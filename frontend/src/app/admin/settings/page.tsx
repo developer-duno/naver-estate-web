@@ -68,9 +68,9 @@ export default function AdminSettingsPage() {
       )}
 
       {loading ? (
-        <div className="text-sm text-gray-400 py-8 text-center">로딩 중...</div>
+        <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
       ) : settings.length === 0 ? (
-        <div className="text-sm text-gray-400 py-8 text-center">등록된 설정이 없습니다</div>
+        <div className="text-sm text-gray-500 py-8 text-center">등록된 설정이 없습니다</div>
       ) : (
         <div className="space-y-3">
           {settings.map((s) => (
@@ -79,7 +79,7 @@ export default function AdminSettingsPage() {
                 <span className="text-sm font-medium text-gray-700">{s.key}</span>
                 <div className="flex items-center gap-2">
                   {s.updated_at && (
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-gray-500">
                       {new Date(s.updated_at).toLocaleString("ko")}
                     </span>
                   )}

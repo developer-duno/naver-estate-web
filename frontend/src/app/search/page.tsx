@@ -127,7 +127,7 @@ function SearchContent() {
       {/* 로딩 */}
       {loading && (
         <div className="flex justify-center py-16">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" role="status" aria-label="로딩 중" />
         </div>
       )}
 
@@ -138,7 +138,7 @@ function SearchContent() {
 
       {/* 결과 없음 */}
       {hasSearchParams && !loading && !error && complexes.length === 0 && (
-        <div className="text-center py-16 text-gray-400">검색 결과가 없습니다.</div>
+        <div className="text-center py-16 text-gray-500">검색 결과가 없습니다.</div>
       )}
 
       {/* 단지 카드 그리드 */}
@@ -198,7 +198,7 @@ export default function SearchPage() {
     <Suspense
       fallback={
         <div className="flex justify-center py-16">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" role="status" aria-label="로딩 중" />
         </div>
       }
     >

@@ -41,16 +41,24 @@ export default function AdminUsersPage() {
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
   const handleUpdate = async (userId: string, payload: UserUpdatePayload) => {
-    const token = await getToken();
-    await updateAdminUser(token, userId, payload);
-    await loadUsers();
+    try {
+      const token = await getToken();
+      await updateAdminUser(token, userId, payload);
+      await loadUsers();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "사용자 업데이트 실패");
+    }
   };
 
   const handleSuspend = async (userId: string) => {
     if (!confirm("이 사용자를 정지하시겠습니까?")) return;
-    const token = await getToken();
-    await suspendAdminUser(token, userId);
-    await loadUsers();
+    try {
+      const token = await getToken();
+      await suspendAdminUser(token, userId);
+      await loadUsers();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "사용자 정지 실패");
+    }
   };
 
   return (
@@ -86,7 +94,7 @@ export default function AdminUsersPage() {
       )}
 
       {loading ? (
-        <div className="text-sm text-gray-400 py-8 text-center">로딩 중...</div>
+        <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
       ) : (
         <UserTable users={users} onUpdate={handleUpdate} onSuspend={handleSuspend} />
       )}

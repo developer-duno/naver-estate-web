@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { getComplex, getArticles, getPyeongDetails, exportArticles, triggerComplexCrawl, ApiError } from "@/lib/api";
 import { createClient } from "@/lib/supabase";
 import type { Complex, Article, PyeongDetail, ArticleFilters } from "@/types";
@@ -10,7 +11,9 @@ import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
 import ArticleTable from "@/components/ArticleTable";
 import ArticleDetail from "@/components/ArticleDetail";
-import PriceChart from "@/components/PriceChart";
+
+// P2-2: Lazy load PriceChart (recharts ~50KB gzipped)
+const PriceChart = dynamic(() => import("@/components/PriceChart"), { ssr: false });
 
 const PAGE_SIZE = 50;
 const CRAWL_POLL_INTERVAL = 10_000;
@@ -172,14 +175,17 @@ export default function ComplexDetailPage() {
       await triggerComplexCrawl(complexNo, session.access_token);
       setCrawlMessage("데이터 갱신 중... 완료되면 자동으로 반영됩니다.");
       clearCrawlPolling();
-      const prevTotal = totalCount;
-      const prevLen = articles.length;
+      // P0-1: 필터 없이 전체 매물 수로 비교 (필터 변경 영향 제거)
+      const baselineTotal = totalCount;
       crawlPollRef.current = setInterval(async () => {
         try {
+          // 필터 적용된 결과로 UI 갱신
           const res = await getArticles(complexNo, {
             ...currentFiltersRef.current, page: 1, page_size: PAGE_SIZE,
           });
-          if (res.total !== prevTotal || res.articles.length !== prevLen) {
+          // 필터 없이 전체 total 비교 (크롤 완료 판별용)
+          const unfiltered = await getArticles(complexNo, { page: 1, page_size: 1 });
+          if (unfiltered.total !== baselineTotal) {
             setArticles(res.articles);
             setTotalCount(res.total);
             setCurrentPage(1);
@@ -215,7 +221,7 @@ export default function ComplexDetailPage() {
   if (loading) {
     return (
       <div className="flex justify-center py-16">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" role="status" aria-label="로딩 중" />
       </div>
     );
   }
@@ -241,12 +247,12 @@ export default function ComplexDetailPage() {
               const isSameOrigin = referrer && new URL(referrer).origin === window.location.origin;
               if (isSameOrigin) { router.back(); } else { router.push("/"); }
             } catch { router.push("/"); }
-          }} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl">
+          }} aria-label="이전 페이지" className="text-gray-500 hover:text-gray-600 text-xl">
           ←
         </button>
         <h1 className="text-2xl font-bold">{complex.complex_name}</h1>
         {complex.last_crawled_at && (
-          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
+          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
             마지막 크롤링: {formatTimeAgo(complex.last_crawled_at)}
           </span>
         )}
@@ -274,7 +280,7 @@ export default function ComplexDetailPage() {
         <div className="flex items-center gap-3">
           <span className="text-lg font-semibold">매물 {totalCount}건</span>
           {tableLoading && (
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" role="status" aria-label="로딩 중" />
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -354,7 +360,7 @@ function Pagination({
       {start > 1 && (
         <>
           <button onClick={() => onPageChange(1)} className="px-3 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-50">1</button>
-          {start > 2 && <span className="px-1 text-gray-400">...</span>}
+          {start > 2 && <span className="px-1 text-gray-500">...</span>}
         </>
       )}
       {pages.map((p) => (
@@ -372,7 +378,7 @@ function Pagination({
       ))}
       {end < totalPages && (
         <>
-          {end < totalPages - 1 && <span className="px-1 text-gray-400">...</span>}
+          {end < totalPages - 1 && <span className="px-1 text-gray-500">...</span>}
           <button onClick={() => onPageChange(totalPages)} className="px-3 py-1.5 text-sm rounded border border-gray-300 hover:bg-gray-50">{totalPages}</button>
         </>
       )}

@@ -59,7 +59,7 @@ export default function AdminDashboard() {
         <div className="bg-white border rounded-lg p-4">
           <h3 className="text-sm font-medium text-gray-700 mb-3">실행 중인 크롤링</h3>
           {runningJobs.length === 0 ? (
-            <p className="text-sm text-gray-400">실행 중인 작업이 없습니다</p>
+            <p className="text-sm text-gray-500">실행 중인 작업이 없습니다</p>
           ) : (
             <ul className="space-y-2">
               {runningJobs.map((j) => (
@@ -76,7 +76,7 @@ export default function AdminDashboard() {
         <div className="bg-white border rounded-lg p-4">
           <h3 className="text-sm font-medium text-gray-700 mb-3">최근 활동</h3>
           {recentLogs.length === 0 ? (
-            <p className="text-sm text-gray-400">활동 기록이 없습니다</p>
+            <p className="text-sm text-gray-500">활동 기록이 없습니다</p>
           ) : (
             <ul className="space-y-2">
               {recentLogs.map((l) => (
@@ -85,7 +85,7 @@ export default function AdminDashboard() {
                     <span className="bg-gray-100 text-xs px-1.5 py-0.5 rounded mr-1">{l.action}</span>
                     {l.target_type ? `${l.target_type}:${l.target_id || ""}` : ""}
                   </span>
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-gray-500">
                     {l.created_at ? new Date(l.created_at).toLocaleString("ko") : ""}
                   </span>
                 </li>

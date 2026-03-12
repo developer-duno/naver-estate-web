@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { getArticle } from "@/lib/api";
 import type { Article } from "@/types";
@@ -26,18 +26,42 @@ export default function ArticleDetail({ articleNo, onClose }: Props) {
       .finally(() => setLoading(false));
   }, [articleNo]);
 
-  // ESC 키로 모달 닫기
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // P1-4: 포커스 트랩 + ESC 닫기
   useEffect(() => {
+    const el = dialogRef.current;
+    if (!el) return;
+    const prev = document.activeElement as HTMLElement | null;
+    el.focus();
+
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key !== "Tab") return;
+      const focusable = el.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
     };
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      prev?.focus();
+    };
   }, [onClose]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="article-detail-title"
@@ -54,7 +78,7 @@ export default function ArticleDetail({ articleNo, onClose }: Props) {
         <div className="overflow-y-auto p-6 max-h-[calc(85vh-64px)] space-y-4">
           {loading && (
             <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" role="status" aria-label="로딩 중" />
             </div>
           )}
 
@@ -63,7 +87,7 @@ export default function ArticleDetail({ articleNo, onClose }: Props) {
           )}
 
           {!loading && !error && !article && (
-            <p className="text-center text-gray-400 py-8">매물 정보를 불러올 수 없습니다.</p>
+            <p className="text-center text-gray-500 py-8">매물 정보를 불러올 수 없습니다.</p>
           )}
 
           {!loading && article && <ArticleBody article={article} />}

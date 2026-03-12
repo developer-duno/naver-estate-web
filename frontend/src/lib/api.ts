@@ -38,6 +38,15 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
+      // P1-1: 인증 실패 시 자동 로그아웃 (토큰 만료, 사용자 정지 등)
+      if (res.status === 401 || res.status === 403) {
+        if (typeof window !== "undefined") {
+          const { createClient } = await import("@/lib/supabase");
+          const supabase = createClient();
+          await supabase.auth.signOut();
+          window.location.href = "/login";
+        }
+      }
       throw new ApiError(body.detail || `API 오류: ${res.status}`, res.status);
     }
     return res.json();

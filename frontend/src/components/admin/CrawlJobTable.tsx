@@ -60,7 +60,7 @@ export default function CrawlJobTable({ jobs, onCancel }: Props) {
             </tr>
           ))}
           {jobs.length === 0 && (
-            <tr><td colSpan={7} className="py-6 text-center text-gray-400">작업이 없습니다</td></tr>
+            <tr><td colSpan={7} className="py-6 text-center text-gray-500">작업이 없습니다</td></tr>
           )}
         </tbody>
       </table>

@@ -76,7 +76,7 @@ export default function AdminLogsPage() {
       )}
 
       {loading ? (
-        <div className="text-sm text-gray-400 py-8 text-center">로딩 중...</div>
+        <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
       ) : (
         <AuditLogTable logs={logs} />
       )}

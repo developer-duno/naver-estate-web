@@ -40,9 +40,13 @@ export default function AdminCrawlPage() {
 
   const handleCancel = async (jobId: number) => {
     if (!confirm("이 작업을 취소하시겠습니까?")) return;
-    const token = await getToken();
-    await cancelAdminCrawlJob(token, jobId);
-    await loadJobs();
+    try {
+      const token = await getToken();
+      await cancelAdminCrawlJob(token, jobId);
+      await loadJobs();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "작업 취소 실패");
+    }
   };
 
   return (
@@ -75,7 +79,7 @@ export default function AdminCrawlPage() {
       )}
 
       {loading ? (
-        <div className="text-sm text-gray-400 py-8 text-center">로딩 중...</div>
+        <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
       ) : (
         <CrawlJobTable jobs={jobs} onCancel={handleCancel} />
       )}

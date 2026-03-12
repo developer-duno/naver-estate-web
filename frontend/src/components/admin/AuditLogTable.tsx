@@ -38,7 +38,7 @@ export default function AuditLogTable({ logs }: Props) {
             </tr>
           ))}
           {logs.length === 0 && (
-            <tr><td colSpan={5} className="py-6 text-center text-gray-400">로그가 없습니다</td></tr>
+            <tr><td colSpan={5} className="py-6 text-center text-gray-500">로그가 없습니다</td></tr>
           )}
         </tbody>
       </table>

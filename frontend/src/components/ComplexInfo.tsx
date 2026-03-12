@@ -19,6 +19,8 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails }: Props) {
         <button
           role="tab"
           aria-selected={tab === "info"}
+          aria-controls="tabpanel-info"
+          id="tab-info"
           onClick={() => setTab("info")}
           className={`px-4 py-2.5 text-sm font-medium ${
             tab === "info" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"
@@ -29,6 +31,8 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails }: Props) {
         <button
           role="tab"
           aria-selected={tab === "area"}
+          aria-controls="tabpanel-area"
+          id="tab-area"
           onClick={() => setTab("area")}
           className={`px-4 py-2.5 text-sm font-medium ${
             tab === "area" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"
@@ -38,7 +42,7 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails }: Props) {
         </button>
       </div>
 
-      <div className="p-4">
+      <div className="p-4" role="tabpanel" id={`tabpanel-${tab}`} aria-labelledby={`tab-${tab}`}>
         {tab === "info" ? <BasicInfo cpx={cpx} /> : <PyeongDetails details={pyeongDetails} />}
       </div>
     </div>
@@ -49,9 +53,9 @@ function BasicInfo({ cpx }: { cpx: Complex }) {
   const rows: [string, string][] = [];
 
   if (cpx.cortar_address) rows.push(["주소", cpx.cortar_address]);
-  if (cpx.total_household_count) rows.push(["세대수", `${cpx.total_household_count.toLocaleString()}세대`]);
-  if (cpx.high_floor) rows.push(["저/최고층", `${cpx.low_floor || 1}층 ~ ${cpx.high_floor}층`]);
-  if (cpx.total_dong_count) rows.push(["동수", `${cpx.total_dong_count}개동`]);
+  if (cpx.total_household_count != null) rows.push(["세대수", `${cpx.total_household_count.toLocaleString()}세대`]);
+  if (cpx.high_floor != null) rows.push(["저/최고층", `${cpx.low_floor || 1}층 ~ ${cpx.high_floor}층`]);
+  if (cpx.total_dong_count != null) rows.push(["동수", `${cpx.total_dong_count}개동`]);
   if (cpx.use_approve_ymd) {
     const ymd = cpx.use_approve_ymd;
     const formatted = formatDateFull(ymd);
@@ -59,13 +63,13 @@ function BasicInfo({ cpx }: { cpx: Complex }) {
   }
   if (cpx.construction_company) rows.push(["건설사", cpx.construction_company]);
   if (cpx.heat_method_type) rows.push(["난방방식", cpx.heat_method_type]);
-  if (cpx.total_parking_count) rows.push(["총주차대수", `${cpx.total_parking_count.toLocaleString()}대`]);
+  if (cpx.total_parking_count != null) rows.push(["총주차대수", `${cpx.total_parking_count.toLocaleString()}대`]);
   if (cpx.floor_area_ratio) rows.push(["용적률", `${cpx.floor_area_ratio}%`]);
   if (cpx.building_coverage_ratio) rows.push(["건폐율", `${cpx.building_coverage_ratio}%`]);
   if (cpx.real_estate_type_name) rows.push(["유형", cpx.real_estate_type_name]);
 
   if (rows.length === 0) {
-    return <p className="text-gray-400 text-sm">단지 상세 정보가 아직 수집되지 않았습니다.</p>;
+    return <p className="text-gray-500 text-sm">단지 상세 정보가 아직 수집되지 않았습니다.</p>;
   }
 
   return (
@@ -82,7 +86,7 @@ function BasicInfo({ cpx }: { cpx: Complex }) {
 
 function PyeongDetails({ details }: { details: PyeongDetail[] }) {
   if (details.length === 0) {
-    return <p className="text-gray-400 text-sm">면적별 정보가 아직 수집되지 않았습니다.</p>;
+    return <p className="text-gray-500 text-sm">면적별 정보가 아직 수집되지 않았습니다.</p>;
   }
 
   return (

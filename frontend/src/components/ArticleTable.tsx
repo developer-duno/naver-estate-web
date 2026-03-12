@@ -13,7 +13,7 @@ interface Props {
 export default function ArticleTable({ articles, onRowClick }: Props) {
   if (articles.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-400">매물이 없습니다.</div>
+      <div className="text-center py-12 text-gray-500">매물이 없습니다.</div>
     );
   }
 

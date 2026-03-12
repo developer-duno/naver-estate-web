@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase";
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="flex justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>}>
+    <Suspense fallback={<div className="flex justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" role="status" aria-label="로딩 중" /></div>}>
       <LoginForm />
     </Suspense>
   );
@@ -85,7 +85,7 @@ function LoginForm() {
 
       <form onSubmit={handleLogin} className="bg-white rounded-lg shadow-sm border p-6 space-y-4">
         {error && (
-          <div className={`text-sm rounded-md px-3 py-2 ${isLocked ? "bg-orange-50 text-orange-700" : "bg-red-50 text-red-600"}`}>
+          <div role="alert" className={`text-sm rounded-md px-3 py-2 ${isLocked ? "bg-orange-50 text-orange-700" : "bg-red-50 text-red-600"}`}>
             {isLocked && <span className="font-medium block mb-1">계정 잠김</span>}
             {error}
           </div>
@@ -100,6 +100,7 @@ function LoginForm() {
             onChange={(e) => setEmail(e.target.value)}
             required
             disabled={isLocked}
+            aria-invalid={!!error || undefined}
             className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
             placeholder="email@example.com"
           />

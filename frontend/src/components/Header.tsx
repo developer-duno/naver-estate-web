@@ -64,7 +64,7 @@ export default function Header() {
         <div className="flex justify-between items-center h-14">
           {/* 로고 */}
           <Link href="/" className="flex items-center gap-2">
-            <span className="text-xl font-bold text-blue-600">🏠</span>
+            <span role="img" aria-label="홈" className="text-xl font-bold text-blue-600">🏠</span>
             <span className="text-lg font-bold text-gray-900">아파트 매물</span>
           </Link>
 

@@ -108,7 +108,7 @@ export default function PriceChart({ complexNo }: PriceChartProps) {
         </div>
 
         {loading ? (
-          <div className="h-64 flex items-center justify-center text-gray-400">
+          <div className="h-64 flex items-center justify-center text-gray-500">
             로딩 중...
           </div>
         ) : historyError ? (
@@ -129,7 +129,7 @@ export default function PriceChart({ complexNo }: PriceChartProps) {
             </button>
           </div>
         ) : chartData.length === 0 ? (
-          <div className="h-64 flex items-center justify-center text-gray-400">
+          <div className="h-64 flex items-center justify-center text-gray-500">
             시세 데이터가 없습니다
           </div>
         ) : (
@@ -180,7 +180,7 @@ export default function PriceChart({ complexNo }: PriceChartProps) {
         </div>
       )}
       {!statsError && priceStats && priceStats.by_area.length === 0 && priceStats.by_floor.length === 0 && (
-        <div className="bg-white rounded-lg border p-4 text-center text-gray-400 text-sm">
+        <div className="bg-white rounded-lg border p-4 text-center text-gray-500 text-sm">
           매매 매물 가격 통계 데이터가 부족합니다
         </div>
       )}

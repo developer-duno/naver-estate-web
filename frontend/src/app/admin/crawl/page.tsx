@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAdminToken } from "@/hooks/useAdminToken";
-import AdminLayout from "@/components/admin/AdminLayout";
 import CrawlJobTable from "@/components/admin/CrawlJobTable";
 import { getAdminCrawlJobs, cancelAdminCrawlJob } from "@/lib/api";
 import type { CrawlJobDetail } from "@/types/admin";
@@ -50,7 +49,7 @@ export default function AdminCrawlPage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <h2 className="text-lg font-semibold mb-4">크롤링 관리</h2>
 
       <div className="flex gap-3 mb-4">
@@ -103,6 +102,6 @@ export default function AdminCrawlPage() {
           </button>
         </div>
       )}
-    </AdminLayout>
+    </>
   );
 }

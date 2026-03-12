@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAdminToken } from "@/hooks/useAdminToken";
-import AdminLayout from "@/components/admin/AdminLayout";
 import UserTable from "@/components/admin/UserTable";
 import { getAdminUsers, updateAdminUser, suspendAdminUser } from "@/lib/api";
 import type { UserProfile, UserUpdatePayload } from "@/types/admin";
@@ -62,7 +61,7 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <h2 className="text-lg font-semibold mb-4">사용자 관리</h2>
 
       {/* 필터 */}
@@ -121,6 +120,6 @@ export default function AdminUsersPage() {
           </button>
         </div>
       )}
-    </AdminLayout>
+    </>
   );
 }

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAdminToken } from "@/hooks/useAdminToken";
-import AdminLayout from "@/components/admin/AdminLayout";
 import AuditLogTable from "@/components/admin/AuditLogTable";
 import { getAdminAuditLogs } from "@/lib/api";
 import type { AuditLog } from "@/types/admin";
@@ -41,7 +40,7 @@ export default function AdminLogsPage() {
   useEffect(() => { loadLogs(); }, [loadLogs]);
 
   return (
-    <AdminLayout>
+    <>
       <h2 className="text-lg font-semibold mb-4">감사 로그</h2>
 
       <div className="flex gap-3 mb-4">
@@ -100,6 +99,6 @@ export default function AdminLogsPage() {
           </button>
         </div>
       )}
-    </AdminLayout>
+    </>
   );
 }

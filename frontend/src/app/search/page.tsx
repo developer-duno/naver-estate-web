@@ -133,7 +133,15 @@ function SearchContent() {
 
       {/* 에러 */}
       {error && (
-        <div className="text-center py-8 text-red-500">{error}</div>
+        <div className="text-center py-8">
+          <p className="text-red-500 mb-3">{error}</p>
+          <button
+            onClick={() => fetchData(new AbortController().signal)}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            다시 시도
+          </button>
+        </div>
       )}
 
       {/* 결과 없음 */}

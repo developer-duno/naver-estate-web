@@ -113,7 +113,7 @@ export default function PriceChart({ complexNo }: PriceChartProps) {
           </div>
         ) : historyError ? (
           <div className="h-64 flex flex-col items-center justify-center gap-2">
-            <span className="text-red-400 text-sm">시세 데이터를 불러오지 못했습니다</span>
+            <span className="text-red-500 text-sm">시세 데이터를 불러오지 못했습니다</span>
             <button
               onClick={() => {
                 setLoading(true);
@@ -133,6 +133,7 @@ export default function PriceChart({ complexNo }: PriceChartProps) {
             시세 데이터가 없습니다
           </div>
         ) : (
+          <div role="img" aria-label="시세 추이 차트">
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -170,12 +171,13 @@ export default function PriceChart({ complexNo }: PriceChartProps) {
               />
             </LineChart>
           </ResponsiveContainer>
+          </div>
         )}
       </div>
 
       {/* 가격 통계 — 면적별 */}
       {statsError && (
-        <div className="bg-white rounded-lg border p-4 text-center text-red-400 text-sm">
+        <div className="bg-white rounded-lg border p-4 text-center text-red-500 text-sm">
           가격 통계를 불러오지 못했습니다
         </div>
       )}
@@ -187,6 +189,7 @@ export default function PriceChart({ complexNo }: PriceChartProps) {
       {priceStats && priceStats.by_area.length > 0 && (
         <div className="bg-white rounded-lg border p-4">
           <h3 className="font-semibold text-lg mb-4">면적별 가격 분포</h3>
+          <div role="img" aria-label="면적별 가격 분포 차트">
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={priceStats.by_area}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -203,6 +206,7 @@ export default function PriceChart({ complexNo }: PriceChartProps) {
               <Bar dataKey="max" name="최고" fill="#ef4444" />
             </BarChart>
           </ResponsiveContainer>
+          </div>
         </div>
       )}
 

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAdminToken } from "@/hooks/useAdminToken";
-import AdminLayout from "@/components/admin/AdminLayout";
 import { getAdminSettings, updateAdminSetting } from "@/lib/api";
 import type { AdminSetting } from "@/types/admin";
 
@@ -60,7 +59,7 @@ export default function AdminSettingsPage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <h2 className="text-lg font-semibold mb-4">시스템 설정</h2>
 
       {error && (
@@ -127,6 +126,6 @@ export default function AdminSettingsPage() {
           ))}
         </div>
       )}
-    </AdminLayout>
+    </>
   );
 }

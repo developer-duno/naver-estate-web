@@ -230,7 +230,15 @@ export default function ComplexDetailPage() {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <p className="text-red-500 text-lg mb-4">{error || "단지를 찾을 수 없습니다."}</p>
-        <Link href="/" className="text-blue-600 hover:underline">홈으로 돌아가기</Link>
+        <div className="flex justify-center gap-4">
+          <button
+            onClick={() => window.location.reload()}
+            className="text-blue-600 hover:underline"
+          >
+            다시 시도
+          </button>
+          <Link href="/" className="text-blue-600 hover:underline">홈으로 돌아가기</Link>
+        </div>
       </div>
     );
   }

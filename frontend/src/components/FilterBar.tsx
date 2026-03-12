@@ -160,6 +160,7 @@ export default function FilterBar({ onChange }: Props) {
               <button
                 key={u}
                 onClick={() => { setAreaUnit(u); emitChange({ areaUnit: u }); }}
+                aria-pressed={areaUnit === u}
                 className={`px-2 py-1.5 text-sm border ${
                   areaUnit === u ? "bg-blue-600 text-white border-blue-600" : "bg-white border-gray-300"
                 } ${u === "m²" ? "rounded-l" : "rounded-r"}`}

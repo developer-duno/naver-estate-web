@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useAdminToken } from "@/hooks/useAdminToken";
-import AdminLayout from "@/components/admin/AdminLayout";
 import StatsCards from "@/components/admin/StatsCards";
 import { getAdminDetailedStats, deleteStaleData } from "@/lib/api";
 import type { DetailedStats } from "@/types/admin";
@@ -50,7 +49,7 @@ export default function AdminDataPage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <h2 className="text-lg font-semibold mb-4">데이터 관리</h2>
 
       {error && (
@@ -86,6 +85,6 @@ export default function AdminDataPage() {
           <p className="text-sm text-green-600 mt-2">{deleteResult}</p>
         )}
       </div>
-    </AdminLayout>
+    </>
   );
 }

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import AdminLayout from "@/components/admin/AdminLayout";
 import StatsCards from "@/components/admin/StatsCards";
 import { getAdminDetailedStats, getAdminAuditLogs, getAdminCrawlJobs } from "@/lib/api";
 import type { DetailedStats, AuditLog, CrawlJobDetail } from "@/types/admin";
@@ -45,11 +44,14 @@ export default function AdminDashboard() {
   }, []);
 
   return (
-    <AdminLayout>
+    <>
       <h2 className="text-lg font-semibold mb-4">대시보드</h2>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">{error}</div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4 flex justify-between items-center">
+          <span>{error}</span>
+          <button onClick={() => window.location.reload()} className="text-red-700 hover:underline text-xs ml-2">재시도</button>
+        </div>
       )}
 
       <StatsCards stats={stats} loading={loading} />
@@ -94,6 +96,6 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
-    </AdminLayout>
+    </>
   );
 }

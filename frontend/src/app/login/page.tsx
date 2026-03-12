@@ -66,7 +66,8 @@ function LoginForm() {
             });
           }
         } catch {}
-        const redirectTo = searchParams.get("redirect") || "/";
+        const rawRedirect = searchParams.get("redirect") || "/";
+        const redirectTo = rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") ? rawRedirect : "/";
         router.push(redirectTo);
         router.refresh();
       }

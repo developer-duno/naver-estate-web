@@ -106,6 +106,7 @@ function SearchContent() {
                 onChange={(e) => setInlineKeyword(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleInlineKeywordSearch()}
                 placeholder="단지명 검색 (예: 래미안, 힐스테이트, 강남...)"
+                maxLength={100}
                 className="flex-1 border border-gray-300 rounded-md px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <button
@@ -173,7 +174,7 @@ const ComplexCard = memo(function ComplexCard({ complex }: { complex: Complex })
         )}
 
         <div className="flex gap-3 text-sm text-gray-600 mb-2">
-          {complex.total_household_count && (
+          {complex.total_household_count != null && complex.total_household_count > 0 && (
             <span>{complex.total_household_count.toLocaleString()}세대</span>
           )}
           {complex.high_floor && <span>최고 {complex.high_floor}층</span>}

@@ -218,6 +218,15 @@ export default function ComplexDetailPage() {
     }
   };
 
+  if (!complexNo || !/^\d+$/.test(complexNo)) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+        <p className="text-red-500 text-lg mb-4">유효하지 않은 단지 번호입니다.</p>
+        <Link href="/" className="text-blue-600 hover:underline">홈으로 돌아가기</Link>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-16">

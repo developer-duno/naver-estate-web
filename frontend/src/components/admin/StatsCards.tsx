@@ -24,10 +24,10 @@ export default function StatsCards({ stats, loading }: Props) {
   if (!stats) return null;
 
   const cards = [
-    { label: "단지 수", value: stats.complex_count.toLocaleString(), color: "text-blue-600" },
-    { label: "활성 매물", value: stats.active_article_count.toLocaleString(), color: "text-green-600" },
-    { label: "사용자", value: stats.user_count.toLocaleString(), color: "text-purple-600" },
-    { label: "오늘 크롤", value: stats.today_crawl_count.toLocaleString(), color: "text-orange-600" },
+    { label: "단지 수", value: (stats.complex_count ?? 0).toLocaleString(), color: "text-blue-600" },
+    { label: "활성 매물", value: (stats.active_article_count ?? 0).toLocaleString(), color: "text-green-600" },
+    { label: "사용자", value: (stats.user_count ?? 0).toLocaleString(), color: "text-purple-600" },
+    { label: "오늘 크롤", value: (stats.today_crawl_count ?? 0).toLocaleString(), color: "text-orange-600" },
   ];
 
   return (
@@ -38,7 +38,7 @@ export default function StatsCards({ stats, loading }: Props) {
           <p className={`text-xl font-bold ${card.color}`}>{card.value}</p>
         </div>
       ))}
-      {stats.error_count_24h > 0 && (
+      {(stats.error_count_24h ?? 0) > 0 && (
         <div className="col-span-full bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
           최근 24시간 에러: {stats.error_count_24h}건
         </div>

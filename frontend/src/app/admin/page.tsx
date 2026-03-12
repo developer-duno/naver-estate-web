@@ -31,8 +31,8 @@ export default function AdminDashboard() {
           getAdminCrawlJobs(token, { status: "running" }),
         ]);
         setStats(statsData);
-        setRecentLogs(logsData.items.slice(0, 5));
-        setRunningJobs(jobsData.items);
+        setRecentLogs((logsData.items ?? []).slice(0, 5));
+        setRunningJobs(jobsData.items ?? []);
       } catch (e) {
         setError(e instanceof Error ? e.message : "데이터 로드 실패");
       } finally {

@@ -21,6 +21,7 @@ interface PriceChartProps {
 }
 
 function formatPrice(value: number): string {
+  if (value == null || isNaN(value)) return "-";
   if (value >= 10000) {
     const eok = Math.floor(value / 10000);
     const rest = value % 10000;

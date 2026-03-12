@@ -52,12 +52,14 @@ export async function middleware(request: NextRequest) {
   if (isAdminPath) {
     if (!user) {
       const loginUrl = new URL("/login", request.url);
-      loginUrl.searchParams.set("redirect", pathname);
+      if (!pathname.startsWith("/login") && !pathname.startsWith("/signup")) {
+        loginUrl.searchParams.set("redirect", pathname);
+      }
       return NextResponse.redirect(loginUrl);
     }
-    // user_metadata에 role이 없으면 일단 통과 (AdminLayout에서 API로 재확인)
+    // admin 역할이 아니면 차단 (role 미설정 포함)
     const role = user.user_metadata?.role;
-    if (role && role !== "admin") {
+    if (role !== "admin") {
       return NextResponse.redirect(new URL("/", request.url));
     }
   }

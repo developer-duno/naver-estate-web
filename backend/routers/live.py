@@ -1,6 +1,7 @@
 """Live crawling API"""
 
 import logging
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from deps import get_db
 from db.models import Complex as ComplexModel, Article as ArticleModel
+from db.database import SessionLocal
 from routers.serializers import complex_to_dict, article_to_dict
 from shared.constants import M2_TO_PYEONG, NAVER_COMPLEX_ARTICLES_API, NAVER_LAND_BASE
 from shared.domain.article import RealEstateArticle
@@ -43,6 +45,10 @@ def _cache_set(key: str, value: object):
         expired = [k for k, (t, _) in _cache.items() if now - t >= _CACHE_TTL_SECONDS]
         for k in expired:
             del _cache[k]
+
+
+# -- Background crawl progress tracking --
+_crawl_status: dict[str, dict] = {}
 
 
 def _utcnow():
@@ -212,6 +218,44 @@ def _fetch_articles_all_trade_types(complex_no: str, page: int = 1):
     )
     return NaverEstateAPI._request_with_retry(url, extra_headers=headers)
 
+
+@router.post("/{complex_no}/articles/start-crawl")
+def start_live_crawl(complex_no: str):
+    """Start background crawl, return immediately."""
+    # Cache hit -> skip crawl
+    cache_key = f"articles:{complex_no}"
+    if _cache_get(cache_key) is not None:
+        return {"complex_no": complex_no, "status": "cached"}
+
+    # Already running?
+    status = _crawl_status.get(complex_no)
+    if status and status.get("status") in ("started", "running"):
+        return {"complex_no": complex_no, "status": "already_running",
+                "current_page": status.get("current_page", 0),
+                "article_count": status.get("article_count", 0)}
+
+    _crawl_status[complex_no] = {
+        "status": "started",
+        "current_page": 0,
+        "article_count": 0,
+        "has_more": True,
+        "error": None,
+    }
+    t = threading.Thread(target=_background_crawl, args=(complex_no,), daemon=True)
+    t.start()
+
+    return {"complex_no": complex_no, "status": "started"}
+
+
+@router.get("/{complex_no}/articles/crawl-status")
+def get_crawl_status(complex_no: str):
+    """Poll crawl progress."""
+    status = _crawl_status.get(complex_no)
+    if not status:
+        return {"complex_no": complex_no, "status": "idle"}
+    return {"complex_no": complex_no, **status}
+
+
 @router.get("/{complex_no}/articles")
 def live_articles(
     complex_no: str,
@@ -293,6 +337,94 @@ def live_articles(
     return result
 
 
+def _background_crawl(complex_no: str):
+    """Run article crawl in background thread with per-page commits."""
+    db = SessionLocal()
+    try:
+        _crawl_status[complex_no] = {
+            "status": "running",
+            "current_page": 0,
+            "article_count": 0,
+            "has_more": True,
+            "error": None,
+        }
+        all_article_nos = set()
+        page = 1
+
+        while True:
+            result = _fetch_articles_all_trade_types(complex_no, page=page)
+            if not result or "error" in result:
+                if page == 1:
+                    _crawl_status[complex_no]["status"] = "error"
+                    _crawl_status[complex_no]["error"] = str(
+                        result.get("error", "네이버 API 요청 실패") if result else "네이버 API 응답 없음"
+                    )
+                    return
+                break
+
+            article_list = result.get("articleList") or []
+            if not article_list:
+                break
+
+            for a_data in article_list:
+                article = RealEstateArticle.from_dict(a_data)
+                article.complex_no = complex_no
+                _upsert_article_no_commit(db, article)
+                all_article_nos.add(article.article_no)
+
+            db.commit()  # per-page commit
+
+            _crawl_status[complex_no]["current_page"] = page
+            _crawl_status[complex_no]["article_count"] = len(all_article_nos)
+
+            if not result.get("isMoreData", False):
+                break
+            page += 1
+            time.sleep(0.5)
+
+        _crawl_status[complex_no]["has_more"] = False
+
+        # Deactivate missing articles
+        if all_article_nos:
+            db.query(ArticleModel).filter(
+                ArticleModel.complex_no == complex_no,
+                ArticleModel.is_active == True,
+                ~ArticleModel.article_no.in_(all_article_nos),
+            ).update(
+                {"is_active": False, "updated_at": _utcnow()},
+                synchronize_session=False,
+            )
+            db.commit()
+
+        # Update last_crawled_at
+        db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).update(
+            {"last_crawled_at": _utcnow()}
+        )
+        db.commit()
+
+        # Enrich complex detail if not yet done
+        cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
+        if cpx and not cpx.detail_crawled_at:
+            _enrich_complex_detail(db, complex_no)
+
+        _crawl_status[complex_no]["status"] = "done"
+        logger.info("Background crawl done: %s -> %d articles", complex_no, len(all_article_nos))
+
+    except Exception as e:
+        logger.exception("Background crawl error: %s", complex_no)
+        _crawl_status[complex_no]["status"] = "error"
+        _crawl_status[complex_no]["error"] = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    finally:
+        db.close()
+        # Invalidate cache so next DB read gets fresh data
+        _cache.pop(f"articles:{complex_no}", None)
+
+
+
 def _upsert_complex_from_search(db: Session, data: dict, sido: str = None, sigungu: str = None, dong: str = None) -> dict | None:
     """Upsert complex from search result, return dict"""
     complex_no = str(data.get("complexNo", ""))
@@ -372,6 +504,45 @@ def _upsert_complex_from_search(db: Session, data: dict, sido: str = None, sigun
         "dong": values.get("dong"),
         "last_crawled_at": None,
     }
+
+
+def _upsert_article_no_commit(db: Session, article: RealEstateArticle):
+    """Upsert article without committing (caller manages commits)."""
+    values = {
+        "article_no": article.article_no,
+        "complex_no": article.complex_no or "",
+        "trade_type_name": article.trade_type_name,
+        "building_name": article.building_name,
+        "floor_info": article.floor_info,
+        "deal_or_warrant_prc": article.deal_or_warrant_prc,
+        "rent_prc": article.rent_prc,
+        "area1_m2": article.area1_m2,
+        "area2_m2": article.area2_m2,
+        "direction": article.direction,
+        "article_feature_desc": article.article_feature_desc,
+        "tags": article.tags or [],
+        "realtor_name": article.realtor_name,
+        "article_confirm_ymd": article.article_confirm_ymd,
+        "latitude": article.latitude,
+        "longitude": article.longitude,
+        "complex_name": article.complex_name,
+        "article_name": article.article_name,
+        "realtor_id": article.realtor_id,
+        "realtor_phone": article.realtor_phone,
+        "is_verified": article.is_verified,
+        "article_real_estate_type_name": article.article_real_estate_type_name,
+        "is_presale": article.is_presale,
+        "numeric_price": article.numeric_price,
+        "numeric_rent_price": article.numeric_rent_price,
+        "price_per_pyeong": article.price_per_pyeong,
+        "last_seen_at": _utcnow(),
+        "is_active": True,
+        "updated_at": _utcnow(),
+    }
+    stmt = pg_insert(ArticleModel).values(**values)
+    update_cols = {k: v for k, v in values.items() if k not in ("article_no", "first_seen_at")}
+    stmt = stmt.on_conflict_do_update(index_elements=["article_no"], set_=update_cols)
+    db.execute(stmt)
 
 
 def _upsert_article(db: Session, article: RealEstateArticle):

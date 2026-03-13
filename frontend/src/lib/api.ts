@@ -2,7 +2,7 @@
  * FastAPI 백엔드 호출 래퍼
  */
 
-import type { Complex, Article, PyeongDetail, ArticleFilters, DbStats, Regions, PriceHistory, PriceStats } from "@/types";
+import type { Complex, Article, PyeongDetail, ArticleFilters, DbStats, Regions, PriceHistory, PriceStats, CrawlProgress } from "@/types";
 import type { UserProfile, AuditLog, AdminSetting, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail } from "@/types/admin";
 
 export class ApiError extends Error {
@@ -108,6 +108,23 @@ export async function liveArticles(complexNo: string) {
   return fetchApi<{ articles: Article[]; total: number; page: number; page_size: number; complex: Complex | null }>(
     `/api/live/${complexNo}/articles`,
     { timeoutMs: LIVE_TIMEOUT_MS } as any,
+  );
+}
+
+
+/** 백그라운드 크롤링 시작 (즉시 반환) */
+export async function startLiveCrawl(complexNo: string) {
+  return fetchApi<CrawlProgress>(
+    `/api/live/${complexNo}/articles/start-crawl`,
+    { method: "POST", timeoutMs: DEFAULT_TIMEOUT_MS } as any,
+  );
+}
+
+/** 크롤링 진행률 폴링 */
+export async function getCrawlStatus(complexNo: string) {
+  return fetchApi<CrawlProgress>(
+    `/api/live/${complexNo}/articles/crawl-status`,
+    { timeoutMs: DEFAULT_TIMEOUT_MS } as any,
   );
 }
 

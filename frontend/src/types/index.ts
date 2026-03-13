@@ -163,3 +163,13 @@ export interface PriceStats {
   by_area: PriceStat[];
   by_floor: PriceStat[];
 }
+
+/** 크롤링 진행 상태 */
+export interface CrawlProgress {
+  complex_no: string;
+  status: "idle" | "started" | "running" | "done" | "error" | "cached" | "already_running";
+  current_page?: number;
+  article_count?: number;
+  has_more?: boolean;
+  error?: string;
+}

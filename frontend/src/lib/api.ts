@@ -133,9 +133,14 @@ export async function getPyeongDetails(complexNo: string) {
   return fetchApi<{ pyeong_details: PyeongDetail[] }>(`/api/complexes/${complexNo}/pyeong-details`);
 }
 
-/** 매물 상세 */
+/** 매물 상세 (DB) */
 export async function getArticle(articleNo: string) {
   return fetchApi<Article>(`/api/articles/${articleNo}`);
+}
+
+/** 매물 상세 실시간 (네이버 API 직접 조회 + DB 저장) */
+export async function getArticleLive(articleNo: string) {
+  return fetchApi<Article>(`/api/live/article/${articleNo}/detail`, { timeoutMs: 30_000 } as any);
 }
 
 /** DB 통계 */

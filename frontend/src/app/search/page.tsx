@@ -146,7 +146,29 @@ function SearchContent() {
 
       {/* 결과 없음 */}
       {hasSearchParams && !loading && !error && complexes.length === 0 && (
-        <div className="text-center py-16 text-gray-500">검색 결과가 없습니다.</div>
+        <div className="text-center py-16 space-y-6">
+          <p className="text-gray-500">검색 결과가 없습니다.</p>
+          <div className="max-w-md mx-auto">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                aria-label="다시 검색"
+                value={inlineKeyword}
+                onChange={(e) => setInlineKeyword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleInlineKeywordSearch()}
+                placeholder="다른 키워드로 검색해보세요"
+                maxLength={100}
+                className="flex-1 border border-gray-300 rounded-md px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={handleInlineKeywordSearch}
+                className="bg-blue-600 text-white px-6 py-2.5 rounded-md text-sm font-medium hover:bg-blue-700"
+              >
+                검색
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 단지 테이블 */}

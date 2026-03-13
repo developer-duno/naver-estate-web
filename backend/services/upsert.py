@@ -1,0 +1,249 @@
+"""공통 upsert 함수 — 매물/단지 DB 저장 로직 통합
+
+Phase 3-2: live.py와 crawler/service.py에서 중복되던 upsert 함수들을 통합.
+"""
+
+import re
+import logging
+from datetime import datetime, timezone
+
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from db.models import (
+    Complex as ComplexModel,
+    Article as ArticleModel,
+    ArticlePriceHistory,
+)
+from shared.domain.article import RealEstateArticle
+
+logger = logging.getLogger(__name__)
+
+
+def _utcnow():
+    return datetime.now(timezone.utc)
+
+
+def _safe_int(val):
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def _safe_float(val):
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def parse_maintenance_cost(cost_str):
+    """관리비 문자열에서 숫자만 추출"""
+    if not cost_str:
+        return None
+    m = re.search(r"(\d+)", cost_str)
+    return int(m.group(1)) if m else None
+
+
+def upsert_complex_from_search(db, data, sido=None, sigungu=None, dong=None, commit=True):
+    """검색 결과에서 단지 upsert. 반환: 직렬화용 dict 또는 None."""
+    complex_no = str(data.get("complexNo", ""))
+    if not complex_no:
+        return None
+
+    lat = data.get("latitude")
+    lng = data.get("longitude")
+    try:
+        latitude = float(lat) if lat else None
+        longitude = float(lng) if lng else None
+    except (ValueError, TypeError):
+        latitude = None
+        longitude = None
+
+    values = {
+        "complex_no": complex_no,
+        "complex_name": data.get("complexName", ""),
+        "cortar_no": data.get("cortarNo"),
+        "real_estate_type_code": data.get("realEstateTypeCode"),
+        "real_estate_type_name": data.get("realEstateTypeName"),
+        "latitude": latitude,
+        "longitude": longitude,
+        "total_household_count": _safe_int(data.get("totalHouseholdCount")),
+        "high_floor": _safe_int(data.get("highFloor")),
+        "low_floor": _safe_int(data.get("lowFloor")),
+        "use_approve_ymd": data.get("useApproveYmd"),
+        "total_dong_count": _safe_int(data.get("totalDongCount")),
+        "min_supply_area_m2": _safe_float(data.get("minSupplyArea")),
+        "max_supply_area_m2": _safe_float(data.get("maxSupplyArea")),
+        "cortar_address": data.get("cortarAddress"),
+        "updated_at": _utcnow(),
+    }
+
+    if sido:
+        values["sido"] = sido
+        if sigungu:
+            values["sigungu"] = sigungu
+        if dong:
+            values["dong"] = dong
+    else:
+        address = data.get("cortarAddress", "")
+        parts = address.split() if address else []
+        if len(parts) >= 2:
+            values["sido"] = parts[0]
+            values["sigungu"] = parts[1]
+            if len(parts) >= 3:
+                values["dong"] = parts[2]
+
+    stmt = pg_insert(ComplexModel).values(**values)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["complex_no"],
+        set_={k: v for k, v in values.items() if k != "complex_no"},
+    )
+    db.execute(stmt)
+    if commit:
+        db.commit()
+
+    return {
+        "complex_no": complex_no,
+        "complex_name": data.get("complexName", ""),
+        "cortar_no": data.get("cortarNo"),
+        "real_estate_type_code": data.get("realEstateTypeCode"),
+        "real_estate_type_name": data.get("realEstateTypeName"),
+        "latitude": latitude,
+        "longitude": longitude,
+        "total_household_count": _safe_int(data.get("totalHouseholdCount")),
+        "high_floor": _safe_int(data.get("highFloor")),
+        "low_floor": _safe_int(data.get("lowFloor")),
+        "use_approve_ymd": data.get("useApproveYmd"),
+        "total_dong_count": _safe_int(data.get("totalDongCount")),
+        "min_supply_area_m2": _safe_float(data.get("minSupplyArea")),
+        "max_supply_area_m2": _safe_float(data.get("maxSupplyArea")),
+        "cortar_address": data.get("cortarAddress"),
+        "sido": values.get("sido"),
+        "sigungu": values.get("sigungu"),
+        "dong": values.get("dong"),
+        "last_crawled_at": None,
+    }
+
+
+def _build_article_values(article):
+    """RealEstateArticle -> DB upsert용 dict"""
+    return {
+        "article_no": article.article_no,
+        "complex_no": article.complex_no or "",
+        "trade_type_name": article.trade_type_name,
+        "building_name": article.building_name,
+        "floor_info": article.floor_info,
+        "deal_or_warrant_prc": article.deal_or_warrant_prc,
+        "rent_prc": article.rent_prc,
+        "area1_m2": article.area1_m2,
+        "area2_m2": article.area2_m2,
+        "direction": article.direction,
+        "article_feature_desc": article.article_feature_desc,
+        "tags": article.tags or [],
+        "realtor_name": article.realtor_name,
+        "article_confirm_ymd": article.article_confirm_ymd,
+        "latitude": article.latitude,
+        "longitude": article.longitude,
+        "complex_name": article.complex_name,
+        "article_name": article.article_name,
+        "realtor_id": article.realtor_id,
+        "realtor_phone": article.realtor_phone,
+        "is_verified": article.is_verified,
+        "article_real_estate_type_name": article.article_real_estate_type_name,
+        "is_presale": article.is_presale,
+        "numeric_price": article.numeric_price,
+        "numeric_rent_price": article.numeric_rent_price,
+        "price_per_pyeong": article.price_per_pyeong,
+        "last_seen_at": _utcnow(),
+        "is_active": True,
+        "updated_at": _utcnow(),
+    }
+
+
+def upsert_article(db, article, commit=True, track_price=False):
+    """매물 upsert. commit=False면 호출자가 관리. track_price=True면 가격 변동 감지."""
+    values = _build_article_values(article)
+
+    if track_price:
+        existing = db.query(ArticleModel.numeric_price, ArticleModel.numeric_rent_price).filter(
+            ArticleModel.article_no == article.article_no
+        ).first()
+
+        if existing and values["numeric_price"] is not None:
+            old_price = existing[0]
+            old_rent = existing[1]
+            new_price = values["numeric_price"]
+            new_rent = values["numeric_rent_price"]
+            price_changed = (
+                (old_price is not None and old_price != new_price) or
+                (old_rent is not None and new_rent is not None and old_rent != new_rent)
+            )
+            if price_changed:
+                values["previous_price"] = old_price
+                values["price_changed_at"] = _utcnow()
+                db.add(ArticlePriceHistory(
+                    article_no=article.article_no,
+                    price=new_price,
+                    rent_price=new_rent,
+                ))
+
+    stmt = pg_insert(ArticleModel).values(**values)
+    update_cols = {k: v for k, v in values.items() if k not in ("article_no", "first_seen_at")}
+    stmt = stmt.on_conflict_do_update(index_elements=["article_no"], set_=update_cols)
+    db.execute(stmt)
+
+    if commit:
+        db.commit()
+
+
+def build_detail_update_dict(domain_article):
+    """상세 크롤링 결과 -> DB 업데이트 dict"""
+    update_data = {
+        "detail_description": domain_article.detail_description,
+        "room_count": domain_article.room_count,
+        "bathroom_count": domain_article.bathroom_count,
+        "move_in_date": domain_article.move_in_date,
+        "maintenance_cost": domain_article.maintenance_cost,
+        "numeric_maintenance_cost": parse_maintenance_cost(domain_article.maintenance_cost),
+        "parking_count": domain_article.parking_count,
+        "photo_urls": domain_article.photo_urls or [],
+        "representative_img_url": domain_article.representative_img_url,
+        "realtor_phone_display": domain_article.realtor_phone_display,
+        "realtor_address": domain_article.realtor_address,
+        "heating_type": domain_article.heating_type,
+        "total_floor_count": domain_article.total_floor_count,
+        "jibun_address": domain_article.jibun_address,
+        "use_approve_ymd": domain_article.use_approve_ymd,
+        "acquisition_tax": domain_article.acquisition_tax,
+        "broker_fee": domain_article.broker_fee,
+        "detail_crawled": True,
+        "updated_at": _utcnow(),
+    }
+    if domain_article.numeric_price is not None:
+        update_data["numeric_price"] = domain_article.numeric_price
+    if domain_article.numeric_rent_price is not None:
+        update_data["numeric_rent_price"] = domain_article.numeric_rent_price
+    if domain_article.price_per_pyeong is not None:
+        update_data["price_per_pyeong"] = domain_article.price_per_pyeong
+    return update_data
+
+
+def deactivate_missing_articles(db, complex_no, seen_article_nos, commit=True):
+    """이번 크롤링에서 보이지 않은 매물 비활성화"""
+    if not seen_article_nos:
+        return
+    db.query(ArticleModel).filter(
+        ArticleModel.complex_no == complex_no,
+        ArticleModel.is_active == True,
+        ~ArticleModel.article_no.in_(seen_article_nos),
+    ).update(
+        {"is_active": False, "updated_at": _utcnow()},
+        synchronize_session=False,
+    )
+    if commit:
+        db.commit()

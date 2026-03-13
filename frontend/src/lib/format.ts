@@ -24,3 +24,10 @@ export function formatKoreanPrice(manwon: number | undefined | null): string {
   }
   return `${manwon.toLocaleString()}만`;
 }
+
+/** 관리비 표시 (문자열 또는 숫자 → "N만원") */
+export function formatMaintenanceCost(cost?: string | null, numericCost?: number | null): string {
+  if (cost) return cost.includes("만") ? cost : `${cost}만원`;
+  if (numericCost != null) return `${numericCost}만원`;
+  return "-";
+}

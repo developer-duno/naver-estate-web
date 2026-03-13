@@ -64,6 +64,12 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // 로그인 사용자가 /login, /signup 접근 시 홈으로 리다이렉트
+  const isAuthPage = pathname === "/login" || pathname === "/signup";
+  if (isAuthPage && user) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
   return response;
 }
 

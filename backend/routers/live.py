@@ -6,14 +6,21 @@ import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from deps import get_db
 from db.models import Complex as ComplexModel, Article as ArticleModel
 from db.database import SessionLocal
 from routers.serializers import complex_to_dict, article_to_dict
-from shared.constants import M2_TO_PYEONG, NAVER_COMPLEX_ARTICLES_API, NAVER_LAND_BASE
+from services.cache import TTLCache
+from services.upsert import (
+    upsert_complex_from_search,
+    upsert_article,
+    build_detail_update_dict,
+    deactivate_missing_articles,
+)
+from services.enricher import enrich_complex_detail
+from shared.constants import NAVER_COMPLEX_ARTICLES_API, NAVER_LAND_BASE
 from shared.domain.article import RealEstateArticle
 from shared.naver_api import NaverEstateAPI
 
@@ -22,34 +29,8 @@ router = APIRouter()
 
 CRAWL_REAL_ESTATE_TYPES = {"APT", "ABYG", "JGC", "PRE"}
 
-# 난방 코드 → 이름 매핑 (데스크톱 앱 price_school_formatter.py 동일)
-HEAT_METHOD_MAP = {"HT001": "중앙난방", "HT002": "개별난방", "HT003": "지역난방"}
-HEAT_FUEL_MAP = {"HF001": "도시가스", "HF002": "LPG", "HF003": "석유", "HF004": "전기"}
-
-# ── TTL Cache: prevent hammering Naver API for identical requests ──
-_CACHE_TTL_SECONDS = 300  # 5 minutes
-
-_cache: dict[str, tuple[float, object]] = {}
-
-
-def _cache_get(key: str):
-    """Return cached value if TTL not expired, else None."""
-    entry = _cache.get(key)
-    if entry and (time.time() - entry[0]) < _CACHE_TTL_SECONDS:
-        return entry[1]
-    return None
-
-
-def _cache_set(key: str, value: object):
-    _cache[key] = (time.time(), value)
-
-    # Evict expired entries periodically (keep cache bounded)
-    if len(_cache) > 500:
-        now = time.time()
-        expired = [k for k, (t, _) in _cache.items() if now - t >= _CACHE_TTL_SECONDS]
-        for k in expired:
-            del _cache[k]
-
+# ── TTL Cache ──
+_cache = TTLCache()
 
 # -- Background crawl progress tracking --
 _crawl_status: dict[str, dict] = {}
@@ -59,24 +40,6 @@ def _utcnow():
     return datetime.now(timezone.utc)
 
 
-def _safe_int(val):
-    if val is None:
-        return None
-    try:
-        return int(val)
-    except (ValueError, TypeError):
-        return None
-
-
-def _safe_float(val):
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return None
-
-
 @router.get("/search")
 def live_search(
     q: str = Query(..., min_length=1, description="Search keyword"),
@@ -84,7 +47,7 @@ def live_search(
 ):
     """Live keyword search - Naver API -> DB upsert -> return"""
     cache_key = f"search:{q}"
-    cached = _cache_get(cache_key)
+    cached = _cache.get(cache_key)
     if cached is not None:
         return cached
 
@@ -107,7 +70,7 @@ def live_search(
             re_type = c_data.get("realEstateTypeCode", "")
             if re_type and re_type not in CRAWL_REAL_ESTATE_TYPES:
                 continue
-            cpx = _upsert_complex_from_search(db, c_data)
+            cpx = upsert_complex_from_search(db, c_data)
             if cpx:
                 all_complexes.append(cpx)
 
@@ -128,8 +91,6 @@ def live_search(
     }
 
 
-
-
 @router.get("/region")
 def live_region(
     sido: str = Query(...),
@@ -139,7 +100,7 @@ def live_region(
 ):
     """Live region search - Naver API -> DB upsert -> return"""
     cache_key = f"region:{sido}:{sigungu}:{dong}"
-    cached = _cache_get(cache_key)
+    cached = _cache.get(cache_key)
     if cached is not None:
         return cached
 
@@ -168,7 +129,7 @@ def live_region(
             re_type = c_data.get("realEstateTypeCode", "")
             if re_type and re_type not in CRAWL_REAL_ESTATE_TYPES:
                 continue
-            cpx = _upsert_complex_from_search(db, c_data, sido=sido, sigungu=sigungu, dong=dong)
+            cpx = upsert_complex_from_search(db, c_data, sido=sido, sigungu=sigungu, dong=dong)
             if cpx:
                 all_complexes.append(cpx)
 
@@ -187,7 +148,7 @@ def live_region(
         ],
         "total": len(all_complexes),
     }
-    _cache_set(cache_key, result)
+    _cache.set(cache_key, result)
     return result
 
 
@@ -228,7 +189,7 @@ def start_live_crawl(complex_no: str):
     """Start background crawl, return immediately."""
     # Cache hit -> skip crawl
     cache_key = f"articles:{complex_no}"
-    if _cache_get(cache_key) is not None:
+    if _cache.get(cache_key) is not None:
         return {"complex_no": complex_no, "status": "cached"}
 
     # Already running?
@@ -256,7 +217,8 @@ def get_crawl_status(complex_no: str):
     """Poll crawl progress."""
     status = _crawl_status.get(complex_no)
     if not status:
-        return {"complex_no": complex_no, "status": "idle"}
+        return {"complex_no": complex_no, "status": "idle",
+                "detail_phase": None, "detail_crawled_count": 0, "detail_total": 0}
     return {"complex_no": complex_no, **status}
 
 
@@ -267,7 +229,7 @@ def live_articles(
 ):
     """Live article crawl - Naver API -> DB upsert -> return"""
     cache_key = f"articles:{complex_no}"
-    cached = _cache_get(cache_key)
+    cached = _cache.get(cache_key)
     if cached is not None:
         return cached
 
@@ -289,7 +251,7 @@ def live_articles(
         for a_data in article_list:
             article = RealEstateArticle.from_dict(a_data)
             article.complex_no = complex_no
-            _upsert_article(db, article)
+            upsert_article(db, article)
             all_article_nos.add(article.article_no)
 
         if not result.get("isMoreData", False):
@@ -298,16 +260,7 @@ def live_articles(
         time.sleep(0.5)
 
     # Deactivate missing articles
-    if all_article_nos:
-        db.query(ArticleModel).filter(
-            ArticleModel.complex_no == complex_no,
-            ArticleModel.is_active == True,
-            ~ArticleModel.article_no.in_(all_article_nos),
-        ).update(
-            {"is_active": False, "updated_at": _utcnow()},
-            synchronize_session=False,
-        )
-        db.commit()
+    deactivate_missing_articles(db, complex_no, all_article_nos)
 
     # Update last_crawled_at
     db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).update(
@@ -318,7 +271,7 @@ def live_articles(
     # Enrich complex detail if not yet done
     cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
     if cpx:  # Always re-enrich to update new fields
-        _enrich_complex_detail(db, complex_no)
+        enrich_complex_detail(db, complex_no)
 
     # Return active articles + refreshed complex info from DB
     articles = (
@@ -337,7 +290,7 @@ def live_articles(
         "page_size": len(articles),
         "complex": complex_to_dict(cpx_refreshed) if cpx_refreshed else None,
     }
-    _cache_set(cache_key, result)
+    _cache.set(cache_key, result)
     return result
 
 
@@ -373,7 +326,7 @@ def _background_crawl(complex_no: str):
             for a_data in article_list:
                 article = RealEstateArticle.from_dict(a_data)
                 article.complex_no = complex_no
-                _upsert_article_no_commit(db, article)
+                upsert_article(db, article, commit=False)
                 all_article_nos.add(article.article_no)
 
             db.commit()  # per-page commit
@@ -389,16 +342,7 @@ def _background_crawl(complex_no: str):
         _crawl_status[complex_no]["has_more"] = False
 
         # Deactivate missing articles
-        if all_article_nos:
-            db.query(ArticleModel).filter(
-                ArticleModel.complex_no == complex_no,
-                ArticleModel.is_active == True,
-                ~ArticleModel.article_no.in_(all_article_nos),
-            ).update(
-                {"is_active": False, "updated_at": _utcnow()},
-                synchronize_session=False,
-            )
-            db.commit()
+        deactivate_missing_articles(db, complex_no, all_article_nos)
 
         # Update last_crawled_at
         db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).update(
@@ -409,7 +353,15 @@ def _background_crawl(complex_no: str):
         # Enrich complex detail if not yet done
         cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
         if cpx:  # Always re-enrich to update new fields
-            _enrich_complex_detail(db, complex_no)
+            enrich_complex_detail(db, complex_no)
+
+        # Phase 2: 상세 정보 자동 크롤링
+        _crawl_status[complex_no]["detail_phase"] = "running"
+        try:
+            _crawl_details_for_complex(db, complex_no)
+        except Exception as e:
+            logger.warning("Detail crawl phase failed: %s → %s", complex_no, e)
+        _crawl_status[complex_no]["detail_phase"] = "done"
 
         _crawl_status[complex_no]["status"] = "done"
         logger.info("Background crawl done: %s -> %d articles", complex_no, len(all_article_nos))
@@ -425,172 +377,7 @@ def _background_crawl(complex_no: str):
     finally:
         db.close()
         # Invalidate cache so next DB read gets fresh data
-        _cache.pop(f"articles:{complex_no}", None)
-
-
-
-def _upsert_complex_from_search(db: Session, data: dict, sido: str = None, sigungu: str = None, dong: str = None) -> dict | None:
-    """Upsert complex from search result, return dict"""
-    complex_no = str(data.get("complexNo", ""))
-    if not complex_no:
-        return None
-
-    lat = data.get("latitude")
-    lng = data.get("longitude")
-    try:
-        latitude = float(lat) if lat else None
-        longitude = float(lng) if lng else None
-    except (ValueError, TypeError):
-        latitude = None
-        longitude = None
-
-    values = {
-        "complex_no": complex_no,
-        "complex_name": data.get("complexName", ""),
-        "cortar_no": data.get("cortarNo"),
-        "real_estate_type_code": data.get("realEstateTypeCode"),
-        "real_estate_type_name": data.get("realEstateTypeName"),
-        "latitude": latitude,
-        "longitude": longitude,
-        "total_household_count": _safe_int(data.get("totalHouseholdCount")),
-        "high_floor": _safe_int(data.get("highFloor")),
-        "low_floor": _safe_int(data.get("lowFloor")),
-        "use_approve_ymd": data.get("useApproveYmd"),
-        "total_dong_count": _safe_int(data.get("totalDongCount")),
-        "min_supply_area_m2": _safe_float(data.get("minSupplyArea")),
-        "max_supply_area_m2": _safe_float(data.get("maxSupplyArea")),
-        "cortar_address": data.get("cortarAddress"),
-        "updated_at": _utcnow(),
-    }
-
-    # Use explicit params if provided, otherwise parse from address
-    if sido:
-        values["sido"] = sido
-        if sigungu:
-            values["sigungu"] = sigungu
-        if dong:
-            values["dong"] = dong
-    else:
-        address = data.get("cortarAddress", "")
-        parts = address.split() if address else []
-        if len(parts) >= 2:
-            values["sido"] = parts[0]
-            values["sigungu"] = parts[1]
-            if len(parts) >= 3:
-                values["dong"] = parts[2]
-
-    stmt = pg_insert(ComplexModel).values(**values)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["complex_no"],
-        set_={k: v for k, v in values.items() if k != "complex_no"},
-    )
-    db.execute(stmt)
-    db.commit()
-
-    return {
-        "complex_no": complex_no,
-        "complex_name": data.get("complexName", ""),
-        "cortar_no": data.get("cortarNo"),
-        "real_estate_type_code": data.get("realEstateTypeCode"),
-        "real_estate_type_name": data.get("realEstateTypeName"),
-        "latitude": latitude,
-        "longitude": longitude,
-        "total_household_count": _safe_int(data.get("totalHouseholdCount")),
-        "high_floor": _safe_int(data.get("highFloor")),
-        "low_floor": _safe_int(data.get("lowFloor")),
-        "use_approve_ymd": data.get("useApproveYmd"),
-        "total_dong_count": _safe_int(data.get("totalDongCount")),
-        "min_supply_area_m2": _safe_float(data.get("minSupplyArea")),
-        "max_supply_area_m2": _safe_float(data.get("maxSupplyArea")),
-        "cortar_address": data.get("cortarAddress"),
-        "sido": values.get("sido"),
-        "sigungu": values.get("sigungu"),
-        "dong": values.get("dong"),
-        "last_crawled_at": None,
-    }
-
-
-def _upsert_article_no_commit(db: Session, article: RealEstateArticle):
-    """Upsert article without committing (caller manages commits)."""
-    values = {
-        "article_no": article.article_no,
-        "complex_no": article.complex_no or "",
-        "trade_type_name": article.trade_type_name,
-        "building_name": article.building_name,
-        "floor_info": article.floor_info,
-        "deal_or_warrant_prc": article.deal_or_warrant_prc,
-        "rent_prc": article.rent_prc,
-        "area1_m2": article.area1_m2,
-        "area2_m2": article.area2_m2,
-        "direction": article.direction,
-        "article_feature_desc": article.article_feature_desc,
-        "tags": article.tags or [],
-        "realtor_name": article.realtor_name,
-        "article_confirm_ymd": article.article_confirm_ymd,
-        "latitude": article.latitude,
-        "longitude": article.longitude,
-        "complex_name": article.complex_name,
-        "article_name": article.article_name,
-        "realtor_id": article.realtor_id,
-        "realtor_phone": article.realtor_phone,
-        "is_verified": article.is_verified,
-        "article_real_estate_type_name": article.article_real_estate_type_name,
-        "is_presale": article.is_presale,
-        "numeric_price": article.numeric_price,
-        "numeric_rent_price": article.numeric_rent_price,
-        "price_per_pyeong": article.price_per_pyeong,
-        "last_seen_at": _utcnow(),
-        "is_active": True,
-        "updated_at": _utcnow(),
-    }
-    stmt = pg_insert(ArticleModel).values(**values)
-    update_cols = {k: v for k, v in values.items() if k not in ("article_no", "first_seen_at")}
-    stmt = stmt.on_conflict_do_update(index_elements=["article_no"], set_=update_cols)
-    db.execute(stmt)
-
-
-def _upsert_article(db: Session, article: RealEstateArticle):
-    """Upsert article"""
-    values = {
-        "article_no": article.article_no,
-        "complex_no": article.complex_no or "",
-        "trade_type_name": article.trade_type_name,
-        "building_name": article.building_name,
-        "floor_info": article.floor_info,
-        "deal_or_warrant_prc": article.deal_or_warrant_prc,
-        "rent_prc": article.rent_prc,
-        "area1_m2": article.area1_m2,
-        "area2_m2": article.area2_m2,
-        "direction": article.direction,
-        "article_feature_desc": article.article_feature_desc,
-        "tags": article.tags or [],
-        "realtor_name": article.realtor_name,
-        "article_confirm_ymd": article.article_confirm_ymd,
-        "latitude": article.latitude,
-        "longitude": article.longitude,
-        "complex_name": article.complex_name,
-        "article_name": article.article_name,
-        "realtor_id": article.realtor_id,
-        "realtor_phone": article.realtor_phone,
-        "is_verified": article.is_verified,
-        "article_real_estate_type_name": article.article_real_estate_type_name,
-        "is_presale": article.is_presale,
-        "numeric_price": article.numeric_price,
-        "numeric_rent_price": article.numeric_rent_price,
-        "price_per_pyeong": article.price_per_pyeong,
-        "last_seen_at": _utcnow(),
-        "is_active": True,
-        "updated_at": _utcnow(),
-    }
-
-    stmt = pg_insert(ArticleModel).values(**values)
-    update_cols = {k: v for k, v in values.items() if k not in ("article_no", "first_seen_at")}
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["article_no"],
-        set_=update_cols,
-    )
-    db.execute(stmt)
-    db.commit()
+        _cache.delete(f"articles:{complex_no}")
 
 
 def _get_article_counts(db: Session, complex_nos: list[str]) -> dict[str, int]:
@@ -607,98 +394,97 @@ def _get_article_counts(db: Session, complex_nos: list[str]) -> dict[str, int]:
     return {r[0]: r[1] for r in rows}
 
 
-def _enrich_complex_detail(db: Session, complex_no: str):
-    """Enrich complex with detail info (pyeong details etc)"""
-    from db.models import ComplexPyeongDetail
-
-    try:
-        detail = NaverEstateAPI.get_complex_detail(complex_no)
-    except Exception as e:
-        logger.warning("Complex detail fetch failed: %s -> %s", complex_no, e)
-        return
-
-    if not detail or not isinstance(detail, dict) or "error" in detail:
-        return
-
-    cd = detail.get("complexDetail") or {}
-
-    # 난방 정보: 코드 → 이름 매핑 (데스크톱 앱과 동일 패턴)
-    heat_method = HEAT_METHOD_MAP.get(cd.get("heatMethodTypeCode"), cd.get("heatMethodTypeName", ""))
-    heat_fuel = HEAT_FUEL_MAP.get(cd.get("heatFuelTypeCode"), "")
-    heat_str = heat_method + (f" ({heat_fuel})" if heat_fuel else "")
-
-    # 도로명주소 조합
-    road_prefix = cd.get("roadAddressPrefix", "")
-    road_addr = cd.get("roadAddress", "")
-    road_full = f"{road_prefix} {road_addr}".strip() if road_addr else None
-
-    db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).update({
-        "heat_method_type": heat_str.strip() or None,
-        "heat_fuel_type": heat_fuel or None,
-        "total_parking_count": _safe_int(cd.get("parkingPossibleCount")) or _safe_int(cd.get("totalParkingCount")),
-        "construction_company": cd.get("constructionCompanyName"),
-        "floor_area_ratio": cd.get("batlRatio"),
-        "building_coverage_ratio": cd.get("btlRatio"),
-        "address": cd.get("address"),
-        "road_address": road_full,
-        "parking_count_by_household": _safe_float(cd.get("parkingCountByHousehold")),
-        "management_office_tel": cd.get("managementOfficeTelNo"),
-        "detail_crawled_at": _utcnow(),
-    }, synchronize_session=False)
-
-    pyeong_list = detail.get("complexPyeongDetailList") or []
-    for p in pyeong_list:
-        pyeong_no = _safe_int(p.get("pyeongNo"))
-        if pyeong_no is None:
-            continue
-
-        avg_maint = p.get("averageMaintenanceCost") or {}
-
-        # 평면도 URL 추출 (첫 번째 이미지)
-        grand_plans = p.get("grandPlanList") or []
-        floor_plan_url = None
-        if grand_plans:
-            src = grand_plans[0].get("imageSrc", "")
-            if src:
-                floor_plan_url = f"https://landthumb-phinf.pstatic.net{src}" if src.startswith("/") else src
-
-        # 최신 관리비 + 기준월
-        maint_list = p.get("maintenanceCostList") or []
-        latest_maint_cost = None
-        maint_basis = None
-        if maint_list:
-            latest_maint_cost = _safe_int(maint_list[0].get("totalPrice"))
-            maint_basis = maint_list[0].get("basisYearMonth")
-
-        values = {
-            "complex_no": complex_no,
-            "pyeong_no": pyeong_no,
-            "pyeong_name": p.get("pyeongName"),
-            "supply_area": p.get("supplyArea"),
-            "supply_area_double": _safe_float(p.get("supplyAreaDouble")),
-            "exclusive_area": p.get("exclusiveArea"),
-            "exclusive_rate": p.get("exclusiveRate"),
-            "household_count_by_pyeong": p.get("householdCountByPyeong"),
-            "entrance_type": p.get("entranceType"),
-            "room_count": _safe_int(p.get("roomCnt")),
-            "bathroom_count": _safe_int(p.get("bathroomCnt")),
-            "avg_maintenance_cost": _safe_int(avg_maint.get("averageTotalPrice")),
-            "summer_maintenance_cost": _safe_int(avg_maint.get("summerTotalPrice")),
-            "winter_maintenance_cost": _safe_int(avg_maint.get("winterTotalPrice")),
-            "floor_plan_url": floor_plan_url,
-            "supply_pyeong": p.get("supplyPyeong"),
-            "exclusive_pyeong": p.get("exclusivePyeong"),
-            "latest_maintenance_cost": latest_maint_cost,
-            "maintenance_cost_basis": maint_basis,
-            "updated_at": _utcnow(),
-        }
-
-        stmt = pg_insert(ComplexPyeongDetail).values(**values)
-        stmt = stmt.on_conflict_do_update(
-            constraint="complex_pyeong_details_complex_no_pyeong_no_key",
-            set_={k: v for k, v in values.items() if k not in ("complex_no", "pyeong_no")},
+def _crawl_details_for_complex(db, complex_no: str):
+    """단지의 미크롤링 매물 상세를 일괄 수집 (백그라운드 워커에서 호출)"""
+    articles = (
+        db.query(ArticleModel)
+        .filter(
+            ArticleModel.complex_no == complex_no,
+            ArticleModel.is_active == True,
+            ArticleModel.detail_crawled == False,
         )
-        db.execute(stmt)
+        .all()
+    )
+    if not articles:
+        return
 
+    total = len(articles)
+    _crawl_status[complex_no]["detail_total"] = total
+    _crawl_status[complex_no]["detail_crawled_count"] = 0
+
+    for i, art in enumerate(articles):
+        try:
+            detail_data = NaverEstateAPI.get_article_detail(art.article_no)
+            if detail_data and "error" not in detail_data:
+                domain_article = RealEstateArticle(
+                    article_no=art.article_no,
+                    trade_type_name=art.trade_type_name or "",
+                )
+                domain_article.deal_or_warrant_prc = art.deal_or_warrant_prc
+                domain_article.rent_prc = art.rent_prc
+                domain_article.area2_m2 = art.area2_m2
+                domain_article.update_from_detail(detail_data)
+
+                update_data = build_detail_update_dict(domain_article)
+                db.query(ArticleModel).filter(
+                    ArticleModel.article_no == art.article_no
+                ).update(update_data, synchronize_session=False)
+        except Exception as e:
+            logger.warning("Article detail crawl failed: %s → %s", art.article_no, e)
+
+        _crawl_status[complex_no]["detail_crawled_count"] = i + 1
+
+        # 50건 단위 커밋
+        if (i + 1) % 50 == 0:
+            db.commit()
+
+        time.sleep(1.0)  # 레이트 리밋
+
+    db.commit()  # 나머지 커밋
+    logger.info("Detail crawl done for %s: %d articles", complex_no, total)
+
+
+@router.get("/article/{article_no}/detail")
+def live_article_detail(
+    article_no: str,
+    db: Session = Depends(get_db),
+):
+    """매물 상세 실시간 조회 — 네이버 API에서 직접 가져와 DB 반영 후 반환"""
+    # DB에서 기존 매물 조회
+    art = db.query(ArticleModel).filter(ArticleModel.article_no == article_no).first()
+
+    # 이미 상세 크롤링 완료된 경우 바로 반환
+    if art and art.detail_crawled:
+        return article_to_dict(art)
+
+    # 네이버 API에서 상세 정보 가져오기
+    detail_data = NaverEstateAPI.get_article_detail(article_no)
+    if not detail_data or "error" in detail_data:
+        if art:
+            return article_to_dict(art)
+        raise HTTPException(status_code=404, detail="매물 정보를 찾을 수 없습니다")
+
+    if not art:
+        raise HTTPException(status_code=404, detail="매물 정보를 찾을 수 없습니다")
+
+    # 도메인 객체로 변환 후 상세 업데이트
+    domain_article = RealEstateArticle(
+        article_no=art.article_no,
+        trade_type_name=art.trade_type_name or "",
+    )
+    domain_article.deal_or_warrant_prc = art.deal_or_warrant_prc
+    domain_article.rent_prc = art.rent_prc
+    domain_article.area2_m2 = art.area2_m2
+    domain_article.update_from_detail(detail_data)
+
+    # DB 업데이트
+    update_data = build_detail_update_dict(domain_article)
+    db.query(ArticleModel).filter(ArticleModel.article_no == article_no).update(
+        update_data, synchronize_session=False
+    )
     db.commit()
-    logger.info("Complex detail enriched: %s -> %d pyeong", complex_no, len(pyeong_list))
+
+    # 갱신된 데이터 반환
+    db.expire_all()
+    art = db.query(ArticleModel).filter(ArticleModel.article_no == article_no).first()
+    return article_to_dict(art)

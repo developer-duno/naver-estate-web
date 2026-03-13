@@ -182,4 +182,7 @@ export interface CrawlProgress {
   article_count?: number;
   has_more?: boolean;
   error?: string;
+  detail_phase?: "running" | "done" | null;
+  detail_crawled_count?: number;
+  detail_total?: number;
 }

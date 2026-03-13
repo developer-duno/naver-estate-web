@@ -11,19 +11,16 @@ import {
   exportArticles,
   triggerComplexCrawl,
   startLiveCrawl,
-  getCrawlStatus,
   ApiError,
 } from "@/lib/api";
 import { createClient } from "@/lib/supabase";
-import type { Complex, Article, PyeongDetail, ArticleFilters, CrawlProgress } from "@/types";
+import { PAGE_SIZE } from "@/lib/constants";
+import { useCrawlProgress } from "@/hooks/useCrawlProgress";
+import type { Complex, Article, PyeongDetail, ArticleFilters } from "@/types";
 import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
 import ArticleTable from "@/components/ArticleTable";
 import ArticleDetail from "@/components/ArticleDetail";
-
-const PAGE_SIZE = 50;
-const CRAWL_STATUS_POLL_MS = 2_000;
-const ARTICLES_POLL_MS = 3_000;
 
 function formatTimeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -51,19 +48,23 @@ export default function ComplexDetailPage() {
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [filterError, setFilterError] = useState("");
-  const [crawling, setCrawling] = useState(false);
-  const [crawlMessage, setCrawlMessage] = useState("");
-  const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null);
   const currentFiltersRef = useRef<ArticleFilters>({});
   const requestIdRef = useRef(0);
   const cancelledRef = useRef(false);
-  const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const articlesPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const clearAllPolling = useCallback(() => {
-    if (statusPollRef.current) { clearInterval(statusPollRef.current); statusPollRef.current = null; }
-    if (articlesPollRef.current) { clearInterval(articlesPollRef.current); articlesPollRef.current = null; }
-  }, []);
+  const {
+    crawling, crawlMessage, crawlProgress,
+    setCrawling, setCrawlMessage,
+    startCrawl, clearAllPolling,
+  } = useCrawlProgress();
+
+  const crawlCallbacks = useCallback(() => ({
+    setArticles,
+    setTotalCount,
+    setCurrentPage,
+    setComplex: (c: Complex) => setComplex(c),
+    setPyeongDetails,
+  }), []);
 
   // SEO: dynamic title
   useEffect(() => {
@@ -71,58 +72,6 @@ export default function ComplexDetailPage() {
       document.title = `${complex.complex_name} - 아파트 매물`;
     }
   }, [complex]);
-
-  // Phase 2: start crawl progress polling
-  const startCrawlPolling = useCallback(() => {
-    clearAllPolling();
-
-    // Status polling (2s)
-    statusPollRef.current = setInterval(async () => {
-      if (cancelledRef.current) return;
-      try {
-        const status = await getCrawlStatus(complexNo);
-        if (cancelledRef.current) return;
-        setCrawlProgress(status);
-
-        if (status.status === "done" || status.status === "error") {
-          clearAllPolling();
-          setCrawling(false);
-          if (status.status === "done") {
-            setCrawlMessage("");
-            try {
-              const res = await getArticles(complexNo, { page: 1, page_size: PAGE_SIZE });
-              if (!cancelledRef.current) {
-                setArticles(res.articles);
-                setTotalCount(res.total);
-                setCurrentPage(1);
-              }
-            } catch { /* ignore */ }
-            try {
-              const pyeong = await getPyeongDetails(complexNo);
-              if (!cancelledRef.current) setPyeongDetails(pyeong.pyeong_details);
-            } catch { /* ignore */ }
-            try {
-              const cpx = await getComplex(complexNo);
-              if (!cancelledRef.current) setComplex(cpx);
-            } catch { /* ignore */ }
-          } else if (status.error) {
-            setCrawlMessage(`크롤링 오류: ${status.error}`);
-          }
-        }
-      } catch { /* polling failure ignored */ }
-    }, CRAWL_STATUS_POLL_MS);
-
-    // Articles refresh polling (3s)
-    articlesPollRef.current = setInterval(async () => {
-      if (cancelledRef.current) return;
-      try {
-        const res = await getArticles(complexNo, { page: 1, page_size: PAGE_SIZE });
-        if (cancelledRef.current) return;
-        setArticles(res.articles);
-        setTotalCount(res.total);
-      } catch { /* ignore */ }
-    }, ARTICLES_POLL_MS);
-  }, [complexNo, clearAllPolling]);
 
   // Initial data load - 2-phase approach
   useEffect(() => {
@@ -161,7 +110,6 @@ export default function ComplexDetailPage() {
       try {
         const crawlResult = await startLiveCrawl(complexNo);
         if (cancelledRef.current) return;
-        setCrawlProgress(crawlResult);
 
         if (crawlResult.status === "cached") {
           // Cache hit - fetch latest via liveArticles once
@@ -181,8 +129,7 @@ export default function ComplexDetailPage() {
           crawlResult.status === "running" ||
           crawlResult.status === "already_running"
         ) {
-          setCrawling(true);
-          startCrawlPolling();
+          startCrawl(complexNo, crawlCallbacks());
         }
       } catch {
         // Fallback: start-crawl endpoint not available, use sync liveArticles
@@ -214,7 +161,7 @@ export default function ComplexDetailPage() {
       cancelledRef.current = true;
       clearAllPolling();
     };
-  }, [complexNo, startCrawlPolling, clearAllPolling]);
+  }, [complexNo, startCrawl, clearAllPolling, crawlCallbacks, setCrawling, setCrawlMessage]);
 
   // 매물 로드 (필터 + 페이지)
   const loadArticles = useCallback(
@@ -256,7 +203,7 @@ export default function ComplexDetailPage() {
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) {
-      setCrawlMessage("엑셀 내보내기는 로그인이 필요합니다.");
+      router.push(`/login?redirect=${encodeURIComponent(`/complex/${complexNo}`)}`);
       return;
     }
     setExporting(true);
@@ -273,7 +220,7 @@ export default function ComplexDetailPage() {
     const supabase = createClient();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) {
-      setCrawlMessage("로그인이 필요합니다.");
+      router.push(`/login?redirect=${encodeURIComponent(`/complex/${complexNo}`)}`);
       return;
     }
     setCrawling(true);
@@ -282,13 +229,12 @@ export default function ComplexDetailPage() {
       await triggerComplexCrawl(complexNo, session.access_token);
       setCrawlMessage("데이터 갱신 중...");
       const crawlResult = await startLiveCrawl(complexNo);
-      setCrawlProgress(crawlResult);
       if (
         crawlResult.status === "started" ||
         crawlResult.status === "running" ||
         crawlResult.status === "already_running"
       ) {
-        startCrawlPolling();
+        startCrawl(complexNo, crawlCallbacks());
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -377,9 +323,15 @@ export default function ComplexDetailPage() {
         <div className="bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-md px-4 py-3 flex items-center gap-3">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 flex-shrink-0" />
           <span>
-            크롤링 중...
-            {(crawlProgress.current_page ?? 0) > 0 && ` ${crawlProgress.current_page}페이지`}
-            {(crawlProgress.article_count ?? 0) > 0 && `, ${crawlProgress.article_count}건 수집`}
+            {crawlProgress.detail_phase === "running" ? (
+              <>상세 정보 수집 중... {crawlProgress.detail_crawled_count ?? 0}/{crawlProgress.detail_total ?? 0}건</>
+            ) : (
+              <>
+                매물 목록 수집 중...
+                {(crawlProgress.current_page ?? 0) > 0 && ` ${crawlProgress.current_page}페이지`}
+                {(crawlProgress.article_count ?? 0) > 0 && `, ${crawlProgress.article_count}건`}
+              </>
+            )}
           </span>
         </div>
       )}

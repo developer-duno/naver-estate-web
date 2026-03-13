@@ -4,6 +4,7 @@ import logging
 import os
 from typing import Generator
 
+import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
@@ -19,10 +20,11 @@ security = HTTPBearer(auto_error=False)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
 
-if not SUPABASE_SERVICE_KEY:
-    logger.critical("SUPABASE_SERVICE_KEY 미설정 — JWT 인증이 작동하지 않습니다")
+if not SUPABASE_JWT_SECRET and not SUPABASE_URL:
+    logger.critical("SUPABASE_JWT_SECRET 또는 SUPABASE_URL 미설정 — JWT 인증이 작동하지 않습니다")
 
 
 def get_db() -> Generator:
@@ -32,6 +34,50 @@ def get_db() -> Generator:
         yield db
     finally:
         db.close()
+
+
+def _verify_token_local(token: str) -> dict:
+    """JWT secret으로 로컬 검증"""
+    try:
+        payload = jwt.decode(
+            token,
+            SUPABASE_JWT_SECRET,
+            algorithms=["HS256"],
+            audience="authenticated",
+        )
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="유효하지 않은 토큰")
+        return {"user_id": user_id, "email": payload.get("email", "")}
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="토큰 검증 실패")
+
+
+def _verify_token_remote(token: str) -> dict:
+    """Supabase GoTrue API로 원격 검증 (JWT secret 미설정 시 폴백)"""
+    if not SUPABASE_URL:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="인증 서비스 미설정",
+        )
+    try:
+        resp = httpx.get(
+            f"{SUPABASE_URL}/auth/v1/user",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "apikey": SUPABASE_SERVICE_KEY,
+            },
+            timeout=5.0,
+        )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="토큰 검증 실패")
+        data = resp.json()
+        user_id = data.get("id")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="유효하지 않은 토큰")
+        return {"user_id": user_id, "email": data.get("email", "")}
+    except httpx.HTTPError:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="인증 서비스 연결 실패")
 
 
 def get_current_user(
@@ -45,26 +91,16 @@ def get_current_user(
     if not credentials:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="인증이 필요합니다")
 
-    if not SUPABASE_SERVICE_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="인증 서비스 미설정",
-        )
-
     token = credentials.credentials
-    try:
-        payload = jwt.decode(
-            token,
-            SUPABASE_SERVICE_KEY,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="유효하지 않은 토큰")
-        email = payload.get("email", "")
-    except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="토큰 검증 실패")
+
+    # JWT secret이 있으면 로컬 검증, 없으면 Supabase API로 원격 검증
+    if SUPABASE_JWT_SECRET:
+        verified = _verify_token_local(token)
+    else:
+        verified = _verify_token_remote(token)
+
+    user_id = verified["user_id"]
+    email = verified["email"]
 
     # user_profiles 테이블에서 프로필 조회/자동 생성
     profile = db.get(UserProfile, user_id)

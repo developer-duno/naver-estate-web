@@ -2,10 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import { getArticle } from "@/lib/api";
+import { getArticleLive } from "@/lib/api";
 import type { Article } from "@/types";
 import { M2_TO_PYEONG } from "@/lib/constants";
-import { formatDateFull } from "@/lib/format";
+import { formatDateFull, formatMaintenanceCost } from "@/lib/format";
 
 interface Props {
   articleNo: string;
@@ -20,7 +20,7 @@ export default function ArticleDetail({ articleNo, onClose }: Props) {
   useEffect(() => {
     setLoading(true);
     setError("");
-    getArticle(articleNo)
+    getArticleLive(articleNo)
       .then(setArticle)
       .catch(() => setError("매물 정보를 불러올 수 없습니다."))
       .finally(() => setLoading(false));
@@ -83,7 +83,22 @@ export default function ArticleDetail({ articleNo, onClose }: Props) {
           )}
 
           {!loading && error && (
-            <p className="text-center text-red-500 py-8">{error}</p>
+            <div className="text-center py-8">
+              <p className="text-red-500 mb-3">{error}</p>
+              <button
+                onClick={() => {
+                  setLoading(true);
+                  setError("");
+                  getArticleLive(articleNo)
+                    .then(setArticle)
+                    .catch(() => setError("매물 정보를 불러올 수 없습니다."))
+                    .finally(() => setLoading(false));
+                }}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                다시 시도
+              </button>
+            </div>
           )}
 
           {!loading && !error && !article && (
@@ -120,7 +135,7 @@ function ArticleBody({ article: a }: { article: Article }) {
         <Info label="방향" value={a.direction} />
         <Info label="방/욕실" value={`${a.room_count ?? "-"}/${a.bathroom_count ?? "-"}`} />
         <Info label="입주가능일" value={formatDateFull(a.move_in_date)} />
-        <Info label="관리비" value={a.maintenance_cost ? `${a.maintenance_cost}만원` : "-"} />
+        <Info label="관리비" value={formatMaintenanceCost(a.maintenance_cost, a.numeric_maintenance_cost)} />
         <Info label="난방방식" value={a.heating_type} />
         <Info label="주차" value={a.parking_count || "-"} />
         <Info label="총층수" value={a.total_floor_count ? String(a.total_floor_count) : "-"} />

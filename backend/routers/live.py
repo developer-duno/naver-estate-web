@@ -317,7 +317,7 @@ def live_articles(
 
     # Enrich complex detail if not yet done
     cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
-    if cpx and not cpx.detail_crawled_at:
+    if cpx:  # Always re-enrich to update new fields
         _enrich_complex_detail(db, complex_no)
 
     # Return active articles + refreshed complex info from DB
@@ -408,7 +408,7 @@ def _background_crawl(complex_no: str):
 
         # Enrich complex detail if not yet done
         cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
-        if cpx and not cpx.detail_crawled_at:
+        if cpx:  # Always re-enrich to update new fields
             _enrich_complex_detail(db, complex_no)
 
         _crawl_status[complex_no]["status"] = "done"

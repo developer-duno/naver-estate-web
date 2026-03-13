@@ -4,7 +4,7 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -55,6 +55,9 @@ def live_search(
     while True:
         result = NaverEstateAPI.search_by_keyword(q, page=page)
         if not result or "error" in result:
+            if page == 1:
+                detail = result.get("error", "네이버 API 요청 실패") if result else "네이버 API 응답 없음"
+                raise HTTPException(status_code=502, detail=str(detail))
             break
 
         complex_list = result.get("complexes") or result.get("complexList") or []
@@ -108,6 +111,9 @@ def live_region(
     while True:
         result = NaverEstateAPI.search_by_keyword(keyword, page=page)
         if not result or "error" in result:
+            if page == 1:
+                detail = result.get("error", "네이버 API 요청 실패") if result else "네이버 API 응답 없음"
+                raise HTTPException(status_code=502, detail=str(detail))
             break
 
         complex_list = result.get("complexes") or result.get("complexList") or []
@@ -183,6 +189,9 @@ def live_articles(
     while True:
         result = _fetch_articles_all_trade_types(complex_no, page=page)
         if not result or "error" in result:
+            if page == 1:
+                detail = result.get("error", "네이버 매물 API 요청 실패") if result else "네이버 API 응답 없음"
+                raise HTTPException(status_code=502, detail=str(detail))
             break
 
         article_list = result.get("articleList") or []

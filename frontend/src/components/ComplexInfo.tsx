@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import type { Complex, PyeongDetail } from "@/types";
 import { formatDateFull } from "@/lib/format";
 
@@ -75,10 +75,10 @@ function BasicInfo({ cpx }: { cpx: Complex }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
       {rows.map(([label, value]) => (
-        <div key={label} className="contents">
+        <React.Fragment key={label}>
           <span className="text-sm text-gray-500 font-medium">{label}</span>
           <span className="text-sm">{value}</span>
-        </div>
+        </React.Fragment>
       ))}
     </div>
   );

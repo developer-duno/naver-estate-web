@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
@@ -11,6 +11,11 @@ export default function Header() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
 
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    return () => { isMountedRef.current = false; };
+  }, []);
+
   useEffect(() => {
     const supabase = createClient();
 
@@ -20,7 +25,7 @@ export default function Header() {
         const res = await fetch(`${apiUrl}/api/users/me`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
-        if (res.ok) {
+        if (res.ok && isMountedRef.current) {
           const data = await res.json();
           setUserRole(data.role || null);
         }
@@ -31,17 +36,19 @@ export default function Header() {
     (async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
+        if (!isMountedRef.current) return;
         setUserEmail(session?.user?.email ?? null);
         if (session?.access_token) {
           fetchProfile(session.access_token);
         }
       } catch {
-        setUserEmail(null);
+        if (isMountedRef.current) setUserEmail(null);
       }
     })();
 
     // 인증 상태 변화 감지
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!isMountedRef.current) return;
       setUserEmail(session?.user?.email ?? null);
       if (session?.access_token) {
         fetchProfile(session.access_token);

@@ -46,25 +46,23 @@ export default function PriceChart({ complexNo }: PriceChartProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setHistoryError(false);
     getPriceHistory(complexNo, tradeType)
-      .then(setPriceHistory)
-      .catch(() => {
-        setPriceHistory(null);
-        setHistoryError(true);
-      })
-      .finally(() => setLoading(false));
+      .then((data) => { if (!cancelled) setPriceHistory(data); })
+      .catch(() => { if (!cancelled) { setPriceHistory(null); setHistoryError(true); } })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [complexNo, tradeType]);
 
   useEffect(() => {
+    let cancelled = false;
     setStatsError(false);
     getPriceStats(complexNo)
-      .then(setPriceStats)
-      .catch(() => {
-        setPriceStats(null);
-        setStatsError(true);
-      });
+      .then((data) => { if (!cancelled) setPriceStats(data); })
+      .catch(() => { if (!cancelled) { setPriceStats(null); setStatsError(true); } });
+    return () => { cancelled = true; };
   }, [complexNo]);
 
   const chartData = useMemo(

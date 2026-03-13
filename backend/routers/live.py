@@ -20,6 +20,30 @@ router = APIRouter()
 
 CRAWL_REAL_ESTATE_TYPES = {"APT", "ABYG", "JGC", "PRE"}
 
+# ── TTL Cache: prevent hammering Naver API for identical requests ──
+_CACHE_TTL_SECONDS = 300  # 5 minutes
+
+_cache: dict[str, tuple[float, object]] = {}
+
+
+def _cache_get(key: str):
+    """Return cached value if TTL not expired, else None."""
+    entry = _cache.get(key)
+    if entry and (time.time() - entry[0]) < _CACHE_TTL_SECONDS:
+        return entry[1]
+    return None
+
+
+def _cache_set(key: str, value: object):
+    _cache[key] = (time.time(), value)
+
+    # Evict expired entries periodically (keep cache bounded)
+    if len(_cache) > 500:
+        now = time.time()
+        expired = [k for k, (t, _) in _cache.items() if now - t >= _CACHE_TTL_SECONDS]
+        for k in expired:
+            del _cache[k]
+
 
 def _utcnow():
     return datetime.now(timezone.utc)
@@ -49,6 +73,11 @@ def live_search(
     db: Session = Depends(get_db),
 ):
     """Live keyword search - Naver API -> DB upsert -> return"""
+    cache_key = f"search:{q}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     all_complexes = []
     page = 1
 
@@ -99,6 +128,11 @@ def live_region(
     db: Session = Depends(get_db),
 ):
     """Live region search - Naver API -> DB upsert -> return"""
+    cache_key = f"region:{sido}:{sigungu}:{dong}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     keyword = sido
     if sigungu:
         keyword += f" {sigungu}"
@@ -136,14 +170,15 @@ def live_region(
     complex_nos = [c["complex_no"] for c in all_complexes]
     counts = _get_article_counts(db, complex_nos)
 
-    return {
+    result = {
         "complexes": [
             {**c, "article_count": counts.get(c["complex_no"], 0)}
             for c in all_complexes
         ],
         "total": len(all_complexes),
     }
-
+    _cache_set(cache_key, result)
+    return result
 
 
 def _fetch_articles_all_trade_types(complex_no: str, page: int = 1):
@@ -183,6 +218,11 @@ def live_articles(
     db: Session = Depends(get_db),
 ):
     """Live article crawl - Naver API -> DB upsert -> return"""
+    cache_key = f"articles:{complex_no}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     all_article_nos = set()
     page = 1
 
@@ -242,13 +282,15 @@ def live_articles(
     # Re-fetch complex after enrichment to return updated info
     cpx_refreshed = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
 
-    return {
+    result = {
         "articles": [article_to_dict(a) for a in articles],
         "total": len(articles),
         "page": 1,
         "page_size": len(articles),
         "complex": complex_to_dict(cpx_refreshed) if cpx_refreshed else None,
     }
+    _cache_set(cache_key, result)
+    return result
 
 
 def _upsert_complex_from_search(db: Session, data: dict, sido: str = None, sigungu: str = None, dong: str = None) -> dict | None:

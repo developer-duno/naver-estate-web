@@ -102,7 +102,7 @@ export async function getArticles(complexNo: string, filters?: ArticleFilters) {
 
 /** 실시간 매물 크롤링 (네이버 API에서 직접 가져옴) */
 export async function liveArticles(complexNo: string) {
-  return fetchApi<{ articles: Article[]; total: number; page: number; page_size: number }>(
+  return fetchApi<{ articles: Article[]; total: number; page: number; page_size: number; complex: Complex | null }>(
     `/api/live/${complexNo}/articles`,
     { timeoutMs: LIVE_TIMEOUT_MS } as any,
   );

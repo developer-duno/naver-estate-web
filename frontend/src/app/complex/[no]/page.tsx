@@ -70,30 +70,44 @@ export default function ComplexDetailPage() {
     async function load() {
       setLoading(true);
       try {
-        const [cpxResult, artResult, pyeongResult] = await Promise.allSettled([
-          getComplex(complexNo),
+        // 실시간 매물 크롤링 (단지 상세 보강 포함) + 평형 정보 동시 조회
+        const [artResult, pyeongResult] = await Promise.allSettled([
           liveArticles(complexNo),
           getPyeongDetails(complexNo),
         ]);
 
         if (cancelled) return;
 
-        // 단지 정보는 필수 — 실패 시 전체 에러
-        if (cpxResult.status === "rejected") {
-          setError("단지 정보를 불러올 수 없습니다.");
-          return;
-        }
-        setComplex(cpxResult.value);
-
-        // 매물 목록 — 실패 시 빈 목록으로 fallback
+        // 매물 크롤링 결과에서 단지 정보도 가져옴 (상세 보강 후 반환)
         if (artResult.status === "fulfilled") {
           setArticles(artResult.value.articles);
           setTotalCount(artResult.value.total);
+          if (artResult.value.complex) {
+            setComplex(artResult.value.complex);
+          }
         }
 
-        // 평형 정보 — 실패 시 빈 배열로 fallback
-        if (pyeongResult.status === "fulfilled") {
+        // liveArticles에서 complex를 못 가져온 경우 DB fallback
+        const gotComplex = artResult.status === "fulfilled" && artResult.value.complex;
+        if (!gotComplex) {
+          try {
+            const cpx = await getComplex(complexNo);
+            if (!cancelled) setComplex(cpx);
+          } catch {
+            if (!cancelled) setError("단지 정보를 불러올 수 없습니다.");
+            return;
+          }
+        }
+
+        // 평형 정보 — liveArticles가 단지 상세를 보강하므로, 보강 후 재조회
+        if (pyeongResult.status === "fulfilled" && pyeongResult.value.pyeong_details.length > 0) {
           setPyeongDetails(pyeongResult.value.pyeong_details);
+        } else if (artResult.status === "fulfilled") {
+          // liveArticles가 단지 상세를 보강했을 수 있으므로 재조회
+          try {
+            const freshPyeong = await getPyeongDetails(complexNo);
+            if (!cancelled) setPyeongDetails(freshPyeong.pyeong_details);
+          } catch { /* ignore */ }
         }
       } catch {
         if (!cancelled) setError("단지 정보를 불러올 수 없습니다.");

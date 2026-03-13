@@ -223,18 +223,22 @@ def live_articles(
     if cpx and not cpx.detail_crawled_at:
         _enrich_complex_detail(db, complex_no)
 
-    # Return active articles from DB
+    # Return active articles + refreshed complex info from DB
     articles = (
         db.query(ArticleModel)
         .filter(ArticleModel.complex_no == complex_no, ArticleModel.is_active == True)
         .all()
     )
 
+    # Re-fetch complex after enrichment to return updated info
+    cpx_refreshed = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
+
     return {
         "articles": [article_to_dict(a) for a in articles],
         "total": len(articles),
         "page": 1,
         "page_size": len(articles),
+        "complex": complex_to_dict(cpx_refreshed) if cpx_refreshed else None,
     }
 
 

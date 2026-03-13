@@ -23,6 +23,8 @@ function getApiBase(): string {
 const DEFAULT_TIMEOUT_MS = 15_000;
 const LIVE_TIMEOUT_MS = 120_000; // live crawling takes longer
 
+let _isLoggingOut = false;
+
 async function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const url = `${getApiBase()}${path}`;
   const externalSignal = options?.signal;
@@ -41,8 +43,9 @@ async function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: n
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       // P1-1: 인증 실패 시 자동 로그아웃 (토큰 만료, 사용자 정지 등)
-      if (res.status === 401 || res.status === 403) {
+      if ((res.status === 401 || res.status === 403) && !_isLoggingOut) {
         if (typeof window !== "undefined") {
+          _isLoggingOut = true;
           const { createClient } = await import("@/lib/supabase");
           const supabase = createClient();
           await supabase.auth.signOut();

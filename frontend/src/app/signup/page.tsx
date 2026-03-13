@@ -165,8 +165,8 @@ export default function SignupPage() {
             className="mt-0.5 rounded border-gray-300"
           />
           <span>
-            <span className="text-blue-600 underline cursor-pointer">이용약관</span> 및{" "}
-            <span className="text-blue-600 underline cursor-pointer">개인정보 처리방침</span>에 동의합니다
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">이용약관</a> 및{" "}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">개인정보 처리방침</a>에 동의합니다
           </span>
         </label>
 

@@ -28,12 +28,17 @@ export default function Header() {
     };
 
     // 현재 세션 확인
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUserEmail(session?.user?.email ?? null);
-      if (session?.access_token) {
-        fetchProfile(session.access_token);
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setUserEmail(session?.user?.email ?? null);
+        if (session?.access_token) {
+          fetchProfile(session.access_token);
+        }
+      } catch {
+        setUserEmail(null);
       }
-    }).catch(() => setUserEmail(null));
+    })();
 
     // 인증 상태 변화 감지
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {

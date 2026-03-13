@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef, memo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { searchComplexes, getComplexesByRegion } from "@/lib/api";
 import RegionSelector from "@/components/RegionSelector";
 import type { Complex } from "@/types";
@@ -84,9 +83,9 @@ function SearchContent() {
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* 헤더 */}
       <div className="flex items-center gap-4 mb-6">
-        <Link href="/" aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl">
+        <button onClick={() => { try { const r = document.referrer; if (r && new URL(r).origin === window.location.origin) { window.history.back(); } else { router.push("/"); } } catch { router.push("/"); } }} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl">
           ←
-        </Link>
+        </button>
         <h1 className="text-2xl font-bold">{title}</h1>
         {hasSearchParams && !loading && (
           <span className="text-gray-500 text-sm">({complexes.length}개 단지)</span>
@@ -180,30 +179,32 @@ function SearchContent() {
 }
 
 const ComplexRow = memo(function ComplexRow({ complex, index }: { complex: Complex; index: number }) {
+  const router = useRouter();
   const year = complex.use_approve_ymd?.slice(0, 4);
   const articleCount = complex.article_count ?? 0;
   const isEven = index % 2 === 0;
 
   return (
-    <Link href={`/complex/${complex.complex_no}`} className="contents">
-      <tr className={`hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-200 ${isEven ? "bg-gray-50/60" : "bg-white"}`}>
-        <td className="px-3 py-2 text-gray-400 text-center text-xs border-r border-gray-100">{index}</td>
-        <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap border-r border-gray-100">{complex.complex_name}</td>
-        <td className="px-3 py-2 text-gray-600 max-w-[300px] truncate border-r border-gray-100" title={complex.cortar_address || ""}>{complex.cortar_address || "-"}</td>
-        <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.total_household_count ? complex.total_household_count.toLocaleString() : "-"}</td>
-        <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.total_dong_count || "-"}</td>
-        <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.high_floor ? `${complex.high_floor}층` : "-"}</td>
-        <td className="px-3 py-2 text-center text-gray-700 whitespace-nowrap border-r border-gray-100">{year || "-"}</td>
-        <td className="px-3 py-2 text-center whitespace-nowrap border-r border-gray-100">
-          {complex.real_estate_type_name ? (
-            <span className="text-xs px-1.5 py-0.5 rounded border border-teal-300 text-teal-600">{complex.real_estate_type_name}</span>
-          ) : "-"}
-        </td>
-        <td className="px-3 py-2 text-right whitespace-nowrap">
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${articleCount > 0 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{articleCount}건</span>
-        </td>
-      </tr>
-    </Link>
+    <tr
+      className={`hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-200 ${isEven ? "bg-gray-50/60" : "bg-white"}`}
+      onClick={() => router.push(`/complex/${complex.complex_no}`)}
+    >
+      <td className="px-3 py-2 text-gray-400 text-center text-xs border-r border-gray-100">{index}</td>
+      <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap border-r border-gray-100">{complex.complex_name}</td>
+      <td className="px-3 py-2 text-gray-600 max-w-[300px] truncate border-r border-gray-100" title={complex.cortar_address || ""}>{complex.cortar_address || "-"}</td>
+      <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.total_household_count ? complex.total_household_count.toLocaleString() : "-"}</td>
+      <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.total_dong_count || "-"}</td>
+      <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.high_floor ? `${complex.high_floor}층` : "-"}</td>
+      <td className="px-3 py-2 text-center text-gray-700 whitespace-nowrap border-r border-gray-100">{year || "-"}</td>
+      <td className="px-3 py-2 text-center whitespace-nowrap border-r border-gray-100">
+        {complex.real_estate_type_name ? (
+          <span className="text-xs px-1.5 py-0.5 rounded border border-teal-300 text-teal-600">{complex.real_estate_type_name}</span>
+        ) : "-"}
+      </td>
+      <td className="px-3 py-2 text-right whitespace-nowrap">
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${articleCount > 0 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{articleCount}건</span>
+      </td>
+    </tr>
   );
 });
 

@@ -190,7 +190,13 @@ export default function ComplexDetailPage() {
       setCrawlMessage("데이터 갱신 중... 완료되면 자동으로 반영됩니다.");
       clearCrawlPolling();
       // P0-1: 필터 없이 전체 매물 수로 비교 (필터 변경 영향 제거)
-      const baselineTotal = totalCount;
+      let baselineTotal: number;
+      try {
+        const baseline = await getArticles(complexNo, { page: 1, page_size: 1 });
+        baselineTotal = baseline.total;
+      } catch {
+        baselineTotal = totalCount;
+      }
       crawlPollRef.current = setInterval(async () => {
         try {
           // 필터 적용된 결과로 UI 갱신

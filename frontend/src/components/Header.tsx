@@ -20,16 +20,21 @@ export default function Header() {
     const supabase = createClient();
 
     const fetchProfile = async (accessToken: string) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL;
         const res = await fetch(`${apiUrl}/api/users/me`, {
           headers: { Authorization: `Bearer ${accessToken}` },
+          signal: controller.signal,
         });
         if (res.ok && isMountedRef.current) {
           const data = await res.json();
           setUserRole(data.role || null);
         }
-      } catch {}
+      } catch {} finally {
+        clearTimeout(timer);
+      }
     };
 
     // 현재 세션 확인

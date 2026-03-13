@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getStats } from "@/lib/api";
 import RegionSelector from "@/components/RegionSelector";
@@ -17,13 +17,16 @@ export default function HomePage() {
     setStatsLoading(true);
     setStatsError(false);
     getStats()
-      .then(setStats)
-      .catch(() => setStatsError(true))
-      .finally(() => setStatsLoading(false));
+      .then((data) => { if (!abortRef.current) setStats(data); })
+      .catch(() => { if (!abortRef.current) setStatsError(true); })
+      .finally(() => { if (!abortRef.current) setStatsLoading(false); });
   };
 
+  const abortRef = useRef(false);
   useEffect(() => {
+    abortRef.current = false;
     loadStats();
+    return () => { abortRef.current = true; };
   }, []);
 
   const handleKeywordSearch = () => {

@@ -15,7 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import Response, JSONResponse
 
-from routers import complexes, articles, crawl, stats, regions, admin, users
+from routers import complexes, articles, crawl, stats, regions, admin, users, live
 from auth.rate_limiter import RateLimitMiddleware
 
 # 로깅 설정
@@ -96,6 +96,7 @@ async def security_headers_middleware(request: Request, call_next):
 
 
 # 라우터 등록
+app.include_router(live.router, prefix="/api/live", tags=["실시간 크롤링"])
 app.include_router(complexes.router, prefix="/api/complexes", tags=["단지"])
 app.include_router(articles.router, prefix="/api/articles", tags=["매물"])
 app.include_router(crawl.router, prefix="/api/crawl", tags=["크롤링"])

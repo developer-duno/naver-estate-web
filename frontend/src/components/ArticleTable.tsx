@@ -20,27 +20,27 @@ export default function ArticleTable({ articles, onRowClick }: Props) {
   return (
     <div className="overflow-x-auto bg-white rounded-lg shadow-sm border">
       <table className="w-full text-sm">
-        <thead className="bg-gray-50 border-b">
+        <thead className="bg-gray-100 border-b-2 border-gray-300 sticky top-0 z-10">
           <tr>
-            <Th>매물번호</Th>
-            <Th>거래유형</Th>
-            <Th>동</Th>
-            <Th>층</Th>
-            <Th>가격</Th>
-            <Th>면적</Th>
-            <Th>평당가</Th>
-            <Th>방/욕실</Th>
-            <Th>입주가능일</Th>
-            <Th>관리비</Th>
-            <Th>방향</Th>
-            <Th className="min-w-[160px]">특징</Th>
-            <Th>중개사</Th>
-            <Th>확인일자</Th>
+            <Th className="w-[40px] text-center">No</Th>
+            <Th className="w-[55px] text-center">거래</Th>
+            <Th className="w-[60px]">동</Th>
+            <Th className="w-[45px] text-center">층</Th>
+            <Th className="w-[120px] text-right">가격</Th>
+            <Th className="w-[120px] text-right">면적</Th>
+            <Th className="w-[75px] text-right">평당가</Th>
+            <Th className="w-[45px] text-center">방/욕</Th>
+            <Th className="w-[80px] text-center">입주가능일</Th>
+            <Th className="w-[55px] text-right">관리비</Th>
+            <Th className="w-[40px] text-center">방향</Th>
+            <Th className="min-w-[150px]">특징</Th>
+            <Th className="w-[80px]">중개사</Th>
+            <Th className="w-[75px] text-center">확인일자</Th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
-          {articles.map((art) => (
-            <ArticleRow key={art.article_no} article={art} onClick={onRowClick} />
+        <tbody>
+          {articles.map((art, idx) => (
+            <ArticleRow key={art.article_no} article={art} index={idx + 1} onClick={onRowClick} />
           ))}
         </tbody>
       </table>
@@ -50,16 +50,16 @@ export default function ArticleTable({ articles, onRowClick }: Props) {
 
 function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <th className={`px-3 py-2 text-left text-xs font-medium text-gray-500 whitespace-nowrap ${className}`}>
+    <th className={`px-2 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 last:border-r-0 ${className}`}>
       {children}
     </th>
   );
 }
 
-const ArticleRow = memo(function ArticleRow({ article: art, onClick }: { article: Article; onClick?: (no: string) => void }) {
+const ArticleRow = memo(function ArticleRow({ article: art, index, onClick }: { article: Article; index: number; onClick?: (no: string) => void }) {
   // 가격
   const price =
-    art.trade_type_name === "월세"
+    (art.trade_type_name === "월세" || art.trade_type_name === "단기임대")
       ? `${art.deal_or_warrant_prc || "-"} / ${art.rent_prc || "-"}`
       : art.deal_or_warrant_prc || "-";
 
@@ -98,14 +98,15 @@ const ArticleRow = memo(function ArticleRow({ article: art, onClick }: { article
       tabIndex={0}
       role="row"
       aria-label={`매물 ${art.article_no} 상세 보기`}
-      className="hover:bg-blue-50 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+      className={`hover:bg-blue-50 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 border-b border-gray-200 ${index % 2 === 0 ? "bg-gray-50/50" : "bg-white"}`}
     >
-      <Td>{art.article_no}</Td>
+      <Td className="text-gray-400 text-center">{index}</Td>
       <Td>
         <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
           art.trade_type_name === "매매" ? "bg-red-100 text-red-700" :
           art.trade_type_name === "전세" ? "bg-blue-100 text-blue-700" :
           art.trade_type_name === "월세" ? "bg-green-100 text-green-700" :
+          art.trade_type_name === "단기임대" ? "bg-yellow-100 text-yellow-700" :
           "bg-gray-100 text-gray-700"
         }`}>
           {art.trade_type_name || "-"}
@@ -113,25 +114,25 @@ const ArticleRow = memo(function ArticleRow({ article: art, onClick }: { article
       </Td>
       <Td>{art.building_name || "-"}</Td>
       <Td>{art.floor_info || "-"}</Td>
-      <Td className="font-medium">{price}</Td>
-      <Td>{area}</Td>
-      <Td>{ppyeong}</Td>
-      <Td>{rooms}</Td>
-      <Td>{moveIn}</Td>
-      <Td>{maint}</Td>
-      <Td>{art.direction || "-"}</Td>
-      <Td className="max-w-[200px] truncate" title={art.article_feature_desc || ""}>
+      <Td className="text-right font-semibold text-gray-900">{price}</Td>
+      <Td className="text-right">{area}</Td>
+      <Td className="text-right">{ppyeong}</Td>
+      <Td className="text-center">{rooms}</Td>
+      <Td className="text-center">{moveIn}</Td>
+      <Td className="text-right">{maint}</Td>
+      <Td className="text-center">{art.direction || "-"}</Td>
+      <Td className="max-w-[250px] truncate" title={art.article_feature_desc || ""}>
         {art.article_feature_desc || "-"}
       </Td>
       <Td>{art.realtor_name || "-"}</Td>
-      <Td>{confirm}</Td>
+      <Td className="text-center">{confirm}</Td>
     </tr>
   );
 });
 
 function Td({ children, className = "", title }: { children: React.ReactNode; className?: string; title?: string }) {
   return (
-    <td className={`px-3 py-2 whitespace-nowrap text-gray-700 ${className}`} title={title}>
+    <td className={`px-2 py-1.5 whitespace-nowrap text-xs text-gray-700 border-r border-gray-100 last:border-r-0 ${className}`} title={title}>
       {children}
     </td>
   );

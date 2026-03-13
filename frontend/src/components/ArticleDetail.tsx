@@ -102,7 +102,7 @@ function ArticleBody({ article: a }: { article: Article }) {
   const pyeong = areaM2 ? Math.round(areaM2 / M2_TO_PYEONG * 10) / 10 : null;
 
   const price =
-    a.trade_type_name === "월세"
+    (a.trade_type_name === "월세" || a.trade_type_name === "단기임대")
       ? `${a.deal_or_warrant_prc || "-"} / ${a.rent_prc || "-"}`
       : a.deal_or_warrant_prc || "-";
 
@@ -113,7 +113,7 @@ function ArticleBody({ article: a }: { article: Article }) {
         <Info label="거래유형" value={a.trade_type_name} />
         <Info label="단지명" value={a.complex_name} />
         <Info label="동/층" value={`${a.building_name || "-"} / ${a.floor_info || "-"}`} />
-        <Info label={a.trade_type_name === "월세" ? "보증금/월세" : "가격"} value={price} />
+        <Info label={(a.trade_type_name === "월세" || a.trade_type_name === "단기임대") ? "보증금/월세" : "가격"} value={price} />
         {areaM2 && <Info label="전용면적" value={`${areaM2}㎡ (${pyeong}평)`} />}
         {a.area1_m2 && <Info label="공급면적" value={`${a.area1_m2}㎡`} />}
         <Info label="평당가" value={a.price_per_pyeong ? `${a.price_per_pyeong.toLocaleString()}만원` : "-"} />

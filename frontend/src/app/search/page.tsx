@@ -81,7 +81,7 @@ function SearchContent() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
+    <div className="max-w-7xl mx-auto px-4 py-6">
       {/* 헤더 */}
       <div className="flex items-center gap-4 mb-6">
         <Link href="/" aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl">
@@ -150,54 +150,59 @@ function SearchContent() {
         <div className="text-center py-16 text-gray-500">검색 결과가 없습니다.</div>
       )}
 
-      {/* 단지 카드 그리드 */}
+      {/* 단지 테이블 */}
       {!loading && complexes.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {complexes.map((cpx) => (
-            <ComplexCard key={cpx.complex_no} complex={cpx} />
-          ))}
+        <div className="overflow-x-auto bg-white rounded-lg shadow-sm border">
+          <table className="w-full text-sm border-collapse">
+            <thead className="bg-gray-100 border-b-2 border-gray-300 sticky top-0 z-10">
+              <tr>
+                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 w-[45px] text-center">No</th>
+                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 min-w-[140px] text-left">단지명</th>
+                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 min-w-[200px] text-left">주소</th>
+                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 w-[70px] text-right">세대수</th>
+                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 w-[55px] text-right">동수</th>
+                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 w-[60px] text-right">최고층</th>
+                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 w-[60px] text-center">준공</th>
+                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 w-[65px] text-center">유형</th>
+                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap w-[65px] text-right">매물수</th>
+              </tr>
+            </thead>
+            <tbody>
+              {complexes.map((cpx, idx) => (
+                <ComplexRow key={cpx.complex_no} complex={cpx} index={idx + 1} />
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
   );
 }
 
-const ComplexCard = memo(function ComplexCard({ complex }: { complex: Complex }) {
+const ComplexRow = memo(function ComplexRow({ complex, index }: { complex: Complex; index: number }) {
   const year = complex.use_approve_ymd?.slice(0, 4);
+  const articleCount = complex.article_count ?? 0;
+  const isEven = index % 2 === 0;
 
   return (
-    <Link href={`/complex/${complex.complex_no}`}>
-      <div className="bg-white rounded-lg shadow-sm border p-4 cursor-pointer hover:shadow-md transition-shadow">
-        <h3 className="text-lg font-semibold mb-1">{complex.complex_name}</h3>
-        {complex.cortar_address && (
-          <p className="text-sm text-gray-500 mb-2">{complex.cortar_address}</p>
-        )}
-
-        <div className="flex gap-3 text-sm text-gray-600 mb-2">
-          {complex.total_household_count != null && complex.total_household_count > 0 && (
-            <span>{complex.total_household_count.toLocaleString()}세대</span>
-          )}
-          {complex.high_floor && <span>최고 {complex.high_floor}층</span>}
-          {year && <span>준공 {year}</span>}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span
-            className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-              (complex.article_count ?? 0) > 0
-                ? "bg-blue-100 text-blue-700"
-                : "bg-gray-100 text-gray-500"
-            }`}
-          >
-            매물 {complex.article_count ?? 0}건
-          </span>
-          {complex.real_estate_type_name && (
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full border border-teal-300 text-teal-600">
-              {complex.real_estate_type_name}
-            </span>
-          )}
-        </div>
-      </div>
+    <Link href={`/complex/${complex.complex_no}`} className="contents">
+      <tr className={`hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-200 ${isEven ? "bg-gray-50/60" : "bg-white"}`}>
+        <td className="px-3 py-2 text-gray-400 text-center text-xs border-r border-gray-100">{index}</td>
+        <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap border-r border-gray-100">{complex.complex_name}</td>
+        <td className="px-3 py-2 text-gray-600 max-w-[300px] truncate border-r border-gray-100" title={complex.cortar_address || ""}>{complex.cortar_address || "-"}</td>
+        <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.total_household_count ? complex.total_household_count.toLocaleString() : "-"}</td>
+        <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.total_dong_count || "-"}</td>
+        <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.high_floor ? `${complex.high_floor}층` : "-"}</td>
+        <td className="px-3 py-2 text-center text-gray-700 whitespace-nowrap border-r border-gray-100">{year || "-"}</td>
+        <td className="px-3 py-2 text-center whitespace-nowrap border-r border-gray-100">
+          {complex.real_estate_type_name ? (
+            <span className="text-xs px-1.5 py-0.5 rounded border border-teal-300 text-teal-600">{complex.real_estate_type_name}</span>
+          ) : "-"}
+        </td>
+        <td className="px-3 py-2 text-right whitespace-nowrap">
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${articleCount > 0 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{articleCount}건</span>
+        </td>
+      </tr>
     </Link>
   );
 });

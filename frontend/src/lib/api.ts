@@ -21,12 +21,14 @@ function getApiBase(): string {
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
+const LIVE_TIMEOUT_MS = 120_000; // live crawling takes longer
 
-async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+async function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const url = `${getApiBase()}${path}`;
   const externalSignal = options?.signal;
   const controller = externalSignal ? null : new AbortController();
-  const timer = controller ? setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS) : null;
+  const timeoutMs = (options as any)?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
   try {
     const res = await fetch(url, {
       ...options,
@@ -63,17 +65,17 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
 /** 단지 키워드 검색 */
 export async function searchComplexes(keyword: string, limit = 50, signal?: AbortSignal) {
   return fetchApi<{ complexes: Complex[]; total: number }>(
-    `/api/complexes/search?q=${encodeURIComponent(keyword)}&limit=${limit}`,
-    signal ? { signal } : undefined,
+    `/api/live/search?q=${encodeURIComponent(keyword)}`,
+    { signal, timeoutMs: LIVE_TIMEOUT_MS } as any,
   );
 }
 
-/** 지역별 단지 조회 */
+/** 지역별 단지 조회 (실시간 크롤링) */
 export async function getComplexesByRegion(sido: string, sigungu?: string, dong?: string, signal?: AbortSignal) {
-  let path = `/api/complexes/region?sido=${encodeURIComponent(sido)}`;
+  let path = `/api/live/region?sido=${encodeURIComponent(sido)}`;
   if (sigungu) path += `&sigungu=${encodeURIComponent(sigungu)}`;
   if (dong) path += `&dong=${encodeURIComponent(dong)}`;
-  return fetchApi<{ complexes: Complex[]; total: number }>(path, signal ? { signal } : undefined);
+  return fetchApi<{ complexes: Complex[]; total: number }>(path, { signal, timeoutMs: LIVE_TIMEOUT_MS } as any);
 }
 
 /** 단지 상세 */
@@ -94,6 +96,15 @@ export async function getArticles(complexNo: string, filters?: ArticleFilters) {
   const qs = params.toString();
   return fetchApi<{ articles: Article[]; total: number; page: number; page_size: number }>(
     `/api/complexes/${complexNo}/articles${qs ? `?${qs}` : ""}`
+  );
+}
+
+
+/** 실시간 매물 크롤링 (네이버 API에서 직접 가져옴) */
+export async function liveArticles(complexNo: string) {
+  return fetchApi<{ articles: Article[]; total: number; page: number; page_size: number }>(
+    `/api/live/${complexNo}/articles`,
+    { timeoutMs: LIVE_TIMEOUT_MS } as any,
   );
 }
 

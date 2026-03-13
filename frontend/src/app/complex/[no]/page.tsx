@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { getComplex, getArticles, getPyeongDetails, exportArticles, triggerComplexCrawl, ApiError } from "@/lib/api";
+import { getComplex, getArticles, liveArticles, getPyeongDetails, exportArticles, triggerComplexCrawl, ApiError } from "@/lib/api";
 import { createClient } from "@/lib/supabase";
 import type { Complex, Article, PyeongDetail, ArticleFilters } from "@/types";
 import ComplexInfo from "@/components/ComplexInfo";
@@ -72,7 +72,7 @@ export default function ComplexDetailPage() {
       try {
         const [cpxResult, artResult, pyeongResult] = await Promise.allSettled([
           getComplex(complexNo),
-          getArticles(complexNo, { page: 1, page_size: PAGE_SIZE }),
+          liveArticles(complexNo),
           getPyeongDetails(complexNo),
         ]);
 

@@ -38,25 +38,25 @@ export default function FilterBar({ onChange }: Props) {
       const tt = get("tradeType", tradeType);
       if (tt !== "전체") filters.trade_types = tt;
 
-      const mp = get("minPrice", minPrice);
-      const xp = get("maxPrice", maxPrice);
-      if (mp) filters.min_price = Number(mp);
-      if (xp) filters.max_price = Number(xp);
+      const safeNum = (v: string) => { const n = Number(v); return (v && n >= 0) ? n : null; };
 
-      const mr = get("minRent", minRent);
-      const xr = get("maxRent", maxRent);
-      if (mr) filters.min_rent = Number(mr);
-      if (xr) filters.max_rent = Number(xr);
+      const mp = safeNum(get("minPrice", minPrice));
+      const xp = safeNum(get("maxPrice", maxPrice));
+      if (mp !== null) filters.min_price = mp;
+      if (xp !== null && (mp === null || xp >= mp)) filters.max_price = xp;
+
+      const mr = safeNum(get("minRent", minRent));
+      const xr = safeNum(get("maxRent", maxRent));
+      if (mr !== null) filters.min_rent = mr;
+      if (xr !== null && (mr === null || xr >= mr)) filters.max_rent = xr;
 
       const unit = get("areaUnit", areaUnit);
       const ma = get("minArea", minArea);
       const xa = get("maxArea", maxArea);
-      if (ma) {
-        filters.min_area_m2 = unit === "평" ? Number(ma) * M2_TO_PYEONG : Number(ma);
-      }
-      if (xa) {
-        filters.max_area_m2 = unit === "평" ? Number(xa) * M2_TO_PYEONG : Number(xa);
-      }
+      const minAreaVal = ma ? (unit === "평" ? Number(ma) * M2_TO_PYEONG : Number(ma)) : null;
+      const maxAreaVal = xa ? (unit === "평" ? Number(xa) * M2_TO_PYEONG : Number(xa)) : null;
+      if (minAreaVal !== null && minAreaVal >= 0) filters.min_area_m2 = minAreaVal;
+      if (maxAreaVal !== null && maxAreaVal >= 0 && (minAreaVal === null || maxAreaVal >= minAreaVal)) filters.max_area_m2 = maxAreaVal;
 
       const rooms = get("minRooms", minRooms);
       if (rooms !== "0") filters.min_rooms = Number(rooms);
@@ -66,15 +66,15 @@ export default function FilterBar({ onChange }: Props) {
       const dir = get("direction", direction);
       if (dir !== "전체") filters.direction = dir;
 
-      const mpp = get("minPpyeong", minPpyeong);
-      const xpp = get("maxPpyeong", maxPpyeong);
-      if (mpp) filters.min_ppyeong = Number(mpp);
-      if (xpp) filters.max_ppyeong = Number(xpp);
+      const mpp = safeNum(get("minPpyeong", minPpyeong));
+      const xpp = safeNum(get("maxPpyeong", maxPpyeong));
+      if (mpp !== null) filters.min_ppyeong = mpp;
+      if (xpp !== null && (mpp === null || xpp >= mpp)) filters.max_ppyeong = xpp;
 
-      const mm = get("minMaint", minMaint);
-      const xm = get("maxMaint", maxMaint);
-      if (mm) filters.min_maintenance = Number(mm);
-      if (xm) filters.max_maintenance = Number(xm);
+      const mm = safeNum(get("minMaint", minMaint));
+      const xm = safeNum(get("maxMaint", maxMaint));
+      if (mm !== null) filters.min_maintenance = mm;
+      if (xm !== null && (mm === null || xm >= mm)) filters.max_maintenance = xm;
 
       const age = get("buildingAge", buildingAge);
       if (age !== "0") filters.max_building_age = Number(age);
@@ -141,12 +141,12 @@ export default function FilterBar({ onChange }: Props) {
       {/* 모바일: 항상 보이는 핵심 필터 + 토글 */}
       <div className="flex items-end gap-2 flex-wrap">
         <FilterSelect label="거래유형" value={tradeType} onChange={setImmediate(setTradeType, "tradeType")}
-          options={["전체", "매매", "전세", "월세"]} className="w-24" />
+          options={["전체", "매매", "전세", "월세", "단기임대"]} className="w-24" />
 
         <FilterInput label="최소 가격(만원)" value={minPrice} onChange={setDebounced(setMinPrice, "minPrice")} className={inputCls} />
         <FilterInput label="최대 가격(만원)" value={maxPrice} onChange={setDebounced(setMaxPrice, "maxPrice")} className={inputCls} />
 
-        {tradeType === "월세" && (
+        {(tradeType === "월세" || tradeType === "단기임대") && (
           <>
             <FilterInput label="최소 월세(만원)" value={minRent} onChange={setDebounced(setMinRent, "minRent")} className={inputCls} />
             <FilterInput label="최대 월세(만원)" value={maxRent} onChange={setDebounced(setMaxRent, "maxRent")} className={inputCls} />
@@ -304,7 +304,7 @@ function FilterInput({
         type="number"
         min="0"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => { const v = e.target.value; if (v === "" || Number(v) >= 0) onChange(v); }}
         className={className || "border border-gray-300 rounded px-2 py-1.5 text-sm w-28"}
         placeholder=""
       />

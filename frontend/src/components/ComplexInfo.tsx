@@ -1,49 +1,104 @@
 "use client";
 
-import React, { useState } from "react";
-import type { Complex, PyeongDetail } from "@/types";
+import React, { useState, useEffect, useMemo } from "react";
+import dynamic from "next/dynamic";
+import type { Complex, PyeongDetail, PriceHistory, PriceStats } from "@/types";
 import { formatDateFull } from "@/lib/format";
+import { getPriceHistory, getPriceStats } from "@/lib/api";
+
+const LazyCharts = dynamic(() => import("./PriceChartInner"), { ssr: false });
+
+type TabType = "info" | "area" | "price-trend" | "price-area" | "price-floor";
 
 interface Props {
   complex: Complex;
   pyeongDetails: PyeongDetail[];
+  complexNo: string;
 }
 
-export default function ComplexInfo({ complex: cpx, pyeongDetails }: Props) {
-  const [tab, setTab] = useState<"info" | "area">("info");
+const TABS: { key: TabType; label: string }[] = [
+  { key: "info", label: "단지정보" },
+  { key: "area", label: "면적별 정보" },
+  { key: "price-trend", label: "시세 추이" },
+  { key: "price-area", label: "면적별 가격" },
+  { key: "price-floor", label: "층수별 가격" },
+];
+
+export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo }: Props) {
+  const [tab, setTab] = useState<TabType>("info");
+  const [tradeType, setTradeType] = useState<"A1" | "B1">("A1");
+  const [priceHistory, setPriceHistory] = useState<PriceHistory | null>(null);
+  const [priceStats, setPriceStats] = useState<PriceStats | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState(false);
+  const [statsError, setStatsError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setHistoryLoading(true);
+    setHistoryError(false);
+    getPriceHistory(complexNo, tradeType)
+      .then((data) => { if (!cancelled) setPriceHistory(data); })
+      .catch(() => { if (!cancelled) { setPriceHistory(null); setHistoryError(true); } })
+      .finally(() => { if (!cancelled) setHistoryLoading(false); });
+    return () => { cancelled = true; };
+  }, [complexNo, tradeType]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatsError(false);
+    getPriceStats(complexNo)
+      .then((data) => { if (!cancelled) setPriceStats(data); })
+      .catch(() => { if (!cancelled) { setPriceStats(null); setStatsError(true); } });
+    return () => { cancelled = true; };
+  }, [complexNo]);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-      {/* 탭 */}
-      <div className="flex border-b" role="tablist">
-        <button
-          role="tab"
-          aria-selected={tab === "info"}
-          aria-controls="tabpanel-info"
-          id="tab-info"
-          onClick={() => setTab("info")}
-          className={`px-4 py-2.5 text-sm font-medium ${
-            tab === "info" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          단지정보
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === "area"}
-          aria-controls="tabpanel-area"
-          id="tab-area"
-          onClick={() => setTab("area")}
-          className={`px-4 py-2.5 text-sm font-medium ${
-            tab === "area" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          면적별 정보
-        </button>
+      <div className="flex border-b overflow-x-auto" role="tablist">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap ${
+              tab === t.key
+                ? "text-blue-600 border-b-2 border-blue-600"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      <div className="p-4" role="tabpanel" id={`tabpanel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {tab === "info" ? <BasicInfo cpx={cpx} /> : <PyeongDetails details={pyeongDetails} />}
+      <div className="p-4">
+        {tab === "info" && <BasicInfo cpx={cpx} />}
+        {tab === "area" && <PyeongDetails details={pyeongDetails} />}
+        {tab === "price-trend" && (
+          <PriceTrendTab
+            tradeType={tradeType}
+            setTradeType={setTradeType}
+            priceHistory={priceHistory}
+            loading={historyLoading}
+            error={historyError}
+            onRetry={() => {
+              setHistoryLoading(true);
+              setHistoryError(false);
+              getPriceHistory(complexNo, tradeType)
+                .then(setPriceHistory)
+                .catch(() => { setPriceHistory(null); setHistoryError(true); })
+                .finally(() => setHistoryLoading(false));
+            }}
+          />
+        )}
+        {tab === "price-area" && (
+          <PriceAreaTab priceStats={priceStats} error={statsError} />
+        )}
+        {tab === "price-floor" && (
+          <PriceFloorTab priceStats={priceStats} error={statsError} />
+        )}
       </div>
     </div>
   );
@@ -51,8 +106,6 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails }: Props) {
 
 function BasicInfo({ cpx }: { cpx: Complex }) {
   const rows: [string, string][] = [];
-
-  // 주소: 상세주소 우선, 없으면 cortarAddress
   const addr = cpx.address || cpx.cortar_address;
   if (addr) rows.push(["주소", addr]);
   if (cpx.road_address) rows.push(["도로명", cpx.road_address]);
@@ -60,18 +113,14 @@ function BasicInfo({ cpx }: { cpx: Complex }) {
   if (cpx.high_floor != null) rows.push(["저/최고층", `${cpx.low_floor || 1}층 ~ ${cpx.high_floor}층`]);
   if (cpx.total_dong_count != null) rows.push(["동수", `${cpx.total_dong_count}개동`]);
   if (cpx.use_approve_ymd) {
-    const formatted = formatDateFull(cpx.use_approve_ymd);
-    rows.push(["사용승인일", formatted]);
+    rows.push(["사용승인일", formatDateFull(cpx.use_approve_ymd)]);
   }
   if (cpx.construction_company) rows.push(["건설사", cpx.construction_company]);
   if (cpx.heat_method_type) rows.push(["난방", cpx.heat_method_type]);
-  // 주차: 총주차대수 + 세대당 주차대수
   if (cpx.total_parking_count != null) {
-    let parkStr = `${cpx.total_parking_count.toLocaleString()}대`;
-    if (cpx.parking_count_by_household != null) {
-      parkStr += ` (세대당 ${cpx.parking_count_by_household}대)`;
-    }
-    rows.push(["주차", parkStr]);
+    let s = `${cpx.total_parking_count.toLocaleString()}대`;
+    if (cpx.parking_count_by_household != null) s += ` (세대당 ${cpx.parking_count_by_household}대)`;
+    rows.push(["주차", s]);
   }
   if (cpx.floor_area_ratio) rows.push(["용적률", `${cpx.floor_area_ratio}%`]);
   if (cpx.building_coverage_ratio) rows.push(["건폐율", `${cpx.building_coverage_ratio}%`]);
@@ -86,7 +135,7 @@ function BasicInfo({ cpx }: { cpx: Complex }) {
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
       {rows.map(([label, value]) => (
         <div key={label} className="flex gap-2">
-          <span className="text-sm text-gray-500 font-medium shrink-0 w-20">{label}</span>
+          <span className="text-sm text-gray-500 font-medium shrink-0 w-24">{label}</span>
           <span className="text-sm">{value}</span>
         </div>
       ))}
@@ -98,35 +147,26 @@ function PyeongDetails({ details }: { details: PyeongDetail[] }) {
   if (details.length === 0) {
     return <p className="text-gray-500 text-sm">면적별 정보가 아직 수집되지 않았습니다.</p>;
   }
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {details.map((pd) => (
-        <PyeongCard key={pd.pyeong_no} detail={pd} />
-      ))}
+      {details.map((pd) => <PyeongCard key={pd.pyeong_no} detail={pd} />)}
     </div>
   );
 }
 
-/** 관리비 포맷 (원 → "186,482원 (2025.12)") */
 function formatMaintCost(cost: number, basis?: string): string {
-  const costStr = cost >= 10000
+  const s = cost >= 10000
     ? `${cost.toLocaleString()}원 (약 ${Math.floor(cost / 10000)}만원)`
     : `${cost.toLocaleString()}원`;
-  if (basis && basis.length === 6) {
-    return `${costStr} (${basis.slice(0, 4)}.${basis.slice(4)})`;
-  }
-  return costStr;
+  if (basis && basis.length === 6) return `${s} (${basis.slice(0, 4)}.${basis.slice(4)})`;
+  return s;
 }
 
 function PyeongCard({ detail: pd }: { detail: PyeongDetail }) {
   const [showPlan, setShowPlan] = useState(false);
-
   const title = pd.pyeong_name && pd.exclusive_area
     ? `${pd.pyeong_name}평 (${pd.exclusive_area}㎡)`
-    : pd.exclusive_area
-    ? `${pd.exclusive_area}㎡`
-    : `면적 ${pd.pyeong_no}`;
+    : pd.exclusive_area ? `${pd.exclusive_area}㎡` : `면적 ${pd.pyeong_no}`;
 
   return (
     <div className="border rounded-lg p-3">
@@ -160,7 +200,6 @@ function PyeongCard({ detail: pd }: { detail: PyeongDetail }) {
             <span>{pd.entrance_type}</span>
           </>
         )}
-        {/* 관리비: 최신 관리비+기준월 우선, 없으면 평균 관리비 */}
         {pd.latest_maintenance_cost ? (
           <>
             <span className="text-gray-500">공용관리비</span>
@@ -183,27 +222,109 @@ function PyeongCard({ detail: pd }: { detail: PyeongDetail }) {
           </>
         )}
       </div>
-      {/* 평면도 이미지 */}
       {pd.floor_plan_url && (
         <div className="mt-2">
-          <button
-            onClick={() => setShowPlan(!showPlan)}
-            className="text-xs text-blue-600 hover:text-blue-800 font-medium"
-          >
+          <button onClick={() => setShowPlan(!showPlan)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">
             {showPlan ? "평면도 접기 ▲" : "평면도 보기 ▼"}
           </button>
           {showPlan && (
             <div className="mt-1">
-              <img
-                src={pd.floor_plan_url}
-                alt={`${pd.pyeong_name || ""}평 평면도`}
-                className="max-h-48 border rounded"
-                loading="lazy"
-              />
+              <img src={pd.floor_plan_url} alt={`${pd.pyeong_name || ""}평 평면도`} className="max-h-48 border rounded" loading="lazy" />
             </div>
           )}
         </div>
       )}
     </div>
   );
+}
+
+function PriceTrendTab({ tradeType, setTradeType, priceHistory, loading, error, onRetry }: {
+  tradeType: "A1" | "B1"; setTradeType: (t: "A1" | "B1") => void;
+  priceHistory: PriceHistory | null; loading: boolean; error: boolean; onRetry: () => void;
+}) {
+  const chartData = useMemo(() =>
+    priceHistory?.history.map((h) => ({
+      month: fmtMonth(h.base_month),
+      "최고가격": h.price_upper,
+      "최저가격": h.price_lower,
+      "평균금액": h.price_avg,
+    })) ?? [], [priceHistory]);
+
+  return (
+    <div>
+      <div className="flex justify-end mb-3">
+        <div className="flex gap-2">
+          <button onClick={() => setTradeType("A1")} className={`px-3 py-1 text-sm rounded ${tradeType === "A1" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>매매</button>
+          <button onClick={() => setTradeType("B1")} className={`px-3 py-1 text-sm rounded ${tradeType === "B1" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>전세</button>
+        </div>
+      </div>
+      {loading ? (
+        <div className="h-64 flex items-center justify-center text-gray-500">로딩 중...</div>
+      ) : error ? (
+        <div className="h-64 flex flex-col items-center justify-center gap-2">
+          <span className="text-red-500 text-sm">시세 데이터를 불러오지 못했습니다</span>
+          <button onClick={onRetry} className="text-xs text-blue-600 hover:underline">다시 시도</button>
+        </div>
+      ) : chartData.length === 0 ? (
+        <div className="h-64 flex items-center justify-center text-gray-500">시세 데이터가 없습니다</div>
+      ) : (
+        <LazyCharts type="trend" data={chartData} />
+      )}
+    </div>
+  );
+}
+
+function PriceAreaTab({ priceStats, error }: { priceStats: PriceStats | null; error: boolean }) {
+  if (error) return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
+  if (!priceStats || priceStats.by_area.length === 0)
+    return <p className="text-gray-500 text-sm text-center">면적별 가격 데이터가 부족합니다</p>;
+  return <LazyCharts type="area" data={priceStats.by_area} />;
+}
+
+function PriceFloorTab({ priceStats, error }: { priceStats: PriceStats | null; error: boolean }) {
+  if (error) return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
+  if (!priceStats || priceStats.by_floor.length === 0)
+    return <p className="text-gray-500 text-sm text-center">층수별 가격 데이터가 부족합니다</p>;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {priceStats.by_floor.map((stat) => (
+        <div key={stat.label} className="border rounded-lg p-3">
+          <div className="text-sm font-medium text-gray-600 mb-2">{stat.label}</div>
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-500">평균금액</span>
+              <span className="font-medium">{fmtPrice(stat.avg)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">최고가격</span>
+              <span className="text-red-600">{fmtPrice(stat.max)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">최저가격</span>
+              <span className="text-green-600">{fmtPrice(stat.min)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">매물 수</span>
+              <span>{stat.count}건</span>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function fmtPrice(value: number): string {
+  if (value == null || isNaN(value)) return "-";
+  if (value >= 10000) {
+    const e = Math.floor(value / 10000);
+    const r = value % 10000;
+    return r > 0 ? `${e}억${r}` : `${e}억`;
+  }
+  return `${value.toLocaleString()}만`;
+}
+
+function fmtMonth(yyyymm: string): string {
+  return yyyymm.length === 6 ? `${yyyymm.slice(2, 4)}.${yyyymm.slice(4)}` : yyyymm;
 }

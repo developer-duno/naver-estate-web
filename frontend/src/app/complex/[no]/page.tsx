@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import {
   getComplex,
   getArticles,
@@ -21,9 +20,6 @@ import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
 import ArticleTable from "@/components/ArticleTable";
 import ArticleDetail from "@/components/ArticleDetail";
-
-// P2-2: Lazy load PriceChart (recharts ~50KB gzipped)
-const PriceChart = dynamic(() => import("@/components/PriceChart"), { ssr: false });
 
 const PAGE_SIZE = 50;
 const CRAWL_STATUS_POLL_MS = 2_000;
@@ -370,10 +366,7 @@ export default function ComplexDetailPage() {
       </div>
 
       {/* 단지 정보 */}
-      <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} />
-
-      {/* 시세 차트 (Phase 1) */}
-      <PriceChart complexNo={complexNo} />
+      <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} />
 
       {/* 크롤링 진행률 배너 */}
       {crawling && crawlProgress && (

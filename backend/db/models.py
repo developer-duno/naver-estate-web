@@ -47,6 +47,12 @@ class Complex(Base):
     floor_area_ratio: Mapped[str | None] = mapped_column(String(20))
     building_coverage_ratio: Mapped[str | None] = mapped_column(String(20))
     detail_crawled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 단지 상세 보완 필드
+    address: Mapped[str | None] = mapped_column(String(500))
+    road_address: Mapped[str | None] = mapped_column(String(500))
+    heat_fuel_type: Mapped[str | None] = mapped_column(String(50))
+    parking_count_by_household: Mapped[float | None] = mapped_column(Float)
+    management_office_tel: Mapped[str | None] = mapped_column(String(30))
     # Phase 1: 시세 관련
     nearby_median_price: Mapped[int | None] = mapped_column(Integer)
     jeonse_rate: Mapped[float | None] = mapped_column(Float)
@@ -232,5 +238,11 @@ class ComplexPyeongDetail(Base):
     avg_maintenance_cost: Mapped[int | None] = mapped_column(Integer)
     summer_maintenance_cost: Mapped[int | None] = mapped_column(Integer)
     winter_maintenance_cost: Mapped[int | None] = mapped_column(Integer)
+    # 면적별 상세 보완 필드
+    floor_plan_url: Mapped[str | None] = mapped_column(Text)
+    supply_pyeong: Mapped[str | None] = mapped_column(String(20))
+    exclusive_pyeong: Mapped[str | None] = mapped_column(String(20))
+    latest_maintenance_cost: Mapped[int | None] = mapped_column(Integer)
+    maintenance_cost_basis: Mapped[str | None] = mapped_column(String(6))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

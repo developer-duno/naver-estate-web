@@ -160,7 +160,7 @@ export default function ComplexDetailPage() {
         if (!cancelledRef.current) setLoading(false);
       }
 
-      // Phase 2: Start background crawl
+      // Phase 2: Start background crawl (with fallback to sync liveArticles)
       if (cancelledRef.current) return;
       try {
         const crawlResult = await startLiveCrawl(complexNo);
@@ -189,7 +189,27 @@ export default function ComplexDetailPage() {
           startCrawlPolling();
         }
       } catch {
-        // Crawl start failed - DB data is already displayed
+        // Fallback: start-crawl endpoint not available, use sync liveArticles
+        if (cancelledRef.current) return;
+        setCrawling(true);
+        setCrawlMessage("매물 데이터 수집 중...");
+        try {
+          const live = await liveArticles(complexNo);
+          if (cancelledRef.current) return;
+          setArticles(live.articles);
+          setTotalCount(live.total);
+          if (live.complex) setComplex(live.complex);
+          try {
+            const pyeong = await getPyeongDetails(complexNo);
+            if (!cancelledRef.current) setPyeongDetails(pyeong.pyeong_details);
+          } catch { /* ignore */ }
+        } catch { /* ignore */ }
+        finally {
+          if (!cancelledRef.current) {
+            setCrawling(false);
+            setCrawlMessage("");
+          }
+        }
       }
     }
 

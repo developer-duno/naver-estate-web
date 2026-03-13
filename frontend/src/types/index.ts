@@ -23,6 +23,11 @@ export interface Complex {
   construction_company?: string;
   floor_area_ratio?: string;
   building_coverage_ratio?: string;
+  address?: string;
+  road_address?: string;
+  heat_fuel_type?: string;
+  parking_count_by_household?: number;
+  management_office_tel?: string;
   last_crawled_at?: string;
   article_count?: number;
   nearby_median_price?: number;
@@ -95,6 +100,11 @@ export interface PyeongDetail {
   avg_maintenance_cost?: number;
   summer_maintenance_cost?: number;
   winter_maintenance_cost?: number;
+  floor_plan_url?: string;
+  supply_pyeong?: string;
+  exclusive_pyeong?: string;
+  latest_maintenance_cost?: number;
+  maintenance_cost_basis?: string;
 }
 
 /** 필터 옵션 */

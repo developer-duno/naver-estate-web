@@ -22,6 +22,10 @@ router = APIRouter()
 
 CRAWL_REAL_ESTATE_TYPES = {"APT", "ABYG", "JGC", "PRE"}
 
+# 난방 코드 → 이름 매핑 (데스크톱 앱 price_school_formatter.py 동일)
+HEAT_METHOD_MAP = {"HT001": "중앙난방", "HT002": "개별난방", "HT003": "지역난방"}
+HEAT_FUEL_MAP = {"HF001": "도시가스", "HF002": "LPG", "HF003": "석유", "HF004": "전기"}
+
 # ── TTL Cache: prevent hammering Naver API for identical requests ──
 _CACHE_TTL_SECONDS = 300  # 5 minutes
 
@@ -618,12 +622,27 @@ def _enrich_complex_detail(db: Session, complex_no: str):
 
     cd = detail.get("complexDetail") or {}
 
+    # 난방 정보: 코드 → 이름 매핑 (데스크톱 앱과 동일 패턴)
+    heat_method = HEAT_METHOD_MAP.get(cd.get("heatMethodTypeCode"), cd.get("heatMethodTypeName", ""))
+    heat_fuel = HEAT_FUEL_MAP.get(cd.get("heatFuelTypeCode"), "")
+    heat_str = heat_method + (f" ({heat_fuel})" if heat_fuel else "")
+
+    # 도로명주소 조합
+    road_prefix = cd.get("roadAddressPrefix", "")
+    road_addr = cd.get("roadAddress", "")
+    road_full = f"{road_prefix} {road_addr}".strip() if road_addr else None
+
     db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).update({
-        "heat_method_type": cd.get("heatMethodTypeName"),
-        "total_parking_count": _safe_int(cd.get("totalParkingCount")),
+        "heat_method_type": heat_str.strip() or None,
+        "heat_fuel_type": heat_fuel or None,
+        "total_parking_count": _safe_int(cd.get("parkingPossibleCount")) or _safe_int(cd.get("totalParkingCount")),
         "construction_company": cd.get("constructionCompanyName"),
-        "floor_area_ratio": cd.get("floorAreaRatio"),
-        "building_coverage_ratio": cd.get("buildingCoverageRatio"),
+        "floor_area_ratio": cd.get("batlRatio"),
+        "building_coverage_ratio": cd.get("btlRatio"),
+        "address": cd.get("address"),
+        "road_address": road_full,
+        "parking_count_by_household": _safe_float(cd.get("parkingCountByHousehold")),
+        "management_office_tel": cd.get("managementOfficeTelNo"),
         "detail_crawled_at": _utcnow(),
     }, synchronize_session=False)
 
@@ -634,6 +653,23 @@ def _enrich_complex_detail(db: Session, complex_no: str):
             continue
 
         avg_maint = p.get("averageMaintenanceCost") or {}
+
+        # 평면도 URL 추출 (첫 번째 이미지)
+        grand_plans = p.get("grandPlanList") or []
+        floor_plan_url = None
+        if grand_plans:
+            src = grand_plans[0].get("imageSrc", "")
+            if src:
+                floor_plan_url = f"https://landthumb-phinf.pstatic.net{src}" if src.startswith("/") else src
+
+        # 최신 관리비 + 기준월
+        maint_list = p.get("maintenanceCostList") or []
+        latest_maint_cost = None
+        maint_basis = None
+        if maint_list:
+            latest_maint_cost = _safe_int(maint_list[0].get("totalPrice"))
+            maint_basis = maint_list[0].get("basisYearMonth")
+
         values = {
             "complex_no": complex_no,
             "pyeong_no": pyeong_no,
@@ -649,6 +685,11 @@ def _enrich_complex_detail(db: Session, complex_no: str):
             "avg_maintenance_cost": _safe_int(avg_maint.get("averageTotalPrice")),
             "summer_maintenance_cost": _safe_int(avg_maint.get("summerTotalPrice")),
             "winter_maintenance_cost": _safe_int(avg_maint.get("winterTotalPrice")),
+            "floor_plan_url": floor_plan_url,
+            "supply_pyeong": p.get("supplyPyeong"),
+            "exclusive_pyeong": p.get("exclusivePyeong"),
+            "latest_maintenance_cost": latest_maint_cost,
+            "maintenance_cost_basis": maint_basis,
             "updated_at": _utcnow(),
         }
 

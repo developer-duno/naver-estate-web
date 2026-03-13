@@ -150,6 +150,11 @@ def get_pyeong_details(
                 "avg_maintenance_cost": p.avg_maintenance_cost,
                 "summer_maintenance_cost": p.summer_maintenance_cost,
                 "winter_maintenance_cost": p.winter_maintenance_cost,
+                "floor_plan_url": p.floor_plan_url,
+                "supply_pyeong": p.supply_pyeong,
+                "exclusive_pyeong": p.exclusive_pyeong,
+                "latest_maintenance_cost": p.latest_maintenance_cost,
+                "maintenance_cost_basis": p.maintenance_cost_basis,
             }
             for p in details
         ]

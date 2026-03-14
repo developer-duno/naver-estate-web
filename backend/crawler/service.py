@@ -259,6 +259,25 @@ def crawl_article_details(batch_size: int = 100):
 # ── D. 시세 수집 (Phase 1) ──
 
 
+def _extract_price_list(result: dict) -> list[dict]:
+    """네이버 API 시세 응답에서 가격 리스트 추출 (응답 형식 호환)"""
+    # 형식 1: marketPrices (현재 API)
+    if "marketPrices" in result:
+        return [
+            {
+                "baseMonth": p.get("baseYearMonthDay", "")[:6],
+                "upperPrice": p.get("dealUpperPriceLimit") or p.get("upperPriceLimit"),
+                "lowerPrice": p.get("dealLowPriceLimit") or p.get("lowPriceLimit"),
+                "averagePrice": p.get("dealAveragePrice") or p.get("averagePriceLimit"),
+                "areaNo": result.get("areaNo"),
+            }
+            for p in result["marketPrices"]
+            if p.get("baseYearMonthDay")
+        ]
+    # 형식 2: realEstatePrice (레거시)
+    return result.get("realEstatePrice") or result.get("prices") or []
+
+
 def collect_price_history_for_complex(db: Session, complex_no: str) -> int:
     """단일 단지의 시세 이력 실시간 수집 (on-demand).
 
@@ -277,14 +296,14 @@ def collect_price_history_for_complex(db: Session, complex_no: str) -> int:
         if not result or "error" in result:
             continue
 
-        price_list = result.get("realEstatePrice") or result.get("prices") or []
+        price_list = _extract_price_list(result)
         for p in price_list:
             base_month = p.get("baseMonth") or p.get("yearMonth")
             if not base_month:
                 continue
             _upsert_price_history(
                 db, complex_no, trade_type,
-                area_no=p.get("areaNo"),
+                area_no=str(p.get("areaNo")) if p.get("areaNo") is not None else None,
                 price_upper=_safe_int(p.get("upperPrice") or p.get("dealUpperPrice")),
                 price_lower=_safe_int(p.get("lowerPrice") or p.get("dealLowerPrice")),
                 price_avg=_safe_int(p.get("averagePrice")),
@@ -334,14 +353,14 @@ def collect_price_history(batch_size: int = 50):
                     continue
 
                 _throttle.on_success()
-                price_list = result.get("realEstatePrice") or result.get("prices") or []
+                price_list = _extract_price_list(result)
                 for p in price_list:
                     base_month = p.get("baseMonth") or p.get("yearMonth")
                     if not base_month:
                         continue
                     _upsert_price_history(
                         db, complex_no, trade_type,
-                        area_no=p.get("areaNo"),
+                        area_no=str(p.get("areaNo")) if p.get("areaNo") is not None else None,
                         price_upper=_safe_int(p.get("upperPrice") or p.get("dealUpperPrice")),
                         price_lower=_safe_int(p.get("lowerPrice") or p.get("dealLowerPrice")),
                         price_avg=_safe_int(p.get("averagePrice")),
@@ -382,21 +401,31 @@ def _upsert_price_history(
     price_avg: int | None,
     base_month: str,
 ):
-    """시세 이력 upsert"""
-    values = {
-        "complex_no": complex_no,
-        "trade_type": trade_type,
-        "area_no": area_no or "",
-        "price_upper": price_upper,
-        "price_lower": price_lower,
-        "price_avg": price_avg,
-        "base_month": base_month,
-        "recorded_at": _utcnow(),
-    }
-    stmt = pg_insert(ComplexPriceHistory).values(**values)
-    stmt = stmt.on_conflict_do_update(
-        constraint="uq_cph_composite",
-        set_={k: v for k, v in values.items()
-              if k not in ("complex_no", "trade_type", "area_no", "base_month")},
+    """시세 이력 upsert (제약조건 없으면 중복 체크 후 insert/update)"""
+    area_key = area_no or ""
+    existing = (
+        db.query(ComplexPriceHistory)
+        .filter(
+            ComplexPriceHistory.complex_no == complex_no,
+            ComplexPriceHistory.trade_type == trade_type,
+            ComplexPriceHistory.base_month == base_month,
+            ComplexPriceHistory.area_no == area_key,
+        )
+        .first()
     )
-    db.execute(stmt)
+    if existing:
+        existing.price_upper = price_upper
+        existing.price_lower = price_lower
+        existing.price_avg = price_avg
+        existing.recorded_at = _utcnow()
+    else:
+        db.add(ComplexPriceHistory(
+            complex_no=complex_no,
+            trade_type=trade_type,
+            area_no=area_key,
+            price_upper=price_upper,
+            price_lower=price_lower,
+            price_avg=price_avg,
+            base_month=base_month,
+            recorded_at=_utcnow(),
+        ))

@@ -8,7 +8,7 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import select, func, and_, or_, text
+from sqlalchemy import select, func, and_, or_, text, cast, ARRAY, String
 from sqlalchemy.orm import Session
 
 from db.models import (
@@ -288,7 +288,7 @@ def _build_filter_conditions(filters: dict) -> list:
     # 태그 필터 (PostgreSQL 배열 겹침 연산자 &&)
     if tags := filters.get("tags"):
         conditions.append(
-            text("articles.tags && :tag_arr").bindparams(tag_arr=tags)
+            text("articles.tags && CAST(:tag_arr AS TEXT[])").bindparams(tag_arr="{" + ",".join(tags) + "}")
         )
 
     # 준공년도 (N년 이내)

@@ -128,9 +128,19 @@ export interface ArticleFilters {
   max_building_age?: number;
   move_in_type?: string;
   estate_type?: string;
+  min_floor?: number;
+  max_floor?: number;
+  tags?: string;
   sort_by?: string;
   page?: number;
   page_size?: number;
+}
+
+/** 필터 옵션 (단지별 동적 값) */
+export interface FilterOptions {
+  building_names: string[];
+  tags: string[];
+  directions: string[];
 }
 
 /** DB 통계 */

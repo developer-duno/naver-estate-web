@@ -1,14 +1,19 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import type { ArticleFilters } from "@/types";
+import type { ArticleFilters, FilterOptions } from "@/types";
 import { M2_TO_PYEONG } from "@/lib/constants";
 
 interface Props {
   onChange: (filters: ArticleFilters) => void;
+  filterOptions?: FilterOptions;
+  sortBy?: string;
+  onSortChange?: (sortBy: string) => void;
 }
 
-export default function FilterBar({ onChange }: Props) {
+type FilterChip = { label: string; reset: () => void };
+
+export default function FilterBar({ onChange, filterOptions, sortBy: externalSortBy, onSortChange }: Props) {
   const [tradeType, setTradeType] = useState("전체");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
@@ -28,7 +33,16 @@ export default function FilterBar({ onChange }: Props) {
   const [moveInType, setMoveInType] = useState("전체");
   const [estateType, setEstateType] = useState("all");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [buildingName, setBuildingName] = useState("전체");
+  const [floorPreset, setFloorPreset] = useState("전체");
   const [sortBy, setSortBy] = useState("rank");
+
+  // Sync external sortBy (from table column click)
+  useEffect(() => {
+    if (externalSortBy !== undefined && externalSortBy !== sortBy) {
+      setSortBy(externalSortBy);
+    }
+  }, [externalSortBy]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const emitChange = useCallback(
     (overrides: Partial<Record<string, string>> = {}) => {
@@ -88,6 +102,16 @@ export default function FilterBar({ onChange }: Props) {
       const vo = get("verifiedOnly", String(verifiedOnly));
       if (vo === "true") filters.verified_only = true;
 
+      // 동 필터
+      const bn = get("buildingName", buildingName);
+      if (bn !== "전체") filters.building_name = bn;
+
+      // 층 필터
+      const fp = get("floorPreset", floorPreset);
+      if (fp === "저층") { filters.min_floor = 1; filters.max_floor = 5; }
+      else if (fp === "중층") { filters.min_floor = 6; filters.max_floor = 10; }
+      else if (fp === "고층") { filters.min_floor = 11; }
+
       const sb = get("sortBy", sortBy);
       if (sb !== "rank") filters.sort_by = sb;
 
@@ -97,7 +121,8 @@ export default function FilterBar({ onChange }: Props) {
       tradeType, minPrice, maxPrice, minRent, maxRent,
       areaUnit, minArea, maxArea, minRooms, minBaths,
       direction, minPpyeong, maxPpyeong, minMaint, maxMaint,
-      buildingAge, moveInType, estateType, verifiedOnly, sortBy, onChange,
+      buildingAge, moveInType, estateType, verifiedOnly,
+      buildingName, floorPreset, sortBy, onChange,
     ]
   );
 
@@ -109,6 +134,11 @@ export default function FilterBar({ onChange }: Props) {
 
   const setImmediate = (setter: (v: string) => void, key: string) => (v: string) => {
     setter(v);
+    if (key === "sortBy" && onSortChange) {
+      // sortBy는 onSortChange를 통해서만 API 호출 (이중 호출 방지)
+      onSortChange(v);
+      return;
+    }
     emitChange({ [key]: v });
   };
 
@@ -128,7 +158,10 @@ export default function FilterBar({ onChange }: Props) {
     setMinPpyeong(""); setMaxPpyeong("");
     setMinMaint(""); setMaxMaint("");
     setBuildingAge("0"); setMoveInType("전체");
-    setEstateType("all"); setVerifiedOnly(false); setSortBy("rank");
+    setEstateType("all"); setVerifiedOnly(false);
+    setBuildingName("전체"); setFloorPreset("전체");
+    setSortBy("rank");
+    if (onSortChange) onSortChange("rank");
     onChange({});
   };
 
@@ -142,6 +175,14 @@ export default function FilterBar({ onChange }: Props) {
       <div className="flex items-end gap-2 flex-wrap">
         <FilterSelect label="거래유형" value={tradeType} onChange={setImmediate(setTradeType, "tradeType")}
           options={["전체", "매매", "전세", "월세", "단기임대"]} className="w-24" />
+
+        {filterOptions && filterOptions.building_names.length > 0 && (
+          <FilterSelect label="동" value={buildingName} onChange={setImmediate(setBuildingName, "buildingName")}
+            options={["전체", ...filterOptions.building_names]} className="w-24" />
+        )}
+
+        <FilterSelect label="층" value={floorPreset} onChange={setImmediate(setFloorPreset, "floorPreset")}
+          options={["전체", "저층", "중층", "고층"]} className="w-20" />
 
         <FilterInput label="최소 가격(만원)" value={minPrice} onChange={setDebounced(setMinPrice, "minPrice")} className={inputCls} />
         <FilterInput label="최대 가격(만원)" value={maxPrice} onChange={setDebounced(setMaxPrice, "maxPrice")} className={inputCls} />
@@ -207,7 +248,7 @@ export default function FilterBar({ onChange }: Props) {
       <div className={`${expanded ? "block" : "hidden"} md:block`}>
       <div className="flex items-end gap-2 flex-wrap">
         <FilterSelect label="방향" value={direction} onChange={setImmediate(setDirection, "direction")}
-          options={["전체", "남향", "남동향", "남서향", "동향", "서향", "북향"]}
+          options={filterOptions?.directions?.length ? ["전체", ...filterOptions.directions] : ["전체", "남향", "남동향", "남서향", "동향", "서향", "북향"]}
           className="w-24" />
         <FilterInput label="최소 평당가(만원)" value={minPpyeong} onChange={setDebounced(setMinPpyeong, "minPpyeong")} className={inputCls + " w-32"} />
         <FilterInput label="최대 평당가(만원)" value={maxPpyeong} onChange={setDebounced(setMaxPpyeong, "maxPpyeong")} className={inputCls + " w-32"} />
@@ -250,6 +291,52 @@ export default function FilterBar({ onChange }: Props) {
         </button>
       </div>
       </div>
+
+      {/* 활성 필터 칩 */}
+      {(() => {
+        
+        const chipList: FilterChip[] = [];
+        if (tradeType !== "전체") chipList.push({ label: tradeType, reset: () => setImmediate(setTradeType, "tradeType")("전체") });
+        if (buildingName !== "전체") chipList.push({ label: buildingName, reset: () => setImmediate(setBuildingName, "buildingName")("전체") });
+        if (floorPreset !== "전체") {
+          const fl = floorPreset === "저층" ? "저층(1-5)" : floorPreset === "중층" ? "중층(6-10)" : "고층(11+)";
+          chipList.push({ label: fl, reset: () => setImmediate(setFloorPreset, "floorPreset")("전체") });
+        }
+        if (direction !== "전체") chipList.push({ label: direction, reset: () => setImmediate(setDirection, "direction")("전체") });
+        if (minRooms !== "0") chipList.push({ label: minRooms + "방+", reset: () => setImmediate(setMinRooms, "minRooms")("0") });
+        if (minBaths !== "0") chipList.push({ label: minBaths + "욕실+", reset: () => setImmediate(setMinBaths, "minBaths")("0") });
+        if (buildingAge !== "0") chipList.push({ label: buildingAge + "년 이내", reset: () => setImmediate(setBuildingAge, "buildingAge")("0") });
+        if (moveInType !== "전체") chipList.push({ label: moveInType, reset: () => setImmediate(setMoveInType, "moveInType")("전체") });
+        if (estateType !== "all") chipList.push({ label: estateType === "presale" ? "분양권" : "일반", reset: () => setImmediate(setEstateType, "estateType")("all") });
+        if (verifiedOnly) chipList.push({ label: "인증매물", reset: () => { setVerifiedOnly(false); emitChange({ verifiedOnly: "false" }); } });
+
+        // 숫자 범위 필터 칩
+        if (minPrice) chipList.push({ label: `${minPrice}만원~`, reset: () => { setMinPrice(""); emitChange({ minPrice: "" }); } });
+        if (maxPrice) chipList.push({ label: `~${maxPrice}만원`, reset: () => { setMaxPrice(""); emitChange({ maxPrice: "" }); } });
+        if (minRent) chipList.push({ label: `월세 ${minRent}만~`, reset: () => { setMinRent(""); emitChange({ minRent: "" }); } });
+        if (maxRent) chipList.push({ label: `월세 ~${maxRent}만`, reset: () => { setMaxRent(""); emitChange({ maxRent: "" }); } });
+        if (minArea) chipList.push({ label: `${minArea}${areaUnit}~`, reset: () => { setMinArea(""); emitChange({ minArea: "" }); } });
+        if (maxArea) chipList.push({ label: `~${maxArea}${areaUnit}`, reset: () => { setMaxArea(""); emitChange({ maxArea: "" }); } });
+        if (minPpyeong) chipList.push({ label: `평당 ${minPpyeong}만~`, reset: () => { setMinPpyeong(""); emitChange({ minPpyeong: "" }); } });
+        if (maxPpyeong) chipList.push({ label: `평당 ~${maxPpyeong}만`, reset: () => { setMaxPpyeong(""); emitChange({ maxPpyeong: "" }); } });
+        if (minMaint) chipList.push({ label: `관리비 ${minMaint}만~`, reset: () => { setMinMaint(""); emitChange({ minMaint: "" }); } });
+        if (maxMaint) chipList.push({ label: `관리비 ~${maxMaint}만`, reset: () => { setMaxMaint(""); emitChange({ maxMaint: "" }); } });
+
+        if (chipList.length === 0) return null;
+        return (
+          <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-gray-100">
+            {chipList.map((chip) => (
+              <span key={chip.label} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs rounded-full px-2.5 py-1 border border-blue-200">
+                {chip.label}
+                <button onClick={chip.reset} className="hover:text-blue-900 font-bold ml-0.5">×</button>
+              </span>
+            ))}
+            <button onClick={resetAll} className="text-xs text-gray-500 hover:text-gray-700 ml-1">
+              전체 초기화
+            </button>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -72,6 +72,16 @@ def get_complex_detail(
     }
 
 
+
+@router.get("/{complex_no}/filter-options")
+def get_filter_options(
+    complex_no: str,
+    db: Session = Depends(get_db),
+):
+    """단지 내 필터 옵션 (동, 태그, 방향)"""
+    return queries.get_filter_options(db, complex_no)
+
+
 @router.get("/{complex_no}/articles")
 def get_complex_articles(
     complex_no: str,
@@ -95,8 +105,11 @@ def get_complex_articles(
     max_building_age: Optional[int] = Query(None),
     move_in_type: Optional[str] = Query(None),
     estate_type: Optional[str] = Query(None),
+    min_floor: Optional[int] = Query(None, ge=0),
+    max_floor: Optional[int] = Query(None, ge=0),
+    tags: Optional[str] = Query(None, description="태그 (쉼표 구분)"),
     # 정렬/페이지
-    sort_by: Literal["rank", "price_asc", "price_desc", "area_asc", "area_desc", "ppyeong_asc", "maintenance_asc", "confirm_desc"] = Query("rank"),
+    sort_by: Literal["rank", "price_asc", "price_desc", "area_asc", "area_desc", "ppyeong_asc", "ppyeong_desc", "maintenance_asc", "maintenance_desc", "confirm_asc", "confirm_desc"] = Query("rank"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -112,6 +125,7 @@ def get_complex_articles(
         building_name=building_name, verified_only=verified_only,
         max_building_age=max_building_age, move_in_type=move_in_type,
         estate_type=estate_type,
+        min_floor=min_floor, max_floor=max_floor, tags=tags,
     )
 
     articles, total_count = queries.get_articles_by_complex(

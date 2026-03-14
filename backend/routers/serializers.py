@@ -119,6 +119,9 @@ def build_filter_dict(
     max_building_age: int | None = None,
     move_in_type: str | None = None,
     estate_type: str | None = None,
+    min_floor: int | None = None,
+    max_floor: int | None = None,
+    tags: str | None = None,
 ) -> dict | None:
     """필터 파라미터를 queries.get_articles_by_complex용 dict로 변환"""
     filters = {}
@@ -160,4 +163,10 @@ def build_filter_dict(
         filters["move_in_type"] = move_in_type
     if estate_type and estate_type != "all":
         filters["estate_type"] = estate_type
+    if min_floor is not None:
+        filters["min_floor"] = min_floor
+    if max_floor is not None:
+        filters["max_floor"] = max_floor
+    if tags:
+        filters["tags"] = tags.split(",")
     return filters or None

@@ -108,6 +108,9 @@ def export_articles_to_excel(
     max_building_age: int | None = None,
     move_in_type: str | None = None,
     estate_type: str | None = None,
+    min_floor: int | None = None,
+    max_floor: int | None = None,
+    tags: str | None = None,
     sort_by: str = "rank",  # export는 Literal 미적용 (프론트 FilterBar에서 선택지 제한)
     request: Request = None,
     db: Session = Depends(get_db),
@@ -133,6 +136,7 @@ def export_articles_to_excel(
         building_name=building_name, verified_only=verified_only,
         max_building_age=max_building_age, move_in_type=move_in_type,
         estate_type=estate_type,
+        min_floor=min_floor, max_floor=max_floor, tags=tags,
     )
 
     articles, _ = queries.get_articles_by_complex(

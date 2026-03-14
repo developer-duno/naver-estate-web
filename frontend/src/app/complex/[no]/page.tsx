@@ -8,6 +8,7 @@ import {
   getArticles,
   liveArticles,
   getPyeongDetails,
+  getFilterOptions,
   exportArticles,
   triggerComplexCrawl,
   startLiveCrawl,
@@ -16,7 +17,7 @@ import {
 import { createClient } from "@/lib/supabase";
 import { PAGE_SIZE } from "@/lib/constants";
 import { useCrawlProgress } from "@/hooks/useCrawlProgress";
-import type { Complex, Article, PyeongDetail, ArticleFilters } from "@/types";
+import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions } from "@/types";
 import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
 import ArticleTable from "@/components/ArticleTable";
@@ -48,6 +49,8 @@ export default function ComplexDetailPage() {
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [filterError, setFilterError] = useState("");
+  const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
+  const [activeSortBy, setActiveSortBy] = useState("rank");
   const currentFiltersRef = useRef<ArticleFilters>({});
   const requestIdRef = useRef(0);
   const cancelledRef = useRef(false);
@@ -81,10 +84,11 @@ export default function ComplexDetailPage() {
       setLoading(true);
       try {
         // Phase 1: Load DB data immediately
-        const [cpxResult, artResult, pyeongResult] = await Promise.allSettled([
+        const [cpxResult, artResult, pyeongResult, filterOptsResult] = await Promise.allSettled([
           getComplex(complexNo),
           getArticles(complexNo, { page: 1, page_size: PAGE_SIZE }),
           getPyeongDetails(complexNo),
+          getFilterOptions(complexNo),
         ]);
 
         if (cancelledRef.current) return;
@@ -98,6 +102,9 @@ export default function ComplexDetailPage() {
         }
         if (pyeongResult.status === "fulfilled") {
           setPyeongDetails(pyeongResult.value.pyeong_details);
+        }
+        if (filterOptsResult.status === "fulfilled") {
+          setFilterOptions(filterOptsResult.value);
         }
       } catch {
         if (!cancelledRef.current) setError("단지 정보를 불러올 수 없습니다.");
@@ -183,6 +190,16 @@ export default function ComplexDetailPage() {
       }
     },
     [complexNo]
+  );
+
+  const handleSortChange = useCallback(
+    (sortBy: string) => {
+      setActiveSortBy(sortBy);
+      const filters = { ...currentFiltersRef.current, sort_by: sortBy === "rank" ? undefined : sortBy };
+      currentFiltersRef.current = filters;
+      loadArticles(filters, 1);
+    },
+    [loadArticles]
   );
 
   const handleFilterChange = useCallback(
@@ -337,7 +354,7 @@ export default function ComplexDetailPage() {
       )}
 
       {/* 필터 바 */}
-      <FilterBar onChange={handleFilterChange} />
+      <FilterBar onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} />
 
       {/* 필터 에러 배너 */}
       {filterError && (
@@ -387,7 +404,7 @@ export default function ComplexDetailPage() {
       )}
 
       {/* 매물 테이블 */}
-      <ArticleTable articles={articles} onRowClick={setSelectedArticle} />
+      <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} activeSortBy={activeSortBy} />
 
       {/* 페이지네이션 */}
       {totalPages > 1 && (

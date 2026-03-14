@@ -139,9 +139,11 @@ function getColumnValue(art: Article, col: ColumnDef): unknown {
 interface Props {
   articles: Article[];
   onRowClick?: (articleNo: string) => void;
+  onSortChange?: (sortBy: string) => void;
+  activeSortBy?: string;
 }
 
-export default function ArticleTable({ articles, onRowClick }: Props) {
+export default function ArticleTable({ articles, onRowClick, onSortChange, activeSortBy }: Props) {
   const [sort, setSort] = useState<SortState>({ key: "", dir: null });
   const [filters, setFilters] = useState<Record<string, FilterValue>>({});
 
@@ -158,6 +160,28 @@ export default function ArticleTable({ articles, onRowClick }: Props) {
   };
 
   const clearAllFilters = () => setFilters({});
+  // Server-side sort columns mapping
+  const SERVER_SORT_MAP: Record<string, { asc: string; desc: string }> = {
+    price: { asc: "price_asc", desc: "price_desc" },
+    area: { asc: "area_asc", desc: "area_desc" },
+    ppyeong: { asc: "ppyeong_asc", desc: "ppyeong_desc" },
+    maint: { asc: "maintenance_asc", desc: "maintenance_desc" },
+    confirm_date: { asc: "confirm_asc", desc: "confirm_desc" },
+  };
+
+  const handleSortChange = (newSort: SortState) => {
+    const serverSort = SERVER_SORT_MAP[newSort.key];
+    if (serverSort && newSort.dir && onSortChange) {
+      // Delegate to server-side sort
+      const sortBy = newSort.dir === "desc" ? serverSort.desc : serverSort.asc;
+      onSortChange(sortBy);
+      setSort(newSort);
+    } else {
+      // Client-side sort
+      setSort(newSort);
+    }
+  };
+
 
   // Compute unique values for categorical columns
   const uniqueValuesMap = useMemo(() => {
@@ -247,7 +271,7 @@ export default function ArticleTable({ articles, onRowClick }: Props) {
                   key={col.key}
                   column={col}
                   sort={sort}
-                  onSortChange={setSort}
+                  onSortChange={handleSortChange}
                   filter={filters[col.key]}
                   onFilterChange={handleFilterChange}
                   uniqueValues={uniqueValuesMap[col.key]}

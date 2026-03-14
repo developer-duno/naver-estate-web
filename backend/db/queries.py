@@ -172,6 +172,44 @@ def get_distinct_values(db: Session, complex_no: str, column_name: str) -> list[
     return [row for row in db.execute(stmt).scalars().all()]
 
 
+
+def get_filter_options(db: Session, complex_no: str) -> dict:
+    """단지 내 필터 옵션 조회 (동, 태그, 방향의 고유값)"""
+    conditions = [Article.complex_no == complex_no, Article.is_active == True]
+
+    # 동 목록
+    building_stmt = (
+        select(Article.building_name)
+        .where(and_(*conditions, Article.building_name.isnot(None)))
+        .distinct()
+        .order_by(Article.building_name)
+    )
+    building_names = [r for r in db.execute(building_stmt).scalars().all()]
+
+    # 태그 목록 (PostgreSQL unnest)
+    tag_stmt = text(
+        "SELECT DISTINCT unnest(tags) AS tag "
+        "FROM articles "
+        "WHERE complex_no = :cno AND is_active = true AND tags IS NOT NULL "
+        "ORDER BY tag"
+    ).bindparams(cno=complex_no)
+    tags = [r[0] for r in db.execute(tag_stmt).all()]
+
+    # 방향 목록
+    dir_stmt = (
+        select(Article.direction)
+        .where(and_(*conditions, Article.direction.isnot(None)))
+        .distinct()
+        .order_by(Article.direction)
+    )
+    directions = [r for r in db.execute(dir_stmt).scalars().all()]
+
+    return {
+        "building_names": building_names,
+        "tags": tags,
+        "directions": directions,
+    }
+
 # ── 필터 조건 빌더 ──
 
 def _build_filter_conditions(filters: dict) -> list:
@@ -228,13 +266,30 @@ def _build_filter_conditions(filters: dict) -> list:
     if building := filters.get("building_name"):
         conditions.append(Article.building_name == building)
 
+
+    # 층수 범위 (floor_info에서 숫자 추출)
+    if (min_floor := filters.get("min_floor")) is not None:
+        conditions.append(
+            text("CASE WHEN articles.floor_info ~ '^[0-9]+' "
+                 "THEN CAST(SPLIT_PART(articles.floor_info, '/', 1) AS INTEGER) "
+                 "ELSE 0 END >= :min_floor").bindparams(min_floor=min_floor)
+        )
+    if (max_floor := filters.get("max_floor")) is not None:
+        conditions.append(
+            text("CASE WHEN articles.floor_info ~ '^[0-9]+' "
+                 "THEN CAST(SPLIT_PART(articles.floor_info, '/', 1) AS INTEGER) "
+                 "ELSE 999 END <= :max_floor").bindparams(max_floor=max_floor)
+        )
+
     # 검증 매물만
     if filters.get("verified_only"):
         conditions.append(Article.is_verified == True)
 
     # 태그 필터 (PostgreSQL 배열 겹침 연산자 &&)
     if tags := filters.get("tags"):
-        conditions.append(Article.tags.overlap(tags))
+        conditions.append(
+            text("articles.tags && :tag_arr").bindparams(tag_arr=tags)
+        )
 
     # 준공년도 (N년 이내)
     if (max_age := filters.get("max_building_age")) and max_age > 0:
@@ -373,7 +428,10 @@ def _build_order_clause(sort_by: str):
         "area_asc": Article.area2_m2.asc(),
         "area_desc": Article.area2_m2.desc(),
         "ppyeong_asc": Article.price_per_pyeong.asc(),
+        "ppyeong_desc": Article.price_per_pyeong.desc(),
         "maintenance_asc": Article.numeric_maintenance_cost.asc(),
+        "maintenance_desc": Article.numeric_maintenance_cost.desc(),
+        "confirm_asc": Article.article_confirm_ymd.asc(),
         "confirm_desc": Article.article_confirm_ymd.desc(),
     }
     return sort_map.get(sort_by, Article.article_confirm_ymd.desc())

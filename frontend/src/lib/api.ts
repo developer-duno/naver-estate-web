@@ -2,7 +2,7 @@
  * FastAPI 백엔드 호출 래퍼
  */
 
-import type { Complex, Article, PyeongDetail, ArticleFilters, DbStats, Regions, PriceHistory, PriceStats, CrawlProgress } from "@/types";
+import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions, DbStats, Regions, PriceHistory, PriceStats, CrawlProgress } from "@/types";
 import type { UserProfile, AuditLog, AdminSetting, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail } from "@/types/admin";
 
 export class ApiError extends Error {
@@ -133,6 +133,11 @@ export async function getPyeongDetails(complexNo: string) {
   return fetchApi<{ pyeong_details: PyeongDetail[] }>(`/api/complexes/${complexNo}/pyeong-details`);
 }
 
+
+/** 필터 옵션 (동, 태그, 방향) */
+export async function getFilterOptions(complexNo: string) {
+  return fetchApi<FilterOptions>(`/api/complexes/${complexNo}/filter-options`);
+}
 /** 매물 상세 (DB) */
 export async function getArticle(articleNo: string) {
   return fetchApi<Article>(`/api/articles/${articleNo}`);

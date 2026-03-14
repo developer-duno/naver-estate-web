@@ -9,6 +9,7 @@ from deps import get_db
 from db import queries
 from routers.serializers import complex_to_dict, article_to_dict, build_filter_dict
 from crawler.stats import group_by_area, group_by_floor
+from crawler.service import collect_price_history_for_complex
 
 router = APIRouter()
 
@@ -184,8 +185,13 @@ def get_price_history(
     months: int = Query(24, ge=1, le=120),
     db: Session = Depends(get_db),
 ):
-    """단지 시세 이력 조회 (Phase 1)"""
+    """단지 시세 이력 조회 — DB 비어있으면 네이버 API에서 실시간 수집"""
     history = queries.get_price_history(db, complex_no, trade_type, months)
+    if not history:
+        # DB에 데이터 없으면 실시간 수집 시도
+        collected = collect_price_history_for_complex(db, complex_no)
+        if collected > 0:
+            history = queries.get_price_history(db, complex_no, trade_type, months)
     return {
         "complex_no": complex_no,
         "trade_type": trade_type,

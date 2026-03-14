@@ -258,6 +258,46 @@ def crawl_article_details(batch_size: int = 100):
 
 # ── D. 시세 수집 (Phase 1) ──
 
+
+def collect_price_history_for_complex(db: Session, complex_no: str) -> int:
+    """단일 단지의 시세 이력 실시간 수집 (on-demand).
+
+    Returns: 수집된 레코드 수
+    """
+    collected = 0
+    for trade_type in ("A1", "B1"):
+        try:
+            result = NaverEstateAPI.get_complex_prices(
+                complex_no, trade_type=trade_type
+            )
+        except Exception as e:
+            logger.warning("시세 조회 실패: %s %s -> %s", complex_no, trade_type, e)
+            continue
+
+        if not result or "error" in result:
+            continue
+
+        price_list = result.get("realEstatePrice") or result.get("prices") or []
+        for p in price_list:
+            base_month = p.get("baseMonth") or p.get("yearMonth")
+            if not base_month:
+                continue
+            _upsert_price_history(
+                db, complex_no, trade_type,
+                area_no=p.get("areaNo"),
+                price_upper=_safe_int(p.get("upperPrice") or p.get("dealUpperPrice")),
+                price_lower=_safe_int(p.get("lowerPrice") or p.get("dealLowerPrice")),
+                price_avg=_safe_int(p.get("averagePrice")),
+                base_month=base_month,
+            )
+            collected += 1
+
+    if collected > 0:
+        db.commit()
+        logger.info("시세 실시간 수집 완료: complex=%s, %d건", complex_no, collected)
+    return collected
+
+
 def collect_price_history(batch_size: int = 50):
     """단지별 시세 이력 수집 → complex_price_history 테이블 저장.
 

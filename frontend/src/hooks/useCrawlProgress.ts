@@ -35,7 +35,6 @@ export function useCrawlProgress(): CrawlHookResult {
   const clearAllPolling = useCallback(() => {
     if (statusPollRef.current) { clearInterval(statusPollRef.current); statusPollRef.current = null; }
     if (articlesPollRef.current) { clearInterval(articlesPollRef.current); articlesPollRef.current = null; }
-    cancelledRef.current = true;
   }, []);
 
   const startCrawl = useCallback((
@@ -48,8 +47,8 @@ export function useCrawlProgress(): CrawlHookResult {
       setPyeongDetails: (p: PyeongDetail[]) => void;
     },
   ) => {
-    cancelledRef.current = false;
     clearAllPolling();
+    cancelledRef.current = false;
 
     statusPollRef.current = setInterval(async () => {
       if (cancelledRef.current) return;

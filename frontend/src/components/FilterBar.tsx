@@ -194,9 +194,9 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
           </>
         )}
 
-        <div className="flex flex-col">
-          <label className="text-xs text-gray-500 mb-1">면적단위</label>
-          <div className="flex">
+        <fieldset className="flex flex-col">
+          <legend className="text-xs text-gray-500 mb-1">면적단위</legend>
+          <div className="flex" role="group">
             {(["m²", "평"] as const).map((u) => (
               <button
                 key={u}
@@ -210,7 +210,7 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
               </button>
             ))}
           </div>
-        </div>
+        </fieldset>
 
         <FilterInput label="최소 면적" value={minArea} onChange={setDebounced(setMinArea, "minArea")} className="border border-gray-300 rounded px-2 py-1.5 text-sm w-24" />
         <FilterInput label="최대 면적" value={maxArea} onChange={setDebounced(setMaxArea, "maxArea")} className="border border-gray-300 rounded px-2 py-1.5 text-sm w-24" />
@@ -345,6 +345,10 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
 
 type OptionItem = string | { v: string; l: string };
 
+function slugId(label: string) {
+  return "filter-" + label.replace(/[^a-zA-Z0-9가-힣]/g, "-").replace(/-+/g, "-");
+}
+
 function FilterSelect({
   label, value, onChange, options, className = "",
 }: {
@@ -354,7 +358,7 @@ function FilterSelect({
   options: OptionItem[];
   className?: string;
 }) {
-  const id = `filter-${label}`;
+  const id = slugId(label);
   return (
     <div className="flex flex-col">
       <label htmlFor={id} className="text-xs text-gray-500 mb-1">{label}</label>
@@ -382,7 +386,7 @@ function FilterInput({
   onChange: (v: string) => void;
   className?: string;
 }) {
-  const id = `filter-${label}`;
+  const id = slugId(label);
   return (
     <div className="flex flex-col">
       <label htmlFor={id} className="text-xs text-gray-500 mb-1">{label}</label>

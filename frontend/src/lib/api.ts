@@ -136,7 +136,11 @@ export async function getPyeongDetails(complexNo: string) {
 
 /** 필터 옵션 (동, 태그, 방향) */
 export async function getFilterOptions(complexNo: string) {
-  return fetchApi<FilterOptions>(`/api/complexes/${complexNo}/filter-options`);
+  try {
+    return await fetchApi<FilterOptions>(`/api/complexes/${complexNo}/filter-options`);
+  } catch {
+    return { building_names: [], tags: [], directions: [] };
+  }
 }
 /** 매물 상세 (DB) */
 export async function getArticle(articleNo: string) {

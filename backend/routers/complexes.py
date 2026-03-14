@@ -66,9 +66,11 @@ def get_complex_detail(
         raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다")
 
     article_count = queries.get_complex_article_count(db, complex_no)
+    filter_options = queries.get_filter_options(db, complex_no)
     return {
         **complex_to_dict(cpx),
         "article_count": article_count,
+        "filter_options": filter_options,
     }
 
 

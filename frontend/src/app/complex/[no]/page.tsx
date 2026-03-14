@@ -8,7 +8,6 @@ import {
   getArticles,
   liveArticles,
   getPyeongDetails,
-  getFilterOptions,
   exportArticles,
   triggerComplexCrawl,
   startLiveCrawl,
@@ -84,17 +83,19 @@ export default function ComplexDetailPage() {
       setLoading(true);
       try {
         // Phase 1: Load DB data immediately
-        const [cpxResult, artResult, pyeongResult, filterOptsResult] = await Promise.allSettled([
+        const [cpxResult, artResult, pyeongResult] = await Promise.allSettled([
           getComplex(complexNo),
           getArticles(complexNo, { page: 1, page_size: PAGE_SIZE }),
           getPyeongDetails(complexNo),
-          getFilterOptions(complexNo),
         ]);
 
         if (cancelledRef.current) return;
 
         if (cpxResult.status === "fulfilled") {
           setComplex(cpxResult.value);
+          // filter_options는 complex 응답에 포함
+          const opts = (cpxResult.value as any).filter_options;
+          if (opts) setFilterOptions(opts);
         }
         if (artResult.status === "fulfilled") {
           setArticles(artResult.value.articles);
@@ -102,9 +103,6 @@ export default function ComplexDetailPage() {
         }
         if (pyeongResult.status === "fulfilled") {
           setPyeongDetails(pyeongResult.value.pyeong_details);
-        }
-        if (filterOptsResult.status === "fulfilled") {
-          setFilterOptions(filterOptsResult.value);
         }
       } catch {
         if (!cancelledRef.current) setError("단지 정보를 불러올 수 없습니다.");

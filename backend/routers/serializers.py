@@ -45,9 +45,10 @@ def complex_to_dict(c) -> dict:
     }
 
 
-def article_to_dict(a) -> dict:
-    """Article ORM → 전체 필드 dict"""
+def article_to_dict(a, complex_obj=None) -> dict:
+    """Article ORM → 전체 필드 dict. complex_obj가 있으면 단지 정보로 빈 필드 보완."""
     pyeong = round(a.area2_m2 / M2_TO_PYEONG, 1) if a.area2_m2 else None
+    c = complex_obj
     return {
         "article_no": a.article_no,
         "complex_no": a.complex_no,
@@ -64,7 +65,7 @@ def article_to_dict(a) -> dict:
         "tags": a.tags,
         "realtor_name": a.realtor_name,
         "article_confirm_ymd": a.article_confirm_ymd,
-        "complex_name": a.complex_name,
+        "complex_name": a.complex_name or (c.complex_name if c else None),
         "numeric_price": a.numeric_price,
         "numeric_rent_price": a.numeric_rent_price,
         "price_per_pyeong": a.price_per_pyeong,
@@ -73,7 +74,7 @@ def article_to_dict(a) -> dict:
         "move_in_date": a.move_in_date,
         "maintenance_cost": a.maintenance_cost,
         "numeric_maintenance_cost": a.numeric_maintenance_cost,
-        "heating_type": a.heating_type,
+        "heating_type": a.heating_type or (c.heat_method_type if c else None),
         "total_floor_count": a.total_floor_count,
         "jibun_address": a.jibun_address,
         "detail_description": a.detail_description,
@@ -89,12 +90,14 @@ def article_to_dict(a) -> dict:
         "is_verified": a.is_verified,
         "is_presale": a.is_presale,
         "detail_crawled": a.detail_crawled,
-        "use_approve_ymd": a.use_approve_ymd,
+        "use_approve_ymd": a.use_approve_ymd or (c.use_approve_ymd if c else None),
         "article_name": a.article_name,
         "first_seen_at": a.first_seen_at.isoformat() if a.first_seen_at else None,
         "last_seen_at": a.last_seen_at.isoformat() if a.last_seen_at else None,
         "previous_price": a.previous_price,
         "price_changed_at": a.price_changed_at.isoformat() if a.price_changed_at else None,
+        "total_household_count": c.total_household_count if c else None,
+        "complex_address": c.address if c else None,
     }
 
 

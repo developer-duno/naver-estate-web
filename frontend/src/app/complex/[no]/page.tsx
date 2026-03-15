@@ -215,17 +215,19 @@ export default function ComplexDetailPage() {
 
   const handleExport = async () => {
     if (exporting) return;
-    const supabase = createClient();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      router.push(`/login?redirect=${encodeURIComponent(`/complex/${complexNo}`)}`);
-      return;
+    let accessToken: string | undefined;
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      accessToken = session?.access_token ?? undefined;
+    } catch {
+      // 인증 실패해도 내보내기는 시도
     }
     setExporting(true);
     try {
-      await exportArticles(complexNo, currentFiltersRef.current, session.access_token);
-    } catch {
-      alert("엑셀 내보내기에 실패했습니다.");
+      await exportArticles(complexNo, currentFiltersRef.current, accessToken);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "엑셀 내보내기에 실패했습니다.");
     } finally {
       setExporting(false);
     }

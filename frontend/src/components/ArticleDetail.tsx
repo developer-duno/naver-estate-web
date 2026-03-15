@@ -139,8 +139,9 @@ function ArticleBody({ article: a }: { article: Article }) {
         <Info label="난방방식" value={a.heating_type} />
         <Info label="주차" value={a.parking_count || "-"} />
         <Info label="총층수" value={a.total_floor_count ? String(a.total_floor_count) : "-"} />
+        <Info label="총호수" value={a.total_household_count ? `${a.total_household_count}세대` : "-"} />
         <Info label="준공일" value={a.is_presale ? "미준공 (분양권)" : formatDateFull(a.use_approve_ymd)} />
-        <Info label="주소" value={a.jibun_address} />
+        <Info label="주소" value={a.jibun_address || a.complex_address} />
       </div>
 
       {/* 특징 */}

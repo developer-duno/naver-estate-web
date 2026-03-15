@@ -201,15 +201,42 @@ def upsert_article(db, article, commit=True, track_price=False):
         db.commit()
 
 
-def build_detail_update_dict(domain_article):
+def _extract_maintenance_from_detail(detail_data: dict) -> str | None:
+    """상세 API에서 관리비 추출 (dict 형식 호환)"""
+    ad = detail_data.get("articleDetail", {})
+    mc = ad.get("maintenanceCost")
+    if mc is None:
+        return None
+    # 단순 값 (int/float/str)
+    if isinstance(mc, (int, float)):
+        return str(mc)
+    if isinstance(mc, str):
+        return mc
+    # dict 형식: {averageTotalPrice: "297616", ...} (원 단위 → 만원 변환)
+    if isinstance(mc, dict):
+        avg = mc.get("averageTotalPrice")
+        if avg:
+            try:
+                return str(round(int(avg) / 10000))
+            except (ValueError, TypeError):
+                pass
+    return None
+
+
+def build_detail_update_dict(domain_article, detail_data: dict = None):
     """상세 크롤링 결과 -> DB 업데이트 dict"""
+    # 관리비: shared 코드가 dict 형식을 미처리하므로 별도 추출
+    maint = domain_article.maintenance_cost
+    if maint is None and detail_data:
+        maint = _extract_maintenance_from_detail(detail_data)
+
     update_data = {
         "detail_description": domain_article.detail_description,
         "room_count": domain_article.room_count,
         "bathroom_count": domain_article.bathroom_count,
         "move_in_date": domain_article.move_in_date,
-        "maintenance_cost": domain_article.maintenance_cost,
-        "numeric_maintenance_cost": parse_maintenance_cost(domain_article.maintenance_cost),
+        "maintenance_cost": maint,
+        "numeric_maintenance_cost": parse_maintenance_cost(maint),
         "parking_count": domain_article.parking_count,
         "photo_urls": domain_article.photo_urls or [],
         "representative_img_url": domain_article.representative_img_url,

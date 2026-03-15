@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from deps import get_db, get_current_user
+from deps import get_db, get_optional_user
 from auth.permissions import check_quota
 from auth.audit import log_action
 from db import queries
@@ -74,7 +74,7 @@ def get_article_price_history_endpoint(
 @router.get("/{article_no}/detail")
 def get_article_realtime_detail(
     article_no: str,
-    user: dict = Depends(get_current_user),
+    user: dict | None = Depends(get_optional_user),
 ):
     """매물 실시간 상세 조회 (네이버 API 직접 호출, 인증 필수)"""
     detail_data = NaverEstateAPI.get_article_detail(article_no)
@@ -114,18 +114,18 @@ def export_articles_to_excel(
     sort_by: str = "rank",  # export는 Literal 미적용 (프론트 FilterBar에서 선택지 제한)
     request: Request = None,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_current_user),
+    user: dict | None = Depends(get_optional_user),
 ):
-    """매물 목록 엑셀 다운로드 (인증 필수, 일일 쿼터 적용)"""
-    # admin은 쿼터 무제한
-    if user["role"] != "admin":
-        check_quota(db, user["user_id"], "export", user["daily_export_quota"])
-
-    client_ip = None
-    if request and request.client:
-        client_ip = request.headers.get("x-forwarded-for", request.client.host)
-    log_action(db, user["user_id"], "export", "complex", complex_no, ip=client_ip)
-    db.commit()  # quota 소진 + 감사 로그를 단일 트랜잭션으로 커밋
+    """매물 목록 엑셀 다운로드 (인증 선택, 인증 시 쿼터 적용)"""
+    if user:
+        # admin은 쿼터 무제한
+        if user["role"] != "admin":
+            check_quota(db, user["user_id"], "export", user["daily_export_quota"])
+        client_ip = None
+        if request and request.client:
+            client_ip = request.headers.get("x-forwarded-for", request.client.host)
+        log_action(db, user["user_id"], "export", "complex", complex_no, ip=client_ip)
+        db.commit()
     filters = build_filter_dict(
         trade_types=trade_types, min_price=min_price, max_price=max_price,
         min_rent=min_rent, max_rent=max_rent,
@@ -146,6 +146,11 @@ def export_articles_to_excel(
 
     if not articles:
         raise HTTPException(status_code=404, detail="내보낼 매물이 없습니다")
+
+    # 파일명용 단지명 조회
+    from db.models import Complex as ComplexModel
+    complex_obj = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
+    _complex_name = (complex_obj.complex_name if complex_obj else None) or articles[0].complex_name
 
     def _safe_excel(val: str) -> str:
         """엑셀 수식 인젝션 방어 — =, +, -, @, \\t, \\r 로 시작하는 문자열에 접두사 추가"""
@@ -170,7 +175,7 @@ def export_articles_to_excel(
         rows.append({
             "매물번호": _safe_excel(art.article_no),
             "거래유형": art.trade_type_name or "",
-            "단지명": _safe_excel(art.complex_name or ""),
+            "단지명": _safe_excel(art.complex_name or (_complex_name or "")),
             "동": _safe_excel(art.building_name or ""),
             "층": art.floor_info or "",
             "가격": _safe_excel(price),
@@ -202,16 +207,19 @@ def export_articles_to_excel(
     buffer.seek(0)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    raw_name = articles[0].complex_name if articles else "매물"
+    raw_name = _complex_name or "매물"
     safe_name = re.sub(r'[^\w가-힣.\-]', '_', raw_name)[:50]
     filename = f"{safe_name}_{timestamp}.xlsx"
 
-    logger.info("엑셀 내보내기 완료: complex=%s articles=%d user=%s", complex_no, len(articles), user["user_id"])
+    logger.info("엑셀 내보내기 완료: complex=%s articles=%d user=%s", complex_no, len(articles), user["user_id"] if user else "anonymous")
 
+    # RFC 5987: 한글 파일명은 UTF-8 percent-encoding 필요
+    from urllib.parse import quote
+    encoded_filename = quote(filename)
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"},
     )
 
 

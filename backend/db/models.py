@@ -3,7 +3,8 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    String, Integer, Float, Boolean, Text, DateTime, ARRAY, Index, JSON
+    String, Integer, Float, Boolean, Text, DateTime, ARRAY, Index, JSON,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -222,6 +223,9 @@ class CrawlerCheckpoint(Base):
 
 class ComplexPyeongDetail(Base):
     __tablename__ = "complex_pyeong_details"
+    __table_args__ = (
+        UniqueConstraint("complex_no", "pyeong_no", name="complex_pyeong_details_complex_no_pyeong_no_key"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     complex_no: Mapped[str] = mapped_column(String(20), nullable=False, index=True)

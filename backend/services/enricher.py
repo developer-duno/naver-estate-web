@@ -7,8 +7,6 @@ Phase 1-1: 두 곳에서 중복/불일치하던 _enrich_complex_detail()을 단�
 import logging
 from datetime import datetime, timezone
 
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-
 from db.models import Complex as ComplexModel, ComplexPyeongDetail
 from shared.naver_api import NaverEstateAPI
 
@@ -129,12 +127,20 @@ def enrich_complex_detail(db, complex_no):
             "updated_at": _utcnow(),
         }
 
-        stmt = pg_insert(ComplexPyeongDetail).values(**values)
-        stmt = stmt.on_conflict_do_update(
-            constraint="complex_pyeong_details_complex_no_pyeong_no_key",
-            set_={k: v for k, v in values.items() if k not in ("complex_no", "pyeong_no")},
+        existing = (
+            db.query(ComplexPyeongDetail)
+            .filter(
+                ComplexPyeongDetail.complex_no == complex_no,
+                ComplexPyeongDetail.pyeong_no == pyeong_no,
+            )
+            .first()
         )
-        db.execute(stmt)
+        if existing:
+            for k, v in values.items():
+                if k not in ("complex_no", "pyeong_no"):
+                    setattr(existing, k, v)
+        else:
+            db.add(ComplexPyeongDetail(**values))
 
     db.commit()
     logger.info("단지 상세 보강 완료: %s -> %d개 면적", complex_no, len(pyeong_list))

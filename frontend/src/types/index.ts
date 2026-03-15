@@ -83,6 +83,8 @@ export interface Article {
   last_seen_at?: string;
   previous_price?: number;
   price_changed_at?: string;
+  total_household_count?: number;
+  complex_address?: string;
 }
 
 /** 면적별 상세 */

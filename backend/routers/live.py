@@ -425,7 +425,7 @@ def _crawl_details_for_complex(db, complex_no: str):
                 domain_article.area2_m2 = art.area2_m2
                 domain_article.update_from_detail(detail_data)
 
-                update_data = build_detail_update_dict(domain_article)
+                update_data = build_detail_update_dict(domain_article, detail_data)
                 db.query(ArticleModel).filter(
                     ArticleModel.article_no == art.article_no
                 ).update(update_data, synchronize_session=False)
@@ -450,18 +450,24 @@ def live_article_detail(
     db: Session = Depends(get_db),
 ):
     """매물 상세 실시간 조회 — 네이버 API에서 직접 가져와 DB 반영 후 반환"""
-    # DB에서 기존 매물 조회
+    # DB에서 기존 매물 + 단지 정보 조회
     art = db.query(ArticleModel).filter(ArticleModel.article_no == article_no).first()
+    complex_obj = None
+    if art and art.complex_no:
+        complex_obj = db.query(ComplexModel).filter(ComplexModel.complex_no == art.complex_no).first()
 
-    # 이미 상세 크롤링 완료된 경우 바로 반환
+    # 이미 상세 크롤링 완료 + 핵심 필드가 채워진 경우 바로 반환
     if art and art.detail_crawled:
-        return article_to_dict(art)
+        # 이전 버그로 detail_crawled=True이지만 필드가 비어있을 수 있음 → 재크롤링
+        has_detail = art.heating_type or art.jibun_address or art.use_approve_ymd
+        if has_detail:
+            return article_to_dict(art, complex_obj)
 
     # 네이버 API에서 상세 정보 가져오기
     detail_data = NaverEstateAPI.get_article_detail(article_no)
     if not detail_data or "error" in detail_data:
         if art:
-            return article_to_dict(art)
+            return article_to_dict(art, complex_obj)
         raise HTTPException(status_code=404, detail="매물 정보를 찾을 수 없습니다")
 
     if not art:
@@ -478,7 +484,7 @@ def live_article_detail(
     domain_article.update_from_detail(detail_data)
 
     # DB 업데이트
-    update_data = build_detail_update_dict(domain_article)
+    update_data = build_detail_update_dict(domain_article, detail_data)
     db.query(ArticleModel).filter(ArticleModel.article_no == article_no).update(
         update_data, synchronize_session=False
     )
@@ -487,4 +493,4 @@ def live_article_detail(
     # 갱신된 데이터 반환
     db.expire_all()
     art = db.query(ArticleModel).filter(ArticleModel.article_no == article_no).first()
-    return article_to_dict(art)
+    return article_to_dict(art, complex_obj)

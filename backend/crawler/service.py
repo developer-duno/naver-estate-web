@@ -228,7 +228,7 @@ def crawl_article_details(batch_size: int = 100):
                 domain_article.update_from_detail(detail_data)
 
                 # DB 업데이트 (commit은 배치로)
-                update_data = build_detail_update_dict(domain_article)
+                update_data = build_detail_update_dict(domain_article, detail_data)
                 db.query(Article).filter(Article.article_no == art.article_no).update(
                     update_data, synchronize_session=False
                 )
@@ -260,20 +260,36 @@ def crawl_article_details(batch_size: int = 100):
 
 
 def _extract_price_list(result: dict) -> list[dict]:
-    """네이버 API 시세 응답에서 가격 리스트 추출 (응답 형식 호환)"""
+    """네이버 API 시세 응답에서 가격 리스트 추출 (응답 형식 호환)
+
+    marketPrices는 주간 데이터를 반환하므로 월 단위로 중복 제거 (최신 우선).
+    """
     # 형식 1: marketPrices (현재 API)
     if "marketPrices" in result:
-        return [
-            {
-                "baseMonth": p.get("baseYearMonthDay", "")[:6],
+        seen_months: set[str] = set()
+        deduped = []
+        # baseYearMonthDay 내림차순 정렬 → 같은 월은 최신만 사용
+        sorted_prices = sorted(
+            result["marketPrices"],
+            key=lambda p: p.get("baseYearMonthDay", ""),
+            reverse=True,
+        )
+        for p in sorted_prices:
+            base_day = p.get("baseYearMonthDay", "")
+            if not base_day:
+                continue
+            month = base_day[:6]
+            if month in seen_months:
+                continue
+            seen_months.add(month)
+            deduped.append({
+                "baseMonth": month,
                 "upperPrice": p.get("dealUpperPriceLimit") or p.get("upperPriceLimit"),
                 "lowerPrice": p.get("dealLowPriceLimit") or p.get("lowPriceLimit"),
                 "averagePrice": p.get("dealAveragePrice") or p.get("averagePriceLimit"),
                 "areaNo": result.get("areaNo"),
-            }
-            for p in result["marketPrices"]
-            if p.get("baseYearMonthDay")
-        ]
+            })
+        return deduped
     # 형식 2: realEstatePrice (레거시)
     return result.get("realEstatePrice") or result.get("prices") or []
 

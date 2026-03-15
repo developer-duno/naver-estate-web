@@ -65,7 +65,9 @@ def group_by_floor(articles: list[dict]) -> list[PriceStat]:
             continue
         floor_str = a.get("floor_info") or a.get("floor") or ""
         try:
-            floor = int(floor_str.split("/")[0]) if "/" in str(floor_str) else int(floor_str)
+            first = str(floor_str).split("/")[0].strip()
+            _KOR = {"저": 3, "중": 8, "고": 20}
+            floor = _KOR[first] if first in _KOR else int(first)
         except (ValueError, TypeError):
             continue
         if floor <= 0:

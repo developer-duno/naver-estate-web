@@ -151,6 +151,11 @@ def get_pyeong_details(
 ):
     """단지 면적별 상세 정보"""
     details = queries.get_complex_pyeong_details(db, complex_no)
+    if not details:
+        from services.enricher import enrich_complex_detail
+        enrich_complex_detail(db, complex_no)
+        db.commit()
+        details = queries.get_complex_pyeong_details(db, complex_no)
     return {
         "pyeong_details": [
             {

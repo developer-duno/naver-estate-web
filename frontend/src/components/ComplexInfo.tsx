@@ -31,6 +31,7 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo }: 
   const [priceStats, setPriceStats] = useState<PriceStats | null>(null);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState(false);
 
   useEffect(() => {
@@ -46,10 +47,11 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo }: 
 
   useEffect(() => {
     let cancelled = false;
+    setStatsLoading(true);
     setStatsError(false);
     getPriceStats(complexNo)
-      .then((data) => { if (!cancelled) setPriceStats(data); })
-      .catch(() => { if (!cancelled) { setPriceStats(null); setStatsError(true); } });
+      .then((data) => { if (!cancelled) { setPriceStats(data); setStatsLoading(false); } })
+      .catch(() => { if (!cancelled) { setPriceStats(null); setStatsError(true); setStatsLoading(false); } });
     return () => { cancelled = true; };
   }, [complexNo]);
 
@@ -94,10 +96,10 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo }: 
           />
         )}
         {tab === "price-area" && (
-          <PriceAreaTab priceStats={priceStats} error={statsError} />
+          <PriceAreaTab priceStats={priceStats} error={statsError} loading={statsLoading} />
         )}
         {tab === "price-floor" && (
-          <PriceFloorTab priceStats={priceStats} error={statsError} />
+          <PriceFloorTab priceStats={priceStats} error={statsError} loading={statsLoading} />
         )}
       </div>
     </div>
@@ -274,14 +276,16 @@ function PriceTrendTab({ tradeType, setTradeType, priceHistory, loading, error, 
   );
 }
 
-function PriceAreaTab({ priceStats, error }: { priceStats: PriceStats | null; error: boolean }) {
+function PriceAreaTab({ priceStats, error, loading }: { priceStats: PriceStats | null; error: boolean; loading: boolean }) {
+  if (loading) return <div className="h-48 flex items-center justify-center text-gray-400 text-sm">로딩 중...</div>;
   if (error) return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
   if (!priceStats || priceStats.by_area.length === 0)
     return <p className="text-gray-500 text-sm text-center">면적별 가격 데이터가 부족합니다</p>;
   return <LazyCharts type="area" data={priceStats.by_area} />;
 }
 
-function PriceFloorTab({ priceStats, error }: { priceStats: PriceStats | null; error: boolean }) {
+function PriceFloorTab({ priceStats, error, loading }: { priceStats: PriceStats | null; error: boolean; loading: boolean }) {
+  if (loading) return <div className="h-48 flex items-center justify-center text-gray-400 text-sm">로딩 중...</div>;
   if (error) return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
   if (!priceStats || priceStats.by_floor.length === 0)
     return <p className="text-gray-500 text-sm text-center">층수별 가격 데이터가 부족합니다</p>;

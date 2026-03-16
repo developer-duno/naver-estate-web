@@ -246,9 +246,16 @@ def get_price_stats(
         if has_data:
             by_floor.append(entry)
 
+    # 실제 버킷에 포함된 매물 수 합산 (area 기준 — numeric_price+area2_m2 모두 있는 매물)
+    area_total = sum(
+        entry.get(f"{_tt_key(tt)}_count", 0)
+        for entry in by_area
+        for tt in TRADE_TYPES
+    )
+
     return {
         "complex_no": complex_no,
-        "total_articles": data["total"],
+        "total_articles": area_total,
         "by_area": by_area,
         "by_floor": by_floor,
     }

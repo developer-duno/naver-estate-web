@@ -30,7 +30,7 @@ def group_by_area(articles: list[dict]) -> list[PriceStat]:
     for a in articles:
         area = a.get("exclusive_area") or a.get("area2_m2")
         price = a.get("price") or a.get("numeric_price")
-        if not area or not price or price <= 0:
+        if area is None or not price or price <= 0:
             continue
         bucket = round(area / AREA_BUCKET_SIZE) * AREA_BUCKET_SIZE
         groups.setdefault(bucket, []).append(price)

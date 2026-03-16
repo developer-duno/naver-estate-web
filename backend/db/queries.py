@@ -285,11 +285,12 @@ def _build_filter_conditions(filters: dict) -> list:
     if filters.get("verified_only"):
         conditions.append(Article.is_verified == True)
 
-    # 태그 필터 (PostgreSQL 배열 겹침 연산자 &&)
+    # 태그 필터 (ANY 사용 — 특수문자 포함 태그도 안전하게 처리)
     if tags := filters.get("tags"):
-        conditions.append(
-            text("articles.tags && CAST(:tag_arr AS TEXT[])").bindparams(tag_arr="{" + ",".join(tags) + "}")
-        )
+        for tag in tags:
+            conditions.append(
+                text("(:tag)::text = ANY(articles.tags)").bindparams(tag=tag)
+            )
 
     # 준공년도 (N년 이내)
     if (max_age := filters.get("max_building_age")) and max_age > 0:

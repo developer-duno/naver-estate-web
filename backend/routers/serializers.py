@@ -42,6 +42,7 @@ def complex_to_dict(c) -> dict:
         "nearby_median_price": c.nearby_median_price,
         "jeonse_rate": c.jeonse_rate,
         "recent_trades_6m": c.recent_trades_6m,
+        "detail_crawled_at": c.detail_crawled_at.isoformat() if getattr(c, "detail_crawled_at", None) else None,
     }
 
 
@@ -98,6 +99,9 @@ def article_to_dict(a, complex_obj=None) -> dict:
         "price_changed_at": a.price_changed_at.isoformat() if a.price_changed_at else None,
         "total_household_count": c.total_household_count if c else None,
         "complex_address": c.address if c else None,
+        "article_real_estate_type_name": getattr(a, "article_real_estate_type_name", None),
+        "realtor_id": getattr(a, "realtor_id", None),
+        "realtor_phone": getattr(a, "realtor_phone", None),
     }
 
 

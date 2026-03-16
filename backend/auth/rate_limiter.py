@@ -82,9 +82,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         _ip_counters[rate_key] = _clean_old_entries(_ip_counters[rate_key], window)
 
-        # 빈 리스트면 키 삭제 — 메모리 누수 방지
         if not _ip_counters[rate_key]:
+            # 윈도우 만료 또는 첫 요청 — 키 삭제 후 이 요청부터 계측 시작
             del _ip_counters[rate_key]
+            _ip_counters[rate_key].append(time.time())
             return await call_next(request)
 
         if len(_ip_counters[rate_key]) >= max_req:

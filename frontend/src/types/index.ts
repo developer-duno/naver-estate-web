@@ -29,10 +29,12 @@ export interface Complex {
   parking_count_by_household?: number;
   management_office_tel?: string;
   last_crawled_at?: string;
+  detail_crawled_at?: string;
   article_count?: number;
   nearby_median_price?: number;
   jeonse_rate?: number;
   recent_trades_6m?: number;
+  filter_options?: FilterOptions;
 }
 
 /** 매물 정보 */

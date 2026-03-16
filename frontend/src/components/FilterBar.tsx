@@ -38,11 +38,14 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
   const [sortBy, setSortBy] = useState("rank");
 
   // Sync external sortBy (from table column click)
+  const sortByRef = useRef(sortBy);
+  sortByRef.current = sortBy;
+
   useEffect(() => {
-    if (externalSortBy !== undefined && externalSortBy !== sortBy) {
+    if (externalSortBy !== undefined && externalSortBy !== sortByRef.current) {
       setSortBy(externalSortBy);
     }
-  }, [externalSortBy]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [externalSortBy]);
 
   const emitChange = useCallback(
     (overrides: Partial<Record<string, string>> = {}) => {

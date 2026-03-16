@@ -58,6 +58,7 @@ class Complex(Base):
     nearby_median_price: Mapped[int | None] = mapped_column(Integer)
     jeonse_rate: Mapped[float | None] = mapped_column(Float)
     recent_trades_6m: Mapped[int | None] = mapped_column(Integer)
+    has_pool: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

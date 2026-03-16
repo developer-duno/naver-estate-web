@@ -34,6 +34,7 @@ _cache = TTLCache()
 
 # -- Background crawl progress tracking --
 _crawl_status: dict[str, dict] = {}
+_crawl_lock = threading.Lock()
 
 
 def _utcnow():
@@ -192,20 +193,22 @@ def start_live_crawl(complex_no: str):
     if _cache.get(cache_key) is not None:
         return {"complex_no": complex_no, "status": "cached"}
 
-    # Already running?
-    status = _crawl_status.get(complex_no)
-    if status and status.get("status") in ("started", "running"):
-        return {"complex_no": complex_no, "status": "already_running",
-                "current_page": status.get("current_page", 0),
-                "article_count": status.get("article_count", 0)}
+    # Already running? (Lock으로 check-then-set 원자화)
+    with _crawl_lock:
+        status = _crawl_status.get(complex_no)
+        if status and status.get("status") in ("started", "running"):
+            return {"complex_no": complex_no, "status": "already_running",
+                    "current_page": status.get("current_page", 0),
+                    "article_count": status.get("article_count", 0)}
 
-    _crawl_status[complex_no] = {
-        "status": "started",
-        "current_page": 0,
-        "article_count": 0,
-        "has_more": True,
-        "error": None,
-    }
+        _crawl_status[complex_no] = {
+            "status": "started",
+            "current_page": 0,
+            "article_count": 0,
+            "has_more": True,
+            "error": None,
+        }
+
     t = threading.Thread(target=_background_crawl, args=(complex_no,), daemon=True)
     t.start()
 
@@ -219,6 +222,9 @@ def get_crawl_status(complex_no: str):
     if not status:
         return {"complex_no": complex_no, "status": "idle",
                 "detail_phase": None, "detail_crawled_count": 0, "detail_total": 0}
+    # 완료/에러 상태는 한 번 읽으면 제거 (메모리 누수 방지)
+    if status.get("status") in ("done", "error"):
+        _crawl_status.pop(complex_no, None)
     return {"complex_no": complex_no, **status}
 
 
@@ -326,7 +332,7 @@ def _background_crawl(complex_no: str):
             for a_data in article_list:
                 article = RealEstateArticle.from_dict(a_data)
                 article.complex_no = complex_no
-                upsert_article(db, article, commit=False)
+                upsert_article(db, article, commit=False, track_price=True)
                 all_article_nos.add(article.article_no)
 
             db.commit()  # per-page commit

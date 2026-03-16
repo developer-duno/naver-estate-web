@@ -45,6 +45,7 @@ export default function ComplexDetailPage() {
   const [loading, setLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [filterError, setFilterError] = useState("");
@@ -94,7 +95,7 @@ export default function ComplexDetailPage() {
         if (cpxResult.status === "fulfilled") {
           setComplex(cpxResult.value);
           // filter_options는 complex 응답에 포함
-          const opts = (cpxResult.value as any).filter_options;
+          const opts = cpxResult.value.filter_options;
           if (opts) setFilterOptions(opts);
         }
         if (artResult.status === "fulfilled") {
@@ -224,10 +225,11 @@ export default function ComplexDetailPage() {
       // 인증 실패해도 내보내기는 시도
     }
     setExporting(true);
+    setExportError("");
     try {
       await exportArticles(complexNo, currentFiltersRef.current, accessToken);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "엑셀 내보내기에 실패했습니다.");
+      setExportError(err instanceof Error ? err.message : "엑셀 내보내기에 실패했습니다.");
     } finally {
       setExporting(false);
     }
@@ -361,6 +363,14 @@ export default function ComplexDetailPage() {
         <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-md px-4 py-2 flex justify-between items-center">
           <span>{filterError}</span>
           <button onClick={() => setFilterError("")} className="text-red-400 hover:text-red-600">×</button>
+        </div>
+      )}
+
+      {/* 엑셀 내보내기 에러 배너 */}
+      {exportError && (
+        <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-md px-4 py-2 flex justify-between items-center">
+          <span>{exportError}</span>
+          <button onClick={() => setExportError("")} className="text-red-400 hover:text-red-600">×</button>
         </div>
       )}
 

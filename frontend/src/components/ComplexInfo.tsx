@@ -209,6 +209,8 @@ function PyeongCard({ detail: pd }: { detail: PyeongDetail }) {
   );
 }
 
+const AREA_FILTER_TOLERANCE_M2 = 4;
+
 function PriceAreaTab({ priceStats, error, loading, onFilterChange }: { priceStats: PriceStats | null; error: boolean; loading: boolean; onFilterChange?: (filters: ArticleFilters) => void; }) {
   if (loading) return <div className="h-48 flex items-center justify-center text-gray-400 text-sm">로딩 중...</div>;
   if (error) return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
@@ -220,7 +222,7 @@ function PriceAreaTab({ priceStats, error, loading, onFilterChange }: { priceSta
     const match = label.match(/(\d+)/);
     if (!match) return;
     const area = parseInt(match[1], 10);
-    onFilterChange({ min_area_m2: area - 4, max_area_m2: area + 4 });
+    onFilterChange({ min_area_m2: area - AREA_FILTER_TOLERANCE_M2, max_area_m2: area + AREA_FILTER_TOLERANCE_M2 });
   };
 
   return (

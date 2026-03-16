@@ -183,12 +183,12 @@ def get_pyeong_details(
 
 
 
-@router.get("/{complex_no}/price-stats")
 def _tt_key(tt: str) -> str:
     """거래유형 한글 → ASCII 키 변환"""
     return {"매매": "maemae", "전세": "jeonse", "월세": "wolse"}.get(tt, tt)
 
 
+@router.get("/{complex_no}/price-stats")
 def get_price_stats(
     complex_no: str,
     db: Session = Depends(get_db),

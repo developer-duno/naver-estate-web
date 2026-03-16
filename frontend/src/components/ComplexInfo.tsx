@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import type { Complex, PyeongDetail, PriceStats, AreaPriceStat, FloorPriceStat } from "@/types";
+import type { Complex, PyeongDetail, PriceStats, AreaPriceStat, FloorPriceStat, ArticleFilters } from "@/types";
 import { formatDateFull } from "@/lib/format";
 import { getPriceStats } from "@/lib/api";
 
@@ -15,6 +15,7 @@ interface Props {
   pyeongDetails: PyeongDetail[];
   complexNo: string;
   articleCount?: number;
+  onFilterChange?: (filters: ArticleFilters) => void;
 }
 
 const TABS: { key: TabType; label: string }[] = [
@@ -24,7 +25,7 @@ const TABS: { key: TabType; label: string }[] = [
   { key: "price-floor", label: "층수별 가격" },
 ];
 
-export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount }: Props) {
+export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount, onFilterChange }: Props) {
   const [tab, setTab] = useState<TabType>("info");
   const [priceStats, setPriceStats] = useState<PriceStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -64,10 +65,10 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
         {tab === "info" && <BasicInfo cpx={cpx} />}
         {tab === "area" && <PyeongDetails details={pyeongDetails} />}
         {tab === "price-area" && (
-          <PriceAreaTab priceStats={priceStats} error={statsError} loading={statsLoading} />
+          <PriceAreaTab priceStats={priceStats} error={statsError} loading={statsLoading} onFilterChange={onFilterChange} />
         )}
         {tab === "price-floor" && (
-          <PriceFloorTab priceStats={priceStats} error={statsError} loading={statsLoading} />
+          <PriceFloorTab priceStats={priceStats} error={statsError} loading={statsLoading} onFilterChange={onFilterChange} />
         )}
       </div>
     </div>
@@ -208,19 +209,52 @@ function PyeongCard({ detail: pd }: { detail: PyeongDetail }) {
   );
 }
 
-function PriceAreaTab({ priceStats, error, loading }: { priceStats: PriceStats | null; error: boolean; loading: boolean }) {
+function PriceAreaTab({ priceStats, error, loading, onFilterChange }: { priceStats: PriceStats | null; error: boolean; loading: boolean; onFilterChange?: (filters: ArticleFilters) => void; }) {
   if (loading) return <div className="h-48 flex items-center justify-center text-gray-400 text-sm">로딩 중...</div>;
   if (error) return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
   if (!priceStats || priceStats.by_area.length === 0)
     return <p className="text-gray-500 text-sm text-center">면적별 가격 데이터가 부족합니다</p>;
-  return <LazyCharts type="area" data={priceStats.by_area} />;
+
+  const handleAreaClick = (label: string) => {
+    if (!onFilterChange) return;
+    const match = label.match(/(\d+)/);
+    if (!match) return;
+    const area = parseInt(match[1], 10);
+    onFilterChange({ min_area_m2: area - 4, max_area_m2: area + 4 });
+  };
+
+  return (
+    <div>
+      {onFilterChange && (
+        <p className="text-xs text-gray-400 mb-1 text-right">막대를 클릭하면 해당 면적 매물만 표시됩니다</p>
+      )}
+      <LazyCharts type="area" data={priceStats.by_area} onAreaClick={onFilterChange ? handleAreaClick : undefined} />
+    </div>
+  );
 }
 
-function PriceFloorTab({ priceStats, error, loading }: { priceStats: PriceStats | null; error: boolean; loading: boolean }) {
+function PriceFloorTab({ priceStats, error, loading, onFilterChange }: { priceStats: PriceStats | null; error: boolean; loading: boolean; onFilterChange?: (filters: ArticleFilters) => void; }) {
+  const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
+
   if (loading) return <div className="h-48 flex items-center justify-center text-gray-400 text-sm">로딩 중...</div>;
   if (error) return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
   if (!priceStats || priceStats.by_floor.length === 0)
     return <p className="text-gray-500 text-sm text-center">층수별 가격 데이터가 부족합니다</p>;
+
+  const handleFloorClick = (label: string) => {
+    if (!onFilterChange) return;
+    if (selectedLabel === label) {
+      setSelectedLabel(null);
+      onFilterChange({ min_floor: undefined, max_floor: undefined });
+      return;
+    }
+    setSelectedLabel(label);
+    const numMatch = label.match(/(\d+)[^0-9]+(\d+)?/);
+    if (!numMatch) return;
+    const min = parseInt(numMatch[1], 10);
+    const max = numMatch[2] ? parseInt(numMatch[2], 10) : undefined;
+    onFilterChange({ min_floor: min, max_floor: max });
+  };
 
   const TRADE_TYPES = [
     { key: "매매", avgKey: "maemae_avg", minKey: "maemae_min", maxKey: "maemae_max", countKey: "maemae_count", color: "text-red-600" },
@@ -229,11 +263,23 @@ function PriceFloorTab({ priceStats, error, loading }: { priceStats: PriceStats 
   ] as const;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div>
+      {onFilterChange && (
+        <p className="text-xs text-gray-400 mb-2 text-right">카드를 클릭하면 해당 층수 매물만 표시됩니다</p>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {priceStats.by_floor.map((stat) => {
         const s = stat as import("@/types").FloorPriceStat;
         return (
-          <div key={s.label} className="border rounded-lg p-3">
+          <div
+              key={s.label}
+              onClick={() => handleFloorClick(s.label)}
+              className={[
+                "border rounded-lg p-3 transition-colors",
+                onFilterChange ? "cursor-pointer hover:border-blue-400" : "",
+                selectedLabel === s.label ? "border-blue-500 bg-blue-50" : "",
+              ].join(" ")}
+            >
             <div className="text-sm font-semibold text-gray-700 mb-3">{s.label}</div>
             <div className="space-y-2">
               {TRADE_TYPES.map(({ key, avgKey, minKey, maxKey, countKey, color }) => {
@@ -255,6 +301,7 @@ function PriceFloorTab({ priceStats, error, loading }: { priceStats: PriceStats 
           </div>
         );
       })}
+      </div>
     </div>
   );
 }

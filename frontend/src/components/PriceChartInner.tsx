@@ -19,17 +19,30 @@ function formatPrice(value: number): string {
 interface Props {
   type: "area";
   data: AreaPriceStat[];
+  onAreaClick?: (label: string) => void;
 }
 
-export default function PriceChartInner({ data }: Props) {
+export default function PriceChartInner({ data, onAreaClick }: Props) {
   const hasMaemae = data.some((d) => d.maemae != null);
   const hasJeonse = data.some((d) => d.jeonse != null);
   const hasWolse  = data.some((d) => d.wolse  != null);
 
+  const handleClick = (chartData: any) => {
+    if (onAreaClick && chartData?.activeLabel) {
+      onAreaClick(chartData.activeLabel);
+    }
+  };
+
   return (
     <div role="img" aria-label="거래유형별 면적 가격 차트">
       <ResponsiveContainer width="100%" height={280}>
-        <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
+        <BarChart
+          data={data}
+          margin={{ top: 4, right: 8, left: 0, bottom: 4 }}
+          barSize={40}
+          onClick={onAreaClick ? handleClick : undefined}
+          style={onAreaClick ? { cursor: "pointer" } : undefined}
+        >
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="label" fontSize={11} />
           <YAxis tickFormatter={formatPrice} fontSize={11} width={68} />

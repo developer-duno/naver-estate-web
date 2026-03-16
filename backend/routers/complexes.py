@@ -194,10 +194,29 @@ def get_price_history(
     """단지 시세 이력 조회 — DB 비어있으면 네이버 API에서 실시간 수집"""
     history = queries.get_price_history(db, complex_no, trade_type, months, area_no=area_no)
     if not history:
-        # DB에 데이터 없으면 실시간 수집 시도
-        collected = collect_price_history_for_complex(db, complex_no)
-        if collected > 0:
-            history = queries.get_price_history(db, complex_no, trade_type, months, area_no=area_no)
+        # DB에 데이터 없으면 기본 면적만 빠르게 수집 (on-demand는 2회 호출만)
+        from shared.naver_api import NaverEstateAPI
+        from crawler.service import _extract_price_list, _upsert_price_history, _safe_int
+        for tt in ("A1", "B1"):
+            try:
+                result = NaverEstateAPI.get_complex_prices(complex_no, trade_type=tt)
+                if result and "error" not in result:
+                    for p in _extract_price_list(result):
+                        bm = p.get("baseMonth")
+                        if not bm:
+                            continue
+                        _upsert_price_history(
+                            db, complex_no, tt,
+                            area_no=str(p.get("areaNo")) if p.get("areaNo") is not None else None,
+                            price_upper=_safe_int(p.get("upperPrice")),
+                            price_lower=_safe_int(p.get("lowerPrice")),
+                            price_avg=_safe_int(p.get("averagePrice")),
+                            base_month=bm,
+                        )
+            except Exception:
+                pass
+        db.commit()
+        history = queries.get_price_history(db, complex_no, trade_type, months, area_no=area_no)
 
     # 면적별 이름 매핑 (pyeong_details에서 조회)
     from db.models import ComplexPyeongDetail

@@ -304,7 +304,7 @@ export async function updateAdminSetting(token: string, key: string, value: Reco
 export async function getPriceHistory(complexNo: string, tradeType = "A1", areaNo?: string | null, months = 96) {
   const params = new URLSearchParams({ trade_type: tradeType, months: String(months) });
   if (areaNo) params.set("area_no", areaNo);
-  return fetchApi<PriceHistory>(`/api/complexes/${complexNo}/price-history?${params}`);
+  return fetchApi<PriceHistory>(`/api/complexes/${complexNo}/price-history?${params}`, { timeoutMs: 30_000 });
 }
 
 /** 가격 통계 (면적별/층수별) */

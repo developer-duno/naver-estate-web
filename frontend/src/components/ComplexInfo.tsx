@@ -14,6 +14,7 @@ interface Props {
   complex: Complex;
   pyeongDetails: PyeongDetail[];
   complexNo: string;
+  articleCount?: number;
 }
 
 const TABS: { key: TabType; label: string }[] = [
@@ -24,7 +25,7 @@ const TABS: { key: TabType; label: string }[] = [
   { key: "price-floor", label: "층수별 가격" },
 ];
 
-export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo }: Props) {
+export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount }: Props) {
   const [tab, setTab] = useState<TabType>("info");
   const [tradeType, setTradeType] = useState<"A1" | "B1">("A1");
   const [priceHistory, setPriceHistory] = useState<PriceHistory | null>(null);
@@ -53,7 +54,7 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo }: 
       .then((data) => { if (!cancelled) { setPriceStats(data); setStatsLoading(false); } })
       .catch(() => { if (!cancelled) { setPriceStats(null); setStatsError(true); setStatsLoading(false); } });
     return () => { cancelled = true; };
-  }, [complexNo]);
+  }, [complexNo, articleCount]);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border overflow-hidden">

@@ -329,7 +329,7 @@ export default function ComplexDetailPage() {
       </div>
 
       {/* 단지 정보 */}
-      <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} />
+      <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} articleCount={totalCount} />
 
       {/* 크롤링 진행률 배너 */}
       {crawling && crawlProgress && (

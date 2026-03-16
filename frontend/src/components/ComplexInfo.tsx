@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import type { Complex, PyeongDetail, PriceStats } from "@/types";
+import type { Complex, PyeongDetail, PriceStats, AreaPriceStat, FloorPriceStat } from "@/types";
 import { formatDateFull } from "@/lib/format";
 import { getPriceStats } from "@/lib/api";
 
@@ -26,7 +26,6 @@ const TABS: { key: TabType; label: string }[] = [
 
 export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount }: Props) {
   const [tab, setTab] = useState<TabType>("info");
-  const [tradeType, setTradeType] = useState<string>("매매");
   const [priceStats, setPriceStats] = useState<PriceStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState(false);
@@ -35,11 +34,11 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
     let cancelled = false;
     setStatsLoading(true);
     setStatsError(false);
-    getPriceStats(complexNo, tradeType)
+    getPriceStats(complexNo)
       .then((data) => { if (!cancelled) { setPriceStats(data); setStatsLoading(false); } })
       .catch(() => { if (!cancelled) { setPriceStats(null); setStatsError(true); setStatsLoading(false); } });
     return () => { cancelled = true; };
-  }, [complexNo, articleCount, tradeType]);
+  }, [complexNo, articleCount]);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
@@ -62,30 +61,13 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
       </div>
 
       <div className="p-4">
-        {(tab === "price-area" || tab === "price-floor") && (
-          <div className="flex gap-1 mb-3">
-            {["매매", "전세", "월세"].map((t) => (
-              <button
-                key={t}
-                onClick={() => setTradeType(t)}
-                className={"px-3 py-1 text-sm rounded border " + (
-                  tradeType === t
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
-                )}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        )}
         {tab === "info" && <BasicInfo cpx={cpx} />}
         {tab === "area" && <PyeongDetails details={pyeongDetails} />}
         {tab === "price-area" && (
-          <PriceAreaTab priceStats={priceStats} error={statsError} loading={statsLoading} tradeType={tradeType} />
+          <PriceAreaTab priceStats={priceStats} error={statsError} loading={statsLoading} />
         )}
         {tab === "price-floor" && (
-          <PriceFloorTab priceStats={priceStats} error={statsError} loading={statsLoading} tradeType={tradeType} />
+          <PriceFloorTab priceStats={priceStats} error={statsError} loading={statsLoading} />
         )}
       </div>
     </div>
@@ -226,49 +208,56 @@ function PyeongCard({ detail: pd }: { detail: PyeongDetail }) {
   );
 }
 
-function PriceAreaTab({ priceStats, error, loading, tradeType }: { priceStats: PriceStats | null; error: boolean; loading: boolean; tradeType: string }) {
+function PriceAreaTab({ priceStats, error, loading }: { priceStats: PriceStats | null; error: boolean; loading: boolean }) {
   if (loading) return <div className="h-48 flex items-center justify-center text-gray-400 text-sm">로딩 중...</div>;
   if (error) return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
   if (!priceStats || priceStats.by_area.length === 0)
-    return <p className="text-gray-500 text-sm text-center">{tradeType} 면적별 가격 데이터가 부족합니다</p>;
+    return <p className="text-gray-500 text-sm text-center">면적별 가격 데이터가 부족합니다</p>;
   return <LazyCharts type="area" data={priceStats.by_area} />;
 }
 
-function PriceFloorTab({ priceStats, error, loading, tradeType }: { priceStats: PriceStats | null; error: boolean; loading: boolean; tradeType: string }) {
+function PriceFloorTab({ priceStats, error, loading }: { priceStats: PriceStats | null; error: boolean; loading: boolean }) {
   if (loading) return <div className="h-48 flex items-center justify-center text-gray-400 text-sm">로딩 중...</div>;
   if (error) return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
   if (!priceStats || priceStats.by_floor.length === 0)
-    return <p className="text-gray-500 text-sm text-center">{tradeType} 층수별 가격 데이터가 부족합니다</p>;
+    return <p className="text-gray-500 text-sm text-center">층수별 가격 데이터가 부족합니다</p>;
+
+  const TRADE_TYPES = [
+    { key: "매매", avgKey: "매매_avg", minKey: "매매_min", maxKey: "매매_max", countKey: "매매_count", color: "text-red-600" },
+    { key: "전세", avgKey: "전세_avg", minKey: "전세_min", maxKey: "전세_max", countKey: "전세_count", color: "text-blue-600" },
+    { key: "월세", avgKey: "월세_avg", minKey: "월세_min", maxKey: "월세_max", countKey: "월세_count", color: "text-green-600" },
+  ] as const;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {priceStats.by_floor.map((stat) => (
-        <div key={stat.label} className="border rounded-lg p-3">
-          <div className="text-sm font-medium text-gray-600 mb-2">{stat.label}</div>
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">평균금액</span>
-              <span className="font-medium">{fmtPrice(stat.avg)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">최고가격</span>
-              <span className="text-red-600">{fmtPrice(stat.max)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">최저가격</span>
-              <span className="text-green-600">{fmtPrice(stat.min)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">매물 수</span>
-              <span>{stat.count}건</span>
+      {priceStats.by_floor.map((stat) => {
+        const s = stat as import("@/types").FloorPriceStat;
+        return (
+          <div key={s.label} className="border rounded-lg p-3">
+            <div className="text-sm font-semibold text-gray-700 mb-3">{s.label}</div>
+            <div className="space-y-2">
+              {TRADE_TYPES.map(({ key, avgKey, minKey, maxKey, countKey, color }) => {
+                const avg = s[avgKey];
+                if (avg == null) return null;
+                return (
+                  <div key={key} className="text-xs">
+                    <div className={"font-medium mb-0.5 " + color}>{key}</div>
+                    <div className="grid grid-cols-2 gap-x-2 text-gray-600">
+                      <span>평균</span><span className="font-medium">{fmtPrice(avg)}</span>
+                      <span>최저</span><span>{fmtPrice(s[minKey] ?? 0)}</span>
+                      <span>최고</span><span>{fmtPrice(s[maxKey] ?? 0)}</span>
+                      <span>매물수</span><span>{s[countKey]}건</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
-
 function fmtPrice(value: number): string {
   if (value == null || isNaN(value)) return "-";
   if (value >= 10000) {

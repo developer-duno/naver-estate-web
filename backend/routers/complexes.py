@@ -186,46 +186,64 @@ def get_pyeong_details(
 @router.get("/{complex_no}/price-stats")
 def get_price_stats(
     complex_no: str,
-    trade_type: Optional[str] = Query(None, description="거래유형 (매매/전세/월세)"),
     db: Session = Depends(get_db),
 ):
-    """단지 매물 가격 통계 — 면적별/층수별 집계 (Phase 1)"""
-    data = queries.get_price_stats(db, complex_no, trade_type=trade_type)
-    articles = data["articles"]
+    """단지 매물 가격 통계 — 거래유형별 면적/층수 비교"""
+    data = queries.get_price_stats(db, complex_no)
+    all_articles = data["articles"]
 
-    # 면적별/층수별 통계 집계
-    area_stats = group_by_area([
-        {"area2_m2": a["area2_m2"], "numeric_price": a["numeric_price"]}
-        for a in articles
-    ])
-    floor_stats = group_by_floor([
-        {"floor_info": a["floor_info"], "numeric_price": a["numeric_price"]}
-        for a in articles
-    ])
+    TRADE_TYPES = ["매매", "전세", "월세"]
+
+    # 거래유형별 분류
+    by_tt = {
+        tt: [a for a in all_articles if a.get("trade_type_name") == tt]
+        for tt in TRADE_TYPES
+    }
+
+    # 거래유형별 면적/층수 통계
+    area_by_tt = {
+        tt: {s.label: s for s in group_by_area(arts)}
+        for tt, arts in by_tt.items()
+    }
+    floor_by_tt = {
+        tt: {s.label: s for s in group_by_floor(arts)}
+        for tt, arts in by_tt.items()
+    }
+
+    # 면적별 복합 데이터: 한 행 = 한 면적 버킷, 열 = 거래유형별 평균가
+    all_area_labels = sorted(
+        {label for tt_stats in area_by_tt.values() for label in tt_stats}
+    )
+    by_area = []
+    for label in all_area_labels:
+        entry: dict = {"label": label}
+        for tt in TRADE_TYPES:
+            s = area_by_tt[tt].get(label)
+            if s:
+                entry[tt] = s.avg_price
+                entry[f"{tt}_count"] = s.count
+        by_area.append(entry)
+
+    # 층수별 복합 데이터
+    floor_labels = ["저층(1-5)", "중층(6-15)", "고층(16+)"]
+    by_floor = []
+    for label in floor_labels:
+        entry = {"label": label}
+        has_data = False
+        for tt in TRADE_TYPES:
+            s = floor_by_tt[tt].get(label)
+            if s:
+                entry[f"{tt}_avg"] = s.avg_price
+                entry[f"{tt}_min"] = s.min_price
+                entry[f"{tt}_max"] = s.max_price
+                entry[f"{tt}_count"] = s.count
+                has_data = True
+        if has_data:
+            by_floor.append(entry)
 
     return {
         "complex_no": complex_no,
         "total_articles": data["total"],
-        "by_area": [
-            {
-                "label": s.label,
-                "min": s.min_price,
-                "avg": s.avg_price,
-                "max": s.max_price,
-                "median": s.median_price,
-                "count": s.count,
-            }
-            for s in area_stats
-        ],
-        "by_floor": [
-            {
-                "label": s.label,
-                "min": s.min_price,
-                "avg": s.avg_price,
-                "max": s.max_price,
-                "median": s.median_price,
-                "count": s.count,
-            }
-            for s in floor_stats
-        ],
+        "by_area": by_area,
+        "by_floor": by_floor,
     }

@@ -1,10 +1,10 @@
 "use client";
 
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, BarChart, Bar,
 } from "recharts";
-import type { PriceStat } from "@/types";
+import type { AreaPriceStat } from "@/types";
 
 function formatPrice(value: number): string {
   if (value == null || isNaN(value)) return "-";
@@ -16,45 +16,30 @@ function formatPrice(value: number): string {
   return `${value.toLocaleString()}만`;
 }
 
-interface TrendData { month: string; "최고가격"?: number; "최저가격"?: number; "평균금액"?: number; }
-
 interface Props {
-  type: "trend" | "area";
-  data: TrendData[] | PriceStat[];
+  type: "area";
+  data: AreaPriceStat[];
 }
 
-export default function PriceChartInner({ type, data }: Props) {
-  if (type === "trend") {
-    return (
-      <div role="img" aria-label="시세 추이 차트">
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={data as TrendData[]}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="month" fontSize={12} />
-            <YAxis tickFormatter={formatPrice} fontSize={12} width={70} />
-            <Tooltip formatter={(v) => formatPrice(Number(v))} labelFormatter={(l) => `20${l}`} />
-            <Legend />
-            <Line type="monotone" dataKey="최고가격" stroke="#ef4444" strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="평균금액" stroke="#3b82f6" strokeWidth={2} dot={false} />
-            <Line type="monotone" dataKey="최저가격" stroke="#22c55e" strokeWidth={2} dot={false} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    );
-  }
+export default function PriceChartInner({ data }: Props) {
+  const hasMaemae = data.some((d) => d.매매 != null);
+  const hasJeonse = data.some((d) => d.전세 != null);
+  const hasWolse  = data.some((d) => d.월세 != null);
 
   return (
-    <div role="img" aria-label="면적별 가격 분포 차트">
-      <ResponsiveContainer width="100%" height={250}>
-        <BarChart data={data as PriceStat[]}>
+    <div role="img" aria-label="거래유형별 면적 가격 차트">
+      <ResponsiveContainer width="100%" height={280}>
+        <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="label" fontSize={12} />
-          <YAxis tickFormatter={formatPrice} fontSize={12} width={70} />
-          <Tooltip formatter={(v) => formatPrice(Number(v))} />
+          <XAxis dataKey="label" fontSize={11} />
+          <YAxis tickFormatter={formatPrice} fontSize={11} width={68} />
+          <Tooltip
+            formatter={(value, name) => [formatPrice(Number(value)), name]}
+          />
           <Legend />
-          <Bar dataKey="min" name="최저가격" fill="#22c55e" />
-          <Bar dataKey="avg" name="평균금액" fill="#3b82f6" />
-          <Bar dataKey="max" name="최고가격" fill="#ef4444" />
+          {hasMaemae && <Bar dataKey="매매" name="매매 평균" fill="#ef4444" />}
+          {hasJeonse && <Bar dataKey="전세" name="전세 평균" fill="#3b82f6" />}
+          {hasWolse  && <Bar dataKey="월세" name="월세 평균" fill="#22c55e" />}
         </BarChart>
       </ResponsiveContainer>
     </div>

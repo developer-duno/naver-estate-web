@@ -2,7 +2,7 @@
  * FastAPI 백엔드 호출 래퍼
  */
 
-import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions, DbStats, Regions, PriceStats, CrawlProgress } from "@/types";
+import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions, DbStats, Regions, PriceStats, AreaPriceStat, FloorPriceStat, CrawlProgress } from "@/types";
 import type { UserProfile, AuditLog, AdminSetting, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail } from "@/types/admin";
 
 export class ApiError extends Error {
@@ -298,10 +298,9 @@ export async function updateAdminSetting(token: string, key: string, value: Reco
   });
 }
 
-/** 가격 통계 (면적별/층수별) */
-export async function getPriceStats(complexNo: string, tradeType?: string) {
-  const qs = tradeType ? `?trade_type=${encodeURIComponent(tradeType)}` : "";
-  return fetchApi<PriceStats>(`/api/complexes/${complexNo}/price-stats${qs}`);
+/** 가격 통계 (면적별/층수별, 거래유형 구분 포함) */
+export async function getPriceStats(complexNo: string) {
+  return fetchApi<PriceStats>(`/api/complexes/${complexNo}/price-stats`);
 }
 
 /** 관리자: 오래된 데이터 삭제 */

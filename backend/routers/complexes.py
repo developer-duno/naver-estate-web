@@ -225,7 +225,7 @@ def get_price_stats(
         for tt in TRADE_TYPES:
             s = area_by_tt[tt].get(label)
             if s:
-                entry[_tt_key(tt)] = s.median_price
+                entry[_tt_key(tt)] = s.avg_price
                 entry[f"{_tt_key(tt)}_count"] = s.count
         by_area.append(entry)
 
@@ -238,7 +238,7 @@ def get_price_stats(
         for tt in TRADE_TYPES:
             s = floor_by_tt[tt].get(label)
             if s:
-                entry[f"{_tt_key(tt)}_avg"] = s.median_price
+                entry[f"{_tt_key(tt)}_avg"] = s.avg_price
                 entry[f"{_tt_key(tt)}_min"] = s.min_price
                 entry[f"{_tt_key(tt)}_max"] = s.max_price
                 entry[f"{_tt_key(tt)}_count"] = s.count

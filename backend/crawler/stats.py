@@ -38,11 +38,12 @@ def group_by_area(articles: list[dict]) -> list[PriceStat]:
     result = []
     for bucket_area in sorted(groups):
         prices = sorted(groups[bucket_area])
+        clean = _remove_outliers(prices)
         result.append(PriceStat(
             label=f"{bucket_area}m²",
-            min_price=prices[0],
-            avg_price=round(sum(prices) / len(prices)),
-            max_price=prices[-1],
+            min_price=clean[0],
+            avg_price=round(sum(clean) / len(clean)),
+            max_price=clean[-1],
             median_price=_median(prices),
             count=len(prices),
         ))
@@ -85,11 +86,12 @@ def group_by_floor(articles: list[dict]) -> list[PriceStat]:
         prices = sorted(groups[label])
         if not prices:
             continue
+        clean = _remove_outliers(prices)
         result.append(PriceStat(
             label=label,
-            min_price=prices[0],
-            avg_price=round(sum(prices) / len(prices)),
-            max_price=prices[-1],
+            min_price=clean[0],
+            avg_price=round(sum(clean) / len(clean)),
+            max_price=clean[-1],
             median_price=_median(prices),
             count=len(prices),
         ))
@@ -110,6 +112,23 @@ def compute_jeonse_rate(
     if not sale_median or not jeonse_median or sale_median <= 0:
         return None
     return round(jeonse_median / sale_median * 100, 1)
+
+
+def _remove_outliers(sorted_prices: list[int]) -> list[int]:
+    """IQR 방식으로 이상치 제거 (Q1-1.5*IQR ~ Q3+1.5*IQR 범위 밖 제거).
+    4개 미만이면 그대로 반환.
+    """
+    n = len(sorted_prices)
+    if n < 4:
+        return sorted_prices
+    q1 = sorted_prices[n // 4]
+    q3 = sorted_prices[(n * 3) // 4]
+    iqr = q3 - q1
+    if iqr == 0:
+        return sorted_prices
+    lower = q1 - int(1.5 * iqr)
+    upper = q3 + int(1.5 * iqr)
+    return [p for p in sorted_prices if lower <= p <= upper] or sorted_prices
 
 
 def _median(sorted_prices: list[int]) -> int:

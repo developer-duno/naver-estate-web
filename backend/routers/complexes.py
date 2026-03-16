@@ -9,7 +9,6 @@ from deps import get_db
 from db import queries
 from routers.serializers import complex_to_dict, article_to_dict, build_filter_dict
 from crawler.stats import group_by_area, group_by_floor
-from crawler.service import collect_price_history_for_complex
 
 router = APIRouter()
 
@@ -182,74 +181,6 @@ def get_pyeong_details(
         ]
     }
 
-
-@router.get("/{complex_no}/price-history")
-def get_price_history(
-    complex_no: str,
-    trade_type: str = Query("A1", description="거래유형 (A1=매매, B1=전세)"),
-    area_no: Optional[str] = Query(None, description="면적번호 (pyeong_no)"),
-    months: int = Query(96, ge=1, le=500),
-    db: Session = Depends(get_db),
-):
-    """단지 시세 이력 조회 — DB 비어있으면 네이버 API에서 실시간 수집"""
-    history = queries.get_price_history(db, complex_no, trade_type, months, area_no=area_no)
-    if not history:
-        # DB에 데이터 없으면 기본 면적만 빠르게 수집 (on-demand는 2회 호출만)
-        from shared.naver_api import NaverEstateAPI
-        from crawler.service import _extract_price_list, _upsert_price_history, _safe_int
-        for tt in ("A1", "B1"):
-            try:
-                result = NaverEstateAPI.get_complex_prices(complex_no, trade_type=tt)
-                if result and "error" not in result:
-                    for p in _extract_price_list(result):
-                        bm = p.get("baseMonth")
-                        if not bm:
-                            continue
-                        _upsert_price_history(
-                            db, complex_no, tt,
-                            area_no=str(p.get("areaNo")) if p.get("areaNo") is not None else None,
-                            price_upper=_safe_int(p.get("upperPrice") or p.get("upperPriceLimit")),
-                            price_lower=_safe_int(p.get("lowerPrice") or p.get("lowPriceLimit")),
-                            price_avg=_safe_int(p.get("averagePrice") or p.get("averagePriceLimit")),
-                            base_month=bm,
-                        )
-            except Exception:
-                pass
-        db.commit()
-        history = queries.get_price_history(db, complex_no, trade_type, months, area_no=area_no)
-
-    # 면적별 이름 매핑 (pyeong_details에서 조회)
-    from db.models import ComplexPyeongDetail
-    pyeong_map: dict[str, str] = {
-        str(p.pyeong_no): f"{p.pyeong_name or ''}({p.exclusive_area or ''}㎡)"
-        for p in db.query(ComplexPyeongDetail)
-            .filter(ComplexPyeongDetail.complex_no == complex_no)
-            .all()
-    }
-
-    # area_no 목록 (프론트 면적 선택기용)
-    area_list = [
-        {"area_no": k, "label": v}
-        for k, v in sorted(pyeong_map.items(), key=lambda x: x[0])
-    ]
-
-    return {
-        "complex_no": complex_no,
-        "trade_type": trade_type,
-        "area_no": area_no,
-        "area_label": pyeong_map.get(str(area_no)) if area_no else None,
-        "area_list": area_list,
-        "history": [
-            {
-                "base_month": h.base_month,
-                "price_upper": h.price_upper,
-                "price_lower": h.price_lower,
-                "price_avg": h.price_avg,
-                "area_no": h.area_no,
-            }
-            for h in history  # 쿼리에서 ASC 정렬됨
-        ],
-    }
 
 
 @router.get("/{complex_no}/price-stats")

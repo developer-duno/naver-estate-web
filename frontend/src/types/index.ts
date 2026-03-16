@@ -154,29 +154,6 @@ export interface DbStats {
 /** 지역 구조: {시도: {시군구: [동, ...]}} */
 export type Regions = Record<string, Record<string, string[]>>;
 
-/** 시세 이력 (Phase 1) */
-export interface PriceHistoryItem {
-  base_month: string;
-  price_upper?: number;
-  price_lower?: number;
-  price_avg?: number;
-  area_no?: string;
-}
-
-export interface PriceAreaOption {
-  area_no: string;
-  label: string;
-}
-
-export interface PriceHistory {
-  complex_no: string;
-  trade_type: string;
-  area_no?: string | null;
-  area_label?: string | null;
-  area_list?: PriceAreaOption[];
-  history: PriceHistoryItem[];
-}
-
 /** 가격 통계 (Phase 1) */
 export interface PriceStat {
   label: string;

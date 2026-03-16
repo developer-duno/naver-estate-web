@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import type { Complex, PyeongDetail, PriceHistory, PriceAreaOption, PriceStats } from "@/types";
+import type { Complex, PyeongDetail, PriceStats } from "@/types";
 import { formatDateFull } from "@/lib/format";
-import { getPriceHistory, getPriceStats } from "@/lib/api";
+import { getPriceStats } from "@/lib/api";
 
 const LazyCharts = dynamic(() => import("./PriceChartInner"), { ssr: false });
 
-type TabType = "info" | "area" | "price-trend" | "price-area" | "price-floor";
+type TabType = "info" | "area" | "price-area" | "price-floor";
 
 interface Props {
   complex: Complex;
@@ -20,40 +20,15 @@ interface Props {
 const TABS: { key: TabType; label: string }[] = [
   { key: "info", label: "단지정보" },
   { key: "area", label: "면적별 정보" },
-  { key: "price-trend", label: "시세 추이" },
   { key: "price-area", label: "면적별 가격" },
   { key: "price-floor", label: "층수별 가격" },
 ];
 
 export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount }: Props) {
   const [tab, setTab] = useState<TabType>("info");
-  const [tradeType, setTradeType] = useState<"A1" | "B1">("A1");
-  const [selectedAreaNo, setSelectedAreaNo] = useState<string | null>(null);
-  const [priceHistory, setPriceHistory] = useState<PriceHistory | null>(null);
   const [priceStats, setPriceStats] = useState<PriceStats | null>(null);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [historyError, setHistoryError] = useState(false);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setHistoryLoading(true);
-    setHistoryError(false);
-    getPriceHistory(complexNo, tradeType, selectedAreaNo)
-      .then((data) => {
-        if (!cancelled) {
-          setPriceHistory(data);
-          // 최초 로드 시 첫번째 면적 자동 선택
-          if (selectedAreaNo === null && data.area_list && data.area_list.length > 0) {
-            setSelectedAreaNo(data.area_list[0].area_no);
-          }
-        }
-      })
-      .catch(() => { if (!cancelled) { setPriceHistory(null); setHistoryError(true); } })
-      .finally(() => { if (!cancelled) setHistoryLoading(false); });
-    return () => { cancelled = true; };
-  }, [complexNo, tradeType, selectedAreaNo]);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,25 +63,6 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
       <div className="p-4">
         {tab === "info" && <BasicInfo cpx={cpx} />}
         {tab === "area" && <PyeongDetails details={pyeongDetails} />}
-        {tab === "price-trend" && (
-          <PriceTrendTab
-            tradeType={tradeType}
-            setTradeType={setTradeType}
-            selectedAreaNo={selectedAreaNo}
-            onAreaChange={(a) => { setSelectedAreaNo(a); }}
-            priceHistory={priceHistory}
-            loading={historyLoading}
-            error={historyError}
-            onRetry={() => {
-              setHistoryLoading(true);
-              setHistoryError(false);
-              getPriceHistory(complexNo, tradeType, selectedAreaNo)
-                .then(setPriceHistory)
-                .catch(() => { setPriceHistory(null); setHistoryError(true); })
-                .finally(() => setHistoryLoading(false));
-            }}
-          />
-        )}
         {tab === "price-area" && (
           <PriceAreaTab priceStats={priceStats} error={statsError} loading={statsLoading} />
         )}
@@ -252,62 +208,6 @@ function PyeongCard({ detail: pd }: { detail: PyeongDetail }) {
   );
 }
 
-function PriceTrendTab({ tradeType, setTradeType, selectedAreaNo, onAreaChange, priceHistory, loading, error, onRetry }: {
-  tradeType: "A1" | "B1"; setTradeType: (t: "A1" | "B1") => void;
-  selectedAreaNo: string | null; onAreaChange: (a: string) => void;
-  priceHistory: PriceHistory | null; loading: boolean; error: boolean; onRetry: () => void;
-}) {
-  const areaList: PriceAreaOption[] = priceHistory?.area_list ?? [];
-
-  const chartData = useMemo(() =>
-    priceHistory?.history.map((h) => ({
-      month: fmtDate(h.base_month),
-      "최고가격": h.price_upper,
-      "최저가격": h.price_lower,
-      "평균금액": h.price_avg,
-    })) ?? [], [priceHistory]);
-
-  return (
-    <div>
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-        {areaList.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {areaList.map((a) => (
-              <button
-                key={a.area_no}
-                onClick={() => onAreaChange(a.area_no)}
-                className={`px-2 py-0.5 text-xs rounded border ${
-                  selectedAreaNo === a.area_no
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
-                }`}
-              >
-                {a.label}
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="flex gap-2 ml-auto">
-          <button onClick={() => setTradeType("A1")} className={`px-3 py-1 text-sm rounded ${tradeType === "A1" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>매매</button>
-          <button onClick={() => setTradeType("B1")} className={`px-3 py-1 text-sm rounded ${tradeType === "B1" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>전세</button>
-        </div>
-      </div>
-      {loading ? (
-        <div className="h-64 flex items-center justify-center text-gray-500">로딩 중...</div>
-      ) : error ? (
-        <div className="h-64 flex flex-col items-center justify-center gap-2">
-          <span className="text-red-500 text-sm">시세 데이터를 불러오지 못했습니다</span>
-          <button onClick={onRetry} className="text-xs text-blue-600 hover:underline">다시 시도</button>
-        </div>
-      ) : chartData.length === 0 ? (
-        <div className="h-64 flex items-center justify-center text-gray-500">시세 데이터가 없습니다</div>
-      ) : (
-        <LazyCharts type="trend" data={chartData} />
-      )}
-    </div>
-  );
-}
-
 function PriceAreaTab({ priceStats, error, loading }: { priceStats: PriceStats | null; error: boolean; loading: boolean }) {
   if (loading) return <div className="h-48 flex items-center justify-center text-gray-400 text-sm">로딩 중...</div>;
   if (error) return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
@@ -360,12 +260,6 @@ function fmtPrice(value: number): string {
   }
   return `${value.toLocaleString()}만`;
 }
-
-function fmtDate(dateStr: string): string {
-  if (dateStr.length === 8) {
-    // YYYYMMDD → MM.dd
-    return `${dateStr.slice(4, 6)}.${dateStr.slice(6, 8)}`;
-  }
   if (dateStr.length === 6) {
     // YYYYMM → YY.MM
     return `${dateStr.slice(2, 4)}.${dateStr.slice(4)}`;

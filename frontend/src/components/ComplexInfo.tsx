@@ -26,6 +26,7 @@ const TABS: { key: TabType; label: string }[] = [
 
 export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount }: Props) {
   const [tab, setTab] = useState<TabType>("info");
+  const [tradeType, setTradeType] = useState<string>("매매");
   const [priceStats, setPriceStats] = useState<PriceStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState(false);
@@ -34,11 +35,11 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
     let cancelled = false;
     setStatsLoading(true);
     setStatsError(false);
-    getPriceStats(complexNo)
+    getPriceStats(complexNo, tradeType)
       .then((data) => { if (!cancelled) { setPriceStats(data); setStatsLoading(false); } })
       .catch(() => { if (!cancelled) { setPriceStats(null); setStatsError(true); setStatsLoading(false); } });
     return () => { cancelled = true; };
-  }, [complexNo, articleCount]);
+  }, [complexNo, articleCount, tradeType]);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
@@ -61,13 +62,30 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
       </div>
 
       <div className="p-4">
+        {(tab === "price-area" || tab === "price-floor") && (
+          <div className="flex gap-1 mb-3">
+            {["매매", "전세", "월세"].map((t) => (
+              <button
+                key={t}
+                onClick={() => setTradeType(t)}
+                className={"px-3 py-1 text-sm rounded border " + (
+                  tradeType === t
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                )}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
         {tab === "info" && <BasicInfo cpx={cpx} />}
         {tab === "area" && <PyeongDetails details={pyeongDetails} />}
         {tab === "price-area" && (
-          <PriceAreaTab priceStats={priceStats} error={statsError} loading={statsLoading} />
+          <PriceAreaTab priceStats={priceStats} error={statsError} loading={statsLoading} tradeType={tradeType} />
         )}
         {tab === "price-floor" && (
-          <PriceFloorTab priceStats={priceStats} error={statsError} loading={statsLoading} />
+          <PriceFloorTab priceStats={priceStats} error={statsError} loading={statsLoading} tradeType={tradeType} />
         )}
       </div>
     </div>
@@ -208,19 +226,19 @@ function PyeongCard({ detail: pd }: { detail: PyeongDetail }) {
   );
 }
 
-function PriceAreaTab({ priceStats, error, loading }: { priceStats: PriceStats | null; error: boolean; loading: boolean }) {
+function PriceAreaTab({ priceStats, error, loading, tradeType }: { priceStats: PriceStats | null; error: boolean; loading: boolean; tradeType: string }) {
   if (loading) return <div className="h-48 flex items-center justify-center text-gray-400 text-sm">로딩 중...</div>;
   if (error) return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
   if (!priceStats || priceStats.by_area.length === 0)
-    return <p className="text-gray-500 text-sm text-center">면적별 가격 데이터가 부족합니다</p>;
+    return <p className="text-gray-500 text-sm text-center">{tradeType} 면적별 가격 데이터가 부족합니다</p>;
   return <LazyCharts type="area" data={priceStats.by_area} />;
 }
 
-function PriceFloorTab({ priceStats, error, loading }: { priceStats: PriceStats | null; error: boolean; loading: boolean }) {
+function PriceFloorTab({ priceStats, error, loading, tradeType }: { priceStats: PriceStats | null; error: boolean; loading: boolean; tradeType: string }) {
   if (loading) return <div className="h-48 flex items-center justify-center text-gray-400 text-sm">로딩 중...</div>;
   if (error) return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
   if (!priceStats || priceStats.by_floor.length === 0)
-    return <p className="text-gray-500 text-sm text-center">층수별 가격 데이터가 부족합니다</p>;
+    return <p className="text-gray-500 text-sm text-center">{tradeType} 층수별 가격 데이터가 부족합니다</p>;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

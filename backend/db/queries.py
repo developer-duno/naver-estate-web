@@ -349,13 +349,15 @@ def get_article_price_history(
     return db.execute(stmt).scalars().all()
 
 
-def get_price_stats(db: Session, complex_no: str) -> dict:
+def get_price_stats(db: Session, complex_no: str, trade_type: Optional[str] = None) -> dict:
     """단지 매물의 가격 통계 (면적별/층수별 집계용 데이터, 전체 거래유형 포함)"""
     conditions = [
         Article.complex_no == complex_no,
         Article.is_active == True,
         Article.numeric_price.isnot(None),
     ]
+    if trade_type:
+        conditions.append(Article.trade_type_name == trade_type)
 
     stmt = (
         select(

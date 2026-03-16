@@ -186,10 +186,11 @@ def get_pyeong_details(
 @router.get("/{complex_no}/price-stats")
 def get_price_stats(
     complex_no: str,
+    trade_type: Optional[str] = Query(None, description="거래유형 (매매/전세/월세)"),
     db: Session = Depends(get_db),
 ):
     """단지 매물 가격 통계 — 면적별/층수별 집계 (Phase 1)"""
-    data = queries.get_price_stats(db, complex_no)
+    data = queries.get_price_stats(db, complex_no, trade_type=trade_type)
     articles = data["articles"]
 
     # 면적별/층수별 통계 집계

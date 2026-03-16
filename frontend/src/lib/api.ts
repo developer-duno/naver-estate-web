@@ -299,8 +299,9 @@ export async function updateAdminSetting(token: string, key: string, value: Reco
 }
 
 /** 가격 통계 (면적별/층수별) */
-export async function getPriceStats(complexNo: string) {
-  return fetchApi<PriceStats>(`/api/complexes/${complexNo}/price-stats`);
+export async function getPriceStats(complexNo: string, tradeType?: string) {
+  const qs = tradeType ? `?trade_type=${encodeURIComponent(tradeType)}` : "";
+  return fetchApi<PriceStats>(`/api/complexes/${complexNo}/price-stats${qs}`);
 }
 
 /** 관리자: 오래된 데이터 삭제 */

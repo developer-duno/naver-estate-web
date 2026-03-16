@@ -208,9 +208,9 @@ def get_price_history(
                         _upsert_price_history(
                             db, complex_no, tt,
                             area_no=str(p.get("areaNo")) if p.get("areaNo") is not None else None,
-                            price_upper=_safe_int(p.get("upperPrice")),
-                            price_lower=_safe_int(p.get("lowerPrice")),
-                            price_avg=_safe_int(p.get("averagePrice")),
+                            price_upper=_safe_int(p.get("upperPrice") or p.get("upperPriceLimit")),
+                            price_lower=_safe_int(p.get("lowerPrice") or p.get("lowPriceLimit")),
+                            price_avg=_safe_int(p.get("averagePrice") or p.get("averagePriceLimit")),
                             base_month=bm,
                         )
             except Exception:

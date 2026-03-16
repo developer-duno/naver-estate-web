@@ -271,11 +271,13 @@ def _extract_price_list(result: dict) -> list[dict]:
             base_day = p.get("baseYearMonthDay", "")
             if not base_day:
                 continue
+            # upperPriceLimit 등은 API가 tradeType에 맞게 세팅한 값 (A1=매매, B1=전세)
+            # deal* 필드는 항상 매매값이므로 사용 금지
             prices.append({
                 "baseMonth": base_day,  # YYYYMMDD 주간 단위
-                "upperPrice": p.get("dealUpperPriceLimit") or p.get("upperPriceLimit"),
-                "lowerPrice": p.get("dealLowPriceLimit") or p.get("lowPriceLimit"),
-                "averagePrice": p.get("dealAveragePrice") or p.get("averagePriceLimit"),
+                "upperPrice": p.get("upperPriceLimit"),
+                "lowerPrice": p.get("lowPriceLimit"),
+                "averagePrice": p.get("averagePriceLimit"),
                 "areaNo": result.get("areaNo"),
             })
         return prices
@@ -328,6 +330,41 @@ def collect_price_history_for_complex(db: Session, complex_no: str) -> int:
                     base_month=base_month,
                 )
                 collected += 1
+
+    # 실거래가(/prices/real): 기본 area_no만 수집 (장기 이력, YYYYMM 월별 저장)
+    for trade_type in ("A1", "B1"):
+        try:
+            real_result = NaverEstateAPI.get_complex_real_prices(complex_no, trade_type=trade_type)
+        except Exception as e:
+            logger.debug("실거래가 조회 실패: %s %s -> %s", complex_no, trade_type, e)
+            continue
+        if not real_result or "error" in real_result:
+            continue
+        month_list = real_result.get("realPriceOnMonthList") or []
+        for month_data in month_list:
+            if not isinstance(month_data, dict):
+                continue
+            trades = month_data.get("realPriceList") or []
+            if not trades:
+                continue
+            # 월 기준: tradeYear + tradeMonth (YYYYMM)
+            first = trades[0]
+            base_month = f"{first.get('tradeYear', '')}{str(first.get('tradeMonth', '')).zfill(2)}"
+            if len(base_month) != 6:
+                continue
+            prices = [t.get("dealPrice") or 0 for t in trades if t.get("dealPrice")]
+            if not prices:
+                continue
+            area_no_val = str(real_result.get("areaNo")) if real_result.get("areaNo") is not None else None
+            _upsert_price_history(
+                db, complex_no, trade_type,
+                area_no=area_no_val,
+                price_upper=max(prices),
+                price_lower=min(prices),
+                price_avg=round(sum(prices) / len(prices)),
+                base_month=base_month,
+            )
+            collected += 1
 
     if collected > 0:
         db.commit()

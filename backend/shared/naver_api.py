@@ -290,6 +290,24 @@ class NaverEstateAPI:
         return cls._request_with_retry(url, params=params, extra_headers=headers)
 
     @classmethod
+    def get_complex_real_prices(cls, complex_id, trade_type="A1", area_no=None):
+        """단지 실거래가 조회 — /prices/real (국토교통부 데이터, 년 단위 장기 이력)"""
+        token = cls._ensure_jwt(complex_id)
+        headers = {'Referer': f'{NAVER_LAND_BASE}/complexes/{complex_id}'}
+        if token:
+            headers['Authorization'] = f'Bearer {token}'
+        params = {
+            'complexNo': complex_id,
+            'tradeType': trade_type,
+            'year': '5',
+            'type': 'table',
+        }
+        if area_no is not None:
+            params['areaNo'] = str(area_no)
+        url = f"{NAVER_COMPLEX_API}/{complex_id}/prices/real"
+        return cls._request_with_retry(url, params=params, extra_headers=headers)
+
+    @classmethod
     def get_complex_schools(cls, complex_id):
         """단지 학군 정보 조회"""
         token = cls._ensure_jwt(complex_id)

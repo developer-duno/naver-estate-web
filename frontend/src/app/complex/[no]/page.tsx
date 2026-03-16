@@ -403,8 +403,18 @@ export default function ComplexDetailPage() {
         </div>
       )}
 
+      {/* 크롤링 중이고 매물이 아직 없을 때 안내 메세지 */}
+      {crawling && totalCount === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-500">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+          <p className="text-sm">매물 데이터를 수집하고 있습니다. 잠시만 기다려 주세요.</p>
+        </div>
+      )}
+
       {/* 매물 테이블 */}
-      <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} activeSortBy={activeSortBy} />
+      {(!crawling || totalCount > 0) && (
+        <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} activeSortBy={activeSortBy} />
+      )}
 
       {/* 페이지네이션 */}
       {totalPages > 1 && (

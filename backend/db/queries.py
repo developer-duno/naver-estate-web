@@ -340,16 +340,26 @@ def get_price_history(
     db: Session, complex_no: str, trade_type: str = "A1", months: int = 96,
     area_no: str | None = None,
 ) -> list[ComplexPriceHistory]:
-    """단지의 시세 이력 조회 (최근 N주, area_no 지정 시 해당 면적만)"""
-    conditions = [
+    """단지의 시세 이력 조회 (최근 N주, area_no 미지정 시 첫 번째 area 자동 선택)"""
+    base_conditions = [
         ComplexPriceHistory.complex_no == complex_no,
         ComplexPriceHistory.trade_type == trade_type,
     ]
+    # area_no 미지정 시 데이터 있는 첫 번째 area_no 자동 선택 (혼합 방지)
+    if area_no is None:
+        first_area = db.execute(
+            select(ComplexPriceHistory.area_no)
+            .where(and_(*base_conditions))
+            .order_by(ComplexPriceHistory.area_no.asc())
+            .limit(1)
+        ).scalar()
+        if first_area is not None:
+            area_no = first_area
     if area_no is not None:
-        conditions.append(ComplexPriceHistory.area_no == str(area_no))
+        base_conditions.append(ComplexPriceHistory.area_no == str(area_no))
     stmt = (
         select(ComplexPriceHistory)
-        .where(and_(*conditions))
+        .where(and_(*base_conditions))
         .order_by(ComplexPriceHistory.base_month.asc())
         .limit(months)
     )

@@ -260,9 +260,3 @@ function fmtPrice(value: number): string {
   }
   return `${value.toLocaleString()}만`;
 }
-  if (dateStr.length === 6) {
-    // YYYYMM → YY.MM
-    return `${dateStr.slice(2, 4)}.${dateStr.slice(4)}`;
-  }
-  return dateStr;
-}

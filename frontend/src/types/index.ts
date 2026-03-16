@@ -154,23 +154,23 @@ export interface DbStats {
 /** 지역 구조: {시도: {시군구: [동, ...]}} */
 export type Regions = Record<string, Record<string, string[]>>;
 
-/** 면적별 가격 통계 — 거래유형별 평균가 (매매/전세/월세 column) */
+/** 면적별 가격 통계 — 거래유형별 평균가 */
 export interface AreaPriceStat {
   label: string;
-  매매?: number;
-  전세?: number;
-  월세?: number;
-  매매_count?: number;
-  전세_count?: number;
-  월세_count?: number;
+  maemae?: number;
+  jeonse?: number;
+  wolse?: number;
+  maemae_count?: number;
+  jeonse_count?: number;
+  wolse_count?: number;
 }
 
 /** 층수별 가격 통계 — 거래유형별 min/avg/max */
 export interface FloorPriceStat {
   label: string;
-  매매_avg?: number; 매매_min?: number; 매매_max?: number; 매매_count?: number;
-  전세_avg?: number; 전세_min?: number; 전세_max?: number; 전세_count?: number;
-  월세_avg?: number; 월세_min?: number; 월세_max?: number; 월세_count?: number;
+  maemae_avg?: number; maemae_min?: number; maemae_max?: number; maemae_count?: number;
+  jeonse_avg?: number; jeonse_min?: number; jeonse_max?: number; jeonse_count?: number;
+  wolse_avg?: number;  wolse_min?: number;  wolse_max?: number;  wolse_count?: number;
 }
 
 /** @deprecated 단일 거래유형 통계 (PriceChartInner 내부용) */

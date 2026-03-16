@@ -223,9 +223,9 @@ function PriceFloorTab({ priceStats, error, loading }: { priceStats: PriceStats 
     return <p className="text-gray-500 text-sm text-center">층수별 가격 데이터가 부족합니다</p>;
 
   const TRADE_TYPES = [
-    { key: "매매", avgKey: "매매_avg", minKey: "매매_min", maxKey: "매매_max", countKey: "매매_count", color: "text-red-600" },
-    { key: "전세", avgKey: "전세_avg", minKey: "전세_min", maxKey: "전세_max", countKey: "전세_count", color: "text-blue-600" },
-    { key: "월세", avgKey: "월세_avg", minKey: "월세_min", maxKey: "월세_max", countKey: "월세_count", color: "text-green-600" },
+    { key: "매매", avgKey: "maemae_avg", minKey: "maemae_min", maxKey: "maemae_max", countKey: "maemae_count", color: "text-red-600" },
+    { key: "전세", avgKey: "jeonse_avg", minKey: "jeonse_min", maxKey: "jeonse_max", countKey: "jeonse_count", color: "text-blue-600" },
+    { key: "월세", avgKey: "wolse_avg",  minKey: "wolse_min",  maxKey: "wolse_max",  countKey: "wolse_count",  color: "text-green-600" },
   ] as const;
 
   return (

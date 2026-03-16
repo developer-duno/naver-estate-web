@@ -184,6 +184,11 @@ def get_pyeong_details(
 
 
 @router.get("/{complex_no}/price-stats")
+def _tt_key(tt: str) -> str:
+    """거래유형 한글 → ASCII 키 변환"""
+    return {"매매": "maemae", "전세": "jeonse", "월세": "wolse"}.get(tt, tt)
+
+
 def get_price_stats(
     complex_no: str,
     db: Session = Depends(get_db),
@@ -220,8 +225,8 @@ def get_price_stats(
         for tt in TRADE_TYPES:
             s = area_by_tt[tt].get(label)
             if s:
-                entry[tt] = s.avg_price
-                entry[f"{tt}_count"] = s.count
+                entry[_tt_key(tt)] = s.avg_price
+                entry[f"{_tt_key(tt)}_count"] = s.count
         by_area.append(entry)
 
     # 층수별 복합 데이터
@@ -233,10 +238,10 @@ def get_price_stats(
         for tt in TRADE_TYPES:
             s = floor_by_tt[tt].get(label)
             if s:
-                entry[f"{tt}_avg"] = s.avg_price
-                entry[f"{tt}_min"] = s.min_price
-                entry[f"{tt}_max"] = s.max_price
-                entry[f"{tt}_count"] = s.count
+                entry[f"{_tt_key(tt)}_avg"] = s.avg_price
+                entry[f"{_tt_key(tt)}_min"] = s.min_price
+                entry[f"{_tt_key(tt)}_max"] = s.max_price
+                entry[f"{_tt_key(tt)}_count"] = s.count
                 has_data = True
         if has_data:
             by_floor.append(entry)

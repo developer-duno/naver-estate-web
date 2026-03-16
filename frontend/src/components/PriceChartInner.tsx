@@ -22,9 +22,9 @@ interface Props {
 }
 
 export default function PriceChartInner({ data }: Props) {
-  const hasMaemae = data.some((d) => d.매매 != null);
-  const hasJeonse = data.some((d) => d.전세 != null);
-  const hasWolse  = data.some((d) => d.월세 != null);
+  const hasMaemae = data.some((d) => d.maemae != null);
+  const hasJeonse = data.some((d) => d.jeonse != null);
+  const hasWolse  = data.some((d) => d.wolse  != null);
 
   return (
     <div role="img" aria-label="거래유형별 면적 가격 차트">
@@ -33,13 +33,11 @@ export default function PriceChartInner({ data }: Props) {
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="label" fontSize={11} />
           <YAxis tickFormatter={formatPrice} fontSize={11} width={68} />
-          <Tooltip
-            formatter={(value, name) => [formatPrice(Number(value)), name]}
-          />
+          <Tooltip formatter={(value, name) => [formatPrice(Number(value)), name]} />
           <Legend />
-          {hasMaemae && <Bar dataKey="매매" name="매매 평균" fill="#ef4444" />}
-          {hasJeonse && <Bar dataKey="전세" name="전세 평균" fill="#3b82f6" />}
-          {hasWolse  && <Bar dataKey="월세" name="월세 평균" fill="#22c55e" />}
+          {hasMaemae && <Bar dataKey="maemae" name="매매 평균" fill="#ef4444" />}
+          {hasJeonse && <Bar dataKey="jeonse" name="전세 평균" fill="#3b82f6" />}
+          {hasWolse  && <Bar dataKey="wolse"  name="월세 평균" fill="#22c55e" />}
         </BarChart>
       </ResponsiveContainer>
     </div>

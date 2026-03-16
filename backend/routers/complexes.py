@@ -187,19 +187,39 @@ def get_pyeong_details(
 def get_price_history(
     complex_no: str,
     trade_type: str = Query("A1", description="거래유형 (A1=매매, B1=전세)"),
-    months: int = Query(24, ge=1, le=120),
+    area_no: Optional[str] = Query(None, description="면적번호 (pyeong_no)"),
+    months: int = Query(96, ge=1, le=500),
     db: Session = Depends(get_db),
 ):
     """단지 시세 이력 조회 — DB 비어있으면 네이버 API에서 실시간 수집"""
-    history = queries.get_price_history(db, complex_no, trade_type, months)
+    history = queries.get_price_history(db, complex_no, trade_type, months, area_no=area_no)
     if not history:
         # DB에 데이터 없으면 실시간 수집 시도
         collected = collect_price_history_for_complex(db, complex_no)
         if collected > 0:
-            history = queries.get_price_history(db, complex_no, trade_type, months)
+            history = queries.get_price_history(db, complex_no, trade_type, months, area_no=area_no)
+
+    # 면적별 이름 매핑 (pyeong_details에서 조회)
+    from db.models import ComplexPyeongDetail
+    pyeong_map: dict[str, str] = {
+        str(p.pyeong_no): f"{p.pyeong_name or ''}({p.exclusive_area or ''}㎡)"
+        for p in db.query(ComplexPyeongDetail)
+            .filter(ComplexPyeongDetail.complex_no == complex_no)
+            .all()
+    }
+
+    # area_no 목록 (프론트 면적 선택기용)
+    area_list = [
+        {"area_no": k, "label": v}
+        for k, v in sorted(pyeong_map.items(), key=lambda x: x[0])
+    ]
+
     return {
         "complex_no": complex_no,
         "trade_type": trade_type,
+        "area_no": area_no,
+        "area_label": pyeong_map.get(str(area_no)) if area_no else None,
+        "area_list": area_list,
         "history": [
             {
                 "base_month": h.base_month,

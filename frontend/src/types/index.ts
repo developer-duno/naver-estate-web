@@ -163,9 +163,17 @@ export interface PriceHistoryItem {
   area_no?: string;
 }
 
+export interface PriceAreaOption {
+  area_no: string;
+  label: string;
+}
+
 export interface PriceHistory {
   complex_no: string;
   trade_type: string;
+  area_no?: string | null;
+  area_label?: string | null;
+  area_list?: PriceAreaOption[];
   history: PriceHistoryItem[];
 }
 

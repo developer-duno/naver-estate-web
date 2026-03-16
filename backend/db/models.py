@@ -199,7 +199,7 @@ class ComplexPriceHistory(Base):
     price_upper: Mapped[int | None] = mapped_column(Integer)
     price_lower: Mapped[int | None] = mapped_column(Integer)
     price_avg: Mapped[int | None] = mapped_column(Integer)
-    base_month: Mapped[str] = mapped_column(String(6), nullable=False)
+    base_month: Mapped[str] = mapped_column(String(8), nullable=False)  # YYYYMMDD (weekly) or YYYYMM (legacy)
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

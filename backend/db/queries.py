@@ -337,17 +337,19 @@ def _build_filter_conditions(filters: dict) -> list:
 # ── 시세 이력 (Phase 1) ──
 
 def get_price_history(
-    db: Session, complex_no: str, trade_type: str = "A1", months: int = 24
+    db: Session, complex_no: str, trade_type: str = "A1", months: int = 96,
+    area_no: str | None = None,
 ) -> list[ComplexPriceHistory]:
-    """단지의 시세 이력 조회 (최근 N개월)"""
+    """단지의 시세 이력 조회 (최근 N주, area_no 지정 시 해당 면적만)"""
+    conditions = [
+        ComplexPriceHistory.complex_no == complex_no,
+        ComplexPriceHistory.trade_type == trade_type,
+    ]
+    if area_no is not None:
+        conditions.append(ComplexPriceHistory.area_no == str(area_no))
     stmt = (
         select(ComplexPriceHistory)
-        .where(
-            and_(
-                ComplexPriceHistory.complex_no == complex_no,
-                ComplexPriceHistory.trade_type == trade_type,
-            )
-        )
+        .where(and_(*conditions))
         .order_by(ComplexPriceHistory.base_month.asc())
         .limit(months)
     )

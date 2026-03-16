@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import dynamic from "next/dynamic";
-import type { Complex, PyeongDetail, PriceHistory, PriceStats } from "@/types";
+import type { Complex, PyeongDetail, PriceHistory, PriceAreaOption, PriceStats } from "@/types";
 import { formatDateFull } from "@/lib/format";
 import { getPriceHistory, getPriceStats } from "@/lib/api";
 
@@ -28,6 +28,7 @@ const TABS: { key: TabType; label: string }[] = [
 export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount }: Props) {
   const [tab, setTab] = useState<TabType>("info");
   const [tradeType, setTradeType] = useState<"A1" | "B1">("A1");
+  const [selectedAreaNo, setSelectedAreaNo] = useState<string | null>(null);
   const [priceHistory, setPriceHistory] = useState<PriceHistory | null>(null);
   const [priceStats, setPriceStats] = useState<PriceStats | null>(null);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -39,12 +40,20 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
     let cancelled = false;
     setHistoryLoading(true);
     setHistoryError(false);
-    getPriceHistory(complexNo, tradeType)
-      .then((data) => { if (!cancelled) setPriceHistory(data); })
+    getPriceHistory(complexNo, tradeType, selectedAreaNo)
+      .then((data) => {
+        if (!cancelled) {
+          setPriceHistory(data);
+          // 최초 로드 시 첫번째 면적 자동 선택
+          if (selectedAreaNo === null && data.area_list && data.area_list.length > 0) {
+            setSelectedAreaNo(data.area_list[0].area_no);
+          }
+        }
+      })
       .catch(() => { if (!cancelled) { setPriceHistory(null); setHistoryError(true); } })
       .finally(() => { if (!cancelled) setHistoryLoading(false); });
     return () => { cancelled = true; };
-  }, [complexNo, tradeType]);
+  }, [complexNo, tradeType, selectedAreaNo]);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,13 +92,15 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
           <PriceTrendTab
             tradeType={tradeType}
             setTradeType={setTradeType}
+            selectedAreaNo={selectedAreaNo}
+            onAreaChange={(a) => { setSelectedAreaNo(a); }}
             priceHistory={priceHistory}
             loading={historyLoading}
             error={historyError}
             onRetry={() => {
               setHistoryLoading(true);
               setHistoryError(false);
-              getPriceHistory(complexNo, tradeType)
+              getPriceHistory(complexNo, tradeType, selectedAreaNo)
                 .then(setPriceHistory)
                 .catch(() => { setPriceHistory(null); setHistoryError(true); })
                 .finally(() => setHistoryLoading(false));
@@ -241,13 +252,16 @@ function PyeongCard({ detail: pd }: { detail: PyeongDetail }) {
   );
 }
 
-function PriceTrendTab({ tradeType, setTradeType, priceHistory, loading, error, onRetry }: {
+function PriceTrendTab({ tradeType, setTradeType, selectedAreaNo, onAreaChange, priceHistory, loading, error, onRetry }: {
   tradeType: "A1" | "B1"; setTradeType: (t: "A1" | "B1") => void;
+  selectedAreaNo: string | null; onAreaChange: (a: string) => void;
   priceHistory: PriceHistory | null; loading: boolean; error: boolean; onRetry: () => void;
 }) {
+  const areaList: PriceAreaOption[] = priceHistory?.area_list ?? [];
+
   const chartData = useMemo(() =>
     priceHistory?.history.map((h) => ({
-      month: fmtMonth(h.base_month),
+      month: fmtDate(h.base_month),
       "최고가격": h.price_upper,
       "최저가격": h.price_lower,
       "평균금액": h.price_avg,
@@ -255,8 +269,25 @@ function PriceTrendTab({ tradeType, setTradeType, priceHistory, loading, error, 
 
   return (
     <div>
-      <div className="flex justify-end mb-3">
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        {areaList.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {areaList.map((a) => (
+              <button
+                key={a.area_no}
+                onClick={() => onAreaChange(a.area_no)}
+                className={`px-2 py-0.5 text-xs rounded border ${
+                  selectedAreaNo === a.area_no
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex gap-2 ml-auto">
           <button onClick={() => setTradeType("A1")} className={`px-3 py-1 text-sm rounded ${tradeType === "A1" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>매매</button>
           <button onClick={() => setTradeType("B1")} className={`px-3 py-1 text-sm rounded ${tradeType === "B1" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>전세</button>
         </div>
@@ -330,6 +361,14 @@ function fmtPrice(value: number): string {
   return `${value.toLocaleString()}만`;
 }
 
-function fmtMonth(yyyymm: string): string {
-  return yyyymm.length === 6 ? `${yyyymm.slice(2, 4)}.${yyyymm.slice(4)}` : yyyymm;
+function fmtDate(dateStr: string): string {
+  if (dateStr.length === 8) {
+    // YYYYMMDD → MM.dd
+    return `${dateStr.slice(4, 6)}.${dateStr.slice(6, 8)}`;
+  }
+  if (dateStr.length === 6) {
+    // YYYYMM → YY.MM
+    return `${dateStr.slice(2, 4)}.${dateStr.slice(4)}`;
+  }
+  return dateStr;
 }

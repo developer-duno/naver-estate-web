@@ -262,34 +262,23 @@ def crawl_article_details(batch_size: int = 100):
 def _extract_price_list(result: dict) -> list[dict]:
     """네이버 API 시세 응답에서 가격 리스트 추출 (응답 형식 호환)
 
-    marketPrices는 주간 데이터를 반환하므로 월 단위로 중복 제거 (최신 우선).
+    marketPrices는 주간(YYYYMMDD) 데이터를 반환. 전체를 그대로 반환하여 누적 저장.
     """
-    # 형식 1: marketPrices (현재 API)
+    # 형식 1: marketPrices (현재 API) — 주간 데이터 그대로 유지
     if "marketPrices" in result:
-        seen_months: set[str] = set()
-        deduped = []
-        # baseYearMonthDay 내림차순 정렬 → 같은 월은 최신만 사용
-        sorted_prices = sorted(
-            result["marketPrices"],
-            key=lambda p: p.get("baseYearMonthDay", ""),
-            reverse=True,
-        )
-        for p in sorted_prices:
+        prices = []
+        for p in result["marketPrices"]:
             base_day = p.get("baseYearMonthDay", "")
             if not base_day:
                 continue
-            month = base_day[:6]
-            if month in seen_months:
-                continue
-            seen_months.add(month)
-            deduped.append({
-                "baseMonth": month,
+            prices.append({
+                "baseMonth": base_day,  # YYYYMMDD 주간 단위
                 "upperPrice": p.get("dealUpperPriceLimit") or p.get("upperPriceLimit"),
                 "lowerPrice": p.get("dealLowPriceLimit") or p.get("lowPriceLimit"),
                 "averagePrice": p.get("dealAveragePrice") or p.get("averagePriceLimit"),
                 "areaNo": result.get("areaNo"),
             })
-        return deduped
+        return prices
     # 형식 2: realEstatePrice (레거시)
     return result.get("realEstatePrice") or result.get("prices") or []
 
@@ -297,35 +286,48 @@ def _extract_price_list(result: dict) -> list[dict]:
 def collect_price_history_for_complex(db: Session, complex_no: str) -> int:
     """단일 단지의 시세 이력 실시간 수집 (on-demand).
 
+    pyeong_details에 등록된 모든 area_no에 대해 수집.
     Returns: 수집된 레코드 수
     """
+    from db.models import ComplexPyeongDetail
+    # 수집할 area_no 목록: DB에 등록된 pyeong 기준, 없으면 기본값(None) 1회만
+    area_nos: list[int | None] = [
+        p.pyeong_no
+        for p in db.query(ComplexPyeongDetail.pyeong_no)
+            .filter(ComplexPyeongDetail.complex_no == complex_no)
+            .all()
+    ]
+    if not area_nos:
+        area_nos = [None]
+
     collected = 0
     for trade_type in ("A1", "B1"):
-        try:
-            result = NaverEstateAPI.get_complex_prices(
-                complex_no, trade_type=trade_type
-            )
-        except Exception as e:
-            logger.warning("시세 조회 실패: %s %s -> %s", complex_no, trade_type, e)
-            continue
-
-        if not result or "error" in result:
-            continue
-
-        price_list = _extract_price_list(result)
-        for p in price_list:
-            base_month = p.get("baseMonth") or p.get("yearMonth")
-            if not base_month:
+        for area_no in area_nos:
+            try:
+                result = NaverEstateAPI.get_complex_prices(
+                    complex_no, trade_type=trade_type, area_no=area_no
+                )
+            except Exception as e:
+                logger.warning("시세 조회 실패: %s %s area=%s -> %s", complex_no, trade_type, area_no, e)
                 continue
-            _upsert_price_history(
-                db, complex_no, trade_type,
-                area_no=str(p.get("areaNo")) if p.get("areaNo") is not None else None,
-                price_upper=_safe_int(p.get("upperPrice") or p.get("dealUpperPrice")),
-                price_lower=_safe_int(p.get("lowerPrice") or p.get("dealLowerPrice")),
-                price_avg=_safe_int(p.get("averagePrice")),
-                base_month=base_month,
-            )
-            collected += 1
+
+            if not result or "error" in result:
+                continue
+
+            price_list = _extract_price_list(result)
+            for p in price_list:
+                base_month = p.get("baseMonth") or p.get("yearMonth")
+                if not base_month:
+                    continue
+                _upsert_price_history(
+                    db, complex_no, trade_type,
+                    area_no=str(p.get("areaNo")) if p.get("areaNo") is not None else None,
+                    price_upper=_safe_int(p.get("upperPrice") or p.get("dealUpperPrice")),
+                    price_lower=_safe_int(p.get("lowerPrice") or p.get("dealLowerPrice")),
+                    price_avg=_safe_int(p.get("averagePrice")),
+                    base_month=base_month,
+                )
+                collected += 1
 
     if collected > 0:
         db.commit()

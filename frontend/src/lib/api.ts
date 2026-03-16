@@ -301,10 +301,10 @@ export async function updateAdminSetting(token: string, key: string, value: Reco
 // ── 시세 API (Phase 1) ──
 
 /** 시세 이력 조회 */
-export async function getPriceHistory(complexNo: string, tradeType = "A1", months = 24) {
-  return fetchApi<PriceHistory>(
-    `/api/complexes/${complexNo}/price-history?trade_type=${tradeType}&months=${months}`
-  );
+export async function getPriceHistory(complexNo: string, tradeType = "A1", areaNo?: string | null, months = 96) {
+  const params = new URLSearchParams({ trade_type: tradeType, months: String(months) });
+  if (areaNo) params.set("area_no", areaNo);
+  return fetchApi<PriceHistory>(`/api/complexes/${complexNo}/price-history?${params}`);
 }
 
 /** 가격 통계 (면적별/층수별) */

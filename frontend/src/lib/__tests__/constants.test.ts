@@ -75,3 +75,45 @@ describe("폴링 간격", () => {
     expect(ARTICLES_POLL_MS).toBeGreaterThanOrEqual(CRAWL_STATUS_POLL_MS);
   });
 });
+
+
+// 신규 상수 테스트
+import { SORT_OPTIONS, BUILDING_AGE_OPTIONS, MOVE_IN_OPTIONS } from "../constants";
+
+describe("SORT_OPTIONS", () => {
+  it("11개 정렬 옵션 포함", () => {
+    expect(SORT_OPTIONS).toHaveLength(11);
+  });
+
+  it("기본순이 첫 번째", () => {
+    expect(SORT_OPTIONS[0].v).toBe("rank");
+    expect(SORT_OPTIONS[0].l).toBe("기본순");
+  });
+
+  it("모든 옵션에 v와 l 필드 존재", () => {
+    for (const opt of SORT_OPTIONS) {
+      expect(opt.v).toBeDefined();
+      expect(opt.l).toBeDefined();
+    }
+  });
+});
+
+describe("BUILDING_AGE_OPTIONS", () => {
+  it("7개 준공년도 옵션", () => {
+    expect(BUILDING_AGE_OPTIONS).toHaveLength(7);
+  });
+
+  it("전체가 첫 번째", () => {
+    expect(BUILDING_AGE_OPTIONS[0].l).toBe("전체");
+  });
+});
+
+describe("MOVE_IN_OPTIONS", () => {
+  it("6개 입주가능일 옵션", () => {
+    expect(MOVE_IN_OPTIONS).toHaveLength(6);
+  });
+
+  it("전체가 첫 번째", () => {
+    expect(MOVE_IN_OPTIONS[0]).toBe("전체");
+  });
+});

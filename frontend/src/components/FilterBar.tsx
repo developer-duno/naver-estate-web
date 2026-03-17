@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, memo } from "react";
 import type { ArticleFilters, FilterOptions, SortBy } from "@/types";
-import { M2_TO_PYEONG, FLOOR_PRESETS, DEBOUNCE_MS } from "@/lib/constants";
+import { M2_TO_PYEONG, FLOOR_PRESETS, DEBOUNCE_MS, SORT_OPTIONS, BUILDING_AGE_OPTIONS, MOVE_IN_OPTIONS } from "@/lib/constants";
 
 interface Props {
   onChange: (filters: ArticleFilters) => void;
@@ -233,19 +233,7 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
           className="w-20" />
 
         <FilterSelect label="정렬" value={sortBy} onChange={setImmediate(setSortBy, "sortBy")}
-          options={[
-            { v: "rank", l: "기본순" },
-            { v: "price_asc", l: "가격↑" },
-            { v: "price_desc", l: "가격↓" },
-            { v: "area_asc", l: "면적↑" },
-            { v: "area_desc", l: "면적↓" },
-            { v: "ppyeong_asc", l: "평당가↑" },
-            { v: "ppyeong_desc", l: "평당가↓" },
-            { v: "maintenance_asc", l: "관리비↑" },
-            { v: "maintenance_desc", l: "관리비↓" },
-            { v: "confirm_desc", l: "최신순" },
-            { v: "confirm_asc", l: "오래된순" },
-          ]}
+          options={SORT_OPTIONS as unknown as { v: string; l: string }[]}
           className="w-28" />
 
         <button
@@ -269,14 +257,11 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
         <FilterInput label="최대 관리비(만원)" value={maxMaint} onChange={setDebounced(setMaxMaint, "maxMaint")} className={inputCls + " w-32"} />
 
         <FilterSelect label="준공년도" value={buildingAge} onChange={setImmediate(setBuildingAge, "buildingAge")}
-          options={[
-            { v: "0", l: "전체" }, { v: "5", l: "5년 이내" }, { v: "10", l: "10년 이내" },
-            { v: "15", l: "15년 이내" }, { v: "20", l: "20년 이내" }, { v: "25", l: "25년 이내" }, { v: "30", l: "30년 이내" },
-          ]}
+          options={BUILDING_AGE_OPTIONS as unknown as { v: string; l: string }[]}
           className="w-28" />
 
         <FilterSelect label="입주가능일" value={moveInType} onChange={setImmediate(setMoveInType, "moveInType")}
-          options={["전체", "즉시입주", "1개월", "3개월", "6개월", "협의"]}
+          options={MOVE_IN_OPTIONS as unknown as string[]}
           className="w-28" />
 
         <FilterSelect label="매물유형" value={estateType} onChange={setImmediate(setEstateType, "estateType")}

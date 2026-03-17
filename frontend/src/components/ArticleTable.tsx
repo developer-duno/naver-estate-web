@@ -365,7 +365,15 @@ const ArticleRow = memo(function ArticleRow({ article: art, index, onClick, sele
       </Td>
       <Td>{art.building_name || "-"}</Td>
       <Td>{art.floor_info || "-"}</Td>
-      <Td className="text-right font-semibold text-gray-900">{price}</Td>
+      <Td className="text-right font-semibold text-gray-900">
+        {price}
+        {art.previous_price != null && art.numeric_price != null && art.previous_price !== art.numeric_price && (
+          <span className={`ml-1 text-xs font-normal ${art.numeric_price < art.previous_price ? "text-blue-600" : "text-red-600"}`}>
+            {art.numeric_price < art.previous_price ? "↓" : "↑"}
+            {Math.abs(art.numeric_price - art.previous_price).toLocaleString()}
+          </span>
+        )}
+      </Td>
       <Td className="text-right">{area}</Td>
       <Td className="text-right">{ppyeong}</Td>
       <Td className="text-center">{rooms}</Td>

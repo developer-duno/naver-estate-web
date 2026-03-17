@@ -46,6 +46,7 @@ export default function ComplexDetailPage() {
   const [tableLoading, setTableLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [selectedArticleNos, setSelectedArticleNos] = useState<Set<string>>(new Set());
+  const [filterOpen, setFilterOpen] = useState(true);
   const [exportError, setExportError] = useState("");
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -385,7 +386,17 @@ export default function ComplexDetailPage() {
       )}
 
       {/* 필터 바 */}
-      <FilterBar onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} />
+      <div>
+        <button
+          onClick={() => setFilterOpen(v => !v)}
+          className="text-sm text-blue-600 hover:text-blue-800 mb-1 flex items-center gap-1 md:hidden"
+        >
+          {filterOpen ? "▲ 필터 접기" : "▼ 필터 펼치기"}
+        </button>
+        <div className={filterOpen ? "" : "hidden md:block"}>
+          <FilterBar onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} />
+        </div>
+      </div>
 
       {/* 필터 에러 배너 */}
       {filterError && (

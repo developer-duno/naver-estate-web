@@ -146,7 +146,7 @@ function LoginForm() {
         <button
           type="submit"
           disabled={loading || isLocked}
-          className="w-full bg-blue-600 text-white py-2.5 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-300"
+          className="w-full bg-blue-600 text-white py-1.5 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-300"
         >
           {loading ? "로그인 중..." : isLocked ? "계정 잠김" : "로그인"}
         </button>

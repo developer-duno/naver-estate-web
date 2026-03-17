@@ -127,7 +127,7 @@ export default function RegionSelector({ onSearch }: Props) {
       <button
         onClick={handleSearch}
         disabled={!sido || !sigungu}
-        className="bg-blue-600 text-white px-5 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+        className="bg-blue-600 text-white px-5 py-1.5 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
       >
         검색
       </button>

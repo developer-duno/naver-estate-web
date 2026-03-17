@@ -24,8 +24,14 @@ export async function getStatsDirect(): Promise<DbStats> {
   };
 }
 
+
+// 지역 목록 캐시 (5분 TTL)
+let _regionCache: { data: Regions; time: number } | null = null;
+const REGION_CACHE_TTL = 5 * 60 * 1000;
+
 /** 지역 목록 */
 export async function getRegionsDirect(): Promise<Regions> {
+  if (_regionCache && Date.now() - _regionCache.time < REGION_CACHE_TTL) return _regionCache.data;
   const supabase = sb();
   // 47K행 전체 SELECT 대신 페이지네이션으로 모든 지역 조합 수집
   const regions: Record<string, Record<string, string[]>> = {};
@@ -56,6 +62,7 @@ export async function getRegionsDirect(): Promise<Regions> {
     from += PAGE;
   }
 
+  _regionCache = { data: regions as Regions, time: Date.now() };
   return regions as Regions;
 }
 

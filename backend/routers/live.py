@@ -218,14 +218,15 @@ def start_live_crawl(complex_no: str):
 @router.get("/{complex_no}/articles/crawl-status")
 def get_crawl_status(complex_no: str):
     """Poll crawl progress."""
-    status = _crawl_status.get(complex_no)
-    if not status:
-        return {"complex_no": complex_no, "status": "idle",
-                "detail_phase": None, "detail_crawled_count": 0, "detail_total": 0}
-    # 완료/에러 상태는 한 번 읽으면 제거 (메모리 누수 방지)
-    if status.get("status") in ("done", "error"):
-        _crawl_status.pop(complex_no, None)
-    return {"complex_no": complex_no, **status}
+    with _crawl_lock:
+        status = _crawl_status.get(complex_no)
+        if not status:
+            return {"complex_no": complex_no, "status": "idle",
+                    "detail_phase": None, "detail_crawled_count": 0, "detail_total": 0}
+        snapshot = {**status}
+        if status.get("status") in ("done", "error"):
+            _crawl_status.pop(complex_no, None)
+    return {"complex_no": complex_no, **snapshot}
 
 
 @router.get("/{complex_no}/articles")

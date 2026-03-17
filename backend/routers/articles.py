@@ -156,8 +156,7 @@ def export_articles_to_excel(
         raise HTTPException(status_code=404, detail="내보낼 매물이 없습니다")
 
     # 파일명용 단지명 조회
-    from db.models import Complex as ComplexModel
-    complex_obj = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
+    complex_obj = queries.get_complex_by_no(db, complex_no)
     _complex_name = (complex_obj.complex_name if complex_obj else None) or articles[0].complex_name
 
     def _safe_excel(val: str) -> str:

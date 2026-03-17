@@ -270,8 +270,7 @@ function PriceFloorTab({ priceStats, error, loading, onFilterChange }: { priceSt
         <p className="text-xs text-gray-400 mb-2 text-right">카드를 클릭하면 해당 층수 매물만 표시됩니다</p>
       )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {priceStats.by_floor.map((stat) => {
-        const s = stat as import("@/types").FloorPriceStat;
+      {priceStats.by_floor.map((s) => {
         return (
           <div
               key={s.label}

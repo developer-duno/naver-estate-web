@@ -39,3 +39,7 @@ class TTLCache:
         expired = [k for k, (t, _) in self._store.items() if now - t >= self._ttl]
         for k in expired:
             del self._store[k]
+        # 만료 삭제 후에도 초과 시 가장 오래된 항목 강제 삭제
+        while len(self._store) > self._max_size:
+            oldest_key = min(self._store, key=lambda k: self._store[k][0])
+            del self._store[oldest_key]

@@ -27,9 +27,10 @@ export default function PriceChartInner({ data, onAreaClick }: Props) {
   const hasJeonse = data.some((d) => d.jeonse != null);
   const hasWolse  = data.some((d) => d.wolse  != null);
 
-  const handleClick = (chartData: any) => {
-    if (onAreaClick && chartData?.activeLabel) {
-      onAreaClick(chartData.activeLabel);
+  const handleClick = (chartData: Record<string, unknown>) => {
+    const label = chartData?.activeLabel;
+    if (onAreaClick && typeof label === "string") {
+      onAreaClick(label);
     }
   };
 

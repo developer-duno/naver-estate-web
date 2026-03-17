@@ -18,12 +18,14 @@ export default function ArticleDetail({ articleNo, onClose }: Props) {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     setError("");
     getArticleLive(articleNo)
-      .then(setArticle)
-      .catch(() => setError("매물 정보를 불러올 수 없습니다."))
-      .finally(() => setLoading(false));
+      .then((data) => { if (!cancelled) setArticle(data); })
+      .catch(() => { if (!cancelled) setError("매물 정보를 불러올 수 없습니다."); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, [articleNo]);
 
   const dialogRef = useRef<HTMLDivElement>(null);

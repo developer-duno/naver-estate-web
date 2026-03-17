@@ -87,6 +87,9 @@ export interface Article {
   price_changed_at?: string;
   total_household_count?: number;
   complex_address?: string;
+  article_real_estate_type_name?: string;
+  realtor_id?: string;
+  realtor_phone?: string;
 }
 
 /** 면적별 상세 */
@@ -135,6 +138,7 @@ export interface ArticleFilters {
   min_floor?: number;
   max_floor?: number;
   tags?: string;
+  selected_articles?: string;
   sort_by?: string;
   page?: number;
   page_size?: number;

@@ -239,11 +239,13 @@ def _build_filter_conditions(filters: dict) -> list:
         conditions.append(Article.area2_m2 <= max_area)
 
     # 방 수
-    if (min_rooms := filters.get("min_rooms")) and min_rooms > 0:
+    min_rooms = filters.get("min_rooms")
+    if min_rooms is not None and min_rooms > 0:
         conditions.append(Article.room_count >= min_rooms)
 
     # 욕실 수
-    if (min_baths := filters.get("min_baths")) and min_baths > 0:
+    min_baths = filters.get("min_baths")
+    if min_baths is not None and min_baths > 0:
         conditions.append(Article.bathroom_count >= min_baths)
 
     # 방향
@@ -366,6 +368,7 @@ def get_price_stats(db: Session, complex_no: str) -> dict:
             Article.trade_type_name,
         )
         .where(and_(*conditions))
+        .limit(10000)
     )
     rows = db.execute(stmt).all()
     articles = [

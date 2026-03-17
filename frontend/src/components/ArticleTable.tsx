@@ -9,6 +9,7 @@ import SortableHeader, {
   type FilterValue,
   type ColumnDef,
   applyFilter,
+  getFilterSummary,
 } from "@/components/SortableHeader";
 
 // -- Column definitions --
@@ -255,13 +256,25 @@ export default function ArticleTable({ articles, onRowClick, onSortChange, activ
   return (
     <div>
       {activeFilterCount > 0 && (
-        <div className="flex items-center gap-2 mb-2 text-xs text-gray-600">
-          <span>{processed.length}건 필터됨 (전체 {articles.length}건)</span>
+        <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100 flex-wrap">
+          <span className="text-xs font-medium text-blue-700">
+            {processed.length}/{articles.length}건
+          </span>
+          {Object.entries(filters).map(([key, f]) => {
+            const col = COLUMNS.find((c) => c.key === key);
+            if (!col) return null;
+            return (
+              <span key={key} className="inline-flex items-center gap-1 bg-white text-blue-700 text-xs rounded-full px-2.5 py-1 border border-blue-200">
+                {col.label}: {getFilterSummary(f)}
+                <button onClick={() => handleFilterChange(key, undefined)} className="hover:text-red-500 font-bold ml-0.5">&times;</button>
+              </span>
+            );
+          })}
           <button
             onClick={clearAllFilters}
-            className="text-blue-600 hover:text-blue-800 underline"
+            className="text-xs text-blue-600 hover:text-blue-800 ml-auto"
           >
-            필터 초기화
+            전체 초기화
           </button>
         </div>
       )}

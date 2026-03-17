@@ -254,10 +254,10 @@ export default function ComplexDetailPage() {
     setExporting(true);
     setExportError("");
     try {
-      const exportFilters = selectedArticleNos.size > 0
-        ? { ...currentFiltersRef.current, selected_articles: [...selectedArticleNos].join(",") }
+      const exportFilters: ArticleFilters = selectedArticleNos.size > 0
+        ? { selected_articles: [...selectedArticleNos].join(",") }
         : currentFiltersRef.current;
-      await exportArticles(complexNo, exportFilters as any, accessToken);
+      await exportArticles(complexNo, exportFilters, accessToken);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "엑셀 내보내기에 실패했습니다.");
     } finally {
@@ -435,7 +435,11 @@ export default function ComplexDetailPage() {
             disabled={exporting}
             className="text-sm border border-gray-300 rounded-md px-3 py-1.5 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
-            {exporting ? "내보내는 중..." : "엑셀 내보내기"}
+            {exporting
+              ? "내보내는 중..."
+              : selectedArticleNos.size > 0
+                ? `선택 ${selectedArticleNos.size}건 내보내기`
+                : "엑셀 내보내기"}
           </button>
         </div>
       </div>

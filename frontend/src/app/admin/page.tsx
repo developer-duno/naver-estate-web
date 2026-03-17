@@ -14,11 +14,12 @@ export default function AdminDashboard() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
     const supabase = createClient();
 
     async function load() {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      if (!session || cancelled) return;
       const token = session.access_token;
 
       try {
@@ -27,17 +28,19 @@ export default function AdminDashboard() {
           getAdminAuditLogs(token, { page: 1 }),
           getAdminCrawlJobs(token, { status: "running" }),
         ]);
+        if (cancelled) return;
         setStats(statsData);
         setRecentLogs((logsData.items ?? []).slice(0, 5));
         setRunningJobs(jobsData.items ?? []);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "데이터 로드 실패");
+        if (!cancelled) setError(e instanceof Error ? e.message : "데이터 로드 실패");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     load();
+    return () => { cancelled = true; };
   }, []);
 
   return (

@@ -10,7 +10,7 @@ interface Props {
 }
 
 const ROLE_OPTIONS = ["user", "expert", "admin"] as const;
-const STATUS_OPTIONS = ["approved", "pending", "suspended"] as const;
+const STATUS_OPTIONS = ["approved", "pending", "suspended", "rejected"] as const;
 
 const ROLE_LABELS: Record<string, string> = { user: "일반", expert: "전문가", admin: "관리자" };
 const STATUS_LABELS: Record<string, string> = { approved: "승인", pending: "대기", suspended: "정지", rejected: "거부" };

@@ -58,12 +58,21 @@ function LoginForm() {
         // 로그인 기록 업데이트 (실패해도 로그인은 차단하지 않음)
         try {
           const { data: { session } } = await supabase.auth.getSession();
-          if (session?.access_token) {
+          if (session?.user?.id) {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-            await fetch(`${apiUrl}/api/users/login-record`, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${session.access_token}` },
-            });
+            if (apiUrl) {
+              await fetch(`${apiUrl}/api/users/login-record`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${session.access_token}` },
+              });
+            } else {
+              // 백엔드 없이 Supabase 직접 업데이트
+              await supabase.from("user_profiles").upsert({
+                user_id: session.user.id,
+                email: session.user.email || "",
+                last_login_at: new Date().toISOString(),
+              }, { onConflict: "user_id" });
+            }
           }
         } catch {}
         const rawRedirect = searchParams.get("redirect") || "/";

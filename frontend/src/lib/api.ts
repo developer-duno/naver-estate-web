@@ -110,6 +110,10 @@ export async function getArticles(complexNo: string, filters?: ArticleFilters) {
 
 /** 실시간 매물 크롤링 (네이버 API에서 직접 가져옴) */
 export async function liveArticles(complexNo: string) {
+  if (!HAS_BACKEND) {
+    const result = await direct.getArticlesDirect(complexNo, {});
+    return { ...result, complex: null };
+  }
   return fetchApi<{ articles: Article[]; total: number; page: number; page_size: number; complex: Complex | null }>(
     `/api/live/${complexNo}/articles`,
     { timeoutMs: LIVE_TIMEOUT_MS } as any,
@@ -135,6 +139,7 @@ export async function getCrawlStatus(complexNo: string) {
 
 /** 면적별 상세 */
 export async function getPyeongDetails(complexNo: string) {
+  if (!HAS_BACKEND) return { pyeong_details: [] };
   return fetchApi<{ pyeong_details: PyeongDetail[] }>(`/api/complexes/${complexNo}/pyeong-details`);
 }
 
@@ -156,6 +161,7 @@ export async function getArticle(articleNo: string) {
 
 /** 매물 상세 실시간 (네이버 API 직접 조회 + DB 저장) */
 export async function getArticleLive(articleNo: string) {
+  if (!HAS_BACKEND) return direct.getArticleDirect(articleNo);
   return fetchApi<Article>(`/api/live/article/${articleNo}/detail`, { timeoutMs: 30_000 } as any);
 }
 
@@ -309,6 +315,7 @@ export async function updateAdminSetting(token: string, key: string, value: Reco
 
 /** 가격 통계 (면적별/층수별, 거래유형 구분 포함) */
 export async function getPriceStats(complexNo: string) {
+  if (!HAS_BACKEND) return { complex_no: complexNo, total_articles: 0, by_area: [], by_floor: [] } as PriceStats;
   return fetchApi<PriceStats>(`/api/complexes/${complexNo}/price-stats`);
 }
 

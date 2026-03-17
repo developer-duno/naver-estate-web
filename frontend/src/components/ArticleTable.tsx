@@ -143,7 +143,7 @@ interface Props {
   activeSortBy?: string;
   selectedArticleNos?: Set<string>;
   onSelectionChange?: (articleNo: string, checked: boolean) => void;
-  onSelectAll?: (checked: boolean) => void;
+  onSelectAll?: (checked: boolean, visibleArticles: Article[]) => void;
 }
 
 export default function ArticleTable({ articles, onRowClick, onSortChange, activeSortBy, selectedArticleNos, onSelectionChange, onSelectAll }: Props) {
@@ -274,7 +274,7 @@ export default function ArticleTable({ articles, onRowClick, onSortChange, activ
                   <input
                     type="checkbox"
                     checked={processed.length > 0 && processed.every(a => selectedArticleNos?.has(a.article_no))}
-                    onChange={(e) => onSelectAll?.(e.target.checked)}
+                    onChange={(e) => onSelectAll?.(e.target.checked, processed)}
                     className="w-4 h-4 rounded border-gray-300"
                     title="전체 선택"
                   />

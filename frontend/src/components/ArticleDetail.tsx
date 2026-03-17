@@ -222,8 +222,14 @@ function ArticleBody({ article: a }: { article: Article }) {
 function formatWon(value?: string | null): string {
   if (!value) return "-";
   const num = parseFloat(value);
-  if (isNaN(num)) return value;
+  if (isNaN(num) || num < 0) return "-";
+  if (num === 0) return "0원";
   const manwon = Math.round(num / 10000);
+  if (manwon >= 10000) {
+    const eok = Math.floor(manwon / 10000);
+    const remainder = manwon % 10000;
+    return remainder > 0 ? `${eok}억 ${remainder.toLocaleString()}만원` : `${eok}억원`;
+  }
   return manwon.toLocaleString() + "만원";
 }
 

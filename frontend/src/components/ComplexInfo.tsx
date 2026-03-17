@@ -39,7 +39,7 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
       .then((data) => { if (!cancelled) { setPriceStats(data); setStatsLoading(false); } })
       .catch(() => { if (!cancelled) { setPriceStats(null); setStatsError(true); setStatsLoading(false); } });
     return () => { cancelled = true; };
-  }, [complexNo, articleCount]);
+  }, [complexNo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="bg-white rounded-lg shadow-sm border overflow-hidden">

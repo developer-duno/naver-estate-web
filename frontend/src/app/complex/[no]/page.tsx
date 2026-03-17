@@ -224,9 +224,14 @@ export default function ComplexDetailPage() {
     });
   };
 
-  const handleSelectAll = (checked: boolean) => {
+  const handleSelectAll = (checked: boolean, visibleArticles?: Article[]) => {
     if (checked) {
-      setSelectedArticleNos(new Set(articles.map(a => a.article_no)));
+      const targets = visibleArticles ?? articles;
+      setSelectedArticleNos(prev => {
+        const next = new Set(prev);
+        targets.forEach(a => next.add(a.article_no));
+        return next;
+      });
     } else {
       setSelectedArticleNos(new Set());
     }

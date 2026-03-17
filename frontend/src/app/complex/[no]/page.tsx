@@ -8,7 +8,6 @@ import {
   getArticles,
   liveArticles,
   getPyeongDetails,
-  exportArticles,
   triggerComplexCrawl,
   startLiveCrawl,
   ApiError,
@@ -16,6 +15,7 @@ import {
 import { createClient } from "@/lib/supabase";
 import { PAGE_SIZE } from "@/lib/constants";
 import { useCrawlProgress } from "@/hooks/useCrawlProgress";
+import { useExport } from "@/hooks/useExport";
 import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions, SortBy } from "@/types";
 import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
@@ -45,10 +45,8 @@ export default function ComplexDetailPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
   const [selectedArticleNos, setSelectedArticleNos] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(true);
-  const [exportError, setExportError] = useState("");
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [filterError, setFilterError] = useState("");
@@ -57,6 +55,8 @@ export default function ComplexDetailPage() {
   const currentFiltersRef = useRef<ArticleFilters>({});
   const requestIdRef = useRef(0);
   const cancelledRef = useRef(false);
+
+  const { exporting, exportError, clearExportError, handleExport: doExport } = useExport();
 
   const {
     crawling, crawlMessage, crawlProgress,
@@ -242,29 +242,7 @@ export default function ComplexDetailPage() {
     }
   };
 
-  const handleExport = async () => {
-    if (exporting) return;
-    let accessToken: string | undefined;
-    try {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      accessToken = session?.access_token ?? undefined;
-    } catch (e) {
-      console.error("[Export] auth session failed:", e);
-    }
-    setExporting(true);
-    setExportError("");
-    try {
-      const exportFilters: ArticleFilters = selectedArticleNos.size > 0
-        ? { selected_articles: [...selectedArticleNos].join(",") }
-        : currentFiltersRef.current;
-      await exportArticles(complexNo, exportFilters, accessToken);
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : "엑셀 내보내기에 실패했습니다.");
-    } finally {
-      setExporting(false);
-    }
-  };
+  const handleExport = () => doExport(complexNo, selectedArticleNos, currentFiltersRef.current);
 
   const handleCrawl = async () => {
     const supabase = createClient();
@@ -416,7 +394,7 @@ export default function ComplexDetailPage() {
       {exportError && (
         <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-md px-4 py-2 flex justify-between items-center">
           <span>{exportError}</span>
-          <button onClick={() => setExportError("")} className="text-red-400 hover:text-red-600">×</button>
+          <button onClick={() => clearExportError()} className="text-red-400 hover:text-red-600">×</button>
         </div>
       )}
 

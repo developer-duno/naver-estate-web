@@ -151,12 +151,17 @@ function LoginForm() {
           {loading ? "로그인 중..." : isLocked ? "계정 잠김" : "로그인"}
         </button>
 
-        <p className="text-center text-sm text-gray-500">
-          계정이 없으신가요?{" "}
-          <Link href="/signup" className="text-blue-600 hover:underline">
-            회원가입
+        <div className="flex justify-between text-sm text-gray-500">
+          <Link href="/forgot-password" className="text-blue-600 hover:underline">
+            비밀번호 찾기
           </Link>
-        </p>
+          <span>
+            계정이 없으신가요?{" "}
+            <Link href="/signup" className="text-blue-600 hover:underline">
+              회원가입
+            </Link>
+          </span>
+        </div>
       </form>
     </div>
   );

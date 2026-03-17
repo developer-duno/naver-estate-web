@@ -321,17 +321,22 @@ export default function ComplexDetailPage() {
   }
 
   if (error || !complex) {
+    const is404 = error?.includes("404") || error?.includes("찾을 수 없");
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <p className="text-red-500 text-lg mb-4">{error || "단지를 찾을 수 없습니다."}</p>
+        <h2 className="text-xl font-bold mb-2">{is404 ? "단지를 찾을 수 없습니다" : "오류가 발생했습니다"}</h2>
+        <p className="text-gray-500 text-sm mb-6">{is404 ? "단지번호가 올바른지 확인해주세요." : error}</p>
         <div className="flex justify-center gap-4">
-          <button
-            onClick={() => window.location.reload()}
-            className="text-blue-600 hover:underline"
-          >
-            다시 시도
-          </button>
-          <Link href="/" className="text-blue-600 hover:underline">홈으로 돌아가기</Link>
+          {!is404 && (
+            <button
+              onClick={() => window.location.reload()}
+              className="text-sm border border-gray-300 rounded-md px-4 py-2 text-gray-600 hover:bg-gray-50"
+            >
+              다시 시도
+            </button>
+          )}
+          <Link href="/" className="text-sm bg-blue-600 text-white rounded-md px-4 py-2 hover:bg-blue-700">홈으로 돌아가기</Link>
+          <Link href="/search" className="text-sm border border-blue-300 text-blue-600 rounded-md px-4 py-2 hover:bg-blue-50">단지 검색</Link>
         </div>
       </div>
     );

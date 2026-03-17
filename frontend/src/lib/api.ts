@@ -53,6 +53,15 @@ async function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: n
           window.location.href = "/login";
         }
       }
+      // Rate limit 사용자 피드백
+      if (res.status === 429) {
+        const retryAfter = res.headers.get("Retry-After");
+        const seconds = retryAfter ? parseInt(retryAfter, 10) : 60;
+        throw new ApiError(
+          `요청 한도를 초과했습니다. ${seconds}초 후 다시 시도해주세요.`,
+          429,
+        );
+      }
       throw new ApiError(body.detail || `API 오류: ${res.status}`, res.status);
     }
     return res.json();

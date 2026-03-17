@@ -26,7 +26,11 @@ const LIVE_TIMEOUT_MS = 120_000; // live crawling takes longer
 
 let _isLoggingOut = false;
 
-async function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
+
+// 동일 URL 요청 중복 방지 (in-flight deduplication)
+const _inflightRequests = new Map<string, Promise<unknown>>();
+
+async function _fetchApiImpl<T>(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const url = `${getApiBase()}${path}`;
   const externalSignal = options?.signal;
   const controller = externalSignal ? null : new AbortController();
@@ -72,9 +76,27 @@ async function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: n
     throw err;
   } finally {
     if (timer) clearTimeout(timer);
+
   }
 }
 
+
+
+/** fetchApi — GET 요청 중복 제거 래퍼 */
+function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
+  const method = options?.method ?? "GET";
+  if (method !== "GET") return _fetchApiImpl<T>(path, options);
+
+  const url = `${getApiBase()}${path}`;
+  const existing = _inflightRequests.get(url);
+  if (existing) return existing as Promise<T>;
+
+  const promise = _fetchApiImpl<T>(path, options).finally(() => {
+    _inflightRequests.delete(url);
+  });
+  _inflightRequests.set(url, promise);
+  return promise;
+}
 /** 단지 키워드 검색 */
 export async function searchComplexes(keyword: string, limit = 50, signal?: AbortSignal) {
   if (!HAS_BACKEND) return direct.searchComplexesDirect(keyword);

@@ -336,7 +336,9 @@ def _background_crawl(complex_no: str):
                 upsert_article(db, article, commit=False, track_price=True)
                 all_article_nos.add(article.article_no)
 
-            db.commit()  # per-page commit
+            # 5페이지마다 배치 커밋 (트랜잭션 오버헤드 감소)
+            if page % 5 == 0:
+                db.commit()
 
             _crawl_status[complex_no]["current_page"] = page
             _crawl_status[complex_no]["article_count"] = len(all_article_nos)

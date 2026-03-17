@@ -112,7 +112,28 @@ def test_build_filter_dict_verified_only():
 
 
 def test_build_filter_dict_min_rooms_zero():
+    """min_rooms=0은 필터에 포함되지 않음 (0개 이상 = 전체)"""
     result = build_filter_dict(min_rooms=0)
+    assert result is None
+
+
+def test_build_filter_dict_min_rooms_positive():
+    """min_rooms=2는 필터에 포함됨"""
+    result = build_filter_dict(min_rooms=2)
+    assert result is not None
+    assert result["min_rooms"] == 2
+
+
+def test_build_filter_dict_min_baths_positive():
+    """min_baths=1은 필터에 포함됨"""
+    result = build_filter_dict(min_baths=1)
+    assert result is not None
+    assert result["min_baths"] == 1
+
+
+def test_build_filter_dict_max_building_age_zero():
+    """max_building_age=0은 필터에 포함되지 않음"""
+    result = build_filter_dict(max_building_age=0)
     assert result is None
 
 def test_article_to_dict_all_keys():

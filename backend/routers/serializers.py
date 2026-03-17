@@ -147,9 +147,9 @@ def build_filter_dict(
         filters["min_area_m2"] = min_area_m2
     if max_area_m2 is not None:
         filters["max_area_m2"] = max_area_m2
-    if min_rooms:
+    if min_rooms is not None and min_rooms > 0:
         filters["min_rooms"] = min_rooms
-    if min_baths:
+    if min_baths is not None and min_baths > 0:
         filters["min_baths"] = min_baths
     if direction:
         filters["direction"] = direction
@@ -165,7 +165,7 @@ def build_filter_dict(
         filters["building_name"] = building_name
     if verified_only:
         filters["verified_only"] = True
-    if max_building_age:
+    if max_building_age is not None and max_building_age > 0:
         filters["max_building_age"] = max_building_age
     if move_in_type:
         filters["move_in_type"] = move_in_type

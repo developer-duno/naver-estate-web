@@ -70,7 +70,7 @@ export default function ArticleDetail({ articleNo, onClose }: Props) {
       >
         {/* 헤더 */}
         <div className="flex justify-between items-center px-6 py-4 border-b">
-          <h2 id="article-detail-title" className="text-lg font-bold">매물 상세 — {articleNo}</h2>
+          <h2 id="article-detail-title" className="text-lg font-bold">매물 상세</h2>
           <button onClick={onClose} aria-label="닫기" className="text-gray-400 hover:text-gray-600 text-xl">×</button>
         </div>
 

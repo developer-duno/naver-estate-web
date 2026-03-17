@@ -33,6 +33,9 @@ export default function Header() {
             if (res.ok && isMountedRef.current) {
               const data = await res.json();
               setUserRole(data.role || null);
+            } else if (res.status === 401 && isMountedRef.current) {
+              await supabase.auth.signOut();
+              setUserRole(null);
             }
           } finally { clearTimeout(timer); }
         } else {

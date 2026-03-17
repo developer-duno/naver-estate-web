@@ -71,20 +71,20 @@ export function useCrawlProgress(): CrawlHookResult {
                 callbacks.setTotalCount(res.total);
                 callbacks.setCurrentPage(1);
               }
-            } catch { /* ignore */ }
+            } catch (e) { console.error("[CrawlProgress]", e); }
             try {
               const pyeong = await getPyeongDetails(complexNo);
               if (!cancelledRef.current) callbacks.setPyeongDetails(pyeong.pyeong_details);
-            } catch { /* ignore */ }
+            } catch (e) { console.error("[CrawlProgress]", e); }
             try {
               const cpx = await getComplex(complexNo);
               if (!cancelledRef.current) callbacks.setComplex(cpx);
-            } catch { /* ignore */ }
+            } catch (e) { console.error("[CrawlProgress]", e); }
           } else if (status.error) {
             setCrawlMessage(`크롤링 오류: ${status.error}`);
           }
         }
-      } catch { /* polling failure ignored */ }
+      } catch (e) { console.error("[CrawlProgress] poll:", e); }
     }, CRAWL_STATUS_POLL_MS);
 
     articlesPollRef.current = setInterval(async () => {
@@ -94,7 +94,7 @@ export function useCrawlProgress(): CrawlHookResult {
         if (cancelledRef.current || crawlTargetRef.current !== complexNo) return;
         callbacks.setArticles(res.articles);
         callbacks.setTotalCount(res.total);
-      } catch { /* ignore */ }
+      } catch (e) { console.error("[CrawlProgress]", e); }
     }, ARTICLES_POLL_MS);
 
     setCrawling(true);

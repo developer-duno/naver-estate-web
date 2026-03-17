@@ -130,8 +130,8 @@ export default function ComplexDetailPage() {
             try {
               const pyeong = await getPyeongDetails(complexNo);
               if (!cancelledRef.current) setPyeongDetails(pyeong.pyeong_details);
-            } catch { /* ignore */ }
-          } catch { /* ignore, DB data already shown */ }
+            } catch (e) { console.error("[Complex]", e); }
+          } catch (e) { console.error("[Complex] live fallback:", e); }
         } else if (
           crawlResult.status === "started" ||
           crawlResult.status === "running" ||
@@ -153,8 +153,8 @@ export default function ComplexDetailPage() {
           try {
             const pyeong = await getPyeongDetails(complexNo);
             if (!cancelledRef.current) setPyeongDetails(pyeong.pyeong_details);
-          } catch { /* ignore */ }
-        } catch { /* ignore */ }
+          } catch (e) { console.error("[Complex]", e); }
+        } catch (e) { console.error("[Complex]", e); }
         finally {
           if (!cancelledRef.current) {
             setCrawling(false);

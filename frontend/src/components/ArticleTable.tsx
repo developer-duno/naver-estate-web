@@ -137,6 +137,15 @@ function getColumnValue(art: Article, col: ColumnDef): unknown {
 
 // -- Main Component --
 
+// Server-side sort columns mapping (모듈 레벨 — 리렌더링마다 재생성 방지)
+const SERVER_SORT_MAP: Record<string, { asc: string; desc: string }> = {
+  price: { asc: "price_asc", desc: "price_desc" },
+  area: { asc: "area_asc", desc: "area_desc" },
+  ppyeong: { asc: "ppyeong_asc", desc: "ppyeong_desc" },
+  maint: { asc: "maintenance_asc", desc: "maintenance_desc" },
+  confirm_date: { asc: "confirm_asc", desc: "confirm_desc" },
+};
+
 interface Props {
   articles: Article[];
   onRowClick?: (articleNo: string) => void;
@@ -164,14 +173,7 @@ export default function ArticleTable({ articles, onRowClick, onSortChange, activ
   };
 
   const clearAllFilters = () => setFilters({});
-  // Server-side sort columns mapping
-  const SERVER_SORT_MAP: Record<string, { asc: string; desc: string }> = {
-    price: { asc: "price_asc", desc: "price_desc" },
-    area: { asc: "area_asc", desc: "area_desc" },
-    ppyeong: { asc: "ppyeong_asc", desc: "ppyeong_desc" },
-    maint: { asc: "maintenance_asc", desc: "maintenance_desc" },
-    confirm_date: { asc: "confirm_asc", desc: "confirm_desc" },
-  };
+
 
   const handleSortChange = (newSort: SortState) => {
     const serverSort = SERVER_SORT_MAP[newSort.key];

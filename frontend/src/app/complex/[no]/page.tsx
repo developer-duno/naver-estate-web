@@ -45,6 +45,7 @@ export default function ComplexDetailPage() {
   const [loading, setLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [selectedArticleNos, setSelectedArticleNos] = useState<Set<string>>(new Set());
   const [exportError, setExportError] = useState("");
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -214,6 +215,23 @@ export default function ComplexDetailPage() {
     loadArticles(currentFiltersRef.current, page);
   };
 
+  const handleSelectionChange = (articleNo: string, checked: boolean) => {
+    setSelectedArticleNos(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(articleNo);
+      else next.delete(articleNo);
+      return next;
+    });
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedArticleNos(new Set(articles.map(a => a.article_no)));
+    } else {
+      setSelectedArticleNos(new Set());
+    }
+  };
+
   const handleExport = async () => {
     if (exporting) return;
     let accessToken: string | undefined;
@@ -227,7 +245,10 @@ export default function ComplexDetailPage() {
     setExporting(true);
     setExportError("");
     try {
-      await exportArticles(complexNo, currentFiltersRef.current, accessToken);
+      const exportFilters = selectedArticleNos.size > 0
+        ? { ...currentFiltersRef.current, selected_articles: [...selectedArticleNos].join(",") }
+        : currentFiltersRef.current;
+      await exportArticles(complexNo, exportFilters as any, accessToken);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "엑셀 내보내기에 실패했습니다.");
     } finally {
@@ -423,7 +444,7 @@ export default function ComplexDetailPage() {
 
       {/* 매물 테이블 */}
       {(!crawling || totalCount > 0) && (
-        <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} activeSortBy={activeSortBy} />
+        <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} activeSortBy={activeSortBy} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} />
       )}
 
       {/* 페이지네이션 */}

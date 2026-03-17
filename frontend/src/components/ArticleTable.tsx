@@ -141,9 +141,12 @@ interface Props {
   onRowClick?: (articleNo: string) => void;
   onSortChange?: (sortBy: string) => void;
   activeSortBy?: string;
+  selectedArticleNos?: Set<string>;
+  onSelectionChange?: (articleNo: string, checked: boolean) => void;
+  onSelectAll?: (checked: boolean) => void;
 }
 
-export default function ArticleTable({ articles, onRowClick, onSortChange, activeSortBy }: Props) {
+export default function ArticleTable({ articles, onRowClick, onSortChange, activeSortBy, selectedArticleNos, onSelectionChange, onSelectAll }: Props) {
   const [sort, setSort] = useState<SortState>({ key: "", dir: null });
   const [filters, setFilters] = useState<Record<string, FilterValue>>({});
 
@@ -266,6 +269,17 @@ export default function ArticleTable({ articles, onRowClick, onSortChange, activ
         <table className="w-full text-sm">
           <thead className="bg-gray-100 border-b-2 border-gray-300 sticky top-0 z-10">
             <tr>
+              {onSelectionChange && (
+                <th className="px-2 py-2 w-8">
+                  <input
+                    type="checkbox"
+                    checked={processed.length > 0 && processed.every(a => selectedArticleNos?.has(a.article_no))}
+                    onChange={(e) => onSelectAll?.(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300"
+                    title="전체 선택"
+                  />
+                </th>
+              )}
               {COLUMNS.map((col) => (
                 <SortableHeader
                   key={col.key}
@@ -281,7 +295,7 @@ export default function ArticleTable({ articles, onRowClick, onSortChange, activ
           </thead>
           <tbody>
             {processed.map((art, idx) => (
-              <ArticleRow key={art.article_no} article={art} index={idx + 1} onClick={onRowClick} />
+              <ArticleRow key={art.article_no} article={art} index={idx + 1} onClick={onRowClick} selected={selectedArticleNos?.has(art.article_no)} onCheck={onSelectionChange} />
             ))}
           </tbody>
         </table>
@@ -290,7 +304,7 @@ export default function ArticleTable({ articles, onRowClick, onSortChange, activ
   );
 }
 
-const ArticleRow = memo(function ArticleRow({ article: art, index, onClick }: { article: Article; index: number; onClick?: (no: string) => void }) {
+const ArticleRow = memo(function ArticleRow({ article: art, index, onClick, selected, onCheck }: { article: Article; index: number; onClick?: (no: string) => void; selected?: boolean; onCheck?: (articleNo: string, checked: boolean) => void }) {
   const price =
     (art.trade_type_name === "월세" || art.trade_type_name === "단기임대")
       ? `${art.deal_or_warrant_prc || "-"} / ${art.rent_prc || "-"}`
@@ -327,6 +341,16 @@ const ArticleRow = memo(function ArticleRow({ article: art, index, onClick }: { 
       aria-label={`매물 ${art.article_no} 상세 보기`}
       className={`hover:bg-blue-50 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 border-b border-gray-200 ${index % 2 === 0 ? "bg-gray-50/50" : "bg-white"}`}
     >
+      {onCheck && (
+        <td className="px-2 py-1.5 text-center border-r border-gray-100" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={(e) => onCheck(art.article_no, e.target.checked)}
+            className="w-4 h-4 rounded border-gray-300"
+          />
+        </td>
+      )}
       <Td className="text-gray-400 text-center">{index}</Td>
       <Td>
         <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${

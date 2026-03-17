@@ -27,22 +27,35 @@ export async function getStatsDirect(): Promise<DbStats> {
 /** 지역 목록 */
 export async function getRegionsDirect(): Promise<Regions> {
   const supabase = sb();
-  const { data } = await supabase
-    .from("complexes")
-    .select("sido, sigungu, dong")
-    .not("sido", "is", null);
-
+  // 47K행 전체 SELECT 대신 페이지네이션으로 모든 지역 조합 수집
   const regions: Record<string, Record<string, string[]>> = {};
-  for (const row of data ?? []) {
-    if (!row.sido) continue;
-    if (!regions[row.sido]) regions[row.sido] = {};
-    if (row.sigungu) {
-      if (!regions[row.sido][row.sigungu]) regions[row.sido][row.sigungu] = [];
-      if (row.dong && !regions[row.sido][row.sigungu].includes(row.dong)) {
-        regions[row.sido][row.sigungu].push(row.dong);
+  const PAGE = 1000;
+  let from = 0;
+
+  while (true) {
+    const { data } = await supabase
+      .from("complexes")
+      .select("sido, sigungu, dong")
+      .not("sido", "is", null)
+      .range(from, from + PAGE - 1);
+
+    if (!data || data.length === 0) break;
+
+    for (const row of data) {
+      if (!row.sido) continue;
+      if (!regions[row.sido]) regions[row.sido] = {};
+      if (row.sigungu) {
+        if (!regions[row.sido][row.sigungu]) regions[row.sido][row.sigungu] = [];
+        if (row.dong && !regions[row.sido][row.sigungu].includes(row.dong)) {
+          regions[row.sido][row.sigungu].push(row.dong);
+        }
       }
     }
+
+    if (data.length < PAGE) break;
+    from += PAGE;
   }
+
   return regions as Regions;
 }
 

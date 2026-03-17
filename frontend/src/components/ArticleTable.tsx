@@ -4,6 +4,7 @@ import { useState, useMemo, memo } from "react";
 import type { Article } from "@/types";
 import { M2_TO_PYEONG, TRADE_TYPE_COLORS, TRADE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
 import { formatDateShort, formatMaintenanceCost } from "@/lib/format";
+import { COLUMNS, SERVER_SORT_MAP, getColumnValue } from "@/components/articleTableColumns";
 import SortableHeader, {
   type SortState,
   type FilterValue,
@@ -12,139 +13,7 @@ import SortableHeader, {
   getFilterSummary,
 } from "@/components/SortableHeader";
 
-// -- Column definitions --
-
-const COLUMNS: ColumnDef[] = [
-  { key: "no", label: "No", className: "w-[40px] text-center" },
-  {
-    key: "trade_type",
-    label: "거래",
-    className: "w-[55px] text-center",
-    sortable: true,
-    filterType: "categorical",
-    getFilterValue: (a) => String((a as unknown as Article).trade_type_name || ""),
-    getSortText: (a) => String((a as unknown as Article).trade_type_name || ""),
-  },
-  {
-    key: "building",
-    label: "동",
-    className: "w-[60px]",
-    sortable: true,
-    filterType: "text",
-    getSortText: (a) => String((a as unknown as Article).building_name || ""),
-  },
-  {
-    key: "floor",
-    label: "층",
-    className: "w-[45px] text-center",
-    sortable: true,
-    filterType: "text",
-    getSortText: (a) => String((a as unknown as Article).floor_info || ""),
-  },
-  {
-    key: "price",
-    label: "가격",
-    className: "w-[120px] text-right",
-    sortable: true,
-    filterType: "numeric",
-    getSortValue: (a) => (a as unknown as Article).numeric_price ?? null,
-  },
-  {
-    key: "area",
-    label: "면적",
-    className: "w-[120px] text-right",
-    sortable: true,
-    filterType: "numeric",
-    getSortValue: (a) => (a as unknown as Article).area2_m2 ?? (a as unknown as Article).area1_m2 ?? null,
-  },
-  {
-    key: "ppyeong",
-    label: "평당가",
-    className: "w-[75px] text-right",
-    sortable: true,
-    filterType: "numeric",
-    getSortValue: (a) => (a as unknown as Article).price_per_pyeong ?? null,
-  },
-  {
-    key: "rooms",
-    label: "방/욕",
-    className: "w-[45px] text-center",
-    sortable: true,
-    filterType: "text",
-    getSortValue: (a) => {
-      const art = a as unknown as Article;
-      return art.room_count != null ? (art.room_count * 100 + (art.bathroom_count ?? 0)) : null;
-    },
-  },
-  {
-    key: "move_in",
-    label: "입주가능일",
-    className: "w-[80px] text-center",
-    sortable: true,
-    filterType: "text",
-    getSortText: (a) => String((a as unknown as Article).move_in_date || ""),
-  },
-  {
-    key: "maint",
-    label: "관리비",
-    className: "w-[55px] text-right",
-    sortable: true,
-    filterType: "numeric",
-    getSortValue: (a) => (a as unknown as Article).numeric_maintenance_cost ?? null,
-  },
-  {
-    key: "direction",
-    label: "방향",
-    className: "w-[40px] text-center",
-    sortable: true,
-    filterType: "categorical",
-    getFilterValue: (a) => String((a as unknown as Article).direction || ""),
-    getSortText: (a) => String((a as unknown as Article).direction || ""),
-  },
-  {
-    key: "features",
-    label: "특징",
-    className: "min-w-[150px]",
-    filterType: "text",
-    getFilterValue: (a) => String((a as unknown as Article).article_feature_desc || ""),
-  },
-  {
-    key: "realtor",
-    label: "중개사",
-    className: "w-[80px]",
-    sortable: true,
-    filterType: "text",
-    getSortText: (a) => String((a as unknown as Article).realtor_name || ""),
-  },
-  {
-    key: "confirm_date",
-    label: "확인일자",
-    className: "w-[75px] text-center",
-    sortable: true,
-    filterType: "text",
-    getSortText: (a) => String((a as unknown as Article).article_confirm_ymd || ""),
-  },
-];
-
-// -- Helper: get filter/sort value for a column --
-
-function getColumnValue(art: Article, col: ColumnDef): unknown {
-  if (col.getSortValue) return col.getSortValue(art as unknown as Record<string, unknown>);
-  if (col.getSortText) return col.getSortText(art as unknown as Record<string, unknown>);
-  if (col.getFilterValue) return col.getFilterValue(art as unknown as Record<string, unknown>);
-  return "";
-}
-
 // -- Main Component --
-
-// Server-side sort columns mapping (모듈 레벨 — 리렌더링마다 재생성 방지)
-const SERVER_SORT_MAP: Record<string, { asc: string; desc: string }> = {
-  price: { asc: "price_asc", desc: "price_desc" },
-  area: { asc: "area_asc", desc: "area_desc" },
-  ppyeong: { asc: "ppyeong_asc", desc: "ppyeong_desc" },
-  maint: { asc: "maintenance_asc", desc: "maintenance_desc" },
-  confirm_date: { asc: "confirm_asc", desc: "confirm_desc" },
-};
 
 interface Props {
   articles: Article[];

@@ -3,6 +3,7 @@
  */
 
 import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions, DbStats, Regions, PriceStats, AreaPriceStat, FloorPriceStat, CrawlProgress } from "@/types";
+import * as direct from "@/lib/api-direct";
 import type { UserProfile, AuditLog, AdminSetting, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail } from "@/types/admin";
 
 export class ApiError extends Error {
@@ -15,10 +16,10 @@ export class ApiError extends Error {
 }
 
 function getApiBase(): string {
-  const base = process.env.NEXT_PUBLIC_API_URL;
-  if (!base) throw new Error("NEXT_PUBLIC_API_URL 환경변수가 설정되지 않았습니다");
-  return base;
+  return process.env.NEXT_PUBLIC_API_URL || "";
 }
+
+const HAS_BACKEND = !!process.env.NEXT_PUBLIC_API_URL;
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const LIVE_TIMEOUT_MS = 120_000; // live crawling takes longer
@@ -67,14 +68,16 @@ async function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: n
 
 /** 단지 키워드 검색 */
 export async function searchComplexes(keyword: string, limit = 50, signal?: AbortSignal) {
+  if (!HAS_BACKEND) return direct.searchComplexesDirect(keyword);
   return fetchApi<{ complexes: Complex[]; total: number }>(
     `/api/live/search?q=${encodeURIComponent(keyword)}`,
     { signal, timeoutMs: LIVE_TIMEOUT_MS } as any,
   );
 }
 
-/** 지역별 단지 조회 (실시간 크롤링) */
+/** 지역별 단지 조회 */
 export async function getComplexesByRegion(sido: string, sigungu?: string, dong?: string, signal?: AbortSignal) {
+  if (!HAS_BACKEND) return direct.getComplexesByRegionDirect(sido, sigungu, dong);
   let path = `/api/live/region?sido=${encodeURIComponent(sido)}`;
   if (sigungu) path += `&sigungu=${encodeURIComponent(sigungu)}`;
   if (dong) path += `&dong=${encodeURIComponent(dong)}`;
@@ -83,11 +86,13 @@ export async function getComplexesByRegion(sido: string, sigungu?: string, dong?
 
 /** 단지 상세 */
 export async function getComplex(complexNo: string) {
+  if (!HAS_BACKEND) return direct.getComplexDirect(complexNo);
   return fetchApi<Complex>(`/api/complexes/${complexNo}`);
 }
 
 /** 단지별 매물 조회 */
 export async function getArticles(complexNo: string, filters?: ArticleFilters) {
+  if (!HAS_BACKEND) return direct.getArticlesDirect(complexNo, filters as any);
   const params = new URLSearchParams();
   if (filters) {
     Object.entries(filters).forEach(([key, value]) => {
@@ -136,6 +141,7 @@ export async function getPyeongDetails(complexNo: string) {
 
 /** 필터 옵션 (동, 태그, 방향) */
 export async function getFilterOptions(complexNo: string) {
+  if (!HAS_BACKEND) return direct.getFilterOptionsDirect(complexNo);
   try {
     return await fetchApi<FilterOptions>(`/api/complexes/${complexNo}/filter-options`);
   } catch {
@@ -144,6 +150,7 @@ export async function getFilterOptions(complexNo: string) {
 }
 /** 매물 상세 (DB) */
 export async function getArticle(articleNo: string) {
+  if (!HAS_BACKEND) return direct.getArticleDirect(articleNo);
   return fetchApi<Article>(`/api/articles/${articleNo}`);
 }
 
@@ -154,11 +161,13 @@ export async function getArticleLive(articleNo: string) {
 
 /** DB 통계 */
 export async function getStats() {
+  if (!HAS_BACKEND) return direct.getStatsDirect();
   return fetchApi<DbStats>(`/api/stats`);
 }
 
 /** 지역 목록 */
 export async function getRegions() {
+  if (!HAS_BACKEND) return direct.getRegionsDirect();
   return fetchApi<Regions>(`/api/regions`);
 }
 

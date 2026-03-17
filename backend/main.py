@@ -13,6 +13,7 @@ load_dotenv()
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import Response, JSONResponse
 
 from routers import complexes, articles, crawl, stats, regions, admin, users, live
@@ -57,6 +58,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# GZip 압축 (1KB 이상 응답 자동 압축)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 # CORS 설정 (FRONTEND_URL: 콤마 구분 복수 도메인 지원)
 _frontend_urls = os.getenv("FRONTEND_URL", "http://localhost:3000" if IS_DEBUG else "")
 if not IS_DEBUG and not _frontend_urls:
@@ -89,9 +93,17 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     if not IS_DEBUG:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    # GET 응답에 짧은 캐시 적용 (준정적 데이터 부하 감소)
+    # GET 응답에 엔드포인트별 캐시 적용
     if request.method == "GET" and request.url.path.startswith("/api/") and "Cache-Control" not in response.headers:
-        response.headers["Cache-Control"] = "private, max-age=30"
+        path = request.url.path
+        if path.startswith("/api/regions"):
+            response.headers["Cache-Control"] = "public, max-age=86400"  # 24시간 (정적 데이터)
+        elif "/articles" not in path and path.startswith("/api/complexes/"):
+            response.headers["Cache-Control"] = "private, max-age=3600"  # 1시간 (단지 정보)
+        elif path.startswith("/api/live/"):
+            response.headers["Cache-Control"] = "private, max-age=300"  # 5분 (실시간 크롤링)
+        else:
+            response.headers["Cache-Control"] = "private, max-age=30"  # 30초 (기본)
     return response
 
 

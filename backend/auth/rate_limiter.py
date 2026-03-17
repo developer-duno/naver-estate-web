@@ -1,6 +1,10 @@
-"""IP 기반 Rate Limiting 미들웨어"""
+"""IP 기반 Rate Limiting 미들웨어
+
+Redis 사용 가능 시 Redis sorted set 기반, 없으면 in-memory 폴백.
+"""
 
 import logging
+import os
 import time
 from collections import defaultdict
 
@@ -12,83 +16,103 @@ from starlette.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
-# 인메모리 IP별 요청 카운터 (프로세스 단위)
-# TODO: Redis 기반으로 전환하여 다중 워커/서버 재시작 시에도 카운터 유지
-_ip_counters: dict[str, list[float]] = defaultdict(list)
-
 # Rate limit 정책
 RATE_LIMITS = {
-    # path_prefix: (max_requests, window_seconds)
-    "/api/": (60, 60),  # 미인증 기본: 60/분
+    "/api/": (60, 60),  # 기본: 60/분
 }
-
 LOGIN_RATE_LIMIT = (5, 300)  # 로그인: 5/5분
+
+# ── Redis 또는 In-Memory 백엔드 선택 ──
+
+_redis_client = None
+_use_redis = False
+
+REDIS_URL = os.getenv("REDIS_URL")
+if REDIS_URL:
+    try:
+        import redis
+        _redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+        _redis_client.ping()
+        _use_redis = True
+        logger.info("Rate limiter: Redis 연결 성공 (%s)", REDIS_URL.split("@")[-1] if "@" in REDIS_URL else "localhost")
+    except Exception as e:
+        logger.warning("Rate limiter: Redis 연결 실패, in-memory 폴백 (%s)", e)
+        _redis_client = None
+        _use_redis = False
+else:
+    logger.info("Rate limiter: REDIS_URL 미설정, in-memory 모드")
+
+# In-memory 폴백용
+_ip_counters: dict[str, list[float]] = defaultdict(list)
 
 
 def _get_client_ip(request: Request) -> str:
-    """클라이언트 IP 추출 (프록시 고려).
-
-    X-Forwarded-For: "client, proxy1, proxy2" 형태.
-    공격자가 헤더를 조작해도 리버스 프록시가 마지막에 추가한 IP는 신뢰 가능.
-    단일 프록시 환경: 뒤에서 첫 번째가 실제 클라이언트.
-    다중 프록시 환경: 뒤에서 두 번째가 실제 클라이언트.
-    """
+    """클라이언트 IP 추출 (프록시 고려)."""
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         parts = [p.strip() for p in forwarded.split(",")]
         if len(parts) == 1:
             return parts[0]
-        # 다중 프록시: 뒤에서 두 번째 = 프록시가 기록한 클라이언트 IP
         return parts[-2]
     if request.client:
         return request.client.host
     return "unknown"
 
 
-def _clean_old_entries(entries: list[float], window: float) -> list[float]:
-    """윈도우 밖의 오래된 타임스탬프 제거"""
-    cutoff = time.time() - window
-    return [t for t in entries if t > cutoff]
+def _check_rate_limit_redis(rate_key: str, max_req: int, window: int) -> bool:
+    """Redis sorted set으로 rate limit 체크. 초과 시 True 반환."""
+    now = time.time()
+    pipe = _redis_client.pipeline()
+    pipe.zremrangebyscore(rate_key, 0, now - window)  # 만료된 엔트리 삭제
+    pipe.zcard(rate_key)  # 현재 카운트
+    pipe.zadd(rate_key, {str(now): now})  # 현재 요청 추가
+    pipe.expire(rate_key, window)  # TTL 설정
+    results = pipe.execute()
+    current_count = results[1]
+    return current_count >= max_req
+
+
+def _check_rate_limit_memory(rate_key: str, max_req: int, window: int) -> bool:
+    """In-memory 폴백으로 rate limit 체크. 초과 시 True 반환."""
+    now = time.time()
+    cutoff = now - window
+    _ip_counters[rate_key] = [t for t in _ip_counters[rate_key] if t > cutoff]
+
+    if len(_ip_counters[rate_key]) >= max_req:
+        return True
+
+    _ip_counters[rate_key].append(now)
+    return False
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """IP 기반 Rate Limiting.
 
-    인증된 사용자(admin)는 제한 없음.
-    인증된 일반 사용자는 2배 한도.
+    Redis 가용 시 분산 환경 지원, 불가 시 프로세스 단위 in-memory.
     """
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
 
-        # 헬스체크, 정적 파일은 제외
         if not path.startswith("/api/"):
             return await call_next(request)
 
         ip = _get_client_ip(request)
 
-        # 인증 여부와 관계없이 동일한 Rate Limit 적용
-        # (토큰 유효성 검증은 엔드포인트 레벨에서 처리)
-        multiplier = 1
-
-        # 로그인 엔드포인트 특별 처리
         if path == "/api/auth/login" or (path == "/api/signup" and request.method == "POST"):
             max_req, window = LOGIN_RATE_LIMIT
         else:
             max_req, window = RATE_LIMITS.get("/api/", (60, 60))
 
-        max_req *= multiplier
-        rate_key = f"{ip}:{path.split('/')[2] if len(path.split('/')) > 2 else 'api'}"
+        rate_key = f"rl:{ip}:{path.split('/')[2] if len(path.split('/')) > 2 else 'api'}"
 
-        _ip_counters[rate_key] = _clean_old_entries(_ip_counters[rate_key], window)
+        exceeded = (
+            _check_rate_limit_redis(rate_key, max_req, window)
+            if _use_redis
+            else _check_rate_limit_memory(rate_key, max_req, window)
+        )
 
-        if not _ip_counters[rate_key]:
-            # 윈도우 만료 또는 첫 요청 — 키 삭제 후 이 요청부터 계측 시작
-            del _ip_counters[rate_key]
-            _ip_counters[rate_key].append(time.time())
-            return await call_next(request)
-
-        if len(_ip_counters[rate_key]) >= max_req:
+        if exceeded:
             logger.warning("Rate limit exceeded: ip=%s path=%s", _mask_ip(ip), path)
             return JSONResponse(
                 status_code=429,
@@ -96,5 +120,4 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 headers={"Retry-After": str(window)},
             )
 
-        _ip_counters[rate_key].append(time.time())
         return await call_next(request)

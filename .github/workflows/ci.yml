@@ -60,8 +60,8 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-key-for-ci-build
           NEXT_PUBLIC_API_URL: https://placeholder.railway.app
 
-      - name: Test (placeholder)
-        run: echo "No tests configured yet — add vitest and update this step."
+      - name: Test
+        run: npm test
 
   backend:
     name: Backend CI
@@ -115,5 +115,10 @@ jobs:
           print(f'All {count} Python files have valid syntax')
           "
 
-      - name: Test (placeholder)
-        run: echo "No tests configured yet — add pytest and update this step."
+      - name: Test
+        run: |
+          pip install pytest httpx
+          python -m pytest
+        env:
+          DATABASE_URL: sqlite://
+          SUPABASE_JWT_SECRET: test-ci-secret

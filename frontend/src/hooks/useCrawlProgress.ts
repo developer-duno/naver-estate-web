@@ -29,6 +29,7 @@ export function useCrawlProgress(): CrawlHookResult {
   const [crawlMessage, setCrawlMessage] = useState("");
   const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null);
   const cancelledRef = useRef(false);
+  const crawlTargetRef = useRef<string>("");
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const articlesPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -49,12 +50,13 @@ export function useCrawlProgress(): CrawlHookResult {
   ) => {
     clearAllPolling();
     cancelledRef.current = false;
+    crawlTargetRef.current = complexNo;
 
     statusPollRef.current = setInterval(async () => {
       if (cancelledRef.current) return;
       try {
         const status = await getCrawlStatus(complexNo);
-        if (cancelledRef.current) return;
+        if (cancelledRef.current || crawlTargetRef.current !== complexNo) return;
         setCrawlProgress(status);
 
         if (status.status === "error" || (status.status === "done" && status.detail_phase !== "running")) {
@@ -89,7 +91,7 @@ export function useCrawlProgress(): CrawlHookResult {
       if (cancelledRef.current) return;
       try {
         const res = await getArticles(complexNo, { page: 1, page_size: PAGE_SIZE });
-        if (cancelledRef.current) return;
+        if (cancelledRef.current || crawlTargetRef.current !== complexNo) return;
         callbacks.setArticles(res.articles);
         callbacks.setTotalCount(res.total);
       } catch { /* ignore */ }

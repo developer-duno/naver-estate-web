@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, memo } from "react";
 import type { ArticleFilters, FilterOptions } from "@/types";
 import { M2_TO_PYEONG } from "@/lib/constants";
 
@@ -129,6 +129,10 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
     ]
   );
 
+  // emitChange를 ref로 안정화 (디바운스 클로저 stale 방지)
+  const emitChangeRef = useRef(emitChange);
+  emitChangeRef.current = emitChange;
+
   // 숫자 입력 필드 디바운스 (300ms)
   const debounceMapRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   useEffect(() => {
@@ -148,7 +152,7 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
   const setDebounced = (setter: (v: string) => void, key: string) => (v: string) => {
     setter(v);
     if (debounceMapRef.current[key]) clearTimeout(debounceMapRef.current[key]);
-    debounceMapRef.current[key] = setTimeout(() => emitChange({ [key]: v }), 300);
+    debounceMapRef.current[key] = setTimeout(() => emitChangeRef.current({ [key]: v }), 300);
   };
 
   const resetAll = () => {
@@ -352,7 +356,7 @@ function slugId(label: string) {
   return "filter-" + label.replace(/[^a-zA-Z0-9가-힣]/g, "-").replace(/-+/g, "-");
 }
 
-function FilterSelect({
+const FilterSelect = memo(function FilterSelect({
   label, value, onChange, options, className = "",
 }: {
   label: string;
@@ -379,9 +383,9 @@ function FilterSelect({
       </select>
     </div>
   );
-}
+});
 
-function FilterInput({
+const FilterInput = memo(function FilterInput({
   label, value, onChange, className = "",
 }: {
   label: string;
@@ -404,4 +408,4 @@ function FilterInput({
       />
     </div>
   );
-}
+});

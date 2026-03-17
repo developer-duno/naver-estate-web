@@ -195,6 +195,8 @@ export default function ComplexDetailPage() {
   const handleSortChange = useCallback(
     (sortBy: string) => {
       setActiveSortBy(sortBy);
+      setCurrentPage(1);
+      setSelectedArticleNos(new Set());
       const filters = { ...currentFiltersRef.current, sort_by: sortBy === "rank" ? undefined : sortBy };
       currentFiltersRef.current = filters;
       loadArticles(filters, 1);
@@ -206,6 +208,7 @@ export default function ComplexDetailPage() {
     (filters: ArticleFilters) => {
       currentFiltersRef.current = filters;
       setCurrentPage(1);
+      setSelectedArticleNos(new Set());
       loadArticles(filters, 1);
     },
     [loadArticles]

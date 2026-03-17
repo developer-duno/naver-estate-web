@@ -23,6 +23,8 @@ from utils import format_date_ymd, format_parking_count, format_acquisition_tax,
 
 router = APIRouter()
 
+MAX_EXPORT_ROWS = 5000
+
 
 @router.get("/price-changes")
 def get_price_changed_articles_endpoint(
@@ -111,6 +113,7 @@ def export_articles_to_excel(
     min_floor: int | None = None,
     max_floor: int | None = None,
     tags: str | None = None,
+    selected_articles: str | None = None,
     sort_by: str = "rank",  # export는 Literal 미적용 (프론트 FilterBar에서 선택지 제한)
     request: Request = None,
     db: Session = Depends(get_db),
@@ -141,8 +144,13 @@ def export_articles_to_excel(
 
     articles, _ = queries.get_articles_by_complex(
         db, complex_no, filters=filters, sort_by=sort_by,
-        page=1, page_size=5000,
+        page=1, page_size=MAX_EXPORT_ROWS,
     )
+
+    # 선택된 매물만 필터링
+    if selected_articles:
+        selected_set = set(selected_articles.split(","))
+        articles = [a for a in articles if a.article_no in selected_set]
 
     if not articles:
         raise HTTPException(status_code=404, detail="내보낼 매물이 없습니다")

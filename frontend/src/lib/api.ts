@@ -2,7 +2,7 @@
  * FastAPI 백엔드 호출 래퍼
  */
 
-import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions, DbStats, Regions, PriceStats, AreaPriceStat, FloorPriceStat, CrawlProgress } from "@/types";
+import type { Complex, Article, PyeongDetail, ArticleFilters, DbStats, Regions, PriceStats, CrawlProgress } from "@/types";
 import * as direct from "@/lib/api-direct";
 import type { UserProfile, AuditLog, AdminSetting, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail } from "@/types/admin";
 
@@ -153,21 +153,6 @@ export async function getPyeongDetails(complexNo: string) {
 }
 
 
-/** 필터 옵션 (동, 태그, 방향) */
-export async function getFilterOptions(complexNo: string) {
-  if (!HAS_BACKEND) return direct.getFilterOptionsDirect(complexNo);
-  try {
-    return await fetchApi<FilterOptions>(`/api/complexes/${complexNo}/filter-options`);
-  } catch {
-    return { building_names: [], tags: [], directions: [] };
-  }
-}
-/** 매물 상세 (DB) */
-export async function getArticle(articleNo: string) {
-  if (!HAS_BACKEND) return direct.getArticleDirect(articleNo);
-  return fetchApi<Article>(`/api/articles/${articleNo}`);
-}
-
 /** 매물 상세 실시간 (네이버 API 직접 조회 + DB 저장) */
 export async function getArticleLive(articleNo: string) {
   if (!HAS_BACKEND) return direct.getArticleDirect(articleNo);
@@ -237,13 +222,6 @@ export async function triggerComplexCrawl(complexNo: string, accessToken: string
       headers: { Authorization: `Bearer ${accessToken}` },
     }
   );
-}
-
-/** 사용자 프로필 조회 */
-export async function getUserProfile(accessToken: string) {
-  return fetchApi<UserProfile>(`/api/users/me`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
 }
 
 // ── 관리자 API ──

@@ -43,6 +43,7 @@ def complex_to_dict(c) -> dict:
         "jeonse_rate": c.jeonse_rate,
         "recent_trades_6m": c.recent_trades_6m,
         "detail_crawled_at": c.detail_crawled_at.isoformat() if getattr(c, "detail_crawled_at", None) else None,
+        "has_pool": getattr(c, "has_pool", None),
     }
 
 

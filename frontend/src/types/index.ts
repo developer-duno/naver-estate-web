@@ -35,6 +35,7 @@ export interface Complex {
   jeonse_rate?: number;
   recent_trades_6m?: number;
   filter_options?: FilterOptions;
+  has_pool?: boolean;
 }
 
 /** 매물 정보 */

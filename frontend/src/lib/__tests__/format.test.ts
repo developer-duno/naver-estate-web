@@ -65,3 +65,31 @@ describe("formatMaintenanceCost", () => {
     expect(formatMaintenanceCost()).toBe("-");
   });
 });
+
+
+// 추가 테스트 케이스 — 경계값 검증
+describe("formatKoreanPrice 추가", () => {
+  it("정확히 1억 (10000만원)", () => {
+    expect(formatKoreanPrice(10000)).toBe("1억");
+  });
+
+  it("큰 금액 (12억 5,000만원)", () => {
+    expect(formatKoreanPrice(125000)).toBe("12억 5,000만");
+  });
+
+  it("매우 작은 값 (1만원)", () => {
+    expect(formatKoreanPrice(1)).toBe("1만");
+  });
+});
+
+describe("formatDateFull 추가", () => {
+  it("공백만 있는 문자열은 그대로 반환", () => {
+    expect(formatDateFull("   ")).toBe("   ");
+  });
+});
+
+describe("formatMaintenanceCost 추가", () => {
+  it("숫자 0은 0만원 반환", () => {
+    expect(formatMaintenanceCost(null, 0)).toBe("0만원");
+  });
+});

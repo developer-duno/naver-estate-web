@@ -18,6 +18,7 @@ engine = create_engine(
     pool_size=10,
     max_overflow=20,
     pool_pre_ping=True,
+    pool_recycle=3600,  # 1시간마다 커넥션 갱신 (DB 타임아웃 방지)
     echo=False,
 )
 

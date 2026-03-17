@@ -68,6 +68,7 @@ class Article(Base):
     __table_args__ = (
         Index("ix_articles_complex_active", "complex_no", "is_active"),
         Index("ix_articles_price_changed", "price_changed_at", "is_active"),
+        Index("ix_articles_trade_active", "complex_no", "is_active", "trade_type_name"),
     )
 
     article_no: Mapped[str] = mapped_column(String(20), primary_key=True)

@@ -4,6 +4,8 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase";
 
+const SPECIAL_CHAR_REGEX = /[!@#$%^&*(),.?":{}|<>]/;
+
 function getPasswordStrength(password: string): { level: number; label: string; color: string } {
   if (!password) return { level: 0, label: "", color: "" };
   let score = 0;
@@ -11,7 +13,7 @@ function getPasswordStrength(password: string): { level: number; label: string; 
   if (password.length >= 12) score++;
   if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
   if (/\d/.test(password)) score++;
-  if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) score++;
+  if (SPECIAL_CHAR_REGEX.test(password)) score++;
 
   if (score <= 1) return { level: 1, label: "약함", color: "bg-red-500" };
   if (score <= 2) return { level: 2, label: "보통", color: "bg-orange-500" };
@@ -42,7 +44,7 @@ export default function SignupPage() {
       setError("비밀번호는 8자 이상이어야 합니다.");
       return;
     }
-    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password) || !/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password) || !SPECIAL_CHAR_REGEX.test(password)) {
       setError("비밀번호는 대문자, 소문자, 숫자, 특수문자를 각 1개 이상 포함해야 합니다.");
       return;
     }

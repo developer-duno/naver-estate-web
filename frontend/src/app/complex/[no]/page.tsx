@@ -16,7 +16,7 @@ import {
 import { createClient } from "@/lib/supabase";
 import { PAGE_SIZE } from "@/lib/constants";
 import { useCrawlProgress } from "@/hooks/useCrawlProgress";
-import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions } from "@/types";
+import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions, SortBy } from "@/types";
 import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
 import ArticleTable from "@/components/ArticleTable";
@@ -198,7 +198,7 @@ export default function ComplexDetailPage() {
       setActiveSortBy(sortBy);
       setCurrentPage(1);
       setSelectedArticleNos(new Set());
-      const filters = { ...currentFiltersRef.current, sort_by: sortBy === "rank" ? undefined : sortBy };
+      const filters = { ...currentFiltersRef.current, sort_by: sortBy === "rank" ? undefined : sortBy as SortBy };
       currentFiltersRef.current = filters;
       loadArticles(filters, 1);
     },

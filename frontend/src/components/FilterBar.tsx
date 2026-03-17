@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect, memo } from "react";
-import type { ArticleFilters, FilterOptions } from "@/types";
+import type { ArticleFilters, FilterOptions, SortBy } from "@/types";
 import { M2_TO_PYEONG } from "@/lib/constants";
 
 interface Props {
@@ -116,7 +116,7 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
       else if (fp === "고층") { filters.min_floor = 11; }
 
       const sb = get("sortBy", sortBy);
-      if (sb !== "rank") filters.sort_by = sb;
+      if (sb !== "rank") filters.sort_by = sb as SortBy;
 
       onChange(filters);
     },
@@ -235,11 +235,14 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
             { v: "rank", l: "기본순" },
             { v: "price_asc", l: "가격↑" },
             { v: "price_desc", l: "가격↓" },
-            { v: "area_desc", l: "면적↓" },
             { v: "area_asc", l: "면적↑" },
+            { v: "area_desc", l: "면적↓" },
             { v: "ppyeong_asc", l: "평당가↑" },
+            { v: "ppyeong_desc", l: "평당가↓" },
             { v: "maintenance_asc", l: "관리비↑" },
-            { v: "confirm_desc", l: "확인일자순" },
+            { v: "maintenance_desc", l: "관리비↓" },
+            { v: "confirm_desc", l: "최신순" },
+            { v: "confirm_asc", l: "오래된순" },
           ]}
           className="w-28" />
 

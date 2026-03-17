@@ -114,6 +114,9 @@ export interface PyeongDetail {
   maintenance_cost_basis?: string;
 }
 
+/** 정렬 옵션 (백엔드 Literal과 동기화) */
+export type SortBy = "rank" | "price_asc" | "price_desc" | "area_asc" | "area_desc" | "ppyeong_asc" | "ppyeong_desc" | "maintenance_asc" | "maintenance_desc" | "confirm_asc" | "confirm_desc";
+
 /** 필터 옵션 */
 export interface ArticleFilters {
   trade_types?: string;
@@ -139,7 +142,7 @@ export interface ArticleFilters {
   max_floor?: number;
   tags?: string;
   selected_articles?: string;
-  sort_by?: string;
+  sort_by?: SortBy;
   page?: number;
   page_size?: number;
 }

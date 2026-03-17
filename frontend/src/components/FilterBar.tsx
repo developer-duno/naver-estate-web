@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, memo } from "react";
 import type { ArticleFilters, FilterOptions, SortBy } from "@/types";
-import { M2_TO_PYEONG } from "@/lib/constants";
+import { M2_TO_PYEONG, FLOOR_PRESETS, DEBOUNCE_MS } from "@/lib/constants";
 
 interface Props {
   onChange: (filters: ArticleFilters) => void;
@@ -111,9 +111,11 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
 
       // 층 필터
       const fp = get("floorPreset", floorPreset);
-      if (fp === "저층") { filters.min_floor = 1; filters.max_floor = 5; }
-      else if (fp === "중층") { filters.min_floor = 6; filters.max_floor = 10; }
-      else if (fp === "고층") { filters.min_floor = 11; }
+      const preset = FLOOR_PRESETS[fp];
+      if (preset) {
+        filters.min_floor = preset.min;
+        if (preset.max) filters.max_floor = preset.max;
+      }
 
       const sb = get("sortBy", sortBy);
       if (sb !== "rank") filters.sort_by = sb as SortBy;
@@ -152,7 +154,7 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
   const setDebounced = (setter: (v: string) => void, key: string) => (v: string) => {
     setter(v);
     if (debounceMapRef.current[key]) clearTimeout(debounceMapRef.current[key]);
-    debounceMapRef.current[key] = setTimeout(() => emitChangeRef.current({ [key]: v }), 300);
+    debounceMapRef.current[key] = setTimeout(() => emitChangeRef.current({ [key]: v }), DEBOUNCE_MS);
   };
 
   const resetAll = () => {

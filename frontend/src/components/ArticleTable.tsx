@@ -2,7 +2,7 @@
 
 import { useState, useMemo, memo } from "react";
 import type { Article } from "@/types";
-import { M2_TO_PYEONG } from "@/lib/constants";
+import { M2_TO_PYEONG, TRADE_TYPE_COLORS, TRADE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
 import { formatDateShort, formatMaintenanceCost } from "@/lib/format";
 import SortableHeader, {
   type SortState,
@@ -367,11 +367,7 @@ const ArticleRow = memo(function ArticleRow({ article: art, index, onClick, sele
       <Td className="text-gray-400 text-center">{index}</Td>
       <Td>
         <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-          art.trade_type_name === "매매" ? "bg-red-100 text-red-700" :
-          art.trade_type_name === "전세" ? "bg-blue-100 text-blue-700" :
-          art.trade_type_name === "월세" ? "bg-green-100 text-green-700" :
-          art.trade_type_name === "단기임대" ? "bg-yellow-100 text-yellow-700" :
-          "bg-gray-100 text-gray-700"
+          TRADE_TYPE_COLORS[art.trade_type_name || ""] || TRADE_TYPE_DEFAULT_COLOR
         }`}>
           {art.trade_type_name || "-"}
         </span>

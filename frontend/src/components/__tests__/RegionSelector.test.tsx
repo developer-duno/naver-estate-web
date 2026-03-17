@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * RegionSelector 컴포넌트 테스트 — 지역 3단계 선택, 검색 콜백
  * 실행: npx vitest run src/components/__tests__/RegionSelector.test.tsx

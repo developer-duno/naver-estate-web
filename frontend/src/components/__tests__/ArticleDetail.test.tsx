@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * ArticleDetail 컴포넌트 테스트 - 모달 렌더링, 닫기
  * 실행: npx vitest run src/components/__tests__/ArticleDetail.test.tsx

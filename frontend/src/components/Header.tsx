@@ -50,7 +50,7 @@ export default function Header() {
             if (data) setUserRole(data.role || null);
           }
         }
-      } catch {}
+      } catch (e) { console.error("[Header] profile fetch failed:", e); }
     };
 
     // 현재 세션 확인

@@ -74,7 +74,7 @@ function LoginForm() {
               }, { onConflict: "user_id" });
             }
           }
-        } catch {}
+        } catch (e) { console.error("[Login] login-record failed:", e); }
         const rawRedirect = searchParams.get("redirect") || "/";
         let redirectTo = "/";
         try {

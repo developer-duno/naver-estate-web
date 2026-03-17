@@ -248,8 +248,8 @@ export default function ComplexDetailPage() {
       const supabase = createClient();
       const { data: { session } } = await supabase.auth.getSession();
       accessToken = session?.access_token ?? undefined;
-    } catch {
-      // 인증 실패해도 내보내기는 시도
+    } catch (e) {
+      console.error("[Export] auth session failed:", e);
     }
     setExporting(true);
     setExportError("");

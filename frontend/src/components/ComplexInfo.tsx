@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Image from "next/image";
 import dynamic from "next/dynamic";
 import type { Complex, PyeongDetail, PriceStats, AreaPriceStat, FloorPriceStat, ArticleFilters } from "@/types";
 import { formatDateFull } from "@/lib/format";
@@ -200,7 +201,7 @@ function PyeongCard({ detail: pd }: { detail: PyeongDetail }) {
           </button>
           {showPlan && (
             <div className="mt-1">
-              <img src={pd.floor_plan_url} alt={`${pd.pyeong_name || ""}평 평면도`} className="max-h-48 border rounded" loading="lazy" />
+              <Image src={pd.floor_plan_url} alt={`${pd.pyeong_name || ""}평 평면도`} width={300} height={200} className="max-h-48 border rounded object-contain" />
             </div>
           )}
         </div>

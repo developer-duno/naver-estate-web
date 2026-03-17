@@ -76,7 +76,11 @@ function LoginForm() {
           }
         } catch {}
         const rawRedirect = searchParams.get("redirect") || "/";
-        const redirectTo = rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") ? rawRedirect : "/";
+        let redirectTo = "/";
+        try {
+          const url = new URL(rawRedirect, window.location.origin);
+          if (url.origin === window.location.origin) redirectTo = url.pathname + url.search;
+        } catch { /* invalid URL → default to / */ }
         router.push(redirectTo);
         router.refresh();
       }

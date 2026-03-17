@@ -71,7 +71,7 @@ export async function searchComplexes(keyword: string, limit = 50, signal?: Abor
   if (!HAS_BACKEND) return direct.searchComplexesDirect(keyword);
   return fetchApi<{ complexes: Complex[]; total: number }>(
     `/api/live/search?q=${encodeURIComponent(keyword)}`,
-    { signal, timeoutMs: LIVE_TIMEOUT_MS } as any,
+    { signal, timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
   );
 }
 
@@ -116,7 +116,7 @@ export async function liveArticles(complexNo: string) {
   }
   return fetchApi<{ articles: Article[]; total: number; page: number; page_size: number; complex: Complex | null }>(
     `/api/live/${complexNo}/articles`,
-    { timeoutMs: LIVE_TIMEOUT_MS } as any,
+    { timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
   );
 }
 
@@ -125,7 +125,7 @@ export async function liveArticles(complexNo: string) {
 export async function startLiveCrawl(complexNo: string) {
   return fetchApi<CrawlProgress>(
     `/api/live/${complexNo}/articles/start-crawl`,
-    { method: "POST", timeoutMs: DEFAULT_TIMEOUT_MS } as any,
+    { method: "POST", timeoutMs: DEFAULT_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
   );
 }
 
@@ -162,7 +162,7 @@ export async function getArticle(articleNo: string) {
 /** 매물 상세 실시간 (네이버 API 직접 조회 + DB 저장) */
 export async function getArticleLive(articleNo: string) {
   if (!HAS_BACKEND) return direct.getArticleDirect(articleNo);
-  return fetchApi<Article>(`/api/live/article/${articleNo}/detail`, { timeoutMs: 30_000 } as any);
+  return fetchApi<Article>(`/api/live/article/${articleNo}/detail`, { timeoutMs: 30_000 } as RequestInit & { timeoutMs?: number });
 }
 
 /** DB 통계 */

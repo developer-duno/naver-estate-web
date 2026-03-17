@@ -184,8 +184,8 @@ function ArticleBody({ article: a }: { article: Article }) {
       {(a.acquisition_tax || a.broker_fee) && (
         <Section title="세금/수수료">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
-            <Info label="취득세" value={a.acquisition_tax} />
-            <Info label="중개보수" value={a.broker_fee} />
+            <Info label="취득세" value={formatWon(a.acquisition_tax)} />
+            <Info label="중개보수" value={formatWon(a.broker_fee)} />
           </div>
         </Section>
       )}
@@ -216,6 +216,15 @@ function ArticleBody({ article: a }: { article: Article }) {
       )}
     </>
   );
+}
+
+/** 원 단위 → 만원 단위 (반올림) */
+function formatWon(value?: string | null): string {
+  if (!value) return "-";
+  const num = parseFloat(value);
+  if (isNaN(num)) return value;
+  const manwon = Math.round(num / 10000);
+  return manwon.toLocaleString() + "만원";
 }
 
 function Info({ label, value }: { label: string; value?: string | null }) {

@@ -207,11 +207,15 @@ def export_articles_to_excel(
             "주소": _safe_excel(art.jibun_address or ""),
         })
 
-    df = pd.DataFrame(rows)
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="매물목록")
-    buffer.seek(0)
+    try:
+        df = pd.DataFrame(rows)
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="매물목록")
+        buffer.seek(0)
+    except Exception as e:
+        logger.exception("엑셀 생성 실패: complex=%s articles=%d", complex_no, len(articles))
+        raise HTTPException(status_code=500, detail="엑셀 파일 생성에 실패했습니다")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     raw_name = _complex_name or "매물"

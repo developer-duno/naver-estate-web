@@ -5,13 +5,7 @@ import type { Article } from "@/types";
 import { M2_TO_PYEONG, TRADE_TYPE_COLORS, TRADE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
 import { formatDateShort, formatMaintenanceCost } from "@/lib/format";
 import { COLUMNS, SERVER_SORT_MAP, getColumnValue } from "@/components/articleTableColumns";
-import SortableHeader, {
-  type SortState,
-  type FilterValue,
-  type ColumnDef,
-  applyFilter,
-  getFilterSummary,
-} from "@/components/SortableHeader";
+import SortableHeader, { type SortState } from "@/components/SortableHeader";
 
 // -- Main Component --
 
@@ -27,78 +21,28 @@ interface Props {
 
 export default function ArticleTable({ articles, onRowClick, onSortChange, activeSortBy, selectedArticleNos, onSelectionChange, onSelectAll }: Props) {
   const [sort, setSort] = useState<SortState>({ key: "", dir: null });
-  const [filters, setFilters] = useState<Record<string, FilterValue>>({});
-
-  const handleFilterChange = (key: string, value: FilterValue | undefined) => {
-    setFilters((prev) => {
-      const next = { ...prev };
-      if (value === undefined) {
-        delete next[key];
-      } else {
-        next[key] = value;
-      }
-      return next;
-    });
-  };
-
-  const clearAllFilters = () => setFilters({});
-
 
   const handleSortChange = (newSort: SortState) => {
     const serverSort = SERVER_SORT_MAP[newSort.key];
     if (serverSort && newSort.dir && onSortChange) {
-      // Delegate to server-side sort
       const sortBy = newSort.dir === "desc" ? serverSort.desc : serverSort.asc;
       onSortChange(sortBy);
       setSort(newSort);
     } else {
-      // Client-side sort
       setSort(newSort);
     }
   };
 
-
-  // Compute unique values for categorical columns
-  const uniqueValuesMap = useMemo(() => {
-    const map: Record<string, string[]> = {};
-    for (const col of COLUMNS) {
-      if (col.filterType === "categorical" && col.getFilterValue) {
-        const vals = new Set<string>();
-        for (const art of articles) {
-          vals.add(col.getFilterValue(art as unknown as Record<string, unknown>));
-        }
-        map[col.key] = Array.from(vals).sort();
-      }
-    }
-    return map;
-  }, [articles]);
-
-  // Filter + Sort pipeline
+  // 클라이언트 정렬만 적용 (필터 제거됨)
   const processed = useMemo(() => {
-    let result = [...articles];
+    const result = [...articles];
 
-    // Apply column filters
-    const filterKeys = Object.keys(filters);
-    if (filterKeys.length > 0) {
-      result = result.filter((art) => {
-        for (const key of filterKeys) {
-          const col = COLUMNS.find((c) => c.key === key);
-          if (!col) continue;
-          const value = getColumnValue(art, col);
-          if (!applyFilter(value, filters[key])) return false;
-        }
-        return true;
-      });
-    }
-
-    // Apply sort
     if (sort.key && sort.dir) {
       const col = COLUMNS.find((c) => c.key === sort.key);
       if (col) {
         result.sort((a, b) => {
           const va = getColumnValue(a, col);
           const vb = getColumnValue(b, col);
-          // nulls last
           if (va == null && vb == null) return 0;
           if (va == null) return 1;
           if (vb == null) return -1;
@@ -114,9 +58,7 @@ export default function ArticleTable({ articles, onRowClick, onSortChange, activ
     }
 
     return result;
-  }, [articles, filters, sort]);
-
-  const activeFilterCount = Object.keys(filters).length;
+  }, [articles, sort]);
 
   if (articles.length === 0) {
     return (
@@ -125,65 +67,37 @@ export default function ArticleTable({ articles, onRowClick, onSortChange, activ
   }
 
   return (
-    <div>
-      {activeFilterCount > 0 && (
-        <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-blue-50 rounded-lg border border-blue-100 flex-wrap">
-          <span className="text-xs font-medium text-blue-700">
-            {processed.length}/{articles.length}건
-          </span>
-          {Object.entries(filters).map(([key, f]) => {
-            const col = COLUMNS.find((c) => c.key === key);
-            if (!col) return null;
-            return (
-              <span key={key} className="inline-flex items-center gap-1 bg-white text-blue-700 text-xs rounded-full px-2.5 py-1 border border-blue-200">
-                {col.label}: {getFilterSummary(f)}
-                <button onClick={() => handleFilterChange(key, undefined)} className="hover:text-red-500 font-bold ml-0.5">&times;</button>
-              </span>
-            );
-          })}
-          <button
-            onClick={clearAllFilters}
-            className="text-xs text-blue-600 hover:text-blue-800 ml-auto"
-          >
-            전체 초기화
-          </button>
-        </div>
-      )}
-      <div className="overflow-x-auto bg-white rounded-lg shadow-sm border">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100 border-b-2 border-gray-300 sticky top-0 z-10">
-            <tr>
-              {onSelectionChange && (
-                <th className="px-2 py-2 w-8">
-                  <input
-                    type="checkbox"
-                    checked={processed.length > 0 && processed.every(a => selectedArticleNos?.has(a.article_no))}
-                    onChange={(e) => onSelectAll?.(e.target.checked, processed)}
-                    className="w-4 h-4 rounded border-gray-300"
-                    title="전체 선택"
-                  />
-                </th>
-              )}
-              {COLUMNS.map((col) => (
-                <SortableHeader
-                  key={col.key}
-                  column={col}
-                  sort={sort}
-                  onSortChange={handleSortChange}
-                  filter={filters[col.key]}
-                  onFilterChange={handleFilterChange}
-                  uniqueValues={uniqueValuesMap[col.key]}
+    <div className="overflow-x-auto bg-white rounded-lg shadow-sm border">
+      <table className="w-full text-sm">
+        <thead className="bg-gray-100 border-b-2 border-gray-300 sticky top-0 z-10">
+          <tr>
+            {onSelectionChange && (
+              <th className="px-2 py-2 w-8">
+                <input
+                  type="checkbox"
+                  checked={processed.length > 0 && processed.every(a => selectedArticleNos?.has(a.article_no))}
+                  onChange={(e) => onSelectAll?.(e.target.checked, processed)}
+                  className="w-4 h-4 rounded border-gray-300"
+                  title="전체 선택"
                 />
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {processed.map((art, idx) => (
-              <ArticleRow key={art.article_no} article={art} index={idx + 1} onClick={onRowClick} selected={selectedArticleNos?.has(art.article_no)} onCheck={onSelectionChange} />
+              </th>
+            )}
+            {COLUMNS.map((col) => (
+              <SortableHeader
+                key={col.key}
+                column={col}
+                sort={sort}
+                onSortChange={handleSortChange}
+              />
             ))}
-          </tbody>
-        </table>
-      </div>
+          </tr>
+        </thead>
+        <tbody>
+          {processed.map((art, idx) => (
+            <ArticleRow key={art.article_no} article={art} index={idx + 1} onClick={onRowClick} selected={selectedArticleNos?.has(art.article_no)} onCheck={onSelectionChange} />
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

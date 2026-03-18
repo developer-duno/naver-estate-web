@@ -1,5 +1,38 @@
-"""웹앱 공통 포맷팅 유틸리티"""
+"""공통 유틸리티 — 날짜, 타입 변환, 포맷팅"""
 
+from datetime import datetime, timezone
+
+
+# ── 날짜 ──
+
+def utcnow():
+    """현재 UTC 시각 반환"""
+    return datetime.now(timezone.utc)
+
+
+# ── 타입 변환 ──
+
+def safe_int(val):
+    """안전한 int 변환 — None/에러 시 None 반환"""
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def safe_float(val):
+    """안전한 float 변환 — None/에러 시 None 반환"""
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
+# ── 포맷팅 (기존 utils.py에서 이전) ──
 
 def format_parking_count(parking_count) -> str:
     """주차 포맷팅 — 100 초과 시 '단지 총 N대'"""
@@ -56,5 +89,5 @@ def format_full_date_ymd(ymd: str) -> str:
     return ymd or "-"
 
 
-# price_school_formatter.py에서 사용하는 별칭
+# 별칭
 _format_date_yyyymmdd = format_full_date_ymd

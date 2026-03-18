@@ -17,20 +17,32 @@ from services.upsert import (
     upsert_complex_from_search,
     upsert_article,
     build_detail_update_dict,
-    deactivate_missing_articles,
+    delete_missing_articles,
 )
 from services.enricher import enrich_complex_detail
 from shared.constants import NAVER_COMPLEX_ARTICLES_API, NAVER_LAND_BASE
 from shared.domain.article import RealEstateArticle
 from shared.naver_api import NaverEstateAPI
+from utils import utcnow
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 CRAWL_REAL_ESTATE_TYPES = {"APT", "ABYG", "JGC", "PRE", "OPST", "OBYG", "RDV"}
 
+# ── Rate limit & 배치 상수 ──
+MAX_SEARCH_PAGES = 50            # 검색 최대 페이지 (무한 루프 방지)
+INTER_PAGE_DELAY = 0.5           # 페이지 간 대기 (초)
+INTER_GROUP_DELAY = 0.3          # 검색 그룹 간 대기 (초)
+DETAIL_CRAWL_DELAY = 1.0         # 상세 크롤링 건별 대기 (초)
+PAGE_COMMIT_INTERVAL = 5         # N페이지마다 DB 커밋
+DETAIL_COMMIT_INTERVAL = 50      # N건마다 DB 커밋
+
 # 네이버 검색 API는 realEstateType 파라미터를 무시함
 # 키워드에 유형명을 추가해야 해당 유형 결과가 반환됨
+# JGC는 그룹0(아파트 계열)과 그룹2("재건축" 전용)에 모두 존재.
+# 기본 검색에서 APT와 함께 나오는 JGC + "재건축" 키워드로만 잡히는 JGC를 모두 확보.
+# seen set으로 중복 제거됨.
 KEYWORD_SUFFIX_GROUPS = [
     (None, {"APT", "ABYG", "JGC", "PRE"}),           # 기본 검색 = 아파트 계열
     ("오피스텔", {"OPST", "OBYG"}),                     # "대전 오피스텔"
@@ -44,9 +56,6 @@ _cache = TTLCache()
 _crawl_status: dict[str, dict] = {}
 _crawl_lock = threading.Lock()
 
-
-def _utcnow():
-    return datetime.now(timezone.utc)
 
 
 def _parse_allowed_types(types: str | None) -> set[str]:
@@ -74,7 +83,7 @@ def _search_all_types(keyword: str, allowed_types: set[str], db: Session,
 
         search_keyword = f"{keyword} {suffix}" if suffix else keyword
         page = 1
-        while True:
+        while page <= MAX_SEARCH_PAGES:
             result = NaverEstateAPI.search_by_keyword(search_keyword, page=page)
             if not result or "error" in result:
                 if page == 1 and first_error is None:
@@ -87,7 +96,7 @@ def _search_all_types(keyword: str, allowed_types: set[str], db: Session,
 
             for c_data in complex_list:
                 re_type = c_data.get("realEstateTypeCode", "")
-                if re_type and re_type not in allowed_types:
+                if not re_type or re_type not in allowed_types:
                     continue
                 cpx = upsert_complex_from_search(db, c_data, **(upsert_kwargs or {}))
                 if cpx and cpx["complex_no"] not in seen:
@@ -97,11 +106,11 @@ def _search_all_types(keyword: str, allowed_types: set[str], db: Session,
             if not result.get("isMoreData", False):
                 break
             page += 1
-            time.sleep(0.5)
+            time.sleep(INTER_PAGE_DELAY)
 
         # 그룹 간 대기 (rate limit 방지)
         if suffix:
-            time.sleep(0.3)
+            time.sleep(INTER_GROUP_DELAY)
 
     # 모든 그룹 실패 + 결과 0건이면 502
     if not all_complexes and first_error is not None:
@@ -126,7 +135,7 @@ def _build_search_response(all_complexes: list[dict], db: Session) -> dict:
 
 @router.get("/search")
 def live_search(
-    q: str = Query(..., min_length=1, description="Search keyword"),
+    q: str = Query(..., min_length=1, max_length=100, description="Search keyword"),
     types: str = Query(None, max_length=100, description="매물유형 코드 (쉼표 구분: APT,OPST,JGC 등)"),
     db: Session = Depends(get_db),
 ):
@@ -284,14 +293,14 @@ def live_articles(
         if not result.get("isMoreData", False):
             break
         page += 1
-        time.sleep(0.5)
+        time.sleep(INTER_PAGE_DELAY)
 
     # Deactivate missing articles
-    deactivate_missing_articles(db, complex_no, all_article_nos)
+    delete_missing_articles(db, complex_no, all_article_nos)
 
     # Update last_crawled_at
     db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).update(
-        {"last_crawled_at": _utcnow()}
+        {"last_crawled_at": utcnow()}
     )
     db.commit()
 
@@ -356,8 +365,7 @@ def _background_crawl(complex_no: str):
                 upsert_article(db, article, commit=False, track_price=True)
                 all_article_nos.add(article.article_no)
 
-            # 5페이지마다 배치 커밋 (트랜잭션 오버헤드 감소)
-            if page % 5 == 0:
+            if page % PAGE_COMMIT_INTERVAL == 0:
                 db.commit()
 
             _crawl_status[complex_no]["current_page"] = page
@@ -366,16 +374,16 @@ def _background_crawl(complex_no: str):
             if not result.get("isMoreData", False):
                 break
             page += 1
-            time.sleep(0.5)
+            time.sleep(INTER_PAGE_DELAY)
 
         _crawl_status[complex_no]["has_more"] = False
 
         # Deactivate missing articles
-        deactivate_missing_articles(db, complex_no, all_article_nos)
+        delete_missing_articles(db, complex_no, all_article_nos)
 
         # Update last_crawled_at
         db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).update(
-            {"last_crawled_at": _utcnow()}
+            {"last_crawled_at": utcnow()}
         )
         db.commit()
 
@@ -463,11 +471,10 @@ def _crawl_details_for_complex(db, complex_no: str):
 
         _crawl_status[complex_no]["detail_crawled_count"] = i + 1
 
-        # 50건 단위 커밋
-        if (i + 1) % 50 == 0:
+        if (i + 1) % DETAIL_COMMIT_INTERVAL == 0:
             db.commit()
 
-        time.sleep(1.0)  # 레이트 리밋
+        time.sleep(DETAIL_CRAWL_DELAY)
 
     db.commit()  # 나머지 커밋
     logger.info("Detail crawl done for %s: %d articles", complex_no, total)

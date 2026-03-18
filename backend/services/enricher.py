@@ -9,33 +9,12 @@ from datetime import datetime, timezone
 
 from db.models import Complex as ComplexModel, ComplexPyeongDetail
 from shared.naver_api import NaverEstateAPI
+from utils import utcnow, safe_int, safe_float
 
 logger = logging.getLogger(__name__)
 
 HEAT_METHOD_MAP = {"HT001": "중앙난방", "HT002": "개별난방", "HT003": "지역난방"}
 HEAT_FUEL_MAP = {"HF001": "도시가스", "HF002": "LPG", "HF003": "석유", "HF004": "전기"}
-
-
-def _utcnow():
-    return datetime.now(timezone.utc)
-
-
-def _safe_int(val):
-    if val is None:
-        return None
-    try:
-        return int(val)
-    except (ValueError, TypeError):
-        return None
-
-
-def _safe_float(val):
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return None
 
 
 def enrich_complex_detail(db, complex_no):
@@ -71,20 +50,20 @@ def enrich_complex_detail(db, complex_no):
     db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).update({
         "heat_method_type": heat_str.strip() or None,
         "heat_fuel_type": heat_fuel or None,
-        "total_parking_count": _safe_int(cd.get("parkingPossibleCount")) or _safe_int(cd.get("totalParkingCount")),
+        "total_parking_count": safe_int(cd.get("parkingPossibleCount")) or safe_int(cd.get("totalParkingCount")),
         "construction_company": cd.get("constructionCompanyName"),
         "floor_area_ratio": floor_area_ratio,
         "building_coverage_ratio": building_coverage_ratio,
         "address": cd.get("address"),
         "road_address": road_full,
-        "parking_count_by_household": _safe_float(cd.get("parkingCountByHousehold")),
+        "parking_count_by_household": safe_float(cd.get("parkingCountByHousehold")),
         "management_office_tel": cd.get("managementOfficeTelNo"),
-        "detail_crawled_at": _utcnow(),
+        "detail_crawled_at": utcnow(),
     }, synchronize_session=False)
 
     pyeong_list = detail.get("complexPyeongDetailList") or []
     for p in pyeong_list:
-        pyeong_no = _safe_int(p.get("pyeongNo"))
+        pyeong_no = safe_int(p.get("pyeongNo"))
         if pyeong_no is None:
             continue
 
@@ -101,7 +80,7 @@ def enrich_complex_detail(db, complex_no):
         latest_maint_cost = None
         maint_basis = None
         if maint_list:
-            latest_maint_cost = _safe_int(maint_list[0].get("totalPrice"))
+            latest_maint_cost = safe_int(maint_list[0].get("totalPrice"))
             maint_basis = maint_list[0].get("basisYearMonth")
 
         values = {
@@ -109,22 +88,22 @@ def enrich_complex_detail(db, complex_no):
             "pyeong_no": pyeong_no,
             "pyeong_name": p.get("pyeongName"),
             "supply_area": p.get("supplyArea"),
-            "supply_area_double": _safe_float(p.get("supplyAreaDouble")),
+            "supply_area_double": safe_float(p.get("supplyAreaDouble")),
             "exclusive_area": p.get("exclusiveArea"),
             "exclusive_rate": p.get("exclusiveRate"),
             "household_count_by_pyeong": p.get("householdCountByPyeong"),
             "entrance_type": p.get("entranceType"),
-            "room_count": _safe_int(p.get("roomCnt")),
-            "bathroom_count": _safe_int(p.get("bathroomCnt")),
-            "avg_maintenance_cost": _safe_int(avg_maint.get("averageTotalPrice")),
-            "summer_maintenance_cost": _safe_int(avg_maint.get("summerTotalPrice")),
-            "winter_maintenance_cost": _safe_int(avg_maint.get("winterTotalPrice")),
+            "room_count": safe_int(p.get("roomCnt")),
+            "bathroom_count": safe_int(p.get("bathroomCnt")),
+            "avg_maintenance_cost": safe_int(avg_maint.get("averageTotalPrice")),
+            "summer_maintenance_cost": safe_int(avg_maint.get("summerTotalPrice")),
+            "winter_maintenance_cost": safe_int(avg_maint.get("winterTotalPrice")),
             "floor_plan_url": floor_plan_url,
             "supply_pyeong": p.get("supplyPyeong"),
             "exclusive_pyeong": p.get("exclusivePyeong"),
             "latest_maintenance_cost": latest_maint_cost,
             "maintenance_cost_basis": maint_basis,
-            "updated_at": _utcnow(),
+            "updated_at": utcnow(),
         }
 
         existing = (

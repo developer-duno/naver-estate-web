@@ -4,10 +4,11 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="flex justify-center py-16"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" role="status" aria-label="로딩 중" /></div>}>
+    <Suspense fallback={<LoadingSpinner />}>
       <LoginForm />
     </Suspense>
   );

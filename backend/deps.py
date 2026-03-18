@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 
 from db.database import SessionLocal
 from db.models import UserProfile
+from utils import utcnow
 
 logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
@@ -23,9 +24,6 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
 ADMIN_EMAILS = set(filter(None, os.getenv("ADMIN_EMAIL", "kyh11kyh@gmail.com").split(",")))
-
-def _utcnow():
-    return datetime.now(timezone.utc)
 
 if not SUPABASE_JWT_SECRET and not SUPABASE_URL:
     logger.critical("SUPABASE_JWT_SECRET 또는 SUPABASE_URL 미설정 — JWT 인증이 작동하지 않습니다")
@@ -167,7 +165,7 @@ def get_approved_user(
     approved_until = user.get("approved_until")
     if approved_until:
         expiry = datetime.fromisoformat(approved_until)
-        if expiry < _utcnow():
+        if expiry < utcnow():
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="승인 기간이 만료되었습니다")
     return user
 

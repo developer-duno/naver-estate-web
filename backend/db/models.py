@@ -9,10 +9,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.database import Base
-
-
-def utcnow():
-    return datetime.now(timezone.utc)
+from utils import utcnow
 
 
 class Complex(Base):

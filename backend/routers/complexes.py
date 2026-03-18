@@ -88,7 +88,7 @@ def get_filter_options(
 def get_complex_articles(
     complex_no: str,
     # 필터
-    trade_types: Optional[str] = Query(None, description="거래유형 (쉼표 구분: 매매,전세,월세)"),
+    trade_types: Optional[str] = Query(None, max_length=100, description="거래유형 (쉼표 구분: 매매,전세,월세)"),
     min_price: Optional[int] = Query(None, ge=0),
     max_price: Optional[int] = Query(None, ge=0),
     min_rent: Optional[int] = Query(None, ge=0),
@@ -102,14 +102,14 @@ def get_complex_articles(
     max_ppyeong: Optional[int] = Query(None, ge=0),
     min_maintenance: Optional[int] = Query(None, ge=0),
     max_maintenance: Optional[int] = Query(None, ge=0),
-    building_name: Optional[str] = Query(None),
+    building_name: Optional[str] = Query(None, max_length=100),
     verified_only: bool = Query(False),
     max_building_age: Optional[int] = Query(None),
     move_in_type: Optional[str] = Query(None),
     estate_type: Optional[str] = Query(None),
     min_floor: Optional[int] = Query(None, ge=0),
     max_floor: Optional[int] = Query(None, ge=0),
-    tags: Optional[str] = Query(None, description="태그 (쉼표 구분)"),
+    tags: Optional[str] = Query(None, max_length=200, description="태그 (쉼표 구분)"),
     # 정렬/페이지
     sort_by: Literal["rank", "price_asc", "price_desc", "area_asc", "area_desc", "ppyeong_asc", "ppyeong_desc", "maintenance_asc", "maintenance_desc", "confirm_asc", "confirm_desc"] = Query("rank"),
     page: int = Query(1, ge=1),

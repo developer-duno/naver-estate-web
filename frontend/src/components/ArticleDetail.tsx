@@ -5,6 +5,7 @@ import { getArticleLive } from "@/lib/api";
 import type { Article } from "@/types";
 import { M2_TO_PYEONG } from "@/lib/constants";
 import { formatDateFull, formatMaintenanceCost } from "@/lib/format";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
 interface Props {
   articleNo: string;
@@ -77,11 +78,7 @@ export default function ArticleDetail({ articleNo, onClose }: Props) {
 
         {/* 본문 */}
         <div className="overflow-y-auto p-6 max-h-[calc(85vh-64px)] space-y-4">
-          {loading && (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" role="status" aria-label="로딩 중" />
-            </div>
-          )}
+          {loading && <LoadingSpinner size="sm" />}
 
           {!loading && error && (
             <div className="text-center py-8">

@@ -27,9 +27,10 @@ from crawler.utils import AdaptiveThrottle, CheckpointManager
 
 from services.upsert import (
     upsert_complex_from_search, upsert_article, build_detail_update_dict,
-    deactivate_missing_articles, _safe_int,
+    delete_missing_articles,
 )
 from services.enricher import enrich_complex_detail
+from utils import utcnow, safe_int
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -44,9 +45,6 @@ _throttle = AdaptiveThrottle(min_interval=1.0, max_interval=5.0)
 _checkpoint = CheckpointManager(checkpoint_interval=5)
 
 
-def _utcnow():
-    return datetime.now(timezone.utc)
-
 
 # ── A. 단지 발견 ──
 
@@ -57,7 +55,7 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None):
         keyword += f" {dong}"
 
     db = SessionLocal()
-    job = CrawlJob(job_type="complex_list", target_id=keyword, status="running", started_at=_utcnow())
+    job = CrawlJob(job_type="complex_list", target_id=keyword, status="running", started_at=utcnow())
     db.add(job)
     db.commit()
 
@@ -89,7 +87,7 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None):
 
         job.status = "completed"
         job.processed_items = total_found
-        job.completed_at = _utcnow()
+        job.completed_at = utcnow()
         db.commit()
         logger.info("단지 발견 완료: %s → %d건", keyword, total_found)
 
@@ -116,7 +114,7 @@ def discover_all_regions():
 def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = None):
     """단지의 전체 매물 크롤링 → articles 테이블 upsert"""
     db = SessionLocal()
-    job = CrawlJob(job_type="complex_articles", target_id=complex_no, status="running", started_at=_utcnow())
+    job = CrawlJob(job_type="complex_articles", target_id=complex_no, status="running", started_at=utcnow())
     db.add(job)
     db.commit()
 
@@ -147,11 +145,11 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
             time.sleep(NaverEstateAPI.PAGE_DELAY)
 
         # 이번 크롤링에서 안 보인 매물 → is_active = False
-        deactivate_missing_articles(db, complex_no, all_article_nos)
+        delete_missing_articles(db, complex_no, all_article_nos)
 
         # 단지 last_crawled_at 업데이트
         db.query(Complex).filter(Complex.complex_no == complex_no).update(
-            {"last_crawled_at": _utcnow()}
+            {"last_crawled_at": utcnow()}
         )
 
         # 단지 상세 정보 보강 (1회성: detail_crawled_at이 없는 경우만)
@@ -162,7 +160,7 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
         job.status = "completed"
         job.total_items = total_articles
         job.processed_items = total_articles
-        job.completed_at = _utcnow()
+        job.completed_at = utcnow()
         db.commit()
         logger.info("매물 수집 완료: complex %s → %d건", complex_no, total_articles)
 
@@ -199,7 +197,7 @@ def crawl_articles_batch(batch_size: int = 50):
 def crawl_article_details(batch_size: int = 100):
     """detail_crawled=FALSE인 활성 매물의 상세 정보 크롤링"""
     db = SessionLocal()
-    job = CrawlJob(job_type="article_detail", status="running", started_at=_utcnow())
+    job = CrawlJob(job_type="article_detail", status="running", started_at=utcnow())
     db.add(job)
     db.commit()
 
@@ -242,7 +240,7 @@ def crawl_article_details(batch_size: int = 100):
 
         job.status = "completed"
         job.processed_items = processed
-        job.completed_at = _utcnow()
+        job.completed_at = utcnow()
         db.commit()  # 나머지 flush
         logger.info("상세 보강 완료: %d/%d건", processed, len(articles))
 
@@ -324,9 +322,9 @@ def collect_price_history_for_complex(db: Session, complex_no: str) -> int:
                 _upsert_price_history(
                     db, complex_no, trade_type,
                     area_no=str(p.get("areaNo")) if p.get("areaNo") is not None else None,
-                    price_upper=_safe_int(p.get("upperPrice") or p.get("dealUpperPrice")),
-                    price_lower=_safe_int(p.get("lowerPrice") or p.get("dealLowerPrice")),
-                    price_avg=_safe_int(p.get("averagePrice")),
+                    price_upper=safe_int(p.get("upperPrice") or p.get("dealUpperPrice")),
+                    price_lower=safe_int(p.get("lowerPrice") or p.get("dealLowerPrice")),
+                    price_avg=safe_int(p.get("averagePrice")),
                     base_month=base_month,
                 )
                 collected += 1
@@ -379,7 +377,7 @@ def collect_price_history(batch_size: int = 50):
     """
     db = SessionLocal()
     job = CrawlJob(
-        job_type="price_history", status="running", started_at=_utcnow()
+        job_type="price_history", status="running", started_at=utcnow()
     )
     db.add(job)
     db.commit()
@@ -416,9 +414,9 @@ def collect_price_history(batch_size: int = 50):
                     _upsert_price_history(
                         db, complex_no, trade_type,
                         area_no=str(p.get("areaNo")) if p.get("areaNo") is not None else None,
-                        price_upper=_safe_int(p.get("upperPrice") or p.get("dealUpperPrice")),
-                        price_lower=_safe_int(p.get("lowerPrice") or p.get("dealLowerPrice")),
-                        price_avg=_safe_int(p.get("averagePrice")),
+                        price_upper=safe_int(p.get("upperPrice") or p.get("dealUpperPrice")),
+                        price_lower=safe_int(p.get("lowerPrice") or p.get("dealLowerPrice")),
+                        price_avg=safe_int(p.get("averagePrice")),
                         base_month=base_month,
                     )
                 processed += 1
@@ -432,7 +430,7 @@ def collect_price_history(batch_size: int = 50):
         job.status = "completed"
         job.total_items = len(complexes)
         job.processed_items = processed
-        job.completed_at = _utcnow()
+        job.completed_at = utcnow()
         db.commit()
         _checkpoint.delete(db, job.id)
         logger.info("시세 수집 완료: %d건", processed)
@@ -472,7 +470,7 @@ def _upsert_price_history(
         existing.price_upper = price_upper
         existing.price_lower = price_lower
         existing.price_avg = price_avg
-        existing.recorded_at = _utcnow()
+        existing.recorded_at = utcnow()
     else:
         db.add(ComplexPriceHistory(
             complex_no=complex_no,
@@ -482,5 +480,5 @@ def _upsert_price_history(
             price_lower=price_lower,
             price_avg=price_avg,
             base_month=base_month,
-            recorded_at=_utcnow(),
+            recorded_at=utcnow(),
         ))

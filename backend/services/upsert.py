@@ -15,30 +15,9 @@ from db.models import (
     ArticlePriceHistory,
 )
 from shared.domain.article import RealEstateArticle
+from utils import utcnow, safe_int, safe_float
 
 logger = logging.getLogger(__name__)
-
-
-def _utcnow():
-    return datetime.now(timezone.utc)
-
-
-def _safe_int(val):
-    if val is None:
-        return None
-    try:
-        return int(val)
-    except (ValueError, TypeError):
-        return None
-
-
-def _safe_float(val):
-    if val is None:
-        return None
-    try:
-        return float(val)
-    except (ValueError, TypeError):
-        return None
 
 
 def parse_maintenance_cost(cost_str):
@@ -72,15 +51,15 @@ def upsert_complex_from_search(db, data, sido=None, sigungu=None, dong=None, com
         "real_estate_type_name": data.get("realEstateTypeName"),
         "latitude": latitude,
         "longitude": longitude,
-        "total_household_count": _safe_int(data.get("totalHouseholdCount")),
-        "high_floor": _safe_int(data.get("highFloor")),
-        "low_floor": _safe_int(data.get("lowFloor")),
+        "total_household_count": safe_int(data.get("totalHouseholdCount")),
+        "high_floor": safe_int(data.get("highFloor")),
+        "low_floor": safe_int(data.get("lowFloor")),
         "use_approve_ymd": data.get("useApproveYmd"),
-        "total_dong_count": _safe_int(data.get("totalDongCount")),
-        "min_supply_area_m2": _safe_float(data.get("minSupplyArea")),
-        "max_supply_area_m2": _safe_float(data.get("maxSupplyArea")),
+        "total_dong_count": safe_int(data.get("totalDongCount")),
+        "min_supply_area_m2": safe_float(data.get("minSupplyArea")),
+        "max_supply_area_m2": safe_float(data.get("maxSupplyArea")),
         "cortar_address": data.get("cortarAddress"),
-        "updated_at": _utcnow(),
+        "updated_at": utcnow(),
     }
 
     if sido:
@@ -115,13 +94,13 @@ def upsert_complex_from_search(db, data, sido=None, sigungu=None, dong=None, com
         "real_estate_type_name": data.get("realEstateTypeName"),
         "latitude": latitude,
         "longitude": longitude,
-        "total_household_count": _safe_int(data.get("totalHouseholdCount")),
-        "high_floor": _safe_int(data.get("highFloor")),
-        "low_floor": _safe_int(data.get("lowFloor")),
+        "total_household_count": safe_int(data.get("totalHouseholdCount")),
+        "high_floor": safe_int(data.get("highFloor")),
+        "low_floor": safe_int(data.get("lowFloor")),
         "use_approve_ymd": data.get("useApproveYmd"),
-        "total_dong_count": _safe_int(data.get("totalDongCount")),
-        "min_supply_area_m2": _safe_float(data.get("minSupplyArea")),
-        "max_supply_area_m2": _safe_float(data.get("maxSupplyArea")),
+        "total_dong_count": safe_int(data.get("totalDongCount")),
+        "min_supply_area_m2": safe_float(data.get("minSupplyArea")),
+        "max_supply_area_m2": safe_float(data.get("maxSupplyArea")),
         "cortar_address": data.get("cortarAddress"),
         "sido": values.get("sido"),
         "sigungu": values.get("sigungu"),
@@ -159,9 +138,9 @@ def _build_article_values(article):
         "numeric_price": article.numeric_price,
         "numeric_rent_price": article.numeric_rent_price,
         "price_per_pyeong": article.price_per_pyeong,
-        "last_seen_at": _utcnow(),
+        "last_seen_at": utcnow(),
         "is_active": True,
-        "updated_at": _utcnow(),
+        "updated_at": utcnow(),
     }
 
 
@@ -185,7 +164,7 @@ def upsert_article(db, article, commit=True, track_price=False):
             )
             if price_changed:
                 values["previous_price"] = old_price
-                values["price_changed_at"] = _utcnow()
+                values["price_changed_at"] = utcnow()
                 db.add(ArticlePriceHistory(
                     article_no=article.article_no,
                     price=new_price,
@@ -249,7 +228,7 @@ def build_detail_update_dict(domain_article, detail_data: dict = None):
         "acquisition_tax": domain_article.acquisition_tax,
         "broker_fee": domain_article.broker_fee,
         "detail_crawled": True,
-        "updated_at": _utcnow(),
+        "updated_at": utcnow(),
     }
     if domain_article.numeric_price is not None:
         update_data["numeric_price"] = domain_article.numeric_price
@@ -270,7 +249,3 @@ def delete_missing_articles(db, complex_no, seen_article_nos, commit=True):
     ).delete(synchronize_session=False)
     if commit:
         db.commit()
-
-
-# 하위 호환 alias
-deactivate_missing_articles = delete_missing_articles

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, memo, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, memo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { searchComplexes, getComplexesByRegion } from "@/lib/api";
 import { createClient } from "@/lib/supabase";
@@ -8,10 +8,13 @@ import RegionSelector from "@/components/RegionSelector";
 import type { Complex } from "@/types";
 import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_TABS } from "@/lib/constants";
 import EstateTypeTabs from "@/components/EstateTypeTabs";
+import LoadingSpinner from "@/components/LoadingSpinner";
+import { useSmartBack } from "@/hooks/useSmartBack";
 
 function SearchContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const goBack = useSmartBack();
   const [complexes, setComplexes] = useState<Complex[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -40,9 +43,12 @@ function SearchContent() {
 
   const typesStr = selectedTypes.length < allCodes.length ? selectedTypes.join(",") : undefined;
 
-  // 매물유형 클라이언트 필터 (한번만 계산)
-  const filteredComplexes = complexes.filter(
-    (c) => !c.real_estate_type_code || selectedTypes.includes(c.real_estate_type_code)
+  // 매물유형 클라이언트 필터 (complexes/selectedTypes 변경 시만 재계산)
+  const filteredComplexes = useMemo(
+    () => complexes.filter(
+      (c) => !c.real_estate_type_code || selectedTypes.includes(c.real_estate_type_code)
+    ),
+    [complexes, selectedTypes],
   );
 
   const fetchData = useCallback(async (signal: AbortSignal) => {
@@ -136,7 +142,7 @@ function SearchContent() {
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* 헤더 */}
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => { try { const r = document.referrer; if (r && new URL(r).origin === window.location.origin) { window.history.back(); } else { router.push("/"); } } catch { router.push("/"); } }} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl">
+        <button onClick={goBack} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl">
           ←
         </button>
         <h1 className="text-2xl font-bold">{title}</h1>
@@ -183,12 +189,7 @@ function SearchContent() {
       )}
 
       {/* 로딩 */}
-      {loading && (
-        <div className="flex flex-col items-center py-16 gap-3">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" role="status" aria-label="로딩 중" />
-          <p className="text-sm text-gray-500">검색 중입니다. 잠시만 기다려주세요.</p>
-        </div>
-      )}
+      {loading && <LoadingSpinner message="검색 중입니다. 잠시만 기다려주세요." />}
 
       {/* 에러 */}
       {error && (
@@ -306,13 +307,7 @@ const ComplexRow = memo(function ComplexRow({ complex, index }: { complex: Compl
 
 export default function SearchPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex justify-center py-16">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" role="status" aria-label="로딩 중" />
-        </div>
-      }
-    >
+    <Suspense fallback={<LoadingSpinner />}>
       <SearchContent />
     </Suspense>
   );

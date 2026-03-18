@@ -16,6 +16,7 @@ export default function HomePage() {
   const [statsError, setStatsError] = useState(false);
   const allCodes = ESTATE_TYPE_TABS.map((t) => t.code) as string[];
   const [selectedTypes, setSelectedTypes] = useState<string[]>([...allCodes]);
+  const abortRef = useRef(false);
 
   const loadStats = () => {
     setStatsLoading(true);
@@ -26,7 +27,6 @@ export default function HomePage() {
       .finally(() => { if (!abortRef.current) setStatsLoading(false); });
   };
 
-  const abortRef = useRef(false);
   useEffect(() => {
     abortRef.current = false;
     loadStats();

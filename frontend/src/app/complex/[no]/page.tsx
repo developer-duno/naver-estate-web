@@ -13,6 +13,8 @@ import {
 } from "@/lib/api";
 import { createClient } from "@/lib/supabase";
 import { PAGE_SIZE, ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
+import LoadingSpinner from "@/components/LoadingSpinner";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { useCrawlProgress } from "@/hooks/useCrawlProgress";
 import { useExport } from "@/hooks/useExport";
 import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions, SortBy } from "@/types";
@@ -34,6 +36,7 @@ function formatTimeAgo(dateStr: string): string {
 export default function ComplexDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const goBack = useSmartBack();
   const rawNo = params.no;
   const complexNo = Array.isArray(rawNo) ? rawNo[0] : rawNo ?? "";
 
@@ -262,11 +265,7 @@ export default function ComplexDetailPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex justify-center py-16">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" role="status" aria-label="로딩 중" />
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (error || !complex) {
@@ -297,13 +296,7 @@ export default function ComplexDetailPage() {
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
       {/* 헤더 */}
       <div className="flex items-center gap-4">
-        <button onClick={() => {
-            try {
-              const referrer = document.referrer;
-              const isSameOrigin = referrer && new URL(referrer).origin === window.location.origin;
-              if (isSameOrigin) { router.back(); } else { router.push("/"); }
-            } catch { router.push("/"); }
-          }} aria-label="이전 페이지" className="text-gray-500 hover:text-gray-600 text-xl">
+        <button onClick={goBack} aria-label="이전 페이지" className="text-gray-500 hover:text-gray-600 text-xl">
           ←
         </button>
         <h1 className="text-2xl font-bold">{complex.complex_name}</h1>

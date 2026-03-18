@@ -143,3 +143,37 @@ describe("ESTATE_TYPE_DEFAULT_COLOR", () => {
     expect(typeof ESTATE_TYPE_DEFAULT_COLOR).toBe("string");
   });
 });
+
+
+// 매물유형 탭/필터 옵션 상수 테스트
+import { ESTATE_TYPE_TABS, ESTATE_TYPE_FILTER_OPTIONS } from "../constants";
+
+describe("ESTATE_TYPE_TABS", () => {
+  it("6개 탭 정의", () => {
+    expect(ESTATE_TYPE_TABS).toHaveLength(6);
+  });
+
+  it("모든 탭에 code와 label 존재", () => {
+    for (const tab of ESTATE_TYPE_TABS) {
+      expect(tab.code).toBeDefined();
+      expect(tab.label).toBeDefined();
+    }
+  });
+
+  it("APT가 첫 번째", () => {
+    expect(ESTATE_TYPE_TABS[0].code).toBe("APT");
+  });
+});
+
+describe("ESTATE_TYPE_FILTER_OPTIONS", () => {
+  it("5개 필터 옵션 정의", () => {
+    expect(ESTATE_TYPE_FILTER_OPTIONS).toHaveLength(5);
+  });
+
+  it("모든 옵션에 code와 label 존재", () => {
+    for (const opt of ESTATE_TYPE_FILTER_OPTIONS) {
+      expect(opt.code).toBeDefined();
+      expect(opt.label).toBeDefined();
+    }
+  });
+});

@@ -34,6 +34,25 @@ export const ESTATE_TYPE_COLORS: Record<string, string> = {
 
 export const ESTATE_TYPE_DEFAULT_COLOR = "border-gray-300 text-gray-600";
 
+/** 매물유형 탭 (네이버 API 코드 기준 — 홈/검색 페이지용) */
+export const ESTATE_TYPE_TABS = [
+  { code: "APT", label: "아파트" },
+  { code: "ABYG", label: "아파트분양권" },
+  { code: "JGC", label: "재건축" },
+  { code: "OPST", label: "오피스텔" },
+  { code: "OBYG", label: "오피스텔분양권" },
+  { code: "RDV", label: "재개발" },
+] as const;
+
+/** 매물유형 필터 옵션 (FilterBar 드롭다운용 — 매물 레벨 필터) */
+export const ESTATE_TYPE_FILTER_OPTIONS = [
+  { code: "apt", label: "아파트" },
+  { code: "opst", label: "오피스텔" },
+  { code: "presale", label: "분양권" },
+  { code: "jgc", label: "재건축" },
+  { code: "rdv", label: "재개발" },
+] as const;
+
 /** 층수 프리셋 */
 export const FLOOR_PRESETS: Record<string, { min: number; max?: number }> = {
   "저층": { min: 1, max: 5 },

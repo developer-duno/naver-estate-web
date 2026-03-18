@@ -5,7 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { searchComplexes, getComplexesByRegion } from "@/lib/api";
 import RegionSelector from "@/components/RegionSelector";
 import type { Complex } from "@/types";
-import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
+import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_TABS } from "@/lib/constants";
+import EstateTypeTabs from "@/components/EstateTypeTabs";
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -20,6 +21,11 @@ function SearchContent() {
   const sido = searchParams.get("sido") || "";
   const sigungu = searchParams.get("sigungu") || "";
   const dong = searchParams.get("dong") || "";
+  const allCodes = ESTATE_TYPE_TABS.map((t) => t.code) as string[];
+  const typesParam = searchParams.get("types");
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(
+    typesParam ? typesParam.split(",").filter((c) => allCodes.includes(c)) : [...allCodes]
+  );
 
   const hasSearchParams = !!(keyword || (sido && sigungu));
 
@@ -29,6 +35,8 @@ function SearchContent() {
     ? `${sido} ${sigungu}${dong ? ` ${dong}` : ""} 단지 목록`
     : "검색";
 
+  const typesStr = selectedTypes.length < allCodes.length ? selectedTypes.join(",") : undefined;
+
   const fetchData = useCallback(async (signal: AbortSignal) => {
     if (!keyword && !(sido && sigungu)) return;
     const reqId = ++requestIdRef.current;
@@ -37,9 +45,9 @@ function SearchContent() {
     try {
       let result: { complexes: Complex[] };
       if (keyword) {
-        result = await searchComplexes(keyword, 50, signal);
+        result = await searchComplexes(keyword, 50, signal, typesStr);
       } else {
-        result = await getComplexesByRegion(sido, sigungu, dong || undefined, signal);
+        result = await getComplexesByRegion(sido, sigungu, dong || undefined, signal, typesStr);
       }
       if (reqId !== requestIdRef.current) return;
       setComplexes(result.complexes);
@@ -52,7 +60,7 @@ function SearchContent() {
         setLoading(false);
       }
     }
-  }, [keyword, sido, sigungu, dong]);
+  }, [keyword, sido, sigungu, dong, typesStr]);
 
   useEffect(() => {
     if (!hasSearchParams) return;
@@ -68,16 +76,31 @@ function SearchContent() {
       : "검색 - 아파트·오피스텔";
   }, [title, hasSearchParams]);
 
+  const buildTypesParam = (types: string[]) =>
+    types.length < allCodes.length ? `&types=${types.join(",")}` : "";
+
+  const handleTabChange = (types: string[]) => {
+    setSelectedTypes(types);
+    // URL 업데이트 (현재 검색 파라미터 유지)
+    const params = new URLSearchParams(searchParams.toString());
+    if (types.length < allCodes.length) {
+      params.set("types", types.join(","));
+    } else {
+      params.delete("types");
+    }
+    router.push(`/search?${params.toString()}`);
+  };
+
   const handleInlineKeywordSearch = () => {
     const q = inlineKeyword.trim();
     if (!q) return;
-    router.push(`/search?q=${encodeURIComponent(q)}`);
+    router.push(`/search?q=${encodeURIComponent(q)}${buildTypesParam(selectedTypes)}`);
   };
 
   const handleInlineRegionSearch = (s: string, sg: string, d?: string) => {
     let path = `/search?sido=${encodeURIComponent(s)}&sigungu=${encodeURIComponent(sg)}`;
     if (d) path += `&dong=${encodeURIComponent(d)}`;
-    router.push(path);
+    router.push(path + buildTypesParam(selectedTypes));
   };
 
   return (
@@ -91,6 +114,11 @@ function SearchContent() {
         {hasSearchParams && !loading && (
           <span className="text-gray-500 text-sm">({complexes.length}개 단지)</span>
         )}
+      </div>
+
+      {/* 매물유형 탭 */}
+      <div className="mb-5">
+        <EstateTypeTabs selected={selectedTypes} onChange={handleTabChange} />
       </div>
 
       {/* 검색 파라미터 없을 때: 인라인 검색 폼 */}

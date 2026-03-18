@@ -6,6 +6,7 @@ import {
   M2_TO_PYEONG, FLOOR_PRESETS, DEBOUNCE_MS, SORT_OPTIONS,
   BUILDING_AGE_OPTIONS, MOVE_IN_OPTIONS,
   PRICE_PRESETS, AREA_PRESETS, MAINTENANCE_PRESETS, PPYEONG_PRESETS,
+  ESTATE_TYPE_FILTER_OPTIONS,
   type RangePreset,
 } from "@/lib/constants";
 import FilterDropdown from "./FilterDropdown";
@@ -19,7 +20,7 @@ interface Props {
 
 type FilterChip = { label: string; reset: () => void };
 
-export default function FilterBar({ onChange, filterOptions, sortBy: externalSortBy, onSortChange }: Props) {
+export default memo(function FilterBar({ onChange, filterOptions, sortBy: externalSortBy, onSortChange }: Props) {
   // ── 상태 (21개 — 기존과 동일) ──
   const [tradeType, setTradeType] = useState("전체");
   const [minPrice, setMinPrice] = useState("");
@@ -498,11 +499,9 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
               <p className={sectionLabel}>매물유형</p>
               <select value={estateType} onChange={(e) => setImmediate(setEstateType, "estateType")(e.target.value)} className={selectCls}>
                 <option value="all">전체</option>
-                <option value="apt">아파트</option>
-                <option value="opst">오피스텔</option>
-                <option value="presale">분양권</option>
-                <option value="jgc">재건축</option>
-                <option value="rdv">재개발</option>
+                {ESTATE_TYPE_FILTER_OPTIONS.map((o) => (
+                  <option key={o.code} value={o.code}>{o.label}</option>
+                ))}
               </select>
             </div>
             <label className="flex items-center gap-2 text-xs cursor-pointer">
@@ -544,7 +543,7 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
         if (minBaths !== "0") chipList.push({ label: minBaths + "욕실+", reset: () => setImmediate(setMinBaths, "minBaths")("0") });
         if (buildingAge !== "0") chipList.push({ label: buildingAge + "년 이내", reset: () => setImmediate(setBuildingAge, "buildingAge")("0") });
         if (moveInType !== "전체") chipList.push({ label: moveInType, reset: () => setImmediate(setMoveInType, "moveInType")("전체") });
-        if (estateType !== "all") chipList.push({ label: { apt: "아파트", opst: "오피스텔", presale: "분양권", jgc: "재건축", rdv: "재개발" }[estateType] ?? estateType, reset: () => setImmediate(setEstateType, "estateType")("all") });
+        if (estateType !== "all") chipList.push({ label: ESTATE_TYPE_FILTER_OPTIONS.find((o) => o.code === estateType)?.label ?? estateType, reset: () => setImmediate(setEstateType, "estateType")("all") });
         if (verifiedOnly) chipList.push({ label: "인증매물", reset: () => { setVerifiedOnly(false); emitChange({ verifiedOnly: "false" }); } });
 
         if (minPrice) chipList.push({ label: `${minPrice}만원~`, reset: () => { setMinPrice(""); emitChange({ minPrice: "" }); } });
@@ -575,4 +574,4 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
       })()}
     </div>
   );
-}
+});

@@ -44,10 +44,16 @@ def _utcnow():
 @router.get("/search")
 def live_search(
     q: str = Query(..., min_length=1, description="Search keyword"),
+    types: str = Query(None, max_length=100, description="매물유형 코드 (쉼표 구분: APT,OPST,JGC 등)"),
     db: Session = Depends(get_db),
 ):
     """Live keyword search - Naver API -> DB upsert -> return"""
-    cache_key = f"search:{q}"
+    # types 파라미터 → 허용 유형 set 결정
+    allowed_types = (
+        set(t.strip() for t in types.split(",") if t.strip()) & CRAWL_REAL_ESTATE_TYPES
+        if types and types.strip() else CRAWL_REAL_ESTATE_TYPES
+    )
+    cache_key = f"search:{q}:{','.join(sorted(allowed_types))}"
     cached = _cache.get(cache_key)
     if cached is not None:
         return cached
@@ -69,7 +75,7 @@ def live_search(
 
         for c_data in complex_list:
             re_type = c_data.get("realEstateTypeCode", "")
-            if re_type and re_type not in CRAWL_REAL_ESTATE_TYPES:
+            if re_type and re_type not in allowed_types:
                 continue
             cpx = upsert_complex_from_search(db, c_data)
             if cpx:
@@ -83,13 +89,15 @@ def live_search(
     complex_nos = [c["complex_no"] for c in all_complexes]
     counts = _get_article_counts(db, complex_nos)
 
-    return {
+    response = {
         "complexes": [
             {**c, "article_count": counts.get(c["complex_no"], 0)}
             for c in all_complexes
         ],
         "total": len(all_complexes),
     }
+    _cache.set(cache_key, response)
+    return response
 
 
 @router.get("/region")
@@ -97,10 +105,15 @@ def live_region(
     sido: str = Query(...),
     sigungu: str = Query(None),
     dong: str = Query(None),
+    types: str = Query(None, max_length=100, description="매물유형 코드 (쉼표 구분: APT,OPST,JGC 등)"),
     db: Session = Depends(get_db),
 ):
     """Live region search - Naver API -> DB upsert -> return"""
-    cache_key = f"region:{sido}:{sigungu}:{dong}"
+    allowed_types = (
+        set(t.strip() for t in types.split(",") if t.strip()) & CRAWL_REAL_ESTATE_TYPES
+        if types and types.strip() else CRAWL_REAL_ESTATE_TYPES
+    )
+    cache_key = f"region:{sido}:{sigungu}:{dong}:{','.join(sorted(allowed_types))}"
     cached = _cache.get(cache_key)
     if cached is not None:
         return cached
@@ -128,7 +141,7 @@ def live_region(
 
         for c_data in complex_list:
             re_type = c_data.get("realEstateTypeCode", "")
-            if re_type and re_type not in CRAWL_REAL_ESTATE_TYPES:
+            if re_type and re_type not in allowed_types:
                 continue
             cpx = upsert_complex_from_search(db, c_data, sido=sido, sigungu=sigungu, dong=dong)
             if cpx:
@@ -142,15 +155,15 @@ def live_region(
     complex_nos = [c["complex_no"] for c in all_complexes]
     counts = _get_article_counts(db, complex_nos)
 
-    result = {
+    response = {
         "complexes": [
             {**c, "article_count": counts.get(c["complex_no"], 0)}
             for c in all_complexes
         ],
         "total": len(all_complexes),
     }
-    _cache.set(cache_key, result)
-    return result
+    _cache.set(cache_key, response)
+    return response
 
 
 def _fetch_articles_all_trade_types(complex_no: str, page: int = 1):

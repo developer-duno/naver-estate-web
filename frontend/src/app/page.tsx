@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getStats } from "@/lib/api";
 import RegionSelector from "@/components/RegionSelector";
+import EstateTypeTabs from "@/components/EstateTypeTabs";
+import { ESTATE_TYPE_TABS } from "@/lib/constants";
 import type { DbStats } from "@/types";
 
 export default function HomePage() {
@@ -12,6 +14,8 @@ export default function HomePage() {
   const [stats, setStats] = useState<DbStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState(false);
+  const allCodes = ESTATE_TYPE_TABS.map((t) => t.code) as string[];
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([...allCodes]);
 
   const loadStats = () => {
     setStatsLoading(true);
@@ -29,16 +33,20 @@ export default function HomePage() {
     return () => { abortRef.current = true; };
   }, []);
 
+  const typesParam = selectedTypes.length < allCodes.length
+    ? `&types=${selectedTypes.join(",")}`
+    : "";
+
   const handleKeywordSearch = () => {
     const q = keyword.trim();
     if (!q) return;
-    router.push(`/search?q=${encodeURIComponent(q)}`);
+    router.push(`/search?q=${encodeURIComponent(q)}${typesParam}`);
   };
 
   const handleRegionSearch = (sido: string, sigungu: string, dong?: string) => {
     let path = `/search?sido=${encodeURIComponent(sido)}&sigungu=${encodeURIComponent(sigungu)}`;
     if (dong) path += `&dong=${encodeURIComponent(dong)}`;
-    router.push(path);
+    router.push(path + typesParam);
   };
 
   return (
@@ -47,6 +55,11 @@ export default function HomePage() {
       <div className="text-center mb-10">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">네이버 아파트·오피스텔 매물 조회</h1>
         <p className="text-gray-500">전국 아파트·오피스텔 매물을 검색하고 필터링하세요</p>
+      </div>
+
+      {/* 매물유형 탭 */}
+      <div className="flex justify-center mb-8">
+        <EstateTypeTabs selected={selectedTypes} onChange={setSelectedTypes} />
       </div>
 
       {/* 통계 */}

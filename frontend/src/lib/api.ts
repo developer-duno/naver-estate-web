@@ -98,20 +98,23 @@ function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: number 
   return promise;
 }
 /** 단지 키워드 검색 */
-export async function searchComplexes(keyword: string, limit = 50, signal?: AbortSignal) {
+export async function searchComplexes(keyword: string, limit = 50, signal?: AbortSignal, types?: string) {
   if (!HAS_BACKEND) return direct.searchComplexesDirect(keyword);
+  let url = `/api/live/search?q=${encodeURIComponent(keyword)}`;
+  if (types) url += `&types=${encodeURIComponent(types)}`;
   return fetchApi<{ complexes: Complex[]; total: number }>(
-    `/api/live/search?q=${encodeURIComponent(keyword)}`,
+    url,
     { signal, timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
   );
 }
 
 /** 지역별 단지 조회 */
-export async function getComplexesByRegion(sido: string, sigungu?: string, dong?: string, signal?: AbortSignal) {
+export async function getComplexesByRegion(sido: string, sigungu?: string, dong?: string, signal?: AbortSignal, types?: string) {
   if (!HAS_BACKEND) return direct.getComplexesByRegionDirect(sido, sigungu, dong);
   let path = `/api/live/region?sido=${encodeURIComponent(sido)}`;
   if (sigungu) path += `&sigungu=${encodeURIComponent(sigungu)}`;
   if (dong) path += `&dong=${encodeURIComponent(dong)}`;
+  if (types) path += `&types=${encodeURIComponent(types)}`;
   return fetchApi<{ complexes: Complex[]; total: number }>(path, { signal, timeoutMs: LIVE_TIMEOUT_MS } as any);
 }
 

@@ -125,8 +125,11 @@ export default function ComplexDetailPage() {
             });
           }
         }
-      } catch {
-        // 크롤링 실패는 무시 (DB 데이터는 이미 표시됨)
+      } catch (err) {
+        // 403: 미승인/만료 → 안내 메시지, 그 외 에러는 무시 (DB 데이터 이미 표시)
+        if (err instanceof ApiError && err.statusCode === 403 && !cancelledRef.current) {
+          setCrawlMessage(err.message || "관리자 승인이 필요합니다");
+        }
       }
     }
 
@@ -221,7 +224,7 @@ export default function ComplexDetailPage() {
     try {
       await triggerComplexCrawl(complexNo, session.access_token);
       setCrawlMessage("데이터 갱신 중...");
-      const crawlResult = await startLiveCrawl(complexNo);
+      const crawlResult = await startLiveCrawl(complexNo, session.access_token);
       if (
         crawlResult.status === "started" ||
         crawlResult.status === "running" ||

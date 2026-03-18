@@ -107,9 +107,9 @@ def update_user(
         changes["status"] = body.status
         profile.status = body.status
     if body.approved_until is not None:
-        from datetime import datetime as dt
+        from datetime import datetime
         try:
-            profile.approved_until = dt.fromisoformat(body.approved_until) if body.approved_until else None
+            profile.approved_until = datetime.fromisoformat(body.approved_until) if body.approved_until else None
         except ValueError:
             raise HTTPException(status_code=400, detail="잘못된 날짜 형식 (ISO 8601)")
         changes["approved_until"] = body.approved_until

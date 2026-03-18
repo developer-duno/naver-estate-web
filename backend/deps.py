@@ -166,8 +166,7 @@ def get_approved_user(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="관리자 승인이 필요합니다")
     approved_until = user.get("approved_until")
     if approved_until:
-        from datetime import datetime as dt
-        expiry = dt.fromisoformat(approved_until)
+        expiry = datetime.fromisoformat(approved_until)
         if expiry < _utcnow():
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="승인 기간이 만료되었습니다")
     return user

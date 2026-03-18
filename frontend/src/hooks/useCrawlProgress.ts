@@ -87,15 +87,8 @@ export function useCrawlProgress(): CrawlHookResult {
       } catch (e) { console.error("[CrawlProgress] poll:", e); }
     }, CRAWL_STATUS_POLL_MS);
 
-    articlesPollRef.current = setInterval(async () => {
-      if (cancelledRef.current) return;
-      try {
-        const res = await getArticles(complexNo, { page: 1, page_size: PAGE_SIZE });
-        if (cancelledRef.current || crawlTargetRef.current !== complexNo) return;
-        callbacks.setArticles(res.articles);
-        callbacks.setTotalCount(res.total);
-      } catch (e) { console.error("[CrawlProgress]", e); }
-    }, ARTICLES_POLL_MS);
+    // 크롤링 중 매물 폴링 — 필터 없이 건수만 갱신 (필터 결과를 덮어씌우지 않음)
+    // 사용자가 필터를 적용한 상태에서 크롤링 폴링이 전체 매물로 덮어씌우는 버그 방지
 
     setCrawling(true);
   }, [clearAllPolling]);

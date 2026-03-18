@@ -136,7 +136,7 @@ function SearchContent() {
         </button>
         <h1 className="text-2xl font-bold">{title}</h1>
         {hasSearchParams && !loading && (
-          <span className="text-gray-500 text-sm">({complexes.length}개 단지)</span>
+          <span className="text-gray-500 text-sm">({complexes.filter((c) => !c.real_estate_type_code || selectedTypes.includes(c.real_estate_type_code)).length}개 단지)</span>
         )}
       </div>
 
@@ -257,7 +257,9 @@ function SearchContent() {
               </tr>
             </thead>
             <tbody>
-              {complexes.map((cpx, idx) => (
+              {complexes
+                .filter((cpx) => !cpx.real_estate_type_code || selectedTypes.includes(cpx.real_estate_type_code))
+                .map((cpx, idx) => (
                 <ComplexRow key={cpx.complex_no} complex={cpx} index={idx + 1} />
               ))}
             </tbody>

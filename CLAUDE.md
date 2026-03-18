@@ -101,6 +101,27 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 프리셋 상수: `PRICE_PRESETS`, `AREA_PRESETS`, `MAINTENANCE_PRESETS`, `PPYEONG_PRESETS`
 - 비활성: 회색, 활성: 파란색 + 선택 요약 텍스트
 
+### 매물유형 뱃지 색상
+- `ESTATE_TYPE_COLORS` (constants.ts): 유형별 `bg-*-100 border-*-400 text-*-800`
+- 아파트(teal), 아파트분양권(orange), 오피스텔(purple), 오피스텔분양권(pink), 재건축(amber), 재개발(rose)
+- 검색 결과 테이블 + 단지 상세 헤더에 표시
+- EstateTypeTabs: 활성 탭도 동일 색상 적용
+
+### 매물유형 탭 (EstateTypeTabs)
+- 6개 토글 버튼 (복수 선택, 최소 1개 보장)
+- 선택 해제 시 검색 결과에서 해당 유형 클라이언트 필터로 즉시 숨김
+- 홈/검색 페이지 공용
+
+### RegionSelector (네이버 스타일 3컬럼 팝업)
+- 트리거 버튼 hover → fixed 팝업 패널 (시/도 | 시/군/구 | 읍/면/동)
+- hover로 하위 목록 미리보기, 읍/면/동 선택 시 검색 실행
+- `fixed` 포지셔닝 (부모 overflow에 영향받지 않음)
+- 200ms 딜레이로 자동 닫힘, 패널 밖 클릭 시 즉시 닫힘
+
+### 홈페이지 레이아웃
+- 컴팩트: 통계 타이틀 인라인, 키워드+지역 한 카드에 합침
+- `max-w-3xl`, `py-6` (한 화면에 모든 요소 표시)
+
 ### 컬럼 헤더 (정렬 전용)
 - 클릭 → ▲(asc) → ▼(desc) → 해제
 - 필터 기능 없음 (FilterBar에서 담당)

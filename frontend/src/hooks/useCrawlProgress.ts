@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { startLiveCrawl, getCrawlStatus, getArticles, getPyeongDetails, getComplex, liveArticles } from "@/lib/api";
+import { getCrawlStatus, getArticles, getPyeongDetails, getComplex } from "@/lib/api";
 import { PAGE_SIZE, CRAWL_STATUS_POLL_MS, ARTICLES_POLL_MS } from "@/lib/constants";
 import type { Complex, Article, PyeongDetail, CrawlProgress, ArticleFilters } from "@/types";
 
@@ -62,12 +62,14 @@ export function useCrawlProgress(): CrawlHookResult {
         setCrawlProgress(status);
 
         const isDone = status.status === "done" && status.detail_phase !== "running";
-        const isIdle = status.status === "idle"; // BE가 done 후 status를 pop하면 idle 반환
+        const isIdle = status.status === "idle"; // BE가 done 후 status를 pop → idle 반환 = 완료
         const isError = status.status === "error";
 
         if (isError || isDone || isIdle) {
           clearAllPolling();
           setCrawling(false);
+          // idle은 done을 놓친 경우 → 완료 배너 표시를 위해 status를 done으로 보정
+          if (isIdle) setCrawlProgress({ ...status, status: "done" });
           if (isDone || isIdle) {
             setCrawlMessage("");
             try {

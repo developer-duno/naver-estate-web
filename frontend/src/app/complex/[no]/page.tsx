@@ -49,6 +49,7 @@ export default function ComplexDetailPage() {
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [filterError, setFilterError] = useState("");
+  const [dismissedDone, setDismissedDone] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
   const [activeSortBy, setActiveSortBy] = useState("rank");
   const currentFiltersRef = useRef<ArticleFilters>({});
@@ -221,6 +222,7 @@ export default function ComplexDetailPage() {
     }
     setCrawling(true);
     setCrawlMessage("");
+    setDismissedDone(false);
     try {
       await triggerComplexCrawl(complexNo, session.access_token);
       setCrawlMessage("데이터 갱신 중...");
@@ -330,7 +332,7 @@ export default function ComplexDetailPage() {
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 flex-shrink-0" />
           <span>
             {crawlProgress.detail_phase === "running" ? (
-              <>상세 정보 수집 중... {crawlProgress.detail_crawled_count ?? 0}/{crawlProgress.detail_total ?? 0}건</>
+              <>매물 상세 페이지 수집 중... {crawlProgress.detail_crawled_count ?? 0}/{crawlProgress.detail_total ?? 0}건</>
             ) : (
               <>
                 매물 목록 수집 중...
@@ -339,6 +341,14 @@ export default function ComplexDetailPage() {
               </>
             )}
           </span>
+        </div>
+      )}
+
+      {/* 크롤링 완료 배너 */}
+      {!crawling && crawlProgress?.status === "done" && !crawlMessage && !dismissedDone && (
+        <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-md px-4 py-3 flex items-center justify-between">
+          <span>데이터 수집 완료! ({crawlProgress.article_count ?? 0}건)</span>
+          <button onClick={() => setDismissedDone(true)} className="text-green-500 hover:text-green-700">×</button>
         </div>
       )}
 

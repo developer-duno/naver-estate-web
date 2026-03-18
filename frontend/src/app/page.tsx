@@ -45,8 +45,8 @@ export default function HomePage() {
     <div className="max-w-4xl mx-auto px-4 py-12">
       {/* 타이틀 */}
       <div className="text-center mb-10">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">네이버 아파트 매물 조회</h1>
-        <p className="text-gray-500">전국 아파트 매물을 검색하고 필터링하세요</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">네이버 아파트·오피스텔 매물 조회</h1>
+        <p className="text-gray-500">전국 아파트·오피스텔 매물을 검색하고 필터링하세요</p>
       </div>
 
       {/* 통계 */}

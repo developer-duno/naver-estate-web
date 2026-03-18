@@ -132,3 +132,41 @@ def test_search_returns_structure(client, db):
     _add_complex(db, 'CR', name='래미안')
     data = client.get('/api/complexes/search?q=래미안').json()
     assert 'total' in data or 'complexes' in data
+
+
+# 매물유형(estate_type) 필터 테스트
+def test_articles_filter_estate_type_apt(client, db):
+    """estate_type=apt → 아파트 매물만 반환"""
+    _add_complex(db, "CE1")
+    _add_article(db, "EA1", "CE1", article_real_estate_type_name="아파트")
+    _add_article(db, "EA2", "CE1", article_real_estate_type_name="오피스텔")
+    res = client.get("/api/complexes/CE1/articles?estate_type=apt")
+    assert res.status_code == 200
+    assert res.json()["total"] == 1
+
+def test_articles_filter_estate_type_opst(client, db):
+    """estate_type=opst → 오피스텔 매물만 반환"""
+    _add_complex(db, "CE2")
+    _add_article(db, "EO1", "CE2", article_real_estate_type_name="오피스텔")
+    _add_article(db, "EO2", "CE2", article_real_estate_type_name="아파트")
+    res = client.get("/api/complexes/CE2/articles?estate_type=opst")
+    assert res.status_code == 200
+    assert res.json()["total"] == 1
+
+def test_articles_filter_estate_type_jgc(client, db):
+    """estate_type=jgc → 재건축 매물만 반환"""
+    _add_complex(db, "CE3")
+    _add_article(db, "EJ1", "CE3", article_real_estate_type_name="재건축")
+    _add_article(db, "EJ2", "CE3", article_real_estate_type_name="아파트")
+    res = client.get("/api/complexes/CE3/articles?estate_type=jgc")
+    assert res.status_code == 200
+    assert res.json()["total"] == 1
+
+def test_articles_filter_estate_type_rdv(client, db):
+    """estate_type=rdv → 재개발 매물만 반환"""
+    _add_complex(db, "CE4")
+    _add_article(db, "ER1", "CE4", article_real_estate_type_name="재개발")
+    _add_article(db, "ER2", "CE4", article_real_estate_type_name="아파트")
+    res = client.get("/api/complexes/CE4/articles?estate_type=rdv")
+    assert res.status_code == 200
+    assert res.json()["total"] == 1

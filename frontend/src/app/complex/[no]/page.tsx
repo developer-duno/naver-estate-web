@@ -74,7 +74,7 @@ export default function ComplexDetailPage() {
   // SEO: dynamic title
   useEffect(() => {
     if (complex) {
-      document.title = `${complex.complex_name} - 아파트 매물`;
+      document.title = `${complex.complex_name} - 아파트·오피스텔`;
     }
   }, [complex]);
 

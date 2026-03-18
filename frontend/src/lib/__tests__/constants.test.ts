@@ -117,3 +117,29 @@ describe("MOVE_IN_OPTIONS", () => {
     expect(MOVE_IN_OPTIONS[0]).toBe("전체");
   });
 });
+
+
+// 매물유형 색상 상수 테스트
+import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "../constants";
+
+describe("ESTATE_TYPE_COLORS", () => {
+  it("6개 매물유형 색상 포함", () => {
+    expect(Object.keys(ESTATE_TYPE_COLORS)).toHaveLength(6);
+  });
+
+  it("아파트/오피스텔/재건축/재개발 포함", () => {
+    expect(ESTATE_TYPE_COLORS).toHaveProperty("아파트");
+    expect(ESTATE_TYPE_COLORS).toHaveProperty("오피스텔");
+    expect(ESTATE_TYPE_COLORS).toHaveProperty("재건축");
+    expect(ESTATE_TYPE_COLORS).toHaveProperty("재개발");
+    expect(ESTATE_TYPE_COLORS).toHaveProperty("아파트분양권");
+    expect(ESTATE_TYPE_COLORS).toHaveProperty("오피스텔분양권");
+  });
+});
+
+describe("ESTATE_TYPE_DEFAULT_COLOR", () => {
+  it("기본 색상이 정의되어 있음", () => {
+    expect(ESTATE_TYPE_DEFAULT_COLOR).toBeDefined();
+    expect(typeof ESTATE_TYPE_DEFAULT_COLOR).toBe("string");
+  });
+});

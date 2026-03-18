@@ -18,16 +18,16 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "네이버 아파트 매물 조회",
-    template: "%s | 아파트 매물",
+    default: "네이버 아파트·오피스텔 매물 조회",
+    template: "%s | 아파트·오피스텔",
   },
-  description: "전국 아파트 매물을 검색하고 필터링하세요. 실시간 시세, 면적별 가격 통계를 제공합니다.",
+  description: "전국 아파트·오피스텔 매물을 검색하고 필터링하세요. 실시간 시세, 면적별 가격 통계를 제공합니다.",
   openGraph: {
     type: "website",
     locale: "ko_KR",
-    siteName: "아파트 매물 조회",
-    title: "네이버 아파트 매물 조회",
-    description: "전국 아파트 매물을 검색하고 필터링하세요",
+    siteName: "아파트·오피스텔 매물 조회",
+    title: "네이버 아파트·오피스텔 매물 조회",
+    description: "전국 아파트·오피스텔 매물을 검색하고 필터링하세요",
   },
   robots: {
     index: true,

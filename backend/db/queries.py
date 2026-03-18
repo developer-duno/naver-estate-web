@@ -301,12 +301,18 @@ def _build_filter_conditions(filters: dict) -> list:
             text("SUBSTRING(articles.use_approve_ymd, 1, 4)::INTEGER >= :min_year").bindparams(min_year=min_year)
         )
 
-    # 매물유형 (일반/분양권)
+    # 매물유형 필터
     estate_type = filters.get("estate_type")
     if estate_type == "presale":
         conditions.append(Article.is_presale == True)
-    elif estate_type == "general":
-        conditions.append(Article.is_presale == False)
+    elif estate_type == "apt":
+        conditions.append(Article.article_real_estate_type_name == "아파트")
+    elif estate_type == "opst":
+        conditions.append(Article.article_real_estate_type_name == "오피스텔")
+    elif estate_type == "jgc":
+        conditions.append(Article.article_real_estate_type_name == "재건축")
+    elif estate_type == "rdv":
+        conditions.append(Article.article_real_estate_type_name == "재개발")
 
     # 입주가능일 타입
     move_in = filters.get("move_in_type")

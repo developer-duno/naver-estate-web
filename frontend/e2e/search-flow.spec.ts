@@ -8,7 +8,7 @@ test("홈 페이지 로드", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("header")).toBeVisible();
   // strict mode 회피: first() 사용
-  await expect(page.locator("header").locator("text=아파트 매물").first()).toBeVisible();
+  await expect(page.locator("header").locator("text=아파트·오피스텔").first()).toBeVisible();
 });
 
 test("키워드 검색 시 결과 페이지 이동", async ({ page }) => {

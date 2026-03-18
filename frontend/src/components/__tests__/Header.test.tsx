@@ -10,7 +10,7 @@ describe("Header 기본", () => {
   it("로고 텍스트 표시", async () => {
     render(<Header />);
     await waitFor(() => {
-      expect(screen.getByText("아파트 매물")).toBeInTheDocument();
+      expect(screen.getByText("아파트·오피스텔")).toBeInTheDocument();
     });
   });
 

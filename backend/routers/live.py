@@ -27,7 +27,7 @@ from shared.naver_api import NaverEstateAPI
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-CRAWL_REAL_ESTATE_TYPES = {"APT", "ABYG", "JGC", "PRE"}
+CRAWL_REAL_ESTATE_TYPES = {"APT", "ABYG", "JGC", "PRE", "OPST", "OBYG", "RDV"}
 
 # ── TTL Cache ──
 _cache = TTLCache()
@@ -168,7 +168,7 @@ def _fetch_articles_all_trade_types(complex_no: str, page: int = 1):
 
     url = (
         f"{NAVER_COMPLEX_ARTICLES_API}/{complex_no}"
-        f"?realEstateType=APT%3AABYG%3AJGC%3APRE"
+        f"?realEstateType=APT%3AABYG%3AJGC%3APRE%3AOPST%3AOBYG%3ARDV"
         f"&tradeType=A1%3AB1%3AB2%3AB3"
         f"&tag=%3A%3A%3A%3A%3A%3A%3A%3A"
         f"&rentPriceMin=0&rentPriceMax=900000000"

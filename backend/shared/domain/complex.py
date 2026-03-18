@@ -96,7 +96,7 @@ class RealEstateComplex:
             instance.articles = [RealEstateArticle.from_dict(article_data) for article_data in articles_data]
 
         # 각 매물에 단지번호 및 분양권 타입 설정
-        is_presale_complex = instance.real_estate_type_code in ("ABYG", "PRE")
+        is_presale_complex = instance.real_estate_type_code in ("ABYG", "PRE", "OBYG")
         for art in instance.articles:
             if not art.complex_no:
                 art.complex_no = instance.complex_no

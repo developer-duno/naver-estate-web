@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "도움말 - 아파트 매물 조회",
-  description: "네이버 아파트 매물 조회 서비스 사용 가이드",
+  title: "도움말 - 아파트·오피스텔 매물 조회",
+  description: "네이버 아파트·오피스텔 매물 조회 서비스 사용 가이드",
 };
 
 export default function HelpPage() {
@@ -11,19 +11,20 @@ export default function HelpPage() {
     <div className="max-w-3xl mx-auto px-4 py-10 space-y-10">
       <div className="text-center">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">사용 가이드</h1>
-        <p className="text-gray-500 text-sm">네이버 아파트 매물 조회 서비스를 효과적으로 활용하는 방법</p>
+        <p className="text-gray-500 text-sm">네이버 아파트·오피스텔 매물 조회 서비스를 효과적으로 활용하는 방법</p>
       </div>
 
       {/* 1. 검색 */}
-      <Section num={1} title="아파트 검색하기">
+      <Section num={1} title="매물 검색하기">
         <H3>키워드 검색</H3>
-        <p>홈 화면 상단의 검색창에 아파트 단지명을 입력하세요.</p>
+        <p>홈 화면 상단의 검색창에 단지명을 입력하세요.</p>
         <Example>래미안, 힐스테이트, 강남, 서초 등</Example>
         <p>검색 버튼을 클릭하거나 Enter 키를 누르면 검색 결과 페이지로 이동합니다.</p>
+        <p>아파트, 오피스텔, 재건축, 재개발 등 모든 매물유형이 검색됩니다.</p>
 
         <H3>지역 검색</H3>
         <p>홈 화면 하단의 지역 선택에서 시도 → 시군구 → 읍면동 순서로 선택하세요.</p>
-        <p>선택한 지역의 모든 아파트 단지가 표시됩니다.</p>
+        <p>선택한 지역의 모든 단지가 표시됩니다.</p>
 
         <H3>검색 결과</H3>
         <p>검색 결과 테이블에서 원하는 단지를 클릭하면 해당 단지의 매물 목록으로 이동합니다.</p>
@@ -45,7 +46,7 @@ export default function HelpPage() {
         <FilterDesc name="층수" desc="저층(1~5층), 중층(6~10층), 고층(11층 이상)" />
         <FilterDesc name="입주" desc="즉시입주, 1개월, 3개월, 6개월, 협의" />
         <FilterDesc name="방/욕실" desc="최소 방 수, 최소 욕실 수 선택" />
-        <FilterDesc name="상세" desc="동, 방향, 관리비, 준공년도, 매물유형, 인증매물, 정렬" />
+        <FilterDesc name="상세" desc="동, 방향, 관리비, 준공년도, 매물유형(아파트/오피스텔/분양권/재건축/재개발), 인증매물, 정렬" />
 
         <H3>필터 칩</H3>
         <p>활성화된 필터는 버튼 아래에 파란색 칩으로 표시됩니다. 칩의 &times; 버튼을 클릭하면 해당 필터가 해제됩니다.</p>

@@ -150,3 +150,37 @@ describe("FilterBar — 필터 칩", () => {
     expect(screen.getAllByText("매매").length).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe("FilterBar — 매물유형 옵션", () => {
+  it("상세 드롭다운에 확장된 매물유형 옵션 표시", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("상세");
+    // 매물유형 select를 찾기: "오피스텔" option을 포함하는 select
+    const selects = screen.getAllByDisplayValue("전체");
+    const estateSelect = selects.find((s) => {
+      const opts = Array.from(s.querySelectorAll("option")).map((o) => o.textContent);
+      return opts.includes("오피스텔");
+    });
+    expect(estateSelect).toBeDefined();
+    const options = Array.from(estateSelect!.querySelectorAll("option")).map((o) => o.textContent);
+    expect(options).toContain("아파트");
+    expect(options).toContain("오피스텔");
+    expect(options).toContain("분양권");
+    expect(options).toContain("재건축");
+    expect(options).toContain("재개발");
+  });
+
+  it("매물유형 변경 시 onChange 호출", () => {
+    const onChange = vi.fn();
+    render(<FilterBar {...defaultProps} onChange={onChange} />);
+    openDropdown("상세");
+    const selects = screen.getAllByDisplayValue("전체");
+    const estateSelect = selects.find((s) => {
+      const opts = Array.from(s.querySelectorAll("option")).map((o) => o.textContent);
+      return opts.includes("오피스텔");
+    });
+    expect(estateSelect).toBeDefined();
+    fireEvent.change(estateSelect!, { target: { value: "opst" } });
+    expect(onChange).toHaveBeenCalled();
+  });
+});

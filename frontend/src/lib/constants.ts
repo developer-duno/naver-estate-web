@@ -22,6 +22,18 @@ export const TRADE_TYPE_COLORS: Record<string, string> = {
 
 export const TRADE_TYPE_DEFAULT_COLOR = "bg-gray-100 text-gray-700";
 
+/** 매물유형별 뱃지 색상 */
+export const ESTATE_TYPE_COLORS: Record<string, string> = {
+  "아파트": "border-teal-300 text-teal-600",
+  "아파트분양권": "border-orange-300 text-orange-600",
+  "오피스텔": "border-purple-300 text-purple-600",
+  "오피스텔분양권": "border-pink-300 text-pink-600",
+  "재건축": "border-amber-300 text-amber-600",
+  "재개발": "border-rose-300 text-rose-600",
+};
+
+export const ESTATE_TYPE_DEFAULT_COLOR = "border-gray-300 text-gray-600";
+
 /** 층수 프리셋 */
 export const FLOOR_PRESETS: Record<string, { min: number; max?: number }> = {
   "저층": { min: 1, max: 5 },

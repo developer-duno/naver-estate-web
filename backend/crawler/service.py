@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 # 크롤링 대상 부동산 유형 (기본: 아파트 관련 4종)
 CRAWL_REAL_ESTATE_TYPES = set(
-    os.getenv("CRAWL_REAL_ESTATE_TYPES", "APT:ABYG:JGC:PRE").split(":")
+    os.getenv("CRAWL_REAL_ESTATE_TYPES", "APT:ABYG:JGC:PRE:OPST:OBYG:RDV").split(":")
 )
 
 # Phase 1: 적응형 쓰로틀 + 체크포인트

@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { searchComplexes, getComplexesByRegion } from "@/lib/api";
 import RegionSelector from "@/components/RegionSelector";
 import type { Complex } from "@/types";
+import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -63,8 +64,8 @@ function SearchContent() {
   // SEO: 동적 타이틀
   useEffect(() => {
     document.title = hasSearchParams
-      ? `${title} - 아파트 매물`
-      : "검색 - 아파트 매물";
+      ? `${title} - 아파트·오피스텔`
+      : "검색 - 아파트·오피스텔";
   }, [title, hasSearchParams]);
 
   const handleInlineKeywordSearch = () => {
@@ -220,7 +221,7 @@ const ComplexRow = memo(function ComplexRow({ complex, index }: { complex: Compl
       <td className="px-3 py-2 text-center text-gray-700 whitespace-nowrap border-r border-gray-100">{year || "-"}</td>
       <td className="px-3 py-2 text-center whitespace-nowrap border-r border-gray-100">
         {complex.real_estate_type_name ? (
-          <span className="text-xs px-1.5 py-0.5 rounded border border-teal-300 text-teal-600">{complex.real_estate_type_name}</span>
+          <span className={`text-xs px-1.5 py-0.5 rounded border ${ESTATE_TYPE_COLORS[complex.real_estate_type_name!] ?? ESTATE_TYPE_DEFAULT_COLOR}`}>{complex.real_estate_type_name}</span>
         ) : "-"}
       </td>
       <td className="px-3 py-2 text-right whitespace-nowrap">

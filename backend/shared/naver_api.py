@@ -218,7 +218,7 @@ class NaverEstateAPI:
 
         url = (
             f"{NAVER_COMPLEX_ARTICLES_API}/{complex_id}"
-            f"?realEstateType=APT%3AABYG%3AJGC%3APRE&tradeType="
+            f"?realEstateType=APT%3AABYG%3AJGC%3APRE%3AOPST%3AOBYG%3ARDV&tradeType="
             f"&tag=%3A%3A%3A%3A%3A%3A%3A%3A"
             f"&rentPriceMin=0&rentPriceMax=900000000"
             f"&priceMin=0&priceMax=900000000"

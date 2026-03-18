@@ -119,6 +119,14 @@ export default function Header() {
             >
               검색
             </Link>
+            <Link
+              href="/help"
+              className={`text-sm font-medium ${
+                pathname === "/help" ? "text-blue-600" : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              도움말
+            </Link>
 
             {isAdmin && (
               <Link

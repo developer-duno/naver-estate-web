@@ -76,10 +76,30 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ```
 검색 → /api/live/search (네이버 API → DB upsert → 반환)
-단지 선택 → /api/live/{no}/articles (매물 크롤링 → DB upsert → 단지정보 보강 → 반환)
+단지 클릭 → DB 데이터 즉시 표시 (자동 크롤링 없음)
+"데이터 갱신" 버튼 → /api/live/{no}/articles (매물 크롤링 → DB upsert → 반환)
 필터 변경 → /api/complexes/{no}/articles (DB 쿼리, SQL WHERE절)
 엑셀 → /api/articles/export (pandas DataFrame → xlsx)
 ```
+
+## UI 패턴
+
+### FilterBar (7개 드롭다운 툴바)
+- 거래유형, 가격, 면적, 층수, 입주, 방/욕실, 상세
+- 프리셋 상수: `PRICE_PRESETS`, `AREA_PRESETS`, `MAINTENANCE_PRESETS`, `PPYEONG_PRESETS`
+- 비활성: 회색, 활성: 파란색 + 선택 요약 텍스트
+
+### 컬럼 헤더 (정렬 전용)
+- 클릭 → ▲(asc) → ▼(desc) → 해제
+- 필터 기능 없음 (FilterBar에서 담당)
+
+### 매물 상세 모달
+- 네이버 부동산 바로가기: `https://new.land.naver.com/complexes/{complex_no}?articleNo={article_no}`
+- 네이버 지도: `https://map.naver.com/p?lat={lat}&lng={lng}&title={단지명}`
+
+### CORS 미들웨어 순서 (중요)
+- `RateLimitMiddleware` → `CORSMiddleware` 순서로 등록 (CORS가 마지막 = 가장 먼저 실행)
+- 반대로 하면 OPTIONS preflight가 429 반환
 
 ## 코딩 규칙
 
@@ -132,8 +152,9 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 ### 테스트 구조
 | 경로 | 도구 | 테스트 수 |
 |------|------|----------|
-| frontend/src/lib/__tests__/ | Vitest | 54 (단위+엣지케이스) |
-| frontend/src/components/__tests__/ | Vitest | 58 (컴포넌트) |
+| frontend/src/lib/__tests__/ | Vitest | 55 (단위+엣지케이스) |
+| frontend/src/components/__tests__/ | Vitest | 53 (컴포넌트) |
 | frontend/src/hooks/__tests__/ | Vitest | 6 (훅) |
+| frontend/src/lib/__tests__/api.msw.test.ts | Vitest | 7 (MSW 통합) |
 | frontend/e2e/ | Playwright | 13 (E2E) |
 | backend/tests/ | pytest | 183 (단위+통합+API+엣지케이스) |

@@ -393,14 +393,6 @@ export default function ComplexDetailPage() {
         );
       })()}
 
-      {/* 크롤링 완료 배너 */}
-      {!crawling && crawlProgress?.status === "done" && !crawlMessage && !dismissedDone && (
-        <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-md px-4 py-3 flex items-center justify-between">
-          <span>데이터 수집 완료! ({crawlProgress.article_count ?? 0}건)</span>
-          <button onClick={() => setDismissedDone(true)} className="text-green-500 hover:text-green-700">×</button>
-        </div>
-      )}
-
       {/* 필터 바 */}
       <div>
         <button

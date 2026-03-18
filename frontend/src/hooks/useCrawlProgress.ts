@@ -70,8 +70,7 @@ export function useCrawlProgress(): CrawlHookResult {
         if (isError || isDone || isIdle) {
           clearAllPolling();
           setCrawling(false);
-          // idle은 done을 놓친 경우 → 완료 배너 표시를 위해 status를 done으로 보정
-          if (isIdle) setCrawlProgress({ ...status, status: "done" });
+          setCrawlProgress(null);  // 프로그레스 바 즉시 제거
           if (isDone || isIdle) {
             setCrawlMessage("");
             try {

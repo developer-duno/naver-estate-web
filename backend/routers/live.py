@@ -232,6 +232,7 @@ def start_live_crawl(complex_no: str, user: dict = Depends(get_approved_user)):
 
         _crawl_status[complex_no] = {
             "status": "started",
+            "phase": "articles",
             "current_page": 0,
             "article_count": 0,
             "has_more": True,
@@ -253,8 +254,11 @@ def get_crawl_status(complex_no: str):
             return {"complex_no": complex_no, "status": "idle",
                     "detail_phase": None, "detail_crawled_count": 0, "detail_total": 0}
         snapshot = {**status}
-        if status.get("status") in ("done", "error"):
+        # done/error는 프론트가 수신 후 pop — 즉시 pop하면 프론트가 놓칠 수 있음
+        if status.get("_polled_final"):
             _crawl_status.pop(complex_no, None)
+        elif status.get("status") in ("done", "error"):
+            status["_polled_final"] = True  # 다음 poll에서 정리
     return {"complex_no": complex_no, **snapshot}
 
 
@@ -330,18 +334,26 @@ def live_articles(
     return result
 
 
+def _update_crawl_status(complex_no: str, **updates):
+    """스레드 안전한 크롤 상태 업데이트"""
+    with _crawl_lock:
+        if complex_no in _crawl_status:
+            _crawl_status[complex_no].update(updates)
+
+
 def _background_crawl(complex_no: str):
     """Run article crawl in background thread with per-page commits."""
     db = SessionLocal()
     try:
-        _crawl_status[complex_no] = {
-            "status": "running",
-            "phase": "articles",
-            "current_page": 0,
-            "article_count": 0,
-            "has_more": True,
-            "error": None,
-        }
+        with _crawl_lock:
+            _crawl_status[complex_no] = {
+                "status": "running",
+                "phase": "articles",
+                "current_page": 0,
+                "article_count": 0,
+                "has_more": True,
+                "error": None,
+            }
         all_article_nos = set()
         page = 1
 
@@ -349,9 +361,9 @@ def _background_crawl(complex_no: str):
             result = _fetch_articles_all_trade_types(complex_no, page=page)
             if not result or "error" in result:
                 if page == 1:
-                    _crawl_status[complex_no]["status"] = "error"
-                    _crawl_status[complex_no]["error"] = str(
-                        result.get("error", "네이버 API 요청 실패") if result else "네이버 API 응답 없음"
+                    _update_crawl_status(complex_no,
+                        status="error",
+                        error=str(result.get("error", "네이버 API 요청 실패") if result else "네이버 API 응답 없음"),
                     )
                     return
                 break
@@ -369,15 +381,14 @@ def _background_crawl(complex_no: str):
             if page % PAGE_COMMIT_INTERVAL == 0:
                 db.commit()
 
-            _crawl_status[complex_no]["current_page"] = page
-            _crawl_status[complex_no]["article_count"] = len(all_article_nos)
+            _update_crawl_status(complex_no, current_page=page, article_count=len(all_article_nos))
 
             if not result.get("isMoreData", False):
                 break
             page += 1
             time.sleep(INTER_PAGE_DELAY)
 
-        _crawl_status[complex_no]["has_more"] = False
+        _update_crawl_status(complex_no, has_more=False)
 
         # Deactivate missing articles
         delete_missing_articles(db, complex_no, all_article_nos)
@@ -389,27 +400,23 @@ def _background_crawl(complex_no: str):
         db.commit()
 
         # 단지정보 보강
-        _crawl_status[complex_no]["phase"] = "enriching"
+        _update_crawl_status(complex_no, phase="enriching")
         cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
         if cpx:
             enrich_complex_detail(db, complex_no)
 
         # Phase 2: 상세 정보 자동 크롤링
-        _crawl_status[complex_no]["phase"] = "details"
-        _crawl_status[complex_no]["detail_phase"] = "running"
+        _update_crawl_status(complex_no, phase="details", detail_phase="running")
         try:
             _crawl_details_for_complex(db, complex_no)
         except Exception as e:
             logger.warning("Detail crawl phase failed: %s → %s", complex_no, e)
-        _crawl_status[complex_no]["detail_phase"] = "done"
-
-        _crawl_status[complex_no]["status"] = "done"
+        _update_crawl_status(complex_no, detail_phase="done", status="done")
         logger.info("Background crawl done: %s -> %d articles", complex_no, len(all_article_nos))
 
     except Exception as e:
         logger.exception("Background crawl error: %s", complex_no)
-        _crawl_status[complex_no]["status"] = "error"
-        _crawl_status[complex_no]["error"] = str(e)
+        _update_crawl_status(complex_no, status="error", error=str(e))
         try:
             db.rollback()
         except Exception:
@@ -449,8 +456,7 @@ def _crawl_details_for_complex(db, complex_no: str):
         return
 
     total = len(articles)
-    _crawl_status[complex_no]["detail_total"] = total
-    _crawl_status[complex_no]["detail_crawled_count"] = 0
+    _update_crawl_status(complex_no, detail_total=total, detail_crawled_count=0)
 
     for i, art in enumerate(articles):
         try:
@@ -472,7 +478,7 @@ def _crawl_details_for_complex(db, complex_no: str):
         except Exception as e:
             logger.warning("Article detail crawl failed: %s → %s", art.article_no, e)
 
-        _crawl_status[complex_no]["detail_crawled_count"] = i + 1
+        _update_crawl_status(complex_no, detail_crawled_count=i + 1)
 
         if (i + 1) % DETAIL_COMMIT_INTERVAL == 0:
             db.commit()

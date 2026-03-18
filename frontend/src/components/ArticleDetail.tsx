@@ -194,7 +194,7 @@ function ArticleBody({ article: a }: { article: Article }) {
       {/* 외부 링크 */}
       <div className="border-t pt-3 flex flex-col gap-2">
         <a
-          href={`https://new.land.naver.com/articles/${a.article_no}`}
+          href={`https://new.land.naver.com/complexes/${a.complex_no}?articleNo=${a.article_no}`}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline font-medium"
@@ -203,7 +203,7 @@ function ArticleBody({ article: a }: { article: Article }) {
         </a>
         {a.latitude && a.longitude && (
           <a
-            href={`https://map.naver.com/p?lat=${a.latitude}&lng=${a.longitude}`}
+            href={`https://map.naver.com/p?lat=${a.latitude}&lng=${a.longitude}&title=${encodeURIComponent(a.complex_name || "")}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"

@@ -12,7 +12,7 @@ import {
   ApiError,
 } from "@/lib/api";
 import { createClient } from "@/lib/supabase";
-import { PAGE_SIZE } from "@/lib/constants";
+import { PAGE_SIZE, ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
 import { useCrawlProgress } from "@/hooks/useCrawlProgress";
 import { useExport } from "@/hooks/useExport";
 import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions, SortBy } from "@/types";
@@ -305,6 +305,11 @@ export default function ComplexDetailPage() {
           ←
         </button>
         <h1 className="text-2xl font-bold">{complex.complex_name}</h1>
+        {complex.real_estate_type_name && (
+          <span className={`text-xs px-1.5 py-0.5 rounded border ${ESTATE_TYPE_COLORS[complex.real_estate_type_name] ?? ESTATE_TYPE_DEFAULT_COLOR}`}>
+            {complex.real_estate_type_name}
+          </span>
+        )}
         {complex.last_crawled_at && (
           <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
             마지막 크롤링: {formatTimeAgo(complex.last_crawled_at)}

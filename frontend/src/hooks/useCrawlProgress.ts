@@ -61,10 +61,14 @@ export function useCrawlProgress(): CrawlHookResult {
         if (cancelledRef.current || crawlTargetRef.current !== complexNo) return;
         setCrawlProgress(status);
 
-        if (status.status === "error" || (status.status === "done" && status.detail_phase !== "running")) {
+        const isDone = status.status === "done" && status.detail_phase !== "running";
+        const isIdle = status.status === "idle"; // BE가 done 후 status를 pop하면 idle 반환
+        const isError = status.status === "error";
+
+        if (isError || isDone || isIdle) {
           clearAllPolling();
           setCrawling(false);
-          if (status.status === "done") {
+          if (isDone || isIdle) {
             setCrawlMessage("");
             try {
               const filters = filtersRef?.current ?? {};

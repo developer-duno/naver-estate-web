@@ -328,19 +328,22 @@ export default function ComplexDetailPage() {
         crawlProgress.status === "running" ||
         crawlProgress.status === "already_running"
       ) && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-md px-4 py-3 flex items-center gap-3">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 flex-shrink-0" />
-          <span>
-            {crawlProgress.detail_phase === "running" ? (
-              <>매물 상세 페이지 수집 중... {crawlProgress.detail_crawled_count ?? 0}/{crawlProgress.detail_total ?? 0}건</>
-            ) : (
-              <>
-                매물 목록 수집 중...
-                {(crawlProgress.current_page ?? 0) > 0 && ` ${crawlProgress.current_page}페이지`}
-                {(crawlProgress.article_count ?? 0) > 0 && `, ${crawlProgress.article_count}건`}
-              </>
-            )}
-          </span>
+        <div className="bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-md px-4 py-3">
+          <div className="flex items-center gap-3">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 shrink-0" />
+            <span>
+              {crawlProgress.detail_phase === "running" ? (
+                <>매물 상세 페이지 수집 중... {crawlProgress.detail_crawled_count ?? 0}/{crawlProgress.detail_total ?? 0}건</>
+              ) : (
+                <>
+                  매물 목록 수집 중...
+                  {(crawlProgress.current_page ?? 0) > 0 && ` ${crawlProgress.current_page}페이지`}
+                  {(crawlProgress.article_count ?? 0) > 0 && `, ${crawlProgress.article_count}건`}
+                </>
+              )}
+            </span>
+          </div>
+          <p className="text-xs text-blue-500 mt-1.5 ml-7">네이버에서 실시간 데이터를 수집하고 있습니다. 완료까지 잠시 기다려 주세요.</p>
         </div>
       )}
 

@@ -2,7 +2,13 @@
 
 import { useState, useCallback, useRef, useEffect, memo } from "react";
 import type { ArticleFilters, FilterOptions, SortBy } from "@/types";
-import { M2_TO_PYEONG, FLOOR_PRESETS, DEBOUNCE_MS, SORT_OPTIONS, BUILDING_AGE_OPTIONS, MOVE_IN_OPTIONS } from "@/lib/constants";
+import {
+  M2_TO_PYEONG, FLOOR_PRESETS, DEBOUNCE_MS, SORT_OPTIONS,
+  BUILDING_AGE_OPTIONS, MOVE_IN_OPTIONS,
+  PRICE_PRESETS, AREA_PRESETS, MAINTENANCE_PRESETS, PPYEONG_PRESETS,
+  type RangePreset,
+} from "@/lib/constants";
+import FilterDropdown from "./FilterDropdown";
 
 interface Props {
   onChange: (filters: ArticleFilters) => void;
@@ -14,6 +20,7 @@ interface Props {
 type FilterChip = { label: string; reset: () => void };
 
 export default function FilterBar({ onChange, filterOptions, sortBy: externalSortBy, onSortChange }: Props) {
+  // ── 상태 (21개 — 기존과 동일) ──
   const [tradeType, setTradeType] = useState("전체");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
@@ -37,6 +44,10 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
   const [floorPreset, setFloorPreset] = useState("전체");
   const [sortBy, setSortBy] = useState("rank");
 
+  // 드롭다운 열림 상태
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const toggle = (name: string) => setOpenDropdown((prev) => (prev === name ? null : name));
+
   // Sync external sortBy (from table column click)
   const sortByRef = useRef(sortBy);
   sortByRef.current = sortBy;
@@ -47,6 +58,7 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
     }
   }, [externalSortBy]);
 
+  // ── emitChange (기존과 100% 동일) ──
   const emitChange = useCallback(
     (overrides: Partial<Record<string, string>> = {}) => {
       const get = (key: string, fallback: string) => overrides[key] ?? fallback;
@@ -105,11 +117,9 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
       const vo = get("verifiedOnly", String(verifiedOnly));
       if (vo === "true") filters.verified_only = true;
 
-      // 동 필터
       const bn = get("buildingName", buildingName);
       if (bn !== "전체") filters.building_name = bn;
 
-      // 층 필터
       const fp = get("floorPreset", floorPreset);
       const preset = FLOOR_PRESETS[fp];
       if (preset) {
@@ -131,11 +141,10 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
     ]
   );
 
-  // emitChange를 ref로 안정화 (디바운스 클로저 stale 방지)
+  // ── 디바운스 (기존과 동일) ──
   const emitChangeRef = useRef(emitChange);
   emitChangeRef.current = emitChange;
 
-  // 숫자 입력 필드 디바운스 (300ms)
   const debounceMapRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   useEffect(() => {
     return () => { Object.values(debounceMapRef.current).forEach(clearTimeout); };
@@ -144,7 +153,6 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
   const setImmediate = (setter: (v: string) => void, key: string) => (v: string) => {
     setter(v);
     if (key === "sortBy" && onSortChange) {
-      // sortBy는 onSortChange를 통해서만 API 호출 (이중 호출 방지)
       onSortChange(v);
       return;
     }
@@ -157,6 +165,16 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
     debounceMapRef.current[key] = setTimeout(() => emitChangeRef.current({ [key]: v }), DEBOUNCE_MS);
   };
 
+  // ── 프리셋 적용 ──
+  const applyPreset = (preset: RangePreset, minSetter: (v: string) => void, maxSetter: (v: string) => void, minKey: string, maxKey: string) => {
+    const minVal = preset.min !== undefined ? String(preset.min) : "";
+    const maxVal = preset.max !== undefined ? String(preset.max) : "";
+    minSetter(minVal);
+    maxSetter(maxVal);
+    emitChange({ [minKey]: minVal, [maxKey]: maxVal });
+  };
+
+  // ── 초기화 (기존과 동일) ──
   const resetAll = () => {
     setTradeType("전체");
     setMinPrice(""); setMaxPrice("");
@@ -172,126 +190,345 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
     setSortBy("rank");
     if (onSortChange) onSortChange("rank");
     onChange({});
+    setOpenDropdown(null);
   };
 
-  const [expanded, setExpanded] = useState(false);
-  const selectCls = "border border-gray-300 rounded px-2 py-1.5 text-sm bg-white";
-  const inputCls = "border border-gray-300 rounded px-2 py-1.5 text-sm w-28";
+  // ── 버튼 요약 텍스트 (데스크톱 _update_button_labels 패턴) ──
+  const priceSummary = minPrice || maxPrice ? `${minPrice || "0"}~${maxPrice || "∞"}만` : undefined;
+  const areaSummary = minArea || maxArea ? `${minArea || "0"}~${maxArea || "∞"}${areaUnit}` : undefined;
+  const floorSummary = floorPreset !== "전체" ? floorPreset : undefined;
+  const roomSummary = minRooms !== "0" || minBaths !== "0"
+    ? [minRooms !== "0" ? `${minRooms}방+` : "", minBaths !== "0" ? `${minBaths}욕실+` : ""].filter(Boolean).join(" ")
+    : undefined;
+
+  const detailParts: string[] = [];
+  if (buildingName !== "전체") detailParts.push(buildingName);
+  if (direction !== "전체") detailParts.push(direction);
+  if (buildingAge !== "0") detailParts.push(buildingAge + "년");
+  if (verifiedOnly) detailParts.push("인증");
+  if (sortBy !== "rank") {
+    const sortLabel = SORT_OPTIONS.find((s) => s.v === sortBy)?.l;
+    if (sortLabel) detailParts.push(sortLabel);
+  }
+  const detailSummary = detailParts.length > 0 ? detailParts.join(", ") : undefined;
+
+  const selectCls = "border border-gray-300 rounded px-2 py-1.5 text-xs bg-white w-full";
+  const inputCls = "border border-gray-300 rounded px-2 py-1.5 text-xs w-full";
+  const sectionLabel = "text-xs font-bold text-gray-700 mb-1";
+  const separator = "border-t border-gray-200 my-2";
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border p-4 space-y-3">
-      {/* 모바일: 항상 보이는 핵심 필터 + 토글 */}
-      <div className="flex items-end gap-2 flex-wrap">
-        <FilterSelect label="거래유형" value={tradeType} onChange={setImmediate(setTradeType, "tradeType")}
-          options={["전체", "매매", "전세", "월세", "단기임대"]} className="w-24" />
+    <div className="bg-white rounded-lg shadow-sm border p-3 space-y-2">
+      {/* ── 툴바 버튼 행 ── */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {/* 거래유형 */}
+        <FilterDropdown
+          label="거래유형"
+          isActive={tradeType !== "전체"}
+          summary={tradeType !== "전체" ? tradeType : undefined}
+          isOpen={openDropdown === "trade"}
+          onToggle={() => toggle("trade")}
+        >
+          <p className={sectionLabel}>거래유형 선택</p>
+          <div className={separator} />
+          {["매매", "전세", "월세", "단기임대"].map((t) => (
+            <label key={t} className="flex items-center gap-2 py-1 text-xs cursor-pointer">
+              <input
+                type="radio"
+                name="tradeType"
+                checked={tradeType === t}
+                onChange={() => setImmediate(setTradeType, "tradeType")(t)}
+                className="accent-blue-600"
+              />
+              {t}
+            </label>
+          ))}
+          <div className={separator} />
+          <button
+            onClick={() => setImmediate(setTradeType, "tradeType")("전체")}
+            className="text-xs text-gray-500 hover:text-gray-700 w-full text-left"
+          >
+            전체 (해제)
+          </button>
+        </FilterDropdown>
 
-        {filterOptions && filterOptions.building_names.length > 0 && (
-          <FilterSelect label="동" value={buildingName} onChange={setImmediate(setBuildingName, "buildingName")}
-            options={["전체", ...filterOptions.building_names]} className="w-24" />
-        )}
-
-        <FilterSelect label="층" value={floorPreset} onChange={setImmediate(setFloorPreset, "floorPreset")}
-          options={["전체", "저층", "중층", "고층"]} className="w-20" />
-
-        <FilterInput label="최소 가격(만원)" value={minPrice} onChange={setDebounced(setMinPrice, "minPrice")} className={inputCls} />
-        <FilterInput label="최대 가격(만원)" value={maxPrice} onChange={setDebounced(setMaxPrice, "maxPrice")} className={inputCls} />
-
-        {(tradeType === "월세" || tradeType === "단기임대") && (
-          <>
-            <FilterInput label="최소 월세(만원)" value={minRent} onChange={setDebounced(setMinRent, "minRent")} className={inputCls} />
-            <FilterInput label="최대 월세(만원)" value={maxRent} onChange={setDebounced(setMaxRent, "maxRent")} className={inputCls} />
-          </>
-        )}
-
-        <fieldset className="flex flex-col">
-          <legend className="text-xs text-gray-500 mb-1">면적단위</legend>
-          <div className="flex" role="group">
-            {(["m²", "평"] as const).map((u) => (
+        {/* 가격 */}
+        <FilterDropdown
+          label="가격"
+          isActive={!!(minPrice || maxPrice || minRent || maxRent || minPpyeong || maxPpyeong)}
+          summary={priceSummary}
+          isOpen={openDropdown === "price"}
+          onToggle={() => toggle("price")}
+        >
+          <p className={sectionLabel}>빠른 선택 (매매가)</p>
+          <div className="flex flex-wrap gap-1 mb-2">
+            {PRICE_PRESETS.map((p) => (
               <button
-                key={u}
-                onClick={() => { setAreaUnit(u); emitChange({ areaUnit: u }); }}
-                aria-pressed={areaUnit === u}
-                className={`px-2 py-1.5 text-sm border ${
-                  areaUnit === u ? "bg-blue-600 text-white border-blue-600" : "bg-white border-gray-300"
-                } ${u === "m²" ? "rounded-l" : "rounded-r"}`}
+                key={p.label}
+                onClick={() => applyPreset(p, setMinPrice, setMaxPrice, "minPrice", "maxPrice")}
+                className={`px-2 py-1 text-xs border rounded ${
+                  (p.min !== undefined ? String(p.min) : "") === minPrice &&
+                  (p.max !== undefined ? String(p.max) : "") === maxPrice
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
+                }`}
               >
-                {u}
+                {p.label}
               </button>
             ))}
           </div>
-        </fieldset>
+          <div className={separator} />
+          <p className={sectionLabel}>가격 직접입력 (만원)</p>
+          <div className="flex items-center gap-1 mb-2">
+            <input type="number" min="0" value={minPrice} onChange={(e) => setDebounced(setMinPrice, "minPrice")(e.target.value)} className={inputCls} placeholder="최소" />
+            <span className="text-xs text-gray-400">~</span>
+            <input type="number" min="0" value={maxPrice} onChange={(e) => setDebounced(setMaxPrice, "maxPrice")(e.target.value)} className={inputCls} placeholder="최대" />
+          </div>
 
-        <FilterInput label="최소 면적" value={minArea} onChange={setDebounced(setMinArea, "minArea")} className="border border-gray-300 rounded px-2 py-1.5 text-sm w-24" />
-        <FilterInput label="최대 면적" value={maxArea} onChange={setDebounced(setMaxArea, "maxArea")} className="border border-gray-300 rounded px-2 py-1.5 text-sm w-24" />
+          {(tradeType === "월세" || tradeType === "단기임대") && (
+            <>
+              <div className={separator} />
+              <p className={sectionLabel}>월세 (만원)</p>
+              <div className="flex items-center gap-1 mb-2">
+                <input type="number" min="0" value={minRent} onChange={(e) => setDebounced(setMinRent, "minRent")(e.target.value)} className={inputCls} placeholder="최소" />
+                <span className="text-xs text-gray-400">~</span>
+                <input type="number" min="0" value={maxRent} onChange={(e) => setDebounced(setMaxRent, "maxRent")(e.target.value)} className={inputCls} placeholder="최대" />
+              </div>
+            </>
+          )}
 
-        <FilterSelect label="방" value={minRooms} onChange={setImmediate(setMinRooms, "minRooms")}
-          options={[{ v: "0", l: "전체" }, { v: "1", l: "1+" }, { v: "2", l: "2+" }, { v: "3", l: "3+" }, { v: "4", l: "4+" }]}
-          className="w-20" />
+          <div className={separator} />
+          <p className={sectionLabel}>평당가 (만원/평)</p>
+          <div className="flex flex-wrap gap-1 mb-2">
+            {PPYEONG_PRESETS.map((p) => (
+              <button
+                key={p.label}
+                onClick={() => applyPreset(p, setMinPpyeong, setMaxPpyeong, "minPpyeong", "maxPpyeong")}
+                className={`px-2 py-1 text-xs border rounded ${
+                  (p.min !== undefined ? String(p.min) : "") === minPpyeong &&
+                  (p.max !== undefined ? String(p.max) : "") === maxPpyeong
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1">
+            <input type="number" min="0" value={minPpyeong} onChange={(e) => setDebounced(setMinPpyeong, "minPpyeong")(e.target.value)} className={inputCls} placeholder="최소" />
+            <span className="text-xs text-gray-400">~</span>
+            <input type="number" min="0" value={maxPpyeong} onChange={(e) => setDebounced(setMaxPpyeong, "maxPpyeong")(e.target.value)} className={inputCls} placeholder="최대" />
+          </div>
+        </FilterDropdown>
 
-        <FilterSelect label="욕실" value={minBaths} onChange={setImmediate(setMinBaths, "minBaths")}
-          options={[{ v: "0", l: "전체" }, { v: "1", l: "1+" }, { v: "2", l: "2+" }]}
-          className="w-20" />
-
-        <FilterSelect label="정렬" value={sortBy} onChange={setImmediate(setSortBy, "sortBy")}
-          options={SORT_OPTIONS as unknown as { v: string; l: string }[]}
-          className="w-28" />
-
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="md:hidden text-sm text-blue-600 hover:text-blue-800 px-2 py-1.5"
+        {/* 면적 */}
+        <FilterDropdown
+          label="면적"
+          isActive={!!(minArea || maxArea)}
+          summary={areaSummary}
+          isOpen={openDropdown === "area"}
+          onToggle={() => toggle("area")}
         >
-          {expanded ? "필터 접기 ▲" : "필터 더보기 ▼"}
-        </button>
-      </div>
+          <div className="flex items-center justify-between mb-2">
+            <p className={sectionLabel}>전용면적 프리셋</p>
+            <button
+              onClick={() => { setAreaUnit(areaUnit === "m²" ? "평" : "m²"); emitChange({ areaUnit: areaUnit === "m²" ? "평" : "m²" }); }}
+              className="px-2 py-0.5 text-xs border rounded bg-gray-50 border-gray-300 hover:bg-blue-50"
+            >
+              {areaUnit === "m²" ? "평으로" : "m²으로"}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1 mb-2">
+            {AREA_PRESETS.map((p) => (
+              <button
+                key={p.label}
+                onClick={() => applyPreset(p, setMinArea, setMaxArea, "minArea", "maxArea")}
+                className={`px-2 py-1 text-xs border rounded ${
+                  (p.min !== undefined ? String(p.min) : "") === minArea &&
+                  (p.max !== undefined ? String(p.max) : "") === maxArea
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className={separator} />
+          <p className={sectionLabel}>직접 입력 ({areaUnit})</p>
+          <div className="flex items-center gap-1">
+            <input type="number" min="0" value={minArea} onChange={(e) => setDebounced(setMinArea, "minArea")(e.target.value)} className={inputCls} placeholder="최소" />
+            <span className="text-xs text-gray-400">~</span>
+            <input type="number" min="0" value={maxArea} onChange={(e) => setDebounced(setMaxArea, "maxArea")(e.target.value)} className={inputCls} placeholder="최대" />
+          </div>
+        </FilterDropdown>
 
-      {/* 확장 필터 (데스크톱: 항상 표시, 모바일: 토글) */}
-      <div className={`${expanded ? "block" : "hidden"} md:block`}>
-      <div className="flex items-end gap-2 flex-wrap">
-        <FilterSelect label="방향" value={direction} onChange={setImmediate(setDirection, "direction")}
-          options={filterOptions?.directions?.length ? ["전체", ...filterOptions.directions] : ["전체", "남향", "남동향", "남서향", "동향", "서향", "북향"]}
-          className="w-24" />
-        <FilterInput label="최소 평당가(만원)" value={minPpyeong} onChange={setDebounced(setMinPpyeong, "minPpyeong")} className={inputCls + " w-32"} />
-        <FilterInput label="최대 평당가(만원)" value={maxPpyeong} onChange={setDebounced(setMaxPpyeong, "maxPpyeong")} className={inputCls + " w-32"} />
+        {/* 층수 */}
+        <FilterDropdown
+          label="층수"
+          isActive={floorPreset !== "전체"}
+          summary={floorSummary}
+          isOpen={openDropdown === "floor"}
+          onToggle={() => toggle("floor")}
+        >
+          <p className={sectionLabel}>층수 필터</p>
+          <div className={separator} />
+          {["전체", "저층", "중층", "고층"].map((f) => (
+            <label key={f} className="flex items-center gap-2 py-1 text-xs cursor-pointer">
+              <input
+                type="radio"
+                name="floorPreset"
+                checked={floorPreset === f}
+                onChange={() => setImmediate(setFloorPreset, "floorPreset")(f)}
+                className="accent-blue-600"
+              />
+              {f === "저층" ? "저층 (1~5층)" : f === "중층" ? "중층 (6~10층)" : f === "고층" ? "고층 (11층↑)" : f}
+            </label>
+          ))}
+        </FilterDropdown>
 
-        <FilterInput label="최소 관리비(만원)" value={minMaint} onChange={setDebounced(setMinMaint, "minMaint")} className={inputCls + " w-32"} />
-        <FilterInput label="최대 관리비(만원)" value={maxMaint} onChange={setDebounced(setMaxMaint, "maxMaint")} className={inputCls + " w-32"} />
+        {/* 입주 */}
+        <FilterDropdown
+          label="입주"
+          isActive={moveInType !== "전체"}
+          summary={moveInType !== "전체" ? moveInType : undefined}
+          isOpen={openDropdown === "movein"}
+          onToggle={() => toggle("movein")}
+        >
+          <p className={sectionLabel}>입주가능일</p>
+          <div className={separator} />
+          {(MOVE_IN_OPTIONS as readonly string[]).map((m) => (
+            <label key={m} className="flex items-center gap-2 py-1 text-xs cursor-pointer">
+              <input
+                type="radio"
+                name="moveInType"
+                checked={moveInType === m}
+                onChange={() => setImmediate(setMoveInType, "moveInType")(m)}
+                className="accent-blue-600"
+              />
+              {m}
+            </label>
+          ))}
+        </FilterDropdown>
 
-        <FilterSelect label="준공년도" value={buildingAge} onChange={setImmediate(setBuildingAge, "buildingAge")}
-          options={BUILDING_AGE_OPTIONS as unknown as { v: string; l: string }[]}
-          className="w-28" />
+        {/* 방/욕실 */}
+        <FilterDropdown
+          label="방/욕실"
+          isActive={minRooms !== "0" || minBaths !== "0"}
+          summary={roomSummary}
+          isOpen={openDropdown === "room"}
+          onToggle={() => toggle("room")}
+        >
+          <p className={sectionLabel}>방 수</p>
+          <select value={minRooms} onChange={(e) => setImmediate(setMinRooms, "minRooms")(e.target.value)} className={selectCls}>
+            <option value="0">전체</option>
+            <option value="1">1+</option>
+            <option value="2">2+</option>
+            <option value="3">3+</option>
+            <option value="4">4+</option>
+          </select>
+          <div className="mt-3">
+            <p className={sectionLabel}>욕실 수</p>
+            <select value={minBaths} onChange={(e) => setImmediate(setMinBaths, "minBaths")(e.target.value)} className={selectCls}>
+              <option value="0">전체</option>
+              <option value="1">1+</option>
+              <option value="2">2+</option>
+            </select>
+          </div>
+        </FilterDropdown>
 
-        <FilterSelect label="입주가능일" value={moveInType} onChange={setImmediate(setMoveInType, "moveInType")}
-          options={MOVE_IN_OPTIONS as unknown as string[]}
-          className="w-28" />
+        {/* 상세 */}
+        <FilterDropdown
+          label="상세"
+          isActive={!!(detailSummary)}
+          summary={detailSummary && detailSummary.length > 12 ? detailSummary.slice(0, 12) + ".." : detailSummary}
+          isOpen={openDropdown === "detail"}
+          onToggle={() => toggle("detail")}
+        >
+          <div className="space-y-3 min-w-60">
+            {filterOptions && filterOptions.building_names.length > 0 && (
+              <div>
+                <p className={sectionLabel}>동</p>
+                <select value={buildingName} onChange={(e) => setImmediate(setBuildingName, "buildingName")(e.target.value)} className={selectCls}>
+                  <option value="전체">전체</option>
+                  {filterOptions.building_names.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
+            )}
+            <div>
+              <p className={sectionLabel}>방향</p>
+              <select value={direction} onChange={(e) => setImmediate(setDirection, "direction")(e.target.value)} className={selectCls}>
+                {(filterOptions?.directions?.length ? ["전체", ...filterOptions.directions] : ["전체", "남향", "남동향", "남서향", "동향", "서향", "북향"]).map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <p className={sectionLabel}>관리비 (만원)</p>
+              <div className="flex flex-wrap gap-1 mb-1">
+                {MAINTENANCE_PRESETS.map((p) => (
+                  <button
+                    key={p.label}
+                    onClick={() => applyPreset(p, setMinMaint, setMaxMaint, "minMaint", "maxMaint")}
+                    className={`px-2 py-0.5 text-xs border rounded ${
+                      (p.min !== undefined ? String(p.min) : "") === minMaint &&
+                      (p.max !== undefined ? String(p.max) : "") === maxMaint
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1">
+                <input type="number" min="0" value={minMaint} onChange={(e) => setDebounced(setMinMaint, "minMaint")(e.target.value)} className={inputCls} placeholder="최소" />
+                <span className="text-xs text-gray-400">~</span>
+                <input type="number" min="0" value={maxMaint} onChange={(e) => setDebounced(setMaxMaint, "maxMaint")(e.target.value)} className={inputCls} placeholder="최대" />
+              </div>
+            </div>
+            <div>
+              <p className={sectionLabel}>준공년도</p>
+              <select value={buildingAge} onChange={(e) => setImmediate(setBuildingAge, "buildingAge")(e.target.value)} className={selectCls}>
+                {(BUILDING_AGE_OPTIONS as readonly { v: string; l: string }[]).map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+              </select>
+            </div>
+            <div>
+              <p className={sectionLabel}>매물유형</p>
+              <select value={estateType} onChange={(e) => setImmediate(setEstateType, "estateType")(e.target.value)} className={selectCls}>
+                <option value="all">전체</option>
+                <option value="general">일반</option>
+                <option value="presale">분양권</option>
+              </select>
+            </div>
+            <label className="flex items-center gap-2 text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                checked={verifiedOnly}
+                onChange={(e) => { setVerifiedOnly(e.target.checked); emitChange({ verifiedOnly: String(e.target.checked) }); }}
+                className="rounded border-gray-300 accent-blue-600"
+              />
+              인증매물만
+            </label>
+            <div className={separator} />
+            <div>
+              <p className={sectionLabel}>정렬</p>
+              <select value={sortBy} onChange={(e) => setImmediate(setSortBy, "sortBy")(e.target.value)} className={selectCls}>
+                {(SORT_OPTIONS as readonly { v: string; l: string }[]).map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+              </select>
+            </div>
+          </div>
+        </FilterDropdown>
 
-        <FilterSelect label="매물유형" value={estateType} onChange={setImmediate(setEstateType, "estateType")}
-          options={[{ v: "all", l: "전체" }, { v: "general", l: "일반" }, { v: "presale", l: "분양권" }]}
-          className="w-24" />
-
-        <div className="flex flex-col justify-end">
-          <label className="flex items-center gap-1.5 text-sm cursor-pointer py-1.5">
-            <input
-              type="checkbox"
-              checked={verifiedOnly}
-              onChange={(e) => {
-                setVerifiedOnly(e.target.checked);
-                emitChange({ verifiedOnly: String(e.target.checked) });
-              }}
-              className="rounded border-gray-300"
-            />
-            <span className="text-gray-600">인증매물만</span>
-          </label>
-        </div>
-
-        <button onClick={resetAll} className="text-sm text-gray-500 hover:text-gray-700 px-2 py-1.5">
+        {/* 초기화 버튼 */}
+        <button onClick={resetAll} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded hover:bg-gray-50">
           초기화
         </button>
       </div>
-      </div>
 
-      {/* 활성 필터 칩 */}
+      {/* ── 활성 필터 칩 (기존과 동일) ── */}
       {(() => {
-        
         const chipList: FilterChip[] = [];
         if (tradeType !== "전체") chipList.push({ label: tradeType, reset: () => setImmediate(setTradeType, "tradeType")("전체") });
         if (buildingName !== "전체") chipList.push({ label: buildingName, reset: () => setImmediate(setBuildingName, "buildingName")("전체") });
@@ -307,7 +544,6 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
         if (estateType !== "all") chipList.push({ label: estateType === "presale" ? "분양권" : "일반", reset: () => setImmediate(setEstateType, "estateType")("all") });
         if (verifiedOnly) chipList.push({ label: "인증매물", reset: () => { setVerifiedOnly(false); emitChange({ verifiedOnly: "false" }); } });
 
-        // 숫자 범위 필터 칩
         if (minPrice) chipList.push({ label: `${minPrice}만원~`, reset: () => { setMinPrice(""); emitChange({ minPrice: "" }); } });
         if (maxPrice) chipList.push({ label: `~${maxPrice}만원`, reset: () => { setMaxPrice(""); emitChange({ maxPrice: "" }); } });
         if (minRent) chipList.push({ label: `월세 ${minRent}만~`, reset: () => { setMinRent(""); emitChange({ minRent: "" }); } });
@@ -337,65 +573,3 @@ export default function FilterBar({ onChange, filterOptions, sortBy: externalSor
     </div>
   );
 }
-
-/* ── 하위 컴포넌트 ── */
-
-type OptionItem = string | { v: string; l: string };
-
-function slugId(label: string) {
-  return "filter-" + label.replace(/[^a-zA-Z0-9가-힣]/g, "-").replace(/-+/g, "-");
-}
-
-const FilterSelect = memo(function FilterSelect({
-  label, value, onChange, options, className = "",
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: OptionItem[];
-  className?: string;
-}) {
-  const id = slugId(label);
-  return (
-    <div className="flex flex-col">
-      <label htmlFor={id} className="text-xs text-gray-500 mb-1">{label}</label>
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={`border border-gray-300 rounded px-2 py-1.5 text-sm bg-white ${className}`}
-      >
-        {options.map((opt) => {
-          const v = typeof opt === "string" ? opt : opt.v;
-          const l = typeof opt === "string" ? opt : opt.l;
-          return <option key={v} value={v}>{l}</option>;
-        })}
-      </select>
-    </div>
-  );
-});
-
-const FilterInput = memo(function FilterInput({
-  label, value, onChange, className = "",
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  className?: string;
-}) {
-  const id = slugId(label);
-  return (
-    <div className="flex flex-col">
-      <label htmlFor={id} className="text-xs text-gray-500 mb-1">{label}</label>
-      <input
-        id={id}
-        type="number"
-        min="0"
-        value={value}
-        onChange={(e) => { const v = e.target.value; if (v === "" || Number(v) >= 0) onChange(v); }}
-        className={className || "border border-gray-300 rounded px-2 py-1.5 text-sm w-28"}
-        placeholder=""
-      />
-    </div>
-  );
-});

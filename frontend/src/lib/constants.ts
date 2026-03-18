@@ -63,3 +63,50 @@ export const BUILDING_AGE_OPTIONS = [
 
 /** 입주가능일 옵션 */
 export const MOVE_IN_OPTIONS = ["전체", "즉시입주", "1개월", "3개월", "6개월", "협의"] as const;
+
+/** 프리셋 타입 */
+export interface RangePreset {
+  label: string;
+  min?: number;
+  max?: number;
+}
+
+/** 가격 프리셋 (만원 단위) — 데스크톱 앱 동기화 */
+export const PRICE_PRESETS: RangePreset[] = [
+  { label: "전체" },
+  { label: "~3억", max: 30000 },
+  { label: "3~6억", min: 30000, max: 60000 },
+  { label: "6~9억", min: 60000, max: 90000 },
+  { label: "9~12억", min: 90000, max: 120000 },
+  { label: "12~15억", min: 120000, max: 150000 },
+  { label: "15억~", min: 150000 },
+];
+
+/** 면적 프리셋 (m² 단위) — 데스크톱 앱 동기화 */
+export const AREA_PRESETS: RangePreset[] = [
+  { label: "전체" },
+  { label: "~59m²", max: 60 },
+  { label: "59m²", min: 59, max: 60 },
+  { label: "84m²", min: 84, max: 85 },
+  { label: "114m²", min: 114, max: 115 },
+  { label: "135m²~", min: 135 },
+];
+
+/** 관리비 프리셋 (만원 단위) — 데스크톱 앱 동기화 */
+export const MAINTENANCE_PRESETS: RangePreset[] = [
+  { label: "전체" },
+  { label: "~5만", max: 5 },
+  { label: "5~10만", min: 5, max: 10 },
+  { label: "10~20만", min: 10, max: 20 },
+  { label: "20만~", min: 20 },
+];
+
+/** 평당가 프리셋 (만원/평 단위) — 데스크톱 앱 동기화 */
+export const PPYEONG_PRESETS: RangePreset[] = [
+  { label: "전체" },
+  { label: "~2천만", max: 2000 },
+  { label: "2~3천만", min: 2000, max: 3000 },
+  { label: "3~4천만", min: 3000, max: 4000 },
+  { label: "4~5천만", min: 4000, max: 5000 },
+  { label: "5천만~", min: 5000 },
+];

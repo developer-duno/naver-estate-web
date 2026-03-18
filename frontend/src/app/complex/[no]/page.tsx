@@ -17,7 +17,7 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useCrawlProgress } from "@/hooks/useCrawlProgress";
 import { useExport } from "@/hooks/useExport";
-import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions, SortBy } from "@/types";
+import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions, SortBy, CrawlProgress } from "@/types";
 import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
 import ArticleTable from "@/components/ArticleTable";
@@ -31,6 +31,49 @@ function formatTimeAgo(dateStr: string): string {
   if (hours < 24) return `${hours}시간 전`;
   const days = Math.floor(hours / 24);
   return `${days}일 전`;
+}
+
+type StepState = "done" | "active" | "pending";
+interface CrawlStep { label: string; state: StepState }
+
+function calcCrawlProgress(p: CrawlProgress): { percent: number; steps: CrawlStep[] } {
+  const phase = p.phase ?? (p.detail_phase === "running" ? "details" : "articles");
+  const articleLabel = `매물 목록 수집${(p.article_count ?? 0) > 0 ? ` (${p.article_count}건)` : ""}`;
+  const detailTotal = p.detail_total ?? 0;
+  const detailDone = p.detail_crawled_count ?? 0;
+  const detailLabel = detailTotal > 0 ? `매물 상세 수집 (${detailDone}/${detailTotal}건)` : "매물 상세 수집";
+
+  if (phase === "articles") {
+    const pct = p.has_more !== false ? Math.min((p.current_page ?? 0) * 10, 30) : 33;
+    return {
+      percent: pct,
+      steps: [
+        { label: articleLabel, state: "active" },
+        { label: "단지정보 보강", state: "pending" },
+        { label: detailLabel, state: "pending" },
+      ],
+    };
+  }
+  if (phase === "enriching") {
+    return {
+      percent: 40,
+      steps: [
+        { label: articleLabel, state: "done" },
+        { label: "단지정보 보강 중...", state: "active" },
+        { label: detailLabel, state: "pending" },
+      ],
+    };
+  }
+  // details
+  const detailPct = detailTotal > 0 ? 50 + Math.round((detailDone / detailTotal) * 50) : 50;
+  return {
+    percent: detailPct,
+    steps: [
+      { label: articleLabel, state: "done" },
+      { label: "단지정보 보강", state: "done" },
+      { label: detailLabel, state: "active" },
+    ],
+  };
 }
 
 export default function ComplexDetailPage() {
@@ -320,25 +363,35 @@ export default function ComplexDetailPage() {
         crawlProgress.status === "started" ||
         crawlProgress.status === "running" ||
         crawlProgress.status === "already_running"
-      ) && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-md px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 shrink-0" />
-            <span>
-              {crawlProgress.detail_phase === "running" ? (
-                <>매물 상세 페이지 수집 중... {crawlProgress.detail_crawled_count ?? 0}/{crawlProgress.detail_total ?? 0}건</>
-              ) : (
-                <>
-                  매물 목록 수집 중...
-                  {(crawlProgress.current_page ?? 0) > 0 && ` ${crawlProgress.current_page}페이지`}
-                  {(crawlProgress.article_count ?? 0) > 0 && `, ${crawlProgress.article_count}건`}
-                </>
-              )}
-            </span>
+      ) && (() => {
+        const { percent, steps } = calcCrawlProgress(crawlProgress);
+        return (
+          <div className="bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-md px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-medium">데이터 수집 중</span>
+              <span className="text-xs text-blue-500">{percent}%</span>
+            </div>
+            <div className="w-full bg-blue-100 rounded-full h-2 mb-3">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+            <div className="space-y-1">
+              {steps.map((s, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className="w-4 text-center shrink-0">
+                    {s.state === "done" ? "✅" : s.state === "active" ? "🔄" : "⏳"}
+                  </span>
+                  <span className={s.state === "active" ? "font-medium" : s.state === "pending" ? "text-blue-400" : "text-blue-500"}>
+                    {s.label}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-          <p className="text-xs text-blue-500 mt-1.5 ml-7">네이버에서 실시간 데이터를 수집하고 있습니다. 완료까지 잠시 기다려 주세요.</p>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 크롤링 완료 배너 */}
       {!crawling && crawlProgress?.status === "done" && !crawlMessage && !dismissedDone && (

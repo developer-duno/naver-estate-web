@@ -204,6 +204,7 @@ export interface PriceStats {
 export interface CrawlProgress {
   complex_no: string;
   status: "idle" | "started" | "running" | "done" | "error" | "cached" | "already_running";
+  phase?: "articles" | "enriching" | "details";
   current_page?: number;
   article_count?: number;
   has_more?: boolean;

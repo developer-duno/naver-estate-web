@@ -336,6 +336,7 @@ def _background_crawl(complex_no: str):
     try:
         _crawl_status[complex_no] = {
             "status": "running",
+            "phase": "articles",
             "current_page": 0,
             "article_count": 0,
             "has_more": True,
@@ -387,12 +388,14 @@ def _background_crawl(complex_no: str):
         )
         db.commit()
 
-        # Enrich complex detail if not yet done
+        # 단지정보 보강
+        _crawl_status[complex_no]["phase"] = "enriching"
         cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
-        if cpx:  # Always re-enrich to update new fields
+        if cpx:
             enrich_complex_detail(db, complex_no)
 
         # Phase 2: 상세 정보 자동 크롤링
+        _crawl_status[complex_no]["phase"] = "details"
         _crawl_status[complex_no]["detail_phase"] = "running"
         try:
             _crawl_details_for_complex(db, complex_no)

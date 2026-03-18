@@ -149,7 +149,7 @@ export default function RegionSelector({ onSearch }: Props) {
 
       {/* 팝업 패널 */}
       {open && !loading && (
-        <div className="absolute left-0 top-full mt-1 z-50 bg-white border rounded-lg shadow-lg w-150">
+        <div className="absolute left-0 top-full mt-1 z-50 bg-white border rounded-lg shadow-lg w-[calc(100vw-2rem)] sm:w-150 max-w-150">
           {/* 브레드크럼 */}
           <nav className="flex items-center gap-1 px-4 py-2 bg-gray-50 border-b text-xs text-gray-500" aria-label="지역 선택 경로">
             <span className={activeSido ? "text-gray-400" : "font-semibold text-gray-700"}>시/도</span>

@@ -32,6 +32,7 @@ export function useCrawlProgress(): CrawlHookResult {
   const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null);
   const cancelledRef = useRef(false);
   const crawlTargetRef = useRef<string>("");
+  const prevPhaseRef = useRef<string | undefined>(undefined);
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const articlesPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -55,6 +56,7 @@ export function useCrawlProgress(): CrawlHookResult {
     clearAllPolling();
     cancelledRef.current = false;
     crawlTargetRef.current = complexNo;
+    prevPhaseRef.current = undefined;
 
     statusPollRef.current = setInterval(async () => {
       if (cancelledRef.current) return;
@@ -62,6 +64,14 @@ export function useCrawlProgress(): CrawlHookResult {
         const status = await getCrawlStatus(complexNo);
         if (cancelledRef.current || crawlTargetRef.current !== complexNo) return;
         setCrawlProgress(status);
+
+        // Phase 1(articles) → enriching/details 전환 = 매물 목록 수집 완료
+        // → DB에 numeric_price 존재 → priceStats 즉시 갱신
+        const curPhase = status.phase;
+        if (prevPhaseRef.current === "articles" && curPhase && curPhase !== "articles") {
+          callbacks.refreshPriceStats();
+        }
+        prevPhaseRef.current = curPhase;
 
         const isDone = status.status === "done" && status.detail_phase !== "running";
         const isIdle = status.status === "idle"; // BE가 done 후 status를 pop → idle 반환 = 완료

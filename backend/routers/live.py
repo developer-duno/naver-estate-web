@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from deps import get_db
+from deps import get_db, get_approved_user
 from db.models import Complex as ComplexModel, Article as ArticleModel
 from db.database import SessionLocal
 from routers.serializers import complex_to_dict, article_to_dict
@@ -199,7 +199,7 @@ def _fetch_articles_all_trade_types(complex_no: str, page: int = 1):
 
 
 @router.post("/{complex_no}/articles/start-crawl")
-def start_live_crawl(complex_no: str):
+def start_live_crawl(complex_no: str, user: dict = Depends(get_approved_user)):
     """Start background crawl, return immediately."""
     # Cache hit -> skip crawl
     cache_key = f"articles:{complex_no}"

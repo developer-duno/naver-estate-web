@@ -108,10 +108,12 @@ export default function HelpPage() {
       </Section>
 
       {/* 7. 계정 */}
-      <Section num={7} title="회원가입 / 로그인">
+      <Section num={7} title="회원가입 / 로그인 / 승인">
         <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 ml-2">
-          <li><strong>비회원</strong>: 검색, 필터, 정렬, 매물 상세 보기 가능</li>
-          <li><strong>로그인 시</strong>: 데이터 갱신, 엑셀 내보내기 기능 사용 가능</li>
+          <li><strong>비회원</strong>: 검색까지만 가능. 단지 매물 조회는 로그인 필요</li>
+          <li><strong>회원가입 후</strong>: 관리자 승인이 필요합니다 (승인 전에는 &quot;대기&quot; 상태)</li>
+          <li><strong>승인 후</strong>: 단지 클릭 시 자동으로 최신 매물 수집, 엑셀 내보내기 가능</li>
+          <li><strong>승인 기간</strong>: 관리자가 설정한 기간 동안 이용 가능 (만료 시 재승인 필요)</li>
           <li><strong>비밀번호 분실</strong>: 로그인 페이지에서 &quot;비밀번호 찾기&quot; → 이메일로 재설정 링크 발송</li>
         </ul>
       </Section>

@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 class UserUpdateRequest(BaseModel):
     role: str | None = None
     status: str | None = None
+    approved_until: str | None = None  # ISO datetime 또는 null (무기한)
     daily_crawl_quota: int | None = None
     daily_export_quota: int | None = None
 
@@ -72,6 +73,7 @@ def list_users(
                 "status": u.status,
                 "daily_crawl_quota": u.daily_crawl_quota,
                 "daily_export_quota": u.daily_export_quota,
+                "approved_until": u.approved_until.isoformat() if u.approved_until else None,
                 "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
                 "login_count": u.login_count,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
@@ -104,6 +106,13 @@ def update_user(
     if body.status is not None and body.status in ("pending", "approved", "rejected", "suspended"):
         changes["status"] = body.status
         profile.status = body.status
+    if body.approved_until is not None:
+        from datetime import datetime as dt
+        try:
+            profile.approved_until = dt.fromisoformat(body.approved_until) if body.approved_until else None
+        except ValueError:
+            raise HTTPException(status_code=400, detail="잘못된 날짜 형식 (ISO 8601)")
+        changes["approved_until"] = body.approved_until
     if body.daily_crawl_quota is not None:
         changes["daily_crawl_quota"] = body.daily_crawl_quota
         profile.daily_crawl_quota = body.daily_crawl_quota

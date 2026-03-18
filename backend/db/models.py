@@ -155,6 +155,7 @@ class UserProfile(Base):
     daily_export_quota: Mapped[int] = mapped_column(Integer, default=10)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     login_count: Mapped[int] = mapped_column(Integer, default=0)
+    approved_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

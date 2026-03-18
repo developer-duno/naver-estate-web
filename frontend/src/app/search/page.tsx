@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, memo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { searchComplexes, getComplexesByRegion } from "@/lib/api";
+import { createClient } from "@/lib/supabase";
 import RegionSelector from "@/components/RegionSelector";
 import type { Complex } from "@/types";
 import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_TABS } from "@/lib/constants";
@@ -15,6 +16,7 @@ function SearchContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [inlineKeyword, setInlineKeyword] = useState("");
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const requestIdRef = useRef(0);
 
   const keyword = searchParams.get("q") || "";
@@ -68,6 +70,11 @@ function SearchContent() {
     fetchData(controller.signal);
     return () => controller.abort();
   }, [fetchData, hasSearchParams]);
+
+  // 로그인 상태 확인
+  useEffect(() => {
+    createClient().auth.getUser().then(({ data }) => setIsLoggedIn(!!data.user)).catch(() => setIsLoggedIn(false));
+  }, []);
 
   // SEO: 동적 타이틀
   useEffect(() => {
@@ -197,6 +204,14 @@ function SearchContent() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 비회원 안내 */}
+      {isLoggedIn === false && hasSearchParams && !loading && complexes.length > 0 && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+          단지 매물 조회는 <a href="/login" className="text-blue-600 underline font-medium">로그인</a> 후 이용 가능합니다.
+          가입 후 관리자 승인이 필요합니다.
         </div>
       )}
 

@@ -7,6 +7,7 @@ export interface UserProfile {
   status: 'pending' | 'approved' | 'rejected' | 'suspended';
   daily_crawl_quota: number;
   daily_export_quota: number;
+  approved_until?: string | null;
   last_login_at?: string;
   login_count: number;
   created_at: string;
@@ -64,6 +65,7 @@ export interface DetailedStats {
 export interface UserUpdatePayload {
   role?: 'user' | 'admin' | 'expert';
   status?: 'pending' | 'approved' | 'rejected' | 'suspended';
+  approved_until?: string | null;
   daily_crawl_quota?: number;
   daily_export_quota?: number;
 }

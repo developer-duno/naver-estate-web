@@ -47,8 +47,8 @@ async function _fetchApiImpl<T>(path: string, options?: RequestInit & { timeoutM
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      // P1-1: 인증 실패 시 자동 로그아웃 (토큰 만료, 사용자 정지 등)
-      if ((res.status === 401 || res.status === 403) && !_isLoggingOut) {
+      // P1-1: 인증 실패 시 자동 로그아웃 (토큰 만료만 — 403은 승인/권한 문제이므로 유지)
+      if (res.status === 401 && !_isLoggingOut) {
         if (typeof window !== "undefined") {
           _isLoggingOut = true;
           const { createClient } = await import("@/lib/supabase");
@@ -156,10 +156,12 @@ export async function liveArticles(complexNo: string) {
 
 
 /** 백그라운드 크롤링 시작 (즉시 반환) */
-export async function startLiveCrawl(complexNo: string) {
+export async function startLiveCrawl(complexNo: string, token?: string) {
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
   return fetchApi<CrawlProgress>(
     `/api/live/${complexNo}/articles/start-crawl`,
-    { method: "POST", timeoutMs: DEFAULT_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
+    { method: "POST", timeoutMs: DEFAULT_TIMEOUT_MS, headers } as RequestInit & { timeoutMs?: number },
   );
 }
 

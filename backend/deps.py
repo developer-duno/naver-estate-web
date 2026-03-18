@@ -2,6 +2,7 @@
 
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Generator
 
 import httpx
@@ -21,7 +22,10 @@ security = HTTPBearer(auto_error=False)
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
-ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "")
+ADMIN_EMAILS = set(filter(None, os.getenv("ADMIN_EMAIL", "kyh11kyh@gmail.com").split(",")))
+
+def _utcnow():
+    return datetime.now(timezone.utc)
 
 if not SUPABASE_JWT_SECRET and not SUPABASE_URL:
     logger.critical("SUPABASE_JWT_SECRET 또는 SUPABASE_URL 미설정 — JWT 인증이 작동하지 않습니다")
@@ -105,13 +109,14 @@ def get_current_user(
     # user_profiles 테이블에서 프로필 조회/자동 생성
     profile = db.get(UserProfile, user_id)
     if not profile:
-        # 첫 로그인 시 프로필 자동 생성 (항상 일반 user 역할)
+        # 첫 로그인 시 프로필 자동 생성
+        is_admin = email in ADMIN_EMAILS
         try:
             profile = UserProfile(
                 user_id=user_id,
                 email=email,
-                role="user",
-                status="approved",
+                role="admin" if is_admin else "user",
+                status="approved" if is_admin else "pending",
             )
             db.add(profile)
             db.commit()
@@ -132,6 +137,7 @@ def get_current_user(
         "email": profile.email,
         "role": profile.role,
         "status": profile.status,
+        "approved_until": profile.approved_until.isoformat() if profile.approved_until else None,
         "daily_crawl_quota": profile.daily_crawl_quota,
         "daily_export_quota": profile.daily_export_quota,
     }
@@ -150,11 +156,28 @@ def get_optional_user(
         return None
 
 
+def get_approved_user(
+    user: dict = Depends(get_current_user),
+) -> dict:
+    """승인된 사용자 전용 — pending/만료 시 403"""
+    if user.get("email") in ADMIN_EMAILS:
+        return user  # 관리자는 항상 통과
+    if user.get("status") != "approved":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="관리자 승인이 필요합니다")
+    approved_until = user.get("approved_until")
+    if approved_until:
+        from datetime import datetime as dt
+        expiry = dt.fromisoformat(approved_until)
+        if expiry < _utcnow():
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="승인 기간이 만료되었습니다")
+    return user
+
+
 def get_admin_user(
     user: dict = Depends(get_current_user),
 ) -> dict:
-    """관리자 전용 의존성 — role이 admin이 아니면 403"""
-    if user.get("role") != "admin":
+    """관리자 전용 의존성 — role이 admin이거나 관리자 이메일이면 통과"""
+    if user.get("role") != "admin" and user.get("email") not in ADMIN_EMAILS:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="관리자 권한이 필요합니다",

@@ -113,8 +113,21 @@ export default function ComplexDetailPage() {
         if (!cancelledRef.current) setLoading(false);
       }
 
-      // Phase 2 제거: 자동 크롤링 비활성화
-      // → DB 데이터만 즉시 표시, 크롤링은 "데이터 갱신" 버튼으로만 실행
+      // Phase 2: 승인된 사용자면 자동 크롤링
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token && !cancelledRef.current) {
+          const crawlResult = await startLiveCrawl(complexNo, session.access_token);
+          if (crawlResult.status === "started" && !cancelledRef.current) {
+            startCrawl(complexNo, {
+              setArticles, setTotalCount, setCurrentPage, setComplex, setPyeongDetails,
+            });
+          }
+        }
+      } catch {
+        // 크롤링 실패는 무시 (DB 데이터는 이미 표시됨)
+      }
     }
 
     load();

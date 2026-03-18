@@ -123,7 +123,7 @@ export default function ComplexDetailPage() {
           if (crawlResult.status === "started" && !cancelledRef.current) {
             startCrawl(complexNo, {
               setArticles, setTotalCount, setCurrentPage, setComplex, setPyeongDetails,
-            });
+            }, currentFiltersRef);
           }
         }
       } catch (err) {
@@ -232,7 +232,7 @@ export default function ComplexDetailPage() {
         crawlResult.status === "running" ||
         crawlResult.status === "already_running"
       ) {
-        startCrawl(complexNo, crawlCallbacks());
+        startCrawl(complexNo, crawlCallbacks(), currentFiltersRef);
       }
     } catch (err) {
       if (err instanceof ApiError) {

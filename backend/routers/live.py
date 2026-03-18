@@ -119,7 +119,7 @@ def live_region(
         return cached
 
     keyword = sido
-    if sigungu:
+    if sigungu and sigungu != sido:
         keyword += f" {sigungu}"
     if dong:
         keyword += f" {dong}"

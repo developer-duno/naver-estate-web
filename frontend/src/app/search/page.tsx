@@ -17,6 +17,7 @@ function SearchContent() {
   const [error, setError] = useState("");
   const [inlineKeyword, setInlineKeyword] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
+  const [userStatus, setUserStatus] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
   const keyword = searchParams.get("q") || "";
@@ -71,9 +72,25 @@ function SearchContent() {
     return () => controller.abort();
   }, [fetchData, hasSearchParams]);
 
-  // 로그인 상태 확인
+  // 로그인 + 승인 상태 확인
   useEffect(() => {
-    createClient().auth.getUser().then(({ data }) => setIsLoggedIn(!!data.user)).catch(() => setIsLoggedIn(false));
+    const supabase = createClient();
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) { setIsLoggedIn(false); return; }
+      setIsLoggedIn(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/users/me`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+          if (res.ok) {
+            const me = await res.json();
+            setUserStatus(me.status);
+          }
+        }
+      } catch { /* 무시 */ }
+    }).catch(() => setIsLoggedIn(false));
   }, []);
 
   // SEO: 동적 타이틀
@@ -212,6 +229,13 @@ function SearchContent() {
         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
           단지 매물 조회는 <a href="/login" className="text-blue-600 underline font-medium">로그인</a> 후 이용 가능합니다.
           가입 후 관리자 승인이 필요합니다.
+        </div>
+      )}
+
+      {/* 승인 대기 중 안내 */}
+      {isLoggedIn === true && userStatus === "pending" && hasSearchParams && !loading && complexes.length > 0 && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+          회원가입이 완료되었습니다! 관리자 승인 대기 중입니다. 승인 후 단지 매물 조회가 가능합니다.
         </div>
       )}
 

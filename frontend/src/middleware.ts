@@ -6,8 +6,8 @@ import type { NextRequest } from "next/server";
 const ADMIN_PATHS = ["/admin"];
 // 로그인 필수 경로
 const AUTH_REQUIRED_PATHS = ["/complex"];
-// 관리자 이메일
-const ADMIN_EMAIL = "kyh11kyh@gmail.com";
+// 관리자 이메일 (환경변수 우선, 폴백: 기본 관리자)
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "kyh11kyh@gmail.com";
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({

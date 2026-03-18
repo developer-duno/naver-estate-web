@@ -132,9 +132,12 @@ def build_filter_dict(
     tags: str | None = None,
 ) -> dict | None:
     """필터 파라미터를 queries.get_articles_by_complex용 dict로 변환"""
+    VALID_TRADE_TYPES = {"매매", "전세", "월세", "단기임대"}
     filters = {}
     if trade_types:
-        filters["trade_types"] = trade_types.split(",")
+        types = [t.strip() for t in trade_types.split(",") if t.strip() in VALID_TRADE_TYPES]
+        if types:
+            filters["trade_types"] = types
     if min_price is not None:
         filters["min_price"] = min_price
     if max_price is not None:

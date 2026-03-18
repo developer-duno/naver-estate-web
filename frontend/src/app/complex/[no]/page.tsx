@@ -6,7 +6,6 @@ import Link from "next/link";
 import {
   getComplex,
   getArticles,
-  liveArticles,
   getPyeongDetails,
   triggerComplexCrawl,
   startLiveCrawl,
@@ -114,55 +113,8 @@ export default function ComplexDetailPage() {
         if (!cancelledRef.current) setLoading(false);
       }
 
-      // Phase 2: Start background crawl (with fallback to sync liveArticles)
-      if (cancelledRef.current) return;
-      try {
-        const crawlResult = await startLiveCrawl(complexNo);
-        if (cancelledRef.current) return;
-
-        if (crawlResult.status === "cached") {
-          // Cache hit - fetch latest via liveArticles once
-          try {
-            const live = await liveArticles(complexNo);
-            if (cancelledRef.current) return;
-            setArticles(live.articles);
-            setTotalCount(live.total);
-            if (live.complex) setComplex(live.complex);
-            try {
-              const pyeong = await getPyeongDetails(complexNo);
-              if (!cancelledRef.current) setPyeongDetails(pyeong.pyeong_details);
-            } catch (e) { console.error("[Complex]", e); }
-          } catch (e) { console.error("[Complex] live fallback:", e); }
-        } else if (
-          crawlResult.status === "started" ||
-          crawlResult.status === "running" ||
-          crawlResult.status === "already_running"
-        ) {
-          startCrawl(complexNo, crawlCallbacks());
-        }
-      } catch {
-        // Fallback: start-crawl endpoint not available, use sync liveArticles
-        if (cancelledRef.current) return;
-        setCrawling(true);
-        setCrawlMessage("매물 데이터 수집 중...");
-        try {
-          const live = await liveArticles(complexNo);
-          if (cancelledRef.current) return;
-          setArticles(live.articles);
-          setTotalCount(live.total);
-          if (live.complex) setComplex(live.complex);
-          try {
-            const pyeong = await getPyeongDetails(complexNo);
-            if (!cancelledRef.current) setPyeongDetails(pyeong.pyeong_details);
-          } catch (e) { console.error("[Complex]", e); }
-        } catch (e) { console.error("[Complex]", e); }
-        finally {
-          if (!cancelledRef.current) {
-            setCrawling(false);
-            setCrawlMessage("");
-          }
-        }
-      }
+      // Phase 2 제거: 자동 크롤링 비활성화
+      // → DB 데이터만 즉시 표시, 크롤링은 "데이터 갱신" 버튼으로만 실행
     }
 
     load();
@@ -170,7 +122,7 @@ export default function ComplexDetailPage() {
       cancelledRef.current = true;
       clearAllPolling();
     };
-  }, [complexNo, startCrawl, clearAllPolling, crawlCallbacks, setCrawling, setCrawlMessage]);
+  }, [complexNo, clearAllPolling]);
 
   // 매물 로드 (필터 + 페이지)
   const loadArticles = useCallback(

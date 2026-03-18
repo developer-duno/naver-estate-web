@@ -7,6 +7,10 @@ import type { Regions } from "@/types";
 // 모듈 레벨 캐시 — 정적 데이터이므로 한 번 로드 후 재사용
 let _cachedRegions: Regions | null = null;
 
+const PANEL_WIDTH = 600;
+const CLOSE_DELAY_MS = 200;
+const PANEL_MARGIN = 8;
+
 interface Props {
   onSearch: (sido: string, sigungu: string, dong?: string) => void;
 }
@@ -76,7 +80,7 @@ export default function RegionSelector({ onSearch }: Props) {
   };
 
   const scheduleClose = () => {
-    closeTimerRef.current = setTimeout(() => setOpen(false), 200);
+    closeTimerRef.current = setTimeout(() => setOpen(false), CLOSE_DELAY_MS);
   };
 
   const handleTriggerEnter = () => {
@@ -137,8 +141,8 @@ export default function RegionSelector({ onSearch }: Props) {
   }
 
   // 패널 left 보정: 화면 밖으로 나가지 않도록
-  const panelWidth = 600;
-  const adjustedLeft = Math.max(8, Math.min(panelPos.left, (typeof window !== "undefined" ? window.innerWidth : 1024) - panelWidth - 8));
+  const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 1024;
+  const adjustedLeft = Math.max(PANEL_MARGIN, Math.min(panelPos.left, viewportWidth - PANEL_WIDTH - PANEL_MARGIN));
 
   return (
     <>
@@ -167,7 +171,7 @@ export default function RegionSelector({ onSearch }: Props) {
         <div
           ref={panelRef}
           className="fixed z-50 bg-white border rounded-lg shadow-lg"
-          style={{ top: panelPos.top, left: adjustedLeft, width: Math.min(panelWidth, (typeof window !== "undefined" ? window.innerWidth : 1024) - 16) }}
+          style={{ top: panelPos.top, left: adjustedLeft, width: Math.min(PANEL_WIDTH, viewportWidth - PANEL_MARGIN * 2) }}
           onMouseEnter={cancelClose}
           onMouseLeave={scheduleClose}
         >

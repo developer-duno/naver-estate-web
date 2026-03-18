@@ -10,9 +10,6 @@ interface Props {
 
 /** 매물유형 토글 탭 — 네이버 부동산 스타일 (복수 선택) */
 export default memo(function EstateTypeTabs({ selected, onChange }: Props) {
-  const allCodes = ESTATE_TYPE_TABS.map((t) => t.code);
-  const allSelected = selected.length === allCodes.length;
-
   function toggle(code: string) {
     const isSelected = selected.includes(code);
     if (isSelected) {

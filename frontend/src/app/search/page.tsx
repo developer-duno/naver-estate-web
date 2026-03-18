@@ -40,6 +40,11 @@ function SearchContent() {
 
   const typesStr = selectedTypes.length < allCodes.length ? selectedTypes.join(",") : undefined;
 
+  // 매물유형 클라이언트 필터 (한번만 계산)
+  const filteredComplexes = complexes.filter(
+    (c) => !c.real_estate_type_code || selectedTypes.includes(c.real_estate_type_code)
+  );
+
   const fetchData = useCallback(async (signal: AbortSignal) => {
     if (!keyword && !(sido && sigungu)) return;
     const reqId = ++requestIdRef.current;
@@ -136,7 +141,7 @@ function SearchContent() {
         </button>
         <h1 className="text-2xl font-bold">{title}</h1>
         {hasSearchParams && !loading && (
-          <span className="text-gray-500 text-sm">({complexes.filter((c) => !c.real_estate_type_code || selectedTypes.includes(c.real_estate_type_code)).length}개 단지)</span>
+          <span className="text-gray-500 text-sm">({filteredComplexes.length}개 단지)</span>
         )}
       </div>
 
@@ -257,9 +262,7 @@ function SearchContent() {
               </tr>
             </thead>
             <tbody>
-              {complexes
-                .filter((cpx) => !cpx.real_estate_type_code || selectedTypes.includes(cpx.real_estate_type_code))
-                .map((cpx, idx) => (
+              {filteredComplexes.map((cpx, idx) => (
                 <ComplexRow key={cpx.complex_no} complex={cpx} index={idx + 1} />
               ))}
             </tbody>

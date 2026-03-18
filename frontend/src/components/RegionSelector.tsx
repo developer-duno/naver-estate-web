@@ -20,8 +20,10 @@ export default function RegionSelector({ onSearch }: Props) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(!_cachedRegions);
   const [error, setError] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [panelPos, setPanelPos] = useState({ top: 0, left: 0 });
 
   const loadRegions = useCallback(() => {
     if (_cachedRegions) {
@@ -48,7 +50,11 @@ export default function RegionSelector({ onSearch }: Props) {
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        triggerRef.current && !triggerRef.current.contains(target) &&
+        panelRef.current && !panelRef.current.contains(target)
+      ) {
         setOpen(false);
       }
     }
@@ -56,23 +62,30 @@ export default function RegionSelector({ onSearch }: Props) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  // 타이머 정리
   useEffect(() => {
     return () => {
       if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     };
   }, []);
 
-  const handleMouseEnter = () => {
+  const cancelClose = () => {
     if (closeTimerRef.current) {
       clearTimeout(closeTimerRef.current);
       closeTimerRef.current = null;
     }
-    setOpen(true);
   };
 
-  const handleMouseLeave = () => {
+  const scheduleClose = () => {
     closeTimerRef.current = setTimeout(() => setOpen(false), 200);
+  };
+
+  const handleTriggerEnter = () => {
+    cancelClose();
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPanelPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setOpen(true);
   };
 
   const sidoList = Object.keys(regions);
@@ -103,7 +116,6 @@ export default function RegionSelector({ onSearch }: Props) {
     onSearch(finalSido, finalSigungu, value);
   };
 
-  // 선택된 지역 요약 텍스트
   const summary = sido && sigungu
     ? `${sido} ${sigungu}`
     : sido
@@ -124,19 +136,22 @@ export default function RegionSelector({ onSearch }: Props) {
     );
   }
 
+  // 패널 left 보정: 화면 밖으로 나가지 않도록
+  const panelWidth = 600;
+  const adjustedLeft = Math.max(8, Math.min(panelPos.left, (typeof window !== "undefined" ? window.innerWidth : 1024) - panelWidth - 8));
+
   return (
-    <div
-      ref={containerRef}
-      className="relative inline-block"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
+    <>
       {/* 트리거 버튼 */}
       <button
+        ref={triggerRef}
         type="button"
         className="flex items-center gap-2 border border-gray-300 rounded-md px-4 py-2 text-sm hover:border-blue-400 hover:bg-blue-50 transition-colors"
         aria-expanded={open}
         aria-haspopup="listbox"
+        onMouseEnter={handleTriggerEnter}
+        onMouseLeave={scheduleClose}
+        onClick={handleTriggerEnter}
       >
         <svg className="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 20 20">
           <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
@@ -147,11 +162,17 @@ export default function RegionSelector({ onSearch }: Props) {
         </svg>
       </button>
 
-      {/* 팝업 패널 */}
+      {/* fixed 팝업 패널 — 부모 overflow에 영향받지 않음 */}
       {open && !loading && (
-        <div className="absolute left-0 top-full mt-1 z-50 bg-white border rounded-lg shadow-lg w-[calc(100vw-2rem)] sm:w-150 max-w-150">
+        <div
+          ref={panelRef}
+          className="fixed z-50 bg-white border rounded-lg shadow-lg"
+          style={{ top: panelPos.top, left: adjustedLeft, width: Math.min(panelWidth, (typeof window !== "undefined" ? window.innerWidth : 1024) - 16) }}
+          onMouseEnter={cancelClose}
+          onMouseLeave={scheduleClose}
+        >
           {/* 브레드크럼 */}
-          <nav className="flex items-center gap-1 px-4 py-2 bg-gray-50 border-b text-xs text-gray-500" aria-label="지역 선택 경로">
+          <nav className="flex items-center gap-1 px-4 py-2 bg-gray-50 border-b text-xs text-gray-500 rounded-t-lg" aria-label="지역 선택 경로">
             <span className={activeSido ? "text-gray-400" : "font-semibold text-gray-700"}>시/도</span>
             <span className="text-gray-300 mx-0.5">&gt;</span>
             <span className={activeSido && !activeSigungu ? "font-semibold text-gray-700" : activeSigungu ? "text-gray-400" : "text-gray-400"}>
@@ -164,7 +185,7 @@ export default function RegionSelector({ onSearch }: Props) {
           </nav>
 
           {/* 3컬럼 */}
-          <div className="flex" style={{ height: "280px" }}>
+          <div className="flex" style={{ height: "260px" }}>
             {/* 시/도 */}
             <div className="w-1/3 border-r overflow-y-auto" role="listbox" aria-label="시/도 선택">
               {sidoList.map((item) => {
@@ -254,6 +275,6 @@ export default function RegionSelector({ onSearch }: Props) {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

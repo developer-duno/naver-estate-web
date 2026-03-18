@@ -28,6 +28,16 @@ beforeEach(async () => {
   RegionSelector = mod.default;
 });
 
+/** 트리거 버튼을 hover해서 패널을 여는 헬퍼 */
+async function openPanel() {
+  const trigger = await screen.findByText("지역을 선택하세요");
+  fireEvent.mouseEnter(trigger);
+  // 패널이 열릴 때까지 대기
+  await waitFor(() => {
+    expect(screen.getByText("서울특별시")).toBeInTheDocument();
+  });
+}
+
 describe("RegionSelector — hover 팝업 패널", () => {
   it("트리거 버튼 렌더링", async () => {
     render(<RegionSelector onSearch={vi.fn()} />);
@@ -38,29 +48,22 @@ describe("RegionSelector — hover 팝업 패널", () => {
 
   it("hover 시 패널 표시, 시/도 목록 보임", async () => {
     render(<RegionSelector onSearch={vi.fn()} />);
-    await waitFor(() => {
-      fireEvent.mouseEnter(screen.getByText("지역을 선택하세요").closest("div")!);
-    });
-    expect(screen.getByText("서울특별시")).toBeInTheDocument();
+    await openPanel();
     expect(screen.getByText("부산광역시")).toBeInTheDocument();
   });
 
   it("시/도 hover → 시/군/구 표시", async () => {
     render(<RegionSelector onSearch={vi.fn()} />);
-    await waitFor(() => {
-      fireEvent.mouseEnter(screen.getByText("지역을 선택하세요").closest("div")!);
-    });
+    await openPanel();
     fireEvent.mouseEnter(screen.getByText("서울특별시"));
     expect(screen.getByText("강남구")).toBeInTheDocument();
     expect(screen.getByText("서초구")).toBeInTheDocument();
   });
 
-  it("읍/면/동 클릭 시 onSearch 호출 + 패널 닫힘", async () => {
+  it("읍/면/동 클릭 시 onSearch 호출", async () => {
     const onSearch = vi.fn();
     render(<RegionSelector onSearch={onSearch} />);
-    await waitFor(() => {
-      fireEvent.mouseEnter(screen.getByText("지역을 선택하세요").closest("div")!);
-    });
+    await openPanel();
     fireEvent.click(screen.getByText("서울특별시"));
     fireEvent.click(screen.getByText("강남구"));
     fireEvent.click(screen.getByText("역삼동"));
@@ -70,9 +73,7 @@ describe("RegionSelector — hover 팝업 패널", () => {
   it("시/군/구 클릭만으로는 onSearch 호출되지 않음", async () => {
     const onSearch = vi.fn();
     render(<RegionSelector onSearch={onSearch} />);
-    await waitFor(() => {
-      fireEvent.mouseEnter(screen.getByText("지역을 선택하세요").closest("div")!);
-    });
+    await openPanel();
     fireEvent.click(screen.getByText("서울특별시"));
     fireEvent.click(screen.getByText("강남구"));
     expect(onSearch).not.toHaveBeenCalled();

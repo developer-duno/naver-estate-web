@@ -24,15 +24,15 @@ export const TRADE_TYPE_DEFAULT_COLOR = "bg-gray-100 text-gray-700";
 
 /** 매물유형별 뱃지 색상 */
 export const ESTATE_TYPE_COLORS: Record<string, string> = {
-  "아파트": "bg-teal-50 border-teal-300 text-teal-700",
-  "아파트분양권": "bg-orange-50 border-orange-300 text-orange-700",
-  "오피스텔": "bg-purple-50 border-purple-300 text-purple-700",
-  "오피스텔분양권": "bg-pink-50 border-pink-300 text-pink-700",
-  "재건축": "bg-amber-50 border-amber-300 text-amber-700",
-  "재개발": "bg-rose-50 border-rose-300 text-rose-700",
+  "아파트": "bg-teal-100 border-teal-400 text-teal-800",
+  "아파트분양권": "bg-orange-100 border-orange-400 text-orange-800",
+  "오피스텔": "bg-purple-100 border-purple-400 text-purple-800",
+  "오피스텔분양권": "bg-pink-100 border-pink-400 text-pink-800",
+  "재건축": "bg-amber-100 border-amber-400 text-amber-800",
+  "재개발": "bg-rose-100 border-rose-400 text-rose-800",
 };
 
-export const ESTATE_TYPE_DEFAULT_COLOR = "bg-gray-50 border-gray-300 text-gray-600";
+export const ESTATE_TYPE_DEFAULT_COLOR = "bg-gray-100 border-gray-400 text-gray-700";
 
 /** 매물유형 탭 (네이버 API 코드 기준 — 홈/검색 페이지용) */
 export const ESTATE_TYPE_TABS = [

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Image from "next/image";
 import { getArticleLive } from "@/lib/api";
 import type { Article } from "@/types";
 import { M2_TO_PYEONG } from "@/lib/constants";
@@ -192,30 +191,27 @@ function ArticleBody({ article: a }: { article: Article }) {
         </Section>
       )}
 
-      {/* 사진 */}
-      {a.photo_urls && a.photo_urls.length > 0 && (
-        <Section title={`사진 (${a.photo_urls.length}장)`}>
-          <div className="flex gap-2 flex-wrap">
-            {a.photo_urls.filter(u => u.startsWith("https://")).slice(0, 6).map((url, i) => (
-              <Image key={url} src={url} alt={`매물 사진 ${i + 1}`} width={128} height={96} className="w-32 h-24 object-cover rounded border" />
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {/* 지도 링크 */}
-      {a.latitude && a.longitude && (
-        <div className="pt-2">
+      {/* 외부 링크 */}
+      <div className="border-t pt-3 flex flex-col gap-2">
+        <a
+          href={`https://new.land.naver.com/articles/${a.article_no}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline font-medium"
+        >
+          네이버 부동산에서 상세보기 →
+        </a>
+        {a.latitude && a.longitude && (
           <a
             href={`https://map.naver.com/p?lat=${a.latitude}&lng=${a.longitude}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-blue-600 hover:underline"
+            className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
           >
             네이버 지도에서 보기 →
           </a>
-        </div>
-      )}
+        )}
+      </div>
     </>
   );
 }
@@ -238,8 +234,8 @@ function formatWon(value?: string | null): string {
 function Info({ label, value }: { label: string; value?: string | null }) {
   return (
     <>
-      <span className="text-sm text-gray-500 font-medium">{label}</span>
-      <span className="text-sm">{value || "-"}</span>
+      <span className="text-sm text-gray-500 font-medium text-center">{label}</span>
+      <span className="text-sm text-center">{value || "-"}</span>
     </>
   );
 }

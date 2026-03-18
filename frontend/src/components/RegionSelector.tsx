@@ -47,11 +47,10 @@ export default function RegionSelector({ onSearch }: Props) {
   const handleSidoChange = (value: string) => {
     setSido(value);
     setDong("");
-    // 세종처럼 시/군/구가 1개뿐인 경우 자동 선택 + 즉시 검색
+    // 세종처럼 시/군/구가 1개뿐인 경우 자동 선택 (검색은 동 선택 시)
     const sgList = value ? Object.keys(regions[value] ?? {}) : [];
     if (sgList.length === 1) {
       setSigungu(sgList[0]);
-      onSearch(value, sgList[0]);
     } else {
       setSigungu("");
     }
@@ -60,10 +59,6 @@ export default function RegionSelector({ onSearch }: Props) {
   const handleSigunguChange = (value: string) => {
     setSigungu(value);
     setDong("");
-    // 시/군/구 선택 시 즉시 검색 (동은 선택사항)
-    if (value && sido) {
-      onSearch(sido, value);
-    }
   };
 
   const handleDongChange = (value: string) => {

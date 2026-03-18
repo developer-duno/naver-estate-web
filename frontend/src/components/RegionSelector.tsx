@@ -11,13 +11,12 @@ interface Props {
   onSearch: (sido: string, sigungu: string, dong?: string) => void;
 }
 
-type Step = "sido" | "sigungu" | "dong";
-
 export default function RegionSelector({ onSearch }: Props) {
   const [regions, setRegions] = useState<Regions>(_cachedRegions ?? {});
   const [sido, setSido] = useState("");
   const [sigungu, setSigungu] = useState("");
-  const [step, setStep] = useState<Step>("sido");
+  const [hoveredSido, setHoveredSido] = useState("");
+  const [hoveredSigungu, setHoveredSigungu] = useState("");
   const [loading, setLoading] = useState(!_cachedRegions);
   const [error, setError] = useState(false);
 
@@ -43,34 +42,32 @@ export default function RegionSelector({ onSearch }: Props) {
   }, [loadRegions]);
 
   const sidoList = Object.keys(regions);
-  const sigunguList = sido ? Object.keys(regions[sido] ?? {}) : [];
-  const dongList = sido && sigungu ? regions[sido]?.[sigungu] ?? [] : [];
+  // hover 중인 시/도의 시/군/구 목록 (선택된 것보다 hover 우선)
+  const activeSido = hoveredSido || sido;
+  const sigunguList = activeSido ? Object.keys(regions[activeSido] ?? {}) : [];
+  // hover 중인 시/군/구의 읍/면/동 목록
+  const activeSigungu = hoveredSigungu || sigungu;
+  const dongList = activeSido && activeSigungu ? regions[activeSido]?.[activeSigungu] ?? [] : [];
 
-  const items = step === "sido" ? sidoList : step === "sigungu" ? sigunguList : dongList;
-
-  const handleSelect = (value: string) => {
-    if (step === "sido") {
-      setSido(value);
-      setSigungu("");
-      setStep("sigungu");
-    } else if (step === "sigungu") {
-      setSigungu(value);
-      onSearch(sido, value);
-      setStep("dong");
-    } else {
-      onSearch(sido, sigungu, value);
-    }
+  const handleSidoClick = (value: string) => {
+    setSido(value);
+    setSigungu("");
+    setHoveredSido("");
+    setHoveredSigungu("");
   };
 
-  const goToSido = () => {
-    setSido("");
-    setSigungu("");
-    setStep("sido");
+  const handleSigunguClick = (value: string) => {
+    setSido(activeSido);
+    setSigungu(value);
+    setHoveredSigungu("");
   };
 
-  const goToSigungu = () => {
-    setSigungu("");
-    setStep("sigungu");
+  const handleDongClick = (value: string) => {
+    const finalSido = activeSido;
+    const finalSigungu = activeSigungu;
+    setSido(finalSido);
+    setSigungu(finalSigungu);
+    onSearch(finalSido, finalSigungu, value);
   };
 
   if (error) {
@@ -96,79 +93,103 @@ export default function RegionSelector({ onSearch }: Props) {
     );
   }
 
-  // 브레드크럼 라벨
-  const stepLabel = step === "sido" ? "시/도" : step === "sigungu" ? "시/군/구" : "읍/면/동";
-
   return (
     <div className="border rounded-lg overflow-hidden">
       {/* 브레드크럼 */}
       <nav className="flex items-center gap-1 px-4 py-2.5 bg-gray-50 border-b text-sm" aria-label="지역 선택 경로">
-        <button
-          type="button"
-          onClick={goToSido}
-          className={`hover:text-blue-600 transition-colors ${step === "sido" ? "font-bold text-gray-900" : "text-gray-500"}`}
-        >
-          시/도
-        </button>
-        {sido && (
-          <>
-            <span className="text-gray-400 mx-0.5">&gt;</span>
-            <button
-              type="button"
-              onClick={goToSigungu}
-              className={`hover:text-blue-600 transition-colors ${step === "sigungu" ? "font-bold text-gray-900" : "text-gray-500"}`}
-            >
-              {sido}
-            </button>
-          </>
-        )}
-        {sigungu && (
-          <>
-            <span className="text-gray-400 mx-0.5">&gt;</span>
-            <span className={step === "dong" ? "font-bold text-gray-900" : "text-gray-500"}>
-              {sigungu}
-            </span>
-          </>
-        )}
-        {step === "dong" && (
-          <>
-            <span className="text-gray-400 mx-0.5">&gt;</span>
-            <span className="text-gray-400">읍/면/동</span>
-          </>
-        )}
+        <span className="text-gray-500">시/도</span>
+        <span className="text-gray-400 mx-0.5">&gt;</span>
+        <span className="text-gray-500">시/군/구</span>
+        <span className="text-gray-400 mx-0.5">&gt;</span>
+        <span className="text-gray-500">읍/면/동</span>
       </nav>
 
-      {/* 그리드 패널 */}
-      <div className="max-h-70 overflow-y-auto">
-        {items.length > 0 ? (
-          <div className="grid grid-cols-3" role="listbox" aria-label={`${stepLabel} 선택`}>
-            {items.map((item) => {
-              const isSelected =
-                (step === "sigungu" && item === sigungu) ||
-                (step === "sido" && item === sido);
+      {/* 3컬럼 패널 */}
+      <div className="flex border-t" style={{ minHeight: "240px" }}>
+        {/* 시/도 */}
+        <div className="w-1/3 border-r overflow-y-auto max-h-70" role="listbox" aria-label="시/도 선택">
+          {sidoList.map((item) => {
+            const isSelected = item === sido;
+            const isHovered = item === hoveredSido;
+            const isActive = item === activeSido;
+            return (
+              <button
+                key={item}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => handleSidoClick(item)}
+                onMouseEnter={() => setHoveredSido(item)}
+                onMouseLeave={() => setHoveredSido("")}
+                className={`w-full px-3 py-2 text-sm text-left transition-colors ${
+                  isSelected
+                    ? "bg-green-50 text-green-700 font-semibold"
+                    : isHovered || isActive
+                      ? "bg-blue-50 text-blue-700"
+                      : "text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                {item}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 시/군/구 */}
+        <div className="w-1/3 border-r overflow-y-auto max-h-70 bg-white" role="listbox" aria-label="시/군/구 선택">
+          {sigunguList.length > 0 ? (
+            sigunguList.map((item) => {
+              const isSelected = item === sigungu && activeSido === sido;
+              const isHovered = item === hoveredSigungu;
               return (
                 <button
                   key={item}
                   type="button"
                   role="option"
                   aria-selected={isSelected}
-                  onClick={() => handleSelect(item)}
-                  className={`px-4 py-2.5 text-sm text-left border-b border-r border-gray-100 transition-colors ${
+                  onClick={() => handleSigunguClick(item)}
+                  onMouseEnter={() => setHoveredSigungu(item)}
+                  onMouseLeave={() => setHoveredSigungu("")}
+                  className={`w-full px-3 py-2 text-sm text-left transition-colors ${
                     isSelected
-                      ? "bg-green-50 text-green-700 font-medium"
-                      : "hover:bg-blue-50 text-gray-700"
+                      ? "bg-green-50 text-green-700 font-semibold"
+                      : isHovered
+                        ? "bg-blue-50 text-blue-700"
+                        : "text-gray-700 hover:bg-gray-50"
                   }`}
                 >
                   {item}
                 </button>
               );
-            })}
-          </div>
-        ) : (
-          <div className="px-4 py-8 text-center text-sm text-gray-400">
-            {step === "dong" ? "읍/면/동 정보가 없습니다." : "항목이 없습니다."}
-          </div>
-        )}
+            })
+          ) : (
+            <div className="px-3 py-8 text-center text-xs text-gray-400">
+              시/도를 선택하세요
+            </div>
+          )}
+        </div>
+
+        {/* 읍/면/동 */}
+        <div className="w-1/3 overflow-y-auto max-h-70 bg-white" role="listbox" aria-label="읍/면/동 선택">
+          {dongList.length > 0 ? (
+            dongList.map((item) => (
+              <button
+                key={item}
+                type="button"
+                role="option"
+                aria-selected={false}
+                onClick={() => handleDongClick(item)}
+                className="w-full px-3 py-2 text-sm text-left text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-700"
+              >
+                {item}
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-8 text-center text-xs text-gray-400">
+              시/군/구를 선택하세요
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

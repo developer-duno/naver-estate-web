@@ -70,6 +70,10 @@ if IS_DEBUG:
     for dev_url in ["http://localhost:3000", "http://localhost:3001"]:
         if dev_url not in allowed_origins:
             allowed_origins.append(dev_url)
+# Rate Limiting 미들웨어 (CORS보다 먼저 등록 = CORS 이후에 실행)
+app.add_middleware(RateLimitMiddleware)
+
+# CORS 설정 (가장 먼저 실행되어야 preflight OPTIONS 처리 가능)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -78,9 +82,6 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
     max_age=3600,
 )
-
-# Rate Limiting 미들웨어
-app.add_middleware(RateLimitMiddleware)
 
 
 # 보안 헤더 미들웨어

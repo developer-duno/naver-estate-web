@@ -63,4 +63,4 @@
 - 비동기 콜백에서 언마운트 체크 없이 setState 호출하지 않기
 - live 엔드포인트에서 에러 시 빈 배열 반환하지 않기
 - dangerouslySetInnerHTML 사용하지 않기
-- DB 매물 레코드 DELETE 하지 않기
+- DB 단지(Complex) 레코드 DELETE 하지 않기 (매물은 크롤링 시 없어진 것 삭제 허용)

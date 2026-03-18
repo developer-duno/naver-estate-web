@@ -260,17 +260,17 @@ def build_detail_update_dict(domain_article, detail_data: dict = None):
     return update_data
 
 
-def deactivate_missing_articles(db, complex_no, seen_article_nos, commit=True):
-    """이번 크롤링에서 보이지 않은 매물 비활성화"""
+def delete_missing_articles(db, complex_no, seen_article_nos, commit=True):
+    """이번 크롤링에서 보이지 않은 매물 삭제 (네이버에 없는 매물은 보존 불필요)"""
     if not seen_article_nos:
         return
     db.query(ArticleModel).filter(
         ArticleModel.complex_no == complex_no,
-        ArticleModel.is_active == True,
         ~ArticleModel.article_no.in_(seen_article_nos),
-    ).update(
-        {"is_active": False, "updated_at": _utcnow()},
-        synchronize_session=False,
-    )
+    ).delete(synchronize_session=False)
     if commit:
         db.commit()
+
+
+# 하위 호환 alias
+deactivate_missing_articles = delete_missing_articles

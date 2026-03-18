@@ -111,8 +111,10 @@ export async function searchComplexes(keyword: string, limit = 50, signal?: Abor
 /** 지역별 단지 조회 */
 export async function getComplexesByRegion(sido: string, sigungu?: string, dong?: string, signal?: AbortSignal, types?: string) {
   if (!HAS_BACKEND) return direct.getComplexesByRegionDirect(sido, sigungu, dong);
+  // 세종처럼 sido === sigungu인 경우 중복 전달 방지
+  const effectiveSigungu = sigungu && sigungu !== sido ? sigungu : undefined;
   let path = `/api/live/region?sido=${encodeURIComponent(sido)}`;
-  if (sigungu) path += `&sigungu=${encodeURIComponent(sigungu)}`;
+  if (effectiveSigungu) path += `&sigungu=${encodeURIComponent(effectiveSigungu)}`;
   if (dong) path += `&dong=${encodeURIComponent(dong)}`;
   if (types) path += `&types=${encodeURIComponent(types)}`;
   return fetchApi<{ complexes: Complex[]; total: number }>(path, { signal, timeoutMs: LIVE_TIMEOUT_MS } as any);

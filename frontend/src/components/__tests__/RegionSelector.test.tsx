@@ -61,12 +61,12 @@ describe("RegionSelector — 인라인 드롭다운", () => {
     expect(onSearch).toHaveBeenCalledWith("서울특별시", "강남구", "역삼동");
   });
 
-  it("시/군/구만 선택하면 onSearch 호출되지 않음", async () => {
+  it("시/군/구 선택 시 onSearch 호출 (동 없이)", async () => {
     const onSearch = vi.fn();
     render(<RegionSelector onSearch={onSearch} />);
     await waitFor(() => expect((screen.getByLabelText("시/도") as HTMLSelectElement).disabled).toBe(false));
     fireEvent.change(screen.getByLabelText("시/도"), { target: { value: "서울특별시" } });
     fireEvent.change(screen.getByLabelText("시/군/구"), { target: { value: "강남구" } });
-    expect(onSearch).not.toHaveBeenCalled();
+    expect(onSearch).toHaveBeenCalledWith("서울특별시", "강남구");
   });
 });

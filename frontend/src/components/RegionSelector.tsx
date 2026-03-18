@@ -53,6 +53,10 @@ export default function RegionSelector({ onSearch }: Props) {
   const handleSigunguChange = (value: string) => {
     setSigungu(value);
     setDong("");
+    // 시/군/구 선택 시 즉시 검색 (동은 선택사항)
+    if (value && sido) {
+      onSearch(sido, value);
+    }
   };
 
   const handleDongChange = (value: string) => {

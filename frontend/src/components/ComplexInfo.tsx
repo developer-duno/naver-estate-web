@@ -17,6 +17,8 @@ interface Props {
   complexNo: string;
   articleCount?: number;
   onFilterChange?: (filters: ArticleFilters) => void;
+  /** 크롤 완료 시 부모가 증가시켜 가격 통계 re-fetch 트리거 */
+  refreshKey?: number;
 }
 
 const TABS: { key: TabType; label: string }[] = [
@@ -26,7 +28,7 @@ const TABS: { key: TabType; label: string }[] = [
   { key: "price-floor", label: "층수별 가격" },
 ];
 
-export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount, onFilterChange }: Props) {
+export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount, onFilterChange, refreshKey }: Props) {
   const [tab, setTab] = useState<TabType>("info");
   const [priceStats, setPriceStats] = useState<PriceStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -40,7 +42,7 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
       .then((data) => { if (!cancelled) { setPriceStats(data); setStatsLoading(false); } })
       .catch(() => { if (!cancelled) { setPriceStats(null); setStatsError(true); setStatsLoading(false); } });
     return () => { cancelled = true; };
-  }, [complexNo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [complexNo, refreshKey]);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border overflow-hidden">

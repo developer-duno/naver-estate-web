@@ -19,6 +19,7 @@ interface CrawlHookResult {
       setCurrentPage: (n: number) => void;
       setComplex: (c: Complex) => void;
       setPyeongDetails: (p: PyeongDetail[]) => void;
+      refreshPriceStats: () => void;
     },
     filtersRef?: React.RefObject<ArticleFilters>,
   ) => void;
@@ -47,6 +48,7 @@ export function useCrawlProgress(): CrawlHookResult {
       setCurrentPage: (n: number) => void;
       setComplex: (c: Complex) => void;
       setPyeongDetails: (p: PyeongDetail[]) => void;
+      refreshPriceStats: () => void;
     },
     filtersRef?: React.RefObject<ArticleFilters>,
   ) => {
@@ -89,6 +91,8 @@ export function useCrawlProgress(): CrawlHookResult {
               const cpx = await getComplex(complexNo);
               if (!cancelledRef.current) callbacks.setComplex(cpx);
             } catch (e) { console.error("[CrawlProgress]", e); }
+            // 크롤 완료 후 가격 통계 갱신 (면적별/층수별 가격)
+            if (!cancelledRef.current) callbacks.refreshPriceStats();
           } else if (status.error) {
             setCrawlMessage(`크롤링 오류: ${status.error}`);
           }

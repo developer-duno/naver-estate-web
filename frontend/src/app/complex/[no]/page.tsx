@@ -54,6 +54,7 @@ export default function ComplexDetailPage() {
   const [filterError, setFilterError] = useState("");
   const [dismissedDone, setDismissedDone] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
+  const [priceStatsKey, setPriceStatsKey] = useState(0);
   const [activeSortBy, setActiveSortBy] = useState("rank");
   const currentFiltersRef = useRef<ArticleFilters>({});
   const requestIdRef = useRef(0);
@@ -73,6 +74,7 @@ export default function ComplexDetailPage() {
     setCurrentPage,
     setComplex: (c: Complex) => setComplex(c),
     setPyeongDetails,
+    refreshPriceStats: () => setPriceStatsKey((k) => k + 1),
   }), []);
 
   // SEO: dynamic title
@@ -124,9 +126,7 @@ export default function ComplexDetailPage() {
         if (session?.access_token && !cancelledRef.current) {
           const crawlResult = await startLiveCrawl(complexNo, session.access_token);
           if (crawlResult.status === "started" && !cancelledRef.current) {
-            startCrawl(complexNo, {
-              setArticles, setTotalCount, setCurrentPage, setComplex, setPyeongDetails,
-            }, currentFiltersRef);
+            startCrawl(complexNo, crawlCallbacks(), currentFiltersRef);
           }
           // "cached" / "already_running" → 크롤링 시작 안 함, DB 데이터 그대로 표시
         }
@@ -313,7 +313,7 @@ export default function ComplexDetailPage() {
       </div>
 
       {/* 단지 정보 */}
-      <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} articleCount={totalCount} onFilterChange={handleFilterChange} />
+      <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} articleCount={totalCount} onFilterChange={handleFilterChange} refreshKey={priceStatsKey} />
 
       {/* 크롤링 진행률 배너 */}
       {crawling && crawlProgress && (

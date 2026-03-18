@@ -12,6 +12,7 @@ export default function Header() {
   const [userRole, setUserRole] = useState<string | null>(null);
 
   const isMountedRef = useRef(true);
+  const prevTokenRef = useRef<string | null>(null);
   useEffect(() => {
     return () => { isMountedRef.current = false; };
   }, []);
@@ -20,6 +21,8 @@ export default function Header() {
     const supabase = createClient();
 
     const fetchProfile = async (accessToken: string) => {
+      if (accessToken === prevTokenRef.current) return;
+      prevTokenRef.current = accessToken;
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL;
         if (apiUrl) {

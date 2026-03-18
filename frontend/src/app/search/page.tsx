@@ -86,19 +86,16 @@ function SearchContent() {
   // 로그인 + 승인 상태 확인
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) { setIsLoggedIn(false); return; }
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.user) { setIsLoggedIn(false); return; }
       setIsLoggedIn(true);
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/users/me`, {
-            headers: { Authorization: `Bearer ${session.access_token}` },
-          });
-          if (res.ok) {
-            const me = await res.json();
-            setUserStatus(me.status);
-          }
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/users/me`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (res.ok) {
+          const me = await res.json();
+          setUserStatus(me.status);
         }
       } catch { /* 무시 */ }
     }).catch(() => setIsLoggedIn(false));

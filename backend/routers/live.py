@@ -3,6 +3,7 @@
 import logging
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -32,9 +33,9 @@ CRAWL_REAL_ESTATE_TYPES = {"APT", "ABYG", "JGC", "PRE", "OPST", "OBYG", "RDV"}
 
 # ── Rate limit & 배치 상수 ──
 MAX_SEARCH_PAGES = 50            # 검색 최대 페이지 (무한 루프 방지)
-INTER_PAGE_DELAY = 0.5           # 페이지 간 대기 (초)
-INTER_GROUP_DELAY = 0.3          # 검색 그룹 간 대기 (초)
-DETAIL_CRAWL_DELAY = 1.0         # 상세 크롤링 건별 대기 (초)
+INTER_PAGE_DELAY = 0.3           # 페이지 간 대기 (초)
+INTER_GROUP_DELAY = 0.2          # 검색 그룹 간 대기 (초)
+DETAIL_CRAWL_DELAY = 0.5         # 상세 크롤링 건별 대기 (초)
 PAGE_COMMIT_INTERVAL = 5         # N페이지마다 DB 커밋
 DETAIL_COMMIT_INTERVAL = 50      # N건마다 DB 커밋
 
@@ -65,23 +66,16 @@ def _parse_allowed_types(types: str | None) -> set[str]:
     return set(CRAWL_REAL_ESTATE_TYPES)
 
 
-def _search_all_types(keyword: str, allowed_types: set[str], db: Session,
-                      upsert_kwargs: dict | None = None):
-    """매물유형 그룹별로 네이버 API 검색 → upsert → 결과 병합
-
-    네이버 검색 API는 realEstateType 파라미터를 무시하므로,
-    키워드에 유형명을 추가하여 해당 유형 결과를 가져옴.
-    예: "대전" → "대전", "대전 오피스텔", "대전 재건축"
-    """
-    all_complexes: list[dict] = []
-    seen: set[str] = set()
+def _search_one_group(keyword: str, suffix: str | None, group_codes: set[str],
+                      allowed_types: set[str], upsert_kwargs: dict | None = None
+                      ) -> tuple[list[dict], dict | None]:
+    """단일 그룹 검색 (스레드 안전 — 자체 DB 세션 사용)"""
+    complexes: list[dict] = []
     first_error = None
+    search_keyword = f"{keyword} {suffix}" if suffix else keyword
 
-    for suffix, group_codes in KEYWORD_SUFFIX_GROUPS:
-        if not (group_codes & allowed_types):
-            continue
-
-        search_keyword = f"{keyword} {suffix}" if suffix else keyword
+    db = SessionLocal()
+    try:
         page = 1
         while page <= MAX_SEARCH_PAGES:
             result = NaverEstateAPI.search_by_keyword(search_keyword, page=page)
@@ -99,18 +93,58 @@ def _search_all_types(keyword: str, allowed_types: set[str], db: Session,
                 if not re_type or re_type not in allowed_types:
                     continue
                 cpx = upsert_complex_from_search(db, c_data, **(upsert_kwargs or {}))
-                if cpx and cpx["complex_no"] not in seen:
-                    seen.add(cpx["complex_no"])
-                    all_complexes.append(cpx)
+                if cpx:
+                    complexes.append(cpx)
 
             if not result.get("isMoreData", False):
                 break
             page += 1
             time.sleep(INTER_PAGE_DELAY)
+    finally:
+        db.close()
 
-        # 그룹 간 대기 (rate limit 방지)
-        if suffix:
-            time.sleep(INTER_GROUP_DELAY)
+    return complexes, first_error
+
+
+def _search_all_types(keyword: str, allowed_types: set[str], db: Session,
+                      upsert_kwargs: dict | None = None):
+    """매물유형 그룹별로 네이버 API 검색 → upsert → 결과 병합 (병렬)
+
+    네이버 검색 API는 realEstateType 파라미터를 무시하므로,
+    키워드에 유형명을 추가하여 해당 유형 결과를 가져옴.
+    예: "대전" → "대전", "대전 오피스텔", "대전 재건축"
+    """
+    # 실행할 그룹 필터링
+    groups_to_search = [
+        (suffix, group_codes)
+        for suffix, group_codes in KEYWORD_SUFFIX_GROUPS
+        if group_codes & allowed_types
+    ]
+
+    if not groups_to_search:
+        return []
+
+    all_complexes: list[dict] = []
+    seen: set[str] = set()
+    first_error = None
+
+    # 그룹별 병렬 호출
+    with ThreadPoolExecutor(max_workers=len(groups_to_search)) as executor:
+        futures = {
+            executor.submit(
+                _search_one_group, keyword, suffix, group_codes,
+                allowed_types, upsert_kwargs,
+            ): (suffix, group_codes)
+            for suffix, group_codes in groups_to_search
+        }
+        for future in as_completed(futures):
+            complexes, error = future.result()
+            if error and first_error is None:
+                first_error = error
+            for cpx in complexes:
+                if cpx["complex_no"] not in seen:
+                    seen.add(cpx["complex_no"])
+                    all_complexes.append(cpx)
 
     # 모든 그룹 실패 + 결과 0건이면 502
     if not all_complexes and first_error is not None:

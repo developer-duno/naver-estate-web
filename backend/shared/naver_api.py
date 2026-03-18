@@ -190,9 +190,9 @@ class NaverEstateAPI:
         return {"error": "API 요청이 반복적으로 실패했습니다. 네트워크 연결을 확인해주세요."}
 
     @staticmethod
-    def search_by_keyword(keyword, page=1):
+    def search_by_keyword(keyword, page=1, real_estate_type=None):
         """키워드로 단지 검색 (인증 불필요)"""
-        cache_key = f"search:{keyword}:{page}"
+        cache_key = f"search:{keyword}:{page}:{real_estate_type or ''}"
         cached = NaverEstateAPI._get_cached(cache_key)
         if cached is not None:
             return cached
@@ -200,6 +200,8 @@ class NaverEstateAPI:
             'keyword': keyword,
             'page': str(page),
         }
+        if real_estate_type:
+            params['realEstateType'] = real_estate_type
         result = NaverEstateAPI._request_with_retry(NAVER_SEARCH_API, params=params)
         if result and "error" not in result:
             NaverEstateAPI._set_cached(cache_key, result)

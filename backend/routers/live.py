@@ -29,6 +29,14 @@ router = APIRouter()
 
 CRAWL_REAL_ESTATE_TYPES = {"APT", "ABYG", "JGC", "PRE", "OPST", "OBYG", "RDV"}
 
+# 네이버 검색 API는 realEstateType 파라미터를 무시함
+# 키워드에 유형명을 추가해야 해당 유형 결과가 반환됨
+KEYWORD_SUFFIX_GROUPS = [
+    (None, {"APT", "ABYG", "JGC", "PRE"}),           # 기본 검색 = 아파트 계열
+    ("오피스텔", {"OPST", "OBYG"}),                     # "대전 오피스텔"
+    ("재건축", {"JGC"}),                                # "대전 재건축" (더 정확한 결과)
+]
+
 # ── TTL Cache ──
 _cache = TTLCache()
 
@@ -41,6 +49,81 @@ def _utcnow():
     return datetime.now(timezone.utc)
 
 
+def _parse_allowed_types(types: str | None) -> set[str]:
+    """types 쿼리 파라미터를 허용 유형 set으로 변환"""
+    if types and types.strip():
+        return set(t.strip() for t in types.split(",") if t.strip()) & CRAWL_REAL_ESTATE_TYPES
+    return set(CRAWL_REAL_ESTATE_TYPES)
+
+
+def _search_all_types(keyword: str, allowed_types: set[str], db: Session,
+                      upsert_kwargs: dict | None = None):
+    """매물유형 그룹별로 네이버 API 검색 → upsert → 결과 병합
+
+    네이버 검색 API는 realEstateType 파라미터를 무시하므로,
+    키워드에 유형명을 추가하여 해당 유형 결과를 가져옴.
+    예: "대전" → "대전", "대전 오피스텔", "대전 재건축"
+    """
+    all_complexes: list[dict] = []
+    seen: set[str] = set()
+    first_error = None
+
+    for suffix, group_codes in KEYWORD_SUFFIX_GROUPS:
+        if not (group_codes & allowed_types):
+            continue
+
+        search_keyword = f"{keyword} {suffix}" if suffix else keyword
+        page = 1
+        while True:
+            result = NaverEstateAPI.search_by_keyword(search_keyword, page=page)
+            if not result or "error" in result:
+                if page == 1 and first_error is None:
+                    first_error = result
+                break
+
+            complex_list = result.get("complexes") or result.get("complexList") or []
+            if not complex_list:
+                break
+
+            for c_data in complex_list:
+                re_type = c_data.get("realEstateTypeCode", "")
+                if re_type and re_type not in allowed_types:
+                    continue
+                cpx = upsert_complex_from_search(db, c_data, **(upsert_kwargs or {}))
+                if cpx and cpx["complex_no"] not in seen:
+                    seen.add(cpx["complex_no"])
+                    all_complexes.append(cpx)
+
+            if not result.get("isMoreData", False):
+                break
+            page += 1
+            time.sleep(0.5)
+
+        # 그룹 간 대기 (rate limit 방지)
+        if suffix:
+            time.sleep(0.3)
+
+    # 모든 그룹 실패 + 결과 0건이면 502
+    if not all_complexes and first_error is not None:
+        detail = first_error.get("error", "네이버 API 요청 실패") if first_error else "네이버 API 응답 없음"
+        raise HTTPException(status_code=502, detail=str(detail))
+
+    return all_complexes
+
+
+def _build_search_response(all_complexes: list[dict], db: Session) -> dict:
+    """검색 결과에 매물 수 추가"""
+    complex_nos = [c["complex_no"] for c in all_complexes]
+    counts = _get_article_counts(db, complex_nos)
+    return {
+        "complexes": [
+            {**c, "article_count": counts.get(c["complex_no"], 0)}
+            for c in all_complexes
+        ],
+        "total": len(all_complexes),
+    }
+
+
 @router.get("/search")
 def live_search(
     q: str = Query(..., min_length=1, description="Search keyword"),
@@ -48,54 +131,14 @@ def live_search(
     db: Session = Depends(get_db),
 ):
     """Live keyword search - Naver API -> DB upsert -> return"""
-    # types 파라미터 → 허용 유형 set 결정
-    allowed_types = (
-        set(t.strip() for t in types.split(",") if t.strip()) & CRAWL_REAL_ESTATE_TYPES
-        if types and types.strip() else CRAWL_REAL_ESTATE_TYPES
-    )
+    allowed_types = _parse_allowed_types(types)
     cache_key = f"search:{q}:{','.join(sorted(allowed_types))}"
     cached = _cache.get(cache_key)
     if cached is not None:
         return cached
 
-    all_complexes = []
-    page = 1
-
-    while True:
-        result = NaverEstateAPI.search_by_keyword(q, page=page)
-        if not result or "error" in result:
-            if page == 1:
-                detail = result.get("error", "네이버 API 요청 실패") if result else "네이버 API 응답 없음"
-                raise HTTPException(status_code=502, detail=str(detail))
-            break
-
-        complex_list = result.get("complexes") or result.get("complexList") or []
-        if not complex_list:
-            break
-
-        for c_data in complex_list:
-            re_type = c_data.get("realEstateTypeCode", "")
-            if re_type and re_type not in allowed_types:
-                continue
-            cpx = upsert_complex_from_search(db, c_data)
-            if cpx:
-                all_complexes.append(cpx)
-
-        if not result.get("isMoreData", False):
-            break
-        page += 1
-        time.sleep(0.5)
-
-    complex_nos = [c["complex_no"] for c in all_complexes]
-    counts = _get_article_counts(db, complex_nos)
-
-    response = {
-        "complexes": [
-            {**c, "article_count": counts.get(c["complex_no"], 0)}
-            for c in all_complexes
-        ],
-        "total": len(all_complexes),
-    }
+    all_complexes = _search_all_types(q, allowed_types, db)
+    response = _build_search_response(all_complexes, db)
     _cache.set(cache_key, response)
     return response
 
@@ -109,10 +152,7 @@ def live_region(
     db: Session = Depends(get_db),
 ):
     """Live region search - Naver API -> DB upsert -> return"""
-    allowed_types = (
-        set(t.strip() for t in types.split(",") if t.strip()) & CRAWL_REAL_ESTATE_TYPES
-        if types and types.strip() else CRAWL_REAL_ESTATE_TYPES
-    )
+    allowed_types = _parse_allowed_types(types)
     cache_key = f"region:{sido}:{sigungu}:{dong}:{','.join(sorted(allowed_types))}"
     cached = _cache.get(cache_key)
     if cached is not None:
@@ -124,44 +164,11 @@ def live_region(
     if dong:
         keyword += f" {dong}"
 
-    all_complexes = []
-    page = 1
-
-    while True:
-        result = NaverEstateAPI.search_by_keyword(keyword, page=page)
-        if not result or "error" in result:
-            if page == 1:
-                detail = result.get("error", "네이버 API 요청 실패") if result else "네이버 API 응답 없음"
-                raise HTTPException(status_code=502, detail=str(detail))
-            break
-
-        complex_list = result.get("complexes") or result.get("complexList") or []
-        if not complex_list:
-            break
-
-        for c_data in complex_list:
-            re_type = c_data.get("realEstateTypeCode", "")
-            if re_type and re_type not in allowed_types:
-                continue
-            cpx = upsert_complex_from_search(db, c_data, sido=sido, sigungu=sigungu, dong=dong)
-            if cpx:
-                all_complexes.append(cpx)
-
-        if not result.get("isMoreData", False):
-            break
-        page += 1
-        time.sleep(0.5)
-
-    complex_nos = [c["complex_no"] for c in all_complexes]
-    counts = _get_article_counts(db, complex_nos)
-
-    response = {
-        "complexes": [
-            {**c, "article_count": counts.get(c["complex_no"], 0)}
-            for c in all_complexes
-        ],
-        "total": len(all_complexes),
-    }
+    all_complexes = _search_all_types(
+        keyword, allowed_types, db,
+        upsert_kwargs={"sido": sido, "sigungu": sigungu, "dong": dong},
+    )
+    response = _build_search_response(all_complexes, db)
     _cache.set(cache_key, response)
     return response
 

@@ -184,8 +184,9 @@ function SearchContent() {
 
       {/* 로딩 */}
       {loading && (
-        <div className="flex justify-center py-16">
+        <div className="flex flex-col items-center py-16 gap-3">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" role="status" aria-label="로딩 중" />
+          <p className="text-sm text-gray-500">검색 중입니다. 잠시만 기다려주세요.</p>
         </div>
       )}
 

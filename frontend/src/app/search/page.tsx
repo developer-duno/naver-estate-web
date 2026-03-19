@@ -5,11 +5,13 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { searchComplexes, getComplexesByRegion } from "@/lib/api";
 import { createClient } from "@/lib/supabase";
 import RegionSelector from "@/components/RegionSelector";
-import type { Complex } from "@/types";
+import FilterBar from "@/components/FilterBar";
+import type { ArticleFilters, Complex } from "@/types";
 import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_TABS } from "@/lib/constants";
 import EstateTypeTabs from "@/components/EstateTypeTabs";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { useSmartBack } from "@/hooks/useSmartBack";
+import { useFilterParams } from "@/hooks/useFilterParams";
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -33,6 +35,7 @@ function SearchContent() {
     typesParam ? typesParam.split(",").filter((c) => allCodes.includes(c)) : [...allCodes]
   );
 
+  const { filters: urlFilters, setFilters: setUrlFilters, buildURL } = useFilterParams();
   const hasSearchParams = !!(keyword || (sido && sigungu));
 
   const title = keyword
@@ -149,8 +152,13 @@ function SearchContent() {
       </div>
 
       {/* 매물유형 탭 */}
-      <div className="mb-5">
+      <div className="mb-3">
         <EstateTypeTabs selected={selectedTypes} onChange={handleTabChange} />
+      </div>
+
+      {/* 매물 필터 */}
+      <div className="mb-5">
+        <FilterBar onChange={setUrlFilters} initialFilters={urlFilters} />
       </div>
 
       {/* 검색 파라미터 없을 때: 인라인 검색 폼 */}
@@ -262,7 +270,7 @@ function SearchContent() {
             </thead>
             <tbody>
               {filteredComplexes.map((cpx, idx) => (
-                <ComplexRow key={cpx.complex_no} complex={cpx} index={idx + 1} />
+                <ComplexRow key={cpx.complex_no} complex={cpx} index={idx + 1} filterURL={buildURL(`/complex/${cpx.complex_no}`, undefined, urlFilters)} />
               ))}
             </tbody>
           </table>
@@ -272,7 +280,7 @@ function SearchContent() {
   );
 }
 
-const ComplexRow = memo(function ComplexRow({ complex, index }: { complex: Complex; index: number }) {
+const ComplexRow = memo(function ComplexRow({ complex, index, filterURL }: { complex: Complex; index: number; filterURL?: string }) {
   const router = useRouter();
   const year = complex.use_approve_ymd?.slice(0, 4);
   const articleCount = complex.article_count ?? 0;
@@ -281,7 +289,7 @@ const ComplexRow = memo(function ComplexRow({ complex, index }: { complex: Compl
   return (
     <tr
       className={`hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-200 ${isEven ? "bg-gray-50/60" : "bg-white"}`}
-      onClick={() => router.push(`/complex/${complex.complex_no}`)}
+      onClick={() => router.push(filterURL || `/complex/${complex.complex_no}`)}
     >
       <td className="px-3 py-2 text-gray-400 text-center text-xs border-r border-gray-100">{index}</td>
       <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap border-r border-gray-100">{complex.complex_name}</td>

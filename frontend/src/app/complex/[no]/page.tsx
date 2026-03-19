@@ -17,6 +17,7 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useCrawlProgress } from "@/hooks/useCrawlProgress";
 import { useExport } from "@/hooks/useExport";
+import { useFilterParams } from "@/hooks/useFilterParams";
 import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions, SortBy, CrawlProgress } from "@/types";
 import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
@@ -99,7 +100,8 @@ export default function ComplexDetailPage() {
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
   const [priceStatsKey, setPriceStatsKey] = useState(0);
   const [activeSortBy, setActiveSortBy] = useState("rank");
-  const currentFiltersRef = useRef<ArticleFilters>({});
+  const { filters: urlFilters } = useFilterParams();
+  const currentFiltersRef = useRef<ArticleFilters>(urlFilters);
   const requestIdRef = useRef(0);
   const cancelledRef = useRef(false);
 
@@ -137,7 +139,7 @@ export default function ComplexDetailPage() {
         // Phase 1: Load DB data immediately
         const [cpxResult, artResult, pyeongResult] = await Promise.allSettled([
           getComplex(complexNo),
-          getArticles(complexNo, { page: 1, page_size: PAGE_SIZE }),
+          getArticles(complexNo, { ...urlFilters, page: 1, page_size: PAGE_SIZE }),
           getPyeongDetails(complexNo),
         ]);
 
@@ -402,7 +404,7 @@ export default function ComplexDetailPage() {
           {filterOpen ? "▲ 필터 접기" : "▼ 필터 펼치기"}
         </button>
         <div className={filterOpen ? "" : "hidden md:block"}>
-          <FilterBar onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} />
+          <FilterBar onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} initialFilters={urlFilters} />
         </div>
       </div>
 

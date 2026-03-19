@@ -16,32 +16,36 @@ interface Props {
   filterOptions?: FilterOptions;
   sortBy?: string;
   onSortChange?: (sortBy: string) => void;
+  initialFilters?: ArticleFilters;
 }
 
 type FilterChip = { label: string; reset: () => void };
 
-export default memo(function FilterBar({ onChange, filterOptions, sortBy: externalSortBy, onSortChange }: Props) {
-  // ── 상태 (21개 — 기존과 동일) ──
-  const [tradeType, setTradeType] = useState("전체");
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
-  const [minRent, setMinRent] = useState("");
-  const [maxRent, setMaxRent] = useState("");
+/** ArticleFilters → FilterBar 내부 상태 초기값 역파싱 */
+function _initStr(v: number | undefined): string { return v ? String(v) : ""; }
+
+export default memo(function FilterBar({ onChange, filterOptions, sortBy: externalSortBy, onSortChange, initialFilters: init }: Props) {
+  // ── 상태 (21개 — initialFilters에서 초기화) ──
+  const [tradeType, setTradeType] = useState(init?.trade_types || "전체");
+  const [minPrice, setMinPrice] = useState(_initStr(init?.min_price));
+  const [maxPrice, setMaxPrice] = useState(_initStr(init?.max_price));
+  const [minRent, setMinRent] = useState(_initStr(init?.min_rent));
+  const [maxRent, setMaxRent] = useState(_initStr(init?.max_rent));
   const [areaUnit, setAreaUnit] = useState<"m²" | "평">("m²");
-  const [minArea, setMinArea] = useState("");
-  const [maxArea, setMaxArea] = useState("");
-  const [minRooms, setMinRooms] = useState("0");
-  const [minBaths, setMinBaths] = useState("0");
-  const [direction, setDirection] = useState("전체");
-  const [minPpyeong, setMinPpyeong] = useState("");
-  const [maxPpyeong, setMaxPpyeong] = useState("");
-  const [minMaint, setMinMaint] = useState("");
-  const [maxMaint, setMaxMaint] = useState("");
-  const [buildingAge, setBuildingAge] = useState("0");
-  const [moveInType, setMoveInType] = useState("전체");
-  const [estateType, setEstateType] = useState("all");
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [buildingName, setBuildingName] = useState("전체");
+  const [minArea, setMinArea] = useState(_initStr(init?.min_area_m2));
+  const [maxArea, setMaxArea] = useState(_initStr(init?.max_area_m2));
+  const [minRooms, setMinRooms] = useState(init?.min_rooms ? String(init.min_rooms) : "0");
+  const [minBaths, setMinBaths] = useState(init?.min_baths ? String(init.min_baths) : "0");
+  const [direction, setDirection] = useState(init?.direction || "전체");
+  const [minPpyeong, setMinPpyeong] = useState(_initStr(init?.min_ppyeong));
+  const [maxPpyeong, setMaxPpyeong] = useState(_initStr(init?.max_ppyeong));
+  const [minMaint, setMinMaint] = useState(_initStr(init?.min_maintenance));
+  const [maxMaint, setMaxMaint] = useState(_initStr(init?.max_maintenance));
+  const [buildingAge, setBuildingAge] = useState(init?.max_building_age ? String(init.max_building_age) : "0");
+  const [moveInType, setMoveInType] = useState(init?.move_in_type || "전체");
+  const [estateType, setEstateType] = useState(init?.estate_type || "all");
+  const [verifiedOnly, setVerifiedOnly] = useState(init?.verified_only || false);
+  const [buildingName, setBuildingName] = useState(init?.building_name || "전체");
   const [floorPreset, setFloorPreset] = useState("전체");
   const [sortBy, setSortBy] = useState("rank");
 

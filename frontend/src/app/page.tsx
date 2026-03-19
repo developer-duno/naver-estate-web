@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { getStats } from "@/lib/api";
 import RegionSelector from "@/components/RegionSelector";
 import EstateTypeTabs from "@/components/EstateTypeTabs";
+import FilterBar from "@/components/FilterBar";
 import { ESTATE_TYPE_TABS } from "@/lib/constants";
-import type { DbStats } from "@/types";
+import type { ArticleFilters, DbStats } from "@/types";
+import { buildFilterURL } from "@/hooks/useFilterParams";
 
 export default function HomePage() {
   const router = useRouter();
@@ -16,6 +18,7 @@ export default function HomePage() {
   const [statsError, setStatsError] = useState(false);
   const allCodes = ESTATE_TYPE_TABS.map((t) => t.code) as string[];
   const [selectedTypes, setSelectedTypes] = useState<string[]>([...allCodes]);
+  const [articleFilters, setArticleFilters] = useState<ArticleFilters>({});
   const abortRef = useRef(false);
 
   const loadStats = () => {
@@ -40,13 +43,16 @@ export default function HomePage() {
   const handleKeywordSearch = () => {
     const q = keyword.trim();
     if (!q) return;
-    router.push(`/search?q=${encodeURIComponent(q)}${typesParam}`);
+    const extra: Record<string, string> = { q };
+    if (typesParam) extra.types = selectedTypes.join(",");
+    router.push(buildFilterURL("/search", extra, articleFilters));
   };
 
   const handleRegionSearch = (sido: string, sigungu: string, dong?: string) => {
-    let path = `/search?sido=${encodeURIComponent(sido)}&sigungu=${encodeURIComponent(sigungu)}`;
-    if (dong) path += `&dong=${encodeURIComponent(dong)}`;
-    router.push(path + typesParam);
+    const extra: Record<string, string> = { sido, sigungu };
+    if (dong) extra.dong = dong;
+    if (typesParam) extra.types = selectedTypes.join(",");
+    router.push(buildFilterURL("/search", extra, articleFilters));
   };
 
   const complexCount = stats?.complex_count ?? 0;
@@ -76,6 +82,11 @@ export default function HomePage() {
       {/* 매물유형 탭 */}
       <div className="flex justify-center mb-4">
         <EstateTypeTabs selected={selectedTypes} onChange={setSelectedTypes} />
+      </div>
+
+      {/* 매물 필터 */}
+      <div className="mb-4">
+        <FilterBar onChange={setArticleFilters} />
       </div>
 
       {/* 검색 영역: 키워드 + 지역 선택 한 카드 */}

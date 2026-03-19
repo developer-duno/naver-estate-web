@@ -28,6 +28,7 @@ const nextConfig: NextConfig = {
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https://*.naver.net https://*.pstatic.net",
               "connect-src 'self' http://localhost:* https://*.supabase.co https://*.railway.app https://*.trycloudflare.com",
+              "media-src 'self' data:",
               "frame-ancestors 'none'",
             ].join("; "),
           },

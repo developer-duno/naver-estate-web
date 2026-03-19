@@ -139,7 +139,7 @@ function formatMaintCost(cost: number, basis?: string): string {
 function PyeongCard({ detail: pd }: { detail: PyeongDetail }) {
   const [showPlan, setShowPlan] = useState(false);
   const title = pd.pyeong_name && pd.exclusive_area
-    ? `${pd.pyeong_name}평 (${pd.exclusive_area}㎡)`
+    ? `${pd.pyeong_name} (${pd.exclusive_area}㎡${pd.exclusive_pyeong ? `, ${pd.exclusive_pyeong}평` : ""})`
     : pd.exclusive_area ? `${pd.exclusive_area}㎡` : `면적 ${pd.pyeong_no}`;
 
   return (
@@ -203,7 +203,7 @@ function PyeongCard({ detail: pd }: { detail: PyeongDetail }) {
           </button>
           {showPlan && (
             <div className="mt-1">
-              <Image src={pd.floor_plan_url} alt={`${pd.pyeong_name || ""}평 평면도`} width={300} height={200} className="max-h-48 border rounded object-contain" />
+              <Image src={pd.floor_plan_url} alt={`${pd.pyeong_name || pd.exclusive_area || ""} 평면도`} width={300} height={200} className="max-h-48 border rounded object-contain" />
             </div>
           )}
         </div>

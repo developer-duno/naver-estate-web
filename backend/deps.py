@@ -51,7 +51,8 @@ def _verify_token_local(token: str) -> dict:
         if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="유효하지 않은 토큰")
         return {"user_id": user_id, "email": payload.get("email", "")}
-    except JWTError:
+    except JWTError as e:
+        logger.warning("[AUTH] JWT 로컬 검증 실패: %s (token prefix: %s...)", e, token[:20] if token else "None")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="토큰 검증 실패")
 
 
@@ -95,10 +96,14 @@ def get_current_user(
 
     token = credentials.credentials
 
-    # JWT secret이 있으면 로컬 검증, 없으면 Supabase API로 원격 검증
+    # JWT secret이 있으면 로컬 검증 시도, 실패 시 원격 검증 폴백
+    verified = None
     if SUPABASE_JWT_SECRET:
-        verified = _verify_token_local(token)
-    else:
+        try:
+            verified = _verify_token_local(token)
+        except HTTPException:
+            pass  # 로컬 실패 → 원격 폴백
+    if verified is None:
         verified = _verify_token_remote(token)
 
     user_id = verified["user_id"]

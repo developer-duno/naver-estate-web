@@ -100,7 +100,7 @@ export default function ComplexDetailPage() {
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
   const [priceStatsKey, setPriceStatsKey] = useState(0);
   const [activeSortBy, setActiveSortBy] = useState("rank");
-  const { filters: urlFilters } = useFilterParams();
+  const { filters: urlFilters, filterKey } = useFilterParams();
   const currentFiltersRef = useRef<ArticleFilters>(urlFilters);
   const requestIdRef = useRef(0);
   const cancelledRef = useRef(false);
@@ -404,7 +404,7 @@ export default function ComplexDetailPage() {
           {filterOpen ? "▲ 필터 접기" : "▼ 필터 펼치기"}
         </button>
         <div className={filterOpen ? "" : "hidden md:block"}>
-          <FilterBar onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} initialFilters={urlFilters} />
+          <FilterBar key={filterKey} onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} initialFilters={urlFilters} />
         </div>
       </div>
 

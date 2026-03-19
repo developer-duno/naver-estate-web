@@ -99,5 +99,8 @@ export function useFilterParams() {
     [searchParams, router, pathname],
   );
 
-  return { filters, setFilters, buildURL: buildFilterURL };
+  /** URL 쿼리 문자열 (FilterBar key용 — URL 변경 시 리마운트) */
+  const filterKey = searchParams.toString();
+
+  return { filters, setFilters, buildURL: buildFilterURL, filterKey };
 }

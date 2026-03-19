@@ -35,7 +35,7 @@ function SearchContent() {
     typesParam ? typesParam.split(",").filter((c) => allCodes.includes(c)) : [...allCodes]
   );
 
-  const { filters: urlFilters, setFilters: setUrlFilters, buildURL } = useFilterParams();
+  const { filters: urlFilters, setFilters: setUrlFilters, buildURL, filterKey } = useFilterParams();
   const hasSearchParams = !!(keyword || (sido && sigungu));
 
   const title = keyword
@@ -158,7 +158,7 @@ function SearchContent() {
 
       {/* 매물 필터 */}
       <div className="mb-5">
-        <FilterBar onChange={setUrlFilters} initialFilters={urlFilters} />
+        <FilterBar key={filterKey} onChange={setUrlFilters} initialFilters={urlFilters} />
       </div>
 
       {/* 검색 파라미터 없을 때: 인라인 검색 폼 */}

@@ -5,7 +5,7 @@ import type { ArticleFilters, FilterOptions, SortBy } from "@/types";
 import {
   M2_TO_PYEONG, FLOOR_PRESETS, DEBOUNCE_MS, SORT_OPTIONS,
   BUILDING_AGE_OPTIONS, MOVE_IN_OPTIONS,
-  PRICE_PRESETS, AREA_PRESETS, MAINTENANCE_PRESETS, PPYEONG_PRESETS,
+  PRICE_PRESETS, AREA_PRESETS, AREA_PRESETS_PYEONG, MAINTENANCE_PRESETS, PPYEONG_PRESETS,
   ESTATE_TYPE_FILTER_OPTIONS,
   type RangePreset,
 } from "@/lib/constants";
@@ -235,26 +235,21 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
           onToggle={() => toggle("trade")}
         >
           <p className={sectionLabel}>거래유형 선택</p>
-          <div className={separator} />
-          {["매매", "전세", "월세", "단기임대"].map((t) => (
-            <label key={t} className="flex items-center gap-2 py-1 text-xs cursor-pointer">
-              <input
-                type="radio"
-                name="tradeType"
-                checked={tradeType === t}
-                onChange={() => setImmediate(setTradeType, "tradeType")(t)}
-                className="accent-blue-600"
-              />
-              {t}
-            </label>
-          ))}
-          <div className={separator} />
-          <button
-            onClick={() => setImmediate(setTradeType, "tradeType")("전체")}
-            className="text-xs text-gray-500 hover:text-gray-700 w-full text-left"
-          >
-            전체 (해제)
-          </button>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {["전체", "매매", "전세", "월세", "단기임대"].map((t) => (
+              <button
+                key={t}
+                onClick={() => setImmediate(setTradeType, "tradeType")(t)}
+                className={`px-2 py-1 text-xs border rounded ${
+                  tradeType === t
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
         </FilterDropdown>
 
         {/* 가격 */}
@@ -345,7 +340,7 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
             </button>
           </div>
           <div className="flex flex-wrap gap-1 mb-2">
-            {AREA_PRESETS.map((p) => (
+            {(areaUnit === "평" ? AREA_PRESETS_PYEONG : AREA_PRESETS).map((p) => (
               <button
                 key={p.label}
                 onClick={() => applyPreset(p, setMinArea, setMaxArea, "minArea", "maxArea")}
@@ -378,19 +373,26 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
           onToggle={() => toggle("floor")}
         >
           <p className={sectionLabel}>층수 필터</p>
-          <div className={separator} />
-          {["전체", "저층", "중층", "고층"].map((f) => (
-            <label key={f} className="flex items-center gap-2 py-1 text-xs cursor-pointer">
-              <input
-                type="radio"
-                name="floorPreset"
-                checked={floorPreset === f}
-                onChange={() => setImmediate(setFloorPreset, "floorPreset")(f)}
-                className="accent-blue-600"
-              />
-              {f === "저층" ? "저층 (1~5층)" : f === "중층" ? "중층 (6~10층)" : f === "고층" ? "고층 (11층↑)" : f}
-            </label>
-          ))}
+          <div className="flex flex-wrap gap-1 mt-1">
+            {([
+              { k: "전체", l: "전체" },
+              { k: "저층", l: "저층(1~5)" },
+              { k: "중층", l: "중층(6~10)" },
+              { k: "고층", l: "고층(11↑)" },
+            ] as const).map(({ k, l }) => (
+              <button
+                key={k}
+                onClick={() => setImmediate(setFloorPreset, "floorPreset")(k)}
+                className={`px-2 py-1 text-xs border rounded ${
+                  floorPreset === k
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
+                }`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
         </FilterDropdown>
 
         {/* 입주 */}

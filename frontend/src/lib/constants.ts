@@ -123,6 +123,16 @@ export const AREA_PRESETS: RangePreset[] = [
   { label: "135m²~", min: 135 },
 ];
 
+/** 면적 프리셋 (평 단위 라벨, min/max는 m² 기준 유지) */
+export const AREA_PRESETS_PYEONG: RangePreset[] = [
+  { label: "전체" },
+  { label: "~18평", max: 60 },
+  { label: "18평", min: 59, max: 60 },
+  { label: "25평", min: 84, max: 85 },
+  { label: "34평", min: 114, max: 115 },
+  { label: "41평~", min: 135 },
+];
+
 /** 관리비 프리셋 (만원 단위) — 데스크톱 앱 동기화 */
 export const MAINTENANCE_PRESETS: RangePreset[] = [
   { label: "전체" },

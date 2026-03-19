@@ -59,7 +59,7 @@ describe("FilterBar — 거래유형 드롭다운", () => {
     const onChange = vi.fn();
     render(<FilterBar {...defaultProps} onChange={onChange} />);
     openDropdown("거래유형");
-    fireEvent.click(screen.getByLabelText("매매"));
+    fireEvent.click(screen.getByText("매매"));
     expect(onChange).toHaveBeenCalled();
   });
 });
@@ -109,9 +109,9 @@ describe("FilterBar — 층수 드롭다운", () => {
   it("드롭다운 열면 층수 프리셋 표시", () => {
     render(<FilterBar {...defaultProps} />);
     openDropdown("층수");
-    expect(screen.getByText("저층 (1~5층)")).toBeInTheDocument();
-    expect(screen.getByText("중층 (6~10층)")).toBeInTheDocument();
-    expect(screen.getByText("고층 (11층↑)")).toBeInTheDocument();
+    expect(screen.getByText("저층(1~5)")).toBeInTheDocument();
+    expect(screen.getByText("중층(6~10)")).toBeInTheDocument();
+    expect(screen.getByText("고층(11↑)")).toBeInTheDocument();
   });
 });
 
@@ -145,7 +145,7 @@ describe("FilterBar — 필터 칩", () => {
     const onChange = vi.fn();
     render(<FilterBar {...defaultProps} onChange={onChange} />);
     openDropdown("거래유형");
-    fireEvent.click(screen.getByLabelText("매매"));
+    fireEvent.click(screen.getByText("매매"));
     // "매매"가 드롭다운 내부 + 칩 두 곳에 존재
     expect(screen.getAllByText("매매").length).toBeGreaterThanOrEqual(1);
   });

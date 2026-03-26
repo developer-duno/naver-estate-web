@@ -19,6 +19,18 @@ from utils import utcnow, safe_int, safe_float
 
 logger = logging.getLogger(__name__)
 
+# 비정규 시/도명 → 정규 시/도명 (네이버 API cortarAddress 파싱 대응)
+_SIDO_NORMALIZE = {
+    "서울시": "서울특별시",
+    "부산시": "부산광역시",
+    "대구시": "대구광역시",
+    "인천시": "인천광역시",
+    "광주시": "광주광역시",
+    "대전시": "대전광역시",
+    "울산시": "울산광역시",
+    "세종시": "세종특별자치시",
+}
+
 
 def parse_maintenance_cost(cost_str):
     """관리비 문자열에서 숫자만 추출"""
@@ -72,7 +84,7 @@ def upsert_complex_from_search(db, data, sido=None, sigungu=None, dong=None, com
         address = data.get("cortarAddress", "")
         parts = address.split() if address else []
         if len(parts) >= 2:
-            values["sido"] = parts[0]
+            values["sido"] = _SIDO_NORMALIZE.get(parts[0], parts[0])
             values["sigungu"] = parts[1]
             if len(parts) >= 3:
                 values["dong"] = parts[2]

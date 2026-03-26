@@ -10,6 +10,18 @@ function sb() {
   return createClient();
 }
 
+/** 비정규 시/도명 → 정규 시/도명 매핑 (네이버 API cortarAddress 파싱 대응) */
+const SIDO_NORMALIZE: Record<string, string> = {
+  "서울시": "서울특별시",
+  "부산시": "부산광역시",
+  "대구시": "대구광역시",
+  "인천시": "인천광역시",
+  "광주시": "광주광역시",
+  "대전시": "대전광역시",
+  "울산시": "울산광역시",
+  "세종시": "세종특별자치시",
+};
+
 /** DB 통계 */
 export async function getStatsDirect(): Promise<DbStats> {
   const supabase = sb();
@@ -49,11 +61,12 @@ export async function getRegionsDirect(): Promise<Regions> {
 
     for (const row of data) {
       if (!row.sido) continue;
-      if (!regions[row.sido]) regions[row.sido] = {};
+      const sido = SIDO_NORMALIZE[row.sido] ?? row.sido;
+      if (!regions[sido]) regions[sido] = {};
       if (row.sigungu) {
-        if (!regions[row.sido][row.sigungu]) regions[row.sido][row.sigungu] = [];
-        if (row.dong && !regions[row.sido][row.sigungu].includes(row.dong)) {
-          regions[row.sido][row.sigungu].push(row.dong);
+        if (!regions[sido][row.sigungu]) regions[sido][row.sigungu] = [];
+        if (row.dong && !regions[sido][row.sigungu].includes(row.dong)) {
+          regions[sido][row.sigungu].push(row.dong);
         }
       }
     }

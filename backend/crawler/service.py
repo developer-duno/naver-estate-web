@@ -184,6 +184,49 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
         db.close()
 
 
+def crawl_popular_complexes(batch_size: int = 100):
+    """인기 단지 선제적 크롤링 — 최근 사용자가 조회한 단지 우선.
+
+    선정 기준: last_crawled_at 최근순 (= 사용자가 실제 검색/조회한 단지)
+    IP 차단 방지를 위해 단지 간 2초 대기.
+    """
+    db = SessionLocal()
+    job = CrawlJob(job_type="popular_crawl", status="running", started_at=utcnow())
+    db.add(job)
+    db.commit()
+
+    try:
+        complexes = (
+            db.query(Complex)
+            .filter(Complex.last_crawled_at.isnot(None))
+            .order_by(Complex.last_crawled_at.desc())
+            .limit(batch_size)
+            .all()
+        )
+
+        logger.info("인기 단지 선제적 크롤링 시작: %d개 단지", len(complexes))
+        processed = 0
+        for cpx in complexes:
+            crawl_complex_articles(cpx.complex_no, cpx.sido, cpx.sigungu)
+            processed += 1
+            time.sleep(2)
+
+        job.status = "completed"
+        job.total_items = len(complexes)
+        job.processed_items = processed
+        job.completed_at = utcnow()
+        db.commit()
+        logger.info("인기 단지 선제적 크롤링 완료: %d개 단지", processed)
+
+    except Exception as e:
+        job.status = "failed"
+        job.error_message = str(e)
+        db.commit()
+        logger.exception("인기 단지 선제적 크롤링 실패")
+    finally:
+        db.close()
+
+
 def crawl_articles_batch(batch_size: int = 50):
     """last_crawled_at이 가장 오래된 단지부터 batch_size만큼 매물 수집"""
     db = SessionLocal()

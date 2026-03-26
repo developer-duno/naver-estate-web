@@ -13,7 +13,7 @@ from deps import get_db, get_approved_user
 from db.models import Complex as ComplexModel, Article as ArticleModel
 from db.database import SessionLocal
 from routers.serializers import complex_to_dict, article_to_dict
-from services.cache import TTLCache
+from services.cache import get_cache
 from services.upsert import (
     upsert_complex_from_search,
     upsert_article,
@@ -33,11 +33,12 @@ CRAWL_REAL_ESTATE_TYPES = {"APT", "ABYG", "JGC", "PRE", "OPST", "OBYG", "RDV"}
 
 # ── Rate limit & 배치 상수 ──
 MAX_SEARCH_PAGES = 50            # 검색 최대 페이지 (무한 루프 방지)
-INTER_PAGE_DELAY = 0.3           # 페이지 간 대기 (초)
+INTER_PAGE_DELAY = 0.1           # 페이지 간 대기 (초) — shared _throttle(1.0s)이 실제 제한
 INTER_GROUP_DELAY = 0.2          # 검색 그룹 간 대기 (초)
-DETAIL_CRAWL_DELAY = 0.5         # 상세 크롤링 건별 대기 (초)
+DETAIL_CRAWL_DELAY = 0.3         # 상세 크롤링 건별 대기 (초) — shared _throttle과 합산
 PAGE_COMMIT_INTERVAL = 5         # N페이지마다 DB 커밋
 DETAIL_COMMIT_INTERVAL = 50      # N건마다 DB 커밋
+DETAIL_FAILURE_THRESHOLD = 0.5   # 상세 크롤 실패율 임계치 (50% 초과 시 done_partial)
 
 # 네이버 검색 API는 realEstateType 파라미터를 무시함
 # 키워드에 유형명을 추가해야 해당 유형 결과가 반환됨
@@ -51,7 +52,7 @@ KEYWORD_SUFFIX_GROUPS = [
 ]
 
 # ── TTL Cache ──
-_cache = TTLCache()
+_cache = get_cache("live")
 
 # -- Background crawl progress tracking --
 _crawl_status: dict[str, dict] = {}
@@ -342,10 +343,8 @@ def live_articles(
     )
     db.commit()
 
-    # Enrich complex detail if not yet done
-    cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
-    if cpx:  # Always re-enrich to update new fields
-        enrich_complex_detail(db, complex_no)
+    # Enrich complex detail
+    enrich_complex_detail(db, complex_no)
 
     # Return active articles + refreshed complex info from DB
     articles = (
@@ -354,7 +353,6 @@ def live_articles(
         .all()
     )
 
-    # Re-fetch complex after enrichment to return updated info
     cpx_refreshed = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
 
     result = {
@@ -391,6 +389,16 @@ def _background_crawl(complex_no: str):
         all_article_nos = set()
         page = 1
 
+        # 기존 가격 일괄 조회 (N+1 방지)
+        existing_prices = {
+            row[0]: (row[1], row[2])
+            for row in db.query(
+                ArticleModel.article_no, ArticleModel.numeric_price, ArticleModel.numeric_rent_price
+            ).filter(
+                ArticleModel.complex_no == complex_no, ArticleModel.is_active == True
+            ).all()
+        }
+
         while True:
             result = _fetch_articles_all_trade_types(complex_no, page=page)
             if not result or "error" in result:
@@ -409,7 +417,7 @@ def _background_crawl(complex_no: str):
             for a_data in article_list:
                 article = RealEstateArticle.from_dict(a_data)
                 article.complex_no = complex_no
-                upsert_article(db, article, commit=False, track_price=True)
+                upsert_article(db, article, commit=False, track_price=True, existing_prices=existing_prices)
                 all_article_nos.add(article.article_no)
 
             if page % PAGE_COMMIT_INTERVAL == 0:
@@ -445,7 +453,11 @@ def _background_crawl(complex_no: str):
             _crawl_details_for_complex(db, complex_no)
         except Exception as e:
             logger.warning("Detail crawl phase failed: %s → %s", complex_no, e)
-        _update_crawl_status(complex_no, detail_phase="done", status="done")
+        # done_partial이 설정되었으면 유지, 아니면 done으로 설정
+        with _crawl_lock:
+            current_status = _crawl_status.get(complex_no, {}).get("status")
+        final_status = current_status if current_status == "done_partial" else "done"
+        _update_crawl_status(complex_no, detail_phase="done", status=final_status)
         logger.info("Background crawl done: %s -> %d articles", complex_no, len(all_article_nos))
 
     except Exception as e:
@@ -459,6 +471,10 @@ def _background_crawl(complex_no: str):
         db.close()
         # Invalidate cache so next DB read gets fresh data
         _cache.delete(f"articles:{complex_no}")
+        # complexes.py의 필터/통계 캐시도 무효화 (레지스트리 기반, 순환 import 없음)
+        complexes_cache = get_cache("complexes")
+        complexes_cache.delete(f"filter_options:{complex_no}")
+        complexes_cache.delete(f"price_stats:{complex_no}")
 
 
 def _get_article_counts(db: Session, complex_nos: list[str]) -> dict[str, int]:
@@ -477,6 +493,10 @@ def _get_article_counts(db: Session, complex_nos: list[str]) -> dict[str, int]:
 
 def _crawl_details_for_complex(db, complex_no: str):
     """단지의 미크롤링 매물 상세를 일괄 수집 (백그라운드 워커에서 호출)"""
+    total_active = db.query(ArticleModel).filter(
+        ArticleModel.complex_no == complex_no,
+        ArticleModel.is_active == True,
+    ).count()
     articles = (
         db.query(ArticleModel)
         .filter(
@@ -486,41 +506,73 @@ def _crawl_details_for_complex(db, complex_no: str):
         )
         .all()
     )
+    skipped = total_active - len(articles)
     if not articles:
+        _update_crawl_status(complex_no, detail_total=0, detail_crawled_count=0,
+                             detail_skipped_count=skipped)
         return
 
     total = len(articles)
-    _update_crawl_status(complex_no, detail_total=total, detail_crawled_count=0)
+    _update_crawl_status(complex_no, detail_total=total, detail_crawled_count=0,
+                         detail_skipped_count=skipped)
 
-    for i, art in enumerate(articles):
+    def _fetch_detail(article_no: str):
+        """워커 스레드: 네트워크 요청만 수행, DB 접근 금지. rate limiting 포함."""
+        time.sleep(DETAIL_CRAWL_DELAY)  # 워커 안에서 rate limiting
         try:
-            detail_data = NaverEstateAPI.get_article_detail(art.article_no)
-            if detail_data and "error" not in detail_data:
-                domain_article = RealEstateArticle(
-                    article_no=art.article_no,
-                    trade_type_name=art.trade_type_name or "",
-                )
-                domain_article.deal_or_warrant_prc = art.deal_or_warrant_prc
-                domain_article.rent_prc = art.rent_prc
-                domain_article.area2_m2 = art.area2_m2
-                domain_article.update_from_detail(detail_data)
-
-                update_data = build_detail_update_dict(domain_article, detail_data)
-                db.query(ArticleModel).filter(
-                    ArticleModel.article_no == art.article_no
-                ).update(update_data, synchronize_session=False)
+            return article_no, NaverEstateAPI.get_article_detail(article_no)
         except Exception as e:
-            logger.warning("Article detail crawl failed: %s → %s", art.article_no, e)
+            logger.warning("Article detail fetch failed: %s → %s", article_no, e)
+            return article_no, None
 
-        _update_crawl_status(complex_no, detail_crawled_count=i + 1)
+    # article_no → DB article 매핑
+    art_map = {art.article_no: art for art in articles}
+    crawled_count = 0
+    failed_count = 0
 
-        if (i + 1) % DETAIL_COMMIT_INTERVAL == 0:
-            db.commit()
+    # 2스레드 병렬: 네트워크 I/O 병렬화, DB 쓰기는 메인 스레드에서 순차 처리
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(_fetch_detail, art.article_no) for art in articles]
 
-        time.sleep(DETAIL_CRAWL_DELAY)
+        for i, future in enumerate(as_completed(futures)):
+            article_no, detail_data = future.result()
+            art = art_map[article_no]
+
+            if detail_data and "error" not in detail_data:
+                try:
+                    domain_article = RealEstateArticle(
+                        article_no=art.article_no,
+                        trade_type_name=art.trade_type_name or "",
+                    )
+                    domain_article.deal_or_warrant_prc = art.deal_or_warrant_prc
+                    domain_article.rent_prc = art.rent_prc
+                    domain_article.area2_m2 = art.area2_m2
+                    domain_article.update_from_detail(detail_data)
+
+                    update_data = build_detail_update_dict(domain_article, detail_data)
+                    db.query(ArticleModel).filter(
+                        ArticleModel.article_no == art.article_no
+                    ).update(update_data, synchronize_session=False)
+                    crawled_count += 1
+                except Exception as e:
+                    logger.warning("Article detail update failed: %s → %s", art.article_no, e)
+                    failed_count += 1
+            else:
+                failed_count += 1
+
+            _update_crawl_status(complex_no, detail_crawled_count=i + 1)
+
+            if (i + 1) % DETAIL_COMMIT_INTERVAL == 0:
+                db.commit()
 
     db.commit()  # 나머지 커밋
-    logger.info("Detail crawl done for %s: %d articles", complex_no, total)
+
+    # 실패율 50% 초과 시 부분 완료 표시
+    if total > 0 and failed_count > total * DETAIL_FAILURE_THRESHOLD:
+        _update_crawl_status(complex_no, status="done_partial")
+
+    logger.info("Detail crawl done for %s: %d/%d articles (failed: %d)",
+                complex_no, crawled_count, total, failed_count)
 
 
 @router.get("/article/{article_no}/detail")

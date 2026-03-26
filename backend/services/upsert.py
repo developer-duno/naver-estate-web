@@ -144,18 +144,25 @@ def _build_article_values(article):
     }
 
 
-def upsert_article(db, article, commit=True, track_price=False):
-    """매물 upsert. commit=False면 호출자가 관리. track_price=True면 가격 변동 감지."""
+def upsert_article(db, article, commit=True, track_price=False, existing_prices=None):
+    """매물 upsert. commit=False면 호출자가 관리. track_price=True면 가격 변동 감지.
+
+    existing_prices: {article_no: (numeric_price, numeric_rent_price)} dict.
+    전달 시 개별 SELECT 대신 캐시 사용 (N+1 방지).
+    """
     values = _build_article_values(article)
 
     if track_price:
-        existing = db.query(ArticleModel.numeric_price, ArticleModel.numeric_rent_price).filter(
-            ArticleModel.article_no == article.article_no
-        ).first()
+        if existing_prices is not None:
+            price_tuple = existing_prices.get(article.article_no)
+        else:
+            row = db.query(ArticleModel.numeric_price, ArticleModel.numeric_rent_price).filter(
+                ArticleModel.article_no == article.article_no
+            ).first()
+            price_tuple = tuple(row) if row else None
 
-        if existing and values["numeric_price"] is not None:
-            old_price = existing[0]
-            old_rent = existing[1]
+        if price_tuple and values["numeric_price"] is not None:
+            old_price, old_rent = price_tuple
             new_price = values["numeric_price"]
             new_rent = values["numeric_rent_price"]
             price_changed = (

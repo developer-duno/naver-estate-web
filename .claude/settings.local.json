@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls z:/cursor/naver-estate-web/backend/pyproject.toml z:/cursor/naver-estate-web/backend/requirements*.txt)",
+      "Bash(where python:*)",
+      "Bash(py --version)",
+      "Bash(py -3 --version)",
+      "Bash(py -3 -m venv .venv)",
+      "Bash(z:/cursor/naver-estate-web/backend/.venv/Scripts/python.exe --version)",
+      "Bash(z:/cursor/naver-estate-web/backend/.venv/Scripts/pip.exe install:*)",
+      "Bash(npm run:*)",
+      "Bash(npx next:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vitest:*)",
+      "Bash(curl -s --connect-timeout 5 http://192.168.219.101:8002/health)"
+    ]
+  }
+}

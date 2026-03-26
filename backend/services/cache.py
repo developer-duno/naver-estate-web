@@ -10,6 +10,18 @@ import time
 DEFAULT_TTL_SECONDS = 300  # 5분
 MAX_CACHE_SIZE = 500
 
+# 라우터별 캐시 레지스트리 — 순환 import 없이 캐시 무효화 가능
+_registry: dict[str, "TTLCache"] = {}
+_registry_lock = threading.Lock()
+
+
+def get_cache(name: str) -> "TTLCache":
+    """이름으로 TTLCache 조회. 없으면 생성 (스레드 안전)."""
+    with _registry_lock:
+        if name not in _registry:
+            _registry[name] = TTLCache()
+        return _registry[name]
+
 
 class TTLCache:
     """스레드 안전 TTL 기반 인메모리 캐시"""

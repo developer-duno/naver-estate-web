@@ -26,6 +26,26 @@ const LIVE_TIMEOUT_MS = 120_000; // live crawling takes longer
 
 let _isLoggingOut = false;
 
+// 백엔드 연결 실패 시 Supabase 직접 조회로 자동 폴백
+let _backendDown = false;
+let _backendDownSince = 0;
+const BACKEND_RETRY_MS = 60_000; // 1분 후 백엔드 재시도
+
+function isBackendAvailable(): boolean {
+  if (!HAS_BACKEND) return false;
+  if (!_backendDown) return true;
+  if (Date.now() - _backendDownSince > BACKEND_RETRY_MS) {
+    _backendDown = false;
+    return true;
+  }
+  return false;
+}
+
+function markBackendDown() {
+  _backendDown = true;
+  _backendDownSince = Date.now();
+}
+
 
 // 동일 URL 요청 중복 방지 (in-flight deduplication)
 const _inflightRequests = new Map<string, Promise<unknown>>();
@@ -73,6 +93,10 @@ async function _fetchApiImpl<T>(path: string, options?: RequestInit & { timeoutM
     if (err instanceof DOMException && err.name === "AbortError") {
       throw new Error("서버 응답 시간이 초과되었습니다");
     }
+    // fetch 자체 실패 (DNS 해석 불가, 네트워크 에러 등)
+    if (err instanceof TypeError) {
+      markBackendDown();
+    }
     throw err;
   } finally {
     if (timer) clearTimeout(timer);
@@ -99,61 +123,82 @@ function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: number 
 }
 /** 단지 키워드 검색 */
 export async function searchComplexes(keyword: string, limit = 50, signal?: AbortSignal, types?: string) {
-  if (!HAS_BACKEND) return direct.searchComplexesDirect(keyword);
-  let url = `/api/live/search?q=${encodeURIComponent(keyword)}`;
-  if (types) url += `&types=${encodeURIComponent(types)}`;
-  return fetchApi<{ complexes: Complex[]; total: number }>(
-    url,
-    { signal, timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
-  );
+  if (!isBackendAvailable()) return direct.searchComplexesDirect(keyword);
+  try {
+    let url = `/api/live/search?q=${encodeURIComponent(keyword)}`;
+    if (types) url += `&types=${encodeURIComponent(types)}`;
+    return await fetchApi<{ complexes: Complex[]; total: number }>(
+      url,
+      { signal, timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
+    );
+  } catch {
+    return direct.searchComplexesDirect(keyword);
+  }
 }
 
 /** 지역별 단지 조회 */
 export async function getComplexesByRegion(sido: string, sigungu?: string, dong?: string, signal?: AbortSignal, types?: string) {
-  if (!HAS_BACKEND) return direct.getComplexesByRegionDirect(sido, sigungu, dong);
-  // 세종처럼 sido === sigungu인 경우 중복 전달 방지
-  const effectiveSigungu = sigungu && sigungu !== sido ? sigungu : undefined;
-  let path = `/api/live/region?sido=${encodeURIComponent(sido)}`;
-  if (effectiveSigungu) path += `&sigungu=${encodeURIComponent(effectiveSigungu)}`;
-  if (dong) path += `&dong=${encodeURIComponent(dong)}`;
-  if (types) path += `&types=${encodeURIComponent(types)}`;
-  return fetchApi<{ complexes: Complex[]; total: number }>(path, { signal, timeoutMs: LIVE_TIMEOUT_MS } as any);
+  if (!isBackendAvailable()) return direct.getComplexesByRegionDirect(sido, sigungu, dong);
+  try {
+    // 세종처럼 sido === sigungu인 경우 중복 전달 방지
+    const effectiveSigungu = sigungu && sigungu !== sido ? sigungu : undefined;
+    let path = `/api/live/region?sido=${encodeURIComponent(sido)}`;
+    if (effectiveSigungu) path += `&sigungu=${encodeURIComponent(effectiveSigungu)}`;
+    if (dong) path += `&dong=${encodeURIComponent(dong)}`;
+    if (types) path += `&types=${encodeURIComponent(types)}`;
+    return await fetchApi<{ complexes: Complex[]; total: number }>(path, { signal, timeoutMs: LIVE_TIMEOUT_MS } as any);
+  } catch {
+    return direct.getComplexesByRegionDirect(sido, sigungu, dong);
+  }
 }
 
 /** 단지 상세 */
 export async function getComplex(complexNo: string) {
-  if (!HAS_BACKEND) return direct.getComplexDirect(complexNo);
-  return fetchApi<Complex>(`/api/complexes/${complexNo}`);
+  if (!isBackendAvailable()) return direct.getComplexDirect(complexNo);
+  try {
+    return await fetchApi<Complex>(`/api/complexes/${complexNo}`);
+  } catch {
+    return direct.getComplexDirect(complexNo);
+  }
 }
 
 /** 단지별 매물 조회 */
 export async function getArticles(complexNo: string, filters?: ArticleFilters) {
-  if (!HAS_BACKEND) return direct.getArticlesDirect(complexNo, filters as any);
-  const params = new URLSearchParams();
-  if (filters) {
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== "") {
-        params.set(key, String(value));
-      }
-    });
+  if (!isBackendAvailable()) return direct.getArticlesDirect(complexNo, filters as any);
+  try {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== "") {
+          params.set(key, String(value));
+        }
+      });
+    }
+    const qs = params.toString();
+    return await fetchApi<{ articles: Article[]; total: number; page: number; page_size: number }>(
+      `/api/complexes/${complexNo}/articles${qs ? `?${qs}` : ""}`
+    );
+  } catch {
+    return direct.getArticlesDirect(complexNo, filters as any);
   }
-  const qs = params.toString();
-  return fetchApi<{ articles: Article[]; total: number; page: number; page_size: number }>(
-    `/api/complexes/${complexNo}/articles${qs ? `?${qs}` : ""}`
-  );
 }
 
 
 /** 실시간 매물 크롤링 (네이버 API에서 직접 가져옴) */
 export async function liveArticles(complexNo: string) {
-  if (!HAS_BACKEND) {
+  if (!isBackendAvailable()) {
     const result = await direct.getArticlesDirect(complexNo, {});
     return { ...result, complex: null };
   }
-  return fetchApi<{ articles: Article[]; total: number; page: number; page_size: number; complex: Complex | null }>(
-    `/api/live/${complexNo}/articles`,
-    { timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
-  );
+  try {
+    return await fetchApi<{ articles: Article[]; total: number; page: number; page_size: number; complex: Complex | null }>(
+      `/api/live/${complexNo}/articles`,
+      { timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
+    );
+  } catch {
+    const result = await direct.getArticlesDirect(complexNo, {});
+    return { ...result, complex: null };
+  }
 }
 
 
@@ -177,27 +222,43 @@ export async function getCrawlStatus(complexNo: string) {
 
 /** 면적별 상세 */
 export async function getPyeongDetails(complexNo: string) {
-  if (!HAS_BACKEND) return { pyeong_details: [] };
-  return fetchApi<{ pyeong_details: PyeongDetail[] }>(`/api/complexes/${complexNo}/pyeong-details`);
+  if (!isBackendAvailable()) return { pyeong_details: [] };
+  try {
+    return await fetchApi<{ pyeong_details: PyeongDetail[] }>(`/api/complexes/${complexNo}/pyeong-details`);
+  } catch {
+    return { pyeong_details: [] };
+  }
 }
 
 
 /** 매물 상세 실시간 (네이버 API 직접 조회 + DB 저장) */
 export async function getArticleLive(articleNo: string) {
-  if (!HAS_BACKEND) return direct.getArticleDirect(articleNo);
-  return fetchApi<Article>(`/api/live/article/${articleNo}/detail`, { timeoutMs: 30_000 } as RequestInit & { timeoutMs?: number });
+  if (!isBackendAvailable()) return direct.getArticleDirect(articleNo);
+  try {
+    return await fetchApi<Article>(`/api/live/article/${articleNo}/detail`, { timeoutMs: 30_000 } as RequestInit & { timeoutMs?: number });
+  } catch {
+    return direct.getArticleDirect(articleNo);
+  }
 }
 
 /** DB 통계 */
 export async function getStats() {
-  if (!HAS_BACKEND) return direct.getStatsDirect();
-  return fetchApi<DbStats>(`/api/stats`);
+  if (!isBackendAvailable()) return direct.getStatsDirect();
+  try {
+    return await fetchApi<DbStats>(`/api/stats`);
+  } catch {
+    return direct.getStatsDirect();
+  }
 }
 
 /** 지역 목록 */
 export async function getRegions() {
-  if (!HAS_BACKEND) return direct.getRegionsDirect();
-  return fetchApi<Regions>(`/api/regions`);
+  if (!isBackendAvailable()) return direct.getRegionsDirect();
+  try {
+    return await fetchApi<Regions>(`/api/regions`);
+  } catch {
+    return direct.getRegionsDirect();
+  }
 }
 
 /** 엑셀 다운로드 (현재 필터 적용) */
@@ -331,8 +392,13 @@ export async function updateAdminSetting(token: string, key: string, value: Reco
 
 /** 가격 통계 (면적별/층수별, 거래유형 구분 포함) */
 export async function getPriceStats(complexNo: string) {
-  if (!HAS_BACKEND) return { complex_no: complexNo, total_articles: 0, by_area: [], by_floor: [] } as PriceStats;
-  return fetchApi<PriceStats>(`/api/complexes/${complexNo}/price-stats`);
+  const empty = { complex_no: complexNo, total_articles: 0, by_area: [], by_floor: [] } as PriceStats;
+  if (!isBackendAvailable()) return empty;
+  try {
+    return await fetchApi<PriceStats>(`/api/complexes/${complexNo}/price-stats`);
+  } catch {
+    return empty;
+  }
 }
 
 /** 관리자: 오래된 데이터 삭제 */

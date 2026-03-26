@@ -123,6 +123,16 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
         all_article_nos = set()
         total_articles = 0
 
+        # 기존 가격 일괄 조회 (N+1 방지)
+        existing_prices = {
+            row[0]: (row[1], row[2])
+            for row in db.query(
+                Article.article_no, Article.numeric_price, Article.numeric_rent_price
+            ).filter(
+                Article.complex_no == complex_no, Article.is_active == True
+            ).all()
+        }
+
         while True:
             result = NaverEstateAPI.get_complex_articles(complex_no, page=page)
             if not result or "error" in result:
@@ -135,7 +145,7 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
             for a_data in article_list:
                 article = RealEstateArticle.from_dict(a_data)
                 article.complex_no = complex_no
-                upsert_article(db, article, track_price=True)
+                upsert_article(db, article, track_price=True, existing_prices=existing_prices)
                 all_article_nos.add(article.article_no)
                 total_articles += 1
 

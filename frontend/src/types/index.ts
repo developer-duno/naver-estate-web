@@ -203,7 +203,7 @@ export interface PriceStats {
 /** 크롤링 진행 상태 */
 export interface CrawlProgress {
   complex_no: string;
-  status: "idle" | "started" | "running" | "done" | "error" | "cached" | "already_running";
+  status: "idle" | "started" | "running" | "done" | "done_partial" | "error" | "cached" | "already_running";
   phase?: "articles" | "enriching" | "details";
   current_page?: number;
   article_count?: number;
@@ -212,4 +212,5 @@ export interface CrawlProgress {
   detail_phase?: "running" | "done" | null;
   detail_crawled_count?: number;
   detail_total?: number;
+  detail_skipped_count?: number;
 }

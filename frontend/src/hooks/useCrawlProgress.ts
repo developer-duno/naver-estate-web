@@ -33,6 +33,7 @@ export function useCrawlProgress(): CrawlHookResult {
   const cancelledRef = useRef(false);
   const crawlTargetRef = useRef<string>("");
   const prevPhaseRef = useRef<string | undefined>(undefined);
+  const prevArticleCountRef = useRef<number>(0);
   const statusPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const articlesPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -63,7 +64,21 @@ export function useCrawlProgress(): CrawlHookResult {
       try {
         const status = await getCrawlStatus(complexNo);
         if (cancelledRef.current || crawlTargetRef.current !== complexNo) return;
-        setCrawlProgress(status);
+        // 상태 디바운스: 실제 변경 시에만 리렌더
+        setCrawlProgress(prev => {
+          if (!prev) return status;
+          if (prev.status === status.status &&
+              prev.article_count === status.article_count &&
+              prev.detail_crawled_count === status.detail_crawled_count &&
+              prev.phase === status.phase &&
+              prev.detail_phase === status.detail_phase &&
+              prev.error === status.error &&
+              prev.detail_total === status.detail_total &&
+              prev.detail_skipped_count === status.detail_skipped_count) {
+            return prev;  // 동일하면 리렌더 방지
+          }
+          return status;
+        });
 
         // Phase 1(articles) → enriching/details 전환 = 매물 목록 수집 완료
         // → DB에 numeric_price 존재 → priceStats 즉시 갱신
@@ -73,7 +88,7 @@ export function useCrawlProgress(): CrawlHookResult {
         }
         prevPhaseRef.current = curPhase;
 
-        const isDone = status.status === "done" && status.detail_phase !== "running";
+        const isDone = (status.status === "done" || status.status === "done_partial") && status.detail_phase !== "running";
         const isIdle = status.status === "idle"; // BE가 done 후 status를 pop → idle 반환 = 완료
         const isError = status.status === "error";
 
@@ -109,15 +124,23 @@ export function useCrawlProgress(): CrawlHookResult {
       } catch (e) { console.error("[CrawlProgress] poll:", e); }
     }, CRAWL_STATUS_POLL_MS);
 
-    // 크롤링 중 매물 실시간 폴링 — 현재 필터를 반영하여 호출
+    // 크롤링 중 매물 실시간 폴링 — article_count 변경 시에만 재조회 (적응형)
+    prevArticleCountRef.current = 0;
     articlesPollRef.current = setInterval(async () => {
       if (cancelledRef.current) return;
+      // 상태 폴링에서 감지한 article_count와 비교 → 변경 없으면 스킵
+      const currentCount = crawlTargetRef.current === complexNo
+        ? (prevArticleCountRef.current)
+        : 0;
       try {
         const filters = filtersRef?.current ?? {};
         const res = await getArticles(complexNo, { ...filters, page: 1, page_size: PAGE_SIZE });
         if (cancelledRef.current || crawlTargetRef.current !== complexNo) return;
-        callbacks.setArticles(res.articles);
-        callbacks.setTotalCount(res.total);
+        if (res.total !== currentCount) {
+          callbacks.setArticles(res.articles);
+          callbacks.setTotalCount(res.total);
+          prevArticleCountRef.current = res.total;
+        }
       } catch (e) { console.error("[CrawlProgress]", e); }
     }, ARTICLES_POLL_MS);
 

@@ -7,17 +7,49 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - **Frontend**: Next.js 16 (App Router) + TypeScript + Tailwind CSS
 - **Backend**: FastAPI + SQLAlchemy 2.0 + curl_cffi
 - **DB**: Supabase (PostgreSQL) + Supabase Auth
-- **배포**: Vercel (frontend) + Railway (backend)
+- **배포**: Vercel (frontend) + 집 서버 (backend, Cloudflare Tunnel)
 
 ## 아키텍처
 
 ```
-[브라우저] → [Next.js (Vercel)]
-                ↓ API 호출
-           [FastAPI (Railway)]
+[브라우저] → [Next.js (Vercel, 2u.pe.kr)]
+                ↓ API 호출 (NEXT_PUBLIC_API_URL)
+           [Cloudflare Tunnel (*.trycloudflare.com)]
+                ↓
+           [FastAPI (집 서버 192.168.219.101:8002)]
                 ↓ 실시간 크롤링
            [네이버 부동산 API] → [PostgreSQL (Supabase)]
 ```
+
+## 집 서버 재시작 후 복구 절차
+
+컴퓨터를 껐다 켜면 백엔드 + 터널이 꺼지므로 아래 순서대로 실행:
+
+### 1. 백엔드 서버 실행 (집 서버에서 cmd 열고)
+```
+D:
+cd cursor\naver-estate-web\backend
+python -m uvicorn main:app --host 0.0.0.0 --port 8002
+```
+
+### 2. Cloudflare Tunnel 실행 (cmd 하나 더 열고)
+```
+cloudflared tunnel --url http://localhost:8002
+```
+→ `https://xxxx.trycloudflare.com` 새 URL 생성됨 (매번 바뀜)
+
+### 3. Vercel 환경변수 업데이트 + 재배포 (개발 PC에서)
+```bash
+cd z:/cursor/naver-estate-web
+npx vercel env rm NEXT_PUBLIC_API_URL production -y
+echo "새URL" | npx vercel env add NEXT_PUBLIC_API_URL production
+npx vercel --prod
+```
+
+### Vercel 프로젝트 정보
+- 프로젝트: `naver-estate-web` (루트에서 배포, frontend/ 아님)
+- 도메인: `2u.pe.kr`, `www.2u.pe.kr`
+- 배포 명령은 **프로젝트 루트**(`z:/cursor/naver-estate-web`)에서 실행
 
 **핵심**: 사전 크롤링이 아닌 **실시간 크롤링** — 사용자 검색 시 네이버 API 호출 → DB upsert → 결과 반환
 

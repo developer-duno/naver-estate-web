@@ -9,8 +9,12 @@ from deps import get_db
 from db import queries
 from routers.serializers import complex_to_dict, article_to_dict, build_filter_dict
 from crawler.stats import group_by_area, group_by_floor
+from services.cache import get_cache
 
 router = APIRouter()
+
+# 필터 옵션 & 가격 통계 캐시 (5분 TTL) — 레지스트리 기반으로 live.py에서 무효화 가능
+_cache = get_cache("complexes")
 
 
 @router.get("/search")
@@ -66,7 +70,11 @@ def get_complex_detail(
         raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다")
 
     article_count = queries.get_complex_article_count(db, complex_no)
-    filter_options = queries.get_filter_options(db, complex_no)
+    cache_key = f"filter_options:{complex_no}"
+    filter_options = _cache.get(cache_key)
+    if filter_options is None:
+        filter_options = queries.get_filter_options(db, complex_no)
+        _cache.set(cache_key, filter_options)
     return {
         **complex_to_dict(cpx),
         "article_count": article_count,
@@ -81,7 +89,13 @@ def get_filter_options(
     db: Session = Depends(get_db),
 ):
     """단지 내 필터 옵션 (동, 태그, 방향)"""
-    return queries.get_filter_options(db, complex_no)
+    cache_key = f"filter_options:{complex_no}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+    result = queries.get_filter_options(db, complex_no)
+    _cache.set(cache_key, result)
+    return result
 
 
 @router.get("/{complex_no}/articles")
@@ -194,6 +208,11 @@ def get_price_stats(
     db: Session = Depends(get_db),
 ):
     """단지 매물 가격 통계 — 거래유형별 면적/층수 비교"""
+    cache_key = f"price_stats:{complex_no}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     data = queries.get_price_stats(db, complex_no)
     all_articles = data["articles"]
 
@@ -253,9 +272,11 @@ def get_price_stats(
         for tt in TRADE_TYPES
     )
 
-    return {
+    result = {
         "complex_no": complex_no,
         "total_articles": area_total,
         "by_area": by_area,
         "by_floor": by_floor,
     }
+    _cache.set(cache_key, result)
+    return result

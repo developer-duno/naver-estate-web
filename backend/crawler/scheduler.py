@@ -22,6 +22,8 @@ CRAWL_DETAIL_INTERVAL_MIN = int(os.getenv("CRAWL_DETAIL_INTERVAL_MIN", "240"))
 CRAWL_BATCH_SIZE = int(os.getenv("CRAWL_BATCH_SIZE", "50"))
 POPULAR_CRAWL_ENABLED = os.getenv("POPULAR_CRAWL_ENABLED", "true").lower() == "true"
 POPULAR_CRAWL_BATCH_SIZE = int(os.getenv("POPULAR_CRAWL_BATCH_SIZE", "100"))
+PUBLIC_DATA_ENABLED = os.getenv("PUBLIC_DATA_ENABLED", "false").lower() == "true"
+PUBLIC_DATA_BATCH_SIZE = int(os.getenv("PUBLIC_DATA_BATCH_SIZE", "50"))
 
 
 def create_scheduler() -> BackgroundScheduler:
@@ -89,5 +91,23 @@ def create_scheduler() -> BackgroundScheduler:
                 misfire_grace_time=1800,
             )
         logger.info("인기 단지 선제적 크롤링 활성화: 10:30, 14:30, 19:00 (배치 %d)", POPULAR_CRAWL_BATCH_SIZE)
+
+    # F. 공공데이터 실거래가 수집 — 주 1회 토요일 새벽 5시
+    #    네이버 API 보완용, IP 차단 우려 없음
+    if PUBLIC_DATA_ENABLED:
+        from crawler.service import collect_public_trade_data
+
+        scheduler.add_job(
+            collect_public_trade_data,
+            "cron",
+            day_of_week="sat",
+            hour=5,
+            kwargs={"batch_size": PUBLIC_DATA_BATCH_SIZE},
+            id="collect_public_trades",
+            name="공공데이터 실거래가 수집",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        logger.info("공공데이터 실거래가 수집 활성화: 토요일 05:00 (배치 %d)", PUBLIC_DATA_BATCH_SIZE)
 
     return scheduler

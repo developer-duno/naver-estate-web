@@ -3,13 +3,14 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import type { Complex, PyeongDetail, PriceStats, AreaPriceStat, FloorPriceStat, ArticleFilters } from "@/types";
+import type { Complex, PyeongDetail, PriceStats, PriceHistoryItem, AreaPriceStat, FloorPriceStat, ArticleFilters } from "@/types";
 import { formatDateFull } from "@/lib/format";
-import { getPriceStats } from "@/lib/api";
+import { getPriceStats, getPriceHistory } from "@/lib/api";
 
 const LazyCharts = dynamic(() => import("./PriceChartInner"), { ssr: false });
+const LazyPriceHistory = dynamic(() => import("./PriceHistoryChart"), { ssr: false });
 
-type TabType = "info" | "area" | "price-area" | "price-floor";
+type TabType = "info" | "area" | "price-area" | "price-floor" | "price-history";
 
 interface Props {
   complex: Complex;
@@ -26,6 +27,7 @@ const TABS: { key: TabType; label: string }[] = [
   { key: "area", label: "면적별 정보" },
   { key: "price-area", label: "면적별 가격" },
   { key: "price-floor", label: "층수별 가격" },
+  { key: "price-history", label: "실거래가 추이" },
 ];
 
 export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount, onFilterChange, refreshKey }: Props) {
@@ -33,6 +35,9 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
   const [priceStats, setPriceStats] = useState<PriceStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState(false);
+  const [historyItems, setHistoryItems] = useState<PriceHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,6 +48,18 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
       .catch(() => { if (!cancelled) { setPriceStats(null); setStatsError(true); setStatsLoading(false); } });
     return () => { cancelled = true; };
   }, [complexNo, refreshKey]);
+
+  useEffect(() => {
+    if (tab !== "price-history") return;
+    if (historyItems.length > 0) return;
+    let cancelled = false;
+    setHistoryLoading(true);
+    setHistoryError(false);
+    getPriceHistory(complexNo)
+      .then((res) => { if (!cancelled) { setHistoryItems(res.items); setHistoryLoading(false); } })
+      .catch(() => { if (!cancelled) { setHistoryError(true); setHistoryLoading(false); } });
+    return () => { cancelled = true; };
+  }, [tab, complexNo, historyItems.length]);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
@@ -72,6 +89,11 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
         )}
         {tab === "price-floor" && (
           <PriceFloorTab priceStats={priceStats} error={statsError} loading={statsLoading} onFilterChange={onFilterChange} />
+        )}
+        {tab === "price-history" && (
+          historyLoading ? <p className="text-gray-500 text-sm">로딩 중...</p>
+          : historyError ? <p className="text-red-500 text-sm">가격 추이를 불러오지 못했습니다</p>
+          : <LazyPriceHistory items={historyItems} />
         )}
       </div>
     </div>

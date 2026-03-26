@@ -200,6 +200,22 @@ export interface PriceStats {
   by_floor: FloorPriceStat[];
 }
 
+/** 단지 가격 추이 항목 */
+export interface PriceHistoryItem {
+  trade_type: string;
+  trade_type_label: string;
+  price_upper: number | null;
+  price_lower: number | null;
+  price_avg: number | null;
+  base_month: string;
+}
+
+/** 단지 가격 추이 응답 */
+export interface PriceHistoryResponse {
+  complex_no: string;
+  items: PriceHistoryItem[];
+}
+
 /** 크롤링 진행 상태 */
 export interface CrawlProgress {
   complex_no: string;

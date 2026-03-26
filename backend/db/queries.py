@@ -425,3 +425,30 @@ def _build_order_clause(sort_by: str):
         "confirm_desc": Article.article_confirm_ymd.desc(),
     }
     return sort_map.get(sort_by, Article.article_confirm_ymd.desc())
+
+
+# ── 단지 가격 추이 ──
+
+def get_complex_price_history(
+    db: Session, complex_no: str, trade_type: Optional[str] = None,
+) -> list[dict]:
+    """단지의 월별 가격 추이 (base_month를 YYYYMM으로 정규화 + 월별 집계)"""
+    month_col = func.left(ComplexPriceHistory.base_month, 6).label("month")
+
+    conditions = [ComplexPriceHistory.complex_no == complex_no]
+    if trade_type:
+        conditions.append(ComplexPriceHistory.trade_type == trade_type)
+
+    stmt = (
+        select(
+            ComplexPriceHistory.trade_type,
+            month_col,
+            func.max(ComplexPriceHistory.price_upper).label("price_upper"),
+            func.min(ComplexPriceHistory.price_lower).label("price_lower"),
+            func.round(func.avg(ComplexPriceHistory.price_avg)).label("price_avg"),
+        )
+        .where(and_(*conditions))
+        .group_by(ComplexPriceHistory.trade_type, month_col)
+        .order_by(month_col.asc())
+    )
+    return [dict(row._mapping) for row in db.execute(stmt).all()]

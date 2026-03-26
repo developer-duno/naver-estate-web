@@ -9,12 +9,14 @@ from deps import get_db
 from db import queries
 from routers.serializers import complex_to_dict, article_to_dict, build_filter_dict
 from crawler.stats import group_by_area, group_by_floor
-from services.cache import get_cache
+from services.cache import get_cache, TTLCache
 
 router = APIRouter()
 
 # 필터 옵션 & 가격 통계 캐시 (시간대별 동적 TTL) — 레지스트리 기반으로 live.py에서 무효화 가능
 _cache = get_cache("complexes", dynamic=True)
+# 가격 추이 캐시 — immutable 데이터이므로 고정 12시간 TTL
+_price_history_cache = TTLCache(ttl=43200)
 
 
 @router.get("/search")
@@ -279,4 +281,38 @@ def get_price_stats(
         "by_floor": by_floor,
     }
     _cache.set(cache_key, result)
+    return result
+
+
+_TT_LABELS = {"A1": "매매", "B1": "전세", "B2": "월세", "B3": "단기임대"}
+
+
+@router.get("/{complex_no}/price-history")
+def get_price_history(
+    complex_no: str,
+    trade_type: Optional[Literal["A1", "B1", "B2", "B3"]] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """단지 월별 가격 추이 (실거래가 + 시세)"""
+    cache_key = f"price_history:{complex_no}:{trade_type or 'all'}"
+    cached = _price_history_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    rows = queries.get_complex_price_history(db, complex_no, trade_type)
+    result = {
+        "complex_no": complex_no,
+        "items": [
+            {
+                "trade_type": r["trade_type"],
+                "trade_type_label": _TT_LABELS.get(r["trade_type"], r["trade_type"]),
+                "price_upper": r["price_upper"],
+                "price_lower": r["price_lower"],
+                "price_avg": int(r["price_avg"]) if r["price_avg"] is not None else None,
+                "base_month": r["month"][:6],
+            }
+            for r in rows
+        ],
+    }
+    _price_history_cache.set(cache_key, result)
     return result

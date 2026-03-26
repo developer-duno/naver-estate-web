@@ -11,6 +11,9 @@ vi.mock("@/lib/api", () => ({
   getPriceStats: vi.fn().mockResolvedValue({
     complex_no: "C001", total_articles: 0, by_area: [], by_floor: [],
   }),
+  getPriceHistory: vi.fn().mockResolvedValue({
+    complex_no: "C001", items: [],
+  }),
 }));
 
 const baseComplex: Complex = {

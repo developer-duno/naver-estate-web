@@ -2,7 +2,7 @@
  * FastAPI 백엔드 호출 래퍼
  */
 
-import type { Complex, Article, PyeongDetail, ArticleFilters, DbStats, Regions, PriceStats, CrawlProgress } from "@/types";
+import type { Complex, Article, PyeongDetail, ArticleFilters, DbStats, Regions, PriceStats, PriceHistoryResponse, CrawlProgress } from "@/types";
 import * as direct from "@/lib/api-direct";
 import type { UserProfile, AuditLog, AdminSetting, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail } from "@/types/admin";
 
@@ -396,6 +396,18 @@ export async function getPriceStats(complexNo: string) {
   if (!isBackendAvailable()) return empty;
   try {
     return await fetchApi<PriceStats>(`/api/complexes/${complexNo}/price-stats`);
+  } catch {
+    return empty;
+  }
+}
+
+/** 단지 가격 추이 (실거래가 + 시세) */
+export async function getPriceHistory(complexNo: string, tradeType?: string) {
+  const empty: PriceHistoryResponse = { complex_no: complexNo, items: [] };
+  if (!isBackendAvailable()) return empty;
+  try {
+    const qs = tradeType ? `?trade_type=${tradeType}` : "";
+    return await fetchApi<PriceHistoryResponse>(`/api/complexes/${complexNo}/price-history${qs}`);
   } catch {
     return empty;
   }

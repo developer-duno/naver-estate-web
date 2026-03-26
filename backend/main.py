@@ -18,6 +18,7 @@ from starlette.responses import Response, JSONResponse
 
 from routers import complexes, articles, crawl, stats, regions, admin, users, live
 from auth.rate_limiter import RateLimitMiddleware
+from services.cache import get_dynamic_ttl
 
 # 로깅 설정
 logging.basicConfig(
@@ -102,7 +103,6 @@ async def security_headers_middleware(request: Request, call_next):
         elif "/articles" not in path and path.startswith("/api/complexes/"):
             response.headers["Cache-Control"] = "private, max-age=3600"  # 1시간 (단지 정보)
         elif path.startswith("/api/live/"):
-            from services.cache import get_dynamic_ttl
             response.headers["Cache-Control"] = f"private, max-age={get_dynamic_ttl()}"
         else:
             response.headers["Cache-Control"] = "private, max-age=30"  # 30초 (기본)

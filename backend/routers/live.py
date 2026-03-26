@@ -472,7 +472,7 @@ def _background_crawl(complex_no: str):
         # Invalidate cache so next DB read gets fresh data
         _cache.delete(f"articles:{complex_no}")
         # complexes.py의 필터/통계 캐시도 무효화 (레지스트리 기반, 순환 import 없음)
-        complexes_cache = get_cache("complexes")
+        complexes_cache = get_cache("complexes", dynamic=True)
         complexes_cache.delete(f"filter_options:{complex_no}")
         complexes_cache.delete(f"price_stats:{complex_no}")
 

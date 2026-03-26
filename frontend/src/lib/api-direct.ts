@@ -93,7 +93,8 @@ export async function searchComplexesDirect(keyword: string) {
 /** 지역별 단지 조회 */
 export async function getComplexesByRegionDirect(sido: string, sigungu?: string, dong?: string) {
   const supabase = sb();
-  let query = supabase.from("complexes").select("*", { count: "exact" }).eq("sido", sido);
+  const normalizedSido = SIDO_NORMALIZE[sido] ?? sido;
+  let query = supabase.from("complexes").select("*", { count: "exact" }).eq("sido", normalizedSido);
   if (sigungu) query = query.eq("sigungu", sigungu);
   if (dong) query = query.eq("dong", dong);
   const { data, count } = await query.limit(200);

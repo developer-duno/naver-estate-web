@@ -13,8 +13,8 @@ from services.cache import get_cache
 
 router = APIRouter()
 
-# 필터 옵션 & 가격 통계 캐시 (5분 TTL) — 레지스트리 기반으로 live.py에서 무효화 가능
-_cache = get_cache("complexes")
+# 필터 옵션 & 가격 통계 캐시 (시간대별 동적 TTL) — 레지스트리 기반으로 live.py에서 무효화 가능
+_cache = get_cache("complexes", dynamic=True)
 
 
 @router.get("/search")

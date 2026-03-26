@@ -52,7 +52,7 @@ KEYWORD_SUFFIX_GROUPS = [
 ]
 
 # ── TTL Cache ──
-_cache = get_cache("live")
+_cache = get_cache("live", dynamic=True)
 
 # -- Background crawl progress tracking --
 _crawl_status: dict[str, dict] = {}

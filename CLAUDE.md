@@ -57,7 +57,7 @@ npx vercel --prod
 
 - `M2_TO_PYEONG = 3.3058` (프론트/백엔드 동일)
 - `LIVE_TIMEOUT_MS = 120_000` (실시간 크롤링 타임아웃)
-- `_CACHE_TTL_SECONDS = 300` (live 엔드포인트 캐시 5분)
+- `get_dynamic_ttl()` (live 엔드포인트 시간대별 동적 캐시: 새벽 2시간 / 오전 15분 / 오후 30분 / 저녁 1시간)
 
 ## 거래유형 코드
 

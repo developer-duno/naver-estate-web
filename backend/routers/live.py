@@ -711,11 +711,22 @@ def start_price_collect(
 
     db.commit()  # 쿼터 카운터 반영
 
+    def _progress_callback(collected: int, failed: int, total: int):
+        """수집 중 실시간 진행률 업데이트"""
+        with _price_collect_lock:
+            st = _price_collect_status.get(complex_no)
+            if st and st["status"] == "running":
+                st["collected"] = collected
+                st["failed"] = failed
+                st["total"] = total
+
     def _run():
         collect_db = SessionLocal()
         try:
             from crawler.service import collect_price_history_for_complex
-            result = collect_price_history_for_complex(collect_db, complex_no)
+            result = collect_price_history_for_complex(
+                collect_db, complex_no, on_progress=_progress_callback,
+            )
             with _price_collect_lock:
                 _price_collect_status[complex_no].update({
                     "status": "done",

@@ -11,6 +11,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
+from typing import Callable
 
 from dotenv import load_dotenv
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -338,10 +339,15 @@ def _extract_price_list(result: dict) -> list[dict]:
     return result.get("realEstatePrice") or result.get("prices") or []
 
 
-def collect_price_history_for_complex(db: Session, complex_no: str) -> dict:
+def collect_price_history_for_complex(
+    db: Session,
+    complex_no: str,
+    on_progress: "Callable[[int, int, int], None] | None" = None,
+) -> dict:
     """단일 단지의 시세 이력 실시간 수집 (on-demand).
 
     pyeong_details에 등록된 모든 area_no에 대해 수집.
+    on_progress: 진행률 콜백 (collected, failed, total)
     Returns: {"collected": N, "failed": N, "total": N}
     """
     from db.models import ComplexPyeongDetail
@@ -359,6 +365,10 @@ def collect_price_history_for_complex(db: Session, complex_no: str) -> dict:
     failed = 0
     total = len(area_nos) * 2 + 2  # (area_nos × 2 trade_types) + 2 실거래가
 
+    def _report():
+        if on_progress:
+            on_progress(collected, failed, total)
+
     logger.info("시세 수집 시작: complex=%s, area_nos=%d개", complex_no, len(area_nos))
 
     for trade_type in ("A1", "B1"):
@@ -373,10 +383,12 @@ def collect_price_history_for_complex(db: Session, complex_no: str) -> dict:
                 logger.warning("시세 조회 실패: %s %s area=%s -> %s", complex_no, trade_type, area_no, e)
                 _throttle_ondemand.on_rate_limit()
                 failed += 1
+                _report()
                 continue
 
             if not result or "error" in result:
                 failed += 1
+                _report()
                 continue
 
             price_list = _extract_price_list(result)
@@ -393,6 +405,7 @@ def collect_price_history_for_complex(db: Session, complex_no: str) -> dict:
                     base_month=base_month,
                 )
                 collected += 1
+            _report()
 
     # 실거래가(/prices/real): 기본 area_no만 수집 (장기 이력, YYYYMM 월별 저장)
     for trade_type in ("A1", "B1"):
@@ -404,9 +417,11 @@ def collect_price_history_for_complex(db: Session, complex_no: str) -> dict:
             logger.debug("실거래가 조회 실패: %s %s -> %s", complex_no, trade_type, e)
             _throttle_ondemand.on_rate_limit()
             failed += 1
+            _report()
             continue
         if not real_result or "error" in real_result:
             failed += 1
+            _report()
             continue
         month_list = real_result.get("realPriceOnMonthList") or []
         for month_data in month_list:
@@ -433,6 +448,7 @@ def collect_price_history_for_complex(db: Session, complex_no: str) -> dict:
                 base_month=base_month,
             )
             collected += 1
+        _report()
 
     if collected > 0:
         db.commit()

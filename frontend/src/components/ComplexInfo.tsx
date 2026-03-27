@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
-import type { Complex, PyeongDetail, PriceStats, PriceHistoryItem, AreaPriceStat, FloorPriceStat, ArticleFilters } from "@/types";
-import { formatDateFull } from "@/lib/format";
+import type { Complex, PyeongDetail, PriceStats, PriceHistoryItem, ArticleFilters } from "@/types";
+import { formatDateFull, formatChartPrice } from "@/lib/format";
 import { getPriceStats, getPriceHistory } from "@/lib/api";
 
 const LazyCharts = dynamic(() => import("./PriceChartInner"), { ssr: false });
@@ -38,6 +38,7 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
   const [historyItems, setHistoryItems] = useState<PriceHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(false);
+  const historyFetchedRef = React.useRef<string>("");
 
   useEffect(() => {
     let cancelled = false;
@@ -46,20 +47,25 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
     getPriceStats(complexNo)
       .then((data) => { if (!cancelled) { setPriceStats(data); setStatsLoading(false); } })
       .catch(() => { if (!cancelled) { setPriceStats(null); setStatsError(true); setStatsLoading(false); } });
+    // complexNo/refreshKey 변경 시 가격 추이도 초기화
+    setHistoryItems([]);
+    setHistoryError(false);
+    historyFetchedRef.current = "";
     return () => { cancelled = true; };
   }, [complexNo, refreshKey]);
 
   useEffect(() => {
     if (tab !== "price-history") return;
-    if (historyItems.length > 0) return;
+    if (historyFetchedRef.current === complexNo) return;
     let cancelled = false;
     setHistoryLoading(true);
     setHistoryError(false);
+    historyFetchedRef.current = complexNo;
     getPriceHistory(complexNo)
       .then((res) => { if (!cancelled) { setHistoryItems(res.items); setHistoryLoading(false); } })
-      .catch(() => { if (!cancelled) { setHistoryError(true); setHistoryLoading(false); } });
+      .catch(() => { if (!cancelled) { setHistoryError(true); setHistoryLoading(false); historyFetchedRef.current = ""; } });
     return () => { cancelled = true; };
-  }, [tab, complexNo, historyItems.length]);
+  }, [tab, complexNo]);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
@@ -315,9 +321,9 @@ function PriceFloorTab({ priceStats, error, loading, onFilterChange }: { priceSt
                   <div key={key} className="text-xs">
                     <div className={"font-medium mb-0.5 " + color}>{key}</div>
                     <div className="grid grid-cols-2 gap-x-2 text-gray-600">
-                      <span>평균</span><span className="font-medium">{fmtPrice(avg)}</span>
-                      <span>최저</span><span>{fmtPrice(s[minKey] ?? 0)}</span>
-                      <span>최고</span><span>{fmtPrice(s[maxKey] ?? 0)}</span>
+                      <span>평균</span><span className="font-medium">{formatChartPrice(avg)}</span>
+                      <span>최저</span><span>{formatChartPrice(s[minKey] ?? 0)}</span>
+                      <span>최고</span><span>{formatChartPrice(s[maxKey] ?? 0)}</span>
                       <span>매물수</span><span>{s[countKey]}건</span>
                     </div>
                   </div>
@@ -330,13 +336,4 @@ function PriceFloorTab({ priceStats, error, loading, onFilterChange }: { priceSt
       </div>
     </div>
   );
-}
-function fmtPrice(value: number): string {
-  if (value == null || isNaN(value)) return "-";
-  if (value >= 10000) {
-    const e = Math.floor(value / 10000);
-    const r = value % 10000;
-    return r > 0 ? `${e}억${r}` : `${e}억`;
-  }
-  return `${value.toLocaleString()}만`;
 }

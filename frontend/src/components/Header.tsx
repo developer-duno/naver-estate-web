@@ -20,6 +20,19 @@ export default function Header() {
   useEffect(() => {
     const supabase = createClient();
 
+    const fetchRoleFromSupabase = async () => {
+      if (!isMountedRef.current) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && isMountedRef.current) {
+        const { data } = await supabase
+          .from("user_profiles")
+          .select("role")
+          .eq("user_id", user.id)
+          .single();
+        if (data) setUserRole(data.role || null);
+      }
+    };
+
     const fetchProfile = async (accessToken: string) => {
       if (accessToken === prevTokenRef.current) return;
       prevTokenRef.current = accessToken;
@@ -41,30 +54,10 @@ export default function Header() {
               setUserRole(null);
             }
           } catch {
-            // 백엔드 타임아웃 시 Supabase 직접 조회 폴백
-            if (isMountedRef.current) {
-              const { data: { user } } = await supabase.auth.getUser();
-              if (user && isMountedRef.current) {
-                const { data } = await supabase
-                  .from("user_profiles")
-                  .select("role")
-                  .eq("user_id", user.id)
-                  .single();
-                if (data) setUserRole(data.role || null);
-              }
-            }
+            await fetchRoleFromSupabase();
           } finally { clearTimeout(timer); }
         } else {
-          // 백엔드 없이 Supabase 직접 조회
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user && isMountedRef.current) {
-            const { data } = await supabase
-              .from("user_profiles")
-              .select("role")
-              .eq("user_id", user.id)
-              .single();
-            if (data) setUserRole(data.role || null);
-          }
+          await fetchRoleFromSupabase();
         }
       } catch (e) { console.error("[Header] profile fetch failed:", e); }
     };

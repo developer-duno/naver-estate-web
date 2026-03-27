@@ -5,16 +5,7 @@ import {
   ResponsiveContainer, BarChart, Bar,
 } from "recharts";
 import type { AreaPriceStat } from "@/types";
-
-function formatPrice(value: number): string {
-  if (value == null || isNaN(value)) return "-";
-  if (value >= 10000) {
-    const e = Math.floor(value / 10000);
-    const r = value % 10000;
-    return r > 0 ? `${e}억${r}` : `${e}억`;
-  }
-  return `${value.toLocaleString()}만`;
-}
+import { formatChartPrice } from "@/lib/format";
 
 interface Props {
   type: "area";
@@ -46,8 +37,8 @@ export default function PriceChartInner({ data, onAreaClick }: Props) {
         >
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="label" fontSize={11} />
-          <YAxis tickFormatter={formatPrice} fontSize={11} width={68} />
-          <Tooltip formatter={(value, name) => [formatPrice(Number(value)), name]} />
+          <YAxis tickFormatter={formatChartPrice} fontSize={11} width={68} />
+          <Tooltip formatter={(value, name) => [formatChartPrice(Number(value)), name]} />
           <Legend />
           {hasMaemae && <Bar dataKey="maemae" name="매매 평균" fill="#ef4444" />}
           {hasJeonse && <Bar dataKey="jeonse" name="전세 평균" fill="#3b82f6" />}

@@ -25,6 +25,17 @@ export function formatKoreanPrice(manwon: number | undefined | null): string {
   return `${manwon.toLocaleString()}만`;
 }
 
+/** 차트용 가격 포맷 (만원 → 억/만, 공백 없는 축약형) */
+export function formatChartPrice(value: number): string {
+  if (value == null || isNaN(value)) return "-";
+  if (value >= 10000) {
+    const eok = Math.floor(value / 10000);
+    const rest = value % 10000;
+    return rest > 0 ? `${eok}억${rest.toLocaleString()}만` : `${eok}억`;
+  }
+  return `${value.toLocaleString()}만`;
+}
+
 /** 관리비 표시 (문자열 또는 숫자 → "N만원") */
 export function formatMaintenanceCost(cost?: string | null, numericCost?: number | null): string {
   if (cost) return cost.includes("만") ? cost : `${cost}만원`;

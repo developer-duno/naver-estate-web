@@ -1,0 +1,279 @@
+/**
+ * FilterBar 드롭다운 내부 콘텐츠 — 7개 섹션 컴포넌트
+ */
+import type { FilterOptions } from "@/types";
+import type { RangePreset } from "@/lib/constants";
+import {
+  PRICE_PRESETS, PPYEONG_PRESETS, AREA_PRESETS, AREA_PRESETS_PYEONG,
+  MAINTENANCE_PRESETS, MOVE_IN_OPTIONS, BUILDING_AGE_OPTIONS,
+  SORT_OPTIONS, ESTATE_TYPE_FILTER_OPTIONS,
+} from "@/lib/constants";
+import type { FilterState } from "./reducer";
+import PresetButtons from "./PresetButtons";
+
+// ── 공통 Props ──
+
+interface SectionProps {
+  s: FilterState;
+  setImmediate: (key: keyof FilterState) => (v: string) => void;
+  setDebounced: (key: keyof FilterState) => (v: string) => void;
+  applyPreset: (p: RangePreset, minK: keyof FilterState, maxK: keyof FilterState) => void;
+  dispatch: (action: { type: "SET"; key: keyof FilterState; value: string }) => void;
+  emitChange: (overrides?: Partial<Record<string, string>>) => void;
+}
+
+const sectionLabel = "text-xs font-bold text-gray-700 mb-1";
+const separator = "border-t border-gray-200 my-2";
+const selectCls = "border border-gray-300 rounded px-2 py-1.5 text-xs bg-white w-full";
+const inputCls = "border border-gray-300 rounded px-2 py-1.5 text-xs w-full";
+
+// ── 거래유형 ──
+
+export function TradeTypeSection({ s, setImmediate }: Pick<SectionProps, "s" | "setImmediate">) {
+  return (
+    <>
+      <p className={sectionLabel}>거래유형 선택</p>
+      <div className="flex flex-wrap gap-1 mt-1">
+        {["전체", "매매", "전세", "월세", "단기임대"].map((t) => (
+          <button
+            key={t}
+            onClick={() => setImmediate("tradeType")(t)}
+            className={`px-2 py-1 text-xs border rounded ${
+              s.tradeType === t
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ── 가격 ──
+
+export function PriceSection({ s, setDebounced, applyPreset }: Pick<SectionProps, "s" | "setDebounced" | "applyPreset">) {
+  return (
+    <>
+      <p className={sectionLabel}>빠른 선택 (매매가)</p>
+      <div className="mb-2">
+        <PresetButtons presets={PRICE_PRESETS} minKey="minPrice" maxKey="maxPrice"
+          currentMin={s.minPrice} currentMax={s.maxPrice} onApply={applyPreset} />
+      </div>
+      <div className={separator} />
+      <p className={sectionLabel}>가격 직접입력 (만원)</p>
+      <div className="flex items-center gap-1 mb-2">
+        <input type="number" min="0" value={s.minPrice} onChange={(e) => setDebounced("minPrice")(e.target.value)} className={inputCls} placeholder="최소" />
+        <span className="text-xs text-gray-400">~</span>
+        <input type="number" min="0" value={s.maxPrice} onChange={(e) => setDebounced("maxPrice")(e.target.value)} className={inputCls} placeholder="최대" />
+      </div>
+
+      {(s.tradeType === "월세" || s.tradeType === "단기임대") && (
+        <>
+          <div className={separator} />
+          <p className={sectionLabel}>월세 (만원)</p>
+          <div className="flex items-center gap-1 mb-2">
+            <input type="number" min="0" value={s.minRent} onChange={(e) => setDebounced("minRent")(e.target.value)} className={inputCls} placeholder="최소" />
+            <span className="text-xs text-gray-400">~</span>
+            <input type="number" min="0" value={s.maxRent} onChange={(e) => setDebounced("maxRent")(e.target.value)} className={inputCls} placeholder="최대" />
+          </div>
+        </>
+      )}
+
+      <div className={separator} />
+      <p className={sectionLabel}>평당가 (만원/평)</p>
+      <div className="mb-2">
+        <PresetButtons presets={PPYEONG_PRESETS} minKey="minPpyeong" maxKey="maxPpyeong"
+          currentMin={s.minPpyeong} currentMax={s.maxPpyeong} onApply={applyPreset} />
+      </div>
+      <div className="flex items-center gap-1">
+        <input type="number" min="0" value={s.minPpyeong} onChange={(e) => setDebounced("minPpyeong")(e.target.value)} className={inputCls} placeholder="최소" />
+        <span className="text-xs text-gray-400">~</span>
+        <input type="number" min="0" value={s.maxPpyeong} onChange={(e) => setDebounced("maxPpyeong")(e.target.value)} className={inputCls} placeholder="최대" />
+      </div>
+    </>
+  );
+}
+
+// ── 면적 ──
+
+export function AreaSection({ s, setDebounced, applyPreset, dispatch, emitChange }: Pick<SectionProps, "s" | "setDebounced" | "applyPreset" | "dispatch" | "emitChange">) {
+  return (
+    <>
+      <div className="flex items-center justify-between mb-2">
+        <p className={sectionLabel}>전용면적 프리셋</p>
+        <button
+          onClick={() => { const next = s.areaUnit === "m²" ? "평" : "m²"; dispatch({ type: "SET", key: "areaUnit", value: next }); emitChange({ areaUnit: next }); }}
+          className="px-2 py-0.5 text-xs border rounded bg-gray-50 border-gray-300 hover:bg-blue-50"
+        >
+          {s.areaUnit === "m²" ? "평으로" : "m²으로"}
+        </button>
+      </div>
+      <div className="mb-2">
+        <PresetButtons presets={s.areaUnit === "평" ? AREA_PRESETS_PYEONG : AREA_PRESETS}
+          minKey="minArea" maxKey="maxArea"
+          currentMin={s.minArea} currentMax={s.maxArea} onApply={applyPreset} />
+      </div>
+      <div className={separator} />
+      <p className={sectionLabel}>직접 입력 ({s.areaUnit})</p>
+      <div className="flex items-center gap-1">
+        <input type="number" min="0" value={s.minArea} onChange={(e) => setDebounced("minArea")(e.target.value)} className={inputCls} placeholder="최소" />
+        <span className="text-xs text-gray-400">~</span>
+        <input type="number" min="0" value={s.maxArea} onChange={(e) => setDebounced("maxArea")(e.target.value)} className={inputCls} placeholder="최대" />
+      </div>
+    </>
+  );
+}
+
+// ── 층수 ──
+
+export function FloorSection({ s, setImmediate }: Pick<SectionProps, "s" | "setImmediate">) {
+  return (
+    <>
+      <p className={sectionLabel}>층수 필터</p>
+      <div className="flex flex-wrap gap-1 mt-1">
+        {([
+          { k: "전체", l: "전체" },
+          { k: "저층", l: "저층(1~5)" },
+          { k: "중층", l: "중층(6~10)" },
+          { k: "고층", l: "고층(11↑)" },
+        ] as const).map(({ k, l }) => (
+          <button
+            key={k}
+            onClick={() => setImmediate("floorPreset")(k)}
+            className={`px-2 py-1 text-xs border rounded ${
+              s.floorPreset === k
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
+            }`}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ── 입주 ──
+
+export function MoveInSection({ s, setImmediate }: Pick<SectionProps, "s" | "setImmediate">) {
+  return (
+    <>
+      <p className={sectionLabel}>입주가능일</p>
+      <div className={separator} />
+      {(MOVE_IN_OPTIONS as readonly string[]).map((m) => (
+        <label key={m} className="flex items-center gap-2 py-1 text-xs cursor-pointer">
+          <input
+            type="radio"
+            name="moveInType"
+            checked={s.moveInType === m}
+            onChange={() => setImmediate("moveInType")(m)}
+            className="accent-blue-600"
+          />
+          {m}
+        </label>
+      ))}
+    </>
+  );
+}
+
+// ── 방/욕실 ──
+
+export function RoomSection({ s, setImmediate }: Pick<SectionProps, "s" | "setImmediate">) {
+  return (
+    <>
+      <p className={sectionLabel}>방 수</p>
+      <select value={s.minRooms} onChange={(e) => setImmediate("minRooms")(e.target.value)} className={selectCls}>
+        <option value="0">전체</option>
+        <option value="1">1+</option>
+        <option value="2">2+</option>
+        <option value="3">3+</option>
+        <option value="4">4+</option>
+      </select>
+      <div className="mt-3">
+        <p className={sectionLabel}>욕실 수</p>
+        <select value={s.minBaths} onChange={(e) => setImmediate("minBaths")(e.target.value)} className={selectCls}>
+          <option value="0">전체</option>
+          <option value="1">1+</option>
+          <option value="2">2+</option>
+        </select>
+      </div>
+    </>
+  );
+}
+
+// ── 상세 ──
+
+interface DetailSectionProps extends SectionProps {
+  filterOptions?: FilterOptions;
+}
+
+export function DetailSection({ s, setImmediate, setDebounced, applyPreset, dispatch, emitChange, filterOptions }: DetailSectionProps) {
+  return (
+    <div className="space-y-3 min-w-60">
+      {filterOptions && filterOptions.building_names.length > 0 && (
+        <div>
+          <p className={sectionLabel}>동</p>
+          <select value={s.buildingName} onChange={(e) => setImmediate("buildingName")(e.target.value)} className={selectCls}>
+            <option value="전체">전체</option>
+            {filterOptions.building_names.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </div>
+      )}
+      <div>
+        <p className={sectionLabel}>방향</p>
+        <select value={s.direction} onChange={(e) => setImmediate("direction")(e.target.value)} className={selectCls}>
+          {(filterOptions?.directions?.length ? ["전체", ...filterOptions.directions] : ["전체", "남향", "남동향", "남서향", "동향", "서향", "북향"]).map((d) => (
+            <option key={d} value={d}>{d}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <p className={sectionLabel}>관리비 (만원)</p>
+        <div className="mb-1">
+          <PresetButtons presets={MAINTENANCE_PRESETS} minKey="minMaint" maxKey="maxMaint"
+            currentMin={s.minMaint} currentMax={s.maxMaint} onApply={applyPreset} size="py-0.5" />
+        </div>
+        <div className="flex items-center gap-1">
+          <input type="number" min="0" value={s.minMaint} onChange={(e) => setDebounced("minMaint")(e.target.value)} className={inputCls} placeholder="최소" />
+          <span className="text-xs text-gray-400">~</span>
+          <input type="number" min="0" value={s.maxMaint} onChange={(e) => setDebounced("maxMaint")(e.target.value)} className={inputCls} placeholder="최대" />
+        </div>
+      </div>
+      <div>
+        <p className={sectionLabel}>준공년도</p>
+        <select value={s.buildingAge} onChange={(e) => setImmediate("buildingAge")(e.target.value)} className={selectCls}>
+          {(BUILDING_AGE_OPTIONS as readonly { v: string; l: string }[]).map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+        </select>
+      </div>
+      <div>
+        <p className={sectionLabel}>매물유형</p>
+        <select value={s.estateType} onChange={(e) => setImmediate("estateType")(e.target.value)} className={selectCls}>
+          <option value="all">전체</option>
+          {ESTATE_TYPE_FILTER_OPTIONS.map((o) => (
+            <option key={o.code} value={o.code}>{o.label}</option>
+          ))}
+        </select>
+      </div>
+      <label className="flex items-center gap-2 text-xs cursor-pointer">
+        <input
+          type="checkbox"
+          checked={s.verifiedOnly === "true"}
+          onChange={(e) => { const v = String(e.target.checked); dispatch({ type: "SET", key: "verifiedOnly", value: v }); emitChange({ verifiedOnly: v }); }}
+          className="rounded border-gray-300 accent-blue-600"
+        />
+        인증매물만
+      </label>
+      <div className="border-t border-gray-200 my-2" />
+      <div>
+        <p className={sectionLabel}>정렬</p>
+        <select value={s.sortBy} onChange={(e) => setImmediate("sortBy")(e.target.value)} className={selectCls}>
+          {(SORT_OPTIONS as readonly { v: string; l: string }[]).map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+        </select>
+      </div>
+    </div>
+  );
+}

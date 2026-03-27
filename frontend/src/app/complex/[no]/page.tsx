@@ -24,7 +24,7 @@ import { useSmartBack } from "@/hooks/useSmartBack";
 import { useCrawlProgress } from "@/hooks/useCrawlProgress";
 import { useExport } from "@/hooks/useExport";
 import { useFilterParams } from "@/hooks/useFilterParams";
-import type { Article, ArticleFilters, FilterOptions, SortBy, CrawlProgress } from "@/types";
+import type { Article, ArticleFilters, FilterOptions, CrawlProgress } from "@/types";
 import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
 import ArticleTable from "@/components/ArticleTable";
@@ -90,8 +90,8 @@ export default function ComplexDetailPage() {
   const rawNo = params.no;
   const complexNo = Array.isArray(rawNo) ? rawNo[0] : rawNo ?? "";
 
-  // 필터/정렬/페이지 상태 (URL 동기화)
-  const [currentPage, setCurrentPage] = useState(1);
+  // 필터/정렬/페이지 — URL을 단일 소스로 사용
+  const { filters, page: currentPage, sortBy: activeSortBy, setFilters, setPage, setSortBy, filterKey } = useFilterParams();
   const [selectedArticleNos, setSelectedArticleNos] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
@@ -99,9 +99,14 @@ export default function ComplexDetailPage() {
   const [filterError, setFilterError] = useState("");
   const [sessionToken, setSessionToken] = useState<string | undefined>(undefined);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
-  const [activeSortBy, setActiveSortBy] = useState("rank");
-  const { filters: urlFilters, filterKey } = useFilterParams();
-  const [currentFilters, setCurrentFilters] = useState<ArticleFilters>(urlFilters);
+
+  // 브라우저 뒤로/앞으로 시에만 FilterBar 리마운트 (사용자 필터 변경 시에는 유지)
+  const [navKey, setNavKey] = useState(0);
+  useEffect(() => {
+    const handler = () => setNavKey(k => k + 1);
+    window.addEventListener("popstate", handler);
+    return () => window.removeEventListener("popstate", handler);
+  }, []);
 
   const { exporting, exportError, clearExportError, handleExport: doExport } = useExport();
 
@@ -141,7 +146,7 @@ export default function ComplexDetailPage() {
 
   // ── useQuery: 매물 목록 (필터/페이지/정렬 포함, 폴링 지원) ──
   const articlesQueryKey = queryKeys.articles(complexNo, {
-    ...currentFilters,
+    ...filters,
     page: currentPage,
     page_size: PAGE_SIZE,
   });
@@ -149,7 +154,7 @@ export default function ComplexDetailPage() {
   const articlesQuery = useQuery({
     queryKey: articlesQueryKey,
     queryFn: () => getArticles(complexNo, {
-      ...currentFilters,
+      ...filters,
       page: currentPage,
       page_size: PAGE_SIZE,
     }),
@@ -216,38 +221,32 @@ export default function ComplexDetailPage() {
     return () => { clearAllPolling(); };
   }, [clearAllPolling]);
 
-  // 핸들러: 정렬 변경
+  // 핸들러: 정렬 변경 → URL 업데이트 (page 리셋)
   const handleSortChange = useCallback(
-    (sortBy: string) => {
-      setActiveSortBy(sortBy);
-      setCurrentPage(1);
+    (newSortBy: string) => {
+      setSortBy(newSortBy);
       setSelectedArticleNos(new Set());
-      setCurrentFilters(prev => ({
-        ...prev,
-        sort_by: sortBy === "rank" ? undefined : sortBy as SortBy,
-      }));
-      // queryKey 변경으로 자동 refetch됨
     },
-    []
+    [setSortBy]
   );
 
-  // 핸들러: 필터 변경
+  // 핸들러: 필터 변경 → URL 업데이트 (page 리셋)
   const handleFilterChange = useCallback(
-    (filters: ArticleFilters) => {
-      setCurrentFilters(filters);
-      setCurrentPage(1);
+    (newFilters: ArticleFilters) => {
+      setFilters(newFilters);
       setSelectedArticleNos(new Set());
       setFilterError("");
-      // queryKey 변경으로 자동 refetch됨
     },
-    []
+    [setFilters]
   );
 
-  // 핸들러: 페이지 변경
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-    // queryKey 변경으로 자동 refetch됨
-  };
+  // 핸들러: 페이지 변경 → URL 업데이트
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      setPage(newPage);
+    },
+    [setPage]
+  );
 
   const handleSelectionChange = (articleNo: string, checked: boolean) => {
     setSelectedArticleNos(prev => {
@@ -271,7 +270,7 @@ export default function ComplexDetailPage() {
     }
   };
 
-  const handleExport = () => doExport(complexNo, selectedArticleNos, currentFilters);
+  const handleExport = () => doExport(complexNo, selectedArticleNos, filters);
 
   // 수동 크롤링 (데이터 갱신 버튼) — useMutation
   const crawlMutation = useMutation({
@@ -430,7 +429,7 @@ export default function ComplexDetailPage() {
           {filterOpen ? "▲ 필터 접기" : "▼ 필터 펼치기"}
         </button>
         <div className={filterOpen ? "" : "hidden md:block"}>
-          <FilterBar key={filterKey} onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} initialFilters={urlFilters} />
+          <FilterBar key={navKey} onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} initialFilters={filters} />
         </div>
       </div>
 

@@ -538,7 +538,7 @@ def _upsert_price_history(
     )
     stmt = pg_insert(ComplexPriceHistory).values(**values)
     stmt = stmt.on_conflict_do_update(
-        constraint="uq_cph_composite",
+        constraint="complex_price_history_upsert_key",
         set_={
             "price_upper": stmt.excluded.price_upper,
             "price_lower": stmt.excluded.price_lower,

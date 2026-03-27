@@ -12,10 +12,14 @@ vi.mock("recharts", () => ({
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="chart-container">{children}</div>
   ),
+  ComposedChart: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="composed-chart">{children}</div>
+  ),
   LineChart: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="line-chart">{children}</div>
   ),
   Line: () => <div data-testid="line" />,
+  Area: () => <div data-testid="area" />,
   XAxis: () => null,
   YAxis: () => null,
   CartesianGrid: () => null,

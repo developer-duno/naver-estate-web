@@ -2,7 +2,8 @@
 실행: python -m pytest tests/test_admin_router.py -v
 """
 from jose import jwt
-from db.models import UserProfile, AdminSetting
+
+from db.models import UserProfile
 
 JWT_SECRET = "test-secret-key-for-testing-only"
 

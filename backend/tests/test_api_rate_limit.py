@@ -4,9 +4,11 @@
 NOTE: RateLimitMiddleware는 미들웨어로 등록되어 있어 TestClient로 직접 테스트.
 in-memory 모드에서 테스트.
 """
-from auth.rate_limiter import _check_rate_limit_memory, _ip_counters
-import pytest
 import time
+
+import pytest
+
+from auth.rate_limiter import _check_rate_limit_memory, _ip_counters
 
 
 @pytest.fixture(autouse=True)

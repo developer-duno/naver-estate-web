@@ -1,7 +1,7 @@
 """감사 로그 테스트 — IP 마스킹, 로그 생성
 실행: python -m pytest tests/test_audit.py -v
 """
-from auth.audit import log_action, _mask_ip
+from auth.audit import _mask_ip, log_action
 from db.models import AuditLog
 
 

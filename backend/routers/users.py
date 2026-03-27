@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from deps import get_db, get_current_user
 from db.models import UserProfile
+from deps import get_current_user, get_db
 
 router = APIRouter()
 

@@ -3,21 +3,21 @@
 실행: cd backend && uvicorn main:app --reload
 """
 
-import os
-import sys
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
-from starlette.responses import Response, JSONResponse
+from starlette.responses import Response
 
-from routers import complexes, articles, crawl, stats, regions, admin, users, live
 from auth.rate_limiter import RateLimitMiddleware
+from routers import admin, articles, complexes, crawl, live, regions, stats, users
 from services.cache import get_dynamic_ttl
 
 # 로깅 설정

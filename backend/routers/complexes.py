@@ -5,11 +5,11 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from deps import get_db
-from db import queries
-from routers.serializers import complex_to_dict, article_to_dict, build_filter_dict
 from crawler.stats import group_by_area, group_by_floor
-from services.cache import get_cache, TTLCache
+from db import queries
+from deps import get_db
+from routers.serializers import article_to_dict, build_filter_dict, complex_to_dict
+from services.cache import TTLCache, get_cache
 
 router = APIRouter()
 

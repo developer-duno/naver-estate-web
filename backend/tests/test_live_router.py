@@ -1,11 +1,9 @@
 """live 라우터 테스트 — 실시간 검색, 지역 검색, 멀티타입 검색 로직
 실행: python -m pytest tests/test_live_router.py -v
 """
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
-from routers.live import _parse_allowed_types, _search_all_types, CRAWL_REAL_ESTATE_TYPES, MAX_SEARCH_PAGES
-
+from routers.live import CRAWL_REAL_ESTATE_TYPES, MAX_SEARCH_PAGES, _parse_allowed_types, _search_all_types
 
 # ── 팩토리 함수 ──
 
@@ -203,7 +201,7 @@ class TestSearchAllTypes:
         )
 
         allowed = {"APT"}
-        result = _search_all_types("테스트", allowed, db)
+        _search_all_types("테스트", allowed, db)
 
         # MAX_SEARCH_PAGES만큼만 호출되어야 함
         assert mock_search.call_count <= MAX_SEARCH_PAGES

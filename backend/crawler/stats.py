@@ -3,9 +3,7 @@
 crawl.mjs의 groupByArea / groupByFloor 포팅.
 """
 
-import math
 from dataclasses import dataclass
-
 
 AREA_BUCKET_SIZE = 5  # 5m² 단위 버킷
 FLOOR_TIERS = {"low": 5, "mid": 15}  # 저층 1-5, 중층 6-15, 고층 16+

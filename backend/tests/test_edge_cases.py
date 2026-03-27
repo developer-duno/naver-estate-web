@@ -2,13 +2,14 @@
 실행: python -m pytest tests/test_edge_cases.py -v
 """
 import time
-import pytest
+
 from jose import jwt
-from db.models import Complex, Article, UserProfile
+
+from auth.audit import _mask_ip
 from db import queries
+from db.models import Article, Complex
 from routers.serializers import article_to_dict
 from services.cache import TTLCache
-from auth.audit import _mask_ip
 
 JWT_SECRET = "test-secret-key-for-testing-only"
 JWT_ALG = "HS256"
@@ -24,14 +25,16 @@ def _token(sub, aud="authenticated"):
 
 def _add_complex(db, no="C001", name="test", **kw):
     c = Complex(complex_no=no, complex_name=name, sido="s", sigungu="g", **kw)
-    db.add(c); db.commit()
+    db.add(c)
+    db.commit()
     return c
 
 
 def _add_article(db, no, cpx="C001", trade="m", price=50000, active=True, **kw):
     a = Article(article_no=no, complex_no=cpx, trade_type_name=trade,
                 numeric_price=price, is_active=active, **kw)
-    db.add(a); db.commit()
+    db.add(a)
+    db.commit()
     return a
 
 
@@ -79,7 +82,8 @@ def test_null_numeric_price_sort(db):
     _add_article(db, "NP1", "NP", price=50000)
     a = Article(article_no="NP2", complex_no="NP", trade_type_name="m",
                 deal_or_warrant_prc="5ok", numeric_price=None, is_active=True)
-    db.add(a); db.commit()
+    db.add(a)
+    db.commit()
     arts, total = queries.get_articles_by_complex(db, "NP", sort_by="price_asc")
     assert total == 2
 
@@ -227,7 +231,11 @@ def test_regions_full_chain(client):
 
 def test_quota_type_isolation(db):
     from auth.permissions import check_quota
-    check_quota(db, "qi", "crawl", 5); db.commit()
-    check_quota(db, "qi", "export", 5); db.commit()
-    check_quota(db, "qi", "crawl", 5); db.commit()
-    check_quota(db, "qi", "export", 5); db.commit()
+    check_quota(db, "qi", "crawl", 5)
+    db.commit()
+    check_quota(db, "qi", "export", 5)
+    db.commit()
+    check_quota(db, "qi", "crawl", 5)
+    db.commit()
+    check_quota(db, "qi", "export", 5)
+    db.commit()

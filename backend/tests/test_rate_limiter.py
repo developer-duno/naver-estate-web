@@ -3,7 +3,8 @@
 """
 import time
 from unittest.mock import MagicMock
-from auth.rate_limiter import _get_client_ip, _check_rate_limit_memory, _ip_counters
+
+from auth.rate_limiter import _check_rate_limit_memory, _get_client_ip
 
 
 def _mock_request(forwarded=None, client_host="127.0.0.1"):

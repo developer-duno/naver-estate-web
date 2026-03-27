@@ -4,25 +4,24 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-
 from starlette import status as http_status
 
-from deps import get_db, get_approved_user
-from db.models import Complex as ComplexModel, Article as ArticleModel
 from db.database import SessionLocal
-from routers.serializers import complex_to_dict, article_to_dict
+from db.models import Article as ArticleModel
+from db.models import Complex as ComplexModel
+from deps import get_approved_user, get_db
+from routers.serializers import article_to_dict, complex_to_dict
 from services.cache import get_cache
+from services.enricher import enrich_complex_detail
 from services.upsert import (
-    upsert_complex_from_search,
-    upsert_article,
     build_detail_update_dict,
     delete_missing_articles,
+    upsert_article,
+    upsert_complex_from_search,
 )
-from services.enricher import enrich_complex_detail
 from shared.constants import NAVER_COMPLEX_ARTICLES_API, NAVER_LAND_BASE
 from shared.domain.article import RealEstateArticle
 from shared.naver_api import NaverEstateAPI
@@ -656,9 +655,10 @@ def start_price_collect(
     db: Session = Depends(get_db),
 ):
     """실거래가 시세 on-demand 수집 시작 (백그라운드). 24시간 TTL 내 재수집 스킵."""
-    from auth.permissions import require_role, check_quota
-    from db.models import UserProfile, ComplexPriceHistory
     from datetime import timedelta
+
+    from auth.permissions import check_quota, require_role
+    from db.models import ComplexPriceHistory, UserProfile
 
     require_role(user, ["admin", "expert"])
 

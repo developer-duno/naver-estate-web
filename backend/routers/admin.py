@@ -1,19 +1,24 @@
 """관리자 API 라우터 — 사용자/크롤링/데이터/감사로그/설정 관리"""
 
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select, func, and_, delete
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.orm import Session
 
-from deps import get_db, get_admin_user
-from db.models import (
-    UserProfile, AuditLog, AdminSetting, CrawlJob,
-    Complex, Article, RateLimitCounter,
-)
 from auth.audit import log_action
+from db.models import (
+    AdminSetting,
+    Article,
+    AuditLog,
+    Complex,
+    CrawlJob,
+    RateLimitCounter,
+    UserProfile,
+)
+from deps import get_admin_user, get_db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -345,7 +350,7 @@ def get_audit_logs(
                 "ip_address": l.ip_address,
                 "created_at": l.created_at.isoformat() if l.created_at else None,
             }
-            for l in logs
+            for l in logs  # noqa: E741
         ],
         "total": total,
         "page": page,

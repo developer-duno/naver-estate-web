@@ -1,9 +1,8 @@
 """DB 쿼리 함수 테스트 — 검색, 필터, 정렬, 페이지네이션
 실행: python -m pytest tests/test_queries.py -v
 """
-import pytest
-from db.models import Complex, Article
 from db import queries
+from db.models import Article, Complex
 
 
 def _add_complex(db, no="C001", name="래미안아파트", sido="서울특별시", sigungu="강남구", dong="역삼동"):

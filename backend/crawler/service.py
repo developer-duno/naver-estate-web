@@ -10,29 +10,31 @@ E. 공공데이터 수집: 국토교통부 실거래가 API (IP 차단 방지 3�
 import logging
 import os
 import time
-from datetime import datetime, timezone
 from typing import Callable
 
 from dotenv import load_dotenv
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from crawler.utils import AdaptiveThrottle, CheckpointManager
 from db.database import SessionLocal
 from db.models import (
-    Complex, Article, CrawlJob,
+    Article,
+    Complex,
     ComplexPriceHistory,
+    CrawlJob,
+)
+from services.enricher import enrich_complex_detail
+from services.upsert import (
+    build_detail_update_dict,
+    delete_missing_articles,
+    upsert_article,
+    upsert_complex_from_search,
 )
 from shared.constants import KOREA_REGIONS
 from shared.domain.article import RealEstateArticle
 from shared.naver_api import NaverEstateAPI
-from crawler.utils import AdaptiveThrottle, CheckpointManager
-
-from services.upsert import (
-    upsert_complex_from_search, upsert_article, build_detail_update_dict,
-    delete_missing_articles,
-)
-from services.enricher import enrich_complex_detail
-from utils import utcnow, safe_int
+from utils import safe_int, utcnow
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -600,7 +602,7 @@ def collect_public_trade_data(batch_size: int = 300):
         months = sorted(set(months))  # 중복 제거 + 정렬
 
         # DB에서 고유 시군구코드 추출 (cortar_no 앞 5자리)
-        from sqlalchemy import func, distinct
+        from sqlalchemy import func
         sigungu_rows = (
             db.query(
                 func.left(Complex.cortar_no, 5).label("sigungu_cd"),

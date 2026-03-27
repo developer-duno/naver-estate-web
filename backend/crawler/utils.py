@@ -7,8 +7,8 @@ LRU 캐시, 적응형 쓰로틀링, Haversine 거리, 한국어 가격 파서,
 import logging
 import math
 import re
-import time
 import threading
+import time
 from typing import Any
 
 from sqlalchemy.orm import Session

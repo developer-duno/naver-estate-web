@@ -8,8 +8,8 @@ API 문서: https://www.data.go.kr/data/15057511/openapi.do
 
 import logging
 import os
-import time
 import threading
+import time
 
 from curl_cffi import requests as cffi_requests
 

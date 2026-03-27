@@ -8,11 +8,11 @@ import os
 import time
 from collections import defaultdict
 
-from auth.audit import _mask_ip
-
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+
+from auth.audit import _mask_ip
 
 logger = logging.getLogger(__name__)
 

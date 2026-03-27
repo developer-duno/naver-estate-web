@@ -3,19 +3,21 @@
 Phase 3-2: live.py와 crawler/service.py에서 중복되던 upsert 함수들을 통합.
 """
 
-import re
 import logging
-from datetime import datetime, timezone
+import re
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db.models import (
-    Complex as ComplexModel,
     Article as ArticleModel,
+)
+from db.models import (
     ArticlePriceHistory,
 )
-from shared.domain.article import RealEstateArticle
-from utils import utcnow, safe_int, safe_float
+from db.models import (
+    Complex as ComplexModel,
+)
+from utils import safe_float, safe_int, utcnow
 
 logger = logging.getLogger(__name__)
 

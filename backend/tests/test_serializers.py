@@ -2,8 +2,9 @@
 실행: python -m pytest tests/test_serializers.py -v
 """
 from datetime import datetime
-from db.models import Complex, Article
-from routers.serializers import complex_to_dict, article_to_dict, build_filter_dict
+
+from db.models import Article, Complex
+from routers.serializers import article_to_dict, build_filter_dict, complex_to_dict
 
 
 def _make_complex(**kw):

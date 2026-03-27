@@ -4,9 +4,7 @@
 에러 케이스: API 키 미설정 시 graceful skip
 """
 
-from unittest.mock import patch, MagicMock
-import pytest
-
+from unittest.mock import MagicMock, patch
 
 # ── 아파트명 정규화 테스트 ──
 

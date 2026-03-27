@@ -1,7 +1,7 @@
 """매물 API 라우터 테스트
 실행: python -m pytest tests/test_articles_router.py -v
 """
-from db.models import Complex, Article
+from db.models import Article, Complex
 
 
 def _seed(db):
@@ -63,7 +63,8 @@ def test_price_changes_empty(client):
     assert res.status_code == 200
 
 def test_get_article_inactive(client, db):
-    from db.models import Complex as C2, Article as A2
+    from db.models import Article as A2
+    from db.models import Complex as C2
     db.add(C2(complex_no="CI",complex_name="t",sido="s",sigungu="g"))
     db.add(A2(article_no="AI",complex_no="CI",trade_type_name="t",is_active=False,numeric_price=1))
     db.commit()
@@ -76,7 +77,8 @@ def test_export_content_disposition(client, db):
         assert "content-disposition" in res.headers
 
 def test_multiple_articles(client, db):
-    from db.models import Complex as C3, Article as A3
+    from db.models import Article as A3
+    from db.models import Complex as C3
     db.add(C3(complex_no="CM",complex_name="m",sido="s",sigungu="g"))
     for i in range(3):
         db.add(A3(article_no=f"AM{i}",complex_no="CM",trade_type_name="m",is_active=True,numeric_price=1000*i))

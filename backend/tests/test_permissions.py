@@ -3,9 +3,9 @@
 """
 import pytest
 from fastapi import HTTPException
-from auth.permissions import require_admin, require_role, check_quota
-from db.models import RateLimitCounter
 
+from auth.permissions import check_quota, require_admin, require_role
+from db.models import RateLimitCounter
 
 # ── require_admin ──
 

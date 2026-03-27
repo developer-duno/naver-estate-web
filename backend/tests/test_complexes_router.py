@@ -2,7 +2,8 @@
 실행: python -m pytest tests/test_complexes_router.py -v
 """
 import pytest
-from db.models import Complex, Article
+
+from db.models import Article, Complex
 
 
 def _add_complex(db, no="C001", name="래미안", **kw):

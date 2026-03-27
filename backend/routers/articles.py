@@ -12,14 +12,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from deps import get_db, get_optional_user
-from auth.permissions import check_quota
 from auth.audit import log_action
+from auth.permissions import check_quota
 from db import queries
+from deps import get_db, get_optional_user
+from routers.serializers import article_to_dict, build_filter_dict
 from shared.constants import M2_TO_PYEONG
 from shared.naver_api import NaverEstateAPI
-from routers.serializers import article_to_dict, build_filter_dict
-from utils import format_date_ymd, format_parking_count, format_acquisition_tax, format_broker_fee
+from utils import format_acquisition_tax, format_broker_fee, format_date_ymd, format_parking_count
 
 router = APIRouter()
 
@@ -213,7 +213,7 @@ def export_articles_to_excel(
         with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
             df.to_excel(writer, index=False, sheet_name="매물목록")
         buffer.seek(0)
-    except Exception as e:
+    except Exception:
         logger.exception("엑셀 생성 실패: complex=%s articles=%d", complex_no, len(articles))
         raise HTTPException(status_code=500, detail="엑셀 파일 생성에 실패했습니다")
 

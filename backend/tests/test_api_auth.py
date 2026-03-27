@@ -3,6 +3,7 @@
 """
 
 from jose import jwt
+
 from db.models import UserProfile
 
 JWT_SECRET = "test-secret-key-for-testing-only"

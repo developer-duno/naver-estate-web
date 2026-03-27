@@ -4,15 +4,18 @@ import os
 import sys
 import types
 
+import pytest
+import sqlalchemy
+import sqlalchemy.dialects.postgresql as pg_dialect
+from sqlalchemy import JSON, create_engine
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.pool import StaticPool
+
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["SUPABASE_JWT_SECRET"] = "test-secret-key-for-testing-only"
 
-from sqlalchemy import create_engine, JSON
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
-
 # ARRAY → JSON 패치 (SQLite 호환)
-import sqlalchemy
-import sqlalchemy.dialects.postgresql as pg_dialect
+
 
 class _FakeARRAY(JSON):
     def __init__(self, *args, **kwargs):
@@ -22,7 +25,6 @@ sqlalchemy.ARRAY = _FakeARRAY
 pg_dialect.ARRAY = _FakeARRAY
 
 # 테스트 엔진
-from sqlalchemy.pool import StaticPool
 test_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 TestSession = sessionmaker(bind=test_engine, autocommit=False, autoflush=False)
 
@@ -38,10 +40,8 @@ fake_db_mod.get_db = None
 sys.modules["db.database"] = fake_db_mod
 
 # ORM 모델 임포트 (Base.metadata에 테이블 등록)
-import db.models  # noqa: F401
-
-import pytest
-from deps import get_db
+import db.models  # noqa: F401, E402
+from deps import get_db  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -62,8 +62,9 @@ def db():
 
 @pytest.fixture
 def client(db):
-    from main import app
     from fastapi.testclient import TestClient
+
+    from main import app
 
     def _override_get_db():
         try:

@@ -1,6 +1,6 @@
 """단지 가격 추이 API 테스트"""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -10,7 +10,7 @@ def _clear_price_collect_status():
     """각 테스트 전후로 수집 상태 초기화"""
     yield
     try:
-        from routers.live import _price_collect_status, _price_collect_lock
+        from routers.live import _price_collect_lock, _price_collect_status
         with _price_collect_lock:
             _price_collect_status.clear()
     except ImportError:
@@ -223,8 +223,9 @@ def test_price_collect_409_already_running(mock_thread, client, db):
 @patch("routers.live.threading.Thread")
 def test_price_collect_429_quota_exceeded(mock_thread, client, db):
     """쿼터 초과 → 429"""
+    from datetime import datetime, timedelta, timezone
+
     from db.models import RateLimitCounter
-    from datetime import datetime, timezone, timedelta
     _add_user_profile(db, role="admin", price_quota=1)
     _add_complex(db)
     # 쿼터 카운터를 사전에 1로 설정 (limit=1이므로 다음 요청은 429)
@@ -256,8 +257,9 @@ def test_price_collect_status_idle(client):
 def test_price_collect_status_done(client):
     """수집 완료 상태 확인"""
     # 수동으로 상태 설정
-    from routers.live import _price_collect_status, _price_collect_lock
     import time
+
+    from routers.live import _price_collect_lock, _price_collect_status
     with _price_collect_lock:
         _price_collect_status["C002"] = {
             "status": "done", "collected": 15, "failed": 2, "total": 17,

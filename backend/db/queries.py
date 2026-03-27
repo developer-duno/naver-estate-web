@@ -5,17 +5,19 @@ Python 메모리 필터 금지.
 """
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import select, func, and_, or_, text, cast, ARRAY, String
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from db.models import (
-    Complex, Article, CrawlJob, ComplexPyeongDetail,
-    ComplexPriceHistory, ArticlePriceHistory,
+    Article,
+    ArticlePriceHistory,
+    Complex,
+    ComplexPriceHistory,
+    ComplexPyeongDetail,
 )
-
 
 # ── 단지 조회 ──
 

@@ -3,7 +3,7 @@ target-version = "py312"
 
 [lint]
 select = ["E", "F", "W", "I"]
-ignore = ["E501"]
+ignore = ["E501", "E712", "E402"]
 
 [lint.per-file-ignores]
 "shared/*" = ["ALL"]

@@ -1,9 +1,17 @@
 """SQLAlchemy ORM 모델"""
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import (
-    String, Integer, Float, Boolean, Text, DateTime, ARRAY, Index, JSON,
+    ARRAY,
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    Index,
+    Integer,
+    String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column

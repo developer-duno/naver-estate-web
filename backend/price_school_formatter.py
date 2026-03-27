@@ -309,9 +309,9 @@ def format_school_data(data):
             continue
         name = school.get("schoolName", "-")
 
-        html += f'<div style="border:1px solid #c8e6c9; border-radius:5px; padding:10px; margin-bottom:8px; background:#f9fbe7;">'
+        html += '<div style="border:1px solid #c8e6c9; border-radius:5px; padding:10px; margin-bottom:8px; background:#f9fbe7;">'
         html += f'<b style="font-size:13px;">{name}</b>'
-        html += f'<table cellpadding="6" style="margin-top:5px; width:100%;">'
+        html += '<table cellpadding="6" style="margin-top:5px; width:100%;">'
 
         # 기본 정보 행
         address = school.get("address", "")
@@ -534,7 +534,7 @@ def _format_real_price_table(real_prices, trade_type):
         alt_keys = ["monthlyRent", "rentAmount"]
         col_name = "보증금/월세"
 
-    html = f"<p style='text-align:right; color:#aaa; font-size:10px;'>국토교통부 기준</p>"
+    html = "<p style='text-align:right; color:#aaa; font-size:10px;'>국토교통부 기준</p>"
     html += "<table border='1' cellpadding='5' cellspacing='0' style='border-collapse:collapse; width:100%; font-size:12px;'>"
     html += f"<tr style='background-color:#e3f2fd;'><th>계약월</th><th>{col_name}</th></tr>"
 
@@ -656,7 +656,6 @@ def format_area_price_detail(area_info, trade_type, lease_area_info=None):
         trade_type: "매매", "전세", or "월세"
         lease_area_info: 매매 탭일 때 전세 데이터 (전세가율 표시용)
     """
-    area_label = area_info.get("areaLabel", "")
     price_data = area_info.get("data", {})
     if not isinstance(price_data, dict):
         price_data = {}

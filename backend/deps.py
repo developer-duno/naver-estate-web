@@ -2,16 +2,15 @@
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Generator
 
 import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from sqlalchemy.orm import Session
-
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from db.database import SessionLocal
 from db.models import UserProfile
@@ -96,14 +95,10 @@ def get_current_user(
 
     token = credentials.credentials
 
-    # JWT secret이 있으면 로컬 검증 시도, 실패 시 원격 검증 폴백
-    verified = None
+    # JWT secret이 있으면 로컬 검증, 없으면 원격 검증
     if SUPABASE_JWT_SECRET:
-        try:
-            verified = _verify_token_local(token)
-        except HTTPException:
-            pass  # 로컬 실패 → 원격 폴백
-    if verified is None:
+        verified = _verify_token_local(token)
+    else:
         verified = _verify_token_remote(token)
 
     user_id = verified["user_id"]

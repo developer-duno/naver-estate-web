@@ -7,11 +7,11 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 
 from crawler.service import (
-    discover_all_regions,
-    crawl_articles_batch,
-    crawl_article_details,
     collect_price_history,
+    crawl_article_details,
+    crawl_articles_batch,
     crawl_popular_complexes,
+    discover_all_regions,
 )
 
 load_dotenv()

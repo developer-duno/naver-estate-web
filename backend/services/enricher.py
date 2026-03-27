@@ -5,11 +5,11 @@ Phase 1-1: 두 곳에서 중복/불일치하던 _enrich_complex_detail()을 단�
 """
 
 import logging
-from datetime import datetime, timezone
 
-from db.models import Complex as ComplexModel, ComplexPyeongDetail
+from db.models import Complex as ComplexModel
+from db.models import ComplexPyeongDetail
 from shared.naver_api import NaverEstateAPI
-from utils import utcnow, safe_int, safe_float
+from utils import safe_float, safe_int, utcnow
 
 logger = logging.getLogger(__name__)
 

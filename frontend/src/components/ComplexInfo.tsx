@@ -65,6 +65,18 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
   // 컴포넌트 언마운트 시 수집 폴링 정리
   useEffect(() => clearPolling, [clearPolling]);
 
+  // 실거래가 추이 탭 진입 시 자동 수집 (24시간 TTL — 서버에서 fresh 판단)
+  const autoCollectRef = React.useRef<string>("");
+  useEffect(() => {
+    if (tab !== "price-history" || !accessToken || collecting) return;
+    if (autoCollectRef.current === complexNo) return; // 이미 시도함
+    autoCollectRef.current = complexNo;
+    startCollect(complexNo, accessToken, () => {
+      historyFetchedRef.current = "";
+      onRefresh?.();
+    });
+  }, [tab, complexNo, accessToken, collecting, startCollect, onRefresh]);
+
   useEffect(() => {
     if (tab !== "price-history") return;
     const fetchKey = `${complexNo}:${historyAreaNo}`;

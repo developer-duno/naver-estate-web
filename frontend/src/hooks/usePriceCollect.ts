@@ -36,7 +36,14 @@ export function usePriceCollect(): PriceCollectHookResult {
       setProgress(null);
 
       startPriceCollect(complexNo, token)
-        .then(() => {
+        .then((res) => {
+          // 24시간 TTL 내 → 수집 스킵
+          if (res.status === "fresh") {
+            setCollecting(false);
+            setMessage("");
+            onDone?.();
+            return;
+          }
           startedRef.current = Date.now();
           let idleCount = 0; // 수집 완료 후 idle 전환 감지
 

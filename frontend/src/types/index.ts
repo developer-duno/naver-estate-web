@@ -219,7 +219,7 @@ export interface PriceHistoryResponse {
 /** 실거래가 수집 진행 상태 */
 export interface PriceCollectProgress {
   complex_no: string;
-  status: "idle" | "running" | "done" | "error";
+  status: "idle" | "running" | "done" | "error" | "fresh";
   collected?: number;
   failed?: number;
   total?: number;

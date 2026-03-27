@@ -637,6 +637,7 @@ def live_article_detail(
 # ── 실거래가 on-demand 수집 ──
 
 _PRICE_COLLECT_TIMEOUT = 600  # 10분
+_PRICE_COLLECT_TTL = 86400    # 24시간 — 마지막 수집 후 이 시간 내 재수집 스킵
 
 
 def _cleanup_stale_price_collects():
@@ -654,21 +655,35 @@ def start_price_collect(
     user: dict = Depends(get_approved_user),
     db: Session = Depends(get_db),
 ):
-    """실거래가 시세 on-demand 수집 시작 (백그라운드)."""
+    """실거래가 시세 on-demand 수집 시작 (백그라운드). 24시간 TTL 내 재수집 스킵."""
     from auth.permissions import require_role, check_quota
-    from db.models import UserProfile
+    from db.models import UserProfile, ComplexPriceHistory
+    from datetime import timedelta
 
     require_role(user, ["admin", "expert"])
-
-    # 쿼터 확인
-    profile = db.query(UserProfile).filter(UserProfile.user_id == user["user_id"]).first()
-    quota_limit = profile.daily_price_collect_quota if profile else 5
-    check_quota(db, user["user_id"], "price_collect", quota_limit)
 
     # 단지 존재 확인
     cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
     if not cpx:
         raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다")
+
+    # TTL 체크 — 24시간 이내 수집된 데이터가 있으면 스킵
+    cutoff = utcnow() - timedelta(seconds=_PRICE_COLLECT_TTL)
+    recent = (
+        db.query(ComplexPriceHistory)
+        .filter(
+            ComplexPriceHistory.complex_no == complex_no,
+            ComplexPriceHistory.recorded_at >= cutoff,
+        )
+        .first()
+    )
+    if recent:
+        return {"complex_no": complex_no, "status": "fresh"}
+
+    # 쿼터 확인
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user["user_id"]).first()
+    quota_limit = profile.daily_price_collect_quota if profile else 5
+    check_quota(db, user["user_id"], "price_collect", quota_limit)
 
     # 이미 수집 중인지 확인
     with _price_collect_lock:

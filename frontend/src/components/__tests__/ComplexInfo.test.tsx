@@ -12,7 +12,7 @@ const mockGetPriceHistory = vi.fn().mockResolvedValue({
   complex_no: "C001", items: [],
 });
 
-const mockStartPriceCollect = vi.fn().mockResolvedValue({ complex_no: "C001", status: "started" });
+const mockStartPriceCollect = vi.fn().mockResolvedValue({ complex_no: "C001", status: "fresh" });
 const mockGetPriceCollectStatus = vi.fn().mockResolvedValue({ complex_no: "C001", status: "idle", collected: 0, failed: 0, total: 0 });
 
 vi.mock("@/lib/api", () => ({
@@ -155,7 +155,10 @@ describe("ComplexInfo", () => {
       <ComplexInfo complex={baseComplex} pyeongDetails={[]} complexNo="C001" accessToken="test-token" />
     );
     await userEvent.click(screen.getByText("실거래가 추이"));
+    // 자동 수집(fresh) 후 버튼이 활성화됨
     await waitFor(() => screen.getByText("실거래가 수집"));
+    mockStartPriceCollect.mockClear(); // 자동 수집 호출 기록 초기화
+    mockStartPriceCollect.mockResolvedValue({ complex_no: "C001", status: "started" });
     await userEvent.click(screen.getByText("실거래가 수집"));
     await waitFor(() => {
       expect(mockStartPriceCollect).toHaveBeenCalledWith("C001", "test-token");
@@ -163,16 +166,17 @@ describe("ComplexInfo", () => {
   });
 
   it("수집 시작 후 로딩 상태 표시", async () => {
-    // startPriceCollect가 resolve되면 polling이 시작되고 버튼이 비활성화됨
+    // 자동 수집은 fresh → 수동 클릭은 started
     mockStartPriceCollect.mockClear();
-    mockStartPriceCollect.mockResolvedValue({ status: "started", complex_no: "C001" });
+    mockStartPriceCollect
+      .mockResolvedValueOnce({ status: "fresh", complex_no: "C001" })  // 자동 수집
+      .mockResolvedValueOnce({ status: "started", complex_no: "C001" }); // 수동 클릭
     render(
       <ComplexInfo complex={baseComplex} pyeongDetails={[]} complexNo="C001" accessToken="test-token" />
     );
     await userEvent.click(screen.getByText("실거래가 추이"));
     await waitFor(() => screen.getByText("실거래가 수집"));
     await userEvent.click(screen.getByText("실거래가 수집"));
-    // 수집 시작 후 "수집 중..." 또는 메시지 표시
     await waitFor(() => {
       expect(screen.getByText("수집 중...")).toBeInTheDocument();
     });

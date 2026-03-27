@@ -37,8 +37,8 @@ def get_db() -> Generator:
         db.close()
 
 
-def _verify_token_local(token: str) -> dict:
-    """JWT secret으로 로컬 검증"""
+def _verify_token_local(token: str) -> dict | None:
+    """JWT secret으로 로컬 검증. 실패 시 None 반환 (원격 폴백 허용)."""
     try:
         payload = jwt.decode(
             token,
@@ -48,11 +48,11 @@ def _verify_token_local(token: str) -> dict:
         )
         user_id = payload.get("sub")
         if not user_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="유효하지 않은 토큰")
+            return None
         return {"user_id": user_id, "email": payload.get("email", "")}
     except JWTError as e:
         logger.warning("[AUTH] JWT 로컬 검증 실패: %s (token prefix: %s...)", e, token[:20] if token else "None")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="토큰 검증 실패")
+        return None
 
 
 def _verify_token_remote(token: str) -> dict:
@@ -95,11 +95,14 @@ def get_current_user(
 
     token = credentials.credentials
 
-    # JWT secret이 있으면 로컬 검증, 없으면 원격 검증
+    # 1) 로컬 검증 시도 (빠름), 2) 실패 시 원격 검증 폴백
+    verified = None
     if SUPABASE_JWT_SECRET:
         verified = _verify_token_local(token)
-    else:
+    if verified is None and SUPABASE_URL:
         verified = _verify_token_remote(token)
+    if verified is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="토큰 검증 실패")
 
     user_id = verified["user_id"]
     email = verified["email"]

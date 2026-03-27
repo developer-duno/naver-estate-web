@@ -149,7 +149,7 @@ export default function PriceHistoryChart({ items }: Props) {
               <Area type="monotone" dataKey="매매_범위" fill="#ef444420" stroke="none" connectNulls legendType="none" />
               <Line type="monotone" dataKey="매매_상한" stroke="#ef444460" strokeWidth={1} strokeDasharray="3 3" dot={false} connectNulls legendType="none" />
               <Line type="monotone" dataKey="매매_하한" stroke="#ef444460" strokeWidth={1} strokeDasharray="3 3" dot={false} connectNulls legendType="none" />
-              <Line type="monotone" dataKey="매매" name="매매 평균" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+              <Line type="monotone" dataKey="매매" name="매매 평균" stroke="#ef4444" strokeWidth={2} dot={{ r: 5, fill: "#ef4444" }} activeDot={{ r: 7, stroke: "#ef4444", strokeWidth: 2, fill: "#fff" }} connectNulls />
             </>
           )}
           {hasJeonse && (
@@ -157,7 +157,7 @@ export default function PriceHistoryChart({ items }: Props) {
               <Area type="monotone" dataKey="전세_범위" fill="#3b82f620" stroke="none" connectNulls legendType="none" />
               <Line type="monotone" dataKey="전세_상한" stroke="#3b82f660" strokeWidth={1} strokeDasharray="3 3" dot={false} connectNulls legendType="none" />
               <Line type="monotone" dataKey="전세_하한" stroke="#3b82f660" strokeWidth={1} strokeDasharray="3 3" dot={false} connectNulls legendType="none" />
-              <Line type="monotone" dataKey="전세" name="전세 평균" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} connectNulls />
+              <Line type="monotone" dataKey="전세" name="전세 평균" stroke="#3b82f6" strokeWidth={2} dot={{ r: 5, fill: "#3b82f6" }} activeDot={{ r: 7, stroke: "#3b82f6", strokeWidth: 2, fill: "#fff" }} connectNulls />
             </>
           )}
         </ComposedChart>

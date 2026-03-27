@@ -12,7 +12,22 @@
       "Bash(npx next:*)",
       "Bash(npx tsc:*)",
       "Bash(npx vitest:*)",
-      "Bash(curl -s --connect-timeout 5 http://192.168.219.101:8002/health)"
+      "Bash(curl -s --connect-timeout 5 http://192.168.219.101:8002/health)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npx vercel:*)",
+      "Bash(cat .github/workflows/*.yml)",
+      "Bash(python -m pytest tests/test_price_history_api.py -v)",
+      "Bash(python -m pytest backend/tests/test_price_history_api.py -v)",
+      "Bash(\"C:/Users/user/AppData/Local/Programs/Python/Python313/python.exe\" -m pytest \"Z:/cursor/naver-estate-web/backend/tests/test_price_history_api.py\" -v --tb=short)",
+      "Bash(curl -s --max-time 10 \"https://enlargement-birthday-absent-fabrics.trycloudflare.com/health\")",
+      "Bash(curl -s --max-time 10 \"https://2u.pe.kr\")",
+      "Bash(curl -s --max-time 10 \"https://enlargement-birthday-absent-fabrics.trycloudflare.com/api/live/102378/price-history/collect-status\")",
+      "Bash(curl -s --max-time 10 \"https://enlargement-birthday-absent-fabrics.trycloudflare.com/api/complexes/102378/price-history\")",
+      "Bash(gh run:*)",
+      "Bash(curl -s --max-time 15 -X POST \"https://enlargement-birthday-absent-fabrics.trycloudflare.com/api/live/109801/price-history/start-collect\" -H \"Content-Type: application/json\")",
+      "Bash(curl -s \"https://enlargement-birthday-absent-fabrics.trycloudflare.com/api/complexes/8906/price-history\")"
     ]
   }
 }

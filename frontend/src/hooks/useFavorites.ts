@@ -1,0 +1,45 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import {
+  getFavorites,
+  isFavorite as checkFavorite,
+  toggleFavorite as doToggle,
+  type FavoriteComplex,
+} from "@/lib/storage";
+
+/** 즐겨찾기 훅 — localStorage 기반 */
+export function useFavorites() {
+  const [favorites, setFavorites] = useState<FavoriteComplex[]>([]);
+
+  useEffect(() => {
+    setFavorites(getFavorites());
+  }, []);
+
+  const isFavorite = useCallback((complexNo: string) => {
+    return favorites.some((f) => f.complex_no === complexNo);
+  }, [favorites]);
+
+  const toggle = useCallback((complex: Omit<FavoriteComplex, "added_at">) => {
+    doToggle(complex);
+    setFavorites(getFavorites());
+  }, []);
+
+  return { favorites, isFavorite, toggle };
+}
+
+/** 단일 단지의 즐겨찾기 상태 훅 */
+export function useFavoriteStatus(complexNo: string) {
+  const [starred, setStarred] = useState(false);
+
+  useEffect(() => {
+    setStarred(checkFavorite(complexNo));
+  }, [complexNo]);
+
+  const toggle = useCallback((complexName: string, address?: string) => {
+    const added = doToggle({ complex_no: complexNo, complex_name: complexName, address });
+    setStarred(added);
+  }, [complexNo]);
+
+  return { starred, toggle };
+}

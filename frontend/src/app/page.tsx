@@ -8,9 +8,13 @@ import { queryKeys } from "@/lib/query-keys";
 import RegionSelector from "@/components/RegionSelector";
 import EstateTypeTabs from "@/components/EstateTypeTabs";
 import FilterBar from "@/components/FilterBar";
+import SearchHistory from "@/components/SearchHistory";
 import { ESTATE_TYPE_TABS } from "@/lib/constants";
 import type { ArticleFilters } from "@/types";
 import { buildFilterURL } from "@/hooks/useFilterParams";
+import { useSearchHistory } from "@/hooks/useSearchHistory";
+import { useFavorites } from "@/hooks/useFavorites";
+import type { SearchHistoryItem } from "@/lib/storage";
 
 export default function HomePage() {
   const router = useRouter();
@@ -18,6 +22,8 @@ export default function HomePage() {
   const allCodes = ESTATE_TYPE_TABS.map((t) => t.code) as string[];
   const [selectedTypes, setSelectedTypes] = useState<string[]>(["APT"]);
   const [articleFilters, setArticleFilters] = useState<ArticleFilters>({});
+  const { history, add: addHistory, remove: removeHistory, clear: clearHistory } = useSearchHistory();
+  const { favorites } = useFavorites();
 
   const { data: stats, isLoading: statsLoading, isError: statsError, refetch: loadStats } = useQuery({
     queryKey: queryKeys.stats,
@@ -32,16 +38,31 @@ export default function HomePage() {
   const handleKeywordSearch = () => {
     const q = keyword.trim();
     if (!q) return;
+    addHistory({ type: "keyword", keyword: q });
     const extra: Record<string, string> = { q };
     if (typesParam) extra.types = selectedTypes.join(",");
     router.push(buildFilterURL("/search", extra, articleFilters));
   };
 
   const handleRegionSearch = (sido: string, sigungu: string, dong?: string) => {
+    addHistory({ type: "region", sido, sigungu, dong });
     const extra: Record<string, string> = { sido, sigungu };
     if (dong) extra.dong = dong;
     if (typesParam) extra.types = selectedTypes.join(",");
     router.push(buildFilterURL("/search", extra, articleFilters));
+  };
+
+  const handleHistorySelect = (item: SearchHistoryItem) => {
+    if (item.type === "keyword" && item.keyword) {
+      const extra: Record<string, string> = { q: item.keyword };
+      if (typesParam) extra.types = selectedTypes.join(",");
+      router.push(buildFilterURL("/search", extra, articleFilters));
+    } else if (item.type === "region" && item.sido && item.sigungu) {
+      const extra: Record<string, string> = { sido: item.sido, sigungu: item.sigungu };
+      if (item.dong) extra.dong = item.dong;
+      if (typesParam) extra.types = selectedTypes.join(",");
+      router.push(buildFilterURL("/search", extra, articleFilters));
+    }
   };
 
   const complexCount = stats?.complex_count ?? 0;
@@ -116,6 +137,28 @@ export default function HomePage() {
           <RegionSelector onSearch={handleRegionSearch} />
         </div>
       </div>
+
+      {/* 최근 검색 */}
+      <SearchHistory history={history} onSelect={handleHistorySelect} onRemove={removeHistory} onClear={clearHistory} />
+
+      {/* 즐겨찾기 단지 */}
+      {favorites.length > 0 && (
+        <div className="mt-4">
+          <span className="text-xs font-semibold text-gray-500 mb-1.5 block">즐겨찾기</span>
+          <div className="flex flex-wrap gap-1.5">
+            {favorites.map((f) => (
+              <button
+                key={f.complex_no}
+                onClick={() => router.push(`/complex/${f.complex_no}`)}
+                className="inline-flex items-center gap-1 bg-yellow-50 text-yellow-800 text-xs rounded-full px-2.5 py-1 border border-yellow-200 hover:bg-yellow-100 cursor-pointer transition-colors"
+              >
+                <span className="text-yellow-500">&#9733;</span>
+                {f.complex_name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

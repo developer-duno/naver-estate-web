@@ -24,6 +24,7 @@ import { useSmartBack } from "@/hooks/useSmartBack";
 import { useCrawlProgress } from "@/hooks/useCrawlProgress";
 import { useExport } from "@/hooks/useExport";
 import { useFilterParams } from "@/hooks/useFilterParams";
+import { useFavoriteStatus } from "@/hooks/useFavorites";
 import type { Article, ArticleFilters, FilterOptions, CrawlProgress } from "@/types";
 import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
@@ -92,6 +93,7 @@ export default function ComplexDetailPage() {
 
   // 필터/정렬/페이지 — URL을 단일 소스로 사용
   const { filters, page: currentPage, sortBy: activeSortBy, setFilters, setPage, setSortBy, filterKey } = useFilterParams();
+  const { starred, toggle: toggleFavorite } = useFavoriteStatus(complexNo);
   const [selectedArticleNos, setSelectedArticleNos] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
@@ -370,6 +372,14 @@ export default function ComplexDetailPage() {
           ←
         </button>
         <h1 className="text-2xl font-bold">{complex.complex_name}</h1>
+        <button
+          onClick={() => toggleFavorite(complex.complex_name, complex.cortar_address)}
+          className={`text-xl transition-colors ${starred ? "text-yellow-500" : "text-gray-300 hover:text-yellow-400"}`}
+          aria-label={starred ? "즐겨찾기 해제" : "즐겨찾기 추가"}
+          title={starred ? "즐겨찾기 해제" : "즐겨찾기 추가"}
+        >
+          {starred ? "\u2605" : "\u2606"}
+        </button>
         {complex.real_estate_type_name && (
           <span className={`text-xs px-1.5 py-0.5 rounded border ${ESTATE_TYPE_COLORS[complex.real_estate_type_name] ?? ESTATE_TYPE_DEFAULT_COLOR}`}>
             {complex.real_estate_type_name}

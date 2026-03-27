@@ -60,6 +60,8 @@ npx vercel --prod
 - `LIVE_TIMEOUT_MS = 120_000` (실시간 크롤링 타임아웃)
 - `get_dynamic_ttl()` (live 엔드포인트 시간대별 동적 캐시: 새벽 2시간 / 오전 15분 / 오후 30분 / 저녁 1시간)
 - `_PRICE_COLLECT_TTL = 86400` (실거래가 수집 24시간 TTL)
+- `PRICE_COLLECT_POLL_MS = 3_000` (실거래가 수집 폴링 간격 3초)
+- `MAX_PRICE_COLLECT_POLLS = 60` (폴링 최대 60회 = 3분 타임아웃)
 
 ## 거래유형 코드
 
@@ -91,7 +93,7 @@ npx vercel --prod
 필터 변경 → /api/complexes/{no}/articles (DB 쿼리, SQL WHERE절)
 실거래가 추이 탭 → 자동 수집 트리거 (/api/live/{no}/price-history/start-collect, 24시간 TTL)
 가격 추이 조회 → /api/complexes/{no}/price-history?trade_type=&area_no= (DB 쿼리, 월별 집계)
-엑셀 → /api/articles/export (pandas DataFrame → xlsx)
+엑셀 → /api/articles/export (pandas DataFrame → xlsxwriter → xlsx)
 ```
 
 ## 스케줄러 (APScheduler)

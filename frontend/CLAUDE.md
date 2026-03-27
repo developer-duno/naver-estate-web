@@ -26,7 +26,7 @@ frontend/src/
 | 훅 | 역할 |
 |---|------|
 | `useCrawlProgress` | 매물 크롤링 진행률 폴링 (start-crawl → crawl-status) |
-| `usePriceCollect` | 실거래가 수집 (fire-and-forget + 30초 지연 리프레시) |
+| `usePriceCollect` | 실거래가 수집 — 3초 실시간 폴링 (진행률 표시, 3분 타임아웃, finishPolling 헬퍼) |
 | `useExport` | 엑셀 내보내기 |
 | `useFilterParams` | URL 기반 필터 상태 관리 |
 | `useSmartBack` | 뒤로가기 (이전 페이지 or 홈) |
@@ -52,7 +52,7 @@ frontend/src/
 
 ### 4. 컴포넌트 메모이제이션
 - `ArticleTable`, `ComplexRow`: `memo()` 적용
-- `FilterBar`: debounce 300ms (입력), immediate (셀렉트/체크박스)
+- `FilterBar`: `memo()` + useReducer, debounce 300ms (입력), immediate (셀렉트/체크박스)
 - `PriceHistoryChart`: `dynamic(() => import(...), { ssr: false })` 동적 임포트
 
 ### 5. 타입 안전성
@@ -66,6 +66,9 @@ frontend/src/
 
 ### FilterBar (7개 드롭다운 툴바)
 - 거래유형, 가격, 면적, 층수, 입주, 방/욕실, 상세
+- **useReducer** 21개 필터 상태 통합 (FilterState + FilterAction)
+- **PresetButtons** 내부 컴포넌트: 가격/면적/평당가/관리비 프리셋 버튼 공통화
+- **buildChipList()**: 활성 필터 칩 생성 함수 (IIFE에서 호출)
 - 프리셋 상수: `PRICE_PRESETS`, `AREA_PRESETS`, `MAINTENANCE_PRESETS`, `PPYEONG_PRESETS`
 - 비활성: 회색, 활성: 파란색 + 선택 요약 텍스트
 
@@ -78,7 +81,7 @@ frontend/src/
 - 기간 필터: 6개월/1년/2년/전체
 - 면적 드롭다운: pyeong_no 기반 필터
 - "실거래가 수집" 버튼: 탭 진입 시 자동 트리거 (24시간 TTL)
-- 수집 완료 30초 후 차트 자동 리프레시
+- 3초 간격 실시간 폴링 → 완료 즉시 차트 갱신 (진행률 표시: "수집 중... 45/120건")
 
 ### RegionSelector (네이버 스타일 3컬럼 팝업)
 - 트리거 버튼 hover → fixed 팝업 패널 (시/도 | 시/군/구 | 읍/면/동)

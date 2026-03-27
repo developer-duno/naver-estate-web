@@ -8,7 +8,7 @@
 | `deps.py` | 인증 의존성 (get_current_user, get_approved_user, get_admin_user) |
 | `routers/live.py` | 실시간 크롤링 + 실거래가 on-demand 수집 API |
 | `routers/complexes.py` | 단지 조회/필터/시세/가격추이 |
-| `routers/articles.py` | 매물 조회/엑셀 내보내기 |
+| `routers/articles.py` | 매물 조회/엑셀 내보내기 (xlsxwriter 엔진) |
 | `routers/crawl.py` | 관리자 크롤링 트리거 |
 | `routers/admin.py` | 관리자 API |
 | `routers/stats.py` | 통계 API |

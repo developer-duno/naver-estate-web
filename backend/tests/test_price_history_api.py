@@ -23,7 +23,7 @@ def test_price_history_normal(mock_query, mock_cache):
 
     from routers.complexes import get_price_history
     mock_db = MagicMock()
-    result = get_price_history(complex_no="12345", trade_type=None, db=mock_db)
+    result = get_price_history(complex_no="12345", trade_type=None, area_no=None, db=mock_db)
 
     assert result["complex_no"] == "12345"
     assert len(result["items"]) == 4
@@ -31,7 +31,7 @@ def test_price_history_normal(mock_query, mock_cache):
     assert result["items"][0]["trade_type_label"] == "매매"
     assert result["items"][0]["base_month"] == "202502"
     assert result["items"][2]["trade_type_label"] == "전세"
-    mock_query.assert_called_once_with(mock_db, "12345", None)
+    mock_query.assert_called_once_with(mock_db, "12345", None, area_no=None)
 
 
 @patch("routers.complexes._price_history_cache")
@@ -43,11 +43,11 @@ def test_price_history_with_trade_type_filter(mock_query, mock_cache):
 
     from routers.complexes import get_price_history
     mock_db = MagicMock()
-    result = get_price_history(complex_no="12345", trade_type="A1", db=mock_db)
+    result = get_price_history(complex_no="12345", trade_type="A1", area_no=None, db=mock_db)
 
     assert len(result["items"]) == 2
     assert all(item["trade_type"] == "A1" for item in result["items"])
-    mock_query.assert_called_once_with(mock_db, "12345", "A1")
+    mock_query.assert_called_once_with(mock_db, "12345", "A1", area_no=None)
 
 
 @patch("routers.complexes._price_history_cache")
@@ -59,7 +59,7 @@ def test_price_history_empty(mock_query, mock_cache):
 
     from routers.complexes import get_price_history
     mock_db = MagicMock()
-    result = get_price_history(complex_no="99999", trade_type=None, db=mock_db)
+    result = get_price_history(complex_no="99999", trade_type=None, area_no=None, db=mock_db)
 
     assert result["complex_no"] == "99999"
     assert result["items"] == []
@@ -76,7 +76,7 @@ def test_price_history_base_month_normalized(mock_query, mock_cache):
 
     from routers.complexes import get_price_history
     mock_db = MagicMock()
-    result = get_price_history(complex_no="12345", trade_type=None, db=mock_db)
+    result = get_price_history(complex_no="12345", trade_type=None, area_no=None, db=mock_db)
 
     # month[:6] → "202503"
     assert result["items"][0]["base_month"] == "202503"
@@ -93,6 +93,21 @@ def test_price_history_null_price_avg(mock_query, mock_cache):
 
     from routers.complexes import get_price_history
     mock_db = MagicMock()
-    result = get_price_history(complex_no="12345", trade_type=None, db=mock_db)
+    result = get_price_history(complex_no="12345", trade_type=None, area_no=None, db=mock_db)
 
     assert result["items"][0]["price_avg"] is None
+
+
+@patch("routers.complexes._price_history_cache")
+@patch("db.queries.get_complex_price_history")
+def test_price_history_with_area_no_filter(mock_query, mock_cache):
+    """면적 필터: area_no 지정 시 쿼리에 전달"""
+    mock_cache.get.return_value = None
+    mock_query.return_value = [MOCK_HISTORY_ROWS[0]]
+
+    from routers.complexes import get_price_history
+    mock_db = MagicMock()
+    result = get_price_history(complex_no="12345", trade_type=None, area_no="3", db=mock_db)
+
+    assert len(result["items"]) == 1
+    mock_query.assert_called_once_with(mock_db, "12345", None, area_no="3")

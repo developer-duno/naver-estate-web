@@ -4,16 +4,19 @@
  */
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import ComplexInfo from "../ComplexInfo";
 import type { Complex } from "@/types";
+
+const mockGetPriceHistory = vi.fn().mockResolvedValue({
+  complex_no: "C001", items: [],
+});
 
 vi.mock("@/lib/api", () => ({
   getPriceStats: vi.fn().mockResolvedValue({
     complex_no: "C001", total_articles: 0, by_area: [], by_floor: [],
   }),
-  getPriceHistory: vi.fn().mockResolvedValue({
-    complex_no: "C001", items: [],
-  }),
+  getPriceHistory: (...args: unknown[]) => mockGetPriceHistory(...args),
 }));
 
 const baseComplex: Complex = {
@@ -58,6 +61,62 @@ describe("ComplexInfo", () => {
     );
     await waitFor(() => {
       expect(screen.getByText("단지정보")).toBeInTheDocument();
+    });
+  });
+
+  /* 실거래가 추이 탭 테스트 */
+  it("실거래가 추이 탭 클릭 시 가격 추이 로딩", async () => {
+    render(
+      <ComplexInfo complex={baseComplex} pyeongDetails={[]} complexNo="C001" />
+    );
+    await userEvent.click(screen.getByText("실거래가 추이"));
+    await waitFor(() => {
+      expect(screen.getByText("실거래가 추이").getAttribute("aria-selected")).toBe("true");
+    });
+  });
+
+  it("실거래가 추이 탭에서 면적 드롭다운 표시 (pyeongDetails 있을 때)", async () => {
+    const pyeongDetails = [
+      { pyeong_no: 1, pyeong_name: "59A", exclusive_area: "59.98", supply_area: "84.0", supply_area_double: 84.0, exclusive_rate: "71" },
+      { pyeong_no: 2, pyeong_name: "84B", exclusive_area: "84.92", supply_area: "116.0", supply_area_double: 116.0, exclusive_rate: "73" },
+    ];
+    render(
+      <ComplexInfo complex={baseComplex} pyeongDetails={pyeongDetails} complexNo="C001" />
+    );
+    await userEvent.click(screen.getByText("실거래가 추이"));
+    await waitFor(() => {
+      expect(screen.getByText("전체 면적")).toBeInTheDocument();
+      expect(screen.getByText(/59A/)).toBeInTheDocument();
+    });
+  });
+
+  it("실거래가 추이 탭에서 면적 드롭다운 숨김 (pyeongDetails 없을 때)", async () => {
+    render(
+      <ComplexInfo complex={baseComplex} pyeongDetails={[]} complexNo="C001" />
+    );
+    await userEvent.click(screen.getByText("실거래가 추이"));
+    await waitFor(() => {
+      expect(screen.queryByText("전체 면적")).not.toBeInTheDocument();
+    });
+  });
+
+  it("면적 선택 시 area_no 포함하여 API 호출", async () => {
+    mockGetPriceHistory.mockClear();
+    const pyeongDetails = [
+      { pyeong_no: 1, pyeong_name: "59A", exclusive_area: "59.98", supply_area: "84.0", supply_area_double: 84.0, exclusive_rate: "71" },
+    ];
+    render(
+      <ComplexInfo complex={baseComplex} pyeongDetails={pyeongDetails} complexNo="C001" />
+    );
+    await userEvent.click(screen.getByText("실거래가 추이"));
+    await waitFor(() => {
+      expect(mockGetPriceHistory).toHaveBeenCalledWith("C001", undefined, undefined);
+    });
+    // 면적 선택
+    const select = screen.getByRole("combobox");
+    await userEvent.selectOptions(select, "1");
+    await waitFor(() => {
+      expect(mockGetPriceHistory).toHaveBeenCalledWith("C001", undefined, "1");
     });
   });
 });

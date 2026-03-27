@@ -431,6 +431,7 @@ def _build_order_clause(sort_by: str):
 
 def get_complex_price_history(
     db: Session, complex_no: str, trade_type: Optional[str] = None,
+    area_no: Optional[str] = None,
 ) -> list[dict]:
     """단지의 월별 가격 추이 (base_month를 YYYYMM으로 정규화 + 월별 집계)"""
     month_col = func.left(ComplexPriceHistory.base_month, 6).label("month")
@@ -438,6 +439,8 @@ def get_complex_price_history(
     conditions = [ComplexPriceHistory.complex_no == complex_no]
     if trade_type:
         conditions.append(ComplexPriceHistory.trade_type == trade_type)
+    if area_no:
+        conditions.append(ComplexPriceHistory.area_no == area_no)
 
     stmt = (
         select(

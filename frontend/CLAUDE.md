@@ -15,7 +15,7 @@
 ```
 frontend/src/
 ├── app/           # Next.js App Router (11 페이지)
-├── components/    # 재사용 컴포넌트 (13개)
+├── components/    # 재사용 컴포넌트 (14개)
 ├── lib/           # api.ts, supabase.ts, constants.ts, format.ts
 ├── types/         # TypeScript 인터페이스
 └── middleware.ts  # Supabase 세션 + 관리자 라우트 보호
@@ -113,7 +113,7 @@ frontend/src/
 |--------|---------|-------------|
 | `/` | `getStats()` | `/api/stats` |
 | `/search` | `searchComplexes()`, `getComplexesByRegion()` | `/api/live/search`, `/api/live/region` |
-| `/complex/[no]` | `liveArticles()`, `getArticles()`, `getPyeongDetails()` | `/api/live/{no}/articles`, `/api/complexes/{no}/articles` |
+| `/complex/[no]` | `liveArticles()`, `getArticles()`, `getPyeongDetails()`, `getPriceHistory()` | `/api/live/{no}/articles`, `/api/complexes/{no}/articles`, `/api/complexes/{no}/price-history` |
 | `/login` | Supabase Auth + `/api/users/login-record` | `/api/users/login-record` |
 | `/admin` | `getAdminDetailedStats()` | `/api/admin/stats/detailed` |
 | `/admin/users` | `getAdminUsers()`, `updateAdminUser()` | `/api/admin/users` |

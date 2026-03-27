@@ -402,12 +402,15 @@ export async function getPriceStats(complexNo: string) {
 }
 
 /** 단지 가격 추이 (실거래가 + 시세) */
-export async function getPriceHistory(complexNo: string, tradeType?: string) {
+export async function getPriceHistory(complexNo: string, tradeType?: string, areaNo?: string) {
   const empty: PriceHistoryResponse = { complex_no: complexNo, items: [] };
   if (!isBackendAvailable()) return empty;
   try {
-    const qs = tradeType ? `?trade_type=${tradeType}` : "";
-    return await fetchApi<PriceHistoryResponse>(`/api/complexes/${complexNo}/price-history${qs}`);
+    const params = new URLSearchParams();
+    if (tradeType) params.set("trade_type", tradeType);
+    if (areaNo) params.set("area_no", areaNo);
+    const qs = params.toString();
+    return await fetchApi<PriceHistoryResponse>(`/api/complexes/${complexNo}/price-history${qs ? `?${qs}` : ""}`);
   } catch {
     return empty;
   }

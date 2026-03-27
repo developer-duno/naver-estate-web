@@ -18,10 +18,10 @@ cd frontend && npm test && cd ../backend && python -m pytest
 
 ### 레벨별 실행
 ```bash
-# FE 단위 + 컴포넌트 + 엣지케이스 (118개)
+# FE 단위 + 컴포넌트 + 엣지케이스 (156개)
 cd frontend && npm test
 
-# BE 단위 + 통합 + API + 엣지케이스 (183개)
+# BE 단위 + 통합 + API + 엣지케이스 (212개)
 cd backend && python -m pytest
 
 # FE 특정 파일
@@ -46,8 +46,8 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 | 경로 | 도구 | 테스트 수 |
 |------|------|----------|
 | frontend/src/lib/__tests__/ | Vitest | 55 (단위+엣지케이스) |
-| frontend/src/components/__tests__/ | Vitest | 53 (컴포넌트) |
+| frontend/src/components/__tests__/ | Vitest | 61 (컴포넌트) |
 | frontend/src/hooks/__tests__/ | Vitest | 6 (훅) |
 | frontend/src/lib/__tests__/api.msw.test.ts | Vitest | 7 (MSW 통합) |
 | frontend/e2e/ | Playwright | 13 (E2E) |
-| backend/tests/ | pytest | 183 (단위+통합+API+엣지케이스) |
+| backend/tests/ | pytest | 212 (단위+통합+API+엣지케이스) |

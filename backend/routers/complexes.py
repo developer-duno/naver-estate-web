@@ -16,7 +16,7 @@ router = APIRouter()
 # 필터 옵션 & 가격 통계 캐시 (시간대별 동적 TTL) — 레지스트리 기반으로 live.py에서 무효화 가능
 _cache = get_cache("complexes", dynamic=True)
 # 가격 추이 캐시 — immutable 데이터이므로 고정 12시간 TTL
-_price_history_cache = TTLCache(ttl=43200)
+_price_history_cache = TTLCache(ttl=43200, max_size=1000)
 
 
 @router.get("/search")
@@ -291,15 +291,16 @@ _TT_LABELS = {"A1": "매매", "B1": "전세", "B2": "월세", "B3": "단기임�
 def get_price_history(
     complex_no: str,
     trade_type: Optional[Literal["A1", "B1", "B2", "B3"]] = Query(None),
+    area_no: Optional[str] = Query(None, max_length=20, pattern=r"^[0-9]+$"),
     db: Session = Depends(get_db),
 ):
     """단지 월별 가격 추이 (실거래가 + 시세)"""
-    cache_key = f"price_history:{complex_no}:{trade_type or 'all'}"
+    cache_key = f"price_history:{complex_no}:{trade_type or 'all'}:{area_no or 'all'}"
     cached = _price_history_cache.get(cache_key)
     if cached is not None:
         return cached
 
-    rows = queries.get_complex_price_history(db, complex_no, trade_type)
+    rows = queries.get_complex_price_history(db, complex_no, trade_type, area_no=area_no)
     result = {
         "complex_no": complex_no,
         "items": [

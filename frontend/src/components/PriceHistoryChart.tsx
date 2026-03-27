@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ComposedChart, Line, Area,
@@ -16,6 +16,20 @@ function formatMonth(ym: string): string {
 interface ChartRow {
   month: string;
   [key: string]: string | number | [number, number] | null | undefined;
+}
+
+type PeriodKey = "6M" | "1Y" | "2Y" | "ALL";
+const PERIODS: { key: PeriodKey; label: string; months: number | null }[] = [
+  { key: "6M", label: "6개월", months: 6 },
+  { key: "1Y", label: "1년", months: 12 },
+  { key: "2Y", label: "2년", months: 24 },
+  { key: "ALL", label: "전체", months: null },
+];
+
+function getCutoffMonth(monthsBack: number): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() - monthsBack);
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 interface Props {
@@ -61,11 +75,20 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export default function PriceHistoryChart({ items }: Props) {
+  const [period, setPeriod] = useState<PeriodKey>("ALL");
+
+  const filteredItems = useMemo(() => {
+    const sel = PERIODS.find((p) => p.key === period);
+    if (!sel?.months || !items?.length) return items;
+    const cutoff = getCutoffMonth(sel.months);
+    return items.filter((item) => item.base_month >= cutoff);
+  }, [items, period]);
+
   const { data, hasMaemae, hasJeonse } = useMemo(() => {
-    if (!items || items.length === 0) return { data: [], hasMaemae: false, hasJeonse: false };
+    if (!filteredItems || filteredItems.length === 0) return { data: [], hasMaemae: false, hasJeonse: false };
 
     const monthMap = new Map<string, ChartRow>();
-    for (const item of items) {
+    for (const item of filteredItems) {
       const key = item.base_month;
       if (!monthMap.has(key)) {
         monthMap.set(key, { month: formatMonth(key) });
@@ -86,7 +109,7 @@ export default function PriceHistoryChart({ items }: Props) {
       hasMaemae: rows.some((d) => d["매매"] != null),
       hasJeonse: rows.some((d) => d["전세"] != null),
     };
-  }, [items]);
+  }, [filteredItems]);
 
   if (data.length === 0) {
     return (
@@ -99,6 +122,21 @@ export default function PriceHistoryChart({ items }: Props) {
 
   return (
     <div role="img" aria-label="단지 가격 추이 차트">
+      <div className="flex gap-1 mb-2 justify-end">
+        {PERIODS.map((p) => (
+          <button
+            key={p.key}
+            onClick={() => setPeriod(p.key)}
+            className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+              period === p.key
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
       <ResponsiveContainer width="100%" height={320}>
         <ComposedChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" />

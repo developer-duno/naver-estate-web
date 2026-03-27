@@ -28,3 +28,9 @@ dist/
 *.egg-info/
 
 .vercel
+
+# Claude Code local
+.claude/settings.local.json
+.claude-memory/
+.claude/worktrees/
+.env.vercel

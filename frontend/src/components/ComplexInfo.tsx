@@ -38,6 +38,7 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
   const [historyItems, setHistoryItems] = useState<PriceHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(false);
+  const [historyAreaNo, setHistoryAreaNo] = useState<string>("");
   const historyFetchedRef = React.useRef<string>("");
 
   useEffect(() => {
@@ -50,22 +51,24 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
     // complexNo/refreshKey 변경 시 가격 추이도 초기화
     setHistoryItems([]);
     setHistoryError(false);
+    setHistoryAreaNo("");
     historyFetchedRef.current = "";
     return () => { cancelled = true; };
   }, [complexNo, refreshKey]);
 
   useEffect(() => {
     if (tab !== "price-history") return;
-    if (historyFetchedRef.current === complexNo) return;
+    const fetchKey = `${complexNo}:${historyAreaNo}`;
+    if (historyFetchedRef.current === fetchKey) return;
     let cancelled = false;
     setHistoryLoading(true);
     setHistoryError(false);
-    historyFetchedRef.current = complexNo;
-    getPriceHistory(complexNo)
+    historyFetchedRef.current = fetchKey;
+    getPriceHistory(complexNo, undefined, historyAreaNo || undefined)
       .then((res) => { if (!cancelled) { setHistoryItems(res.items); setHistoryLoading(false); } })
       .catch(() => { if (!cancelled) { setHistoryError(true); setHistoryLoading(false); historyFetchedRef.current = ""; } });
     return () => { cancelled = true; };
-  }, [tab, complexNo]);
+  }, [tab, complexNo, historyAreaNo]);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
@@ -97,9 +100,29 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
           <PriceFloorTab priceStats={priceStats} error={statsError} loading={statsLoading} onFilterChange={onFilterChange} />
         )}
         {tab === "price-history" && (
-          historyLoading ? <p className="text-gray-500 text-sm">로딩 중...</p>
-          : historyError ? <p className="text-red-500 text-sm">가격 추이를 불러오지 못했습니다</p>
-          : <LazyPriceHistory items={historyItems} />
+          <div>
+            {pyeongDetails.length > 0 && (
+              <div className="mb-3">
+                <select
+                  value={historyAreaNo}
+                  onChange={(e) => setHistoryAreaNo(e.target.value)}
+                  className="text-sm border rounded px-2 py-1.5 text-gray-700"
+                >
+                  <option value="">전체 면적</option>
+                  {pyeongDetails.map((pd) => (
+                    <option key={pd.pyeong_no} value={String(pd.pyeong_no)}>
+                      {pd.pyeong_name
+                        ? `${pd.pyeong_name} (${pd.exclusive_area}㎡)`
+                        : `${pd.exclusive_area}㎡`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {historyLoading ? <p className="text-gray-500 text-sm">로딩 중...</p>
+            : historyError ? <p className="text-red-500 text-sm">가격 추이를 불러오지 못했습니다</p>
+            : <LazyPriceHistory items={historyItems} />}
+          </div>
         )}
       </div>
     </div>

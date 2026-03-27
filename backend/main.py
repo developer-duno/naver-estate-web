@@ -5,6 +5,7 @@
 
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -85,6 +86,31 @@ app.add_middleware(
 )
 
 
+# 응답 시간 측정 미들웨어 (200ms 이상만 로깅)
+@app.middleware("http")
+async def log_response_time(request: Request, call_next):
+    start = time.time()
+    response: Response = await call_next(request)
+    elapsed_ms = (time.time() - start) * 1000
+    if elapsed_ms > 200:
+        logger.warning("PERF %s %s %.0fms", request.method, request.url.path, elapsed_ms)
+    return response
+
+
+# TTL 캐시 (get_dynamic_ttl 호출 최적화 — 60초 간격으로 갱신)
+_cached_ttl: int = 300
+_cached_ttl_time: float = 0
+
+
+def _get_cached_ttl() -> int:
+    global _cached_ttl, _cached_ttl_time
+    now = time.time()
+    if now - _cached_ttl_time > 60:
+        _cached_ttl = get_dynamic_ttl()
+        _cached_ttl_time = now
+    return _cached_ttl
+
+
 # 보안 헤더 미들웨어
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
@@ -103,7 +129,7 @@ async def security_headers_middleware(request: Request, call_next):
         elif "/articles" not in path and path.startswith("/api/complexes/"):
             response.headers["Cache-Control"] = "private, max-age=3600"  # 1시간 (단지 정보)
         elif path.startswith("/api/live/"):
-            response.headers["Cache-Control"] = f"private, max-age={get_dynamic_ttl()}"
+            response.headers["Cache-Control"] = f"private, max-age={_get_cached_ttl()}"
         else:
             response.headers["Cache-Control"] = "private, max-age=30"  # 30초 (기본)
     return response

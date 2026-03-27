@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from db.database import SessionLocal
 from db.models import UserProfile
+from services.cache import TTLCache
 from utils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,9 @@ def _check_jwt_secret():
 
 
 _check_jwt_secret()
+
+# 사용자 프로필 캐시 (5분 TTL — role/status 변경 시 admin.py에서 무효화)
+_user_cache = TTLCache(ttl=300, max_size=200)
 
 
 def get_db() -> Generator:
@@ -151,6 +155,11 @@ def get_current_user(
     user_id = verified["user_id"]
     email = verified["email"]
 
+    # 캐시 확인 (5분 TTL — admin에서 role/status 변경 시 무효화)
+    cached_profile = _user_cache.get(f"profile:{user_id}")
+    if cached_profile is not None:
+        return cached_profile
+
     # user_profiles 테이블에서 프로필 조회/자동 생성
     profile = db.get(UserProfile, user_id)
     if not profile:
@@ -177,7 +186,7 @@ def get_current_user(
     if profile.status == "suspended":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="계정이 정지되었습니다")
 
-    return {
+    result = {
         "user_id": user_id,
         "email": profile.email,
         "role": profile.role,
@@ -186,6 +195,8 @@ def get_current_user(
         "daily_crawl_quota": profile.daily_crawl_quota,
         "daily_export_quota": profile.daily_export_quota,
     }
+    _user_cache.set(f"profile:{user_id}", result)
+    return result
 
 
 def get_optional_user(

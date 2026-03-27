@@ -49,6 +49,9 @@ def setup_db():
     Base.metadata.create_all(bind=test_engine)
     yield
     Base.metadata.drop_all(bind=test_engine)
+    # 테스트 간 캐시 잔존 방지
+    from deps import _user_cache
+    _user_cache._store.clear()
 
 
 @pytest.fixture

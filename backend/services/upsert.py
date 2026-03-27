@@ -123,6 +123,14 @@ def upsert_complex_from_search(db, data, sido=None, sigungu=None, dong=None, com
     }
 
 
+def _parse_floor_number(floor_info: str | None) -> int | None:
+    """floor_info 문자열에서 숫자 층수 추출. "3/20"→3, "저층"→None, None→None"""
+    if not floor_info:
+        return None
+    match = re.match(r"^(\d+)", floor_info)
+    return int(match.group(1)) if match else None
+
+
 def _build_article_values(article):
     """RealEstateArticle -> DB upsert용 dict"""
     return {
@@ -131,6 +139,7 @@ def _build_article_values(article):
         "trade_type_name": article.trade_type_name,
         "building_name": article.building_name,
         "floor_info": article.floor_info,
+        "floor_number": _parse_floor_number(article.floor_info),
         "deal_or_warrant_prc": article.deal_or_warrant_prc,
         "rent_prc": article.rent_prc,
         "area1_m2": article.area1_m2,

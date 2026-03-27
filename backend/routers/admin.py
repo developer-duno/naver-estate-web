@@ -130,6 +130,9 @@ def update_user(
 
     log_action(db, admin["user_id"], "admin_user_update", "user", user_id, changes)
     db.commit()
+    # 프로필 캐시 무효화 (role/status 즉시 반영)
+    from deps import _user_cache
+    _user_cache.delete(f"profile:{user_id}")
     return {"status": "updated", "changes": changes}
 
 
@@ -149,6 +152,9 @@ def suspend_user(
     profile.status = "suspended"
     log_action(db, admin["user_id"], "admin_user_suspend", "user", user_id)
     db.commit()
+    # 프로필 캐시 무효화 (정지 즉시 반영)
+    from deps import _user_cache
+    _user_cache.delete(f"profile:{user_id}")
     return {"status": "suspended"}
 
 

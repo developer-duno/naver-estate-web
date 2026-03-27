@@ -5,7 +5,6 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from crawler.stats import group_by_area, group_by_floor
 from db import queries
 from deps import get_db
 from routers.serializers import article_to_dict, build_filter_dict, complex_to_dict
@@ -48,17 +47,24 @@ def get_complexes_by_region(
     db: Session = Depends(get_db),
 ):
     """지역별 단지 조회"""
+    cache_key = f"region:{sido}:{sigungu or ''}:{dong or ''}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+
     results = queries.get_complexes_by_region(db, sido, sigungu, dong, limit=limit)
     # 매물 수 배치 조회
     complex_nos = [c.complex_no for c in results]
     counts = queries.get_article_counts_by_complexes(db, complex_nos)
-    return {
+    result = {
         "complexes": [
             {**complex_to_dict(c), "article_count": counts.get(c.complex_no, 0)}
             for c in results
         ],
         "total": len(results),
     }
+    _cache.set(cache_key, result)
+    return result
 
 
 @router.get("/{complex_no}")
@@ -199,87 +205,18 @@ def get_pyeong_details(
 
 
 
-def _tt_key(tt: str) -> str:
-    """거래유형 한글 → ASCII 키 변환"""
-    return {"매매": "maemae", "전세": "jeonse", "월세": "wolse"}.get(tt, tt)
-
-
 @router.get("/{complex_no}/price-stats")
 def get_price_stats(
     complex_no: str,
     db: Session = Depends(get_db),
 ):
-    """단지 매물 가격 통계 — 거래유형별 면적/층수 비교"""
+    """단지 매물 가격 통계 — 거래유형별 면적/층수 비교 (SQL 집계)"""
     cache_key = f"price_stats:{complex_no}"
     cached = _cache.get(cache_key)
     if cached is not None:
         return cached
 
-    data = queries.get_price_stats(db, complex_no)
-    all_articles = data["articles"]
-
-    TRADE_TYPES = ["매매", "전세", "월세"]
-
-    # 거래유형별 분류
-    by_tt = {
-        tt: [a for a in all_articles if a.get("trade_type_name") == tt]
-        for tt in TRADE_TYPES
-    }
-
-    # 거래유형별 면적/층수 통계
-    area_by_tt = {
-        tt: {s.label: s for s in group_by_area(arts)}
-        for tt, arts in by_tt.items()
-    }
-    floor_by_tt = {
-        tt: {s.label: s for s in group_by_floor(arts)}
-        for tt, arts in by_tt.items()
-    }
-
-    # 면적별 복합 데이터: 한 행 = 한 면적 버킷, 열 = 거래유형별 평균가
-    all_area_labels = sorted(
-        {label for tt_stats in area_by_tt.values() for label in tt_stats}
-    )
-    by_area = []
-    for label in all_area_labels:
-        entry: dict = {"label": label}
-        for tt in TRADE_TYPES:
-            s = area_by_tt[tt].get(label)
-            if s:
-                entry[_tt_key(tt)] = s.avg_price
-                entry[f"{_tt_key(tt)}_count"] = s.count
-        by_area.append(entry)
-
-    # 층수별 복합 데이터
-    floor_labels = ["저층(1-5)", "중층(6-15)", "고층(16+)"]
-    by_floor = []
-    for label in floor_labels:
-        entry = {"label": label}
-        has_data = False
-        for tt in TRADE_TYPES:
-            s = floor_by_tt[tt].get(label)
-            if s:
-                entry[f"{_tt_key(tt)}_avg"] = s.avg_price
-                entry[f"{_tt_key(tt)}_min"] = s.min_price
-                entry[f"{_tt_key(tt)}_max"] = s.max_price
-                entry[f"{_tt_key(tt)}_count"] = s.count
-                has_data = True
-        if has_data:
-            by_floor.append(entry)
-
-    # 실제 버킷에 포함된 매물 수 합산 (area 기준 — numeric_price+area2_m2 모두 있는 매물)
-    area_total = sum(
-        entry.get(f"{_tt_key(tt)}_count", 0)
-        for entry in by_area
-        for tt in TRADE_TYPES
-    )
-
-    result = {
-        "complex_no": complex_no,
-        "total_articles": area_total,
-        "by_area": by_area,
-        "by_floor": by_floor,
-    }
+    result = queries.get_price_stats_aggregated(db, complex_no)
     _cache.set(cache_key, result)
     return result
 

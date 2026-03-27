@@ -81,6 +81,7 @@ class Article(Base):
     trade_type_name: Mapped[str | None] = mapped_column(String(20))
     building_name: Mapped[str | None] = mapped_column(String(50))
     floor_info: Mapped[str | None] = mapped_column(String(20))
+    floor_number: Mapped[int | None] = mapped_column(Integer)
     deal_or_warrant_prc: Mapped[str | None] = mapped_column(String(50))
     rent_prc: Mapped[str | None] = mapped_column(String(50))
     area1_m2: Mapped[float | None] = mapped_column(Float)

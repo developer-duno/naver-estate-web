@@ -171,11 +171,13 @@ export default function ComplexDetailPage() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.access_token && !cancelledRef.current) {
           setSessionToken(session.access_token);
-          const crawlResult = await startLiveCrawl(complexNo, session.access_token);
-          if (crawlResult.status === "started" && !cancelledRef.current) {
-            startCrawl(complexNo, crawlCallbacks(), currentFiltersRef);
-          }
-          // "cached" / "already_running" → 크롤링 시작 안 함, DB 데이터 그대로 표시
+          // 크롤링 시작 + 폴링을 병렬 실행 (optimistic UI)
+          startLiveCrawl(complexNo, session.access_token).then((crawlResult) => {
+            if (crawlResult.status === "started" && !cancelledRef.current) {
+              startCrawl(complexNo, crawlCallbacks(), currentFiltersRef);
+            }
+            // "cached" / "already_running" → 크롤링 시작 안 함, DB 데이터 그대로 표시
+          });
         }
       } catch (err) {
         if (err instanceof ApiError && err.statusCode === 403 && !cancelledRef.current) {

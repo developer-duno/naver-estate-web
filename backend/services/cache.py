@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 DEFAULT_TTL_SECONDS = 300  # 5분 (동적 TTL 미사용 시 기본값)
-MAX_CACHE_SIZE = 500
+MAX_CACHE_SIZE = 2000
 
 _KST = timezone(timedelta(hours=9))
 

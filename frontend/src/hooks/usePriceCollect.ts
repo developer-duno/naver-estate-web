@@ -38,9 +38,9 @@ export function usePriceCollect(): PriceCollectHookResult {
       startPriceCollect(complexNo, token)
         .then(() => {
           startedRef.current = Date.now();
-          // 폴링 시작
-          pollRef.current = setInterval(async () => {
-            // 10분 타임아웃
+          let idleCount = 0; // 수집 완료 후 idle 전환 감지
+
+          const poll = async () => {
             if (Date.now() - startedRef.current > MAX_POLL_DURATION_MS) {
               clearPolling();
               setCollecting(false);
@@ -51,6 +51,7 @@ export function usePriceCollect(): PriceCollectHookResult {
               const status = await getPriceCollectStatus(complexNo);
               setProgress(status);
               if (status.status === "running") {
+                idleCount = 0;
                 const c = status.collected ?? 0;
                 const t = status.total ?? 0;
                 setMessage(t > 0 ? `수집 중... ${c}/${t} 완료` : "수집 중...");
@@ -68,11 +69,25 @@ export function usePriceCollect(): PriceCollectHookResult {
                 clearPolling();
                 setCollecting(false);
                 setMessage("수집 중 오류가 발생했습니다. 재시도해주세요.");
+              } else if (status.status === "idle") {
+                idleCount++;
+                // 수집 시작 후 idle이 2번 연속이면 → 이미 완료된 것
+                if (idleCount >= 2) {
+                  clearPolling();
+                  setCollecting(false);
+                  setMessage("수집 완료");
+                  onDone?.();
+                }
               }
             } catch {
-              // 네트워크 오류 시 폴링 계속 (일시적 오류일 수 있음)
+              // 네트워크 오류 시 폴링 계속
             }
-          }, CRAWL_STATUS_POLL_MS);
+          };
+
+          // 첫 폴링은 5초 후 (수집 시간 확보)
+          setTimeout(poll, 5000);
+          // 이후 3초 간격
+          pollRef.current = setInterval(poll, CRAWL_STATUS_POLL_MS);
         })
         .catch((err) => {
           setCollecting(false);

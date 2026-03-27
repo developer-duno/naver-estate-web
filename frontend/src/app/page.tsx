@@ -16,7 +16,7 @@ export default function HomePage() {
   const router = useRouter();
   const [keyword, setKeyword] = useState("");
   const allCodes = ESTATE_TYPE_TABS.map((t) => t.code) as string[];
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([...allCodes]);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(["APT"]);
   const [articleFilters, setArticleFilters] = useState<ArticleFilters>({});
 
   const { data: stats, isLoading: statsLoading, isError: statsError, refetch: loadStats } = useQuery({

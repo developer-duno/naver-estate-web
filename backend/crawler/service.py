@@ -371,7 +371,7 @@ def collect_price_history_for_complex(db: Session, complex_no: str) -> dict:
                 _throttle_ondemand.on_success()
             except Exception as e:
                 logger.warning("시세 조회 실패: %s %s area=%s -> %s", complex_no, trade_type, area_no, e)
-                _throttle_ondemand.on_error()
+                _throttle_ondemand.on_rate_limit()
                 failed += 1
                 continue
 
@@ -402,7 +402,7 @@ def collect_price_history_for_complex(db: Session, complex_no: str) -> dict:
             _throttle_ondemand.on_success()
         except Exception as e:
             logger.debug("실거래가 조회 실패: %s %s -> %s", complex_no, trade_type, e)
-            _throttle_ondemand.on_error()
+            _throttle_ondemand.on_rate_limit()
             failed += 1
             continue
         if not real_result or "error" in real_result:

@@ -71,8 +71,8 @@ class PublicDataAPI:
             time.sleep(sleep_time)
 
     @classmethod
-    def _check_daily_limit(cls, max_calls: int = 900) -> bool:
-        """일일 호출 한도 체크 (기본 900회, 안전 마진 포함)"""
+    def _check_daily_limit(cls, max_calls: int = 9000) -> bool:
+        """일일 호출 한도 체크 (일일 10,000회, 안전 마진 10% 포함)"""
         from datetime import date
         today = date.today().isoformat()
         with cls._lock:

@@ -540,7 +540,7 @@ def _upsert_price_history(
 
 # ── E. 공공데이터 실거래가 수집 ──
 
-def collect_public_trade_data(batch_size: int = 50):
+def collect_public_trade_data(batch_size: int = 300):
     """공공데이터포털 아파트 매매 실거래가 수집 → complex_price_history 저장.
 
     국토교통부 API에서 시군구별 실거래가를 가져와 기존 단지에 매칭 후 저장.
@@ -563,14 +563,14 @@ def collect_public_trade_data(batch_size: int = 50):
     db.commit()
 
     try:
-        # 수집 대상 월: 최근 2개월
+        # 수집 대상 월: 최근 24개월 (차트 분별력 확보, 일일 한도 10,000회 충분)
         from datetime import date, timedelta
         today = date.today()
         months = []
-        for delta in [0, 1]:
-            d = today.replace(day=1) - timedelta(days=delta * 28)
+        for delta in range(24):
+            d = today.replace(day=1) - timedelta(days=delta * 30)
             months.append(d.strftime("%Y%m"))
-        months = list(set(months))  # 중복 제거
+        months = sorted(set(months))  # 중복 제거 + 정렬
 
         # DB에서 고유 시군구코드 추출 (cortar_no 앞 5자리)
         from sqlalchemy import func, distinct

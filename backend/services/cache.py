@@ -80,6 +80,13 @@ class TTLCache:
         with self._lock:
             self._store.pop(key, None)
 
+    def delete_by_prefix(self, prefix: str):
+        """prefix로 시작하는 모든 캐시 키 삭제."""
+        with self._lock:
+            keys = [k for k in self._store if k.startswith(prefix)]
+            for k in keys:
+                del self._store[k]
+
     def _evict_expired(self):
         """Lock은 호출자가 획득한 상태에서 실행"""
         if len(self._store) <= self._max_size:

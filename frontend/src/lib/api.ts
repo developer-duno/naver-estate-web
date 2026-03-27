@@ -2,7 +2,7 @@
  * FastAPI 백엔드 호출 래퍼
  */
 
-import type { Complex, Article, PyeongDetail, ArticleFilters, DbStats, Regions, PriceStats, PriceHistoryResponse, CrawlProgress } from "@/types";
+import type { Complex, Article, PyeongDetail, ArticleFilters, DbStats, Regions, PriceStats, PriceHistoryResponse, CrawlProgress, PriceCollectProgress } from "@/types";
 import * as direct from "@/lib/api-direct";
 import type { UserProfile, AuditLog, AdminSetting, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail } from "@/types/admin";
 
@@ -209,6 +209,24 @@ export async function startLiveCrawl(complexNo: string, token?: string) {
   return fetchApi<CrawlProgress>(
     `/api/live/${complexNo}/articles/start-crawl`,
     { method: "POST", timeoutMs: DEFAULT_TIMEOUT_MS, headers } as RequestInit & { timeoutMs?: number },
+  );
+}
+
+/** 실거래가 on-demand 수집 시작 */
+export async function startPriceCollect(complexNo: string, token?: string) {
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  return fetchApi<PriceCollectProgress>(
+    `/api/live/${complexNo}/price-history/start-collect`,
+    { method: "POST", timeoutMs: DEFAULT_TIMEOUT_MS, headers } as RequestInit & { timeoutMs?: number },
+  );
+}
+
+/** 실거래가 수집 진행 상태 폴링 */
+export async function getPriceCollectStatus(complexNo: string) {
+  return fetchApi<PriceCollectProgress>(
+    `/api/live/${complexNo}/price-history/collect-status`,
+    { timeoutMs: DEFAULT_TIMEOUT_MS } as any,
   );
 }
 

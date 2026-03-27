@@ -216,6 +216,16 @@ export interface PriceHistoryResponse {
   items: PriceHistoryItem[];
 }
 
+/** 실거래가 수집 진행 상태 */
+export interface PriceCollectProgress {
+  complex_no: string;
+  status: "idle" | "running" | "done" | "error";
+  collected?: number;
+  failed?: number;
+  total?: number;
+  error?: string;
+}
+
 /** 크롤링 진행 상태 */
 export interface CrawlProgress {
   complex_no: string;

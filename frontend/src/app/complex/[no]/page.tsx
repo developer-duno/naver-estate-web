@@ -97,6 +97,7 @@ export default function ComplexDetailPage() {
   const [error, setError] = useState("");
   const [filterError, setFilterError] = useState("");
   const [dismissedDone, setDismissedDone] = useState(false);
+  const [sessionToken, setSessionToken] = useState<string | undefined>(undefined);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
   const [priceStatsKey, setPriceStatsKey] = useState(0);
   const [activeSortBy, setActiveSortBy] = useState("rank");
@@ -169,6 +170,7 @@ export default function ComplexDetailPage() {
         const supabase = createClient();
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.access_token && !cancelledRef.current) {
+          setSessionToken(session.access_token);
           const crawlResult = await startLiveCrawl(complexNo, session.access_token);
           if (crawlResult.status === "started" && !cancelledRef.current) {
             startCrawl(complexNo, crawlCallbacks(), currentFiltersRef);
@@ -358,7 +360,7 @@ export default function ComplexDetailPage() {
       </div>
 
       {/* 단지 정보 */}
-      <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} articleCount={totalCount} onFilterChange={handleFilterChange} refreshKey={priceStatsKey} />
+      <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} articleCount={totalCount} onFilterChange={handleFilterChange} refreshKey={priceStatsKey} accessToken={sessionToken} onRefresh={() => setPriceStatsKey((k) => k + 1)} />
 
       {/* 크롤링 진행률 배너 */}
       {crawling && crawlProgress && (

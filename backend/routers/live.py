@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from starlette import status as http_status
+
 from deps import get_db, get_approved_user
 from db.models import Complex as ComplexModel, Article as ArticleModel
 from db.database import SessionLocal
@@ -57,6 +59,11 @@ _cache = get_cache("live", dynamic=True)
 # -- Background crawl progress tracking --
 _crawl_status: dict[str, dict] = {}
 _crawl_lock = threading.Lock()
+
+# -- Price history collection --
+_price_collect_status: dict[str, dict] = {}
+_price_collect_lock = threading.Lock()
+_price_collect_semaphore = threading.Semaphore(3)
 
 
 
@@ -625,3 +632,115 @@ def live_article_detail(
     db.expire_all()
     art = db.query(ArticleModel).filter(ArticleModel.article_no == article_no).first()
     return article_to_dict(art, complex_obj)
+
+
+# ── 실거래가 on-demand 수집 ──
+
+_PRICE_COLLECT_TIMEOUT = 600  # 10분
+
+
+def _cleanup_stale_price_collects():
+    """10분 이상 된 수집 상태 자동 정리 (lock 내에서 호출)."""
+    now = time.time()
+    expired = [k for k, v in _price_collect_status.items()
+               if now - v.get("started_at", now) > _PRICE_COLLECT_TIMEOUT]
+    for k in expired:
+        _price_collect_status.pop(k, None)
+
+
+@router.post("/{complex_no}/price-history/start-collect")
+def start_price_collect(
+    complex_no: str,
+    user: dict = Depends(get_approved_user),
+    db: Session = Depends(get_db),
+):
+    """실거래가 시세 on-demand 수집 시작 (백그라운드)."""
+    from auth.permissions import require_role, check_quota
+    from db.models import UserProfile
+
+    require_role(user, ["admin", "expert"])
+
+    # 쿼터 확인
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user["user_id"]).first()
+    quota_limit = profile.daily_price_collect_quota if profile else 5
+    check_quota(db, user["user_id"], "price_collect", quota_limit)
+
+    # 단지 존재 확인
+    cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
+    if not cpx:
+        raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다")
+
+    # 이미 수집 중인지 확인
+    with _price_collect_lock:
+        _cleanup_stale_price_collects()
+        status = _price_collect_status.get(complex_no)
+        if status and status.get("status") == "running":
+            raise HTTPException(status_code=409, detail="이미 수집 중입니다")
+
+    # Semaphore 확인 (동시 3개 제한)
+    if not _price_collect_semaphore.acquire(blocking=False):
+        raise HTTPException(
+            status_code=http_status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="동시 수집 요청이 가득 찼습니다. 잠시 후 다시 시도해주세요.",
+        )
+
+    # 상태 등록
+    with _price_collect_lock:
+        _price_collect_status[complex_no] = {
+            "status": "running",
+            "collected": 0,
+            "failed": 0,
+            "total": 0,
+            "started_at": time.time(),
+        }
+
+    db.commit()  # 쿼터 카운터 반영
+
+    def _run():
+        collect_db = SessionLocal()
+        try:
+            from crawler.service import collect_price_history_for_complex
+            result = collect_price_history_for_complex(collect_db, complex_no)
+            with _price_collect_lock:
+                _price_collect_status[complex_no].update({
+                    "status": "done",
+                    "collected": result["collected"],
+                    "failed": result["failed"],
+                    "total": result["total"],
+                })
+            # 캐시 무효화
+            from routers.complexes import _price_history_cache
+            _price_history_cache.delete_by_prefix(f"price_history:{complex_no}:")
+        except Exception as e:
+            logger.exception("시세 수집 실패: %s", complex_no)
+            with _price_collect_lock:
+                st = _price_collect_status.get(complex_no)
+                if st:
+                    st["status"] = "error"
+                    st["error"] = str(e)[:200]
+        finally:
+            collect_db.close()
+            _price_collect_semaphore.release()
+
+    t = threading.Thread(target=_run, daemon=True)
+    t.start()
+
+    return {"complex_no": complex_no, "status": "started"}
+
+
+@router.get("/{complex_no}/price-history/collect-status")
+def get_price_collect_status(complex_no: str):
+    """실거래가 수집 진행 상태 폴링."""
+    with _price_collect_lock:
+        _cleanup_stale_price_collects()
+        status = _price_collect_status.get(complex_no)
+        if not status:
+            return {"complex_no": complex_no, "status": "idle",
+                    "collected": 0, "failed": 0, "total": 0}
+        snapshot = {k: v for k, v in status.items() if not k.startswith("_")}
+        # done/error 상태는 프론트가 한 번 확인 후 정리
+        if status.get("_polled_final"):
+            _price_collect_status.pop(complex_no, None)
+        elif status.get("status") in ("done", "error"):
+            status["_polled_final"] = True
+    return {"complex_no": complex_no, **snapshot}

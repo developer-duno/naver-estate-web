@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import type { Complex, PyeongDetail, PriceStats, PriceHistoryItem, ArticleFilters } from "@/types";
 import { formatDateFull, formatChartPrice } from "@/lib/format";
 import { getPriceStats, getPriceHistory } from "@/lib/api";
+import { usePriceCollect } from "@/hooks/usePriceCollect";
 
 const LazyCharts = dynamic(() => import("./PriceChartInner"), { ssr: false });
 const LazyPriceHistory = dynamic(() => import("./PriceHistoryChart"), { ssr: false });
@@ -20,6 +21,10 @@ interface Props {
   onFilterChange?: (filters: ArticleFilters) => void;
   /** 크롤 완료 시 부모가 증가시켜 가격 통계 re-fetch 트리거 */
   refreshKey?: number;
+  /** 인증 토큰 (실거래가 수집용) */
+  accessToken?: string;
+  /** refreshKey 증가 트리거 */
+  onRefresh?: () => void;
 }
 
 const TABS: { key: TabType; label: string }[] = [
@@ -30,7 +35,7 @@ const TABS: { key: TabType; label: string }[] = [
   { key: "price-history", label: "실거래가 추이" },
 ];
 
-export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount, onFilterChange, refreshKey }: Props) {
+export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount, onFilterChange, refreshKey, accessToken, onRefresh }: Props) {
   const [tab, setTab] = useState<TabType>("info");
   const [priceStats, setPriceStats] = useState<PriceStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -38,6 +43,7 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
   const [historyItems, setHistoryItems] = useState<PriceHistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState(false);
+  const { collecting, message: collectMessage, startCollect, clearPolling } = usePriceCollect();
   const [historyAreaNo, setHistoryAreaNo] = useState<string>("");
   const historyFetchedRef = React.useRef<string>("");
 
@@ -55,6 +61,9 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
     historyFetchedRef.current = "";
     return () => { cancelled = true; };
   }, [complexNo, refreshKey]);
+
+  // 컴포넌트 언마운트 시 수집 폴링 정리
+  useEffect(() => clearPolling, [clearPolling]);
 
   useEffect(() => {
     if (tab !== "price-history") return;
@@ -101,8 +110,8 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
         )}
         {tab === "price-history" && (
           <div>
-            {pyeongDetails.length > 0 && (
-              <div className="mb-3">
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              {pyeongDetails.length > 0 && (
                 <select
                   value={historyAreaNo}
                   onChange={(e) => setHistoryAreaNo(e.target.value)}
@@ -117,8 +126,33 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
                     </option>
                   ))}
                 </select>
-              </div>
-            )}
+              )}
+              <button
+                onClick={() => {
+                  if (!accessToken) return;
+                  startCollect(complexNo, accessToken, () => {
+                    // 수집 완료 → 차트 재조회
+                    historyFetchedRef.current = "";
+                    onRefresh?.();
+                  });
+                }}
+                disabled={collecting || !accessToken}
+                className={`text-sm px-3 py-1.5 rounded font-medium ${
+                  collecting
+                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                    : accessToken
+                      ? "bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200"
+                      : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                }`}
+              >
+                {collecting ? "수집 중..." : "실거래가 수집"}
+              </button>
+              {collectMessage && (
+                <span className={`text-xs ${collectMessage.includes("오류") || collectMessage.includes("실패") || collectMessage.includes("초과") ? "text-red-500" : "text-green-600"}`}>
+                  {collectMessage}
+                </span>
+              )}
+            </div>
             {historyLoading ? <p className="text-gray-500 text-sm">로딩 중...</p>
             : historyError ? <p className="text-red-500 text-sm">가격 추이를 불러오지 못했습니다</p>
             : <LazyPriceHistory items={historyItems} />}

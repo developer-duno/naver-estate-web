@@ -43,6 +43,7 @@ CRAWL_REAL_ESTATE_TYPES = set(
 
 # Phase 1: 적응형 쓰로틀 + 체크포인트
 _throttle = AdaptiveThrottle(min_interval=1.0, max_interval=5.0)
+_throttle_ondemand = AdaptiveThrottle(min_interval=2.0, max_interval=5.0)
 _checkpoint = CheckpointManager(checkpoint_interval=5)
 
 
@@ -337,11 +338,11 @@ def _extract_price_list(result: dict) -> list[dict]:
     return result.get("realEstatePrice") or result.get("prices") or []
 
 
-def collect_price_history_for_complex(db: Session, complex_no: str) -> int:
+def collect_price_history_for_complex(db: Session, complex_no: str) -> dict:
     """단일 단지의 시세 이력 실시간 수집 (on-demand).
 
     pyeong_details에 등록된 모든 area_no에 대해 수집.
-    Returns: 수집된 레코드 수
+    Returns: {"collected": N, "failed": N, "total": N}
     """
     from db.models import ComplexPyeongDetail
     # 수집할 area_no 목록: DB에 등록된 pyeong 기준, 없으면 기본값(None) 1회만
@@ -355,17 +356,27 @@ def collect_price_history_for_complex(db: Session, complex_no: str) -> int:
         area_nos = [None]
 
     collected = 0
+    failed = 0
+    total = len(area_nos) * 2 + 2  # (area_nos × 2 trade_types) + 2 실거래가
+
+    logger.info("시세 수집 시작: complex=%s, area_nos=%d개", complex_no, len(area_nos))
+
     for trade_type in ("A1", "B1"):
         for area_no in area_nos:
+            _throttle_ondemand.wait()
             try:
                 result = NaverEstateAPI.get_complex_prices(
                     complex_no, trade_type=trade_type, area_no=area_no
                 )
+                _throttle_ondemand.on_success()
             except Exception as e:
                 logger.warning("시세 조회 실패: %s %s area=%s -> %s", complex_no, trade_type, area_no, e)
+                _throttle_ondemand.on_error()
+                failed += 1
                 continue
 
             if not result or "error" in result:
+                failed += 1
                 continue
 
             price_list = _extract_price_list(result)
@@ -385,12 +396,17 @@ def collect_price_history_for_complex(db: Session, complex_no: str) -> int:
 
     # 실거래가(/prices/real): 기본 area_no만 수집 (장기 이력, YYYYMM 월별 저장)
     for trade_type in ("A1", "B1"):
+        _throttle_ondemand.wait()
         try:
             real_result = NaverEstateAPI.get_complex_real_prices(complex_no, trade_type=trade_type)
+            _throttle_ondemand.on_success()
         except Exception as e:
             logger.debug("실거래가 조회 실패: %s %s -> %s", complex_no, trade_type, e)
+            _throttle_ondemand.on_error()
+            failed += 1
             continue
         if not real_result or "error" in real_result:
+            failed += 1
             continue
         month_list = real_result.get("realPriceOnMonthList") or []
         for month_data in month_list:
@@ -420,8 +436,8 @@ def collect_price_history_for_complex(db: Session, complex_no: str) -> int:
 
     if collected > 0:
         db.commit()
-        logger.info("시세 실시간 수집 완료: complex=%s, %d건", complex_no, collected)
-    return collected
+    logger.info("시세 수집 완료: complex=%s, collected=%d, failed=%d", complex_no, collected, failed)
+    return {"collected": collected, "failed": failed, "total": total}
 
 
 def collect_price_history(batch_size: int = 50):
@@ -508,34 +524,29 @@ def _upsert_price_history(
     price_avg: int | None,
     base_month: str,
 ):
-    """시세 이력 upsert (제약조건 없으면 중복 체크 후 insert/update)"""
+    """시세 이력 upsert — PostgreSQL ON CONFLICT (원자적)"""
     area_key = area_no or ""
-    existing = (
-        db.query(ComplexPriceHistory)
-        .filter(
-            ComplexPriceHistory.complex_no == complex_no,
-            ComplexPriceHistory.trade_type == trade_type,
-            ComplexPriceHistory.base_month == base_month,
-            ComplexPriceHistory.area_no == area_key,
-        )
-        .first()
+    values = dict(
+        complex_no=complex_no,
+        trade_type=trade_type,
+        area_no=area_key,
+        price_upper=price_upper,
+        price_lower=price_lower,
+        price_avg=price_avg,
+        base_month=base_month,
+        recorded_at=utcnow(),
     )
-    if existing:
-        existing.price_upper = price_upper
-        existing.price_lower = price_lower
-        existing.price_avg = price_avg
-        existing.recorded_at = utcnow()
-    else:
-        db.add(ComplexPriceHistory(
-            complex_no=complex_no,
-            trade_type=trade_type,
-            area_no=area_key,
-            price_upper=price_upper,
-            price_lower=price_lower,
-            price_avg=price_avg,
-            base_month=base_month,
-            recorded_at=utcnow(),
-        ))
+    stmt = pg_insert(ComplexPriceHistory).values(**values)
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_cph_composite",
+        set_={
+            "price_upper": stmt.excluded.price_upper,
+            "price_lower": stmt.excluded.price_lower,
+            "price_avg": stmt.excluded.price_avg,
+            "recorded_at": stmt.excluded.recorded_at,
+        },
+    )
+    db.execute(stmt)
 
 
 # ── E. 공공데이터 실거래가 수집 ──

@@ -150,6 +150,7 @@ class UserProfile(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="approved")
     daily_crawl_quota: Mapped[int] = mapped_column(Integer, default=5)
     daily_export_quota: Mapped[int] = mapped_column(Integer, default=10)
+    daily_price_collect_quota: Mapped[int] = mapped_column(Integer, default=5)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     login_count: Mapped[int] = mapped_column(Integer, default=0)
     approved_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

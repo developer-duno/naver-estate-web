@@ -33,7 +33,7 @@ export default function AdminCrawlPage() {
       return cancelAdminCrawlJob(t, jobId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "crawlJobs"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.crawlJobs() });
     },
   });
 

@@ -32,7 +32,7 @@ export function useCrawlProgress(): CrawlHookResult {
   // 크롤 완료 시 관련 쿼리 무효화
   const invalidateAllQueries = useCallback(
     (complexNo: string) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.articles(complexNo) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo) });
       queryClient.invalidateQueries({ queryKey: queryKeys.pyeongDetails(complexNo) });
       queryClient.invalidateQueries({ queryKey: queryKeys.complex(complexNo) });
       queryClient.invalidateQueries({ queryKey: queryKeys.priceStats(complexNo) });

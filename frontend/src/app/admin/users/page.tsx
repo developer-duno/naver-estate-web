@@ -39,7 +39,7 @@ export default function AdminUsersPage() {
       return updateAdminUser(t, userId, payload);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.users() });
     },
   });
 
@@ -49,7 +49,7 @@ export default function AdminUsersPage() {
       return suspendAdminUser(t, userId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.users() });
     },
   });
 

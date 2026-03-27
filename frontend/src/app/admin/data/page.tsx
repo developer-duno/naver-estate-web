@@ -29,7 +29,7 @@ export default function AdminDataPage() {
     },
     onSuccess: (data) => {
       setDeleteResult(`${data.deleted}건 삭제 완료`);
-      queryClient.invalidateQueries({ queryKey: ["admin", "stats"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.stats() });
     },
   });
 

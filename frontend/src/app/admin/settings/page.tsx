@@ -34,7 +34,7 @@ export default function AdminSettingsPage() {
     onSuccess: () => {
       setEditingKey(null);
       setJsonError("");
-      queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.settings() });
     },
   });
 

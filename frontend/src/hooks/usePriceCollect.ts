@@ -62,6 +62,7 @@ export function usePriceCollect(): PriceCollectHookResult {
     },
     enabled: isPolling && !!targetComplexNo,
     refetchInterval: isPolling ? PRICE_COLLECT_POLL_MS : false,
+    retry: 0, // 폴링은 refetchInterval이 재시도 역할 — retry 시 pollCount 중복 증가 방지
   });
 
   // 폴링 결과에 따른 상태 전환 (useEffect로 처리 — 렌더 중 setState 방지)

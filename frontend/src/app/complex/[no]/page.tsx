@@ -110,6 +110,20 @@ export default function ComplexDetailPage() {
     setCrawling, setCrawlMessage,
     startCrawl, clearAllPolling,
   } = useCrawlProgress();
+  const [crawlMessageType, setCrawlMessageType] = useState<"info" | "error" | "success">("info");
+
+  // setCrawlMessage + type을 함께 설정하는 헬퍼
+  const setCrawlMsg = useCallback((text: string, type: "info" | "error" | "success" = "info") => {
+    setCrawlMessage(text);
+    setCrawlMessageType(type);
+  }, [setCrawlMessage]);
+
+  // useCrawlProgress 훅 내부에서 직접 setCrawlMessage를 호출하는 경우 타입 동기화
+  useEffect(() => {
+    if (!crawlMessage) return;
+    if (crawlMessage.startsWith("크롤링 오류")) setCrawlMessageType("error");
+    else if (crawlMessage === "") setCrawlMessageType("info");
+  }, [crawlMessage]);
 
   // ── useQuery: 단지 정보 ──
   const complexQuery = useQuery({
@@ -191,7 +205,7 @@ export default function ComplexDetailPage() {
         }
       } catch (err) {
         if (err instanceof ApiError && err.statusCode === 403) {
-          setCrawlMessage(err.message || "관리자 승인이 필요합니다");
+          setCrawlMsg(err.message || "관리자 승인이 필요합니다", "error");
         }
       }
     })();
@@ -273,10 +287,10 @@ export default function ComplexDetailPage() {
     },
     onMutate: () => {
       setCrawling(true);
-      setCrawlMessage("");
+      setCrawlMsg("");
     },
     onSuccess: (crawlResult: { status: string }) => {
-      setCrawlMessage("데이터 갱신 중...");
+      setCrawlMsg("데이터 갱신 중...", "info");
       if (
         crawlResult.status === "started" ||
         crawlResult.status === "running" ||
@@ -293,16 +307,16 @@ export default function ComplexDetailPage() {
           return;
         }
         if (err.statusCode === 409) {
-          setCrawlMessage("이미 크롤링이 진행 중입니다.");
+          setCrawlMsg("이미 크롤링이 진행 중입니다.", "info");
         } else if (err.statusCode === 403) {
-          setCrawlMessage("크롤링 권한이 없습니다.");
+          setCrawlMsg("크롤링 권한이 없습니다.", "error");
         } else if (err.statusCode === 429) {
-          setCrawlMessage("일일 크롤링 한도를 초과했습니다.");
+          setCrawlMsg("일일 크롤링 한도를 초과했습니다.", "error");
         } else {
-          setCrawlMessage("데이터 갱신에 실패했습니다.");
+          setCrawlMsg("데이터 갱신에 실패했습니다.", "error");
         }
       } else {
-        setCrawlMessage("데이터 갱신에 실패했습니다.");
+        setCrawlMsg("데이터 갱신에 실패했습니다.", "error");
       }
       setCrawling(false);
     },
@@ -469,9 +483,9 @@ export default function ComplexDetailPage() {
       {/* 크롤 메시지 */}
       {crawlMessage && (
         <div className={`text-sm rounded-md px-4 py-2 ${
-          crawlMessage.includes("실패") || crawlMessage.includes("로그인") || crawlMessage.includes("권한") || crawlMessage.includes("한도") || crawlMessage.includes("오류")
+          crawlMessageType === "error"
             ? "bg-red-50 text-red-600"
-            : crawlMessage.includes("갱신 중")
+            : crawlMessageType === "info"
               ? "bg-blue-50 text-blue-600"
               : "bg-green-50 text-green-600"
         }`}>

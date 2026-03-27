@@ -5,7 +5,7 @@ import { startPriceCollect, getPriceCollectStatus } from "@/lib/api";
 import type { PriceCollectProgress } from "@/types";
 
 const POLL_INTERVAL_MS = 3_000;
-const MAX_POLL_DURATION_MS = 120_000; // 2분 (수집은 보통 30초 이내)
+const MAX_POLL_DURATION_MS = 120_000; // 2분
 
 export interface PriceCollectHookResult {
   collecting: boolean;
@@ -20,7 +20,7 @@ export function usePriceCollect(): PriceCollectHookResult {
   const [progress, setProgress] = useState<PriceCollectProgress | null>(null);
   const [message, setMessage] = useState("");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const activeRef = useRef(false); // 폴링 활성 여부 (중복 방지)
+  const activeRef = useRef(false);
 
   const clearPolling = useCallback(() => {
     activeRef.current = false;
@@ -32,19 +32,76 @@ export function usePriceCollect(): PriceCollectHookResult {
 
   const startCollect = useCallback(
     (complexNo: string, token: string, onDone?: () => void) => {
-      if (activeRef.current) return; // 이미 수집 중이면 무시
+      if (activeRef.current) return;
 
       setCollecting(true);
       setMessage("수집 시작 중...");
       setProgress(null);
       activeRef.current = true;
 
+      // 폴링 루프 — 수집 완료까지 3초 간격으로 상태 확인
+      const startPolling = () => {
+        const startTime = Date.now();
+
+        const scheduleNextPoll = () => {
+          timerRef.current = setTimeout(async () => {
+            if (!activeRef.current) return;
+
+            if (Date.now() - startTime > MAX_POLL_DURATION_MS) {
+              activeRef.current = false;
+              setCollecting(false);
+              setMessage("수집 완료");
+              onDone?.();
+              return;
+            }
+
+            try {
+              const status = await getPriceCollectStatus(complexNo);
+              if (!activeRef.current) return;
+
+              setProgress(status);
+
+              if (status.status === "running") {
+                const c = status.collected ?? 0;
+                const t = status.total ?? 0;
+                setMessage(t > 0 ? `수집 중... ${c}/${t}` : "수집 중...");
+                scheduleNextPoll();
+              } else if (status.status === "done") {
+                activeRef.current = false;
+                setCollecting(false);
+                const f = status.failed ?? 0;
+                setMessage(
+                  f > 0
+                    ? `수집 완료 (${status.collected}건, 실패 ${f}건)`
+                    : `수집 완료 (${status.collected}건)`,
+                );
+                onDone?.();
+              } else if (status.status === "error") {
+                activeRef.current = false;
+                setCollecting(false);
+                setMessage("수집 중 오류가 발생했습니다.");
+              } else {
+                // idle = 이미 완료됨
+                activeRef.current = false;
+                setCollecting(false);
+                setMessage("");
+                onDone?.();
+              }
+            } catch {
+              if (activeRef.current) scheduleNextPoll();
+            }
+          }, POLL_INTERVAL_MS);
+        };
+
+        scheduleNextPoll();
+      };
+
       startPriceCollect(complexNo, token)
         .then((res) => {
           if (!activeRef.current) return;
 
-          // 24시간 TTL 내 → 수집 스킵
           if (res.status === "fresh") {
+            // 24시간 TTL 내 → 수집 불필요, 기존 데이터 사용
             activeRef.current = false;
             setCollecting(false);
             setMessage("");
@@ -52,72 +109,24 @@ export function usePriceCollect(): PriceCollectHookResult {
             return;
           }
 
-          const startTime = Date.now();
-
-          // setTimeout 체인으로 순차 폴링 (setInterval 대신 — 동시 실행 방지)
-          const scheduleNextPoll = () => {
-            timerRef.current = setTimeout(async () => {
-              if (!activeRef.current) return;
-
-              // 타임아웃 체크
-              if (Date.now() - startTime > MAX_POLL_DURATION_MS) {
-                activeRef.current = false;
-                setCollecting(false);
-                setMessage("수집 완료");
-                onDone?.();
-                return;
-              }
-
-              try {
-                const status = await getPriceCollectStatus(complexNo);
-                if (!activeRef.current) return;
-
-                setProgress(status);
-
-                if (status.status === "running") {
-                  const c = status.collected ?? 0;
-                  const t = status.total ?? 0;
-                  setMessage(t > 0 ? `수집 중... ${c}/${t}` : "수집 중...");
-                  scheduleNextPoll();
-                } else if (status.status === "done") {
-                  activeRef.current = false;
-                  setCollecting(false);
-                  const f = status.failed ?? 0;
-                  setMessage(
-                    f > 0
-                      ? `수집 완료 (${status.collected}건, 실패 ${f}건)`
-                      : `수집 완료 (${status.collected}건)`,
-                  );
-                  onDone?.();
-                } else if (status.status === "error") {
-                  activeRef.current = false;
-                  setCollecting(false);
-                  setMessage("수집 중 오류가 발생했습니다. 재시도해주세요.");
-                } else {
-                  // idle = 이미 완료되어 정리됨
-                  activeRef.current = false;
-                  setCollecting(false);
-                  setMessage("수집 완료");
-                  onDone?.();
-                }
-              } catch {
-                if (activeRef.current) scheduleNextPoll();
-              }
-            }, POLL_INTERVAL_MS);
-          };
-
-          // 첫 폴링은 3초 후
-          scheduleNextPoll();
+          // "started" → 폴링 시작
+          startPolling();
         })
         .catch((err) => {
-          activeRef.current = false;
-          setCollecting(false);
+          if (!activeRef.current) return;
+
           if (err?.statusCode === 409) {
-            setMessage("이미 수집 중입니다.");
-          } else if (err?.statusCode === 429) {
-            setMessage("요청 한도를 초과했습니다. 나중에 다시 시도해주세요.");
+            // 이미 수집 중 → 폴링으로 결과 대기
+            setMessage("수집 진행 중...");
+            startPolling();
           } else {
-            setMessage("수집 시작에 실패했습니다.");
+            activeRef.current = false;
+            setCollecting(false);
+            if (err?.statusCode === 429) {
+              setMessage("요청 한도 초과. 나중에 다시 시도해주세요.");
+            } else {
+              setMessage("");
+            }
           }
         });
     },

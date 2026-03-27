@@ -685,12 +685,19 @@ def start_price_collect(
     quota_limit = profile.daily_price_collect_quota if profile else 5
     check_quota(db, user["user_id"], "price_collect", quota_limit)
 
-    # 이미 수집 중인지 확인
+    # 이미 수집 중인지 확인 (2분 이상 running이면 stale로 간주)
     with _price_collect_lock:
         _cleanup_stale_price_collects()
         status = _price_collect_status.get(complex_no)
         if status and status.get("status") == "running":
-            raise HTTPException(status_code=409, detail="이미 수집 중입니다")
+            elapsed = time.time() - status.get("started_at", 0)
+            if elapsed < 120:  # 2분 이내면 진짜 수집 중
+                raise HTTPException(status_code=409, detail="이미 수집 중입니다")
+            # 2분 이상이면 stale — 정리하고 새로 시작
+            _price_collect_status.pop(complex_no, None)
+        elif status:
+            # done/error 상태는 정리하고 새 수집 허용
+            _price_collect_status.pop(complex_no, None)
 
     # Semaphore 확인 (동시 3개 제한)
     if not _price_collect_semaphore.acquire(blocking=False):

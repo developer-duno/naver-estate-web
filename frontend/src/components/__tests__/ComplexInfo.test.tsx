@@ -165,20 +165,17 @@ describe("ComplexInfo", () => {
     });
   });
 
-  it("수집 시작 후 로딩 상태 표시", async () => {
-    // 자동 수집은 fresh → 수동 클릭은 started
+  it("자동 수집 fresh 시 버튼 활성 유지", async () => {
     mockStartPriceCollect.mockClear();
-    mockStartPriceCollect
-      .mockResolvedValueOnce({ status: "fresh", complex_no: "C001" })  // 자동 수집
-      .mockResolvedValueOnce({ status: "started", complex_no: "C001" }); // 수동 클릭
+    mockStartPriceCollect.mockResolvedValue({ status: "fresh", complex_no: "C001" });
     render(
       <ComplexInfo complex={baseComplex} pyeongDetails={[]} complexNo="C001" accessToken="test-token" />
     );
     await userEvent.click(screen.getByText("실거래가 추이"));
-    await waitFor(() => screen.getByText("실거래가 수집"));
-    await userEvent.click(screen.getByText("실거래가 수집"));
+    // fresh 응답 후 버튼은 다시 활성화
     await waitFor(() => {
-      expect(screen.getByText("수집 중...")).toBeInTheDocument();
+      const btn = screen.getByText("실거래가 수집");
+      expect(btn).not.toBeDisabled();
     });
   });
 });

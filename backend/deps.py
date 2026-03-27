@@ -9,6 +9,7 @@ import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from jose.exceptions import ExpiredSignatureError, JWSError, JWTClaimsError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -27,6 +28,26 @@ ADMIN_EMAILS = set(filter(None, os.getenv("ADMIN_EMAIL", "kyh11kyh@gmail.com").s
 if not SUPABASE_JWT_SECRET and not SUPABASE_URL:
     logger.critical("SUPABASE_JWT_SECRET 또는 SUPABASE_URL 미설정 — JWT 인증이 작동하지 않습니다")
 
+_ALLOWED_ALGORITHMS = ["HS256"]
+
+
+def _check_jwt_secret():
+    """서버 시작 시 JWT secret 유효성 자가진단"""
+    if not SUPABASE_JWT_SECRET:
+        return
+    secret_len = len(SUPABASE_JWT_SECRET)
+    logger.info("[AUTH] JWT secret 설정됨 (길이: %d)", secret_len)
+    try:
+        test_payload = {"sub": "_selftest", "aud": "authenticated"}
+        token = jwt.encode(test_payload, SUPABASE_JWT_SECRET, algorithm=_ALLOWED_ALGORITHMS[0])
+        jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=_ALLOWED_ALGORITHMS, audience="authenticated")
+        logger.info("[AUTH] JWT secret 자가진단 통과 (HS256 라운드트립 성공)")
+    except Exception as e:
+        logger.error("[AUTH] JWT secret 자가진단 실패 — 로컬 검증이 작동하지 않을 수 있음: %s", e)
+
+
+_check_jwt_secret()
+
 
 def get_db() -> Generator:
     """DB 세션 의존성"""
@@ -39,19 +60,42 @@ def get_db() -> Generator:
 
 def _verify_token_local(token: str) -> dict | None:
     """JWT secret으로 로컬 검증. 실패 시 None 반환 (원격 폴백 허용)."""
+    # Phase 1: 토큰 헤더 알고리즘 검사
+    try:
+        header = jwt.get_unverified_header(token)
+    except JWTError:
+        logger.warning("[AUTH] JWT 헤더 파싱 실패 (잘못된 토큰 형식)")
+        return None
+
+    token_alg = header.get("alg", "unknown")
+    if token_alg not in _ALLOWED_ALGORITHMS:
+        logger.warning("[AUTH] JWT 알고리즘 불일치: 토큰=%s, 서버=%s", token_alg, _ALLOWED_ALGORITHMS)
+        return None
+
+    # Phase 2: 서명 + 클레임 검증
     try:
         payload = jwt.decode(
             token,
             SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
+            algorithms=_ALLOWED_ALGORITHMS,
             audience="authenticated",
         )
         user_id = payload.get("sub")
         if not user_id:
+            logger.warning("[AUTH] JWT에 sub 클레임 없음")
             return None
         return {"user_id": user_id, "email": payload.get("email", "")}
+    except ExpiredSignatureError:
+        logger.info("[AUTH] JWT 만료됨 (정상 — 토큰 갱신 필요)")
+        return None
+    except JWTClaimsError as e:
+        logger.warning("[AUTH] JWT 클레임 불일치 (audience 등): %s", e)
+        return None
+    except JWSError as e:
+        logger.warning("[AUTH] JWT 서명 검증 실패 (secret 불일치): %s", e)
+        return None
     except JWTError as e:
-        logger.warning("[AUTH] JWT 로컬 검증 실패: %s (token prefix: %s...)", e, token[:20] if token else "None")
+        logger.warning("[AUTH] JWT 검증 실패 (기타): %s", e)
         return None
 
 

@@ -4,8 +4,8 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 기술 스택
 
-- **Frontend**: Next.js 16 (App Router) + TypeScript + Tailwind CSS
-- **Backend**: FastAPI + SQLAlchemy 2.0 + curl_cffi
+- **Frontend**: Next.js 16 (App Router) + TypeScript + Tailwind CSS 4 + Recharts 3
+- **Backend**: FastAPI + SQLAlchemy 2.0 + curl_cffi + APScheduler
 - **DB**: Supabase (PostgreSQL) + Supabase Auth
 - **배포**: Vercel (frontend) + 집 서버 (backend, Cloudflare Tunnel)
 
@@ -17,8 +17,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
            [Cloudflare Tunnel (*.trycloudflare.com)]
                 ↓
            [FastAPI (집 서버 192.168.219.101:8002)]
-                ↓ 실시간 크롤링
+                ↓ 실시간 크롤링 + 스케줄러
            [네이버 부동산 API] → [PostgreSQL (Supabase)]
+           [국토교통부 공공데이터 API] ↗
 ```
 
 ## 집 서버 재시작 후 복구 절차
@@ -42,7 +43,7 @@ cloudflared tunnel --url http://localhost:8002
 ```bash
 cd z:/cursor/naver-estate-web
 npx vercel env rm NEXT_PUBLIC_API_URL production -y
-echo "새URL" | npx vercel env add NEXT_PUBLIC_API_URL production
+printf "새URL" | npx vercel env add NEXT_PUBLIC_API_URL production
 npx vercel --prod
 ```
 
@@ -58,6 +59,7 @@ npx vercel --prod
 - `M2_TO_PYEONG = 3.3058` (프론트/백엔드 동일)
 - `LIVE_TIMEOUT_MS = 120_000` (실시간 크롤링 타임아웃)
 - `get_dynamic_ttl()` (live 엔드포인트 시간대별 동적 캐시: 새벽 2시간 / 오전 15분 / 오후 30분 / 저녁 1시간)
+- `_PRICE_COLLECT_TTL = 86400` (실거래가 수집 24시간 TTL)
 
 ## 거래유형 코드
 
@@ -84,12 +86,24 @@ npx vercel --prod
 
 ```
 검색 → /api/live/search (네이버 API → DB upsert → 반환)
-단지 클릭 → DB 데이터 즉시 표시 (자동 크롤링 없음)
-"데이터 갱신" 버튼 → /api/live/{no}/articles (매물 크롤링 → DB upsert → 반환)
+단지 클릭 → DB 데이터 즉시 표시 + 자동 매물 크롤링 (start-crawl)
+"데이터 갱신" 버튼 → /api/live/{no}/articles/start-crawl (백그라운드 크롤링 → 폴링)
 필터 변경 → /api/complexes/{no}/articles (DB 쿼리, SQL WHERE절)
-가격 추이 → /api/complexes/{no}/price-history?trade_type=&area_no= (DB 쿼리, 월별 집계)
+실거래가 추이 탭 → 자동 수집 트리거 (/api/live/{no}/price-history/start-collect, 24시간 TTL)
+가격 추이 조회 → /api/complexes/{no}/price-history?trade_type=&area_no= (DB 쿼리, 월별 집계)
 엑셀 → /api/articles/export (pandas DataFrame → xlsx)
 ```
+
+## 스케줄러 (APScheduler)
+
+| 작업 | 주기 | 설명 |
+|------|------|------|
+| 전국 단지 발견 | 매일 3시 | 네이버 키워드 검색으로 신규 단지 수집 |
+| 매물 수집 배치 | 매일 3:30 | 최근 조회 단지 매물 크롤링 |
+| 매물 상세 보강 | 매일 4시 | 매물 상세 정보 크롤링 |
+| 시세 이력 수집 | 수요일 4시 | 단지별 시세(매매/전세) 주간 수집 |
+| 인기 단지 크롤링 | 매일 10:30/14:30/19:00 | 자주 조회되는 단지 선제적 크롤링 |
+| 공공데이터 수집 | 토요일 5시 | 국토교통부 실거래가 API |
 
 ## 코딩 규칙
 

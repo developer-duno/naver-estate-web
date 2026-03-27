@@ -72,7 +72,11 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
     if (autoCollectRef.current === complexNo) return; // 이미 시도함
     autoCollectRef.current = complexNo;
     startCollect(complexNo, accessToken, () => {
+      // 수집 완료 → 차트 데이터 직접 리프레시
       historyFetchedRef.current = "";
+      getPriceHistory(complexNo, undefined, historyAreaNo || undefined)
+        .then((res) => { setHistoryItems(res.items); setHistoryLoading(false); })
+        .catch(() => {});
       onRefresh?.();
     });
   }, [tab, complexNo, accessToken, collecting, startCollect, onRefresh]);
@@ -143,8 +147,10 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
                 onClick={() => {
                   if (!accessToken) return;
                   startCollect(complexNo, accessToken, () => {
-                    // 수집 완료 → 차트 재조회
                     historyFetchedRef.current = "";
+                    getPriceHistory(complexNo, undefined, historyAreaNo || undefined)
+                      .then((res) => { setHistoryItems(res.items); })
+                      .catch(() => {});
                     onRefresh?.();
                   });
                 }}

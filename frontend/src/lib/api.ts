@@ -54,7 +54,7 @@ async function _fetchApiImpl<T>(path: string, options?: RequestInit & { timeoutM
   const url = `${getApiBase()}${path}`;
   const externalSignal = options?.signal;
   const controller = externalSignal ? null : new AbortController();
-  const timeoutMs = (options as any)?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timeoutMs = (options as RequestInit & { timeoutMs?: number } | undefined)?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
   try {
     const res = await fetch(url, {
@@ -122,7 +122,7 @@ function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: number 
   return promise;
 }
 /** 단지 키워드 검색 */
-export async function searchComplexes(keyword: string, limit = 50, signal?: AbortSignal, types?: string) {
+export async function searchComplexes(keyword: string, _limit = 50, signal?: AbortSignal, types?: string) {
   if (!isBackendAvailable()) return direct.searchComplexesDirect(keyword);
   try {
     let url = `/api/live/search?q=${encodeURIComponent(keyword)}`;
@@ -146,7 +146,7 @@ export async function getComplexesByRegion(sido: string, sigungu?: string, dong?
     if (effectiveSigungu) path += `&sigungu=${encodeURIComponent(effectiveSigungu)}`;
     if (dong) path += `&dong=${encodeURIComponent(dong)}`;
     if (types) path += `&types=${encodeURIComponent(types)}`;
-    return await fetchApi<{ complexes: Complex[]; total: number }>(path, { signal, timeoutMs: LIVE_TIMEOUT_MS } as any);
+    return await fetchApi<{ complexes: Complex[]; total: number }>(path, { signal, timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number });
   } catch {
     return direct.getComplexesByRegionDirect(sido, sigungu, dong);
   }
@@ -164,7 +164,7 @@ export async function getComplex(complexNo: string) {
 
 /** 단지별 매물 조회 */
 export async function getArticles(complexNo: string, filters?: ArticleFilters) {
-  if (!isBackendAvailable()) return direct.getArticlesDirect(complexNo, filters as any);
+  if (!isBackendAvailable()) return direct.getArticlesDirect(complexNo, filters as Record<string, string>);
   try {
     const params = new URLSearchParams();
     if (filters) {
@@ -179,7 +179,7 @@ export async function getArticles(complexNo: string, filters?: ArticleFilters) {
       `/api/complexes/${complexNo}/articles${qs ? `?${qs}` : ""}`
     );
   } catch {
-    return direct.getArticlesDirect(complexNo, filters as any);
+    return direct.getArticlesDirect(complexNo, filters as Record<string, string>);
   }
 }
 
@@ -226,7 +226,7 @@ export async function startPriceCollect(complexNo: string, token?: string) {
 export async function getPriceCollectStatus(complexNo: string) {
   return fetchApi<PriceCollectProgress>(
     `/api/live/${complexNo}/price-history/collect-status`,
-    { timeoutMs: DEFAULT_TIMEOUT_MS } as any,
+    { timeoutMs: DEFAULT_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
   );
 }
 
@@ -234,7 +234,7 @@ export async function getPriceCollectStatus(complexNo: string) {
 export async function getCrawlStatus(complexNo: string) {
   return fetchApi<CrawlProgress>(
     `/api/live/${complexNo}/articles/crawl-status`,
-    { timeoutMs: DEFAULT_TIMEOUT_MS } as any,
+    { timeoutMs: DEFAULT_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
   );
 }
 

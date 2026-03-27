@@ -110,6 +110,40 @@ function buildInitState(init?: ArticleFilters): FilterState {
   };
 }
 
+/** 프리셋 버튼 목록 — 가격·면적·평당가·관리비 드롭다운에서 공통 사용 */
+function PresetButtons({ presets, minKey, maxKey, currentMin, currentMax, onApply, size = "py-1" }: {
+  presets: readonly RangePreset[];
+  minKey: keyof FilterState;
+  maxKey: keyof FilterState;
+  currentMin: string;
+  currentMax: string;
+  onApply: (p: RangePreset, minK: keyof FilterState, maxK: keyof FilterState) => void;
+  size?: string;
+}) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {presets.map((p) => {
+        const isActive =
+          (p.min !== undefined ? String(p.min) : "") === currentMin &&
+          (p.max !== undefined ? String(p.max) : "") === currentMax;
+        return (
+          <button
+            key={p.label}
+            onClick={() => onApply(p, minKey, maxKey)}
+            className={`px-2 ${size} text-xs border rounded ${
+              isActive
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
+            }`}
+          >
+            {p.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default memo(function FilterBar({ onChange, filterOptions, sortBy: externalSortBy, onSortChange, initialFilters: init }: Props) {
   // ── useReducer로 21개 필터 상태 통합 ──
   const [s, dispatch] = useReducer(filterReducer, init, buildInitState);
@@ -308,21 +342,9 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
           onToggle={() => toggle("price")}
         >
           <p className={sectionLabel}>빠른 선택 (매매가)</p>
-          <div className="flex flex-wrap gap-1 mb-2">
-            {PRICE_PRESETS.map((p) => (
-              <button
-                key={p.label}
-                onClick={() => applyPreset(p, "minPrice", "maxPrice")}
-                className={`px-2 py-1 text-xs border rounded ${
-                  (p.min !== undefined ? String(p.min) : "") === s.minPrice &&
-                  (p.max !== undefined ? String(p.max) : "") === s.maxPrice
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
+          <div className="mb-2">
+            <PresetButtons presets={PRICE_PRESETS} minKey="minPrice" maxKey="maxPrice"
+              currentMin={s.minPrice} currentMax={s.maxPrice} onApply={applyPreset} />
           </div>
           <div className={separator} />
           <p className={sectionLabel}>가격 직접입력 (만원)</p>
@@ -346,21 +368,9 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
 
           <div className={separator} />
           <p className={sectionLabel}>평당가 (만원/평)</p>
-          <div className="flex flex-wrap gap-1 mb-2">
-            {PPYEONG_PRESETS.map((p) => (
-              <button
-                key={p.label}
-                onClick={() => applyPreset(p, "minPpyeong", "maxPpyeong")}
-                className={`px-2 py-1 text-xs border rounded ${
-                  (p.min !== undefined ? String(p.min) : "") === s.minPpyeong &&
-                  (p.max !== undefined ? String(p.max) : "") === s.maxPpyeong
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
+          <div className="mb-2">
+            <PresetButtons presets={PPYEONG_PRESETS} minKey="minPpyeong" maxKey="maxPpyeong"
+              currentMin={s.minPpyeong} currentMax={s.maxPpyeong} onApply={applyPreset} />
           </div>
           <div className="flex items-center gap-1">
             <input type="number" min="0" value={s.minPpyeong} onChange={(e) => setDebounced("minPpyeong")(e.target.value)} className={inputCls} placeholder="최소" />
@@ -386,21 +396,10 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
               {s.areaUnit === "m²" ? "평으로" : "m²으로"}
             </button>
           </div>
-          <div className="flex flex-wrap gap-1 mb-2">
-            {(s.areaUnit === "평" ? AREA_PRESETS_PYEONG : AREA_PRESETS).map((p) => (
-              <button
-                key={p.label}
-                onClick={() => applyPreset(p, "minArea", "maxArea")}
-                className={`px-2 py-1 text-xs border rounded ${
-                  (p.min !== undefined ? String(p.min) : "") === s.minArea &&
-                  (p.max !== undefined ? String(p.max) : "") === s.maxArea
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
+          <div className="mb-2">
+            <PresetButtons presets={s.areaUnit === "평" ? AREA_PRESETS_PYEONG : AREA_PRESETS}
+              minKey="minArea" maxKey="maxArea"
+              currentMin={s.minArea} currentMax={s.maxArea} onApply={applyPreset} />
           </div>
           <div className={separator} />
           <p className={sectionLabel}>직접 입력 ({s.areaUnit})</p>
@@ -520,21 +519,9 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
             </div>
             <div>
               <p className={sectionLabel}>관리비 (만원)</p>
-              <div className="flex flex-wrap gap-1 mb-1">
-                {MAINTENANCE_PRESETS.map((p) => (
-                  <button
-                    key={p.label}
-                    onClick={() => applyPreset(p, "minMaint", "maxMaint")}
-                    className={`px-2 py-0.5 text-xs border rounded ${
-                      (p.min !== undefined ? String(p.min) : "") === s.minMaint &&
-                      (p.max !== undefined ? String(p.max) : "") === s.maxMaint
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
-                    }`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
+              <div className="mb-1">
+                <PresetButtons presets={MAINTENANCE_PRESETS} minKey="minMaint" maxKey="maxMaint"
+                  currentMin={s.minMaint} currentMax={s.maxMaint} onApply={applyPreset} size="py-0.5" />
               </div>
               <div className="flex items-center gap-1">
                 <input type="number" min="0" value={s.minMaint} onChange={(e) => setDebounced("minMaint")(e.target.value)} className={inputCls} placeholder="최소" />
@@ -584,32 +571,37 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
 
       {/* ── 활성 필터 칩 ── */}
       {(() => {
-        const chipList: FilterChip[] = [];
-        if (s.tradeType !== "전체") chipList.push({ label: s.tradeType, reset: () => setImmediate("tradeType")("전체") });
-        if (s.buildingName !== "전체") chipList.push({ label: s.buildingName, reset: () => setImmediate("buildingName")("전체") });
-        if (s.floorPreset !== "전체") {
-          const fl = s.floorPreset === "저층" ? "저층(1-5)" : s.floorPreset === "중층" ? "중층(6-10)" : "고층(11+)";
-          chipList.push({ label: fl, reset: () => setImmediate("floorPreset")("전체") });
+        /** 현재 필터 상태에서 활성 칩 목록 생성 */
+        function buildChipList(): FilterChip[] {
+          const chips: FilterChip[] = [];
+          if (s.tradeType !== "전체") chips.push({ label: s.tradeType, reset: () => setImmediate("tradeType")("전체") });
+          if (s.buildingName !== "전체") chips.push({ label: s.buildingName, reset: () => setImmediate("buildingName")("전체") });
+          if (s.floorPreset !== "전체") {
+            const fl = s.floorPreset === "저층" ? "저층(1-5)" : s.floorPreset === "중층" ? "중층(6-10)" : "고층(11+)";
+            chips.push({ label: fl, reset: () => setImmediate("floorPreset")("전체") });
+          }
+          if (s.direction !== "전체") chips.push({ label: s.direction, reset: () => setImmediate("direction")("전체") });
+          if (s.minRooms !== "0") chips.push({ label: s.minRooms + "방+", reset: () => setImmediate("minRooms")("0") });
+          if (s.minBaths !== "0") chips.push({ label: s.minBaths + "욕실+", reset: () => setImmediate("minBaths")("0") });
+          if (s.buildingAge !== "0") chips.push({ label: s.buildingAge + "년 이내", reset: () => setImmediate("buildingAge")("0") });
+          if (s.moveInType !== "전체") chips.push({ label: s.moveInType, reset: () => setImmediate("moveInType")("전체") });
+          if (s.estateType !== "all") chips.push({ label: ESTATE_TYPE_FILTER_OPTIONS.find((o) => o.code === s.estateType)?.label ?? s.estateType, reset: () => setImmediate("estateType")("all") });
+          if (s.verifiedOnly === "true") chips.push({ label: "인증매물", reset: () => { dispatch({ type: "SET", key: "verifiedOnly", value: "false" }); emitChange({ verifiedOnly: "false" }); } });
+
+          if (s.minPrice) chips.push({ label: `${s.minPrice}만원~`, reset: () => { dispatch({ type: "SET", key: "minPrice", value: "" }); emitChange({ minPrice: "" }); } });
+          if (s.maxPrice) chips.push({ label: `~${s.maxPrice}만원`, reset: () => { dispatch({ type: "SET", key: "maxPrice", value: "" }); emitChange({ maxPrice: "" }); } });
+          if (s.minRent) chips.push({ label: `월세 ${s.minRent}만~`, reset: () => { dispatch({ type: "SET", key: "minRent", value: "" }); emitChange({ minRent: "" }); } });
+          if (s.maxRent) chips.push({ label: `월세 ~${s.maxRent}만`, reset: () => { dispatch({ type: "SET", key: "maxRent", value: "" }); emitChange({ maxRent: "" }); } });
+          if (s.minArea) chips.push({ label: `${s.minArea}${s.areaUnit}~`, reset: () => { dispatch({ type: "SET", key: "minArea", value: "" }); emitChange({ minArea: "" }); } });
+          if (s.maxArea) chips.push({ label: `~${s.maxArea}${s.areaUnit}`, reset: () => { dispatch({ type: "SET", key: "maxArea", value: "" }); emitChange({ maxArea: "" }); } });
+          if (s.minPpyeong) chips.push({ label: `평당 ${s.minPpyeong}만~`, reset: () => { dispatch({ type: "SET", key: "minPpyeong", value: "" }); emitChange({ minPpyeong: "" }); } });
+          if (s.maxPpyeong) chips.push({ label: `평당 ~${s.maxPpyeong}만`, reset: () => { dispatch({ type: "SET", key: "maxPpyeong", value: "" }); emitChange({ maxPpyeong: "" }); } });
+          if (s.minMaint) chips.push({ label: `관리비 ${s.minMaint}만~`, reset: () => { dispatch({ type: "SET", key: "minMaint", value: "" }); emitChange({ minMaint: "" }); } });
+          if (s.maxMaint) chips.push({ label: `관리비 ~${s.maxMaint}만`, reset: () => { dispatch({ type: "SET", key: "maxMaint", value: "" }); emitChange({ maxMaint: "" }); } });
+          return chips;
         }
-        if (s.direction !== "전체") chipList.push({ label: s.direction, reset: () => setImmediate("direction")("전체") });
-        if (s.minRooms !== "0") chipList.push({ label: s.minRooms + "방+", reset: () => setImmediate("minRooms")("0") });
-        if (s.minBaths !== "0") chipList.push({ label: s.minBaths + "욕실+", reset: () => setImmediate("minBaths")("0") });
-        if (s.buildingAge !== "0") chipList.push({ label: s.buildingAge + "년 이내", reset: () => setImmediate("buildingAge")("0") });
-        if (s.moveInType !== "전체") chipList.push({ label: s.moveInType, reset: () => setImmediate("moveInType")("전체") });
-        if (s.estateType !== "all") chipList.push({ label: ESTATE_TYPE_FILTER_OPTIONS.find((o) => o.code === s.estateType)?.label ?? s.estateType, reset: () => setImmediate("estateType")("all") });
-        if (s.verifiedOnly === "true") chipList.push({ label: "인증매물", reset: () => { dispatch({ type: "SET", key: "verifiedOnly", value: "false" }); emitChange({ verifiedOnly: "false" }); } });
 
-        if (s.minPrice) chipList.push({ label: `${s.minPrice}만원~`, reset: () => { dispatch({ type: "SET", key: "minPrice", value: "" }); emitChange({ minPrice: "" }); } });
-        if (s.maxPrice) chipList.push({ label: `~${s.maxPrice}만원`, reset: () => { dispatch({ type: "SET", key: "maxPrice", value: "" }); emitChange({ maxPrice: "" }); } });
-        if (s.minRent) chipList.push({ label: `월세 ${s.minRent}만~`, reset: () => { dispatch({ type: "SET", key: "minRent", value: "" }); emitChange({ minRent: "" }); } });
-        if (s.maxRent) chipList.push({ label: `월세 ~${s.maxRent}만`, reset: () => { dispatch({ type: "SET", key: "maxRent", value: "" }); emitChange({ maxRent: "" }); } });
-        if (s.minArea) chipList.push({ label: `${s.minArea}${s.areaUnit}~`, reset: () => { dispatch({ type: "SET", key: "minArea", value: "" }); emitChange({ minArea: "" }); } });
-        if (s.maxArea) chipList.push({ label: `~${s.maxArea}${s.areaUnit}`, reset: () => { dispatch({ type: "SET", key: "maxArea", value: "" }); emitChange({ maxArea: "" }); } });
-        if (s.minPpyeong) chipList.push({ label: `평당 ${s.minPpyeong}만~`, reset: () => { dispatch({ type: "SET", key: "minPpyeong", value: "" }); emitChange({ minPpyeong: "" }); } });
-        if (s.maxPpyeong) chipList.push({ label: `평당 ~${s.maxPpyeong}만`, reset: () => { dispatch({ type: "SET", key: "maxPpyeong", value: "" }); emitChange({ maxPpyeong: "" }); } });
-        if (s.minMaint) chipList.push({ label: `관리비 ${s.minMaint}만~`, reset: () => { dispatch({ type: "SET", key: "minMaint", value: "" }); emitChange({ minMaint: "" }); } });
-        if (s.maxMaint) chipList.push({ label: `관리비 ~${s.maxMaint}만`, reset: () => { dispatch({ type: "SET", key: "maxMaint", value: "" }); emitChange({ maxMaint: "" }); } });
-
+        const chipList = buildChipList();
         if (chipList.length === 0) return null;
         return (
           <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-gray-100">

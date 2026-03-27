@@ -33,6 +33,16 @@ export function usePriceCollect(): PriceCollectHookResult {
     }
   }, []);
 
+  /** 폴링 종료 + 상태 정리 (onDone은 호출부에서 별도 처리) */
+  const finishPolling = useCallback(
+    (msg: string = "") => {
+      clearPolling();
+      setCollecting(false);
+      setMessage(msg);
+    },
+    [clearPolling],
+  );
+
   // 언마운트 시 폴링 정리 (web-rules.md 준수)
   useEffect(() => {
     return () => {
@@ -54,10 +64,8 @@ export function usePriceCollect(): PriceCollectHookResult {
 
         // 최대 폴링 횟수 초과 → 타임아웃
         if (pollCountRef.current > MAX_PRICE_COLLECT_POLLS) {
-          clearPolling();
           console.error("[PriceCollect] Timeout after", MAX_PRICE_COLLECT_POLLS, "polls:", complexNo);
-          setCollecting(false);
-          setMessage("수집 시간 초과. 나중에 다시 시도해주세요");
+          finishPolling("수집 시간 초과. 나중에 다시 시도해주세요");
           onDone?.();
           return;
         }
@@ -67,14 +75,10 @@ export function usePriceCollect(): PriceCollectHookResult {
           if (cancelledRef.current) return;
 
           if (status.status === "done" || status.status === "idle") {
-            clearPolling();
-            setCollecting(false);
-            setMessage("");
+            finishPolling("");
             onDone?.();
           } else if (status.status === "error") {
-            clearPolling();
-            setCollecting(false);
-            setMessage("수집 오류: " + (status.error ?? "알 수 없는 오류"));
+            finishPolling("수집 오류: " + (status.error ?? "알 수 없는 오류"));
           } else if (status.status === "running") {
             // 진행률 표시 (0/0 방지)
             if (status.total && status.total > 0) {
@@ -93,7 +97,7 @@ export function usePriceCollect(): PriceCollectHookResult {
       poll();
       pollRef.current = setInterval(poll, PRICE_COLLECT_POLL_MS);
     },
-    [clearPolling],
+    [clearPolling, finishPolling],
   );
 
   const startCollect = useCallback(

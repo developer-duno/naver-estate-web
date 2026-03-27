@@ -210,7 +210,7 @@ def export_articles_to_excel(
     try:
         df = pd.DataFrame(rows)
         buffer = io.BytesIO()
-        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
             df.to_excel(writer, index=False, sheet_name="매물목록")
         buffer.seek(0)
     except Exception:

@@ -1,51 +1,44 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useAdminToken } from "@/hooks/useAdminToken";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTokenReady } from "@/hooks/useAdminQuery";
+import { queryKeys } from "@/lib/query-keys";
 import StatsCards from "@/components/admin/StatsCards";
 import { getAdminDetailedStats, deleteStaleData } from "@/lib/api";
 import type { DetailedStats } from "@/types/admin";
 
 export default function AdminDataPage() {
-  const [stats, setStats] = useState<DetailedStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [staleDays, setStaleDays] = useState(90);
-  const [deleting, setDeleting] = useState(false);
   const [deleteResult, setDeleteResult] = useState("");
 
-  const getToken = useAdminToken();
+  const { token, getToken } = useTokenReady();
+  const queryClient = useQueryClient();
 
-  const loadStats = useCallback(async () => {
-    setLoading(true);
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const data = await getAdminDetailedStats(token);
-      setStats(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "통계 로드 실패");
-    } finally {
-      setLoading(false);
-    }
-  }, [getToken]);
+  const statsQuery = useQuery<DetailedStats, Error>({
+    queryKey: queryKeys.admin.stats(),
+    queryFn: () => getAdminDetailedStats(token),
+    enabled: !!token,
+    staleTime: 0,
+  });
 
-  useEffect(() => { loadStats(); }, [loadStats]);
+  const deleteMutation = useMutation<{ deleted: number }, Error, number>({
+    mutationFn: async (days) => {
+      const t = await getToken();
+      return deleteStaleData(t, days);
+    },
+    onSuccess: (data) => {
+      setDeleteResult(`${data.deleted}건 삭제 완료`);
+      queryClient.invalidateQueries({ queryKey: ["admin", "stats"] });
+    },
+  });
 
-  const handleDeleteStale = async () => {
+  const error = statsQuery.error?.message ?? deleteMutation.error?.message ?? "";
+
+  const handleDeleteStale = () => {
     if (!confirm(`${staleDays}일 이상 된 비활성 매물 데이터를 삭제하시겠습니까?`)) return;
-    setDeleting(true);
     setDeleteResult("");
-    try {
-      const token = await getToken();
-      const result = await deleteStaleData(token, staleDays);
-      setDeleteResult(`${result.deleted}건 삭제 완료`);
-      await loadStats();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "삭제 실패");
-    } finally {
-      setDeleting(false);
-    }
+    deleteMutation.mutate(staleDays);
   };
 
   return (
@@ -56,7 +49,7 @@ export default function AdminDataPage() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">{error}</div>
       )}
 
-      <StatsCards stats={stats} loading={loading} />
+      <StatsCards stats={statsQuery.data ?? null} loading={statsQuery.isLoading} />
 
       {/* 데이터 정리 */}
       <div className="bg-white border rounded-lg p-4 mt-6">
@@ -75,10 +68,10 @@ export default function AdminDataPage() {
           <span className="text-sm text-gray-500">일 이상</span>
           <button
             onClick={handleDeleteStale}
-            disabled={deleting}
+            disabled={deleteMutation.isPending}
             className="text-sm px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
           >
-            {deleting ? "삭제 중..." : "삭제"}
+            {deleteMutation.isPending ? "삭제 중..." : "삭제"}
           </button>
         </div>
         {deleteResult && (

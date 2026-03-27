@@ -4,6 +4,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
+  useQuery,
+  useMutation,
+  keepPreviousData,
+} from "@tanstack/react-query";
+import {
   getComplex,
   getArticles,
   getPyeongDetails,
@@ -11,6 +16,7 @@ import {
   startLiveCrawl,
   ApiError,
 } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
 import { createClient } from "@/lib/supabase";
 import { PAGE_SIZE, ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -18,7 +24,7 @@ import { useSmartBack } from "@/hooks/useSmartBack";
 import { useCrawlProgress } from "@/hooks/useCrawlProgress";
 import { useExport } from "@/hooks/useExport";
 import { useFilterParams } from "@/hooks/useFilterParams";
-import type { Complex, Article, PyeongDetail, ArticleFilters, FilterOptions, SortBy, CrawlProgress } from "@/types";
+import type { Article, ArticleFilters, FilterOptions, SortBy, CrawlProgress } from "@/types";
 import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
 import ArticleTable from "@/components/ArticleTable";
@@ -84,27 +90,18 @@ export default function ComplexDetailPage() {
   const rawNo = params.no;
   const complexNo = Array.isArray(rawNo) ? rawNo[0] : rawNo ?? "";
 
-  const [complex, setComplex] = useState<Complex | null>(null);
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [pyeongDetails, setPyeongDetails] = useState<PyeongDetail[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
+  // 필터/정렬/페이지 상태 (URL 동기화)
   const [currentPage, setCurrentPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [tableLoading, setTableLoading] = useState(false);
   const [selectedArticleNos, setSelectedArticleNos] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [filterError, setFilterError] = useState("");
-  const [dismissedDone, setDismissedDone] = useState(false);
   const [sessionToken, setSessionToken] = useState<string | undefined>(undefined);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
-  const [priceStatsKey, setPriceStatsKey] = useState(0);
   const [activeSortBy, setActiveSortBy] = useState("rank");
   const { filters: urlFilters, filterKey } = useFilterParams();
-  const currentFiltersRef = useRef<ArticleFilters>(urlFilters);
-  const requestIdRef = useRef(0);
-  const cancelledRef = useRef(false);
+  const [currentFilters, setCurrentFilters] = useState<ArticleFilters>(urlFilters);
 
   const { exporting, exportError, clearExportError, handleExport: doExport } = useExport();
 
@@ -114,14 +111,51 @@ export default function ComplexDetailPage() {
     startCrawl, clearAllPolling,
   } = useCrawlProgress();
 
-  const crawlCallbacks = useCallback(() => ({
-    setArticles,
-    setTotalCount,
-    setCurrentPage,
-    setComplex: (c: Complex) => setComplex(c),
-    setPyeongDetails,
-    refreshPriceStats: () => setPriceStatsKey((k) => k + 1),
-  }), []);
+  // ── useQuery: 단지 정보 ──
+  const complexQuery = useQuery({
+    queryKey: queryKeys.complex(complexNo),
+    queryFn: () => getComplex(complexNo),
+    enabled: !!complexNo && /^\d+$/.test(complexNo),
+  });
+
+  // filter_options 추출
+  useEffect(() => {
+    if (complexQuery.data?.filter_options) {
+      setFilterOptions(complexQuery.data.filter_options);
+    }
+  }, [complexQuery.data]);
+
+  // ── useQuery: 매물 목록 (필터/페이지/정렬 포함, 폴링 지원) ──
+  const articlesQueryKey = queryKeys.articles(complexNo, {
+    ...currentFilters,
+    page: currentPage,
+    page_size: PAGE_SIZE,
+  });
+
+  const articlesQuery = useQuery({
+    queryKey: articlesQueryKey,
+    queryFn: () => getArticles(complexNo, {
+      ...currentFilters,
+      page: currentPage,
+      page_size: PAGE_SIZE,
+    }),
+    enabled: !!complexNo && /^\d+$/.test(complexNo),
+    placeholderData: keepPreviousData,
+  });
+
+  // ── useQuery: 면적별 상세 ──
+  const pyeongQuery = useQuery({
+    queryKey: queryKeys.pyeongDetails(complexNo),
+    queryFn: () => getPyeongDetails(complexNo),
+    enabled: !!complexNo && /^\d+$/.test(complexNo),
+  });
+
+  const complex = complexQuery.data ?? null;
+  const articles = articlesQuery.data?.articles ?? [];
+  const totalCount = articlesQuery.data?.total ?? 0;
+  const pyeongDetails = pyeongQuery.data?.pyeong_details ?? [];
+  const loading = complexQuery.isLoading || articlesQuery.isLoading || pyeongQuery.isLoading;
+  const tableLoading = articlesQuery.isFetching && !articlesQuery.isLoading;
 
   // SEO: dynamic title
   useEffect(() => {
@@ -130,115 +164,75 @@ export default function ComplexDetailPage() {
     }
   }, [complex]);
 
-  // Initial data load - 2-phase approach
+  // 에러 처리
   useEffect(() => {
-    cancelledRef.current = false;
+    if (complexQuery.isError) {
+      setError("단지 정보를 불러올 수 없습니다.");
+    }
+  }, [complexQuery.isError]);
 
-    async function load() {
-      setLoading(true);
-      try {
-        // Phase 1: Load DB data immediately
-        const [cpxResult, artResult, pyeongResult] = await Promise.allSettled([
-          getComplex(complexNo),
-          getArticles(complexNo, { ...urlFilters, page: 1, page_size: PAGE_SIZE }),
-          getPyeongDetails(complexNo),
-        ]);
+  // Phase 2: 자동 크롤링 (초기 로드 성공 후)
+  const autoCrawlTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (autoCrawlTriggeredRef.current) return;
+    if (!complexQuery.isSuccess || !articlesQuery.isSuccess || !pyeongQuery.isSuccess) return;
+    autoCrawlTriggeredRef.current = true;
 
-        if (cancelledRef.current) return;
-
-        if (cpxResult.status === "fulfilled") {
-          setComplex(cpxResult.value);
-          // filter_options는 complex 응답에 포함
-          const opts = cpxResult.value.filter_options;
-          if (opts) setFilterOptions(opts);
-        }
-        if (artResult.status === "fulfilled") {
-          setArticles(artResult.value.articles);
-          setTotalCount(artResult.value.total);
-        }
-        if (pyeongResult.status === "fulfilled") {
-          setPyeongDetails(pyeongResult.value.pyeong_details);
-        }
-      } catch {
-        if (!cancelledRef.current) setError("단지 정보를 불러올 수 없습니다.");
-      } finally {
-        if (!cancelledRef.current) setLoading(false);
-      }
-
-      // Phase 2: 승인된 사용자면 자동 크롤링 (캐시 내 재접근 시 BE가 "cached" 반환 → 스킵)
+    (async () => {
       try {
         const supabase = createClient();
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token && !cancelledRef.current) {
+        if (session?.access_token) {
           setSessionToken(session.access_token);
-          // 크롤링 시작 + 폴링을 병렬 실행 (optimistic UI)
-          startLiveCrawl(complexNo, session.access_token).then((crawlResult) => {
-            if (crawlResult.status === "started" && !cancelledRef.current) {
-              startCrawl(complexNo, crawlCallbacks(), currentFiltersRef);
-            }
-            // "cached" / "already_running" → 크롤링 시작 안 함, DB 데이터 그대로 표시
-          });
+          const crawlResult = await startLiveCrawl(complexNo, session.access_token);
+          if (crawlResult.status === "started") {
+            startCrawl(complexNo);
+          }
         }
       } catch (err) {
-        if (err instanceof ApiError && err.statusCode === 403 && !cancelledRef.current) {
+        if (err instanceof ApiError && err.statusCode === 403) {
           setCrawlMessage(err.message || "관리자 승인이 필요합니다");
         }
       }
-    }
+    })();
+  }, [complexNo, complexQuery.isSuccess, articlesQuery.isSuccess, pyeongQuery.isSuccess, startCrawl, setCrawlMessage]);
 
-    load();
-    return () => {
-      cancelledRef.current = true;
-      clearAllPolling();
-    };
-  }, [complexNo, clearAllPolling]);
+  // 언마운트 시 폴링 정리
+  useEffect(() => {
+    return () => { clearAllPolling(); };
+  }, [clearAllPolling]);
 
-  // 매물 로드 (필터 + 페이지)
-  const loadArticles = useCallback(
-    async (filters: ArticleFilters, page: number) => {
-      const thisRequestId = ++requestIdRef.current;
-      setTableLoading(true);
-      setFilterError("");
-      try {
-        const res = await getArticles(complexNo, { ...filters, page, page_size: PAGE_SIZE });
-        if (thisRequestId !== requestIdRef.current) return;
-        setArticles(res.articles);
-        setTotalCount(res.total);
-        setCurrentPage(page);
-      } catch {
-        if (thisRequestId !== requestIdRef.current) return;
-        setFilterError("매물 조회에 실패했습니다. 다시 시도해주세요.");
-      } finally {
-        if (thisRequestId === requestIdRef.current) setTableLoading(false);
-      }
-    },
-    [complexNo]
-  );
-
+  // 핸들러: 정렬 변경
   const handleSortChange = useCallback(
     (sortBy: string) => {
       setActiveSortBy(sortBy);
       setCurrentPage(1);
       setSelectedArticleNos(new Set());
-      const filters = { ...currentFiltersRef.current, sort_by: sortBy === "rank" ? undefined : sortBy as SortBy };
-      currentFiltersRef.current = filters;
-      loadArticles(filters, 1);
+      setCurrentFilters(prev => ({
+        ...prev,
+        sort_by: sortBy === "rank" ? undefined : sortBy as SortBy,
+      }));
+      // queryKey 변경으로 자동 refetch됨
     },
-    [loadArticles]
+    []
   );
 
+  // 핸들러: 필터 변경
   const handleFilterChange = useCallback(
     (filters: ArticleFilters) => {
-      currentFiltersRef.current = filters;
+      setCurrentFilters(filters);
       setCurrentPage(1);
       setSelectedArticleNos(new Set());
-      loadArticles(filters, 1);
+      setFilterError("");
+      // queryKey 변경으로 자동 refetch됨
     },
-    [loadArticles]
+    []
   );
 
+  // 핸들러: 페이지 변경
   const handlePageChange = (page: number) => {
-    loadArticles(currentFiltersRef.current, page);
+    setCurrentPage(page);
+    // queryKey 변경으로 자동 refetch됨
   };
 
   const handleSelectionChange = (articleNo: string, checked: boolean) => {
@@ -263,31 +257,41 @@ export default function ComplexDetailPage() {
     }
   };
 
-  const handleExport = () => doExport(complexNo, selectedArticleNos, currentFiltersRef.current);
+  const handleExport = () => doExport(complexNo, selectedArticleNos, currentFilters);
 
-  const handleCrawl = async () => {
-    const supabase = createClient();
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      router.push(`/login?redirect=${encodeURIComponent(`/complex/${complexNo}`)}`);
-      return;
-    }
-    setCrawling(true);
-    setCrawlMessage("");
-    setDismissedDone(false);
-    try {
+  // 수동 크롤링 (데이터 갱신 버튼) — useMutation
+  const crawlMutation = useMutation({
+    mutationFn: async () => {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new ApiError("로그인이 필요합니다", 401);
+      }
       await triggerComplexCrawl(complexNo, session.access_token);
-      setCrawlMessage("데이터 갱신 중...");
       const crawlResult = await startLiveCrawl(complexNo, session.access_token);
+      return crawlResult;
+    },
+    onMutate: () => {
+      setCrawling(true);
+      setCrawlMessage("");
+    },
+    onSuccess: (crawlResult: { status: string }) => {
+      setCrawlMessage("데이터 갱신 중...");
       if (
         crawlResult.status === "started" ||
         crawlResult.status === "running" ||
         crawlResult.status === "already_running"
       ) {
-        startCrawl(complexNo, crawlCallbacks(), currentFiltersRef);
+        startCrawl(complexNo);
       }
-    } catch (err) {
+    },
+    onError: (err: unknown) => {
       if (err instanceof ApiError) {
+        if (err.statusCode === 401) {
+          router.push(`/login?redirect=${encodeURIComponent(`/complex/${complexNo}`)}`);
+          setCrawling(false);
+          return;
+        }
         if (err.statusCode === 409) {
           setCrawlMessage("이미 크롤링이 진행 중입니다.");
         } else if (err.statusCode === 403) {
@@ -301,7 +305,11 @@ export default function ComplexDetailPage() {
         setCrawlMessage("데이터 갱신에 실패했습니다.");
       }
       setCrawling(false);
-    }
+    },
+  });
+
+  const handleCrawl = () => {
+    crawlMutation.mutate();
   };
 
   if (!complexNo || !/^\d+$/.test(complexNo)) {
@@ -362,7 +370,7 @@ export default function ComplexDetailPage() {
       </div>
 
       {/* 단지 정보 */}
-      <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} articleCount={totalCount} onFilterChange={handleFilterChange} refreshKey={priceStatsKey} accessToken={sessionToken} onRefresh={() => setPriceStatsKey((k) => k + 1)} />
+      <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} articleCount={totalCount} onFilterChange={handleFilterChange} accessToken={sessionToken} />
 
       {/* 크롤링 진행률 배너 */}
       {crawling && crawlProgress && (
@@ -500,5 +508,3 @@ export default function ComplexDetailPage() {
     </div>
   );
 }
-
-

@@ -1,6 +1,24 @@
 /* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any */
 import "@testing-library/jest-dom/vitest";
 import { vi } from "vitest";
+import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+/** 테스트용 QueryClient — retry 비활성, gcTime 0 */
+export function createTestQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0 },
+      mutations: { retry: false },
+    },
+  });
+}
+
+/** 테스트용 QueryClientProvider 래퍼 */
+export function TestQueryProvider({ children }: { children: React.ReactNode }) {
+  const [client] = React.useState(createTestQueryClient);
+  return React.createElement(QueryClientProvider, { client }, children);
+}
 
 // Mock next/navigation
 vi.mock("next/navigation", () => ({

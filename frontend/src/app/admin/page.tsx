@@ -1,47 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase";
+import { useQuery } from "@tanstack/react-query";
+import { useTokenReady } from "@/hooks/useAdminQuery";
+import { queryKeys } from "@/lib/query-keys";
 import StatsCards from "@/components/admin/StatsCards";
 import { getAdminDetailedStats, getAdminAuditLogs, getAdminCrawlJobs } from "@/lib/api";
 import type { DetailedStats, AuditLog, CrawlJobDetail } from "@/types/admin";
+import type { PaginatedResponse } from "@/types/admin";
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<DetailedStats | null>(null);
-  const [recentLogs, setRecentLogs] = useState<AuditLog[]>([]);
-  const [runningJobs, setRunningJobs] = useState<CrawlJobDetail[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { token } = useTokenReady();
 
-  useEffect(() => {
-    let cancelled = false;
-    const supabase = createClient();
+  const statsQuery = useQuery<DetailedStats, Error>({
+    queryKey: queryKeys.admin.stats(),
+    queryFn: () => getAdminDetailedStats(token),
+    enabled: !!token,
+    staleTime: 0,
+  });
 
-    async function load() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session || cancelled) return;
-      const token = session.access_token;
+  const logsQuery = useQuery<PaginatedResponse<AuditLog>, Error>({
+    queryKey: [...queryKeys.admin.auditLogs(), "dashboard"] as const,
+    queryFn: () => getAdminAuditLogs(token, { page: 1 }),
+    enabled: !!token,
+    staleTime: 0,
+  });
 
-      try {
-        const [statsData, logsData, jobsData] = await Promise.all([
-          getAdminDetailedStats(token),
-          getAdminAuditLogs(token, { page: 1 }),
-          getAdminCrawlJobs(token, { status: "running" }),
-        ]);
-        if (cancelled) return;
-        setStats(statsData);
-        setRecentLogs((logsData.items ?? []).slice(0, 5));
-        setRunningJobs(jobsData.items ?? []);
-      } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "데이터 로드 실패");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
+  const jobsQuery = useQuery<PaginatedResponse<CrawlJobDetail>, Error>({
+    queryKey: [...queryKeys.admin.crawlJobs(), "running"] as const,
+    queryFn: () => getAdminCrawlJobs(token, { status: "running" }),
+    enabled: !!token,
+    staleTime: 0,
+  });
 
-    load();
-    return () => { cancelled = true; };
-  }, []);
+  const loading = statsQuery.isLoading || logsQuery.isLoading || jobsQuery.isLoading;
+  const error = statsQuery.error?.message ?? logsQuery.error?.message ?? jobsQuery.error?.message ?? "";
+  const stats = statsQuery.data ?? null;
+  const recentLogs = (logsQuery.data?.items ?? []).slice(0, 5);
+  const runningJobs = jobsQuery.data?.items ?? [];
 
   return (
     <>

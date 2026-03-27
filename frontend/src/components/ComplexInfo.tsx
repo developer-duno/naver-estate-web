@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import dynamic from "next/dynamic";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import type { Complex, PyeongDetail, PriceStats, PriceHistoryItem, ArticleFilters } from "@/types";
 import { formatDateFull, formatChartPrice } from "@/lib/format";
 import { getPriceStats, getPriceHistory } from "@/lib/api";
@@ -19,12 +21,8 @@ interface Props {
   complexNo: string;
   articleCount?: number;
   onFilterChange?: (filters: ArticleFilters) => void;
-  /** 크롤 완료 시 부모가 증가시켜 가격 통계 re-fetch 트리거 */
-  refreshKey?: number;
   /** 인증 토큰 (실거래가 수집용) */
   accessToken?: string;
-  /** refreshKey 증가 트리거 */
-  onRefresh?: () => void;
 }
 
 const TABS: { key: TabType; label: string }[] = [
@@ -35,32 +33,32 @@ const TABS: { key: TabType; label: string }[] = [
   { key: "price-history", label: "실거래가 추이" },
 ];
 
-export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount, onFilterChange, refreshKey, accessToken, onRefresh }: Props) {
+export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount, onFilterChange, accessToken }: Props) {
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<TabType>("info");
-  const [priceStats, setPriceStats] = useState<PriceStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
-  const [statsError, setStatsError] = useState(false);
-  const [historyItems, setHistoryItems] = useState<PriceHistoryItem[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState(false);
-  const { collecting, message: collectMessage, startCollect, clearPolling } = usePriceCollect();
   const [historyAreaNo, setHistoryAreaNo] = useState<string>("");
-  const historyFetchedRef = React.useRef<string>("");
+  const { collecting, message: collectMessage, startCollect, clearPolling } = usePriceCollect();
 
-  useEffect(() => {
-    let cancelled = false;
-    setStatsLoading(true);
-    setStatsError(false);
-    getPriceStats(complexNo)
-      .then((data) => { if (!cancelled) { setPriceStats(data); setStatsLoading(false); } })
-      .catch(() => { if (!cancelled) { setPriceStats(null); setStatsError(true); setStatsLoading(false); } });
-    // complexNo/refreshKey 변경 시 가격 추이도 초기화
-    setHistoryItems([]);
-    setHistoryError(false);
-    setHistoryAreaNo("");
-    historyFetchedRef.current = "";
-    return () => { cancelled = true; };
-  }, [complexNo, refreshKey]);
+  // ── useQuery: 가격 통계 (staleTime 30초) ──
+  const priceStatsQuery = useQuery({
+    queryKey: queryKeys.priceStats(complexNo),
+    queryFn: () => getPriceStats(complexNo),
+    staleTime: 30_000,
+  });
+
+  // ── useQuery: 가격 추이 (실거래가 추이 탭 활성 시에만) ──
+  const priceHistoryQuery = useQuery({
+    queryKey: queryKeys.priceHistory(complexNo, undefined, historyAreaNo || undefined),
+    queryFn: () => getPriceHistory(complexNo, undefined, historyAreaNo || undefined),
+    enabled: tab === "price-history",
+  });
+
+  const priceStats = priceStatsQuery.data ?? null;
+  const statsLoading = priceStatsQuery.isLoading;
+  const statsError = priceStatsQuery.isError;
+  const historyItems = priceHistoryQuery.data?.items ?? [];
+  const historyLoading = priceHistoryQuery.isLoading;
+  const historyError = priceHistoryQuery.isError;
 
   // 컴포넌트 언마운트 시 수집 폴링 정리
   useEffect(() => clearPolling, [clearPolling]);
@@ -72,28 +70,10 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
     if (autoCollectRef.current === complexNo) return; // 이미 시도함
     autoCollectRef.current = complexNo;
     startCollect(complexNo, accessToken, () => {
-      // 수집 완료 → 차트 데이터 직접 리프레시
-      historyFetchedRef.current = "";
-      getPriceHistory(complexNo, undefined, historyAreaNo || undefined)
-        .then((res) => { setHistoryItems(res.items); setHistoryLoading(false); })
-        .catch(() => {});
-      onRefresh?.();
+      // 수집 완료 → priceHistory 쿼리 무효화 (자동 refetch)
+      queryClient.invalidateQueries({ queryKey: queryKeys.priceHistoryAll(complexNo) });
     });
-  }, [tab, complexNo, accessToken, collecting, startCollect, onRefresh]);
-
-  useEffect(() => {
-    if (tab !== "price-history") return;
-    const fetchKey = `${complexNo}:${historyAreaNo}`;
-    if (historyFetchedRef.current === fetchKey) return;
-    let cancelled = false;
-    setHistoryLoading(true);
-    setHistoryError(false);
-    historyFetchedRef.current = fetchKey;
-    getPriceHistory(complexNo, undefined, historyAreaNo || undefined)
-      .then((res) => { if (!cancelled) { setHistoryItems(res.items); setHistoryLoading(false); } })
-      .catch(() => { if (!cancelled) { setHistoryError(true); setHistoryLoading(false); historyFetchedRef.current = ""; } });
-    return () => { cancelled = true; };
-  }, [tab, complexNo, historyAreaNo]);
+  }, [tab, complexNo, accessToken, collecting, startCollect, queryClient]);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
@@ -147,11 +127,8 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, ar
                 onClick={() => {
                   if (!accessToken) return;
                   startCollect(complexNo, accessToken, () => {
-                    historyFetchedRef.current = "";
-                    getPriceHistory(complexNo, undefined, historyAreaNo || undefined)
-                      .then((res) => { setHistoryItems(res.items); })
-                      .catch(() => {});
-                    onRefresh?.();
+                    // 수집 완료 → priceHistory 쿼리 무효화
+                    queryClient.invalidateQueries({ queryKey: queryKeys.priceHistoryAll(complexNo) });
                   });
                 }}
                 disabled={collecting || !accessToken}

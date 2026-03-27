@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import { TestQueryProvider } from "../../test-setup";
 
 vi.mock("@/lib/api", () => ({
   getArticleLive: vi.fn().mockResolvedValue({
@@ -31,7 +32,7 @@ beforeEach(async () => {
 describe("ArticleDetail — 추가", () => {
   it("dialog role 존재", async () => {
     const onClose = vi.fn();
-    render(<ArticleDetail articleNo="A001" onClose={onClose} />);
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
     await waitFor(() => {
       const dialog = screen.getByRole("dialog");
       expect(dialog).toBeInTheDocument();
@@ -40,7 +41,7 @@ describe("ArticleDetail — 추가", () => {
 
   it("매물 상세 타이틀", async () => {
     const onClose = vi.fn();
-    render(<ArticleDetail articleNo="A001" onClose={onClose} />);
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
     await waitFor(() => {
       expect(screen.getByText("매물 상세")).toBeInTheDocument();
     });
@@ -48,7 +49,7 @@ describe("ArticleDetail — 추가", () => {
 
   it("닫기 버튼 aria-label", async () => {
     const onClose = vi.fn();
-    render(<ArticleDetail articleNo="A001" onClose={onClose} />);
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
     await waitFor(() => {
       const btn = screen.getByLabelText("닫기");
       expect(btn).toBeInTheDocument();
@@ -57,7 +58,7 @@ describe("ArticleDetail — 추가", () => {
 
   it("로딩 상태 표시", () => {
     const onClose = vi.fn();
-    render(<ArticleDetail articleNo="A001" onClose={onClose} />);
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
     const spinner = screen.getByRole("status");
     expect(spinner).toBeInTheDocument();
   });
@@ -67,7 +68,7 @@ describe("ArticleDetail — 추가", () => {
 describe("ArticleDetail", () => {
   it("로딩 후 매물 정보 표시", async () => {
     const onClose = vi.fn();
-    render(<ArticleDetail articleNo="A001" onClose={onClose} />);
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
     await waitFor(() => {
       // 매물 데이터가 로드된 후 닫기 버튼이 표시되어야 함
       const closeBtn = screen.queryByRole("button");
@@ -77,7 +78,7 @@ describe("ArticleDetail", () => {
 
   it("onClose 프롭 전달", () => {
     const onClose = vi.fn();
-    render(<ArticleDetail articleNo="A001" onClose={onClose} />);
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
     // 컴포넌트가 크래시 없이 렌더링됨을 확인
     expect(onClose).not.toHaveBeenCalled();
   });

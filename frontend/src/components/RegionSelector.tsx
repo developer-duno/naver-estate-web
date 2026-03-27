@@ -1,44 +1,26 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { getRegions } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
 import type { Regions } from "@/types";
-
-// 모듈 레벨 캐시 — 정적 데이터이므로 한 번 로드 후 재사용
-let _cachedRegions: Regions | null = null;
 
 interface Props {
   onSearch: (sido: string, sigungu: string, dong?: string) => void;
 }
 
 export default function RegionSelector({ onSearch }: Props) {
-  const [regions, setRegions] = useState<Regions>(_cachedRegions ?? {});
+  const { data: regions = {} as Regions, isLoading: loading, isError: error, refetch: loadRegions } = useQuery({
+    queryKey: queryKeys.regions,
+    queryFn: () => getRegions(),
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+
   const [sido, setSido] = useState("");
   const [sigungu, setSigungu] = useState("");
   const [dong, setDong] = useState("");
-  const [loading, setLoading] = useState(!_cachedRegions);
-  const [error, setError] = useState(false);
-
-  const loadRegions = useCallback(() => {
-    if (_cachedRegions) {
-      setRegions(_cachedRegions);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(false);
-    getRegions()
-      .then((data) => {
-        _cachedRegions = data;
-        setRegions(data);
-      })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    loadRegions();
-  }, [loadRegions]);
 
   const sidoList = Object.keys(regions);
   const sigunguList = sido ? Object.keys(regions[sido] ?? {}) : [];
@@ -47,7 +29,6 @@ export default function RegionSelector({ onSearch }: Props) {
   const handleSidoChange = (value: string) => {
     setSido(value);
     setDong("");
-    // 세종처럼 시/군/구가 1개뿐인 경우 자동 선택 (검색은 동 선택 시)
     const sgList = value ? Object.keys(regions[value] ?? {}) : [];
     if (sgList.length === 1) {
       setSigungu(sgList[0]);
@@ -73,7 +54,7 @@ export default function RegionSelector({ onSearch }: Props) {
       <div className="flex items-center gap-3 text-sm text-red-500">
         <span>지역 정보를 불러올 수 없습니다.</span>
         <button
-          onClick={loadRegions}
+          onClick={() => loadRegions()}
           className="text-blue-600 hover:underline font-medium"
         >
           재시도

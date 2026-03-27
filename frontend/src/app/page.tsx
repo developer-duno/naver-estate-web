@@ -1,40 +1,29 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { getStats } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
 import RegionSelector from "@/components/RegionSelector";
 import EstateTypeTabs from "@/components/EstateTypeTabs";
 import FilterBar from "@/components/FilterBar";
 import { ESTATE_TYPE_TABS } from "@/lib/constants";
-import type { ArticleFilters, DbStats } from "@/types";
+import type { ArticleFilters } from "@/types";
 import { buildFilterURL } from "@/hooks/useFilterParams";
 
 export default function HomePage() {
   const router = useRouter();
   const [keyword, setKeyword] = useState("");
-  const [stats, setStats] = useState<DbStats | null>(null);
-  const [statsLoading, setStatsLoading] = useState(true);
-  const [statsError, setStatsError] = useState(false);
   const allCodes = ESTATE_TYPE_TABS.map((t) => t.code) as string[];
   const [selectedTypes, setSelectedTypes] = useState<string[]>([...allCodes]);
   const [articleFilters, setArticleFilters] = useState<ArticleFilters>({});
-  const abortRef = useRef(false);
 
-  const loadStats = () => {
-    setStatsLoading(true);
-    setStatsError(false);
-    getStats()
-      .then((data) => { if (!abortRef.current) setStats(data); })
-      .catch(() => { if (!abortRef.current) setStatsError(true); })
-      .finally(() => { if (!abortRef.current) setStatsLoading(false); });
-  };
-
-  useEffect(() => {
-    abortRef.current = false;
-    loadStats();
-    return () => { abortRef.current = true; };
-  }, []);
+  const { data: stats, isLoading: statsLoading, isError: statsError, refetch: loadStats } = useQuery({
+    queryKey: queryKeys.stats,
+    queryFn: () => getStats(),
+    staleTime: 60_000,
+  });
 
   const typesParam = selectedTypes.length < allCodes.length
     ? `&types=${selectedTypes.join(",")}`
@@ -69,7 +58,7 @@ export default function HomePage() {
           {statsLoading ? (
             <span className="text-gray-400">통계 로딩...</span>
           ) : statsError ? (
-            <button onClick={loadStats} className="text-gray-400 hover:text-blue-500">통계 재시도</button>
+            <button onClick={() => loadStats()} className="text-gray-400 hover:text-blue-500">통계 재시도</button>
           ) : (
             <>
               <span>단지 <strong className="text-blue-600">{complexCount.toLocaleString()}</strong></span>

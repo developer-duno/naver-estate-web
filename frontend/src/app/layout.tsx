@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import Providers from "@/components/Providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -51,10 +52,12 @@ export default function RootLayout({
         >
           본문으로 건너뛰기
         </a>
-        <Header />
-        <ErrorBoundary>
-          <main id="main-content">{children}</main>
-        </ErrorBoundary>
+        <Providers>
+          <Header />
+          <ErrorBoundary>
+            <main id="main-content">{children}</main>
+          </ErrorBoundary>
+        </Providers>
       </body>
     </html>
   );

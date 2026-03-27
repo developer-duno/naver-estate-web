@@ -1,63 +1,67 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useAdminToken } from "@/hooks/useAdminToken";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTokenReady } from "@/hooks/useAdminQuery";
+import { queryKeys } from "@/lib/query-keys";
 import UserTable from "@/components/admin/UserTable";
 import { getAdminUsers, updateAdminUser, suspendAdminUser } from "@/lib/api";
-import type { UserProfile, UserUpdatePayload } from "@/types/admin";
+import type { UserProfile, UserUpdatePayload, PaginatedResponse } from "@/types/admin";
 
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [filterRole, setFilterRole] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
 
-  const getToken = useAdminToken();
+  const { token, getToken } = useTokenReady();
+  const queryClient = useQueryClient();
 
-  const loadUsers = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const data = await getAdminUsers(token, {
-        role: filterRole || undefined,
-        status: filterStatus || undefined,
-        page,
-      });
-      setUsers(data.items);
-      setTotal(data.total);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "사용자 목록 로드 실패");
-    } finally {
-      setLoading(false);
-    }
-  }, [getToken, filterRole, filterStatus, page]);
+  const params = {
+    role: filterRole || undefined,
+    status: filterStatus || undefined,
+    page,
+  };
 
-  useEffect(() => { loadUsers(); }, [loadUsers]);
+  const usersQuery = useQuery<PaginatedResponse<UserProfile>, Error>({
+    queryKey: queryKeys.admin.users(params as Record<string, unknown>),
+    queryFn: () => getAdminUsers(token, params),
+    enabled: !!token,
+    staleTime: 0,
+  });
+
+  const updateMutation = useMutation<
+    { status: string; changes: Record<string, unknown> },
+    Error,
+    { userId: string; payload: UserUpdatePayload }
+  >({
+    mutationFn: async ({ userId, payload }) => {
+      const t = await getToken();
+      return updateAdminUser(t, userId, payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+
+  const suspendMutation = useMutation<{ status: string }, Error, string>({
+    mutationFn: async (userId) => {
+      const t = await getToken();
+      return suspendAdminUser(t, userId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+    },
+  });
+
+  const error = usersQuery.error?.message ?? updateMutation.error?.message ?? suspendMutation.error?.message ?? "";
 
   const handleUpdate = async (userId: string, payload: UserUpdatePayload) => {
-    try {
-      const token = await getToken();
-      await updateAdminUser(token, userId, payload);
-      await loadUsers();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "사용자 업데이트 실패");
-    }
+    await updateMutation.mutateAsync({ userId, payload });
   };
 
   const handleSuspend = async (userId: string) => {
     if (!confirm("이 사용자를 정지하시겠습니까?")) return;
-    try {
-      const token = await getToken();
-      await suspendAdminUser(token, userId);
-      await loadUsers();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "사용자 정지 실패");
-    }
+    await suspendMutation.mutateAsync(userId);
   };
 
   return (
@@ -92,14 +96,14 @@ export default function AdminUsersPage() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">{error}</div>
       )}
 
-      {loading ? (
+      {usersQuery.isLoading ? (
         <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
       ) : (
-        <UserTable users={users} onUpdate={handleUpdate} onSuspend={handleSuspend} />
+        <UserTable users={usersQuery.data?.items ?? []} onUpdate={handleUpdate} onSuspend={handleSuspend} />
       )}
 
       {/* 페이지네이션 */}
-      {total > 20 && (
+      {(usersQuery.data?.total ?? 0) > 20 && (
         <div className="flex justify-center gap-2 mt-4">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -109,11 +113,11 @@ export default function AdminUsersPage() {
             이전
           </button>
           <span className="text-sm text-gray-500 py-1">
-            {page} / {Math.ceil(total / 20)}
+            {page} / {Math.ceil((usersQuery.data?.total ?? 0) / 20)}
           </span>
           <button
             onClick={() => setPage((p) => p + 1)}
-            disabled={page >= Math.ceil(total / 20)}
+            disabled={page >= Math.ceil((usersQuery.data?.total ?? 0) / 20)}
             className="text-sm px-3 py-1 border rounded disabled:opacity-30"
           >
             다음

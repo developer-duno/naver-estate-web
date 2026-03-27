@@ -1,10 +1,11 @@
 /**
- * ComplexInfo 컴포넌트 테스트 - 단지 정보 표시
+ * ComplexInfo 컴포넌트 테스트 - 단지 정보 표시 (React Query 래핑)
  * 실행: npx vitest run src/components/__tests__/ComplexInfo.test.tsx
  */
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { TestQueryProvider } from "@/test-setup";
 import ComplexInfo from "../ComplexInfo";
 import type { Complex } from "@/types";
 
@@ -31,9 +32,14 @@ const baseComplex: Complex = {
   total_household_count: 500,
 };
 
+/** TestQueryProvider로 감싸서 렌더 */
+function renderWithQuery(ui: React.ReactElement) {
+  return render(ui, { wrapper: TestQueryProvider });
+}
+
 describe("ComplexInfo", () => {
   it("탭 메뉴 표시", async () => {
-    render(
+    renderWithQuery(
       <ComplexInfo complex={baseComplex} pyeongDetails={[]} complexNo="C001" />
     );
     await waitFor(() => {
@@ -42,7 +48,7 @@ describe("ComplexInfo", () => {
   });
 
   it("면적별 정보 탭 존재", async () => {
-    render(
+    renderWithQuery(
       <ComplexInfo complex={baseComplex} pyeongDetails={[]} complexNo="C001" />
     );
     await waitFor(() => {
@@ -51,7 +57,7 @@ describe("ComplexInfo", () => {
   });
 
   it("면적별 가격 탭 존재", async () => {
-    render(
+    renderWithQuery(
       <ComplexInfo complex={baseComplex} pyeongDetails={[]} complexNo="C001" />
     );
     await waitFor(() => {
@@ -61,7 +67,7 @@ describe("ComplexInfo", () => {
 
   it("null 필드에도 크래시 없음", async () => {
     const minimal: Complex = { complex_no: "C002", complex_name: "미니멀" };
-    render(
+    renderWithQuery(
       <ComplexInfo complex={minimal} pyeongDetails={[]} complexNo="C002" />
     );
     await waitFor(() => {
@@ -71,7 +77,7 @@ describe("ComplexInfo", () => {
 
   /* 실거래가 추이 탭 테스트 */
   it("실거래가 추이 탭 클릭 시 가격 추이 로딩", async () => {
-    render(
+    renderWithQuery(
       <ComplexInfo complex={baseComplex} pyeongDetails={[]} complexNo="C001" />
     );
     await userEvent.click(screen.getByText("실거래가 추이"));
@@ -85,7 +91,7 @@ describe("ComplexInfo", () => {
       { pyeong_no: 1, pyeong_name: "59A", exclusive_area: "59.98", supply_area: "84.0", supply_area_double: 84.0, exclusive_rate: "71" },
       { pyeong_no: 2, pyeong_name: "84B", exclusive_area: "84.92", supply_area: "116.0", supply_area_double: 116.0, exclusive_rate: "73" },
     ];
-    render(
+    renderWithQuery(
       <ComplexInfo complex={baseComplex} pyeongDetails={pyeongDetails} complexNo="C001" />
     );
     await userEvent.click(screen.getByText("실거래가 추이"));
@@ -96,7 +102,7 @@ describe("ComplexInfo", () => {
   });
 
   it("실거래가 추이 탭에서 면적 드롭다운 숨김 (pyeongDetails 없을 때)", async () => {
-    render(
+    renderWithQuery(
       <ComplexInfo complex={baseComplex} pyeongDetails={[]} complexNo="C001" />
     );
     await userEvent.click(screen.getByText("실거래가 추이"));
@@ -110,7 +116,7 @@ describe("ComplexInfo", () => {
     const pyeongDetails = [
       { pyeong_no: 1, pyeong_name: "59A", exclusive_area: "59.98", supply_area: "84.0", supply_area_double: 84.0, exclusive_rate: "71" },
     ];
-    render(
+    renderWithQuery(
       <ComplexInfo complex={baseComplex} pyeongDetails={pyeongDetails} complexNo="C001" />
     );
     await userEvent.click(screen.getByText("실거래가 추이"));
@@ -127,7 +133,7 @@ describe("ComplexInfo", () => {
 
   // 실거래가 수집 버튼 테스트
   it("실거래가 수집 버튼 렌더링 — 인증 시 활성", async () => {
-    render(
+    renderWithQuery(
       <ComplexInfo complex={baseComplex} pyeongDetails={[]} complexNo="C001" accessToken="test-token" />
     );
     await userEvent.click(screen.getByText("실거래가 추이"));
@@ -139,7 +145,7 @@ describe("ComplexInfo", () => {
   });
 
   it("실거래가 수집 버튼 — 미인증 시 비활성", async () => {
-    render(
+    renderWithQuery(
       <ComplexInfo complex={baseComplex} pyeongDetails={[]} complexNo="C001" />
     );
     await userEvent.click(screen.getByText("실거래가 추이"));
@@ -151,7 +157,7 @@ describe("ComplexInfo", () => {
 
   it("수집 버튼 클릭 → startPriceCollect 호출", async () => {
     mockStartPriceCollect.mockClear();
-    render(
+    renderWithQuery(
       <ComplexInfo complex={baseComplex} pyeongDetails={[]} complexNo="C001" accessToken="test-token" />
     );
     await userEvent.click(screen.getByText("실거래가 추이"));
@@ -168,7 +174,7 @@ describe("ComplexInfo", () => {
   it("자동 수집 fresh 시 버튼 활성 유지", async () => {
     mockStartPriceCollect.mockClear();
     mockStartPriceCollect.mockResolvedValue({ status: "fresh", complex_no: "C001" });
-    render(
+    renderWithQuery(
       <ComplexInfo complex={baseComplex} pyeongDetails={[]} complexNo="C001" accessToken="test-token" />
     );
     await userEvent.click(screen.getByText("실거래가 추이"));

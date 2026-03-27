@@ -1,10 +1,11 @@
 # 네이버 아파트 매물 조회 웹
 
-> Next.js 16 (App Router) + TypeScript + Tailwind CSS 4 + Supabase Auth + FastAPI Backend
+> Next.js 16 (App Router) + TypeScript + Tailwind CSS 4 + React Query + Supabase Auth + FastAPI Backend
 
 ## 기술 스택
 
 - **프론트엔드**: Next.js 16.1.6, React 19, TypeScript 5, Tailwind CSS 4
+- **서버 상태 관리**: React Query (TanStack Query v5) — 캐싱, 중복 제거, 폴링
 - **인증**: Supabase SSR (쿠키 기반 JWT)
 - **차트**: Recharts 3 (dynamic import)
 - **테스트**: Vitest + @testing-library/react + MSW
@@ -15,8 +16,8 @@
 frontend/src/
 ├── app/           # Next.js App Router (11 페이지)
 ├── components/    # 재사용 컴포넌트 (14개)
-├── hooks/         # 커스텀 훅 (6개)
-├── lib/           # api.ts, supabase.ts, constants.ts, format.ts
+├── hooks/         # 커스텀 훅 (7개)
+├── lib/           # api.ts, supabase.ts, constants.ts, format.ts, query-client.ts, query-keys.ts
 ├── types/         # TypeScript 인터페이스
 └── middleware.ts  # Supabase 세션 + 관리자 라우트 보호
 ```
@@ -25,12 +26,13 @@ frontend/src/
 
 | 훅 | 역할 |
 |---|------|
-| `useCrawlProgress` | 매물 크롤링 진행률 폴링 (start-crawl → crawl-status) |
-| `usePriceCollect` | 실거래가 수집 — 3초 실시간 폴링 (진행률 표시, 3분 타임아웃, finishPolling 헬퍼) |
-| `useExport` | 엑셀 내보내기 |
+| `useCrawlProgress` | 매물 크롤링 진행률 — useQuery(crawlStatus, refetchInterval) + invalidateQueries |
+| `usePriceCollect` | 실거래가 수집 — useMutation(시작) + useQuery(폴링, 3초 간격, 3분 타임아웃) |
+| `useExport` | 엑셀 내보내기 — useMutation 래퍼 |
+| `useAdminQuery` | 관리자 쿼리 유틸 — token 비동기 해소 + useQuery/useMutation 래핑 |
 | `useFilterParams` | URL 기반 필터 상태 관리 |
 | `useSmartBack` | 뒤로가기 (이전 페이지 or 홈) |
-| `useAdminToken` | 관리자 토큰 관리 |
+| `useAdminToken` | 관리자 토큰 접근자 |
 
 ## Critical Rules
 
@@ -39,11 +41,13 @@ frontend/src/
 - 보호된 API 호출 시 `session.access_token`을 Authorization 헤더로 전달
 - middleware.ts에서 `/admin/*` 경로 보호 (role 체크)
 
-### 2. API 호출 패턴
-- 모든 API 호출은 `api.ts`의 `fetchApi()` 래퍼를 통해 수행
-- 기본 타임아웃: 15초, Live 크롤링: 120초
-- 401/403 시 자동 로그아웃 + `/login` 리다이렉트
-- AbortController로 컴포넌트 언마운트 시 요청 취소
+### 2. API 호출 패턴 (React Query)
+- 모든 데이터 페칭은 `useQuery`/`useMutation` + `api.ts` 함수 조합
+- `api.ts`의 `fetchApi()` 래퍼: 타임아웃(15초/120초), 401 자동 로그아웃, Supabase 폴백 내장
+- React Query가 요청 중복 제거 + 캐싱 + 자동 재시도 담당
+- `queryKeys` (`lib/query-keys.ts`): 모든 쿼리 키 팩토리 (admin 키에 token 미포함)
+- `Providers.tsx`: QueryClientProvider + 로그아웃 시 `queryClient.clear()`
+- 폴링: `refetchInterval` 옵션 사용 (크롤 상태 3초, 매물 목록 8초, 가격 수집 3초)
 
 ### 3. HTML 유효성
 - `<table>` 내부에 `<Link>`(`<a>`) 래퍼 사용 금지 (hydration 에러)
@@ -81,7 +85,7 @@ frontend/src/
 - 기간 필터: 6개월/1년/2년/전체
 - 면적 드롭다운: pyeong_no 기반 필터
 - "실거래가 수집" 버튼: 탭 진입 시 자동 트리거 (24시간 TTL)
-- 3초 간격 실시간 폴링 → 완료 즉시 차트 갱신 (진행률 표시: "수집 중... 45/120건")
+- usePriceCollect: useMutation(시작) + useQuery(refetchInterval: 3초) → 완료 시 invalidateQueries(priceHistory)
 
 ### RegionSelector (네이버 스타일 3컬럼 팝업)
 - 트리거 버튼 hover → fixed 팝업 패널 (시/도 | 시/군/구 | 읍/면/동)

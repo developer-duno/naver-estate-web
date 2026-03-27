@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { Suspense } from "react";
+import { TestQueryProvider } from "../../test-setup";
 
 // next/navigation mock 오버라이드용
 const mockPush = vi.fn();
@@ -51,9 +52,11 @@ function makeComplex(no: string, name: string, reType = "APT") {
 
 function renderSearch() {
   return render(
-    <Suspense fallback={<div>loading</div>}>
-      <SearchPage />
-    </Suspense>,
+    <TestQueryProvider>
+      <Suspense fallback={<div>loading</div>}>
+        <SearchPage />
+      </Suspense>
+    </TestQueryProvider>,
   );
 }
 

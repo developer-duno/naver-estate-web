@@ -18,7 +18,7 @@ cd frontend && npm test && cd ../backend && python -m pytest
 
 ### 레벨별 실행
 ```bash
-# FE 단위 + 컴포넌트 + 엣지케이스 (168개)
+# FE 단위 + 컴포넌트 + 훅 + 페이지 (168개)
 cd frontend && npm test
 
 # BE 단위 + 통합 + API + 엣지케이스 (221개)
@@ -45,9 +45,14 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 ### 테스트 구조
 | 경로 | 도구 | 테스트 수 |
 |------|------|----------|
-| frontend/src/lib/__tests__/ | Vitest | 55 (단위+엣지케이스) |
-| frontend/src/components/__tests__/ | Vitest | 61 (컴포넌트) |
-| frontend/src/hooks/__tests__/ | Vitest | 14 (훅: useCrawlProgress 6 + usePriceCollect 8) |
-| frontend/src/lib/__tests__/api.msw.test.ts | Vitest | 7 (MSW 통합) |
+| frontend/src/lib/__tests__/ | Vitest | 68 (단위+엣지케이스) |
+| frontend/src/components/__tests__/ | Vitest | 79 (컴포넌트) |
+| frontend/src/hooks/__tests__/ | Vitest | 14 (훅: useCrawlProgress + usePriceCollect) |
+| frontend/src/app/__tests__/ | Vitest | 7 (페이지 통합) |
 | frontend/e2e/ | Playwright | 13 (E2E) |
 | backend/tests/ | pytest | 221 (단위+통합+API+엣지케이스) |
+
+### React Query 테스트 패턴
+- 컴포넌트/훅 테스트에서 `TestQueryProvider` 래퍼 사용 (test-setup.ts에서 export)
+- API 함수는 `vi.mock("@/lib/api")` 로 모킹 (React Query가 모킹된 함수를 호출)
+- MSW 테스트 (api.test.ts)는 네트워크 레벨 → QueryProvider 불필요

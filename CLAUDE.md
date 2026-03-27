@@ -4,7 +4,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 기술 스택
 
-- **Frontend**: Next.js 16 (App Router) + TypeScript + Tailwind CSS 4 + Recharts 3
+- **Frontend**: Next.js 16 (App Router) + TypeScript + Tailwind CSS 4 + React Query (TanStack Query v5) + Recharts 3
 - **Backend**: FastAPI + SQLAlchemy 2.0 + curl_cffi + APScheduler
 - **DB**: Supabase (PostgreSQL) + Supabase Auth
 - **배포**: Vercel (frontend) + 집 서버 (backend, Cloudflare Tunnel)

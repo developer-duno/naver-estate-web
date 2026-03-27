@@ -1,51 +1,51 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useAdminToken } from "@/hooks/useAdminToken";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTokenReady } from "@/hooks/useAdminQuery";
+import { queryKeys } from "@/lib/query-keys";
 import CrawlJobTable from "@/components/admin/CrawlJobTable";
 import { getAdminCrawlJobs, cancelAdminCrawlJob } from "@/lib/api";
-import type { CrawlJobDetail } from "@/types/admin";
+import type { CrawlJobDetail, PaginatedResponse } from "@/types/admin";
 
 export default function AdminCrawlPage() {
-  const [jobs, setJobs] = useState<CrawlJobDetail[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
 
-  const getToken = useAdminToken();
+  const { token, getToken } = useTokenReady();
+  const queryClient = useQueryClient();
 
-  const loadJobs = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const token = await getToken();
-      if (!token) return;
-      const data = await getAdminCrawlJobs(token, {
-        status: filterStatus || undefined,
-        page,
-      });
-      setJobs(data.items);
-      setTotal(data.total);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "작업 목록 로드 실패");
-    } finally {
-      setLoading(false);
-    }
-  }, [getToken, filterStatus, page]);
+  const params = {
+    status: filterStatus || undefined,
+    page,
+  };
 
-  useEffect(() => { loadJobs(); }, [loadJobs]);
+  const jobsQuery = useQuery<PaginatedResponse<CrawlJobDetail>, Error>({
+    queryKey: queryKeys.admin.crawlJobs(params as Record<string, unknown>),
+    queryFn: () => getAdminCrawlJobs(token, params),
+    enabled: !!token,
+    staleTime: 0,
+  });
+
+  const cancelMutation = useMutation<{ status: string }, Error, number>({
+    mutationFn: async (jobId) => {
+      const t = await getToken();
+      return cancelAdminCrawlJob(t, jobId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "crawlJobs"] });
+    },
+  });
+
+  const error = jobsQuery.error?.message ?? cancelMutation.error?.message ?? "";
 
   const handleCancel = async (jobId: number) => {
     if (!confirm("이 작업을 취소하시겠습니까?")) return;
-    try {
-      const token = await getToken();
-      await cancelAdminCrawlJob(token, jobId);
-      await loadJobs();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "작업 취소 실패");
-    }
+    await cancelMutation.mutateAsync(jobId);
+  };
+
+  const handleRefresh = () => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.admin.crawlJobs(params as Record<string, unknown>) });
   };
 
   return (
@@ -66,7 +66,7 @@ export default function AdminCrawlPage() {
           <option value="cancelled">취소</option>
         </select>
         <button
-          onClick={loadJobs}
+          onClick={handleRefresh}
           className="text-sm px-3 py-1 border rounded hover:bg-gray-50"
         >
           새로고침
@@ -77,13 +77,13 @@ export default function AdminCrawlPage() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">{error}</div>
       )}
 
-      {loading ? (
+      {jobsQuery.isLoading ? (
         <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
       ) : (
-        <CrawlJobTable jobs={jobs} onCancel={handleCancel} />
+        <CrawlJobTable jobs={jobsQuery.data?.items ?? []} onCancel={handleCancel} />
       )}
 
-      {total > 20 && (
+      {(jobsQuery.data?.total ?? 0) > 20 && (
         <div className="flex justify-center gap-2 mt-4">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -92,10 +92,10 @@ export default function AdminCrawlPage() {
           >
             이전
           </button>
-          <span className="text-sm text-gray-500 py-1">{page} / {Math.ceil(total / 20)}</span>
+          <span className="text-sm text-gray-500 py-1">{page} / {Math.ceil((jobsQuery.data?.total ?? 0) / 20)}</span>
           <button
             onClick={() => setPage((p) => p + 1)}
-            disabled={page >= Math.ceil(total / 20)}
+            disabled={page >= Math.ceil((jobsQuery.data?.total ?? 0) / 20)}
             className="text-sm px-3 py-1 border rounded disabled:opacity-30"
           >
             다음

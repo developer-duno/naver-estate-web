@@ -8,17 +8,23 @@
 - `<div className="contents">` 대신 `React.Fragment` 사용 (grid 레이아웃 시)
 - 인터랙티브 요소 중첩 금지 (`<button>` 안에 `<a>`, `<a>` 안에 `<button>`)
 
-### State Management (메모리 누수 방지)
-- 비동기 작업 후 setState 전에 반드시 언마운트 체크:
+### 데이터 페칭 (React Query 사용)
+- **서버 데이터**: `useQuery` / `useMutation` 사용 (캐싱, 중복 제거, 자동 재시도)
   ```tsx
-  useEffect(() => {
-    let cancelled = false;
-    fetchData().then(data => { if (!cancelled) setState(data); });
-    return () => { cancelled = true; };
-  }, [deps]);
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: queryKeys.stats,
+    queryFn: () => getStats(),
+  });
   ```
+- **폴링**: `refetchInterval` 옵션 (setInterval 대신)
+- **캐시 무효화**: 크롤 완료 시 `queryClient.invalidateQueries()` 호출
+- **로그아웃 시**: `queryClient.clear()` → 세션 간 캐시 유출 방지 (Providers.tsx)
+- **플래시 방지**: 필터 변경 시 `placeholderData: keepPreviousData` 적용
+- **TestQueryProvider**: 테스트에서 컴포넌트/훅 렌더링 시 래퍼로 감싸기
+
+### State Management (메모리 누수 방지)
+- useQuery/useMutation이 아닌 순수 로컬 상태(UI 토글 등)에만 useEffect + setState 사용
 - 타이머(setInterval/setTimeout)는 useEffect cleanup에서 반드시 clear
-- AbortController로 fetch 요청 취소: 페이지 이탈 시 pending 요청 정리
 - useRef로 isMounted 패턴: Header 등 전역 컴포넌트에서 필수
 
 ### 성능

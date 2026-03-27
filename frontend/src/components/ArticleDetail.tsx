@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { getArticleLive } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
 import type { Article } from "@/types";
 import { M2_TO_PYEONG } from "@/lib/constants";
 import { formatDateFull, formatMaintenanceCost } from "@/lib/format";
@@ -13,20 +15,11 @@ interface Props {
 }
 
 export default function ArticleDetail({ articleNo, onClose }: Props) {
-  const [article, setArticle] = useState<Article | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError("");
-    getArticleLive(articleNo)
-      .then((data) => { if (!cancelled) setArticle(data); })
-      .catch(() => { if (!cancelled) setError("매물 정보를 불러올 수 없습니다."); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [articleNo]);
+  const { data: article, isLoading: loading, isError, error: queryError, refetch } = useQuery({
+    queryKey: queryKeys.articleLive(articleNo),
+    queryFn: () => getArticleLive(articleNo),
+  });
+  const error = isError ? "매물 정보를 불러올 수 없습니다." : "";
 
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -84,14 +77,7 @@ export default function ArticleDetail({ articleNo, onClose }: Props) {
             <div className="text-center py-8">
               <p className="text-red-500 mb-3">{error}</p>
               <button
-                onClick={() => {
-                  setLoading(true);
-                  setError("");
-                  getArticleLive(articleNo)
-                    .then(setArticle)
-                    .catch(() => setError("매물 정보를 불러올 수 없습니다."))
-                    .finally(() => setLoading(false));
-                }}
+                onClick={() => refetch()}
                 className="text-sm text-blue-600 hover:underline"
               >
                 다시 시도

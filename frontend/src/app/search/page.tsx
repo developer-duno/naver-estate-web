@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo, memo, Suspense } from "react";
+import { useState, useEffect, useMemo, memo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { searchComplexes, getComplexesByRegion } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
 import { createClient } from "@/lib/supabase";
 import RegionSelector from "@/components/RegionSelector";
 import FilterBar from "@/components/FilterBar";
-import type { ArticleFilters, Complex } from "@/types";
+import type { Complex } from "@/types";
 import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_TABS } from "@/lib/constants";
 import EstateTypeTabs from "@/components/EstateTypeTabs";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -17,13 +19,9 @@ function SearchContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const goBack = useSmartBack();
-  const [complexes, setComplexes] = useState<Complex[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [inlineKeyword, setInlineKeyword] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [userStatus, setUserStatus] = useState<string | null>(null);
-  const requestIdRef = useRef(0);
 
   const keyword = searchParams.get("q") || "";
   const sido = searchParams.get("sido") || "";
@@ -46,6 +44,22 @@ function SearchContent() {
 
   const typesStr = selectedTypes.length < allCodes.length ? selectedTypes.join(",") : undefined;
 
+  // React Query로 검색 데이터 페칭
+  const { data: searchData, isLoading: loading, isError, refetch: retrySearch } = useQuery({
+    queryKey: keyword
+      ? queryKeys.search(keyword, typesStr)
+      : queryKeys.regionSearch(sido, sigungu, dong || undefined, typesStr),
+    queryFn: ({ signal }) => keyword
+      ? searchComplexes(keyword, 50, signal, typesStr)
+      : getComplexesByRegion(sido, sigungu, dong || undefined, signal, typesStr),
+    enabled: hasSearchParams,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
+  });
+
+  const complexes = searchData?.complexes ?? [];
+  const error = isError ? "검색에 실패했습니다. 다시 시도해주세요." : "";
+
   // 매물유형 클라이언트 필터 (complexes/selectedTypes 변경 시만 재계산)
   const filteredComplexes = useMemo(
     () => complexes.filter(
@@ -53,38 +67,6 @@ function SearchContent() {
     ),
     [complexes, selectedTypes],
   );
-
-  const fetchData = useCallback(async (signal: AbortSignal) => {
-    if (!keyword && !(sido && sigungu)) return;
-    const reqId = ++requestIdRef.current;
-    setLoading(true);
-    setError("");
-    try {
-      let result: { complexes: Complex[] };
-      if (keyword) {
-        result = await searchComplexes(keyword, 50, signal, typesStr);
-      } else {
-        result = await getComplexesByRegion(sido, sigungu, dong || undefined, signal, typesStr);
-      }
-      if (reqId !== requestIdRef.current) return;
-      setComplexes(result.complexes);
-    } catch (err) {
-      if (signal.aborted) return; // 취소된 요청은 에러 무시
-      if (reqId !== requestIdRef.current) return;
-      setError("검색에 실패했습니다. 다시 시도해주세요.");
-    } finally {
-      if (reqId === requestIdRef.current && !signal.aborted) {
-        setLoading(false);
-      }
-    }
-  }, [keyword, sido, sigungu, dong, typesStr]);
-
-  useEffect(() => {
-    if (!hasSearchParams) return;
-    const controller = new AbortController();
-    fetchData(controller.signal);
-    return () => controller.abort();
-  }, [fetchData, hasSearchParams]);
 
   // 로그인 + 승인 상태 확인
   useEffect(() => {
@@ -201,7 +183,7 @@ function SearchContent() {
         <div className="text-center py-8">
           <p className="text-red-500 mb-3">{error}</p>
           <button
-            onClick={() => fetchData(new AbortController().signal)}
+            onClick={() => retrySearch()}
             className="text-sm text-blue-600 hover:underline"
           >
             다시 시도

@@ -50,6 +50,14 @@
 - `MB_DATABASE_URL` 환경변수 있을 때만 mb 엔진 활성화 (조건부)
 - `MBBase`, `MBSessionLocal`, `get_mb_db()` — mb 전용 세션
 
+## CI 테스트 인프라
+
+- **엔진**: file-based SQLite + NullPool + WAL + busy_timeout 5초
+- **dialect 분기**: `_search_all_types()`는 SQLite에서 ThreadPoolExecutor 대신 순차 실행
+  - `_do_upsert()`도 dialect-aware (pg_insert/sqlite_insert 자동 분기)
+- **테스트**: 227개 (22개 파일) — `python -m pytest --tb=short -q`
+- **conftest.py**: `sys.modules["db.database"]` 교체로 테스트 엔진 주입
+
 ## CORS 미들웨어 순서 (중요)
 
 - `RateLimitMiddleware` → `CORSMiddleware` 순서로 등록 (CORS가 마지막 = 가장 먼저 실행)

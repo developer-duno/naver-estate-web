@@ -6,6 +6,7 @@
 
 - **프론트엔드**: Next.js 16.1.6, React 19, TypeScript 5, Tailwind CSS 4
 - **서버 상태 관리**: React Query (TanStack Query v5) — 캐싱, 중복 제거, 폴링
+- **클라이언트 저장소**: localStorage (검색 히스토리, 즐겨찾기, 비교 목록)
 - **인증**: Supabase SSR (쿠키 기반 JWT)
 - **차트**: Recharts 3 (dynamic import)
 - **테스트**: Vitest + @testing-library/react + MSW
@@ -14,10 +15,10 @@
 
 ```
 frontend/src/
-├── app/           # Next.js App Router (11 페이지)
-├── components/    # 재사용 컴포넌트 (14개)
-├── hooks/         # 커스텀 훅 (7개)
-├── lib/           # api.ts, supabase.ts, constants.ts, format.ts, query-client.ts, query-keys.ts
+├── app/           # Next.js App Router (12 페이지)
+├── components/    # 재사용 컴포넌트 (18개 + filter/ 서브디렉토리)
+├── hooks/         # 커스텀 훅 (10개)
+├── lib/           # api.ts, supabase.ts, constants.ts, format.ts, query-client.ts, query-keys.ts, storage.ts
 ├── types/         # TypeScript 인터페이스
 └── middleware.ts  # Supabase 세션 + 관리자 라우트 보호
 ```
@@ -30,9 +31,25 @@ frontend/src/
 | `usePriceCollect` | 실거래가 수집 — useMutation(시작) + useQuery(폴링, 3초 간격, 3분 타임아웃) |
 | `useExport` | 엑셀 내보내기 — useMutation 래퍼 |
 | `useAdminQuery` | 관리자 쿼리 유틸 — token 비동기 해소 + useQuery/useMutation 래핑 |
-| `useFilterParams` | URL 기반 필터 상태 관리 |
+| `useFilterParams` | URL searchParams ↔ ArticleFilters 양방향 변환 (필터 URL 공유) |
 | `useSmartBack` | 뒤로가기 (이전 페이지 or 홈) |
 | `useAdminToken` | 관리자 토큰 접근자 |
+| `useSearchHistory` | 검색 히스토리 (localStorage, 최근 10개, 중복 제거) |
+| `useFavorites` | 즐겨찾기 단지 (localStorage, 토글 방식) |
+| `useCompare` | 단지 비교 목록 (localStorage, 최대 4개) |
+
+## FilterBar 구조 (모듈 분리)
+
+```
+components/
+├── FilterBar.tsx              # 컨테이너 (143줄) — 훅 + 드롭다운 조합
+└── filter/
+    ├── reducer.ts             # FilterState, FilterAction, filterReducer, buildInitState
+    ├── emitFilters.ts         # buildArticleFilters (State → ArticleFilters 변환)
+    ├── FilterSections.tsx     # 7개 드롭다운 섹션 (TradeType/Price/Area/Floor/MoveIn/Room/Detail)
+    ├── FilterChips.tsx        # 활성 필터 칩 목록 + 개별 해제
+    └── PresetButtons.tsx      # 프리셋 버튼 공통 컴포넌트
+```
 
 ## Critical Rules
 
@@ -56,7 +73,7 @@ frontend/src/
 
 ### 4. 컴포넌트 메모이제이션
 - `ArticleTable`, `ComplexRow`: `memo()` 적용
-- `FilterBar`: `memo()` + useReducer, debounce 300ms (입력), immediate (셀렉트/체크박스)
+- `FilterBar`: `memo()` + useReducer, debounce 500ms (입력), immediate (셀렉트/체크박스)
 - `PriceHistoryChart`: `dynamic(() => import(...), { ssr: false })` 동적 임포트
 
 ### 5. 타입 안전성
@@ -64,17 +81,23 @@ frontend/src/
 - 새 필드 추가 시 양쪽 모두 업데이트 필수
 - optional (`?`) 필드에 대해 `??` (nullish coalescing) 사용 (`||` 금지)
 
+### 6. localStorage 패턴
+- SSR에서 접근 불가 → 반드시 `"use client"` + `useEffect` 내부에서 읽기
+- `lib/storage.ts` 래퍼 사용 (try/catch로 에러 방어)
+- 브라우저별 독립 (기기 간 동기화 없음)
+
 ---
 
 ## UI 패턴
 
 ### FilterBar (7개 드롭다운 툴바)
 - 거래유형, 가격, 면적, 층수, 입주, 방/욕실, 상세
-- **useReducer** 21개 필터 상태 통합 (FilterState + FilterAction)
-- **PresetButtons** 내부 컴포넌트: 가격/면적/평당가/관리비 프리셋 버튼 공통화
-- **buildChipList()**: 활성 필터 칩 생성 함수 (IIFE에서 호출)
+- **useReducer** 21개 필터 상태 통합 (`filter/reducer.ts`)
+- **buildArticleFilters()**: State → API 필터 변환 (`filter/emitFilters.ts`)
+- **PresetButtons**: 가격/면적/평당가/관리비 프리셋 버튼 (`filter/PresetButtons.tsx`)
+- **FilterChips**: 활성 필터 칩 생성 + 개별 해제 (`filter/FilterChips.tsx`)
 - 프리셋 상수: `PRICE_PRESETS`, `AREA_PRESETS`, `MAINTENANCE_PRESETS`, `PPYEONG_PRESETS`
-- 비활성: 회색, 활성: 파란색 + 선택 요약 텍스트
+- **useFilterParams**: URL searchParams ↔ 필터 양방향 동기화 (필터 URL 공유)
 
 ### 매물유형 뱃지 색상
 - `ESTATE_TYPE_COLORS` (constants.ts): 유형별 `bg-*-100 border-*-400 text-*-800`
@@ -91,15 +114,21 @@ frontend/src/
 - 트리거 버튼 hover → fixed 팝업 패널 (시/도 | 시/군/구 | 읍/면/동)
 - hover로 하위 목록 미리보기, 읍/면/동 선택 시 검색 실행
 
+### 단지 비교 (CompareFloatingBar)
+- 검색 결과 테이블에 "+" 버튼 → useCompare로 localStorage 관리 (최대 4개)
+- 하단 플로팅 바에 선택 단지 표시 + "비교하기" 버튼
+- /compare 페이지: useQueries로 병렬 조회, 19개 항목 side-by-side 테이블
+
 ---
 
 ## 페이지별 데이터 흐름
 
 | 페이지 | API 호출 | 백엔드 라우터 |
 |--------|---------|-------------|
-| `/` | `getStats()` | `/api/stats` |
-| `/search` | `searchComplexes()`, `getComplexesByRegion()` | `/api/live/search`, `/api/live/region` |
-| `/complex/[no]` | `startLiveCrawl()`, `getCrawlStatus()`, `getArticles()`, `getPyeongDetails()`, `getPriceHistory()`, `startPriceCollect()` | `/api/live/{no}/articles/*`, `/api/complexes/{no}/*`, `/api/live/{no}/price-history/*` |
+| `/` | `getStats()` + localStorage(히스토리/즐겨찾기) | `/api/stats` |
+| `/search` | `searchComplexes()`, `getComplexesByRegion()` + useCompare | `/api/live/search`, `/api/live/region` |
+| `/complex/[no]` | `startLiveCrawl()`, `getCrawlStatus()`, `getArticles()`, `getPyeongDetails()`, `getPriceHistory()`, `startPriceCollect()` + useFavoriteStatus | `/api/live/{no}/articles/*`, `/api/complexes/{no}/*`, `/api/live/{no}/price-history/*` |
+| `/compare` | `getComplex()` x N (useQueries 병렬) | `/api/complexes/{no}` |
 | `/login` | Supabase Auth + `/api/users/login-record` | `/api/users/login-record` |
 | `/admin` | `getAdminDetailedStats()` | `/api/admin/stats/detailed` |
 | `/admin/users` | `getAdminUsers()`, `updateAdminUser()` | `/api/admin/users` |

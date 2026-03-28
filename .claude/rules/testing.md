@@ -18,7 +18,7 @@ cd frontend && npm test && cd ../backend && python -m pytest
 
 ### 레벨별 실행
 ```bash
-# FE 단위 + 컴포넌트 + 훅 + 페이지 (168개)
+# FE 단위 + 컴포넌트 + 훅 + 페이지 (199개)
 cd frontend && npm test
 
 # BE 단위 + 통합 + API + 엣지케이스 (221개)
@@ -45,9 +45,9 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 ### 테스트 구조
 | 경로 | 도구 | 테스트 수 |
 |------|------|----------|
-| frontend/src/lib/__tests__/ | Vitest | 68 (단위+엣지케이스) |
+| frontend/src/lib/__tests__/ | Vitest | 78 (단위+엣지케이스+storage) |
 | frontend/src/components/__tests__/ | Vitest | 79 (컴포넌트) |
-| frontend/src/hooks/__tests__/ | Vitest | 14 (훅: useCrawlProgress + usePriceCollect) |
+| frontend/src/hooks/__tests__/ | Vitest | 35 (훅: useCrawlProgress + usePriceCollect + useFilterParams) |
 | frontend/src/app/__tests__/ | Vitest | 7 (페이지 통합) |
 | frontend/e2e/ | Playwright | 13 (E2E) |
 | backend/tests/ | pytest | 221 (단위+통합+API+엣지케이스) |

@@ -90,11 +90,25 @@ npx vercel --prod
 검색 → /api/live/search (네이버 API → DB upsert → 반환)
 단지 클릭 → DB 데이터 즉시 표시 + 자동 매물 크롤링 (start-crawl)
 "데이터 갱신" 버튼 → /api/live/{no}/articles/start-crawl (백그라운드 크롤링 → 폴링)
-필터 변경 → /api/complexes/{no}/articles (DB 쿼리, SQL WHERE절)
+필터 변경 → /api/complexes/{no}/articles (DB 쿼리, SQL WHERE절) + URL 쿼리 파라미터 동기화
 실거래가 추이 탭 → 자동 수집 트리거 (/api/live/{no}/price-history/start-collect, 24시간 TTL)
 가격 추이 조회 → /api/complexes/{no}/price-history?trade_type=&area_no= (DB 쿼리, 월별 집계)
 엑셀 → /api/articles/export (pandas DataFrame → xlsxwriter → xlsx)
+단지 비교 → /compare?ids=no1,no2,... (클라이언트에서 useQueries로 병렬 조회)
 ```
+
+## 클라이언트 저장소 (localStorage)
+
+| 키 | 용도 | 제한 |
+|----|------|------|
+| `search_history` | 최근 검색 (키워드/지역) | 최대 10개, 중복 제거 |
+| `favorite_complexes` | 즐겨찾기 단지 | 무제한, 토글 방식 |
+| `compare_complexes` | 비교 대상 단지 | 최대 4개 |
+
+## DB 커넥션 풀
+
+- **NullPool** 사용 (요청마다 연결/해제) — Supabase Session Mode 동시 연결 한도 방지
+- `db/database.py`에서 설정
 
 ## 스케줄러 (APScheduler)
 

@@ -17,7 +17,7 @@
 | `routers/serializers.py` | ORM → dict 변환 |
 | `db/models.py` | SQLAlchemy ORM 모델 |
 | `db/queries.py` | DB 쿼리 함수 |
-| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V009) |
+| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V011) |
 | `shared/naver_api.py` | NaverEstateAPI (수정 금지) |
 | `shared/constants.py` | 상수 (수정 금지) |
 | `auth/permissions.py` | 역할 체크 (require_role) + 일일 쿼터 (check_quota) |
@@ -51,6 +51,6 @@
 
 ## DB 마이그레이션
 
-- `db/migrations/` 폴더에 `V000__` ~ `V009__` SQL 파일
+- `db/migrations/` 폴더에 `V000__` ~ `V011__` SQL 파일
 - Supabase SQL Editor에서 수동 실행
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행

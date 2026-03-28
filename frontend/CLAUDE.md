@@ -15,10 +15,10 @@
 
 ```
 frontend/src/
-├── app/           # Next.js App Router (12 페이지)
-├── components/    # 재사용 컴포넌트 (18개 + filter/ 서브디렉토리)
+├── app/           # Next.js App Router (16 페이지)
+├── components/    # 재사용 컴포넌트 (22개 + filter/ 서브디렉토리)
 ├── hooks/         # 커스텀 훅 (10개)
-├── lib/           # api.ts, supabase.ts, constants.ts, format.ts, query-client.ts, query-keys.ts, storage.ts
+├── lib/           # api.ts, supabase.ts, constants.ts, format.ts, query-client.ts, query-keys.ts, storage.ts, compare-utils.ts, compare-export.ts
 ├── types/         # TypeScript 인터페이스
 └── middleware.ts  # Supabase 세션 + 관리자 라우트 보호
 ```
@@ -114,10 +114,14 @@ components/
 - 트리거 버튼 hover → fixed 팝업 패널 (시/도 | 시/군/구 | 읍/면/동)
 - hover로 하위 목록 미리보기, 읍/면/동 선택 시 검색 실행
 
-### 단지 비교 (CompareFloatingBar)
+### 단지 비교 (CompareFloatingBar + CompareCharts)
 - 검색 결과 테이블에 "+" 버튼 → useCompare로 localStorage 관리 (최대 4개)
 - 하단 플로팅 바에 선택 단지 표시 + "비교하기" 버튼
-- /compare 페이지: useQueries로 병렬 조회, 19개 항목 side-by-side 테이블
+- /compare 페이지: useQueries로 병렬 조회, 24행 비교 테이블 (평당가 포함) + 우위 판정(★)
+- 차트 5종: CompareRadarChart(9축, 평당가 invert), ComparePriceTrendChart, ComparePriceBarChart(매매/전세/월세 ★), CompareFloorChart
+- 상세 테이블 3종: 면적별 가격, 관리비, 세대구성
+- 인쇄: @media print .no-print + expandAll(아코디언 전체 펼침) + rAF 2회
+- 엑셀: xlsx dynamic import + safeCellValue 수식 인젝션 방어 (compare-export.ts)
 
 ---
 
@@ -128,7 +132,7 @@ components/
 | `/` | `getStats()` + localStorage(히스토리/즐겨찾기) | `/api/stats` |
 | `/search` | `searchComplexes()`, `getComplexesByRegion()` + useCompare | `/api/live/search`, `/api/live/region` |
 | `/complex/[no]` | `startLiveCrawl()`, `getCrawlStatus()`, `getArticles()`, `getPyeongDetails()`, `getPriceHistory()`, `startPriceCollect()` + useFavoriteStatus | `/api/live/{no}/articles/*`, `/api/complexes/{no}/*`, `/api/live/{no}/price-history/*` |
-| `/compare` | `getComplex()` x N (useQueries 병렬) | `/api/complexes/{no}` |
+| `/compare` | `getComplex()` x N + `getPriceStats()` x N (useQueries 병렬, 캐시 공유) + 인쇄/엑셀 | `/api/complexes/{no}`, `/api/complexes/{no}/price-stats` |
 | `/login` | Supabase Auth + `/api/users/login-record` | `/api/users/login-record` |
 | `/admin` | `getAdminDetailedStats()` | `/api/admin/stats/detailed` |
 | `/admin/users` | `getAdminUsers()`, `updateAdminUser()` | `/api/admin/users` |

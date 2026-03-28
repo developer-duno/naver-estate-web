@@ -93,8 +93,9 @@ npx vercel --prod
 필터 변경 → /api/complexes/{no}/articles (DB 쿼리, SQL WHERE절) + URL 쿼리 파라미터 동기화
 실거래가 추이 탭 → 자동 수집 트리거 (/api/live/{no}/price-history/start-collect, 24시간 TTL)
 가격 추이 조회 → /api/complexes/{no}/price-history?trade_type=&area_no= (DB 쿼리, 월별 집계)
-엑셀 → /api/articles/export (pandas DataFrame → xlsxwriter → xlsx)
-단지 비교 → /compare?ids=no1,no2,... (클라이언트에서 useQueries로 병렬 조회)
+엑셀(매물) → /api/articles/export (pandas DataFrame → xlsxwriter → xlsx)
+엑셀(비교) → 클라이언트 xlsx 라이브러리 (compare-export.ts, safeCellValue 수식 인젝션 방어)
+단지 비교 → /compare?ids=no1,no2,... (useQueries 병렬 조회 + 평당가 계산 + 인쇄/엑셀)
 ```
 
 ## 클라이언트 저장소 (localStorage)

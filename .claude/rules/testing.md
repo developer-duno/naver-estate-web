@@ -11,6 +11,11 @@
 
 ## 테스트 실행
 
+### 커밋 전 필수 (CI와 동일)
+```bash
+cd frontend && npx tsc --noEmit && npm run lint && npm test
+```
+
 ### 한 줄 전체 실행
 ```bash
 cd frontend && npm test && cd ../backend && python -m pytest
@@ -45,10 +50,11 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 ### 테스트 구조
 | 경로 | 도구 | 테스트 수 |
 |------|------|----------|
-| frontend/src/lib/__tests__/ | Vitest | 78 (단위+엣지케이스+storage) |
-| frontend/src/components/__tests__/ | Vitest | 79 (컴포넌트) |
+| frontend/src/lib/__tests__/ | Vitest | 99 (단위+엣지케이스+storage+compare-utils) |
+| frontend/src/components/__tests__/ | Vitest | 47 (컴포넌트+차트) |
 | frontend/src/hooks/__tests__/ | Vitest | 35 (훅: useCrawlProgress + usePriceCollect + useFilterParams) |
 | frontend/src/app/__tests__/ | Vitest | 7 (페이지 통합) |
+| **프론트 합계** | Vitest | **233** (21개 파일) |
 | frontend/e2e/ | Playwright | 13 (E2E) |
 | backend/tests/ | pytest | 221 (단위+통합+API+엣지케이스) |
 

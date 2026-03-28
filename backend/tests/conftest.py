@@ -1,15 +1,20 @@
-"""테스트 공통 Fixture — in-memory SQLite + FastAPI TestClient"""
+"""테스트 공통 Fixture — file-based SQLite + FastAPI TestClient
+
+NullPool 사용 — 스레드별 독립 커넥션 (live router ThreadPoolExecutor 호환).
+WAL + busy_timeout으로 동시 쓰기 안전하게 처리.
+"""
 
 import os
 import sys
+import tempfile
 import types
 
 import pytest
 import sqlalchemy
 import sqlalchemy.dialects.postgresql as pg_dialect
-from sqlalchemy import JSON, create_engine
+from sqlalchemy import JSON, create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.pool import NullPool
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["SUPABASE_JWT_SECRET"] = "test-secret-key-for-testing-only"
@@ -24,8 +29,27 @@ class _FakeARRAY(JSON):
 sqlalchemy.ARRAY = _FakeARRAY
 pg_dialect.ARRAY = _FakeARRAY
 
-# 테스트 엔진
-test_engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+# file-based SQLite — NullPool로 스레드별 독립 커넥션
+_TEST_DB = os.path.join(tempfile.gettempdir(), "naver_estate_test.db")
+for _ext in ("", "-wal", "-shm"):
+    try:
+        os.unlink(_TEST_DB + _ext)
+    except FileNotFoundError:
+        pass
+
+test_engine = create_engine(
+    f"sqlite:///{_TEST_DB}",
+    connect_args={"check_same_thread": False},
+    poolclass=NullPool,
+)
+
+@event.listens_for(test_engine, "connect")
+def _set_sqlite_pragma(dbapi_conn, _connection_record):
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA journal_mode = WAL")
+    cursor.execute("PRAGMA busy_timeout = 5000")
+    cursor.close()
+
 TestSession = sessionmaker(bind=test_engine, autocommit=False, autoflush=False)
 
 class Base(DeclarativeBase):

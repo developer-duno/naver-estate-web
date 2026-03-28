@@ -1,16 +1,16 @@
 "use client";
 
-import { Suspense, useMemo } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueries } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
-import { getComplex } from "@/lib/api";
+import { getComplex, getPriceStats } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { M2_TO_PYEONG } from "@/lib/constants";
 import { useSmartBack } from "@/hooks/useSmartBack";
-import { getAdvantageForRow } from "@/lib/compare-utils";
+import { getAdvantageForRow, getBestIndices, calcAvgPricePerPyeong } from "@/lib/compare-utils";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import type { Complex } from "@/types";
+import type { Complex, PriceStats } from "@/types";
 
 const LazyCompareCharts = dynamic(
   () => import("@/components/CompareCharts"),
@@ -41,9 +41,9 @@ function formatPrice(price?: number): string {
   return `${price.toLocaleString()}만`;
 }
 
-/* ── 비교 테이블 행 정의 (24행) ── */
+/* ── 비교 테이블 행 정의 (기본 23행, 평당가는 동적 삽입) ── */
 
-const COMPARE_ROWS: { label: string; render: (c: Complex) => string }[] = [
+const BASE_ROWS: { label: string; render: (c: Complex) => string }[] = [
   { label: "주소", render: (c) => c.cortar_address || "-" },
   { label: "도로명주소", render: (c) => c.road_address || "-" },
   { label: "유형", render: (c) => c.real_estate_type_name || "-" },
@@ -61,6 +61,7 @@ const COMPARE_ROWS: { label: string; render: (c: Complex) => string }[] = [
   { label: "시공사", render: (c) => c.construction_company || "-" },
   { label: "용적률", render: (c) => c.floor_area_ratio ? `${c.floor_area_ratio}%` : "-" },
   { label: "건폐율", render: (c) => c.building_coverage_ratio ? `${c.building_coverage_ratio}%` : "-" },
+  // 평당가는 여기에 동적 삽입 (인덱스 17)
   { label: "매물수", render: (c) => formatCount(c.article_count) },
   { label: "주변 중위가", render: (c) => formatPrice(c.nearby_median_price) },
   { label: "전세가율", render: (c) => c.jeonse_rate ? `${(c.jeonse_rate * 100).toFixed(0)}%` : "-" },
@@ -95,15 +96,89 @@ function CompareContent() {
     [complexIds],
   );
 
+  /* 가격 통계 (React Query 캐시 공유 — CompareCharts와 동일 queryKey) */
+  const statsQueries = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: queryKeys.priceStats(id),
+      queryFn: () => getPriceStats(id),
+      staleTime: 60_000,
+    })),
+  });
+  const statsLoading = statsQueries.some((q) => q.isLoading);
+
+  /* 평당가 맵: { [complex_no]: 만원/평 } */
+  const pricePerPyeong: Record<string, number> = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (let i = 0; i < ids.length; i++) {
+      const data = statsQueries[i]?.data as PriceStats | undefined;
+      if (!data) continue;
+      const pp = calcAvgPricePerPyeong(data);
+      if (pp != null) map[ids[i]] = pp;
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ids.join(","), statsQueries.map((q) => q.dataUpdatedAt).join(",")]);
+
+  /* 비교 행: 기본 23행 + 평당가 동적 삽입 */
+  const compareRows = useMemo(() => {
+    const ppRow = {
+      label: "평당가",
+      render: (c: Complex) => {
+        const pp = pricePerPyeong[c.complex_no];
+        if (pp != null) return formatPrice(pp);
+        return statsLoading ? "불러오는 중..." : "-";
+      },
+    };
+    // 건폐율(인덱스 16) 다음, 매물수(인덱스 17) 앞에 삽입
+    const rows = [...BASE_ROWS];
+    rows.splice(17, 0, ppRow);
+    return rows;
+  }, [pricePerPyeong, statsLoading]);
+
   /* 우위 인덱스 캐싱 (label → bestIndices) */
   const advantageMap = useMemo(() => {
     const map = new Map<string, number[]>();
     if (complexes.length < 2) return map;
-    for (const row of COMPARE_ROWS) {
+    for (const row of compareRows) {
       map.set(row.label, getAdvantageForRow(row.label, complexes));
     }
+    // 평당가 우위: 낮을수록 좋음
+    const ppValues = complexes.map((c) => pricePerPyeong[c.complex_no] ?? null);
+    map.set("평당가", getBestIndices(ppValues, "lower"));
     return map;
-  }, [complexes]);
+  }, [complexes, compareRows, pricePerPyeong]);
+
+  /* ── 인쇄/엑셀 ── */
+  const [expandAll, setExpandAll] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handlePrint = useCallback(() => {
+    setExpandAll(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.print();
+      });
+    });
+  }, []);
+
+  // afterprint 복원 + 3초 백업
+  useEffect(() => {
+    const restore = () => setExpandAll(false);
+    window.addEventListener("afterprint", restore);
+    return () => window.removeEventListener("afterprint", restore);
+  }, []);
+
+  const handleExport = useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const { exportCompareToXlsx } = await import("@/lib/compare-export");
+      await exportCompareToXlsx(complexes, compareRows);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "엑셀 다운로드에 실패했습니다");
+    } finally {
+      setIsExporting(false);
+    }
+  }, [complexes, compareRows]);
 
   if (ids.length < 2) {
     return (
@@ -119,11 +194,26 @@ function CompareContent() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={goBack} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl">
+        <button onClick={goBack} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl no-print">
           &#8592;
         </button>
         <h1 className="text-2xl font-bold">단지 비교</h1>
         <span className="text-gray-500 text-sm">({complexes.length}개 단지)</span>
+        <div className="ml-auto flex gap-2 no-print">
+          <button
+            onClick={handlePrint}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            인쇄
+          </button>
+          <button
+            onClick={handleExport}
+            disabled={isExporting}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+          >
+            {isExporting ? "생성 중..." : "엑셀"}
+          </button>
+        </div>
       </div>
 
       {/* 범례 */}
@@ -152,7 +242,7 @@ function CompareContent() {
             </tr>
           </thead>
           <tbody>
-            {COMPARE_ROWS.map((row, i) => {
+            {compareRows.map((row, i) => {
               const best = advantageMap.get(row.label) ?? [];
               return (
                 <tr key={row.label} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/60"}>
@@ -192,6 +282,8 @@ function CompareContent() {
               complex_name: c.complex_name,
             }))}
             fullComplexes={complexes}
+            pricePerPyeong={pricePerPyeong}
+            expandAll={expandAll}
           />
         </div>
       )}

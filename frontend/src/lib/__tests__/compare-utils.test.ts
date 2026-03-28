@@ -7,9 +7,10 @@ import {
   getBestIndices,
   parseApprovalDate,
   getAdvantageForRow,
+  calcAvgPricePerPyeong,
   ADVANTAGE_ROWS,
 } from "../compare-utils";
-import type { Complex } from "@/types";
+import type { Complex, PriceStats } from "@/types";
 
 /** 테스트용 단지 팩토리 */
 function makeComplex(overrides: Partial<Complex> = {}): Complex {
@@ -105,5 +106,43 @@ describe("getAdvantageForRow", () => {
 
   it("ADVANTAGE_ROWS 개수 확인", () => {
     expect(ADVANTAGE_ROWS.length).toBe(14);
+  });
+});
+
+/** 테스트용 PriceStats 팩토리 */
+function makeStats(
+  byArea: { label: string; maemae?: number; maemae_count?: number }[],
+): PriceStats {
+  return {
+    complex_no: "100001",
+    total_articles: 10,
+    by_area: byArea.map((a) => ({ ...a })),
+    by_floor: [],
+  };
+}
+
+describe("calcAvgPricePerPyeong", () => {
+  it("정상: 면적별 매매 데이터 → 가중 평균 평당가 반환", () => {
+    // 85m² = 약 25.71평, 매매 50000만원 → 평당가 ≈ 1945만
+    const stats = makeStats([
+      { label: "85m²", maemae: 50000, maemae_count: 3 },
+      { label: "60m²", maemae: 35000, maemae_count: 2 },
+    ]);
+    const result = calcAvgPricePerPyeong(stats);
+    expect(result).not.toBeNull();
+    expect(result).toBeGreaterThan(1500);
+    expect(result).toBeLessThan(2500);
+  });
+
+  it("label 파싱 실패 → null 반환", () => {
+    const stats = makeStats([
+      { label: "N/A", maemae: 50000, maemae_count: 3 },
+    ]);
+    expect(calcAvgPricePerPyeong(stats)).toBeNull();
+  });
+
+  it("빈 by_area → null 반환", () => {
+    const stats = makeStats([]);
+    expect(calcAvgPricePerPyeong(stats)).toBeNull();
   });
 });

@@ -34,7 +34,7 @@ function weightedAvg(
 }
 
 export default function ComparePriceBarChart({ datasets }: Props) {
-  const { chartData, bestMaemae } = useMemo(() => {
+  const { chartData, bestMaemae, bestJeonse, bestWolse } = useMemo(() => {
     const rows = datasets.map((ds) => {
       const maemae = weightedAvg(
         ds.priceStats.by_area.map((a) => ({ val: a.maemae, cnt: a.maemae_count })),
@@ -48,17 +48,21 @@ export default function ComparePriceBarChart({ datasets }: Props) {
       return { name: ds.complexName, maemae, jeonse, wolse };
     });
 
-    // 최고 매매가 인덱스
-    let bestIdx = -1;
-    let bestVal = -1;
-    rows.forEach((r, i) => {
-      if (r.maemae != null && r.maemae > bestVal) {
-        bestVal = r.maemae;
-        bestIdx = i;
-      }
-    });
+    function findBestName(key: "maemae" | "jeonse" | "wolse"): string {
+      let idx = -1, best = -1;
+      rows.forEach((r, i) => {
+        const v = r[key];
+        if (v != null && v > best) { best = v; idx = i; }
+      });
+      return idx >= 0 ? rows[idx].name : "";
+    }
 
-    return { chartData: rows, bestMaemae: bestIdx >= 0 ? rows[bestIdx].name : "" };
+    return {
+      chartData: rows,
+      bestMaemae: findBestName("maemae"),
+      bestJeonse: findBestName("jeonse"),
+      bestWolse: findBestName("wolse"),
+    };
   }, [datasets]);
 
   const hasData = chartData.some((r) => r.maemae != null || r.jeonse != null || r.wolse != null);
@@ -73,27 +77,57 @@ export default function ComparePriceBarChart({ datasets }: Props) {
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="name" fontSize={11} />
           <YAxis tickFormatter={formatChartPrice} fontSize={11} width={68} />
-          <Tooltip formatter={(value: number) => formatChartPrice(value)} />
+          <Tooltip formatter={(value) => formatChartPrice(value as number)} />
           <Legend />
           <Bar dataKey="maemae" name="매매 평균" fill="#ef4444">
             <LabelList
               dataKey="maemae"
               position="top"
-              fontSize={10}
-              formatter={(v: number | null) => {
-                if (v == null) return "";
-                const row = chartData.find((r) => r.maemae === v);
-                return row?.name === bestMaemae ? "★" : "";
+              content={({ index, value, x, y, width }) => {
+                if (value == null || index == null) return null;
+                if (chartData[index as number]?.name !== bestMaemae) return null;
+                return (
+                  <text x={(x as number) + (width as number) / 2} y={(y as number) - 4}
+                    textAnchor="middle" fontSize={10} fill="#16a34a">★</text>
+                );
               }}
             />
           </Bar>
-          <Bar dataKey="jeonse" name="전세 평균" fill="#3b82f6" />
-          <Bar dataKey="wolse" name="월세 평균" fill="#22c55e" />
+          <Bar dataKey="jeonse" name="전세 평균" fill="#3b82f6">
+            <LabelList
+              dataKey="jeonse"
+              position="top"
+              content={({ index, value, x, y, width }) => {
+                if (value == null || index == null) return null;
+                if (chartData[index as number]?.name !== bestJeonse) return null;
+                return (
+                  <text x={(x as number) + (width as number) / 2} y={(y as number) - 4}
+                    textAnchor="middle" fontSize={10} fill="#16a34a">★</text>
+                );
+              }}
+            />
+          </Bar>
+          <Bar dataKey="wolse" name="월세 평균" fill="#22c55e">
+            <LabelList
+              dataKey="wolse"
+              position="top"
+              content={({ index, value, x, y, width }) => {
+                if (value == null || index == null) return null;
+                if (chartData[index as number]?.name !== bestWolse) return null;
+                return (
+                  <text x={(x as number) + (width as number) / 2} y={(y as number) - 4}
+                    textAnchor="middle" fontSize={10} fill="#16a34a">★</text>
+                );
+              }}
+            />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
-      {bestMaemae && (
-        <p className="text-center text-sm mt-2">
-          <span className="text-green-600 font-bold">★ 매매 최고: {bestMaemae}</span>
+      {(bestMaemae || bestJeonse || bestWolse) && (
+        <p className="text-center text-sm mt-2 space-x-3">
+          {bestMaemae && <span className="text-red-500 font-bold">★ 매매: {bestMaemae}</span>}
+          {bestJeonse && <span className="text-blue-500 font-bold">★ 전세: {bestJeonse}</span>}
+          {bestWolse && <span className="text-green-600 font-bold">★ 월세: {bestWolse}</span>}
         </p>
       )}
     </div>

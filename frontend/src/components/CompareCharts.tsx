@@ -21,18 +21,21 @@ function ChartAccordion({
   badge,
   children,
   defaultOpen = false,
+  forceOpen = false,
 }: {
   title: string;
   badge?: string;
   children: React.ReactNode;
   defaultOpen?: boolean;
+  forceOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const isOpen = forceOpen || open;
   return (
     <div className="border rounded-lg overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        aria-expanded={open}
+        aria-expanded={isOpen}
         className="w-full flex justify-between items-center px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
       >
         <span className="font-semibold text-sm">{title}</span>
@@ -40,10 +43,10 @@ function ChartAccordion({
           {badge && (
             <span className="text-xs text-green-600 font-bold">{badge}</span>
           )}
-          <span className="text-gray-400 text-xs">{open ? "▲" : "▼"}</span>
+          <span className="text-gray-400 text-xs no-print">{isOpen ? "▲" : "▼"}</span>
         </div>
       </button>
-      {open && <div className="p-4 border-t">{children}</div>}
+      {isOpen && <div className="p-4 border-t">{children}</div>}
     </div>
   );
 }
@@ -53,6 +56,8 @@ function ChartAccordion({
 interface Props {
   complexes: { complex_no: string; complex_name: string }[];
   fullComplexes: Complex[];
+  pricePerPyeong?: Record<string, number>;
+  expandAll?: boolean;
 }
 
 /* ── 상세 테이블: 면적별 가격 ── */
@@ -283,7 +288,7 @@ function UnitCompositionTable({
 
 /* ── 메인 컨테이너 ── */
 
-export default function CompareCharts({ complexes, fullComplexes }: Props) {
+export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong, expandAll = false }: Props) {
   // 데이터 fetch
   const historyQueries = useQueries({
     queries: complexes.map((c) => ({
@@ -343,14 +348,14 @@ export default function CompareCharts({ complexes, fullComplexes }: Props) {
       <h2 className="text-lg font-bold">가격 비교 차트</h2>
 
       {/* 1. 레이더 — API 불필요, 즉시 렌더 */}
-      <ChartAccordion title="종합 비교 (레이더)" defaultOpen>
+      <ChartAccordion title="종합 비교 (레이더)" defaultOpen forceOpen={expandAll}>
         <ErrorBoundary>
-          <CompareRadarChart complexes={fullComplexes} />
+          <CompareRadarChart complexes={fullComplexes} pricePerPyeong={pricePerPyeong} />
         </ErrorBoundary>
       </ChartAccordion>
 
       {/* 2. 가격 추이 */}
-      <ChartAccordion title="가격 추이 비교">
+      <ChartAccordion title="가격 추이 비교" forceOpen={expandAll}>
         <ErrorBoundary>
           {historyLoading ? (
             <LoadingSpinner message="가격 추이 로딩 중..." />
@@ -363,7 +368,7 @@ export default function CompareCharts({ complexes, fullComplexes }: Props) {
       </ChartAccordion>
 
       {/* 3. 현재 평균가 */}
-      <ChartAccordion title="현재 평균가 비교">
+      <ChartAccordion title="현재 평균가 비교" forceOpen={expandAll}>
         <ErrorBoundary>
           {statsLoading ? (
             <LoadingSpinner message="가격 통계 로딩 중..." />
@@ -376,7 +381,7 @@ export default function CompareCharts({ complexes, fullComplexes }: Props) {
       </ChartAccordion>
 
       {/* 4. 층별 가격 */}
-      <ChartAccordion title="층별 가격 비교">
+      <ChartAccordion title="층별 가격 비교" forceOpen={expandAll}>
         <ErrorBoundary>
           {statsLoading ? (
             <LoadingSpinner message="층별 가격 로딩 중..." />
@@ -389,7 +394,7 @@ export default function CompareCharts({ complexes, fullComplexes }: Props) {
       </ChartAccordion>
 
       {/* 5. 상세 데이터 */}
-      <ChartAccordion title="상세 데이터 (면적별 가격 · 관리비 · 세대구성)">
+      <ChartAccordion title="상세 데이터 (면적별 가격 · 관리비 · 세대구성)" forceOpen={expandAll}>
         <ErrorBoundary>
           <div className="space-y-6">
             {/* 5-A: 면적별 가격표 */}

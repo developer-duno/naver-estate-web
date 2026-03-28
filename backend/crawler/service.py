@@ -581,6 +581,13 @@ def collect_public_trade_data(batch_size: int = 300):
         logger.info("PUBLIC_DATA_API_KEY 미설정 — 공공데이터 수집 건너뜀")
         return
 
+    # 매월 10일 토요일 skip (mibunyang building-info ~8,500회와 API 쿼터 충돌 방지)
+    from datetime import date
+    today = date.today()
+    if today.day == 10 and today.weekday() == 5:  # 5 = Saturday
+        logger.info("매월 10일 토요일 — mibunyang building-info 쿼터 충돌 방지로 수집 skip")
+        return
+
     # lazy import — import chain 실패 방지
     from crawler.public_data_api import PublicDataAPI, _normalize_apt_name
 

@@ -27,6 +27,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 컴퓨터를 껐다 켜면 백엔드 + 터널이 꺼지므로 아래 순서대로 실행:
 
 ### 1. 백엔드 서버 실행 (집 서버에서 cmd 열고)
+
 ```
 D:
 cd cursor\naver-estate-web\backend
@@ -34,12 +35,15 @@ python -m uvicorn main:app --host 0.0.0.0 --port 8002
 ```
 
 ### 2. Cloudflare Tunnel 실행 (cmd 하나 더 열고)
+
 ```
 cloudflared tunnel --url http://localhost:8002
 ```
+
 → `https://xxxx.trycloudflare.com` 새 URL 생성됨 (매번 바뀜)
 
 ### 3. Vercel 환경변수 업데이트 + 재배포 (개발 PC에서)
+
 ```bash
 cd z:/cursor/naver-estate-web
 npx vercel env rm NEXT_PUBLIC_API_URL production -y
@@ -48,6 +52,7 @@ npx vercel --prod
 ```
 
 ### Vercel 프로젝트 정보
+
 - 프로젝트: `naver-estate-web` (루트에서 배포, frontend/ 아님)
 - 도메인: `2u.pe.kr`, `www.2u.pe.kr`
 - 배포 명령은 **프로젝트 루트**(`z:/cursor/naver-estate-web`)에서 실행
@@ -65,24 +70,24 @@ npx vercel --prod
 
 ## 거래유형 코드
 
-| 코드 | 이름 | 설명 |
-|------|------|------|
-| A1 | 매매 | 매매 거래 |
-| B1 | 전세 | 전세 거래 |
-| B2 | 월세 | 월세 (보증금/월세) |
-| B3 | 단기임대 | 단기임대 (보증금/월세) |
+| 코드 | 이름     | 설명                   |
+| ---- | -------- | ---------------------- |
+| A1   | 매매     | 매매 거래              |
+| B1   | 전세     | 전세 거래              |
+| B2   | 월세     | 월세 (보증금/월세)     |
+| B3   | 단기임대 | 단기임대 (보증금/월세) |
 
 ## 매물유형 코드
 
-| 코드 | 이름 | 설명 |
-|------|------|------|
-| APT | 아파트 | 일반 아파트 |
-| ABYG | 아파트분양권 | 아파트 분양권 |
-| JGC | 재건축 | 재건축 단지 |
-| PRE | 분양권 | 분양권 (레거시) |
-| OPST | 오피스텔 | 오피스텔 |
+| 코드 | 이름           | 설명            |
+| ---- | -------------- | --------------- |
+| APT  | 아파트         | 일반 아파트     |
+| ABYG | 아파트분양권   | 아파트 분양권   |
+| JGC  | 재건축         | 재건축 단지     |
+| PRE  | 분양권         | 분양권 (레거시) |
+| OPST | 오피스텔       | 오피스텔        |
 | OBYG | 오피스텔분양권 | 오피스텔 분양권 |
-| RDV | 재개발 | 재개발 단지 |
+| RDV  | 재개발         | 재개발 단지     |
 
 ## 데이터 흐름
 
@@ -100,11 +105,11 @@ npx vercel --prod
 
 ## 클라이언트 저장소 (localStorage)
 
-| 키 | 용도 | 제한 |
-|----|------|------|
-| `search_history` | 최근 검색 (키워드/지역) | 최대 10개, 중복 제거 |
-| `favorite_complexes` | 즐겨찾기 단지 | 무제한, 토글 방식 |
-| `compare_complexes` | 비교 대상 단지 | 최대 4개 |
+| 키                   | 용도                    | 제한                 |
+| -------------------- | ----------------------- | -------------------- |
+| `search_history`     | 최근 검색 (키워드/지역) | 최대 10개, 중복 제거 |
+| `favorite_complexes` | 즐겨찾기 단지           | 무제한, 토글 방식    |
+| `compare_complexes`  | 비교 대상 단지          | 최대 4개             |
 
 ## DB 커넥션 풀
 
@@ -115,12 +120,46 @@ npx vercel --prod
 
 | 작업 | 주기 | 설명 |
 |------|------|------|
-| 전국 단지 발견 | 매일 3시 | 네이버 키워드 검색으로 신규 단지 수집 |
-| 매물 수집 배치 | 매일 3:30 | 최근 조회 단지 매물 크롤링 |
-| 매물 상세 보강 | 매일 4시 | 매물 상세 정보 크롤링 |
+| 전국 단지 발견 | 일요일 3시 | 네이버 키워드 검색으로 신규 단지 수집 |
+| 매물 수집 배치 | 12시간 interval | 최근 조회 단지 매물 크롤링 (CRAWL_INTERVAL_HOURS) |
+| 매물 상세 보강 | 4시간 interval | 매물 상세 정보 크롤링 (CRAWL_DETAIL_INTERVAL_MIN) |
 | 시세 이력 수집 | 수요일 4시 | 단지별 시세(매매/전세) 주간 수집 |
-| 인기 단지 크롤링 | 매일 10:30/14:30/19:00 | 자주 조회되는 단지 선제적 크롤링 |
-| 공공데이터 수집 | 토요일 5시 | 국토교통부 실거래가 API |
+| 인기 단지 크롤링 | 매일 10:30/14:30/19:00 | 자주 조회되는 단지 선제적 크롤링 (POPULAR_CRAWL_ENABLED) |
+| 공공데이터 수집 | 토요일 5시 | 국토교통부 실거래가 API (PUBLIC_DATA_ENABLED, 매월 10일 토요일은 skip) |
+
+## 공유 인프라 규칙 (mibunyang 프로젝트와 공유)
+
+### data.go.kr API 쿼터 (일일 10,000회, 동일 키 공유)
+
+| 일자      | 프로젝트         | 워크플로우                       | 추정 호출수  |
+| --------- | ---------------- | -------------------------------- | ------------ |
+| 매월 1일  | mibunyang        | collect-unsold-kosis             | ~1           |
+| 매월 5일  | mibunyang        | collect-population, market-stats | ~100         |
+| 매월 6일  | mibunyang        | collect-trades + molit-units     | ~1,500~3,800 |
+| 매월 10일 | mibunyang        | **collect-building-info**        | **~8,500**   |
+| 토요일    | naver-estate-web | collect_public_trades            | ~3,600       |
+
+- **위험일**: 매월 10일이 토요일 → 8,500 + 3,600 = 12,100 > 10,000
+- **대응**: `service.py`의 `collect_public_trade_data()`에서 매월 10일 토요일이면 skip
+- 다른 날짜는 한도 이내: 5일(토)=3,700, 6일(토)=7,400
+
+### 네이버 크롤링 시간 분리 (같은 집 서버 IP)
+
+| 시간              | 프로젝트         | 작업                  | 실행일             |
+| ----------------- | ---------------- | --------------------- | ------------------ |
+| 03:00             | naver-estate-web | discover_regions      | 일요일             |
+| 04:00             | naver-estate-web | collect_prices        | 수요일             |
+| 08:00             | mibunyang        | 로컬 naver-collect.py | 월/목              |
+| 10:30/14:30/19:00 | naver-estate-web | popular 크롤링        | 매일               |
+| 12h interval      | naver-estate-web | crawl_articles        | 매일 (시간 불고정) |
+| 4h interval       | naver-estate-web | crawl_details         | 매일 (시간 불고정) |
+
+### 공용 테이블 규칙 (mibunyang Supabase)
+
+- 공용: `complexes`, `articles`, `complex_price_history`, `trades` (양쪽 upsert)
+- **기존 컬럼 타입 변경/삭제 금지** — 컬럼 추가만 허용
+- ALTER/DROP 전 상대 프로젝트의 SELECT 쿼리/ORM 모델 검색 필수
+- 컬럼명 불일치 주의: naver-estate-web ORM은 `latitude`/`longitude`/`total_household_count`, mibunyang schema.sql은 `lat`/`lng`/`total_households`
 
 ## 코딩 규칙
 
@@ -129,6 +168,7 @@ npx vercel --prod
 # 플랜 모드 규칙 (모든 /plan에 자동 적용)
 
 ## 계획 작성 시 반드시 포함할 섹션:
+
 1. **영향 범위** — 수정 파일 목록 + 해당 파일을 import하는 파일 목록
 2. **실행 순서** — 의존 관계 기반 단계 구분
 3. **위험 요소** — 사이드이펙트, 보안, 데이터 유실 가능성

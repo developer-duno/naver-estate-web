@@ -23,10 +23,10 @@ cd frontend && npm test && cd ../backend && python -m pytest
 
 ### 레벨별 실행
 ```bash
-# FE 단위 + 컴포넌트 + 훅 + 페이지 (199개)
+# FE 단위 + 컴포넌트 + 훅 + 페이지 (233개)
 cd frontend && npm test
 
-# BE 단위 + 통합 + API + 엣지케이스 (221개)
+# BE 단위 + 통합 + API + 엣지케이스 (224개)
 cd backend && python -m pytest
 
 # FE 특정 파일
@@ -56,7 +56,7 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 | frontend/src/app/__tests__/ | Vitest | 7 (페이지 통합) |
 | **프론트 합계** | Vitest | **233** (21개 파일) |
 | frontend/e2e/ | Playwright | 13 (E2E) |
-| backend/tests/ | pytest | 221 (단위+통합+API+엣지케이스) |
+| backend/tests/ | pytest | 224 (단위+통합+API+엣지케이스+공유인프라) |
 
 ### React Query 테스트 패턴
 - 컴포넌트/훅 테스트에서 `TestQueryProvider` 래퍼 사용 (test-setup.ts에서 export)

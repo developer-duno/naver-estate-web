@@ -28,7 +28,7 @@
 | `crawler/public_data_api.py` | 국토교통부 공공데이터 API |
 | `crawler/utils.py` | AdaptiveThrottle, CheckpointManager |
 | `services/cache.py` | TTLCache (동적/고정 TTL, delete_by_prefix) |
-| `services/upsert.py` | DB upsert 헬퍼 (pg_insert ON CONFLICT) |
+| `services/upsert.py` | DB upsert 헬퍼 (_do_upsert: pg_insert/sqlite_insert 자동 분기) |
 | `services/enricher.py` | 단지 상세 정보 보강 |
 
 ## 실거래가 on-demand 수집 (live.py)
@@ -43,6 +43,12 @@
 - on-demand 전용 throttle: `_throttle_ondemand` (min 2.0s, 스케줄러와 분리)
 - 수집 중 실시간 진행률: `on_progress` 콜백으로 collected/failed/total 업데이트
 - 완료 시 `_price_history_cache` 캐시 무효화 (delete_by_prefix)
+
+## DB 듀얼 엔진 (mibunyang 통합 준비)
+
+- `db/database.py`에 estate DB + mibunyang DB 듀얼 엔진 설정
+- `MB_DATABASE_URL` 환경변수 있을 때만 mb 엔진 활성화 (조건부)
+- `MBBase`, `MBSessionLocal`, `get_mb_db()` — mb 전용 세션
 
 ## CORS 미들웨어 순서 (중요)
 

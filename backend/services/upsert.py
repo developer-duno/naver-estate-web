@@ -8,6 +8,29 @@ import re
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+logger = logging.getLogger(__name__)
+
+
+def _do_upsert(db, model, values: dict, pk_col: str, *, exclude_from_update: set | None = None):
+    """dialect-aware upsert — PostgreSQL pg_insert / SQLite sqlite_insert 자동 분기.
+
+    CI에서 SQLite 사용 시에도 ON CONFLICT DO UPDATE 동작.
+    """
+    exclude = {pk_col} | (exclude_from_update or set())
+    update_cols = {k: v for k, v in values.items() if k not in exclude}
+
+    dialect = db.bind.dialect.name if db.bind else "postgresql"
+    if dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+        stmt = sqlite_insert(model).values(**values)
+        stmt = stmt.on_conflict_do_update(index_elements=[pk_col], set_=update_cols)
+    else:
+        stmt = pg_insert(model).values(**values)
+        stmt = stmt.on_conflict_do_update(index_elements=[pk_col], set_=update_cols)
+    db.execute(stmt)
+
+
 from db.models import (
     Article as ArticleModel,
 )
@@ -18,8 +41,6 @@ from db.models import (
     Complex as ComplexModel,
 )
 from utils import safe_float, safe_int, utcnow
-
-logger = logging.getLogger(__name__)
 
 # 비정규 시/도명 → 정규 시/도명 (네이버 API cortarAddress 파싱 대응)
 _SIDO_NORMALIZE = {
@@ -91,12 +112,7 @@ def upsert_complex_from_search(db, data, sido=None, sigungu=None, dong=None, com
             if len(parts) >= 3:
                 values["dong"] = parts[2]
 
-    stmt = pg_insert(ComplexModel).values(**values)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["complex_no"],
-        set_={k: v for k, v in values.items() if k != "complex_no"},
-    )
-    db.execute(stmt)
+    _do_upsert(db, ComplexModel, values, "complex_no")
     if commit:
         db.commit()
 
@@ -201,10 +217,7 @@ def upsert_article(db, article, commit=True, track_price=False, existing_prices=
                     rent_price=new_rent,
                 ))
 
-    stmt = pg_insert(ArticleModel).values(**values)
-    update_cols = {k: v for k, v in values.items() if k not in ("article_no", "first_seen_at")}
-    stmt = stmt.on_conflict_do_update(index_elements=["article_no"], set_=update_cols)
-    db.execute(stmt)
+    _do_upsert(db, ArticleModel, values, "article_no", exclude_from_update={"first_seen_at"})
 
     if commit:
         db.commit()

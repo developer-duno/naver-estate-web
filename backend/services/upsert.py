@@ -15,19 +15,20 @@ def _do_upsert(db, model, values: dict, pk_col: str, *, exclude_from_update: set
     """dialect-aware upsert — PostgreSQL pg_insert / SQLite sqlite_insert 자동 분기.
 
     CI에서 SQLite 사용 시에도 ON CONFLICT DO UPDATE 동작.
+    stmt.excluded 참조로 파라미터 중복 바인딩 문제 방지.
     """
     exclude = {pk_col} | (exclude_from_update or set())
-    update_cols = {k: v for k, v in values.items() if k not in exclude}
 
     dialect = db.bind.dialect.name if db.bind else "postgresql"
     if dialect == "sqlite":
         from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
         stmt = sqlite_insert(model).values(**values)
-        stmt = stmt.on_conflict_do_update(index_elements=[pk_col], set_=update_cols)
     else:
         stmt = pg_insert(model).values(**values)
-        stmt = stmt.on_conflict_do_update(index_elements=[pk_col], set_=update_cols)
+
+    update_cols = {k: stmt.excluded[k] for k in values if k not in exclude}
+    stmt = stmt.on_conflict_do_update(index_elements=[pk_col], set_=update_cols)
     db.execute(stmt)
 
 

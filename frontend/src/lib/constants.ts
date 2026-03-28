@@ -72,6 +72,14 @@ export const DEBOUNCE_MS = 300;
 /** 최대 엑셀 내보내기 행 수 */
 export const MAX_EXPORT_ROWS = 5000;
 
+/** 단지 비교 차트 색상 (최대 4개 단지) */
+export const COMPARE_COLORS = [
+  { main: "#ef4444", light: "#ef444420" },  // red
+  { main: "#3b82f6", light: "#3b82f620" },  // blue
+  { main: "#f59e0b", light: "#f59e0b20" },  // amber
+  { main: "#10b981", light: "#10b98120" },  // emerald
+] as const;
+
 /** 정렬 옵션 */
 export const SORT_OPTIONS = [
   { v: "rank", l: "기본순" },

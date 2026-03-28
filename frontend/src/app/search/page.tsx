@@ -14,6 +14,8 @@ import EstateTypeTabs from "@/components/EstateTypeTabs";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useFilterParams } from "@/hooks/useFilterParams";
+import { useCompare } from "@/hooks/useCompare";
+import CompareFloatingBar from "@/components/CompareFloatingBar";
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -34,6 +36,7 @@ function SearchContent() {
   );
 
   const { filters: urlFilters, setFilters: setUrlFilters, buildURL, filterKey } = useFilterParams();
+  const { list: compareList, toggle: toggleCompare, remove: removeCompare, clear: clearCompare, isInCompare, isFull: compareFull } = useCompare();
   const hasSearchParams = !!(keyword || (sido && sigungu));
 
   const title = keyword
@@ -248,21 +251,25 @@ function SearchContent() {
                 <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 w-[60px] text-center">준공</th>
                 <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 w-[65px] text-center">유형</th>
                 <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap w-[65px] text-right">매물수</th>
+                <th className="px-2 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap w-[40px] text-center">비교</th>
               </tr>
             </thead>
             <tbody>
               {filteredComplexes.map((cpx, idx) => (
-                <ComplexRow key={cpx.complex_no} complex={cpx} index={idx + 1} filterURL={buildURL(`/complex/${cpx.complex_no}`, undefined, urlFilters)} />
+                <ComplexRow key={cpx.complex_no} complex={cpx} index={idx + 1} filterURL={buildURL(`/complex/${cpx.complex_no}`, undefined, urlFilters)} isCompared={isInCompare(cpx.complex_no)} compareFull={compareFull} onToggleCompare={() => toggleCompare({ complex_no: cpx.complex_no, complex_name: cpx.complex_name })} />
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* 비교 플로팅 바 */}
+      <CompareFloatingBar list={compareList} onRemove={removeCompare} onClear={clearCompare} />
     </div>
   );
 }
 
-const ComplexRow = memo(function ComplexRow({ complex, index, filterURL }: { complex: Complex; index: number; filterURL?: string }) {
+const ComplexRow = memo(function ComplexRow({ complex, index, filterURL, isCompared, compareFull, onToggleCompare }: { complex: Complex; index: number; filterURL?: string; isCompared?: boolean; compareFull?: boolean; onToggleCompare?: () => void }) {
   const router = useRouter();
   const year = complex.use_approve_ymd?.slice(0, 4);
   const articleCount = complex.article_count ?? 0;
@@ -287,6 +294,22 @@ const ComplexRow = memo(function ComplexRow({ complex, index, filterURL }: { com
       </td>
       <td className="px-3 py-2 text-right whitespace-nowrap">
         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${articleCount > 0 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{articleCount}건</span>
+      </td>
+      <td className="px-2 py-2 text-center whitespace-nowrap">
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleCompare?.(); }}
+          disabled={!isCompared && compareFull}
+          className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+            isCompared
+              ? "bg-blue-600 text-white border-blue-600"
+              : compareFull
+                ? "bg-gray-100 text-gray-300 border-gray-200 cursor-not-allowed"
+                : "bg-white text-gray-500 border-gray-300 hover:bg-blue-50 hover:text-blue-600"
+          }`}
+          title={isCompared ? "비교 해제" : compareFull ? "최대 4개" : "비교 추가"}
+        >
+          {isCompared ? "V" : "+"}
+        </button>
       </td>
     </tr>
   );

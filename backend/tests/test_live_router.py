@@ -1,7 +1,10 @@
 """live 라우터 테스트 — 실시간 검색, 지역 검색, 멀티타입 검색 로직
 실행: python -m pytest tests/test_live_router.py -v
 """
+import pytest
 from unittest.mock import patch
+
+from fastapi import HTTPException
 
 from routers.live import CRAWL_REAL_ESTATE_TYPES, MAX_SEARCH_PAGES, _parse_allowed_types, _search_all_types
 
@@ -205,3 +208,33 @@ class TestSearchAllTypes:
 
         # MAX_SEARCH_PAGES만큼만 호출되어야 함
         assert mock_search.call_count <= MAX_SEARCH_PAGES
+
+    @patch(SEARCH_PATCH)
+    def test_sqlite_sequential_search(self, mock_search, db):
+        """SQLite 환경: 순차 실행 동작 확인"""
+        assert db.bind.dialect.name == "sqlite"
+        mock_search.return_value = make_search_result([
+            make_complex_data("C400", "테스트아파트", re_type="APT"),
+        ])
+        result = _search_all_types("테스트", {"APT", "OPST"}, db)
+        assert len(result) >= 1
+        # 기본+오피스텔 2그룹 이상 호출
+        assert mock_search.call_count >= 2
+
+    @patch(SEARCH_PATCH)
+    def test_sqlite_sequential_dedup(self, mock_search, db):
+        """SQLite 순차 처리에서도 중복 제거 동작"""
+        mock_search.return_value = make_search_result([
+            make_complex_data("C500", "중복단지", re_type="JGC"),
+        ])
+        result = _search_all_types("테스트", {"APT", "JGC"}, db)
+        nos = [c["complex_no"] for c in result]
+        assert nos.count("C500") == 1
+
+    @patch(SEARCH_PATCH)
+    def test_sqlite_sequential_all_fail_502(self, mock_search, db):
+        """SQLite 순차 모드에서 모든 그룹 실패 → 502"""
+        mock_search.return_value = make_search_result(error="네이버 서버 오류")
+        with pytest.raises(HTTPException) as exc_info:
+            _search_all_types("테스트", {"APT", "OPST"}, db)
+        assert exc_info.value.status_code == 502

@@ -115,11 +115,11 @@ def _search_one_group(keyword: str, suffix: str | None, group_codes: set[str],
 
 def _search_all_types(keyword: str, allowed_types: set[str], db: Session,
                       upsert_kwargs: dict | None = None):
-    """매물유형 그룹별로 네이버 API 검색 → upsert → 결과 병합 (병렬)
+    """매물유형 그룹별 네이버 API 검색 → upsert → 결과 병합
 
-    네이버 검색 API는 realEstateType 파라미터를 무시하므로,
-    키워드에 유형명을 추가하여 해당 유형 결과를 가져옴.
-    예: "대전" → "대전", "대전 오피스텔", "대전 재건축"
+    dialect-aware 실행:
+    - PostgreSQL(prod): ThreadPoolExecutor 병렬 호출
+    - SQLite(CI): 순차 실행 (동시 쓰기 불안정 방지)
     """
     # 실행할 그룹 필터링
     groups_to_search = [
@@ -135,23 +135,39 @@ def _search_all_types(keyword: str, allowed_types: set[str], db: Session,
     seen: set[str] = set()
     first_error = None
 
-    # 그룹별 병렬 호출
-    with ThreadPoolExecutor(max_workers=len(groups_to_search)) as executor:
-        futures = {
-            executor.submit(
-                _search_one_group, keyword, suffix, group_codes,
-                allowed_types, upsert_kwargs,
-            ): (suffix, group_codes)
-            for suffix, group_codes in groups_to_search
-        }
-        for future in as_completed(futures):
-            complexes, error = future.result()
+    # dialect 감지 — SQLite는 동시 쓰기 불안정 → 순차 실행
+    dialect = db.bind.dialect.name if db.bind else "postgresql"
+
+    if dialect == "sqlite":
+        logger.info("SQLite dialect — 순차 검색 모드 (%d그룹)", len(groups_to_search))
+        for suffix, group_codes in groups_to_search:
+            complexes, error = _search_one_group(
+                keyword, suffix, group_codes, allowed_types, upsert_kwargs,
+            )
             if error and first_error is None:
                 first_error = error
             for cpx in complexes:
                 if cpx["complex_no"] not in seen:
                     seen.add(cpx["complex_no"])
                     all_complexes.append(cpx)
+    else:
+        # PostgreSQL: 그룹별 병렬 호출
+        with ThreadPoolExecutor(max_workers=len(groups_to_search)) as executor:
+            futures = {
+                executor.submit(
+                    _search_one_group, keyword, suffix, group_codes,
+                    allowed_types, upsert_kwargs,
+                ): (suffix, group_codes)
+                for suffix, group_codes in groups_to_search
+            }
+            for future in as_completed(futures):
+                complexes, error = future.result()
+                if error and first_error is None:
+                    first_error = error
+                for cpx in complexes:
+                    if cpx["complex_no"] not in seen:
+                        seen.add(cpx["complex_no"])
+                        all_complexes.append(cpx)
 
     # 모든 그룹 실패 + 결과 0건이면 502
     if not all_complexes and first_error is not None:

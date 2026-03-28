@@ -72,22 +72,29 @@ def get_complex_detail(
     complex_no: str,
     db: Session = Depends(get_db),
 ):
-    """단지 상세 정보"""
+    """단지 상세 정보 (캐시 적용)"""
+    detail_key = f"complex_detail:{complex_no}"
+    cached = _cache.get(detail_key)
+    if cached is not None:
+        return cached
+
     cpx = queries.get_complex_by_no(db, complex_no)
     if not cpx:
         raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다")
 
     article_count = queries.get_complex_article_count(db, complex_no)
-    cache_key = f"filter_options:{complex_no}"
-    filter_options = _cache.get(cache_key)
+    fo_key = f"filter_options:{complex_no}"
+    filter_options = _cache.get(fo_key)
     if filter_options is None:
         filter_options = queries.get_filter_options(db, complex_no)
-        _cache.set(cache_key, filter_options)
-    return {
+        _cache.set(fo_key, filter_options)
+    result = {
         **complex_to_dict(cpx),
         "article_count": article_count,
         "filter_options": filter_options,
     }
+    _cache.set(detail_key, result)
+    return result
 
 
 
@@ -138,7 +145,7 @@ def get_complex_articles(
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
-    """단지별 매물 조회 (필터 + 정렬 + 페이지네이션)"""
+    """단지별 매물 조회 (필터 + 정렬 + 페이지네이션, 기본 조회 캐시)"""
     filters = build_filter_dict(
         trade_types=trade_types, min_price=min_price, max_price=max_price,
         min_rent=min_rent, max_rent=max_rent,
@@ -152,17 +159,33 @@ def get_complex_articles(
         min_floor=min_floor, max_floor=max_floor, tags=tags,
     )
 
+    # 필터 없는 첫 페이지 기본 조회 → 캐시 (페이지 진입 속도 향상)
+    is_default = (
+        page == 1 and sort_by == "rank" and page_size == 50
+        and not any(filters.values())
+    )
+    if is_default:
+        art_cache_key = f"articles_default:{complex_no}"
+        cached = _cache.get(art_cache_key)
+        if cached is not None:
+            return cached
+
     articles, total_count = queries.get_articles_by_complex(
         db, complex_no, filters=filters, sort_by=sort_by,
         page=page, page_size=page_size,
     )
 
-    return {
+    result = {
         "articles": [article_to_dict(a) for a in articles],
         "total": total_count,
         "page": page,
         "page_size": page_size,
     }
+
+    if is_default:
+        _cache.set(art_cache_key, result)
+
+    return result
 
 
 @router.get("/{complex_no}/pyeong-details")
@@ -170,14 +193,19 @@ def get_pyeong_details(
     complex_no: str,
     db: Session = Depends(get_db),
 ):
-    """단지 면적별 상세 정보"""
+    """단지 면적별 상세 정보 (캐시 적용)"""
+    pyeong_key = f"pyeong_details:{complex_no}"
+    cached = _cache.get(pyeong_key)
+    if cached is not None:
+        return cached
+
     details = queries.get_complex_pyeong_details(db, complex_no)
     if not details:
         from services.enricher import enrich_complex_detail
         enrich_complex_detail(db, complex_no)
         db.commit()
         details = queries.get_complex_pyeong_details(db, complex_no)
-    return {
+    result = {
         "pyeong_details": [
             {
                 "pyeong_no": p.pyeong_no,
@@ -202,6 +230,8 @@ def get_pyeong_details(
             for p in details
         ]
     }
+    _cache.set(pyeong_key, result)
+    return result
 
 
 

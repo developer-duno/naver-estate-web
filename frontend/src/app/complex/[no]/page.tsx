@@ -137,6 +137,7 @@ export default function ComplexDetailPage() {
     queryKey: queryKeys.complex(complexNo),
     queryFn: () => getComplex(complexNo),
     enabled: !!complexNo && /^\d+$/.test(complexNo),
+    staleTime: 60_000,
   });
 
   // filter_options 추출
@@ -162,6 +163,7 @@ export default function ComplexDetailPage() {
     }),
     enabled: !!complexNo && /^\d+$/.test(complexNo),
     placeholderData: keepPreviousData,
+    staleTime: 30_000,
   });
 
   // ── useQuery: 면적별 상세 ──
@@ -169,13 +171,15 @@ export default function ComplexDetailPage() {
     queryKey: queryKeys.pyeongDetails(complexNo),
     queryFn: () => getPyeongDetails(complexNo),
     enabled: !!complexNo && /^\d+$/.test(complexNo),
+    staleTime: 60_000,
   });
 
   const complex = complexQuery.data ?? null;
   const articles = articlesQuery.data?.articles ?? [];
   const totalCount = articlesQuery.data?.total ?? 0;
   const pyeongDetails = pyeongQuery.data?.pyeong_details ?? [];
-  const loading = complexQuery.isLoading || articlesQuery.isLoading || pyeongQuery.isLoading;
+  // 분할 로딩: complex 정보만 있으면 페이지 표시 (articles/pyeong은 이후 로드)
+  const loading = complexQuery.isLoading;
   const tableLoading = articlesQuery.isFetching && !articlesQuery.isLoading;
 
   // SEO: dynamic title

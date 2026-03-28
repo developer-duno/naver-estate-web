@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo, memo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { searchComplexes, getComplexesByRegion } from "@/lib/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { searchComplexes, getComplexesByRegion, getComplex, getArticles } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { createClient } from "@/lib/supabase";
 import RegionSelector from "@/components/RegionSelector";
@@ -271,14 +271,31 @@ function SearchContent() {
 
 const ComplexRow = memo(function ComplexRow({ complex, index, filterURL, isCompared, compareFull, onToggleCompare }: { complex: Complex; index: number; filterURL?: string; isCompared?: boolean; compareFull?: boolean; onToggleCompare?: () => void }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const year = complex.use_approve_ymd?.slice(0, 4);
   const articleCount = complex.article_count ?? 0;
   const isEven = index % 2 === 0;
+
+  /** hover 시 complex + articles 프리페치 → 클릭 시 즉시 표시 */
+  const handlePrefetch = () => {
+    const no = complex.complex_no;
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.complex(no),
+      queryFn: () => getComplex(no),
+      staleTime: 60_000,
+    });
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.articles(no, { page: 1, page_size: 50 }),
+      queryFn: () => getArticles(no, { page: 1, page_size: 50 }),
+      staleTime: 60_000,
+    });
+  };
 
   return (
     <tr
       className={`hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-200 ${isEven ? "bg-gray-50/60" : "bg-white"}`}
       onClick={() => router.push(filterURL || `/complex/${complex.complex_no}`)}
+      onMouseEnter={handlePrefetch}
     >
       <td className="px-3 py-2 text-gray-400 text-center text-xs border-r border-gray-100">{index}</td>
       <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap border-r border-gray-100">{complex.complex_name}</td>

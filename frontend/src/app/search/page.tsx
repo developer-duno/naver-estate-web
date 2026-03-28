@@ -277,7 +277,7 @@ const ComplexRow = memo(function ComplexRow({ complex, index, filterURL, isCompa
   const isEven = index % 2 === 0;
 
   /** hover 200ms 유지 시 complex + articles 프리페치 (빠른 스크롤 시 불필요한 요청 방지) */
-  const prefetchTimer = useRef<ReturnType<typeof setTimeout>>();
+  const prefetchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const handlePrefetchEnter = useCallback(() => {
     prefetchTimer.current = setTimeout(() => {
       const no = complex.complex_no;

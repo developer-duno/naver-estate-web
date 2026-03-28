@@ -325,7 +325,7 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
       if (!data?.items?.length) return null;
       return { complexNo: c.complex_no, complexName: c.complex_name, items: data.items };
     })
-    .filter(Boolean) as { complexNo: string; complexName: string; items: any[] }[];
+    .filter(Boolean) as { complexNo: string; complexName: string; items: PriceHistoryResponse["items"] }[];
 
   const statsDatasets = complexes
     .map((c, i) => {

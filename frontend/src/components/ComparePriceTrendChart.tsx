@@ -154,7 +154,7 @@ export default function ComparePriceTrendChart({ datasets }: Props) {
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey="month" fontSize={11} />
           <YAxis tickFormatter={formatChartPrice} fontSize={11} width={68} />
-          <Tooltip formatter={(value: number) => formatChartPrice(value)} />
+          <Tooltip formatter={(value) => formatChartPrice(value as number)} />
           <Legend />
           {seriesKeys.map((sk) => (
             <Line

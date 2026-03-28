@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, BarChart, Bar, Cell, LabelList,
+  ResponsiveContainer, BarChart, Bar, LabelList,
 } from "recharts";
 import { formatChartPrice } from "@/lib/format";
 import type { PriceStats } from "@/types";

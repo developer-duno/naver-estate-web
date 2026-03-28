@@ -32,6 +32,7 @@ function ChartAccordion({
     <div className="border rounded-lg overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
         className="w-full flex justify-between items-center px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
       >
         <span className="font-semibold text-sm">{title}</span>
@@ -308,10 +309,9 @@ export default function CompareCharts({ complexes, fullComplexes }: Props) {
     })),
   });
 
-  const allLoading =
-    historyQueries.some((q) => q.isLoading) ||
-    statsQueries.some((q) => q.isLoading) ||
-    pyeongQueries.some((q) => q.isLoading);
+  const historyLoading = historyQueries.some((q) => q.isLoading);
+  const statsLoading = statsQueries.some((q) => q.isLoading);
+  const pyeongLoading = pyeongQueries.some((q) => q.isLoading);
 
   // 데이터 조립
   const historyDatasets = complexes
@@ -338,15 +338,11 @@ export default function CompareCharts({ complexes, fullComplexes }: Props) {
     })
     .filter(Boolean) as { name: string; details: PyeongDetail[] }[];
 
-  if (allLoading) {
-    return <LoadingSpinner message="차트 데이터를 불러오는 중..." />;
-  }
-
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold">가격 비교 차트</h2>
 
-      {/* 1. 레이더 — 기본 펼침 */}
+      {/* 1. 레이더 — API 불필요, 즉시 렌더 */}
       <ChartAccordion title="종합 비교 (레이더)" defaultOpen>
         <ErrorBoundary>
           <CompareRadarChart complexes={fullComplexes} />
@@ -356,7 +352,9 @@ export default function CompareCharts({ complexes, fullComplexes }: Props) {
       {/* 2. 가격 추이 */}
       <ChartAccordion title="가격 추이 비교">
         <ErrorBoundary>
-          {historyDatasets.length > 0 ? (
+          {historyLoading ? (
+            <LoadingSpinner message="가격 추이 로딩 중..." />
+          ) : historyDatasets.length > 0 ? (
             <ComparePriceTrendChart datasets={historyDatasets} />
           ) : (
             <p className="text-gray-500 text-sm py-4 text-center">가격 추이 데이터가 없습니다.</p>
@@ -367,7 +365,9 @@ export default function CompareCharts({ complexes, fullComplexes }: Props) {
       {/* 3. 현재 평균가 */}
       <ChartAccordion title="현재 평균가 비교">
         <ErrorBoundary>
-          {statsDatasets.length > 0 ? (
+          {statsLoading ? (
+            <LoadingSpinner message="가격 통계 로딩 중..." />
+          ) : statsDatasets.length > 0 ? (
             <ComparePriceBarChart datasets={statsDatasets} />
           ) : (
             <p className="text-gray-500 text-sm py-4 text-center">가격 통계 데이터가 없습니다.</p>
@@ -378,7 +378,9 @@ export default function CompareCharts({ complexes, fullComplexes }: Props) {
       {/* 4. 층별 가격 */}
       <ChartAccordion title="층별 가격 비교">
         <ErrorBoundary>
-          {statsDatasets.length > 0 ? (
+          {statsLoading ? (
+            <LoadingSpinner message="층별 가격 로딩 중..." />
+          ) : statsDatasets.length > 0 ? (
             <CompareFloorChart datasets={statsDatasets} />
           ) : (
             <p className="text-gray-500 text-sm py-4 text-center">층별 가격 데이터가 없습니다.</p>

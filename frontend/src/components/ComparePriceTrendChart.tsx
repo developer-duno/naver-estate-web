@@ -61,7 +61,7 @@ export default function ComparePriceTrendChart({ datasets }: Props) {
           monthMap.set(item.base_month, { month: formatMonth(item.base_month) });
         }
         const row = monthMap.get(item.base_month)!;
-        const key = `${ds.complexName}_${label}`;
+        const key = `${ds.complexNo}_${label}`;
         if (item.price_avg != null) row[key] = item.price_avg;
       }
     }
@@ -76,7 +76,7 @@ export default function ComparePriceTrendChart({ datasets }: Props) {
       const color = COMPARE_COLORS[i % COMPARE_COLORS.length].main;
       if (tradeFilter !== "jeonse") {
         keys.push({
-          dataKey: `${datasets[i].complexName}_매매`,
+          dataKey: `${datasets[i].complexNo}_매매`,
           color,
           dashed: false,
           name: `${datasets[i].complexName} 매매`,
@@ -84,7 +84,7 @@ export default function ComparePriceTrendChart({ datasets }: Props) {
       }
       if (tradeFilter !== "maemae") {
         keys.push({
-          dataKey: `${datasets[i].complexName}_전세`,
+          dataKey: `${datasets[i].complexNo}_전세`,
           color,
           dashed: true,
           name: `${datasets[i].complexName} 전세`,
@@ -98,7 +98,7 @@ export default function ComparePriceTrendChart({ datasets }: Props) {
       const last = sorted[sorted.length - 1];
       let bestVal = -1;
       for (const ds of datasets) {
-        const v = Number(last[`${ds.complexName}_매매`]) || 0;
+        const v = Number(last[`${ds.complexNo}_매매`]) || 0;
         if (v > bestVal) {
           bestVal = v;
           bestName = ds.complexName;

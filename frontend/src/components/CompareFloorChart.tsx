@@ -7,7 +7,7 @@ import {
 } from "recharts";
 import { COMPARE_COLORS } from "@/lib/constants";
 import { formatChartPrice } from "@/lib/format";
-import type { PriceStats, FloorPriceStat } from "@/types";
+import type { PriceStats } from "@/types";
 
 /** 백엔드 "저층(1-5)" → "저층" */
 function stripFloorLabel(label: string): string {
@@ -48,7 +48,7 @@ export default function CompareFloorChart({ datasets }: Props) {
         const match = ds.priceStats.by_floor.find(
           (f) => stripFloorLabel(f.label) === floor,
         );
-        row[ds.complexName] = match?.maemae_avg ?? null;
+        row[ds.complexNo] = match?.maemae_avg ?? null;
       }
       return row;
     });
@@ -59,7 +59,7 @@ export default function CompareFloorChart({ datasets }: Props) {
       let maxVal = -1;
       let maxName = "";
       for (const ds of datasets) {
-        const v = Number(row[ds.complexName]) || 0;
+        const v = Number(row[ds.complexNo]) || 0;
         if (v > maxVal) {
           maxVal = v;
           maxName = ds.complexName;
@@ -72,7 +72,7 @@ export default function CompareFloorChart({ datasets }: Props) {
   }, [datasets]);
 
   const hasData = chartData.some((r) =>
-    datasets.some((ds) => r[ds.complexName] != null),
+    datasets.some((ds) => r[ds.complexNo] != null),
   );
   if (!hasData) {
     return <p className="text-gray-500 text-sm py-8 text-center">층별 가격 데이터가 부족합니다.</p>;
@@ -90,7 +90,7 @@ export default function CompareFloorChart({ datasets }: Props) {
           {datasets.map((ds, i) => (
             <Bar
               key={ds.complexNo}
-              dataKey={ds.complexName}
+              dataKey={ds.complexNo}
               name={ds.complexName}
               fill={COMPARE_COLORS[i % COMPARE_COLORS.length].main}
             />

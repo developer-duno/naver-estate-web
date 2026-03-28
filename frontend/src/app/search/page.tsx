@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, memo, Suspense } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, memo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { searchComplexes, getComplexesByRegion, getComplex, getArticles } from "@/lib/api";
@@ -276,26 +276,33 @@ const ComplexRow = memo(function ComplexRow({ complex, index, filterURL, isCompa
   const articleCount = complex.article_count ?? 0;
   const isEven = index % 2 === 0;
 
-  /** hover 시 complex + articles 프리페치 → 클릭 시 즉시 표시 */
-  const handlePrefetch = useCallback(() => {
-    const no = complex.complex_no;
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.complex(no),
-      queryFn: () => getComplex(no),
-      staleTime: 60_000,
-    });
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.articles(no, { page: 1, page_size: PAGE_SIZE }),
-      queryFn: () => getArticles(no, { page: 1, page_size: PAGE_SIZE }),
-      staleTime: 60_000,
-    });
+  /** hover 200ms 유지 시 complex + articles 프리페치 (빠른 스크롤 시 불필요한 요청 방지) */
+  const prefetchTimer = useRef<ReturnType<typeof setTimeout>>();
+  const handlePrefetchEnter = useCallback(() => {
+    prefetchTimer.current = setTimeout(() => {
+      const no = complex.complex_no;
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.complex(no),
+        queryFn: () => getComplex(no),
+        staleTime: 60_000,
+      });
+      queryClient.prefetchQuery({
+        queryKey: queryKeys.articles(no, { page: 1, page_size: PAGE_SIZE }),
+        queryFn: () => getArticles(no, { page: 1, page_size: PAGE_SIZE }),
+        staleTime: 60_000,
+      });
+    }, 200);
   }, [complex.complex_no, queryClient]);
+  const handlePrefetchLeave = useCallback(() => {
+    clearTimeout(prefetchTimer.current);
+  }, []);
 
   return (
     <tr
       className={`hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-200 ${isEven ? "bg-gray-50/60" : "bg-white"}`}
       onClick={() => router.push(filterURL || `/complex/${complex.complex_no}`)}
-      onMouseEnter={handlePrefetch}
+      onMouseEnter={handlePrefetchEnter}
+      onMouseLeave={handlePrefetchLeave}
     >
       <td className="px-3 py-2 text-gray-400 text-center text-xs border-r border-gray-100">{index}</td>
       <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap border-r border-gray-100">{complex.complex_name}</td>

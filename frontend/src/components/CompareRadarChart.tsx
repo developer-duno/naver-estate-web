@@ -55,7 +55,7 @@ export default function CompareRadarChart({ complexes }: Props) {
       for (let i = 0; i < complexes.length; i++) {
         const raw = axis.getValue(complexes[i]);
         const max = maxMap.get(axis.key) ?? 1;
-        row[complexes[i].complex_name] = Math.round((raw / max) * 100);
+        row[complexes[i].complex_no] = Math.round((raw / max) * 100);
       }
       return row;
     });
@@ -64,7 +64,7 @@ export default function CompareRadarChart({ complexes }: Props) {
     let bestIdx = 0;
     let bestSum = 0;
     for (let i = 0; i < complexes.length; i++) {
-      const sum = rows.reduce((acc, r) => acc + (Number(r[complexes[i].complex_name]) || 0), 0);
+      const sum = rows.reduce((acc, r) => acc + (Number(r[complexes[i].complex_no]) || 0), 0);
       if (sum > bestSum) {
         bestSum = sum;
         bestIdx = i;
@@ -87,7 +87,7 @@ export default function CompareRadarChart({ complexes }: Props) {
             <Radar
               key={c.complex_no}
               name={c.complex_name}
-              dataKey={c.complex_name}
+              dataKey={c.complex_no}
               stroke={COMPARE_COLORS[i % COMPARE_COLORS.length].main}
               fill={COMPARE_COLORS[i % COMPARE_COLORS.length].main}
               fillOpacity={0.15}

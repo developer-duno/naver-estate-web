@@ -502,6 +502,14 @@ export default function ComplexDetailPage() {
         </div>
       )}
 
+      {/* 크롤링 중 + 이전 데이터 안내 */}
+      {crawling && totalCount > 0 && (
+        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded-md px-3 py-2">
+          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-amber-500 shrink-0" />
+          <span>이전 데이터를 표시 중입니다. 갱신이 완료되면 자동으로 업데이트됩니다.</span>
+        </div>
+      )}
+
       {/* 크롤링 중이고 매물이 아직 없을 때 안내 메세지 */}
       {crawling && totalCount === 0 && (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-500">
@@ -510,8 +518,8 @@ export default function ComplexDetailPage() {
         </div>
       )}
 
-      {/* 매물 테이블 */}
-      {(!crawling || totalCount > 0) && (
+      {/* 매물 테이블 — 크롤링 중에도 기존 데이터 항상 표시 */}
+      {totalCount > 0 && (
         <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} activeSortBy={activeSortBy} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} />
       )}
 

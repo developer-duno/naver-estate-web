@@ -54,12 +54,23 @@ export function useCrawlProgress(): CrawlHookResult {
 
     const status = statusQuery.data;
 
-    // Phase 1(articles) → enriching/details 전환 시 priceStats 갱신
+    // Phase 1(articles) → enriching/details 전환 시 매물 목록 + priceStats 즉시 갱신
     const curPhase = status.phase;
     if (prevPhaseRef.current === "articles" && curPhase && curPhase !== "articles") {
+      queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(targetComplexNo) });
       queryClient.invalidateQueries({ queryKey: queryKeys.priceStats(targetComplexNo) });
     }
     prevPhaseRef.current = curPhase;
+
+    // 상세 크롤링 진행 중 매물 목록 중간 갱신 (20건마다)
+    if (
+      curPhase === "details" &&
+      status.detail_crawled_count != null &&
+      status.detail_crawled_count > 0 &&
+      status.detail_crawled_count % 20 === 0
+    ) {
+      queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(targetComplexNo) });
+    }
 
     // 완료/에러 감지
     const isDone = (status.status === "done" || status.status === "done_partial") && status.detail_phase !== "running";

@@ -28,6 +28,7 @@ export function useCrawlProgress(): CrawlHookResult {
   const [isPolling, setIsPolling] = useState(false);
   const [targetComplexNo, setTargetComplexNo] = useState<string>("");
   const prevPhaseRef = useRef<string | undefined>(undefined);
+  const lastRefreshCountRef = useRef(0);
 
   // 크롤 완료 시 관련 쿼리 무효화
   const invalidateAllQueries = useCallback(
@@ -62,13 +63,15 @@ export function useCrawlProgress(): CrawlHookResult {
     }
     prevPhaseRef.current = curPhase;
 
-    // 상세 크롤링 진행 중 매물 목록 중간 갱신 (20건마다)
+    // 상세 크롤링 진행 중 매물 목록 중간 갱신 (20건 간격)
+    const DETAIL_REFRESH_INTERVAL = 20;
     if (
       curPhase === "details" &&
       status.detail_crawled_count != null &&
       status.detail_crawled_count > 0 &&
-      status.detail_crawled_count % 20 === 0
+      status.detail_crawled_count - lastRefreshCountRef.current >= DETAIL_REFRESH_INTERVAL
     ) {
+      lastRefreshCountRef.current = status.detail_crawled_count;
       queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(targetComplexNo) });
     }
 
@@ -97,6 +100,7 @@ export function useCrawlProgress(): CrawlHookResult {
   const startCrawl = useCallback((complexNo: string) => {
     setTargetComplexNo(complexNo);
     prevPhaseRef.current = undefined;
+    lastRefreshCountRef.current = 0;
     setCrawlProgress(null);
     setIsPolling(true);
     setCrawling(true);

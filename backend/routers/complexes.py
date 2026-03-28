@@ -162,7 +162,7 @@ def get_complex_articles(
     # 필터 없는 첫 페이지 기본 조회 → 캐시 (페이지 진입 속도 향상)
     is_default = (
         page == 1 and sort_by == "rank" and page_size == 50
-        and not any(filters.values())
+        and not filters
     )
     if is_default:
         art_cache_key = f"articles_default:{complex_no}"

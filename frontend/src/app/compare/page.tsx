@@ -87,7 +87,13 @@ function CompareContent() {
   });
 
   const loading = queries.some((q) => q.isLoading);
-  const complexes = queries.map((q) => q.data).filter(Boolean) as Complex[];
+  // React Query는 데이터 변경 없으면 동일 참조 반환 → 안정적 키로 memo
+  const complexIds = queries.map((q) => q.data?.complex_no).filter(Boolean).join(",");
+  const complexes = useMemo(
+    () => queries.map((q) => q.data).filter(Boolean) as Complex[],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [complexIds],
+  );
 
   /* 우위 인덱스 캐싱 (label → bestIndices) */
   const advantageMap = useMemo(() => {

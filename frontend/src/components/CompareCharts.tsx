@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { getPriceHistory, getPriceStats, getPyeongDetails } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { formatChartPrice } from "@/lib/format";
 import { getBestIndices } from "@/lib/compare-utils";
-import { COMPARE_COLORS } from "@/lib/constants";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import CompareRadarChart from "@/components/CompareRadarChart";
@@ -84,10 +83,10 @@ function AreaPriceTable({ datasets }: { datasets: { name: string; stats: PriceSt
           <tr>
             <th className="px-2 py-1 border" />
             {datasets.map((ds) => (
-              <>
-                <th key={`${ds.name}-m`} className="px-2 py-1 text-center border text-red-500">매매</th>
-                <th key={`${ds.name}-j`} className="px-2 py-1 text-center border text-blue-500">전세</th>
-              </>
+              <React.Fragment key={`${ds.name}-hd`}>
+                <th className="px-2 py-1 text-center border text-red-500">매매</th>
+                <th className="px-2 py-1 text-center border text-blue-500">전세</th>
+              </React.Fragment>
             ))}
           </tr>
         </thead>
@@ -117,20 +116,18 @@ function AreaPriceTable({ datasets }: { datasets: { name: string; stats: PriceSt
                   const mCnt = a?.maemae_count;
                   const jCnt = a?.jeonse_count;
                   return (
-                    <>
+                    <React.Fragment key={`${ds.name}-${label}`}>
                       <td
-                        key={`${ds.name}-${label}-m`}
                         className={`px-2 py-1 border text-center ${maeemaeBest.includes(di) ? "bg-green-50 font-bold" : ""}`}
                       >
                         {mVal != null ? `${formatChartPrice(mVal)}${mCnt ? ` (${mCnt}건)` : ""}` : "-"}
                       </td>
                       <td
-                        key={`${ds.name}-${label}-j`}
                         className={`px-2 py-1 border text-center ${jeonseBest.includes(di) ? "bg-green-50 font-bold" : ""}`}
                       >
                         {jVal != null ? `${formatChartPrice(jVal)}${jCnt ? ` (${jCnt}건)` : ""}` : "-"}
                       </td>
-                    </>
+                    </React.Fragment>
                   );
                 })}
               </tr>
@@ -251,10 +248,10 @@ function UnitCompositionTable({
           <tr>
             <th className="px-2 py-1 border" />
             {datasets.map((ds) => (
-              <>
-                <th key={`${ds.name}-rb`} className="px-2 py-1 text-center border">방/욕실</th>
-                <th key={`${ds.name}-hh`} className="px-2 py-1 text-center border">세대수</th>
-              </>
+              <React.Fragment key={`${ds.name}-uc`}>
+                <th className="px-2 py-1 text-center border">방/욕실</th>
+                <th className="px-2 py-1 text-center border">세대수</th>
+              </React.Fragment>
             ))}
           </tr>
         </thead>
@@ -265,14 +262,14 @@ function UnitCompositionTable({
               {datasets.map((ds) => {
                 const d = ds.details.find((x) => x.pyeong_no === pyeongNo);
                 return (
-                  <>
-                    <td key={`${ds.name}-${pyeongNo}-rb`} className="px-2 py-1 border text-center">
+                  <React.Fragment key={`${ds.name}-${pyeongNo}`}>
+                    <td className="px-2 py-1 border text-center">
                       {d?.room_count != null ? `${d.room_count}/${d.bathroom_count ?? "-"}` : "-"}
                     </td>
-                    <td key={`${ds.name}-${pyeongNo}-hh`} className="px-2 py-1 border text-center">
+                    <td className="px-2 py-1 border text-center">
                       {d?.household_count_by_pyeong ?? "-"}
                     </td>
-                  </>
+                  </React.Fragment>
                 );
               })}
             </tr>
@@ -357,10 +354,7 @@ export default function CompareCharts({ complexes, fullComplexes }: Props) {
       </ChartAccordion>
 
       {/* 2. 가격 추이 */}
-      <ChartAccordion
-        title="가격 추이 비교"
-        badge={historyDatasets.length > 0 ? undefined : undefined}
-      >
+      <ChartAccordion title="가격 추이 비교">
         <ErrorBoundary>
           {historyDatasets.length > 0 ? (
             <ComparePriceTrendChart datasets={historyDatasets} />

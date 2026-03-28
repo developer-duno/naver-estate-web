@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, memo, Suspense } from "react";
+import { useState, useEffect, useMemo, useCallback, memo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { searchComplexes, getComplexesByRegion, getComplex, getArticles } from "@/lib/api";
@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase";
 import RegionSelector from "@/components/RegionSelector";
 import FilterBar from "@/components/FilterBar";
 import type { Complex } from "@/types";
-import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_TABS } from "@/lib/constants";
+import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_TABS, PAGE_SIZE } from "@/lib/constants";
 import EstateTypeTabs from "@/components/EstateTypeTabs";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { useSmartBack } from "@/hooks/useSmartBack";
@@ -277,7 +277,7 @@ const ComplexRow = memo(function ComplexRow({ complex, index, filterURL, isCompa
   const isEven = index % 2 === 0;
 
   /** hover 시 complex + articles 프리페치 → 클릭 시 즉시 표시 */
-  const handlePrefetch = () => {
+  const handlePrefetch = useCallback(() => {
     const no = complex.complex_no;
     queryClient.prefetchQuery({
       queryKey: queryKeys.complex(no),
@@ -285,11 +285,11 @@ const ComplexRow = memo(function ComplexRow({ complex, index, filterURL, isCompa
       staleTime: 60_000,
     });
     queryClient.prefetchQuery({
-      queryKey: queryKeys.articles(no, { page: 1, page_size: 50 }),
-      queryFn: () => getArticles(no, { page: 1, page_size: 50 }),
+      queryKey: queryKeys.articles(no, { page: 1, page_size: PAGE_SIZE }),
+      queryFn: () => getArticles(no, { page: 1, page_size: PAGE_SIZE }),
       staleTime: 60_000,
     });
-  };
+  }, [complex.complex_no, queryClient]);
 
   return (
     <tr

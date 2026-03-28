@@ -8,13 +8,15 @@ import {
 import { COMPARE_COLORS } from "@/lib/constants";
 import type { Complex } from "@/types";
 
+const MAX_BUILDING_AGE = 50;
+
 /** 준공년도 → 신축도 (최대 50년, 역수) */
 function getNewness(ymd?: string): number {
   if (!ymd) return 0;
   const year = parseInt(ymd.slice(0, 4), 10);
   if (isNaN(year)) return 0;
-  const age = 2026 - year;
-  return Math.max(0, 50 - age); // 신축=50, 50년=0
+  const age = new Date().getFullYear() - year;
+  return Math.max(0, MAX_BUILDING_AGE - age);
 }
 
 interface AxisDef {

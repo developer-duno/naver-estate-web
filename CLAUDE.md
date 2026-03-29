@@ -101,11 +101,13 @@ npx vercel --prod
 엑셀(매물) → /api/articles/export (pandas DataFrame → xlsxwriter → xlsx)
 엑셀(비교) → 클라이언트 xlsx 라이브러리 (compare-export.ts, safeCellValue 수식 인젝션 방어)
 단지 비교 → /compare?ids=no1,no2,... (useQueries 병렬 조회 + 평당가 계산 + 인쇄/엑셀)
-미분양 조회 → /api/mb/apartments (같은 Supabase DB, 기존 get_db() 사용)
+미분양 조회 → /api/mb/apartments?sort_by=&keyword= (같은 Supabase DB, 정렬+검색)
 미분양 상세 → /api/mb/apartments/{id} (인프라/학군/교통/분양가/시공사 병합)
+미분양만 → /api/mb/unsold?sort_by=&keyword= (unsold > 0 필터)
 미분양 추이 → /api/mb/unsold/{id}/history (월별 미분양 추이)
-실거래 조회 → /api/mb/trades (지역별 실거래 내역)
+실거래 조회 → /api/mb/trades?sort_by= (지역별 실거래 내역, 정렬)
 지역 통계 → /api/mb/regions (인구/세대/미분양/시세)
+홈 → 미분양 바로가기 카드 (/mibunyang 링크)
 ```
 
 ## 클라이언트 저장소 (localStorage)

@@ -31,10 +31,10 @@ cd backend && ruff check . && python -m pytest && cd ../frontend && npm test
 
 ### 레벨별 실행
 ```bash
-# FE 단위 + 컴포넌트 + 훅 + 페이지 (233개)
+# FE 단위 + 컴포넌트 + 훅 + 페이지 (270개, 25파일)
 cd frontend && npm test
 
-# BE 단위 + 통합 + API + 엣지케이스 + mibunyang (250개, 1 스킵)
+# BE 단위 + 통합 + API + 엣지케이스 + mibunyang + 정렬/검색 (263개, 1 스킵)
 cd backend && python -m pytest
 
 # FE 특정 파일
@@ -59,12 +59,12 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 | 경로 | 도구 | 테스트 수 |
 |------|------|----------|
 | frontend/src/lib/__tests__/ | Vitest | 99 (단위+엣지케이스+storage+compare-utils) |
-| frontend/src/components/__tests__/ | Vitest | 47 (컴포넌트+차트) |
+| frontend/src/components/__tests__/ | Vitest | 56 (컴포넌트+차트+MbRegionSelector+MbApartmentTable) |
 | frontend/src/hooks/__tests__/ | Vitest | 35 (훅: useCrawlProgress + usePriceCollect + useFilterParams) |
-| frontend/src/app/__tests__/ | Vitest | 7 (페이지 통합) |
-| **프론트 합계** | Vitest | **233** (21개 파일) |
+| frontend/src/app/__tests__/ | Vitest | 35 (페이지 통합: search+mibunyang+mibunyang-detail) |
+| **프론트 합계** | Vitest | **270** (25개 파일) |
 | frontend/e2e/ | Playwright | 13 (E2E) |
-| backend/tests/ | pytest | 250 (단위+통합+API+엣지케이스+공유인프라+dialect분기+mibunyang, 1 스킵) |
+| backend/tests/ | pytest | 263 (단위+통합+API+엣지케이스+공유인프라+dialect분기+mibunyang+정렬/검색, 1 스킵) |
 
 ### React Query 테스트 패턴
 - 컴포넌트/훅 테스트에서 `TestQueryProvider` 래퍼 사용 (test-setup.ts에서 export)

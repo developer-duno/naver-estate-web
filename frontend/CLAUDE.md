@@ -15,11 +15,11 @@
 
 ```
 frontend/src/
-├── app/           # Next.js App Router (16 페이지)
-├── components/    # 재사용 컴포넌트 (22개 + filter/ 서브디렉토리)
+├── app/           # Next.js App Router (18 페이지, mibunyang/ 포함)
+├── components/    # 재사용 컴포넌트 (22개 + filter/ + mb/ 서브디렉토리)
 ├── hooks/         # 커스텀 훅 (10개)
 ├── lib/           # api.ts, supabase.ts, constants.ts, format.ts, query-client.ts, query-keys.ts, storage.ts, compare-utils.ts, compare-export.ts
-├── types/         # TypeScript 인터페이스
+├── types/         # TypeScript 인터페이스 (estate + Mb* 10개 mibunyang 타입)
 └── middleware.ts  # Supabase 세션 + 관리자 라우트 보호
 ```
 
@@ -136,6 +136,27 @@ components/
 | `/login` | Supabase Auth + `/api/users/login-record` | `/api/users/login-record` |
 | `/admin` | `getAdminDetailedStats()` | `/api/admin/stats/detailed` |
 | `/admin/users` | `getAdminUsers()`, `updateAdminUser()` | `/api/admin/users` |
+| `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()` (4탭, 정렬+검색) | `/api/mb/apartments`, `/api/mb/unsold`, `/api/mb/regions`, `/api/mb/trades` |
+| `/mibunyang/[id]` | `getMbApartmentDetail()`, `getMbUnsoldHistory()` (5섹션 선형 스크롤 + 추이 차트) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
+
+## 미분양 (mibunyang) 컴포넌트
+
+```
+components/mb/
+├── MbRegionSelector.tsx     # 시도/시군구 2단계 셀렉터 + 키워드 검색 입력
+├── MbApartmentTable.tsx     # 아파트 목록 테이블 (정렬 가능 헤더: 세대수/미분양/미분양률)
+├── MbTradeTable.tsx         # 실거래 테이블 (정렬 가능 헤더: 가격/거래월/면적)
+├── MbRegionStatsTable.tsx   # 지역 통계 테이블
+├── MbDetailSections.tsx     # 상세 5개 섹션 (개요/분양/주변환경/거래통계/미분양추이)
+└── MbUnsoldTrendChart.tsx   # Recharts 미분양 추이 차트 (dynamic import)
+```
+
+### 미분양 URL 상태 관리
+- `useSearchParams` + `useRouter` 직접 사용 (useFilterParams 미사용 — ArticleFilters 전용)
+- URL params: `?region=&gu=&tab=&page=&sort_by=&q=`
+- 지역 변경 시 sort 유지, page=1 리셋
+- 탭 전환 시 apartments/unsold 탭만 keyword 유지, regions/trades에서 제거
+- `MB_SORT_OPTIONS` (constants.ts): 7개 정렬 옵션
 
 ## 백엔드 영향 체크리스트
 

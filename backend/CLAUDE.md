@@ -47,22 +47,29 @@
 - 수집 중 실시간 진행률: `on_progress` 콜백으로 collected/failed/total 업데이트
 - 완료 시 `_price_history_cache` 캐시 무효화 (delete_by_prefix)
 
-## mibunyang 통합 (Phase 1 — 읽기 전용)
+## mibunyang 통합 (Phase 1.5 — 읽기 + 정렬/검색)
 
 - 같은 Supabase DB 공유 → 기존 `Base`/`SessionLocal`/`get_db()` 그대로 사용
 - `db/mb_models.py`: mibunyang 10개 테이블 ORM (Apartment, UnsoldHistory, MBRegion, MBTrade 등)
-- `db/mb_queries.py`: 읽기 쿼리 (get_apartments, get_unsold_by_region, get_trades 등)
-- `routers/mb.py`: `/api/mb/*` 엔드포인트 (인증 없는 공개 API, complexes.py 패턴)
+- `db/mb_queries.py`: 읽기 쿼리 + 정렬/검색 헬퍼
+  - `_build_mb_order_clause(sort_by)`: 아파트 동적 정렬 (7개 옵션)
+  - `_build_mb_trade_order_clause(sort_by)`: 실거래 동적 정렬 (5개 옵션)
+  - `_apply_keyword_filter(conditions, keyword)`: 단지명 ILIKE 검색 (%/_ 이스케이프)
+- `routers/mb.py`: `/api/mb/*` 엔드포인트 (인증 없는 공개 API)
+  - `/apartments`: `sort_by` (Literal[7]), `keyword` (min_length=2, max_length=100)
+  - `/unsold`: `sort_by` (Literal[7]), `keyword`
+  - `/trades`: `sort_by` (Literal[5])
+  - `MbAptSortBy`, `MbTradeSortBy` Literal 타입 정의
 - mibunyang 테이블: apartments(97col), unsold_history, regions, trades, prices, trade_stats, builders, infra, schools, transport
 - 컬럼명 매핑: `lat`→`latitude`, `lng`→`longitude` (mapped_column alias)
-- **레거시**: `MBBase`/`get_mb_db()`는 `database.py`에 남아있으나 Phase 1에서 미사용 (향후 정리)
+- **레거시**: `MBBase`/`get_mb_db()`는 `database.py`에 남아있으나 미사용 (향후 정리)
 
 ## CI 테스트 인프라
 
 - **엔진**: file-based SQLite + NullPool + WAL + busy_timeout 5초
 - **dialect 분기**: `_search_all_types()`는 SQLite에서 ThreadPoolExecutor 대신 순차 실행
   - `_do_upsert()`도 dialect-aware (pg_insert/sqlite_insert 자동 분기)
-- **테스트**: 250개 (24개 파일, 1개 스킵) — `python -m pytest --tb=short -q`
+- **테스트**: 263개 (26개 파일, 1개 스킵) — `python -m pytest --tb=short -q`
 - **conftest.py**: `sys.modules["db.database"]` 교체로 테스트 엔진 주입
 
 ## CORS 미들웨어 순서 (중요)

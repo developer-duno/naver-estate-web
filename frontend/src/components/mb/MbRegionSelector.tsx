@@ -14,17 +14,20 @@ const SIDO_LIST = [
 ] as const;
 
 interface Props {
-  onSearch: (region: string, gu?: string) => void;
+  onSearch: (region: string, gu?: string, keyword?: string) => void;
   defaultRegion?: string;
   defaultGu?: string;
+  defaultKeyword?: string;
 }
 
-export default function MbRegionSelector({ onSearch, defaultRegion, defaultGu }: Props) {
+export default function MbRegionSelector({ onSearch, defaultRegion, defaultGu, defaultKeyword }: Props) {
   const [region, setRegion] = useState(defaultRegion ?? "");
   const [gu, setGu] = useState(defaultGu ?? "");
+  const [keyword, setKeyword] = useState(defaultKeyword ?? "");
 
   useEffect(() => { setRegion(defaultRegion ?? ""); }, [defaultRegion]);
   useEffect(() => { setGu(defaultGu ?? ""); }, [defaultGu]);
+  useEffect(() => { setKeyword(defaultKeyword ?? ""); }, [defaultKeyword]);
 
   const regionsQuery = useQuery({
     queryKey: queryKeys.mb.regions(region),
@@ -45,7 +48,7 @@ export default function MbRegionSelector({ onSearch, defaultRegion, defaultGu }:
 
   const handleSearch = () => {
     if (!region) return;
-    onSearch(region, gu || undefined);
+    onSearch(region, gu || undefined, keyword.trim() || undefined);
   };
 
   return (
@@ -79,6 +82,20 @@ export default function MbRegionSelector({ onSearch, defaultRegion, defaultGu }:
             <option key={g} value={g}>{g}</option>
           ))}
         </select>
+      </div>
+
+      <div>
+        <label htmlFor="mb-keyword" className="block text-xs text-gray-500 mb-1">단지명</label>
+        <input
+          id="mb-keyword"
+          type="text"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+          placeholder="단지명 검색"
+          maxLength={100}
+          className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-40"
+        />
       </div>
 
       <button

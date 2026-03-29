@@ -168,3 +168,89 @@ def test_get_trades_pagination(db):
 
     total = mb_queries.count_trades(db, "서울")
     assert total == 5
+
+
+# ── 정렬 헬퍼 ───────────────────────────────────────────────
+
+
+def test_build_mb_order_clause_valid():
+    """유효한 정렬 키 → 올바른 ORDER BY 절 반환"""
+    clause = mb_queries._build_mb_order_clause("unsold_desc")
+    # SQLAlchemy UnaryExpression — 컬럼명+방향 확인
+    compiled = str(clause)
+    assert "unsold" in compiled.lower()
+
+
+def test_build_mb_order_clause_invalid():
+    """잘못된 정렬 키 → 기본값 name_asc 반환"""
+    default_clause = mb_queries._build_mb_order_clause("name_asc")
+    invalid_clause = mb_queries._build_mb_order_clause("invalid_key")
+    assert str(default_clause) == str(invalid_clause)
+
+
+def test_build_mb_trade_order_clause_valid():
+    """유효한 실거래 정렬 키 → 올바른 ORDER BY 절 반환"""
+    clause = mb_queries._build_mb_trade_order_clause("price_desc")
+    compiled = str(clause)
+    assert "price" in compiled.lower()
+
+
+def test_build_mb_trade_order_clause_invalid():
+    """잘못된 실거래 정렬 키 → 기본값 deal_month_desc 반환"""
+    default_clause = mb_queries._build_mb_trade_order_clause("deal_month_desc")
+    invalid_clause = mb_queries._build_mb_trade_order_clause("no_such_key")
+    assert str(default_clause) == str(invalid_clause)
+
+
+# ── 정렬 + 키워드 통합 ──────────────────────────────────────
+
+
+def test_get_apartments_sorted_by_unsold(db):
+    """미분양 수 내림차순 정렬 확인"""
+    _add_apartment(db, "APT001", "래미안", region="서울", unsold=10)
+    _add_apartment(db, "APT002", "자이", region="서울", unsold=50)
+
+    results = mb_queries.get_apartments(db, region="서울", sort_by="unsold_desc")
+    assert len(results) == 2
+    # unsold 50이 먼저
+    assert results[0].name == "자이"
+    assert results[1].name == "래미안"
+
+
+def test_get_apartments_keyword_match(db):
+    """키워드 필터 — 이름에 포함된 단지만 반환"""
+    _add_apartment(db, "APT001", "래미안퍼스티지", region="서울")
+    _add_apartment(db, "APT002", "자이더빌리지", region="서울")
+
+    results = mb_queries.get_apartments(db, region="서울", keyword="래미안")
+    assert len(results) == 1
+    assert results[0].name == "래미안퍼스티지"
+
+    # count도 동일하게 필터링
+    cnt = mb_queries.count_apartments(db, region="서울", keyword="래미안")
+    assert cnt == 1
+
+
+def test_get_apartments_keyword_wildcard_escape(db):
+    """키워드에 %가 포함되면 이스케이프 — 전체 매칭 방지"""
+    _add_apartment(db, "APT001", "래미안", region="서울")
+    _add_apartment(db, "APT002", "자이", region="서울")
+
+    # "%" 자체를 검색 → 이름에 %가 없으므로 결과 0건
+    results = mb_queries.get_apartments(db, region="서울", keyword="%%")
+    assert len(results) == 0
+
+
+def test_get_apartments_sort_and_keyword_combined(db):
+    """정렬 + 키워드 동시 사용"""
+    _add_apartment(db, "APT001", "래미안레이크", region="서울", unsold=20)
+    _add_apartment(db, "APT002", "래미안퍼스트", region="서울", unsold=80)
+    _add_apartment(db, "APT003", "자이더빌리지", region="서울", unsold=100)
+
+    results = mb_queries.get_apartments(
+        db, region="서울", sort_by="unsold_desc", keyword="래미안",
+    )
+    # "자이"는 제외, 래미안 2개만 unsold 내림차순
+    assert len(results) == 2
+    assert results[0].name == "래미안퍼스트"  # unsold=80
+    assert results[1].name == "래미안레이크"  # unsold=20

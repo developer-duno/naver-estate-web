@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
@@ -35,6 +36,12 @@ export default function MbDetailPage() {
     enabled: !!id,
   });
 
+  const apt = detailQuery.data;
+
+  useEffect(() => {
+    if (apt?.name) document.title = `${apt.name} - 미분양 상세 | 아파트·오피스텔`;
+  }, [apt?.name]);
+
   if (detailQuery.isLoading) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-6">
@@ -62,7 +69,6 @@ export default function MbDetailPage() {
     );
   }
 
-  const apt = detailQuery.data;
   if (!apt) return null;
 
   return (

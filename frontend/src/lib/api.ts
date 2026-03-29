@@ -434,9 +434,11 @@ export async function deleteStaleData(token: string, days: number) {
 import type { MbApartment, MbUnsoldHistory, MbRegion, MbTrade } from "@/types";
 
 /** 지역별 아파트 목록 */
-export async function getMbApartments(region: string, gu?: string, page = 1, pageSize = 50) {
+export async function getMbApartments(region: string, gu?: string, page = 1, pageSize = 50, sortBy?: string, keyword?: string) {
   const params = new URLSearchParams({ region, page: String(page), page_size: String(pageSize) });
   if (gu) params.set("gu", gu);
+  if (sortBy) params.set("sort_by", sortBy);
+  if (keyword) params.set("keyword", keyword);
   return fetchApi<{ apartments: MbApartment[]; total: number; page: number; page_size: number }>(
     `/api/mb/apartments?${params}`,
   );
@@ -448,9 +450,11 @@ export async function getMbApartmentDetail(id: string) {
 }
 
 /** 미분양 아파트 목록 (unsold > 0) */
-export async function getMbUnsold(region: string, gu?: string) {
+export async function getMbUnsold(region: string, gu?: string, sortBy?: string, keyword?: string) {
   const params = new URLSearchParams({ region });
   if (gu) params.set("gu", gu);
+  if (sortBy) params.set("sort_by", sortBy);
+  if (keyword) params.set("keyword", keyword);
   return fetchApi<{ unsold: MbApartment[]; total: number }>(`/api/mb/unsold?${params}`);
 }
 
@@ -469,10 +473,11 @@ export async function getMbRegions(region: string, gu?: string) {
 }
 
 /** 지역별 실거래 내역 */
-export async function getMbTrades(region: string, gu?: string, dong?: string, page = 1, pageSize = 50) {
+export async function getMbTrades(region: string, gu?: string, dong?: string, page = 1, pageSize = 50, sortBy?: string) {
   const params = new URLSearchParams({ region, page: String(page), page_size: String(pageSize) });
   if (gu) params.set("gu", gu);
   if (dong) params.set("dong", dong);
+  if (sortBy) params.set("sort_by", sortBy);
   return fetchApi<{ trades: MbTrade[]; total: number; page: number; page_size: number }>(
     `/api/mb/trades?${params}`,
   );

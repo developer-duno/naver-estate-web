@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, Suspense } from "react";
+import { useCallback, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
@@ -38,6 +38,14 @@ function MibunyangContent() {
   const gu = searchParams.get("gu") ?? "";
   const tab = (searchParams.get("tab") as TabKey) || "apartments";
   const page = Number(searchParams.get("page")) || 1;
+  const sortBy = searchParams.get("sort_by") ?? "";
+  const keyword = searchParams.get("q") ?? "";
+
+  useEffect(() => {
+    document.title = region
+      ? `미분양 현황 - ${region} | 아파트·오피스텔`
+      : "미분양 현황 | 아파트·오피스텔";
+  }, [region]);
 
   const updateParams = useCallback(
     (updates: Record<string, string | undefined>) => {
@@ -52,19 +60,32 @@ function MibunyangContent() {
   );
 
   const handleSearch = useCallback(
-    (r: string, g?: string) => {
+    (r: string, g?: string, kw?: string) => {
       const params = new URLSearchParams();
       params.set("region", r);
       if (g) params.set("gu", g);
       params.set("tab", tab);
       params.set("page", "1");
+      if (sortBy) params.set("sort_by", sortBy);
+      if (kw) params.set("q", kw);
       router.replace(`/mibunyang?${params}`, { scroll: false });
     },
-    [router, tab],
+    [router, tab, sortBy],
   );
 
   const handleTabChange = useCallback(
-    (t: TabKey) => updateParams({ tab: t, page: "1" }),
+    (t: TabKey) => {
+      const updates: Record<string, string | undefined> = { tab: t, page: "1" };
+      if (t === "regions" || t === "trades") {
+        updates.q = undefined;
+      }
+      updateParams(updates);
+    },
+    [updateParams],
+  );
+
+  const handleSortChange = useCallback(
+    (newSort: string) => updateParams({ sort_by: newSort || undefined, page: "1" }),
     [updateParams],
   );
 
@@ -76,15 +97,15 @@ function MibunyangContent() {
   const hasRegion = region.length >= 2;
 
   const apartmentsQuery = useQuery({
-    queryKey: queryKeys.mb.apartments(region, gu || undefined, page),
-    queryFn: () => getMbApartments(region, gu || undefined, page, PAGE_SIZE),
+    queryKey: queryKeys.mb.apartments(region, gu || undefined, page, sortBy || undefined, keyword || undefined),
+    queryFn: () => getMbApartments(region, gu || undefined, page, PAGE_SIZE, sortBy || undefined, keyword || undefined),
     enabled: hasRegion && tab === "apartments",
     placeholderData: keepPreviousData,
   });
 
   const unsoldQuery = useQuery({
-    queryKey: queryKeys.mb.unsold(region, gu || undefined),
-    queryFn: () => getMbUnsold(region, gu || undefined),
+    queryKey: queryKeys.mb.unsold(region, gu || undefined, sortBy || undefined, keyword || undefined),
+    queryFn: () => getMbUnsold(region, gu || undefined, sortBy || undefined, keyword || undefined),
     enabled: hasRegion && tab === "unsold",
     placeholderData: keepPreviousData,
   });
@@ -97,8 +118,8 @@ function MibunyangContent() {
   });
 
   const tradesQuery = useQuery({
-    queryKey: queryKeys.mb.trades(region, gu || undefined, undefined, page),
-    queryFn: () => getMbTrades(region, gu || undefined, undefined, page, PAGE_SIZE),
+    queryKey: queryKeys.mb.trades(region, gu || undefined, undefined, page, sortBy || undefined),
+    queryFn: () => getMbTrades(region, gu || undefined, undefined, page, PAGE_SIZE, sortBy || undefined),
     enabled: hasRegion && tab === "trades",
     placeholderData: keepPreviousData,
   });
@@ -108,7 +129,7 @@ function MibunyangContent() {
       <h1 className="text-2xl font-bold text-gray-900 mb-6">미분양 현황</h1>
 
       <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
-        <MbRegionSelector onSearch={handleSearch} defaultRegion={region} defaultGu={gu} />
+        <MbRegionSelector onSearch={handleSearch} defaultRegion={region} defaultGu={gu} defaultKeyword={keyword} />
       </div>
 
       {!hasRegion ? (
@@ -152,6 +173,8 @@ function MibunyangContent() {
               <MbApartmentTable
                 apartments={apartmentsQuery.data?.apartments ?? []}
                 startIndex={(page - 1) * PAGE_SIZE}
+                sort={sortBy}
+                onSortChange={handleSortChange}
               />
               {apartmentsQuery.data && apartmentsQuery.data.total > PAGE_SIZE && (
                 <div className="mt-4">
@@ -176,7 +199,7 @@ function MibunyangContent() {
                   미분양 {unsoldQuery.data?.total?.toLocaleString() ?? 0}개
                 </span>
               </div>
-              <MbApartmentTable apartments={unsoldQuery.data?.unsold ?? []} />
+              <MbApartmentTable apartments={unsoldQuery.data?.unsold ?? []} sort={sortBy} onSortChange={handleSortChange} />
             </TabContent>
           )}
 
@@ -204,6 +227,8 @@ function MibunyangContent() {
               <MbTradeTable
                 trades={tradesQuery.data?.trades ?? []}
                 startIndex={(page - 1) * PAGE_SIZE}
+                sort={sortBy}
+                onSortChange={handleSortChange}
               />
               {tradesQuery.data && tradesQuery.data.total > PAGE_SIZE && (
                 <div className="mt-4">

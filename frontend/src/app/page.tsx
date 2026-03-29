@@ -138,6 +138,14 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* 미분양 현황 바로가기 */}
+      <div className="mt-4">
+        <button onClick={() => router.push("/mibunyang")} className="w-full bg-white rounded-lg shadow-sm border p-4 text-left hover:bg-gray-50 transition-colors">
+          <span className="text-sm font-semibold text-gray-700">미분양 현황 바로가기</span>
+          <p className="text-xs text-gray-500 mt-1">전국 미분양 아파트 현황, 지역별 통계를 확인하세요</p>
+        </button>
+      </div>
+
       {/* 최근 검색 */}
       <SearchHistory history={history} onSelect={handleHistorySelect} onRemove={removeHistory} onClear={clearHistory} />
 

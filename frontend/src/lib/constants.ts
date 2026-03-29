@@ -165,3 +165,14 @@ export const PPYEONG_PRESETS: RangePreset[] = [
   { label: "4~5천만", min: 4000, max: 5000 },
   { label: "5천만~", min: 5000 },
 ];
+
+/** 미분양 정렬 옵션 */
+export const MB_SORT_OPTIONS = [
+  { v: "name_asc", l: "단지명순" },
+  { v: "unsold_desc", l: "미분양 많은순" },
+  { v: "unsold_asc", l: "미분양 적은순" },
+  { v: "unsold_rate_desc", l: "미분양률 높은순" },
+  { v: "units_desc", l: "세대수순" },
+  { v: "price_asc", l: "분양가 낮은순" },
+  { v: "price_desc", l: "분양가 높은순" },
+] as const;

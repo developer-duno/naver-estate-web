@@ -5,7 +5,7 @@
 """
 
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -32,17 +32,28 @@ logger = logging.getLogger(__name__)
 # ── 아파트 단지 ──────────────────────────────────────────────
 
 
+MbAptSortBy = Literal[
+    "name_asc", "unsold_desc", "unsold_asc", "unsold_rate_desc",
+    "units_desc", "price_asc", "price_desc",
+]
+MbTradeSortBy = Literal[
+    "deal_month_desc", "deal_month_asc", "price_desc", "price_asc", "area_desc",
+]
+
+
 @router.get("/apartments")
 def get_apartments(
     region: str = Query(..., min_length=2, max_length=20, description="시도"),
     gu: Optional[str] = Query(None, max_length=20, description="시군구"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    sort_by: MbAptSortBy = Query("name_asc"),
+    keyword: Optional[str] = Query(None, min_length=2, max_length=100),
     db: Session = Depends(get_db),
 ):
-    """지역별 아파트 목록"""
-    items = mb_queries.get_apartments(db, region, gu, page, page_size)
-    total = mb_queries.count_apartments(db, region, gu)
+    """지역별 아파트 목록 (정렬 + 검색)"""
+    items = mb_queries.get_apartments(db, region, gu, page, page_size, sort_by, keyword)
+    total = mb_queries.count_apartments(db, region, gu, keyword)
     return {
         "apartments": [apartment_to_dict(a) for a in items],
         "total": total,
@@ -99,10 +110,12 @@ def get_apartment_detail(
 def get_unsold(
     region: str = Query(..., min_length=2, max_length=20, description="시도"),
     gu: Optional[str] = Query(None, max_length=20, description="시군구"),
+    sort_by: MbAptSortBy = Query("unsold_desc"),
+    keyword: Optional[str] = Query(None, min_length=2, max_length=100),
     db: Session = Depends(get_db),
 ):
-    """지역별 미분양 아파트 목록 (unsold > 0)"""
-    items = mb_queries.get_unsold_by_region(db, region, gu)
+    """지역별 미분양 아파트 목록 (unsold > 0, 정렬 + 검색)"""
+    items = mb_queries.get_unsold_by_region(db, region, gu, sort_by, keyword)
     return {
         "unsold": [apartment_to_dict(a) for a in items],
         "total": len(items),
@@ -150,10 +163,11 @@ def get_trades(
     dong: Optional[str] = Query(None, max_length=20),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    sort_by: MbTradeSortBy = Query("deal_month_desc"),
     db: Session = Depends(get_db),
 ):
-    """지역별 실거래 내역"""
-    items = mb_queries.get_trades(db, region, gu, dong, page, page_size)
+    """지역별 실거래 내역 (정렬)"""
+    items = mb_queries.get_trades(db, region, gu, dong, page, page_size, sort_by)
     total = mb_queries.count_trades(db, region, gu, dong)
     return {
         "trades": [mb_trade_to_dict(t) for t in items],

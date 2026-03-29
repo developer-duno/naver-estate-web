@@ -49,15 +49,15 @@ export const queryKeys = {
 
   // 미분양 (mibunyang)
   mb: {
-    apartments: (region: string, gu?: string, page?: number) =>
-      ["mb", "apartments", region, gu, page] as const,
+    apartments: (region: string, gu?: string, page?: number, sortBy?: string, keyword?: string) =>
+      ["mb", "apartments", region, gu, page, ...(sortBy ? [sortBy] : []), ...(keyword ? [keyword] : [])] as const,
     apartmentDetail: (id: string) => ["mb", "apartment", id] as const,
-    unsold: (region: string, gu?: string) =>
-      ["mb", "unsold", region, gu] as const,
+    unsold: (region: string, gu?: string, sortBy?: string, keyword?: string) =>
+      ["mb", "unsold", region, gu, ...(sortBy ? [sortBy] : []), ...(keyword ? [keyword] : [])] as const,
     unsoldHistory: (id: string) => ["mb", "unsoldHistory", id] as const,
     regions: (region: string, gu?: string) =>
       ["mb", "regions", region, gu] as const,
-    trades: (region: string, gu?: string, dong?: string, page?: number) =>
-      ["mb", "trades", region, gu, dong, page] as const,
+    trades: (region: string, gu?: string, dong?: string, page?: number, sortBy?: string) =>
+      ["mb", "trades", region, gu, dong, page, ...(sortBy ? [sortBy] : [])] as const,
   },
 } as const;

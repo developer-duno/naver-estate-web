@@ -66,7 +66,7 @@ describe("MbRegionSelector 상호작용", () => {
     const { onSearch } = renderSelector();
     fireEvent.change(screen.getByLabelText("시/도"), { target: { value: "서울특별시" } });
     fireEvent.click(screen.getByRole("button", { name: "검색" }));
-    expect(onSearch).toHaveBeenCalledWith("서울특별시", undefined);
+    expect(onSearch).toHaveBeenCalledWith("서울특별시", undefined, undefined);
   });
 
   it("시도 선택 시 시군구가 중복 제거되어 표시된다", async () => {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useQueries } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { getMbApartmentDetail } from "@/lib/api";
@@ -9,14 +10,25 @@ import { MB_COMPARE_ROWS, getBestIndices, formatCellValue } from "@/lib/mb-compa
 import { exportMbCompareToXlsx } from "@/lib/mb-compare-export";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { COMPARE_TEXT_COLORS } from "@/lib/constants";
 
-const COMPARE_COLORS = ["text-red-600", "text-blue-600", "text-amber-600", "text-emerald-600"];
+const LazyMbCompareRadarChart = dynamic(
+  () => import("@/components/mb/MbCompareRadarChart"),
+  { ssr: false, loading: () => <LoadingSpinner message="차트 로딩..." /> },
+);
+const LazyMbComparePriceChart = dynamic(
+  () => import("@/components/mb/MbComparePriceChart"),
+  { ssr: false, loading: () => <LoadingSpinner message="차트 로딩..." /> },
+);
 
 function CompareContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const goBack = useSmartBack();
-  const ids = (searchParams.get("ids") ?? "").split(",").filter(Boolean);
+  const MAX_COMPARE = 4;
+  const ids = (searchParams.get("ids") ?? "").split(",").filter(Boolean).slice(0, MAX_COMPARE);
   const [isExporting, setIsExporting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const queries = useQueries({
     queries: ids.map((id) => ({
@@ -34,10 +46,33 @@ function CompareContent() {
     try { await exportMbCompareToXlsx(apartments); } catch { /* */ } finally { setIsExporting(false); }
   }, [apartments]);
 
+  const handlePrint = useCallback(() => {
+    requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+  }, []);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      alert("복사에 실패했습니다");
+    }
+  }, []);
+
   if (ids.length === 0) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-20 text-center">
         <p className="text-gray-600 mb-4">비교할 아파트를 선택해주세요.</p>
+        <button onClick={goBack} className="text-sm text-blue-600 hover:underline">← 미분양 목록</button>
+      </div>
+    );
+  }
+
+  if (ids.length < 2 && !isLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-20 text-center">
+        <p className="text-gray-600 mb-4">비교할 아파트를 2개 이상 선택해주세요.</p>
         <button onClick={goBack} className="text-sm text-blue-600 hover:underline">← 미분양 목록</button>
       </div>
     );
@@ -53,19 +88,33 @@ function CompareContent() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <button onClick={goBack} className="text-sm text-gray-500 hover:text-gray-700 mb-2">← 미분양 목록</button>
-          <h1 className="text-2xl font-bold text-gray-900">미분양 단지 비교</h1>
-        </div>
-        <button
-          type="button"
-          disabled={apartments.length < 2 || isExporting}
-          onClick={handleExport}
-          className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-40"
-        >
-          {isExporting ? "생성 중..." : "엑셀"}
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={goBack} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl no-print">
+          &#8592;
         </button>
+        <h1 className="text-2xl font-bold text-gray-900">미분양 단지 비교</h1>
+        <span className="text-gray-500 text-sm">({apartments.length}개 아파트)</span>
+        <div className="ml-auto flex gap-2 no-print">
+          <button
+            onClick={handleCopy}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            {copied ? "복사됨" : "URL 복사"}
+          </button>
+          <button
+            onClick={handlePrint}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+          >
+            인쇄
+          </button>
+          <button
+            onClick={handleExport}
+            disabled={apartments.length < 2 || isExporting}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+          >
+            {isExporting ? "생성 중..." : "엑셀"}
+          </button>
+        </div>
       </div>
 
       {/* 비교 테이블 */}
@@ -75,7 +124,11 @@ function CompareContent() {
             <tr>
               <th className="px-4 py-3 text-left font-semibold text-gray-700 min-w-35">항목</th>
               {apartments.map((apt, i) => (
-                <th key={apt.id} className={`px-4 py-3 text-center font-semibold ${COMPARE_COLORS[i]} min-w-40`}>
+                <th
+                  key={apt.id}
+                  className={`px-4 py-3 text-center font-semibold ${COMPARE_TEXT_COLORS[i]} min-w-40 cursor-pointer hover:underline`}
+                  onClick={() => router.push(`/mibunyang/${apt.id}`)}
+                >
                   {apt.name}
                 </th>
               ))}
@@ -108,6 +161,12 @@ function CompareContent() {
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* 차트 섹션 */}
+      <div className="mt-6 space-y-6">
+        <LazyMbCompareRadarChart apartments={apartments} />
+        <LazyMbComparePriceChart apartments={apartments} />
       </div>
     </div>
   );

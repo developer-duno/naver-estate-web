@@ -80,6 +80,11 @@ export const COMPARE_COLORS = [
   { main: "#10b981", light: "#10b98120" },  // emerald
 ] as const;
 
+/** 단지 비교 테이블 텍스트 색상 (Tailwind 클래스) */
+export const COMPARE_TEXT_COLORS = [
+  "text-red-600", "text-blue-600", "text-amber-600", "text-emerald-600",
+] as const;
+
 /** 정렬 옵션 */
 export const SORT_OPTIONS = [
   { v: "rank", l: "기본순" },

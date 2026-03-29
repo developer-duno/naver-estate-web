@@ -65,13 +65,14 @@ describe("미분양 메인 — 초기 상태", () => {
 describe("미분양 메인 — 데이터 표시", () => {
   beforeEach(() => { mockReplace.mockClear(); });
 
-  it("지역 선택 후 탭이 표시된다", async () => {
+  it("지역 선택 후 탭이 표시된다 (5개)", async () => {
     renderPage("region=서울특별시&tab=apartments&page=1");
     await waitFor(() => {
-      expect(screen.getByRole("tab", { name: "미분양 단지" })).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: "미분양만" })).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: "지역 통계" })).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: "실거래" })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /미분양 단지/ })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /미분양만/ })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /지역 통계/ })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /실거래/ })).toBeInTheDocument();
+      expect(screen.getByRole("tab", { name: /즐겨찾기/ })).toBeInTheDocument();
     });
   });
 
@@ -96,6 +97,25 @@ describe("미분양 메인 — 데이터 표시", () => {
     await waitFor(() => {
       expect(screen.getByText("테스트아파트")).toBeInTheDocument();
     });
+  });
+});
+
+describe("미분양 메인 — 즐겨찾기 탭", () => {
+  beforeEach(() => { mockReplace.mockClear(); });
+
+  it("지역 미선택 시에도 탭바가 표시된다", () => {
+    renderPage();
+    expect(screen.getByRole("tab", { name: /즐겨찾기/ })).toBeInTheDocument();
+  });
+
+  it("즐겨찾기 탭에서 빈 상태 안내가 표시된다", () => {
+    renderPage("tab=favorites");
+    expect(screen.getByText("즐겨찾기한 단지가 없습니다")).toBeInTheDocument();
+  });
+
+  it("지역 미선택 + 즐겨찾기 탭이면 '지역을 선택해주세요'가 표시되지 않는다", () => {
+    renderPage("tab=favorites");
+    expect(screen.queryByText("지역을 선택해주세요")).not.toBeInTheDocument();
   });
 });
 

@@ -46,4 +46,18 @@ export const queryKeys = {
       ["admin", "auditLogs", params] as const,
     settings: () => ["admin", "settings"] as const,
   },
+
+  // 미분양 (mibunyang)
+  mb: {
+    apartments: (region: string, gu?: string, page?: number) =>
+      ["mb", "apartments", region, gu, page] as const,
+    apartmentDetail: (id: string) => ["mb", "apartment", id] as const,
+    unsold: (region: string, gu?: string) =>
+      ["mb", "unsold", region, gu] as const,
+    unsoldHistory: (id: string) => ["mb", "unsoldHistory", id] as const,
+    regions: (region: string, gu?: string) =>
+      ["mb", "regions", region, gu] as const,
+    trades: (region: string, gu?: string, dong?: string, page?: number) =>
+      ["mb", "trades", region, gu, dong, page] as const,
+  },
 } as const;

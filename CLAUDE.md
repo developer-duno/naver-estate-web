@@ -165,6 +165,16 @@ npx vercel --prod
 
 `.claude/rules/web-rules.md` 참조.
 
+### 커밋 전 필수 검증
+
+```bash
+# BE 변경 시 (ruff 빠뜨리면 CI 실패)
+cd backend && ruff check . && python -m pytest --tb=short -q
+
+# FE 변경 시
+cd frontend && npx tsc --noEmit && npm run lint && npm test
+```
+
 # 플랜 모드 규칙 (모든 /plan에 자동 적용)
 
 ## 계획 작성 시 반드시 포함할 섹션:

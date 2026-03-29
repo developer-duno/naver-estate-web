@@ -13,12 +13,20 @@
 
 ### 커밋 전 필수 (CI와 동일)
 ```bash
+# BE 변경 시
+cd backend && ruff check . && python -m pytest --tb=short -q
+
+# FE 변경 시
 cd frontend && npx tsc --noEmit && npm run lint && npm test
 ```
 
+> **주의**: `ruff check .`를 빠뜨리면 CI에서 import 정렬(I001), 미사용 import(F401) 등으로 실패함.
+> ruff.toml에 `select = ["E", "F", "W", "I"]`로 isort 규칙 활성화 상태.
+> `ruff check --fix .`로 자동 수정 가능.
+
 ### 한 줄 전체 실행
 ```bash
-cd frontend && npm test && cd ../backend && python -m pytest
+cd backend && ruff check . && python -m pytest && cd ../frontend && npm test
 ```
 
 ### 레벨별 실행

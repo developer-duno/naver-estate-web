@@ -22,7 +22,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from db.database import Base
 
-
 # ── 아파트 단지 (mibunyang 핵심) ──────────────────────────────
 
 

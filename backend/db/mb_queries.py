@@ -18,7 +18,6 @@ from db.mb_models import (
     UnsoldHistory,
 )
 
-
 # ── 아파트 단지 ──────────────────────────────────────────────
 
 

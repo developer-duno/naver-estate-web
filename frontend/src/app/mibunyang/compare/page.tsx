@@ -5,10 +5,11 @@ import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useQueries } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
-import { getMbApartmentDetail } from "@/lib/api";
+import { getMbApartmentDetail, getMbUnsoldHistory } from "@/lib/api";
 import { MB_COMPARE_ROWS, getBestIndices, formatCellValue } from "@/lib/mb-compare-utils";
 import { exportMbCompareToXlsx } from "@/lib/mb-compare-export";
 import { useSmartBack } from "@/hooks/useSmartBack";
+import type { UnsoldDataset } from "@/components/mb/MbCompareUnsoldChart";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { COMPARE_TEXT_COLORS } from "@/lib/constants";
 
@@ -18,6 +19,10 @@ const LazyMbCompareRadarChart = dynamic(
 );
 const LazyMbComparePriceChart = dynamic(
   () => import("@/components/mb/MbComparePriceChart"),
+  { ssr: false, loading: () => <LoadingSpinner message="차트 로딩..." /> },
+);
+const LazyMbCompareUnsoldChart = dynamic(
+  () => import("@/components/mb/MbCompareUnsoldChart"),
   { ssr: false, loading: () => <LoadingSpinner message="차트 로딩..." /> },
 );
 
@@ -37,8 +42,21 @@ function CompareContent() {
     })),
   });
 
+  const historyQueries = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: queryKeys.mb.unsoldHistory(id),
+      queryFn: () => getMbUnsoldHistory(id),
+    })),
+  });
+
   const isLoading = queries.some((q) => q.isLoading);
   const apartments = queries.map((q) => q.data).filter((d): d is NonNullable<typeof d> => !!d);
+
+  const unsoldDatasets: UnsoldDataset[] = apartments.map((apt, i) => ({
+    apartmentId: apt.id,
+    apartmentName: apt.name,
+    items: historyQueries[i]?.data?.items ?? [],
+  }));
 
   const handleExport = useCallback(async () => {
     if (apartments.length < 2) return;
@@ -167,6 +185,7 @@ function CompareContent() {
       <div className="mt-6 space-y-6">
         <LazyMbCompareRadarChart apartments={apartments} />
         <LazyMbComparePriceChart apartments={apartments} />
+        <LazyMbCompareUnsoldChart datasets={unsoldDatasets} />
       </div>
     </div>
   );

@@ -129,7 +129,12 @@ components/
 ### 미분양 비교 (MbCompareFloatingBar + /mibunyang/compare)
 - 미분양 테이블에 "+" 버튼 → useMbCompare로 localStorage 관리 (최대 4개)
 - 하단 MbCompareFloatingBar: 선택 단지 pill + "비교하기" (2개 이상) + "초기화"
-- /mibunyang/compare?ids=id1,id2,... → useQueries 병렬 조회 + 17행 비교 테이블 + 우위★ + 엑셀
+- /mibunyang/compare?ids=id1,id2,... → useQueries 병렬 조회 + 17행 비교 테이블 + 우위★
+- 차트 2종: MbCompareRadarChart(9축 정규화, 종합우위★), MbComparePriceChart(min/max/pp 막대, 최저가★)
+- 인쇄: window.print() + rAF 2회 + no-print 클래스
+- URL 복사: navigator.clipboard.writeText + fallback alert
+- 단지명→상세 링크: th onClick + router.push
+- 엑셀: mb-compare-export.ts (safeCellValue 재사용)
 - mb-compare-utils.ts: MB_COMPARE_ROWS(17행), getBestIndices(higher/lower 우위 판정)
 
 ### 미분양 즐겨찾기 + 엑셀 + 지도
@@ -151,9 +156,9 @@ components/
 | `/login` | Supabase Auth + `/api/users/login-record` | `/api/users/login-record` |
 | `/admin` | `getAdminDetailedStats()` | `/api/admin/stats/detailed` |
 | `/admin/users` | `getAdminUsers()`, `updateAdminUser()` | `/api/admin/users` |
-| `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()` (4탭, 정렬+검색+즐겨찾기+비교+엑셀) | `/api/mb/apartments`, `/api/mb/unsold`, `/api/mb/regions`, `/api/mb/trades` |
+| `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()` (5탭: 단지+미분양+지역+실거래+즐겨찾기, 정렬+검색+비교+엑셀) | `/api/mb/apartments`, `/api/mb/unsold`, `/api/mb/regions`, `/api/mb/trades` |
 | `/mibunyang/[id]` | `getMbApartmentDetail()`, `getMbUnsoldHistory()` (5섹션+지도+추이차트, 즐겨찾기+엑셀) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
-| `/mibunyang/compare` | `getMbApartmentDetail()` x N (useQueries 병렬, 17행 비교+우위★+엑셀) | `/api/mb/apartments/{id}` |
+| `/mibunyang/compare` | `getMbApartmentDetail()` x N (useQueries 병렬, 17행 비교+우위★+레이더차트+막대차트+인쇄+URL복사+엑셀) | `/api/mb/apartments/{id}` |
 
 ## 미분양 (mibunyang) 컴포넌트
 
@@ -166,6 +171,8 @@ components/mb/
 ├── MbDetailSections.tsx        # 상세 5개 섹션 (개요/분양/주변환경/거래통계/미분양추이)
 ├── MbUnsoldTrendChart.tsx      # Recharts 미분양 추이 차트 (dynamic import)
 ├── MbCompareFloatingBar.tsx    # 비교 하단 플로팅 바 (최대 4개, 비교하기 버튼)
+├── MbCompareRadarChart.tsx    # 레이더 차트 (9축 정규화, 종합우위★, dynamic import)
+├── MbComparePriceChart.tsx    # 분양가 막대 차트 (min/max/pp, 최저가★, dynamic import)
 └── MbLocationMap.tsx           # Naver Maps v3 지도 (vanilla SDK, dynamic import)
 ```
 
@@ -173,7 +180,8 @@ components/mb/
 - `useSearchParams` + `useRouter` 직접 사용 (useFilterParams 미사용 — ArticleFilters 전용)
 - URL params: `?region=&gu=&tab=&page=&sort_by=&q=`
 - 지역 변경 시 sort 유지, page=1 리셋
-- 탭 전환 시 apartments/unsold 탭만 keyword 유지, regions/trades에서 제거
+- 탭 전환 시 apartments/unsold 탭만 keyword 유지, regions/trades/favorites에서 제거
+- 즐겨찾기 탭: hasRegion 바이패스 (탭바 항상 표시, 즐겨찾기만 지역 불필요)
 - `MB_SORT_OPTIONS` (constants.ts): 7개 정렬 옵션
 
 ## 백엔드 영향 체크리스트

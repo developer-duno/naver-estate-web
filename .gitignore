@@ -34,3 +34,4 @@ dist/
 .claude-memory/
 .claude/worktrees/
 .env.vercel
+.mcp.json

@@ -108,21 +108,22 @@ npx vercel --prod
 실거래 조회 → /api/mb/trades?sort_by= (지역별 실거래 내역, 정렬)
 지역 통계 → /api/mb/regions (인구/세대/미분양/시세)
 미분양 즐겨찾기 → localStorage (mb_favorites, 최대 200개, 토글)
-미분양 비교 → /mibunyang/compare?ids=id1,id2,... (useQueries 병렬 조회 + 17행 우위 판정 + 엑셀)
+미분양 비교 → /mibunyang/compare?ids=id1,id2,... (useQueries 병렬 조회 + 17행 우위 판정 + 레이더차트 9축 + 분양가 막대차트 + 인쇄 + URL복사 + 엑셀)
 미분양 엑셀 → 클라이언트 xlsx (mb-export.ts, safeCellValue 재사용, 4개 탭+추이)
 미분양 지도 → Naver Maps v3 SDK (CDN, lat/lng null 시 미표시)
+미분양 즐겨찾기 탭 → localStorage 메타데이터 경량 테이블 (API 0회, 탭바 hasRegion 바이패스)
 홈 → 미분양 바로가기 카드 (/mibunyang 링크)
 ```
 
 ## 클라이언트 저장소 (localStorage)
 
-| 키                   | 용도                    | 제한                 |
-| -------------------- | ----------------------- | -------------------- |
-| `search_history`     | 최근 검색 (키워드/지역) | 최대 10개, 중복 제거 |
-| `favorite_complexes` | 즐겨찾기 단지           | 무제한, 토글 방식    |
-| `compare_complexes`  | 비교 대상 단지          | 최대 4개             |
+| 키                   | 용도                    | 제한                  |
+| -------------------- | ----------------------- | --------------------- |
+| `search_history`     | 최근 검색 (키워드/지역) | 최대 10개, 중복 제거  |
+| `favorite_complexes` | 즐겨찾기 단지           | 무제한, 토글 방식     |
+| `compare_complexes`  | 비교 대상 단지          | 최대 4개              |
 | `mb_favorites`       | 미분양 즐겨찾기         | 최대 200개, 토글 방식 |
-| `mb_compare`         | 미분양 비교 대상        | 최대 4개             |
+| `mb_compare`         | 미분양 비교 대상        | 최대 4개              |
 
 ## DB 커넥션 풀
 
@@ -131,14 +132,14 @@ npx vercel --prod
 
 ## 스케줄러 (APScheduler)
 
-| 작업 | 주기 | 설명 |
-|------|------|------|
-| 전국 단지 발견 | 일요일 3시 | 네이버 키워드 검색으로 신규 단지 수집 |
-| 매물 수집 배치 | 12시간 interval | 최근 조회 단지 매물 크롤링 (CRAWL_INTERVAL_HOURS) |
-| 매물 상세 보강 | 4시간 interval | 매물 상세 정보 크롤링 (CRAWL_DETAIL_INTERVAL_MIN) |
-| 시세 이력 수집 | 수요일 4시 | 단지별 시세(매매/전세) 주간 수집 |
-| 인기 단지 크롤링 | 매일 10:30/14:30/19:00 | 자주 조회되는 단지 선제적 크롤링 (POPULAR_CRAWL_ENABLED) |
-| 공공데이터 수집 | 토요일 5시 | 국토교통부 실거래가 API (PUBLIC_DATA_ENABLED, 매월 10일 토요일은 skip) |
+| 작업             | 주기                   | 설명                                                                   |
+| ---------------- | ---------------------- | ---------------------------------------------------------------------- |
+| 전국 단지 발견   | 일요일 3시             | 네이버 키워드 검색으로 신규 단지 수집                                  |
+| 매물 수집 배치   | 12시간 interval        | 최근 조회 단지 매물 크롤링 (CRAWL_INTERVAL_HOURS)                      |
+| 매물 상세 보강   | 4시간 interval         | 매물 상세 정보 크롤링 (CRAWL_DETAIL_INTERVAL_MIN)                      |
+| 시세 이력 수집   | 수요일 4시             | 단지별 시세(매매/전세) 주간 수집                                       |
+| 인기 단지 크롤링 | 매일 10:30/14:30/19:00 | 자주 조회되는 단지 선제적 크롤링 (POPULAR_CRAWL_ENABLED)               |
+| 공공데이터 수집  | 토요일 5시             | 국토교통부 실거래가 API (PUBLIC_DATA_ENABLED, 매월 10일 토요일은 skip) |
 
 ## 공유 인프라 규칙 (mibunyang 프로젝트와 공유)
 
@@ -202,7 +203,24 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 7. 계획 제시 후 바로 실행하지 말 것
 
 ## 자동 검증 규칙:
+
 - 5개 이상 파일 수정 시 → 단계를 나눠서 제시
 - DB 변경 포함 시 → 마이그레이션 롤백 방법 명시
 - API 변경 포함 시 → 영향받는 프론트 페이지 나열
 - 새 기능 추가 시 → 에러 처리·빈 데이터·로딩 상태 포함 확인
+
+## 작업 완료 후 필수 프로세스
+
+### 커밋 전 교차검증 (병렬 에이전트)
+
+작업 완료 후, **커밋 전** 5개 에이전트를 **동시에** 실행하여 교차검증:
+
+| # | 에이전트 | 검증 항목 | 주요 체크 |
+|---|----------|-----------|-----------|
+| 1 | **빌드 검증** | `tsc --noEmit` + `npm run lint` | 타입 에러, import 누락 |
+| 2 | **null 안전성** | null/undefined 가드 누락 | `?.`, `?? 0`, toLocaleString 등 |
+| 3 | **Hook 규칙** | React Rules of Hooks 준수 | 호출 순서, 의존성 배열, 조건부 호출 없음 |
+| 4 | **보안 점검** | XSS, CSP, 인젝션, 인증 우회 | dangerouslySetInnerHTML, env 키 노출 |
+| 5 | **테스트** | `npm test` 전체 통과 | 기존 테스트 깨짐 없는지 |
+
+검증 후 문제 발견 시 수정 → 재검증. 모두 통과하면 커밋+푸시.

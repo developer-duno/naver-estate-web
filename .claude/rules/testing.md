@@ -59,10 +59,10 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 | 경로 | 도구 | 테스트 수 |
 |------|------|----------|
 | frontend/src/lib/__tests__/ | Vitest | 118 (단위+엣지케이스+storage+compare-utils+mb-storage+mb-export+mb-compare-utils) |
-| frontend/src/components/__tests__/ | Vitest | 65 (컴포넌트+차트+MbRegionSelector+MbApartmentTable+MbCompareFloatingBar+MbLocationMap) |
+| frontend/src/components/__tests__/ | Vitest | 68 (컴포넌트+차트+MbRegionSelector+MbApartmentTable+MbCompareFloatingBar+MbLocationMap+MbCompareRadarChart) |
 | frontend/src/hooks/__tests__/ | Vitest | 49 (훅: useCrawlProgress+usePriceCollect+useFilterParams+useMbFavorites+useMbCompare) |
-| frontend/src/app/__tests__/ | Vitest | 35 (페이지 통합: search+mibunyang+mibunyang-detail) |
-| **프론트 합계** | Vitest | **322** (32개 파일) |
+| frontend/src/app/__tests__/ | Vitest | 49 (페이지 통합: search+mibunyang+mibunyang-detail+mibunyang-compare) |
+| **프론트 합계** | Vitest | **336** (34개 파일) |
 | frontend/e2e/ | Playwright | 13 (E2E) |
 | backend/tests/ | pytest | 263 (단위+통합+API+엣지케이스+공유인프라+dialect분기+mibunyang+정렬/검색, 1 스킵) |
 

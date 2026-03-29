@@ -7,7 +7,6 @@ from datetime import date
 from db import mb_queries
 from db.mb_models import Apartment, MBRegion, MBTrade, UnsoldHistory
 
-
 # ── 팩토리 함수 ──────────────────────────────────────────────
 
 

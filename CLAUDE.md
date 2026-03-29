@@ -101,6 +101,11 @@ npx vercel --prod
 엑셀(매물) → /api/articles/export (pandas DataFrame → xlsxwriter → xlsx)
 엑셀(비교) → 클라이언트 xlsx 라이브러리 (compare-export.ts, safeCellValue 수식 인젝션 방어)
 단지 비교 → /compare?ids=no1,no2,... (useQueries 병렬 조회 + 평당가 계산 + 인쇄/엑셀)
+미분양 조회 → /api/mb/apartments (같은 Supabase DB, 기존 get_db() 사용)
+미분양 상세 → /api/mb/apartments/{id} (인프라/학군/교통/분양가/시공사 병합)
+미분양 추이 → /api/mb/unsold/{id}/history (월별 미분양 추이)
+실거래 조회 → /api/mb/trades (지역별 실거래 내역)
+지역 통계 → /api/mb/regions (인구/세대/미분양/시세)
 ```
 
 ## 클라이언트 저장소 (localStorage)
@@ -154,12 +159,13 @@ npx vercel --prod
 | 12h interval      | naver-estate-web | crawl_articles        | 매일 (시간 불고정) |
 | 4h interval       | naver-estate-web | crawl_details         | 매일 (시간 불고정) |
 
-### 공용 테이블 규칙 (mibunyang Supabase)
+### 공용 테이블 규칙 (같은 Supabase DB)
 
 - 공용: `complexes`, `articles`, `complex_price_history`, `trades` (양쪽 upsert)
+- mibunyang 전용: `apartments`, `unsold_history`, `regions`, `prices`, `trade_stats`, `builders`, `infra`, `schools`, `transport` (ORM: `db/mb_models.py`)
 - **기존 컬럼 타입 변경/삭제 금지** — 컬럼 추가만 허용
 - ALTER/DROP 전 상대 프로젝트의 SELECT 쿼리/ORM 모델 검색 필수
-- 컬럼명 불일치 주의: naver-estate-web ORM은 `latitude`/`longitude`/`total_household_count`, mibunyang schema.sql은 `lat`/`lng`/`total_households`
+- 컬럼명 불일치 주의: naver-estate-web ORM은 `latitude`/`longitude`/`total_household_count`, mibunyang은 `lat`/`lng`/`total_households` (mb_models.py에서 mapped_column alias로 해결)
 
 ## 코딩 규칙
 

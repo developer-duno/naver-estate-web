@@ -47,7 +47,7 @@
 - 매물 비활성화만 허용 (`is_active = FALSE`), DELETE 금지
 
 ### DB 규칙
-- 모든 쿼리는 `db/queries.py` 경유 (직접 SQL 금지)
+- estate 쿼리는 `db/queries.py`, mibunyang 쿼리는 `db/mb_queries.py` 경유 (직접 SQL 금지)
 - 필터링은 SQL WHERE절 (Python 메모리 필터 금지)
 - 사전계산 컬럼 활용: `numeric_price`, `numeric_rent_price`, `price_per_pyeong`
 - 권장 인덱스: `articles(complex_no, is_active)` 복합 인덱스

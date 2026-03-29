@@ -107,6 +107,10 @@ npx vercel --prod
 미분양 추이 → /api/mb/unsold/{id}/history (월별 미분양 추이)
 실거래 조회 → /api/mb/trades?sort_by= (지역별 실거래 내역, 정렬)
 지역 통계 → /api/mb/regions (인구/세대/미분양/시세)
+미분양 즐겨찾기 → localStorage (mb_favorites, 최대 200개, 토글)
+미분양 비교 → /mibunyang/compare?ids=id1,id2,... (useQueries 병렬 조회 + 17행 우위 판정 + 엑셀)
+미분양 엑셀 → 클라이언트 xlsx (mb-export.ts, safeCellValue 재사용, 4개 탭+추이)
+미분양 지도 → Naver Maps v3 SDK (CDN, lat/lng null 시 미표시)
 홈 → 미분양 바로가기 카드 (/mibunyang 링크)
 ```
 
@@ -117,6 +121,8 @@ npx vercel --prod
 | `search_history`     | 최근 검색 (키워드/지역) | 최대 10개, 중복 제거 |
 | `favorite_complexes` | 즐겨찾기 단지           | 무제한, 토글 방식    |
 | `compare_complexes`  | 비교 대상 단지          | 최대 4개             |
+| `mb_favorites`       | 미분양 즐겨찾기         | 최대 200개, 토글 방식 |
+| `mb_compare`         | 미분양 비교 대상        | 최대 4개             |
 
 ## DB 커넥션 풀
 

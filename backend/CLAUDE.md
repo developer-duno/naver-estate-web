@@ -62,7 +62,6 @@
   - `MbAptSortBy`, `MbTradeSortBy` Literal 타입 정의
 - mibunyang 테이블: apartments(97col), unsold_history, regions, trades, prices, trade_stats, builders, infra, schools, transport
 - 컬럼명 매핑: `lat`→`latitude`, `lng`→`longitude` (mapped_column alias)
-- **레거시**: `MBBase`/`get_mb_db()`는 `database.py`에 남아있으나 미사용 (향후 정리)
 
 ## CI 테스트 인프라
 

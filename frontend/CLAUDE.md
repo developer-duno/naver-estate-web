@@ -6,7 +6,8 @@
 
 - **프론트엔드**: Next.js 16.1.6, React 19, TypeScript 5, Tailwind CSS 4
 - **서버 상태 관리**: React Query (TanStack Query v5) — 캐싱, 중복 제거, 폴링
-- **클라이언트 저장소**: localStorage (검색 히스토리, 즐겨찾기, 비교 목록)
+- **클라이언트 저장소**: localStorage (검색 히스토리, 즐겨찾기, 비교 목록, 미분양 즐겨찾기/비교)
+- **지도**: Naver Maps v3 SDK (CDN, vanilla JS + useRef)
 - **인증**: Supabase SSR (쿠키 기반 JWT)
 - **차트**: Recharts 3 (dynamic import)
 - **테스트**: Vitest + @testing-library/react + MSW
@@ -15,11 +16,11 @@
 
 ```
 frontend/src/
-├── app/           # Next.js App Router (18 페이지, mibunyang/ 포함)
-├── components/    # 재사용 컴포넌트 (22개 + filter/ + mb/ 서브디렉토리)
-├── hooks/         # 커스텀 훅 (10개)
-├── lib/           # api.ts, supabase.ts, constants.ts, format.ts, query-client.ts, query-keys.ts, storage.ts, compare-utils.ts, compare-export.ts
-├── types/         # TypeScript 인터페이스 (estate + Mb* 10개 mibunyang 타입)
+├── app/           # Next.js App Router (20 페이지, mibunyang/ + mibunyang/compare 포함)
+├── components/    # 재사용 컴포넌트 (24개 + filter/ + mb/ 서브디렉토리)
+├── hooks/         # 커스텀 훅 (12개, useMbFavorites + useMbCompare 포함)
+├── lib/           # api, storage, format, query-keys, compare-export, mb-export, mb-compare-utils, mb-compare-export 등
+├── types/         # TypeScript 인터페이스 (estate + Mb* 10개 + naver-maps.d.ts)
 └── middleware.ts  # Supabase 세션 + 관리자 라우트 보호
 ```
 
@@ -37,6 +38,8 @@ frontend/src/
 | `useSearchHistory` | 검색 히스토리 (localStorage, 최근 10개, 중복 제거) |
 | `useFavorites` | 즐겨찾기 단지 (localStorage, 토글 방식) |
 | `useCompare` | 단지 비교 목록 (localStorage, 최대 4개) |
+| `useMbFavorites` | 미분양 즐겨찾기 (localStorage, 최대 200개, useMbFavoriteStatus 포함) |
+| `useMbCompare` | 미분양 비교 목록 (localStorage, 최대 4개) |
 
 ## FilterBar 구조 (모듈 분리)
 
@@ -123,6 +126,18 @@ components/
 - 인쇄: @media print .no-print + expandAll(아코디언 전체 펼침) + rAF 2회
 - 엑셀: xlsx dynamic import + safeCellValue 수식 인젝션 방어 (compare-export.ts)
 
+### 미분양 비교 (MbCompareFloatingBar + /mibunyang/compare)
+- 미분양 테이블에 "+" 버튼 → useMbCompare로 localStorage 관리 (최대 4개)
+- 하단 MbCompareFloatingBar: 선택 단지 pill + "비교하기" (2개 이상) + "초기화"
+- /mibunyang/compare?ids=id1,id2,... → useQueries 병렬 조회 + 17행 비교 테이블 + 우위★ + 엑셀
+- mb-compare-utils.ts: MB_COMPARE_ROWS(17행), getBestIndices(higher/lower 우위 판정)
+
+### 미분양 즐겨찾기 + 엑셀 + 지도
+- 즐겨찾기: useMbFavorites + useMbFavoriteStatus (localStorage, 최대 200개)
+- MbApartmentTable 액션 열: ★(즐겨찾기) + +(비교) 통합
+- 엑셀: mb-export.ts 4개 함수 (apartments/regions/trades/unsoldHistory) + ExportButton (로딩+실패 피드백)
+- 지도: MbLocationMap (Naver Maps v3 vanilla SDK, dynamic import, 폴링 기반 SDK 대기, lat/lng null 시 미표시)
+
 ---
 
 ## 페이지별 데이터 흐름
@@ -136,19 +151,22 @@ components/
 | `/login` | Supabase Auth + `/api/users/login-record` | `/api/users/login-record` |
 | `/admin` | `getAdminDetailedStats()` | `/api/admin/stats/detailed` |
 | `/admin/users` | `getAdminUsers()`, `updateAdminUser()` | `/api/admin/users` |
-| `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()` (4탭, 정렬+검색) | `/api/mb/apartments`, `/api/mb/unsold`, `/api/mb/regions`, `/api/mb/trades` |
-| `/mibunyang/[id]` | `getMbApartmentDetail()`, `getMbUnsoldHistory()` (5섹션 선형 스크롤 + 추이 차트) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
+| `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()` (4탭, 정렬+검색+즐겨찾기+비교+엑셀) | `/api/mb/apartments`, `/api/mb/unsold`, `/api/mb/regions`, `/api/mb/trades` |
+| `/mibunyang/[id]` | `getMbApartmentDetail()`, `getMbUnsoldHistory()` (5섹션+지도+추이차트, 즐겨찾기+엑셀) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
+| `/mibunyang/compare` | `getMbApartmentDetail()` x N (useQueries 병렬, 17행 비교+우위★+엑셀) | `/api/mb/apartments/{id}` |
 
 ## 미분양 (mibunyang) 컴포넌트
 
 ```
 components/mb/
-├── MbRegionSelector.tsx     # 시도/시군구 2단계 셀렉터 + 키워드 검색 입력
-├── MbApartmentTable.tsx     # 아파트 목록 테이블 (정렬 가능 헤더: 세대수/미분양/미분양률)
-├── MbTradeTable.tsx         # 실거래 테이블 (정렬 가능 헤더: 가격/거래월/면적)
-├── MbRegionStatsTable.tsx   # 지역 통계 테이블
-├── MbDetailSections.tsx     # 상세 5개 섹션 (개요/분양/주변환경/거래통계/미분양추이)
-└── MbUnsoldTrendChart.tsx   # Recharts 미분양 추이 차트 (dynamic import)
+├── MbRegionSelector.tsx        # 시도/시군구 2단계 셀렉터 + 키워드 검색 입력
+├── MbApartmentTable.tsx        # 아파트 목록 테이블 (정렬+즐겨찾기★+비교+)
+├── MbTradeTable.tsx            # 실거래 테이블 (정렬 가능 헤더: 가격/거래월/면적)
+├── MbRegionStatsTable.tsx      # 지역 통계 테이블
+├── MbDetailSections.tsx        # 상세 5개 섹션 (개요/분양/주변환경/거래통계/미분양추이)
+├── MbUnsoldTrendChart.tsx      # Recharts 미분양 추이 차트 (dynamic import)
+├── MbCompareFloatingBar.tsx    # 비교 하단 플로팅 바 (최대 4개, 비교하기 버튼)
+└── MbLocationMap.tsx           # Naver Maps v3 지도 (vanilla SDK, dynamic import)
 ```
 
 ### 미분양 URL 상태 관리

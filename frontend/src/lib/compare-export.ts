@@ -1,7 +1,7 @@
 import type { Complex } from "@/types";
 
 /** 엑셀 수식 인젝션 방어 — 백엔드 _safe_excel()과 동일 패턴 */
-function safeCellValue(val: string): string {
+export function safeCellValue(val: string): string {
   if (!val) return "";
   if ("=+@-\t\r".includes(val[0])) return "'" + val;
   return val;

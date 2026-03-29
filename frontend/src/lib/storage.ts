@@ -91,3 +91,36 @@ export function toggleFavorite(complex: Omit<FavoriteComplex, "added_at">): bool
   localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
   return true; // 추가됨
 }
+
+// ── 미분양 즐겨찾기 ──
+
+const MB_FAVORITES_KEY = "mb_favorites";
+const MAX_MB_FAVORITES = 200;
+
+export interface MbFavoriteApartment {
+  id: string;
+  name: string;
+  region?: string;
+  added_at: number;
+}
+
+export function getMbFavorites(): MbFavoriteApartment[] {
+  return readJSON<MbFavoriteApartment[]>(MB_FAVORITES_KEY, []);
+}
+
+export function isMbFavorite(id: string): boolean {
+  return getMbFavorites().some((f) => f.id === id);
+}
+
+export function toggleMbFavorite(item: Omit<MbFavoriteApartment, "added_at">): boolean {
+  const favorites = getMbFavorites();
+  const idx = favorites.findIndex((f) => f.id === item.id);
+  if (idx >= 0) {
+    favorites.splice(idx, 1);
+    try { localStorage.setItem(MB_FAVORITES_KEY, JSON.stringify(favorites)); } catch { /* quota */ }
+    return false;
+  }
+  const updated = [{ ...item, added_at: Date.now() }, ...favorites].slice(0, MAX_MB_FAVORITES);
+  try { localStorage.setItem(MB_FAVORITES_KEY, JSON.stringify(updated)); } catch { /* quota */ }
+  return true;
+}

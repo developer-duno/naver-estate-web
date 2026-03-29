@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import type { MbApartment } from "@/types";
+import { useMbFavorites } from "@/hooks/useMbFavorites";
 
 /** 문자열 sort 값 ("unsold_desc") ↔ SortState 변환 */
 function parseSortString(s?: string): { key: string; dir: "asc" | "desc" | null } {
@@ -57,11 +58,15 @@ interface Props {
   startIndex?: number;
   sort?: string;
   onSortChange?: (sort: string) => void;
+  isInCompare?: (id: string) => boolean;
+  onCompareToggle?: (id: string, name: string) => void;
+  compareFull?: boolean;
 }
 
-export default function MbApartmentTable({ apartments, startIndex = 0, sort, onSortChange }: Props) {
+export default function MbApartmentTable({ apartments, startIndex = 0, sort, onSortChange, isInCompare, onCompareToggle, compareFull }: Props) {
   const router = useRouter();
   const sortState = parseSortString(sort);
+  const { isFavorite, toggle: toggleFav } = useMbFavorites();
 
   if (apartments.length === 0) {
     return (
@@ -76,6 +81,7 @@ export default function MbApartmentTable({ apartments, startIndex = 0, sort, onS
       <table className="w-full text-sm border-collapse">
         <thead className="bg-gray-100 border-b-2 border-gray-300">
           <tr>
+            <th className="px-2 py-2.5 text-center text-gray-700 font-semibold w-10" aria-label="액션" />
             <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">#</th>
             <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">단지명</th>
             <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">지역</th>
@@ -88,7 +94,10 @@ export default function MbApartmentTable({ apartments, startIndex = 0, sort, onS
           </tr>
         </thead>
         <tbody>
-          {apartments.map((apt, i) => (
+          {apartments.map((apt, i) => {
+            const fav = isFavorite(apt.id);
+            const cmp = isInCompare?.(apt.id) ?? false;
+            return (
             <tr
               key={apt.id}
               onClick={() => router.push(`/mibunyang/${apt.id}`)}
@@ -98,6 +107,37 @@ export default function MbApartmentTable({ apartments, startIndex = 0, sort, onS
               tabIndex={0}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") router.push(`/mibunyang/${apt.id}`); }}
             >
+              <td className="px-1 py-2 text-center whitespace-nowrap">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFav({ id: apt.id, name: apt.name, region: apt.region });
+                  }}
+                  className={`text-base leading-none ${fav ? "text-yellow-500" : "text-gray-300 hover:text-yellow-400"}`}
+                  aria-label={fav ? "즐겨찾기 해제" : "즐겨찾기 추가"}
+                >
+                  {fav ? "★" : "☆"}
+                </button>
+                {onCompareToggle && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCompareToggle(apt.id, apt.name);
+                    }}
+                    disabled={!cmp && compareFull}
+                    className={`ml-1 text-xs px-1 py-0.5 rounded border leading-none ${
+                      cmp
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-500 border-gray-300 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                    }`}
+                    aria-label={cmp ? "비교 해제" : "비교 추가"}
+                  >
+                    {cmp ? "V" : "+"}
+                  </button>
+                )}
+              </td>
               <td className="px-3 py-2 text-gray-500">{startIndex + i + 1}</td>
               <td className="px-3 py-2 font-medium text-blue-700 hover:underline">{apt.name}</td>
               <td className="px-3 py-2 text-gray-600">{apt.region}</td>
@@ -112,7 +152,8 @@ export default function MbApartmentTable({ apartments, startIndex = 0, sort, onS
               <td className="px-3 py-2 text-gray-600">{apt.presale_move_in ?? apt.completion ?? "-"}</td>
               <td className="px-3 py-2 text-gray-600 max-w-[120px] truncate">{apt.builder ?? "-"}</td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

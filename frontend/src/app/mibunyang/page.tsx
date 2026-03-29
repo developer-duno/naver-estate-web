@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, Suspense } from "react";
+import { useState, useCallback, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
@@ -12,6 +12,9 @@ import MbTradeTable from "@/components/mb/MbTradeTable";
 import Pagination from "@/components/Pagination";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { PAGE_SIZE } from "@/lib/constants";
+import { exportMbApartmentsToXlsx, exportMbRegionsToXlsx, exportMbTradesToXlsx } from "@/lib/mb-export";
+import { useMbCompare } from "@/hooks/useMbCompare";
+import MbCompareFloatingBar from "@/components/mb/MbCompareFloatingBar";
 
 const TABS = [
   { key: "apartments", label: "미분양 단지" },
@@ -33,6 +36,7 @@ export default function MibunyangPage() {
 function MibunyangContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const compare = useMbCompare();
 
   const region = searchParams.get("region") ?? "";
   const gu = searchParams.get("gu") ?? "";
@@ -169,12 +173,19 @@ function MibunyangContent() {
                 <span className="text-sm text-gray-500">
                   총 {apartmentsQuery.data?.total?.toLocaleString() ?? 0}개
                 </span>
+                <ExportButton
+                  disabled={!apartmentsQuery.data?.apartments?.length}
+                  onClick={() => exportMbApartmentsToXlsx(apartmentsQuery.data?.apartments ?? [])}
+                />
               </div>
               <MbApartmentTable
                 apartments={apartmentsQuery.data?.apartments ?? []}
                 startIndex={(page - 1) * PAGE_SIZE}
                 sort={sortBy}
                 onSortChange={handleSortChange}
+                isInCompare={compare.isInCompare}
+                onCompareToggle={(id, name) => compare.toggle({ id, name })}
+                compareFull={compare.isFull}
               />
               {apartmentsQuery.data && apartmentsQuery.data.total > PAGE_SIZE && (
                 <div className="mt-4">
@@ -198,8 +209,19 @@ function MibunyangContent() {
                 <span className="text-sm text-gray-500">
                   미분양 {unsoldQuery.data?.total?.toLocaleString() ?? 0}개
                 </span>
+                <ExportButton
+                  disabled={!unsoldQuery.data?.unsold?.length}
+                  onClick={() => exportMbApartmentsToXlsx(unsoldQuery.data?.unsold ?? [])}
+                />
               </div>
-              <MbApartmentTable apartments={unsoldQuery.data?.unsold ?? []} sort={sortBy} onSortChange={handleSortChange} />
+              <MbApartmentTable
+                apartments={unsoldQuery.data?.unsold ?? []}
+                sort={sortBy}
+                onSortChange={handleSortChange}
+                isInCompare={compare.isInCompare}
+                onCompareToggle={(id, name) => compare.toggle({ id, name })}
+                compareFull={compare.isFull}
+              />
             </TabContent>
           )}
 
@@ -209,6 +231,15 @@ function MibunyangContent() {
               error={regionsQuery.error}
               refetch={regionsQuery.refetch}
             >
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm text-gray-500">
+                  {regionsQuery.data?.regions?.length ?? 0}개 지역
+                </span>
+                <ExportButton
+                  disabled={!regionsQuery.data?.regions?.length}
+                  onClick={() => exportMbRegionsToXlsx(regionsQuery.data?.regions ?? [])}
+                />
+              </div>
               <MbRegionStatsTable regions={regionsQuery.data?.regions ?? []} />
             </TabContent>
           )}
@@ -223,6 +254,10 @@ function MibunyangContent() {
                 <span className="text-sm text-gray-500">
                   총 {tradesQuery.data?.total?.toLocaleString() ?? 0}건
                 </span>
+                <ExportButton
+                  disabled={!tradesQuery.data?.trades?.length}
+                  onClick={() => exportMbTradesToXlsx(tradesQuery.data?.trades ?? [])}
+                />
               </div>
               <MbTradeTable
                 trades={tradesQuery.data?.trades ?? []}
@@ -243,6 +278,9 @@ function MibunyangContent() {
           )}
         </>
       )}
+
+      <MbCompareFloatingBar list={compare.list} onRemove={compare.remove} onClear={compare.clear} />
+      {compare.list.length > 0 && <div className="pb-16" />}
     </div>
   );
 }
@@ -273,4 +311,33 @@ function TabContent({
     );
   }
   return <>{children}</>;
+}
+
+function ExportButton({ disabled, onClick }: { disabled: boolean; onClick: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const handle = async () => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      await onClick();
+    } catch {
+      setFailed(true);
+      setTimeout(() => setFailed(false), 3000);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      disabled={disabled || busy}
+      onClick={handle}
+      className={`text-xs px-3 py-1 rounded border text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed ${
+        failed ? "border-red-400 text-red-500" : "border-gray-300"
+      }`}
+    >
+      {busy ? "다운로드 중..." : failed ? "실패" : "엑셀"}
+    </button>
+  );
 }

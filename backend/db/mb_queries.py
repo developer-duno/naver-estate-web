@@ -56,6 +56,16 @@ def _apply_keyword_filter(conditions: list, keyword: Optional[str]):
             conditions.append(Apartment.name.ilike(f"%{escaped}%"))
 
 
+def get_gu_list(db: Session, region: str) -> list[str]:
+    """시/도 내 시/군/구 목록 (apartments 테이블에서 DISTINCT)"""
+    stmt = (
+        select(func.distinct(Apartment.gu))
+        .where(and_(Apartment.region == region, Apartment.gu.isnot(None)))
+        .order_by(Apartment.gu)
+    )
+    return [row for row in db.execute(stmt).scalars().all()]
+
+
 # ── 아파트 단지 ──────────────────────────────────────────────
 
 

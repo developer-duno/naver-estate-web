@@ -49,6 +49,7 @@ export const queryKeys = {
 
   // 미분양 (mibunyang)
   mb: {
+    guList: (region: string) => ["mb", "guList", region] as const,
     apartments: (region: string, gu?: string, page?: number, sortBy?: string, keyword?: string) =>
       ["mb", "apartments", region, gu, page, ...(sortBy ? [sortBy] : []), ...(keyword ? [keyword] : [])] as const,
     apartmentDetail: (id: string) => ["mb", "apartment", id] as const,

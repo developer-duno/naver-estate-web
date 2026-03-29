@@ -433,6 +433,13 @@ export async function deleteStaleData(token: string, days: number) {
 
 import type { MbApartment, MbUnsoldHistory, MbRegion, MbTrade } from "@/types";
 
+/** 시/도 내 시/군/구 목록 (apartments 기준) */
+export async function getMbGuList(region: string) {
+  return fetchApi<{ region: string; gu_list: string[] }>(
+    `/api/mb/gu-list?region=${encodeURIComponent(region)}`,
+  );
+}
+
 /** 지역별 아파트 목록 */
 export async function getMbApartments(region: string, gu?: string, page = 1, pageSize = 50, sortBy?: string, keyword?: string) {
   const params = new URLSearchParams({ region, page: String(page), page_size: String(pageSize) });

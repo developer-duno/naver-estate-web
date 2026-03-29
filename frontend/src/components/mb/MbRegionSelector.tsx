@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getMbRegions } from "@/lib/api";
+import { getMbGuList } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 
 const SIDO_LIST = [
@@ -29,17 +29,14 @@ export default function MbRegionSelector({ onSearch, defaultRegion, defaultGu, d
   useEffect(() => { setGu(defaultGu ?? ""); }, [defaultGu]);
   useEffect(() => { setKeyword(defaultKeyword ?? ""); }, [defaultKeyword]);
 
-  const regionsQuery = useQuery({
-    queryKey: queryKeys.mb.regions(region),
-    queryFn: () => getMbRegions(region),
+  const guQuery = useQuery({
+    queryKey: queryKeys.mb.guList(region),
+    queryFn: () => getMbGuList(region),
     enabled: region.length >= 2,
-    staleTime: 60_000,
+    staleTime: 5 * 60_000,
   });
 
-  const guList = useMemo(() => {
-    if (!regionsQuery.data?.regions) return [];
-    return [...new Set(regionsQuery.data.regions.map((r) => r.gu).filter(Boolean))] as string[];
-  }, [regionsQuery.data]);
+  const guList = guQuery.data?.gu_list ?? [];
 
   const handleRegionChange = (value: string) => {
     setRegion(value);

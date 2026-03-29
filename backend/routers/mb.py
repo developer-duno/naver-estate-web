@@ -41,6 +41,16 @@ MbTradeSortBy = Literal[
 ]
 
 
+@router.get("/gu-list")
+def get_gu_list(
+    region: str = Query(..., min_length=2, max_length=20, description="시도"),
+    db: Session = Depends(get_db),
+):
+    """시/도 내 시/군/구 목록 (apartments 테이블 기준)"""
+    items = mb_queries.get_gu_list(db, region)
+    return {"region": region, "gu_list": items}
+
+
 @router.get("/apartments")
 def get_apartments(
     region: str = Query(..., min_length=2, max_length=20, description="시도"),

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
@@ -23,6 +23,14 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 export default function MibunyangPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <MibunyangContent />
+    </Suspense>
+  );
+}
+
+function MibunyangContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 

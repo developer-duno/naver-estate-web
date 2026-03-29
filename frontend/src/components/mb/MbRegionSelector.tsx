@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getMbRegions } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
@@ -22,6 +22,9 @@ interface Props {
 export default function MbRegionSelector({ onSearch, defaultRegion, defaultGu }: Props) {
   const [region, setRegion] = useState(defaultRegion ?? "");
   const [gu, setGu] = useState(defaultGu ?? "");
+
+  useEffect(() => { setRegion(defaultRegion ?? ""); }, [defaultRegion]);
+  useEffect(() => { setGu(defaultGu ?? ""); }, [defaultGu]);
 
   const regionsQuery = useQuery({
     queryKey: queryKeys.mb.regions(region),

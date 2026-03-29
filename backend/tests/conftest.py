@@ -66,6 +66,7 @@ sys.modules["db.database"] = fake_db_mod
 
 # ORM 모델 임포트 (Base.metadata에 테이블 등록)
 import db.models  # noqa: F401, E402
+import db.mb_models  # noqa: F401, E402  — mibunyang 테이블
 from deps import get_db  # noqa: E402
 
 

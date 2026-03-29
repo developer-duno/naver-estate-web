@@ -14,9 +14,12 @@
 | `routers/stats.py` | 통계 API |
 | `routers/regions.py` | 지역 데이터 API |
 | `routers/users.py` | 사용자 로그인 기록 |
-| `routers/serializers.py` | ORM → dict 변환 |
-| `db/models.py` | SQLAlchemy ORM 모델 |
-| `db/queries.py` | DB 쿼리 함수 |
+| `routers/serializers.py` | ORM → dict 변환 (estate + mb) |
+| `routers/mb.py` | mibunyang 데이터 API (미분양/실거래/지역통계) |
+| `db/models.py` | SQLAlchemy ORM 모델 (estate) |
+| `db/mb_models.py` | mibunyang 테이블 ORM 모델 (같은 Base 상속) |
+| `db/queries.py` | DB 쿼리 함수 (estate) |
+| `db/mb_queries.py` | mibunyang 읽기 쿼리 함수 |
 | `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V011) |
 | `shared/naver_api.py` | NaverEstateAPI (수정 금지) |
 | `shared/constants.py` | 상수 (수정 금지) |
@@ -44,18 +47,22 @@
 - 수집 중 실시간 진행률: `on_progress` 콜백으로 collected/failed/total 업데이트
 - 완료 시 `_price_history_cache` 캐시 무효화 (delete_by_prefix)
 
-## DB 듀얼 엔진 (mibunyang 통합 준비)
+## mibunyang 통합 (Phase 1 — 읽기 전용)
 
-- `db/database.py`에 estate DB + mibunyang DB 듀얼 엔진 설정
-- `MB_DATABASE_URL` 환경변수 있을 때만 mb 엔진 활성화 (조건부)
-- `MBBase`, `MBSessionLocal`, `get_mb_db()` — mb 전용 세션
+- 같은 Supabase DB 공유 → 기존 `Base`/`SessionLocal`/`get_db()` 그대로 사용
+- `db/mb_models.py`: mibunyang 10개 테이블 ORM (Apartment, UnsoldHistory, MBRegion, MBTrade 등)
+- `db/mb_queries.py`: 읽기 쿼리 (get_apartments, get_unsold_by_region, get_trades 등)
+- `routers/mb.py`: `/api/mb/*` 엔드포인트 (인증 없는 공개 API, complexes.py 패턴)
+- mibunyang 테이블: apartments(97col), unsold_history, regions, trades, prices, trade_stats, builders, infra, schools, transport
+- 컬럼명 매핑: `lat`→`latitude`, `lng`→`longitude` (mapped_column alias)
+- **레거시**: `MBBase`/`get_mb_db()`는 `database.py`에 남아있으나 Phase 1에서 미사용 (향후 정리)
 
 ## CI 테스트 인프라
 
 - **엔진**: file-based SQLite + NullPool + WAL + busy_timeout 5초
 - **dialect 분기**: `_search_all_types()`는 SQLite에서 ThreadPoolExecutor 대신 순차 실행
   - `_do_upsert()`도 dialect-aware (pg_insert/sqlite_insert 자동 분기)
-- **테스트**: 227개 (22개 파일) — `python -m pytest --tb=short -q`
+- **테스트**: 249개 (24개 파일) — `python -m pytest --tb=short -q`
 - **conftest.py**: `sys.modules["db.database"]` 교체로 테스트 엔진 주입
 
 ## CORS 미들웨어 순서 (중요)

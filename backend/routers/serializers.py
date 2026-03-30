@@ -4,6 +4,7 @@ complexes.py와 articles.py에서 동일한 변환 로직이 중복되어 있었
 DRY 원칙에 따라 단일 모듈로 통합.
 """
 
+from db.mb_queries import extract_base_name
 from shared.constants import M2_TO_PYEONG
 
 
@@ -187,10 +188,10 @@ def build_filter_dict(
 
 
 def apartment_to_dict(a) -> dict:
-    """Apartment ORM → dict"""
+    """Apartment ORM → dict (name에서 차수 접미사 제거)"""
     return {
         "id": a.id,
-        "name": a.name,
+        "name": extract_base_name(a.name),
         "region": a.region,
         "gu": a.gu,
         "dong": a.dong,

@@ -62,8 +62,7 @@ def get_apartments(
     db: Session = Depends(get_db),
 ):
     """지역별 아파트 목록 (정렬 + 검색)"""
-    items = mb_queries.get_apartments(db, region, gu, page, page_size, sort_by, keyword)
-    total = mb_queries.count_apartments(db, region, gu, keyword)
+    items, total = mb_queries.get_apartments_page(db, region, gu, page, page_size, sort_by, keyword)
     return {
         "apartments": [apartment_to_dict(a) for a in items],
         "total": total,

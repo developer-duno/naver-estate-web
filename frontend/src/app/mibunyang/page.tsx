@@ -340,6 +340,8 @@ function TabContent({
   return <>{children}</>;
 }
 
+const MAX_BATCH_COMPARE = 4;
+
 function FavoritesContent({
   favorites,
   onRemove,
@@ -348,6 +350,32 @@ function FavoritesContent({
   onRemove: (item: { id: string; name: string; region?: string }) => void;
 }) {
   const router = useRouter();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (next.size < MAX_BATCH_COMPARE) {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    setSelected((prev) => {
+      if (prev.size === Math.min(favorites.length, MAX_BATCH_COMPARE)) return new Set();
+      return new Set(favorites.slice(0, MAX_BATCH_COMPARE).map((f) => f.id));
+    });
+  }, [favorites]);
+
+  const handleBatchCompare = () => {
+    if (selected.size < 2) return;
+    const ids = Array.from(selected).join(",");
+    router.push(`/mibunyang/compare?ids=${ids}`);
+  };
 
   if (favorites.length === 0) {
     return (
@@ -358,13 +386,39 @@ function FavoritesContent({
     );
   }
 
+  const allChecked = selected.size === Math.min(favorites.length, MAX_BATCH_COMPARE);
+
   return (
     <div>
-      <span className="text-sm text-gray-500 mb-3 block">{favorites.length}개 단지</span>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm text-gray-500">{favorites.length}개 단지</span>
+        <div className="flex items-center gap-2">
+          {selected.size > 0 && (
+            <span className="text-xs text-gray-500">{selected.size}/{MAX_BATCH_COMPARE}개 선택</span>
+          )}
+          <button
+            type="button"
+            onClick={handleBatchCompare}
+            disabled={selected.size < 2}
+            className="px-3 py-1 text-xs rounded border bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            선택 비교
+          </button>
+        </div>
+      </div>
       <div className="overflow-x-auto bg-white rounded-lg shadow-sm border">
         <table className="w-full text-sm border-collapse">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
+              <th className="px-3 py-2 text-center w-10">
+                <input
+                  type="checkbox"
+                  checked={allChecked}
+                  onChange={toggleAll}
+                  aria-label="전체 선택"
+                  className="accent-blue-600"
+                />
+              </th>
               <th className="px-3 py-2 text-left text-gray-600 w-12">#</th>
               <th className="px-3 py-2 text-left text-gray-600">단지명</th>
               <th className="px-3 py-2 text-left text-gray-600">지역</th>
@@ -376,11 +430,24 @@ function FavoritesContent({
             {favorites.map((fav, i) => (
               <tr
                 key={fav.id}
-                className="border-b border-gray-100 hover:bg-blue-50/40 cursor-pointer"
+                className={`border-b border-gray-100 hover:bg-blue-50/40 cursor-pointer ${
+                  selected.has(fav.id) ? "bg-blue-50/60" : ""
+                }`}
                 onClick={() => router.push(`/mibunyang/${fav.id}`)}
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === "Enter") router.push(`/mibunyang/${fav.id}`); }}
               >
+                <td className="px-3 py-2 text-center">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(fav.id)}
+                    disabled={!selected.has(fav.id) && selected.size >= MAX_BATCH_COMPARE}
+                    onChange={() => toggleSelect(fav.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`${fav.name} 선택`}
+                    className="accent-blue-600"
+                  />
+                </td>
                 <td className="px-3 py-2 text-gray-400">{i + 1}</td>
                 <td className="px-3 py-2 font-medium text-gray-900">{fav.name}</td>
                 <td className="px-3 py-2 text-gray-500">{fav.region ?? "-"}</td>

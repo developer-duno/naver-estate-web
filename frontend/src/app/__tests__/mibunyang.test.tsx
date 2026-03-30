@@ -2,16 +2,18 @@
  * 미분양 메인 페이지 통합 테스트 — 탭 전환, API 호출, 로딩/에러/빈 상태
  * 실행: npx vitest run src/app/__tests__/mibunyang.test.tsx
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import MibunyangPage from "../mibunyang/page";
 import { TestQueryProvider } from "@/test-setup";
 
-const mockReplace = vi.fn();
-const mockSearchParams = vi.fn(() => new URLSearchParams());
+const { mockRouter, mockSearchParams } = vi.hoisted(() => ({
+  mockRouter: { replace: vi.fn(), push: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() },
+  mockSearchParams: vi.fn(() => new URLSearchParams()),
+}));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace: mockReplace, push: vi.fn() }),
+  useRouter: () => mockRouter,
   useSearchParams: () => mockSearchParams(),
 }));
 
@@ -44,7 +46,7 @@ function renderPage(params = "") {
 }
 
 describe("미분양 메인 — 초기 상태", () => {
-  beforeEach(() => { mockReplace.mockClear(); });
+  beforeEach(() => { mockRouter.replace.mockClear(); mockRouter.push.mockClear(); });
 
   it("페이지 제목이 표시된다", () => {
     renderPage();
@@ -63,7 +65,7 @@ describe("미분양 메인 — 초기 상태", () => {
 });
 
 describe("미분양 메인 — 데이터 표시", () => {
-  beforeEach(() => { mockReplace.mockClear(); });
+  beforeEach(() => { mockRouter.replace.mockClear(); mockRouter.push.mockClear(); });
 
   it("지역 선택 후 탭이 표시된다 (5개)", async () => {
     renderPage("region=서울특별시&tab=apartments&page=1");
@@ -89,7 +91,7 @@ describe("미분양 메인 — 데이터 표시", () => {
       expect(screen.getByRole("tab", { name: "미분양만" })).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole("tab", { name: "미분양만" }));
-    expect(mockReplace).toHaveBeenCalled();
+    expect(mockRouter.replace).toHaveBeenCalled();
   });
 
   it("실거래 탭에서 거래 데이터가 표시된다", async () => {
@@ -101,7 +103,7 @@ describe("미분양 메인 — 데이터 표시", () => {
 });
 
 describe("미분양 메인 — 즐겨찾기 탭", () => {
-  beforeEach(() => { mockReplace.mockClear(); });
+  beforeEach(() => { mockRouter.replace.mockClear(); mockRouter.push.mockClear(); });
 
   it("지역 미선택 시에도 탭바가 표시된다", () => {
     renderPage();
@@ -116,6 +118,83 @@ describe("미분양 메인 — 즐겨찾기 탭", () => {
   it("지역 미선택 + 즐겨찾기 탭이면 '지역을 선택해주세요'가 표시되지 않는다", () => {
     renderPage("tab=favorites");
     expect(screen.queryByText("지역을 선택해주세요")).not.toBeInTheDocument();
+  });
+});
+
+describe("미분양 메인 — 즐겨찾기 일괄 비교", () => {
+  const favs = [
+    { id: "F1", name: "단지A", region: "서울", added_at: 1000 },
+    { id: "F2", name: "단지B", region: "경기", added_at: 2000 },
+    { id: "F3", name: "단지C", region: "인천", added_at: 3000 },
+    { id: "F4", name: "단지D", region: "부산", added_at: 4000 },
+    { id: "F5", name: "단지E", region: "대구", added_at: 5000 },
+  ];
+
+  beforeEach(() => {
+    mockRouter.replace.mockClear();
+    mockRouter.push.mockClear();
+    localStorage.setItem("mb_favorites", JSON.stringify(favs));
+  });
+
+  afterEach(() => { localStorage.removeItem("mb_favorites"); });
+
+  it("즐겨찾기 목록에 체크박스가 표시된다", () => {
+    renderPage("tab=favorites");
+    // 전체 선택 + 개별 5개 = 6개 체크박스
+    const checkboxes = screen.getAllByRole("checkbox");
+    expect(checkboxes.length).toBe(6);
+  });
+
+  it("선택 비교 버튼이 비활성화 상태로 표시된다 (0개 선택)", () => {
+    renderPage("tab=favorites");
+    const btn = screen.getByRole("button", { name: "선택 비교" });
+    expect(btn).toBeDisabled();
+  });
+
+  it("체크박스 2개 선택 시 선택 비교 버튼이 활성화된다", () => {
+    renderPage("tab=favorites");
+    const checkboxes = screen.getAllByRole("checkbox");
+    // checkboxes[0] = 전체 선택, [1]~[5] = 개별
+    fireEvent.click(checkboxes[1]); // 단지A
+    fireEvent.click(checkboxes[2]); // 단지B
+    expect(screen.getByRole("button", { name: "선택 비교" })).not.toBeDisabled();
+    expect(screen.getByText("2/4개 선택")).toBeInTheDocument();
+  });
+
+  it("최대 4개까지만 선택 가능하다", () => {
+    renderPage("tab=favorites");
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[1]); // F1
+    fireEvent.click(checkboxes[2]); // F2
+    fireEvent.click(checkboxes[3]); // F3
+    fireEvent.click(checkboxes[4]); // F4
+    // 5번째 체크박스(F5)는 disabled
+    expect(checkboxes[5]).toBeDisabled();
+    expect(screen.getByText("4/4개 선택")).toBeInTheDocument();
+  });
+
+  it("전체 선택 시 최대 4개까지 선택된다", () => {
+    renderPage("tab=favorites");
+    const allCheckbox = screen.getByLabelText("전체 선택");
+    fireEvent.click(allCheckbox);
+    expect(screen.getByText("4/4개 선택")).toBeInTheDocument();
+  });
+
+  it("선택 비교 클릭 시 compare 페이지로 이동한다", async () => {
+    renderPage("tab=favorites");
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[1]); // F1
+    fireEvent.click(checkboxes[2]); // F2
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "선택 비교" })).not.toBeDisabled();
+    });
+    mockRouter.push.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "선택 비교" }));
+    expect(mockRouter.push).toHaveBeenCalledTimes(1);
+    const url = mockRouter.push.mock.calls[0][0] as string;
+    expect(url).toContain("/mibunyang/compare?ids=");
+    expect(url).toContain("F1");
+    expect(url).toContain("F2");
   });
 });
 

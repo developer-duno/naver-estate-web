@@ -1,5 +1,7 @@
 """mibunyang 읽기 쿼리 — 기존 get_db() 세션 사용, SQL WHERE 필터링"""
 
+import re
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import and_, func, select
@@ -17,6 +19,51 @@ from db.mb_models import (
     Transport,
     UnsoldHistory,
 )
+
+# ── 중복 제거 헬퍼 ──────────────────────────────────────────
+
+_TRAILING_PAREN_RE = re.compile(r"\s*\([^)]*\)\s*$")
+
+
+def extract_base_name(name: str) -> str:
+    """단지명에서 차수 접미사 제거: '푸르지오(임의공급 3차)' → '푸르지오'"""
+    if not name:
+        return ""
+    return _TRAILING_PAREN_RE.sub("", name)
+
+
+def _deduplicate_apartments(apartments: list["Apartment"]) -> list["Apartment"]:
+    """(base_name, region, gu) 그룹에서 마지막 차수만 유지 (created_at DESC, id DESC)"""
+    best: dict[tuple[str, str, Optional[str]], "Apartment"] = {}
+    _min_dt = datetime.min
+    for apt in apartments:
+        key = (extract_base_name(apt.name), apt.region, apt.gu)
+        existing = best.get(key)
+        if existing is None:
+            best[key] = apt
+        else:
+            if (apt.created_at or _min_dt, apt.id) > (
+                existing.created_at or _min_dt,
+                existing.id,
+            ):
+                best[key] = apt
+    return list(best.values())
+
+
+def _sort_apartments(apartments: list["Apartment"], sort_by: str) -> list["Apartment"]:
+    """Python 레벨 정렬 (중복 제거 후 순서 복원용)"""
+    sort_config: dict[str, tuple] = {
+        "name_asc": (lambda a: (a.name or ""), False),
+        "unsold_desc": (lambda a: (a.unsold or 0), True),
+        "unsold_asc": (lambda a: (a.unsold or 0), False),
+        "unsold_rate_desc": (lambda a: (a.unsold_rate or 0.0), True),
+        "units_desc": (lambda a: (a.units or 0), True),
+        "price_asc": (lambda a: (a.presale_min_price or float("inf")), False),
+        "price_desc": (lambda a: (a.presale_min_price or 0), True),
+    }
+    key_fn, reverse = sort_config.get(sort_by, (lambda a: (a.name or ""), False))
+    return sorted(apartments, key=key_fn, reverse=reverse)
+
 
 # ── 정렬 헬퍼 ───────────────────────────────────────────────
 
@@ -69,6 +116,29 @@ def get_gu_list(db: Session, region: str) -> list[str]:
 # ── 아파트 단지 ──────────────────────────────────────────────
 
 
+def get_apartments_page(
+    db: Session,
+    region: str,
+    gu: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+    sort_by: str = "name_asc",
+    keyword: Optional[str] = None,
+) -> tuple[list[Apartment], int]:
+    """아파트 목록 + 전체 수 (단일 쿼리, 중복 제거 + 정렬 + 페이지네이션)"""
+    conditions = [Apartment.region == region]
+    if gu:
+        conditions.append(Apartment.gu == gu)
+    _apply_keyword_filter(conditions, keyword)
+
+    stmt = select(Apartment).where(and_(*conditions))
+    all_rows = list(db.execute(stmt).scalars().all())
+    deduped = _deduplicate_apartments(all_rows)
+    sorted_rows = _sort_apartments(deduped, sort_by)
+    start = (page - 1) * page_size
+    return sorted_rows[start : start + page_size], len(deduped)
+
+
 def get_apartments(
     db: Session,
     region: str,
@@ -78,20 +148,9 @@ def get_apartments(
     sort_by: str = "name_asc",
     keyword: Optional[str] = None,
 ) -> list[Apartment]:
-    """지역별 아파트 목록 (페이지네이션 + 정렬 + 검색)"""
-    conditions = [Apartment.region == region]
-    if gu:
-        conditions.append(Apartment.gu == gu)
-    _apply_keyword_filter(conditions, keyword)
-
-    stmt = (
-        select(Apartment)
-        .where(and_(*conditions))
-        .order_by(_build_mb_order_clause(sort_by))
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-    return list(db.execute(stmt).scalars().all())
+    """지역별 아파트 목록 (래퍼 — get_apartments_page 사용)"""
+    items, _ = get_apartments_page(db, region, gu, page, page_size, sort_by, keyword)
+    return items
 
 
 def count_apartments(
@@ -100,14 +159,9 @@ def count_apartments(
     gu: Optional[str] = None,
     keyword: Optional[str] = None,
 ) -> int:
-    """지역별 아파트 수 (검색 반영)"""
-    conditions = [Apartment.region == region]
-    if gu:
-        conditions.append(Apartment.gu == gu)
-    _apply_keyword_filter(conditions, keyword)
-
-    stmt = select(func.count(Apartment.id)).where(and_(*conditions))
-    return db.execute(stmt).scalar() or 0
+    """지역별 아파트 수 (래퍼 — get_apartments_page 사용)"""
+    _, total = get_apartments_page(db, region, gu, 1, 1, keyword=keyword)
+    return total
 
 
 def get_apartment_by_id(db: Session, apartment_id: str) -> Optional[Apartment]:
@@ -140,18 +194,16 @@ def get_unsold_by_region(
     sort_by: str = "unsold_desc",
     keyword: Optional[str] = None,
 ) -> list[Apartment]:
-    """지역별 미분양 아파트 (unsold > 0, 정렬 + 검색)"""
+    """지역별 미분양 아파트 (unsold > 0, 중복 제거 + 정렬 + 검색)"""
     conditions = [Apartment.region == region, Apartment.unsold > 0]
     if gu:
         conditions.append(Apartment.gu == gu)
     _apply_keyword_filter(conditions, keyword)
 
-    stmt = (
-        select(Apartment)
-        .where(and_(*conditions))
-        .order_by(_build_mb_order_clause(sort_by))
-    )
-    return list(db.execute(stmt).scalars().all())
+    stmt = select(Apartment).where(and_(*conditions))
+    all_rows = list(db.execute(stmt).scalars().all())
+    deduped = _deduplicate_apartments(all_rows)
+    return _sort_apartments(deduped, sort_by)
 
 
 # ── 지역 통계 ────────────────────────────────────────────────

@@ -131,7 +131,7 @@ components/
 - 미분양 테이블에 "+" 버튼 → useMbCompare로 localStorage 관리 (최대 4개)
 - 하단 MbCompareFloatingBar: 선택 단지 pill + "비교하기" (2개 이상) + "초기화"
 - /mibunyang/compare?ids=id1,id2,... → useQueries 병렬 조회 + 17행 비교 테이블 + 우위★
-- 차트 3종: MbCompareRadarChart(9축 정규화, 종합우위★), MbComparePriceChart(min/max/pp 막대, 최저가★), MbCompareUnsoldChart(다중아파트 추이, 기간필터 6M/1Y/2Y/ALL)
+- 차트 3종: MbCompareRadarChart(9축 정규화, 동적 축 선택 칩 최소3개, 종합우위★), MbComparePriceChart(min/max/pp 막대, 최저가★), MbCompareUnsoldChart(다중아파트 추이, 기간필터 6M/1Y/2Y/ALL)
 - 인쇄: window.print() + rAF 2회 + no-print 클래스
 - URL 복사: navigator.clipboard.writeText + fallback alert
 - 단지명→상세 링크: th onClick + router.push
@@ -141,6 +141,7 @@ components/
 ### 미분양 즐겨찾기 + 일괄 비교 + 엑셀 + 지도
 - 즐겨찾기: useMbFavorites + useMbFavoriteStatus (localStorage, 최대 200개)
 - 즐겨찾기 일괄 비교: FavoritesContent 체크박스 선택 (최대 4개) → "선택 비교" → /mibunyang/compare
+- 즐겨찾기 정렬: FavSortBy 드롭다운 (추가일순↓/단지명순/지역순, useMemo 클라이언트 정렬)
 - MbApartmentTable 액션 열: ★(즐겨찾기) + +(비교) 통합
 - 엑셀: mb-export.ts 4개 함수 (apartments/regions/trades/unsoldHistory) + ExportButton (로딩+실패 피드백)
 - 지도: MbLocationMap (Naver Maps v3 vanilla SDK, dynamic import, 폴링 기반 SDK 대기, lat/lng null 시 미표시)

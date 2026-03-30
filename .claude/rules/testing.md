@@ -31,7 +31,7 @@ cd backend && ruff check . && python -m pytest && cd ../frontend && npm test
 
 ### 레벨별 실행
 ```bash
-# FE 단위 + 컴포넌트 + 훅 + 페이지 (368개, 37파일)
+# FE 단위 + 컴포넌트 + 훅 + 페이지 (372개, 37파일)
 cd frontend && npm test
 
 # BE 단위 + 통합 + API + 엣지케이스 + mibunyang + 정렬/검색 + 중복제거 (276개, 1 스킵)

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Legend, Tooltip,
@@ -11,6 +11,7 @@ import type { MbApartment } from "@/types";
 const RADAR_HEIGHT = 400;
 const NORMALIZE_MAX = 100;
 const RADAR_FILL_OPACITY = 0.15;
+const MIN_AXES = 3;
 
 interface AxisDef {
   key: string;
@@ -36,14 +37,34 @@ interface Props {
 }
 
 export default function MbCompareRadarChart({ apartments }: Props) {
+  const [enabledAxes, setEnabledAxes] = useState<Set<string>>(
+    () => new Set(AXES.map((a) => a.key)),
+  );
+
+  const toggleAxis = useCallback((key: string) => {
+    setEnabledAxes((prev) => {
+      if (prev.has(key)) {
+        if (prev.size <= MIN_AXES) return prev;
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      }
+      const next = new Set(prev);
+      next.add(key);
+      return next;
+    });
+  }, []);
+
+  const activeAxes = AXES.filter((a) => enabledAxes.has(a.key));
+
   const { data, bestName } = useMemo(() => {
     const maxMap = new Map<string, number>();
-    for (const axis of AXES) {
+    for (const axis of activeAxes) {
       const max = Math.max(...apartments.map((a) => axis.getValue(a)), 1);
       maxMap.set(axis.key, max);
     }
 
-    const rows = AXES.map((axis) => {
+    const rows = activeAxes.map((axis) => {
       const row: Record<string, string | number> = { axis: axis.label };
       for (let i = 0; i < apartments.length; i++) {
         const raw = axis.getValue(apartments[i]);
@@ -63,13 +84,39 @@ export default function MbCompareRadarChart({ apartments }: Props) {
     }
 
     return { data: rows, bestName: apartments[bestIdx]?.name ?? "" };
-  }, [apartments]);
+  }, [apartments, enabledAxes]);
 
   if (apartments.length < 2) return null;
 
+  const atMinimum = enabledAxes.size <= MIN_AXES;
+
   return (
     <div className="bg-white rounded-lg shadow-sm border p-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">종합 비교 (레이더)</h3>
+      <h3 className="text-sm font-semibold text-gray-700 mb-2">종합 비교 (레이더)</h3>
+      <div className="flex flex-wrap items-center gap-1.5 mb-3 no-print">
+        {AXES.map((axis) => {
+          const active = enabledAxes.has(axis.key);
+          const locked = active && atMinimum;
+          return (
+            <button
+              key={axis.key}
+              type="button"
+              onClick={() => toggleAxis(axis.key)}
+              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs border transition-colors ${
+                active
+                  ? `bg-blue-50 text-blue-700 border-blue-200${locked ? " cursor-not-allowed opacity-70" : " hover:bg-blue-100 cursor-pointer"}`
+                  : "bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200 cursor-pointer"
+              }`}
+              aria-pressed={active}
+            >
+              {axis.label}
+            </button>
+          );
+        })}
+        {atMinimum && (
+          <span className="text-xs text-gray-400">(최소 3개)</span>
+        )}
+      </div>
       <ResponsiveContainer width="100%" height={RADAR_HEIGHT}>
         <RadarChart data={data} cx="50%" cy="50%" outerRadius="75%">
           <PolarGrid />

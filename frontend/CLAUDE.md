@@ -17,7 +17,7 @@
 ```
 frontend/src/
 ├── app/           # Next.js App Router (20 페이지, mibunyang/ + mibunyang/compare 포함)
-├── components/    # 재사용 컴포넌트 (24개 + filter/ + mb/ 서브디렉토리)
+├── components/    # 재사용 컴포넌트 (22개 + filter/5개 + mb/12개 = 39개 TSX)
 ├── hooks/         # 커스텀 훅 (13개, useMbFavorites + useMbCompare + useMbSearchHistory 포함)
 ├── lib/           # api, storage, format, query-keys, compare-export, mb-export, mb-compare-utils, mb-compare-export 등
 ├── types/         # TypeScript 인터페이스 (estate + Mb* 10개 + naver-maps.d.ts)
@@ -131,7 +131,7 @@ components/
 - 미분양 테이블에 "+" 버튼 → useMbCompare로 localStorage 관리 (최대 4개)
 - 하단 MbCompareFloatingBar: 선택 단지 pill + "비교하기" (2개 이상) + "초기화"
 - /mibunyang/compare?ids=id1,id2,... → useQueries 병렬 조회 + 17행 비교 테이블 + 우위★
-- 차트 2종: MbCompareRadarChart(9축 정규화, 종합우위★), MbComparePriceChart(min/max/pp 막대, 최저가★)
+- 차트 3종: MbCompareRadarChart(9축 정규화, 종합우위★), MbComparePriceChart(min/max/pp 막대, 최저가★), MbCompareUnsoldChart(다중아파트 추이, 기간필터 6M/1Y/2Y/ALL)
 - 인쇄: window.print() + rAF 2회 + no-print 클래스
 - URL 복사: navigator.clipboard.writeText + fallback alert
 - 단지명→상세 링크: th onClick + router.push
@@ -157,9 +157,9 @@ components/
 | `/login` | Supabase Auth + `/api/users/login-record` | `/api/users/login-record` |
 | `/admin` | `getAdminDetailedStats()` | `/api/admin/stats/detailed` |
 | `/admin/users` | `getAdminUsers()`, `updateAdminUser()` | `/api/admin/users` |
-| `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()` (5탭: 단지+미분양+지역+실거래+즐겨찾기, 정렬+검색+비교+엑셀) | `/api/mb/apartments`, `/api/mb/unsold`, `/api/mb/regions`, `/api/mb/trades` |
+| `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()`, `getMbGuList()` (5탭: 단지+미분양+지역+실거래+즐겨찾기, 정렬+검색+비교+엑셀+검색히스토리) | `/api/mb/apartments`, `/api/mb/unsold`, `/api/mb/regions`, `/api/mb/trades`, `/api/mb/gu-list` |
 | `/mibunyang/[id]` | `getMbApartmentDetail()`, `getMbUnsoldHistory()` (5섹션+지도+추이차트, 즐겨찾기+엑셀) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
-| `/mibunyang/compare` | `getMbApartmentDetail()` x N (useQueries 병렬, 17행 비교+우위★+레이더차트+막대차트+인쇄+URL복사+엑셀) | `/api/mb/apartments/{id}` |
+| `/mibunyang/compare` | `getMbApartmentDetail()` x N + `getMbUnsoldHistory()` x N (useQueries 병렬, 17행 비교+우위★+레이더차트+막대차트+추이비교차트+인쇄+URL복사+엑셀) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
 
 ## 미분양 (mibunyang) 컴포넌트
 
@@ -174,6 +174,7 @@ components/mb/
 ├── MbCompareFloatingBar.tsx    # 비교 하단 플로팅 바 (최대 4개, 비교하기 버튼)
 ├── MbCompareRadarChart.tsx    # 레이더 차트 (9축 정규화, 종합우위★, dynamic import)
 ├── MbComparePriceChart.tsx    # 분양가 막대 차트 (min/max/pp, 최저가★, dynamic import)
+├── MbCompareUnsoldChart.tsx   # 미분양 추이 비교 차트 (ComposedChart, 기간필터 6M/1Y/2Y/ALL, dynamic import)
 ├── MbLocationMap.tsx           # Naver Maps v3 지도 (vanilla SDK, dynamic import)
 └── MbSearchHistory.tsx         # 미분양 검색 히스토리 pill 뱃지 (최근 10개, 클릭→재검색)
 ```

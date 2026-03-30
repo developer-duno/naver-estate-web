@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, Suspense } from "react";
+import { useState, useCallback, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
@@ -29,6 +29,7 @@ const TABS = [
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
+type FavSortBy = "added_at" | "name" | "region";
 
 export default function MibunyangPage() {
   return (
@@ -351,6 +352,24 @@ function FavoritesContent({
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sortBy, setSortBy] = useState<FavSortBy>("added_at");
+
+  const sortedFavorites = useMemo(() => {
+    const sorted = [...favorites];
+    switch (sortBy) {
+      case "name":
+        sorted.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+        break;
+      case "region":
+        sorted.sort((a, b) => (a.region ?? "").localeCompare(b.region ?? "", "ko"));
+        break;
+      case "added_at":
+      default:
+        sorted.sort((a, b) => b.added_at - a.added_at);
+        break;
+    }
+    return sorted;
+  }, [favorites, sortBy]);
 
   const toggleSelect = useCallback((id: string) => {
     setSelected((prev) => {
@@ -366,10 +385,10 @@ function FavoritesContent({
 
   const toggleAll = useCallback(() => {
     setSelected((prev) => {
-      if (prev.size === Math.min(favorites.length, MAX_BATCH_COMPARE)) return new Set();
-      return new Set(favorites.slice(0, MAX_BATCH_COMPARE).map((f) => f.id));
+      if (prev.size === Math.min(sortedFavorites.length, MAX_BATCH_COMPARE)) return new Set();
+      return new Set(sortedFavorites.slice(0, MAX_BATCH_COMPARE).map((f) => f.id));
     });
-  }, [favorites]);
+  }, [sortedFavorites]);
 
   const handleBatchCompare = () => {
     if (selected.size < 2) return;
@@ -391,7 +410,19 @@ function FavoritesContent({
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <span className="text-sm text-gray-500">{favorites.length}개 단지</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500">{favorites.length}개 단지</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as FavSortBy)}
+            className="border border-gray-300 rounded-md px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            aria-label="정렬 기준"
+          >
+            <option value="added_at">추가일순</option>
+            <option value="name">단지명순</option>
+            <option value="region">지역순</option>
+          </select>
+        </div>
         <div className="flex items-center gap-2">
           {selected.size > 0 && (
             <span className="text-xs text-gray-500">{selected.size}/{MAX_BATCH_COMPARE}개 선택</span>
@@ -427,7 +458,7 @@ function FavoritesContent({
             </tr>
           </thead>
           <tbody>
-            {favorites.map((fav, i) => (
+            {sortedFavorites.map((fav, i) => (
               <tr
                 key={fav.id}
                 className={`border-b border-gray-100 hover:bg-blue-50/40 cursor-pointer ${

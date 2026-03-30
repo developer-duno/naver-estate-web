@@ -16,10 +16,10 @@
 
 ```
 frontend/src/
-├── app/           # Next.js App Router (20 페이지, mibunyang/ + mibunyang/compare 포함)
-├── components/    # 재사용 컴포넌트 (22개 + filter/5개 + mb/12개 = 39개 TSX)
+├── app/           # Next.js App Router (19 페이지, mibunyang/ + mibunyang/compare 포함)
+├── components/    # 재사용 컴포넌트 (22개 + admin/5개 + filter/3개 + mb/12개 = 42개 TSX)
 ├── hooks/         # 커스텀 훅 (13개, useMbFavorites + useMbCompare + useMbSearchHistory 포함)
-├── lib/           # api, storage, format, query-keys, compare-export, mb-export, mb-compare-utils, mb-compare-export 등
+├── lib/           # api, storage, format, query-keys, compare-export, mb-export, mb-compare-utils, mb-compare-export 등 (13개)
 ├── types/         # TypeScript 인터페이스 (estate + Mb* 10개 + naver-maps.d.ts)
 └── middleware.ts  # Supabase 세션 + 관리자 라우트 보호
 ```
@@ -138,11 +138,18 @@ components/
 - 엑셀: mb-compare-export.ts (safeCellValue 재사용)
 - mb-compare-utils.ts: MB_COMPARE_ROWS(17행), getBestIndices(higher/lower 우위 판정)
 
-### 미분양 즐겨찾기 + 엑셀 + 지도
+### 미분양 즐겨찾기 + 일괄 비교 + 엑셀 + 지도
 - 즐겨찾기: useMbFavorites + useMbFavoriteStatus (localStorage, 최대 200개)
+- 즐겨찾기 일괄 비교: FavoritesContent 체크박스 선택 (최대 4개) → "선택 비교" → /mibunyang/compare
 - MbApartmentTable 액션 열: ★(즐겨찾기) + +(비교) 통합
 - 엑셀: mb-export.ts 4개 함수 (apartments/regions/trades/unsoldHistory) + ExportButton (로딩+실패 피드백)
 - 지도: MbLocationMap (Naver Maps v3 vanilla SDK, dynamic import, 폴링 기반 SDK 대기, lat/lng null 시 미표시)
+
+### 미분양 중복 제거 (백엔드)
+- extract_base_name(): 단지명에서 차수 접미사 제거 ("푸르지오(3차)" → "푸르지오")
+- _deduplicate_apartments(): (base_name, region, gu) 그룹에서 마지막 차수만 유지
+- get_apartments_page(): 목록+total 단일 쿼리 반환 (기존 get_apartments + count_apartments 통합)
+- apartment_to_dict(): name 필드에서 차수 접미사 자동 제거
 
 ---
 
@@ -157,7 +164,7 @@ components/
 | `/login` | Supabase Auth + `/api/users/login-record` | `/api/users/login-record` |
 | `/admin` | `getAdminDetailedStats()` | `/api/admin/stats/detailed` |
 | `/admin/users` | `getAdminUsers()`, `updateAdminUser()` | `/api/admin/users` |
-| `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()`, `getMbGuList()` (5탭: 단지+미분양+지역+실거래+즐겨찾기, 정렬+검색+비교+엑셀+검색히스토리) | `/api/mb/apartments`, `/api/mb/unsold`, `/api/mb/regions`, `/api/mb/trades`, `/api/mb/gu-list` |
+| `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()`, `getMbGuList()` (5탭: 단지+미분양+지역+실거래+즐겨찾기, 정렬+검색+비교+엑셀+검색히스토리+일괄비교+중복제거) | `/api/mb/apartments`, `/api/mb/unsold`, `/api/mb/regions`, `/api/mb/trades`, `/api/mb/gu-list` |
 | `/mibunyang/[id]` | `getMbApartmentDetail()`, `getMbUnsoldHistory()` (5섹션+지도+추이차트, 즐겨찾기+엑셀) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
 | `/mibunyang/compare` | `getMbApartmentDetail()` x N + `getMbUnsoldHistory()` x N (useQueries 병렬, 17행 비교+우위★+레이더차트+막대차트+추이비교차트+인쇄+URL복사+엑셀) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
 

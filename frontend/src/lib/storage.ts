@@ -124,3 +124,51 @@ export function toggleMbFavorite(item: Omit<MbFavoriteApartment, "added_at">): b
   try { localStorage.setItem(MB_FAVORITES_KEY, JSON.stringify(updated)); } catch { /* quota */ }
   return true;
 }
+
+// ── 미분양 검색 히스토리 ──
+
+const MB_HISTORY_KEY = "mb_search_history";
+const MAX_MB_HISTORY = 10;
+
+export interface MbSearchHistoryItem {
+  region: string;
+  gu?: string;
+  keyword?: string;
+  timestamp: number;
+}
+
+export function getMbSearchHistory(): MbSearchHistoryItem[] {
+  return readJSON<MbSearchHistoryItem[]>(MB_HISTORY_KEY, []);
+}
+
+export function addMbSearchHistory(item: Omit<MbSearchHistoryItem, "timestamp">): void {
+  if (!item.region || item.region.trim().length === 0) return;
+  const cleaned = {
+    region: item.region,
+    gu: item.gu?.trim() || undefined,
+    keyword: item.keyword?.trim() || undefined,
+  };
+  try {
+    const history = getMbSearchHistory();
+    const deduplicated = history.filter(
+      (h) =>
+        !(h.region === cleaned.region && (h.gu ?? "") === (cleaned.gu ?? "") && (h.keyword ?? "") === (cleaned.keyword ?? "")),
+    );
+    const entry: MbSearchHistoryItem = { ...cleaned, timestamp: uniqueTimestamp() };
+    const updated = [entry, ...deduplicated].slice(0, MAX_MB_HISTORY);
+    localStorage.setItem(MB_HISTORY_KEY, JSON.stringify(updated));
+  } catch (err) {
+    if (typeof window !== "undefined" && err instanceof Error) {
+      console.warn(`[MbSearchHistory] Failed to add: ${err.message}`);
+    }
+  }
+}
+
+export function removeMbSearchHistory(timestamp: number): void {
+  const updated = getMbSearchHistory().filter((h) => h.timestamp !== timestamp);
+  localStorage.setItem(MB_HISTORY_KEY, JSON.stringify(updated));
+}
+
+export function clearMbSearchHistory(): void {
+  localStorage.removeItem(MB_HISTORY_KEY);
+}

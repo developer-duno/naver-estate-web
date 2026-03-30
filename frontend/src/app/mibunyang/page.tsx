@@ -15,7 +15,10 @@ import { PAGE_SIZE } from "@/lib/constants";
 import { exportMbApartmentsToXlsx, exportMbRegionsToXlsx, exportMbTradesToXlsx } from "@/lib/mb-export";
 import { useMbCompare } from "@/hooks/useMbCompare";
 import { useMbFavorites } from "@/hooks/useMbFavorites";
+import { useMbSearchHistory } from "@/hooks/useMbSearchHistory";
 import MbCompareFloatingBar from "@/components/mb/MbCompareFloatingBar";
+import MbSearchHistory from "@/components/mb/MbSearchHistory";
+import type { MbSearchHistoryItem } from "@/lib/storage";
 
 const TABS = [
   { key: "apartments", label: "미분양 단지" },
@@ -40,6 +43,7 @@ function MibunyangContent() {
   const searchParams = useSearchParams();
   const compare = useMbCompare();
   const { favorites, toggle: toggleFavorite } = useMbFavorites();
+  const { history: mbHistory, add: addMbHistory, remove: removeMbHistory, clear: clearMbHistory } = useMbSearchHistory();
 
   const region = searchParams.get("region") ?? "";
   const gu = searchParams.get("gu") ?? "";
@@ -68,6 +72,7 @@ function MibunyangContent() {
 
   const handleSearch = useCallback(
     (r: string, g?: string, kw?: string) => {
+      addMbHistory({ region: r, gu: g, keyword: kw });
       const params = new URLSearchParams();
       params.set("region", r);
       if (g) params.set("gu", g);
@@ -77,7 +82,14 @@ function MibunyangContent() {
       if (kw) params.set("q", kw);
       router.replace(`/mibunyang?${params}`, { scroll: false });
     },
-    [router, tab, sortBy],
+    [router, tab, sortBy, addMbHistory],
+  );
+
+  const handleMbHistorySelect = useCallback(
+    (item: MbSearchHistoryItem) => {
+      handleSearch(item.region, item.gu, item.keyword);
+    },
+    [handleSearch],
   );
 
   const handleTabChange = useCallback(
@@ -137,6 +149,12 @@ function MibunyangContent() {
 
       <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
         <MbRegionSelector onSearch={handleSearch} defaultRegion={region} defaultGu={gu} defaultKeyword={keyword} />
+        <MbSearchHistory
+          history={mbHistory}
+          onSelect={handleMbHistorySelect}
+          onRemove={removeMbHistory}
+          onClear={clearMbHistory}
+        />
       </div>
 
       {/* 탭바 — 항상 표시 (즐겨찾기 탭은 지역 불필요) */}

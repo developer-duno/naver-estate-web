@@ -124,6 +124,7 @@ npx vercel --prod
 | `compare_complexes`  | 비교 대상 단지          | 최대 4개              |
 | `mb_favorites`       | 미분양 즐겨찾기         | 최대 200개, 토글 방식 |
 | `mb_compare`         | 미분양 비교 대상        | 최대 4개              |
+| `mb_search_history`  | 미분양 검색 히스토리    | 최대 10개, 중복 제거  |
 
 ## DB 커넥션 풀
 

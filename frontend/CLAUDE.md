@@ -18,7 +18,7 @@
 frontend/src/
 ├── app/           # Next.js App Router (20 페이지, mibunyang/ + mibunyang/compare 포함)
 ├── components/    # 재사용 컴포넌트 (24개 + filter/ + mb/ 서브디렉토리)
-├── hooks/         # 커스텀 훅 (12개, useMbFavorites + useMbCompare 포함)
+├── hooks/         # 커스텀 훅 (13개, useMbFavorites + useMbCompare + useMbSearchHistory 포함)
 ├── lib/           # api, storage, format, query-keys, compare-export, mb-export, mb-compare-utils, mb-compare-export 등
 ├── types/         # TypeScript 인터페이스 (estate + Mb* 10개 + naver-maps.d.ts)
 └── middleware.ts  # Supabase 세션 + 관리자 라우트 보호
@@ -40,6 +40,7 @@ frontend/src/
 | `useCompare` | 단지 비교 목록 (localStorage, 최대 4개) |
 | `useMbFavorites` | 미분양 즐겨찾기 (localStorage, 최대 200개, useMbFavoriteStatus 포함) |
 | `useMbCompare` | 미분양 비교 목록 (localStorage, 최대 4개) |
+| `useMbSearchHistory` | 미분양 검색 히스토리 (localStorage, 최근 10개, 중복 제거) |
 
 ## FilterBar 구조 (모듈 분리)
 
@@ -173,7 +174,8 @@ components/mb/
 ├── MbCompareFloatingBar.tsx    # 비교 하단 플로팅 바 (최대 4개, 비교하기 버튼)
 ├── MbCompareRadarChart.tsx    # 레이더 차트 (9축 정규화, 종합우위★, dynamic import)
 ├── MbComparePriceChart.tsx    # 분양가 막대 차트 (min/max/pp, 최저가★, dynamic import)
-└── MbLocationMap.tsx           # Naver Maps v3 지도 (vanilla SDK, dynamic import)
+├── MbLocationMap.tsx           # Naver Maps v3 지도 (vanilla SDK, dynamic import)
+└── MbSearchHistory.tsx         # 미분양 검색 히스토리 pill 뱃지 (최근 10개, 클릭→재검색)
 ```
 
 ### 미분양 URL 상태 관리

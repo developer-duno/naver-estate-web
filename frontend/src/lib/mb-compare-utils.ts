@@ -3,14 +3,17 @@
  */
 import type { MbApartment } from "@/types";
 
+/** 비교 우위 방향: "higher"=클수록 우위, "lower"=작을수록 우위, null=비교 불가(텍스트 항목) */
 export type AdvantageDir = "higher" | "lower" | null;
 
+/** 비교 테이블 한 행의 정의 — 라벨, 값 추출 함수, 우위 판정 방향 */
 export interface MbCompareRow {
   label: string;
   getValue: (apt: MbApartment) => string | number | null | undefined;
   direction: AdvantageDir;
 }
 
+/** 17행 비교 테이블 정의 — /mibunyang/compare 페이지에서 단지 간 우위(★) 판정에 사용 */
 export const MB_COMPARE_ROWS: MbCompareRow[] = [
   { label: "단지명", getValue: (a) => a.name, direction: null },
   { label: "지역", getValue: (a) => [a.region, a.gu].filter(Boolean).join(" "), direction: null },

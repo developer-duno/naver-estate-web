@@ -19,18 +19,21 @@ function getApiBase(): string {
   return process.env.NEXT_PUBLIC_API_URL || "";
 }
 
+/** 빌드 시점에 결정되는 백엔드 존재 여부 (NEXT_PUBLIC_API_URL 설정 유무) */
 const HAS_BACKEND = !!process.env.NEXT_PUBLIC_API_URL;
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const LIVE_TIMEOUT_MS = 120_000; // live crawling takes longer
 
+/** 중복 로그아웃 방지 mutex — 401 응답이 동시 다발 시 signOut 1회만 실행 */
 let _isLoggingOut = false;
 
-// 백엔드 연결 실패 시 Supabase 직접 조회로 자동 폴백
+// ── 서킷 브레이커: 백엔드 장애 시 Supabase 직접 조회(api-direct.ts)로 자동 폴백 ──
 let _backendDown = false;
 let _backendDownSince = 0;
-const BACKEND_RETRY_MS = 60_000; // 1분 후 백엔드 재시도
+const BACKEND_RETRY_MS = 60_000; // 장애 마킹 후 1분 뒤 백엔드 재시도
 
+/** 백엔드 사용 가능 여부 — 장애 후 BACKEND_RETRY_MS 경과 시 자동 복구 시도 */
 function isBackendAvailable(): boolean {
   if (!HAS_BACKEND) return false;
   if (!_backendDown) return true;
@@ -41,6 +44,7 @@ function isBackendAvailable(): boolean {
   return false;
 }
 
+/** fetch TypeError(DNS 실패, 네트워크 에러) 발생 시 백엔드를 장애 상태로 마킹 */
 function markBackendDown() {
   _backendDown = true;
   _backendDownSince = Date.now();
@@ -48,6 +52,7 @@ function markBackendDown() {
 
 
 
+/** 핵심 fetch 래퍼: 타임아웃, 401 자동 로그아웃, 429 rate limit, 에러 전파 */
 async function _fetchApiImpl<T>(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const url = `${getApiBase()}${path}`;
   const externalSignal = options?.signal;
@@ -319,8 +324,9 @@ export async function triggerComplexCrawl(complexNo: string, accessToken: string
   );
 }
 
-// ── 관리자 API ──
+// ── 관리자 API — 모든 호출에 Bearer 토큰 필수 ──
 
+/** Authorization 헤더 생성 헬퍼 */
 function adminHeaders(token: string) {
   return { Authorization: `Bearer ${token}` };
 }
@@ -429,7 +435,7 @@ export async function deleteStaleData(token: string, days: number) {
   });
 }
 
-// ── 미분양 (mibunyang) API ──
+// ── 미분양 (mibunyang) API — 인증 불필요 (공개 데이터) ──
 
 import type { MbApartment, MbUnsoldHistory, MbRegion, MbTrade } from "@/types";
 

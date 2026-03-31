@@ -1,3 +1,58 @@
+# 세션 로그: 2026-03-31 (세션 3)
+
+## 완료 작업
+
+### 1. Vercel 재배포 — ADMIN_EMAIL 환경변수 반영
+- `npx vercel env ls production` → ADMIN_EMAIL 이미 설정됨 확인
+- `npx vercel --prod` 재배포 완료 (빌드 성공, www.2u.pe.kr 배포)
+- 배포 ID: `dpl_8CmjA8EyeR7WZ77MkiW7EGWUUJyd`
+
+### 2. ADMIN_PASSWORD 환경변수 정리 → SKIP
+- backend/.env, frontend/.env.local 양쪽 모두 ADMIN_PASSWORD 이미 없음
+- 코드에서도 참조 0건 (grep 확인)
+- 작업 불필요
+
+### 3. 주석 비율 개선 — api.ts + mb-compare-utils.ts
+- `api.ts`: 서킷 브레이커 패턴, mutex, fetch 래퍼, 섹션 구분 등 6곳 주석 추가 (+13줄, -4줄)
+- `mb-compare-utils.ts`: AdvantageDir, MbCompareRow, MB_COMPARE_ROWS 3곳 주석 추가 (+3줄)
+- 로직 변경 0건, export 시그니처 변경 0건
+
+## 5 GATE 리뷰 결과
+| GATE | 판정 |
+|------|------|
+| 1. 구조 무결성 | 🟢 PASS — 21+2 참조처 전수 대조, 끊어진 링크 0건 |
+| 2. 코드 품질 | 🟢 PASS — tsc 0 에러, lint 0 에러, 주석-코드 일치 12/12 |
+| 3. 보안 | 🟢 PASS — 하드코딩 0건, XSS 0건, 인증 정상 |
+| 4. 연동 일관성 | 🟢 PASS — 34 API + 19 타입 필드 전수 대조 일치 |
+| 5. 교차 검증 | 🟢 PASS — 시나리오, 엣지케이스, 의존성, 패턴, 목적 모두 통과 |
+
+## 수정 파일
+| 파일 | 변경 |
+|------|------|
+| `frontend/src/lib/api.ts` | 내부 헬퍼·상수·폴백 메커니즘 주석 6곳 추가 |
+| `frontend/src/lib/mb-compare-utils.ts` | 타입·인터페이스·상수 주석 3곳 추가 |
+
+## 검증 결과
+- `npx tsc --noEmit`: 에러 0건
+- `npm run lint`: 에러 0건 (기존 경고 45건)
+- `npm test`: 55파일 502개 전체 통과
+- Vercel 빌드: 성공 (22 페이지, 59초)
+
+## 다음 작업 (우선순위)
+1. 기존 lint 경고 45건 정리 (set-state-in-effect, unused-vars, exhaustive-deps 등)
+2. `liveArticles` 함수 프로덕션 미사용 확인 → 제거 또는 활용처 추가
+3. `complexNo`/`articleNo` 등 URL 파라미터에 `encodeURIComponent` 방어적 추가 (보안 경화)
+4. `formatCellValue(0)` 테스트 추가 (엣지 케이스 커버리지)
+
+## 현재 상태
+- **사이트**: 2u.pe.kr (Vercel, 정상 — 재배포 완료)
+- **백엔드**: 집 서버 실행 중 (Cloudflare Tunnel)
+- **테스트**: FE 502/502 (55파일), BE 280/280 (1 스킵)
+- **브랜치**: main
+- **ADMIN_EMAIL**: Vercel + backend/.env + frontend/.env.local 3곳 설정 완료
+
+---
+
 # 세션 로그: 2026-03-31 (세션 2)
 
 ## 완료 작업
@@ -49,15 +104,3 @@
 | `frontend/src/hooks/useLocalStorageFavorites.ts` | 제네릭 즐겨찾기 훅 |
 | `backend/tests/test_admin_email.py` | ADMIN_EMAIL 환경변수 테스트 |
 | FE 테스트 12개 | 훅 7 + 컴포넌트 5 |
-
-## 다음 작업 (우선순위)
-1. api.ts, mb-compare-utils.ts 주석 추가 (주석 비율 0.8-1.8%)
-2. 불필요한 ADMIN_PASSWORD 환경변수 삭제 (backend/.env, frontend/.env.local)
-3. Vercel 재배포 (`npx vercel --prod`)
-
-## 현재 상태
-- **사이트**: 2u.pe.kr (Vercel, 정상)
-- **백엔드**: 집 서버 실행 중 (Cloudflare Tunnel)
-- **테스트**: FE 502/502 (55파일), BE 280/280 (1 스킵)
-- **브랜치**: main, 미커밋 변경 있음
-- **ADMIN_EMAIL**: Vercel + backend/.env + frontend/.env.local 3곳 설정 완료

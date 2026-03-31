@@ -2,6 +2,23 @@
 
 Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산 크롤링.
 
+## 현재 진행 상황
+
+**마지막 작업**: 2026-03-31 — Vercel 재배포(ADMIN_EMAIL 반영) + api.ts/mb-compare-utils.ts 주석 보강
+
+**다음 우선순위**:
+
+1. 기존 lint 경고 45건 정리 (set-state-in-effect, unused-vars, exhaustive-deps 등)
+2. `liveArticles` 함수 프로덕션 미사용 확인 → 제거 또는 활용처 추가
+3. `complexNo`/`articleNo` 등 URL 파라미터에 `encodeURIComponent` 방어적 추가
+4. `formatCellValue(0)` 테스트 추가 (엣지 케이스 커버리지)
+
+**주의사항**:
+
+- ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
+- 테스트 현황: FE 502개 (55파일), BE 280개 — 전체 통과
+- Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
+
 ## 기술 스택
 
 - **Frontend**: Next.js 16 (App Router) + TypeScript + Tailwind CSS 4 + React Query (TanStack Query v5) + Recharts 3

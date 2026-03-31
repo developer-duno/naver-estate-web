@@ -15,21 +15,21 @@ export default function AdminDashboard() {
     queryKey: queryKeys.admin.stats(),
     queryFn: () => getAdminDetailedStats(token),
     enabled: !!token,
-    staleTime: 0,
+    staleTime: 30_000,
   });
 
   const logsQuery = useQuery<PaginatedResponse<AuditLog>, Error>({
     queryKey: [...queryKeys.admin.auditLogs(), "dashboard"] as const,
     queryFn: () => getAdminAuditLogs(token, { page: 1 }),
     enabled: !!token,
-    staleTime: 0,
+    staleTime: 30_000,
   });
 
   const jobsQuery = useQuery<PaginatedResponse<CrawlJobDetail>, Error>({
     queryKey: [...queryKeys.admin.crawlJobs(), "running"] as const,
     queryFn: () => getAdminCrawlJobs(token, { status: "running" }),
     enabled: !!token,
-    staleTime: 0,
+    staleTime: 30_000,
   });
 
   const loading = statsQuery.isLoading || logsQuery.isLoading || jobsQuery.isLoading;

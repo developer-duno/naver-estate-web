@@ -52,7 +52,9 @@ function calcCrawlProgress(p: CrawlProgress): { percent: number; steps: CrawlSte
   const detailLabel = detailTotal > 0 ? `매물 상세 수집 (${detailDone}/${detailTotal}건)` : "매물 상세 수집";
 
   if (phase === "articles") {
-    const pct = p.has_more !== false ? Math.min((p.current_page ?? 0) * 10, 30) : 33;
+    // article_count 기반 진행률 (50건 기준 30% 스케일, 페이지 수 대비 정확)
+    const count = p.article_count ?? 0;
+    const pct = p.has_more !== false ? Math.min(count > 0 ? Math.round((count / 50) * 30) : (p.current_page ?? 0) * 5, 30) : 33;
     return {
       percent: pct,
       steps: [
@@ -92,7 +94,7 @@ export default function ComplexDetailPage() {
   const complexNo = Array.isArray(rawNo) ? rawNo[0] : rawNo ?? "";
 
   // 필터/정렬/페이지 — URL을 단일 소스로 사용
-  const { filters, page: currentPage, sortBy: activeSortBy, setFilters, setPage, setSortBy, filterKey } = useFilterParams();
+  const { filters, page: currentPage, sortBy: activeSortBy, setFilters, setPage, setSortBy } = useFilterParams();
   const { starred, toggle: toggleFavorite } = useFavoriteStatus(complexNo);
   const [selectedArticleNos, setSelectedArticleNos] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(true);
@@ -113,7 +115,7 @@ export default function ComplexDetailPage() {
   const { exporting, exportError, clearExportError, handleExport: doExport } = useExport();
 
   const {
-    crawling, crawlMessage, crawlProgress,
+    crawling, crawlMessage, crawlProgress, isPolling,
     setCrawling, setCrawlMessage,
     startCrawl, clearAllPolling,
   } = useCrawlProgress();
@@ -128,7 +130,7 @@ export default function ComplexDetailPage() {
   // useCrawlProgress 훅 내부에서 직접 setCrawlMessage를 호출하는 경우 타입 동기화
   useEffect(() => {
     if (!crawlMessage) return;
-    if (crawlMessage.startsWith("크롤링 오류")) setCrawlMessageType("error");
+    if (crawlMessage.startsWith("크롤링 오류")) setCrawlMessageType("error"); // eslint-disable-line react-hooks/set-state-in-effect -- 메시지 타입 동기화
     else if (crawlMessage === "") setCrawlMessageType("info");
   }, [crawlMessage]);
 
@@ -143,7 +145,7 @@ export default function ComplexDetailPage() {
   // filter_options 추출
   useEffect(() => {
     if (complexQuery.data?.filter_options) {
-      setFilterOptions(complexQuery.data.filter_options);
+      setFilterOptions(complexQuery.data.filter_options); // eslint-disable-line react-hooks/set-state-in-effect -- 쿼리 데이터 동기화
     }
   }, [complexQuery.data]);
 
@@ -192,7 +194,7 @@ export default function ComplexDetailPage() {
   // 에러 처리
   useEffect(() => {
     if (complexQuery.isError) {
-      setError("단지 정보를 불러올 수 없습니다.");
+      setError("단지 정보를 불러올 수 없습니다."); // eslint-disable-line react-hooks/set-state-in-effect -- 에러 상태 동기화
     }
   }, [complexQuery.isError]);
 
@@ -210,7 +212,7 @@ export default function ComplexDetailPage() {
         if (session?.access_token) {
           setSessionToken(session.access_token);
           const crawlResult = await startLiveCrawl(complexNo, session.access_token);
-          if (crawlResult.status === "started") {
+          if (crawlResult.status === "started" || crawlResult.status === "already_running") {
             startCrawl(complexNo);
           }
         }
@@ -220,7 +222,7 @@ export default function ComplexDetailPage() {
         }
       }
     })();
-  }, [complexNo, complexQuery.isSuccess, articlesQuery.isSuccess, pyeongQuery.isSuccess, startCrawl, setCrawlMessage]);
+  }, [complexNo, complexQuery.isSuccess, articlesQuery.isSuccess, pyeongQuery.isSuccess, startCrawl, setCrawlMessage, setCrawlMsg]);
 
   // 언마운트 시 폴링 정리
   useEffect(() => {
@@ -295,6 +297,13 @@ export default function ComplexDetailPage() {
       setCrawlMsg("");
     },
     onSuccess: (crawlResult: { status: string }) => {
+      if (crawlResult.status === "cached") {
+        // 캐시 히트 — 크롤 불필요, 즉시 복원
+        setCrawling(false);
+        setCrawlMsg("최근 갱신된 데이터입니다", "success");
+        setTimeout(() => setCrawlMessage(""), 3_000);
+        return;
+      }
       setCrawlMsg("데이터 갱신 중...", "info");
       if (
         crawlResult.status === "started" ||
@@ -397,7 +406,7 @@ export default function ComplexDetailPage() {
       </div>
 
       {/* 단지 정보 */}
-      <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} articleCount={totalCount} onFilterChange={handleFilterChange} accessToken={sessionToken} />
+      <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} onFilterChange={handleFilterChange} accessToken={sessionToken} />
 
       {/* 크롤링 진행률 배너 */}
       {crawling && crawlProgress && (
@@ -506,8 +515,8 @@ export default function ComplexDetailPage() {
         </div>
       )}
 
-      {/* 크롤링 중 + 이전 데이터 안내 */}
-      {crawling && totalCount > 0 && (
+      {/* 크롤링 중 + 이전 데이터 안내 (실제 폴링 중에만 표시) */}
+      {isPolling && totalCount > 0 && (
         <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded-md px-3 py-2">
           <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-amber-500 shrink-0" />
           <span>이전 데이터를 표시 중입니다. 갱신이 완료되면 자동으로 업데이트됩니다.</span>
@@ -524,7 +533,7 @@ export default function ComplexDetailPage() {
 
       {/* 매물 테이블 — 크롤링 중에도 기존 데이터 항상 표시 */}
       {totalCount > 0 && (
-        <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} activeSortBy={activeSortBy} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} />
+        <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} />
       )}
 
       {/* 페이지네이션 */}

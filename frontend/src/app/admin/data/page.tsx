@@ -19,7 +19,7 @@ export default function AdminDataPage() {
     queryKey: queryKeys.admin.stats(),
     queryFn: () => getAdminDetailedStats(token),
     enabled: !!token,
-    staleTime: 0,
+    staleTime: 30_000,
   });
 
   const deleteMutation = useMutation<{ deleted: number }, Error, number>({

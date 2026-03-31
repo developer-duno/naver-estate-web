@@ -81,7 +81,7 @@ export function useCrawlProgress(): CrawlHookResult {
     const isError = status.status === "error";
 
     if (isDone || isIdle || isError) {
-      setIsPolling(false);
+      setIsPolling(false); // eslint-disable-line react-hooks/set-state-in-effect -- 쿼리 응답 동기화(의도적)
       setCrawling(false);
       setCrawlProgress(null); // 프로그레스 바 즉시 제거
       if (isDone || isIdle) {
@@ -96,6 +96,16 @@ export function useCrawlProgress(): CrawlHookResult {
       setCrawlProgress(status);
     }
   }, [statusQuery.data, isPolling, targetComplexNo, invalidateAllQueries, queryClient]);
+
+  // 안전장치: crawling=true인데 폴링이 시작되지 않으면 5초 후 자동 복원
+  useEffect(() => {
+    if (!crawling || isPolling) return;
+    const timer = setTimeout(() => {
+      setCrawling(false);
+      setCrawlMessage("");
+    }, 5_000);
+    return () => clearTimeout(timer);
+  }, [crawling, isPolling]);
 
   const startCrawl = useCallback((complexNo: string) => {
     setTargetComplexNo(complexNo);

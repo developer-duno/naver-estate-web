@@ -79,6 +79,22 @@ describe("formatCellValue (셀 포맷)", () => {
   it("빈 문자열은 '-' 반환", () => {
     expect(formatCellValue("")).toBe("-");
   });
+
+  it("0은 '0'을 반환한다 (falsy이지만 유효한 데이터)", () => {
+    expect(formatCellValue(0)).toBe("0");
+  });
+
+  it("음수는 천단위 구분 포맷으로 반환한다", () => {
+    expect(formatCellValue(-1234)).toBe("-1,234");
+  });
+
+  it("소수는 그대로 반환한다", () => {
+    expect(formatCellValue(0.5)).toBe("0.5");
+  });
+
+  it("문자열 '0'은 그대로 반환한다", () => {
+    expect(formatCellValue("0")).toBe("0");
+  });
 });
 
 describe("MB_COMPARE_ROWS (비교 행 정의)", () => {

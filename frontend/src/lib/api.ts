@@ -148,7 +148,7 @@ export async function getComplexesByRegion(sido: string, sigungu?: string, dong?
 export async function getComplex(complexNo: string) {
   if (!isBackendAvailable()) return direct.getComplexDirect(complexNo);
   try {
-    return await fetchApi<Complex>(`/api/complexes/${complexNo}`);
+    return await fetchApi<Complex>(`/api/complexes/${encodeURIComponent(complexNo)}`);
   } catch {
     return direct.getComplexDirect(complexNo);
   }
@@ -168,28 +168,10 @@ export async function getArticles(complexNo: string, filters?: ArticleFilters) {
     }
     const qs = params.toString();
     return await fetchApi<{ articles: Article[]; total: number; page: number; page_size: number }>(
-      `/api/complexes/${complexNo}/articles${qs ? `?${qs}` : ""}`
+      `/api/complexes/${encodeURIComponent(complexNo)}/articles${qs ? `?${qs}` : ""}`
     );
   } catch {
     return direct.getArticlesDirect(complexNo, filters as Record<string, string>);
-  }
-}
-
-
-/** 실시간 매물 크롤링 (네이버 API에서 직접 가져옴) */
-export async function liveArticles(complexNo: string) {
-  if (!isBackendAvailable()) {
-    const result = await direct.getArticlesDirect(complexNo, {});
-    return { ...result, complex: null };
-  }
-  try {
-    return await fetchApi<{ articles: Article[]; total: number; page: number; page_size: number; complex: Complex | null }>(
-      `/api/live/${complexNo}/articles`,
-      { timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
-    );
-  } catch {
-    const result = await direct.getArticlesDirect(complexNo, {});
-    return { ...result, complex: null };
   }
 }
 
@@ -199,7 +181,7 @@ export async function startLiveCrawl(complexNo: string, token?: string) {
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   return fetchApi<CrawlProgress>(
-    `/api/live/${complexNo}/articles/start-crawl`,
+    `/api/live/${encodeURIComponent(complexNo)}/articles/start-crawl`,
     { method: "POST", timeoutMs: DEFAULT_TIMEOUT_MS, headers } as RequestInit & { timeoutMs?: number },
   );
 }
@@ -209,7 +191,7 @@ export async function startPriceCollect(complexNo: string, token?: string) {
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   return fetchApi<PriceCollectProgress>(
-    `/api/live/${complexNo}/price-history/start-collect`,
+    `/api/live/${encodeURIComponent(complexNo)}/price-history/start-collect`,
     { method: "POST", timeoutMs: DEFAULT_TIMEOUT_MS, headers } as RequestInit & { timeoutMs?: number },
   );
 }
@@ -217,7 +199,7 @@ export async function startPriceCollect(complexNo: string, token?: string) {
 /** 실거래가 수집 진행 상태 폴링 */
 export async function getPriceCollectStatus(complexNo: string) {
   return fetchApi<PriceCollectProgress>(
-    `/api/live/${complexNo}/price-history/collect-status`,
+    `/api/live/${encodeURIComponent(complexNo)}/price-history/collect-status`,
     { timeoutMs: DEFAULT_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
   );
 }
@@ -225,7 +207,7 @@ export async function getPriceCollectStatus(complexNo: string) {
 /** 크롤링 진행률 폴링 */
 export async function getCrawlStatus(complexNo: string) {
   return fetchApi<CrawlProgress>(
-    `/api/live/${complexNo}/articles/crawl-status`,
+    `/api/live/${encodeURIComponent(complexNo)}/articles/crawl-status`,
     { timeoutMs: DEFAULT_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
   );
 }
@@ -234,7 +216,7 @@ export async function getCrawlStatus(complexNo: string) {
 export async function getPyeongDetails(complexNo: string) {
   if (!isBackendAvailable()) return { pyeong_details: [] };
   try {
-    return await fetchApi<{ pyeong_details: PyeongDetail[] }>(`/api/complexes/${complexNo}/pyeong-details`);
+    return await fetchApi<{ pyeong_details: PyeongDetail[] }>(`/api/complexes/${encodeURIComponent(complexNo)}/pyeong-details`);
   } catch {
     return { pyeong_details: [] };
   }
@@ -245,7 +227,7 @@ export async function getPyeongDetails(complexNo: string) {
 export async function getArticleLive(articleNo: string) {
   if (!isBackendAvailable()) return direct.getArticleDirect(articleNo);
   try {
-    return await fetchApi<Article>(`/api/live/article/${articleNo}/detail`, { timeoutMs: 30_000 } as RequestInit & { timeoutMs?: number });
+    return await fetchApi<Article>(`/api/live/article/${encodeURIComponent(articleNo)}/detail`, { timeoutMs: 30_000 } as RequestInit & { timeoutMs?: number });
   } catch {
     return direct.getArticleDirect(articleNo);
   }
@@ -316,7 +298,7 @@ export async function exportArticles(complexNo: string, filters?: ArticleFilters
 /** 크롤링 트리거 (인증 필요) */
 export async function triggerComplexCrawl(complexNo: string, accessToken: string) {
   return fetchApi<{ status: string; complex_no: string }>(
-    `/api/crawl/complex/${complexNo}`,
+    `/api/crawl/complex/${encodeURIComponent(complexNo)}`,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -342,7 +324,7 @@ export async function getAdminUsers(token: string, params?: { status?: string; r
 
 /** 관리자: 사용자 역할/상태 변경 */
 export async function updateAdminUser(token: string, userId: string, payload: UserUpdatePayload) {
-  return fetchApi<{ status: string; changes: Record<string, unknown> }>(`/api/admin/users/${userId}`, {
+  return fetchApi<{ status: string; changes: Record<string, unknown> }>(`/api/admin/users/${encodeURIComponent(userId)}`, {
     method: "PATCH",
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -351,7 +333,7 @@ export async function updateAdminUser(token: string, userId: string, payload: Us
 
 /** 관리자: 사용자 정지 */
 export async function suspendAdminUser(token: string, userId: string) {
-  return fetchApi<{ status: string }>(`/api/admin/users/${userId}`, {
+  return fetchApi<{ status: string }>(`/api/admin/users/${encodeURIComponent(userId)}`, {
     method: "DELETE",
     headers: adminHeaders(token),
   });
@@ -367,7 +349,7 @@ export async function getAdminCrawlJobs(token: string, params?: { status?: strin
 
 /** 관리자: 크롤 작업 취소 */
 export async function cancelAdminCrawlJob(token: string, jobId: number) {
-  return fetchApi<{ status: string }>(`/api/admin/crawl-jobs/${jobId}/cancel`, {
+  return fetchApi<{ status: string }>(`/api/admin/crawl-jobs/${encodeURIComponent(String(jobId))}/cancel`, {
     method: "POST",
     headers: adminHeaders(token),
   });
@@ -394,7 +376,7 @@ export async function getAdminSettings(token: string) {
 
 /** 관리자: 설정 변경 */
 export async function updateAdminSetting(token: string, key: string, value: Record<string, unknown>) {
-  return fetchApi<{ status: string }>(`/api/admin/settings/${key}`, {
+  return fetchApi<{ status: string }>(`/api/admin/settings/${encodeURIComponent(key)}`, {
     method: "PATCH",
     headers: { ...adminHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify({ value }),
@@ -406,7 +388,7 @@ export async function getPriceStats(complexNo: string) {
   const empty = { complex_no: complexNo, total_articles: 0, by_area: [], by_floor: [] } as PriceStats;
   if (!isBackendAvailable()) return empty;
   try {
-    return await fetchApi<PriceStats>(`/api/complexes/${complexNo}/price-stats`);
+    return await fetchApi<PriceStats>(`/api/complexes/${encodeURIComponent(complexNo)}/price-stats`);
   } catch {
     return empty;
   }
@@ -421,7 +403,7 @@ export async function getPriceHistory(complexNo: string, tradeType?: string, are
     if (tradeType) params.set("trade_type", tradeType);
     if (areaNo) params.set("area_no", areaNo);
     const qs = params.toString();
-    return await fetchApi<PriceHistoryResponse>(`/api/complexes/${complexNo}/price-history${qs ? `?${qs}` : ""}`);
+    return await fetchApi<PriceHistoryResponse>(`/api/complexes/${encodeURIComponent(complexNo)}/price-history${qs ? `?${qs}` : ""}`);
   } catch {
     return empty;
   }

@@ -13,7 +13,7 @@ vi.mock("@/lib/api", () => ({
   getArticles: vi.fn().mockResolvedValue({ articles: [], total: 0, page: 1, page_size: 50 }),
   getPyeongDetails: vi.fn().mockResolvedValue({ pyeong_details: [] }),
   getComplex: vi.fn().mockResolvedValue({ complex_no: "C001", complex_name: "테스트" }),
-  liveArticles: vi.fn().mockResolvedValue({ articles: [], total: 0, page: 1, page_size: 50, complex: null }),
+
 }));
 
 describe("useCrawlProgress 모듈", () => {

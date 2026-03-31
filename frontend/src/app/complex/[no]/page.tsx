@@ -12,7 +12,6 @@ import {
   getComplex,
   getArticles,
   getPyeongDetails,
-  triggerComplexCrawl,
   startLiveCrawl,
   ApiError,
 } from "@/lib/api";
@@ -289,7 +288,6 @@ export default function ComplexDetailPage() {
       if (!session?.access_token) {
         throw new ApiError("로그인이 필요합니다", 401);
       }
-      await triggerComplexCrawl(complexNo, session.access_token);
       const crawlResult = await startLiveCrawl(complexNo, session.access_token);
       return crawlResult;
     },

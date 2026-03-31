@@ -26,7 +26,7 @@ export default function AdminLogsPage() {
     queryKey: queryKeys.admin.auditLogs(params as Record<string, unknown>),
     queryFn: () => getAdminAuditLogs(token, params),
     enabled: !!token,
-    staleTime: 0,
+    staleTime: 60_000,
   });
 
   const error = logsQuery.error?.message ?? "";

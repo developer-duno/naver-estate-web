@@ -26,7 +26,7 @@ export default function AdminUsersPage() {
     queryKey: queryKeys.admin.users(params as Record<string, unknown>),
     queryFn: () => getAdminUsers(token, params),
     enabled: !!token,
-    staleTime: 0,
+    staleTime: 60_000,
   });
 
   const updateMutation = useMutation<

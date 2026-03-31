@@ -19,7 +19,7 @@ export default function AdminSettingsPage() {
     queryKey: queryKeys.admin.settings(),
     queryFn: () => getAdminSettings(token),
     enabled: !!token,
-    staleTime: 0,
+    staleTime: 300_000,
   });
 
   const updateMutation = useMutation<

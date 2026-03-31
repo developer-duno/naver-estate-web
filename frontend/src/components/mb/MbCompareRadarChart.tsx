@@ -32,6 +32,14 @@ const AXES: AxisDef[] = [
   { key: "far", label: "용적률", getValue: (a) => a.floor_area_ratio ?? 0, invert: true },
 ];
 
+const BASE_CHIP = "inline-flex items-center rounded-full px-2.5 py-1 text-xs border transition-colors";
+
+function getAxisChipClass(active: boolean, locked: boolean): string {
+  if (!active) return `${BASE_CHIP} bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200 cursor-pointer`;
+  if (locked) return `${BASE_CHIP} bg-blue-50 text-blue-700 border-blue-200 cursor-not-allowed opacity-70`;
+  return `${BASE_CHIP} bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 cursor-pointer`;
+}
+
 interface Props {
   apartments: MbApartment[];
 }
@@ -55,7 +63,10 @@ export default function MbCompareRadarChart({ apartments }: Props) {
     });
   }, []);
 
-  const activeAxes = AXES.filter((a) => enabledAxes.has(a.key));
+  const activeAxes = useMemo(
+    () => AXES.filter((a) => enabledAxes.has(a.key)),
+    [enabledAxes],
+  );
 
   const { data, bestName } = useMemo(() => {
     const maxMap = new Map<string, number>();
@@ -102,11 +113,7 @@ export default function MbCompareRadarChart({ apartments }: Props) {
               key={axis.key}
               type="button"
               onClick={() => toggleAxis(axis.key)}
-              className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs border transition-colors ${
-                active
-                  ? `bg-blue-50 text-blue-700 border-blue-200${locked ? " cursor-not-allowed opacity-70" : " hover:bg-blue-100 cursor-pointer"}`
-                  : "bg-gray-100 text-gray-400 border-gray-200 hover:bg-gray-200 cursor-pointer"
-              }`}
+              className={getAxisChipClass(active, locked)}
               aria-pressed={active}
             >
               {axis.label}
@@ -114,7 +121,7 @@ export default function MbCompareRadarChart({ apartments }: Props) {
           );
         })}
         {atMinimum && (
-          <span className="text-xs text-gray-400">(최소 3개)</span>
+          <span className="text-xs text-gray-400">(최소 {MIN_AXES}개)</span>
         )}
       </div>
       <ResponsiveContainer width="100%" height={RADAR_HEIGHT}>

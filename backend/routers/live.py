@@ -274,9 +274,9 @@ def _fetch_articles_all_trade_types(complex_no: str, page: int = 1):
 @router.post("/{complex_no}/articles/start-crawl")
 def start_live_crawl(complex_no: str, user: dict = Depends(get_approved_user)):
     """Start background crawl, return immediately."""
-    # Cache hit -> skip crawl
-    cache_key = f"articles:{complex_no}"
-    if _cache.get(cache_key) is not None:
+    # 최근 크롤링 완료 여부 확인 (동적 TTL 적용)
+    done_key = f"crawl_done:{complex_no}"
+    if _cache.get(done_key) is not None:
         return {"complex_no": complex_no, "status": "cached"}
 
     # Already running? (Lock으로 check-then-set 원자화)
@@ -314,7 +314,7 @@ def get_crawl_status(complex_no: str):
         # done/error는 프론트가 수신 후 pop — 즉시 pop하면 프론트가 놓칠 수 있음
         if status.get("_polled_final"):
             _crawl_status.pop(complex_no, None)
-        elif status.get("status") in ("done", "error"):
+        elif status.get("status") in ("done", "done_partial", "error"):
             status["_polled_final"] = True  # 다음 poll에서 정리
     return {"complex_no": complex_no, **snapshot}
 
@@ -491,8 +491,10 @@ def _background_crawl(complex_no: str):
             pass
     finally:
         db.close()
-        # Invalidate cache so next DB read gets fresh data
+        # 레거시 live_articles 응답 캐시 무효화
         _cache.delete(f"articles:{complex_no}")
+        # 크롤링 완료 마커 설정 (start-crawl 중복 방지, 동적 TTL 적용)
+        _cache.set(f"crawl_done:{complex_no}", True)
         # complexes.py의 필터/통계/상세 캐시도 무효화 (레지스트리 기반, 순환 import 없음)
         complexes_cache = get_cache("complexes", dynamic=True)
         complexes_cache.delete(f"filter_options:{complex_no}")

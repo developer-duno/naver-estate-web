@@ -54,7 +54,8 @@ function calcCrawlProgress(p: CrawlProgress): { percent: number; steps: CrawlSte
   if (phase === "articles") {
     // article_count 기반 진행률 (50건 기준 30% 스케일, 페이지 수 대비 정확)
     const count = p.article_count ?? 0;
-    const pct = p.has_more !== false ? Math.min(count > 0 ? Math.round((count / 50) * 30) : (p.current_page ?? 0) * 5, 30) : 33;
+    const rawPct = count > 0 ? Math.round((count / 50) * 30) : (p.current_page ?? 0) * 5;
+    const pct = p.has_more !== false ? Math.max(3, Math.min(rawPct, 30)) : 33;
     return {
       percent: pct,
       steps: [

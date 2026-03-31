@@ -4,14 +4,14 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-03-31 — Vercel 재배포(ADMIN_EMAIL 반영) + api.ts/mb-compare-utils.ts 주석 보강
+**마지막 작업**: 2026-03-31 — ESLint 45→0건 정리 + 크롤링 UI 버그 4건 수정
 
 **다음 우선순위**:
 
-1. 기존 lint 경고 45건 정리 (set-state-in-effect, unused-vars, exhaustive-deps 등)
-2. `liveArticles` 함수 프로덕션 미사용 확인 → 제거 또는 활용처 추가
-3. `complexNo`/`articleNo` 등 URL 파라미터에 `encodeURIComponent` 방어적 추가
-4. `formatCellValue(0)` 테스트 추가 (엣지 케이스 커버리지)
+1. `liveArticles` 함수 프로덕션 미사용 확인 → 제거 또는 활용처 추가
+2. `complexNo`/`articleNo` 등 URL 파라미터에 `encodeURIComponent` 방어적 추가
+3. `formatCellValue(0)` 테스트 추가 (엣지 케이스 커버리지)
+4. 관리자 나머지 4개 페이지 staleTime 추가 (crawl/logs/settings/users)
 
 **주의사항**:
 

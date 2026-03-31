@@ -88,7 +88,7 @@ export default function CompareRadarChart({ complexes, pricePerPyeong }: Props) 
     }
 
     return { data: rows, bestName: complexes[bestIdx]?.complex_name ?? "" };
-  }, [complexes]);
+  }, [complexes, pricePerPyeong]);
 
   if (complexes.length < 2) return null;
 

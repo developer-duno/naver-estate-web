@@ -2,7 +2,7 @@
  * Header 컴포넌트 테스트 — 인증 상태별 렌더링, 네비게이션 링크
  * 실행: npx vitest run src/components/__tests__/Header.test.tsx
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import Header from "../Header";
 

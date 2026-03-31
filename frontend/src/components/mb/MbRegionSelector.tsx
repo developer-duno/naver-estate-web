@@ -25,9 +25,9 @@ export default function MbRegionSelector({ onSearch, defaultRegion, defaultGu, d
   const [gu, setGu] = useState(defaultGu ?? "");
   const [keyword, setKeyword] = useState(defaultKeyword ?? "");
 
-  useEffect(() => { setRegion(defaultRegion ?? ""); }, [defaultRegion]);
-  useEffect(() => { setGu(defaultGu ?? ""); }, [defaultGu]);
-  useEffect(() => { setKeyword(defaultKeyword ?? ""); }, [defaultKeyword]);
+  useEffect(() => { setRegion(defaultRegion ?? ""); }, [defaultRegion]); // eslint-disable-line react-hooks/set-state-in-effect -- prop 동기화
+  useEffect(() => { setGu(defaultGu ?? ""); }, [defaultGu]); // eslint-disable-line react-hooks/set-state-in-effect -- prop 동기화
+  useEffect(() => { setKeyword(defaultKeyword ?? ""); }, [defaultKeyword]); // eslint-disable-line react-hooks/set-state-in-effect -- prop 동기화
 
   const guQuery = useQuery({
     queryKey: queryKeys.mb.guList(region),

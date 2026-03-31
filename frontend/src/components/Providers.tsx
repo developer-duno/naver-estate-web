@@ -20,7 +20,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       }
     });
     return () => subscription.unsubscribe();
-  }, []); // queryClient는 useState로 생성되어 불변
+  }, [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

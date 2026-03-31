@@ -45,16 +45,14 @@ vi.mock("next/link", () => ({
 // Mock next/image
 vi.mock("next/image", () => ({
   default: (props: any) => {
-    const React = require("react");
-    const { fill, priority, ...rest } = props;
-    return React.createElement("img", rest);
+    const { fill: _fill, priority: _priority, ...rest } = props; // eslint-disable-line @typescript-eslint/no-unused-vars -- next/image 전용 props 제외
+    return require("react").createElement("img", rest);
   },
 }));
 
 // Mock next/dynamic
 vi.mock("next/dynamic", () => ({
-  default: (loader: any) => {
-    const React = require("react");
+  default: () => {
     return function DynamicComponent() { return null; };
   },
 }));

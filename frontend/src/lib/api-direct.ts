@@ -4,7 +4,7 @@
  */
 
 import { createClient } from "@/lib/supabase";
-import type { Complex, Article, DbStats, Regions, FilterOptions, PriceStats } from "@/types";
+import type { Complex, Article, DbStats, Regions, FilterOptions } from "@/types";
 
 function sb() {
   return createClient();

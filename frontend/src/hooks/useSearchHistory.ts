@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   getSearchHistory,
   addSearchHistory,
@@ -11,11 +11,7 @@ import {
 
 /** 검색 히스토리 훅 — localStorage 기반, 최근 10개 */
 export function useSearchHistory() {
-  const [history, setHistory] = useState<SearchHistoryItem[]>([]);
-
-  useEffect(() => {
-    setHistory(getSearchHistory());
-  }, []);
+  const [history, setHistory] = useState<SearchHistoryItem[]>(() => getSearchHistory());
 
   const add = useCallback((item: Omit<SearchHistoryItem, "timestamp">) => {
     addSearchHistory(item);

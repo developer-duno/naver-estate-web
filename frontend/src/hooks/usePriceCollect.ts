@@ -72,7 +72,7 @@ export function usePriceCollect(): PriceCollectHookResult {
     const status = statusQuery.data;
 
     if (status.status === "done" || status.status === "idle") {
-      finishPolling("");
+      finishPolling(""); // eslint-disable-line react-hooks/set-state-in-effect -- 쿼리 응답 동기화
       queryClient.invalidateQueries({ queryKey: queryKeys.priceHistoryAll(targetComplexNo) });
       onDoneRef.current?.();
       onDoneRef.current = undefined;
@@ -91,7 +91,7 @@ export function usePriceCollect(): PriceCollectHookResult {
   useEffect(() => {
     if (!statusQuery.error) return;
     if ((statusQuery.error as Error).message === "timeout") {
-      finishPolling("수집 시간 초과. 나중에 다시 시도해주세요");
+      finishPolling("수집 시간 초과. 나중에 다시 시도해주세요"); // eslint-disable-line react-hooks/set-state-in-effect -- 타임아웃 에러 처리
       onDoneRef.current?.();
       onDoneRef.current = undefined;
     }

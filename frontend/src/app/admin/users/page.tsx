@@ -59,11 +59,6 @@ export default function AdminUsersPage() {
     await updateMutation.mutateAsync({ userId, payload });
   };
 
-  const handleSuspend = async (userId: string) => {
-    if (!confirm("이 사용자를 정지하시겠습니까?")) return;
-    await suspendMutation.mutateAsync(userId);
-  };
-
   return (
     <>
       <h2 className="text-lg font-semibold mb-4">사용자 관리</h2>
@@ -99,7 +94,7 @@ export default function AdminUsersPage() {
       {usersQuery.isLoading ? (
         <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
       ) : (
-        <UserTable users={usersQuery.data?.items ?? []} onUpdate={handleUpdate} onSuspend={handleSuspend} />
+        <UserTable users={usersQuery.data?.items ?? []} onUpdate={handleUpdate} />
       )}
 
       {/* 페이지네이션 */}

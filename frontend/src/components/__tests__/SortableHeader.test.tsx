@@ -5,7 +5,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import SortableHeader from "../SortableHeader";
-import type { ColumnDef, SortState } from "../SortableHeader";
+import type { ColumnDef } from "../SortableHeader";
 
 const sortableColumn: ColumnDef = {
   key: "price",

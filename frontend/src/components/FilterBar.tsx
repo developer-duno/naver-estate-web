@@ -1,7 +1,7 @@
 "use client";
 
 import { useReducer, useState, useCallback, useRef, useEffect, memo } from "react";
-import type { ArticleFilters, FilterOptions, SortBy } from "@/types";
+import type { ArticleFilters, FilterOptions } from "@/types";
 import { DEBOUNCE_MS, SORT_OPTIONS, type RangePreset } from "@/lib/constants";
 import FilterDropdown from "./FilterDropdown";
 import { filterReducer, buildInitState, type FilterState } from "./filter/reducer";
@@ -24,7 +24,7 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
 
   // Sync external sortBy (from table column click)
   const sortByRef = useRef(s.sortBy);
-  sortByRef.current = s.sortBy;
+  useEffect(() => { sortByRef.current = s.sortBy; }, [s.sortBy]);
   useEffect(() => {
     if (externalSortBy !== undefined && externalSortBy !== sortByRef.current) {
       dispatch({ type: "SET", key: "sortBy", value: externalSortBy });
@@ -40,12 +40,13 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
   );
 
   const emitChangeRef = useRef(emitChange);
-  emitChangeRef.current = emitChange;
+  useEffect(() => { emitChangeRef.current = emitChange; }, [emitChange]);
 
   // ── 디바운스 ──
   const debounceMapRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   useEffect(() => {
-    return () => { Object.values(debounceMapRef.current).forEach(clearTimeout); };
+    const map = debounceMapRef.current;
+    return () => { Object.values(map).forEach(clearTimeout); };
   }, []);
 
   const setImmediate = (key: keyof FilterState) => (v: string) => {

@@ -6,7 +6,6 @@ import type { UserProfile, UserUpdatePayload } from "@/types/admin";
 interface Props {
   users: UserProfile[];
   onUpdate: (userId: string, payload: UserUpdatePayload) => Promise<void>;
-  onSuspend: (userId: string) => Promise<void>;
 }
 
 const ROLE_OPTIONS = ["user", "expert", "admin"] as const;
@@ -44,7 +43,7 @@ function isExpired(approvedUntil?: string | null): boolean {
   return new Date(approvedUntil) < new Date();
 }
 
-export default function UserTable({ users, onUpdate, onSuspend }: Props) {
+export default function UserTable({ users, onUpdate }: Props) {
   const [updating, setUpdating] = useState<string | null>(null);
   const [approvalModal, setApprovalModal] = useState<string | null>(null);
 

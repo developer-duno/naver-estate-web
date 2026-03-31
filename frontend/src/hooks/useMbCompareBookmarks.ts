@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   getMbCompareBookmarks,
   addMbCompareBookmark,
@@ -12,11 +12,7 @@ import {
 
 /** 미분양 비교 북마크 훅 — localStorage 기반, 최대 20개, 수동 저장 */
 export function useMbCompareBookmarks() {
-  const [bookmarks, setBookmarks] = useState<MbCompareBookmarkItem[]>([]);
-
-  useEffect(() => {
-    setBookmarks(getMbCompareBookmarks());
-  }, []);
+  const [bookmarks, setBookmarks] = useState<MbCompareBookmarkItem[]>(() => getMbCompareBookmarks());
 
   const add = useCallback((item: Omit<MbCompareBookmarkItem, "saved_at">) => {
     addMbCompareBookmark(item);

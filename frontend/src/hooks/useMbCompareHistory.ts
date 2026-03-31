@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   getMbCompareHistory,
   addMbCompareHistory,
@@ -11,11 +11,7 @@ import {
 
 /** 미분양 비교 히스토리 훅 — localStorage 기반, 최근 10개, 자동 중복 제거 */
 export function useMbCompareHistory() {
-  const [history, setHistory] = useState<MbCompareHistoryItem[]>([]);
-
-  useEffect(() => {
-    setHistory(getMbCompareHistory());
-  }, []);
+  const [history, setHistory] = useState<MbCompareHistoryItem[]>(() => getMbCompareHistory());
 
   const add = useCallback((item: Omit<MbCompareHistoryItem, "timestamp">) => {
     addMbCompareHistory(item);

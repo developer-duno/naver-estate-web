@@ -316,7 +316,6 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
 
   const historyLoading = historyQueries.some((q) => q.isLoading);
   const statsLoading = statsQueries.some((q) => q.isLoading);
-  const pyeongLoading = pyeongQueries.some((q) => q.isLoading);
 
   // 데이터 조립
   const historyDatasets = complexes

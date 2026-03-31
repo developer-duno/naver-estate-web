@@ -2,7 +2,7 @@
  * ArticleTable 컴포넌트 테스트 - 매물 행 렌더링, 빈 상태
  * 실행: npx vitest run src/components/__tests__/ArticleTable.test.tsx
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import ArticleTable from "../ArticleTable";
 import type { Article } from "@/types";

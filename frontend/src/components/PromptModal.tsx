@@ -25,7 +25,7 @@ export default function PromptModal({
   // 모달 열릴 때 초기화 + 포커스 + 스크롤 락
   useEffect(() => {
     if (!isOpen) return;
-    setValue("");
+    setValue(""); // eslint-disable-line react-hooks/set-state-in-effect -- 모달 초기화
     requestAnimationFrame(() => inputRef.current?.focus());
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";

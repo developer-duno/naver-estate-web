@@ -13,13 +13,12 @@ interface Props {
   articles: Article[];
   onRowClick?: (articleNo: string) => void;
   onSortChange?: (sortBy: string) => void;
-  activeSortBy?: string;
   selectedArticleNos?: Set<string>;
   onSelectionChange?: (articleNo: string, checked: boolean) => void;
   onSelectAll?: (checked: boolean, visibleArticles: Article[]) => void;
 }
 
-export default function ArticleTable({ articles, onRowClick, onSortChange, activeSortBy, selectedArticleNos, onSelectionChange, onSelectAll }: Props) {
+export default function ArticleTable({ articles, onRowClick, onSortChange, selectedArticleNos, onSelectionChange, onSelectAll }: Props) {
   const [sort, setSort] = useState<SortState>({ key: "", dir: null });
 
   const handleSortChange = (newSort: SortState) => {

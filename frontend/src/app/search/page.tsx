@@ -53,14 +53,14 @@ function SearchContent() {
       ? queryKeys.search(keyword, typesStr)
       : queryKeys.regionSearch(sido, sigungu, dong || undefined, typesStr),
     queryFn: ({ signal }) => keyword
-      ? searchComplexes(keyword, 50, signal, typesStr)
+      ? searchComplexes(keyword, signal, typesStr)
       : getComplexesByRegion(sido, sigungu, dong || undefined, signal, typesStr),
     enabled: hasSearchParams,
     staleTime: 30_000,
     placeholderData: (prev) => prev,
   });
 
-  const complexes = searchData?.complexes ?? [];
+  const complexes = useMemo(() => searchData?.complexes ?? [], [searchData?.complexes]);
   const error = isError ? "검색에 실패했습니다. 다시 시도해주세요." : "";
 
   // 매물유형 클라이언트 필터 (complexes/selectedTypes 변경 시만 재계산)

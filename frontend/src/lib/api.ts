@@ -114,7 +114,7 @@ function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: number 
   return _fetchApiImpl<T>(path, options);
 }
 /** 단지 키워드 검색 */
-export async function searchComplexes(keyword: string, _limit = 50, signal?: AbortSignal, types?: string) {
+export async function searchComplexes(keyword: string, signal?: AbortSignal, types?: string) {
   if (!isBackendAvailable()) return direct.searchComplexesDirect(keyword);
   try {
     let url = `/api/live/search?q=${encodeURIComponent(keyword)}`;

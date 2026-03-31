@@ -5,7 +5,7 @@ import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
-import type { Complex, PyeongDetail, PriceStats, PriceHistoryItem, ArticleFilters } from "@/types";
+import type { Complex, PyeongDetail, PriceStats, ArticleFilters } from "@/types";
 import { formatDateFull, formatChartPrice } from "@/lib/format";
 import { getPriceStats, getPriceHistory } from "@/lib/api";
 import { usePriceCollect } from "@/hooks/usePriceCollect";
@@ -19,7 +19,7 @@ interface Props {
   complex: Complex;
   pyeongDetails: PyeongDetail[];
   complexNo: string;
-  articleCount?: number;
+
   onFilterChange?: (filters: ArticleFilters) => void;
   /** 인증 토큰 (실거래가 수집용) */
   accessToken?: string;
@@ -33,7 +33,7 @@ const TABS: { key: TabType; label: string }[] = [
   { key: "price-history", label: "실거래가 추이" },
 ];
 
-export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, articleCount, onFilterChange, accessToken }: Props) {
+export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, onFilterChange, accessToken }: Props) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<TabType>("info");
   const [historyAreaNo, setHistoryAreaNo] = useState<string>("");

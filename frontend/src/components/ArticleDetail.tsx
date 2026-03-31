@@ -15,7 +15,7 @@ interface Props {
 }
 
 export default function ArticleDetail({ articleNo, onClose }: Props) {
-  const { data: article, isLoading: loading, isError, error: queryError, refetch } = useQuery({
+  const { data: article, isLoading: loading, isError, refetch } = useQuery({
     queryKey: queryKeys.articleLive(articleNo),
     queryFn: () => getArticleLive(articleNo),
   });

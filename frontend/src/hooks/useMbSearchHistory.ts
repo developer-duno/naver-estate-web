@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   getMbSearchHistory,
   addMbSearchHistory,
@@ -11,11 +11,7 @@ import {
 
 /** 미분양 검색 히스토리 훅 — localStorage 기반, 최근 10개 */
 export function useMbSearchHistory() {
-  const [history, setHistory] = useState<MbSearchHistoryItem[]>([]);
-
-  useEffect(() => {
-    setHistory(getMbSearchHistory());
-  }, []);
+  const [history, setHistory] = useState<MbSearchHistoryItem[]>(() => getMbSearchHistory());
 
   const add = useCallback((item: Omit<MbSearchHistoryItem, "timestamp">) => {
     addMbSearchHistory(item);

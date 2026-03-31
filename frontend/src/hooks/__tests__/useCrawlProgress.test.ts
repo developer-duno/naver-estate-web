@@ -2,7 +2,7 @@
  * useCrawlProgress 훅 테스트 — React Query 기반 폴링
  * 실행: npx vitest run src/hooks/__tests__/useCrawlProgress.test.ts
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 

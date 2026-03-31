@@ -2,7 +2,7 @@
  * MbRegionSelector 컴포넌트 테스트 — 시도/시군구 선택, 검색 콜백
  * 실행: npx vitest run src/components/__tests__/MbRegionSelector.test.tsx
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import MbRegionSelector from "../mb/MbRegionSelector";
 import { TestQueryProvider } from "@/test-setup";

@@ -114,7 +114,7 @@ export default function MbCompareRadarChart({ apartments }: Props) {
     }
 
     return { data: rows, scores: scoreList, bestIdx: bestI };
-  }, [apartments, enabledAxes, weights]);
+  }, [apartments, activeAxes, weights]);
 
   if (apartments.length < 2) return null;
 

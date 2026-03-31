@@ -4,7 +4,7 @@
  * 레이더 차트 축 선택 + 가중치 영속화 훅
  * localStorage 기반, useMbCompareBookmarks 패턴 따름
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   getMbRadarSettings,
   saveMbRadarSettings,
@@ -16,10 +16,6 @@ const MIN_AXES = 3;
 
 export function useMbRadarSettings() {
   const [settings, setSettings] = useState<MbRadarSettings>(() => getMbRadarSettings());
-
-  useEffect(() => {
-    setSettings(getMbRadarSettings());
-  }, []);
 
   /** 축 활성/비활성 토글 (최소 3개 유지) */
   const toggleAxis = useCallback((key: string) => {

@@ -2,7 +2,7 @@
  * 고난이도 엣지 케이스 테스트 — 네트워크, XSS, 경계값, 동시성
  * 실행: npx vitest run src/lib/__tests__/edge-cases.test.ts
  */
-import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { ApiError } from "../api";

@@ -268,3 +268,45 @@ export function removeMbCompareBookmark(saved_at: number): void {
 export function clearMbCompareBookmarks(): void {
   localStorage.removeItem(MB_COMPARE_BOOKMARK_KEY);
 }
+
+// ── 레이더 차트 설정 (축 선택 + 가중치 영속화) ──
+
+const MB_RADAR_SETTINGS_KEY = "mb_radar_settings";
+
+export interface MbRadarSettings {
+  enabledAxes: string[];
+  weights: Record<string, number>;
+}
+
+/** 모든 축 활성, 가중치 3 (균등) */
+export const DEFAULT_RADAR_SETTINGS: MbRadarSettings = {
+  enabledAxes: ["units", "parking", "maxFloor", "jeonse", "nearby", "discount", "unsold", "pp", "far"],
+  weights: { units: 3, parking: 3, maxFloor: 3, jeonse: 3, nearby: 3, discount: 3, unsold: 3, pp: 3, far: 3 },
+};
+
+/** localStorage에서 레이더 설정 조회 — 방어적 merge로 새 축 자동 대응 */
+export function getMbRadarSettings(): MbRadarSettings {
+  const raw = readJSON<Partial<MbRadarSettings>>(MB_RADAR_SETTINGS_KEY, {});
+  return {
+    enabledAxes: Array.isArray(raw.enabledAxes) && raw.enabledAxes.length >= 3
+      ? raw.enabledAxes
+      : DEFAULT_RADAR_SETTINGS.enabledAxes,
+    weights: { ...DEFAULT_RADAR_SETTINGS.weights, ...(raw.weights ?? {}) },
+  };
+}
+
+/** 레이더 설정 저장 */
+export function saveMbRadarSettings(settings: MbRadarSettings): void {
+  try {
+    localStorage.setItem(MB_RADAR_SETTINGS_KEY, JSON.stringify(settings));
+  } catch (err) {
+    if (typeof window !== "undefined" && err instanceof Error) {
+      console.warn(`[MbRadarSettings] Failed to save: ${err.message}`);
+    }
+  }
+}
+
+/** 레이더 설정 초기화 */
+export function clearMbRadarSettings(): void {
+  localStorage.removeItem(MB_RADAR_SETTINGS_KEY);
+}

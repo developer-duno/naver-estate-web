@@ -4,14 +4,14 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-03-31 — 코드 정리 4종 (liveArticles 제거 + encodeURI + 테스트 + staleTime)
+**마지막 작업**: 2026-04-01 — 크롤링 진행 상태 버그 수정 (캐시 키 분리 + 최소 3%)
 
 **다음 우선순위**:
 
-1. Vercel 재배포 (크롤 버그 수정 + 코드 정리 반영)
-2. 브라우저 수동 테스트 (단지 상세 → 데이터 갱신 크롤링)
-3. 백엔드 `/api/live/{no}/articles` 레거시 엔드포인트 정리 검토
-4. E2E 테스트 보강 (Playwright)
+1. Vercel 재배포 (크롤 버그 수정 반영) + 브라우저 수동 테스트
+2. 백엔드 `/api/live/{no}/articles` 레거시 엔드포인트 정리 검토
+3. E2E 테스트 보강 (Playwright)
+4. useCrawlProgress 폴링 최대 시간 제한 추가 (무한 폴링 방지)
 
 **주의사항**:
 

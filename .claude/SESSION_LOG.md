@@ -1,31 +1,38 @@
-# 세션 로그: 2026-03-31 (세션 5 — Night)
+# 세션 로그: 2026-04-01 (세션 6)
 
 ## 완료 작업
 
-### 코드 정리 4종
+### 크롤링 진행 상태 버그 수정
 
-1. **liveArticles 함수 제거** — 프로덕션 미사용 확인 (grep 0건), api.ts에서 삭제 + 테스트 mock 정리
-2. **encodeURIComponent 적용** — api.ts 내 15개 path parameter에 방어적 인코딩 래핑
-3. **formatCellValue 테스트 추가** — 엣지케이스 4건 (0, 음수, 소수, 문자열"0"), 506개 전체 통과
-4. **관리자 staleTime 설정** — logs(60초), settings(5분), users(60초), crawl은 0 유지(실시간 모니터링)
+**증상**: 단지 상세 페이지 새로고침 시 "갱신 중..." 상태 무한 반복 + 진행률 0% 멈춤
+
+**근본 원인**: `_background_crawl` 완료 시 `articles:{complex_no}` 캐시 삭제 → `start-crawl`이 매번 캐시 미스 → 불필요한 재크롤링
+
+**수정 (live.py + page.tsx)**:
+1. BE: 캐시 키를 `crawl_done:{complex_no}`로 분리 — 크롤링 완료 마커 역할 (동적 TTL)
+2. BE: `done_partial` 상태를 `_polled_final` 정리 대상에 추가 (메모리 누수 방지)
+3. FE: `calcCrawlProgress` articles 단계 최소 3% 보장 (0% → 3%)
+
+### Vercel 재배포
+
+- CI #158 통과 (3m 1s) — 코드 정리 4종 + 크롤 버그 수정 반영
+- 브라우저 수동 테스트: 필터 URL 동기화 정상, 크롤링 진행 확인
 
 ## 커밋
 
-1. `d3b16cb` refactor: liveArticles 제거 + URL path param encodeURIComponent 적용
-2. `73f3c84` test: formatCellValue 엣지케이스 추가
-3. `0700dae` perf: 관리자 logs/settings/users 페이지 staleTime 설정
+1. `e1f45b9` fix: 크롤링 진행 상태 버그 수정 — 캐시 키 분리 + 최소 3%
 
 ## 검증
 
 - tsc: 0 에러
 - lint: 0 warnings
-- test: FE 506개 (55파일) 전체 통과
+- test: FE 506개 (55파일), BE 280개 — 전체 통과
+- ruff: 0 에러
 - console.log / TODO: 0건
-- build: 네트워크 드라이브 + Turbopack 경로 이슈 (기존 문제, 코드 변경 무관)
 
 ## 다음 작업
 
-1. Vercel 재배포 (크롤 버그 수정 + 이번 코드 정리 반영)
-2. 브라우저 수동 테스트 (단지 상세 → 데이터 갱신 크롤링)
-3. 백엔드 `/api/live/{no}/articles` 레거시 엔드포인트 정리 검토
-4. E2E 테스트 보강 (Playwright)
+1. Vercel 재배포 (크롤 버그 수정 반영) + 브라우저 수동 테스트 (새로고침 시 "갱신 중..." 안 나오는지)
+2. 백엔드 `/api/live/{no}/articles` 레거시 엔드포인트 정리 검토
+3. E2E 테스트 보강 (Playwright)
+4. useCrawlProgress 폴링 최대 시간 제한 추가 (무한 폴링 방지)

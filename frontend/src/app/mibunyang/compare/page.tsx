@@ -14,6 +14,7 @@ import { useMbCompareBookmarks } from "@/hooks/useMbCompareBookmarks";
 import type { UnsoldDataset } from "@/components/mb/MbCompareUnsoldChart";
 import type { MbCompareHistoryItem, MbCompareBookmarkItem } from "@/lib/storage";
 import MbCompareHistory from "@/components/mb/MbCompareHistory";
+import PromptModal from "@/components/PromptModal";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { COMPARE_TEXT_COLORS } from "@/lib/constants";
 
@@ -38,6 +39,7 @@ function CompareContent() {
   const ids = (searchParams.get("ids") ?? "").split(",").filter(Boolean).slice(0, MAX_COMPARE);
   const [isExporting, setIsExporting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [promptOpen, setPromptOpen] = useState(false);
   const { history: compareHistory, add: addHistory, remove: removeHistory, clear: clearHistory } = useMbCompareHistory();
   const { bookmarks, add: addBookmark, remove: removeBookmark, clear: clearBookmarks, isBookmarked } = useMbCompareBookmarks();
   const historySaved = useRef(false);
@@ -78,14 +80,20 @@ function CompareContent() {
 
   const handleBookmark = useCallback(() => {
     if (apartments.length < 2 || alreadyBookmarked) return;
-    const label = prompt("비교 북마크 이름 (빈칸이면 자동 생성):");
-    if (label === null) return;
-    addBookmark({
-      ids: currentIds,
-      names: apartments.map((a) => a.name),
-      label: label.trim() || undefined,
-    });
-  }, [apartments, currentIds, alreadyBookmarked, addBookmark]);
+    setPromptOpen(true);
+  }, [apartments.length, alreadyBookmarked]);
+
+  const handleBookmarkConfirm = useCallback(
+    (label: string) => {
+      setPromptOpen(false);
+      addBookmark({
+        ids: currentIds,
+        names: apartments.map((a) => a.name),
+        label: label.trim() || undefined,
+      });
+    },
+    [currentIds, apartments, addBookmark],
+  );
 
   const handleSelectCompare = useCallback(
     (item: MbCompareHistoryItem | MbCompareBookmarkItem) => {
@@ -197,6 +205,15 @@ function CompareContent() {
           onClearBookmarks={clearBookmarks}
         />
       </div>
+
+      {/* 북마크 이름 입력 모달 */}
+      <PromptModal
+        isOpen={promptOpen}
+        title="비교 북마크 이름"
+        placeholder="빈칸이면 자동 생성"
+        onConfirm={handleBookmarkConfirm}
+        onCancel={() => setPromptOpen(false)}
+      />
 
       {/* 비교 테이블 */}
       <div className="overflow-x-auto bg-white rounded-lg shadow-sm border">

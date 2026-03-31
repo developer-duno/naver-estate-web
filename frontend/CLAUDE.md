@@ -17,8 +17,8 @@
 ```
 frontend/src/
 ├── app/           # Next.js App Router (19 페이지, mibunyang/ + mibunyang/compare 포함)
-├── components/    # 재사용 컴포넌트 (22개 + admin/5개 + filter/3개 + mb/13개 = 43개 TSX)
-├── hooks/         # 커스텀 훅 (16개, useMbFavorites + useMbCompare + useMbSearchHistory + useMbCompareHistory + useMbCompareBookmarks + useMbRadarSettings 포함)
+├── components/    # 재사용 컴포넌트 (23개 + admin/5개 + filter/3개 + mb/13개 = 44개 TSX, PromptModal 포함)
+├── hooks/         # 커스텀 훅 (18개, useLocalStorageList + useLocalStorageFavorites 제네릭 훅 포함)
 ├── lib/           # api, storage, format, query-keys, compare-export, mb-export, mb-compare-utils, mb-compare-export 등 (13개)
 ├── types/         # TypeScript 인터페이스 (estate + Mb* 10개 + naver-maps.d.ts)
 └── middleware.ts  # Supabase 세션 + 관리자 라우트 보호

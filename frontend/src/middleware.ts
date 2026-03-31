@@ -6,8 +6,13 @@ import type { NextRequest } from "next/server";
 const ADMIN_PATHS = ["/admin"];
 // 로그인 필수 경로
 const AUTH_REQUIRED_PATHS = ["/complex"];
-// 관리자 이메일 (환경변수 우선, 폴백: 기본 관리자)
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "kyh11kyh@gmail.com";
+// 관리자 이메일 (환경변수 필수, 쉼표 구분 다중 지원, 미설정 시 관리자 접근 차단)
+const ADMIN_EMAILS = new Set(
+  (process.env.ADMIN_EMAIL ?? "")
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean),
+);
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -61,8 +66,8 @@ export async function middleware(request: NextRequest) {
       }
       return NextResponse.redirect(loginUrl);
     }
-    // 관리자 이메일이 아니면 차단
-    if (user.email !== ADMIN_EMAIL) {
+    // 관리자 이메일이 아니면 차단 (ADMIN_EMAIL 미설정 시 전원 차단)
+    if (!ADMIN_EMAILS.has(user.email ?? "")) {
       return NextResponse.redirect(new URL("/", request.url));
     }
   }

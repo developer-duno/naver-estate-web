@@ -75,7 +75,7 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 | 파일 | 내용 |
 |------|------|
 | `.claude/rules/web-rules.md` | React/Next.js + FastAPI 코딩 규칙, DON'T 목록 |
-| `.claude/rules/testing.md` | 테스트 작성·실행 규칙, 구조표 (FE 429개, BE 276개) |
+| `.claude/rules/testing.md` | 테스트 작성·실행 규칙, 구조표 (FE 502개, BE 280개) |
 | `.claude/rules/planning.md` | /plan 모드 규칙, 교차검증 에이전트 5종 |
 | `.claude/rules/infra.md` | 서버 복구 절차, 스케줄러, 공유 인프라, DB 풀 |
 | `.claude/rules/codes.md` | 거래/매물유형 코드, 핵심 상수, localStorage 키 |

@@ -7,23 +7,22 @@ import {
   toggleFavorite as doToggle,
   type FavoriteComplex,
 } from "@/lib/storage";
+import { useLocalStorageFavorites } from "./useLocalStorageFavorites";
+
+const getId = (item: FavoriteComplex) => item.complex_no;
 
 /** 즐겨찾기 훅 — localStorage 기반 */
 export function useFavorites() {
-  const [favorites, setFavorites] = useState<FavoriteComplex[]>([]);
+  const { favorites, isFavorite, refresh } =
+    useLocalStorageFavorites<FavoriteComplex>({ getAll: getFavorites, getId });
 
-  useEffect(() => {
-    setFavorites(getFavorites());
-  }, []);
-
-  const isFavorite = useCallback((complexNo: string) => {
-    return favorites.some((f) => f.complex_no === complexNo);
-  }, [favorites]);
-
-  const toggle = useCallback((complex: Omit<FavoriteComplex, "added_at">) => {
-    doToggle(complex);
-    setFavorites(getFavorites());
-  }, []);
+  const toggle = useCallback(
+    (complex: Omit<FavoriteComplex, "added_at">) => {
+      doToggle(complex);
+      refresh();
+    },
+    [refresh],
+  );
 
   return { favorites, isFavorite, toggle };
 }
@@ -36,10 +35,17 @@ export function useFavoriteStatus(complexNo: string) {
     setStarred(checkFavorite(complexNo));
   }, [complexNo]);
 
-  const toggle = useCallback((complexName: string, address?: string) => {
-    const added = doToggle({ complex_no: complexNo, complex_name: complexName, address });
-    setStarred(added);
-  }, [complexNo]);
+  const toggle = useCallback(
+    (complexName: string, address?: string) => {
+      const added = doToggle({
+        complex_no: complexNo,
+        complex_name: complexName,
+        address,
+      });
+      setStarred(added);
+    },
+    [complexNo],
+  );
 
   return { starred, toggle };
 }

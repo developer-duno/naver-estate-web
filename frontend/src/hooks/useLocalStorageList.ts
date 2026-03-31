@@ -1,0 +1,85 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+
+/** localStorage 기반 리스트 관리 제네릭 훅 — useCompare, useMbCompare 공통 로직 */
+interface UseLocalStorageListConfig<T> {
+  storageKey: string;
+  getId: (item: T) => string;
+  maxItems: number;
+}
+
+function readJSON<T>(key: string): T[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function useLocalStorageList<T>({
+  storageKey,
+  getId,
+  maxItems,
+}: UseLocalStorageListConfig<T>) {
+  const [list, setList] = useState<T[]>([]);
+
+  useEffect(() => {
+    setList(readJSON<T>(storageKey));
+  }, [storageKey]);
+
+  const save = useCallback(
+    (items: T[]) => {
+      localStorage.setItem(storageKey, JSON.stringify(items));
+      setList(items);
+    },
+    [storageKey],
+  );
+
+  const isIn = useCallback(
+    (id: string) => list.some((item) => getId(item) === id),
+    [list, getId],
+  );
+
+  const add = useCallback(
+    (item: T) => {
+      const current = readJSON<T>(storageKey);
+      if (current.length >= maxItems) return false;
+      if (current.some((c) => getId(c) === getId(item))) return false;
+      save([...current, item]);
+      return true;
+    },
+    [storageKey, maxItems, getId, save],
+  );
+
+  const remove = useCallback(
+    (id: string) => {
+      save(readJSON<T>(storageKey).filter((c) => getId(c) !== id));
+    },
+    [storageKey, getId, save],
+  );
+
+  const clear = useCallback(() => {
+    localStorage.removeItem(storageKey);
+    setList([]);
+  }, [storageKey]);
+
+  const toggle = useCallback(
+    (item: T) => {
+      const current = readJSON<T>(storageKey);
+      const exists = current.some((c) => getId(c) === getId(item));
+      if (exists) {
+        save(current.filter((c) => getId(c) !== getId(item)));
+      } else {
+        if (current.length >= maxItems) return false;
+        save([...current, item]);
+      }
+      return true;
+    },
+    [storageKey, maxItems, getId, save],
+  );
+
+  return { list, isIn, add, remove, clear, toggle, isFull: list.length >= maxItems };
+}

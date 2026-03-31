@@ -24,7 +24,9 @@ security = HTTPBearer(auto_error=False)
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
-ADMIN_EMAILS = set(filter(None, os.getenv("ADMIN_EMAIL", "kyh11kyh@gmail.com").split(",")))
+ADMIN_EMAILS = set(filter(None, os.getenv("ADMIN_EMAIL", "").split(",")))
+if not ADMIN_EMAILS:
+    logger.warning("[AUTH] ADMIN_EMAIL 환경변수 미설정 — 관리자 접근이 차단됩니다")
 
 if not SUPABASE_JWT_SECRET and not SUPABASE_URL:
     logger.critical("SUPABASE_JWT_SECRET 또는 SUPABASE_URL 미설정 — JWT 인증이 작동하지 않습니다")

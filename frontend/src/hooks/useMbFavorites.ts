@@ -7,24 +7,25 @@ import {
   toggleMbFavorite as doMbToggle,
   type MbFavoriteApartment,
 } from "@/lib/storage";
+import { useLocalStorageFavorites } from "./useLocalStorageFavorites";
+
+const getId = (item: MbFavoriteApartment) => item.id;
 
 /** 미분양 즐겨찾기 목록 훅 — localStorage 기반 */
 export function useMbFavorites() {
-  const [favorites, setFavorites] = useState<MbFavoriteApartment[]>([]);
+  const { favorites, isFavorite, refresh } =
+    useLocalStorageFavorites<MbFavoriteApartment>({
+      getAll: getMbFavorites,
+      getId,
+    });
 
-  useEffect(() => {
-    setFavorites(getMbFavorites());
-  }, []);
-
-  const isFavorite = useCallback(
-    (id: string) => favorites.some((f) => f.id === id),
-    [favorites],
+  const toggle = useCallback(
+    (item: Omit<MbFavoriteApartment, "added_at">) => {
+      doMbToggle(item);
+      refresh();
+    },
+    [refresh],
   );
-
-  const toggle = useCallback((item: Omit<MbFavoriteApartment, "added_at">) => {
-    doMbToggle(item);
-    setFavorites(getMbFavorites());
-  }, []);
 
   return { favorites, isFavorite, toggle };
 }

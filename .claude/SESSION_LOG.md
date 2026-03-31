@@ -1,32 +1,31 @@
-# 세션 로그: 2026-03-31 (세션 4 — Evening)
+# 세션 로그: 2026-03-31 (세션 5 — Night)
 
 ## 완료 작업
 
-### 1. ESLint 경고 45건 → 0건 정리
-- set-state-in-effect (15건): localStorage 훅 5개 lazy initializer + eslint-disable
-- no-unused-vars (22건): 미사용 import/변수/props 제거
-- exhaustive-deps (5건): 누락 의존성 추가
-- ref 이슈 (3건): FilterBar ref useEffect 이동
-- 8 GATE 검증 전체 통과
+### 코드 정리 4종
 
-### 2. 크롤링 UI 버그 4건 수정
-- "cached" 상태 처리: onSuccess에서 즉시 복원 + 성공 메시지
-- 자동크롤 "already_running" 폴링 시작
-- 진행률: article_count 기반 계산
-- 배너: isPolling 기반으로 변경
-- 안전장치: crawling/isPolling 불일치 5초 후 자동 복원
-- 관리자 staleTime: 0→30초
+1. **liveArticles 함수 제거** — 프로덕션 미사용 확인 (grep 0건), api.ts에서 삭제 + 테스트 mock 정리
+2. **encodeURIComponent 적용** — api.ts 내 15개 path parameter에 방어적 인코딩 래핑
+3. **formatCellValue 테스트 추가** — 엣지케이스 4건 (0, 음수, 소수, 문자열"0"), 506개 전체 통과
+4. **관리자 staleTime 설정** — logs(60초), settings(5분), users(60초), crawl은 0 유지(실시간 모니터링)
 
 ## 커밋
-1. `3e1b130` fix: ESLint 경고 45건 전체 정리
-2. `a0b3027` fix: 크롤링 UI 버그 4건 수정
-3. `aa28d95` docs: CLAUDE.md 현행화
 
-## 테스트: FE 502개 통과 | lint 0 warnings
+1. `d3b16cb` refactor: liveArticles 제거 + URL path param encodeURIComponent 적용
+2. `73f3c84` test: formatCellValue 엣지케이스 추가
+3. `0700dae` perf: 관리자 logs/settings/users 페이지 staleTime 설정
+
+## 검증
+
+- tsc: 0 에러
+- lint: 0 warnings
+- test: FE 506개 (55파일) 전체 통과
+- console.log / TODO: 0건
+- build: 네트워크 드라이브 + Turbopack 경로 이슈 (기존 문제, 코드 변경 무관)
 
 ## 다음 작업
-1. liveArticles 미사용 확인 → 제거
-2. URL 파라미터 encodeURIComponent 추가
-3. formatCellValue(0) 테스트
-4. 관리자 나머지 staleTime 추가
-5. Vercel 재배포 (크롤 버그 수정 반영)
+
+1. Vercel 재배포 (크롤 버그 수정 + 이번 코드 정리 반영)
+2. 브라우저 수동 테스트 (단지 상세 → 데이터 갱신 크롤링)
+3. 백엔드 `/api/live/{no}/articles` 레거시 엔드포인트 정리 검토
+4. E2E 테스트 보강 (Playwright)

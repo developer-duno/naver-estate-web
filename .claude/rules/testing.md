@@ -62,7 +62,7 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 | frontend/src/components/__tests__/ | Vitest | 20파일 (컴포넌트+차트+Mb*+MbSearchHistory+MbCompareHistory+PromptModal+CompareFloatingBar+SearchHistory+Pagination+SortableHeader) + mb/3파일 (MbCompareFloatingBar+MbCompareRadarChart+MbLocationMap) |
 | frontend/src/hooks/__tests__/ | Vitest | 16파일 (useCrawlProgress+usePriceCollect+useFilterParams+useMbFavorites+useMbCompare+useMbSearchHistory+useMbCompareHistory+useMbCompareBookmarks+useMbRadarSettings+useLocalStorageList+useCompare+useFavorites+useSearchHistory+useSmartBack+useExport+useAdminToken) |
 | frontend/src/app/__tests__/ | Vitest | 4파일 (페이지 통합: search+mibunyang+mibunyang-detail+mibunyang-compare) |
-| **프론트 합계** | Vitest | **502개** (55파일) |
+| **프론트 합계** | Vitest | **506개** (55파일) |
 | frontend/e2e/ | Playwright | 13 (E2E) |
 | backend/tests/ | pytest | 280 (단위+통합+API+엣지케이스+공유인프라+dialect분기+mibunyang+정렬/검색+중복제거+admin-email, 1 스킵) |
 

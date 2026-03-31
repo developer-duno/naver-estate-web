@@ -4,19 +4,19 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-03-31 — ESLint 45→0건 정리 + 크롤링 UI 버그 4건 수정
+**마지막 작업**: 2026-03-31 — 코드 정리 4종 (liveArticles 제거 + encodeURI + 테스트 + staleTime)
 
 **다음 우선순위**:
 
-1. `liveArticles` 함수 프로덕션 미사용 확인 → 제거 또는 활용처 추가
-2. `complexNo`/`articleNo` 등 URL 파라미터에 `encodeURIComponent` 방어적 추가
-3. `formatCellValue(0)` 테스트 추가 (엣지 케이스 커버리지)
-4. 관리자 나머지 4개 페이지 staleTime 추가 (crawl/logs/settings/users)
+1. Vercel 재배포 (크롤 버그 수정 + 코드 정리 반영)
+2. 브라우저 수동 테스트 (단지 상세 → 데이터 갱신 크롤링)
+3. 백엔드 `/api/live/{no}/articles` 레거시 엔드포인트 정리 검토
+4. E2E 테스트 보강 (Playwright)
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 502개 (55파일), BE 280개 — 전체 통과
+- 테스트 현황: FE 506개 (55파일), BE 280개 — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
 
 ## 기술 스택
@@ -92,7 +92,7 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 | 파일 | 내용 |
 |------|------|
 | `.claude/rules/web-rules.md` | React/Next.js + FastAPI 코딩 규칙, DON'T 목록 |
-| `.claude/rules/testing.md` | 테스트 작성·실행 규칙, 구조표 (FE 502개, BE 280개) |
+| `.claude/rules/testing.md` | 테스트 작성·실행 규칙, 구조표 (FE 506개, BE 280개) |
 | `.claude/rules/planning.md` | /plan 모드 규칙, 교차검증 에이전트 5종 |
 | `.claude/rules/infra.md` | 서버 복구 절차, 스케줄러, 공유 인프라, DB 풀 |
 | `.claude/rules/codes.md` | 거래/매물유형 코드, 핵심 상수, localStorage 키 |

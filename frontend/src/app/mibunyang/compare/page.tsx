@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, Suspense } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useQueries } from "@tanstack/react-query";
@@ -9,7 +9,11 @@ import { getMbApartmentDetail, getMbUnsoldHistory } from "@/lib/api";
 import { MB_COMPARE_ROWS, getBestIndices, formatCellValue } from "@/lib/mb-compare-utils";
 import { exportMbCompareToXlsx } from "@/lib/mb-compare-export";
 import { useSmartBack } from "@/hooks/useSmartBack";
+import { useMbCompareHistory } from "@/hooks/useMbCompareHistory";
+import { useMbCompareBookmarks } from "@/hooks/useMbCompareBookmarks";
 import type { UnsoldDataset } from "@/components/mb/MbCompareUnsoldChart";
+import type { MbCompareHistoryItem, MbCompareBookmarkItem } from "@/lib/storage";
+import MbCompareHistory from "@/components/mb/MbCompareHistory";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { COMPARE_TEXT_COLORS } from "@/lib/constants";
 
@@ -34,6 +38,15 @@ function CompareContent() {
   const ids = (searchParams.get("ids") ?? "").split(",").filter(Boolean).slice(0, MAX_COMPARE);
   const [isExporting, setIsExporting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const { history: compareHistory, add: addHistory, remove: removeHistory, clear: clearHistory } = useMbCompareHistory();
+  const { bookmarks, add: addBookmark, remove: removeBookmark, clear: clearBookmarks, isBookmarked } = useMbCompareBookmarks();
+  const historySaved = useRef(false);
+  const idsKey = ids.join(",");
+
+  // ids 변경 시 ref 리셋 (같은 컴포넌트 내 pill 클릭으로 URL만 변경될 때)
+  useEffect(() => {
+    historySaved.current = false;
+  }, [idsKey]);
 
   const queries = useQueries({
     queries: ids.map((id) => ({
@@ -51,6 +64,35 @@ function CompareContent() {
 
   const isLoading = queries.some((q) => q.isLoading);
   const apartments = queries.map((q) => q.data).filter((d): d is NonNullable<typeof d> => !!d);
+
+  // 비교 데이터 로드 완료 시 히스토리 자동 저장
+  useEffect(() => {
+    if (apartments.length >= 2 && !historySaved.current) {
+      historySaved.current = true;
+      addHistory({ ids: apartments.map((a) => a.id), names: apartments.map((a) => a.name) });
+    }
+  }, [apartments, addHistory]);
+
+  const currentIds = useMemo(() => apartments.map((a) => a.id), [apartments]);
+  const alreadyBookmarked = isBookmarked(currentIds);
+
+  const handleBookmark = useCallback(() => {
+    if (apartments.length < 2 || alreadyBookmarked) return;
+    const label = prompt("비교 북마크 이름 (빈칸이면 자동 생성):");
+    if (label === null) return;
+    addBookmark({
+      ids: currentIds,
+      names: apartments.map((a) => a.name),
+      label: label.trim() || undefined,
+    });
+  }, [apartments, currentIds, alreadyBookmarked, addBookmark]);
+
+  const handleSelectCompare = useCallback(
+    (item: MbCompareHistoryItem | MbCompareBookmarkItem) => {
+      router.push(`/mibunyang/compare?ids=${item.ids.join(",")}`);
+    },
+    [router],
+  );
 
   const unsoldDatasets: UnsoldDataset[] = apartments.map((apt, i) => ({
     apartmentId: apt.id,
@@ -132,7 +174,28 @@ function CompareContent() {
           >
             {isExporting ? "생성 중..." : "엑셀"}
           </button>
+          <button
+            onClick={handleBookmark}
+            disabled={alreadyBookmarked}
+            className="px-3 py-1.5 text-sm border border-amber-300 rounded-md hover:bg-amber-50 disabled:opacity-50 disabled:bg-amber-50"
+          >
+            {alreadyBookmarked ? "★ 저장됨" : "☆ 저장"}
+          </button>
         </div>
+      </div>
+
+      {/* 최근 비교 / 저장된 비교 */}
+      <div className="mb-4 no-print">
+        <MbCompareHistory
+          history={compareHistory}
+          bookmarks={bookmarks}
+          onSelectHistory={handleSelectCompare}
+          onRemoveHistory={removeHistory}
+          onClearHistory={clearHistory}
+          onSelectBookmark={handleSelectCompare}
+          onRemoveBookmark={removeBookmark}
+          onClearBookmarks={clearBookmarks}
+        />
       </div>
 
       {/* 비교 테이블 */}

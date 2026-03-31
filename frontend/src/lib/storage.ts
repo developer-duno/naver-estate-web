@@ -172,3 +172,99 @@ export function removeMbSearchHistory(timestamp: number): void {
 export function clearMbSearchHistory(): void {
   localStorage.removeItem(MB_HISTORY_KEY);
 }
+
+// ── 미분양 비교 히스토리 (자동 저장) ──
+
+const MB_COMPARE_HISTORY_KEY = "mb_compare_history";
+const MAX_MB_COMPARE_HISTORY = 10;
+
+export interface MbCompareHistoryItem {
+  ids: string[];
+  names: string[];
+  timestamp: number;
+}
+
+/** ids를 정렬한 문자열로 비교 세트 동일성 판별 */
+export function compareSetKey(ids: string[]): string {
+  return [...ids].sort().join(",");
+}
+
+export function getMbCompareHistory(): MbCompareHistoryItem[] {
+  return readJSON<MbCompareHistoryItem[]>(MB_COMPARE_HISTORY_KEY, []);
+}
+
+export function addMbCompareHistory(item: Omit<MbCompareHistoryItem, "timestamp">): void {
+  if (!item.ids || item.ids.length < 2) return;
+  try {
+    const history = getMbCompareHistory();
+    const key = compareSetKey(item.ids);
+    const deduplicated = history.filter((h) => compareSetKey(h.ids) !== key);
+    const entry: MbCompareHistoryItem = { ...item, timestamp: uniqueTimestamp() };
+    const updated = [entry, ...deduplicated].slice(0, MAX_MB_COMPARE_HISTORY);
+    localStorage.setItem(MB_COMPARE_HISTORY_KEY, JSON.stringify(updated));
+  } catch (err) {
+    if (typeof window !== "undefined" && err instanceof Error) {
+      console.warn(`[MbCompareHistory] Failed to add: ${err.message}`);
+    }
+  }
+}
+
+export function removeMbCompareHistory(timestamp: number): void {
+  const updated = getMbCompareHistory().filter((h) => h.timestamp !== timestamp);
+  try { localStorage.setItem(MB_COMPARE_HISTORY_KEY, JSON.stringify(updated)); } catch { /* quota */ }
+}
+
+export function clearMbCompareHistory(): void {
+  localStorage.removeItem(MB_COMPARE_HISTORY_KEY);
+}
+
+// ── 미분양 비교 북마크 (수동 저장) ──
+
+const MB_COMPARE_BOOKMARK_KEY = "mb_compare_bookmarks";
+const MAX_MB_COMPARE_BOOKMARKS = 20;
+
+export interface MbCompareBookmarkItem {
+  ids: string[];
+  names: string[];
+  label?: string;
+  saved_at: number;
+}
+
+export function getMbCompareBookmarks(): MbCompareBookmarkItem[] {
+  return readJSON<MbCompareBookmarkItem[]>(MB_COMPARE_BOOKMARK_KEY, []);
+}
+
+export function addMbCompareBookmark(item: Omit<MbCompareBookmarkItem, "saved_at">): void {
+  if (!item.ids || item.ids.length < 2) return;
+  try {
+    const bookmarks = getMbCompareBookmarks();
+    const key = compareSetKey(item.ids);
+    // 동일 비교 세트가 이미 있으면 라벨만 업데이트
+    const idx = bookmarks.findIndex((b) => compareSetKey(b.ids) === key);
+    if (idx >= 0) {
+      bookmarks[idx] = { ...bookmarks[idx], label: item.label, names: item.names };
+      localStorage.setItem(MB_COMPARE_BOOKMARK_KEY, JSON.stringify(bookmarks));
+      return;
+    }
+    const entry: MbCompareBookmarkItem = {
+      ...item,
+      label: item.label || item.names.join(" vs "),
+      saved_at: uniqueTimestamp(),
+    };
+    const updated = [entry, ...bookmarks].slice(0, MAX_MB_COMPARE_BOOKMARKS);
+    localStorage.setItem(MB_COMPARE_BOOKMARK_KEY, JSON.stringify(updated));
+  } catch (err) {
+    if (typeof window !== "undefined" && err instanceof Error) {
+      console.warn(`[MbCompareBookmark] Failed to add: ${err.message}`);
+    }
+  }
+}
+
+export function removeMbCompareBookmark(saved_at: number): void {
+  const updated = getMbCompareBookmarks().filter((b) => b.saved_at !== saved_at);
+  try { localStorage.setItem(MB_COMPARE_BOOKMARK_KEY, JSON.stringify(updated)); } catch { /* quota */ }
+}
+
+export function clearMbCompareBookmarks(): void {
+  localStorage.removeItem(MB_COMPARE_BOOKMARK_KEY);
+}

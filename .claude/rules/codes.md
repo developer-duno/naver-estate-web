@@ -40,3 +40,5 @@
 | `mb_favorites`       | 미분양 즐겨찾기         | 최대 200개, 토글 방식 |
 | `mb_compare`         | 미분양 비교 대상        | 최대 4개              |
 | `mb_search_history`  | 미분양 검색 히스토리    | 최대 10개, 중복 제거  |
+| `mb_compare_history` | 미분양 비교 히스토리    | 최대 10개, 자동 저장, ids 정렬 중복 제거 |
+| `mb_compare_bookmarks` | 미분양 비교 북마크    | 최대 20개, 수동 저장, 이름 지정 가능 |

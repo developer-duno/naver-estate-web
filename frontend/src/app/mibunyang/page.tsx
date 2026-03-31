@@ -16,9 +16,12 @@ import { exportMbApartmentsToXlsx, exportMbRegionsToXlsx, exportMbTradesToXlsx }
 import { useMbCompare } from "@/hooks/useMbCompare";
 import { useMbFavorites } from "@/hooks/useMbFavorites";
 import { useMbSearchHistory } from "@/hooks/useMbSearchHistory";
+import { useMbCompareHistory } from "@/hooks/useMbCompareHistory";
+import { useMbCompareBookmarks } from "@/hooks/useMbCompareBookmarks";
 import MbCompareFloatingBar from "@/components/mb/MbCompareFloatingBar";
 import MbSearchHistory from "@/components/mb/MbSearchHistory";
-import type { MbSearchHistoryItem } from "@/lib/storage";
+import MbCompareHistory from "@/components/mb/MbCompareHistory";
+import type { MbSearchHistoryItem, MbCompareHistoryItem, MbCompareBookmarkItem } from "@/lib/storage";
 
 const TABS = [
   { key: "apartments", label: "미분양 단지" },
@@ -45,6 +48,15 @@ function MibunyangContent() {
   const compare = useMbCompare();
   const { favorites, toggle: toggleFavorite } = useMbFavorites();
   const { history: mbHistory, add: addMbHistory, remove: removeMbHistory, clear: clearMbHistory } = useMbSearchHistory();
+  const { history: compareHistory, remove: removeCompareHistory, clear: clearCompareHistory } = useMbCompareHistory();
+  const { bookmarks: compareBookmarks, remove: removeCompareBookmark, clear: clearCompareBookmarks } = useMbCompareBookmarks();
+
+  const handleCompareSelect = useCallback(
+    (item: MbCompareHistoryItem | MbCompareBookmarkItem) => {
+      router.push(`/mibunyang/compare?ids=${item.ids.join(",")}`);
+    },
+    [router],
+  );
 
   const region = searchParams.get("region") ?? "";
   const gu = searchParams.get("gu") ?? "";
@@ -155,6 +167,16 @@ function MibunyangContent() {
           onSelect={handleMbHistorySelect}
           onRemove={removeMbHistory}
           onClear={clearMbHistory}
+        />
+        <MbCompareHistory
+          history={compareHistory}
+          bookmarks={compareBookmarks}
+          onSelectHistory={handleCompareSelect}
+          onRemoveHistory={removeCompareHistory}
+          onClearHistory={clearCompareHistory}
+          onSelectBookmark={handleCompareSelect}
+          onRemoveBookmark={removeCompareBookmark}
+          onClearBookmarks={clearCompareBookmarks}
         />
       </div>
 

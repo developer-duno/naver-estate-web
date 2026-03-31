@@ -17,8 +17,8 @@
 ```
 frontend/src/
 ├── app/           # Next.js App Router (19 페이지, mibunyang/ + mibunyang/compare 포함)
-├── components/    # 재사용 컴포넌트 (22개 + admin/5개 + filter/3개 + mb/12개 = 42개 TSX)
-├── hooks/         # 커스텀 훅 (13개, useMbFavorites + useMbCompare + useMbSearchHistory 포함)
+├── components/    # 재사용 컴포넌트 (22개 + admin/5개 + filter/3개 + mb/13개 = 43개 TSX)
+├── hooks/         # 커스텀 훅 (15개, useMbFavorites + useMbCompare + useMbSearchHistory + useMbCompareHistory + useMbCompareBookmarks 포함)
 ├── lib/           # api, storage, format, query-keys, compare-export, mb-export, mb-compare-utils, mb-compare-export 등 (13개)
 ├── types/         # TypeScript 인터페이스 (estate + Mb* 10개 + naver-maps.d.ts)
 └── middleware.ts  # Supabase 세션 + 관리자 라우트 보호
@@ -41,6 +41,8 @@ frontend/src/
 | `useMbFavorites` | 미분양 즐겨찾기 (localStorage, 최대 200개, useMbFavoriteStatus 포함) |
 | `useMbCompare` | 미분양 비교 목록 (localStorage, 최대 4개) |
 | `useMbSearchHistory` | 미분양 검색 히스토리 (localStorage, 최근 10개, 중복 제거) |
+| `useMbCompareHistory` | 미분양 비교 히스토리 (localStorage, 최대 10개, 자동 저장, ids 정렬 중복 제거) |
+| `useMbCompareBookmarks` | 미분양 비교 북마크 (localStorage, 최대 20개, 수동 저장, 이름 지정, isBookmarked) |
 
 ## FilterBar 구조 (모듈 분리)
 
@@ -138,6 +140,15 @@ components/
 - 엑셀: mb-compare-export.ts (safeCellValue 재사용)
 - mb-compare-utils.ts: MB_COMPARE_ROWS(17행), getBestIndices(higher/lower 우위 판정)
 
+### 미분양 비교 히스토리 + 북마크
+- 비교 히스토리: useMbCompareHistory (localStorage, 최대 10개, 비교 진입 시 자동 저장)
+- 비교 북마크: useMbCompareBookmarks (localStorage, 최대 20개, 수동 저장, 이름 지정, isBookmarked)
+- MbCompareHistory: ComparePill variant(history=회색/bookmark=amber) + PILL_STYLES + title tooltip
+- ids 정렬 중복 제거: compareSetKey() (storage.ts export, [...ids].sort().join(","))
+- 비교 페이지: 자동 히스토리 저장(useRef guard + idsKey 리셋) + "☆ 저장" 북마크 버튼 + 양쪽 pill UI
+- 미분양 메인: 최근 비교(히스토리) + 저장된 비교(북마크) pill 표시 (검색 히스토리 아래)
+- 히스토리/북마크 각각 "전체 삭제" 버튼 (onClearBookmarks optional)
+
 ### 미분양 즐겨찾기 + 일괄 비교 + 엑셀 + 지도
 - 즐겨찾기: useMbFavorites + useMbFavoriteStatus (localStorage, 최대 200개)
 - 즐겨찾기 일괄 비교: FavoritesContent 체크박스 선택 (최대 4개) → "선택 비교" → /mibunyang/compare
@@ -167,7 +178,7 @@ components/
 | `/admin/users` | `getAdminUsers()`, `updateAdminUser()` | `/api/admin/users` |
 | `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()`, `getMbGuList()` (5탭: 단지+미분양+지역+실거래+즐겨찾기, 정렬+검색+비교+엑셀+검색히스토리+일괄비교+중복제거) | `/api/mb/apartments`, `/api/mb/unsold`, `/api/mb/regions`, `/api/mb/trades`, `/api/mb/gu-list` |
 | `/mibunyang/[id]` | `getMbApartmentDetail()`, `getMbUnsoldHistory()` (5섹션+지도+추이차트, 즐겨찾기+엑셀) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
-| `/mibunyang/compare` | `getMbApartmentDetail()` x N + `getMbUnsoldHistory()` x N (useQueries 병렬, 17행 비교+우위★+레이더차트+막대차트+추이비교차트+인쇄+URL복사+엑셀) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
+| `/mibunyang/compare` | `getMbApartmentDetail()` x N + `getMbUnsoldHistory()` x N (useQueries 병렬, 17행 비교+우위★+레이더차트+막대차트+추이비교차트+인쇄+URL복사+엑셀+비교히스토리자동저장+북마크저장) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
 
 ## 미분양 (mibunyang) 컴포넌트
 
@@ -184,7 +195,8 @@ components/mb/
 ├── MbComparePriceChart.tsx    # 분양가 막대 차트 (min/max/pp, 최저가★, dynamic import)
 ├── MbCompareUnsoldChart.tsx   # 미분양 추이 비교 차트 (ComposedChart, 기간필터 6M/1Y/2Y/ALL, dynamic import)
 ├── MbLocationMap.tsx           # Naver Maps v3 지도 (vanilla SDK, dynamic import)
-└── MbSearchHistory.tsx         # 미분양 검색 히스토리 pill 뱃지 (최근 10개, 클릭→재검색)
+├── MbSearchHistory.tsx         # 미분양 검색 히스토리 pill 뱃지 (최근 10개, 클릭→재검색)
+└── MbCompareHistory.tsx        # 비교 히스토리+북마크 pill 뱃지 (ComparePill variant, 최근비교+저장된비교)
 ```
 
 ### 미분양 URL 상태 관리
@@ -194,6 +206,16 @@ components/mb/
 - 탭 전환 시 apartments/unsold 탭만 keyword 유지, regions/trades/favorites에서 제거
 - 즐겨찾기 탭: hasRegion 바이패스 (탭바 항상 표시, 즐겨찾기만 지역 불필요)
 - `MB_SORT_OPTIONS` (constants.ts): 7개 정렬 옵션
+
+### localStorage 키 (storage.ts, 총 6개)
+| 키 | 용도 | 제한 |
+|---|---|---|
+| `search_history` | 최근 검색 (키워드/지역) | 최대 10개 |
+| `favorite_complexes` | 즐겨찾기 단지 | 무제한 |
+| `mb_favorites` | 미분양 즐겨찾기 | 최대 200개 |
+| `mb_search_history` | 미분양 검색 히스토리 | 최대 10개 |
+| `mb_compare_history` | 미분양 비교 히스토리 (자동) | 최대 10개, ids 정렬 중복 제거 |
+| `mb_compare_bookmarks` | 미분양 비교 북마크 (수동) | 최대 20개, 이름 지정 가능 |
 
 ## 백엔드 영향 체크리스트
 

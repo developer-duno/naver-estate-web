@@ -48,6 +48,8 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 미분양 지도 → Naver Maps v3 SDK (CDN, lat/lng null 시 미표시)
 미분양 즐겨찾기 탭 → localStorage 메타데이터 경량 테이블 (API 0회, 탭바 hasRegion 바이패스, 체크박스 일괄 비교, FavSortBy 정렬 드롭다운)
 미분양 검색 히스토리 → localStorage (mb_search_history, 최대 10개, pill 뱃지 클릭→재검색)
+미분양 비교 히스토리 → localStorage (mb_compare_history, 최대 10개, 비교 진입 시 자동 저장, ids 정렬 중복 제거, pill 클릭→복원)
+미분양 비교 북마크 → localStorage (mb_compare_bookmarks, 최대 20개, 수동 저장+이름 지정, amber pill, 메인+비교 양쪽 표시)
 미분양 중복 제거 → extract_base_name()으로 차수 접미사 제거, _deduplicate_apartments()로 마지막 차수만 유지
 미분양 시/군/구 목록 → /api/mb/gu-list?region= (DISTINCT gu, 시도별 구 목록)
 홈 → 미분양 바로가기 카드 (/mibunyang 링크)
@@ -72,7 +74,25 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 | 파일 | 내용 |
 |------|------|
 | `.claude/rules/web-rules.md` | React/Next.js + FastAPI 코딩 규칙, DON'T 목록 |
-| `.claude/rules/testing.md` | 테스트 작성·실행 규칙, 구조표 (FE 372개, BE 276개) |
+| `.claude/rules/testing.md` | 테스트 작성·실행 규칙, 구조표 (FE 413개, BE 276개) |
 | `.claude/rules/planning.md` | /plan 모드 규칙, 교차검증 에이전트 5종 |
 | `.claude/rules/infra.md` | 서버 복구 절차, 스케줄러, 공유 인프라, DB 풀 |
 | `.claude/rules/codes.md` | 거래/매물유형 코드, 핵심 상수, localStorage 키 |
+
+# 하네스 코드 리뷰 규칙 (모든 코드 수정 후 자동 적용)
+
+## 수정 완료 시 자기 검증 (에이전트 스스로 실행):
+1. npx tsc --noEmit → 타입 에러 0건 확인
+2. 수정 파일의 참조처를 grep으로 확인 → 깨지는 연동 없는지
+3. grep으로 console.log, TODO, 민감정보 잔재 확인
+
+## 수정 코드 작성 규칙:
+- 수정마다 파일명:줄번호 + before/after 명시
+- 프론트 수정이 백엔드에 영향 → 백엔드도 같이 수정
+- 추측으로 "문제없음" 판정 금지 → 도구 실행 결과 기반만 인정
+
+## AI 안티패턴 방지:
+- 1회용 유틸 함수 생성 금지 (2회 이상 사용 확인 후 추출)
+- 과도한 추상화 금지 (현재 규모에 맞게)
+- 주석과 코드 불일치 금지
+- console.log 커밋 금지

@@ -31,7 +31,7 @@ cd backend && ruff check . && python -m pytest && cd ../frontend && npm test
 
 ### 레벨별 실행
 ```bash
-# FE 단위 + 컴포넌트 + 훅 + 페이지 (413개, 41파일)
+# FE 단위 + 컴포넌트 + 훅 + 페이지 (429개, 43파일)
 cd frontend && npm test
 
 # BE 단위 + 통합 + API + 엣지케이스 + mibunyang + 정렬/검색 + 중복제거 (276개, 1 스킵)
@@ -58,11 +58,11 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 ### 테스트 구조
 | 경로 | 도구 | 테스트 수 |
 |------|------|----------|
-| frontend/src/lib/__tests__/ | Vitest | 11파일 (단위+엣지케이스+storage+compare-utils+mb-storage+mb-export+mb-compare-utils+mb-search-history+storage.compareHistory) |
+| frontend/src/lib/__tests__/ | Vitest | 12파일 (단위+엣지케이스+storage+compare-utils+mb-storage+mb-export+mb-compare-utils+mb-search-history+storage.compareHistory+storage.radarSettings) |
 | frontend/src/components/__tests__/ | Vitest | 15파일 (컴포넌트+차트+Mb*+MbSearchHistory+MbCompareHistory) + mb/3파일 (MbCompareFloatingBar+MbCompareRadarChart+MbLocationMap) |
-| frontend/src/hooks/__tests__/ | Vitest | 8파일 (useCrawlProgress+usePriceCollect+useFilterParams+useMbFavorites+useMbCompare+useMbSearchHistory+useMbCompareHistory+useMbCompareBookmarks) |
+| frontend/src/hooks/__tests__/ | Vitest | 9파일 (useCrawlProgress+usePriceCollect+useFilterParams+useMbFavorites+useMbCompare+useMbSearchHistory+useMbCompareHistory+useMbCompareBookmarks+useMbRadarSettings) |
 | frontend/src/app/__tests__/ | Vitest | 4파일 (페이지 통합: search+mibunyang+mibunyang-detail+mibunyang-compare) |
-| **프론트 합계** | Vitest | **413개** (41파일) |
+| **프론트 합계** | Vitest | **429개** (43파일) |
 | frontend/e2e/ | Playwright | 13 (E2E) |
 | backend/tests/ | pytest | 276 (단위+통합+API+엣지케이스+공유인프라+dialect분기+mibunyang+정렬/검색+중복제거, 1 스킵) |
 

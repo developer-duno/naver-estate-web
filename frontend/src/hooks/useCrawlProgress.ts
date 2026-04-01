@@ -47,6 +47,7 @@ export function useCrawlProgress(): CrawlHookResult {
     queryFn: () => getCrawlStatus(targetComplexNo),
     enabled: isPolling && !!targetComplexNo,
     refetchInterval: isPolling ? CRAWL_STATUS_POLL_MS : false,
+    staleTime: 0, // 폴링 시 매번 fresh fetch 필요 (전역 30초 오버라이드)
   });
 
   // 폴링 결과에 따른 상태 전환 (useEffect로 처리 — 렌더 중 setState 방지)
@@ -108,13 +109,14 @@ export function useCrawlProgress(): CrawlHookResult {
   }, [crawling, isPolling]);
 
   const startCrawl = useCallback((complexNo: string) => {
+    queryClient.removeQueries({ queryKey: queryKeys.crawlStatus(complexNo) });
     setTargetComplexNo(complexNo);
     prevPhaseRef.current = undefined;
     lastRefreshCountRef.current = 0;
     setCrawlProgress(null);
     setIsPolling(true);
     setCrawling(true);
-  }, []);
+  }, [queryClient]);
 
   const clearAllPolling = useCallback(() => {
     setIsPolling(false);

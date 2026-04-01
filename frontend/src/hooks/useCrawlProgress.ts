@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { getCrawlStatus } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { CRAWL_STATUS_POLL_MS } from "@/lib/constants";
@@ -15,18 +15,28 @@ export interface CrawlHookResult {
   setCrawlMessage: (v: string) => void;
   /** isPolling — 현재 폴링 중인지 여부 */
   isPolling: boolean;
-  /** complexNo 설정 + 폴링 시작 (콜백 불필요) */
+  /** complexNo 설정 + 폴링 시작 */
   startCrawl: (complexNo: string) => void;
   clearAllPolling: () => void;
 }
 
+/**
+ * 크롤링 진행률 폴링 훅 — setInterval 기반 직접 폴링
+ *
+ * React Query refetchInterval 대신 setInterval로 CRAWL_STATUS_POLL_MS마다
+ * crawl-status를 직접 fetch하여 진행률을 확실하게 업데이트한다.
+ */
 export function useCrawlProgress(): CrawlHookResult {
   const queryClient = useQueryClient();
   const [crawling, setCrawling] = useState(false);
   const [crawlMessage, setCrawlMessage] = useState("");
   const [crawlProgress, setCrawlProgress] = useState<CrawlProgress | null>(null);
   const [isPolling, setIsPolling] = useState(false);
-  const [targetComplexNo, setTargetComplexNo] = useState<string>("");
+
+  // refs: setInterval 콜백에서 stale closure 방지
+  const targetRef = useRef("");
+  const pollingRef = useRef(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevPhaseRef = useRef<string | undefined>(undefined);
   const lastRefreshCountRef = useRef(0);
 
@@ -41,62 +51,77 @@ export function useCrawlProgress(): CrawlHookResult {
     [queryClient],
   );
 
-  // useQuery로 crawl status 폴링
-  const statusQuery = useQuery({
-    queryKey: queryKeys.crawlStatus(targetComplexNo),
-    queryFn: () => getCrawlStatus(targetComplexNo),
-    enabled: isPolling && !!targetComplexNo,
-    refetchInterval: isPolling ? CRAWL_STATUS_POLL_MS : false,
-    staleTime: 0, // 폴링 시 매번 fresh fetch 필요 (전역 30초 오버라이드)
-  });
-
-  // 폴링 결과에 따른 상태 전환 (useEffect로 처리 — 렌더 중 setState 방지)
-  useEffect(() => {
-    if (!isPolling || !statusQuery.data) return;
-
-    const status = statusQuery.data;
-
-    // Phase 1(articles) → enriching/details 전환 시 매물 목록 + priceStats 즉시 갱신
-    const curPhase = status.phase;
-    if (prevPhaseRef.current === "articles" && curPhase && curPhase !== "articles") {
-      queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(targetComplexNo) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.priceStats(targetComplexNo) });
+  // 폴링 중지
+  const stopPolling = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
-    prevPhaseRef.current = curPhase;
+    pollingRef.current = false;
+    setIsPolling(false);
+  }, []);
 
-    // 상세 크롤링 진행 중 매물 목록 중간 갱신 (20건 간격)
-    const DETAIL_REFRESH_INTERVAL = 20;
-    if (
-      curPhase === "details" &&
-      status.detail_crawled_count != null &&
-      status.detail_crawled_count > 0 &&
-      status.detail_crawled_count - lastRefreshCountRef.current >= DETAIL_REFRESH_INTERVAL
-    ) {
-      lastRefreshCountRef.current = status.detail_crawled_count;
-      queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(targetComplexNo) });
-    }
+  // 폴링 1회 실행
+  const pollOnce = useCallback(async () => {
+    const complexNo = targetRef.current;
+    if (!complexNo || !pollingRef.current) return;
 
-    // 완료/에러 감지
-    const isDone = (status.status === "done" || status.status === "done_partial") && status.detail_phase !== "running";
-    const isIdle = status.status === "idle";
-    const isError = status.status === "error";
+    try {
+      const status = await getCrawlStatus(complexNo);
 
-    if (isDone || isIdle || isError) {
-      setIsPolling(false); // eslint-disable-line react-hooks/set-state-in-effect -- 쿼리 응답 동기화(의도적)
-      setCrawling(false);
-      setCrawlProgress(null); // 프로그레스 바 즉시 제거
-      if (isDone || isIdle) {
-        setCrawlMessage("");
-        invalidateAllQueries(targetComplexNo);
-      } else if (isError && status.error) {
-        setCrawlMessage(`크롤링 오류: ${status.error}`);
-        invalidateAllQueries(targetComplexNo);
+      // Phase 전환 시 매물 목록 즉시 갱신
+      const curPhase = status.phase;
+      if (prevPhaseRef.current === "articles" && curPhase && curPhase !== "articles") {
+        queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.priceStats(complexNo) });
       }
-    } else {
-      // 진행 중 — 프로그레스 업데이트
-      setCrawlProgress(status);
+      prevPhaseRef.current = curPhase;
+
+      // 상세 크롤링 중 매물 목록 중간 갱신 (20건 간격)
+      const DETAIL_REFRESH_INTERVAL = 20;
+      if (
+        curPhase === "details" &&
+        status.detail_crawled_count != null &&
+        status.detail_crawled_count > 0 &&
+        status.detail_crawled_count - lastRefreshCountRef.current >= DETAIL_REFRESH_INTERVAL
+      ) {
+        lastRefreshCountRef.current = status.detail_crawled_count;
+        queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo) });
+      }
+
+      // 완료/에러 감지
+      const isDone = (status.status === "done" || status.status === "done_partial") && status.detail_phase !== "running";
+      const isIdle = status.status === "idle";
+      const isError = status.status === "error";
+
+      if (isDone || isIdle || isError) {
+        stopPolling();
+        setCrawling(false);
+        setCrawlProgress(null);
+        if (isDone || isIdle) {
+          setCrawlMessage("");
+          invalidateAllQueries(complexNo);
+        } else if (isError && status.error) {
+          setCrawlMessage(`크롤링 오류: ${status.error}`);
+          invalidateAllQueries(complexNo);
+        }
+      } else {
+        setCrawlProgress(status);
+      }
+    } catch {
+      // 네트워크 에러 — 폴링 계속 (다음 주기에 재시도)
     }
-  }, [statusQuery.data, isPolling, targetComplexNo, invalidateAllQueries, queryClient]);
+  }, [queryClient, stopPolling, invalidateAllQueries]);
+
+  // 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
 
   // 안전장치: crawling=true인데 폴링이 시작되지 않으면 5초 후 자동 복원
   useEffect(() => {
@@ -109,19 +134,24 @@ export function useCrawlProgress(): CrawlHookResult {
   }, [crawling, isPolling]);
 
   const startCrawl = useCallback((complexNo: string) => {
-    queryClient.removeQueries({ queryKey: queryKeys.crawlStatus(complexNo) });
-    setTargetComplexNo(complexNo);
+    // 기존 타이머 정리 (연타 방지)
+    stopPolling();
+    targetRef.current = complexNo;
     prevPhaseRef.current = undefined;
     lastRefreshCountRef.current = 0;
     setCrawlProgress(null);
-    setIsPolling(true);
     setCrawling(true);
-  }, [queryClient]);
+    pollingRef.current = true;
+    setIsPolling(true);
+    // 즉시 1회 + 이후 주기적 폴링
+    pollOnce();
+    timerRef.current = setInterval(pollOnce, CRAWL_STATUS_POLL_MS);
+  }, [stopPolling, pollOnce]);
 
   const clearAllPolling = useCallback(() => {
-    setIsPolling(false);
-    setTargetComplexNo("");
-  }, []);
+    stopPolling();
+    targetRef.current = "";
+  }, [stopPolling]);
 
   return {
     crawling,

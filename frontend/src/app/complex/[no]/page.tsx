@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   useQuery,
+  useQueryClient,
   useMutation,
   keepPreviousData,
 } from "@tanstack/react-query";
@@ -42,6 +43,7 @@ function formatTimeAgo(dateStr: string): string {
 export default function ComplexDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const goBack = useSmartBack();
   const rawNo = params.no;
   const complexNo = Array.isArray(rawNo) ? rawNo[0] : rawNo ?? "";
@@ -238,9 +240,21 @@ export default function ComplexDetailPage() {
         setTimeout(() => setCrawlMessage(""), 3_000);
         return;
       }
-      setCrawlMsg("데이터 갱신을 요청했습니다", "success");
-      setCrawling(false);
-      setTimeout(() => setCrawlMessage(""), 3_000);
+      setCrawlMsg("데이터 갱신 중...", "info");
+      // 백그라운드 크롤링 완료 후 데이터 자동 갱신 (10초, 20초, 30초 후 refetch)
+      [10_000, 20_000, 30_000].forEach((delay) => {
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo) });
+          queryClient.invalidateQueries({ queryKey: queryKeys.complex(complexNo) });
+          queryClient.invalidateQueries({ queryKey: queryKeys.pyeongDetails(complexNo) });
+          queryClient.invalidateQueries({ queryKey: queryKeys.priceStats(complexNo) });
+        }, delay);
+      });
+      // 30초 후 버튼 복원
+      setTimeout(() => {
+        setCrawling(false);
+        setCrawlMessage("");
+      }, 30_000);
     },
     onError: (err: unknown) => {
       if (err instanceof ApiError) {

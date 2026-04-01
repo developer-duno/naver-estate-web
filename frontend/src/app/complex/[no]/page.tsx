@@ -20,7 +20,6 @@ import { createClient } from "@/lib/supabase";
 import { PAGE_SIZE, ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { useSmartBack } from "@/hooks/useSmartBack";
-import { useCrawlProgress } from "@/hooks/useCrawlProgress";
 import { useExport } from "@/hooks/useExport";
 import { useFilterParams } from "@/hooks/useFilterParams";
 import { useFavoriteStatus } from "@/hooks/useFavorites";
@@ -68,25 +67,15 @@ export default function ComplexDetailPage() {
 
   const { exporting, exportError, clearExportError, handleExport: doExport } = useExport();
 
-  const {
-    crawling, crawlMessage, isPolling,
-    setCrawling, setCrawlMessage,
-    startCrawl, clearAllPolling,
-  } = useCrawlProgress();
+  const [crawling, setCrawling] = useState(false);
+  const [crawlMessage, setCrawlMessage] = useState("");
   const [crawlMessageType, setCrawlMessageType] = useState<"info" | "error" | "success">("info");
 
   // setCrawlMessage + type을 함께 설정하는 헬퍼
   const setCrawlMsg = useCallback((text: string, type: "info" | "error" | "success" = "info") => {
     setCrawlMessage(text);
     setCrawlMessageType(type);
-  }, [setCrawlMessage]);
-
-  // useCrawlProgress 훅 내부에서 직접 setCrawlMessage를 호출하는 경우 타입 동기화
-  useEffect(() => {
-    if (!crawlMessage) return;
-    if (crawlMessage.startsWith("크롤링 오류")) setCrawlMessageType("error"); // eslint-disable-line react-hooks/set-state-in-effect -- 메시지 타입 동기화
-    else if (crawlMessage === "") setCrawlMessageType("info");
-  }, [crawlMessage]);
+  }, []);
 
   // ── useQuery: 단지 정보 ──
   const complexQuery = useQuery({
@@ -165,10 +154,7 @@ export default function ComplexDetailPage() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.access_token) {
           setSessionToken(session.access_token);
-          const crawlResult = await startLiveCrawl(complexNo, session.access_token);
-          if (crawlResult.status === "started" || crawlResult.status === "already_running") {
-            startCrawl(complexNo);
-          }
+          await startLiveCrawl(complexNo, session.access_token);
         }
       } catch (err) {
         if (err instanceof ApiError && err.statusCode === 403) {
@@ -176,12 +162,7 @@ export default function ComplexDetailPage() {
         }
       }
     })();
-  }, [complexNo, complexQuery.isSuccess, articlesQuery.isSuccess, pyeongQuery.isSuccess, startCrawl, setCrawlMessage, setCrawlMsg]);
-
-  // 언마운트 시 폴링 정리
-  useEffect(() => {
-    return () => { clearAllPolling(); };
-  }, [clearAllPolling]);
+  }, [complexNo, complexQuery.isSuccess, articlesQuery.isSuccess, pyeongQuery.isSuccess, setCrawlMsg]);
 
   // 핸들러: 정렬 변경 → URL 업데이트 (page 리셋)
   const handleSortChange = useCallback(
@@ -257,14 +238,9 @@ export default function ComplexDetailPage() {
         setTimeout(() => setCrawlMessage(""), 3_000);
         return;
       }
-      setCrawlMsg("데이터 갱신 중...", "info");
-      if (
-        crawlResult.status === "started" ||
-        crawlResult.status === "running" ||
-        crawlResult.status === "already_running"
-      ) {
-        startCrawl(complexNo);
-      }
+      setCrawlMsg("데이터 갱신을 요청했습니다", "success");
+      setCrawling(false);
+      setTimeout(() => setCrawlMessage(""), 3_000);
     },
     onError: (err: unknown) => {
       if (err instanceof ApiError) {
@@ -433,23 +409,7 @@ export default function ComplexDetailPage() {
         </div>
       )}
 
-      {/* 크롤링 중 + 이전 데이터 안내 (실제 폴링 중에만 표시) */}
-      {isPolling && totalCount > 0 && (
-        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-xs rounded-md px-3 py-2">
-          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-amber-500 shrink-0" />
-          <span>이전 데이터를 표시 중입니다. 갱신이 완료되면 자동으로 업데이트됩니다.</span>
-        </div>
-      )}
-
-      {/* 크롤링 중이고 매물이 아직 없을 때 안내 메세지 */}
-      {crawling && totalCount === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-500">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
-          <p className="text-sm">매물 데이터를 수집하고 있습니다. 잠시만 기다려 주세요.</p>
-        </div>
-      )}
-
-      {/* 매물 테이블 — 크롤링 중에도 기존 데이터 항상 표시 */}
+      {/* 매물 테이블 */}
       {totalCount > 0 && (
         <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} />
       )}

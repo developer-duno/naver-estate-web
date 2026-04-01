@@ -24,7 +24,7 @@ import { useCrawlProgress } from "@/hooks/useCrawlProgress";
 import { useExport } from "@/hooks/useExport";
 import { useFilterParams } from "@/hooks/useFilterParams";
 import { useFavoriteStatus } from "@/hooks/useFavorites";
-import type { Article, ArticleFilters, FilterOptions, CrawlProgress } from "@/types";
+import type { Article, ArticleFilters, FilterOptions } from "@/types";
 import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
 import ArticleTable from "@/components/ArticleTable";
@@ -38,52 +38,6 @@ function formatTimeAgo(dateStr: string): string {
   if (hours < 24) return `${hours}시간 전`;
   const days = Math.floor(hours / 24);
   return `${days}일 전`;
-}
-
-type StepState = "done" | "active" | "pending";
-interface CrawlStep { label: string; state: StepState }
-
-function calcCrawlProgress(p: CrawlProgress): { percent: number; steps: CrawlStep[] } {
-  const phase = p.phase ?? (p.detail_phase === "running" ? "details" : "articles");
-  const articleLabel = `매물 목록 수집${(p.article_count ?? 0) > 0 ? ` (${p.article_count}건)` : ""}`;
-  const detailTotal = p.detail_total ?? 0;
-  const detailDone = p.detail_crawled_count ?? 0;
-  const detailLabel = detailTotal > 0 ? `매물 상세 수집 (${detailDone}/${detailTotal}건)` : "매물 상세 수집";
-
-  if (phase === "articles") {
-    // article_count 기반 진행률 (50건 기준 30% 스케일, 페이지 수 대비 정확)
-    const count = p.article_count ?? 0;
-    const rawPct = count > 0 ? Math.round((count / 50) * 30) : (p.current_page ?? 0) * 5;
-    const pct = p.has_more !== false ? Math.max(3, Math.min(rawPct, 30)) : 33;
-    return {
-      percent: pct,
-      steps: [
-        { label: articleLabel, state: "active" },
-        { label: "단지정보 보강", state: "pending" },
-        { label: detailLabel, state: "pending" },
-      ],
-    };
-  }
-  if (phase === "enriching") {
-    return {
-      percent: 40,
-      steps: [
-        { label: articleLabel, state: "done" },
-        { label: "단지정보 보강 중...", state: "active" },
-        { label: detailLabel, state: "pending" },
-      ],
-    };
-  }
-  // details
-  const detailPct = detailTotal > 0 ? 50 + Math.round((detailDone / detailTotal) * 50) : 50;
-  return {
-    percent: detailPct,
-    steps: [
-      { label: articleLabel, state: "done" },
-      { label: "단지정보 보강", state: "done" },
-      { label: detailLabel, state: "active" },
-    ],
-  };
 }
 
 export default function ComplexDetailPage() {
@@ -115,7 +69,7 @@ export default function ComplexDetailPage() {
   const { exporting, exportError, clearExportError, handleExport: doExport } = useExport();
 
   const {
-    crawling, crawlMessage, crawlProgress, isPolling,
+    crawling, crawlMessage, isPolling,
     setCrawling, setCrawlMessage,
     startCrawl, clearAllPolling,
   } = useCrawlProgress();
@@ -406,41 +360,6 @@ export default function ComplexDetailPage() {
 
       {/* 단지 정보 */}
       <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} onFilterChange={handleFilterChange} accessToken={sessionToken} />
-
-      {/* 크롤링 진행률 배너 */}
-      {crawling && crawlProgress && (
-        crawlProgress.status === "started" ||
-        crawlProgress.status === "running" ||
-        crawlProgress.status === "already_running"
-      ) && (() => {
-        const { percent, steps } = calcCrawlProgress(crawlProgress);
-        return (
-          <div className="bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-md px-4 py-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-medium">데이터 수집 중</span>
-              <span className="text-xs text-blue-500">{percent}%</span>
-            </div>
-            <div className="w-full bg-blue-100 rounded-full h-2 mb-3">
-              <div
-                className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                style={{ width: `${percent}%` }}
-              />
-            </div>
-            <div className="space-y-1">
-              {steps.map((s, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
-                  <span className="w-4 text-center shrink-0">
-                    {s.state === "done" ? "✅" : s.state === "active" ? "🔄" : "⏳"}
-                  </span>
-                  <span className={s.state === "active" ? "font-medium" : s.state === "pending" ? "text-blue-400" : "text-blue-500"}>
-                    {s.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
 
       {/* 필터 바 */}
       <div>

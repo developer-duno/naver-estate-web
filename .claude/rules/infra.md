@@ -52,6 +52,7 @@ npx vercel --prod
 | 공공데이터 수집  | 토요일 5시             | 국토교통부 실거래가 API (PUBLIC_DATA_ENABLED, 매월 10일 토요일은 skip) |
 | 대기질 수집     | 매일 2시               | 에어코리아 API (AIR_QUALITY_ENABLED, 매월 10일 토요일은 skip)          |
 | 응급의료 수집   | 매월 첫째 월요일 3시   | NEMC 응급의료기관 API (EMERGENCY_ENABLED)                              |
+| 어린이집 수집   | 매월 첫째 목요일 6시   | CPMS 어린이집 API (CHILDCARE_ENABLED, 서비스 신청 필요)                |
 
 ## 공유 인프라 규칙 (mibunyang 프로젝트와 공유)
 

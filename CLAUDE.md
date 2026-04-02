@@ -4,20 +4,22 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-03 — 공공데이터 API 통합 (에어코리아 대기질 + 응급의료기관) + crawl.py 레거시 삭제
+**마지막 작업**: 2026-04-03 — Phase 2 어린이집/범죄통계 API + 레이더 13축 확장
 
 **다음 우선순위**:
 
-1. Phase 2: 어린이집/범죄통계 API 추가 (data.go.kr 키 확인 + CSV 포맷 확인 후)
-2. E2E 테스트 보강 (Playwright)
-3. 백엔드 스케줄러 DB 세션 관리 개선 (PendingRollbackError 방지)
+1. data.go.kr "어린이집 정보 공개 포털" 서비스 신청 → 승인 후 CHILDCARE_ENABLED=true
+2. Supabase에서 V013 마이그레이션 실행 (infra 테이블 7컬럼 추가)
+3. 경찰청 범죄통계 CSV 다운로드 → backend/data/crime_stats.csv → load_crime_stats() 실행
+4. E2E 테스트 보강 (Playwright)
+5. 백엔드 스케줄러 DB 세션 관리 개선 (PendingRollbackError 방지)
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 498개 (54파일), BE 293개 — 전체 통과
+- 테스트 현황: FE 498개 (54파일), BE 314개 — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
-- 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED (backend/.env)
+- 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED, CHILDCARE_ENABLED (backend/.env)
 
 ## 기술 스택
 
@@ -39,6 +41,8 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
            [국토교통부 공공데이터 API] ↗
            [에어코리아 대기질 API] ↗
            [응급의료기관 API (NEMC)] ↗
+           [어린이집 API (CPMS)] ↗
+           [경찰청 범죄통계 CSV] ↗
 ```
 
 **핵심**: 사전 크롤링이 아닌 **실시간 크롤링** — 사용자 검색 시 네이버 API 호출 → DB upsert → 결과 반환
@@ -62,7 +66,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 실거래 조회 → /api/mb/trades?sort_by= (지역별 실거래 내역, 정렬)
 지역 통계 → /api/mb/regions (인구/세대/미분양/시세)
 미분양 즐겨찾기 → localStorage (mb_favorites, 최대 200개, 토글)
-미분양 비교 → /mibunyang/compare?ids=id1,id2,... (useQueries 병렬 조회 + 17행 우위 판정 + 레이더차트 11축 동적선택(칩토글,최소3개) + 가중치프리셋3종(균등/투자형/실거주형)+슬라이더(1-5)+가중점수 + 분양가 막대차트 + 미분양추이 비교차트 + 인쇄 + URL복사 + 엑셀)
+미분양 비교 → /mibunyang/compare?ids=id1,id2,... (useQueries 병렬 조회 + 17행 우위 판정 + 레이더차트 13축 동적선택(칩토글,최소3개) + 가중치프리셋3종(균등/투자형/실거주형)+슬라이더(1-5)+가중점수 + 분양가 막대차트 + 미분양추이 비교차트 + 인쇄 + URL복사 + 엑셀)
 레이더 가중치 영속화 → localStorage (mb_radar_settings, 축선택+가중치, useMbRadarSettings 훅, 페이지 새로고침 시 유지)
 미분양 엑셀 → 클라이언트 xlsx (mb-export.ts, safeCellValue 재사용, 4개 탭+추이)
 미분양 지도 → Naver Maps v3 SDK (CDN, lat/lng null 시 미표시)
@@ -75,7 +79,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 홈 → 미분양 바로가기 카드 (/mibunyang 링크)
 대기질 수집 → 스케줄러 매일 02:00 (에어코리아 API → infra 테이블 air_* 컬럼)
 응급의료 수집 → 스케줄러 매월 첫째 월 03:00 (NEMC API → infra 테이블 emergency_* 컬럼)
-레이더 차트 → 11축 (기존9 + airQuality + medical), 프리셋3종 + 슬라이더(1-5)
+어린이집 수집 → 스케줄러 매월 첫째 목 06:00 (CPMS API → infra 테이블 childcare_* 컬럼)
+범죄통계 반영 → 수동 트리거 (경찰청 CSV → infra 테이블 crime_* 컬럼)
+레이더 차트 → 13축 (기존9 + airQuality + medical + childcare + safety), 프리셋3종 + 슬라이더(1-5)
 ```
 
 ## 코딩 규칙

@@ -14,7 +14,7 @@ describe("useMbRadarSettings 훅", () => {
   it("초기 상태에서 모든 축이 활성화되고 가중치가 3이다", async () => {
     const { useMbRadarSettings } = await import("../useMbRadarSettings");
     const { result } = renderHook(() => useMbRadarSettings());
-    expect(result.current.enabledAxes.size).toBe(11);
+    expect(result.current.enabledAxes.size).toBe(13);
     expect(result.current.weights.units).toBe(3);
     expect(result.current.weights.jeonse).toBe(3);
   });
@@ -26,7 +26,7 @@ describe("useMbRadarSettings 훅", () => {
 
     act(() => { result.current.toggleAxis("units"); });
     expect(result.current.enabledAxes.has("units")).toBe(false);
-    expect(result.current.enabledAxes.size).toBe(10);
+    expect(result.current.enabledAxes.size).toBe(12);
 
     const stored = JSON.parse(localStorage.getItem("mb_radar_settings")!);
     expect(stored.enabledAxes).not.toContain("units");
@@ -37,8 +37,8 @@ describe("useMbRadarSettings 훅", () => {
     const { useMbRadarSettings } = await import("../useMbRadarSettings");
     const { result } = renderHook(() => useMbRadarSettings());
 
-    // 8개 비활성화 → 3개 남음
-    const toDisable = ["units", "parking", "maxFloor", "jeonse", "nearby", "discount", "airQuality", "medical"];
+    // 10개 비활성화 → 3개 남음
+    const toDisable = ["units", "parking", "maxFloor", "jeonse", "nearby", "discount", "airQuality", "medical", "childcare", "safety"];
     toDisable.forEach((key) => act(() => { result.current.toggleAxis(key); }));
     expect(result.current.enabledAxes.size).toBe(3);
 

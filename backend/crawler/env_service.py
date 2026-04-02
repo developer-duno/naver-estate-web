@@ -1,4 +1,4 @@
-"""환경 데이터 수집 오케스트레이터 — 대기질 + 응급의료
+"""환경 데이터 수집 오케스트레이터 — 대기질 + 응급의료 + 어린이집 + 범죄통계
 
 미분양 아파트(apartments 테이블)를 순회하며 공공데이터 API 호출 → infra 테이블 업데이트.
 스케줄러에서 호출되는 최상위 함수.
@@ -124,6 +124,105 @@ def collect_emergency_data(batch_size: int = 100):
 
         db.commit()
         logger.info("[emergency] 완료: %d 수집, %d 실패 (배치 %d)", collected, failed, batch_size)
+    finally:
+        db.close()
+
+
+def collect_childcare_data(batch_size: int = 100):
+    """어린이집 수집 — 시군구별 어린이집 목록 1회 → 단지별 근접 매칭 (반경 1km)"""
+    if _is_skip_day():
+        logger.info("[childcare] 매월 10일 토요일 — 쿼터 보호를 위해 건너뜀")
+        return
+
+    from crawler.childcare_api import ChildcareAPI
+
+    db = SessionLocal()
+    try:
+        apts = db.query(
+            Apartment.id, Apartment.latitude, Apartment.longitude,
+            Apartment.region, Apartment.gu,
+        ).filter(
+            Apartment.latitude.isnot(None),
+            Apartment.longitude.isnot(None),
+        ).limit(batch_size).all()
+
+        # 시군구별 어린이집 캐시: {sigungu_code: [facilities]}
+        gu_cache: dict[str, list[dict]] = {}
+        collected, failed = 0, 0
+
+        for apt_id, lat, lng, region, gu in apts:
+            try:
+                # 시군구 키로 캐시 (같은 지역 단지들은 재조회 불필요)
+                cache_key = f"{region}_{gu}"
+                if cache_key not in gu_cache:
+                    # 행정코드가 없으므로 지역명으로 빈 리스트 초기화
+                    # API 서비스 신청 후 sigungu_code 매핑 추가 필요
+                    gu_cache[cache_key] = []
+                    logger.debug("[childcare] %s 캐시 미스 — API 서비스 신청 필요", cache_key)
+
+                facilities = gu_cache[cache_key]
+                if not facilities:
+                    failed += 1
+                    continue
+
+                result = ChildcareAPI.find_nearest(lat, lng, facilities)
+                infra = db.get(Infra, apt_id)
+                if not infra:
+                    failed += 1
+                    continue
+
+                infra.childcare_count = result["count"]
+                infra.childcare_nearest_dist = result["nearest_dist"]
+                infra.childcare_nearest_name = result["nearest_name"]
+                infra.childcare_nearest_capacity = result["nearest_capacity"]
+                collected += 1
+            except Exception:
+                logger.exception("[childcare] 단지 %s 처리 실패", apt_id)
+                failed += 1
+
+        db.commit()
+        logger.info("[childcare] 완료: %d 수집, %d 실패 (배치 %d)", collected, failed, batch_size)
+    finally:
+        db.close()
+
+
+def load_crime_stats(csv_path: str | None = None):
+    """범죄통계 CSV → infra 테이블 반영 (수동 트리거용)"""
+    from crawler.crime_stats_loader import CrimeStatsLoader
+
+    raw = CrimeStatsLoader.load_from_csv(csv_path)
+    if not raw:
+        logger.warning("[crime] CSV 데이터 없음 — 건너뜀")
+        return
+
+    scored = CrimeStatsLoader.compute_scores(raw)
+    if not scored:
+        logger.warning("[crime] 점수 산출 실패 — 건너뜀")
+        return
+
+    db = SessionLocal()
+    try:
+        apts = db.query(Apartment.id, Apartment.region, Apartment.gu).all()
+        collected, skipped = 0, 0
+
+        for apt_id, region, gu in apts:
+            result = CrimeStatsLoader.get_crime_score(region, gu or "", scored)
+            if not result:
+                skipped += 1
+                continue
+
+            infra = db.get(Infra, apt_id)
+            if not infra:
+                skipped += 1
+                continue
+
+            infra.crime_score = result["crime_score"]
+            infra.crime_grade = result["crime_grade"]
+            infra.crime_updated_at = datetime.now()
+            collected += 1
+
+        db.commit()
+        logger.info("[crime] 완료: %d 수집, %d 건너뜀", collected, skipped)
     finally:
         db.close()
 

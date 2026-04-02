@@ -85,8 +85,8 @@ describe("MbCompareRadarChart", () => {
     const apts = [makeApt({ id: "A", name: "단지A" }), makeApt({ id: "B", name: "단지B" })];
     render(<MbCompareRadarChart apartments={apts} />);
 
-    // aria-pressed 버튼만 선택하여 클릭 — 8개 비활성화 → 3개 남음
-    const labels = ["세대수", "주차비율", "최고층", "전세가율", "주변시세", "할인율", "대기질", "의료인프라"];
+    // aria-pressed 버튼만 선택하여 클릭 — 10개 비활성화 → 3개 남음
+    const labels = ["세대수", "주차비율", "최고층", "전세가율", "주변시세", "할인율", "대기질", "의료인프라", "보육", "치안"];
     labels.forEach((label) => {
       const btn = screen.getByRole("button", { name: label, pressed: true });
       fireEvent.click(btn);

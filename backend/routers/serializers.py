@@ -349,6 +349,15 @@ def infra_to_dict(i) -> dict:
         "air_o3": i.air_o3,
         "air_grade": i.air_grade,
         "air_updated_at": i.air_updated_at.isoformat() if i.air_updated_at else None,
+        # 어린이집 (V013)
+        "childcare_count": i.childcare_count,
+        "childcare_nearest_dist": i.childcare_nearest_dist,
+        "childcare_nearest_name": i.childcare_nearest_name,
+        "childcare_nearest_capacity": i.childcare_nearest_capacity,
+        # 범죄통계 (V013)
+        "crime_score": i.crime_score,
+        "crime_grade": i.crime_grade,
+        "crime_updated_at": i.crime_updated_at.isoformat() if i.crime_updated_at else None,
     }
 
 

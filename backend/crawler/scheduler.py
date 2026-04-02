@@ -28,6 +28,8 @@ AIR_QUALITY_ENABLED = os.getenv("AIR_QUALITY_ENABLED", "false").lower() == "true
 AIR_QUALITY_BATCH_SIZE = int(os.getenv("AIR_QUALITY_BATCH_SIZE", "100"))
 EMERGENCY_ENABLED = os.getenv("EMERGENCY_ENABLED", "false").lower() == "true"
 EMERGENCY_BATCH_SIZE = int(os.getenv("EMERGENCY_BATCH_SIZE", "100"))
+CHILDCARE_ENABLED = os.getenv("CHILDCARE_ENABLED", "false").lower() == "true"
+CHILDCARE_BATCH_SIZE = int(os.getenv("CHILDCARE_BATCH_SIZE", "100"))
 
 
 def create_scheduler() -> BackgroundScheduler:
@@ -147,5 +149,23 @@ def create_scheduler() -> BackgroundScheduler:
             misfire_grace_time=3600,
         )
         logger.info("응급의료기관 수집 활성화: 매월 첫째 월요일 03:00 (배치 %d)", EMERGENCY_BATCH_SIZE)
+
+    # I. 어린이집 수집 — 매월 첫째 목요일 새벽 6시
+    if CHILDCARE_ENABLED:
+        from crawler.env_service import collect_childcare_data
+
+        scheduler.add_job(
+            collect_childcare_data,
+            "cron",
+            day="1-7",
+            day_of_week="thu",
+            hour=6,
+            kwargs={"batch_size": CHILDCARE_BATCH_SIZE},
+            id="collect_childcare",
+            name="어린이집 수집",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        logger.info("어린이집 수집 활성화: 매월 첫째 목요일 06:00 (배치 %d)", CHILDCARE_BATCH_SIZE)
 
     return scheduler

@@ -29,6 +29,24 @@ function AirGradeBadge({ grade }: { grade: string }) {
   return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs border ${style}`}>{grade}</span>;
 }
 
+/** 범죄 안전등급 색상 뱃지 */
+const CRIME_GRADE_STYLES: Record<string, string> = {
+  A: "bg-green-100 text-green-800 border-green-300",
+  B: "bg-blue-100 text-blue-800 border-blue-300",
+  C: "bg-yellow-100 text-yellow-800 border-yellow-300",
+  D: "bg-red-100 text-red-800 border-red-300",
+};
+
+const CRIME_GRADE_LABELS: Record<string, string> = {
+  A: "매우 안전", B: "안전", C: "보통", D: "주의",
+};
+
+function CrimeGradeBadge({ grade }: { grade: string }) {
+  const style = CRIME_GRADE_STYLES[grade] ?? "bg-gray-100 text-gray-600 border-gray-300";
+  const label = CRIME_GRADE_LABELS[grade] ?? grade;
+  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs border ${style}`}>{label}</span>;
+}
+
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="bg-white rounded-lg shadow-sm border p-4 md:p-6">
@@ -218,6 +236,30 @@ export function EnvironmentSection({ apartment: a }: SectionProps) {
             <InfoRow label="최근접 거리" value={infra.emergency_hospital_dist != null ? `${infra.emergency_hospital_dist}m` : undefined} />
             <InfoRow label="병상 수" value={infra.emergency_beds ? `${infra.emergency_beds}개` : undefined} />
             <InfoRow label="기관 등급" value={infra.emergency_level || undefined} />
+          </dl>
+        </div>
+      )}
+
+      {/* 어린이집 (V013) */}
+      {infra?.childcare_count != null && (
+        <div className="mb-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">보육</h4>
+          <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <InfoRow label="어린이집 (1km)" value={`${infra.childcare_count}개`} />
+            <InfoRow label="최근접 거리" value={infra.childcare_nearest_dist != null ? `${infra.childcare_nearest_dist}m` : undefined} />
+            <InfoRow label="가장 가까운" value={infra.childcare_nearest_name || undefined} />
+            <InfoRow label="정원" value={infra.childcare_nearest_capacity ? `${infra.childcare_nearest_capacity}명` : undefined} />
+          </dl>
+        </div>
+      )}
+
+      {/* 범죄통계 (V013) */}
+      {infra?.crime_score != null && (
+        <div className="mb-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">치안</h4>
+          <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <InfoRow label="안전 점수" value={`${infra.crime_score}/100`} />
+            <InfoRow label="안전 등급" value={infra.crime_grade ? <CrimeGradeBadge grade={infra.crime_grade} /> : undefined} />
           </dl>
         </div>
       )}

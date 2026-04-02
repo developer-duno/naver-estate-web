@@ -252,6 +252,15 @@ class Infra(Base):
     air_o3: Mapped[float | None] = mapped_column(Float)
     air_grade: Mapped[str | None] = mapped_column(Text)
     air_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # 어린이집 (V013)
+    childcare_count: Mapped[int | None] = mapped_column(Integer)
+    childcare_nearest_dist: Mapped[float | None] = mapped_column(Float)
+    childcare_nearest_name: Mapped[str | None] = mapped_column(Text)
+    childcare_nearest_capacity: Mapped[int | None] = mapped_column(Integer)
+    # 범죄통계 (V013)
+    crime_score: Mapped[int | None] = mapped_column(Integer)
+    crime_grade: Mapped[str | None] = mapped_column(Text)
+    crime_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 

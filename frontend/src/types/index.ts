@@ -406,6 +406,15 @@ export interface MbInfra {
   air_o3?: number;
   air_grade?: string;
   air_updated_at?: string;
+  /** 어린이집 (V013) */
+  childcare_count?: number;
+  childcare_nearest_dist?: number;
+  childcare_nearest_name?: string;
+  childcare_nearest_capacity?: number;
+  /** 범죄통계 (V013) */
+  crime_score?: number;
+  crime_grade?: string;
+  crime_updated_at?: string;
 }
 
 /** 학군 정보 */

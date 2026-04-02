@@ -4,7 +4,9 @@ API 문서: https://www.data.go.kr/data/15004400/openapi.do
 시군구별 어린이집 목록을 조회하여 단지별 가장 가까운 어린이집을 매칭한다.
 """
 
+import json
 import logging
+from pathlib import Path
 
 from crawler.emergency_api import haversine
 from crawler.public_data_base import BasePublicDataAPI
@@ -118,3 +120,38 @@ def _safe_float(val) -> float | None:
         return float(val)
     except (ValueError, TypeError):
         return None
+
+
+# --- 행정표준코드 매핑 ---
+
+_SIGUNGU_MAP: dict[str, dict[str, str]] | None = None
+
+
+def _load_sigungu_map() -> dict[str, dict[str, str]]:
+    """data/sigungu_codes.json 로드 (싱글턴)"""
+    global _SIGUNGU_MAP  # noqa: PLW0603
+    if _SIGUNGU_MAP is None:
+        p = Path(__file__).resolve().parent.parent / "data" / "sigungu_codes.json"
+        with open(p, encoding="utf-8") as f:
+            _SIGUNGU_MAP = json.load(f)
+    return _SIGUNGU_MAP
+
+
+def resolve_sigungu_code(region: str, gu: str | None) -> str | None:
+    """DB region(축약명) + gu → 행정표준코드 5자리 변환
+
+    예: resolve_sigungu_code("서울", "강남구") → "11680"
+        resolve_sigungu_code("경기", "수원시 영통구") → "41110" (상위 시 폴백)
+    """
+    if not gu:
+        return None
+    m = _load_sigungu_map().get(region)
+    if not m:
+        return None
+    code = m.get(gu)
+    if code:
+        return code
+    # "수원시 영통구" → "수원시" 폴백
+    if " " in gu:
+        return m.get(gu.split(" ")[0])
+    return None

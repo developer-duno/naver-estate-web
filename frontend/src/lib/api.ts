@@ -398,6 +398,16 @@ export async function deleteStaleData(token: string, days: number) {
   });
 }
 
+/** 관리자: 데이터 수집 트리거 (동기 블로킹, 최대 120초) */
+export type CollectorName = "crime-stats" | "air-quality" | "emergency" | "childcare";
+
+export async function triggerCollection(token: string, name: CollectorName) {
+  return fetchApi<{ status: string; collector: string }>(
+    `/api/admin/collect/${encodeURIComponent(name)}`,
+    { method: "POST", headers: adminHeaders(token), timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
+  );
+}
+
 // ── 미분양 (mibunyang) API — 인증 불필요 (공개 데이터) ──
 
 import type { MbApartment, MbUnsoldHistory, MbRegion, MbTrade } from "@/types";

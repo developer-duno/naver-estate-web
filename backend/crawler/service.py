@@ -97,8 +97,9 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None):
         logger.info("단지 발견 완료: %s → %d건", keyword, total_found)
 
     except Exception as e:
+        db.rollback()
         job.status = "failed"
-        job.error_message = str(e)
+        job.error_message = str(e)[:500]
         db.commit()
         logger.exception("단지 발견 실패: %s", keyword)
     finally:
@@ -180,8 +181,9 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
         logger.info("매물 수집 완료: complex %s → %d건", complex_no, total_articles)
 
     except Exception as e:
+        db.rollback()
         job.status = "failed"
-        job.error_message = str(e)
+        job.error_message = str(e)[:500]
         db.commit()
         logger.exception("매물 수집 실패: complex %s", complex_no)
     finally:
@@ -224,8 +226,9 @@ def crawl_popular_complexes(batch_size: int = 100):
         logger.info("인기 단지 선제적 크롤링 완료: %d개 단지", processed)
 
     except Exception as e:
+        db.rollback()
         job.status = "failed"
-        job.error_message = str(e)
+        job.error_message = str(e)[:500]
         db.commit()
         logger.exception("인기 단지 선제적 크롤링 실패")
     finally:
@@ -303,8 +306,9 @@ def crawl_article_details(batch_size: int = 100):
         logger.info("상세 보강 완료: %d/%d건", processed, len(articles))
 
     except Exception as e:
+        db.rollback()
         job.status = "failed"
-        job.error_message = str(e)
+        job.error_message = str(e)[:500]
         db.commit()
         logger.exception("상세 보강 실패")
     finally:
@@ -524,8 +528,9 @@ def collect_price_history(batch_size: int = 50):
         logger.info("시세 수집 완료: %d건", processed)
 
     except Exception as e:
+        db.rollback()
         job.status = "failed"
-        job.error_message = str(e)
+        job.error_message = str(e)[:500]
         db.commit()
         logger.exception("시세 수집 실패")
     finally:
@@ -696,6 +701,7 @@ def collect_public_trade_data(batch_size: int = 300):
         logger.info("공공데이터 수집 완료: %d건 처리, %d건 매칭", processed, matched)
 
     except Exception as e:
+        db.rollback()
         job.status = "failed"
         job.error_message = str(e)[:500]
         db.commit()

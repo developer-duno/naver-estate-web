@@ -134,7 +134,7 @@ def collect_childcare_data(batch_size: int = 100):
         logger.info("[childcare] 매월 10일 토요일 — 쿼터 보호를 위해 건너뜀")
         return
 
-    from crawler.childcare_api import ChildcareAPI
+    from crawler.childcare_api import ChildcareAPI, resolve_sigungu_code
 
     db = SessionLocal()
     try:
@@ -155,10 +155,18 @@ def collect_childcare_data(batch_size: int = 100):
                 # 시군구 키로 캐시 (같은 지역 단지들은 재조회 불필요)
                 cache_key = f"{region}_{gu}"
                 if cache_key not in gu_cache:
-                    # 행정코드가 없으므로 지역명으로 빈 리스트 초기화
-                    # API 서비스 신청 후 sigungu_code 매핑 추가 필요
-                    gu_cache[cache_key] = []
-                    logger.debug("[childcare] %s 캐시 미스 — API 서비스 신청 필요", cache_key)
+                    sigungu_code = resolve_sigungu_code(region, gu)
+                    if sigungu_code:
+                        try:
+                            gu_cache[cache_key] = ChildcareAPI.get_childcare_list(sigungu_code)
+                            logger.info("[childcare] %s (code=%s) → %d건",
+                                        cache_key, sigungu_code, len(gu_cache[cache_key]))
+                        except Exception:
+                            logger.exception("[childcare] %s API 조회 실패", cache_key)
+                            gu_cache[cache_key] = []
+                    else:
+                        gu_cache[cache_key] = []
+                        logger.warning("[childcare] %s → sigungu_code 매핑 없음", cache_key)
 
                 facilities = gu_cache[cache_key]
                 if not facilities:
@@ -498,6 +506,7 @@ def collect_crime_stats():
             collected, fallback_count, skipped,
         )
     except Exception:
+        db.rollback()
         logger.exception("[crime] 수집 실패")
     finally:
         db.close()

@@ -1,8 +1,8 @@
-"""어린이집 API 단위 테스트 — 응답 파싱 + 근접 매칭"""
+"""어린이집 API 단위 테스트 — 응답 파싱 + 근접 매칭 + 행정코드 매핑"""
 
 from unittest.mock import patch
 
-from crawler.childcare_api import ChildcareAPI
+from crawler.childcare_api import ChildcareAPI, resolve_sigungu_code
 
 
 class TestGetChildcareList:
@@ -132,3 +132,43 @@ class TestFindNearest:
         result = ChildcareAPI.find_nearest(37.5, 127.0, facilities, radius_m=2000)
         assert result["nearest_name"] == "가장가까운"
         assert result["nearest_capacity"] == 60
+
+
+class TestResolveSigunguCode:
+    """행정표준코드 매핑 테스트"""
+
+    def test_서울_강남구(self):
+        """서울 강남구 → 11680"""
+        assert resolve_sigungu_code("서울", "강남구") == "11680"
+
+    def test_부산_해운대구(self):
+        """부산 해운대구 → 26350"""
+        assert resolve_sigungu_code("부산", "해운대구") == "26350"
+
+    def test_경기_수원시(self):
+        """경기 수원시 → 41110"""
+        assert resolve_sigungu_code("경기", "수원시") == "41110"
+
+    def test_복합_gu_폴백(self):
+        """경기 '수원시 영통구' → 수원시(41110)로 폴백"""
+        assert resolve_sigungu_code("경기", "수원시 영통구") == "41110"
+
+    def test_미매핑_구(self):
+        """존재하지 않는 구 → None"""
+        assert resolve_sigungu_code("서울", "존재안하는구") is None
+
+    def test_미매핑_시도(self):
+        """존재하지 않는 시도 → None"""
+        assert resolve_sigungu_code("미지의시도", "강남구") is None
+
+    def test_gu_없음(self):
+        """gu=None → None"""
+        assert resolve_sigungu_code("서울", None) is None
+
+    def test_제주시(self):
+        """제주 제주시 → 50110"""
+        assert resolve_sigungu_code("제주", "제주시") == "50110"
+
+    def test_세종시(self):
+        """세종 세종시 → 36110"""
+        assert resolve_sigungu_code("세종", "세종시") == "36110"

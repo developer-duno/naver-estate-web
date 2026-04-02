@@ -4,12 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import StatsCards from "@/components/admin/StatsCards";
+import CollectorTrigger from "@/components/admin/CollectorTrigger";
 import { getAdminDetailedStats, getAdminAuditLogs, getAdminCrawlJobs } from "@/lib/api";
 import type { DetailedStats, AuditLog, CrawlJobDetail } from "@/types/admin";
 import type { PaginatedResponse } from "@/types/admin";
 
 export default function AdminDashboard() {
-  const { token } = useTokenReady();
+  const { token, getToken } = useTokenReady();
 
   const statsQuery = useQuery<DetailedStats, Error>({
     queryKey: queryKeys.admin.stats(),
@@ -90,6 +91,10 @@ export default function AdminDashboard() {
             </ul>
           )}
         </div>
+      </div>
+
+      <div className="mt-6">
+        <CollectorTrigger getToken={getToken} />
       </div>
     </>
   );

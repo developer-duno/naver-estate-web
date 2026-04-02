@@ -1,61 +1,63 @@
-# 세션 로그: 2026-04-03 (세션 11)
+# 세션 로그: 2026-04-03 (세션 12)
 
 ## 완료 작업
 
-### 1. 관리자 수동 수집 API
+### 1. PendingRollbackError 방지 (service.py + env_service.py)
 
-- `POST /api/admin/collect/{collector_name}` — 4종 수집기(crime-stats/air-quality/emergency/childcare) 트리거
-- `GET /api/admin/collect/crime-stats/status` — 범죄통계 현황(총점수/최신날짜/등급분포) 조회
-- `Depends(get_admin_user)` 인증 + 감사 로그
-- 테스트 8개 (인증/트리거/에러/상태조회)
+**문제**: 스케줄러 크롤링 함수 6개에서 예외 발생 시 `db.commit()` 호출 → SQLAlchemy pending rollback 상태에서 PendingRollbackError 발생
 
-### 2. 범죄통계 키 매칭 100% 달성
+**해결**: except 블록에 `db.rollback()` 추가 후 job 상태 업데이트 + commit
+- `service.py`: 6곳 (discover_complexes, crawl_articles, crawl_popular, crawl_details, collect_price, collect_public_trade)
+- `env_service.py`: 1곳 (collect_crime_stats)
 
-**문제**: API(서울특별시_강남구) vs DB(서울_강남) 키 형식 불일치 → 0% 매칭
+### 2. 어린이집 sigungu_code 매핑 구현
 
-**해결 (4차례 반복 수정)**:
-1. `_build_population_map()` — DB 축약명→정식명 확장 (`_DB_ALIAS` 18개)
-2. `_build_score_lookup()` — 정식명→축약명 역매핑 (`_LONG_TO_SHORT`)
-3. `_lookup_score()` — 5단계 폴백 (정확→상위시→구→상위시→시군교체→region)
-4. `_GU_TO_PARENT_CITY` — 하위구→상위시 매핑 30개 (기흥구→용인시 등)
-5. `_compute_median_score()` — 인구 누락 지역(강원/전북/세종) 중앙값 폴백
+**문제**: env_service.py에서 gu_cache를 항상 빈 리스트로 초기화 → 어린이집 수집 항상 실패
 
-**결과**: 0% → 75% → 91% → 94% → **100%** (1928/1928)
+**해결**:
+- `data/sigungu_codes.json`: 17개 시도 행정표준코드 5자리 매핑 (~250개 시군구)
+- `childcare_api.py`: `resolve_sigungu_code(region, gu)` 함수 추가 (JSON 싱글턴 로드 + 복합 gu 폴백)
+- `env_service.py`: 캐시 초기화 로직을 실제 API 호출로 교체
+- CHILDCARE_ENABLED=false 유지 (API 서비스 미승인)
+- 테스트 9개 추가 (서울/부산/경기/제주/세종/복합gu/미매핑 등)
 
-### 3. 수동 실행 스크립트
+### 3. 관리자 대시보드 수집 트리거 UI
 
-- `scripts/run_crime_stats.py` — 범죄통계 수동 수집
-- `scripts/check_crime_stats.py` — DB 현황 확인
-- `scripts/test_childcare_api.py` — 어린이집 API 승인 테스트
-- `scripts/diagnose_crime_keys.py` — 키 매칭 진단
-- `scripts/diagnose_crime_skipped.py` — 건너뜀 원인 분석
-
-### 4. 어린이집 API 승인 확인
-
-- HTTP 500 반환 → **서비스 미승인** 확인
-- `CHILDCARE_ENABLED=false` 유지
-- data.go.kr 마이페이지에서 B553260/CpmsService 재신청 필요
-- **주의**: `env_service.py:159` sigungu_code 매핑 미구현 (승인 후 추가 작업 필요)
-
-### 5. E2E 테스트 보강
-
-- `mibunyang-flow.spec.ts` — 5개 (메인 로드/탭 전환/검색/상세/미존재)
-- `compare-flow.spec.ts` — 4개 (단지 비교 2 + 미분양 비교 2)
-- 기존 13개 + 신규 9개 = **총 22개 E2E**
+**구현**:
+- `api.ts`: `triggerCollection(token, name)` 함수 (120초 타임아웃)
+- `CollectorTrigger.tsx`: 4개 수집기 버튼 (범죄통계/대기질/응급의료/어린이집)
+  - useMutation + 로딩/성공/실패 상태
+  - mutation.isPending 중 전체 버튼 disabled (중복 실행 방지)
+- `admin/page.tsx`: 대시보드에 CollectorTrigger 섹션 통합
+- 테스트 5개 추가 (렌더링/API호출/성공/실패/제목)
 
 ## 테스트 현황
 
 | 영역 | 도구 | 테스트 수 | 결과 |
 |------|------|----------|------|
-| BE 단위+통합 | pytest | 356 | 전체 통과 (1 스킵) |
-| FE 단위+컴포넌트 | Vitest | 498 | 전체 통과 |
+| BE 단위+통합 | pytest | 365 (+9) | 전체 통과 (1 스킵) |
+| FE 단위+컴포넌트 | Vitest | 503 (+5) | 전체 통과 |
 | FE E2E | Playwright | 22 | (서버 필요) |
 | ruff | ruff check | — | All checks passed |
 | tsc | tsc --noEmit | — | 에러 0 |
 
+## 변경 파일
+
+| 파일 | 변경 내용 |
+|------|----------|
+| backend/crawler/service.py | 6곳 except에 db.rollback() 추가 |
+| backend/crawler/env_service.py | crime_stats rollback + childcare 캐시 로직 |
+| backend/crawler/childcare_api.py | resolve_sigungu_code() + JSON 로드 |
+| backend/data/sigungu_codes.json | 행정표준코드 매핑 (신규) |
+| backend/tests/test_childcare_api.py | sigungu 매핑 테스트 9개 추가 |
+| frontend/src/lib/api.ts | triggerCollection 함수 추가 |
+| frontend/src/components/admin/CollectorTrigger.tsx | 수집 트리거 컴포넌트 (신규) |
+| frontend/src/app/admin/page.tsx | CollectorTrigger 통합 |
+| frontend/src/components/__tests__/CollectorTrigger.test.tsx | 테스트 5개 (신규) |
+
 ## 다음 세션 우선순위
 
-1. data.go.kr 어린이집 서비스 재신청 → 승인 확인 → sigungu_code 매핑 구현
-2. PendingRollbackError 방지 (스케줄러 DB 세션)
-3. 관리자 대시보드에 수집 트리거 UI 추가
-4. E2E 실서버 연동 테스트
+1. data.go.kr 어린이집 서비스 재신청 → 승인 확인 → CHILDCARE_ENABLED=true 전환
+2. E2E Playwright 테스트 실서버 연동 확인
+3. 미분양 상세 페이지에 환경 데이터 표시 UI 추가
+4. 스케줄러 실행 로그 모니터링 대시보드

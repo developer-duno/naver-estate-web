@@ -59,12 +59,12 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 | 경로 | 도구 | 테스트 수 |
 |------|------|----------|
 | frontend/src/lib/__tests__/ | Vitest | 12파일 (단위+엣지케이스+storage+compare-utils+mb-storage+mb-export+mb-compare-utils+mb-search-history+storage.compareHistory+storage.radarSettings) |
-| frontend/src/components/__tests__/ | Vitest | 20파일 (컴포넌트+차트+Mb*+MbSearchHistory+MbCompareHistory+PromptModal+CompareFloatingBar+SearchHistory+Pagination+SortableHeader) + mb/3파일 (MbCompareFloatingBar+MbCompareRadarChart+MbLocationMap) |
+| frontend/src/components/__tests__/ | Vitest | 21파일 (컴포넌트+차트+Mb*+MbSearchHistory+MbCompareHistory+PromptModal+CompareFloatingBar+SearchHistory+Pagination+SortableHeader+CollectorTrigger) + mb/3파일 (MbCompareFloatingBar+MbCompareRadarChart+MbLocationMap) |
 | frontend/src/hooks/__tests__/ | Vitest | 15파일 (usePriceCollect+useFilterParams+useMbFavorites+useMbCompare+useMbSearchHistory+useMbCompareHistory+useMbCompareBookmarks+useMbRadarSettings+useLocalStorageList+useCompare+useFavorites+useSearchHistory+useSmartBack+useExport+useAdminToken) |
 | frontend/src/app/__tests__/ | Vitest | 4파일 (페이지 통합: search+mibunyang+mibunyang-detail+mibunyang-compare) |
-| **프론트 합계** | Vitest | **498개** (54파일, 13축 레이더 반영) |
+| **프론트 합계** | Vitest | **503개** (55파일, 13축 레이더 반영) |
 | frontend/e2e/ | Playwright | 13 (E2E) |
-| backend/tests/ | pytest | 330 (단위+통합+API+엣지케이스+공유인프라+dialect분기+mibunyang+정렬/검색+중복제거+admin-email+환경데이터+어린이집+범죄통계+범죄통계API, 1 스킵) |
+| backend/tests/ | pytest | 365 (단위+통합+API+엣지케이스+공유인프라+dialect분기+mibunyang+정렬/검색+중복제거+admin-email+환경데이터+어린이집+범죄통계+범죄통계API+sigungu매핑, 1 스킵) |
 
 ### React Query 테스트 패턴
 - 컴포넌트/훅 테스트에서 `TestQueryProvider` 래퍼 사용 (test-setup.ts에서 export)

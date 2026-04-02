@@ -53,6 +53,7 @@ npx vercel --prod
 | 대기질 수집     | 매일 2시               | 에어코리아 API (AIR_QUALITY_ENABLED, 매월 10일 토요일은 skip)          |
 | 응급의료 수집   | 매월 첫째 월요일 3시   | NEMC 응급의료기관 API (EMERGENCY_ENABLED)                              |
 | 어린이집 수집   | 매월 첫째 목요일 6시   | CPMS 어린이집 API (CHILDCARE_ENABLED, 서비스 신청 필요)                |
+| 범죄통계 수집   | 분기별 첫째 일요일 4시 | 경찰청 odcloud API (CRIME_STATS_ENABLED, CSV 폴백)                     |
 
 ## 공유 인프라 규칙 (mibunyang 프로젝트와 공유)
 

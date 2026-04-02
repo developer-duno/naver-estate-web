@@ -4,22 +4,22 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-03 — Phase 2 어린이집/범죄통계 API + 레이더 13축 확장
+**마지막 작업**: 2026-04-03 — Phase 2 후속: V013 실행 + 범죄통계 API 수집기 + 어린이집 API 테스트
 
 **다음 우선순위**:
 
-1. data.go.kr "어린이집 정보 공개 포털" 서비스 신청 → 승인 후 CHILDCARE_ENABLED=true
-2. Supabase에서 V013 마이그레이션 실행 (infra 테이블 7컬럼 추가)
-3. 경찰청 범죄통계 CSV 다운로드 → backend/data/crime_stats.csv → load_crime_stats() 실행
-4. E2E 테스트 보강 (Playwright)
-5. 백엔드 스케줄러 DB 세션 관리 개선 (PendingRollbackError 방지)
+1. `collect_crime_stats()` 수동 실행 → 실제 DB 반영 확인
+2. data.go.kr "어린이집 정보 공개 포털" (B553260/CpmsService) 서비스 재신청 → 승인 후 CHILDCARE_ENABLED=true
+3. E2E 테스트 보강 (Playwright)
+4. 백엔드 스케줄러 DB 세션 관리 개선 (PendingRollbackError 방지)
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 498개 (54파일), BE 314개 — 전체 통과
+- 테스트 현황: FE 498개 (54파일), BE 330개 — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
-- 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED, CHILDCARE_ENABLED (backend/.env)
+- 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED, CHILDCARE_ENABLED, CRIME_STATS_ENABLED (backend/.env)
+- V013 마이그레이션 실행 완료 (Supabase SQL Editor, 2026-04-03)
 
 ## 기술 스택
 
@@ -42,7 +42,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
            [에어코리아 대기질 API] ↗
            [응급의료기관 API (NEMC)] ↗
            [어린이집 API (CPMS)] ↗
-           [경찰청 범죄통계 CSV] ↗
+           [경찰청 범죄통계 API (odcloud)] ↗
 ```
 
 **핵심**: 사전 크롤링이 아닌 **실시간 크롤링** — 사용자 검색 시 네이버 API 호출 → DB upsert → 결과 반환
@@ -80,7 +80,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 대기질 수집 → 스케줄러 매일 02:00 (에어코리아 API → infra 테이블 air_* 컬럼)
 응급의료 수집 → 스케줄러 매월 첫째 월 03:00 (NEMC API → infra 테이블 emergency_* 컬럼)
 어린이집 수집 → 스케줄러 매월 첫째 목 06:00 (CPMS API → infra 테이블 childcare_* 컬럼)
-범죄통계 반영 → 수동 트리거 (경찰청 CSV → infra 테이블 crime_* 컬럼)
+범죄통계 수집 → 스케줄러 분기별 첫째 일 04:00 (경찰청 odcloud API → infra 테이블 crime_* 컬럼, CSV 폴백)
 레이더 차트 → 13축 (기존9 + airQuality + medical + childcare + safety), 프리셋3종 + 슬라이더(1-5)
 ```
 
@@ -103,7 +103,7 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 | 파일 | 내용 |
 |------|------|
 | `.claude/rules/web-rules.md` | React/Next.js + FastAPI 코딩 규칙, DON'T 목록 |
-| `.claude/rules/testing.md` | 테스트 작성·실행 규칙, 구조표 (FE 498개, BE 293개) |
+| `.claude/rules/testing.md` | 테스트 작성·실행 규칙, 구조표 (FE 498개, BE 330개) |
 | `.claude/rules/planning.md` | /plan 모드 규칙, 교차검증 에이전트 5종 |
 | `.claude/rules/infra.md` | 서버 복구 절차, 스케줄러, 공유 인프라, DB 풀 |
 | `.claude/rules/codes.md` | 거래/매물유형 코드, 핵심 상수, localStorage 키 |

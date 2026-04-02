@@ -58,6 +58,7 @@ export default function ComplexDetailPage() {
   const [filterError, setFilterError] = useState("");
   const [sessionToken, setSessionToken] = useState<string | undefined>(undefined);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
+  const crawlTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   // 브라우저 뒤로/앞으로 시에만 FilterBar 리마운트 (사용자 필터 변경 시에는 유지)
   const [navKey, setNavKey] = useState(0);
@@ -166,6 +167,14 @@ export default function ComplexDetailPage() {
     })();
   }, [complexNo, complexQuery.isSuccess, articlesQuery.isSuccess, pyeongQuery.isSuccess, setCrawlMsg]);
 
+  // 언마운트 시 크롤링 타이머 정리 (메모리 누수 방지)
+  useEffect(() => {
+    return () => {
+      crawlTimersRef.current.forEach(clearTimeout);
+      crawlTimersRef.current = [];
+    };
+  }, []);
+
   // 핸들러: 정렬 변경 → URL 업데이트 (page 리셋)
   const handleSortChange = useCallback(
     (newSortBy: string) => {
@@ -237,24 +246,24 @@ export default function ComplexDetailPage() {
         // 캐시 히트 — 크롤 불필요, 즉시 복원
         setCrawling(false);
         setCrawlMsg("최근 갱신된 데이터입니다", "success");
-        setTimeout(() => setCrawlMessage(""), 3_000);
+        crawlTimersRef.current.push(setTimeout(() => setCrawlMessage(""), 3_000));
         return;
       }
       setCrawlMsg("데이터 갱신 중...", "info");
       // 백그라운드 크롤링 완료 후 데이터 자동 갱신 (10초, 20초, 30초 후 refetch)
       [10_000, 20_000, 30_000].forEach((delay) => {
-        setTimeout(() => {
+        crawlTimersRef.current.push(setTimeout(() => {
           queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo) });
           queryClient.invalidateQueries({ queryKey: queryKeys.complex(complexNo) });
           queryClient.invalidateQueries({ queryKey: queryKeys.pyeongDetails(complexNo) });
           queryClient.invalidateQueries({ queryKey: queryKeys.priceStats(complexNo) });
-        }, delay);
+        }, delay));
       });
       // 30초 후 버튼 복원
-      setTimeout(() => {
+      crawlTimersRef.current.push(setTimeout(() => {
         setCrawling(false);
         setCrawlMessage("");
-      }, 30_000);
+      }, 30_000));
     },
     onError: (err: unknown) => {
       if (err instanceof ApiError) {

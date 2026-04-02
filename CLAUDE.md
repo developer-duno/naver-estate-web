@@ -4,19 +4,18 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-01 — 크롤링 진행 상태 버그 수정 (캐시 키 분리 + 최소 3%)
+**마지막 작업**: 2026-04-02 — 크롤링 진행률 UI 전면 수정 (이중 크롤링 해결 + 진행률 배너 제거 + 타이머 기반 refetch)
 
 **다음 우선순위**:
 
-1. Vercel 재배포 (크롤 버그 수정 반영) + 브라우저 수동 테스트
-2. 백엔드 `/api/live/{no}/articles` 레거시 엔드포인트 정리 검토
-3. E2E 테스트 보강 (Playwright)
-4. useCrawlProgress 폴링 최대 시간 제한 추가 (무한 폴링 방지)
+1. 백엔드 `/api/live/{no}/articles` 레거시 엔드포인트 정리 검토
+2. E2E 테스트 보강 (Playwright)
+3. 백엔드 스케줄러 DB 세션 관리 개선 (PendingRollbackError 방지)
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 506개 (55파일), BE 280개 — 전체 통과
+- 테스트 현황: FE 498개 (54파일), BE 280개 — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
 
 ## 기술 스택
@@ -46,7 +45,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 ```
 검색 → /api/live/search (네이버 API → DB upsert → 반환)
 단지 클릭 → DB 데이터 즉시 표시 + 자동 매물 크롤링 (start-crawl)
-"데이터 갱신" 버튼 → /api/live/{no}/articles/start-crawl (백그라운드 크롤링 → 폴링)
+"데이터 갱신" 버튼 → /api/live/{no}/articles/start-crawl (백그라운드 크롤링 → 10/20/30초 타이머 refetch)
 필터 변경 → /api/complexes/{no}/articles (DB 쿼리, SQL WHERE절) + URL 쿼리 파라미터 동기화
 실거래가 추이 탭 → 자동 수집 트리거 (/api/live/{no}/price-history/start-collect, 24시간 TTL)
 가격 추이 조회 → /api/complexes/{no}/price-history?trade_type=&area_no= (DB 쿼리, 월별 집계)

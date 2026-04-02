@@ -30,6 +30,7 @@ EMERGENCY_ENABLED = os.getenv("EMERGENCY_ENABLED", "false").lower() == "true"
 EMERGENCY_BATCH_SIZE = int(os.getenv("EMERGENCY_BATCH_SIZE", "100"))
 CHILDCARE_ENABLED = os.getenv("CHILDCARE_ENABLED", "false").lower() == "true"
 CHILDCARE_BATCH_SIZE = int(os.getenv("CHILDCARE_BATCH_SIZE", "100"))
+CRIME_STATS_ENABLED = os.getenv("CRIME_STATS_ENABLED", "false").lower() == "true"
 
 
 def create_scheduler() -> BackgroundScheduler:
@@ -167,5 +168,24 @@ def create_scheduler() -> BackgroundScheduler:
             misfire_grace_time=3600,
         )
         logger.info("어린이집 수집 활성화: 매월 첫째 목요일 06:00 (배치 %d)", CHILDCARE_BATCH_SIZE)
+
+    # J. 범죄통계 수집 — 분기 1회 (1/4/7/10월 첫째 일요일 새벽 4시)
+    #    경찰청 범죄통계 분기별 공표 주기에 맞춤
+    if CRIME_STATS_ENABLED:
+        from crawler.env_service import collect_crime_stats
+
+        scheduler.add_job(
+            collect_crime_stats,
+            "cron",
+            month="1,4,7,10",
+            day="1-7",
+            day_of_week="sun",
+            hour=4,
+            id="collect_crime_stats",
+            name="범죄통계 수집",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        logger.info("범죄통계 수집 활성화: 분기별 첫째 일요일 04:00")
 
     return scheduler

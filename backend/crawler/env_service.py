@@ -186,8 +186,100 @@ def collect_childcare_data(batch_size: int = 100):
         db.close()
 
 
+def collect_crime_stats():
+    """경찰청 범죄통계 API → infra 테이블 반영 (스케줄러/수동 트리거용)
+
+    odcloud API에서 전국 시군구별 범죄 건수를 조회하고,
+    regions 테이블의 인구수로 범죄율을 계산하여 안전 점수를 산출한다.
+    API 실패 시 기존 CSV 로더로 폴백한다.
+    """
+    from crawler.crime_stats_api import CrimeStatsAPI
+    from db.mb_models import MBRegion
+
+    # 1) API 호출
+    rows = CrimeStatsAPI.fetch_all()
+    if not rows:
+        logger.warning("[crime] API 실패 — CSV 폴백 시도")
+        load_crime_stats()
+        return
+
+    # 2) 시군구별 합산
+    stats = CrimeStatsAPI.aggregate_by_region(rows)
+    if not stats:
+        logger.warning("[crime] 집계 실패 — CSV 폴백 시도")
+        load_crime_stats()
+        return
+
+    # 3) 인구수 조회 (regions 테이블, 최신 recorded_at 기준)
+    db = SessionLocal()
+    try:
+        from sqlalchemy import func
+
+        # 지역별 최신 인구수 서브쿼리
+        subq = (
+            db.query(
+                MBRegion.region,
+                MBRegion.gu,
+                func.max(MBRegion.recorded_at).label("max_date"),
+            )
+            .group_by(MBRegion.region, MBRegion.gu)
+            .subquery()
+        )
+        pop_rows = (
+            db.query(MBRegion.region, MBRegion.gu, MBRegion.population)
+            .join(
+                subq,
+                (MBRegion.region == subq.c.region)
+                & (MBRegion.gu == subq.c.gu)
+                & (MBRegion.recorded_at == subq.c.max_date),
+            )
+            .filter(MBRegion.population.isnot(None))
+            .all()
+        )
+        population_map = {
+            f"{r}_{g}" if g else r: pop
+            for r, g, pop in pop_rows
+        }
+        logger.info("[crime] 인구수 %d개 시군구 조회", len(population_map))
+
+        # 4) 안전 점수 산출
+        scored = CrimeStatsAPI.compute_scores(stats, population_map)
+        if not scored:
+            logger.warning("[crime] 점수 산출 실패 — CSV 폴백 시도")
+            load_crime_stats()
+            return
+
+        # 5) infra 테이블 업데이트
+        apts = db.query(Apartment.id, Apartment.region, Apartment.gu).all()
+        collected, skipped = 0, 0
+
+        for apt_id, region, gu in apts:
+            db_key = f"{region}_{gu}" if gu else region
+            result = scored.get(db_key)
+            if not result:
+                skipped += 1
+                continue
+
+            infra = db.get(Infra, apt_id)
+            if not infra:
+                skipped += 1
+                continue
+
+            infra.crime_score = result["crime_score"]
+            infra.crime_grade = result["crime_grade"]
+            infra.crime_updated_at = datetime.now()
+            collected += 1
+
+        db.commit()
+        logger.info("[crime] 완료: %d 수집, %d 건너뜀", collected, skipped)
+    except Exception:
+        logger.exception("[crime] 수집 실패")
+    finally:
+        db.close()
+
+
 def load_crime_stats(csv_path: str | None = None):
-    """범죄통계 CSV → infra 테이블 반영 (수동 트리거용)"""
+    """범죄통계 CSV → infra 테이블 반영 (수동/폴백용)"""
     from crawler.crime_stats_loader import CrimeStatsLoader
 
     raw = CrimeStatsLoader.load_from_csv(csv_path)
@@ -222,7 +314,7 @@ def load_crime_stats(csv_path: str | None = None):
             collected += 1
 
         db.commit()
-        logger.info("[crime] 완료: %d 수집, %d 건너뜀", collected, skipped)
+        logger.info("[crime] CSV 폴백 완료: %d 수집, %d 건너뜀", collected, skipped)
     finally:
         db.close()
 

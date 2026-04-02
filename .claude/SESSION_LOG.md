@@ -1,40 +1,52 @@
-# 세션 로그: 2026-04-02 (세션 7)
+# 세션 로그: 2026-04-03 (세션 8)
 
 ## 완료 작업
 
-### 크롤링 진행률 UI 전면 수정
+### 1. 공공데이터 API 통합 (Phase 1)
 
-**문제**: "데이터 갱신" 버튼 클릭 시 진행률이 3%에서 멈추고, "갱신 중..."이 풀리지 않음
+에어코리아 대기질 + 응급의료기관 2개 API를 data.go.kr에서 수집하여 미분양 단지별 환경 지표 강화.
 
-**원인 분석 (3단계)**:
-1. `triggerComplexCrawl` + `startLiveCrawl` 이중 호출 → 진행률 추적 없는 크롤링이 먼저 완료
-2. React Query `refetchInterval`이 실제로 3초 폴링을 수행하지 않음 (전역 staleTime 30초 문제?)
-3. setInterval 직접 폴링으로 재작성했지만 여전히 동작 안 함
+**BE 신규 (6파일, +901줄)**:
+- `crawler/public_data_base.py` — BasePublicDataAPI (전역 카운터 9000, throttle, retry, requests 라이브러리)
+- `crawler/air_quality_api.py` — 에어코리아 (WGS84→TM 변환, 근접측정소, 실시간 대기질)
+- `crawler/emergency_api.py` — 응급의료 (NEMC, Haversine 근접 필터)
+- `crawler/env_service.py` — 수집 오케스트레이터 (매월 10일 토요일 skip)
+- `db/migrations/V012__env_data_columns.sql` — infra +11컬럼, air_quality_stations 테이블
+- `tests/test_env_service.py` — 13개 테스트
 
-**최종 해결**:
-- 진행률 배너 완전 제거 (사용자 요청)
-- useCrawlProgress 폴링 훅 의존 제거
-- 타이머 기반 refetch: 크롤링 요청 후 10/20/30초 후 자동 데이터 갱신
-- 리뷰: setTimeout cleanup 추가 (crawlTimersRef + useEffect cleanup)
-- 리뷰: useCrawlProgress.ts + 테스트 삭제 (죽은 코드)
+**FE**: 상세 페이지 대기질 등급 뱃지 + 응급의료 블록, 레이더 차트 9→11축
 
-**커밋 (7개)**:
-1. `567f627` fix: 크롤링 진행률 실시간 표시 안 되는 버그 수정 (triggerComplexCrawl 제거)
-2. `a7b4966` fix: 크롤링 진행률 폴링 안 되는 버그 수정 (staleTime: 0 + removeQueries)
-3. `196e7a4` fix: 크롤링 진행률 폴링을 setInterval 직접 방식으로 재작성
-4. `2a46193` fix: 크롤링 진행률 배너 제거 — 3%에서 멈추는 UX 문제
-5. `0ce98d9` fix: useCrawlProgress 폴링 의존 제거 — 갱신 버튼 즉시 복원
-6. `7243fed` fix: 데이터 갱신 후 매물 목록 자동 refetch 추가
-7. `164c9e2` fix: 리뷰 반영 — setTimeout cleanup + 죽은 코드 제거
+**커밋**: `fdf43fb feat: 공공데이터 API 통합 — 에어코리아 대기질 + 응급의료기관`
 
-### Vercel 배포
-- 크롤 버그 수정 반영 → 프로덕션 배포 완료 (여러 차례)
+### 2. 레거시 라우터 삭제
 
-## 발견된 이슈 (미해결)
+crawl.py 삭제 + live_articles 엔드포인트 제거 + api.ts 함수 제거 (-188줄)
 
-1. **백엔드 스케줄러 DB 세션 에러**: `crawl_popular_complexes`에서 `PendingRollbackError` — Supabase 유휴 연결 끊김 → 서버 재시작으로 해결
-2. **React Query refetchInterval 신뢰성**: `staleTime: 0` + `removeQueries`로도 3초 폴링이 동작하지 않는 근본 원인 미확인
+**커밋**: `d43152c refactor: crawl.py 레거시 라우터 삭제 + live_articles 엔드포인트 제거`
+
+### 3. 운영 설정 완료
+
+- V012 마이그레이션 Supabase 실행 완료
+- data.go.kr 에어코리아 + 응급의료 API 활용 신청/승인
+- backend/.env에 AIR_QUALITY_ENABLED=true, EMERGENCY_ENABLED=true
+- 집 서버 수집 테스트 성공 (대기질 3건, 응급의료 530기관→3건)
+
+### 트러블슈팅
+
+| 문제 | 원인 | 해결 |
+|------|------|------|
+| HTTP 403 | data.go.kr 서비스별 개별 활용 신청 필요 | 에어코리아+응급의료 신청/승인 |
+| curl_cffi Timeout | 집 서버에서 curl_cffi DNS 해석 실패 | requests 라이브러리로 교체 |
+| emergency body TypeError | API 응답 body가 string일 수 있음 | isinstance 가드 추가 |
 
 ## 테스트 현황
-- FE: 498개 (54파일) — 전체 통과
-- BE: 280개 — 전체 통과
+
+- BE: 293 passed, 1 skipped
+- FE: 498 passed (54 files)
+
+## 다음 세션
+
+Phase 2(어린이집/범죄통계) 사전 확인:
+1. 어린이집 API curl 테스트 (data.go.kr 통합 키)
+2. 경찰청 범죄통계 CSV URL + 포맷 확인
+3. Phase 1 운영 안정성 1주 확인

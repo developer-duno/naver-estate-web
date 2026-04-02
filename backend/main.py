@@ -18,7 +18,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import Response
 
 from auth.rate_limiter import RateLimitMiddleware
-from routers import admin, articles, complexes, crawl, live, mb, regions, stats, users
+from routers import admin, articles, complexes, live, mb, regions, stats, users
 from services.cache import get_dynamic_ttl
 
 # 로깅 설정
@@ -139,7 +139,6 @@ async def security_headers_middleware(request: Request, call_next):
 app.include_router(live.router, prefix="/api/live", tags=["실시간 크롤링"])
 app.include_router(complexes.router, prefix="/api/complexes", tags=["단지"])
 app.include_router(articles.router, prefix="/api/articles", tags=["매물"])
-app.include_router(crawl.router, prefix="/api/crawl", tags=["크롤링"])
 app.include_router(stats.router, prefix="/api", tags=["통계"])
 app.include_router(regions.router, prefix="/api", tags=["지역"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])

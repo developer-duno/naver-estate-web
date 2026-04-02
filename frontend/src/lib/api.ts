@@ -204,14 +204,6 @@ export async function getPriceCollectStatus(complexNo: string) {
   );
 }
 
-/** 크롤링 진행률 폴링 */
-export async function getCrawlStatus(complexNo: string) {
-  return fetchApi<CrawlProgress>(
-    `/api/live/${encodeURIComponent(complexNo)}/articles/crawl-status`,
-    { timeoutMs: DEFAULT_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
-  );
-}
-
 /** 면적별 상세 */
 export async function getPyeongDetails(complexNo: string) {
   if (!isBackendAvailable()) return { pyeong_details: [] };
@@ -293,17 +285,6 @@ export async function exportArticles(complexNo: string, filters?: ArticleFilters
   } finally {
     clearTimeout(timer);
   }
-}
-
-/** 크롤링 트리거 (인증 필요) */
-export async function triggerComplexCrawl(complexNo: string, accessToken: string) {
-  return fetchApi<{ status: string; complex_no: string }>(
-    `/api/crawl/complex/${encodeURIComponent(complexNo)}`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }
-  );
 }
 
 // ── 관리자 API — 모든 호출에 Bearer 토큰 필수 ──

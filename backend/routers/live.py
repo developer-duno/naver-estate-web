@@ -13,7 +13,7 @@ from db.database import SessionLocal
 from db.models import Article as ArticleModel
 from db.models import Complex as ComplexModel
 from deps import get_approved_user, get_db
-from routers.serializers import article_to_dict, complex_to_dict
+from routers.serializers import article_to_dict
 from services.cache import get_cache
 from services.enricher import enrich_complex_detail
 from services.upsert import (
@@ -319,75 +319,6 @@ def get_crawl_status(complex_no: str):
     return {"complex_no": complex_no, **snapshot}
 
 
-@router.get("/{complex_no}/articles")
-def live_articles(
-    complex_no: str,
-    db: Session = Depends(get_db),
-):
-    """Live article crawl - Naver API -> DB upsert -> return"""
-    cache_key = f"articles:{complex_no}"
-    cached = _cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    all_article_nos = set()
-    page = 1
-
-    while True:
-        result = _fetch_articles_all_trade_types(complex_no, page=page)
-        if not result or "error" in result:
-            if page == 1:
-                detail = result.get("error", "네이버 매물 API 요청 실패") if result else "네이버 API 응답 없음"
-                raise HTTPException(status_code=502, detail=str(detail))
-            break
-
-        article_list = result.get("articleList") or []
-        if not article_list:
-            break
-
-        for a_data in article_list:
-            article = RealEstateArticle.from_dict(a_data)
-            article.complex_no = complex_no
-            upsert_article(db, article)
-            all_article_nos.add(article.article_no)
-
-        if not result.get("isMoreData", False):
-            break
-        page += 1
-        time.sleep(INTER_PAGE_DELAY)
-
-    # Deactivate missing articles
-    delete_missing_articles(db, complex_no, all_article_nos)
-
-    # Update last_crawled_at
-    db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).update(
-        {"last_crawled_at": utcnow()}
-    )
-    db.commit()
-
-    # Enrich complex detail
-    enrich_complex_detail(db, complex_no)
-
-    # Return active articles + refreshed complex info from DB
-    articles = (
-        db.query(ArticleModel)
-        .filter(ArticleModel.complex_no == complex_no, ArticleModel.is_active == True)
-        .all()
-    )
-
-    cpx_refreshed = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
-
-    result = {
-        "articles": [article_to_dict(a) for a in articles],
-        "total": len(articles),
-        "page": 1,
-        "page_size": len(articles),
-        "complex": complex_to_dict(cpx_refreshed) if cpx_refreshed else None,
-    }
-    _cache.set(cache_key, result)
-    return result
-
-
 def _update_crawl_status(complex_no: str, **updates):
     """스레드 안전한 크롤 상태 업데이트"""
     with _crawl_lock:
@@ -491,8 +422,6 @@ def _background_crawl(complex_no: str):
             pass
     finally:
         db.close()
-        # 레거시 live_articles 응답 캐시 무효화
-        _cache.delete(f"articles:{complex_no}")
         # 크롤링 완료 마커 설정 (start-crawl 중복 방지, 동적 TTL 적용)
         _cache.set(f"crawl_done:{complex_no}", True)
         # complexes.py의 필터/통계/상세 캐시도 무효화 (레지스트리 기반, 순환 import 없음)

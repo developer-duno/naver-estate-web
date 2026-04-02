@@ -4,24 +4,25 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-02 — 크롤링 진행률 UI 전면 수정 (이중 크롤링 해결 + 진행률 배너 제거 + 타이머 기반 refetch)
+**마지막 작업**: 2026-04-03 — 공공데이터 API 통합 (에어코리아 대기질 + 응급의료기관) + crawl.py 레거시 삭제
 
 **다음 우선순위**:
 
-1. 백엔드 `/api/live/{no}/articles` 레거시 엔드포인트 정리 검토
+1. Phase 2: 어린이집/범죄통계 API 추가 (data.go.kr 키 확인 + CSV 포맷 확인 후)
 2. E2E 테스트 보강 (Playwright)
 3. 백엔드 스케줄러 DB 세션 관리 개선 (PendingRollbackError 방지)
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 498개 (54파일), BE 280개 — 전체 통과
+- 테스트 현황: FE 498개 (54파일), BE 293개 — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
+- 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED (backend/.env)
 
 ## 기술 스택
 
 - **Frontend**: Next.js 16 (App Router) + TypeScript + Tailwind CSS 4 + React Query (TanStack Query v5) + Recharts 3
-- **Backend**: FastAPI + SQLAlchemy 2.0 + curl_cffi + APScheduler
+- **Backend**: FastAPI + SQLAlchemy 2.0 + curl_cffi + requests + APScheduler
 - **DB**: Supabase (PostgreSQL) + Supabase Auth
 - **배포**: Vercel (frontend) + 집 서버 (backend, Cloudflare Tunnel)
 
@@ -36,6 +37,8 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
                 ↓ 실시간 크롤링 + 스케줄러
            [네이버 부동산 API] → [PostgreSQL (Supabase)]
            [국토교통부 공공데이터 API] ↗
+           [에어코리아 대기질 API] ↗
+           [응급의료기관 API (NEMC)] ↗
 ```
 
 **핵심**: 사전 크롤링이 아닌 **실시간 크롤링** — 사용자 검색 시 네이버 API 호출 → DB upsert → 결과 반환
@@ -59,7 +62,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 실거래 조회 → /api/mb/trades?sort_by= (지역별 실거래 내역, 정렬)
 지역 통계 → /api/mb/regions (인구/세대/미분양/시세)
 미분양 즐겨찾기 → localStorage (mb_favorites, 최대 200개, 토글)
-미분양 비교 → /mibunyang/compare?ids=id1,id2,... (useQueries 병렬 조회 + 17행 우위 판정 + 레이더차트 9축 동적선택(칩토글,최소3개) + 가중치프리셋3종(균등/투자형/실거주형)+슬라이더(1-5)+가중점수 + 분양가 막대차트 + 미분양추이 비교차트 + 인쇄 + URL복사 + 엑셀)
+미분양 비교 → /mibunyang/compare?ids=id1,id2,... (useQueries 병렬 조회 + 17행 우위 판정 + 레이더차트 11축 동적선택(칩토글,최소3개) + 가중치프리셋3종(균등/투자형/실거주형)+슬라이더(1-5)+가중점수 + 분양가 막대차트 + 미분양추이 비교차트 + 인쇄 + URL복사 + 엑셀)
 레이더 가중치 영속화 → localStorage (mb_radar_settings, 축선택+가중치, useMbRadarSettings 훅, 페이지 새로고침 시 유지)
 미분양 엑셀 → 클라이언트 xlsx (mb-export.ts, safeCellValue 재사용, 4개 탭+추이)
 미분양 지도 → Naver Maps v3 SDK (CDN, lat/lng null 시 미표시)
@@ -70,6 +73,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 미분양 중복 제거 → extract_base_name()으로 차수 접미사 제거, _deduplicate_apartments()로 마지막 차수만 유지
 미분양 시/군/구 목록 → /api/mb/gu-list?region= (DISTINCT gu, 시도별 구 목록)
 홈 → 미분양 바로가기 카드 (/mibunyang 링크)
+대기질 수집 → 스케줄러 매일 02:00 (에어코리아 API → infra 테이블 air_* 컬럼)
+응급의료 수집 → 스케줄러 매월 첫째 월 03:00 (NEMC API → infra 테이블 emergency_* 컬럼)
+레이더 차트 → 11축 (기존9 + airQuality + medical), 프리셋3종 + 슬라이더(1-5)
 ```
 
 ## 코딩 규칙
@@ -91,7 +97,7 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 | 파일 | 내용 |
 |------|------|
 | `.claude/rules/web-rules.md` | React/Next.js + FastAPI 코딩 규칙, DON'T 목록 |
-| `.claude/rules/testing.md` | 테스트 작성·실행 규칙, 구조표 (FE 506개, BE 280개) |
+| `.claude/rules/testing.md` | 테스트 작성·실행 규칙, 구조표 (FE 498개, BE 293개) |
 | `.claude/rules/planning.md` | /plan 모드 규칙, 교차검증 에이전트 5종 |
 | `.claude/rules/infra.md` | 서버 복구 절차, 스케줄러, 공유 인프라, DB 풀 |
 | `.claude/rules/codes.md` | 거래/매물유형 코드, 핵심 상수, localStorage 키 |

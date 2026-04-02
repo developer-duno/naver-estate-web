@@ -50,6 +50,8 @@ npx vercel --prod
 | 시세 이력 수집   | 수요일 4시             | 단지별 시세(매매/전세) 주간 수집                                       |
 | 인기 단지 크롤링 | 매일 10:30/14:30/19:00 | 자주 조회되는 단지 선제적 크롤링 (POPULAR_CRAWL_ENABLED)               |
 | 공공데이터 수집  | 토요일 5시             | 국토교통부 실거래가 API (PUBLIC_DATA_ENABLED, 매월 10일 토요일은 skip) |
+| 대기질 수집     | 매일 2시               | 에어코리아 API (AIR_QUALITY_ENABLED, 매월 10일 토요일은 skip)          |
+| 응급의료 수집   | 매월 첫째 월요일 3시   | NEMC 응급의료기관 API (EMERGENCY_ENABLED)                              |
 
 ## 공유 인프라 규칙 (mibunyang 프로젝트와 공유)
 
@@ -70,6 +72,8 @@ npx vercel --prod
 
 | 시간              | 프로젝트         | 작업                  | 실행일             |
 | ----------------- | ---------------- | --------------------- | ------------------ |
+| 02:00             | naver-estate-web | collect_air_quality   | 매일               |
+| 03:00 (첫째 월)   | naver-estate-web | collect_emergency     | 매월 첫째 월요일   |
 | 03:00             | naver-estate-web | discover_regions      | 일요일             |
 | 04:00             | naver-estate-web | collect_prices        | 수요일             |
 | 08:00             | mibunyang        | 로컬 naver-collect.py | 월/목              |
@@ -80,7 +84,7 @@ npx vercel --prod
 ### 공용 테이블 규칙 (같은 Supabase DB)
 
 - 공용: `complexes`, `articles`, `complex_price_history`, `trades` (양쪽 upsert)
-- mibunyang 전용: `apartments`, `unsold_history`, `regions`, `prices`, `trade_stats`, `builders`, `infra`, `schools`, `transport` (ORM: `db/mb_models.py`)
+- mibunyang 전용: `apartments`, `unsold_history`, `regions`, `prices`, `trade_stats`, `builders`, `infra`, `schools`, `transport`, `air_quality_stations` (ORM: `db/mb_models.py`)
 - **기존 컬럼 타입 변경/삭제 금지** — 컬럼 추가만 허용
 - ALTER/DROP 전 상대 프로젝트의 SELECT 쿼리/ORM 모델 검색 필수
 - 컬럼명 불일치 주의: naver-estate-web ORM은 `latitude`/`longitude`/`total_household_count`, mibunyang은 `lat`/`lng`/`total_households` (mb_models.py에서 mapped_column alias로 해결)

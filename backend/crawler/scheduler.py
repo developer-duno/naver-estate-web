@@ -24,6 +24,10 @@ POPULAR_CRAWL_ENABLED = os.getenv("POPULAR_CRAWL_ENABLED", "true").lower() == "t
 POPULAR_CRAWL_BATCH_SIZE = int(os.getenv("POPULAR_CRAWL_BATCH_SIZE", "100"))
 PUBLIC_DATA_ENABLED = os.getenv("PUBLIC_DATA_ENABLED", "false").lower() == "true"
 PUBLIC_DATA_BATCH_SIZE = int(os.getenv("PUBLIC_DATA_BATCH_SIZE", "300"))
+AIR_QUALITY_ENABLED = os.getenv("AIR_QUALITY_ENABLED", "false").lower() == "true"
+AIR_QUALITY_BATCH_SIZE = int(os.getenv("AIR_QUALITY_BATCH_SIZE", "100"))
+EMERGENCY_ENABLED = os.getenv("EMERGENCY_ENABLED", "false").lower() == "true"
+EMERGENCY_BATCH_SIZE = int(os.getenv("EMERGENCY_BATCH_SIZE", "100"))
 
 
 def create_scheduler() -> BackgroundScheduler:
@@ -109,5 +113,39 @@ def create_scheduler() -> BackgroundScheduler:
             misfire_grace_time=3600,
         )
         logger.info("공공데이터 실거래가 수집 활성화: 토요일 05:00 (배치 %d)", PUBLIC_DATA_BATCH_SIZE)
+
+    # G. 에어코리아 대기질 수집 — 매일 새벽 2시
+    if AIR_QUALITY_ENABLED:
+        from crawler.env_service import collect_air_quality
+
+        scheduler.add_job(
+            collect_air_quality,
+            "cron",
+            hour=2,
+            kwargs={"batch_size": AIR_QUALITY_BATCH_SIZE},
+            id="collect_air_quality",
+            name="에어코리아 대기질 수집",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        logger.info("에어코리아 대기질 수집 활성화: 매일 02:00 (배치 %d)", AIR_QUALITY_BATCH_SIZE)
+
+    # H. 응급의료기관 수집 — 매월 첫째 월요일 새벽 3시
+    if EMERGENCY_ENABLED:
+        from crawler.env_service import collect_emergency_data
+
+        scheduler.add_job(
+            collect_emergency_data,
+            "cron",
+            day="1-7",
+            day_of_week="mon",
+            hour=3,
+            kwargs={"batch_size": EMERGENCY_BATCH_SIZE},
+            id="collect_emergency",
+            name="응급의료기관 수집",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        logger.info("응급의료기관 수집 활성화: 매월 첫째 월요일 03:00 (배치 %d)", EMERGENCY_BATCH_SIZE)
 
     return scheduler

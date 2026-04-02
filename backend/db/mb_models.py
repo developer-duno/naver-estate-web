@@ -239,6 +239,19 @@ class Infra(Base):
     park_dist: Mapped[float | None] = mapped_column(Float)
     subway_dist: Mapped[float | None] = mapped_column(Float)
     nearby_facilities: Mapped[dict | None] = mapped_column(JSON)
+    # 응급의료기관 (V012)
+    emergency_hospital: Mapped[int | None] = mapped_column(Integer)
+    emergency_hospital_dist: Mapped[float | None] = mapped_column(Float)
+    emergency_beds: Mapped[int | None] = mapped_column(Integer)
+    emergency_level: Mapped[str | None] = mapped_column(Text)
+    # 대기질 — 에어코리아 (V012)
+    air_station_name: Mapped[str | None] = mapped_column(Text)
+    air_station_dist: Mapped[float | None] = mapped_column(Float)
+    air_pm10: Mapped[float | None] = mapped_column(Float)
+    air_pm25: Mapped[float | None] = mapped_column(Float)
+    air_o3: Mapped[float | None] = mapped_column(Float)
+    air_grade: Mapped[str | None] = mapped_column(Text)
+    air_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
@@ -273,4 +286,19 @@ class Transport(Base):
     subway_name: Mapped[str | None] = mapped_column(Text)
     subway_lines: Mapped[str | None] = mapped_column(Text)
     bus_stop_names: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+# ── 에어코리아 측정소 캐시 ───────────────────────────────────
+
+
+class AirQualityStation(Base):
+    """에어코리아 측정소 위치 캐시 — 근접 측정소 매칭용"""
+
+    __tablename__ = "air_quality_stations"
+
+    station_name: Mapped[str] = mapped_column(Text, primary_key=True)
+    address: Mapped[str | None] = mapped_column(Text)
+    lat: Mapped[float | None] = mapped_column(Float)
+    lng: Mapped[float | None] = mapped_column(Float)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)

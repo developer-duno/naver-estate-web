@@ -393,6 +393,19 @@ export interface MbInfra {
   park?: number;
   park_dist?: number;
   subway_dist?: number;
+  /** 응급의료기관 (V012) */
+  emergency_hospital?: number;
+  emergency_hospital_dist?: number;
+  emergency_beds?: number;
+  emergency_level?: string;
+  /** 대기질 — 에어코리아 (V012) */
+  air_station_name?: string;
+  air_station_dist?: number;
+  air_pm10?: number;
+  air_pm25?: number;
+  air_o3?: number;
+  air_grade?: string;
+  air_updated_at?: string;
 }
 
 /** 학군 정보 */

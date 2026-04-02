@@ -35,6 +35,8 @@ const AXES: AxisDef[] = [
   { key: "unsold", label: "미분양률", getValue: (a) => a.unsold_rate ?? 0, invert: true },
   { key: "pp", label: "평당가", getValue: (a) => a.presale_pp ?? 0, invert: true },
   { key: "far", label: "용적률", getValue: (a) => a.floor_area_ratio ?? 0, invert: true },
+  { key: "airQuality", label: "대기질", getValue: (a) => ({ "좋음": 100, "보통": 75, "나쁨": 40, "매우나쁨": 10 }[a.infra?.air_grade ?? ""] ?? 0) },
+  { key: "medical", label: "의료인프라", getValue: (a) => a.infra?.emergency_hospital ?? 0 },
 ];
 
 // ── 칩 스타일 ──
@@ -55,9 +57,9 @@ interface WeightPreset {
 }
 
 const WEIGHT_PRESETS: WeightPreset[] = [
-  { name: "균등", weights: { units: 3, parking: 3, maxFloor: 3, jeonse: 3, nearby: 3, discount: 3, unsold: 3, pp: 3, far: 3 } },
-  { name: "투자형", weights: { units: 2, parking: 1, maxFloor: 1, jeonse: 5, nearby: 5, discount: 5, unsold: 4, pp: 4, far: 1 } },
-  { name: "실거주형", weights: { units: 4, parking: 5, maxFloor: 3, jeonse: 2, nearby: 2, discount: 2, unsold: 3, pp: 3, far: 4 } },
+  { name: "균등", weights: { units: 3, parking: 3, maxFloor: 3, jeonse: 3, nearby: 3, discount: 3, unsold: 3, pp: 3, far: 3, airQuality: 3, medical: 3 } },
+  { name: "투자형", weights: { units: 2, parking: 1, maxFloor: 1, jeonse: 5, nearby: 5, discount: 5, unsold: 4, pp: 4, far: 1, airQuality: 2, medical: 1 } },
+  { name: "실거주형", weights: { units: 4, parking: 5, maxFloor: 3, jeonse: 2, nearby: 2, discount: 2, unsold: 3, pp: 3, far: 4, airQuality: 4, medical: 5 } },
 ];
 
 /** 현재 가중치가 프리셋과 일치하는지 판정 */

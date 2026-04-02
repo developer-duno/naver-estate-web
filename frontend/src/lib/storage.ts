@@ -280,8 +280,8 @@ export interface MbRadarSettings {
 
 /** 모든 축 활성, 가중치 3 (균등) */
 export const DEFAULT_RADAR_SETTINGS: MbRadarSettings = {
-  enabledAxes: ["units", "parking", "maxFloor", "jeonse", "nearby", "discount", "unsold", "pp", "far"],
-  weights: { units: 3, parking: 3, maxFloor: 3, jeonse: 3, nearby: 3, discount: 3, unsold: 3, pp: 3, far: 3 },
+  enabledAxes: ["units", "parking", "maxFloor", "jeonse", "nearby", "discount", "unsold", "pp", "far", "airQuality", "medical"],
+  weights: { units: 3, parking: 3, maxFloor: 3, jeonse: 3, nearby: 3, discount: 3, unsold: 3, pp: 3, far: 3, airQuality: 3, medical: 3 },
 };
 
 /** localStorage에서 레이더 설정 조회 — 방어적 merge로 새 축 자동 대응 */

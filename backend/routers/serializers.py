@@ -336,6 +336,19 @@ def infra_to_dict(i) -> dict:
         "park": i.park,
         "park_dist": i.park_dist,
         "subway_dist": i.subway_dist,
+        # 응급의료기관 (V012)
+        "emergency_hospital": i.emergency_hospital,
+        "emergency_hospital_dist": i.emergency_hospital_dist,
+        "emergency_beds": i.emergency_beds,
+        "emergency_level": i.emergency_level,
+        # 대기질 — 에어코리아 (V012)
+        "air_station_name": i.air_station_name,
+        "air_station_dist": i.air_station_dist,
+        "air_pm10": i.air_pm10,
+        "air_pm25": i.air_pm25,
+        "air_o3": i.air_o3,
+        "air_grade": i.air_grade,
+        "air_updated_at": i.air_updated_at.isoformat() if i.air_updated_at else None,
     }
 
 

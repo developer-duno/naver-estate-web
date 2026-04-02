@@ -16,6 +16,19 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+/** 대기질 등급 색상 뱃지 */
+const AIR_GRADE_STYLES: Record<string, string> = {
+  "좋음": "bg-green-100 text-green-800 border-green-300",
+  "보통": "bg-yellow-100 text-yellow-800 border-yellow-300",
+  "나쁨": "bg-orange-100 text-orange-800 border-orange-300",
+  "매우나쁨": "bg-red-100 text-red-800 border-red-300",
+};
+
+function AirGradeBadge({ grade }: { grade: string }) {
+  const style = AIR_GRADE_STYLES[grade] ?? "bg-gray-100 text-gray-600 border-gray-300";
+  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs border ${style}`}>{grade}</span>;
+}
+
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="bg-white rounded-lg shadow-sm border p-4 md:p-6">
@@ -152,6 +165,59 @@ export function EnvironmentSection({ apartment: a }: SectionProps) {
                 <dd className="text-sm">{infra.subway_dist}m</dd>
               </div>
             )}
+          </dl>
+        </div>
+      )}
+
+      {/* 대기질 — 에어코리아 */}
+      {infra?.air_grade && (
+        <div className="mb-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">대기질</h4>
+          <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="flex flex-col">
+              <dt className="text-xs text-gray-500">종합 등급</dt>
+              <dd className="text-sm"><AirGradeBadge grade={infra.air_grade} /></dd>
+            </div>
+            {infra.air_pm10 != null && (
+              <div className="flex flex-col">
+                <dt className="text-xs text-gray-500">PM10</dt>
+                <dd className="text-sm">{infra.air_pm10} <span className="text-gray-400">μg/m³</span></dd>
+              </div>
+            )}
+            {infra.air_pm25 != null && (
+              <div className="flex flex-col">
+                <dt className="text-xs text-gray-500">PM2.5</dt>
+                <dd className="text-sm">{infra.air_pm25} <span className="text-gray-400">μg/m³</span></dd>
+              </div>
+            )}
+            {infra.air_o3 != null && (
+              <div className="flex flex-col">
+                <dt className="text-xs text-gray-500">오존</dt>
+                <dd className="text-sm">{infra.air_o3} <span className="text-gray-400">ppm</span></dd>
+              </div>
+            )}
+            {infra.air_station_name && (
+              <div className="flex flex-col col-span-2">
+                <dt className="text-xs text-gray-500">측정소</dt>
+                <dd className="text-sm text-gray-600">
+                  {infra.air_station_name}
+                  {infra.air_station_dist != null && <span className="text-gray-400 ml-1">({infra.air_station_dist}m)</span>}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
+      )}
+
+      {/* 응급의료기관 */}
+      {infra?.emergency_hospital != null && (
+        <div className="mb-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">응급의료</h4>
+          <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <InfoRow label="기관 수 (3km)" value={`${infra.emergency_hospital}개`} />
+            <InfoRow label="최근접 거리" value={infra.emergency_hospital_dist != null ? `${infra.emergency_hospital_dist}m` : undefined} />
+            <InfoRow label="병상 수" value={infra.emergency_beds ? `${infra.emergency_beds}개` : undefined} />
+            <InfoRow label="기관 등급" value={infra.emergency_level || undefined} />
           </dl>
         </div>
       )}

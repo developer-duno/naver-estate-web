@@ -1,6 +1,27 @@
-# 세션 로그: 2026-04-03 (세션 12)
+# 세션 로그: 2026-04-03 (세션 12-2)
 
-## 완료 작업
+## 완료 작업 (세션 12-2)
+
+### 5. 어린이집 API 승인 확인
+- 결과: **아직 미승인** (HTTP 500 반복)
+- CHILDCARE_ENABLED=false 유지
+- data.go.kr에서 B553260/CpmsService 재신청 필요
+
+### 6. E2E Playwright 테스트 실서버 연동 (22개 전체 통과)
+- Playwright Chromium 브라우저 설치
+- **Turbopack UNC 경로 이슈 해결**: 네트워크 드라이브(Z:\)에서 Turbopack이 UNC 경로를 root 밖으로 판단 → `--webpack` 모드로 전환
+- 수정: `playwright.config.ts` (webServer command), `search-flow.spec.ts`, `mibunyang-flow.spec.ts`, `complex-detail.spec.ts`
+- React controlled input + Playwright 호환 이슈 → URL 직접 접근 방식으로 변경 (폼 제출은 단위 테스트에서 검증)
+
+### 7. 홈 페이지 키워드 검색 UI 제거
+- `page.tsx`에서 키워드 검색 입력 + 구분선 제거
+- 지역 선택만 남음
+- `/search?q=` URL은 히스토리/직접 접근 시 유지
+
+### 8. 미분양 상세 환경 데이터 UI — 이미 완료 확인
+- `MbDetailSections.tsx`의 `EnvironmentSection`에 대기질/응급의료/어린이집/범죄통계 모두 구현됨
+
+## 완료 작업 (세션 12)
 
 ### 1. PendingRollbackError 방지 (service.py + env_service.py)
 

@@ -4,19 +4,17 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-03 — Phase 2 후속: PendingRollbackError 방지 + 어린이집 sigungu 매핑 + 수집 트리거 UI
+**마지막 작업**: 2026-04-03 — Phase 2 후속: E2E 실서버 연동 22개 통과 + 홈 키워드 검색 제거 + 어린이집 API 미승인 확인
 
 **다음 우선순위**:
 
 1. data.go.kr "어린이집 정보 공개 포털" (B553260/CpmsService) 서비스 재신청 → 승인 후 CHILDCARE_ENABLED=true 전환
-2. E2E Playwright 테스트 실서버 연동 확인
-3. 프론트엔드 미분양 상세 페이지에 환경 데이터(대기질/응급의료/어린이집/범죄통계) 표시 UI 추가
-4. 백엔드 스케줄러 실행 로그 모니터링 대시보드
+2. 백엔드 스케줄러 실행 로그 모니터링 대시보드
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 503개 (55파일), BE 365개 — 전체 통과
+- 테스트 현황: FE 503개 (55파일), BE 365개, E2E 22개 — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
 - 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED, CHILDCARE_ENABLED, CRIME_STATS_ENABLED (backend/.env)
 - V013 마이그레이션 실행 완료 (Supabase SQL Editor, 2026-04-03)
@@ -25,6 +23,8 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 관리자 수집 API: `POST /api/admin/collect/{name}` (crime-stats/air-quality/emergency/childcare)
 - 관리자 대시보드 수집 트리거 UI 추가 완료 (CollectorTrigger 컴포넌트)
 - PendingRollbackError 방지: service.py 6곳 + env_service.py 1곳 db.rollback() 추가
+- E2E Playwright: 네트워크 드라이브(Z:\) Turbopack 호환 이슈 → `--webpack` 모드로 실행 (playwright.config.ts)
+- 홈 페이지 키워드 검색 UI 제거됨 (지역 선택만 남음, /search?q= URL은 유지)
 
 ## 기술 스택
 

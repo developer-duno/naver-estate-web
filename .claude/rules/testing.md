@@ -63,7 +63,7 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 | frontend/src/hooks/__tests__/ | Vitest | 15파일 (usePriceCollect+useFilterParams+useMbFavorites+useMbCompare+useMbSearchHistory+useMbCompareHistory+useMbCompareBookmarks+useMbRadarSettings+useLocalStorageList+useCompare+useFavorites+useSearchHistory+useSmartBack+useExport+useAdminToken) |
 | frontend/src/app/__tests__/ | Vitest | 4파일 (페이지 통합: search+mibunyang+mibunyang-detail+mibunyang-compare) |
 | **프론트 합계** | Vitest | **503개** (55파일, 13축 레이더 반영) |
-| frontend/e2e/ | Playwright | 13 (E2E) |
+| frontend/e2e/ | Playwright | 22 (E2E, --webpack 모드) |
 | backend/tests/ | pytest | 365 (단위+통합+API+엣지케이스+공유인프라+dialect분기+mibunyang+정렬/검색+중복제거+admin-email+환경데이터+어린이집+범죄통계+범죄통계API+sigungu매핑, 1 스킵) |
 
 ### React Query 테스트 패턴

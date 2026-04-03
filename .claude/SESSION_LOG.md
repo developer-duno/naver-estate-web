@@ -33,6 +33,11 @@
 - Playwright E2E는 안정성 위해 `--webpack` 유지
 - 관련 이슈: vercel/next.js#75113 (UNC path), vercel/next.js#81628 (filesystem path join)
 
+### 4. 백엔드 서버 재시작 + API 확인
+- 집 서버(192.168.219.101:8002) 재시작 완료
+- 스케줄러 12개 작업 정상 등록 확인 (로그)
+- `GET /scheduler-status` → 401 (인증 필요) 정상 응답 확인
+
 ## 커밋
 - `efb4983` feat: 스케줄러 모니터링 대시보드 + 환경수집 CrawlJob 기록
 

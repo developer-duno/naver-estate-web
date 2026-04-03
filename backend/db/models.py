@@ -140,6 +140,7 @@ class CrawlJob(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     job_type: Mapped[str] = mapped_column(String(30), nullable=False)
     target_id: Mapped[str | None] = mapped_column(String(50))
+    scheduler_job_id: Mapped[str | None] = mapped_column(String(50), index=True)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     total_items: Mapped[int] = mapped_column(Integer, default=0)
     processed_items: Mapped[int] = mapped_column(Integer, default=0)

@@ -4,7 +4,7 @@
 
 import type { Complex, Article, PyeongDetail, ArticleFilters, DbStats, Regions, PriceStats, PriceHistoryResponse, CrawlProgress, PriceCollectProgress } from "@/types";
 import * as direct from "@/lib/api-direct";
-import type { UserProfile, AuditLog, AdminSetting, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail } from "@/types/admin";
+import type { UserProfile, AuditLog, AdminSetting, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail, SchedulerStatusResponse } from "@/types/admin";
 
 export class ApiError extends Error {
   statusCode: number;
@@ -396,6 +396,11 @@ export async function deleteStaleData(token: string, days: number) {
     method: "DELETE",
     headers: adminHeaders(token),
   });
+}
+
+/** 관리자: 스케줄러 모니터링 상태 조회 */
+export async function getSchedulerStatus(token: string) {
+  return fetchApi<SchedulerStatusResponse>(`/api/admin/scheduler-status`, { headers: adminHeaders(token) });
 }
 
 /** 관리자: 데이터 수집 트리거 (동기 블로킹, 최대 120초) */

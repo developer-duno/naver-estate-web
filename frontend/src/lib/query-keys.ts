@@ -45,6 +45,7 @@ export const queryKeys = {
     auditLogs: (params?: Record<string, unknown>) =>
       ["admin", "auditLogs", params] as const,
     settings: () => ["admin", "settings"] as const,
+    schedulerStatus: () => ["admin", "schedulerStatus"] as const,
   },
 
   // 미분양 (mibunyang)

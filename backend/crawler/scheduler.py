@@ -32,6 +32,14 @@ CHILDCARE_ENABLED = os.getenv("CHILDCARE_ENABLED", "false").lower() == "true"
 CHILDCARE_BATCH_SIZE = int(os.getenv("CHILDCARE_BATCH_SIZE", "100"))
 CRIME_STATS_ENABLED = os.getenv("CRIME_STATS_ENABLED", "false").lower() == "true"
 
+# 모듈 레벨 스케줄러 참조 — admin API에서 다음 실행 시각 조회용
+_scheduler: BackgroundScheduler | None = None
+
+
+def get_scheduler() -> BackgroundScheduler | None:
+    """실행 중인 스케줄러 인스턴스 반환 (미실행 시 None)"""
+    return _scheduler
+
 
 def create_scheduler() -> BackgroundScheduler:
     """크롤러 스케줄러 생성 (BackgroundScheduler — 메인 스레드 차단 없음)"""
@@ -188,4 +196,6 @@ def create_scheduler() -> BackgroundScheduler:
         )
         logger.info("범죄통계 수집 활성화: 분기별 첫째 일요일 04:00")
 
+    global _scheduler
+    _scheduler = scheduler
     return scheduler

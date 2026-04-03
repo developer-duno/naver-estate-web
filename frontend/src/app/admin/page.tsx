@@ -5,6 +5,7 @@ import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import StatsCards from "@/components/admin/StatsCards";
 import CollectorTrigger from "@/components/admin/CollectorTrigger";
+import SchedulerMonitor from "@/components/admin/SchedulerMonitor";
 import { getAdminDetailedStats, getAdminAuditLogs, getAdminCrawlJobs } from "@/lib/api";
 import type { DetailedStats, AuditLog, CrawlJobDetail } from "@/types/admin";
 import type { PaginatedResponse } from "@/types/admin";
@@ -51,6 +52,10 @@ export default function AdminDashboard() {
       )}
 
       <StatsCards stats={stats} loading={loading} />
+
+      <div className="mt-6">
+        <SchedulerMonitor token={token} />
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
         {/* 실행 중인 크롤링 */}

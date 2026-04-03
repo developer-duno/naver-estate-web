@@ -9,8 +9,41 @@ from datetime import date, datetime
 
 from db.database import SessionLocal
 from db.mb_models import AirQualityStation, Apartment, Infra
+from db.models import CrawlJob
+from utils import utcnow
 
 logger = logging.getLogger(__name__)
+
+
+def _record_job(db, job_type: str, scheduler_job_id: str) -> CrawlJob:
+    """CrawlJob 레코드 생성 — 수집 시작 기록"""
+    job = CrawlJob(
+        job_type=job_type,
+        scheduler_job_id=scheduler_job_id,
+        status="running",
+        started_at=utcnow(),
+    )
+    db.add(job)
+    db.commit()
+    return job
+
+
+def _complete_job(db, job: CrawlJob, collected: int, failed: int):
+    """CrawlJob 완료 기록"""
+    job.status = "completed"
+    job.processed_items = collected
+    job.total_items = collected + failed
+    job.completed_at = utcnow()
+    db.commit()
+
+
+def _fail_job(db, job: CrawlJob, error: str):
+    """CrawlJob 실패 기록"""
+    db.rollback()
+    job.status = "failed"
+    job.error_message = error[:500]
+    job.completed_at = utcnow()
+    db.commit()
 
 
 def _is_skip_day() -> bool:
@@ -24,13 +57,20 @@ def collect_air_quality(batch_size: int = 100):
 
     측정소 캐시(air_quality_stations)를 활용하여 API 호출을 최소화한다.
     """
+    db = SessionLocal()
     if _is_skip_day():
         logger.info("[air_quality] 매월 10일 토요일 — 쿼터 보호를 위해 건너뜀")
+        job = _record_job(db, "air_quality", "collect_air_quality")
+        job.status = "cancelled"
+        job.error_message = "쿼터 보호 건너뜀 (매월 10일 토요일)"
+        job.completed_at = utcnow()
+        db.commit()
+        db.close()
         return
 
     from crawler.air_quality_api import AirQualityAPI
 
-    db = SessionLocal()
+    job = _record_job(db, "air_quality", "collect_air_quality")
     try:
         apts = db.query(Apartment.id, Apartment.latitude, Apartment.longitude).filter(
             Apartment.latitude.isnot(None),
@@ -80,7 +120,11 @@ def collect_air_quality(batch_size: int = 100):
                 failed += 1
 
         db.commit()
+        _complete_job(db, job, collected, failed)
         logger.info("[air_quality] 완료: %d 수집, %d 실패 (배치 %d)", collected, failed, batch_size)
+    except Exception as exc:
+        _fail_job(db, job, str(exc))
+        logger.exception("[air_quality] 수집 실패")
     finally:
         db.close()
 
@@ -90,11 +134,13 @@ def collect_emergency_data(batch_size: int = 100):
     from crawler.emergency_api import EmergencyAPI
 
     db = SessionLocal()
+    job = _record_job(db, "emergency", "collect_emergency")
     try:
         # 전국 응급의료기관 목록 (1회, ~400건)
         facilities = EmergencyAPI.get_emergency_list()
         if not facilities:
             logger.warning("[emergency] 응급의료기관 목록 조회 실패")
+            _complete_job(db, job, 0, 0)
             return
 
         logger.info("[emergency] 전국 %d개 응급의료기관 조회 완료", len(facilities))
@@ -123,20 +169,31 @@ def collect_emergency_data(batch_size: int = 100):
                 failed += 1
 
         db.commit()
+        _complete_job(db, job, collected, failed)
         logger.info("[emergency] 완료: %d 수집, %d 실패 (배치 %d)", collected, failed, batch_size)
+    except Exception as exc:
+        _fail_job(db, job, str(exc))
+        logger.exception("[emergency] 수집 실패")
     finally:
         db.close()
 
 
 def collect_childcare_data(batch_size: int = 100):
     """어린이집 수집 — 시군구별 어린이집 목록 1회 → 단지별 근접 매칭 (반경 1km)"""
+    db = SessionLocal()
     if _is_skip_day():
         logger.info("[childcare] 매월 10일 토요일 — 쿼터 보호를 위해 건너뜀")
+        job = _record_job(db, "childcare", "collect_childcare")
+        job.status = "cancelled"
+        job.error_message = "쿼터 보호 건너뜀 (매월 10일 토요일)"
+        job.completed_at = utcnow()
+        db.commit()
+        db.close()
         return
 
     from crawler.childcare_api import ChildcareAPI, resolve_sigungu_code
 
-    db = SessionLocal()
+    job = _record_job(db, "childcare", "collect_childcare")
     try:
         apts = db.query(
             Apartment.id, Apartment.latitude, Apartment.longitude,
@@ -189,7 +246,11 @@ def collect_childcare_data(batch_size: int = 100):
                 failed += 1
 
         db.commit()
+        _complete_job(db, job, collected, failed)
         logger.info("[childcare] 완료: %d 수집, %d 실패 (배치 %d)", collected, failed, batch_size)
+    except Exception as exc:
+        _fail_job(db, job, str(exc))
+        logger.exception("[childcare] 수집 실패")
     finally:
         db.close()
 
@@ -432,6 +493,7 @@ def collect_crime_stats():
 
     # 3) 인구수 조회 (regions 테이블, 최신 recorded_at 기준)
     db = SessionLocal()
+    job = _record_job(db, "crime_stats", "collect_crime_stats")
     try:
         from sqlalchemy import func
 
@@ -465,6 +527,7 @@ def collect_crime_stats():
         scored = CrimeStatsAPI.compute_scores(stats, population_map)
         if not scored:
             logger.warning("[crime] 점수 산출 실패 — CSV 폴백 시도")
+            _complete_job(db, job, 0, 0)
             load_crime_stats()
             return
 
@@ -501,12 +564,13 @@ def collect_crime_stats():
                 fallback_count += 1
 
         db.commit()
+        _complete_job(db, job, collected, skipped)
         logger.info(
             "[crime] 완료: %d 수집 (중앙값 폴백 %d), %d 건너뜀",
             collected, fallback_count, skipped,
         )
-    except Exception:
-        db.rollback()
+    except Exception as exc:
+        _fail_job(db, job, str(exc))
         logger.exception("[crime] 수집 실패")
     finally:
         db.close()

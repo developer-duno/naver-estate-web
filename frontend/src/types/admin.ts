@@ -77,3 +77,34 @@ export interface PaginatedResponse<T> {
   page: number;
   page_size: number;
 }
+
+/** 스케줄러 작업 마지막 실행 정보 */
+export interface SchedulerLastRun {
+  status: string;
+  started_at?: string;
+  completed_at?: string;
+  duration_seconds?: number;
+  total_items: number;
+  processed_items: number;
+  error_message?: string;
+}
+
+/** 스케줄러 작업별 상태 */
+export interface SchedulerJobStatus {
+  scheduler_job_id: string;
+  name: string;
+  schedule: string;
+  enabled: boolean;
+  last_run: SchedulerLastRun | null;
+  next_run_at?: string;
+  stats_24h: { runs: number; failures: number };
+}
+
+/** 스케줄러 모니터링 응답 */
+export interface SchedulerStatusResponse {
+  jobs: SchedulerJobStatus[];
+  summary: {
+    total_runs_today: number;
+    failures_today: number;
+  };
+}

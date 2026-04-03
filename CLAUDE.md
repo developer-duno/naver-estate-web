@@ -4,26 +4,28 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-03 — Phase 2 후속: E2E 실서버 연동 22개 통과 + 홈 키워드 검색 제거 + 어린이집 API 미승인 확인
+**마지막 작업**: 2026-04-03 — 스케줄러 모니터링 대시보드 구현 + 어린이집 API 미승인 재확인
 
 **다음 우선순위**:
 
 1. data.go.kr "어린이집 정보 공개 포털" (B553260/CpmsService) 서비스 재신청 → 승인 후 CHILDCARE_ENABLED=true 전환
-2. 백엔드 스케줄러 실행 로그 모니터링 대시보드
+2. 백엔드 서버 재시작 (새 코드 반영: scheduler-status API + env_service CrawlJob 기록)
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 503개 (55파일), BE 365개, E2E 22개 — 전체 통과
+- 테스트 현황: FE 511개 (56파일), BE 374개, E2E 22개 — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
 - 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED, CHILDCARE_ENABLED, CRIME_STATS_ENABLED (backend/.env)
-- V013 마이그레이션 실행 완료 (Supabase SQL Editor, 2026-04-03)
+- V014 마이그레이션 실행 완료 (Supabase SQL Editor, 2026-04-03): crawl_jobs.scheduler_job_id
 - 범죄통계 수집 완료: 1928/1928 (100%), crime_score/crime_grade 반영됨
 - 어린이집 API: HTTP 500 (서비스 미승인), CHILDCARE_ENABLED=false 유지, sigungu_code 매핑 완성
 - 관리자 수집 API: `POST /api/admin/collect/{name}` (crime-stats/air-quality/emergency/childcare)
-- 관리자 대시보드 수집 트리거 UI 추가 완료 (CollectorTrigger 컴포넌트)
+- 관리자 대시보드: StatsCards + SchedulerMonitor + CollectorTrigger (수집 트리거 + 모니터링)
+- 스케줄러 모니터링: `GET /api/admin/scheduler-status` (12개 작업 이력/통계/다음실행, 60초 자동갱신)
+- env_service 4개 수집 함수에 CrawlJob 기록 추가 (air/emergency/childcare/crime)
 - PendingRollbackError 방지: service.py 6곳 + env_service.py 1곳 db.rollback() 추가
-- E2E Playwright: 네트워크 드라이브(Z:\) Turbopack 호환 이슈 → `--webpack` 모드로 실행 (playwright.config.ts)
+- E2E Playwright: Turbopack dev 시작은 성공하나 안정성 위해 `--webpack` 모드 유지 (playwright.config.ts)
 - 홈 페이지 키워드 검색 UI 제거됨 (지역 선택만 남음, /search?q= URL은 유지)
 
 ## 기술 스택
@@ -87,6 +89,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 어린이집 수집 → 스케줄러 매월 첫째 목 06:00 (CPMS API → infra 테이블 childcare_* 컬럼)
 범죄통계 수집 → 스케줄러 분기별 첫째 일 04:00 (경찰청 odcloud API → infra 테이블 crime_* 컬럼, CSV 폴백)
 관리자 수집 트리거 → /admin 대시보드 CollectorTrigger 버튼 → POST /api/admin/collect/{name} (동기 120초)
+스케줄러 모니터링 → /admin 대시보드 SchedulerMonitor → GET /api/admin/scheduler-status (12개 작업, 60초 자동갱신)
 레이더 차트 → 13축 (기존9 + airQuality + medical + childcare + safety), 프리셋3종 + 슬라이더(1-5)
 ```
 

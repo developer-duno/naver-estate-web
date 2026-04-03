@@ -1,3 +1,43 @@
+# 세션 로그: 2026-04-03 (세션 13)
+
+## 완료 작업 (세션 13)
+
+### 1. 스케줄러 모니터링 대시보드 구현
+
+**변경 요약**: 관리자 대시보드에 스케줄러 실행 이력 모니터링 기능 추가
+
+**DB**: V014 마이그레이션 — `crawl_jobs.scheduler_job_id` 컬럼 추가 (인덱스 포함)
+
+**Backend (4파일)**:
+- `models.py`: CrawlJob에 scheduler_job_id 컬럼
+- `scheduler.py`: `get_scheduler()` 접근자 (다음 실행 시각 조회용)
+- `env_service.py`: 4개 수집 함수에 CrawlJob 기록 래핑 (air/emergency/childcare/crime), `_record_job`/`_complete_job`/`_fail_job` 헬퍼
+- `admin.py`: `GET /scheduler-status` 엔드포인트 — SCHEDULER_JOB_META 12개 작업, 최신 실행 이력, 24h 통계, 다음 실행 시각
+
+**Frontend (5파일)**:
+- `types/admin.ts`: SchedulerLastRun, SchedulerJobStatus, SchedulerStatusResponse
+- `api.ts`: getSchedulerStatus() 함수
+- `query-keys.ts`: admin.schedulerStatus() 키
+- `SchedulerMonitor.tsx`: 신규 컴포넌트 — 반응형 테이블, 60초 자동갱신, 상태 뱃지, 에러 펼침, OFF 뱃지
+- `admin/page.tsx`: SchedulerMonitor 통합 (StatsCards 아래)
+
+**테스트**: BE +9개 (374), FE +8개 (511)
+
+### 2. 어린이집 API 승인 재확인
+- data.go.kr B553260/CpmsService: **여전히 HTTP 500 (미승인)**
+- CHILDCARE_ENABLED=false 유지
+
+### 3. Turbopack 네트워크 드라이브 이슈 조사
+- `next dev --turbopack` → 시작 성공 (Ready in 10.4s)
+- 이전 이슈는 Next.js 16.1.6에서 개선된 것으로 추정
+- Playwright E2E는 안정성 위해 `--webpack` 유지
+- 관련 이슈: vercel/next.js#75113 (UNC path), vercel/next.js#81628 (filesystem path join)
+
+## 커밋
+- `efb4983` feat: 스케줄러 모니터링 대시보드 + 환경수집 CrawlJob 기록
+
+---
+
 # 세션 로그: 2026-04-03 (세션 12-2)
 
 ## 완료 작업 (세션 12-2)

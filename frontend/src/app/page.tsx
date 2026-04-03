@@ -18,7 +18,6 @@ import type { SearchHistoryItem } from "@/lib/storage";
 
 export default function HomePage() {
   const router = useRouter();
-  const [keyword, setKeyword] = useState("");
   const allCodes = ESTATE_TYPE_TABS.map((t) => t.code) as string[];
   const [selectedTypes, setSelectedTypes] = useState<string[]>(["APT"]);
   const [articleFilters, setArticleFilters] = useState<ArticleFilters>({});
@@ -34,15 +33,6 @@ export default function HomePage() {
   const typesParam = selectedTypes.length < allCodes.length
     ? `&types=${selectedTypes.join(",")}`
     : "";
-
-  const handleKeywordSearch = () => {
-    const q = keyword.trim();
-    if (!q) return;
-    addHistory({ type: "keyword", keyword: q });
-    const extra: Record<string, string> = { q };
-    if (typesParam) extra.types = selectedTypes.join(",");
-    router.push(buildFilterURL("/search", extra, articleFilters));
-  };
 
   const handleRegionSearch = (sido: string, sigungu: string, dong?: string) => {
     addHistory({ type: "region", sido, sigungu, dong });
@@ -99,43 +89,10 @@ export default function HomePage() {
         <FilterBar onChange={setArticleFilters} />
       </div>
 
-      {/* 검색 영역: 키워드 + 지역 선택 한 카드 */}
-      <div className="bg-white rounded-lg shadow-sm border p-4 space-y-4">
-        {/* 키워드 검색 */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1.5">키워드 검색</label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              aria-label="단지명 검색"
-              value={keyword}
-              onChange={(e) => setKeyword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleKeywordSearch()}
-              placeholder="단지명 검색 (예: 래미안, 힐스테이트, 강남...)"
-              maxLength={100}
-              className="flex-1 border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            <button
-              onClick={handleKeywordSearch}
-              className="bg-blue-600 text-white px-5 py-1.5 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
-            >
-              검색
-            </button>
-          </div>
-        </div>
-
-        {/* 구분선 */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 border-t border-gray-200" />
-          <span className="text-xs text-gray-400">또는</span>
-          <div className="flex-1 border-t border-gray-200" />
-        </div>
-
-        {/* 지역 선택 */}
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-1.5">지역 선택</label>
-          <RegionSelector onSearch={handleRegionSearch} />
-        </div>
+      {/* 검색 영역: 지역 선택 */}
+      <div className="bg-white rounded-lg shadow-sm border p-4">
+        <label className="block text-sm font-semibold text-gray-700 mb-1.5">지역 선택</label>
+        <RegionSelector onSearch={handleRegionSearch} />
       </div>
 
       {/* 미분양 현황 바로가기 */}

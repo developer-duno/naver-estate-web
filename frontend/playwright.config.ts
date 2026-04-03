@@ -9,7 +9,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   webServer: {
-    command: "npm run dev",
+    command: "npm run dev -- --webpack",
     port: 3000,
     reuseExistingServer: true,
   },

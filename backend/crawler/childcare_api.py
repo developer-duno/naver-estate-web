@@ -1,26 +1,131 @@
-"""어린이집 API — 보육정보공개시스템(CPMS) 어린이집 목록 + 근접 필터
+"""어린이집 API — 보육정보공개포털(api.childcare.go.kr) 전국 어린이집 정보 조회
 
-API 문서: https://www.data.go.kr/data/15004400/openapi.do
-시군구별 어린이집 목록을 조회하여 단지별 가장 가까운 어린이집을 매칭한다.
+API: http://api.childcare.go.kr/mediate/rest/cpmsapi021/cpmsapi021/request
+포털: https://info.childcare.go.kr
+인증: CHILDCARE_API_KEY 환경변수 (포털 활용신청 후 발급)
+
+기존 data.go.kr(B553260/CpmsService) API가 서비스 미제공으로 전환됨.
+보육정보공개포털 자체 OPEN API(cpmsapi021)를 사용한다.
 """
 
 import json
 import logging
+import os
+import threading
+import time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import requests as std_requests
+
 from crawler.emergency_api import haversine
-from crawler.public_data_base import BasePublicDataAPI
 
 logger = logging.getLogger(__name__)
 
-# 보육정보공개시스템 어린이집 조회 API
-CHILDCARE_LIST_URL = "https://apis.data.go.kr/B553260/CpmsService/getCpmsInfo"
+# 보육정보공개포털 전국 어린이집 정보 조회 API
+CHILDCARE_LIST_URL = (
+    "http://api.childcare.go.kr/mediate/rest/cpmsapi021/cpmsapi021/request"
+)
+
+MAX_RETRIES = 3
+RETRY_DELAYS = [2, 5, 10]
+REQUEST_TIMEOUT = 15
+MIN_REQUEST_INTERVAL = 0.3
 
 
-class ChildcareAPI(BasePublicDataAPI):
-    """어린이집 API — data.go.kr CPMS"""
+class ChildcareAPI:
+    """어린이집 API — api.childcare.go.kr (cpmsapi021)"""
 
-    _api_name = "childcare"
+    _lock = threading.Lock()
+    _last_request_time = 0.0
+    _session: std_requests.Session | None = None
+
+    @classmethod
+    def _get_session(cls) -> std_requests.Session:
+        with cls._lock:
+            if cls._session is None:
+                cls._session = std_requests.Session()
+            return cls._session
+
+    @classmethod
+    def _throttle(cls):
+        """요청 간 최소 간격 보장 (0.3초)"""
+        with cls._lock:
+            now = time.monotonic()
+            elapsed = now - cls._last_request_time
+            sleep_time = max(0, MIN_REQUEST_INTERVAL - elapsed)
+            cls._last_request_time = now + sleep_time
+        if sleep_time > 0:
+            time.sleep(sleep_time)
+
+    @classmethod
+    def _call_api(cls, params: dict) -> list[dict] | None:
+        """API 호출 + XML 파싱 → [{tag: text}, ...]"""
+        api_key = os.getenv("CHILDCARE_API_KEY")
+        if not api_key:
+            logger.warning("[childcare] CHILDCARE_API_KEY 미설정 — 건너뜀")
+            return None
+
+        params = {**params, "key": api_key}
+        headers = {"User-Agent": "Mozilla/5.0 NaverEstateWeb/1.0"}
+        session = cls._get_session()
+
+        for attempt in range(MAX_RETRIES):
+            cls._throttle()
+            try:
+                resp = session.get(
+                    CHILDCARE_LIST_URL,
+                    params=params,
+                    headers=headers,
+                    timeout=REQUEST_TIMEOUT,
+                )
+                if resp.status_code == 200:
+                    return cls._parse_xml(resp.text)
+                if resp.status_code == 429:
+                    delay = RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)]
+                    logger.info("[childcare] 429 — %d초 대기 후 재시도", delay)
+                    time.sleep(delay)
+                    continue
+                logger.warning(
+                    "[childcare] HTTP %d (시도 %d/%d)",
+                    resp.status_code,
+                    attempt + 1,
+                    MAX_RETRIES,
+                )
+            except Exception as e:
+                logger.warning(
+                    "[childcare] 요청 실패: %s (시도 %d/%d)",
+                    type(e).__name__,
+                    attempt + 1,
+                    MAX_RETRIES,
+                )
+
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)])
+
+        return None
+
+    @classmethod
+    def _parse_xml(cls, xml_text: str) -> list[dict]:
+        """XML 응답 → item 딕셔너리 리스트
+
+        표준 공공데이터 XML 구조:
+        <response><body><items><item><crname>...</crname>...</item></items></body></response>
+        """
+        try:
+            root = ET.fromstring(xml_text)
+        except ET.ParseError:
+            logger.warning("[childcare] XML 파싱 실패")
+            return []
+
+        items = []
+        for item_el in root.iter("item"):
+            item: dict[str, str] = {}
+            for child in item_el:
+                item[child.tag] = (child.text or "").strip()
+            if item:
+                items.append(item)
+        return items
 
     @classmethod
     def get_childcare_list(cls, sigungu_code: str) -> list[dict]:
@@ -32,51 +137,31 @@ class ChildcareAPI(BasePublicDataAPI):
         Returns:
             [{"name", "lat", "lng", "capacity", "current", "type_name"}, ...]
         """
-        all_items: list[dict] = []
-        page = 1
-        while True:
-            params = {
-                "sigunguCode": sigungu_code,
-                "numOfRows": "100",
-                "pageNo": str(page),
-            }
+        params = {
+            "arcode": sigungu_code,
+            "stcode": "",
+        }
 
-            data = cls.call_api(CHILDCARE_LIST_URL, params)
-            if not data:
-                break
+        raw_items = cls._call_api(params)
+        if not raw_items:
+            return []
 
-            body = (data.get("response") or {}).get("body") or {}
-            if not isinstance(body, dict):
-                break
-            items_wrapper = body.get("items") or {}
-            if not isinstance(items_wrapper, dict):
-                break
-            items = items_wrapper.get("item", [])
-            if isinstance(items, dict):
-                items = [items]
-            if not items:
-                break
+        result: list[dict] = []
+        for item in raw_items:
+            lat = _safe_float(item.get("la"))
+            lng = _safe_float(item.get("lo"))
+            if lat is None or lng is None:
+                continue
+            result.append({
+                "name": item.get("crname", ""),
+                "lat": lat,
+                "lng": lng,
+                "capacity": int(item.get("crcapat", 0) or 0),
+                "current": int(item.get("crcnfnt", 0) or 0),
+                "type_name": item.get("crtypename", ""),
+            })
 
-            for item in items:
-                lat = _safe_float(item.get("la"))
-                lng = _safe_float(item.get("lo"))
-                if lat is None or lng is None:
-                    continue
-                all_items.append({
-                    "name": item.get("crname", ""),
-                    "lat": lat,
-                    "lng": lng,
-                    "capacity": int(item.get("crcapat", 0) or 0),
-                    "current": int(item.get("crcnfnt", 0) or 0),
-                    "type_name": item.get("crtypename", ""),
-                })
-
-            total = int(body.get("totalCount", 0))
-            if len(all_items) >= total:
-                break
-            page += 1
-
-        return all_items
+        return result
 
     @classmethod
     def find_nearest(
@@ -110,6 +195,17 @@ class ChildcareAPI(BasePublicDataAPI):
             "nearest_name": nearest["name"],
             "nearest_capacity": nearest["capacity"],
         }
+
+    @classmethod
+    def reset(cls):
+        """세션 초기화"""
+        with cls._lock:
+            if cls._session:
+                try:
+                    cls._session.close()
+                except (OSError, RuntimeError):
+                    pass
+            cls._session = None
 
 
 def _safe_float(val) -> float | None:

@@ -65,9 +65,9 @@ export function PriceSection({ s, setDebounced, applyPreset }: Pick<SectionProps
       <div className={separator} />
       <p className={sectionLabel}>가격 직접입력 (만원)</p>
       <div className="flex items-center gap-1 mb-2">
-        <input type="number" min="0" value={s.minPrice} onChange={(e) => setDebounced("minPrice")(e.target.value)} className={inputCls} placeholder="최소" />
+        <input type="number" min="0" value={s.minPrice} onChange={(e) => setDebounced("minPrice")(e.target.value)} className={inputCls} placeholder="최소" aria-label="최소 매매가 (만원)" />
         <span className="text-xs text-gray-400">~</span>
-        <input type="number" min="0" value={s.maxPrice} onChange={(e) => setDebounced("maxPrice")(e.target.value)} className={inputCls} placeholder="최대" />
+        <input type="number" min="0" value={s.maxPrice} onChange={(e) => setDebounced("maxPrice")(e.target.value)} className={inputCls} placeholder="최대" aria-label="최대 매매가 (만원)" />
       </div>
 
       {(s.tradeType === "월세" || s.tradeType === "단기임대") && (
@@ -75,9 +75,9 @@ export function PriceSection({ s, setDebounced, applyPreset }: Pick<SectionProps
           <div className={separator} />
           <p className={sectionLabel}>월세 (만원)</p>
           <div className="flex items-center gap-1 mb-2">
-            <input type="number" min="0" value={s.minRent} onChange={(e) => setDebounced("minRent")(e.target.value)} className={inputCls} placeholder="최소" />
+            <input type="number" min="0" value={s.minRent} onChange={(e) => setDebounced("minRent")(e.target.value)} className={inputCls} placeholder="최소" aria-label="최소 월세 (만원)" />
             <span className="text-xs text-gray-400">~</span>
-            <input type="number" min="0" value={s.maxRent} onChange={(e) => setDebounced("maxRent")(e.target.value)} className={inputCls} placeholder="최대" />
+            <input type="number" min="0" value={s.maxRent} onChange={(e) => setDebounced("maxRent")(e.target.value)} className={inputCls} placeholder="최대" aria-label="최대 월세 (만원)" />
           </div>
         </>
       )}
@@ -89,9 +89,9 @@ export function PriceSection({ s, setDebounced, applyPreset }: Pick<SectionProps
           currentMin={s.minPpyeong} currentMax={s.maxPpyeong} onApply={applyPreset} />
       </div>
       <div className="flex items-center gap-1">
-        <input type="number" min="0" value={s.minPpyeong} onChange={(e) => setDebounced("minPpyeong")(e.target.value)} className={inputCls} placeholder="최소" />
+        <input type="number" min="0" value={s.minPpyeong} onChange={(e) => setDebounced("minPpyeong")(e.target.value)} className={inputCls} placeholder="최소" aria-label="최소 평당가 (만원/평)" />
         <span className="text-xs text-gray-400">~</span>
-        <input type="number" min="0" value={s.maxPpyeong} onChange={(e) => setDebounced("maxPpyeong")(e.target.value)} className={inputCls} placeholder="최대" />
+        <input type="number" min="0" value={s.maxPpyeong} onChange={(e) => setDebounced("maxPpyeong")(e.target.value)} className={inputCls} placeholder="최대" aria-label="최대 평당가 (만원/평)" />
       </div>
     </>
   );
@@ -119,9 +119,9 @@ export function AreaSection({ s, setDebounced, applyPreset, dispatch, emitChange
       <div className={separator} />
       <p className={sectionLabel}>직접 입력 ({s.areaUnit})</p>
       <div className="flex items-center gap-1">
-        <input type="number" min="0" value={s.minArea} onChange={(e) => setDebounced("minArea")(e.target.value)} className={inputCls} placeholder="최소" />
+        <input type="number" min="0" value={s.minArea} onChange={(e) => setDebounced("minArea")(e.target.value)} className={inputCls} placeholder="최소" aria-label={`최소 전용면적 (${s.areaUnit})`} />
         <span className="text-xs text-gray-400">~</span>
-        <input type="number" min="0" value={s.maxArea} onChange={(e) => setDebounced("maxArea")(e.target.value)} className={inputCls} placeholder="최대" />
+        <input type="number" min="0" value={s.maxArea} onChange={(e) => setDebounced("maxArea")(e.target.value)} className={inputCls} placeholder="최대" aria-label={`최대 전용면적 (${s.areaUnit})`} />
       </div>
     </>
   );
@@ -186,7 +186,7 @@ export function RoomSection({ s, setImmediate }: Pick<SectionProps, "s" | "setIm
   return (
     <>
       <p className={sectionLabel}>방 수</p>
-      <select value={s.minRooms} onChange={(e) => setImmediate("minRooms")(e.target.value)} className={selectCls}>
+      <select value={s.minRooms} onChange={(e) => setImmediate("minRooms")(e.target.value)} className={selectCls} aria-label="최소 방 수">
         <option value="0">전체</option>
         <option value="1">1+</option>
         <option value="2">2+</option>
@@ -195,7 +195,7 @@ export function RoomSection({ s, setImmediate }: Pick<SectionProps, "s" | "setIm
       </select>
       <div className="mt-3">
         <p className={sectionLabel}>욕실 수</p>
-        <select value={s.minBaths} onChange={(e) => setImmediate("minBaths")(e.target.value)} className={selectCls}>
+        <select value={s.minBaths} onChange={(e) => setImmediate("minBaths")(e.target.value)} className={selectCls} aria-label="최소 욕실 수">
           <option value="0">전체</option>
           <option value="1">1+</option>
           <option value="2">2+</option>
@@ -217,7 +217,7 @@ export function DetailSection({ s, setImmediate, setDebounced, applyPreset, disp
       {filterOptions && filterOptions.building_names.length > 0 && (
         <div>
           <p className={sectionLabel}>동</p>
-          <select value={s.buildingName} onChange={(e) => setImmediate("buildingName")(e.target.value)} className={selectCls}>
+          <select value={s.buildingName} onChange={(e) => setImmediate("buildingName")(e.target.value)} className={selectCls} aria-label="동 선택">
             <option value="전체">전체</option>
             {filterOptions.building_names.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
@@ -225,7 +225,7 @@ export function DetailSection({ s, setImmediate, setDebounced, applyPreset, disp
       )}
       <div>
         <p className={sectionLabel}>방향</p>
-        <select value={s.direction} onChange={(e) => setImmediate("direction")(e.target.value)} className={selectCls}>
+        <select value={s.direction} onChange={(e) => setImmediate("direction")(e.target.value)} className={selectCls} aria-label="방향 선택">
           {(filterOptions?.directions?.length ? ["전체", ...filterOptions.directions] : ["전체", "남향", "남동향", "남서향", "동향", "서향", "북향"]).map((d) => (
             <option key={d} value={d}>{d}</option>
           ))}
@@ -238,20 +238,20 @@ export function DetailSection({ s, setImmediate, setDebounced, applyPreset, disp
             currentMin={s.minMaint} currentMax={s.maxMaint} onApply={applyPreset} size="py-0.5" />
         </div>
         <div className="flex items-center gap-1">
-          <input type="number" min="0" value={s.minMaint} onChange={(e) => setDebounced("minMaint")(e.target.value)} className={inputCls} placeholder="최소" />
+          <input type="number" min="0" value={s.minMaint} onChange={(e) => setDebounced("minMaint")(e.target.value)} className={inputCls} placeholder="최소" aria-label="최소 관리비 (만원)" />
           <span className="text-xs text-gray-400">~</span>
-          <input type="number" min="0" value={s.maxMaint} onChange={(e) => setDebounced("maxMaint")(e.target.value)} className={inputCls} placeholder="최대" />
+          <input type="number" min="0" value={s.maxMaint} onChange={(e) => setDebounced("maxMaint")(e.target.value)} className={inputCls} placeholder="최대" aria-label="최대 관리비 (만원)" />
         </div>
       </div>
       <div>
         <p className={sectionLabel}>준공년도</p>
-        <select value={s.buildingAge} onChange={(e) => setImmediate("buildingAge")(e.target.value)} className={selectCls}>
+        <select value={s.buildingAge} onChange={(e) => setImmediate("buildingAge")(e.target.value)} className={selectCls} aria-label="준공년도 선택">
           {(BUILDING_AGE_OPTIONS as readonly { v: string; l: string }[]).map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
         </select>
       </div>
       <div>
         <p className={sectionLabel}>매물유형</p>
-        <select value={s.estateType} onChange={(e) => setImmediate("estateType")(e.target.value)} className={selectCls}>
+        <select value={s.estateType} onChange={(e) => setImmediate("estateType")(e.target.value)} className={selectCls} aria-label="매물유형 선택">
           <option value="all">전체</option>
           {ESTATE_TYPE_FILTER_OPTIONS.map((o) => (
             <option key={o.code} value={o.code}>{o.label}</option>
@@ -270,7 +270,7 @@ export function DetailSection({ s, setImmediate, setDebounced, applyPreset, disp
       <div className="border-t border-gray-200 my-2" />
       <div>
         <p className={sectionLabel}>정렬</p>
-        <select value={s.sortBy} onChange={(e) => setImmediate("sortBy")(e.target.value)} className={selectCls}>
+        <select value={s.sortBy} onChange={(e) => setImmediate("sortBy")(e.target.value)} className={selectCls} aria-label="정렬 기준">
           {(SORT_OPTIONS as readonly { v: string; l: string }[]).map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
         </select>
       </div>

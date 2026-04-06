@@ -4,22 +4,22 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-03 — 스케줄러 모니터링 대시보드 구현 + 백엔드 재시작 완료 + 어린이집 API 미승인
+**마지막 작업**: 2026-04-03 — 어린이집 API를 보육정보공개포털(api.childcare.go.kr) cpmsapi021로 전환
 
 **다음 우선순위**:
 
-1. data.go.kr "어린이집 정보 공개 포털" (B553260/CpmsService) 서비스 재신청 → 승인 후 CHILDCARE_ENABLED=true 전환
+1. info.childcare.go.kr cpmsapi021 활용신청 승인 대기 → 승인 후 CHILDCARE_API_KEY 설정 + CHILDCARE_ENABLED=true
 2. /admin 대시보드에서 스케줄러 모니터링 실사용 확인 (수집 실행 후 이력 표시)
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 511개 (56파일), BE 374개, E2E 22개 — 전체 통과
+- 테스트 현황: FE 511개 (56파일), BE 375개, E2E 22개 — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
 - 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED, CHILDCARE_ENABLED, CRIME_STATS_ENABLED (backend/.env)
 - V014 마이그레이션 실행 완료 (Supabase SQL Editor, 2026-04-03): crawl_jobs.scheduler_job_id
 - 범죄통계 수집 완료: 1928/1928 (100%), crime_score/crime_grade 반영됨
-- 어린이집 API: HTTP 500 (서비스 미승인), CHILDCARE_ENABLED=false 유지, sigungu_code 매핑 완성
+- 어린이집 API: data.go.kr → api.childcare.go.kr(cpmsapi021) 전환 완료, CHILDCARE_API_KEY 별도 필요, CHILDCARE_ENABLED=false 유지
 - 관리자 수집 API: `POST /api/admin/collect/{name}` (crime-stats/air-quality/emergency/childcare)
 - 관리자 대시보드: StatsCards + SchedulerMonitor + CollectorTrigger (수집 트리거 + 모니터링)
 - 스케줄러 모니터링: `GET /api/admin/scheduler-status` (12개 작업 이력/통계/다음실행, 60초 자동갱신)

@@ -503,7 +503,18 @@
       "Bash(curl -s --max-time 10 \"http://192.168.219.101:8002/api/mb/apartments?region=%EA%B2%BD%EA%B8%B0%EB%8F%84&page_size=3\")",
       "Bash(curl -s --max-time 10 \"http://192.168.219.101:8002/api/mb/apartments?region=%EB%8C%80%EA%B5%AC%EA%B4%91%EC%97%AD%EC%8B%9C&page_size=3\")",
       "Bash(curl -s --max-time 10 \"http://192.168.219.101:8002/api/mb/regions?region=%EC%84%9C%EC%9A%B8%ED%8A%B9%EB%B3%84%EC%8B%9C\")",
-      "Bash(curl -s --max-time 10 \"http://192.168.219.101:8002/health\")"
+      "Bash(curl -s --max-time 10 \"http://192.168.219.101:8002/health\")",
+      "Bash(ls -d */)",
+      "Bash(ls backend/*.py)",
+      "Bash(ls backend/routers/*.py)",
+      "Bash(ls backend/db/*.py)",
+      "Bash(ls frontend/src/lib/*.ts)",
+      "Bash(ls frontend/src/types/*.ts)",
+      "Bash(ls frontend/src/components/*.tsx)",
+      "Bash(ls frontend/src/components/filter/*.tsx)",
+      "Bash(ls frontend/src/components/admin/*.tsx)",
+      "Bash(ls frontend/src/components/mb/*.tsx)",
+      "Bash(ls frontend/src/hooks/*.ts)"
     ],
     "additionalDirectories": [
       "Z:\\cursor\\naver-estate-web\\frontend\\src\\components"

@@ -110,14 +110,14 @@ class TestSafeFloat:
 class TestSkipDay:
     """매월 10일 토요일 쿼터 보호 테스트"""
 
-    @patch("crawler.env_service.date")
+    @patch("crawler.env_common.date")
     def test_10일_토요일이면_skip(self, mock_date):
         mock_date.today.return_value = MagicMock(day=10, weekday=MagicMock(return_value=5))
         from crawler.env_service import _is_skip_day
 
         assert _is_skip_day() is True
 
-    @patch("crawler.env_service.date")
+    @patch("crawler.env_common.date")
     def test_10일_월요일이면_정상(self, mock_date):
         mock_date.today.return_value = MagicMock(day=10, weekday=MagicMock(return_value=0))
         from crawler.env_service import _is_skip_day

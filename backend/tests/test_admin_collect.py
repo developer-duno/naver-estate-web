@@ -51,7 +51,7 @@ def test_collect_regular_user_403(client, db):
 def test_collect_crime_stats_success(client, db):
     """범죄통계 수집 트리거 — 관리자 성공"""
     _make_profile(db, "a1", role="admin")
-    with patch("routers.admin._get_collector") as mock_get:
+    with patch("routers.admin.collect._get_collector") as mock_get:
         mock_fn = mock_get.return_value
         mock_fn.return_value = None
         res = client.post("/api/admin/collect/crime-stats", headers=_auth(_token("a1")))
@@ -64,7 +64,7 @@ def test_collect_crime_stats_success(client, db):
 def test_collect_air_quality_success(client, db):
     """대기질 수집 트리거 — 관리자 성공"""
     _make_profile(db, "a2", role="admin")
-    with patch("routers.admin._get_collector") as mock_get:
+    with patch("routers.admin.collect._get_collector") as mock_get:
         mock_fn = mock_get.return_value
         mock_fn.return_value = None
         res = client.post("/api/admin/collect/air-quality", headers=_auth(_token("a2")))
@@ -82,7 +82,7 @@ def test_collect_invalid_name_422(client, db):
 def test_collect_exception_500(client, db):
     """수집 중 예외 → 500"""
     _make_profile(db, "a4", role="admin")
-    with patch("routers.admin._get_collector") as mock_get:
+    with patch("routers.admin.collect._get_collector") as mock_get:
         mock_fn = mock_get.return_value
         mock_fn.side_effect = RuntimeError("API 장애")
         res = client.post("/api/admin/collect/crime-stats", headers=_auth(_token("a4")))

@@ -67,7 +67,7 @@ class TestParseAllowedTypes:
 
 # ── live_search 엔드포인트 테스트 ──
 
-SEARCH_PATCH = "routers.live.NaverEstateAPI.search_by_keyword"
+SEARCH_PATCH = "routers.live.search.NaverEstateAPI.search_by_keyword"
 
 
 class TestLiveSearch:

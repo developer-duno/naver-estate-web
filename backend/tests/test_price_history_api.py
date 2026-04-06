@@ -159,7 +159,7 @@ def _add_complex(db, no="C001"):
     return c
 
 
-@patch("routers.live.threading.Thread")
+@patch("routers.live.price.threading.Thread")
 def test_price_collect_200_started(mock_thread, client, db):
     """정상 수집 시작 → 200"""
     _add_user_profile(db, role="admin")
@@ -192,7 +192,7 @@ def test_price_collect_403_wrong_role(client, db):
     assert res.status_code == 403
 
 
-@patch("routers.live.threading.Thread")
+@patch("routers.live.price.threading.Thread")
 def test_price_collect_404_no_complex(mock_thread, client, db):
     """존재하지 않는 단지 → 404"""
     _add_user_profile(db, role="admin")
@@ -203,7 +203,7 @@ def test_price_collect_404_no_complex(mock_thread, client, db):
     assert res.status_code == 404
 
 
-@patch("routers.live.threading.Thread")
+@patch("routers.live.price.threading.Thread")
 def test_price_collect_409_already_running(mock_thread, client, db):
     """이미 수집 중 → 409"""
     _add_user_profile(db, role="admin")
@@ -220,7 +220,7 @@ def test_price_collect_409_already_running(mock_thread, client, db):
     assert res.status_code == 409
 
 
-@patch("routers.live.threading.Thread")
+@patch("routers.live.price.threading.Thread")
 def test_price_collect_429_quota_exceeded(mock_thread, client, db):
     """쿼터 초과 → 429"""
     from datetime import datetime, timedelta, timezone

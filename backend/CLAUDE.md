@@ -26,7 +26,11 @@
 | `auth/permissions.py` | 역할 체크 (require_role) + 일일 쿼터 (check_quota) |
 | `auth/rate_limiter.py` | IP 기반 요청 제한 |
 | `auth/audit.py` | 감사 로그 |
-| `crawler/service.py` | 크롤링 서비스 (시세 수집, 공공데이터, on-demand 수집) |
+| `crawler/service.py` | 크롤링 서비스 barrel re-export (기존 import 호환) |
+| `crawler/service_common.py` | 공통 헬퍼 (시세 upsert, 체크포인트) |
+| `crawler/service_discover.py` | 단지 발견 + 매물 수집 + 상세 보강 |
+| `crawler/service_price.py` | 시세 수집 (배치 + on-demand) |
+| `crawler/service_public.py` | 공공데이터 실거래가 수집 |
 | `crawler/scheduler.py` | APScheduler 스케줄 (매물/시세/공공데이터/인기단지) |
 | `crawler/public_data_api.py` | 국토교통부 공공데이터 API |
 | `crawler/utils.py` | AdaptiveThrottle, CheckpointManager |

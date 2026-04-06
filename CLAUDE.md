@@ -4,17 +4,17 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-06 — 🔴 백로그 3건 처리 + 거대 파일 분리 3종 (mibunyang 393→258줄 + ComplexInfo 391→187줄 + MbDetailSections 319→138줄)
+**마지막 작업**: 2026-04-06 — 백엔드 거대 파일 분리 7종 완료 (live 729→6모듈, admin 644→6모듈, env_service 636→7모듈, service 710→4모듈)
 
 **다음 우선순위**:
 
 1. info.childcare.go.kr cpmsapi021 활용신청 승인 대기 → 승인 후 CHILDCARE_API_KEY 설정 + CHILDCARE_ENABLED=true
-2. 백엔드 거대 파일 분리: live.py(729줄), admin.py(644줄), env_service.py(636줄)
+2. 핵심 서비스 테스트 추가 완료 (upsert 11 + enricher 5 + service_price 5 = 21개)
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 511개 (56파일), BE 375개, E2E 22개 — 전체 통과
+- 테스트 현황: FE 511개 (56파일), BE 396개, E2E 22개 — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
 - 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED, CHILDCARE_ENABLED, CRIME_STATS_ENABLED (backend/.env)
 - V014 마이그레이션 실행 완료 (Supabase SQL Editor, 2026-04-03): crawl_jobs.scheduler_job_id

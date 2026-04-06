@@ -4,12 +4,14 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-03 — 어린이집 API를 보육정보공개포털(api.childcare.go.kr) cpmsapi021로 전환
+**마지막 작업**: 2026-04-06 — 서버 자동 시작 스크립트 + npm audit fix + 차트 중복 제거 + 거대 파일 분리 + 접근성 개선
 
 **다음 우선순위**:
 
 1. info.childcare.go.kr cpmsapi021 활용신청 승인 대기 → 승인 후 CHILDCARE_API_KEY 설정 + CHILDCARE_ENABLED=true
-2. /admin 대시보드에서 스케줄러 모니터링 실사용 확인 (수집 실행 후 이력 표시)
+2. 🟡 readJSON 시그니처 통일 (storage.ts vs useLocalStorageList.ts) — 3회 반복 시 🔴 승격
+3. 🟡 api.ts 475줄 도메인별 분리 — 3회 반복 시 🔴 승격
+4. 🟡 CompareCharts 438줄 서브컴포넌트 분리 — 3회 반복 시 🔴 승격
 
 **주의사항**:
 
@@ -27,6 +29,13 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - PendingRollbackError 방지: service.py 6곳 + env_service.py 1곳 db.rollback() 추가
 - E2E Playwright: Turbopack dev 시작은 성공하나 안정성 위해 `--webpack` 모드 유지 (playwright.config.ts)
 - 홈 페이지 키워드 검색 UI 제거됨 (지역 선택만 남음, /search?q= URL은 유지)
+- 서버 자동 시작: scripts/startup_orchestrator.py (Windows Startup 폴더 BAT → pythonw.exe 백그라운드)
+- 자동 시작 흐름: uvicorn → health check → cloudflared tunnel → URL 추출 → Vercel env 업데이트 → 배포 → watchdog
+- Next.js 16.2.2로 업그레이드됨 (보안 패치: HTTP smuggling, CSRF)
+- 차트 유틸 통합: formatChartMonth, getCutoffMonth, CHART_PERIODS → lib/format.ts
+- MbFavoritesTab 컴포넌트 추출 (mibunyang/page.tsx 556→393줄)
+- useCrawlAction 훅 추출 (complex/[no]/page.tsx 455→363줄)
+- FilterSections aria-label 17개 추가 (접근성 WCAG 2.1 AA)
 
 ## 기술 스택
 

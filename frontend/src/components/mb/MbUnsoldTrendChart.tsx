@@ -5,6 +5,7 @@ import {
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import type { MbUnsoldHistory } from "@/types";
+import { formatChartMonth } from "@/lib/format";
 
 const SERIES_LABELS: Record<string, string> = {
   unsold: "미분양",
@@ -33,7 +34,7 @@ export default function MbUnsoldTrendChart({ items }: Props) {
     const sorted = [...items].sort((a, b) => a.base_month.localeCompare(b.base_month));
     const sliced = Number.isFinite(period) ? sorted.slice(-period) : sorted;
     return sliced.map((d) => ({
-      month: d.base_month.length >= 6 ? `${d.base_month.slice(2, 4)}.${d.base_month.slice(4, 6)}` : d.base_month,
+      month: formatChartMonth(d.base_month),
       unsold: d.unsold_count ?? 0,
       postCompletion: d.post_completion_unsold ?? 0,
       change: d.change ?? 0,

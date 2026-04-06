@@ -6,29 +6,10 @@ import {
   ResponsiveContainer, ComposedChart, Line,
 } from "recharts";
 import { COMPARE_COLORS } from "@/lib/constants";
-import { formatChartPrice } from "@/lib/format";
+import { formatChartPrice, formatChartMonth, getCutoffMonth, CHART_PERIODS, type PeriodKey } from "@/lib/format";
 import type { PriceHistoryItem } from "@/types";
 
-type PeriodKey = "6M" | "1Y" | "2Y" | "ALL";
-const PERIODS: { key: PeriodKey; label: string; months: number | null }[] = [
-  { key: "6M", label: "6개월", months: 6 },
-  { key: "1Y", label: "1년", months: 12 },
-  { key: "2Y", label: "2년", months: 24 },
-  { key: "ALL", label: "전체", months: null },
-];
-
 type TradeFilter = "both" | "maemae" | "jeonse";
-
-function getCutoffMonth(monthsBack: number): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() - monthsBack);
-  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function formatMonth(ym: string): string {
-  if (!ym || ym.length < 6) return ym;
-  return `${ym.slice(2, 4)}.${ym.slice(4, 6)}`;
-}
 
 interface Dataset {
   complexNo: string;
@@ -45,7 +26,7 @@ export default function ComparePriceTrendChart({ datasets }: Props) {
   const [tradeFilter, setTradeFilter] = useState<TradeFilter>("both");
 
   const { chartData, seriesKeys, latestBest } = useMemo(() => {
-    const sel = PERIODS.find((p) => p.key === period);
+    const sel = CHART_PERIODS.find((p) => p.key === period);
     const cutoff = sel?.months ? getCutoffMonth(sel.months) : null;
 
     // 모든 월 수집 + merge
@@ -58,7 +39,7 @@ export default function ComparePriceTrendChart({ datasets }: Props) {
         if (tradeFilter === "jeonse" && label !== "전세") continue;
 
         if (!monthMap.has(item.base_month)) {
-          monthMap.set(item.base_month, { month: formatMonth(item.base_month) });
+          monthMap.set(item.base_month, { month: formatChartMonth(item.base_month) });
         }
         const row = monthMap.get(item.base_month)!;
         const key = `${ds.complexNo}_${label}`;
@@ -133,7 +114,7 @@ export default function ComparePriceTrendChart({ datasets }: Props) {
           ))}
         </div>
         <div className="flex gap-1">
-          {PERIODS.map((p) => (
+          {CHART_PERIODS.map((p) => (
             <button
               key={p.key}
               onClick={() => setPeriod(p.key)}

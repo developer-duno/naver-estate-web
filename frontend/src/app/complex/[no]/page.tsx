@@ -1,14 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-import {
-  useQuery,
-  useQueryClient,
-  useMutation,
-  keepPreviousData,
-} from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import {
   getComplex,
   getArticles,
@@ -24,6 +19,7 @@ import { useSmartBack } from "@/hooks/useSmartBack";
 import { useExport } from "@/hooks/useExport";
 import { useFilterParams } from "@/hooks/useFilterParams";
 import { useFavoriteStatus } from "@/hooks/useFavorites";
+import { useCrawlAction } from "@/hooks/useCrawlAction";
 import type { Article, ArticleFilters, FilterOptions } from "@/types";
 import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
@@ -42,8 +38,6 @@ function formatTimeAgo(dateStr: string): string {
 
 export default function ComplexDetailPage() {
   const params = useParams();
-  const router = useRouter();
-  const queryClient = useQueryClient();
   const goBack = useSmartBack();
   const rawNo = params.no;
   const complexNo = Array.isArray(rawNo) ? rawNo[0] : rawNo ?? "";
@@ -51,6 +45,7 @@ export default function ComplexDetailPage() {
   // 필터/정렬/페이지 — URL을 단일 소스로 사용
   const { filters, page: currentPage, sortBy: activeSortBy, setFilters, setPage, setSortBy } = useFilterParams();
   const { starred, toggle: toggleFavorite } = useFavoriteStatus(complexNo);
+  const { crawling, message: crawlMessage, messageType: crawlMessageType, setMsg: setCrawlMsg, handleCrawl } = useCrawlAction(complexNo);
   const [selectedArticleNos, setSelectedArticleNos] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
@@ -58,7 +53,6 @@ export default function ComplexDetailPage() {
   const [filterError, setFilterError] = useState("");
   const [sessionToken, setSessionToken] = useState<string | undefined>(undefined);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
-  const crawlTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   // 브라우저 뒤로/앞으로 시에만 FilterBar 리마운트 (사용자 필터 변경 시에는 유지)
   const [navKey, setNavKey] = useState(0);
@@ -69,16 +63,6 @@ export default function ComplexDetailPage() {
   }, []);
 
   const { exporting, exportError, clearExportError, handleExport: doExport } = useExport();
-
-  const [crawling, setCrawling] = useState(false);
-  const [crawlMessage, setCrawlMessage] = useState("");
-  const [crawlMessageType, setCrawlMessageType] = useState<"info" | "error" | "success">("info");
-
-  // setCrawlMessage + type을 함께 설정하는 헬퍼
-  const setCrawlMsg = useCallback((text: string, type: "info" | "error" | "success" = "info") => {
-    setCrawlMessage(text);
-    setCrawlMessageType(type);
-  }, []);
 
   // ── useQuery: 단지 정보 ──
   const complexQuery = useQuery({
@@ -167,14 +151,6 @@ export default function ComplexDetailPage() {
     })();
   }, [complexNo, complexQuery.isSuccess, articlesQuery.isSuccess, pyeongQuery.isSuccess, setCrawlMsg]);
 
-  // 언마운트 시 크롤링 타이머 정리 (메모리 누수 방지)
-  useEffect(() => {
-    return () => {
-      crawlTimersRef.current.forEach(clearTimeout);
-      crawlTimersRef.current = [];
-    };
-  }, []);
-
   // 핸들러: 정렬 변경 → URL 업데이트 (page 리셋)
   const handleSortChange = useCallback(
     (newSortBy: string) => {
@@ -225,72 +201,6 @@ export default function ComplexDetailPage() {
   };
 
   const handleExport = () => doExport(complexNo, selectedArticleNos, filters);
-
-  // 수동 크롤링 (데이터 갱신 버튼) — useMutation
-  const crawlMutation = useMutation({
-    mutationFn: async () => {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new ApiError("로그인이 필요합니다", 401);
-      }
-      const crawlResult = await startLiveCrawl(complexNo, session.access_token);
-      return crawlResult;
-    },
-    onMutate: () => {
-      setCrawling(true);
-      setCrawlMsg("");
-    },
-    onSuccess: (crawlResult: { status: string }) => {
-      if (crawlResult.status === "cached") {
-        // 캐시 히트 — 크롤 불필요, 즉시 복원
-        setCrawling(false);
-        setCrawlMsg("최근 갱신된 데이터입니다", "success");
-        crawlTimersRef.current.push(setTimeout(() => setCrawlMessage(""), 3_000));
-        return;
-      }
-      setCrawlMsg("데이터 갱신 중...", "info");
-      // 백그라운드 크롤링 완료 후 데이터 자동 갱신 (10초, 20초, 30초 후 refetch)
-      [10_000, 20_000, 30_000].forEach((delay) => {
-        crawlTimersRef.current.push(setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo) });
-          queryClient.invalidateQueries({ queryKey: queryKeys.complex(complexNo) });
-          queryClient.invalidateQueries({ queryKey: queryKeys.pyeongDetails(complexNo) });
-          queryClient.invalidateQueries({ queryKey: queryKeys.priceStats(complexNo) });
-        }, delay));
-      });
-      // 30초 후 버튼 복원
-      crawlTimersRef.current.push(setTimeout(() => {
-        setCrawling(false);
-        setCrawlMessage("");
-      }, 30_000));
-    },
-    onError: (err: unknown) => {
-      if (err instanceof ApiError) {
-        if (err.statusCode === 401) {
-          router.push(`/login?redirect=${encodeURIComponent(`/complex/${complexNo}`)}`);
-          setCrawling(false);
-          return;
-        }
-        if (err.statusCode === 409) {
-          setCrawlMsg("이미 크롤링이 진행 중입니다.", "info");
-        } else if (err.statusCode === 403) {
-          setCrawlMsg("크롤링 권한이 없습니다.", "error");
-        } else if (err.statusCode === 429) {
-          setCrawlMsg("일일 크롤링 한도를 초과했습니다.", "error");
-        } else {
-          setCrawlMsg("데이터 갱신에 실패했습니다.", "error");
-        }
-      } else {
-        setCrawlMsg("데이터 갱신에 실패했습니다.", "error");
-      }
-      setCrawling(false);
-    },
-  });
-
-  const handleCrawl = () => {
-    crawlMutation.mutate();
-  };
 
   if (!complexNo || !/^\d+$/.test(complexNo)) {
     return (

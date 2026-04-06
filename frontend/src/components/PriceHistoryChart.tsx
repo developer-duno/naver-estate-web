@@ -6,30 +6,11 @@ import {
   ResponsiveContainer, ComposedChart, Line, Area,
 } from "recharts";
 import type { PriceHistoryItem } from "@/types";
-import { formatChartPrice } from "@/lib/format";
-
-function formatMonth(ym: string): string {
-  if (!ym || ym.length < 6) return ym;
-  return `${ym.slice(2, 4)}.${ym.slice(4, 6)}`;
-}
+import { formatChartPrice, formatChartMonth, getCutoffMonth, CHART_PERIODS, type PeriodKey } from "@/lib/format";
 
 interface ChartRow {
   month: string;
   [key: string]: string | number | [number, number] | null | undefined;
-}
-
-type PeriodKey = "6M" | "1Y" | "2Y" | "ALL";
-const PERIODS: { key: PeriodKey; label: string; months: number | null }[] = [
-  { key: "6M", label: "6개월", months: 6 },
-  { key: "1Y", label: "1년", months: 12 },
-  { key: "2Y", label: "2년", months: 24 },
-  { key: "ALL", label: "전체", months: null },
-];
-
-function getCutoffMonth(monthsBack: number): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() - monthsBack);
-  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 interface Props {
@@ -78,7 +59,7 @@ export default function PriceHistoryChart({ items }: Props) {
   const [period, setPeriod] = useState<PeriodKey>("ALL");
 
   const filteredItems = useMemo(() => {
-    const sel = PERIODS.find((p) => p.key === period);
+    const sel = CHART_PERIODS.find((p) => p.key === period);
     if (!sel?.months || !items?.length) return items;
     const cutoff = getCutoffMonth(sel.months);
     return items.filter((item) => item.base_month >= cutoff);
@@ -91,7 +72,7 @@ export default function PriceHistoryChart({ items }: Props) {
     for (const item of filteredItems) {
       const key = item.base_month;
       if (!monthMap.has(key)) {
-        monthMap.set(key, { month: formatMonth(key) });
+        monthMap.set(key, { month: formatChartMonth(key) });
       }
       const row = monthMap.get(key)!;
       const label = item.trade_type_label;
@@ -123,7 +104,7 @@ export default function PriceHistoryChart({ items }: Props) {
   return (
     <div role="img" aria-label="단지 가격 추이 차트">
       <div className="flex gap-1 mb-2 justify-end">
-        {PERIODS.map((p) => (
+        {CHART_PERIODS.map((p) => (
           <button
             key={p.key}
             onClick={() => setPeriod(p.key)}

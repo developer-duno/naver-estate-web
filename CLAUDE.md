@@ -4,7 +4,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-06 — 백엔드 거대 파일 분리 7종 완료 (live 729→6모듈, admin 644→6모듈, env_service 636→7모듈, service 710→4모듈)
+**마지막 작업**: 2026-04-06 — 백엔드 거대 파일 추가 분리 3종 완료 (formatter 715→5모듈, queries 566→5모듈, serializers 393→3모듈)
 
 **다음 우선순위**:
 
@@ -34,6 +34,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - FilterSections aria-label 17개 추가 (접근성 WCAG 2.1 AA)
 - api.ts 도메인 분리: lib/api/ (core/complex/articles/crawl/analytics/admin/mibunyang), barrel re-export 호환
 - 거대 파일 분리 완료 (세션 15): CompareCharts 438→170, mibunyang/page 393→258, ComplexInfo 391→187, MbDetailSections 319→138
+- 거대 파일 추가 분리 완료 (세션 17): price_school_formatter 715→5모듈(formatters/), queries 566→5모듈(db/), serializers 393→3모듈(routers/), barrel re-export 호환
 
 ## 기술 스택
 

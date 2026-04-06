@@ -14,11 +14,19 @@
 | `routers/stats.py` | 통계 API |
 | `routers/regions.py` | 지역 데이터 API |
 | `routers/users.py` | 사용자 로그인 기록 |
-| `routers/serializers.py` | ORM → dict 변환 (estate + mb) |
+| `routers/serializers.py` | ORM → dict 변환 barrel re-export (3모듈) |
+| `routers/estate_serializers.py` | Complex/Article ORM → dict |
+| `routers/filter_builder.py` | 필터 파라미터 → dict 변환 |
+| `routers/mb_serializers.py` | mibunyang ORM → dict (10개 모델) |
 | `routers/mb.py` | mibunyang 데이터 API (미분양/실거래/지역통계) |
 | `db/models.py` | SQLAlchemy ORM 모델 (estate) |
 | `db/mb_models.py` | mibunyang 테이블 ORM 모델 (같은 Base 상속) |
-| `db/queries.py` | DB 쿼리 함수 (estate) |
+| `db/queries.py` | DB 쿼리 barrel re-export (5모듈) |
+| `db/query_helpers.py` | 필터 조건 빌더 + 정렬 빌더 |
+| `db/complex_queries.py` | 단지 조회 쿼리 |
+| `db/article_queries.py` | 매물 조회 쿼리 (필터+정렬+페이지네이션) |
+| `db/price_queries.py` | 가격 이력/통계/추이 쿼리 |
+| `db/stats_queries.py` | DB 통계 + 필터 옵션 쿼리 |
 | `db/mb_queries.py` | mibunyang 읽기 쿼리 함수 |
 | `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V011) |
 | `shared/naver_api.py` | NaverEstateAPI (수정 금지) |
@@ -37,6 +45,12 @@
 | `services/cache.py` | TTLCache (동적/고정 TTL, delete_by_prefix) |
 | `services/upsert.py` | DB upsert 헬퍼 (_do_upsert: pg_insert/sqlite_insert 자동 분기) |
 | `services/enricher.py` | 단지 상세 정보 보강 |
+| `formatters/price_core.py` | 가격 포맷 코어 (format_price_value, format_price_data) |
+| `formatters/complex_area.py` | 단지/면적 HTML 포맷 |
+| `formatters/analysis.py` | 전세가율/대출분석 HTML 포맷 |
+| `formatters/school.py` | 학군 HTML 포맷 |
+| `formatters/area_price_detail.py` | 면적별 시세 상세 HTML 포맷 |
+| `price_school_formatter.py` | HTML 포맷 barrel re-export (5모듈) |
 
 ## 실거래가 on-demand 수집 (live.py)
 

@@ -35,3 +35,6 @@ dist/
 .claude/worktrees/
 .env.vercel
 .mcp.json
+scripts/startup.log
+scripts/backend.log
+scripts/cloudflared.log

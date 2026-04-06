@@ -152,7 +152,7 @@ class _FakeDate(_real_date):
         return cls._today
 
 
-@patch("crawler.service.SessionLocal")
+@patch("crawler.service_public.SessionLocal")
 def test_collect_public_trade_normal_saturday(mock_db_cls):
     """정상 토요일 (10일 아님) — 수집 실행"""
     _FakeDate._today = _real_date(2026, 3, 14)  # 토요일, 14일
@@ -173,7 +173,7 @@ def test_collect_public_trade_normal_saturday(mock_db_cls):
     mock_db_cls.assert_called()
 
 
-@patch("crawler.service.SessionLocal")
+@patch("crawler.service_public.SessionLocal")
 def test_collect_public_trade_10th_not_saturday(mock_db_cls):
     """10일이지만 토요일 아님 — 수집 실행"""
     _FakeDate._today = _real_date(2026, 3, 10)  # 화요일
@@ -193,7 +193,7 @@ def test_collect_public_trade_10th_not_saturday(mock_db_cls):
     mock_db_cls.assert_called()
 
 
-@patch("crawler.service.SessionLocal")
+@patch("crawler.service_public.SessionLocal")
 def test_collect_public_trade_10th_saturday_skip(mock_db_cls):
     """10일이고 토요일 — mibunyang building-info 쿼터 충돌로 skip"""
     _FakeDate._today = _real_date(2026, 1, 10)  # 토요일

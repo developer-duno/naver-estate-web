@@ -26,7 +26,7 @@ export interface FavoriteComplex {
 
 // ── 검색 히스토리 ──
 
-function readJSON<T>(key: string, fallback: T): T {
+export function readJSON<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
     const raw = localStorage.getItem(key);

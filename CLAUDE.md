@@ -4,14 +4,11 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-06 — 서버 자동 시작 스크립트 + npm audit fix + 차트 중복 제거 + 거대 파일 분리 + 접근성 개선
+**마지막 작업**: 2026-04-06 — 🔴 백로그 3건 승격 처리 (readJSON 통일 + CompareCharts 분리 + api.ts 도메인 ��리)
 
 **다음 우선순위**:
 
-1. info.childcare.go.kr cpmsapi021 활용신청 승인 대기 → 승인 후 CHILDCARE_API_KEY 설정 + CHILDCARE_ENABLED=true
-2. 🟡 readJSON 시그니처 통일 (storage.ts vs useLocalStorageList.ts) — 3회 반복 시 🔴 승격
-3. 🟡 api.ts 475줄 도메인별 분리 — 3회 반복 시 🔴 승격
-4. 🟡 CompareCharts 438줄 서브컴포넌트 분리 — 3회 반복 시 🔴 승격
+1. info.childcare.go.kr cpmsapi021 활��신청 승인 대기 → 승인 후 CHILDCARE_API_KEY 설정 + CHILDCARE_ENABLED=true
 
 **주의사항**:
 
@@ -35,7 +32,10 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 차트 유틸 통합: formatChartMonth, getCutoffMonth, CHART_PERIODS → lib/format.ts
 - MbFavoritesTab 컴포넌트 추출 (mibunyang/page.tsx 556→393줄)
 - useCrawlAction 훅 추출 (complex/[no]/page.tsx 455→363줄)
-- FilterSections aria-label 17개 추가 (접근성 WCAG 2.1 AA)
+- FilterSections aria-label 17개 ���가 (접���성 WCAG 2.1 AA)
+- readJSON 통일 완료: storage.ts에서 export, useLocalStorageList.ts는 import해서 사용
+- api.ts 도메인 분리 완료: lib/api/ 디렉토리 (core/complex/articles/crawl/analytics/admin/mibunyang), api.ts는 barrel re-export
+- CompareCharts 분리 완료: ChartAccordion + CompareAreaPriceTable + CompareMaintenanceTable + CompareUnitCompositionTable 추출 (438→170줄)
 
 ## 기술 스택
 

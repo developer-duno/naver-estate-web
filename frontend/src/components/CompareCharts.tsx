@@ -1,55 +1,20 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { getPriceHistory, getPriceStats, getPyeongDetails } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import { formatChartPrice } from "@/lib/format";
-import { getBestIndices } from "@/lib/compare-utils";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import ChartAccordion from "@/components/ChartAccordion";
 import CompareRadarChart from "@/components/CompareRadarChart";
 import ComparePriceTrendChart from "@/components/ComparePriceTrendChart";
 import ComparePriceBarChart from "@/components/ComparePriceBarChart";
 import CompareFloorChart from "@/components/CompareFloorChart";
+import CompareAreaPriceTable from "@/components/CompareAreaPriceTable";
+import CompareMaintenanceTable from "@/components/CompareMaintenanceTable";
+import CompareUnitCompositionTable from "@/components/CompareUnitCompositionTable";
 import type { Complex, PriceStats, PriceHistoryResponse, PyeongDetail } from "@/types";
-
-/* ── 아코디언 ── */
-
-function ChartAccordion({
-  title,
-  badge,
-  children,
-  defaultOpen = false,
-  forceOpen = false,
-}: {
-  title: string;
-  badge?: string;
-  children: React.ReactNode;
-  defaultOpen?: boolean;
-  forceOpen?: boolean;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  const isOpen = forceOpen || open;
-  return (
-    <div className="border rounded-lg overflow-hidden">
-      <button
-        onClick={() => setOpen(!open)}
-        aria-expanded={isOpen}
-        className="w-full flex justify-between items-center px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
-      >
-        <span className="font-semibold text-sm">{title}</span>
-        <div className="flex items-center gap-2">
-          {badge && (
-            <span className="text-xs text-green-600 font-bold">{badge}</span>
-          )}
-          <span className="text-gray-400 text-xs no-print">{isOpen ? "▲" : "▼"}</span>
-        </div>
-      </button>
-      {isOpen && <div className="p-4 border-t">{children}</div>}
-    </div>
-  );
-}
 
 /* ── Props ── */
 
@@ -58,232 +23,6 @@ interface Props {
   fullComplexes: Complex[];
   pricePerPyeong?: Record<string, number>;
   expandAll?: boolean;
-}
-
-/* ── 상세 테이블: 면적별 가격 ── */
-
-function AreaPriceTable({ datasets }: { datasets: { name: string; stats: PriceStats }[] }) {
-  // 모든 면적 라벨 수집
-  const allLabels = useMemo(() => {
-    const set = new Set<string>();
-    for (const ds of datasets) {
-      for (const a of ds.stats.by_area) set.add(a.label);
-    }
-    return Array.from(set).sort();
-  }, [datasets]);
-
-  if (allLabels.length === 0) return <p className="text-gray-500 text-sm">면적별 데이터 없음</p>;
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs border-collapse">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-2 py-1 text-left border">면적</th>
-            {datasets.map((ds) => (
-              <th key={ds.name} colSpan={2} className="px-2 py-1 text-center border">
-                {ds.name}
-              </th>
-            ))}
-          </tr>
-          <tr>
-            <th className="px-2 py-1 border" />
-            {datasets.map((ds) => (
-              <React.Fragment key={`${ds.name}-hd`}>
-                <th className="px-2 py-1 text-center border text-red-500">매매</th>
-                <th className="px-2 py-1 text-center border text-blue-500">전세</th>
-              </React.Fragment>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {allLabels.map((label) => {
-            // 매매 우위
-            const maemaeVals = datasets.map((ds) => {
-              const a = ds.stats.by_area.find((x) => x.label === label);
-              return a?.maemae ?? null;
-            });
-            const maeemaeBest = getBestIndices(maemaeVals, "higher");
-
-            // 전세 우위 (낮을수록 좋음? 아니, 높을수록 자산가치)
-            const jeonseVals = datasets.map((ds) => {
-              const a = ds.stats.by_area.find((x) => x.label === label);
-              return a?.jeonse ?? null;
-            });
-            const jeonseBest = getBestIndices(jeonseVals, "higher");
-
-            return (
-              <tr key={label}>
-                <td className="px-2 py-1 border font-medium">{label}</td>
-                {datasets.map((ds, di) => {
-                  const a = ds.stats.by_area.find((x) => x.label === label);
-                  const mVal = a?.maemae;
-                  const jVal = a?.jeonse;
-                  const mCnt = a?.maemae_count;
-                  const jCnt = a?.jeonse_count;
-                  return (
-                    <React.Fragment key={`${ds.name}-${label}`}>
-                      <td
-                        className={`px-2 py-1 border text-center ${maeemaeBest.includes(di) ? "bg-green-50 font-bold" : ""}`}
-                      >
-                        {mVal != null ? `${formatChartPrice(mVal)}${mCnt ? ` (${mCnt}건)` : ""}` : "-"}
-                      </td>
-                      <td
-                        className={`px-2 py-1 border text-center ${jeonseBest.includes(di) ? "bg-green-50 font-bold" : ""}`}
-                      >
-                        {jVal != null ? `${formatChartPrice(jVal)}${jCnt ? ` (${jCnt}건)` : ""}` : "-"}
-                      </td>
-                    </React.Fragment>
-                  );
-                })}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/* ── 상세 테이블: 관리비 ── */
-
-function MaintenanceTable({
-  datasets,
-}: {
-  datasets: { name: string; details: PyeongDetail[] }[];
-}) {
-  // 모든 평형 이름 수집
-  const allPyeongs = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const ds of datasets) {
-      for (const d of ds.details) {
-        if (!map.has(d.pyeong_no)) map.set(d.pyeong_no, d.pyeong_name || `${d.pyeong_no}평`);
-      }
-    }
-    return Array.from(map.entries()).sort(([a], [b]) => a - b);
-  }, [datasets]);
-
-  if (allPyeongs.length === 0) return <p className="text-gray-500 text-sm">관리비 데이터 없음</p>;
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs border-collapse">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-2 py-1 text-left border">평형</th>
-            {datasets.map((ds) => (
-              <th key={ds.name} className="px-2 py-1 text-center border">{ds.name}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {allPyeongs.map(([pyeongNo, pyeongName]) => {
-            const vals = datasets.map((ds) => {
-              const d = ds.details.find((x) => x.pyeong_no === pyeongNo);
-              return d?.avg_maintenance_cost ?? d?.latest_maintenance_cost ?? null;
-            });
-            const best = getBestIndices(vals, "lower"); // 낮을수록 우위
-
-            return (
-              <tr key={pyeongNo}>
-                <td className="px-2 py-1 border font-medium">{pyeongName}</td>
-                {datasets.map((ds, di) => {
-                  const d = ds.details.find((x) => x.pyeong_no === pyeongNo);
-                  const cost = d?.avg_maintenance_cost ?? d?.latest_maintenance_cost;
-                  const summer = d?.summer_maintenance_cost;
-                  const winter = d?.winter_maintenance_cost;
-                  return (
-                    <td
-                      key={`${ds.name}-${pyeongNo}`}
-                      className={`px-2 py-1 border text-center ${best.includes(di) ? "bg-green-50 font-bold" : ""}`}
-                    >
-                      {cost != null ? (
-                        <>
-                          {best.includes(di) && <span className="text-green-600 mr-1">★</span>}
-                          {cost.toLocaleString()}만
-                          {summer != null && winter != null && (
-                            <span className="text-gray-400 text-[10px] block">
-                              (여름 {summer.toLocaleString()} / 겨울 {winter.toLocaleString()})
-                            </span>
-                          )}
-                        </>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-/* ── 상세 테이블: 세대 구성 ── */
-
-function UnitCompositionTable({
-  datasets,
-}: {
-  datasets: { name: string; details: PyeongDetail[] }[];
-}) {
-  const allPyeongs = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const ds of datasets) {
-      for (const d of ds.details) {
-        if (!map.has(d.pyeong_no)) map.set(d.pyeong_no, d.pyeong_name || `${d.pyeong_no}평`);
-      }
-    }
-    return Array.from(map.entries()).sort(([a], [b]) => a - b);
-  }, [datasets]);
-
-  if (allPyeongs.length === 0) return <p className="text-gray-500 text-sm">세대 구성 데이터 없음</p>;
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs border-collapse">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-2 py-1 text-left border">평형</th>
-            {datasets.map((ds) => (
-              <th key={ds.name} colSpan={2} className="px-2 py-1 text-center border">{ds.name}</th>
-            ))}
-          </tr>
-          <tr>
-            <th className="px-2 py-1 border" />
-            {datasets.map((ds) => (
-              <React.Fragment key={`${ds.name}-uc`}>
-                <th className="px-2 py-1 text-center border">방/욕실</th>
-                <th className="px-2 py-1 text-center border">세대수</th>
-              </React.Fragment>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {allPyeongs.map(([pyeongNo, pyeongName]) => (
-            <tr key={pyeongNo}>
-              <td className="px-2 py-1 border font-medium">{pyeongName}</td>
-              {datasets.map((ds) => {
-                const d = ds.details.find((x) => x.pyeong_no === pyeongNo);
-                return (
-                  <React.Fragment key={`${ds.name}-${pyeongNo}`}>
-                    <td className="px-2 py-1 border text-center">
-                      {d?.room_count != null ? `${d.room_count}/${d.bathroom_count ?? "-"}` : "-"}
-                    </td>
-                    <td className="px-2 py-1 border text-center">
-                      {d?.household_count_by_pyeong ?? "-"}
-                    </td>
-                  </React.Fragment>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 /* ── 메인 컨테이너 ── */
@@ -334,13 +73,15 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
     })
     .filter(Boolean) as { complexNo: string; complexName: string; priceStats: PriceStats }[];
 
-  const pyeongDatasets = complexes
-    .map((c, i) => {
-      const data = pyeongQueries[i]?.data as { pyeong_details: PyeongDetail[] } | undefined;
-      if (!data?.pyeong_details?.length) return null;
-      return { name: c.complex_name, details: data.pyeong_details };
-    })
-    .filter(Boolean) as { name: string; details: PyeongDetail[] }[];
+  const pyeongDatasets = useMemo(() =>
+    complexes
+      .map((c, i) => {
+        const data = pyeongQueries[i]?.data as { pyeong_details: PyeongDetail[] } | undefined;
+        if (!data?.pyeong_details?.length) return null;
+        return { name: c.complex_name, details: data.pyeong_details };
+      })
+      .filter(Boolean) as { name: string; details: PyeongDetail[] }[],
+  [complexes, pyeongQueries]);
 
   return (
     <div className="space-y-4">
@@ -400,7 +141,7 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
             <div>
               <h3 className="text-sm font-semibold mb-2">면적별 가격</h3>
               {statsDatasets.length > 0 ? (
-                <AreaPriceTable
+                <CompareAreaPriceTable
                   datasets={statsDatasets.map((ds) => ({
                     name: ds.complexName,
                     stats: ds.priceStats,
@@ -415,7 +156,7 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
             <div>
               <h3 className="text-sm font-semibold mb-2">관리비 비교</h3>
               {pyeongDatasets.length > 0 ? (
-                <MaintenanceTable datasets={pyeongDatasets} />
+                <CompareMaintenanceTable datasets={pyeongDatasets} />
               ) : (
                 <p className="text-gray-500 text-sm">관리비 데이터 없음</p>
               )}
@@ -425,7 +166,7 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
             <div>
               <h3 className="text-sm font-semibold mb-2">세대 구성</h3>
               {pyeongDatasets.length > 0 ? (
-                <UnitCompositionTable datasets={pyeongDatasets} />
+                <CompareUnitCompositionTable datasets={pyeongDatasets} />
               ) : (
                 <p className="text-gray-500 text-sm">세대 구성 데이터 없음</p>
               )}

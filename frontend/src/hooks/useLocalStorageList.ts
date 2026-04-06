@@ -1,22 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { readJSON } from "@/lib/storage";
 
 /** localStorage 기반 리스트 관리 제네릭 훅 — useCompare, useMbCompare 공통 로직 */
 interface UseLocalStorageListConfig<T> {
   storageKey: string;
   getId: (item: T) => string;
   maxItems: number;
-}
-
-function readJSON<T>(key: string): T[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
 }
 
 export function useLocalStorageList<T>({
@@ -27,7 +18,7 @@ export function useLocalStorageList<T>({
   const [list, setList] = useState<T[]>([]);
 
   useEffect(() => {
-    setList(readJSON<T>(storageKey));
+    setList(readJSON<T[]>(storageKey, []));
   }, [storageKey]);
 
   const save = useCallback(
@@ -45,7 +36,7 @@ export function useLocalStorageList<T>({
 
   const add = useCallback(
     (item: T) => {
-      const current = readJSON<T>(storageKey);
+      const current = readJSON<T[]>(storageKey, []);
       if (current.length >= maxItems) return false;
       if (current.some((c) => getId(c) === getId(item))) return false;
       save([...current, item]);
@@ -56,7 +47,7 @@ export function useLocalStorageList<T>({
 
   const remove = useCallback(
     (id: string) => {
-      save(readJSON<T>(storageKey).filter((c) => getId(c) !== id));
+      save(readJSON<T[]>(storageKey, []).filter((c) => getId(c) !== id));
     },
     [storageKey, getId, save],
   );
@@ -68,7 +59,7 @@ export function useLocalStorageList<T>({
 
   const toggle = useCallback(
     (item: T) => {
-      const current = readJSON<T>(storageKey);
+      const current = readJSON<T[]>(storageKey, []);
       const exists = current.some((c) => getId(c) === getId(item));
       if (exists) {
         save(current.filter((c) => getId(c) !== getId(item)));

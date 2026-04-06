@@ -1,18 +1,13 @@
 "use client";
 
-import { useState, useCallback, useEffect, Suspense } from "react";
+import { useCallback, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { getMbApartments, getMbUnsold, getMbRegions, getMbTrades } from "@/lib/api";
 import MbRegionSelector from "@/components/mb/MbRegionSelector";
-import MbApartmentTable from "@/components/mb/MbApartmentTable";
-import MbRegionStatsTable from "@/components/mb/MbRegionStatsTable";
-import MbTradeTable from "@/components/mb/MbTradeTable";
-import Pagination from "@/components/Pagination";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { PAGE_SIZE } from "@/lib/constants";
-import { exportMbApartmentsToXlsx, exportMbRegionsToXlsx, exportMbTradesToXlsx } from "@/lib/mb-export";
 import { useMbCompare } from "@/hooks/useMbCompare";
 import { useMbFavorites } from "@/hooks/useMbFavorites";
 import { useMbSearchHistory } from "@/hooks/useMbSearchHistory";
@@ -22,6 +17,10 @@ import MbCompareFloatingBar from "@/components/mb/MbCompareFloatingBar";
 import MbSearchHistory from "@/components/mb/MbSearchHistory";
 import MbCompareHistory from "@/components/mb/MbCompareHistory";
 import MbFavoritesTab from "@/components/mb/MbFavoritesTab";
+import MbApartmentsTab from "@/components/mb/MbApartmentsTab";
+import MbUnsoldTab from "@/components/mb/MbUnsoldTab";
+import MbRegionsTab from "@/components/mb/MbRegionsTab";
+import MbTradesTab from "@/components/mb/MbTradesTab";
 import type { MbSearchHistoryItem, MbCompareHistoryItem, MbCompareBookmarkItem } from "@/lib/storage";
 
 const TABS = [
@@ -214,117 +213,39 @@ function MibunyangContent() {
         <>
           {/* 탭 콘텐츠 */}
           {tab === "apartments" && (
-            <TabContent
-              loading={apartmentsQuery.isLoading}
-              error={apartmentsQuery.error}
-              refetch={apartmentsQuery.refetch}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-gray-500">
-                  총 {apartmentsQuery.data?.total?.toLocaleString() ?? 0}개
-                </span>
-                <ExportButton
-                  disabled={!apartmentsQuery.data?.apartments?.length}
-                  onClick={() => exportMbApartmentsToXlsx(apartmentsQuery.data?.apartments ?? [])}
-                />
-              </div>
-              <MbApartmentTable
-                apartments={apartmentsQuery.data?.apartments ?? []}
-                startIndex={(page - 1) * PAGE_SIZE}
-                sort={sortBy}
-                onSortChange={handleSortChange}
-                isInCompare={compare.isInCompare}
-                onCompareToggle={(id, name) => compare.toggle({ id, name })}
-                compareFull={compare.isFull}
-              />
-              {apartmentsQuery.data && apartmentsQuery.data.total > PAGE_SIZE && (
-                <div className="mt-4">
-                  <Pagination
-                    currentPage={page}
-                    totalPages={Math.ceil(apartmentsQuery.data.total / PAGE_SIZE)}
-                    onPageChange={handlePageChange}
-                  />
-                </div>
-              )}
-            </TabContent>
+            <MbApartmentsTab
+              query={apartmentsQuery}
+              page={page}
+              sort={sortBy}
+              onSortChange={handleSortChange}
+              onPageChange={handlePageChange}
+              isInCompare={compare.isInCompare}
+              onCompareToggle={(id, name) => compare.toggle({ id, name })}
+              compareFull={compare.isFull}
+            />
           )}
 
           {tab === "unsold" && (
-            <TabContent
-              loading={unsoldQuery.isLoading}
-              error={unsoldQuery.error}
-              refetch={unsoldQuery.refetch}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-gray-500">
-                  미분양 {unsoldQuery.data?.total?.toLocaleString() ?? 0}개
-                </span>
-                <ExportButton
-                  disabled={!unsoldQuery.data?.unsold?.length}
-                  onClick={() => exportMbApartmentsToXlsx(unsoldQuery.data?.unsold ?? [])}
-                />
-              </div>
-              <MbApartmentTable
-                apartments={unsoldQuery.data?.unsold ?? []}
-                sort={sortBy}
-                onSortChange={handleSortChange}
-                isInCompare={compare.isInCompare}
-                onCompareToggle={(id, name) => compare.toggle({ id, name })}
-                compareFull={compare.isFull}
-              />
-            </TabContent>
+            <MbUnsoldTab
+              query={unsoldQuery}
+              sort={sortBy}
+              onSortChange={handleSortChange}
+              isInCompare={compare.isInCompare}
+              onCompareToggle={(id, name) => compare.toggle({ id, name })}
+              compareFull={compare.isFull}
+            />
           )}
 
-          {tab === "regions" && (
-            <TabContent
-              loading={regionsQuery.isLoading}
-              error={regionsQuery.error}
-              refetch={regionsQuery.refetch}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-gray-500">
-                  {regionsQuery.data?.regions?.length ?? 0}개 지역
-                </span>
-                <ExportButton
-                  disabled={!regionsQuery.data?.regions?.length}
-                  onClick={() => exportMbRegionsToXlsx(regionsQuery.data?.regions ?? [])}
-                />
-              </div>
-              <MbRegionStatsTable regions={regionsQuery.data?.regions ?? []} />
-            </TabContent>
-          )}
+          {tab === "regions" && <MbRegionsTab query={regionsQuery} />}
 
           {tab === "trades" && (
-            <TabContent
-              loading={tradesQuery.isLoading}
-              error={tradesQuery.error}
-              refetch={tradesQuery.refetch}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-gray-500">
-                  총 {tradesQuery.data?.total?.toLocaleString() ?? 0}건
-                </span>
-                <ExportButton
-                  disabled={!tradesQuery.data?.trades?.length}
-                  onClick={() => exportMbTradesToXlsx(tradesQuery.data?.trades ?? [])}
-                />
-              </div>
-              <MbTradeTable
-                trades={tradesQuery.data?.trades ?? []}
-                startIndex={(page - 1) * PAGE_SIZE}
-                sort={sortBy}
-                onSortChange={handleSortChange}
-              />
-              {tradesQuery.data && tradesQuery.data.total > PAGE_SIZE && (
-                <div className="mt-4">
-                  <Pagination
-                    currentPage={page}
-                    totalPages={Math.ceil(tradesQuery.data.total / PAGE_SIZE)}
-                    onPageChange={handlePageChange}
-                  />
-                </div>
-              )}
-            </TabContent>
+            <MbTradesTab
+              query={tradesQuery}
+              page={page}
+              sort={sortBy}
+              onSortChange={handleSortChange}
+              onPageChange={handlePageChange}
+            />
           )}
         </>
       )}
@@ -335,59 +256,3 @@ function MibunyangContent() {
   );
 }
 
-function TabContent({
-  loading,
-  error,
-  refetch,
-  children,
-}: {
-  loading: boolean;
-  error: Error | null;
-  refetch: () => void;
-  children: React.ReactNode;
-}) {
-  if (loading) return <LoadingSpinner message="데이터를 불러오는 중..." />;
-  if (error) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-red-600 mb-3">데이터를 불러오지 못했습니다.</p>
-        <button
-          onClick={refetch}
-          className="text-sm text-blue-600 hover:underline"
-        >
-          다시 시도
-        </button>
-      </div>
-    );
-  }
-  return <>{children}</>;
-}
-
-function ExportButton({ disabled, onClick }: { disabled: boolean; onClick: () => Promise<void> }) {
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const handle = async () => {
-    setBusy(true);
-    setFailed(false);
-    try {
-      await onClick();
-    } catch {
-      setFailed(true);
-      setTimeout(() => setFailed(false), 3000);
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <button
-      type="button"
-      disabled={disabled || busy}
-      onClick={handle}
-      className={`text-xs px-3 py-1 rounded border text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed ${
-        failed ? "border-red-400 text-red-500" : "border-gray-300"
-      }`}
-    >
-      {busy ? "다운로드 중..." : failed ? "실패" : "엑셀"}
-    </button>
-  );
-}

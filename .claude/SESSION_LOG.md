@@ -1,48 +1,48 @@
-# 세션 로그: 2026-04-06 (세션 14)
+# 세션 로그: 2026-04-06 (세션 15)
 
 ## 완료 작업
 
-### 1. 집 서버 복구 + 자동 시작 스크립트
-- 백엔드 서버 pip install + uvicorn 실행
-- cloudflared 터널 설정 (경로: WinGet Links)
-- Vercel 환경변수 업데이트 + 프로덕션 배포
-- **scripts/startup_orchestrator.py** 작성 — 컴퓨터 시작 시 전 과정 자동화
-- Windows Startup 폴더에 BAT 런처 배치
-- 수동 테스트 통과 (서버→터널→Vercel 배포 완료 확인)
+### 1. 🔴 백로그 3건 승격 처리
+3회 반복 확인 후 🔴 승격 → 즉시 해결:
+- **readJSON 시그니처 통일**: storage.ts에서 export, useLocalStorageList.ts 중복 제거
+- **api.ts 도메인 분리**: 476줄 → lib/api/ 7개 모듈 + barrel re-export (5줄)
+- **CompareCharts 분리**: 438→170줄, 4개 컴포넌트 추출 (ChartAccordion, CompareAreaPriceTable, CompareMaintenanceTable, CompareUnitCompositionTable)
 
-### 2. npm audit fix + Next.js 보안 업데이트
-- npm audit 5 → 1 취약점 감소 (brace-expansion, flatted, picomatch 해결)
-- next 16.1.6 → 16.2.2 (HTTP smuggling, CSRF 수정)
-- xlsx 1건은 패치 불가 (대체 라이브러리 검토 백로그)
-
-### 3. 차트 중복 코드 제거
-- formatChartMonth, getCutoffMonth, CHART_PERIODS → lib/format.ts 통합
-- PriceHistoryChart, ComparePriceTrendChart, MbUnsoldTrendChart 3개 파일에서 중복 제거
-
-### 4. 거대 파일 분리
-- mibunyang/page.tsx 556→393줄: FavoritesContent → MbFavoritesTab 컴포넌트 추출
-- complex/[no]/page.tsx 455→363줄: 크롤 뮤테이션 → useCrawlAction 훅 추출
-
-### 5. 접근성 개선
-- FilterSections.tsx: 17개 input/select에 aria-label 추가 (WCAG 2.1 AA)
+### 2. 거대 파일 분리 3종
+- **mibunyang/page.tsx** 393→258줄: MbTabContent, MbApartmentsTab, MbUnsoldTab, MbRegionsTab, MbTradesTab 5개 추출
+- **ComplexInfo.tsx** 391→187줄: ComplexBasicInfo, ComplexPyeongCard (PyeongDetailsList), ComplexPriceFloorTab 3개 추출
+- **MbDetailSections.tsx** 319→138줄: MbEnvironmentSection 추출 + re-export 호환
 
 ## 검증 결과
 - tsc: 0 에러
-- lint: 0 에러/경고
-- 테스트: FE 511개 전체 통과 (56 파일)
-- console.log 잔재: 0건
+- lint: 0 에러 (warning 2, 기존)
+- 테스트: FE 511개 전체 통과 (56파일)
+- console.log 잔재: 0건 (warn 4건은 의도적 에러 방어)
+- TODO/FIXME: 0건
 
-## 커밋 (3개)
-1. `feat: 컴퓨터 시작 시 백엔드+터널+Vercel 자동 배포 스크립트`
-2. `refactor: npm audit fix + 차트 중복 제거 + 거대 파일 분리`
-3. `fix(a11y): FilterSections 17개 input/select에 aria-label 추가`
+## 커밋 (5개)
+1. `refactor: readJSON 통일 + CompareCharts 서브컴포넌트 분리 + api.ts 도메인별 분리`
+2. `refactor(mb): mibunyang 페이지 탭 컴포넌트 분리 (393→258줄)`
+3. `refactor: ComplexInfo 내부 컴포넌트 추출 (391→187줄)`
+4. `refactor(mb): MbEnvironmentSection 추출, MbDetailSections 319→138줄`
+5. `docs: 거대 파일 분리 완료 기록`
 
-## 개선 분석 (2회 실행)
-- 1차: 🔴 4건 발견 → 모두 해결
-- 2차: 🔴 1건 발견 → 해결 (접근성)
-- 🟡 백로그 5건 등록 (readJSON 통일, api.ts 분리, CompareCharts 분리, ComplexInfo 분리, xlsx 대체)
+## 신규 파일 (19개)
+- lib/api/: core.ts, complex.ts, articles.ts, crawl.ts, analytics.ts, admin.ts, mibunyang.ts, index.ts
+- components/: ChartAccordion, CompareAreaPriceTable, CompareMaintenanceTable, CompareUnitCompositionTable, ComplexBasicInfo, ComplexPyeongCard, ComplexPriceFloorTab
+- components/mb/: MbTabContent, MbApartmentsTab, MbUnsoldTab, MbRegionsTab, MbTradesTab, MbEnvironmentSection
+
+## 줄 수 감소 총계
+| 파일 | Before | After | 감소 |
+|------|--------|-------|------|
+| api.ts | 476 | 5 | -471 |
+| CompareCharts.tsx | 438 | 170 | -268 |
+| mibunyang/page.tsx | 393 | 258 | -135 |
+| ComplexInfo.tsx | 391 | 187 | -204 |
+| MbDetailSections.tsx | 319 | 138 | -181 |
+| **합계** | **2017** | **758** | **-1259** |
 
 ## 다음 세션 참고
-- 🟡 readJSON/api.ts/CompareCharts 3건은 2회 반복 지적됨 → 3회째 🔴 승격
-- 어린이집 API 승인 대기 중
-- Startup BAT는 C:\Users\user\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\startup-server.bat
+- 어린이집 API 승인 대기 중 (CHILDCARE_ENABLED=false)
+- 백엔드 거대 파일 분리 후보: live.py(729), admin.py(644), env_service.py(636)
+- 프론트엔드 300줄 초과 잔여: complex/[no]/page.tsx(365), search/page.tsx(348), mibunyang/page.tsx(258 — OK)

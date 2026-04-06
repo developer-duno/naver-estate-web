@@ -8,7 +8,8 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 **다음 우선순위**:
 
-1. info.childcare.go.kr cpmsapi021 활��신청 승인 대기 → 승인 후 CHILDCARE_API_KEY 설정 + CHILDCARE_ENABLED=true
+1. info.childcare.go.kr cpmsapi021 활용신청 승인 대기 → 승인 후 CHILDCARE_API_KEY 설정 + CHILDCARE_ENABLED=true
+2. 백엔드 거대 파일 분리: live.py(729줄), admin.py(644줄), env_service.py(636줄)
 
 **주의사항**:
 
@@ -30,15 +31,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 자동 시작 흐름: uvicorn → health check → cloudflared tunnel → URL 추출 → Vercel env 업데이트 → 배포 → watchdog
 - Next.js 16.2.2로 업그레이드됨 (보안 패치: HTTP smuggling, CSRF)
 - 차트 유틸 통합: formatChartMonth, getCutoffMonth, CHART_PERIODS → lib/format.ts
-- MbFavoritesTab 컴포넌트 추출 (mibunyang/page.tsx 556→393줄)
-- useCrawlAction 훅 추출 (complex/[no]/page.tsx 455→363줄)
-- FilterSections aria-label 17개 ���가 (접���성 WCAG 2.1 AA)
-- readJSON 통일 완료: storage.ts에서 export, useLocalStorageList.ts는 import해서 사용
-- api.ts 도메인 분리 완료: lib/api/ 디렉토리 (core/complex/articles/crawl/analytics/admin/mibunyang), api.ts는 barrel re-export
-- CompareCharts 분리 완료: ChartAccordion + CompareAreaPriceTable + CompareMaintenanceTable + CompareUnitCompositionTable 추출 (438→170줄)
-- mibunyang/page.tsx 탭 분리 완료: MbTabContent + MbApartmentsTab + MbUnsoldTab + MbRegionsTab + MbTradesTab (393→258줄)
-- ComplexInfo 분리 완료: ComplexBasicInfo + ComplexPyeongCard + ComplexPriceFloorTab 추출 (391→187줄)
-- MbDetailSections 분리 완료: MbEnvironmentSection 추출 + re-export 호환 (319→138줄)
+- FilterSections aria-label 17개 추가 (접근성 WCAG 2.1 AA)
+- api.ts 도메인 분리: lib/api/ (core/complex/articles/crawl/analytics/admin/mibunyang), barrel re-export 호환
+- 거대 파일 분리 완료 (세션 15): CompareCharts 438→170, mibunyang/page 393→258, ComplexInfo 391→187, MbDetailSections 319→138
 
 ## 기술 스택
 
@@ -124,7 +119,7 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 | 파일 | 내용 |
 |------|------|
 | `.claude/rules/web-rules.md` | React/Next.js + FastAPI 코딩 규칙, DON'T 목록 |
-| `.claude/rules/testing.md` | 테스트 작성·실행 규칙, 구조표 (FE 503개, BE 365개) |
+| `.claude/rules/testing.md` | 테스트 작성·실행 규칙, 구조표 (FE 511개, BE 374개) |
 | `.claude/rules/planning.md` | /plan 모드 규칙, 교차검증 에이전트 5종 |
 | `.claude/rules/infra.md` | 서버 복구 절차, 스케줄러, 공유 인프라, DB 풀 |
 | `.claude/rules/codes.md` | 거래/매물유형 코드, 핵심 상수, localStorage 키 |

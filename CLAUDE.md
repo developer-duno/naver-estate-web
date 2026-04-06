@@ -4,7 +4,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-06 — 🔴 백로그 3건 승격 처리 (readJSON 통일 + CompareCharts 분리 + api.ts 도메인 ��리)
+**마지막 작업**: 2026-04-06 — 🔴 백로그 3건 처리 + 거대 파일 분리 3종 (mibunyang 393→258줄 + ComplexInfo 391→187줄 + MbDetailSections 319→138줄)
 
 **다음 우선순위**:
 
@@ -36,6 +36,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - readJSON 통일 완료: storage.ts에서 export, useLocalStorageList.ts는 import해서 사용
 - api.ts 도메인 분리 완료: lib/api/ 디렉토리 (core/complex/articles/crawl/analytics/admin/mibunyang), api.ts는 barrel re-export
 - CompareCharts 분리 완료: ChartAccordion + CompareAreaPriceTable + CompareMaintenanceTable + CompareUnitCompositionTable 추출 (438→170줄)
+- mibunyang/page.tsx 탭 분리 완료: MbTabContent + MbApartmentsTab + MbUnsoldTab + MbRegionsTab + MbTradesTab (393→258줄)
+- ComplexInfo 분리 완료: ComplexBasicInfo + ComplexPyeongCard + ComplexPriceFloorTab 추출 (391→187줄)
+- MbDetailSections 분리 완료: MbEnvironmentSection 추출 + re-export 호환 (319→138줄)
 
 ## 기술 스택
 

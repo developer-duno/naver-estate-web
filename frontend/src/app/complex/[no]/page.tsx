@@ -24,6 +24,7 @@ import type { Article, ArticleFilters, FilterOptions } from "@/types";
 import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
 import ArticleTable from "@/components/ArticleTable";
+import ArticleCardMobile from "@/components/ArticleCardMobile";
 import ArticleDetail from "@/components/ArticleDetail";
 import Pagination from "@/components/Pagination";
 
@@ -254,11 +255,11 @@ export default function ComplexDetailPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
       {/* 헤더 */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 md:gap-4 flex-wrap">
         <button onClick={goBack} aria-label="이전 페이지" className="text-gray-500 hover:text-gray-600 text-xl">
           ←
         </button>
-        <h1 className="text-2xl font-bold">{complex.complex_name}</h1>
+        <h1 className="text-lg md:text-2xl font-bold truncate">{complex.complex_name}</h1>
         <button
           onClick={() => toggleFavorite(complex.complex_name, complex.cortar_address)}
           className={`text-xl transition-colors ${starred ? "text-yellow-500" : "text-gray-300 hover:text-yellow-400"}`}
@@ -273,7 +274,7 @@ export default function ComplexDetailPage() {
           </span>
         )}
         {complex.last_crawled_at && (
-          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+          <span className="hidden sm:inline-flex text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
             마지막 크롤링: {formatTimeAgo(complex.last_crawled_at)}
           </span>
         )}
@@ -312,25 +313,25 @@ export default function ComplexDetailPage() {
       )}
 
       {/* 매물 수 + 엑셀 */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-lg font-semibold">매물 {totalCount}건</span>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 md:gap-3">
+          <span className="text-base md:text-lg font-semibold">매물 {totalCount}건</span>
           {tableLoading && (
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" role="status" aria-label="로딩 중" />
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 md:gap-2">
           <button
             onClick={handleCrawl}
             disabled={crawling}
-            className="text-sm border border-blue-300 text-blue-600 rounded-md px-3 py-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50"
+            className="text-xs md:text-sm border border-blue-300 text-blue-600 rounded-md px-2.5 md:px-3 py-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50"
           >
             {crawling ? "갱신 중..." : "데이터 갱신"}
           </button>
           <button
             onClick={handleExport}
             disabled={exporting}
-            className="text-sm border border-gray-300 rounded-md px-3 py-1.5 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="text-xs md:text-sm border border-gray-300 rounded-md px-2.5 md:px-3 py-1.5 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             {exporting
               ? "내보내는 중..."
@@ -354,9 +355,16 @@ export default function ComplexDetailPage() {
         </div>
       )}
 
-      {/* 매물 테이블 */}
+      {/* 매물 테이블 (데스크톱) / 카드뷰 (모바일) */}
       {totalCount > 0 && (
-        <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} />
+        <>
+          <div className="hidden md:block">
+            <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} />
+          </div>
+          <div className="md:hidden">
+            <ArticleCardMobile articles={articles} onRowClick={setSelectedArticle} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} />
+          </div>
+        </>
       )}
 
       {/* 페이지네이션 */}

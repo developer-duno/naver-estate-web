@@ -4,19 +4,18 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-07 — 세션 21 완료 (모바일 UX 개선: 아코디언+카드뷰+통계카드)
+**마지막 작업**: 2026-04-08 — 세션 22 완료 (단지 상세 모바일 최적화: 카드뷰+헤더+필터+탭)
 
 **다음 우선순위**:
 
 1. 어린이집 API 운영키 전환 (info.childcare.go.kr → 개발키→운영키 신청 필요)
-2. 공공데이터 전체 단지 자동 수집 대기 (4/12 토요일 05:00 스케줄러, resultCode 버그 수정 완료)
-3. 단지 상세 페이지 모바일 최적화 (매물 테이블, 차트, 탭 등)
-4. 추가 UI 개선 (필터바 모바일, 빈 상태 개선 등)
+2. 4/12 공공데이터 수집 결과 확인 (토요일 05:00 스케줄러)
+3. 추가 모바일 UI 개선 (Pagination, FilterChips 등)
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 511개 (56파일), BE 396개, E2E 44개 (8파일) — 전체 통과
+- 테스트 현황: FE 518개 (57파일), BE 396개, E2E 44개 (8파일) — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
 - 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED, CHILDCARE_ENABLED, CRIME_STATS_ENABLED (backend/.env)
 - V014 마이그레이션 실행 완료 (Supabase SQL Editor, 2026-04-03): crawl_jobs.scheduler_job_id
@@ -55,6 +54,10 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 매물 상세 아코디언: 시세/경쟁매물/관리비 카드 3종을 ChartAccordion으로 감싸 접기 기본 (모바일 스크롤 감소)
 - 검색 결과 모바일 카드뷰: ComplexCardMobile 추가 (md:hidden), 데스크톱 테이블은 hidden md:block 유지
 - 홈 페이지 통계: 인라인 텍스트 → 단지/매물 2개 소형 카드 (파란색/초록색)
+- 단지 상세 매물 목록 모바일: ArticleCardMobile (md:hidden 카드뷰) + ArticleTable (hidden md:block)
+- 단지 상세 헤더/액션바: text-lg md:text-2xl, flex-wrap, 버튼 text-xs md:text-sm
+- FilterDropdown: max-w-[calc(100vw-2rem)] + max-h-[70vh] overflow-y-auto (모바일 오버플로 방지)
+- ComplexInfo 탭: px-3 md:px-4, text-xs md:text-sm (모바일 탭 최적화)
 
 ## 기술 스택
 

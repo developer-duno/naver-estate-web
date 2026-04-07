@@ -6,6 +6,7 @@ import { getArticleLive } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Complex } from "@/types";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import ChartAccordion from "@/components/ChartAccordion";
 import PriceHeader from "@/components/article/PriceHeader";
 import MarketPosition from "@/components/article/MarketPosition";
 import CompetingListings from "@/components/article/CompetingListings";
@@ -92,10 +93,16 @@ export default function ArticleDetail({ articleNo, onClose, complex }: Props) {
               {/* 우측: 가격 + 정보 + 설명 */}
               <div className="md:col-span-3 space-y-4">
                 <PriceHeader article={article} />
-                <MarketPosition complexNo={article.complex_no} tradeTypeName={article.trade_type_name} area2M2={article.area2_m2} />
-                <CompetingListings complexNo={article.complex_no} tradeTypeName={article.trade_type_name} currentArticleNo={articleNo} />
+                <ChartAccordion title="시세 정보">
+                  <MarketPosition complexNo={article.complex_no} tradeTypeName={article.trade_type_name} area2M2={article.area2_m2} />
+                </ChartAccordion>
+                <ChartAccordion title="경쟁 매물">
+                  <CompetingListings complexNo={article.complex_no} tradeTypeName={article.trade_type_name} currentArticleNo={articleNo} />
+                </ChartAccordion>
                 <InfoCards article={article} complex={complex} />
-                <MaintenanceCost complexNo={article.complex_no} area2M2={article.area2_m2} />
+                <ChartAccordion title="관리비 상세">
+                  <MaintenanceCost complexNo={article.complex_no} area2M2={article.area2_m2} />
+                </ChartAccordion>
                 <ArticleDescription article={article} />
               </div>
             </div>

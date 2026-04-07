@@ -123,8 +123,9 @@ describe("SearchPage", () => {
 
     renderSearch();
     await waitFor(() => {
-      expect(screen.getByText("래미안퍼스티지")).toBeInTheDocument();
-      expect(screen.getByText("래미안블레스티지")).toBeInTheDocument();
+      // 데스크톱 테이블 + 모바일 카드 양쪽에 렌더됨
+      expect(screen.getAllByText("래미안퍼스티지").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("래미안블레스티지").length).toBeGreaterThan(0);
     });
   });
 

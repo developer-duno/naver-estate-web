@@ -63,20 +63,23 @@ export default function HomePage() {
       {/* 타이틀 + 통계 인라인 */}
       <div className="text-center mb-4">
         <h1 className="text-2xl font-bold text-gray-900">네이버 아파트·오피스텔 매물 조회</h1>
-        <div className="flex justify-center items-center gap-4 mt-2 text-sm text-gray-500">
-          <span>전국 매물을 검색하고 필터링하세요</span>
-          <span className="text-gray-300">|</span>
-          {statsLoading ? (
-            <span className="text-gray-400">통계 로딩...</span>
-          ) : statsError ? (
-            <button onClick={() => loadStats()} className="text-gray-400 hover:text-blue-500">통계 재시도</button>
-          ) : (
-            <>
-              <span>단지 <strong className="text-blue-600">{complexCount.toLocaleString()}</strong></span>
-              <span>매물 <strong className="text-green-600">{articleCount.toLocaleString()}</strong></span>
-            </>
-          )}
-        </div>
+        <p className="mt-1 text-sm text-gray-500">전국 매물을 검색하고 필터링하세요</p>
+        {statsLoading ? (
+          <p className="mt-2 text-sm text-gray-400">통계 로딩...</p>
+        ) : statsError ? (
+          <button onClick={() => loadStats()} className="mt-2 text-sm text-gray-400 hover:text-blue-500">통계 재시도</button>
+        ) : (
+          <div className="flex justify-center gap-3 mt-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-5 py-2.5 text-center">
+              <p className="text-xs text-blue-600 font-medium">단지</p>
+              <p className="text-lg font-bold text-blue-700">{complexCount.toLocaleString()}</p>
+            </div>
+            <div className="bg-green-50 border border-green-200 rounded-lg px-5 py-2.5 text-center">
+              <p className="text-xs text-green-600 font-medium">매물</p>
+              <p className="text-lg font-bold text-green-700">{articleCount.toLocaleString()}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 매물유형 탭 */}

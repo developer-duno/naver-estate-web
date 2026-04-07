@@ -236,9 +236,9 @@ function SearchContent() {
         </div>
       )}
 
-      {/* 단지 테이블 */}
+      {/* 단지 테이블 (데스크톱) */}
       {!loading && complexes.length > 0 && (
-        <div className="overflow-x-auto bg-white rounded-lg shadow-sm border">
+        <div className="hidden md:block overflow-x-auto bg-white rounded-lg shadow-sm border">
           <table className="w-full text-sm border-collapse">
             <thead className="bg-gray-100 border-b-2 border-gray-300 sticky top-0 z-10">
               <tr>
@@ -260,6 +260,15 @@ function SearchContent() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* 단지 카드 (모바일) */}
+      {!loading && complexes.length > 0 && (
+        <div className="md:hidden space-y-3">
+          {filteredComplexes.map((cpx, idx) => (
+            <ComplexCardMobile key={cpx.complex_no} complex={cpx} index={idx + 1} filterURL={buildURL(`/complex/${cpx.complex_no}`, undefined, urlFilters)} isCompared={isInCompare(cpx.complex_no)} compareFull={compareFull} onToggleCompare={() => toggleCompare({ complex_no: cpx.complex_no, complex_name: cpx.complex_name })} />
+          ))}
         </div>
       )}
 
@@ -336,6 +345,65 @@ const ComplexRow = memo(function ComplexRow({ complex, index, filterURL, isCompa
         </button>
       </td>
     </tr>
+  );
+});
+
+const ComplexCardMobile = memo(function ComplexCardMobile({ complex, index, filterURL, isCompared, compareFull, onToggleCompare }: { complex: Complex; index: number; filterURL?: string; isCompared?: boolean; compareFull?: boolean; onToggleCompare?: () => void }) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const year = complex.use_approve_ymd?.slice(0, 4);
+  const articleCount = complex.article_count ?? 0;
+  const colorClass = complex.real_estate_type_name ? (ESTATE_TYPE_COLORS[complex.real_estate_type_name] ?? ESTATE_TYPE_DEFAULT_COLOR) : "";
+
+  const prefetchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const handlePrefetchEnter = useCallback(() => {
+    prefetchTimer.current = setTimeout(() => {
+      const no = complex.complex_no;
+      queryClient.prefetchQuery({ queryKey: queryKeys.complex(no), queryFn: () => getComplex(no), staleTime: 60_000 });
+      queryClient.prefetchQuery({ queryKey: queryKeys.articles(no, { page: 1, page_size: PAGE_SIZE }), queryFn: () => getArticles(no, { page: 1, page_size: PAGE_SIZE }), staleTime: 60_000 });
+    }, 200);
+  }, [complex.complex_no, queryClient]);
+  const handlePrefetchLeave = useCallback(() => { clearTimeout(prefetchTimer.current); }, []);
+
+  return (
+    <div
+      className="bg-white rounded-lg shadow-sm border p-4 cursor-pointer hover:bg-blue-50 transition-colors active:bg-blue-100"
+      onClick={() => router.push(filterURL || `/complex/${complex.complex_no}`)}
+      onMouseEnter={handlePrefetchEnter}
+      onMouseLeave={handlePrefetchLeave}
+    >
+      <div className="flex justify-between items-start">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 shrink-0">{index}</span>
+            <span className="font-medium text-gray-900 truncate">{complex.complex_name}</span>
+            {complex.real_estate_type_name && (
+              <span className={`text-xs px-1.5 py-0.5 rounded border shrink-0 ${colorClass}`}>{complex.real_estate_type_name}</span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-1 truncate">{complex.cortar_address || "-"}</p>
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleCompare?.(); }}
+          disabled={!isCompared && compareFull}
+          className={`ml-2 shrink-0 text-xs px-2.5 py-1 rounded border transition-colors ${
+            isCompared
+              ? "bg-blue-600 text-white border-blue-600"
+              : compareFull
+                ? "bg-gray-100 text-gray-300 border-gray-200 cursor-not-allowed"
+                : "bg-white text-gray-500 border-gray-300 hover:bg-blue-50 hover:text-blue-600"
+          }`}
+          title={isCompared ? "비교 해제" : compareFull ? "최대 4개" : "비교 추가"}
+        >
+          {isCompared ? "V" : "+"}
+        </button>
+      </div>
+      <div className="grid grid-cols-3 gap-2 mt-2.5 text-xs text-gray-600">
+        <span>{complex.total_household_count ? `${complex.total_household_count.toLocaleString()}세대` : "-"}</span>
+        <span>{year ? `${year}년` : "-"}</span>
+        <span className={`font-medium ${articleCount > 0 ? "text-blue-600" : "text-gray-400"}`}>{articleCount}건</span>
+      </div>
+    </div>
   );
 });
 

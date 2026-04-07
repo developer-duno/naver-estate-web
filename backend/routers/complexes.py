@@ -47,7 +47,7 @@ def get_complexes_by_region(
     db: Session = Depends(get_db),
 ):
     """지역별 단지 조회"""
-    cache_key = f"region:{sido}:{sigungu or ''}:{dong or ''}"
+    cache_key = f"region:{sido}:{sigungu or ''}:{dong or ''}:{limit}"
     cached = _cache.get(cache_key)
     if cached is not None:
         return cached

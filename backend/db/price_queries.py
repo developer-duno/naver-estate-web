@@ -21,36 +21,6 @@ def get_article_price_history(
     return db.execute(stmt).scalars().all()
 
 
-def get_price_stats(db: Session, complex_no: str) -> dict:
-    """단지 매물의 가격 통계 (면적별/층수별 집계용 데이터, 전체 거래유형 포함)"""
-    conditions = [
-        Article.complex_no == complex_no,
-        Article.is_active == True,  # noqa: E712
-        Article.numeric_price.isnot(None),
-    ]
-
-    stmt = (
-        select(
-            Article.area2_m2,
-            Article.floor_info,
-            Article.numeric_price,
-            Article.trade_type_name,
-        )
-        .where(and_(*conditions))
-        .limit(10000)
-    )
-    rows = db.execute(stmt).all()
-    articles = [
-        {
-            "area2_m2": r[0],
-            "floor_info": r[1],
-            "numeric_price": r[2],
-            "trade_type_name": r[3],
-        }
-        for r in rows
-    ]
-    return {"articles": articles, "total": len(articles)}
-
 
 def get_price_stats_aggregated(db: Session, complex_no: str) -> dict:
     """단지 매물 가격 통계 — SQL 집계 (면적 5m² 버킷 + 층수 3티어)"""

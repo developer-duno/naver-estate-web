@@ -4,7 +4,7 @@
   db/query_helpers.py     — _build_filter_conditions, _build_order_clause
   db/complex_queries.py   — search_complexes, get_complexes_by_region, get_complex_by_no, ...
   db/article_queries.py   — get_articles_by_complex, get_article_by_no
-  db/price_queries.py     — get_article_price_history, get_price_stats, get_price_stats_aggregated, ...
+  db/price_queries.py     — get_article_price_history, get_price_stats_aggregated, ...
   db/stats_queries.py     — get_db_stats, get_distinct_values, get_filter_options
 """
 
@@ -21,7 +21,6 @@ from db.price_queries import (  # noqa: F401
     get_article_price_history,
     get_complex_price_history,
     get_price_changed_articles,
-    get_price_stats,
     get_price_stats_aggregated,
 )
 from db.query_helpers import _build_filter_conditions, _build_order_clause  # noqa: F401

@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { useRouter } from "next/navigation";
 import type { MbApartment } from "@/types";
 import { useMbFavorites } from "@/hooks/useMbFavorites";
@@ -63,7 +64,7 @@ interface Props {
   compareFull?: boolean;
 }
 
-export default function MbApartmentTable({ apartments, startIndex = 0, sort, onSortChange, isInCompare, onCompareToggle, compareFull }: Props) {
+function MbApartmentTable({ apartments, startIndex = 0, sort, onSortChange, isInCompare, onCompareToggle, compareFull }: Props) {
   const router = useRouter();
   const sortState = parseSortString(sort);
   const { isFavorite, toggle: toggleFav } = useMbFavorites();
@@ -159,3 +160,5 @@ export default function MbApartmentTable({ apartments, startIndex = 0, sort, onS
     </div>
   );
 }
+
+export default memo(MbApartmentTable);

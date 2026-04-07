@@ -117,6 +117,11 @@ def get_gu_list(db: Session, region: str) -> list[str]:
 # ── 아파트 단지 ──────────────────────────────────────────────
 
 
+def _is_sqlite(db: Session) -> bool:
+    """CI(SQLite) vs Production(PostgreSQL) dialect 판별"""
+    return (db.bind.dialect.name if db.bind else "postgresql") == "sqlite"
+
+
 def get_apartments_page(
     db: Session,
     region: str,
@@ -126,18 +131,54 @@ def get_apartments_page(
     sort_by: str = "name_asc",
     keyword: Optional[str] = None,
 ) -> tuple[list[Apartment], int]:
-    """아파트 목록 + 전체 수 (단일 쿼리, 중복 제거 + 정렬 + 페이지네이션)"""
+    """아파트 목록 + 전체 수 (중복 제거 + 정렬 + 페이지네이션)
+
+    PostgreSQL: SQL CTE + ROW_NUMBER + regexp_replace (인덱스 활용)
+    SQLite: Python fallback (CI 테스트 호환)
+    """
     conditions = [Apartment.region == region]
     if gu:
         conditions.append(Apartment.gu == gu)
     _apply_keyword_filter(conditions, keyword)
 
-    stmt = select(Apartment).where(and_(*conditions))
-    all_rows = list(db.execute(stmt).scalars().all())
-    deduped = _deduplicate_apartments(all_rows)
-    sorted_rows = _sort_apartments(deduped, sort_by)
-    start = (page - 1) * page_size
-    return sorted_rows[start : start + page_size], len(deduped)
+    if _is_sqlite(db):
+        # SQLite: regexp_replace 미지원 → Python fallback
+        stmt = select(Apartment).where(and_(*conditions))
+        all_rows = list(db.execute(stmt).scalars().all())
+        deduped = _deduplicate_apartments(all_rows)
+        sorted_rows = _sort_apartments(deduped, sort_by)
+        start = (page - 1) * page_size
+        return sorted_rows[start : start + page_size], len(deduped)
+
+    # PostgreSQL: SQL 레벨 중복 제거
+    base_name_expr = func.regexp_replace(Apartment.name, r"\s*\([^)]*\)\s*$", "")
+    rn = func.row_number().over(
+        partition_by=[base_name_expr, Apartment.region, Apartment.gu],
+        order_by=[Apartment.created_at.desc().nullslast(), Apartment.id.desc()],
+    ).label("rn")
+
+    subq = (
+        select(Apartment.id, rn)
+        .where(and_(*conditions))
+        .subquery()
+    )
+
+    # 전체 수
+    count_stmt = select(func.count()).select_from(subq).where(subq.c.rn == 1)
+    total = db.execute(count_stmt).scalar() or 0
+
+    # 페이지 데이터
+    order = _build_mb_order_clause(sort_by)
+    stmt = (
+        select(Apartment)
+        .join(subq, Apartment.id == subq.c.id)
+        .where(subq.c.rn == 1)
+        .order_by(order)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    rows = list(db.execute(stmt).scalars().all())
+    return rows, total
 
 
 def get_apartments(
@@ -195,16 +236,43 @@ def get_unsold_by_region(
     sort_by: str = "unsold_desc",
     keyword: Optional[str] = None,
 ) -> list[Apartment]:
-    """지역별 미분양 아파트 (unsold > 0, 중복 제거 + 정렬 + 검색)"""
+    """지역별 미분양 아파트 (unsold > 0, 중복 제거 + 정렬 + 검색)
+
+    PostgreSQL: SQL CTE + ROW_NUMBER + regexp_replace
+    SQLite: Python fallback (CI 테스트 호환)
+    """
     conditions = [Apartment.region == region, Apartment.unsold > 0]
     if gu:
         conditions.append(Apartment.gu == gu)
     _apply_keyword_filter(conditions, keyword)
 
-    stmt = select(Apartment).where(and_(*conditions))
-    all_rows = list(db.execute(stmt).scalars().all())
-    deduped = _deduplicate_apartments(all_rows)
-    return _sort_apartments(deduped, sort_by)
+    if _is_sqlite(db):
+        stmt = select(Apartment).where(and_(*conditions))
+        all_rows = list(db.execute(stmt).scalars().all())
+        deduped = _deduplicate_apartments(all_rows)
+        return _sort_apartments(deduped, sort_by)
+
+    # PostgreSQL: SQL 레벨 중복 제거
+    base_name_expr = func.regexp_replace(Apartment.name, r"\s*\([^)]*\)\s*$", "")
+    rn = func.row_number().over(
+        partition_by=[base_name_expr, Apartment.region, Apartment.gu],
+        order_by=[Apartment.created_at.desc().nullslast(), Apartment.id.desc()],
+    ).label("rn")
+
+    subq = (
+        select(Apartment.id, rn)
+        .where(and_(*conditions))
+        .subquery()
+    )
+
+    order = _build_mb_order_clause(sort_by)
+    stmt = (
+        select(Apartment)
+        .join(subq, Apartment.id == subq.c.id)
+        .where(subq.c.rn == 1)
+        .order_by(order)
+    )
+    return list(db.execute(stmt).scalars().all())
 
 
 # ── 지역 통계 ────────────────────────────────────────────────

@@ -18,7 +18,7 @@ interface Props {
   onSelectAll?: (checked: boolean, visibleArticles: Article[]) => void;
 }
 
-export default function ArticleTable({ articles, onRowClick, onSortChange, selectedArticleNos, onSelectionChange, onSelectAll }: Props) {
+function ArticleTable({ articles, onRowClick, onSortChange, selectedArticleNos, onSelectionChange, onSelectAll }: Props) {
   const [sort, setSort] = useState<SortState>({ key: "", dir: null });
 
   const handleSortChange = (newSort: SortState) => {
@@ -181,6 +181,8 @@ const ArticleRow = memo(function ArticleRow({ article: art, index, onClick, sele
     </tr>
   );
 });
+
+export default memo(ArticleTable);
 
 function Td({ children, className = "", title }: { children: React.ReactNode; className?: string; title?: string }) {
   return (

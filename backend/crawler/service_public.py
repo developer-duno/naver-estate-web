@@ -147,3 +147,90 @@ def collect_public_trade_data(batch_size: int = 300):
         logger.exception("공공데이터 수집 실패")
     finally:
         db.close()
+
+
+def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
+    """특정 단지의 과거 실거래가를 국토교통부 API로 소급 수집.
+
+    네이버 시세 API가 최근 데이터만 반환하는 단지에 대해
+    장기 이력을 보강하여 차트 기간 선택(6M/1Y/2Y/전체)이 의미있게 동작.
+
+    Args:
+        complex_no: 단지 번호
+        months_back: 소급 기간 (기본 60개월 = 5년)
+
+    Returns:
+        {"collected": N, "months_covered": N, "complex_name": "..."}
+    """
+    from datetime import date, timedelta
+
+    from crawler.public_data_api import PublicDataAPI, _normalize_apt_name
+
+    db = SessionLocal()
+    try:
+        cpx = db.get(Complex, complex_no)
+        if not cpx:
+            raise ValueError(f"단지 {complex_no}을 찾을 수 없습니다")
+        if not cpx.cortar_no or len(cpx.cortar_no) < 5:
+            raise ValueError(f"단지 {complex_no}의 법정동코드(cortar_no)가 없습니다")
+
+        sigungu_cd = cpx.cortar_no[:5]
+        norm_name = _normalize_apt_name(cpx.complex_name)
+        if not norm_name:
+            raise ValueError(f"단지명 정규화 실패: {cpx.complex_name}")
+        # "단지" 접미사 제거 버전도 준비 (국토교통부 API 단지명과 매칭률 향상)
+        import re
+        norm_short = re.sub(r"단지$", "", norm_name)
+
+        # 소급 대상 월 생성
+        today = date.today()
+        months = []
+        for delta in range(months_back):
+            d = today.replace(day=1) - timedelta(days=delta * 30)
+            months.append(d.strftime("%Y%m"))
+        months = sorted(set(months))
+
+        collected = 0
+        for deal_ymd in months:
+            trades = PublicDataAPI.get_all_apt_trades(sigungu_cd, deal_ymd)
+            if not trades:
+                continue
+
+            # 이 단지와 매칭되는 거래만 추출
+            prices: list[int] = []
+            for trade in trades:
+                apt_name = trade.get("aptNm") or trade.get("아파트") or ""
+                price_str = str(trade.get("dealAmount") or trade.get("거래금액") or "0")
+                price = safe_int(price_str.replace(",", "").strip())
+                if not price:
+                    continue
+                api_norm = _normalize_apt_name(apt_name)
+                if api_norm == norm_name or api_norm == norm_short:
+                    prices.append(price)
+
+            if prices:
+                _upsert_price_history(
+                    db,
+                    complex_no=complex_no,
+                    trade_type="A1",
+                    area_no=None,
+                    price_upper=max(prices),
+                    price_lower=min(prices),
+                    price_avg=round(sum(prices) / len(prices)),
+                    base_month=deal_ymd,
+                )
+                collected += 1
+
+        if collected > 0:
+            db.commit()
+        logger.info(
+            "소급 수집 완료: complex=%s (%s), %d/%d 월 매칭",
+            complex_no, cpx.complex_name, collected, len(months),
+        )
+        return {
+            "collected": collected,
+            "months_covered": len(months),
+            "complex_name": cpx.complex_name,
+        }
+    finally:
+        db.close()

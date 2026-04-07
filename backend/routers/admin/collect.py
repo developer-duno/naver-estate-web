@@ -3,7 +3,7 @@
 import logging
 from typing import Literal
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -82,3 +82,25 @@ def get_crime_stats_status(
         "last_updated": last_updated.isoformat() if last_updated else None,
         "grade_dist": grade_dist,
     }
+
+
+@router.post("/backfill-price/{complex_no}")
+def backfill_price(
+    complex_no: str,
+    months_back: int = Query(60, ge=1, le=120),
+    admin: dict = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """특정 단지의 과거 실거래가 소급 수집 (국토교통부 API)"""
+    log_action(db, admin["user_id"], "admin_backfill_price", "complex", complex_no)
+    db.commit()
+
+    try:
+        from crawler.service_public import backfill_price_history
+        result = backfill_price_history(complex_no, months_back=months_back)
+        return {"status": "completed", **result}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception("[admin] 소급 수집 실패: %s", complex_no)
+        raise HTTPException(status_code=500, detail=f"소급 수집 실패: {e}")

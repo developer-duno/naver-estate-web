@@ -144,8 +144,8 @@ class PublicDataAPI:
                     data = response.json()
                     # 공공데이터 API 에러 응답 체크
                     header = (data.get("response") or {}).get("header") or {}
-                    result_code = header.get("resultCode", "")
-                    if result_code != "00":
+                    result_code = str(header.get("resultCode", "")).lstrip("0") or "0"
+                    if result_code != "0":
                         result_msg = header.get("resultMsg", "알 수 없는 오류")
                         logger.warning(
                             "공공데이터 API 오류: %s (%s) — LAWD=%s, YMD=%s",

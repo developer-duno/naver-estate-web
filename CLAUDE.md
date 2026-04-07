@@ -18,7 +18,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
 - 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED, CHILDCARE_ENABLED, CRIME_STATS_ENABLED (backend/.env)
 - V014 마이그레이션 실행 완료 (Supabase SQL Editor, 2026-04-03): crawl_jobs.scheduler_job_id
-- V015/V016 마이그레이션 미실행: apartments/trades 인덱스 7개 + trigram (Supabase SQL Editor에서 실행 필요)
+- V015/V016 마이그레이션 실행 완료 (2026-04-07): apartments/trades 인덱스 7개 + trigram
 - mb_queries.py SQL 중복 제거: PostgreSQL regexp_replace+ROW_NUMBER, SQLite는 Python fallback (dialect 분기)
 - 범죄통계 수집 완료: 1928/1928 (100%), crime_score/crime_grade 반영됨
 - 어린이집 API: data.go.kr → api.childcare.go.kr(cpmsapi021) 전환 완료, CHILDCARE_API_KEY 별도 필요, CHILDCARE_ENABLED=false 유지

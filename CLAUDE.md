@@ -4,13 +4,13 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-07 — 세션 18 완료 (MB 성능 최적화 + E2E 44개 + 자동 크롤링 UI 갱신 + 국토교통부 소급 수집 + Watchdog 수정)
+**마지막 작업**: 2026-04-07 — 세션 19 완료 (매물 상세 모달 전면 리디자인)
 
 **다음 우선순위**:
 
 1. 어린이집 API 운영키 전환 (info.childcare.go.kr → 개발키→운영키 신청 필요)
 2. 공공데이터 전체 단지 자동 수집 대기 (4/12 토요일 05:00 스케줄러, resultCode 버그 수정 완료)
-3. 프론트엔드 새 기능/UI 개선
+3. 프론트엔드 추가 UI 개선 (검색 결과, 홈 페이지 등)
 
 **주의사항**:
 
@@ -28,6 +28,11 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 공공데이터 resultCode 버그 수정 완료: "000" → "0" 정규화 (public_data_api.py)
 - 단지 상세 페이지: 자동 크롤링 후 10/20/30초 뒤 UI 자동 갱신 (쿼리 무효화)
 - startup_orchestrator.py: Watchdog 포트 충돌 수정 (_kill_port + 연속 5회 실패 방어)
+- 매물 상세 모달 리디자인: max-w-6xl 확장, 2열 그리드(지도+이력 | 가격+정보+설명), 5개 하위 컴포넌트(article/)
+- 매물 상세에 단지정보 통합: complex prop 전달 (건설사/용적률/전세가율/주변시세 등)
+- 매물 가격이력 API 연결: GET /api/articles/{no}/price-history (프론트 신규 연결)
+- 단지 상세 레이아웃에 Naver Maps SDK Script 추가 (complex/[no]/layout.tsx)
+- formatWon 함수 lib/format.ts로 이동 (ArticleDetail 로컬 → 공통 유틸)
 - 관리자 대시보드: StatsCards + SchedulerMonitor + CollectorTrigger (수집 트리거 + 모니터링)
 - 스케줄러 모니터링: `GET /api/admin/scheduler-status` (12개 작업 이력/통계/다음실행, 60초 자동갱신)
 - env_service 4개 수집 함수에 CrawlJob 기록 추가 (air/emergency/childcare/crime)
@@ -42,6 +47,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - api.ts 도메인 분리: lib/api/ (core/complex/articles/crawl/analytics/admin/mibunyang), barrel re-export 호환
 - 거대 파일 분리 완료 (세션 15): CompareCharts 438→170, mibunyang/page 393→258, ComplexInfo 391→187, MbDetailSections 319→138
 - 거대 파일 추가 분리 완료 (세션 17): price_school_formatter 715→5모듈(formatters/), queries 566→5모듈(db/), serializers 393→3모듈(routers/), barrel re-export 호환
+- ArticleDetail 분리 (세션 19): 234→80줄 + 하위 5개(article/PriceHeader, InfoCards, ArticleDescription, PriceHistoryTable, ArticleMap)
 
 ## 기술 스택
 

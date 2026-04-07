@@ -17,21 +17,23 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function ArticleDescription({ article: a }: Props) {
-  const photoCount = a.photo_urls?.length ?? 0;
+  const feature = a.article_feature_desc?.trim();
+  const detail = a.detail_description?.trim();
+  const isDuplicate = !!(feature && detail && feature === detail);
 
   return (
     <div className="space-y-3">
       {/* 특징 */}
-      {a.article_feature_desc && (
+      {feature && (
         <Section title="특징">
-          <p className="text-sm text-gray-600">{a.article_feature_desc}</p>
+          <p className="text-sm text-gray-600">{feature}</p>
         </Section>
       )}
 
-      {/* 상세설명 */}
-      {a.detail_description && (
+      {/* 상세설명 (특징과 동일하면 미표시) */}
+      {!isDuplicate && detail && (
         <Section title="상세설명">
-          <p className="text-sm text-gray-600 whitespace-pre-wrap">{a.detail_description}</p>
+          <p className="text-sm text-gray-600 whitespace-pre-wrap">{detail}</p>
         </Section>
       )}
 
@@ -44,22 +46,6 @@ export default function ArticleDescription({ article: a }: Props) {
                 {t}
               </span>
             ))}
-          </div>
-        </Section>
-      )}
-
-      {/* 사진 링크 */}
-      {(a.representative_img_url || photoCount > 0) && (
-        <Section title="사진">
-          <div className="flex gap-3 text-sm">
-            {a.representative_img_url && (
-              <a href={a.representative_img_url} target="_blank" rel="noopener noreferrer"
-                className="text-blue-600 hover:underline">대표 사진 보기 →</a>
-            )}
-            {photoCount > 0 && (
-              <a href={a.photo_urls![0]} target="_blank" rel="noopener noreferrer"
-                className="text-blue-600 hover:underline">사진 {photoCount}장 보기 →</a>
-            )}
           </div>
         </Section>
       )}

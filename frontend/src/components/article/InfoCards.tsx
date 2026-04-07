@@ -9,7 +9,7 @@ interface Props {
   complex?: Complex;
 }
 
-function InfoRow({ label, value }: { label: string; value?: string | null }) {
+export function InfoRow({ label, value }: { label: string; value?: string | null }) {
   if (!value || value === "-") return null;
   return (
     <div className="flex justify-between text-sm py-0.5">
@@ -19,7 +19,7 @@ function InfoRow({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
-function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
+export function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border bg-gray-50/50 p-4">
       <h4 className="text-sm font-semibold mb-2">{title}</h4>

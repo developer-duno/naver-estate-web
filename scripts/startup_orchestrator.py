@@ -61,29 +61,8 @@ def kill_existing_processes():
         timeout=10,
     )
 
-    # port 8002 점유 프로세스 종료
-    if _is_port_in_use(BACKEND_PORT):
-        try:
-            result = subprocess.run(
-                ["netstat", "-ano"],
-                capture_output=True,
-                text=True,
-                timeout=10,
-            )
-            for line in result.stdout.splitlines():
-                if f":{BACKEND_PORT}" in line and "LISTENING" in line:
-                    parts = line.split()
-                    pid = parts[-1]
-                    logger.info(f"port {BACKEND_PORT} 점유 PID {pid} 종료")
-                    subprocess.run(
-                        ["taskkill", "/F", "/PID", pid],
-                        capture_output=True,
-                        timeout=10,
-                    )
-        except Exception as e:
-            logger.warning(f"포트 정리 실패: {e}")
-
-    time.sleep(2)
+    # port 8002 점유 프로세스 종료 + 포트 해제 대기
+    _kill_port(BACKEND_PORT)
     logger.info("프로세스 정리 완료")
 
 
@@ -210,20 +189,63 @@ def deploy_vercel():
     logger.info(f"Vercel 배포 완료")
 
 
+def _kill_port(port: int):
+    """특정 포트를 점유 중인 프로세스를 강제 종료하고 해제 대기."""
+    if not _is_port_in_use(port):
+        return
+    try:
+        result = subprocess.run(
+            ["netstat", "-ano"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        for line in result.stdout.splitlines():
+            if f":{port}" in line and "LISTENING" in line:
+                pid = line.split()[-1]
+                logger.info(f"포트 {port} 점유 PID {pid} 강제 종료")
+                subprocess.run(
+                    ["taskkill", "/F", "/PID", pid],
+                    capture_output=True,
+                    timeout=10,
+                )
+    except Exception as e:
+        logger.warning(f"포트 {port} 정리 실패: {e}")
+
+    # 포트 해제 대기 (최대 10초)
+    for _ in range(20):
+        if not _is_port_in_use(port):
+            return
+        time.sleep(0.5)
+    logger.warning(f"포트 {port} 해제 대기 타임아웃")
+
+
 def watchdog(backend_proc: subprocess.Popen, tunnel_proc: subprocess.Popen):
     """프로세스 생존 감시 + 자동 재시작."""
     logger.info("Watchdog 시작 (30초 간격 감시)")
+    backend_fail_count = 0
 
     while True:
         time.sleep(WATCHDOG_INTERVAL)
 
         # 백엔드 체크
         if backend_proc.poll() is not None:
-            logger.warning("백엔드 프로세스 종료 감지 — 재시작")
+            backend_fail_count += 1
+            logger.warning(f"백엔드 프로세스 종료 감지 — 재시작 (연속 실패: {backend_fail_count})")
+
+            # 포트 정리 후 재시작
+            _kill_port(BACKEND_PORT)
             backend_proc = start_backend()
             if not wait_for_backend():
                 logger.error("백엔드 재시작 실패")
+                if backend_fail_count >= 5:
+                    logger.error("연속 5회 재시작 실패 — 60초 대기 후 재시도")
+                    time.sleep(60)
+                    backend_fail_count = 0
                 continue
+            backend_fail_count = 0
+        else:
+            backend_fail_count = 0
 
         # 터널 체크
         if tunnel_proc.poll() is not None:

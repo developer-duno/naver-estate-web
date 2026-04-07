@@ -4,13 +4,14 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-07 — 세션 20 완료 (매물 상세 중개 업무 정보 강화)
+**마지막 작업**: 2026-04-07 — 세션 21 완료 (모바일 UX 개선: 아코디언+카드뷰+통계카드)
 
 **다음 우선순위**:
 
 1. 어린이집 API 운영키 전환 (info.childcare.go.kr → 개발키→운영키 신청 필요)
 2. 공공데이터 전체 단지 자동 수집 대기 (4/12 토요일 05:00 스케줄러, resultCode 버그 수정 완료)
-3. 프론트엔드 추가 UI 개선 (검색 결과, 홈 페이지 등)
+3. 단지 상세 페이지 모바일 최적화 (매물 테이블, 차트, 탭 등)
+4. 추가 UI 개선 (필터바 모바일, 빈 상태 개선 등)
 
 **주의사항**:
 
@@ -51,6 +52,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 거대 파일 분리 완료 (세션 15): CompareCharts 438→170, mibunyang/page 393→258, ComplexInfo 391→187, MbDetailSections 319→138
 - 거대 파일 추가 분리 완료 (세션 17): price_school_formatter 715→5모듈(formatters/), queries 566→5모듈(db/), serializers 393→3모듈(routers/), barrel re-export 호환
 - ArticleDetail 분리 (세션 19→20): 234→110줄 + 하위 8개(article/PriceHeader, MarketPosition, CompetingListings, InfoCards, MaintenanceCost, ArticleDescription, PriceHistoryTable, ArticleMap)
+- 매물 상세 아코디언: 시세/경쟁매물/관리비 카드 3종을 ChartAccordion으로 감싸 접기 기본 (모바일 스크롤 감소)
+- 검색 결과 모바일 카드뷰: ComplexCardMobile 추가 (md:hidden), 데스크톱 테이블은 hidden md:block 유지
+- 홈 페이지 통계: 인라인 텍스트 → 단지/매물 2개 소형 카드 (파란색/초록색)
 
 ## 기술 스택
 

@@ -1,30 +1,35 @@
-# 세션 20 로그 (2026-04-07)
+# 세션 21 로그 (2026-04-07)
 
-## 커밋 (1개)
-1. `adf3f6a` feat: 매물 상세 모달 중개 업무 정보 강화 (시세/경쟁/관리비 카드)
+## 커밋 (2개)
+1. `21e51ac` feat: 모바일 UX 개선 (매물 상세 아코디언 + 검색 카드뷰 + 홈 통계 카드)
+2. (docs 커밋 예정)
 
-## 주요 작업
-- **매물 상세 사진 섹션 제거**: ArticleDescription에서 사진 링크 섹션 삭제
-- **특징/상세설명 중복 제거**: article_feature_desc === detail_description 시 하나만 표시
-- **InfoCard/InfoRow export**: 하위 컴포넌트에서 공통 재사용 가능하도록 named export
-- **MarketPosition 카드 신규**: 해당 면적(5m² 버킷)의 거래유형별 평균가·매물 수 표시
-- **CompetingListings 카드 신규**: 같은 단지·거래유형 경쟁 매물 수, 가격 범위, 평균 평당가
-- **MaintenanceCost 카드 신규**: 현재 면적의 평균/여름/겨울/최근 관리비
+## 변경 내역
 
-## 설계 결정
-- 신규 백엔드 API 0개 — 기존 getPriceStats, getArticles, getPyeongDetails 100% 재사용
-- React Query 캐시 공유 — 단지 상세 페이지 방문 후면 추가 API 호출 없음
-- 각 카드 컴포넌트에서 독립 useQuery + enabled 조건 + null 반환 (graceful fallback)
-- 9 GATE 검증 수행: 🟢7, 🟡2 (면적 매칭 로직 주의, 모바일 스크롤 증가 수용)
+### Phase 1: 매물 상세 모달 아코디언
+- `ArticleDetail.tsx`: 시세/경쟁매물/관리비 카드 3종을 ChartAccordion으로 감싸서 접기 기본
+- 기존 ChartAccordion 컴포넌트 재사용, 하위 컴포넌트 수정 없음
+- 모바일 스크롤 대폭 감소
 
-## 파일 변경
-- 수정 3파일: ArticleDetail.tsx, ArticleDescription.tsx, InfoCards.tsx
-- 신규 3파일: article/MarketPosition, CompetingListings, MaintenanceCost
+### Phase 2: 검색 결과 모바일 카드 뷰
+- `search/page.tsx`: ComplexCardMobile memo 컴포넌트 추가
+- 데스크톱: 기존 10열 테이블 유지 (hidden md:block)
+- 모바일: 카드 레이아웃 (md:hidden) — 단지명+유형+주소+세대수/준공/매물수+비교버튼
+- 프리페치 로직 ComplexRow와 동일하게 복제
 
-## 테스트: FE 511 (56파일) 전체 통과, tsc 에러 0, lint 경고 3 (기존)
+### Phase 2b: 홈 페이지 통계 카드화
+- `page.tsx`: 인라인 텍스트 통계 → 단지(파랑)/매물(초록) 2개 소형 카드
 
-## 미완료
-- 어린이집 API 운영키 전환
-- 공공데이터 전체 단지 자동 수집 (4/12 토 05:00)
-- 프론트엔드 추가 UI 개선 (검색 결과, 홈 페이지 등)
-- 모바일에서 카드 3개 추가로 스크롤 길어짐 — 추후 탭/아코디언 검토
+### 테스트 수정
+- `search.test.tsx`: 중복 렌더 대응 getByText → getAllByText
+
+## 테스트 현황
+- FE: 511개 (56파일) 전체 통과
+- BE: 396개 (변경 없음)
+- E2E: 44개 (변경 없음)
+
+## 다음 세션 우선순위
+1. 어린이집 API 운영키 전환
+2. 공공데이터 전체 단지 자동 수집 대기 (4/12 토)
+3. 단지 상세 페이지 모바일 최적화
+4. 추가 UI 개선 (필터바 모바일 등)

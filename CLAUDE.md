@@ -4,20 +4,22 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-06 — 백엔드 거대 파일 추가 분리 3종 완료 (formatter 715→5모듈, queries 566→5모듈, serializers 393→3모듈)
+**마지막 작업**: 2026-04-07 — MB 성능 최적화 + E2E 22→44개 + FE memo + 캐시 키/dead code 수정
 
 **다음 우선순위**:
 
 1. info.childcare.go.kr cpmsapi021 활용신청 승인 대기 → 승인 후 CHILDCARE_API_KEY 설정 + CHILDCARE_ENABLED=true
-2. 핵심 서비스 테스트 추가 완료 (upsert 11 + enricher 5 + service_price 5 = 21개)
+2. V015/V016 마이그레이션 실행 필요 (Supabase SQL Editor): apartments/trades 인덱스 + trigram
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 511개 (56파일), BE 396개, E2E 22개 — 전체 통과
+- 테스트 현황: FE 511개 (56파일), BE 396개, E2E 44개 (8파일) — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
 - 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED, CHILDCARE_ENABLED, CRIME_STATS_ENABLED (backend/.env)
 - V014 마이그레이션 실행 완료 (Supabase SQL Editor, 2026-04-03): crawl_jobs.scheduler_job_id
+- V015/V016 마이그레이션 미실행: apartments/trades 인덱스 7개 + trigram (Supabase SQL Editor에서 실행 필요)
+- mb_queries.py SQL 중복 제거: PostgreSQL regexp_replace+ROW_NUMBER, SQLite는 Python fallback (dialect 분기)
 - 범죄통계 수집 완료: 1928/1928 (100%), crime_score/crime_grade 반영됨
 - 어린이집 API: data.go.kr → api.childcare.go.kr(cpmsapi021) 전환 완료, CHILDCARE_API_KEY 별도 필요, CHILDCARE_ENABLED=false 유지
 - 관리자 수집 API: `POST /api/admin/collect/{name}` (crime-stats/air-quality/emergency/childcare)

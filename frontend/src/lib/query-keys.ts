@@ -47,6 +47,13 @@ export const queryKeys = {
       ["admin", "auditLogs", params] as const,
     settings: () => ["admin", "settings"] as const,
     schedulerStatus: () => ["admin", "schedulerStatus"] as const,
+    verifications: (params?: Record<string, unknown>) =>
+      ["admin", "verifications", params] as const,
+  },
+
+  // 중개사 검증
+  verification: {
+    status: () => ["verification", "status"] as const,
   },
 
   // 미분양 (mibunyang)

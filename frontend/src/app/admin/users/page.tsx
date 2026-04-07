@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import UserTable from "@/components/admin/UserTable";
+import VerificationReview from "@/components/admin/VerificationReview";
 import { getAdminUsers, updateAdminUser, suspendAdminUser } from "@/lib/api";
 import type { UserProfile, UserUpdatePayload, PaginatedResponse } from "@/types/admin";
 
@@ -62,6 +63,13 @@ export default function AdminUsersPage() {
   return (
     <>
       <h2 className="text-lg font-semibold mb-4">사용자 관리</h2>
+
+      {/* 검증 심사 대기 */}
+      {token && (
+        <div className="mb-6">
+          <VerificationReview token={token} />
+        </div>
+      )}
 
       {/* 필터 */}
       <div className="flex gap-3 mb-4">

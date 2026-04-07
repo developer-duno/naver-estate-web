@@ -168,6 +168,26 @@ class UserProfile(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
+class AgentVerification(Base):
+    """공인중개사 검증 — 자격증/사업자등록 검증 데이터"""
+    __tablename__ = "agent_verifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    license_number: Mapped[str | None] = mapped_column(String)
+    business_number: Mapped[str | None] = mapped_column(String)
+    office_name: Mapped[str | None] = mapped_column(String)
+    representative_name: Mapped[str] = mapped_column(String, nullable=False)
+    business_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    license_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    verification_status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    rejection_reason: Mapped[str | None] = mapped_column(String)
+    reviewed_by: Mapped[str | None] = mapped_column(String)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 

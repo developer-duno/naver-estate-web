@@ -103,7 +103,7 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
   return (
     <div className="bg-white rounded-lg shadow-sm border p-3 space-y-2">
       {/* ── 툴바 버튼 행 ── */}
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto md:flex-wrap md:overflow-x-visible">
         <FilterDropdown label="거래유형" isActive={s.tradeType !== "전체"} summary={s.tradeType !== "전체" ? s.tradeType : undefined} isOpen={openDropdown === "trade"} onToggle={() => toggle("trade")}>
           <TradeTypeSection s={s} setImmediate={setImmediate} />
         </FilterDropdown>
@@ -132,7 +132,7 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
           <DetailSection {...sectionProps} filterOptions={filterOptions} />
         </FilterDropdown>
 
-        <button onClick={resetAll} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded hover:bg-gray-50">
+        <button onClick={resetAll} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded hover:bg-gray-50 whitespace-nowrap">
           초기화
         </button>
       </div>

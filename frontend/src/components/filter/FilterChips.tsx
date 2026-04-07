@@ -51,7 +51,7 @@ export default function FilterChips({ s, setImmediate, dispatch, emitChange, res
   if (chipList.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-gray-100">
+    <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-gray-100 max-h-16 md:max-h-none overflow-y-auto">
       {chipList.map((chip) => (
         <span key={chip.label} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs rounded-full px-2.5 py-1 border border-blue-200">
           {chip.label}

@@ -44,9 +44,12 @@ export default function ForgotPasswordPage() {
         <div className="bg-white rounded-lg shadow-sm border p-8">
           <div className="text-4xl mb-4">&#9993;</div>
           <h1 className="text-xl font-bold mb-3">이메일을 확인해주세요</h1>
-          <p className="text-sm text-gray-600 mb-6">
+          <p className="text-sm text-gray-600 mb-2">
             <strong>{email}</strong>으로 비밀번호 재설정 링크를 보냈습니다.
             메일함을 확인해주세요.
+          </p>
+          <p className="text-xs text-gray-400 mb-6">
+            링크는 1시간 후 만료됩니다.
           </p>
           <Link href="/login" className="text-sm text-blue-600 hover:underline">
             로그인으로 돌아가기

@@ -1,6 +1,7 @@
-"""관리자 사용자 관리 라우트"""
+"""관리자 사용자 관리 라우트 — 사용자 + 검증 심사"""
 
 import logging
+from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -8,7 +9,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from auth.audit import log_action
-from db.models import UserProfile
+from db.models import AgentVerification, UserProfile
 from deps import get_admin_user, get_db
 
 from ._shared import router
@@ -140,3 +141,119 @@ def suspend_user(
     from deps import _user_cache
     _user_cache.delete(f"profile:{user_id}")
     return {"status": "suspended"}
+
+
+# ── 검증 심사 ──
+
+
+@router.get("/verifications")
+def list_verifications(
+    status: str | None = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_admin_user),
+):
+    """검증 신청 목록 (관리자용)"""
+    conditions = []
+    if status:
+        conditions.append(AgentVerification.verification_status == status)
+
+    where = and_(*conditions) if conditions else True
+    total = db.execute(select(func.count()).select_from(AgentVerification).where(where)).scalar() or 0
+
+    stmt = (
+        select(AgentVerification)
+        .where(where)
+        .order_by(AgentVerification.submitted_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    items = db.execute(stmt).scalars().all()
+
+    # 이메일 조회를 위해 user_ids 일괄 조회
+    user_ids = [v.user_id for v in items]
+    email_map: dict[str, str] = {}
+    if user_ids:
+        profiles = db.execute(select(UserProfile).where(UserProfile.user_id.in_(user_ids))).scalars().all()
+        email_map = {p.user_id: p.email for p in profiles}
+
+    return {
+        "items": [
+            {
+                "id": v.id,
+                "user_id": v.user_id,
+                "email": email_map.get(v.user_id, ""),
+                "license_number": v.license_number,
+                "business_number": v.business_number,
+                "office_name": v.office_name,
+                "representative_name": v.representative_name,
+                "business_verified": v.business_verified,
+                "license_verified": v.license_verified,
+                "verification_status": v.verification_status,
+                "rejection_reason": v.rejection_reason,
+                "submitted_at": v.submitted_at.isoformat() if v.submitted_at else None,
+                "reviewed_at": v.reviewed_at.isoformat() if v.reviewed_at else None,
+            }
+            for v in items
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.patch("/verifications/{verification_id}/approve")
+def approve_verification(
+    verification_id: int,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_admin_user),
+):
+    """검증 승인 — role=expert, status=approved 자동 변경"""
+    v = db.get(AgentVerification, verification_id)
+    if not v:
+        raise HTTPException(status_code=404, detail="검증 신청을 찾을 수 없습니다")
+
+    v.verification_status = "approved"
+    v.reviewed_by = admin["user_id"]
+    v.reviewed_at = datetime.now(timezone.utc)
+
+    profile = db.get(UserProfile, v.user_id)
+    if profile:
+        profile.role = "expert"
+        profile.status = "approved"
+
+    log_action(db, admin["user_id"], "admin_verify_approve", "verification", str(verification_id))
+    db.commit()
+
+    from deps import _user_cache
+    _user_cache.delete(f"profile:{v.user_id}")
+    return {"status": "approved"}
+
+
+class RejectRequest(BaseModel):
+    reason: str
+
+
+@router.patch("/verifications/{verification_id}/reject")
+def reject_verification(
+    verification_id: int,
+    body: RejectRequest,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_admin_user),
+):
+    """검증 거부 — 사유 필수"""
+    v = db.get(AgentVerification, verification_id)
+    if not v:
+        raise HTTPException(status_code=404, detail="검증 신청을 찾을 수 없습니다")
+    if not body.reason.strip():
+        raise HTTPException(status_code=400, detail="거부 사유를 입력해주세요")
+
+    v.verification_status = "rejected"
+    v.rejection_reason = body.reason.strip()
+    v.reviewed_by = admin["user_id"]
+    v.reviewed_at = datetime.now(timezone.utc)
+
+    log_action(db, admin["user_id"], "admin_verify_reject", "verification", str(verification_id), {"reason": body.reason})
+    db.commit()
+    return {"status": "rejected"}

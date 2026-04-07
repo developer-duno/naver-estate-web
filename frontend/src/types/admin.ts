@@ -108,3 +108,40 @@ export interface SchedulerStatusResponse {
     failures_today: number;
   };
 }
+
+/** 공인중개사 검증 신청 */
+export interface AgentVerification {
+  id: number;
+  user_id: string;
+  email?: string;
+  license_number?: string;
+  business_number?: string;
+  office_name?: string;
+  representative_name: string;
+  business_verified: boolean;
+  license_verified: boolean;
+  verification_status: "pending" | "approved" | "rejected";
+  rejection_reason?: string;
+  reviewed_by?: string;
+  submitted_at: string;
+  reviewed_at?: string;
+}
+
+/** 검증 상태 조회 응답 */
+export interface VerificationStatusResponse {
+  submitted: boolean;
+  verification_status?: "pending" | "approved" | "rejected";
+  business_verified?: boolean;
+  license_verified?: boolean;
+  rejection_reason?: string;
+  submitted_at?: string;
+  reviewed_at?: string;
+}
+
+/** 검증 신청 응답 */
+export interface VerifySubmitResponse {
+  status: "approved" | "pending";
+  business_verified: boolean;
+  business_message: string;
+  auto_approved: boolean;
+}

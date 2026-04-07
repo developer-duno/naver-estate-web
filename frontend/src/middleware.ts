@@ -5,7 +5,7 @@ import type { NextRequest } from "next/server";
 // 관리자 페이지 보호 대상 경로
 const ADMIN_PATHS = ["/admin"];
 // 로그인 필수 경로
-const AUTH_REQUIRED_PATHS = ["/complex"];
+const AUTH_REQUIRED_PATHS = ["/complex", "/verify"];
 // 관리자 이메일 (환경변수 필수, 쉼표 구분 다중 지원, 미설정 시 관리자 접근 차단)
 const ADMIN_EMAILS = new Set(
   (process.env.ADMIN_EMAIL ?? "")

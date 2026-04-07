@@ -4,13 +4,13 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-08 — 세션 22 완료 (단지 상세 모바일 최적화: 카드뷰+헤더+필터+탭)
+**마지막 작업**: 2026-04-08 — 세션 23 완료 (모바일 UI 개선 + Gmail SMTP + 공인중개사 검증 시스템)
 
 **다음 우선순위**:
 
 1. 어린이집 API 운영키 전환 (info.childcare.go.kr → 개발키→운영키 신청 필요)
 2. 4/12 공공데이터 수집 결과 확인 (토요일 05:00 스케줄러)
-3. 추가 모바일 UI 개선 (Pagination, FilterChips 등)
+3. 한국산업인력공단 자격증 진위확인 API 연동 (2차 — data.go.kr 키 신청 필요)
 
 **주의사항**:
 
@@ -58,6 +58,19 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 단지 상세 헤더/액션바: text-lg md:text-2xl, flex-wrap, 버튼 text-xs md:text-sm
 - FilterDropdown: max-w-[calc(100vw-2rem)] + max-h-[70vh] overflow-y-auto (모바일 오버플로 방지)
 - ComplexInfo 탭: px-3 md:px-4, text-xs md:text-sm (모바일 탭 최적화)
+- Pagination 모바일 반응형: px-2 py-1 md:px-3 md:py-1.5, text-xs md:text-sm, gap-0.5 md:gap-1
+- FilterChips 모바일: max-h-16 md:max-h-none overflow-y-auto (칩 영역 제한)
+- FilterBar 모바일: flex-nowrap overflow-x-auto md:flex-wrap (가로 스크롤)
+- Gmail SMTP 설정 완료: supabase config push (smtp.gmail.com, 발신자: 네이버부동산)
+- 비밀번호 재설정 이메일 템플릿: supabase/templates/recovery.html (1시간 만료 안내 포함)
+- 비밀번호 재설정 페이지: forgot-password/page.tsx (링크 만료 1시간 문구 추가)
+- 공인중개사 검증 시스템: agent_verifications 테이블 (V017), 자동+수동 검증
+- 검증 흐름: /verify 신청 → 국세청 사업자등록 API 자동 검증 → 성공 시 role=expert 자동 승인
+- 검증 실패 시: verification_status=pending → 관리자 /admin/users에서 수동 승인/거부
+- 검증 API: POST /api/verify/submit, GET /api/verify/status
+- 관리자 검증 API: GET /api/admin/verifications, PATCH .../approve, PATCH .../reject
+- Header 전문가 뱃지: role=expert 시 초록색 "전문가" 표시
+- 테스트 현황: FE 518개 (57파일), BE 396개, E2E 44개 (8파일) — 전체 통과
 
 ## 기술 스택
 

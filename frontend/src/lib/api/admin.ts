@@ -2,7 +2,7 @@
  * 관리자 API — 모든 호출에 Bearer 토큰 필수
  */
 
-import type { UserProfile, AuditLog, AdminSetting, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail, SchedulerStatusResponse } from "@/types/admin";
+import type { UserProfile, AuditLog, AdminSetting, AgentVerification, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail, SchedulerStatusResponse } from "@/types/admin";
 import { fetchApi, adminHeaders, LIVE_TIMEOUT_MS } from "./core";
 
 /** 관리자: 사용자 목록 */
@@ -96,4 +96,29 @@ export async function triggerCollection(token: string, name: CollectorName) {
     `/api/admin/collect/${encodeURIComponent(name)}`,
     { method: "POST", headers: adminHeaders(token), timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
   );
+}
+
+/** 관리자: 검증 신청 목록 */
+export async function getAdminVerifications(token: string, params?: { status?: string; page?: number }) {
+  const qs = new URLSearchParams();
+  if (params?.status) qs.set("status", params.status);
+  if (params?.page) qs.set("page", String(params.page));
+  return fetchApi<PaginatedResponse<AgentVerification>>(`/api/admin/verifications?${qs}`, { headers: adminHeaders(token) });
+}
+
+/** 관리자: 검증 승인 */
+export async function approveVerification(token: string, id: number) {
+  return fetchApi<{ status: string }>(`/api/admin/verifications/${id}/approve`, {
+    method: "PATCH",
+    headers: adminHeaders(token),
+  });
+}
+
+/** 관리자: 검증 거부 */
+export async function rejectVerification(token: string, id: number, reason: string) {
+  return fetchApi<{ status: string }>(`/api/admin/verifications/${id}/reject`, {
+    method: "PATCH",
+    headers: { ...adminHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ reason }),
+  });
 }

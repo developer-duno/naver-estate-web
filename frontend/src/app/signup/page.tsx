@@ -83,8 +83,11 @@ export default function SignupPage() {
     return (
       <div className="max-w-md mx-auto px-4 py-16 text-center">
         <h1 className="text-2xl font-bold mb-4">회원가입 완료</h1>
-        <p className="text-gray-600 mb-6">
+        <p className="text-gray-600 mb-4">
           이메일로 인증 링크를 보내드렸습니다. 이메일을 확인해주세요.
+        </p>
+        <p className="text-sm text-gray-500 mb-6">
+          공인중개사이신 경우 로그인 후 <strong>중개사 인증</strong>을 진행해주세요.
         </p>
         <Link href="/login" className="text-blue-600 hover:underline">
           로그인 페이지로 이동

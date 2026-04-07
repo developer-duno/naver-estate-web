@@ -164,6 +164,11 @@ export default function Header() {
                       관리자
                     </span>
                   )}
+                  {userRole === "expert" && (
+                    <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">
+                      전문가
+                    </span>
+                  )}
                   <span className="text-xs text-gray-500 hidden sm:inline max-w-[120px] truncate">
                     {userEmail}
                   </span>

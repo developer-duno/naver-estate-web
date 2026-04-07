@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 
 export const metadata: Metadata = {
   title: "단지 상세",
@@ -10,5 +11,16 @@ export const metadata: Metadata = {
 };
 
 export default function ComplexLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  const clientId = process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID;
+  return (
+    <>
+      {clientId && (
+        <Script
+          src={`https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}`}
+          strategy="afterInteractive"
+        />
+      )}
+      {children}
+    </>
+  );
 }

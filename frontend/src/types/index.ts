@@ -93,6 +93,13 @@ export interface Article {
   realtor_phone?: string;
 }
 
+/** 매물 가격 변동 이력 항목 */
+export interface ArticlePriceHistoryItem {
+  price: number | null;
+  rent_price: number | null;
+  recorded_at: string | null;
+}
+
 /** 면적별 상세 */
 export interface PyeongDetail {
   pyeong_no: number;

@@ -58,6 +58,21 @@ export const CHART_PERIODS: { key: PeriodKey; label: string; months: number | nu
   { key: "ALL", label: "전체", months: null },
 ];
 
+/** 원 단위 → 만원/억원 변환 (세금·수수료 등) */
+export function formatWon(value?: string | null): string {
+  if (!value) return "-";
+  const num = parseFloat(value);
+  if (isNaN(num) || num < 0) return "-";
+  if (num === 0) return "0원";
+  const manwon = Math.round(num / 10000);
+  if (manwon >= 10000) {
+    const eok = Math.floor(manwon / 10000);
+    const remainder = manwon % 10000;
+    return remainder > 0 ? `${eok}억 ${remainder.toLocaleString()}만원` : `${eok}억원`;
+  }
+  return manwon.toLocaleString() + "만원";
+}
+
 /** 관리비 표시 (문자열 또는 숫자 → "N만원") */
 export function formatMaintenanceCost(cost?: string | null, numericCost?: number | null): string {
   if (cost) return cost.includes("만") ? cost : `${cost}만원`;

@@ -370,7 +370,7 @@ export default function ComplexDetailPage() {
 
       {/* 매물 상세 모달 */}
       {selectedArticle && (
-        <ArticleDetail articleNo={selectedArticle} onClose={() => setSelectedArticle(null)} />
+        <ArticleDetail articleNo={selectedArticle} onClose={() => setSelectedArticle(null)} complex={complexQuery.data} />
       )}
     </div>
   );

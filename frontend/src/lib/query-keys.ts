@@ -30,6 +30,7 @@ export const queryKeys = {
 
   // Article detail
   articleLive: (articleNo: string) => ["articleLive", articleNo] as const,
+  articlePriceHistory: (articleNo: string) => ["articlePriceHistory", articleNo] as const,
 
   // Crawl status (polling)
   crawlStatus: (no: string) => ["crawlStatus", no] as const,

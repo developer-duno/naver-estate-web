@@ -2,7 +2,7 @@
  * 매물 조회/내보내기 API
  */
 
-import type { Article, ArticleFilters } from "@/types";
+import type { Article, ArticleFilters, ArticlePriceHistoryItem } from "@/types";
 import * as direct from "@/lib/api-direct";
 import { fetchApi, isBackendAvailable, getApiBase } from "./core";
 
@@ -35,6 +35,13 @@ export async function getArticleLive(articleNo: string) {
   } catch {
     return direct.getArticleDirect(articleNo);
   }
+}
+
+/** 매물 가격 변동 이력 조회 */
+export async function getArticlePriceHistory(articleNo: string) {
+  return await fetchApi<{ article_no: string; history: ArticlePriceHistoryItem[] }>(
+    `/api/articles/${encodeURIComponent(articleNo)}/price-history`
+  );
 }
 
 /** 엑셀 다운로드 (현재 필터 적용) */

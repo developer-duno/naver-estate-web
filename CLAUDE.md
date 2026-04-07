@@ -4,12 +4,13 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-07 — MB 성능 최적화 + E2E 22→44개 + FE memo + 캐시 키/dead code 수정
+**마지막 작업**: 2026-04-07 — 세션 18 완료 (MB 성능 최적화 + E2E 44개 + 자동 크롤링 UI 갱신 + 국토교통부 소급 수집 + Watchdog 수정)
 
 **다음 우선순위**:
 
-1. info.childcare.go.kr cpmsapi021 활용신청 승인 대기 → 승인 후 CHILDCARE_API_KEY 설정 + CHILDCARE_ENABLED=true
-2. V015/V016 마이그레이션 실행 필요 (Supabase SQL Editor): apartments/trades 인덱스 + trigram
+1. 어린이집 API 운영키 전환 (info.childcare.go.kr → 개발키→운영키 신청 필요)
+2. 공공데이터 전체 단지 자동 수집 대기 (4/12 토요일 05:00 스케줄러, resultCode 버그 수정 완료)
+3. 프론트엔드 새 기능/UI 개선
 
 **주의사항**:
 
@@ -23,6 +24,10 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 범죄통계 수집 완료: 1928/1928 (100%), crime_score/crime_grade 반영됨
 - 어린이집 API: data.go.kr → api.childcare.go.kr(cpmsapi021) 전환 완료, CHILDCARE_API_KEY 별도 필요, CHILDCARE_ENABLED=false 유지
 - 관리자 수집 API: `POST /api/admin/collect/{name}` (crime-stats/air-quality/emergency/childcare)
+- 관리자 소급 수집 API: `POST /api/admin/backfill-price/{complex_no}?months_back=60` (국토교통부 실거래가 5년)
+- 공공데이터 resultCode 버그 수정 완료: "000" → "0" 정규화 (public_data_api.py)
+- 단지 상세 페이지: 자동 크롤링 후 10/20/30초 뒤 UI 자동 갱신 (쿼리 무효화)
+- startup_orchestrator.py: Watchdog 포트 충돌 수정 (_kill_port + 연속 5회 실패 방어)
 - 관리자 대시보드: StatsCards + SchedulerMonitor + CollectorTrigger (수집 트리거 + 모니터링)
 - 스케줄러 모니터링: `GET /api/admin/scheduler-status` (12개 작업 이력/통계/다음실행, 60초 자동갱신)
 - env_service 4개 수집 함수에 CrawlJob 기록 추가 (air/emergency/childcare/crime)

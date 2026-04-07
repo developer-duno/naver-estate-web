@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import {
   getComplex,
   getArticles,
@@ -45,6 +45,7 @@ export default function ComplexDetailPage() {
   // 필터/정렬/페이지 — URL을 단일 소스로 사용
   const { filters, page: currentPage, sortBy: activeSortBy, setFilters, setPage, setSortBy } = useFilterParams();
   const { starred, toggle: toggleFavorite } = useFavoriteStatus(complexNo);
+  const queryClient = useQueryClient();
   const { crawling, message: crawlMessage, messageType: crawlMessageType, setMsg: setCrawlMsg, handleCrawl } = useCrawlAction(complexNo);
   const [selectedArticleNos, setSelectedArticleNos] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(true);
@@ -141,7 +142,18 @@ export default function ComplexDetailPage() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.access_token) {
           setSessionToken(session.access_token);
-          await startLiveCrawl(complexNo, session.access_token);
+          const result = await startLiveCrawl(complexNo, session.access_token);
+          // 자동 크롤링이 실제로 시작된 경우에만 쿼리 갱신 예약
+          if (result.status === "started") {
+            [10_000, 20_000, 30_000].forEach((delay) => {
+              setTimeout(() => {
+                queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo) });
+                queryClient.invalidateQueries({ queryKey: queryKeys.complex(complexNo) });
+                queryClient.invalidateQueries({ queryKey: queryKeys.pyeongDetails(complexNo) });
+                queryClient.invalidateQueries({ queryKey: queryKeys.priceStats(complexNo) });
+              }, delay);
+            });
+          }
         }
       } catch (err) {
         if (err instanceof ApiError && err.statusCode === 403) {
@@ -149,7 +161,7 @@ export default function ComplexDetailPage() {
         }
       }
     })();
-  }, [complexNo, complexQuery.isSuccess, articlesQuery.isSuccess, pyeongQuery.isSuccess, setCrawlMsg]);
+  }, [complexNo, complexQuery.isSuccess, articlesQuery.isSuccess, pyeongQuery.isSuccess, setCrawlMsg, queryClient]);
 
   // 핸들러: 정렬 변경 → URL 업데이트 (page 리셋)
   const handleSortChange = useCallback(

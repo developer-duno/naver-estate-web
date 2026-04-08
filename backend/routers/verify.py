@@ -1,6 +1,7 @@
 """공인중개사 검증 신청 라우트 — 사용자용"""
 
 import logging
+import os
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -83,6 +84,13 @@ def submit_verification(
     biz_result = verify_business_registration(body.business_number, body.representative_name)
     existing.business_verified = biz_result["valid"] is True
 
+    # 자격증 진위확인 (license_number 입력 시)
+    lic_result: dict = {"valid": None, "message": ""}
+    if body.license_number:
+        from crawler.license_api import verify_license
+        lic_result = verify_license(body.license_number, body.representative_name)
+        existing.license_verified = lic_result["valid"] is True
+
     # 자동 승인: 사업자등록 확인됨
     auto_approved = False
     if existing.business_verified:
@@ -109,6 +117,8 @@ def submit_verification(
         "business_verified": existing.business_verified,
         "business_message": biz_result["message"],
         "auto_approved": auto_approved,
+        "license_verified": existing.license_verified,
+        "license_message": lic_result["message"] if body.license_number else None,
     }
 
 
@@ -123,7 +133,10 @@ def get_verification_status(
     ).scalar_one_or_none()
 
     if not v:
-        return {"submitted": False}
+        return {
+            "submitted": False,
+            "license_verification_available": os.getenv("HRDKOREA_ENABLED", "false").lower() == "true",
+        }
 
     return {
         "submitted": True,
@@ -133,4 +146,5 @@ def get_verification_status(
         "rejection_reason": v.rejection_reason,
         "submitted_at": v.submitted_at.isoformat() if v.submitted_at else None,
         "reviewed_at": v.reviewed_at.isoformat() if v.reviewed_at else None,
+        "license_verification_available": os.getenv("HRDKOREA_ENABLED", "false").lower() == "true",
     }

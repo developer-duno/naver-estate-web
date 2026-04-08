@@ -133,6 +133,7 @@ export interface VerificationStatusResponse {
   verification_status?: "pending" | "approved" | "rejected";
   business_verified?: boolean;
   license_verified?: boolean;
+  license_verification_available?: boolean;
   rejection_reason?: string;
   submitted_at?: string;
   reviewed_at?: string;
@@ -144,4 +145,6 @@ export interface VerifySubmitResponse {
   business_verified: boolean;
   business_message: string;
   auto_approved: boolean;
+  license_verified?: boolean;
+  license_message?: string;
 }

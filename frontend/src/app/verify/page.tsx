@@ -97,6 +97,11 @@ export default function VerifyPage() {
           <p className={`text-sm ${result.business_verified ? "text-green-600" : "text-yellow-600"}`}>
             {result.business_message}
           </p>
+          {result.license_message && (
+            <p className={`text-sm ${result.license_verified ? "text-green-600" : "text-yellow-600"}`}>
+              {result.license_message}
+            </p>
+          )}
           {result.auto_approved
             ? <p className="text-sm text-gray-600">전문가(Expert) 권한이 부여되었습니다.</p>
             : <p className="text-sm text-gray-600">관리자 심사 후 승인될 예정입니다.</p>}
@@ -129,7 +134,12 @@ export default function VerifyPage() {
           <label htmlFor="v-license" className="block text-sm font-medium text-gray-700 mb-1">공인중개사 자격증번호</label>
           <input id="v-license" type="text" value={form.license_number}
             onChange={(e) => setForm((f) => ({ ...f, license_number: e.target.value }))}
-            maxLength={30} placeholder="선택 입력" className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            disabled={!status?.license_verification_available}
+            maxLength={30} placeholder={status?.license_verification_available ? "선택 입력" : "서비스 준비 중"}
+            className={`w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500${!status?.license_verification_available ? " bg-gray-50 text-gray-400 cursor-not-allowed" : ""}`} />
+          {!status?.license_verification_available && (
+            <p className="text-xs text-gray-400 mt-1">자격증 검증 서비스 준비 중입니다.</p>
+          )}
         </div>
         <div>
           <label htmlFor="v-office" className="block text-sm font-medium text-gray-700 mb-1">중개사무소명</label>

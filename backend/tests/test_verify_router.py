@@ -193,3 +193,53 @@ def test_status_approved(mock_biz, client, db):
     assert data["submitted"] is True
     assert data["verification_status"] == "approved"
     assert data["business_verified"] is True
+
+
+# ── HRDKOREA 자격증 검증 ──
+
+
+@patch("routers.verify.verify_business_registration")
+@patch("crawler.license_api.verify_license")
+@patch.dict("os.environ", {"HRDKOREA_ENABLED": "true"})
+def test_submit_with_license_verified(mock_lic, mock_biz, client, db):
+    """HRDKOREA 활성화 + 자격증 확인됨 → license_verified=True"""
+    mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
+    mock_lic.return_value = {"valid": True, "message": "자격증 확인됨"}
+    _make_profile(db, "u1")
+
+    res = client.post("/api/verify/submit", json=_valid_body(), headers=_auth(_token("u1")))
+    data = res.json()
+    assert res.status_code == 200
+    assert data["license_verified"] is True
+    assert data["license_message"] == "자격증 확인됨"
+
+    # DB 확인
+    v = db.query(AgentVerification).filter_by(user_id="u1").one()
+    assert v.license_verified is True
+
+
+@patch("routers.verify.verify_business_registration")
+@patch("crawler.license_api.verify_license")
+@patch.dict("os.environ", {"HRDKOREA_ENABLED": "true"})
+def test_submit_license_invalid(mock_lic, mock_biz, client, db):
+    """자격증 불일치 → license_verified=False (사업자 확인은 별도 처리)"""
+    mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
+    mock_lic.return_value = {"valid": False, "message": "일치하는 자격증 정보 없음"}
+    _make_profile(db, "u1")
+
+    res = client.post("/api/verify/submit", json=_valid_body(), headers=_auth(_token("u1")))
+    data = res.json()
+    assert res.status_code == 200
+    assert data["license_verified"] is False
+    assert data["license_message"] == "일치하는 자격증 정보 없음"
+    # 사업자 확인 성공이므로 자동 승인은 여전히 작동
+    assert data["auto_approved"] is True
+
+
+@patch.dict("os.environ", {"HRDKOREA_ENABLED": "true"})
+def test_status_license_available(client, db):
+    """HRDKOREA 활성화 시 status에서 license_verification_available=true"""
+    _make_profile(db, "u1")
+    res = client.get("/api/verify/status", headers=_auth(_token("u1")))
+    data = res.json()
+    assert data["license_verification_available"] is True

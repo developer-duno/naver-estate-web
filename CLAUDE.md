@@ -4,19 +4,19 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-08 — 세션 25 완료 (이메일 알림 + 모바일 반응형 + HRDKOREA 테스트 + 보안 보강)
+**마지막 작업**: 2026-04-08 — 세션 26 완료 (스케줄러 모니터 scheduler_job_id 누락 수정)
 
 **다음 우선순위**:
 
 1. 4/11(토) 공공데이터 수집 결과 확인 (/admin → SchedulerMonitor → collect_public_trades)
-2. data.go.kr 한국산업인력공단 API 키 신청 → HRDKOREA_ENABLED=true 전환
-3. 어린이집 API 운영키 전환 (info.childcare.go.kr → 개발키→운영키 신청 필요)
-4. backend/.env에 SMTP_HOST/PORT/USER/PASS/FROM 설정 후 이메일 알림 활성화
+2. backend/.env에 SMTP_HOST/PORT/USER/PASS/FROM 설정 후 이메일 알림 활성화
+3. data.go.kr 한국산업인력공단 API 키 신청 → HRDKOREA_ENABLED=true 전환
+4. 어린이집 API 운영키 전환 (info.childcare.go.kr → 개발키→운영키 신청 필요)
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 529개 (59파일), BE 446개 (37파일), E2E 48개 (9파일) — 전체 통과
+- 테스트 현황: FE 529개 (59파일), BE 447개 (37파일), E2E 48개 (9파일) — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
 - 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED, CHILDCARE_ENABLED, CRIME_STATS_ENABLED (backend/.env)
 - V014 마이그레이션 실행 완료 (Supabase SQL Editor, 2026-04-03): crawl_jobs.scheduler_job_id
@@ -40,6 +40,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 관리자 대시보드: StatsCards + SchedulerMonitor + CollectorTrigger (수집 트리거 + 모니터링)
 - 스케줄러 모니터링: `GET /api/admin/scheduler-status` (12개 작업 이력/통계/다음실행, 60초 자동갱신)
 - env_service 4개 수집 함수에 CrawlJob 기록 추가 (air/emergency/childcare/crime)
+- scheduler_job_id 누락 수정 (세션 26): 12개 스케줄러 작업 전부 CrawlJob.scheduler_job_id 설정 → SchedulerMonitor 이력 표시
+- 크롤러 함수 scheduler_job_id 파라미터: scheduler.py kwargs로 전달, 수동 호출 시 None 기본값
+- 공공데이터 수집 skip 시 cancelled CrawlJob 기록 (API키 미설정/10일 토요일 쿼터 보호)
 - PendingRollbackError 방지: service.py 6곳 + env_service.py 1곳 db.rollback() 추가
 - E2E Playwright: Turbopack dev 시작은 성공하나 안정성 위해 `--webpack` 모드 유지 (playwright.config.ts)
 - 홈 페이지 키워드 검색 UI 제거됨 (지역 선택만 남음, /search?q= URL은 유지)
@@ -81,7 +84,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 검증 중복 처리 방지: approve/reject 시 verification_status != pending → 409
 - RejectRequest.reason: max_length=500 제한 (Pydantic Field)
 - verify/forgot-password 모바일 반응형: max-w-md sm:max-w-lg, px-3 sm:px-4, py-8 sm:py-16
-- 테스트 현황: FE 529개 (59파일), BE 446개 (37파일), E2E 48개 (9파일) — 전체 통과
+- 테스트 현황: FE 529개 (59파일), BE 447개 (37파일), E2E 48개 (9파일) — 전체 통과
 
 ## 기술 스택
 

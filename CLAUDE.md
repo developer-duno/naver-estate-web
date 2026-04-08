@@ -4,18 +4,19 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-08 — 세션 24 완료 (검증 테스트 47개 + 자격증 API 연동)
+**마지막 작업**: 2026-04-08 — 세션 25 완료 (이메일 알림 + 모바일 반응형 + HRDKOREA 테스트 + 보안 보강)
 
 **다음 우선순위**:
 
-1. 4/11(토) 공공데이터 수집 결과 확인 (/admin → SchedulerMonitor)
+1. 4/11(토) 공공데이터 수집 결과 확인 (/admin → SchedulerMonitor → collect_public_trades)
 2. data.go.kr 한국산업인력공단 API 키 신청 → HRDKOREA_ENABLED=true 전환
 3. 어린이집 API 운영키 전환 (info.childcare.go.kr → 개발키→운영키 신청 필요)
+4. backend/.env에 SMTP_HOST/PORT/USER/PASS/FROM 설정 후 이메일 알림 활성화
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 529개 (59파일), BE 432개, E2E 48개 (9파일) — 전체 통과
+- 테스트 현황: FE 529개 (59파일), BE 446개 (37파일), E2E 48개 (9파일) — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
 - 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED, CHILDCARE_ENABLED, CRIME_STATS_ENABLED (backend/.env)
 - V014 마이그레이션 실행 완료 (Supabase SQL Editor, 2026-04-03): crawl_jobs.scheduler_job_id
@@ -75,7 +76,12 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - verify 페이지: 자격증 입력란 비활성화 + "서비스 준비 중" (HRDKOREA_ENABLED=false 시)
 - VerificationReview: "자격증 검증" 컬럼 추가 (확인됨/미확인 뱃지)
 - 환경변수 추가: HRDKOREA_ENABLED, HRDKOREA_API_KEY (backend/.env)
-- 테스트 현황: FE 529개 (59파일), BE 432개, E2E 48개 (9파일) — 전체 통과
+- 환경변수 추가 (세션 25): SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM (backend/.env, 이메일 알림용)
+- 이메일 알림: services/email.py — 검증 승인/거부 시 사용자에게 이메일 발송 (best-effort, SMTP 미설정 시 건너뜀)
+- 검증 중복 처리 방지: approve/reject 시 verification_status != pending → 409
+- RejectRequest.reason: max_length=500 제한 (Pydantic Field)
+- verify/forgot-password 모바일 반응형: max-w-md sm:max-w-lg, px-3 sm:px-4, py-8 sm:py-16
+- 테스트 현황: FE 529개 (59파일), BE 446개 (37파일), E2E 48개 (9파일) — 전체 통과
 
 ## 기술 스택
 

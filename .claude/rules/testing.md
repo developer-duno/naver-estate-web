@@ -64,7 +64,7 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 | frontend/src/app/__tests__/ | Vitest | 5파일 (페이지 통합: search+mibunyang+mibunyang-detail+mibunyang-compare+verify) |
 | **프론트 합계** | Vitest | **529개** (59파일) |
 | frontend/e2e/ | Playwright | 48 (E2E 9파일, --webpack 모드, helpers.ts 공통유틸) |
-| backend/tests/ | pytest | 432 (단위+통합+API+엣지케이스+공유인프라+dialect분기+mibunyang+정렬/검색+중복제거+admin-email+환경데이터+어린이집+범죄통계+범죄통계API+sigungu매핑+스케줄러모니터링+upsert+enricher+service_price+business_api+verify_router+admin_verify+license_api, 1 스킵) |
+| backend/tests/ | pytest | 446 (단위+통합+API+엣지케이스+공유인프라+dialect분기+mibunyang+정렬/검색+중복제거+admin-email+환경데이터+어린이집+범죄통계+범죄통계API+sigungu매핑+스케줄러모니터링+upsert+enricher+service_price+business_api+verify_router+admin_verify+license_api+email, 1 스킵) |
 
 ### React Query 테스트 패턴
 - 컴포넌트/훅 테스트에서 `TestQueryProvider` 래퍼 사용 (test-setup.ts에서 export)

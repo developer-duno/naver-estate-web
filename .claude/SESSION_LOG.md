@@ -1,28 +1,36 @@
-# 세션 24 로그 (2026-04-08)
+# 세션 27 로그 (2026-04-08)
 
 ## 작업 내용
 
-### 1. 검증 시스템 테스트 (BE 36개 + FE 11개 + E2E 4개 = 51개)
-- test_business_api.py: 국세청 API 클라이언트 단위 테스트 8개
-- test_verify_router.py: /api/verify/submit, /status 라우터 테스트 11개
-- test_admin_verify_router.py: 관리자 검증 심사 라우터 테스트 10개
-- test_license_api.py: 자격증 API 클라이언트 단위 테스트 7개
-- verify.test.tsx: 인증 신청 페이지 컴포넌트 테스트 6개
-- VerificationReview.test.tsx: 관리자 심사 컴포넌트 테스트 5개
-- verify-flow.spec.ts: E2E 브라우저 테스트 4개
+### 매물 상세 모달 1열 레이아웃 리디자인
+- **배경**: 사용자가 좌측 빈 공간 문제 지적 → 지도 불필요, 가독성+프린트 최적화 요청
+- **변경**: 2열 비대칭 그리드(5col) → 1열 스택 레이아웃
+- **모달 너비**: max-w-6xl(1344px) → max-w-4xl(896px) 축소
+- **지도 제거**: ArticleMap.tsx 삭제 (ArticleDetail에서만 사용)
+- **InfoCards**: space-y-3 → grid md:grid-cols-2 gap-4 (2카드 나란히)
+- **검증**: 9 GATE 하네스 검증 통과 (🟢8, 🟡1, 🔴0)
 
-### 2. 자격증 진위확인 API 연동 (HRDKOREA feature flag)
-- license_api.py: 한국산업인력공단 자격증 진위확인 API 클라이언트
-- HRDKOREA_ENABLED=false 기본 (API 키 확보 후 true 전환)
-- verify.py: 자격증 검증 통합 + license_verification_available 상태
-- FE: 자격증 입력란 비활성화 + "서비스 준비 중" 안내 (disabled 시)
-- 관리자 VerificationReview: "자격증 검증" 컬럼 추가
-- types/admin.ts: VerifySubmitResponse에 license_verified, license_message 추가
+## 수정 파일
 
-## 통계
-- 커밋: 1개 (b6fb99c) | 파일: 13개 | +982줄
-- 테스트: FE 529개 ✅ | BE 432개 ✅ | E2E 48개 | tsc ✅ | ruff ✅
+| 파일 | 변경 |
+|------|------|
+| frontend/src/components/ArticleDetail.tsx | 2열→1열, max-w-4xl, 지도 import 제거 |
+| frontend/src/components/article/InfoCards.tsx | md:grid-cols-2 나란히 배치 |
+| frontend/src/components/article/ArticleMap.tsx | 삭제 |
 
-## 미완료
-- 4/11(토) 공공데이터 수집 결과 확인 (/admin → SchedulerMonitor)
-- data.go.kr 한국산업인력공단 API 키 신청 → HRDKOREA_API_KEY 설정 + HRDKOREA_ENABLED=true
+## 커밋
+
+1. `7876924` refactor: 매물 상세 모달 1열 레이아웃 리디자인 (지도 제거)
+
+## 테스트
+
+- FE: 529 passed (59파일)
+- Build: 통과
+- tsc: 에러 0건
+
+## 미완료 운영 작업 (코드 변경 없음)
+
+1. backend/.env SMTP 설정 → 이메일 알림 활성화
+2. data.go.kr HRDKOREA API 키 신청 → HRDKOREA_ENABLED=true
+3. info.childcare.go.kr 운영키 신청 → CHILDCARE_ENABLED=true
+4. 4/11(토) /admin → SchedulerMonitor → collect_public_trades 확인

@@ -64,7 +64,7 @@ export default function InfoCards({ article: a, complex: c }: Props) {
     : [];
 
   return (
-    <div className="space-y-3">
+    <div className="grid md:grid-cols-2 gap-4">
       <InfoCard title="매물 기본정보">
         {basicItems.map(([label, value]) => (
           <InfoRow key={label} label={label} value={value} />

@@ -14,7 +14,6 @@ import InfoCards from "@/components/article/InfoCards";
 import MaintenanceCost from "@/components/article/MaintenanceCost";
 import ArticleDescription from "@/components/article/ArticleDescription";
 import PriceHistoryTable from "@/components/article/PriceHistoryTable";
-import ArticleMap from "@/components/article/ArticleMap";
 
 interface Props {
   articleNo: string;
@@ -62,7 +61,7 @@ export default function ArticleDetail({ articleNo, onClose, complex }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="article-detail-title"
-        className="bg-white rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden mx-4"
+        className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center px-6 py-4 border-b">
@@ -84,27 +83,20 @@ export default function ArticleDetail({ articleNo, onClose, complex }: Props) {
             <p className="text-center text-gray-500 py-8">매물 정보를 불러올 수 없습니다.</p>
           )}
           {!isLoading && article && (
-            <div className="grid md:grid-cols-5 grid-cols-1 gap-6">
-              {/* 좌측: 지도 + 가격이력 */}
-              <div className="md:col-span-2 space-y-4">
-                <ArticleMap latitude={article.latitude} longitude={article.longitude} name={article.complex_name} />
-                <PriceHistoryTable articleNo={articleNo} />
-              </div>
-              {/* 우측: 가격 + 정보 + 설명 */}
-              <div className="md:col-span-3 space-y-4">
-                <PriceHeader article={article} />
-                <ChartAccordion title="시세 정보">
-                  <MarketPosition complexNo={article.complex_no} tradeTypeName={article.trade_type_name} area2M2={article.area2_m2} />
-                </ChartAccordion>
-                <ChartAccordion title="경쟁 매물">
-                  <CompetingListings complexNo={article.complex_no} tradeTypeName={article.trade_type_name} currentArticleNo={articleNo} />
-                </ChartAccordion>
-                <InfoCards article={article} complex={complex} />
-                <ChartAccordion title="관리비 상세">
-                  <MaintenanceCost complexNo={article.complex_no} area2M2={article.area2_m2} />
-                </ChartAccordion>
-                <ArticleDescription article={article} />
-              </div>
+            <div className="space-y-4">
+              <PriceHeader article={article} />
+              <PriceHistoryTable articleNo={articleNo} />
+              <InfoCards article={article} complex={complex} />
+              <ChartAccordion title="시세 정보">
+                <MarketPosition complexNo={article.complex_no} tradeTypeName={article.trade_type_name} area2M2={article.area2_m2} />
+              </ChartAccordion>
+              <ChartAccordion title="경쟁 매물">
+                <CompetingListings complexNo={article.complex_no} tradeTypeName={article.trade_type_name} currentArticleNo={articleNo} />
+              </ChartAccordion>
+              <ChartAccordion title="관리비 상세">
+                <MaintenanceCost complexNo={article.complex_no} area2M2={article.area2_m2} />
+              </ChartAccordion>
+              <ArticleDescription article={article} />
             </div>
           )}
         </div>

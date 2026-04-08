@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
@@ -213,6 +213,8 @@ def approve_verification(
     v = db.get(AgentVerification, verification_id)
     if not v:
         raise HTTPException(status_code=404, detail="검증 신청을 찾을 수 없습니다")
+    if v.verification_status != "pending":
+        raise HTTPException(status_code=409, detail="이미 처리된 검증 신청입니다")
 
     v.verification_status = "approved"
     v.reviewed_by = admin["user_id"]
@@ -228,11 +230,18 @@ def approve_verification(
 
     from deps import _user_cache
     _user_cache.delete(f"profile:{v.user_id}")
+
+    # 승인 이메일 알림 (best-effort)
+    if profile and profile.email:
+        from services.email import build_approval_email, send_email
+        subj, html = build_approval_email(profile.email)
+        send_email(profile.email, subj, html)
+
     return {"status": "approved"}
 
 
 class RejectRequest(BaseModel):
-    reason: str
+    reason: str = Field(..., max_length=500)
 
 
 @router.patch("/verifications/{verification_id}/reject")
@@ -246,6 +255,8 @@ def reject_verification(
     v = db.get(AgentVerification, verification_id)
     if not v:
         raise HTTPException(status_code=404, detail="검증 신청을 찾을 수 없습니다")
+    if v.verification_status != "pending":
+        raise HTTPException(status_code=409, detail="이미 처리된 검증 신청입니다")
     if not body.reason.strip():
         raise HTTPException(status_code=400, detail="거부 사유를 입력해주세요")
 
@@ -256,4 +267,12 @@ def reject_verification(
 
     log_action(db, admin["user_id"], "admin_verify_reject", "verification", str(verification_id), {"reason": body.reason})
     db.commit()
+
+    # 거부 이메일 알림 (best-effort)
+    user_profile = db.get(UserProfile, v.user_id)
+    if user_profile and user_profile.email:
+        from services.email import build_rejection_email, send_email
+        subj, html = build_rejection_email(user_profile.email, body.reason.strip())
+        send_email(user_profile.email, subj, html)
+
     return {"status": "rejected"}

@@ -86,8 +86,8 @@ export default function VerificationReview({ token }: Props) {
                       className="px-2 py-0.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50">
                       승인
                     </button>
-                    <button onClick={() => setRejectId(v.id)}
-                      className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200">
+                    <button onClick={() => setRejectId(v.id)} disabled={rejectMut.isPending}
+                      className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50">
                       거부
                     </button>
                   </div>

@@ -2,6 +2,8 @@
 실행: python -m pytest tests/test_admin_verify_router.py -v
 """
 
+from unittest.mock import patch
+
 from jose import jwt
 
 from db.models import AgentVerification, UserProfile
@@ -175,3 +177,51 @@ def test_reject_404(client, db):
         headers=_auth(_token("a1")),
     )
     assert res.status_code == 404
+
+
+# ── 이메일 알림 ──
+
+
+@patch("services.email.send_email", return_value=True)
+def test_approve_sends_email(mock_send, client, db):
+    """승인 시 이메일 발송 호출"""
+    _make_profile(db, "a1", role="admin")
+    _make_profile(db, "u1")
+    v = _make_verification(db, "u1")
+
+    res = client.patch(f"/api/admin/verifications/{v.id}/approve", headers=_auth(_token("a1")))
+    assert res.status_code == 200
+    mock_send.assert_called_once()
+    assert mock_send.call_args[0][0] == "u1@test.com"
+
+
+@patch("services.email.send_email", return_value=True)
+def test_reject_sends_email(mock_send, client, db):
+    """거부 시 이메일 발송 호출 — 사유 포함"""
+    _make_profile(db, "a1", role="admin")
+    _make_profile(db, "u1")
+    v = _make_verification(db, "u1")
+
+    res = client.patch(
+        f"/api/admin/verifications/{v.id}/reject",
+        json={"reason": "서류 불충분"},
+        headers=_auth(_token("a1")),
+    )
+    assert res.status_code == 200
+    mock_send.assert_called_once()
+    assert mock_send.call_args[0][0] == "u1@test.com"
+
+
+@patch("services.email.send_email", return_value=False)
+def test_approve_succeeds_even_if_email_fails(mock_send, client, db):
+    """이메일 실패해도 승인 자체는 성공"""
+    _make_profile(db, "a1", role="admin")
+    _make_profile(db, "u1")
+    v = _make_verification(db, "u1")
+
+    res = client.patch(f"/api/admin/verifications/{v.id}/approve", headers=_auth(_token("a1")))
+    assert res.status_code == 200
+    assert res.json()["status"] == "approved"
+
+    db.refresh(v)
+    assert v.verification_status == "approved"

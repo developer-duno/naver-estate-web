@@ -36,14 +36,14 @@ CRAWL_REAL_ESTATE_TYPES = set(
 
 # ── A. 단지 발견 ──
 
-def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None):
+def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, scheduler_job_id: str | None = None):
     """지역 키워드로 네이버 검색 → complexes 테이블 upsert"""
     keyword = f"{sido} {sigungu}"
     if dong:
         keyword += f" {dong}"
 
     db = SessionLocal()
-    job = CrawlJob(job_type="complex_list", target_id=keyword, status="running", started_at=utcnow())
+    job = CrawlJob(job_type="complex_list", target_id=keyword, scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow())
     db.add(job)
     db.commit()
 
@@ -89,21 +89,21 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None):
         db.close()
 
 
-def discover_all_regions():
+def discover_all_regions(scheduler_job_id: str | None = None):
     """전국 모든 지역 순회하며 단지 발견"""
     for sido, sigungu_dict in KOREA_REGIONS.items():
         for sigungu, dong_list in sigungu_dict.items():
             logger.info("단지 발견 시작: %s %s", sido, sigungu)
-            discover_complexes_by_region(sido, sigungu)
+            discover_complexes_by_region(sido, sigungu, scheduler_job_id=scheduler_job_id)
             time.sleep(2)  # 지역 간 딜레이
 
 
 # ── B. 매물 수집 ──
 
-def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = None):
+def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = None, scheduler_job_id: str | None = None):
     """단지의 전체 매물 크롤링 → articles 테이블 upsert"""
     db = SessionLocal()
-    job = CrawlJob(job_type="complex_articles", target_id=complex_no, status="running", started_at=utcnow())
+    job = CrawlJob(job_type="complex_articles", target_id=complex_no, scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow())
     db.add(job)
     db.commit()
 
@@ -174,14 +174,14 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
         db.close()
 
 
-def crawl_popular_complexes(batch_size: int = 100):
+def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None = None):
     """인기 단지 선제적 크롤링 — 최근 사용자가 조회한 단지 우선.
 
     선정 기준: last_crawled_at 최근순 (= 사용자가 실제 검색/조회한 단지)
     IP 차단 방지를 위해 단지 간 2초 대기.
     """
     db = SessionLocal()
-    job = CrawlJob(job_type="popular_crawl", status="running", started_at=utcnow())
+    job = CrawlJob(job_type="popular_crawl", scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow())
     db.add(job)
     db.commit()
 
@@ -218,7 +218,7 @@ def crawl_popular_complexes(batch_size: int = 100):
         db.close()
 
 
-def crawl_articles_batch(batch_size: int = 50):
+def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = None):
     """last_crawled_at이 가장 오래된 단지부터 batch_size만큼 매물 수집"""
     db = SessionLocal()
     try:
@@ -230,7 +230,7 @@ def crawl_articles_batch(batch_size: int = 50):
         )
         logger.info("매물 수집 배치 시작: %d개 단지", len(complexes))
         for cpx in complexes:
-            crawl_complex_articles(cpx.complex_no, cpx.sido, cpx.sigungu)
+            crawl_complex_articles(cpx.complex_no, cpx.sido, cpx.sigungu, scheduler_job_id=scheduler_job_id)
             time.sleep(1)
     finally:
         db.close()
@@ -238,10 +238,10 @@ def crawl_articles_batch(batch_size: int = 50):
 
 # ── C. 상세 보강 ──
 
-def crawl_article_details(batch_size: int = 100):
+def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = None):
     """detail_crawled=FALSE인 활성 매물의 상세 정보 크롤링"""
     db = SessionLocal()
-    job = CrawlJob(job_type="article_detail", status="running", started_at=utcnow())
+    job = CrawlJob(job_type="article_detail", scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow())
     db.add(job)
     db.commit()
 

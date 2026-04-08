@@ -138,14 +138,14 @@ def collect_price_history_for_complex(
     return {"collected": collected, "failed": failed, "total": total}
 
 
-def collect_price_history(batch_size: int = 50):
+def collect_price_history(batch_size: int = 50, scheduler_job_id: str | None = None):
     """단지별 시세 이력 수집 → complex_price_history 테이블 저장.
 
     네이버 API에서 매매(A1)/전세(B1) 시세를 가져와 월별 이력 기록.
     """
     db = SessionLocal()
     job = CrawlJob(
-        job_type="price_history", status="running", started_at=utcnow()
+        job_type="price_history", scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow()
     )
     db.add(job)
     db.commit()

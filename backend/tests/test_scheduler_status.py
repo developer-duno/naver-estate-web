@@ -190,3 +190,30 @@ def test_fail_job_helper(db):
     assert job.status == "failed"
     assert job.error_message == "테스트 에러 메시지"
     assert job.completed_at is not None
+
+
+# ── non-env 작업 scheduler_job_id 반영 ──
+
+
+@patch("crawler.scheduler.get_scheduler", return_value=None)
+def test_scheduler_status_non_env_job(mock_sched, client, db):
+    """non-env 작업(price_history)의 scheduler_job_id가 모니터에 반영되는지 확인"""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(CrawlJob(
+        job_type="price_history",
+        scheduler_job_id="collect_prices",
+        status="completed",
+        total_items=100,
+        processed_items=95,
+        started_at=now - timedelta(minutes=10),
+        completed_at=now,
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/scheduler-status", headers=_auth(_token("admin1")))
+    data = res.json()
+    price_job = next(j for j in data["jobs"] if j["scheduler_job_id"] == "collect_prices")
+    assert price_job["last_run"] is not None
+    assert price_job["last_run"]["status"] == "completed"
+    assert price_job["last_run"]["processed_items"] == 95

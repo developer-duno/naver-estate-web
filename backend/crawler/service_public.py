@@ -14,7 +14,7 @@ from utils import safe_int, utcnow
 logger = logging.getLogger(__name__)
 
 
-def collect_public_trade_data(batch_size: int = 300):
+def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | None = None):
     """공공데이터포털 아파트 매매 실거래가 수집 → complex_price_history 저장.
 
     국토교통부 API에서 시군구별 실거래가를 가져와 기존 단지에 매칭 후 저장.
@@ -23,6 +23,16 @@ def collect_public_trade_data(batch_size: int = 300):
     api_key = os.getenv("PUBLIC_DATA_API_KEY")
     if not api_key:
         logger.info("PUBLIC_DATA_API_KEY 미설정 — 공공데이터 수집 건너뜀")
+        if scheduler_job_id:
+            db = SessionLocal()
+            job = CrawlJob(
+                job_type="public_trade_data", scheduler_job_id=scheduler_job_id,
+                status="cancelled", started_at=utcnow(), completed_at=utcnow(),
+                error_message="PUBLIC_DATA_API_KEY 미설정",
+            )
+            db.add(job)
+            db.commit()
+            db.close()
         return
 
     # 매월 10일 토요일 skip (mibunyang building-info ~8,500회와 API 쿼터 충돌 방지)
@@ -30,6 +40,16 @@ def collect_public_trade_data(batch_size: int = 300):
     today = date.today()
     if today.day == 10 and today.weekday() == 5:  # 5 = Saturday
         logger.info("매월 10일 토요일 — mibunyang building-info 쿼터 충돌 방지로 수집 skip")
+        if scheduler_job_id:
+            db = SessionLocal()
+            job = CrawlJob(
+                job_type="public_trade_data", scheduler_job_id=scheduler_job_id,
+                status="cancelled", started_at=utcnow(), completed_at=utcnow(),
+                error_message="쿼터 보호 건너뜀 (매월 10일 토요일)",
+            )
+            db.add(job)
+            db.commit()
+            db.close()
         return
 
     # lazy import — import chain 실패 방지
@@ -37,7 +57,7 @@ def collect_public_trade_data(batch_size: int = 300):
 
     db = SessionLocal()
     job = CrawlJob(
-        job_type="public_trade_data", status="running", started_at=utcnow()
+        job_type="public_trade_data", scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow()
     )
     db.add(job)
     db.commit()

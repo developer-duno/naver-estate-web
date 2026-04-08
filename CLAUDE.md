@@ -4,18 +4,18 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-08 — 세션 23 완료 (모바일 UI 개선 + Gmail SMTP + 공인중개사 검증 시스템)
+**마지막 작업**: 2026-04-08 — 세션 24 완료 (검증 테스트 47개 + 자격증 API 연동)
 
 **다음 우선순위**:
 
-1. 어린이집 API 운영키 전환 (info.childcare.go.kr → 개발키→운영키 신청 필요)
-2. 4/12 공공데이터 수집 결과 확인 (토요일 05:00 스케줄러)
-3. 한국산업인력공단 자격증 진위확인 API 연동 (2차 — data.go.kr 키 신청 필요)
+1. 4/11(토) 공공데이터 수집 결과 확인 (/admin → SchedulerMonitor)
+2. data.go.kr 한국산업인력공단 API 키 신청 → HRDKOREA_ENABLED=true 전환
+3. 어린이집 API 운영키 전환 (info.childcare.go.kr → 개발키→운영키 신청 필요)
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 518개 (57파일), BE 396개, E2E 44개 (8파일) — 전체 통과
+- 테스트 현황: FE 529개 (59파일), BE 432개, E2E 48개 (9파일) — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
 - 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED, CHILDCARE_ENABLED, CRIME_STATS_ENABLED (backend/.env)
 - V014 마이그레이션 실행 완료 (Supabase SQL Editor, 2026-04-03): crawl_jobs.scheduler_job_id
@@ -70,7 +70,12 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 검증 API: POST /api/verify/submit, GET /api/verify/status
 - 관리자 검증 API: GET /api/admin/verifications, PATCH .../approve, PATCH .../reject
 - Header 전문가 뱃지: role=expert 시 초록색 "전문가" 표시
-- 테스트 현황: FE 518개 (57파일), BE 396개, E2E 44개 (8파일) — 전체 통과
+- 자격증 진위확인 API: license_api.py (HRDKOREA_ENABLED=false 기본, data.go.kr 별도 키 필요)
+- verify.py: 자격증 검증 통합 + /status에 license_verification_available 반환
+- verify 페이지: 자격증 입력란 비활성화 + "서비스 준비 중" (HRDKOREA_ENABLED=false 시)
+- VerificationReview: "자격증 검증" 컬럼 추가 (확인됨/미확인 뱃지)
+- 환경변수 추가: HRDKOREA_ENABLED, HRDKOREA_API_KEY (backend/.env)
+- 테스트 현황: FE 529개 (59파일), BE 432개, E2E 48개 (9파일) — 전체 통과
 
 ## 기술 스택
 

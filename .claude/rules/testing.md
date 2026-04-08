@@ -59,12 +59,12 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 | 경로 | 도구 | 테스트 수 |
 |------|------|----------|
 | frontend/src/lib/__tests__/ | Vitest | 12파일 (단위+엣지케이스+storage+compare-utils+mb-storage+mb-export+mb-compare-utils+mb-search-history+storage.compareHistory+storage.radarSettings) |
-| frontend/src/components/__tests__/ | Vitest | 22파일 (컴포넌트+차트+Mb*+MbSearchHistory+MbCompareHistory+PromptModal+CompareFloatingBar+SearchHistory+Pagination+SortableHeader+CollectorTrigger+SchedulerMonitor) + mb/3파일 (MbCompareFloatingBar+MbCompareRadarChart+MbLocationMap) |
+| frontend/src/components/__tests__/ | Vitest | 23파일 (컴포넌트+차트+Mb*+MbSearchHistory+MbCompareHistory+PromptModal+CompareFloatingBar+SearchHistory+Pagination+SortableHeader+CollectorTrigger+SchedulerMonitor+VerificationReview) + mb/3파일 (MbCompareFloatingBar+MbCompareRadarChart+MbLocationMap) |
 | frontend/src/hooks/__tests__/ | Vitest | 15파일 (usePriceCollect+useFilterParams+useMbFavorites+useMbCompare+useMbSearchHistory+useMbCompareHistory+useMbCompareBookmarks+useMbRadarSettings+useLocalStorageList+useCompare+useFavorites+useSearchHistory+useSmartBack+useExport+useAdminToken) |
-| frontend/src/app/__tests__/ | Vitest | 4파일 (페이지 통합: search+mibunyang+mibunyang-detail+mibunyang-compare) |
-| **프론트 합계** | Vitest | **511개** (56파일, 13축 레이더 반영) |
-| frontend/e2e/ | Playwright | 44 (E2E 8파일, --webpack 모드, helpers.ts 공통유틸) |
-| backend/tests/ | pytest | 396 (단위+통합+API+엣지케이스+공유인프라+dialect분기+mibunyang+정렬/검색+중복제거+admin-email+환경데이터+어린이집+범죄통계+범죄통계API+sigungu매핑+스케줄러모니터링+upsert+enricher+service_price, 1 스킵) |
+| frontend/src/app/__tests__/ | Vitest | 5파일 (페이지 통합: search+mibunyang+mibunyang-detail+mibunyang-compare+verify) |
+| **프론트 합계** | Vitest | **529개** (59파일) |
+| frontend/e2e/ | Playwright | 48 (E2E 9파일, --webpack 모드, helpers.ts 공통유틸) |
+| backend/tests/ | pytest | 432 (단위+통합+API+엣지케이스+공유인프라+dialect분기+mibunyang+정렬/검색+중복제거+admin-email+환경데이터+어린이집+범죄통계+범죄통계API+sigungu매핑+스케줄러모니터링+upsert+enricher+service_price+business_api+verify_router+admin_verify+license_api, 1 스킵) |
 
 ### React Query 테스트 패턴
 - 컴포넌트/훅 테스트에서 `TestQueryProvider` 래퍼 사용 (test-setup.ts에서 export)

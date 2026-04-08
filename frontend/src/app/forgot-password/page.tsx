@@ -40,8 +40,8 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <div className="max-w-md mx-auto px-4 py-16 text-center">
-        <div className="bg-white rounded-lg shadow-sm border p-8">
+      <div className="max-w-md sm:max-w-lg mx-auto px-3 sm:px-4 py-8 sm:py-16 text-center">
+        <div className="bg-white rounded-lg shadow-sm border p-6 sm:p-8">
           <div className="text-4xl mb-4">&#9993;</div>
           <h1 className="text-xl font-bold mb-3">이메일을 확인해주세요</h1>
           <p className="text-sm text-gray-600 mb-2">
@@ -60,10 +60,10 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 py-16">
+    <div className="max-w-md sm:max-w-lg mx-auto px-3 sm:px-4 py-8 sm:py-16">
       <h1 className="text-2xl font-bold text-center mb-8">비밀번호 찾기</h1>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border p-6 space-y-4">
+      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border p-4 sm:p-6 space-y-4">
         <p className="text-sm text-gray-600">
           가입 시 사용한 이메일 주소를 입력하면 비밀번호 재설정 링크를 보내드립니다.
         </p>

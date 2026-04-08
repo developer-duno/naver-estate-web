@@ -50,7 +50,7 @@ export default function VerifyPage() {
   };
 
   if (isLoading) {
-    return <div className="max-w-md mx-auto px-4 py-16"><div className="h-8 bg-gray-200 rounded animate-pulse" /></div>;
+    return <div className="max-w-md sm:max-w-lg mx-auto px-3 sm:px-4 py-8 sm:py-16"><div className="h-8 bg-gray-200 rounded animate-pulse" /></div>;
   }
 
   // 이미 제출한 경우 — 상태 표시
@@ -58,9 +58,9 @@ export default function VerifyPage() {
     const vs = status.verification_status ?? "pending";
     const style = STATUS_MAP[vs] ?? STATUS_MAP.pending;
     return (
-      <div className="max-w-md mx-auto px-4 py-16">
+      <div className="max-w-md sm:max-w-lg mx-auto px-3 sm:px-4 py-8 sm:py-16">
         <h1 className="text-2xl font-bold text-center mb-8">중개사 인증</h1>
-        <div className="bg-white rounded-lg shadow-sm border p-6 space-y-4">
+        <div className="bg-white rounded-lg shadow-sm border p-4 sm:p-6 space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-gray-700">인증 상태</span>
             <span className={`text-xs px-2 py-1 rounded ${style.color}`}>{style.label}</span>
@@ -91,9 +91,9 @@ export default function VerifyPage() {
   const result = mutation.data;
   if (result) {
     return (
-      <div className="max-w-md mx-auto px-4 py-16 text-center">
+      <div className="max-w-md sm:max-w-lg mx-auto px-3 sm:px-4 py-8 sm:py-16 text-center">
         <h1 className="text-2xl font-bold mb-4">{result.auto_approved ? "인증 완료" : "신청 접수됨"}</h1>
-        <div className="bg-white rounded-lg shadow-sm border p-6 space-y-3">
+        <div className="bg-white rounded-lg shadow-sm border p-4 sm:p-6 space-y-3">
           <p className={`text-sm ${result.business_verified ? "text-green-600" : "text-yellow-600"}`}>
             {result.business_message}
           </p>
@@ -112,9 +112,9 @@ export default function VerifyPage() {
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 py-16">
+    <div className="max-w-md sm:max-w-lg mx-auto px-3 sm:px-4 py-8 sm:py-16">
       <h1 className="text-2xl font-bold text-center mb-8">중개사 인증 신청</h1>
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border p-6 space-y-4">
+      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border p-4 sm:p-6 space-y-4">
         <p className="text-sm text-gray-600">공인중개사 자격 및 사업자 정보를 입력하면 자동 검증을 진행합니다.</p>
         {error && <div role="alert" className="bg-red-50 text-red-600 text-sm rounded-md px-3 py-2">{error}</div>}
 

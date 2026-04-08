@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 interface ChartAccordionProps {
   title: string;
@@ -18,6 +18,14 @@ export default function ChartAccordion({
   forceOpen = false,
 }: ChartAccordionProps) {
   const [open, setOpen] = useState(defaultOpen);
+
+  useEffect(() => {
+    const mql = window.matchMedia("print");
+    const handler = (e: MediaQueryListEvent) => { if (e.matches) setOpen(true); };
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+
   const isOpen = forceOpen || open;
   return (
     <div className="border rounded-lg overflow-hidden">

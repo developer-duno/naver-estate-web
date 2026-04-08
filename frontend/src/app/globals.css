@@ -24,4 +24,21 @@ body {
   .no-print { display: none !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .recharts-wrapper, table { break-inside: avoid; }
+
+  /* 매물 상세 모달 인쇄 최적화 */
+  .fixed.inset-0.z-50 {
+    position: static !important;
+    background: transparent !important;
+  }
+  .fixed.inset-0.z-50 > div {
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+  }
+  .fixed.inset-0.z-50 .overflow-y-auto {
+    max-height: none !important;
+    overflow: visible !important;
+  }
 }

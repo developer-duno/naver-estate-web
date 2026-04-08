@@ -68,7 +68,7 @@ export default function ArticleDetail({ articleNo, onClose, complex }: Props) {
           <h2 id="article-detail-title" className="text-lg font-bold">
             매물 상세{article?.complex_name ? ` — ${article.complex_name}` : ""}
           </h2>
-          <button onClick={onClose} aria-label="닫기" className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+          <button onClick={onClose} aria-label="닫기" className="text-gray-400 hover:text-gray-600 text-xl no-print">×</button>
         </div>
 
         <div className="overflow-y-auto p-6 max-h-[calc(90vh-64px)]">

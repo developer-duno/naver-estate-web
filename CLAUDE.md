@@ -4,7 +4,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-08 — 세션 27 완료 (매물 상세 모달 1열 리디자인 + 지도 제거)
+**마지막 작업**: 2026-04-09 — 세션 28 완료 (매물 상세 모달 인쇄 최적화 + 브라우저 레이아웃 검증)
 
 **다음 우선순위**:
 
@@ -30,6 +30,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 단지 상세 페이지: 자동 크롤링 후 10/20/30초 뒤 UI 자동 갱신 (쿼리 무효화)
 - startup_orchestrator.py: Watchdog 포트 충돌 수정 (_kill_port + 연속 5회 실패 방어)
 - 매물 상세 모달 리디자인: max-w-4xl, 1열 스택 레이아웃 (지도 제거, 세션 27), 7개 하위 컴포넌트(article/)
+- 매물 상세 인쇄 최적화 (세션 28): @media print에서 모달 position:static/overflow:visible, 아코디언 matchMedia('print') 자동 펼침, 닫기 버튼 no-print
 - 매물 상세에 단지정보 통합: complex prop 전달 (건설사/용적률/전세가율/주변시세 등)
 - 매물 상세 중개 강화: MarketPosition(시세)+CompetingListings(경쟁매물)+MaintenanceCost(관리비) 카드 3종
 - 매물 상세 사진 섹션 제거 + 특징/상세설명 중복 자동 제거

@@ -1,64 +1,44 @@
-# 세션 29 로그 (2026-04-09)
+# 세션 30 로그 (2026-04-10)
 
 ## 작업 내용
 
-### 1. SMTP 설정 완료
-- backend/.env에 Gmail SMTP 변수 5개 추가 (SSL 465)
-- 검증 승인/거부 시 사용자에게 이메일 발송 활성화
+### 1. 어린이집 API cpmsapi030 전환
+- cpmsapi021은 좌표(la/lo) 미제공 → 근접 매칭 불가능 (기존 코드 버그)
+- cpmsapi030으로 전환: 좌표 + 교직원 수 + 아동 수 + 유형 포함
+- API 명세서 직접 다운로드하여 파라미터 확인 (svcseq=79, 82)
+- CHILDCARE_DETAIL_API_KEY 운영키 설정 (cpmsapi030 전용)
+- CHILDCARE_ENABLED=true 전환
 
-### 2. 공공데이터 수집 확인
-- 4/11(토) collect_public_trades: skip 조건(10일+토요일)에 해당하지 않아 정상 수집 예정
+### 2. V019 마이그레이션 + DB/코드 수정
+- infra 테이블에 childcare_nearest_type, childcare_nearest_teachers 컬럼 추가
+- env_childcare.py: 새 필드 저장
+- mb_serializers.py: 직렬화 추가
+- mb_models.py: ORM 컬럼 추가
 
-### 3. 자격증 서류 업로드 전환 (HRDKOREA API 폐기 대응)
-- data.go.kr API ID 15000806 폐기 확인 (404)
-- 자격증번호 자동 검증 → 서류 업로드 + 관리자 수동 확인 방식 전환
-- 신규: services/storage.py (Supabase Storage 업로드/signed URL)
-- 신규: POST /api/verify/upload-license (5MB/JPG/PNG/PDF)
-- 신규: V018 마이그레이션 (license_doc_path 컬럼)
-- verify 페이지: 드래그앤드롭 파일 업로드 UI
-- VerificationReview: 자격증 이미지 미리보기 모달
-- 삭제: license_api.py, test_license_api.py, HRDKOREA 환경변수
-- python-multipart 의존성 추가
+### 3. CSP + Hydration 수정
+- script-src/connect-src에 https://vercel.live 추가 (Vercel 피드백 위젯 차단 해소)
+- html suppressHydrationWarning (Vercel Live DOM 주입 대응)
 
-### 4. Supabase 실행 완료
-- V018 마이그레이션 실행됨
-- license-docs Storage 버킷 + RLS 정책 생성됨
+### 4. 운영 검증 E2E (Playwright)
+- /verify 인증 신청 (파일 없이) → 심사 대기 ✅
+- /admin 거부 + 사유 입력 → 거부 표시 ✅
+- /verify 재신청 + JPG 파일 업로드 → Supabase Storage 성공 ✅
+- /admin "보기" → 이미지 미리보기 모달 (signed URL) ✅
+- /admin "승인" → 전문가 뱃지 표시 ✅
+- /verify "승인 완료" 상태 ✅
+- Gmail 이메일: 미수신 (SMTP 앱 비밀번호 미설정)
 
-## 수정 파일
-
-| 파일 | 변경 |
-|------|------|
-| backend/services/storage.py | 신규: Supabase Storage 업로드/signed URL |
-| backend/routers/verify.py | 업로드 엔드포인트 추가, license_api 제거 |
-| backend/routers/admin/users.py | license_doc_url (signed URL) 반환 추가 |
-| backend/db/models.py | license_doc_path 컬럼 추가 |
-| backend/db/migrations/V018 | 신규 |
-| backend/requirements.txt | python-multipart 추가 |
-| backend/.env.example | HRDKOREA 변수 제거 |
-| backend/crawler/license_api.py | 삭제 |
-| backend/tests/test_license_api.py | 삭제 |
-| backend/tests/test_verify_router.py | 업로드 테스트 추가 |
-| backend/tests/test_admin_verify_router.py | license_doc_url 테스트 추가 |
-| frontend/src/app/verify/page.tsx | 파일 업로드 UI |
-| frontend/src/lib/api/verify.ts | uploadLicenseDoc 추가 |
-| frontend/src/types/admin.ts | 타입 수정 |
-| frontend/src/components/admin/VerificationReview.tsx | 이미지 미리보기 |
+### 5. 스케줄러 점검
+- collect_public_trades: 다음 실행 4/11 05:00 확인 ✅
+- 어린이집: completed (2일 전, 3초) — cpmsapi030 전환 전 실행
+- 인기 단지 14:30/19:00: failed — 별도 조사 필요
 
 ## 커밋
+- `67195ce` feat: 어린이집 API cpmsapi030 전환 + CSP/Hydration 수정
+- `a46ab25` docs: 세션 30 마무리
 
-1. `cb7b524` feat: 자격증 서류 업로드 + 관리자 수동 확인 전환
-2. `2331119` docs: 세션 29 마무리
-
-## 테스트
-
-- BE: 444 passed, 1 skipped (36파일)
-- FE: 529 passed (59파일)
-- tsc: 0 errors
-- ruff: All checks passed
-
-## 다음 세션 우선순위
-
-1. 4/11(토) 이후 /admin → SchedulerMonitor에서 collect_public_trades 결과 확인
-2. 어린이집 API 운영키 전환 (info.childcare.go.kr → 개발키→운영키)
-3. 검증 이메일 발송 실테스트 (승인/거부 → Gmail 수신 확인)
-4. 자격증 업로드 실테스트 (/verify → 파일 업로드 → /admin 미리보기)
+## 미완료
+- Gmail 앱 비밀번호 설정 → SMTP_PASS 교체 → 이메일 발송 테스트
+- 인기 단지 크롤링 failed 원인 조사
+- Cloudflare Named Tunnel 설정 (api.2u.pe.kr 고정)
+- 어린이집 수집 재실행 (cpmsapi030 전환 후 첫 수집)

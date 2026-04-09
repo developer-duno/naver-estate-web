@@ -4,13 +4,14 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-09 — 세션 29 진행 중 (SMTP 설정 + 자격증 업로드 전환)
+**마지막 작업**: 2026-04-10 — 세션 30 완료 (운영 검증 + cpmsapi030 전환 + CSP 수정)
 
 **다음 우선순위**:
 
-1. 4/11(토) 공공데이터 수집 결과 확인 (/admin → SchedulerMonitor → collect_public_trades)
-2. Supabase Storage `license-docs` 버킷 생성 + V018 마이그레이션 실행
-3. 어린이집 API 운영키 전환 (info.childcare.go.kr → 개발키→운영키 신청 필요)
+1. 4/11(토) 05:00 collect_public_trades 수집 결과 확인 (/admin → SchedulerMonitor)
+2. Gmail 앱 비밀번호 설정 → SMTP_PASS 교체 → 이메일 발송 테스트
+3. 인기 단지 크롤링 14:30/19:00 failed 원인 조사
+4. Cloudflare Named Tunnel 설정 (api.2u.pe.kr 고정 URL 전환)
 
 **주의사항**:
 
@@ -22,7 +23,13 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - V015/V016 마이그레이션 실행 완료 (2026-04-07): apartments/trades 인덱스 7개 + trigram
 - mb_queries.py SQL 중복 제거: PostgreSQL regexp_replace+ROW_NUMBER, SQLite는 Python fallback (dialect 분기)
 - 범죄통계 수집 완료: 1928/1928 (100%), crime_score/crime_grade 반영됨
-- 어린이집 API: data.go.kr → api.childcare.go.kr(cpmsapi021) 전환 완료, CHILDCARE_API_KEY 별도 필요, CHILDCARE_ENABLED=false 유지
+- 어린이집 API: cpmsapi021→cpmsapi030 전환 완료 (좌표+교직원+아동수 포함), CHILDCARE_DETAIL_API_KEY 운영키 설정, CHILDCARE_ENABLED=true
+- V018 마이그레이션 실행 완료: agent_verifications.license_doc_path
+- V019 마이그레이션 실행 완료: infra.childcare_nearest_type/teachers
+- Supabase Storage license-docs 버킷 생성 완료 (Private)
+- CSP: script-src/connect-src에 https://vercel.live 추가 (피드백 위젯 차단 해소)
+- Hydration: html suppressHydrationWarning (Vercel Live 주입 대응)
+- SMTP 이메일: Gmail 앱 비밀번호 미설정 — 일반 비밀번호로는 발송 실패 (best-effort 무영향)
 - 관리자 수집 API: `POST /api/admin/collect/{name}` (crime-stats/air-quality/emergency/childcare)
 - 관리자 소급 수집 API: `POST /api/admin/backfill-price/{complex_no}?months_back=60` (국토교통부 실거래가 5년)
 - 공공데이터 resultCode 버그 수정 완료: "000" → "0" 정규화 (public_data_api.py)

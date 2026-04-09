@@ -72,6 +72,8 @@ def collect_childcare_data(batch_size: int = 100):
                 infra.childcare_nearest_dist = result["nearest_dist"]
                 infra.childcare_nearest_name = result["nearest_name"]
                 infra.childcare_nearest_capacity = result["nearest_capacity"]
+                infra.childcare_nearest_type = result.get("nearest_type", "")
+                infra.childcare_nearest_teachers = result.get("nearest_teachers", 0)
                 collected += 1
             except Exception:
                 logger.exception("[childcare] 단지 %s 처리 실패", apt_id)

@@ -257,6 +257,8 @@ class Infra(Base):
     childcare_nearest_dist: Mapped[float | None] = mapped_column(Float)
     childcare_nearest_name: Mapped[str | None] = mapped_column(Text)
     childcare_nearest_capacity: Mapped[int | None] = mapped_column(Integer)
+    childcare_nearest_type: Mapped[str | None] = mapped_column(Text)  # V019
+    childcare_nearest_teachers: Mapped[int | None] = mapped_column(Integer)  # V019
     # 범죄통계 (V013)
     crime_score: Mapped[int | None] = mapped_column(Integer)
     crime_grade: Mapped[str | None] = mapped_column(Text)

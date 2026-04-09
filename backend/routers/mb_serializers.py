@@ -170,6 +170,8 @@ def infra_to_dict(i) -> dict:
         "childcare_nearest_dist": i.childcare_nearest_dist,
         "childcare_nearest_name": i.childcare_nearest_name,
         "childcare_nearest_capacity": i.childcare_nearest_capacity,
+        "childcare_nearest_type": i.childcare_nearest_type,
+        "childcare_nearest_teachers": i.childcare_nearest_teachers,
         # 범죄통계 (V013)
         "crime_score": i.crime_score,
         "crime_grade": i.crime_grade,

@@ -2,8 +2,8 @@
 
 사용법: cd backend && python -m scripts.test_childcare_api
 
-보육정보공개포털(api.childcare.go.kr) cpmsapi021 API를 테스트한다.
-CHILDCARE_API_KEY 환경변수가 설정되어 있어야 한다.
+보육정보공개포털(api.childcare.go.kr) cpmsapi030 API를 테스트한다.
+CHILDCARE_DETAIL_API_KEY 환경변수가 설정되어 있어야 한다.
 """
 
 import logging
@@ -19,14 +19,14 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 if __name__ == "__main__":
-    api_key = os.getenv("CHILDCARE_API_KEY", "")
+    api_key = os.getenv("CHILDCARE_DETAIL_API_KEY") or os.getenv("CHILDCARE_API_KEY", "")
     if not api_key:
-        print("ERROR: CHILDCARE_API_KEY 환경변수가 설정되지 않았습니다")
-        print("  → info.childcare.go.kr에서 활용신청 후 발급받은 인증키를 설정하세요")
-        print("  → backend/.env에 CHILDCARE_API_KEY=발급받은키 추가")
+        print("ERROR: CHILDCARE_DETAIL_API_KEY 환경변수가 설정되지 않았습니다")
+        print("  → info.childcare.go.kr에서 cpmsapi030 활용신청 후 발급받은 인증키를 설정하세요")
+        print("  → backend/.env에 CHILDCARE_DETAIL_API_KEY=발급받은키 추가")
         sys.exit(1)
 
-    print("=== 어린이집 API 승인 테스트 (api.childcare.go.kr) ===")
+    print("=== 어린이집 API 승인 테스트 (cpmsapi030, api.childcare.go.kr) ===")
     print(f"  인증키: {api_key[:8]}...{api_key[-4:]}")
 
     from crawler.childcare_api import ChildcareAPI
@@ -38,11 +38,13 @@ if __name__ == "__main__":
         print(f"  SUCCESS: {len(result)}개 어린이집 조회됨")
         sample = result[0]
         print(f"  예시: {sample.get('name', '?')} (정원: {sample.get('capacity', '?')}명)")
+        print(f"  좌표: ({sample.get('lat')}, {sample.get('lng')})")
+        print(f"  유형: {sample.get('type_name', '?')}, 교사: {sample.get('teachers', '?')}명")
     elif result is not None:
         print("  WARNING: 빈 결과 반환 (시군구코드 확인 필요)")
     else:
         print("  FAIL: API 응답 없음")
-        print("  → info.childcare.go.kr에서 cpmsapi021 활용신청 승인 상태 확인 필요")
+        print("  → info.childcare.go.kr에서 cpmsapi030 활용신청 승인 상태 확인 필요")
 
     # 부산 해운대구 (행정코드 26350) 테스트
     print("\n[2] 부산 해운대구 (arcode=26350)...")

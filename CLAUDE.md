@@ -4,19 +4,18 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-09 — 세션 28 완료 (매물 상세 모달 인쇄 최적화 + 브라우저 레이아웃 검증)
+**마지막 작업**: 2026-04-09 — 세션 29 진행 중 (SMTP 설정 + 자격증 업로드 전환)
 
 **다음 우선순위**:
 
 1. 4/11(토) 공공데이터 수집 결과 확인 (/admin → SchedulerMonitor → collect_public_trades)
-2. backend/.env에 SMTP_HOST/PORT/USER/PASS/FROM 설정 후 이메일 알림 활성화
-3. data.go.kr 한국산업인력공단 API 키 신청 → HRDKOREA_ENABLED=true 전환
-4. 어린이집 API 운영키 전환 (info.childcare.go.kr → 개발키→운영키 신청 필요)
+2. Supabase Storage `license-docs` 버킷 생성 + V018 마이그레이션 실행
+3. 어린이집 API 운영키 전환 (info.childcare.go.kr → 개발키→운영키 신청 필요)
 
 **주의사항**:
 
 - ADMIN_EMAIL 환경변수: Vercel + backend/.env + frontend/.env.local 3곳 모두 설정 필수
-- 테스트 현황: FE 529개 (59파일), BE 447개 (37파일), E2E 48개 (9파일) — 전체 통과
+- 테스트 현황: FE 529개 (59파일), BE 444개 (36파일), E2E 48개 (9파일) — 전체 통과
 - Vercel 배포는 프로젝트 루트(`z:/cursor/naver-estate-web`)에서 실행
 - 환경변수 추가됨: AIR_QUALITY_ENABLED, EMERGENCY_ENABLED, CHILDCARE_ENABLED, CRIME_STATS_ENABLED (backend/.env)
 - V014 마이그레이션 실행 완료 (Supabase SQL Editor, 2026-04-03): crawl_jobs.scheduler_job_id
@@ -75,17 +74,18 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 검증 API: POST /api/verify/submit, GET /api/verify/status
 - 관리자 검증 API: GET /api/admin/verifications, PATCH .../approve, PATCH .../reject
 - Header 전문가 뱃지: role=expert 시 초록색 "전문가" 표시
-- 자격증 진위확인 API: license_api.py (HRDKOREA_ENABLED=false 기본, data.go.kr 별도 키 필요)
-- verify.py: 자격증 검증 통합 + /status에 license_verification_available 반환
-- verify 페이지: 자격증 입력란 비활성화 + "서비스 준비 중" (HRDKOREA_ENABLED=false 시)
-- VerificationReview: "자격증 검증" 컬럼 추가 (확인됨/미확인 뱃지)
-- 환경변수 추가: HRDKOREA_ENABLED, HRDKOREA_API_KEY (backend/.env)
-- 환경변수 추가 (세션 25): SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM (backend/.env, 이메일 알림용)
+- 자격증 검증: HRDKOREA API 폐기 → 자격증 서류 업로드 + 관리자 수동 확인 방식 전환 (세션 29)
+- 자격증 업로드: POST /api/verify/upload-license (Supabase Storage license-docs 버킷, 5MB/JPG/PNG/PDF)
+- services/storage.py: Supabase Storage 업로드/signed URL 생성
+- VerificationReview: "자격증 서류" 컬럼 (보기 버튼 → 이미지/PDF 미리보기 모달)
+- V018 마이그레이션: agent_verifications.license_doc_path 컬럼 추가
+- python-multipart 의존성 추가 (FastAPI UploadFile용)
+- 환경변수 추가 (세션 25→29 설정 완료): SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM (backend/.env, Gmail SMTP SSL 465)
 - 이메일 알림: services/email.py — 검증 승인/거부 시 사용자에게 이메일 발송 (best-effort, SMTP 미설정 시 건너뜀)
 - 검증 중복 처리 방지: approve/reject 시 verification_status != pending → 409
 - RejectRequest.reason: max_length=500 제한 (Pydantic Field)
 - verify/forgot-password 모바일 반응형: max-w-md sm:max-w-lg, px-3 sm:px-4, py-8 sm:py-16
-- 테스트 현황: FE 529개 (59파일), BE 447개 (37파일), E2E 48개 (9파일) — 전체 통과
+- 테스트 현황: FE 529개 (59파일), BE 444개 (36파일), E2E 48개 (9파일) — 전체 통과
 
 ## 기술 스택
 

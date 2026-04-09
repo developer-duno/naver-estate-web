@@ -125,6 +125,16 @@ def test_approve(client, db):
     assert profile.role == "expert"
 
 
+def test_approve_already_processed_409(client, db):
+    """이미 승인된 건 재승인 → 409"""
+    _make_profile(db, "a1", role="admin")
+    _make_profile(db, "u1")
+    v = _make_verification(db, "u1", status="approved")
+
+    res = client.patch(f"/api/admin/verifications/{v.id}/approve", headers=_auth(_token("a1")))
+    assert res.status_code == 409
+
+
 def test_approve_404(client, db):
     """존재하지 않는 ID → 404"""
     _make_profile(db, "a1", role="admin")
@@ -225,3 +235,30 @@ def test_approve_succeeds_even_if_email_fails(mock_send, client, db):
 
     db.refresh(v)
     assert v.verification_status == "approved"
+
+
+# ── 자격증 서류 URL ──
+
+
+@patch("services.storage.create_signed_url", return_value="https://example.com/signed-url")
+def test_list_includes_license_doc_url(mock_signed, client, db):
+    """자격증 서류 업로드된 경우 license_doc_url 반환"""
+    _make_profile(db, "a1", role="admin")
+    _make_profile(db, "u1")
+    _make_verification(db, "u1", license_doc_path="u1/license.jpg")
+
+    res = client.get("/api/admin/verifications", headers=_auth(_token("a1")))
+    data = res.json()
+    assert data["items"][0]["license_doc_url"] == "https://example.com/signed-url"
+    mock_signed.assert_called_once_with("u1/license.jpg")
+
+
+def test_list_no_license_doc_url_none(client, db):
+    """자격증 서류 미업로드 → license_doc_url=None"""
+    _make_profile(db, "a1", role="admin")
+    _make_profile(db, "u1")
+    _make_verification(db, "u1")
+
+    res = client.get("/api/admin/verifications", headers=_auth(_token("a1")))
+    data = res.json()
+    assert data["items"][0]["license_doc_url"] is None

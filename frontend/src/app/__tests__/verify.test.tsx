@@ -11,6 +11,7 @@ import VerifyPage from "../verify/page";
 vi.mock("@/lib/api", () => ({
   submitVerification: vi.fn(),
   getVerificationStatus: vi.fn(),
+  uploadLicenseDoc: vi.fn(),
 }));
 vi.mock("@/hooks/useAdminToken", () => ({
   useAdminToken: () => () => Promise.resolve("test-token"),
@@ -41,14 +42,15 @@ describe("VerifyPage", () => {
   });
 
   /** 미제출 — 폼 렌더링 */
-  it("미제출 시 4개 입력 필드와 제출 버튼이 표시된다", async () => {
+  it("미제출 시 입력 필드와 파일 업로드 영역, 제출 버튼이 표시된다", async () => {
     mockGetStatus.mockResolvedValueOnce({ submitted: false } as never);
     renderPage();
     await waitFor(() => {
       expect(screen.getByLabelText(/사업자등록번호/)).toBeInTheDocument();
     });
     expect(screen.getByLabelText(/대표자명/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/자격증번호/)).toBeInTheDocument();
+    expect(screen.getByText(/공인중개사 자격증/)).toBeInTheDocument();
+    expect(screen.getByText(/클릭 또는 드래그/)).toBeInTheDocument();
     expect(screen.getByLabelText(/중개사무소명/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /인증 신청/ })).toBeInTheDocument();
   });

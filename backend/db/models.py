@@ -175,6 +175,7 @@ class AgentVerification(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     license_number: Mapped[str | None] = mapped_column(String)
+    license_doc_path: Mapped[str | None] = mapped_column(String)
     business_number: Mapped[str | None] = mapped_column(String)
     office_name: Mapped[str | None] = mapped_column(String)
     representative_name: Mapped[str] = mapped_column(String, nullable=False)

@@ -178,6 +178,12 @@ def list_verifications(
         profiles = db.execute(select(UserProfile).where(UserProfile.user_id.in_(user_ids))).scalars().all()
         email_map = {p.user_id: p.email for p in profiles}
 
+    # 자격증 서류 signed URL 생성
+    from services.storage import create_signed_url
+    doc_url_map: dict[str, str | None] = {}
+    for v in items:
+        doc_url_map[v.user_id] = create_signed_url(v.license_doc_path) if v.license_doc_path else None
+
     return {
         "items": [
             {
@@ -190,6 +196,7 @@ def list_verifications(
                 "representative_name": v.representative_name,
                 "business_verified": v.business_verified,
                 "license_verified": v.license_verified,
+                "license_doc_url": doc_url_map.get(v.user_id),
                 "verification_status": v.verification_status,
                 "rejection_reason": v.rejection_reason,
                 "submitted_at": v.submitted_at.isoformat() if v.submitted_at else None,

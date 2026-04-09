@@ -73,8 +73,9 @@ describe("VerificationReview", () => {
     });
     expect(screen.getByText("1234567890")).toBeInTheDocument();
     expect(screen.getByText("홍길동")).toBeInTheDocument();
-    // 사업자 + 자격증 미확인 뱃지 2개
-    expect(screen.getAllByText("미확인")).toHaveLength(2);
+    // 사업자 미확인 + 자격증 미제출
+    expect(screen.getByText("미확인")).toBeInTheDocument();
+    expect(screen.getByText("미제출")).toBeInTheDocument();
   });
 
   /** 승인 버튼 */

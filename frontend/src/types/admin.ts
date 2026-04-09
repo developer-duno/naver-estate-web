@@ -120,6 +120,7 @@ export interface AgentVerification {
   representative_name: string;
   business_verified: boolean;
   license_verified: boolean;
+  license_doc_url?: string;
   verification_status: "pending" | "approved" | "rejected";
   rejection_reason?: string;
   reviewed_by?: string;
@@ -132,8 +133,7 @@ export interface VerificationStatusResponse {
   submitted: boolean;
   verification_status?: "pending" | "approved" | "rejected";
   business_verified?: boolean;
-  license_verified?: boolean;
-  license_verification_available?: boolean;
+  license_doc_uploaded?: boolean;
   rejection_reason?: string;
   submitted_at?: string;
   reviewed_at?: string;
@@ -145,6 +145,10 @@ export interface VerifySubmitResponse {
   business_verified: boolean;
   business_message: string;
   auto_approved: boolean;
-  license_verified?: boolean;
-  license_message?: string;
+}
+
+/** 자격증 서류 업로드 응답 */
+export interface LicenseUploadResponse {
+  uploaded: boolean;
+  path: string;
 }

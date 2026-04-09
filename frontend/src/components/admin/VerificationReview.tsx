@@ -8,12 +8,6 @@ import { queryKeys } from "@/lib/query-keys";
 import { getAdminVerifications, approveVerification, rejectVerification } from "@/lib/api";
 import type { AgentVerification } from "@/types/admin";
 
-const STATUS_STYLES: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-700",
-  approved: "bg-green-100 text-green-700",
-  rejected: "bg-red-100 text-red-700",
-};
-
 interface Props {
   token: string;
 }
@@ -22,6 +16,7 @@ export default function VerificationReview({ token }: Props) {
   const queryClient = useQueryClient();
   const [rejectId, setRejectId] = useState<number | null>(null);
   const [reason, setReason] = useState("");
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.admin.verifications({ status: "pending" }),
@@ -56,7 +51,7 @@ export default function VerificationReview({ token }: Props) {
               <th className="pb-2 pr-3">사업자번호</th>
               <th className="pb-2 pr-3">대표자</th>
               <th className="pb-2 pr-3">사업자 검증</th>
-              <th className="pb-2 pr-3">자격증 검증</th>
+              <th className="pb-2 pr-3">자격증 서류</th>
               <th className="pb-2 pr-3">신청일</th>
               <th className="pb-2">작업</th>
             </tr>
@@ -73,9 +68,14 @@ export default function VerificationReview({ token }: Props) {
                   </span>
                 </td>
                 <td className="py-2 pr-3">
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${v.license_verified ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                    {v.license_verified ? "확인됨" : "미확인"}
-                  </span>
+                  {v.license_doc_url ? (
+                    <button onClick={() => setPreviewUrl(v.license_doc_url!)}
+                      className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 hover:bg-blue-200">
+                      보기
+                    </button>
+                  ) : (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">미제출</span>
+                  )}
                 </td>
                 <td className="py-2 pr-3 text-xs text-gray-500">
                   {v.submitted_at ? new Date(v.submitted_at).toLocaleDateString("ko") : "-"}
@@ -97,6 +97,28 @@ export default function VerificationReview({ token }: Props) {
           </tbody>
         </table>
       </div>
+
+      {/* 자격증 서류 미리보기 모달 */}
+      {previewUrl && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setPreviewUrl(null)}>
+          <div className="bg-white rounded-lg shadow-xl p-4 max-w-2xl w-full mx-4 max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="text-lg font-semibold">자격증 서류</h3>
+              <button onClick={() => setPreviewUrl(null)} className="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+            {previewUrl.includes(".pdf") ? (
+              <iframe src={previewUrl} className="w-full h-[70vh] border rounded" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={previewUrl} alt="자격증 서류" className="w-full rounded" />
+            )}
+            <a href={previewUrl} target="_blank" rel="noopener noreferrer"
+              className="block text-center text-sm text-blue-600 hover:underline mt-3">
+              새 탭에서 열기
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* 거부 사유 입력 모달 */}
       {rejectId !== null && (

@@ -1,10 +1,10 @@
 "use client";
 
-/** 관리자 데이터 수집 트리거 — 4개 수집기를 수동으로 실행하는 버튼 그리드 */
+/** 관리자 데이터 수집 트리거 — 5개 수집기를 수동으로 실행하는 버튼 그리드 */
 
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { triggerCollection, backfillPrice, type CollectorName } from "@/lib/api";
+import { triggerCollection, type CollectorName } from "@/lib/api";
 
 interface CollectorTriggerProps {
   getToken: () => Promise<string>;
@@ -15,27 +15,12 @@ const COLLECTORS: { name: CollectorName; label: string; description: string }[] 
   { name: "air-quality", label: "대기질", description: "에어코리아 대기질 측정" },
   { name: "emergency", label: "응급의료", description: "응급의료기관 정보" },
   { name: "childcare", label: "어린이집", description: "보육정보공개시스템" },
+  { name: "backfill-price", label: "실거래가 소급", description: "이력 부족 상위 단지 자동 선정" },
 ];
 
 export default function CollectorTrigger({ getToken }: CollectorTriggerProps) {
   // 각 수집기별 결과 상태
   const [results, setResults] = useState<Record<string, { ok: boolean; message: string }>>({});
-  // 실거래가 소급 수집
-  const [backfillNo, setBackfillNo] = useState("");
-  const [backfillResult, setBackfillResult] = useState<{ ok: boolean; message: string } | null>(null);
-
-  const backfillMutation = useMutation({
-    mutationFn: async (complexNo: string) => {
-      const t = await getToken();
-      return backfillPrice(t, complexNo);
-    },
-    onSuccess: (data) => {
-      setBackfillResult({ ok: true, message: `완료: ${data.matched}건 매칭 / ${data.total_trades}건 수집` });
-    },
-    onError: (err: Error) => {
-      setBackfillResult({ ok: false, message: err.message });
-    },
-  });
 
   const mutation = useMutation<
     { status: string; collector: string },
@@ -84,37 +69,6 @@ export default function CollectorTrigger({ getToken }: CollectorTriggerProps) {
             </button>
           );
         })}
-      </div>
-
-      {/* 실거래가 소급 수집 */}
-      <div className="mt-4 pt-4 border-t">
-        <h4 className="text-sm font-medium text-gray-700 mb-2">실거래가 소급 수집</h4>
-        <p className="text-xs text-gray-500 mb-2">특정 단지의 과거 5년 실거래가를 국토교통부 API에서 수집합니다.</p>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={backfillNo}
-            onChange={(e) => setBackfillNo(e.target.value.trim())}
-            placeholder="단지번호 (예: 12345)"
-            className="border rounded px-2.5 py-1.5 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-          <button
-            onClick={() => {
-              if (!backfillNo) return;
-              setBackfillResult(null);
-              backfillMutation.mutate(backfillNo);
-            }}
-            disabled={!backfillNo || backfillMutation.isPending}
-            className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {backfillMutation.isPending ? "수집 중..." : "소급 수집"}
-          </button>
-        </div>
-        {backfillResult && (
-          <p className={`text-xs mt-1.5 ${backfillResult.ok ? "text-green-600" : "text-red-600"}`}>
-            {backfillResult.message}
-          </p>
-        )}
       </div>
     </div>
   );

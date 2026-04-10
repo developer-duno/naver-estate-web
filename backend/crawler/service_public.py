@@ -254,3 +254,49 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
         }
     finally:
         db.close()
+
+
+def backfill_price_batch(batch_size: int = 20):
+    """가격 이력이 부족한 상위 단지 일괄 소급 수집.
+
+    선정 기준: 세대수 상위 + price_history 6개월 미만인 단지.
+    """
+    from sqlalchemy import func, select
+
+    from db.models import ComplexPriceHistory
+
+    db = SessionLocal()
+    try:
+        rich_nos = (
+            select(ComplexPriceHistory.complex_no)
+            .group_by(ComplexPriceHistory.complex_no)
+            .having(func.count() >= 6)
+        )
+
+        complexes = (
+            db.query(Complex.complex_no)
+            .filter(
+                Complex.total_household_count.isnot(None),
+                Complex.cortar_no.isnot(None),
+                ~Complex.complex_no.in_(rich_nos),
+            )
+            .order_by(Complex.total_household_count.desc())
+            .limit(batch_size)
+            .all()
+        )
+
+        total = len(complexes)
+        success = 0
+        failed = 0
+        for (cno,) in complexes:
+            try:
+                backfill_price_history(cno, months_back=24)
+                success += 1
+            except Exception:
+                failed += 1
+                logger.exception("소급 수집 개별 실패: %s", cno)
+
+        logger.info("소급 배치 완료: 성공 %d / 실패 %d / 전체 %d", success, failed, total)
+        return {"success": success, "failed": failed, "total": total}
+    finally:
+        db.close()

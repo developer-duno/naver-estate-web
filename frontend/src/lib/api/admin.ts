@@ -89,19 +89,11 @@ export async function getSchedulerStatus(token: string) {
 }
 
 /** 관리자: 데이터 수집 트리거 (동기 블로킹, 최대 120초) */
-export type CollectorName = "crime-stats" | "air-quality" | "emergency" | "childcare";
+export type CollectorName = "crime-stats" | "air-quality" | "emergency" | "childcare" | "backfill-price";
 
 export async function triggerCollection(token: string, name: CollectorName) {
   return fetchApi<{ status: string; collector: string }>(
     `/api/admin/collect/${encodeURIComponent(name)}`,
-    { method: "POST", headers: adminHeaders(token), timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
-  );
-}
-
-/** 관리자: 단지 실거래가 소급 수집 (국토교통부 API, 최대 120초) */
-export async function backfillPrice(token: string, complexNo: string, monthsBack = 60) {
-  return fetchApi<{ status: string; matched: number; total_trades: number }>(
-    `/api/admin/backfill-price/${encodeURIComponent(complexNo)}?months_back=${monthsBack}`,
     { method: "POST", headers: adminHeaders(token), timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
   );
 }

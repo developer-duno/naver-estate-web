@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import type { Article } from "@/types";
-import { M2_TO_PYEONG, TRADE_TYPE_COLORS, TRADE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
+import { M2_TO_PYEONG, TRADE_TYPE_COLORS, TRADE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
 import { formatMaintenanceCost } from "@/lib/format";
 
 interface Props {
@@ -16,7 +16,12 @@ interface Props {
 /** 매물 목록 모바일 카드뷰 (md:hidden) — 데스크톱 ArticleTable의 모바일 대응 */
 function ArticleCardMobile({ articles, onRowClick, selectedArticleNos, onSelectionChange, onSelectAll }: Props) {
   if (articles.length === 0) {
-    return <div className="text-center py-12 text-gray-500">매물이 없습니다.</div>;
+    return (
+      <div className="text-center py-12 space-y-1">
+        <p className="text-gray-500">매물이 없습니다.</p>
+        <p className="text-xs text-gray-400">위의 &quot;데이터 갱신&quot; 버튼을 눌러보세요.</p>
+      </div>
+    );
   }
 
   return (
@@ -87,6 +92,11 @@ const ArticleCardItem = memo(function ArticleCardItem({ article: art, onClick, s
         }`}>
           {art.trade_type_name ?? "-"}
         </span>
+        {art.article_real_estate_type_name && art.article_real_estate_type_name !== "아파트" && (
+          <span className={`px-1 py-0.5 rounded text-xs border shrink-0 ${
+            ESTATE_TYPE_COLORS[art.article_real_estate_type_name] ?? ESTATE_TYPE_DEFAULT_COLOR
+          }`}>{art.article_real_estate_type_name}</span>
+        )}
         <span className="font-semibold text-gray-900 text-sm">{price}</span>
         {art.previous_price != null && art.numeric_price != null && art.previous_price !== art.numeric_price && (
           <span className={`text-xs ${art.numeric_price < art.previous_price ? "text-blue-600" : "text-red-600"}`}>
@@ -109,6 +119,8 @@ const ArticleCardItem = memo(function ArticleCardItem({ article: art, onClick, s
         {art.direction && <><span className="text-gray-300">·</span><span>{art.direction}</span></>}
         {art.move_in_date && <><span className="text-gray-300">·</span><span>{art.move_in_date}</span></>}
         {maint !== "-" && <><span className="text-gray-300">·</span><span>관리비 {maint}</span></>}
+        {art.monthly_rent_yield != null && <><span className="text-gray-300">·</span><span className="text-emerald-600">수익률 {art.monthly_rent_yield}%</span></>}
+        {art.article_jeonse_ratio != null && <><span className="text-gray-300">·</span><span className="text-blue-600">전세가율 {art.article_jeonse_ratio}%</span></>}
       </div>
 
       {/* 4행: 특징 (truncate) */}

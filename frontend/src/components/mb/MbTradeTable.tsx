@@ -54,12 +54,11 @@ function SortableTh({
 
 interface Props {
   trades: MbTrade[];
-  startIndex?: number;
   sort?: string;
   onSortChange?: (sort: string) => void;
 }
 
-export default function MbTradeTable({ trades, startIndex = 0, sort, onSortChange }: Props) {
+export default function MbTradeTable({ trades, sort, onSortChange }: Props) {
   const sortState = parseSortString(sort);
   if (trades.length === 0) {
     return (
@@ -74,7 +73,6 @@ export default function MbTradeTable({ trades, startIndex = 0, sort, onSortChang
       <table className="w-full text-sm border-collapse">
         <thead className="bg-gray-100 border-b-2 border-gray-300">
           <tr>
-            <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">#</th>
             <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">단지명</th>
             <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">동</th>
             <SortableTh label="거래월" sortKey="deal_month" align="left" currentSort={sortState} onSort={onSortChange} />
@@ -88,7 +86,6 @@ export default function MbTradeTable({ trades, startIndex = 0, sort, onSortChang
         <tbody>
           {trades.map((t, i) => (
             <tr key={t.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/60"}>
-              <td className="px-3 py-2 text-gray-500">{startIndex + i + 1}</td>
               <td className="px-3 py-2 font-medium text-gray-800">{t.apt_name ?? "-"}</td>
               <td className="px-3 py-2 text-gray-600">{t.dong ?? "-"}</td>
               <td className="px-3 py-2 text-gray-600">{t.deal_month ?? "-"}</td>

@@ -46,6 +46,9 @@ export default function InfoCards({ article: a, complex: c }: Props) {
     ["총층수", a.total_floor_count ? `${a.total_floor_count}층` : null],
     ["준공일", a.is_presale ? "미준공 (분양권)" : formatDateFull(a.use_approve_ymd)],
     ["주소", a.jibun_address ?? a.complex_address],
+    ["매물유형", a.article_real_estate_type_name],
+    ["월세 수익률", a.monthly_rent_yield != null ? `${a.monthly_rent_yield}%` : null],
+    ["전세가율(매물)", a.article_jeonse_ratio != null ? `${a.article_jeonse_ratio}%` : null],
   ];
 
   const complexItems: [string, string | undefined | null][] = c

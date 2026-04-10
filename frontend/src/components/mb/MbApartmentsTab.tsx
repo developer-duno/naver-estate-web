@@ -41,7 +41,6 @@ export default function MbApartmentsTab({
       </div>
       <MbApartmentTable
         apartments={query.data?.apartments ?? []}
-        startIndex={(page - 1) * PAGE_SIZE}
         sort={sort}
         onSortChange={onSortChange}
         isInCompare={isInCompare}

@@ -186,6 +186,7 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
     db.commit()
 
     try:
+        # 1순위: 사용자가 최근 조회한 단지 (last_crawled_at 최신순)
         complexes = (
             db.query(Complex)
             .filter(Complex.last_crawled_at.isnot(None))
@@ -193,6 +194,18 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
             .limit(batch_size)
             .all()
         )
+
+        # 폴백: 인기 단지가 없으면 최근 등록된 단지로 로테이션
+        if not complexes:
+            complexes = (
+                db.query(Complex)
+                .filter(Complex.total_household_count.isnot(None))
+                .order_by(Complex.total_household_count.desc())
+                .limit(batch_size)
+                .all()
+            )
+            if complexes:
+                logger.info("인기 단지 0개 → 세대수 상위 %d개 단지로 폴백", len(complexes))
 
         total = len(complexes)
         logger.info("인기 단지 선제적 크롤링 시작: %d개 단지", total)

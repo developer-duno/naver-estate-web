@@ -8,6 +8,7 @@ import { filterReducer, buildInitState, type FilterState } from "./filter/reduce
 import { buildArticleFilters } from "./filter/emitFilters";
 import { TradeTypeSection, PriceSection, AreaSection, FloorSection, MoveInSection, RoomSection, DetailSection } from "./filter/FilterSections";
 import FilterChips from "./filter/FilterChips";
+import HintIcon from "./HintIcon";
 
 interface Props {
   onChange: (filters: ArticleFilters) => void;
@@ -104,6 +105,7 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
     <div className="bg-white rounded-lg shadow-sm border p-3 space-y-2">
       {/* ── 툴바 버튼 행 ── */}
       <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto md:flex-wrap md:overflow-x-visible">
+        <HintIcon text="거래유형, 가격, 면적 등으로 매물을 필터링합니다" className="mr-0.5" />
         <FilterDropdown label="거래유형" isActive={s.tradeType !== "전체"} summary={s.tradeType !== "전체" ? s.tradeType : undefined} isOpen={openDropdown === "trade"} onToggle={() => toggle("trade")}>
           <TradeTypeSection s={s} setImmediate={setImmediate} />
         </FilterDropdown>

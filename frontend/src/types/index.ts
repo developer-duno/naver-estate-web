@@ -91,6 +91,8 @@ export interface Article {
   article_real_estate_type_name?: string;
   realtor_id?: string;
   realtor_phone?: string;
+  monthly_rent_yield?: number;      // 월세 수익률 (%)
+  article_jeonse_ratio?: number;    // 개별 전세가율 (%)
 }
 
 /** 매물 가격 변동 이력 항목 */

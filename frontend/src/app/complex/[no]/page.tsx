@@ -27,6 +27,7 @@ import ArticleTable from "@/components/ArticleTable";
 import ArticleCardMobile from "@/components/ArticleCardMobile";
 import ArticleDetail from "@/components/ArticleDetail";
 import Pagination from "@/components/Pagination";
+import HintIcon from "@/components/HintIcon";
 
 function formatTimeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -328,6 +329,7 @@ export default function ComplexDetailPage() {
           >
             {crawling ? "갱신 중..." : "데이터 갱신"}
           </button>
+          <HintIcon text="네이버에서 최신 매물을 다시 가져옵니다 (30초~2분)" />
           <button
             onClick={handleExport}
             disabled={exporting}

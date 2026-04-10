@@ -99,4 +99,32 @@ def article_to_dict(a, complex_obj=None) -> dict:
         "article_real_estate_type_name": getattr(a, "article_real_estate_type_name", None),
         "realtor_id": getattr(a, "realtor_id", None),
         "realtor_phone": getattr(a, "realtor_phone", None),
+        # 수익률 (동적 계산, DB 컬럼 불필요)
+        "monthly_rent_yield": _calc_rent_yield(a),
+        "article_jeonse_ratio": _calc_jeonse_ratio(a, c),
     }
+
+
+def _calc_rent_yield(a) -> float | None:
+    """월세 수익률: (월세 × 12) / 보증금 × 100"""
+    if (
+        a.trade_type_name == "월세"
+        and a.numeric_rent_price
+        and a.numeric_price
+        and a.numeric_price > 0
+    ):
+        return round((a.numeric_rent_price * 12) / a.numeric_price * 100, 2)
+    return None
+
+
+def _calc_jeonse_ratio(a, c) -> float | None:
+    """개별 전세가율: 전세보증금 / 매매중위가 × 100"""
+    c_median = getattr(c, "nearby_median_price", None) if c else None
+    if (
+        a.trade_type_name == "전세"
+        and a.numeric_price
+        and c_median
+        and c_median > 0
+    ):
+        return round(a.numeric_price / c_median * 100, 1)
+    return None

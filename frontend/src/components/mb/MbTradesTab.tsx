@@ -35,7 +35,6 @@ export default function MbTradesTab({
       </div>
       <MbTradeTable
         trades={query.data?.trades ?? []}
-        startIndex={(page - 1) * PAGE_SIZE}
         sort={sort}
         onSortChange={onSortChange}
       />

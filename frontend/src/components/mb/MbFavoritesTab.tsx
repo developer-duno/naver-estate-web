@@ -119,7 +119,6 @@ export default function MbFavoritesTab({ favorites, onRemove }: Props) {
                   className="accent-blue-600"
                 />
               </th>
-              <th className="px-3 py-2 text-left text-gray-600 w-12">#</th>
               <th className="px-3 py-2 text-left text-gray-600">단지명</th>
               <th className="px-3 py-2 text-left text-gray-600">지역</th>
               <th className="px-3 py-2 text-center text-gray-600">추가일</th>
@@ -148,7 +147,6 @@ export default function MbFavoritesTab({ favorites, onRemove }: Props) {
                     className="accent-blue-600"
                   />
                 </td>
-                <td className="px-3 py-2 text-gray-400">{i + 1}</td>
                 <td className="px-3 py-2 font-medium text-gray-900">{fav.name}</td>
                 <td className="px-3 py-2 text-gray-500">{fav.region ?? "-"}</td>
                 <td className="px-3 py-2 text-center text-gray-400 text-xs">

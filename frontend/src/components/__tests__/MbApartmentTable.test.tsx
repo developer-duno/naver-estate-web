@@ -61,16 +61,6 @@ describe("MbApartmentTable 렌더링", () => {
     expect(mockPush).toHaveBeenCalledWith("/mibunyang/APT001");
   });
 
-  it("여러 아파트가 올바른 번호로 표시된다", () => {
-    const apts = [
-      createMockApartment({ id: "A1", name: "단지1" }),
-      createMockApartment({ id: "A2", name: "단지2" }),
-    ];
-    render(<MbApartmentTable apartments={apts} startIndex={10} />);
-    expect(screen.getByText("11")).toBeInTheDocument();
-    expect(screen.getByText("12")).toBeInTheDocument();
-  });
-
   it("null 필드는 '-'로 표시된다", () => {
     render(<MbApartmentTable apartments={[createMockApartment({ gu: undefined, units: undefined, builder: undefined })]} />);
     const dashes = screen.getAllByText("-");

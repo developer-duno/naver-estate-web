@@ -12,6 +12,7 @@ import {
 import { COMPARE_COLORS } from "@/lib/constants";
 import { useMbRadarSettings } from "@/hooks/useMbRadarSettings";
 import type { MbApartment } from "@/types";
+import HintIcon from "@/components/HintIcon";
 
 const RADAR_HEIGHT = 400;
 const NORMALIZE_MAX = 100;
@@ -127,7 +128,7 @@ export default function MbCompareRadarChart({ apartments }: Props) {
 
   return (
     <div className="bg-white rounded-lg shadow-sm border p-4">
-      <h3 className="text-sm font-semibold text-gray-700 mb-2">종합 비교 (레이더)</h3>
+      <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1">종합 비교 (레이더) <HintIcon text="축을 선택하고 가중치를 조절하세요. 아래 슬라이더로 중요도 설정 가능" /></h3>
 
       {/* 축 선택 칩 */}
       <div className="flex flex-wrap items-center gap-1.5 mb-2 no-print">

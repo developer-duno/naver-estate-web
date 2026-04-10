@@ -61,7 +61,10 @@ function ArticleTable({ articles, onRowClick, onSortChange, selectedArticleNos, 
 
   if (articles.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-500">매물이 없습니다.</div>
+      <div className="text-center py-12 space-y-1">
+        <p className="text-gray-500">매물이 없습니다.</p>
+        <p className="text-xs text-gray-400">위의 &quot;데이터 갱신&quot; 버튼을 눌러보세요.</p>
+      </div>
     );
   }
 
@@ -169,6 +172,13 @@ const ArticleRow = memo(function ArticleRow({ article: art, index, onClick, sele
       </Td>
       <Td className="text-right">{area}</Td>
       <Td className="text-right">{ppyeong}</Td>
+      <Td className="text-right">
+        {art.monthly_rent_yield != null
+          ? <span className="text-emerald-600">{art.monthly_rent_yield}%</span>
+          : art.article_jeonse_ratio != null
+          ? <span className="text-blue-600">{art.article_jeonse_ratio}%</span>
+          : "-"}
+      </Td>
       <Td className="text-center">{rooms}</Td>
       <Td className="text-center">{moveIn}</Td>
       <Td className="text-right">{maint}</Td>

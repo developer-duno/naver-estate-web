@@ -56,7 +56,7 @@ function SortableTh({
 
 interface Props {
   apartments: MbApartment[];
-  startIndex?: number;
+
   sort?: string;
   onSortChange?: (sort: string) => void;
   isInCompare?: (id: string) => boolean;
@@ -64,7 +64,7 @@ interface Props {
   compareFull?: boolean;
 }
 
-function MbApartmentTable({ apartments, startIndex = 0, sort, onSortChange, isInCompare, onCompareToggle, compareFull }: Props) {
+function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompareToggle, compareFull }: Props) {
   const router = useRouter();
   const sortState = parseSortString(sort);
   const { isFavorite, toggle: toggleFav } = useMbFavorites();
@@ -83,7 +83,6 @@ function MbApartmentTable({ apartments, startIndex = 0, sort, onSortChange, isIn
         <thead className="bg-gray-100 border-b-2 border-gray-300">
           <tr>
             <th className="px-2 py-2.5 text-center text-gray-700 font-semibold w-10" aria-label="액션" />
-            <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">#</th>
             <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">단지명</th>
             <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">지역</th>
             <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">시군구</th>
@@ -139,7 +138,6 @@ function MbApartmentTable({ apartments, startIndex = 0, sort, onSortChange, isIn
                   </button>
                 )}
               </td>
-              <td className="px-3 py-2 text-gray-500">{startIndex + i + 1}</td>
               <td className="px-3 py-2 font-medium text-blue-700 hover:underline">{apt.name}</td>
               <td className="px-3 py-2 text-gray-600">{apt.region}</td>
               <td className="px-3 py-2 text-gray-600">{apt.gu ?? "-"}</td>

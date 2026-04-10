@@ -205,6 +205,17 @@ def export_articles_to_excel(
             "취득세": format_acquisition_tax(art.acquisition_tax),
             "중개보수": format_broker_fee(art.broker_fee),
             "주소": _safe_excel(art.jibun_address or ""),
+            "매물유형": art.article_real_estate_type_name or "",
+            "월세수익률(%)": (
+                round((art.numeric_rent_price * 12) / art.numeric_price * 100, 2)
+                if art.trade_type_name == "월세" and art.numeric_rent_price and art.numeric_price and art.numeric_price > 0
+                else ""
+            ),
+            "전세가율(%)": (
+                round(art.numeric_price / complex_obj.nearby_median_price * 100, 1)
+                if art.trade_type_name == "전세" and art.numeric_price and complex_obj and complex_obj.nearby_median_price and complex_obj.nearby_median_price > 0
+                else ""
+            ),
         })
 
     try:

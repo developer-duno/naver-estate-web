@@ -14,6 +14,7 @@ export interface ColumnDef {
   label: string;
   className?: string;
   sortable?: boolean;
+  headerTitle?: string;
   getSortValue?: (art: Record<string, unknown>) => number | null;
   getSortText?: (art: Record<string, unknown>) => string;
 }
@@ -52,7 +53,7 @@ export default function SortableHeader({
         type="button"
         onClick={handleSortClick}
         className={`flex items-center gap-0.5 ${column.sortable ? "cursor-pointer hover:text-blue-600" : "cursor-default"}`}
-        title={column.sortable ? "클릭하여 정렬" : undefined}
+        title={column.headerTitle ?? (column.sortable ? "클릭하여 정렬" : undefined)}
       >
         <span>{column.label}</span>
         {column.sortable && isSorted && (

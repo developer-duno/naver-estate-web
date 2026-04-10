@@ -53,6 +53,17 @@ export const COLUMNS: ColumnDef[] = [
     getSortValue: (a) => (a as unknown as Article).price_per_pyeong ?? null,
   },
   {
+    key: "yield",
+    label: "수익률",
+    headerTitle: "월세: (월세×12)/보증금, 전세: 보증금/매매중위가",
+    className: "w-[70px] text-right",
+    sortable: true,
+    getSortValue: (a) => {
+      const art = a as unknown as Article;
+      return art.monthly_rent_yield ?? art.article_jeonse_ratio ?? null;
+    },
+  },
+  {
     key: "rooms",
     label: "방/욕",
     className: "w-[45px] text-center",

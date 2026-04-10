@@ -98,6 +98,14 @@ export async function triggerCollection(token: string, name: CollectorName) {
   );
 }
 
+/** 관리자: 단지 실거래가 소급 수집 (국토교통부 API, 최대 120초) */
+export async function backfillPrice(token: string, complexNo: string, monthsBack = 60) {
+  return fetchApi<{ status: string; matched: number; total_trades: number }>(
+    `/api/admin/backfill-price/${encodeURIComponent(complexNo)}?months_back=${monthsBack}`,
+    { method: "POST", headers: adminHeaders(token), timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
+  );
+}
+
 /** 관리자: 검증 신청 목록 */
 export async function getAdminVerifications(token: string, params?: { status?: string; page?: number }) {
   const qs = new URLSearchParams();

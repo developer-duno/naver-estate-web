@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useCallback, useState } from "react";
 
 interface Props {
   /** 버튼에 표시할 기본 라벨 */
@@ -30,6 +30,18 @@ const FilterDropdown = React.memo(function FilterDropdown({
   children,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [alignRight, setAlignRight] = useState(false);
+
+  // 드롭다운 우측 오버플로 감지
+  useEffect(() => {
+    if (isOpen && panelRef.current) {
+      const rect = panelRef.current.getBoundingClientRect();
+      setAlignRight(rect.right > window.innerWidth - 16);
+    } else {
+      setAlignRight(false);
+    }
+  }, [isOpen]);
 
   // 외부 클릭 시 닫기
   const handleClickOutside = useCallback(
@@ -61,7 +73,7 @@ const FilterDropdown = React.memo(function FilterDropdown({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 min-w-[200px] max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto p-3">
+        <div ref={panelRef} className={`absolute top-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 min-w-[200px] max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto p-3 ${alignRight ? "right-0" : "left-0"}`}>
           {children}
         </div>
       )}

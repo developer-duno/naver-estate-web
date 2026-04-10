@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: blob: https://*.naver.net https://*.pstatic.net",
-              "connect-src 'self' http://localhost:* https://*.supabase.co https://*.railway.app https://*.trycloudflare.com https://oapi.map.naver.com https://openapi.map.naver.com https://vercel.live",
+              "connect-src 'self' http://localhost:* https://*.supabase.co https://*.railway.app https://api.2u.pe.kr https://oapi.map.naver.com https://openapi.map.naver.com https://vercel.live",
               "media-src 'self' data:",
               "frame-ancestors 'none'",
             ].join("; "),

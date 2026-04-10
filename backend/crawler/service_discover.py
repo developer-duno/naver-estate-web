@@ -194,19 +194,34 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
             .all()
         )
 
-        logger.info("인기 단지 선제적 크롤링 시작: %d개 단지", len(complexes))
+        total = len(complexes)
+        logger.info("인기 단지 선제적 크롤링 시작: %d개 단지", total)
         processed = 0
+        failed = 0
+        failed_nos: list[str] = []
         for cpx in complexes:
-            crawl_complex_articles(cpx.complex_no, cpx.sido, cpx.sigungu)
-            processed += 1
+            try:
+                crawl_complex_articles(cpx.complex_no, cpx.sido, cpx.sigungu)
+                processed += 1
+            except Exception:
+                failed += 1
+                failed_nos.append(str(cpx.complex_no))
+                logger.exception("인기 단지 크롤링 개별 실패: complex %s", cpx.complex_no)
             time.sleep(2)
 
-        job.status = "completed"
-        job.total_items = len(complexes)
+        job.total_items = total
         job.processed_items = processed
         job.completed_at = utcnow()
+        if failed == 0:
+            job.status = "completed"
+        elif processed == 0:
+            job.status = "failed"
+            job.error_message = f"전체 {total}개 단지 실패: {', '.join(failed_nos[:20])}"
+        else:
+            job.status = "completed"
+            job.error_message = f"{failed}/{total}개 단지 실패: {', '.join(failed_nos[:20])}"
         db.commit()
-        logger.info("인기 단지 선제적 크롤링 완료: %d개 단지", processed)
+        logger.info("인기 단지 선제적 크롤링 완료: 성공 %d / 실패 %d / 전체 %d", processed, failed, total)
 
     except Exception as e:
         db.rollback()

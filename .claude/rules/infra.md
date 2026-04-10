@@ -2,32 +2,46 @@
 
 ## 집 서버 재시작 후 복구 절차
 
-컴퓨터를 껐다 켜면 백엔드 + 터널이 꺼지므로 아래 순서대로 실행:
+### 자동 시작 (정상 경로)
 
-### 1. 백엔드 서버 실행 (집 서버에서 cmd 열고)
+Windows Startup 폴더의 BAT가 `scripts/startup_orchestrator.py`를 실행:
+1. 기존 프로세스 정리 (port 8002 + cloudflared)
+2. 백엔드 서버 시작 → health check 대기
+3. Cloudflare Named Tunnel 시작 (api.2u.pe.kr)
+4. Watchdog (30초 간격 생존 감시, 죽으면 재시작)
 
-```
+### 수동 복구 (자동 시작 실패 시)
+
+```bash
+# 1. 백엔드 서버 실행 (집 서버 cmd)
 D:
 cd cursor\naver-estate-web\backend
 python -m uvicorn main:app --host 0.0.0.0 --port 8002
+
+# 2. Named Tunnel 실행 (cmd 하나 더)
+cloudflared tunnel run naver-estate-backend
 ```
 
-### 2. Cloudflare Tunnel 실행 (cmd 하나 더 열고)
+URL이 고정(api.2u.pe.kr)이므로 Vercel 재배포 불필요.
 
-```
-cloudflared tunnel --url http://localhost:8002
-```
-
-→ `https://xxxx.trycloudflare.com` 새 URL 생성됨 (매번 바뀜)
-
-### 3. Vercel 환경변수 업데이트 + 재배포 (개발 PC에서)
+### Named Tunnel 사전 작업 (1회성, 미완료)
 
 ```bash
-cd z:/cursor/naver-estate-web
-npx vercel env rm NEXT_PUBLIC_API_URL production -y
-printf "새URL" | npx vercel env add NEXT_PUBLIC_API_URL production
-npx vercel --prod
+cloudflared tunnel create naver-estate-backend
+cloudflared tunnel route dns naver-estate-backend api.2u.pe.kr
 ```
+
+`~/.cloudflared/config.yml`:
+```yaml
+tunnel: naver-estate-backend
+credentials-file: ~/.cloudflared/<tunnel-id>.json
+ingress:
+  - hostname: api.2u.pe.kr
+    service: http://localhost:8002
+  - service: http_status:404
+```
+
+Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 
 ### Vercel 프로젝트 정보
 
@@ -42,51 +56,51 @@ npx vercel --prod
 
 ## 스케줄러 (APScheduler)
 
-| 작업             | 주기                   | 설명                                                                   |
-| ---------------- | ---------------------- | ---------------------------------------------------------------------- |
-| 전국 단지 발견   | 일요일 3시             | 네이버 키워드 검색으로 신규 단지 수집                                  |
-| 매물 수집 배치   | 12시간 interval        | 최근 조회 단지 매물 크롤링 (CRAWL_INTERVAL_HOURS)                      |
-| 매물 상세 보강   | 4시간 interval         | 매물 상세 정보 크롤링 (CRAWL_DETAIL_INTERVAL_MIN)                      |
-| 시세 이력 수집   | 수요일 4시             | 단지별 시세(매매/전세) 주간 수집                                       |
-| 인기 단지 크롤링 | 매일 10:30/14:30/19:00 | 자주 조회되는 단지 선제적 크롤링 (POPULAR_CRAWL_ENABLED)               |
-| 공공데이터 수집  | 토요일 5시             | 국토교통부 실거래가 API (PUBLIC_DATA_ENABLED, 매월 10일 토요일은 skip) |
-| 대기질 수집     | 매일 2시               | 에어코리아 API (AIR_QUALITY_ENABLED, 매월 10일 토요일은 skip)          |
-| 응급의료 수집   | 매월 첫째 월요일 3시   | NEMC 응급의료기관 API (EMERGENCY_ENABLED)                              |
-| 어린이집 수집   | 매월 첫째 목요일 6시   | CPMS 어린이집 API (CHILDCARE_ENABLED, 서비스 신청 필요)                |
-| 범죄통계 수집   | 분기별 첫째 일요일 4시 | 경찰청 odcloud API (CRIME_STATS_ENABLED, CSV 폴백)                     |
+| 작업 | 주기 | 설명 |
+|------|------|------|
+| 전국 단지 발견 | 일요일 3시 | 네이버 키워드 검색으로 신규 단지 수집 |
+| 매물 수집 배치 | 12시간 interval | 최근 조회 단지 매물 크롤링 |
+| 매물 상세 보강 | 4시간 interval | 매물 상세 정보 크롤링 |
+| 시세 이력 수집 | 수요일 4시 | 단지별 시세(매매/전세) 주간 수집 |
+| 인기 단지 크롤링 | 매일 10:30/14:30/19:00 | 자주 조회되는 단지 선제적 크롤링, 개별 try/except |
+| 공공데이터 수집 | 토요일 5시 | 국토교통부 실거래가 (10일 토요일 skip) |
+| 대기질 수집 | 매일 2시 | 에어코리아 API |
+| 응급의료 수집 | 매월 첫째 월 3시 | NEMC 응급의료기관 API |
+| 어린이집 수집 | 매월 첫째 목 6시 | CPMS cpmsapi030 API |
+| 범죄통계 수집 | 분기별 첫째 일 4시 | 경찰청 odcloud API (CSV 폴백) |
 
 ## 공유 인프라 규칙 (mibunyang 프로젝트와 공유)
 
 ### data.go.kr API 쿼터 (일일 10,000회, 동일 키 공유)
 
-| 일자      | 프로젝트         | 워크플로우                       | 추정 호출수  |
-| --------- | ---------------- | -------------------------------- | ------------ |
-| 매월 1일  | mibunyang        | collect-unsold-kosis             | ~1           |
-| 매월 5일  | mibunyang        | collect-population, market-stats | ~100         |
-| 매월 6일  | mibunyang        | collect-trades + molit-units     | ~1,500~3,800 |
-| 매월 10일 | mibunyang        | **collect-building-info**        | **~8,500**   |
-| 토요일    | naver-estate-web | collect_public_trades            | ~3,600       |
+| 일자 | 프로젝트 | 워크플로우 | 추정 호출수 |
+|------|----------|-----------|------------|
+| 매월 1일 | mibunyang | collect-unsold-kosis | ~1 |
+| 매월 5일 | mibunyang | collect-population, market-stats | ~100 |
+| 매월 6일 | mibunyang | collect-trades + molit-units | ~1,500~3,800 |
+| 매월 10일 | mibunyang | **collect-building-info** | **~8,500** |
+| 토요일 | naver-estate-web | collect_public_trades | ~3,600 |
 
 - **위험일**: 매월 10일이 토요일 → 8,500 + 3,600 = 12,100 > 10,000
-- **대응**: `service.py`의 `collect_public_trade_data()`에서 매월 10일 토요일이면 skip
+- **대응**: collect_public_trade_data()에서 매월 10일 토요일이면 skip
 
 ### 네이버 크롤링 시간 분리 (같은 집 서버 IP)
 
-| 시간              | 프로젝트         | 작업                  | 실행일             |
-| ----------------- | ---------------- | --------------------- | ------------------ |
-| 02:00             | naver-estate-web | collect_air_quality   | 매일               |
-| 03:00 (첫째 월)   | naver-estate-web | collect_emergency     | 매월 첫째 월요일   |
-| 03:00             | naver-estate-web | discover_regions      | 일요일             |
-| 04:00             | naver-estate-web | collect_prices        | 수요일             |
-| 08:00             | mibunyang        | 로컬 naver-collect.py | 월/목              |
-| 10:30/14:30/19:00 | naver-estate-web | popular 크롤링        | 매일               |
-| 12h interval      | naver-estate-web | crawl_articles        | 매일 (시간 불고정) |
-| 4h interval       | naver-estate-web | crawl_details         | 매일 (시간 불고정) |
+| 시간 | 프로젝트 | 작업 | 실행일 |
+|------|----------|------|--------|
+| 02:00 | naver-estate-web | collect_air_quality | 매일 |
+| 03:00 (첫째 월) | naver-estate-web | collect_emergency | 매월 첫째 월 |
+| 03:00 | naver-estate-web | discover_regions | 일요일 |
+| 04:00 | naver-estate-web | collect_prices | 수요일 |
+| 08:00 | mibunyang | 로컬 naver-collect.py | 월/목 |
+| 10:30/14:30/19:00 | naver-estate-web | popular 크롤링 | 매일 |
+| 12h interval | naver-estate-web | crawl_articles | 매일 |
+| 4h interval | naver-estate-web | crawl_details | 매일 |
 
 ### 공용 테이블 규칙 (같은 Supabase DB)
 
 - 공용: `complexes`, `articles`, `complex_price_history`, `trades` (양쪽 upsert)
-- mibunyang 전용: `apartments`, `unsold_history`, `regions`, `prices`, `trade_stats`, `builders`, `infra`, `schools`, `transport`, `air_quality_stations` (ORM: `db/mb_models.py`)
+- mibunyang 전용: `apartments`, `unsold_history`, `regions`, `prices`, `trade_stats`, `builders`, `infra`, `schools`, `transport`, `air_quality_stations`
 - **기존 컬럼 타입 변경/삭제 금지** — 컬럼 추가만 허용
 - ALTER/DROP 전 상대 프로젝트의 SELECT 쿼리/ORM 모델 검색 필수
-- 컬럼명 불일치 주의: naver-estate-web ORM은 `latitude`/`longitude`/`total_household_count`, mibunyang은 `lat`/`lng`/`total_households` (mb_models.py에서 mapped_column alias로 해결)
+- 컬럼명 불일치 주의: naver-estate-web은 `latitude`/`longitude`, mibunyang은 `lat`/`lng` (mb_models.py alias)

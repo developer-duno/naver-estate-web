@@ -90,8 +90,8 @@ function MbApartmentTable({ apartments, startIndex = 0, sort, onSortChange, isIn
             <SortableTh label="세대수" sortKey="units" align="right" currentSort={sortState} onSort={onSortChange} />
             <SortableTh label="미분양" sortKey="unsold" align="right" currentSort={sortState} onSort={onSortChange} />
             <SortableTh label="미분양률" sortKey="unsold_rate" align="right" currentSort={sortState} onSort={onSortChange} />
-            <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">입주시기</th>
-            <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">시공사</th>
+            <th className="px-3 py-2.5 text-left text-gray-700 font-semibold hidden sm:table-cell">입주시기</th>
+            <th className="px-3 py-2.5 text-left text-gray-700 font-semibold hidden sm:table-cell">시공사</th>
           </tr>
         </thead>
         <tbody>
@@ -150,8 +150,8 @@ function MbApartmentTable({ apartments, startIndex = 0, sort, onSortChange, isIn
               <td className="px-3 py-2 text-right">
                 {apt.unsold_rate != null ? `${apt.unsold_rate.toFixed(1)}%` : "-"}
               </td>
-              <td className="px-3 py-2 text-gray-600">{apt.presale_move_in ?? apt.completion ?? "-"}</td>
-              <td className="px-3 py-2 text-gray-600 max-w-[120px] truncate">{apt.builder ?? "-"}</td>
+              <td className="px-3 py-2 text-gray-600 hidden sm:table-cell">{apt.presale_move_in ?? apt.completion ?? "-"}</td>
+              <td className="px-3 py-2 text-gray-600 max-w-[120px] truncate hidden sm:table-cell">{apt.builder ?? "-"}</td>
             </tr>
             );
           })}

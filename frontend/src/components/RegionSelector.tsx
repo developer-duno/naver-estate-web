@@ -63,10 +63,10 @@ export default function RegionSelector({ onSearch }: Props) {
     );
   }
 
-  const selectClass = "border border-gray-300 rounded-md px-3 py-2 text-sm min-w-0 flex-1";
+  const selectClass = "border border-gray-300 rounded-md px-3 py-2 text-sm w-full";
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
       <select
         aria-label="시/도"
         value={sido}

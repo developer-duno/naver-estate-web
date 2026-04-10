@@ -156,13 +156,13 @@ function CompareContent() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex flex-wrap items-center gap-2 md:gap-4 mb-6">
         <button onClick={goBack} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl no-print">
           &#8592;
         </button>
-        <h1 className="text-2xl font-bold text-gray-900">미분양 단지 비교</h1>
+        <h1 className="text-xl md:text-2xl font-bold text-gray-900">미분양 단지 비교</h1>
         <span className="text-gray-500 text-sm">({apartments.length}개 아파트)</span>
-        <div className="ml-auto flex gap-2 no-print">
+        <div className="ml-auto flex flex-wrap gap-2 no-print">
           <button
             onClick={handleCopy}
             className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
@@ -215,8 +215,8 @@ function CompareContent() {
         onCancel={() => setPromptOpen(false)}
       />
 
-      {/* 비교 테이블 */}
-      <div className="overflow-x-auto bg-white rounded-lg shadow-sm border">
+      {/* 비교 테이블 (데스크톱) */}
+      <div className="hidden md:block overflow-x-auto bg-white rounded-lg shadow-sm border">
         <table className="w-full text-sm border-collapse">
           <thead className="bg-gray-100 border-b-2 border-gray-300">
             <tr>
@@ -259,6 +259,37 @@ function CompareContent() {
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* 비교 카드 (모바일) */}
+      <div className="md:hidden space-y-4">
+        {apartments.map((apt, ci) => (
+          <div key={apt.id} className="bg-white rounded-lg shadow-sm border p-4">
+            <button
+              onClick={() => router.push(`/mibunyang/${apt.id}`)}
+              className={`${COMPARE_TEXT_COLORS[ci]} hover:underline font-semibold text-base mb-3 block`}
+            >
+              {apt.name}
+            </button>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+              {MB_COMPARE_ROWS.map((row, ri) => {
+                const values = apartments.map((a) => row.getValue(a));
+                const numValues = values.map((v) => (typeof v === "number" ? v : null));
+                const bestIdxs = getBestIndices(numValues, row.direction);
+                const isBest = bestIdxs.includes(ci);
+                return (
+                  <div key={ri} className={`contents ${isBest ? "font-bold" : ""}`}>
+                    <dt className="text-gray-500 text-xs">{row.label}</dt>
+                    <dd className={isBest ? "text-amber-700" : "text-gray-800"}>
+                      {formatCellValue(row.getValue(apt))}
+                      {isBest && row.direction && " ★"}
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </div>
+        ))}
       </div>
 
       {/* 차트 섹션 */}

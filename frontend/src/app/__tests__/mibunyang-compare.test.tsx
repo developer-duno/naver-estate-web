@@ -78,9 +78,9 @@ describe("미분양 비교 — 정상 렌더링", () => {
   it("비교 행이 표시된다 (세대수, 미분양 등)", async () => {
     renderPage("ids=A1,A2");
     await waitFor(() => {
-      expect(screen.getByText("세대수")).toBeInTheDocument();
-      expect(screen.getByText("미분양")).toBeInTheDocument();
-      expect(screen.getByText("평당가(만원)")).toBeInTheDocument();
+      expect(screen.getAllByText("세대수").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("미분양").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("평당가(만원)").length).toBeGreaterThan(0);
     });
   });
 });

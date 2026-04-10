@@ -81,8 +81,8 @@ export default function MbTradeTable({ trades, startIndex = 0, sort, onSortChang
             <SortableTh label="면적(㎡)" sortKey="area" align="right" currentSort={sortState} onSort={onSortChange} />
             <SortableTh label="가격" sortKey="price" align="right" currentSort={sortState} onSort={onSortChange} />
             <th className="px-3 py-2.5 text-right text-gray-700 font-semibold">층</th>
-            <th className="px-3 py-2.5 text-right text-gray-700 font-semibold">건축년도</th>
-            <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">거래유형</th>
+            <th className="px-3 py-2.5 text-right text-gray-700 font-semibold hidden sm:table-cell">건축년도</th>
+            <th className="px-3 py-2.5 text-left text-gray-700 font-semibold hidden sm:table-cell">거래유형</th>
           </tr>
         </thead>
         <tbody>
@@ -97,8 +97,8 @@ export default function MbTradeTable({ trades, startIndex = 0, sort, onSortChang
                 {t.price != null ? formatKoreanPrice(t.price) : "-"}
               </td>
               <td className="px-3 py-2 text-right">{t.floor ?? "-"}</td>
-              <td className="px-3 py-2 text-right">{t.build_year ?? "-"}</td>
-              <td className="px-3 py-2 text-gray-600">
+              <td className="px-3 py-2 text-right hidden sm:table-cell">{t.build_year ?? "-"}</td>
+              <td className="px-3 py-2 text-gray-600 hidden sm:table-cell">
                 {t.trade_type ?? "-"}
                 {t.cancel_date && (
                   <span className="ml-1 text-xs text-red-500">(취소)</span>

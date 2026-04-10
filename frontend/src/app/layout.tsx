@@ -17,6 +17,12 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
+
 export const metadata: Metadata = {
   title: {
     default: "네이버 아파트·오피스텔 매물 조회",

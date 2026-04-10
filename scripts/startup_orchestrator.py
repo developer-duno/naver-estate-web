@@ -1,17 +1,15 @@
 """
-Windows 시작 시 백엔드 서버 + Cloudflare 터널 + Vercel 배포 자동화 스크립트.
+Windows 시작 시 백엔드 서버 + Cloudflare Named Tunnel 자동화 스크립트.
 
 실행 흐름:
 1. 기존 프로세스 정리 (port 8002 + cloudflared)
 2. 백엔드 서버 시작 → health check 대기
-3. Cloudflare 터널 시작 → URL 추출
-4. Vercel 환경변수 업데이트 + 배포
-5. Watchdog (프로세스 생존 감시, 죽으면 재시작)
+3. Cloudflare Named Tunnel 시작 (api.2u.pe.kr)
+4. Watchdog (프로세스 생존 감시, 죽으면 재시작)
 """
 
 import logging
 import os
-import re
 import socket
 import subprocess
 import sys
@@ -21,19 +19,18 @@ import urllib.request
 # ── 경로 상수 ──────────────────────────────────────────────
 PYTHON_EXE = r"C:\Users\user\AppData\Local\Programs\Python\Python312\python.exe"
 CLOUDFLARED_EXE = r"C:\Users\user\AppData\Local\Microsoft\WinGet\Links\cloudflared.exe"
-NPX_CMD = r"C:\Program Files\nodejs\npx.cmd"
-PROJECT_ROOT = r"D:\cursor\naver-estate-web"
+PROJECT_ROOT = r"F:\cursor\naver-estate-web"
 BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend")
 SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "scripts")
 BACKEND_PORT = 8002
 STARTUP_LOG = os.path.join(SCRIPTS_DIR, "startup.log")
 BACKEND_LOG = os.path.join(SCRIPTS_DIR, "backend.log")
 CLOUDFLARED_LOG = os.path.join(SCRIPTS_DIR, "cloudflared.log")
+PID_FILE = os.path.join(SCRIPTS_DIR, "orchestrator.pid")
 
 # ── 타임아웃 설정 ──────────────────────────────────────────
 INITIAL_DELAY = 10  # 부팅 후 네트워크 안정화 대기 (초)
 BACKEND_HEALTH_TIMEOUT = 30
-TUNNEL_URL_TIMEOUT = 60
 WATCHDOG_INTERVAL = 30
 
 # ── 로깅 설정 ──────────────────────────────────────────────
@@ -105,88 +102,17 @@ def wait_for_backend(timeout: int = BACKEND_HEALTH_TIMEOUT) -> bool:
 
 
 def start_tunnel() -> subprocess.Popen:
-    """Cloudflare 터널 시작, Popen 객체 반환."""
-    logger.info("Cloudflare 터널 시작 중...")
-
-    # 이전 로그 파일 초기화 (오래된 URL 매칭 방지)
-    with open(CLOUDFLARED_LOG, "w", encoding="utf-8") as f:
-        f.write("")
-
+    """Cloudflare Named Tunnel 시작 (api.2u.pe.kr)."""
+    logger.info("Cloudflare Named Tunnel 시작 중...")
+    log_file = open(CLOUDFLARED_LOG, "w", encoding="utf-8")
     proc = subprocess.Popen(
-        [CLOUDFLARED_EXE, "tunnel", "--url", f"http://localhost:{BACKEND_PORT}", "--logfile", CLOUDFLARED_LOG],
+        [CLOUDFLARED_EXE, "tunnel", "run", "naver-estate-backend"],
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
     logger.info(f"터널 프로세스 시작됨 (PID: {proc.pid})")
     return proc
-
-
-def extract_tunnel_url(proc: subprocess.Popen, timeout: int = TUNNEL_URL_TIMEOUT) -> str:
-    """cloudflared 로그 파일에서 trycloudflare.com URL 추출."""
-    logger.info(f"터널 URL 추출 대기 (최대 {timeout}초)...")
-    pattern = re.compile(r"(https://[a-zA-Z0-9-]+\.trycloudflare\.com)")
-    deadline = time.time() + timeout
-
-    while time.time() < deadline:
-        if proc.poll() is not None:
-            logger.error(f"터널 프로세스가 종료됨 (exit code: {proc.returncode})")
-            raise RuntimeError("cloudflared 프로세스 비정상 종료")
-
-        try:
-            with open(CLOUDFLARED_LOG, "r", encoding="utf-8") as f:
-                content = f.read()
-            match = pattern.search(content)
-            if match:
-                url = match.group(1)
-                logger.info(f"터널 URL 추출 성공: {url}")
-                return url
-        except Exception:
-            pass
-        time.sleep(3)
-
-    raise RuntimeError("터널 URL 추출 타임아웃")
-
-
-def update_vercel_env(tunnel_url: str):
-    """Vercel 환경변수 NEXT_PUBLIC_API_URL 업데이트."""
-    logger.info(f"Vercel 환경변수 업데이트: {tunnel_url}")
-
-    # 기존 변수 삭제 (없어도 에러 무시)
-    subprocess.run(
-        [NPX_CMD, "vercel", "env", "rm", "NEXT_PUBLIC_API_URL", "production", "-y"],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        timeout=60,
-    )
-    logger.info("기존 NEXT_PUBLIC_API_URL 삭제 완료")
-
-    # 새 변수 추가
-    result = subprocess.run(
-        [NPX_CMD, "vercel", "env", "add", "NEXT_PUBLIC_API_URL", "production", "--value", tunnel_url],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    if result.returncode != 0:
-        logger.error(f"Vercel env add 실패: {result.stderr}")
-        raise RuntimeError("Vercel 환경변수 추가 실패")
-    logger.info("NEXT_PUBLIC_API_URL 추가 완료")
-
-
-def deploy_vercel():
-    """Vercel 프로덕션 배포."""
-    logger.info("Vercel 프로덕션 배포 시작...")
-    result = subprocess.run(
-        [NPX_CMD, "vercel", "--prod", "--yes"],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=600,
-    )
-    if result.returncode != 0:
-        logger.error(f"Vercel 배포 실패: {result.stderr}")
-        raise RuntimeError("Vercel 배포 실패")
-    logger.info(f"Vercel 배포 완료")
 
 
 def _kill_port(port: int):
@@ -249,20 +175,43 @@ def watchdog(backend_proc: subprocess.Popen, tunnel_proc: subprocess.Popen):
 
         # 터널 체크
         if tunnel_proc.poll() is not None:
-            logger.warning("터널 프로세스 종료 감지 — 재시작 + Vercel 재배포")
+            logger.warning("터널 프로세스 종료 감지 — 재시작")
             tunnel_proc = start_tunnel()
-            try:
-                new_url = extract_tunnel_url(tunnel_proc)
-                update_vercel_env(new_url)
-                deploy_vercel()
-            except Exception as e:
-                logger.error(f"터널 재시작 후 Vercel 업데이트 실패: {e}")
+
+
+def _check_already_running() -> bool:
+    """PID 파일로 중복 실행 방지. 이미 실행 중이면 True 반환."""
+    if os.path.exists(PID_FILE):
+        try:
+            old_pid = int(open(PID_FILE).read().strip())
+            # 프로세스가 살아있는지 확인
+            subprocess.run(
+                ["tasklist", "/FI", f"PID eq {old_pid}"],
+                capture_output=True, text=True, timeout=5,
+            ).stdout
+            result = subprocess.run(
+                ["tasklist", "/FI", f"PID eq {old_pid}", "/NH"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if str(old_pid) in result.stdout:
+                logger.error(f"오케스트레이터가 이미 실행 중 (PID: {old_pid}). 종료합니다.")
+                return True
+        except Exception:
+            pass  # PID 파일 손상 — 무시하고 진행
+    # 현재 PID 기록
+    with open(PID_FILE, "w") as f:
+        f.write(str(os.getpid()))
+    return False
 
 
 def main():
     logger.info("=" * 60)
     logger.info("서버 자동 시작 스크립트 실행")
     logger.info("=" * 60)
+
+    # 0. 중복 실행 방지
+    if _check_already_running():
+        sys.exit(0)
 
     # 1. 네트워크 안정화 대기
     logger.info(f"{INITIAL_DELAY}초 대기 (네트워크 안정화)...")
@@ -277,23 +226,25 @@ def main():
         logger.error("백엔드 시작 실패 — 스크립트 종료")
         sys.exit(1)
 
-    # 4. 터널 시작 + URL 추출
+    # 4. Named Tunnel 시작 (api.2u.pe.kr)
     tunnel_proc = start_tunnel()
-    tunnel_url = extract_tunnel_url(tunnel_proc)
-
-    # 5. Vercel 업데이트 + 배포
-    update_vercel_env(tunnel_url)
-    deploy_vercel()
 
     logger.info("모든 서비스 정상 시작 완료!")
 
-    # 6. Watchdog
+    # 5. Watchdog
     watchdog(backend_proc, tunnel_proc)
 
 
 if __name__ == "__main__":
     try:
         main()
+    except KeyboardInterrupt:
+        logger.info("사용자에 의해 중단됨")
     except Exception:
         logger.exception("치명적 오류 발생")
         sys.exit(1)
+    finally:
+        try:
+            os.remove(PID_FILE)
+        except OSError:
+            pass

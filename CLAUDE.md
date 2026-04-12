@@ -4,15 +4,15 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-11 — 세션 34 완료 (모바일 카드뷰 수정 + 수익률 뱃지 강화 + 어린이집 API 재시도)
+**마지막 작업**: 2026-04-13 — 세션 35 완료 (수익률 범위 필터 + 공유 쿼터 DB 카운터 + CI 수정)
 
 **다음 우선순위**:
 
-1. 모바일 실기기 재테스트 (Fragment 교체 후 비교 카드뷰 확인)
-2. 어린이집 수동 트리거 (/admin → 어린이집 버튼, API 서버 간헐적 장애 재시도 대응 완료)
-3. Vercel 프로덕션 배포 (git push 후)
-4. 오피스텔 전용 필터 확장 (수익률 범위/면적 범위 프리셋)
-5. 공유 쿼터 보호 DB 카운터 도입 (mibunyang 조율 강화)
+1. mibunyang 네이버 429 대응 (같은 IP에서 크롤러 Rate Limit, 시간 분리 재조정 필요)
+2. 모바일 실기기 재테스트 (Fragment 교체 후 비교 카드뷰 확인, Vercel 배포 완료)
+3. 어린이집 수동 트리거 (/admin → 어린이집 버튼)
+4. 오피스텔 면적 범위 프리셋 추가 (수익률 필터는 완료)
+5. mibunyang 쪽 quota_db 연동 (같은 RateLimitCounter 테이블 사용)
 
 ## 기술 스택
 
@@ -78,7 +78,10 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 서버 자동 시작: startup_orchestrator.py → Named Tunnel (api.2u.pe.kr) + watchdog
 - 인기 단지 크롤링: 매일 10:30/14:30/19:00, 개별 단지 try/except (부분 실패 허용)
 - 스케줄러 모니터링: GET /api/admin/scheduler-status (12개 작업, 60초 자동갱신)
-- 관리자 대시보드: StatsCards + SchedulerMonitor + CollectorTrigger
+- 관리자 대시보드: StatsCards + SchedulerMonitor + CollectorTrigger + QuotaStatus
+- 공유 쿼터 DB 카운터: RateLimitCounter 테이블 기반, INSERT ON CONFLICT 원자적 (quota_db.py)
+  - GET /api/admin/quota-status: 오늘의 data.go.kr API 쿼터 현황
+  - in-memory 폴백 유지 (DB 장애 시 안전장치)
 - DB: NullPool (Supabase Session Mode 대응), PendingRollbackError 방지 (db.rollback())
 - CSP: script-src/connect-src에 https://vercel.live 추가
 - Hydration: html suppressHydrationWarning (Vercel Live 주입 대응)
@@ -100,6 +103,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - 검색 결과: ComplexCardMobile (md:hidden 카드뷰)
 - 단지 상세: ArticleCardMobile + 헤더/액션바 text-xs md:text-sm
 - 필터: FilterBar flex-nowrap overflow-x-auto, FilterDropdown max-w-[calc(100vw-2rem)]
+- 수익률 필터: 월세/전체/단기임대일 때만 표시, YIELD_PRESETS 6종 + 직접입력 (min_yield/max_yield float)
 - 페이지네이션: px-2 py-1 md:px-3 md:py-1.5
 
 ### 코드 구조 (분리 완료)
@@ -135,7 +139,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 |------|------|----------|
 | FE 단위/컴포넌트/훅/페이지 | Vitest | 539개 (61파일) |
 | E2E | Playwright | 48개 (9파일, --webpack 모드) |
-| BE 단위/통합/API | pytest | 455개 (36파일, 1 skipped) |
+| BE 단위/통합/API | pytest | 463개 (38파일, 1 skipped) |
 
 ## 커밋 전 필수 검증
 

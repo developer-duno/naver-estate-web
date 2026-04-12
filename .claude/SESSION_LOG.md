@@ -1,30 +1,41 @@
-# 세션 32 로그 (2026-04-10)
+# 세션 34 로그 (2026-04-11)
 
 ## 작업 내용
 
-### 1. Cloudflare Named Tunnel 완전 설정
-- config.yml에 `api.2u.pe.kr → localhost:8002` ingress 규칙 추가
-- `cloudflared tunnel route dns naver-estate-backend api.2u.pe.kr` DNS CNAME 등록
-- Vercel 환경변수 `NEXT_PUBLIC_API_URL` → `https://api.2u.pe.kr`로 영구 변경
-- Vercel 프로덕션 재배포 완료
-- Named Tunnel 사전 작업 전부 완료
+### 1. 모바일 실기기 문제 수정 (7단계 중 3번부터 안 됨)
+- 원인: 비교 페이지 모바일 카드뷰의 `display: contents` — iOS Safari/삼성 인터넷 호환성 문제
+- 수정: `display: contents` div → `React.Fragment` 교체 (compare + mibunyang/compare)
+- 단계 4,6,7은 코드 실측 결과 문제 없는 패턴 사용 → 수정 불필요
 
-### 2. startup_orchestrator.py 경로 수정
-- PROJECT_ROOT: `D:\cursor\naver-estate-web` → `F:\cursor\naver-estate-web` (드라이브 추가 대응)
-- startup-server.bat 경로도 동일하게 수정
+### 2. FilterDropdown rAF 타이밍 보정
+- `getBoundingClientRect()` → `requestAnimationFrame` 감싸기
 
-### 3. MCP 서버 정리
-- `.mcp.json`에서 sequential-thinking 삭제 (미사용)
-- `.mcp.json`에서 playwright 삭제 (글로벌 설정과 중복)
-- 글로벌 settings.json에서 qmd 삭제 (마크다운 전용, 소스코드 검색 불가)
-- CLAUDE.md "코드 탐색 규칙" 섹션 삭제 (QMD 관련)
+### 3. 수익률 배경뱃지 스타일 업그레이드
+- 인라인 색상 → 배경뱃지 (단계별 색상: <3% 노랑/5%+ 녹색/10%+ 파랑)
+- 전세가율 80% 초과 빨간색 경고, InfoCards 경고 텍스트
+
+### 4. 오피스텔 데스크톱 뱃지 추가
+- ArticleTable에 매물유형 뱃지 (ESTATE_TYPE_COLORS, 모바일과 일관성)
+
+### 5. collect_public_trades 확인
+- 4/11(토) 05:00 KST 정상 완료: 968K건 처리, 177K건 매칭, ~69분
+
+### 6. 어린이집 API 디버깅
+- cpmsapi030 간헐적 200+ERROR-100 발견 → 재시도 로직 보강
+- API 키 승인 확인 완료 (운영 cpmsapi021+030, 2026-04-07)
+
+### 7. 미분양 수집기 통합 분석
+- 분리 이유 정리 + 결론: 완전 통합 불필요, 조율만 강화
+
+### 8. 9 GATE 하네스 검증: 🟢7 🟡2 🔴0
 
 ## 검증
-- 백엔드 health check: 200 OK (localhost:8002)
-- Named Tunnel health check: 200 OK (https://api.2u.pe.kr)
-- Vercel 배포: READY
+- tsc: 통과 | lint: 기존 경고 5개 | FE test: 539 passed | BE test: 455 passed
+- ruff: All passed | collect_public_trades: completed
 
-## 미완료 (운영/수동)
-- Gmail 앱 비밀번호 설정 → SMTP_PASS 교체 → 이메일 발송 테스트
-- 4/11(토) collect_public_trades 수집 결과 확인 (/admin → SchedulerMonitor)
-- 어린이집 수집 수동 트리거 (/admin → 어린이집 버튼)
+## 다음 세션 우선순위
+1. 모바일 실기기 재테스트 (Fragment 교체 후)
+2. 어린이집 수동 트리거 (API 안정 시)
+3. Vercel 프로덕션 배포
+4. 오피스텔 전용 필터 확장
+5. 공유 쿼터 보호 DB 카운터 도입

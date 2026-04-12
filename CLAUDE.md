@@ -4,15 +4,22 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-13 — 세션 36 완료 (네이버 429 대응 AdaptiveThrottle 강화 + scheduler jitter)
+**마지막 작업**: 2026-04-13 — 세션 36-B **미해결**. 모바일 필터 먹통 3번 시도 모두 실패 (ac7870f/3ddb064/286394a). 다음 세션에서 재진단 필요.
+
+**🚨 최우선 미해결 이슈**: 모바일 Safari에서 홈(/), /complex/[no], /admin 등 **모든 onClick 버튼이 작동 안 함**
+- Console 에러: `React error #418 (Hydration failed)` + `CSP frame-src` 위반
+- HTML에 `<template data-dgst="BAILOUT_TO_CLIENT_SIDE_RENDERING">` 존재
+- 시도한 수정 (실패): FilterDropdown pointerdown + body suppressHydrationWarning + CSP frame-src + 5개 localStorage 훅 SSR-safe 패턴
+- 상세: `memory/project_mobile_filter_bug.md`
+- 다음 세션 첫 작업: (1) 사용자로부터 Console 에러 전체 텍스트 받기 (2) Vercel 대시보드에서 Toolbar > Production OFF 요청 (3) Providers 및 모든 use client 컴포넌트 SSR 안전성 감사
 
 **다음 우선순위**:
 
-1. 모바일 실기기 재테스트 (Fragment 교체 후 비교 카드뷰 확인, Vercel 배포 완료)
-2. 어린이집 수동 트리거 실기기 확인 (/admin → 어린이집 버튼, API 키 설정 필요)
-3. 오피스텔 면적 범위 프리셋 추가 (수익률 필터는 완료)
-4. mibunyang 쪽 quota_db 연동 (같은 RateLimitCounter 테이블 사용, 가이드 작성 완료)
-5. mibunyang 네이버 429 모니터링 (AdaptiveThrottle 적용 후 효과 확인)
+1. **🚨 모바일 필터 먹통 재진단** (세션 37 최우선)
+2. 어린이집 수동 트리거 실기기 확인 (/admin → 어린이집 버튼, API 키는 이미 .env에 있음)
+3. 오피스텔 면적 범위 프리셋 추가
+4. mibunyang 쪽 quota_db 연동 (가이드 작성 완료)
+5. mibunyang 네이버 429 모니터링
 
 ## 기술 스택
 

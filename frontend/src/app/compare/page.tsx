@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueries } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
@@ -288,13 +288,13 @@ function CompareContent() {
                 const best = advantageMap.get(row.label) ?? [];
                 const isBest = best.includes(ci);
                 return (
-                  <div key={row.label} className={`contents ${isBest ? "font-bold" : ""}`}>
-                    <dt className="text-gray-500 text-xs">{row.label}</dt>
-                    <dd className={isBest ? "text-green-700" : "text-gray-800"}>
+                  <Fragment key={row.label}>
+                    <dt className={`text-gray-500 text-xs ${isBest ? "font-bold" : ""}`}>{row.label}</dt>
+                    <dd className={isBest ? "text-green-700 font-bold" : "text-gray-800"}>
                       {isBest && <span className="text-green-600 mr-0.5">★</span>}
                       {row.render(c)}
                     </dd>
-                  </div>
+                  </Fragment>
                 );
               })}
             </dl>

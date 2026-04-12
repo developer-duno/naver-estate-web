@@ -2,7 +2,7 @@
 
 import { useState, useMemo, memo } from "react";
 import type { Article } from "@/types";
-import { M2_TO_PYEONG, TRADE_TYPE_COLORS, TRADE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
+import { M2_TO_PYEONG, TRADE_TYPE_COLORS, TRADE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
 import { formatDateShort, formatMaintenanceCost } from "@/lib/format";
 import { COLUMNS, SERVER_SORT_MAP, getColumnValue } from "@/components/articleTableColumns";
 import SortableHeader, { type SortState } from "@/components/SortableHeader";
@@ -158,6 +158,11 @@ const ArticleRow = memo(function ArticleRow({ article: art, index, onClick, sele
         }`}>
           {art.trade_type_name || "-"}
         </span>
+        {art.article_real_estate_type_name && art.article_real_estate_type_name !== "아파트" && (
+          <span className={`ml-1 px-1 py-0.5 rounded text-xs border ${
+            ESTATE_TYPE_COLORS[art.article_real_estate_type_name] ?? ESTATE_TYPE_DEFAULT_COLOR
+          }`}>{art.article_real_estate_type_name}</span>
+        )}
       </Td>
       <Td>{art.building_name || "-"}</Td>
       <Td>{art.floor_info || "-"}</Td>
@@ -174,9 +179,9 @@ const ArticleRow = memo(function ArticleRow({ article: art, index, onClick, sele
       <Td className="text-right">{ppyeong}</Td>
       <Td className="text-right">
         {art.monthly_rent_yield != null
-          ? <span className="text-emerald-600">{art.monthly_rent_yield}%</span>
+          ? <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${art.monthly_rent_yield >= 10 ? "bg-blue-100 text-blue-700" : art.monthly_rent_yield >= 5 ? "bg-emerald-100 text-emerald-700" : art.monthly_rent_yield < 3 ? "bg-yellow-100 text-yellow-700" : "bg-emerald-50 text-emerald-600"}`}>{art.monthly_rent_yield}%</span>
           : art.article_jeonse_ratio != null
-          ? <span className="text-blue-600">{art.article_jeonse_ratio}%</span>
+          ? <span className={`px-1.5 py-0.5 rounded text-xs font-semibold ${art.article_jeonse_ratio > 80 ? "bg-red-100 text-red-700" : "bg-blue-50 text-blue-600"}`}>{art.article_jeonse_ratio}%</span>
           : "-"}
       </Td>
       <Td className="text-center">{rooms}</Td>

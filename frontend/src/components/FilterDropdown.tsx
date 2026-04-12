@@ -33,11 +33,15 @@ const FilterDropdown = React.memo(function FilterDropdown({
   const panelRef = useRef<HTMLDivElement>(null);
   const [alignRight, setAlignRight] = useState(false);
 
-  // 드롭다운 우측 오버플로 감지
+  // 드롭다운 우측 오버플로 감지 (rAF로 렌더링 완료 후 측정)
   useEffect(() => {
     if (isOpen && panelRef.current) {
-      const rect = panelRef.current.getBoundingClientRect();
-      setAlignRight(rect.right > window.innerWidth - 16);
+      requestAnimationFrame(() => {
+        if (panelRef.current) {
+          const rect = panelRef.current.getBoundingClientRect();
+          setAlignRight(rect.right > window.innerWidth - 16);
+        }
+      });
     } else {
       setAlignRight(false);
     }

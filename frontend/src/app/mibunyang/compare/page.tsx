@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, useMemo, Suspense } from "react";
+import { Fragment, useState, useCallback, useEffect, useRef, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useQueries } from "@tanstack/react-query";
@@ -278,13 +278,13 @@ function CompareContent() {
                 const bestIdxs = getBestIndices(numValues, row.direction);
                 const isBest = bestIdxs.includes(ci);
                 return (
-                  <div key={ri} className={`contents ${isBest ? "font-bold" : ""}`}>
-                    <dt className="text-gray-500 text-xs">{row.label}</dt>
-                    <dd className={isBest ? "text-amber-700" : "text-gray-800"}>
+                  <Fragment key={ri}>
+                    <dt className={`text-gray-500 text-xs ${isBest ? "font-bold" : ""}`}>{row.label}</dt>
+                    <dd className={isBest ? "text-amber-700 font-bold" : "text-gray-800"}>
                       {formatCellValue(row.getValue(apt))}
                       {isBest && row.direction && " ★"}
                     </dd>
-                  </div>
+                  </Fragment>
                 );
               })}
             </dl>

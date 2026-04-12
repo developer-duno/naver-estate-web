@@ -47,8 +47,8 @@ export default function InfoCards({ article: a, complex: c }: Props) {
     ["준공일", a.is_presale ? "미준공 (분양권)" : formatDateFull(a.use_approve_ymd)],
     ["주소", a.jibun_address ?? a.complex_address],
     ["매물유형", a.article_real_estate_type_name],
-    ["월세 수익률", a.monthly_rent_yield != null ? `${a.monthly_rent_yield}%` : null],
-    ["전세가율(매물)", a.article_jeonse_ratio != null ? `${a.article_jeonse_ratio}%` : null],
+    ["월세 수익률", a.monthly_rent_yield != null ? `${a.monthly_rent_yield}%${a.monthly_rent_yield < 3 ? " (낮음)" : a.monthly_rent_yield >= 10 ? " (높음)" : ""}` : null],
+    ["전세가율(매물)", a.article_jeonse_ratio != null ? `${a.article_jeonse_ratio}%${a.article_jeonse_ratio > 80 ? " (주의)" : ""}` : null],
   ];
 
   const complexItems: [string, string | undefined | null][] = c

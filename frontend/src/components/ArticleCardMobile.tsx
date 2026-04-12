@@ -119,8 +119,8 @@ const ArticleCardItem = memo(function ArticleCardItem({ article: art, onClick, s
         {art.direction && <><span className="text-gray-300">·</span><span>{art.direction}</span></>}
         {art.move_in_date && <><span className="text-gray-300">·</span><span>{art.move_in_date}</span></>}
         {maint !== "-" && <><span className="text-gray-300">·</span><span>관리비 {maint}</span></>}
-        {art.monthly_rent_yield != null && <><span className="text-gray-300">·</span><span className="text-emerald-600">수익률 {art.monthly_rent_yield}%</span></>}
-        {art.article_jeonse_ratio != null && <><span className="text-gray-300">·</span><span className="text-blue-600">전세가율 {art.article_jeonse_ratio}%</span></>}
+        {art.monthly_rent_yield != null && <><span className="text-gray-300">·</span><span className={`px-1 py-0.5 rounded text-xs font-semibold ${art.monthly_rent_yield >= 10 ? "bg-blue-100 text-blue-700" : art.monthly_rent_yield >= 5 ? "bg-emerald-100 text-emerald-700" : art.monthly_rent_yield < 3 ? "bg-yellow-100 text-yellow-700" : "bg-emerald-50 text-emerald-600"}`}>수익 {art.monthly_rent_yield}%</span></>}
+        {art.article_jeonse_ratio != null && <><span className="text-gray-300">·</span><span className={`px-1 py-0.5 rounded text-xs font-semibold ${art.article_jeonse_ratio > 80 ? "bg-red-100 text-red-700" : "bg-blue-50 text-blue-600"}`}>전세 {art.article_jeonse_ratio}%</span></>}
       </div>
 
       {/* 4행: 특징 (truncate) */}

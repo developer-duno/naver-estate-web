@@ -35,7 +35,7 @@ describe("ArticleCardMobile 수익률/뱃지", () => {
       monthly_rent_yield: 12.0,
     });
     render(<ArticleCardMobile articles={[art]} />);
-    expect(screen.getByText(/수익률 12%/)).toBeInTheDocument();
+    expect(screen.getByText(/수익 12%/)).toBeInTheDocument();
   });
 
   it("전세 매물에 전세가율 표시", () => {
@@ -45,14 +45,14 @@ describe("ArticleCardMobile 수익률/뱃지", () => {
       article_jeonse_ratio: 60.0,
     });
     render(<ArticleCardMobile articles={[art]} />);
-    expect(screen.getByText(/전세가율 60%/)).toBeInTheDocument();
+    expect(screen.getByText(/전세 60%/)).toBeInTheDocument();
   });
 
   it("매매 매물은 수익률 미표시", () => {
     const art = makeArticle({ trade_type_name: "매매" });
     render(<ArticleCardMobile articles={[art]} />);
-    expect(screen.queryByText(/수익률/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/전세가율/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/수익 \d+%/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/전세 \d+%/)).not.toBeInTheDocument();
   });
 
   it("오피스텔 매물에 유형 뱃지 표시", () => {

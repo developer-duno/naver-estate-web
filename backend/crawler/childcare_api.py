@@ -79,7 +79,15 @@ class ChildcareAPI:
                     timeout=REQUEST_TIMEOUT,
                 )
                 if resp.status_code == 200:
-                    return cls._parse_xml(resp.text)
+                    if "<errcode>" in resp.text:
+                        logger.info(
+                            "[childcare] API 에러 응답 (시도 %d/%d): %s",
+                            attempt + 1,
+                            MAX_RETRIES,
+                            resp.text[:200],
+                        )
+                    else:
+                        return cls._parse_xml(resp.text)
                 if resp.status_code == 429:
                     delay = RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)]
                     logger.info("[childcare] 429 — %d초 대기 후 재시도", delay)

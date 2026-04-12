@@ -51,6 +51,7 @@ export default function RootLayout({
     <html lang="ko" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 min-h-screen`}
+        suppressHydrationWarning
       >
         <a
           href="#main-content"

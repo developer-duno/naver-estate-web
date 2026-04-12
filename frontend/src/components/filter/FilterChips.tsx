@@ -43,6 +43,8 @@ export function buildChipList(
   if (s.maxPpyeong) chips.push({ label: `평당 ~${s.maxPpyeong}만`, reset: () => { dispatch({ type: "SET", key: "maxPpyeong", value: "" }); emitChange({ maxPpyeong: "" }); } });
   if (s.minMaint) chips.push({ label: `관리비 ${s.minMaint}만~`, reset: () => { dispatch({ type: "SET", key: "minMaint", value: "" }); emitChange({ minMaint: "" }); } });
   if (s.maxMaint) chips.push({ label: `관리비 ~${s.maxMaint}만`, reset: () => { dispatch({ type: "SET", key: "maxMaint", value: "" }); emitChange({ maxMaint: "" }); } });
+  if (s.minYield) chips.push({ label: `수익률 ${s.minYield}%~`, reset: () => { dispatch({ type: "SET", key: "minYield", value: "" }); emitChange({ minYield: "" }); } });
+  if (s.maxYield) chips.push({ label: `수익률 ~${s.maxYield}%`, reset: () => { dispatch({ type: "SET", key: "maxYield", value: "" }); emitChange({ maxYield: "" }); } });
   return chips;
 }
 

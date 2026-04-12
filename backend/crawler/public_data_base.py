@@ -29,19 +29,34 @@ MIN_REQUEST_INTERVAL = 0.3
 
 
 def check_global_daily_limit() -> bool:
-    """전역 일일 호출 한도 체크 — 모든 공공데이터 API 합산"""
+    """전역 일일 호출 한도 체크 — DB 기반 (모든 공공데이터 API 합산)"""
     global _global_daily_count, _global_daily_date
     from datetime import date
 
-    today = date.today().isoformat()
-    with _global_lock:
-        if _global_daily_date != today:
-            _global_daily_date = today
-            _global_daily_count = 0
-        if _global_daily_count >= GLOBAL_DAILY_LIMIT:
-            return False
-        _global_daily_count += 1
-        return True
+    from crawler.quota_db import increment_api_quota
+
+    try:
+        from db.database import SessionLocal
+        result = increment_api_quota(SessionLocal, max_calls=GLOBAL_DAILY_LIMIT)
+        # in-memory 카운터도 동기화 (로깅/모니터링용)
+        today = date.today().isoformat()
+        with _global_lock:
+            if _global_daily_date != today:
+                _global_daily_date = today
+                _global_daily_count = 0
+            _global_daily_count += 1
+        return result
+    except Exception:
+        # DB 실패 시 기존 in-memory 폴백
+        today = date.today().isoformat()
+        with _global_lock:
+            if _global_daily_date != today:
+                _global_daily_date = today
+                _global_daily_count = 0
+            if _global_daily_count >= GLOBAL_DAILY_LIMIT:
+                return False
+            _global_daily_count += 1
+            return True
 
 
 def get_global_daily_count() -> int:

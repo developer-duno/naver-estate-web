@@ -101,6 +101,27 @@ def _build_filter_conditions(filters: dict) -> list:
     elif estate_type == "rdv":
         conditions.append(Article.article_real_estate_type_name == "재개발")
 
+    # 수익률 범위 (%, SQL 계산식 — DB 컬럼 없음)
+    _yield_base = (
+        "articles.trade_type_name = '월세' "
+        "AND articles.numeric_price > 0 "
+        "AND articles.numeric_rent_price > 0"
+    )
+    if (min_yield := filters.get("min_yield")) is not None:
+        conditions.append(
+            text(
+                f"{_yield_base} "
+                "AND (articles.numeric_rent_price * 12.0) / articles.numeric_price * 100 >= :min_yield"
+            ).bindparams(min_yield=min_yield)
+        )
+    if (max_yield := filters.get("max_yield")) is not None:
+        conditions.append(
+            text(
+                f"{_yield_base} "
+                "AND (articles.numeric_rent_price * 12.0) / articles.numeric_price * 100 <= :max_yield"
+            ).bindparams(max_yield=max_yield)
+        )
+
     # 입주가능일 타입
     move_in = filters.get("move_in_type")
     if move_in == "즉시입주":

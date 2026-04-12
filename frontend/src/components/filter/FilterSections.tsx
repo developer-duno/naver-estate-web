@@ -6,7 +6,7 @@ import type { RangePreset } from "@/lib/constants";
 import {
   PRICE_PRESETS, PPYEONG_PRESETS, AREA_PRESETS, AREA_PRESETS_PYEONG,
   MAINTENANCE_PRESETS, MOVE_IN_OPTIONS, BUILDING_AGE_OPTIONS,
-  SORT_OPTIONS, ESTATE_TYPE_FILTER_OPTIONS,
+  SORT_OPTIONS, ESTATE_TYPE_FILTER_OPTIONS, YIELD_PRESETS,
 } from "@/lib/constants";
 import type { FilterState } from "./reducer";
 import PresetButtons from "./PresetButtons";
@@ -93,6 +93,22 @@ export function PriceSection({ s, setDebounced, applyPreset }: Pick<SectionProps
         <span className="text-xs text-gray-400">~</span>
         <input type="number" min="0" value={s.maxPpyeong} onChange={(e) => setDebounced("maxPpyeong")(e.target.value)} className={inputCls} placeholder="최대" aria-label="최대 평당가 (만원/평)" />
       </div>
+
+      {(s.tradeType === "월세" || s.tradeType === "전체" || s.tradeType === "단기임대") && (
+        <>
+          <div className={separator} />
+          <p className={sectionLabel}>수익률 (%)</p>
+          <div className="mb-2">
+            <PresetButtons presets={YIELD_PRESETS} minKey="minYield" maxKey="maxYield"
+              currentMin={s.minYield} currentMax={s.maxYield} onApply={applyPreset} />
+          </div>
+          <div className="flex items-center gap-1">
+            <input type="number" min="0" max="100" step="0.1" value={s.minYield} onChange={(e) => setDebounced("minYield")(e.target.value)} className={inputCls} placeholder="최소" aria-label="최소 수익률 (%)" />
+            <span className="text-xs text-gray-400">~</span>
+            <input type="number" min="0" max="100" step="0.1" value={s.maxYield} onChange={(e) => setDebounced("maxYield")(e.target.value)} className={inputCls} placeholder="최대" aria-label="최대 수익률 (%)" />
+          </div>
+        </>
+      )}
     </>
   );
 }

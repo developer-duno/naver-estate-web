@@ -76,6 +76,11 @@ export function buildArticleFilters(
     if (preset.max) filters.max_floor = preset.max;
   }
 
+  const mny = safeNum(get("minYield"));
+  const xny = safeNum(get("maxYield"));
+  if (mny !== null) filters.min_yield = mny;
+  if (xny !== null && (mny === null || xny >= mny)) filters.max_yield = xny;
+
   const sb = get("sortBy");
   if (sb !== "rank") filters.sort_by = sb as SortBy;
 

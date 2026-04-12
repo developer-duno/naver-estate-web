@@ -146,3 +146,14 @@ def cleanup_rate_limits(
     deleted = result.rowcount
     db.commit()
     return {"deleted": deleted}
+
+
+@router.get("/quota-status")
+def get_quota_status(
+    admin: dict = Depends(get_admin_user),
+):
+    """오늘의 공공데이터 API 쿼터 현황 조회"""
+    from crawler.quota_db import get_api_quota_status
+    from db.database import SessionLocal
+
+    return get_api_quota_status(SessionLocal)

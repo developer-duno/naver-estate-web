@@ -72,17 +72,33 @@ class PublicDataAPI:
 
     @classmethod
     def _check_daily_limit(cls, max_calls: int = 9000) -> bool:
-        """일일 호출 한도 체크 (일일 10,000회, 안전 마진 10% 포함)"""
+        """일일 호출 한도 체크 — DB 기반 (일일 10,000회, 안전 마진 10% 포함)"""
         from datetime import date
-        today = date.today().isoformat()
-        with cls._lock:
-            if cls._daily_call_date != today:
-                cls._daily_call_date = today
-                cls._daily_call_count = 0
-            if cls._daily_call_count >= max_calls:
-                return False
-            cls._daily_call_count += 1
-            return True
+
+        from crawler.quota_db import increment_api_quota
+
+        try:
+            from db.database import SessionLocal
+            result = increment_api_quota(SessionLocal, max_calls=max_calls)
+            # in-memory 카운터도 동기화
+            today = date.today().isoformat()
+            with cls._lock:
+                if cls._daily_call_date != today:
+                    cls._daily_call_date = today
+                    cls._daily_call_count = 0
+                cls._daily_call_count += 1
+            return result
+        except Exception:
+            # DB 실패 시 기존 in-memory 폴백
+            today = date.today().isoformat()
+            with cls._lock:
+                if cls._daily_call_date != today:
+                    cls._daily_call_date = today
+                    cls._daily_call_count = 0
+                if cls._daily_call_count >= max_calls:
+                    return False
+                cls._daily_call_count += 1
+                return True
 
     @classmethod
     def _get_service_key(cls) -> str | None:

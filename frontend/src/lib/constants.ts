@@ -171,6 +171,16 @@ export const PPYEONG_PRESETS: RangePreset[] = [
   { label: "5천만~", min: 5000 },
 ];
 
+/** 수익률 프리셋 (% 단위) */
+export const YIELD_PRESETS: RangePreset[] = [
+  { label: "전체" },
+  { label: "~3%", max: 3 },
+  { label: "3~5%", min: 3, max: 5 },
+  { label: "5~8%", min: 5, max: 8 },
+  { label: "8~12%", min: 8, max: 12 },
+  { label: "12%~", min: 12 },
+];
+
 /** 미분양 정렬 옵션 */
 export const MB_SORT_OPTIONS = [
   { v: "name_asc", l: "단지명순" },

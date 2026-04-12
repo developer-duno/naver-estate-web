@@ -10,7 +10,8 @@ const FILTER_KEYS: (keyof ArticleFilters)[] = [
   "min_area_m2", "max_area_m2", "min_rooms", "min_baths", "direction",
   "min_ppyeong", "max_ppyeong", "min_maintenance", "max_maintenance",
   "building_name", "verified_only", "max_building_age", "move_in_type",
-  "estate_type", "min_floor", "max_floor", "tags", "sort_by",
+  "estate_type", "min_floor", "max_floor", "tags",
+  "min_yield", "max_yield", "sort_by",
 ];
 
 const INT_KEYS = new Set<string>([
@@ -18,7 +19,7 @@ const INT_KEYS = new Set<string>([
   "min_ppyeong", "max_ppyeong", "min_maintenance", "max_maintenance",
   "max_building_age", "min_floor", "max_floor",
 ]);
-const FLOAT_KEYS = new Set<string>(["min_area_m2", "max_area_m2"]);
+const FLOAT_KEYS = new Set<string>(["min_area_m2", "max_area_m2", "min_yield", "max_yield"]);
 const BOOL_KEYS = new Set<string>(["verified_only"]);
 
 /** 유효한 sort_by 값 (백엔드 Literal과 동기화) */

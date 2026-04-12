@@ -25,6 +25,8 @@ def build_filter_dict(
     min_floor: int | None = None,
     max_floor: int | None = None,
     tags: str | None = None,
+    min_yield: float | None = None,
+    max_yield: float | None = None,
 ) -> dict | None:
     """필터 파라미터를 queries.get_articles_by_complex용 dict로 변환"""
     VALID_TRADE_TYPES = {"매매", "전세", "월세", "단기임대"}
@@ -75,4 +77,8 @@ def build_filter_dict(
         filters["max_floor"] = max_floor
     if tags:
         filters["tags"] = tags.split(",")
+    if min_yield is not None:
+        filters["min_yield"] = min_yield
+    if max_yield is not None:
+        filters["max_yield"] = max_yield
     return filters or None

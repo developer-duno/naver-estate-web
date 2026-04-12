@@ -27,6 +27,8 @@ export interface FilterState {
   verifiedOnly: string;
   buildingName: string;
   floorPreset: string;
+  minYield: string;
+  maxYield: string;
   sortBy: string;
 }
 
@@ -52,6 +54,7 @@ export const DEFAULT_STATE: FilterState = {
   buildingAge: "0", moveInType: "전체",
   estateType: "all", verifiedOnly: "false",
   buildingName: "전체", floorPreset: "전체",
+  minYield: "", maxYield: "",
   sortBy: "rank",
 };
 
@@ -96,5 +99,7 @@ export function buildInitState(init?: ArticleFilters): FilterState {
     estateType: init?.estate_type || "all",
     verifiedOnly: init?.verified_only ? "true" : "false",
     buildingName: init?.building_name || "전체",
+    minYield: _initStr(init?.min_yield),
+    maxYield: _initStr(init?.max_yield),
   };
 }

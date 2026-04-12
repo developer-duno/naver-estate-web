@@ -139,6 +139,8 @@ def get_complex_articles(
     min_floor: Optional[int] = Query(None, ge=0),
     max_floor: Optional[int] = Query(None, ge=0),
     tags: Optional[str] = Query(None, max_length=200, description="태그 (쉼표 구분)"),
+    min_yield: Optional[float] = Query(None, ge=0, le=100, description="최소 수익률 (%)"),
+    max_yield: Optional[float] = Query(None, ge=0, le=100, description="최대 수익률 (%)"),
     # 정렬/페이지
     sort_by: Literal["rank", "price_asc", "price_desc", "area_asc", "area_desc", "ppyeong_asc", "ppyeong_desc", "maintenance_asc", "maintenance_desc", "confirm_asc", "confirm_desc"] = Query("rank"),
     page: int = Query(1, ge=1),
@@ -157,6 +159,7 @@ def get_complex_articles(
         max_building_age=max_building_age, move_in_type=move_in_type,
         estate_type=estate_type,
         min_floor=min_floor, max_floor=max_floor, tags=tags,
+        min_yield=min_yield, max_yield=max_yield,
     )
 
     # 필터 없는 첫 페이지 기본 조회 → 캐시 (페이지 진입 속도 향상)

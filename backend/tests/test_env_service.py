@@ -311,10 +311,10 @@ class TestGlobalDailyLimit:
     """전역 일일 호출 한도 테스트"""
 
     def test_한도_초과_시_False(self):
+        from unittest.mock import patch
+
         import crawler.public_data_base as pdb
 
-        pdb._global_daily_count = pdb.GLOBAL_DAILY_LIMIT
-        pdb._global_daily_date = __import__("datetime").date.today().isoformat()
-        assert pdb.check_global_daily_limit() is False
-        # 정리
-        pdb._global_daily_count = 0
+        # DB 카운터가 한도 초과 반환하도록 mock
+        with patch("crawler.quota_db.increment_api_quota", return_value=False):
+            assert pdb.check_global_daily_limit() is False

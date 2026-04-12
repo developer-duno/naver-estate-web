@@ -151,6 +151,8 @@ export interface ArticleFilters {
   min_floor?: number;
   max_floor?: number;
   tags?: string;
+  min_yield?: number;
+  max_yield?: number;
   selected_articles?: string;
   sort_by?: SortBy;
   page?: number;

@@ -7,10 +7,10 @@ C. 상세 보강: 매물 상세 정보 크롤링
 
 import logging
 import os
-import time
 
 from dotenv import load_dotenv
 
+from crawler.utils import AdaptiveThrottle
 from db.database import SessionLocal
 from db.models import Article, Complex, CrawlJob
 from services.enricher import enrich_complex_detail
@@ -27,6 +27,11 @@ from utils import utcnow
 
 load_dotenv()
 logger = logging.getLogger(__name__)
+
+# 적응형 쓰로틀 — 429 발생 시 자동으로 간격 증가, 정상화 시 서서히 복귀
+_throttle_discover = AdaptiveThrottle(min_interval=2.0, max_interval=10.0)  # 단지 발견
+_throttle_articles = AdaptiveThrottle(min_interval=2.0, max_interval=10.0)  # 매물 수집
+_throttle_details = AdaptiveThrottle(min_interval=1.5, max_interval=10.0)   # 상세 보강
 
 # 크롤링 대상 부동산 유형 (기본: 아파트 관련 4종)
 CRAWL_REAL_ESTATE_TYPES = set(
@@ -71,7 +76,7 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, sche
             if not result.get("isMoreData", False):
                 break
             page += 1
-            time.sleep(NaverEstateAPI.PAGE_DELAY)
+            _throttle_discover.wait()
 
         job.status = "completed"
         job.processed_items = total_found
@@ -95,7 +100,7 @@ def discover_all_regions(scheduler_job_id: str | None = None):
         for sigungu, dong_list in sigungu_dict.items():
             logger.info("단지 발견 시작: %s %s", sido, sigungu)
             discover_complexes_by_region(sido, sigungu, scheduler_job_id=scheduler_job_id)
-            time.sleep(2)  # 지역 간 딜레이
+            _throttle_discover.wait(extra_delay=0.5)  # 지역 간 딜레이
 
 
 # ── B. 매물 수집 ──
@@ -141,7 +146,7 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
             if not result.get("isMoreData", False):
                 break
             page += 1
-            time.sleep(NaverEstateAPI.PAGE_DELAY)
+            _throttle_articles.wait()
 
         # 이번 크롤링에서 안 보인 매물 → is_active = False
         delete_missing_articles(db, complex_no, all_article_nos)
@@ -220,7 +225,7 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
                 failed += 1
                 failed_nos.append(str(cpx.complex_no))
                 logger.exception("인기 단지 크롤링 개별 실패: complex %s", cpx.complex_no)
-            time.sleep(2)
+            _throttle_articles.wait(extra_delay=0.5)
 
         job.total_items = total
         job.processed_items = processed
@@ -259,7 +264,7 @@ def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = No
         logger.info("매물 수집 배치 시작: %d개 단지", len(complexes))
         for cpx in complexes:
             crawl_complex_articles(cpx.complex_no, cpx.sido, cpx.sigungu, scheduler_job_id=scheduler_job_id)
-            time.sleep(1)
+            _throttle_articles.wait()
     finally:
         db.close()
 
@@ -308,7 +313,7 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
             if (i + 1) % 50 == 0:
                 db.commit()
 
-            time.sleep(NaverEstateAPI.MIN_REQUEST_INTERVAL)
+            _throttle_details.wait()
 
         job.status = "completed"
         job.processed_items = processed

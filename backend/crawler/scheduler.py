@@ -57,22 +57,24 @@ def create_scheduler() -> BackgroundScheduler:
         misfire_grace_time=3600,
     )
 
-    # B. 매물 수집 — N시간마다
+    # B. 매물 수집 — N시간마다 (jitter: mibunyang 08:00 월/목 크롤링과 충돌 회피)
     scheduler.add_job(
         crawl_articles_batch,
         "interval",
         hours=CRAWL_INTERVAL_HOURS,
+        jitter=1800,
         kwargs={"batch_size": CRAWL_BATCH_SIZE, "scheduler_job_id": "crawl_articles"},
         id="crawl_articles",
         name="매물 수집 배치",
         misfire_grace_time=1800,
     )
 
-    # C. 상세 보강 — N분마다
+    # C. 상세 보강 — N분마다 (jitter: 같은 IP 네이버 요청 분산)
     scheduler.add_job(
         crawl_article_details,
         "interval",
         minutes=CRAWL_DETAIL_INTERVAL_MIN,
+        jitter=900,
         kwargs={"batch_size": 100, "scheduler_job_id": "crawl_details"},
         id="crawl_details",
         name="매물 상세 보강",

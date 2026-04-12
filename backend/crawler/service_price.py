@@ -17,8 +17,8 @@ from utils import safe_int, utcnow
 logger = logging.getLogger(__name__)
 
 # 적응형 쓰로틀: 배치용 / on-demand용 분리
-_throttle = AdaptiveThrottle(min_interval=1.0, max_interval=5.0)
-_throttle_ondemand = AdaptiveThrottle(min_interval=2.0, max_interval=5.0)
+_throttle = AdaptiveThrottle(min_interval=1.5, max_interval=10.0)
+_throttle_ondemand = AdaptiveThrottle(min_interval=2.0, max_interval=10.0)
 
 
 def collect_price_history_for_complex(

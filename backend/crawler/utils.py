@@ -63,12 +63,12 @@ class LRUCache:
 class AdaptiveThrottle:
     """적응형 요청 간격 조절 (naver-api.mjs 포팅).
 
-    - 429 응답 → interval ×1.5 (최대 5초)
-    - 10회 연속 성공 → interval ×0.8 (최소 min_interval)
+    - 429 응답 → interval ×2.0 (최대 10초)
+    - 20회 연속 성공 → interval ×0.8 (최소 min_interval)
     - 스레드 안전
     """
 
-    def __init__(self, min_interval: float = 1.0, max_interval: float = 5.0):
+    def __init__(self, min_interval: float = 1.0, max_interval: float = 10.0):
         self._min_interval = min_interval
         self._max_interval = max_interval
         self._dynamic_interval = min_interval
@@ -89,10 +89,10 @@ class AdaptiveThrottle:
             self._last_request_time = time.monotonic()
 
     def on_rate_limit(self) -> None:
-        """429 응답 시 호출 — 간격 1.5배 증가"""
+        """429 응답 시 호출 — 간격 2.0배 증가"""
         with self._lock:
             self._dynamic_interval = min(
-                self._dynamic_interval * 1.5, self._max_interval
+                self._dynamic_interval * 2.0, self._max_interval
             )
             self._consecutive_success = 0
             logger.warning(
@@ -100,11 +100,11 @@ class AdaptiveThrottle:
             )
 
     def on_success(self) -> None:
-        """성공 응답 시 호출 — 10회 연속 성공 시 간격 축소"""
+        """성공 응답 시 호출 — 20회 연속 성공 시 간격 축소"""
         with self._lock:
             self._consecutive_success += 1
             if (
-                self._consecutive_success >= 10
+                self._consecutive_success >= 20
                 and self._dynamic_interval > self._min_interval
             ):
                 self._dynamic_interval = max(

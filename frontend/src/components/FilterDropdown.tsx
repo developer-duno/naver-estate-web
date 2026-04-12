@@ -47,21 +47,26 @@ const FilterDropdown = React.memo(function FilterDropdown({
     }
   }, [isOpen]);
 
-  // 외부 클릭 시 닫기
+  // 외부 클릭 시 닫기 (pointerdown = mouse + touch + pen 통합)
   const handleClickOutside = useCallback(
-    (e: MouseEvent) => {
-      if (isOpen && ref.current && !ref.current.contains(e.target as Node)) {
+    (e: Event) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
         onToggle();
       }
     },
-    [isOpen, onToggle]
+    [onToggle]
   );
 
   useEffect(() => {
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
+    if (!isOpen) return;
+    // 같은 이벤트 사이클에서 방금 열린 드롭다운이 즉시 닫히는 race 회피
+    const timer = setTimeout(() => {
+      document.addEventListener("pointerdown", handleClickOutside);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("pointerdown", handleClickOutside);
+    };
   }, [isOpen, handleClickOutside]);
 
   const buttonText = isActive && summary ? `${label}: ${summary} ▾` : `${label} ▾`;

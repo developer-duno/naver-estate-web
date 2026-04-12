@@ -283,7 +283,12 @@ def get_region_stats(
     region: str,
     gu: Optional[str] = None,
 ) -> list[MBRegion]:
-    """지역별 통계 (최신 데이터)"""
+    """지역별 통계 — (region, gu) 조합별 최신 레코드만 반환.
+
+    mibunyang 수집기가 주기적으로 MBRegion을 누적 저장하므로,
+    같은 (region, gu)가 여러 recorded_at으로 중복될 수 있음.
+    recorded_at desc로 정렬 후 (region, gu) 첫 등장만 유지.
+    """
     conditions = [MBRegion.region == region]
     if gu:
         conditions.append(MBRegion.gu == gu)
@@ -293,7 +298,19 @@ def get_region_stats(
         .where(and_(*conditions))
         .order_by(MBRegion.recorded_at.desc())
     )
-    return list(db.execute(stmt).scalars().all())
+    rows = list(db.execute(stmt).scalars().all())
+
+    seen: set[tuple[str, Optional[str]]] = set()
+    unique: list[MBRegion] = []
+    for r in rows:
+        key = (r.region, r.gu)
+        if key not in seen:
+            seen.add(key)
+            unique.append(r)
+
+    # 종합(gu=None) 먼저, 그 다음 시군구 이름순으로 정렬
+    unique.sort(key=lambda r: (r.gu is not None, r.gu or ""))
+    return unique
 
 
 # ── 실거래 ───────────────────────────────────────────────────

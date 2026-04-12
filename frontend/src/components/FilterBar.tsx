@@ -104,7 +104,7 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
   return (
     <div className="bg-white rounded-lg shadow-sm border p-3 space-y-2">
       {/* ── 툴바 버튼 행 ── */}
-      <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto md:flex-wrap md:overflow-x-visible">
+      <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto md:flex-wrap md:overflow-x-visible [touch-action:pan-x]">
         <HintIcon text="거래유형, 가격, 면적 등으로 매물을 필터링합니다" className="mr-0.5" />
         <FilterDropdown label="거래유형" isActive={s.tradeType !== "전체"} summary={s.tradeType !== "전체" ? s.tradeType : undefined} isOpen={openDropdown === "trade"} onToggle={() => toggle("trade")}>
           <TradeTypeSection s={s} setImmediate={setImmediate} />

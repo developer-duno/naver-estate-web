@@ -4,15 +4,15 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-13 — 세션 35 완료 (수익률 범위 필터 + 공유 쿼터 DB 카운터 + CI 수정)
+**마지막 작업**: 2026-04-13 — 세션 36 완료 (네이버 429 대응 AdaptiveThrottle 강화 + scheduler jitter)
 
 **다음 우선순위**:
 
-1. mibunyang 네이버 429 대응 (같은 IP에서 크롤러 Rate Limit, 시간 분리 재조정 필요)
-2. 모바일 실기기 재테스트 (Fragment 교체 후 비교 카드뷰 확인, Vercel 배포 완료)
-3. 어린이집 수동 트리거 (/admin → 어린이집 버튼)
-4. 오피스텔 면적 범위 프리셋 추가 (수익률 필터는 완료)
-5. mibunyang 쪽 quota_db 연동 (같은 RateLimitCounter 테이블 사용)
+1. 모바일 실기기 재테스트 (Fragment 교체 후 비교 카드뷰 확인, Vercel 배포 완료)
+2. 어린이집 수동 트리거 실기기 확인 (/admin → 어린이집 버튼, API 키 설정 필요)
+3. 오피스텔 면적 범위 프리셋 추가 (수익률 필터는 완료)
+4. mibunyang 쪽 quota_db 연동 (같은 RateLimitCounter 테이블 사용, 가이드 작성 완료)
+5. mibunyang 네이버 429 모니터링 (AdaptiveThrottle 적용 후 효과 확인)
 
 ## 기술 스택
 
@@ -139,7 +139,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 |------|------|----------|
 | FE 단위/컴포넌트/훅/페이지 | Vitest | 539개 (61파일) |
 | E2E | Playwright | 48개 (9파일, --webpack 모드) |
-| BE 단위/통합/API | pytest | 463개 (38파일, 1 skipped) |
+| BE 단위/통합/API | pytest | 476개 (39파일, 1 skipped) |
 
 ## 커밋 전 필수 검증
 

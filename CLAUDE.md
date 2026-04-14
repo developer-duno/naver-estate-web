@@ -4,29 +4,30 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-15 — 세션 40 **어린이집 silent failure 완전 해결** ✅. 4개월 0건 → 라이브 DB 3건 검증 완료.
+**마지막 작업**: 2026-04-15 — 세션 41 **어린이집 full 배치 완료 + 152 실패 구제** ✅. 1978/1995 단지(99%) 라이브 DB 반영.
 
-**세션 40 성과**:
-- **진짜 원인 2가지**:
-  1. `childcare_api.py`에서 `params["stcode"] = ""` 빈 문자열이 ERROR-100 유발 → **stcode 키 자체 제거** (arcode만 보내면 cpmsapi030이 시군구 전체 목록+좌표+상세 한 번에 반환)
-  2. CPMS 서버가 쿼리 파라미터 순서에 민감 → **`{"key": api_key, **params}` 로 key를 먼저** 배치 (이전 `{**params, "key": api_key}`는 ERROR-100)
-- 부가 개선: `ChildcareAPIError` 예외로 쿼터/인증 실패 시 배치 중단, INFO-200 즉시 return [] (재시도 fall-through 버그 수정), 응답 태그 대소문자 혼재 대응, `_extract_errcode` 헬퍼
-- 세션 39 silent success 가드(`collected == 0 → status='failed'`) 그대로 유지
-- ruff + pytest **481 passed / 1 skipped** (+5 신규 errcode 테스트)
-- 라이브 검증: `collect_childcare_data(batch_size=3)` → 서초/서대문/동작구 3단지 모두 DB 반영
-  - 지에스타워: count=28, nearest=서초1동하은어린이집 18m
-  - 스타타워: count=31, nearest=자람어린이집 141m
-  - 써밋더힐: count=12, nearest=은혜어린이집 192m
+**세션 41 성과** (커밋 `07dbddd` bulk + `a65306e` 152구제, main push 완료):
+
+- **[1] Infra bulk prefetch** (`07dbddd`): `env_childcare.py` +6/-1. 루프 내 `db.get(Infra, apt_id)` × N회 라운드트립 제거 → 배치 시작 시점 `WHERE apartment_id IN (...)` 1회로 identity map 로드. Supabase pooler 7분 timeout 위험 제거.
+- **[2] 152 → 22 실패 구제** (`a65306e`, 세 원인 분리 진단):
+  1. **세종 gu=None 40건**: `resolve_sigungu_code`에 `region in ("세종", ...) → "36110"` 분기 추가 (세종은 광역=시군구 1:1)
+  2. **Infra 행 부재 45건**: `infra_map.get()` None이면 `Infra(apartment_id=apt_id)` 자동 INSERT. **mibunyang 5개 collectors(infra-kakao/collect-childcare/collect-police/transport-tago/collect-emergency .mjs) 전부 `upsert({onConflict: "apartment_id"})`** 사용 교차 확인 → PK 충돌 없음
+  3. **CPMS empty 시군구 45건**(제주시/증평군/전주 덕진구): 기존 `facilities 비었으면 continue` 제거, count=0으로 정상 기록
+- **silent success 가드 재설계**: 세션 39 `collected==0` 가드가 무력화되지 않도록 `collected_with_matches` 별도 카운터 도입, 가드 조건 `(with_matches==0) AND (len(gu_cache)>0)`. CPMS 전역 INFO-200 장애 시나리오도 여전히 `failed` 판정
+- **ruff + pytest 484 passed / 1 skipped** (+3 신규 세종 gu=None 테스트)
+- **라이브 재검증**: `batch_size=2000` → 1978 수집 (매칭 1877) / 22 실패 / ~240초. DB 실측 `has_childcare=1978/total_infra=1995`, zero_count=101, matches=1877
+- **Infra 행 45개 신규 생성** (2001 Apartments - 1950 Infra → 1995 Infra)
+
+**남은 22 실패**: 전부 **구 단독 케이스** (덕양구/동탄구/북구/서북구/만안구/장안구/기흥구/오정구/상당구/소사구/동남구/의창구). mibunyang 원본 데이터가 "시 + 구"를 "구"만 저장한 행. 다음 세션에 region 내 유일성 기반 fallback으로 처리.
 
 **상세**: `memory/project_childcare_trigger_bug.md`
 
-**다음 우선순위 (세션 41)**:
+**다음 우선순위 (세션 42)**:
 
-1. 🟡 전체 1949 단지 full 배치 라이브 테스트 (수동 트리거 `POST /api/admin/collect/childcare` 또는 스케줄러 매월 첫째 목 06:00)
-2. `db.get(Infra, apt_id) × 1949회` → `WHERE apartment_id IN (...)` bulk select (Supabase pooler 7분 timeout 대응, env_childcare.py 동일 파일)
-3. 오피스텔 면적 범위 프리셋 추가
-4. mibunyang 쪽 quota_db 연동 (가이드 작성 완료)
-5. Supabase MCP 2개 해제 안내 (`/mcp` UI 또는 claude.ai Connectors)
+1. 🟡 **구 단독 22건 구제** — `sigungu_codes.json`에 "덕양구": "41281" 같은 구 단독 alias를 region별 유일성 검증하면서 자동 등록 (또는 `resolve_sigungu_code`에 region 내 구명 역인덱스 추가)
+2. 오피스텔 면적 범위 프리셋 추가
+3. mibunyang 쪽 quota_db 연동 (가이드 작성 완료)
+4. Supabase MCP 2개 해제 안내 (`/mcp` UI 또는 claude.ai Connectors)
 
 ## 기술 스택
 

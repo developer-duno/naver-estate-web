@@ -4,22 +4,20 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-13 — 세션 36-B **미해결**. 모바일 필터 먹통 3번 시도 모두 실패 (ac7870f/3ddb064/286394a). 다음 세션에서 재진단 필요.
+**마지막 작업**: 2026-04-14 — 세션 37 **모바일 onClick 먹통 완전 해결** ✅ (커밋 5b2cd56). iPhone+Android 실기기 검증 통과.
 
-**🚨 최우선 미해결 이슈**: 모바일 Safari에서 홈(/), /complex/[no], /admin 등 **모든 onClick 버튼이 작동 안 함**
-- Console 에러: `React error #418 (Hydration failed)` + `CSP frame-src` 위반
-- HTML에 `<template data-dgst="BAILOUT_TO_CLIENT_SIDE_RENDERING">` 존재
-- 시도한 수정 (실패): FilterDropdown pointerdown + body suppressHydrationWarning + CSP frame-src + 5개 localStorage 훅 SSR-safe 패턴
-- 상세: `memory/project_mobile_filter_bug.md`
-- 다음 세션 첫 작업: (1) 사용자로부터 Console 에러 전체 텍스트 받기 (2) Vercel 대시보드에서 Toolbar > Production OFF 요청 (3) Providers 및 모든 use client 컴포넌트 SSR 안전성 감사
+**해결 내역**: 4세션에 걸친 미해결 이슈를 정공법으로 진단:
+- **원인 1 (Header.tsx)**: 로그인 상태 SSR/CSR mismatch → React 19가 BAILOUT_TO_CLIENT_SIDE_RENDERING 폴백 → 전체 onClick 핸들러 미부착
+- **원인 2 (FilterBar.tsx)**: `overflow-x-auto` 컨테이너가 `absolute` 드롭다운 패널 클리핑 → 모바일 터치 가로채짐
+- **수정**: Header에 `mounted` 가드 + FilterBar `flex flex-wrap` + FilterDropdown `onToggleRef` 안정화 (3파일 / 23 insertions)
+- **회고**: `memory/project_mobile_filter_bug.md` 재발 방지 메모
 
 **다음 우선순위**:
 
-1. **🚨 모바일 필터 먹통 재진단** (세션 37 최우선)
-2. 어린이집 수동 트리거 실기기 확인 (/admin → 어린이집 버튼, API 키는 이미 .env에 있음)
-3. 오피스텔 면적 범위 프리셋 추가
-4. mibunyang 쪽 quota_db 연동 (가이드 작성 완료)
-5. mibunyang 네이버 429 모니터링
+1. 어린이집 수동 트리거 실기기 확인 (/admin → 어린이집 버튼, API 키는 이미 .env에 있음)
+2. 오피스텔 면적 범위 프리셋 추가
+3. mibunyang 쪽 quota_db 연동 (가이드 작성 완료)
+4. mibunyang 네이버 429 모니터링
 
 ## 기술 스택
 

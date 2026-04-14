@@ -1,4 +1,18 @@
 {
+  "enabledPlugins": {
+    "webapp-testing@claude-plugins-official": true,
+    "engineering@knowledge-work-plugins": true,
+    "pr-review-toolkit@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "feature-dev@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true
+  },
   "permissions": {
     "allow": [
       "Bash(printf \"https://produced-moms-consulting-animated.trycloudflare.com\")",

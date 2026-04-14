@@ -305,6 +305,7 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         job.total_items = len(articles)
         processed = 0
 
+        skipped_dead = 0
         for i, art in enumerate(articles):
             detail_data = NaverEstateAPI.get_article_detail(art.article_no)
             if detail_data and "error" not in detail_data:
@@ -324,6 +325,15 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
                     update_data, synchronize_session=False
                 )
                 processed += 1
+            else:
+                # 네이버 상세 API가 error/404 → 네이버 쪽에서 이미 지운 매물로 간주.
+                # detail_crawled=TRUE + is_active=FALSE로 마크해 같은 매물이 다음
+                # 배치에서 반복 pick되지 않도록 한다. 58만 건이 영원히 pick되던 문제 해결.
+                db.query(Article).filter(Article.article_no == art.article_no).update(
+                    {"detail_crawled": True, "is_active": False},
+                    synchronize_session=False,
+                )
+                skipped_dead += 1
 
             # CV-49: 배치 commit (50건 단위) — 행별 commit 대신
             if (i + 1) % 50 == 0:
@@ -335,7 +345,10 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         job.processed_items = processed
         job.completed_at = utcnow()
         db.commit()  # 나머지 flush
-        logger.info("상세 보강 완료: %d/%d건", processed, len(articles))
+        logger.info(
+            "상세 보강 완료: %d/%d건 (dead 매물 %d건 비활성화)",
+            processed, len(articles), skipped_dead,
+        )
 
     except Exception as e:
         db.rollback()

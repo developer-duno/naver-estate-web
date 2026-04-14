@@ -160,6 +160,7 @@ def collect_price_history(batch_size: int = 50, scheduler_job_id: str | None = N
 
         processed = 0
         for i, (complex_no,) in enumerate(complexes):
+            complex_had_success = False
             for trade_type in ("A1", "B1"):  # 매매, 전세
                 _throttle.wait()
                 try:
@@ -187,6 +188,9 @@ def collect_price_history(batch_size: int = 50, scheduler_job_id: str | None = N
                         price_avg=safe_int(p.get("averagePrice")),
                         base_month=base_month,
                     )
+                complex_had_success = True
+            # 단지당 한 번만 카운트 (A1, B1 중 하나라도 성공하면)
+            if complex_had_success:
                 processed += 1
 
             # 체크포인트

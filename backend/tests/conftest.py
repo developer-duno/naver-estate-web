@@ -78,6 +78,9 @@ def setup_db():
     # 테스트 간 캐시 잔존 방지
     from deps import _user_cache
     _user_cache._store.clear()
+    # Rate limiter in-memory 카운터도 리셋 (testclient 동일 IP 누적 방지)
+    from auth.rate_limiter import _ip_counters
+    _ip_counters.clear()
 
 
 @pytest.fixture

@@ -250,6 +250,7 @@ export interface CrawlProgress {
   detail_crawled_count?: number;
   detail_total?: number;
   detail_skipped_count?: number;
+  forced?: boolean;
 }
 
 // ── 미분양 (mibunyang) ──

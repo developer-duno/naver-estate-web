@@ -4,30 +4,36 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-15 — 세션 41 **어린이집 full 배치 완료 + 152 실패 구제** ✅. 1978/1995 단지(99%) 라이브 DB 반영.
+**마지막 작업**: 2026-04-15 — 세션 42 **어린이집 서사 완전 종결 (22 → 0) + 오피스텔 면적 프리셋** ✅. DB 2000/2001 (세종 좌표 None 1건만 제외).
 
-**세션 41 성과** (커밋 `07dbddd` bulk + `a65306e` 152구제, main push 완료):
+**세션 42 성과** (커밋 `a9dabc9` 어린이집 22구제 + `2329e17` 오피스텔 프리셋, main push 완료):
 
-- **[1] Infra bulk prefetch** (`07dbddd`): `env_childcare.py` +6/-1. 루프 내 `db.get(Infra, apt_id)` × N회 라운드트립 제거 → 배치 시작 시점 `WHERE apartment_id IN (...)` 1회로 identity map 로드. Supabase pooler 7분 timeout 위험 제거.
-- **[2] 152 → 22 실패 구제** (`a65306e`, 세 원인 분리 진단):
-  1. **세종 gu=None 40건**: `resolve_sigungu_code`에 `region in ("세종", ...) → "36110"` 분기 추가 (세종은 광역=시군구 1:1)
-  2. **Infra 행 부재 45건**: `infra_map.get()` None이면 `Infra(apartment_id=apt_id)` 자동 INSERT. **mibunyang 5개 collectors(infra-kakao/collect-childcare/collect-police/transport-tago/collect-emergency .mjs) 전부 `upsert({onConflict: "apartment_id"})`** 사용 교차 확인 → PK 충돌 없음
-  3. **CPMS empty 시군구 45건**(제주시/증평군/전주 덕진구): 기존 `facilities 비었으면 continue` 제거, count=0으로 정상 기록
-- **silent success 가드 재설계**: 세션 39 `collected==0` 가드가 무력화되지 않도록 `collected_with_matches` 별도 카운터 도입, 가드 조건 `(with_matches==0) AND (len(gu_cache)>0)`. CPMS 전역 INFO-200 장애 시나리오도 여전히 `failed` 판정
-- **ruff + pytest 484 passed / 1 skipped** (+3 신규 세종 gu=None 테스트)
-- **라이브 재검증**: `batch_size=2000` → 1978 수집 (매칭 1877) / 22 실패 / ~240초. DB 실측 `has_childcare=1978/total_infra=1995`, zero_count=101, matches=1877
-- **Infra 행 45개 신규 생성** (2001 Apartments - 1950 Infra → 1995 Infra)
+- **[1] 어린이집 22 실패 완전 구제** (`a9dabc9`):
+  - 원인 전수조사: 전부 mibunyang 원본이 "경기 고양시 덕양구"를 `region="경기"/gu="덕양구"`로 시 정보 누락 저장한 **일반구 단독 케이스**. 세션 41의 "23건 중 세종 1건"은 `lat/lng=None`이라 `env_childcare.py:41` WHERE 조건에서 배치 제외(=22와 별개 이슈)
+  - `_GU_TO_PARENT_CITY: dict[tuple[str, str], str]` 32 엔트리 별칭 테이블을 `resolve_sigungu_code` 폴백 단계에 추가. region 튜플 키로 중복 구명 모호성 회피(경북 북구=47110, 부산 북구=26320 기존 직매핑 regression 방어)
+  - CPMS cpmsapi030이 시 단위 법정코드로도 시 전체 어린이집 반환 → 덕양구 단지는 고양시(41280) 조회 결과에서 반경 1km 매칭 정상
+  - **라이브 batch_size=2000**: 2000 수집 (매칭 1899) / **0 실패** / 205.4초
+  - **DB 실측**: `has_childcare=2000 / total_infra=2001 / zero=101 / with_matches=1899`
+  - 테스트: BE 490 passed / 1 skipped (484 + 6 regression 포함). Plan 에이전트 1회 교차검토 완료
+  - 파일: `backend/crawler/childcare_api.py` +50/-1, `backend/tests/test_childcare_api.py` +29 (2파일 / 78줄)
 
-**남은 22 실패**: 전부 **구 단독 케이스** (덕양구/동탄구/북구/서북구/만안구/장안구/기흥구/오정구/상당구/소사구/동남구/의창구). mibunyang 원본 데이터가 "시 + 구"를 "구"만 저장한 행. 다음 세션에 region 내 유일성 기반 fallback으로 처리.
+- **[2] 오피스텔 면적 프리셋** (`2329e17`):
+  - FilterBar 전용면적 프리셋이 아파트 기준(59/84/114/135m²)만 제공 → 오피스텔 검색 시 실사용 면적대 불일치
+  - `AREA_PRESETS_OFFICETEL` / `AREA_PRESETS_OFFICETEL_PYEONG` 신규: 원룸(~26m²=8평) / 1.5룸(26~40=8~12평) / 투룸(40~60=12~18평) / 쓰리룸+(60~)
+  - `AreaSection`에서 `estateType === "opst" | "obyg"` 분기로 자동 전환, 라벨에 "(오피스텔)" 표기
+  - 테스트: FE 545 passed (539 + 6), tsc clean, lint 0 errors
+  - 파일: `frontend/src/lib/constants.ts` +20, `frontend/src/components/filter/FilterSections.tsx` +10/-2, `constants.test.ts` +49 (3파일 / 79줄)
 
-**상세**: `memory/project_childcare_trigger_bug.md`
+- **어린이집 서사 완결**: 38(진단) → 39(가드) → 40(CPMS 버그) → 41(bulk prefetch + 152→22) → **42(일반구 별칭 22→0)**. DB 2000/2001 커버 (99.95%).
 
-**다음 우선순위 (세션 42)**:
+**상세**: `memory/project_childcare_trigger_bug.md`, `memory/session42_summary.md`
 
-1. 🟡 **구 단독 22건 구제** — `sigungu_codes.json`에 "덕양구": "41281" 같은 구 단독 alias를 region별 유일성 검증하면서 자동 등록 (또는 `resolve_sigungu_code`에 region 내 구명 역인덱스 추가)
-2. 오피스텔 면적 범위 프리셋 추가
-3. mibunyang 쪽 quota_db 연동 (가이드 작성 완료)
-4. Supabase MCP 2개 해제 안내 (`/mcp` UI 또는 claude.ai Connectors)
+**다음 우선순위 (세션 43)**:
+
+1. 🟡 **세종 좌표 1건 보강** (`ah-2022910239`) — kakao geocoding으로 lat/lng 채워 DB 2001/2001 완결 (ROI 낮지만 상징적)
+2. mibunyang 쪽 quota_db 연동 가이드 공유 (본 프로젝트 코드 변경 없음)
+3. Supabase MCP 2개 해제 안내 (`/mcp` UI 또는 claude.ai Connectors)
+4. 새 작업 탐색 — 어린이집 큰 숙제 종료로 `/admin` UX / 비교 페이지 / 매물 필터 고도화 등 사용자 요청 대기
 
 ## 기술 스택
 

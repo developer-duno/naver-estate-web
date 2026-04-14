@@ -122,3 +122,31 @@ export async function rejectVerification(token: string, id: number, reason: stri
     body: JSON.stringify({ reason }),
   });
 }
+
+/** 관리자: 매물 일괄 재크롤 — 지금 실행 안전도 조회 */
+export interface RecrawlStatus {
+  level: "safe" | "warn" | "danger";
+  message: string;
+  current_kst_hour: number;
+  running_jobs_count: number;
+  running_jobs: Array<{ id: number; job_type: string; scheduler_job_id: string | null; started_at: string | null }>;
+  recrawl_in_progress: boolean;
+  recommended_window_kst: string;
+  estimated_seconds_per_100: number;
+}
+
+export async function getRecrawlStatus(token: string) {
+  return fetchApi<RecrawlStatus>("/api/admin/recrawl/status", { headers: adminHeaders(token) });
+}
+
+/** 관리자: 매물 일괄 재크롤 즉시 실행 */
+export async function runRecrawlArticles(token: string, batchSize: number, force: boolean = false) {
+  return fetchApi<{ status: string; batch_size: number; level: string; message: string }>(
+    "/api/admin/recrawl/articles",
+    {
+      method: "POST",
+      headers: { ...adminHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify({ batch_size: batchSize, force }),
+    },
+  );
+}

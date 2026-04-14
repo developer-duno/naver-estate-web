@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import StatsCards from "@/components/admin/StatsCards";
+import BulkRecrawlCard from "@/components/admin/BulkRecrawlCard";
 import CollectorTrigger from "@/components/admin/CollectorTrigger";
 import SchedulerMonitor from "@/components/admin/SchedulerMonitor";
 import { getAdminDetailedStats, getAdminAuditLogs, getAdminCrawlJobs } from "@/lib/api";
@@ -100,6 +101,10 @@ export default function AdminDashboard() {
 
       <div className="mt-6">
         <CollectorTrigger getToken={getToken} />
+      </div>
+
+      <div className="mt-6">
+        <BulkRecrawlCard getToken={getToken} />
       </div>
     </>
   );

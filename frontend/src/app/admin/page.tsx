@@ -5,7 +5,6 @@ import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import StatsCards from "@/components/admin/StatsCards";
 import CollectorTrigger from "@/components/admin/CollectorTrigger";
-import ForceRecrawlCard from "@/components/admin/ForceRecrawlCard";
 import SchedulerMonitor from "@/components/admin/SchedulerMonitor";
 import { getAdminDetailedStats, getAdminAuditLogs, getAdminCrawlJobs } from "@/lib/api";
 import type { DetailedStats, AuditLog, CrawlJobDetail } from "@/types/admin";
@@ -101,10 +100,6 @@ export default function AdminDashboard() {
 
       <div className="mt-6">
         <CollectorTrigger getToken={getToken} />
-      </div>
-
-      <div className="mt-6">
-        <ForceRecrawlCard getToken={getToken} />
       </div>
     </>
   );

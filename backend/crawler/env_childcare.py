@@ -1,4 +1,11 @@
-"""어린이집 수집 — CPMS API → infra 테이블 반영"""
+"""어린이집 수집 — cpmsapi030 1회 호출 + 시군구 캐시 + 반경 1km 필터
+
+세션 40 재작성:
+- 기존 버그: params["stcode"] = "" 빈 문자열이 ERROR-100 유발 (4개월 silent failure)
+- 수정: childcare_api.py에서 stcode 키 자체 제거 → arcode만으로 시군구 전체 상세 응답
+- 시군구당 030 1회 호출 → 응답 캐싱 → 같은 시군구 단지는 재사용
+- 치명적 에러(쿼터 초과/인증 실패)는 ChildcareAPIError로 배치 중단
+"""
 
 import logging
 
@@ -11,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def collect_childcare_data(batch_size: int = 100):
-    """어린이집 수집 — 시군구별 어린이집 목록 1회 → 단지별 근접 매칭 (반경 1km)"""
+    """어린이집 수집 — 시군구별 1회 API 호출 + 단지별 반경 1km 매칭"""
     db = SessionLocal()
     if _is_skip_day():
         logger.info("[childcare] 매월 10일 토요일 — 쿼터 보호를 위해 건너뜀")
@@ -23,7 +30,7 @@ def collect_childcare_data(batch_size: int = 100):
         db.close()
         return
 
-    from crawler.childcare_api import ChildcareAPI, resolve_sigungu_code
+    from crawler.childcare_api import ChildcareAPI, ChildcareAPIError, resolve_sigungu_code
 
     job = _record_job(db, "childcare", "collect_childcare")
     try:
@@ -41,23 +48,28 @@ def collect_childcare_data(batch_size: int = 100):
 
         for apt_id, lat, lng, region, gu in apts:
             try:
-                # 시군구 키로 캐시 (같은 지역 단지들은 재조회 불필요)
-                cache_key = f"{region}_{gu}"
-                if cache_key not in gu_cache:
-                    sigungu_code = resolve_sigungu_code(region, gu)
-                    if sigungu_code:
-                        try:
-                            gu_cache[cache_key] = ChildcareAPI.get_childcare_list(sigungu_code)
-                            logger.info("[childcare] %s (code=%s) → %d건",
-                                        cache_key, sigungu_code, len(gu_cache[cache_key]))
-                        except Exception:
-                            logger.exception("[childcare] %s API 조회 실패", cache_key)
-                            gu_cache[cache_key] = []
-                    else:
-                        gu_cache[cache_key] = []
-                        logger.warning("[childcare] %s → sigungu_code 매핑 없음", cache_key)
+                sigungu_code = resolve_sigungu_code(region, gu)
+                if not sigungu_code:
+                    logger.warning("[childcare] %s %s → 시군구 코드 매핑 없음", region, gu)
+                    failed += 1
+                    continue
 
-                facilities = gu_cache[cache_key]
+                if sigungu_code not in gu_cache:
+                    try:
+                        gu_cache[sigungu_code] = (
+                            ChildcareAPI.get_childcare_list(sigungu_code)
+                        )
+                        logger.info(
+                            "[childcare] %s %s (code=%s) → %d건",
+                            region, gu, sigungu_code, len(gu_cache[sigungu_code]),
+                        )
+                    except ChildcareAPIError:
+                        raise
+                    except Exception:
+                        logger.exception("[childcare] %s API 조회 실패", sigungu_code)
+                        gu_cache[sigungu_code] = []
+
+                facilities = gu_cache[sigungu_code]
                 if not facilities:
                     failed += 1
                     continue
@@ -75,14 +87,15 @@ def collect_childcare_data(batch_size: int = 100):
                 infra.childcare_nearest_type = result.get("nearest_type", "")
                 infra.childcare_nearest_teachers = result.get("nearest_teachers", 0)
                 collected += 1
+            except ChildcareAPIError:
+                raise
             except Exception:
                 logger.exception("[childcare] 단지 %s 처리 실패", apt_id)
                 failed += 1
 
         db.commit()
 
-        # silent success 가드: 한 건도 못 넣었으면 failed로 강제 (세션 39)
-        # 원인: cpmsapi030이 INFO-200(검색결과 없음)만 반환 중 — 세션 40에서 수정 예정
+        # silent success 가드 (세션 39)
         if collected == 0:
             empty_gus = sum(1 for v in gu_cache.values() if not v)
             total_gus = len(gu_cache)
@@ -100,7 +113,13 @@ def collect_childcare_data(batch_size: int = 100):
             )
         else:
             _complete_job(db, job, collected, failed)
-            logger.info("[childcare] 완료: %d 수집, %d 실패 (배치 %d)", collected, failed, batch_size)
+            logger.info(
+                "[childcare] 완료: %d 수집, %d 실패 (배치 %d)",
+                collected, failed, batch_size,
+            )
+    except ChildcareAPIError as exc:
+        _fail_job(db, job, f"CPMS 치명적 에러: {exc}")
+        logger.error("[childcare] CPMS 쿼터/인증 에러 — 배치 중단: %s", exc)
     except Exception as exc:
         _fail_job(db, job, str(exc))
         logger.exception("[childcare] 수집 실패")

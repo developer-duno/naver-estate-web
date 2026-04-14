@@ -4,30 +4,29 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-14 — 세션 39 **어린이집 silent success 가드 추가** 🟡 (부분 해결, 재발 방지만). API 파라미터 수정은 CPMS 명세 재확인 필요로 세션 40+ 분리.
+**마지막 작업**: 2026-04-15 — 세션 40 **어린이집 silent failure 완전 해결** ✅. 4개월 0건 → 라이브 DB 3건 검증 완료.
 
-**세션 39 성과**:
-- `env_childcare.py`에 `collected == 0` 가드 추가 — `status='failed'` 강제 + `error_message="시군구 N개 중 empty M개"` 요약 기록. 대시보드 거짓 "completed" 재발 차단.
-- ruff + pytest 476 passed / 1 skipped 통과, 1파일 +21/-2.
-
-**세션 39 A단계 발견 (재진단)**:
-- 세션 38의 "ERROR-100 = 필수값 누락" 가설은 **오류**. 실제 테스트 결과:
-  - `key=X&arcode=11&stcode=680` → `INFO-200 검색결과 없음` (파라미터 통과, 결과 0건)
-  - `serviceKey=X` (대문자) → `ERROR-100` (data.go.kr 표준 키 이름 거부)
-  - no-params → HTTP 500 (완전 누락)
-- 즉 **ERROR-100은 인증/키 오류 계열**, 파라미터 조합 `arcode/stcode` 분리 가설 자체는 맞음. 그러나 강남구(11680→11+680), 종로구(11+110), 서울 전체(11) 모두 INFO-200.
-- 추정: `arcode/stcode`가 행정표준코드가 아닌 CPMS 내부 분류 코드거나, cpmsapi030이 단건조회 API(리스트는 cpmsapi021/022 별도)일 가능성
+**세션 40 성과**:
+- **진짜 원인 2가지**:
+  1. `childcare_api.py`에서 `params["stcode"] = ""` 빈 문자열이 ERROR-100 유발 → **stcode 키 자체 제거** (arcode만 보내면 cpmsapi030이 시군구 전체 목록+좌표+상세 한 번에 반환)
+  2. CPMS 서버가 쿼리 파라미터 순서에 민감 → **`{"key": api_key, **params}` 로 key를 먼저** 배치 (이전 `{**params, "key": api_key}`는 ERROR-100)
+- 부가 개선: `ChildcareAPIError` 예외로 쿼터/인증 실패 시 배치 중단, INFO-200 즉시 return [] (재시도 fall-through 버그 수정), 응답 태그 대소문자 혼재 대응, `_extract_errcode` 헬퍼
+- 세션 39 silent success 가드(`collected == 0 → status='failed'`) 그대로 유지
+- ruff + pytest **481 passed / 1 skipped** (+5 신규 errcode 테스트)
+- 라이브 검증: `collect_childcare_data(batch_size=3)` → 서초/서대문/동작구 3단지 모두 DB 반영
+  - 지에스타워: count=28, nearest=서초1동하은어린이집 18m
+  - 스타타워: count=31, nearest=자람어린이집 141m
+  - 써밋더힐: count=12, nearest=은혜어린이집 192m
 
 **상세**: `memory/project_childcare_trigger_bug.md`
 
-**다음 우선순위 (세션 40)**:
+**다음 우선순위 (세션 41)**:
 
-1. 🔴 **사용자 조치**: [info.childcare.go.kr](https://info.childcare.go.kr) 활용신청 콘솔에서 cpmsapi030 요청/응답 스펙 확인 (arcode/stcode 코드 체계, 필수 파라미터 목록) → 명세 스크린샷 공유
-2. 🔴 명세 확정 후 childcare_api.py B단계 수정 (~15줄, 2곳)
-3. `db.get(Infra) × 1949회` → bulk select 최적화 (Supabase pooler 7분 timeout 대응)
-4. 오피스텔 면적 범위 프리셋 추가
-5. mibunyang 쪽 quota_db 연동 (가이드 작성 완료)
-6. Supabase MCP 2개 해제 안내 (`/mcp` UI 또는 claude.ai Connectors)
+1. 🟡 전체 1949 단지 full 배치 라이브 테스트 (수동 트리거 `POST /api/admin/collect/childcare` 또는 스케줄러 매월 첫째 목 06:00)
+2. `db.get(Infra, apt_id) × 1949회` → `WHERE apartment_id IN (...)` bulk select (Supabase pooler 7분 timeout 대응, env_childcare.py 동일 파일)
+3. 오피스텔 면적 범위 프리셋 추가
+4. mibunyang 쪽 quota_db 연동 (가이드 작성 완료)
+5. Supabase MCP 2개 해제 안내 (`/mcp` UI 또는 claude.ai Connectors)
 
 ## 기술 스택
 

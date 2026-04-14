@@ -125,6 +125,44 @@ class TestSkipDay:
         assert _is_skip_day() is False
 
 
+# ── _upsert_station 배치 중복 안전성 테스트 ──
+
+
+class TestUpsertStationBatch:
+    """동일 station_name 반복 호출 시 UniqueViolation 방어
+
+    회귀 테스트: 이전 구현(db.merge + SELECT 체크)은 flush 전 동일 pk 중복 INSERT를
+    감지 못해 commit 시점에 UniqueViolation으로 배치 전체가 롤백되는 버그 있었음.
+    """
+
+    def test_같은_측정소_반복_호출_안전(self, db):
+        from crawler.env_air import _upsert_station
+        from db.mb_models import AirQualityStation
+
+        # 같은 station_name을 3번 연속 호출 — 실제 배치에서 같은 측정소가 여러 단지에 매핑될 때
+        _upsert_station(db, "성산읍", "제주 서귀포시 성산읍")
+        _upsert_station(db, "성산읍", "제주 서귀포시 성산읍")
+        _upsert_station(db, "성산읍", "제주 서귀포시 성산읍 갱신")
+        db.commit()
+
+        rows = db.query(AirQualityStation).filter_by(station_name="성산읍").all()
+        assert len(rows) == 1
+        assert rows[0].address == "제주 서귀포시 성산읍 갱신"  # 마지막 값으로 업데이트
+
+    def test_다수_측정소_혼합_안전(self, db):
+        from crawler.env_air import _upsert_station
+        from db.mb_models import AirQualityStation
+
+        # 실제 배치 시나리오: 여러 단지가 여러 측정소에 매핑, 일부는 반복
+        for sname in ["동홍동", "남원읍", "동홍동", "성산읍", "남원읍", "동홍동"]:
+            _upsert_station(db, sname, f"제주 {sname}")
+        db.commit()
+
+        assert db.query(AirQualityStation).count() == 3
+        for expected in ("동홍동", "남원읍", "성산읍"):
+            assert db.query(AirQualityStation).filter_by(station_name=expected).one()
+
+
 # ── BasePublicDataAPI 전역 카운터 테스트 ──
 
 

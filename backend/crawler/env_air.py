@@ -6,6 +6,7 @@ from datetime import datetime
 from crawler.env_common import _complete_job, _fail_job, _is_skip_day, _record_job
 from db.database import SessionLocal
 from db.mb_models import AirQualityStation, Apartment, Infra
+from services.upsert import _do_upsert
 from utils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -89,13 +90,18 @@ def collect_air_quality(batch_size: int = 100):
 
 
 def _upsert_station(db, station_name: str, addr: str):
-    """에어코리아 측정소 캐시 upsert"""
-    existing = db.get(AirQualityStation, station_name)
-    if existing:
-        return
-    station = AirQualityStation(
-        station_name=station_name,
-        address=addr,
-        updated_at=datetime.now(),
+    """에어코리아 측정소 캐시 upsert — ON CONFLICT DO UPDATE.
+
+    동일 배치 내 같은 station_name이 여러 단지에서 반복 호출돼도
+    UniqueViolation 없이 안전 (기존 db.merge + SELECT 체크는 flush 전 중복 감지 불가).
+    """
+    _do_upsert(
+        db,
+        AirQualityStation,
+        {
+            "station_name": station_name,
+            "address": addr,
+            "updated_at": datetime.now(),
+        },
+        "station_name",
     )
-    db.merge(station)

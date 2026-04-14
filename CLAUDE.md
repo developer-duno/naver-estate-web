@@ -4,20 +4,30 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-14 — 세션 37 **모바일 onClick 먹통 완전 해결** ✅ (커밋 5b2cd56). iPhone+Android 실기기 검증 통과.
+**마지막 작업**: 2026-04-14 — 세션 39 **어린이집 silent success 가드 추가** 🟡 (부분 해결, 재발 방지만). API 파라미터 수정은 CPMS 명세 재확인 필요로 세션 40+ 분리.
 
-**해결 내역**: 4세션에 걸친 미해결 이슈를 정공법으로 진단:
-- **원인 1 (Header.tsx)**: 로그인 상태 SSR/CSR mismatch → React 19가 BAILOUT_TO_CLIENT_SIDE_RENDERING 폴백 → 전체 onClick 핸들러 미부착
-- **원인 2 (FilterBar.tsx)**: `overflow-x-auto` 컨테이너가 `absolute` 드롭다운 패널 클리핑 → 모바일 터치 가로채짐
-- **수정**: Header에 `mounted` 가드 + FilterBar `flex flex-wrap` + FilterDropdown `onToggleRef` 안정화 (3파일 / 23 insertions)
-- **회고**: `memory/project_mobile_filter_bug.md` 재발 방지 메모
+**세션 39 성과**:
+- `env_childcare.py`에 `collected == 0` 가드 추가 — `status='failed'` 강제 + `error_message="시군구 N개 중 empty M개"` 요약 기록. 대시보드 거짓 "completed" 재발 차단.
+- ruff + pytest 476 passed / 1 skipped 통과, 1파일 +21/-2.
 
-**다음 우선순위**:
+**세션 39 A단계 발견 (재진단)**:
+- 세션 38의 "ERROR-100 = 필수값 누락" 가설은 **오류**. 실제 테스트 결과:
+  - `key=X&arcode=11&stcode=680` → `INFO-200 검색결과 없음` (파라미터 통과, 결과 0건)
+  - `serviceKey=X` (대문자) → `ERROR-100` (data.go.kr 표준 키 이름 거부)
+  - no-params → HTTP 500 (완전 누락)
+- 즉 **ERROR-100은 인증/키 오류 계열**, 파라미터 조합 `arcode/stcode` 분리 가설 자체는 맞음. 그러나 강남구(11680→11+680), 종로구(11+110), 서울 전체(11) 모두 INFO-200.
+- 추정: `arcode/stcode`가 행정표준코드가 아닌 CPMS 내부 분류 코드거나, cpmsapi030이 단건조회 API(리스트는 cpmsapi021/022 별도)일 가능성
 
-1. 어린이집 수동 트리거 실기기 확인 (/admin → 어린이집 버튼, API 키는 이미 .env에 있음)
-2. 오피스텔 면적 범위 프리셋 추가
-3. mibunyang 쪽 quota_db 연동 (가이드 작성 완료)
-4. mibunyang 네이버 429 모니터링
+**상세**: `memory/project_childcare_trigger_bug.md`
+
+**다음 우선순위 (세션 40)**:
+
+1. 🔴 **사용자 조치**: [info.childcare.go.kr](https://info.childcare.go.kr) 활용신청 콘솔에서 cpmsapi030 요청/응답 스펙 확인 (arcode/stcode 코드 체계, 필수 파라미터 목록) → 명세 스크린샷 공유
+2. 🔴 명세 확정 후 childcare_api.py B단계 수정 (~15줄, 2곳)
+3. `db.get(Infra) × 1949회` → bulk select 최적화 (Supabase pooler 7분 timeout 대응)
+4. 오피스텔 면적 범위 프리셋 추가
+5. mibunyang 쪽 quota_db 연동 (가이드 작성 완료)
+6. Supabase MCP 2개 해제 안내 (`/mcp` UI 또는 claude.ai Connectors)
 
 ## 기술 스택
 

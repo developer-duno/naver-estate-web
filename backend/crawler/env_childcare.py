@@ -80,8 +80,27 @@ def collect_childcare_data(batch_size: int = 100):
                 failed += 1
 
         db.commit()
-        _complete_job(db, job, collected, failed)
-        logger.info("[childcare] 완료: %d 수집, %d 실패 (배치 %d)", collected, failed, batch_size)
+
+        # silent success 가드: 한 건도 못 넣었으면 failed로 강제 (세션 39)
+        # 원인: cpmsapi030이 INFO-200(검색결과 없음)만 반환 중 — 세션 40에서 수정 예정
+        if collected == 0:
+            empty_gus = sum(1 for v in gu_cache.values() if not v)
+            total_gus = len(gu_cache)
+            job.status = "failed"
+            job.processed_items = 0
+            job.total_items = failed
+            job.error_message = (
+                f"0건 수집 — 시군구 {total_gus}개 중 API empty {empty_gus}개"
+            )[:500]
+            job.completed_at = utcnow()
+            db.commit()
+            logger.error(
+                "[childcare] silent failure 감지: 시군구 %d개 중 empty %d개 (배치 %d)",
+                total_gus, empty_gus, batch_size,
+            )
+        else:
+            _complete_job(db, job, collected, failed)
+            logger.info("[childcare] 완료: %d 수집, %d 실패 (배치 %d)", collected, failed, batch_size)
     except Exception as exc:
         _fail_job(db, job, str(exc))
         logger.exception("[childcare] 수집 실패")

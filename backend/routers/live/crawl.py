@@ -6,9 +6,10 @@ import threading
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from auth.audit import log_action
 from db.models import Article as ArticleModel
 from db.models import Complex as ComplexModel
-from deps import get_approved_user, get_db
+from deps import ADMIN_EMAILS, get_approved_user, get_db
 from routers.serializers import article_to_dict
 from services.upsert import build_detail_update_dict
 from shared.domain.article import RealEstateArticle
@@ -21,17 +22,35 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/{complex_no}/articles/start-crawl")
-def start_live_crawl(complex_no: str, user: dict = Depends(get_approved_user)):
-    """Start background crawl, return immediately."""
-    # 최근 크롤링 완료 여부 확인 (동적 TTL 적용)
+def start_live_crawl(
+    complex_no: str,
+    force: bool = False,
+    user: dict = Depends(get_approved_user),
+    db: Session = Depends(get_db),
+):
+    """Start background crawl, return immediately.
+
+    `force=true`는 관리자에 한해 TTL 캐시/running 가드를 우회하고 즉시 재크롤한다.
+    비-admin이 force를 넘겨도 무시 — get_admin_user와 동일 조건으로 재검증.
+    """
+    is_admin = user.get("role") == "admin" or user.get("email") in ADMIN_EMAILS
+    is_admin_force = force and is_admin
+
     done_key = f"crawl_done:{complex_no}"
-    if _cache.get(done_key) is not None:
+
+    if is_admin_force:
+        _cache.delete(done_key)
+        log_action(db, user.get("user_id"), "force_recrawl", "complex", complex_no)
+        db.commit()
+
+    # 최근 크롤링 완료 여부 확인 (동적 TTL 적용) — force 시 스킵
+    if not is_admin_force and _cache.get(done_key) is not None:
         return {"complex_no": complex_no, "status": "cached"}
 
-    # Already running? (Lock으로 check-then-set 원자화)
+    # Already running? (Lock으로 check-then-set 원자화) — force 시 덮어쓰기
     with _crawl_lock:
         status = _crawl_status.get(complex_no)
-        if status and status.get("status") in ("started", "running"):
+        if not is_admin_force and status and status.get("status") in ("started", "running"):
             return {"complex_no": complex_no, "status": "already_running",
                     "current_page": status.get("current_page", 0),
                     "article_count": status.get("article_count", 0)}
@@ -48,7 +67,7 @@ def start_live_crawl(complex_no: str, user: dict = Depends(get_approved_user)):
     t = threading.Thread(target=_background_crawl, args=(complex_no,), daemon=True)
     t.start()
 
-    return {"complex_no": complex_no, "status": "started"}
+    return {"complex_no": complex_no, "status": "started", "forced": is_admin_force}
 
 
 @router.get("/{complex_no}/articles/crawl-status")

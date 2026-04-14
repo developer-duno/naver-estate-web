@@ -242,3 +242,32 @@ class TestResolveSigunguCode:
     def test_서울_gu_None_여전히_None(self):
         # region 단독으론 매핑 못하는 광역(서울 25개 구)은 여전히 None
         assert resolve_sigungu_code("서울", None) is None
+
+    # 세션 42: 일반구 → 모시 별칭 폴백 (22건 구제)
+
+    def test_경기_덕양구_고양시_폴백(self):
+        # mibunyang 원본이 "경기 고양시 덕양구"를 gu="덕양구"로 저장한 케이스.
+        # 폴백 별칭 테이블로 고양시 코드 반환해야 함.
+        assert resolve_sigungu_code("경기", "덕양구") == "41280"
+
+    def test_충남_서북구_천안시_폴백(self):
+        assert resolve_sigungu_code("충남", "서북구") == "44130"
+
+    def test_경북_북구_포항시_폴백(self):
+        # 중복 구명("북구"는 부산/대구/광주/울산에도 있음)이지만
+        # region 튜플 키로 경북 북구 → 포항 북구 하나로 고정.
+        assert resolve_sigungu_code("경북", "북구") == "47110"
+
+    def test_부산_북구_기존_매핑_유지_regression(self):
+        # 광역시 북구 직매핑은 별칭 폴백 이전에 sigungu_codes.json
+        # 직매핑에서 히트해야 함 (부산/대구/광주/울산 모두 동일 방어).
+        assert resolve_sigungu_code("부산", "북구") == "26320"
+        assert resolve_sigungu_code("대구", "북구") == "27230"
+
+    def test_경기_수원시_영통구_기존_복합_gu_유지_regression(self):
+        # 기존 split 분기가 별칭 폴백보다 먼저 걸려야 함.
+        assert resolve_sigungu_code("경기", "수원시 영통구") == "41110"
+
+    def test_경기_존재안함구_None_유지(self):
+        # 폴백 별칭 테이블에도 없는 일반구는 여전히 None.
+        assert resolve_sigungu_code("경기", "존재안함구") is None

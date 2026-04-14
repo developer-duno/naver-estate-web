@@ -152,6 +152,26 @@ export const AREA_PRESETS_PYEONG: RangePreset[] = [
   { label: "41평~", min: 135 },
 ];
 
+/** 오피스텔 면적 프리셋 (m² 단위) — 실사용 면적대 기준
+ * 원룸/1.5룸/투룸/쓰리룸+ 분류 (1평≈3.3058m²)
+ * 8평=26m², 12평=40m², 18평=60m² */
+export const AREA_PRESETS_OFFICETEL: RangePreset[] = [
+  { label: "전체" },
+  { label: "원룸(~26m²)", max: 26 },
+  { label: "1.5룸(26~40m²)", min: 26, max: 40 },
+  { label: "투룸(40~60m²)", min: 40, max: 60 },
+  { label: "쓰리룸~(60m²~)", min: 60 },
+];
+
+/** 오피스텔 면적 프리셋 (평 단위 라벨, min/max는 m² 기준 유지) */
+export const AREA_PRESETS_OFFICETEL_PYEONG: RangePreset[] = [
+  { label: "전체" },
+  { label: "원룸(~8평)", max: 26 },
+  { label: "1.5룸(8~12평)", min: 26, max: 40 },
+  { label: "투룸(12~18평)", min: 40, max: 60 },
+  { label: "쓰리룸~(18평~)", min: 60 },
+];
+
 /** 관리비 프리셋 (만원 단위) — 데스크톱 앱 동기화 */
 export const MAINTENANCE_PRESETS: RangePreset[] = [
   { label: "전체" },

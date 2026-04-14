@@ -5,6 +5,7 @@ import type { FilterOptions } from "@/types";
 import type { RangePreset } from "@/lib/constants";
 import {
   PRICE_PRESETS, PPYEONG_PRESETS, AREA_PRESETS, AREA_PRESETS_PYEONG,
+  AREA_PRESETS_OFFICETEL, AREA_PRESETS_OFFICETEL_PYEONG,
   MAINTENANCE_PRESETS, MOVE_IN_OPTIONS, BUILDING_AGE_OPTIONS,
   SORT_OPTIONS, ESTATE_TYPE_FILTER_OPTIONS, YIELD_PRESETS,
 } from "@/lib/constants";
@@ -116,10 +117,17 @@ export function PriceSection({ s, setDebounced, applyPreset }: Pick<SectionProps
 // ── 면적 ──
 
 export function AreaSection({ s, setDebounced, applyPreset, dispatch, emitChange }: Pick<SectionProps, "s" | "setDebounced" | "applyPreset" | "dispatch" | "emitChange">) {
+  // 오피스텔/오피스텔분양권 선택 시 실사용 면적대(원룸/1.5룸/투룸/쓰리룸+) 프리셋
+  const isOfficetel = s.estateType === "opst" || s.estateType === "obyg";
+  const presets = isOfficetel
+    ? (s.areaUnit === "평" ? AREA_PRESETS_OFFICETEL_PYEONG : AREA_PRESETS_OFFICETEL)
+    : (s.areaUnit === "평" ? AREA_PRESETS_PYEONG : AREA_PRESETS);
   return (
     <>
       <div className="flex items-center justify-between mb-2">
-        <p className={sectionLabel}>전용면적 프리셋</p>
+        <p className={sectionLabel}>
+          전용면적 프리셋{isOfficetel && " (오피스텔)"}
+        </p>
         <button
           onClick={() => { const next = s.areaUnit === "m²" ? "평" : "m²"; dispatch({ type: "SET", key: "areaUnit", value: next }); emitChange({ areaUnit: next }); }}
           className="px-2 py-0.5 text-xs border rounded bg-gray-50 border-gray-300 hover:bg-blue-50"
@@ -128,7 +136,7 @@ export function AreaSection({ s, setDebounced, applyPreset, dispatch, emitChange
         </button>
       </div>
       <div className="mb-2">
-        <PresetButtons presets={s.areaUnit === "평" ? AREA_PRESETS_PYEONG : AREA_PRESETS}
+        <PresetButtons presets={presets}
           minKey="minArea" maxKey="maxArea"
           currentMin={s.minArea} currentMax={s.maxArea} onApply={applyPreset} />
       </div>

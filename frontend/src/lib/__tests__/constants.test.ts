@@ -177,3 +177,52 @@ describe("ESTATE_TYPE_FILTER_OPTIONS", () => {
     }
   });
 });
+
+import {
+  AREA_PRESETS_OFFICETEL,
+  AREA_PRESETS_OFFICETEL_PYEONG,
+} from "../constants";
+
+describe("AREA_PRESETS_OFFICETEL", () => {
+  it("5개 프리셋 (전체 + 원룸/1.5룸/투룸/쓰리룸+)", () => {
+    expect(AREA_PRESETS_OFFICETEL).toHaveLength(5);
+    expect(AREA_PRESETS_OFFICETEL[0].label).toBe("전체");
+  });
+
+  it("원룸은 상한 26m² (약 8평)", () => {
+    const wonroom = AREA_PRESETS_OFFICETEL[1];
+    expect(wonroom.max).toBe(26);
+    expect(wonroom.min).toBeUndefined();
+  });
+
+  it("투룸은 40~60m² 구간", () => {
+    const tworoom = AREA_PRESETS_OFFICETEL[3];
+    expect(tworoom.min).toBe(40);
+    expect(tworoom.max).toBe(60);
+  });
+
+  it("쓰리룸+는 하한만 60m²", () => {
+    const threeroom = AREA_PRESETS_OFFICETEL[4];
+    expect(threeroom.min).toBe(60);
+    expect(threeroom.max).toBeUndefined();
+  });
+});
+
+describe("AREA_PRESETS_OFFICETEL_PYEONG", () => {
+  it("평 단위 라벨, m² 기준 값 유지", () => {
+    expect(AREA_PRESETS_OFFICETEL_PYEONG).toHaveLength(5);
+    for (let i = 0; i < AREA_PRESETS_OFFICETEL.length; i++) {
+      expect(AREA_PRESETS_OFFICETEL_PYEONG[i].min).toBe(
+        AREA_PRESETS_OFFICETEL[i].min,
+      );
+      expect(AREA_PRESETS_OFFICETEL_PYEONG[i].max).toBe(
+        AREA_PRESETS_OFFICETEL[i].max,
+      );
+    }
+  });
+
+  it("라벨에 '평' 표기 포함", () => {
+    expect(AREA_PRESETS_OFFICETEL_PYEONG[1].label).toContain("평");
+    expect(AREA_PRESETS_OFFICETEL_PYEONG[4].label).toContain("평");
+  });
+});

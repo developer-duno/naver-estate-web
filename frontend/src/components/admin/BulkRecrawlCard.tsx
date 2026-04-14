@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getRecrawlStatus, runRecrawlArticles, type RecrawlStatus } from "@/lib/api";
+import {
+  getRecrawlProgress,
+  getRecrawlStatus,
+  runRecrawlArticles,
+  type RecrawlProgress,
+  type RecrawlStatus,
+} from "@/lib/api";
 
 interface Props {
   getToken: () => Promise<string>;
@@ -29,6 +35,15 @@ export default function BulkRecrawlCard({ getToken }: Props) {
     refetchInterval: 30_000,
   });
 
+  const progressQuery = useQuery<RecrawlProgress, Error>({
+    queryKey: ["admin", "recrawl", "progress"] as const,
+    queryFn: async () => {
+      const token = await getToken();
+      return getRecrawlProgress(token);
+    },
+    refetchInterval: (q) => (q.state.data?.job?.status === "running" ? 3_000 : 15_000),
+  });
+
   const runMut = useMutation({
     mutationFn: async () => {
       const token = await getToken();
@@ -36,6 +51,7 @@ export default function BulkRecrawlCard({ getToken }: Props) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "recrawl", "status"] });
+      qc.invalidateQueries({ queryKey: ["admin", "recrawl", "progress"] });
     },
   });
 
@@ -104,6 +120,42 @@ export default function BulkRecrawlCard({ getToken }: Props) {
         <p className="mt-2 text-xs text-green-700">✓ {runMut.data.status} — batch_size {runMut.data.batch_size}</p>
       )}
       {runMut.error && <p className="mt-2 text-xs text-red-700">{runMut.error.message}</p>}
+
+      {progressQuery.data?.job && (
+        <div className="mt-3 p-2 bg-gray-50 border border-gray-200 rounded">
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-gray-700 font-medium">
+              진행: {progressQuery.data.job.processed_items}/{progressQuery.data.job.total_items}
+            </span>
+            <span
+              className={
+                progressQuery.data.job.status === "running"
+                  ? "text-blue-700"
+                  : progressQuery.data.job.status === "completed"
+                    ? "text-green-700"
+                    : "text-red-700"
+              }
+            >
+              {progressQuery.data.job.status === "running" && "크롤 중..."}
+              {progressQuery.data.job.status === "completed" && "✓ 완료"}
+              {progressQuery.data.job.status === "failed" && "✗ 실패"}
+            </span>
+          </div>
+          <div className="w-full bg-gray-200 rounded h-1.5 overflow-hidden">
+            <div
+              className={`h-full transition-all duration-500 ${
+                progressQuery.data.job.status === "failed" ? "bg-red-500" : "bg-blue-500"
+              }`}
+              style={{
+                width: `${Math.min(100, Math.round((progressQuery.data.job.processed_items / Math.max(1, progressQuery.data.job.total_items)) * 100))}%`,
+              }}
+            />
+          </div>
+          {progressQuery.data.job.error_message && (
+            <p className="mt-1 text-[11px] text-red-700">{progressQuery.data.job.error_message}</p>
+          )}
+        </div>
+      )}
 
       <p className="mt-2 text-[11px] text-gray-500">
         last_crawled_at이 가장 오래된 단지부터 순차 크롤링합니다. 자동 스케줄러와 throttle·단지 락을 공유해 네이버 API에 부담 주지 않습니다.

@@ -90,16 +90,56 @@ def get_recrawl_status(
     }
 
 
-def _run_batch_wrapped(batch_size: int):
-    """백그라운드 실행 wrapper — 완료/실패 시 전역 flag 해제."""
+def _run_batch_wrapped(batch_size: int, parent_job_id: int):
+    """백그라운드 실행 wrapper — 부모 CrawlJob 진행률 갱신 + 전역 flag 해제.
+
+    crawl_articles_batch는 단지마다 `complex_articles` row를 개별로 남기므로
+    관리자 입장에선 "100단지짜리 일괄 작업"의 집계 단일 행이 필요. 부모 job은
+    이 wrapper가 만들고, 루프가 끝나면 하위 row count로 processed_items 갱신 후
+    completed로 마감한다.
+    """
     global _recrawl_running
+    from sqlalchemy import text
+
+    from db.database import SessionLocal
+
+    start_ts = datetime.now(timezone.utc)
     try:
         from crawler.service_discover import crawl_articles_batch
         crawl_articles_batch(batch_size=batch_size, scheduler_job_id="admin_recrawl")
         logger.info("[admin] 일괄 재크롤 완료 — batch_size=%d", batch_size)
-    except Exception:
+        final_status = "completed"
+        err_msg = None
+    except Exception as e:
         logger.exception("[admin] 일괄 재크롤 실패")
+        final_status = "failed"
+        err_msg = str(e)[:500]
     finally:
+        # 부모 job 행에 진행률 + 상태 반영
+        db = SessionLocal()
+        try:
+            child_count = db.execute(
+                text("""
+                    SELECT COUNT(*) FROM crawl_jobs
+                    WHERE scheduler_job_id = 'admin_recrawl'
+                      AND job_type = 'complex_articles'
+                      AND started_at >= :start
+                """),
+                {"start": start_ts},
+            ).scalar() or 0
+            parent = db.get(CrawlJob, parent_job_id)
+            if parent:
+                parent.status = final_status
+                parent.processed_items = child_count
+                parent.completed_at = datetime.now(timezone.utc)
+                parent.error_message = err_msg
+                db.commit()
+        except Exception:
+            logger.exception("부모 job 마감 실패 id=%s", parent_job_id)
+            db.rollback()
+        finally:
+            db.close()
+
         with _recrawl_lock:
             _recrawl_running = False
 
@@ -140,17 +180,32 @@ def run_recrawl_articles(
 
         _recrawl_running = True
 
+    # 부모 CrawlJob 생성 — 진행률 집계 단일 행
+    parent = CrawlJob(
+        job_type="bulk_recrawl",
+        scheduler_job_id="admin_recrawl",
+        status="running",
+        total_items=batch_size,
+        processed_items=0,
+        started_at=datetime.now(timezone.utc),
+    )
+    db.add(parent)
+    db.flush()
+    parent_id = parent.id
+
     log_action(
         db,
         admin["user_id"],
         "admin_recrawl_articles",
         "batch",
         str(batch_size),
-        details={"level": level, "force": force},
+        details={"level": level, "force": force, "parent_job_id": parent_id},
     )
     db.commit()
 
-    t = threading.Thread(target=_run_batch_wrapped, args=(batch_size,), daemon=True)
+    t = threading.Thread(
+        target=_run_batch_wrapped, args=(batch_size, parent_id), daemon=True
+    )
     t.start()
 
     return {
@@ -158,4 +213,56 @@ def run_recrawl_articles(
         "batch_size": batch_size,
         "level": level,
         "message": message,
+        "parent_job_id": parent_id,
+    }
+
+
+@router.get("/recrawl/progress")
+def get_recrawl_progress(
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_admin_user),
+):
+    """가장 최근 bulk_recrawl 부모 job의 진행률 반환 (카드 내 폴링용).
+
+    스케줄러 자동 작업과 섞이지 않는 단일 집계 뷰. 최근 1시간 이내 job이
+    없으면 None 반환.
+    """
+    from sqlalchemy import text
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+    parent = (
+        db.query(CrawlJob)
+        .filter(
+            CrawlJob.job_type == "bulk_recrawl",
+            CrawlJob.started_at >= cutoff,
+        )
+        .order_by(CrawlJob.started_at.desc())
+        .first()
+    )
+    if not parent:
+        return {"job": None}
+
+    # 실행 중이면 하위 complex_articles 행 수를 실시간 집계
+    live_processed = parent.processed_items
+    if parent.status == "running":
+        live_processed = db.execute(
+            text("""
+                SELECT COUNT(*) FROM crawl_jobs
+                WHERE scheduler_job_id = 'admin_recrawl'
+                  AND job_type = 'complex_articles'
+                  AND started_at >= :start
+            """),
+            {"start": parent.started_at},
+        ).scalar() or 0
+
+    return {
+        "job": {
+            "id": parent.id,
+            "status": parent.status,
+            "total_items": parent.total_items,
+            "processed_items": int(live_processed),
+            "started_at": parent.started_at.isoformat() if parent.started_at else None,
+            "completed_at": parent.completed_at.isoformat() if parent.completed_at else None,
+            "error_message": parent.error_message,
+        }
     }

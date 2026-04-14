@@ -141,7 +141,7 @@ export async function getRecrawlStatus(token: string) {
 
 /** 관리자: 매물 일괄 재크롤 즉시 실행 */
 export async function runRecrawlArticles(token: string, batchSize: number, force: boolean = false) {
-  return fetchApi<{ status: string; batch_size: number; level: string; message: string }>(
+  return fetchApi<{ status: string; batch_size: number; level: string; message: string; parent_job_id: number }>(
     "/api/admin/recrawl/articles",
     {
       method: "POST",
@@ -149,4 +149,21 @@ export async function runRecrawlArticles(token: string, batchSize: number, force
       body: JSON.stringify({ batch_size: batchSize, force }),
     },
   );
+}
+
+/** 관리자: 매물 일괄 재크롤 진행률 (부모 job) */
+export interface RecrawlProgress {
+  job: {
+    id: number;
+    status: string;
+    total_items: number;
+    processed_items: number;
+    started_at: string | null;
+    completed_at: string | null;
+    error_message: string | null;
+  } | null;
+}
+
+export async function getRecrawlProgress(token: string) {
+  return fetchApi<RecrawlProgress>("/api/admin/recrawl/progress", { headers: adminHeaders(token) });
 }

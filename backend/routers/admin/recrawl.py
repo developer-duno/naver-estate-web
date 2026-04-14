@@ -48,11 +48,19 @@ def get_recrawl_status(
     db: Session = Depends(get_db),
     admin: dict = Depends(get_admin_user),
 ):
-    """일괄 재크롤 안전도 + 현재 실행 중 작업 목록 반환."""
+    """일괄 재크롤 안전도 + 현재 실행 중 작업 목록 반환.
+
+    started_at이 1시간 이상 지난 running 행은 stale(유령)로 간주해 count에서
+    제외 — startup sweep의 런타임 방어 레이어. 운영자 안전도 판정이 방치된
+    crawl_jobs 잔재로 위험으로 떨어지는 문제 방지.
+    """
+    from datetime import datetime as _dt
+
     now_kst = datetime.now(_KST)
+    stale_cutoff = _dt.now(timezone.utc) - timedelta(hours=1)
     running_jobs = (
         db.query(CrawlJob)
-        .filter(CrawlJob.status == "running")
+        .filter(CrawlJob.status == "running", CrawlJob.started_at >= stale_cutoff)
         .order_by(CrawlJob.started_at.desc())
         .limit(10)
         .all()
@@ -118,9 +126,14 @@ def run_recrawl_articles(
         if _recrawl_running:
             raise HTTPException(status_code=409, detail="이미 일괄 재크롤이 진행 중입니다")
 
-        # 안전도 재확인 — 🔴면 force 없이 거부
+        # 안전도 재확인 — 🔴면 force 없이 거부. stale 1시간 이상은 제외
         now_kst_hour = datetime.now(_KST).hour
-        running_count = db.query(CrawlJob).filter(CrawlJob.status == "running").count()
+        stale_cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+        running_count = (
+            db.query(CrawlJob)
+            .filter(CrawlJob.status == "running", CrawlJob.started_at >= stale_cutoff)
+            .count()
+        )
         level, message = _classify_safety(now_kst_hour, running_count)
         if level == "danger" and not force:
             raise HTTPException(status_code=409, detail=f"위험 상태 — {message}")

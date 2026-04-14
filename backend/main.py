@@ -31,10 +31,48 @@ logger = logging.getLogger(__name__)
 IS_DEBUG = os.getenv("DEBUG", "").lower() in ("1", "true")
 
 
+def _sweep_stale_running_jobs() -> int:
+    """서버 재시작 시 1시간 이상 running 상태로 방치된 crawl_jobs 행을 failed로 정리.
+
+    uvicorn 강제 종료 등으로 중단된 job들이 running인 채 남아 /admin 안전도
+    판정이 항상 '위험'으로 떨어지는 문제 방지.
+    """
+    from sqlalchemy import text
+
+    from db.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        res = db.execute(text("""
+            UPDATE crawl_jobs
+            SET status = 'failed',
+                completed_at = NOW(),
+                error_message = COALESCE(error_message, 'stale running — swept on startup')
+            WHERE status = 'running' AND started_at < NOW() - INTERVAL '1 hour'
+        """))
+        db.commit()
+        return res.rowcount or 0
+    except Exception as e:
+        logger.warning("stale crawl_jobs sweep 실패: %s", e)
+        db.rollback()
+        return 0
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """앱 시작/종료 시 실행"""
     logger.info("FastAPI 서버 시작")
+
+    # 재시작 시 유령 running job 정리 (운영자 안전도 신호등 재발 방지)
+    try:
+        swept = _sweep_stale_running_jobs()
+        if swept:
+            logger.info("시작 시 stale running crawl_jobs %d개 정리", swept)
+    except Exception as e:
+        logger.warning("stale sweep 예외: %s", e)
+
     scheduler = None
     try:
         from crawler.scheduler import create_scheduler

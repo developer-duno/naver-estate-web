@@ -101,6 +101,29 @@ def test_status_admin_returns_level(client, db):
     assert isinstance(body["running_jobs"], list)
 
 
+def test_status_filters_stale_running_jobs(client, db):
+    """1시간 이상 방치된 running 행은 count에서 제외 — 유령 잔재 방지"""
+    from datetime import datetime, timedelta, timezone
+
+    from db.models import CrawlJob
+
+    _make_profile(db, "a_stale", role="admin")
+    # 30일 전 running 행 (유령)
+    stale = CrawlJob(
+        job_type="popular_crawl",
+        status="running",
+        started_at=datetime.now(timezone.utc) - timedelta(days=30),
+    )
+    db.add(stale)
+    db.commit()
+
+    res = client.get("/api/admin/recrawl/status", headers=_auth(_token("a_stale")))
+    assert res.status_code == 200
+    body = res.json()
+    assert body["running_jobs_count"] == 0  # stale은 제외돼야 함
+    assert len(body["running_jobs"]) == 0
+
+
 # ── run 엔드포인트 ──
 
 

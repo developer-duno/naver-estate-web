@@ -282,6 +282,9 @@ def resolve_sigungu_code(region: str, gu: str | None) -> str | None:
 
     예: resolve_sigungu_code("서울", "강남구") → "11680"
     """
+    # 세종은 광역=시군구가 1:1이라 gu 없이도 매핑 (full 배치 40건 구제)
+    if region in ("세종", "세종특별자치시"):
+        return "36110"
     if not gu:
         return None
     m = _load_sigungu_map().get(region)

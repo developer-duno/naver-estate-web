@@ -231,3 +231,14 @@ class TestResolveSigunguCode:
 
     def test_세종시(self):
         assert resolve_sigungu_code("세종", "세종시") == "36110"
+
+    def test_세종_gu_None(self):
+        # 세션 41: 세종은 광역=시군구 1:1, gu 없이도 매핑되어야 함 (40건 구제)
+        assert resolve_sigungu_code("세종", None) == "36110"
+
+    def test_세종특별자치시_gu_None(self):
+        assert resolve_sigungu_code("세종특별자치시", None) == "36110"
+
+    def test_서울_gu_None_여전히_None(self):
+        # region 단독으론 매핑 못하는 광역(서울 25개 구)은 여전히 None
+        assert resolve_sigungu_code("서울", None) is None

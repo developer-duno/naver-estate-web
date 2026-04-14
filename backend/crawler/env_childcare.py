@@ -51,7 +51,9 @@ def collect_childcare_data(batch_size: int = 100):
 
         # 시군구별 어린이집 캐시: {sigungu_code: [facilities]}
         gu_cache: dict[str, list[dict]] = {}
-        collected, failed = 0, 0
+        # collected=전체 기록 수, collected_with_matches=반경 1km 내 매칭 >0인 수
+        # (세션 41: empty 시군구를 count=0으로 기록해도 silent failure 감지가 무력화되지 않도록 분리)
+        collected, collected_with_matches, failed = 0, 0, 0
 
         for apt_id, lat, lng, region, gu in apts:
             try:
@@ -77,15 +79,17 @@ def collect_childcare_data(batch_size: int = 100):
                         gu_cache[sigungu_code] = []
 
                 facilities = gu_cache[sigungu_code]
-                if not facilities:
-                    failed += 1
-                    continue
-
+                # empty facilities여도 find_nearest가 count=0 반환 → count=0으로 정상 기록
+                # (세션 41: 제주시 등 CPMS가 시군구 0건 반환하는 케이스 구제)
                 result = ChildcareAPI.find_nearest(lat, lng, facilities)
+
                 infra = infra_map.get(apt_id)
                 if not infra:
-                    failed += 1
-                    continue
+                    # Infra 행 자동 생성 — mibunyang 전 collectors가 upsert(onConflict=apartment_id)
+                    # 이므로 PK 충돌 없음. 검증: /f/mibunyang/scripts/collectors/*.mjs (세션 41)
+                    infra = Infra(apartment_id=apt_id)
+                    db.add(infra)
+                    infra_map[apt_id] = infra
 
                 infra.childcare_count = result["count"]
                 infra.childcare_nearest_dist = result["nearest_dist"]
@@ -94,6 +98,8 @@ def collect_childcare_data(batch_size: int = 100):
                 infra.childcare_nearest_type = result.get("nearest_type", "")
                 infra.childcare_nearest_teachers = result.get("nearest_teachers", 0)
                 collected += 1
+                if result["count"] > 0:
+                    collected_with_matches += 1
             except ChildcareAPIError:
                 raise
             except Exception:
@@ -102,27 +108,30 @@ def collect_childcare_data(batch_size: int = 100):
 
         db.commit()
 
-        # silent success 가드 (세션 39)
-        if collected == 0:
+        # silent success 가드 (세션 39 + 41 재설계)
+        # 매칭 >0인 단지가 0이고, 적어도 하나의 시군구를 조회한 경우 → 전역 장애
+        if collected_with_matches == 0 and len(gu_cache) > 0:
             empty_gus = sum(1 for v in gu_cache.values() if not v)
             total_gus = len(gu_cache)
             job.status = "failed"
             job.processed_items = 0
             job.total_items = failed
             job.error_message = (
-                f"0건 수집 — 시군구 {total_gus}개 중 API empty {empty_gus}개"
+                f"매칭 0건 — 시군구 {total_gus}개 중 API empty {empty_gus}개, "
+                f"collected={collected}"
             )[:500]
             job.completed_at = utcnow()
             db.commit()
             logger.error(
-                "[childcare] silent failure 감지: 시군구 %d개 중 empty %d개 (배치 %d)",
-                total_gus, empty_gus, batch_size,
+                "[childcare] silent failure 감지: 시군구 %d개 중 empty %d개, "
+                "collected=%d with_matches=0 (배치 %d)",
+                total_gus, empty_gus, collected, batch_size,
             )
         else:
             _complete_job(db, job, collected, failed)
             logger.info(
-                "[childcare] 완료: %d 수집, %d 실패 (배치 %d)",
-                collected, failed, batch_size,
+                "[childcare] 완료: %d 수집 (매칭 %d), %d 실패 (배치 %d)",
+                collected, collected_with_matches, failed, batch_size,
             )
     except ChildcareAPIError as exc:
         _fail_job(db, job, f"CPMS 치명적 에러: {exc}")

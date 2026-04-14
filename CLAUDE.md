@@ -4,36 +4,49 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-15 — 세션 42 **어린이집 서사 완전 종결 (22 → 0) + 오피스텔 면적 프리셋** ✅. DB 2000/2001 (세종 좌표 None 1건만 제외).
+**마지막 작업**: 2026-04-15 — 세션 43 **어린이집 DB 2001/2001 완결** + **quota_db 연동 가이드 문서화** + **세종 단지명 교정** ✅. 어린이집 서사 100% 종결, 하네스 제약(3파일/100줄) 안에서 다중 작업 병행.
 
-**세션 42 성과** (커밋 `a9dabc9` 어린이집 22구제 + `2329e17` 오피스텔 프리셋, main push 완료):
+**세션 43 성과** (naver-estate-web 코드 변경 0 / docs 1파일 신규, mibunyang 2파일 변경):
 
-- **[1] 어린이집 22 실패 완전 구제** (`a9dabc9`):
-  - 원인 전수조사: 전부 mibunyang 원본이 "경기 고양시 덕양구"를 `region="경기"/gu="덕양구"`로 시 정보 누락 저장한 **일반구 단독 케이스**. 세션 41의 "23건 중 세종 1건"은 `lat/lng=None`이라 `env_childcare.py:41` WHERE 조건에서 배치 제외(=22와 별개 이슈)
-  - `_GU_TO_PARENT_CITY: dict[tuple[str, str], str]` 32 엔트리 별칭 테이블을 `resolve_sigungu_code` 폴백 단계에 추가. region 튜플 키로 중복 구명 모호성 회피(경북 북구=47110, 부산 북구=26320 기존 직매핑 regression 방어)
-  - CPMS cpmsapi030이 시 단위 법정코드로도 시 전체 어린이집 반환 → 덕양구 단지는 고양시(41280) 조회 결과에서 반경 1km 매칭 정상
-  - **라이브 batch_size=2000**: 2000 수집 (매칭 1899) / **0 실패** / 205.4초
-  - **DB 실측**: `has_childcare=2000 / total_infra=2001 / zero=101 / with_matches=1899`
-  - 테스트: BE 490 passed / 1 skipped (484 + 6 regression 포함). Plan 에이전트 1회 교차검토 완료
-  - 파일: `backend/crawler/childcare_api.py` +50/-1, `backend/tests/test_childcare_api.py` +29 (2파일 / 78줄)
+- **[1] 세종 린스트라우스 좌표 보강** (DB 2000/2001 → 2001/2001):
+  - 대상: `apartments.id='ah-2022910239'` (세종 린스트라우스, 1세대 단지, 2022년 11월 준공). 이전에 `lat/lng=NULL`이라 `env_childcare.py:41-42` WHERE에서 배치 스코프 제외 → 어린이집 커버리지 마지막 1칸
+  - Part A (mibunyang 쪽, `scripts/fix_sejong_coord.mjs` 신규 ~75줄): Kakao keyword search. "세종 나성동 린스트라우스" 쿼리로 실제 단지 **"한뜰마을5단지린스트라우스아파트"** 발견, `lat=36.4976, lng=127.2565`. bbox sanity check(`36.40 ≤ lat ≤ 36.75`) + dry-run + `--commit` 가드 경유
+  - Part B (naver-estate-web): `collect_childcare_data(batch_size=2001)` 재실행. 세종 단건 `infra` 반영 — `childcare_count=31, nearest_dist=58.8m, nearest_type="국공립", capacity=38, teachers=7`. 코드 변경 0
+  - **DB 최종 실측**: `with_coord=2001 / has_childcare=2001 / with_matches=1900 / zero=101 / total_infra=2001 / total_apt=2001` (2000→2001)
+  - 4단 연결 검증: DB → serializer(`mb_serializers.py:169-174`) → API(`/api/mb/apartments/ah-2022910239` infra.childcare_* 6필드 정상 응답) → UI(`MbEnvironmentSection.tsx:146-156` "보육" 섹션, 기존 코드로 이미 렌더 중, air/emergency/crime과 대칭)
+  - 9 GATE 하네스 전 통과 (🟢9, 🟡0, 🔴0), `fetchWithRetry`가 Response 객체 반환하는 것 몰라서 `.json()` 빠뜨린 디버깅 1회
+  - 삽질: CLAUDE.md에는 `address_jibun/address_road` 필드로 가정했으나 실제 컬럼은 `address/road_address`. `Apartment.__table__.columns`로 조회 시 실제 컬럼명 `lat/lng` 반환(ORM 속성은 `latitude/longitude` alias), 이걸 `r.lat`으로 읽었다가 AttributeError 1회
 
-- **[2] 오피스텔 면적 프리셋** (`2329e17`):
-  - FilterBar 전용면적 프리셋이 아파트 기준(59/84/114/135m²)만 제공 → 오피스텔 검색 시 실사용 면적대 불일치
-  - `AREA_PRESETS_OFFICETEL` / `AREA_PRESETS_OFFICETEL_PYEONG` 신규: 원룸(~26m²=8평) / 1.5룸(26~40=8~12평) / 투룸(40~60=12~18평) / 쓰리룸+(60~)
-  - `AreaSection`에서 `estateType === "opst" | "obyg"` 분기로 자동 전환, 라벨에 "(오피스텔)" 표기
-  - 테스트: FE 545 passed (539 + 6), tsc clean, lint 0 errors
-  - 파일: `frontend/src/lib/constants.ts` +20, `frontend/src/components/filter/FilterSections.tsx` +10/-2, `constants.test.ts` +49 (3파일 / 79줄)
+- **[2] 세종 단지 이름 교정** (mibunyang `apartments.name` UPDATE):
+  - 기존: `세종 린스트라우스（행정중심복합도시 １-5생활권 H6블록）` (풀각 괄호/숫자, "행정중심복합도시")
+  - 신규: `세종 린스트라우스 (한뜰마을5단지, 행복도시 1-5생활권 H6블록)` (반각 정리 + 실제 단지명 병기 + "행복도시" 일반 표기)
+  - 1회성 SQL UPDATE만, 스크립트 추가 없음
 
-- **어린이집 서사 완결**: 38(진단) → 39(가드) → 40(CPMS 버그) → 41(bulk prefetch + 152→22) → **42(일반구 별칭 22→0)**. DB 2000/2001 커버 (99.95%).
+- **[3] quota_db 연동 가이드 문서화** (`docs/quota_db_integration.md` 신규):
+  - 배경: data.go.kr 일일 쿼터 10,000회를 두 프로젝트(naver-estate-web, mibunyang)가 공유. 현재 naver-estate-web만 `RateLimitCounter` 테이블 기반 공유 카운터 적용, mibunyang은 미연동 → 매월 10일(건축물대장 8,500) × 토요일(실거래가 3,600) 겹치면 초과 위험
+  - 문서 구성: 배경 / 진실의 원천(quota_db.py) / 옵션 A(Supabase RPC 직접 호출) + 옵션 B(in-memory 폴백) / 적용 지점 4개 collector / 동시성 주의 / 체크리스트 6단계 / 롤백
+  - 신규 Postgres 함수 `increment_quota_counter(service, date, cost)` 스니펫 포함 (INSERT ON CONFLICT + 원자 증가)
+  - mibunyang 쪽에서 그대로 복사·실행 가능한 형태
 
-**상세**: `memory/project_childcare_trigger_bug.md`, `memory/session42_summary.md`
+- **[4] 다음 세션 후보 탐색** (Explore 에이전트 1회):
+  - 🔥 **1. /admin 운영 개선** — 단지 강제 재크롤, 잡 일시정지/중단, 에러율 차트 (FE 3~4 + BE 2파일, 운영 효율 대폭)
+  - ⭐ 2. 비교 페이지 4→6~8개 확장 (FE 2파일)
+  - ⭐ 3. 미분양 지도 뷰 (FE 2파일, Naver Maps)
+  - 💤 4. 매물 필터 세부 확장 (반려동물/주차/즉시입주)
+  - 🔥 **5. 에러 페이지 + 모바일 반응형 강화** (FE 4~5파일, 모바일 CVR 개선)
 
-**다음 우선순위 (세션 43)**:
+- **어린이집 서사 최종 종결**: 38(진단) → 39(가드) → 40(CPMS 버그) → 41(bulk prefetch + 152→22) → 42(일반구 별칭 22→0) → **43(세종 좌표 보강 2000→2001)** = 커버리지 **100% (2001/2001)** 달성
 
-1. 🟡 **세종 좌표 1건 보강** (`ah-2022910239`) — kakao geocoding으로 lat/lng 채워 DB 2001/2001 완결 (ROI 낮지만 상징적)
-2. mibunyang 쪽 quota_db 연동 가이드 공유 (본 프로젝트 코드 변경 없음)
-3. Supabase MCP 2개 해제 안내 (`/mcp` UI 또는 claude.ai Connectors)
-4. 새 작업 탐색 — 어린이집 큰 숙제 종료로 `/admin` UX / 비교 페이지 / 매물 필터 고도화 등 사용자 요청 대기
+**상세**: `memory/project_childcare_trigger_bug.md`, `memory/session43_summary.md`, `docs/quota_db_integration.md`
+
+**다음 우선순위 (세션 44)**:
+
+1. 🔥 **/admin 운영 개선** — 단지 강제 재크롤 버튼 + 잡 일시정지/중단 UI + 크롤 에러율 차트. FE 3~4파일 + BE 2파일. ROI 최고
+2. 🔥 **에러 페이지 + 모바일 반응형 강화** — 404/500 페이지 개선 + 미분양 테이블 모바일 카드뷰. FE 4~5파일
+3. ⭐ 미분양 지도 뷰 — 목록에 Naver Maps 오버레이, 마커 클릭→상세 이동. FE 2파일
+4. ⭐ 비교 페이지 4→6~8개 확장 — CompareTable 스크롤 리팩토링. FE 2파일
+5. Supabase MCP 2개 해제 안내 (사용자 수동 작업, /mcp UI)
+6. mibunyang 쪽에서 `quota_db_integration.md` 적용 (mibunyang 세션 작업, 본 프로젝트 변경 없음)
 
 ## 기술 스택
 

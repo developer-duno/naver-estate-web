@@ -10,6 +10,14 @@ export default function Header() {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // SSR/CSR mismatch 방지 — 첫 렌더는 항상 placeholder, 이후 실제 UI
+  // Why: Supabase 세션 비동기 로드 결과가 서버(null)와 클라이언트(user)에서 달라
+  // React 19가 BAILOUT_TO_CLIENT_SIDE_RENDERING으로 전체 페이지 onClick 핸들러 미부착
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const isMountedRef = useRef(true);
   const prevTokenRef = useRef<string | null>(null);
@@ -138,7 +146,9 @@ export default function Header() {
               </Link>
             ))}
 
-            {userEmail ? (
+            {!mounted ? (
+              <div className="w-[80px] h-[34px]" aria-hidden />
+            ) : userEmail ? (
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
                   {isAdmin && (

@@ -47,15 +47,18 @@ const FilterDropdown = React.memo(function FilterDropdown({
     }
   }, [isOpen]);
 
+  // onToggle을 ref로 안정화 — 부모 리렌더로 인한 useEffect 재실행 방지
+  const onToggleRef = useRef(onToggle);
+  useEffect(() => {
+    onToggleRef.current = onToggle;
+  }, [onToggle]);
+
   // 외부 클릭 시 닫기 (pointerdown = mouse + touch + pen 통합)
-  const handleClickOutside = useCallback(
-    (e: Event) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onToggle();
-      }
-    },
-    [onToggle]
-  );
+  const handleClickOutside = useCallback((e: Event) => {
+    if (ref.current && !ref.current.contains(e.target as Node)) {
+      onToggleRef.current();
+    }
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;

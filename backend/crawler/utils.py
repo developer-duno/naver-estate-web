@@ -118,6 +118,33 @@ class AdaptiveThrottle:
             return self._dynamic_interval
 
 
+# ── 공유 Throttle 레지스트리 ──
+#
+# 같은 name으로 조회하면 동일 인스턴스를 반환한다. 스케줄러 배치 경로
+# (crawl_articles_batch)와 live 경로(_background_crawl)가 같은 네이버 API를
+# 두드릴 때 서로 모르는 throttle 2개가 돌아 집 서버 IP 기준 2배 트래픽이
+# 나가던 문제를 해결. 동일 name 공유 시 전역 2초 브레이크가 모든 경로에 걸린다.
+
+_throttle_registry: dict[str, AdaptiveThrottle] = {}
+_throttle_registry_lock = threading.Lock()
+
+
+def get_shared_throttle(
+    name: str, min_interval: float = 2.0, max_interval: float = 10.0
+) -> AdaptiveThrottle:
+    """이름으로 AdaptiveThrottle 조회. 없으면 생성 (스레드 안전).
+
+    이미 등록된 이름이면 min/max_interval 인자는 무시하고 기존 인스턴스를
+    반환. 최초 호출자가 파라미터를 결정한다.
+    """
+    with _throttle_registry_lock:
+        if name not in _throttle_registry:
+            _throttle_registry[name] = AdaptiveThrottle(
+                min_interval=min_interval, max_interval=max_interval
+            )
+        return _throttle_registry[name]
+
+
 # ── Haversine 거리 계산 ──
 
 def haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:

@@ -36,6 +36,28 @@ _cache = get_cache("live", dynamic=True)
 _crawl_status: dict[str, dict] = {}
 _crawl_lock = threading.Lock()
 
+# -- 단지별 active guard --
+# 스케줄러 배치(crawl_articles_batch)와 live 경로(_background_crawl)가 같은
+# complex_no를 동시에 긁어 DB upsert 충돌 / 네이버 2배 호출을 내지 않도록
+# 전역 active set을 공유. 먼저 들어온 쪽이 소유권을 가지며, 뒤늦게 온
+# 호출은 skip된다. 반드시 try/finally로 release 보장.
+_active_complexes: set[str] = set()
+
+
+def try_acquire_complex(complex_no: str) -> bool:
+    """complex_no에 대한 크롤 소유권 획득 시도. 이미 진행 중이면 False."""
+    with _crawl_lock:
+        if complex_no in _active_complexes:
+            return False
+        _active_complexes.add(complex_no)
+        return True
+
+
+def release_complex(complex_no: str) -> None:
+    """크롤 종료 시 소유권 반환. try/finally에서 반드시 호출."""
+    with _crawl_lock:
+        _active_complexes.discard(complex_no)
+
 # -- Price history collection --
 _price_collect_status: dict[str, dict] = {}
 _price_collect_lock = threading.Lock()

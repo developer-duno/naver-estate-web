@@ -10,7 +10,7 @@ import os
 
 from dotenv import load_dotenv
 
-from crawler.utils import AdaptiveThrottle
+from crawler.utils import get_shared_throttle
 from db.database import SessionLocal
 from db.models import Article, Complex, CrawlJob
 from services.enricher import enrich_complex_detail
@@ -28,10 +28,12 @@ from utils import utcnow
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-# 적응형 쓰로틀 — 429 발생 시 자동으로 간격 증가, 정상화 시 서서히 복귀
-_throttle_discover = AdaptiveThrottle(min_interval=2.0, max_interval=10.0)  # 단지 발견
-_throttle_articles = AdaptiveThrottle(min_interval=2.0, max_interval=10.0)  # 매물 수집
-_throttle_details = AdaptiveThrottle(min_interval=1.5, max_interval=10.0)   # 상세 보강
+# 적응형 쓰로틀 — 429 발생 시 자동으로 간격 증가, 정상화 시 서서히 복귀.
+# 공유 레지스트리 사용 — 스케줄러 배치와 live 경로(_background_crawl)가 같은
+# 인스턴스를 참조하므로 네이버 API 호출이 서로의 간격을 존중한다.
+_throttle_discover = get_shared_throttle("discover", min_interval=2.0, max_interval=10.0)
+_throttle_articles = get_shared_throttle("articles", min_interval=2.0, max_interval=10.0)
+_throttle_details = get_shared_throttle("details", min_interval=1.5, max_interval=10.0)
 
 # 크롤링 대상 부동산 유형 (기본: 아파트 관련 4종)
 CRAWL_REAL_ESTATE_TYPES = set(
@@ -252,7 +254,13 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
 
 
 def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = None):
-    """last_crawled_at이 가장 오래된 단지부터 batch_size만큼 매물 수집"""
+    """last_crawled_at이 가장 오래된 단지부터 batch_size만큼 매물 수집.
+
+    live 경로(_background_crawl)와 단지별 소유권을 공유 — 이미 live 쪽이
+    같은 complex_no를 크롤 중이면 해당 단지는 skip하고 다음으로 넘어간다.
+    """
+    from routers.live._shared import release_complex, try_acquire_complex
+
     db = SessionLocal()
     try:
         complexes = (
@@ -263,7 +271,15 @@ def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = No
         )
         logger.info("매물 수집 배치 시작: %d개 단지", len(complexes))
         for cpx in complexes:
-            crawl_complex_articles(cpx.complex_no, cpx.sido, cpx.sigungu, scheduler_job_id=scheduler_job_id)
+            if not try_acquire_complex(cpx.complex_no):
+                logger.info("배치 skip: %s 이미 크롤 진행 중", cpx.complex_no)
+                continue
+            try:
+                crawl_complex_articles(
+                    cpx.complex_no, cpx.sido, cpx.sigungu, scheduler_job_id=scheduler_job_id
+                )
+            finally:
+                release_complex(cpx.complex_no)
             _throttle_articles.wait()
     finally:
         db.close()

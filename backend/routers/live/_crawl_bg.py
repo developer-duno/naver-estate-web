@@ -3,6 +3,7 @@
 import logging
 import time
 
+from crawler.utils import get_shared_throttle
 from db.database import SessionLocal
 from db.models import Article as ArticleModel
 from db.models import Complex as ComplexModel
@@ -22,6 +23,8 @@ from ._shared import (
     _crawl_lock,
     _crawl_status,
     _update_crawl_status,
+    release_complex,
+    try_acquire_complex,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,6 +60,15 @@ def _fetch_articles_all_trade_types(complex_no: str, page: int = 1):
 
 def _background_crawl(complex_no: str):
     """Run article crawl in background thread with per-page commits."""
+    # 스케줄러 배치와 단지 소유권 공유 — 이미 진행 중이면 즉시 종료
+    if not try_acquire_complex(complex_no):
+        logger.info("live _background_crawl skip: %s 이미 크롤 진행 중", complex_no)
+        _update_crawl_status(complex_no, status="already_running")
+        return
+
+    # 스케줄러 배치와 동일한 글로벌 2초 브레이크 통과 — 네이버 IP 기준 폭주 방지
+    get_shared_throttle("articles").wait()
+
     db = SessionLocal()
     try:
         with _crawl_lock:
@@ -151,6 +163,7 @@ def _background_crawl(complex_no: str):
             pass
     finally:
         db.close()
+        release_complex(complex_no)
         # 크롤링 완료 마커 설정 (start-crawl 중복 방지, 동적 TTL 적용)
         _cache.set(f"crawl_done:{complex_no}", True)
         # complexes.py의 필터/통계/상세 캐시도 무효화 (레지스트리 기반, 순환 import 없음)

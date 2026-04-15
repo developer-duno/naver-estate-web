@@ -190,7 +190,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
                 ↓ API 호출 (NEXT_PUBLIC_API_URL)
            [Cloudflare Named Tunnel (api.2u.pe.kr)]
                 ↓
-           [FastAPI (집 서버 192.168.219.101:8002)]
+           [FastAPI (집 서버 DESKTOP-Q5999EI, localhost:8002)]
                 ↓ 실시간 크롤링 + 스케줄러
            [네이버 부동산 API] → [PostgreSQL (Supabase)]
            [국토교통부 공공데이터 API] ↗

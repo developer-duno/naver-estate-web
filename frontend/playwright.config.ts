@@ -16,11 +16,15 @@ export default defineConfig({
     },
     {
       name: "public",
-      testIgnore: [/global\.setup\.ts$/, /admin-dashboard\.spec\.ts$/],
+      testIgnore: [
+        /global\.setup\.ts$/,
+        /admin-dashboard\.spec\.ts$/,
+        /admin-pages\.spec\.ts$/,
+      ],
     },
     {
       name: "admin",
-      testMatch: /admin-dashboard\.spec\.ts$/,
+      testMatch: /admin-(dashboard|pages)\.spec\.ts$/,
       dependencies: ["setup"],
       use: {
         storageState: "e2e/.auth/admin.json",

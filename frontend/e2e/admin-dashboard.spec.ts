@@ -20,6 +20,10 @@ test.describe("admin dashboard", () => {
 
     await expect(page.getByText("대기질 수집")).toBeVisible();
 
+    // 세션 51: NaverCallsCard 회귀 가드
+    await expect(page.getByText("네이버 API 호출 계측")).toBeVisible();
+    await expect(page.getByText("매물 목록 (배치)")).toBeVisible();
+
     await page.screenshot({
       path: "test-results/admin-dashboard.png",
       fullPage: true,

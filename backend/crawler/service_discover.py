@@ -258,8 +258,10 @@ def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = No
 
     live 경로(_background_crawl)와 단지별 소유권을 공유 — 이미 live 쪽이
     같은 complex_no를 크롤 중이면 해당 단지는 skip하고 다음으로 넘어간다.
+    또한 live 경로의 `crawl_done:{complex_no}` 캐시(get_dynamic_ttl)를 공유해
+    최근 크롤된 단지는 동적 TTL 동안 재크롤하지 않는다.
     """
-    from routers.live._shared import release_complex, try_acquire_complex
+    from routers.live._shared import _cache, release_complex, try_acquire_complex
 
     db = SessionLocal()
     try:
@@ -271,6 +273,10 @@ def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = No
         )
         logger.info("매물 수집 배치 시작: %d개 단지", len(complexes))
         for cpx in complexes:
+            done_key = f"crawl_done:{cpx.complex_no}"
+            if _cache.get(done_key) is not None:
+                logger.info("배치 skip: %s 동적 TTL 캐시 히트", cpx.complex_no)
+                continue
             if not try_acquire_complex(cpx.complex_no):
                 logger.info("배치 skip: %s 이미 크롤 진행 중", cpx.complex_no)
                 continue
@@ -278,6 +284,7 @@ def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = No
                 crawl_complex_articles(
                     cpx.complex_no, cpx.sido, cpx.sigungu, scheduler_job_id=scheduler_job_id
                 )
+                _cache.set(done_key, True)
             finally:
                 release_complex(cpx.complex_no)
             _throttle_articles.wait()

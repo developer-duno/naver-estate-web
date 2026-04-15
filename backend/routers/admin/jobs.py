@@ -28,6 +28,10 @@ def list_crawl_jobs(
     conditions = []
     if status:
         conditions.append(CrawlJob.status == status)
+        # running 필터에는 stale(유령) 1시간 컷오프 적용 — recrawl/status와 동일 정책
+        if status == "running":
+            stale_cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+            conditions.append(CrawlJob.started_at >= stale_cutoff)
 
     where = and_(*conditions) if conditions else True
     total = db.execute(select(func.count()).select_from(CrawlJob).where(where)).scalar() or 0

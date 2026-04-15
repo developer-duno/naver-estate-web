@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { triggerSingleRecrawl, type SingleRecrawlResponse } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
+import AdminCard from "./AdminCard";
 
 interface Props {
   getToken: () => Promise<string>;
@@ -50,11 +51,7 @@ export default function SingleRecrawlCard({ getToken }: Props) {
   const displayError = clientError ?? runMut.error?.message;
 
   return (
-    <div className="bg-white border rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-gray-700">단건 강제 재크롤</h3>
-      </div>
-
+    <AdminCard title="단건 강제 재크롤">
       <div className="flex flex-col sm:flex-row gap-2 mb-2">
         <input
           type="text"
@@ -100,6 +97,6 @@ export default function SingleRecrawlCard({ getToken }: Props) {
       <p className="mt-2 text-[11px] text-gray-500">
         CrawlJobTable의 target_id 셀에서 단지번호를 복사해 붙여넣을 수 있습니다.
       </p>
-    </div>
+    </AdminCard>
   );
 }

@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { triggerCollection, type CollectorName } from "@/lib/api";
+import AdminCard from "./AdminCard";
 
 interface CollectorTriggerProps {
   getToken: () => Promise<string>;
@@ -40,8 +41,7 @@ export default function CollectorTrigger({ getToken }: CollectorTriggerProps) {
   });
 
   return (
-    <div className="bg-white border rounded-lg p-4">
-      <h3 className="text-sm font-medium text-gray-700 mb-3">데이터 수집 트리거</h3>
+    <AdminCard title="데이터 수집 트리거">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {COLLECTORS.map((c) => {
           const result = results[c.name];
@@ -70,6 +70,6 @@ export default function CollectorTrigger({ getToken }: CollectorTriggerProps) {
           );
         })}
       </div>
-    </div>
+    </AdminCard>
   );
 }

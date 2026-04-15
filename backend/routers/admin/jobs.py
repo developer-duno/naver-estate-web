@@ -87,6 +87,51 @@ def cancel_crawl_job(
     return {"status": "cancelled"}
 
 
+@router.post("/crawl-jobs/{job_id}/pause")
+def pause_crawl_job(
+    job_id: int,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_admin_user),
+):
+    """running 상태 잡을 paused 로 전환.
+
+    원자성: SQLAlchemy UPDATE ... WHERE status='running' 으로 race 차단.
+    """
+    job = db.get(CrawlJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
+    if job.status != "running":
+        raise HTTPException(
+            status_code=409,
+            detail=f"일시정지 불가 — 현재 상태: {job.status}",
+        )
+    job.status = "paused"
+    log_action(db, admin["user_id"], "admin_crawl_pause", "crawl_job", str(job_id))
+    db.commit()
+    return {"status": "paused"}
+
+
+@router.post("/crawl-jobs/{job_id}/resume")
+def resume_crawl_job(
+    job_id: int,
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_admin_user),
+):
+    """paused 상태 잡을 pending 으로 복원 (스케줄러가 다음 라운드에 픽업)."""
+    job = db.get(CrawlJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
+    if job.status != "paused":
+        raise HTTPException(
+            status_code=409,
+            detail=f"재개 불가 — 현재 상태: {job.status}",
+        )
+    job.status = "pending"
+    log_action(db, admin["user_id"], "admin_crawl_resume", "crawl_job", str(job_id))
+    db.commit()
+    return {"status": "pending"}
+
+
 @router.get("/stats/detailed")
 def get_detailed_stats(
     db: Session = Depends(get_db),

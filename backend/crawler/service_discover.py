@@ -33,6 +33,29 @@ logger = logging.getLogger(__name__)
 # 인스턴스를 참조하므로 네이버 API 호출이 서로의 간격을 존중한다.
 _throttle_discover = get_shared_throttle("discover", min_interval=2.0, max_interval=10.0)
 _throttle_articles = get_shared_throttle("articles", min_interval=2.0, max_interval=10.0)
+
+
+def _finalize_job(db, job: CrawlJob, target_status: str, **extra_fields) -> bool:
+    """워커 종료 시 job.status 덮어쓰기 race 가드.
+
+    다른 주체(관리자 pause/cancel)가 status 를 이미 바꿨으면 덮지 않음.
+    DB 에서 최신 값을 다시 읽어서 'running' 일 때만 목표 상태로 전환한다.
+    반환: 실제로 덮어썼으면 True, skip 했으면 False.
+    """
+    try:
+        db.refresh(job)
+    except Exception:
+        pass
+    if job.status != "running":
+        logger.info(
+            "[race guard] job %s 종료 skip — 현재 status=%s (target=%s)",
+            job.id, job.status, target_status,
+        )
+        return False
+    job.status = target_status
+    for k, v in extra_fields.items():
+        setattr(job, k, v)
+    return True
 _throttle_details = get_shared_throttle("details", min_interval=1.5, max_interval=10.0)
 
 # 크롤링 대상 부동산 유형 (기본: 아파트 관련 4종)
@@ -163,17 +186,18 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
         if cpx and not cpx.detail_crawled_at:
             enrich_complex_detail(db, complex_no)
 
-        job.status = "completed"
-        job.total_items = total_articles
-        job.processed_items = total_articles
-        job.completed_at = utcnow()
+        _finalize_job(
+            db, job, "completed",
+            total_items=total_articles,
+            processed_items=total_articles,
+            completed_at=utcnow(),
+        )
         db.commit()
         logger.info("매물 수집 완료: complex %s → %d건", complex_no, total_articles)
 
     except Exception as e:
         db.rollback()
-        job.status = "failed"
-        job.error_message = str(e)[:500]
+        _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
         db.commit()
         logger.exception("매물 수집 실패: complex %s", complex_no)
     finally:
@@ -229,24 +253,29 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
                 logger.exception("인기 단지 크롤링 개별 실패: complex %s", cpx.complex_no)
             _throttle_articles.wait(extra_delay=0.5)
 
-        job.total_items = total
-        job.processed_items = processed
-        job.completed_at = utcnow()
+        # race guard: 아래 status 판정 결과를 일괄로 _finalize_job 에 전달
         if failed == 0:
-            job.status = "completed"
+            target_status = "completed"
+            err_msg = None
         elif processed == 0:
-            job.status = "failed"
-            job.error_message = f"전체 {total}개 단지 실패: {', '.join(failed_nos[:20])}"
+            target_status = "failed"
+            err_msg = f"전체 {total}개 단지 실패: {', '.join(failed_nos[:20])}"
         else:
-            job.status = "completed"
-            job.error_message = f"{failed}/{total}개 단지 실패: {', '.join(failed_nos[:20])}"
+            target_status = "completed"
+            err_msg = f"{failed}/{total}개 단지 실패: {', '.join(failed_nos[:20])}"
+        _finalize_job(
+            db, job, target_status,
+            total_items=total,
+            processed_items=processed,
+            completed_at=utcnow(),
+            error_message=err_msg,
+        )
         db.commit()
         logger.info("인기 단지 선제적 크롤링 완료: 성공 %d / 실패 %d / 전체 %d", processed, failed, total)
 
     except Exception as e:
         db.rollback()
-        job.status = "failed"
-        job.error_message = str(e)[:500]
+        _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
         db.commit()
         logger.exception("인기 단지 선제적 크롤링 실패")
     finally:
@@ -348,9 +377,11 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
 
             _throttle_details.wait()
 
-        job.status = "completed"
-        job.processed_items = processed
-        job.completed_at = utcnow()
+        _finalize_job(
+            db, job, "completed",
+            processed_items=processed,
+            completed_at=utcnow(),
+        )
         db.commit()  # 나머지 flush
         logger.info(
             "상세 보강 완료: %d/%d건 (dead 매물 %d건 비활성화)",
@@ -359,8 +390,7 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
 
     except Exception as e:
         db.rollback()
-        job.status = "failed"
-        job.error_message = str(e)[:500]
+        _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
         db.commit()
         logger.exception("상세 보강 실패")
     finally:

@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,9 @@ from db.models import CrawlJob
 from deps import get_admin_user, get_db
 
 from ._shared import router
+
+# 에러율 차트에서 집계할 status 값 (crawl_jobs 테이블 실측 기준)
+_ERROR_STATS_STATUSES = ("completed", "failed", "paused", "pending", "running", "cancelled")
 
 logger = logging.getLogger(__name__)
 
@@ -154,3 +157,54 @@ def get_scheduler_status(
             "failures_today": today_failures,
         },
     }
+
+
+@router.get("/error-stats")
+def get_error_stats(
+    days: int = Query(14, description="조회 기간 (일)"),
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_admin_user),
+):
+    """최근 N일 crawl_jobs 의 일자별 status 분포.
+
+    days 는 7/14/30 만 허용. 응답 형식:
+    [{date: "2026-04-15", completed: 12, failed: 1, paused: 0, ...}, ...]
+
+    날짜는 KST 기준, 빈 날도 0으로 채워 반환 (차트 연속성).
+    """
+    if days not in (7, 14, 30):
+        raise HTTPException(status_code=422, detail="days 는 7, 14, 30 중 하나여야 합니다")
+    now_utc = datetime.now(timezone.utc)
+    cutoff = now_utc - timedelta(days=days)
+
+    # PostgreSQL / SQLite 공통 동작을 위해 Python 측에서 KST 변환 후 집계
+    rows = (
+        db.query(
+            CrawlJob.created_at,
+            CrawlJob.status,
+        )
+        .filter(CrawlJob.created_at >= cutoff)
+        .all()
+    )
+
+    kst = timezone(timedelta(hours=9))
+    buckets: dict[str, dict[str, int]] = {}
+    for created_at, status in rows:
+        if created_at is None:
+            continue
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        day_key = created_at.astimezone(kst).strftime("%Y-%m-%d")
+        if day_key not in buckets:
+            buckets[day_key] = {s: 0 for s in _ERROR_STATS_STATUSES}
+        buckets[day_key][status] = buckets[day_key].get(status, 0) + 1
+
+    # 빈 날도 0으로 채움 (cutoff ~ today)
+    out: list[dict] = []
+    today_kst = now_utc.astimezone(kst).date()
+    for i in range(days, -1, -1):
+        d = (today_kst - timedelta(days=i)).strftime("%Y-%m-%d")
+        stats = buckets.get(d, {s: 0 for s in _ERROR_STATS_STATUSES})
+        out.append({"date": d, **stats})
+
+    return {"days": days, "rows": out}

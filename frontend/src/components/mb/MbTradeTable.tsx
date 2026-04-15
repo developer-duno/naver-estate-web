@@ -69,7 +69,59 @@ export default function MbTradeTable({ trades, sort, onSortChange }: Props) {
   }
 
   return (
-    <div className="overflow-x-auto bg-white rounded-lg shadow-sm border">
+    <>
+      {/* 모바일: 카드뷰 */}
+      <div className="md:hidden space-y-2" data-testid="mb-trade-cards">
+        {trades.map((t) => (
+          <div
+            key={t.id}
+            data-testid={`mb-trade-card-${t.id}`}
+            className="bg-white rounded-lg shadow-sm border p-3"
+          >
+            {/* 1행: 단지명 + 동 */}
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <span className="font-semibold text-gray-800 truncate">
+                {t.apt_name ?? "-"}
+              </span>
+              {t.dong && (
+                <span className="text-xs text-gray-500 flex-none">{t.dong}</span>
+              )}
+            </div>
+            {/* 2행: 가격 강조 + 취소 */}
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-bold text-blue-700 text-base">
+                {t.price != null ? formatKoreanPrice(t.price) : "-"}
+              </span>
+              {t.cancel_date && (
+                <span className="text-[11px] text-red-500 font-medium">취소</span>
+              )}
+            </div>
+            {/* 3행: 면적·층·거래월·거래유형 */}
+            <div className="flex items-center flex-wrap gap-1.5 text-xs text-gray-600">
+              <span>{t.area != null ? `${t.area.toFixed(1)}㎡` : "-"}</span>
+              <span className="text-gray-300">·</span>
+              <span>{t.floor != null ? `${t.floor}층` : "-"}</span>
+              <span className="text-gray-300">·</span>
+              <span>{t.deal_month ?? "-"}</span>
+              {t.trade_type && (
+                <>
+                  <span className="text-gray-300">·</span>
+                  <span>{t.trade_type}</span>
+                </>
+              )}
+              {t.build_year && (
+                <>
+                  <span className="text-gray-300">·</span>
+                  <span>{t.build_year}년</span>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 데스크톱: 테이블 */}
+      <div className="hidden md:block overflow-x-auto bg-white rounded-lg shadow-sm border">
       <table className="w-full text-sm border-collapse">
         <thead className="bg-gray-100 border-b-2 border-gray-300">
           <tr>
@@ -105,6 +157,7 @@ export default function MbTradeTable({ trades, sort, onSortChange }: Props) {
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }

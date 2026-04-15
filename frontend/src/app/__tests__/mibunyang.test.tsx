@@ -80,8 +80,9 @@ describe("미분양 메인 — 데이터 표시", () => {
 
   it("아파트 탭에서 데이터가 표시된다", async () => {
     renderPage("region=서울특별시&tab=apartments&page=1");
+    // 카드뷰 + 테이블 양쪽 DOM 렌더 (hidden md:block / md:hidden)
     await waitFor(() => {
-      expect(screen.getByText("테스트단지")).toBeInTheDocument();
+      expect(screen.getAllByText("테스트단지").length).toBeGreaterThanOrEqual(1);
     });
   });
 
@@ -96,8 +97,9 @@ describe("미분양 메인 — 데이터 표시", () => {
 
   it("실거래 탭에서 거래 데이터가 표시된다", async () => {
     renderPage("region=서울특별시&tab=trades&page=1");
+    // 카드뷰 + 테이블 양쪽 DOM 렌더 (hidden md:block / md:hidden)
     await waitFor(() => {
-      expect(screen.getByText("테스트아파트")).toBeInTheDocument();
+      expect(screen.getAllByText("테스트아파트").length).toBeGreaterThanOrEqual(1);
     });
   });
 });

@@ -217,3 +217,66 @@ def test_scheduler_status_non_env_job(mock_sched, client, db):
     assert price_job["last_run"] is not None
     assert price_job["last_run"]["status"] == "completed"
     assert price_job["last_run"]["processed_items"] == 95
+
+
+# ── 인기 단지 크롤링 시간대 회귀 (2026-04-16 세션 49 쿨다운 대응) ──
+#
+# 세션 49에서 인기 단지 크롤링을 10:30/14:30/19:00 → 10:45/14:45/19:15 로 15분씩
+# 시프트했다. 세 곳(scheduler.py cron 등록 / admin/scheduler.py 메타 / job id)의
+# 시간이 서로 drift 하면 UI와 실제 실행이 어긋나거나 mibunyang 쪽 시간대와 다시
+# 겹쳐 쿨다운이 재발할 수 있어 회귀 테스트로 고정한다.
+
+POPULAR_EXPECTED = [
+    ("popular_1030", 10, 45, "인기 단지 크롤링 10:45", "매일 10:45"),
+    ("popular_1430", 14, 45, "인기 단지 크롤링 14:45", "매일 14:45"),
+    ("popular_1900", 19, 15, "인기 단지 크롤링 19:15", "매일 19:15"),
+]
+
+
+def test_popular_crawl_meta_matches_session49_shift():
+    """SCHEDULER_JOB_META 에 popular 3개 job 이 10:45/14:45/19:15 로 고정돼 있는지"""
+    from routers.admin.scheduler import SCHEDULER_JOB_META
+
+    for job_id, _hour, _minute, expected_name, expected_schedule in POPULAR_EXPECTED:
+        assert job_id in SCHEDULER_JOB_META, f"{job_id} 가 메타에서 누락"
+        meta = SCHEDULER_JOB_META[job_id]
+        assert meta["name"] == expected_name
+        assert meta["schedule"] == expected_schedule
+        assert meta["env"] == "POPULAR_CRAWL_ENABLED"
+        assert meta.get("env_default") == "true"
+
+
+def test_popular_crawl_scheduler_source_matches_meta():
+    """crawler/scheduler.py 의 cron 등록 튜플이 메타와 일치하는지 (소스 레벨 drift 방지)
+
+    APScheduler 인스턴스를 실제로 띄우지 않고, 소스 파일에서 cron 등록에 쓰는
+    (hour, minute, job_id) 튜플 리터럴을 읽어 검증. 세션 49 의 시프트가
+    scheduler.py 와 admin/scheduler.py 양쪽에서 동시에 반영돼야 한다.
+    """
+    import inspect
+
+    from crawler import scheduler as sched_mod
+
+    source = inspect.getsource(sched_mod)
+    for job_id, hour, minute, _name, _schedule in POPULAR_EXPECTED:
+        # cron 등록 리스트 리터럴: (10, 45, "popular_1030") 형태
+        needle = f'({hour}, {minute}, "{job_id}")'
+        assert needle in source, (
+            f"scheduler.py 에서 {needle} 를 찾을 수 없음 — 세션 49 시프트가 풀렸거나 "
+            f"리터럴 포맷이 바뀜"
+        )
+
+
+@patch("crawler.scheduler.get_scheduler", return_value=None)
+def test_scheduler_status_exposes_popular_15min_shift(mock_sched, client, db):
+    """/api/admin/scheduler-status 응답의 popular job schedule 문자열이 UI 에 정확히 내려오는지"""
+    _make_admin(db)
+    res = client.get("/api/admin/scheduler-status", headers=_auth(_token("admin1")))
+    assert res.status_code == 200
+    jobs = {j["scheduler_job_id"]: j for j in res.json()["jobs"]}
+
+    for job_id, _hour, _minute, expected_name, expected_schedule in POPULAR_EXPECTED:
+        assert job_id in jobs, f"응답에 {job_id} 누락"
+        assert jobs[job_id]["name"] == expected_name
+        assert jobs[job_id]["schedule"] == expected_schedule
+        assert jobs[job_id]["enabled"] is True  # POPULAR_CRAWL_ENABLED 기본 true

@@ -50,6 +50,7 @@ export const queryKeys = {
     verifications: (params?: Record<string, unknown>) =>
       ["admin", "verifications", params] as const,
     errorStats: (days: number) => ["admin", "errorStats", days] as const,
+    naverCalls: () => ["admin", "naverCalls"] as const,
   },
 
   // 중개사 검증

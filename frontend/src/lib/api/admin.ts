@@ -220,3 +220,21 @@ export async function getAdminErrorStats(token: string, days: 7 | 14 | 30 = 14) 
     { headers: adminHeaders(token) },
   );
 }
+
+export interface NaverCallWindowCounts {
+  "10m": number;
+  "1h": number;
+  "24h": number;
+}
+
+export interface NaverCallStats {
+  labels: Record<string, NaverCallWindowCounts>;
+  totals: NaverCallWindowCounts;
+}
+
+/** 네이버 API 호출 계측 — 라벨별 10분/1시간/24시간 슬라이딩 윈도우 */
+export async function getAdminNaverCalls(token: string) {
+  return fetchApi<NaverCallStats>(`/api/admin/naver-calls`, {
+    headers: adminHeaders(token),
+  });
+}

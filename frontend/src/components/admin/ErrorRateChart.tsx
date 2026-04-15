@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { getAdminErrorStats, type ErrorStatsRow } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
+import AdminCard from "./AdminCard";
 
 // Recharts 는 SSR 에서 window 참조 문제 + 번들 크기가 커서 dynamic import
 const BarChart = dynamic(() => import("recharts").then((m) => m.BarChart), { ssr: false });
@@ -52,27 +53,26 @@ export default function ErrorRateChart({ getToken }: Props) {
     (r) => r.completed + r.failed + r.paused + r.cancelled > 0,
   );
 
-  return (
-    <div className="bg-white border rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-gray-700">크롤 에러율 추이</h3>
-        <div className="flex gap-1">
-          {([7, 14, 30] as const).map((d) => (
-            <button
-              key={d}
-              onClick={() => setDays(d)}
-              className={`px-2 py-1 text-xs rounded border ${
-                days === d
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "bg-white text-gray-700 border-gray-300"
-              }`}
-            >
-              {d}일
-            </button>
-          ))}
-        </div>
-      </div>
+  const daysToggle = (
+    <div className="flex gap-1">
+      {([7, 14, 30] as const).map((d) => (
+        <button
+          key={d}
+          onClick={() => setDays(d)}
+          className={`px-2 py-1 text-xs rounded border ${
+            days === d
+              ? "bg-blue-600 text-white border-blue-600"
+              : "bg-white text-gray-700 border-gray-300"
+          }`}
+        >
+          {d}일
+        </button>
+      ))}
+    </div>
+  );
 
+  return (
+    <AdminCard title="크롤 에러율 추이" action={daysToggle}>
       {isLoading && (
         <div className="h-[240px] bg-gray-100 animate-pulse rounded" />
       )}
@@ -107,6 +107,6 @@ export default function ErrorRateChart({ getToken }: Props) {
       <p className="mt-2 text-[11px] text-gray-500">
         KST 기준 일자별 status 집계. running/pending은 생략 (최종 상태만 표시).
       </p>
-    </div>
+    </AdminCard>
   );
 }

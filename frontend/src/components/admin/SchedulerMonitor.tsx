@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { getSchedulerStatus } from "@/lib/api";
 import type { SchedulerJobStatus } from "@/types/admin";
+import AdminCard from "./AdminCard";
 
 /** 상태 뱃지 색상 매핑 */
 const STATUS_STYLES: Record<string, string> = {
@@ -55,14 +56,13 @@ export default function SchedulerMonitor({ token }: Props) {
 
   if (isLoading) {
     return (
-      <div className="bg-white border rounded-lg p-4">
-        <div className="h-5 bg-gray-200 rounded w-40 mb-3 animate-pulse" />
+      <AdminCard title="스케줄러 모니터링">
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-8 bg-gray-100 rounded animate-pulse" />
           ))}
         </div>
-      </div>
+      </AdminCard>
     );
   }
 
@@ -78,19 +78,17 @@ export default function SchedulerMonitor({ token }: Props) {
 
   const { jobs, summary } = data;
 
-  return (
-    <div className="bg-white border rounded-lg p-4">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-gray-700">스케줄러 모니터링</h3>
-        <span className="text-xs text-gray-500">
-          오늘 {summary.total_runs_today}회 실행
-          {summary.failures_today > 0 && (
-            <span className="text-red-600 ml-1">/ {summary.failures_today}건 실패</span>
-          )}
-        </span>
-      </div>
+  const summaryAction = (
+    <span className="text-xs text-gray-500">
+      오늘 {summary.total_runs_today}회 실행
+      {summary.failures_today > 0 && (
+        <span className="text-red-600 ml-1">/ {summary.failures_today}건 실패</span>
+      )}
+    </span>
+  );
 
+  return (
+    <AdminCard title="스케줄러 모니터링" action={summaryAction}>
       {/* 테이블 */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -125,7 +123,7 @@ export default function SchedulerMonitor({ token }: Props) {
       {jobs.length === 0 && (
         <p className="text-sm text-gray-500 text-center py-4">등록된 스케줄러 작업이 없습니다</p>
       )}
-    </div>
+    </AdminCard>
   );
 }
 

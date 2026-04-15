@@ -7,6 +7,7 @@ import StatsCards from "@/components/admin/StatsCards";
 import BulkRecrawlCard from "@/components/admin/BulkRecrawlCard";
 import CollectorTrigger from "@/components/admin/CollectorTrigger";
 import SchedulerMonitor from "@/components/admin/SchedulerMonitor";
+import AdminCard from "@/components/admin/AdminCard";
 import { getAdminDetailedStats, getAdminAuditLogs, getAdminCrawlJobs } from "@/lib/api";
 import type { DetailedStats, AuditLog, CrawlJobDetail } from "@/types/admin";
 import type { PaginatedResponse } from "@/types/admin";
@@ -59,9 +60,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-        {/* 실행 중인 크롤링 */}
-        <div className="bg-white border rounded-lg p-4">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">실행 중인 크롤링</h3>
+        <AdminCard title="실행 중인 크롤링">
           {runningJobs.length === 0 ? (
             <p className="text-sm text-gray-500">실행 중인 작업이 없습니다</p>
           ) : (
@@ -74,11 +73,9 @@ export default function AdminDashboard() {
               ))}
             </ul>
           )}
-        </div>
+        </AdminCard>
 
-        {/* 최근 활동 */}
-        <div className="bg-white border rounded-lg p-4">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">최근 활동</h3>
+        <AdminCard title="최근 활동">
           {recentLogs.length === 0 ? (
             <p className="text-sm text-gray-500">활동 기록이 없습니다</p>
           ) : (
@@ -96,7 +93,7 @@ export default function AdminDashboard() {
               ))}
             </ul>
           )}
-        </div>
+        </AdminCard>
       </div>
 
       <div className="mt-6">

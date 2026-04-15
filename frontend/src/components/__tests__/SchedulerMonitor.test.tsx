@@ -77,12 +77,16 @@ describe("SchedulerMonitor 컴포넌트", () => {
   /** 정상 렌더링 — 제목과 요약 표시 */
   it("스케줄러 모니터링 제목과 요약이 표시된다", async () => {
     mockGetStatus.mockResolvedValueOnce(MOCK_RESPONSE);
-    renderWithProvider();
+    const { container } = renderWithProvider();
+    // "스케줄러 모니터링" 타이틀은 isLoading 분기에서도 AdminCard 헤더로 즉시 렌더되므로,
+    // jobs 목록이 실제 로드 완료되었는지는 job name 으로 확인한다
     await waitFor(() => {
-      expect(screen.getByText("스케줄러 모니터링")).toBeInTheDocument();
+      expect(screen.getByText("에어코리아 대기질")).toBeInTheDocument();
     });
-    expect(screen.getByText(/오늘 3회 실행/)).toBeInTheDocument();
-    expect(screen.getByText(/1건 실패/)).toBeInTheDocument();
+    expect(screen.getByText("스케줄러 모니터링")).toBeInTheDocument();
+    // summary 는 <span> 안에 내부 <span> 이 중첩되어 있어 getByText 가 다중 요소로 판단함 → textContent 포함 검증
+    expect(container.textContent).toContain("오늘 3회 실행");
+    expect(container.textContent).toContain("1건 실패");
   });
 
   /** 작업명이 모두 렌더되는지 */

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import StatsCards from "@/components/admin/StatsCards";
+import AdminCard from "@/components/admin/AdminCard";
 import { getAdminDetailedStats, deleteStaleData } from "@/lib/api";
 import type { DetailedStats } from "@/types/admin";
 
@@ -52,31 +53,32 @@ export default function AdminDataPage() {
       <StatsCards stats={statsQuery.data ?? null} loading={statsQuery.isLoading} />
 
       {/* 데이터 정리 */}
-      <div className="bg-white border rounded-lg p-4 mt-6">
-        <h3 className="text-sm font-medium text-gray-700 mb-3">오래된 데이터 정리</h3>
-        <p className="text-xs text-gray-500 mb-3">
-          비활성 상태(is_active=false)이며 지정 일수 이상 경과된 매물을 삭제합니다.
-        </p>
-        <div className="flex items-center gap-3">
-          <input
-            type="number"
-            value={staleDays}
-            onChange={(e) => setStaleDays(Number(e.target.value))}
-            min={30}
-            className="w-20 text-sm border rounded px-2 py-1"
-          />
-          <span className="text-sm text-gray-500">일 이상</span>
-          <button
-            onClick={handleDeleteStale}
-            disabled={deleteMutation.isPending}
-            className="text-sm px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-          >
-            {deleteMutation.isPending ? "삭제 중..." : "삭제"}
-          </button>
-        </div>
-        {deleteResult && (
-          <p className="text-sm text-green-600 mt-2">{deleteResult}</p>
-        )}
+      <div className="mt-6">
+        <AdminCard title="오래된 데이터 정리">
+          <p className="text-xs text-gray-500 mb-3">
+            비활성 상태(is_active=false)이며 지정 일수 이상 경과된 매물을 삭제합니다.
+          </p>
+          <div className="flex items-center gap-3">
+            <input
+              type="number"
+              value={staleDays}
+              onChange={(e) => setStaleDays(Number(e.target.value))}
+              min={30}
+              className="w-20 text-sm border rounded px-2 py-1"
+            />
+            <span className="text-sm text-gray-500">일 이상</span>
+            <button
+              onClick={handleDeleteStale}
+              disabled={deleteMutation.isPending}
+              className="text-sm px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+            >
+              {deleteMutation.isPending ? "삭제 중..." : "삭제"}
+            </button>
+          </div>
+          {deleteResult && (
+            <p className="text-sm text-green-600 mt-2">{deleteResult}</p>
+          )}
+        </AdminCard>
       </div>
     </>
   );

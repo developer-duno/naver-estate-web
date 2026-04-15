@@ -4,7 +4,23 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-15 — 세션 44 **3건 일괄 완결** ✅ — (1) xlsx→exceljs 취약점 제거, (2) /admin 운영 개선 완성(pause/resume + 단건 재크롤 + 에러율 차트), (3) 에러 페이지 UX 강화 + 미분양 테이블 모바일 카드뷰. 커밋 **12건**, 하네스 9 GATE 검증 후 실행.
+**마지막 작업**: 2026-04-15 — 세션 45 **types 도메인 분리 + 백로그 재판정** ✅ — `frontend/src/types/index.ts` 447줄·27개 타입 → `estate.ts`(167줄·7) + `analytics.ts`(60줄·8) + `progress.ts`(25줄·2) + `mibunyang.ts`(191줄·10) 4파일 분리, `index.ts` 는 7줄 순수 barrel (`export * from "./..."`) 로 축약. 외부 import 경로 `from "@/types"` 69파일 무변경. 커밋 **5건** (53772a5 / aff3a4f / c9df47a / 650fadc / 본 커밋). 하네스 9 GATE 통과 후 실행. 저위험 백로그 3건 중 2건(CORS env / parseApprovalDate 제거)은 사전 조사로 **스테일 판정** — 상세는 하단 "다음 우선순위" 3번 참조.
+
+**세션 45 성과** (naver-estate-web FE 6파일, 5커밋):
+
+- Step 1 (53772a5) `estate.ts` 신규 167줄 — Complex/Article/ArticlePriceHistoryItem/PyeongDetail/SortBy/ArticleFilters/FilterOptions (tsc + 565 테스트 통과)
+- Step 2 (aff3a4f) `analytics.ts` 신규 60줄 — DbStats/Regions/AreaPriceStat/FloorPriceStat/PriceStat/PriceStats/PriceHistoryItem/PriceHistoryResponse
+- Step 3 (c9df47a) `progress.ts` 신규 25줄 — PriceCollectProgress/CrawlProgress
+- Step 4+5 (650fadc) `mibunyang.ts` 신규 191줄 — MbApartment/MbUnsoldHistory/MbRegion/MbTrade/MbPrice/MbTradeStats/MbBuilder/MbInfra/MbSchool/MbTransport. **Step 4와 5를 통합**한 이유: MbApartment 가 Mb\* 하위 타입을 참조하므로 part1 만 이동하면 중간 커밋에서 mibunyang.ts 내부 미정의로 tsc 깨짐. 원자적 이동이 안전하다고 판단.
+- Step 6 (본 커밋) `CLAUDE.md` 백로그 정정 — CORS env / parseApprovalDate 스테일 표기 + 세션 45 성과 기록
+- 검증: 각 단계마다 `npx tsc --noEmit` exit 0, vitest 565/565 통과. `npm run build` 는 Windows junction point 환경 이슈(Turbopack → `failed to create junction point`, webpack → `favicon.ico` readlink EISDIR)로 로컬 실패하나 타입 리팩터와 무관(next.config/webpack 설정 미변경) — Vercel 리눅스 빌드 정상.
+
+### 세션 45 하네스 교훈
+- **CLAUDE.md 백로그 신뢰도 감사 필요**: 세션 44 종료 시 적어놓은 저위험 백로그 3건 중 2건이 사전 조사 단계에서 무효로 판명. CLAUDE.md 의 "다음 우선순위" 섹션은 작성 시점의 가정이므로 다음 세션 시작 시 **실제 코드/env 와 대조 검증** 없이 그대로 실행하면 헛걸음. 규칙: 백로그 항목은 Explore 3개 병렬 사전조사 후에만 실행 계획 확정.
+- **원자적 리팩터 단위 판단**: 원래 6단계 플랜에서 Step 4 를 "part1 5개 이동" 으로 쪼개려 했으나 타입 의존 그래프를 다시 읽고 Step 4+5 통합으로 현장 수정. **플랜 검증 → 실행 직전 재확인** 루프가 플랜보다 중요한 경우 있음.
+- **이전 커밋 비교 빌드는 리스크**: 빌드 환경 이슈를 "커밋 무관" 증명하려고 `git checkout 993f74f -- .` 로 돌아가려 했다가 워킹트리 혼란 유발, `git reset --hard HEAD` 로 복구. **리팩터 중에 과거 커밋 체크아웃 금지 — 환경 이슈는 증거(에러 메시지) 로만 판단**.
+
+**상세**: `memory/session45_summary.md` (차후 세션 종료 시 생성)
 
 **세션 44 성과** (naver-estate-web FE+BE, 총 ~30파일):
 
@@ -91,7 +107,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 1. ⭐ **미분양 지도 뷰** — 목록에 Naver Maps 오버레이, 마커 클릭→상세 이동. FE 2파일
 2. ⭐ **비교 페이지 4→6~8개 확장** — CompareTable 스크롤 리팩토링. FE 2파일
-3. 🟡 **저위험 백로그 묶음 3건** — backend/main.py CORS 하드코드 → env / types/index.ts 447줄 분리 / parseApprovalDate 미사용 export 제거. 각 1커밋
+3. ~~🟡 **저위험 백로그 묶음 3건**~~ — 세션 45 에서 재판정 완료. (a) backend CORS 는 이미 `main.py:105` 에서 `os.getenv("FRONTEND_URL")` 사용 중으로 완료, (b) `parseApprovalDate` 는 `lib/compare-utils.ts:26` 의 `ADVANTAGE_ROWS[4]` "준공일" 우위 판정에서 실제 사용 중으로 제거 불가 — 두 항목 모두 **스테일**. (c) `types/index.ts` 447줄 분리만 세션 45 에서 실행됨 (아래 성과 참조)
 4. 🟡 **/admin/users isLoading UI** + AdminCard 공통 컴포넌트 추출(9곳 중복)
 5. **Playwright 실측 follow-up** — 세션 44에서 단계 5 완료 후 `webapp-testing` 스킬로 375×812 뷰포트 스크린샷을 뜨지 않음. 다음 세션에 before/after 비교 캡처 (목록/상세/404/500, 7장)
 6. 🟡 **React.memo 확대** — ArticleTable/ArticleCardMobile/ComplexRow (FilterDropdown만 적용 상태)

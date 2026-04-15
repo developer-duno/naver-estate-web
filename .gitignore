@@ -33,8 +33,21 @@ dist/
 .claude/settings.local.json
 .claude-memory/
 .claude/worktrees/
+.claude/scheduled_tasks.lock
+.claude/*.bak-pre-renewal
+.claude/commands/
 .env.vercel
 .mcp.json
 scripts/startup.log
 scripts/backend.log
 scripts/cloudflared.log
+scripts/orchestrator.pid
+scripts/uvicorn.log
+
+# Playwright MCP 자동 생성 스냅샷/로그 (세션별 디버그용, 커밋 제외)
+.playwright-mcp/
+
+# 루트 디버깅 스크린샷 (임시)
+/article-modal-*.png
+/complex-detail.png
+/home-check.png

@@ -142,13 +142,13 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 **다음 우선순위 (세션 47)**:
 
-1. ⭐ **미분양 지도 뷰** — 목록에 Naver Maps 오버레이, 마커 클릭→상세 이동. FE 2파일 (세션 45 이후 계속 보류, 사용자 요청 필요)
-2. **Playwright 시각 회귀** — 세션 44/45/46 연속 skip. 목록/상세/404/500 + /admin 로그인 후 대시보드 캡처 (before/after 비교). **인증 fixture 필요 — 기존 E2E 테스트 48개 중 admin 접근 방식 참고**
-3. 🟡 **React.memo 확대** — ArticleTable/ArticleCardMobile/ComplexRow (FilterDropdown만 적용 상태)
-4. 🟡 **AdminCard 추가 검토** — 세션 46 에서 제외한 `admin/settings/page.tsx:76` 편집 모드 카드. title + action(timestamp + 편집 버튼) + 편집모드 분기 처리 가능한지 재판정. 필요 시 AdminCard 에 `headerRight` 슬롯 추가 대신 `action` 에 `<></>` fragment 로 해결 가능
-5. ~~🟡 **비교 페이지 4→6~8개 확장**~~ — 세션 46 에서 **스킵 결정**. 사용자 의견: 4개도 이미 빡빡, 8개는 UX 악화. 필요 시 4→6 만 소폭 확장 선택지 있음
-6. mibunyang 쪽에서 `quota_db_integration.md` 적용 (mibunyang 세션, 본 프로젝트 변경 없음)
-7. Supabase MCP 2개 해제 안내 (사용자 수동, /mcp UI)
+1. **Playwright 시각 회귀** — 세션 44/45/46 연속 skip. 목록/상세/404/500 + /admin 로그인 후 대시보드 캡처 (before/after 비교). **인증 fixture 필요 — 기존 E2E 테스트 48개 중 admin 접근 방식 참고**
+2. 🟡 **React.memo 확대** — ArticleTable/ArticleCardMobile/ComplexRow (FilterDropdown만 적용 상태)
+3. 🟡 **AdminCard 추가 검토** — 세션 46 에서 제외한 `admin/settings/page.tsx:76` 편집 모드 카드. title + action(timestamp + 편집 버튼) + 편집모드 분기 처리 가능한지 재판정
+4. mibunyang 쪽에서 `quota_db_integration.md` 적용 (mibunyang 세션, 본 프로젝트 변경 없음)
+5. Supabase MCP 2개 해제 안내 (사용자 수동, /mcp UI)
+
+<!-- 보류 (사용자 미요청): 미분양 지도 뷰 (FE 2파일, Naver Maps 오버레이), 비교 페이지 4→6~8 확장 (세션 46 스킵 결정) -->
 
 ## 기술 스택
 

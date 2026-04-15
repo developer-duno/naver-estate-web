@@ -21,7 +21,7 @@ CRAWL_INTERVAL_HOURS = int(os.getenv("CRAWL_INTERVAL_HOURS", "12"))
 CRAWL_DETAIL_INTERVAL_MIN = int(os.getenv("CRAWL_DETAIL_INTERVAL_MIN", "240"))
 CRAWL_BATCH_SIZE = int(os.getenv("CRAWL_BATCH_SIZE", "50"))
 POPULAR_CRAWL_ENABLED = os.getenv("POPULAR_CRAWL_ENABLED", "true").lower() == "true"
-POPULAR_CRAWL_BATCH_SIZE = int(os.getenv("POPULAR_CRAWL_BATCH_SIZE", "100"))
+POPULAR_CRAWL_BATCH_SIZE = int(os.getenv("POPULAR_CRAWL_BATCH_SIZE", "50"))
 PUBLIC_DATA_ENABLED = os.getenv("PUBLIC_DATA_ENABLED", "false").lower() == "true"
 PUBLIC_DATA_BATCH_SIZE = int(os.getenv("PUBLIC_DATA_BATCH_SIZE", "300"))
 AIR_QUALITY_ENABLED = os.getenv("AIR_QUALITY_ENABLED", "false").lower() == "true"
@@ -62,7 +62,7 @@ def create_scheduler() -> BackgroundScheduler:
         crawl_articles_batch,
         "interval",
         hours=CRAWL_INTERVAL_HOURS,
-        jitter=1800,
+        jitter=2700,
         kwargs={"batch_size": CRAWL_BATCH_SIZE, "scheduler_job_id": "crawl_articles"},
         id="crawl_articles",
         name="매물 수집 배치",
@@ -93,10 +93,11 @@ def create_scheduler() -> BackgroundScheduler:
         misfire_grace_time=3600,
     )
 
-    # E. 인기 단지 선제적 크롤링 — 하루 3회 (10:30, 14:30, 19:00 KST)
+    # E. 인기 단지 선제적 크롤링 — 하루 3회 (10:45, 14:45, 19:15 KST)
     #    기존 스케줄(B: 12시간마다, C: 4시간마다)과 충돌 회피
+    #    2026-04-16: mibunyang 쿨다운 대응 — 기존 10:30/14:30/19:00에서 15분씩 시프트
     if POPULAR_CRAWL_ENABLED:
-        for hour, minute, job_id in [(10, 30, "popular_1030"), (14, 30, "popular_1430"), (19, 0, "popular_1900")]:
+        for hour, minute, job_id in [(10, 45, "popular_1030"), (14, 45, "popular_1430"), (19, 15, "popular_1900")]:
             scheduler.add_job(
                 crawl_popular_complexes,
                 "cron",
@@ -108,7 +109,7 @@ def create_scheduler() -> BackgroundScheduler:
                 max_instances=1,
                 misfire_grace_time=1800,
             )
-        logger.info("인기 단지 선제적 크롤링 활성화: 10:30, 14:30, 19:00 (배치 %d)", POPULAR_CRAWL_BATCH_SIZE)
+        logger.info("인기 단지 선제적 크롤링 활성화: 10:45, 14:45, 19:15 (배치 %d)", POPULAR_CRAWL_BATCH_SIZE)
 
     # F. 공공데이터 실거래가 수집 — 주 1회 토요일 새벽 5시
     #    네이버 API 보완용, IP 차단 우려 없음

@@ -238,7 +238,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ### 인프라·운영
 - 서버 자동 시작: startup_orchestrator.py → Named Tunnel (api.2u.pe.kr) + watchdog
-- 인기 단지 크롤링: 매일 10:30/14:30/19:00, 개별 단지 try/except (부분 실패 허용)
+- 인기 단지 크롤링: 매일 10:45/14:45/19:15, 개별 단지 try/except (부분 실패 허용, 기본 배치 50)
 - 스케줄러 모니터링: GET /api/admin/scheduler-status (12개 작업, 60초 자동갱신)
 - 관리자 대시보드: StatsCards + SchedulerMonitor + CollectorTrigger + QuotaStatus
 - 공유 쿼터 DB 카운터: RateLimitCounter 테이블 기반, INSERT ON CONFLICT 원자적 (quota_db.py)

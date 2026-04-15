@@ -62,7 +62,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 | 매물 수집 배치 | 12시간 interval | 최근 조회 단지 매물 크롤링 |
 | 매물 상세 보강 | 4시간 interval | 매물 상세 정보 크롤링 |
 | 시세 이력 수집 | 수요일 4시 | 단지별 시세(매매/전세) 주간 수집 |
-| 인기 단지 크롤링 | 매일 10:30/14:30/19:00 | 자주 조회되는 단지 선제적 크롤링, 개별 try/except |
+| 인기 단지 크롤링 | 매일 10:45/14:45/19:15 | 자주 조회되는 단지 선제적 크롤링, 개별 try/except (기본 배치 50) |
 | 공공데이터 수집 | 토요일 5시 | 국토교통부 실거래가 (10일 토요일 skip) |
 | 대기질 수집 | 매일 2시 | 에어코리아 API |
 | 응급의료 수집 | 매월 첫째 월 3시 | NEMC 응급의료기관 API |
@@ -93,7 +93,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 | 03:00 | naver-estate-web | discover_regions | 일요일 |
 | 04:00 | naver-estate-web | collect_prices | 수요일 |
 | 08:00 | mibunyang | 로컬 naver-collect.py | 월/목 |
-| 10:30/14:30/19:00 | naver-estate-web | popular 크롤링 | 매일 |
+| 10:45/14:45/19:15 | naver-estate-web | popular 크롤링 | 매일 |
 | 12h interval | naver-estate-web | crawl_articles | 매일 |
 | 4h interval | naver-estate-web | crawl_details | 매일 |
 

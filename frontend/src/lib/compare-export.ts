@@ -7,23 +7,48 @@ export function safeCellValue(val: string): string {
   return val;
 }
 
+/** ExcelJS 버퍼 → Blob 다운로드 (브라우저 전용) */
+export async function downloadXlsxBuffer(
+  buffer: ArrayBuffer | Uint8Array,
+  filename: string,
+) {
+  const blob = new Blob([buffer as BlobPart], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export async function exportCompareToXlsx(
   complexes: Complex[],
   rows: { label: string; render: (c: Complex) => string }[],
 ) {
   try {
-    const XLSX = await import("xlsx");
-    const header = ["항목", ...complexes.map((c) => safeCellValue(c.complex_name))];
-    const data = rows.map((row) => [
-      safeCellValue(row.label),
-      ...complexes.map((c) => safeCellValue(row.render(c))),
-    ]);
-    const ws = XLSX.utils.aoa_to_sheet([header, ...data]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "단지 비교");
-    ws["!cols"] = [{ wch: 15 }, ...complexes.map(() => ({ wch: 25 }))];
-    XLSX.writeFile(
-      wb,
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("단지 비교");
+    ws.columns = [
+      { header: "항목", width: 15 },
+      ...complexes.map((c) => ({
+        header: safeCellValue(c.complex_name),
+        width: 25,
+      })),
+    ];
+    rows.forEach((row) => {
+      ws.addRow([
+        safeCellValue(row.label),
+        ...complexes.map((c) => safeCellValue(row.render(c))),
+      ]);
+    });
+    const buf = await wb.xlsx.writeBuffer();
+    await downloadXlsxBuffer(
+      buf,
       `단지비교_${new Date().toISOString().slice(0, 10)}.xlsx`,
     );
   } catch (err) {

@@ -4,7 +4,55 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-15 — 세션 43 **어린이집 DB 2001/2001 완결** + **quota_db 연동 가이드 문서화** + **세종 단지명 교정** ✅. 어린이집 서사 100% 종결, 하네스 제약(3파일/100줄) 안에서 다중 작업 병행.
+**마지막 작업**: 2026-04-15 — 세션 44 **3건 일괄 완결** ✅ — (1) xlsx→exceljs 취약점 제거, (2) /admin 운영 개선 완성(pause/resume + 단건 재크롤 + 에러율 차트), (3) 에러 페이지 UX 강화 + 미분양 테이블 모바일 카드뷰. 커밋 **12건**, 하네스 9 GATE 검증 후 실행.
+
+**세션 44 성과** (naver-estate-web FE+BE, 총 ~30파일):
+
+### [1] xlsx → exceljs 교체 (npm audit high 2건 제거)
+- 배경: xlsx 0.18.5 는 Prototype Pollution + ReDoS 2종 high 취약점, "No fix available". 유지보수 중단.
+- 3커밋 분할 (8fb7cce/5d2abdf/37fa88f):
+  - `compare-export.ts`: `downloadXlsxBuffer()` 공통 헬퍼 추출 (Blob → a.click → revokeObjectURL)
+  - `mb-export.ts` 4함수 + `mb-compare-export.ts`: Workbook → worksheet.columns → addRow → writeBuffer() 패턴
+  - `mb-export.test.ts`: `vi.mock("exceljs")` 로 Workbook 클래스 스텁
+- `safeCellValue()` 수식 인젝션 방어는 그대로 유지
+- 결과: npm audit xlsx 2건 high → 0건, 남은 next/vite 2건은 범위 밖
+
+### [2] /admin 운영 개선 완성 (unstaged 마무리 + FE UI)
+- 세션 43 이전 시작된 unstaged 작업(BE API 3종 + FE 컴포넌트 2종 + 테스트 4파일)을 하네스 검증 후 3커밋으로 완결:
+  - `efbeffa` feat(admin): pause/resume + 에러율 추이 API + race guard
+    - `POST /api/admin/crawl-jobs/{id}/pause` `resume` (running ↔ paused ↔ pending, 409 guard)
+    - `GET /api/admin/error-stats?days=7|14|30` — KST 기준 일자별 status 집계, 빈 날 0 채움
+    - **race guard**: `service_discover._finalize_job()` — 워커가 완료/실패 덮어쓰기 전 DB 재조회, running 일 때만 전환. 관리자 pause/cancel 승리 보장
+    - 테스트: `test_admin_jobs` 8 + `test_service_discover_race` 3
+  - `73b6229` feat(admin): 단건 강제 재크롤 API
+    - `POST /api/admin/recrawl/single` — 숫자 1~20자리 검증 + Complex 존재 확인 + 1시간 중복 차단(force 우회) + threading.Thread 백그라운드
+    - `test_admin_recrawl` +109줄
+  - `83dd9b3` feat(fe): /admin 운영 개선 UI
+    - `SingleRecrawlCard`: 단지번호 입력 + force 체크박스 + 성공/실패 피드백
+    - `ErrorRateChart`: Recharts dynamic import, stacked bar, 7/14/30일 토글
+    - `CrawlJobTable`: 일시정지/재개 버튼 + paused status 색상(amber) + target_id select-text
+    - 테스트 9개 (SingleRecrawlCard 5 + ErrorRateChart 4)
+- BE 533 + FE 554 전체 회귀 통과
+
+### [3] 에러 페이지 UX 강화 + 미분양 테이블 모바일 카드뷰
+- Context7 `/vercel/next.js/v16.2.2` 로 공식 문서 확인 → **`reset` → `unstable_retry` 리네임 발견**. `props.unstable_retry ?? props.reset` fallback 패턴으로 Next 15/16 양방향 호환
+- Explore 에이전트 3개 병렬로 9 GATE 검증 (초기 🟢4/🟡4/🔴1 → 수정 후 🟢9/🟡0/🔴0)
+- 5커밋 분할:
+  - `0aab791` `ErrorActions` 공통 컴포넌트 — variant("notfound"/"error") + `useSmartBack` 훅 재사용
+  - `2e93147` `not-found.tsx` + `error.tsx` + `mibunyang/error.tsx` 일괄 교체 (`unstable_retry` 시그너처 통일)
+  - `3b93be0` `/admin/error.tsx` 신규 + 에러 페이지 테스트 9개 (not-found/error/ErrorActions)
+  - `b675943` `MbApartmentTable` 모바일 카드뷰 (md:hidden) — 4행 구조, tabIndex + onKeyDown + stopPropagation, data-testid 부여. 기존 테스트 6개 수정(`getAllByText` + `.closest("tr") !== null` 필터) + 신규 2개
+  - `2d6e7aa` `MbTradeTable` + `MbRegionStatsTable` 모바일 카드뷰 + `mibunyang.test.tsx` 2곳 수정
+- **jsdom 이슈 발견**: CSS `hidden md:block` / `md:hidden` 은 jsdom 에서 **둘 다 DOM 에 렌더**. `getByText` 는 중복으로 실패 → `getAllByText[0]` 또는 `data-testid` 로 이전
+- **키보드 접근성**: 카드 `tabIndex=0` + `onKeyDown` Enter/Space (기존 `MbApartmentTable:107-108` 패턴 복제)
+- **stopPropagation**: ★즐겨찾기 / + 비교 버튼에 이벤트 전파 차단 (기존 `:113-127` 선례)
+- FE 회귀: 66파일 / 565 테스트 통과 (554 → 565 = +11 신규), tsc/lint 에러 0
+
+### 세션 44 하네스 교훈 (다음 세션용)
+- **MCP 실측 우선**: 사용자가 "일 잘하는 MCP" 요구 → Context7 로 `reset` 이 `unstable_retry` 로 바뀐 것 발견, 기억만으로 답변 금지
+- **Explore 병렬 검증**: 9 GATE 를 에이전트 3개(GATE 1+6 / GATE 5+3 / GATE 0+2+4+7+8)로 병렬 검증 → 30분 절약
+- **jsdom CSS hidden 모름**: 모바일 카드뷰 추가 시 기존 테스트의 `getByText` 가 전부 깨질 수 있음. 카드뷰 도입 전 반드시 테스트 파일 전체에서 `getByText\(` 를 grep 해서 `getAllByText[0]` 또는 testid 로 선제 수정
+- **plan 수정 후 재승인**: 사용자가 "일 잘하는 MCP 데리고 한 거 맞아?" 라고 반려 → Context7 + 9 GATE 로 증거 추가 후 재승인. 재승인 루프는 품질에 크게 기여
 
 **세션 43 성과** (naver-estate-web 코드 변경 0 / docs 1파일 신규, mibunyang 2파일 변경):
 
@@ -39,14 +87,16 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 **상세**: `memory/project_childcare_trigger_bug.md`, `memory/session43_summary.md`, `docs/quota_db_integration.md`
 
-**다음 우선순위 (세션 44)**:
+**다음 우선순위 (세션 45)**:
 
-1. 🔥 **/admin 운영 개선** — 단지 강제 재크롤 버튼 + 잡 일시정지/중단 UI + 크롤 에러율 차트. FE 3~4파일 + BE 2파일. ROI 최고
-2. 🔥 **에러 페이지 + 모바일 반응형 강화** — 404/500 페이지 개선 + 미분양 테이블 모바일 카드뷰. FE 4~5파일
-3. ⭐ 미분양 지도 뷰 — 목록에 Naver Maps 오버레이, 마커 클릭→상세 이동. FE 2파일
-4. ⭐ 비교 페이지 4→6~8개 확장 — CompareTable 스크롤 리팩토링. FE 2파일
-5. Supabase MCP 2개 해제 안내 (사용자 수동 작업, /mcp UI)
-6. mibunyang 쪽에서 `quota_db_integration.md` 적용 (mibunyang 세션 작업, 본 프로젝트 변경 없음)
+1. ⭐ **미분양 지도 뷰** — 목록에 Naver Maps 오버레이, 마커 클릭→상세 이동. FE 2파일
+2. ⭐ **비교 페이지 4→6~8개 확장** — CompareTable 스크롤 리팩토링. FE 2파일
+3. 🟡 **저위험 백로그 묶음 3건** — backend/main.py CORS 하드코드 → env / types/index.ts 447줄 분리 / parseApprovalDate 미사용 export 제거. 각 1커밋
+4. 🟡 **/admin/users isLoading UI** + AdminCard 공통 컴포넌트 추출(9곳 중복)
+5. **Playwright 실측 follow-up** — 세션 44에서 단계 5 완료 후 `webapp-testing` 스킬로 375×812 뷰포트 스크린샷을 뜨지 않음. 다음 세션에 before/after 비교 캡처 (목록/상세/404/500, 7장)
+6. 🟡 **React.memo 확대** — ArticleTable/ArticleCardMobile/ComplexRow (FilterDropdown만 적용 상태)
+7. mibunyang 쪽에서 `quota_db_integration.md` 적용 (mibunyang 세션, 본 프로젝트 변경 없음)
+8. Supabase MCP 2개 해제 안내 (사용자 수동, /mcp UI)
 
 ## 기술 스택
 

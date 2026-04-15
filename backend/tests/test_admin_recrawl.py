@@ -216,3 +216,112 @@ def test_run_danger_allowed_with_force(client, db):
         assert res.json()["level"] == "danger"
         mock_thread.assert_called_once()
     _reset_flag()
+
+
+# ── 단건 강제 재크롤 ──
+
+
+def _make_complex(db, cno="12345", name="테스트단지"):
+    from db.models import Complex
+    c = Complex(
+        complex_no=cno,
+        complex_name=name,
+        sido="서울특별시",
+        sigungu="강남구",
+        dong="역삼동",
+    )
+    db.add(c)
+    db.commit()
+    return c
+
+
+def test_recrawl_single_invalid_format_400(client, db):
+    """숫자 아닌 complex_no → 400"""
+    _make_profile(db, "sa1", role="admin")
+    res = client.post(
+        "/api/admin/recrawl/single",
+        headers=_auth(_token("sa1")),
+        json={"complex_no": "abc"},
+    )
+    assert res.status_code == 400
+
+
+def test_recrawl_single_not_found_404(client, db):
+    """존재하지 않는 단지 → 404"""
+    _make_profile(db, "sa2", role="admin")
+    res = client.post(
+        "/api/admin/recrawl/single",
+        headers=_auth(_token("sa2")),
+        json={"complex_no": "99999"},
+    )
+    assert res.status_code == 404
+
+
+def test_recrawl_single_success(client, db):
+    """정상 트리거 → 200 + complex_name 반환 + 스레드 시작"""
+    _make_profile(db, "sa3", role="admin")
+    _make_complex(db, cno="12345", name="테스트단지")
+    with patch("routers.admin.recrawl.threading.Thread") as mock_thread:
+        res = client.post(
+            "/api/admin/recrawl/single",
+            headers=_auth(_token("sa3")),
+            json={"complex_no": "12345"},
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["status"] == "started"
+        assert body["complex_no"] == "12345"
+        assert body["complex_name"] == "테스트단지"
+        mock_thread.assert_called_once()
+
+
+def test_recrawl_single_duplicate_409(client, db):
+    """1시간 내 같은 단지 재크롤 이력 있으면 409"""
+    from datetime import datetime, timezone
+
+    from db.models import CrawlJob
+
+    _make_profile(db, "sa4", role="admin")
+    _make_complex(db, cno="22222", name="중복단지")
+    # 최근 재크롤 이력 1건
+    recent = CrawlJob(
+        job_type="complex_articles",
+        target_id="22222",
+        status="completed",
+        started_at=datetime.now(timezone.utc),
+    )
+    db.add(recent)
+    db.commit()
+
+    res = client.post(
+        "/api/admin/recrawl/single",
+        headers=_auth(_token("sa4")),
+        json={"complex_no": "22222"},
+    )
+    assert res.status_code == 409
+
+
+def test_recrawl_single_force_bypasses_duplicate(client, db):
+    """force=true 면 1시간 내 중복 있어도 통과"""
+    from datetime import datetime, timezone
+
+    from db.models import CrawlJob
+
+    _make_profile(db, "sa5", role="admin")
+    _make_complex(db, cno="33333", name="포스단지")
+    db.add(CrawlJob(
+        job_type="complex_articles",
+        target_id="33333",
+        status="completed",
+        started_at=datetime.now(timezone.utc),
+    ))
+    db.commit()
+
+    with patch("routers.admin.recrawl.threading.Thread") as mock_thread:
+        res = client.post(
+            "/api/admin/recrawl/single",
+            headers=_auth(_token("sa5")),
+            json={"complex_no": "33333", "force": True},
+        )
+        assert res.status_code == 200
+        mock_thread.assert_called_once()

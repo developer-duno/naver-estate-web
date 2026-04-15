@@ -8,6 +8,7 @@ throttle 싱글톤 및 단지별 active guard는 service_discover 측에 이미 
 """
 
 import logging
+import re
 import threading
 from datetime import datetime, timedelta, timezone
 
@@ -15,10 +16,13 @@ from fastapi import Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from auth.audit import log_action
-from db.models import CrawlJob
+from db.models import Complex, CrawlJob
 from deps import get_admin_user, get_db
 
 from ._shared import router
+
+# complex_no 형식: 숫자 1~20자리 (Complex.complex_no = String(20))
+_COMPLEX_NO_RE = re.compile(r"^\d{1,20}$")
 
 logger = logging.getLogger(__name__)
 
@@ -265,4 +269,89 @@ def get_recrawl_progress(
             "completed_at": parent.completed_at.isoformat() if parent.completed_at else None,
             "error_message": parent.error_message,
         }
+    }
+
+
+def _run_single_recrawl(complex_no: str, sido: str | None, sigungu: str | None):
+    """백그라운드 스레드 wrapper — crawl_complex_articles 단건 호출."""
+    try:
+        from crawler.service_discover import crawl_complex_articles
+        crawl_complex_articles(
+            complex_no=complex_no,
+            sido=sido,
+            sigungu=sigungu,
+            scheduler_job_id="admin_single_recrawl",
+        )
+        logger.info("[admin] 단건 재크롤 완료 — complex_no=%s", complex_no)
+    except Exception:
+        logger.exception("[admin] 단건 재크롤 실패 complex_no=%s", complex_no)
+
+
+@router.post("/recrawl/single")
+def run_recrawl_single(
+    payload: dict = Body(default_factory=dict),
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_admin_user),
+):
+    """특정 단지 1개를 즉시 강제 재크롤.
+
+    Body: {"complex_no": str, "force": bool 기본 False}
+    - complex_no 형식: 숫자 1~20자리
+    - Complex 테이블에 존재하지 않으면 404
+    - 1시간 이내 같은 단지 재크롤 있으면 force=False 시 409
+    """
+    complex_no = str(payload.get("complex_no", "")).strip()
+    force = bool(payload.get("force", False))
+
+    # 입력 검증 — 숫자만 1~20자리
+    if not _COMPLEX_NO_RE.match(complex_no):
+        raise HTTPException(
+            status_code=400,
+            detail="complex_no는 숫자 1~20자리여야 합니다",
+        )
+
+    # 단지 존재 확인
+    complex_row = db.get(Complex, complex_no)
+    if complex_row is None:
+        raise HTTPException(status_code=404, detail="해당 단지를 찾을 수 없습니다")
+
+    # 1시간 내 중복 차단 (force 없이만)
+    if not force:
+        recent_cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+        recent = (
+            db.query(CrawlJob)
+            .filter(
+                CrawlJob.job_type == "complex_articles",
+                CrawlJob.target_id == complex_no,
+                CrawlJob.started_at >= recent_cutoff,
+            )
+            .first()
+        )
+        if recent is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="이 단지는 1시간 내에 이미 재크롤된 이력이 있습니다. force=true 로 우회 가능",
+            )
+
+    log_action(
+        db,
+        admin["user_id"],
+        "admin_recrawl_single",
+        "complex",
+        complex_no,
+        details={"force": force},
+    )
+    db.commit()
+
+    t = threading.Thread(
+        target=_run_single_recrawl,
+        args=(complex_no, complex_row.sido, complex_row.sigungu),
+        daemon=True,
+    )
+    t.start()
+
+    return {
+        "status": "started",
+        "complex_no": complex_no,
+        "complex_name": complex_row.complex_name,
     }

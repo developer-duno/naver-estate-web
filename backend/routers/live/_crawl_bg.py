@@ -9,6 +9,7 @@ from db.models import Article as ArticleModel
 from db.models import Complex as ComplexModel
 from services.cache import get_cache
 from services.enricher import enrich_complex_detail
+from services.naver_call_counter import record_call
 from services.upsert import delete_missing_articles, upsert_article
 from shared.constants import NAVER_COMPLEX_ARTICLES_API, NAVER_LAND_BASE
 from shared.domain.article import RealEstateArticle
@@ -55,6 +56,7 @@ def _fetch_articles_all_trade_types(complex_no: str, page: int = 1):
         f"&page={page}&complexNo={complex_no}"
         f"&buildingNos=&areaNos=&type=list&order=rank"
     )
+    record_call("crawl_articles_live")
     return NaverEstateAPI._request_with_retry(url, extra_headers=headers)
 
 

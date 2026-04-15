@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from db.database import SessionLocal
 from db.models import Article as ArticleModel
 from deps import get_db
+from services.naver_call_counter import record_call
 from services.upsert import upsert_complex_from_search
 from shared.naver_api import NaverEstateAPI
 
@@ -44,6 +45,7 @@ def _search_one_group(keyword: str, suffix: str | None, group_codes: set[str],
     try:
         page = 1
         while page <= MAX_SEARCH_PAGES:
+            record_call("search")
             result = NaverEstateAPI.search_by_keyword(search_keyword, page=page)
             if not result or "error" in result:
                 if page == 1 and first_error is None:

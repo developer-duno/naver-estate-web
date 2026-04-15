@@ -5,6 +5,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from db.models import Article as ArticleModel
+from services.naver_call_counter import record_call
 from services.upsert import build_detail_update_dict
 from shared.domain.article import RealEstateArticle
 from shared.naver_api import NaverEstateAPI
@@ -47,6 +48,7 @@ def _crawl_details_for_complex(db, complex_no: str):
     def _fetch_detail(article_no: str):
         """워커 스레드: 네트워크 요청만 수행, DB 접근 금지. rate limiting 포함."""
         time.sleep(DETAIL_CRAWL_DELAY)  # 워커 안에서 rate limiting
+        record_call("article_detail_live")
         try:
             return article_no, NaverEstateAPI.get_article_detail(article_no)
         except Exception as e:

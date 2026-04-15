@@ -140,24 +140,39 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 **상세**: `memory/project_childcare_trigger_bug.md`, `memory/session43_summary.md`, `docs/quota_db_integration.md`
 
-**마지막 작업 (세션 47, 2026-04-16)**: **ComplexRow/ComplexCardMobile memo props 안정화** — 세션 46 에서 넘긴 "React.memo 확대" 백로그가 스테일 판정. 실제 확인해보니 ArticleTable/ArticleCardMobile/ComplexRow/FilterDropdown 전부 이미 `memo()` 적용됨. 진짜 문제는 **ComplexRow/ComplexCardMobile 의 호출부가 인라인 화살표 `onToggleCompare={() => toggleCompare({...})}` 와 매 렌더 새 문자열 `filterURL={buildURL(...)}` 로 memo 얕은비교를 무력화**하고 있던 것. 수리:
-- `onToggleCompare` 시그너처를 `() => void` → `(item: CompareItem) => void` 로 변경, 부모는 `toggleCompare` 참조만 그대로 전달 (useLocalStorageList 의 useCallback 으로 안정된 참조)
-- `filterURL` prop 제거, 대신 자식이 `urlFilters` 만 받아서 내부에서 `buildFilterURL(...)` 로 직접 계산 (urlFilters 는 `useFilterParams` 의 `useMemo` 로 searchParams 의존성만 있어 안정)
-- `useFilterParams` 에서 `buildURL` 구조분해 제거, `buildFilterURL` 을 named export 로 직접 import
-- 파일 1개 (`search/page.tsx`) 12+/9-, tsc/lint/vitest 568 통과
+**마지막 작업 (세션 48, 2026-04-16)**: **Playwright 관리자 인증 fixture + /admin 시각 회귀 + CI E2E job** — 세션 44/45/46/47 네 번 연속 미뤄온 부채 해소. 9 파일 신규/수정, 기존 e2e 48 회귀 0, vitest 568 회귀 0.
 
-**다음 우선순위 (세션 48)**:
+**세션 48 성과**:
+- Step 1 `playwright.config.ts` — `projects` 3개(`setup`/`public`/`admin`) 도입. 기존 48 테스트는 `public` 로 자동 분류, 새 `admin-dashboard.spec.ts` 만 `admin` project 소속. webServer timeout 180_000 + html reporter 추가
+- Step 2 `e2e/global.setup.ts` — dotenv 의존성 없이 `.env.test` 자체 파서(10줄). `process.env` 우선 + 파일 폴백. `TEST_ADMIN_*` missing 시 setup.skip. `/login` 에서 `#login-email`/`#login-password`/`button[type=submit]` 실측 셀렉터로 타이핑 로그인 → `waitForURL(!/login)` + `[role=alert]` 실패 감지 race → storageState 저장. Supabase rate limit 1회 retry. `.env.test.example` 신규 커밋. `frontend/.gitignore` 에 `e2e/.auth/` + `!.env.test.example` 추가
+- Step 3 `e2e/fixtures/admin-mocks.ts` + `admin-dashboard.spec.ts` — DetailedStats/AuditLog/CrawlJobDetail/SchedulerStatusResponse 실측 필드 전부 포함한 mock + `applyAdminMocks(page)` 헬퍼(4 URL `page.route`). 스펙은 "대시보드" heading + "단지 수"/"오늘 크롤"/"스케줄러 모니터링"/"실행 중인 크롤링"/"최근 활동"/"대기질 수집" 가시성 assert + `test-results/admin-dashboard.png` 저장. strict mode 충돌 우려 "사용자"/"활성 매물" 은 의도적 제외
+- Step 4 `.github/workflows/ci.yml` — `e2e` job 신규(needs `[changes, frontend]`, if frontend 변경). node 22 + `playwright install --with-deps chromium` + `npx playwright test --project=setup --project=admin`. secrets 5개(TEST_ADMIN_EMAIL/PASSWORD/ADMIN_EMAIL/NEXT_PUBLIC_SUPABASE_URL/ANON_KEY). 파일 안 쓰고 env 블록 직접 주입(artifact 유출 차단). playwright-report + admin-screenshots 14일 보관
+- Step 5 `frontend/e2e/README.md` 신규 + CLAUDE.md 세션 48 블록
 
-1. **Playwright 시각 회귀 + 인증 fixture 설계** — 세션 44/45/46/47 연속 skip. /admin 은 Supabase httpOnly 쿠키 기반이라 JWT 직접 생성 불가 — storageState 에 실제 로그인 세션을 한 번 기록해두는 fixture 필요. `.env.test` 에 테스트용 관리자 계정 분리 선행. Playwright CI job 도 같이 추가 (현재 CI 에 없음)
-2. 🟡 **AdminCard 추가 검토** — 세션 46 에서 제외한 `admin/settings/page.tsx:76` 편집 모드 카드. title + action(timestamp + 편집 버튼) + 편집모드 분기 처리 가능한지 재판정
-3. mibunyang 쪽에서 `quota_db_integration.md` 적용 (mibunyang 세션, 본 프로젝트 변경 없음)
-4. Supabase MCP 2개 해제 안내 (사용자 수동, /mcp UI)
+**검증 결과**:
+- tsc exit 0 (전 Step)
+- ESLint 0 errors, 10 warnings (전부 기존 `react-hooks/set-state-in-effect`, 이번 변경 무관)
+- vitest 568/568 통과
+- `playwright test --list`: setup 1 + public 48 + admin 1 = **50 tests in 11 files**
+- 기존 `admin-flow.spec.ts` 2개는 `public` project 에 유지되어 storageState 주입 없음(비인증 /login 리다이렉트 회귀 보존)
+- CI YAML 문법 `python -c "import yaml; yaml.safe_load(...)"` 통과
+- `git check-ignore`: `e2e/.auth/admin.json` / `.env.test` ignored, `.env.test.example` allowed
+- **실 Playwright 로그인/스크린샷 실행**은 사용자가 로컬 `frontend/.env.test` 작성 + GitHub secrets 등록 후 검증 (세션 마지막 수동 단계)
 
-### 세션 47 하네스 교훈
-- **백로그 "스테일" 2세션 연속 재발**: 세션 45 에서 "CLAUDE.md 백로그는 실제 코드와 대조 검증 없이 그대로 실행하면 헛걸음" 교훈을 적었는데 세션 46 에 백로그를 쓸 때 같은 오류를 반복 — "React.memo 확대 — FilterDropdown 만 적용 상태" 라고 적었으나 실제로는 4개 컴포넌트 전부 적용돼 있었음. **규칙**: CLAUDE.md 의 "다음 우선순위" 섹션에 항목을 추가할 때는 해당 시점에 **실제 grep 으로 현 상태 실측** 후에만 기록. "아마 그럴 것" 금지
-- **스테일 백로그에서도 Explore 사전조사의 가치**: 헛걸음처럼 보였지만 Explore 중에 "memo 는 있는데 호출부 인라인 콜백으로 무력화" 라는 진짜 버그 발견. 백로그가 틀렸어도 사전조사가 실제 이슈를 드러내는 통로가 됨. 세션 45 결론 "Explore 3개 병렬 습관 유지" 재확인
-- **Playwright /admin 시각 회귀는 단독 세션 필요**: 인증 fixture + CI 통합 + 테스트 계정 분리 + storageState 캐싱까지 한 세션에 전부 들어가야 가치 있음. 공개 페이지만 찍는 반쪽짜리는 실익 낮음. 세션 48 에서 정식 진행
-- **3번째 Explore 에이전트 로그인 실패 발생**: Phase 1 에서 병렬 3개 Explore 중 하나가 "Not logged in · Please run /login" 으로 죽음. 2개 결과만으로 충분해서 재시도 없이 진행. 교훈: 병렬 Explore 는 N-1 결과로도 진행 가능하도록 "한 에이전트 실패해도 다른 2개 커버" 분담 설계
+**세션 48 하네스 교훈** (다음 세션 필독):
+1. **9 GATE Phase 2 재검증의 가치**: Phase 1 에서 🟢9 로 성급 판정했던 플랜이 병렬 Explore 3개로 재검증하니 🔴1/🟡5 로 뒤집힘. 치명적 🔴 1건(기존 `admin-flow.spec.ts` 를 testMatch 정규식이 오염)은 실행 전에 잡아야만 했음. **규칙**: 하네스 GATE 는 Plan 모드에서 반드시 실측 Explore 병렬 검증 후 판정. "아마 괜찮을 것" 금지
+2. **Explore 에이전트가 찾아낸 구체 수정 포인트 8건**: login DOM `#login-email` id 실측 / `button[type=submit]` (버튼 텍스트 상태별 변동) / DetailedStats 9필드 중 2개 누락(`article_count`, `recent_crawl_jobs`) / "사용자"/"활성 매물" strict mode 중복 위험 / `.env.test.example` 도 `.env*` 에 걸려 allow 필요(`!.env.test.example`) / dotenv 의존성 회피 자체 파서 / Supabase rate limit retry / webServer timeout 180s. **추측 플랜은 전부 깨졌을 것**
+3. **테스트 파일 이름 정규식은 정확 매칭**: `admin-*` 같은 prefix 매칭은 기존 `admin-flow.spec.ts` 같은 동명 프리픽스 파일을 오염. `admin-dashboard\.spec\.ts$` 처럼 완전 일치로 쓸 것
+4. **CI secrets 파일 생성 vs env 주입**: `.env.test` 파일 생성 경로는 artifact 유출 리스크. `env:` 블록 직접 주입이 안전. global.setup.ts 가 `process.env` 우선 / 파일 폴백 구조면 로컬과 CI 양쪽 같은 코드 재사용
+
+**다음 우선순위 (세션 49)**:
+1. **사용자 로컬 검증 + CI 초록불 확인** — (A) `frontend/.env.test` 작성 후 `npx playwright test --project=setup --project=admin` 로컬 통과 확인 (B) GitHub secrets 5개 등록 + PR 올려 e2e job green 확인
+2. **toHaveScreenshot baseline 확정** — 세션 48 에서 단순 `page.screenshot()` 저장만 했음. 이번엔 Linux CI 런처로 baseline 1회 커밋 + `maxDiffPixelRatio: 0.02` 관용치로 시각 회귀 완결
+3. **admin 스펙 확장** — `/admin/data`, `/admin/users`, `/admin/settings` 로 테스트 확대. 세션 46 에서 스킵한 `admin/settings/page.tsx:76` 편집 모드 카드 AdminCard 적용 검토 동시 진행 가능
+4. mibunyang 쪽에서 `quota_db_integration.md` 적용 (mibunyang 세션, 본 프로젝트 변경 없음)
+5. Supabase MCP 2개 해제 안내 (사용자 수동, /mcp UI)
+
+**상세**: `memory/session48_summary.md` (세션 종료 시 생성)
 
 <!-- 보류 (사용자 미요청): 미분양 지도 뷰 (FE 2파일, Naver Maps 오버레이), 비교 페이지 4→6~8 확장 (세션 46 스킵 결정) -->
 

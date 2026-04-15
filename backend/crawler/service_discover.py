@@ -14,6 +14,7 @@ from crawler.utils import get_shared_throttle
 from db.database import SessionLocal
 from db.models import Article, Complex, CrawlJob
 from services.enricher import enrich_complex_detail
+from services.naver_call_counter import record_call
 from services.upsert import (
     build_detail_update_dict,
     delete_missing_articles,
@@ -81,6 +82,7 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, sche
         page = 1
         total_found = 0
         while True:
+            record_call("search_discover")
             result = NaverEstateAPI.search_by_keyword(keyword, page=page)
             if not result or "error" in result:
                 break
@@ -153,6 +155,7 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
         }
 
         while True:
+            record_call("crawl_articles_batch")
             result = NaverEstateAPI.get_complex_articles(complex_no, page=page)
             if not result or "error" in result:
                 break
@@ -343,6 +346,7 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
 
         skipped_dead = 0
         for i, art in enumerate(articles):
+            record_call("article_detail_batch")
             detail_data = NaverEstateAPI.get_article_detail(art.article_no)
             if detail_data and "error" not in detail_data:
                 # 도메인 객체로 변환 후 상세 업데이트

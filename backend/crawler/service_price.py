@@ -11,6 +11,7 @@ from crawler.service_common import _checkpoint, _extract_price_list, _upsert_pri
 from crawler.utils import AdaptiveThrottle
 from db.database import SessionLocal
 from db.models import Complex, CrawlJob
+from services.naver_call_counter import record_call
 from shared.naver_api import NaverEstateAPI
 from utils import safe_int, utcnow
 
@@ -56,6 +57,7 @@ def collect_price_history_for_complex(
     for trade_type in ("A1", "B1"):
         for area_no in area_nos:
             _throttle_ondemand.wait()
+            record_call("complex_prices_ondemand")
             try:
                 result = NaverEstateAPI.get_complex_prices(
                     complex_no, trade_type=trade_type, area_no=area_no
@@ -92,6 +94,7 @@ def collect_price_history_for_complex(
     # 실거래가(/prices/real): 기본 area_no만 수집 (장기 이력, YYYYMM 월별 저장)
     for trade_type in ("A1", "B1"):
         _throttle_ondemand.wait()
+        record_call("complex_real_prices_ondemand")
         try:
             real_result = NaverEstateAPI.get_complex_real_prices(complex_no, trade_type=trade_type)
             _throttle_ondemand.on_success()
@@ -163,6 +166,7 @@ def collect_price_history(batch_size: int = 50, scheduler_job_id: str | None = N
             complex_had_success = False
             for trade_type in ("A1", "B1"):  # 매매, 전세
                 _throttle.wait()
+                record_call("complex_prices_batch")
                 try:
                     result = NaverEstateAPI.get_complex_prices(
                         complex_no, trade_type=trade_type

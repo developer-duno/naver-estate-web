@@ -9,6 +9,7 @@ import {
   type RecrawlProgress,
   type RecrawlStatus,
 } from "@/lib/api";
+import AdminCard from "./AdminCard";
 
 interface Props {
   getToken: () => Promise<string>;
@@ -63,18 +64,15 @@ export default function BulkRecrawlCard({ getToken }: Props) {
   const disabled = statusQuery.isLoading || runMut.isPending || isDanger || inProgress;
   const estimatedMinutes = Math.ceil((batchSize * (status?.estimated_seconds_per_100 ?? 300)) / 100 / 60);
 
-  return (
-    <div className="bg-white border rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-gray-700">매물 일괄 재크롤</h3>
-        {status && (
-          <span className={`inline-flex items-center gap-1 text-xs ${style.text}`}>
-            <span className={`inline-block w-2 h-2 rounded-full ${style.dot}`} />
-            {style.label}
-          </span>
-        )}
-      </div>
+  const levelBadge = status ? (
+    <span className={`inline-flex items-center gap-1 text-xs ${style.text}`}>
+      <span className={`inline-block w-2 h-2 rounded-full ${style.dot}`} />
+      {style.label}
+    </span>
+  ) : null;
 
+  return (
+    <AdminCard title="매물 일괄 재크롤" action={levelBadge}>
       {statusQuery.isLoading && <p className="text-xs text-gray-500">상태 확인 중...</p>}
 
       {status && (
@@ -160,6 +158,6 @@ export default function BulkRecrawlCard({ getToken }: Props) {
       <p className="mt-2 text-[11px] text-gray-500">
         last_crawled_at이 가장 오래된 단지부터 순차 크롤링합니다. 자동 스케줄러와 throttle·단지 락을 공유해 네이버 API에 부담 주지 않습니다.
       </p>
-    </div>
+    </AdminCard>
   );
 }

@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { getAdminVerifications, approveVerification, rejectVerification } from "@/lib/api";
 import type { AgentVerification } from "@/types/admin";
+import AdminCard from "./AdminCard";
 
 interface Props {
   token: string;
@@ -41,8 +42,7 @@ export default function VerificationReview({ token }: Props) {
   if (items.length === 0) return null;
 
   return (
-    <div className="bg-white border rounded-lg p-4">
-      <h3 className="text-sm font-medium text-gray-700 mb-3">검증 심사 대기 ({data?.total ?? 0}건)</h3>
+    <AdminCard title={`검증 심사 대기 (${data?.total ?? 0}건)`}>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -138,6 +138,6 @@ export default function VerificationReview({ token }: Props) {
           </div>
         </div>
       )}
-    </div>
+    </AdminCard>
   );
 }

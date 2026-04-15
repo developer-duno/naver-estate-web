@@ -1,65 +1,6 @@
 export * from "./estate";
 
-/** DB 통계 */
-export interface DbStats {
-  complex_count: number;
-  article_count: number;
-}
-
-/** 지역 구조: {시도: {시군구: [동, ...]}} */
-export type Regions = Record<string, Record<string, string[]>>;
-
-/** 면적별 가격 통계 — 거래유형별 평균가 */
-export interface AreaPriceStat {
-  label: string;
-  maemae?: number;
-  jeonse?: number;
-  wolse?: number;
-  maemae_count?: number;
-  jeonse_count?: number;
-  wolse_count?: number;
-}
-
-/** 층수별 가격 통계 — 거래유형별 min/avg/max */
-export interface FloorPriceStat {
-  label: string;
-  maemae_avg?: number; maemae_min?: number; maemae_max?: number; maemae_count?: number;
-  jeonse_avg?: number; jeonse_min?: number; jeonse_max?: number; jeonse_count?: number;
-  wolse_avg?: number;  wolse_min?: number;  wolse_max?: number;  wolse_count?: number;
-}
-
-/** @deprecated 단일 거래유형 통계 (PriceChartInner 내부용) */
-export interface PriceStat {
-  label: string;
-  min: number;
-  avg: number;
-  max: number;
-  median: number;
-  count: number;
-}
-
-export interface PriceStats {
-  complex_no: string;
-  total_articles: number;
-  by_area: AreaPriceStat[];
-  by_floor: FloorPriceStat[];
-}
-
-/** 단지 가격 추이 항목 */
-export interface PriceHistoryItem {
-  trade_type: string;
-  trade_type_label: string;
-  price_upper: number | null;
-  price_lower: number | null;
-  price_avg: number | null;
-  base_month: string;
-}
-
-/** 단지 가격 추이 응답 */
-export interface PriceHistoryResponse {
-  complex_no: string;
-  items: PriceHistoryItem[];
-}
+export * from "./analytics";
 
 /** 실거래가 수집 진행 상태 */
 export interface PriceCollectProgress {

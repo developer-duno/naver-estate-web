@@ -13,8 +13,9 @@ import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_TABS, PAGE_S
 import EstateTypeTabs from "@/components/EstateTypeTabs";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { useSmartBack } from "@/hooks/useSmartBack";
-import { useFilterParams } from "@/hooks/useFilterParams";
-import { useCompare } from "@/hooks/useCompare";
+import { useFilterParams, buildFilterURL } from "@/hooks/useFilterParams";
+import { useCompare, type CompareItem } from "@/hooks/useCompare";
+import type { ArticleFilters } from "@/types";
 import CompareFloatingBar from "@/components/CompareFloatingBar";
 
 function SearchContent() {
@@ -35,7 +36,7 @@ function SearchContent() {
     typesParam ? typesParam.split(",").filter((c) => allCodes.includes(c)) : [...allCodes]
   );
 
-  const { filters: urlFilters, setFilters: setUrlFilters, buildURL, filterKey } = useFilterParams();
+  const { filters: urlFilters, setFilters: setUrlFilters, filterKey } = useFilterParams();
   const { list: compareList, toggle: toggleCompare, remove: removeCompare, clear: clearCompare, isInCompare, isFull: compareFull } = useCompare();
   const hasSearchParams = !!(keyword || (sido && sigungu));
 
@@ -256,7 +257,7 @@ function SearchContent() {
             </thead>
             <tbody>
               {filteredComplexes.map((cpx, idx) => (
-                <ComplexRow key={cpx.complex_no} complex={cpx} index={idx + 1} filterURL={buildURL(`/complex/${cpx.complex_no}`, undefined, urlFilters)} isCompared={isInCompare(cpx.complex_no)} compareFull={compareFull} onToggleCompare={() => toggleCompare({ complex_no: cpx.complex_no, complex_name: cpx.complex_name })} />
+                <ComplexRow key={cpx.complex_no} complex={cpx} index={idx + 1} urlFilters={urlFilters} isCompared={isInCompare(cpx.complex_no)} compareFull={compareFull} onToggleCompare={toggleCompare} />
               ))}
             </tbody>
           </table>
@@ -267,7 +268,7 @@ function SearchContent() {
       {!loading && complexes.length > 0 && (
         <div className="md:hidden space-y-3">
           {filteredComplexes.map((cpx, idx) => (
-            <ComplexCardMobile key={cpx.complex_no} complex={cpx} index={idx + 1} filterURL={buildURL(`/complex/${cpx.complex_no}`, undefined, urlFilters)} isCompared={isInCompare(cpx.complex_no)} compareFull={compareFull} onToggleCompare={() => toggleCompare({ complex_no: cpx.complex_no, complex_name: cpx.complex_name })} />
+            <ComplexCardMobile key={cpx.complex_no} complex={cpx} index={idx + 1} urlFilters={urlFilters} isCompared={isInCompare(cpx.complex_no)} compareFull={compareFull} onToggleCompare={toggleCompare} />
           ))}
         </div>
       )}
@@ -278,9 +279,10 @@ function SearchContent() {
   );
 }
 
-const ComplexRow = memo(function ComplexRow({ complex, index, filterURL, isCompared, compareFull, onToggleCompare }: { complex: Complex; index: number; filterURL?: string; isCompared?: boolean; compareFull?: boolean; onToggleCompare?: () => void }) {
+const ComplexRow = memo(function ComplexRow({ complex, index, urlFilters, isCompared, compareFull, onToggleCompare }: { complex: Complex; index: number; urlFilters?: ArticleFilters; isCompared?: boolean; compareFull?: boolean; onToggleCompare?: (item: CompareItem) => void }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const filterURL = buildFilterURL(`/complex/${complex.complex_no}`, undefined, urlFilters);
   const year = complex.use_approve_ymd?.slice(0, 4);
   const articleCount = complex.article_count ?? 0;
   const isEven = index % 2 === 0;
@@ -330,7 +332,7 @@ const ComplexRow = memo(function ComplexRow({ complex, index, filterURL, isCompa
       </td>
       <td className="px-2 py-2 text-center whitespace-nowrap">
         <button
-          onClick={(e) => { e.stopPropagation(); onToggleCompare?.(); }}
+          onClick={(e) => { e.stopPropagation(); onToggleCompare?.({ complex_no: complex.complex_no, complex_name: complex.complex_name }); }}
           disabled={!isCompared && compareFull}
           className={`text-xs px-2 py-0.5 rounded border transition-colors ${
             isCompared
@@ -348,12 +350,13 @@ const ComplexRow = memo(function ComplexRow({ complex, index, filterURL, isCompa
   );
 });
 
-const ComplexCardMobile = memo(function ComplexCardMobile({ complex, index, filterURL, isCompared, compareFull, onToggleCompare }: { complex: Complex; index: number; filterURL?: string; isCompared?: boolean; compareFull?: boolean; onToggleCompare?: () => void }) {
+const ComplexCardMobile = memo(function ComplexCardMobile({ complex, index, urlFilters, isCompared, compareFull, onToggleCompare }: { complex: Complex; index: number; urlFilters?: ArticleFilters; isCompared?: boolean; compareFull?: boolean; onToggleCompare?: (item: CompareItem) => void }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const year = complex.use_approve_ymd?.slice(0, 4);
   const articleCount = complex.article_count ?? 0;
   const colorClass = complex.real_estate_type_name ? (ESTATE_TYPE_COLORS[complex.real_estate_type_name] ?? ESTATE_TYPE_DEFAULT_COLOR) : "";
+  const filterURL = buildFilterURL(`/complex/${complex.complex_no}`, undefined, urlFilters);
 
   const prefetchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const handlePrefetchEnter = useCallback(() => {
@@ -384,7 +387,7 @@ const ComplexCardMobile = memo(function ComplexCardMobile({ complex, index, filt
           <p className="text-xs text-gray-500 mt-1 truncate">{complex.cortar_address || "-"}</p>
         </div>
         <button
-          onClick={(e) => { e.stopPropagation(); onToggleCompare?.(); }}
+          onClick={(e) => { e.stopPropagation(); onToggleCompare?.({ complex_no: complex.complex_no, complex_name: complex.complex_name }); }}
           disabled={!isCompared && compareFull}
           className={`ml-2 shrink-0 text-xs px-2.5 py-1 rounded border transition-colors ${
             isCompared

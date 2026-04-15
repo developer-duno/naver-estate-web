@@ -140,13 +140,24 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 **상세**: `memory/project_childcare_trigger_bug.md`, `memory/session43_summary.md`, `docs/quota_db_integration.md`
 
-**다음 우선순위 (세션 47)**:
+**마지막 작업 (세션 47, 2026-04-16)**: **ComplexRow/ComplexCardMobile memo props 안정화** — 세션 46 에서 넘긴 "React.memo 확대" 백로그가 스테일 판정. 실제 확인해보니 ArticleTable/ArticleCardMobile/ComplexRow/FilterDropdown 전부 이미 `memo()` 적용됨. 진짜 문제는 **ComplexRow/ComplexCardMobile 의 호출부가 인라인 화살표 `onToggleCompare={() => toggleCompare({...})}` 와 매 렌더 새 문자열 `filterURL={buildURL(...)}` 로 memo 얕은비교를 무력화**하고 있던 것. 수리:
+- `onToggleCompare` 시그너처를 `() => void` → `(item: CompareItem) => void` 로 변경, 부모는 `toggleCompare` 참조만 그대로 전달 (useLocalStorageList 의 useCallback 으로 안정된 참조)
+- `filterURL` prop 제거, 대신 자식이 `urlFilters` 만 받아서 내부에서 `buildFilterURL(...)` 로 직접 계산 (urlFilters 는 `useFilterParams` 의 `useMemo` 로 searchParams 의존성만 있어 안정)
+- `useFilterParams` 에서 `buildURL` 구조분해 제거, `buildFilterURL` 을 named export 로 직접 import
+- 파일 1개 (`search/page.tsx`) 12+/9-, tsc/lint/vitest 568 통과
 
-1. **Playwright 시각 회귀** — 세션 44/45/46 연속 skip. 목록/상세/404/500 + /admin 로그인 후 대시보드 캡처 (before/after 비교). **인증 fixture 필요 — 기존 E2E 테스트 48개 중 admin 접근 방식 참고**
-2. 🟡 **React.memo 확대** — ArticleTable/ArticleCardMobile/ComplexRow (FilterDropdown만 적용 상태)
-3. 🟡 **AdminCard 추가 검토** — 세션 46 에서 제외한 `admin/settings/page.tsx:76` 편집 모드 카드. title + action(timestamp + 편집 버튼) + 편집모드 분기 처리 가능한지 재판정
-4. mibunyang 쪽에서 `quota_db_integration.md` 적용 (mibunyang 세션, 본 프로젝트 변경 없음)
-5. Supabase MCP 2개 해제 안내 (사용자 수동, /mcp UI)
+**다음 우선순위 (세션 48)**:
+
+1. **Playwright 시각 회귀 + 인증 fixture 설계** — 세션 44/45/46/47 연속 skip. /admin 은 Supabase httpOnly 쿠키 기반이라 JWT 직접 생성 불가 — storageState 에 실제 로그인 세션을 한 번 기록해두는 fixture 필요. `.env.test` 에 테스트용 관리자 계정 분리 선행. Playwright CI job 도 같이 추가 (현재 CI 에 없음)
+2. 🟡 **AdminCard 추가 검토** — 세션 46 에서 제외한 `admin/settings/page.tsx:76` 편집 모드 카드. title + action(timestamp + 편집 버튼) + 편집모드 분기 처리 가능한지 재판정
+3. mibunyang 쪽에서 `quota_db_integration.md` 적용 (mibunyang 세션, 본 프로젝트 변경 없음)
+4. Supabase MCP 2개 해제 안내 (사용자 수동, /mcp UI)
+
+### 세션 47 하네스 교훈
+- **백로그 "스테일" 2세션 연속 재발**: 세션 45 에서 "CLAUDE.md 백로그는 실제 코드와 대조 검증 없이 그대로 실행하면 헛걸음" 교훈을 적었는데 세션 46 에 백로그를 쓸 때 같은 오류를 반복 — "React.memo 확대 — FilterDropdown 만 적용 상태" 라고 적었으나 실제로는 4개 컴포넌트 전부 적용돼 있었음. **규칙**: CLAUDE.md 의 "다음 우선순위" 섹션에 항목을 추가할 때는 해당 시점에 **실제 grep 으로 현 상태 실측** 후에만 기록. "아마 그럴 것" 금지
+- **스테일 백로그에서도 Explore 사전조사의 가치**: 헛걸음처럼 보였지만 Explore 중에 "memo 는 있는데 호출부 인라인 콜백으로 무력화" 라는 진짜 버그 발견. 백로그가 틀렸어도 사전조사가 실제 이슈를 드러내는 통로가 됨. 세션 45 결론 "Explore 3개 병렬 습관 유지" 재확인
+- **Playwright /admin 시각 회귀는 단독 세션 필요**: 인증 fixture + CI 통합 + 테스트 계정 분리 + storageState 캐싱까지 한 세션에 전부 들어가야 가치 있음. 공개 페이지만 찍는 반쪽짜리는 실익 낮음. 세션 48 에서 정식 진행
+- **3번째 Explore 에이전트 로그인 실패 발생**: Phase 1 에서 병렬 3개 Explore 중 하나가 "Not logged in · Please run /login" 으로 죽음. 2개 결과만으로 충분해서 재시도 없이 진행. 교훈: 병렬 Explore 는 N-1 결과로도 진행 가능하도록 "한 에이전트 실패해도 다른 2개 커버" 분담 설계
 
 <!-- 보류 (사용자 미요청): 미분양 지도 뷰 (FE 2파일, Naver Maps 오버레이), 비교 페이지 4→6~8 확장 (세션 46 스킵 결정) -->
 

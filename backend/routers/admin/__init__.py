@@ -7,6 +7,7 @@ sub-modules: _shared, users, jobs, data, collect, scheduler
 from routers.admin import collect as _collect_mod  # noqa: F401, I001
 from routers.admin import data as _data_mod  # noqa: F401, I001
 from routers.admin import jobs as _jobs_mod  # noqa: F401, I001
+from routers.admin import naver_calls as _naver_calls_mod  # noqa: F401, I001
 from routers.admin import recrawl as _recrawl_mod  # noqa: F401, I001
 from routers.admin import scheduler as _sched_mod  # noqa: F401, I001
 from routers.admin import users as _users_mod  # noqa: F401, I001

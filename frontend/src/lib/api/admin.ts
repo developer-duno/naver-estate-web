@@ -167,3 +167,56 @@ export interface RecrawlProgress {
 export async function getRecrawlProgress(token: string) {
   return fetchApi<RecrawlProgress>("/api/admin/recrawl/progress", { headers: adminHeaders(token) });
 }
+
+/** 관리자: 단건 강제 재크롤 (특정 단지 1개 즉시 트리거) */
+export interface SingleRecrawlResponse {
+  status: string;
+  complex_no: string;
+  complex_name: string;
+}
+
+export async function triggerSingleRecrawl(
+  token: string,
+  complexNo: string,
+  force: boolean = false,
+) {
+  return fetchApi<SingleRecrawlResponse>("/api/admin/recrawl/single", {
+    method: "POST",
+    headers: { ...adminHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ complex_no: complexNo, force }),
+  });
+}
+
+/** 관리자: 크롤 잡 일시정지 */
+export async function pauseAdminCrawlJob(token: string, jobId: number) {
+  return fetchApi<{ status: string }>(
+    `/api/admin/crawl-jobs/${encodeURIComponent(String(jobId))}/pause`,
+    { method: "POST", headers: adminHeaders(token) },
+  );
+}
+
+/** 관리자: 크롤 잡 재개 */
+export async function resumeAdminCrawlJob(token: string, jobId: number) {
+  return fetchApi<{ status: string }>(
+    `/api/admin/crawl-jobs/${encodeURIComponent(String(jobId))}/resume`,
+    { method: "POST", headers: adminHeaders(token) },
+  );
+}
+
+/** 관리자: 에러율 차트 데이터 — 일자별 status 분포 */
+export interface ErrorStatsRow {
+  date: string;
+  completed: number;
+  failed: number;
+  paused: number;
+  pending: number;
+  running: number;
+  cancelled: number;
+}
+
+export async function getAdminErrorStats(token: string, days: 7 | 14 | 30 = 14) {
+  return fetchApi<{ days: number; rows: ErrorStatsRow[] }>(
+    `/api/admin/error-stats?days=${days}`,
+    { headers: adminHeaders(token) },
+  );
+}

@@ -49,6 +49,7 @@ export const queryKeys = {
     schedulerStatus: () => ["admin", "schedulerStatus"] as const,
     verifications: (params?: Record<string, unknown>) =>
       ["admin", "verifications", params] as const,
+    errorStats: (days: number) => ["admin", "errorStats", days] as const,
   },
 
   // 중개사 검증

@@ -5,7 +5,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import CrawlJobTable from "@/components/admin/CrawlJobTable";
-import { getAdminCrawlJobs, cancelAdminCrawlJob } from "@/lib/api";
+import SingleRecrawlCard from "@/components/admin/SingleRecrawlCard";
+import ErrorRateChart from "@/components/admin/ErrorRateChart";
+import {
+  getAdminCrawlJobs,
+  cancelAdminCrawlJob,
+  pauseAdminCrawlJob,
+  resumeAdminCrawlJob,
+} from "@/lib/api";
 import type { CrawlJobDetail, PaginatedResponse } from "@/types/admin";
 
 export default function AdminCrawlPage() {
@@ -37,11 +44,45 @@ export default function AdminCrawlPage() {
     },
   });
 
-  const error = jobsQuery.error?.message ?? cancelMutation.error?.message ?? "";
+  const pauseMutation = useMutation<{ status: string }, Error, number>({
+    mutationFn: async (jobId) => {
+      const t = await getToken();
+      return pauseAdminCrawlJob(t, jobId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.crawlJobs() });
+    },
+  });
+
+  const resumeMutation = useMutation<{ status: string }, Error, number>({
+    mutationFn: async (jobId) => {
+      const t = await getToken();
+      return resumeAdminCrawlJob(t, jobId);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.crawlJobs() });
+    },
+  });
+
+  const error =
+    jobsQuery.error?.message ??
+    cancelMutation.error?.message ??
+    pauseMutation.error?.message ??
+    resumeMutation.error?.message ??
+    "";
 
   const handleCancel = async (jobId: number) => {
     if (!confirm("이 작업을 취소하시겠습니까?")) return;
     await cancelMutation.mutateAsync(jobId);
+  };
+
+  const handlePause = async (jobId: number) => {
+    if (!confirm("이 작업을 일시정지하시겠습니까?")) return;
+    await pauseMutation.mutateAsync(jobId);
+  };
+
+  const handleResume = async (jobId: number) => {
+    await resumeMutation.mutateAsync(jobId);
   };
 
   const handleRefresh = () => {
@@ -52,6 +93,11 @@ export default function AdminCrawlPage() {
     <>
       <h2 className="text-lg font-semibold mb-4">크롤링 관리</h2>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <SingleRecrawlCard getToken={getToken} />
+        <ErrorRateChart getToken={getToken} />
+      </div>
+
       <div className="flex gap-3 mb-4">
         <select
           value={filterStatus}
@@ -61,6 +107,7 @@ export default function AdminCrawlPage() {
           <option value="">상태 전체</option>
           <option value="running">실행 중</option>
           <option value="pending">대기</option>
+          <option value="paused">일시정지</option>
           <option value="completed">완료</option>
           <option value="failed">실패</option>
           <option value="cancelled">취소</option>
@@ -80,7 +127,12 @@ export default function AdminCrawlPage() {
       {jobsQuery.isLoading ? (
         <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
       ) : (
-        <CrawlJobTable jobs={jobsQuery.data?.items ?? []} onCancel={handleCancel} />
+        <CrawlJobTable
+          jobs={jobsQuery.data?.items ?? []}
+          onCancel={handleCancel}
+          onPause={handlePause}
+          onResume={handleResume}
+        />
       )}
 
       {(jobsQuery.data?.total ?? 0) > 20 && (

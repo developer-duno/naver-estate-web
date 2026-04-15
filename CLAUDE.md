@@ -4,7 +4,44 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-15 — 세션 45 **types 도메인 분리 + 백로그 재판정** ✅ — `frontend/src/types/index.ts` 447줄·27개 타입 → `estate.ts`(167줄·7) + `analytics.ts`(60줄·8) + `progress.ts`(25줄·2) + `mibunyang.ts`(191줄·10) 4파일 분리, `index.ts` 는 7줄 순수 barrel (`export * from "./..."`) 로 축약. 외부 import 경로 `from "@/types"` 69파일 무변경. 커밋 **5건** (53772a5 / aff3a4f / c9df47a / 650fadc / 본 커밋). 하네스 9 GATE 통과 후 실행. 저위험 백로그 3건 중 2건(CORS env / parseApprovalDate 제거)은 사전 조사로 **스테일 판정** — 상세는 하단 "다음 우선순위" 3번 참조.
+**마지막 작업**: 2026-04-15 — 세션 46 **AdminCard 공통 컴포넌트 추출** ✅ — `/admin` 영역의 `bg-white border rounded-lg p-4` + `<h3 mb-3>` 헤더 카드 반복 패턴을 공통 `AdminCard` 컴포넌트로 추출, **8곳 치환**. 커밋 **5건** (967a462 / e48add1 / 4b44e34 / 63358dc / 3ddd7f6). 하네스 9 GATE 실측 재검증 후 5 Step 분할 (단계당 ≤2파일). 전체 테스트 568/568 통과.
+
+**세션 46 성과** (naver-estate-web FE 10파일, 5커밋):
+
+- Step 1 (967a462) `AdminCard.tsx` + 단위 테스트 신규 — title/children/action? 3 prop, `memo()`/className 과잉 제거. 테스트 3개(기본 렌더/action 헤더/action 미제공)
+- Step 2A (e48add1) `SingleRecrawlCard` + `CollectorTrigger` 단순 치환 (action 없음)
+- Step 2B (4b44e34) `BulkRecrawlCard` level 뱃지 action 추출 + `VerificationReview` 동적 title (`검증 심사 대기 (${total}건)`)
+- Step 3 (63358dc) `ErrorRateChart` 7/14/30일 토글을 action 으로 + `SchedulerMonitor` isLoading/정상 2분기 치환. **L59 skeleton 헤더 블록 `<div className="h-5 bg-gray-200 rounded w-40 mb-3 animate-pulse" />` 제거** — AdminCard 의 실제 `<h3>` 가 헤더 담당, 이중 렌더 방지. error 분기(bg-red-50)는 카드 래퍼 아님이라 그대로 유지
+- Step 4 (3ddd7f6) `admin/page.tsx` 2카드(실행중 크롤링/최근 활동) + `admin/data/page.tsx` 1카드(오래된 데이터 정리, 외부 `<div className="mt-6">` 래퍼 + AdminCard) + `SchedulerMonitor.test.tsx` race fix (waitFor 기준을 job name 으로 변경)
+
+**제외 3곳** (의도적):
+- `StatsCards.tsx` — 타이틀 없는 stat 박스 4개 grid, `<p>{label}</p>` 구조가 AdminCard 의 `<h3>` 템플릿과 불일치
+- `admin/settings/page.tsx:76` — 헤더 action 이 `<span>{key}</span>` + timestamp + 편집 버튼 2요소 + 편집모드 textarea 분기로 복잡도 높음
+- `/admin/users` isLoading — 세션 44 백로그에 적혀 있었으나 사전 조사 결과 L102 에 이미 `isLoading ? <div role="status">로딩 중...</div>` 존재. 스테일 판정
+
+**치환 누락 grep 검증**: `bg-white border rounded-lg p-4` 잔재 = StatsCards ×2 + settings/page ×1 + AdminCard 본체 ×2 = 5 매칭 (기대값 일치)
+
+**검증 결과**:
+- tsc exit 0 (5단계 전부)
+- ESLint 0 errors, 10 warnings (전부 기존 `react-hooks/set-state-in-effect` 경고, AdminCard 무관)
+- vitest 568/568 통과 (기존 565 + AdminCard 3 신규)
+- 시각 검증: Playwright 로 /, /admin, /admin/data, /login 스크린샷 4장. 홈 정상 렌더 + /admin·/admin/data 는 미들웨어 로그인 리다이렉트 정상. 내부 대시보드는 인증 게이트로 자동화 불가 → **사용자 수동 확인** 필요
+- `npm run build` 는 세션 45 와 동일 Windows junction 이슈로 로컬 실패, Vercel 리눅스 빌드 무관
+
+### 세션 46 사고 기록 (다음 세션 필독)
+
+**첫 커밋 오염 사고**: Step 1 첫 커밋 `3d20eb0` 가 의도한 2파일(AdminCard + 테스트)이 아니라 **44파일 4539+/647- 줄**로 찍힘. unstaged 상태이던 `.claude/commands/`, `.playwright-mcp/` 40파일, 스크린샷 6장, `orchestrator.pid`, `uvicorn.log`, settings 백업 2개가 전부 흡수됨. 원인은 `git add <특정파일>` 뒤 `git commit` 실행 시 Git 이 의도대로 2파일만 잡아야 했는데, 왜 44파일이 딸려갔는지 정확 원인 미규명. 의심: Windows 환경의 일부 Git hook 또는 harness 의 pre-commit 단계. **로컬 only 커밋이라 `git reset --soft HEAD~1 && git reset HEAD .` 로 완전 복구** → AdminCard 2파일만 재add/재commit 해서 `967a462` 깨끗한 버전으로 교체. 이후 4커밋은 **매번 `git diff --cached --stat` 로 선검증** 해서 재발 방지. 다음 세션부터는 **staging 후 반드시 `git diff --cached --stat` 확인**을 의식적으로 수행할 것.
+
+**SchedulerMonitor 테스트 race**: Step 3 에서 "로딩 중에도 제목 보이는 UX 개선" 으로 isLoading 분기에도 AdminCard `<h3>스케줄러 모니터링</h3>` 을 렌더하게 됨. 그런데 기존 테스트 `waitFor(() => screen.getByText("스케줄러 모니터링"))` 가 이전엔 정상 분기 도달까지 기다려줬는데(원본 isLoading 분기는 `h-5 w-40 pulse` skeleton 이라 해당 텍스트 없음), 이제 isLoading 에서 즉시 해소돼 jobs 데이터 로드 전에 다음 assertion 이 실행돼 실패. 해결: waitFor 기준을 `"에어코리아 대기질"` (정상 분기 job name)로 변경. summary 텍스트는 중첩 `<span>` 이라 `getByText` 불가 → `container.textContent.toContain` 으로 전환. 이 fix 는 플랜 범위 외 파일(`SchedulerMonitor.test.tsx`) 수정이었지만 내 변경이 유발한 regression 이라 Step 4 에 포함.
+
+### 세션 46 하네스 교훈 (다음 세션 필독)
+
+1. **`git add` 후 `git diff --cached --stat` 선검증**: 세션 45 에 이어 또 한 번 확인됐듯, Windows 환경에서 staging 이 의도대로 안 될 수 있음. 커밋 전에 **반드시** staged diff 를 보고 파일 수/라인 수가 예상과 맞는지 확인. 계획대로 "2파일 ±30줄" 예상인데 staged 에 "44파일 4000+ 줄" 이면 즉시 `git reset HEAD .` 로 돌리고 재시도
+2. **UX "개선" 이 테스트 regression 을 만들 수 있음**: skeleton 헤더 블록 제거가 "로딩 중에도 제목 보임" 이라는 긍정적 변화지만, 기존 테스트의 `waitFor(getByText("..."))` 동기화 기준이 그 "숨겨진 텍스트 부재" 에 암묵적으로 의존했기 때문에 race 발생. **컴포넌트 리팩터 시 `waitFor(getByText(...))` 기준이 해당 컴포넌트 다른 분기에도 존재하는지 grep 으로 미리 확인** 필요
+3. **Explore grep 범위 누락**: Phase 1 에서 `src/components/admin/__tests__` 만 검색하고 `src/components/__tests__` (admin 외부지만 SchedulerMonitor 테스트가 거기 있음)는 빠뜨림. 다음 세션부터 **테스트 파일 grep 범위는 `src/**/__tests__` 로 확대**
+4. **`className` prop 도입은 1곳만 사용이면 과잉**: GATE 4 검증에서 확인. 외부 래퍼 `<div className="...">` 가 더 깔끔. presentational 컴포넌트에 prop 추가할 때 "실제 사용처가 2곳 이상인지" 기준 적용
+
+**상세**: `memory/session46_summary.md` (세션 종료 시 생성)
 
 **세션 45 성과** (naver-estate-web FE 6파일, 5커밋):
 
@@ -103,16 +140,15 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 **상세**: `memory/project_childcare_trigger_bug.md`, `memory/session43_summary.md`, `docs/quota_db_integration.md`
 
-**다음 우선순위 (세션 45)**:
+**다음 우선순위 (세션 47)**:
 
-1. ⭐ **미분양 지도 뷰** — 목록에 Naver Maps 오버레이, 마커 클릭→상세 이동. FE 2파일
-2. ⭐ **비교 페이지 4→6~8개 확장** — CompareTable 스크롤 리팩토링. FE 2파일
-3. ~~🟡 **저위험 백로그 묶음 3건**~~ — 세션 45 에서 재판정 완료. (a) backend CORS 는 이미 `main.py:105` 에서 `os.getenv("FRONTEND_URL")` 사용 중으로 완료, (b) `parseApprovalDate` 는 `lib/compare-utils.ts:26` 의 `ADVANTAGE_ROWS[4]` "준공일" 우위 판정에서 실제 사용 중으로 제거 불가 — 두 항목 모두 **스테일**. (c) `types/index.ts` 447줄 분리만 세션 45 에서 실행됨 (아래 성과 참조)
-4. 🟡 **/admin/users isLoading UI** + AdminCard 공통 컴포넌트 추출(9곳 중복)
-5. **Playwright 실측 follow-up** — 세션 44에서 단계 5 완료 후 `webapp-testing` 스킬로 375×812 뷰포트 스크린샷을 뜨지 않음. 다음 세션에 before/after 비교 캡처 (목록/상세/404/500, 7장)
-6. 🟡 **React.memo 확대** — ArticleTable/ArticleCardMobile/ComplexRow (FilterDropdown만 적용 상태)
-7. mibunyang 쪽에서 `quota_db_integration.md` 적용 (mibunyang 세션, 본 프로젝트 변경 없음)
-8. Supabase MCP 2개 해제 안내 (사용자 수동, /mcp UI)
+1. ⭐ **미분양 지도 뷰** — 목록에 Naver Maps 오버레이, 마커 클릭→상세 이동. FE 2파일 (세션 45 이후 계속 보류, 사용자 요청 필요)
+2. **Playwright 시각 회귀** — 세션 44/45/46 연속 skip. 목록/상세/404/500 + /admin 로그인 후 대시보드 캡처 (before/after 비교). **인증 fixture 필요 — 기존 E2E 테스트 48개 중 admin 접근 방식 참고**
+3. 🟡 **React.memo 확대** — ArticleTable/ArticleCardMobile/ComplexRow (FilterDropdown만 적용 상태)
+4. 🟡 **AdminCard 추가 검토** — 세션 46 에서 제외한 `admin/settings/page.tsx:76` 편집 모드 카드. title + action(timestamp + 편집 버튼) + 편집모드 분기 처리 가능한지 재판정. 필요 시 AdminCard 에 `headerRight` 슬롯 추가 대신 `action` 에 `<></>` fragment 로 해결 가능
+5. ~~🟡 **비교 페이지 4→6~8개 확장**~~ — 세션 46 에서 **스킵 결정**. 사용자 의견: 4개도 이미 빡빡, 8개는 UX 악화. 필요 시 4→6 만 소폭 확장 선택지 있음
+6. mibunyang 쪽에서 `quota_db_integration.md` 적용 (mibunyang 세션, 본 프로젝트 변경 없음)
+7. Supabase MCP 2개 해제 안내 (사용자 수동, /mcp UI)
 
 ## 기술 스택
 

@@ -83,12 +83,18 @@ components/
 - `FilterBar`: `memo()` + useReducer, debounce 500ms (입력), immediate (셀렉트/체크박스)
 - `PriceHistoryChart`: `dynamic(() => import(...), { ssr: false })` 동적 임포트
 
-### 5. 타입 안전성
-- 프론트 타입(`types/index.ts`) ↔ 백엔드 모델(`db/models.py`) 동기화 유지
+### 5. 관리자 화면 공통 래퍼
+- `/admin` 영역에 새 카드형 UI (헤더 + 본문 구조) 추가 시 **반드시 `AdminCard` 컴포넌트 사용**
+- Props: `title` (string, required), `children` (ReactNode), `action?` (ReactNode, 헤더 우측 슬롯)
+- 외부 여백은 래퍼 div 로 처리 (className prop 도입 금지) — 예: `<div className="mt-6"><AdminCard ...>...</AdminCard></div>`
+- 제외 케이스: 타이틀 없는 stat 박스 grid(StatsCards 패턴) 또는 편집모드 분기가 복잡한 카드(settings/page 패턴) 는 AdminCard 부적합. 판단은 `<h3>` 헤더가 자연스러운지 기준
+
+### 6. 타입 안전성
+- 프론트 타입(`types/estate.ts`/`analytics.ts`/`progress.ts`/`mibunyang.ts`, `index.ts` 는 barrel) ↔ 백엔드 모델(`db/models.py`) 동기화 유지
 - 새 필드 추가 시 양쪽 모두 업데이트 필수
 - optional (`?`) 필드에 대해 `??` (nullish coalescing) 사용 (`||` 금지)
 
-### 6. localStorage 패턴
+### 7. localStorage 패턴
 - SSR에서 접근 불가 → 반드시 `"use client"` + `useEffect` 내부에서 읽기
 - `lib/storage.ts` 래퍼 사용 (try/catch로 에러 방어)
 - 브라우저별 독립 (기기 간 동기화 없음)

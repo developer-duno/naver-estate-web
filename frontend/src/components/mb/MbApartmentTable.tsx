@@ -78,7 +78,91 @@ function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompa
   }
 
   return (
-    <div className="overflow-x-auto bg-white rounded-lg shadow-sm border">
+    <>
+      {/* 모바일: 카드뷰 (md 미만) */}
+      <div className="md:hidden space-y-2" data-testid="mb-apt-cards">
+        {apartments.map((apt) => {
+          const fav = isFavorite(apt.id);
+          const cmp = isInCompare?.(apt.id) ?? false;
+          const go = () => router.push(`/mibunyang/${apt.id}`);
+          return (
+            <div
+              key={apt.id}
+              onClick={go}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") go(); }}
+              tabIndex={0}
+              role="button"
+              data-testid={`mb-apt-card-${apt.id}`}
+              className="bg-white rounded-lg shadow-sm border p-3 cursor-pointer hover:bg-blue-50 active:bg-blue-100 transition-colors"
+            >
+              {/* 1행: 즐겨찾기 + 단지명 + 비교버튼 */}
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFav({ id: apt.id, name: apt.name, region: apt.region });
+                    }}
+                    className={`text-lg leading-none flex-none ${fav ? "text-yellow-500" : "text-gray-300"}`}
+                    aria-label={fav ? "즐겨찾기 해제" : "즐겨찾기 추가"}
+                  >
+                    {fav ? "★" : "☆"}
+                  </button>
+                  <span className="font-semibold text-blue-700 truncate">{apt.name}</span>
+                </div>
+                {onCompareToggle && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCompareToggle(apt.id, apt.name);
+                    }}
+                    disabled={!cmp && compareFull}
+                    className={`text-xs px-2 py-0.5 rounded border leading-none flex-none ${
+                      cmp
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-500 border-gray-300 disabled:opacity-30"
+                    }`}
+                    aria-label={cmp ? "비교 해제" : "비교 추가"}
+                  >
+                    {cmp ? "V" : "+"}
+                  </button>
+                )}
+              </div>
+              {/* 2행: 지역 · 시군구 · 세대수 */}
+              <div className="flex items-center gap-1.5 text-xs text-gray-600 mb-1">
+                <span>{apt.region}</span>
+                <span className="text-gray-300">·</span>
+                <span>{apt.gu ?? "-"}</span>
+                <span className="text-gray-300">·</span>
+                <span>{apt.units?.toLocaleString() ?? "-"}세대</span>
+              </div>
+              {/* 3행: 미분양 강조 */}
+              <div className="flex items-center gap-2 text-sm mb-1">
+                <span className="text-gray-500">미분양</span>
+                <span className="font-semibold text-red-600">
+                  {apt.unsold != null ? `${apt.unsold.toLocaleString()}세대` : "-"}
+                </span>
+                {apt.unsold_rate != null && (
+                  <span className="ml-auto font-medium text-red-700">
+                    {apt.unsold_rate.toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              {/* 4행: 입주·시공사 */}
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-500 truncate">
+                <span>{apt.presale_move_in ?? apt.completion ?? "-"}</span>
+                <span className="text-gray-300">·</span>
+                <span className="truncate">{apt.builder ?? "-"}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 데스크톱: 기존 테이블 (md 이상) */}
+      <div className="hidden md:block overflow-x-auto bg-white rounded-lg shadow-sm border">
       <table className="w-full text-sm border-collapse">
         <thead className="bg-gray-100 border-b-2 border-gray-300">
           <tr>
@@ -155,7 +239,8 @@ function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompa
           })}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   );
 }
 

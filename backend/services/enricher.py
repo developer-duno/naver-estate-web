@@ -8,6 +8,7 @@ import logging
 
 from db.models import Complex as ComplexModel
 from db.models import ComplexPyeongDetail
+from services.naver_call_counter import record_call
 from shared.naver_api import NaverEstateAPI
 from utils import safe_float, safe_int, utcnow
 
@@ -23,6 +24,7 @@ def enrich_complex_detail(db, complex_no):
     live.py와 crawler/service.py 모두 이 함수를 호출.
     """
     try:
+        record_call("complex_detail")
         detail = NaverEstateAPI.get_complex_detail(complex_no)
     except Exception as e:
         logger.warning("단지 상세 조회 실패: %s -> %s", complex_no, e)

@@ -10,6 +10,7 @@ from db.models import Article as ArticleModel
 from db.models import Complex as ComplexModel
 from deps import get_approved_user, get_db
 from routers.serializers import article_to_dict
+from services.naver_call_counter import record_call
 from services.upsert import build_detail_update_dict
 from shared.domain.article import RealEstateArticle
 from shared.naver_api import NaverEstateAPI
@@ -88,6 +89,7 @@ def live_article_detail(
             return article_to_dict(art, complex_obj)
 
     # 네이버 API에서 상세 정보 가져오기
+    record_call("article_detail_live_fallback")
     detail_data = NaverEstateAPI.get_article_detail(article_no)
     if not detail_data or "error" in detail_data:
         if art:

@@ -17,6 +17,7 @@ from auth.permissions import check_quota
 from db import queries
 from deps import get_db, get_optional_user
 from routers.serializers import article_to_dict, build_filter_dict
+from services.naver_call_counter import record_call
 from shared.constants import M2_TO_PYEONG
 from shared.naver_api import NaverEstateAPI
 from utils import format_acquisition_tax, format_broker_fee, format_date_ymd, format_parking_count
@@ -79,6 +80,7 @@ def get_article_realtime_detail(
     user: dict | None = Depends(get_optional_user),
 ):
     """매물 실시간 상세 조회 (네이버 API 직접 호출, 인증 필수)"""
+    record_call("article_detail_realtime")
     detail_data = NaverEstateAPI.get_article_detail(article_no)
     if not detail_data:
         raise HTTPException(status_code=404, detail="매물 상세 정보를 찾을 수 없습니다")

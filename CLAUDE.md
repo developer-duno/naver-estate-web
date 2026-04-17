@@ -194,14 +194,32 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 4. **mock 누락 검증은 useQuery 전체 추적**: 플랜 시점에서 "테스트가 버튼 안 누르므로 DELETE mock 불필요" 로 🟡 처리했는데 실제는 전혀 다른 mock(recrawl) 이 치명적이었음. **페이지·컴포넌트의 모든 useQuery 가 mock 되는지** 가 옳은 기준. `grep "useQuery"` 해당 라우트 렌더 경로 전체 추적 필요
 5. **계획 외 부채 동시 해소 > 깔끔한 범위 유지**: 원래 2 커밋 계획이 4 커밋 됐지만 같은 세션에 부채를 같이 닦으면 미래 세션 비용 줄어듦. 각 커밋이 단일 관심사로 분리돼 revert 도 용이
 
-**다음 우선순위 (세션 58)**:
-1. 🟡 **admin settings 편집 모드 AdminCard 적용 검토** (세션 46 잔여): `admin/settings/page.tsx:76` 편집 모드 분기. 판단 기준은 `<h3>` 헤더 자연스러움 + action 슬롯 복잡도(2요소 + 편집모드 textarea 분기). Plan → Explore 병렬 → 9 GATE 루프 필수
-2. 🟡 **naver_call_counter 48h+ 누적 확인**: V020 영속화(2026-04-16) 후 48h 이상 경과 시점에 `SELECT counter_key, count FROM naver_call_counter ORDER BY count DESC`. TTL 72h 상향 여부 판단
-3. 🟡 **admin 시각 회귀 추가 확장 후보**: 현재 dashboard + data + users + settings 4장 커버. `/compare`, `/mibunyang` 메인 등 데스크톱 전용 페이지 확장 검토. 단 비인증 경로는 storageState 불필요 → `public` project 분리 필요
-4. 🟡 **백로그** (세션 43 리스트 잔여): 비교 페이지 4→6~8 확장 / 미분양 지도 뷰
-5. ⚪ mibunyang 쪽 `quota_db_integration.md` 적용 (다른 프로젝트 세션)
+**세션 58 성과 (2026-04-17~18, 3커밋 push + 계측 확인)**:
+- `9170aff` feat(e2e): /login + / 홈 시각 회귀 스펙 + public-visual project 추가 (5파일, +54/-0) — spec + mock + playwright.config + win32 baseline 2장
+- `8ffcad5` feat(e2e): CI 에 public-visual 시각 회귀 project 추가 (ci.yml ±2줄)
+- `e6337aa` feat(e2e): public-visual Linux CI baseline 추가 (CI run 24557665780 artifact 2 PNG)
+- CI 흐름: run 24557665780 fail (Linux baseline 없음, 예상) → artifact 추출 → run 24557893289 전 job success ✅
+- baseline 총 12장으로 확장: admin-dashboard 2 + admin-pages 6 + public-flow 4 (win32 6 + linux 6)
+- `naver_api_call_counts` 실계측 (KST 2026-04-17 23:47 기준): 5 rows (9h span, 오후 14:00~23:00 KST), 24h 합 368회 (article_detail_batch 200 / crawl_articles_batch 167 / search 1). DB 영속화 작동 확인. 다만 9h 치라 TTL 72h 상향 판단엔 근거 부족 → 48h+ 후 재확인 필요
 
-**상세**: `memory/session57_summary.md`
+**세션 58 하네스 교훈** (다음 세션 필독):
+1. **9 GATE 병렬 Explore 3개로 모든 🟢 얻은 첫 사례**: Phase 2 에서 3 에이전트(GATE 0+1 / GATE 2+3+4 / GATE 5+6+7+8) 병렬로 grep 실측 기반 검증. 세션 48 처럼 뒤집힐 만한 근본 헛점 없음 확인. 단순 task 에서는 이 패턴이 효율적
+2. **config 변경은 spec 커밋과 동반 필수**: 원래 플랜은 "커밋 1 spec / 커밋 2 config+ci / 커밋 3 linux baseline" 이었는데 실행 직전에 깨달음 — Windows baseline 생성하려면 `public-visual` project 가 config 에 있어야 `--project=public-visual --update-snapshots` 가 동작. 그래서 config 를 커밋 1 에 포함시키고 ci.yml 만 커밋 2 로 분리. **플랜은 실행 직전에 한 번 더 재판단**
+3. **`testIgnore` + 동명 파일 충돌 선제 방지**: `public-visual` project 가 `testMatch: /public-flow\.spec\.ts$/` 로 잡으면서 동시에 기존 `public` project 의 `testIgnore` 에 동일 정규식 추가해야 중복 실행 막음. 세션 48 의 "testMatch 정규식은 정확 매칭" 교훈 그대로 적용
+4. **CI artifact 폴더명 한글 이슈 여전**: `gh run download` 가 test name 을 폴더명에 쓰는데 "로그인 페이지 렌더 시각 회귀" 한글이 그대로 포함. 다행히 Git Bash 의 `cp "경로"` 는 따옴표로 감싸면 동작. 세션 57 에선 `/tmp` 경로 Read 툴 불가였지만 이번은 `cp` 만 하므로 영향 없음
+5. **쉬운 말 규칙의 경계**: 사용자가 "이해하기 쉽게 설명해줄래?" 요청 → 전문 용어("스냅샷 비교", "artifact", "baseline") 대신 "사진 찍어서 나중에 바뀌면 알려주는 장치" 비유로 설명. 글로벌 CLAUDE.md 의 초등학생 규칙을 사용자 대화에만 적용 원칙 그대로. 코드/커밋 메시지엔 기술 용어 유지
+
+**상세**: `memory/session58_summary.md`
+
+**다음 우선순위 (세션 59)**:
+1. 🟡 **naver_call_counter 48h+ 누적 재확인**: 2026-04-19 이후 (세션 58 기준 +24h) 시점에 `naver_api_call_counts` 재조회. 평일+주말 1사이클 확보되면 TTL 72h 상향 판단 가능
+2. 🟡 **public-visual baseline 안정성 감시**: CI 3회 연속 green 기준 미달 (현재 1회). 다음 세션 진입 시 `gh run list --workflow=ci.yml --limit=5` 에서 public-visual e2e 연속 green 여부 확인. 불안정하면 admin-dashboard 의 BulkRecrawlCard mock 누락 같은 근본 원인 추적
+3. 🟡 **admin settings 편집 모드 AdminCard 적용 검토** (세션 46 잔여): `admin/settings/page.tsx:76` 편집 모드 분기. Plan → Explore 병렬 → 9 GATE 루프 필수
+4. 🟡 **시각 회귀 확장 후보**: 현재 admin 4 + public 2 = 6페이지. `/compare` (mock 중간) / `/mibunyang?region=서울` (mock 어려움) 순으로 확장 가능
+5. 🟡 **백로그** (세션 43 리스트 잔여): 비교 페이지 4→6~8 확장 / 미분양 지도 뷰
+6. ⚪ mibunyang 쪽 `quota_db_integration.md` 적용 (다른 프로젝트 세션)
+
+**상세**: `memory/session58_summary.md`
 
 <!-- 보류 (사용자 미요청): 미분양 지도 뷰 (FE 2파일, Naver Maps 오버레이), 비교 페이지 4→6~8 확장 (세션 46 스킵 결정) -->
 

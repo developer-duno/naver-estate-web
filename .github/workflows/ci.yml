@@ -5,6 +5,12 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      update_snapshots:
+        description: "Playwright 시각 회귀 baseline 갱신 (Linux). artifact 'updated-snapshots' 다운로드해서 커밋"
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -86,7 +92,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E (setup + admin)
-        run: npx playwright test --project=setup --project=admin
+        run: npx playwright test --project=setup --project=admin ${{ inputs.update_snapshots && '--update-snapshots' || '' }}
         env:
           TEST_ADMIN_EMAIL: ${{ secrets.TEST_ADMIN_EMAIL }}
           TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
@@ -107,6 +113,15 @@ jobs:
         with:
           name: admin-screenshots
           path: frontend/test-results
+          retention-days: 14
+
+      # workflow_dispatch + update_snapshots=true 일 때만 baseline 변경분 업로드
+      # 다운로드 후 frontend/e2e/admin-dashboard.spec.ts-snapshots/ 에 풀어서 커밋
+      - if: inputs.update_snapshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: updated-snapshots
+          path: frontend/e2e/**/*-snapshots/**
           retention-days: 14
 
   backend:

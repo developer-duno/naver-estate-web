@@ -24,9 +24,10 @@ test.describe("admin dashboard", () => {
     await expect(page.getByText("네이버 API 호출 계측")).toBeVisible();
     await expect(page.getByText("매물 목록 (배치)")).toBeVisible();
 
-    await page.screenshot({
-      path: "test-results/admin-dashboard.png",
+    // 시각 회귀: chromium-{platform} 별 baseline 자동 생성 (e2e/admin-dashboard.spec.ts-snapshots/)
+    await expect(page).toHaveScreenshot("admin-dashboard.png", {
       fullPage: true,
+      maxDiffPixelRatio: 0.02,
     });
   });
 });

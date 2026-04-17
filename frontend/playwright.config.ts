@@ -7,6 +7,12 @@ export default defineConfig({
   timeout: 180_000,
   retries: 1,
   reporter: [["list"], ["html", { open: "never" }]],
+  expect: {
+    toHaveScreenshot: {
+      animations: "disabled",
+      maxDiffPixelRatio: 0.02,
+    },
+  },
   use: {
     baseURL: `http://localhost:${port}`,
     screenshot: "only-on-failure",

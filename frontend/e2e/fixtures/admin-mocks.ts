@@ -9,7 +9,7 @@ import type {
   AdminSetting,
   AgentVerification,
 } from "../../src/types/admin";
-import type { NaverCallStats } from "../../src/lib/api/admin";
+import type { NaverCallStats, RecrawlStatus, RecrawlProgress } from "../../src/lib/api/admin";
 
 export const mockDetailedStats: DetailedStats = {
   complex_count: 1234,
@@ -133,6 +133,21 @@ export const mockSettings: { items: AdminSetting[] } = {
   ],
 };
 
+export const mockRecrawlStatus: RecrawlStatus = {
+  level: "safe",
+  message: "지금 실행",
+  current_kst_hour: 10,
+  running_jobs_count: 0,
+  running_jobs: [],
+  recrawl_in_progress: false,
+  recommended_window_kst: "야간 (00~06시)",
+  estimated_seconds_per_100: 300,
+};
+
+export const mockRecrawlProgress: RecrawlProgress = {
+  job: null,
+};
+
 export const mockVerifications: PaginatedResponse<AgentVerification> = {
   items: [],
   total: 0,
@@ -164,5 +179,11 @@ export async function applyAdminMocks(page: Page): Promise<void> {
   });
   await page.route("**/api/admin/verifications*", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockVerifications) });
+  });
+  await page.route("**/api/admin/recrawl/status", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockRecrawlStatus) });
+  });
+  await page.route("**/api/admin/recrawl/progress", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockRecrawlProgress) });
   });
 }

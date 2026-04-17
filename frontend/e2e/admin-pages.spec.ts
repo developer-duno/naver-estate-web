@@ -4,7 +4,7 @@ import { applyAdminMocks } from "./fixtures/admin-mocks";
 /**
  * /admin 하위 페이지(데이터/사용자/설정) 시각 회귀 스펙.
  * 세션 48 admin-dashboard 와 동일한 mock + storageState 패턴으로 인증 우회.
- * 각 페이지 진입 + 핵심 텍스트 가시성 + 전체 스크린샷.
+ * 각 페이지 진입 + 핵심 텍스트 가시성 + toHaveScreenshot 시각 회귀.
  */
 test.describe("admin sub-pages", () => {
   test.beforeEach(async ({ page }) => {
@@ -21,9 +21,9 @@ test.describe("admin sub-pages", () => {
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "삭제" })).toBeVisible();
 
-    await page.screenshot({
-      path: "test-results/admin-data.png",
+    await expect(page).toHaveScreenshot("admin-data.png", {
       fullPage: true,
+      maxDiffPixelRatio: 0.02,
     });
   });
 
@@ -37,9 +37,9 @@ test.describe("admin sub-pages", () => {
     await expect(page.getByText("admin@example.com")).toBeVisible();
     await expect(page.getByText("expert@example.com")).toBeVisible();
 
-    await page.screenshot({
-      path: "test-results/admin-users.png",
+    await expect(page).toHaveScreenshot("admin-users.png", {
       fullPage: true,
+      maxDiffPixelRatio: 0.02,
     });
   });
 
@@ -54,9 +54,9 @@ test.describe("admin sub-pages", () => {
     const editButtons = page.getByRole("button", { name: "편집" });
     await expect(editButtons).toHaveCount(2);
 
-    await page.screenshot({
-      path: "test-results/admin-settings.png",
+    await expect(page).toHaveScreenshot("admin-settings.png", {
       fullPage: true,
+      maxDiffPixelRatio: 0.02,
     });
   });
 });

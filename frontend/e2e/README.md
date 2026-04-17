@@ -62,9 +62,14 @@ secrets 미설정 시 `setup` project 가 `TEST_ADMIN_*` missing 로그와 함�
 
 ## 시각 회귀 (toHaveScreenshot)
 
-`admin-dashboard.spec.ts` 의 마지막 assertion 이 `expect(page).toHaveScreenshot(...)`. baseline 은 `e2e/admin-dashboard.spec.ts-snapshots/` 에 platform 별로 저장:
-- `admin-dashboard-admin-win32.png` — Windows 로컬 (커밋됨)
-- `admin-dashboard-admin-linux.png` — CI Ubuntu (Actions 에서 갱신)
+`admin-dashboard.spec.ts` + `admin-pages.spec.ts` 의 마지막 assertion 이 `expect(page).toHaveScreenshot(...)`. baseline 은 spec 파일별 디렉토리에 platform 별로 저장:
+
+- `e2e/admin-dashboard.spec.ts-snapshots/`
+  - `admin-dashboard-admin-{win32,linux}.png`
+- `e2e/admin-pages.spec.ts-snapshots/` (세션 57)
+  - `admin-data-admin-{win32,linux}.png`
+  - `admin-users-admin-{win32,linux}.png`
+  - `admin-settings-admin-{win32,linux}.png`
 
 `maxDiffPixelRatio: 0.02` (2%) + `animations: "disabled"` 로 미세 차이 허용.
 

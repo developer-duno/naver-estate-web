@@ -42,7 +42,7 @@ test("존재하지 않는 키워드 검색 — 빈 결과 또는 로딩", async 
 });
 
 test("지역 검색 — URL 파라미터로 정상 렌더링", async ({ page }) => {
-  const res = await page.goto("/search?region=서울특별시");
+  const res = await page.goto("/search?sido=서울특별시&sigungu=강남구");
   expect(res?.status()).toBeLessThan(500);
   await expectHeader(page);
   // 로딩 또는 결과가 보이면 통과

@@ -39,6 +39,10 @@ setup("authenticate as admin", async ({ page }) => {
 
   const attemptLogin = async () => {
     await page.goto("/login");
+    // middleware가 이미 로그인된 세션을 홈으로 리다이렉트한 경우 즉시 완료
+    if (!page.url().includes("/login")) {
+      return;
+    }
     await page.locator("#login-email").fill(email!);
     await page.locator("#login-password").fill(password!);
     await page.locator('button[type="submit"]').click();

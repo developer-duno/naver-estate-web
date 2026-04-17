@@ -38,5 +38,9 @@ export default defineConfig({
     port,
     reuseExistingServer: true,
     timeout: 180_000,
+    env: {
+      // CSP connect-src 가 http://localhost:* 만 허용하므로 API URL 을 localhost 로 고정
+      NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8002",
+    },
   },
 });

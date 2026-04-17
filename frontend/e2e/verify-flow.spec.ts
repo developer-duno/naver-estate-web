@@ -15,9 +15,8 @@ test("검증 신청 페이지 접근 — 미인증 시 로그인 리다이렉트
 
 test("검증 신청 폼 — 필수 입력 필드 존재", async ({ page }) => {
   await page.goto("/verify");
-  // 폼이 표시되는 경우만 검증 (미인증 시 스킵)
-  const formVisible = await page.locator("form").count();
-  if (formVisible === 0) return;
+  // 미인증 시 /login 으로 리다이렉트되어 #v-biz 가 없으므로 스킵
+  if (page.url().includes("/login")) return;
 
   await expect(page.locator("input#v-biz")).toBeVisible();
   await expect(page.locator("input#v-name")).toBeVisible();
@@ -28,8 +27,7 @@ test("검증 신청 폼 — 필수 입력 필드 존재", async ({ page }) => {
 
 test("검증 신청 폼 — 클라이언트 검증 (잘못된 사업자번호)", async ({ page }) => {
   await page.goto("/verify");
-  const formVisible = await page.locator("form").count();
-  if (formVisible === 0) return;
+  if (page.url().includes("/login")) return;
 
   await page.fill("input#v-biz", "12345");
   await page.fill("input#v-name", "홍길동");

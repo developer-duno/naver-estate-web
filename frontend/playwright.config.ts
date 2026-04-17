@@ -29,11 +29,12 @@ export default defineConfig({
         /admin-dashboard\.spec\.ts$/,
         /admin-pages\.spec\.ts$/,
         /public-flow\.spec\.ts$/,
+        /compare-visual\.spec\.ts$/,
       ],
     },
     {
       name: "public-visual",
-      testMatch: /public-flow\.spec\.ts$/,
+      testMatch: /(public-flow|compare-visual)\.spec\.ts$/,
     },
     {
       name: "admin",

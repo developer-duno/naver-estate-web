@@ -304,7 +304,7 @@ function CompareContent() {
 
       {/* 차트 섹션 */}
       {complexes.length >= 2 && (
-        <div className="mt-8">
+        <div className="mt-8" data-testid="compare-charts">
           <LazyCompareCharts
             complexes={complexes.map((c) => ({
               complex_no: c.complex_no,

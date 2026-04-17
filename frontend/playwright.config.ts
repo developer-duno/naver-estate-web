@@ -28,7 +28,12 @@ export default defineConfig({
         /global\.setup\.ts$/,
         /admin-dashboard\.spec\.ts$/,
         /admin-pages\.spec\.ts$/,
+        /public-flow\.spec\.ts$/,
       ],
+    },
+    {
+      name: "public-visual",
+      testMatch: /public-flow\.spec\.ts$/,
     },
     {
       name: "admin",

@@ -165,14 +165,26 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 3. **테스트 파일 이름 정규식은 정확 매칭**: `admin-*` 같은 prefix 매칭은 기존 `admin-flow.spec.ts` 같은 동명 프리픽스 파일을 오염. `admin-dashboard\.spec\.ts$` 처럼 완전 일치로 쓸 것
 4. **CI secrets 파일 생성 vs env 주입**: `.env.test` 파일 생성 경로는 artifact 유출 리스크. `env:` 블록 직접 주입이 안전. global.setup.ts 가 `process.env` 우선 / 파일 폴백 구조면 로컬과 CI 양쪽 같은 코드 재사용
 
-**다음 우선순위 (세션 49)**:
-1. **사용자 로컬 검증 + CI 초록불 확인** — (A) `frontend/.env.test` 작성 후 `npx playwright test --project=setup --project=admin` 로컬 통과 확인 (B) GitHub secrets 5개 등록 + PR 올려 e2e job green 확인
-2. **toHaveScreenshot baseline 확정** — 세션 48 에서 단순 `page.screenshot()` 저장만 했음. 이번엔 Linux CI 런처로 baseline 1회 커밋 + `maxDiffPixelRatio: 0.02` 관용치로 시각 회귀 완결
-3. **admin 스펙 확장** — `/admin/data`, `/admin/users`, `/admin/settings` 로 테스트 확대. 세션 46 에서 스킵한 `admin/settings/page.tsx:76` 편집 모드 카드 AdminCard 적용 검토 동시 진행 가능
-4. mibunyang 쪽에서 `quota_db_integration.md` 적용 (mibunyang 세션, 본 프로젝트 변경 없음)
-5. Supabase MCP 2개 해제 안내 (사용자 수동, /mcp UI)
+**세션 55 성과 (2026-04-17, 1커밋 + secret 재등록)**:
+- `e5903d8` fix(e2e): CSP unsafe-eval + API URL override 로 Playwright admin e2e 복구 (5파일, +15/-7)
+  - `next.config.ts` — dev 환경 CSP `script-src` 에 `'unsafe-eval'` 추가 (webpack eval-source-map 허용, 프로덕션 그대로)
+  - `playwright.config.ts` — webServer env 로 `NEXT_PUBLIC_API_URL=localhost:8002` 주입 (CSP connect-src 가 localhost:* 만 허용)
+  - `e2e/global.setup.ts` — middleware 가 로그인 세션을 `/` 로 리다이렉트하는 retry 케이스 조기 return
+  - `e2e/verify-flow.spec.ts` — 미인증 판정 `form.count()` → URL `/login` 체크 (로그인 페이지에도 form 있음)
+  - `e2e/search-flow.spec.ts` — `region=` → `sido=&sigungu=` (실제 param, `hasSearchParams` 조건 충족)
+- GitHub secrets 재등록: `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` (`MSYS_NO_PATHCONV=1 printf '%s' '...' | gh secret set NAME` 로 Git Bash 경로 mangling 회피)
+- 원인 7개: CSP unsafe-eval / API URL CSP 차단 / middleware 리다이렉트 / verify form 오판 / search param 오류 / secret 값 오류 / Git Bash 경로 mangling
+- Playwright 53/53, Vitest 573/573, tsc 0, CI run #24547049109 전 job 초록불
+- 세션 48~54 누적 빨간불 5개(#241/244/245/246/248) 전부 소급 해결
 
-**상세**: `memory/session48_summary.md` (세션 종료 시 생성)
+**다음 우선순위 (세션 56)**:
+1. 🟡 **toHaveScreenshot baseline 확정** — 지금은 `page.screenshot()` 저장만. Linux CI 런처로 baseline 1회 커밋 + `maxDiffPixelRatio: 0.02` 시각 회귀 완결
+2. 🟡 **admin 스펙 확장 + settings 편집 모드 AdminCard** — 세션 46 에서 스킵한 `admin/settings/page.tsx:76` 편집 모드 카드 검토
+3. 🟡 **naver_call_counter 24h 누적 확인** — 유의미한 숫자 모이면 TTL 72h 상향 여부 판단
+4. 🟡 **백로그**: 비교 페이지 6~8개 확장 / 미분양 지도 뷰
+5. ⚪ mibunyang 쪽 `quota_db_integration.md` 적용 (다른 프로젝트 세션)
+
+**상세**: `memory/session55_summary.md`
 
 <!-- 보류 (사용자 미요청): 미분양 지도 뷰 (FE 2파일, Naver Maps 오버레이), 비교 페이지 4→6~8 확장 (세션 46 스킵 결정) -->
 

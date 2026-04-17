@@ -211,15 +211,40 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 **상세**: `memory/session58_summary.md`
 
-**다음 우선순위 (세션 59)**:
-1. 🟡 **naver_call_counter 48h+ 누적 재확인**: 2026-04-19 이후 (세션 58 기준 +24h) 시점에 `naver_api_call_counts` 재조회. 평일+주말 1사이클 확보되면 TTL 72h 상향 판단 가능
-2. 🟡 **public-visual baseline 안정성 감시**: CI 3회 연속 green 기준 미달 (현재 1회). 다음 세션 진입 시 `gh run list --workflow=ci.yml --limit=5` 에서 public-visual e2e 연속 green 여부 확인. 불안정하면 admin-dashboard 의 BulkRecrawlCard mock 누락 같은 근본 원인 추적
-3. 🟡 **admin settings 편집 모드 AdminCard 적용 검토** (세션 46 잔여): `admin/settings/page.tsx:76` 편집 모드 분기. Plan → Explore 병렬 → 9 GATE 루프 필수
-4. 🟡 **시각 회귀 확장 후보**: 현재 admin 4 + public 2 = 6페이지. `/compare` (mock 중간) / `/mibunyang?region=서울` (mock 어려움) 순으로 확장 가능
-5. 🟡 **백로그** (세션 43 리스트 잔여): 비교 페이지 4→6~8 확장 / 미분양 지도 뷰
-6. ⚪ mibunyang 쪽 `quota_db_integration.md` 적용 (다른 프로젝트 세션)
+**세션 59 성과 (2026-04-18, 2커밋 push + CI 2회차 green)**:
+- `302fb78` feat(e2e): /compare 시각 회귀 스펙 + 2단지 mock fixture (Windows baseline) — 5 파일, +158/-2
+  - `compare-visual.spec.ts` 신규 + `compare-mocks.ts` 신규 (Complex/PriceStats 2단지)
+  - `playwright.config.ts`: `public` testIgnore + `public-visual` testMatch 에 `compare-visual` 추가
+  - `compare/page.tsx`: 차트 섹션 div 에 `data-testid="compare-charts"` 부여
+  - win32 baseline PNG 72KB
+- `9ffe46c` feat(e2e): /compare Linux CI baseline 추가 — 111KB PNG
+  - CI run 24574853294 artifact 에서 `compare-actual.png` 추출 → Linux 리네임
+- **CI run 24575123524 전 job success** (8 passed, 45.5s). baseline 총 14장(admin 8 + public-flow 4 + compare-visual 2)
+- (a) naver_call_counter 48h 재확인 — 세션 58 +30분만 경과라 불가. 511회/10h, TTL 72h 판단은 2026-04-24 이후
+- (b) public-visual 3회 연속 green 달성(24557893289 / 24572908062 workflow_dispatch / 24575123524)
+- (c) admin settings AdminCard — frontend/CLAUDE.md 규칙에 이미 결정됨, 우선순위에서 제거
 
-**상세**: `memory/session58_summary.md`
+**세션 59 사고 기록 (다음 세션 필독)**: 첫 baseline 생성 후 전체 public-visual 배치 실행 시 "1 flaky" — retry=1 로 우연 pass. 진단: diff PNG 전 영역 빨간색 + "단지 정보를 불러오는 중..." LoadingSpinner 잔존. 원인 2개: (1) Recharts ResponsiveContainer 비결정 렌더 (2) LoadingSpinner 미숨김 대기. 해결: `data-testid="compare-charts"` + `addStyleTag({content: '[data-testid=...] { visibility: hidden !important; }'})` 로 차트 픽셀 제거 + `expect(page.getByText("단지 정보를 불러오는 중")).toBeHidden({timeout: 10_000})` 로 명시 대기. `--retries=0` 3회 연속 green 확인 후 커밋.
+
+**세션 59 하네스 교훈** (다음 세션 필독):
+1. **Recharts + toHaveScreenshot 결합 시 flaky 디폴트**: 시각 회귀 스펙에 Recharts 포함되면 **무조건** 차트 영역 visibility:hidden 또는 mask. baseline 결정성 > 차트 커버리지
+2. **`data-testid` 는 테스트 전용 훅**: CSS 클래스 의존 대신 data-testid 가 리팩터 내성 우수. 프로덕션 번들 비용 무시 가능
+3. **배치 실행 flaky 는 retry 로 감추지 말 것**: `retries: 1` 이 "1 flaky 2 passed" 로 표시되지만 결정성 0. `--retries=0` 검증 필수. 세션 57 교훈 "3회 연속 green" 은 `--retries=0` 기준
+4. **LoadingSpinner 대기는 구체 selector > networkidle**: `waitForLoadState("networkidle")` 은 polling/websocket 있으면 영원히 대기. `expect(...).toBeHidden({timeout})` 이 deterministic
+5. **mock route 패턴 단일 `**/api/complexes/**` + path segment 분기**: `segments[3]` 서브경로 분기 + fallback 404. 기존 4 route 개별 설정 대비 간결
+
+**상세**: `memory/session59_summary.md`
+
+**다음 우선순위 (세션 60)**:
+1. 🟡 **naver_call_counter 48h+ 누적 재확인**: 2026-04-19~20 이후 재조회. 평일+주말 1사이클 확보되면 TTL 72h 상향 판단 가능
+2. 🟡 **public-visual baseline 안정성 계속 감시**: 3회 연속 green 달성 후 회귀 징후 여부만 추적
+3. 🟡 **시각 회귀 추가 확장 후보**: `/complex/[no]` 단지 상세(mock 다수) / `/mibunyang/[id]` 미분양 상세(Naver Maps 결정성 우려) / 비교 페이지 4→6~8 확장
+4. 🟡 **세션 43 백로그 잔여**: 미분양 지도 뷰 / 매물 필터 세부 확장
+5. ⚪ mibunyang 쪽 `quota_db_integration.md` 적용 (다른 프로젝트 세션)
+
+**제거된 우선순위**: ~~admin settings 편집 모드 AdminCard~~ — frontend/CLAUDE.md 규칙화 완료
+
+**상세**: `memory/session59_summary.md`
 
 <!-- 보류 (사용자 미요청): 미분양 지도 뷰 (FE 2파일, Naver Maps 오버레이), 비교 페이지 4→6~8 확장 (세션 46 스킵 결정) -->
 

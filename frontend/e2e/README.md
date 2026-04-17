@@ -8,7 +8,7 @@
 |---|---|---|---|
 | `setup` | `global.setup.ts` | 쓰기 (`e2e/.auth/admin.json`) | Supabase 로그인 후 세션 저장 |
 | `public` | 전부 (setup·admin 제외) | 없음 | 비인증 경로 회귀 48개 |
-| `admin` | `admin-dashboard.spec.ts` | 읽기 (setup 산출물) | 관리자 대시보드 스펙 |
+| `admin` | `admin-dashboard.spec.ts`, `admin-pages.spec.ts` | 읽기 (setup 산출물) | 관리자 대시보드 + 서브 페이지 스펙 |
 
 `admin` project 는 `setup` 에 `dependencies` 로 묶여 있어서 `--project=admin` 실행 시 setup 이 먼저 돈다.
 
@@ -57,7 +57,25 @@ secrets 미설정 시 `setup` project 가 `TEST_ADMIN_*` missing 로그와 함�
 
 아티팩트:
 - `playwright-report` — HTML 리포트 (14일 보관)
-- `admin-screenshots` — `test-results/admin-dashboard.png` 등 (14일 보관)
+- `admin-screenshots` — `test-results/` 실패 시 자동 캡처 (14일 보관)
+- `updated-snapshots` — workflow_dispatch + `update_snapshots=true` 일 때만 (Linux baseline)
+
+## 시각 회귀 (toHaveScreenshot)
+
+`admin-dashboard.spec.ts` 의 마지막 assertion 이 `expect(page).toHaveScreenshot(...)`. baseline 은 `e2e/admin-dashboard.spec.ts-snapshots/` 에 platform 별로 저장:
+- `admin-dashboard-admin-win32.png` — Windows 로컬 (커밋됨)
+- `admin-dashboard-admin-linux.png` — CI Ubuntu (Actions 에서 갱신)
+
+`maxDiffPixelRatio: 0.02` (2%) + `animations: "disabled"` 로 미세 차이 허용.
+
+### baseline 갱신 절차
+
+**로컬 (Windows)**: 의도적인 UI 변경 후
+```bash
+PLAYWRIGHT_PORT=3100 npx playwright test --project=admin --update-snapshots
+```
+
+**CI (Linux)**: GitHub Actions UI 에서 `CI` 워크플로우 → "Run workflow" 버튼 → `update_snapshots=true` 체크 → 실행 → 완료 후 `updated-snapshots` artifact 다운로드 → `frontend/e2e/**/*-snapshots/` 폴더에 풀어서 커밋.
 
 ## 보안 주의
 

@@ -9,16 +9,31 @@ from services import naver_call_counter
 
 
 def setup_function():
-    """각 테스트 시작 전 카운터 초기화."""
+    """각 테스트 시작 전 카운터 초기화 + DB 테이블 정리."""
     naver_call_counter.reset()
+    # DB 테이블도 비우기 (conftest 가 매 테스트 drop/create 하지만 안전장치)
+    try:
+        from db.database import SessionLocal
+        from db.models import NaverApiCallCount
+
+        db = SessionLocal()
+        try:
+            db.query(NaverApiCallCount).delete()
+            db.commit()
+        finally:
+            db.close()
+    except Exception:
+        pass
 
 
 def test_record_and_get_stats_basic():
-    """record_call 3회 → 10m/1h/24h 전부 3으로 나와야 함."""
+    """record_call 3회 → 10m/1h 전부 3, 24h 도 DB 에서 3."""
     for _ in range(3):
         naver_call_counter.record_call("search")
     stats = naver_call_counter.get_stats()
-    assert stats["labels"]["search"] == {"10m": 3, "1h": 3, "24h": 3}
+    assert stats["labels"]["search"]["10m"] == 3
+    assert stats["labels"]["search"]["1h"] == 3
+    assert stats["labels"]["search"]["24h"] == 3
     assert stats["totals"] == {"10m": 3, "1h": 3, "24h": 3}
     # process_uptime_seconds 는 양수여야 함
     assert stats["process_uptime_seconds"] > 0
@@ -35,8 +50,11 @@ def test_multi_label_totals():
     assert stats["totals"]["10m"] == 3
 
 
-def test_window_expiry():
-    """오래된 레코드는 1h/10m 윈도우에서 빠져야 함."""
+def test_window_expiry_10m_1h():
+    """오래된 레코드는 1h/10m in-memory 윈도우에서 빠져야 함.
+
+    24h 는 DB 기반이라 monotonic 시계와 무관 — 여기서는 10m/1h 만 검증.
+    """
     # 3건 먼저 기록
     for _ in range(3):
         naver_call_counter.record_call("crawl_articles")
@@ -54,33 +72,36 @@ def test_window_expiry():
         naver_call_counter.record_call("crawl_articles")
         stats = naver_call_counter.get_stats()
 
-    # 이전 3건은 10m/1h 밖, 24h 안. 새 1건은 10m/1h/24h 전부 안
+    # 이전 3건은 10m/1h 밖. 새 1건만 10m/1h 에 남음
     assert stats["labels"]["crawl_articles"]["10m"] == 1
     assert stats["labels"]["crawl_articles"]["1h"] == 1
+    # 24h 는 DB 기반: 전체 4건 (시간 버킷은 실제 시각 기준)
     assert stats["labels"]["crawl_articles"]["24h"] == 4
 
 
-def test_24h_cutoff_drops_records():
-    """24시간 초과 레코드는 record_call 호출 시 완전 제거."""
-    naver_call_counter.record_call("old")
+def test_db_persistence_survives_reset():
+    """in-memory reset 후에도 DB 의 24h 집계는 살아있어야 함."""
+    for _ in range(5):
+        naver_call_counter.record_call("search")
 
-    import services.naver_call_counter as mod
+    naver_call_counter.reset()
 
-    fake_now = [mod.monotonic() + 25 * 3600]  # +25시간
-
-    with patch.object(mod, "monotonic", lambda: fake_now[0]):
-        naver_call_counter.record_call("old")
-        stats = naver_call_counter.get_stats()
-
-    # 25h 이전 건은 제거, 새 1건만 남음
-    assert stats["labels"]["old"]["24h"] == 1
+    stats = naver_call_counter.get_stats()
+    # in-memory 는 비어있으므로 10m/1h=0
+    assert stats["labels"]["search"]["10m"] == 0
+    assert stats["labels"]["search"]["1h"] == 0
+    # DB 에는 5건 남아있음
+    assert stats["labels"]["search"]["24h"] == 5
 
 
-def test_reset_clears_all():
-    """reset 호출 시 전 라벨 제거."""
+def test_reset_clears_in_memory():
+    """reset 호출 시 in-memory 전 라벨 제거 (DB 는 건드리지 않음)."""
     naver_call_counter.record_call("a")
     naver_call_counter.record_call("b")
     naver_call_counter.reset()
     stats = naver_call_counter.get_stats()
-    assert stats["labels"] == {}
-    assert stats["totals"] == {"10m": 0, "1h": 0, "24h": 0}
+    # in-memory 10m/1h 는 0
+    assert stats["totals"]["10m"] == 0
+    assert stats["totals"]["1h"] == 0
+    # DB 24h 에는 기록이 남아있을 수 있음 (reset 은 in-memory 만 클리어)
+    assert stats["totals"]["24h"] == 2

@@ -283,3 +283,16 @@ class ComplexPyeongDetail(Base):
     maintenance_cost_basis: Mapped[str | None] = mapped_column(String(6))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class NaverApiCallCount(Base):
+    """네이버 API 호출 시간당 집계 (영속 계측)"""
+    __tablename__ = "naver_api_call_counts"
+    __table_args__ = (
+        UniqueConstraint("label", "bucket_hour", name="uq_nacc_label_bucket"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    label: Mapped[str] = mapped_column(String(50), nullable=False)
+    bucket_hour: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    call_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

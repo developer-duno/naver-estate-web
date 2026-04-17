@@ -30,8 +30,20 @@ def _make_admin(db, uid="admin1"):
 
 
 def setup_function():
-    """각 테스트 전 카운터 초기화."""
+    """각 테스트 전 카운터 + DB 초기화."""
     naver_call_counter.reset()
+    try:
+        from db.database import SessionLocal
+        from db.models import NaverApiCallCount
+
+        db = SessionLocal()
+        try:
+            db.query(NaverApiCallCount).delete()
+            db.commit()
+        finally:
+            db.close()
+    except Exception:
+        pass
 
 
 def test_naver_calls_no_auth_401(client):

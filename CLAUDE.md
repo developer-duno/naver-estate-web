@@ -177,14 +177,31 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - Playwright 53/53, Vitest 573/573, tsc 0, CI run #24547049109 전 job 초록불
 - 세션 48~54 누적 빨간불 5개(#241/244/245/246/248) 전부 소급 해결
 
-**다음 우선순위 (세션 56)**:
-1. 🟡 **toHaveScreenshot baseline 확정** — 지금은 `page.screenshot()` 저장만. Linux CI 런처로 baseline 1회 커밋 + `maxDiffPixelRatio: 0.02` 시각 회귀 완결
-2. 🟡 **admin 스펙 확장 + settings 편집 모드 AdminCard** — 세션 46 에서 스킵한 `admin/settings/page.tsx:76` 편집 모드 카드 검토
-3. 🟡 **naver_call_counter 24h 누적 확인** — 유의미한 숫자 모이면 TTL 72h 상향 여부 판단
-4. 🟡 **백로그**: 비교 페이지 6~8개 확장 / 미분양 지도 뷰
+**세션 57 성과 (2026-04-17, 4커밋 push)**:
+- `600d6bb` feat(e2e): admin 서브페이지 3개 toHaveScreenshot 확장 (Windows baseline) — `admin-pages.spec.ts` 3 블록 `page.screenshot()` → `expect(page).toHaveScreenshot()` 교체 + win32 baseline 3장 + README 갱신
+- `5e9484e` feat(e2e): admin 서브페이지 Linux CI baseline 추가 (CI run 24552023143 artifact)
+- `41b7ed0` fix(e2e): BulkRecrawlCard mock 누락으로 dashboard baseline 불안정 해소 — `admin-mocks.ts` 에 `mockRecrawlStatus`(level=safe) + `mockRecrawlProgress`(job=null) + 2 `page.route` 추가, dashboard win32 재생성
+- `bc7c395` fix(e2e): dashboard Linux baseline 갱신 (recrawl mock 반영, CI run 24552527223 artifact)
+- CI 4차 run 24552730163 전 job success ✅
+- baseline 총 8장: `admin-dashboard.spec.ts-snapshots/` 2 + `admin-pages.spec.ts-snapshots/` 6
+
+**세션 57 핵심 발견**: 세션 56 dashboard Linux baseline 이 스테일 상태였음. 원인은 `applyAdminMocks` 에 `/api/admin/recrawl/status` + `/api/admin/recrawl/progress` 누락 → `BulkRecrawlCard.tsx:76` 의 "상태 확인 중..." 로딩 텍스트가 CI 환경에서 매번 렌더. 세션 56 baseline 생성 당시 캡처 타이밍이 우연히 로딩 해소 순간이었을 뿐. mock 추가 + baseline 재생성으로 근본 해소.
+
+**세션 57 하네스 교훈** (다음 세션 필독):
+1. **"CI green 1회 = 완결" 금지**: 시각 회귀 baseline 이 green 한 번 찍었다고 안정이 아님. 최소 3회 연속 green 이어야 안정성 주장 가능. 세션 56 2회 green 으로 "완결" 판정한 게 스테일 원인
+2. **diff PNG 직접 Read 의 가치**: `gh run download -n admin-screenshots` 로 `*-diff.png` 받아 Read 로 시각 확인 → "매물 일괄 재크롤 카드 하단 빨간 영역" 즉시 특정 → `grep "상태 확인 중"` 1회로 `BulkRecrawlCard:76` 도달. 로그 텍스트만 봤으면 못 찾음
+3. **artifact 폴더명 한글 + Git Bash 경로**: `gh run download` 가 테스트 이름 전체를 폴더명으로 사용 → 한글 경로는 Read 툴이 못 읽음. `/tmp/` 에서 `/f/cursor/.../test-results/` 로 복사 후 읽어야 함. `find` 로 `*-actual.png` 글롭 필터링이 안전
+4. **mock 누락 검증은 useQuery 전체 추적**: 플랜 시점에서 "테스트가 버튼 안 누르므로 DELETE mock 불필요" 로 🟡 처리했는데 실제는 전혀 다른 mock(recrawl) 이 치명적이었음. **페이지·컴포넌트의 모든 useQuery 가 mock 되는지** 가 옳은 기준. `grep "useQuery"` 해당 라우트 렌더 경로 전체 추적 필요
+5. **계획 외 부채 동시 해소 > 깔끔한 범위 유지**: 원래 2 커밋 계획이 4 커밋 됐지만 같은 세션에 부채를 같이 닦으면 미래 세션 비용 줄어듦. 각 커밋이 단일 관심사로 분리돼 revert 도 용이
+
+**다음 우선순위 (세션 58)**:
+1. 🟡 **admin settings 편집 모드 AdminCard 적용 검토** (세션 46 잔여): `admin/settings/page.tsx:76` 편집 모드 분기. 판단 기준은 `<h3>` 헤더 자연스러움 + action 슬롯 복잡도(2요소 + 편집모드 textarea 분기). Plan → Explore 병렬 → 9 GATE 루프 필수
+2. 🟡 **naver_call_counter 48h+ 누적 확인**: V020 영속화(2026-04-16) 후 48h 이상 경과 시점에 `SELECT counter_key, count FROM naver_call_counter ORDER BY count DESC`. TTL 72h 상향 여부 판단
+3. 🟡 **admin 시각 회귀 추가 확장 후보**: 현재 dashboard + data + users + settings 4장 커버. `/compare`, `/mibunyang` 메인 등 데스크톱 전용 페이지 확장 검토. 단 비인증 경로는 storageState 불필요 → `public` project 분리 필요
+4. 🟡 **백로그** (세션 43 리스트 잔여): 비교 페이지 4→6~8 확장 / 미분양 지도 뷰
 5. ⚪ mibunyang 쪽 `quota_db_integration.md` 적용 (다른 프로젝트 세션)
 
-**상세**: `memory/session55_summary.md`
+**상세**: `memory/session57_summary.md`
 
 <!-- 보류 (사용자 미요청): 미분양 지도 뷰 (FE 2파일, Naver Maps 오버레이), 비교 페이지 4→6~8 확장 (세션 46 스킵 결정) -->
 

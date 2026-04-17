@@ -29,6 +29,7 @@ describe("NaverCallsCard 컴포넌트", () => {
     mockGet.mockResolvedValueOnce({
       labels: {},
       totals: { "10m": 0, "1h": 0, "24h": 0 },
+      process_uptime_seconds: 7200,
     });
     renderWithProvider();
     expect(screen.getByText("네이버 API 호출 계측")).toBeInTheDocument();
@@ -48,6 +49,7 @@ describe("NaverCallsCard 컴포넌트", () => {
         article_detail_live: { "10m": 2, "1h": 10, "24h": 50 },
       },
       totals: { "10m": 7, "1h": 60, "24h": 650 },
+      process_uptime_seconds: 90000,
     });
     renderWithProvider();
     await waitFor(() => {
@@ -73,6 +75,7 @@ describe("NaverCallsCard 컴포넌트", () => {
         unknown_new_label: { "10m": 1, "1h": 2, "24h": 3 },
       },
       totals: { "10m": 1, "1h": 2, "24h": 3 },
+      process_uptime_seconds: 3600,
     });
     renderWithProvider();
     await waitFor(() => {
@@ -89,5 +92,34 @@ describe("NaverCallsCard 컴포넌트", () => {
         screen.getByText(/호출 통계를 불러오지 못했습니다.*network down/),
       ).toBeInTheDocument();
     });
+  });
+
+  it("업타임 24시간 미만이면 경고색 뱃지, 이상이면 초록색 뱃지", async () => {
+    // 24h 미만 (2시간 = 7200초)
+    mockGet.mockResolvedValueOnce({
+      labels: {},
+      totals: { "10m": 0, "1h": 0, "24h": 0 },
+      process_uptime_seconds: 7200,
+    });
+    const { unmount } = renderWithProvider();
+    await waitFor(() => {
+      expect(screen.getByText("가동 2시간 0분")).toBeInTheDocument();
+    });
+    const badge = screen.getByText("가동 2시간 0분");
+    expect(badge.className).toContain("bg-amber-50");
+    unmount();
+
+    // 24h 이상 (90000초 = 1일 1시간)
+    mockGet.mockResolvedValueOnce({
+      labels: {},
+      totals: { "10m": 0, "1h": 0, "24h": 0 },
+      process_uptime_seconds: 90000,
+    });
+    renderWithProvider();
+    await waitFor(() => {
+      expect(screen.getByText("가동 1일 1시간")).toBeInTheDocument();
+    });
+    const greenBadge = screen.getByText("가동 1일 1시간");
+    expect(greenBadge.className).toContain("bg-green-50");
   });
 });

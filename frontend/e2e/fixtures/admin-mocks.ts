@@ -85,6 +85,7 @@ export const mockNaverCallStats: NaverCallStats = {
     article_detail_live: { "10m": 1, "1h": 5, "24h": 35 },
   },
   totals: { "10m": 4, "1h": 25, "24h": 542 },
+  process_uptime_seconds: 43200,
 };
 
 export const mockUsers: PaginatedResponse<UserProfile> = {

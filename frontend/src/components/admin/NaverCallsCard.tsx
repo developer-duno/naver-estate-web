@@ -67,6 +67,17 @@ const GROUP_CLASS: Record<Row["group"], string> = {
   other: "bg-gray-50 text-gray-600 border-gray-200",
 };
 
+function formatUptime(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h >= 24) {
+    const d = Math.floor(h / 24);
+    const rh = h % 24;
+    return `${d}일 ${rh}시간`;
+  }
+  return `${h}시간 ${m}분`;
+}
+
 /**
  * 네이버 API 호출 계측 대시보드 카드.
  * 세션 50 `/api/admin/naver-calls` 를 60초 간격으로 폴링.
@@ -85,9 +96,27 @@ export default function NaverCallsCard({ getToken }: Props) {
 
   const rows = data ? buildRows(data) : [];
   const totals = data?.totals ?? { "10m": 0, "1h": 0, "24h": 0 };
+  const uptime = data?.process_uptime_seconds;
+  const uptimeUnder24h = uptime != null && uptime < 86400;
 
   return (
-    <AdminCard title="네이버 API 호출 계측">
+    <AdminCard
+      title="네이버 API 호출 계측"
+      action={
+        uptime != null ? (
+          <span
+            className={`text-xs px-2 py-0.5 rounded border ${
+              uptimeUnder24h
+                ? "bg-amber-50 text-amber-700 border-amber-300"
+                : "bg-green-50 text-green-700 border-green-300"
+            }`}
+            title="프로세스 재시작 후 카운터가 리셋됩니다"
+          >
+            가동 {formatUptime(uptime)}
+          </span>
+        ) : undefined
+      }
+    >
       {isLoading && !data && (
         <div className="h-[120px] bg-gray-100 animate-pulse rounded" />
       )}

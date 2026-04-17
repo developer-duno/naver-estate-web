@@ -48,13 +48,14 @@ def test_naver_calls_regular_user_403(client, db):
 
 
 def test_naver_calls_empty_response(client, db):
-    """카운터 비어있으면 빈 labels + 0 totals"""
+    """카운터 비어있으면 빈 labels + 0 totals + 업타임 양수"""
     _make_admin(db)
     res = client.get("/api/admin/naver-calls", headers=_auth(_token("admin1")))
     assert res.status_code == 200
     data = res.json()
     assert data["labels"] == {}
     assert data["totals"] == {"10m": 0, "1h": 0, "24h": 0}
+    assert data["process_uptime_seconds"] > 0
 
 
 def test_naver_calls_reflects_record_call(client, db):

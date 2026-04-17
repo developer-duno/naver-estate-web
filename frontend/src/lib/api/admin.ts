@@ -230,6 +230,7 @@ export interface NaverCallWindowCounts {
 export interface NaverCallStats {
   labels: Record<string, NaverCallWindowCounts>;
   totals: NaverCallWindowCounts;
+  process_uptime_seconds: number;
 }
 
 /** 네이버 API 호출 계측 — 라벨별 10분/1시간/24시간 슬라이딩 윈도우 */

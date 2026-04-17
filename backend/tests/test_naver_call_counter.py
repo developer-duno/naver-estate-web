@@ -20,6 +20,8 @@ def test_record_and_get_stats_basic():
     stats = naver_call_counter.get_stats()
     assert stats["labels"]["search"] == {"10m": 3, "1h": 3, "24h": 3}
     assert stats["totals"] == {"10m": 3, "1h": 3, "24h": 3}
+    # process_uptime_seconds 는 양수여야 함
+    assert stats["process_uptime_seconds"] > 0
 
 
 def test_multi_label_totals():

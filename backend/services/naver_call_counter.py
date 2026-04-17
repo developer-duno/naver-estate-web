@@ -12,8 +12,11 @@
 """
 
 import threading
+import time
 from collections import defaultdict, deque
 from time import monotonic
+
+_started_at = time.time()  # 모듈 로드 시각 (epoch)
 
 _WINDOW_SECONDS = 24 * 3600  # 24시간 초과 레코드는 잘라냄
 _MAX_RECORDS_PER_LABEL = 20000  # 라벨당 상한 (메모리 폭주 방지)
@@ -40,8 +43,13 @@ def record_call(label: str) -> None:
             dq.popleft()
 
 
+def get_uptime_seconds() -> float:
+    """프로세스(모듈 로드) 이후 경과 초."""
+    return time.time() - _started_at
+
+
 def get_stats() -> dict:
-    """라벨별 10분/1시간/24시간 윈도우 카운트 + 총합 반환."""
+    """라벨별 10분/1시간/24시간 윈도우 카운트 + 총합 + 업타임 반환."""
     now = monotonic()
     buckets = {"10m": now - 600, "1h": now - 3600, "24h": now - _WINDOW_SECONDS}
     with _lock:
@@ -57,7 +65,11 @@ def get_stats() -> dict:
                         counts[key] += 1
             per_label[label] = counts
         totals = {k: sum(pl[k] for pl in per_label.values()) for k in buckets}
-    return {"labels": per_label, "totals": totals}
+    return {
+        "labels": per_label,
+        "totals": totals,
+        "process_uptime_seconds": get_uptime_seconds(),
+    }
 
 
 def reset() -> None:

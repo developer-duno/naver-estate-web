@@ -26,11 +26,13 @@
 
    `TEST_ADMIN_EMAIL` 은 `ADMIN_EMAIL` 환경변수에 등록된 관리자 이메일이어야 한다 (미들웨어의 `ADMIN_EMAILS` 매칭).
 
-2. setup + admin 만 실행:
+2. setup + admin 만 실행 (이 PC 에서는 포트 3000 이 sangse-agent 가 쓰고 있으므로 3100 사용):
 
    ```bash
-   npx playwright test --project=setup --project=admin
+   PLAYWRIGHT_PORT=3100 npx playwright test --project=setup --project=admin
    ```
+
+   CI 에서는 `PLAYWRIGHT_PORT` 미설정 → 기본값 3000 사용.
 
 3. 성공 시 `e2e/.auth/admin.json` 생성. 이후 세션 재사용. 만료되면 (Supabase 기본 1시간) 같은 명령으로 재생성.
 

@@ -62,6 +62,11 @@ function SearchContent() {
   });
 
   const complexes = useMemo(() => searchData?.complexes ?? [], [searchData?.complexes]);
+  const fallbackNotice = (() => {
+    const data = searchData as { source?: string; notice?: string } | undefined;
+    if (data?.source !== "db_fallback") return "";
+    return data.notice ?? "네이버 실시간 검색이 일시적으로 지연되어 저장된 단지 데이터로 표시합니다.";
+  })();
   const error = isError ? "검색에 실패했습니다. 다시 시도해주세요." : "";
 
   // 매물유형 클라이언트 필터 (complexes/selectedTypes 변경 시만 재계산)
@@ -181,6 +186,17 @@ function SearchContent() {
 
       {/* 로딩 */}
       {loading && <LoadingSpinner message="검색 중입니다. 잠시만 기다려주세요." />}
+
+      {/* DB 폴백 안내 — 네이버 쿨다운 중 저장된 데이터로 표시됨 */}
+      {fallbackNotice && !loading && (
+        <div
+          role="status"
+          className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800"
+        >
+          <span aria-hidden="true">⚠ </span>
+          {fallbackNotice}
+        </div>
+      )}
 
       {/* 에러 */}
       {error && (

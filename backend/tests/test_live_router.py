@@ -128,6 +128,39 @@ class TestLiveSearch:
         res = client.get("/api/live/search?q=")
         assert res.status_code == 422
 
+    @patch(SEARCH_PATCH)
+    def test_search_naver_error_falls_back_to_db(self, mock_search, client, db):
+        """네이버 API 실패 + DB 에 매칭 단지 있음 → 200 + source=db_fallback"""
+        from db.models import Complex
+        from routers.live._shared import _cache
+        _cache.delete_by_prefix("search:")  # 다른 테스트 캐시 잔재 제거
+        db.add(Complex(
+            complex_no="C999",
+            complex_name="테스트폴백단지",
+            real_estate_type_code="APT",
+            real_estate_type_name="아파트",
+            cortar_no="1111010100",
+        ))
+        db.commit()
+
+        mock_search.return_value = make_search_result(error="네이버 쿨다운")
+        res = client.get("/api/live/search?q=폴백단지")
+        assert res.status_code == 200
+        body = res.json()
+        assert body["source"] == "db_fallback"
+        assert body["total"] >= 1
+        assert any(c["complex_name"] == "테스트폴백단지" for c in body["complexes"])
+        assert "notice" in body
+
+    @patch(SEARCH_PATCH)
+    def test_search_naver_error_and_db_empty_still_502(self, mock_search, client, db):
+        """네이버 실패 + DB 도 비어있음 → 502 (폴백 불가)"""
+        from routers.live._shared import _cache
+        _cache.delete_by_prefix("search:")
+        mock_search.return_value = make_search_result(error="네이버 쿨다운")
+        res = client.get("/api/live/search?q=없는단지명xyz")
+        assert res.status_code == 502
+
 
 # ── live_region 엔드포인트 테스트 ──
 

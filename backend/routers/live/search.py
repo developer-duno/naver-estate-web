@@ -1,4 +1,9 @@
-"""검색 라우트 — 키워드/지역 검색 + 매물 수 집계"""
+"""검색 라우트 — 키워드/지역 검색 + 매물 수 집계
+
+네이버 쿨다운(429 장시간 지속) 시에도 사이트 검색이 죽지 않도록
+DB 폴백 경로를 내장. _search_all_types 가 모든 그룹 실패로 502 를
+던지면 상위 엔드포인트가 DB 단지 검색으로 전환해 200 응답 유지.
+"""
 
 import logging
 import time
@@ -7,9 +12,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from db.complex_queries import get_complexes_by_region, search_complexes
 from db.database import SessionLocal
 from db.models import Article as ArticleModel
 from deps import get_db
+from routers.estate_serializers import complex_to_dict
 from services.naver_call_counter import record_call
 from services.upsert import upsert_complex_from_search
 from shared.naver_api import NaverEstateAPI
@@ -24,6 +31,19 @@ from ._shared import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _db_fallback_response(
+    complexes: list, db: Session, source: str = "db_fallback",
+) -> dict:
+    """네이버 실패 시 DB 단지로 검색 응답 구성 — 서비스 연명용."""
+    dicts = [complex_to_dict(c) for c in complexes]
+    response = _build_search_response(dicts, db)
+    response["source"] = source
+    response["notice"] = (
+        "네이버 실시간 검색이 일시적으로 지연되어 저장된 단지 데이터로 표시합니다."
+    )
+    return response
 
 
 def _parse_allowed_types(types: str | None) -> set[str]:
@@ -130,12 +150,72 @@ def _search_all_types(keyword: str, allowed_types: set[str], db: Session,
                         seen.add(cpx["complex_no"])
                         all_complexes.append(cpx)
 
-    # 모든 그룹 실패 + 결과 0건이면 502
+    # 모든 그룹 실패 + 결과 0건이면 502 (상위 라우터가 DB 폴백으로 전환)
     if not all_complexes and first_error is not None:
         detail = first_error.get("error", "네이버 API 요청 실패") if first_error else "네이버 API 응답 없음"
         raise HTTPException(status_code=502, detail=str(detail))
 
     return all_complexes
+
+
+# 네이버 검색 wall-clock timeout (초). 이 시간 안에 결과 못 받으면 DB 폴백.
+# 쿨다운(429 반복)·네트워크 지연 둘 다 이 가드로 막음.
+NAVER_SEARCH_WALL_TIMEOUT = 15.0
+
+
+def _search_with_fallback(
+    *, keyword: str, allowed_types: set[str], db: Session,
+    upsert_kwargs: dict | None = None,
+    fallback: callable,
+) -> dict:
+    """네이버 호출 → 실패/지연 시 DB 폴백. 응답 반환.
+
+    fallback: () -> list[Complex]  — DB 단지 조회 클로저
+
+    네이버가 NAVER_SEARCH_WALL_TIMEOUT 안에 응답하지 않으면(쿨다운 중 재시도
+    지연 등) 폴백으로 전환. 네이버 호출 스레드는 백그라운드에서 계속 진행
+    되지만 사용자 응답은 즉시 반환.
+    """
+    import concurrent.futures as cf
+
+    executor = cf.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(
+        _search_all_types, keyword, allowed_types, db, upsert_kwargs,
+    )
+    try:
+        all_complexes = future.result(timeout=NAVER_SEARCH_WALL_TIMEOUT)
+        executor.shutdown(wait=False)
+        return _build_search_response(all_complexes, db)
+    except cf.TimeoutError:
+        logger.warning(
+            "naver search wall-clock %ss 초과 — DB 폴백으로 전환 (keyword=%s)",
+            NAVER_SEARCH_WALL_TIMEOUT, keyword,
+        )
+        # 백그라운드 스레드는 계속 돌되 응답은 즉시 반환
+        executor.shutdown(wait=False)
+    except HTTPException as e:
+        executor.shutdown(wait=False)
+        if e.status_code != 502:
+            raise
+        logger.warning(
+            "naver search 실패(%s) — DB 폴백으로 전환 (keyword=%s)",
+            e.detail, keyword,
+        )
+    except Exception as e:  # noqa: BLE001 — 네트워크 예외도 폴백
+        executor.shutdown(wait=False)
+        logger.warning(
+            "naver search 예외(%s) — DB 폴백으로 전환 (keyword=%s)",
+            type(e).__name__, keyword,
+        )
+
+    db_complexes = fallback()
+    if not db_complexes:
+        # 폴백도 비었으면 원래 에러로 502
+        raise HTTPException(
+            status_code=502,
+            detail="네이버 검색 실패 + 저장된 데이터도 없습니다",
+        )
+    return _db_fallback_response(db_complexes, db)
 
 
 def _get_article_counts(db: Session, complex_nos: list[str]) -> dict[str, int]:
@@ -178,9 +258,13 @@ def live_search(
     if cached is not None:
         return cached
 
-    all_complexes = _search_all_types(q, allowed_types, db)
-    response = _build_search_response(all_complexes, db)
-    _cache.set(cache_key, response)
+    response = _search_with_fallback(
+        keyword=q, allowed_types=allowed_types, db=db,
+        fallback=lambda: search_complexes(db, q, limit=50),
+    )
+    # DB 폴백이면 짧게만 캐시 (네이버 복구 시 빠른 전환)
+    if response.get("source") != "db_fallback":
+        _cache.set(cache_key, response)
     return response
 
 
@@ -205,10 +289,11 @@ def live_region(
     if dong:
         keyword += f" {dong}"
 
-    all_complexes = _search_all_types(
-        keyword, allowed_types, db,
+    response = _search_with_fallback(
+        keyword=keyword, allowed_types=allowed_types, db=db,
         upsert_kwargs={"sido": sido, "sigungu": sigungu, "dong": dong},
+        fallback=lambda: get_complexes_by_region(db, sido, sigungu, dong, limit=500),
     )
-    response = _build_search_response(all_complexes, db)
-    _cache.set(cache_key, response)
+    if response.get("source") != "db_fallback":
+        _cache.set(cache_key, response)
     return response

@@ -24,6 +24,14 @@ export async function startLiveCrawl(
   );
 }
 
+/** 백그라운드 크롤링 진행 상태 폴링 (started 이후 done/error 까지 추적) */
+export async function getCrawlStatus(complexNo: string) {
+  return fetchApi<CrawlProgress>(
+    `/api/live/${encodeURIComponent(complexNo)}/articles/crawl-status`,
+    { timeoutMs: DEFAULT_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
+  );
+}
+
 /** 실거래가 on-demand 수집 시작 */
 export async function startPriceCollect(complexNo: string, token?: string) {
   const headers: Record<string, string> = {};

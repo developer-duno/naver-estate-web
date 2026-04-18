@@ -5,7 +5,8 @@
  * 검증 항목:
  *  1. cached 응답 시 invalidateQueries 호출 + force=false 전달
  *  2. cached 직후 10초 내 재클릭 → force=true 전달
- *  3. started 응답 시 기존 10/20/30 초 invalidate 체인
+ *  3. started 응답 시 "데이터 갱신 중..." 메시지 진입
+ *  4. started 후 crawl-status 폴링 → done 순간 "갱신 완료" 표시
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
@@ -13,12 +14,14 @@ import { TestQueryProvider } from "@/test-setup";
 
 // API mock
 const mockStartLiveCrawl = vi.fn();
+const mockGetCrawlStatus = vi.fn();
 
 vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
   return {
     ...actual,
     startLiveCrawl: (...args: unknown[]) => mockStartLiveCrawl(...args),
+    getCrawlStatus: (...args: unknown[]) => mockGetCrawlStatus(...args),
   };
 });
 
@@ -41,6 +44,7 @@ vi.mock("next/navigation", () => ({
 describe("useCrawlAction — 수동 갱신 로직", () => {
   beforeEach(() => {
     mockStartLiveCrawl.mockReset();
+    mockGetCrawlStatus.mockReset();
   });
 
   it("첫 클릭에 force=false 로 호출하고, cached 응답 시 invalidateQueries 를 호출한다", async () => {
@@ -116,6 +120,8 @@ describe("useCrawlAction — 수동 갱신 로직", () => {
       complex_no: "C003",
       status: "started",
     });
+    // 폴링 초기 1회는 running 으로 두어 메시지가 유지되도록
+    mockGetCrawlStatus.mockResolvedValue({ complex_no: "C003", status: "running" });
 
     const { useCrawlAction } = await import("../useCrawlAction");
     const { result } = renderHook(() => useCrawlAction("C003"), {
@@ -131,5 +137,54 @@ describe("useCrawlAction — 수동 갱신 로직", () => {
     });
     expect(result.current.messageType).toBe("info");
     expect(mockStartLiveCrawl).toHaveBeenCalledWith("C003", "test-token", false);
+  }, 15000);
+
+  it("started 후 crawl-status 폴링 done 감지 → '갱신 완료' 메시지", async () => {
+    vi.useFakeTimers();
+    mockStartLiveCrawl.mockResolvedValue({
+      complex_no: "C004",
+      status: "started",
+    });
+    // 첫 2번 running, 3번째에서 done
+    mockGetCrawlStatus
+      .mockResolvedValueOnce({ complex_no: "C004", status: "running", phase: "articles" })
+      .mockResolvedValueOnce({ complex_no: "C004", status: "running", phase: "articles" })
+      .mockResolvedValue({ complex_no: "C004", status: "done" });
+
+    const { useCrawlAction } = await import("../useCrawlAction");
+    const { result } = renderHook(() => useCrawlAction("C004"), {
+      wrapper: TestQueryProvider,
+    });
+
+    await act(async () => {
+      result.current.handleCrawl();
+    });
+
+    // started 응답 수신 + 폴링 시작 대기 (mutation 해소)
+    await vi.waitFor(
+      () => expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1),
+      { timeout: 3000 },
+    );
+
+    // 폴링 2초 × 3회 = 6초 + 각 폴링 promise 해소 여유
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_100);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_100);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_100);
+    });
+
+    await vi.waitFor(
+      () => expect(result.current.message).toBe("갱신 완료"),
+      { timeout: 3000 },
+    );
+    expect(result.current.messageType).toBe("success");
+    expect(result.current.crawling).toBe(false);
+    expect(mockGetCrawlStatus).toHaveBeenCalled();
+
+    vi.useRealTimers();
   }, 15000);
 });

@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { CrawlProgress } from "@/types";
-import { startLiveCrawl, ApiError } from "@/lib/api";
+import { startLiveCrawl, getCrawlStatus, ApiError } from "@/lib/api";
 import { createClient } from "@/lib/supabase";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -10,6 +10,13 @@ type MessageType = "info" | "error" | "success";
 
 // 10초 내 재클릭이면 force=true 로 보내서 서버 쿨다운 우회
 const FORCE_WINDOW_MS = 10_000;
+
+// 크롤 완료 폴링 — 2초 간격, 최대 5분(150회)
+const POLL_INTERVAL_MS = 2_000;
+const POLL_MAX_ATTEMPTS = 150;
+
+// 서버가 완료 상태로 반환하는 status 값들 (_crawl_bg.py + crawl.py 참조)
+const TERMINAL_STATUSES = new Set(["done", "done_partial", "error", "idle"]);
 
 function formatAgo(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -39,6 +46,7 @@ export function useCrawlAction(complexNo: string) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastCachedAtRef = useRef<number>(0);
 
   const [crawling, setCrawling] = useState(false);
@@ -50,13 +58,63 @@ export function useCrawlAction(complexNo: string) {
     setMessageType(type);
   }, []);
 
-  // 언마운트 시 타이머 정리
+  const clearPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  // 언마운트 시 타이머/폴링 정리
   useEffect(() => {
     return () => {
       timersRef.current.forEach(clearTimeout);
       timersRef.current = [];
+      clearPolling();
     };
-  }, []);
+  }, [clearPolling]);
+
+  const startPolling = useCallback(() => {
+    clearPolling();
+    let attempts = 0;
+    pollRef.current = setInterval(async () => {
+      attempts += 1;
+      try {
+        const status = await getCrawlStatus(complexNo);
+        // 진행 중에도 매물 수 변동 반영 (대략 current_page 기준)
+        if (status.status === "running" && status.phase === "articles") {
+          // 매 3 폴링(6초) 마다 조용히 articles 갱신 — 진행 체감용
+          if (attempts % 3 === 0) {
+            queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo) });
+          }
+        }
+        if (TERMINAL_STATUSES.has(status.status)) {
+          clearPolling();
+          invalidateComplexQueries(queryClient, complexNo);
+          setCrawling(false);
+          if (status.status === "error") {
+            setMsg("데이터 갱신 중 오류가 발생했습니다.", "error");
+          } else if (status.status === "done_partial") {
+            setMsg("일부 항목 갱신 완료", "success");
+          } else {
+            setMsg("갱신 완료", "success");
+          }
+          timersRef.current.push(setTimeout(() => setMessage(""), 4_000));
+          return;
+        }
+      } catch {
+        // 네트워크 일시 오류는 무시하고 다음 폴링 기다림
+      }
+      if (attempts >= POLL_MAX_ATTEMPTS) {
+        // 5분 안에 done 못 받으면 중단하고 최소한 최신 DB 값 반영
+        clearPolling();
+        invalidateComplexQueries(queryClient, complexNo);
+        setCrawling(false);
+        setMsg("갱신이 오래 걸립니다 — 나중에 다시 확인해주세요.", "info");
+        timersRef.current.push(setTimeout(() => setMessage(""), 4_000));
+      }
+    }, POLL_INTERVAL_MS);
+  }, [complexNo, queryClient, clearPolling, setMsg]);
 
   const mutation = useMutation({
     mutationFn: async (force: boolean) => {
@@ -84,17 +142,11 @@ export function useCrawlAction(complexNo: string) {
         return;
       }
       setMsg("데이터 갱신 중...", "info");
-      [10_000, 20_000, 30_000].forEach((delay) => {
-        timersRef.current.push(setTimeout(() => {
-          invalidateComplexQueries(queryClient, complexNo);
-        }, delay));
-      });
-      timersRef.current.push(setTimeout(() => {
-        setCrawling(false);
-        setMessage("");
-      }, 30_000));
+      // 서버 상태를 2초 간격 폴링 → done 순간 invalidate + 성공 메시지
+      startPolling();
     },
     onError: (err: unknown) => {
+      clearPolling();
       if (err instanceof ApiError) {
         if (err.statusCode === 401) {
           router.push(`/login?redirect=${encodeURIComponent(`/complex/${complexNo}`)}`);

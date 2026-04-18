@@ -31,14 +31,37 @@ function formatAgo(iso: string | null | undefined): string {
   return `${day}일 전`;
 }
 
-function invalidateComplexQueries(
+function refetchComplexQueries(
   queryClient: ReturnType<typeof useQueryClient>,
   complexNo: string,
 ) {
-  queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo) });
-  queryClient.invalidateQueries({ queryKey: queryKeys.complex(complexNo) });
-  queryClient.invalidateQueries({ queryKey: queryKeys.pyeongDetails(complexNo) });
-  queryClient.invalidateQueries({ queryKey: queryKeys.priceStats(complexNo) });
+  // invalidateQueries 대신 refetchQueries 사용 — active 쿼리를 staleTime 무시하고
+  // 즉시 재요청. invalidate 도 본질은 동일하지만 refetch 명시가 의도를 분명히 하고
+  // 배지·매물·평·시세 네 쿼리가 동일 시점에 서버로 향하도록 보장.
+  void queryClient.refetchQueries({ queryKey: queryKeys.articlesAll(complexNo) });
+  void queryClient.refetchQueries({ queryKey: queryKeys.complex(complexNo) });
+  void queryClient.refetchQueries({ queryKey: queryKeys.pyeongDetails(complexNo) });
+  void queryClient.refetchQueries({ queryKey: queryKeys.priceStats(complexNo) });
+}
+
+/**
+ * 서버가 돌려준 last_crawled_at 을 Complex 쿼리 캐시에 즉시 주입 (낙관적 업데이트).
+ * refetch 가 끝나기 전에도 배지가 "방금 전" 으로 바뀌어 사용자 체감 개선.
+ * old 가 없거나 신규 값이 null 이면 건드리지 않음 — 다른 필드 보존.
+ */
+function patchLastCrawledAt(
+  queryClient: ReturnType<typeof useQueryClient>,
+  complexNo: string,
+  lastCrawledAt: string | null | undefined,
+) {
+  if (!lastCrawledAt) return;
+  queryClient.setQueryData(
+    queryKeys.complex(complexNo),
+    (old: unknown) => {
+      if (!old || typeof old !== "object") return old;
+      return { ...old, last_crawled_at: lastCrawledAt };
+    },
+  );
 }
 
 /** 수동 크롤링 (데이터 갱신 버튼) 로직을 캡슐화 */
@@ -90,7 +113,7 @@ export function useCrawlAction(complexNo: string) {
         }
         if (TERMINAL_STATUSES.has(status.status)) {
           clearPolling();
-          invalidateComplexQueries(queryClient, complexNo);
+          refetchComplexQueries(queryClient, complexNo);
           setCrawling(false);
           if (status.status === "error") {
             setMsg("데이터 갱신 중 오류가 발생했습니다.", "error");
@@ -108,7 +131,7 @@ export function useCrawlAction(complexNo: string) {
       if (attempts >= POLL_MAX_ATTEMPTS) {
         // 5분 안에 done 못 받으면 중단하고 최소한 최신 DB 값 반영
         clearPolling();
-        invalidateComplexQueries(queryClient, complexNo);
+        refetchComplexQueries(queryClient, complexNo);
         setCrawling(false);
         setMsg("갱신이 오래 걸립니다 — 나중에 다시 확인해주세요.", "info");
         timersRef.current.push(setTimeout(() => setMessage(""), 4_000));
@@ -131,8 +154,9 @@ export function useCrawlAction(complexNo: string) {
     },
     onSuccess: (result: CrawlProgress) => {
       if (result.status === "cached") {
-        // 서버가 쿨다운으로 스킵 — 하지만 DB 재조회는 해서 화면 동기화
-        invalidateComplexQueries(queryClient, complexNo);
+        // 서버가 쿨다운으로 스킵 — DB 재조회 + 캐시 즉시 패치로 배지 빠르게 갱신
+        patchLastCrawledAt(queryClient, complexNo, result.last_crawled_at);
+        refetchComplexQueries(queryClient, complexNo);
         lastCachedAtRef.current = Date.now();
         setCrawling(false);
         const ago = formatAgo(result.last_crawled_at);
@@ -141,15 +165,19 @@ export function useCrawlAction(complexNo: string) {
         timersRef.current.push(setTimeout(() => setMessage(""), 6_000));
         return;
       }
+      // started 분기 — 서버가 돌려준 현재 last_crawled_at 즉시 반영(이전 시각)해서
+      // 갱신 시작 순간에도 배지 표시가 어긋나지 않게 함. 진짜 "방금 전" 은
+      // 폴링의 done 수신 후 refetch 로 교체.
+      patchLastCrawledAt(queryClient, complexNo, result.last_crawled_at);
       setMsg("데이터 갱신 중...", "info");
-      // 서버 상태를 2초 간격 폴링 → done 순간 invalidate + 성공 메시지
+      // 서버 상태를 2초 간격 폴링 → done 순간 refetch + 성공 메시지
       startPolling();
       // 60초 안전망: 폴링이 어떤 이유로든 terminal 못 받아도 버튼 강제 해제.
       // 사용자가 무한정 "갱신 중..." 상태로 묶이지 않도록 보장.
       timersRef.current.push(setTimeout(() => {
         if (pollRef.current) {
           clearPolling();
-          invalidateComplexQueries(queryClient, complexNo);
+          refetchComplexQueries(queryClient, complexNo);
           setCrawling(false);
           setMsg("갱신이 계속 진행 중일 수 있어요. 잠시 후 다시 확인해주세요.", "info");
           timersRef.current.push(setTimeout(() => setMessage(""), 4_000));

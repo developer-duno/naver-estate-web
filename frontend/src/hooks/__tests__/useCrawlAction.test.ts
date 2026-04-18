@@ -10,7 +10,10 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
+import React from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TestQueryProvider } from "@/test-setup";
+import { queryKeys } from "@/lib/query-keys";
 
 // API mock
 const mockStartLiveCrawl = vi.fn();
@@ -186,5 +189,62 @@ describe("useCrawlAction — 수동 갱신 로직", () => {
     expect(mockGetCrawlStatus).toHaveBeenCalled();
 
     vi.useRealTimers();
+  }, 15000);
+
+  it("cached 응답의 last_crawled_at 이 Complex 쿼리 캐시에 즉시 주입된다 (낙관적 업데이트)", async () => {
+    const newIso = new Date(Date.now() - 3 * 60_000).toISOString();
+    const oldIso = new Date(Date.now() - 5 * 24 * 60 * 60_000).toISOString();
+    mockStartLiveCrawl.mockResolvedValue({
+      complex_no: "C005",
+      status: "cached",
+      last_crawled_at: newIso,
+    });
+
+    // 현실 시나리오 재현: BE 가 크롤 직후 새 값을 돌려줌. queryFn mock 도 newIso 반환.
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: Infinity } },
+    });
+    let queryFnCalls = 0;
+    await client.prefetchQuery({
+      queryKey: queryKeys.complex("C005"),
+      queryFn: async () => {
+        queryFnCalls += 1;
+        // 초기(프리페치)에는 oldIso, refetch 부터는 newIso
+        return {
+          complex_no: "C005",
+          complex_name: "테스트",
+          last_crawled_at: queryFnCalls === 1 ? oldIso : newIso,
+        };
+      },
+    });
+    // 사전 조건: 초기값이 oldIso 로 세팅됨
+    const before = client.getQueryData(queryKeys.complex("C005")) as {
+      last_crawled_at: string;
+    };
+    expect(before.last_crawled_at).toBe(oldIso);
+
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(QueryClientProvider, { client }, children);
+
+    const { useCrawlAction } = await import("../useCrawlAction");
+    const { result } = renderHook(() => useCrawlAction("C005"), { wrapper });
+
+    await act(async () => {
+      result.current.handleCrawl();
+    });
+
+    await waitFor(() => {
+      expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1);
+    });
+
+    // patchLastCrawledAt + refetchQueries 합작으로 배지가 newIso 로 교체되어야 함
+    await waitFor(() => {
+      const cached = client.getQueryData(queryKeys.complex("C005")) as {
+        last_crawled_at: string;
+        complex_name: string;
+      } | undefined;
+      expect(cached?.last_crawled_at).toBe(newIso);
+      expect(cached?.complex_name).toBe("테스트");
+    });
   }, 15000);
 });

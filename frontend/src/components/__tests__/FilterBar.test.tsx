@@ -138,6 +138,39 @@ describe("FilterBar — 상세 드롭다운", () => {
     expect(screen.getByText("101동")).toBeInTheDocument();
     expect(screen.getByText("102동")).toBeInTheDocument();
   });
+
+  it("태그 버튼 표시 + 선택 시 tags 쿼리 전달 + 재클릭 시 해제", () => {
+    const onChange = vi.fn();
+    const props = {
+      ...defaultProps,
+      onChange,
+      filterOptions: { building_names: [], tags: ["역세권", "복층", "테라스"], directions: [] } as FilterOptions,
+    };
+    render(<FilterBar {...props} />);
+    openDropdown("상세");
+
+    const tagBtn = screen.getByRole("button", { name: "역세권" });
+    expect(tagBtn).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(tagBtn);
+    expect(tagBtn).toHaveAttribute("aria-pressed", "true");
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ tags: "역세권" }));
+
+    // 재클릭 해제
+    fireEvent.click(tagBtn);
+    expect(tagBtn).toHaveAttribute("aria-pressed", "false");
+    expect(onChange).toHaveBeenLastCalledWith(expect.not.objectContaining({ tags: expect.anything() }));
+  });
+
+  it("filter_options.tags 가 빈 배열이면 태그 섹션 미렌더", () => {
+    const props = {
+      ...defaultProps,
+      filterOptions: { building_names: [], tags: [], directions: [] } as FilterOptions,
+    };
+    render(<FilterBar {...props} />);
+    openDropdown("상세");
+    expect(screen.queryByText("태그")).not.toBeInTheDocument();
+  });
 });
 
 describe("FilterBar — 필터 칩", () => {
@@ -148,6 +181,27 @@ describe("FilterBar — 필터 칩", () => {
     fireEvent.click(screen.getByText("매매"));
     // "매매"가 드롭다운 내부 + 칩 두 곳에 존재
     expect(screen.getAllByText("매매").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("태그 선택 시 '#태그명' 칩 표시 + 칩 × 클릭 시 해제", () => {
+    const onChange = vi.fn();
+    const props = {
+      ...defaultProps,
+      onChange,
+      filterOptions: { building_names: [], tags: ["역세권"], directions: [] } as FilterOptions,
+    };
+    render(<FilterBar {...props} />);
+    openDropdown("상세");
+    fireEvent.click(screen.getByRole("button", { name: "역세권" }));
+    expect(screen.getByText("#역세권")).toBeInTheDocument();
+
+    // 칩 × 버튼 (#태그 텍스트의 다음 형제 button) 클릭
+    const chipSpan = screen.getByText("#역세권").closest("span");
+    expect(chipSpan).not.toBeNull();
+    const xBtn = chipSpan!.querySelector("button");
+    expect(xBtn).not.toBeNull();
+    fireEvent.click(xBtn!);
+    expect(screen.queryByText("#역세권")).not.toBeInTheDocument();
   });
 });
 

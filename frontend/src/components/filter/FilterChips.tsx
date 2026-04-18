@@ -45,6 +45,19 @@ export function buildChipList(
   if (s.maxMaint) chips.push({ label: `관리비 ~${s.maxMaint}만`, reset: () => { dispatch({ type: "SET", key: "maxMaint", value: "" }); emitChange({ maxMaint: "" }); } });
   if (s.minYield) chips.push({ label: `수익률 ${s.minYield}%~`, reset: () => { dispatch({ type: "SET", key: "minYield", value: "" }); emitChange({ minYield: "" }); } });
   if (s.maxYield) chips.push({ label: `수익률 ~${s.maxYield}%`, reset: () => { dispatch({ type: "SET", key: "maxYield", value: "" }); emitChange({ maxYield: "" }); } });
+  if (s.tags) {
+    const selected = s.tags.split(",").filter(Boolean);
+    selected.forEach((tag) => {
+      chips.push({
+        label: `#${tag}`,
+        reset: () => {
+          const next = selected.filter((t) => t !== tag).join(",");
+          dispatch({ type: "SET", key: "tags", value: next });
+          emitChange({ tags: next });
+        },
+      });
+    });
+  }
   return chips;
 }
 

@@ -291,6 +291,38 @@ export function DetailSection({ s, setImmediate, setDebounced, applyPreset, disp
         />
         인증매물만
       </label>
+      {filterOptions && filterOptions.tags.length > 0 && (
+        <div>
+          <p className={sectionLabel}>태그</p>
+          <div className="flex flex-wrap gap-1">
+            {filterOptions.tags.map((t) => {
+              const selected = s.tags.split(",").filter(Boolean);
+              const isOn = selected.includes(t);
+              const toggle = () => {
+                const next = isOn ? selected.filter((x) => x !== t) : [...selected, t];
+                const v = next.join(",");
+                dispatch({ type: "SET", key: "tags", value: v });
+                emitChange({ tags: v });
+              };
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={toggle}
+                  aria-pressed={isOn}
+                  className={`px-2 py-0.5 text-xs border rounded ${
+                    isOn
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
+                  }`}
+                >
+                  {t}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="border-t border-gray-200 my-2" />
       <div>
         <p className={sectionLabel}>정렬</p>

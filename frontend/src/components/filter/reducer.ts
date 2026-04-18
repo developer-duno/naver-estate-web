@@ -30,6 +30,8 @@ export interface FilterState {
   minYield: string;
   maxYield: string;
   sortBy: string;
+  /** 선택된 태그 쉼표 문자열 (예: "복층,테라스"). 빈 문자열이면 미적용 */
+  tags: string;
 }
 
 export type FilterAction =
@@ -56,6 +58,7 @@ export const DEFAULT_STATE: FilterState = {
   buildingName: "전체", floorPreset: "전체",
   minYield: "", maxYield: "",
   sortBy: "rank",
+  tags: "",
 };
 
 // ── 리듀서 ──
@@ -101,5 +104,6 @@ export function buildInitState(init?: ArticleFilters): FilterState {
     buildingName: init?.building_name || "전체",
     minYield: _initStr(init?.min_yield),
     maxYield: _initStr(init?.max_yield),
+    tags: init?.tags ?? "",
   };
 }

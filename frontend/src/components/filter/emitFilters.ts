@@ -84,5 +84,8 @@ export function buildArticleFilters(
   const sb = get("sortBy");
   if (sb !== "rank") filters.sort_by = sb as SortBy;
 
+  const tg = get("tags");
+  if (tg) filters.tags = tg;
+
   return filters;
 }

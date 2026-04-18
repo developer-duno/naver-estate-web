@@ -22,12 +22,30 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/{complex_no}/articles/start-crawl")
-def start_live_crawl(complex_no: str, user: dict = Depends(get_approved_user)):
-    """Start background crawl, return immediately."""
-    # 최근 크롤링 완료 여부 확인 (동적 TTL 적용)
+def start_live_crawl(
+    complex_no: str,
+    force: bool = False,
+    user: dict = Depends(get_approved_user),
+    db: Session = Depends(get_db),
+):
+    """Start background crawl, return immediately.
+
+    force=True 면 `crawl_done` 쿨다운 캐시를 무시하고 강제로 크롤 시작.
+    사용자가 수동 버튼을 10초 내 재클릭한 경우 FE 가 force=1 을 붙임.
+    네이버 API 과호출 방지는 `_active_complexes` 가드가 담당.
+    """
+    # 최근 크롤링 완료 여부 확인 (동적 TTL 적용) — force=True 면 스킵
     done_key = f"crawl_done:{complex_no}"
-    if _cache.get(done_key) is not None:
-        return {"complex_no": complex_no, "status": "cached"}
+    if not force and _cache.get(done_key) is not None:
+        cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
+        last_crawled_at = (
+            cpx.last_crawled_at.isoformat() if cpx and cpx.last_crawled_at else None
+        )
+        return {
+            "complex_no": complex_no,
+            "status": "cached",
+            "last_crawled_at": last_crawled_at,
+        }
 
     # Already running? (Lock으로 check-then-set 원자화)
     with _crawl_lock:

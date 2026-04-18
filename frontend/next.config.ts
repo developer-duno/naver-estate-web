@@ -2,7 +2,19 @@ import type { NextConfig } from "next";
 
 const isDev = process.env.NODE_ENV !== "production";
 
+// Vercel 은 배포마다 고유 VERCEL_GIT_COMMIT_SHA / VERCEL_DEPLOYMENT_ID 주입.
+// 이를 빌드 ID 로 써서 브라우저가 자기 버전을 알게 한다 (VersionWatcher 가 참조).
+const buildId =
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.VERCEL_DEPLOYMENT_ID ||
+  process.env.NEXT_PUBLIC_BUILD_ID ||
+  `dev-${Date.now()}`;
+
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_BUILD_ID: buildId,
+  },
+  generateBuildId: async () => buildId,
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**.naver.net" },

@@ -144,6 +144,17 @@ export function useCrawlAction(complexNo: string) {
       setMsg("데이터 갱신 중...", "info");
       // 서버 상태를 2초 간격 폴링 → done 순간 invalidate + 성공 메시지
       startPolling();
+      // 60초 안전망: 폴링이 어떤 이유로든 terminal 못 받아도 버튼 강제 해제.
+      // 사용자가 무한정 "갱신 중..." 상태로 묶이지 않도록 보장.
+      timersRef.current.push(setTimeout(() => {
+        if (pollRef.current) {
+          clearPolling();
+          invalidateComplexQueries(queryClient, complexNo);
+          setCrawling(false);
+          setMsg("갱신이 계속 진행 중일 수 있어요. 잠시 후 다시 확인해주세요.", "info");
+          timersRef.current.push(setTimeout(() => setMessage(""), 4_000));
+        }
+      }, 60_000));
     },
     onError: (err: unknown) => {
       clearPolling();

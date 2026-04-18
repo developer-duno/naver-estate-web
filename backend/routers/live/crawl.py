@@ -67,7 +67,16 @@ def start_live_crawl(
     t = threading.Thread(target=_background_crawl, args=(complex_no,), daemon=True)
     t.start()
 
-    return {"complex_no": complex_no, "status": "started"}
+    # 현재 DB 상 last_crawled_at 동봉 — FE 가 배지 즉시 힌트로 사용
+    cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
+    last_crawled_at = (
+        cpx.last_crawled_at.isoformat() if cpx and cpx.last_crawled_at else None
+    )
+    return {
+        "complex_no": complex_no,
+        "status": "started",
+        "last_crawled_at": last_crawled_at,
+    }
 
 
 @router.get("/{complex_no}/articles/crawl-status")

@@ -172,17 +172,17 @@ export function useCrawlAction(complexNo: string) {
       setMsg("데이터 갱신 중...", "info");
       // 서버 상태를 2초 간격 폴링 → done 순간 refetch + 성공 메시지
       startPolling();
-      // 60초 안전망: 폴링이 어떤 이유로든 terminal 못 받아도 버튼 강제 해제.
-      // 사용자가 무한정 "갱신 중..." 상태로 묶이지 않도록 보장.
+      // 120초 UX 가드: 크롤이 길면(상세 수집 176건 등) 사용자가 버튼을 다시
+      // 누를 수 있게 버튼만 활성화. **폴링은 계속 유지** — 완료 시 자동으로
+      // 배지/매물 최신화. 혹시 버튼 다시 누르면 이미 _active_complexes 가드로
+      // already_running 응답 → 사용자에게 "진행 중" 안내.
       timersRef.current.push(setTimeout(() => {
         if (pollRef.current) {
-          clearPolling();
-          refetchComplexQueries(queryClient, complexNo);
           setCrawling(false);
-          setMsg("갱신이 계속 진행 중일 수 있어요. 잠시 후 다시 확인해주세요.", "info");
-          timersRef.current.push(setTimeout(() => setMessage(""), 4_000));
+          setMsg("갱신이 오래 걸리고 있어요 — 완료되면 자동 반영됩니다.", "info");
+          timersRef.current.push(setTimeout(() => setMessage(""), 5_000));
         }
-      }, 60_000));
+      }, 120_000));
     },
     onError: (err: unknown) => {
       clearPolling();

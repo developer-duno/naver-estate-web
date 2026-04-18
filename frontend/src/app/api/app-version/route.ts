@@ -18,6 +18,10 @@ export async function GET() {
     {
       headers: {
         "Cache-Control": "no-store",
+        // Vercel Edge 는 Cache-Control 만으로는 캐시를 끄지 않음 —
+        // CDN 전용 지시자로 명시해야 매 요청이 오리진까지 도달.
+        // 참고: https://vercel.com/docs/edge-cache#cdn-cache-control
+        "Vercel-CDN-Cache-Control": "no-store",
       },
     },
   );

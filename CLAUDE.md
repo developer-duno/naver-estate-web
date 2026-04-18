@@ -4,7 +4,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-15 — 세션 46 **AdminCard 공통 컴포넌트 추출** ✅ — `/admin` 영역의 `bg-white border rounded-lg p-4` + `<h3 mb-3>` 헤더 카드 반복 패턴을 공통 `AdminCard` 컴포넌트로 추출, **8곳 치환**. 커밋 **5건** (967a462 / e48add1 / 4b44e34 / 63358dc / 3ddd7f6). 하네스 9 GATE 실측 재검증 후 5 Step 분할 (단계당 ≤2파일). 전체 테스트 568/568 통과.
+**마지막 작업**: 2026-04-18 — 세션 60 **시각 회귀 3페이지 + 매물 tags 필터 UI** ✅ — `/complex/[no]` · `/mibunyang/[id]` · `/search` Playwright `toHaveScreenshot` 신설 + FilterBar 에 tags 멀티선택 토글 버튼 추가. 커밋 **7건** (d0ae048 / b414e50 / 6cc6835 / 757b384 / ed5c573 / d3a3703 / d9f076a). CI 4회 green. baseline 14→20장, vitest 568→576개.
 
 **세션 46 성과** (naver-estate-web FE 10파일, 5커밋):
 
@@ -235,16 +235,68 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 **상세**: `memory/session59_summary.md`
 
-**다음 우선순위 (세션 60)**:
-1. 🟡 **naver_call_counter 48h+ 누적 재확인**: 2026-04-19~20 이후 재조회. 평일+주말 1사이클 확보되면 TTL 72h 상향 판단 가능
-2. 🟡 **public-visual baseline 안정성 계속 감시**: 3회 연속 green 달성 후 회귀 징후 여부만 추적
-3. 🟡 **시각 회귀 추가 확장 후보**: `/complex/[no]` 단지 상세(mock 다수) / `/mibunyang/[id]` 미분양 상세(Naver Maps 결정성 우려) / 비교 페이지 4→6~8 확장
-4. 🟡 **세션 43 백로그 잔여**: 미분양 지도 뷰 / 매물 필터 세부 확장
+**세션 60 성과 (2026-04-18, 7커밋 push + CI 4회 green)**:
+
+### 1차: /complex/[no] 단지 상세 시각 회귀 (2커밋)
+- `d0ae048` feat(e2e): /complex/[no] 시각 회귀 스펙 + mock fixture (Windows baseline) — 4 파일 (+148/-1)
+- `b414e50` feat(e2e): /complex/[no] Linux CI baseline 추가 — 1 파일
+- **중요 발견**: middleware.ts:8 `AUTH_REQUIRED_PATHS = ["/complex", "/verify"]` 로 `/complex/*` 가 **로그인 필수** → public-visual 아닌 `admin` project (storageState) 에 편입. playwright.config.ts admin project testMatch 를 `/(admin-(dashboard|pages)|complex-visual)\.spec\.ts$/` 로 확장. CI `--project=admin` 이미 포함되어 CI 변경 0
+- Explore 플랜 단계에서 놓친 블로커를 실행 중 스크린샷 확인으로 즉시 발견해 admin project 편입 우회
+- 기본 탭이 "info" 라 Recharts 미마운트 → `data-testid` / `visibility:hidden` 불필요 (세션 59 /compare 보다 단순)
+- `last_crawled_at` omit 으로 formatTimeAgo 배지 미렌더 (완전 결정적)
+- CI run 24594160184 전 job success
+
+### 2차: /mibunyang/[id] 미분양 상세 시각 회귀 (2커밋)
+- `6cc6835` feat(e2e): /mibunyang/[id] 시각 회귀 스펙 + mock fixture (Windows baseline) — 5 파일 (+170/-2)
+- `757b384` feat(e2e): /mibunyang/[id] Linux CI baseline 추가 — 1 파일
+- `/mibunyang/*` 는 AUTH_REQUIRED_PATHS 미포함 → `public-visual` project 편입
+- `mibunyang/[id]/page.tsx` 미분양 추이 section 에 `data-testid="mb-unsold-trend"` 추가 + Recharts 섹션 visibility:hidden (세션 59 /compare 선례 그대로)
+- Naver Maps SDK 결정성 회피 → mock 에 `latitude`/`longitude` omit → 지도 섹션 미렌더
+- CI run 24594716290 전 job success
+
+### 3차: /search 빈 상태 시각 회귀 (2커밋)
+- `ed5c573` feat(e2e): /search 빈 상태 진입 시각 회귀 스펙 + regions mock (Windows baseline) — 4 파일 (+49/-1)
+- `d3a3703` feat(e2e): /search Linux CI baseline 추가 — 1 파일
+- `public-visual` project (auth 불필요)
+- 빈 상태 (`?q=` / `?sido=` 없음) 진입 → `searchComplexes` / `getComplexesByRegion` useQuery enabled=false. RegionSelector 만 `getRegions()` 항상 fire → mock 필요
+- 스펙 시도 1회 `getByRole("heading", { name: "검색" })` 타이밍 이슈로 실패 → "키워드 검색"/"지역 선택" 더 구체 heading + "서울" option `toBeAttached` 로 교체 (세션 59 교훈 "구체 selector > networkidle" 재확인)
+- CI run 24595839658 전 job success
+
+### 4차: 매물 tags 멀티선택 필터 UI 추가 (1커밋)
+- `d9f076a` feat(filter): 매물 tags 멀티선택 필터 UI 추가 (상세 섹션) — 5 파일 (+106/-0)
+- 사용자 요청 "반려동물/주차/즉시입주" 실측 결과 **셋 다 잘못된 후보**로 판명:
+  - 즉시입주: 이미 구현됨 (`move_in_type` FilterBar 입주 드롭다운 기존 존재)
+  - 반려동물: DB `tags` 전수 조회 결과 "반려/애완/펫" 태그 **0건** (네이버 크롤 원천 부재)
+  - 주차: `article.parking_count` 593,855건 중 593,475건 **NULL**, 있는 값도 단지 전체 주차대수("720"/"2275") 라 매물 필터 의미 없음
+- 대신 **진짜 공백 발견**: `ArticleFilters.tags` 타입 + BE `query_helpers.py` + 응답 `filter_options.tags` 전부 구현되어 있으나 FE UI 만 0건 (`components/filter/` 5 파일 grep tags 0건)
+- 변경: `reducer.ts` tags 필드 / `emitFilters.ts` tags 전달 / `FilterSections.tsx` DetailSection 에 tags 토글 버튼 그룹 (aria-pressed, 빈 배열시 미렌더) / `FilterChips.tsx` `#태그명` 개별 칩 / `FilterBar.test.tsx` 신규 3 테스트 (17→20)
+- BE/DB 무변경. DB 실데이터 상위: 역세권 917 / 복층 2,276 / 테라스 1,229 / 엘리베이터 160 / 필로티 1,017 / 탑층 2,392 / 마당 727 / 풀옵션 31 / 주차가능 465
+- CI run 24596461430 전 job success
+
+**세션 60 하네스 교훈 (다음 세션 필독)**:
+1. **Plan Explore 의 맹점은 middleware 같은 전역 가드**: Explore 가 useQuery/mock/Recharts 는 잘 찾았지만 `/complex/*` 가 AUTH_REQUIRED_PATHS 에 있다는 걸 세션 60 1차에서 놓쳐 첫 baseline 생성이 /login 리다이렉트로 실패. Explore 보고 후 Plan 단계에서 `middleware.ts` 를 반드시 직접 Read 해서 경로 보호 여부 확인 필수
+2. **사용자 요청 용어를 실측 없이 수용 금지**: "반려동물/주차/즉시입주" 셋 다 잘못된 후보였는데 BE/DB 전수 실측(`parking_count` 분포, tags 태그명 집계)으로 바로잡음. 네이버 크롤 기반 프로젝트는 **원천 데이터 분포를 DB 쿼리로 먼저 확인**해야 할 "확장" 과 "불가" 가 갈림
+3. **Type/BE 지원 + FE UI 공백 패턴**: 타입 정의·BE 쿼리·API 응답 필드 모두 구현되어있지만 FE UI 만 0건인 "반공백" 은 grep 으로 명확히 검출됨 (`grep -c "tags" src/components/filter/*` → 0). 향후 유사 작업 시 BE → FE 경로를 순방향 grep 으로 빠뜨린 연결 검출
+4. **시각 회귀 fixture 패턴 확립**: `**/api/복수엔드포인트/**` path segment 분기 + 404 fallback + mock 즉시 응답 + heading 대기 `toBeVisible({timeout:10_000})` + Recharts 는 `data-testid` + `visibility:hidden`. 4번 연속 동일 패턴으로 성공 → 5번째부터는 템플릿화 가능
+5. **사용자 대화 쉬운말 vs 커밋 기술 용어 분리 유지**: 사용자 요청 "반려동물/주차" 를 쉬운말 답변으로 "DB 조회 결과 데이터가 아예 없어요" 설명하되 커밋 메시지는 `parking_count 593,855건 중 593,475건 NULL` 정확 수치 기록
+
+**상세**: `memory/session60_summary.md`
+
+**baseline 14 → 20장**:
+- admin 8 + public-flow 4 + compare-visual 2 + **complex-visual 2** + **mibunyang-visual 2** + **search-visual 2**
+
+**vitest 568 → 576 pass** (FilterBar 17→20, +3 신규)
+
+**다음 우선순위 (세션 61)**:
+1. 🟡 **naver_call_counter 48h+ 누적 재확인**: 2026-04-19~20 이후 재조회. 평일+주말 1사이클 확보되면 TTL 72h 상향 판단 가능 (세션 60 실측 8.5h 678회 확인했으나 판단 조기)
+2. 🟡 **시각 회귀 baseline 안정성 감시**: 현재 20장. CI 정기 실행에서 회귀 징후만 추적 (workflow_dispatch baseline 갱신 분기는 세션 56 에서 구축 완료)
+3. 🟡 **세션 43 백로그 잔여**: 미분양 지도 뷰 (Naver Maps 오버레이, FE 2파일) / 비교 페이지 4→6~8 확장
+4. 🟡 **tags 필터 UX 개선 후보**: 현재 `filter_options.tags` 가 단지별 **사용 중인** 태그만 반환 (적은 단지는 tags 비어있어 섹션 미노출). "인기 태그 고정 목록" 추가 검토 필요 시 (세션 43 백로그로 유지)
 5. ⚪ mibunyang 쪽 `quota_db_integration.md` 적용 (다른 프로젝트 세션)
 
-**제거된 우선순위**: ~~admin settings 편집 모드 AdminCard~~ — frontend/CLAUDE.md 규칙화 완료
+**제거된 우선순위**: ~~admin settings 편집 모드 AdminCard~~ / ~~매물 필터 세부 확장 (반려동물/주차/즉시입주)~~ — 원천 데이터 부재 / 기구현 확인으로 무효화
 
-**상세**: `memory/session59_summary.md`
+**상세**: `memory/session60_summary.md`
 
 <!-- 보류 (사용자 미요청): 미분양 지도 뷰 (FE 2파일, Naver Maps 오버레이), 비교 페이지 4→6~8 확장 (세션 46 스킵 결정) -->
 

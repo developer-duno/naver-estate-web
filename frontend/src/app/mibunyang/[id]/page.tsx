@@ -126,7 +126,7 @@ export default function MbDetailPage() {
         <TradeStatsSection apartment={apt} />
 
         {/* 미분양 추이 */}
-        <section className="bg-white rounded-lg shadow-sm border p-4 md:p-6">
+        <section data-testid="mb-unsold-trend" className="bg-white rounded-lg shadow-sm border p-4 md:p-6">
           <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
             <h3 className="text-base font-bold text-gray-800">미분양 추이</h3>
             {historyQuery.data?.items?.length ? (

@@ -31,11 +31,12 @@ export default defineConfig({
         /public-flow\.spec\.ts$/,
         /compare-visual\.spec\.ts$/,
         /complex-visual\.spec\.ts$/,
+        /mibunyang-visual\.spec\.ts$/,
       ],
     },
     {
       name: "public-visual",
-      testMatch: /(public-flow|compare-visual)\.spec\.ts$/,
+      testMatch: /(public-flow|compare-visual|mibunyang-visual)\.spec\.ts$/,
     },
     {
       name: "admin",

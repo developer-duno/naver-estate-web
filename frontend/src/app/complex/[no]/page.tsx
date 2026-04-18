@@ -1,15 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import {
   getComplex,
   getArticles,
   getPyeongDetails,
-  startLiveCrawl,
-  ApiError,
 } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { createClient } from "@/lib/supabase";
@@ -47,8 +45,6 @@ export default function ComplexDetailPage() {
   // 필터/정렬/페이지 — URL을 단일 소스로 사용
   const { filters, page: currentPage, sortBy: activeSortBy, setFilters, setPage, setSortBy } = useFilterParams();
   const { starred, toggle: toggleFavorite } = useFavoriteStatus(complexNo);
-  const queryClient = useQueryClient();
-  const { crawling, message: crawlMessage, messageType: crawlMessageType, setMsg: setCrawlMsg, handleCrawl } = useCrawlAction(complexNo);
   const [selectedArticleNos, setSelectedArticleNos] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
@@ -131,39 +127,34 @@ export default function ComplexDetailPage() {
     }
   }, [complexQuery.isError]);
 
-  // Phase 2: 자동 크롤링 (초기 로드 성공 후)
-  const autoCrawlTriggeredRef = useRef(false);
+  // sessionToken 추출 — ComplexInfo 의 "실거래가 수집" 버튼이 accessToken 필요.
+  // 자동 크롤 로직은 useCrawlAction(auto) 로 이전됐고, 토큰은 별도로 뽑아둔다.
   useEffect(() => {
-    if (autoCrawlTriggeredRef.current) return;
-    if (!complexQuery.isSuccess || !articlesQuery.isSuccess || !pyeongQuery.isSuccess) return;
-    autoCrawlTriggeredRef.current = true;
-
     (async () => {
       try {
         const supabase = createClient();
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          setSessionToken(session.access_token);
-          const result = await startLiveCrawl(complexNo, session.access_token);
-          // 자동 크롤링이 실제로 시작된 경우에만 쿼리 갱신 예약
-          if (result.status === "started") {
-            [10_000, 20_000, 30_000].forEach((delay) => {
-              setTimeout(() => {
-                queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo) });
-                queryClient.invalidateQueries({ queryKey: queryKeys.complex(complexNo) });
-                queryClient.invalidateQueries({ queryKey: queryKeys.pyeongDetails(complexNo) });
-                queryClient.invalidateQueries({ queryKey: queryKeys.priceStats(complexNo) });
-              }, delay);
-            });
-          }
-        }
+        if (session?.access_token) setSessionToken(session.access_token);
       } catch (err) {
-        if (err instanceof ApiError && err.statusCode === 403) {
-          setCrawlMsg(err.message || "관리자 승인이 필요합니다", "error");
-        }
+        console.error("Failed to extract sessionToken:", err);
+        // 실패 시 토큰 없이 진행 — 실거래가 수집 버튼만 비활성화됨
       }
     })();
-  }, [complexNo, complexQuery.isSuccess, articlesQuery.isSuccess, pyeongQuery.isSuccess, setCrawlMsg, queryClient]);
+  }, []);
+
+  // 자동 크롤 통합 — 초기 3쿼리 성공 시 1회 자동 실행. 이후 폴링·문구·에러
+  // 처리는 수동 버튼과 동일 경로 (useCrawlAction 내부).
+  const {
+    crawling,
+    message: crawlMessage,
+    messageType: crawlMessageType,
+    clearMessage: clearCrawlMessage,
+    handleCrawl,
+  } = useCrawlAction(complexNo, {
+    auto: true,
+    autoEnabled:
+      complexQuery.isSuccess && articlesQuery.isSuccess && pyeongQuery.isSuccess,
+  });
 
   // 핸들러: 정렬 변경 → URL 업데이트 (page 리셋)
   const handleSortChange = useCallback(
@@ -344,16 +335,26 @@ export default function ComplexDetailPage() {
         </div>
       </div>
 
-      {/* 크롤 메시지 */}
+      {/* 크롤 메시지 — error 일 때만 X 버튼 (사용자가 인지할 때까지 유지) */}
       {crawlMessage && (
-        <div className={`text-sm rounded-md px-4 py-2 ${
+        <div className={`text-sm rounded-md px-4 py-2 flex justify-between items-center gap-3 ${
           crawlMessageType === "error"
             ? "bg-red-50 text-red-600"
             : crawlMessageType === "info"
               ? "bg-blue-50 text-blue-600"
               : "bg-green-50 text-green-600"
         }`}>
-          {crawlMessage}
+          <span>{crawlMessage}</span>
+          {crawlMessageType === "error" && (
+            <button
+              type="button"
+              onClick={clearCrawlMessage}
+              aria-label="닫기"
+              className="text-red-400 hover:text-red-600 flex-shrink-0"
+            >
+              ×
+            </button>
+          )}
         </div>
       )}
 

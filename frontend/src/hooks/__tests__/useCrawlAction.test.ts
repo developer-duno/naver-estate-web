@@ -1,12 +1,15 @@
 /**
- * useCrawlAction 훅 테스트 — 수동 "데이터 갱신" 버튼 로직
+ * useCrawlAction 훅 테스트 — 수동·자동 "데이터 갱신" 로직
  * 실행: npx vitest run src/hooks/__tests__/useCrawlAction.test.ts
  *
  * 검증 항목:
- *  1. cached 응답 시 invalidateQueries 호출 + force=false 전달
- *  2. cached 직후 10초 내 재클릭 → force=true 전달
- *  3. started 응답 시 "데이터 갱신 중..." 메시지 진입
- *  4. started 후 crawl-status 폴링 → done 순간 "갱신 완료" 표시
+ *  1. cached 응답 시 refetchQueries 호출 + "갱신됨" 문구
+ *  2. started 응답 시 "불러오는 중" 메시지 진입 (force 파라미터 삭제됨)
+ *  3. started 후 crawl-status 폴링 → done 순간 "갱신 완료" 표시
+ *  4. cached 응답의 last_crawled_at 낙관적 주입
+ *  5. 폴링 중 running 상태 → buildProgressMessage 결과 메시지 교체
+ *  6. 서버 status=error → refetch 없이 빨강 배너 + 자동 사라짐 없음
+ *  7. auto=true && autoEnabled=true → 마운트 시 1회 자동 실행
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
@@ -44,13 +47,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 
-describe("useCrawlAction — 수동 갱신 로직", () => {
+describe("useCrawlAction — 크롤 트리거 + 폴링 + UI 상태", () => {
   beforeEach(() => {
     mockStartLiveCrawl.mockReset();
     mockGetCrawlStatus.mockReset();
   });
 
-  it("첫 클릭에 force=false 로 호출하고, cached 응답 시 invalidateQueries 를 호출한다", async () => {
+  it("cached 응답 시 'N분 전 갱신됨' 문구를 표시한다 (force 파라미터 없음)", async () => {
     mockStartLiveCrawl.mockResolvedValue({
       complex_no: "C001",
       status: "cached",
@@ -66,64 +69,26 @@ describe("useCrawlAction — 수동 갱신 로직", () => {
       result.current.handleCrawl();
     });
 
-    // 첫 클릭은 force=false
     await waitFor(() => {
       expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1);
     });
-    expect(mockStartLiveCrawl).toHaveBeenNthCalledWith(1, "C001", "test-token", false);
+    // 인자 2개만: complexNo + access_token (force 파라미터 삭제됨)
+    expect(mockStartLiveCrawl).toHaveBeenNthCalledWith(1, "C001", "test-token");
 
-    // cached 분기: 메시지에 "N분 전 갱신됨" + 강제 갱신 안내 포함
     await waitFor(() => {
       expect(result.current.message).toContain("분 전");
-      expect(result.current.message).toContain("강제 갱신");
+      expect(result.current.message).toContain("갱신됨");
     });
+    expect(result.current.message).not.toContain("강제 갱신");
     expect(result.current.messageType).toBe("success");
     expect(result.current.crawling).toBe(false);
   }, 15000);
 
-  it("cached 직후 10초 내 재클릭은 force=true 로 호출한다", async () => {
-    mockStartLiveCrawl
-      .mockResolvedValueOnce({
-        complex_no: "C002",
-        status: "cached",
-        last_crawled_at: new Date().toISOString(),
-      })
-      .mockResolvedValueOnce({
-        complex_no: "C002",
-        status: "started",
-      });
-
-    const { useCrawlAction } = await import("../useCrawlAction");
-    const { result } = renderHook(() => useCrawlAction("C002"), {
-      wrapper: TestQueryProvider,
-    });
-
-    // 1차 클릭 (cached)
-    await act(async () => {
-      result.current.handleCrawl();
-    });
-    await waitFor(() => {
-      expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1);
-    });
-
-    // 2차 클릭 (즉시) → force=true 기대
-    await act(async () => {
-      result.current.handleCrawl();
-    });
-    await waitFor(() => {
-      expect(mockStartLiveCrawl).toHaveBeenCalledTimes(2);
-    });
-
-    expect(mockStartLiveCrawl).toHaveBeenNthCalledWith(1, "C002", "test-token", false);
-    expect(mockStartLiveCrawl).toHaveBeenNthCalledWith(2, "C002", "test-token", true);
-  }, 15000);
-
-  it("started 응답 시 '데이터 갱신 중...' 메시지로 진입한다", async () => {
+  it("started 응답 시 '매물 목록 불러오는 중...' 메시지로 진입한다", async () => {
     mockStartLiveCrawl.mockResolvedValue({
       complex_no: "C003",
       status: "started",
     });
-    // 폴링 초기 1회는 running 으로 두어 메시지가 유지되도록
     mockGetCrawlStatus.mockResolvedValue({ complex_no: "C003", status: "running" });
 
     const { useCrawlAction } = await import("../useCrawlAction");
@@ -136,10 +101,9 @@ describe("useCrawlAction — 수동 갱신 로직", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.message).toBe("데이터 갱신 중...");
+      expect(result.current.message).toContain("불러오는 중");
     });
     expect(result.current.messageType).toBe("info");
-    expect(mockStartLiveCrawl).toHaveBeenCalledWith("C003", "test-token", false);
   }, 15000);
 
   it("started 후 crawl-status 폴링 done 감지 → '갱신 완료' 메시지", async () => {
@@ -148,7 +112,6 @@ describe("useCrawlAction — 수동 갱신 로직", () => {
       complex_no: "C004",
       status: "started",
     });
-    // 첫 2번 running, 3번째에서 done
     mockGetCrawlStatus
       .mockResolvedValueOnce({ complex_no: "C004", status: "running", phase: "articles" })
       .mockResolvedValueOnce({ complex_no: "C004", status: "running", phase: "articles" })
@@ -163,13 +126,11 @@ describe("useCrawlAction — 수동 갱신 로직", () => {
       result.current.handleCrawl();
     });
 
-    // started 응답 수신 + 폴링 시작 대기 (mutation 해소)
     await vi.waitFor(
       () => expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1),
       { timeout: 3000 },
     );
 
-    // 폴링 2초 × 3회 = 6초 + 각 폴링 promise 해소 여유
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_100);
     });
@@ -186,7 +147,6 @@ describe("useCrawlAction — 수동 갱신 로직", () => {
     );
     expect(result.current.messageType).toBe("success");
     expect(result.current.crawling).toBe(false);
-    expect(mockGetCrawlStatus).toHaveBeenCalled();
 
     vi.useRealTimers();
   }, 15000);
@@ -200,7 +160,6 @@ describe("useCrawlAction — 수동 갱신 로직", () => {
       last_crawled_at: newIso,
     });
 
-    // 현실 시나리오 재현: BE 가 크롤 직후 새 값을 돌려줌. queryFn mock 도 newIso 반환.
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: Infinity } },
     });
@@ -209,7 +168,6 @@ describe("useCrawlAction — 수동 갱신 로직", () => {
       queryKey: queryKeys.complex("C005"),
       queryFn: async () => {
         queryFnCalls += 1;
-        // 초기(프리페치)에는 oldIso, refetch 부터는 newIso
         return {
           complex_no: "C005",
           complex_name: "테스트",
@@ -217,7 +175,6 @@ describe("useCrawlAction — 수동 갱신 로직", () => {
         };
       },
     });
-    // 사전 조건: 초기값이 oldIso 로 세팅됨
     const before = client.getQueryData(queryKeys.complex("C005")) as {
       last_crawled_at: string;
     };
@@ -237,7 +194,6 @@ describe("useCrawlAction — 수동 갱신 로직", () => {
       expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1);
     });
 
-    // patchLastCrawledAt + refetchQueries 합작으로 배지가 newIso 로 교체되어야 함
     await waitFor(() => {
       const cached = client.getQueryData(queryKeys.complex("C005")) as {
         last_crawled_at: string;
@@ -246,5 +202,141 @@ describe("useCrawlAction — 수동 갱신 로직", () => {
       expect(cached?.last_crawled_at).toBe(newIso);
       expect(cached?.complex_name).toBe("테스트");
     });
+  }, 15000);
+
+  it("폴링 중 running+phase=articles 이면 '매물 수집 중 N건' 진행률 문구로 교체된다", async () => {
+    vi.useFakeTimers();
+    mockStartLiveCrawl.mockResolvedValue({
+      complex_no: "C006",
+      status: "started",
+    });
+    mockGetCrawlStatus.mockResolvedValue({
+      complex_no: "C006",
+      status: "running",
+      phase: "articles",
+      article_count: 42,
+      current_page: 3,
+    });
+
+    const { useCrawlAction } = await import("../useCrawlAction");
+    const { result } = renderHook(() => useCrawlAction("C006"), {
+      wrapper: TestQueryProvider,
+    });
+
+    await act(async () => {
+      result.current.handleCrawl();
+    });
+
+    await vi.waitFor(
+      () => expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1),
+      { timeout: 3000 },
+    );
+
+    // 첫 폴링(2초) 후 진행률 메시지로 갱신
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_100);
+    });
+
+    await vi.waitFor(
+      () => expect(result.current.message).toContain("매물 수집 중 42건"),
+      { timeout: 3000 },
+    );
+    expect(result.current.message).toContain("(3페이지)");
+    expect(result.current.messageType).toBe("info");
+
+    vi.useRealTimers();
+  }, 15000);
+
+  it("서버 status=error → refetchQueries 호출 없이 빨강 배너 메시지 유지", async () => {
+    vi.useFakeTimers();
+    mockStartLiveCrawl.mockResolvedValue({
+      complex_no: "C007",
+      status: "started",
+    });
+    mockGetCrawlStatus.mockResolvedValue({
+      complex_no: "C007",
+      status: "error",
+      error: "naver timeout",
+    });
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: Infinity } },
+    });
+    const refetchSpy = vi.spyOn(client, "refetchQueries");
+
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(QueryClientProvider, { client }, children);
+
+    const { useCrawlAction } = await import("../useCrawlAction");
+    const { result } = renderHook(() => useCrawlAction("C007"), { wrapper });
+
+    await act(async () => {
+      result.current.handleCrawl();
+    });
+
+    await vi.waitFor(
+      () => expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1),
+      { timeout: 3000 },
+    );
+
+    // 첫 폴링(2초) 후 error 감지
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_100);
+    });
+
+    await vi.waitFor(
+      () => expect(result.current.messageType).toBe("error"),
+      { timeout: 3000 },
+    );
+    expect(result.current.message).toContain("네이버가 막아서");
+    // 서버 error 필드 원문이 UI 에 노출되면 안 됨
+    expect(result.current.message).not.toContain("naver timeout");
+    expect(result.current.crawling).toBe(false);
+    // error 분기에서는 refetchQueries 가 호출되지 않아야 함 (기존 데이터 보존)
+    expect(refetchSpy).not.toHaveBeenCalled();
+
+    // 4초 지나도 메시지 유지 (자동 사라짐 금지)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    expect(result.current.message).toContain("네이버가 막아서");
+
+    vi.useRealTimers();
+  }, 15000);
+
+  it("auto=true && autoEnabled=true → 마운트 시 1회 자동 실행", async () => {
+    mockStartLiveCrawl.mockResolvedValue({
+      complex_no: "C008",
+      status: "cached",
+      last_crawled_at: new Date().toISOString(),
+    });
+
+    const { useCrawlAction } = await import("../useCrawlAction");
+    const { rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) =>
+        useCrawlAction("C008", { auto: true, autoEnabled: enabled }),
+      {
+        wrapper: TestQueryProvider,
+        initialProps: { enabled: false },
+      },
+    );
+
+    // autoEnabled=false 면 실행 안 됨
+    await waitFor(() => {
+      expect(mockStartLiveCrawl).not.toHaveBeenCalled();
+    });
+
+    // autoEnabled=true 로 전환 → 1회 실행
+    rerender({ enabled: true });
+
+    await waitFor(() => {
+      expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1);
+    });
+
+    // 재렌더 반복해도 추가 호출 없음 (autoTriggeredRef 로 1회 가드)
+    rerender({ enabled: true });
+    rerender({ enabled: true });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1);
   }, 15000);
 });

@@ -1,13 +1,16 @@
 /**
  * 앱 버전 API — VersionWatcher 가 폴링해서 새 배포 감지에 사용.
  *
- * 이 route 는 Vercel 배포마다 고유 buildId 로 고정 빌드됨. 클라이언트가
- * 받은 값이 자기 NEXT_PUBLIC_BUILD_ID 와 다르면 새 배포가 있다는 신호.
+ * 배포마다 Vercel 이 process.env.NEXT_PUBLIC_BUILD_ID 를 새 값으로 주입하고
+ * 이 route 는 그 값을 런타임에 그대로 반환. 클라이언트가 받은 값이 자기
+ * (빌드타임에 고정된) NEXT_PUBLIC_BUILD_ID 와 다르면 새 배포가 있다는 신호.
+ *
+ * dynamic="force-dynamic" 으로 매 요청마다 실행 — 정적 prerender 되면
+ * .rsc 만 빌드되고 일반 GET URL 이 404 나는 문제를 피한다.
  */
 import { NextResponse } from "next/server";
 
-export const dynamic = "force-static"; // 배포 시점에 고정 생성
-export const revalidate = false;
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   return NextResponse.json(

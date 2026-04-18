@@ -21,4 +21,6 @@ export interface CrawlProgress {
   detail_crawled_count?: number;
   detail_total?: number;
   detail_skipped_count?: number;
+  /** status=cached 시 DB 상 마지막 크롤링 시각 (ISO string) */
+  last_crawled_at?: string | null;
 }

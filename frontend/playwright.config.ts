@@ -30,6 +30,7 @@ export default defineConfig({
         /admin-pages\.spec\.ts$/,
         /public-flow\.spec\.ts$/,
         /compare-visual\.spec\.ts$/,
+        /complex-visual\.spec\.ts$/,
       ],
     },
     {
@@ -38,7 +39,7 @@ export default defineConfig({
     },
     {
       name: "admin",
-      testMatch: /admin-(dashboard|pages)\.spec\.ts$/,
+      testMatch: /(admin-(dashboard|pages)|complex-visual)\.spec\.ts$/,
       dependencies: ["setup"],
       use: {
         storageState: "e2e/.auth/admin.json",

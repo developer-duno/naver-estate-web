@@ -26,6 +26,7 @@ import ArticleCardMobile from "@/components/ArticleCardMobile";
 import ArticleDetail from "@/components/ArticleDetail";
 import Pagination from "@/components/Pagination";
 import HintIcon from "@/components/HintIcon";
+import CrawlProgressBanner from "@/components/CrawlProgressBanner";
 
 function formatTimeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -148,6 +149,7 @@ export default function ComplexDetailPage() {
     crawling,
     message: crawlMessage,
     messageType: crawlMessageType,
+    progress: crawlProgress,
     clearMessage: clearCrawlMessage,
     handleCrawl,
   } = useCrawlAction(complexNo, {
@@ -335,27 +337,35 @@ export default function ComplexDetailPage() {
         </div>
       </div>
 
-      {/* 크롤 메시지 — error 일 때만 X 버튼 (사용자가 인지할 때까지 유지) */}
-      {crawlMessage && (
-        <div className={`text-sm rounded-md px-4 py-2 flex justify-between items-center gap-3 ${
-          crawlMessageType === "error"
-            ? "bg-red-50 text-red-600"
-            : crawlMessageType === "info"
-              ? "bg-blue-50 text-blue-600"
-              : "bg-green-50 text-green-600"
-        }`}>
-          <span>{crawlMessage}</span>
-          {crawlMessageType === "error" && (
-            <button
-              type="button"
-              onClick={clearCrawlMessage}
-              aria-label="닫기"
-              className="text-red-400 hover:text-red-600 flex-shrink-0"
-            >
-              ×
-            </button>
-          )}
-        </div>
+      {/* 크롤 메시지: 진행 중(info+crawling)이면 상세 배너, 완료/에러/쿨다운은 기존 1줄 */}
+      {crawling && crawlMessageType === "info" ? (
+        <CrawlProgressBanner
+          progress={crawlProgress}
+          crawling={crawling}
+          fallbackMessage={crawlMessage || undefined}
+        />
+      ) : (
+        crawlMessage && (
+          <div className={`text-sm rounded-md px-4 py-2 flex justify-between items-center gap-3 ${
+            crawlMessageType === "error"
+              ? "bg-red-50 text-red-600"
+              : crawlMessageType === "info"
+                ? "bg-blue-50 text-blue-600"
+                : "bg-green-50 text-green-600"
+          }`}>
+            <span>{crawlMessage}</span>
+            {crawlMessageType === "error" && (
+              <button
+                type="button"
+                onClick={clearCrawlMessage}
+                aria-label="닫기"
+                className="text-red-400 hover:text-red-600 flex-shrink-0"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        )
       )}
 
       {/* 매물 테이블 (데스크톱) / 카드뷰 (모바일) */}

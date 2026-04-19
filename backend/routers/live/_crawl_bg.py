@@ -175,3 +175,5 @@ def _background_crawl(complex_no: str):
         complexes_cache.delete(f"complex_detail:{complex_no}")
         complexes_cache.delete(f"articles_default:{complex_no}")
         complexes_cache.delete(f"pyeong_details:{complex_no}")
+        # /api/stats 캐시 무효화 — 크롤 완료로 article_count 변동 가능
+        get_cache("stats", dynamic=True).delete("db_stats")

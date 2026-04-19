@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from crawler.utils import get_shared_throttle
 from db.database import SessionLocal
 from db.models import Article, Complex, CrawlJob
+from services.cache import get_cache
 from services.enricher import enrich_complex_detail
 from services.naver_call_counter import record_call
 from services.upsert import (
@@ -178,6 +179,8 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
 
         # 이번 크롤링에서 안 보인 매물 → is_active = False
         delete_missing_articles(db, complex_no, all_article_nos)
+        # /api/stats 캐시 무효화 — 물리 삭제로 article_count 변동
+        get_cache("stats", dynamic=True).delete("db_stats")
 
         # 단지 last_crawled_at 업데이트
         db.query(Complex).filter(Complex.complex_no == complex_no).update(

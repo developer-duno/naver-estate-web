@@ -92,6 +92,8 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
   if (s.direction !== "전체") detailParts.push(s.direction);
   if (s.buildingAge !== "0") detailParts.push(s.buildingAge + "년");
   if (s.verifiedOnly === "true") detailParts.push("인증");
+  const tagCount = s.tags ? s.tags.split(",").filter(Boolean).length : 0;
+  if (tagCount > 0) detailParts.push(`태그 ${tagCount}`);
   if (s.sortBy !== "rank") {
     const sortLabel = SORT_OPTIONS.find((o) => o.v === s.sortBy)?.l;
     if (sortLabel) detailParts.push(sortLabel);

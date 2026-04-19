@@ -171,6 +171,22 @@ describe("FilterBar — 상세 드롭다운", () => {
     openDropdown("상세");
     expect(screen.queryByText("태그")).not.toBeInTheDocument();
   });
+
+  it("상세 드롭다운 버튼에 선택된 태그 개수 요약 표시", () => {
+    const props = {
+      ...defaultProps,
+      filterOptions: { building_names: [], tags: ["역세권", "복층", "테라스"], directions: [] } as FilterOptions,
+    };
+    render(<FilterBar {...props} />);
+    openDropdown("상세");
+
+    fireEvent.click(screen.getByRole("button", { name: "역세권" }));
+    fireEvent.click(screen.getByRole("button", { name: "복층" }));
+
+    // 상세 드롭다운 버튼에 "태그 2" 요약이 포함되어야 함
+    const detailBtn = screen.getByRole("button", { name: /^상세/ });
+    expect(detailBtn.textContent).toContain("태그 2");
+  });
 });
 
 describe("FilterBar — 필터 칩", () => {

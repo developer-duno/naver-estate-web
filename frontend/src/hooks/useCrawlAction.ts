@@ -10,6 +10,12 @@ type MessageType = "info" | "error" | "success";
 
 const POLL_INTERVAL_MS = 2_000;
 
+// 2s × 150 = 5분. BE 백그라운드 스레드가 예외로 죽어서 _crawl_status 가
+// "running" 고정으로 새어나오는 경우, FE 가 영원히 대기하지 않도록 강제 해제.
+// 세션 63 already_running 분기 추가(130bc5f)에도 BE 상태 누수 시 폴링이 안전망
+// 없이 무한 루프하는 시나리오를 사용자가 세션 64 에서 보고. 해당 방어망.
+const MAX_POLL_ATTEMPTS = 150;
+
 // 서버가 완료 상태로 반환하는 status 값들 (_crawl_bg.py + crawl.py 참조)
 const TERMINAL_STATUSES = new Set(["done", "done_partial", "error", "idle"]);
 
@@ -130,6 +136,18 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
     let attempts = 0;
     pollRef.current = setInterval(async () => {
       attempts += 1;
+      // 5분 경과 시 강제 해제 — BE _crawl_status 가 "running" 고정으로 누수된
+      // 상태라도 사용자 버튼을 무한 잠그지 않는다. 진짜 오래 걸리는 작업은
+      // 새로고침 후 status 폴링이 다시 붙어 이어받는다.
+      if (attempts > MAX_POLL_ATTEMPTS) {
+        clearPolling();
+        setCrawling(false);
+        setMsg(
+          "크롤링이 5분 이상 걸립니다. 새로고침 뒤 다시 시도해주세요.",
+          "error",
+        );
+        return;
+      }
       try {
         const status = await getCrawlStatus(complexNo);
         if (status.status === "running") {

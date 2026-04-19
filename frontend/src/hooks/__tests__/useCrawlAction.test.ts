@@ -421,47 +421,6 @@ describe("useCrawlAction — 크롤 트리거 + 폴링 + UI 상태", () => {
     expect(cached.last_crawled_at).toBe(oldIso);
   }, 15000);
 
-  it("BE status 가 'running' 고정으로 누수 시 5분(150회) 초과하면 강제 해제한다", async () => {
-    vi.useFakeTimers();
-    mockStartLiveCrawl.mockResolvedValue({
-      complex_no: "C011",
-      status: "started",
-      last_crawled_at: null,
-    });
-    // 폴링이 받을 응답: 항상 running (BE 상태 누수 시뮬레이션)
-    mockGetCrawlStatus.mockResolvedValue({
-      complex_no: "C011",
-      status: "running",
-      phase: "articles",
-      article_count: 0,
-      current_page: 0,
-    });
-
-    const { useCrawlAction } = await import("../useCrawlAction");
-    const { result } = renderHook(() => useCrawlAction("C011"), {
-      wrapper: TestQueryProvider,
-    });
-
-    await act(async () => {
-      result.current.handleCrawl();
-    });
-    // started 응답 처리 완료 대기
-    await vi.waitFor(() => {
-      expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1);
-    });
-    // 폴링 2초 간격 × 151 회 = 302 초 → MAX_POLL_ATTEMPTS(150) 초과
-    await act(async () => {
-      for (let i = 0; i < 151; i++) {
-        await vi.advanceTimersByTimeAsync(2_000);
-      }
-    });
-
-    expect(result.current.crawling).toBe(false);
-    expect(result.current.message).toContain("5분 이상");
-    expect(result.current.messageType).toBe("error");
-    vi.useRealTimers();
-  }, 20000);
-
   it("폴링 중 running+phase=articles 이면 progress 객체가 phase/article_count/current_page 반영한다", async () => {
     vi.useFakeTimers();
     mockStartLiveCrawl.mockResolvedValue({

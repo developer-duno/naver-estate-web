@@ -4,9 +4,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-19 — 세션 65, FE 폴링 5분 안전망(`MAX_POLL_ATTEMPTS=150`) 제거. 세션 62 약속(BE terminal 신호로만 폴링 종료) 복원. 1 커밋 `d91f963`.
+**마지막 작업**: 2026-04-20 — 세션 67, 성능/안정성/UX 3트랙. E1 `/api/stats` 캐시(cold 34ms/warm 2ms, 세션 64 베이스라인 7.26초 대비 ~3600배), BE `_background_crawl` terminal 가드(5 경로 누수 해소), 태그 필터 드롭다운 버튼 요약. 4커밋 push(`25813ed`/`a8bc6ad`/`0554fad`/`3808963`), CI 4/4 green, Vercel Production Ready. pytest 552→559, vitest 595→596.
 
-**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~64 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
+**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~67 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
 
 
 ## 기술 스택

@@ -120,6 +120,8 @@ def _background_crawl(complex_no: str):
 
                 if page % PAGE_COMMIT_INTERVAL == 0:
                     db.commit()
+                    # FE 페이지별 refetch 반영 위해 articles 캐시 즉시 delete
+                    get_cache("complexes", dynamic=True).delete(f"articles_default:{complex_no}")
 
                 _update_crawl_status(complex_no, current_page=page, article_count=len(all_article_nos))
 

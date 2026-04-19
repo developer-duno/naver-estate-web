@@ -141,8 +141,9 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
           // 진행률 문구 실시간 갱신 + progress 객체를 CrawlProgressBanner 에 전달
           setMsg(buildProgressMessage(status), "info");
           setProgress(status);
-          // 매 3 폴링(6초) 마다 조용히 articles 갱신 — 진행 체감용
-          if (status.phase === "articles" && attempts % 3 === 0) {
+          // 매 3 폴링(6초) 마다 조용히 articles 갱신 — articles/details/enriching 전 phase
+          // BE 가 페이지당 커밋 + 캐시 delete 하므로 전 phase refetch 가 의미 있음
+          if (attempts % 3 === 0) {
             queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo) });
           }
           return;

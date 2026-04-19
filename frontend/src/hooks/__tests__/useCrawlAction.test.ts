@@ -554,4 +554,54 @@ describe("useCrawlAction — 크롤 트리거 + 폴링 + UI 상태", () => {
     expect(result.current.messageType).toBe("info");
     vi.useRealTimers();
   }, 15000);
+
+  it("details phase 에서도 3번째 폴링(6초)에 articles 를 invalidate 한다", async () => {
+    vi.useFakeTimers();
+    mockStartLiveCrawl.mockResolvedValue({
+      complex_no: "C015",
+      status: "started",
+    });
+    // 모든 폴링이 details phase running 상태
+    mockGetCrawlStatus.mockResolvedValue({
+      complex_no: "C015",
+      status: "running",
+      phase: "details",
+      detail_crawled_count: 3,
+      detail_total: 10,
+    });
+
+    // QueryClient 를 직접 만들어 invalidateQueries spy
+    const qc = new QueryClient();
+    const invalidateSpy = vi.spyOn(qc, "invalidateQueries");
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(QueryClientProvider, { client: qc }, children);
+
+    const { useCrawlAction } = await import("../useCrawlAction");
+    const { result } = renderHook(() => useCrawlAction("C015"), { wrapper });
+
+    await act(async () => {
+      result.current.handleCrawl();
+    });
+    await vi.waitFor(() => expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1));
+
+    // 3회 폴링(약 6초) 진행 — attempts % 3 === 0 도달
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_100);
+      await vi.advanceTimersByTimeAsync(2_100);
+      await vi.advanceTimersByTimeAsync(2_100);
+    });
+
+    // details phase 에서도 articlesAll 키로 invalidate 호출됨
+    await vi.waitFor(() => {
+      const calledWithArticlesAll = invalidateSpy.mock.calls.some(
+        ([arg]) => {
+          const key = (arg as { queryKey?: unknown[] })?.queryKey;
+          return Array.isArray(key) && key[0] === "articles" && key[1] === "C015";
+        },
+      );
+      expect(calledWithArticlesAll).toBe(true);
+    });
+
+    vi.useRealTimers();
+  }, 15000);
 });

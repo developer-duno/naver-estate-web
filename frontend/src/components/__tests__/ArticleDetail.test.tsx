@@ -62,6 +62,12 @@ describe("ArticleDetail — 추가", () => {
     const spinner = screen.getByRole("status");
     expect(spinner).toBeInTheDocument();
   });
+
+  it("로딩 중 '불러오는 중' 안내 문구", () => {
+    const onClose = vi.fn();
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
+    expect(screen.getByText(/불러오는 중/)).toBeInTheDocument();
+  });
 });
 
 

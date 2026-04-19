@@ -72,7 +72,7 @@ export default function ArticleDetail({ articleNo, onClose, complex }: Props) {
         </div>
 
         <div className="overflow-y-auto p-6 max-h-[calc(90vh-64px)]">
-          {isLoading && <LoadingSpinner size="sm" />}
+          {isLoading && <LoadingSpinner size="sm" message="매물 정보를 불러오는 중..." />}
           {!isLoading && isError && (
             <div className="text-center py-8">
               <p className="text-red-500 mb-3">매물 정보를 불러올 수 없습니다.</p>

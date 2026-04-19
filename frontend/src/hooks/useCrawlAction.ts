@@ -103,10 +103,13 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoTriggeredRef = useRef(false);
+  // 폴링 중 연속 실패 카운터 — 3회 초과 시 progress=null 로 fallback 뷰 전환
+  const consecutiveErrorsRef = useRef(0);
 
   const [crawling, setCrawling] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<MessageType>("info");
+  const [progress, setProgress] = useState<CrawlProgress | null>(null);
 
   const setMsg = useCallback((text: string, type: MessageType = "info") => {
     setMessage(text);
@@ -133,6 +136,7 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
 
   const startPolling = useCallback(() => {
     clearPolling();
+    consecutiveErrorsRef.current = 0;
     let attempts = 0;
     pollRef.current = setInterval(async () => {
       attempts += 1;
@@ -142,6 +146,7 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
       if (attempts > MAX_POLL_ATTEMPTS) {
         clearPolling();
         setCrawling(false);
+        setProgress(null);
         setMsg(
           "크롤링이 5분 이상 걸립니다. 새로고침 뒤 다시 시도해주세요.",
           "error",
@@ -150,9 +155,11 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
       }
       try {
         const status = await getCrawlStatus(complexNo);
+        consecutiveErrorsRef.current = 0;
         if (status.status === "running") {
-          // 진행률 문구 실시간 갱신
+          // 진행률 문구 실시간 갱신 + progress 객체를 CrawlProgressBanner 에 전달
           setMsg(buildProgressMessage(status), "info");
+          setProgress(status);
           // 매 3 폴링(6초) 마다 조용히 articles 갱신 — 진행 체감용
           if (status.phase === "articles" && attempts % 3 === 0) {
             queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo) });
@@ -162,6 +169,7 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
         if (TERMINAL_STATUSES.has(status.status)) {
           clearPolling();
           setCrawling(false);
+          setProgress(null);
           if (status.status === "error") {
             // 🚨 refetch/invalidate 호출 금지 — 기존 저장 데이터를 그대로 유지
             //    사용자가 X 눌러 배너 닫을 때까지 메시지 유지 (자동 사라짐 X)
@@ -177,7 +185,12 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
           timersRef.current.push(setTimeout(() => setMessage(""), 4_000));
         }
       } catch {
-        // 네트워크 일시 오류는 무시하고 다음 폴링 기다림 — 서버 신호로만 종료
+        // 간헐 네트워크 실패는 무시, 3회 연속 실패 시 fallback 전환
+        consecutiveErrorsRef.current += 1;
+        if (consecutiveErrorsRef.current >= 3) {
+          setProgress(null);
+          setMsg("서버 응답 확인 중...", "info");
+        }
       }
     }, POLL_INTERVAL_MS);
   }, [complexNo, queryClient, clearPolling, setMsg]);
@@ -193,6 +206,7 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
     },
     onMutate: () => {
       setCrawling(true);
+      setProgress(null);
       setMsg("매물 목록 불러오는 중...", "info");
     },
     onSuccess: (result: CrawlProgress) => {
@@ -201,6 +215,7 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
         patchLastCrawledAt(queryClient, complexNo, result.last_crawled_at);
         refetchComplexQueries(queryClient, complexNo);
         setCrawling(false);
+        setProgress(null);
         const ago = formatAgo(result.last_crawled_at);
         setMsg(ago ? `${ago} 갱신됨` : "최근 갱신됨", "success");
         timersRef.current.push(setTimeout(() => setMessage(""), 4_000));
@@ -223,6 +238,7 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
     },
     onError: (err: unknown) => {
       clearPolling();
+      setProgress(null);
       if (err instanceof ApiError) {
         if (err.statusCode === 401) {
           router.push(`/login?redirect=${encodeURIComponent(`/complex/${complexNo}`)}`);
@@ -264,6 +280,7 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
     crawling,
     message,
     messageType,
+    progress,
     setMsg,
     clearMessage,
     handleCrawl,

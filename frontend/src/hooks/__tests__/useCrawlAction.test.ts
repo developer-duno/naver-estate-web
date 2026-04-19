@@ -461,4 +461,138 @@ describe("useCrawlAction — 크롤 트리거 + 폴링 + UI 상태", () => {
     expect(result.current.messageType).toBe("error");
     vi.useRealTimers();
   }, 20000);
+
+  it("폴링 중 running+phase=articles 이면 progress 객체가 phase/article_count/current_page 반영한다", async () => {
+    vi.useFakeTimers();
+    mockStartLiveCrawl.mockResolvedValue({
+      complex_no: "C012",
+      status: "started",
+    });
+    mockGetCrawlStatus.mockResolvedValue({
+      complex_no: "C012",
+      status: "running",
+      phase: "articles",
+      article_count: 42,
+      current_page: 3,
+    });
+
+    const { useCrawlAction } = await import("../useCrawlAction");
+    const { result } = renderHook(() => useCrawlAction("C012"), {
+      wrapper: TestQueryProvider,
+    });
+
+    await act(async () => {
+      result.current.handleCrawl();
+    });
+    await vi.waitFor(() => expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1));
+
+    // 첫 폴링(2초) 통과 후 progress 객체 갱신
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_100);
+    });
+
+    await vi.waitFor(() =>
+      expect(result.current.progress?.phase).toBe("articles"),
+    );
+    expect(result.current.progress?.article_count).toBe(42);
+    expect(result.current.progress?.current_page).toBe(3);
+    vi.useRealTimers();
+  }, 15000);
+
+  it("terminal status 수신 시 progress 가 null 로 리셋된다", async () => {
+    vi.useFakeTimers();
+    mockStartLiveCrawl.mockResolvedValue({
+      complex_no: "C013",
+      status: "started",
+    });
+    // 첫 폴링은 running, 두 번째 폴링은 done
+    mockGetCrawlStatus
+      .mockResolvedValueOnce({
+        complex_no: "C013",
+        status: "running",
+        phase: "details",
+        detail_crawled_count: 10,
+        detail_total: 20,
+      })
+      .mockResolvedValue({
+        complex_no: "C013",
+        status: "done",
+      });
+
+    const { useCrawlAction } = await import("../useCrawlAction");
+    const { result } = renderHook(() => useCrawlAction("C013"), {
+      wrapper: TestQueryProvider,
+    });
+
+    await act(async () => {
+      result.current.handleCrawl();
+    });
+    await vi.waitFor(() => expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1));
+
+    // 첫 폴링 → running 수신, progress 세팅
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_100);
+    });
+    await vi.waitFor(() =>
+      expect(result.current.progress?.phase).toBe("details"),
+    );
+
+    // 두 번째 폴링 → done 수신, progress null 리셋
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_100);
+    });
+    await vi.waitFor(() => expect(result.current.progress).toBeNull());
+    expect(result.current.crawling).toBe(false);
+    vi.useRealTimers();
+  }, 15000);
+
+  it("getCrawlStatus 3회 연속 throw 시 progress=null + '서버 응답 확인 중...' 메시지 전환", async () => {
+    vi.useFakeTimers();
+    mockStartLiveCrawl.mockResolvedValue({
+      complex_no: "C014",
+      status: "started",
+    });
+    // 첫 폴링 성공 (progress 세팅) → 이후 3회 연속 throw
+    mockGetCrawlStatus
+      .mockResolvedValueOnce({
+        complex_no: "C014",
+        status: "running",
+        phase: "articles",
+        article_count: 7,
+        current_page: 1,
+      })
+      .mockRejectedValue(new Error("network down"));
+
+    const { useCrawlAction } = await import("../useCrawlAction");
+    const { result } = renderHook(() => useCrawlAction("C014"), {
+      wrapper: TestQueryProvider,
+    });
+
+    await act(async () => {
+      result.current.handleCrawl();
+    });
+    await vi.waitFor(() => expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1));
+
+    // 첫 폴링(2초) → 성공, progress 세팅됨
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_100);
+    });
+    await vi.waitFor(() =>
+      expect(result.current.progress?.article_count).toBe(7),
+    );
+
+    // 이후 3회 폴링 (총 6초) → 전부 throw
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_100);
+      await vi.advanceTimersByTimeAsync(2_100);
+      await vi.advanceTimersByTimeAsync(2_100);
+    });
+
+    await vi.waitFor(() => {
+      expect(result.current.progress).toBeNull();
+      expect(result.current.message).toContain("서버 응답 확인 중");
+    });
+    expect(result.current.messageType).toBe("info");
+    vi.useRealTimers();
+  }, 15000);
 });

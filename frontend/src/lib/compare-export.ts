@@ -25,9 +25,14 @@ export async function downloadXlsxBuffer(
   URL.revokeObjectURL(url);
 }
 
+/** ReactNode → 엑셀 셀용 string 변환 (string 이 아니면 "-" 로 fallback) */
+function toCellText(value: unknown): string {
+  return typeof value === "string" ? value : "-";
+}
+
 export async function exportCompareToXlsx(
   complexes: Complex[],
-  rows: { label: string; render: (c: Complex) => string }[],
+  rows: { label: string; render: (c: Complex) => unknown }[],
 ) {
   try {
     const ExcelJS = (await import("exceljs")).default;
@@ -43,7 +48,7 @@ export async function exportCompareToXlsx(
     rows.forEach((row) => {
       ws.addRow([
         safeCellValue(row.label),
-        ...complexes.map((c) => safeCellValue(row.render(c))),
+        ...complexes.map((c) => safeCellValue(toCellText(row.render(c)))),
       ]);
     });
     const buf = await wb.xlsx.writeBuffer();

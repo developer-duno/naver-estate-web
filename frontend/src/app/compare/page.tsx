@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueries } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
@@ -43,7 +43,7 @@ function formatPrice(price?: number): string {
 
 /* ── 비교 테이블 행 정의 (기본 23행, 평당가는 동적 삽입) ── */
 
-const BASE_ROWS: { label: string; render: (c: Complex) => string }[] = [
+const BASE_ROWS: { label: string; render: (c: Complex) => ReactNode }[] = [
   { label: "주소", render: (c) => c.cortar_address || "-" },
   { label: "도로명주소", render: (c) => c.road_address || "-" },
   { label: "유형", render: (c) => c.real_estate_type_name || "-" },
@@ -126,7 +126,15 @@ function CompareContent() {
       render: (c: Complex) => {
         const pp = pricePerPyeong[c.complex_no];
         if (pp != null) return formatPrice(pp);
-        return statsLoading ? "불러오는 중..." : "-";
+        if (statsLoading) {
+          return (
+            <span
+              className="inline-block w-16 h-4 bg-gray-200 rounded animate-pulse align-middle"
+              aria-label="평당가 로딩 중"
+            />
+          );
+        }
+        return "-";
       },
     };
     // 건폐율(인덱스 16) 다음, 매물수(인덱스 17) 앞에 삽입

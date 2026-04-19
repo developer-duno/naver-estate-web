@@ -331,7 +331,10 @@ export default function ComplexDetailPage() {
         <div className="flex items-center gap-2 md:gap-3">
           <span className="text-base md:text-lg font-semibold">매물 {totalCount}건</span>
           {tableLoading && (
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" role="status" aria-label="로딩 중" />
+            <div className="flex items-center gap-1.5" role="status" aria-label="매물 갱신 중">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+              <span className="text-xs text-blue-600">갱신 중</span>
+            </div>
           )}
         </div>
         <div className="flex items-center gap-1.5 md:gap-2">
@@ -399,9 +402,9 @@ export default function ComplexDetailPage() {
         </div>
       )}
 
-      {/* 매물 테이블 (데스크톱) / 카드뷰 (모바일) */}
+      {/* 매물 테이블 (데스크톱) / 카드뷰 (모바일) — isFetching 중엔 반투명 처리 */}
       {!articlesQuery.isLoading && !articlesQuery.isError && (
-        <>
+        <div className={`transition-opacity duration-200 ${tableLoading ? "opacity-50" : "opacity-100"}`}>
           <div className="hidden md:block">
             <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} />
           </div>
@@ -410,7 +413,7 @@ export default function ComplexDetailPage() {
               <ArticleCardMobile articles={articles} onRowClick={setSelectedArticle} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} />
             </div>
           )}
-        </>
+        </div>
       )}
 
       {/* 페이지네이션 */}

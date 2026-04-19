@@ -4,7 +4,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-19 — 세션 61 **baseline 안정성 감시 + quota_db 가이드 v2 재작성** ✅ — workflow_dispatch run 24599955542 추가 green (public-visual 4회 연속), baseline 20장 회귀 0 확인. `docs/quota_db_integration.md` v1 8개 항목 정정(파일 경로/함수명/테이블명/컬럼/키 형식/한도 9000/RPC 미사용/expires_at 필수). 커밋 **2건** (a57c1ca / ca0cecc). 사용자 피드백: "최근 세션이 보험성·문서화 위주, 사이트 자체 기능 점검 필요" → 다음 세션 사용자 6항목 직접 점검 우선.
+**마지막 작업**: 2026-04-19 — 세션 63 **갱신중 버튼 영구 비활성화 버그 수정(already_running 분기) + CI #283 Linux baseline 복구 + 성능 진단 4엔드포인트** ✅ — 세션 62 `useCrawlAction` 개편(ce1e846) 이 BE `status="already_running"` 응답 처리를 onSuccess 에서 누락 → 자동 크롤 중 사용자 수동 클릭 시 `setCrawling(true)` 영구 유지 버그. Step 1 `130bc5f` 훅에 분기 6줄 + 테스트 2건 추가 (vitest 583→585). Step 3 `c6de858` CI artifact 에서 `complex-admin-linux.png` 추출(1280×733) 로 세션 62 이후 지속된 CI fail 복구. Step 4 curl timing 4엔드포인트×5회 + localhost 비교 실측: **`/api/stats` p50 500ms (NullPool+COUNT 병목), 튜널 오버헤드 ≈ 0**. Step 2 win32 baseline 은 로컬 Playwright 의 /login Internal Server Error 문제로 이번 세션 건너뜀(다음 세션 이월). 사용자 가치 🟢 (갱신중 버튼 버그 즉시 체감). 다음 세션 우선순위: (1) 태그 버튼 안 보임 DB 실측 / (4) 모바일 필터바 잘림 사용자 캡처 / `/api/stats` 캐시 레이어 도입.
+
+**이전 기록**: 2026-04-19 — 세션 61 **baseline 안정성 감시 + quota_db 가이드 v2 재작성** ✅ — workflow_dispatch run 24599955542 추가 green (public-visual 4회 연속), baseline 20장 회귀 0 확인. `docs/quota_db_integration.md` v1 8개 항목 정정(파일 경로/함수명/테이블명/컬럼/키 형식/한도 9000/RPC 미사용/expires_at 필수). 커밋 **2건** (a57c1ca / ca0cecc). 사용자 피드백: "최근 세션이 보험성·문서화 위주, 사이트 자체 기능 점검 필요" → 다음 세션 사용자 6항목 직접 점검 우선.
 
 **세션 46 성과** (naver-estate-web FE 10파일, 5커밋):
 

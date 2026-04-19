@@ -52,6 +52,7 @@ export default function ComplexDetailPage() {
   const [error, setError] = useState("");
   const [filterError, setFilterError] = useState("");
   const [sessionToken, setSessionToken] = useState<string | undefined>(undefined);
+  const [tokenError, setTokenError] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
 
   // 브라우저 뒤로/앞으로 시에만 FilterBar 리마운트 (사용자 필터 변경 시에는 유지)
@@ -138,7 +139,7 @@ export default function ComplexDetailPage() {
         if (session?.access_token) setSessionToken(session.access_token);
       } catch (err) {
         console.error("Failed to extract sessionToken:", err);
-        // 실패 시 토큰 없이 진행 — 실거래가 수집 버튼만 비활성화됨
+        setTokenError(true);
       }
     })();
   }, []);
@@ -176,6 +177,13 @@ export default function ComplexDetailPage() {
     },
     [setFilters]
   );
+
+  const hasActiveFilters = Object.keys(filters).some(k => k !== "sort_by");
+  const resetFilters = useCallback(() => {
+    setFilters({});
+    setSelectedArticleNos(new Set());
+    setFilterError("");
+  }, [setFilters]);
 
   // 핸들러: 페이지 변경 → URL 업데이트
   const handlePageChange = useCallback(
@@ -277,6 +285,18 @@ export default function ComplexDetailPage() {
       {/* 단지 정보 */}
       <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} onFilterChange={handleFilterChange} accessToken={sessionToken} />
 
+      {/* 로그인 세션 경고 */}
+      {tokenError && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md px-3 py-2 flex justify-between items-center gap-2">
+          <span>로그인 세션을 확인할 수 없어 일부 기능(실거래가 수집)이 제한됩니다. 새로고침하거나 다시 로그인해 주세요.</span>
+          <button
+            onClick={() => setTokenError(false)}
+            aria-label="닫기"
+            className="text-amber-600 hover:text-amber-900 flex-shrink-0"
+          >×</button>
+        </div>
+      )}
+
       {/* 필터 바 */}
       <div>
         <button
@@ -368,15 +388,28 @@ export default function ComplexDetailPage() {
         )
       )}
 
+      {/* 매물 API 실패 배너 */}
+      {articlesQuery.isError && (
+        <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-md px-4 py-2 flex justify-between items-center gap-3">
+          <span>매물 목록을 불러올 수 없습니다.</span>
+          <button
+            onClick={() => articlesQuery.refetch()}
+            className="text-xs border border-red-300 rounded px-2 py-1 hover:bg-red-100 flex-shrink-0"
+          >다시 시도</button>
+        </div>
+      )}
+
       {/* 매물 테이블 (데스크톱) / 카드뷰 (모바일) */}
-      {totalCount > 0 && (
+      {!articlesQuery.isLoading && !articlesQuery.isError && (
         <>
           <div className="hidden md:block">
-            <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} />
+            <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} />
           </div>
-          <div className="md:hidden">
-            <ArticleCardMobile articles={articles} onRowClick={setSelectedArticle} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} />
-          </div>
+          {totalCount > 0 && (
+            <div className="md:hidden">
+              <ArticleCardMobile articles={articles} onRowClick={setSelectedArticle} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} />
+            </div>
+          )}
         </>
       )}
 

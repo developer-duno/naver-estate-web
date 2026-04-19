@@ -2,8 +2,8 @@
  * ArticleTable 컴포넌트 테스트 - 매물 행 렌더링, 빈 상태
  * 실행: npx vitest run src/components/__tests__/ArticleTable.test.tsx
  */
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
 import ArticleTable from "../ArticleTable";
 import type { Article } from "@/types";
 
@@ -63,5 +63,20 @@ describe("ArticleTable — 추가", () => {
     render(<ArticleTable articles={[sampleArticle]} />);
     expect(screen.getByText("거래")).toBeInTheDocument();
     expect(screen.getByText("동")).toBeInTheDocument();
+  });
+
+  it("필터 활성 시 필터 초기화 버튼 노출 + 콜백 호출", () => {
+    const onReset = vi.fn();
+    render(<ArticleTable articles={[]} hasActiveFilters onResetFilters={onReset} />);
+    const btn = screen.getByText("필터 초기화");
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(onReset).toHaveBeenCalledTimes(1);
+  });
+
+  it("필터 없을 때는 갱신 안내 표시 (필터 초기화 버튼 없음)", () => {
+    render(<ArticleTable articles={[]} />);
+    expect(screen.queryByText("필터 초기화")).toBeNull();
+    expect(screen.getByText(/데이터 갱신/)).toBeInTheDocument();
   });
 });

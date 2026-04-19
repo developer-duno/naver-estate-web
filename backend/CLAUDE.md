@@ -28,7 +28,7 @@
 | `db/price_queries.py` | 가격 이력/통계/추이 쿼리 |
 | `db/stats_queries.py` | DB 통계 + 필터 옵션 쿼리 |
 | `db/mb_queries.py` | mibunyang 읽기 쿼리 함수 |
-| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V011) |
+| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V019) |
 | `shared/naver_api.py` | NaverEstateAPI (수정 금지) |
 | `shared/constants.py` | 상수 (수정 금지) |
 | `auth/permissions.py` | 역할 체크 (require_role) + 일일 쿼터 (check_quota) |
@@ -86,7 +86,7 @@
 - **엔진**: file-based SQLite + NullPool + WAL + busy_timeout 5초
 - **dialect 분기**: `_search_all_types()`는 SQLite에서 ThreadPoolExecutor 대신 순차 실행
   - `_do_upsert()`도 dialect-aware (pg_insert/sqlite_insert 자동 분기)
-- **테스트**: 263개 (26개 파일, 1개 스킵) — `python -m pytest --tb=short -q`
+- **테스트**: 552개 (46파일) — `python -m pytest --tb=short -q`
 - **conftest.py**: `sys.modules["db.database"]` 교체로 테스트 엔진 주입
 
 ## CORS 미들웨어 순서 (중요)
@@ -96,6 +96,6 @@
 
 ## DB 마이그레이션
 
-- `db/migrations/` 폴더에 `V000__` ~ `V011__` SQL 파일
+- `db/migrations/` 폴더에 `V000__` ~ `V019__` SQL 파일
 - Supabase SQL Editor에서 수동 실행
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행

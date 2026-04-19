@@ -54,7 +54,7 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 - **pytest**: . = 통과, F = 실패, s = 스킵 + traceback
 - **Playwright**: PASS/FAIL + 실패 시 스크린샷 test-results/
 
-### 테스트 구조 (2026-04-10 기준)
+### 테스트 구조 (2026-04-19 기준)
 
 | 영역 | 경로 | 도구 | 테스트 수 |
 |------|------|------|----------|
@@ -62,9 +62,9 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 | FE 컴포넌트 | frontend/src/components/__tests__/ | Vitest | 26파일 (admin/5 + mb/3) |
 | FE 훅 | frontend/src/hooks/__tests__/ | Vitest | 15파일 |
 | FE 페이지 | frontend/src/app/__tests__/ | Vitest | 5파일 |
-| **FE 합계** | | Vitest | **529개 (59파일)** |
-| E2E | frontend/e2e/ | Playwright | **48개 (9파일, --webpack)** |
-| **BE 합계** | backend/tests/ | pytest | **444개 (36파일, 1 skipped)** |
+| **FE 합계** | | Vitest | **595개 (70파일)** |
+| E2E | frontend/e2e/ | Playwright | **16파일 (--webpack)** |
+| **BE 합계** | backend/tests/ | pytest | **552개 (46파일)** |
 
 ### React Query 테스트 패턴
 - 컴포넌트/훅 테스트에서 `TestQueryProvider` 래퍼 사용 (test-setup.ts에서 export)

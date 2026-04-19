@@ -23,6 +23,7 @@ describe("usePriceCollect — 초기 상태 검증 (React Query)", () => {
     });
     expect(result.current).toHaveProperty("collecting");
     expect(result.current).toHaveProperty("message");
+    expect(result.current).toHaveProperty("messageType");
     expect(result.current).toHaveProperty("startCollect");
     expect(result.current).toHaveProperty("clearPolling");
   }, 15000);
@@ -91,6 +92,7 @@ describe("usePriceCollect — 에러 처리 (React Query)", () => {
     await waitFor(() => {
       expect(result.current.collecting).toBe(false);
       expect(result.current.message).toBe("요청 한도 초과");
+      expect(result.current.messageType).toBe("error");
     });
     expect(mockGetPriceCollectStatus).not.toHaveBeenCalled();
   }, 15000);
@@ -115,6 +117,7 @@ describe("usePriceCollect — 에러 처리 (React Query)", () => {
     await waitFor(() => {
       expect(result.current.collecting).toBe(false);
       expect(result.current.message).toBe("수집 오류: DB 연결 실패");
+      expect(result.current.messageType).toBe("error");
     }, { timeout: 10000 });
   }, 15000);
 });

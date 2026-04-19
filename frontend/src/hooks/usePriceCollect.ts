@@ -6,9 +6,12 @@ import { startPriceCollect, getPriceCollectStatus } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { PRICE_COLLECT_POLL_MS, MAX_PRICE_COLLECT_POLLS } from "@/lib/constants";
 
+export type PriceCollectMessageType = "info" | "success" | "error" | "";
+
 export interface PriceCollectHookResult {
   collecting: boolean;
   message: string;
+  messageType: PriceCollectMessageType;
   startCollect: (complexNo: string, token: string, onDone?: () => void) => void;
   clearPolling: () => void;
 }
@@ -24,7 +27,12 @@ export interface PriceCollectHookResult {
 export function usePriceCollect(): PriceCollectHookResult {
   const queryClient = useQueryClient();
   const [collecting, setCollecting] = useState(false);
-  const [message, setMessage] = useState("");
+  const [message, setMessageRaw] = useState("");
+  const [messageType, setMessageType] = useState<PriceCollectMessageType>("");
+  const setMessage = useCallback((msg: string, type: PriceCollectMessageType = "") => {
+    setMessageRaw(msg);
+    setMessageType(type);
+  }, []);
   const [isPolling, setIsPolling] = useState(false);
   const [targetComplexNo, setTargetComplexNo] = useState<string>("");
   const pollCountRef = useRef(0);
@@ -38,12 +46,12 @@ export function usePriceCollect(): PriceCollectHookResult {
 
   /** 폴링 종료 + 상태 정리 */
   const finishPolling = useCallback(
-    (msg: string = "") => {
+    (msg: string = "", type: PriceCollectMessageType = "") => {
       clearPolling();
       setCollecting(false);
-      setMessage(msg);
+      setMessage(msg, type);
     },
-    [clearPolling],
+    [clearPolling, setMessage],
   );
 
   // useQuery로 수집 상태 폴링
@@ -77,21 +85,21 @@ export function usePriceCollect(): PriceCollectHookResult {
       onDoneRef.current?.();
       onDoneRef.current = undefined;
     } else if (status.status === "error") {
-      finishPolling("수집 오류: " + (status.error ?? "알 수 없는 오류"));
+      finishPolling("수집 오류: " + (status.error ?? "알 수 없는 오류"), "error");
     } else if (status.status === "running") {
       if (status.total && status.total > 0) {
-        setMessage(`수집 중... ${status.collected ?? 0}/${status.total}건`);
+        setMessage(`수집 중... ${status.collected ?? 0}/${status.total}건`, "info");
       } else {
-        setMessage("수집 준비 중...");
+        setMessage("수집 준비 중...", "info");
       }
     }
-  }, [statusQuery.data, isPolling, targetComplexNo, finishPolling, queryClient]);
+  }, [statusQuery.data, isPolling, targetComplexNo, finishPolling, queryClient, setMessage]);
 
   // 타임아웃 에러 처리
   useEffect(() => {
     if (!statusQuery.error) return;
     if ((statusQuery.error as Error).message === "timeout") {
-      finishPolling("수집 시간 초과. 나중에 다시 시도해주세요"); // eslint-disable-line react-hooks/set-state-in-effect -- 타임아웃 에러 처리
+      finishPolling("수집 시간 초과. 나중에 다시 시도해주세요", "error"); // eslint-disable-line react-hooks/set-state-in-effect -- 타임아웃 에러 처리
       onDoneRef.current?.();
       onDoneRef.current = undefined;
     }
@@ -113,7 +121,7 @@ export function usePriceCollect(): PriceCollectHookResult {
       // "started" → 폴링 시작
       setTargetComplexNo(complexNo);
       pollCountRef.current = 0;
-      setMessage("수집 시작 중...");
+      setMessage("수집 시작 중...", "info");
       setIsPolling(true);
     },
     onError: (err: unknown, { complexNo }) => {
@@ -122,11 +130,11 @@ export function usePriceCollect(): PriceCollectHookResult {
         // 이미 수집 중 → 폴링으로 완료 감지
         setTargetComplexNo(complexNo);
         pollCountRef.current = 0;
-        setMessage("수집 시작 중...");
+        setMessage("수집 시작 중...", "info");
         setIsPolling(true);
       } else if (apiErr?.statusCode === 429) {
         setCollecting(false);
-        setMessage("요청 한도 초과");
+        setMessage("요청 한도 초과", "error");
       } else {
         console.error("[PriceCollect] start error:", err);
         setCollecting(false);
@@ -141,11 +149,11 @@ export function usePriceCollect(): PriceCollectHookResult {
 
       onDoneRef.current = onDone;
       setCollecting(true);
-      setMessage("수집 시작 중...");
+      setMessage("수집 시작 중...", "info");
       startMutation.mutate({ complexNo, token });
     },
-    [isPolling, startMutation],
+    [isPolling, startMutation, setMessage],
   );
 
-  return { collecting, message, startCollect, clearPolling };
+  return { collecting, message, messageType, startCollect, clearPolling };
 }

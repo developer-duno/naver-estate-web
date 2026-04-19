@@ -38,7 +38,7 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, on
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<TabType>("info");
   const [historyAreaNo, setHistoryAreaNo] = useState<string>("");
-  const { collecting, message: collectMessage, startCollect, clearPolling } = usePriceCollect();
+  const { collecting, message: collectMessage, messageType: collectMessageType, startCollect, clearPolling } = usePriceCollect();
 
   // ── useQuery: 가격 통계 (staleTime 30초) ──
   const priceStatsQuery = useQuery({
@@ -144,7 +144,11 @@ export default function ComplexInfo({ complex: cpx, pyeongDetails, complexNo, on
                 {collecting ? "수집 중..." : "실거래가 수집"}
               </button>
               {collectMessage && (
-                <span className={`text-xs ${collectMessage.includes("오류") || collectMessage.includes("실패") || collectMessage.includes("초과") ? "text-red-500" : "text-green-600"}`}>
+                <span className={`text-xs ${
+                  collectMessageType === "error" ? "text-red-500" :
+                  collectMessageType === "info" ? "text-blue-600" :
+                  "text-green-600"
+                }`}>
                   {collectMessage}
                 </span>
               )}

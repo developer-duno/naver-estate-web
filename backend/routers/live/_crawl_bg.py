@@ -68,103 +68,141 @@ def _background_crawl(complex_no: str):
         _update_crawl_status(complex_no, status="already_running")
         return
 
-    # 스케줄러 배치와 동일한 글로벌 2초 브레이크 통과 — 네이버 IP 기준 폭주 방지
-    get_shared_throttle("articles").wait()
-
-    db = SessionLocal()
+    # acquire 성공 직후부터 outer finally 까지 반드시 실행되어야 release 누수 방지
+    db = None
     try:
-        with _crawl_lock:
-            _crawl_status[complex_no] = {
-                "status": "running",
-                "phase": "articles",
-                "current_page": 0,
-                "article_count": 0,
-                "has_more": True,
-                "error": None,
+        # 스케줄러 배치와 동일한 글로벌 2초 브레이크 통과 — 네이버 IP 기준 폭주 방지
+        get_shared_throttle("articles").wait()
+        db = SessionLocal()
+        try:
+            with _crawl_lock:
+                _crawl_status[complex_no] = {
+                    "status": "running",
+                    "phase": "articles",
+                    "current_page": 0,
+                    "article_count": 0,
+                    "has_more": True,
+                    "error": None,
+                }
+            all_article_nos = set()
+            page = 1
+
+            # 기존 가격 일괄 조회 (N+1 방지)
+            existing_prices = {
+                row[0]: (row[1], row[2])
+                for row in db.query(
+                    ArticleModel.article_no, ArticleModel.numeric_price, ArticleModel.numeric_rent_price
+                ).filter(
+                    ArticleModel.complex_no == complex_no, ArticleModel.is_active == True
+                ).all()
             }
-        all_article_nos = set()
-        page = 1
 
-        # 기존 가격 일괄 조회 (N+1 방지)
-        existing_prices = {
-            row[0]: (row[1], row[2])
-            for row in db.query(
-                ArticleModel.article_no, ArticleModel.numeric_price, ArticleModel.numeric_rent_price
-            ).filter(
-                ArticleModel.complex_no == complex_no, ArticleModel.is_active == True
-            ).all()
-        }
+            while True:
+                result = _fetch_articles_all_trade_types(complex_no, page=page)
+                if not result or "error" in result:
+                    if page == 1:
+                        _update_crawl_status(complex_no,
+                            status="error",
+                            error=str(result.get("error", "네이버 API 요청 실패") if result else "네이버 API 응답 없음"),
+                        )
+                        return
+                    break
 
-        while True:
-            result = _fetch_articles_all_trade_types(complex_no, page=page)
-            if not result or "error" in result:
-                if page == 1:
-                    _update_crawl_status(complex_no,
-                        status="error",
-                        error=str(result.get("error", "네이버 API 요청 실패") if result else "네이버 API 응답 없음"),
-                    )
-                    return
-                break
+                article_list = result.get("articleList") or []
+                if not article_list:
+                    break
 
-            article_list = result.get("articleList") or []
-            if not article_list:
-                break
+                for a_data in article_list:
+                    article = RealEstateArticle.from_dict(a_data)
+                    article.complex_no = complex_no
+                    upsert_article(db, article, commit=False, track_price=True, existing_prices=existing_prices)
+                    all_article_nos.add(article.article_no)
 
-            for a_data in article_list:
-                article = RealEstateArticle.from_dict(a_data)
-                article.complex_no = complex_no
-                upsert_article(db, article, commit=False, track_price=True, existing_prices=existing_prices)
-                all_article_nos.add(article.article_no)
+                if page % PAGE_COMMIT_INTERVAL == 0:
+                    db.commit()
 
-            if page % PAGE_COMMIT_INTERVAL == 0:
-                db.commit()
+                _update_crawl_status(complex_no, current_page=page, article_count=len(all_article_nos))
 
-            _update_crawl_status(complex_no, current_page=page, article_count=len(all_article_nos))
+                if not result.get("isMoreData", False):
+                    break
+                page += 1
+                time.sleep(INTER_PAGE_DELAY)
 
-            if not result.get("isMoreData", False):
-                break
-            page += 1
-            time.sleep(INTER_PAGE_DELAY)
+            _update_crawl_status(complex_no, has_more=False)
 
-        _update_crawl_status(complex_no, has_more=False)
+            # Deactivate missing articles
+            delete_missing_articles(db, complex_no, all_article_nos)
 
-        # Deactivate missing articles
-        delete_missing_articles(db, complex_no, all_article_nos)
+            # Update last_crawled_at
+            db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).update(
+                {"last_crawled_at": utcnow()}
+            )
+            db.commit()
 
-        # Update last_crawled_at
-        db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).update(
-            {"last_crawled_at": utcnow()}
-        )
-        db.commit()
+            # 단지정보 보강
+            _update_crawl_status(complex_no, phase="enriching")
+            cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
+            if cpx:
+                enrich_complex_detail(db, complex_no)
 
-        # 단지정보 보강
-        _update_crawl_status(complex_no, phase="enriching")
-        cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
-        if cpx:
-            enrich_complex_detail(db, complex_no)
+            # Phase 2: 상세 정보 자동 크롤링
+            _update_crawl_status(complex_no, phase="details", detail_phase="running")
+            try:
+                _crawl_details_for_complex(db, complex_no)
+            except Exception as e:
+                logger.warning("Detail crawl phase failed: %s → %s", complex_no, e)
+            # done_partial이 설정되었으면 유지, 아니면 done으로 설정
+            with _crawl_lock:
+                current_status = _crawl_status.get(complex_no, {}).get("status")
+            final_status = current_status if current_status == "done_partial" else "done"
+            _update_crawl_status(complex_no, detail_phase="done", status=final_status)
+            logger.info("Background crawl done: %s -> %d articles", complex_no, len(all_article_nos))
 
-        # Phase 2: 상세 정보 자동 크롤링
-        _update_crawl_status(complex_no, phase="details", detail_phase="running")
-        try:
-            _crawl_details_for_complex(db, complex_no)
         except Exception as e:
-            logger.warning("Detail crawl phase failed: %s → %s", complex_no, e)
-        # done_partial이 설정되었으면 유지, 아니면 done으로 설정
-        with _crawl_lock:
-            current_status = _crawl_status.get(complex_no, {}).get("status")
-        final_status = current_status if current_status == "done_partial" else "done"
-        _update_crawl_status(complex_no, detail_phase="done", status=final_status)
-        logger.info("Background crawl done: %s -> %d articles", complex_no, len(all_article_nos))
-
+            logger.exception("Background crawl error: %s", complex_no)
+            _update_crawl_status(complex_no, status="error", error=str(e))
+            if db is not None:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
     except Exception as e:
-        logger.exception("Background crawl error: %s", complex_no)
+        # outer 예외 (throttle/SessionLocal 실패 등) — 로그만 남기고 삼킨 뒤 finally guard 로 넘김
+        logger.exception("Background crawl bootstrap error: %s", complex_no)
         _update_crawl_status(complex_no, status="error", error=str(e))
-        try:
-            db.rollback()
-        except Exception:
-            pass
     finally:
-        db.close()
+        # ── Terminal 가드: 어떤 경로(throttle/SessionLocal/except 재예외/BaseException)로
+        #    종료되든 status 가 반드시 terminal 이 되도록 강제. FE 폴링 무한 대기 차단.
+        #    TERMINAL 에 "started"/"running" 의도적 제외 — 이들 잔존 = 스레드가 본체 진입
+        #    실패 또는 비정상 종료를 의미하므로 error 전환이 정당.
+        TERMINAL = {"done", "done_partial", "error", "already_running"}
+        with _crawl_lock:
+            st = _crawl_status.get(complex_no)
+            if st is None:
+                _crawl_status[complex_no] = {
+                    "status": "error",
+                    "error": "크롤 스레드가 상태 세팅 전 종료됨",
+                }
+                need_log = True
+                from_status = None
+            elif st.get("status") not in TERMINAL:
+                _crawl_status[complex_no]["status"] = "error"
+                _crawl_status[complex_no].setdefault("error", "크롤 스레드가 비정상 종료됨")
+                need_log = True
+                from_status = st.get("status")
+            else:
+                need_log = False
+                from_status = None
+        # logger 는 락 밖 I/O
+        if need_log:
+            logger.warning("crawl terminal guard: %s status=%s → error", complex_no, from_status)
+
+        # 기존 정리 로직 — db/release/캐시
+        if db is not None:
+            try:
+                db.close()
+            except Exception:
+                pass
         release_complex(complex_no)
         # 크롤링 완료 마커 설정 (start-crawl 중복 방지, 동적 TTL 적용)
         _cache.set(f"crawl_done:{complex_no}", True)

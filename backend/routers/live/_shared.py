@@ -69,7 +69,9 @@ _PRICE_COLLECT_TTL = 86400     # 24시간 — 재수집 방지
 
 
 def _update_crawl_status(complex_no: str, **kwargs):
-    """스레드 안전 크롤 상태 업데이트"""
+    """스레드 안전 크롤 상태 업데이트. key 없으면 신규 생성."""
     with _crawl_lock:
         if complex_no in _crawl_status:
             _crawl_status[complex_no].update(kwargs)
+        else:
+            _crawl_status[complex_no] = dict(kwargs)

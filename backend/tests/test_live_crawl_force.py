@@ -155,3 +155,128 @@ def test_no_cache_marker_starts_crawl_without_force(client, db):
         assert res.json()["status"] == "started"
     finally:
         _reset_live_state("C004")
+
+
+# ── finally terminal guard (세션 67) ──
+
+
+def test_background_crawl_guard_when_session_fail(monkeypatch):
+    """경로 1: SessionLocal() 예외 (상태 세팅 전) → guard 가 error 기록 + release 보장"""
+    from routers.live import _crawl_bg
+    from routers.live._shared import _active_complexes, _crawl_lock, _crawl_status
+
+    def _boom():
+        raise RuntimeError("DB connect fail")
+
+    monkeypatch.setattr(_crawl_bg, "SessionLocal", _boom)
+
+    complex_no = "guard-test-1"
+    with _crawl_lock:
+        _crawl_status.pop(complex_no, None)
+        _active_complexes.discard(complex_no)
+
+    _crawl_bg._background_crawl(complex_no)
+
+    with _crawl_lock:
+        st = _crawl_status.get(complex_no)
+    assert st is not None
+    assert st["status"] == "error"
+    # release_complex 호출로 _active_complexes 정리됐는지 (finally 바깥 누수 방지)
+    assert complex_no not in _active_complexes
+
+
+def test_background_crawl_guard_when_throttle_fail(monkeypatch):
+    """경로 1b: get_shared_throttle().wait() 예외 → guard 가 error + release 보장"""
+    from routers.live import _crawl_bg
+    from routers.live._shared import _active_complexes, _crawl_lock, _crawl_status
+
+    class _FakeThrottle:
+        def wait(self):
+            raise RuntimeError("throttle crashed")
+
+    monkeypatch.setattr(_crawl_bg, "get_shared_throttle", lambda _name: _FakeThrottle())
+
+    complex_no = "guard-test-1b"
+    with _crawl_lock:
+        _crawl_status.pop(complex_no, None)
+        _active_complexes.discard(complex_no)
+
+    _crawl_bg._background_crawl(complex_no)
+
+    with _crawl_lock:
+        st = _crawl_status.get(complex_no)
+    assert st is not None
+    assert st["status"] == "error"
+    assert complex_no not in _active_complexes
+
+
+def test_background_crawl_guard_when_baseexception(monkeypatch):
+    """경로 3: BaseException 경로 → finally 가드가 running → error"""
+    from routers.live import _crawl_bg
+    from routers.live._shared import _active_complexes, _crawl_lock, _crawl_status
+
+    class _CustomBaseExc(BaseException):
+        """pytest 런너를 중단시키지 않는 커스텀 BaseException"""
+
+    def _boom(*_a, **_kw):
+        raise _CustomBaseExc("simulated")
+
+    monkeypatch.setattr(_crawl_bg, "_fetch_articles_all_trade_types", _boom)
+
+    complex_no = "guard-test-2"
+    with _crawl_lock:
+        _crawl_status.pop(complex_no, None)
+        _active_complexes.discard(complex_no)
+
+    try:
+        _crawl_bg._background_crawl(complex_no)
+    except _CustomBaseExc:
+        pass
+
+    with _crawl_lock:
+        st = _crawl_status.get(complex_no)
+    assert st is not None
+    assert st["status"] == "error"
+    assert complex_no not in _active_complexes
+
+
+def test_background_crawl_guard_preserves_terminal(monkeypatch):
+    """정상 경로(status=done) 시 finally 가드가 덮어쓰지 않음"""
+    from routers.live import _crawl_bg
+    from routers.live._shared import _active_complexes, _crawl_lock, _crawl_status
+
+    complex_no = "guard-test-3"
+    with _crawl_lock:
+        _crawl_status.pop(complex_no, None)
+        _active_complexes.discard(complex_no)
+
+    monkeypatch.setattr(
+        _crawl_bg,
+        "_fetch_articles_all_trade_types",
+        lambda *_a, **_kw: {"articleList": [], "isMoreData": False},
+    )
+    monkeypatch.setattr(_crawl_bg, "enrich_complex_detail", lambda *_a, **_kw: None)
+    monkeypatch.setattr(_crawl_bg, "_crawl_details_for_complex", lambda *_a, **_kw: None)
+
+    _crawl_bg._background_crawl(complex_no)
+
+    with _crawl_lock:
+        st = _crawl_status.get(complex_no)
+    assert st is not None
+    assert st["status"] in {"done", "done_partial"}
+
+
+def test_update_crawl_status_creates_when_absent():
+    """_update_crawl_status: key 없으면 신규 생성 (create 모드)"""
+    from routers.live._shared import _crawl_lock, _crawl_status, _update_crawl_status
+
+    complex_no = "guard-test-4"
+    with _crawl_lock:
+        _crawl_status.pop(complex_no, None)
+
+    _update_crawl_status(complex_no, status="already_running")
+
+    with _crawl_lock:
+        st = _crawl_status.get(complex_no)
+    assert st is not None
+    assert st["status"] == "already_running"

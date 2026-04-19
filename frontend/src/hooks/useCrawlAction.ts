@@ -188,6 +188,14 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
         timersRef.current.push(setTimeout(() => setMessage(""), 4_000));
         return;
       }
+      if (result.status === "already_running") {
+        // 자동 크롤 폴링이 이미 진행 중인 상태를 서버가 감지.
+        // startPolling 재호출하면 2개 interval 이 겹치고, setCrawling 을
+        // 건드리면 기존 폴링의 종료 시점 해제 로직과 꼬인다. 메시지만 교체.
+        // 문구는 기존 onError 409 분기와 톤 통일 — 사용자 입장에서 동일 상황.
+        setMsg("이미 크롤링이 진행 중입니다.", "info");
+        return;
+      }
       // started 분기 — 서버가 돌려준 현재 last_crawled_at 즉시 반영(이전 시각)해서
       // 갱신 시작 순간에도 배지 표시가 어긋나지 않게 함. 진짜 "방금 전" 은
       // 폴링의 done 수신 후 refetch 로 교체.

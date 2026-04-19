@@ -339,4 +339,85 @@ describe("useCrawlAction — 크롤 트리거 + 폴링 + UI 상태", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1);
   }, 15000);
+
+  it("already_running 응답 시 startPolling 재호출 안됨 + crawling=true 유지 + '이미 크롤링이 진행 중입니다.' 메시지", async () => {
+    vi.useFakeTimers();
+    mockStartLiveCrawl.mockResolvedValue({
+      complex_no: "C009",
+      status: "already_running",
+      current_page: 2,
+      article_count: 45,
+    });
+
+    const { useCrawlAction } = await import("../useCrawlAction");
+    const { result } = renderHook(() => useCrawlAction("C009"), {
+      wrapper: TestQueryProvider,
+    });
+
+    await act(async () => {
+      result.current.handleCrawl();
+    });
+
+    await vi.waitFor(
+      () => expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1),
+      { timeout: 3000 },
+    );
+
+    await vi.waitFor(
+      () => expect(result.current.message).toBe("이미 크롤링이 진행 중입니다."),
+      { timeout: 3000 },
+    );
+    expect(result.current.messageType).toBe("info");
+    expect(result.current.crawling).toBe(true);
+
+    // 3초 추가 대기 (POLL_INTERVAL_MS = 2000) — startPolling 재호출 안됨 검증
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000);
+    });
+    expect(mockGetCrawlStatus).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
+  }, 15000);
+
+  it("already_running 응답 시 Complex 쿼리 캐시의 last_crawled_at 이 덮어써지지 않는다", async () => {
+    const oldIso = new Date(Date.now() - 5 * 24 * 60 * 60_000).toISOString();
+    mockStartLiveCrawl.mockResolvedValue({
+      complex_no: "C010",
+      status: "already_running",
+      current_page: 0,
+      article_count: 0,
+    });
+
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: Infinity } },
+    });
+    await client.prefetchQuery({
+      queryKey: queryKeys.complex("C010"),
+      queryFn: async () => ({
+        complex_no: "C010",
+        complex_name: "테스트",
+        last_crawled_at: oldIso,
+      }),
+    });
+
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(QueryClientProvider, { client }, children);
+
+    const { useCrawlAction } = await import("../useCrawlAction");
+    const { result: _result } = renderHook(() => useCrawlAction("C010"), { wrapper });
+
+    await act(async () => {
+      _result.current.handleCrawl();
+    });
+
+    await waitFor(() => {
+      expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1);
+    });
+
+    // 캐시의 last_crawled_at 은 oldIso 유지 (덮어쓰기 금지)
+    const cached = client.getQueryData(queryKeys.complex("C010")) as {
+      last_crawled_at: string;
+    };
+    expect(cached.last_crawled_at).toBe(oldIso);
+  }, 15000);
 });

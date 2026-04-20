@@ -205,9 +205,20 @@ function MibunyangContent() {
       {tab === "favorites" ? (
         <MbFavoritesTab favorites={favorites} onRemove={toggleFavorite} />
       ) : !hasRegion ? (
-        <div className="text-center py-20 text-gray-400">
-          <p className="text-lg mb-2">지역을 선택해주세요</p>
-          <p className="text-sm">시/도를 선택한 후 검색 버튼을 클릭하면 데이터를 조회합니다.</p>
+        <div className="text-center py-16">
+          <p className="text-lg text-gray-500 mb-1">지역을 선택해주세요</p>
+          <p className="text-sm text-gray-400 mb-6">아래에서 바로 선택하거나, 상단의 시/도 드롭다운을 이용하세요</p>
+          <div className="flex flex-wrap justify-center gap-2 max-w-md mx-auto">
+            {["서울", "경기", "부산", "인천", "대구", "대전"].map((sido) => (
+              <button
+                key={sido}
+                onClick={() => handleSearch(sido)}
+                className="px-4 py-2 border border-blue-200 text-blue-600 rounded-md bg-blue-50 hover:bg-blue-100 text-sm font-medium transition-colors"
+              >
+                {sido}
+              </button>
+            ))}
+          </div>
         </div>
       ) : (
         <>

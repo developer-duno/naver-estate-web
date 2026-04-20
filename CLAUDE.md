@@ -97,7 +97,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 ### 모바일 반응형
 - 검색 결과: ComplexCardMobile (md:hidden 카드뷰)
 - 단지 상세: ArticleCardMobile + 헤더/액션바 text-xs md:text-sm
-- 필터: FilterBar flex-nowrap overflow-x-auto, FilterDropdown max-w-[calc(100vw-2rem)]
+- 필터: FilterBar flex flex-wrap items-center gap-1.5, FilterDropdown max-w-[calc(100vw-2rem)]
 - 수익률 필터: 월세/전체/단기임대일 때만 표시, YIELD_PRESETS 6종 + 직접입력 (min_yield/max_yield float)
 - 페이지네이션: px-2 py-1 md:px-3 md:py-1.5
 

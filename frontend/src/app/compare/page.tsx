@@ -70,6 +70,29 @@ const BASE_ROWS: { label: string; render: (c: Complex) => ReactNode }[] = [
   { label: "관리사무소", render: (c) => c.management_office_tel || "-" },
 ];
 
+/* 모바일 카드뷰 탭 분류 — BASE_ROWS + 동적 평당가 레이블과 정확히 일치해야 함 */
+const ROW_CATEGORIES = {
+  basic: new Set([
+    "주소", "도로명주소", "유형", "세대수", "동수",
+    "최저층", "최고층", "준공일", "최소 면적", "최대 면적",
+  ]),
+  price: new Set([
+    "평당가", "매물수", "주변 중위가", "전세가율", "최근 6개월 거래",
+  ]),
+  facility: new Set([
+    "총 주차", "세대당 주차", "난방", "난방 연료", "시공사",
+    "용적률", "건폐율", "수영장", "관리사무소",
+  ]),
+} as const;
+
+type MobileTab = keyof typeof ROW_CATEGORIES;
+
+const MOBILE_TAB_LABELS: Record<MobileTab, string> = {
+  basic: "기본",
+  price: "가격",
+  facility: "시설",
+};
+
 /* ── 메인 컴포넌트 ── */
 
 function CompareContent() {
@@ -159,6 +182,12 @@ function CompareContent() {
   /* ── 인쇄/엑셀 ── */
   const [expandAll, setExpandAll] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [mobileTab, setMobileTab] = useState<MobileTab>("basic");
+
+  const mobileRows = useMemo(
+    () => compareRows.filter((r) => ROW_CATEGORIES[mobileTab].has(r.label)),
+    [compareRows, mobileTab],
+  );
 
   const handlePrint = useCallback(() => {
     setExpandAll(true);
@@ -283,6 +312,27 @@ function CompareContent() {
 
       {/* 비교 카드 (모바일) */}
       <div className="md:hidden space-y-4">
+        <div role="tablist" aria-label="비교 항목 분류" className="flex gap-1.5 bg-gray-100 rounded-lg p-1 sticky top-0 z-10">
+          {(Object.keys(MOBILE_TAB_LABELS) as MobileTab[]).map((key) => {
+            const active = mobileTab === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setMobileTab(key)}
+                className={`flex-1 text-xs font-medium px-2 py-1.5 rounded-md transition-colors ${
+                  active
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                {MOBILE_TAB_LABELS[key]}
+              </button>
+            );
+          })}
+        </div>
         {complexes.map((c, ci) => (
           <div key={c.complex_no} className="bg-white rounded-lg shadow-sm border p-4">
             <button
@@ -292,7 +342,7 @@ function CompareContent() {
               {c.complex_name}
             </button>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-              {compareRows.map((row) => {
+              {mobileRows.map((row) => {
                 const best = advantageMap.get(row.label) ?? [];
                 const isBest = best.includes(ci);
                 return (

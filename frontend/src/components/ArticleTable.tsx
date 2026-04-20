@@ -70,6 +70,7 @@ function ArticleTable({ articles, onRowClick, onSortChange, selectedArticleNos, 
             <p className="text-xs text-gray-400">필터 조건이 너무 좁을 수 있어요.</p>
             {onResetFilters && (
               <button
+                type="button"
                 onClick={onResetFilters}
                 className="text-xs text-blue-600 hover:underline"
               >

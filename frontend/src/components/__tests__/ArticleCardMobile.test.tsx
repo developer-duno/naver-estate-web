@@ -39,6 +39,20 @@ describe("ArticleCardMobile", () => {
     expect(screen.getByText(/매물이 없습니다/)).toBeInTheDocument();
   });
 
+  it("빈 매물 + 필터 활성 → '필터 초기화' 버튼 클릭 시 onResetFilters 호출", () => {
+    const reset = vi.fn();
+    render(<ArticleCardMobile articles={[]} hasActiveFilters onResetFilters={reset} />);
+    expect(screen.getByText(/필터 조건이 너무 좁/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "필터 초기화" }));
+    expect(reset).toHaveBeenCalledTimes(1);
+  });
+
+  it("빈 매물 + 필터 비활성 → '데이터 갱신' 안내 문구 유지", () => {
+    render(<ArticleCardMobile articles={[]} hasActiveFilters={false} />);
+    expect(screen.getByText(/데이터 갱신/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "필터 초기화" })).not.toBeInTheDocument();
+  });
+
   it("여러 매물 카드 렌더링", () => {
     const arts = [makeArticle(), makeArticle({ article_no: "A002", building_name: "102동" })];
     render(<ArticleCardMobile articles={arts} />);

@@ -11,15 +11,32 @@ interface Props {
   selectedArticleNos?: Set<string>;
   onSelectionChange?: (articleNo: string, checked: boolean) => void;
   onSelectAll?: (checked: boolean, visibleArticles: Article[]) => void;
+  hasActiveFilters?: boolean;
+  onResetFilters?: () => void;
 }
 
 /** 매물 목록 모바일 카드뷰 (md:hidden) — 데스크톱 ArticleTable의 모바일 대응 */
-function ArticleCardMobile({ articles, onRowClick, selectedArticleNos, onSelectionChange, onSelectAll }: Props) {
+function ArticleCardMobile({ articles, onRowClick, selectedArticleNos, onSelectionChange, onSelectAll, hasActiveFilters, onResetFilters }: Props) {
   if (articles.length === 0) {
     return (
-      <div className="text-center py-12 space-y-1">
+      <div className="text-center py-12 space-y-2">
         <p className="text-gray-500">매물이 없습니다.</p>
-        <p className="text-xs text-gray-400">위의 &quot;데이터 갱신&quot; 버튼을 눌러보세요.</p>
+        {hasActiveFilters ? (
+          <>
+            <p className="text-xs text-gray-400">필터 조건이 너무 좁을 수 있어요.</p>
+            {onResetFilters && (
+              <button
+                type="button"
+                onClick={onResetFilters}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                필터 초기화
+              </button>
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-gray-400">위의 &quot;데이터 갱신&quot; 버튼을 눌러보세요.</p>
+        )}
       </div>
     );
   }

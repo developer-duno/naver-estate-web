@@ -1,5 +1,5 @@
 import type { Page, Route } from "@playwright/test";
-import type { Article, Complex, PriceHistoryResponse, PriceStats, PyeongDetail } from "../../src/types";
+import type { Article, Complex, CrawlProgress, PriceCollectProgress, PriceHistoryResponse, PriceStats, PyeongDetail } from "../../src/types";
 
 const COMPLEX: Complex = {
   complex_no: "100000",
@@ -99,6 +99,28 @@ const EMPTY_HISTORY: PriceHistoryResponse = {
   items: [],
 };
 
+// 크롤 API: auto:true 자동 크롤(page.tsx:157)이 실서버로 새는 것 차단.
+// start-crawl → "cached" 반환 시 useCrawlAction.onSuccess (L195-204) 가
+// setCrawling(false) + setProgress(null) 즉시 → CrawlProgressBanner 미렌더
+// (page.tsx:365 `crawling && type==="info"` 두 조건 모두 거짓).
+// last_crawled_at=null 이면 patchLastCrawledAt (L70-82) no-op → Complex mock 의
+// last_crawled_at omit 유지, formatTimeAgo 배지 결정성 확보.
+const CACHED_CRAWL: CrawlProgress = {
+  complex_no: "100000",
+  status: "cached",
+  last_crawled_at: null,
+};
+
+const IDLE_CRAWL: CrawlProgress = {
+  complex_no: "100000",
+  status: "idle",
+};
+
+const IDLE_PRICE: PriceCollectProgress = {
+  complex_no: "100000",
+  status: "idle",
+};
+
 async function fulfillJson(route: Route, body: unknown): Promise<void> {
   await route.fulfill({
     status: 200,
@@ -119,6 +141,15 @@ export async function applyComplexMocks(page: Page): Promise<void> {
     if (sub === "price-stats") return fulfillJson(route, EMPTY_STATS);
     if (sub === "price-history") return fulfillJson(route, EMPTY_HISTORY);
 
+    await route.fulfill({ status: 404, body: "not found" });
+  });
+
+  await page.route("**/api/live/**", async (route) => {
+    const p = new URL(route.request().url()).pathname;
+    if (p.endsWith("/articles/start-crawl")) return fulfillJson(route, CACHED_CRAWL);
+    if (p.endsWith("/articles/crawl-status")) return fulfillJson(route, IDLE_CRAWL);
+    if (p.endsWith("/price-history/start-collect")) return fulfillJson(route, IDLE_PRICE);
+    if (p.endsWith("/price-history/collect-status")) return fulfillJson(route, IDLE_PRICE);
     await route.fulfill({ status: 404, body: "not found" });
   });
 }

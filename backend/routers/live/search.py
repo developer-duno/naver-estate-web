@@ -17,6 +17,7 @@ from db.database import SessionLocal
 from db.models import Article as ArticleModel
 from deps import get_db
 from routers.estate_serializers import complex_to_dict
+from services.cache import get_cache
 from services.naver_call_counter import record_call
 from services.upsert import upsert_complex_from_search
 from shared.naver_api import NaverEstateAPI
@@ -31,6 +32,10 @@ from ._shared import (
 )
 
 logger = logging.getLogger(__name__)
+
+# 네이버 쿨다운 기간 동안 db_fallback 응답도 짧게 캐시 — 동일 키워드 반복 입력
+# 시 DB 중복 쿼리 방어. 네이버 복구 시 빠른 전환을 위해 기본 TTL(300s) 사용.
+_fallback_cache = get_cache("search_fallback")
 
 
 def _db_fallback_response(
@@ -254,7 +259,7 @@ def live_search(
     """Live keyword search - Naver API -> DB upsert -> return"""
     allowed_types = _parse_allowed_types(types)
     cache_key = f"search:{q}:{','.join(sorted(allowed_types))}"
-    cached = _cache.get(cache_key)
+    cached = _cache.get(cache_key) or _fallback_cache.get(cache_key)
     if cached is not None:
         return cached
 
@@ -262,8 +267,9 @@ def live_search(
         keyword=q, allowed_types=allowed_types, db=db,
         fallback=lambda: search_complexes(db, q, limit=50),
     )
-    # DB 폴백이면 짧게만 캐시 (네이버 복구 시 빠른 전환)
-    if response.get("source") != "db_fallback":
+    if response.get("source") == "db_fallback":
+        _fallback_cache.set(cache_key, response)
+    else:
         _cache.set(cache_key, response)
     return response
 
@@ -279,7 +285,7 @@ def live_region(
     """Live region search - Naver API -> DB upsert -> return"""
     allowed_types = _parse_allowed_types(types)
     cache_key = f"region:{sido}:{sigungu}:{dong}:{','.join(sorted(allowed_types))}"
-    cached = _cache.get(cache_key)
+    cached = _cache.get(cache_key) or _fallback_cache.get(cache_key)
     if cached is not None:
         return cached
 
@@ -294,6 +300,8 @@ def live_region(
         upsert_kwargs={"sido": sido, "sigungu": sigungu, "dong": dong},
         fallback=lambda: get_complexes_by_region(db, sido, sigungu, dong, limit=500),
     )
-    if response.get("source") != "db_fallback":
+    if response.get("source") == "db_fallback":
+        _fallback_cache.set(cache_key, response)
+    else:
         _cache.set(cache_key, response)
     return response

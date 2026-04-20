@@ -161,6 +161,35 @@ class TestLiveSearch:
         res = client.get("/api/live/search?q=없는단지명xyz")
         assert res.status_code == 502
 
+    @patch(SEARCH_PATCH)
+    def test_search_db_fallback_cached_between_requests(self, mock_search, client, db):
+        """db_fallback 응답도 캐시 — 쿨다운 중 동일 검색어 반복 시 DB 재조회 방지"""
+        from db.models import Complex
+        from routers.live._shared import _cache
+        from services.cache import get_cache
+        _cache.delete_by_prefix("search:")
+        fallback_cache = get_cache("search_fallback")
+        fallback_cache.delete_by_prefix("search:")
+        db.add(Complex(
+            complex_no="C888",
+            complex_name="캐시폴백단지",
+            real_estate_type_code="APT",
+            real_estate_type_name="아파트",
+            cortar_no="1111010100",
+        ))
+        db.commit()
+
+        mock_search.return_value = make_search_result(error="네이버 쿨다운")
+        res1 = client.get("/api/live/search?q=캐시폴백단지")
+        assert res1.status_code == 200
+        assert res1.json()["source"] == "db_fallback"
+        call_count_after_first = mock_search.call_count
+
+        res2 = client.get("/api/live/search?q=캐시폴백단지")
+        assert res2.status_code == 200
+        assert res2.json()["source"] == "db_fallback"
+        assert mock_search.call_count == call_count_after_first
+
 
 # ── live_region 엔드포인트 테스트 ──
 

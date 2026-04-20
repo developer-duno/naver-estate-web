@@ -4,9 +4,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-20 — 세션 67, 성능/안정성/UX 3트랙. E1 `/api/stats` 캐시(cold 34ms/warm 2ms, 세션 64 베이스라인 7.26초 대비 ~3600배), BE `_background_crawl` terminal 가드(5 경로 누수 해소), 태그 필터 드롭다운 버튼 요약. 4커밋 push(`25813ed`/`a8bc6ad`/`0554fad`/`3808963`), CI 4/4 green, Vercel Production Ready. pytest 552→559, vitest 595→596.
+**마지막 작업**: 2026-04-20 — 세션 68, UX 7트랙. 🟢 사용자 체감 개선 6건 + 🟡 구조화 1건. 9ac2d04(ArticleDetail 로딩 메시지), 424b5c4(ArticleTable 빈상태+tokenError+isError 배너), dbcc8cf(크롤 중 매물 실시간 증가 — BE PAGE_COMMIT_INTERVAL 5→1 + 페이지 커밋 직후 articles 캐시 delete + FE 전 phase invalidate), 9500eb1(테이블 갱신 중 opacity+"갱신 중"), b763635(Compare 평당가 skeleton pulse), d5cda18(usePriceCollect messageType 구조화), f37af55(미분양 빈상태 서울/경기/부산/인천/대구/대전 단축 버튼 6개). BE uvicorn 재시작 PID 230436→260488. pytest 559 유지, vitest 596→600.
 
-**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~67 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
+**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~68 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
 
 
 ## 기술 스택

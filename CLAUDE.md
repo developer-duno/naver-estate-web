@@ -4,9 +4,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-20 — 세션 69, 세션 68 이월 후보 a/c/d/e 처리. 🟢 1건(ArticleCardMobile 빈상태 필터초기화 + ComplexPage L411 totalCount>0 가드 제거로 모바일 패리티 확보 + 세션 68 놓친 ArticleTable L72 type=button 동반 수정) + 🟡 2건(CLAUDE.md flex-nowrap→flex-wrap 정정 / PAGE_COMMIT_INTERVAL 크롤상수 4개 회귀방지 테스트). 3커밋 push: 1f4dcbb(docs) / f909ee7(feat/ux 4파일) / 7ebbaef(test/crawl). 5회 연속 하네스 수렴(플랜 3차 + 종료수순 2차). vitest 600→602, pytest 559→563, tsc 0, lint warning 10 유지. BE uvicorn PID 유지 (BE 코드 미변경).
+**마지막 작업**: 2026-04-21 — 세션 71, CI #302 complex-visual 복구 (A안+B안 병행). 3커밋 push: d2dca10(baseline 1차 재생성) / 4a878d6(complex-mocks /api/live/** mock 보강) / 5553bce(spec reducedMotion + 갱신 스피너 미출현 단언). 근본 원인은 complex-mocks 가 auto:true 자동 크롤 API 를 덮지 않아 start-crawl 호출이 webServer 로 새어 CrawlProgressBanner(140px) 간헐 렌더 → 높이 720/801 진동. cached 분기 고정으로 해소. 2차 baseline 재생성 결과 MD5 일치 확인(커밋 1 baseline 이 이미 안정 상태). vitest 612, pytest 563 유지, tsc 0.
 
-**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~69 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
+**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~71 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
 
 
 ## 기술 스택
@@ -132,9 +132,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE 단위/컴포넌트/훅/페이지 | Vitest | 595개 (70파일) |
+| FE 단위/컴포넌트/훅/페이지 | Vitest | 612개 (71파일) |
 | E2E | Playwright | 16파일 (--webpack 모드) |
-| BE 단위/통합/API | pytest | 552개 (46파일) |
+| BE 단위/통합/API | pytest | 563개 (46파일) |
 
 ## 커밋 전 필수 검증
 

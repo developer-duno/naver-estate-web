@@ -4,9 +4,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-21 — 세션 73 B트랙, 미테스트 컴포넌트 2건에 Vitest 11케이스 추가. 1커밋 push(20aa582, 4파일 +208): MbTabContent.test.tsx(76줄, 6케이스: 미분양 4개 탭 공용 래퍼+ExportButton), MaintenanceCost.null.test.tsx(60줄, 3케이스: 가드 분기), MaintenanceCost.render.test.tsx(56줄, 2케이스: 면적 가장 가까운 매칭), MaintenanceCost.factory.ts(16줄: PyeongDetail factory). vitest 612→623 passed (71→74 files) / tsc 0 / lint 0 errors. 하네스 80줄 규칙 위반(107줄) 발견 즉시 분할 수정. 🟡 간접 가치 (운영 중 사용 컴포넌트 회귀 방지망).
+**마지막 작업**: 2026-04-21 — 세션 74, `/api/live/search` · `/region` db_fallback 캐시 정책 확장. 1커밋 push(df1218f, 2파일 +42/-5): `services.cache.get_cache` import + `_fallback_cache = get_cache("search_fallback")` 별도 레지스트리(TTL 기본 300s) + 두 엔드포인트 분기(성공→`_cache` 동적 TTL / db_fallback→`_fallback_cache` 짧은 TTL) + 신규 테스트 `test_search_db_fallback_cached_between_requests`. pytest 563→564 passed / ruff 0. Explore 초기 주장(성공 응답 미캐시)은 Phase 3 Read 로 반박(이미 캐시됨) → db_fallback 경로 재정의. 🟡 간접 가치 (평시 체감 0, 네이버 쿨다운 중만 DB 중복 쿼리 방어). 세션 73·74 🟡 연속이라 세션 75 는 feedback_user_value_focus 에 따라 🟢 직접 가치 강제.
 
-**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~73 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
+**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~74 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
 
 
 ## 기술 스택

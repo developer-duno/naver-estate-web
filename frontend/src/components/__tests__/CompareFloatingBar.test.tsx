@@ -101,4 +101,28 @@ describe("CompareFloatingBar 컴포넌트", () => {
     fireEvent.click(screen.getByText("비교하기"));
     expect(pushMock).toHaveBeenCalledWith("/compare?ids=C1,C2");
   });
+
+  /** 가득 참 배너 — 4개일 때만 표시 */
+  it("비교 목록이 4개로 가득 차면 안내 배너가 표시된다", () => {
+    const fullList: CompareItem[] = [
+      { complex_no: "C1", complex_name: "래미안" },
+      { complex_no: "C2", complex_name: "힐스테이트" },
+      { complex_no: "C3", complex_name: "푸르지오" },
+      { complex_no: "C4", complex_name: "자이" },
+    ];
+    render(
+      <CompareFloatingBar list={fullList} onRemove={onRemove} onClear={onClear} />,
+    );
+    expect(
+      screen.getByText(/비교 목록이 가득 찼습니다/),
+    ).toBeInTheDocument();
+  });
+
+  /** 가득 참 배너 — 3개 이하면 미표시 */
+  it("비교 목록이 3개 이하면 가득 참 배너가 표시되지 않는다", () => {
+    render(
+      <CompareFloatingBar list={sampleList} onRemove={onRemove} onClear={onClear} />,
+    );
+    expect(screen.queryByText(/비교 목록이 가득 찼습니다/)).toBeNull();
+  });
 });

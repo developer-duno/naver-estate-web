@@ -348,6 +348,7 @@ const ComplexRow = memo(function ComplexRow({ complex, index, urlFilters, isComp
       </td>
       <td className="px-2 py-2 text-center whitespace-nowrap">
         <button
+          type="button"
           onClick={(e) => { e.stopPropagation(); onToggleCompare?.({ complex_no: complex.complex_no, complex_name: complex.complex_name }); }}
           disabled={!isCompared && compareFull}
           className={`text-xs px-2 py-0.5 rounded border transition-colors ${
@@ -357,7 +358,8 @@ const ComplexRow = memo(function ComplexRow({ complex, index, urlFilters, isComp
                 ? "bg-gray-100 text-gray-300 border-gray-200 cursor-not-allowed"
                 : "bg-white text-gray-500 border-gray-300 hover:bg-blue-50 hover:text-blue-600"
           }`}
-          title={isCompared ? "비교 해제" : compareFull ? "최대 4개" : "비교 추가"}
+          aria-label={isCompared ? `${complex.complex_name} 비교 해제` : compareFull ? "비교 목록 가득 참 — 기존 단지를 먼저 빼주세요" : `${complex.complex_name} 비교 추가`}
+          title={isCompared ? "비교 해제" : compareFull ? "비교 목록 가득 참 (4/4)" : "비교 추가"}
         >
           {isCompared ? "V" : "+"}
         </button>
@@ -403,6 +405,7 @@ const ComplexCardMobile = memo(function ComplexCardMobile({ complex, index, urlF
           <p className="text-xs text-gray-500 mt-1 truncate">{complex.cortar_address || "-"}</p>
         </div>
         <button
+          type="button"
           onClick={(e) => { e.stopPropagation(); onToggleCompare?.({ complex_no: complex.complex_no, complex_name: complex.complex_name }); }}
           disabled={!isCompared && compareFull}
           className={`ml-2 shrink-0 text-xs px-2.5 py-1 rounded border transition-colors ${
@@ -412,7 +415,8 @@ const ComplexCardMobile = memo(function ComplexCardMobile({ complex, index, urlF
                 ? "bg-gray-100 text-gray-300 border-gray-200 cursor-not-allowed"
                 : "bg-white text-gray-500 border-gray-300 hover:bg-blue-50 hover:text-blue-600"
           }`}
-          title={isCompared ? "비교 해제" : compareFull ? "최대 4개" : "비교 추가"}
+          aria-label={isCompared ? `${complex.complex_name} 비교 해제` : compareFull ? "비교 목록 가득 참 — 기존 단지를 먼저 빼주세요" : `${complex.complex_name} 비교 추가`}
+          title={isCompared ? "비교 해제" : compareFull ? "비교 목록 가득 참 (4/4)" : "비교 추가"}
         >
           {isCompared ? "V" : "+"}
         </button>

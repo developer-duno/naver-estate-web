@@ -13,8 +13,19 @@ export default function CompareFloatingBar({ list, onRemove, onClear }: Props) {
   const router = useRouter();
   if (list.length === 0) return null;
 
+  const isFull = list.length >= 4;
+
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-blue-500 shadow-lg z-50 px-4 py-2.5">
+      {isFull && (
+        <div
+          role="status"
+          className="max-w-7xl mx-auto mb-2 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800"
+        >
+          <span aria-hidden="true">⚠ </span>
+          비교 목록이 가득 찼습니다. 다른 단지를 추가하려면 기존 단지를 먼저 빼주세요.
+        </div>
+      )}
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <span className="text-sm font-semibold text-blue-600 shrink-0">비교 {list.length}/4</span>

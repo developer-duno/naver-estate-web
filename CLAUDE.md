@@ -4,9 +4,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-21 — 세션 72, npm audit high 2건 보안 패치. 1커밋 push(3528894): next 16.2.2→16.2.4 (^16.2.3, DoS GHSA-q4gf-8mx6-v5v3 CVSS 7.5) + vite 8.0.0→8.0.5 via `overrides` (fs.deny bypass + WebSocket ArbitraryRead 포함 3건). `npm audit` 0 vulnerabilities. vitest 612 / tsc 0 / lint 0 errors / dev(3100) 200 OK 유지. 1차 CI #314 실패는 dorny/paths-filter 인프라 장애(세션 71 동일 패턴), rerun 1회로 green. 🟡 보안 범주라 🟢 스트릭 영향 없음.
+**마지막 작업**: 2026-04-21 — 세션 73 B트랙, 미테스트 컴포넌트 2건에 Vitest 11케이스 추가. 1커밋 push(20aa582, 4파일 +208): MbTabContent.test.tsx(76줄, 6케이스: 미분양 4개 탭 공용 래퍼+ExportButton), MaintenanceCost.null.test.tsx(60줄, 3케이스: 가드 분기), MaintenanceCost.render.test.tsx(56줄, 2케이스: 면적 가장 가까운 매칭), MaintenanceCost.factory.ts(16줄: PyeongDetail factory). vitest 612→623 passed (71→74 files) / tsc 0 / lint 0 errors. 하네스 80줄 규칙 위반(107줄) 발견 즉시 분할 수정. 🟡 간접 가치 (운영 중 사용 컴포넌트 회귀 방지망).
 
-**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~72 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
+**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~73 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
 
 
 ## 기술 스택

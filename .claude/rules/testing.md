@@ -59,10 +59,10 @@ cd frontend && npx playwright test --ui      # 인터랙티브 모드
 | 영역 | 경로 | 도구 | 테스트 수 |
 |------|------|------|----------|
 | FE 단위 | frontend/src/lib/__tests__/ | Vitest | 12파일 |
-| FE 컴포넌트 | frontend/src/components/__tests__/ | Vitest | 27파일 (admin/5 + mb/3) |
+| FE 컴포넌트 | frontend/src/components/__tests__/ | Vitest | 30파일 (admin/5 + mb/3) |
 | FE 훅 | frontend/src/hooks/__tests__/ | Vitest | 15파일 |
 | FE 페이지 | frontend/src/app/__tests__/ | Vitest | 5파일 |
-| **FE 합계** | | Vitest | **612개 (71파일)** |
+| **FE 합계** | | Vitest | **623개 (74파일)** |
 | E2E | frontend/e2e/ | Playwright | **16파일 (--webpack)** |
 | **BE 합계** | backend/tests/ | pytest | **563개 (46파일)** |
 

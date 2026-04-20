@@ -4,9 +4,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-21 — 세션 71, CI #302 complex-visual 복구 (A안+B안 병행). 3커밋 push: d2dca10(baseline 1차 재생성) / 4a878d6(complex-mocks /api/live/** mock 보강) / 5553bce(spec reducedMotion + 갱신 스피너 미출현 단언). 근본 원인은 complex-mocks 가 auto:true 자동 크롤 API 를 덮지 않아 start-crawl 호출이 webServer 로 새어 CrawlProgressBanner(140px) 간헐 렌더 → 높이 720/801 진동. cached 분기 고정으로 해소. 2차 baseline 재생성 결과 MD5 일치 확인(커밋 1 baseline 이 이미 안정 상태). vitest 612, pytest 563 유지, tsc 0.
+**마지막 작업**: 2026-04-21 — 세션 72, npm audit high 2건 보안 패치. 1커밋 push(3528894): next 16.2.2→16.2.4 (^16.2.3, DoS GHSA-q4gf-8mx6-v5v3 CVSS 7.5) + vite 8.0.0→8.0.5 via `overrides` (fs.deny bypass + WebSocket ArbitraryRead 포함 3건). `npm audit` 0 vulnerabilities. vitest 612 / tsc 0 / lint 0 errors / dev(3100) 200 OK 유지. 1차 CI #314 실패는 dorny/paths-filter 인프라 장애(세션 71 동일 패턴), rerun 1회로 green. 🟡 보안 범주라 🟢 스트릭 영향 없음.
 
-**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~71 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
+**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~72 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
 
 
 ## 기술 스택

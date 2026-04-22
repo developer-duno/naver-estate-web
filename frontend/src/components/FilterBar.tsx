@@ -136,7 +136,7 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
           <DetailSection {...sectionProps} filterOptions={filterOptions} />
         </FilterDropdown>
 
-        <button onClick={resetAll} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded hover:bg-gray-50 whitespace-nowrap">
+        <button onClick={resetAll} className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 border border-gray-200 rounded hover:bg-gray-50 whitespace-nowrap">
           초기화
         </button>
       </div>

@@ -75,8 +75,8 @@ const FilterDropdown = React.memo(function FilterDropdown({
   const buttonText = isActive && summary ? `${label}: ${summary} ▾` : `${label} ▾`;
 
   const btnClass = isActive
-    ? "px-3 py-1.5 border rounded text-xs font-bold bg-blue-50 border-blue-600 text-blue-700 hover:bg-blue-100 whitespace-nowrap"
-    : "px-3 py-1.5 border rounded text-xs bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100 whitespace-nowrap";
+    ? "px-3 py-2 border rounded text-sm font-bold bg-blue-50 border-blue-600 text-blue-700 hover:bg-blue-100 whitespace-nowrap"
+    : "px-3 py-2 border rounded text-sm bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100 whitespace-nowrap";
 
   return (
     <div className="relative" ref={ref}>

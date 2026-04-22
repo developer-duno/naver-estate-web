@@ -4,9 +4,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-21 — 세션 74, `/api/live/search` · `/region` db_fallback 캐시 정책 확장. 1커밋 push(df1218f, 2파일 +42/-5): `services.cache.get_cache` import + `_fallback_cache = get_cache("search_fallback")` 별도 레지스트리(TTL 기본 300s) + 두 엔드포인트 분기(성공→`_cache` 동적 TTL / db_fallback→`_fallback_cache` 짧은 TTL) + 신규 테스트 `test_search_db_fallback_cached_between_requests`. pytest 563→564 passed / ruff 0. Explore 초기 주장(성공 응답 미캐시)은 Phase 3 Read 로 반박(이미 캐시됨) → db_fallback 경로 재정의. 🟡 간접 가치 (평시 체감 0, 네이버 쿨다운 중만 DB 중복 쿼리 방어). 세션 73·74 🟡 연속이라 세션 75 는 feedback_user_value_focus 에 따라 🟢 직접 가치 강제.
+**마지막 작업**: 2026-04-22 — 세션 75, A-2 모바일·데스크톱 글자/버튼 크기 상향. 2커밋 push(d84c71c + 88b44d5, 4파일 +20/-20): ArticleCardMobile 12줄(text-xs→text-sm 전반 + L127/L134 flex-wrap+gap-y-0.5 overflow 방지 + 거래/매물/수익률/전세 뱃지 px·py 상향) + search/page.tsx 인라인 ComplexCardMobile 5줄(인덱스/주소/뱃지/비교버튼/세대수·준공·매물수) + FilterDropdown btnClass 2줄(py-1.5 text-xs → py-2 text-sm) + FilterBar 초기화 버튼 1줄. A-1(초기화 버튼/요약텍스트 이미 존재) 피봇(세션 74 Explore 과장 패턴 재발). Plan 에이전트 🔴 2건(flex-wrap 누락/md: prefix 모순) 사전 발견 → 사용자 확정 "전체 동반 상향" + ComplexCardMobile 포함. 모바일 14px/36px 가독성 확보, md: prefix 없이 데스크톱 동반 상향. vitest 623 유지 / tsc 0 / lint baseline 유지. feedback_user_value_focus 🟢 2건 스트릭 리셋.
 
-**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~74 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
+**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~75 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
 
 
 ## 기술 스택

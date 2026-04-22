@@ -396,19 +396,19 @@ const ComplexCardMobile = memo(function ComplexCardMobile({ complex, index, urlF
       <div className="flex justify-between items-start">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 shrink-0">{index}</span>
+            <span className="text-sm text-gray-400 shrink-0">{index}</span>
             <span className="font-medium text-gray-900 truncate">{complex.complex_name}</span>
             {complex.real_estate_type_name && (
-              <span className={`text-xs px-1.5 py-0.5 rounded border shrink-0 ${colorClass}`}>{complex.real_estate_type_name}</span>
+              <span className={`text-sm px-2 py-1 rounded border shrink-0 ${colorClass}`}>{complex.real_estate_type_name}</span>
             )}
           </div>
-          <p className="text-xs text-gray-500 mt-1 truncate">{complex.cortar_address || "-"}</p>
+          <p className="text-sm text-gray-500 mt-1 truncate">{complex.cortar_address || "-"}</p>
         </div>
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onToggleCompare?.({ complex_no: complex.complex_no, complex_name: complex.complex_name }); }}
           disabled={!isCompared && compareFull}
-          className={`ml-2 shrink-0 text-xs px-2.5 py-1 rounded border transition-colors ${
+          className={`ml-2 shrink-0 text-sm px-3 py-1.5 rounded border transition-colors ${
             isCompared
               ? "bg-blue-600 text-white border-blue-600"
               : compareFull
@@ -421,7 +421,7 @@ const ComplexCardMobile = memo(function ComplexCardMobile({ complex, index, urlF
           {isCompared ? "V" : "+"}
         </button>
       </div>
-      <div className="grid grid-cols-3 gap-2 mt-2.5 text-xs text-gray-600">
+      <div className="grid grid-cols-3 gap-2 mt-2.5 text-sm text-gray-600">
         <span>{complex.total_household_count ? `${complex.total_household_count.toLocaleString()}세대` : "-"}</span>
         <span>{year ? `${year}년` : "-"}</span>
         <span className={`font-medium ${articleCount > 0 ? "text-blue-600" : "text-gray-400"}`}>{articleCount}건</span>

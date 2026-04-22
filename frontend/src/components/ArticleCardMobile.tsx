@@ -23,19 +23,19 @@ function ArticleCardMobile({ articles, onRowClick, selectedArticleNos, onSelecti
         <p className="text-gray-500">매물이 없습니다.</p>
         {hasActiveFilters ? (
           <>
-            <p className="text-xs text-gray-400">필터 조건이 너무 좁을 수 있어요.</p>
+            <p className="text-sm text-gray-400">필터 조건이 너무 좁을 수 있어요.</p>
             {onResetFilters && (
               <button
                 type="button"
                 onClick={onResetFilters}
-                className="text-xs text-blue-600 hover:underline"
+                className="text-sm text-blue-600 hover:underline py-1"
               >
                 필터 초기화
               </button>
             )}
           </>
         ) : (
-          <p className="text-xs text-gray-400">위의 &quot;데이터 갱신&quot; 버튼을 눌러보세요.</p>
+          <p className="text-sm text-gray-400">위의 &quot;데이터 갱신&quot; 버튼을 눌러보세요.</p>
         )}
       </div>
     );
@@ -44,7 +44,7 @@ function ArticleCardMobile({ articles, onRowClick, selectedArticleNos, onSelecti
   return (
     <div className="space-y-2">
       {onSelectionChange && (
-        <label className="flex items-center gap-2 px-1 text-xs text-gray-500">
+        <label className="flex items-center gap-2 px-1 text-sm text-gray-500">
           <input
             type="checkbox"
             checked={articles.length > 0 && articles.every(a => selectedArticleNos?.has(a.article_no))}
@@ -104,19 +104,19 @@ const ArticleCardItem = memo(function ArticleCardItem({ article: art, onClick, s
             className="w-4 h-4 rounded border-gray-300 shrink-0"
           />
         )}
-        <span className={`px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${
+        <span className={`px-2 py-1 rounded text-sm font-medium shrink-0 ${
           TRADE_TYPE_COLORS[art.trade_type_name ?? ""] ?? TRADE_TYPE_DEFAULT_COLOR
         }`}>
           {art.trade_type_name ?? "-"}
         </span>
         {art.article_real_estate_type_name && art.article_real_estate_type_name !== "아파트" && (
-          <span className={`px-1 py-0.5 rounded text-xs border shrink-0 ${
+          <span className={`px-1.5 py-1 rounded text-sm border shrink-0 ${
             ESTATE_TYPE_COLORS[art.article_real_estate_type_name] ?? ESTATE_TYPE_DEFAULT_COLOR
           }`}>{art.article_real_estate_type_name}</span>
         )}
         <span className="font-semibold text-gray-900 text-sm">{price}</span>
         {art.previous_price != null && art.numeric_price != null && art.previous_price !== art.numeric_price && (
-          <span className={`text-xs ${art.numeric_price < art.previous_price ? "text-blue-600" : "text-red-600"}`}>
+          <span className={`text-sm ${art.numeric_price < art.previous_price ? "text-blue-600" : "text-red-600"}`}>
             {art.numeric_price < art.previous_price ? "↓" : "↑"}
             {Math.abs(art.numeric_price - art.previous_price).toLocaleString()}
           </span>
@@ -124,25 +124,25 @@ const ArticleCardItem = memo(function ArticleCardItem({ article: art, onClick, s
       </div>
 
       {/* 2행: 면적·동·층 */}
-      <div className="flex items-center gap-1.5 mt-1.5 text-xs text-gray-600">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-1.5 text-sm text-gray-600">
         {areaTxt && <span>{areaTxt}</span>}
         {art.building_name && <><span className="text-gray-300">·</span><span>{art.building_name}</span></>}
         {art.floor_info && <><span className="text-gray-300">·</span><span>{art.floor_info}층</span></>}
       </div>
 
       {/* 3행: 방/욕·방향·입주·관리비 */}
-      <div className="flex items-center gap-1.5 mt-1 text-xs text-gray-500">
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-1 text-sm text-gray-500">
         {rooms && <span>{rooms}</span>}
         {art.direction && <><span className="text-gray-300">·</span><span>{art.direction}</span></>}
         {art.move_in_date && <><span className="text-gray-300">·</span><span>{art.move_in_date}</span></>}
         {maint !== "-" && <><span className="text-gray-300">·</span><span>관리비 {maint}</span></>}
-        {art.monthly_rent_yield != null && <><span className="text-gray-300">·</span><span className={`px-1 py-0.5 rounded text-xs font-semibold ${art.monthly_rent_yield >= 10 ? "bg-blue-100 text-blue-700" : art.monthly_rent_yield >= 5 ? "bg-emerald-100 text-emerald-700" : art.monthly_rent_yield < 3 ? "bg-yellow-100 text-yellow-700" : "bg-emerald-50 text-emerald-600"}`}>수익 {art.monthly_rent_yield}%</span></>}
-        {art.article_jeonse_ratio != null && <><span className="text-gray-300">·</span><span className={`px-1 py-0.5 rounded text-xs font-semibold ${art.article_jeonse_ratio > 80 ? "bg-red-100 text-red-700" : "bg-blue-50 text-blue-600"}`}>전세 {art.article_jeonse_ratio}%</span></>}
+        {art.monthly_rent_yield != null && <><span className="text-gray-300">·</span><span className={`px-1.5 py-0.5 rounded text-sm font-semibold ${art.monthly_rent_yield >= 10 ? "bg-blue-100 text-blue-700" : art.monthly_rent_yield >= 5 ? "bg-emerald-100 text-emerald-700" : art.monthly_rent_yield < 3 ? "bg-yellow-100 text-yellow-700" : "bg-emerald-50 text-emerald-600"}`}>수익 {art.monthly_rent_yield}%</span></>}
+        {art.article_jeonse_ratio != null && <><span className="text-gray-300">·</span><span className={`px-1.5 py-0.5 rounded text-sm font-semibold ${art.article_jeonse_ratio > 80 ? "bg-red-100 text-red-700" : "bg-blue-50 text-blue-600"}`}>전세 {art.article_jeonse_ratio}%</span></>}
       </div>
 
       {/* 4행: 특징 (truncate) */}
       {art.article_feature_desc && (
-        <p className="mt-1.5 text-xs text-gray-400 truncate">{art.article_feature_desc}</p>
+        <p className="mt-1.5 text-sm text-gray-400 truncate">{art.article_feature_desc}</p>
       )}
     </div>
   );

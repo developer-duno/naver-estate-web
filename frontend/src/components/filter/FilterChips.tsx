@@ -68,12 +68,12 @@ export default function FilterChips({ s, setImmediate, dispatch, emitChange, res
   return (
     <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-gray-100 max-h-16 md:max-h-none overflow-y-auto">
       {chipList.map((chip) => (
-        <span key={chip.label} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs rounded-full px-2.5 py-1 border border-blue-200">
+        <span key={chip.label} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-sm rounded-full px-3 py-1 border border-blue-200">
           {chip.label}
           <button onClick={chip.reset} className="hover:text-blue-900 font-bold ml-0.5">×</button>
         </span>
       ))}
-      <button onClick={resetAll} className="text-xs text-gray-500 hover:text-gray-700 ml-1">
+      <button onClick={resetAll} className="text-sm text-gray-500 hover:text-gray-700 ml-1">
         전체 초기화
       </button>
     </div>

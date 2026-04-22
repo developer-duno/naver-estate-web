@@ -25,7 +25,7 @@ export default function PresetButtons({ presets, minKey, maxKey, currentMin, cur
           <button
             key={p.label}
             onClick={() => onApply(p, minKey, maxKey)}
-            className={`px-2 ${size} text-xs border rounded ${
+            className={`px-2 ${size} text-sm border rounded ${
               isActive
                 ? "bg-blue-600 text-white border-blue-600"
                 : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"

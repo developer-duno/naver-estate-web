@@ -4,7 +4,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-22 — 세션 75, A-2 모바일·데스크톱 글자/버튼 크기 상향. 2커밋 push(d84c71c + 88b44d5, 4파일 +20/-20): ArticleCardMobile 12줄(text-xs→text-sm 전반 + L127/L134 flex-wrap+gap-y-0.5 overflow 방지 + 거래/매물/수익률/전세 뱃지 px·py 상향) + search/page.tsx 인라인 ComplexCardMobile 5줄(인덱스/주소/뱃지/비교버튼/세대수·준공·매물수) + FilterDropdown btnClass 2줄(py-1.5 text-xs → py-2 text-sm) + FilterBar 초기화 버튼 1줄. A-1(초기화 버튼/요약텍스트 이미 존재) 피봇(세션 74 Explore 과장 패턴 재발). Plan 에이전트 🔴 2건(flex-wrap 누락/md: prefix 모순) 사전 발견 → 사용자 확정 "전체 동반 상향" + ComplexCardMobile 포함. 모바일 14px/36px 가독성 확보, md: prefix 없이 데스크톱 동반 상향. vitest 623 유지 / tsc 0 / lint baseline 유지. feedback_user_value_focus 🟢 2건 스트릭 리셋.
+**마지막 작업**: 2026-04-22 — 세션 76, Tier 2 크기 상향 이월. 3커밋 push(92af9d7 + 05afe31 + 987f5e3, 6파일 +31/-31): Header 관리자/전문가 뱃지 4지점 text-[10px]→text-xs (px-1.5/py-0.5 유지, 헤더 h-[34px] 제약) + PriceHeader 뱃지 4지점 text-xs py-0.5→text-sm py-1 + Pagination 5지점 모바일 text-xs md:text-sm → text-sm(md: 제거 단순화) + FilterChips 칩+초기화 2지점 + PresetButtons 공통 템플릿 1지점 + FilterSections 15지점(상수 3개·TradeType·Floor 버튼 text만·areaUnit·태그·MoveIn·verified 라벨·~ 구분자 6곳). 9 GATE 검증 🟢 8+🟡 1(GATE 1 외부 text-[10px] 8곳·py-0.5 4곳 성격상 제외 수용). Plan 에이전트 🔴 4건 사전 발견(구분자 누락/PresetButtons 미포함/규모 이탈/버튼 padding overflow) 사용자 확정 반영(3커밋 분할+text만 상향). vitest 623 유지 / tsc 0 / lint baseline 유지. feedback_user_value_focus 🟢 3건 스트릭 연속.
 
 **과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~75 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
 

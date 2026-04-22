@@ -4,7 +4,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-22 — 세션 76, Tier 2 크기 상향 이월. 3커밋 push(92af9d7 + 05afe31 + 987f5e3, 6파일 +31/-31): Header 관리자/전문가 뱃지 4지점 text-[10px]→text-xs (px-1.5/py-0.5 유지, 헤더 h-[34px] 제약) + PriceHeader 뱃지 4지점 text-xs py-0.5→text-sm py-1 + Pagination 5지점 모바일 text-xs md:text-sm → text-sm(md: 제거 단순화) + FilterChips 칩+초기화 2지점 + PresetButtons 공통 템플릿 1지점 + FilterSections 15지점(상수 3개·TradeType·Floor 버튼 text만·areaUnit·태그·MoveIn·verified 라벨·~ 구분자 6곳). 9 GATE 검증 🟢 8+🟡 1(GATE 1 외부 text-[10px] 8곳·py-0.5 4곳 성격상 제외 수용). Plan 에이전트 🔴 4건 사전 발견(구분자 누락/PresetButtons 미포함/규모 이탈/버튼 padding overflow) 사용자 확정 반영(3커밋 분할+text만 상향). vitest 623 유지 / tsc 0 / lint baseline 유지. feedback_user_value_focus 🟢 3건 스트릭 연속.
+**마지막 작업**: 2026-04-23 — 세션 77, 로딩 skeleton UI (A-3). 3커밋 push(55505fe + 34fd2c6 + fcf486d, 4파일 +62/-10): Skeleton.tsx 신규 52줄 3 export(default Skeleton/SkeletonRows/SkeletonPage, role="status"+sr-only a11y, bg-gray-200 일반영역 선례) + MbTabContent.tsx L18 LoadingSpinner→SkeletonRows 전환(skeletonRows prop 추가, 미분양 4탭 자동 반영) + complex/[no]/page.tsx·compare/page.tsx·mibunyang/[id]/page.tsx 로딩 분기 LoadingSpinner→SkeletonPage 교체(complex 는 import 제거, compare/mibunyang 은 Suspense·추이 로딩에서 LoadingSpinner 병존 유지). 9 GATE 검증 🟢 6+🟡 3+🔴 0 후 사용자 확정(3커밋 분할/3 export 유지). Plan 에이전트 🔴 3건 사전 발견(MbTabContent.test.tsx 단언 보존/범위 과장/app/loading.tsx 효과 불분명) 반영(sr-only 텍스트로 테스트 호환/3페이지만/Phase C 삭제). MbTabContent.test.tsx 6 passed 확증, vitest 623 유지 / tsc 0 / lint baseline 유지. feedback_user_value_focus 🟢 4건 스트릭 6건 연속.
 
 **과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~75 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
 

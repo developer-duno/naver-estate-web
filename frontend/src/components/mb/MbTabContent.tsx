@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import LoadingSpinner from "@/components/LoadingSpinner";
+import { SkeletonRows } from "@/components/Skeleton";
 
 /** 미분양 탭 공용 래퍼 — 로딩/에러/빈 데이터 처리 */
 export function MbTabContent({
@@ -9,13 +9,15 @@ export function MbTabContent({
   error,
   refetch,
   children,
+  skeletonRows,
 }: {
   loading: boolean;
   error: Error | null;
   refetch: () => void;
   children: React.ReactNode;
+  skeletonRows?: number;
 }) {
-  if (loading) return <LoadingSpinner message="데이터를 불러오는 중..." />;
+  if (loading) return <SkeletonRows rows={skeletonRows ?? 8} />;
   if (error) {
     return (
       <div className="text-center py-12">

@@ -36,22 +36,22 @@ export default function PriceHeader({ article: a }: Props) {
       {/* 뱃지 행 */}
       <div className="flex flex-wrap gap-1.5">
         {a.trade_type_name && (
-          <span className={`text-xs font-medium px-2 py-0.5 rounded ${tradeColor}`}>
+          <span className={`text-sm font-medium px-2 py-1 rounded ${tradeColor}`}>
             {a.trade_type_name}
           </span>
         )}
         {estateColor && (
-          <span className={`text-xs font-medium px-2 py-0.5 rounded border ${estateColor}`}>
+          <span className={`text-sm font-medium px-2 py-1 rounded border ${estateColor}`}>
             {estateType}
           </span>
         )}
         {a.is_verified && (
-          <span className="text-xs font-medium px-2 py-0.5 rounded bg-green-100 text-green-700">
+          <span className="text-sm font-medium px-2 py-1 rounded bg-green-100 text-green-700">
             ✓ 검증매물
           </span>
         )}
         {a.is_presale && (
-          <span className="text-xs font-medium px-2 py-0.5 rounded bg-orange-100 text-orange-700">
+          <span className="text-sm font-medium px-2 py-1 rounded bg-orange-100 text-orange-700">
             분양권
           </span>
         )}

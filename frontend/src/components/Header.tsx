@@ -152,12 +152,12 @@ export default function Header() {
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
                   {isAdmin && (
-                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                    <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
                       관리자
                     </span>
                   )}
                   {userRole === "expert" && (
-                    <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">
+                    <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">
                       전문가
                     </span>
                   )}
@@ -223,10 +223,10 @@ export default function Header() {
                 <div className="px-3 py-2">
                   <div className="flex items-center gap-1.5 mb-1">
                     {isAdmin && (
-                      <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">관리자</span>
+                      <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">관리자</span>
                     )}
                     {userRole === "expert" && (
-                      <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">전문가</span>
+                      <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">전문가</span>
                     )}
                   </div>
                   <span className="text-sm text-gray-500 break-all">{userEmail}</span>

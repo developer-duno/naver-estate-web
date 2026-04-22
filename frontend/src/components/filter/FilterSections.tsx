@@ -23,10 +23,10 @@ interface SectionProps {
   emitChange: (overrides?: Partial<Record<string, string>>) => void;
 }
 
-const sectionLabel = "text-xs font-bold text-gray-700 mb-1";
+const sectionLabel = "text-sm font-bold text-gray-700 mb-1";
 const separator = "border-t border-gray-200 my-2";
-const selectCls = "border border-gray-300 rounded px-2 py-1.5 text-xs bg-white w-full";
-const inputCls = "border border-gray-300 rounded px-2 py-1.5 text-xs w-full";
+const selectCls = "border border-gray-300 rounded px-2 py-2 text-sm bg-white w-full";
+const inputCls = "border border-gray-300 rounded px-2 py-2 text-sm w-full";
 
 // ── 거래유형 ──
 
@@ -39,7 +39,7 @@ export function TradeTypeSection({ s, setImmediate }: Pick<SectionProps, "s" | "
           <button
             key={t}
             onClick={() => setImmediate("tradeType")(t)}
-            className={`px-2 py-1 text-xs border rounded ${
+            className={`px-2 py-1 text-sm border rounded ${
               s.tradeType === t
                 ? "bg-blue-600 text-white border-blue-600"
                 : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
@@ -67,7 +67,7 @@ export function PriceSection({ s, setDebounced, applyPreset }: Pick<SectionProps
       <p className={sectionLabel}>가격 직접입력 (만원)</p>
       <div className="flex items-center gap-1 mb-2">
         <input type="number" min="0" value={s.minPrice} onChange={(e) => setDebounced("minPrice")(e.target.value)} className={inputCls} placeholder="최소" aria-label="최소 매매가 (만원)" />
-        <span className="text-xs text-gray-400">~</span>
+        <span className="text-sm text-gray-400">~</span>
         <input type="number" min="0" value={s.maxPrice} onChange={(e) => setDebounced("maxPrice")(e.target.value)} className={inputCls} placeholder="최대" aria-label="최대 매매가 (만원)" />
       </div>
 
@@ -77,7 +77,7 @@ export function PriceSection({ s, setDebounced, applyPreset }: Pick<SectionProps
           <p className={sectionLabel}>월세 (만원)</p>
           <div className="flex items-center gap-1 mb-2">
             <input type="number" min="0" value={s.minRent} onChange={(e) => setDebounced("minRent")(e.target.value)} className={inputCls} placeholder="최소" aria-label="최소 월세 (만원)" />
-            <span className="text-xs text-gray-400">~</span>
+            <span className="text-sm text-gray-400">~</span>
             <input type="number" min="0" value={s.maxRent} onChange={(e) => setDebounced("maxRent")(e.target.value)} className={inputCls} placeholder="최대" aria-label="최대 월세 (만원)" />
           </div>
         </>
@@ -91,7 +91,7 @@ export function PriceSection({ s, setDebounced, applyPreset }: Pick<SectionProps
       </div>
       <div className="flex items-center gap-1">
         <input type="number" min="0" value={s.minPpyeong} onChange={(e) => setDebounced("minPpyeong")(e.target.value)} className={inputCls} placeholder="최소" aria-label="최소 평당가 (만원/평)" />
-        <span className="text-xs text-gray-400">~</span>
+        <span className="text-sm text-gray-400">~</span>
         <input type="number" min="0" value={s.maxPpyeong} onChange={(e) => setDebounced("maxPpyeong")(e.target.value)} className={inputCls} placeholder="최대" aria-label="최대 평당가 (만원/평)" />
       </div>
 
@@ -105,7 +105,7 @@ export function PriceSection({ s, setDebounced, applyPreset }: Pick<SectionProps
           </div>
           <div className="flex items-center gap-1">
             <input type="number" min="0" max="100" step="0.1" value={s.minYield} onChange={(e) => setDebounced("minYield")(e.target.value)} className={inputCls} placeholder="최소" aria-label="최소 수익률 (%)" />
-            <span className="text-xs text-gray-400">~</span>
+            <span className="text-sm text-gray-400">~</span>
             <input type="number" min="0" max="100" step="0.1" value={s.maxYield} onChange={(e) => setDebounced("maxYield")(e.target.value)} className={inputCls} placeholder="최대" aria-label="최대 수익률 (%)" />
           </div>
         </>
@@ -130,7 +130,7 @@ export function AreaSection({ s, setDebounced, applyPreset, dispatch, emitChange
         </p>
         <button
           onClick={() => { const next = s.areaUnit === "m²" ? "평" : "m²"; dispatch({ type: "SET", key: "areaUnit", value: next }); emitChange({ areaUnit: next }); }}
-          className="px-2 py-0.5 text-xs border rounded bg-gray-50 border-gray-300 hover:bg-blue-50"
+          className="px-2 py-1 text-sm border rounded bg-gray-50 border-gray-300 hover:bg-blue-50"
         >
           {s.areaUnit === "m²" ? "평으로" : "m²으로"}
         </button>
@@ -144,7 +144,7 @@ export function AreaSection({ s, setDebounced, applyPreset, dispatch, emitChange
       <p className={sectionLabel}>직접 입력 ({s.areaUnit})</p>
       <div className="flex items-center gap-1">
         <input type="number" min="0" value={s.minArea} onChange={(e) => setDebounced("minArea")(e.target.value)} className={inputCls} placeholder="최소" aria-label={`최소 전용면적 (${s.areaUnit})`} />
-        <span className="text-xs text-gray-400">~</span>
+        <span className="text-sm text-gray-400">~</span>
         <input type="number" min="0" value={s.maxArea} onChange={(e) => setDebounced("maxArea")(e.target.value)} className={inputCls} placeholder="최대" aria-label={`최대 전용면적 (${s.areaUnit})`} />
       </div>
     </>
@@ -167,7 +167,7 @@ export function FloorSection({ s, setImmediate }: Pick<SectionProps, "s" | "setI
           <button
             key={k}
             onClick={() => setImmediate("floorPreset")(k)}
-            className={`px-2 py-1 text-xs border rounded ${
+            className={`px-2 py-1 text-sm border rounded ${
               s.floorPreset === k
                 ? "bg-blue-600 text-white border-blue-600"
                 : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
@@ -189,7 +189,7 @@ export function MoveInSection({ s, setImmediate }: Pick<SectionProps, "s" | "set
       <p className={sectionLabel}>입주가능일</p>
       <div className={separator} />
       {(MOVE_IN_OPTIONS as readonly string[]).map((m) => (
-        <label key={m} className="flex items-center gap-2 py-1 text-xs cursor-pointer">
+        <label key={m} className="flex items-center gap-2 py-1.5 text-sm cursor-pointer">
           <input
             type="radio"
             name="moveInType"
@@ -263,7 +263,7 @@ export function DetailSection({ s, setImmediate, setDebounced, applyPreset, disp
         </div>
         <div className="flex items-center gap-1">
           <input type="number" min="0" value={s.minMaint} onChange={(e) => setDebounced("minMaint")(e.target.value)} className={inputCls} placeholder="최소" aria-label="최소 관리비 (만원)" />
-          <span className="text-xs text-gray-400">~</span>
+          <span className="text-sm text-gray-400">~</span>
           <input type="number" min="0" value={s.maxMaint} onChange={(e) => setDebounced("maxMaint")(e.target.value)} className={inputCls} placeholder="최대" aria-label="최대 관리비 (만원)" />
         </div>
       </div>
@@ -282,7 +282,7 @@ export function DetailSection({ s, setImmediate, setDebounced, applyPreset, disp
           ))}
         </select>
       </div>
-      <label className="flex items-center gap-2 text-xs cursor-pointer">
+      <label className="flex items-center gap-2 text-sm cursor-pointer">
         <input
           type="checkbox"
           checked={s.verifiedOnly === "true"}
@@ -310,7 +310,7 @@ export function DetailSection({ s, setImmediate, setDebounced, applyPreset, disp
                   type="button"
                   onClick={toggle}
                   aria-pressed={isOn}
-                  className={`px-2 py-0.5 text-xs border rounded ${
+                  className={`px-2 py-1 text-sm border rounded ${
                     isOn
                       ? "bg-blue-600 text-white border-blue-600"
                       : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"

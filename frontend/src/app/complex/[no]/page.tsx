@@ -12,7 +12,7 @@ import {
 import { queryKeys } from "@/lib/query-keys";
 import { createClient } from "@/lib/supabase";
 import { PAGE_SIZE, ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
-import LoadingSpinner from "@/components/LoadingSpinner";
+import { SkeletonPage } from "@/components/Skeleton";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useExport } from "@/hooks/useExport";
 import { useFilterParams } from "@/hooks/useFilterParams";
@@ -227,7 +227,7 @@ export default function ComplexDetailPage() {
   }
 
   if (loading) {
-    return <LoadingSpinner />;
+    return <SkeletonPage message="단지 정보를 불러오는 중..." />;
   }
 
   if (error || !complex) {

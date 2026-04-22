@@ -10,6 +10,7 @@ import { M2_TO_PYEONG } from "@/lib/constants";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { getAdvantageForRow, getBestIndices, calcAvgPricePerPyeong } from "@/lib/compare-utils";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { SkeletonPage } from "@/components/Skeleton";
 import type { Complex, PriceStats } from "@/types";
 
 const LazyCompareCharts = dynamic(
@@ -226,7 +227,7 @@ function CompareContent() {
     );
   }
 
-  if (loading) return <LoadingSpinner message="단지 정보를 불러오는 중..." />;
+  if (loading) return <SkeletonPage message="단지 정보를 불러오는 중..." />;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">

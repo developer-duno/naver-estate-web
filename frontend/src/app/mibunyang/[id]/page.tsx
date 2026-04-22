@@ -14,6 +14,7 @@ import {
   TradeStatsSection,
 } from "@/components/mb/MbDetailSections";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { SkeletonPage } from "@/components/Skeleton";
 import { useMbFavoriteStatus } from "@/hooks/useMbFavorites";
 import { exportMbUnsoldHistoryToXlsx } from "@/lib/mb-export";
 
@@ -56,11 +57,7 @@ export default function MbDetailPage() {
   }, [apt?.name]);
 
   if (detailQuery.isLoading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <LoadingSpinner message="아파트 정보를 불러오는 중..." />
-      </div>
-    );
+    return <SkeletonPage message="아파트 정보를 불러오는 중..." />;
   }
 
   if (detailQuery.error) {

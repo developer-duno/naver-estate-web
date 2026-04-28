@@ -136,6 +136,47 @@ describe("FilterBar — 가격 드롭다운", () => {
     expect(screen.getByText("평당가 (만원/평)")).toBeInTheDocument();
     expect(screen.queryByText("수익률 (%)")).not.toBeInTheDocument();
   });
+
+  it("거래유형 '월세' 선택 시 보증금·월세 빠른 선택 프리셋 표시", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("거래유형");
+    fireEvent.click(screen.getByText("월세"));
+    openDropdown("가격");
+    expect(screen.getByText("보증금 빠른 선택")).toBeInTheDocument();
+    expect(screen.getByText("1~3천만")).toBeInTheDocument();
+    expect(screen.getByText("5천만~1억")).toBeInTheDocument();
+    expect(screen.getByText("월세 빠른 선택")).toBeInTheDocument();
+    expect(screen.getByText("50~100만")).toBeInTheDocument();
+    expect(screen.getByText("200만~")).toBeInTheDocument();
+  });
+
+  it("월세에서 보증금 프리셋 클릭 시 minPrice/maxPrice 로 onChange 호출", () => {
+    const onChange = vi.fn();
+    render(<FilterBar {...defaultProps} onChange={onChange} />);
+    openDropdown("거래유형");
+    fireEvent.click(screen.getByText("월세"));
+    openDropdown("가격");
+    fireEvent.click(screen.getByText("1~3천만"));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ min_price: 1000, max_price: 3000 }));
+  });
+
+  it("월세에서 월세 프리셋 클릭 시 minRent/maxRent 로 onChange 호출", () => {
+    const onChange = vi.fn();
+    render(<FilterBar {...defaultProps} onChange={onChange} />);
+    openDropdown("거래유형");
+    fireEvent.click(screen.getByText("월세"));
+    openDropdown("가격");
+    fireEvent.click(screen.getByText("50~100만"));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ min_rent: 50, max_rent: 100 }));
+  });
+
+  it("매매·전세 에는 보증금·월세 빠른 선택 미표시", () => {
+    render(<FilterBar {...defaultProps} />);
+    selectSale();
+    openDropdown("가격");
+    expect(screen.queryByText("보증금 빠른 선택")).not.toBeInTheDocument();
+    expect(screen.queryByText("월세 빠른 선택")).not.toBeInTheDocument();
+  });
 });
 
 describe("FilterBar — 면적 드롭다운", () => {

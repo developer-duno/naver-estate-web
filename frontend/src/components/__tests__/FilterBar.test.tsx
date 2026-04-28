@@ -195,6 +195,83 @@ describe("FilterBar — 면적 드롭다운", () => {
   });
 });
 
+describe("FilterBar — 면적 단위 토글 자동 변환", () => {
+  // 면적 드롭다운 열고 minArea/maxArea 입력 헬퍼 (debounce 없이 즉시 onChange)
+  function setAreaInputs(min: string, max: string = "") {
+    openDropdown("면적");
+    const minInput = screen.getByLabelText(/최소 전용면적/);
+    const maxInput = screen.getByLabelText(/최대 전용면적/);
+    if (min) fireEvent.change(minInput, { target: { value: min } });
+    if (max) fireEvent.change(maxInput, { target: { value: max } });
+    return { minInput, maxInput };
+  }
+
+  it("m² → 평 토글 시 84 → 25.4 변환", () => {
+    render(<FilterBar {...defaultProps} />);
+    const { minInput } = setAreaInputs("84");
+    fireEvent.click(screen.getByText("평으로"));
+    expect((minInput as HTMLInputElement).value).toBe("25.4");
+  });
+
+  it("평 → m² 토글 시 25.4 → 84 변환", () => {
+    render(<FilterBar {...defaultProps} />);
+    const { minInput } = setAreaInputs("84");
+    fireEvent.click(screen.getByText("평으로"));
+    expect((minInput as HTMLInputElement).value).toBe("25.4");
+    fireEvent.click(screen.getByText("m²으로"));
+    expect((minInput as HTMLInputElement).value).toBe("84");
+  });
+
+  it("빈 값은 토글해도 빈 값 유지", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("면적");
+    const minInput = screen.getByLabelText(/최소 전용면적/) as HTMLInputElement;
+    const maxInput = screen.getByLabelText(/최대 전용면적/) as HTMLInputElement;
+    expect(minInput.value).toBe("");
+    fireEvent.click(screen.getByText("평으로"));
+    expect(minInput.value).toBe("");
+    expect(maxInput.value).toBe("");
+  });
+
+  it("한쪽만 입력해도 max는 빈 값 유지", () => {
+    render(<FilterBar {...defaultProps} />);
+    const { minInput, maxInput } = setAreaInputs("60");
+    fireEvent.click(screen.getByText("평으로"));
+    expect((minInput as HTMLInputElement).value).toBe("18.1");
+    expect((maxInput as HTMLInputElement).value).toBe("");
+  });
+
+  it("토글 후 라벨이 직접 입력 (평) 으로 변경", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("면적");
+    expect(screen.getByText("직접 입력 (m²)")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("평으로"));
+    expect(screen.getByText("직접 입력 (평)")).toBeInTheDocument();
+  });
+
+  it("토글 시 onChange 가 새 단위와 변환된 값으로 한 번 호출", () => {
+    const onChange = vi.fn();
+    render(<FilterBar {...defaultProps} onChange={onChange} />);
+    setAreaInputs("84", "200");
+    onChange.mockClear();
+    fireEvent.click(screen.getByText("평으로"));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    const last = onChange.mock.calls[0][0];
+    // 변환 후 값이 m² 환산되어 BE 페이로드에 들어감
+    // 25.4평 × 3.3058 ≈ 83.97m², 60.5평 × 3.3058 ≈ 200m²
+    expect(last.min_area_m2).toBeCloseTo(84, 0);
+    expect(last.max_area_m2).toBeCloseTo(200, 0);
+  });
+
+  it("min/max 모두 변환 (84/200 → 25.4/60.5)", () => {
+    render(<FilterBar {...defaultProps} />);
+    const { minInput, maxInput } = setAreaInputs("84", "200");
+    fireEvent.click(screen.getByText("평으로"));
+    expect((minInput as HTMLInputElement).value).toBe("25.4");
+    expect((maxInput as HTMLInputElement).value).toBe("60.5");
+  });
+});
+
 describe("FilterBar — 층수 드롭다운", () => {
   it("드롭다운 열면 층수 프리셋 표시", () => {
     render(<FilterBar {...defaultProps} />);

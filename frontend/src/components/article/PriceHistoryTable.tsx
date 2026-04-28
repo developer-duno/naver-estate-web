@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getArticlePriceHistory } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { formatKoreanPrice } from "@/lib/format";
-import LoadingSpinner from "@/components/LoadingSpinner";
+import { SkeletonRows } from "@/components/Skeleton";
 
 interface Props {
   articleNo: string;
@@ -16,7 +16,7 @@ export default function PriceHistoryTable({ articleNo }: Props) {
     queryFn: () => getArticlePriceHistory(articleNo),
   });
 
-  if (isLoading) return <LoadingSpinner size="sm" />;
+  if (isLoading) return <SkeletonRows rows={3} rowHeight="h-8" />;
 
   const history = data?.history;
   if (!history || history.length === 0) return null;

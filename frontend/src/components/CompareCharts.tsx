@@ -4,7 +4,7 @@ import React, { useMemo } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { getPriceHistory, getPriceStats, getPyeongDetails } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import LoadingSpinner from "@/components/LoadingSpinner";
+import Skeleton from "@/components/Skeleton";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ChartAccordion from "@/components/ChartAccordion";
 import CompareRadarChart from "@/components/CompareRadarChart";
@@ -98,7 +98,10 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
       <ChartAccordion title="가격 추이 비교" forceOpen={expandAll}>
         <ErrorBoundary>
           {historyLoading ? (
-            <LoadingSpinner message="가격 추이 로딩 중..." />
+            <div role="status" aria-label="로딩 중" className="py-4">
+              <span className="sr-only">가격 추이 로딩 중...</span>
+              <Skeleton className="h-72 w-full" />
+            </div>
           ) : historyDatasets.length > 0 ? (
             <ComparePriceTrendChart datasets={historyDatasets} />
           ) : (
@@ -111,7 +114,10 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
       <ChartAccordion title="현재 평균가 비교" forceOpen={expandAll}>
         <ErrorBoundary>
           {statsLoading ? (
-            <LoadingSpinner message="가격 통계 로딩 중..." />
+            <div role="status" aria-label="로딩 중" className="py-4">
+              <span className="sr-only">가격 통계 로딩 중...</span>
+              <Skeleton className="h-72 w-full" />
+            </div>
           ) : statsDatasets.length > 0 ? (
             <ComparePriceBarChart datasets={statsDatasets} />
           ) : (
@@ -124,7 +130,10 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
       <ChartAccordion title="층별 가격 비교" forceOpen={expandAll}>
         <ErrorBoundary>
           {statsLoading ? (
-            <LoadingSpinner message="층별 가격 로딩 중..." />
+            <div role="status" aria-label="로딩 중" className="py-4">
+              <span className="sr-only">층별 가격 로딩 중...</span>
+              <Skeleton className="h-72 w-full" />
+            </div>
           ) : statsDatasets.length > 0 ? (
             <CompareFloorChart datasets={statsDatasets} />
           ) : (

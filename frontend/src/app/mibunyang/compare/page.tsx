@@ -16,6 +16,7 @@ import type { MbCompareHistoryItem, MbCompareBookmarkItem } from "@/lib/storage"
 import MbCompareHistory from "@/components/mb/MbCompareHistory";
 import PromptModal from "@/components/PromptModal";
 import LoadingSpinner from "@/components/LoadingSpinner";
+import { SkeletonPage } from "@/components/Skeleton";
 import { COMPARE_TEXT_COLORS } from "@/lib/constants";
 
 const LazyMbCompareRadarChart = dynamic(
@@ -147,11 +148,7 @@ function CompareContent() {
   }
 
   if (isLoading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-6">
-        <LoadingSpinner message="비교 데이터 로딩 중..." />
-      </div>
-    );
+    return <SkeletonPage message="비교 데이터 로딩 중..." />;
   }
 
   return (
@@ -304,7 +301,7 @@ function CompareContent() {
 
 export default function MbComparePage() {
   return (
-    <Suspense fallback={<LoadingSpinner />}>
+    <Suspense fallback={<SkeletonPage />}>
       <CompareContent />
     </Suspense>
   );

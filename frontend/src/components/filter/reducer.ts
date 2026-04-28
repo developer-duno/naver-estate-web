@@ -2,6 +2,7 @@
  * FilterBar 상태 관리 — 타입, 리듀서, 상수
  */
 import type { ArticleFilters } from "@/types";
+import { convertArea } from "@/lib/constants";
 
 // ── 타입 ──
 
@@ -37,6 +38,7 @@ export interface FilterState {
 export type FilterAction =
   | { type: "SET"; key: keyof FilterState; value: string }
   | { type: "SET_MULTI"; updates: Partial<FilterState> }
+  | { type: "SET_AREA_UNIT"; value: "m²" | "평" }
   | { type: "RESET" };
 
 export type FilterChip = { label: string; reset: () => void };
@@ -69,6 +71,16 @@ export function filterReducer(state: FilterState, action: FilterAction): FilterS
       return { ...state, [action.key]: action.value };
     case "SET_MULTI":
       return { ...state, ...action.updates };
+    case "SET_AREA_UNIT": {
+      if (state.areaUnit === action.value) return state;
+      const from = state.areaUnit as "m²" | "평";
+      return {
+        ...state,
+        areaUnit: action.value,
+        minArea: convertArea(state.minArea, from, action.value),
+        maxArea: convertArea(state.maxArea, from, action.value),
+      };
+    }
     case "RESET":
       return { ...DEFAULT_STATE };
     default:

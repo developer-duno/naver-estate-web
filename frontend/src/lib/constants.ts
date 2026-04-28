@@ -3,6 +3,19 @@
 /** 제곱미터 → 평 변환 계수 */
 export const M2_TO_PYEONG = 3.3058;
 
+/** 면적 단위 변환 (빈 문자열·NaN·음수는 그대로 반환)
+ * m² → 평: ÷ 3.3058, 소수점 1자리 라운딩 ("84" → "25.4")
+ * 평 → m²: × 3.3058, 정수 라운딩 ("25.4" → "84") */
+export function convertArea(value: string, from: "m²" | "평", to: "m²" | "평"): string {
+  if (!value || from === to) return value;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return value;
+  if (from === "m²" && to === "평") {
+    return (Math.round((n / M2_TO_PYEONG) * 10) / 10).toString();
+  }
+  return Math.round(n * M2_TO_PYEONG).toString();
+}
+
 /** 페이지당 매물 수 */
 export const PAGE_SIZE = 50;
 

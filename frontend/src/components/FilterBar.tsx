@@ -2,7 +2,7 @@
 
 import { useReducer, useState, useCallback, useRef, useEffect, memo } from "react";
 import type { ArticleFilters, FilterOptions } from "@/types";
-import { DEBOUNCE_MS, SORT_OPTIONS, type RangePreset } from "@/lib/constants";
+import { DEBOUNCE_MS, SORT_OPTIONS, convertArea, type RangePreset } from "@/lib/constants";
 import FilterDropdown from "./FilterDropdown";
 import { filterReducer, buildInitState, type FilterState } from "./filter/reducer";
 import { buildArticleFilters } from "./filter/emitFilters";
@@ -66,8 +66,11 @@ export default memo(function FilterBar({ onChange, filterOptions, sortBy: extern
   };
 
   const applyPreset = (preset: RangePreset, minKey: keyof FilterState, maxKey: keyof FilterState) => {
-    const minVal = preset.min !== undefined ? String(preset.min) : "";
-    const maxVal = preset.max !== undefined ? String(preset.max) : "";
+    const isAreaPyeong = minKey === "minArea" && s.areaUnit === "평";
+    const rawMin = preset.min !== undefined ? String(preset.min) : "";
+    const rawMax = preset.max !== undefined ? String(preset.max) : "";
+    const minVal = isAreaPyeong ? convertArea(rawMin, "m²", "평") : rawMin;
+    const maxVal = isAreaPyeong ? convertArea(rawMax, "m²", "평") : rawMax;
     dispatch({ type: "SET_MULTI", updates: { [minKey]: minVal, [maxKey]: maxVal } });
     emitChange({ [minKey]: minVal, [maxKey]: maxVal });
   };

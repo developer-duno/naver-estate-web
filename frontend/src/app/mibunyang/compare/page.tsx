@@ -15,21 +15,35 @@ import type { UnsoldDataset } from "@/components/mb/MbCompareUnsoldChart";
 import type { MbCompareHistoryItem, MbCompareBookmarkItem } from "@/lib/storage";
 import MbCompareHistory from "@/components/mb/MbCompareHistory";
 import PromptModal from "@/components/PromptModal";
-import LoadingSpinner from "@/components/LoadingSpinner";
-import { SkeletonPage } from "@/components/Skeleton";
+import Skeleton, { SkeletonPage } from "@/components/Skeleton";
 import { COMPARE_TEXT_COLORS } from "@/lib/constants";
 
 const LazyMbCompareRadarChart = dynamic(
   () => import("@/components/mb/MbCompareRadarChart"),
-  { ssr: false, loading: () => <LoadingSpinner message="차트 로딩..." /> },
+  { ssr: false, loading: () => (
+    <div role="status" aria-label="로딩 중" className="py-4">
+      <span className="sr-only">차트 로딩...</span>
+      <Skeleton className="h-80 w-full" />
+    </div>
+  ) },
 );
 const LazyMbComparePriceChart = dynamic(
   () => import("@/components/mb/MbComparePriceChart"),
-  { ssr: false, loading: () => <LoadingSpinner message="차트 로딩..." /> },
+  { ssr: false, loading: () => (
+    <div role="status" aria-label="로딩 중" className="py-4">
+      <span className="sr-only">차트 로딩...</span>
+      <Skeleton className="h-80 w-full" />
+    </div>
+  ) },
 );
 const LazyMbCompareUnsoldChart = dynamic(
   () => import("@/components/mb/MbCompareUnsoldChart"),
-  { ssr: false, loading: () => <LoadingSpinner message="차트 로딩..." /> },
+  { ssr: false, loading: () => (
+    <div role="status" aria-label="로딩 중" className="py-4">
+      <span className="sr-only">차트 로딩...</span>
+      <Skeleton className="h-80 w-full" />
+    </div>
+  ) },
 );
 
 function CompareContent() {

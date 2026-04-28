@@ -201,6 +201,26 @@ export const YIELD_PRESETS: RangePreset[] = [
   { label: "12%~", min: 12 },
 ];
 
+/** 월세 보증금 프리셋 (만원 단위) — minPrice/maxPrice 키 재사용 */
+export const DEPOSIT_PRESETS: RangePreset[] = [
+  { label: "전체" },
+  { label: "~1천만", max: 1000 },
+  { label: "1~3천만", min: 1000, max: 3000 },
+  { label: "3~5천만", min: 3000, max: 5000 },
+  { label: "5천만~1억", min: 5000, max: 10000 },
+  { label: "1억~", min: 10000 },
+];
+
+/** 월세 프리셋 (만원 단위) — minRent/maxRent 키 */
+export const MONTHLY_RENT_PRESETS: RangePreset[] = [
+  { label: "전체" },
+  { label: "~50만", max: 50 },
+  { label: "50~100만", min: 50, max: 100 },
+  { label: "100~150만", min: 100, max: 150 },
+  { label: "150~200만", min: 150, max: 200 },
+  { label: "200만~", min: 200 },
+];
+
 /** 미분양 정렬 옵션 */
 export const MB_SORT_OPTIONS = [
   { v: "name_asc", l: "단지명순" },

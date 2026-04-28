@@ -8,6 +8,7 @@ import {
   AREA_PRESETS_OFFICETEL, AREA_PRESETS_OFFICETEL_PYEONG,
   MAINTENANCE_PRESETS, MOVE_IN_OPTIONS, BUILDING_AGE_OPTIONS,
   SORT_OPTIONS, ESTATE_TYPE_FILTER_OPTIONS, YIELD_PRESETS,
+  DEPOSIT_PRESETS, MONTHLY_RENT_PRESETS,
 } from "@/lib/constants";
 import type { FilterState } from "./reducer";
 import PresetButtons from "./PresetButtons";
@@ -85,6 +86,17 @@ export function PriceSection({ s, setDebounced, applyPreset }: Pick<SectionProps
         </>
       )}
 
+      {isMonthly && (
+        <>
+          <p className={sectionLabel}>보증금 빠른 선택</p>
+          <div className="mb-2">
+            <PresetButtons presets={DEPOSIT_PRESETS} minKey="minPrice" maxKey="maxPrice"
+              currentMin={s.minPrice} currentMax={s.maxPrice} onApply={applyPreset} />
+          </div>
+          <div className={separator} />
+        </>
+      )}
+
       <p className={sectionLabel}>{lbl.direct}</p>
       <div className="flex items-center gap-1 mb-2">
         <input type="number" min="0" value={s.minPrice} onChange={(e) => setDebounced("minPrice")(e.target.value)} className={inputCls} placeholder="최소" aria-label={`최소 ${lbl.aria} (만원)`} />
@@ -95,6 +107,11 @@ export function PriceSection({ s, setDebounced, applyPreset }: Pick<SectionProps
       {isMonthly && (
         <>
           <div className={separator} />
+          <p className={sectionLabel}>월세 빠른 선택</p>
+          <div className="mb-2">
+            <PresetButtons presets={MONTHLY_RENT_PRESETS} minKey="minRent" maxKey="maxRent"
+              currentMin={s.minRent} currentMax={s.maxRent} onApply={applyPreset} />
+          </div>
           <p className={sectionLabel}>월세 (만원)</p>
           <div className="flex items-center gap-1 mb-2">
             <input type="number" min="0" value={s.minRent} onChange={(e) => setDebounced("minRent")(e.target.value)} className={inputCls} placeholder="최소" aria-label="최소 월세 (만원)" />

@@ -8,9 +8,9 @@ import {
   AREA_PRESETS_OFFICETEL, AREA_PRESETS_OFFICETEL_PYEONG,
   MAINTENANCE_PRESETS, MOVE_IN_OPTIONS, BUILDING_AGE_OPTIONS,
   SORT_OPTIONS, ESTATE_TYPE_FILTER_OPTIONS, YIELD_PRESETS,
-  DEPOSIT_PRESETS, MONTHLY_RENT_PRESETS,
+  DEPOSIT_PRESETS, MONTHLY_RENT_PRESETS, convertArea,
 } from "@/lib/constants";
-import type { FilterState } from "./reducer";
+import type { FilterState, FilterAction } from "./reducer";
 import PresetButtons from "./PresetButtons";
 
 // ── 공통 Props ──
@@ -20,7 +20,7 @@ interface SectionProps {
   setImmediate: (key: keyof FilterState) => (v: string) => void;
   setDebounced: (key: keyof FilterState) => (v: string) => void;
   applyPreset: (p: RangePreset, minK: keyof FilterState, maxK: keyof FilterState) => void;
-  dispatch: (action: { type: "SET"; key: keyof FilterState; value: string }) => void;
+  dispatch: (action: FilterAction) => void;
   emitChange: (overrides?: Partial<Record<string, string>>) => void;
 }
 
@@ -171,7 +171,14 @@ export function AreaSection({ s, setDebounced, applyPreset, dispatch, emitChange
           전용면적 프리셋{isOfficetel && " (오피스텔)"}
         </p>
         <button
-          onClick={() => { const next = s.areaUnit === "m²" ? "평" : "m²"; dispatch({ type: "SET", key: "areaUnit", value: next }); emitChange({ areaUnit: next }); }}
+          onClick={() => {
+            const from = s.areaUnit as "m²" | "평";
+            const next = from === "m²" ? "평" : "m²";
+            const nextMin = convertArea(s.minArea, from, next);
+            const nextMax = convertArea(s.maxArea, from, next);
+            dispatch({ type: "SET_AREA_UNIT", value: next });
+            emitChange({ areaUnit: next, minArea: nextMin, maxArea: nextMax });
+          }}
           className="px-2 py-1 text-sm border rounded bg-gray-50 border-gray-300 hover:bg-blue-50"
         >
           {s.areaUnit === "m²" ? "평으로" : "m²으로"}

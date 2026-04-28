@@ -4,9 +4,11 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-28 — 세션 78, LoadingSpinner 이월 7곳 (조심한 완전판). 5커밋 push(a78dfb6/43f6f2b/27af834/7b61520/4379aba, 9파일 +59/-37): Phase 0 Skeleton.tsx 패치(role 옵셔널화·aria-label "로딩 중" 고정·sr-only 메시지 분리, complex-visual.spec.ts:14 우연 통과→정직 통과로 개선) + Phase A 컴포넌트 3파일(CompareCharts 차트 3곳 wrapper+Skeleton h-72 / ArticleDetail 모달 wrapper+Skeleton 박스 3개 / PriceHistoryTable SkeletonRows rows=3 h-8) + Phase B-1 페이지 3파일(login/search/mibunyang Suspense+isLoading SkeletonPage) + Phase B-2 mibunyang/compare 진입 분기(SkeletonPage message="비교 데이터 로딩 중...") + Phase C dynamic loading 3곳(차트 wrapper+Skeleton h-80, replace_all 3건). Plan 에이전트 🔴 5건 + 9 GATE 🟡 3건 사전 발견 후 사용자 "조심한 완전판" 확정. ArticleDetail.test.tsx + CompareCharts.test.tsx 20 passed 확증 + MbTabContent.test.tsx 6 passed 회귀 검증. vitest 623 유지 / tsc 0 / lint baseline 유지. feedback_user_value_focus 🟢 5건 스트릭 7건 연속.
+**마지막 작업**: 2026-04-28 — 세션 80~81 통합, 가격 드롭다운 거래유형별 라벨·노출 동적화 + 월세 빠른 선택 신설. 4커밋 push (423278b/ef26ca6/4c886cb/f5ca073, 4파일 +147/-27). 사용자 보고 "매매가는 매매에서 수익률은 월세이고 기준이 없네" → priceLabels(tradeType) 헬퍼로 라벨 동적화 + "전체"일 때 안내박스 + 빠른선택/평당가는 매매에서만 + 수익률은 월세·단기임대에서만. 가격 칩 prefix 동적("매매가/전세가/보증금"). 월세 보증금 5단계(~1천만/1~3천만/3~5천만/5천만~1억/1억~) + 월세 5단계(~50/50~100/100~150/150~200/200~) PresetButtons 신설. vitest 623 → 631 (8 신규). 사용자 가치 🟢 스트릭 9건.
 
-**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~77 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
+**직전 작업 (세션 79)**: "단지 검색 대덕구 대화동만 나온다" 사용자 버그 → 코드 흐름 7단계 + curl 6회 + 9 GATE 3에이전트 병렬 검증 결과 모든 코드 정상, 원인은 브라우저/Vercel CDN 캐시. 0커밋 진단 종결. feedback_no_fake_user_attribution.md 신규.
+
+**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~78 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
 
 
 ## 기술 스택

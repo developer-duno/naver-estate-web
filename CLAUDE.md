@@ -4,9 +4,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-23 — 세션 77, 로딩 skeleton UI (A-3). 3커밋 push(55505fe + 34fd2c6 + fcf486d, 4파일 +62/-10): Skeleton.tsx 신규 52줄 3 export(default Skeleton/SkeletonRows/SkeletonPage, role="status"+sr-only a11y, bg-gray-200 일반영역 선례) + MbTabContent.tsx L18 LoadingSpinner→SkeletonRows 전환(skeletonRows prop 추가, 미분양 4탭 자동 반영) + complex/[no]/page.tsx·compare/page.tsx·mibunyang/[id]/page.tsx 로딩 분기 LoadingSpinner→SkeletonPage 교체(complex 는 import 제거, compare/mibunyang 은 Suspense·추이 로딩에서 LoadingSpinner 병존 유지). 9 GATE 검증 🟢 6+🟡 3+🔴 0 후 사용자 확정(3커밋 분할/3 export 유지). Plan 에이전트 🔴 3건 사전 발견(MbTabContent.test.tsx 단언 보존/범위 과장/app/loading.tsx 효과 불분명) 반영(sr-only 텍스트로 테스트 호환/3페이지만/Phase C 삭제). MbTabContent.test.tsx 6 passed 확증, vitest 623 유지 / tsc 0 / lint baseline 유지. feedback_user_value_focus 🟢 4건 스트릭 6건 연속.
+**마지막 작업**: 2026-04-28 — 세션 78, LoadingSpinner 이월 7곳 (조심한 완전판). 5커밋 push(a78dfb6/43f6f2b/27af834/7b61520/4379aba, 9파일 +59/-37): Phase 0 Skeleton.tsx 패치(role 옵셔널화·aria-label "로딩 중" 고정·sr-only 메시지 분리, complex-visual.spec.ts:14 우연 통과→정직 통과로 개선) + Phase A 컴포넌트 3파일(CompareCharts 차트 3곳 wrapper+Skeleton h-72 / ArticleDetail 모달 wrapper+Skeleton 박스 3개 / PriceHistoryTable SkeletonRows rows=3 h-8) + Phase B-1 페이지 3파일(login/search/mibunyang Suspense+isLoading SkeletonPage) + Phase B-2 mibunyang/compare 진입 분기(SkeletonPage message="비교 데이터 로딩 중...") + Phase C dynamic loading 3곳(차트 wrapper+Skeleton h-80, replace_all 3건). Plan 에이전트 🔴 5건 + 9 GATE 🟡 3건 사전 발견 후 사용자 "조심한 완전판" 확정. ArticleDetail.test.tsx + CompareCharts.test.tsx 20 passed 확증 + MbTabContent.test.tsx 6 passed 회귀 검증. vitest 623 유지 / tsc 0 / lint baseline 유지. feedback_user_value_focus 🟢 5건 스트릭 7건 연속.
 
-**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~75 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
+**과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~77 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
 
 
 ## 기술 스택

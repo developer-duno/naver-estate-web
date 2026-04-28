@@ -55,23 +55,44 @@ export function TradeTypeSection({ s, setImmediate }: Pick<SectionProps, "s" | "
 
 // ── 가격 ──
 
+export function priceLabels(tradeType: string): { quick: string; direct: string; aria: string } {
+  if (tradeType === "매매") return { quick: "빠른 선택 (매매가)", direct: "매매가 직접입력 (만원)", aria: "매매가" };
+  if (tradeType === "전세") return { quick: "", direct: "전세가 직접입력 (만원)", aria: "전세가" };
+  if (tradeType === "월세" || tradeType === "단기임대") return { quick: "", direct: "보증금 직접입력 (만원)", aria: "보증금" };
+  return { quick: "", direct: "가격 직접입력 (만원)", aria: "가격" };
+}
+
 export function PriceSection({ s, setDebounced, applyPreset }: Pick<SectionProps, "s" | "setDebounced" | "applyPreset">) {
+  const lbl = priceLabels(s.tradeType);
+  const isSale = s.tradeType === "매매";
+  const isMonthly = s.tradeType === "월세" || s.tradeType === "단기임대";
   return (
     <>
-      <p className={sectionLabel}>빠른 선택 (매매가)</p>
-      <div className="mb-2">
-        <PresetButtons presets={PRICE_PRESETS} minKey="minPrice" maxKey="maxPrice"
-          currentMin={s.minPrice} currentMax={s.maxPrice} onApply={applyPreset} />
-      </div>
-      <div className={separator} />
-      <p className={sectionLabel}>가격 직접입력 (만원)</p>
+      {s.tradeType === "전체" && (
+        <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-2">
+          거래유형을 먼저 선택하면 정확한 가격 기준이 표시됩니다
+        </div>
+      )}
+
+      {isSale && (
+        <>
+          <p className={sectionLabel}>{lbl.quick}</p>
+          <div className="mb-2">
+            <PresetButtons presets={PRICE_PRESETS} minKey="minPrice" maxKey="maxPrice"
+              currentMin={s.minPrice} currentMax={s.maxPrice} onApply={applyPreset} />
+          </div>
+          <div className={separator} />
+        </>
+      )}
+
+      <p className={sectionLabel}>{lbl.direct}</p>
       <div className="flex items-center gap-1 mb-2">
-        <input type="number" min="0" value={s.minPrice} onChange={(e) => setDebounced("minPrice")(e.target.value)} className={inputCls} placeholder="최소" aria-label="최소 매매가 (만원)" />
+        <input type="number" min="0" value={s.minPrice} onChange={(e) => setDebounced("minPrice")(e.target.value)} className={inputCls} placeholder="최소" aria-label={`최소 ${lbl.aria} (만원)`} />
         <span className="text-sm text-gray-400">~</span>
-        <input type="number" min="0" value={s.maxPrice} onChange={(e) => setDebounced("maxPrice")(e.target.value)} className={inputCls} placeholder="최대" aria-label="최대 매매가 (만원)" />
+        <input type="number" min="0" value={s.maxPrice} onChange={(e) => setDebounced("maxPrice")(e.target.value)} className={inputCls} placeholder="최대" aria-label={`최대 ${lbl.aria} (만원)`} />
       </div>
 
-      {(s.tradeType === "월세" || s.tradeType === "단기임대") && (
+      {isMonthly && (
         <>
           <div className={separator} />
           <p className={sectionLabel}>월세 (만원)</p>
@@ -83,19 +104,23 @@ export function PriceSection({ s, setDebounced, applyPreset }: Pick<SectionProps
         </>
       )}
 
-      <div className={separator} />
-      <p className={sectionLabel}>평당가 (만원/평)</p>
-      <div className="mb-2">
-        <PresetButtons presets={PPYEONG_PRESETS} minKey="minPpyeong" maxKey="maxPpyeong"
-          currentMin={s.minPpyeong} currentMax={s.maxPpyeong} onApply={applyPreset} />
-      </div>
-      <div className="flex items-center gap-1">
-        <input type="number" min="0" value={s.minPpyeong} onChange={(e) => setDebounced("minPpyeong")(e.target.value)} className={inputCls} placeholder="최소" aria-label="최소 평당가 (만원/평)" />
-        <span className="text-sm text-gray-400">~</span>
-        <input type="number" min="0" value={s.maxPpyeong} onChange={(e) => setDebounced("maxPpyeong")(e.target.value)} className={inputCls} placeholder="최대" aria-label="최대 평당가 (만원/평)" />
-      </div>
+      {isSale && (
+        <>
+          <div className={separator} />
+          <p className={sectionLabel}>평당가 (만원/평)</p>
+          <div className="mb-2">
+            <PresetButtons presets={PPYEONG_PRESETS} minKey="minPpyeong" maxKey="maxPpyeong"
+              currentMin={s.minPpyeong} currentMax={s.maxPpyeong} onApply={applyPreset} />
+          </div>
+          <div className="flex items-center gap-1">
+            <input type="number" min="0" value={s.minPpyeong} onChange={(e) => setDebounced("minPpyeong")(e.target.value)} className={inputCls} placeholder="최소" aria-label="최소 평당가 (만원/평)" />
+            <span className="text-sm text-gray-400">~</span>
+            <input type="number" min="0" value={s.maxPpyeong} onChange={(e) => setDebounced("maxPpyeong")(e.target.value)} className={inputCls} placeholder="최대" aria-label="최대 평당가 (만원/평)" />
+          </div>
+        </>
+      )}
 
-      {(s.tradeType === "월세" || s.tradeType === "전체" || s.tradeType === "단기임대") && (
+      {isMonthly && (
         <>
           <div className={separator} />
           <p className={sectionLabel}>수익률 (%)</p>

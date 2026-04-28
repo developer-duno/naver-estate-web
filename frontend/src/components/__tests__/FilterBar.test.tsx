@@ -65,27 +65,76 @@ describe("FilterBar — 거래유형 드롭다운", () => {
 });
 
 describe("FilterBar — 가격 드롭다운", () => {
-  it("드롭다운 열면 가격 프리셋 표시", () => {
+  // 거래유형이 "전체"면 빠른 선택·평당가 숨김 → 매매 선택 후 검사
+  function selectSale() {
+    openDropdown("거래유형");
+    fireEvent.click(screen.getByText("매매"));
+  }
+
+  it("매매 선택 후 가격 프리셋 표시", () => {
     render(<FilterBar {...defaultProps} />);
+    selectSale();
     openDropdown("가격");
     expect(screen.getByText("~3억")).toBeInTheDocument();
     expect(screen.getByText("3~6억")).toBeInTheDocument();
     expect(screen.getByText("15억~")).toBeInTheDocument();
   });
 
-  it("프리셋 클릭 시 onChange 호출", () => {
+  it("매매 선택 후 프리셋 클릭 시 onChange 호출", () => {
     const onChange = vi.fn();
     render(<FilterBar {...defaultProps} onChange={onChange} />);
+    selectSale();
     openDropdown("가격");
     fireEvent.click(screen.getByText("~3억"));
     expect(onChange).toHaveBeenCalled();
   });
 
-  it("평당가 프리셋도 표시", () => {
+  it("매매 선택 후 평당가 프리셋도 표시", () => {
     render(<FilterBar {...defaultProps} />);
+    selectSale();
     openDropdown("가격");
     expect(screen.getByText("~2천만")).toBeInTheDocument();
     expect(screen.getByText("5천만~")).toBeInTheDocument();
+  });
+
+  it("거래유형 '전체' 일 때는 안내 박스 + 빠른 선택·평당가 숨김", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("가격");
+    expect(screen.getByText(/거래유형을 먼저 선택/)).toBeInTheDocument();
+    expect(screen.queryByText("~3억")).not.toBeInTheDocument();
+    expect(screen.queryByText("~2천만")).not.toBeInTheDocument();
+    expect(screen.getByText("가격 직접입력 (만원)")).toBeInTheDocument();
+  });
+
+  it("거래유형 '전세' 선택 시 '전세가 직접입력' 라벨 + 빠른 선택·평당가 숨김", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("거래유형");
+    fireEvent.click(screen.getByText("전세"));
+    openDropdown("가격");
+    expect(screen.getByText("전세가 직접입력 (만원)")).toBeInTheDocument();
+    expect(screen.queryByText("~3억")).not.toBeInTheDocument();
+    expect(screen.queryByText("~2천만")).not.toBeInTheDocument();
+    expect(screen.queryByText(/수익률/)).not.toBeInTheDocument();
+  });
+
+  it("거래유형 '월세' 선택 시 '보증금 직접입력' + 월세 + 수익률 표시", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("거래유형");
+    fireEvent.click(screen.getByText("월세"));
+    openDropdown("가격");
+    expect(screen.getByText("보증금 직접입력 (만원)")).toBeInTheDocument();
+    expect(screen.getByText("월세 (만원)")).toBeInTheDocument();
+    expect(screen.getByText("수익률 (%)")).toBeInTheDocument();
+    expect(screen.queryByText("평당가 (만원/평)")).not.toBeInTheDocument();
+  });
+
+  it("거래유형 '매매' 선택 시 '매매가 직접입력' 라벨 + 평당가 표시 + 수익률 숨김", () => {
+    render(<FilterBar {...defaultProps} />);
+    selectSale();
+    openDropdown("가격");
+    expect(screen.getByText("매매가 직접입력 (만원)")).toBeInTheDocument();
+    expect(screen.getByText("평당가 (만원/평)")).toBeInTheDocument();
+    expect(screen.queryByText("수익률 (%)")).not.toBeInTheDocument();
   });
 });
 

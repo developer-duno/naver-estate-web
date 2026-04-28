@@ -272,6 +272,101 @@ describe("FilterBar — 면적 단위 토글 자동 변환", () => {
   });
 });
 
+describe("FilterBar — 면적 빠른선택 단위 변환", () => {
+  // 면적 드롭다운에서 빠른선택 클릭 시 현재 areaUnit 으로 변환된 값이 입력창에 박혀야 함
+  function selectPyeong() {
+    fireEvent.click(screen.getByText("평으로"));
+  }
+  function getMinMax() {
+    return {
+      minInput: screen.getByLabelText(/최소 전용면적/) as HTMLInputElement,
+      maxInput: screen.getByLabelText(/최대 전용면적/) as HTMLInputElement,
+    };
+  }
+
+  it("m² 단위 + '84m²' 클릭 시 입력창 84/85 (회귀 미발생)", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("면적");
+    fireEvent.click(screen.getByText("84m²"));
+    const { minInput, maxInput } = getMinMax();
+    expect(minInput.value).toBe("84");
+    expect(maxInput.value).toBe("85");
+  });
+
+  it("평 단위 + '25평' 클릭 시 입력창 25.4/25.7 변환", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("면적");
+    selectPyeong();
+    fireEvent.click(screen.getByText("25평"));
+    const { minInput, maxInput } = getMinMax();
+    expect(minInput.value).toBe("25.4");
+    expect(maxInput.value).toBe("25.7");
+  });
+
+  it("평 단위 + '전체' 클릭 시 입력창 빈 값", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("면적");
+    selectPyeong();
+    fireEvent.click(screen.getByText("전체"));
+    const { minInput, maxInput } = getMinMax();
+    expect(minInput.value).toBe("");
+    expect(maxInput.value).toBe("");
+  });
+
+  it("평 단위 + '41평~' 클릭 시 max 빈 값 유지", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("면적");
+    selectPyeong();
+    fireEvent.click(screen.getByText("41평~"));
+    const { minInput, maxInput } = getMinMax();
+    expect(minInput.value).toBe("40.8"); // 135 / 3.3058
+    expect(maxInput.value).toBe("");
+  });
+
+  it("평 단위 + '~18평' 클릭 시 min 빈 값 유지", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("면적");
+    selectPyeong();
+    fireEvent.click(screen.getByText("~18평"));
+    const { minInput, maxInput } = getMinMax();
+    expect(minInput.value).toBe("");
+    expect(maxInput.value).toBe("18.1"); // 60 / 3.3058
+  });
+
+  it("회귀: 매매 가격 '3~6억' 클릭은 areaUnit 무관 (단위 변환 미발동)", () => {
+    const onChange = vi.fn();
+    render(<FilterBar {...defaultProps} onChange={onChange} />);
+    // 매매 선택
+    openDropdown("거래유형");
+    fireEvent.click(screen.getByText("매매"));
+    // 면적 평 단위로 토글
+    openDropdown("면적");
+    selectPyeong();
+    onChange.mockClear();
+    // 가격 프리셋 클릭
+    openDropdown("가격");
+    fireEvent.click(screen.getByText("3~6억"));
+    expect(onChange).toHaveBeenCalled();
+    const last = onChange.mock.calls[onChange.mock.calls.length - 1][0];
+    expect(last.min_price).toBe(30000);
+    expect(last.max_price).toBe(60000);
+  });
+
+  it("평 단위 + '25평' 클릭 후 BE 페이로드 m² 환산 (round-trip)", () => {
+    const onChange = vi.fn();
+    render(<FilterBar {...defaultProps} onChange={onChange} />);
+    openDropdown("면적");
+    selectPyeong();
+    onChange.mockClear();
+    fireEvent.click(screen.getByText("25평"));
+    expect(onChange).toHaveBeenCalled();
+    const last = onChange.mock.calls[onChange.mock.calls.length - 1][0];
+    // 25.4평 × 3.3058 ≈ 83.97 → toBeCloseTo(84, 0) 통과
+    expect(last.min_area_m2).toBeCloseTo(84, 0);
+    expect(last.max_area_m2).toBeCloseTo(85, 0);
+  });
+});
+
 describe("FilterBar — 층수 드롭다운", () => {
   it("드롭다운 열면 층수 프리셋 표시", () => {
     render(<FilterBar {...defaultProps} />);

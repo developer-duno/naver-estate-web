@@ -11,7 +11,7 @@ import FilterBar from "@/components/FilterBar";
 import type { Complex } from "@/types";
 import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_TABS, PAGE_SIZE } from "@/lib/constants";
 import EstateTypeTabs from "@/components/EstateTypeTabs";
-import LoadingSpinner from "@/components/LoadingSpinner";
+import { SkeletonPage } from "@/components/Skeleton";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useFilterParams, buildFilterURL } from "@/hooks/useFilterParams";
 import { useCompare, type CompareItem } from "@/hooks/useCompare";
@@ -185,7 +185,7 @@ function SearchContent() {
       )}
 
       {/* 로딩 */}
-      {loading && <LoadingSpinner message="검색 중입니다. 잠시만 기다려주세요." />}
+      {loading && <SkeletonPage message="검색 중입니다. 잠시만 기다려주세요." />}
 
       {/* DB 폴백 안내 — 네이버 쿨다운 중 저장된 데이터로 표시됨 */}
       {fallbackNotice && !loading && (
@@ -432,7 +432,7 @@ const ComplexCardMobile = memo(function ComplexCardMobile({ complex, index, urlF
 
 export default function SearchPage() {
   return (
-    <Suspense fallback={<LoadingSpinner />}>
+    <Suspense fallback={<SkeletonPage />}>
       <SearchContent />
     </Suspense>
   );

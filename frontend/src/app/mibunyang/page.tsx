@@ -6,7 +6,7 @@ import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { getMbApartments, getMbUnsold, getMbRegions, getMbTrades } from "@/lib/api";
 import MbRegionSelector from "@/components/mb/MbRegionSelector";
-import LoadingSpinner from "@/components/LoadingSpinner";
+import { SkeletonPage } from "@/components/Skeleton";
 import { PAGE_SIZE } from "@/lib/constants";
 import { useMbCompare } from "@/hooks/useMbCompare";
 import { useMbFavorites } from "@/hooks/useMbFavorites";
@@ -35,7 +35,7 @@ type TabKey = (typeof TABS)[number]["key"];
 
 export default function MibunyangPage() {
   return (
-    <Suspense fallback={<LoadingSpinner />}>
+    <Suspense fallback={<SkeletonPage />}>
       <MibunyangContent />
     </Suspense>
   );

@@ -4,9 +4,11 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-29 — 세션 82, 면적 m²↔평 토글 자동 변환. 3커밋 push (1e9c64e/47b0ec2/d380e1f, 4파일 +113/-4). `convertArea(value, from, to)` 헬퍼 신설(m²→평 소수점 1자리, 평→m² 정수 라운딩, 빈값/NaN/음수 보존) + reducer `SET_AREA_UNIT` 액션(areaUnit + minArea + maxArea 동시 갱신, 동일 단위 no-op 가드) + FilterSections 토글 onClick 교체(emitChange 3키 단일 호출로 URL 동기화 race 방지) + FilterBar.test.tsx 7 케이스(양방향 변환·빈값 보존·한쪽만·라벨 갱신·onChange 단일·min/max 동시). vitest 631 → 638. 사용자 가치 🟢 스트릭 10건.
+**마지막 작업**: 2026-04-29 — 세션 83, 면적 빠른선택 클릭 시 현재 단위로 자동 변환 (세션 82 위험 4번 선결 버그). 2커밋 push (82330ce/ec7cfec, 2파일 +101/-3). FilterBar.tsx applyPreset 본문에 `minKey === "minArea" && areaUnit === "평"` 분기 추가, m² 기준 preset.min/max 를 convertArea 로 평 변환 후 dispatch. 가격/평당가/관리비 호출처는 minKey 분기 미발동, BE 페이로드는 emitFilters 가 항상 m² 환산이라 호환성 무영향. FilterBar.test.tsx 7케이스 추가(m² 회귀/25평/전체/41평~/~18평/가격 회귀/BE round-trip). vitest 638 → 645. 사용자 가치 🟡 (UX 정합성 버그).
 
-**직전 작업 (세션 80~81)**: 가격 드롭다운 거래유형별 라벨·노출 동적화 + 월세 빠른 선택 신설. 4커밋 push (423278b/ef26ca6/4c886cb/f5ca073, 4파일 +147/-27). priceLabels(tradeType) 헬퍼 + "전체"일 때 안내박스 + 빠른선택/평당가는 매매에서만 + 수익률은 월세·단기임대에서만. 가격 칩 prefix 동적. 월세 보증금/월세 5단계 PresetButtons 신설.
+**직전 작업 (세션 82)**: 면적 m²↔평 토글 자동 변환. 3커밋 push (1e9c64e/47b0ec2/d380e1f, 4파일 +113/-4). `convertArea(value, from, to)` 헬퍼 + reducer `SET_AREA_UNIT` 액션 + FilterSections 토글 onClick(emitChange 3키 단일 호출로 URL 동기화 race 방지) + 7 케이스. vitest 631 → 638.
+
+**과거 세션 (세션 80~81)**: 가격 드롭다운 거래유형별 라벨·노출 동적화 + 월세 빠른 선택 신설. 4커밋 push (423278b/ef26ca6/4c886cb/f5ca073, 4파일 +147/-27). priceLabels(tradeType) 헬퍼 + 안내박스 + 매매·월세 분기 + 월세 보증금/월세 5단계 PresetButtons 신설.
 
 **과거 세션 기록**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` (세션 43~78 일자별 정리). 사고·교훈·결정을 찾으려면 해당 파일 직접 조회.
 

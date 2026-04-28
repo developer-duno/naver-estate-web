@@ -33,8 +33,13 @@ export function buildChipList(
   if (s.estateType !== "all") chips.push({ label: ESTATE_TYPE_FILTER_OPTIONS.find((o) => o.code === s.estateType)?.label ?? s.estateType, reset: () => setImmediate("estateType")("all") });
   if (s.verifiedOnly === "true") chips.push({ label: "인증매물", reset: () => { dispatch({ type: "SET", key: "verifiedOnly", value: "false" }); emitChange({ verifiedOnly: "false" }); } });
 
-  if (s.minPrice) chips.push({ label: `${s.minPrice}만원~`, reset: () => { dispatch({ type: "SET", key: "minPrice", value: "" }); emitChange({ minPrice: "" }); } });
-  if (s.maxPrice) chips.push({ label: `~${s.maxPrice}만원`, reset: () => { dispatch({ type: "SET", key: "maxPrice", value: "" }); emitChange({ maxPrice: "" }); } });
+  // 가격 칩 prefix — 거래유형에 따라 "매매가/전세가/보증금/가격"
+  const pricePrefix = s.tradeType === "매매" ? "매매가 "
+    : s.tradeType === "전세" ? "전세가 "
+    : s.tradeType === "월세" || s.tradeType === "단기임대" ? "보증금 "
+    : "";
+  if (s.minPrice) chips.push({ label: `${pricePrefix}${s.minPrice}만원~`, reset: () => { dispatch({ type: "SET", key: "minPrice", value: "" }); emitChange({ minPrice: "" }); } });
+  if (s.maxPrice) chips.push({ label: `${pricePrefix}~${s.maxPrice}만원`, reset: () => { dispatch({ type: "SET", key: "maxPrice", value: "" }); emitChange({ maxPrice: "" }); } });
   if (s.minRent) chips.push({ label: `월세 ${s.minRent}만~`, reset: () => { dispatch({ type: "SET", key: "minRent", value: "" }); emitChange({ minRent: "" }); } });
   if (s.maxRent) chips.push({ label: `월세 ~${s.maxRent}만`, reset: () => { dispatch({ type: "SET", key: "maxRent", value: "" }); emitChange({ maxRent: "" }); } });
   if (s.minArea) chips.push({ label: `${s.minArea}${s.areaUnit}~`, reset: () => { dispatch({ type: "SET", key: "minArea", value: "" }); emitChange({ minArea: "" }); } });

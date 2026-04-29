@@ -4,9 +4,11 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-29 — 세션 83, 면적 빠른선택 클릭 시 현재 단위로 자동 변환 (세션 82 위험 4번 선결 버그). 2커밋 push (82330ce/ec7cfec, 2파일 +101/-3). FilterBar.tsx applyPreset 본문에 `minKey === "minArea" && areaUnit === "평"` 분기 추가, m² 기준 preset.min/max 를 convertArea 로 평 변환 후 dispatch. 가격/평당가/관리비 호출처는 minKey 분기 미발동, BE 페이로드는 emitFilters 가 항상 m² 환산이라 호환성 무영향. FilterBar.test.tsx 7케이스 추가(m² 회귀/25평/전체/41평~/~18평/가격 회귀/BE round-trip). vitest 638 → 645. 사용자 가치 🟡 (UX 정합성 버그).
+**마지막 작업**: 2026-04-29 — 세션 84, 면적 빠른선택 active(파랑) 표시 버그 수정 (세션 83 격리 부채). 3커밋 push (94d4be1/edfc75d/c724867, 3파일 +116/-6). PresetButtons.tsx에 `unit?` `presetUnit?` optional prop + `matches` 헬퍼(둘 다 정의되고 다를 때만 convertArea로 preset값 변환 후 비교). FilterSections AreaSection 호출에만 `unit={s.areaUnit as "m²"|"평"} presetUnit="m²"` 전달, 면적 외 6 호출처(가격/보증금/월세/평당가/수익률/관리비)는 prop 미전달 → 기존 String() 비교 fallback (회귀 0). FilterBar.test.tsx 9케이스 추가(m²/평/전체/타버튼 비교/가격 회귀/직접입력/41평~/오피스텔 평/토글 후 유지). vitest 645 → 654. 사용자 가치 🟡 (UX 정합성 마감).
 
-**직전 작업 (세션 82)**: 면적 m²↔평 토글 자동 변환. 3커밋 push (1e9c64e/47b0ec2/d380e1f, 4파일 +113/-4). `convertArea(value, from, to)` 헬퍼 + reducer `SET_AREA_UNIT` 액션 + FilterSections 토글 onClick(emitChange 3키 단일 호출로 URL 동기화 race 방지) + 7 케이스. vitest 631 → 638.
+**직전 작업 (세션 83)**: 면적 빠른선택 클릭 시 현재 단위로 자동 변환. 2커밋 push (82330ce/ec7cfec, 2파일 +101/-3). FilterBar.tsx applyPreset 본문에 `minKey === "minArea" && areaUnit === "평"` 분기 추가, m² 기준 preset.min/max를 convertArea로 평 변환 후 dispatch. vitest 638 → 645.
+
+**과거 세션 (세션 82)**: 면적 m²↔평 토글 자동 변환. 3커밋 push (1e9c64e/47b0ec2/d380e1f, 4파일 +113/-4). `convertArea(value, from, to)` 헬퍼 + reducer `SET_AREA_UNIT` 액션 + FilterSections 토글 onClick(emitChange 3키 단일 호출로 URL 동기화 race 방지) + 7 케이스. vitest 631 → 638.
 
 **과거 세션 (세션 80~81)**: 가격 드롭다운 거래유형별 라벨·노출 동적화 + 월세 빠른 선택 신설. 4커밋 push (423278b/ef26ca6/4c886cb/f5ca073, 4파일 +147/-27). priceLabels(tradeType) 헬퍼 + 안내박스 + 매매·월세 분기 + 월세 보증금/월세 5단계 PresetButtons 신설.
 

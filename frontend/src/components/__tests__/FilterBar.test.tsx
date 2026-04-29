@@ -580,6 +580,68 @@ describe("FilterBar — 필터 칩", () => {
   });
 });
 
+describe("FilterBar — 모바일 필터 칩 +N 더보기 토글", () => {
+  // 칩 4개+ 상태 주입: 거래유형(매매) + 최소가격 5억 + 방2+ + 태그 #역세권
+  const initialChips4 = {
+    trade_types: "매매",
+    min_price: 50000,
+    min_rooms: 2,
+    tags: "역세권",
+  };
+
+  it("칩 3개 이하: '+N 더보기'·'접기' 버튼 미노출", () => {
+    // 거래유형 + 가격 + 방 = 칩 3개
+    const init3 = { trade_types: "매매", min_price: 50000, min_rooms: 2 };
+    render(<FilterBar {...defaultProps} initialFilters={init3} />);
+    expect(screen.queryByText(/^\+\d+ 더보기$/)).not.toBeInTheDocument();
+    expect(screen.queryByText("접기")).not.toBeInTheDocument();
+  });
+
+  it("칩 4개 이상: '+1 더보기' 버튼 노출 + 4번째 칩은 hidden md:inline-flex 클래스", () => {
+    render(<FilterBar {...defaultProps} initialFilters={initialChips4} />);
+    const moreBtn = screen.getByText("+1 더보기");
+    expect(moreBtn).toBeInTheDocument();
+    expect(moreBtn.className).toContain("md:hidden");
+    // 4번째 칩(#역세권)은 모바일에서 숨김 클래스 보유
+    const tagChipSpan = screen.getByText("#역세권").closest("span");
+    expect(tagChipSpan).not.toBeNull();
+    expect(tagChipSpan!.className).toContain("hidden");
+    expect(tagChipSpan!.className).toContain("md:inline-flex");
+  });
+
+  it("'+N 더보기' 클릭 시 숨겨진 칩 모바일에서도 노출 + '접기' 버튼 표시", () => {
+    render(<FilterBar {...defaultProps} initialFilters={initialChips4} />);
+    fireEvent.click(screen.getByText("+1 더보기"));
+    // 펼침 후 4번째 칩은 hidden 제거
+    const tagChipSpan = screen.getByText("#역세권").closest("span");
+    expect(tagChipSpan!.className).not.toContain("hidden");
+    // '접기' 버튼 표시
+    expect(screen.getByText("접기")).toBeInTheDocument();
+    expect(screen.queryByText(/^\+\d+ 더보기$/)).not.toBeInTheDocument();
+  });
+
+  it("'접기' 클릭 시 다시 첫 3개로 축소 + '+N 더보기' 버튼 복귀", () => {
+    render(<FilterBar {...defaultProps} initialFilters={initialChips4} />);
+    fireEvent.click(screen.getByText("+1 더보기"));
+    fireEvent.click(screen.getByText("접기"));
+    // 다시 4번째 칩이 hidden 클래스 보유
+    const tagChipSpan = screen.getByText("#역세권").closest("span");
+    expect(tagChipSpan!.className).toContain("hidden");
+    expect(screen.getByText("+1 더보기")).toBeInTheDocument();
+    expect(screen.queryByText("접기")).not.toBeInTheDocument();
+  });
+
+  it("외곽 컨테이너에서 max-h-16 제거 — 데스크톱 자연 wrap 보장", () => {
+    render(<FilterBar {...defaultProps} initialFilters={initialChips4} />);
+    // 첫 칩의 부모 div 가 칩 컨테이너
+    const firstChip = screen.getAllByText("매매")[0].closest("span");
+    const container = firstChip!.parentElement;
+    expect(container).not.toBeNull();
+    expect(container!.className).not.toContain("max-h-16");
+    expect(container!.className).not.toContain("overflow-y-auto");
+  });
+});
+
 describe("FilterBar — 매물유형 옵션", () => {
   it("상세 드롭다운에 확장된 매물유형 옵션 표시", () => {
     render(<FilterBar {...defaultProps} />);

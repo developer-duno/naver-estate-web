@@ -4,9 +4,11 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-29 — 세션 85, 모바일 필터 칩 "+N 더보기" 토글 신설. 2커밋 push 예정 (d7ba70d/5c2a1f4, 2파일 +99/-4). FilterChips.tsx에서 `max-h-16 md:max-h-none overflow-y-auto` 삭제 + `VISIBLE_MOBILE=3` 상수 + `useState(expanded)` 토글 + 4번째 칩부터 `hidden md:inline-flex` (모바일 숨김/데스크톱 표시) + "+N 더보기"·"접기" 버튼 `md:hidden` (모바일 전용) + aria-expanded/aria-label 보강. FilterBar.test.tsx 5케이스 추가 (3개 이하 토글 미노출 / 4개+ "+1 더보기" + hidden 클래스 / 펼침 후 hidden 제거+접기 / 접기 후 축소+더보기 복귀 / max-h-16 회귀 방지). vitest 654 → 659. 사용자 가치 🟢 (모바일에서 적용 필터 항상 인지 + 화면 점유 최소화).
+**마지막 작업**: 2026-04-29 — 세션 86, 단지 상세 페이지 매물 표 위에 "적용된 필터" 한 줄 요약 칩 신설. 2커밋 push 예정 (7720ef7/72be290, 3파일 +133/-0). `FilterChipsSummary.tsx` 신규 (59줄): props `{ filters: ArticleFilters }` → `buildInitState`로 FilterState 변환 → 기존 `buildChipList` 100% 재사용 (noop reset 함수 주입) → 라벨 칩만 렌더 (X 버튼 부재, 읽기 전용). 회색 배경(`bg-gray-50 border-gray-200`) + "적용된 필터:" 좌측 라벨 + `cursor-default` 로 FilterBar 내 인터랙티브 칩과 시각/역할 분리. 모바일 +N 더보기 토글 포함 (VISIBLE_MOBILE=3). complex/[no]/page.tsx L328에 `{hasActiveFilters && <FilterChipsSummary filters={filters} />}` 삽입. 테스트 5케이스(빈/단일/복합 prefix/태그 다중/+N 토글). vitest 659 → 664. 사용자 가치 🟢 (단지 상세에서 표를 보면서 동시에 어떤 필터 걸렸는지 인지).
 
-**직전 작업 (세션 84)**: 면적 빠른선택 active(파랑) 표시 버그 수정 (세션 83 격리 부채). 3커밋 push (94d4be1/edfc75d/c724867, 3파일 +116/-6). PresetButtons.tsx에 `unit?` `presetUnit?` optional prop + `matches` 헬퍼. FilterBar.test.tsx 9케이스 추가. vitest 645 → 654.
+**직전 작업 (세션 85)**: 모바일 필터 칩 "+N 더보기" 토글 신설. 3커밋 push (d7ba70d/5c2a1f4/7cf7adf, 3파일 +103/-6). FilterChips.tsx에서 `max-h-16` 삭제 + `VISIBLE_MOBILE=3` + `useState(expanded)` 토글 + 4번째 칩부터 `hidden md:inline-flex`. vitest 654 → 659.
+
+**과거 세션 (세션 84)**: 면적 빠른선택 active(파랑) 표시 버그 수정 (세션 83 격리 부채). 3커밋 push (94d4be1/edfc75d/c724867, 3파일 +116/-6). PresetButtons.tsx에 `unit?` `presetUnit?` optional prop + `matches` 헬퍼. FilterBar.test.tsx 9케이스 추가. vitest 645 → 654.
 
 **과거 세션 (세션 83)**: 면적 빠른선택 클릭 시 현재 단위로 자동 변환. 2커밋 push (82330ce/ec7cfec, 2파일 +101/-3). FilterBar.tsx applyPreset 본문에 `minKey === "minArea" && areaUnit === "평"` 분기 추가, m² 기준 preset.min/max를 convertArea로 평 변환 후 dispatch. vitest 638 → 645.
 

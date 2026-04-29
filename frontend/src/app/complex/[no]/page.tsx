@@ -21,6 +21,7 @@ import { useCrawlAction } from "@/hooks/useCrawlAction";
 import type { Article, ArticleFilters, FilterOptions } from "@/types";
 import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
+import FilterChipsSummary from "@/components/filter/FilterChipsSummary";
 import ArticleTable from "@/components/ArticleTable";
 import ArticleCardMobile from "@/components/ArticleCardMobile";
 import ArticleDetail from "@/components/ArticleDetail";
@@ -325,6 +326,9 @@ export default function ComplexDetailPage() {
           <button onClick={() => clearExportError()} className="text-red-400 hover:text-red-600">×</button>
         </div>
       )}
+
+      {/* 적용된 필터 한 줄 요약 — 매물 표 위 읽기 전용 */}
+      {hasActiveFilters && <FilterChipsSummary filters={filters} />}
 
       {/* 매물 수 + 엑셀 */}
       <div className="flex items-center justify-between flex-wrap gap-2">

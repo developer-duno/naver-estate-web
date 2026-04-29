@@ -187,7 +187,9 @@ export function AreaSection({ s, setDebounced, applyPreset, dispatch, emitChange
       <div className="mb-2">
         <PresetButtons presets={presets}
           minKey="minArea" maxKey="maxArea"
-          currentMin={s.minArea} currentMax={s.maxArea} onApply={applyPreset} />
+          currentMin={s.minArea} currentMax={s.maxArea}
+          unit={s.areaUnit as "m²" | "평"} presetUnit="m²"
+          onApply={applyPreset} />
       </div>
       <div className={separator} />
       <p className={sectionLabel}>직접 입력 ({s.areaUnit})</p>

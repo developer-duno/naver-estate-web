@@ -367,6 +367,103 @@ describe("FilterBar — 면적 빠른선택 단위 변환", () => {
   });
 });
 
+describe("FilterBar — 면적 빠른선택 active(파랑) 표시", () => {
+  // 빠른선택 클릭 시 해당 버튼이 bg-blue-600 클래스로 파랑 표시되어야 함
+  // 평 단위 + m² 기준 preset 의 단위 변환 비교가 정확해야 active 일관성 유지
+  function selectPyeong() {
+    fireEvent.click(screen.getByText("평으로"));
+  }
+  function selectM2() {
+    fireEvent.click(screen.getByText("m²으로"));
+  }
+
+  it("T1: m² 단위 + '84m²' 클릭 후 해당 버튼 파랑", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("면적");
+    const btn = screen.getByText("84m²");
+    fireEvent.click(btn);
+    expect(btn.className).toContain("bg-blue-600");
+  });
+
+  it("T2: 평 단위 + '25평' 클릭 후 해당 버튼 파랑 (단위 변환 비교)", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("면적");
+    selectPyeong();
+    const btn = screen.getByText("25평");
+    fireEvent.click(btn);
+    expect(btn.className).toContain("bg-blue-600");
+  });
+
+  it("T3: 평 단위 + '전체' 클릭 후 해당 버튼 파랑", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("면적");
+    selectPyeong();
+    const btn = screen.getByText("전체");
+    fireEvent.click(btn);
+    expect(btn.className).toContain("bg-blue-600");
+  });
+
+  it("T4: m² 단위 + '84m²' 클릭 후 다른 버튼('59m²')은 파랑 아님", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("면적");
+    fireEvent.click(screen.getByText("84m²"));
+    const other = screen.getByText("59m²");
+    expect(other.className).not.toContain("bg-blue-600");
+  });
+
+  it("T5: 가격 빠른선택 회귀 — '3~6억' 클릭 후 해당 버튼 파랑 (unit prop 미전달)", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("거래유형");
+    fireEvent.click(screen.getByText("매매"));
+    openDropdown("가격");
+    const btn = screen.getByText("3~6억");
+    fireEvent.click(btn);
+    expect(btn.className).toContain("bg-blue-600");
+  });
+
+  it("T6: 평 단위 + 사용자가 직접 '25' 입력 시 '25평' 버튼 파랑 아님 (의도된 동작)", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("면적");
+    selectPyeong();
+    const minInput = screen.getByLabelText(/최소 전용면적/) as HTMLInputElement;
+    fireEvent.change(minInput, { target: { value: "25" } }); // 25.4 가 아닌 25
+    const btn = screen.getByText("25평");
+    expect(btn.className).not.toContain("bg-blue-600");
+  });
+
+  it("T7: 평 단위 + '41평~' 클릭 후 해당 버튼 파랑 (한쪽만 변환·비교)", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("면적");
+    selectPyeong();
+    const btn = screen.getByText("41평~");
+    fireEvent.click(btn);
+    expect(btn.className).toContain("bg-blue-600");
+  });
+
+  it("T8: 오피스텔(OPST) + 평 단위 + '투룸(12~18평)' 클릭 후 해당 버튼 파랑", () => {
+    // 매물유형 select 를 OPST 로 변경 → AREA_PRESETS_OFFICETEL_PYEONG 가 노출되어야 함
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("상세");
+    const select = screen.getByLabelText("매물유형 선택") as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "opst" } });
+    openDropdown("면적");
+    selectPyeong();
+    const btn = screen.getByText("투룸(12~18평)");
+    fireEvent.click(btn);
+    expect(btn.className).toContain("bg-blue-600");
+  });
+
+  it("T9: 평 단위 '25평' 클릭 → m² 토글 후 '84m²' 버튼 파랑 유지", () => {
+    render(<FilterBar {...defaultProps} />);
+    openDropdown("면적");
+    selectPyeong();
+    fireEvent.click(screen.getByText("25평"));
+    selectM2(); // 평 → m² 토글, state minArea/maxArea 도 84/85 로 자동 변환
+    const btn = screen.getByText("84m²");
+    expect(btn.className).toContain("bg-blue-600");
+  });
+});
+
 describe("FilterBar — 층수 드롭다운", () => {
   it("드롭다운 열면 층수 프리셋 표시", () => {
     render(<FilterBar {...defaultProps} />);

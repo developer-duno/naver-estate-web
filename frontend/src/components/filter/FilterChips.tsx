@@ -1,6 +1,8 @@
 /**
  * 활성 필터 칩 목록 — 현재 적용된 필터를 시각적으로 표시 + 개별 해제
  */
+"use client";
+import { useState } from "react";
 import { ESTATE_TYPE_FILTER_OPTIONS } from "@/lib/constants";
 import type { FilterState, FilterChip } from "./reducer";
 
@@ -66,18 +68,49 @@ export function buildChipList(
   return chips;
 }
 
+const VISIBLE_MOBILE = 3;
+
 export default function FilterChips({ s, setImmediate, dispatch, emitChange, resetAll }: Props) {
+  const [expanded, setExpanded] = useState(false);
   const chipList = buildChipList(s, setImmediate, dispatch, emitChange);
   if (chipList.length === 0) return null;
 
+  const hiddenCount = Math.max(0, chipList.length - VISIBLE_MOBILE);
+  const showToggle = hiddenCount > 0;
+
   return (
-    <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-gray-100 max-h-16 md:max-h-none overflow-y-auto">
-      {chipList.map((chip) => (
-        <span key={chip.label} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-sm rounded-full px-3 py-1 border border-blue-200">
+    <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-gray-100">
+      {chipList.map((chip, i) => (
+        <span
+          key={chip.label}
+          className={`inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-sm rounded-full px-3 py-1 border border-blue-200 ${
+            i >= VISIBLE_MOBILE && !expanded ? "hidden md:inline-flex" : ""
+          }`}
+        >
           {chip.label}
-          <button onClick={chip.reset} className="hover:text-blue-900 font-bold ml-0.5">×</button>
+          <button onClick={chip.reset} className="hover:text-blue-900 font-bold ml-0.5" aria-label={`${chip.label} 제거`}>×</button>
         </span>
       ))}
+      {showToggle && !expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          aria-expanded={false}
+          className="md:hidden inline-flex items-center text-xs text-blue-600 px-2 py-1 rounded-full bg-blue-50 hover:bg-blue-100 border border-blue-200"
+        >
+          +{hiddenCount} 더보기
+        </button>
+      )}
+      {showToggle && expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          aria-expanded={true}
+          className="md:hidden inline-flex items-center text-xs text-gray-600 px-2 py-1 rounded-full bg-gray-100 hover:bg-gray-200 border border-gray-300"
+        >
+          접기
+        </button>
+      )}
       <button onClick={resetAll} className="text-sm text-gray-500 hover:text-gray-700 ml-1">
         전체 초기화
       </button>

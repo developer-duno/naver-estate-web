@@ -4,9 +4,11 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-29 — 세션 84, 면적 빠른선택 active(파랑) 표시 버그 수정 (세션 83 격리 부채). 3커밋 push (94d4be1/edfc75d/c724867, 3파일 +116/-6). PresetButtons.tsx에 `unit?` `presetUnit?` optional prop + `matches` 헬퍼(둘 다 정의되고 다를 때만 convertArea로 preset값 변환 후 비교). FilterSections AreaSection 호출에만 `unit={s.areaUnit as "m²"|"평"} presetUnit="m²"` 전달, 면적 외 6 호출처(가격/보증금/월세/평당가/수익률/관리비)는 prop 미전달 → 기존 String() 비교 fallback (회귀 0). FilterBar.test.tsx 9케이스 추가(m²/평/전체/타버튼 비교/가격 회귀/직접입력/41평~/오피스텔 평/토글 후 유지). vitest 645 → 654. 사용자 가치 🟡 (UX 정합성 마감).
+**마지막 작업**: 2026-04-29 — 세션 85, 모바일 필터 칩 "+N 더보기" 토글 신설. 2커밋 push 예정 (d7ba70d/5c2a1f4, 2파일 +99/-4). FilterChips.tsx에서 `max-h-16 md:max-h-none overflow-y-auto` 삭제 + `VISIBLE_MOBILE=3` 상수 + `useState(expanded)` 토글 + 4번째 칩부터 `hidden md:inline-flex` (모바일 숨김/데스크톱 표시) + "+N 더보기"·"접기" 버튼 `md:hidden` (모바일 전용) + aria-expanded/aria-label 보강. FilterBar.test.tsx 5케이스 추가 (3개 이하 토글 미노출 / 4개+ "+1 더보기" + hidden 클래스 / 펼침 후 hidden 제거+접기 / 접기 후 축소+더보기 복귀 / max-h-16 회귀 방지). vitest 654 → 659. 사용자 가치 🟢 (모바일에서 적용 필터 항상 인지 + 화면 점유 최소화).
 
-**직전 작업 (세션 83)**: 면적 빠른선택 클릭 시 현재 단위로 자동 변환. 2커밋 push (82330ce/ec7cfec, 2파일 +101/-3). FilterBar.tsx applyPreset 본문에 `minKey === "minArea" && areaUnit === "평"` 분기 추가, m² 기준 preset.min/max를 convertArea로 평 변환 후 dispatch. vitest 638 → 645.
+**직전 작업 (세션 84)**: 면적 빠른선택 active(파랑) 표시 버그 수정 (세션 83 격리 부채). 3커밋 push (94d4be1/edfc75d/c724867, 3파일 +116/-6). PresetButtons.tsx에 `unit?` `presetUnit?` optional prop + `matches` 헬퍼. FilterBar.test.tsx 9케이스 추가. vitest 645 → 654.
+
+**과거 세션 (세션 83)**: 면적 빠른선택 클릭 시 현재 단위로 자동 변환. 2커밋 push (82330ce/ec7cfec, 2파일 +101/-3). FilterBar.tsx applyPreset 본문에 `minKey === "minArea" && areaUnit === "평"` 분기 추가, m² 기준 preset.min/max를 convertArea로 평 변환 후 dispatch. vitest 638 → 645.
 
 **과거 세션 (세션 82)**: 면적 m²↔평 토글 자동 변환. 3커밋 push (1e9c64e/47b0ec2/d380e1f, 4파일 +113/-4). `convertArea(value, from, to)` 헬퍼 + reducer `SET_AREA_UNIT` 액션 + FilterSections 토글 onClick(emitChange 3키 단일 호출로 URL 동기화 race 방지) + 7 케이스. vitest 631 → 638.
 

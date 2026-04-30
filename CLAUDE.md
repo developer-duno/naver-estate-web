@@ -4,9 +4,11 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-29 — 세션 86, 단지 상세 페이지 매물 표 위에 "적용된 필터" 한 줄 요약 칩 신설. 2커밋 push 예정 (7720ef7/72be290, 3파일 +133/-0). `FilterChipsSummary.tsx` 신규 (59줄): props `{ filters: ArticleFilters }` → `buildInitState`로 FilterState 변환 → 기존 `buildChipList` 100% 재사용 (noop reset 함수 주입) → 라벨 칩만 렌더 (X 버튼 부재, 읽기 전용). 회색 배경(`bg-gray-50 border-gray-200`) + "적용된 필터:" 좌측 라벨 + `cursor-default` 로 FilterBar 내 인터랙티브 칩과 시각/역할 분리. 모바일 +N 더보기 토글 포함 (VISIBLE_MOBILE=3). complex/[no]/page.tsx L328에 `{hasActiveFilters && <FilterChipsSummary filters={filters} />}` 삽입. 테스트 5케이스(빈/단일/복합 prefix/태그 다중/+N 토글). vitest 659 → 664. 사용자 가치 🟢 (단지 상세에서 표를 보면서 동시에 어떤 필터 걸렸는지 인지).
+**마지막 작업**: 2026-04-30 — 세션 87, /search 단지 검색 결과 정렬 드롭다운 신설 (필터바 우측, 7종 클라이언트 정렬). 3커밋 push 예정 (5cf5c87/6f4a746/세션87 docs, 6파일 +243/-7). `COMPLEX_SORT_OPTIONS` 7종(기본순/단지명↓/세대수↑↓/신축순/오래된순/매물 많은순) + `sortComplexes(list, sortBy)` 순수 함수(lib/sortComplexes.ts) + `ComplexSortDropdown` native select 컴포넌트(28줄) + `app/search/page.tsx` flex-wrap 래핑 + `?complex_sort=...` URL 동기화 + `VALID_COMPLEX_SORT` whitelist 검증 + `sortedFilteredComplexes` useMemo. BE 변경 0, `Complex` 객체에 이미 존재하는 필드만 활용. FilterBar 매물 정렬(`sort_by`)과 별 namespace 격리. 테스트 11케이스(sortComplexes 8 + Dropdown 3). vitest 664 → 675. 같은 영역(필터) 7세션 연속 한계 깨고 새 영역(/search) 진입. 사용자 가치 🟢.
 
-**직전 작업 (세션 85)**: 모바일 필터 칩 "+N 더보기" 토글 신설. 3커밋 push (d7ba70d/5c2a1f4/7cf7adf, 3파일 +103/-6). FilterChips.tsx에서 `max-h-16` 삭제 + `VISIBLE_MOBILE=3` + `useState(expanded)` 토글 + 4번째 칩부터 `hidden md:inline-flex`. vitest 654 → 659.
+**직전 작업 (세션 86)**: 단지 상세 페이지 매물 표 위에 "적용된 필터" 한 줄 요약 칩 신설. 3커밋 push (7720ef7/72be290/88b2fc5, 4파일 +137/-2). `FilterChipsSummary.tsx` 신규 (59줄): props `{ filters: ArticleFilters }` → `buildInitState`로 FilterState 변환 → 기존 `buildChipList` 100% 재사용 (noop reset 함수 주입) → 라벨 칩만 렌더 (X 버튼 부재, 읽기 전용). complex/[no]/page.tsx L328에 `{hasActiveFilters && <FilterChipsSummary filters={filters} />}` 삽입. vitest 659 → 664.
+
+**과거 세션 (세션 85)**: 모바일 필터 칩 "+N 더보기" 토글 신설. 3커밋 push (d7ba70d/5c2a1f4/7cf7adf, 3파일 +103/-6). FilterChips.tsx에서 `max-h-16` 삭제 + `VISIBLE_MOBILE=3` + `useState(expanded)` 토글 + 4번째 칩부터 `hidden md:inline-flex`. vitest 654 → 659.
 
 **과거 세션 (세션 84)**: 면적 빠른선택 active(파랑) 표시 버그 수정 (세션 83 격리 부채). 3커밋 push (94d4be1/edfc75d/c724867, 3파일 +116/-6). PresetButtons.tsx에 `unit?` `presetUnit?` optional prop + `matches` 헬퍼. FilterBar.test.tsx 9케이스 추가. vitest 645 → 654.
 

@@ -9,14 +9,18 @@ import { createClient } from "@/lib/supabase";
 import RegionSelector from "@/components/RegionSelector";
 import FilterBar from "@/components/FilterBar";
 import type { Complex } from "@/types";
-import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_TABS, PAGE_SIZE } from "@/lib/constants";
+import { COMPLEX_SORT_OPTIONS, ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_TABS, PAGE_SIZE } from "@/lib/constants";
 import EstateTypeTabs from "@/components/EstateTypeTabs";
+import ComplexSortDropdown from "@/components/ComplexSortDropdown";
 import { SkeletonPage } from "@/components/Skeleton";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useFilterParams, buildFilterURL } from "@/hooks/useFilterParams";
 import { useCompare, type CompareItem } from "@/hooks/useCompare";
+import { sortComplexes } from "@/lib/sortComplexes";
 import type { ArticleFilters } from "@/types";
 import CompareFloatingBar from "@/components/CompareFloatingBar";
+
+const VALID_COMPLEX_SORT = new Set<string>(COMPLEX_SORT_OPTIONS.map((o) => o.v));
 
 function SearchContent() {
   const searchParams = useSearchParams();
@@ -39,6 +43,20 @@ function SearchContent() {
   const { filters: urlFilters, setFilters: setUrlFilters, filterKey } = useFilterParams();
   const { list: compareList, toggle: toggleCompare, remove: removeCompare, clear: clearCompare, isInCompare, isFull: compareFull } = useCompare();
   const hasSearchParams = !!(keyword || (sido && sigungu));
+
+  // 단지 정렬 (URL ?complex_sort 동기화, whitelist 검증)
+  const rawComplexSort = searchParams.get("complex_sort") ?? "default";
+  const complexSort = VALID_COMPLEX_SORT.has(rawComplexSort) ? rawComplexSort : "default";
+  const setComplexSort = useCallback((next: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "default" || !VALID_COMPLEX_SORT.has(next)) {
+      params.delete("complex_sort");
+    } else {
+      params.set("complex_sort", next);
+    }
+    const qs = params.toString();
+    router.replace(qs ? `/search?${qs}` : "/search", { scroll: false });
+  }, [searchParams, router]);
 
   const title = keyword
     ? `"${keyword}" 검색 결과`
@@ -75,6 +93,12 @@ function SearchContent() {
       (c) => !c.real_estate_type_code || selectedTypes.includes(c.real_estate_type_code)
     ),
     [complexes, selectedTypes],
+  );
+
+  // 정렬 적용 (필터 통과한 목록을 sortBy 기준 재정렬)
+  const sortedFilteredComplexes = useMemo(
+    () => sortComplexes(filteredComplexes, complexSort),
+    [filteredComplexes, complexSort],
   );
 
   // 로그인 + 승인 상태 확인
@@ -147,9 +171,12 @@ function SearchContent() {
         <EstateTypeTabs selected={selectedTypes} onChange={handleTabChange} />
       </div>
 
-      {/* 매물 필터 */}
-      <div className="mb-5">
-        <FilterBar key={filterKey} onChange={setUrlFilters} initialFilters={urlFilters} />
+      {/* 매물 필터 + 단지 정렬 */}
+      <div className="mb-5 flex flex-wrap items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <FilterBar key={filterKey} onChange={setUrlFilters} initialFilters={urlFilters} />
+        </div>
+        <ComplexSortDropdown value={complexSort} onChange={setComplexSort} />
       </div>
 
       {/* 검색 파라미터 없을 때: 인라인 검색 폼 */}
@@ -272,7 +299,7 @@ function SearchContent() {
               </tr>
             </thead>
             <tbody>
-              {filteredComplexes.map((cpx, idx) => (
+              {sortedFilteredComplexes.map((cpx, idx) => (
                 <ComplexRow key={cpx.complex_no} complex={cpx} index={idx + 1} urlFilters={urlFilters} isCompared={isInCompare(cpx.complex_no)} compareFull={compareFull} onToggleCompare={toggleCompare} />
               ))}
             </tbody>
@@ -283,7 +310,7 @@ function SearchContent() {
       {/* 단지 카드 (모바일) */}
       {!loading && complexes.length > 0 && (
         <div className="md:hidden space-y-3">
-          {filteredComplexes.map((cpx, idx) => (
+          {sortedFilteredComplexes.map((cpx, idx) => (
             <ComplexCardMobile key={cpx.complex_no} complex={cpx} index={idx + 1} urlFilters={urlFilters} isCompared={isInCompare(cpx.complex_no)} compareFull={compareFull} onToggleCompare={toggleCompare} />
           ))}
         </div>

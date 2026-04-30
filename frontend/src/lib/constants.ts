@@ -98,7 +98,7 @@ export const COMPARE_TEXT_COLORS = [
   "text-red-600", "text-blue-600", "text-amber-600", "text-emerald-600",
 ] as const;
 
-/** 정렬 옵션 */
+/** 정렬 옵션 (매물 단위 — /complex/{no} 매물 표) */
 export const SORT_OPTIONS = [
   { v: "rank", l: "기본순" },
   { v: "price_asc", l: "가격↑" },
@@ -111,6 +111,17 @@ export const SORT_OPTIONS = [
   { v: "maintenance_desc", l: "관리비↓" },
   { v: "confirm_desc", l: "최신순" },
   { v: "confirm_asc", l: "오래된순" },
+] as const;
+
+/** 단지 정렬 옵션 (/search 단지 목록 — 클라이언트 정렬) */
+export const COMPLEX_SORT_OPTIONS = [
+  { v: "default", l: "기본순" },
+  { v: "name_desc", l: "단지명↓" },
+  { v: "household_desc", l: "세대수↓" },
+  { v: "household_asc", l: "세대수↑" },
+  { v: "year_desc", l: "신축순" },
+  { v: "year_asc", l: "오래된순" },
+  { v: "article_desc", l: "매물 많은순" },
 ] as const;
 
 /** 준공년도 필터 옵션 */

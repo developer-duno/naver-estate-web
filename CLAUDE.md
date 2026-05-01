@@ -4,9 +4,11 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-05-02 — 세션 88, /search 빈 결과·에러 UI 보강. 3커밋 push 예정 (1839dd4/70f0736/세션88 docs, 2파일 +250/-13). 사각지대 3건 보강: (1) 서버 결과 0 — 키워드/지역 인용 + `useSearchHistory` 재사용 "최근 검색" 칩 5개 + 클릭 시 router.push 재검색 (2) **필터 통과 0건 사각지대 신설** — `complexes>0 && sortedFilteredComplexes==0` 분기로 "필터 조건에 맞는 단지가 없습니다" + 전체/통과 카운트 + 초기화 (이전엔 빈 테이블·빈 카드만 그려져 사용자 막힘) (3) 에러 시 `hasActiveFilters` 면 "필터 초기화" 동시 노출. `resetFilters` = `setUrlFilters({})` + `setSelectedTypes(allCodes)` + URL `?types=` 제거 한 번에 처리. 테이블/카드 렌더 조건도 `sortedFilteredComplexes.length>0` 으로 일치. BE 변경 0. 5케이스(서버0+키워드/최근검색 칩+클릭/필터0/에러+필터활성/에러+필터비활성). vitest 675 → 680. 같은 영역(/search) 누적 1세션. 사용자 가치 🟢. **다음 세션은 또 다른 새 영역(매물 상세 모달 / 단지 비교 / 미분양 등) 권장**.
+**마지막 작업**: 2026-05-02 — 세션 89, **/admin 데이터 신선도 카드 + 헛바퀴 감지 + 한 줄 건강 요약 + ⓘ 도움말**. 13커밋 push (Phase 1~11 + baseline 2회). 사용자 보고 "수집기는 돌았는데 데이터가 안 들어온 케이스"를 잡기 위해 `GET /api/admin/data-freshness` 엔드포인트 신설 — 8개 종목(단지/매물/시세이력/미분양/대기질/어린이집/범죄통계/공공실거래가) 각각 `last_updated`(MAX timestamp) + `last_job`(crawl_jobs 메타) + `new_rows`(작업 시작 후 신규 행) + `status`(green/yellow/red/unknown) + `spinning`(헛바퀴) 반환. **헛바퀴 룰**: processed=0&total>0 또는 new_rows=0&new_rows_expected=true → status=red 격상. `articles.created_at`은 upsert 시 안 건드려져 N0 정확 측정 가능, `complex_price_history.recorded_at`은 신규+갱신 합산. **사용자 보고 후 추가**: 캡처 + "사용하기 불편, 직관적으로 한눈에, 도움말 바로바로" → AdminCard `help` prop + 7개 카드 한국어 도움말 + 신선도 카드 약어 캡션(처리 N/M, 신규 K건) + `HealthSummary` 최상단 한 줄("정상 6 · 주의 1 · 지연 1 · 헛바퀴 0") + 클릭 시 신선도 카드로 scrollIntoView. BE 573 (+9), FE 699 (+19). baseline 2회 갱신(신선도 카드·HealthSummary 추가로 admin 높이 1421→1531→1595px). 같은 영역(/admin) 새 영역 진입. 사용자 가치 🟢 14 → 16건. **다음 세션 90**: B안 잔여 — 카드 우선순위 재배치(위험 카드 자동 상단), 신선도 카드 격자 레이아웃, 통계 카드 위치 이동.
 
-**직전 작업 (세션 87)**: /search 단지 검색 결과 정렬 드롭다운 신설 (필터바 우측, 7종 클라이언트 정렬). 3커밋 push (5cf5c87/6f4a746/a84172e, 6파일 +243/-7). `COMPLEX_SORT_OPTIONS` 7종 + `sortComplexes` 순수 함수 + `ComplexSortDropdown` native select + `?complex_sort=` URL 동기화 + `VALID_COMPLEX_SORT` whitelist + `sortedFilteredComplexes` useMemo. BE 변경 0. FilterBar 매물 정렬(`sort_by`)과 별 namespace 격리. 11케이스. vitest 664 → 675. 같은 영역(필터) 7세션 연속 한계 깨고 새 영역(/search) 진입.
+**직전 작업 (세션 88)**: /search 빈 결과·에러 UI 보강. 3커밋 push (1839dd4/70f0736/229b880, 2파일 +250/-13). 사각지대 3건 보강: 서버 결과 0 + 최근 검색 칩 / 필터 통과 0건 신설 / 에러 시 필터 초기화 동시 노출. vitest 675 → 680.
+
+**과거 세션 (세션 87)**: /search 단지 검색 결과 정렬 드롭다운 신설 (필터바 우측, 7종 클라이언트 정렬). 3커밋 push (5cf5c87/6f4a746/a84172e, 6파일 +243/-7). vitest 664 → 675.
 
 **과거 세션 (세션 86)**: 단지 상세 페이지 매물 표 위에 "적용된 필터" 한 줄 요약 칩 신설. 3커밋 push (7720ef7/72be290/88b2fc5, 4파일 +137/-2). `FilterChipsSummary.tsx` 신규 (59줄, buildChipList 재사용 + noop reset 주입 + 읽기 전용). vitest 659 → 664.
 

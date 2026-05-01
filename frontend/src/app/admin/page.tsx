@@ -8,6 +8,7 @@ import BulkRecrawlCard from "@/components/admin/BulkRecrawlCard";
 import CollectorTrigger from "@/components/admin/CollectorTrigger";
 import SchedulerMonitor from "@/components/admin/SchedulerMonitor";
 import DataFreshnessCard from "@/components/admin/DataFreshnessCard";
+import HealthSummary from "@/components/admin/HealthSummary";
 import NaverCallsCard from "@/components/admin/NaverCallsCard";
 import AdminCard from "@/components/admin/AdminCard";
 import { getAdminDetailedStats, getAdminAuditLogs, getAdminCrawlJobs } from "@/lib/api";
@@ -55,13 +56,15 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      <HealthSummary token={token} />
+
       <StatsCards stats={stats} loading={loading} />
 
       <div className="mt-6">
         <SchedulerMonitor token={token} />
       </div>
 
-      <div className="mt-6">
+      <div className="mt-6" id="freshness">
         <DataFreshnessCard token={token} />
       </div>
 
@@ -70,7 +73,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-        <AdminCard title="실행 중인 크롤링">
+        <AdminCard title="실행 중인 크롤링" help="지금 백그라운드에서 진행 중인 크롤 작업. 처리/총 비율로 진행률 표시. 일괄 재크롤이 여기에 보임">
           {runningJobs.length === 0 ? (
             <p className="text-sm text-gray-500">실행 중인 작업이 없습니다</p>
           ) : (
@@ -85,7 +88,7 @@ export default function AdminDashboard() {
           )}
         </AdminCard>
 
-        <AdminCard title="최근 활동">
+        <AdminCard title="최근 활동" help="관리자 액션과 자동 트리거 기록 (감사 로그 최근 5건). 누가 언제 어떤 트리거를 눌렀는지">
           {recentLogs.length === 0 ? (
             <p className="text-sm text-gray-500">활동 기록이 없습니다</p>
           ) : (

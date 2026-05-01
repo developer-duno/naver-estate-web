@@ -41,7 +41,7 @@ export default function CollectorTrigger({ getToken }: CollectorTriggerProps) {
   });
 
   return (
-    <AdminCard title="데이터 수집 트리거">
+    <AdminCard title="데이터 수집 트리거" help="각 외부 API 즉시 수집 트리거. 자동 스케줄과 별개로 지금 한 번 더 받아오고 싶을 때 사용. 응답까지 최대 120초">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {COLLECTORS.map((c) => {
           const result = results[c.name];

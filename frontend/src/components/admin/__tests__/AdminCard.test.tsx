@@ -42,4 +42,27 @@ describe("AdminCard", () => {
     // 버튼/링크 없음 보장
     expect(screen.queryByRole("button")).toBeNull();
   });
+
+  /** help prop: ⓘ 아이콘이 렌더되고 title 속성에 도움말이 들어감 */
+  it("help prop 이 있으면 ⓘ 아이콘 + title 툴팁 렌더", () => {
+    render(
+      <AdminCard title="도움말 카드" help="이건 도움말 텍스트입니다">
+        <p>body</p>
+      </AdminCard>,
+    );
+    const helpIcon = screen.getByRole("img", { name: "이건 도움말 텍스트입니다" });
+    expect(helpIcon).toBeInTheDocument();
+    expect(helpIcon).toHaveAttribute("title", "이건 도움말 텍스트입니다");
+    expect(helpIcon.textContent).toBe("ⓘ");
+  });
+
+  /** help 미지정: ⓘ 아이콘 미렌더 */
+  it("help 미지정 시 ⓘ 아이콘 미렌더", () => {
+    render(
+      <AdminCard title="기본 카드">
+        <p>body</p>
+      </AdminCard>,
+    );
+    expect(screen.queryByRole("img")).toBeNull();
+  });
 });

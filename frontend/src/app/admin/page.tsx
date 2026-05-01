@@ -7,6 +7,7 @@ import StatsCards from "@/components/admin/StatsCards";
 import BulkRecrawlCard from "@/components/admin/BulkRecrawlCard";
 import CollectorTrigger from "@/components/admin/CollectorTrigger";
 import SchedulerMonitor from "@/components/admin/SchedulerMonitor";
+import DataFreshnessCard from "@/components/admin/DataFreshnessCard";
 import NaverCallsCard from "@/components/admin/NaverCallsCard";
 import AdminCard from "@/components/admin/AdminCard";
 import { getAdminDetailedStats, getAdminAuditLogs, getAdminCrawlJobs } from "@/lib/api";
@@ -58,6 +59,10 @@ export default function AdminDashboard() {
 
       <div className="mt-6">
         <SchedulerMonitor token={token} />
+      </div>
+
+      <div className="mt-6">
+        <DataFreshnessCard token={token} />
       </div>
 
       <div className="mt-6">

@@ -23,19 +23,33 @@ function renderCard(token = "test-token") {
   );
 }
 
+const baseItem = (overrides: Partial<DataFreshnessResponse["items"][number]> = {}) => ({
+  key: "x",
+  label: "x",
+  count: 0,
+  last_updated: null,
+  expected_interval_seconds: 86400,
+  status: "green" as const,
+  spinning: false,
+  last_job: null,
+  new_rows: null,
+  ...overrides,
+});
+
 const baseFixture = (): DataFreshnessResponse => {
   const now = new Date();
+  const ago = (ms: number) => new Date(now.getTime() - ms).toISOString();
   return {
     generated_at: now.toISOString(),
     items: [
-      { key: "complexes", label: "단지", count: 63360, last_updated: new Date(now.getTime() - 60 * 60 * 1000).toISOString(), expected_interval_seconds: 604800, status: "green" },
-      { key: "articles", label: "매물", count: 620635, last_updated: new Date(now.getTime() - 30 * 60 * 1000).toISOString(), expected_interval_seconds: 43200, status: "green" },
-      { key: "complex_price_history", label: "시세 이력", count: 1200000, last_updated: new Date(now.getTime() - 3 * 86400 * 1000).toISOString(), expected_interval_seconds: 604800, status: "green" },
-      { key: "unsold", label: "미분양 이력", count: 8432, last_updated: new Date(now.getTime() - 50 * 86400 * 1000).toISOString(), expected_interval_seconds: 2592000, status: "yellow" },
-      { key: "air_quality", label: "대기질", count: 100, last_updated: new Date(now.getTime() - 40 * 60 * 1000).toISOString(), expected_interval_seconds: 86400, status: "green" },
-      { key: "childcare", label: "어린이집", count: 0, last_updated: null, expected_interval_seconds: 2592000, status: "unknown" },
-      { key: "crime_stats", label: "범죄통계", count: 2001, last_updated: new Date(now.getTime() - 300 * 86400 * 1000).toISOString(), expected_interval_seconds: 7776000, status: "red" },
-      { key: "public_trades", label: "공공데이터 실거래가", count: 173964, last_updated: new Date(now.getTime() - 86400 * 1000).toISOString(), expected_interval_seconds: 604800, status: "green" },
+      baseItem({ key: "complexes", label: "단지", count: 63360, last_updated: ago(60 * 60 * 1000), expected_interval_seconds: 604800, status: "green", new_rows: 12 }),
+      baseItem({ key: "articles", label: "매물", count: 620635, last_updated: ago(30 * 60 * 1000), expected_interval_seconds: 43200, status: "green", new_rows: 245, last_job: { started_at: ago(40 * 60 * 1000), completed_at: ago(20 * 60 * 1000), processed_items: 50, total_items: 50 } }),
+      baseItem({ key: "complex_price_history", label: "시세 이력", count: 1200000, last_updated: ago(3 * 86400 * 1000), expected_interval_seconds: 604800, status: "green", new_rows: 1500 }),
+      baseItem({ key: "unsold", label: "미분양 이력", count: 8432, last_updated: ago(50 * 86400 * 1000), expected_interval_seconds: 2592000, status: "yellow" }),
+      baseItem({ key: "air_quality", label: "대기질", count: 100, last_updated: ago(40 * 60 * 1000), expected_interval_seconds: 86400, status: "green", last_job: { started_at: ago(45 * 60 * 1000), completed_at: ago(40 * 60 * 1000), processed_items: 100, total_items: 100 } }),
+      baseItem({ key: "childcare", label: "어린이집", count: 0, last_updated: null, expected_interval_seconds: 2592000, status: "unknown" }),
+      baseItem({ key: "crime_stats", label: "범죄통계", count: 2001, last_updated: ago(300 * 86400 * 1000), expected_interval_seconds: 7776000, status: "red" }),
+      baseItem({ key: "public_trades", label: "공공데이터 실거래가", count: 173964, last_updated: ago(86400 * 1000), expected_interval_seconds: 604800, status: "green" }),
     ],
   };
 };
@@ -84,7 +98,8 @@ describe("DataFreshnessCard 컴포넌트", () => {
     await waitFor(() => {
       expect(screen.getByText("어린이집")).toBeInTheDocument();
     });
-    expect(screen.getByText("미수집")).toBeInTheDocument();
+    // "갱신 미수집" 라벨 (어린이집은 last_updated=null 이라 '갱신 미수집' 출력)
+    expect(screen.getAllByText(/미수집/).length).toBeGreaterThanOrEqual(1);
   });
 
   it("API 에러 시 에러 메시지 표시", async () => {
@@ -101,5 +116,69 @@ describe("DataFreshnessCard 컴포넌트", () => {
     renderCard("");
     await new Promise((r) => setTimeout(r, 50));
     expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it("spinning=true 인 종목에 '헛바퀴 의심' 뱃지 표시", async () => {
+    const fx = baseFixture();
+    // 어린이집을 헛바퀴 시나리오로 교체
+    fx.items[5] = {
+      ...fx.items[5],
+      status: "red",
+      spinning: true,
+      last_updated: new Date().toISOString(),
+      last_job: {
+        started_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+        completed_at: new Date(Date.now() - 8 * 60_000).toISOString(),
+        processed_items: 0,
+        total_items: 100,
+      },
+    };
+    mockGet.mockClear();
+    mockGet.mockResolvedValueOnce(fx);
+    renderCard();
+    await waitFor(() => {
+      expect(screen.getByText("어린이집")).toBeInTheDocument();
+    });
+    expect(screen.getByText("헛바퀴 의심")).toBeInTheDocument();
+    // 처리 0/100 표시
+    expect(screen.getByText(/처리 0\/100/)).toBeInTheDocument();
+  });
+
+  it("new_rows=0 이면 빨간 강조 텍스트로 '신규 0건' 표시", async () => {
+    const fx = baseFixture();
+    // 매물에 작업은 돌았는데 new_rows=0
+    fx.items[1] = {
+      ...fx.items[1],
+      status: "red",
+      spinning: true,
+      new_rows: 0,
+      last_job: {
+        started_at: new Date(Date.now() - 30 * 60_000).toISOString(),
+        completed_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+        processed_items: 10,
+        total_items: 10,
+      },
+    };
+    mockGet.mockClear();
+    mockGet.mockResolvedValueOnce(fx);
+    const { container } = renderCard();
+    await waitFor(() => {
+      expect(screen.getByText("매물")).toBeInTheDocument();
+    });
+    const newRowsText = screen.getByText("신규 0건");
+    expect(newRowsText.className).toContain("text-red-600");
+    // 헛바퀴 뱃지도 매물 줄에 떠야 함
+    expect(container.textContent).toContain("헛바퀴 의심");
+  });
+
+  it("last_job=null 종목은 '정기 작업 없음' 표시", async () => {
+    mockGet.mockClear();
+    mockGet.mockResolvedValueOnce(baseFixture());
+    renderCard();
+    await waitFor(() => {
+      expect(screen.getByText("미분양 이력")).toBeInTheDocument();
+    });
+    // 미분양/시세이력/공공실거래/단지/범죄통계 등 last_job=null 인 종목들 ≥ 1
+    expect(screen.getAllByText("정기 작업 없음").length).toBeGreaterThanOrEqual(1);
   });
 });

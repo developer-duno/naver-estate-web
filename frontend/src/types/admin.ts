@@ -153,6 +153,14 @@ export interface LicenseUploadResponse {
   path: string;
 }
 
+/** 데이터 신선도 — 마지막 수집 작업 메타 */
+export interface DataFreshnessJob {
+  started_at: string | null;
+  completed_at: string | null;
+  processed_items: number;
+  total_items: number;
+}
+
 /** 데이터 신선도 — 종목 1건 */
 export interface DataFreshnessItem {
   key: string;
@@ -161,6 +169,12 @@ export interface DataFreshnessItem {
   last_updated: string | null;
   expected_interval_seconds: number;
   status: "green" | "yellow" | "red" | "unknown";
+  /** 헛바퀴 의심 여부 (작업 돌았는데 신규 행 0 또는 processed 0) */
+  spinning: boolean;
+  /** 마지막 수집 작업 — 정기 job 없는 종목은 null */
+  last_job: DataFreshnessJob | null;
+  /** 작업 시작 후 신규 행 수 — 측정 불가 종목은 null */
+  new_rows: number | null;
 }
 
 /** 데이터 신선도 응답 */

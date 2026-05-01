@@ -16,7 +16,9 @@ import { SkeletonPage } from "@/components/Skeleton";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useFilterParams, buildFilterURL } from "@/hooks/useFilterParams";
 import { useCompare, type CompareItem } from "@/hooks/useCompare";
+import { useSearchHistory } from "@/hooks/useSearchHistory";
 import { sortComplexes } from "@/lib/sortComplexes";
+import type { SearchHistoryItem } from "@/lib/storage";
 import type { ArticleFilters } from "@/types";
 import CompareFloatingBar from "@/components/CompareFloatingBar";
 
@@ -42,7 +44,14 @@ function SearchContent() {
 
   const { filters: urlFilters, setFilters: setUrlFilters, filterKey } = useFilterParams();
   const { list: compareList, toggle: toggleCompare, remove: removeCompare, clear: clearCompare, isInCompare, isFull: compareFull } = useCompare();
+  const { history } = useSearchHistory();
+  const recentItems = history.slice(0, 5);
   const hasSearchParams = !!(keyword || (sido && sigungu));
+
+  // 필터 활성 판정 (urlFilters 의 sort_by 외 키 + 매물유형 탭 좁힘)
+  const filtersActive = Object.keys(urlFilters).some((k) => k !== "sort_by");
+  const typesNarrowed = selectedTypes.length < allCodes.length;
+  const hasActiveFilters = filtersActive || typesNarrowed;
 
   // 단지 정렬 (URL ?complex_sort 동기화, whitelist 검증)
   const rawComplexSort = searchParams.get("complex_sort") ?? "default";
@@ -57,6 +66,27 @@ function SearchContent() {
     const qs = params.toString();
     router.replace(qs ? `/search?${qs}` : "/search", { scroll: false });
   }, [searchParams, router]);
+
+  // 필터 + 매물유형 탭 + ?types= URL 키를 한 번에 초기화
+  const resetFilters = useCallback(() => {
+    setUrlFilters({});
+    setSelectedTypes([...allCodes]);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("types");
+    const qs = params.toString();
+    router.replace(qs ? `/search?${qs}` : "/search", { scroll: false });
+  }, [setUrlFilters, allCodes, searchParams, router]);
+
+  // 최근 검색어 칩 클릭 → 같은 검색 재실행
+  const goToRecent = useCallback((item: SearchHistoryItem) => {
+    if (item.type === "keyword" && item.keyword) {
+      router.push(`/search?q=${encodeURIComponent(item.keyword)}`);
+    } else if (item.type === "region" && item.sido && item.sigungu) {
+      let path = `/search?sido=${encodeURIComponent(item.sido)}&sigungu=${encodeURIComponent(item.sigungu)}`;
+      if (item.dong) path += `&dong=${encodeURIComponent(item.dong)}`;
+      router.push(path);
+    }
+  }, [router]);
 
   const title = keyword
     ? `"${keyword}" 검색 결과`
@@ -227,21 +257,36 @@ function SearchContent() {
 
       {/* 에러 */}
       {error && (
-        <div className="text-center py-8">
-          <p className="text-red-500 mb-3">{error}</p>
-          <button
-            onClick={() => retrySearch()}
-            className="text-sm text-blue-600 hover:underline"
-          >
-            다시 시도
-          </button>
+        <div className="text-center py-8 space-y-3">
+          <p className="text-red-500">{error}</p>
+          <div className="flex justify-center gap-2 flex-wrap">
+            <button
+              onClick={() => retrySearch()}
+              className="text-sm text-blue-600 hover:underline px-3 py-1.5"
+            >
+              다시 시도
+            </button>
+            {hasActiveFilters && (
+              <button
+                onClick={resetFilters}
+                className="text-sm text-gray-600 hover:underline px-3 py-1.5"
+              >
+                필터 초기화
+              </button>
+            )}
+          </div>
         </div>
       )}
 
-      {/* 결과 없음 */}
+      {/* 결과 없음 (서버 응답 0건) */}
       {hasSearchParams && !loading && !error && complexes.length === 0 && (
-        <div className="text-center py-16 space-y-6">
-          <p className="text-gray-500">검색 결과가 없습니다.</p>
+        <div className="text-center py-12 space-y-6">
+          <div className="space-y-1">
+            <p className="text-gray-700 font-medium">
+              {keyword ? `"${keyword}"에 대한 검색 결과가 없습니다.` : "이 지역에 등록된 단지가 없습니다."}
+            </p>
+            <p className="text-gray-500 text-sm">다른 키워드나 지역으로 다시 시도해보세요.</p>
+          </div>
           <div className="max-w-md mx-auto">
             <div className="flex gap-2">
               <input
@@ -262,6 +307,24 @@ function SearchContent() {
               </button>
             </div>
           </div>
+          {recentItems.length > 0 && (
+            <div className="max-w-md mx-auto pt-2">
+              <p className="text-xs text-gray-500 mb-2">최근 검색</p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {recentItems.map((item) => (
+                  <button
+                    key={item.timestamp}
+                    onClick={() => goToRecent(item)}
+                    className="text-xs px-2.5 py-1 rounded-full border border-gray-300 bg-white hover:bg-blue-50 hover:border-blue-300 text-gray-700"
+                  >
+                    {item.type === "keyword"
+                      ? item.keyword
+                      : `${item.sido} ${item.sigungu}${item.dong ? ` ${item.dong}` : ""}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -280,8 +343,24 @@ function SearchContent() {
         </div>
       )}
 
+      {/* 필터 통과 0건 (서버는 결과 있으나 클라이언트 필터·매물유형 탭으로 좁혀서 0) */}
+      {!loading && !error && complexes.length > 0 && sortedFilteredComplexes.length === 0 && (
+        <div className="text-center py-12 space-y-3">
+          <p className="text-gray-700 font-medium">필터 조건에 맞는 단지가 없습니다.</p>
+          <p className="text-gray-500 text-sm">
+            전체 {complexes.length}개 단지 중 0개가 통과했습니다. 필터를 완화하거나 초기화해보세요.
+          </p>
+          <button
+            onClick={resetFilters}
+            className="text-sm text-blue-600 hover:underline px-3 py-1.5"
+          >
+            필터 초기화
+          </button>
+        </div>
+      )}
+
       {/* 단지 테이블 (데스크톱) */}
-      {!loading && complexes.length > 0 && (
+      {!loading && sortedFilteredComplexes.length > 0 && (
         <div className="hidden md:block overflow-x-auto bg-white rounded-lg shadow-sm border">
           <table className="w-full text-sm border-collapse">
             <thead className="bg-gray-100 border-b-2 border-gray-300 sticky top-0 z-10">
@@ -308,7 +387,7 @@ function SearchContent() {
       )}
 
       {/* 단지 카드 (모바일) */}
-      {!loading && complexes.length > 0 && (
+      {!loading && sortedFilteredComplexes.length > 0 && (
         <div className="md:hidden space-y-3">
           {sortedFilteredComplexes.map((cpx, idx) => (
             <ComplexCardMobile key={cpx.complex_no} complex={cpx} index={idx + 1} urlFilters={urlFilters} isCompared={isInCompare(cpx.complex_no)} compareFull={compareFull} onToggleCompare={toggleCompare} />

@@ -2,7 +2,7 @@
  * 관리자 API — 모든 호출에 Bearer 토큰 필수
  */
 
-import type { UserProfile, AuditLog, AdminSetting, AgentVerification, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail, SchedulerStatusResponse } from "@/types/admin";
+import type { UserProfile, AuditLog, AdminSetting, AgentVerification, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail, SchedulerStatusResponse, DataFreshnessResponse } from "@/types/admin";
 import { fetchApi, adminHeaders, LIVE_TIMEOUT_MS } from "./core";
 
 /** 관리자: 사용자 목록 */
@@ -86,6 +86,11 @@ export async function deleteStaleData(token: string, days: number) {
 /** 관리자: 스케줄러 모니터링 상태 조회 */
 export async function getSchedulerStatus(token: string) {
   return fetchApi<SchedulerStatusResponse>(`/api/admin/scheduler-status`, { headers: adminHeaders(token) });
+}
+
+/** 관리자: 데이터 신선도 조회 — 8개 종목 행 수 + 마지막 갱신 + 신호등 */
+export async function getDataFreshness(token: string) {
+  return fetchApi<DataFreshnessResponse>(`/api/admin/data-freshness`, { headers: adminHeaders(token) });
 }
 
 /** 관리자: 데이터 수집 트리거 (동기 블로킹, 최대 120초) */

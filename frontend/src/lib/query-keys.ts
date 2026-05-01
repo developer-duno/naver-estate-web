@@ -51,6 +51,7 @@ export const queryKeys = {
       ["admin", "verifications", params] as const,
     errorStats: (days: number) => ["admin", "errorStats", days] as const,
     naverCalls: () => ["admin", "naverCalls"] as const,
+    dataFreshness: () => ["admin", "dataFreshness"] as const,
   },
 
   // 중개사 검증

@@ -152,3 +152,19 @@ export interface LicenseUploadResponse {
   uploaded: boolean;
   path: string;
 }
+
+/** 데이터 신선도 — 종목 1건 */
+export interface DataFreshnessItem {
+  key: string;
+  label: string;
+  count: number;
+  last_updated: string | null;
+  expected_interval_seconds: number;
+  status: "green" | "yellow" | "red" | "unknown";
+}
+
+/** 데이터 신선도 응답 */
+export interface DataFreshnessResponse {
+  items: DataFreshnessItem[];
+  generated_at: string;
+}

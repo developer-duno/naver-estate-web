@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from jose import jwt
 
 from db.mb_models import Infra
-from db.models import Complex, UserProfile
+from db.models import Article, Complex, CrawlJob, UserProfile
 
 JWT_SECRET = "test-secret-key-for-testing-only"
 
@@ -113,6 +113,100 @@ def test_freshness_response_schema(client, db):
     }
     assert keys == expected_keys
     for item in body["items"]:
-        for field in ("key", "label", "count", "last_updated", "expected_interval_seconds", "status"):
+        for field in (
+            "key", "label", "count", "last_updated", "expected_interval_seconds",
+            "status", "spinning", "last_job", "new_rows",
+        ):
             assert field in item, f"{field} missing in {item}"
         assert item["status"] in {"green", "yellow", "red", "unknown"}
+
+
+# ── 헛바퀴 감지 (작업 메타 + new_rows) ──
+
+def _make_completed_job(db, sched_id: str, *, started_at, completed_at, processed: int, total: int):
+    db.add(CrawlJob(
+        job_type="test",
+        scheduler_job_id=sched_id,
+        status="completed",
+        started_at=started_at,
+        completed_at=completed_at,
+        processed_items=processed,
+        total_items=total,
+    ))
+    db.commit()
+
+
+def test_freshness_spinning_zero_processed(client, db):
+    """processed=0, total>0 → 헛바퀴 빨강 격상"""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    # 어린이집 수집기가 막 끝났는데 0/100 처리
+    _make_completed_job(
+        db, "collect_childcare",
+        started_at=now - timedelta(minutes=10), completed_at=now - timedelta(minutes=8),
+        processed=0, total=100,
+    )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    items = res.json()["items"]
+    childcare = _get_item(items, "childcare")
+    assert childcare["spinning"] is True
+    assert childcare["status"] == "red"
+    assert childcare["last_job"]["processed_items"] == 0
+    assert childcare["last_job"]["total_items"] == 100
+
+
+def test_freshness_articles_new_rows_counted(client, db):
+    """매물 크롤 작업 후 articles.created_at>=job_start 신규 행 수 카운트"""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    job_start = now - timedelta(minutes=30)
+    job_end = now - timedelta(minutes=10)
+    _make_completed_job(
+        db, "crawl_articles",
+        started_at=job_start, completed_at=job_end,
+        processed=50, total=50,
+    )
+    # 작업 시작 전 기존 매물 1건
+    db.add(Article(article_no="OLD1", complex_no="C1", created_at=now - timedelta(hours=2), updated_at=now - timedelta(hours=2)))
+    # 작업 시작 후 신규 2건
+    db.add(Article(article_no="NEW1", complex_no="C1", created_at=job_start + timedelta(minutes=5), updated_at=job_start + timedelta(minutes=5)))
+    db.add(Article(article_no="NEW2", complex_no="C1", created_at=job_start + timedelta(minutes=10), updated_at=job_start + timedelta(minutes=10)))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    arts = _get_item(res.json()["items"], "articles")
+    assert arts["new_rows"] == 2
+    assert arts["spinning"] is False
+    assert arts["last_job"]["processed_items"] == 50
+
+
+def test_freshness_articles_spinning_no_new_rows(client, db):
+    """매물 크롤 작업 돌았는데 new_rows=0 → 헛바퀴 빨강"""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    job_start = now - timedelta(minutes=30)
+    _make_completed_job(
+        db, "crawl_articles",
+        started_at=job_start, completed_at=now - timedelta(minutes=10),
+        processed=10, total=10,
+    )
+    # 작업 시작 전 매물만 존재 → 신규 0건
+    db.add(Article(article_no="OLD", complex_no="C1", created_at=now - timedelta(hours=2), updated_at=now - timedelta(hours=2)))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    arts = _get_item(res.json()["items"], "articles")
+    assert arts["new_rows"] == 0
+    assert arts["spinning"] is True
+    assert arts["status"] == "red"
+
+
+def test_freshness_no_job_meta_fields_null(client, db):
+    """정기 job 없는 종목(미분양) → last_job=None, new_rows=None, spinning=False"""
+    _make_admin(db)
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    unsold = _get_item(res.json()["items"], "unsold")
+    assert unsold["last_job"] is None
+    assert unsold["new_rows"] is None
+    assert unsold["spinning"] is False

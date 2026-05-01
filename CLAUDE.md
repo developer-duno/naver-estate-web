@@ -4,11 +4,11 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-04-30 — 세션 87, /search 단지 검색 결과 정렬 드롭다운 신설 (필터바 우측, 7종 클라이언트 정렬). 3커밋 push 예정 (5cf5c87/6f4a746/세션87 docs, 6파일 +243/-7). `COMPLEX_SORT_OPTIONS` 7종(기본순/단지명↓/세대수↑↓/신축순/오래된순/매물 많은순) + `sortComplexes(list, sortBy)` 순수 함수(lib/sortComplexes.ts) + `ComplexSortDropdown` native select 컴포넌트(28줄) + `app/search/page.tsx` flex-wrap 래핑 + `?complex_sort=...` URL 동기화 + `VALID_COMPLEX_SORT` whitelist 검증 + `sortedFilteredComplexes` useMemo. BE 변경 0, `Complex` 객체에 이미 존재하는 필드만 활용. FilterBar 매물 정렬(`sort_by`)과 별 namespace 격리. 테스트 11케이스(sortComplexes 8 + Dropdown 3). vitest 664 → 675. 같은 영역(필터) 7세션 연속 한계 깨고 새 영역(/search) 진입. 사용자 가치 🟢.
+**마지막 작업**: 2026-05-02 — 세션 88, /search 빈 결과·에러 UI 보강. 3커밋 push 예정 (1839dd4/70f0736/세션88 docs, 2파일 +250/-13). 사각지대 3건 보강: (1) 서버 결과 0 — 키워드/지역 인용 + `useSearchHistory` 재사용 "최근 검색" 칩 5개 + 클릭 시 router.push 재검색 (2) **필터 통과 0건 사각지대 신설** — `complexes>0 && sortedFilteredComplexes==0` 분기로 "필터 조건에 맞는 단지가 없습니다" + 전체/통과 카운트 + 초기화 (이전엔 빈 테이블·빈 카드만 그려져 사용자 막힘) (3) 에러 시 `hasActiveFilters` 면 "필터 초기화" 동시 노출. `resetFilters` = `setUrlFilters({})` + `setSelectedTypes(allCodes)` + URL `?types=` 제거 한 번에 처리. 테이블/카드 렌더 조건도 `sortedFilteredComplexes.length>0` 으로 일치. BE 변경 0. 5케이스(서버0+키워드/최근검색 칩+클릭/필터0/에러+필터활성/에러+필터비활성). vitest 675 → 680. 같은 영역(/search) 누적 1세션. 사용자 가치 🟢. **다음 세션은 또 다른 새 영역(매물 상세 모달 / 단지 비교 / 미분양 등) 권장**.
 
-**직전 작업 (세션 86)**: 단지 상세 페이지 매물 표 위에 "적용된 필터" 한 줄 요약 칩 신설. 3커밋 push (7720ef7/72be290/88b2fc5, 4파일 +137/-2). `FilterChipsSummary.tsx` 신규 (59줄): props `{ filters: ArticleFilters }` → `buildInitState`로 FilterState 변환 → 기존 `buildChipList` 100% 재사용 (noop reset 함수 주입) → 라벨 칩만 렌더 (X 버튼 부재, 읽기 전용). complex/[no]/page.tsx L328에 `{hasActiveFilters && <FilterChipsSummary filters={filters} />}` 삽입. vitest 659 → 664.
+**직전 작업 (세션 87)**: /search 단지 검색 결과 정렬 드롭다운 신설 (필터바 우측, 7종 클라이언트 정렬). 3커밋 push (5cf5c87/6f4a746/a84172e, 6파일 +243/-7). `COMPLEX_SORT_OPTIONS` 7종 + `sortComplexes` 순수 함수 + `ComplexSortDropdown` native select + `?complex_sort=` URL 동기화 + `VALID_COMPLEX_SORT` whitelist + `sortedFilteredComplexes` useMemo. BE 변경 0. FilterBar 매물 정렬(`sort_by`)과 별 namespace 격리. 11케이스. vitest 664 → 675. 같은 영역(필터) 7세션 연속 한계 깨고 새 영역(/search) 진입.
 
-**과거 세션 (세션 85)**: 모바일 필터 칩 "+N 더보기" 토글 신설. 3커밋 push (d7ba70d/5c2a1f4/7cf7adf, 3파일 +103/-6). FilterChips.tsx에서 `max-h-16` 삭제 + `VISIBLE_MOBILE=3` + `useState(expanded)` 토글 + 4번째 칩부터 `hidden md:inline-flex`. vitest 654 → 659.
+**과거 세션 (세션 86)**: 단지 상세 페이지 매물 표 위에 "적용된 필터" 한 줄 요약 칩 신설. 3커밋 push (7720ef7/72be290/88b2fc5, 4파일 +137/-2). `FilterChipsSummary.tsx` 신규 (59줄, buildChipList 재사용 + noop reset 주입 + 읽기 전용). vitest 659 → 664.
 
 **과거 세션 (세션 84)**: 면적 빠른선택 active(파랑) 표시 버그 수정 (세션 83 격리 부채). 3커밋 push (94d4be1/edfc75d/c724867, 3파일 +116/-6). PresetButtons.tsx에 `unit?` `presetUnit?` optional prop + `matches` 헬퍼. FilterBar.test.tsx 9케이스 추가. vitest 645 → 654.
 

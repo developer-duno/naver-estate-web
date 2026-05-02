@@ -119,6 +119,7 @@ export default function Header() {
     { href: "/search", label: "검색", active: pathname?.startsWith("/search") },
     { href: "/mibunyang", label: "미분양", active: pathname?.startsWith("/mibunyang") },
     { href: "/pricing", label: "요금제", active: pathname === "/pricing" },
+    { href: "/blog", label: "블로그", active: pathname?.startsWith("/blog") },
     { href: "/help", label: "도움말", active: pathname === "/help" },
     ...(isAdmin ? [{ href: "/admin", label: "관리", active: pathname?.startsWith("/admin") }] : []),
   ];

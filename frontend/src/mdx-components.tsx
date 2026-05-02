@@ -1,4 +1,5 @@
 import type { MDXComponents } from "mdx/types";
+import Image from "next/image";
 import Link from "next/link";
 
 const components: MDXComponents = {
@@ -42,6 +43,22 @@ const components: MDXComponents = {
     <code className="bg-gray-100 text-pink-700 px-1.5 py-0.5 rounded text-xs sm:text-sm">{children}</code>
   ),
   hr: () => <hr className="my-8 border-gray-200" />,
+  // raw <img> 금지 (web-rules.md). next/Image 로 강제 매핑.
+  // src 가 /로 시작하는 절대 경로 또는 외부 URL 만 허용. width/height 미지정 시 차트 비율 기본값.
+  img: (props) => {
+    const src = typeof props.src === "string" ? props.src : "";
+    if (!src) return null;
+    return (
+      <Image
+        src={src}
+        alt={props.alt ?? ""}
+        width={typeof props.width === "number" ? props.width : 800}
+        height={typeof props.height === "number" ? props.height : 450}
+        className="my-4 rounded border border-gray-200"
+        sizes="(max-width: 768px) 100vw, 800px"
+      />
+    );
+  },
   a: ({ href, children }) => {
     const url = href ?? "#";
     if (url.startsWith("/")) {

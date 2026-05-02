@@ -106,7 +106,7 @@ describe("Header 계산기 드롭다운 (데스크톱)", () => {
     expect(document.getElementById("tools-menu")).toBeNull();
   });
 
-  it("트리거 클릭 — aria-expanded=true 전환 + 자식 3개 노출", async () => {
+  it("트리거 클릭 — aria-expanded=true 전환 + 자식 4개 노출", async () => {
     render(<Header />);
     await waitFor(() => getTrigger());
     fireEvent.click(getTrigger());
@@ -115,10 +115,11 @@ describe("Header 계산기 드롭다운 (데스크톱)", () => {
     expect(menu).not.toBeNull();
     expect(menu?.getAttribute("role")).toBe("menu");
     const items = menu?.querySelectorAll('[role="menuitem"]') ?? [];
-    expect(items.length).toBe(3);
+    expect(items.length).toBe(4);
     expect(items[0].getAttribute("href")).toBe("/tools/brokerage-fee");
     expect(items[1].getAttribute("href")).toBe("/tools/acquisition-tax");
-    expect(items[2].getAttribute("href")).toBe("/tools/area-converter");
+    expect(items[2].getAttribute("href")).toBe("/tools/transfer-tax");
+    expect(items[3].getAttribute("href")).toBe("/tools/area-converter");
   });
 
   it("자식 클릭 — 메뉴 자동 닫힘", async () => {

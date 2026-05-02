@@ -204,6 +204,14 @@ export default function Header() {
                     취득세
                   </Link>
                   <Link
+                    href="/tools/transfer-tax"
+                    role="menuitem"
+                    onClick={() => setToolsMenuOpen(false)}
+                    className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    양도소득세
+                  </Link>
+                  <Link
                     href="/tools/area-converter"
                     role="menuitem"
                     onClick={() => setToolsMenuOpen(false)}
@@ -312,6 +320,16 @@ export default function Header() {
               }`}
             >
               취득세
+            </Link>
+            <Link
+              href="/tools/transfer-tax"
+              className={`min-h-[44px] flex items-center pl-7 pr-3 rounded-lg text-sm ${
+                pathname === "/tools/transfer-tax"
+                  ? "text-blue-600 bg-blue-50"
+                  : "text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              양도소득세
             </Link>
             <Link
               href="/tools/area-converter"

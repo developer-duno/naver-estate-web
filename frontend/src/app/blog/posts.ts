@@ -22,23 +22,21 @@ export const POSTS: BlogPost[] = [
   },
   {
     slug: "complex-price-analysis",
-    title: "단지 시세 분석법 — 평당가·시세 추이 읽는 법",
+    title: "단지 시세 분석법 — 평당가·시세 추이·비교 줄세우기",
     description:
-      "매매·전세 시세 추이 차트로 단지 흐름을 한눈에. 어떤 단지가 오르고 어떤 단지가 정체인지 빠르게 분류하는 법.",
+      "평당가가 가장 먼저인 이유, 시세 추이 차트(6개월/1년/2년/전체) 읽는 법, 호가 vs 실거래가 격차 판독, /compare 24행 비교로 같은 동네 단지 줄 세우기.",
     date: "2026-05-02",
     category: "시세 분석",
-    readingTime: 5,
-    draft: true,
+    readingTime: 7,
   },
   {
     slug: "mibunyang-for-agents",
     title: "공인중개사를 위한 미분양 단지 활용법",
     description:
-      "미분양 정보를 그냥 통계가 아닌 실제 매수 상담 자료로 바꾸는 법. 분양가·할인율·9축 비교의 실무 활용.",
+      "미분양은 위험 신호인가 기회 신호인가. 9축 레이더 + 가중치 프리셋 3종(균등/투자형/실거주형) + 즐겨찾기 + 미분양 추이 차트로 매수 상담 자료 만드는 법.",
     date: "2026-05-02",
     category: "미분양",
-    readingTime: 5,
-    draft: true,
+    readingTime: 8,
   },
   {
     slug: "realtime-listing",

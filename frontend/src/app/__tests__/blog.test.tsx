@@ -24,7 +24,8 @@ describe("/blog 목록 페이지", () => {
     render(<BlogIndexPage />);
     const draftCount = POSTS.filter((p) => p.draft).length;
     const publishedCount = POSTS.filter((p) => !p.draft).length;
-    expect(screen.getAllByText("준비 중").length).toBe(draftCount);
+    // draft 0개여도 단언 가능하도록 queryAllByText 사용 (getAllByText는 0건이면 throw)
+    expect(screen.queryAllByText("준비 중").length).toBe(draftCount);
     // 발행 글만 /blog/[slug] 로 링크됨
     const links = screen.getAllByRole("link");
     const blogPostLinks = links.filter((a) => a.getAttribute("href")?.startsWith("/blog/"));
@@ -45,12 +46,18 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 3편 (jeonse·calculators·realtime)", () => {
+  it("POSTS — slug 가 모두 unique 하고 발행 글 5편 (전체)", () => {
     expect(POSTS.length).toBe(5);
     const slugs = POSTS.map((p) => p.slug);
     expect(new Set(slugs).size).toBe(5);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
-    expect(publishedSlugs).toEqual(["jeonse-ratio", "realestate-calculators", "realtime-listing"]);
+    expect(publishedSlugs).toEqual([
+      "complex-price-analysis",
+      "jeonse-ratio",
+      "mibunyang-for-agents",
+      "realestate-calculators",
+      "realtime-listing",
+    ]);
   });
 
   it("realestate-calculators 메타 — 출시 톤, /tools/brokerage-fee 안내 키워드", () => {

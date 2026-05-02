@@ -23,23 +23,50 @@ export const viewport = {
   maximumScale: 5,
 };
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://2u.pe.kr";
+const GOOGLE_VERIFICATION = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION;
+const NAVER_VERIFICATION = process.env.NEXT_PUBLIC_NAVER_SITE_VERIFICATION;
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "네이버 아파트·오피스텔 매물 조회",
-    template: "%s | 아파트·오피스텔",
+    default: "공인중개사를 위한 부동산 매물·시세 분석 도구 | 2u부동산",
+    template: "%s | 2u부동산",
   },
-  description: "전국 아파트·오피스텔 매물을 검색하고 필터링하세요. 실시간 시세, 면적별 가격 통계를 제공합니다.",
+  description:
+    "공인중개사가 빠르게 매물·시세·미분양·실거래가를 한 번에 분석하는 전국 부동산 데이터 도구. 실시간 단지 시세, 평당가 비교, 미분양 현황 제공.",
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     type: "website",
     locale: "ko_KR",
-    siteName: "아파트·오피스텔 매물 조회",
-    title: "네이버 아파트·오피스텔 매물 조회",
-    description: "전국 아파트·오피스텔 매물을 검색하고 필터링하세요",
+    siteName: "2u부동산",
+    url: SITE_URL,
+    title: "공인중개사를 위한 부동산 매물·시세 분석 도구",
+    description:
+      "공인중개사가 빠르게 매물·시세·미분양을 분석하는 전국 부동산 데이터 도구",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "공인중개사를 위한 부동산 매물·시세 분석 도구",
+    description:
+      "공인중개사가 빠르게 매물·시세·미분양을 분석하는 전국 부동산 데이터 도구",
   },
   robots: {
     index: true,
     follow: true,
   },
+  ...(GOOGLE_VERIFICATION || NAVER_VERIFICATION
+    ? {
+        verification: {
+          ...(GOOGLE_VERIFICATION ? { google: GOOGLE_VERIFICATION } : {}),
+          ...(NAVER_VERIFICATION
+            ? { other: { "naver-site-verification": NAVER_VERIFICATION } }
+            : {}),
+        },
+      }
+    : {}),
 };
 
 export default function RootLayout({

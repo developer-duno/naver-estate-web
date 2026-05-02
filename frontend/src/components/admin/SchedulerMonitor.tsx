@@ -56,7 +56,7 @@ export default function SchedulerMonitor({ token }: Props) {
 
   if (isLoading) {
     return (
-      <AdminCard title="스케줄러 모니터링" help="각 자동 작업의 마지막 실행 결과와 다음 실행 시각. 작업 실패(failed)는 빨강. 데이터가 실제로 들어왔는지는 신선도 카드에서 확인">
+      <AdminCard title="스케줄러 모니터링" help="자동으로 돌아가는 수집 작업들이 마지막에 언제 실행됐고, 다음에 언제 또 돌아갈지 보여줘요. 빨간색은 실패한 작업이에요. 작업이 돌긴 돌았는데 데이터가 진짜 들어왔는지는 아래 '데이터 신선도' 카드에서 확인할 수 있어요">
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-8 bg-gray-100 rounded animate-pulse" />
@@ -88,7 +88,7 @@ export default function SchedulerMonitor({ token }: Props) {
   );
 
   return (
-    <AdminCard title="스케줄러 모니터링" help="각 자동 작업의 마지막 실행 결과와 다음 실행 시각. 작업 실패(failed)는 빨강. 데이터가 실제로 들어왔는지는 신선도 카드에서 확인" action={summaryAction}>
+    <AdminCard title="스케줄러 모니터링" help="자동으로 돌아가는 수집 작업들이 마지막에 언제 실행됐고, 다음에 언제 또 돌아갈지 보여줘요. 빨간색은 실패한 작업이에요. 작업이 돌긴 돌았는데 데이터가 진짜 들어왔는지는 아래 '데이터 신선도' 카드에서 확인할 수 있어요" action={summaryAction}>
       {/* 테이블 */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

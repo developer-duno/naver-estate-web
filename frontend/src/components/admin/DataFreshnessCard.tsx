@@ -59,7 +59,7 @@ export default function DataFreshnessCard({ token }: Props) {
 
   if (error) {
     return (
-      <AdminCard title="데이터 신선도" help="각 종목 DB 행이 정상 갱신 주기 안에 들어오는지. 빨강 = 작업 주기 3배 초과, 헛바퀴 의심 = 작업은 돌았는데 처리 0건 또는 신규 0건">
+      <AdminCard title="데이터 신선도" help="단지·매물·시세 같은 각 종류의 데이터가 제때 갱신되고 있는지 보여줘요. 빨간색은 너무 오래 됐다는 뜻(원래 주기보다 3배 이상 늦음). '헛바퀴 의심'은 작업은 돌긴 돌았는데 실제로 새로 들어온 데이터가 0건이라는 뜻이에요">
         <p className="text-sm text-red-600">불러오기 실패: {error.message}</p>
       </AdminCard>
     );
@@ -67,7 +67,7 @@ export default function DataFreshnessCard({ token }: Props) {
 
   if (isLoading || !data) {
     return (
-      <AdminCard title="데이터 신선도" help="각 종목 DB 행이 정상 갱신 주기 안에 들어오는지. 빨강 = 작업 주기 3배 초과, 헛바퀴 의심 = 작업은 돌았는데 처리 0건 또는 신규 0건">
+      <AdminCard title="데이터 신선도" help="단지·매물·시세 같은 각 종류의 데이터가 제때 갱신되고 있는지 보여줘요. 빨간색은 너무 오래 됐다는 뜻(원래 주기보다 3배 이상 늦음). '헛바퀴 의심'은 작업은 돌긴 돌았는데 실제로 새로 들어온 데이터가 0건이라는 뜻이에요">
         <ul className="space-y-2" aria-label="로딩 중">
           {Array.from({ length: 8 }).map((_, i) => (
             <li key={i} className="h-10 bg-gray-100 rounded animate-pulse" />
@@ -79,17 +79,17 @@ export default function DataFreshnessCard({ token }: Props) {
 
   if (data.items.length === 0) {
     return (
-      <AdminCard title="데이터 신선도" help="각 종목 DB 행이 정상 갱신 주기 안에 들어오는지. 빨강 = 작업 주기 3배 초과, 헛바퀴 의심 = 작업은 돌았는데 처리 0건 또는 신규 0건">
+      <AdminCard title="데이터 신선도" help="단지·매물·시세 같은 각 종류의 데이터가 제때 갱신되고 있는지 보여줘요. 빨간색은 너무 오래 됐다는 뜻(원래 주기보다 3배 이상 늦음). '헛바퀴 의심'은 작업은 돌긴 돌았는데 실제로 새로 들어온 데이터가 0건이라는 뜻이에요">
         <p className="text-sm text-gray-500">데이터 없음</p>
       </AdminCard>
     );
   }
 
   return (
-    <AdminCard title="데이터 신선도" help="각 종목 DB 행이 정상 갱신 주기 안에 들어오는지. 빨강 = 작업 주기 3배 초과, 헛바퀴 의심 = 작업은 돌았는데 처리 0건 또는 신규 0건">
+    <AdminCard title="데이터 신선도" help="단지·매물·시세 같은 각 종류의 데이터가 제때 갱신되고 있는지 보여줘요. 빨간색은 너무 오래 됐다는 뜻(원래 주기보다 3배 이상 늦음). '헛바퀴 의심'은 작업은 돌긴 돌았는데 실제로 새로 들어온 데이터가 0건이라는 뜻이에요">
       <p className="text-xs text-gray-500 mb-2">
-        <span className="font-medium text-gray-600">처리 N/M</span> = 작업이 처리한 건수 / 총 대상 ·{" "}
-        <span className="font-medium text-gray-600">신규 K건</span> = 이번 작업으로 DB에 새로 들어온 행
+        <span className="font-medium text-gray-600">처리 N/M</span> = 이번 작업이 끝낸 건수 / 처리 대상이었던 전체 건수 ·{" "}
+        <span className="font-medium text-gray-600">신규 K건</span> = 그중 진짜로 새로 들어온 데이터 수
       </p>
       <ul className="divide-y divide-gray-100">
         {data.items.map((item) => (

@@ -72,7 +72,7 @@ export default function BulkRecrawlCard({ getToken }: Props) {
   ) : null;
 
   return (
-    <AdminCard title="매물 일괄 재크롤" help="last_crawled_at 이 가장 오래된 단지 N개를 한 번에 재크롤. 추천 시간대(KST 05~10시) 외엔 자동 스케줄과 겹쳐 네이버 차단 위험" action={levelBadge}>
+    <AdminCard title="오래된 단지 한 번에 다시 수집" help="가장 오래 갱신 안 된 단지들을 한꺼번에 다시 수집해요. 새벽 5시~오전 10시(한국 시간)에 돌리는 게 안전해요. 그 외 시간엔 자동 작업과 겹쳐서 네이버에서 차단당할 위험이 있어요" action={levelBadge}>
       {statusQuery.isLoading && <p className="text-xs text-gray-500">상태 확인 중...</p>}
 
       {status && (

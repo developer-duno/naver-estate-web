@@ -75,7 +75,7 @@ export default function AdminUsersPage() {
 
       {/* 필터 */}
       <div className="mt-6">
-        <AdminCard title="필터" help="역할/상태별 사용자 필터링">
+        <AdminCard title="필터" help="역할(일반·전문가·관리자)이나 상태(승인·대기·정지)로 사용자 목록을 좁혀서 볼 수 있어요">
           <div className="flex gap-3">
             <select
               value={filterRole}
@@ -108,7 +108,7 @@ export default function AdminUsersPage() {
       <div className="mt-6">
         <AdminCard
           title={`사용자 목록 (총 ${usersQuery.data?.total ?? 0}명)`}
-          help="역할/상태 인라인 변경. 승인 시 기간 모달 표시"
+          help="가입한 사용자 목록이에요. 표 안에서 바로 역할이나 상태를 바꿀 수 있고, 승인 버튼을 누르면 기간을 정하는 작은 창이 떠요"
         >
           {usersQuery.isLoading ? (
             <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>

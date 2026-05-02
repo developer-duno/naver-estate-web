@@ -32,7 +32,7 @@ describe("NaverCallsCard 컴포넌트", () => {
       process_uptime_seconds: 7200,
     });
     renderWithProvider();
-    expect(screen.getByText("네이버 API 호출 계측")).toBeInTheDocument();
+    expect(screen.getByText("네이버 호출 횟수 (10분 / 1시간 / 24시간)")).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByText("아직 집계된 호출이 없습니다")).toBeInTheDocument();
     });

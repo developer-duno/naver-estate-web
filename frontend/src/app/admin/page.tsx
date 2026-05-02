@@ -73,7 +73,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-        <AdminCard title="실행 중인 크롤링" help="지금 백그라운드에서 진행 중인 크롤 작업. 처리/총 비율로 진행률 표시. 일괄 재크롤이 여기에 보임">
+        <AdminCard title="지금 돌아가는 작업" help="현재 서버에서 실행 중인 수집 작업이에요. '처리 / 총 건수'로 진행률을 보여줘요. '오래된 단지 한 번에 다시 수집'을 눌러서 시작한 작업도 여기에 표시돼요">
           {runningJobs.length === 0 ? (
             <p className="text-sm text-gray-500">실행 중인 작업이 없습니다</p>
           ) : (
@@ -88,7 +88,7 @@ export default function AdminDashboard() {
           )}
         </AdminCard>
 
-        <AdminCard title="최근 활동" help="관리자 액션과 자동 트리거 기록 (감사 로그 최근 5건). 누가 언제 어떤 트리거를 눌렀는지">
+        <AdminCard title="최근 활동" help="관리자가 직접 누른 작업이나 자동으로 실행된 트리거 기록이에요 (최근 5건). 누가 언제 무슨 작업을 시작했는지 한눈에 볼 수 있어요">
           {recentLogs.length === 0 ? (
             <p className="text-sm text-gray-500">활동 기록이 없습니다</p>
           ) : (

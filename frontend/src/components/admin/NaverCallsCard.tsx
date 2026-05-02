@@ -101,8 +101,8 @@ export default function NaverCallsCard({ getToken }: Props) {
 
   return (
     <AdminCard
-      title="네이버 API 호출 계측"
-      help="최근 10분/1시간/24시간 네이버 API 호출 횟수. 차단 위험 모니터링 (시간당 800회 미만 권장). 가동 시간이 24시간 미만이면 24h 합계가 부정확"
+      title="네이버 호출 횟수 (10분 / 1시간 / 24시간)"
+      help="우리 서버가 네이버에 요청을 몇 번 보냈는지 시간 단위로 보여줘요. 너무 자주 부르면 네이버가 우리를 차단하기 때문에 시간당 800회 안 넘기는 게 안전해요. 서버를 켠 지 24시간이 안 됐으면 24시간 숫자는 정확하지 않아요"
       action={
         uptime != null ? (
           <span

@@ -38,7 +38,7 @@ describe("CollectorTrigger 컴포넌트", () => {
   /** 제목이 표시되는지 */
   it("제목이 표시된다", () => {
     renderWithProvider();
-    expect(screen.getByText("데이터 수집 트리거")).toBeInTheDocument();
+    expect(screen.getByText("외부 데이터 지금 받아오기")).toBeInTheDocument();
   });
 
   /** 클릭 시 API 호출 */

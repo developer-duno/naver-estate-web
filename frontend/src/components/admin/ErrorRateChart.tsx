@@ -73,8 +73,8 @@ export default function ErrorRateChart({ getToken }: Props) {
 
   return (
     <AdminCard
-      title="크롤 에러율 추이"
-      help="최근 N일 status 분포 (KST 기준 일자별). running/pending 제외, 최종 상태만 표시"
+      title="날짜별 성공·실패 추이"
+      help="최근 며칠 동안 자동 수집이 성공·실패한 건수를 막대 그래프로 보여줘요 (한국 시간 기준). 아직 진행 중이거나 대기 중인 작업은 제외하고, 끝난 작업만 집계해요"
       action={daysToggle}
     >
       {isLoading && (

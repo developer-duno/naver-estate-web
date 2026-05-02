@@ -45,10 +45,10 @@ describe("CrawlSummary", () => {
 
     renderSummary();
     await waitFor(() => {
-      expect(screen.getByText(/실행중 2/)).toBeInTheDocument();
+      expect(screen.getByText(/돌아가는 중 2건/)).toBeInTheDocument();
     });
-    expect(screen.getByText(/대기 5/)).toBeInTheDocument();
-    expect(screen.getByText(/실패 3건/)).toBeInTheDocument();
+    expect(screen.getByText(/대기 중 5건/)).toBeInTheDocument();
+    expect(screen.getByText(/실패 누적 3건/)).toBeInTheDocument();
   });
 
   it("failed > 0 이면 bg-red-50 클래스 적용", async () => {
@@ -59,7 +59,7 @@ describe("CrawlSummary", () => {
 
     const { container } = renderSummary();
     await waitFor(() => {
-      expect(screen.getByText(/실패 1건/)).toBeInTheDocument();
+      expect(screen.getByText(/실패 누적 1건/)).toBeInTheDocument();
     });
     const root = container.querySelector("[aria-label='현재 크롤 작업 요약']");
     expect(root?.className).toContain("bg-red-50");
@@ -87,9 +87,9 @@ describe("CrawlSummary", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /실패 189건/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /실패 누적 189건/ })).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole("button", { name: /실패 189건/ }));
+    fireEvent.click(screen.getByRole("button", { name: /실패 누적 189건/ }));
     expect(onJumpToFailed).toHaveBeenCalledTimes(1);
   });
 });

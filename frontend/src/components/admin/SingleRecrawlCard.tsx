@@ -52,8 +52,8 @@ export default function SingleRecrawlCard({ getToken }: Props) {
 
   return (
     <AdminCard
-      title="단건 강제 재크롤"
-      help="특정 단지번호를 입력해 즉시 재크롤. 1시간 내 중복 이력은 force 체크박스로 우회"
+      title="단지 1개 즉시 다시 수집"
+      help="특정 아파트 단지의 매물 목록을 지금 바로 네이버에서 다시 가져와요. 1시간 안에 이미 한 번 돌렸다면 '강제 실행'에 체크해야 또 돌아가요 (네이버 API 부담 줄이기 위한 안전장치)"
     >
       <div className="flex flex-col sm:flex-row gap-2 mb-2">
         <input

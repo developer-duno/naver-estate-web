@@ -7,6 +7,7 @@ import { queryKeys } from "@/lib/query-keys";
 import AdminCard from "@/components/admin/AdminCard";
 import CrawlJobTable from "@/components/admin/CrawlJobTable";
 import CrawlSummary from "@/components/admin/CrawlSummary";
+import FailureBreakdown from "@/components/admin/FailureBreakdown";
 import SingleRecrawlCard from "@/components/admin/SingleRecrawlCard";
 import ErrorRateChart from "@/components/admin/ErrorRateChart";
 import {
@@ -91,7 +92,9 @@ export default function AdminCrawlPage() {
     queryClient.invalidateQueries({ queryKey: queryKeys.admin.crawlJobs(params as Record<string, unknown>) });
   };
 
-  const handleJumpToFailed = () => {
+  const handleJumpToFailed = (_jobType?: string) => {
+    // jobType 인자는 향후 유형별 추가 필터를 위해 받아두지만, 현재 BE 의 /crawl-jobs 는 status 필터만
+    // 지원하므로 일단 status="failed" 만 적용. (유형별 필터는 후속 BE 작업 시 확장)
     setFilterStatus("failed");
     setPage(1);
     requestAnimationFrame(() => {
@@ -101,9 +104,20 @@ export default function AdminCrawlPage() {
 
   return (
     <>
-      <h2 className="text-lg font-semibold mb-4">크롤링 관리</h2>
+      <h2 className="text-lg font-semibold mb-2">크롤링 관리</h2>
+      <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+        <strong className="text-gray-800">크롤링이란?</strong>{" "}
+        네이버 부동산·국토교통부·에어코리아 등 외부 사이트에서 매물·시세·환경 정보를 자동으로 가져오는 작업이에요.
+        이 페이지에서는 그 작업들이 잘 돌고 있는지, 어디서 멈췄는지 확인하고 직접 다시 돌릴 수 있어요.
+      </p>
 
       {token && <CrawlSummary token={token} onJumpToFailed={handleJumpToFailed} />}
+
+      {token && (
+        <div className="mt-2 mb-4">
+          <FailureBreakdown token={token} onJumpToFailed={handleJumpToFailed} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <SingleRecrawlCard getToken={getToken} />
@@ -113,7 +127,7 @@ export default function AdminCrawlPage() {
       <div className="mt-6">
         <AdminCard
           title="필터"
-          help="크롤 작업 상태별 필터링. 새로고침 버튼으로 즉시 갱신"
+          help="작업 상태(실행 중·대기·완료·실패 등)로 좁혀서 볼 수 있어요. '새로고침'을 누르면 표를 즉시 다시 불러와요"
           action={
             <button
               onClick={handleRefresh}
@@ -146,7 +160,7 @@ export default function AdminCrawlPage() {
       <div id="crawl-jobs-list" className="mt-6 scroll-mt-4">
         <AdminCard
           title={`크롤 작업 목록 (총 ${jobsQuery.data?.total ?? 0}건)`}
-          help="현재 큐에 등록된 크롤 작업. 실행 중/대기 상태에서 일시정지·취소 가능"
+          help="지금까지 실행됐거나 대기 중인 모든 자동 수집 작업이에요. 실행 중이거나 대기 중인 작업은 직접 일시정지·취소할 수 있어요"
         >
           {jobsQuery.isLoading ? (
             <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>

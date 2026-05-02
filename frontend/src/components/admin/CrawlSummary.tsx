@@ -51,23 +51,23 @@ export default function CrawlSummary({ token, onJumpToFailed }: Props) {
       className={`border rounded-lg p-3 mb-4 text-sm flex flex-wrap gap-x-3 gap-y-1 ${containerClass}`}
       aria-label="현재 크롤 작업 요약"
     >
-      <span className="font-medium text-gray-700">현재 크롤:</span>
-      <span className="text-gray-700">실행중 {running}</span>
+      <span className="font-medium text-gray-700">지금 작업 상태:</span>
+      <span className="text-gray-700">돌아가는 중 {running}건</span>
       <span className={pending > 10 ? "text-yellow-800 font-medium" : "text-gray-700"}>
-        대기 {pending}
+        대기 중 {pending}건
       </span>
       {failed > 0 && onJumpToFailed ? (
         <button
           type="button"
           onClick={onJumpToFailed}
           className="text-red-700 font-medium underline-offset-2 hover:underline cursor-pointer"
-          aria-label={`실패 ${failed}건 — 클릭 시 실패 작업만 표시`}
+          aria-label={`실패 누적 ${failed}건 — 클릭 시 실패 작업만 표시`}
         >
-          실패 {failed}건 (전체 기간) ↓
+          실패 누적 {failed}건 (전체 기간) ↓
         </button>
       ) : (
         <span className={failed > 0 ? "text-red-700 font-medium" : "text-gray-700"}>
-          실패 {failed}건 (전체 기간)
+          실패 누적 {failed}건 (전체 기간)
         </span>
       )}
     </div>

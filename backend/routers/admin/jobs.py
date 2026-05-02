@@ -67,6 +67,66 @@ def list_crawl_jobs(
     }
 
 
+@router.get("/crawl-failures")
+def list_crawl_failures(
+    hours: int = Query(24, ge=1, le=720),
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_admin_user),
+):
+    """최근 N시간(기본 24h) 동안 실패한 크롤 잡을 job_type 별로 집계.
+
+    응답 예: { "window_hours": 24, "total": 12,
+              "items": [{ "job_type": "complex_articles", "count": 8,
+                          "last_error": "...", "last_failed_at": "..." }] }
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+    # job_type 별 집계 (count + 가장 최근 실패 정보)
+    rows = db.execute(
+        select(
+            CrawlJob.job_type,
+            func.count(CrawlJob.id).label("count"),
+            func.max(CrawlJob.completed_at).label("last_failed_at"),
+        )
+        .where(
+            and_(
+                CrawlJob.status == "failed",
+                CrawlJob.created_at >= cutoff,
+            )
+        )
+        .group_by(CrawlJob.job_type)
+        .order_by(func.count(CrawlJob.id).desc())
+    ).all()
+
+    items = []
+    total = 0
+    for r in rows:
+        # 해당 job_type 의 가장 최근 실패 1건에서 error_message 가져오기
+        last = db.execute(
+            select(CrawlJob.error_message)
+            .where(
+                and_(
+                    CrawlJob.status == "failed",
+                    CrawlJob.created_at >= cutoff,
+                    CrawlJob.job_type == r.job_type,
+                )
+            )
+            .order_by(CrawlJob.completed_at.desc().nullslast(), CrawlJob.created_at.desc())
+            .limit(1)
+        ).scalar()
+        items.append(
+            {
+                "job_type": r.job_type,
+                "count": int(r.count),
+                "last_error": (last[:200] if last else None),
+                "last_failed_at": r.last_failed_at.isoformat() if r.last_failed_at else None,
+            }
+        )
+        total += int(r.count)
+
+    return {"window_hours": hours, "total": total, "items": items}
+
+
 @router.post("/crawl-jobs/{job_id}/cancel")
 def cancel_crawl_job(
     job_id: int,

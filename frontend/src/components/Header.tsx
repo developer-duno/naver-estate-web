@@ -203,6 +203,14 @@ export default function Header() {
                   >
                     취득세
                   </Link>
+                  <Link
+                    href="/tools/area-converter"
+                    role="menuitem"
+                    onClick={() => setToolsMenuOpen(false)}
+                    className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    평·㎡ 변환
+                  </Link>
                 </div>
               )}
             </div>
@@ -304,6 +312,16 @@ export default function Header() {
               }`}
             >
               취득세
+            </Link>
+            <Link
+              href="/tools/area-converter"
+              className={`min-h-[44px] flex items-center pl-7 pr-3 rounded-lg text-sm ${
+                pathname === "/tools/area-converter"
+                  ? "text-blue-600 bg-blue-50"
+                  : "text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              평·㎡ 변환
             </Link>
 
             <hr className="my-2 border-gray-200" />

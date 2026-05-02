@@ -1,6 +1,7 @@
 "use client";
 
 import type { TransferResult } from "@/lib/transfer-tax";
+import TransferNotices from "./TransferNotices";
 
 interface Props {
   result: TransferResult;
@@ -49,6 +50,7 @@ export default function TransferResultCard({ result }: Props) {
             <div className="text-xs text-blue-700 mb-1">산출세액 (지방소득세 별도 약 10%)</div>
             <div className="text-2xl font-bold text-blue-900">{result.totalTax.toLocaleString()}원</div>
           </div>
+          <TransferNotices notes={result.notes} />
         </>
       )}
     </section>

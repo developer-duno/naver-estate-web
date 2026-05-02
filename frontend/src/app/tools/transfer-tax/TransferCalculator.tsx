@@ -68,9 +68,6 @@ export default function TransferCalculator() {
         onExemptionOverrideChange={setExemptionOverride}
       />
       <TransferResultCard result={result} />
-      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900">
-        💡 안내 메시지 ({result.notes.length}건) — 다음 단계 TransferNotices 에서 표시
-      </div>
     </div>
   );
 }

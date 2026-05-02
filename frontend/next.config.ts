@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import createMDX from "@next/mdx";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -11,6 +12,8 @@ const buildId =
   `dev-${Date.now()}`;
 
 const nextConfig: NextConfig = {
+  // .mdx 파일을 페이지/라우트로 인식. Turbopack·webpack 양쪽 호환 위해 문자열 플러그인.
+  pageExtensions: ["ts", "tsx", "md", "mdx"],
   env: {
     NEXT_PUBLIC_BUILD_ID: buildId,
   },
@@ -53,4 +56,12 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Turbopack 호환을 위해 plugin 을 문자열로 전달 (함수 직렬화 불가).
+const withMDX = createMDX({
+  options: {
+    remarkPlugins: [["remark-gfm", {}]],
+    rehypePlugins: [],
+  },
+});
+
+export default withMDX(nextConfig);

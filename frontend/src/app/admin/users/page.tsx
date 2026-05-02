@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
+import AdminCard from "@/components/admin/AdminCard";
 import UserTable from "@/components/admin/UserTable";
 import VerificationReview from "@/components/admin/VerificationReview";
 import { getAdminUsers, updateAdminUser, suspendAdminUser } from "@/lib/api";
@@ -72,38 +73,49 @@ export default function AdminUsersPage() {
       )}
 
       {/* 필터 */}
-      <div className="flex gap-3 mb-4">
-        <select
-          value={filterRole}
-          onChange={(e) => { setFilterRole(e.target.value); setPage(1); }}
-          className="text-sm border rounded px-2 py-1"
-        >
-          <option value="">역할 전체</option>
-          <option value="user">일반</option>
-          <option value="expert">전문가</option>
-          <option value="admin">관리자</option>
-        </select>
-        <select
-          value={filterStatus}
-          onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
-          className="text-sm border rounded px-2 py-1"
-        >
-          <option value="">상태 전체</option>
-          <option value="approved">승인</option>
-          <option value="pending">대기</option>
-          <option value="suspended">정지</option>
-        </select>
+      <div className="mt-6">
+        <AdminCard title="필터" help="역할/상태별 사용자 필터링">
+          <div className="flex gap-3">
+            <select
+              value={filterRole}
+              onChange={(e) => { setFilterRole(e.target.value); setPage(1); }}
+              className="text-sm border rounded px-2 py-1"
+            >
+              <option value="">역할 전체</option>
+              <option value="user">일반</option>
+              <option value="expert">전문가</option>
+              <option value="admin">관리자</option>
+            </select>
+            <select
+              value={filterStatus}
+              onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+              className="text-sm border rounded px-2 py-1"
+            >
+              <option value="">상태 전체</option>
+              <option value="approved">승인</option>
+              <option value="pending">대기</option>
+              <option value="suspended">정지</option>
+            </select>
+          </div>
+        </AdminCard>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">{error}</div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mt-4">{error}</div>
       )}
 
-      {usersQuery.isLoading ? (
-        <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
-      ) : (
-        <UserTable users={usersQuery.data?.items ?? []} onUpdate={handleUpdate} />
-      )}
+      <div className="mt-6">
+        <AdminCard
+          title={`사용자 목록 (총 ${usersQuery.data?.total ?? 0}명)`}
+          help="역할/상태 인라인 변경. 승인 시 기간 모달 표시"
+        >
+          {usersQuery.isLoading ? (
+            <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
+          ) : (
+            <UserTable users={usersQuery.data?.items ?? []} onUpdate={handleUpdate} />
+          )}
+        </AdminCard>
+      </div>
 
       {/* 페이지네이션 */}
       {(usersQuery.data?.total ?? 0) > 20 && (

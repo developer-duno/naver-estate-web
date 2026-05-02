@@ -6,6 +6,7 @@ import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import AdminCard from "@/components/admin/AdminCard";
 import CrawlJobTable from "@/components/admin/CrawlJobTable";
+import CrawlSummary from "@/components/admin/CrawlSummary";
 import SingleRecrawlCard from "@/components/admin/SingleRecrawlCard";
 import ErrorRateChart from "@/components/admin/ErrorRateChart";
 import {
@@ -93,6 +94,8 @@ export default function AdminCrawlPage() {
   return (
     <>
       <h2 className="text-lg font-semibold mb-4">크롤링 관리</h2>
+
+      {token && <CrawlSummary token={token} />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <SingleRecrawlCard getToken={getToken} />

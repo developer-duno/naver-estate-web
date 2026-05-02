@@ -44,11 +44,10 @@ export const POSTS: BlogPost[] = [
     slug: "realtime-listing",
     title: "네이버 매물 실시간 조회 노하우",
     description:
-      "사전 크롤링이 아닌 실시간 조회의 장점과 한계. 단지 검색·필터링·즐겨찾기로 매물을 빠르게 압축하는 흐름.",
+      "사전 크롤링이 아닌 실시간 조회의 장점과 한계. 단지 검색·필터링·즐겨찾기·엑셀로 매물을 빠르게 압축하고 손님께 자료 만드는 5분 워크플로.",
     date: "2026-05-02",
     category: "도구 활용",
-    readingTime: 4,
-    draft: true,
+    readingTime: 6,
   },
   {
     slug: "realestate-calculators",

@@ -45,12 +45,12 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 jeonse-ratio·realestate-calculators 가 발행", () => {
+  it("POSTS — slug 가 모두 unique 하고 발행 글 3편 (jeonse·calculators·realtime)", () => {
     expect(POSTS.length).toBe(5);
     const slugs = POSTS.map((p) => p.slug);
     expect(new Set(slugs).size).toBe(5);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
-    expect(publishedSlugs).toEqual(["jeonse-ratio", "realestate-calculators"]);
+    expect(publishedSlugs).toEqual(["jeonse-ratio", "realestate-calculators", "realtime-listing"]);
   });
 
   it("realestate-calculators 메타 — 출시 톤, /tools/brokerage-fee 안내 키워드", () => {

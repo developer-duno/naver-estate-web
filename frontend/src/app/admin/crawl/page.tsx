@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
+import AdminCard from "@/components/admin/AdminCard";
 import CrawlJobTable from "@/components/admin/CrawlJobTable";
 import SingleRecrawlCard from "@/components/admin/SingleRecrawlCard";
 import ErrorRateChart from "@/components/admin/ErrorRateChart";
@@ -98,42 +99,56 @@ export default function AdminCrawlPage() {
         <ErrorRateChart getToken={getToken} />
       </div>
 
-      <div className="flex gap-3 mb-4">
-        <select
-          value={filterStatus}
-          onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
-          className="text-sm border rounded px-2 py-1"
+      <div className="mt-6">
+        <AdminCard
+          title="필터"
+          help="크롤 작업 상태별 필터링. 새로고침 버튼으로 즉시 갱신"
+          action={
+            <button
+              onClick={handleRefresh}
+              className="text-sm px-3 py-1 border rounded hover:bg-gray-50"
+            >
+              새로고침
+            </button>
+          }
         >
-          <option value="">상태 전체</option>
-          <option value="running">실행 중</option>
-          <option value="pending">대기</option>
-          <option value="paused">일시정지</option>
-          <option value="completed">완료</option>
-          <option value="failed">실패</option>
-          <option value="cancelled">취소</option>
-        </select>
-        <button
-          onClick={handleRefresh}
-          className="text-sm px-3 py-1 border rounded hover:bg-gray-50"
-        >
-          새로고침
-        </button>
+          <select
+            value={filterStatus}
+            onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+            className="text-sm border rounded px-2 py-1"
+          >
+            <option value="">상태 전체</option>
+            <option value="running">실행 중</option>
+            <option value="pending">대기</option>
+            <option value="paused">일시정지</option>
+            <option value="completed">완료</option>
+            <option value="failed">실패</option>
+            <option value="cancelled">취소</option>
+          </select>
+        </AdminCard>
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">{error}</div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mt-4">{error}</div>
       )}
 
-      {jobsQuery.isLoading ? (
-        <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
-      ) : (
-        <CrawlJobTable
-          jobs={jobsQuery.data?.items ?? []}
-          onCancel={handleCancel}
-          onPause={handlePause}
-          onResume={handleResume}
-        />
-      )}
+      <div className="mt-6">
+        <AdminCard
+          title={`크롤 작업 목록 (총 ${jobsQuery.data?.total ?? 0}건)`}
+          help="현재 큐에 등록된 크롤 작업. 실행 중/대기 상태에서 일시정지·취소 가능"
+        >
+          {jobsQuery.isLoading ? (
+            <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
+          ) : (
+            <CrawlJobTable
+              jobs={jobsQuery.data?.items ?? []}
+              onCancel={handleCancel}
+              onPause={handlePause}
+              onResume={handleResume}
+            />
+          )}
+        </AdminCard>
+      </div>
 
       {(jobsQuery.data?.total ?? 0) > 20 && (
         <div className="flex justify-center gap-2 mt-4">

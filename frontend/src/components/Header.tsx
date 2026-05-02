@@ -108,19 +108,34 @@ export default function Header() {
 
   const isAdmin = userRole === "admin";
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
+  const toolsMenuRef = useRef<HTMLDivElement>(null);
 
-  // 경로 변경 시 모바일 메뉴 닫기
+  // 경로 변경 시 모바일 메뉴 + 계산기 드롭다운 닫기
   useEffect(() => {
     setMobileOpen(false);
+    setToolsMenuOpen(false);
   }, [pathname]);
 
+  // 드롭다운 외부 mousedown 닫기
+  useEffect(() => {
+    if (!toolsMenuOpen) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (toolsMenuRef.current && !toolsMenuRef.current.contains(e.target as Node)) {
+        setToolsMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [toolsMenuOpen]);
+
+  const toolsActive = pathname?.startsWith("/tools") ?? false;
   const navLinks = [
     { href: "/", label: "홈", active: pathname === "/" },
     { href: "/search", label: "검색", active: pathname?.startsWith("/search") },
     { href: "/mibunyang", label: "미분양", active: pathname?.startsWith("/mibunyang") },
     { href: "/pricing", label: "요금제", active: pathname === "/pricing" },
     { href: "/blog", label: "블로그", active: pathname?.startsWith("/blog") },
-    { href: "/tools/brokerage-fee", label: "계산기", active: pathname?.startsWith("/tools") },
     { href: "/help", label: "도움말", active: pathname === "/help" },
     ...(isAdmin ? [{ href: "/admin", label: "관리", active: pathname?.startsWith("/admin") }] : []),
   ];
@@ -148,6 +163,49 @@ export default function Header() {
                 {link.label}
               </Link>
             ))}
+
+            {/* 계산기 드롭다운 */}
+            <div ref={toolsMenuRef} className="relative">
+              <button
+                type="button"
+                aria-expanded={toolsMenuOpen}
+                aria-haspopup="menu"
+                aria-controls="tools-menu"
+                onClick={() => setToolsMenuOpen((v) => !v)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") setToolsMenuOpen(false);
+                }}
+                className={`text-sm font-medium ${
+                  toolsActive ? "text-blue-600" : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                계산기 ▾
+              </button>
+              {toolsMenuOpen && (
+                <div
+                  id="tools-menu"
+                  role="menu"
+                  className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg py-1 min-w-[160px] z-50"
+                >
+                  <Link
+                    href="/tools/brokerage-fee"
+                    role="menuitem"
+                    onClick={() => setToolsMenuOpen(false)}
+                    className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    중개수수료
+                  </Link>
+                  <Link
+                    href="/tools/acquisition-tax"
+                    role="menuitem"
+                    onClick={() => setToolsMenuOpen(false)}
+                    className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    취득세
+                  </Link>
+                </div>
+              )}
+            </div>
 
             {!mounted ? (
               <div className="w-[80px] h-[34px]" aria-hidden />
@@ -218,6 +276,35 @@ export default function Header() {
                 {link.label}
               </Link>
             ))}
+
+            {/* 계산기 그룹 (모바일은 토글 없이 자식 2개 항상 표시) */}
+            <div
+              className={`min-h-[44px] flex items-center px-3 rounded-lg text-base font-medium ${
+                toolsActive ? "text-blue-600" : "text-gray-700"
+              }`}
+            >
+              계산기
+            </div>
+            <Link
+              href="/tools/brokerage-fee"
+              className={`min-h-[44px] flex items-center pl-7 pr-3 rounded-lg text-sm ${
+                pathname === "/tools/brokerage-fee"
+                  ? "text-blue-600 bg-blue-50"
+                  : "text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              중개수수료
+            </Link>
+            <Link
+              href="/tools/acquisition-tax"
+              className={`min-h-[44px] flex items-center pl-7 pr-3 rounded-lg text-sm ${
+                pathname === "/tools/acquisition-tax"
+                  ? "text-blue-600 bg-blue-50"
+                  : "text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              취득세
+            </Link>
 
             <hr className="my-2 border-gray-200" />
 

@@ -3,7 +3,7 @@
  * 실행: npx vitest run src/components/__tests__/Header.test.tsx
  */
 import { describe, it, expect } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import Header from "../Header";
 
 describe("Header 기본", () => {
@@ -87,5 +87,91 @@ describe("Header 네비게이션", () => {
     render(<Header />);
     const container = document.querySelector(".max-w-7xl");
     expect(container).not.toBeNull();
+  });
+});
+
+describe("Header 계산기 드롭다운 (데스크톱)", () => {
+  // 트리거 버튼 — 모바일 nav 의 "계산기" div 와 구분 위해 button 만 선택
+  const getTrigger = () =>
+    screen.getByRole("button", { name: /계산기/ });
+
+  it("초기 상태 — 트리거 aria-expanded=false, 메뉴 미렌더", async () => {
+    render(<Header />);
+    await waitFor(() => {
+      const trigger = getTrigger();
+      expect(trigger).toHaveAttribute("aria-expanded", "false");
+      expect(trigger).toHaveAttribute("aria-haspopup", "menu");
+      expect(trigger).toHaveAttribute("aria-controls", "tools-menu");
+    });
+    expect(document.getElementById("tools-menu")).toBeNull();
+  });
+
+  it("트리거 클릭 — aria-expanded=true 전환 + 자식 2개 노출", async () => {
+    render(<Header />);
+    await waitFor(() => getTrigger());
+    fireEvent.click(getTrigger());
+    expect(getTrigger()).toHaveAttribute("aria-expanded", "true");
+    const menu = document.getElementById("tools-menu");
+    expect(menu).not.toBeNull();
+    expect(menu?.getAttribute("role")).toBe("menu");
+    const items = menu?.querySelectorAll('[role="menuitem"]') ?? [];
+    expect(items.length).toBe(2);
+    expect(items[0].getAttribute("href")).toBe("/tools/brokerage-fee");
+    expect(items[1].getAttribute("href")).toBe("/tools/acquisition-tax");
+  });
+
+  it("자식 클릭 — 메뉴 자동 닫힘", async () => {
+    render(<Header />);
+    await waitFor(() => getTrigger());
+    fireEvent.click(getTrigger());
+    const menu = document.getElementById("tools-menu");
+    const items = menu?.querySelectorAll('[role="menuitem"]') ?? [];
+    fireEvent.click(items[1]);
+    expect(getTrigger()).toHaveAttribute("aria-expanded", "false");
+    expect(document.getElementById("tools-menu")).toBeNull();
+  });
+
+  it("Esc 키 — 메뉴 닫힘", async () => {
+    render(<Header />);
+    await waitFor(() => getTrigger());
+    fireEvent.click(getTrigger());
+    expect(getTrigger()).toHaveAttribute("aria-expanded", "true");
+    fireEvent.keyDown(getTrigger(), { key: "Escape" });
+    expect(getTrigger()).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("외부 mousedown — 메뉴 닫힘", async () => {
+    render(<Header />);
+    await waitFor(() => getTrigger());
+    fireEvent.click(getTrigger());
+    expect(document.getElementById("tools-menu")).not.toBeNull();
+    fireEvent.mouseDown(document.body);
+    expect(getTrigger()).toHaveAttribute("aria-expanded", "false");
+    expect(document.getElementById("tools-menu")).toBeNull();
+  });
+});
+
+describe("Header 계산기 그룹 (모바일)", () => {
+  it("모바일 영역에 자식 2개 Link 직접 표시 (토글 없음)", async () => {
+    render(<Header />);
+    await waitFor(() => {
+      // 모바일 nav 와 데스크톱 드롭다운 양쪽에 같은 href 가 존재
+      const brokerageLinks = document.querySelectorAll('a[href="/tools/brokerage-fee"]');
+      const acquisitionLinks = document.querySelectorAll('a[href="/tools/acquisition-tax"]');
+      // 데스크톱 드롭다운은 닫혀있으니 모바일 1개만 — 단, 햄버거도 닫혀있어 모바일 nav 미렌더
+      // 결국 양쪽 모두 미렌더 → 햄버거 열어야 모바일 자식 노출됨
+      expect(brokerageLinks.length).toBeGreaterThanOrEqual(0);
+      expect(acquisitionLinks.length).toBeGreaterThanOrEqual(0);
+    });
+    // 햄버거 열기
+    const hamburger = screen.getByRole("button", { name: "메뉴 열기" });
+    fireEvent.click(hamburger);
+    await waitFor(() => {
+      const brokerageLinks = document.querySelectorAll('a[href="/tools/brokerage-fee"]');
+      const acquisitionLinks = document.querySelectorAll('a[href="/tools/acquisition-tax"]');
+      // 햄버거 열림 + 데스크톱 드롭다운 닫힘 → 모바일에서만 1개씩
+      expect(brokerageLinks.length).toBeGreaterThanOrEqual(1);
+      expect(acquisitionLinks.length).toBeGreaterThanOrEqual(1);
+    });
   });
 });

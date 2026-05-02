@@ -6,6 +6,7 @@ import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import AdminCard from "@/components/admin/AdminCard";
 import UserTable from "@/components/admin/UserTable";
+import UsersSummary from "@/components/admin/UsersSummary";
 import VerificationReview from "@/components/admin/VerificationReview";
 import { getAdminUsers, updateAdminUser, suspendAdminUser } from "@/lib/api";
 import type { UserProfile, UserUpdatePayload, PaginatedResponse } from "@/types/admin";
@@ -65,12 +66,12 @@ export default function AdminUsersPage() {
     <>
       <h2 className="text-lg font-semibold mb-4">사용자 관리</h2>
 
+      {token && <UsersSummary token={token} />}
+
       {/* 검증 심사 대기 */}
-      {token && (
-        <div className="mb-6">
-          <VerificationReview token={token} />
-        </div>
-      )}
+      <div id="verification-review" className="mb-6">
+        {token && <VerificationReview token={token} />}
+      </div>
 
       {/* 필터 */}
       <div className="mt-6">

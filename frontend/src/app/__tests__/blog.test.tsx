@@ -20,15 +20,20 @@ describe("/blog 목록 페이지", () => {
     });
   });
 
-  it("draft 4편은 '준비 중' 뱃지를 달고 비클릭, 정상 1편만 클릭 가능", () => {
+  it("draft 글은 '준비 중' 뱃지를 달고 비클릭, 발행 글만 클릭 가능", () => {
     render(<BlogIndexPage />);
-    // "준비 중" 뱃지 4개 (draft 4편)
-    expect(screen.getAllByText("준비 중").length).toBe(4);
-    // 정상 글(jeonse-ratio) 만 /blog/[slug] 로 링크됨
+    const draftCount = POSTS.filter((p) => p.draft).length;
+    const publishedCount = POSTS.filter((p) => !p.draft).length;
+    expect(screen.getAllByText("준비 중").length).toBe(draftCount);
+    // 발행 글만 /blog/[slug] 로 링크됨
     const links = screen.getAllByRole("link");
     const blogPostLinks = links.filter((a) => a.getAttribute("href")?.startsWith("/blog/"));
-    expect(blogPostLinks.length).toBe(1);
-    expect(blogPostLinks[0].getAttribute("href")).toBe("/blog/jeonse-ratio");
+    expect(blogPostLinks.length).toBe(publishedCount);
+    const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
+    const linkedSlugs = blogPostLinks
+      .map((a) => a.getAttribute("href")?.replace("/blog/", "") ?? "")
+      .sort();
+    expect(linkedSlugs).toEqual(publishedSlugs);
   });
 
   it("CTA 푸터가 /signup 으로 링크된다", () => {
@@ -40,13 +45,21 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS 5편 — slug 가 모두 unique 하고 jeonse-ratio 만 draft:false", () => {
+  it("POSTS — slug 가 모두 unique 하고 jeonse-ratio·realestate-calculators 가 발행", () => {
     expect(POSTS.length).toBe(5);
     const slugs = POSTS.map((p) => p.slug);
     expect(new Set(slugs).size).toBe(5);
-    const published = POSTS.filter((p) => !p.draft);
-    expect(published.length).toBe(1);
-    expect(published[0].slug).toBe("jeonse-ratio");
+    const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
+    expect(publishedSlugs).toEqual(["jeonse-ratio", "realestate-calculators"]);
+  });
+
+  it("realestate-calculators 메타 — 출시 톤, /tools/brokerage-fee 안내 키워드", () => {
+    const post = getPostBySlug("realestate-calculators");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("중개수수료");
+    expect(post?.description).toMatch(/중개수수료|출시/);
+    expect(post?.category).toBe("세금");
   });
 
   it("getPostBySlug — 존재 slug 반환, 미존재 slug 는 undefined", () => {

@@ -52,13 +52,12 @@ export const POSTS: BlogPost[] = [
   },
   {
     slug: "realestate-calculators",
-    title: "부동산 세금·금융 계산기 모음 (준비 중)",
+    title: "부동산 세금·금융 계산기 모음 — 1순위 중개수수료 출시",
     description:
-      "공인중개사가 자주 쓰는 부동산 계산기를 한곳에 모았습니다. 중개수수료·취득세·평·㎡ 변환·양도소득세 순으로 출시 예정.",
+      "공인중개사가 자주 쓰는 부동산 계산기. 중개수수료(출시), 취득세·평·㎡·양도세 순으로 출시. 핵심 함정과 사용 흐름을 정리합니다.",
     date: "2026-05-02",
     category: "세금",
-    readingTime: 3,
-    draft: true,
+    readingTime: 5,
   },
 ];
 

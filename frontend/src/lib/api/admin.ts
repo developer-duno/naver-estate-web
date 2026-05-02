@@ -226,6 +226,27 @@ export async function getAdminErrorStats(token: string, days: 7 | 14 | 30 = 14) 
   );
 }
 
+/** 유형(job_type)별 실패 분포 — 최근 N시간(기본 24h) */
+export interface CrawlFailureItem {
+  job_type: string;
+  count: number;
+  last_error: string | null;
+  last_failed_at: string | null;
+}
+
+export interface CrawlFailuresResponse {
+  window_hours: number;
+  total: number;
+  items: CrawlFailureItem[];
+}
+
+export async function getAdminCrawlFailures(token: string, hours: number = 24) {
+  return fetchApi<CrawlFailuresResponse>(
+    `/api/admin/crawl-failures?hours=${hours}`,
+    { headers: adminHeaders(token) },
+  );
+}
+
 export interface NaverCallWindowCounts {
   "10m": number;
   "1h": number;

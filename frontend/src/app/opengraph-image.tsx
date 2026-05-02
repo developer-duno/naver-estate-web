@@ -58,6 +58,9 @@ export default function OpengraphImage() {
         </div>
         <div
           style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
             fontSize: 40,
             fontWeight: 600,
             color: "#374151",
@@ -66,9 +69,8 @@ export default function OpengraphImage() {
             marginBottom: 24,
           }}
         >
-          공인중개사를 위한
-          <br />
-          부동산 매물·시세 분석 도구
+          <div style={{ display: "flex" }}>공인중개사를 위한</div>
+          <div style={{ display: "flex" }}>부동산 매물·시세 분석 도구</div>
         </div>
         <div
           style={{

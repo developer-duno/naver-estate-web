@@ -9,11 +9,13 @@ import type { CrawlJobDetail, PaginatedResponse } from "@/types/admin";
 
 interface Props {
   token: string;
+  /** 실패 N건 클릭 시 호출 — 부모에서 필터를 "failed" 로 바꾸고 작업 표로 스크롤 */
+  onJumpToFailed?: () => void;
 }
 
 const STATUSES = ["running", "pending", "failed"] as const;
 
-export default function CrawlSummary({ token }: Props) {
+export default function CrawlSummary({ token, onJumpToFailed }: Props) {
   const queries = useQueries({
     queries: STATUSES.map((status) => ({
       queryKey: queryKeys.admin.crawlJobs({ status }),
@@ -54,9 +56,20 @@ export default function CrawlSummary({ token }: Props) {
       <span className={pending > 10 ? "text-yellow-800 font-medium" : "text-gray-700"}>
         대기 {pending}
       </span>
-      <span className={failed > 0 ? "text-red-700 font-medium" : "text-gray-700"}>
-        실패 {failed}건 (전체 기간)
-      </span>
+      {failed > 0 && onJumpToFailed ? (
+        <button
+          type="button"
+          onClick={onJumpToFailed}
+          className="text-red-700 font-medium underline-offset-2 hover:underline cursor-pointer"
+          aria-label={`실패 ${failed}건 — 클릭 시 실패 작업만 표시`}
+        >
+          실패 {failed}건 (전체 기간) ↓
+        </button>
+      ) : (
+        <span className={failed > 0 ? "text-red-700 font-medium" : "text-gray-700"}>
+          실패 {failed}건 (전체 기간)
+        </span>
+      )}
     </div>
   );
 }

@@ -91,11 +91,19 @@ export default function AdminCrawlPage() {
     queryClient.invalidateQueries({ queryKey: queryKeys.admin.crawlJobs(params as Record<string, unknown>) });
   };
 
+  const handleJumpToFailed = () => {
+    setFilterStatus("failed");
+    setPage(1);
+    requestAnimationFrame(() => {
+      document.getElementById("crawl-jobs-list")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
   return (
     <>
       <h2 className="text-lg font-semibold mb-4">크롤링 관리</h2>
 
-      {token && <CrawlSummary token={token} />}
+      {token && <CrawlSummary token={token} onJumpToFailed={handleJumpToFailed} />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <SingleRecrawlCard getToken={getToken} />
@@ -135,7 +143,7 @@ export default function AdminCrawlPage() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mt-4">{error}</div>
       )}
 
-      <div className="mt-6">
+      <div id="crawl-jobs-list" className="mt-6 scroll-mt-4">
         <AdminCard
           title={`크롤 작업 목록 (총 ${jobsQuery.data?.total ?? 0}건)`}
           help="현재 큐에 등록된 크롤 작업. 실행 중/대기 상태에서 일시정지·취소 가능"

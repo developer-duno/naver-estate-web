@@ -3,7 +3,7 @@
  * 실행: npx vitest run src/components/admin/__tests__/CrawlSummary.test.tsx
  */
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 import CrawlSummary from "../CrawlSummary";
 import type { CrawlJobDetail, PaginatedResponse } from "@/types/admin";
@@ -71,5 +71,25 @@ describe("CrawlSummary", () => {
     const placeholder = container.querySelector("[aria-label='크롤 요약 로딩 중']");
     expect(placeholder).toBeTruthy();
     expect(placeholder?.className).toContain("animate-pulse");
+  });
+
+  it("failed > 0 + onJumpToFailed 제공 시 클릭하면 콜백 호출", async () => {
+    mockGet
+      .mockResolvedValueOnce(mkResponse(0))
+      .mockResolvedValueOnce(mkResponse(0))
+      .mockResolvedValueOnce(mkResponse(189));
+
+    const onJumpToFailed = vi.fn();
+    render(
+      <TestQueryProvider>
+        <CrawlSummary token="test-token" onJumpToFailed={onJumpToFailed} />
+      </TestQueryProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /실패 189건/ })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /실패 189건/ }));
+    expect(onJumpToFailed).toHaveBeenCalledTimes(1);
   });
 });

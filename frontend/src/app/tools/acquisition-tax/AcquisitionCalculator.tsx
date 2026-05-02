@@ -1,13 +1,78 @@
 "use client";
 
+import { useMemo, useState } from "react";
+import {
+  calculateAcquisitionTax,
+  DEFAULT_AREA_M2,
+  type AcquisitionInput,
+  type AcquisitionPropertyType,
+} from "@/lib/acquisition-tax";
+import AcquisitionInputs from "./AcquisitionInputs";
+import AcquisitionResultCard from "./AcquisitionResultCard";
+
 /**
- * 취득세 계산기 컨테이너 (Phase B-1 — placeholder).
- * Phase B-2에서 입력 폼 + 결과 카드 활성화 예정.
+ * 취득세 계산기 컨테이너.
+ * 생애최초 비활성 사유: 오피스텔(우선순위 1) > 12억 초과(2) > 다주택(3).
  */
 export default function AcquisitionCalculator() {
+  const [propertyType, setPropertyType] = useState<AcquisitionPropertyType>("house");
+  const [houses, setHouses] = useState<1 | 2 | 3>(1);
+  const [isRegulatedArea, setIsRegulatedArea] = useState(false);
+  const [isFirstTime, setIsFirstTime] = useState(false);
+  const [areaM2, setAreaM2] = useState<number>(DEFAULT_AREA_M2);
+  const [amountManwon, setAmountManwon] = useState(0);
+
+  const amountWon = amountManwon * 10_000;
+
+  const firstTimeDisabledReason: string | null =
+    propertyType === "officetel-commercial"
+      ? "오피스텔·상가는 생애최초 감면 대상이 아닙니다"
+      : amountWon > 1_200_000_000
+        ? "12억 초과 매물은 생애최초 감면 대상이 아닙니다"
+        : houses >= 2
+          ? "다주택자는 생애최초 감면 대상이 아닙니다"
+          : null;
+
+  const handleHousesChange = (next: 1 | 2 | 3) => {
+    setHouses(next);
+    if (next >= 2) setIsFirstTime(false);
+  };
+
+  const handlePropertyTypeChange = (next: AcquisitionPropertyType) => {
+    setPropertyType(next);
+    if (next === "officetel-commercial") setIsFirstTime(false);
+  };
+
+  const result = useMemo(() => {
+    const input: AcquisitionInput = {
+      amountWon,
+      propertyType,
+      houses,
+      isRegulatedArea,
+      isFirstTime: firstTimeDisabledReason ? false : isFirstTime,
+      area_m2: areaM2,
+    };
+    return calculateAcquisitionTax(input);
+  }, [amountWon, propertyType, houses, isRegulatedArea, isFirstTime, areaM2, firstTimeDisabledReason]);
+
   return (
-    <section className="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
-      입력 폼을 준비하고 있습니다.
-    </section>
+    <div className="space-y-4">
+      <AcquisitionInputs
+        propertyType={propertyType}
+        houses={houses}
+        isRegulatedArea={isRegulatedArea}
+        isFirstTime={isFirstTime}
+        areaM2={areaM2}
+        amountManwon={amountManwon}
+        firstTimeDisabledReason={firstTimeDisabledReason}
+        onPropertyTypeChange={handlePropertyTypeChange}
+        onHousesChange={handleHousesChange}
+        onIsRegulatedAreaChange={setIsRegulatedArea}
+        onIsFirstTimeChange={setIsFirstTime}
+        onAreaM2Change={setAreaM2}
+        onAmountChange={setAmountManwon}
+      />
+      <AcquisitionResultCard result={result} />
+    </div>
   );
 }

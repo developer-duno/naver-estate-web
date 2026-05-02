@@ -14,21 +14,25 @@ interface AdminCardProps {
 export default function AdminCard({ title, children, action, help }: AdminCardProps) {
   return (
     <div className="bg-white border rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
-          {title}
+      <div className="flex items-start justify-between mb-3 gap-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
+            {title}
+            {help && (
+              <span
+                role="img"
+                aria-label={help}
+                className="text-gray-400 text-xs select-none"
+              >
+                ⓘ
+              </span>
+            )}
+          </h3>
           {help && (
-            <span
-              role="img"
-              aria-label={help}
-              title={help}
-              className="text-gray-400 text-xs cursor-help select-none"
-            >
-              ⓘ
-            </span>
+            <p className="mt-1 text-xs text-gray-500 leading-snug">{help}</p>
           )}
-        </h3>
-        {action}
+        </div>
+        {action && <div className="shrink-0">{action}</div>}
       </div>
       {children}
     </div>

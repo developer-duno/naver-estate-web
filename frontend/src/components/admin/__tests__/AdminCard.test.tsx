@@ -43,8 +43,8 @@ describe("AdminCard", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  /** help prop: ⓘ 아이콘이 렌더되고 title 속성에 도움말이 들어감 */
-  it("help prop 이 있으면 ⓘ 아이콘 + title 툴팁 렌더", () => {
+  /** help prop: ⓘ 아이콘 + 항상 보이는 회색 캡션이 함께 렌더 */
+  it("help prop 이 있으면 ⓘ 아이콘 + 캡션 텍스트 항상 표시", () => {
     render(
       <AdminCard title="도움말 카드" help="이건 도움말 텍스트입니다">
         <p>body</p>
@@ -52,8 +52,9 @@ describe("AdminCard", () => {
     );
     const helpIcon = screen.getByRole("img", { name: "이건 도움말 텍스트입니다" });
     expect(helpIcon).toBeInTheDocument();
-    expect(helpIcon).toHaveAttribute("title", "이건 도움말 텍스트입니다");
     expect(helpIcon.textContent).toBe("ⓘ");
+    // 캡션이 항상 보이는 회색 텍스트로 함께 렌더 (hover 없이도 즉시 확인 가능)
+    expect(screen.getByText("이건 도움말 텍스트입니다")).toBeInTheDocument();
   });
 
   /** help 미지정: ⓘ 아이콘 미렌더 */

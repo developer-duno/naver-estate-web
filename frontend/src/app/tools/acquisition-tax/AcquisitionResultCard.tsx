@@ -2,6 +2,7 @@
 
 import type { AcquisitionResult } from "@/lib/acquisition-tax";
 import { fmt, pct } from "@/lib/acquisition-format";
+import AcquisitionNotices from "./AcquisitionNotices";
 
 interface Props {
   result: AcquisitionResult;
@@ -38,34 +39,7 @@ export default function AcquisitionResultCard({ result }: Props) {
         <span className="text-xs text-blue-700">실효 {pct(effectiveRate)}</span>
       </div>
 
-      {/* Phase B-2 임시: inline 텍스트 5종 박제. Phase B-3에서 <AcquisitionNotices notes={notes} /> 한 줄로 교체 */}
-      <div className="space-y-2">
-        {notes.includes("disclaimer") && (
-          <p className="text-xs text-gray-700">
-            취득세 과세표준 = 실거래가 (지방세법 제10조의3). 정확한 세액은 시·군·구청 또는 세무사 상담 권장.
-          </p>
-        )}
-        {notes.includes("multi-house-rural") && (
-          <p className="text-xs text-gray-700">
-            다주택 농특세는 8% 시 0.6%, 12% 시 1.0%로 표준 시(0.2%)보다 높습니다 (면적 무관).
-          </p>
-        )}
-        {notes.includes("first-time-base-only") && (
-          <p className="text-xs text-gray-700">
-            200만원 감면은 취득세 본세에만 적용. 농특세·교육세는 표준세율 그대로 부과됩니다.
-          </p>
-        )}
-        {notes.includes("area-85-exempt") && (
-          <p className="text-xs text-gray-700">
-            전용 85m² 이하 1주택은 농특세 비과세. 다주택 중과 시는 면적 무관 부과.
-          </p>
-        )}
-        {notes.includes("first-time-rejected") && (
-          <p className="text-xs text-amber-700">
-            12억 초과 매물은 생애최초 감면 대상이 아닙니다. 표준세율로 계산했습니다.
-          </p>
-        )}
-      </div>
+      <AcquisitionNotices notes={notes} />
     </section>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import type { CrawlJobDetail } from "@/types/admin";
+import { jobTypeLabel } from "@/lib/crawl-job-labels";
 
 interface Props {
   jobs: CrawlJobDetail[];
@@ -16,6 +17,15 @@ const STATUS_COLORS: Record<string, string> = {
   paused: "bg-amber-100 text-amber-700",
   failed: "bg-red-100 text-red-700",
   cancelled: "bg-gray-100 text-gray-500",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  completed: "완료",
+  running: "실행 중",
+  pending: "대기",
+  paused: "일시정지",
+  failed: "실패",
+  cancelled: "취소",
 };
 
 export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Props) {
@@ -37,11 +47,16 @@ export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Pro
           {jobs.map((j) => (
             <tr key={j.id} className="border-b hover:bg-gray-50">
               <td className="py-2 pr-3 text-gray-500">{j.id}</td>
-              <td className="py-2 pr-3">{j.job_type}</td>
+              <td className="py-2 pr-3">
+                <div className="flex flex-col">
+                  <span className="text-gray-800">{jobTypeLabel(j.job_type)}</span>
+                  <span className="text-[10px] text-gray-400">{j.job_type}</span>
+                </div>
+              </td>
               <td className="py-2 pr-3 text-xs text-gray-600 max-w-[120px] truncate select-text">{j.target_id || "-"}</td>
               <td className="py-2 pr-3">
                 <span className={`text-xs px-1.5 py-0.5 rounded ${STATUS_COLORS[j.status] || "bg-gray-100"}`}>
-                  {j.status}
+                  {STATUS_LABELS[j.status] || j.status}
                 </span>
               </td>
               <td className="py-2 pr-3 text-xs">

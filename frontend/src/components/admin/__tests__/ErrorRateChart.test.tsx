@@ -30,7 +30,7 @@ describe("ErrorRateChart 컴포넌트", () => {
   it("제목과 기간 토글 버튼이 렌더된다", () => {
     mockGet.mockResolvedValueOnce({ days: 14, rows: [] });
     renderWithProvider();
-    expect(screen.getByText("크롤 에러율 추이")).toBeInTheDocument();
+    expect(screen.getByText("날짜별 성공·실패 추이")).toBeInTheDocument();
     expect(screen.getByText("7일")).toBeInTheDocument();
     expect(screen.getByText("14일")).toBeInTheDocument();
     expect(screen.getByText("30일")).toBeInTheDocument();

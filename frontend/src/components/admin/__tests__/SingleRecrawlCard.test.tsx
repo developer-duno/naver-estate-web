@@ -29,7 +29,7 @@ describe("SingleRecrawlCard 컴포넌트", () => {
   /** 카드 제목 + 입력 필드가 렌더되는지 */
   it("제목과 입력 필드가 표시된다", () => {
     renderWithProvider();
-    expect(screen.getByText("단건 강제 재크롤")).toBeInTheDocument();
+    expect(screen.getByText("단지 1개 즉시 다시 수집")).toBeInTheDocument();
     expect(
       screen.getByPlaceholderText("단지번호 (예: 12345)"),
     ).toBeInTheDocument();

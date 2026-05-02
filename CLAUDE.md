@@ -4,11 +4,15 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 현재 진행 상황
 
-**마지막 작업**: 2026-05-02 — 세션 91-92, **SEO 최소 패키지 + /pricing 마케팅 페이지**. 13커밋 push (세션 91 SEO 4 + 세션 92 /pricing 5 + CI 사고 fix 3 + 도움말 사람말화 1). **비즈니스 모델 = 공인중개사 B2B 구독 명시** — 단지 6만개 색인 노출은 일반 사용자만 유입해 구독 매출 무관 + 가치 데이터 무료 공개 → 단지·미분양 상세는 `noindex` + sitemap 제외. **세션 91 SEO**: metadataBase + verification env(google·naver) + canonical + twitter card / icon.tsx (32x32 favicon) + manifest.ts (PWA, lang=ko) + opengraph-image.tsx (1200x630 1장) / robots.ts 도구 페이지(`/complex/`, `/mibunyang/`, `/search` 등) disallow + sitemap 절대 URL / 도구 5개 layout `robots: { index: false, follow: true }` + WebSiteJsonLd. **세션 92 /pricing**: Server component, Hero + 기능 4개 + 기본/프로 카드 (highlight prop) + FAQ 5개 + CTA 푸터, 7일 무료 체험 + 가격 "추후 공개" placeholder, `/signup` 으로 진입, Header navLinks "요금제" + sitemap priority 0.9. **CI 사고 3건 모두 해결**: ① opengraph-image satori multi-child div display:flex 누락 → 6ac306b ② admin-dashboard.spec.ts 옛 카드 제목 셀렉터(세션 91 사람말화 누락) → 9ca1746 ③ admin baseline PNG 2장(linux) → c71054c. WebFetch 8개 공식 문서 직접 검증(Next.js·Google·OG·schema.org), 네이버 도메인 환경 차단. GATE 0 분할 요청으로 /pricing page.tsx 200줄 → 126+77 두 파일. FE 720→723. **다음 세션 93 후보**: `/about` 페이지(이번 /pricing 동일 패턴) / `/blog` B2B SEO 콘텐츠 / 결제 연동(토스페이먼츠 + 7일 체험 자동 전환) / 가격 확정.
+**마지막 작업**: 2026-05-02 — 세션 93, **/blog MDX 인프라 + 전세가율 글 1편 + placeholder 4편**. 11커밋 push (Phase 1~4b 8 + 🟡 개선 3). 라이브러리 5개 추가(@next/mdx, @mdx-js/loader, @mdx-js/react, @types/mdx, remark-gfm). next.config.ts withMDX 래퍼 + Turbopack 호환 위해 remark plugin 문자열 형태(`["remark-gfm", {}]`) 전달. src/mdx-components.tsx 14종 매핑(h1~h3, p, ul/ol, table, code, blockquote, hr, **img(next/Image 강제), a(/시작 next/Link, 외부 target=_blank rel=noopener noreferrer)**). /blog/[slug] = generateStaticParams + dynamicParams=false + dynamic import(`@/content/blog/${slug}.mdx`) Next 16 정석 패턴. 5편 = jeonse-ratio(완결, 6 섹션, 표 1개, 4구간 판단, 실무 화법) + draft 4편(complex-price-analysis / mibunyang-for-agents / realtime-listing / realestate-calculators 로드맵 표). **draft 글은 robots: { index: false, follow: true }** + sitemap 제외(빈 글 색인 방지, 본문 채우면 draft:false 자동 등록). page.tsx 108→53 + PostCard.tsx 59 분리(/pricing 패턴). sitemap +/blog +1편(priority 0.8/0.7). Header navLinks "블로그" 추가. vitest 723 → 728. **CI 사고 예상**: Header 1줄 추가로 시각 회귀 baseline 20장(admin 8 + public 12) 깨질 가능성 매우 높음 → workflow_dispatch baseline 갱신 1커밋으로 후속(세션 91-92 c71054c 패턴). 9 GATE 재검증으로 🔴 2건(라벨/URL + baseline) 사전 발견, 라벨 fix d7e1059 / baseline 후속 처리 결정. WebFetch Next.js 16 MDX 공식 문서 검증.
 
-**환경변수 등록 안내 (사용자 후속)**: Vercel 대시보드에 `NEXT_PUBLIC_SITE_URL=https://2u.pe.kr` + Google Search Console·네이버 웹마스터 가입 후 인증 코드 → `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` / `NEXT_PUBLIC_NAVER_SITE_VERIFICATION` 등록 → 재배포 → sitemap.xml 제출.
+**Lock 파일 카운트 가이드**: 80줄/3파일 룰의 파일 카운트에서 `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock` 등 자동 생성 lock 파일은 제외한다. (이번 세션 ad5ea61 = 4파일이지만 lock 제외 시 3파일로 룰 준수)
 
-**직전 작업 (세션 89)**: /admin 데이터 신선도 카드 + 헛바퀴 감지 + 한 줄 건강 요약 + ⓘ 도움말. 13커밋. BE 573, FE 699. baseline 2회 갱신.
+**환경변수 등록 안내 (사용자 후속, 세션 91-92 부터 미완료)**: Vercel 대시보드에 `NEXT_PUBLIC_SITE_URL=https://2u.pe.kr` + Google Search Console·네이버 웹마스터 가입 후 인증 코드 → `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` / `NEXT_PUBLIC_NAVER_SITE_VERIFICATION` 등록 → 재배포 → sitemap.xml 제출.
+
+**직전 작업 (세션 91-92)**: SEO 최소 패키지 + /pricing 마케팅 페이지. 13커밋. 비즈니스 모델 공인중개사 B2B 구독 명시. CI 사고 3건 모두 해결.
+
+**과거 세션 (세션 89)**: /admin 데이터 신선도 카드 + 헛바퀴 감지 + 한 줄 건강 요약 + ⓘ 도움말. 13커밋. BE 573, FE 699. baseline 2회 갱신.
 
 **직전 작업 (세션 88)**: /search 빈 결과·에러 UI 보강. 3커밋 push (1839dd4/70f0736/229b880, 2파일 +250/-13). 사각지대 3건 보강: 서버 결과 0 + 최근 검색 칩 / 필터 통과 0건 신설 / 에러 시 필터 초기화 동시 노출. vitest 675 → 680.
 

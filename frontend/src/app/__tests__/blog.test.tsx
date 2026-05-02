@@ -46,10 +46,10 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 5편 (전체)", () => {
-    expect(POSTS.length).toBe(5);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 6편 (전체)", () => {
+    expect(POSTS.length).toBe(6);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(5);
+    expect(new Set(slugs).size).toBe(6);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
       "complex-price-analysis",
@@ -57,6 +57,7 @@ describe("blog/posts 메타데이터", () => {
       "mibunyang-for-agents",
       "realestate-calculators",
       "realtime-listing",
+      "transfer-tax-guide",
     ]);
   });
 
@@ -66,6 +67,15 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.draft).toBeUndefined();
     expect(post?.title).toContain("중개수수료");
     expect(post?.description).toMatch(/중개수수료|출시/);
+    expect(post?.category).toBe("세금");
+  });
+
+  it("transfer-tax-guide 메타 — 출시 톤, /tools/transfer-tax 안내 키워드", () => {
+    const post = getPostBySlug("transfer-tax-guide");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("양도소득세");
+    expect(post?.description).toMatch(/12억|중과|미등기/);
     expect(post?.category).toBe("세금");
   });
 

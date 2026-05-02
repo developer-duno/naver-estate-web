@@ -56,6 +56,15 @@ export const POSTS: BlogPost[] = [
     category: "세금",
     readingTime: 6,
   },
+  {
+    slug: "transfer-tax-guide",
+    title: "양도소득세 계산기 출시 — 13 필드·6 분기 자동 판정",
+    description:
+      "1세대1주택 비과세·12억 초과 안분·다주택 중과 한시배제·미등기 70%·장특공 표1/표2 모두 자동 분기. 9 권위 출처 교차검증.",
+    date: "2026-05-03",
+    category: "세금",
+    readingTime: 7,
+  },
 ];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {

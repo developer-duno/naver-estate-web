@@ -35,7 +35,12 @@
       "Bash(git check-ignore *)",
       "Bash(npm test *)",
       "Bash(python -c \"import yaml; yaml.safe_load\\(open\\('.github/workflows/ci.yml'\\)\\)\")",
-      "Bash(curl -sS http://localhost:3000)"
+      "Bash(curl -sS http://localhost:3000)",
+      "Bash(git -C f:/cursor/naver-estate-web status)",
+      "Bash(git -C f:/cursor/naver-estate-web diff --stat)",
+      "Bash(git -C f:/cursor/naver-estate-web log origin/main..HEAD --oneline)",
+      "Bash(git -C f:/cursor/naver-estate-web add frontend/src/content/blog/realestate-calculators.mdx)",
+      "Bash(git -C f:/cursor/naver-estate-web status --short)"
     ]
   }
 }

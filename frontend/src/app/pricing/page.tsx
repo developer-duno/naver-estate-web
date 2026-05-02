@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import PlanCards from "./PlanCards";
 
 export const metadata: Metadata = {
   title: "요금제",
@@ -44,26 +45,10 @@ export default function PricingPage() {
         <Feature icon="📥" title="엑셀 내보내기" desc="매물 목록·비교 결과를 엑셀로 즉시 다운로드 (수식 인젝션 방어)" />
       </section>
 
-      {/* 요금제 카드 — Phase 1b 에서 PlanCards 컴포넌트로 분리 예정 */}
+      {/* 요금제 카드 */}
       <section className="mb-12 sm:mb-16">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-900 text-center mb-6">요금제</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
-          <PlanCardPlaceholder
-            name="기본"
-            features={["단지 검색·매물 조회", "시세 조회", "필터 7종", "엑셀 내보내기"]}
-          />
-          <PlanCardPlaceholder
-            name="프로"
-            highlight
-            features={[
-              "기본 플랜 모든 기능",
-              "단지 비교 (최대 4개)",
-              "미분양 비교 + 레이더 차트",
-              "공공 실거래가 분석",
-              "우선 지원",
-            ]}
-          />
-        </div>
+        <PlanCards />
         <p className="text-xs text-gray-500 text-center mt-4">
           * 가격은 정식 출시와 함께 공개됩니다. 7일 무료 체험은 모든 플랜에 적용됩니다.
         </p>
@@ -139,50 +124,3 @@ function FAQItem({ q, a }: { q: string; a: string }) {
   );
 }
 
-// Phase 1b 에서 PlanCards.tsx 로 분리될 임시 placeholder
-function PlanCardPlaceholder({
-  name,
-  features,
-  highlight,
-}: {
-  name: string;
-  features: string[];
-  highlight?: boolean;
-}) {
-  return (
-    <div
-      className={`bg-white rounded-xl p-6 ${
-        highlight ? "border-2 border-blue-500 shadow-md relative" : "border border-gray-200"
-      }`}
-    >
-      {highlight && (
-        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-xs font-medium px-3 py-1 rounded-full">
-          인기
-        </span>
-      )}
-      <h3 className="text-lg font-bold text-gray-900 mb-1">{name}</h3>
-      <p className="text-2xl font-bold text-gray-900 mb-1">
-        ₩ <span className="text-gray-400">추후 공개</span>
-      </p>
-      <p className="text-xs text-gray-500 mb-4">/ 월</p>
-      <ul className="space-y-2 mb-6">
-        {features.map((f) => (
-          <li key={f} className="flex items-start gap-2 text-sm text-gray-700">
-            <span className="text-blue-600 mt-0.5" aria-hidden>
-              ✓
-            </span>
-            <span>{f}</span>
-          </li>
-        ))}
-      </ul>
-      <Link
-        href="/signup"
-        className={`block w-full text-center font-medium text-sm py-2.5 rounded-lg transition ${
-          highlight ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-800"
-        }`}
-      >
-        무료 체험 시작
-      </Link>
-    </div>
-  );
-}

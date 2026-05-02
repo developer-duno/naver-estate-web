@@ -51,7 +51,10 @@ export default function SingleRecrawlCard({ getToken }: Props) {
   const displayError = clientError ?? runMut.error?.message;
 
   return (
-    <AdminCard title="단건 강제 재크롤">
+    <AdminCard
+      title="단건 강제 재크롤"
+      help="특정 단지번호를 입력해 즉시 재크롤. 1시간 내 중복 이력은 force 체크박스로 우회"
+    >
       <div className="flex flex-col sm:flex-row gap-2 mb-2">
         <input
           type="text"

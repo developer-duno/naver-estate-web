@@ -72,7 +72,11 @@ export default function ErrorRateChart({ getToken }: Props) {
   );
 
   return (
-    <AdminCard title="크롤 에러율 추이" action={daysToggle}>
+    <AdminCard
+      title="크롤 에러율 추이"
+      help="최근 N일 status 분포 (KST 기준 일자별). running/pending 제외, 최종 상태만 표시"
+      action={daysToggle}
+    >
       {isLoading && (
         <div className="h-[240px] bg-gray-100 animate-pulse rounded" />
       )}

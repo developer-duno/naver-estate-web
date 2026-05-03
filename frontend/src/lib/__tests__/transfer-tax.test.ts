@@ -116,6 +116,7 @@ describe("calculateTransferTax — 도메인 15 케이스 (plan v1.8 매트릭�
     expect(r.branch).toBe("general");
     expect(r.totalTax).toBe(341_250_000);
     expect(r.appliedRate).toBeCloseTo(0.70);
+    expect(r.notes).toContain("short-term-70"); // R11 회귀 가드
   });
 
   it("#4 1주택 단기 60% (보유 1.5y) → 292,500,000원", () => {
@@ -125,6 +126,7 @@ describe("calculateTransferTax — 도메인 15 케이스 (plan v1.8 매트릭�
     });
     expect(r.branch).toBe("general");
     expect(r.totalTax).toBe(292_500_000);
+    expect(r.notes).toContain("short-term-60"); // R11 회귀 가드
   });
 
   it("#5 한시배제 적용 (양도일 ≤ 2026-05-09) → 표1 적용 223,830,000원", () => {
@@ -137,6 +139,7 @@ describe("calculateTransferTax — 도메인 15 케이스 (plan v1.8 매트릭�
     expect(r.branch).toBe("general");
     expect(r.totalTax).toBe(223_830_000);
     expect(r.appliedTable).toBe("table1");
+    expect(r.appliedRate).toBeCloseTo(0.42); // R12 회귀 가드 (taxBase 618.5M → 42% 구간)
   });
 
   it("#6 다주택 중과 +20%p (양도일 > 2026-05-09, 2주택) → 390,310,000원 (장특공 0)", () => {
@@ -149,6 +152,7 @@ describe("calculateTransferTax — 도메인 15 케이스 (plan v1.8 매트릭�
     expect(r.branch).toBe("general");
     expect(r.longTermDeduction).toBe(0);
     expect(r.totalTax).toBe(390_310_000);
+    expect(r.notes).toContain("multi-heavy-applied"); // R11 회귀 가드
   });
 
   it("#7 다주택 중과 +30%p (3주택) → 675,060,000원", () => {
@@ -179,6 +183,8 @@ describe("calculateTransferTax — 도메인 15 케이스 (plan v1.8 매트릭�
     });
     expect(r.branch).toBe("general");
     expect(r.totalTax).toBe(149_460_000);
+    expect(r.appliedRate).toBeCloseTo(0.40); // R12 회귀 가드 (taxBase 438.5M → 40% 구간)
+    expect(r.notes).toContain("single-house-fail-live"); // R14 회귀 가드 (dead notes 활성화)
   });
 
   it("#10 양도차손 → loss → 0", () => {
@@ -197,6 +203,7 @@ describe("calculateTransferTax — 도메인 15 케이스 (plan v1.8 매트릭�
     });
     expect(r.branch).toBe("unregistered");
     expect(r.totalTax).toBe(343_000_000);
+    expect(r.notes).toContain("unregistered-70"); // R11 회귀 가드
   });
 
   it("#12 1주택 보유 1.99y (비과세 라인 탈락) → 단기60% 292,500,000원", () => {
@@ -216,6 +223,7 @@ describe("calculateTransferTax — 도메인 15 케이스 (plan v1.8 매트릭�
     });
     expect(r.branch).toBe("general");
     expect(r.totalTax).toBe(378_810_000);
+    expect(r.appliedRate).toBeCloseTo(0.42); // R12 회귀 가드 (taxBase 987.5M → 42% 구간)
   });
 
   it("#14 미등기 + 다주택 → unregistered 우선 343,000,000원", () => {
@@ -236,6 +244,15 @@ describe("calculateTransferTax — 도메인 15 케이스 (plan v1.8 매트릭�
     });
     expect(r.branch).toBe("single-house-exempt");
     expect(r.totalTax).toBe(0);
+  });
+
+  it("#16 R14 신규: 1주택 보유 1.5y (보유 미달) → single-house-fail-hold notes 활성화", () => {
+    const r = calculateTransferTax({
+      ...base, transferWon: 1_000_000_000, acquisitionWon: 500_000_000, expensesWon: 10_000_000,
+      holdYears: 1.5, livedYears: 0, houses: 1,
+    });
+    expect(r.branch).toBe("general");
+    expect(r.notes).toContain("single-house-fail-hold"); // R14 회귀 가드 (dead notes 활성화)
   });
 });
 

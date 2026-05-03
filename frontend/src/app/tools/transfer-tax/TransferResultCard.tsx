@@ -7,6 +7,17 @@ interface Props {
   result: TransferResult;
 }
 
+// R11: 본세 라벨에 사유 prefix (미등기/단기/중과 구분, 누진 일반은 R12 fix 후 정확 rate)
+function formatBaseTaxLabel(result: TransferResult): string {
+  const ratePct = (result.appliedRate * 100).toFixed(1).replace(/\.0$/, "");
+  if (result.branch === "unregistered") return `본세 (미등기 ${ratePct}%)`;
+  if (result.notes.includes("short-term-70") || result.notes.includes("short-term-60")) {
+    return `본세 (단기 ${ratePct}%)`;
+  }
+  if (result.notes.includes("multi-heavy-applied")) return `본세 (중과 ${ratePct}%)`;
+  return `본세 (${ratePct}%)`;
+}
+
 const BRANCH_TEXT: Record<TransferResult["branch"], { color: string; label: string }> = {
   "empty": { color: "gray", label: "입력값이 부족합니다 (양도가액·취득가액 필요)" },
   "loss": { color: "gray", label: "양도차손 발생, 산출세액 0원" },
@@ -43,7 +54,7 @@ export default function TransferResultCard({ result }: Props) {
               <tr><td className="py-1.5 text-gray-600">양도차익</td><td className="py-1.5 text-right">{result.gain.toLocaleString()}원</td></tr>
               <tr><td className="py-1.5 text-gray-600">장기보유공제 ({APPLIED_TABLE_LABEL[result.appliedTable]})</td><td className="py-1.5 text-right">{result.longTermDeduction.toLocaleString()}원</td></tr>
               <tr><td className="py-1.5 text-gray-600">과세표준</td><td className="py-1.5 text-right">{result.taxBase.toLocaleString()}원</td></tr>
-              <tr><td className="py-1.5 text-gray-600">본세 ({(result.appliedRate * 100).toFixed(1)}%)</td><td className="py-1.5 text-right">{result.baseTax.toLocaleString()}원</td></tr>
+              <tr><td className="py-1.5 text-gray-600">{formatBaseTaxLabel(result)}</td><td className="py-1.5 text-right">{result.baseTax.toLocaleString()}원</td></tr>
             </tbody>
           </table>
           <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-3 text-center">

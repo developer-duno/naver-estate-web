@@ -78,11 +78,13 @@ export function generalBranch(input: TransferInput, gain: number, shortRate: num
     notes.push(heavyAddRate > 0 ? "multi-heavy-applied" : "multi-heavy-suspended");
   }
   if (baseTax > 0) notes.push("local-income-tax");
+  // R12: 누진 일반 케이스 progressiveRate fallback (singleHouseProrateBranch L51 패턴 답습).
+  const progressiveRate = PROGRESSIVE_BRACKETS.find((b) => taxBase <= b.max)?.rate ?? 0;
   return buildResult({
     branch: "general", gain, taxableGain: gain, longTermDeduction, taxBase,
     baseTax, surchargeTax: heavyAddRate > 0 ? surchargeTax : 0, totalTax: baseTax,
     appliedTable: longTermDeduction > 0 ? "table1" : "none",
-    appliedRate: shortRate > 0 ? shortRate : (heavyAddRate > 0 ? heavyAddRate : 0),
+    appliedRate: shortRate > 0 ? shortRate : (heavyAddRate > 0 ? heavyAddRate : 0) || progressiveRate,
     notes,
   });
 }

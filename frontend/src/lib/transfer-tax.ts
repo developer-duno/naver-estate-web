@@ -4,7 +4,7 @@
  * UI는 만원→원 변환 후 호출. 모든 금액은 원(KRW) 단위.
  */
 
-import { type TransferInput, type TransferResult, EMPTY_RESULT } from "./transfer-tax-types";
+import { type TransferInput, type TransferResult, type TransferNoticeKey, EMPTY_RESULT } from "./transfer-tax-types";
 import {
   SHORT_TERM_UNDER_1Y, SHORT_TERM_1Y_TO_2Y,
   HEAVY_RATE_2_HOUSES, HEAVY_RATE_3_HOUSES,
@@ -81,5 +81,14 @@ export function calculateTransferTax(input: TransferInput): TransferResult {
   // GATE 3: 일반 (단기 + 중과 + 장특공 표1 + 누진).
   const shortRate = computeShortTermRate(input.holdYears);
   const heavyAddRate = computeHeavyRate(input);
-  return generalBranch(input, gain, shortRate, heavyAddRate);
+  const result = generalBranch(input, gain, shortRate, heavyAddRate);
+
+  // R14: 1주택 비과세 폴백 사유 notes 활성화 (dead code 제거).
+  if (input.houses === 1) {
+    let failNote: TransferNoticeKey | null = null;
+    if (input.holdYears < 2) failNote = "single-house-fail-hold";
+    else if (input.isRegulatedAtAcquisition && input.livedYears < 2) failNote = "single-house-fail-live";
+    if (failNote) return { ...result, notes: [...result.notes, failNote] };
+  }
+  return result;
 }

@@ -364,3 +364,90 @@ export function clearComplexNote(complexNo: string): void {
   delete notes[complexNo];
   try { localStorage.setItem(COMPLEX_NOTES_KEY, JSON.stringify(notes)); } catch { /* quota */ }
 }
+
+// ── 매물 메모 (매물별 손님 응대 메모, localStorage) ──
+
+const ARTICLE_NOTES_KEY = "article_notes";
+export const ARTICLE_NOTE_MAX_LEN = 500;       // 매물당 글자 한도
+export const ARTICLE_NOTES_MAX_COUNT = 1000;   // 매물 메모 최대 개수 (5MB localStorage 가드)
+
+export interface ArticleNote {
+  text: string;
+  updated_at: number;
+}
+
+export type ArticleNotesMap = Record<string, ArticleNote>;
+
+export function getArticleNotes(): ArticleNotesMap {
+  return readJSON<ArticleNotesMap>(ARTICLE_NOTES_KEY, {});
+}
+
+export function getArticleNote(articleNo: string): string {
+  return getArticleNotes()[articleNo]?.text ?? "";
+}
+
+/** 매물 메모 저장 — trim 후 빈 값이면 자동 삭제, 500자 초과는 잘림, 1000개 초과 시 가장 오래된 메모 1건 정리 */
+export function setArticleNote(articleNo: string, rawText: string): void {
+  const trimmed = rawText.trim().slice(0, ARTICLE_NOTE_MAX_LEN);
+  const notes = getArticleNotes();
+  if (trimmed.length === 0) {
+    delete notes[articleNo];
+    try { localStorage.setItem(ARTICLE_NOTES_KEY, JSON.stringify(notes)); } catch { /* quota */ }
+    return;
+  }
+  notes[articleNo] = { text: trimmed, updated_at: Date.now() };
+  const entries = Object.entries(notes);
+  if (entries.length > ARTICLE_NOTES_MAX_COUNT) {
+    entries.sort(([, a], [, b]) => a.updated_at - b.updated_at);
+    const toRemove = entries.length - ARTICLE_NOTES_MAX_COUNT;
+    for (let i = 0; i < toRemove; i++) delete notes[entries[i][0]];
+  }
+  try {
+    localStorage.setItem(ARTICLE_NOTES_KEY, JSON.stringify(notes));
+  } catch (err) {
+    if (typeof window !== "undefined" && err instanceof Error) {
+      console.warn(`[ArticleNotes] Failed to save: ${err.message}`);
+    }
+  }
+}
+
+export function clearArticleNote(articleNo: string): void {
+  const notes = getArticleNotes();
+  delete notes[articleNo];
+  try { localStorage.setItem(ARTICLE_NOTES_KEY, JSON.stringify(notes)); } catch { /* quota */ }
+}
+
+// ── 매물 즐겨찾기 (localStorage) ──
+
+const FAVORITE_ARTICLES_KEY = "favorite_articles";
+
+export interface FavoriteArticle {
+  article_no: string;
+  complex_no: string;
+  complex_name?: string;
+  trade_type_name?: string;
+  price?: string;
+  added_at: number;
+}
+
+export function getFavoriteArticles(): FavoriteArticle[] {
+  return readJSON<FavoriteArticle[]>(FAVORITE_ARTICLES_KEY, []);
+}
+
+export function isArticleFavorite(articleNo: string): boolean {
+  return getFavoriteArticles().some((f) => f.article_no === articleNo);
+}
+
+/** 토글 — 추가되면 true, 제거되면 false */
+export function toggleFavoriteArticle(article: Omit<FavoriteArticle, "added_at">): boolean {
+  const favorites = getFavoriteArticles();
+  const idx = favorites.findIndex((f) => f.article_no === article.article_no);
+  if (idx >= 0) {
+    favorites.splice(idx, 1);
+    localStorage.setItem(FAVORITE_ARTICLES_KEY, JSON.stringify(favorites));
+    return false;
+  }
+  favorites.unshift({ ...article, added_at: Date.now() });
+  localStorage.setItem(FAVORITE_ARTICLES_KEY, JSON.stringify(favorites));
+  return true;
+}

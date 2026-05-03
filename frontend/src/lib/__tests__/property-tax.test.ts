@@ -145,6 +145,56 @@ describe("실효세율", () => {
   });
 });
 
+describe("B-3 공동명의 (ownershipRatio)", () => {
+  // 케이스 #B3-1: ratio=1.0 → no-op (기존 산식과 동일)
+  it("ratio=1.0 (또는 미입력) → 기존 산식과 동일 (no-op)", () => {
+    const baseR = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: true,
+    }));
+    const ratioR = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: true, ownershipRatio: 1,
+    }));
+    expect(ratioR.grandTotal).toBe(baseR.grandTotal);
+    expect(ratioR.notes).not.toContain("ownership-applied");
+  });
+
+  // 케이스 #B3-2: ratio=0.5 → 종부세 진입값 절반 → 종부세 만 영향 + warning notice
+  it("ratio=0.5 + 1세대1주택 → 종부세 진입값 절반 + ownership-single-house-warning", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: true, ownershipRatio: 0.5,
+    }));
+    // effectivePublished = 15억 × 0.5 = 7.5억 < 12억 공제 → 종부세 0
+    expect(r.comprehensiveTax).toBe(0);
+    expect(r.branch).toBe("below-threshold");
+    expect(r.notes).toContain("ownership-applied");
+    expect(r.notes).toContain("ownership-single-house-warning");
+  });
+
+  // 케이스 #B3-3: 재산세는 ratio 영향 없음
+  it("재산세는 ownershipRatio 영향 없음 (사용자 입력 = 본인 지분 공시가 가정)", () => {
+    const baseR = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: true,
+    }));
+    const ratioR = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: true, ownershipRatio: 0.3,
+    }));
+    expect(ratioR.propertyTax).toBe(baseR.propertyTax);
+    expect(ratioR.appliedRate.property).toBe(baseR.appliedRate.property);
+  });
+
+  // 케이스 #B3-4: ratio=0.01 극단값 → 종부세 ≈ 0
+  it("ratio=0.01 극단값 → 종부세 ≈ 0 (effectivePublished 0.15억, 공제 미만)", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 2, isSingleHouseEligible: false, ownershipRatio: 0.01,
+    }));
+    // effectivePublished = 15억 × 0.01 = 0.15억 < 9억 공제 → 종부세 0
+    expect(r.comprehensiveTax).toBe(0);
+    expect(r.branch).toBe("below-threshold");
+    expect(r.notes).toContain("ownership-applied");
+    expect(r.notes).not.toContain("ownership-single-house-warning"); // single-house 자격 X
+  });
+});
+
 describe("B-2 합산배제 (excludedHouses)", () => {
   // 케이스 #B2-1: excluded=0 → 기존 #4 (multi-house) 와 동일 (no-op 확증)
   it("excluded=0 → 기존 산식과 동일 (no-op)", () => {

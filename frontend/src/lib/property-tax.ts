@@ -57,6 +57,14 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   const isSingleComprehensive = input.isSingleHouseEligible && effectiveHouses === 1; // 종부세 1주택 공제
   if (excludedHouses > 0) notes.push("exclusion-applied");
 
+  // B-3 공동명의: ratio 는 종부세 진입값 (effectivePublished) 에만 적용. 재산세는 영향 없음 (사용자 입력 = 본인 지분 공시가 가정).
+  const ownershipRatio = input.ownershipRatio ?? 1;
+  const effectivePublished = input.publishedPriceWon * ownershipRatio;
+  if (ownershipRatio < 1) {
+    notes.push("ownership-applied");
+    if (input.isSingleHouseEligible) notes.push("ownership-single-house-warning");
+  }
+
   // ===== 1단계: 재산세 (지방세법 §111) =====
   const propertyTaxBase = Math.floor(input.publishedPriceWon * FAIR_MARKET_RATIO);
   const propertyBrackets = isSingleProperty ? PROPERTY_TAX_BRACKETS_SINGLE : PROPERTY_TAX_BRACKETS_GENERAL;
@@ -68,7 +76,7 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   const comprehensiveDeduction = isSingleComprehensive ? SINGLE_HOUSE_DEDUCTION : GENERAL_DEDUCTION;
   notes.push(isSingleComprehensive ? "single-house-deduction-12e" : "general-deduction-9e");
 
-  const afterDeduction = Math.max(0, input.publishedPriceWon - comprehensiveDeduction);
+  const afterDeduction = Math.max(0, effectivePublished - comprehensiveDeduction);
   const comprehensiveTaxBase = Math.floor(afterDeduction * FAIR_MARKET_RATIO);
 
   // 종부세 과세표준 0 = 공제 미만 (납부 의무 없음)

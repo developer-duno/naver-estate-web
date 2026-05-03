@@ -83,6 +83,18 @@ const NOTICE_MESSAGES: Record<PropertyTaxNoticeKey, { title: string; body: strin
     body:
       "종부세법 §8③ / 시행령 §3 — 임대등록·종교/사원용·주택신축용 등 합산배제 신청 주택은 종부세 산정에서 제외. 입력하신 합산배제 주택 수 만큼 빼고 종부세 산정 (재산세는 영향 없음).",
   },
+  "ownership-applied": {
+    tone: "info",
+    title: "공동명의 본인 지분 반영",
+    body:
+      "종부세법 §9 (인별 과세) — 공동명의 시 본인 지분만큼만 종부세 산정. 입력하신 공시가격에 지분 비율을 곱한 값을 종부세 산정 기준으로 사용 (재산세는 본인 지분이 별도 고지되므로 입력값 그대로 사용).",
+  },
+  "ownership-single-house-warning": {
+    tone: "warn",
+    title: "⚠ 공동명의 + 1세대1주택 자격 — 명의자별 독립 자격 충족 필요",
+    body:
+      "공동명의 12억 공제 + 연령/보유 세액공제는 각 명의자가 독립적으로 1세대1주택 자격을 충족할 때만 받을 수 있습니다. 부부 공동명의는 보통 가능하나 가족·지인 공동명의는 자격 요건 까다로움. 세무사 상담 권장.",
+  },
   "consult-experts": {
     tone: "warn",
     title: "세무사 상담 권장",

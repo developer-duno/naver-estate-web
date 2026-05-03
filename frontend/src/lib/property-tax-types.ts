@@ -25,6 +25,8 @@ export type PropertyTaxNoticeKey =
   | "tax-burden-cap-150"          // 세부담 상한 150% 가드 (전년도 미입력 시)
   | "tax-burden-cap-applied"      // 세부담 상한 150% 자동 적용됨 (전년도 입력 시)
   | "exclusion-applied"           // 합산배제 신청 주택 N채 → effectiveHouses 산정 (B-2)
+  | "ownership-applied"           // 공동명의 본인 지분 N% → 종부세 본인 몫 산정 (B-3)
+  | "ownership-single-house-warning" // 공동명의+1세대1주택자 — 명의자별 독립 1주택 자격 충족 필요 안내 (B-3)
   | "consult-experts";            // 세무사 상담 권장
 
 export interface PropertyTaxInput {

@@ -96,8 +96,33 @@ describe("PropertyTaxResultCard 분기별 라벨 (4분기 × 누진세율 표기
     expect(screen.getByText(/종부세 \(공제 미만\)/)).toBeInTheDocument();
   });
 
-  it("세부담 상한 150% 미반영 황색 박스 항상 표시 (empty 제외)", () => {
-    render(<PropertyTaxResultCard result={buildTestResult({})} />);
+  it("세부담 상한 150% 미반영 안내 — Notices 통해 표시 (notes 에 키 포함 시)", () => {
+    // 황색 박스는 ResultCard 본체에서 빠지고 Notices 컴포넌트로 위임됨
+    render(<PropertyTaxResultCard result={buildTestResult({
+      notes: ["disclaimer", "tax-burden-cap-150"],
+    })} />);
     expect(screen.getByText(/세부담 상한 150% 미반영/)).toBeInTheDocument();
+  });
+
+  it("wasCapped=true → 총 부담 박스에 'cap 적용' + 원본 표시", () => {
+    render(<PropertyTaxResultCard result={buildTestResult({
+      branch: "single-house",
+      grandTotal: 1_500_000,
+      uncappedGrandTotal: 5_000_000,
+      wasCapped: true,
+      notes: ["disclaimer", "tax-burden-cap-applied"],
+    })} />);
+    expect(screen.getByText(/세부담 상한 150% cap 적용/)).toBeInTheDocument();
+    expect(screen.getByText(/5,000,000원/)).toBeInTheDocument(); // 원본
+  });
+
+  it("wasCapped=false → 'cap 적용' 표시 미렌더 (cap 발동 안 함)", () => {
+    render(<PropertyTaxResultCard result={buildTestResult({
+      branch: "single-house",
+      grandTotal: 1_000_000,
+      uncappedGrandTotal: 1_000_000,
+      wasCapped: false,
+    })} />);
+    expect(screen.queryByText(/세부담 상한 150% cap 적용/)).not.toBeInTheDocument();
   });
 });

@@ -6,12 +6,14 @@ interface Props {
   isSingleHouseEligible: boolean;
   ageYears: number;
   holdYears: number;
+  prevYearTaxManwon: number;
 
   onPublishedManwonChange: (v: number) => void;
   onHousesChange: (v: 1 | 2 | 3) => void;
   onIsSingleHouseEligibleChange: (v: boolean) => void;
   onAgeYearsChange: (v: number) => void;
   onHoldYearsChange: (v: number) => void;
+  onPrevYearTaxManwonChange: (v: number) => void;
 }
 
 const INPUT_CLASS =
@@ -21,9 +23,9 @@ const RADIO_LABEL_CLASS =
 
 export default function PropertyTaxInputs(props: Props) {
   const {
-    publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears,
+    publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon,
     onPublishedManwonChange, onHousesChange, onIsSingleHouseEligibleChange,
-    onAgeYearsChange, onHoldYearsChange,
+    onAgeYearsChange, onHoldYearsChange, onPrevYearTaxManwonChange,
   } = props;
 
   const singleActive = isSingleHouseEligible && houses === 1;
@@ -137,6 +139,26 @@ export default function PropertyTaxInputs(props: Props) {
           <strong>다주택자 또는 1세대1주택 미적용:</strong> 연령·보유 세액공제 없음 (1세대1주택자에게만 적용).
         </div>
       )}
+
+      <div>
+        <label htmlFor="prevYearTaxManwon" className="block text-sm font-medium text-gray-700 mb-1.5">
+          전년도 보유세 합계 (만원, 선택)
+        </label>
+        <input
+          id="prevYearTaxManwon"
+          type="number"
+          inputMode="numeric"
+          autoComplete="off"
+          min={0}
+          value={prevYearTaxManwon || ""}
+          onChange={(e) => onPrevYearTaxManwonChange(Number(e.target.value) || 0)}
+          placeholder="예: 200 (200만원 = 작년 재산세+종부세 합계)"
+          className={INPUT_CLASS}
+        />
+        <p className="mt-1 text-xs text-gray-500">
+          입력하시면 지방세법 §122 의 <strong>세부담 상한 150% cap</strong>이 자동 적용됩니다 (올해 세금이 작년의 1.5배를 넘지 않도록 자동 제한). 비워두면 cap 미적용.
+        </p>
+      </div>
     </section>
   );
 }

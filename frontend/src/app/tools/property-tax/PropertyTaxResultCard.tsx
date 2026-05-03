@@ -83,10 +83,12 @@ export default function PropertyTaxResultCard({ result }: Props) {
             <div className="text-2xl font-bold text-blue-900">
               {result.grandTotal.toLocaleString()}원
             </div>
-          </div>
-          <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-900">
-            ⚠️ <strong>세부담 상한 150% 미반영:</strong> 지방세법 §122 에 따라 전년 대비 150% 초과분은
-            자동 캡 적용되나 본 계산기는 단순 산출세액만 표시합니다.
+            {result.wasCapped && (
+              <div className="mt-1 text-xs text-blue-700">
+                ✓ 세부담 상한 150% cap 적용 (cap 적용 전 원본:{" "}
+                <span className="font-semibold">{result.uncappedGrandTotal.toLocaleString()}원</span>)
+              </div>
+            )}
           </div>
           <PropertyTaxNotices notes={result.notes} />
         </>

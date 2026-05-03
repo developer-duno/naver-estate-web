@@ -55,7 +55,7 @@ export default function PropertyTaxCalculator() {
         onOwnershipPercentChange={setOwnershipPercent}
         onIsCorporationChange={setIsCorporation}
       />
-      <PropertyTaxResultCard result={result} />
+      <PropertyTaxResultCard result={result} excludedHouses={excludedHouses} ownershipPercent={ownershipPercent} />
     </div>
   );
 }

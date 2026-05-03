@@ -5,6 +5,8 @@ import PropertyTaxNotices from "./PropertyTaxNotices";
 
 interface Props {
   result: PropertyTaxResult;
+  excludedHouses?: number;
+  ownershipPercent?: number;
 }
 
 // 누진세율 라벨 — 0 일 때 "(공제 미만)" 인라인, R12 답습 (`|| 0` fallback NaN 방지)
@@ -32,11 +34,13 @@ const COLOR_CLASS: Record<string, string> = {
   amber: "bg-amber-50 border-amber-200 text-amber-900",
 };
 
-export default function PropertyTaxResultCard({ result }: Props) {
+export default function PropertyTaxResultCard({ result, excludedHouses, ownershipPercent }: Props) {
   const branchInfo = BRANCH_TEXT[result.branch];
   const empty = result.branch === "empty";
   const showRural = result.ruralTax > 0;
   const showCredit = result.comprehensiveTaxCredit > 0;
+  const showExcluded = !empty && (excludedHouses ?? 0) > 0;
+  const showOwnership = !empty && ownershipPercent !== undefined && ownershipPercent > 0 && ownershipPercent < 100;
 
   return (
     <section
@@ -46,6 +50,12 @@ export default function PropertyTaxResultCard({ result }: Props) {
       <div className={`rounded-md border px-3 py-2 text-sm ${COLOR_CLASS[branchInfo.color]}`}>
         <strong>분기:</strong> {branchInfo.label}
       </div>
+      {(showExcluded || showOwnership) && (
+        <div className="text-xs text-gray-600 space-y-0.5">
+          {showExcluded && <div>합산배제 신청: 제외 {excludedHouses}주택</div>}
+          {showOwnership && <div>공동명의 본인 지분: {ownershipPercent}%</div>}
+        </div>
+      )}
       {!empty && (
         <>
           <table className="w-full text-sm">

@@ -9,7 +9,7 @@ const NOTICE_MESSAGES: Record<PropertyTaxNoticeKey, { title: string; body: strin
     tone: "info",
     title: "면책 안내",
     body:
-      "본 계산기는 표준 기준 참고치입니다. 공동명의·합산배제·임대등록·종교/사원용·법인 누진은 미반영. 정확한 세액은 세무사 상담 권장.",
+      "본 계산기는 표준 기준 참고치입니다. v2 에서 합산배제·공동명의·법인 단일세율 반영. 향교/종교 별도 가산, 1주택 일부 구간 공정시장가액비율 43~45% 추가 인하 등 일부 특례는 여전히 미반영. 정확한 세액은 세무사 상담 권장.",
   },
   "single-house-special-rate": {
     tone: "info",
@@ -111,7 +111,7 @@ const NOTICE_MESSAGES: Record<PropertyTaxNoticeKey, { title: string; body: strin
     tone: "warn",
     title: "세무사 상담 권장",
     body:
-      "공동명의(지분별 별도 합산)·합산배제 신청 주택(임대등록·종교용·사원용·주택신축용 등)·법인 누진세율 적용 케이스는 본 계산기 범위 밖입니다. 세무사·국세청 상담 필요.",
+      "v2 에서 합산배제·공동명의·법인 단일세율을 반영했지만, 합산배제 자격 요건 자동 검증·향교/종교 가산·1주택 공정시장가액비율 43~45% 추가 인하 등은 본 계산기 범위 밖입니다. 세무사·국세청 상담 필요.",
   },
 };
 

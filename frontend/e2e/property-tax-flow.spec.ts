@@ -100,3 +100,45 @@ test("multi-house (공시 30억 + 3주택+) → 다주택 9억 공제 + 25억 �
   // 세부담 상한 150% 황색 박스 항상 표시 (empty 제외)
   await expect(page.getByText(/세부담 상한 150% 미반영/).first()).toBeVisible();
 });
+
+// ── 케이스 7: B-2 합산배제 (3주택 중 1채 임대) ──
+// PropertyTaxAdvancedFields details/summary 펼친 후 합산배제 select 1 선택
+test("B-2 합산배제 (3주택 중 1채 임대) → exclusion-applied notice + effectiveHouses 반영", async ({ page }) => {
+  await page.goto("/tools/property-tax");
+  await fillBaseInputs(page, { publishedManwon: 300_000, houses: 3 });
+  // 고급 옵션 details 펼치기
+  await page.getByText(/고급 옵션.*합산배제.*공동명의.*법인/).click();
+  // 합산배제 select 1채 선택
+  await page.getByLabel(/합산배제 신청 주택 수/).selectOption("1");
+  // Notices 라벨 (고유 단어 "합산배제 신청 주택 반영")
+  await expect(page.getByText(/합산배제 신청 주택 반영/)).toBeVisible();
+});
+
+// ── 케이스 8: B-3 공동명의 (1세대1주택 + 50%) ──
+// ownership input 50 입력 시 종부세 7.5억 < 12억 공제 → 종부세 0
+test("B-3 공동명의 (1세대1주택 + 50%) → ownership-applied + warning notice", async ({ page }) => {
+  await page.goto("/tools/property-tax");
+  await fillBaseInputs(page, {
+    publishedManwon: 150_000, houses: 1, isSingleHouseEligible: true,
+  });
+  await page.getByText(/고급 옵션.*합산배제.*공동명의.*법인/).click();
+  // ownership 50% 입력
+  await page.getByLabel(/공동명의 본인 지분/).fill("50");
+  // Notices 라벨 (고유 단어 "공동명의 본인 지분 반영")
+  await expect(page.getByText(/공동명의 본인 지분 반영/)).toBeVisible();
+  // single-house-warning 도 표시
+  await expect(page.getByText(/공동명의.*1세대1주택 자격.*명의자별 독립 자격/)).toBeVisible();
+});
+
+// ── 케이스 9: B-4 법인 (2주택 단일세율 2.7%) ──
+test("B-4 법인 (2주택 단일세율) → corporation 분기 + 단일세율 라벨", async ({ page }) => {
+  await page.goto("/tools/property-tax");
+  await fillBaseInputs(page, { publishedManwon: 150_000, houses: 2 });
+  await page.getByText(/고급 옵션.*합산배제.*공동명의.*법인/).click();
+  // 법인 토글 켜기 (Advanced 영역 안의 체크박스)
+  await page.getByRole("checkbox", { name: /법인 보유.*단일세율.*공제.*차단/ }).check();
+  // ResultCard BRANCH_TEXT["corporation"] 라벨 (strict mode prefix "분기:" 한정)
+  await expect(page.getByText(/분기: 법인 보유.*단일세율 2\.7%.*5\.0%.*공제 없음/)).toBeVisible();
+  // Notices "법인 단일세율 적용"
+  await expect(page.getByText(/법인 단일세율 적용/)).toBeVisible();
+});

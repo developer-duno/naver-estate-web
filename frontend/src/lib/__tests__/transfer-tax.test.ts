@@ -105,6 +105,7 @@ describe("calculateTransferTax — 도메인 15 케이스 (plan v1.8 매트릭�
     expect(r.taxBase).toBe(75_900_000);
     expect(r.totalTax).toBe(12_456_000);
     expect(r.appliedTable).toBe("table2");
+    expect(r.appliedRate).toBe(0.24);
   });
 
   it("#3 1주택 단기 70% (보유 0.5y) → 341,250,000원", () => {

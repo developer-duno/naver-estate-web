@@ -9,6 +9,7 @@ import {
 } from "./transfer-tax-types";
 import {
   applyProgressive, computeTable1Deduction, computeTable2Deduction,
+  PROGRESSIVE_BRACKETS,
   SHORT_TERM_UNDER_1Y, SHORT_TERM_1Y_TO_2Y,
   HIGH_VALUE_THRESHOLD, BASIC_DEDUCTION,
 } from "./transfer-brackets";
@@ -47,9 +48,10 @@ export function singleHouseProrateBranch(input: TransferInput, gain: number): Tr
   const longTermDeduction = computeTable2Deduction(input.holdYears, input.livedYears, taxableGain);
   const taxBase = Math.max(0, taxableGain - longTermDeduction - BASIC_DEDUCTION);
   const baseTax = Math.floor(applyProgressive(taxBase));
+  const appliedRate = PROGRESSIVE_BRACKETS.find((b) => taxBase <= b.max)?.rate ?? 0;
   return buildResult({
     branch: "single-house-prorate", gain, taxableGain, longTermDeduction, taxBase,
-    baseTax, totalTax: baseTax, appliedTable: "table2",
+    baseTax, totalTax: baseTax, appliedTable: "table2", appliedRate,
     notes: ["disclaimer", "single-house-prorate", "local-income-tax"],
   });
 }

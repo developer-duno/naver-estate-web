@@ -310,3 +310,57 @@ export function saveMbRadarSettings(settings: MbRadarSettings): void {
 export function clearMbRadarSettings(): void {
   localStorage.removeItem(MB_RADAR_SETTINGS_KEY);
 }
+
+// ── 단지 메모 (손님별 단지 메모, localStorage) ──
+
+const COMPLEX_NOTES_KEY = "complex_notes";
+export const COMPLEX_NOTE_MAX_LEN = 500;       // 단지당 글자 한도
+export const COMPLEX_NOTES_MAX_COUNT = 1000;   // 단지 메모 최대 개수 (5MB localStorage 가드)
+
+export interface ComplexNote {
+  text: string;
+  updated_at: number;
+}
+
+export type ComplexNotesMap = Record<string, ComplexNote>;
+
+export function getComplexNotes(): ComplexNotesMap {
+  return readJSON<ComplexNotesMap>(COMPLEX_NOTES_KEY, {});
+}
+
+export function getComplexNote(complexNo: string): string {
+  const notes = getComplexNotes();
+  return notes[complexNo]?.text ?? "";
+}
+
+/** 단지 메모 저장 — trim 후 빈 값이면 자동 삭제, 500자 초과는 잘림, 1000개 초과 시 가장 오래된 메모 1건 정리 */
+export function setComplexNote(complexNo: string, rawText: string): void {
+  const trimmed = rawText.trim().slice(0, COMPLEX_NOTE_MAX_LEN);
+  const notes = getComplexNotes();
+  if (trimmed.length === 0) {
+    delete notes[complexNo];
+    try { localStorage.setItem(COMPLEX_NOTES_KEY, JSON.stringify(notes)); } catch { /* quota */ }
+    return;
+  }
+  notes[complexNo] = { text: trimmed, updated_at: Date.now() };
+  // 1000개 초과 시 가장 오래된 메모 정리
+  const entries = Object.entries(notes);
+  if (entries.length > COMPLEX_NOTES_MAX_COUNT) {
+    entries.sort(([, a], [, b]) => a.updated_at - b.updated_at);
+    const toRemove = entries.length - COMPLEX_NOTES_MAX_COUNT;
+    for (let i = 0; i < toRemove; i++) delete notes[entries[i][0]];
+  }
+  try {
+    localStorage.setItem(COMPLEX_NOTES_KEY, JSON.stringify(notes));
+  } catch (err) {
+    if (typeof window !== "undefined" && err instanceof Error) {
+      console.warn(`[ComplexNotes] Failed to save: ${err.message}`);
+    }
+  }
+}
+
+export function clearComplexNote(complexNo: string): void {
+  const notes = getComplexNotes();
+  delete notes[complexNo];
+  try { localStorage.setItem(COMPLEX_NOTES_KEY, JSON.stringify(notes)); } catch { /* quota */ }
+}

@@ -8,6 +8,7 @@ interface Props {
   holdYears: number;
   prevYearTaxManwon: number;
   excludedHouses: number;
+  ownershipPercent: number;
 
   onPublishedManwonChange: (v: number) => void;
   onHousesChange: (v: 1 | 2 | 3) => void;
@@ -16,6 +17,7 @@ interface Props {
   onHoldYearsChange: (v: number) => void;
   onPrevYearTaxManwonChange: (v: number) => void;
   onExcludedHousesChange: (v: number) => void;
+  onOwnershipPercentChange: (v: number) => void;
 }
 
 const INPUT_CLASS =
@@ -25,9 +27,9 @@ const RADIO_LABEL_CLASS =
 
 export default function PropertyTaxInputs(props: Props) {
   const {
-    publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses,
+    publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent,
     onPublishedManwonChange, onHousesChange, onIsSingleHouseEligibleChange,
-    onAgeYearsChange, onHoldYearsChange, onPrevYearTaxManwonChange, onExcludedHousesChange,
+    onAgeYearsChange, onHoldYearsChange, onPrevYearTaxManwonChange, onExcludedHousesChange, onOwnershipPercentChange,
   } = props;
 
   const singleActive = isSingleHouseEligible && houses === 1;
@@ -119,6 +121,28 @@ export default function PropertyTaxInputs(props: Props) {
           </p>
         </div>
       )}
+
+      <div>
+        <label htmlFor="ownershipPercent" className="block text-sm font-medium text-gray-700 mb-1.5">
+          공동명의 본인 지분 (%, 선택)
+        </label>
+        <input
+          id="ownershipPercent"
+          type="number"
+          inputMode="decimal"
+          autoComplete="off"
+          min={1}
+          max={100}
+          step={1}
+          value={ownershipPercent || ""}
+          onChange={(e) => onOwnershipPercentChange(Number(e.target.value) || 0)}
+          placeholder="예: 50 (부부 공동명의 50%) — 비워두면 100%"
+          className={INPUT_CLASS}
+        />
+        <p className="mt-1 text-xs text-gray-500">
+          종부세법 §9 (인별 과세) — 입력하신 공시가격은 <strong>본인 지분 공시가</strong>로 가정합니다. 본인 지분 % 만큼 종부세 산정에 적용 (재산세는 영향 없음). 부부 공동명의 50% → 보통 각자 1세대1주택 12억 공제 가능.
+        </p>
+      </div>
 
       {singleActive ? (
         <>

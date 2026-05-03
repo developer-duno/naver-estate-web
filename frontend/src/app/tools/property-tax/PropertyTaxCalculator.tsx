@@ -14,6 +14,7 @@ export default function PropertyTaxCalculator() {
   const [holdYears, setHoldYears] = useState(0);
   const [prevYearTaxManwon, setPrevYearTaxManwon] = useState(0);
   const [excludedHouses, setExcludedHouses] = useState(0);
+  const [ownershipPercent, setOwnershipPercent] = useState(0);
 
   const result = useMemo(() => {
     const single = isSingleHouseEligible && houses === 1;
@@ -25,9 +26,10 @@ export default function PropertyTaxCalculator() {
       holdYears: single ? holdYears : 0,
       prevYearTax: prevYearTaxManwon > 0 ? prevYearTaxManwon * 10_000 : undefined,
       excludedHouses,
+      ownershipRatio: ownershipPercent > 0 && ownershipPercent <= 100 ? ownershipPercent / 100 : 1,
     };
     return calculatePropertyTax(input);
-  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses]);
+  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent]);
 
   return (
     <div className="space-y-4">
@@ -39,6 +41,7 @@ export default function PropertyTaxCalculator() {
         holdYears={holdYears}
         prevYearTaxManwon={prevYearTaxManwon}
         excludedHouses={excludedHouses}
+        ownershipPercent={ownershipPercent}
         onPublishedManwonChange={setPublishedManwon}
         onHousesChange={setHouses}
         onIsSingleHouseEligibleChange={setIsSingleHouseEligible}
@@ -46,6 +49,7 @@ export default function PropertyTaxCalculator() {
         onHoldYearsChange={setHoldYears}
         onPrevYearTaxManwonChange={setPrevYearTaxManwon}
         onExcludedHousesChange={setExcludedHouses}
+        onOwnershipPercentChange={setOwnershipPercent}
       />
       <PropertyTaxResultCard result={result} />
     </div>

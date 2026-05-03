@@ -46,27 +46,37 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 6편 (전체)", () => {
-    expect(POSTS.length).toBe(6);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 7편 (전체)", () => {
+    expect(POSTS.length).toBe(7);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(6);
+    expect(new Set(slugs).size).toBe(7);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
       "complex-price-analysis",
       "jeonse-ratio",
       "mibunyang-for-agents",
+      "property-tax-guide",
       "realestate-calculators",
       "realtime-listing",
       "transfer-tax-guide",
     ]);
   });
 
-  it("realestate-calculators 메타 — 4종 출시 완료 톤", () => {
+  it("realestate-calculators 메타 — 5종 출시 완료 톤", () => {
     const post = getPostBySlug("realestate-calculators");
     expect(post).toBeDefined();
     expect(post?.draft).toBeUndefined();
     expect(post?.title).toContain("계산기");
-    expect(post?.description).toMatch(/4종|출시 완료/);
+    expect(post?.description).toMatch(/5종|출시 완료/);
+    expect(post?.category).toBe("세금");
+  });
+
+  it("property-tax-guide 메타 — 출시 톤, 보유세 키워드", () => {
+    const post = getPostBySlug("property-tax-guide");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("보유세");
+    expect(post?.description).toMatch(/12억|9억|농특세|중과/);
     expect(post?.category).toBe("세금");
   });
 

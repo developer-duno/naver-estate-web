@@ -49,12 +49,12 @@ export const POSTS: BlogPost[] = [
   },
   {
     slug: "realestate-calculators",
-    title: "부동산 세금·금융 계산기 모음 — 4종 출시 완료",
+    title: "부동산 세금·금융 계산기 모음 — 5종 출시 완료",
     description:
-      "공인중개사가 자주 쓰는 부동산 계산기 4종 (중개수수료·취득세·평·㎡ 변환·양도소득세) 모두 출시 완료. 핵심 함정과 사용 흐름을 정리합니다.",
-    date: "2026-05-03",
+      "공인중개사가 자주 쓰는 부동산 계산기 5종 (중개수수료·취득세·평·㎡ 변환·양도소득세·보유세) 모두 출시 완료. 핵심 함정과 사용 흐름을 정리합니다.",
+    date: "2026-05-04",
     category: "세금",
-    readingTime: 7,
+    readingTime: 8,
   },
   {
     slug: "transfer-tax-guide",
@@ -64,6 +64,15 @@ export const POSTS: BlogPost[] = [
     date: "2026-05-03",
     category: "세금",
     readingTime: 7,
+  },
+  {
+    slug: "property-tax-guide",
+    title: "보유세 계산기 출시 — 재산세 + 종부세 5 필드 4 분기 자동 판정",
+    description:
+      "1세대1주택 12억 공제·연령/보유 세액공제·다주택 9억 공제·3주택 25억 초과 중과·농특세 20% 모두 자동 분기. 국세청 PDF 16개 권위 출처 100% 정확값.",
+    date: "2026-05-04",
+    category: "세금",
+    readingTime: 8,
   },
 ];
 

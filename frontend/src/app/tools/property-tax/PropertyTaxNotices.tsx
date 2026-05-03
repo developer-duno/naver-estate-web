@@ -77,6 +77,12 @@ const NOTICE_MESSAGES: Record<PropertyTaxNoticeKey, { title: string; body: strin
     body:
       "지방세법 §122 — 전년도 보유세 입력값 기준으로 150% cap 적용. 산출 합계가 cap 을 넘으면 cap 으로 제한됩니다. 결과 표 하단의 'cap 적용' 표시로 실제 발동 여부 확인 가능.",
   },
+  "exclusion-applied": {
+    tone: "info",
+    title: "합산배제 신청 주택 반영",
+    body:
+      "종부세법 §8③ / 시행령 §3 — 임대등록·종교/사원용·주택신축용 등 합산배제 신청 주택은 종부세 산정에서 제외. 입력하신 합산배제 주택 수 만큼 빼고 종부세 산정 (재산세는 영향 없음).",
+  },
   "consult-experts": {
     tone: "warn",
     title: "세무사 상담 권장",

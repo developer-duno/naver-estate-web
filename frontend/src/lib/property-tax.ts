@@ -50,18 +50,23 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   const input = normalizeInput(rawInput);
 
   const notes: PropertyTaxNoticeKey[] = ["disclaimer", "fair-market-ratio-60"];
-  const isSingle = input.isSingleHouseEligible && input.houses === 1;
+  // B-2 합산배제: effectiveHouses = 종부세 산정용 실효 주택 수 (재산세는 houses 그대로)
+  const excludedHouses = input.excludedHouses ?? 0;
+  const effectiveHouses = Math.max(0, input.houses - excludedHouses);
+  const isSingleProperty = input.isSingleHouseEligible && input.houses === 1;       // 재산세 1주택 특례
+  const isSingleComprehensive = input.isSingleHouseEligible && effectiveHouses === 1; // 종부세 1주택 공제
+  if (excludedHouses > 0) notes.push("exclusion-applied");
 
   // ===== 1단계: 재산세 (지방세법 §111) =====
   const propertyTaxBase = Math.floor(input.publishedPriceWon * FAIR_MARKET_RATIO);
-  const propertyBrackets = isSingle ? PROPERTY_TAX_BRACKETS_SINGLE : PROPERTY_TAX_BRACKETS_GENERAL;
+  const propertyBrackets = isSingleProperty ? PROPERTY_TAX_BRACKETS_SINGLE : PROPERTY_TAX_BRACKETS_GENERAL;
   const propertyResult = applyBracket(propertyTaxBase, propertyBrackets);
   const propertyTax = Math.floor(propertyResult.tax);
-  if (isSingle) notes.push("single-house-special-rate");
+  if (isSingleProperty) notes.push("single-house-special-rate");
 
   // ===== 2단계: 종합부동산세 (종부세법 §8 §9) =====
-  const comprehensiveDeduction = isSingle ? SINGLE_HOUSE_DEDUCTION : GENERAL_DEDUCTION;
-  notes.push(isSingle ? "single-house-deduction-12e" : "general-deduction-9e");
+  const comprehensiveDeduction = isSingleComprehensive ? SINGLE_HOUSE_DEDUCTION : GENERAL_DEDUCTION;
+  notes.push(isSingleComprehensive ? "single-house-deduction-12e" : "general-deduction-9e");
 
   const afterDeduction = Math.max(0, input.publishedPriceWon - comprehensiveDeduction);
   const comprehensiveTaxBase = Math.floor(afterDeduction * FAIR_MARKET_RATIO);
@@ -87,16 +92,17 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
     };
   }
 
-  const comprehensiveBrackets = input.houses >= 3 ? COMPREHENSIVE_BRACKETS_3 : COMPREHENSIVE_BRACKETS_2;
+  // B-2 합산배제: BRACKETS 선택은 effectiveHouses 기준
+  const comprehensiveBrackets = effectiveHouses >= 3 ? COMPREHENSIVE_BRACKETS_3 : COMPREHENSIVE_BRACKETS_2;
   const compResult = applyBracket(comprehensiveTaxBase, comprehensiveBrackets);
   const comprehensiveTaxBeforeDeduction = Math.floor(compResult.tax);
 
-  // 3주택+ 25억 초과 중과 안내
-  if (input.houses >= 3 && comprehensiveTaxBase > 1_200_000_000) notes.push("multi-heavy-25e");
+  // 3주택+ 25억 초과 중과 안내 (effectiveHouses 기준)
+  if (effectiveHouses >= 3 && comprehensiveTaxBase > 1_200_000_000) notes.push("multi-heavy-25e");
 
   // ===== 3단계: 1세대1주택 세액공제 (연령 + 보유, 한도 80%) =====
   let comprehensiveTaxCredit = 0;
-  if (isSingle) {
+  if (isSingleComprehensive) {
     const creditRate = totalCreditRate(input.ageYears, input.holdYears);
     comprehensiveTaxCredit = Math.floor(comprehensiveTaxBeforeDeduction * creditRate);
     if (input.ageYears >= 60) notes.push("age-deduction-eligible");
@@ -115,7 +121,7 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   notes.push("consult-experts");
 
   return {
-    branch: isSingle ? "single-house" : "multi-house",
+    branch: isSingleComprehensive ? "single-house" : "multi-house",
     propertyTaxBase, propertyTax,
     comprehensiveDeduction, comprehensiveTaxBase,
     comprehensiveTaxBeforeDeduction, comprehensiveTaxCredit, comprehensiveTax,

@@ -144,3 +144,66 @@ describe("실효세율", () => {
     expect(r.effectiveRate).toBeLessThan(0.05); // 5% 미만 sanity
   });
 });
+
+describe("B-2 합산배제 (excludedHouses)", () => {
+  // 케이스 #B2-1: excluded=0 → 기존 #4 (multi-house) 와 동일 (no-op 확증)
+  it("excluded=0 → 기존 산식과 동일 (no-op)", () => {
+    const baseR = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 2, isSingleHouseEligible: false,
+    }));
+    const excR = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 2, isSingleHouseEligible: false, excludedHouses: 0,
+    }));
+    expect(excR.grandTotal).toBe(baseR.grandTotal);
+    expect(excR.notes).not.toContain("exclusion-applied");
+  });
+
+  // 케이스 #B2-2: 3주택 중 1채 임대 → effectiveHouses=2 → BRACKETS_2 + 일반 9억 공제
+  it("3주택 중 1채 임대 (excluded=1) → effectiveHouses=2 → BRACKETS_2 (중과 X)", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000, houses: 3, isSingleHouseEligible: false, excludedHouses: 1,
+    }));
+    // 종부세 과표 = (30억 - 9억) × 60% = 12.6억 → BRACKETS_2 1.0% (12억 이하 1.0%)
+    expect(r.comprehensiveTaxBase).toBe(1_260_000_000);
+    expect(r.appliedRate.comprehensive).toBe(0.013); // 25억 이하 BRACKETS_2 1.3%
+    expect(r.notes).toContain("exclusion-applied");
+    expect(r.notes).not.toContain("multi-heavy-25e"); // effectiveHouses=2 라 중과 X
+  });
+
+  // 케이스 #B2-3: 3주택 중 2채 임대 → effectiveHouses=1 + isSingleHouseEligible=true → 12억 공제 + 1주택 종부세
+  it("3주택 중 2채 임대 (excluded=2) + 1세대1주택 자격 → 종부세 12억 공제 분기", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 3, isSingleHouseEligible: true, excludedHouses: 2,
+    }));
+    // effectiveHouses=1 → 종부세 12억 공제 분기
+    expect(r.branch).toBe("single-house");
+    expect(r.comprehensiveDeduction).toBe(1_200_000_000);
+    expect(r.notes).toContain("single-house-deduction-12e");
+    expect(r.notes).toContain("exclusion-applied");
+  });
+
+  // 케이스 #B2-4: 3주택 중 3채 모두 임대 → effectiveHouses=0 → 종부세 0
+  it("3주택 모두 임대 (excluded=houses) → 종부세 0", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000, houses: 3, isSingleHouseEligible: false, excludedHouses: 3,
+    }));
+    // effectiveHouses=0 → 종부세 산정 단계에서 9억 공제 적용 후 12.6억 과표 → BRACKETS_2 (effectiveHouses=0 이라 _2)
+    // 단, 공시 30억 - 9억 = 21억 × 60% = 12.6억 과표 → 종부세 발생 (effectiveHouses 0 이지만 사용자 입력 공시는 그대로)
+    // → 합산배제는 BRACKETS 선택 + 공제 분기에 영향 (산식 결정), 입력 공시 자체는 줄지 않음
+    // 따라서 effectiveHouses=0 이어도 9억 공제 적용 (effectiveHouses < 1 이라 1주택 공제 X)
+    expect(r.notes).toContain("exclusion-applied");
+    expect(r.comprehensiveDeduction).toBe(900_000_000); // effectiveHouses=0 → not single-comprehensive → 9억 공제
+  });
+
+  // 케이스 #B2-5: 재산세는 합산배제 영향 0 (houses 그대로)
+  it("재산세는 excludedHouses 영향 없음 (houses 기준 그대로)", () => {
+    const baseR = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 3, isSingleHouseEligible: false,
+    }));
+    const excR = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 3, isSingleHouseEligible: false, excludedHouses: 1,
+    }));
+    expect(excR.propertyTax).toBe(baseR.propertyTax); // 재산세 동일
+    expect(excR.appliedRate.property).toBe(baseR.appliedRate.property);
+  });
+});

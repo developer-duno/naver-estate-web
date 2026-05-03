@@ -24,7 +24,7 @@ export default function ComplexNoteButton({ complexNo }: Props) {
     return () => window.clearTimeout(id);
   }, [open, note]);
 
-  // ESC 닫기 + Tab 순환 (focus trap: textarea ↔ 닫기 버튼)
+  // ESC 닫기 (포커스 트랩 미적용 — textarea + 버튼 3~4개라 native Tab order 로 충분)
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {

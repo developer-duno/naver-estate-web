@@ -20,6 +20,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${baseUrl}/tools/brokerage-fee`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${baseUrl}/tools/acquisition-tax`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${baseUrl}/tools/transfer-tax`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${baseUrl}/tools/property-tax`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${baseUrl}/tools/area-converter`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
     { url: `${baseUrl}/blog`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
     ...publishedPosts,

@@ -22,6 +22,20 @@ vi.mock("@/lib/api", () => ({
   }),
 }));
 
+// jsdom 에 window.matchMedia 미존재 — ChartAccordion mount 시 throw 방지 polyfill
+if (typeof window !== "undefined" && !window.matchMedia) {
+  window.matchMedia = (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  });
+}
+
 let ArticleDetail: any;
 beforeEach(async () => {
   vi.resetModules();
@@ -87,5 +101,32 @@ describe("ArticleDetail", () => {
     render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
     // 컴포넌트가 크래시 없이 렌더링됨을 확인
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+// 세션 105: 헤더에 즐겨찾기/메모 버튼 통합 회귀 가드
+describe("ArticleDetail — 헤더 즐겨찾기·메모 버튼", () => {
+  it("매물 로드 후 ☆ 즐겨찾기 버튼 렌더", async () => {
+    const onClose = vi.fn();
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
+    await waitFor(() => {
+      expect(screen.getByLabelText("매물 즐겨찾기 추가")).toBeInTheDocument();
+    }, { timeout: 3000 });
+  });
+
+  it("매물 로드 후 📄 메모 버튼 렌더", async () => {
+    const onClose = vi.fn();
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
+    await waitFor(() => {
+      expect(screen.getByLabelText("매물 메모 추가")).toBeInTheDocument();
+    }, { timeout: 3000 });
+  });
+
+  it("로딩 중(article 미정) 시 즐겨찾기·메모 버튼 미렌더", () => {
+    const onClose = vi.fn();
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
+    // 로딩 직후엔 article 데이터가 아직 없어 두 버튼 모두 렌더되지 않아야 함
+    expect(screen.queryByLabelText("매물 즐겨찾기 추가")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("매물 메모 추가")).not.toBeInTheDocument();
   });
 });

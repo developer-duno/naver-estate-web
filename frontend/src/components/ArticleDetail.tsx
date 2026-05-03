@@ -14,6 +14,8 @@ import InfoCards from "@/components/article/InfoCards";
 import MaintenanceCost from "@/components/article/MaintenanceCost";
 import ArticleDescription from "@/components/article/ArticleDescription";
 import PriceHistoryTable from "@/components/article/PriceHistoryTable";
+import ArticleNoteButton from "@/components/ArticleNoteButton";
+import ArticleFavoriteButton from "@/components/ArticleFavoriteButton";
 
 interface Props {
   articleNo: string;
@@ -64,11 +66,25 @@ export default function ArticleDetail({ articleNo, onClose, complex }: Props) {
         className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden mx-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center px-6 py-4 border-b">
-          <h2 id="article-detail-title" className="text-lg font-bold">
+        <div className="flex justify-between items-center gap-2 px-6 py-4 border-b">
+          <h2 id="article-detail-title" className="text-lg font-bold truncate min-w-0">
             매물 상세{article?.complex_name ? ` — ${article.complex_name}` : ""}
           </h2>
-          <button onClick={onClose} aria-label="닫기" className="text-gray-400 hover:text-gray-600 text-xl no-print">×</button>
+          <div className="flex items-center gap-1 shrink-0 no-print">
+            {article && (
+              <>
+                <ArticleFavoriteButton
+                  articleNo={articleNo}
+                  complexNo={article.complex_no}
+                  complexName={article.complex_name}
+                  tradeTypeName={article.trade_type_name}
+                  price={article.deal_or_warrant_prc}
+                />
+                <ArticleNoteButton articleNo={articleNo} />
+              </>
+            )}
+            <button onClick={onClose} aria-label="닫기" className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+          </div>
         </div>
 
         <div className="overflow-y-auto p-6 max-h-[calc(90vh-64px)]">

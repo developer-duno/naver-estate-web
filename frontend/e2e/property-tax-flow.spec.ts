@@ -81,7 +81,8 @@ test("single-house (공시 15억 + 1세대1주택 + 70세 + 15년) → 세액공
     ageYears: 70,
     holdYears: 15,
   });
-  await expect(page.getByText(/1세대1주택자.*공제 12억/)).toBeVisible();
+  // strict mode 회피: "분기:" prefix 로 ResultCard 분기 라벨만 한정 (세션 100 답습)
+  await expect(page.getByText(/분기: 1세대1주택자.*공제 12억/)).toBeVisible();
   await expect(page.getByText(/세액공제 \(연령\+보유\)/)).toBeVisible();
   // 농특세 행 표시 (ruralTax > 0)
   await expect(page.getByText(/농특세 \(종부세 × 20%\)/)).toBeVisible();

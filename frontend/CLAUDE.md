@@ -44,6 +44,9 @@ frontend/src/
 | `useMbCompareHistory` | 미분양 비교 히스토리 (localStorage, 최대 10개, 자동 저장, ids 정렬 중복 제거) |
 | `useMbCompareBookmarks` | 미분양 비교 북마크 (localStorage, 최대 20개, 수동 저장, 이름 지정, isBookmarked) |
 | `useMbRadarSettings` | 레이더 차트 설정 영속화 (localStorage, 축 선택+가중치 1-5, toggleAxis/setWeight/applyPreset/reset) |
+| `useComplexNote` | 단지 메모 (localStorage, 단지당 500자, 1000개 한도 자동 정리) |
+| `useArticleNote` | 매물 메모 (localStorage, 매물당 500자, 1000개 한도 자동 정리) |
+| `useArticleFavorites` | 매물 즐겨찾기 (localStorage, useArticleFavoriteStatus 포함, 무제한 토글) |
 
 ## FilterBar 구조 (모듈 분리)
 
@@ -221,11 +224,14 @@ components/mb/
 - 즐겨찾기 탭: hasRegion 바이패스 (탭바 항상 표시, 즐겨찾기만 지역 불필요)
 - `MB_SORT_OPTIONS` (constants.ts): 7개 정렬 옵션
 
-### localStorage 키 (storage.ts, 총 7개)
+### localStorage 키 (storage.ts, 총 10개)
 | 키 | 용도 | 제한 |
 |---|---|---|
 | `search_history` | 최근 검색 (키워드/지역) | 최대 10개 |
 | `favorite_complexes` | 즐겨찾기 단지 | 무제한 |
+| `complex_notes` | 단지 메모 (손님 응대용) | 단지당 500자, 1000개 자동 정리 |
+| `article_notes` | 매물 메모 (손님 응대용) | 매물당 500자, 1000개 자동 정리 |
+| `favorite_articles` | 매물 즐겨찾기 | 무제한, 토글 방식 |
 | `mb_favorites` | 미분양 즐겨찾기 | 최대 200개 |
 | `mb_search_history` | 미분양 검색 히스토리 | 최대 10개 |
 | `mb_compare_history` | 미분양 비교 히스토리 (자동) | 최대 10개, ids 정렬 중복 제거 |

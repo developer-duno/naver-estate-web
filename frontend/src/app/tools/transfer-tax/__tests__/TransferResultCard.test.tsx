@@ -59,3 +59,41 @@ describe("TransferResultCard 본세 라벨 사유 prefix (R11+R12 정정)", () =
     expect(screen.queryByText(/본세 \(중과/)).not.toBeInTheDocument();
   });
 });
+
+describe("TransferResultCard R15: 비과세/양도차손 본세 라벨 명확화", () => {
+  it("비과세 (single-house-exempt) → '본세 (비과세)' (rate% 표시 안 함)", () => {
+    render(<TransferResultCard result={buildTestResult({
+      branch: "single-house-exempt", gain: 100_000_000, taxableGain: 0, taxBase: 0,
+      baseTax: 0, totalTax: 0, appliedRate: 0,
+      notes: ["disclaimer", "single-house-exempt-met"],
+    })} />);
+    expect(screen.getByText("본세 (비과세)")).toBeInTheDocument();
+    expect(screen.queryByText(/본세 \(0%\)/)).not.toBeInTheDocument();
+  });
+
+  it("양도차손 (loss) → '본세 (양도차손)' (rate% 표시 안 함)", () => {
+    render(<TransferResultCard result={buildTestResult({
+      branch: "loss", gain: -50_000_000, taxableGain: 0, taxBase: 0,
+      baseTax: 0, totalTax: 0, appliedRate: 0,
+      notes: ["disclaimer", "out-of-scope", "loss-no-tax"],
+    })} />);
+    expect(screen.getByText("본세 (양도차손)")).toBeInTheDocument();
+    expect(screen.queryByText(/본세 \(0%\)/)).not.toBeInTheDocument();
+  });
+});
+
+describe("TransferResultCard R13: 단기+중과 동시 케이스 가산세 별도 행", () => {
+  it("surchargeTax > 0 → '가산세 (중과 분)' 행 표시", () => {
+    render(<TransferResultCard result={buildTestResult({
+      appliedRate: 0.70, baseTax: 341_600_000, surchargeTax: 146_400_000, totalTax: 341_600_000,
+      notes: ["disclaimer", "short-term-70", "multi-heavy-applied"],
+    })} />);
+    expect(screen.getByText("가산세 (중과 분)")).toBeInTheDocument();
+    expect(screen.getByText("146,400,000원")).toBeInTheDocument();
+  });
+
+  it("surchargeTax = 0 → 가산세 행 숨김 (일반 누진 케이스)", () => {
+    render(<TransferResultCard result={buildTestResult({ surchargeTax: 0 })} />);
+    expect(screen.queryByText("가산세 (중과 분)")).not.toBeInTheDocument();
+  });
+});

@@ -8,7 +8,10 @@ interface Props {
 }
 
 // R11: 본세 라벨에 사유 prefix (미등기/단기/중과 구분, 누진 일반은 R12 fix 후 정확 rate)
+// R15: 비과세·양도차손은 baseTax 0인데 "(0%)" 만 보이면 사유 모호 → branch 별 명시 라벨
 function formatBaseTaxLabel(result: TransferResult): string {
+  if (result.branch === "single-house-exempt") return "본세 (비과세)";
+  if (result.branch === "loss") return "본세 (양도차손)";
   const ratePct = (result.appliedRate * 100).toFixed(1).replace(/\.0$/, "");
   if (result.branch === "unregistered") return `본세 (미등기 ${ratePct}%)`;
   if (result.notes.includes("short-term-70") || result.notes.includes("short-term-60")) {
@@ -55,6 +58,10 @@ export default function TransferResultCard({ result }: Props) {
               <tr><td className="py-1.5 text-gray-600">장기보유공제 ({APPLIED_TABLE_LABEL[result.appliedTable]})</td><td className="py-1.5 text-right">{result.longTermDeduction.toLocaleString()}원</td></tr>
               <tr><td className="py-1.5 text-gray-600">과세표준</td><td className="py-1.5 text-right">{result.taxBase.toLocaleString()}원</td></tr>
               <tr><td className="py-1.5 text-gray-600">{formatBaseTaxLabel(result)}</td><td className="py-1.5 text-right">{result.baseTax.toLocaleString()}원</td></tr>
+              {/* R13: 단기+중과 동시 케이스 (#8) — surchargeTax 가산세 별도 행으로 표시 (단기세 적용 시에도 가산세 정보 노출) */}
+              {result.surchargeTax > 0 && (
+                <tr><td className="py-1.5 text-gray-600">가산세 (중과 분)</td><td className="py-1.5 text-right">{result.surchargeTax.toLocaleString()}원</td></tr>
+              )}
             </tbody>
           </table>
           <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-3 text-center">

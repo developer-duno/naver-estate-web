@@ -7,6 +7,7 @@ interface Props {
   ageYears: number;
   holdYears: number;
   prevYearTaxManwon: number;
+  excludedHouses: number;
 
   onPublishedManwonChange: (v: number) => void;
   onHousesChange: (v: 1 | 2 | 3) => void;
@@ -14,6 +15,7 @@ interface Props {
   onAgeYearsChange: (v: number) => void;
   onHoldYearsChange: (v: number) => void;
   onPrevYearTaxManwonChange: (v: number) => void;
+  onExcludedHousesChange: (v: number) => void;
 }
 
 const INPUT_CLASS =
@@ -23,9 +25,9 @@ const RADIO_LABEL_CLASS =
 
 export default function PropertyTaxInputs(props: Props) {
   const {
-    publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon,
+    publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses,
     onPublishedManwonChange, onHousesChange, onIsSingleHouseEligibleChange,
-    onAgeYearsChange, onHoldYearsChange, onPrevYearTaxManwonChange,
+    onAgeYearsChange, onHoldYearsChange, onPrevYearTaxManwonChange, onExcludedHousesChange,
   } = props;
 
   const singleActive = isSingleHouseEligible && houses === 1;
@@ -94,6 +96,29 @@ export default function PropertyTaxInputs(props: Props) {
           1세대1주택자 (공제 12억 + 특례세율 + 연령/보유 세액공제)
         </span>
       </label>
+
+      {houses > 1 && (
+        <div>
+          <label htmlFor="excludedHouses" className="block text-sm font-medium text-gray-700 mb-1.5">
+            합산배제 신청 주택 수 (선택)
+          </label>
+          <select
+            id="excludedHouses"
+            value={excludedHouses}
+            onChange={(e) => onExcludedHousesChange(Number(e.target.value) || 0)}
+            className={INPUT_CLASS}
+          >
+            {Array.from({ length: houses + 1 }, (_, i) => (
+              <option key={i} value={i}>
+                {i === 0 ? "0채 (미적용)" : `${i}채 임대등록·종교/사원용 등`}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500">
+            종부세법 §8③ — 합산배제 신청한 주택은 종부세 산정에서 제외 (재산세는 영향 없음). 자격 요건은 세무사 상담 권장.
+          </p>
+        </div>
+      )}
 
       {singleActive ? (
         <>

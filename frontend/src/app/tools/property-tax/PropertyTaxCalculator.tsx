@@ -13,6 +13,7 @@ export default function PropertyTaxCalculator() {
   const [ageYears, setAgeYears] = useState(0);
   const [holdYears, setHoldYears] = useState(0);
   const [prevYearTaxManwon, setPrevYearTaxManwon] = useState(0);
+  const [excludedHouses, setExcludedHouses] = useState(0);
 
   const result = useMemo(() => {
     const single = isSingleHouseEligible && houses === 1;
@@ -23,9 +24,10 @@ export default function PropertyTaxCalculator() {
       ageYears: single ? ageYears : 0,
       holdYears: single ? holdYears : 0,
       prevYearTax: prevYearTaxManwon > 0 ? prevYearTaxManwon * 10_000 : undefined,
+      excludedHouses,
     };
     return calculatePropertyTax(input);
-  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon]);
+  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses]);
 
   return (
     <div className="space-y-4">
@@ -36,12 +38,14 @@ export default function PropertyTaxCalculator() {
         ageYears={ageYears}
         holdYears={holdYears}
         prevYearTaxManwon={prevYearTaxManwon}
+        excludedHouses={excludedHouses}
         onPublishedManwonChange={setPublishedManwon}
         onHousesChange={setHouses}
         onIsSingleHouseEligibleChange={setIsSingleHouseEligible}
         onAgeYearsChange={setAgeYears}
         onHoldYearsChange={setHoldYears}
         onPrevYearTaxManwonChange={setPrevYearTaxManwon}
+        onExcludedHousesChange={setExcludedHouses}
       />
       <PropertyTaxResultCard result={result} />
     </div>

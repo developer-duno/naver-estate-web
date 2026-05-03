@@ -1,0 +1,99 @@
+/**
+ * 보유세(재산세 + 종합부동산세) 계산기 진입점.
+ * 1년 보유세 = 재산세 + 종부세 (공제할 재산세액은 단순화로 0 가정 — 손님 상담용 추정치).
+ * 권위 출처: 국세청 PDF 16개 (지방세법 §111 + 종부세법 §8/§9 + 합산배제 + 세율표).
+ */
+
+import { validateAmount } from "./brokerage";
+import {
+  type PropertyTaxInput, type PropertyTaxResult, type PropertyTaxNoticeKey,
+  EMPTY_PROPERTY_TAX_RESULT,
+} from "./property-tax-types";
+import {
+  PROPERTY_TAX_BRACKETS_SINGLE, PROPERTY_TAX_BRACKETS_GENERAL,
+  COMPREHENSIVE_BRACKETS_2, COMPREHENSIVE_BRACKETS_3,
+  applyBracket, totalCreditRate,
+  FAIR_MARKET_RATIO, SINGLE_HOUSE_DEDUCTION, GENERAL_DEDUCTION, RURAL_TAX_RATE,
+} from "./property-tax-brackets";
+
+/**
+ * 보유세 계산 (재산세 + 종합부동산세 통합).
+ * - 입력: 공시가격, 주택수, 1세대1주택 여부, 연령, 보유연수
+ * - 출력: 재산세 / 종부세 / 합계 / 농특세 / 총 부담 / 안내문 키
+ */
+export function calculatePropertyTax(input: PropertyTaxInput): PropertyTaxResult {
+  // GATE 0: 입력 검증
+  if (!validateAmount(input.publishedPriceWon) || input.publishedPriceWon === 0) {
+    return EMPTY_PROPERTY_TAX_RESULT;
+  }
+
+  const notes: PropertyTaxNoticeKey[] = ["disclaimer", "fair-market-ratio-60"];
+  const isSingle = input.isSingleHouseEligible && input.houses === 1;
+
+  // ===== 1단계: 재산세 (지방세법 §111) =====
+  const propertyTaxBase = Math.floor(input.publishedPriceWon * FAIR_MARKET_RATIO);
+  const propertyBrackets = isSingle ? PROPERTY_TAX_BRACKETS_SINGLE : PROPERTY_TAX_BRACKETS_GENERAL;
+  const propertyResult = applyBracket(propertyTaxBase, propertyBrackets);
+  const propertyTax = Math.floor(propertyResult.tax);
+  if (isSingle) notes.push("single-house-special-rate");
+
+  // ===== 2단계: 종합부동산세 (종부세법 §8 §9) =====
+  const comprehensiveDeduction = isSingle ? SINGLE_HOUSE_DEDUCTION : GENERAL_DEDUCTION;
+  notes.push(isSingle ? "single-house-deduction-12e" : "general-deduction-9e");
+
+  const afterDeduction = Math.max(0, input.publishedPriceWon - comprehensiveDeduction);
+  const comprehensiveTaxBase = Math.floor(afterDeduction * FAIR_MARKET_RATIO);
+
+  // 종부세 과세표준 0 = 공제 미만 (납부 의무 없음)
+  if (comprehensiveTaxBase === 0) {
+    notes.push("below-comprehensive-threshold");
+    notes.push("consult-experts");
+    return {
+      branch: "below-threshold",
+      propertyTaxBase, propertyTax,
+      comprehensiveDeduction, comprehensiveTaxBase: 0,
+      comprehensiveTaxBeforeDeduction: 0, comprehensiveTaxCredit: 0, comprehensiveTax: 0,
+      totalTax: propertyTax, ruralTax: 0, grandTotal: propertyTax,
+      effectiveRate: input.publishedPriceWon > 0 ? propertyTax / input.publishedPriceWon : 0,
+      appliedRate: { property: propertyResult.rate, comprehensive: 0 },
+      notes,
+    };
+  }
+
+  const comprehensiveBrackets = input.houses >= 3 ? COMPREHENSIVE_BRACKETS_3 : COMPREHENSIVE_BRACKETS_2;
+  const compResult = applyBracket(comprehensiveTaxBase, comprehensiveBrackets);
+  const comprehensiveTaxBeforeDeduction = Math.floor(compResult.tax);
+
+  // 3주택+ 25억 초과 중과 안내
+  if (input.houses >= 3 && comprehensiveTaxBase > 1_200_000_000) notes.push("multi-heavy-25e");
+
+  // ===== 3단계: 1세대1주택 세액공제 (연령 + 보유, 한도 80%) =====
+  let comprehensiveTaxCredit = 0;
+  if (isSingle) {
+    const creditRate = totalCreditRate(input.ageYears, input.holdYears);
+    comprehensiveTaxCredit = Math.floor(comprehensiveTaxBeforeDeduction * creditRate);
+    if (input.ageYears >= 60) notes.push("age-deduction-eligible");
+    if (input.holdYears >= 5) notes.push("hold-deduction-eligible");
+  }
+  const comprehensiveTax = Math.max(0, comprehensiveTaxBeforeDeduction - comprehensiveTaxCredit);
+
+  // ===== 4단계: 농어촌특별세 (종부세액 × 20%) =====
+  const ruralTax = Math.floor(comprehensiveTax * RURAL_TAX_RATE);
+  if (ruralTax > 0) notes.push("rural-tax-20");
+
+  const totalTax = propertyTax + comprehensiveTax;
+  const grandTotal = totalTax + ruralTax;
+  notes.push("tax-burden-cap-150");
+  notes.push("consult-experts");
+
+  return {
+    branch: isSingle ? "single-house" : "multi-house",
+    propertyTaxBase, propertyTax,
+    comprehensiveDeduction, comprehensiveTaxBase,
+    comprehensiveTaxBeforeDeduction, comprehensiveTaxCredit, comprehensiveTax,
+    totalTax, ruralTax, grandTotal,
+    effectiveRate: input.publishedPriceWon > 0 ? grandTotal / input.publishedPriceWon : 0,
+    appliedRate: { property: propertyResult.rate, comprehensive: compResult.rate },
+    notes,
+  };
+}

@@ -22,7 +22,8 @@ export type PropertyTaxNoticeKey =
   | "age-deduction-eligible"      // 연령 세액공제 가능 (1주택만)
   | "hold-deduction-eligible"     // 보유 세액공제 가능 (1주택만)
   | "rural-tax-20"                // 농어촌특별세 종부세액의 20% 별도
-  | "tax-burden-cap-150"          // 세부담 상한 150% 가드
+  | "tax-burden-cap-150"          // 세부담 상한 150% 가드 (전년도 미입력 시)
+  | "tax-burden-cap-applied"      // 세부담 상한 150% 자동 적용됨 (전년도 입력 시)
   | "consult-experts";            // 세무사 상담 권장
 
 export interface PropertyTaxInput {
@@ -31,6 +32,7 @@ export interface PropertyTaxInput {
   isSingleHouseEligible: boolean; // 1세대1주택자 여부 (공제 12억 + 특례세율)
   ageYears: number;               // 연령 (1주택 세액공제용, 0=공제없음)
   holdYears: number;              // 보유연수 (1주택 세액공제용, 0=공제없음)
+  prevYearTax?: number;           // 전년도 보유세 합계 (원, 옵션) — 세부담 상한 150% cap 자동 적용용
 }
 
 export interface PropertyTaxResult {
@@ -47,8 +49,10 @@ export interface PropertyTaxResult {
   // 합계
   totalTax: number;               // 보유세 합계 (재산세 + 종부세)
   ruralTax: number;               // 농어촌특별세 (종부세 × 20%)
-  grandTotal: number;             // 총 부담 (보유세 + 농특세)
-  effectiveRate: number;          // 공시가격 대비 실효세율
+  grandTotal: number;             // 총 부담 (cap 적용 후 최종 — 보유세 + 농특세)
+  uncappedGrandTotal: number;     // cap 적용 전 원본 (cap 미적용 시 grandTotal 과 동일)
+  wasCapped: boolean;             // 세부담 상한 150% cap 이 실제 적용됐는지
+  effectiveRate: number;          // 공시가격 대비 실효세율 (cap 후 grandTotal 기준)
   appliedRate: {                  // 적용된 누진세율 (UI 표시용)
     property: number;
     comprehensive: number;
@@ -61,7 +65,9 @@ export const EMPTY_PROPERTY_TAX_RESULT: PropertyTaxResult = {
   propertyTaxBase: 0, propertyTax: 0,
   comprehensiveDeduction: 0, comprehensiveTaxBase: 0,
   comprehensiveTaxBeforeDeduction: 0, comprehensiveTaxCredit: 0, comprehensiveTax: 0,
-  totalTax: 0, ruralTax: 0, grandTotal: 0, effectiveRate: 0,
+  totalTax: 0, ruralTax: 0, grandTotal: 0,
+  uncappedGrandTotal: 0, wasCapped: false,
+  effectiveRate: 0,
   appliedRate: { property: 0, comprehensive: 0 },
   notes: ["disclaimer"],
 };

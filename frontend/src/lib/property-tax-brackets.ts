@@ -61,6 +61,7 @@ export const RURAL_TAX_RATE = 0.20;             // 농어촌특별세: 종부세
 export const MAX_AGE_DEDUCTION_RATE = 0.40;     // 연령 세액공제 최대 40% (70세+)
 export const MAX_HOLD_DEDUCTION_RATE = 0.50;    // 보유 세액공제 최대 50% (15년+)
 export const MAX_TOTAL_CREDIT = 0.80;           // 합산 최대 80%
+export const TAX_BURDEN_CAP_RATE = 1.5;         // 세부담 상한 — 전년도 보유세의 150% (지방세법 §122)
 
 // ===== 헬퍼 함수 =====
 

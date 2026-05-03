@@ -14,7 +14,26 @@ import {
   COMPREHENSIVE_BRACKETS_2, COMPREHENSIVE_BRACKETS_3,
   applyBracket, totalCreditRate,
   FAIR_MARKET_RATIO, SINGLE_HOUSE_DEDUCTION, GENERAL_DEDUCTION, RURAL_TAX_RATE,
+  TAX_BURDEN_CAP_RATE,
 } from "./property-tax-brackets";
+
+/**
+ * 세부담 상한 150% cap 적용 — 전년도 보유세가 양수일 때만 활성화.
+ * grandTotal 만 cap (내부 분해 propertyTax/comprehensiveTax/ruralTax 는 보존).
+ * @returns { capped: cap 적용 후 grandTotal, wasCapped: 실제 cap 발동 여부, capNote: notes 에 추가할 키 }
+ */
+function applyTaxBurdenCap(grandTotal: number, prevYearTax: number | undefined): {
+  capped: number; wasCapped: boolean; capNote: PropertyTaxNoticeKey;
+} {
+  if (prevYearTax === undefined || prevYearTax <= 0) {
+    return { capped: grandTotal, wasCapped: false, capNote: "tax-burden-cap-150" };
+  }
+  const cap = Math.floor(prevYearTax * TAX_BURDEN_CAP_RATE);
+  if (grandTotal <= cap) {
+    return { capped: grandTotal, wasCapped: false, capNote: "tax-burden-cap-applied" };
+  }
+  return { capped: cap, wasCapped: true, capNote: "tax-burden-cap-applied" };
+}
 
 /**
  * 보유세 계산 (재산세 + 종합부동산세 통합).
@@ -47,14 +66,19 @@ export function calculatePropertyTax(input: PropertyTaxInput): PropertyTaxResult
   // 종부세 과세표준 0 = 공제 미만 (납부 의무 없음)
   if (comprehensiveTaxBase === 0) {
     notes.push("below-comprehensive-threshold");
+    const cap = applyTaxBurdenCap(propertyTax, input.prevYearTax);
+    notes.push(cap.capNote);
     notes.push("consult-experts");
     return {
       branch: "below-threshold",
       propertyTaxBase, propertyTax,
       comprehensiveDeduction, comprehensiveTaxBase: 0,
       comprehensiveTaxBeforeDeduction: 0, comprehensiveTaxCredit: 0, comprehensiveTax: 0,
-      totalTax: propertyTax, ruralTax: 0, grandTotal: propertyTax,
-      effectiveRate: input.publishedPriceWon > 0 ? propertyTax / input.publishedPriceWon : 0,
+      totalTax: propertyTax, ruralTax: 0,
+      grandTotal: cap.capped,
+      uncappedGrandTotal: propertyTax,
+      wasCapped: cap.wasCapped,
+      effectiveRate: input.publishedPriceWon > 0 ? cap.capped / input.publishedPriceWon : 0,
       appliedRate: { property: propertyResult.rate, comprehensive: 0 },
       notes,
     };
@@ -82,8 +106,9 @@ export function calculatePropertyTax(input: PropertyTaxInput): PropertyTaxResult
   if (ruralTax > 0) notes.push("rural-tax-20");
 
   const totalTax = propertyTax + comprehensiveTax;
-  const grandTotal = totalTax + ruralTax;
-  notes.push("tax-burden-cap-150");
+  const uncappedGrandTotal = totalTax + ruralTax;
+  const cap = applyTaxBurdenCap(uncappedGrandTotal, input.prevYearTax);
+  notes.push(cap.capNote);
   notes.push("consult-experts");
 
   return {
@@ -91,8 +116,11 @@ export function calculatePropertyTax(input: PropertyTaxInput): PropertyTaxResult
     propertyTaxBase, propertyTax,
     comprehensiveDeduction, comprehensiveTaxBase,
     comprehensiveTaxBeforeDeduction, comprehensiveTaxCredit, comprehensiveTax,
-    totalTax, ruralTax, grandTotal,
-    effectiveRate: input.publishedPriceWon > 0 ? grandTotal / input.publishedPriceWon : 0,
+    totalTax, ruralTax,
+    grandTotal: cap.capped,
+    uncappedGrandTotal,
+    wasCapped: cap.wasCapped,
+    effectiveRate: input.publishedPriceWon > 0 ? cap.capped / input.publishedPriceWon : 0,
     appliedRate: { property: propertyResult.rate, comprehensive: compResult.rate },
     notes,
   };

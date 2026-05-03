@@ -69,7 +69,13 @@ const NOTICE_MESSAGES: Record<PropertyTaxNoticeKey, { title: string; body: strin
     tone: "warn",
     title: "⚠ 세부담 상한 150% 미반영",
     body:
-      "지방세법 §122 — 전년 대비 보유세 150% 초과분은 자동 캡 적용. 본 계산기는 단순 산출세액만 표시하므로 실제 납부세액은 더 낮을 수 있음. 정확한 캡 산식은 세무사 상담 권장.",
+      "지방세법 §122 — 전년 대비 보유세 150% 초과분은 자동 캡 적용. 전년도 보유세를 입력하시면 자동으로 cap 이 적용됩니다 (현재 미입력 상태). 정확한 캡 산식은 세무사 상담 권장.",
+  },
+  "tax-burden-cap-applied": {
+    tone: "info",
+    title: "✓ 세부담 상한 150% 자동 반영",
+    body:
+      "지방세법 §122 — 전년도 보유세 입력값 기준으로 150% cap 적용. 산출 합계가 cap 을 넘으면 cap 으로 제한됩니다. 결과 표 하단의 'cap 적용' 표시로 실제 발동 여부 확인 가능.",
   },
   "consult-experts": {
     tone: "warn",

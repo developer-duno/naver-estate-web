@@ -10,7 +10,9 @@ function buildTestResult(over: Partial<PropertyTaxResult>): PropertyTaxResult {
     propertyTaxBase: 600_000_000, propertyTax: 1_000_000,
     comprehensiveDeduction: 1_200_000_000, comprehensiveTaxBase: 0,
     comprehensiveTaxBeforeDeduction: 0, comprehensiveTaxCredit: 0, comprehensiveTax: 0,
-    totalTax: 1_000_000, ruralTax: 0, grandTotal: 1_000_000, effectiveRate: 0.001,
+    totalTax: 1_000_000, ruralTax: 0, grandTotal: 1_000_000,
+    uncappedGrandTotal: 1_000_000, wasCapped: false,
+    effectiveRate: 0.001,
     appliedRate: { property: 0.0035, comprehensive: 0 },
     notes: ["disclaimer"], ...over,
   };

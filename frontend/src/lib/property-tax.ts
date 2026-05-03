@@ -13,6 +13,7 @@ import {
 import {
   PROPERTY_TAX_BRACKETS_SINGLE, PROPERTY_TAX_BRACKETS_GENERAL,
   COMPREHENSIVE_BRACKETS_2, COMPREHENSIVE_BRACKETS_3,
+  COMPREHENSIVE_BRACKETS_CORP_2, COMPREHENSIVE_BRACKETS_CORP_3,
   applyBracket, totalCreditRate,
   FAIR_MARKET_RATIO, SINGLE_HOUSE_DEDUCTION, GENERAL_DEDUCTION, RURAL_TAX_RATE,
   TAX_BURDEN_CAP_RATE,
@@ -65,6 +66,15 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
     if (input.isSingleHouseEligible) notes.push("ownership-single-house-warning");
   }
 
+  // B-4 법인: 종부세 단일세율 (2.7%/5.0%) + 공제 0원 + 1주택 공제·세액공제 자동 차단 (normalize 에서 isSingleHouseEligible=false 강제됨)
+  const isCorp = input.isCorporation === true;
+  if (isCorp) {
+    notes.push("corporation-flat-rate-applied");
+    // raw 입력에 1주택 자격/연령/보유가 있었으면 차단 안내 (normalize 후엔 false/0 이므로 raw 비교)
+    const hadCreditAttempt = rawInput.isSingleHouseEligible || (rawInput.ageYears ?? 0) > 0 || (rawInput.holdYears ?? 0) > 0;
+    if (hadCreditAttempt) notes.push("corporation-no-credit");
+  }
+
   // ===== 1단계: 재산세 (지방세법 §111) =====
   const propertyTaxBase = Math.floor(input.publishedPriceWon * FAIR_MARKET_RATIO);
   const propertyBrackets = isSingleProperty ? PROPERTY_TAX_BRACKETS_SINGLE : PROPERTY_TAX_BRACKETS_GENERAL;
@@ -73,8 +83,9 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   if (isSingleProperty) notes.push("single-house-special-rate");
 
   // ===== 2단계: 종합부동산세 (종부세법 §8 §9) =====
-  const comprehensiveDeduction = isSingleComprehensive ? SINGLE_HOUSE_DEDUCTION : GENERAL_DEDUCTION;
-  notes.push(isSingleComprehensive ? "single-house-deduction-12e" : "general-deduction-9e");
+  // B-4 법인: 공제 0원 (개인 공제 9억/12억 미적용)
+  const comprehensiveDeduction = isCorp ? 0 : (isSingleComprehensive ? SINGLE_HOUSE_DEDUCTION : GENERAL_DEDUCTION);
+  if (!isCorp) notes.push(isSingleComprehensive ? "single-house-deduction-12e" : "general-deduction-9e");
 
   const afterDeduction = Math.max(0, effectivePublished - comprehensiveDeduction);
   const comprehensiveTaxBase = Math.floor(afterDeduction * FAIR_MARKET_RATIO);
@@ -86,7 +97,7 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
     notes.push(cap.capNote);
     notes.push("consult-experts");
     return {
-      branch: "below-threshold",
+      branch: isCorp ? "corporation" : "below-threshold",
       propertyTaxBase, propertyTax,
       comprehensiveDeduction, comprehensiveTaxBase: 0,
       comprehensiveTaxBeforeDeduction: 0, comprehensiveTaxCredit: 0, comprehensiveTax: 0,
@@ -100,17 +111,19 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
     };
   }
 
-  // B-2 합산배제: BRACKETS 선택은 effectiveHouses 기준
-  const comprehensiveBrackets = effectiveHouses >= 3 ? COMPREHENSIVE_BRACKETS_3 : COMPREHENSIVE_BRACKETS_2;
+  // B-2/B-4 BRACKETS 선택: 법인은 CORP, 개인은 effectiveHouses 기준
+  const comprehensiveBrackets = isCorp
+    ? (input.houses >= 3 ? COMPREHENSIVE_BRACKETS_CORP_3 : COMPREHENSIVE_BRACKETS_CORP_2)
+    : (effectiveHouses >= 3 ? COMPREHENSIVE_BRACKETS_3 : COMPREHENSIVE_BRACKETS_2);
   const compResult = applyBracket(comprehensiveTaxBase, comprehensiveBrackets);
   const comprehensiveTaxBeforeDeduction = Math.floor(compResult.tax);
 
-  // 3주택+ 25억 초과 중과 안내 (effectiveHouses 기준)
-  if (effectiveHouses >= 3 && comprehensiveTaxBase > 1_200_000_000) notes.push("multi-heavy-25e");
+  // 3주택+ 25억 초과 중과 안내 (개인만, effectiveHouses 기준)
+  if (!isCorp && effectiveHouses >= 3 && comprehensiveTaxBase > 1_200_000_000) notes.push("multi-heavy-25e");
 
-  // ===== 3단계: 1세대1주택 세액공제 (연령 + 보유, 한도 80%) =====
+  // ===== 3단계: 1세대1주택 세액공제 (개인 1주택만, 법인 차단) =====
   let comprehensiveTaxCredit = 0;
-  if (isSingleComprehensive) {
+  if (!isCorp && isSingleComprehensive) {
     const creditRate = totalCreditRate(input.ageYears, input.holdYears);
     comprehensiveTaxCredit = Math.floor(comprehensiveTaxBeforeDeduction * creditRate);
     if (input.ageYears >= 60) notes.push("age-deduction-eligible");
@@ -129,7 +142,7 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   notes.push("consult-experts");
 
   return {
-    branch: isSingleComprehensive ? "single-house" : "multi-house",
+    branch: isCorp ? "corporation" : (isSingleComprehensive ? "single-house" : "multi-house"),
     propertyTaxBase, propertyTax,
     comprehensiveDeduction, comprehensiveTaxBase,
     comprehensiveTaxBeforeDeduction, comprehensiveTaxCredit, comprehensiveTax,

@@ -21,6 +21,7 @@ const BRANCH_TEXT: Record<PropertyTaxResult["branch"], { color: string; label: s
   "below-threshold": { color: "green", label: "종부세 과세표준 0 — 재산세만 부과" },
   "single-house": { color: "blue", label: "1세대1주택자 (공제 12억 + 세액공제)" },
   "multi-house": { color: "purple", label: "다주택자 (공제 9억, 3주택+ 25억 초과 중과)" },
+  corporation: { color: "amber", label: "법인 보유 (단일세율 2.7% / 5.0%, 공제 없음)" },
 };
 
 const COLOR_CLASS: Record<string, string> = {
@@ -28,6 +29,7 @@ const COLOR_CLASS: Record<string, string> = {
   green: "bg-green-50 border-green-200 text-green-900",
   blue: "bg-blue-50 border-blue-200 text-blue-900",
   purple: "bg-purple-50 border-purple-200 text-purple-900",
+  amber: "bg-amber-50 border-amber-200 text-amber-900",
 };
 
 export default function PropertyTaxResultCard({ result }: Props) {

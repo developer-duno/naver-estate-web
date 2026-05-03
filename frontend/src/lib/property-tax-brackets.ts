@@ -41,6 +41,16 @@ export const COMPREHENSIVE_BRACKETS_2: TaxBracket[] = [
   { max: Infinity,         rate: 0.027, deduction: 101_800_000 }, // 94억 초과 2.7%
 ];
 
+/** 법인 2주택 이하 단일세율 (종부세법 §9③) — 누진 X, 공제 0 */
+export const COMPREHENSIVE_BRACKETS_CORP_2: TaxBracket[] = [
+  { max: Infinity, rate: 0.027, deduction: 0 },  // 단일 2.7%
+];
+
+/** 법인 3주택 이상 단일세율 (종부세법 §9③) — 누진 X, 공제 0 */
+export const COMPREHENSIVE_BRACKETS_CORP_3: TaxBracket[] = [
+  { max: Infinity, rate: 0.050, deduction: 0 },  // 단일 5.0%
+];
+
 /** 개인 3주택 이상 7구간 누진 (25억 초과부터 중과) */
 export const COMPREHENSIVE_BRACKETS_3: TaxBracket[] = [
   { max: 300_000_000,      rate: 0.005, deduction: 0 },           // 3억 이하 0.5%

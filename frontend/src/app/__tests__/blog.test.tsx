@@ -61,12 +61,12 @@ describe("blog/posts 메타데이터", () => {
     ]);
   });
 
-  it("realestate-calculators 메타 — 출시 톤, /tools/brokerage-fee 안내 키워드", () => {
+  it("realestate-calculators 메타 — 4종 출시 완료 톤", () => {
     const post = getPostBySlug("realestate-calculators");
     expect(post).toBeDefined();
     expect(post?.draft).toBeUndefined();
-    expect(post?.title).toContain("중개수수료");
-    expect(post?.description).toMatch(/중개수수료|출시/);
+    expect(post?.title).toContain("계산기");
+    expect(post?.description).toMatch(/4종|출시 완료/);
     expect(post?.category).toBe("세금");
   });
 

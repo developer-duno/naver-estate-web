@@ -51,3 +51,13 @@ scripts/uvicorn.log
 /article-modal-*.png
 /complex-detail.png
 /home-check.png
+
+# 권위 출처 PDF (사장님 사적 자료 — 코드 박제용 참조, 커밋 제외)
+/종합부동산세/
+/양도세/
+/취득세/
+/재산세/
+/property-tax-refs/
+
+# 임시 디버그 JS (서브에이전트 생성)
+/test_*.js

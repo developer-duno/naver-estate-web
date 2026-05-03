@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { calculatePropertyTax } from "@/lib/property-tax";
 import type { PropertyTaxInput } from "@/lib/property-tax-types";
 import PropertyTaxInputs from "./PropertyTaxInputs";
+import PropertyTaxResultCard from "./PropertyTaxResultCard";
 
 export default function PropertyTaxCalculator() {
   const [publishedManwon, setPublishedManwon] = useState(0);
@@ -38,15 +39,7 @@ export default function PropertyTaxCalculator() {
         onAgeYearsChange={setAgeYears}
         onHoldYearsChange={setHoldYears}
       />
-      <section
-        className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 sm:p-6 text-center text-sm text-gray-500"
-        aria-label="결과 카드 자리 (B-2 단계에서 ResultCard 로 교체 예정)"
-      >
-        결과 카드 (B-2 예정) — 현재 lib 산출값:{" "}
-        <span className="font-mono text-xs text-gray-700">
-          branch={result.branch} grandTotal={result.grandTotal.toLocaleString()}원
-        </span>
-      </section>
+      <PropertyTaxResultCard result={result} />
     </div>
   );
 }

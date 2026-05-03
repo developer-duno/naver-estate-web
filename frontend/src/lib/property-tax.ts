@@ -5,6 +5,7 @@
  */
 
 import { validateAmount } from "./brokerage";
+import { normalizeInput } from "./property-tax-rules";
 import {
   type PropertyTaxInput, type PropertyTaxResult, type PropertyTaxNoticeKey,
   EMPTY_PROPERTY_TAX_RESULT,
@@ -40,11 +41,13 @@ function applyTaxBurdenCap(grandTotal: number, prevYearTax: number | undefined):
  * - 입력: 공시가격, 주택수, 1세대1주택 여부, 연령, 보유연수
  * - 출력: 재산세 / 종부세 / 합계 / 농특세 / 총 부담 / 안내문 키
  */
-export function calculatePropertyTax(input: PropertyTaxInput): PropertyTaxResult {
+export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxResult {
   // GATE 0: 입력 검증
-  if (!validateAmount(input.publishedPriceWon) || input.publishedPriceWon === 0) {
+  if (!validateAmount(rawInput.publishedPriceWon) || rawInput.publishedPriceWon === 0) {
     return EMPTY_PROPERTY_TAX_RESULT;
   }
+  // GATE 0b: 정규화 (clamp + corp 강제) — Phase A-0 인프라
+  const input = normalizeInput(rawInput);
 
   const notes: PropertyTaxNoticeKey[] = ["disclaimer", "fair-market-ratio-60"];
   const isSingle = input.isSingleHouseEligible && input.houses === 1;

@@ -27,12 +27,15 @@ export type PropertyTaxNoticeKey =
   | "consult-experts";            // 세무사 상담 권장
 
 export interface PropertyTaxInput {
-  publishedPriceWon: number;      // 공시가격 (원)
-  houses: Houses;                 // 보유 주택 수
+  publishedPriceWon: number;      // 공시가격 (원, 공동명의 시 본인 지분 공시가)
+  houses: Houses;                 // 보유 주택 수 (3 = "3주택 이상" 의미)
   isSingleHouseEligible: boolean; // 1세대1주택자 여부 (공제 12억 + 특례세율)
   ageYears: number;               // 연령 (1주택 세액공제용, 0=공제없음)
   holdYears: number;              // 보유연수 (1주택 세액공제용, 0=공제없음)
   prevYearTax?: number;           // 전년도 보유세 합계 (원, 옵션) — 세부담 상한 150% cap 자동 적용용
+  excludedHouses?: number;        // 합산배제 신청 주택 수 (옵션, 임대등록·종교/사원용 등) — 종부세 산정 전용
+  ownershipRatio?: number;        // 공동명의 본인 지분 비율 (0 < x ≤ 1, 옵션) — 종부세 산정 전용
+  isCorporation?: boolean;        // 법인 보유 여부 (옵션) — 단일세율 + 공제·세액공제 자동 off
 }
 
 export interface PropertyTaxResult {

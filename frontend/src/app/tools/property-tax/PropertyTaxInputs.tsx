@@ -1,5 +1,7 @@
 "use client";
 
+import PropertyTaxAdvancedFields from "./PropertyTaxAdvancedFields";
+
 interface Props {
   publishedManwon: number;
   houses: 1 | 2 | 3;
@@ -9,6 +11,7 @@ interface Props {
   prevYearTaxManwon: number;
   excludedHouses: number;
   ownershipPercent: number;
+  isCorporation: boolean;
 
   onPublishedManwonChange: (v: number) => void;
   onHousesChange: (v: 1 | 2 | 3) => void;
@@ -18,6 +21,7 @@ interface Props {
   onPrevYearTaxManwonChange: (v: number) => void;
   onExcludedHousesChange: (v: number) => void;
   onOwnershipPercentChange: (v: number) => void;
+  onIsCorporationChange: (v: boolean) => void;
 }
 
 const INPUT_CLASS =
@@ -27,9 +31,11 @@ const RADIO_LABEL_CLASS =
 
 export default function PropertyTaxInputs(props: Props) {
   const {
-    publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent,
+    publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon,
+    excludedHouses, ownershipPercent, isCorporation,
     onPublishedManwonChange, onHousesChange, onIsSingleHouseEligibleChange,
-    onAgeYearsChange, onHoldYearsChange, onPrevYearTaxManwonChange, onExcludedHousesChange, onOwnershipPercentChange,
+    onAgeYearsChange, onHoldYearsChange, onPrevYearTaxManwonChange,
+    onExcludedHousesChange, onOwnershipPercentChange, onIsCorporationChange,
   } = props;
 
   const singleActive = isSingleHouseEligible && houses === 1;
@@ -99,50 +105,15 @@ export default function PropertyTaxInputs(props: Props) {
         </span>
       </label>
 
-      {houses > 1 && (
-        <div>
-          <label htmlFor="excludedHouses" className="block text-sm font-medium text-gray-700 mb-1.5">
-            합산배제 신청 주택 수 (선택)
-          </label>
-          <select
-            id="excludedHouses"
-            value={excludedHouses}
-            onChange={(e) => onExcludedHousesChange(Number(e.target.value) || 0)}
-            className={INPUT_CLASS}
-          >
-            {Array.from({ length: houses + 1 }, (_, i) => (
-              <option key={i} value={i}>
-                {i === 0 ? "0채 (미적용)" : `${i}채 임대등록·종교/사원용 등`}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-gray-500">
-            종부세법 §8③ — 합산배제 신청한 주택은 종부세 산정에서 제외 (재산세는 영향 없음). 자격 요건은 세무사 상담 권장.
-          </p>
-        </div>
-      )}
-
-      <div>
-        <label htmlFor="ownershipPercent" className="block text-sm font-medium text-gray-700 mb-1.5">
-          공동명의 본인 지분 (%, 선택)
-        </label>
-        <input
-          id="ownershipPercent"
-          type="number"
-          inputMode="decimal"
-          autoComplete="off"
-          min={1}
-          max={100}
-          step={1}
-          value={ownershipPercent || ""}
-          onChange={(e) => onOwnershipPercentChange(Number(e.target.value) || 0)}
-          placeholder="예: 50 (부부 공동명의 50%) — 비워두면 100%"
-          className={INPUT_CLASS}
-        />
-        <p className="mt-1 text-xs text-gray-500">
-          종부세법 §9 (인별 과세) — 입력하신 공시가격은 <strong>본인 지분 공시가</strong>로 가정합니다. 본인 지분 % 만큼 종부세 산정에 적용 (재산세는 영향 없음). 부부 공동명의 50% → 보통 각자 1세대1주택 12억 공제 가능.
-        </p>
-      </div>
+      <PropertyTaxAdvancedFields
+        houses={houses}
+        excludedHouses={excludedHouses}
+        ownershipPercent={ownershipPercent}
+        isCorporation={isCorporation}
+        onExcludedHousesChange={onExcludedHousesChange}
+        onOwnershipPercentChange={onOwnershipPercentChange}
+        onIsCorporationChange={onIsCorporationChange}
+      />
 
       {singleActive ? (
         <>

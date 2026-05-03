@@ -145,6 +145,91 @@ describe("실효세율", () => {
   });
 });
 
+describe("B-4 법인 (isCorporation)", () => {
+  // 케이스 #B4-1: 법인 2주택 단일세율 2.7%
+  it("법인 2주택 → COMPREHENSIVE_BRACKETS_CORP_2 단일세율 2.7%, 공제 0", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 2, isSingleHouseEligible: false,
+      isCorporation: true,
+    }));
+    expect(r.branch).toBe("corporation");
+    // 법인 공제 0 → 과표 = 15억 × 60% = 9억
+    expect(r.comprehensiveDeduction).toBe(0);
+    expect(r.comprehensiveTaxBase).toBe(900_000_000);
+    // 종부세 = 9억 × 2.7% = 2,430만
+    expect(r.comprehensiveTaxBeforeDeduction).toBe(24_300_000);
+    expect(r.appliedRate.comprehensive).toBe(0.027);
+    expect(r.notes).toContain("corporation-flat-rate-applied");
+  });
+
+  // 케이스 #B4-2: 법인 3주택 이상 단일세율 5.0%
+  it("법인 3주택 이상 → COMPREHENSIVE_BRACKETS_CORP_3 단일세율 5.0%", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000, houses: 3, isSingleHouseEligible: false,
+      isCorporation: true,
+    }));
+    expect(r.branch).toBe("corporation");
+    // 법인 공제 0 → 과표 = 30억 × 60% = 18억
+    expect(r.comprehensiveTaxBase).toBe(1_800_000_000);
+    // 종부세 = 18억 × 5.0% = 9,000만
+    expect(r.comprehensiveTaxBeforeDeduction).toBe(90_000_000);
+    expect(r.appliedRate.comprehensive).toBe(0.050);
+    expect(r.notes).not.toContain("multi-heavy-25e"); // 법인은 누진 X
+  });
+
+  // 케이스 #B4-3: 법인 + 1세대1주택 자격 시도 → 자동 차단 + warning
+  it("법인 + isSingleHouseEligible=true 시도 → 공제·세액공제 차단 + corporation-no-credit warning", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: true,
+      ageYears: 70, holdYears: 15,
+      isCorporation: true,
+    }));
+    expect(r.branch).toBe("corporation");
+    // 법인 공제 0 + 세액공제 0 (eligible 자동 false 강제)
+    expect(r.comprehensiveDeduction).toBe(0);
+    expect(r.comprehensiveTaxCredit).toBe(0);
+    expect(r.notes).toContain("corporation-flat-rate-applied");
+    expect(r.notes).toContain("corporation-no-credit");
+    expect(r.notes).not.toContain("single-house-deduction-12e");
+    expect(r.notes).not.toContain("age-deduction-eligible");
+  });
+
+  // 케이스 #B4-4: 법인 + excludedHouses 시도 → normalize 에서 0 강제
+  it("법인 + excludedHouses=2 시도 → normalize 에서 0 으로 강제", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000, houses: 3, isSingleHouseEligible: false,
+      isCorporation: true, excludedHouses: 2,
+    }));
+    expect(r.branch).toBe("corporation");
+    // excluded=2 무시되므로 effectiveHouses 와 무관하게 CORP_3 사용 (houses=3)
+    expect(r.appliedRate.comprehensive).toBe(0.050);
+    expect(r.notes).not.toContain("exclusion-applied"); // excluded=0 강제됨
+  });
+
+  // 케이스 #B4-5: 법인 + ownershipRatio 시도 → normalize 에서 1 강제
+  it("법인 + ownershipRatio=0.5 시도 → normalize 에서 1 강제", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 2, isSingleHouseEligible: false,
+      isCorporation: true, ownershipRatio: 0.5,
+    }));
+    expect(r.branch).toBe("corporation");
+    // ratio=1 강제 → effectivePublished = 15억 그대로
+    expect(r.comprehensiveTaxBase).toBe(900_000_000);
+    expect(r.notes).not.toContain("ownership-applied"); // ratio=1 강제됨
+  });
+
+  // 케이스 #B4-6: 법인 재산세는 일반 세율 (1세대1주택 특례 X)
+  it("법인 재산세는 일반 세율 (1세대1주택 특례 차단)", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: true,
+      isCorporation: true,
+    }));
+    // isSingleProperty 는 isSingleHouseEligible (raw=true 지만 normalize 에서 false 강제)
+    expect(r.appliedRate.property).toBe(0.004); // 일반 세율 0.4%
+    expect(r.notes).not.toContain("single-house-special-rate");
+  });
+});
+
 describe("B-3 공동명의 (ownershipRatio)", () => {
   // 케이스 #B3-1: ratio=1.0 → no-op (기존 산식과 동일)
   it("ratio=1.0 (또는 미입력) → 기존 산식과 동일 (no-op)", () => {

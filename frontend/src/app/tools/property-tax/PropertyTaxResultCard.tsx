@@ -7,6 +7,7 @@ interface Props {
   result: PropertyTaxResult;
   excludedHouses?: number;
   ownershipPercent?: number;
+  isSpouseJointSingleHouse?: boolean;
 }
 
 // 누진세율 라벨 — 0 일 때 "(공제 미만)" 인라인, R12 답습 (`|| 0` fallback NaN 방지)
@@ -34,13 +35,14 @@ const COLOR_CLASS: Record<string, string> = {
   amber: "bg-amber-50 border-amber-200 text-amber-900",
 };
 
-export default function PropertyTaxResultCard({ result, excludedHouses, ownershipPercent }: Props) {
+export default function PropertyTaxResultCard({ result, excludedHouses, ownershipPercent, isSpouseJointSingleHouse }: Props) {
   const branchInfo = BRANCH_TEXT[result.branch];
   const empty = result.branch === "empty";
   const showRural = result.ruralTax > 0;
   const showCredit = result.comprehensiveTaxCredit > 0;
   const showExcluded = !empty && (excludedHouses ?? 0) > 0;
   const showOwnership = !empty && ownershipPercent !== undefined && ownershipPercent > 0 && ownershipPercent < 100;
+  const showSpouseJoint = !empty && isSpouseJointSingleHouse === true;
 
   return (
     <section
@@ -50,10 +52,11 @@ export default function PropertyTaxResultCard({ result, excludedHouses, ownershi
       <div className={`rounded-md border px-3 py-2 text-sm ${COLOR_CLASS[branchInfo.color]}`}>
         <strong>분기:</strong> {branchInfo.label}
       </div>
-      {(showExcluded || showOwnership) && (
+      {(showExcluded || showOwnership || showSpouseJoint) && (
         <div className="text-xs text-gray-600 space-y-0.5">
           {showExcluded && <div>합산배제 신청: 제외 {excludedHouses}주택</div>}
           {showOwnership && <div>공동명의 본인 지분: {ownershipPercent}%</div>}
+          {showSpouseJoint && <div>부부 공동명의 1주택자 특례 적용 (1인 합산 12억 공제)</div>}
         </div>
       )}
       {!empty && (

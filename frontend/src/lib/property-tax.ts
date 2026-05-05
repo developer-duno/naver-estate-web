@@ -54,14 +54,19 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   // B-2 합산배제: effectiveHouses = 종부세 산정용 실효 주택 수 (재산세는 houses 그대로)
   const excludedHouses = input.excludedHouses ?? 0;
   const effectiveHouses = Math.max(0, input.houses - excludedHouses);
+  const isSpouseJointSingle = input.isSpouseJointSingleHouse === true; // B-5 부부 공동명의 1주택자 특례
   const isSingleProperty = input.isSingleHouseEligible && input.houses === 1;       // 재산세 1주택 특례
-  const isSingleComprehensive = input.isSingleHouseEligible && effectiveHouses === 1; // 종부세 1주택 공제
+  // 종부세 1주택 공제: 본인 단독 1세대1주택 OR 부부 공동명의 1주택 특례 (PDF: 1인 합산 12억)
+  const isSingleComprehensive = (input.isSingleHouseEligible || isSpouseJointSingle) && effectiveHouses === 1;
   if (excludedHouses > 0) notes.push("exclusion-applied");
 
   // B-3 공동명의: ratio 는 종부세 진입값 (effectivePublished) 에만 적용. 재산세는 영향 없음 (사용자 입력 = 본인 지분 공시가 가정).
-  const ownershipRatio = input.ownershipRatio ?? 1;
+  // B-5 특례 적용 시: 1인 합산 납세 → ratio=1 강제 (인별 과세 우회), ownership-applied 미푸시
+  const ownershipRatio = isSpouseJointSingle ? 1 : (input.ownershipRatio ?? 1);
   const effectivePublished = input.publishedPriceWon * ownershipRatio;
-  if (ownershipRatio < 1) {
+  if (isSpouseJointSingle) {
+    notes.push("spouse-joint-single-house-applied");
+  } else if (ownershipRatio < 1) {
     notes.push("ownership-applied");
     if (input.isSingleHouseEligible) notes.push("ownership-single-house-warning");
   }

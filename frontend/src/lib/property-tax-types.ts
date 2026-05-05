@@ -27,6 +27,7 @@ export type PropertyTaxNoticeKey =
   | "exclusion-applied"           // 합산배제 신청 주택 N채 → effectiveHouses 산정 (B-2)
   | "ownership-applied"           // 공동명의 본인 지분 N% → 종부세 본인 몫 산정 (B-3)
   | "ownership-single-house-warning" // 공동명의+1세대1주택자 — 명의자별 독립 1주택 자격 충족 필요 안내 (B-3)
+  | "spouse-joint-single-house-applied" // 부부 공동명의 1주택자 특례 — 1인 합산 12억 공제 + 세액공제 80% (B-5)
   | "corporation-flat-rate-applied" // 법인 단일세율 적용 (2.7% / 5.0%) (B-4)
   | "corporation-no-credit"       // 법인 1주택 공제·세액공제 자동 차단 안내 (B-4)
   | "consult-experts";            // 세무사 상담 권장
@@ -41,6 +42,7 @@ export interface PropertyTaxInput {
   excludedHouses?: number;        // 합산배제 신청 주택 수 (옵션, 임대등록·종교/사원용 등) — 종부세 산정 전용
   ownershipRatio?: number;        // 공동명의 본인 지분 비율 (0 < x ≤ 1, 옵션) — 종부세 산정 전용
   isCorporation?: boolean;        // 법인 보유 여부 (옵션) — 단일세율 + 공제·세액공제 자동 off
+  isSpouseJointSingleHouse?: boolean; // 부부 공동명의 1주택자 특례 신청 (옵션, B-5) — 1인 합산 12억 공제 + 세액공제 80%
 }
 
 export interface PropertyTaxResult {

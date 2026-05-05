@@ -52,7 +52,7 @@ describe("1세대1주택 — 공제 12억 + 특례세율", () => {
     expect(r.appliedRate.propertyFairMarketRatio).toBe(0.44);
   });
 
-  it("#2 공시 15억 (1주택, 70세, 15년+ 보유) → 세액공제 80% 적용", () => {
+  it("#2 공시 15억 (1주택, 70세, 15년+ 보유) → 세액공제 80% (공제할 재산세액 차감 후 기준)", () => {
     const r = calculatePropertyTax(buildInput({
       publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: true,
       ageYears: 70, holdYears: 15,
@@ -62,14 +62,21 @@ describe("1세대1주택 — 공제 12억 + 특례세율", () => {
     expect(r.comprehensiveTaxBase).toBe(180_000_000);
     // 종부세 = 1.8e8 × 0.5% = 90만
     expect(r.comprehensiveTaxBeforeDeduction).toBe(900_000);
-    // 세액공제 80% = 72만 (40+50=90 → 80캡)
-    expect(r.comprehensiveTaxCredit).toBe(720_000);
-    expect(r.comprehensiveTax).toBe(180_000);
+    // v3-A ②: 공제할 재산세액 = 분자 (단일 합산 시 분모 = 재산세 부과액)
+    // 분자 = applyBracket((15억-12억) × 60% × 45%, SINGLE) = applyBracket(8100만, SINGLE)
+    //      = 8100만 × 0.001 - 30000 = 81000 - 30000 = 51000
+    expect(r.comprehensivePropertyTaxCredit).toBe(51_000);
+    // 차감 후 종부세 = 90만 - 5.1만 = 84.9만
+    // 세액공제 80% = 84.9만 × 0.8 = 679,200 (대법원 판결 정합 — 차감 후 기준)
+    expect(r.comprehensiveTaxCredit).toBe(679_200);
+    // 종부세 최종 = 84.9만 - 67.92만 = 16.98만
+    expect(r.comprehensiveTax).toBe(169_800);
     expect(r.notes).toContain("age-deduction-eligible");
     expect(r.notes).toContain("hold-deduction-eligible");
+    expect(r.notes).toContain("comprehensive-property-tax-credit");
   });
 
-  it("#3 공시 20억 (1주택, 60세, 5년) → 세액공제 40% (20+20)", () => {
+  it("#3 공시 20억 (1주택, 60세, 5년) → 세액공제 40% (공제할 재산세액 차감 후)", () => {
     const r = calculatePropertyTax(buildInput({
       publishedPriceWon: 2_000_000_000, houses: 1, isSingleHouseEligible: true,
       ageYears: 60, holdYears: 5,
@@ -78,8 +85,10 @@ describe("1세대1주택 — 공제 12억 + 특례세율", () => {
     expect(r.comprehensiveTaxBase).toBe(480_000_000);
     // 종부세 = 4.8e8 × 0.7% - 60만 = 336만 - 60만 = 276만
     expect(r.comprehensiveTaxBeforeDeduction).toBe(2_760_000);
-    // 세액공제 40% = 110.4만 → floor 1_104_000
-    expect(r.comprehensiveTaxCredit).toBe(1_104_000);
+    // v3-A ②: 공제할 재산세액 = 분자 = applyBracket(2.16억, SINGLE) = 2.16e8 × 0.002 - 18만 = 25.2만
+    expect(r.comprehensivePropertyTaxCredit).toBe(252_000);
+    // 차감 후 = 276만 - 25.2만 = 250.8만, 세액공제 40% = 100.32만 → floor 1,003,200
+    expect(r.comprehensiveTaxCredit).toBe(1_003_200);
   });
 });
 
@@ -123,6 +132,65 @@ describe("v3-A ① 1주택 재산세 차등 공정시장가액비율 (지방세�
     expect(r.propertyTaxBase).toBe(360_000_000); // 6e8 × 0.60
     expect(r.notes).not.toContain("single-house-fair-market-ratio");
     expect(r.notes).toContain("fair-market-ratio-60");
+  });
+});
+
+describe("v3-A ② 종부세 공제할 재산세액 (시행령 §4의2 + 대법원 2019두39796)", () => {
+  it("#CPC-1 1주택 12억 (공제 미만) → 종부세 0 → 공제할 재산세액 분기 미진입", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_200_000_000, houses: 1, isSingleHouseEligible: true,
+    }));
+    expect(r.branch).toBe("below-threshold");
+    expect(r.comprehensiveTaxBase).toBe(0);
+    expect(r.comprehensivePropertyTaxCredit).toBe(0);
+    expect(r.notes).not.toContain("comprehensive-property-tax-credit");
+  });
+
+  it("#CPC-2 1주택 15억 → 공제할 재산세액 5.1만 + 세액공제 차감 후 기준 적용", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: true,
+      ageYears: 70, holdYears: 15,
+    }));
+    // 분자 = applyBracket((15억-12억) × 0.6 × 0.45, SINGLE) = applyBracket(8100만, SINGLE)
+    //      = 8100만 × 0.001 - 30000 = 5.1만 (1.5억 이하 0.1%)
+    expect(r.comprehensivePropertyTaxCredit).toBe(51_000);
+    // 차감 후 종부세 = 90만 - 5.1만 = 84.9만, 80% 세액공제 = 67.92만 (대법원 정합)
+    expect(r.comprehensiveTaxCredit).toBe(679_200);
+    expect(r.notes).toContain("comprehensive-property-tax-credit");
+  });
+
+  it("#CPC-3 다주택 30억 → 공제할 재산세액 적용으로 종부세 ↓", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000, houses: 2, isSingleHouseEligible: false,
+    }));
+    expect(r.branch).toBe("multi-house");
+    // 산출세액 = 1038만, 분자 = applyBracket(7.56억, GENERAL) = 239.4만
+    expect(r.comprehensiveTaxBeforeDeduction).toBe(10_380_000);
+    expect(r.comprehensivePropertyTaxCredit).toBe(2_394_000);
+    expect(r.comprehensiveTax).toBe(7_986_000); // 1038만 - 239.4만 (다주택은 세액공제 0)
+    expect(r.notes).toContain("comprehensive-property-tax-credit");
+  });
+
+  it("#CPC-4 법인 1주택 → 기준금액 0, 공시가 전체로 분자 산정", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: false,
+      isCorporation: true,
+    }));
+    expect(r.branch).toBe("corporation");
+    expect(r.comprehensiveDeduction).toBe(0); // 법인 공제 0
+    // 분자 = applyBracket((15억 - 0) × 0.6 × 0.6, GENERAL) = applyBracket(5.4억, GENERAL) = 5.4e8 × 0.004 - 63만 = 153만
+    // 분모 = applyBracket(15억 × 0.6, GENERAL) = applyBracket(9억, GENERAL) = 297만
+    // 비율 = 153/297, 공제 = 297만 × 153/297 = 153만 (= 분자)
+    expect(r.comprehensivePropertyTaxCredit).toBe(1_530_000);
+    expect(r.notes).toContain("comprehensive-property-tax-credit");
+    expect(r.notes).toContain("corporation-flat-rate-applied");
+  });
+
+  it("#CPC-5 1주택 6억 (공제 미만) → 공제할 재산세액 0 (분기 미진입)", () => {
+    // below-threshold 분기는 공제할 재산세액 산정 자체 미실행
+    const r = calculatePropertyTax(buildInput({ publishedPriceWon: 600_000_000 }));
+    expect(r.branch).toBe("below-threshold");
+    expect(r.comprehensivePropertyTaxCredit).toBe(0);
   });
 });
 
@@ -416,12 +484,17 @@ describe("B-5 부부 공동명의 1주택자 특례 (isSpouseJointSingleHouse)",
     }));
     expect(r.branch).toBe("single-house");
     expect(r.comprehensiveTaxBeforeDeduction).toBe(900_000);
-    expect(r.comprehensiveTaxCredit).toBe(720_000); // 80% 캡 (40+50=90)
-    expect(r.comprehensiveTax).toBe(180_000);
-    expect(r.ruralTax).toBe(36_000); // 18만 × 20%
+    // v3-A ②: 재산세는 GENERAL (isSingleProperty=false, FMR=60%), 분자 = applyBracket(1.08억, GENERAL) = 1.08e8 × 0.0015 - 3만 = 13.2만
+    expect(r.comprehensivePropertyTaxCredit).toBe(132_000);
+    // 차감 후 = 90만 - 13.2만 = 76.8만, 세액공제 80% = 61.44만
+    expect(r.comprehensiveTaxCredit).toBe(614_400);
+    // 종부세 최종 = 76.8만 - 61.44만 = 15.36만
+    expect(r.comprehensiveTax).toBe(153_600);
+    expect(r.ruralTax).toBe(30_720); // 15.36만 × 20%
     expect(r.notes).toContain("age-deduction-eligible");
     expect(r.notes).toContain("hold-deduction-eligible");
     expect(r.notes).toContain("spouse-joint-single-house-applied");
+    expect(r.notes).toContain("comprehensive-property-tax-credit");
   });
 
   // 케이스 #B5-3: 부부 토글 + houses=2 → normalize 에서 false 강제 → general 분기
@@ -434,7 +507,12 @@ describe("B-5 부부 공동명의 1주택자 특례 (isSpouseJointSingleHouse)",
     expect(r.comprehensiveDeduction).toBe(900_000_000); // 일반 9억
     // 공시 30억 - 9억 = 21억 × 60% = 12.6억 → BRACKETS_2 1.3% (25억 이하)
     expect(r.comprehensiveTaxBase).toBe(1_260_000_000);
-    expect(r.comprehensiveTax).toBe(10_380_000); // 12.6억 × 1.3% - 600만
+    // v3-A ②: 산출세액 = 12.6e8 × 0.013 - 600만 = 1038만
+    expect(r.comprehensiveTaxBeforeDeduction).toBe(10_380_000);
+    // 공제할 재산세액 = 분자 = applyBracket(21억 × 0.6 × 0.6, GENERAL) = applyBracket(7.56억, GENERAL) = 7.56e8 × 0.004 - 63만 = 239.4만
+    expect(r.comprehensivePropertyTaxCredit).toBe(2_394_000);
+    // 종부세 최종 = 1038만 - 239.4만 = 798.6만 (다주택은 1주택 세액공제 0)
+    expect(r.comprehensiveTax).toBe(7_986_000);
     expect(r.notes).not.toContain("spouse-joint-single-house-applied");
     expect(r.notes).toContain("general-deduction-9e");
   });

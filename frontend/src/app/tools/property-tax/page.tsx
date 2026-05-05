@@ -34,7 +34,7 @@ export default function PropertyTaxToolPage() {
           <strong>납부 일정:</strong> 재산세 7월 16~31일·9월 16~30일 분납 (50:50). 종합부동산세 12월 1~15일.
         </div>
         <div className="mt-2 p-3 sm:p-4 bg-gray-50 border border-gray-200 rounded-lg text-left text-xs sm:text-sm text-gray-600">
-          <strong>면책:</strong> 표준 계산 참고치입니다. v2 에서 공동명의·합산배제·법인 단일세율 반영 완료. <strong>공제할 재산세액 단순화 + 부부 공동명의 12억 추가 공제</strong> 2건만 다음 업데이트로 미루어집니다. 향교/종교는 산식 영향 없는 신고 절차 특례라 별도 처리 불필요. 정확한 세액은 세무사 상담 권장.
+          <strong>면책:</strong> 표준 계산 참고치입니다. 공동명의·합산배제·법인 단일세율·부부 공동명의 1주택자 특례 반영 완료. <strong>공제할 재산세액 단순화</strong> 1건만 다음 업데이트로 미루어집니다. 향교/종교는 산식 영향 없는 신고 절차 특례라 별도 처리 불필요. 정확한 세액은 세무사 상담 권장.
           <br />
           <span className="text-gray-500">※ 공정시장가액비율 = 공시가에 곱하는 비율 (현재 60%, 1세대1주택 일부 구간 43~45% 인하 예정)</span>
         </div>

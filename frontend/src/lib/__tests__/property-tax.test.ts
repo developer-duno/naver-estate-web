@@ -342,3 +342,69 @@ describe("B-2 합산배제 (excludedHouses)", () => {
     expect(excR.appliedRate.property).toBe(baseR.appliedRate.property);
   });
 });
+
+describe("B-5 부부 공동명의 1주택자 특례 (isSpouseJointSingleHouse)", () => {
+  // 케이스 #B5-1: 부부 토글 + houses=1 + 단독 1주택 자격 false → 1인 합산 12억 공제 (단독 동일 결과)
+  it("부부 토글 + houses=1 + 단독 자격 X → 12억 공제 + single-house 분기 (단독 동일)", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: false,
+      isSpouseJointSingleHouse: true,
+    }));
+    expect(r.branch).toBe("single-house");
+    expect(r.comprehensiveDeduction).toBe(1_200_000_000);
+    // 종부세 과표 = (15억 - 12억) × 60% = 1.8억 → 0.5% = 90만
+    expect(r.comprehensiveTaxBase).toBe(180_000_000);
+    expect(r.comprehensiveTaxBeforeDeduction).toBe(900_000);
+    expect(r.comprehensiveTaxCredit).toBe(0); // ageYears/holdYears 0
+    expect(r.notes).toContain("spouse-joint-single-house-applied");
+    expect(r.notes).toContain("single-house-deduction-12e");
+    expect(r.notes).not.toContain("ownership-applied");
+  });
+
+  // 케이스 #B5-2: 부부 토글 + 70세 + 15년 → 세액공제 80% (납세의무자 연령·보유 기준)
+  it("부부 토글 + 70세 + 15년 → 세액공제 80% (1인 합산 명의자 기준)", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: false,
+      isSpouseJointSingleHouse: true,
+      ageYears: 70, holdYears: 15,
+    }));
+    expect(r.branch).toBe("single-house");
+    expect(r.comprehensiveTaxBeforeDeduction).toBe(900_000);
+    expect(r.comprehensiveTaxCredit).toBe(720_000); // 80% 캡 (40+50=90)
+    expect(r.comprehensiveTax).toBe(180_000);
+    expect(r.ruralTax).toBe(36_000); // 18만 × 20%
+    expect(r.notes).toContain("age-deduction-eligible");
+    expect(r.notes).toContain("hold-deduction-eligible");
+    expect(r.notes).toContain("spouse-joint-single-house-applied");
+  });
+
+  // 케이스 #B5-3: 부부 토글 + houses=2 → normalize 에서 false 강제 → general 분기
+  it("부부 토글 + houses=2 → normalize 강제 false → general 9억 공제 분기", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000, houses: 2, isSingleHouseEligible: false,
+      isSpouseJointSingleHouse: true, // normalize 에서 false 강제
+    }));
+    expect(r.branch).toBe("multi-house");
+    expect(r.comprehensiveDeduction).toBe(900_000_000); // 일반 9억
+    // 공시 30억 - 9억 = 21억 × 60% = 12.6억 → BRACKETS_2 1.3% (25억 이하)
+    expect(r.comprehensiveTaxBase).toBe(1_260_000_000);
+    expect(r.comprehensiveTax).toBe(10_380_000); // 12.6억 × 1.3% - 600만
+    expect(r.notes).not.toContain("spouse-joint-single-house-applied");
+    expect(r.notes).toContain("general-deduction-9e");
+  });
+
+  // 케이스 #B5-4: 부부 토글 + ownershipRatio=0.5 동시 입력 → 특례 우선 (ratio=1 강제)
+  it("부부 토글 + ownershipRatio=0.5 동시 → 특례 우선 (ratio=1 강제, ownership-applied 미푸시)", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: false,
+      isSpouseJointSingleHouse: true,
+      ownershipRatio: 0.5,
+    }));
+    // ratio=0.5 무효 → effectivePublished=15억 그대로 → 12억 공제 → 1.8억 과표
+    expect(r.comprehensiveTaxBase).toBe(180_000_000);
+    expect(r.branch).toBe("single-house");
+    expect(r.comprehensiveDeduction).toBe(1_200_000_000);
+    expect(r.notes).toContain("spouse-joint-single-house-applied");
+    expect(r.notes).not.toContain("ownership-applied"); // ratio=1 강제로 미푸시
+  });
+});

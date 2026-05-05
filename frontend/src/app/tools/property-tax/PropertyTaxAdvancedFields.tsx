@@ -1,6 +1,6 @@
 "use client";
 
-import type { CorporationGeneralRateCategory } from "@/lib/property-tax-types";
+import type { CorporationGeneralRateCategory, SpecialHousesInput } from "@/lib/property-tax-types";
 
 interface Props {
   houses: 1 | 2 | 3;
@@ -10,12 +10,27 @@ interface Props {
   isSingleHouseEligible: boolean;
   isSpouseJointSingleHouse: boolean;
   corporationGeneralRateCategory: CorporationGeneralRateCategory | "";
+  specialHouses: SpecialHousesInput;
   onExcludedHousesChange: (v: number) => void;
   onOwnershipPercentChange: (v: number) => void;
   onIsCorporationChange: (v: boolean) => void;
   onIsSpouseJointSingleHouseChange: (v: boolean) => void;
   onCorporationGeneralRateCategoryChange: (v: CorporationGeneralRateCategory | "") => void;
+  onSpecialHouseEntryChange: (key: keyof SpecialHousesInput, field: "count" | "publishedTotal", value: number) => void;
 }
+
+// PDF #12 페이지 1·2 본문 박제 — 5종 카테고리 라벨 + 자격 요건 (UI 안내)
+const SPECIAL_HOUSE_OPTIONS: Array<{
+  key: keyof SpecialHousesInput;
+  label: string;
+  qualification: string;
+}> = [
+  { key: "temporary2", label: "① 일시적2주택 (신규주택)", qualification: "신규주택 취득일 ≤3년" },
+  { key: "inherited", label: "② 상속주택", qualification: "상속개시일 ≤5년 (5년 초과 시 지분 ≤40% or 지분 공시가 ≤6억(수도권 밖 3억) 포함)" },
+  { key: "ruralLowPrice", label: "③ 지방저가주택", qualification: "공시가 ≤4억 + 수도권 밖 (수도권은 가평·연천·강화·옹진만)" },
+  { key: "populationDecline", label: "④ 인구감소지역주택", qualification: "공시가 ≤4억 + 인구감소지역 + 2024~2026.12.31 취득 + 기존 1주택과 다른 시·군·구" },
+  { key: "postCompletionUnsold", label: "⑤ 준공후미분양주택", qualification: "전용 ≤85㎡ + 취득가 ≤6억 + 수도권 밖 + 2024.1.10~2025.12.31 + 양도자 사업주체/시공자 + 시·군·구청장 확인" },
+];
 
 // PDF #14 페이지 2 표 직접 박제 — 9 카테고리 라벨 (UI 표시 + Notice 본문 동일)
 const CORP_GENERAL_OPTIONS: Array<{ value: CorporationGeneralRateCategory; label: string }> = [
@@ -37,8 +52,10 @@ export default function PropertyTaxAdvancedFields(props: Props) {
   const {
     houses, excludedHouses, ownershipPercent, isCorporation,
     isSingleHouseEligible, isSpouseJointSingleHouse, corporationGeneralRateCategory,
+    specialHouses,
     onExcludedHousesChange, onOwnershipPercentChange, onIsCorporationChange,
     onIsSpouseJointSingleHouseChange, onCorporationGeneralRateCategoryChange,
+    onSpecialHouseEntryChange,
   } = props;
 
   const advancedDisabled = isCorporation;
@@ -46,6 +63,8 @@ export default function PropertyTaxAdvancedFields(props: Props) {
   const spouseJointDisabled = !(houses === 1 && isSingleHouseEligible && !isCorporation);
   // 부부 토글 켜진 동안 ownershipPercent 자동 disabled (1인 합산 납세이므로 지분 % 무의미)
   const ownershipDisabled = advancedDisabled || isSpouseJointSingleHouse;
+  // 5종 특례주택: 1주택 + 1세대1주택 자격 + 비법인 시만 활성 (PDF #12 본문 자격)
+  const specialHousesDisabled = !(houses === 1 && isSingleHouseEligible && !isCorporation);
 
   return (
     <details className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
@@ -157,6 +176,61 @@ export default function PropertyTaxAdvancedFields(props: Props) {
             </span>
           </span>
         </label>
+
+        {/* 1세대1주택 5종 특례주택 (PDF #12, 세션 112) — 1주택 자격 + 비법인 시만 활성 */}
+        <fieldset disabled={specialHousesDisabled} className={specialHousesDisabled ? "opacity-50" : ""}>
+          <legend className="text-sm font-medium text-gray-700">
+            1세대1주택 5종 특례주택 (PDF #12 — 1주택 + 특례주택 = 1주택 자격 인정)
+          </legend>
+          <p className="mt-1 mb-2 text-xs text-gray-500">
+            {specialHousesDisabled
+              ? "1주택 + 1세대1주택자 자격 충족 + 비법인 시만 활성화 (PDF #12 거주자 1주택 전제)"
+              : "5종 중 본인 케이스 1~2개만 입력 가능 (모르면 비움 → 미적용). 신청 시 12억 공제 + 세액공제 80% (안분). 매년 9.16~9.30 신청 (별지 제24호 서식). 자격 본인 책임."}
+          </p>
+          <details className="rounded border border-gray-200 px-2 py-1.5 text-xs bg-white">
+            <summary className="cursor-pointer text-gray-700">5종 자격 안내 펼치기 (PDF #12 본문)</summary>
+            <ul className="mt-2 space-y-1 text-gray-600 list-disc pl-4">
+              {SPECIAL_HOUSE_OPTIONS.map((opt) => (
+                <li key={opt.key}><strong>{opt.label}</strong>: {opt.qualification}</li>
+              ))}
+            </ul>
+          </details>
+          <div className="mt-3 space-y-3">
+            {SPECIAL_HOUSE_OPTIONS.map((opt) => {
+              const entry = specialHouses[opt.key];
+              const count = entry?.count ?? 0;
+              const publishedTotal = entry?.publishedTotal ?? 0;
+              return (
+                <div key={opt.key} className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                  <span className="text-sm text-gray-700">{opt.label}</span>
+                  <select
+                    aria-label={`${opt.label} 채수`}
+                    value={count}
+                    onChange={(e) => onSpecialHouseEntryChange(opt.key, "count", Number(e.target.value) || 0)}
+                    disabled={specialHousesDisabled}
+                    className={INPUT_CLASS}
+                  >
+                    {[0, 1, 2, 3].map((n) => (
+                      <option key={n} value={n}>{n}채</option>
+                    ))}
+                  </select>
+                  <input
+                    aria-label={`${opt.label} 합계 공시가 (만원)`}
+                    type="number"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    min={0}
+                    value={publishedTotal || ""}
+                    onChange={(e) => onSpecialHouseEntryChange(opt.key, "publishedTotal", Number(e.target.value) || 0)}
+                    disabled={specialHousesDisabled || count === 0}
+                    placeholder="합계 공시가 (만원)"
+                    className={INPUT_CLASS}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </fieldset>
       </div>
     </details>
   );

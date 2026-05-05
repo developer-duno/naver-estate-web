@@ -1,6 +1,6 @@
 "use client";
 
-import type { CorporationGeneralRateCategory } from "@/lib/property-tax-types";
+import type { CorporationGeneralRateCategory, SpecialHousesInput } from "@/lib/property-tax-types";
 import PropertyTaxAdvancedFields from "./PropertyTaxAdvancedFields";
 
 interface Props {
@@ -15,6 +15,7 @@ interface Props {
   isCorporation: boolean;
   isSpouseJointSingleHouse: boolean;
   corporationGeneralRateCategory: CorporationGeneralRateCategory | "";
+  specialHouses: SpecialHousesInput;
 
   onPublishedManwonChange: (v: number) => void;
   onHousesChange: (v: 1 | 2 | 3) => void;
@@ -27,6 +28,7 @@ interface Props {
   onIsCorporationChange: (v: boolean) => void;
   onIsSpouseJointSingleHouseChange: (v: boolean) => void;
   onCorporationGeneralRateCategoryChange: (v: CorporationGeneralRateCategory | "") => void;
+  onSpecialHouseEntryChange: (key: keyof SpecialHousesInput, field: "count" | "publishedTotal", value: number) => void;
 }
 
 const INPUT_CLASS =
@@ -38,11 +40,12 @@ export default function PropertyTaxInputs(props: Props) {
   const {
     publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon,
     excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse,
-    corporationGeneralRateCategory,
+    corporationGeneralRateCategory, specialHouses,
     onPublishedManwonChange, onHousesChange, onIsSingleHouseEligibleChange,
     onAgeYearsChange, onHoldYearsChange, onPrevYearTaxManwonChange,
     onExcludedHousesChange, onOwnershipPercentChange, onIsCorporationChange,
     onIsSpouseJointSingleHouseChange, onCorporationGeneralRateCategoryChange,
+    onSpecialHouseEntryChange,
   } = props;
 
   const singleActive = isSingleHouseEligible && houses === 1;
@@ -120,11 +123,13 @@ export default function PropertyTaxInputs(props: Props) {
         isSingleHouseEligible={isSingleHouseEligible}
         isSpouseJointSingleHouse={isSpouseJointSingleHouse}
         corporationGeneralRateCategory={corporationGeneralRateCategory}
+        specialHouses={specialHouses}
         onExcludedHousesChange={onExcludedHousesChange}
         onOwnershipPercentChange={onOwnershipPercentChange}
         onIsCorporationChange={onIsCorporationChange}
         onIsSpouseJointSingleHouseChange={onIsSpouseJointSingleHouseChange}
         onCorporationGeneralRateCategoryChange={onCorporationGeneralRateCategoryChange}
+        onSpecialHouseEntryChange={onSpecialHouseEntryChange}
       />
 
       {singleActive ? (

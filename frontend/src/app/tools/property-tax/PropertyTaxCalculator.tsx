@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { calculatePropertyTax } from "@/lib/property-tax";
-import type { PropertyTaxInput, CorporationGeneralRateCategory } from "@/lib/property-tax-types";
+import type { PropertyTaxInput, CorporationGeneralRateCategory, SpecialHousesInput } from "@/lib/property-tax-types";
 import PropertyTaxInputs from "./PropertyTaxInputs";
 import PropertyTaxResultCard from "./PropertyTaxResultCard";
 
@@ -19,6 +19,16 @@ export default function PropertyTaxCalculator() {
   const [isSpouseJointSingleHouse, setIsSpouseJointSingleHouse] = useState(false);
   const [corporationGeneralRateCategory, setCorporationGeneralRateCategory] =
     useState<CorporationGeneralRateCategory | "">("");
+  // 5종 특례주택 (PDF #12, 세션 112) — 카테고리별 { count, publishedTotal } 저장
+  const [specialHouses, setSpecialHouses] = useState<SpecialHousesInput>({});
+
+  // 5종 특례주택 entry 갱신 핸들러 (카테고리 + 필드 + 값)
+  const handleSpecialHouseEntryChange = useCallback((key: keyof SpecialHousesInput, field: "count" | "publishedTotal", value: number) => {
+    setSpecialHouses((prev) => ({
+      ...prev,
+      [key]: { count: prev[key]?.count ?? 0, publishedTotal: prev[key]?.publishedTotal ?? 0, [field]: value },
+    }));
+  }, []);
 
   // 부부 토글 켤 때 ownershipPercent 자동 0 리셋 (1인 합산 납세 → 지분 % 무의미, 화면 모순 차단)
   const handleIsSpouseJointSingleHouseChange = (v: boolean) => {
@@ -47,9 +57,10 @@ export default function PropertyTaxCalculator() {
       isCorporation,
       isSpouseJointSingleHouse,
       corporationGeneralRateCategory: corporationGeneralRateCategory || undefined,
+      specialHouses: Object.keys(specialHouses).length > 0 ? specialHouses : undefined,
     };
     return calculatePropertyTax(input);
-  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse, corporationGeneralRateCategory]);
+  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse, corporationGeneralRateCategory, specialHouses]);
 
   return (
     <div className="space-y-4">
@@ -65,6 +76,7 @@ export default function PropertyTaxCalculator() {
         isCorporation={isCorporation}
         isSpouseJointSingleHouse={isSpouseJointSingleHouse}
         corporationGeneralRateCategory={corporationGeneralRateCategory}
+        specialHouses={specialHouses}
         onPublishedManwonChange={setPublishedManwon}
         onHousesChange={setHouses}
         onIsSingleHouseEligibleChange={setIsSingleHouseEligible}
@@ -76,6 +88,7 @@ export default function PropertyTaxCalculator() {
         onIsCorporationChange={handleIsCorporationChange}
         onIsSpouseJointSingleHouseChange={handleIsSpouseJointSingleHouseChange}
         onCorporationGeneralRateCategoryChange={setCorporationGeneralRateCategory}
+        onSpecialHouseEntryChange={handleSpecialHouseEntryChange}
       />
       <PropertyTaxResultCard
         result={result}

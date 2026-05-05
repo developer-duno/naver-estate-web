@@ -14,7 +14,7 @@
 
 | # | 한국어 파일명 | 영문 alias | 주요 사용처 (NoticeKey / 산식) | 검수 세션 |
 |---|---|---|---|---|
-| 1 | 지방세법(법률)(제21308호)(20260424).pdf | local-tax-law | property-tax-brackets §111의2 / §122 (cap) | 103·105·108 |
+| 1 | 지방세법(법률)(제21308호)(20260424).pdf | local-tax-law | property-tax-brackets §111의2 / §122 (cap) / 시행령 §109 1주택 차등 | 103·105·108·110 |
 | 2 | 국세청 종합부동산세 법령 안내자료.pdf | comprehensive-tax-overview | property-tax 전체 분기 | 103 |
 | 3 | 국세청 세액계산 흐름도.pdf | tax-calc-flowchart | fair-market-ratio-60 / 4단계 산식 | 103·108 |
 | 4 | 국세청세율.pdf | tax-rates | COMPREHENSIVE_BRACKETS_2 / _3 | 103 |
@@ -122,7 +122,8 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 | ~~worktrees 잔재 5개~~ ✅ 세션 110 정리 (`git worktree prune` 완료) | (해소) | UNC 경로 폴더(`//192.168.219.101/Code/...`)는 다른 PC 네트워크 공유라 본 PC에서 미접근 |
 | ~~R21 e2e 검증 미완~~ ✅ 세션 110 재실행 통과 (run 25361059023 success: Frontend CI + Frontend E2E admin 둘 다 🟢) | (해소) | 부부 공동명의 #10 strict mode 정정 진짜 통과 확증 |
 | complex-visual baseline | 세션 71 답습, R20+R21 별건 | 시각 회귀 |
-| v3-A 재산세 1주택 차등 | property-tax 미출시 | 면책 박스 2건 노란불 (5~7시간) |
+| ~~v3-A ① 재산세 1주택 차등~~ ✅ 세션 110 출시 (지방세법 시행령 §109 — 3억 43% / 6억 44% / 6억 초과 45%) | (해소) | 면책 박스 2건 → 1건 (종부세 공제할 재산세액만 미반영) |
+| v3-A ② 종부세 공제할 재산세액 산정 | property-tax 미출시 (종부세법 시행령 §4의2·§5의3) | 면책 박스 1건 (도구 100% 정확화 시 0건) |
 | 1세대 1주택 5종 특례주택 | property-tax 미출시 (PDF #12·#13 참조) | 후속 후보 — 일시적2주택·상속·지방저가·인구감소·준공후미분양 |
 | 법인 9종 누진 토글 | property-tax 미출시 (PDF #14 참조) | 후속 후보 — 공익법인등·공공주택사업자·주택조합·정비사업시행자·민간건설임대사업자·도시개발사업시행자·사회적기업등·종중 |
 | ASSETS.md / GLOSSARY.md drift 자동화 | hook 없음 | §7 관행으로만 차단 (수동) |

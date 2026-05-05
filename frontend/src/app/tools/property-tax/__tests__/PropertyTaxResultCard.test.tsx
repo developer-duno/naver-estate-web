@@ -9,7 +9,7 @@ function buildTestResult(over: Partial<PropertyTaxResult>): PropertyTaxResult {
     branch: "single-house",
     propertyTaxBase: 600_000_000, propertyTax: 1_000_000,
     comprehensiveDeduction: 1_200_000_000, comprehensiveTaxBase: 0,
-    comprehensiveTaxBeforeDeduction: 0, comprehensiveTaxCredit: 0, comprehensiveTax: 0,
+    comprehensiveTaxBeforeDeduction: 0, comprehensivePropertyTaxCredit: 0, comprehensiveTaxCredit: 0, comprehensiveTax: 0,
     totalTax: 1_000_000, ruralTax: 0, grandTotal: 1_000_000,
     uncappedGrandTotal: 1_000_000, wasCapped: false,
     effectiveRate: 0.001,
@@ -44,7 +44,7 @@ describe("PropertyTaxResultCard 분기별 라벨 (4분기 × 누진세율 표기
   it("single-house 분기 + 세액공제 → 세액공제 행 표시 + grandTotal 강조", () => {
     render(<PropertyTaxResultCard result={buildTestResult({
       branch: "single-house",
-      comprehensiveTaxBeforeDeduction: 5_000_000,
+      comprehensiveTaxBeforeDeduction: 5_000_000, comprehensivePropertyTaxCredit: 0,
       comprehensiveTaxCredit: 2_000_000,
       comprehensiveTax: 3_000_000,
       ruralTax: 600_000,

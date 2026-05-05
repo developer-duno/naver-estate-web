@@ -44,6 +44,7 @@ export default function PropertyTaxResultCard({ result, excludedHouses, ownershi
   const branchInfo = BRANCH_TEXT[result.branch];
   const empty = result.branch === "empty";
   const showRural = result.ruralTax > 0;
+  const showCompPropertyCredit = result.comprehensivePropertyTaxCredit > 0;
   const showCredit = result.comprehensiveTaxCredit > 0;
   const showExcluded = !empty && (excludedHouses ?? 0) > 0;
   const showOwnership = !empty && ownershipPercent !== undefined && ownershipPercent > 0 && ownershipPercent < 100;
@@ -80,6 +81,16 @@ export default function PropertyTaxResultCard({ result, excludedHouses, ownershi
                 </td>
                 <td className="py-1.5 text-right">{result.comprehensiveTax.toLocaleString()}원</td>
               </tr>
+              {showCompPropertyCredit && (
+                <tr>
+                  <td className="py-1.5 text-gray-600">
+                    └ 공제할 재산세액 (이중과세 방지)
+                  </td>
+                  <td className="py-1.5 text-right text-green-700">
+                    -{result.comprehensivePropertyTaxCredit.toLocaleString()}원
+                  </td>
+                </tr>
+              )}
               {showCredit && (
                 <tr>
                   <td className="py-1.5 text-gray-600">

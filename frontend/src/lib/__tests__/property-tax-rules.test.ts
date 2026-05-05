@@ -67,3 +67,49 @@ describe("normalizeInput — Phase A-0 정규화 안전망", () => {
     expect(result.isSingleHouseEligible).toBe(false);
   });
 });
+
+describe("normalizeInput — 5종 특례주택 (PDF #12, 세션 112)", () => {
+  const singleBase: PropertyTaxInput = {
+    publishedPriceWon: 1_500_000_000, houses: 1,
+    isSingleHouseEligible: true, ageYears: 0, holdYears: 0,
+  };
+
+  // 케이스 1: 1주택 + 자격 + 비법인 + 1 카테고리 입력 — 보존
+  it("자격 충족 (1주택 + 1세대1주택 + 비법인) — specialHouses 보존", () => {
+    const r = normalizeInput({ ...singleBase, specialHouses: { temporary2: { count: 1, publishedTotal: 50_000 } } });
+    expect(r.specialHouses).toEqual({ temporary2: { count: 1, publishedTotal: 50_000 } });
+  });
+
+  // 케이스 2: 다주택 시 자동 차단
+  it("houses !== 1 시 specialHouses=undefined 강제", () => {
+    const r = normalizeInput({ ...singleBase, houses: 2, isSingleHouseEligible: false, specialHouses: { inherited: { count: 1, publishedTotal: 30_000 } } });
+    expect(r.specialHouses).toBeUndefined();
+  });
+
+  // 케이스 3: 자격 미충족 시 자동 차단
+  it("isSingleHouseEligible=false 시 specialHouses=undefined 강제", () => {
+    const r = normalizeInput({ ...singleBase, isSingleHouseEligible: false, specialHouses: { ruralLowPrice: { count: 1, publishedTotal: 40_000 } } });
+    expect(r.specialHouses).toBeUndefined();
+  });
+
+  // 케이스 4: 법인 시 자동 차단
+  it("isCorporation=true 시 specialHouses=undefined 강제", () => {
+    const r = normalizeInput({ ...singleBase, isCorporation: true, specialHouses: { populationDecline: { count: 1, publishedTotal: 30_000 } } });
+    expect(r.specialHouses).toBeUndefined();
+  });
+
+  // 케이스 5: count 음수/Infinity/NaN/4 이상 → clamp (음수 0, 4+ → 3)
+  it("count clamp — 음수 0, Infinity 0, NaN 0, 4 이상 3 강제", () => {
+    expect(normalizeInput({ ...singleBase, specialHouses: { temporary2: { count: -1, publishedTotal: 50_000 } } }).specialHouses).toBeUndefined();
+    expect(normalizeInput({ ...singleBase, specialHouses: { temporary2: { count: Infinity, publishedTotal: 50_000 } } }).specialHouses).toBeUndefined();
+    expect(normalizeInput({ ...singleBase, specialHouses: { temporary2: { count: NaN, publishedTotal: 50_000 } } }).specialHouses).toBeUndefined();
+    expect(normalizeInput({ ...singleBase, specialHouses: { temporary2: { count: 10, publishedTotal: 50_000 } } }).specialHouses).toEqual({ temporary2: { count: 3, publishedTotal: 50_000 } });
+  });
+
+  // 케이스 6: count=0 시 publishedTotal=0 강제 + entry undefined 정리
+  it("count=0 시 publishedTotal=0 강제 + entry undefined 정리 (양립 모순 차단)", () => {
+    const r = normalizeInput({ ...singleBase, specialHouses: { temporary2: { count: 0, publishedTotal: 50_000 }, inherited: { count: 1, publishedTotal: 30_000 } } });
+    expect(r.specialHouses?.temporary2).toBeUndefined();
+    expect(r.specialHouses?.inherited).toEqual({ count: 1, publishedTotal: 30_000 });
+  });
+});

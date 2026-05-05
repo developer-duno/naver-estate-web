@@ -38,7 +38,7 @@ describe("PropertyTaxResultCard 분기별 라벨 (4분기 × 누진세율 표기
     })} />);
     expect(screen.getByText(/종부세 과세표준 0/)).toBeInTheDocument();
     expect(screen.getByText(/종부세 \(공제 미만\)/)).toBeInTheDocument();
-    expect(screen.getByText(/재산세 \(0.1%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/재산세 \(공정시장 60% × 0.1%\)/)).toBeInTheDocument();
   });
 
   it("single-house 분기 + 세액공제 → 세액공제 행 표시 + grandTotal 강조", () => {
@@ -68,7 +68,7 @@ describe("PropertyTaxResultCard 분기별 라벨 (4분기 × 누진세율 표기
       notes: ["disclaimer", "general-deduction-9e", "multi-heavy-25e"],
     })} />);
     expect(screen.getByText(/다주택자/)).toBeInTheDocument();
-    expect(screen.getByText(/재산세 \(0.4%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/재산세 \(공정시장 60% × 0.4%\)/)).toBeInTheDocument();
     expect(screen.getByText(/종부세 \(2.7%\)/)).toBeInTheDocument();
     expect(screen.getByText(/41,000,000원/)).toBeInTheDocument();
     expect(screen.getByText(/3주택 이상.*25억 초과.*중과/)).toBeInTheDocument();

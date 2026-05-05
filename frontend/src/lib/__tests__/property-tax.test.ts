@@ -39,14 +39,17 @@ describe("1세대1주택 — 공제 12억 + 특례세율", () => {
     // 공시 6억 < 12억 공제 → 종부세 0, 재산세만
     const r = calculatePropertyTax(buildInput({ publishedPriceWon: 600_000_000 }));
     expect(r.branch).toBe("below-threshold");
-    // 재산세 과표 = 6억 × 60% = 3.6억 (3억 초과, 특례세율 0.35%)
-    expect(r.propertyTaxBase).toBe(360_000_000);
-    // 재산세 = 3.6e8 × 0.35% - 63만 = 126만 - 63만 = 63만
-    expect(r.propertyTax).toBe(630_000);
+    // v3-A ①: 1주택 + 6억 → 차등 공정시장가액비율 44% (3억 초과 6억 이하) 적용
+    // 재산세 과표 = 6억 × 44% = 2.64억 (3억 이하 특례세율 0.2%)
+    expect(r.propertyTaxBase).toBe(264_000_000);
+    // 재산세 = 2.64e8 × 0.2% - 18만 = 52.8만 - 18만 = 34.8만
+    expect(r.propertyTax).toBe(348_000);
     expect(r.comprehensiveTax).toBe(0);
     expect(r.notes).toContain("below-comprehensive-threshold");
     expect(r.notes).toContain("single-house-special-rate");
     expect(r.notes).toContain("single-house-deduction-12e");
+    expect(r.notes).toContain("single-house-fair-market-ratio");
+    expect(r.appliedRate.propertyFairMarketRatio).toBe(0.44);
   });
 
   it("#2 공시 15억 (1주택, 70세, 15년+ 보유) → 세액공제 80% 적용", () => {
@@ -77,6 +80,49 @@ describe("1세대1주택 — 공제 12억 + 특례세율", () => {
     expect(r.comprehensiveTaxBeforeDeduction).toBe(2_760_000);
     // 세액공제 40% = 110.4만 → floor 1_104_000
     expect(r.comprehensiveTaxCredit).toBe(1_104_000);
+  });
+});
+
+describe("v3-A ① 1주택 재산세 차등 공정시장가액비율 (지방세법 시행령 §109)", () => {
+  it("#FMR-1 1주택 + 시가표준액 2.5억 → 43% 적용 (3억 이하 구간)", () => {
+    const r = calculatePropertyTax(buildInput({ publishedPriceWon: 250_000_000 }));
+    expect(r.appliedRate.propertyFairMarketRatio).toBe(0.43);
+    expect(r.propertyTaxBase).toBe(107_500_000); // 2.5e8 × 0.43
+    expect(r.notes).toContain("single-house-fair-market-ratio");
+    expect(r.notes).not.toContain("fair-market-ratio-60");
+  });
+
+  it("#FMR-2 1주택 + 5억 → 44% 적용 (3억 초과 6억 이하)", () => {
+    const r = calculatePropertyTax(buildInput({ publishedPriceWon: 500_000_000 }));
+    expect(r.appliedRate.propertyFairMarketRatio).toBe(0.44);
+    expect(r.propertyTaxBase).toBe(220_000_000); // 5e8 × 0.44
+    expect(r.notes).toContain("single-house-fair-market-ratio");
+  });
+
+  it("#FMR-3 1주택 + 8억 → 45% 적용 (6억 초과, 9억 이하)", () => {
+    const r = calculatePropertyTax(buildInput({ publishedPriceWon: 800_000_000 }));
+    expect(r.appliedRate.propertyFairMarketRatio).toBe(0.45);
+    expect(r.propertyTaxBase).toBe(360_000_000); // 8e8 × 0.45
+    expect(r.notes).toContain("single-house-fair-market-ratio");
+  });
+
+  it("#FMR-4 1주택 + 12억 → 45% 적용 (9억 초과 한도 없음 검증)", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_200_000_000, houses: 1, isSingleHouseEligible: true,
+    }));
+    expect(r.appliedRate.propertyFairMarketRatio).toBe(0.45);
+    expect(r.propertyTaxBase).toBe(540_000_000); // 12e8 × 0.45
+    expect(r.notes).toContain("single-house-fair-market-ratio");
+  });
+
+  it("#FMR-5 다주택 (houses=2) → 60% 유지 (NoticeKey 미푸시)", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 600_000_000, houses: 2, isSingleHouseEligible: false,
+    }));
+    expect(r.appliedRate.propertyFairMarketRatio).toBe(0.6);
+    expect(r.propertyTaxBase).toBe(360_000_000); // 6e8 × 0.60
+    expect(r.notes).not.toContain("single-house-fair-market-ratio");
+    expect(r.notes).toContain("fair-market-ratio-60");
   });
 });
 

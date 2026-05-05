@@ -56,9 +56,27 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   const effectiveHouses = Math.max(0, input.houses - excludedHouses);
   const isSpouseJointSingle = input.isSpouseJointSingleHouse === true; // B-5 부부 공동명의 1주택자 특례
   const isSingleProperty = input.isSingleHouseEligible && input.houses === 1;       // 재산세 1주택 특례 (특례세율 §111의2 + 차등 공정시장가액비율 §109)
-  // 종부세 1주택 공제: 본인 단독 1세대1주택 OR 부부 공동명의 1주택 특례 (PDF: 1인 합산 12억)
-  const isSingleComprehensive = (input.isSingleHouseEligible || isSpouseJointSingle) && effectiveHouses === 1;
+  // 세션 112: 5종 특례주택 (PDF #12) — normalize 가드 통과 시점에서 specialHouses 존재 시 자격 충족 확정
+  // (normalize 에서 houses=1 + isSingleHouseEligible + 비법인 가드 처리, 여기서는 합산만)
+  // 카테고리 미입력 시 ?? 0 가드 (NaN 방지)
+  const sh = input.specialHouses;
+  const specialHousesCount = (sh?.temporary2?.count ?? 0) + (sh?.inherited?.count ?? 0) +
+    (sh?.ruralLowPrice?.count ?? 0) + (sh?.populationDecline?.count ?? 0) + (sh?.postCompletionUnsold?.count ?? 0);
+  const specialHousesPublishedTotal = ((sh?.temporary2?.publishedTotal ?? 0) + (sh?.inherited?.publishedTotal ?? 0) +
+    (sh?.ruralLowPrice?.publishedTotal ?? 0) + (sh?.populationDecline?.publishedTotal ?? 0) + (sh?.postCompletionUnsold?.publishedTotal ?? 0)) * 10000; // 만원→원
+  const isSingleSpecialHouseEligible = !isSpouseJointSingle && specialHousesCount > 0; // B-5 우선: 부부 공동명의 시 안분 비활성
+  // 종부세 1주택 공제: 본인 단독 1세대1주택 OR 부부 공동명의 1주택 특례 OR 5종 특례주택 자격 (PDF: 1인 합산 12억)
+  const isSingleComprehensive = (input.isSingleHouseEligible || isSpouseJointSingle || isSingleSpecialHouseEligible) && effectiveHouses === 1;
   if (excludedHouses > 0) notes.push("exclusion-applied");
+  if (sh) {
+    if (isSingleSpecialHouseEligible) notes.push("special-houses-applied");
+    else if (isSpouseJointSingle) notes.push("special-houses-spouse-joint-priority"); // B-5 우선 적용 안내
+  }
+  // normalize 에서 차단된 경우 raw input 으로 사용자 시도 감지 → 안내 push
+  if (rawInput.specialHouses && !sh) {
+    if (rawInput.isCorporation === true) notes.push("special-houses-corp-blocked");
+    else if (rawInput.houses !== 1) notes.push("special-houses-multi-house-blocked");
+  }
 
   // B-3 공동명의: ratio 는 종부세 진입값 (effectivePublished) 에만 적용. 재산세는 영향 없음 (사용자 입력 = 본인 지분 공시가 가정).
   // B-5 특례 적용 시: 1인 합산 납세 → ratio=1 강제 (인별 과세 우회), ownership-applied 미푸시
@@ -158,10 +176,20 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
 
   // ===== 4단계: 1세대1주택 세액공제 (개인 1주택만, 법인 차단) =====
   // 대법원 2019두39796: 세액공제는 공제할 재산세액 차감 후 종부세액 기준 (이중공제 방지).
+  // 세션 112 PDF #12: 5종 특례주택 자격 시 안분 산식 적용 — "산출세액 중 특례주택을 제외한 1주택이 차지하는 부분"
+  //   안분 비율 = effectivePublished / (effectivePublished + specialHousesPublishedTotal)
+  //   분모 0 시 1.0 fallback (안분 비활성), 분모 단위 = 공시가 (FMR 미적용, PDF 본문 명시 부재 → mdx 면책)
   let comprehensiveTaxCredit = 0;
   if (!isCorp && isSingleComprehensive) {
     const creditRate = totalCreditRate(input.ageYears, input.holdYears);
-    comprehensiveTaxCredit = Math.floor(comprehensiveTaxAfterPropertyCredit * creditRate);
+    // 5종 특례주택 안분 (B-5 우선 시 비활성 — isSingleSpecialHouseEligible 가 false 강제됨)
+    const proRationDenominator = effectivePublished + specialHousesPublishedTotal;
+    const proRationRatio = (isSingleSpecialHouseEligible && proRationDenominator > 0)
+      ? effectivePublished / proRationDenominator
+      : 1.0;
+    const taxBaseForCredit = Math.floor(comprehensiveTaxAfterPropertyCredit * proRationRatio);
+    comprehensiveTaxCredit = Math.floor(taxBaseForCredit * creditRate);
+    if (isSingleSpecialHouseEligible && proRationRatio < 1.0) notes.push("special-houses-credit-prorated");
     if (input.ageYears >= 60) notes.push("age-deduction-eligible");
     if (input.holdYears >= 5) notes.push("hold-deduction-eligible");
   }

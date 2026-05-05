@@ -12,6 +12,31 @@ export type Houses = 1 | 2 | 3;
 export type PropertyTaxBranch = "empty" | "below-threshold" | "single-house" | "multi-house" | "corporation";
 
 /**
+ * 1세대 1주택자 5종 특례주택 (PDF #12 페이지 1·2·3 직접 박제, 세션 112).
+ * 사용자가 1주택 보유 + 아래 5종 중 어느 하나(들)을 함께 소유 시 신청에 의해 1세대1주택자로 봄.
+ * - 신청 효과: 기본공제 12억 + 세액공제 최대 80% (특례주택 제외 1주택 부분만 안분)
+ * - 자격 본인 책임 (PDF 본문 자격 요건 사용자가 직접 확인 필요)
+ *
+ * 카테고리별 자격 (PDF #12 페이지 1·2 본문):
+ * - temporary2:           ① 신규주택(일시적2주택) — 신규주택 취득일 ≤3년
+ * - inherited:            ② 상속주택 — 상속개시일 ≤5년 (5년 초과 시 지분율 ≤40% or 지분 공시가 ≤6억(수도권 밖 3억) 포함)
+ * - ruralLowPrice:        ③ 지방저가주택 — 공시가 ≤4억 + 수도권 밖 (수도권은 가평·연천·강화·옹진만)
+ * - populationDecline:    ④ 인구감소지역주택 — 공시가 ≤4억 + 인구감소지역 + 2024~2026.12.31 취득 + 기존 1주택과 다른 시·군·구
+ * - postCompletionUnsold: ⑤ 준공후미분양주택 — 전용 ≤85㎡ + 취득가 ≤6억 + 수도권 밖 + 2024.1.10~2025.12.31 + 양도자 사업주체/시공자 + 시·군·구청장 확인
+ */
+export interface SpecialHouseEntry {
+  count: number;          // 채수 (0~3, normalize 에서 clamp)
+  publishedTotal: number; // 합계 공시가 (만원, normalize 에서 ×10000 변환)
+}
+export interface SpecialHousesInput {
+  temporary2?: SpecialHouseEntry;          // ① 일시적2주택
+  inherited?: SpecialHouseEntry;           // ② 상속주택
+  ruralLowPrice?: SpecialHouseEntry;       // ③ 지방저가주택
+  populationDecline?: SpecialHouseEntry;   // ④ 인구감소지역주택
+  postCompletionUnsold?: SpecialHouseEntry; // ⑤ 준공후미분양주택
+}
+
+/**
  * 법인 9종 일반 누진세율 특례 카테고리 (PDF #14 페이지 2 표 직접 박제).
  * - public-charity-other: ① 공익법인등 (②에 해당하지 아니하는 경우) — 2주택 이하 기본세율 / 3주택 이상 중과세율
  * - public-charity-direct: ② 공익법인등 (직접 공익목적 사용 주택만 보유) — 항상 기본세율
@@ -56,6 +81,11 @@ export type PropertyTaxNoticeKey =
   | "corporation-flat-rate-applied" // 법인 단일세율 적용 (2.7% / 5.0%) (B-4)
   | "corporation-no-credit"       // 법인 1주택 공제·세액공제 자동 차단 안내 (B-4)
   | "corporation-general-rate-applied" // 법인 9종 일반 누진세율 특례 적용 (PDF #14 카테고리 라디오, 세션 111)
+  | "special-houses-applied"      // 1세대1주택 5종 특례주택 자격 적용 — 12억 공제 + 세액공제 안분 (PDF #12, 세션 112)
+  | "special-houses-credit-prorated" // 5종 특례주택 안분 비율 적용 (1주택 / (1주택 + 특례주택) 공시가 비율)
+  | "special-houses-corp-blocked" // 5종 특례주택 법인 자동 차단 안내 (PDF #12 "거주자" 명시)
+  | "special-houses-multi-house-blocked" // 5종 특례주택 다주택자 자동 차단 안내 (PDF #12 "1주택" 강제)
+  | "special-houses-spouse-joint-priority" // 5종 특례주택 + 부부 공동명의 1주택자 특례 양립 — B-5 우선 적용 (안분 비활성)
   | "consult-experts";            // 세무사 상담 권장
 
 export interface PropertyTaxInput {
@@ -70,6 +100,7 @@ export interface PropertyTaxInput {
   isCorporation?: boolean;        // 법인 보유 여부 (옵션) — 단일세율 + 공제·세액공제 자동 off
   isSpouseJointSingleHouse?: boolean; // 부부 공동명의 1주택자 특례 신청 (옵션, B-5) — 1인 합산 12억 공제 + 세액공제 80%
   corporationGeneralRateCategory?: CorporationGeneralRateCategory; // 법인 9종 일반 누진세율 특례 카테고리 (옵션, 세션 111). isCorporation=true && 카테고리 선택 시 단일세율 → 누진세율 + 공제 9억 + 세부담 상한 150%
+  specialHouses?: SpecialHousesInput; // 1세대1주택자 5종 특례주택 (옵션, PDF #12, 세션 112). houses=1 + isSingleHouseEligible + 비법인 시만 활성. 신청 시 1주택 자격 인정 + 세액공제 안분
 }
 
 export interface PropertyTaxResult {

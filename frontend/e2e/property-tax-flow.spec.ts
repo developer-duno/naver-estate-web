@@ -161,8 +161,8 @@ test("B-5 부부 공동명의 1주택자 특례 (15억 + 70세 + 15년) → sing
   await expect(page.getByText(/분기: 1세대1주택자.*공제 12억/)).toBeVisible();
   // 입력값 표시 행 (B2 ResultCard) — 토글 라벨 "특례 신청" 과 충돌 회피로 "적용 \(1인 합산 12억 공제\)" 정확 매칭
   await expect(page.getByText("부부 공동명의 1주택자 특례 적용 (1인 합산 12억 공제)")).toBeVisible();
-  // Notices 신규 키 (고유 단어 "1인 합산 납세")
-  await expect(page.getByText(/1인 합산 납세/)).toBeVisible();
+  // Notices 신규 키 title 정확 매칭 (ResultCard 표시 행 "...특례 적용 (1인 합산 12억 공제)" 와 분리)
+  await expect(page.getByText("부부 공동명의 1주택자 특례 적용", { exact: true })).toBeVisible();
   // 세액공제 행 표시 (80% = 72만)
   await expect(page.getByText(/세액공제 \(연령\+보유\)/)).toBeVisible();
 });

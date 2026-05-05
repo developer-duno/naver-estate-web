@@ -17,7 +17,8 @@ export type PropertyTaxNoticeKey =
   | "single-house-deduction-12e"  // 1세대1주택 종부세 공제 12억
   | "general-deduction-9e"        // 일반 종부세 공제 9억
   | "below-comprehensive-threshold" // 종부세 과세표준 0 (공제 미만)
-  | "fair-market-ratio-60"        // 공정시장가액비율 60% 적용
+  | "fair-market-ratio-60"        // 공정시장가액비율 60% 적용 (일반·종부세 공통)
+  | "single-house-fair-market-ratio" // 1세대1주택 재산세 차등 공정시장가액비율 (43~45%) 자동 적용 (v3-A ①)
   | "multi-heavy-25e"             // 3주택 이상 + 25억 초과 = 중과 누진 진입
   | "age-deduction-eligible"      // 연령 세액공제 가능 (1주택만)
   | "hold-deduction-eligible"     // 보유 세액공제 가능 (1주택만)
@@ -66,6 +67,7 @@ export interface PropertyTaxResult {
   appliedRate: {                  // 적용된 누진세율 (UI 표시용)
     property: number;
     comprehensive: number;
+    propertyFairMarketRatio: number; // 재산세 적용 공정시장가액비율 (1주택 0.43~0.45 또는 일반 0.60)
   };
   notes: PropertyTaxNoticeKey[];
 }
@@ -78,6 +80,6 @@ export const EMPTY_PROPERTY_TAX_RESULT: PropertyTaxResult = {
   totalTax: 0, ruralTax: 0, grandTotal: 0,
   uncappedGrandTotal: 0, wasCapped: false,
   effectiveRate: 0,
-  appliedRate: { property: 0, comprehensive: 0 },
+  appliedRate: { property: 0, comprehensive: 0, propertyFairMarketRatio: 0 },
   notes: ["disclaimer"],
 };

@@ -14,7 +14,7 @@ import {
   PROPERTY_TAX_BRACKETS_SINGLE, PROPERTY_TAX_BRACKETS_GENERAL,
   COMPREHENSIVE_BRACKETS_2, COMPREHENSIVE_BRACKETS_3,
   COMPREHENSIVE_BRACKETS_CORP_2, COMPREHENSIVE_BRACKETS_CORP_3,
-  applyBracket, totalCreditRate,
+  applyBracket, totalCreditRate, singleHouseFairMarketRatio,
   FAIR_MARKET_RATIO, SINGLE_HOUSE_DEDUCTION, GENERAL_DEDUCTION, RURAL_TAX_RATE,
   TAX_BURDEN_CAP_RATE,
 } from "./property-tax-brackets";
@@ -50,12 +50,12 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   // GATE 0b: 정규화 (clamp + corp 강제) — Phase A-0 인프라
   const input = normalizeInput(rawInput);
 
-  const notes: PropertyTaxNoticeKey[] = ["disclaimer", "fair-market-ratio-60"];
+  const notes: PropertyTaxNoticeKey[] = ["disclaimer"];
   // B-2 합산배제: effectiveHouses = 종부세 산정용 실효 주택 수 (재산세는 houses 그대로)
   const excludedHouses = input.excludedHouses ?? 0;
   const effectiveHouses = Math.max(0, input.houses - excludedHouses);
   const isSpouseJointSingle = input.isSpouseJointSingleHouse === true; // B-5 부부 공동명의 1주택자 특례
-  const isSingleProperty = input.isSingleHouseEligible && input.houses === 1;       // 재산세 1주택 특례
+  const isSingleProperty = input.isSingleHouseEligible && input.houses === 1;       // 재산세 1주택 특례 (특례세율 §111의2 + 차등 공정시장가액비율 §109)
   // 종부세 1주택 공제: 본인 단독 1세대1주택 OR 부부 공동명의 1주택 특례 (PDF: 1인 합산 12억)
   const isSingleComprehensive = (input.isSingleHouseEligible || isSpouseJointSingle) && effectiveHouses === 1;
   if (excludedHouses > 0) notes.push("exclusion-applied");
@@ -81,7 +81,10 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   }
 
   // ===== 1단계: 재산세 (지방세법 §111) =====
-  const propertyTaxBase = Math.floor(input.publishedPriceWon * FAIR_MARKET_RATIO);
+  // v3-A ①: 1세대1주택은 시가표준액 구간별 차등 공정시장가액비율 (§109, 43~45%) 적용. 그 외는 60%.
+  const propertyFairMarketRatio = isSingleProperty ? singleHouseFairMarketRatio(input.publishedPriceWon) : FAIR_MARKET_RATIO;
+  notes.push(isSingleProperty ? "single-house-fair-market-ratio" : "fair-market-ratio-60");
+  const propertyTaxBase = Math.floor(input.publishedPriceWon * propertyFairMarketRatio);
   const propertyBrackets = isSingleProperty ? PROPERTY_TAX_BRACKETS_SINGLE : PROPERTY_TAX_BRACKETS_GENERAL;
   const propertyResult = applyBracket(propertyTaxBase, propertyBrackets);
   const propertyTax = Math.floor(propertyResult.tax);
@@ -111,7 +114,7 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
       uncappedGrandTotal: propertyTax,
       wasCapped: cap.wasCapped,
       effectiveRate: input.publishedPriceWon > 0 ? cap.capped / input.publishedPriceWon : 0,
-      appliedRate: { property: propertyResult.rate, comprehensive: 0 },
+      appliedRate: { property: propertyResult.rate, comprehensive: 0, propertyFairMarketRatio },
       notes,
     };
   }
@@ -156,7 +159,7 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
     uncappedGrandTotal,
     wasCapped: cap.wasCapped,
     effectiveRate: input.publishedPriceWon > 0 ? cap.capped / input.publishedPriceWon : 0,
-    appliedRate: { property: propertyResult.rate, comprehensive: compResult.rate },
+    appliedRate: { property: propertyResult.rate, comprehensive: compResult.rate, propertyFairMarketRatio },
     notes,
   };
 }

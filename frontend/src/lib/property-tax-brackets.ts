@@ -65,6 +65,14 @@ export const COMPREHENSIVE_BRACKETS_3: TaxBracket[] = [
 // ===== 핵심 상수 (PDF 박제) =====
 
 export const FAIR_MARKET_RATIO = 0.60;          // 종부세 + 재산세 일반 공정시장가액비율 (2026)
+
+// 1세대1주택 재산세 차등 공정시장가액비율 (지방세법 시행령 §109, 2025년 납세의무, 2026년 유지)
+// 권위 출처: LBOX 법령 (lbox.kr) §109 본문 + 한국세정신문 274811 + 정책브리핑 148941752 + 행안부 FILE_00135228WqBEC5V
+// 9억 초과 1주택도 45% 적용 (한도 없음)
+export const SINGLE_HOUSE_FMR_3E = 0.43;        // 시가표준액 3억 이하
+export const SINGLE_HOUSE_FMR_6E = 0.44;        // 3억 초과 6억 이하
+export const SINGLE_HOUSE_FMR_OVER = 0.45;      // 6억 초과 (한도 없음)
+
 export const SINGLE_HOUSE_DEDUCTION = 1_200_000_000; // 1세대1주택 종부세 공제 12억
 export const GENERAL_DEDUCTION = 900_000_000;        // 일반(2주택+) 종부세 공제 9억
 export const RURAL_TAX_RATE = 0.20;             // 농어촌특별세: 종부세액의 20%
@@ -80,6 +88,17 @@ export function applyBracket(taxBase: number, brackets: TaxBracket[]): { tax: nu
   const b = brackets.find((br) => taxBase <= br.max);
   if (!b) return { tax: 0, rate: 0 };
   return { tax: Math.max(0, taxBase * b.rate - b.deduction), rate: b.rate };
+}
+
+/**
+ * 1세대1주택 재산세 공정시장가액비율 (지방세법 시행령 §109).
+ * 시가표준액 = 공시가격 (지방세법 §4 + 시행령 §109).
+ * 9억 초과 1주택도 45% 적용 (한도 없음 — LBOX 직접 검증).
+ */
+export function singleHouseFairMarketRatio(publishedPriceWon: number): number {
+  if (publishedPriceWon <= 300_000_000) return SINGLE_HOUSE_FMR_3E;       // 3억 이하 43%
+  if (publishedPriceWon <= 600_000_000) return SINGLE_HOUSE_FMR_6E;       // 6억 이하 44%
+  return SINGLE_HOUSE_FMR_OVER;                                            // 6억 초과 45%
 }
 
 /** 1세대1주택 연령 세액공제율 (60세 20% / 65세 30% / 70세+ 40%) */

@@ -101,6 +101,47 @@ export function singleHouseFairMarketRatio(publishedPriceWon: number): number {
   return SINGLE_HOUSE_FMR_OVER;                                            // 6억 초과 45%
 }
 
+/**
+ * 종부세 공제할 재산세액 (이중과세 방지) — 종부세법 시행령 §4의2.
+ *
+ * 산식 (대법원 2023.8.31. 선고 2019두39796 판결 + 국세청 공식 흐름도 기반):
+ *   공제할 재산세액 = 재산세 부과액 × (분자 ÷ 분모)
+ *   분자 = applyBracket((공시가 - 종부세 기준금액) × 종부세FMR × 재산세FMR, propertyBrackets).tax
+ *   분모 = applyBracket(공시가 × 재산세FMR, propertyBrackets).tax
+ *
+ * 권위 출처 (모두 직접 검증):
+ *   - 종부세법 시행령 §4의2 (LBOX 법령 + elitelaw.kr/23 직접 fetch)
+ *   - 대법원 2023.8.31. 선고 2019두39796 판결 (분자·분모 모두 누진세율 적용 명시)
+ *   - 국세청 공식 흐름도 (nts.go.kr cntntsId=7735) — 종부세 = 산출세액 - 공제할 재산세액 - 세액공제
+ *   - KILF 한국지방세연구원 — 법인에도 동일 적용
+ *
+ * 적용: 1주택·다주택·법인 모든 분기 (comprehensiveTaxBase > 0 인 경우만)
+ * 법인: 기준금액 = 0 (개인 공제 미적용 → 공시가 전체로 분자 산정)
+ *
+ * 분모 0 가드: 정상 입력에선 도달 불가하나 방어용으로 0 반환.
+ */
+export function comprehensivePropertyTaxCredit(args: {
+  publishedPriceWon: number;
+  comprehensiveDeduction: number; // 1주택 12억 / 일반 9억 / 법인 0
+  comprehensiveFmRatio: number;   // 종부세 공정시장가액비율 (현재 0.60)
+  propertyFmRatio: number;        // 재산세 공정시장가액비율 (1주택 차등 0.43~0.45 또는 일반 0.60)
+  propertyTax: number;            // 실제 재산세 부과액 (이중과세분 비율 곱할 대상)
+  propertyBrackets: TaxBracket[]; // 1주택 SINGLE / 일반 GENERAL
+}): number {
+  const { publishedPriceWon, comprehensiveDeduction, comprehensiveFmRatio, propertyFmRatio, propertyTax, propertyBrackets } = args;
+
+  // 분자: 종부세 과세표준 부분의 재산세 상당액
+  const numeratorBase = Math.max(0, publishedPriceWon - comprehensiveDeduction) * comprehensiveFmRatio * propertyFmRatio;
+  const numerator = applyBracket(numeratorBase, propertyBrackets).tax;
+
+  // 분모: 전체 주택의 재산세 상당액
+  const denominatorBase = publishedPriceWon * propertyFmRatio;
+  const denominator = applyBracket(denominatorBase, propertyBrackets).tax;
+
+  if (denominator <= 0) return 0;
+  return Math.floor(propertyTax * (numerator / denominator));
+}
+
 /** 1세대1주택 연령 세액공제율 (60세 20% / 65세 30% / 70세+ 40%) */
 export function ageDeductionRate(ageYears: number): number {
   if (ageYears >= 70) return 0.40;

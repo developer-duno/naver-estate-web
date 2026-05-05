@@ -14,7 +14,7 @@ import {
   PROPERTY_TAX_BRACKETS_SINGLE, PROPERTY_TAX_BRACKETS_GENERAL,
   COMPREHENSIVE_BRACKETS_2, COMPREHENSIVE_BRACKETS_3,
   COMPREHENSIVE_BRACKETS_CORP_2, COMPREHENSIVE_BRACKETS_CORP_3,
-  applyBracket, totalCreditRate, singleHouseFairMarketRatio,
+  applyBracket, totalCreditRate, singleHouseFairMarketRatio, comprehensivePropertyTaxCredit,
   FAIR_MARKET_RATIO, SINGLE_HOUSE_DEDUCTION, GENERAL_DEDUCTION, RURAL_TAX_RATE,
   TAX_BURDEN_CAP_RATE,
 } from "./property-tax-brackets";
@@ -108,7 +108,7 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
       branch: isCorp ? "corporation" : "below-threshold",
       propertyTaxBase, propertyTax,
       comprehensiveDeduction, comprehensiveTaxBase: 0,
-      comprehensiveTaxBeforeDeduction: 0, comprehensiveTaxCredit: 0, comprehensiveTax: 0,
+      comprehensiveTaxBeforeDeduction: 0, comprehensivePropertyTaxCredit: 0, comprehensiveTaxCredit: 0, comprehensiveTax: 0,
       totalTax: propertyTax, ruralTax: 0,
       grandTotal: cap.capped,
       uncappedGrandTotal: propertyTax,
@@ -129,17 +129,31 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   // 3주택+ 25억 초과 중과 안내 (개인만, effectiveHouses 기준)
   if (!isCorp && effectiveHouses >= 3 && comprehensiveTaxBase > 1_200_000_000) notes.push("multi-heavy-25e");
 
-  // ===== 3단계: 1세대1주택 세액공제 (개인 1주택만, 법인 차단) =====
+  // ===== 3단계: 공제할 재산세액 (종부세법 시행령 §4의2) — v3-A ② =====
+  // 1주택·다주택·법인 모두 적용 (KILF + 국세청 공식). 분자·분모 누진세율 (대법원 2019두39796).
+  const propertyTaxCreditAmount = comprehensivePropertyTaxCredit({
+    publishedPriceWon: effectivePublished,
+    comprehensiveDeduction,
+    comprehensiveFmRatio: FAIR_MARKET_RATIO,
+    propertyFmRatio: propertyFairMarketRatio,
+    propertyTax,
+    propertyBrackets,
+  });
+  const comprehensiveTaxAfterPropertyCredit = Math.max(0, comprehensiveTaxBeforeDeduction - propertyTaxCreditAmount);
+  if (propertyTaxCreditAmount > 0) notes.push("comprehensive-property-tax-credit");
+
+  // ===== 4단계: 1세대1주택 세액공제 (개인 1주택만, 법인 차단) =====
+  // 대법원 2019두39796: 세액공제는 공제할 재산세액 차감 후 종부세액 기준 (이중공제 방지).
   let comprehensiveTaxCredit = 0;
   if (!isCorp && isSingleComprehensive) {
     const creditRate = totalCreditRate(input.ageYears, input.holdYears);
-    comprehensiveTaxCredit = Math.floor(comprehensiveTaxBeforeDeduction * creditRate);
+    comprehensiveTaxCredit = Math.floor(comprehensiveTaxAfterPropertyCredit * creditRate);
     if (input.ageYears >= 60) notes.push("age-deduction-eligible");
     if (input.holdYears >= 5) notes.push("hold-deduction-eligible");
   }
-  const comprehensiveTax = Math.max(0, comprehensiveTaxBeforeDeduction - comprehensiveTaxCredit);
+  const comprehensiveTax = Math.max(0, comprehensiveTaxAfterPropertyCredit - comprehensiveTaxCredit);
 
-  // ===== 4단계: 농어촌특별세 (종부세액 × 20%) =====
+  // ===== 5단계: 농어촌특별세 (종부세액 × 20%) =====
   const ruralTax = Math.floor(comprehensiveTax * RURAL_TAX_RATE);
   if (ruralTax > 0) notes.push("rural-tax-20");
 
@@ -153,7 +167,9 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
     branch: isCorp ? "corporation" : (isSingleComprehensive ? "single-house" : "multi-house"),
     propertyTaxBase, propertyTax,
     comprehensiveDeduction, comprehensiveTaxBase,
-    comprehensiveTaxBeforeDeduction, comprehensiveTaxCredit, comprehensiveTax,
+    comprehensiveTaxBeforeDeduction,
+    comprehensivePropertyTaxCredit: propertyTaxCreditAmount,
+    comprehensiveTaxCredit, comprehensiveTax,
     totalTax, ruralTax,
     grandTotal: cap.capped,
     uncappedGrandTotal,

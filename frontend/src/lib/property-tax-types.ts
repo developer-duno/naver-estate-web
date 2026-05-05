@@ -19,6 +19,7 @@ export type PropertyTaxNoticeKey =
   | "below-comprehensive-threshold" // 종부세 과세표준 0 (공제 미만)
   | "fair-market-ratio-60"        // 공정시장가액비율 60% 적용 (일반·종부세 공통)
   | "single-house-fair-market-ratio" // 1세대1주택 재산세 차등 공정시장가액비율 (43~45%) 자동 적용 (v3-A ①)
+  | "comprehensive-property-tax-credit" // 종부세 공제할 재산세액 자동 차감 (이중과세 방지, v3-A ②)
   | "multi-heavy-25e"             // 3주택 이상 + 25억 초과 = 중과 누진 진입
   | "age-deduction-eligible"      // 연령 세액공제 가능 (1주택만)
   | "hold-deduction-eligible"     // 보유 세액공제 가능 (1주택만)
@@ -55,8 +56,9 @@ export interface PropertyTaxResult {
   comprehensiveDeduction: number; // 종부세 공제금액 (12억/9억/0)
   comprehensiveTaxBase: number;   // 종부세 과세표준 = max(0, 공시 - 공제) × 60%
   comprehensiveTaxBeforeDeduction: number; // 종부세 산출세액 (공제할 재산세액 적용 전)
-  comprehensiveTaxCredit: number; // 1세대1주택 세액공제 (연령+보유, 한도 80%)
-  comprehensiveTax: number;       // 종부세 최종 (세액공제 후)
+  comprehensivePropertyTaxCredit: number;  // 공제할 재산세액 — 종부세법 시행령 §4의2 (이중과세 방지, v3-A ②)
+  comprehensiveTaxCredit: number; // 1세대1주택 세액공제 (연령+보유, 한도 80%, 공제할 재산세액 차감 후 기준 — 대법원 2019두39796)
+  comprehensiveTax: number;       // 종부세 최종 (공제할 재산세액 + 세액공제 모두 차감 후)
   // 합계
   totalTax: number;               // 보유세 합계 (재산세 + 종부세)
   ruralTax: number;               // 농어촌특별세 (종부세 × 20%)
@@ -76,7 +78,7 @@ export const EMPTY_PROPERTY_TAX_RESULT: PropertyTaxResult = {
   branch: "empty",
   propertyTaxBase: 0, propertyTax: 0,
   comprehensiveDeduction: 0, comprehensiveTaxBase: 0,
-  comprehensiveTaxBeforeDeduction: 0, comprehensiveTaxCredit: 0, comprehensiveTax: 0,
+  comprehensiveTaxBeforeDeduction: 0, comprehensivePropertyTaxCredit: 0, comprehensiveTaxCredit: 0, comprehensiveTax: 0,
   totalTax: 0, ruralTax: 0, grandTotal: 0,
   uncappedGrandTotal: 0, wasCapped: false,
   effectiveRate: 0,

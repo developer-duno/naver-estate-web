@@ -13,7 +13,7 @@ function buildTestResult(over: Partial<PropertyTaxResult>): PropertyTaxResult {
     totalTax: 1_000_000, ruralTax: 0, grandTotal: 1_000_000,
     uncappedGrandTotal: 1_000_000, wasCapped: false,
     effectiveRate: 0.001,
-    appliedRate: { property: 0.0035, comprehensive: 0 },
+    appliedRate: { property: 0.0035, comprehensive: 0, propertyFairMarketRatio: 0.6 },
     notes: ["disclaimer"], ...over,
   };
 }
@@ -24,7 +24,7 @@ describe("PropertyTaxResultCard 분기별 라벨 (4분기 × 누진세율 표기
       branch: "empty",
       propertyTaxBase: 0, propertyTax: 0, comprehensiveDeduction: 0,
       totalTax: 0, grandTotal: 0,
-      appliedRate: { property: 0, comprehensive: 0 },
+      appliedRate: { property: 0, comprehensive: 0, propertyFairMarketRatio: 0.6 },
     })} />);
     expect(screen.getByText(/공시가격을 입력하세요/)).toBeInTheDocument();
     // 표 자체 미렌더 — 재산세 라벨 0건
@@ -34,7 +34,7 @@ describe("PropertyTaxResultCard 분기별 라벨 (4분기 × 누진세율 표기
   it("below-threshold 분기 → 종부세 (공제 미만) 회색 표기", () => {
     render(<PropertyTaxResultCard result={buildTestResult({
       branch: "below-threshold",
-      appliedRate: { property: 0.001, comprehensive: 0 },
+      appliedRate: { property: 0.001, comprehensive: 0, propertyFairMarketRatio: 0.6 },
     })} />);
     expect(screen.getByText(/종부세 과세표준 0/)).toBeInTheDocument();
     expect(screen.getByText(/종부세 \(공제 미만\)/)).toBeInTheDocument();
@@ -49,7 +49,7 @@ describe("PropertyTaxResultCard 분기별 라벨 (4분기 × 누진세율 표기
       comprehensiveTax: 3_000_000,
       ruralTax: 600_000,
       totalTax: 4_000_000, grandTotal: 4_600_000,
-      appliedRate: { property: 0.0035, comprehensive: 0.005 },
+      appliedRate: { property: 0.0035, comprehensive: 0.005, propertyFairMarketRatio: 0.6 },
     })} />);
     expect(screen.getByText(/1세대1주택자/)).toBeInTheDocument();
     expect(screen.getByText(/세액공제 \(연령\+보유\)/)).toBeInTheDocument();
@@ -64,7 +64,7 @@ describe("PropertyTaxResultCard 분기별 라벨 (4분기 × 누진세율 표기
       propertyTax: 5_000_000,
       comprehensiveTax: 30_000_000, ruralTax: 6_000_000,
       totalTax: 35_000_000, grandTotal: 41_000_000,
-      appliedRate: { property: 0.004, comprehensive: 0.027 },
+      appliedRate: { property: 0.004, comprehensive: 0.027, propertyFairMarketRatio: 0.6 },
       notes: ["disclaimer", "general-deduction-9e", "multi-heavy-25e"],
     })} />);
     expect(screen.getByText(/다주택자/)).toBeInTheDocument();
@@ -90,7 +90,7 @@ describe("PropertyTaxResultCard 분기별 라벨 (4분기 × 누진세율 표기
 
   it("R12 답습 — appliedRate 0 fallback 정상 (NaN 회피)", () => {
     render(<PropertyTaxResultCard result={buildTestResult({
-      appliedRate: { property: 0, comprehensive: 0 },
+      appliedRate: { property: 0, comprehensive: 0, propertyFairMarketRatio: 0.6 },
     })} />);
     expect(screen.getByText(/재산세 \(공제 미만\)/)).toBeInTheDocument();
     expect(screen.getByText(/종부세 \(공제 미만\)/)).toBeInTheDocument();

@@ -10,12 +10,17 @@ interface Props {
   isSpouseJointSingleHouse?: boolean;
 }
 
-// 누진세율 라벨 — 0 일 때 "(공제 미만)" 인라인, R12 답습 (`|| 0` fallback NaN 방지)
-function formatPropertyRateLabel(rate: number, kind: "property" | "comprehensive"): string {
+// 누진세율 라벨 — 0 일 때 "(공제 미만)" 인라인, R12 답습 (`|| 0` fallback NaN 방지).
+// v3-A ①: 재산세는 적용 공정시장가액비율 동반 표시 (1주택 차등 43~45% vs 일반 60%).
+function formatPropertyRateLabel(rate: number, kind: "property" | "comprehensive", fairMarketRatio?: number): string {
   const safeRate = rate || 0;
   const label = kind === "property" ? "재산세" : "종부세";
   if (safeRate === 0) return `${label} (공제 미만)`;
   const ratePct = (safeRate * 100).toFixed(2).replace(/\.?0+$/, "");
+  if (kind === "property" && fairMarketRatio && fairMarketRatio > 0) {
+    const fmrPct = Math.round(fairMarketRatio * 100);
+    return `${label} (공정시장 ${fmrPct}% × ${ratePct}%)`;
+  }
   return `${label} (${ratePct}%)`;
 }
 
@@ -65,7 +70,7 @@ export default function PropertyTaxResultCard({ result, excludedHouses, ownershi
             <tbody>
               <tr>
                 <td className="py-1.5 text-gray-600">
-                  {formatPropertyRateLabel(result.appliedRate.property, "property")}
+                  {formatPropertyRateLabel(result.appliedRate.property, "property", result.appliedRate.propertyFairMarketRatio)}
                 </td>
                 <td className="py-1.5 text-right">{result.propertyTax.toLocaleString()}원</td>
               </tr>

@@ -5,9 +5,12 @@ interface Props {
   excludedHouses: number;
   ownershipPercent: number;
   isCorporation: boolean;
+  isSingleHouseEligible: boolean;
+  isSpouseJointSingleHouse: boolean;
   onExcludedHousesChange: (v: number) => void;
   onOwnershipPercentChange: (v: number) => void;
   onIsCorporationChange: (v: boolean) => void;
+  onIsSpouseJointSingleHouseChange: (v: boolean) => void;
 }
 
 const INPUT_CLASS =
@@ -16,10 +19,16 @@ const INPUT_CLASS =
 export default function PropertyTaxAdvancedFields(props: Props) {
   const {
     houses, excludedHouses, ownershipPercent, isCorporation,
+    isSingleHouseEligible, isSpouseJointSingleHouse,
     onExcludedHousesChange, onOwnershipPercentChange, onIsCorporationChange,
+    onIsSpouseJointSingleHouseChange,
   } = props;
 
   const advancedDisabled = isCorporation;
+  // B-5 부부 공동명의 1주택자 특례: houses === 1 + 1세대1주택 자격 + 법인 아닐 때만 활성
+  const spouseJointDisabled = !(houses === 1 && isSingleHouseEligible && !isCorporation);
+  // 부부 토글 켜진 동안 ownershipPercent 자동 disabled (1인 합산 납세이므로 지분 % 무의미)
+  const ownershipDisabled = advancedDisabled || isSpouseJointSingleHouse;
 
   return (
     <details className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
@@ -78,16 +87,36 @@ export default function PropertyTaxAdvancedFields(props: Props) {
             step={1}
             value={ownershipPercent || ""}
             onChange={(e) => onOwnershipPercentChange(Number(e.target.value) || 0)}
-            disabled={advancedDisabled}
+            disabled={ownershipDisabled}
             placeholder="예: 50 (부부 공동명의 50%) — 비워두면 100%"
             className={INPUT_CLASS}
           />
           <p className="mt-1 text-xs text-gray-500">
             {advancedDisabled
               ? "법인은 지분 개념 없음 (자동 비활성화)"
-              : "종부세법 §9 (인별 과세) — 입력하신 공시가격은 본인 지분 공시가로 가정. 본인 지분 % 만큼 종부세 산정 (재산세 영향 없음)."}
+              : isSpouseJointSingleHouse
+                ? "부부 공동명의 1주택자 특례 적용 중 — 1인 합산 납세이므로 지분 % 무효 (자동 비활성화)"
+                : "종부세법 §9 (인별 과세) — 입력하신 공시가격은 본인 지분 공시가로 가정. 본인 지분 % 만큼 종부세 산정 (재산세 영향 없음)."}
           </p>
         </div>
+
+        <label className="flex items-start gap-2 min-h-[44px]">
+          <input
+            type="checkbox"
+            checked={isSpouseJointSingleHouse}
+            onChange={(e) => onIsSpouseJointSingleHouseChange(e.target.checked)}
+            disabled={spouseJointDisabled}
+            className="mt-1"
+          />
+          <span className={`text-sm ${spouseJointDisabled ? "text-gray-400" : "text-gray-700"}`}>
+            부부 공동명의 1주택자 특례 신청 (1인 합산 12억 공제 + 세액공제 80%)
+            <span className="block text-xs text-gray-500 mt-0.5">
+              {spouseJointDisabled
+                ? "1주택 + 1세대1주택자 자격 충족 시만 활성화 (법인 제외)"
+                : "신청 시 1인 합산 납세, 매년 9.16~9.30 신청 (별지 제30호 서식). 자격 요건 (다른 세대원 무주택 + 배우자 다른 주택 무) 본인 책임."}
+            </span>
+          </span>
+        </label>
       </div>
     </details>
   );

@@ -16,22 +16,31 @@ export default function PropertyTaxCalculator() {
   const [excludedHouses, setExcludedHouses] = useState(0);
   const [ownershipPercent, setOwnershipPercent] = useState(0);
   const [isCorporation, setIsCorporation] = useState(false);
+  const [isSpouseJointSingleHouse, setIsSpouseJointSingleHouse] = useState(false);
+
+  // 부부 토글 켤 때 ownershipPercent 자동 0 리셋 (1인 합산 납세 → 지분 % 무의미, 화면 모순 차단)
+  const handleIsSpouseJointSingleHouseChange = (v: boolean) => {
+    setIsSpouseJointSingleHouse(v);
+    if (v) setOwnershipPercent(0);
+  };
 
   const result = useMemo(() => {
-    const single = isSingleHouseEligible && houses === 1;
+    // single 분기: 본인 단독 1세대1주택 OR 부부 공동명의 1주택 특례 모두 ageYears/holdYears 전달
+    const single = (isSingleHouseEligible || isSpouseJointSingleHouse) && houses === 1;
     const input: PropertyTaxInput = {
       publishedPriceWon: publishedManwon * 10_000,
       houses,
-      isSingleHouseEligible: single,
+      isSingleHouseEligible: isSingleHouseEligible && houses === 1,
       ageYears: single ? ageYears : 0,
       holdYears: single ? holdYears : 0,
       prevYearTax: prevYearTaxManwon > 0 ? prevYearTaxManwon * 10_000 : undefined,
       excludedHouses,
       ownershipRatio: ownershipPercent > 0 && ownershipPercent <= 100 ? ownershipPercent / 100 : 1,
       isCorporation,
+      isSpouseJointSingleHouse,
     };
     return calculatePropertyTax(input);
-  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent, isCorporation]);
+  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse]);
 
   return (
     <div className="space-y-4">
@@ -45,6 +54,7 @@ export default function PropertyTaxCalculator() {
         excludedHouses={excludedHouses}
         ownershipPercent={ownershipPercent}
         isCorporation={isCorporation}
+        isSpouseJointSingleHouse={isSpouseJointSingleHouse}
         onPublishedManwonChange={setPublishedManwon}
         onHousesChange={setHouses}
         onIsSingleHouseEligibleChange={setIsSingleHouseEligible}
@@ -54,8 +64,14 @@ export default function PropertyTaxCalculator() {
         onExcludedHousesChange={setExcludedHouses}
         onOwnershipPercentChange={setOwnershipPercent}
         onIsCorporationChange={setIsCorporation}
+        onIsSpouseJointSingleHouseChange={handleIsSpouseJointSingleHouseChange}
       />
-      <PropertyTaxResultCard result={result} excludedHouses={excludedHouses} ownershipPercent={ownershipPercent} />
+      <PropertyTaxResultCard
+        result={result}
+        excludedHouses={excludedHouses}
+        ownershipPercent={ownershipPercent}
+        isSpouseJointSingleHouse={isSpouseJointSingleHouse}
+      />
     </div>
   );
 }

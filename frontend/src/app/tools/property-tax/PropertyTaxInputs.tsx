@@ -12,6 +12,7 @@ interface Props {
   excludedHouses: number;
   ownershipPercent: number;
   isCorporation: boolean;
+  isSpouseJointSingleHouse: boolean;
 
   onPublishedManwonChange: (v: number) => void;
   onHousesChange: (v: 1 | 2 | 3) => void;
@@ -22,6 +23,7 @@ interface Props {
   onExcludedHousesChange: (v: number) => void;
   onOwnershipPercentChange: (v: number) => void;
   onIsCorporationChange: (v: boolean) => void;
+  onIsSpouseJointSingleHouseChange: (v: boolean) => void;
 }
 
 const INPUT_CLASS =
@@ -32,10 +34,11 @@ const RADIO_LABEL_CLASS =
 export default function PropertyTaxInputs(props: Props) {
   const {
     publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon,
-    excludedHouses, ownershipPercent, isCorporation,
+    excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse,
     onPublishedManwonChange, onHousesChange, onIsSingleHouseEligibleChange,
     onAgeYearsChange, onHoldYearsChange, onPrevYearTaxManwonChange,
     onExcludedHousesChange, onOwnershipPercentChange, onIsCorporationChange,
+    onIsSpouseJointSingleHouseChange,
   } = props;
 
   const singleActive = isSingleHouseEligible && houses === 1;
@@ -110,9 +113,12 @@ export default function PropertyTaxInputs(props: Props) {
         excludedHouses={excludedHouses}
         ownershipPercent={ownershipPercent}
         isCorporation={isCorporation}
+        isSingleHouseEligible={isSingleHouseEligible}
+        isSpouseJointSingleHouse={isSpouseJointSingleHouse}
         onExcludedHousesChange={onExcludedHousesChange}
         onOwnershipPercentChange={onOwnershipPercentChange}
         onIsCorporationChange={onIsCorporationChange}
+        onIsSpouseJointSingleHouseChange={onIsSpouseJointSingleHouseChange}
       />
 
       {singleActive ? (

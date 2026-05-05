@@ -532,3 +532,114 @@ describe("B-5 부부 공동명의 1주택자 특례 (isSpouseJointSingleHouse)",
     expect(r.notes).not.toContain("ownership-applied"); // ratio=1 강제로 미푸시
   });
 });
+
+describe("법인 9종 일반 누진세율 특례 (CorporationGeneralRateCategory, PDF #14, 세션 111)", () => {
+  // 케이스 #CGR-1: 카테고리 ① + houses=1 + 공시 30억 → BRACKETS_2 + 공제 9억
+  it("카테고리 ① (public-charity-other) + houses=1 + 공시 30억 → BRACKETS_2, 공제 9억", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000, houses: 1, isSingleHouseEligible: false,
+      isCorporation: true, corporationGeneralRateCategory: "public-charity-other",
+    }));
+    expect(r.branch).toBe("corporation");
+    // 일반 누진세율 적용 → 공제 9억
+    expect(r.comprehensiveDeduction).toBe(900_000_000);
+    // 과표 = (30억 - 9억) × 60% = 12.6억
+    expect(r.comprehensiveTaxBase).toBe(1_260_000_000);
+    // BRACKETS_2 25억 이하 1.3% - 600만 = 12.6억 × 0.013 - 6_000_000 = 16,380,000 - 6,000,000 = 10,380,000
+    expect(r.comprehensiveTaxBeforeDeduction).toBe(10_380_000);
+    expect(r.appliedRate.comprehensive).toBe(0.013);
+    expect(r.notes).toContain("corporation-general-rate-applied");
+    expect(r.notes).not.toContain("corporation-flat-rate-applied");
+  });
+
+  // 케이스 #CGR-2: 카테고리 ① + houses=3 → BRACKETS_3 (중과 누진)
+  it("카테고리 ① + houses=3 → BRACKETS_3 (중과 누진 + multi-heavy-25e)", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000, houses: 3, isSingleHouseEligible: false,
+      isCorporation: true, corporationGeneralRateCategory: "public-charity-other",
+    }));
+    expect(r.branch).toBe("corporation");
+    expect(r.comprehensiveDeduction).toBe(900_000_000);
+    expect(r.comprehensiveTaxBase).toBe(1_260_000_000);
+    // BRACKETS_3 25억 이하 2.0% - 14,400,000 (누진공제) = 12.6억 × 0.02 - 14,400,000 = 25,200,000 - 14,400,000 = 10,800,000
+    expect(r.comprehensiveTaxBeforeDeduction).toBe(10_800_000);
+    expect(r.appliedRate.comprehensive).toBe(0.02);
+    expect(r.notes).toContain("multi-heavy-25e"); // 카테고리 ① + effectiveHouses>=3
+  });
+
+  // 케이스 #CGR-3: 카테고리 ② + houses=3 → BRACKETS_2 일률 (중과 안 함)
+  it("카테고리 ② (public-charity-direct) + houses=3 → BRACKETS_2 일률 (중과 안 함)", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000, houses: 3, isSingleHouseEligible: false,
+      isCorporation: true, corporationGeneralRateCategory: "public-charity-direct",
+    }));
+    expect(r.branch).toBe("corporation");
+    expect(r.comprehensiveDeduction).toBe(900_000_000);
+    expect(r.comprehensiveTaxBase).toBe(1_260_000_000);
+    // BRACKETS_2 1.3% - 600만 = 10,380,000 (#CGR-1과 같은 산출세액)
+    expect(r.comprehensiveTaxBeforeDeduction).toBe(10_380_000);
+    expect(r.appliedRate.comprehensive).toBe(0.013);
+    expect(r.notes).not.toContain("multi-heavy-25e"); // 카테고리 ②~⑨ BRACKETS_2 일률
+  });
+
+  // 케이스 #CGR-4: 카테고리 ⑨ (clan) + houses=3 → BRACKETS_2 일률
+  it("카테고리 ⑨ (clan) + houses=3 → BRACKETS_2 일률 (#CGR-3과 동일 결과)", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000, houses: 3, isSingleHouseEligible: false,
+      isCorporation: true, corporationGeneralRateCategory: "clan",
+    }));
+    expect(r.appliedRate.comprehensive).toBe(0.013);
+    expect(r.comprehensiveTaxBeforeDeduction).toBe(10_380_000);
+  });
+
+  // 케이스 #CGR-5: 미선택 → 단일세율 회귀 (기존 동작 100% 보존)
+  it("corporationGeneralRateCategory 미선택 (undefined) → 단일세율 2.7% 유지 (회귀)", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 2, isSingleHouseEligible: false,
+      isCorporation: true,
+    }));
+    expect(r.branch).toBe("corporation");
+    expect(r.comprehensiveDeduction).toBe(0);
+    expect(r.appliedRate.comprehensive).toBe(0.027);
+    expect(r.notes).toContain("corporation-flat-rate-applied");
+    expect(r.notes).not.toContain("corporation-general-rate-applied");
+  });
+
+  // 케이스 #CGR-6: 비법인 + 카테고리 입력 → normalize 자동 undefined → 일반 분기
+  it("비법인 + corporationGeneralRateCategory='clan' → normalize 자동 undefined", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: true,
+      isCorporation: false, corporationGeneralRateCategory: "clan",
+    }));
+    expect(r.branch).toBe("single-house"); // 일반 1세대1주택 분기
+    expect(r.notes).not.toContain("corporation-general-rate-applied");
+    expect(r.notes).not.toContain("corporation-flat-rate-applied");
+  });
+
+  // 케이스 #CGR-7: 카테고리 ③ + 합산배제 1주택 (3주택 중 1) → effectiveHouses=2, BRACKETS_2 일률
+  it("카테고리 ③ (public-housing) + houses=3 + excludedHouses=1 → effectiveHouses=2 + BRACKETS_2", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000, houses: 3, isSingleHouseEligible: false,
+      isCorporation: true, corporationGeneralRateCategory: "public-housing", excludedHouses: 1,
+    }));
+    expect(r.branch).toBe("corporation");
+    // 합산배제 1 → effectiveHouses=2 → BRACKETS_2 (카테고리 ③은 어차피 일률 BRACKETS_2)
+    expect(r.notes).toContain("exclusion-applied"); // 카테고리 ②~⑨ 일반세율 신청 시 합산배제 양립 가능
+    expect(r.appliedRate.comprehensive).toBe(0.013); // BRACKETS_2 1.3%
+  });
+
+  // 케이스 #CGR-8: 카테고리 ① + isSingleHouseEligible=true → 12억 공제 차단 (법인 1세대1주택 자격 없음)
+  it("카테고리 ① + isSingleHouseEligible=true 시도 → 9억 공제 (12억 차단), 세액공제 0", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000, houses: 1, isSingleHouseEligible: true,
+      ageYears: 70, holdYears: 15,
+      isCorporation: true, corporationGeneralRateCategory: "public-charity-other",
+    }));
+    expect(r.branch).toBe("corporation");
+    // normalize 에서 isSingleHouseEligible=false 강제 → 일반 누진세율 신청은 9억 공제 (12억 X)
+    expect(r.comprehensiveDeduction).toBe(900_000_000);
+    expect(r.comprehensiveTaxCredit).toBe(0); // 법인 세액공제 0
+    expect(r.notes).toContain("corporation-no-credit"); // 1주택 자격 시도 → 차단 안내
+    expect(r.notes).toContain("corporation-general-rate-applied");
+  });
+});

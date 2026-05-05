@@ -12,15 +12,21 @@ import type { PropertyTaxInput } from "./property-tax-types";
 
 export function normalizeInput(input: PropertyTaxInput): PropertyTaxInput {
   const isCorp = input.isCorporation === true;
+  // 세션 111: 법인 9종 일반 누진세율 특례 카테고리 — 법인 아니면 자동 undefined 강제 (양립 가드)
+  const corporationGeneralRateCategory = isCorp ? input.corporationGeneralRateCategory : undefined;
+  const isCorpGeneral = isCorp && corporationGeneralRateCategory != null;
 
+  // 합산배제: 단일세율 법인은 0 강제 / 일반 누진세율 신청 법인 + 개인은 입력 허용
+  // (PDF #14 합산배제 신고기간 9.16~9.30 동일, 양립 가능)
   const excludedRaw = input.excludedHouses ?? 0;
-  const excludedHouses = isCorp
+  const excludedHouses = (isCorp && !isCorpGeneral)
     ? 0
     : Math.max(0, Math.min(input.houses, Math.floor(excludedRaw)));
 
   const ratioRaw = input.ownershipRatio;
   let ownershipRatio: number;
   if (isCorp) {
+    // 법인은 단일세율·일반세율 무관 공동명의 개념 없음 (1 강제)
     ownershipRatio = 1;
   } else if (ratioRaw === undefined || !Number.isFinite(ratioRaw) || ratioRaw <= 0 || ratioRaw > 1) {
     ownershipRatio = 1;
@@ -33,9 +39,6 @@ export function normalizeInput(input: PropertyTaxInput): PropertyTaxInput {
   // B-5 부부 공동명의 1주택자 특례: 자격 = houses === 1 + 법인 아님 (그 외 false 강제)
   const isSpouseJointSingleHouse =
     !isCorp && input.houses === 1 && input.isSpouseJointSingleHouse === true;
-
-  // 세션 111: 법인 9종 일반 누진세율 특례 카테고리 — 법인 아니면 자동 undefined 강제 (양립 가드)
-  const corporationGeneralRateCategory = isCorp ? input.corporationGeneralRateCategory : undefined;
 
   return {
     ...input,

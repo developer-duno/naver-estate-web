@@ -127,20 +127,20 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
 
   // B-2/B-4 BRACKETS 선택: 법인 단일세율 = CORP, 개인 = effectiveHouses 기준
   // 세션 111: 법인 9종 일반 누진세율 (PDF #14 페이지 2 표):
-  //   - 카테고리 ① (public-charity-other): 2주택 이하 BRACKETS_2 / 3주택 이상 BRACKETS_3
+  //   - 카테고리 ① (public-charity-other): 2주택 이하 BRACKETS_2 / 3주택 이상 BRACKETS_3 (effectiveHouses 기준 — 합산배제 양립)
   //   - 카테고리 ②~⑨: BRACKETS_2 일률 (다주택 보유해도 중과 안 함)
   const comprehensiveBrackets = isCorp
     ? (isCorpGeneral
         ? (corpCategory === "public-charity-other"
-            ? (input.houses >= 3 ? COMPREHENSIVE_BRACKETS_3 : COMPREHENSIVE_BRACKETS_2)
+            ? (effectiveHouses >= 3 ? COMPREHENSIVE_BRACKETS_3 : COMPREHENSIVE_BRACKETS_2)
             : COMPREHENSIVE_BRACKETS_2)
         : (input.houses >= 3 ? COMPREHENSIVE_BRACKETS_CORP_3 : COMPREHENSIVE_BRACKETS_CORP_2))
     : (effectiveHouses >= 3 ? COMPREHENSIVE_BRACKETS_3 : COMPREHENSIVE_BRACKETS_2);
   const compResult = applyBracket(comprehensiveTaxBase, comprehensiveBrackets);
   const comprehensiveTaxBeforeDeduction = Math.floor(compResult.tax);
 
-  // 3주택+ 25억 초과 중과 안내 (개인 + 법인 카테고리 ① 둘 다 BRACKETS_3 진입)
-  const usesHeavyBrackets = !isCorp ? (effectiveHouses >= 3) : (isCorpGeneral && corpCategory === "public-charity-other" && input.houses >= 3);
+  // 3주택+ 25억 초과 중과 안내 (개인 + 법인 카테고리 ① 둘 다 BRACKETS_3 진입, effectiveHouses 기준)
+  const usesHeavyBrackets = !isCorp ? (effectiveHouses >= 3) : (isCorpGeneral && corpCategory === "public-charity-other" && effectiveHouses >= 3);
   if (usesHeavyBrackets && comprehensiveTaxBase > 1_200_000_000) notes.push("multi-heavy-25e");
 
   // ===== 3단계: 공제할 재산세액 (종부세법 시행령 §4의2) — v3-A ② =====

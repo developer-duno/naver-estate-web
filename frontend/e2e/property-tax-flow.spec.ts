@@ -142,3 +142,27 @@ test("B-4 법인 (2주택 단일세율) → corporation 분기 + 단일세율 �
   // Notices "법인 단일세율 적용"
   await expect(page.getByText(/법인 단일세율 적용/)).toBeVisible();
 });
+
+// ── 케이스 10: B-5 부부 공동명의 1주택자 특례 (12억 공제 + 세액공제 80%) ──
+// 공시 15억 + 1주택 + 1세대1주택자 + 부부 토글 ON + 70세 + 15년 → 1.8억 과표 + 80% 세액공제
+test("B-5 부부 공동명의 1주택자 특례 (15억 + 70세 + 15년) → single-house 분기 + 12억 공제 + 1인 합산 + 세액공제 표시", async ({ page }) => {
+  await page.goto("/tools/property-tax");
+  await fillBaseInputs(page, {
+    publishedManwon: 150_000,
+    houses: 1,
+    isSingleHouseEligible: true,
+    ageYears: 70,
+    holdYears: 15,
+  });
+  await page.getByText(/고급 옵션.*합산배제.*공동명의.*법인/).click();
+  // 부부 공동명의 1주택자 특례 토글 켜기
+  await page.getByRole("checkbox", { name: /부부 공동명의 1주택자 특례/ }).check();
+  // strict mode 회피: "분기:" prefix 로 ResultCard 분기 라벨만 한정 (세션 100 답습)
+  await expect(page.getByText(/분기: 1세대1주택자.*공제 12억/)).toBeVisible();
+  // 입력값 표시 행 (B2 ResultCard)
+  await expect(page.getByText(/부부 공동명의 1주택자 특례 적용.*1인 합산 12억 공제/)).toBeVisible();
+  // Notices 신규 키 (고유 단어 "1인 합산 납세")
+  await expect(page.getByText(/1인 합산 납세/)).toBeVisible();
+  // 세액공제 행 표시 (80% = 72만)
+  await expect(page.getByText(/세액공제 \(연령\+보유\)/)).toBeVisible();
+});

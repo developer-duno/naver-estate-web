@@ -34,6 +34,9 @@ export function normalizeInput(input: PropertyTaxInput): PropertyTaxInput {
   const isSpouseJointSingleHouse =
     !isCorp && input.houses === 1 && input.isSpouseJointSingleHouse === true;
 
+  // 세션 111: 법인 9종 일반 누진세율 특례 카테고리 — 법인 아니면 자동 undefined 강제 (양립 가드)
+  const corporationGeneralRateCategory = isCorp ? input.corporationGeneralRateCategory : undefined;
+
   return {
     ...input,
     excludedHouses,
@@ -41,5 +44,6 @@ export function normalizeInput(input: PropertyTaxInput): PropertyTaxInput {
     isSingleHouseEligible,
     isCorporation: isCorp,
     isSpouseJointSingleHouse,
+    corporationGeneralRateCategory,
   };
 }

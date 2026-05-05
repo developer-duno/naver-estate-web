@@ -72,10 +72,13 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   }
 
   // B-4 법인: 종부세 단일세율 (2.7%/5.0%) + 공제 0원 + 1주택 공제·세액공제 자동 차단 (normalize 에서 isSingleHouseEligible=false 강제됨)
+  // 세션 111: 법인 9종 일반 누진세율 특례 (PDF #14) — 카테고리 선택 시 단일세율 → 누진세율 + 공제 9억 + 세부담 상한 150%
   const isCorp = input.isCorporation === true;
+  const corpCategory = input.corporationGeneralRateCategory;
+  const isCorpGeneral = isCorp && corpCategory != null;
   if (isCorp) {
-    notes.push("corporation-flat-rate-applied");
-    // raw 입력에 1주택 자격/연령/보유가 있었으면 차단 안내 (normalize 후엔 false/0 이므로 raw 비교)
+    notes.push(isCorpGeneral ? "corporation-general-rate-applied" : "corporation-flat-rate-applied");
+    // raw 입력에 1주택 자격/연령/보유가 있었으면 차단 안내 (법인은 1세대1주택 자격 없음 — 일반세율 신청 무관)
     const hadCreditAttempt = rawInput.isSingleHouseEligible || (rawInput.ageYears ?? 0) > 0 || (rawInput.holdYears ?? 0) > 0;
     if (hadCreditAttempt) notes.push("corporation-no-credit");
   }
@@ -91,9 +94,12 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   if (isSingleProperty) notes.push("single-house-special-rate");
 
   // ===== 2단계: 종합부동산세 (종부세법 §8 §9) =====
-  // B-4 법인: 공제 0원 (개인 공제 9억/12억 미적용)
-  const comprehensiveDeduction = isCorp ? 0 : (isSingleComprehensive ? SINGLE_HOUSE_DEDUCTION : GENERAL_DEDUCTION);
+  // B-4 법인: 단일세율 시 공제 0원, 일반 누진세율 신청 시 9억 (PDF #2 페이지 3 — 일반과 동일 분기)
+  const comprehensiveDeduction = isCorp
+    ? (isCorpGeneral ? GENERAL_DEDUCTION : 0)
+    : (isSingleComprehensive ? SINGLE_HOUSE_DEDUCTION : GENERAL_DEDUCTION);
   if (!isCorp) notes.push(isSingleComprehensive ? "single-house-deduction-12e" : "general-deduction-9e");
+  if (isCorpGeneral) notes.push("general-deduction-9e");
 
   const afterDeduction = Math.max(0, effectivePublished - comprehensiveDeduction);
   const comprehensiveTaxBase = Math.floor(afterDeduction * FAIR_MARKET_RATIO);
@@ -119,15 +125,23 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
     };
   }
 
-  // B-2/B-4 BRACKETS 선택: 법인은 CORP, 개인은 effectiveHouses 기준
+  // B-2/B-4 BRACKETS 선택: 법인 단일세율 = CORP, 개인 = effectiveHouses 기준
+  // 세션 111: 법인 9종 일반 누진세율 (PDF #14 페이지 2 표):
+  //   - 카테고리 ① (public-charity-other): 2주택 이하 BRACKETS_2 / 3주택 이상 BRACKETS_3
+  //   - 카테고리 ②~⑨: BRACKETS_2 일률 (다주택 보유해도 중과 안 함)
   const comprehensiveBrackets = isCorp
-    ? (input.houses >= 3 ? COMPREHENSIVE_BRACKETS_CORP_3 : COMPREHENSIVE_BRACKETS_CORP_2)
+    ? (isCorpGeneral
+        ? (corpCategory === "public-charity-other"
+            ? (input.houses >= 3 ? COMPREHENSIVE_BRACKETS_3 : COMPREHENSIVE_BRACKETS_2)
+            : COMPREHENSIVE_BRACKETS_2)
+        : (input.houses >= 3 ? COMPREHENSIVE_BRACKETS_CORP_3 : COMPREHENSIVE_BRACKETS_CORP_2))
     : (effectiveHouses >= 3 ? COMPREHENSIVE_BRACKETS_3 : COMPREHENSIVE_BRACKETS_2);
   const compResult = applyBracket(comprehensiveTaxBase, comprehensiveBrackets);
   const comprehensiveTaxBeforeDeduction = Math.floor(compResult.tax);
 
-  // 3주택+ 25억 초과 중과 안내 (개인만, effectiveHouses 기준)
-  if (!isCorp && effectiveHouses >= 3 && comprehensiveTaxBase > 1_200_000_000) notes.push("multi-heavy-25e");
+  // 3주택+ 25억 초과 중과 안내 (개인 + 법인 카테고리 ① 둘 다 BRACKETS_3 진입)
+  const usesHeavyBrackets = !isCorp ? (effectiveHouses >= 3) : (isCorpGeneral && corpCategory === "public-charity-other" && input.houses >= 3);
+  if (usesHeavyBrackets && comprehensiveTaxBase > 1_200_000_000) notes.push("multi-heavy-25e");
 
   // ===== 3단계: 공제할 재산세액 (종부세법 시행령 §4의2) — v3-A ② =====
   // 1주택·다주택·법인 모두 적용 (KILF + 국세청 공식). 분자·분모 누진세율 (대법원 2019두39796).

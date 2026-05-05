@@ -11,6 +11,29 @@
 export type Houses = 1 | 2 | 3;
 export type PropertyTaxBranch = "empty" | "below-threshold" | "single-house" | "multi-house" | "corporation";
 
+/**
+ * 법인 9종 일반 누진세율 특례 카테고리 (PDF #14 페이지 2 표 직접 박제).
+ * - public-charity-other: ① 공익법인등 (②에 해당하지 아니하는 경우) — 2주택 이하 기본세율 / 3주택 이상 중과세율
+ * - public-charity-direct: ② 공익법인등 (직접 공익목적 사용 주택만 보유) — 항상 기본세율
+ * - public-housing: ③ 공공주택사업자 — 항상 기본세율
+ * - housing-association: ④ 주택조합 — 항상 기본세율
+ * - redevelopment: ⑤ 정비사업시행자 — 항상 기본세율
+ * - private-rental: ⑥ 민간건설임대사업자 — 항상 기본세율
+ * - urban-development: ⑦ 도시개발사업시행자 — 항상 기본세율
+ * - social-enterprise: ⑧ 사회적기업등 — 항상 기본세율
+ * - clan: ⑨ 종중 — 항상 기본세율
+ */
+export type CorporationGeneralRateCategory =
+  | "public-charity-other"
+  | "public-charity-direct"
+  | "public-housing"
+  | "housing-association"
+  | "redevelopment"
+  | "private-rental"
+  | "urban-development"
+  | "social-enterprise"
+  | "clan";
+
 export type PropertyTaxNoticeKey =
   | "disclaimer"                  // 면책 안내
   | "single-house-special-rate"   // 1세대1주택 9억 이하 특례 세율 적용
@@ -32,6 +55,7 @@ export type PropertyTaxNoticeKey =
   | "spouse-joint-single-house-applied" // 부부 공동명의 1주택자 특례 — 1인 합산 12억 공제 + 세액공제 80% (B-5)
   | "corporation-flat-rate-applied" // 법인 단일세율 적용 (2.7% / 5.0%) (B-4)
   | "corporation-no-credit"       // 법인 1주택 공제·세액공제 자동 차단 안내 (B-4)
+  | "corporation-general-rate-applied" // 법인 9종 일반 누진세율 특례 적용 (PDF #14 카테고리 라디오, 세션 111)
   | "consult-experts";            // 세무사 상담 권장
 
 export interface PropertyTaxInput {
@@ -45,6 +69,7 @@ export interface PropertyTaxInput {
   ownershipRatio?: number;        // 공동명의 본인 지분 비율 (0 < x ≤ 1, 옵션) — 종부세 산정 전용
   isCorporation?: boolean;        // 법인 보유 여부 (옵션) — 단일세율 + 공제·세액공제 자동 off
   isSpouseJointSingleHouse?: boolean; // 부부 공동명의 1주택자 특례 신청 (옵션, B-5) — 1인 합산 12억 공제 + 세액공제 80%
+  corporationGeneralRateCategory?: CorporationGeneralRateCategory; // 법인 9종 일반 누진세율 특례 카테고리 (옵션, 세션 111). isCorporation=true && 카테고리 선택 시 단일세율 → 누진세율 + 공제 9억 + 세부담 상한 150%
 }
 
 export interface PropertyTaxResult {

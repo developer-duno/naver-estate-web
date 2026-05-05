@@ -96,6 +96,7 @@ export default function PropertyTaxCalculator() {
         ownershipPercent={ownershipPercent}
         isSpouseJointSingleHouse={isSpouseJointSingleHouse}
         corporationGeneralRateCategory={corporationGeneralRateCategory}
+        specialHouses={specialHouses}
       />
     </div>
   );

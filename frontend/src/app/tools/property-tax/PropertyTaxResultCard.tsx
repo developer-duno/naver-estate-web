@@ -1,6 +1,6 @@
 "use client";
 
-import type { PropertyTaxResult, CorporationGeneralRateCategory } from "@/lib/property-tax-types";
+import type { PropertyTaxResult, CorporationGeneralRateCategory, SpecialHousesInput } from "@/lib/property-tax-types";
 import PropertyTaxNotices from "./PropertyTaxNotices";
 
 interface Props {
@@ -9,7 +9,17 @@ interface Props {
   ownershipPercent?: number;
   isSpouseJointSingleHouse?: boolean;
   corporationGeneralRateCategory?: CorporationGeneralRateCategory | "";
+  specialHouses?: SpecialHousesInput;
 }
+
+// 5종 특례주택 카테고리 → 한글 짧은 라벨 (ResultCard 입력값 표시 행, 세션 112)
+const SPECIAL_HOUSE_LABEL: Record<keyof SpecialHousesInput, string> = {
+  temporary2: "① 일시적2주택",
+  inherited: "② 상속주택",
+  ruralLowPrice: "③ 지방저가",
+  populationDecline: "④ 인구감소지역",
+  postCompletionUnsold: "⑤ 준공후미분양",
+};
 
 // PDF #14 페이지 2 표 — 카테고리 → 한글 짧은 라벨 (ResultCard 입력값 표시 행)
 const CORP_GENERAL_LABEL: Record<CorporationGeneralRateCategory, string> = {
@@ -54,7 +64,7 @@ const COLOR_CLASS: Record<string, string> = {
   amber: "bg-amber-50 border-amber-200 text-amber-900",
 };
 
-export default function PropertyTaxResultCard({ result, excludedHouses, ownershipPercent, isSpouseJointSingleHouse, corporationGeneralRateCategory }: Props) {
+export default function PropertyTaxResultCard({ result, excludedHouses, ownershipPercent, isSpouseJointSingleHouse, corporationGeneralRateCategory, specialHouses }: Props) {
   const branchInfo = BRANCH_TEXT[result.branch];
   const empty = result.branch === "empty";
   const showRural = result.ruralTax > 0;
@@ -64,6 +74,12 @@ export default function PropertyTaxResultCard({ result, excludedHouses, ownershi
   const showOwnership = !empty && ownershipPercent !== undefined && ownershipPercent > 0 && ownershipPercent < 100;
   const showSpouseJoint = !empty && isSpouseJointSingleHouse === true;
   const showCorpGeneral = !empty && result.branch === "corporation" && corporationGeneralRateCategory != null && corporationGeneralRateCategory !== "";
+  // 5종 특례주택 표시 (count > 0 카테고리만, 행 폭증 방지)
+  const specialEntries = !empty && specialHouses
+    ? (Object.keys(SPECIAL_HOUSE_LABEL) as Array<keyof SpecialHousesInput>)
+        .filter((k) => (specialHouses[k]?.count ?? 0) > 0)
+    : [];
+  const showSpecialHouses = specialEntries.length > 0 && result.notes.includes("special-houses-applied");
 
   return (
     <section
@@ -73,7 +89,7 @@ export default function PropertyTaxResultCard({ result, excludedHouses, ownershi
       <div className={`rounded-md border px-3 py-2 text-sm ${COLOR_CLASS[branchInfo.color]}`}>
         <strong>분기:</strong> {branchInfo.label}
       </div>
-      {(showExcluded || showOwnership || showSpouseJoint || showCorpGeneral) && (
+      {(showExcluded || showOwnership || showSpouseJoint || showCorpGeneral || showSpecialHouses) && (
         <div className="text-xs text-gray-600 space-y-0.5">
           {showExcluded && <div>합산배제 신청: 제외 {excludedHouses}주택</div>}
           {showOwnership && <div>공동명의 본인 지분: {ownershipPercent}%</div>}
@@ -82,6 +98,22 @@ export default function PropertyTaxResultCard({ result, excludedHouses, ownershi
             <div>
               법인 일반 누진세율 신청: {CORP_GENERAL_LABEL[corporationGeneralRateCategory as CorporationGeneralRateCategory]}
             </div>
+          )}
+          {showSpecialHouses && (
+            <>
+              <div className="font-medium text-gray-700 mt-1">1세대1주택 5종 특례주택 적용:</div>
+              {specialEntries.map((k) => {
+                const entry = specialHouses![k]!;
+                return (
+                  <div key={k} className="pl-2">
+                    {SPECIAL_HOUSE_LABEL[k]}: {entry.count}채 / 합계 공시가 {entry.publishedTotal.toLocaleString()}만원
+                  </div>
+                );
+              })}
+              {result.notes.includes("special-houses-credit-prorated") && (
+                <div className="pl-2 text-blue-700">└ 안분 비율 적용 (산출세액 × 1주택 비율 × 공제율)</div>
+              )}
+            </>
           )}
         </div>
       )}

@@ -1,5 +1,7 @@
 "use client";
 
+import type { CorporationGeneralRateCategory } from "@/lib/property-tax-types";
+
 interface Props {
   houses: 1 | 2 | 3;
   excludedHouses: number;
@@ -7,11 +9,26 @@ interface Props {
   isCorporation: boolean;
   isSingleHouseEligible: boolean;
   isSpouseJointSingleHouse: boolean;
+  corporationGeneralRateCategory: CorporationGeneralRateCategory | "";
   onExcludedHousesChange: (v: number) => void;
   onOwnershipPercentChange: (v: number) => void;
   onIsCorporationChange: (v: boolean) => void;
   onIsSpouseJointSingleHouseChange: (v: boolean) => void;
+  onCorporationGeneralRateCategoryChange: (v: CorporationGeneralRateCategory | "") => void;
 }
+
+// PDF #14 페이지 2 표 직접 박제 — 9 카테고리 라벨 (UI 표시 + Notice 본문 동일)
+const CORP_GENERAL_OPTIONS: Array<{ value: CorporationGeneralRateCategory; label: string }> = [
+  { value: "public-charity-other", label: "① 공익법인등 (②에 해당하지 않음) — 다주택 시 중과세율" },
+  { value: "public-charity-direct", label: "② 공익법인등 (직접 공익목적 사용 주택만 보유)" },
+  { value: "public-housing", label: "③ 공공주택사업자" },
+  { value: "housing-association", label: "④ 주택조합" },
+  { value: "redevelopment", label: "⑤ 정비사업시행자" },
+  { value: "private-rental", label: "⑥ 민간건설임대사업자" },
+  { value: "urban-development", label: "⑦ 도시개발사업시행자" },
+  { value: "social-enterprise", label: "⑧ 사회적기업등" },
+  { value: "clan", label: "⑨ 종중(宗中)" },
+];
 
 const INPUT_CLASS =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed";
@@ -19,9 +36,9 @@ const INPUT_CLASS =
 export default function PropertyTaxAdvancedFields(props: Props) {
   const {
     houses, excludedHouses, ownershipPercent, isCorporation,
-    isSingleHouseEligible, isSpouseJointSingleHouse,
+    isSingleHouseEligible, isSpouseJointSingleHouse, corporationGeneralRateCategory,
     onExcludedHousesChange, onOwnershipPercentChange, onIsCorporationChange,
-    onIsSpouseJointSingleHouseChange,
+    onIsSpouseJointSingleHouseChange, onCorporationGeneralRateCategoryChange,
   } = props;
 
   const advancedDisabled = isCorporation;
@@ -46,6 +63,29 @@ export default function PropertyTaxAdvancedFields(props: Props) {
             법인 보유 (단일세율 2.7% / 5.0%, 1주택 공제·세액공제 자동 차단)
           </span>
         </label>
+
+        <div>
+          <label htmlFor="corporationGeneralRateCategoryAdv" className="block text-sm font-medium text-gray-700 mb-1.5">
+            법인 9종 일반 누진세율 특례 (선택, PDF #14)
+          </label>
+          <select
+            id="corporationGeneralRateCategoryAdv"
+            value={corporationGeneralRateCategory}
+            onChange={(e) => onCorporationGeneralRateCategoryChange(e.target.value as CorporationGeneralRateCategory | "")}
+            disabled={!isCorporation}
+            className={INPUT_CLASS}
+          >
+            <option value="">선택 안 함 (단일세율 적용)</option>
+            {CORP_GENERAL_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-gray-500">
+            {!isCorporation
+              ? "법인 토글 ON 시 활성화 (개인은 해당 없음)"
+              : "신청 시 단일세율 → 일반 누진세율 + 공제 9억 + 세부담 상한 150% 적용. 매년 9.16~9.30 별지 제28호 서식 신고. ①번은 다주택 시 중과세율, ②~⑨번은 항상 기본세율 일률. 자격 확인 본인 책임."}
+          </p>
+        </div>
 
         {houses > 1 && (
           <div>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { calculatePropertyTax } from "@/lib/property-tax";
-import type { PropertyTaxInput } from "@/lib/property-tax-types";
+import type { PropertyTaxInput, CorporationGeneralRateCategory } from "@/lib/property-tax-types";
 import PropertyTaxInputs from "./PropertyTaxInputs";
 import PropertyTaxResultCard from "./PropertyTaxResultCard";
 
@@ -17,11 +17,19 @@ export default function PropertyTaxCalculator() {
   const [ownershipPercent, setOwnershipPercent] = useState(0);
   const [isCorporation, setIsCorporation] = useState(false);
   const [isSpouseJointSingleHouse, setIsSpouseJointSingleHouse] = useState(false);
+  const [corporationGeneralRateCategory, setCorporationGeneralRateCategory] =
+    useState<CorporationGeneralRateCategory | "">("");
 
   // 부부 토글 켤 때 ownershipPercent 자동 0 리셋 (1인 합산 납세 → 지분 % 무의미, 화면 모순 차단)
   const handleIsSpouseJointSingleHouseChange = (v: boolean) => {
     setIsSpouseJointSingleHouse(v);
     if (v) setOwnershipPercent(0);
+  };
+
+  // 법인 토글 OFF 시 9종 카테고리 자동 reset (UI 가드 + normalize 자동 undefined 강제 이중 안전망, 세션 111)
+  const handleIsCorporationChange = (v: boolean) => {
+    setIsCorporation(v);
+    if (!v) setCorporationGeneralRateCategory("");
   };
 
   const result = useMemo(() => {
@@ -38,9 +46,10 @@ export default function PropertyTaxCalculator() {
       ownershipRatio: ownershipPercent > 0 && ownershipPercent <= 100 ? ownershipPercent / 100 : 1,
       isCorporation,
       isSpouseJointSingleHouse,
+      corporationGeneralRateCategory: corporationGeneralRateCategory || undefined,
     };
     return calculatePropertyTax(input);
-  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse]);
+  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse, corporationGeneralRateCategory]);
 
   return (
     <div className="space-y-4">
@@ -55,6 +64,7 @@ export default function PropertyTaxCalculator() {
         ownershipPercent={ownershipPercent}
         isCorporation={isCorporation}
         isSpouseJointSingleHouse={isSpouseJointSingleHouse}
+        corporationGeneralRateCategory={corporationGeneralRateCategory}
         onPublishedManwonChange={setPublishedManwon}
         onHousesChange={setHouses}
         onIsSingleHouseEligibleChange={setIsSingleHouseEligible}
@@ -63,14 +73,16 @@ export default function PropertyTaxCalculator() {
         onPrevYearTaxManwonChange={setPrevYearTaxManwon}
         onExcludedHousesChange={setExcludedHouses}
         onOwnershipPercentChange={setOwnershipPercent}
-        onIsCorporationChange={setIsCorporation}
+        onIsCorporationChange={handleIsCorporationChange}
         onIsSpouseJointSingleHouseChange={handleIsSpouseJointSingleHouseChange}
+        onCorporationGeneralRateCategoryChange={setCorporationGeneralRateCategory}
       />
       <PropertyTaxResultCard
         result={result}
         excludedHouses={excludedHouses}
         ownershipPercent={ownershipPercent}
         isSpouseJointSingleHouse={isSpouseJointSingleHouse}
+        corporationGeneralRateCategory={corporationGeneralRateCategory}
       />
     </div>
   );

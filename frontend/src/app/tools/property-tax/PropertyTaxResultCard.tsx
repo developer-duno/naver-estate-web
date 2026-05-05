@@ -1,6 +1,6 @@
 "use client";
 
-import type { PropertyTaxResult } from "@/lib/property-tax-types";
+import type { PropertyTaxResult, CorporationGeneralRateCategory } from "@/lib/property-tax-types";
 import PropertyTaxNotices from "./PropertyTaxNotices";
 
 interface Props {
@@ -8,7 +8,21 @@ interface Props {
   excludedHouses?: number;
   ownershipPercent?: number;
   isSpouseJointSingleHouse?: boolean;
+  corporationGeneralRateCategory?: CorporationGeneralRateCategory | "";
 }
+
+// PDF #14 페이지 2 표 — 카테고리 → 한글 짧은 라벨 (ResultCard 입력값 표시 행)
+const CORP_GENERAL_LABEL: Record<CorporationGeneralRateCategory, string> = {
+  "public-charity-other": "① 공익법인등 (②미해당)",
+  "public-charity-direct": "② 공익법인등 (공익목적 직접 사용)",
+  "public-housing": "③ 공공주택사업자",
+  "housing-association": "④ 주택조합",
+  "redevelopment": "⑤ 정비사업시행자",
+  "private-rental": "⑥ 민간건설임대사업자",
+  "urban-development": "⑦ 도시개발사업시행자",
+  "social-enterprise": "⑧ 사회적기업등",
+  "clan": "⑨ 종중",
+};
 
 // 누진세율 라벨 — 0 일 때 "(공제 미만)" 인라인, R12 답습 (`|| 0` fallback NaN 방지).
 // v3-A ①: 재산세는 적용 공정시장가액비율 동반 표시 (1주택 차등 43~45% vs 일반 60%).
@@ -40,7 +54,7 @@ const COLOR_CLASS: Record<string, string> = {
   amber: "bg-amber-50 border-amber-200 text-amber-900",
 };
 
-export default function PropertyTaxResultCard({ result, excludedHouses, ownershipPercent, isSpouseJointSingleHouse }: Props) {
+export default function PropertyTaxResultCard({ result, excludedHouses, ownershipPercent, isSpouseJointSingleHouse, corporationGeneralRateCategory }: Props) {
   const branchInfo = BRANCH_TEXT[result.branch];
   const empty = result.branch === "empty";
   const showRural = result.ruralTax > 0;
@@ -49,6 +63,7 @@ export default function PropertyTaxResultCard({ result, excludedHouses, ownershi
   const showExcluded = !empty && (excludedHouses ?? 0) > 0;
   const showOwnership = !empty && ownershipPercent !== undefined && ownershipPercent > 0 && ownershipPercent < 100;
   const showSpouseJoint = !empty && isSpouseJointSingleHouse === true;
+  const showCorpGeneral = !empty && result.branch === "corporation" && corporationGeneralRateCategory != null && corporationGeneralRateCategory !== "";
 
   return (
     <section
@@ -58,11 +73,16 @@ export default function PropertyTaxResultCard({ result, excludedHouses, ownershi
       <div className={`rounded-md border px-3 py-2 text-sm ${COLOR_CLASS[branchInfo.color]}`}>
         <strong>분기:</strong> {branchInfo.label}
       </div>
-      {(showExcluded || showOwnership || showSpouseJoint) && (
+      {(showExcluded || showOwnership || showSpouseJoint || showCorpGeneral) && (
         <div className="text-xs text-gray-600 space-y-0.5">
           {showExcluded && <div>합산배제 신청: 제외 {excludedHouses}주택</div>}
           {showOwnership && <div>공동명의 본인 지분: {ownershipPercent}%</div>}
           {showSpouseJoint && <div>부부 공동명의 1주택자 특례 적용 (1인 합산 12억 공제)</div>}
+          {showCorpGeneral && (
+            <div>
+              법인 일반 누진세율 신청: {CORP_GENERAL_LABEL[corporationGeneralRateCategory as CorporationGeneralRateCategory]}
+            </div>
+          )}
         </div>
       )}
       {!empty && (

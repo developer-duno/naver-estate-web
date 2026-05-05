@@ -119,8 +119,8 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 
 | 부채 | 위치 | 영향 |
 |---|---|---|
-| worktrees 잔재 5개 (모두 prunable) | UNC 경로 `//192.168.219.101/Code/cursor/naver-estate-web/.claude/worktrees/agent-{a24e5c9f, a5c6cae8, a6b18f3f, ab0a88b1, abed8383}/` | grep 노이즈 (전체 코드 grep 시 5배 결과). 정리: `git worktree prune` |
-| R21 e2e 검증 미완 | CI run 25361059023 cancelled | 다음 e2e 커밋 시 strict mode 3차 답습 가능성 |
+| ~~worktrees 잔재 5개~~ ✅ 세션 110 정리 (`git worktree prune` 완료) | (해소) | UNC 경로 폴더(`//192.168.219.101/Code/...`)는 다른 PC 네트워크 공유라 본 PC에서 미접근 |
+| ~~R21 e2e 검증 미완~~ ✅ 세션 110 재실행 통과 (run 25361059023 success: Frontend CI + Frontend E2E admin 둘 다 🟢) | (해소) | 부부 공동명의 #10 strict mode 정정 진짜 통과 확증 |
 | complex-visual baseline | 세션 71 답습, R20+R21 별건 | 시각 회귀 |
 | v3-A 재산세 1주택 차등 | property-tax 미출시 | 면책 박스 2건 노란불 (5~7시간) |
 | 1세대 1주택 5종 특례주택 | property-tax 미출시 (PDF #12·#13 참조) | 후속 후보 — 일시적2주택·상속·지방저가·인구감소·준공후미분양 |

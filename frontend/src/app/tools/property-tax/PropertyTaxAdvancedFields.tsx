@@ -13,6 +13,7 @@ interface Props {
   corporationGeneralRateCategory: CorporationGeneralRateCategory | "";
   specialHouses: SpecialHousesInput;
   specialHousesRateApply: SpecialHousesRateApplyInput;
+  isReligiousSpecial: boolean;
   onExcludedHousesChange: (v: number) => void;
   onOwnershipPercentChange: (v: number) => void;
   onIsCorporationChange: (v: boolean) => void;
@@ -20,6 +21,7 @@ interface Props {
   onCorporationGeneralRateCategoryChange: (v: CorporationGeneralRateCategory | "") => void;
   onSpecialHouseEntryChange: (key: keyof SpecialHousesInput, field: "count" | "publishedAverage", value: number) => void;
   onRateApplyEntryChange: (key: keyof SpecialHousesRateApplyInput, count: number) => void;
+  onIsReligiousSpecialChange: (v: boolean) => void;
 }
 
 // PDF #12 페이지 1·2 본문 박제 — 5종 카테고리 라벨 + 자격 요건 (UI 안내)
@@ -55,10 +57,10 @@ export default function PropertyTaxAdvancedFields(props: Props) {
   const {
     houses, excludedHouses, ownershipPercent, isCorporation,
     isSingleHouseEligible, isSpouseJointSingleHouse, corporationGeneralRateCategory,
-    specialHouses, specialHousesRateApply,
+    specialHouses, specialHousesRateApply, isReligiousSpecial,
     onExcludedHousesChange, onOwnershipPercentChange, onIsCorporationChange,
     onIsSpouseJointSingleHouseChange, onCorporationGeneralRateCategoryChange,
-    onSpecialHouseEntryChange, onRateApplyEntryChange,
+    onSpecialHouseEntryChange, onRateApplyEntryChange, onIsReligiousSpecialChange,
   } = props;
 
   const advancedDisabled = isCorporation;
@@ -252,6 +254,22 @@ export default function PropertyTaxAdvancedFields(props: Props) {
           specialHousesRateApply={specialHousesRateApply}
           onRateApplyEntryChange={onRateApplyEntryChange}
         />
+
+        {/* PDF #15 향교·종교단체 직접사용 (세션 114) — 산식 무영향, 안내 4 카드만 push */}
+        <label className="flex items-start gap-2 min-h-[44px] pt-2 border-t border-gray-200">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={isReligiousSpecial}
+            onChange={(e) => onIsReligiousSpecialChange(e.target.checked)}
+          />
+          <span className="text-sm text-gray-700">
+            향교·종교단체 직접 사용
+            <span className="block text-xs text-gray-500 mt-0.5">
+              지특법 §50 (재산세 면세) + 조특법 §104조의13 (종부세 납세자 변경) 안내 4 카드 표시. 산식 결과는 변경되지 않습니다 (수익사업·직접사용 판정은 세무 영역).
+            </span>
+          </span>
+        </label>
       </div>
     </details>
   );

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { calculatePropertyTax } from "@/lib/property-tax";
-import type { PropertyTaxInput, CorporationGeneralRateCategory, SpecialHousesInput, SpecialHousesRateApplyInput } from "@/lib/property-tax-types";
+import type { PropertyTaxInput, CorporationGeneralRateCategory, SpecialHousesInput, SpecialHousesRateApplyInput, PropertyTaxNoticeKey } from "@/lib/property-tax-types";
 import PropertyTaxInputs from "./PropertyTaxInputs";
 import PropertyTaxResultCard from "./PropertyTaxResultCard";
 
@@ -23,6 +23,8 @@ export default function PropertyTaxCalculator() {
   const [specialHouses, setSpecialHouses] = useState<SpecialHousesInput>({});
   // PDF #13 4종 세율 특례주택 (세션 113) — 카테고리별 { count } 저장 (publishedAverage 미보유)
   const [specialHousesRateApply, setSpecialHousesRateApply] = useState<SpecialHousesRateApplyInput>({});
+  // PDF #15 향교·종교단체 직접사용 토글 (세션 114) — 산식 무영향, 안내 4 카드만 push
+  const [isReligiousSpecial, setIsReligiousSpecial] = useState(false);
 
   // 5종 특례주택 entry 갱신 핸들러 (카테고리 + 필드 + 값)
   const handleSpecialHouseEntryChange = useCallback((key: keyof SpecialHousesInput, field: "count" | "publishedAverage", value: number) => {
@@ -67,8 +69,17 @@ export default function PropertyTaxCalculator() {
       specialHouses: Object.keys(specialHouses).length > 0 ? specialHouses : undefined,
       specialHousesRateApply: Object.keys(specialHousesRateApply).length > 0 ? specialHousesRateApply : undefined,
     };
-    return calculatePropertyTax(input);
-  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse, corporationGeneralRateCategory, specialHouses, specialHousesRateApply]);
+    const base = calculatePropertyTax(input);
+    if (!isReligiousSpecial) return base;
+    // PDF #15 향교·종교단체 직접사용 — 산식 결과 불변, 안내 4 키만 합산 (consult-experts 앞으로 정렬은 PropertyTaxNotices TONE_ORDER 가 자동 처리)
+    const religiousNotes: PropertyTaxNoticeKey[] = [
+      "religious-property-tax-exempt",
+      "religious-comprehensive-payer-shift",
+      "religious-filing-deadline",
+      "religious-joint-liability-cap",
+    ];
+    return { ...base, notes: [...base.notes, ...religiousNotes] };
+  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse, corporationGeneralRateCategory, specialHouses, specialHousesRateApply, isReligiousSpecial]);
 
   return (
     <div className="space-y-4">
@@ -86,6 +97,7 @@ export default function PropertyTaxCalculator() {
         corporationGeneralRateCategory={corporationGeneralRateCategory}
         specialHouses={specialHouses}
         specialHousesRateApply={specialHousesRateApply}
+        isReligiousSpecial={isReligiousSpecial}
         onPublishedManwonChange={setPublishedManwon}
         onHousesChange={setHouses}
         onIsSingleHouseEligibleChange={setIsSingleHouseEligible}
@@ -99,6 +111,7 @@ export default function PropertyTaxCalculator() {
         onCorporationGeneralRateCategoryChange={setCorporationGeneralRateCategory}
         onSpecialHouseEntryChange={handleSpecialHouseEntryChange}
         onRateApplyEntryChange={handleRateApplyEntryChange}
+        onIsReligiousSpecialChange={setIsReligiousSpecial}
       />
       <PropertyTaxResultCard
         result={result}

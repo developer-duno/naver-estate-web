@@ -17,6 +17,7 @@ interface Props {
   corporationGeneralRateCategory: CorporationGeneralRateCategory | "";
   specialHouses: SpecialHousesInput;
   specialHousesRateApply: SpecialHousesRateApplyInput;
+  isReligiousSpecial: boolean;
 
   onPublishedManwonChange: (v: number) => void;
   onHousesChange: (v: 1 | 2 | 3) => void;
@@ -31,6 +32,7 @@ interface Props {
   onCorporationGeneralRateCategoryChange: (v: CorporationGeneralRateCategory | "") => void;
   onSpecialHouseEntryChange: (key: keyof SpecialHousesInput, field: "count" | "publishedAverage", value: number) => void;
   onRateApplyEntryChange: (key: keyof SpecialHousesRateApplyInput, count: number) => void;
+  onIsReligiousSpecialChange: (v: boolean) => void;
 }
 
 const INPUT_CLASS =
@@ -42,12 +44,12 @@ export default function PropertyTaxInputs(props: Props) {
   const {
     publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon,
     excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse,
-    corporationGeneralRateCategory, specialHouses, specialHousesRateApply,
+    corporationGeneralRateCategory, specialHouses, specialHousesRateApply, isReligiousSpecial,
     onPublishedManwonChange, onHousesChange, onIsSingleHouseEligibleChange,
     onAgeYearsChange, onHoldYearsChange, onPrevYearTaxManwonChange,
     onExcludedHousesChange, onOwnershipPercentChange, onIsCorporationChange,
     onIsSpouseJointSingleHouseChange, onCorporationGeneralRateCategoryChange,
-    onSpecialHouseEntryChange, onRateApplyEntryChange,
+    onSpecialHouseEntryChange, onRateApplyEntryChange, onIsReligiousSpecialChange,
   } = props;
 
   const singleActive = isSingleHouseEligible && houses === 1;
@@ -127,6 +129,7 @@ export default function PropertyTaxInputs(props: Props) {
         corporationGeneralRateCategory={corporationGeneralRateCategory}
         specialHouses={specialHouses}
         specialHousesRateApply={specialHousesRateApply}
+        isReligiousSpecial={isReligiousSpecial}
         onExcludedHousesChange={onExcludedHousesChange}
         onOwnershipPercentChange={onOwnershipPercentChange}
         onIsCorporationChange={onIsCorporationChange}
@@ -134,6 +137,7 @@ export default function PropertyTaxInputs(props: Props) {
         onCorporationGeneralRateCategoryChange={onCorporationGeneralRateCategoryChange}
         onSpecialHouseEntryChange={onSpecialHouseEntryChange}
         onRateApplyEntryChange={onRateApplyEntryChange}
+        onIsReligiousSpecialChange={onIsReligiousSpecialChange}
       />
 
       {singleActive ? (

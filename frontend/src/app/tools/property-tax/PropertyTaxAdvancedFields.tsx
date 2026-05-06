@@ -1,7 +1,8 @@
 "use client";
 
-import type { CorporationGeneralRateCategory, SpecialHousesInput, SpecialHousesRateApplyInput } from "@/lib/property-tax-types";
+import type { CorporationGeneralRateCategory, SpecialHousesInput, SpecialHousesRateApplyInput, HoldPeriodSpecialMode } from "@/lib/property-tax-types";
 import RateApplyExclusionFields from "./RateApplyExclusionFields";
+import HoldPeriodSpecialFields from "./HoldPeriodSpecialFields";
 
 interface Props {
   houses: 1 | 2 | 3;
@@ -14,6 +15,8 @@ interface Props {
   specialHouses: SpecialHousesInput;
   specialHousesRateApply: SpecialHousesRateApplyInput;
   isReligiousSpecial: boolean;
+  holdPeriodSpecialMode: HoldPeriodSpecialMode;
+  originalAcquisitionYear: number;
   onExcludedHousesChange: (v: number) => void;
   onOwnershipPercentChange: (v: number) => void;
   onIsCorporationChange: (v: boolean) => void;
@@ -22,6 +25,8 @@ interface Props {
   onSpecialHouseEntryChange: (key: keyof SpecialHousesInput, field: "count" | "publishedAverage", value: number) => void;
   onRateApplyEntryChange: (key: keyof SpecialHousesRateApplyInput, count: number) => void;
   onIsReligiousSpecialChange: (v: boolean) => void;
+  onHoldPeriodSpecialModeChange: (v: HoldPeriodSpecialMode) => void;
+  onOriginalAcquisitionYearChange: (v: number) => void;
 }
 
 // PDF #12 페이지 1·2 본문 박제 — 5종 카테고리 라벨 + 자격 요건 (UI 안내)
@@ -58,9 +63,11 @@ export default function PropertyTaxAdvancedFields(props: Props) {
     houses, excludedHouses, ownershipPercent, isCorporation,
     isSingleHouseEligible, isSpouseJointSingleHouse, corporationGeneralRateCategory,
     specialHouses, specialHousesRateApply, isReligiousSpecial,
+    holdPeriodSpecialMode, originalAcquisitionYear,
     onExcludedHousesChange, onOwnershipPercentChange, onIsCorporationChange,
     onIsSpouseJointSingleHouseChange, onCorporationGeneralRateCategoryChange,
     onSpecialHouseEntryChange, onRateApplyEntryChange, onIsReligiousSpecialChange,
+    onHoldPeriodSpecialModeChange, onOriginalAcquisitionYearChange,
   } = props;
 
   const advancedDisabled = isCorporation;
@@ -270,6 +277,17 @@ export default function PropertyTaxAdvancedFields(props: Props) {
             </span>
           </span>
         </label>
+
+        {/* PDF #16 보유기간 계산 특례 (세션 115) — 라디오 3상태 + 원래 취득연도 */}
+        <HoldPeriodSpecialFields
+          houses={houses}
+          isSingleHouseEligible={isSingleHouseEligible}
+          isCorporation={isCorporation}
+          holdPeriodSpecialMode={holdPeriodSpecialMode}
+          originalAcquisitionYear={originalAcquisitionYear}
+          onHoldPeriodSpecialModeChange={onHoldPeriodSpecialModeChange}
+          onOriginalAcquisitionYearChange={onOriginalAcquisitionYearChange}
+        />
       </div>
     </details>
   );

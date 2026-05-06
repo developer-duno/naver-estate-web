@@ -117,6 +117,8 @@ export default function PropertyTaxCalculator() {
         specialHouses={specialHouses}
         specialHousesRateApply={specialHousesRateApply}
         isReligiousSpecial={isReligiousSpecial}
+        holdPeriodSpecialMode={holdPeriodSpecialMode}
+        originalAcquisitionYear={originalAcquisitionYear}
         onPublishedManwonChange={setPublishedManwon}
         onHousesChange={setHouses}
         onIsSingleHouseEligibleChange={setIsSingleHouseEligible}
@@ -131,6 +133,8 @@ export default function PropertyTaxCalculator() {
         onSpecialHouseEntryChange={handleSpecialHouseEntryChange}
         onRateApplyEntryChange={handleRateApplyEntryChange}
         onIsReligiousSpecialChange={setIsReligiousSpecial}
+        onHoldPeriodSpecialModeChange={handleHoldPeriodSpecialModeChange}
+        onOriginalAcquisitionYearChange={setOriginalAcquisitionYear}
       />
       <PropertyTaxResultCard
         result={result}

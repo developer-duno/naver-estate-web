@@ -1,6 +1,6 @@
 "use client";
 
-import type { CorporationGeneralRateCategory, SpecialHousesInput, SpecialHousesRateApplyInput } from "@/lib/property-tax-types";
+import type { CorporationGeneralRateCategory, SpecialHousesInput, SpecialHousesRateApplyInput, HoldPeriodSpecialMode } from "@/lib/property-tax-types";
 import PropertyTaxAdvancedFields from "./PropertyTaxAdvancedFields";
 
 interface Props {
@@ -18,6 +18,8 @@ interface Props {
   specialHouses: SpecialHousesInput;
   specialHousesRateApply: SpecialHousesRateApplyInput;
   isReligiousSpecial: boolean;
+  holdPeriodSpecialMode: HoldPeriodSpecialMode;
+  originalAcquisitionYear: number;
 
   onPublishedManwonChange: (v: number) => void;
   onHousesChange: (v: 1 | 2 | 3) => void;
@@ -33,6 +35,8 @@ interface Props {
   onSpecialHouseEntryChange: (key: keyof SpecialHousesInput, field: "count" | "publishedAverage", value: number) => void;
   onRateApplyEntryChange: (key: keyof SpecialHousesRateApplyInput, count: number) => void;
   onIsReligiousSpecialChange: (v: boolean) => void;
+  onHoldPeriodSpecialModeChange: (v: HoldPeriodSpecialMode) => void;
+  onOriginalAcquisitionYearChange: (v: number) => void;
 }
 
 const INPUT_CLASS =
@@ -45,11 +49,13 @@ export default function PropertyTaxInputs(props: Props) {
     publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon,
     excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse,
     corporationGeneralRateCategory, specialHouses, specialHousesRateApply, isReligiousSpecial,
+    holdPeriodSpecialMode, originalAcquisitionYear,
     onPublishedManwonChange, onHousesChange, onIsSingleHouseEligibleChange,
     onAgeYearsChange, onHoldYearsChange, onPrevYearTaxManwonChange,
     onExcludedHousesChange, onOwnershipPercentChange, onIsCorporationChange,
     onIsSpouseJointSingleHouseChange, onCorporationGeneralRateCategoryChange,
     onSpecialHouseEntryChange, onRateApplyEntryChange, onIsReligiousSpecialChange,
+    onHoldPeriodSpecialModeChange, onOriginalAcquisitionYearChange,
   } = props;
 
   const singleActive = isSingleHouseEligible && houses === 1;
@@ -130,6 +136,8 @@ export default function PropertyTaxInputs(props: Props) {
         specialHouses={specialHouses}
         specialHousesRateApply={specialHousesRateApply}
         isReligiousSpecial={isReligiousSpecial}
+        holdPeriodSpecialMode={holdPeriodSpecialMode}
+        originalAcquisitionYear={originalAcquisitionYear}
         onExcludedHousesChange={onExcludedHousesChange}
         onOwnershipPercentChange={onOwnershipPercentChange}
         onIsCorporationChange={onIsCorporationChange}
@@ -138,6 +146,8 @@ export default function PropertyTaxInputs(props: Props) {
         onSpecialHouseEntryChange={onSpecialHouseEntryChange}
         onRateApplyEntryChange={onRateApplyEntryChange}
         onIsReligiousSpecialChange={onIsReligiousSpecialChange}
+        onHoldPeriodSpecialModeChange={onHoldPeriodSpecialModeChange}
+        onOriginalAcquisitionYearChange={onOriginalAcquisitionYearChange}
       />
 
       {singleActive ? (

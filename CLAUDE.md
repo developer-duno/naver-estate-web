@@ -181,21 +181,6 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 | `/harness` | Plan→Guard→Work→Review 전체 워크플로우, Sonnet 분할, 코드 작성 규칙 |
 | `/guard` | 9 GATE 검증 (크기/영향/순서/완전성/적정성/보안/연동/롤백/UX) |
 
-## 세션 종료 시 마무리 (재발방지 박제, 2026-05-06 세션 112 리뉴얼)
+## 세션 종료 시 마무리
 
-**원칙**: 세션 박제 (진행 상황·사고·결정·교훈) 는 **글로벌 메모리에만** 저장. CLAUDE.md 는 변하지 않는 프로젝트 구조만 박제.
-
-**세션 종료 절차**:
-1. **글로벌 메모리에 세션 요약 저장**: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md` 신규 작성 (커밋 해시 + 사고·결정·교훈 + 다음 세션 후보)
-2. **MEMORY.md 인덱스 1줄 추가**: 새 session{N} 메모 포인터
-3. **CLAUDE.md "현재 진행 상황" 섹션 박제 금지** — 룰: `.claude/rules/planning.md`
-4. **다음 세션 시작 명령어 대화창 출력** (코드블록, 파일 저장 X — 글로벌 룰 답습)
-
-**유일한 CLAUDE.md 갱신 트리거**:
-- 도구 5종 라인업이 6개로 확장됐을 때 (라인업 표 1행 추가)
-- DB 마이그레이션 V021+ 실행 시 (마이그레이션 표 1행 추가)
-- 테스트 카운트가 50+ 차이 나면 (실측 갱신)
-- 비즈니스 모델 변경 시
-- **그 외 코드 변경은 CLAUDE.md 갱신 불필요** (메모리만 갱신)
-
-**자세히**: `.claude/rules/planning.md` "세션 종료 시 마무리" 섹션 + 글로벌 룰 (`~/.claude/CLAUDE.md` "세션 종료 시 다음 시작 명령어 자동 출력")
+**진실의 원천**: `.claude/rules/planning.md` "세션 종료 시 마무리" 섹션. 핵심 = 진행 박제는 글로벌 메모리에만 (`~/.claude/projects/.../memory/session{N}_summary.md`), CLAUDE.md 진행 박제 금지.

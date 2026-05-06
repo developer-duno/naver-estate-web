@@ -60,7 +60,6 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 
 | 파일 | git 추적 | 한 줄 설명 |
 |---|---|---|
-| `SESSION_LOG.md` | ✅ | 세션 로그 (커밋 단위 활동 추적) |
 | `rules/web-rules.md` | ✅ | React/Next.js + FastAPI 코딩 규칙, DON'T 목록 |
 | `rules/testing.md` | ✅ | 테스트 작성·실행 규칙, 구조표 |
 | `rules/infra.md` | ✅ | 서버 복구 절차, 스케줄러 12개, 공유 인프라(mibun) |

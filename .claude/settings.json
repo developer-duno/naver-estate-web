@@ -30,5 +30,18 @@
       "C:\\Users\\user\\.claude\\plans",
       "C:\\Users\\user\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const i=JSON.parse(require('fs').readFileSync(0,'utf8'));const p=i.tool_input?.file_path||'';const c=i.tool_input?.new_string||i.tool_input?.content||'';if(p.endsWith('CLAUDE.md')&&/^(##|\\*\\*).*?(마지막 작업|과거 작업|직전 작업|현재 진행 상황|과거 세션 \\(세션|\\(세션 \\d+)/m.test(c)){console.error('BLOCKED: CLAUDE.md 진행 박제 금지 (.claude/rules/planning.md L43). 메모리 활용: ~/.claude/projects/.../memory/session{N}_summary.md');process.exit(2);}\" < /dev/stdin"
+          }
+        ]
+      }
+    ]
   }
 }

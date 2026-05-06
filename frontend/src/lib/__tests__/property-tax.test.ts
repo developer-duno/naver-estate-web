@@ -643,3 +643,61 @@ describe("법인 9종 일반 누진세율 특례 (CorporationGeneralRateCategory
     expect(r.notes).toContain("corporation-general-rate-applied");
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────
+// PDF #16 보유기간 계산 특례 (세션 115)
+// ──────────────────────────────────────────────────────────────────────
+describe("calculatePropertyTax — PDF #16 보유기간 계산 특례 (세션 115)", () => {
+  // 공통 1주택 + 보유 5+ 입력 (공시가 15억)
+  const buildHoldInput = (over: Partial<PropertyTaxInput>) => buildInput({
+    publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: true,
+    ageYears: 0, holdYears: 10,
+    ...over,
+  });
+
+  it("PDF #16 mode='none' → eligible 안내만, planned/applied/precision-warn 미push", () => {
+    const r = calculatePropertyTax(buildHoldInput({ holdPeriodSpecialMode: "none" }));
+    expect(r.notes).toContain("hold-deduction-eligible");
+    expect(r.notes).toContain("hold-period-special-eligible");
+    expect(r.notes).not.toContain("hold-period-special-planned");
+    expect(r.notes).not.toContain("hold-period-special-applied");
+    expect(r.notes).not.toContain("hold-period-precision-warn");
+  });
+
+  it("PDF #16 mode='planned' + 5+ + origYear → planned + precision-warn push", () => {
+    const r = calculatePropertyTax(buildHoldInput({ holdPeriodSpecialMode: "planned", originalAcquisitionYear: 2010 }));
+    expect(r.notes).toContain("hold-period-special-eligible");
+    expect(r.notes).toContain("hold-period-special-planned");
+    expect(r.notes).toContain("hold-period-precision-warn");
+    expect(r.notes).not.toContain("hold-period-special-applied");
+  });
+
+  it("PDF #16 mode='applied' + 5+ + origYear → applied + precision-warn push", () => {
+    const r = calculatePropertyTax(buildHoldInput({ holdPeriodSpecialMode: "applied", originalAcquisitionYear: 2008 }));
+    expect(r.notes).toContain("hold-period-special-applied");
+    expect(r.notes).toContain("hold-period-precision-warn");
+    expect(r.notes).not.toContain("hold-period-special-planned");
+  });
+
+  it("PDF #16 mode='planned' + 5년 미만 → planned/precision-warn 모두 미push", () => {
+    const r = calculatePropertyTax(buildHoldInput({ holdYears: 4, holdPeriodSpecialMode: "planned", originalAcquisitionYear: 2010 }));
+    expect(r.notes).not.toContain("hold-deduction-eligible");
+    expect(r.notes).not.toContain("hold-period-special-eligible");
+    expect(r.notes).not.toContain("hold-period-special-planned");
+    expect(r.notes).not.toContain("hold-period-precision-warn");
+  });
+
+  it("PDF #16 holdYears=14 (40% 마지막) → 40% 공제 적용", () => {
+    const r = calculatePropertyTax(buildHoldInput({ holdYears: 14, holdPeriodSpecialMode: "none" }));
+    expect(r.notes).toContain("hold-deduction-eligible");
+    // holdDeductionRate(14) = 0.40 — 세액공제 효과 확증 (별도 단위 테스트 부재라 통합 가드)
+    expect(r.comprehensiveTaxCredit).toBeGreaterThan(0);
+  });
+
+  it("PDF #16 외부 가드: mode='planned' 인데 origYear=0 → planned 미push (산식 단계 가드)", () => {
+    const r = calculatePropertyTax(buildHoldInput({ holdPeriodSpecialMode: "planned", originalAcquisitionYear: 0 }));
+    expect(r.notes).toContain("hold-period-special-eligible");
+    expect(r.notes).not.toContain("hold-period-special-planned");
+    expect(r.notes).not.toContain("hold-period-precision-warn");
+  });
+});

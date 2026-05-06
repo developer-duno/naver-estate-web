@@ -124,6 +124,10 @@ export type PropertyTaxNoticeKey =
   | "rate-apply-exclusion-downgraded" // PDF #13 효과 발동 — 3주택 이상 → 2주택 이하 다운판정으로 BRACKETS_3 → BRACKETS_2 전환 (세션 113)
   | "rate-apply-exclusion-no-effect" // PDF #13 신청했으나 효과 없음 안내 — 원래 2주택 이하이거나 제외 후에도 3주택 이상 (세션 113)
   | "rate-apply-exclusion-corp-blocked" // PDF #13 법인 자동 차단 안내 — PDF 본문 "납세의무자" = 거주자 (세션 113)
+  | "religious-property-tax-exempt"     // PDF #15 향교·종교단체 재산세 면세 안내 (지특법 §50, 세션 114)
+  | "religious-comprehensive-payer-shift" // PDF #15 종부세 납세자 변경 안내 (조특법 §104조의13, 세션 114)
+  | "religious-filing-deadline"         // PDF #15 9.16~9.30 별지 제64호의13서식 신고 의무 안내 (세션 114)
+  | "religious-joint-liability-cap"     // PDF #15 향교재단 명의신탁물건 공시가격 한도 연대납세 안내 (세션 114)
   | "consult-experts";            // 세무사 상담 권장
 
 export interface PropertyTaxInput {

@@ -26,7 +26,7 @@
 | 10 | 국세청주택신축용토지 합산배제 안내.pdf | exclusion-new-build-land | (토지분, 본 계산기 미적용) | 103 |
 | 11 | 국세청공동명의 1주택자 과세특례.pdf | spouse-joint-special | spouse-joint-single-house-applied | 108 |
 | 12 | 국세청1세대 1주택자 판단 시 주택 수 산정 제외 특례.pdf | single-house-judgement-exclusion | special-houses-applied / special-houses-credit-prorated / special-houses-corp-blocked / special-houses-multi-house-blocked / special-houses-spouse-joint-priority (5종 라디오 출시 세션 112) | 108·112 |
-| 13 | 국세청세율 적용 시 주택 수 산정 제외 특례.pdf | rate-apply-exclusion | (미출시 후속 — 4종 BRACKETS_2 분기, 다음 세션 이월) | 108·112 (검수만) |
+| 13 | 국세청세율 적용 시 주택 수 산정 제외 특례.pdf | rate-apply-exclusion | rate-apply-exclusion-applied / rate-apply-exclusion-downgraded / rate-apply-exclusion-no-effect / rate-apply-exclusion-corp-blocked (4종 라디오 출시 세션 113 — 3주택+ → BRACKETS_2 다운판정, BRACKETS 신규 정의 불필요) | 108·112·113 |
 | 14 | 국세청법인 주택분 일반 누진세율 특례.pdf | corp-progressive-special | corporation-flat-rate-applied / corporation-general-rate-applied (9 카테고리 라디오 출시 세션 111) | 106·108·111 |
 | 15 | 국세청 향교 및 종교단체에 대한 과세특례.pdf | religious-special | (안내성, 본 계산기 미적용) | 108 |
 | 16 | 국세청 1세대 1주택자 보유기간 계산 특례.pdf | hold-period-special | hold-deduction-eligible / single-house-special-rate (보유 연차 세액공제) | 102·108 |
@@ -43,13 +43,13 @@
 |---|---|---|---|---|---|
 | 양도세 | `transfer-tax.ts` (3 파일: tax + branches + types) | `transfer-tax-branches.ts` | 15개 | `__tests__/transfer-tax.test.ts` | 법제처 §95② + 국세청 표 (세션 98 9출처 교차검증) |
 | 취득세 | `acquisition-tax.ts` (4 파일: tax + brackets + format + types) | `acquisition-brackets.ts` | (미실측) | `__tests__/acquisition-tax.test.ts` | 지방세법 §11 (세션 95 9차 plan v1.8) |
-| 보유세 | `property-tax.ts` (4 파일: tax + brackets + rules + types) | `property-tax-brackets.ts` (재산세 4구간 + 종부세 2주택이하/3주택이상 7구간) | **19개** (세션 108까지) | 4 파일: `property-tax.test.ts` (#B5-1~#B5-4 포함) + `property-tax-brackets.test.ts` + `property-tax-cap.test.ts` + `property-tax-rules.test.ts` | PDF 16장 직접 (§1 표) — 세션 103·106·108 |
+| 보유세 | `property-tax.ts` (4 파일: tax + brackets + rules + types) | `property-tax-brackets.ts` (재산세 4구간 + 종부세 2주택이하/3주택이상 7구간) | **23개** (세션 113까지) | 6 파일: `property-tax.test.ts` (#B5-1~#B5-4 포함) + `property-tax-brackets.test.ts` + `property-tax-cap.test.ts` + `property-tax-rules.test.ts` + `property-tax-special-houses.test.ts` (PDF #12) + `property-tax-rate-apply.test.ts` (PDF #13, 8 케이스) | PDF 16장 직접 (§1 표) — 세션 103·106·108·113 |
 | 중개수수료 | `brokerage.ts` (3 파일: brokerage + brackets + format) | `brokerage-brackets.ts` | (미실측) | `__tests__/brokerage.test.ts` | 시행규칙 별표1 (세션 94) |
 | 면적 변환 | `constants.ts`의 `convertArea` (L9) | M2_TO_PYEONG=3.3058 | — | `__tests__/format.test.ts` | (수학식, 세션 82) |
 
 ### NoticeKey union 정의 위치 (직접 참조용)
 - 양도세: `transfer-tax-types.ts` `TransferNoticeKey` (15개)
-- 보유세: `property-tax-types.ts` `PropertyTaxNoticeKey` (19개)
+- 보유세: `property-tax-types.ts` `PropertyTaxNoticeKey` (23개) + `SpecialHousesRateApplyInput` (PDF #13 4종, 세션 113)
 - 취득세: `acquisition-types.ts` `AcquisitionNoticeKey`
 
 ---
@@ -123,9 +123,10 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 | complex-visual baseline | 세션 71 답습, R20+R21 별건 | 시각 회귀 |
 | ~~v3-A ① 재산세 1주택 차등~~ ✅ 세션 110 출시 (지방세법 시행령 §109 — 3억 43% / 6억 44% / 6억 초과 45%) | (해소) | 면책 박스 2건 → 1건 |
 | ~~v3-A ② 종부세 공제할 재산세액~~ ✅ 세션 110 출시 (시행령 §4의2 + 대법원 2019두39796 정합 — 분자·분모 누진세율, 1주택·다주택·법인 모두 적용, 세액공제는 차감 후 기준) | (해소) | **면책 박스 노란불 0건 = 보유세 도구 100% 정확** |
-| ~~1세대 1주택 5종 특례주택 (PDF #12)~~ ✅ 세션 112 출시 (5종 라디오 5칸 + 카테고리별 채수+공시가 입력 + 안분 산식 + 법인·다주택·자격 미충족 시 자동 차단 + B-5 우선 양립 + Notice 5 신규) | (해소) | PDF #12 효과 (1주택 자격 + 12억 공제 + 세액공제 80% 안분) 100% 반영. PDF #13 (BRACKETS_2 분기) 다음 세션 이월 |
+| ~~1세대 1주택 5종 특례주택 (PDF #12)~~ ✅ 세션 112 출시 (5종 라디오 5칸 + 카테고리별 채수+공시가 입력 + 안분 산식 + 법인·다주택·자격 미충족 시 자동 차단 + B-5 우선 양립 + Notice 5 신규) | (해소) | PDF #12 효과 (1주택 자격 + 12억 공제 + 세액공제 80% 안분) 100% 반영 |
+| ~~세율 적용 시 4종 특례주택 (PDF #13)~~ ✅ 세션 113 출시 (4종 라디오 4칸 + count 입력 + 3주택+ → BRACKETS_2 다운판정 산식 + 법인 자동 차단 + Notice 4 신규 + RateApplyExclusionFields 컴포넌트 분리) | (해소) | BRACKETS 신규 정의 불필요 (기존 BRACKETS_2 재사용). 종부세 1주택 공제는 effectiveHousesAfterExclusion 기준 (PDF #13 무관 분리) — 세율 분기만 영향 |
 | ~~법인 9종 누진 토글~~ ✅ 세션 111 출시 (PDF #14 페이지 2 표 직접 인용 9 카테고리 라디오 — 공익법인등 ①② 분리·공공주택사업자·주택조합·정비사업시행자·민간건설임대사업자·도시개발사업시행자·사회적기업등·종중) | (해소) | 면책 박스 미반영 0건 유지 = 보유세 도구 100% 정확 |
-| ASSETS.md / GLOSSARY.md drift 자동화 | hook 없음 | §7 관행으로만 차단 (수동) |
+| ~~ASSETS.md drift 자동화~~ ✅ 세션 113 출시 (.claude/settings.json hooks.PreToolUse — 신규 계산기 lib *.ts Write 시 ASSETS.md §2 등재 검증 자동 BLOCK) | (해소) | 단위 검증 8/8 PASS. GLOSSARY.md 자동 검증은 도메인 용어 자유 형식이라 불가 — 수동 관행 유지 |
 
 ---
 

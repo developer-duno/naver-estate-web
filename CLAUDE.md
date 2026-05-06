@@ -118,7 +118,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 | 취득세 | `/tools/acquisition-tax` | 일반/조정/감면 3종 + 면적·가격 누진 |
 | 평·㎡ 변환 | `/tools/area-converter` | 단순 변환 |
 | 양도소득세 | `/tools/transfer-tax` | 1주택 비과세·단기·중과·미등기 + 한시배제 |
-| 보유세 | `/tools/property-tax` | 재산세 + 종부세 + 농특세 합산. 6 변종 (B-1 cap / B-2 합산배제 / B-3 공동명의 / B-4 법인 / B-5 부부공동 / 법인9종 / 5종 특례주택) |
+| 보유세 | `/tools/property-tax` | 재산세 + 종부세 + 농특세 합산. 7 변종 (B-1 cap / B-2 합산배제 / B-3 공동명의 / B-4 법인 / B-5 부부공동 / 법인9종 / PDF #12 5종 / PDF #13 4종 세율 다운판정) |
 
 ## 환경변수
 

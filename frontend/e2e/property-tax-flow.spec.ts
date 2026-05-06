@@ -166,3 +166,32 @@ test("B-5 부부 공동명의 1주택자 특례 (15억 + 70세 + 15년) → sing
   // 세액공제 행 표시 (80% = 72만)
   await expect(page.getByText(/세액공제 \(연령\+보유\)/)).toBeVisible();
 });
+
+// ── 케이스 11: PDF #12 5종 특례주택 (1주택 15억 + 일시적2주택 5억 → 안분 0.75) ──
+// 공시 15억 + 1주택 + 1세대1주택자 + 일시적2주택 1채(5억) → 12억 공제 + 안분 비율 적용
+test("PDF #12 5종 특례주택 (1주택 15억 + 일시적2주택 1채 5억) → 12억 공제 + 안분 비율 + ResultCard 표시", async ({ page }) => {
+  await page.goto("/tools/property-tax");
+  await fillBaseInputs(page, {
+    publishedManwon: 150_000,
+    houses: 1,
+    isSingleHouseEligible: true,
+    ageYears: 65,
+    holdYears: 10,
+  });
+  await page.getByText(/고급 옵션.*합산배제.*공동명의.*법인/).click();
+  // 5종 자격 안내 nested details 펼치기 (R1 답습 — strict mode 회피로 정확 라벨 매칭)
+  await page.getByText(/5종 자격 안내 펼치기/).click();
+  // PDF 본문 인용 노출 검증
+  await expect(page.getByText(/① 일시적2주택.*신규주택 취득일 ≤3년/)).toBeVisible();
+  // 일시적2주택 채수 select = 1
+  await page.getByLabel("① 일시적2주택 (신규주택) 채수").selectOption("1");
+  // 일시적2주택 합계 공시가 = 50,000만원 (5억)
+  await page.getByLabel("① 일시적2주택 (신규주택) 합계 공시가 (만원)").fill("50000");
+  // ResultCard 표시 행: "1세대1주택 5종 특례주택 적용:" + 카테고리 표시
+  await expect(page.getByText(/1세대1주택 5종 특례주택 적용:/)).toBeVisible();
+  await expect(page.getByText(/① 일시적2주택: 1채 \/ 합계 공시가 50,000만원/)).toBeVisible();
+  // 안분 비율 안내
+  await expect(page.getByText(/안분 비율 적용.*산출세액.*1주택 비율.*공제율/)).toBeVisible();
+  // Notices 신규 special-houses-applied title 표시
+  await expect(page.getByText("1세대1주택 5종 특례주택 자격 적용", { exact: true })).toBeVisible();
+});

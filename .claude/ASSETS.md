@@ -43,7 +43,7 @@
 |---|---|---|---|---|---|
 | 양도세 | `transfer-tax.ts` (3 파일: tax + branches + types) | `transfer-tax-branches.ts` | 15개 | `__tests__/transfer-tax.test.ts` | 법제처 §95② + 국세청 표 (세션 98 9출처 교차검증) |
 | 취득세 | `acquisition-tax.ts` (4 파일: tax + brackets + format + types) | `acquisition-brackets.ts` | (미실측) | `__tests__/acquisition-tax.test.ts` | 지방세법 §11 (세션 95 9차 plan v1.8) |
-| 보유세 | `property-tax.ts` (4 파일: tax + brackets + rules + types) | `property-tax-brackets.ts` (재산세 4구간 + 종부세 2주택이하/3주택이상 7구간) | **23개** (세션 113까지) | 6 파일: `property-tax.test.ts` (#B5-1~#B5-4 포함) + `property-tax-brackets.test.ts` + `property-tax-cap.test.ts` + `property-tax-rules.test.ts` + `property-tax-special-houses.test.ts` (PDF #12) + `property-tax-rate-apply.test.ts` (PDF #13, 8 케이스) | PDF 16장 직접 (§1 표) — 세션 103·106·108·113 |
+| 보유세 | `property-tax.ts` (4 파일: tax + brackets + rules + types) | `property-tax-brackets.ts` (재산세 4구간 + 종부세 2주택이하/3주택이상 7구간) | **23개** (세션 113까지) | 6 파일 110 케이스: `property-tax.test.ts` (#B5-1~#B5-4 포함) + `property-tax-brackets.test.ts` + `property-tax-cap.test.ts` + `property-tax-rules.test.ts` + `property-tax-special-houses.test.ts` (PDF #12 + 자동 합산 SH-13~15 + B-3↔5종 상호작용 B23-1~4, 19 케이스) + `property-tax-rate-apply.test.ts` (PDF #13, 8 케이스) | PDF 16장 직접 (§1 표) — 세션 103·106·108·113 |
 | 중개수수료 | `brokerage.ts` (3 파일: brokerage + brackets + format) | `brokerage-brackets.ts` | (미실측) | `__tests__/brokerage.test.ts` | 시행규칙 별표1 (세션 94) |
 | 면적 변환 | `constants.ts`의 `convertArea` (L9) | M2_TO_PYEONG=3.3058 | — | `__tests__/format.test.ts` | (수학식, 세션 82) |
 

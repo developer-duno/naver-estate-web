@@ -260,3 +260,92 @@ describe("calculatePropertyTax — 5종 특례주택 (PDF #12)", () => {
     expect(r.comprehensiveTaxCredit).toBe(rEquiv.comprehensiveTaxCredit);
   });
 });
+
+describe("calculatePropertyTax — B-3 (공동명의) × 5종 (PDF #12) × PDF #13 상호작용 (세션 113 Phase B-2)", () => {
+  // #B23-1: B-3 공동명의 50% × 5종 1채 — ownership ratio 가 effectivePublished 에만 적용 (특례주택은 100% 기준)
+  it("#B23-1 공동명의 50% × 일시적2주택 1채 — 안분 분자에 본인 지분 50% 만 반영", () => {
+    // 본인 1주택 20억 × 50% = 10억 effectivePublished + 일시적2주택 1×5억 = 5억
+    // 안분 분모 = 10억 + 5억 = 15억, 분자 = 10억, 비율 = 0.667
+    const rJoint = calculatePropertyTax(buildInput({
+      publishedPriceWon: 2_000_000_000,
+      ageYears: 65, holdYears: 10,
+      ownershipRatio: 0.5,
+      specialHouses: { temporary2: { count: 1, publishedAverage: 50_000 } },
+    }));
+    // 단독명의 동일 지분 (10억 단독) + 5종 5억 → 안분 비율 = 0.667 동일
+    const rSingle = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_000_000_000,
+      ageYears: 65, holdYears: 10,
+      specialHouses: { temporary2: { count: 1, publishedAverage: 50_000 } },
+    }));
+    // 공동명의 case는 1세대1주택자 이므로 ownership-applied + ownership-single-house-warning Notice 푸시
+    expect(rJoint.notes).toContain("ownership-applied");
+    expect(rJoint.notes).toContain("ownership-single-house-warning");
+    expect(rJoint.notes).toContain("special-houses-applied");
+    // 종부세 1주택 자격은 effectiveHousesAfterExclusion === 1 이므로 양쪽 모두 12억 공제 적용
+    expect(rJoint.comprehensiveDeduction).toBe(rSingle.comprehensiveDeduction);
+  });
+
+  // #B23-2: B-5 부부 공동명의 1주택 특례 우선 적용 시 ownership ratio 강제 1.0 + 5종 안분 비활성
+  it("#B23-2 B-5 부부 공동명의 + 5종 입력 — special-houses-spouse-joint-priority Notice + 안분 비활성", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000,
+      ageYears: 65, holdYears: 10,
+      ownershipRatio: 0.5,
+      isSpouseJointSingleHouse: true,
+      specialHouses: { inherited: { count: 2, publishedAverage: 30_000 } },
+    }));
+    // B-5 우선 적용 → ratio=1 강제 + 5종 안분 비활성
+    expect(r.notes).toContain("spouse-joint-single-house-applied");
+    expect(r.notes).toContain("special-houses-spouse-joint-priority");
+    expect(r.notes).not.toContain("special-houses-credit-prorated"); // 안분 비활성
+    expect(r.notes).not.toContain("ownership-applied"); // ratio=1 강제로 미푸시
+  });
+
+  // #B23-3: B-3 공동명의 + PDF #13 4종 — ratio 는 종부세 산정에만, PDF #13 은 세율 분기에만 영향
+  // 둘 다 1세대1주택 자격 무관이라 다주택 케이스로 검증
+  it("#B23-3 공동명의 50% (다주택) × PDF #13 4종 — 종부세 ratio 적용 + BRACKETS_2 다운판정 양립", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000,
+      houses: 3,
+      isSingleHouseEligible: false, // 다주택 케이스 명시 (buildInput default true 오버라이드)
+      ownershipRatio: 0.5,
+      specialHousesRateApply: { inheritedRA: { count: 1 } },
+    }));
+    // 다주택 + isSingleHouseEligible=false → ownership-warning 미푸시 (1세대1주택 자격 무)
+    expect(r.notes).toContain("ownership-applied");
+    expect(r.notes).not.toContain("ownership-single-house-warning"); // 1세대1주택 자격 무 → warning 없음
+    expect(r.notes).toContain("rate-apply-exclusion-applied");
+    expect(r.notes).toContain("rate-apply-exclusion-downgraded"); // 3주택 → 2주택 다운판정
+    // ratio 50% 적용 검증: 동일 입력에서 ratio=1 vs ratio=0.5 → 종부세 다름
+    const rFull = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000,
+      houses: 3,
+      isSingleHouseEligible: false,
+      ownershipRatio: 1,
+      specialHousesRateApply: { inheritedRA: { count: 1 } },
+    }));
+    expect(r.comprehensiveTax).toBeLessThan(rFull.comprehensiveTax); // 50% 지분 → 종부세 감소
+  });
+
+  // #B23-4: 트리플 — B-3 + 5종 (PDF #12) + PDF #13 4종 동시 입력 (1세대1주택 자격, 다주택 효과는 별도)
+  // 1세대1주택자라 PDF #13 효과 없음 (이미 BRACKETS_2), 5종은 안분 적용, B-3 ratio 도 적용
+  // 본인 공시가 30억 × 50% = 15억 (12억 공제 후 양수, branch=single-house 진입)
+  it("#B23-4 트리플 (B-3 50% + 5종 PDF #12 + PDF #13 4종) — 모든 Notice 정확 발동 + 산식 충돌 0", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 3_000_000_000,
+      houses: 1,
+      isSingleHouseEligible: true,
+      ageYears: 65, holdYears: 10,
+      ownershipRatio: 0.5,
+      specialHouses: { inherited: { count: 1, publishedAverage: 50_000 } },
+      specialHousesRateApply: { inheritedRA: { count: 1 } },
+    }));
+    expect(r.notes).toContain("ownership-applied");
+    expect(r.notes).toContain("ownership-single-house-warning");
+    expect(r.notes).toContain("special-houses-applied");
+    expect(r.notes).toContain("rate-apply-exclusion-applied");
+    expect(r.notes).toContain("rate-apply-exclusion-no-effect"); // 1주택이라 PDF #13 효과 없음
+    expect(r.branch).toBe("single-house"); // 1세대1주택 자격 유지
+  });
+});

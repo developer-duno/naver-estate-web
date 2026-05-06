@@ -25,8 +25,8 @@
 | 9 | 국세청합산배제 사원용 주택 등.pdf | exclusion-employee | exclusion-applied | 103·106 |
 | 10 | 국세청주택신축용토지 합산배제 안내.pdf | exclusion-new-build-land | (토지분, 본 계산기 미적용) | 103 |
 | 11 | 국세청공동명의 1주택자 과세특례.pdf | spouse-joint-special | spouse-joint-single-house-applied | 108 |
-| 12 | 국세청1세대 1주택자 판단 시 주택 수 산정 제외 특례.pdf | single-house-judgement-exclusion | (미출시 후속 — 5종 특례주택 처리) | 108 (검수만) |
-| 13 | 국세청세율 적용 시 주택 수 산정 제외 특례.pdf | rate-apply-exclusion | (미출시 후속 — 5종 특례주택 처리) | 108 (검수만) |
+| 12 | 국세청1세대 1주택자 판단 시 주택 수 산정 제외 특례.pdf | single-house-judgement-exclusion | special-houses-applied / special-houses-credit-prorated / special-houses-corp-blocked / special-houses-multi-house-blocked / special-houses-spouse-joint-priority (5종 라디오 출시 세션 112) | 108·112 |
+| 13 | 국세청세율 적용 시 주택 수 산정 제외 특례.pdf | rate-apply-exclusion | (미출시 후속 — 4종 BRACKETS_2 분기, 다음 세션 이월) | 108·112 (검수만) |
 | 14 | 국세청법인 주택분 일반 누진세율 특례.pdf | corp-progressive-special | corporation-flat-rate-applied / corporation-general-rate-applied (9 카테고리 라디오 출시 세션 111) | 106·108·111 |
 | 15 | 국세청 향교 및 종교단체에 대한 과세특례.pdf | religious-special | (안내성, 본 계산기 미적용) | 108 |
 | 16 | 국세청 1세대 1주택자 보유기간 계산 특례.pdf | hold-period-special | hold-deduction-eligible / single-house-special-rate (보유 연차 세액공제) | 102·108 |
@@ -124,7 +124,7 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 | complex-visual baseline | 세션 71 답습, R20+R21 별건 | 시각 회귀 |
 | ~~v3-A ① 재산세 1주택 차등~~ ✅ 세션 110 출시 (지방세법 시행령 §109 — 3억 43% / 6억 44% / 6억 초과 45%) | (해소) | 면책 박스 2건 → 1건 |
 | ~~v3-A ② 종부세 공제할 재산세액~~ ✅ 세션 110 출시 (시행령 §4의2 + 대법원 2019두39796 정합 — 분자·분모 누진세율, 1주택·다주택·법인 모두 적용, 세액공제는 차감 후 기준) | (해소) | **면책 박스 노란불 0건 = 보유세 도구 100% 정확** |
-| 1세대 1주택 5종 특례주택 | property-tax 미출시 (PDF #12·#13 참조) | 후속 후보 — 일시적2주택·상속·지방저가·인구감소·준공후미분양 |
+| ~~1세대 1주택 5종 특례주택 (PDF #12)~~ ✅ 세션 112 출시 (5종 라디오 5칸 + 카테고리별 채수+공시가 입력 + 안분 산식 + 법인·다주택·자격 미충족 시 자동 차단 + B-5 우선 양립 + Notice 5 신규) | (해소) | PDF #12 효과 (1주택 자격 + 12억 공제 + 세액공제 80% 안분) 100% 반영. PDF #13 (BRACKETS_2 분기) 다음 세션 이월 |
 | ~~법인 9종 누진 토글~~ ✅ 세션 111 출시 (PDF #14 페이지 2 표 직접 인용 9 카테고리 라디오 — 공익법인등 ①② 분리·공공주택사업자·주택조합·정비사업시행자·민간건설임대사업자·도시개발사업시행자·사회적기업등·종중) | (해소) | 면책 박스 미반영 0건 유지 = 보유세 도구 100% 정확 |
 | ASSETS.md / GLOSSARY.md drift 자동화 | hook 없음 | §7 관행으로만 차단 (수동) |
 

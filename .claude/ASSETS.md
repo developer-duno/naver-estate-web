@@ -204,7 +204,7 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 
 | 명령 | 용도 | 위치 |
 |---|---|---|
-| `npm run dev` | 프론트엔드 dev 서버 (port 3000 충돌 주의 — sangse가 점유, 본 프로젝트는 3100 권장) | `frontend/` |
+| `npm run dev` | 프론트엔드 dev 서버 (port 3000=sangse / 3100=legal 점유, naver 는 8090 사용 — 세션 114 박제) | `frontend/` |
 | `npm test` / `npx vitest run` | FE 단위·컴포넌트·훅 테스트 (992개) | `frontend/` |
 | `npm run test:e2e` / `npx playwright test` | E2E (16파일, --webpack 모드) | `frontend/` |
 | `npx tsc --noEmit` | 타입 체크 (커밋 전 필수) | `frontend/` |

@@ -1,6 +1,6 @@
 /**
  * E2E: /tools/property-tax 보유세 계산기 회귀 가드 (6 케이스, 4분기 커버)
- * 실행: PLAYWRIGHT_PORT=3100 npx playwright test e2e/property-tax-flow.spec.ts --project=public
+ * 실행: PLAYWRIGHT_PORT=8090 npx playwright test e2e/property-tax-flow.spec.ts --project=public
  *
  * 데스크톱 nav 의존 — 뷰포트 ≥768px 필수 (public project Chromium 기본 1280×720)
  * 박제 케이스 = src/lib/__tests__/property-tax.test.ts 와 ResultCard 분기별 라벨

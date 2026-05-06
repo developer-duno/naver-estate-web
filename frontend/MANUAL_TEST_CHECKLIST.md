@@ -1,11 +1,11 @@
 # 수동 테스트 체크리스트 — 네이버 아파트 매물 조회 웹
 
 > 브라우저에서 직접 클릭하며 확인하는 QA 체크리스트
-> 테스트 환경: http://localhost:3100 (프론트, 본 PC sangse-agent 가 3000 점유) + http://localhost:8002 (백엔드)
+> 테스트 환경: http://localhost:8090 (프론트, 본 PC 3000=sangse / 3100=legal 점유, naver 는 8090 — 세션 114 박제) + http://localhost:8002 (백엔드)
 
 ---
 
-## 1. 홈 페이지: http://localhost:3100
+## 1. 홈 페이지: http://localhost:8090
 
 ### 정상 흐름
 - [ ] 페이지 접속 시 상단 헤더에 "네이버 아파트 매물 조회" 표시됨 → 기대: 헤더 렌더링 정상

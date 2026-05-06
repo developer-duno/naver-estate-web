@@ -26,13 +26,13 @@
 
    `TEST_ADMIN_EMAIL` 은 `ADMIN_EMAIL` 환경변수에 등록된 관리자 이메일이어야 한다 (미들웨어의 `ADMIN_EMAILS` 매칭).
 
-2. setup + admin 만 실행 (이 PC 에서는 포트 3000 이 sangse-agent 가 쓰고 있으므로 3100 사용):
+2. setup + admin 만 실행 (이 PC 에서는 3000=sangse / 3100=legal 가 점유 중이므로 naver 는 8090 사용 — 세션 114 박제):
 
    ```bash
-   PLAYWRIGHT_PORT=3100 npx playwright test --project=setup --project=admin
+   PLAYWRIGHT_PORT=8090 npx playwright test --project=setup --project=admin
    ```
 
-   CI 에서는 `PLAYWRIGHT_PORT` 미설정 → 기본값 3000 사용.
+   CI 에서는 `PLAYWRIGHT_PORT` 미설정 → 기본값 3000 사용 (CI 환경은 단독, 충돌 없음).
 
 3. 성공 시 `e2e/.auth/admin.json` 생성. 이후 세션 재사용. 만료되면 (Supabase 기본 1시간) 같은 명령으로 재생성.
 
@@ -75,9 +75,9 @@ secrets 미설정 시 `setup` project 가 `TEST_ADMIN_*` missing 로그와 함�
 
 ### baseline 갱신 절차
 
-**로컬 (Windows)**: 의도적인 UI 변경 후
+**로컬 (Windows)**: 의도적인 UI 변경 후 (PORT 8090 — 세션 114 박제)
 ```bash
-PLAYWRIGHT_PORT=3100 npx playwright test --project=admin --update-snapshots
+PLAYWRIGHT_PORT=8090 npx playwright test --project=admin --update-snapshots
 ```
 
 **CI (Linux)**: GitHub Actions UI 에서 `CI` 워크플로우 → "Run workflow" 버튼 → `update_snapshots=true` 체크 → 실행 → 완료 후 `updated-snapshots` artifact 다운로드 → `frontend/e2e/**/*-snapshots/` 폴더에 풀어서 커밋.

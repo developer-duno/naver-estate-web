@@ -1,6 +1,6 @@
 /**
  * E2E: /tools/transfer-tax 양도소득세 계산기 회귀 가드 (8 케이스, 6 분기 커버)
- * 실행: PLAYWRIGHT_PORT=3100 npx playwright test e2e/transfer-tax-flow.spec.ts --project=public
+ * 실행: PLAYWRIGHT_PORT=8090 npx playwright test e2e/transfer-tax-flow.spec.ts --project=public
  *
  * 데스크톱 nav 의존 — 뷰포트 ≥768px 필수 (public project Chromium 기본 1280×720)
  * 박제 케이스 = src/lib/__tests__/transfer-tax.test.ts L85-235 의 #1/#2/#6/#10/#11

@@ -195,3 +195,28 @@ test("PDF #12 5종 특례주택 (1주택 15억 + 일시적2주택 1채 5억) →
   // Notices 신규 special-houses-applied title 표시
   await expect(page.getByText("1세대1주택 5종 특례주택 자격 적용", { exact: true })).toBeVisible();
 });
+
+// ── 케이스 12: PDF #15 향교·종교단체 직접사용 (체크박스 ON → 안내 4 카드 노출, OFF → 소거) ──
+// 산식 무영향 검증: 체크 ON 전후 재산세·종부세 산출 동일
+test("PDF #15 향교·종교단체 — 체크박스 ON 시 안내 4 카드 노출 + 산식 무영향", async ({ page }) => {
+  await page.goto("/tools/property-tax");
+  await fillBaseInputs(page, {
+    publishedManwon: 100_000,
+    houses: 1,
+    isSingleHouseEligible: false, // 일반 분기, 산식 단순화
+  });
+  // 고급 옵션 펼치기
+  await page.getByText(/고급 옵션.*합산배제.*공동명의.*법인/).click();
+  // 체크 OFF 상태에서 4 카드 미노출 확증
+  await expect(page.getByText("✓ 향교·종교단체 — 재산세 면세 (지특법 §50)", { exact: true })).toHaveCount(0);
+  // 체크박스 ON
+  await page.getByLabel(/향교·종교단체 직접 사용/).check();
+  // 안내 4 카드 모두 노출 확증
+  await expect(page.getByText("✓ 향교·종교단체 — 재산세 면세 (지특법 §50)", { exact: true })).toBeVisible();
+  await expect(page.getByText("✓ 향교·종교단체 — 종부세 납세자 변경 (조특법 §104조의13)", { exact: true })).toBeVisible();
+  await expect(page.getByText("⚠ 향교·종교단체 — 9월 신고 의무", { exact: true })).toBeVisible();
+  await expect(page.getByText("⚠ 향교·종교단체 — 연대납세 한도", { exact: true })).toBeVisible();
+  // 체크 OFF 토글 시 4 카드 소거 확증
+  await page.getByLabel(/향교·종교단체 직접 사용/).uncheck();
+  await expect(page.getByText("✓ 향교·종교단체 — 재산세 면세 (지특법 §50)", { exact: true })).toHaveCount(0);
+});

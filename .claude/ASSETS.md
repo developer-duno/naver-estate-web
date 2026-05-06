@@ -28,7 +28,7 @@
 | 12 | 국세청1세대 1주택자 판단 시 주택 수 산정 제외 특례.pdf | single-house-judgement-exclusion | special-houses-applied / special-houses-credit-prorated / special-houses-corp-blocked / special-houses-multi-house-blocked / special-houses-spouse-joint-priority (5종 라디오 출시 세션 112) | 108·112 |
 | 13 | 국세청세율 적용 시 주택 수 산정 제외 특례.pdf | rate-apply-exclusion | rate-apply-exclusion-applied / rate-apply-exclusion-downgraded / rate-apply-exclusion-no-effect / rate-apply-exclusion-corp-blocked (4종 라디오 출시 세션 113 — 3주택+ → BRACKETS_2 다운판정, BRACKETS 신규 정의 불필요) | 108·112·113 |
 | 14 | 국세청법인 주택분 일반 누진세율 특례.pdf | corp-progressive-special | corporation-flat-rate-applied / corporation-general-rate-applied (9 카테고리 라디오 출시 세션 111) | 106·108·111 |
-| 15 | 국세청 향교 및 종교단체에 대한 과세특례.pdf | religious-special | (안내성, 본 계산기 미적용) | 108 |
+| 15 | 국세청 향교 및 종교단체에 대한 과세특례.pdf | religious-special | religious-property-tax-exempt / religious-comprehensive-payer-shift / religious-filing-deadline / religious-joint-liability-cap (안내 4 카드 출시 세션 114 — 산식 무영향, 체크박스 ON 시 자동 push. 지특법 §50 + 조특법 §104조의13) | 108·114 |
 | 16 | 국세청 1세대 1주택자 보유기간 계산 특례.pdf | hold-period-special | hold-deduction-eligible / single-house-special-rate (보유 연차 세액공제) | 102·108 |
 
 **용어 정의**: `.claude/GLOSSARY.md` 참조 (공시가/공정시장가액비율/합산배제 등 14개).

@@ -12,15 +12,16 @@
 - **차트**: Recharts 3 (dynamic import)
 - **테스트**: Vitest + @testing-library/react + MSW
 
-## 디렉토리 구조
+## 디렉토리 구조 (2026-05-06 실측)
 
 ```
 frontend/src/
-├── app/           # Next.js App Router (19 페이지, mibunyang/ + mibunyang/compare 포함)
-├── components/    # 재사용 컴포넌트 (23개 + admin/5개 + filter/3개 + mb/13개 = 44개 TSX, PromptModal 포함)
-├── hooks/         # 커스텀 훅 (18개, useLocalStorageList + useLocalStorageFavorites 제네릭 훅 포함)
-├── lib/           # api, storage, format, query-keys, compare-export, mb-export, mb-compare-utils, mb-compare-export 등 (13개)
+├── app/           # Next.js App Router (28 페이지, mibunyang/* + tools/* 5종 + admin/* + blog/* 포함)
+├── components/    # 재사용 컴포넌트 (admin/18 + filter/6 + mb/20 + article/7 + 루트 23 = 74+ TSX)
+├── hooks/         # 커스텀 훅 (21개, useLocalStorageList + useLocalStorageFavorites 제네릭 훅 포함)
+├── lib/           # 31개 (api/ 7모듈 + storage/ + format/ + query-keys/ + 도구별 lib(brokerage·acquisition·transfer·property-tax 등))
 ├── types/         # TypeScript 인터페이스 (estate + Mb* 10개 + naver-maps.d.ts)
+├── content/blog/  # MDX 본문 (전세가율 + realestate-calculators + property-tax-guide 등)
 └── middleware.ts  # Supabase 세션 + 관리자 라우트 보호
 ```
 
@@ -182,20 +183,39 @@ components/
 
 ---
 
-## 페이지별 데이터 흐름
+## 페이지별 데이터 흐름 (28 페이지, 카테고리별)
 
+### 매물 영역 (estate)
 | 페이지 | API 호출 | 백엔드 라우터 |
 |--------|---------|-------------|
 | `/` | `getStats()` + localStorage(히스토리/즐겨찾기) | `/api/stats` |
-| `/search` | `searchComplexes()`, `getComplexesByRegion()` + useCompare | `/api/live/search`, `/api/live/region` |
-| `/complex/[no]` | `startLiveCrawl()`, `getCrawlStatus()`, `getArticles()`, `getPyeongDetails()`, `getPriceHistory()`, `startPriceCollect()` + useFavoriteStatus | `/api/live/{no}/articles/*`, `/api/complexes/{no}/*`, `/api/live/{no}/price-history/*` |
-| `/compare` | `getComplex()` x N + `getPriceStats()` x N (useQueries 병렬, 캐시 공유) + 인쇄/엑셀 | `/api/complexes/{no}`, `/api/complexes/{no}/price-stats` |
-| `/login` | Supabase Auth + `/api/users/login-record` | `/api/users/login-record` |
-| `/admin` | `getAdminDetailedStats()` | `/api/admin/stats/detailed` |
-| `/admin/users` | `getAdminUsers()`, `updateAdminUser()` | `/api/admin/users` |
-| `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()`, `getMbGuList()` (5탭: 단지+미분양+지역+실거래+즐겨찾기, 정렬+검색+비교+엑셀+검색히스토리+일괄비교+중복제거) | `/api/mb/apartments`, `/api/mb/unsold`, `/api/mb/regions`, `/api/mb/trades`, `/api/mb/gu-list` |
-| `/mibunyang/[id]` | `getMbApartmentDetail()`, `getMbUnsoldHistory()` (5섹션+지도+추이차트, 즐겨찾기+엑셀) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
-| `/mibunyang/compare` | `getMbApartmentDetail()` x N + `getMbUnsoldHistory()` x N (useQueries 병렬, 17행 비교+우위★+레이더차트+막대차트+추이비교차트+인쇄+URL복사+엑셀+비교히스토리자동저장+북마크저장) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
+| `/search` | `searchComplexes()`, `getComplexesByRegion()` + useCompare + ComplexSortDropdown | `/api/live/search`, `/api/live/region` |
+| `/complex/[no]` | `startLiveCrawl()`, `getCrawlStatus()`, `getArticles()`, `getPyeongDetails()`, `getPriceHistory()`, `startPriceCollect()` + useFavoriteStatus + ComplexNoteButton | `/api/live/{no}/articles/*`, `/api/complexes/{no}/*`, `/api/live/{no}/price-history/*` |
+| `/compare` | `getComplex()` x N + `getPriceStats()` x N (useQueries 병렬) + 인쇄/엑셀 | `/api/complexes/{no}`, `/api/complexes/{no}/price-stats` |
+
+### 미분양 영역 (mibunyang)
+| 페이지 | API 호출 | 백엔드 라우터 |
+|--------|---------|-------------|
+| `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()`, `getMbGuList()` (5탭) | `/api/mb/*` |
+| `/mibunyang/[id]` | `getMbApartmentDetail()`, `getMbUnsoldHistory()` (5섹션+지도+추이차트) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
+| `/mibunyang/compare` | `getMbApartmentDetail()` x N + `getMbUnsoldHistory()` x N (17행 비교+레이더+막대+추이) | 동일 |
+
+### 도구 5종 (/tools/*) — 모두 클라이언트 산식, BE 호출 없음
+| 페이지 | 라이브러리 | 핵심 |
+|--------|---------|-------------|
+| `/tools/brokerage-fee` | `lib/brokerage*.ts` | 시행규칙 별표1 4종 요율 + 부가세 |
+| `/tools/acquisition-tax` | `lib/acquisition-tax*.ts` | 일반/조정/감면 3종 + 면적·가격 누진 |
+| `/tools/area-converter` | inline | 평·㎡ 변환 |
+| `/tools/transfer-tax` | `lib/transfer-tax*.ts` | 1주택 비과세·단기·중과·미등기·한시배제 |
+| `/tools/property-tax` | `lib/property-tax*.ts` | 재산세+종부세+농특세 (B-1~B-5+법인9종+5종 특례주택) |
+
+### 인증·관리·마케팅·블로그
+| 페이지 | API 호출 | 백엔드 라우터 |
+|--------|---------|-------------|
+| `/login`, `/signup`, `/verify` | Supabase Auth + `/api/users/login-record` | `/api/users/*` |
+| `/admin` (+ /admin/users/scheduler/etc) | `getAdminDetailedStats()`, `getAdminUsers()`, FreshnessCard 등 | `/api/admin/*` |
+| `/pricing` | 정적 (B2B 구독 안내) | — |
+| `/blog` + `/blog/[slug]` | MDX dynamic import (generateStaticParams + dynamicParams=false) | — |
 
 ## 미분양 (mibunyang) 컴포넌트
 

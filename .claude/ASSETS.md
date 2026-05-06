@@ -72,7 +72,7 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 | `settings.local.json` | ❌ (.gitignore) | 사적 권한 (본인 PC 한정) |
 | `commands/harness.md` | ❌ (.gitignore) | **사적**. Plan→Guard→Work→Review |
 | `commands/guard.md` | ❌ (.gitignore) | **사적**. 9 GATE 검증 |
-| `worktrees/agent-*/` | ❌ (.gitignore) | 사적, 5개 prunable 잔재 (§6 부채) |
+| ~~`worktrees/agent-*/`~~ ✅ 세션 112 폴더 직접 삭제 (git worktree prune + rm -rf) | (해소) | git 무인식 stale 폴더 5개 모두 정리 |
 
 ---
 
@@ -119,7 +119,7 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 
 | 부채 | 위치 | 영향 |
 |---|---|---|
-| ~~worktrees 잔재 5개~~ ✅ 세션 110 정리 (`git worktree prune` 완료) | (해소) | UNC 경로 폴더(`//192.168.219.101/Code/...`)는 다른 PC 네트워크 공유라 본 PC에서 미접근 |
+| ~~worktrees 잔재 5개~~ ✅ 세션 110 prune + 세션 112 폴더 rm -rf 완료 | (해소) | 세션 109+110 prune 후 잔재 5개 다시 생성됐는데 세션 112 rm -rf 로 완전 정리. 향후 git worktree 사용 후 prune 자동화 검토 권장 |
 | ~~R21 e2e 검증 미완~~ ✅ 세션 110 재실행 통과 (run 25361059023 success: Frontend CI + Frontend E2E admin 둘 다 🟢) | (해소) | 부부 공동명의 #10 strict mode 정정 진짜 통과 확증 |
 | complex-visual baseline | 세션 71 답습, R20+R21 별건 | 시각 회귀 |
 | ~~v3-A ① 재산세 1주택 차등~~ ✅ 세션 110 출시 (지방세법 시행령 §109 — 3억 43% / 6억 44% / 6억 초과 45%) | (해소) | 면책 박스 2건 → 1건 |
@@ -189,7 +189,7 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 | `superpowers:verification-before-completion` | "완료" 단언 직전 | 검증 명령 실행 후만 success 표기 |
 | `superpowers:dispatching-parallel-agents` | 2+ 독립 작업 병렬 가능 시 | Agent 병렬 호출 패턴 |
 | `superpowers:subagent-driven-development` | 큰 plan 서브에이전트 분할 실행 | 단일 세션 내 SubAgent 활용 |
-| `superpowers:using-git-worktrees` | 격리 작업공간 필요 시 | worktree 신규 생성 (현재 5개 prunable §6 부채) |
+| `superpowers:using-git-worktrees` | 격리 작업공간 필요 시 | worktree 신규 생성. **사용 후 `git worktree prune + rm -rf .claude/worktrees/agent-*/` 의무** (세션 112 답습) |
 | `superpowers:finishing-a-development-branch` | 구현 완료·테스트 통과 후 | 머지/PR/cleanup 옵션 결정 |
 | `superpowers:writing-skills` | 새 Skill 만들거나 기존 Skill 수정 시 | Skill 작성 표준 |
 

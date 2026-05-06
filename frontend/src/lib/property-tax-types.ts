@@ -37,6 +37,36 @@ export interface SpecialHousesInput {
 }
 
 /**
+ * 세율 적용 시 주택 수 산정 제외 특례 (PDF #13 페이지 1~3 직접 박제, 세션 113).
+ * 3주택 이상 보유자가 아래 4종 특례주택을 보유 시, 신청에 의해 해당 채수만큼
+ * 세율 적용 주택 수에서 제외 → 남은 주택 수가 2 이하면 중과세율(BRACKETS_3) 대신
+ * 기본세율(BRACKETS_2) 적용 (PDF "특례 적용 시 혜택" 박스 명시).
+ *
+ * PDF #12 와의 차이:
+ * - PDF #12: 1세대1주택자 자격 인정 (12억 공제 + 세액공제 80% 안분)
+ * - PDF #13: 자격 무관, 단순 세율 분기 (3주택→2주택 다운판정)
+ * - 양립 가능: PDF #12 + PDF #13 동시 활성 (상속주택만 양쪽 카테고리에 존재)
+ *
+ * 카테고리별 자격 (PDF #13 페이지 1·2 본문):
+ * - inheritedRA:        ① 상속주택 — 상속개시일 ≤5년 (5년 초과 시 지분율 ≤40% or 지분 공시가 ≤6억(수도권 밖 3억) 포함)
+ * - unauthorizedLand:   ② 무허가주택의 부속토지 — 허가·신고 없는 무허가주택의 부속토지
+ * - smallNewHouse:      ③ 소형 신축주택 — 2024.1.10~2025.12.31 취득 + 전용 ≤60㎡ + 6억(수도권 밖 3억) 이하 + 같은 기간 준공 + 아파트 제외(도시형 생활주택만) + 양도자 사업주체 + 첫 매매계약 + 미입주
+ * - postCompletionUnsoldRA: ④ 준공 후 미분양주택 — 2024.1.10~2025.12.31 취득 + ≤85㎡ + 6억 이하 + 수도권 밖 + 양도자 사업주체 + 첫 매매계약 + 시·군·구청장 확인
+ *
+ * 신청서: 종합부동산세법 시행규칙 별지 제27호 서식, 매년 9.16~9.30 신고.
+ * 특례 신청 시 자격 본인 책임.
+ */
+export interface RateApplyExclusionEntry {
+  count: number;          // 채수 (0~3, normalize 에서 clamp) — 세율 산정에서 제외할 주택 수
+}
+export interface SpecialHousesRateApplyInput {
+  inheritedRA?: RateApplyExclusionEntry;         // ① 상속주택
+  unauthorizedLand?: RateApplyExclusionEntry;    // ② 무허가주택 부속토지
+  smallNewHouse?: RateApplyExclusionEntry;       // ③ 소형 신축주택
+  postCompletionUnsoldRA?: RateApplyExclusionEntry; // ④ 준공 후 미분양주택
+}
+
+/**
  * 법인 9종 일반 누진세율 특례 카테고리 (PDF #14 페이지 2 표 직접 박제).
  * - public-charity-other: ① 공익법인등 (②에 해당하지 아니하는 경우) — 2주택 이하 기본세율 / 3주택 이상 중과세율
  * - public-charity-direct: ② 공익법인등 (직접 공익목적 사용 주택만 보유) — 항상 기본세율
@@ -86,6 +116,10 @@ export type PropertyTaxNoticeKey =
   | "special-houses-corp-blocked" // 5종 특례주택 법인 자동 차단 안내 (PDF #12 "거주자" 명시)
   | "special-houses-multi-house-blocked" // 5종 특례주택 다주택자 자동 차단 안내 (PDF #12 "1주택" 강제)
   | "special-houses-spouse-joint-priority" // 5종 특례주택 + 부부 공동명의 1주택자 특례 양립 — B-5 우선 적용 (안분 비활성)
+  | "rate-apply-exclusion-applied"  // PDF #13 4종 세율 특례주택 신청 적용 — 세율 산정 주택 수에서 N채 제외 (세션 113)
+  | "rate-apply-exclusion-downgraded" // PDF #13 효과 발동 — 3주택 이상 → 2주택 이하 다운판정으로 BRACKETS_3 → BRACKETS_2 전환 (세션 113)
+  | "rate-apply-exclusion-no-effect" // PDF #13 신청했으나 효과 없음 안내 — 원래 2주택 이하이거나 제외 후에도 3주택 이상 (세션 113)
+  | "rate-apply-exclusion-corp-blocked" // PDF #13 법인 자동 차단 안내 — PDF 본문 "납세의무자" = 거주자 (세션 113)
   | "consult-experts";            // 세무사 상담 권장
 
 export interface PropertyTaxInput {
@@ -101,6 +135,7 @@ export interface PropertyTaxInput {
   isSpouseJointSingleHouse?: boolean; // 부부 공동명의 1주택자 특례 신청 (옵션, B-5) — 1인 합산 12억 공제 + 세액공제 80%
   corporationGeneralRateCategory?: CorporationGeneralRateCategory; // 법인 9종 일반 누진세율 특례 카테고리 (옵션, 세션 111). isCorporation=true && 카테고리 선택 시 단일세율 → 누진세율 + 공제 9억 + 세부담 상한 150%
   specialHouses?: SpecialHousesInput; // 1세대1주택자 5종 특례주택 (옵션, PDF #12, 세션 112). houses=1 + isSingleHouseEligible + 비법인 시만 활성. 신청 시 1주택 자격 인정 + 세액공제 안분
+  specialHousesRateApply?: SpecialHousesRateApplyInput; // 세율 적용 시 주택 수 산정 제외 4종 특례주택 (옵션, PDF #13, 세션 113). 비법인 시만 활성. 신청 시 세율 산정 주택 수에서 제외 (3주택+ → BRACKETS_2 다운판정)
 }
 
 export interface PropertyTaxResult {

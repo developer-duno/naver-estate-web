@@ -146,13 +146,13 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 | V019 | infra.childcare_nearest_type/teachers | — |
 | V020 | naver_call_counter Supabase 영속화 | 2026-04-22 (세션 54) |
 
-## 테스트 현황 (2026-05-06 실측)
+## 테스트 현황 (2026-05-06 실측, 세션 115)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` | **1032개** (106 파일) |
+| FE Vitest | `frontend/src/**/__tests__/` | **1047개** (107 파일) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **18 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **563개** (46 파일, 세션 74 기준) |
+| BE pytest | `backend/tests/` | **579개** (47 파일) |
 
 ## 커밋 전 필수 검증
 

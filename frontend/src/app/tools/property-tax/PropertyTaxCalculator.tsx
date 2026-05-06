@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { calculatePropertyTax } from "@/lib/property-tax";
-import type { PropertyTaxInput, CorporationGeneralRateCategory, SpecialHousesInput, SpecialHousesRateApplyInput, PropertyTaxNoticeKey } from "@/lib/property-tax-types";
+import type { PropertyTaxInput, CorporationGeneralRateCategory, SpecialHousesInput, SpecialHousesRateApplyInput, PropertyTaxNoticeKey, HoldPeriodSpecialMode } from "@/lib/property-tax-types";
 import PropertyTaxInputs from "./PropertyTaxInputs";
 import PropertyTaxResultCard from "./PropertyTaxResultCard";
 
@@ -25,6 +25,9 @@ export default function PropertyTaxCalculator() {
   const [specialHousesRateApply, setSpecialHousesRateApply] = useState<SpecialHousesRateApplyInput>({});
   // PDF #15 향교·종교단체 직접사용 토글 (세션 114) — 산식 무영향, 안내 4 카드만 push
   const [isReligiousSpecial, setIsReligiousSpecial] = useState(false);
+  // PDF #16 보유기간 계산 특례 (세션 115) — 라디오 3상태 + 원래 취득연도, holdYears 자동 재계산
+  const [holdPeriodSpecialMode, setHoldPeriodSpecialMode] = useState<HoldPeriodSpecialMode>("none");
+  const [originalAcquisitionYear, setOriginalAcquisitionYear] = useState(0);
 
   // 5종 특례주택 entry 갱신 핸들러 (카테고리 + 필드 + 값)
   const handleSpecialHouseEntryChange = useCallback((key: keyof SpecialHousesInput, field: "count" | "publishedAverage", value: number) => {
@@ -51,15 +54,29 @@ export default function PropertyTaxCalculator() {
     if (!v) setCorporationGeneralRateCategory("");
   };
 
+  // PDF #16 라디오 "신청 안 함" 선택 시 원래 취득연도 자동 reset (UX 가드, 세션 115)
+  const handleHoldPeriodSpecialModeChange = (v: HoldPeriodSpecialMode) => {
+    setHoldPeriodSpecialMode(v);
+    if (v === "none") setOriginalAcquisitionYear(0);
+  };
+
   const result = useMemo(() => {
     // single 분기: 본인 단독 1세대1주택 OR 부부 공동명의 1주택 특례 모두 ageYears/holdYears 전달
     const single = (isSingleHouseEligible || isSpouseJointSingleHouse) && houses === 1;
+    // PDF #16 보유기간 자동 재계산 (세션 115) — Transfer Calculator 답습 (let + if)
+    let effectiveHoldYears = holdYears;
+    if (holdPeriodSpecialMode !== "none" && originalAcquisitionYear > 0) {
+      const computed = new Date().getFullYear() - originalAcquisitionYear;
+      if (computed > 0) effectiveHoldYears = Math.max(holdYears, computed);
+    }
+    // 라디오만 켜고 연도 미입력 시 산식 input 의 mode 를 "none" 으로 정규화 (UX 명확)
+    const normalizedMode: HoldPeriodSpecialMode = (holdPeriodSpecialMode !== "none" && originalAcquisitionYear > 0) ? holdPeriodSpecialMode : "none";
     const input: PropertyTaxInput = {
       publishedPriceWon: publishedManwon * 10_000,
       houses,
       isSingleHouseEligible: isSingleHouseEligible && houses === 1,
       ageYears: single ? ageYears : 0,
-      holdYears: single ? holdYears : 0,
+      holdYears: single ? effectiveHoldYears : 0,
       prevYearTax: prevYearTaxManwon > 0 ? prevYearTaxManwon * 10_000 : undefined,
       excludedHouses,
       ownershipRatio: ownershipPercent > 0 && ownershipPercent <= 100 ? ownershipPercent / 100 : 1,
@@ -68,6 +85,8 @@ export default function PropertyTaxCalculator() {
       corporationGeneralRateCategory: corporationGeneralRateCategory || undefined,
       specialHouses: Object.keys(specialHouses).length > 0 ? specialHouses : undefined,
       specialHousesRateApply: Object.keys(specialHousesRateApply).length > 0 ? specialHousesRateApply : undefined,
+      holdPeriodSpecialMode: normalizedMode,
+      originalAcquisitionYear: originalAcquisitionYear > 0 ? originalAcquisitionYear : undefined,
     };
     const base = calculatePropertyTax(input);
     if (!isReligiousSpecial) return base;
@@ -79,7 +98,7 @@ export default function PropertyTaxCalculator() {
       "religious-joint-liability-cap",
     ];
     return { ...base, notes: [...base.notes, ...religiousNotes] };
-  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse, corporationGeneralRateCategory, specialHouses, specialHousesRateApply, isReligiousSpecial]);
+  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse, corporationGeneralRateCategory, specialHouses, specialHousesRateApply, isReligiousSpecial, holdPeriodSpecialMode, originalAcquisitionYear]);
 
   return (
     <div className="space-y-4">

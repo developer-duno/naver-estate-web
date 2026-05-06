@@ -222,7 +222,21 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
     comprehensiveTaxCredit = Math.floor(taxBaseForCredit * creditRate);
     if (isSingleSpecialHouseEligible && proRationRatio < 1.0) notes.push("special-houses-credit-prorated");
     if (input.ageYears >= 60) notes.push("age-deduction-eligible");
-    if (input.holdYears >= 5) notes.push("hold-deduction-eligible");
+    if (input.holdYears >= 5) {
+      notes.push("hold-deduction-eligible");
+      notes.push("hold-period-special-eligible"); // PDF #16 안내 (세션 115)
+    }
+    // PDF #16 산식 단계 가드: mode != none + 연도 입력 + 5+ 모두 충족 시만 push (외부 직접 호출 보호)
+    const mode = input.holdPeriodSpecialMode ?? "none";
+    const hasOrigYear = (input.originalAcquisitionYear ?? 0) > 0;
+    if (mode === "planned" && input.holdYears >= 5 && hasOrigYear) {
+      notes.push("hold-period-special-planned");
+      notes.push("hold-period-precision-warn");
+    }
+    if (mode === "applied" && input.holdYears >= 5 && hasOrigYear) {
+      notes.push("hold-period-special-applied");
+      notes.push("hold-period-precision-warn");
+    }
   }
   const comprehensiveTax = Math.max(0, comprehensiveTaxAfterPropertyCredit - comprehensiveTaxCredit);
 

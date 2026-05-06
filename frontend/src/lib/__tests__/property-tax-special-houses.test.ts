@@ -24,7 +24,7 @@ describe("calculatePropertyTax — 5종 특례주택 (PDF #12)", () => {
       publishedPriceWon: 1_500_000_000,
       houses: 1, isSingleHouseEligible: true,
       ageYears: 65, holdYears: 10,
-      specialHouses: { temporary2: { count: 1, publishedTotal: 50_000 } }, // 만원, → 5억 (50,000만원 = 5억원)
+      specialHouses: { temporary2: { count: 1, publishedAverage: 50_000 } }, // 만원, → 5억 (50,000만원 = 5억원)
     }));
     expect(r.branch).toBe("single-house");
     expect(r.notes).toContain("special-houses-applied");
@@ -48,7 +48,7 @@ describe("calculatePropertyTax — 5종 특례주택 (PDF #12)", () => {
     const r = calculatePropertyTax(buildInput({
       publishedPriceWon: 2_000_000_000,
       ageYears: 65, holdYears: 10,
-      specialHouses: { inherited: { count: 1, publishedTotal: 100_000 } }, // 10억 (100,000만원 = 10억원)
+      specialHouses: { inherited: { count: 1, publishedAverage: 100_000 } }, // 10억 (100,000만원 = 10억원)
     }));
     expect(r.notes).toContain("special-houses-applied");
     expect(r.notes).toContain("age-deduction-eligible");
@@ -61,7 +61,7 @@ describe("calculatePropertyTax — 5종 특례주택 (PDF #12)", () => {
     const r = calculatePropertyTax(buildInput({
       publishedPriceWon: 1_300_000_000,
       ageYears: 60, holdYears: 5,
-      specialHouses: { ruralLowPrice: { count: 1, publishedTotal: 40_000 } }, // 4억 (40,000만원)
+      specialHouses: { ruralLowPrice: { count: 1, publishedAverage: 40_000 } }, // 4억 (40,000만원)
     }));
     expect(r.notes).toContain("special-houses-applied");
     expect(r.branch).toBe("single-house");
@@ -72,7 +72,7 @@ describe("calculatePropertyTax — 5종 특례주택 (PDF #12)", () => {
     const r = calculatePropertyTax(buildInput({
       publishedPriceWon: 1_500_000_000,
       ageYears: 65, holdYears: 0,
-      specialHouses: { populationDecline: { count: 1, publishedTotal: 30_000 } }, // 3억 (30,000만원)
+      specialHouses: { populationDecline: { count: 1, publishedAverage: 30_000 } }, // 3억 (30,000만원)
     }));
     expect(r.notes).toContain("special-houses-applied");
     expect(r.notes).toContain("special-houses-credit-prorated");
@@ -83,7 +83,7 @@ describe("calculatePropertyTax — 5종 특례주택 (PDF #12)", () => {
     const r = calculatePropertyTax(buildInput({
       publishedPriceWon: 1_400_000_000,
       ageYears: 70, holdYears: 15,
-      specialHouses: { postCompletionUnsold: { count: 1, publishedTotal: 50_000 } }, // 5억 (50,000만원)
+      specialHouses: { postCompletionUnsold: { count: 1, publishedAverage: 50_000 } }, // 5억 (50,000만원)
     }));
     expect(r.notes).toContain("special-houses-applied");
     // 공제율 = min(0.40 + 0.50, 0.80) = 0.80 (한도 80% 적용)
@@ -96,11 +96,11 @@ describe("calculatePropertyTax — 5종 특례주택 (PDF #12)", () => {
       publishedPriceWon: 2_000_000_000,
       ageYears: 65, holdYears: 10,
       specialHouses: {
-        temporary2: { count: 1, publishedTotal: 30_000 },     // 3억 (30,000만원)
-        inherited: { count: 1, publishedTotal: 50_000 },      // 5억
-        ruralLowPrice: { count: 1, publishedTotal: 20_000 },  // 2억
-        populationDecline: { count: 1, publishedTotal: 20_000 },  // 2억
-        postCompletionUnsold: { count: 1, publishedTotal: 30_000 },  // 3억
+        temporary2: { count: 1, publishedAverage: 30_000 },     // 3억 (30,000만원)
+        inherited: { count: 1, publishedAverage: 50_000 },      // 5억
+        ruralLowPrice: { count: 1, publishedAverage: 20_000 },  // 2억
+        populationDecline: { count: 1, publishedAverage: 20_000 },  // 2억
+        postCompletionUnsold: { count: 1, publishedAverage: 30_000 },  // 3억
       },
     }));
     // 안분 비율 = 20억 / (20억 + 15억) = 0.5714
@@ -120,7 +120,7 @@ describe("calculatePropertyTax — 5종 특례주택 (PDF #12)", () => {
     const r = calculatePropertyTax(buildInput({
       publishedPriceWon: 2_000_000_000,
       houses: 2, isSingleHouseEligible: false,
-      specialHouses: { temporary2: { count: 1, publishedTotal: 50_000 } },
+      specialHouses: { temporary2: { count: 1, publishedAverage: 50_000 } },
     }));
     expect(r.notes).toContain("special-houses-multi-house-blocked");
     expect(r.notes).not.toContain("special-houses-applied");
@@ -132,7 +132,7 @@ describe("calculatePropertyTax — 5종 특례주택 (PDF #12)", () => {
     const r = calculatePropertyTax(buildInput({
       publishedPriceWon: 1_500_000_000,
       houses: 1, isSingleHouseEligible: false,
-      specialHouses: { inherited: { count: 1, publishedTotal: 50_000 } },
+      specialHouses: { inherited: { count: 1, publishedAverage: 50_000 } },
     }));
     expect(r.notes).not.toContain("special-houses-applied");
     expect(r.notes).not.toContain("special-houses-multi-house-blocked"); // houses=1 이라 multi 아님
@@ -144,7 +144,7 @@ describe("calculatePropertyTax — 5종 특례주택 (PDF #12)", () => {
     const r = calculatePropertyTax(buildInput({
       publishedPriceWon: 5_000_000_000, houses: 2,
       isCorporation: true, isSingleHouseEligible: false,
-      specialHouses: { temporary2: { count: 1, publishedTotal: 100_000 } },
+      specialHouses: { temporary2: { count: 1, publishedAverage: 100_000 } },
     }));
     expect(r.branch).toBe("corporation");
     expect(r.notes).toContain("special-houses-corp-blocked");
@@ -158,7 +158,7 @@ describe("calculatePropertyTax — 5종 특례주택 (PDF #12)", () => {
       houses: 1, isSingleHouseEligible: true,
       isSpouseJointSingleHouse: true,
       ageYears: 65, holdYears: 10,
-      specialHouses: { inherited: { count: 1, publishedTotal: 50_000 } },
+      specialHouses: { inherited: { count: 1, publishedAverage: 50_000 } },
     }));
     expect(r.notes).toContain("spouse-joint-single-house-applied"); // B-5 활성
     expect(r.notes).toContain("special-houses-spouse-joint-priority"); // 우선 적용 안내
@@ -179,14 +179,14 @@ describe("calculatePropertyTax — 5종 특례주택 (PDF #12)", () => {
     expect(withUndef).toEqual(without);
   });
 
-  // #SH-12: 분모 0 fallback — count > 0 + publishedTotal = 0 시 안분 비율 1.0
-  it("#SH-12 분모 0 fallback — count > 0 + publishedTotal = 0 → 안분 비활성 (회귀와 동일)", () => {
+  // #SH-12: 분모 0 fallback — count > 0 + publishedAverage = 0 시 안분 비율 1.0
+  it("#SH-12 분모 0 fallback — count > 0 + publishedAverage = 0 → 안분 비활성 (회귀와 동일)", () => {
     const r = calculatePropertyTax(buildInput({
       publishedPriceWon: 1_500_000_000,
       ageYears: 65, holdYears: 10,
-      specialHouses: { temporary2: { count: 1, publishedTotal: 0 } }, // 공시가 0 → normalize 에서 entry undefined
+      specialHouses: { temporary2: { count: 1, publishedAverage: 0 } }, // 공시가 0 → normalize 에서 entry undefined
     }));
-    // normalize 에서 entry { count:1, publishedTotal:0 } → count===0 강제 → undefined → specialHouses=undefined
+    // normalize 에서 entry { count:1, publishedAverage:0 } → count===0 강제 → undefined → specialHouses=undefined
     // 결과: 안분 비활성, 12억 공제 적용 안 됨 (specialHousesCount===0)
     expect(r.notes).not.toContain("special-houses-credit-prorated");
     // 회귀: 비특례 케이스와 동일 결과
@@ -195,5 +195,68 @@ describe("calculatePropertyTax — 5종 특례주택 (PDF #12)", () => {
       ageYears: 65, holdYears: 10,
     }));
     expect(r.comprehensiveTaxCredit).toBe(baseline.comprehensiveTaxCredit);
+  });
+
+  // #SH-13: 세션 113 자동 합산 — count=2 + publishedAverage=10억 → 합계 20억 자동 (안분 분모 = 1주택 + 자동합산)
+  it("#SH-13 자동 합산 (세션 113) — 상속 2채 × 평균 5억 = 합계 10억 안분", () => {
+    // 본인 1주택 15억 + 상속 2채 (1주택당 5억 평균 → 자동 합산 10억)
+    // 안분 비율 = 15억 / (15억 + 10억) = 0.6
+    // 동등 회귀 검증: 기존 합계 직접 입력 (count=1 + 합계 10억)과 결과 동일해야 함
+    const rAuto = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000,
+      ageYears: 65, holdYears: 10,
+      specialHouses: { inherited: { count: 2, publishedAverage: 50_000 } }, // count=2 × 평균 5억 = 10억
+    }));
+    const rManual = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000,
+      ageYears: 65, holdYears: 10,
+      specialHouses: { inherited: { count: 1, publishedAverage: 100_000 } }, // count=1 × 평균 10억 = 10억 (동일 합계)
+    }));
+    expect(rAuto.notes).toContain("special-houses-credit-prorated");
+    expect(rAuto.comprehensiveTaxCredit).toBe(rManual.comprehensiveTaxCredit); // 자동 합산 = 수동 합산 동등
+    expect(rAuto.comprehensiveTax).toBe(rManual.comprehensiveTax);
+  });
+
+  // #SH-14: 자동 합산 + 다중 카테고리 — 일시적2주택 1채 + 상속 2채 (각각 평균 다름) 자동 합산
+  it("#SH-14 자동 합산 (세션 113) — 다중 카테고리 (일시적2주택 1채 × 3억 + 상속 2채 × 4억) = 11억 안분", () => {
+    // 본인 1주택 15억 (12억 공제 후 과세표준 양수) + 일시적2주택 1×3억 + 상속 2×4억 = 자동 합산 분모 = 15 + 3 + 8 = 26억
+    // 안분 비율 = 15 / 26
+    const rAuto = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000,
+      ageYears: 65, holdYears: 10,
+      specialHouses: {
+        temporary2: { count: 1, publishedAverage: 30_000 },  // 1채 × 3억 = 3억
+        inherited: { count: 2, publishedAverage: 40_000 },   // 2채 × 4억 = 8억
+      },
+    }));
+    // 동등 회귀: count=1로 만든 동일 합계 입력
+    const rManual = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000,
+      ageYears: 65, holdYears: 10,
+      specialHouses: {
+        temporary2: { count: 1, publishedAverage: 30_000 },
+        inherited: { count: 1, publishedAverage: 80_000 },   // 1채 × 8억 = 8억
+      },
+    }));
+    expect(rAuto.notes).toContain("special-houses-credit-prorated");
+    expect(rAuto.comprehensiveTaxCredit).toBe(rManual.comprehensiveTaxCredit);
+  });
+
+  // #SH-15: count=3 (최대) 자동 합산
+  it("#SH-15 자동 합산 (세션 113) — count=3 (최대) × 평균 1억 = 합계 3억", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000,
+      ageYears: 65, holdYears: 10,
+      specialHouses: { ruralLowPrice: { count: 3, publishedAverage: 10_000 } }, // 3채 × 1억 = 3억
+    }));
+    expect(r.notes).toContain("special-houses-applied");
+    expect(r.notes).toContain("special-houses-credit-prorated");
+    // 합계 3억이 분모에 정확 반영됐는지 회귀
+    const rEquiv = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_500_000_000,
+      ageYears: 65, holdYears: 10,
+      specialHouses: { ruralLowPrice: { count: 1, publishedAverage: 30_000 } }, // 1채 × 3억 = 3억
+    }));
+    expect(r.comprehensiveTaxCredit).toBe(rEquiv.comprehensiveTaxCredit);
   });
 });

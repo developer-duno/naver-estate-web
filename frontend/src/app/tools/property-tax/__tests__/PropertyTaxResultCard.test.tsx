@@ -131,28 +131,28 @@ describe("5종 특례주택 (PDF #12, 세션 112) — ResultCard 표시 행", ()
   it("specialHouses + special-houses-applied note → '1세대1주택 5종 특례주택 적용:' 헤더 + 채수 표시", () => {
     render(<PropertyTaxResultCard
       result={buildTestResult({ notes: ["disclaimer", "special-houses-applied"] })}
-      specialHouses={{ temporary2: { count: 1, publishedTotal: 50_000 } }}
+      specialHouses={{ temporary2: { count: 1, publishedAverage: 50_000 } }}
     />);
     expect(screen.getByText(/1세대1주택 5종 특례주택 적용/)).toBeInTheDocument();
-    expect(screen.getByText(/① 일시적2주택: 1채 \/ 합계 공시가 50,000만원/)).toBeInTheDocument();
+    expect(screen.getByText(/① 일시적2주택: 1채 × 평균 공시가 50,000만원 = 합계 50,000만원/)).toBeInTheDocument();
   });
 
   it("count = 0 카테고리는 미표시 (행 폭증 방지)", () => {
     render(<PropertyTaxResultCard
       result={buildTestResult({ notes: ["disclaimer", "special-houses-applied"] })}
       specialHouses={{
-        temporary2: { count: 0, publishedTotal: 0 },
-        inherited: { count: 1, publishedTotal: 30_000 },
+        temporary2: { count: 0, publishedAverage: 0 },
+        inherited: { count: 1, publishedAverage: 30_000 },
       }}
     />);
     expect(screen.queryByText(/① 일시적2주택/)).not.toBeInTheDocument();
-    expect(screen.getByText(/② 상속주택: 1채 \/ 합계 공시가 30,000만원/)).toBeInTheDocument();
+    expect(screen.getByText(/② 상속주택: 1채 × 평균 공시가 30,000만원 = 합계 30,000만원/)).toBeInTheDocument();
   });
 
   it("special-houses-credit-prorated note 시 안분 비율 안내 행 표시", () => {
     render(<PropertyTaxResultCard
       result={buildTestResult({ notes: ["disclaimer", "special-houses-applied", "special-houses-credit-prorated"] })}
-      specialHouses={{ inherited: { count: 1, publishedTotal: 50_000 } }}
+      specialHouses={{ inherited: { count: 1, publishedAverage: 50_000 } }}
     />);
     // "안분 비율 적용" 은 ResultCard 표시 행 + Notices title 둘 다 매칭 → ResultCard 행만 정확 매칭 (parens 포함)
     expect(screen.getByText(/└ 안분 비율 적용 \(산출세액/)).toBeInTheDocument();

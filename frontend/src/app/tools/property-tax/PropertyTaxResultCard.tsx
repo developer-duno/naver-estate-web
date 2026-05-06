@@ -106,7 +106,7 @@ export default function PropertyTaxResultCard({ result, excludedHouses, ownershi
                 const entry = specialHouses![k]!;
                 return (
                   <div key={k} className="pl-2">
-                    {SPECIAL_HOUSE_LABEL[k]}: {entry.count}채 / 합계 공시가 {entry.publishedTotal.toLocaleString()}만원
+                    {SPECIAL_HOUSE_LABEL[k]}: {entry.count}채 × 평균 공시가 {entry.publishedAverage.toLocaleString()}만원 = 합계 {(entry.count * entry.publishedAverage).toLocaleString()}만원
                   </div>
                 );
               })}

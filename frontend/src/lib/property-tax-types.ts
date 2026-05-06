@@ -25,8 +25,12 @@ export type PropertyTaxBranch = "empty" | "below-threshold" | "single-house" | "
  * - postCompletionUnsold: ⑤ 준공후미분양주택 — 전용 ≤85㎡ + 취득가 ≤6억 + 수도권 밖 + 2024.1.10~2025.12.31 + 양도자 사업주체/시공자 + 시·군·구청장 확인
  */
 export interface SpecialHouseEntry {
-  count: number;          // 채수 (0~3, normalize 에서 clamp)
-  publishedTotal: number; // 합계 공시가 (만원, normalize 에서 ×10000 변환)
+  count: number;             // 채수 (0~3, normalize 에서 clamp)
+  publishedAverage: number;  // 1주택당 평균 공시가 (만원, normalize 에서 ×10000 변환). 세션 113 의미 변경:
+                             // - 기존(세션 112): publishedTotal (합계) — 사용자가 손으로 N채 합계 계산해서 입력
+                             // - 신규(세션 113): publishedAverage (1주택당 평균) — count × 평균 자동 합산
+                             // 공식 도구(홈택스·부동산계산기.com) 답습 = 주택별 개별 입력. 우리 도구는 손님 응대용 간이로 카테고리당 평균 1칸 단순화.
+                             // 데이터 호환: count=1 케이스는 기존 합계 = 신규 평균이라 의미 동일 (세션 112 5종 기존 입력 무영향).
 }
 export interface SpecialHousesInput {
   temporary2?: SpecialHouseEntry;          // ① 일시적2주택

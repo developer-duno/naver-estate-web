@@ -19,16 +19,16 @@ export default function PropertyTaxCalculator() {
   const [isSpouseJointSingleHouse, setIsSpouseJointSingleHouse] = useState(false);
   const [corporationGeneralRateCategory, setCorporationGeneralRateCategory] =
     useState<CorporationGeneralRateCategory | "">("");
-  // 5종 특례주택 (PDF #12, 세션 112) — 카테고리별 { count, publishedTotal } 저장
+  // 5종 특례주택 (PDF #12, 세션 112) — 카테고리별 { count, publishedAverage } 저장
   const [specialHouses, setSpecialHouses] = useState<SpecialHousesInput>({});
-  // PDF #13 4종 세율 특례주택 (세션 113) — 카테고리별 { count } 저장 (publishedTotal 미보유)
+  // PDF #13 4종 세율 특례주택 (세션 113) — 카테고리별 { count } 저장 (publishedAverage 미보유)
   const [specialHousesRateApply, setSpecialHousesRateApply] = useState<SpecialHousesRateApplyInput>({});
 
   // 5종 특례주택 entry 갱신 핸들러 (카테고리 + 필드 + 값)
-  const handleSpecialHouseEntryChange = useCallback((key: keyof SpecialHousesInput, field: "count" | "publishedTotal", value: number) => {
+  const handleSpecialHouseEntryChange = useCallback((key: keyof SpecialHousesInput, field: "count" | "publishedAverage", value: number) => {
     setSpecialHouses((prev) => ({
       ...prev,
-      [key]: { count: prev[key]?.count ?? 0, publishedTotal: prev[key]?.publishedTotal ?? 0, [field]: value },
+      [key]: { count: prev[key]?.count ?? 0, publishedAverage: prev[key]?.publishedAverage ?? 0, [field]: value },
     }));
   }, []);
 

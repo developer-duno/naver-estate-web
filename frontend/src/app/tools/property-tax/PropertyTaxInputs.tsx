@@ -29,7 +29,7 @@ interface Props {
   onIsCorporationChange: (v: boolean) => void;
   onIsSpouseJointSingleHouseChange: (v: boolean) => void;
   onCorporationGeneralRateCategoryChange: (v: CorporationGeneralRateCategory | "") => void;
-  onSpecialHouseEntryChange: (key: keyof SpecialHousesInput, field: "count" | "publishedTotal", value: number) => void;
+  onSpecialHouseEntryChange: (key: keyof SpecialHousesInput, field: "count" | "publishedAverage", value: number) => void;
   onRateApplyEntryChange: (key: keyof SpecialHousesRateApplyInput, count: number) => void;
 }
 

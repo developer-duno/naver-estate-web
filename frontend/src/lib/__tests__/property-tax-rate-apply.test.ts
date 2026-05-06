@@ -105,7 +105,7 @@ describe("calculatePropertyTax — PDF #13 4종 세율 특례주택 (세션 113)
       houses: 1,
       isSingleHouseEligible: true,
       ageYears: 65, holdYears: 10,
-      specialHouses: { temporary2: { count: 1, publishedTotal: 50_000 } }, // PDF #12 — 1주택 자격 인정
+      specialHouses: { temporary2: { count: 1, publishedAverage: 50_000 } }, // PDF #12 — 1주택 자격 인정
       specialHousesRateApply: { inheritedRA: { count: 1 } }, // PDF #13 — 1주택이라 효과 없음
     }));
     expect(r.notes).toContain("special-houses-applied"); // PDF #12 자격 인정

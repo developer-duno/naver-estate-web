@@ -18,7 +18,7 @@ interface Props {
   onIsCorporationChange: (v: boolean) => void;
   onIsSpouseJointSingleHouseChange: (v: boolean) => void;
   onCorporationGeneralRateCategoryChange: (v: CorporationGeneralRateCategory | "") => void;
-  onSpecialHouseEntryChange: (key: keyof SpecialHousesInput, field: "count" | "publishedTotal", value: number) => void;
+  onSpecialHouseEntryChange: (key: keyof SpecialHousesInput, field: "count" | "publishedAverage", value: number) => void;
   onRateApplyEntryChange: (key: keyof SpecialHousesRateApplyInput, count: number) => void;
 }
 
@@ -198,37 +198,48 @@ export default function PropertyTaxAdvancedFields(props: Props) {
               ))}
             </ul>
           </details>
-          <div className="mt-3 space-y-3">
+          <p className="mt-2 mb-1 text-xs text-gray-500">
+            세션 113 자동화: 카테고리당 <strong>1주택당 평균 공시가</strong>만 입력하시면 채수 × 평균 = 합계가 자동 계산됩니다 (홈택스·부동산계산기.com 답습).
+          </p>
+          <div className="mt-2 space-y-3">
             {SPECIAL_HOUSE_OPTIONS.map((opt) => {
               const entry = specialHouses[opt.key];
               const count = entry?.count ?? 0;
-              const publishedTotal = entry?.publishedTotal ?? 0;
+              const publishedAverage = entry?.publishedAverage ?? 0;
+              const autoTotal = count * publishedAverage;
               return (
-                <div key={opt.key} className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-2 items-center">
-                  <span className="text-sm text-gray-700">{opt.label}</span>
-                  <select
-                    aria-label={`${opt.label} 채수`}
-                    value={count}
-                    onChange={(e) => onSpecialHouseEntryChange(opt.key, "count", Number(e.target.value) || 0)}
-                    disabled={specialHousesDisabled}
-                    className={INPUT_CLASS}
-                  >
-                    {[0, 1, 2, 3].map((n) => (
-                      <option key={n} value={n}>{n}채</option>
-                    ))}
-                  </select>
-                  <input
-                    aria-label={`${opt.label} 합계 공시가 (만원)`}
-                    type="number"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    min={0}
-                    value={publishedTotal || ""}
-                    onChange={(e) => onSpecialHouseEntryChange(opt.key, "publishedTotal", Number(e.target.value) || 0)}
-                    disabled={specialHousesDisabled || count === 0}
-                    placeholder="합계 공시가 (만원)"
-                    className={INPUT_CLASS}
-                  />
+                <div key={opt.key} className="space-y-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                    <span className="text-sm text-gray-700">{opt.label}</span>
+                    <select
+                      aria-label={`${opt.label} 채수`}
+                      value={count}
+                      onChange={(e) => onSpecialHouseEntryChange(opt.key, "count", Number(e.target.value) || 0)}
+                      disabled={specialHousesDisabled}
+                      className={INPUT_CLASS}
+                    >
+                      {[0, 1, 2, 3].map((n) => (
+                        <option key={n} value={n}>{n}채</option>
+                      ))}
+                    </select>
+                    <input
+                      aria-label={`${opt.label} 1주택당 평균 공시가 (만원)`}
+                      type="number"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      min={0}
+                      value={publishedAverage || ""}
+                      onChange={(e) => onSpecialHouseEntryChange(opt.key, "publishedAverage", Number(e.target.value) || 0)}
+                      disabled={specialHousesDisabled || count === 0}
+                      placeholder="1주택당 평균 공시가 (만원)"
+                      className={INPUT_CLASS}
+                    />
+                  </div>
+                  {count > 0 && publishedAverage > 0 && (
+                    <p className="text-xs text-blue-700 sm:pl-2">
+                      자동 합산: {count}채 × {publishedAverage.toLocaleString()}만원 = <strong>{autoTotal.toLocaleString()}만원</strong>
+                    </p>
+                  )}
                 </div>
               );
             })}

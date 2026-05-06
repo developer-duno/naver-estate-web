@@ -84,8 +84,16 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   const sh = input.specialHouses;
   const specialHousesCount = (sh?.temporary2?.count ?? 0) + (sh?.inherited?.count ?? 0) +
     (sh?.ruralLowPrice?.count ?? 0) + (sh?.populationDecline?.count ?? 0) + (sh?.postCompletionUnsold?.count ?? 0);
-  const specialHousesPublishedTotal = ((sh?.temporary2?.publishedTotal ?? 0) + (sh?.inherited?.publishedTotal ?? 0) +
-    (sh?.ruralLowPrice?.publishedTotal ?? 0) + (sh?.populationDecline?.publishedTotal ?? 0) + (sh?.postCompletionUnsold?.publishedTotal ?? 0)) * 10000; // 만원→원
+  // 세션 113 의미 변경: publishedTotal (합계) → publishedAverage (1주택당 평균)
+  // 사용자는 카테고리당 1주택 평균 공시가만 입력 → count × 평균 자동 합산
+  // count=1 케이스는 기존 합계 = 신규 평균 × 1 이라 결과 동일 (호환성 100%)
+  const specialHousesPublishedTotal = (
+    (sh?.temporary2?.publishedAverage ?? 0) * (sh?.temporary2?.count ?? 0) +
+    (sh?.inherited?.publishedAverage ?? 0) * (sh?.inherited?.count ?? 0) +
+    (sh?.ruralLowPrice?.publishedAverage ?? 0) * (sh?.ruralLowPrice?.count ?? 0) +
+    (sh?.populationDecline?.publishedAverage ?? 0) * (sh?.populationDecline?.count ?? 0) +
+    (sh?.postCompletionUnsold?.publishedAverage ?? 0) * (sh?.postCompletionUnsold?.count ?? 0)
+  ) * 10000; // 만원→원
   const isSingleSpecialHouseEligible = !isSpouseJointSingle && specialHousesCount > 0; // B-5 우선: 부부 공동명의 시 안분 비활성
   // 종부세 1주택 공제: 본인 단독 1세대1주택 OR 부부 공동명의 1주택 특례 OR 5종 특례주택 자격 (PDF: 1인 합산 12억)
   // 1주택 자격 판정은 합산배제(B-2) 만 적용 — PDF #13 세율 다운판정은 자격 무관 (세율 분기만 영향)

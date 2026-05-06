@@ -41,6 +41,15 @@
             "command": "node -e \"const i=JSON.parse(require('fs').readFileSync(0,'utf8'));const p=i.tool_input?.file_path||'';const c=i.tool_input?.new_string||i.tool_input?.content||'';if(p.endsWith('CLAUDE.md')&&/^(##|\\*\\*).*?(마지막 작업|과거 작업|직전 작업|현재 진행 상황|과거 세션 \\(세션|\\(세션 \\d+)/m.test(c)){console.error('BLOCKED: CLAUDE.md 진행 박제 금지 (.claude/rules/planning.md L43). 메모리 활용: ~/.claude/projects/.../memory/session{N}_summary.md');process.exit(2);}\" < /dev/stdin"
           }
         ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const fs=require('fs');const path=require('path');const i=JSON.parse(fs.readFileSync(0,'utf8'));const p=(i.tool_input?.file_path||'').replace(/\\\\/g,'/');const m=p.match(/frontend\\/src\\/lib\\/((?:transfer-tax|property-tax|acquisition-tax|brokerage|area)[^/]*)\\.ts$/);if(!m||p.includes('__tests__'))process.exit(0);const fname=m[1]+'.ts';try{const a=fs.readFileSync(path.resolve('.claude/ASSETS.md'),'utf8');if(a.includes(fname))process.exit(0);console.error('BLOCKED: 신규 계산기 lib '+fname+' 생성 시 .claude/ASSETS.md §2 표 갱신 필수 (drift 차단). 한 줄 추가 후 재시도.');process.exit(2);}catch(e){console.error('WARN: ASSETS.md 읽기 실패 '+e.message);process.exit(0);}\" < /dev/stdin"
+          }
+        ]
       }
     ]
   }

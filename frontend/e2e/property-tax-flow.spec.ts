@@ -220,3 +220,24 @@ test("PDF #15 향교·종교단체 — 체크박스 ON 시 안내 4 카드 노�
   await page.getByLabel(/향교·종교단체 직접 사용/).uncheck();
   await expect(page.getByText("✓ 향교·종교단체 — 재산세 면세 (지특법 §50)", { exact: true })).toHaveCount(0);
 });
+
+// ── 케이스 7: PDF #16 보유기간 계산 특례 (세션 115) ──
+test("보유기간 특례 라디오 + 원래 취득연도 → planned 경고 + precision-warn 노출", async ({ page }) => {
+  await page.goto("/tools/property-tax");
+  await fillBaseInputs(page, {
+    publishedManwon: 150_000,
+    houses: 1,
+    isSingleHouseEligible: true,
+    ageYears: 0,
+    holdYears: 5, // 5+ 만족
+  });
+  // 고급 옵션 펼치기
+  await page.getByText(/고급 옵션.*합산배제.*공동명의.*법인/).click();
+  // 라디오 "신청 예정" 클릭 (aria-label 매칭)
+  await page.getByRole("radio", { name: "신청 예정" }).check();
+  // 원래 취득연도 입력 (재개발 16년 전)
+  await page.getByLabel("원래 주택 취득연도").fill("2010");
+  // 결과 카드: planned 경고 + precision-warn 노출 확증
+  await expect(page.getByText("⚠ 보유기간 특례 적용 — 9.16~9.30 신청 필수", { exact: true })).toBeVisible();
+  await expect(page.getByText("⚠ 보유연수 정밀도 안내 (연도 단위 입력)", { exact: true })).toBeVisible();
+});

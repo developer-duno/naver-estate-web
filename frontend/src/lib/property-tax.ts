@@ -53,7 +53,29 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   const notes: PropertyTaxNoticeKey[] = ["disclaimer"];
   // B-2 합산배제: effectiveHouses = 종부세 산정용 실효 주택 수 (재산세는 houses 그대로)
   const excludedHouses = input.excludedHouses ?? 0;
-  const effectiveHouses = Math.max(0, input.houses - excludedHouses);
+  const effectiveHousesAfterExclusion = Math.max(0, input.houses - excludedHouses);
+
+  // 세션 113 PDF #13: 세율 적용 시 주택 수 산정 제외 — 4종 채수 합계만큼 추가 차감 (세율 분기만 영향)
+  // 합산배제(B-2)와 별개 효과로 양립 가능. 합산배제는 종부세 산정 자체에서 빼지만, PDF #13은 세율 분기만.
+  const ra = input.specialHousesRateApply;
+  const rateApplyExclusionCount = (ra?.inheritedRA?.count ?? 0) + (ra?.unauthorizedLand?.count ?? 0) +
+    (ra?.smallNewHouse?.count ?? 0) + (ra?.postCompletionUnsoldRA?.count ?? 0);
+  // 세율 산정용 effectiveHouses (BRACKETS 분기 결정용) — 합산배제 + PDF #13 모두 적용
+  const effectiveHouses = Math.max(0, effectiveHousesAfterExclusion - rateApplyExclusionCount);
+  // normalize 에서 차단된 경우 raw input 으로 사용자 시도 감지 → 안내 push
+  if (rawInput.specialHousesRateApply && !ra && rawInput.isCorporation === true) {
+    notes.push("rate-apply-exclusion-corp-blocked");
+  }
+  if (ra && rateApplyExclusionCount > 0) {
+    notes.push("rate-apply-exclusion-applied");
+    // 효과 발동 판정: 원래 BRACKETS_3 진입 (effectiveHousesAfterExclusion >= 3) 였으나
+    // PDF #13 적용 후 BRACKETS_2 다운판정 (effectiveHouses < 3) 시 발동
+    if (effectiveHousesAfterExclusion >= 3 && effectiveHouses < 3) {
+      notes.push("rate-apply-exclusion-downgraded");
+    } else {
+      notes.push("rate-apply-exclusion-no-effect");
+    }
+  }
   const isSpouseJointSingle = input.isSpouseJointSingleHouse === true; // B-5 부부 공동명의 1주택자 특례
   const isSingleProperty = input.isSingleHouseEligible && input.houses === 1;       // 재산세 1주택 특례 (특례세율 §111의2 + 차등 공정시장가액비율 §109)
   // 세션 112: 5종 특례주택 (PDF #12) — normalize 가드 통과 시점에서 specialHouses 존재 시 자격 충족 확정
@@ -66,7 +88,8 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
     (sh?.ruralLowPrice?.publishedTotal ?? 0) + (sh?.populationDecline?.publishedTotal ?? 0) + (sh?.postCompletionUnsold?.publishedTotal ?? 0)) * 10000; // 만원→원
   const isSingleSpecialHouseEligible = !isSpouseJointSingle && specialHousesCount > 0; // B-5 우선: 부부 공동명의 시 안분 비활성
   // 종부세 1주택 공제: 본인 단독 1세대1주택 OR 부부 공동명의 1주택 특례 OR 5종 특례주택 자격 (PDF: 1인 합산 12억)
-  const isSingleComprehensive = (input.isSingleHouseEligible || isSpouseJointSingle || isSingleSpecialHouseEligible) && effectiveHouses === 1;
+  // 1주택 자격 판정은 합산배제(B-2) 만 적용 — PDF #13 세율 다운판정은 자격 무관 (세율 분기만 영향)
+  const isSingleComprehensive = (input.isSingleHouseEligible || isSpouseJointSingle || isSingleSpecialHouseEligible) && effectiveHousesAfterExclusion === 1;
   if (excludedHouses > 0) notes.push("exclusion-applied");
   if (sh) {
     if (isSingleSpecialHouseEligible) notes.push("special-houses-applied");

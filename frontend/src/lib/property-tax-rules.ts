@@ -10,10 +10,16 @@
  *   카테고리별 count 0~3 clamp / publishedTotal ≥0 clamp / count===0 시 publishedTotal 도 0 강제 (양립 모순 차단)
  */
 
-import type { PropertyTaxInput, SpecialHousesInput, SpecialHouseEntry } from "./property-tax-types";
+import type {
+  PropertyTaxInput, SpecialHousesInput, SpecialHouseEntry,
+  SpecialHousesRateApplyInput, RateApplyExclusionEntry,
+} from "./property-tax-types";
 
 /** 5종 특례주택 카테고리 키 (반복 처리용) */
 const SPECIAL_HOUSE_KEYS = ["temporary2", "inherited", "ruralLowPrice", "populationDecline", "postCompletionUnsold"] as const;
+
+/** PDF #13 4종 세율 특례주택 카테고리 키 (반복 처리용) */
+const RATE_APPLY_KEYS = ["inheritedRA", "unauthorizedLand", "smallNewHouse", "postCompletionUnsoldRA"] as const;
 
 /** 카테고리 1개 정규화: count 0~3 clamp + publishedTotal ≥0 clamp + count=0 시 publishedTotal=0 강제 */
 function normalizeSpecialHouseEntry(raw: SpecialHouseEntry | undefined): SpecialHouseEntry | undefined {
@@ -36,6 +42,35 @@ function normalizeSpecialHouses(input: PropertyTaxInput, isCorp: boolean, isSing
   let hasAny = false;
   for (const key of SPECIAL_HOUSE_KEYS) {
     const entry = normalizeSpecialHouseEntry(raw[key]);
+    if (entry) {
+      normalized[key] = entry;
+      hasAny = true;
+    }
+  }
+  return hasAny ? normalized : undefined;
+}
+
+/** PDF #13 1개 카테고리 정규화: count 0~3 clamp (publishedTotal 미보유) */
+function normalizeRateApplyEntry(raw: RateApplyExclusionEntry | undefined): RateApplyExclusionEntry | undefined {
+  if (!raw) return undefined;
+  const countRaw = raw.count;
+  const count = Number.isFinite(countRaw) && countRaw > 0 ? Math.min(3, Math.floor(countRaw)) : 0;
+  if (count === 0) return undefined;
+  return { count };
+}
+
+/**
+ * PDF #13 4종 세율 특례주택 정규화 (법인 미자격 시 undefined 강제).
+ * 개인은 주택 수·1세대1주택 자격 무관 (세율 분기만 영향, PDF 본문은 다주택 전제).
+ */
+function normalizeRateApply(input: PropertyTaxInput, isCorp: boolean): SpecialHousesRateApplyInput | undefined {
+  if (isCorp) return undefined; // PDF #13 본문 "납세의무자" = 거주자
+  const raw = input.specialHousesRateApply;
+  if (!raw) return undefined;
+  const normalized: SpecialHousesRateApplyInput = {};
+  let hasAny = false;
+  for (const key of RATE_APPLY_KEYS) {
+    const entry = normalizeRateApplyEntry(raw[key]);
     if (entry) {
       normalized[key] = entry;
       hasAny = true;
@@ -77,6 +112,9 @@ export function normalizeInput(input: PropertyTaxInput): PropertyTaxInput {
   // 세션 112: 5종 특례주택 (PDF #12) — 법인·다주택·자격 미충족 시 undefined 강제
   const specialHouses = normalizeSpecialHouses(input, isCorp, isSingleHouseEligible);
 
+  // 세션 113: PDF #13 4종 세율 특례주택 — 법인 시만 undefined 강제 (개인은 주택 수·자격 무관)
+  const specialHousesRateApply = normalizeRateApply(input, isCorp);
+
   return {
     ...input,
     excludedHouses,
@@ -86,5 +124,6 @@ export function normalizeInput(input: PropertyTaxInput): PropertyTaxInput {
     isSpouseJointSingleHouse,
     corporationGeneralRateCategory,
     specialHouses,
+    specialHousesRateApply,
   };
 }

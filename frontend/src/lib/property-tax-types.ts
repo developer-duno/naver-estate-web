@@ -128,7 +128,13 @@ export type PropertyTaxNoticeKey =
   | "religious-comprehensive-payer-shift" // PDF #15 종부세 납세자 변경 안내 (조특법 §104조의13, 세션 114)
   | "religious-filing-deadline"         // PDF #15 9.16~9.30 별지 제64호의13서식 신고 의무 안내 (세션 114)
   | "religious-joint-liability-cap"     // PDF #15 향교재단 명의신탁물건 공시가격 한도 연대납세 안내 (세션 114)
+  | "hold-period-special-eligible"    // PDF #16 보유기간 계산 특례 신청 가능 안내 (재개발·배우자 상속, 세션 115)
+  | "hold-period-special-planned"     // PDF #16 신청 예정 — 9.16~9.30 신청 필수 경고 (세션 115)
+  | "hold-period-special-applied"     // PDF #16 이미 신청 완료 가정 — 자동 유지 안내 (세션 115)
+  | "hold-period-precision-warn"      // PDF #16 연도 단위 입력 ±1년 오차 + 양도세 도구와 산식 차이 안내 (세션 115)
   | "consult-experts";            // 세무사 상담 권장
+
+export type HoldPeriodSpecialMode = "none" | "planned" | "applied";
 
 export interface PropertyTaxInput {
   publishedPriceWon: number;      // 공시가격 (원, 공동명의 시 본인 지분 공시가)
@@ -144,6 +150,8 @@ export interface PropertyTaxInput {
   corporationGeneralRateCategory?: CorporationGeneralRateCategory; // 법인 9종 일반 누진세율 특례 카테고리 (옵션, 세션 111). isCorporation=true && 카테고리 선택 시 단일세율 → 누진세율 + 공제 9억 + 세부담 상한 150%
   specialHouses?: SpecialHousesInput; // 1세대1주택자 5종 특례주택 (옵션, PDF #12, 세션 112). houses=1 + isSingleHouseEligible + 비법인 시만 활성. 신청 시 1주택 자격 인정 + 세액공제 안분
   specialHousesRateApply?: SpecialHousesRateApplyInput; // 세율 적용 시 주택 수 산정 제외 4종 특례주택 (옵션, PDF #13, 세션 113). 비법인 시만 활성. 신청 시 세율 산정 주택 수에서 제외 (3주택+ → BRACKETS_2 다운판정)
+  holdPeriodSpecialMode?: HoldPeriodSpecialMode; // PDF #16 보유기간 특례 신청 상태 (옵션, 세션 115). "none" 기본 / "planned" 신청 예정 / "applied" 이미 신청 완료. effectiveHoldYears 자동 재계산은 Calculator 단계, 산식은 push 만 영향
+  originalAcquisitionYear?: number; // PDF #16 원래 주택 취득연도 (옵션, 멸실 주택 또는 사망 배우자 취득일 기준, 세션 115). Calculator 단계에서 holdYears 와 max 비교
 }
 
 export interface PropertyTaxResult {

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { calculatePropertyTax } from "@/lib/property-tax";
-import type { PropertyTaxInput, CorporationGeneralRateCategory, SpecialHousesInput } from "@/lib/property-tax-types";
+import type { PropertyTaxInput, CorporationGeneralRateCategory, SpecialHousesInput, SpecialHousesRateApplyInput } from "@/lib/property-tax-types";
 import PropertyTaxInputs from "./PropertyTaxInputs";
 import PropertyTaxResultCard from "./PropertyTaxResultCard";
 
@@ -21,6 +21,8 @@ export default function PropertyTaxCalculator() {
     useState<CorporationGeneralRateCategory | "">("");
   // 5종 특례주택 (PDF #12, 세션 112) — 카테고리별 { count, publishedTotal } 저장
   const [specialHouses, setSpecialHouses] = useState<SpecialHousesInput>({});
+  // PDF #13 4종 세율 특례주택 (세션 113) — 카테고리별 { count } 저장 (publishedTotal 미보유)
+  const [specialHousesRateApply, setSpecialHousesRateApply] = useState<SpecialHousesRateApplyInput>({});
 
   // 5종 특례주택 entry 갱신 핸들러 (카테고리 + 필드 + 값)
   const handleSpecialHouseEntryChange = useCallback((key: keyof SpecialHousesInput, field: "count" | "publishedTotal", value: number) => {
@@ -28,6 +30,11 @@ export default function PropertyTaxCalculator() {
       ...prev,
       [key]: { count: prev[key]?.count ?? 0, publishedTotal: prev[key]?.publishedTotal ?? 0, [field]: value },
     }));
+  }, []);
+
+  // PDF #13 4종 entry 갱신 핸들러 (count만)
+  const handleRateApplyEntryChange = useCallback((key: keyof SpecialHousesRateApplyInput, count: number) => {
+    setSpecialHousesRateApply((prev) => ({ ...prev, [key]: { count } }));
   }, []);
 
   // 부부 토글 켤 때 ownershipPercent 자동 0 리셋 (1인 합산 납세 → 지분 % 무의미, 화면 모순 차단)
@@ -58,9 +65,10 @@ export default function PropertyTaxCalculator() {
       isSpouseJointSingleHouse,
       corporationGeneralRateCategory: corporationGeneralRateCategory || undefined,
       specialHouses: Object.keys(specialHouses).length > 0 ? specialHouses : undefined,
+      specialHousesRateApply: Object.keys(specialHousesRateApply).length > 0 ? specialHousesRateApply : undefined,
     };
     return calculatePropertyTax(input);
-  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse, corporationGeneralRateCategory, specialHouses]);
+  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse, corporationGeneralRateCategory, specialHouses, specialHousesRateApply]);
 
   return (
     <div className="space-y-4">
@@ -77,6 +85,7 @@ export default function PropertyTaxCalculator() {
         isSpouseJointSingleHouse={isSpouseJointSingleHouse}
         corporationGeneralRateCategory={corporationGeneralRateCategory}
         specialHouses={specialHouses}
+        specialHousesRateApply={specialHousesRateApply}
         onPublishedManwonChange={setPublishedManwon}
         onHousesChange={setHouses}
         onIsSingleHouseEligibleChange={setIsSingleHouseEligible}
@@ -89,6 +98,7 @@ export default function PropertyTaxCalculator() {
         onIsSpouseJointSingleHouseChange={handleIsSpouseJointSingleHouseChange}
         onCorporationGeneralRateCategoryChange={setCorporationGeneralRateCategory}
         onSpecialHouseEntryChange={handleSpecialHouseEntryChange}
+        onRateApplyEntryChange={handleRateApplyEntryChange}
       />
       <PropertyTaxResultCard
         result={result}

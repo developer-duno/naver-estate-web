@@ -1,6 +1,7 @@
 "use client";
 
-import type { CorporationGeneralRateCategory, SpecialHousesInput } from "@/lib/property-tax-types";
+import type { CorporationGeneralRateCategory, SpecialHousesInput, SpecialHousesRateApplyInput } from "@/lib/property-tax-types";
+import RateApplyExclusionFields from "./RateApplyExclusionFields";
 
 interface Props {
   houses: 1 | 2 | 3;
@@ -11,12 +12,14 @@ interface Props {
   isSpouseJointSingleHouse: boolean;
   corporationGeneralRateCategory: CorporationGeneralRateCategory | "";
   specialHouses: SpecialHousesInput;
+  specialHousesRateApply: SpecialHousesRateApplyInput;
   onExcludedHousesChange: (v: number) => void;
   onOwnershipPercentChange: (v: number) => void;
   onIsCorporationChange: (v: boolean) => void;
   onIsSpouseJointSingleHouseChange: (v: boolean) => void;
   onCorporationGeneralRateCategoryChange: (v: CorporationGeneralRateCategory | "") => void;
   onSpecialHouseEntryChange: (key: keyof SpecialHousesInput, field: "count" | "publishedTotal", value: number) => void;
+  onRateApplyEntryChange: (key: keyof SpecialHousesRateApplyInput, count: number) => void;
 }
 
 // PDF #12 페이지 1·2 본문 박제 — 5종 카테고리 라벨 + 자격 요건 (UI 안내)
@@ -52,10 +55,10 @@ export default function PropertyTaxAdvancedFields(props: Props) {
   const {
     houses, excludedHouses, ownershipPercent, isCorporation,
     isSingleHouseEligible, isSpouseJointSingleHouse, corporationGeneralRateCategory,
-    specialHouses,
+    specialHouses, specialHousesRateApply,
     onExcludedHousesChange, onOwnershipPercentChange, onIsCorporationChange,
     onIsSpouseJointSingleHouseChange, onCorporationGeneralRateCategoryChange,
-    onSpecialHouseEntryChange,
+    onSpecialHouseEntryChange, onRateApplyEntryChange,
   } = props;
 
   const advancedDisabled = isCorporation;
@@ -231,6 +234,13 @@ export default function PropertyTaxAdvancedFields(props: Props) {
             })}
           </div>
         </fieldset>
+
+        {/* PDF #13 4종 세율 특례주택 (세션 113) — 비법인 시 항상 활성, 주택 수·자격 무관 */}
+        <RateApplyExclusionFields
+          isCorporation={isCorporation}
+          specialHousesRateApply={specialHousesRateApply}
+          onRateApplyEntryChange={onRateApplyEntryChange}
+        />
       </div>
     </details>
   );

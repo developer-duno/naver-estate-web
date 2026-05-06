@@ -1,6 +1,6 @@
 "use client";
 
-import type { CorporationGeneralRateCategory, SpecialHousesInput } from "@/lib/property-tax-types";
+import type { CorporationGeneralRateCategory, SpecialHousesInput, SpecialHousesRateApplyInput } from "@/lib/property-tax-types";
 import PropertyTaxAdvancedFields from "./PropertyTaxAdvancedFields";
 
 interface Props {
@@ -16,6 +16,7 @@ interface Props {
   isSpouseJointSingleHouse: boolean;
   corporationGeneralRateCategory: CorporationGeneralRateCategory | "";
   specialHouses: SpecialHousesInput;
+  specialHousesRateApply: SpecialHousesRateApplyInput;
 
   onPublishedManwonChange: (v: number) => void;
   onHousesChange: (v: 1 | 2 | 3) => void;
@@ -29,6 +30,7 @@ interface Props {
   onIsSpouseJointSingleHouseChange: (v: boolean) => void;
   onCorporationGeneralRateCategoryChange: (v: CorporationGeneralRateCategory | "") => void;
   onSpecialHouseEntryChange: (key: keyof SpecialHousesInput, field: "count" | "publishedTotal", value: number) => void;
+  onRateApplyEntryChange: (key: keyof SpecialHousesRateApplyInput, count: number) => void;
 }
 
 const INPUT_CLASS =
@@ -40,12 +42,12 @@ export default function PropertyTaxInputs(props: Props) {
   const {
     publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon,
     excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse,
-    corporationGeneralRateCategory, specialHouses,
+    corporationGeneralRateCategory, specialHouses, specialHousesRateApply,
     onPublishedManwonChange, onHousesChange, onIsSingleHouseEligibleChange,
     onAgeYearsChange, onHoldYearsChange, onPrevYearTaxManwonChange,
     onExcludedHousesChange, onOwnershipPercentChange, onIsCorporationChange,
     onIsSpouseJointSingleHouseChange, onCorporationGeneralRateCategoryChange,
-    onSpecialHouseEntryChange,
+    onSpecialHouseEntryChange, onRateApplyEntryChange,
   } = props;
 
   const singleActive = isSingleHouseEligible && houses === 1;
@@ -124,12 +126,14 @@ export default function PropertyTaxInputs(props: Props) {
         isSpouseJointSingleHouse={isSpouseJointSingleHouse}
         corporationGeneralRateCategory={corporationGeneralRateCategory}
         specialHouses={specialHouses}
+        specialHousesRateApply={specialHousesRateApply}
         onExcludedHousesChange={onExcludedHousesChange}
         onOwnershipPercentChange={onOwnershipPercentChange}
         onIsCorporationChange={onIsCorporationChange}
         onIsSpouseJointSingleHouseChange={onIsSpouseJointSingleHouseChange}
         onCorporationGeneralRateCategoryChange={onCorporationGeneralRateCategoryChange}
         onSpecialHouseEntryChange={onSpecialHouseEntryChange}
+        onRateApplyEntryChange={onRateApplyEntryChange}
       />
 
       {singleActive ? (

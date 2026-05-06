@@ -185,11 +185,11 @@ test("PDF #12 5종 특례주택 (1주택 15억 + 일시적2주택 1채 5억) →
   await expect(page.getByText(/① 일시적2주택.*신규주택 취득일 ≤3년/)).toBeVisible();
   // 일시적2주택 채수 select = 1
   await page.getByLabel("① 일시적2주택 (신규주택) 채수").selectOption("1");
-  // 일시적2주택 합계 공시가 = 50,000만원 (5억)
-  await page.getByLabel("① 일시적2주택 (신규주택) 합계 공시가 (만원)").fill("50000");
+  // 일시적2주택 1주택당 평균 공시가 = 50,000만원 (5억)
+  await page.getByLabel("① 일시적2주택 (신규주택) 1주택당 평균 공시가 (만원)").fill("50000");
   // ResultCard 표시 행: "1세대1주택 5종 특례주택 적용:" + 카테고리 표시
   await expect(page.getByText(/1세대1주택 5종 특례주택 적용:/)).toBeVisible();
-  await expect(page.getByText(/① 일시적2주택: 1채 \/ 합계 공시가 50,000만원/)).toBeVisible();
+  await expect(page.getByText(/① 일시적2주택: 1채 × 평균 공시가 50,000만원 = 합계 50,000만원/)).toBeVisible();
   // 안분 비율 안내
   await expect(page.getByText(/안분 비율 적용.*산출세액.*1주택 비율.*공제율/)).toBeVisible();
   // Notices 신규 special-houses-applied title 표시

@@ -514,7 +514,7 @@ const ComplexCardMobile = memo(function ComplexCardMobile({ complex, index, urlF
           type="button"
           onClick={(e) => { e.stopPropagation(); onToggleCompare?.({ complex_no: complex.complex_no, complex_name: complex.complex_name }); }}
           disabled={!isCompared && compareFull}
-          className={`ml-2 shrink-0 text-sm px-3 py-1.5 rounded border transition-colors ${
+          className={`ml-2 shrink-0 text-sm px-3 py-2 rounded border transition-colors ${
             isCompared
               ? "bg-blue-600 text-white border-blue-600"
               : compareFull

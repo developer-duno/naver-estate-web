@@ -202,7 +202,7 @@ export default function TransferInputs(props: Props) {
             </label>
           ))}
         </div>
-        <p className="mt-1 text-xs text-gray-500">전문가용 모드. 자동 분기 결과를 수동으로 override 합니다</p>
+        <p className="mt-1 text-xs text-gray-500">보통 자동 판정으로 충분합니다. 손님 케이스가 자동 결과와 다를 때만 강제 적용/미적용을 선택하세요</p>
       </fieldset>
     </section>
   );

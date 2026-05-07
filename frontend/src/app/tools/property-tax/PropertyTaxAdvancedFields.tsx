@@ -81,7 +81,7 @@ export default function PropertyTaxAdvancedFields(props: Props) {
   return (
     <details className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
       <summary className="cursor-pointer text-sm font-medium text-gray-700">
-        고급 옵션 (합산배제·공동명의·법인)
+        해당하면 펼쳐서 입력 (합산배제·공동명의·법인)
       </summary>
       <div className="mt-3 space-y-4">
         <label className="flex items-center gap-2 min-h-[44px]">

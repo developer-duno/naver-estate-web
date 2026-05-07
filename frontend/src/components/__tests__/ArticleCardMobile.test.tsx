@@ -2,10 +2,14 @@
  * ArticleCardMobile 컴포넌트 테스트 — 모바일 매물 카드뷰 렌더링
  * 실행: npx vitest run src/components/__tests__/ArticleCardMobile.test.tsx
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import ArticleCardMobile from "../ArticleCardMobile";
 import type { Article } from "@/types";
+
+beforeEach(() => {
+  localStorage.clear();
+});
 
 // 테스트 팩토리
 function makeArticle(overrides: Partial<Article> = {}): Article {
@@ -96,5 +100,43 @@ describe("ArticleCardMobile", () => {
     expect(checkboxes).toHaveLength(2);
     fireEvent.click(checkboxes[1]);
     expect(handler).toHaveBeenCalledWith("A001", true);
+  });
+
+  // B-1 Phase 2: 액션 영역 (메모/즐겨찾기) 회귀 가드
+  describe("B-1 액션 영역 — 메모·즐겨찾기 버튼 (옵션 B layout)", () => {
+    it("메모(📄) 우상단 + 즐겨찾기(☆) 1행 우측 렌더링", () => {
+      render(<ArticleCardMobile articles={[makeArticle()]} />);
+      expect(screen.getByLabelText("매물 메모 추가")).toBeInTheDocument();
+      expect(screen.getByLabelText("매물 즐겨찾기 추가")).toBeInTheDocument();
+    });
+
+    it("메모 버튼 클릭 → 모달 진입 + 카드 onClick 차단 (stopPropagation)", () => {
+      const onRow = vi.fn();
+      render(<ArticleCardMobile articles={[makeArticle()]} onRowClick={onRow} />);
+      fireEvent.click(screen.getByLabelText("매물 메모 추가"));
+      expect(screen.getByRole("dialog", { name: "매물 메모" })).toBeInTheDocument();
+      expect(onRow).not.toHaveBeenCalled();
+    });
+
+    it("즐겨찾기 클릭 → ★ + 카드 onClick 차단", () => {
+      const onRow = vi.fn();
+      render(<ArticleCardMobile articles={[makeArticle()]} onRowClick={onRow} />);
+      fireEvent.click(screen.getByLabelText("매물 즐겨찾기 추가"));
+      expect(screen.getByText("★")).toBeInTheDocument();
+      expect(onRow).not.toHaveBeenCalled();
+    });
+
+    it("complex_name optional 누락 시 graceful (즐겨찾기 정상 렌더)", () => {
+      const noName = makeArticle({ complex_name: undefined });
+      render(<ArticleCardMobile articles={[noName]} />);
+      expect(screen.getByLabelText("매물 즐겨찾기 추가")).toBeInTheDocument();
+    });
+
+    it("카드 본문 클릭 → onRowClick 호출 (액션 외부 영역)", () => {
+      const onRow = vi.fn();
+      render(<ArticleCardMobile articles={[makeArticle()]} onRowClick={onRow} />);
+      fireEvent.click(screen.getByText("101동"));
+      expect(onRow).toHaveBeenCalledWith("A001");
+    });
   });
 });

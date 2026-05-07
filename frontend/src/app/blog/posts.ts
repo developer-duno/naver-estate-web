@@ -74,6 +74,15 @@ export const POSTS: BlogPost[] = [
     category: "세금",
     readingTime: 8,
   },
+  {
+    slug: "compare-workflow",
+    title: "/compare 24행 비교 — 4단지 줄세우기 5분 워크플로",
+    description:
+      "검색 결과에서 + 4번, 비교하기 1번이면 24행 표 + 5종 차트 자동 생성. 평당가·★ 우위·인쇄·엑셀·URL 공유까지 손님 응대 자료를 5분에 끝내는 사용법.",
+    date: "2026-05-07",
+    category: "도구 활용",
+    readingTime: 7,
+  },
 ];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {

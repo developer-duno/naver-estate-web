@@ -46,12 +46,13 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 7편 (전체)", () => {
-    expect(POSTS.length).toBe(7);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 8편 (전체)", () => {
+    expect(POSTS.length).toBe(8);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(7);
+    expect(new Set(slugs).size).toBe(8);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
+      "compare-workflow",
       "complex-price-analysis",
       "jeonse-ratio",
       "mibunyang-for-agents",
@@ -87,6 +88,15 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.title).toContain("양도소득세");
     expect(post?.description).toMatch(/12억|중과|미등기/);
     expect(post?.category).toBe("세금");
+  });
+
+  it("compare-workflow 메타 — 도구 활용 카테고리, /compare 24행 키워드", () => {
+    const post = getPostBySlug("compare-workflow");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("24행");
+    expect(post?.description).toMatch(/평당가|차트|엑셀|5분/);
+    expect(post?.category).toBe("도구 활용");
   });
 
   it("getPostBySlug — 존재 slug 반환, 미존재 slug 는 undefined", () => {

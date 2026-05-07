@@ -106,8 +106,8 @@ test("multi-house (공시 30억 + 3주택+) → 다주택 9억 공제 + 25억 �
 test("B-2 합산배제 (3주택 중 1채 임대) → exclusion-applied notice + effectiveHouses 반영", async ({ page }) => {
   await page.goto("/tools/property-tax");
   await fillBaseInputs(page, { publishedManwon: 300_000, houses: 3 });
-  // 고급 옵션 details 펼치기
-  await page.getByText(/고급 옵션.*합산배제.*공동명의.*법인/).click();
+  // 해당하면 펼쳐서 입력 details 펼치기
+  await page.getByText(/해당하면 펼쳐서 입력.*합산배제.*공동명의.*법인/).click();
   // 합산배제 select 1채 선택
   await page.getByLabel(/합산배제 신청 주택 수/).selectOption("1");
   // Notices 라벨 (고유 단어 "합산배제 신청 주택 반영")
@@ -121,7 +121,7 @@ test("B-3 공동명의 (1세대1주택 + 50%) → ownership-applied + warning no
   await fillBaseInputs(page, {
     publishedManwon: 150_000, houses: 1, isSingleHouseEligible: true,
   });
-  await page.getByText(/고급 옵션.*합산배제.*공동명의.*법인/).click();
+  await page.getByText(/해당하면 펼쳐서 입력.*합산배제.*공동명의.*법인/).click();
   // ownership 50% 입력
   await page.getByLabel(/공동명의 본인 지분/).fill("50");
   // Notices 라벨 (고유 단어 "공동명의 본인 지분 반영")
@@ -134,7 +134,7 @@ test("B-3 공동명의 (1세대1주택 + 50%) → ownership-applied + warning no
 test("B-4 법인 (2주택 단일세율) → corporation 분기 + 단일세율 라벨", async ({ page }) => {
   await page.goto("/tools/property-tax");
   await fillBaseInputs(page, { publishedManwon: 150_000, houses: 2 });
-  await page.getByText(/고급 옵션.*합산배제.*공동명의.*법인/).click();
+  await page.getByText(/해당하면 펼쳐서 입력.*합산배제.*공동명의.*법인/).click();
   // 법인 토글 켜기 (Advanced 영역 안의 체크박스)
   await page.getByRole("checkbox", { name: /법인 보유.*단일세율.*공제.*차단/ }).check();
   // ResultCard BRANCH_TEXT["corporation"] 라벨 (strict mode prefix "분기:" 한정)
@@ -154,7 +154,7 @@ test("B-5 부부 공동명의 1주택자 특례 (15억 + 70세 + 15년) → sing
     ageYears: 70,
     holdYears: 15,
   });
-  await page.getByText(/고급 옵션.*합산배제.*공동명의.*법인/).click();
+  await page.getByText(/해당하면 펼쳐서 입력.*합산배제.*공동명의.*법인/).click();
   // 부부 공동명의 1주택자 특례 토글 켜기
   await page.getByRole("checkbox", { name: /부부 공동명의 1주택자 특례/ }).check();
   // strict mode 회피: "분기:" prefix 로 ResultCard 분기 라벨만 한정 (세션 100 답습)
@@ -178,7 +178,7 @@ test("PDF #12 5종 특례주택 (1주택 15억 + 일시적2주택 1채 5억) →
     ageYears: 65,
     holdYears: 10,
   });
-  await page.getByText(/고급 옵션.*합산배제.*공동명의.*법인/).click();
+  await page.getByText(/해당하면 펼쳐서 입력.*합산배제.*공동명의.*법인/).click();
   // 5종 자격 안내 nested details 펼치기 (R1 답습 — strict mode 회피로 정확 라벨 매칭)
   await page.getByText(/5종 자격 안내 펼치기/).click();
   // PDF 본문 인용 노출 검증
@@ -205,8 +205,8 @@ test("PDF #15 향교·종교단체 — 체크박스 ON 시 안내 4 카드 노�
     houses: 1,
     isSingleHouseEligible: false, // 일반 분기, 산식 단순화
   });
-  // 고급 옵션 펼치기
-  await page.getByText(/고급 옵션.*합산배제.*공동명의.*법인/).click();
+  // 해당하면 펼쳐서 입력 펼치기
+  await page.getByText(/해당하면 펼쳐서 입력.*합산배제.*공동명의.*법인/).click();
   // 체크 OFF 상태에서 4 카드 미노출 확증
   await expect(page.getByText("✓ 향교·종교단체 — 재산세 면세 (지특법 §50)", { exact: true })).toHaveCount(0);
   // 체크박스 ON
@@ -231,8 +231,8 @@ test("보유기간 특례 라디오 + 원래 취득연도 → planned 경고 + p
     ageYears: 0,
     holdYears: 5, // 5+ 만족
   });
-  // 고급 옵션 펼치기
-  await page.getByText(/고급 옵션.*합산배제.*공동명의.*법인/).click();
+  // 해당하면 펼쳐서 입력 펼치기
+  await page.getByText(/해당하면 펼쳐서 입력.*합산배제.*공동명의.*법인/).click();
   // 라디오 "신청 예정" 클릭 (aria-label 매칭)
   await page.getByRole("radio", { name: "신청 예정" }).check();
   // 원래 취득연도 입력 (재개발 16년 전)

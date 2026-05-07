@@ -46,13 +46,14 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 10편 (전체)", () => {
-    expect(POSTS.length).toBe(10);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 11편 (전체)", () => {
+    expect(POSTS.length).toBe(11);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(10);
+    expect(new Set(slugs).size).toBe(11);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
       "article-notes-workflow",
+      "asking-vs-actual-price",
       "compare-workflow",
       "complex-price-analysis",
       "jeonse-ratio",
@@ -117,6 +118,15 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.title).toContain("보유세");
     expect(post?.description).toMatch(/공동명의|합산배제|법인|보유기간/);
     expect(post?.category).toBe("도구 활용");
+  });
+
+  it("asking-vs-actual-price 메타 — 시세 분석 카테고리, 호가 vs 실거래가 키워드", () => {
+    const post = getPostBySlug("asking-vs-actual-price");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("호가");
+    expect(post?.description).toMatch(/실거래가|격차|협상|공공데이터/);
+    expect(post?.category).toBe("시세 분석");
   });
 
   it("getPostBySlug — 존재 slug 반환, 미존재 slug 는 undefined", () => {

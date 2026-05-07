@@ -12,6 +12,15 @@ export type BlogCategory = "시세 분석" | "세금" | "미분양" | "도구 �
 
 export const POSTS: BlogPost[] = [
   {
+    slug: "asking-vs-actual-price",
+    title: "호가 vs 실거래가 — 손님 협상 카드 1장으로 5천만원 절약",
+    description:
+      "호가는 매도자 희망가, 실거래가는 국토교통부 공공데이터. 격차 5%·10%·반대 시 협상 카드 시나리오 4종 + 차트에서 1초 읽는 법 + 거래량 0 단지 신뢰도 함정.",
+    date: "2026-05-08",
+    category: "시세 분석",
+    readingTime: 7,
+  },
+  {
     slug: "property-tax-tool-guide",
     title: "보유세 계산기 사용법 — 손님 30초 응대 워크플로",
     description:
@@ -42,7 +51,7 @@ export const POSTS: BlogPost[] = [
     slug: "complex-price-analysis",
     title: "단지 시세 분석법 — 평당가·시세 추이·비교 줄세우기",
     description:
-      "평당가가 가장 먼저인 이유, 시세 추이 차트(6개월/1년/2년/전체) 읽는 법, 호가 vs 실거래가 격차 판독, /compare 24행 비교로 같은 동네 단지 줄 세우기.",
+      "평당가가 가장 먼저인 이유, 시세 추이 차트(6개월/1년/2년/전체) 읽는 법, /compare 24행 비교로 같은 동네 단지 줄 세우기.",
     date: "2026-05-02",
     category: "시세 분석",
     readingTime: 7,

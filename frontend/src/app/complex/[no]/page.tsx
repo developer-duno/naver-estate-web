@@ -52,7 +52,6 @@ export default function ComplexDetailPage() {
   const [filterOpen, setFilterOpen] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [filterError, setFilterError] = useState("");
   const [sessionToken, setSessionToken] = useState<string | undefined>(undefined);
   const [tokenError, setTokenError] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
@@ -175,7 +174,6 @@ export default function ComplexDetailPage() {
     (newFilters: ArticleFilters) => {
       setFilters(newFilters);
       setSelectedArticleNos(new Set());
-      setFilterError("");
     },
     [setFilters]
   );
@@ -184,7 +182,6 @@ export default function ComplexDetailPage() {
   const resetFilters = useCallback(() => {
     setFilters({});
     setSelectedArticleNos(new Set());
-    setFilterError("");
   }, [setFilters]);
 
   // 핸들러: 페이지 변경 → URL 업데이트
@@ -312,14 +309,6 @@ export default function ComplexDetailPage() {
           <FilterBar key={navKey} onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} initialFilters={filters} />
         </div>
       </div>
-
-      {/* 필터 에러 배너 */}
-      {filterError && (
-        <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-md px-4 py-2 flex justify-between items-center">
-          <span>{filterError}</span>
-          <button onClick={() => setFilterError("")} className="text-red-400 hover:text-red-600">×</button>
-        </div>
-      )}
 
       {/* 엑셀 내보내기 에러 배너 */}
       {exportError && (

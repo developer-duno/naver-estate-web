@@ -26,16 +26,6 @@ export interface FloorPriceStat {
   wolse_avg?: number;  wolse_min?: number;  wolse_max?: number;  wolse_count?: number;
 }
 
-/** @deprecated 단일 거래유형 통계 (PriceChartInner 내부용) */
-export interface PriceStat {
-  label: string;
-  min: number;
-  avg: number;
-  max: number;
-  median: number;
-  count: number;
-}
-
 export interface PriceStats {
   complex_no: string;
   total_articles: number;

@@ -9,6 +9,7 @@ import CollectorTrigger from "@/components/admin/CollectorTrigger";
 import SchedulerMonitor from "@/components/admin/SchedulerMonitor";
 import DataFreshnessCard from "@/components/admin/DataFreshnessCard";
 import HealthSummary from "@/components/admin/HealthSummary";
+import WeeklyIssuesCard from "@/components/admin/WeeklyIssuesCard";
 import NaverCallsCard from "@/components/admin/NaverCallsCard";
 import AdminCard from "@/components/admin/AdminCard";
 import { getAdminDetailedStats, getAdminAuditLogs, getAdminCrawlJobs } from "@/lib/api";
@@ -57,6 +58,8 @@ export default function AdminDashboard() {
       )}
 
       <HealthSummary token={token} />
+
+      <div className="mb-4"><WeeklyIssuesCard token={token} /></div>
 
       <StatsCards stats={stats} loading={loading} />
 

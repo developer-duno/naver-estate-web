@@ -2,10 +2,14 @@
  * ArticleTable 컴포넌트 테스트 - 매물 행 렌더링, 빈 상태
  * 실행: npx vitest run src/components/__tests__/ArticleTable.test.tsx
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import ArticleTable from "../ArticleTable";
 import type { Article } from "@/types";
+
+beforeEach(() => {
+  localStorage.clear();
+});
 
 const sampleArticle: Article = {
   article_no: "A001",
@@ -78,5 +82,44 @@ describe("ArticleTable — 추가", () => {
     render(<ArticleTable articles={[]} />);
     expect(screen.queryByText("필터 초기화")).toBeNull();
     expect(screen.getByText(/데이터 갱신/)).toBeInTheDocument();
+  });
+
+  // B-1 Phase 1: 액션 열 (메모/즐겨찾기) 회귀 가드
+  describe("B-1 액션 열 — 메모·즐겨찾기 버튼", () => {
+    it("액션 헤더 + 메모(📄) + 즐겨찾기(☆) 버튼 렌더링", () => {
+      render(<ArticleTable articles={[sampleArticle]} />);
+      expect(screen.getByLabelText("메모/즐겨찾기 액션")).toBeInTheDocument();
+      expect(screen.getByLabelText("매물 메모 추가")).toBeInTheDocument();
+      expect(screen.getByLabelText("매물 즐겨찾기 추가")).toBeInTheDocument();
+    });
+
+    it("메모 버튼 클릭 → 모달 진입 + 행 onClick 차단 (stopPropagation)", () => {
+      const onRow = vi.fn();
+      render(<ArticleTable articles={[sampleArticle]} onRowClick={onRow} />);
+      fireEvent.click(screen.getByLabelText("매물 메모 추가"));
+      expect(screen.getByRole("dialog", { name: "매물 메모" })).toBeInTheDocument();
+      expect(onRow).not.toHaveBeenCalled();
+    });
+
+    it("즐겨찾기 클릭 → ★ + 행 onClick 차단", () => {
+      const onRow = vi.fn();
+      render(<ArticleTable articles={[sampleArticle]} onRowClick={onRow} />);
+      fireEvent.click(screen.getByLabelText("매물 즐겨찾기 추가"));
+      expect(screen.getByText("★")).toBeInTheDocument();
+      expect(onRow).not.toHaveBeenCalled();
+    });
+
+    it("complex_name optional 누락 시 graceful (button 정상 렌더)", () => {
+      const noName: Article = { ...sampleArticle, complex_name: undefined };
+      render(<ArticleTable articles={[noName]} />);
+      expect(screen.getByLabelText("매물 즐겨찾기 추가")).toBeInTheDocument();
+    });
+
+    it("행 클릭 → onRowClick 정상 동작 (액션 열 외부)", () => {
+      const onRow = vi.fn();
+      render(<ArticleTable articles={[sampleArticle]} onRowClick={onRow} />);
+      fireEvent.click(screen.getByText("101동"));
+      expect(onRow).toHaveBeenCalledWith("A001");
+    });
   });
 });

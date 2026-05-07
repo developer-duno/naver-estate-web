@@ -6,6 +6,8 @@ import { M2_TO_PYEONG, TRADE_TYPE_COLORS, TRADE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_
 import { formatDateShort, formatMaintenanceCost } from "@/lib/format";
 import { COLUMNS, SERVER_SORT_MAP, getColumnValue } from "@/components/articleTableColumns";
 import SortableHeader, { type SortState } from "@/components/SortableHeader";
+import ArticleNoteButton from "@/components/ArticleNoteButton";
+import ArticleFavoriteButton from "@/components/ArticleFavoriteButton";
 
 // -- Main Component --
 
@@ -101,6 +103,7 @@ function ArticleTable({ articles, onRowClick, onSortChange, selectedArticleNos, 
                 />
               </th>
             )}
+            <th className="px-2 py-2 w-16 text-center text-xs text-gray-700" aria-label="메모/즐겨찾기 액션">액션</th>
             {COLUMNS.map((col) => (
               <SortableHeader
                 key={col.key}
@@ -168,6 +171,18 @@ const ArticleRow = memo(function ArticleRow({ article: art, index, onClick, sele
           />
         </td>
       )}
+      <td className="px-2 py-1.5 text-center border-r border-gray-100 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+        <ArticleNoteButton articleNo={art.article_no} />
+        <span className="ml-1">
+          <ArticleFavoriteButton
+            articleNo={art.article_no}
+            complexNo={art.complex_no}
+            complexName={art.complex_name}
+            tradeTypeName={art.trade_type_name}
+            price={art.deal_or_warrant_prc}
+          />
+        </span>
+      </td>
       <Td className="text-gray-400 text-center">{index}</Td>
       <Td>
         <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${

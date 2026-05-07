@@ -46,12 +46,13 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 8편 (전체)", () => {
-    expect(POSTS.length).toBe(8);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 9편 (전체)", () => {
+    expect(POSTS.length).toBe(9);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(8);
+    expect(new Set(slugs).size).toBe(9);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
+      "article-notes-workflow",
       "compare-workflow",
       "complex-price-analysis",
       "jeonse-ratio",
@@ -96,6 +97,15 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.draft).toBeUndefined();
     expect(post?.title).toContain("24행");
     expect(post?.description).toMatch(/평당가|차트|엑셀|5분/);
+    expect(post?.category).toBe("도구 활용");
+  });
+
+  it("article-notes-workflow 메타 — 도구 활용 카테고리, 매물 메모 키워드", () => {
+    const post = getPostBySlug("article-notes-workflow");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("매물 메모");
+    expect(post?.description).toMatch(/500자|즐겨찾기|3 진입점|localStorage/);
     expect(post?.category).toBe("도구 활용");
   });
 

@@ -46,10 +46,10 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 9편 (전체)", () => {
-    expect(POSTS.length).toBe(9);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 10편 (전체)", () => {
+    expect(POSTS.length).toBe(10);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(9);
+    expect(new Set(slugs).size).toBe(10);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
       "article-notes-workflow",
@@ -58,6 +58,7 @@ describe("blog/posts 메타데이터", () => {
       "jeonse-ratio",
       "mibunyang-for-agents",
       "property-tax-guide",
+      "property-tax-tool-guide",
       "realestate-calculators",
       "realtime-listing",
       "transfer-tax-guide",
@@ -106,6 +107,15 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.draft).toBeUndefined();
     expect(post?.title).toContain("매물 메모");
     expect(post?.description).toMatch(/500자|즐겨찾기|3 진입점|localStorage/);
+    expect(post?.category).toBe("도구 활용");
+  });
+
+  it("property-tax-tool-guide 메타 — 도구 활용 카테고리, 보유세 도구 키워드", () => {
+    const post = getPostBySlug("property-tax-tool-guide");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("보유세");
+    expect(post?.description).toMatch(/공동명의|합산배제|법인|보유기간/);
     expect(post?.category).toBe("도구 활용");
   });
 

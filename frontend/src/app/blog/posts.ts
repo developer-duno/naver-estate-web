@@ -12,6 +12,15 @@ export type BlogCategory = "시세 분석" | "세금" | "미분양" | "도구 �
 
 export const POSTS: BlogPost[] = [
   {
+    slug: "property-tax-tool-guide",
+    title: "보유세 계산기 사용법 — 손님 30초 응대 워크플로",
+    description:
+      "공동명의 특례·합산배제·법인 단일세율·보유기간 특례 라디오까지 손님 시나리오별 사용법. /tools/property-tax 8 변종을 1주택/공동/임대/법인/고급옵션 H2 6개로 분리.",
+    date: "2026-05-08",
+    category: "도구 활용",
+    readingTime: 7,
+  },
+  {
     slug: "article-notes-workflow",
     title: "매물 메모로 손님 응대 30초 단축 — 매물 단위 CRM 워크플로",
     description:

@@ -4,13 +4,15 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 진입점
 
-새 컨텍스트 읽기 순서 = ① `.claude/rules/` 5종 (자동 로드) → ② `.claude/ASSETS.md` · `.claude/GLOSSARY.md` · `.claude/BLOG.md` (필요 시 참조) → ③ `memory/MEMORY.md` (세션 누적 박제).
+새 컨텍스트 읽기 순서 = ① `.claude/rules/` 5종 (자동 로드) → ② `.claude/ASSETS.md` · `.claude/GLOSSARY.md` · `.claude/BLOG.md` (필요 시 참조) → ③ FE/BE 깊이 토픽 5종 (FE/BE 작업 시 명시 참조) → ④ `memory/MEMORY.md` (세션 누적 박제).
 
 | 자료 | 위치 | 용도 |
 |---|---|---|
 | **자산 인덱스** | `.claude/ASSETS.md` | 한국어 PDF 16장 / 계산기 라이브러리 14개 / 글로벌 자산 / 운영 부채 |
 | **도메인 용어집** | `.claude/GLOSSARY.md` | 한국어 부동산 도메인 용어 30+ 개 |
 | **블로그 라인업** | `.claude/BLOG.md` | /blog MDX 14편 (시세 분석 3 / 세금 3 / 도구 활용 6 / 미분양 2) + 새 글 발행 4단 절차 |
+| **FE 깊이 토픽 4종** | `frontend/.claude/{hooks-and-state,ui-patterns,pages-and-mb,tools-lineup}.md` | FE 작업 시 명시 참조 (자동 로드 안 됨) — 훅·UI 패턴·페이지 흐름·도구 5종 |
+| **BE 깊이 토픽 1종** | `backend/.claude/details.md` | BE 작업 시 명시 참조 (자동 로드 안 됨) — 실거래가·mibunyang·검증·중복 제거 |
 | **세션 박제 메모리** | `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\` | 세션 43~126 일자별 정리 + 박제 룰 + 사고 회고 |
 | **세션 79~112 archive** | 메모리 폴더 `sessions_79_112_archive.md` | 도구 5종 라인업 진화 + 박제 룰 진화 한 표 요약 |
 
@@ -78,22 +80,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 주요 기능·구현 사항
 
-### 인프라·운영 (상세 = `.claude/rules/infra.md`)
-- 서버 자동 시작: `scripts/startup_orchestrator.py` → Named Tunnel + watchdog
-- 인기 단지 크롤링: 매일 10:45/14:45/19:15, 개별 단지 try/except (기본 배치 50)
-- 스케줄러 모니터링: GET /api/admin/scheduler-status (12개 작업, 60초 자동갱신)
-- 관리자 대시보드: StatsCards + SchedulerMonitor + CollectorTrigger + QuotaStatus + FreshnessCard
-- 공유 쿼터 DB 카운터: `RateLimitCounter` 테이블 기반 INSERT ON CONFLICT 원자적 (`backend/crawler/quota_db.py`). 상세는 `docs/quota_db_integration.md`
-- DB: NullPool (Supabase Session Mode 대응)
-- CSP: script-src/connect-src에 https://vercel.live 추가
-- Hydration: html suppressHydrationWarning (Vercel Live 주입 대응)
-
-### 공인중개사 검증 (B2B 구독 모델)
-
-자세한 워크플로 = `backend/CLAUDE.md` §공인중개사 검증 워크플로 참조. FE 측 = `/verify` + `/admin/users` 페이지 + Header 전문가 뱃지 (role=expert).
-
-> **FE 전용 깊이** (매물 상세 모달 / 모바일 반응형 / 코드 구조 / 도구 5종 라인업) = `frontend/CLAUDE.md` 참조.
-> **BE 전용 깊이** (실거래가 on-demand / mibunyang 통합 / 미분양 중복 제거 / DB 마이그레이션 / 코드 구조) = `backend/CLAUDE.md` 참조.
+> **인프라·운영**: 상세 = `.claude/rules/infra.md` §스케줄러 (APScheduler) + 서버 자동 시작 / Named Tunnel / 공유 쿼터 / NullPool / CSP·Hydration.
+>
+> **공인중개사 검증 (B2B 구독 모델)**: FE = `/verify` + `/admin/users` + Header 전문가 뱃지 (role=expert). BE 워크플로 상세 = `backend/.claude/details.md` §공인중개사 검증 워크플로 참조.
 
 ## 환경변수
 

@@ -12,16 +12,16 @@
 - **차트**: Recharts 3 (dynamic import)
 - **테스트**: Vitest + @testing-library/react + MSW
 
-## 디렉토리 구조 (2026-05-06 실측)
+## 디렉토리 구조 (2026-05-09 실측)
 
 ```
 frontend/src/
 ├── app/           # Next.js App Router (28 페이지, mibunyang/* + tools/* 5종 + admin/* + blog/* 포함)
-├── components/    # 재사용 컴포넌트 (admin/18 + filter/6 + mb/20 + article/7 + 루트 23 = 74+ TSX)
+├── components/    # 재사용 컴포넌트 (admin/30 + filter/4 + mb/23 + article/7 + 루트 41 + 그 외 = 141 TSX)
 ├── hooks/         # 커스텀 훅 (21개, useLocalStorageList + useLocalStorageFavorites 제네릭 훅 포함)
-├── lib/           # 31개 (api/ 7모듈 + storage/ + format/ + query-keys/ + 도구별 lib(brokerage·acquisition·transfer·property-tax 등))
+├── lib/           # 40개 (api/ 7모듈 + storage/ + format/ + query-keys/ + 도구별 lib(brokerage·acquisition·transfer·property-tax 등))
 ├── types/         # TypeScript 인터페이스 (estate + Mb* 10개 + naver-maps.d.ts)
-├── content/blog/  # MDX 본문 (전세가율 + realestate-calculators + property-tax-guide 등)
+├── content/blog/  # MDX 14편 (.claude/BLOG.md SSOT 참조)
 └── middleware.ts  # Supabase 세션 + 관리자 라우트 보호
 ```
 

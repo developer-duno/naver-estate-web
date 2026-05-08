@@ -46,5 +46,6 @@ next-env.d.ts
 test-results/
 playwright-report/
 e2e/.auth/
+e2e/**/*-win32.png
 
 .vercel

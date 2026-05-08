@@ -175,13 +175,42 @@ components/
 - 엑셀: mb-export.ts 4개 함수 (apartments/regions/trades/unsoldHistory) + ExportButton (로딩+실패 피드백)
 - 지도: MbLocationMap (Naver Maps v3 vanilla SDK, dynamic import, 폴링 기반 SDK 대기, lat/lng null 시 미표시)
 
-### 미분양 중복 제거 (백엔드)
-- extract_base_name(): 단지명에서 차수 접미사 제거 ("푸르지오(3차)" → "푸르지오")
-- _deduplicate_apartments(): (base_name, region, gu) 그룹에서 마지막 차수만 유지
-- get_apartments_page(): 목록+total 단일 쿼리 반환 (기존 get_apartments + count_apartments 통합)
-- apartment_to_dict(): name 필드에서 차수 접미사 자동 제거
+> **미분양 중복 제거 (백엔드 로직)**: `backend/CLAUDE.md` §미분양 중복 제거 참조 (extract_base_name / _deduplicate_apartments / get_apartments_page / apartment_to_dict).
 
 ---
+
+## /tools 도구 5종 라인업
+
+| 도구 | 경로 | 핵심 |
+|---|---|---|
+| 중개수수료 | `/tools/brokerage-fee` | 시행규칙 별표1 4종 요율 + 월세환산 ×100→×70 + 부가세 |
+| 취득세 | `/tools/acquisition-tax` | standard/multi-house/first-time/officetel/first-time-rejected 5분기 + 면적·가격 누진 |
+| 평·㎡ 변환 | `/tools/area-converter` | 단순 변환 |
+| 양도소득세 | `/tools/transfer-tax` | 1주택 비과세·단기·중과·미등기 + 한시배제 |
+| 보유세 | `/tools/property-tax` | 재산세 + 종부세 + 농특세 합산. 7 변종 (B-1 cap / B-2 합산배제 / B-3 공동명의 / B-4 법인 / B-5 부부공동 / 법인9종 / PDF #12 5종 / PDF #13 4종 세율 다운판정) + PDF #15 향교·종교단체 안내 (산식 무영향) + PDF #16 보유기간 특례 라디오 3상태 (자동 재계산, 세션 115) |
+
+각 도구는 클라이언트 산식 (BE 호출 없음). 라이브러리 = `lib/<tool>*.ts` 분할 (100줄 룰 회피, 세션 94 답습).
+
+## 매물 상세 모달
+
+- 1열 스택 레이아웃 (max-w-4xl), 7개 하위 컴포넌트 (`components/article/`)
+- 아코디언: 시세/경쟁매물/관리비 카드 3종 (접기 기본)
+- 인쇄 최적화: @media print position:static, 아코디언 자동 펼침
+- 메모/즐겨찾기: ArticleNoteButton + ArticleFavoriteButton (헤더 통합, no-print)
+
+## 모바일 반응형
+
+- 검색 결과: ComplexCardMobile (md:hidden 카드뷰)
+- 단지 상세: ArticleCardMobile + 헤더/액션바 text-xs md:text-sm
+- 필터: FilterBar flex flex-wrap items-center gap-1.5
+- 페이지네이션: px-2 py-1 md:px-3 md:py-1.5
+
+## 코드 구조 (분리 완료, FE 부분)
+
+- FE api.ts → `lib/api/` **9 모듈** (`admin`/`analytics`/`articles`/`complex`/`core`/`crawl`/`index` barrel/`mibunyang`/`verify`)
+- ArticleDetail → 100줄 + 하위 7개 컴포넌트 (`components/article/`)
+- 도구 라이브러리 분할 (세션 94 답습): `brokerage.ts` 등 100줄 룰 회피 시 3분할
+- FilterBar 분리 (위 §FilterBar 구조 참조)
 
 ## 페이지별 데이터 흐름 (28 페이지, 카테고리별)
 
@@ -215,7 +244,7 @@ components/
 | `/login`, `/signup`, `/verify` | Supabase Auth + `/api/users/login-record` | `/api/users/*` |
 | `/admin` (+ /admin/users/scheduler/etc) | `getAdminDetailedStats()`, `getAdminUsers()`, FreshnessCard 등 | `/api/admin/*` |
 | `/pricing` | 정적 (B2B 구독 안내) | — |
-| `/blog` + `/blog/[slug]` | MDX dynamic import (generateStaticParams + dynamicParams=false) | — |
+| `/blog` + `/blog/[slug]` | 라인업 = `.claude/BLOG.md` (단일 진실 공급원) | — |
 
 ## 미분양 (mibunyang) 컴포넌트
 
@@ -258,10 +287,4 @@ components/mb/
 | `mb_compare_bookmarks` | 미분양 비교 북마크 (수동) | 최대 20개, 이름 지정 가능 |
 | `mb_radar_settings` | 레이더 축 선택+가중치 (영속화) | 축 9개, 가중치 1-5 |
 
-## 백엔드 영향 체크리스트
-
-프론트엔드 변경 시 아래 확인:
-- [ ] 새 API 호출 추가? → `api.ts`에 함수 추가 + 백엔드 라우터 존재 확인
-- [ ] 새 타입 필드 사용? → `types/index.ts` + `db/models.py` + `serializers.py` 동기화
-- [ ] 인증 필요 엔드포인트? → Authorization 헤더 전달 확인
-- [ ] 관리자 전용? → middleware.ts 라우트 보호 확인
+> **양쪽 영향 체크리스트** (FE↔BE 동기화 의무) = 루트 `CLAUDE.md` §양쪽 영향 체크리스트 참조.

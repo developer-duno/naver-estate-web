@@ -4,11 +4,14 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 진입점
 
+새 컨텍스트 읽기 순서 = ① `.claude/rules/` 5종 (자동 로드) → ② `.claude/ASSETS.md` · `.claude/GLOSSARY.md` · `.claude/BLOG.md` (필요 시 참조) → ③ `memory/MEMORY.md` (세션 누적 박제).
+
 | 자료 | 위치 | 용도 |
 |---|---|---|
 | **자산 인덱스** | `.claude/ASSETS.md` | 한국어 PDF 16장 / 계산기 라이브러리 14개 / 글로벌 자산 / 운영 부채 |
 | **도메인 용어집** | `.claude/GLOSSARY.md` | 한국어 부동산 도메인 용어 30+ 개 |
-| **세션 박제 메모리** | `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\` | 세션 43~112 일자별 정리 + 박제 룰 + 사고 회고 |
+| **블로그 라인업** | `.claude/BLOG.md` | /blog MDX 14편 (시세 분석 3 / 세금 3 / 도구 활용 6 / 미분양 2) + 새 글 발행 4단 절차 |
+| **세션 박제 메모리** | `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\` | 세션 43~126 일자별 정리 + 박제 룰 + 사고 회고 |
 | **세션 79~112 archive** | 메모리 폴더 `sessions_79_112_archive.md` | 도구 5종 라인업 진화 + 박제 룰 진화 한 표 요약 |
 
 ## 비즈니스 모델
@@ -85,40 +88,12 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - CSP: script-src/connect-src에 https://vercel.live 추가
 - Hydration: html suppressHydrationWarning (Vercel Live 주입 대응)
 
-### 공인중개사 검증
-- /verify 신청 → 국세청 사업자등록 API 자동검증 → 성공 시 role=expert 자동 승인
-- 실패 시: verification_status=pending → 관리자 /admin/users 수동 승인/거부
-- 자격증: Supabase Storage 업로드 (5MB/JPG/PNG/PDF) + 관리자 수동 확인
-- 이메일 알림: `services/email.py` (Gmail SMTP SSL 465, best-effort)
-- Header 전문가 뱃지: role=expert 시 초록색 "전문가" 표시
+### 공인중개사 검증 (B2B 구독 모델)
 
-### 매물 상세 모달
-- 1열 스택 레이아웃 (max-w-4xl), 7개 하위 컴포넌트 (`components/article/`)
-- 아코디언: 시세/경쟁매물/관리비 카드 3종 (접기 기본)
-- 인쇄 최적화: @media print position:static, 아코디언 자동 펼침
-- 메모/즐겨찾기: ArticleNoteButton + ArticleFavoriteButton (헤더 통합, no-print)
+자세한 워크플로 = `backend/CLAUDE.md` §공인중개사 검증 워크플로 참조. FE 측 = `/verify` + `/admin/users` 페이지 + Header 전문가 뱃지 (role=expert).
 
-### 모바일 반응형
-- 검색 결과: ComplexCardMobile (md:hidden 카드뷰)
-- 단지 상세: ArticleCardMobile + 헤더/액션바 text-xs md:text-sm
-- 필터: FilterBar flex flex-wrap items-center gap-1.5
-- 페이지네이션: px-2 py-1 md:px-3 md:py-1.5
-
-### 코드 구조 (분리 완료)
-- FE api.ts → `lib/api/` 7모듈 (core/complex/articles/crawl/analytics/admin/mibunyang)
-- BE service.py → 4모듈 (service_common/discover/price/public)
-- BE formatters/ 5모듈, db/ 5모듈, serializers/ 3모듈 (barrel re-export 호환)
-- ArticleDetail → 100줄 + 하위 7개 컴포넌트
-- 도구 라이브러리 분할 (세션 94 답습): `brokerage.ts` 등 100줄 룰 회피 시 3분할
-
-### /tools 도구 5종 라인업 (세션 104 완성)
-| 도구 | 경로 | 핵심 |
-|---|---|---|
-| 중개수수료 | `/tools/brokerage-fee` | 시행규칙 별표1 4종 요율 + 월세환산 ×100→×70 + 부가세 |
-| 취득세 | `/tools/acquisition-tax` | standard/multi-house/first-time/officetel/first-time-rejected 5분기 + 면적·가격 누진 |
-| 평·㎡ 변환 | `/tools/area-converter` | 단순 변환 |
-| 양도소득세 | `/tools/transfer-tax` | 1주택 비과세·단기·중과·미등기 + 한시배제 |
-| 보유세 | `/tools/property-tax` | 재산세 + 종부세 + 농특세 합산. 7 변종 (B-1 cap / B-2 합산배제 / B-3 공동명의 / B-4 법인 / B-5 부부공동 / 법인9종 / PDF #12 5종 / PDF #13 4종 세율 다운판정) + PDF #15 향교·종교단체 안내 (산식 무영향) + PDF #16 보유기간 특례 라디오 3상태 (자동 재계산, 세션 115) |
+> **FE 전용 깊이** (매물 상세 모달 / 모바일 반응형 / 코드 구조 / 도구 5종 라인업) = `frontend/CLAUDE.md` 참조.
+> **BE 전용 깊이** (실거래가 on-demand / mibunyang 통합 / 미분양 중복 제거 / DB 마이그레이션 / 코드 구조) = `backend/CLAUDE.md` 참조.
 
 ## 환경변수
 
@@ -135,22 +110,11 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - `CHILDCARE_DETAIL_API_KEY` — cpmsapi030 운영키
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — Gmail SMTP SSL 465
 
-## DB 마이그레이션 (실행 완료)
-
-| 버전 | 내용 | 실행일 |
-|------|------|--------|
-| V014 | crawl_jobs.scheduler_job_id | 2026-04-03 |
-| V015/V016 | apartments/trades 인덱스 7개 + trigram | 2026-04-07 |
-| V017 | agent_verifications 테이블 | — |
-| V018 | agent_verifications.license_doc_path | — |
-| V019 | infra.childcare_nearest_type/teachers | — |
-| V020 | naver_call_counter Supabase 영속화 | 2026-04-22 (세션 54) |
-
-## 테스트 현황 (2026-05-06 실측, 세션 115)
+## 테스트 현황 (2026-05-08 실측, 세션 126)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` | **1047개** (107 파일) |
+| FE Vitest | `frontend/src/**/__tests__/` | **1076개** (109 파일) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **18 파일** (Playwright, --webpack 모드) |
 | BE pytest | `backend/tests/` | **579개** (47 파일) |
 
@@ -180,6 +144,22 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 |--------|------|
 | `/harness` | Plan→Guard→Work→Review 전체 워크플로우, Sonnet 분할, 코드 작성 규칙 |
 | `/guard` | 9 GATE 검증 (크기/영향/순서/완전성/적정성/보안/연동/롤백/UX) |
+
+## 양쪽 영향 체크리스트 (FE↔BE 동기화)
+
+### FE → BE (frontend 변경 시 확인)
+
+- [ ] 새 API 호출 추가? → `frontend/src/lib/api/` 9 모듈에 함수 추가 + 백엔드 라우터 존재 확인
+- [ ] 새 타입 필드 사용? → `frontend/src/types/` + `backend/db/models.py` + `backend/routers/*serializers.py` 동기화
+- [ ] 인증 필요 엔드포인트? → Authorization 헤더 전달 확인 (`session.access_token`)
+- [ ] 관리자 전용? → `frontend/src/middleware.ts` 라우트 보호 확인
+
+### BE → FE (backend 변경 시 확인)
+
+- [ ] BE 라우터 변경 시 → FE `lib/api/` 9 모듈 동기화 (새 함수·시그니처 갱신)
+- [ ] serializers 변경 시 → FE `types/` 인터페이스 동기화 (필드 추가/삭제)
+- [ ] `.env` 변경 시 → `.env.local` (FE) + Vercel 환경변수 동기화
+- [ ] V021+ 마이그레이션 시 → FE 영향 검토 (테이블 컬럼 변경 시 타입·UI 영향)
 
 ## 세션 종료 시 마무리
 

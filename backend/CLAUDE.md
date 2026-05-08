@@ -28,7 +28,7 @@
 | `db/price_queries.py` | 가격 이력/통계/추이 쿼리 |
 | `db/stats_queries.py` | DB 통계 + 필터 옵션 쿼리 |
 | `db/mb_queries.py` | mibunyang 읽기 쿼리 함수 |
-| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V019) |
+| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V020) |
 | `shared/naver_api.py` | NaverEstateAPI (수정 금지) |
 | `shared/constants.py` | 상수 (수정 금지) |
 | `auth/permissions.py` | 역할 체크 (require_role) + 일일 쿼터 (check_quota) |
@@ -86,7 +86,7 @@
 - **엔진**: file-based SQLite + NullPool + WAL + busy_timeout 5초
 - **dialect 분기**: `_search_all_types()`는 SQLite에서 ThreadPoolExecutor 대신 순차 실행
   - `_do_upsert()`도 dialect-aware (pg_insert/sqlite_insert 자동 분기)
-- **테스트**: 552개 (46파일) — `python -m pytest --tb=short -q`
+- **테스트**: 579개 (47파일) — `python -m pytest --tb=short -q`
 - **conftest.py**: `sys.modules["db.database"]` 교체로 테스트 엔진 주입
 
 ## CORS 미들웨어 순서 (중요)
@@ -94,8 +94,50 @@
 - `RateLimitMiddleware` → `CORSMiddleware` 순서로 등록 (CORS가 마지막 = 가장 먼저 실행)
 - 반대로 하면 OPTIONS preflight가 429 반환
 
-## DB 마이그레이션
+## DB 마이그레이션 (실행 완료)
 
-- `db/migrations/` 폴더에 `V000__` ~ `V019__` SQL 파일
+| 버전 | 내용 | 실행일 |
+|------|------|--------|
+| V014 | crawl_jobs.scheduler_job_id | 2026-04-03 |
+| V015/V016 | apartments/trades 인덱스 7개 + trigram | 2026-04-07 |
+| V017 | agent_verifications 테이블 | — |
+| V018 | agent_verifications.license_doc_path | — |
+| V019 | infra.childcare_nearest_type/teachers | — |
+| V020 | naver_call_counter Supabase 영속화 | 2026-04-22 (세션 54) |
+
+- `db/migrations/` 폴더에 `V000__` ~ `V020__` SQL 파일
 - Supabase SQL Editor에서 수동 실행
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
+
+## 코드 구조 (분리 완료)
+
+- BE service.py → **5 파일** (`service.py` barrel + `service_common`/`service_discover`/`service_price`/`service_public` 4 분할)
+- BE formatters/ → **5 파일** (`analysis`/`area_price_detail`/`complex_area`/`price_core`/`school`)
+- BE db/ → **10 파일** (`article_queries`/`complex_queries`/`database`/`mb_models`/`mb_queries`/`models`/`price_queries`/`queries` barrel/`query_helpers`/`stats_queries`)
+- BE serializers → **3 파일** (`routers/serializers.py` barrel + `routers/estate_serializers.py` + `routers/mb_serializers.py`)
+
+## 공인중개사 검증 워크플로 (B2B 구독 모델)
+
+```
+/verify (FE) → POST /api/verify (sangji 사업자번호 10자리)
+  ↓
+business_api.py (국세청 odcloud API: api.odcloud.kr/api/nts-businessman/v1/validate)
+  ↓ 성공
+db/models.py agent_verifications.verification_status = "approved"
+users.role = "expert" (자동 승인)
+  ↓ 실패
+verification_status = "pending"
+  → 자격증 업로드 (services/storage.py: Supabase Storage, 5MB JPG/PNG/PDF)
+  → /admin/users 관리자 수동 승인/거부 (routers/admin/users.py)
+  → services/email.py Gmail SMTP SSL 465 알림 (best-effort)
+```
+
+- 핵심 모듈 6종: `routers/verify.py` + `routers/admin/users.py` + `crawler/business_api.py` + `services/storage.py` + `services/email.py` + `db/models.py` (`agent_verifications` 테이블)
+- 환경변수 (backend/.env): `PUBLIC_DATA_API_KEY` (odcloud), `SMTP_HOST/PORT/USER/PASS/FROM` (Gmail)
+
+## 미분양 중복 제거
+
+- `extract_base_name()` — 단지명에서 차수 접미사 제거 ("푸르지오(3차)" → "푸르지오")
+- `_deduplicate_apartments()` — (base_name, region, gu) 그룹에서 마지막 차수만 유지
+- `get_apartments_page()` — 목록+total 단일 쿼리 반환 (기존 `get_apartments` + `count_apartments` 통합)
+- `apartment_to_dict()` — name 필드에서 차수 접미사 자동 제거

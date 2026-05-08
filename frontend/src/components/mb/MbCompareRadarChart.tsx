@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 미분양 비교 레이더 차트 — 9축 정규화 + 가중치 프리셋 + 축별 슬라이더 + 가중 점수
+ * 미분양 비교 레이더 차트 — 13축 정규화 + 가중치 프리셋 + 축별 슬라이더 + 가중 점수
  * useMbRadarSettings 훅으로 축 선택 + 가중치를 localStorage에 영속화
  */
 import { useMemo } from "react";

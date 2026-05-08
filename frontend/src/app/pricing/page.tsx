@@ -41,7 +41,7 @@ export default function PricingPage() {
       <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-12 sm:mb-16">
         <Feature icon="📊" title="실시간 단지 시세" desc="네이버 부동산 시세를 실시간으로 가져와 평당가·전세가율까지 분석" />
         <Feature icon="🔎" title="매물 필터·비교" desc="가격·면적·층수·방향 등 7가지 필터 + 단지 4개까지 비교표·차트" />
-        <Feature icon="📈" title="미분양 분석" desc="전국 미분양 단지 + 9축 레이더 차트로 투자·실거주 우위 한눈에" />
+        <Feature icon="📈" title="미분양 분석" desc="전국 미분양 단지 + 13축 레이더 차트로 투자·실거주 우위 한눈에" />
         <Feature icon="📥" title="엑셀 내보내기" desc="매물 목록·비교 결과를 엑셀로 즉시 다운로드 (수식 인젝션 방어)" />
       </section>
 

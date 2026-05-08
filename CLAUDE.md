@@ -57,7 +57,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 ### 미분양 (mibunyang)
 ```
 미분양 조회 → /api/mb/apartments?sort_by=&keyword= (정렬+검색+중복제거)
-미분양 비교 → /mibunyang/compare?ids= (17행 우위 + 레이더9축 + 가중치 + 분양가/추이 차트)
+미분양 비교 → /mibunyang/compare?ids= (17행 우위 + 레이더13축 + 가중치 + 분양가/추이 차트)
 미분양 즐겨찾기 → localStorage (최대 200개, 일괄 비교, FavSortBy)
 미분양 히스토리/북마크 → localStorage (자동 저장 10개 / 수동 저장 20개)
 레이더 설정 → localStorage (축 선택 + 가중치 1-5, 프리셋 3종)
@@ -115,7 +115,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 | 도구 | 경로 | 핵심 |
 |---|---|---|
 | 중개수수료 | `/tools/brokerage-fee` | 시행규칙 별표1 4종 요율 + 월세환산 ×100→×70 + 부가세 |
-| 취득세 | `/tools/acquisition-tax` | 일반/조정/감면 3종 + 면적·가격 누진 |
+| 취득세 | `/tools/acquisition-tax` | standard/multi-house/first-time/officetel/first-time-rejected 5분기 + 면적·가격 누진 |
 | 평·㎡ 변환 | `/tools/area-converter` | 단순 변환 |
 | 양도소득세 | `/tools/transfer-tax` | 1주택 비과세·단기·중과·미등기 + 한시배제 |
 | 보유세 | `/tools/property-tax` | 재산세 + 종부세 + 농특세 합산. 7 변종 (B-1 cap / B-2 합산배제 / B-3 공동명의 / B-4 법인 / B-5 부부공동 / 법인9종 / PDF #12 5종 / PDF #13 4종 세율 다운판정) + PDF #15 향교·종교단체 안내 (산식 무영향) + PDF #16 보유기간 특례 라디오 3상태 (자동 재계산, 세션 115) |

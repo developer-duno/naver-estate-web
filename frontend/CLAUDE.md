@@ -144,7 +144,7 @@ components/
 - 미분양 테이블에 "+" 버튼 → useMbCompare로 localStorage 관리 (최대 4개)
 - 하단 MbCompareFloatingBar: 선택 단지 pill + "비교하기" (2개 이상) + "초기화"
 - /mibunyang/compare?ids=id1,id2,... → useQueries 병렬 조회 + 17행 비교 테이블 + 우위★
-- 차트 3종: MbCompareRadarChart(9축 정규화, 동적 축 선택 칩 최소3개, getAxisChipClass헬퍼, activeAxes useMemo, 종합우위★), MbComparePriceChart(min/max/pp 막대, 최저가★), MbCompareUnsoldChart(다중아파트 추이, 기간필터 6M/1Y/2Y/ALL)
+- 차트 3종: MbCompareRadarChart(13축 정규화 = 기본 9축 + 인프라 4축, 동적 축 선택 칩 최소3개, getAxisChipClass헬퍼, activeAxes useMemo, 종합우위★), MbComparePriceChart(min/max/pp 막대, 최저가★), MbCompareUnsoldChart(다중아파트 추이, 기간필터 6M/1Y/2Y/ALL)
 - 인쇄: window.print() + rAF 2회 + no-print 클래스
 - URL 복사: navigator.clipboard.writeText + fallback alert
 - 단지명→상세 링크: th onClick + router.push
@@ -204,7 +204,7 @@ components/
 | 페이지 | 라이브러리 | 핵심 |
 |--------|---------|-------------|
 | `/tools/brokerage-fee` | `lib/brokerage*.ts` | 시행규칙 별표1 4종 요율 + 부가세 |
-| `/tools/acquisition-tax` | `lib/acquisition-tax*.ts` | 일반/조정/감면 3종 + 면적·가격 누진 |
+| `/tools/acquisition-tax` | `lib/acquisition-tax*.ts` | standard/multi-house/first-time/officetel/first-time-rejected 5분기 |
 | `/tools/area-converter` | inline | 평·㎡ 변환 |
 | `/tools/transfer-tax` | `lib/transfer-tax*.ts` | 1주택 비과세·단기·중과·미등기·한시배제 |
 | `/tools/property-tax` | `lib/property-tax*.ts` | 재산세+종부세+농특세 (B-1~B-5+법인9종+5종 특례주택) |
@@ -228,7 +228,7 @@ components/mb/
 ├── MbDetailSections.tsx        # 상세 5개 섹션 (개요/분양/주변환경/거래통계/미분양추이)
 ├── MbUnsoldTrendChart.tsx      # Recharts 미분양 추이 차트 (dynamic import)
 ├── MbCompareFloatingBar.tsx    # 비교 하단 플로팅 바 (최대 4개, 비교하기 버튼)
-├── MbCompareRadarChart.tsx    # 레이더 차트 (9축 정규화, 가중치프리셋3종+슬라이더1-5+가중점수, 종합우위★, dynamic import)
+├── MbCompareRadarChart.tsx    # 레이더 차트 (13축 정규화 = 기본 9축 + 인프라 4축, 가중치프리셋3종+슬라이더1-5+가중점수, 종합우위★, dynamic import)
 ├── MbComparePriceChart.tsx    # 분양가 막대 차트 (min/max/pp, 최저가★, dynamic import)
 ├── MbCompareUnsoldChart.tsx   # 미분양 추이 비교 차트 (ComposedChart, 기간필터 6M/1Y/2Y/ALL, dynamic import)
 ├── MbLocationMap.tsx           # Naver Maps v3 지도 (vanilla SDK, dynamic import)

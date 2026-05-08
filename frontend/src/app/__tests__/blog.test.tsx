@@ -11,7 +11,7 @@ import BlogIndexPage from "../blog/page";
 import { POSTS, getPostBySlug } from "../blog/posts";
 
 describe("/blog 목록 페이지", () => {
-  it("Hero 제목과 12편 카드가 모두 렌더된다", () => {
+  it("Hero 제목과 14편 카드가 모두 렌더된다", () => {
     const { container } = render(<BlogIndexPage />);
     expect(screen.getByRole("heading", { name: /부동산 인사이트/, level: 1 })).toBeInTheDocument();
     // 모든 글 제목이 카드에 표시
@@ -46,18 +46,20 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 12편 (전체)", () => {
-    expect(POSTS.length).toBe(12);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 14편 (전체)", () => {
+    expect(POSTS.length).toBe(14);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(12);
+    expect(new Set(slugs).size).toBe(14);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
+      "acquisition-tax-tool-guide",
       "article-notes-workflow",
       "asking-vs-actual-price",
       "compare-workflow",
       "complex-price-analysis",
       "jeonse-ratio",
       "mibunyang-for-agents",
+      "mibunyang-radar-weights",
       "property-tax-guide",
       "property-tax-tool-guide",
       "realestate-calculators",
@@ -137,6 +139,24 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.title).toContain("호가");
     expect(post?.description).toMatch(/실거래가|격차|협상|공공데이터/);
     expect(post?.category).toBe("시세 분석");
+  });
+
+  it("acquisition-tax-tool-guide 메타 — 도구 활용 카테고리, 취득세 도구 키워드", () => {
+    const post = getPostBySlug("acquisition-tax-tool-guide");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("취득세");
+    expect(post?.description).toMatch(/표준세율|중과|생애최초|85m²|보간/);
+    expect(post?.category).toBe("도구 활용");
+  });
+
+  it("mibunyang-radar-weights 메타 — 미분양 카테고리, 레이더 가중치 키워드", () => {
+    const post = getPostBySlug("mibunyang-radar-weights");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("레이더");
+    expect(post?.description).toMatch(/13축|가중치|프리셋|78점|성향/);
+    expect(post?.category).toBe("미분양");
   });
 
   it("getPostBySlug — 존재 slug 반환, 미존재 slug 는 undefined", () => {

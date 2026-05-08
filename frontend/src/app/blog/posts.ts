@@ -12,6 +12,15 @@ export type BlogCategory = "시세 분석" | "세금" | "미분양" | "도구 �
 
 export const POSTS: BlogPost[] = [
   {
+    slug: "transfer-tax-tool-guide",
+    title: "양도세 계산기 사용법 — 손님 30초 응대 워크플로",
+    description:
+      "1주택 12억 비과세·12억 초과 안분·단기 70%·중과 vs 한시배제·미등기 70%까지 손님 시나리오별 사용법. /tools/transfer-tax 6 분기 자동 판정을 1주택/다주택/단기/중과/미등기 H2 5개로 분리.",
+    date: "2026-05-08",
+    category: "도구 활용",
+    readingTime: 7,
+  },
+  {
     slug: "asking-vs-actual-price",
     title: "호가 vs 실거래가 — 손님 협상 카드 1장으로 5천만원 절약",
     description:

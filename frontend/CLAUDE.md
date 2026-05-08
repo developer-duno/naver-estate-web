@@ -230,13 +230,8 @@ components/
 | `/mibunyang/compare` | `getMbApartmentDetail()` x N + `getMbUnsoldHistory()` x N (17행 비교+레이더+막대+추이) | 동일 |
 
 ### 도구 5종 (/tools/*) — 모두 클라이언트 산식, BE 호출 없음
-| 페이지 | 라이브러리 | 핵심 |
-|--------|---------|-------------|
-| `/tools/brokerage-fee` | `lib/brokerage*.ts` | 시행규칙 별표1 4종 요율 + 부가세 |
-| `/tools/acquisition-tax` | `lib/acquisition-tax*.ts` | standard/multi-house/first-time/officetel/first-time-rejected 5분기 |
-| `/tools/area-converter` | inline | 평·㎡ 변환 |
-| `/tools/transfer-tax` | `lib/transfer-tax*.ts` | 1주택 비과세·단기·중과·미등기·한시배제 |
-| `/tools/property-tax` | `lib/property-tax*.ts` | 재산세+종부세+농특세 (B-1~B-5+법인9종+5종 특례주택) |
+
+> 상세 = `frontend/.claude/tools-lineup.md` §/tools 도구 5종 라인업 참조
 
 ### 인증·관리·마케팅·블로그
 | 페이지 | API 호출 | 백엔드 라우터 |

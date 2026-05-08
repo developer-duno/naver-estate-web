@@ -86,7 +86,7 @@
 - **엔진**: file-based SQLite + NullPool + WAL + busy_timeout 5초
 - **dialect 분기**: `_search_all_types()`는 SQLite에서 ThreadPoolExecutor 대신 순차 실행
   - `_do_upsert()`도 dialect-aware (pg_insert/sqlite_insert 자동 분기)
-- **테스트**: 579개 (47파일) — `python -m pytest --tb=short -q`
+- **테스트**: 루트 `CLAUDE.md` §테스트 현황 참조 (`python -m pytest --tb=short -q`)
 - **conftest.py**: `sys.modules["db.database"]` 교체로 테스트 엔진 주입
 
 ## CORS 미들웨어 순서 (중요)

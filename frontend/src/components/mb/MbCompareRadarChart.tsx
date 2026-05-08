@@ -77,7 +77,7 @@ interface Props {
 }
 
 export default function MbCompareRadarChart({ apartments }: Props) {
-  const { enabledAxes, weights, toggleAxis, setWeight, applyPreset } = useMbRadarSettings();
+  const { enabledAxes, weights, toggleAxis, setWeight, applyPreset, reset } = useMbRadarSettings();
 
   const activeAxes = useMemo(
     () => AXES.filter((a) => enabledAxes.has(a.key)),
@@ -194,6 +194,16 @@ export default function MbCompareRadarChart({ apartments }: Props) {
           ))}
         </div>
       </details>
+
+      {/* 가중치 초기화 — details 밖 (closed 상태에서도 노출) */}
+      <button
+        type="button"
+        onClick={reset}
+        className={`${BASE_CHIP} bg-gray-50 text-gray-600 border-gray-300 hover:bg-gray-100 cursor-pointer mt-1 mb-3 no-print`}
+        aria-label="가중치 초기화"
+      >
+        가중치 초기화
+      </button>
 
       {/* 레이더 차트 */}
       <ResponsiveContainer width="100%" height={RADAR_HEIGHT}>

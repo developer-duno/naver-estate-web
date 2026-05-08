@@ -52,6 +52,7 @@
 - 가중 점수: Σ(normalized×weight)/Σ(weight) → 0-100 스케일, "★ 종합 우위: 단지A (78점)"
 - 슬라이더: details 접이식 (기본 닫힘, 반응형 grid-cols-1/2/3)
 - 축 추가 대응: getMbRadarSettings에서 DEFAULT와 merge → 새 키 자동 기본값
+- 가중치 초기화: reset 함수로 가중치만 3 복원 (축 선택 유지), details 밖 회색 톤 button (closed 상태에서도 노출)
 
 ## 미분양 비교 히스토리 + 북마크
 - 비교 히스토리: useMbCompareHistory (localStorage, 최대 10개, 비교 진입 시 자동 저장)

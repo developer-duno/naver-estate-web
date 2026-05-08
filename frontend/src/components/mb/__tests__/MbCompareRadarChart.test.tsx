@@ -149,4 +149,23 @@ describe("MbCompareRadarChart", () => {
     render(<MbCompareRadarChart apartments={apts} />);
     expect(screen.getByText("프리셋:")).toBeInTheDocument();
   });
+
+  /** reset 버튼: 가중치 변경 후 클릭 → 가중치 표시 3 으로 복원 */
+  it("가중치 초기화 버튼 클릭 시 가중치 표시가 3으로 복원된다", () => {
+    const apts = [makeApt({ id: "A", name: "단지A" }), makeApt({ id: "B", name: "단지B" })];
+    render(<MbCompareRadarChart apartments={apts} />);
+
+    // 슬라이더(units 축) 가중치 5 로 변경
+    const sliders = screen.getAllByRole("slider");
+    expect(sliders.length).toBeGreaterThan(0);
+    fireEvent.change(sliders[0], { target: { value: "5" } });
+    expect((sliders[0] as HTMLInputElement).value).toBe("5");
+
+    // 가중치 초기화 버튼 클릭
+    const resetBtn = screen.getByRole("button", { name: "가중치 초기화" });
+    fireEvent.click(resetBtn);
+
+    // 슬라이더 가중치 3 복원 단언
+    expect((sliders[0] as HTMLInputElement).value).toBe("3");
+  });
 });

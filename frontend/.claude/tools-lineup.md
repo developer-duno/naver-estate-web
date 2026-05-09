@@ -19,7 +19,7 @@
 - 1열 스택 레이아웃 (max-w-4xl), 7개 하위 컴포넌트 (`components/article/`)
 - 아코디언: 시세/경쟁매물/관리비 카드 3종 (접기 기본)
 - 인쇄 최적화: @media print position:static, 아코디언 자동 펼침
-- 메모/즐겨찾기: ArticleNoteButton + ArticleFavoriteButton (헤더 통합, no-print)
+- 즐겨찾기: ArticleFavoriteButton (헤더 통합, no-print)
 
 ## 모바일 반응형
 

@@ -22,8 +22,6 @@
 | `useMbCompareHistory` | 미분양 비교 히스토리 (localStorage, 최대 10개, 자동 저장, ids 정렬 중복 제거) |
 | `useMbCompareBookmarks` | 미분양 비교 북마크 (localStorage, 최대 20개, 수동 저장, 이름 지정, isBookmarked) |
 | `useMbRadarSettings` | 레이더 차트 설정 영속화 (localStorage, 축 선택+가중치 1-5, toggleAxis/setWeight/applyPreset/reset) |
-| `useComplexNote` | 단지 메모 (localStorage, 단지당 500자, 1000개 한도 자동 정리) |
-| `useArticleNote` | 매물 메모 (localStorage, 매물당 500자, 1000개 한도 자동 정리) |
 | `useArticleFavorites` | 매물 즐겨찾기 (localStorage, useArticleFavoriteStatus 포함, 무제한 토글) |
 
 ## FilterBar 구조 (모듈 분리)

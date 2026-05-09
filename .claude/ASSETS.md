@@ -104,7 +104,7 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 | 시군구·읍면동 한국어 | `backend/shared/constants.py` `KOREA_REGIONS` | 288줄, 자동완성/검색 (수정 금지) |
 | 거래 코드 (A1·B1·B2·B3) | `.claude/rules/codes.md` | 매매·전세·월세·단기임대 |
 | 매물 코드 (APT·OPST 등 7종) | `.claude/rules/codes.md` | 아파트·오피스텔·재건축 등 |
-| localStorage 키 (12개) | `.claude/rules/codes.md` | search_history / favorite_complexes / complex_notes 등 |
+| localStorage 키 (10개) | `.claude/rules/codes.md` | search_history / favorite_complexes / mb_favorites 등 |
 | 핵심 상수 | `backend/shared/constants.py` (수정 금지) | M2_TO_PYEONG=3.3058 / TTL / Naver API URL |
 | Naver API URL | `backend/shared/constants.py` `NAVER_LAND_BASE` | new.land.naver.com (수정 금지) |
 | 종부세 BRACKETS (한국어 정의) | `frontend/src/lib/property-tax-brackets.ts` | 재산세 4 + 종부세 7 + 법인 단일세율 |

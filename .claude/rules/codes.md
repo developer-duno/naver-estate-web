@@ -43,6 +43,4 @@
 | `mb_compare_history` | 미분양 비교 히스토리    | 최대 10개, 자동 저장, ids 정렬 중복 제거 |
 | `mb_compare_bookmarks` | 미분양 비교 북마크    | 최대 20개, 수동 저장, 이름 지정 가능 |
 | `mb_radar_settings`  | 레이더 축 선택+가중치  | 축 13개, 가중치 1-5, 프리셋 3종 |
-| `complex_notes`      | 단지별 손님 응대 메모   | 단지당 500자, 1000개, 자동 정리 |
-| `article_notes`      | 매물별 손님 응대 메모   | 매물당 500자, 1000개, 자동 정리 |
 | `favorite_articles`  | 매물 즐겨찾기           | 무제한, 토글 방식 |

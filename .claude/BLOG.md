@@ -1,9 +1,9 @@
 # Blog 라인업 — `/blog` MDX 박제 (단일 진실 공급원)
 
-> 15편 발행 (draft 0편). posts.ts BlogCategory 4종 = 시세 분석 / 세금 / 도구 활용 / 미분양.
+> 14편 발행 (draft 0편). posts.ts BlogCategory 4종 = 시세 분석 / 세금 / 도구 활용 / 미분양.
 > 새 글 발행 시 본 파일 표 1행 + 발행일 git log 실측 동시 갱신 의무.
 
-## 발행 글 15편 (BlogCategory 4종)
+## 발행 글 14편 (BlogCategory 4종)
 
 ### 시세 분석 (3편)
 
@@ -21,7 +21,7 @@
 | `transfer-tax-guide` | 양도소득세 계산기 출시 — 13 필드·6 분기 자동 판정 | 2026-05-03 |
 | `property-tax-guide` | 보유세 계산기 출시 — 재산세 + 종부세 5 필드 4 분기 자동 판정 | 2026-05-03 |
 
-### 도구 활용 (7편)
+### 도구 활용 (6편)
 
 | slug | 제목 | 발행일 |
 |---|---|---|
@@ -30,7 +30,6 @@
 | `acquisition-tax-tool-guide` | 취득세 계산기 사용법 — 손님 30초 응대 워크플로 | 2026-05-08 |
 | `transfer-tax-tool-guide` | 양도세 계산기 사용법 — 손님 30초 응대 워크플로 | 2026-05-08 |
 | `property-tax-tool-guide` | 보유세 계산기 사용법 — 손님 30초 응대 워크플로 | 2026-05-08 |
-| `article-notes-workflow` | 매물 메모로 손님 응대 30초 단축 — 매물 단위 CRM 워크플로 | 2026-05-08 |
 | `agent-verification-guide` | 공인중개사 인증 5분 가이드 — B2B 구독 가입 첫 단계 | 2026-05-09 |
 
 ### 미분양 (2편)
@@ -45,7 +44,7 @@
 - **MDX dynamic import**: `@/content/blog/${slug}.mdx`
 - **generateStaticParams** + **dynamicParams=false** (Next 16 정석)
 - **mdx-components.tsx** 14종 매핑 (img→next/Image 강제, 외부 a→target=\_blank rel=noopener)
-- **draft 미사용** = 15편 전부 발행 (영구 제외 박제: "draft N편" 표현 금지)
+- **draft 미사용** = 14편 전부 발행 (영구 제외 박제: "draft N편" 표현 금지)
 
 ## 새 글 발행 4단 절차 (의무)
 
@@ -65,7 +64,7 @@
 
 - 시세 분석 4편째: 평당가 비교 워크플로 / 호가 변동 추이 / 매수 타이밍 신호
 - 세금 4편째: 종부세 합산배제 가이드 / 부부 공동명의 절세 전략 / 임대주택 세제 혜택
-- 도구 활용 8편째: 단지 메모 활용법 / 검색 히스토리 활용 / 인쇄·엑셀 내보내기 노하우
+- 도구 활용 7편째: 검색 히스토리 활용 / 인쇄·엑셀 내보내기 노하우
 - 미분양 3편째: 미분양 추이 차트 활용 / 분양가 비교 / 즐겨찾기 일괄 비교
 
 ## 회귀 가드 (영구 제외 박제 답습)

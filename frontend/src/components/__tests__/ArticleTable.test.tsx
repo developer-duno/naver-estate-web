@@ -84,21 +84,11 @@ describe("ArticleTable — 추가", () => {
     expect(screen.getByText(/데이터 갱신/)).toBeInTheDocument();
   });
 
-  // B-1 Phase 1: 액션 열 (메모/즐겨찾기) 회귀 가드
-  describe("B-1 액션 열 — 메모·즐겨찾기 버튼", () => {
-    it("액션 헤더 + 메모(📄) + 즐겨찾기(☆) 버튼 렌더링", () => {
+  // B-1 Phase 1: 액션 열 (즐겨찾기) 회귀 가드 (메모 폐기 후 즐겨찾기 단독)
+  describe("B-1 액션 열 — 즐겨찾기 버튼", () => {
+    it("즐겨찾기(☆) 버튼 렌더링", () => {
       render(<ArticleTable articles={[sampleArticle]} />);
-      expect(screen.getByLabelText("메모/즐겨찾기 액션")).toBeInTheDocument();
-      expect(screen.getByLabelText("매물 메모 추가")).toBeInTheDocument();
       expect(screen.getByLabelText("매물 즐겨찾기 추가")).toBeInTheDocument();
-    });
-
-    it("메모 버튼 클릭 → 모달 진입 + 행 onClick 차단 (stopPropagation)", () => {
-      const onRow = vi.fn();
-      render(<ArticleTable articles={[sampleArticle]} onRowClick={onRow} />);
-      fireEvent.click(screen.getByLabelText("매물 메모 추가"));
-      expect(screen.getByRole("dialog", { name: "매물 메모" })).toBeInTheDocument();
-      expect(onRow).not.toHaveBeenCalled();
     });
 
     it("즐겨찾기 클릭 → ★ + 행 onClick 차단", () => {

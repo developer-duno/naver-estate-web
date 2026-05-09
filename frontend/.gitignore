@@ -48,4 +48,7 @@ playwright-report/
 e2e/.auth/
 e2e/**/*-win32.png
 
+# blog-hero raw 원본 (변환 전 jpg/png) — webp 만 git 추적
+public/blog-hero/raw/
+
 .vercel

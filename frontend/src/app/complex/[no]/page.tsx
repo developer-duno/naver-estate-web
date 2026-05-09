@@ -28,7 +28,6 @@ import ArticleDetail from "@/components/ArticleDetail";
 import Pagination from "@/components/Pagination";
 import HintIcon from "@/components/HintIcon";
 import CrawlProgressBanner from "@/components/CrawlProgressBanner";
-import ComplexNoteButton from "@/components/ComplexNoteButton";
 
 function formatTimeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -269,7 +268,6 @@ export default function ComplexDetailPage() {
         >
           {starred ? "\u2605" : "\u2606"}
         </button>
-        <ComplexNoteButton complexNo={complexNo} />
         {complex.real_estate_type_name && (
           <span className={`text-xs px-1.5 py-0.5 rounded border ${ESTATE_TYPE_COLORS[complex.real_estate_type_name] ?? ESTATE_TYPE_DEFAULT_COLOR}`}>
             {complex.real_estate_type_name}

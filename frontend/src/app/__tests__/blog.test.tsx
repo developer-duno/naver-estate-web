@@ -11,7 +11,7 @@ import BlogIndexPage from "../blog/page";
 import { POSTS, getPostBySlug } from "../blog/posts";
 
 describe("/blog 목록 페이지", () => {
-  it("Hero 제목과 14편 카드가 모두 렌더된다", () => {
+  it("Hero 제목과 15편 카드가 모두 렌더된다", () => {
     const { container } = render(<BlogIndexPage />);
     expect(screen.getByRole("heading", { name: /부동산 인사이트/, level: 1 })).toBeInTheDocument();
     // 모든 글 제목이 카드에 표시
@@ -46,13 +46,14 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 14편 (전체)", () => {
-    expect(POSTS.length).toBe(14);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 15편 (전체)", () => {
+    expect(POSTS.length).toBe(15);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(14);
+    expect(new Set(slugs).size).toBe(15);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
       "acquisition-tax-tool-guide",
+      "agent-verification-guide",
       "article-notes-workflow",
       "asking-vs-actual-price",
       "compare-workflow",
@@ -157,6 +158,15 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.title).toContain("레이더");
     expect(post?.description).toMatch(/13축|가중치|프리셋|78점|성향/);
     expect(post?.category).toBe("미분양");
+  });
+
+  it("agent-verification-guide 메타 — 도구 활용 카테고리, 인증 워크플로 키워드", () => {
+    const post = getPostBySlug("agent-verification-guide");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("공인중개사 인증");
+    expect(post?.description).toMatch(/사업자등록|자격증|JPG|상태 4|전문가/);
+    expect(post?.category).toBe("도구 활용");
   });
 
   it("getPostBySlug — 존재 slug 반환, 미존재 slug 는 undefined", () => {

@@ -137,6 +137,15 @@ export const POSTS: BlogPost[] = [
     category: "도구 활용",
     readingTime: 7,
   },
+  {
+    slug: "agent-verification-guide",
+    title: "공인중개사 인증 5분 가이드 — B2B 구독 가입 첫 단계",
+    description:
+      "사업자등록 자동 검증 + 자격증 업로드 (JPG/PNG/PDF 5MB) + 상태 4 분기 (대기·승인·거부·자동승인). 인증 후 전문가 뱃지·7일 무료 체험·고급 기능 잠금 해제까지 손님 funnel 정리.",
+    date: "2026-05-09",
+    category: "도구 활용",
+    readingTime: 6,
+  },
 ];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {

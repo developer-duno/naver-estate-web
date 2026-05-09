@@ -18,7 +18,7 @@
 frontend/src/
 ├── app/           # Next.js App Router (28 페이지, mibunyang/* + tools/* 5종 + admin/* + blog/* 포함)
 ├── components/    # 재사용 컴포넌트 (admin/30 + filter/4 + mb/23 + article/7 + 루트 41 + 그 외 = 141 TSX)
-├── hooks/         # 커스텀 훅 (21개, useLocalStorageList + useLocalStorageFavorites 제네릭 훅 포함)
+├── hooks/         # 커스텀 훅 (19개, useLocalStorageList + useLocalStorageFavorites 제네릭 훅 포함)
 ├── lib/           # 40개 (api/ 7모듈 + storage/ + format/ + query-keys/ + 도구별 lib(brokerage·acquisition·transfer·property-tax 등))
 ├── types/         # TypeScript 인터페이스 (estate + Mb* 10개 + naver-maps.d.ts)
 ├── content/blog/  # MDX 14편 (.claude/BLOG.md SSOT 참조)
@@ -29,7 +29,7 @@ frontend/src/
 
 | 토픽 파일 | 내용 |
 |---|---|
-| `frontend/.claude/hooks-and-state.md` | 커스텀 훅 21표 + FilterBar 구조 |
+| `frontend/.claude/hooks-and-state.md` | 커스텀 훅 19표 + FilterBar 구조 |
 | `frontend/.claude/ui-patterns.md` | UI 패턴 8 하위 (FilterBar / 뱃지 / 차트 / RegionSelector / 비교 / 레이더 / 히스토리·북마크 / 즐겨찾기) |
 | `frontend/.claude/pages-and-mb.md` | 페이지별 데이터 흐름 28 페이지 + 미분양 컴포넌트 + URL 상태 관리 |
 | `frontend/.claude/tools-lineup.md` | /tools 도구 5종 라인업 + 매물 상세 모달 + 모바일 반응형 + 코드 구조 |

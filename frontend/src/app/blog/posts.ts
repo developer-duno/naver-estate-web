@@ -57,15 +57,6 @@ export const POSTS: BlogPost[] = [
     readingTime: 7,
   },
   {
-    slug: "article-notes-workflow",
-    title: "매물 메모로 손님 응대 30초 단축 — 매물 단위 CRM 워크플로",
-    description:
-      "매물별 손님 메모 500자 + ★ 즐겨찾기로 같은 단지 다른 매물도 손님 컨텍스트 복원. 데스크톱·모바일·매물 상세 모달 3 진입점, localStorage 영속, 1000개 자동 정리.",
-    date: "2026-05-08",
-    category: "도구 활용",
-    readingTime: 6,
-  },
-  {
     slug: "jeonse-ratio",
     title: "전세가율 계산법과 활용 — 공인중개사 실무 가이드",
     description:

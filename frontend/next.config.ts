@@ -24,6 +24,12 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "**.pstatic.net" },
     ],
   },
+  async redirects() {
+    return [
+      // 메모 기능 폐기 (세션 132) — 외부 색인 영구 리다이렉트
+      { source: "/blog/article-notes-workflow", destination: "/blog", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {

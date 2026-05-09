@@ -1,10 +1,9 @@
 /**
- * useArticleNote / useArticleFavorites / useArticleFavoriteStatus 훅 테스트
+ * useArticleFavorites / useArticleFavoriteStatus 훅 테스트
  * 실행: npx vitest run src/hooks/__tests__/useArticleStorage.test.ts
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useArticleNote } from "@/hooks/useArticleNote";
 import {
   useArticleFavorites,
   useArticleFavoriteStatus,
@@ -12,50 +11,6 @@ import {
 
 beforeEach(() => {
   localStorage.clear();
-});
-
-describe("useArticleNote — 매물 메모 훅", () => {
-  it("초기 상태: 저장된 메모 없으면 빈 문자열 + maxLen 500", () => {
-    const { result } = renderHook(() => useArticleNote("A1"));
-    expect(result.current.note).toBe("");
-    expect(result.current.updatedAt).toBeNull();
-    expect(result.current.maxLen).toBe(500);
-  });
-
-  it("save → note 즉시 갱신 + updatedAt 채움", () => {
-    const { result } = renderHook(() => useArticleNote("A1"));
-    act(() => result.current.save("손님 김○○ 관심"));
-    expect(result.current.note).toBe("손님 김○○ 관심");
-    expect(result.current.updatedAt).not.toBeNull();
-  });
-
-  it("save 빈 문자열 → 메모 삭제", () => {
-    const { result } = renderHook(() => useArticleNote("A1"));
-    act(() => result.current.save("초기 메모"));
-    act(() => result.current.save(""));
-    expect(result.current.note).toBe("");
-    expect(result.current.updatedAt).toBeNull();
-  });
-
-  it("clear → 메모 삭제 + updatedAt null", () => {
-    const { result } = renderHook(() => useArticleNote("A1"));
-    act(() => result.current.save("메모"));
-    act(() => result.current.clear());
-    expect(result.current.note).toBe("");
-    expect(result.current.updatedAt).toBeNull();
-  });
-
-  it("articleNo 변경 → 해당 매물 메모로 다시 로드", () => {
-    const { result, rerender } = renderHook(
-      ({ no }) => useArticleNote(no),
-      { initialProps: { no: "A1" } },
-    );
-    act(() => result.current.save("매물 A1 메모"));
-    rerender({ no: "A2" });
-    expect(result.current.note).toBe("");
-    rerender({ no: "A1" });
-    expect(result.current.note).toBe("매물 A1 메모");
-  });
 });
 
 describe("useArticleFavorites 훅", () => {

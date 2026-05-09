@@ -10,6 +10,13 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-noto-serif-kr);
+
+  /* premium editorial palette (세션 132 Phase 2-1a) */
+  --color-editorial-bg: #f5f1eb;
+  --color-editorial-ink: #1f2937;
+  --color-editorial-navy: #1e3a5f;
+  --color-editorial-gold: #b89968;
 }
 
 /* 다크 모드 비활성화 — 라이트 모드 고정 */

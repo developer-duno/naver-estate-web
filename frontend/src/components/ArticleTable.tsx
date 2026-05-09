@@ -6,7 +6,6 @@ import { M2_TO_PYEONG, TRADE_TYPE_COLORS, TRADE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_
 import { formatDateShort, formatMaintenanceCost } from "@/lib/format";
 import { COLUMNS, SERVER_SORT_MAP, getColumnValue } from "@/components/articleTableColumns";
 import SortableHeader, { type SortState } from "@/components/SortableHeader";
-import ArticleNoteButton from "@/components/ArticleNoteButton";
 import ArticleFavoriteButton from "@/components/ArticleFavoriteButton";
 
 // -- Main Component --
@@ -172,7 +171,6 @@ const ArticleRow = memo(function ArticleRow({ article: art, index, onClick, sele
         </td>
       )}
       <td className="px-2 py-1.5 text-center border-r border-gray-100 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-        <ArticleNoteButton articleNo={art.article_no} />
         <span className="ml-1">
           <ArticleFavoriteButton
             articleNo={art.article_no}

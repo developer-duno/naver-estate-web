@@ -4,7 +4,6 @@ import { memo } from "react";
 import type { Article } from "@/types";
 import { M2_TO_PYEONG, TRADE_TYPE_COLORS, TRADE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
 import { formatMaintenanceCost } from "@/lib/format";
-import ArticleNoteButton from "@/components/ArticleNoteButton";
 import ArticleFavoriteButton from "@/components/ArticleFavoriteButton";
 
 interface Props {
@@ -95,10 +94,6 @@ const ArticleCardItem = memo(function ArticleCardItem({ article: art, onClick, s
       className="relative bg-white rounded-lg shadow-sm border p-3 pr-10 cursor-pointer hover:bg-blue-50 active:bg-blue-100 transition-colors"
       onClick={() => onClick?.(art.article_no)}
     >
-      {/* B-1 우상단 절대 위치 액션: 메모(📝) — 카드 글로벌 액션 (가격 가변폭과 분리) */}
-      <span className="absolute top-2 right-2" onClick={(e) => e.stopPropagation()}>
-        <ArticleNoteButton articleNo={art.article_no} />
-      </span>
       {/* 1행: 체크+거래유형+가격+가격변동+즐겨찾기★ */}
       <div className="flex items-center gap-2">
         {onCheck && (

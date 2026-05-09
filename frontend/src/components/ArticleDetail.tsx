@@ -14,7 +14,6 @@ import InfoCards from "@/components/article/InfoCards";
 import MaintenanceCost from "@/components/article/MaintenanceCost";
 import ArticleDescription from "@/components/article/ArticleDescription";
 import PriceHistoryTable from "@/components/article/PriceHistoryTable";
-import ArticleNoteButton from "@/components/ArticleNoteButton";
 import ArticleFavoriteButton from "@/components/ArticleFavoriteButton";
 
 interface Props {
@@ -80,7 +79,6 @@ export default function ArticleDetail({ articleNo, onClose, complex }: Props) {
                   tradeTypeName={article.trade_type_name}
                   price={article.deal_or_warrant_prc}
                 />
-                <ArticleNoteButton articleNo={articleNo} />
               </>
             )}
             <button onClick={onClose} aria-label="닫기" className="text-gray-400 hover:text-gray-600 text-xl">×</button>

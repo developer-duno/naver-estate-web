@@ -54,4 +54,33 @@ describe("check-ad-compliance.scan()", () => {
     const hits = await scan([FIXTURE]);
     expect(hits).toEqual([]);
   });
+
+  it("'확정합니다' / '확정했습니다' 단정 종결형 검출", async () => {
+    const file = join(FIXTURE, "risky-confirm.mdx");
+    await writeFile(
+      file,
+      [
+        "산식을 100% 확정합니다.",
+        "다출처로 검증을 확정했습니다.",
+      ].join("\n"),
+    );
+    const hits = await scan([FIXTURE]);
+    const words = hits.map((h) => h.word).sort();
+    expect(words).toContain("확정합니다");
+    expect(words).toContain("확정했습니다");
+  });
+
+  it("WHITELIST '확정하시기 바랍니다' / '확정 신고' / '확정 일자' 면책·법률 용어 보존", async () => {
+    const file = join(FIXTURE, "whitelist-confirm.mdx");
+    await writeFile(
+      file,
+      [
+        "정확한 세액은 세무사 상담을 거쳐 확정하시기 바랍니다.",
+        "양도소득세 확정 신고 기한은 5월 31일입니다.",
+        "전세권 확정 일자 발급 절차 안내.",
+      ].join("\n"),
+    );
+    const hits = await scan([FIXTURE]);
+    expect(hits).toEqual([]);
+  });
 });

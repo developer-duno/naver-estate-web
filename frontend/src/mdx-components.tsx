@@ -1,8 +1,10 @@
 import type { MDXComponents } from "mdx/types";
 import Image from "next/image";
 import Link from "next/link";
+import BlogFigure from "@/components/blog/BlogFigure";
 
 const components: MDXComponents = {
+  BlogFigure,
   h1: ({ children }) => (
     <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2 mb-4 leading-tight">{children}</h1>
   ),

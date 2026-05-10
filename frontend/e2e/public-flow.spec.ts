@@ -20,7 +20,7 @@ test.describe("public visual regression", () => {
     await applyPublicMocks(page);
     await page.goto("/");
 
-    await expect(page.getByRole("heading", { name: /매물 조회/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /공인중개사.*분석 도구/ })).toBeVisible();
     await expect(page.getByText("단지", { exact: true })).toBeVisible();
     await expect(page.getByText("매물", { exact: true })).toBeVisible();
 

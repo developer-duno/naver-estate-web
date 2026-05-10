@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Serif_KR } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Providers from "@/components/Providers";
 import { WebSiteJsonLd } from "@/components/StructuredData";
@@ -104,6 +105,7 @@ export default function RootLayout({
           <ErrorBoundary>
             <main id="main-content">{children}</main>
           </ErrorBoundary>
+          <Footer />
         </Providers>
       </body>
     </html>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { POSTS, getPostBySlug } from "../posts";
 import Article from "./Article";
+import { getHeroAsset } from "@/lib/blog-hero";
 
 export const dynamicParams = false;
 
@@ -17,6 +18,7 @@ export async function generateMetadata({
   const { slug } = await params;
   const post = getPostBySlug(slug);
   if (!post) return {};
+  const heroAsset = getHeroAsset(post);
   return {
     title: post.title,
     description: post.description,
@@ -26,6 +28,14 @@ export async function generateMetadata({
       description: post.description,
       type: "article",
       publishedTime: post.date,
+      images: [
+        {
+          url: heroAsset,
+          width: 1200,
+          height: 630,
+          alt: post.title,
+        },
+      ],
     },
     robots: post.draft ? { index: false, follow: true } : undefined,
   };

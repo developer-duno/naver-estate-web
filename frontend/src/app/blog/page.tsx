@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { POSTS } from "./posts";
 import PostCard from "./PostCard";
+import BlogHero from "@/components/blog/BlogHero";
 
 export const metadata: Metadata = {
   title: "블로그 — 공인중개사를 위한 인사이트",
@@ -13,13 +14,21 @@ export const metadata: Metadata = {
     description:
       "전세가율·시세 분석·미분양·매물 조회 노하우. 공인중개사 실무에 바로 쓰는 글 모음.",
     type: "website",
+    images: [
+      {
+        url: "/blog-hero/og-blog.svg",
+        width: 1200,
+        height: 630,
+        alt: "2u부동산 블로그",
+      },
+    ],
   },
 };
 
 export default function BlogIndexPage() {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
-      <section className="text-center mb-10 sm:mb-14">
+      <section className="text-center mb-8 sm:mb-10">
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 leading-tight mb-3">
           공인중개사를 위한
           <br className="sm:hidden" />
@@ -30,8 +39,22 @@ export default function BlogIndexPage() {
         </p>
       </section>
 
+      {POSTS[0] && (
+        <section className="mb-10 sm:mb-12">
+          <Link href={`/blog/${POSTS[0].slug}`} className="block group">
+            <BlogHero post={POSTS[0]} priority />
+            <h2 className="text-base sm:text-lg font-bold text-gray-900 group-hover:text-blue-700 transition leading-snug -mt-2">
+              {POSTS[0].title}
+            </h2>
+            <p className="text-xs sm:text-sm text-gray-600 mt-1 line-clamp-2">
+              {POSTS[0].description}
+            </p>
+          </Link>
+        </section>
+      )}
+
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-12">
-        {POSTS.map((post) => (
+        {POSTS.slice(1).map((post) => (
           <PostCard key={post.slug} post={post} />
         ))}
       </section>

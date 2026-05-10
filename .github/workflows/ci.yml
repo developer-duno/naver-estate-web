@@ -66,6 +66,9 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-key-for-ci-build
           NEXT_PUBLIC_API_URL: https://placeholder.railway.app
 
+      - name: Compliance
+        run: npm run check:ad-compliance
+
       - name: Test
         run: npm test
 

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "도움말 - 아파트·오피스텔 매물 조회",
-  description: "네이버 아파트·오피스텔 매물 조회 서비스 사용 가이드",
+  title: "도움말 - 공인중개사용 매물·시세 분석 도구",
+  description: "공인중개사를 위한 매물·시세 분석 도구 사용 가이드",
 };
 
 export default function HelpPage() {
@@ -11,7 +11,7 @@ export default function HelpPage() {
     <div className="max-w-3xl mx-auto px-4 py-10 space-y-10">
       <div className="text-center">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">사용 가이드</h1>
-        <p className="text-gray-500 text-sm">네이버 아파트·오피스텔 매물 조회 서비스를 효과적으로 활용하는 방법</p>
+        <p className="text-gray-500 text-sm">공인중개사를 위한 매물·시세 분석 도구를 효과적으로 활용하는 방법</p>
       </div>
 
       {/* 1. 검색 */}

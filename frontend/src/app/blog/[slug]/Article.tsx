@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { BlogPost } from "../posts";
+import BlogHero from "@/components/blog/BlogHero";
 
 const CATEGORY_COLOR: Record<string, string> = {
   "시세 분석": "bg-blue-100 text-blue-700",
@@ -30,6 +31,8 @@ export default function Article({
           ← 블로그 목록으로
         </Link>
       </nav>
+
+      <BlogHero post={post} priority />
 
       <header className="mb-8 pb-6 border-b border-gray-200">
         <div className="flex items-center gap-2 mb-3">

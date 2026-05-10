@@ -1,0 +1,249 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="즐겨찾기 별표에서 비교 화면까지 4단계로 미분양 상담 5분 워크플로를 시각화한 다이어그램">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FBF6EE"/>
+      <stop offset="100%" stop-color="#EDE0CC"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FAFAF7"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="20" flood-color="#1E3A5F" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <!-- 배경 -->
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+
+  <!-- 타이틀 -->
+  <text x="960" y="120"
+        font-family="'Noto Serif KR', serif"
+        font-size="56" font-weight="700" fill="#1F2937" text-anchor="middle" letter-spacing="-2">
+    공인중개사용 미분양 5분 워크플로
+  </text>
+  <rect x="900" y="145" width="120" height="3" fill="#B89968"/>
+  <text x="960" y="195"
+        font-family="'Pretendard', sans-serif"
+        font-size="22" fill="#6B7280" text-anchor="middle">
+    즐겨찾기 ★ → 200개 누적 → 4개 선택 → 17행 비교까지 한 흐름
+  </text>
+
+  <!-- ===================== STEP 1: ★ 즐겨찾기 표시 ===================== -->
+  <g transform="translate(60, 290)" filter="url(#shadow)">
+    <rect width="420" height="640" rx="20" fill="url(#card)" stroke="#E5E7EB"/>
+
+    <circle cx="60" cy="60" r="32" fill="#1E3A5F"/>
+    <text x="60" y="72" font-family="'Noto Serif KR', serif" font-size="32" font-weight="700"
+          fill="#FFFFFF" text-anchor="middle">1</text>
+    <text x="120" y="72"
+          font-family="'Pretendard', sans-serif"
+          font-size="26" font-weight="700" fill="#1F2937">★ 표시</text>
+
+    <text x="40" y="140"
+          font-family="'Pretendard', sans-serif"
+          font-size="14" fill="#6B7280">단지 탭에서 후보를 발견하면 별표 1번</text>
+
+    <!-- 단지 행 4개 (별표 토글) -->
+    <g font-family="'Pretendard', sans-serif">
+      <g transform="translate(40, 180)">
+        <rect width="340" height="78" rx="10" fill="#FFFFFF" stroke="#E5E7EB"/>
+        <text x="20" y="32" font-size="16" font-weight="700" fill="#1F2937">평택 푸르지오</text>
+        <text x="20" y="56" font-size="13" fill="#6B7280">분양가 4.8억 · 미분양 38호</text>
+        <text x="305" y="48" font-size="32" fill="#B89968" text-anchor="middle">★</text>
+      </g>
+      <g transform="translate(40, 270)">
+        <rect width="340" height="78" rx="10" fill="#FFFFFF" stroke="#E5E7EB"/>
+        <text x="20" y="32" font-size="16" font-weight="700" fill="#1F2937">화성 자이</text>
+        <text x="20" y="56" font-size="13" fill="#6B7280">분양가 5.2억 · 미분양 26호</text>
+        <text x="305" y="48" font-size="32" fill="#B89968" text-anchor="middle">★</text>
+      </g>
+      <g transform="translate(40, 360)">
+        <rect width="340" height="78" rx="10" fill="#FFFFFF" stroke="#E5E7EB"/>
+        <text x="20" y="32" font-size="16" font-weight="700" fill="#1F2937">청주 힐스테이트</text>
+        <text x="20" y="56" font-size="13" fill="#6B7280">분양가 3.9억 · 미분양 52호</text>
+        <text x="305" y="48" font-size="32" fill="#D1D5DB" text-anchor="middle">☆</text>
+      </g>
+      <g transform="translate(40, 450)">
+        <rect width="340" height="78" rx="10" fill="#FFFFFF" stroke="#E5E7EB"/>
+        <text x="20" y="32" font-size="16" font-weight="700" fill="#1F2937">대전 e편한세상</text>
+        <text x="20" y="56" font-size="13" fill="#6B7280">분양가 4.5억 · 미분양 19호</text>
+        <text x="305" y="48" font-size="32" fill="#B89968" text-anchor="middle">★</text>
+      </g>
+    </g>
+
+    <text x="210" y="600"
+          font-family="'Pretendard', sans-serif"
+          font-size="14" fill="#B89968" text-anchor="middle" font-weight="600" letter-spacing="2">상담 후보 모으기</text>
+  </g>
+
+  <!-- 화살표 1 → 2 -->
+  <g transform="translate(500, 610)">
+    <line x1="0" y1="0" x2="60" y2="0" stroke="#B89968" stroke-width="3"/>
+    <polygon points="60,-8 76,0 60,8" fill="#B89968"/>
+  </g>
+
+  <!-- ===================== STEP 2: 즐겨찾기 200개 누적 ===================== -->
+  <g transform="translate(600, 290)" filter="url(#shadow)">
+    <rect width="420" height="640" rx="20" fill="url(#card)" stroke="#E5E7EB"/>
+
+    <circle cx="60" cy="60" r="32" fill="#1E3A5F"/>
+    <text x="60" y="72" font-family="'Noto Serif KR', serif" font-size="32" font-weight="700"
+          fill="#FFFFFF" text-anchor="middle">2</text>
+    <text x="120" y="72"
+          font-family="'Pretendard', sans-serif"
+          font-size="26" font-weight="700" fill="#1F2937">즐겨찾기 탭</text>
+
+    <text x="40" y="140"
+          font-family="'Pretendard', sans-serif"
+          font-size="14" fill="#6B7280">최대 200개 · 추가일 / 단지명 / 지역 정렬</text>
+
+    <!-- 정렬 셀렉트 mockup -->
+    <g transform="translate(40, 170)">
+      <rect width="340" height="40" rx="8" fill="#F9FAFB" stroke="#D1D5DB"/>
+      <text x="16" y="26" font-family="'Pretendard', sans-serif" font-size="14" fill="#1F2937">추가일순 ↓</text>
+      <text x="320" y="26" font-family="'Pretendard', sans-serif" font-size="14" fill="#9CA3AF" text-anchor="end">▾</text>
+    </g>
+
+    <!-- 누적 통계 -->
+    <g transform="translate(40, 230)">
+      <rect width="340" height="120" rx="12" fill="#FBF6EE" stroke="#B89968" stroke-opacity="0.3"/>
+      <text x="170" y="44" font-family="'Noto Serif KR', serif" font-size="48" font-weight="700"
+            fill="#B89968" text-anchor="middle">132 / 200</text>
+      <text x="170" y="84" font-family="'Pretendard', sans-serif" font-size="14"
+            fill="#6B7280" text-anchor="middle">즐겨찾기 누적</text>
+      <rect x="60" y="98" width="220" height="6" rx="3" fill="#E5E7EB"/>
+      <rect x="60" y="98" width="145" height="6" rx="3" fill="#B89968"/>
+    </g>
+
+    <!-- 단지 행 (체크박스 미선택) -->
+    <g font-family="'Pretendard', sans-serif" transform="translate(40, 370)">
+      <g transform="translate(0, 0)">
+        <rect width="340" height="48" rx="8" fill="#FFFFFF" stroke="#E5E7EB"/>
+        <rect x="14" y="14" width="20" height="20" rx="4" fill="#FFFFFF" stroke="#D1D5DB"/>
+        <text x="48" y="30" font-size="14" font-weight="600" fill="#1F2937">평택 푸르지오</text>
+        <text x="320" y="30" font-size="11" fill="#9CA3AF" text-anchor="end">3일 전</text>
+      </g>
+      <g transform="translate(0, 56)">
+        <rect width="340" height="48" rx="8" fill="#FFFFFF" stroke="#E5E7EB"/>
+        <rect x="14" y="14" width="20" height="20" rx="4" fill="#FFFFFF" stroke="#D1D5DB"/>
+        <text x="48" y="30" font-size="14" font-weight="600" fill="#1F2937">화성 자이</text>
+        <text x="320" y="30" font-size="11" fill="#9CA3AF" text-anchor="end">5일 전</text>
+      </g>
+      <g transform="translate(0, 112)">
+        <rect width="340" height="48" rx="8" fill="#FFFFFF" stroke="#E5E7EB"/>
+        <rect x="14" y="14" width="20" height="20" rx="4" fill="#FFFFFF" stroke="#D1D5DB"/>
+        <text x="48" y="30" font-size="14" font-weight="600" fill="#1F2937">대전 e편한세상</text>
+        <text x="320" y="30" font-size="11" fill="#9CA3AF" text-anchor="end">1주 전</text>
+      </g>
+    </g>
+
+    <text x="210" y="600"
+          font-family="'Pretendard', sans-serif"
+          font-size="14" fill="#B89968" text-anchor="middle" font-weight="600" letter-spacing="2">상담 회차마다 누적</text>
+  </g>
+
+  <!-- 화살표 2 → 3 -->
+  <g transform="translate(1040, 610)">
+    <line x1="0" y1="0" x2="60" y2="0" stroke="#B89968" stroke-width="3"/>
+    <polygon points="60,-8 76,0 60,8" fill="#B89968"/>
+  </g>
+
+  <!-- ===================== STEP 3: 4개 체크박스 선택 ===================== -->
+  <g transform="translate(1140, 290)" filter="url(#shadow)">
+    <rect width="420" height="640" rx="20" fill="url(#card)" stroke="#E5E7EB"/>
+
+    <circle cx="60" cy="60" r="32" fill="#1E3A5F"/>
+    <text x="60" y="72" font-family="'Noto Serif KR', serif" font-size="32" font-weight="700"
+          fill="#FFFFFF" text-anchor="middle">3</text>
+    <text x="120" y="72"
+          font-family="'Pretendard', sans-serif"
+          font-size="26" font-weight="700" fill="#1F2937">4개 선택</text>
+
+    <text x="40" y="140"
+          font-family="'Pretendard', sans-serif"
+          font-size="14" fill="#6B7280">손님 후보 4개 체크 → 선택 비교 버튼</text>
+
+    <!-- 단지 행 4개 (체크박스 ✓ 선택) -->
+    <g font-family="'Pretendard', sans-serif" transform="translate(40, 180)">
+      <g transform="translate(0, 0)">
+        <rect width="340" height="66" rx="8" fill="#FBF6EE" stroke="#B89968"/>
+        <rect x="14" y="22" width="22" height="22" rx="4" fill="#B89968" stroke="#B89968"/>
+        <polyline points="20,32 24,38 32,28" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="50" y="30" font-size="15" font-weight="700" fill="#1F2937">평택 푸르지오</text>
+        <text x="50" y="52" font-size="12" fill="#6B7280">4.8억 · 38호</text>
+      </g>
+      <g transform="translate(0, 80)">
+        <rect width="340" height="66" rx="8" fill="#FBF6EE" stroke="#B89968"/>
+        <rect x="14" y="22" width="22" height="22" rx="4" fill="#B89968" stroke="#B89968"/>
+        <polyline points="20,32 24,38 32,28" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="50" y="30" font-size="15" font-weight="700" fill="#1F2937">화성 자이</text>
+        <text x="50" y="52" font-size="12" fill="#6B7280">5.2억 · 26호</text>
+      </g>
+      <g transform="translate(0, 160)">
+        <rect width="340" height="66" rx="8" fill="#FBF6EE" stroke="#B89968"/>
+        <rect x="14" y="22" width="22" height="22" rx="4" fill="#B89968" stroke="#B89968"/>
+        <polyline points="20,32 24,38 32,28" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="50" y="30" font-size="15" font-weight="700" fill="#1F2937">청주 힐스테이트</text>
+        <text x="50" y="52" font-size="12" fill="#6B7280">3.9억 · 52호</text>
+      </g>
+      <g transform="translate(0, 240)">
+        <rect width="340" height="66" rx="8" fill="#FBF6EE" stroke="#B89968"/>
+        <rect x="14" y="22" width="22" height="22" rx="4" fill="#B89968" stroke="#B89968"/>
+        <polyline points="20,32 24,38 32,28" stroke="#FFFFFF" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="50" y="30" font-size="15" font-weight="700" fill="#1F2937">대전 e편한세상</text>
+        <text x="50" y="52" font-size="12" fill="#6B7280">4.5억 · 19호</text>
+      </g>
+    </g>
+
+    <!-- 선택 비교 버튼 -->
+    <g transform="translate(40, 470)">
+      <rect width="340" height="56" rx="12" fill="#1E3A5F"/>
+      <text x="170" y="35"
+            font-family="'Pretendard', sans-serif"
+            font-size="18" font-weight="700" fill="#FFFFFF" text-anchor="middle">선택 비교 (4/4) →</text>
+    </g>
+
+    <text x="210" y="600"
+          font-family="'Pretendard', sans-serif"
+          font-size="14" fill="#B89968" text-anchor="middle" font-weight="600" letter-spacing="2">최대 4개</text>
+  </g>
+
+  <!-- 화살표 3 → 4 (아래쪽 비교 박스 향함) -->
+  <g transform="translate(580, 945)">
+    <line x1="0" y1="0" x2="760" y2="0" stroke="#B89968" stroke-width="3" stroke-dasharray="6,6"/>
+  </g>
+
+  <!-- ===================== STEP 4: /compare 17행 + 레이더 결과 ===================== -->
+  <g transform="translate(540, 960)">
+    <rect width="840" height="110" rx="16" fill="url(#card)" stroke="#B89968" stroke-width="2" filter="url(#shadow)"/>
+
+    <circle cx="50" cy="55" r="26" fill="#B89968"/>
+    <text x="50" y="65" font-family="'Noto Serif KR', serif" font-size="26" font-weight="700"
+          fill="#FFFFFF" text-anchor="middle">4</text>
+
+    <text x="100" y="46"
+          font-family="'Pretendard', sans-serif"
+          font-size="20" font-weight="700" fill="#1F2937">/mibunyang/compare</text>
+    <text x="100" y="74"
+          font-family="'Pretendard', sans-serif"
+          font-size="14" fill="#6B7280">17행 우위 표 + 13축 레이더 + 미분양 추이 차트 + ☆ 저장 북마크 20개</text>
+
+    <!-- 미니어처 아이콘 3 -->
+    <g transform="translate(560, 30)">
+      <rect x="0"   y="0" width="60" height="50" rx="6" fill="#FBF6EE" stroke="#B89968" stroke-opacity="0.4"/>
+      <line x1="10" y1="14" x2="50" y2="14" stroke="#B89968" stroke-width="2"/>
+      <line x1="10" y1="25" x2="50" y2="25" stroke="#1E3A5F" stroke-opacity="0.4" stroke-width="2"/>
+      <line x1="10" y1="36" x2="50" y2="36" stroke="#1E3A5F" stroke-opacity="0.4" stroke-width="2"/>
+      <text x="30" y="64" font-family="'Pretendard', sans-serif" font-size="10" fill="#6B7280" text-anchor="middle">17행</text>
+
+      <rect x="80"  y="0" width="60" height="50" rx="6" fill="#FBF6EE" stroke="#B89968" stroke-opacity="0.4"/>
+      <polygon points="110,8 130,22 124,42 96,42 90,22" fill="#B89968" fill-opacity="0.3" stroke="#B89968"/>
+      <text x="110" y="64" font-family="'Pretendard', sans-serif" font-size="10" fill="#6B7280" text-anchor="middle">레이더</text>
+
+      <rect x="160" y="0" width="60" height="50" rx="6" fill="#FBF6EE" stroke="#B89968" stroke-opacity="0.4"/>
+      <polyline points="170,40 180,30 190,34 200,18 210,22" stroke="#1E3A5F" stroke-width="2" fill="none"/>
+      <text x="190" y="64" font-family="'Pretendard', sans-serif" font-size="10" fill="#6B7280" text-anchor="middle">추이</text>
+    </g>
+  </g>
+</svg>

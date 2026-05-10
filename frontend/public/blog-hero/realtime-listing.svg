@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="실시간 매물 조회 — 네이버 부동산 직접 조회, 매매·전세·월세·단기임대 4종 동시">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F5F1EB"/>
+      <stop offset="100%" stop-color="#E8DFD0"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FAFAF7"/>
+    </linearGradient>
+    <linearGradient id="cardOld" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F3F4F6"/>
+      <stop offset="100%" stop-color="#E5E7EB"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="20" stdDeviation="30" flood-color="#1E3A5F" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- 배경 -->
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+
+  <!-- 좌측 큰 카피 영역 -->
+  <text x="120" y="280"
+        font-family="'Noto Serif KR', serif"
+        font-size="96" font-weight="700" fill="#1F2937" letter-spacing="-3">
+    실시간 매물
+  </text>
+  <text x="120" y="400"
+        font-family="'Noto Serif KR', serif"
+        font-size="96" font-weight="700" fill="#1E3A5F" letter-spacing="-3">
+    한 화면에
+  </text>
+  <rect x="120" y="430" width="80" height="4" fill="#B89968"/>
+  <text x="120" y="510"
+        font-family="'Pretendard', sans-serif"
+        font-size="32" font-weight="400" fill="#4B5563">
+    검색하는 그 순간 네이버를 직접 조회합니다
+  </text>
+  <text x="120" y="555"
+        font-family="'Pretendard', sans-serif"
+        font-size="28" font-weight="300" fill="#6B7280">
+    매매 · 전세 · 월세 · 단기임대 4종 동시
+  </text>
+
+  <!-- 우측 좌·우 대조 -->
+  <!-- 좌: 어제 자료 (회색) -->
+  <g transform="translate(1010, 220)" filter="url(#shadow)">
+    <rect x="0" y="0" width="360" height="640" rx="16" fill="url(#cardOld)" stroke="#D1D5DB" stroke-width="1"/>
+
+    <!-- 헤더 -->
+    <rect x="0" y="0" width="360" height="60" rx="16" fill="#9CA3AF"/>
+    <rect x="0" y="44" width="360" height="16" fill="#9CA3AF"/>
+    <text x="180" y="38"
+          font-family="'Pretendard', sans-serif"
+          font-size="16" font-weight="600" fill="#FFFFFF" text-anchor="middle">
+      사전 크롤링
+    </text>
+
+    <!-- 라벨 -->
+    <rect x="20" y="80" width="120" height="28" rx="14" fill="#6B7280"/>
+    <text x="80" y="99" font-family="'Pretendard', sans-serif" font-size="14" font-weight="600" fill="#FFFFFF" text-anchor="middle">어제 자료</text>
+
+    <!-- 매물 카드 (회색 톤) -->
+    <g font-family="'Pretendard', sans-serif" fill="#6B7280">
+      <rect x="20" y="130" width="320" height="80" rx="8" fill="#FFFFFF" stroke="#E5E7EB"/>
+      <text x="36" y="160" font-size="16" font-weight="600" fill="#4B5563">래미안 강남</text>
+      <text x="36" y="184" font-size="14">매매 18억 · 32평</text>
+      <text x="36" y="201" font-size="12" fill="#9CA3AF" font-style="italic">2026-05-10 03:00 수집</text>
+
+      <rect x="20" y="225" width="320" height="80" rx="8" fill="#FFFFFF" stroke="#E5E7EB"/>
+      <text x="36" y="255" font-size="16" font-weight="600" fill="#4B5563">대치 푸르지오</text>
+      <text x="36" y="279" font-size="14">매매 22억 · 38평</text>
+      <text x="36" y="296" font-size="12" fill="#9CA3AF" font-style="italic">2026-05-10 03:00 수집</text>
+
+      <rect x="20" y="320" width="320" height="80" rx="8" fill="#FFFFFF" stroke="#E5E7EB"/>
+      <text x="36" y="350" font-size="16" font-weight="600" fill="#4B5563" text-decoration="line-through">은마아파트</text>
+      <text x="36" y="374" font-size="14" text-decoration="line-through">매매 24억 · 31평</text>
+      <text x="36" y="391" font-size="12" fill="#DC2626" font-weight="600">매물 사라짐 (어제 데이터)</text>
+    </g>
+
+    <!-- 한계 노트 -->
+    <rect x="20" y="430" width="320" height="180" rx="12" fill="#F9FAFB" stroke="#E5E7EB"/>
+    <text x="180" y="460" font-family="'Pretendard', sans-serif" font-size="14" font-weight="600" fill="#6B7280" text-anchor="middle" letter-spacing="2">
+      한계
+    </text>
+    <text x="40" y="495" font-family="'Pretendard', sans-serif" font-size="14" fill="#6B7280">· 손님 보는 시점 ≠ 수집 시점</text>
+    <text x="40" y="525" font-family="'Pretendard', sans-serif" font-size="14" fill="#6B7280">· 어제의 가격이 지금 화면에</text>
+    <text x="40" y="555" font-family="'Pretendard', sans-serif" font-size="14" fill="#6B7280">· 사라진 매물이 그대로 표시</text>
+    <text x="40" y="585" font-family="'Pretendard', sans-serif" font-size="14" fill="#6B7280">· "이 매물 아직 있어요?" 즉답 X</text>
+  </g>
+
+  <!-- 화살표 (좌 → 우) -->
+  <g transform="translate(1395, 540)">
+    <line x1="0" y1="0" x2="40" y2="0" stroke="#B89968" stroke-width="3"/>
+    <polygon points="40,-8 56,0 40,8" fill="#B89968"/>
+  </g>
+
+  <!-- 우: 방금 조회 (#1E3A5F 강조) -->
+  <g transform="translate(1470, 220)" filter="url(#shadow)">
+    <rect x="0" y="0" width="360" height="640" rx="16" fill="url(#card)" stroke="#E5E7EB" stroke-width="1"/>
+
+    <!-- 헤더 -->
+    <rect x="0" y="0" width="360" height="60" rx="16" fill="#1E3A5F"/>
+    <rect x="0" y="44" width="360" height="16" fill="#1E3A5F"/>
+    <text x="180" y="38"
+          font-family="'Pretendard', sans-serif"
+          font-size="16" font-weight="600" fill="#FFFFFF" text-anchor="middle">
+      실시간 조회
+    </text>
+
+    <!-- 라벨 -->
+    <rect x="20" y="80" width="120" height="28" rx="14" fill="#1E3A5F"/>
+    <text x="80" y="99" font-family="'Pretendard', sans-serif" font-size="14" font-weight="600" fill="#FFFFFF" text-anchor="middle">방금 조회</text>
+
+    <!-- 매물 카드 (남색 강조) -->
+    <g font-family="'Pretendard', sans-serif" fill="#1F2937">
+      <rect x="20" y="130" width="320" height="80" rx="8" fill="#FFFFFF" stroke="#1E3A5F" stroke-width="1.5"/>
+      <text x="36" y="160" font-size="16" font-weight="600" fill="#1F2937">래미안 강남</text>
+      <text x="36" y="184" font-size="14">매매 18.2억 · 32평</text>
+      <text x="36" y="201" font-size="12" fill="#1E3A5F" font-weight="600">방금 네이버 직접 조회</text>
+
+      <rect x="20" y="225" width="320" height="80" rx="8" fill="#FFFFFF" stroke="#1E3A5F" stroke-width="1.5"/>
+      <text x="36" y="255" font-size="16" font-weight="600" fill="#1F2937">대치 푸르지오</text>
+      <text x="36" y="279" font-size="14">매매 22.5억 · 38평</text>
+      <text x="36" y="296" font-size="12" fill="#1E3A5F" font-weight="600">방금 네이버 직접 조회</text>
+
+      <rect x="20" y="320" width="320" height="80" rx="8" fill="#FFFFFF" stroke="#1E3A5F" stroke-width="1.5"/>
+      <text x="36" y="350" font-size="16" font-weight="600" fill="#1F2937">선경아파트</text>
+      <text x="36" y="374" font-size="14">매매 19억 · 35평</text>
+      <text x="36" y="391" font-size="12" fill="#1E3A5F" font-weight="600">방금 네이버 직접 조회</text>
+    </g>
+
+    <!-- 강점 노트 -->
+    <rect x="20" y="430" width="320" height="180" rx="12" fill="#1E3A5F"/>
+    <text x="180" y="460" font-family="'Pretendard', sans-serif" font-size="14" font-weight="600" fill="#B89968" text-anchor="middle" letter-spacing="2">
+      강점
+    </text>
+    <text x="40" y="495" font-family="'Pretendard', sans-serif" font-size="14" fill="#FFFFFF">· 손님 검색 시점 = 조회 시점</text>
+    <text x="40" y="525" font-family="'Pretendard', sans-serif" font-size="14" fill="#FFFFFF">· 가격 · 매물 상태 가장 최신</text>
+    <text x="40" y="555" font-family="'Pretendard', sans-serif" font-size="14" fill="#FFFFFF">· 사라진 매물 즉시 사라짐</text>
+    <text x="40" y="585" font-family="'Pretendard', sans-serif" font-size="14" fill="#FFFFFF">· "방금 확인했습니다" 즉답</text>
+  </g>
+
+  <!-- 하단 브랜드 -->
+  <text x="120" y="1010"
+        font-family="'Pretendard', sans-serif"
+        font-size="20" font-weight="600" fill="#1E3A5F" letter-spacing="3">
+    2u.pe.kr · 도구 활용
+  </text>
+</svg>

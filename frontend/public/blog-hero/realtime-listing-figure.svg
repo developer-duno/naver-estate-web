@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="거래유형 4종 표 — A1 매매·B1 전세·B2 월세·B3 단기임대 시사점">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F5F1EB"/>
+      <stop offset="100%" stop-color="#EBE5D9"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FAFAF7"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="20" flood-color="#1E3A5F" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <!-- 배경 -->
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+
+  <!-- 타이틀 -->
+  <text x="960" y="140"
+        font-family="'Noto Serif KR', serif"
+        font-size="56" font-weight="700" fill="#1F2937" text-anchor="middle" letter-spacing="-2">
+    거래유형 4종 — 한 번의 검색으로 동시 조회
+  </text>
+  <rect x="900" y="165" width="120" height="3" fill="#B89968"/>
+  <text x="960" y="215"
+        font-family="'Pretendard', sans-serif"
+        font-size="22" fill="#6B7280" text-anchor="middle">
+    매매 · 전세 · 월세 · 단기임대 비율로 단지 성격을 빠르게 판단
+  </text>
+
+  <!-- 표 카드 -->
+  <g transform="translate(160, 290)" filter="url(#shadow)">
+    <rect x="0" y="0" width="1600" height="640" rx="20" fill="url(#card)" stroke="#E5E7EB" stroke-width="1"/>
+
+    <!-- 표 헤더 행 -->
+    <rect x="0" y="0" width="1600" height="80" rx="20" fill="#1E3A5F"/>
+    <rect x="0" y="60" width="1600" height="20" fill="#1E3A5F"/>
+    <text x="100" y="50"
+          font-family="'Pretendard', sans-serif"
+          font-size="20" font-weight="600" fill="#FFFFFF">
+      코드
+    </text>
+    <text x="280" y="50"
+          font-family="'Pretendard', sans-serif"
+          font-size="20" font-weight="600" fill="#FFFFFF">
+      거래유형
+    </text>
+    <text x="540" y="50"
+          font-family="'Pretendard', sans-serif"
+          font-size="20" font-weight="600" fill="#FFFFFF">
+      시사점 — 비율이 높을 때 무엇을 의미하나
+    </text>
+
+    <!-- 행 1: A1 매매 -->
+    <rect x="0" y="80" width="1600" height="140" fill="#FFFFFF" stroke="#F3F4F6"/>
+    <rect x="40" y="120" width="120" height="60" rx="30" fill="#1E3A5F"/>
+    <text x="100" y="158"
+          font-family="'Pretendard', sans-serif"
+          font-size="22" font-weight="700" fill="#FFFFFF" text-anchor="middle">A1</text>
+    <text x="280" y="160"
+          font-family="'Noto Serif KR', serif"
+          font-size="32" font-weight="700" fill="#1F2937">매매</text>
+    <text x="540" y="155"
+          font-family="'Pretendard', sans-serif"
+          font-size="22" font-weight="500" fill="#1F2937">실거주 중심, 매물 회전 매도 위주</text>
+    <text x="540" y="190"
+          font-family="'Pretendard', sans-serif"
+          font-size="16" fill="#6B7280">매매 비율이 다른 거래유형보다 높으면 실거주 수요 단지로 판단할 수 있어요</text>
+
+    <!-- 행 2: B1 전세 -->
+    <rect x="0" y="220" width="1600" height="140" fill="#FAFAF7" stroke="#F3F4F6"/>
+    <rect x="40" y="260" width="120" height="60" rx="30" fill="#B89968"/>
+    <text x="100" y="298"
+          font-family="'Pretendard', sans-serif"
+          font-size="22" font-weight="700" fill="#FFFFFF" text-anchor="middle">B1</text>
+    <text x="280" y="300"
+          font-family="'Noto Serif KR', serif"
+          font-size="32" font-weight="700" fill="#1F2937">전세</text>
+    <text x="540" y="295"
+          font-family="'Pretendard', sans-serif"
+          font-size="22" font-weight="500" fill="#1F2937">전세가율 높음, 갭투자·실거주 후보</text>
+    <text x="540" y="330"
+          font-family="'Pretendard', sans-serif"
+          font-size="16" fill="#6B7280">전세 비율이 매매보다 높으면 전세가율도 함께 확인하실 추천 단지예요</text>
+
+    <!-- 행 3: B2 월세 -->
+    <rect x="0" y="360" width="1600" height="140" fill="#FFFFFF" stroke="#F3F4F6"/>
+    <rect x="40" y="400" width="120" height="60" rx="30" fill="#1E3A5F"/>
+    <text x="100" y="438"
+          font-family="'Pretendard', sans-serif"
+          font-size="22" font-weight="700" fill="#FFFFFF" text-anchor="middle">B2</text>
+    <text x="280" y="440"
+          font-family="'Noto Serif KR', serif"
+          font-size="32" font-weight="700" fill="#1F2937">월세</text>
+    <text x="540" y="435"
+          font-family="'Pretendard', sans-serif"
+          font-size="22" font-weight="500" fill="#1F2937">임대 수익형, 오피스텔 성격</text>
+    <text x="540" y="470"
+          font-family="'Pretendard', sans-serif"
+          font-size="16" fill="#6B7280">월세 비율이 두드러지면 원룸·오피스텔 단지일 가능성이 큽니다</text>
+
+    <!-- 행 4: B3 단기임대 -->
+    <rect x="0" y="500" width="1600" height="140" rx="0" fill="#FAFAF7" stroke="#F3F4F6"/>
+    <rect x="40" y="540" width="120" height="60" rx="30" fill="#B89968"/>
+    <text x="100" y="578"
+          font-family="'Pretendard', sans-serif"
+          font-size="22" font-weight="700" fill="#FFFFFF" text-anchor="middle">B3</text>
+    <text x="280" y="580"
+          font-family="'Noto Serif KR', serif"
+          font-size="32" font-weight="700" fill="#1F2937">단기임대</text>
+    <text x="540" y="575"
+          font-family="'Pretendard', sans-serif"
+          font-size="22" font-weight="500" fill="#1F2937">관광 · 역세권 · 기숙사 수요</text>
+    <text x="540" y="610"
+          font-family="'Pretendard', sans-serif"
+          font-size="16" fill="#6B7280">단기임대 비중이 크면 관광지 인근이거나 학교·역세권 단지로 추정해볼 수 있어요</text>
+  </g>
+
+  <!-- 하단 캡션 -->
+  <text x="960" y="990"
+        font-family="'Pretendard', sans-serif"
+        font-size="20" fill="#1F2937" text-anchor="middle" font-weight="500">
+    한 단지의 4종 비율을 보면 그 단지의 성격이 보입니다
+  </text>
+</svg>

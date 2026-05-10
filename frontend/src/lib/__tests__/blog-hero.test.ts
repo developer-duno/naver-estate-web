@@ -17,6 +17,15 @@ describe("getHeroAsset", () => {
     ).toBe("/blog-hero/property-tax-tool-guide.svg");
   });
 
+  it("slug.svg compare-workflow / realtime-listing 신설 매핑", () => {
+    expect(
+      getHeroAsset({ slug: "compare-workflow", category: "도구 활용" }),
+    ).toBe("/blog-hero/compare-workflow.svg");
+    expect(
+      getHeroAsset({ slug: "realtime-listing", category: "도구 활용" }),
+    ).toBe("/blog-hero/realtime-listing.svg");
+  });
+
   it("slug 자산 부재 시 카테고리 폴백 (4 카테고리)", () => {
     expect(getHeroAsset({ slug: "no-asset-1", category: "시세 분석" })).toBe(
       "/blog-hero/category-price.webp",

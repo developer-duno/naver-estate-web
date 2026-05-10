@@ -8,6 +8,8 @@ const SLUG_ASSET: Record<string, string> = {
   "property-tax-tool-guide": "/blog-hero/property-tax-tool-guide.svg",
   "acquisition-tax-tool-guide": "/blog-hero/acquisition-tax-tool-guide.svg",
   "transfer-tax-tool-guide": "/blog-hero/transfer-tax-tool-guide.svg",
+  "compare-workflow": "/blog-hero/compare-workflow.svg",
+  "realtime-listing": "/blog-hero/realtime-listing.svg",
 };
 
 const CATEGORY_FALLBACK: Record<BlogCategory, string> = {

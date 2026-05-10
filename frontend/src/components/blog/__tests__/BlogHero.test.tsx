@@ -43,4 +43,16 @@ describe("BlogHero", () => {
     const img = screen.getByRole("img");
     expect(img.getAttribute("alt")).toBe("전세가율 계산법");
   });
+
+  it("acquisition-tax-tool-guide slug 자산 svg 렌더 (카테고리 폴백 우회)", () => {
+    render(<BlogHero post={makePost({ slug: "acquisition-tax-tool-guide", category: "도구 활용" })} />);
+    const img = screen.getByRole("img");
+    expect(img.getAttribute("src")).toContain("acquisition-tax-tool-guide");
+  });
+
+  it("transfer-tax-tool-guide slug 자산 svg 렌더 (카테고리 폴백 우회)", () => {
+    render(<BlogHero post={makePost({ slug: "transfer-tax-tool-guide", category: "도구 활용" })} />);
+    const img = screen.getByRole("img");
+    expect(img.getAttribute("src")).toContain("transfer-tax-tool-guide");
+  });
 });

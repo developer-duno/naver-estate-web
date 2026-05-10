@@ -49,7 +49,7 @@ test.describe("blog visual regression (iPhone + Desktop)", () => {
   test("/blog/[slug] hero + BlogFigure — iPhone (realtime-listing)", async ({ page }) => {
     await page.setViewportSize(VIEWPORTS.iphone);
     await page.goto("/blog/realtime-listing");
-    await expect(page.getByRole("heading", { name: /실시간 조회/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /네이버 매물 실시간 조회/ })).toBeVisible();
     await expect(page).toHaveScreenshot("blog-slug-realtime-iphone.png", {
       fullPage: false,
       maxDiffPixelRatio: 0.02,
@@ -59,7 +59,7 @@ test.describe("blog visual regression (iPhone + Desktop)", () => {
   test("/blog/[slug] hero + BlogFigure — Desktop (realtime-listing)", async ({ page }) => {
     await page.setViewportSize(VIEWPORTS.desktop);
     await page.goto("/blog/realtime-listing");
-    await expect(page.getByRole("heading", { name: /실시간 조회/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /네이버 매물 실시간 조회/ })).toBeVisible();
     await expect(page).toHaveScreenshot("blog-slug-realtime-desktop.png", {
       fullPage: false,
       maxDiffPixelRatio: 0.02,

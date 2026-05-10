@@ -75,8 +75,8 @@ export default function HomePage() {
 
       {/* 타이틀 + 통계 인라인 */}
       <div className="text-center mb-4">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">네이버 아파트·오피스텔 매물 조회</h1>
-        <p className="mt-1 text-sm text-gray-500">전국 매물을 검색하고 필터링하세요</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">공인중개사를 위한 매물·시세 분석 도구</h1>
+        <p className="mt-1 text-sm text-gray-500">손님 응대 자료를 5분 안에 끝내는 데이터 도구</p>
         {statsLoading ? (
           <p className="mt-2 text-sm text-gray-400">통계 로딩...</p>
         ) : statsError ? (

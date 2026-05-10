@@ -26,6 +26,7 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreeMarketing, setAgreeMarketing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -173,6 +174,16 @@ export default function SignupPage() {
             <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">이용약관</a> 및{" "}
             <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">개인정보 처리방침</a>에 동의합니다
           </span>
+        </label>
+
+        <label className="flex items-start gap-2 text-sm text-gray-600 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={agreeMarketing}
+            onChange={(e) => setAgreeMarketing(e.target.checked)}
+            className="mt-0.5 rounded border-gray-300"
+          />
+          <span>(선택) 신규 도구·블로그 발행 알림을 이메일로 받겠습니다</span>
         </label>
 
         <button

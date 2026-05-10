@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -60,9 +61,21 @@ export default function HomePage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
+      {/* hero band — main-hero.webp + 카피 (LCP 후보) */}
+      <div className="relative w-full aspect-21/9 sm:aspect-3/1 mb-6 rounded-lg overflow-hidden bg-gray-100">
+        <Image
+          src="/blog-hero/main-hero.webp"
+          alt="2u부동산 — 네이버 아파트·오피스텔 매물 조회"
+          fill
+          priority
+          sizes="(max-width: 768px) 100vw, 768px"
+          className="object-cover"
+        />
+      </div>
+
       {/* 타이틀 + 통계 인라인 */}
       <div className="text-center mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">네이버 아파트·오피스텔 매물 조회</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">네이버 아파트·오피스텔 매물 조회</h1>
         <p className="mt-1 text-sm text-gray-500">전국 매물을 검색하고 필터링하세요</p>
         {statsLoading ? (
           <p className="mt-2 text-sm text-gray-400">통계 로딩...</p>

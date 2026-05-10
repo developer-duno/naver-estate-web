@@ -12,7 +12,7 @@ interface Props {
 export default function BlogHero({ post, priority = false }: Props) {
   const src = getHeroAsset(post);
   return (
-    <div className="relative w-full aspect-[16/9] sm:aspect-[21/9] mb-6 sm:mb-8 rounded-lg overflow-hidden bg-gray-100">
+    <div className="relative w-full aspect-video sm:aspect-21/9 mb-6 sm:mb-8 rounded-lg overflow-hidden bg-gray-100">
       <Image
         src={src}
         alt={post.title}

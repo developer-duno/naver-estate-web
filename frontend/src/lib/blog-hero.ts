@@ -10,6 +10,8 @@ const SLUG_ASSET: Record<string, string> = {
   "transfer-tax-tool-guide": "/blog-hero/transfer-tax-tool-guide.svg",
   "compare-workflow": "/blog-hero/compare-workflow.svg",
   "realtime-listing": "/blog-hero/realtime-listing.svg",
+  "mibunyang-radar-weights": "/blog-hero/mibunyang-radar-weights.svg",
+  "mibunyang-for-agents": "/blog-hero/mibunyang-for-agents.svg",
 };
 
 const CATEGORY_FALLBACK: Record<BlogCategory, string> = {

@@ -27,6 +27,9 @@ Thumbs.db
 dist/
 *.egg-info/
 
+# CI artifacts (baseline drift 갱신 시 임시)
+.ci-artifacts/
+
 .vercel
 
 # Claude Code local

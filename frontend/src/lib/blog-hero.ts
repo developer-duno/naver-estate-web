@@ -6,6 +6,7 @@ const SLUG_ASSET: Record<string, string> = {
   "asking-vs-actual-price": "/blog-hero/asking-vs-actual-price.webp",
   "agent-verification-guide": "/blog-hero/agent-verification-guide.webp",
   "property-tax-tool-guide": "/blog-hero/property-tax-tool-guide.svg",
+  "acquisition-tax-tool-guide": "/blog-hero/acquisition-tax-tool-guide.svg",
 };
 
 const CATEGORY_FALLBACK: Record<BlogCategory, string> = {

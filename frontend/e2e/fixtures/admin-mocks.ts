@@ -8,6 +8,7 @@ import type {
   UserProfile,
   AdminSetting,
   AgentVerification,
+  QuotaStatus,
 } from "../../src/types/admin";
 import type { NaverCallStats, RecrawlStatus, RecrawlProgress } from "../../src/lib/api/admin";
 
@@ -155,6 +156,15 @@ export const mockVerifications: PaginatedResponse<AgentVerification> = {
   page_size: 20,
 };
 
+export const mockQuotaStatus: QuotaStatus = {
+  api_name: "data_go_kr",
+  date: "2026-05-11",
+  count: 1234,
+  limit: 10_000,
+  remaining: 8_766,
+  utilization_pct: 12.3,
+};
+
 export async function applyAdminMocks(page: Page): Promise<void> {
   await page.route("**/api/admin/stats/detailed", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockDetailedStats) });
@@ -185,5 +195,8 @@ export async function applyAdminMocks(page: Page): Promise<void> {
   });
   await page.route("**/api/admin/recrawl/progress", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockRecrawlProgress) });
+  });
+  await page.route("**/api/admin/quota-status", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockQuotaStatus) });
   });
 }

@@ -11,6 +11,7 @@ import DataFreshnessCard from "@/components/admin/DataFreshnessCard";
 import HealthSummary from "@/components/admin/HealthSummary";
 import WeeklyIssuesCard from "@/components/admin/WeeklyIssuesCard";
 import NaverCallsCard from "@/components/admin/NaverCallsCard";
+import QuotaStatusCard from "@/components/admin/QuotaStatusCard";
 import AdminCard from "@/components/admin/AdminCard";
 import { getAdminDetailedStats, getAdminAuditLogs, getAdminCrawlJobs } from "@/lib/api";
 import type { DetailedStats, AuditLog, CrawlJobDetail } from "@/types/admin";
@@ -73,6 +74,10 @@ export default function AdminDashboard() {
 
       <div className="mt-6">
         <NaverCallsCard getToken={getToken} />
+      </div>
+
+      <div className="mt-6">
+        <QuotaStatusCard token={token} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">

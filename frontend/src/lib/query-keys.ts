@@ -53,6 +53,7 @@ export const queryKeys = {
     naverCalls: () => ["admin", "naverCalls"] as const,
     dataFreshness: () => ["admin", "dataFreshness"] as const,
     crawlFailures: (hours: number = 24) => ["admin", "crawlFailures", hours] as const,
+    quotaStatus: () => ["admin", "quotaStatus"] as const,
   },
 
   // 중개사 검증

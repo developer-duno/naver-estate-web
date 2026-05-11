@@ -2,7 +2,7 @@
  * 관리자 API — 모든 호출에 Bearer 토큰 필수
  */
 
-import type { UserProfile, AuditLog, AdminSetting, AgentVerification, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail, SchedulerStatusResponse, DataFreshnessResponse } from "@/types/admin";
+import type { UserProfile, AuditLog, AdminSetting, AgentVerification, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail, SchedulerStatusResponse, DataFreshnessResponse, QuotaStatus } from "@/types/admin";
 import { fetchApi, adminHeaders, LIVE_TIMEOUT_MS } from "./core";
 
 /** 관리자: 사용자 목록 */
@@ -262,6 +262,13 @@ export interface NaverCallStats {
 /** 네이버 API 호출 계측 — 라벨별 10분/1시간/24시간 슬라이딩 윈도우 */
 export async function getAdminNaverCalls(token: string) {
   return fetchApi<NaverCallStats>(`/api/admin/naver-calls`, {
+    headers: adminHeaders(token),
+  });
+}
+
+/** 공공데이터 API 쿼터 현황 (오늘) */
+export async function getAdminQuotaStatus(token: string) {
+  return fetchApi<QuotaStatus>(`/api/admin/quota-status`, {
     headers: adminHeaders(token),
   });
 }

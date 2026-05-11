@@ -182,3 +182,13 @@ export interface DataFreshnessResponse {
   items: DataFreshnessItem[];
   generated_at: string;
 }
+
+/** 공공데이터 API 쿼터 현황 (오늘) — BE `crawler/quota_db.py:62~89` 답습 */
+export interface QuotaStatus {
+  api_name: string;
+  date: string;
+  count: number;
+  limit: number;
+  remaining: number;
+  utilization_pct: number;
+}

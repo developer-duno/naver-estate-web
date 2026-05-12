@@ -66,6 +66,24 @@ def test_apartment_detail_200(client, db):
     assert data["name"] == "래미안"
 
 
+def test_apartment_response_includes_noise(client, db):
+    """apartment_to_dict 응답에 noise 필드 포함 (None 허용)"""
+    _add_apartment(db, "APT001", "래미안", region="서울", noise=55.5)
+    res = client.get("/api/mb/apartments/APT001")
+    assert res.status_code == 200
+    data = res.json()
+    assert "noise" in data
+    assert data["noise"] == 55.5
+
+
+def test_apartment_response_noise_null(client, db):
+    """noise 값이 없으면 null 응답"""
+    _add_apartment(db, "APT002", "자이", region="서울")
+    res = client.get("/api/mb/apartments/APT002")
+    assert res.status_code == 200
+    assert res.json()["noise"] is None
+
+
 def test_apartment_detail_404(client):
     """없는 아파트 → 404"""
     res = client.get("/api/mb/apartments/NONE")
@@ -109,6 +127,40 @@ def test_regions_200(client, db):
     data = res.json()
     assert data["total"] == 1
     assert data["regions"][0]["population"] == 500000
+
+
+def test_regions_response_includes_new_fields(client, db):
+    """mb_region_to_dict 응답에 avg_price_sqm + initial_sale_rate + land_cost_ratio 3 신규 필드 포함"""
+    db.add(
+        MBRegion(
+            region="서울",
+            gu="강남",
+            population=500000,
+            avg_price_sqm=2500.5,
+            initial_sale_rate=85.3,
+            land_cost_ratio=42.1,
+            recorded_at=date.today(),
+        )
+    )
+    db.commit()
+    res = client.get("/api/mb/regions?region=서울")
+    assert res.status_code == 200
+    region = res.json()["regions"][0]
+    assert region["avg_price_sqm"] == 2500.5
+    assert region["initial_sale_rate"] == 85.3
+    assert region["land_cost_ratio"] == 42.1
+
+
+def test_regions_response_new_fields_null(client, db):
+    """3 신규 필드 값이 없으면 null 응답"""
+    db.add(MBRegion(region="부산", gu="해운대", population=300000, recorded_at=date.today()))
+    db.commit()
+    res = client.get("/api/mb/regions?region=부산")
+    assert res.status_code == 200
+    region = res.json()["regions"][0]
+    assert region["avg_price_sqm"] is None
+    assert region["initial_sale_rate"] is None
+    assert region["land_cost_ratio"] is None
 
 
 # ── 실거래 API ───────────────────────────────────────────────

@@ -40,6 +40,7 @@ def apartment_to_dict(a) -> dict:
         "naver_sell_count": a.naver_sell_count,
         "naver_build_year": a.naver_build_year,
         "is_regulated": a.is_regulated,
+        "noise": a.noise,
         "road_address": a.road_address,
         "district": a.district,
     }
@@ -72,9 +73,12 @@ def mb_region_to_dict(r) -> dict:
         "supply_ratio": r.supply_ratio,
         "jeonse_rate": r.jeonse_rate,
         "avg_price": r.avg_price,
+        "avg_price_sqm": r.avg_price_sqm,
         "net_migration": r.net_migration,
         "price_index": r.price_index,
         "new_supply": r.new_supply,
+        "initial_sale_rate": r.initial_sale_rate,
+        "land_cost_ratio": r.land_cost_ratio,
         "recorded_at": r.recorded_at.isoformat() if r.recorded_at else None,
     }
 

@@ -139,6 +139,15 @@ export const POSTS: BlogPost[] = [
     readingTime: 6,
   },
   {
+    slug: "buy-timing-signals",
+    title: "매수 타이밍 신호 — 시세 추이 + 거래량 + 미분양율 3 축 5분 판독법",
+    description:
+      "시세 추이(1년 횡보 후 첫 반등) + 거래량(0→1~2건 회복) + 미분양율(6개월 누적 감소) 3 축 신호로 단지 사이클 위치 파악. 4 분기(저점다지기·회복진행·상승후반·하락지속) 손님 응대 화법 + 갈리는 신호 3종 해석.",
+    date: "2026-05-13",
+    category: "시세 분석",
+    readingTime: 7,
+  },
+  {
     slug: "print-excel-workflow",
     title: "인쇄·엑셀 내보내기 노하우 — 손님 응대 자료 1분 워크플로",
     description:

@@ -11,7 +11,7 @@ import BlogIndexPage from "../blog/page";
 import { POSTS, getPostBySlug } from "../blog/posts";
 
 describe("/blog 목록 페이지", () => {
-  it("Hero 제목과 16편 카드가 모두 렌더된다", () => {
+  it("Hero 제목과 17편 카드가 모두 렌더된다", () => {
     const { container } = render(<BlogIndexPage />);
     expect(screen.getByRole("heading", { name: /부동산 인사이트/, level: 1 })).toBeInTheDocument();
     // 모든 글 제목이 카드에 표시
@@ -46,15 +46,16 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 16편 (전체)", () => {
-    expect(POSTS.length).toBe(16);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 17편 (전체)", () => {
+    expect(POSTS.length).toBe(17);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(16);
+    expect(new Set(slugs).size).toBe(17);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
       "acquisition-tax-tool-guide",
       "agent-verification-guide",
       "asking-vs-actual-price",
+      "buy-timing-signals",
       "compare-workflow",
       "complex-price-analysis",
       "jeonse-ratio",
@@ -69,6 +70,15 @@ describe("blog/posts 메타데이터", () => {
       "transfer-tax-guide",
       "transfer-tax-tool-guide",
     ]);
+  });
+
+  it("buy-timing-signals 메타 — 시세 분석 카테고리, 3 축 신호 키워드", () => {
+    const post = getPostBySlug("buy-timing-signals");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("매수 타이밍");
+    expect(post?.description).toMatch(/시세 추이|거래량|미분양율/);
+    expect(post?.category).toBe("시세 분석");
   });
 
   it("realestate-calculators 메타 — 5종 출시 완료 톤", () => {

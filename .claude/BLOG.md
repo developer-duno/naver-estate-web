@@ -1,17 +1,18 @@
 # Blog 라인업 — `/blog` MDX 박제 (단일 진실 공급원)
 
-> 16편 발행 (draft 0편). posts.ts BlogCategory 4종 = 시세 분석 / 세금 / 도구 활용 / 미분양.
+> 17편 발행 (draft 0편). posts.ts BlogCategory 4종 = 시세 분석 / 세금 / 도구 활용 / 미분양.
 > 새 글 발행 시 본 파일 표 1행 + 발행일 git log 실측 동시 갱신 의무.
 
-## 발행 글 16편 (BlogCategory 4종)
+## 발행 글 17편 (BlogCategory 4종)
 
-### 시세 분석 (3편)
+### 시세 분석 (4편)
 
 | slug | 제목 | 발행일 |
 |---|---|---|
 | `jeonse-ratio` | 전세가율 계산법과 활용 — 공인중개사 실무 가이드 | 2026-05-02 |
 | `complex-price-analysis` | 단지 시세 분석법 — 평당가·시세 추이·비교 줄세우기 | 2026-05-02 |
 | `asking-vs-actual-price` | 호가 vs 실거래가 — 손님 협상 카드 1장으로 5천만원 절약 | 2026-05-08 |
+| `buy-timing-signals` | 매수 타이밍 신호 — 시세 추이 + 거래량 + 미분양율 3 축 5분 판독법 | 2026-05-13 |
 
 ### 세금 (3편)
 

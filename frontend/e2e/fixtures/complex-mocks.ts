@@ -152,4 +152,16 @@ export async function applyComplexMocks(page: Page): Promise<void> {
     if (p.endsWith("/price-history/collect-status")) return fulfillJson(route, IDLE_PRICE);
     await route.fulfill({ status: 404, body: "not found" });
   });
+
+  // Header role 결정성 — fetchProfile 1순위 (백엔드 /api/users/me) mock.
+  // 응답이 admin 이면 setUserRole('admin') → "관리자" 뱃지 렌더 (Header.tsx L240·370).
+  await page.route("**/api/users/me", async (route) => {
+    await fulfillJson(route, { role: "admin", email: "admin@test" });
+  });
+
+  // Header role 결정성 — fetchRoleFromSupabase fallback (Supabase PostgREST) mock.
+  // supabase-js .single() 은 array[0] 을 추출하므로 PostgREST 응답 형식 그대로.
+  await page.route("**/rest/v1/user_profiles**", async (route) => {
+    await fulfillJson(route, [{ role: "admin" }]);
+  });
 }

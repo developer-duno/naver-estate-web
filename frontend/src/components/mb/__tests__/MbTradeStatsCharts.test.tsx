@@ -76,4 +76,35 @@ describe("MbTradeStatsCharts", () => {
     render(<MbTradeStatsCharts tradeStats={ts} />);
     expect(screen.getAllByTestId("bar-chart")).toHaveLength(1);
   });
+
+  it("rent_by_area 만 있으면 임대료 BarChart 1개 렌더", () => {
+    const ts = makeTradeStats({
+      rent_by_area: { "59": 80, "84": 120 },
+    });
+    render(<MbTradeStatsCharts tradeStats={ts} />);
+    expect(screen.getAllByTestId("bar-chart")).toHaveLength(1);
+    expect(screen.getByText("면적별 평균 임대료")).toBeInTheDocument();
+    expect(screen.queryByText("면적별 평균 전세가")).not.toBeInTheDocument();
+  });
+
+  it("jeonse_by_area 만 있으면 전세 BarChart 1개 렌더", () => {
+    const ts = makeTradeStats({
+      jeonse_by_area: { "59": 45000, "84": 65000 },
+    });
+    render(<MbTradeStatsCharts tradeStats={ts} />);
+    expect(screen.getAllByTestId("bar-chart")).toHaveLength(1);
+    expect(screen.getByText("면적별 평균 전세가")).toBeInTheDocument();
+    expect(screen.queryByText("면적별 평균 임대료")).not.toBeInTheDocument();
+  });
+
+  it("4종 모두 있으면 BarChart 4개 렌더 (매매·임대료·전세·층별)", () => {
+    const ts = makeTradeStats({
+      price_by_area: { "59": 60000, "84": 80000 },
+      rent_by_area: { "59": 80, "84": 120 },
+      jeonse_by_area: { "59": 45000, "84": 65000 },
+      price_by_floor: { "저층": 65000, "고층": 95000 },
+    });
+    render(<MbTradeStatsCharts tradeStats={ts} />);
+    expect(screen.getAllByTestId("bar-chart")).toHaveLength(4);
+  });
 });

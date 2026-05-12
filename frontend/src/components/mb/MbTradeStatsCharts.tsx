@@ -28,15 +28,19 @@ interface Props {
   tradeStats: MbTradeStats;
 }
 
-/** TradeStats 면적별·층별 평균가 BarChart 2종 — price_by_area + price_by_floor 시각화 */
+/** TradeStats 면적별·층별 평균가 BarChart — 매매/임대료/전세/층별 4종 시각화 */
 export default function MbTradeStatsCharts({ tradeStats }: Props) {
   const areaData = useMemo(() => dictToChartData(tradeStats.price_by_area), [tradeStats.price_by_area]);
+  const rentData = useMemo(() => dictToChartData(tradeStats.rent_by_area), [tradeStats.rent_by_area]);
+  const jeonseData = useMemo(() => dictToChartData(tradeStats.jeonse_by_area), [tradeStats.jeonse_by_area]);
   const floorData = useMemo(() => dictToChartData(tradeStats.price_by_floor), [tradeStats.price_by_floor]);
 
   const hasArea = areaData.length > 0;
+  const hasRent = rentData.length > 0;
+  const hasJeonse = jeonseData.length > 0;
   const hasFloor = floorData.length > 0;
 
-  if (!hasArea && !hasFloor) {
+  if (!hasArea && !hasRent && !hasJeonse && !hasFloor) {
     return null;
   }
 
@@ -52,6 +56,34 @@ export default function MbTradeStatsCharts({ tradeStats }: Props) {
               <YAxis tickFormatter={fmtPrice} fontSize={11} width={56} />
               <Tooltip formatter={(value) => fmtPrice(value as number)} />
               <Bar dataKey="value" name="평균가" fill="#3b82f6" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      {hasRent && (
+        <div className="bg-white rounded-lg shadow-sm border p-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-3">면적별 평균 임대료</h4>
+          <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT}>
+            <BarChart data={rentData} margin={BAR_CHART_MARGIN}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="label" fontSize={11} />
+              <YAxis tickFormatter={fmtPrice} fontSize={11} width={56} />
+              <Tooltip formatter={(value) => fmtPrice(value as number)} />
+              <Bar dataKey="value" name="평균 임대료" fill="#a855f7" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      {hasJeonse && (
+        <div className="bg-white rounded-lg shadow-sm border p-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-3">면적별 평균 전세가</h4>
+          <ResponsiveContainer width="100%" height={BAR_CHART_HEIGHT}>
+            <BarChart data={jeonseData} margin={BAR_CHART_MARGIN}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="label" fontSize={11} />
+              <YAxis tickFormatter={fmtPrice} fontSize={11} width={56} />
+              <Tooltip formatter={(value) => fmtPrice(value as number)} />
+              <Bar dataKey="value" name="평균 전세가" fill="#f97316" />
             </BarChart>
           </ResponsiveContainer>
         </div>

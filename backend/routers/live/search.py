@@ -173,13 +173,14 @@ def _search_with_fallback(
     upsert_kwargs: dict | None = None,
     fallback: callable,
 ) -> dict:
-    """네이버 호출 → 실패/지연 시 DB 폴백. 응답 반환.
+    """네이버 호출 → 실패/지연/0건 시 DB 폴백. 응답 반환.
 
     fallback: () -> list[Complex]  — DB 단지 조회 클로저
 
-    네이버가 NAVER_SEARCH_WALL_TIMEOUT 안에 응답하지 않으면(쿨다운 중 재시도
-    지연 등) 폴백으로 전환. 네이버 호출 스레드는 백그라운드에서 계속 진행
-    되지만 사용자 응답은 즉시 반환.
+    폴백 trigger 3 종:
+    1. 네이버가 NAVER_SEARCH_WALL_TIMEOUT 안에 응답 못 함 (쿨다운/네트워크)
+    2. 네이버가 502/예외 던짐
+    3. 네이버 정상 응답이지만 결과 0건 (= 키워드 매칭 실패, 동명 검색 등)
     """
     import concurrent.futures as cf
 
@@ -190,7 +191,11 @@ def _search_with_fallback(
     try:
         all_complexes = future.result(timeout=NAVER_SEARCH_WALL_TIMEOUT)
         executor.shutdown(wait=False)
-        return _build_search_response(all_complexes, db)
+        if all_complexes:
+            return _build_search_response(all_complexes, db)
+        logger.info(
+            "naver search 결과 0건 — DB 폴백 시도 (keyword=%s)", keyword,
+        )
     except cf.TimeoutError:
         logger.warning(
             "naver search wall-clock %ss 초과 — DB 폴백으로 전환 (keyword=%s)",

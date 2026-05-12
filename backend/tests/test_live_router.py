@@ -162,6 +162,28 @@ class TestLiveSearch:
         assert res.status_code == 502
 
     @patch(SEARCH_PATCH)
+    def test_search_naver_zero_results_falls_back_to_db(self, mock_search, client, db):
+        """네이버 정상 응답이지만 0건 (= 키워드 매칭 실패, 동명 검색 등) → DB 폴백 trigger"""
+        from db.models import Complex
+        from routers.live._shared import _cache
+        _cache.delete_by_prefix("search:")
+        db.add(Complex(
+            complex_no="C777",
+            complex_name="문평동테스트",
+            real_estate_type_code="APT",
+            real_estate_type_name="아파트",
+            cortar_no="3023011200",
+        ))
+        db.commit()
+
+        mock_search.return_value = make_search_result(complexes=[])
+        res = client.get("/api/live/search?q=문평동테스트")
+        assert res.status_code == 200
+        body = res.json()
+        assert body["source"] == "db_fallback"
+        assert any(c["complex_name"] == "문평동테스트" for c in body["complexes"])
+
+    @patch(SEARCH_PATCH)
     def test_search_db_fallback_cached_between_requests(self, mock_search, client, db):
         """db_fallback 응답도 캐시 — 쿨다운 중 동일 검색어 반복 시 DB 재조회 방지"""
         from db.models import Complex

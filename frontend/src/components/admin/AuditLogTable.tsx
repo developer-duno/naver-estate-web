@@ -1,12 +1,17 @@
 "use client";
 
 import type { AuditLog } from "@/types/admin";
+import { getActionLabel, getTargetLabel, getDetailsSummary } from "@/lib/admin-labels";
+import { useAdminUserMap, formatUserDisplay } from "@/hooks/useAdminUserMap";
 
 interface Props {
   logs: AuditLog[];
+  token: string;
 }
 
-export default function AuditLogTable({ logs }: Props) {
+export default function AuditLogTable({ logs, token }: Props) {
+  const { userMap } = useAdminUserMap(token);
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -25,15 +30,19 @@ export default function AuditLogTable({ logs }: Props) {
               <td className="py-2 pr-3 text-xs text-gray-500 whitespace-nowrap">
                 {l.created_at ? new Date(l.created_at).toLocaleString("ko") : "-"}
               </td>
-              <td className="py-2 pr-3 text-xs text-gray-600 max-w-[100px] truncate">{l.user_id || "-"}</td>
+              <td className="py-2 pr-3 text-xs text-gray-600 max-w-45 truncate" title={l.user_id || ""}>
+                {formatUserDisplay(l.user_id, userMap)}
+              </td>
               <td className="py-2 pr-3">
-                <span className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">{l.action}</span>
+                <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded" title={l.action}>
+                  {getActionLabel(l.action)}
+                </span>
               </td>
-              <td className="py-2 pr-3 text-xs text-gray-600">
-                {l.target_type ? `${l.target_type}:${l.target_id || ""}` : "-"}
+              <td className="py-2 pr-3 text-xs text-gray-700" title={l.target_type ? `${l.target_type}:${l.target_id || ""}` : ""}>
+                {getTargetLabel(l.target_type, l.target_id)}
               </td>
-              <td className="py-2 text-xs text-gray-500 max-w-[200px] truncate">
-                {l.details ? JSON.stringify(l.details) : "-"}
+              <td className="py-2 text-xs text-gray-500 max-w-70 truncate" title={l.details ? JSON.stringify(l.details) : ""}>
+                {getDetailsSummary(l.action, l.details)}
               </td>
             </tr>
           ))}

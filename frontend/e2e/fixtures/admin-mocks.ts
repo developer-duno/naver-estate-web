@@ -25,10 +25,61 @@ export const mockDetailedStats: DetailedStats = {
 };
 
 export const mockAuditLogs: PaginatedResponse<AuditLog> = {
-  items: [],
-  total: 0,
+  items: [
+    {
+      id: 5,
+      user_id: "b0da4fd4-487d-46a9-8b3b-cff07227429c",
+      action: "admin_recrawl_articles",
+      target_type: "batch",
+      target_id: "500",
+      details: { level: "safe", force: false, parent_job_id: 12 },
+      ip_address: "127.0.0.xxx",
+      created_at: "2026-05-11T10:00:00+09:00",
+    },
+    {
+      id: 4,
+      user_id: "b0da4fd4-487d-46a9-8b3b-cff07227429c",
+      action: "admin_collect_trigger",
+      target_type: "collector",
+      target_id: "backfill-price",
+      details: {},
+      ip_address: "127.0.0.xxx",
+      created_at: "2026-05-11T09:00:00+09:00",
+    },
+    {
+      id: 3,
+      user_id: "b0da4fd4-487d-46a9-8b3b-cff07227429c",
+      action: "admin_verify_reject",
+      target_type: "verification",
+      target_id: "1",
+      details: { reason: "자격증 서류 미제출 — 재신청 시 첨부 부탁드립니다" },
+      ip_address: "127.0.0.xxx",
+      created_at: "2026-05-10T18:04:30+09:00",
+    },
+    {
+      id: 2,
+      user_id: "b0da4fd4-487d-46a9-8b3b-cff07227429c",
+      action: "admin_user_update",
+      target_type: "user",
+      target_id: "b0da4fd4-487d-46a9-8b3b-cff07227429c",
+      details: { role: "admin" },
+      ip_address: "127.0.0.xxx",
+      created_at: "2026-05-10T16:28:56+09:00",
+    },
+    {
+      id: 1,
+      user_id: "b0da4fd4-487d-46a9-8b3b-cff07227429c",
+      action: "export",
+      target_type: "complex",
+      target_id: "9138",
+      details: {},
+      ip_address: "127.0.0.xxx",
+      created_at: "2026-05-02T10:56:23+09:00",
+    },
+  ],
+  total: 5,
   page: 1,
-  page_size: 20,
+  page_size: 50,
 };
 
 export const mockCrawlJobs: PaginatedResponse<CrawlJobDetail> = {

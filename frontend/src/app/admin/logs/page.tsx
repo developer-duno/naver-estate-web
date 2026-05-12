@@ -6,6 +6,7 @@ import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import AuditLogTable from "@/components/admin/AuditLogTable";
 import { getAdminAuditLogs } from "@/lib/api";
+import { ACTION_LABELS } from "@/lib/admin-labels";
 import type { AuditLog, PaginatedResponse } from "@/types/admin";
 
 export default function AdminLogsPage() {
@@ -44,12 +45,13 @@ export default function AdminLogsPage() {
           value={filterAction}
           onChange={(e) => { setFilterAction(e.target.value); setPage(1); }}
           className="text-sm border rounded px-2 py-1"
+          title="액션 필터"
+          aria-label="액션 필터"
         >
           <option value="">액션 전체</option>
-          <option value="login">로그인</option>
-          <option value="crawl_trigger">크롤링</option>
-          <option value="export">내보내기</option>
-          <option value="admin_action">관리자 액션</option>
+          {Object.entries(ACTION_LABELS).map(([key, label]) => (
+            <option key={key} value={key}>{label}</option>
+          ))}
         </select>
         <input
           type="text"
@@ -73,7 +75,7 @@ export default function AdminLogsPage() {
       {logsQuery.isLoading ? (
         <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
       ) : (
-        <AuditLogTable logs={logsQuery.data?.items ?? []} />
+        <AuditLogTable logs={logsQuery.data?.items ?? []} token={token} />
       )}
 
       {(logsQuery.data?.total ?? 0) > 50 && (

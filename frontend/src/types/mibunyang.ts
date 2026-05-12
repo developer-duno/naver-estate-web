@@ -34,6 +34,7 @@ export interface MbApartment {
   naver_sell_count?: number;
   naver_build_year?: number;
   is_regulated?: boolean;
+  noise?: number;
   road_address?: string;
   district?: string;
   trade_stats?: MbTradeStats;
@@ -68,9 +69,12 @@ export interface MbRegion {
   supply_ratio?: number;
   jeonse_rate?: number;
   avg_price?: number;
+  avg_price_sqm?: number;
   net_migration?: number;
   price_index?: number;
   new_supply?: number;
+  initial_sale_rate?: number;
+  land_cost_ratio?: number;
   recorded_at?: string;
 }
 
@@ -161,22 +165,32 @@ export interface MbInfra {
   air_o3?: number;
   air_grade?: string;
   air_updated_at?: string;
-  /** 어린이집 (V013) */
+  /** 어린이집 (V013 + V019 type/teachers) */
   childcare_count?: number;
   childcare_nearest_dist?: number;
   childcare_nearest_name?: string;
   childcare_nearest_capacity?: number;
+  childcare_nearest_type?: string;
+  childcare_nearest_teachers?: number;
   /** 범죄통계 (V013) */
   crime_score?: number;
   crime_grade?: string;
   crime_updated_at?: string;
 }
 
-/** 학군 정보 */
+/** 학군 정보 — 단지 주변 학교 목록 */
+export interface MbNearbySchool {
+  name: string;
+  type?: string;
+  distance?: number;
+  students?: number;
+  classes?: number;
+}
+
 export interface MbSchool {
   school_score?: number;
   school_grade?: string;
-  nearby_schools?: Record<string, unknown>;
+  nearby_schools?: MbNearbySchool[];
 }
 
 /** 교통 정보 */

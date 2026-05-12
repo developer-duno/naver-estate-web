@@ -72,6 +72,26 @@ export default function MbRegionStatsTable({ regions }: Props) {
                 </>
               )}
             </div>
+            {/* 5행: ㎡당시세·초기분양률·토지비율 */}
+            {(r.avg_price_sqm != null || r.initial_sale_rate != null || r.land_cost_ratio != null) && (
+              <div className="flex items-center flex-wrap gap-1.5 text-[11px] text-gray-500 mt-0.5">
+                {r.avg_price_sqm != null && (
+                  <span>㎡당 {formatKoreanPrice(r.avg_price_sqm)}</span>
+                )}
+                {r.initial_sale_rate != null && (
+                  <>
+                    <span className="text-gray-300">·</span>
+                    <span>초기분양 {r.initial_sale_rate.toFixed(1)}%</span>
+                  </>
+                )}
+                {r.land_cost_ratio != null && (
+                  <>
+                    <span className="text-gray-300">·</span>
+                    <span>토지비 {r.land_cost_ratio.toFixed(1)}%</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -91,6 +111,9 @@ export default function MbRegionStatsTable({ regions }: Props) {
             <th className="px-3 py-2.5 text-right text-gray-700 font-semibold hidden md:table-cell">공급비율</th>
             <th className="px-3 py-2.5 text-right text-gray-700 font-semibold hidden md:table-cell">전세율</th>
             <th className="px-3 py-2.5 text-right text-gray-700 font-semibold hidden sm:table-cell">평균시세</th>
+            <th className="px-3 py-2.5 text-right text-gray-700 font-semibold hidden lg:table-cell">㎡당시세</th>
+            <th className="px-3 py-2.5 text-right text-gray-700 font-semibold hidden lg:table-cell">초기분양률</th>
+            <th className="px-3 py-2.5 text-right text-gray-700 font-semibold hidden lg:table-cell">토지비율</th>
           </tr>
         </thead>
         <tbody>
@@ -117,6 +140,15 @@ export default function MbRegionStatsTable({ regions }: Props) {
               </td>
               <td className="px-3 py-2 text-right hidden sm:table-cell">
                 {r.avg_price != null ? formatKoreanPrice(r.avg_price) : "-"}
+              </td>
+              <td className="px-3 py-2 text-right hidden lg:table-cell">
+                {r.avg_price_sqm != null ? formatKoreanPrice(r.avg_price_sqm) : "-"}
+              </td>
+              <td className="px-3 py-2 text-right hidden lg:table-cell">
+                {r.initial_sale_rate != null ? `${r.initial_sale_rate.toFixed(1)}%` : "-"}
+              </td>
+              <td className="px-3 py-2 text-right hidden lg:table-cell">
+                {r.land_cost_ratio != null ? `${r.land_cost_ratio.toFixed(1)}%` : "-"}
               </td>
             </tr>
           ))}

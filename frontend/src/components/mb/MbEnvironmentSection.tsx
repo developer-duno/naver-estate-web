@@ -43,12 +43,13 @@ function CrimeGradeBadge({ grade }: { grade: string }) {
   return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs border ${style}`}>{label}</span>;
 }
 
-/** 주변 환경 — 인프라 + 대기질 + 응급의료 + 어린이집 + 범죄 + 학군 + 교통 */
+/** 주변 환경 — 인프라 + 대기질 + 응급의료 + 어린이집 + 범죄 + 학군 + 교통 + 소음도 */
 export function EnvironmentSection({ apartment: a }: { apartment: MbApartment }) {
   const infra = a.infra;
   const school = a.school;
   const transport = a.transport;
-  const hasData = infra ?? school ?? transport;
+  const noise = a.noise;
+  const hasData = infra ?? school ?? transport ?? noise != null;
 
   if (!hasData) {
     return (
@@ -151,6 +152,8 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
             <InfoRow label="최근접 거리" value={infra.childcare_nearest_dist != null ? `${infra.childcare_nearest_dist}m` : undefined} />
             <InfoRow label="가장 가까운" value={infra.childcare_nearest_name || undefined} />
             <InfoRow label="정원" value={infra.childcare_nearest_capacity ? `${infra.childcare_nearest_capacity}명` : undefined} />
+            <InfoRow label="시설 유형" value={infra.childcare_nearest_type || undefined} />
+            <InfoRow label="교사 수" value={infra.childcare_nearest_teachers ? `${infra.childcare_nearest_teachers}명` : undefined} />
           </dl>
         </div>
       )}
@@ -165,13 +168,45 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
         </div>
       )}
 
+      {noise != null && (
+        <div className="mb-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">소음</h4>
+          <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <InfoRow label="소음도" value={`${noise} dB`} />
+          </dl>
+        </div>
+      )}
+
       {school && (
         <div className="mb-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-2">학군</h4>
-          <dl className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <dl className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
             <InfoRow label="학군 점수" value={school.school_score} />
             <InfoRow label="학군 등급" value={school.school_grade} />
           </dl>
+          {Array.isArray(school.nearby_schools) && school.nearby_schools.length > 0 && (
+            <div className="border-t border-gray-100 pt-2">
+              <p className="text-xs text-gray-500 mb-1.5">주변 학교 (가까운 순 최대 5개)</p>
+              <ul className="space-y-1">
+                {school.nearby_schools.slice(0, 5).map((s, i) => (
+                  <li key={`${s.name}-${i}`} className="flex items-center gap-1.5 text-sm">
+                    {s.type && (
+                      <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] border bg-gray-50 text-gray-600 border-gray-200">
+                        {s.type}
+                      </span>
+                    )}
+                    <span className="font-medium text-gray-900">{s.name}</span>
+                    {s.distance != null && (
+                      <span className="text-xs text-gray-500">({s.distance}m)</span>
+                    )}
+                    {s.students != null && (
+                      <span className="text-xs text-gray-400 ml-auto">학생 {s.students}명</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 
@@ -186,6 +221,11 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
             <InfoRow label="IC 거리" value={transport.ic_dist != null ? `${(transport.ic_dist / 1000).toFixed(1)}km` : undefined} />
             <InfoRow label="KTX 거리" value={transport.ktx_dist != null ? `${(transport.ktx_dist / 1000).toFixed(1)}km` : undefined} />
           </dl>
+          {transport.bus_stop_names && (
+            <p className="mt-2 text-xs text-gray-500">
+              <span className="font-medium text-gray-600">주변 정류장:</span> {transport.bus_stop_names}
+            </p>
+          )}
         </div>
       )}
     </SectionCard>

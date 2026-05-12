@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import type { MbApartment, MbPrice } from "@/types";
 import { formatKoreanPrice } from "@/lib/format";
+import { MbCancelRatioBar } from "./MbCancelRatioBar";
 
 const MbTradeStatsCharts = dynamic(() => import("./MbTradeStatsCharts"), { ssr: false });
 
@@ -136,7 +137,7 @@ export function TradeStatsSection({ apartment: a }: SectionProps) {
         <InfoRow label="PSR" value={ts.psr != null ? ts.psr.toFixed(1) : undefined} />
         <InfoRow label="평균층" value={ts.avg_floor != null ? `${ts.avg_floor.toFixed(1)}층` : undefined} />
         <InfoRow label="층 범위" value={ts.floor_range} />
-        <InfoRow label="6개월 취소율" value={ts.cancel_ratio_6m != null ? `${ts.cancel_ratio_6m.toFixed(1)}%` : undefined} />
+        <InfoRow label="6개월 취소율" value={<MbCancelRatioBar value={ts.cancel_ratio_6m} />} />
       </dl>
       <MbTradeStatsCharts tradeStats={ts} />
     </SectionCard>

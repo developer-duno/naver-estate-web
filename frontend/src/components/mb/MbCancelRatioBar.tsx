@@ -12,7 +12,7 @@ export function MbCancelRatioBar({ value }: Props) {
   }
   const capped = Math.min(Math.max(value, 0), MAX_PCT);
   const widthPct = (capped / MAX_PCT) * 100;
-  const tier = value < 3 ? "safe" : value < 7 ? "warn" : "danger";
+  const tier = value < 1.5 ? "safe" : value < 3 ? "warn" : "danger";
   const colorClass =
     tier === "safe" ? "bg-emerald-500" :
     tier === "warn" ? "bg-amber-500" : "bg-rose-500";

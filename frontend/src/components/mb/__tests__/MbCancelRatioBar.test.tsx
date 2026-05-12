@@ -32,20 +32,20 @@ describe("MbCancelRatioBar", () => {
     expect(getInnerBar(container).style.width).toBe("0%");
     expect(screen.getByText("안전")).toBeInTheDocument();
   });
-  it("2.9% (안전 상한)", () => {
-    render(<MbCancelRatioBar value={2.9} />);
+  it("1.4% (안전 상한, p50 1.50% 미만)", () => {
+    render(<MbCancelRatioBar value={1.4} />);
     expect(screen.getByText("안전")).toBeInTheDocument();
   });
-  it("3.0% (경계 → 주의)", () => {
+  it("1.5% (경계 → 주의, p50)", () => {
+    render(<MbCancelRatioBar value={1.5} />);
+    expect(screen.getByText("주의")).toBeInTheDocument();
+  });
+  it("2.9% (주의 상한, p90 3.10% 미만)", () => {
+    render(<MbCancelRatioBar value={2.9} />);
+    expect(screen.getByText("주의")).toBeInTheDocument();
+  });
+  it("3.0% (경계 → 위험, p90 부근)", () => {
     render(<MbCancelRatioBar value={3.0} />);
-    expect(screen.getByText("주의")).toBeInTheDocument();
-  });
-  it("6.9% (주의 상한)", () => {
-    render(<MbCancelRatioBar value={6.9} />);
-    expect(screen.getByText("주의")).toBeInTheDocument();
-  });
-  it("7.0% (경계 → 위험)", () => {
-    render(<MbCancelRatioBar value={7.0} />);
     expect(screen.getByText("위험")).toBeInTheDocument();
   });
   it("12.0% (위험) → widthPct 60%", () => {

@@ -22,6 +22,7 @@ function makeApt(id: string, name: string) {
     presale_pp: 2500, parking_ratio: 120, max_floor: 30,
     naver_jeonse_rate: 65, naver_nearby_median: 90000,
     discount_pct: 5, floor_area_ratio: 250, builder: "테스트건설",
+    noise: 55,
   };
 }
 

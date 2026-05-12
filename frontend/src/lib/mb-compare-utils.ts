@@ -13,7 +13,7 @@ export interface MbCompareRow {
   direction: AdvantageDir;
 }
 
-/** 18행 비교 테이블 정의 — /mibunyang/compare 페이지에서 단지 간 우위(★) 판정에 사용 */
+/** 19행 비교 테이블 정의 — /mibunyang/compare 페이지에서 단지 간 우위(★) 판정에 사용 */
 export const MB_COMPARE_ROWS: MbCompareRow[] = [
   { label: "단지명", getValue: (a) => a.name, direction: null },
   { label: "지역", getValue: (a) => [a.region, a.gu].filter(Boolean).join(" "), direction: null },
@@ -33,6 +33,7 @@ export const MB_COMPARE_ROWS: MbCompareRow[] = [
   { label: "할인율(%)", getValue: (a) => a.discount_pct, direction: "higher" },
   { label: "주변 중위가(만원)", getValue: (a) => a.naver_nearby_median, direction: "higher" },
   { label: "전세가율(%)", getValue: (a) => a.naver_jeonse_rate, direction: "higher" },
+  { label: "소음도(dB)", getValue: (a) => a.noise, direction: "lower" },
 ];
 
 /** 숫자 배열에서 우위 인덱스 반환 (direction별) */

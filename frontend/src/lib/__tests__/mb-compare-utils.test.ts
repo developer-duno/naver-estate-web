@@ -26,6 +26,7 @@ function makeApt(overrides: Partial<MbApartment> = {}): MbApartment {
     discount_pct: 5,
     naver_nearby_median: 90000,
     naver_jeonse_rate: 65,
+    noise: 55,
     ...overrides,
   };
 }
@@ -98,9 +99,17 @@ describe("formatCellValue (셀 포맷)", () => {
 });
 
 describe("MB_COMPARE_ROWS (비교 행 정의)", () => {
-  /** 18개 비교 행이 정의됨 */
-  it("18개 비교 행이 정의되어 있다", () => {
-    expect(MB_COMPARE_ROWS).toHaveLength(18);
+  /** 19개 비교 행이 정의됨 */
+  it("19개 비교 행이 정의되어 있다", () => {
+    expect(MB_COMPARE_ROWS).toHaveLength(19);
+  });
+
+  /** 소음도 행이 포함되어 있고 direction이 "lower" */
+  it("소음도 행이 포함되어 있고 lower direction", () => {
+    const row = MB_COMPARE_ROWS.find((r) => r.label === "소음도(dB)");
+    expect(row).toBeDefined();
+    expect(row?.direction).toBe("lower");
+    expect(row?.getValue(makeApt({ noise: 55 }))).toBe(55);
   });
 
   /** 6개월 취소율 행이 포함되어 있고 direction이 "lower" */

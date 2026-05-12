@@ -37,6 +37,8 @@ export interface MbApartment {
   noise?: number;
   road_address?: string;
   district?: string;
+  created_at?: string;
+  updated_at?: string;
   trade_stats?: MbTradeStats;
   infra?: MbInfra;
   school?: MbSchool;

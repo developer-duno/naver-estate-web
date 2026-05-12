@@ -53,6 +53,8 @@ export function OverviewSection({ apartment: a }: SectionProps) {
             <InfoRow label="HUG 보증" value={b.hug_guarantee ? "가능" : b.hug_guarantee === false ? "불가" : undefined} />
           </>
         )}
+        <InfoRow label="등록" value={a.created_at ? new Date(a.created_at).toLocaleDateString("ko-KR") : undefined} />
+        <InfoRow label="갱신" value={a.updated_at ? new Date(a.updated_at).toLocaleDateString("ko-KR") : undefined} />
       </dl>
     </SectionCard>
   );

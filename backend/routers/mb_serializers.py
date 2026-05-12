@@ -43,6 +43,8 @@ def apartment_to_dict(a) -> dict:
         "noise": a.noise,
         "road_address": a.road_address,
         "district": a.district,
+        "created_at": a.created_at.isoformat() if a.created_at else None,
+        "updated_at": a.updated_at.isoformat() if a.updated_at else None,
     }
 
 

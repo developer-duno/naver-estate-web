@@ -4,7 +4,7 @@ interface Props {
   value: number | null | undefined;
 }
 
-const MAX_PCT = 20;
+const MAX_PCT = 7.5;
 
 export function MbCancelRatioBar({ value }: Props) {
   if (value == null || !Number.isFinite(value)) {

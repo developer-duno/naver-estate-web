@@ -48,19 +48,19 @@ describe("MbCancelRatioBar", () => {
     render(<MbCancelRatioBar value={3.0} />);
     expect(screen.getByText("위험")).toBeInTheDocument();
   });
-  it("12.0% (위험) → widthPct 60%", () => {
-    const { container } = render(<MbCancelRatioBar value={12.0} />);
-    expect(getInnerBar(container).style.width).toBe("60%");
+  it("5.0% (위험, p99 부근) → widthPct 67% (5/7.5≈66.67%)", () => {
+    const { container } = render(<MbCancelRatioBar value={5.0} />);
+    expect(getInnerBar(container).style.width).toBe("66.66666666666666%");
   });
-  it("20.0% (캡 경계) → widthPct 100%", () => {
-    const { container } = render(<MbCancelRatioBar value={20.0} />);
+  it("7.5% (캡 경계) → widthPct 100%", () => {
+    const { container } = render(<MbCancelRatioBar value={7.5} />);
     expect(getInnerBar(container).style.width).toBe("100%");
   });
-  it("25.0% (캡 초과) → widthPct 100% 유지 + aria-valuenow 25", () => {
-    const { container } = render(<MbCancelRatioBar value={25.0} />);
+  it("10.0% (캡 초과) → widthPct 100% 유지 + aria-valuenow 10 + aria-valuemax 7.5", () => {
+    const { container } = render(<MbCancelRatioBar value={10.0} />);
     expect(getInnerBar(container).style.width).toBe("100%");
     const bar = container.querySelector('[role="progressbar"]') as HTMLElement;
-    expect(bar.getAttribute("aria-valuenow")).toBe("25");
-    expect(bar.getAttribute("aria-valuemax")).toBe("20");
+    expect(bar.getAttribute("aria-valuenow")).toBe("10");
+    expect(bar.getAttribute("aria-valuemax")).toBe("7.5");
   });
 });

@@ -37,6 +37,12 @@ export interface MbApartment {
   noise?: number;
   road_address?: string;
   district?: string;
+  /** 관리비 5 항목 분리 (mibunyang W3, 2026-05-13 동기화) */
+  maint_heat?: number;
+  maint_hotwater?: number;
+  maint_gas?: number;
+  maint_elec?: number;
+  maint_water?: number;
   created_at?: string;
   updated_at?: string;
   trade_stats?: MbTradeStats;
@@ -159,6 +165,9 @@ export interface MbInfra {
   emergency_hospital_dist?: number;
   emergency_beds?: number;
   emergency_level?: string;
+  /** 응급의료기관 시설명/분류 (mibunyang W4, 2026-05-13 동기화) */
+  emergency_name?: string;
+  emergency_type?: string;
   /** 대기질 — 에어코리아 (V012) */
   air_station_name?: string;
   air_station_dist?: number;

@@ -138,6 +138,15 @@ export const POSTS: BlogPost[] = [
     category: "도구 활용",
     readingTime: 6,
   },
+  {
+    slug: "print-excel-workflow",
+    title: "인쇄·엑셀 내보내기 노하우 — 손님 응대 자료 1분 워크플로",
+    description:
+      "엑셀 6곳(단지비교·미분양 단지/지역/실거래/추이·미분양비교) + BE 매물 엑셀 1곳 + /compare 인쇄(펼침→rAF 2회→print→afterprint 복원) + 수식 인젝션 6글자 방어(=+@-탭엔터). 7개 위치를 한 번씩 눌러 손님 자료를 1분에 떨어뜨리는 사용법.",
+    date: "2026-05-13",
+    category: "도구 활용",
+    readingTime: 6,
+  },
 ];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {

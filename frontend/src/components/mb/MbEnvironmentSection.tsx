@@ -1,6 +1,7 @@
 "use client";
 
 import type { MbApartment } from "@/types";
+import { MbNoiseBar } from "./MbNoiseBar";
 
 /** 인프라 정보 행 (label + value) */
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -172,7 +173,7 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
         <div className="mb-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-2">소음</h4>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <InfoRow label="소음도" value={`${noise} dB`} />
+            <InfoRow label="소음도" value={<MbNoiseBar value={noise} />} />
           </dl>
         </div>
       )}

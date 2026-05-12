@@ -24,6 +24,9 @@ test.describe("admin dashboard", () => {
     await expect(page.getByText("네이버 호출 횟수 (10분 / 1시간 / 24시간)")).toBeVisible();
     await expect(page.getByText("매물 목록 (배치)")).toBeVisible();
 
+    // 세션 146: FailureBreakdown 12번째 카드 가시성 회귀 가드
+    await expect(page.getByText(/유형별 실패 분포/)).toBeVisible();
+
     // 시각 회귀: chromium-{platform} 별 baseline 자동 생성 (e2e/admin-dashboard.spec.ts-snapshots/)
     await expect(page).toHaveScreenshot("admin-dashboard.png", {
       fullPage: true,

@@ -10,7 +10,7 @@ import type {
   AgentVerification,
   QuotaStatus,
 } from "../../src/types/admin";
-import type { NaverCallStats, RecrawlStatus, RecrawlProgress } from "../../src/lib/api/admin";
+import type { NaverCallStats, RecrawlStatus, RecrawlProgress, CrawlFailuresResponse } from "../../src/lib/api/admin";
 
 export const mockDetailedStats: DetailedStats = {
   complex_count: 1234,
@@ -216,6 +216,25 @@ export const mockQuotaStatus: QuotaStatus = {
   utilization_pct: 12.3,
 };
 
+export const mockCrawlFailures: CrawlFailuresResponse = {
+  window_hours: 24,
+  total: 4,
+  items: [
+    {
+      job_type: "complex_articles",
+      count: 3,
+      last_error: "네이버 API 차단",
+      last_failed_at: "2026-05-12T12:00:00+00:00",
+    },
+    {
+      job_type: "price_history",
+      count: 1,
+      last_error: "DB 락 타임아웃",
+      last_failed_at: "2026-05-12T11:30:00+00:00",
+    },
+  ],
+};
+
 export async function applyAdminMocks(page: Page): Promise<void> {
   await page.route("**/api/admin/stats/detailed", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockDetailedStats) });
@@ -249,5 +268,8 @@ export async function applyAdminMocks(page: Page): Promise<void> {
   });
   await page.route("**/api/admin/quota-status", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockQuotaStatus) });
+  });
+  await page.route("**/api/admin/crawl-failures*", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockCrawlFailures) });
   });
 }

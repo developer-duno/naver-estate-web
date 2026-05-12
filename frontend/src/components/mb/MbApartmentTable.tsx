@@ -150,7 +150,25 @@ function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompa
                   </span>
                 )}
               </div>
-              {/* 4행: 입주·시공사 */}
+              {/* 4행: 평당가·할인율 */}
+              {(apt.presale_pp != null || apt.discount_pct != null) && (
+                <div className="flex items-center gap-1.5 text-[11px] mb-1">
+                  {apt.presale_pp != null && (
+                    <span className="text-amber-700">
+                      평당 {apt.presale_pp.toLocaleString()}만
+                    </span>
+                  )}
+                  {apt.discount_pct != null && (
+                    <>
+                      <span className="text-gray-300">·</span>
+                      <span className="text-green-700">
+                        할인 {apt.discount_pct.toFixed(1)}%
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+              {/* 5행: 입주·시공사 */}
               <div className="flex items-center gap-1.5 text-[11px] text-gray-500 truncate">
                 <span>{apt.presale_move_in ?? apt.completion ?? "-"}</span>
                 <span className="text-gray-300">·</span>
@@ -173,6 +191,8 @@ function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompa
             <SortableTh label="세대수" sortKey="units" align="right" currentSort={sortState} onSort={onSortChange} />
             <SortableTh label="미분양" sortKey="unsold" align="right" currentSort={sortState} onSort={onSortChange} />
             <SortableTh label="미분양률" sortKey="unsold_rate" align="right" currentSort={sortState} onSort={onSortChange} />
+            <SortableTh label="평당가" sortKey="price" align="right" currentSort={sortState} onSort={onSortChange} />
+            <th className="px-3 py-2.5 text-right text-gray-700 font-semibold hidden md:table-cell">할인율</th>
             <th className="px-3 py-2.5 text-left text-gray-700 font-semibold hidden sm:table-cell">입주시기</th>
             <th className="px-3 py-2.5 text-left text-gray-700 font-semibold hidden sm:table-cell">시공사</th>
           </tr>
@@ -231,6 +251,12 @@ function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompa
               </td>
               <td className="px-3 py-2 text-right">
                 {apt.unsold_rate != null ? `${apt.unsold_rate.toFixed(1)}%` : "-"}
+              </td>
+              <td className="px-3 py-2 text-right text-amber-700">
+                {apt.presale_pp != null ? apt.presale_pp.toLocaleString() : "-"}
+              </td>
+              <td className="px-3 py-2 text-right text-green-700 hidden md:table-cell">
+                {apt.discount_pct != null ? `${apt.discount_pct.toFixed(1)}%` : "-"}
               </td>
               <td className="px-3 py-2 text-gray-600 hidden sm:table-cell">{apt.presale_move_in ?? apt.completion ?? "-"}</td>
               <td className="px-3 py-2 text-gray-600 max-w-[120px] truncate hidden sm:table-cell">{apt.builder ?? "-"}</td>

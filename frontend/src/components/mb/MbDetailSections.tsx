@@ -1,7 +1,10 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import type { MbApartment, MbPrice } from "@/types";
 import { formatKoreanPrice } from "@/lib/format";
+
+const MbTradeStatsCharts = dynamic(() => import("./MbTradeStatsCharts"), { ssr: false });
 
 interface SectionProps {
   apartment: MbApartment;
@@ -123,7 +126,7 @@ export function TradeStatsSection({ apartment: a }: SectionProps) {
 
   return (
     <SectionCard title="거래 통계">
-      <dl className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <dl className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
         <InfoRow label="인근 시세 중위값" value={ts.nearby_median != null ? formatKoreanPrice(ts.nearby_median) : undefined} />
         <InfoRow label="최근 6개월 거래" value={ts.recent_trades_6m != null ? `${ts.recent_trades_6m}건` : undefined} />
         <InfoRow label="전세율" value={ts.jeonse_rate != null ? `${ts.jeonse_rate.toFixed(1)}%` : undefined} />
@@ -133,6 +136,7 @@ export function TradeStatsSection({ apartment: a }: SectionProps) {
         <InfoRow label="층 범위" value={ts.floor_range} />
         <InfoRow label="6개월 취소율" value={ts.cancel_ratio_6m != null ? `${ts.cancel_ratio_6m.toFixed(1)}%` : undefined} />
       </dl>
+      <MbTradeStatsCharts tradeStats={ts} />
     </SectionCard>
   );
 }

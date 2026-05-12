@@ -129,6 +129,15 @@ export const POSTS: BlogPost[] = [
     category: "도구 활용",
     readingTime: 6,
   },
+  {
+    slug: "search-history-workflow",
+    title: "검색 히스토리 활용법 — 손님 재방문 5분 응대",
+    description:
+      "단지 검색 10개 + 미분양 검색 10개 + 미분양 비교 자동 10개 + 비교 북마크 수동 20개 = localStorage 4 키에 50개 보관. 어제 손님이 본 단지를 30초 만에 복원해 시세 변동 + 비교 추가 워크플로로 재방문 응대를 5분에 끝내는 사용법.",
+    date: "2026-05-13",
+    category: "도구 활용",
+    readingTime: 6,
+  },
 ];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {

@@ -13,13 +13,14 @@ export interface MbCompareRow {
   direction: AdvantageDir;
 }
 
-/** 17행 비교 테이블 정의 — /mibunyang/compare 페이지에서 단지 간 우위(★) 판정에 사용 */
+/** 18행 비교 테이블 정의 — /mibunyang/compare 페이지에서 단지 간 우위(★) 판정에 사용 */
 export const MB_COMPARE_ROWS: MbCompareRow[] = [
   { label: "단지명", getValue: (a) => a.name, direction: null },
   { label: "지역", getValue: (a) => [a.region, a.gu].filter(Boolean).join(" "), direction: null },
   { label: "세대수", getValue: (a) => a.units, direction: "higher" },
   { label: "미분양", getValue: (a) => a.unsold, direction: "lower" },
   { label: "미분양률(%)", getValue: (a) => a.unsold_rate, direction: "lower" },
+  { label: "6개월 취소율(%)", getValue: (a) => a.trade_stats?.cancel_ratio_6m, direction: "lower" },
   { label: "입주시기", getValue: (a) => a.presale_move_in ?? a.completion, direction: null },
   { label: "분양가 최저(만원)", getValue: (a) => a.presale_min_price, direction: "lower" },
   { label: "분양가 최고(만원)", getValue: (a) => a.presale_max_price, direction: "lower" },

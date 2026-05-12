@@ -98,9 +98,16 @@ describe("formatCellValue (셀 포맷)", () => {
 });
 
 describe("MB_COMPARE_ROWS (비교 행 정의)", () => {
-  /** 17개 비교 행이 정의됨 */
-  it("17개 비교 행이 정의되어 있다", () => {
-    expect(MB_COMPARE_ROWS).toHaveLength(17);
+  /** 18개 비교 행이 정의됨 */
+  it("18개 비교 행이 정의되어 있다", () => {
+    expect(MB_COMPARE_ROWS).toHaveLength(18);
+  });
+
+  /** 6개월 취소율 행이 포함되어 있고 direction이 "lower" */
+  it("6개월 취소율 행이 포함되어 있고 lower direction", () => {
+    const row = MB_COMPARE_ROWS.find((r) => r.label === "6개월 취소율(%)");
+    expect(row).toBeDefined();
+    expect(row?.direction).toBe("lower");
   });
 
   /** 모든 행이 MbApartment에서 값을 추출할 수 있다 */

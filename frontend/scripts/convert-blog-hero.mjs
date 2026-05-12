@@ -34,7 +34,7 @@ let converted = 0;
 for (const file of files) {
   const m = file.match(/attachment-\d+-([a-f0-9]+)\.(jpg|png)/);
   if (!m) continue;
-  const [, hash, ext] = m;
+  const [, hash] = m;
   const slug = MAP[hash];
   if (!slug) {
     console.warn(`[SKIP] ${file} — 매핑 없음 (hash: ${hash})`);
@@ -52,7 +52,6 @@ for (const file of files) {
     .toFile(outPath);
 
   const meta = await sharp(outPath).metadata();
-  const sizeKb = Math.round((await sharp(outPath).stats()).channels.length); // dummy
   console.log(`[OK] ${slug}.webp (${meta.width}×${meta.height})`);
   converted++;
 }

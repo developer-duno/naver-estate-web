@@ -1,11 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import dynamic from "next/dynamic";
 import type { PriceStats, ArticleFilters } from "@/types";
 import { formatChartPrice } from "@/lib/format";
-
-const LazyCharts = dynamic(() => import("./PriceChartInner"), { ssr: false });
 
 /** 층수별 가격 탭 — 카드형 UI + 클릭 시 해당 층수 필터 적용 */
 export default function ComplexPriceFloorTab({ priceStats, error, loading, onFilterChange }: {

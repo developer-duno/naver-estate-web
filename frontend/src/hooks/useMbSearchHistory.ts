@@ -14,6 +14,8 @@ export function useMbSearchHistory() {
   const [history, setHistory] = useState<MbSearchHistoryItem[]>([]);
 
   useEffect(() => {
+    // localStorage 는 SSR 에서 접근 불가 — useEffect 내부에서 1회 로드 (hydration mismatch 방지)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHistory(getMbSearchHistory());
   }, []);
 

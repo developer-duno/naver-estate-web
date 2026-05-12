@@ -3,7 +3,7 @@
  * 실행: npx playwright test e2e/search-flow.spec.ts
  */
 import { test, expect } from "@playwright/test";
-import { expectHeader, waitForContentOrEmpty } from "./helpers";
+import { expectHeader } from "./helpers";
 
 test("홈 페이지 로드", async ({ page }) => {
   await page.goto("/");

@@ -10,7 +10,6 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 
-const ROOT = "src";
 const TARGETS = ["src/app", "src/components", "src/content/blog"];
 
 const RISKY = [

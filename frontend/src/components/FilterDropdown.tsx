@@ -43,6 +43,8 @@ const FilterDropdown = React.memo(function FilterDropdown({
         }
       });
     } else {
+      // 닫힘 시 좌측 정렬 복원 (다음 열림 측정 전 초기화)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAlignRight(false);
     }
   }, [isOpen]);

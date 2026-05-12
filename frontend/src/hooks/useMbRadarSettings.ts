@@ -19,6 +19,8 @@ export function useMbRadarSettings() {
   const [settings, setSettings] = useState<MbRadarSettings>(DEFAULT_RADAR_SETTINGS);
 
   useEffect(() => {
+    // localStorage 는 SSR 에서 접근 불가 — useEffect 내부에서 1회 로드 (L18 댓글 답습)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSettings(getMbRadarSettings());
   }, []);
 

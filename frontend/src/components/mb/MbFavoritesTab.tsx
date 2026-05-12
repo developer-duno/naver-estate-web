@@ -126,7 +126,7 @@ export default function MbFavoritesTab({ favorites, onRemove }: Props) {
             </tr>
           </thead>
           <tbody>
-            {sortedFavorites.map((fav, i) => (
+            {sortedFavorites.map((fav) => (
               <tr
                 key={fav.id}
                 className={`border-b border-gray-100 hover:bg-blue-50/40 cursor-pointer ${

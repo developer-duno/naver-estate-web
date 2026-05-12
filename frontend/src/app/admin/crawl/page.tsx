@@ -92,9 +92,8 @@ export default function AdminCrawlPage() {
     queryClient.invalidateQueries({ queryKey: queryKeys.admin.crawlJobs(params as Record<string, unknown>) });
   };
 
-  const handleJumpToFailed = (_jobType?: string) => {
-    // jobType 인자는 향후 유형별 추가 필터를 위해 받아두지만, 현재 BE 의 /crawl-jobs 는 status 필터만
-    // 지원하므로 일단 status="failed" 만 적용. (유형별 필터는 후속 BE 작업 시 확장)
+  const handleJumpToFailed = () => {
+    // 실패 잡 목록으로 점프 + 부드러운 스크롤. (BE /crawl-jobs 가 현재 status 필터만 지원)
     setFilterStatus("failed");
     setPage(1);
     requestAnimationFrame(() => {

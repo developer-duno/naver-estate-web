@@ -1,9 +1,9 @@
 # Blog 라인업 — `/blog` MDX 박제 (단일 진실 공급원)
 
-> 17편 발행 (draft 0편). posts.ts BlogCategory 4종 = 시세 분석 / 세금 / 도구 활용 / 미분양.
+> 18편 발행 (draft 0편). posts.ts BlogCategory 4종 = 시세 분석 / 세금 / 도구 활용 / 미분양.
 > 새 글 발행 시 본 파일 표 1행 + 발행일 git log 실측 동시 갱신 의무.
 
-## 발행 글 17편 (BlogCategory 4종)
+## 발행 글 18편 (BlogCategory 4종)
 
 ### 시세 분석 (4편)
 
@@ -35,19 +35,20 @@
 | `search-history-workflow` | 검색 히스토리 활용법 — 손님 재방문 5분 응대 | 2026-05-13 |
 | `print-excel-workflow` | 인쇄·엑셀 내보내기 노하우 — 손님 응대 자료 1분 워크플로 | 2026-05-13 |
 
-### 미분양 (2편)
+### 미분양 (3편)
 
 | slug | 제목 | 발행일 |
 |---|---|---|
 | `mibunyang-for-agents` | 공인중개사를 위한 미분양 단지 활용법 | 2026-05-02 |
 | `mibunyang-radar-weights` | 미분양 레이더 가중치 활용법 — 손님 성향별 우위 단지 30초에 줄세우기 | 2026-05-08 |
+| `mibunyang-detail-bars-guide` | 미분양 상세 진행바 6종 30초 독법 — 손님 응대 카드 | 2026-05-13 |
 
 ## /blog 페이지 빌드 메커니즘
 
 - **MDX dynamic import**: `@/content/blog/${slug}.mdx`
 - **generateStaticParams** + **dynamicParams=false** (Next 16 정석)
 - **mdx-components.tsx** 14종 매핑 (img→next/Image 강제, 외부 a→target=\_blank rel=noopener)
-- **draft 미사용** = 14편 전부 발행 (영구 제외 박제: "draft N편" 표현 금지)
+- **draft 미사용** = 18편 전부 발행 (영구 제외 박제: "draft N편" 표현 금지)
 
 ## 새 글 발행 4단 절차 (의무)
 

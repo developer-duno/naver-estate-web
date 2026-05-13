@@ -11,7 +11,7 @@ import BlogIndexPage from "../blog/page";
 import { POSTS, getPostBySlug } from "../blog/posts";
 
 describe("/blog 목록 페이지", () => {
-  it("Hero 제목과 17편 카드가 모두 렌더된다", () => {
+  it("Hero 제목과 18편 카드가 모두 렌더된다", () => {
     const { container } = render(<BlogIndexPage />);
     expect(screen.getByRole("heading", { name: /부동산 인사이트/, level: 1 })).toBeInTheDocument();
     // 모든 글 제목이 카드에 표시
@@ -46,10 +46,10 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 17편 (전체)", () => {
-    expect(POSTS.length).toBe(17);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 18편 (전체)", () => {
+    expect(POSTS.length).toBe(18);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(17);
+    expect(new Set(slugs).size).toBe(18);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
       "acquisition-tax-tool-guide",
@@ -59,6 +59,7 @@ describe("blog/posts 메타데이터", () => {
       "compare-workflow",
       "complex-price-analysis",
       "jeonse-ratio",
+      "mibunyang-detail-bars-guide",
       "mibunyang-for-agents",
       "mibunyang-radar-weights",
       "print-excel-workflow",
@@ -159,6 +160,15 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.draft).toBeUndefined();
     expect(post?.title).toContain("레이더");
     expect(post?.description).toMatch(/13축|가중치|프리셋|78점|성향/);
+    expect(post?.category).toBe("미분양");
+  });
+
+  it("mibunyang-detail-bars-guide 메타 — 미분양 카테고리, 진행바 6종 키워드", () => {
+    const post = getPostBySlug("mibunyang-detail-bars-guide");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("진행바");
+    expect(post?.description).toMatch(/주차|건폐율|미분양률|전세율|취소율|소음도/);
     expect(post?.category).toBe("미분양");
   });
 

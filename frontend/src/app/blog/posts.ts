@@ -22,6 +22,15 @@ export const POSTS: BlogPost[] = [
     readingTime: 7,
   },
   {
+    slug: "mibunyang-detail-bars-guide",
+    title: "미분양 상세 진행바 6종 30초 독법 — 손님 응대 카드",
+    description:
+      "주차·건폐율·미분양률·전세율·6개월 취소율·소음도 6 진행바를 emerald/amber/rose 3 단계로 30초에 판독. DB 실측 분포 정합 임계값 + 손님 응대 30초 워크플로.",
+    date: "2026-05-13",
+    category: "미분양",
+    readingTime: 7,
+  },
+  {
     slug: "transfer-tax-tool-guide",
     title: "양도세 계산기 사용법 — 손님 30초 응대 워크플로",
     description:

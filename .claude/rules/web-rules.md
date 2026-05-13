@@ -71,19 +71,22 @@
 - dangerouslySetInnerHTML 사용하지 않기
 - DB 단지(Complex) 레코드 DELETE 하지 않기 (매물은 크롤링 시 없어진 것 삭제 허용)
 
-## mdx 발행 규칙 (GATE 10 — 162 세션 사고 답습)
+## mdx 발행 규칙 (GATE 10 — 162 세션 사고 답습 + 164 세션 확장)
 
 `src/content/blog/*.mdx` 발행·수정 시 CI `npm run check:mdx-jsx` 통과 의무 (자동).
 
-금지 패턴 3종 (mdx-js-loader 가 JSX 시작 태그로 오인해 Turbopack build 실패):
+금지 패턴 5종 (mdx-js-loader 가 JSX 시작 태그로 오인해 Turbopack build 실패):
 
-- raw `<숫자` (표 cell `<1.0`, `<60` 등) → `미만 부족` 한글 또는 `≤` 유니코드
-- raw `>숫자` (표 cell `>65`, `>30` 등) → `초과 고밀` 한글 또는 `≥` 유니코드
+- raw `<숫자` (표 cell `<1.0`, `<60` 등) → `미만` 한글 표현
+- raw `>숫자` (표 cell `>65`, `>30` 등) → `초과` 한글 표현
+- raw `<=숫자` (표 cell `<=1.0` 등) → `이하` 한글 또는 `≤` 유니코드 (164 세션 확장)
+- raw `>=숫자` (표 cell `>=65` 등) → `이상` 한글 또는 `≥` 유니코드 (164 세션 확장)
 - 단독 `[/path/[xxx]]` (`[id]`, `[no]`, `[slug]` 등 — 마크다운 링크 컨텍스트 밖) → `[표시 텍스트](/path)` 마크다운 링크 형식
 
 화이트리스트 (가드 통과 = 안전):
 - 인라인 코드 백틱 `` `<1.0` ``
 - 펜스 코드 블록 ```` ``` ````
 - 마크다운 링크 `[/complex/[no]](/search)` (`](` lookahead 통과)
+- 유니코드 부등호 `≤80%` / `≥1.5` (한글 표현 권장 답습)
 
-검증: `cd frontend && npm run check:mdx-jsx`. 회귀 테스트: `frontend/scripts/__tests__/check-mdx-jsx.test.mjs` 4 케이스.
+검증: `cd frontend && npm run check:mdx-jsx`. 회귀 테스트: `frontend/scripts/__tests__/check-mdx-jsx.test.mjs` 6 케이스.

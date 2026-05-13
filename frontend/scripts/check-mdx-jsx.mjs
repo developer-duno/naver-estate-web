@@ -4,13 +4,18 @@
  *
  * 검사 대상: src/content/blog/*.mdx
  * 검출 패턴:
- *   (a) raw "<숫자"   — 표 cell <1.0, <60 등 JSX 시작 태그 오인
- *   (b) raw ">숫자"   — 표 cell >65, >30 등 JSX 시작 태그 오인
- *   (c) [/path/[xxx]] — 마크다운 링크 컨텍스트 아닌 단독 동적 라우트 표기
+ *   (a) raw "<숫자"    — 표 cell <1.0, <60 등 JSX 시작 태그 오인
+ *   (b) raw ">숫자"    — 표 cell >65, >30 등 JSX 시작 태그 오인
+ *   (c) raw "<=숫자"   — 표 cell <=1.0 등 JSX 시작 태그 오인 (164 세션 확장)
+ *   (d) raw ">=숫자"   — 표 cell >=65 등 JSX 시작 태그 오인 (164 세션 확장)
+ *   (e) [/path/[xxx]] — 마크다운 링크 컨텍스트 아닌 단독 동적 라우트 표기
  *
  * 162 세션 답습:
  *   fix1 11a0891 — [/mibunyang/[id]] 의 [id] JSX 오인
  *   fix2 2264226 — 표 cell <1.0 / >65 / <60 등 raw 부등호 6행 JSX 오인
+ *
+ * 164 세션 확장:
+ *   <=숫자 / >=숫자 ASCII 부등호 false negative 차단 (plan v3 9 GATE 통과)
  *
  * 실행: node scripts/check-mdx-jsx.mjs
  */
@@ -20,8 +25,10 @@ import { join, relative } from "node:path";
 const TARGETS = ["src/content/blog"];
 
 const PATTERNS = [
-  { name: "raw '<숫자'", re: /<(\d)/g },
-  { name: "raw '>숫자'", re: /(^|[^=\->])>(\d)/g },
+  { name: "raw '<=숫자'", re: /<=(\d)/g },
+  { name: "raw '>=숫자'", re: /(^|[^=\->])>=(\d)/g },
+  { name: "raw '<숫자'", re: /<(?!=)(\d)/g },
+  { name: "raw '>숫자'", re: /(^|[^=\->])>(?!=)(\d)/g },
   { name: "단독 [/path/[xxx]]", re: /\[\/[^\]\n]*\[(\.\.\.)?[a-zA-Z][a-zA-Z0-9]*\][^\]\n]*\](?!\()/g },
 ];
 
@@ -100,9 +107,10 @@ if (isMain) {
   console.error(
     `\nmdx-js-loader 가 JSX 시작 태그로 오인해 Turbopack build 실패 위험.\n` +
       `정정 답습:\n` +
-      `  raw '<숫자' / '>숫자'  → '미만/초과/이상' 한글 표현 또는 ≥/≤ 유니코드\n` +
-      `  단독 [/path/[id]]      → [표시 텍스트](/path) 마크다운 링크 형식\n` +
-      `상세: 162 세션 fix1(11a0891) / fix2(2264226) git show 답습.`,
+      `  raw '<숫자' / '>숫자'    → '미만/초과' 한글 표현\n` +
+      `  raw '<=숫자' / '>=숫자'  → '이하/이상' 한글 표현 또는 ≤/≥ 유니코드\n` +
+      `  단독 [/path/[id]]        → [표시 텍스트](/path) 마크다운 링크 형식\n` +
+      `상세: 162 세션 fix1(11a0891) / fix2(2264226) + 164 세션 확장 git show 답습.`,
   );
   process.exit(1);
 }

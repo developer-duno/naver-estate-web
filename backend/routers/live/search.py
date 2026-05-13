@@ -300,12 +300,32 @@ def live_region(
     if dong:
         keyword += f" {dong}"
 
-    response = _search_with_fallback(
-        keyword=keyword, allowed_types=allowed_types, db=db,
-        upsert_kwargs={"sido": sido, "sigungu": sigungu, "dong": dong},
-        fallback=lambda: get_complexes_by_region(db, sido, sigungu, dong, limit=500),
-    )
-    if response.get("source") == "db_fallback":
+    try:
+        response = _search_with_fallback(
+            keyword=keyword, allowed_types=allowed_types, db=db,
+            upsert_kwargs={"sido": sido, "sigungu": sigungu, "dong": dong},
+            fallback=lambda: get_complexes_by_region(db, sido, sigungu, dong, limit=500),
+        )
+    except HTTPException as e:
+        # dong 있는 검색이 완전 실패 (네이버 0 + DB 동 단위 0) → 시구 단위로 한 번 더 폴백
+        # 네이버는 동명 단독 매칭이 약하고, DB 동 메타데이터도 모든 단지에 안 채워져 있어
+        # 사용자에게 "검색 실패" 보다 시구 단위 결과 + 안내 노출이 더 친절.
+        if e.status_code != 502 or not dong:
+            raise
+        sigungu_complexes = get_complexes_by_region(db, sido, sigungu, None, limit=500)
+        if not sigungu_complexes:
+            raise
+        logger.info(
+            "region 동 단위 폴백 실패 → 시구 단위 폴백 (sido=%s, sigungu=%s, dong=%s, %d건)",
+            sido, sigungu, dong, len(sigungu_complexes),
+        )
+        response = _db_fallback_response(sigungu_complexes, db, source="region_fallback")
+        response["notice"] = (
+            f"'{dong}'에 등록된 단지가 아직 없어 '{sigungu}' 단위로 결과를 표시합니다."
+        )
+        response["fallback_dong"] = dong
+
+    if response.get("source") in ("db_fallback", "region_fallback"):
         _fallback_cache.set(cache_key, response)
     else:
         _cache.set(cache_key, response)

@@ -112,10 +112,19 @@ function SearchContent() {
   const complexes = useMemo(() => searchData?.complexes ?? [], [searchData?.complexes]);
   const fallbackNotice = (() => {
     const data = searchData as { source?: string; notice?: string } | undefined;
-    if (data?.source !== "db_fallback") return "";
-    return data.notice ?? "네이버 실시간 검색이 일시적으로 지연되어 저장된 단지 데이터로 표시합니다.";
+    if (data?.source === "db_fallback") {
+      return data.notice ?? "네이버 실시간 검색이 일시적으로 지연되어 저장된 단지 데이터로 표시합니다.";
+    }
+    if (data?.source === "region_fallback") {
+      return data.notice ?? `'${dong}'에 등록된 단지가 아직 없어 '${sigungu}' 단위로 결과를 표시합니다.`;
+    }
+    return "";
   })();
-  const error = isError ? "검색에 실패했습니다. 다시 시도해주세요." : "";
+  const error = isError
+    ? (sido && sigungu && dong
+        ? `'${sido} ${sigungu} ${dong}' 검색 결과가 없습니다. 동을 빼고 시구 단위로 다시 시도하거나 단지명으로 검색해보세요.`
+        : "검색에 실패했습니다. 다시 시도해주세요.")
+    : "";
 
   // 매물유형 클라이언트 필터 (complexes/selectedTypes 변경 시만 재계산)
   const filteredComplexes = useMemo(
@@ -266,6 +275,14 @@ function SearchContent() {
             >
               다시 시도
             </button>
+            {sido && sigungu && dong && (
+              <button
+                onClick={() => router.push(`/search?sido=${encodeURIComponent(sido)}&sigungu=${encodeURIComponent(sigungu)}${buildTypesParam(selectedTypes)}`)}
+                className="text-sm text-blue-600 hover:underline px-3 py-1.5"
+              >
+                {sigungu} 단위로 검색
+              </button>
+            )}
             {hasActiveFilters && (
               <button
                 onClick={resetFilters}

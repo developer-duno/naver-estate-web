@@ -155,4 +155,48 @@ describe("/search 빈 결과·에러 UI 보강", () => {
     expect(screen.getByRole("button", { name: "다시 시도" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "필터 초기화" })).not.toBeInTheDocument();
   });
+
+  it("region_fallback 응답 → 동에 단지 없어 시구 단위로 표시 안내 노출", async () => {
+    mockSearchParams.mockReturnValue(
+      new URLSearchParams("sido=대전광역시&sigungu=대덕구&dong=문평동"),
+    );
+    mockGetComplexesByRegion.mockResolvedValue({
+      complexes: [makeComplex("C111", "시구단위단지", "APT")],
+      total: 1,
+      source: "region_fallback",
+      notice: "'문평동'에 등록된 단지가 아직 없어 '대덕구' 단위로 결과를 표시합니다.",
+      fallback_dong: "문평동",
+    });
+
+    renderSearch();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          /'문평동'에 등록된 단지가 아직 없어 '대덕구' 단위로 결과를 표시합니다/,
+        ),
+      ).toBeInTheDocument();
+    });
+    // 시구 단위 단지는 정상 노출
+    expect(screen.getAllByText("시구단위단지").length).toBeGreaterThan(0);
+  });
+
+  it("dong 검색 502 에러 → 동 빼고 시구 단위로 검색 버튼 노출", async () => {
+    mockSearchParams.mockReturnValue(
+      new URLSearchParams("sido=대전광역시&sigungu=대덕구&dong=문평동"),
+    );
+    mockGetComplexesByRegion.mockRejectedValue(new Error("502"));
+
+    renderSearch();
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          /'대전광역시 대덕구 문평동' 검색 결과가 없습니다/,
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: "다시 시도" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "대덕구 단위로 검색" })).toBeInTheDocument();
+  });
 });

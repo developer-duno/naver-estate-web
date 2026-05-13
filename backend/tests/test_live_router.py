@@ -241,6 +241,47 @@ class TestLiveRegion:
         called_keywords = [call.args[0] for call in mock_search.call_args_list]
         assert any("역삼동" in kw for kw in called_keywords)
 
+    @patch(SEARCH_PATCH)
+    def test_region_dong_failure_falls_back_to_sigungu(self, mock_search, client, db):
+        """dong 검색 완전 실패 (네이버 0 + DB 동 단위 0) → 시구 단위 폴백 + notice"""
+        from db.models import Complex
+        from routers.live._shared import _cache
+        from services.cache import get_cache
+        _cache.delete_by_prefix("region:")
+        get_cache("search_fallback").delete_by_prefix("region:")
+        # 시구 단위에는 단지 있음 (다른 동), 동 단위에는 0건
+        db.add(Complex(
+            complex_no="C111",
+            complex_name="시구단위단지",
+            real_estate_type_code="APT",
+            real_estate_type_name="아파트",
+            cortar_no="3023010800",
+            sido="대전광역시", sigungu="대덕구", dong="법동",
+        ))
+        db.commit()
+
+        # 네이버 0건 → 동 단위 DB 폴백도 0건 → 시구 단위 폴백 trigger
+        mock_search.return_value = make_search_result(complexes=[])
+        res = client.get("/api/live/region?sido=대전광역시&sigungu=대덕구&dong=문평동")
+        assert res.status_code == 200
+        body = res.json()
+        assert body["source"] == "region_fallback"
+        assert body["fallback_dong"] == "문평동"
+        assert "문평동" in body["notice"]
+        assert "대덕구" in body["notice"]
+        assert any(c["complex_name"] == "시구단위단지" for c in body["complexes"])
+
+    @patch(SEARCH_PATCH)
+    def test_region_dong_failure_and_sigungu_empty_still_502(self, mock_search, client, db):
+        """dong + 시구 단위 둘 다 0건 → 502 (폴백 불가)"""
+        from routers.live._shared import _cache
+        from services.cache import get_cache
+        _cache.delete_by_prefix("region:")
+        get_cache("search_fallback").delete_by_prefix("region:")
+        mock_search.return_value = make_search_result(complexes=[])
+        res = client.get("/api/live/region?sido=없는시&sigungu=없는구&dong=없는동")
+        assert res.status_code == 502
+
 
 # ── _search_all_types 통합 테스트 ──
 

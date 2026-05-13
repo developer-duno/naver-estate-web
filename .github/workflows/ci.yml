@@ -71,6 +71,9 @@ jobs:
       - name: Compliance
         run: npm run check:ad-compliance
 
+      - name: Mdx-JSX guard
+        run: npm run check:mdx-jsx
+
       - name: Test
         run: npm test
 

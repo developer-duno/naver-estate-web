@@ -4,7 +4,9 @@ import dynamic from "next/dynamic";
 import type { MbApartment, MbPrice } from "@/types";
 import { formatKoreanPrice } from "@/lib/format";
 import { MbCancelRatioBar } from "./MbCancelRatioBar";
+import { MbCoverageBar } from "./MbCoverageBar";
 import { MbParkingBar } from "./MbParkingBar";
+import { MbUnsoldRateBar } from "./MbUnsoldRateBar";
 
 const MbTradeStatsCharts = dynamic(() => import("./MbTradeStatsCharts"), { ssr: false });
 
@@ -45,7 +47,7 @@ export function OverviewSection({ apartment: a }: SectionProps) {
         <InfoRow label="최고층" value={a.max_floor ? `${a.max_floor}층` : undefined} />
         <InfoRow label="세대당 주차" value={a.parking_ratio != null ? <MbParkingBar value={a.parking_ratio} /> : undefined} />
         <InfoRow label="용적률" value={a.floor_area_ratio ? `${a.floor_area_ratio}%` : undefined} />
-        <InfoRow label="건폐율" value={a.building_coverage_ratio ? `${a.building_coverage_ratio}%` : undefined} />
+        <InfoRow label="건폐율" value={a.building_coverage_ratio != null ? <MbCoverageBar value={a.building_coverage_ratio} /> : undefined} />
         <InfoRow label="규제지역" value={a.is_regulated ? "예" : a.is_regulated === false ? "아니오" : undefined} />
         <InfoRow label="시공사" value={a.builder} />
         {b && (
@@ -75,6 +77,7 @@ export function PresaleSection({ apartment: a }: SectionProps) {
         <InfoRow label="분양단계" value={a.presale_stage} />
         <InfoRow label="입주시기" value={a.presale_move_in} />
         <InfoRow label="할인율" value={a.discount_pct != null ? `${a.discount_pct}%` : undefined} />
+        <InfoRow label="미분양률" value={a.unsold_rate != null ? <MbUnsoldRateBar value={a.unsold_rate} /> : undefined} />
         <InfoRow label="발코니 무상" value={a.balcony_free ? "O" : a.balcony_free === false ? "X" : undefined} />
         <InfoRow label="옵션 무상" value={a.option_free ? "O" : a.option_free === false ? "X" : undefined} />
         <InfoRow label="캐시백" value={a.cashback != null ? formatKoreanPrice(a.cashback) : undefined} />

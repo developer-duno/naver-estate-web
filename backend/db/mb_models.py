@@ -79,6 +79,13 @@ class Apartment(Base):
     road_address: Mapped[str | None] = mapped_column(Text)
     district: Mapped[str | None] = mapped_column(Text)
 
+    # 관리비 5 항목 분리 (mibunyang W3, 2026-05-13 동기화)
+    maint_heat: Mapped[int | None] = mapped_column(Integer)
+    maint_hotwater: Mapped[int | None] = mapped_column(Integer)
+    maint_gas: Mapped[int | None] = mapped_column(Integer)
+    maint_elec: Mapped[int | None] = mapped_column(Integer)
+    maint_water: Mapped[int | None] = mapped_column(Integer)
+
     created_at: Mapped[datetime | None] = mapped_column(DateTime)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
 
@@ -244,6 +251,9 @@ class Infra(Base):
     emergency_hospital_dist: Mapped[float | None] = mapped_column(Float)
     emergency_beds: Mapped[int | None] = mapped_column(Integer)
     emergency_level: Mapped[str | None] = mapped_column(Text)
+    # 응급의료기관 시설명/분류 (mibunyang W4, 2026-05-13 동기화)
+    emergency_name: Mapped[str | None] = mapped_column(Text)
+    emergency_type: Mapped[str | None] = mapped_column(Text)
     # 대기질 — 에어코리아 (V012)
     air_station_name: Mapped[str | None] = mapped_column(Text)
     air_station_dist: Mapped[float | None] = mapped_column(Float)

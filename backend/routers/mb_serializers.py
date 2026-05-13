@@ -43,6 +43,12 @@ def apartment_to_dict(a) -> dict:
         "noise": a.noise,
         "road_address": a.road_address,
         "district": a.district,
+        # 관리비 5 항목 분리 (mibunyang W3)
+        "maint_heat": a.maint_heat,
+        "maint_hotwater": a.maint_hotwater,
+        "maint_gas": a.maint_gas,
+        "maint_elec": a.maint_elec,
+        "maint_water": a.maint_water,
         "created_at": a.created_at.isoformat() if a.created_at else None,
         "updated_at": a.updated_at.isoformat() if a.updated_at else None,
     }
@@ -163,6 +169,9 @@ def infra_to_dict(i) -> dict:
         "emergency_hospital_dist": i.emergency_hospital_dist,
         "emergency_beds": i.emergency_beds,
         "emergency_level": i.emergency_level,
+        # 응급의료기관 시설명/분류 (mibunyang W4)
+        "emergency_name": i.emergency_name,
+        "emergency_type": i.emergency_type,
         # 대기질 — 에어코리아 (V012)
         "air_station_name": i.air_station_name,
         "air_station_dist": i.air_station_dist,

@@ -137,4 +137,12 @@ export async function applyMibunyangDetailMocks(page: Page): Promise<void> {
     }
     await route.fulfill({ status: 404, body: "not found" });
   });
+
+  // Header role 결정성 — 147 답습 (98f1f94). 공개 페이지이므로 role="user".
+  await page.route("**/api/users/me", async (route) => {
+    await fulfillJson(route, { role: "user", email: "test@example.com" });
+  });
+  await page.route("**/rest/v1/user_profiles**", async (route) => {
+    await fulfillJson(route, [{ role: "user" }]);
+  });
 }

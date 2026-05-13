@@ -18,7 +18,7 @@ function makeApt(overrides: Partial<MbApartment> = {}): MbApartment {
     presale_min_price: 50000,
     presale_max_price: 80000,
     presale_pp: 3000,
-    parking_ratio: 120,
+    parking_ratio: 1.2,
     max_floor: 30,
     floor_area_ratio: 250,
     heating: "지역난방",

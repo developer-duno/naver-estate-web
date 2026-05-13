@@ -19,7 +19,7 @@ function makeApt(id: string, name: string) {
   return {
     id, name, region: "서울", gu: "강남", units: 500, unsold: 10,
     unsold_rate: 2.0, presale_min_price: 40000, presale_max_price: 80000,
-    presale_pp: 2500, parking_ratio: 120, max_floor: 30,
+    presale_pp: 2500, parking_ratio: 1.2, max_floor: 30,
     naver_jeonse_rate: 65, naver_nearby_median: 90000,
     discount_pct: 5, floor_area_ratio: 250, builder: "테스트건설",
     noise: 55,

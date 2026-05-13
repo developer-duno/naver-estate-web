@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import type { MbApartment, MbPrice } from "@/types";
 import { formatKoreanPrice } from "@/lib/format";
 import { MbCancelRatioBar } from "./MbCancelRatioBar";
+import { MbParkingBar } from "./MbParkingBar";
 
 const MbTradeStatsCharts = dynamic(() => import("./MbTradeStatsCharts"), { ssr: false });
 
@@ -42,7 +43,7 @@ export function OverviewSection({ apartment: a }: SectionProps) {
         <InfoRow label="완공" value={a.completion} />
         <InfoRow label="난방" value={a.heating} />
         <InfoRow label="최고층" value={a.max_floor ? `${a.max_floor}층` : undefined} />
-        <InfoRow label="주차비율" value={a.parking_ratio ? `${a.parking_ratio}%` : undefined} />
+        <InfoRow label="세대당 주차" value={a.parking_ratio != null ? <MbParkingBar value={a.parking_ratio} /> : undefined} />
         <InfoRow label="용적률" value={a.floor_area_ratio ? `${a.floor_area_ratio}%` : undefined} />
         <InfoRow label="건폐율" value={a.building_coverage_ratio ? `${a.building_coverage_ratio}%` : undefined} />
         <InfoRow label="규제지역" value={a.is_regulated ? "예" : a.is_regulated === false ? "아니오" : undefined} />

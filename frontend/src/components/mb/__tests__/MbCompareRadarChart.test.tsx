@@ -24,7 +24,7 @@ function makeApt(overrides: Partial<MbApartment> & { id: string; name: string })
     units: 300,
     unsold: 10,
     unsold_rate: 3.3,
-    parking_ratio: 100,
+    parking_ratio: 1.0,
     max_floor: 25,
     naver_jeonse_rate: 60,
     naver_nearby_median: 80000,
@@ -59,8 +59,8 @@ describe("MbCompareRadarChart", () => {
 
   it("종합 우위 텍스트와 점수가 표시된다", () => {
     const apts = [
-      makeApt({ id: "A", name: "단지A", units: 1000, parking_ratio: 150 }),
-      makeApt({ id: "B", name: "단지B", units: 200, parking_ratio: 80 }),
+      makeApt({ id: "A", name: "단지A", units: 1000, parking_ratio: 1.5 }),
+      makeApt({ id: "B", name: "단지B", units: 200, parking_ratio: 0.8 }),
     ];
     render(<MbCompareRadarChart apartments={apts} />);
     expect(screen.getByText(/종합 우위/)).toBeInTheDocument();
@@ -86,7 +86,7 @@ describe("MbCompareRadarChart", () => {
     render(<MbCompareRadarChart apartments={apts} />);
 
     // aria-pressed 버튼만 선택하여 클릭 — 10개 비활성화 → 3개 남음
-    const labels = ["세대수", "주차비율", "최고층", "전세가율", "주변시세", "할인율", "대기질", "의료인프라", "보육", "치안"];
+    const labels = ["세대수", "세대당 주차", "최고층", "전세가율", "주변시세", "할인율", "대기질", "의료인프라", "보육", "치안"];
     labels.forEach((label) => {
       const btn = screen.getByRole("button", { name: label, pressed: true });
       fireEvent.click(btn);
@@ -126,13 +126,13 @@ describe("MbCompareRadarChart", () => {
     const apts = [
       makeApt({
         id: "A", name: "단지A",
-        units: 1000, parking_ratio: 150, max_floor: 30,
+        units: 1000, parking_ratio: 1.5, max_floor: 30,
         naver_jeonse_rate: 80, naver_nearby_median: 100000,
         discount_pct: 10, unsold_rate: 1, presale_pp: 1000, floor_area_ratio: 150,
       }),
       makeApt({
         id: "B", name: "단지B",
-        units: 200, parking_ratio: 50, max_floor: 10,
+        units: 200, parking_ratio: 0.5, max_floor: 10,
         naver_jeonse_rate: 30, naver_nearby_median: 50000,
         discount_pct: 2, unsold_rate: 10, presale_pp: 3000, floor_area_ratio: 300,
       }),

@@ -28,7 +28,7 @@ interface AxisDef {
 
 const AXES: AxisDef[] = [
   { key: "units", label: "세대수", getValue: (a) => a.units ?? 0 },
-  { key: "parking", label: "주차비율", getValue: (a) => a.parking_ratio ?? 0 },
+  { key: "parking", label: "세대당 주차", getValue: (a) => a.parking_ratio ?? 0 },
   { key: "maxFloor", label: "최고층", getValue: (a) => a.max_floor ?? 0 },
   { key: "jeonse", label: "전세가율", getValue: (a) => a.naver_jeonse_rate ?? 0 },
   { key: "nearby", label: "주변시세", getValue: (a) => a.naver_nearby_median ?? 0 },

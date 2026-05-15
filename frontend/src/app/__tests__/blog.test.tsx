@@ -11,7 +11,7 @@ import BlogIndexPage from "../blog/page";
 import { POSTS, getPostBySlug } from "../blog/posts";
 
 describe("/blog 목록 페이지", () => {
-  it("Hero 제목과 18편 카드가 모두 렌더된다", () => {
+  it("Hero 제목과 20편 카드가 모두 렌더된다", () => {
     const { container } = render(<BlogIndexPage />);
     expect(screen.getByRole("heading", { name: /부동산 인사이트/, level: 1 })).toBeInTheDocument();
     // 모든 글 제목이 카드에 표시
@@ -46,10 +46,10 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 19편 (전체)", () => {
-    expect(POSTS.length).toBe(19);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 20편 (전체)", () => {
+    expect(POSTS.length).toBe(20);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(19);
+    expect(new Set(slugs).size).toBe(20);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
       "acquisition-tax-tool-guide",
@@ -60,6 +60,7 @@ describe("blog/posts 메타데이터", () => {
       "complex-price-analysis",
       "jeonse-ratio",
       "mibunyang-detail-bars-guide",
+      "mibunyang-detail-sections-guide",
       "mibunyang-for-agents",
       "mibunyang-price-discount-guide",
       "mibunyang-radar-weights",
@@ -164,13 +165,23 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.category).toBe("미분양");
   });
 
-  it("mibunyang-detail-bars-guide 메타 — 미분양 카테고리, 진행바 6종 키워드", () => {
+  it("mibunyang-detail-bars-guide 메타 — 미분양 카테고리, 진행바 8종 키워드", () => {
     const post = getPostBySlug("mibunyang-detail-bars-guide");
     expect(post).toBeDefined();
     expect(post?.draft).toBeUndefined();
     expect(post?.title).toContain("진행바");
-    expect(post?.description).toMatch(/주차|건폐율|미분양률|전세율|취소율|소음도/);
+    expect(post?.description).toMatch(/세대수|최고층|주차|건폐율|미분양률|전세율|취소율|소음도/);
     expect(post?.category).toBe("미분양");
+  });
+
+  it("mibunyang-detail-sections-guide 메타 — 미분양 카테고리, 5 단원 도해 키워드", () => {
+    const post = getPostBySlug("mibunyang-detail-sections-guide");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("5 단원");
+    expect(post?.description).toMatch(/개요|분양|거래|주변환경|위치|진행바 8종/);
+    expect(post?.category).toBe("미분양");
+    expect(post?.date).toBe("2026-05-16");
   });
 
   it("mibunyang-price-discount-guide 메타 — 미분양 카테고리, 분양가·할인율·평당가 키워드", () => {

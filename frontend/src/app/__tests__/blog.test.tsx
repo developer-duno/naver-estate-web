@@ -46,10 +46,10 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 18편 (전체)", () => {
-    expect(POSTS.length).toBe(18);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 19편 (전체)", () => {
+    expect(POSTS.length).toBe(19);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(18);
+    expect(new Set(slugs).size).toBe(19);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
       "acquisition-tax-tool-guide",
@@ -61,6 +61,7 @@ describe("blog/posts 메타데이터", () => {
       "jeonse-ratio",
       "mibunyang-detail-bars-guide",
       "mibunyang-for-agents",
+      "mibunyang-price-discount-guide",
       "mibunyang-radar-weights",
       "print-excel-workflow",
       "property-tax-guide",
@@ -170,6 +171,16 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.title).toContain("진행바");
     expect(post?.description).toMatch(/주차|건폐율|미분양률|전세율|취소율|소음도/);
     expect(post?.category).toBe("미분양");
+  });
+
+  it("mibunyang-price-discount-guide 메타 — 미분양 카테고리, 분양가·할인율·평당가 키워드", () => {
+    const post = getPostBySlug("mibunyang-price-discount-guide");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("분양가");
+    expect(post?.description).toMatch(/분양가|할인율|평당가|평형별|HUG/);
+    expect(post?.category).toBe("미분양");
+    expect(post?.date).toBe("2026-05-16");
   });
 
   it("agent-verification-guide 메타 — 도구 활용 카테고리, 인증 워크플로 키워드", () => {

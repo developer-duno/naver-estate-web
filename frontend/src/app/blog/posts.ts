@@ -85,6 +85,15 @@ export const POSTS: BlogPost[] = [
     readingTime: 8,
   },
   {
+    slug: "mibunyang-price-discount-guide",
+    title: "미분양 분양가·할인율·평당가 한눈에 비교하는 법 — 집 사려는 분의 첫 가이드",
+    description:
+      "분양가 / 할인율 / 평당가 3개념 입문 + 평형별 분양가 표 읽는 법 + 시공사 부채비율·신용등급·HUG 보증 + /mibunyang 분양가 낮은순 정렬 → 즐겨찾기 → 4단지 19행 비교 워크플로. 부동산 처음 보는 일반 사용자도 한 글 읽고 미분양 단지 검토할 수 있도록 정리한 입문 가이드.",
+    date: "2026-05-16",
+    category: "미분양",
+    readingTime: 7,
+  },
+  {
     slug: "realtime-listing",
     title: "네이버 매물 실시간 조회 노하우",
     description:

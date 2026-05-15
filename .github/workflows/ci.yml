@@ -110,14 +110,14 @@ jobs:
           NEXT_PUBLIC_API_URL: http://localhost:9999
 
       - if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: playwright-report
           path: frontend/playwright-report
           retention-days: 14
 
       - if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: admin-screenshots
           path: frontend/test-results
@@ -126,7 +126,7 @@ jobs:
       # workflow_dispatch + update_snapshots=true 일 때만 baseline 변경분 업로드
       # 다운로드 후 frontend/e2e/admin-dashboard.spec.ts-snapshots/ 에 풀어서 커밋
       - if: inputs.update_snapshots
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: updated-snapshots
           path: frontend/e2e/**/*-snapshots/**
@@ -143,7 +143,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip

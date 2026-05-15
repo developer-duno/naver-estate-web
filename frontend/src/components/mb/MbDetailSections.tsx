@@ -6,6 +6,7 @@ import { formatKoreanPrice } from "@/lib/format";
 import { MbCancelRatioBar } from "./MbCancelRatioBar";
 import { MbCoverageBar } from "./MbCoverageBar";
 import { MbJeonseRateBar } from "./MbJeonseRateBar";
+import { MbMaxFloorBar } from "./MbMaxFloorBar";
 import { MbParkingBar } from "./MbParkingBar";
 import { MbUnsoldRateBar } from "./MbUnsoldRateBar";
 
@@ -45,7 +46,7 @@ export function OverviewSection({ apartment: a }: SectionProps) {
         <InfoRow label="세대수" value={a.units?.toLocaleString()} />
         <InfoRow label="완공" value={a.completion} />
         <InfoRow label="난방" value={a.heating} />
-        <InfoRow label="최고층" value={a.max_floor ? `${a.max_floor}층` : undefined} />
+        <InfoRow label="최고층" value={a.max_floor != null ? <MbMaxFloorBar value={a.max_floor} /> : undefined} />
         <InfoRow label="세대당 주차" value={a.parking_ratio != null ? <MbParkingBar value={a.parking_ratio} /> : undefined} />
         <InfoRow label="용적률" value={a.floor_area_ratio ? `${a.floor_area_ratio}%` : undefined} />
         <InfoRow label="건폐율" value={a.building_coverage_ratio != null ? <MbCoverageBar value={a.building_coverage_ratio} /> : undefined} />

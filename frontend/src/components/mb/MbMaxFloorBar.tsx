@@ -20,8 +20,8 @@ export function MbMaxFloorBar({ value }: Props) {
     tier === "low" ? "text-emerald-600" :
     tier === "mid" ? "text-sky-600" : "text-indigo-600";
   const label =
-    tier === "low" ? "저층" :
-    tier === "mid" ? "중층" : "고층";
+    tier === "low" ? "저층 단지" :
+    tier === "mid" ? "중층 단지" : "고층 단지";
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-baseline gap-2">

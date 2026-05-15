@@ -8,6 +8,7 @@ import { MbCoverageBar } from "./MbCoverageBar";
 import { MbJeonseRateBar } from "./MbJeonseRateBar";
 import { MbMaxFloorBar } from "./MbMaxFloorBar";
 import { MbParkingBar } from "./MbParkingBar";
+import { MbUnitsBar } from "./MbUnitsBar";
 import { MbUnsoldRateBar } from "./MbUnsoldRateBar";
 
 const MbTradeStatsCharts = dynamic(() => import("./MbTradeStatsCharts"), { ssr: false });
@@ -43,7 +44,7 @@ export function OverviewSection({ apartment: a }: SectionProps) {
         <InfoRow label="단지명" value={a.name} />
         <InfoRow label="주소" value={a.address ?? a.road_address} />
         <InfoRow label="지역" value={`${a.region} ${a.gu ?? ""} ${a.dong ?? ""}`.trim()} />
-        <InfoRow label="세대수" value={a.units?.toLocaleString()} />
+        <InfoRow label="세대수" value={a.units != null ? <MbUnitsBar value={a.units} /> : undefined} />
         <InfoRow label="완공" value={a.completion} />
         <InfoRow label="난방" value={a.heating} />
         <InfoRow label="최고층" value={a.max_floor != null ? <MbMaxFloorBar value={a.max_floor} /> : undefined} />

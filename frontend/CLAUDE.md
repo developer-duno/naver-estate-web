@@ -21,7 +21,7 @@ frontend/src/
 ├── hooks/         # 커스텀 훅 (19개, useLocalStorageList + useLocalStorageFavorites 제네릭 훅 포함)
 ├── lib/           # 40개 (api/ 7모듈 + storage/ + format/ + query-keys/ + 도구별 lib(brokerage·acquisition·transfer·property-tax 등))
 ├── types/         # TypeScript 인터페이스 (estate + Mb* 10개 + naver-maps.d.ts)
-├── content/blog/  # MDX 14편 (.claude/BLOG.md SSOT 참조)
+├── content/blog/  # MDX 20편 (.claude/BLOG.md SSOT 참조)
 └── middleware.ts  # Supabase 세션 + 관리자 라우트 보호
 ```
 

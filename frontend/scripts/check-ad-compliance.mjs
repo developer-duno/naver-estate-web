@@ -2,7 +2,7 @@
 /**
  * 광고법 위험 단어 회귀 가드
  *
- * 검사 대상: blog mdx 14편 + app/components tsx
+ * 검사 대상: blog mdx 20편 + app/components tsx
  * 검출 시 exit 1 + 위치·라인·문맥 출력
  *
  * 실행: node scripts/check-ad-compliance.mjs

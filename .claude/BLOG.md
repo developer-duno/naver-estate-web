@@ -1,9 +1,9 @@
 # Blog 라인업 — `/blog` MDX 박제 (단일 진실 공급원)
 
-> 19편 발행 (draft 0편). posts.ts BlogCategory 4종 = 시세 분석 / 세금 / 도구 활용 / 미분양.
+> 20편 발행 (draft 0편). posts.ts BlogCategory 4종 = 시세 분석 / 세금 / 도구 활용 / 미분양.
 > 새 글 발행 시 본 파일 표 1행 + 발행일 git log 실측 동시 갱신 의무.
 
-## 발행 글 19편 (BlogCategory 4종)
+## 발행 글 20편 (BlogCategory 4종)
 
 ### 시세 분석 (4편)
 
@@ -35,7 +35,7 @@
 | `search-history-workflow` | 검색 히스토리 활용법 — 손님 재방문 5분 응대 | 2026-05-13 |
 | `print-excel-workflow` | 인쇄·엑셀 내보내기 노하우 — 손님 응대 자료 1분 워크플로 | 2026-05-13 |
 
-### 미분양 (4편)
+### 미분양 (5편)
 
 | slug | 제목 | 발행일 |
 |---|---|---|
@@ -43,18 +43,19 @@
 | `mibunyang-radar-weights` | 미분양 레이더 가중치 활용법 — 손님 성향별 우위 단지 30초에 줄세우기 | 2026-05-08 |
 | `mibunyang-detail-bars-guide` | 미분양 상세 진행바 8종 30초 독법 — 손님 응대 카드 | 2026-05-13 |
 | `mibunyang-price-discount-guide` | 미분양 분양가·할인율·평당가 한눈에 비교하는 법 — 집 사려는 분의 첫 가이드 | 2026-05-16 |
+| `mibunyang-detail-sections-guide` | 단지 상세 5 단원 30초 도해 — 손님 신뢰 응대 카드 | 2026-05-16 |
 
 ## /blog 페이지 빌드 메커니즘
 
 - **MDX dynamic import**: `@/content/blog/${slug}.mdx`
 - **generateStaticParams** + **dynamicParams=false** (Next 16 정석)
-- **mdx-components.tsx** 14종 매핑 (img→next/Image 강제, 외부 a→target=\_blank rel=noopener)
-- **draft 미사용** = 19편 전부 발행 (영구 제외 박제: "draft N편" 표현 금지)
+- **mdx-components.tsx** 17종 매핑 (img→next/Image 강제, 외부 a→target=\_blank rel=noopener)
+- **draft 미사용** = 20편 전부 발행 (영구 제외 박제: "draft N편" 표현 금지)
 
 ## 새 글 발행 4단 절차 (의무)
 
 1. **mdx 본문 작성** — `frontend/src/content/blog/<slug>.mdx`
-   - mdx-components.tsx 14종 답습 (img / h1~h6 / table / a / code 등)
+   - mdx-components.tsx 17종 답습 (img / h1~h6 / table / a / code 등)
    - 본문 길이 = 도구 활용 카테고리 ~120~140줄, 시세·세금 ~80~120줄 답습
 2. **posts.ts 1행 추가** — `frontend/src/app/blog/posts.ts`
    - `slug` (kebab-case) / `title` / `category` (BlogCategory 4종 中 1) / `description` / `date` (YYYY-MM-DD) / `readingTime` (분 단위 추정)
@@ -70,10 +71,10 @@
 - 시세 분석 5편째: 평당가 비교 워크플로 / 호가 변동 추이
 - 세금 4편째: 종부세 합산배제 가이드 / 부부 공동명의 절세 전략 / 임대주택 세제 혜택
 - 도구 활용 9편째: (현재 8편 = 도구 5종 사용법 + 비교/검색/인쇄 워크플로 커버) 추가 후보 협의
-- 미분양 5편째: 미분양 추이 차트 활용 / 즐겨찾기 일괄 비교 / 단지 상세 9 단원 도해
+- 미분양 6편째: 미분양 추이 차트 활용 (MbUnsoldTrendChart 4 기간 × 3 시리즈) / 즐겨찾기 일괄 비교 워크플로 (200개 → 4 단지 → 19행) / 자매글 역링크 정합 보강
 
 ## 회귀 가드 (영구 제외 박제 답습)
 
-- "draft N편" 표현 금지 (15편 전부 발행, draft 미사용)
+- "draft N편" 표현 금지 (20편 전부 발행, draft 미사용)
 - 미분양 지도 뷰 / 비교 4→6~8 확장 = 영구 제외 (사용자 명시 제외)
 - 6번째 도구 도입 = 영구 제외 (사용자 명시 요청 0)

@@ -90,3 +90,5 @@
 - 유니코드 부등호 `≤80%` / `≥1.5` (한글 표현 권장 답습)
 
 검증: `cd frontend && npm run check:mdx-jsx`. 회귀 테스트: `frontend/scripts/__tests__/check-mdx-jsx.test.mjs` 6 케이스.
+
+로컬 pre-commit hook 자동 차단 운영 (165 세션 신설, husky v9). `frontend/src/content/blog/*.mdx` staged 변경 감지 시 `check:mdx-jsx` + `check:ad-compliance` 둘 다 자동 실행. CI step (`Mdx-JSX guard`) + pre-commit hook 이중 안전망 = 162·163·164 사고 회귀 0차 차단. bypass `--no-verify` 금지 (긴급 hotfix 한정, CONTRIBUTING.md 답습).

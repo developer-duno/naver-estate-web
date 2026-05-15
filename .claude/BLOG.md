@@ -49,7 +49,7 @@
 - **MDX dynamic import**: `@/content/blog/${slug}.mdx`
 - **generateStaticParams** + **dynamicParams=false** (Next 16 정석)
 - **mdx-components.tsx** 14종 매핑 (img→next/Image 강제, 외부 a→target=\_blank rel=noopener)
-- **draft 미사용** = 18편 전부 발행 (영구 제외 박제: "draft N편" 표현 금지)
+- **draft 미사용** = 19편 전부 발행 (영구 제외 박제: "draft N편" 표현 금지)
 
 ## 새 글 발행 4단 절차 (의무)
 

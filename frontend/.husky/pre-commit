@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+# GATE 10 + 광고법 자동 차단 pre-commit hook
+# 답습: 162·163·164 mdx JSX 충돌 사고 + 149 광고법 사고 회귀 0차 차단
+# 실행 조건: staged 변경 중 frontend/src/content/blog/*.mdx 있을 때만
+# Bypass: --no-verify (긴급 hotfix 한정, CONTRIBUTING.md 답습)
+
+staged_mdx=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '^frontend/src/content/blog/.*\.mdx$' || true)
+
+if [ -z "$staged_mdx" ]; then
+  exit 0
+fi
+
+echo "▶ staged mdx 감지 → GATE 10 + 광고법 가드 실행"
+echo "$staged_mdx" | sed 's/^/  - /'
+
+cd frontend || exit 1
+
+npm run --silent check:mdx-jsx || exit 1
+npm run --silent check:ad-compliance || exit 1

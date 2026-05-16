@@ -11,7 +11,7 @@ import BlogIndexPage from "../blog/page";
 import { POSTS, getPostBySlug } from "../blog/posts";
 
 describe("/blog 목록 페이지", () => {
-  it("Hero 제목과 23편 카드가 모두 렌더된다", () => {
+  it("Hero 제목과 24편 카드가 모두 렌더된다", () => {
     const { container } = render(<BlogIndexPage />);
     expect(screen.getByRole("heading", { name: /부동산 인사이트/, level: 1 })).toBeInTheDocument();
     // 모든 글 제목이 카드에 표시
@@ -46,10 +46,10 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 23편 (전체)", () => {
-    expect(POSTS.length).toBe(23);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 24편 (전체)", () => {
+    expect(POSTS.length).toBe(24);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(23);
+    expect(new Set(slugs).size).toBe(24);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
       "acquisition-tax-tool-guide",
@@ -59,6 +59,7 @@ describe("blog/posts 메타데이터", () => {
       "buy-timing-signals",
       "compare-workflow",
       "complex-price-analysis",
+      "hold-period-special-guide",
       "jeonse-ratio",
       "mibunyang-detail-bars-guide",
       "mibunyang-detail-sections-guide",
@@ -120,6 +121,15 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.draft).toBeUndefined();
     expect(post?.title).toContain("비과세");
     expect(post?.description).toMatch(/거주요건|조정대상지역|2년|12억/);
+    expect(post?.category).toBe("세금");
+  });
+
+  it("hold-period-special-guide 메타 — 세금 카테고리, 보유기간 특례 키워드", () => {
+    const post = getPostBySlug("hold-period-special-guide");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("보유기간");
+    expect(post?.description).toMatch(/재개발|배우자 상속|장기보유세액공제|9.16/);
     expect(post?.category).toBe("세금");
   });
 

@@ -210,6 +210,15 @@ export const POSTS: BlogPost[] = [
     category: "도구 활용",
     readingTime: 6,
   },
+  {
+    slug: "hold-period-special-guide",
+    title: "1세대1주택 보유기간 계산 특례 가이드 — 재개발·배우자 상속 보유기간 승계",
+    description:
+      "재개발·재건축으로 멸실된 주택, 배우자에게 상속받은 주택은 원래 취득일로 보유기간을 인정받아 종부세 장기보유세액공제율(5년 20%·10년 40%·15년 50%)이 올라갑니다. 특례 대상 2종·9.16~9.30 신청 절차·흔한 오해 케이스 정리. 국세청 1세대1주택자 보유기간 계산 특례 기준.",
+    date: "2026-05-17",
+    category: "세금",
+    readingTime: 7,
+  },
 ];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {

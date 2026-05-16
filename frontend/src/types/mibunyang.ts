@@ -37,6 +37,8 @@ export interface MbApartment {
   noise?: number;
   road_address?: string;
   district?: string;
+  /** 세대당 월 관리비 합산 (만원) */
+  avg_maintenance_cost?: number;
   /** 관리비 5 항목 분리 (mibunyang W3, 2026-05-13 동기화) */
   maint_heat?: number;
   maint_hotwater?: number;

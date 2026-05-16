@@ -43,6 +43,8 @@ def apartment_to_dict(a) -> dict:
         "noise": a.noise,
         "road_address": a.road_address,
         "district": a.district,
+        # 세대당 월 관리비 합산 (만원)
+        "avg_maintenance_cost": a.avg_maintenance_cost,
         # 관리비 5 항목 분리 (mibunyang W3)
         "maint_heat": a.maint_heat,
         "maint_hotwater": a.maint_hotwater,

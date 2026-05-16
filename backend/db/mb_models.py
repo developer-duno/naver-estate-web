@@ -79,6 +79,9 @@ class Apartment(Base):
     road_address: Mapped[str | None] = mapped_column(Text)
     district: Mapped[str | None] = mapped_column(Text)
 
+    # 세대당 월 관리비 합산 (mibunyang 수집, 만원)
+    avg_maintenance_cost: Mapped[int | None] = mapped_column(Integer)
+
     # 관리비 5 항목 분리 (mibunyang W3, 2026-05-13 동기화)
     maint_heat: Mapped[int | None] = mapped_column(Integer)
     maint_hotwater: Mapped[int | None] = mapped_column(Integer)

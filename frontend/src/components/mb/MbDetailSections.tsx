@@ -9,6 +9,7 @@ import { MbFloorAreaRatioBar } from "./MbFloorAreaRatioBar";
 import { MbJeonseRateBar } from "./MbJeonseRateBar";
 import { MbMaxFloorBar } from "./MbMaxFloorBar";
 import { MbParkingBar } from "./MbParkingBar";
+import { MbPirBar } from "./MbPirBar";
 import { MbUnitsBar } from "./MbUnitsBar";
 import { MbUnsoldRateBar } from "./MbUnsoldRateBar";
 
@@ -141,7 +142,7 @@ export function TradeStatsSection({ apartment: a }: SectionProps) {
         <InfoRow label="인근 시세 중위값" value={ts.nearby_median != null ? formatKoreanPrice(ts.nearby_median) : undefined} />
         <InfoRow label="최근 6개월 거래" value={ts.recent_trades_6m != null ? `${ts.recent_trades_6m}건` : undefined} />
         <InfoRow label="전세율" value={ts.jeonse_rate != null ? <MbJeonseRateBar value={ts.jeonse_rate} /> : undefined} />
-        <InfoRow label="PIR" value={ts.pir != null ? ts.pir.toFixed(1) : undefined} />
+        <InfoRow label="PIR" value={ts.pir != null ? <MbPirBar value={ts.pir} /> : undefined} />
         <InfoRow label="PSR" value={ts.psr != null ? ts.psr.toFixed(1) : undefined} />
         <InfoRow label="평균층" value={ts.avg_floor != null ? `${ts.avg_floor.toFixed(1)}층` : undefined} />
         <InfoRow label="층 범위" value={ts.floor_range} />

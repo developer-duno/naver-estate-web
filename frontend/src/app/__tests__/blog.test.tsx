@@ -195,7 +195,7 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.category).toBe("미분양");
   });
 
-  it("mibunyang-detail-bars-guide 메타 — 미분양 카테고리, 진행바 8종 키워드", () => {
+  it("mibunyang-detail-bars-guide 메타 — 미분양 카테고리, 진행바 14종 키워드", () => {
     const post = getPostBySlug("mibunyang-detail-bars-guide");
     expect(post).toBeDefined();
     expect(post?.draft).toBeUndefined();
@@ -209,7 +209,7 @@ describe("blog/posts 메타데이터", () => {
     expect(post).toBeDefined();
     expect(post?.draft).toBeUndefined();
     expect(post?.title).toContain("5 단원");
-    expect(post?.description).toMatch(/개요|분양|거래|주변환경|위치|진행바 8종/);
+    expect(post?.description).toMatch(/개요|분양|거래|주변환경|위치|진행바 14종/);
     expect(post?.category).toBe("미분양");
     expect(post?.date).toBe("2026-05-16");
   });

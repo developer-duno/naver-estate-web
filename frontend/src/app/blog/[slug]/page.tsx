@@ -3,8 +3,11 @@ import { notFound } from "next/navigation";
 import { POSTS, getPostBySlug } from "../posts";
 import Article from "./Article";
 import { getHeroAsset } from "@/lib/blog-hero";
+import { BlogPostingJsonLd } from "@/components/StructuredData";
 
 export const dynamicParams = false;
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://2u.pe.kr";
 
 export function generateStaticParams() {
   return POSTS.map((post) => ({ slug: post.slug }));
@@ -53,8 +56,20 @@ export default async function BlogPostPage({
   const { default: MdxContent } = await import(`@/content/blog/${slug}.mdx`);
 
   return (
-    <Article post={post}>
-      <MdxContent />
-    </Article>
+    <>
+      {!post.draft && (
+        <BlogPostingJsonLd
+          headline={post.title}
+          description={post.description}
+          image={`${SITE_URL}${getHeroAsset(post)}`}
+          datePublished={post.date}
+          url={`${SITE_URL}/blog/${slug}`}
+          articleSection={post.category}
+        />
+      )}
+      <Article post={post}>
+        <MdxContent />
+      </Article>
+    </>
   );
 }

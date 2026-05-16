@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import { MbSchoolWalkBar } from "../MbSchoolWalkBar";
 
-// 학교 도보 시간 진행바 — null/0/음수 가드 + 임계(가까움<=5/보통<=10/멈>10) + MAX_MIN=15 캡 검증
+// 학교 도보 시간 진행바 — null/0/음수 가드 + 임계(가까움<=5/보통<=10/멀음>10) + MAX_MIN=15 캡 검증
 function getInnerBar(container: HTMLElement) {
   return container.querySelector('[role="progressbar"] > div') as HTMLElement;
 }
@@ -51,13 +51,13 @@ describe("MbSchoolWalkBar", () => {
     expect(screen.getByText("10분")).toBeInTheDocument();
     expect(screen.getByText("보통")).toBeInTheDocument();
   });
-  it("11분 (보통→멈 경계, DB p95 근처)", () => {
+  it("11분 (보통→멀음 경계, DB p95 근처)", () => {
     render(<MbSchoolWalkBar value={11} />);
-    expect(screen.getByText("멈")).toBeInTheDocument();
+    expect(screen.getByText("멀음")).toBeInTheDocument();
   });
-  it("12분 (멈)", () => {
+  it("12분 (멀음)", () => {
     render(<MbSchoolWalkBar value={12} />);
-    expect(screen.getByText("멈")).toBeInTheDocument();
+    expect(screen.getByText("멀음")).toBeInTheDocument();
   });
   it("7.0(real 타입 소수) 시 '7분' 정수 표시", () => {
     render(<MbSchoolWalkBar value={7.0} />);

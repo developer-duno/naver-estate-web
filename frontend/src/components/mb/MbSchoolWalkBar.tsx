@@ -24,7 +24,7 @@ export function MbSchoolWalkBar({ value }: Props) {
     tier === "warn" ? "text-amber-600" : "text-rose-600";
   const label =
     tier === "safe" ? "가까움" :
-    tier === "warn" ? "보통" : "멈";
+    tier === "warn" ? "보통" : "멀음";
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-baseline gap-2">

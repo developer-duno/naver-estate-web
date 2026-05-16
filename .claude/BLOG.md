@@ -41,7 +41,7 @@
 |---|---|---|
 | `mibunyang-for-agents` | 공인중개사를 위한 미분양 단지 활용법 | 2026-05-02 |
 | `mibunyang-radar-weights` | 미분양 레이더 가중치 활용법 — 손님 성향별 우위 단지 30초에 줄세우기 | 2026-05-08 |
-| `mibunyang-detail-bars-guide` | 미분양 상세 진행바 8종 30초 독법 — 손님 응대 카드 | 2026-05-13 |
+| `mibunyang-detail-bars-guide` | 미분양 상세 진행바 14종 30초 독법 — 손님 응대 카드 | 2026-05-13 |
 | `mibunyang-price-discount-guide` | 미분양 분양가·할인율·평당가 한눈에 비교하는 법 — 집 사려는 분의 첫 가이드 | 2026-05-16 |
 | `mibunyang-detail-sections-guide` | 단지 상세 5 단원 30초 도해 — 손님 신뢰 응대 카드 | 2026-05-16 |
 

@@ -50,6 +50,7 @@ export function OverviewSection({ apartment: a }: SectionProps) {
         <InfoRow label="지역" value={`${a.region} ${a.gu ?? ""} ${a.dong ?? ""}`.trim()} />
         <InfoRow label="세대수" value={a.units != null ? <MbUnitsBar value={a.units} /> : undefined} />
         <InfoRow label="완공" value={a.completion} />
+        <InfoRow label="준공연도(네이버)" value={a.naver_build_year != null ? `${a.naver_build_year}년` : undefined} />
         <InfoRow label="난방" value={a.heating} />
         <InfoRow label="최고층" value={a.max_floor != null ? <MbMaxFloorBar value={a.max_floor} /> : undefined} />
         <InfoRow label="세대당 주차" value={a.parking_ratio != null ? <MbParkingBar value={a.parking_ratio} /> : undefined} />
@@ -66,6 +67,9 @@ export function OverviewSection({ apartment: a }: SectionProps) {
             <InfoRow label="HUG 보증" value={b.hug_guarantee ? "가능" : b.hug_guarantee === false ? "불가" : undefined} />
           </>
         )}
+        <InfoRow label="네이버 인근 시세" value={a.naver_nearby_median != null ? formatKoreanPrice(a.naver_nearby_median) : undefined} />
+        <InfoRow label="네이버 매물 수" value={a.naver_sell_count != null ? `${a.naver_sell_count}건` : undefined} />
+        <InfoRow label="네이버 전세가율" value={a.naver_jeonse_rate != null ? `${a.naver_jeonse_rate.toFixed(1)}%` : undefined} />
         <InfoRow label="등록" value={a.created_at ? new Date(a.created_at).toLocaleDateString("ko-KR") : undefined} />
         <InfoRow label="갱신" value={a.updated_at ? new Date(a.updated_at).toLocaleDateString("ko-KR") : undefined} />
       </dl>
@@ -87,6 +91,7 @@ export function PresaleSection({ apartment: a }: SectionProps) {
         <InfoRow label="입주시기" value={a.presale_move_in} />
         <InfoRow label="할인율" value={a.discount_pct != null ? `${a.discount_pct}%` : undefined} />
         <InfoRow label="미분양률" value={a.unsold_rate != null ? <MbUnsoldRateBar value={a.unsold_rate} /> : undefined} />
+        <InfoRow label="미분양 세대수" value={a.unsold != null ? `${a.unsold.toLocaleString()}세대` : undefined} />
         <InfoRow label="발코니 무상" value={a.balcony_free ? "O" : a.balcony_free === false ? "X" : undefined} />
         <InfoRow label="옵션 무상" value={a.option_free ? "O" : a.option_free === false ? "X" : undefined} />
         <InfoRow label="캐시백" value={a.cashback != null ? formatKoreanPrice(a.cashback) : undefined} />

@@ -31,7 +31,7 @@ const APARTMENT: MbApartment = {
   presale_stage: "3순위",
   presale_move_in: "202601",
   naver_nearby_median: 65000,
-  naver_jeonse_rate: 0.58,
+  naver_jeonse_rate: 58.0,
   naver_sell_count: 12,
   naver_build_year: 2020,
   naver_school_walk_min: 7,

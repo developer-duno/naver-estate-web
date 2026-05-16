@@ -193,6 +193,15 @@ export const POSTS: BlogPost[] = [
     readingTime: 7,
   },
   {
+    slug: "asking-price-trend",
+    title: "호가 변동 추이 — 매물 상세 가격 변동 이력으로 협상 타이밍 읽기",
+    description:
+      "호가는 매도자 의지의 온도계. 매물 상세 '가격 변동 이력' 표 + 매물 표 가격 변동 화살표(↑↓)로 한 매물의 호가가 언제·얼마나·어느 방향으로 움직였는지 읽는 법. 변동 횟수·방향·폭·간격 4 신호와 손님 협상 타이밍 화법.",
+    date: "2026-05-17",
+    category: "시세 분석",
+    readingTime: 7,
+  },
+  {
     slug: "print-excel-workflow",
     title: "인쇄·엑셀 내보내기 노하우 — 손님 응대 자료 1분 워크플로",
     description:

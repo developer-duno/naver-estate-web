@@ -1,5 +1,6 @@
 import { POSTS } from "@/app/blog/posts";
 import { buildRssFeed } from "@/lib/rss";
+import { SITE_URL } from "@/lib/constants";
 
 /**
  * 블로그 RSS 2.0 피드 — /feed.xml.
@@ -8,8 +9,6 @@ import { buildRssFeed } from "@/lib/rss";
  * POSTS 는 배포 시에만 바뀌므로 정적 생성을 허용(dynamic 지시자 생략)하고
  * CDN 1시간 캐시를 둔다.
  */
-
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://2u.pe.kr";
 
 export function GET() {
   const xml = buildRssFeed(POSTS, SITE_URL);

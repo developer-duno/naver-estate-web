@@ -255,3 +255,7 @@ export const MB_SORT_OPTIONS = [
   { v: "price_asc", l: "분양가 낮은순" },
   { v: "price_desc", l: "분양가 높은순" },
 ] as const;
+
+/** 사이트 절대 URL — SEO 메타·canonical·sitemap·RSS 의 단일 진실 원천.
+ *  NEXT_PUBLIC_SITE_URL 미설정 시 운영 도메인으로 fallback. */
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://2u.pe.kr";

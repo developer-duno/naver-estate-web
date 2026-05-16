@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Providers from "@/components/Providers";
 import { WebSiteJsonLd } from "@/components/StructuredData";
+import { SITE_URL } from "@/lib/constants";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,7 +33,6 @@ export const viewport = {
   maximumScale: 5,
 };
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://2u.pe.kr";
 const GOOGLE_VERIFICATION = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION;
 const NAVER_VERIFICATION = process.env.NEXT_PUBLIC_NAVER_SITE_VERIFICATION;
 

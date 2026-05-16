@@ -4,10 +4,9 @@ import { POSTS, getPostBySlug } from "../posts";
 import Article from "./Article";
 import { getHeroAsset } from "@/lib/blog-hero";
 import { BlogPostingJsonLd } from "@/components/StructuredData";
+import { SITE_URL } from "@/lib/constants";
 
 export const dynamicParams = false;
-
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://2u.pe.kr";
 
 export function generateStaticParams() {
   return POSTS.map((post) => ({ slug: post.slug }));

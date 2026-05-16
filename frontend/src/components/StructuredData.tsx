@@ -1,5 +1,7 @@
 /** SEO 구조화 데이터(JSON-LD) 헬퍼. server component 에서 직접 렌더 */
 
+import { SITE_URL } from "@/lib/constants";
+
 /** JSON-LD 직렬화 — `</script>` 조기 종료 방지를 위해 `<`/`>` 를 유니코드 이스케이프 */
 function serializeJsonLd(data: unknown): string {
   return JSON.stringify(data).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
@@ -54,7 +56,7 @@ export function BlogPostingJsonLd({
   const organization = {
     "@type": "Organization",
     name: "2u부동산",
-    url: "https://2u.pe.kr",
+    url: SITE_URL,
   };
   const data = {
     "@context": "https://schema.org",

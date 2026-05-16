@@ -38,6 +38,8 @@ describe("BlogPostingJsonLd — 정상 케이스", () => {
     expect(data.author["@type"]).toBe("Organization");
     expect(data.publisher["@type"]).toBe("Organization");
     expect(data.author.name).toBe("2u부동산");
+    // organization.url 은 SITE_URL 상수(constants.ts) — 운영 도메인으로 채워짐
+    expect(data.publisher.url).toBe("https://2u.pe.kr");
     expect(data.mainEntityOfPage["@id"]).toBe(BASE_PROPS.url);
     expect(data.mainEntityOfPage["@type"]).toBe("WebPage");
   });

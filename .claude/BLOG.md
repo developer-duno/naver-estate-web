@@ -1,9 +1,9 @@
 # Blog 라인업 — `/blog` MDX 박제 (단일 진실 공급원)
 
-> 24편 발행 (draft 0편). posts.ts BlogCategory 4종 = 시세 분석 / 세금 / 도구 활용 / 미분양.
+> 25편 발행 (draft 0편). posts.ts BlogCategory 4종 = 시세 분석 / 세금 / 도구 활용 / 미분양.
 > 새 글 발행 시 본 파일 표 1행 + 발행일 git log 실측 동시 갱신 의무.
 
-## 발행 글 24편 (BlogCategory 4종)
+## 발행 글 25편 (BlogCategory 4종)
 
 ### 시세 분석 (5편)
 
@@ -39,7 +39,7 @@
 | `search-history-workflow` | 검색 히스토리 활용법 — 손님 재방문 5분 응대 | 2026-05-13 |
 | `print-excel-workflow` | 인쇄·엑셀 내보내기 노하우 — 손님 응대 자료 1분 워크플로 | 2026-05-13 |
 
-### 미분양 (5편)
+### 미분양 (6편)
 
 | slug | 제목 | 발행일 |
 |---|---|---|
@@ -48,6 +48,7 @@
 | `mibunyang-detail-bars-guide` | 미분양 상세 진행바 14종 30초 독법 — 손님 응대 카드 | 2026-05-13 |
 | `mibunyang-price-discount-guide` | 미분양 분양가·할인율·평당가 한눈에 비교하는 법 — 집 사려는 분의 첫 가이드 | 2026-05-16 |
 | `mibunyang-detail-sections-guide` | 단지 상세 5 단원 30초 도해 — 손님 신뢰 응대 카드 | 2026-05-16 |
+| `mibunyang-batch-compare-guide` | 미분양 즐겨찾기 일괄 비교 — 후보 200개에서 4단지 한 화면에 | 2026-05-17 |
 
 ## /blog 페이지 빌드 메커니즘
 

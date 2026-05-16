@@ -94,6 +94,15 @@ export const POSTS: BlogPost[] = [
     readingTime: 8,
   },
   {
+    slug: "mibunyang-batch-compare-guide",
+    title: "미분양 즐겨찾기 일괄 비교 — 후보 200개에서 4단지 한 화면에",
+    description:
+      "미분양 후보 단지에 ★ 모으기(최대 200개) → 즐겨찾기 탭 정렬 3종(추가일/단지명/지역) → 체크박스로 2~4개 선택 → 선택 비교 버튼으로 19행 표·레이더 13축·차트 3종 한 화면에. 다회차 상담 재방문 5분 응대 워크플로 + 비교 북마크 연결까지 클릭 동선 전체 가이드.",
+    date: "2026-05-17",
+    category: "미분양",
+    readingTime: 7,
+  },
+  {
     slug: "mibunyang-price-discount-guide",
     title: "미분양 분양가·할인율·평당가 한눈에 비교하는 법 — 집 사려는 분의 첫 가이드",
     description:

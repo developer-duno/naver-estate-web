@@ -8,7 +8,10 @@ export const metadata: Metadata = {
   title: "블로그 — 공인중개사를 위한 인사이트",
   description:
     "전세가율·단지 시세 분석·미분양 활용법 등 공인중개사 실무에 필요한 부동산 인사이트를 정리합니다.",
-  alternates: { canonical: "/blog" },
+  alternates: {
+    canonical: "/blog",
+    types: { "application/rss+xml": "/feed.xml" },
+  },
   openGraph: {
     title: "블로그 — 공인중개사를 위한 인사이트 | 2u부동산",
     description:

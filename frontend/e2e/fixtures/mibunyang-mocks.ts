@@ -34,6 +34,7 @@ const APARTMENT: MbApartment = {
   naver_jeonse_rate: 0.58,
   naver_sell_count: 12,
   naver_build_year: 2020,
+  naver_school_walk_min: 7,
   is_regulated: false,
   builder_info: {
     name: "테스트건설",

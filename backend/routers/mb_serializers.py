@@ -40,6 +40,7 @@ def apartment_to_dict(a) -> dict:
         "naver_jeonse_rate": a.naver_jeonse_rate,
         "naver_sell_count": a.naver_sell_count,
         "naver_build_year": a.naver_build_year,
+        "naver_school_walk_min": a.naver_school_walk_min,
         "is_regulated": a.is_regulated,
         "noise": a.noise,
         "road_address": a.road_address,

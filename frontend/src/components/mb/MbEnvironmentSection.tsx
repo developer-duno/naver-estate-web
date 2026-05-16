@@ -2,6 +2,7 @@
 
 import type { MbApartment } from "@/types";
 import { MbNoiseBar } from "./MbNoiseBar";
+import { MbSchoolWalkBar } from "./MbSchoolWalkBar";
 
 /** 인프라 정보 행 (label + value) */
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -44,13 +45,13 @@ function CrimeGradeBadge({ grade }: { grade: string }) {
   return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs border ${style}`}>{label}</span>;
 }
 
-/** 주변 환경 — 인프라 + 대기질 + 응급의료 + 어린이집 + 범죄 + 학군 + 교통 + 소음도 */
+/** 주변 환경 — 인프라 + 대기질 + 응급의료 + 어린이집 + 범죄 + 소음도 + 학교 접근성 + 학군 + 교통 */
 export function EnvironmentSection({ apartment: a }: { apartment: MbApartment }) {
   const infra = a.infra;
   const school = a.school;
   const transport = a.transport;
   const noise = a.noise;
-  const hasData = infra ?? school ?? transport ?? noise != null;
+  const hasData = (infra ?? school ?? transport ?? noise) != null || a.naver_school_walk_min != null;
 
   if (!hasData) {
     return (
@@ -174,6 +175,15 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
           <h4 className="text-sm font-semibold text-gray-700 mb-2">소음</h4>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <InfoRow label="소음도" value={<MbNoiseBar value={noise} />} />
+          </dl>
+        </div>
+      )}
+
+      {a.naver_school_walk_min != null && (
+        <div className="mb-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">학교 접근성</h4>
+          <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <InfoRow label="학교 도보 시간" value={<MbSchoolWalkBar value={a.naver_school_walk_min} />} />
           </dl>
         </div>
       )}

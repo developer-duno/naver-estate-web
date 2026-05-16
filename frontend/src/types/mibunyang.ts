@@ -35,6 +35,8 @@ export interface MbApartment {
   naver_jeonse_rate?: number;
   naver_sell_count?: number;
   naver_build_year?: number;
+  /** 학교 도보 시간 (분) — 네이버 연동, 가까울수록 좋음 */
+  naver_school_walk_min?: number;
   is_regulated?: boolean;
   noise?: number;
   road_address?: string;

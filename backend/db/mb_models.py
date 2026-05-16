@@ -73,6 +73,7 @@ class Apartment(Base):
     naver_jeonse_rate: Mapped[float | None] = mapped_column(Float)
     naver_sell_count: Mapped[int | None] = mapped_column(Integer)
     naver_build_year: Mapped[int | None] = mapped_column(Integer)
+    naver_school_walk_min: Mapped[float | None] = mapped_column(Float)  # 학교 도보 시간 (분)
 
     # 규제/환경
     is_regulated: Mapped[bool | None] = mapped_column(Boolean)

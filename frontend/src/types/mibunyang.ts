@@ -18,6 +18,8 @@ export interface MbApartment {
   parking_ratio?: number;
   floor_area_ratio?: number;
   building_coverage_ratio?: number;
+  /** 전용률 (%) — 공급면적 대비 전용면적 비율 */
+  exclusive_ratio?: number;
   discount_pct?: number;
   balcony_free?: boolean;
   option_free?: boolean;

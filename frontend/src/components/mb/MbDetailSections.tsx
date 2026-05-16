@@ -5,6 +5,7 @@ import type { MbApartment, MbPrice } from "@/types";
 import { formatKoreanPrice } from "@/lib/format";
 import { MbCancelRatioBar } from "./MbCancelRatioBar";
 import { MbCoverageBar } from "./MbCoverageBar";
+import { MbExclusiveRatioBar } from "./MbExclusiveRatioBar";
 import { MbFloorAreaRatioBar } from "./MbFloorAreaRatioBar";
 import { MbJeonseRateBar } from "./MbJeonseRateBar";
 import { MbMaintenanceBar } from "./MbMaintenanceBar";
@@ -54,6 +55,7 @@ export function OverviewSection({ apartment: a }: SectionProps) {
         <InfoRow label="세대당 주차" value={a.parking_ratio != null ? <MbParkingBar value={a.parking_ratio} /> : undefined} />
         <InfoRow label="용적률" value={a.floor_area_ratio != null ? <MbFloorAreaRatioBar value={a.floor_area_ratio} /> : undefined} />
         <InfoRow label="건폐율" value={a.building_coverage_ratio != null ? <MbCoverageBar value={a.building_coverage_ratio} /> : undefined} />
+        <InfoRow label="전용률" value={a.exclusive_ratio != null ? <MbExclusiveRatioBar value={a.exclusive_ratio} /> : undefined} />
         <InfoRow label="관리비" value={a.avg_maintenance_cost != null ? <MbMaintenanceBar value={a.avg_maintenance_cost} /> : undefined} />
         <InfoRow label="규제지역" value={a.is_regulated ? "예" : a.is_regulated === false ? "아니오" : undefined} />
         <InfoRow label="시공사" value={a.builder} />

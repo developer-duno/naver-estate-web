@@ -130,6 +130,15 @@ export const POSTS: BlogPost[] = [
     readingTime: 7,
   },
   {
+    slug: "transfer-tax-exemption-guide",
+    title: "1세대1주택 양도세 비과세 요건 가이드 — 거주요건·조정대상지역 판정",
+    description:
+      "1세대1주택 비과세 4대 요건(1주택·보유 2년·거주요건·12억 이하)을 한 표로 정리. 취득 시점 조정대상지역 여부로 갈리는 거주요건 함정 + 비과세가 깨지는 흔한 케이스 5가지 + 손님 응대 화법. 소득세법 제89조·시행령 제154조 기준.",
+    date: "2026-05-17",
+    category: "세금",
+    readingTime: 7,
+  },
+  {
     slug: "property-tax-exclusion-guide",
     title: "종부세 합산배제 완전 가이드 — 임대주택 9종·사원용 19종 자격표",
     description:

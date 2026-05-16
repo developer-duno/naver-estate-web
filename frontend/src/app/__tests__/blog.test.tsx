@@ -11,7 +11,7 @@ import BlogIndexPage from "../blog/page";
 import { POSTS, getPostBySlug } from "../blog/posts";
 
 describe("/blog 목록 페이지", () => {
-  it("Hero 제목과 21편 카드가 모두 렌더된다", () => {
+  it("Hero 제목과 22편 카드가 모두 렌더된다", () => {
     const { container } = render(<BlogIndexPage />);
     expect(screen.getByRole("heading", { name: /부동산 인사이트/, level: 1 })).toBeInTheDocument();
     // 모든 글 제목이 카드에 표시
@@ -46,10 +46,10 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 21편 (전체)", () => {
-    expect(POSTS.length).toBe(21);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 22편 (전체)", () => {
+    expect(POSTS.length).toBe(22);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(21);
+    expect(new Set(slugs).size).toBe(22);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
       "acquisition-tax-tool-guide",
@@ -71,6 +71,7 @@ describe("blog/posts 메타데이터", () => {
       "realestate-calculators",
       "realtime-listing",
       "search-history-workflow",
+      "transfer-tax-exemption-guide",
       "transfer-tax-guide",
       "transfer-tax-tool-guide",
     ]);
@@ -109,6 +110,15 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.draft).toBeUndefined();
     expect(post?.title).toContain("보유세");
     expect(post?.description).toMatch(/12억|9억|농특세|중과/);
+    expect(post?.category).toBe("세금");
+  });
+
+  it("transfer-tax-exemption-guide 메타 — 세금 카테고리, 비과세 요건 키워드", () => {
+    const post = getPostBySlug("transfer-tax-exemption-guide");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("비과세");
+    expect(post?.description).toMatch(/거주요건|조정대상지역|2년|12억/);
     expect(post?.category).toBe("세금");
   });
 

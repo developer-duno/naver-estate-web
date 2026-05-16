@@ -43,6 +43,7 @@ def apartment_to_dict(a) -> dict:
         "naver_school_walk_min": a.naver_school_walk_min,
         "is_regulated": a.is_regulated,
         "noise": a.noise,
+        "noxious_dist": a.noxious_dist,
         "road_address": a.road_address,
         "district": a.district,
         # 세대당 월 관리비 합산 (만원)

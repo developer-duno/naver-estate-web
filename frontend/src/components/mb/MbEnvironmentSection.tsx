@@ -2,6 +2,7 @@
 
 import type { MbApartment } from "@/types";
 import { MbNoiseBar } from "./MbNoiseBar";
+import { MbNoxiousBar } from "./MbNoxiousBar";
 import { MbSchoolWalkBar } from "./MbSchoolWalkBar";
 
 /** 인프라 정보 행 (label + value) */
@@ -51,7 +52,7 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
   const school = a.school;
   const transport = a.transport;
   const noise = a.noise;
-  const hasData = (infra ?? school ?? transport ?? noise) != null || a.naver_school_walk_min != null;
+  const hasData = (infra ?? school ?? transport ?? noise) != null || a.naver_school_walk_min != null || a.noxious_dist != null;
 
   if (!hasData) {
     return (
@@ -184,6 +185,15 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
           <h4 className="text-sm font-semibold text-gray-700 mb-2">학교 접근성</h4>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <InfoRow label="학교 도보 시간" value={<MbSchoolWalkBar value={a.naver_school_walk_min} />} />
+          </dl>
+        </div>
+      )}
+
+      {a.noxious_dist != null && (
+        <div className="mb-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">유해시설</h4>
+          <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <InfoRow label="가장 가까운 유해시설" value={<MbNoxiousBar value={a.noxious_dist} />} />
           </dl>
         </div>
       )}

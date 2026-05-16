@@ -78,6 +78,7 @@ class Apartment(Base):
     # 규제/환경
     is_regulated: Mapped[bool | None] = mapped_column(Boolean)
     noise: Mapped[float | None] = mapped_column(Float)
+    noxious_dist: Mapped[float | None] = mapped_column(Float)  # 가장 가까운 유해시설까지 거리 (m)
     road_address: Mapped[str | None] = mapped_column(Text)
     district: Mapped[str | None] = mapped_column(Text)
 

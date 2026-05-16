@@ -36,6 +36,7 @@ const APARTMENT: MbApartment = {
   naver_build_year: 2020,
   naver_school_walk_min: 7,
   is_regulated: false,
+  noxious_dist: 520,
   builder_info: {
     name: "테스트건설",
     debt_ratio: 180,

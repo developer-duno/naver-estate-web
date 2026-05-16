@@ -39,6 +39,8 @@ export interface MbApartment {
   naver_school_walk_min?: number;
   is_regulated?: boolean;
   noise?: number;
+  /** 가장 가까운 유해시설까지 거리 (m) — 멀수록 좋음 */
+  noxious_dist?: number;
   road_address?: string;
   district?: string;
   /** 세대당 월 관리비 합산 (만원) */

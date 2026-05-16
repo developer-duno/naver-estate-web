@@ -24,6 +24,7 @@ def apartment_to_dict(a) -> dict:
         "parking_ratio": a.parking_ratio,
         "floor_area_ratio": float(a.floor_area_ratio) if a.floor_area_ratio else None,
         "building_coverage_ratio": float(a.building_coverage_ratio) if a.building_coverage_ratio else None,
+        "exclusive_ratio": float(a.exclusive_ratio) if a.exclusive_ratio else None,
         "discount_pct": a.discount_pct,
         "balcony_free": a.balcony_free,
         "option_free": a.option_free,

@@ -49,6 +49,7 @@ class Apartment(Base):
     parking_ratio: Mapped[float | None] = mapped_column(Float)
     floor_area_ratio: Mapped[float | None] = mapped_column(Float)
     building_coverage_ratio: Mapped[float | None] = mapped_column(Numeric)
+    exclusive_ratio: Mapped[float | None] = mapped_column(Float)  # 전용률 (%)
 
     # 혜택
     discount_pct: Mapped[float | None] = mapped_column(Float)

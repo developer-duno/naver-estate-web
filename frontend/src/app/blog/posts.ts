@@ -130,6 +130,15 @@ export const POSTS: BlogPost[] = [
     readingTime: 7,
   },
   {
+    slug: "property-tax-exclusion-guide",
+    title: "종부세 합산배제 완전 가이드 — 임대주택 9종·사원용 19종 자격표",
+    description:
+      "합산배제 신청 주택은 종부세 산정에서 제외(재산세는 영향 없음). 임대주택 9종·사원용 주택 등 19종·주택신축용토지 자격 요건을 국세청 PDF 3장 기준으로 정리. 3주택 중 2채 합산배제 → 1주택 12억 공제 분기 + /tools/property-tax 반영법.",
+    date: "2026-05-17",
+    category: "세금",
+    readingTime: 7,
+  },
+  {
     slug: "property-tax-guide",
     title: "보유세 계산기 출시 — 재산세 + 종부세 5 필드 4 분기 자동 판정",
     description:

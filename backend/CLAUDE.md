@@ -81,11 +81,11 @@
 | V018 | agent_verifications.license_doc_path | — |
 | V019 | infra.childcare_nearest_type/teachers | — |
 | V020 | naver_call_counter Supabase 영속화 | 2026-04-22 (세션 54) |
-| V021~V023 | 단지/매물 유형명 backfill + 유형별 인덱스 | 미실행 |
-| V024 | articles 매물 가치 필드 12개 (에픽 D #9) | 미실행 |
+| V021~V023 | 단지/매물 유형명 backfill + 유형별 인덱스 | 2026-05-17 (세션 195) |
+| V024 | articles 매물 가치 필드 12개 (에픽 D #9) | 2026-05-17 (세션 195) |
 
 - `db/migrations/` 폴더에 `V000__` ~ `V024__` SQL 파일
-- Supabase SQL Editor에서 수동 실행 (V021~V024 미실행 — 사용자 후속)
+- Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
 
 ## 코드 구조 (분리 완료)

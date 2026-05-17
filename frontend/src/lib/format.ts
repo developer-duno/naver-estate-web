@@ -14,26 +14,36 @@ export function formatDateShort(d: string | undefined | null): string {
   return d;
 }
 
-/** 가격 포맷 (만원 → 억/만원) */
-export function formatKoreanPrice(manwon: number | undefined | null): string {
-  if (manwon == null || manwon === 0) return "-";
+/**
+ * 만원 단위 금액을 억/만으로 분해해 문자열로 조립한다 (0/null 가드는 호출부 책임).
+ * - sep: 억과 만 사이 구분자 ("억 5,000만" vs "억5,000만")
+ * - manSuffix: 만 단위 접미사 ("만" vs "만원")
+ * - eokSuffix: 정확히 N억일 때 접미사 ("억" vs "억원")
+ */
+function splitEokMan(
+  manwon: number,
+  opts: { sep: string; manSuffix: string; eokSuffix: string },
+): string {
   if (manwon >= 10000) {
     const eok = Math.floor(manwon / 10000);
     const rest = manwon % 10000;
-    return rest > 0 ? `${eok}억 ${rest.toLocaleString()}만` : `${eok}억`;
+    return rest > 0
+      ? `${eok}억${opts.sep}${rest.toLocaleString()}${opts.manSuffix}`
+      : `${eok}${opts.eokSuffix}`;
   }
-  return `${manwon.toLocaleString()}만`;
+  return `${manwon.toLocaleString()}${opts.manSuffix}`;
+}
+
+/** 가격 포맷 (만원 → 억/만원) */
+export function formatKoreanPrice(manwon: number | undefined | null): string {
+  if (manwon == null || manwon === 0) return "-";
+  return splitEokMan(manwon, { sep: " ", manSuffix: "만", eokSuffix: "억" });
 }
 
 /** 차트용 가격 포맷 (만원 → 억/만, 공백 없는 축약형) */
 export function formatChartPrice(value: number): string {
   if (value == null || isNaN(value)) return "-";
-  if (value >= 10000) {
-    const eok = Math.floor(value / 10000);
-    const rest = value % 10000;
-    return rest > 0 ? `${eok}억${rest.toLocaleString()}만` : `${eok}억`;
-  }
-  return `${value.toLocaleString()}만`;
+  return splitEokMan(value, { sep: "", manSuffix: "만", eokSuffix: "억" });
 }
 
 /** 차트용 월 포맷 (YYYYMM → YY.MM) */
@@ -65,12 +75,7 @@ export function formatWon(value?: string | null): string {
   if (isNaN(num) || num < 0) return "-";
   if (num === 0) return "0원";
   const manwon = Math.round(num / 10000);
-  if (manwon >= 10000) {
-    const eok = Math.floor(manwon / 10000);
-    const remainder = manwon % 10000;
-    return remainder > 0 ? `${eok}억 ${remainder.toLocaleString()}만원` : `${eok}억원`;
-  }
-  return manwon.toLocaleString() + "만원";
+  return splitEokMan(manwon, { sep: " ", manSuffix: "만원", eokSuffix: "억원" });
 }
 
 /** 관리비 표시 (문자열 또는 숫자 → "N만원") */

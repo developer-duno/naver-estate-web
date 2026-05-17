@@ -30,32 +30,49 @@ function toCellText(value: unknown): string {
   return typeof value === "string" ? value : "-";
 }
 
+/**
+ * 비교용 엑셀 워크북 생성 + 다운로드 — 단지 비교·미분양 비교 공통.
+ * 첫 열은 "항목" 라벨, 나머지 열은 비교 대상. columns·rows 의 모든
+ * 문자열은 호출부에서 safeCellValue 적용을 마친 상태로 넘겨야 한다
+ * (수식 인젝션 방어 책임은 호출부 — 데이터 모델을 아는 쪽).
+ */
+export async function buildCompareXlsx(opts: {
+  sheetName: string;
+  itemHeader: { label: string; width: number };
+  columns: { header: string; width: number }[];
+  rows: string[][];
+  filename: string;
+}) {
+  const ExcelJS = (await import("exceljs")).default;
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet(opts.sheetName);
+  ws.columns = [
+    { header: opts.itemHeader.label, width: opts.itemHeader.width },
+    ...opts.columns,
+  ];
+  opts.rows.forEach((row) => ws.addRow(row));
+  const buf = await wb.xlsx.writeBuffer();
+  await downloadXlsxBuffer(buf, opts.filename);
+}
+
 export async function exportCompareToXlsx(
   complexes: Complex[],
   rows: { label: string; render: (c: Complex) => unknown }[],
 ) {
   try {
-    const ExcelJS = (await import("exceljs")).default;
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet("단지 비교");
-    ws.columns = [
-      { header: "항목", width: 15 },
-      ...complexes.map((c) => ({
+    await buildCompareXlsx({
+      sheetName: "단지 비교",
+      itemHeader: { label: "항목", width: 15 },
+      columns: complexes.map((c) => ({
         header: safeCellValue(c.complex_name),
         width: 25,
       })),
-    ];
-    rows.forEach((row) => {
-      ws.addRow([
+      rows: rows.map((row) => [
         safeCellValue(row.label),
         ...complexes.map((c) => safeCellValue(toCellText(row.render(c)))),
-      ]);
+      ]),
+      filename: `단지비교_${new Date().toISOString().slice(0, 10)}.xlsx`,
     });
-    const buf = await wb.xlsx.writeBuffer();
-    await downloadXlsxBuffer(
-      buf,
-      `단지비교_${new Date().toISOString().slice(0, 10)}.xlsx`,
-    );
   } catch (err) {
     throw new Error(
       err instanceof Error

@@ -16,6 +16,7 @@ from crawler.service_discover import (  # noqa: F401
     crawl_article_details,
     crawl_articles_batch,
     crawl_complex_articles,
+    crawl_complex_details_batch,
     crawl_popular_complexes,
     discover_all_regions,
     discover_complexes_by_region,

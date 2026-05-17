@@ -10,6 +10,7 @@ from crawler.service import (
     collect_price_history,
     crawl_article_details,
     crawl_articles_batch,
+    crawl_complex_details_batch,
     crawl_popular_complexes,
     discover_all_regions,
 )
@@ -31,6 +32,8 @@ EMERGENCY_BATCH_SIZE = int(os.getenv("EMERGENCY_BATCH_SIZE", "100"))
 CHILDCARE_ENABLED = os.getenv("CHILDCARE_ENABLED", "false").lower() == "true"
 CHILDCARE_BATCH_SIZE = int(os.getenv("CHILDCARE_BATCH_SIZE", "100"))
 CRIME_STATS_ENABLED = os.getenv("CRIME_STATS_ENABLED", "false").lower() == "true"
+COMPLEX_DETAIL_ENABLED = os.getenv("COMPLEX_DETAIL_ENABLED", "true").lower() == "true"
+COMPLEX_DETAIL_BATCH_SIZE = int(os.getenv("COMPLEX_DETAIL_BATCH_SIZE", "500"))
 
 # 모듈 레벨 스케줄러 참조 — admin API에서 다음 실행 시각 조회용
 _scheduler: BackgroundScheduler | None = None
@@ -110,6 +113,40 @@ def create_scheduler() -> BackgroundScheduler:
                 misfire_grace_time=1800,
             )
         logger.info("인기 단지 선제적 크롤링 활성화: 10:45, 14:45, 19:15 (배치 %d)", POPULAR_CRAWL_BATCH_SIZE)
+
+    # K. 단지 상세 유형별 backfill — 매물유형별 독립 job (05~07시 빈 슬롯)
+    #    APT(4.6만)·OPST(1.5만)는 매일, 소수 유형은 주 1회. jitter 로 추가 분산.
+    if COMPLEX_DETAIL_ENABLED:
+        # 대량 유형 — 매일
+        for hour, rtype in [(5, "APT"), (6, "OPST")]:
+            scheduler.add_job(
+                crawl_complex_details_batch,
+                "cron",
+                hour=hour,
+                jitter=600,
+                kwargs={"real_estate_type": rtype, "batch_size": COMPLEX_DETAIL_BATCH_SIZE,
+                        "scheduler_job_id": f"complex_detail_{rtype}"},
+                id=f"complex_detail_{rtype}",
+                name=f"단지 상세 backfill {rtype} {hour:02d}:00",
+                max_instances=1,
+                misfire_grace_time=3600,
+            )
+        # 소수 유형 — 주 1회 07:00 (요일 분산)
+        for dow, rtype in [("tue", "JGC"), ("wed", "ABYG"), ("thu", "OBYG")]:
+            scheduler.add_job(
+                crawl_complex_details_batch,
+                "cron",
+                day_of_week=dow,
+                hour=7,
+                jitter=600,
+                kwargs={"real_estate_type": rtype, "batch_size": COMPLEX_DETAIL_BATCH_SIZE,
+                        "scheduler_job_id": f"complex_detail_{rtype}"},
+                id=f"complex_detail_{rtype}",
+                name=f"단지 상세 backfill {rtype} {dow} 07:00",
+                max_instances=1,
+                misfire_grace_time=3600,
+            )
+        logger.info("단지 상세 backfill 활성화: APT 05:00 / OPST 06:00 매일, JGC·ABYG·OBYG 주1회 07:00 (배치 %d)", COMPLEX_DETAIL_BATCH_SIZE)
 
     # F. 공공데이터 실거래가 수집 — 주 1회 토요일 새벽 5시
     #    네이버 API 보완용, IP 차단 우려 없음

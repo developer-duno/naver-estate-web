@@ -49,6 +49,9 @@ export default function InfoCards({ article: a, complex: c }: Props) {
     ["매물유형", a.article_real_estate_type_name],
     ["월세 수익률", a.monthly_rent_yield != null ? `${a.monthly_rent_yield}%${a.monthly_rent_yield < 3 ? " (낮음)" : a.monthly_rent_yield >= 10 ? " (높음)" : ""}` : null],
     ["전세가율(매물)", a.article_jeonse_ratio != null ? `${a.article_jeonse_ratio}%${a.article_jeonse_ratio > 80 ? " (주의)" : ""}` : null],
+    ["동일주소 매물", a.same_addr_cnt != null && a.same_addr_cnt > 1 ? `${a.same_addr_cnt}건 (${a.same_addr_min_prc ?? "-"} ~ ${a.same_addr_max_prc ?? "-"})` : null],
+    ["사진 수", a.site_image_count != null && a.site_image_count > 0 ? `${a.site_image_count}장` : null],
+    ["분양권 프리미엄", a.is_presale && a.same_addr_premium_min ? `${a.same_addr_premium_min} ~ ${a.same_addr_premium_max ?? "-"}` : null],
   ];
 
   const complexItems: [string, string | undefined | null][] = c

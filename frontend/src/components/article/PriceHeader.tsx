@@ -55,6 +55,21 @@ export default function PriceHeader({ article: a }: Props) {
             분양권
           </span>
         )}
+        {a.price_change_state === "INCREASE" && (
+          <span className="text-sm font-medium px-2 py-1 rounded bg-red-100 text-red-700">
+            가격상승
+          </span>
+        )}
+        {a.price_change_state === "DECREASE" && (
+          <span className="text-sm font-medium px-2 py-1 rounded bg-blue-100 text-blue-700">
+            가격하락
+          </span>
+        )}
+        {a.is_direct_trade && (
+          <span className="text-sm font-medium px-2 py-1 rounded bg-purple-100 text-purple-700">
+            직거래
+          </span>
+        )}
       </div>
 
       {/* 가격 */}

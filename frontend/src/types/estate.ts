@@ -95,6 +95,19 @@ export interface Article {
   realtor_phone?: string;
   monthly_rent_yield?: number;      // 월세 수익률 (%)
   article_jeonse_ratio?: number;    // 개별 전세가율 (%)
+  // #9 매물 가치 필드 (네이버 리스트 API 응답)
+  price_change_state?: string;      // 가격변동 (SAME/INCREASE/DECREASE)
+  article_status?: string;          // 거래상태 코드
+  same_addr_cnt?: number;           // 동일주소 매물 묶음 수
+  same_addr_min_prc?: string;       // 동일주소 최저가
+  same_addr_max_prc?: string;       // 동일주소 최고가
+  verification_type_code?: string;  // 검증유형 코드
+  is_direct_trade?: boolean;        // 직거래 여부
+  cp_name?: string;                 // 제공 플랫폼명
+  site_image_count?: number;        // 사진 수
+  same_addr_premium_min?: string;   // 분양권 프리미엄 최저
+  same_addr_premium_max?: string;   // 분양권 프리미엄 최고
+  premium_prc?: string;             // 분양권 개별 매물 프리미엄
 }
 
 /** 매물 가격 변동 이력 항목 */

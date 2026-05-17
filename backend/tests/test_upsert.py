@@ -86,6 +86,19 @@ def _make_article(**overrides):
         "use_approve_ymd": None,
         "acquisition_tax": None,
         "broker_fee": None,
+        # #9 매물 가치 필드
+        "price_change_state": None,
+        "article_status": None,
+        "same_addr_cnt": None,
+        "same_addr_min_prc": None,
+        "same_addr_max_prc": None,
+        "verification_type_code": None,
+        "is_direct_trade": False,
+        "cp_name": None,
+        "site_image_count": None,
+        "same_addr_premium_min": None,
+        "same_addr_premium_max": None,
+        "premium_prc": None,
     }
     defaults.update(overrides)
     for k, v in defaults.items():
@@ -241,3 +254,69 @@ class TestDeleteMissingArticles:
 
         count = db.query(ArticleModel).count()
         assert count == 2
+
+
+class TestArticleValueFields:
+    """#9 매물 가치 필드 — from_dict 매핑 + upsert 저장 검증"""
+
+    def test_from_dict_maps_value_fields(self):
+        """정상: 네이버 리스트 API 키가 가치 필드 속성으로 매핑된다"""
+        from shared.domain.article import RealEstateArticle
+
+        art = RealEstateArticle.from_dict({
+            "articleNo": "A1",
+            "tradeTypeName": "매매",
+            "priceChangeState": "INCREASE",
+            "articleStatus": "R0",
+            "sameAddrCnt": 3,
+            "sameAddrMinPrc": "13억 5,000",
+            "sameAddrMaxPrc": "14억",
+            "verificationTypeCode": "S_VR",
+            "isDirectTrade": True,
+            "cpName": "매경부동산",
+            "siteImageCount": "12",
+            "sameAddrPremiumMin": "-1000",
+            "sameAddrPremiumMax": "0",
+            "premiumPrc": "-1,000",
+        })
+        assert art.price_change_state == "INCREASE"
+        assert art.article_status == "R0"
+        assert art.same_addr_cnt == 3  # 정수 변환
+        assert art.same_addr_min_prc == "13억 5,000"  # 문자열 보존
+        assert art.verification_type_code == "S_VR"
+        assert art.is_direct_trade is True
+        assert art.cp_name == "매경부동산"
+        assert art.site_image_count == 12  # 문자열 "12" → 정수
+        assert art.same_addr_premium_min == "-1000"  # 음수 문자열 보존
+        assert art.premium_prc == "-1,000"
+
+    def test_from_dict_value_fields_default_when_absent(self):
+        """엣지: 가치 키가 없으면 안전한 기본값(None / False)"""
+        from shared.domain.article import RealEstateArticle
+
+        art = RealEstateArticle.from_dict({"articleNo": "A2", "tradeTypeName": "전세"})
+        assert art.price_change_state is None
+        assert art.same_addr_cnt is None
+        assert art.site_image_count is None
+        assert art.is_direct_trade is False  # 불리언 기본값
+        assert art.same_addr_premium_min is None
+
+    def test_upsert_persists_value_fields(self, db):
+        """정상: 가치 필드가 DB upsert 로 저장된다"""
+        upsert_complex_from_search(db, _make_search_data())
+        upsert_article(db, _make_article(
+            article_no="A001",
+            price_change_state="DECREASE",
+            same_addr_cnt=2,
+            same_addr_min_prc="10억",
+            is_direct_trade=True,
+            site_image_count=8,
+            same_addr_premium_min="-500",
+        ))
+        saved = db.query(ArticleModel).filter_by(article_no="A001").one()
+        assert saved.price_change_state == "DECREASE"
+        assert saved.same_addr_cnt == 2
+        assert saved.same_addr_min_prc == "10억"
+        assert saved.is_direct_trade is True
+        assert saved.site_image_count == 8
+        assert saved.same_addr_premium_min == "-500"

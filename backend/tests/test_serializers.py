@@ -76,6 +76,52 @@ def test_article_to_dict_without_complex():
     assert d["total_household_count"] is None
 
 
+def test_article_to_dict_value_fields():
+    """#9 매물 가치 필드 12종이 직렬화 dict에 값과 함께 포함된다"""
+    a = _make_article(
+        price_change_state="INCREASE",
+        article_status="R0",
+        same_addr_cnt=3,
+        same_addr_min_prc="13억 5,000",
+        same_addr_max_prc="14억",
+        verification_type_code="S_VR",
+        is_direct_trade=True,
+        cp_name="매경부동산",
+        site_image_count=12,
+        same_addr_premium_min="-1000",
+        same_addr_premium_max="0",
+        premium_prc="-1,000",
+    )
+    d = article_to_dict(a)
+    assert d["price_change_state"] == "INCREASE"
+    assert d["article_status"] == "R0"
+    assert d["same_addr_cnt"] == 3
+    assert d["same_addr_min_prc"] == "13억 5,000"
+    assert d["same_addr_max_prc"] == "14억"
+    assert d["verification_type_code"] == "S_VR"
+    assert d["is_direct_trade"] is True
+    assert d["cp_name"] == "매경부동산"
+    assert d["site_image_count"] == 12
+    assert d["same_addr_premium_min"] == "-1000"
+    assert d["same_addr_premium_max"] == "0"
+    assert d["premium_prc"] == "-1,000"
+
+
+def test_article_to_dict_value_fields_default():
+    """가치 필드 미설정 매물도 12 키가 모두 존재한다 (KeyError 없음)"""
+    a = _make_article()
+    d = article_to_dict(a)
+    for key in (
+        "price_change_state", "article_status", "same_addr_cnt",
+        "same_addr_min_prc", "same_addr_max_prc", "verification_type_code",
+        "is_direct_trade", "cp_name", "site_image_count",
+        "same_addr_premium_min", "same_addr_premium_max", "premium_prc",
+    ):
+        assert key in d
+    assert d["price_change_state"] is None
+    assert d["same_addr_cnt"] is None
+
+
 def test_build_filter_dict_all_none():
     """모든 파라미터가 None이면 None 반환"""
     assert build_filter_dict() is None

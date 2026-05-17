@@ -68,6 +68,20 @@ class RealEstateArticle:
     jibun_address: Optional[str] = None  # 지번주소
     use_approve_ymd: Optional[str] = None  # 사용승인일
 
+    # #9 매물 가치 필드 (리스트 API 응답, 크롤 시점 값)
+    price_change_state: Optional[str] = None  # 가격변동 (SAME/INCREASE/DECREASE)
+    article_status: Optional[str] = None  # 거래상태 코드
+    same_addr_cnt: Optional[int] = None  # 동일주소 매물 묶음 수
+    same_addr_min_prc: Optional[str] = None  # 동일주소 최저가 (문자열)
+    same_addr_max_prc: Optional[str] = None  # 동일주소 최고가 (문자열)
+    verification_type_code: Optional[str] = None  # 검증유형 코드
+    is_direct_trade: bool = False  # 직거래 여부
+    cp_name: Optional[str] = None  # 제공 플랫폼명
+    site_image_count: Optional[int] = None  # 사진 수
+    same_addr_premium_min: Optional[str] = None  # 분양권 프리미엄 최저 (ABYG, 문자열)
+    same_addr_premium_max: Optional[str] = None  # 분양권 프리미엄 최고 (ABYG, 문자열)
+    premium_prc: Optional[str] = None  # 분양권 개별 매물 프리미엄 (ABYG, 문자열)
+
 
     @property
     def display_trade_type(self) -> str:
@@ -292,7 +306,13 @@ class RealEstateArticle:
         except ValueError:
             latitude = None
             longitude = None
-            
+
+        def _to_int(v):
+            try:
+                return int(v) if v is not None and v != "" else None
+            except (ValueError, TypeError):
+                return None
+
         return cls(
             article_no=str(data.get("articleNo", "")),
             trade_type_name=data.get("tradeTypeName", ""),
@@ -317,4 +337,17 @@ class RealEstateArticle:
             is_verified=data.get("isVerified", False),
             article_real_estate_type_name=data.get("realEstateTypeName") or data.get("articleRealEstateTypeName"),
             is_presale="분양권" in (data.get("realEstateTypeName") or data.get("articleRealEstateTypeName") or ""),
-        ) 
+            # #9 매물 가치 필드 (리스트 API 응답)
+            price_change_state=data.get("priceChangeState"),
+            article_status=data.get("articleStatus"),
+            same_addr_cnt=_to_int(data.get("sameAddrCnt")),
+            same_addr_min_prc=data.get("sameAddrMinPrc"),
+            same_addr_max_prc=data.get("sameAddrMaxPrc"),
+            verification_type_code=data.get("verificationTypeCode"),
+            is_direct_trade=data.get("isDirectTrade", False),
+            cp_name=data.get("cpName"),
+            site_image_count=_to_int(data.get("siteImageCount")),
+            same_addr_premium_min=data.get("sameAddrPremiumMin"),
+            same_addr_premium_max=data.get("sameAddrPremiumMax"),
+            premium_prc=data.get("premiumPrc"),
+        )

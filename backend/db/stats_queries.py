@@ -1,9 +1,9 @@
 """DB 통계 + 필터 옵션 쿼리"""
 
-from sqlalchemy import and_, func, select, text
+from sqlalchemy import and_, exists, func, select, text
 from sqlalchemy.orm import Session
 
-from db.models import Article, Complex
+from db.models import Article, Complex, ComplexPriceHistory
 
 _ALLOWED_DISTINCT_COLUMNS = {"direction", "building_name", "trade_type_name"}
 
@@ -66,3 +66,38 @@ def get_filter_options(db: Session, complex_no: str) -> dict:
         "tags": tags,
         "directions": directions,
     }
+
+
+def count_coverage_by_type(db: Session) -> dict:
+    """매물유형별 데이터 커버리지 집계.
+
+    반환: {type_code: {complexes, with_article, with_price, with_detail}}
+    유형별로 단지 수 / 활성매물 있는 단지 / 시세이력 있는 단지 /
+    단지 상세 수집된 단지를 집계해, 유형별 수집 진행률을 한눈에 본다.
+    """
+    has_article = exists().where(
+        and_(Article.complex_no == Complex.complex_no, Article.is_active == True)  # noqa: E712
+    )
+    has_price = exists().where(ComplexPriceHistory.complex_no == Complex.complex_no)
+
+    stmt = (
+        select(
+            Complex.real_estate_type_code,
+            func.count().label("complexes"),
+            func.count().filter(has_article).label("with_article"),
+            func.count().filter(has_price).label("with_price"),
+            func.count(Complex.detail_crawled_at).label("with_detail"),
+        )
+        .group_by(Complex.real_estate_type_code)
+        .order_by(func.count().desc())
+    )
+
+    result = {}
+    for code, complexes, with_article, with_price, with_detail in db.execute(stmt).all():
+        result[code or "UNKNOWN"] = {
+            "complexes": complexes,
+            "with_article": with_article,
+            "with_price": with_price,
+            "with_detail": with_detail,
+        }
+    return result

@@ -11,6 +11,7 @@ import os
 from dotenv import load_dotenv
 
 from crawler.utils import get_shared_throttle
+from db.complex_queries import get_complexes_for_detail_enrich
 from db.database import SessionLocal
 from db.models import Article, Complex, CrawlJob
 from services.cache import get_cache
@@ -59,6 +60,8 @@ def _finalize_job(db, job: CrawlJob, target_status: str, **extra_fields) -> bool
         setattr(job, k, v)
     return True
 _throttle_details = get_shared_throttle("details", min_interval=1.5, max_interval=10.0)
+# 단지 상세(get_complex_detail) 전용 — 매물 API 와 엔드포인트가 달라 별도 throttle.
+_throttle_detail = get_shared_throttle("complex_detail", min_interval=2.0, max_interval=10.0)
 
 # 크롤링 대상 부동산 유형 (기본: 아파트 관련 4종)
 CRAWL_REAL_ESTATE_TYPES = set(
@@ -401,4 +404,69 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         db.commit()
         logger.exception("상세 보강 실패")
     finally:
+        db.close()
+
+
+# ── K. 단지 상세 유형별 backfill ──
+
+def crawl_complex_details_batch(
+    real_estate_type: str, batch_size: int = 500, scheduler_job_id: str | None = None
+):
+    """detail_crawled_at IS NULL 단지를 매물유형별로 골라 단지 상세 보강.
+
+    real_estate_type 으로 유형(APT/OPST/JGC/ABYG/OBYG)을 분리해 backfill.
+    단지별 개별 try/except — 한 단지 실패가 배치 전체를 멈추지 않는다.
+    enrich_complex_detail 이 정상 응답 시 detail_crawled_at 을 채운다.
+    """
+    db = SessionLocal()
+    job = CrawlJob(
+        job_type=f"complex_detail_{real_estate_type}",
+        scheduler_job_id=scheduler_job_id,
+        status="running",
+        started_at=utcnow(),
+    )
+    db.add(job)
+    db.commit()
+
+    try:
+        complex_nos = get_complexes_for_detail_enrich(db, real_estate_type, batch_size)
+        job.total_items = len(complex_nos)
+        db.commit()
+        logger.info("단지 상세 backfill 시작: %s %d개 단지", real_estate_type, len(complex_nos))
+
+        processed = 0
+        failed = 0
+        for i, complex_no in enumerate(complex_nos):
+            _throttle_detail.wait()
+            try:
+                enrich_complex_detail(db, complex_no)
+                _throttle_detail.on_success()
+                processed += 1
+            except Exception:
+                db.rollback()
+                _throttle_detail.on_rate_limit()
+                failed += 1
+                logger.exception("단지 상세 보강 개별 실패: complex %s", complex_no)
+            if (i + 1) % 50 == 0:
+                job.processed_items = processed
+                db.commit()
+
+        _finalize_job(
+            db, job, "completed",
+            processed_items=processed,
+            completed_at=utcnow(),
+        )
+        db.commit()
+        logger.info(
+            "단지 상세 backfill 완료: %s 성공 %d / 실패 %d / 전체 %d",
+            real_estate_type, processed, failed, len(complex_nos),
+        )
+
+    except Exception as e:
+        db.rollback()
+        _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
+        db.commit()
+        logger.exception("단지 상세 backfill 실패: %s", real_estate_type)
+    finally:
+        NaverEstateAPI.clear_cache()
         db.close()

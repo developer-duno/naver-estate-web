@@ -8,6 +8,8 @@ import re
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from shared.constants import REAL_ESTATE_TYPE_NAMES
+
 logger = logging.getLogger(__name__)
 
 
@@ -79,12 +81,16 @@ def upsert_complex_from_search(db, data, sido=None, sigungu=None, dong=None, com
         latitude = None
         longitude = None
 
+    # 유형명이 네이버 응답에 없으면 code 로 폴백 (NULL 방지)
+    type_code = data.get("realEstateTypeCode")
+    type_name = data.get("realEstateTypeName") or REAL_ESTATE_TYPE_NAMES.get(type_code)
+
     values = {
         "complex_no": complex_no,
         "complex_name": data.get("complexName", ""),
         "cortar_no": data.get("cortarNo"),
-        "real_estate_type_code": data.get("realEstateTypeCode"),
-        "real_estate_type_name": data.get("realEstateTypeName"),
+        "real_estate_type_code": type_code,
+        "real_estate_type_name": type_name,
         "latitude": latitude,
         "longitude": longitude,
         "total_household_count": safe_int(data.get("totalHouseholdCount")),
@@ -121,8 +127,8 @@ def upsert_complex_from_search(db, data, sido=None, sigungu=None, dong=None, com
         "complex_no": complex_no,
         "complex_name": data.get("complexName", ""),
         "cortar_no": data.get("cortarNo"),
-        "real_estate_type_code": data.get("realEstateTypeCode"),
-        "real_estate_type_name": data.get("realEstateTypeName"),
+        "real_estate_type_code": type_code,
+        "real_estate_type_name": type_name,
         "latitude": latitude,
         "longitude": longitude,
         "total_household_count": safe_int(data.get("totalHouseholdCount")),

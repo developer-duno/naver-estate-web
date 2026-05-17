@@ -16,6 +16,13 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# paths-filter 가 pull_request 이벤트에서 변경 파일 목록을 GitHub API 로
+# 조회할 때 pull-requests: read 권한이 필요하다. permissions 블록을
+# 명시하면 그 외 권한은 모두 none 으로 축소된다 (최소 권한 원칙).
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   changes:
     name: Detect changes

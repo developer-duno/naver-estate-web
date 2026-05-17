@@ -68,6 +68,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 | 응급의료 수집 | 매월 첫째 월 3시 | NEMC 응급의료기관 API |
 | 어린이집 수집 | 매월 첫째 목 6시 | CPMS cpmsapi030 API |
 | 범죄통계 수집 | 분기별 첫째 일 4시 | 경찰청 odcloud API (CSV 폴백) |
+| 단지 상세 backfill | APT 5시·OPST 6시 매일 / JGC·ABYG·OBYG 주1회 7시 | 매물유형별 독립 job, detail_crawled_at NULL 단지 보강 (기본 배치 500) |
 
 ## 공유 인프라 규칙 (mibunyang 프로젝트와 공유)
 
@@ -92,10 +93,22 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 | 03:00 (첫째 월) | naver-estate-web | collect_emergency | 매월 첫째 월 |
 | 03:00 | naver-estate-web | discover_regions | 일요일 |
 | 04:00 | naver-estate-web | collect_prices | 수요일 |
+| 05:00 | naver-estate-web | 단지 상세 backfill APT | 매일 |
+| 06:00 | naver-estate-web | 단지 상세 backfill OPST | 매일 |
+| 07:00 | naver-estate-web | 단지 상세 backfill JGC·ABYG·OBYG | 화·수·목 |
 | 08:00 | mibunyang | 로컬 naver-collect.py | 월/목 |
 | 10:45/14:45/19:15 | naver-estate-web | popular 크롤링 | 매일 |
 | 12h interval | naver-estate-web | crawl_articles | 매일 |
 | 4h interval | naver-estate-web | crawl_details | 매일 |
+
+### IP 차단 방지 (절대 규칙)
+
+같은 집 서버 IP 로 네이버를 크롤링하므로, 짧은 시간에 대량 요청하면 IP 가 차단된다.
+
+1. **모든 네이버 수집 코드는 `AdaptiveThrottle` 경유 필수.** `crawler/utils.py` 의 `get_shared_throttle(name, ...)` 로 인스턴스를 받아 단지·페이지 루프마다 `.wait()` 호출. 429 응답 시 자동 감속(`on_rate_limit`). throttle 우회한 직접 반복 호출 금지.
+2. **크롤 지표 컬럼을 SQL 직접 일괄 UPDATE 로 찍지 말 것.** `complexes.last_crawled_at`·`complexes.detail_crawled_at`·`articles.detail_crawled` 는 실제 크롤 코드(`CrawlJob` 생성 경유)만 갱신한다. SQL 로 일괄 UPDATE 하면 "크롤된 것처럼" 보이지만 실제 데이터는 없어 진단을 망친다.
+
+> **사건**: 2026-04-13 — `last_crawled_at` 이 하루에 29,944개(전체 75%) 동일 날짜로 찍힘. 그날 `crawl_jobs` 0건 → 크롤이 아니라 SQL 직접 일괄 UPDATE. 그 단지들의 단지상세 채움률은 2.6%뿐 — `last_crawled_at` 이 허수가 되어 데이터 진단을 장기간 어지럽힘.
 
 ### 공용 테이블 규칙 (같은 Supabase DB)
 

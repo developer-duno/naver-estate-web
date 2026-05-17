@@ -106,18 +106,20 @@ def run_monitor(db) -> None:
         ).scalar_one_or_none()
 
         if alert is None:
-            # 신규 장애 — 발송 + 행 생성
-            send_telegram(f"⚠ 크롤링 장애\n{issue['detail']}")
+            # 신규 장애 — 발송 성공 시에만 last_notified 기록
+            sent = send_telegram(f"⚠ 크롤링 장애\n{issue['detail']}")
             db.add(MonitorAlert(
                 alert_key=key, status="active",
-                detail=issue["detail"], last_notified=now,
+                detail=issue["detail"],
+                last_notified=now if sent else None,
             ))
         elif alert.status == "resolved":
-            # 해소됐던 장애 재발 — 발송 + 재활성화
-            send_telegram(f"⚠ 크롤링 장애 재발\n{issue['detail']}")
+            # 해소됐던 장애 재발 — 발송 성공 시에만 last_notified 갱신
+            sent = send_telegram(f"⚠ 크롤링 장애 재발\n{issue['detail']}")
             alert.status = "active"
             alert.detail = issue["detail"]
-            alert.last_notified = now
+            if sent:
+                alert.last_notified = now
         else:
             # 진행 중 장애 — 쿨다운 확인
             last = alert.last_notified
@@ -126,8 +128,8 @@ def run_monitor(db) -> None:
             if last is not None and last.tzinfo is None:
                 last = last.replace(tzinfo=timezone.utc)
             if last is None or (now - last) >= cooldown:
-                send_telegram(f"⚠ 크롤링 장애 지속\n{issue['detail']}")
-                alert.last_notified = now
+                if send_telegram(f"⚠ 크롤링 장애 지속\n{issue['detail']}"):
+                    alert.last_notified = now
             alert.detail = issue["detail"]
 
     # 2. 해소된 장애 — 이번 스캔에 없는 active 행
@@ -136,7 +138,8 @@ def run_monitor(db) -> None:
     ).scalars().all()
     for alert in actives:
         if alert.alert_key not in current_keys:
-            send_telegram(f"✅ 크롤링 복구\n{alert.alert_key} — 정상으로 돌아왔습니다.")
-            alert.status = "resolved"
+            # 복구 알림 성공 시에만 resolved 처리 — 실패 시 다음 스캔 재시도
+            if send_telegram(f"✅ 크롤링 복구\n{alert.alert_key} — 정상으로 돌아왔습니다."):
+                alert.status = "resolved"
 
     db.commit()

@@ -183,3 +183,45 @@ def test_run_monitor_resolved_issue_sends_recovery():
         assert alert.status == "resolved"
     finally:
         db.close()
+
+
+def test_run_monitor_send_failure_does_not_record_notified():
+    """버그 가드: 텔레그램 발송 실패 시 last_notified 를 찍지 않는다 (다음 스캔 재시도 가능)"""
+    db = TestSession()
+    try:
+        db.add(CrawlJob(
+            job_type="complex_articles", status="failed",
+            error_message="네이버 502", started_at=_utcnow(),
+            completed_at=_utcnow(), created_at=_utcnow(),
+        ))
+        db.commit()
+        with patch("crawler.monitor.send_telegram", return_value=False):
+            run_monitor(db)
+        alert = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed:complex_articles")
+        ).scalar_one()
+        assert alert.status == "active"
+        assert alert.last_notified is None  # 발송 실패 → 미기록
+    finally:
+        db.close()
+
+
+def test_run_monitor_cooldown_expired_resends():
+    """정상: 쿨다운(6h) 지난 진행 중 장애는 텔레그램 재발송"""
+    db = TestSession()
+    try:
+        db.add(CrawlJob(
+            job_type="complex_articles", status="failed",
+            error_message="네이버 502", started_at=_utcnow(),
+            completed_at=_utcnow(), created_at=_utcnow(),
+        ))
+        db.add(MonitorAlert(
+            alert_key="crawl_failed:complex_articles", status="active",
+            detail="이전", last_notified=_utcnow() - timedelta(hours=7),
+        ))
+        db.commit()
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+        assert mock_tg.called  # 쿨다운 만료 → 재발송
+    finally:
+        db.close()

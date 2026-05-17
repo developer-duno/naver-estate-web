@@ -185,3 +185,46 @@ def test_region_sigungu_filter(db):
     _add_complex(db, 'RS2', sido='서울특별시', sigungu='강남구')
     results = queries.get_complexes_by_region(db, '서울특별시', sigungu='서초구')
     assert len(results) == 1
+
+
+def test_trade_type_counts_basic(db):
+    """거래유형별 매물 수 — 4종 키 항상 포함, 없는 유형은 0"""
+    _add_complex(db, "TC1")
+    _add_article(db, "TC1A", "TC1", trade="매매")
+    _add_article(db, "TC1B", "TC1", trade="매매")
+    _add_article(db, "TC1C", "TC1", trade="전세")
+    counts = queries.get_trade_type_counts(db, "TC1")
+    assert counts == {"매매": 2, "전세": 1, "월세": 0, "단기임대": 0}
+
+
+def test_trade_type_counts_empty(db):
+    """매물 0건 단지 → 4키 전부 0"""
+    _add_complex(db, "TC2")
+    counts = queries.get_trade_type_counts(db, "TC2")
+    assert counts == {"매매": 0, "전세": 0, "월세": 0, "단기임대": 0}
+
+
+def test_trade_type_counts_excludes_inactive(db):
+    """비활성 매물(is_active=False)은 카운트 제외"""
+    _add_complex(db, "TC3")
+    _add_article(db, "TC3A", "TC3", trade="매매", active=True)
+    _add_article(db, "TC3B", "TC3", trade="매매", active=False)
+    counts = queries.get_trade_type_counts(db, "TC3")
+    assert counts["매매"] == 1
+
+
+def test_trade_type_counts_by_complexes(db):
+    """복수 단지 배치 조회 — 각 단지별 4키 dict 반환"""
+    _add_complex(db, "TC4")
+    _add_complex(db, "TC5")
+    _add_article(db, "TC4A", "TC4", trade="월세")
+    _add_article(db, "TC5A", "TC5", trade="단기임대")
+    _add_article(db, "TC5B", "TC5", trade="전세")
+    result = queries.get_trade_type_counts_by_complexes(db, ["TC4", "TC5"])
+    assert result["TC4"] == {"매매": 0, "전세": 0, "월세": 1, "단기임대": 0}
+    assert result["TC5"] == {"매매": 0, "전세": 1, "월세": 0, "단기임대": 1}
+
+
+def test_trade_type_counts_by_complexes_empty(db):
+    """빈 단지 목록 → 빈 dict"""
+    assert queries.get_trade_type_counts_by_complexes(db, []) == {}

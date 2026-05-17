@@ -12,7 +12,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from db.complex_queries import get_complexes_by_region, search_complexes
+from db.complex_queries import (
+    get_complexes_by_region,
+    get_trade_type_counts_by_complexes,
+    search_complexes,
+)
 from db.database import SessionLocal
 from db.models import Article as ArticleModel
 from deps import get_db
@@ -243,12 +247,17 @@ def _get_article_counts(db: Session, complex_nos: list[str]) -> dict[str, int]:
 
 
 def _build_search_response(all_complexes: list[dict], db: Session) -> dict:
-    """검색 결과에 매물 수 추가"""
+    """검색 결과에 매물 수 + 거래유형별 매물 수 추가"""
     complex_nos = [c["complex_no"] for c in all_complexes]
     counts = _get_article_counts(db, complex_nos)
+    trade_counts = get_trade_type_counts_by_complexes(db, complex_nos)
     return {
         "complexes": [
-            {**c, "article_count": counts.get(c["complex_no"], 0)}
+            {
+                **c,
+                "article_count": counts.get(c["complex_no"], 0),
+                "trade_type_counts": trade_counts.get(c["complex_no"]),
+            }
             for c in all_complexes
         ],
         "total": len(all_complexes),

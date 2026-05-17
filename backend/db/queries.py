@@ -15,6 +15,8 @@ from db.complex_queries import (  # noqa: F401
     get_complex_by_no,
     get_complex_pyeong_details,
     get_complexes_by_region,
+    get_trade_type_counts,
+    get_trade_type_counts_by_complexes,
     search_complexes,
 )
 from db.price_queries import (  # noqa: F401

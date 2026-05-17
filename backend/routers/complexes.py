@@ -29,9 +29,14 @@ def search_complexes(
     # 매물 수 배치 조회 (region 엔드포인트와 동일 패턴)
     complex_nos = [c.complex_no for c in results]
     counts = queries.get_article_counts_by_complexes(db, complex_nos)
+    trade_counts = queries.get_trade_type_counts_by_complexes(db, complex_nos)
     return {
         "complexes": [
-            {**complex_to_dict(c), "article_count": counts.get(c.complex_no, 0)}
+            {
+                **complex_to_dict(c),
+                "article_count": counts.get(c.complex_no, 0),
+                "trade_type_counts": trade_counts.get(c.complex_no),
+            }
             for c in results
         ],
         "total": len(results),
@@ -56,9 +61,14 @@ def get_complexes_by_region(
     # 매물 수 배치 조회
     complex_nos = [c.complex_no for c in results]
     counts = queries.get_article_counts_by_complexes(db, complex_nos)
+    trade_counts = queries.get_trade_type_counts_by_complexes(db, complex_nos)
     result = {
         "complexes": [
-            {**complex_to_dict(c), "article_count": counts.get(c.complex_no, 0)}
+            {
+                **complex_to_dict(c),
+                "article_count": counts.get(c.complex_no, 0),
+                "trade_type_counts": trade_counts.get(c.complex_no),
+            }
             for c in results
         ],
         "total": len(results),
@@ -91,6 +101,7 @@ def get_complex_detail(
     result = {
         **complex_to_dict(cpx),
         "article_count": article_count,
+        "trade_type_counts": queries.get_trade_type_counts(db, complex_no),
         "filter_options": filter_options,
     }
     _cache.set(detail_key, result)

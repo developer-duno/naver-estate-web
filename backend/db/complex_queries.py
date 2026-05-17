@@ -78,6 +78,48 @@ def get_article_counts_by_complexes(db: Session, complex_nos: list[str]) -> dict
     return {row[0]: row[1] for row in results}
 
 
+# 거래유형 4종 고정 (codes.md 답습 — trade_type_name 한국어 값)
+_TRADE_TYPES = ("매매", "전세", "월세", "단기임대")
+
+
+def get_trade_type_counts(db: Session, complex_no: str) -> dict[str, int]:
+    """단지의 거래유형별 활성 매물 수. 4종 키 항상 포함(0 채움)."""
+    stmt = (
+        select(Article.trade_type_name, func.count())
+        .where(and_(
+            Article.complex_no == complex_no,
+            Article.is_active == True,  # noqa: E712
+            Article.trade_type_name.in_(_TRADE_TYPES),
+        ))
+        .group_by(Article.trade_type_name)
+    )
+    rows = dict(db.execute(stmt).all())
+    return {t: rows.get(t, 0) for t in _TRADE_TYPES}
+
+
+def get_trade_type_counts_by_complexes(
+    db: Session, complex_nos: list[str]
+) -> dict[str, dict[str, int]]:
+    """복수 단지의 거래유형별 활성 매물 수 (N+1 방지)."""
+    if not complex_nos:
+        return {}
+    stmt = (
+        select(Article.complex_no, Article.trade_type_name, func.count())
+        .where(and_(
+            Article.complex_no.in_(complex_nos),
+            Article.is_active == True,  # noqa: E712
+            Article.trade_type_name.in_(_TRADE_TYPES),
+        ))
+        .group_by(Article.complex_no, Article.trade_type_name)
+    )
+    result: dict[str, dict[str, int]] = {
+        no: {t: 0 for t in _TRADE_TYPES} for no in complex_nos
+    }
+    for cno, tname, cnt in db.execute(stmt).all():
+        result[cno][tname] = cnt
+    return result
+
+
 def get_complexes_for_article_crawl(db: Session, limit: int = 50) -> list[Complex]:
     """매물 수집 배치 대상 단지 — 활성매물 0건 단지를 먼저 반환.
 

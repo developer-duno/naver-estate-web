@@ -46,3 +46,20 @@ describe("PriceHeader — 매물 가치 뱃지", () => {
     expect(screen.getByText("5억")).toBeInTheDocument();
   });
 });
+
+describe("PriceHeader — #10 거래완료 뱃지", () => {
+  it("trade_complete=true면 '거래완료' 뱃지 표시", () => {
+    render(<PriceHeader article={makeArticle({ trade_complete: true })} />);
+    expect(screen.getByText("거래완료")).toBeInTheDocument();
+  });
+
+  it("trade_complete=false면 '거래완료' 뱃지 미표시", () => {
+    render(<PriceHeader article={makeArticle({ trade_complete: false })} />);
+    expect(screen.queryByText("거래완료")).not.toBeInTheDocument();
+  });
+
+  it("trade_complete 미설정이면 '거래완료' 뱃지 미표시", () => {
+    render(<PriceHeader article={makeArticle()} />);
+    expect(screen.queryByText("거래완료")).not.toBeInTheDocument();
+  });
+});

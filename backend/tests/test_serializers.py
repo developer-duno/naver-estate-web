@@ -122,6 +122,32 @@ def test_article_to_dict_value_fields_default():
     assert d["same_addr_cnt"] is None
 
 
+def test_article_to_dict_detail_4fields():
+    """#10 매물 상세 4필드가 직렬화 dict에 값과 함께 포함된다"""
+    a = _make_article(
+        walking_time_to_subway=3,
+        isale_right_type_name="일반분양",
+        detail_status_code="R0",
+        trade_complete=True,
+    )
+    d = article_to_dict(a)
+    assert d["walking_time_to_subway"] == 3
+    assert d["isale_right_type_name"] == "일반분양"
+    assert d["detail_status_code"] == "R0"
+    assert d["trade_complete"] is True
+
+
+def test_article_to_dict_detail_4fields_default():
+    """상세 4필드 미설정 매물도 4 키가 모두 존재한다 (KeyError 없음)"""
+    a = _make_article()
+    d = article_to_dict(a)
+    for key in ("walking_time_to_subway", "isale_right_type_name",
+                "detail_status_code", "trade_complete"):
+        assert key in d
+    assert d["walking_time_to_subway"] is None
+    assert d["trade_complete"] is False
+
+
 def test_build_filter_dict_all_none():
     """모든 파라미터가 None이면 None 반환"""
     assert build_filter_dict() is None

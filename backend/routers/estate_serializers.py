@@ -112,6 +112,12 @@ def article_to_dict(a, complex_obj=None) -> dict:
         "same_addr_premium_min": getattr(a, "same_addr_premium_min", None),
         "same_addr_premium_max": getattr(a, "same_addr_premium_max", None),
         "premium_prc": getattr(a, "premium_prc", None),
+        # #10 매물 상세 4필드 (상세 API 출처 — article_status 와 구분)
+        "walking_time_to_subway": getattr(a, "walking_time_to_subway", None),
+        "isale_right_type_name": getattr(a, "isale_right_type_name", None),
+        "detail_status_code": getattr(a, "detail_status_code", None),
+        # BOOLEAN 필드 — DB 미저장 ORM(None)도 항상 boolean 으로 정규화
+        "trade_complete": bool(getattr(a, "trade_complete", False)),
         # 수익률 (동적 계산, DB 컬럼 불필요)
         "monthly_rent_yield": _calc_rent_yield(a),
         "article_jeonse_ratio": _calc_jeonse_ratio(a, c),

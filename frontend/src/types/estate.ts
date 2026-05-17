@@ -108,6 +108,11 @@ export interface Article {
   same_addr_premium_min?: string;   // 분양권 프리미엄 최저
   same_addr_premium_max?: string;   // 분양권 프리미엄 최고
   premium_prc?: string;             // 분양권 개별 매물 프리미엄
+  // #10 매물 상세 4필드 (네이버 상세 API articleDetail 응답)
+  walking_time_to_subway?: number;  // 지하철역 도보시간 (분)
+  isale_right_type_name?: string;   // 분양권 유형명 (분양권 매물만)
+  detail_status_code?: string;      // 상세 API 매물 상태코드 (cf. article_status = 리스트 API)
+  trade_complete?: boolean;         // 거래완료 여부
 }
 
 /** 매물 가격 변동 이력 항목 */

@@ -52,6 +52,8 @@ export default function InfoCards({ article: a, complex: c }: Props) {
     ["동일주소 매물", a.same_addr_cnt != null && a.same_addr_cnt > 1 ? `${a.same_addr_cnt}건 (${a.same_addr_min_prc ?? "-"} ~ ${a.same_addr_max_prc ?? "-"})` : null],
     ["사진 수", a.site_image_count != null && a.site_image_count > 0 ? `${a.site_image_count}장` : null],
     ["분양권 프리미엄", a.is_presale && a.same_addr_premium_min ? `${a.same_addr_premium_min} ~ ${a.same_addr_premium_max ?? "-"}` : null],
+    ["지하철 도보시간", a.walking_time_to_subway != null && a.walking_time_to_subway > 0 ? `도보 ${a.walking_time_to_subway}분` : null],
+    ["분양권 유형", a.isale_right_type_name],
   ];
 
   const complexItems: [string, string | undefined | null][] = c

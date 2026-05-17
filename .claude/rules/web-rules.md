@@ -55,7 +55,7 @@
 ### 인증
 - 보호 엔드포인트: `Depends(get_current_user)` 또는 `Depends(get_admin_user)`
 - 401/403 응답 시 프론트엔드 자동 로그아웃 (`_isLoggingOut` mutex로 중복 방지)
-- Rate limiting: in-memory (향후 Redis 전환 필요)
+- Rate limiting: `auth/rate_limiter.py` — Redis/in-memory 분기 구현 완료. `REDIS_URL` 환경변수 설정 시 Redis sorted set, 미설정 시 in-memory 폴백 자동 선택 (분산 환경 대비 완료, 단일 집 서버는 in-memory 로 충분)
 
 ### 보안
 - CSP: `unsafe-eval` 사용 금지, `unsafe-inline`은 Next.js 요구 시만 허용

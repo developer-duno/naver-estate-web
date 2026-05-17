@@ -8,7 +8,6 @@ line 190-193)가 저장하지 못함 → 이 테스트로 버그를 재현·고�
 
 from unittest.mock import patch
 
-from db.database import SessionLocal
 from db.models import Complex as ComplexModel
 from services.upsert import upsert_complex_from_search
 

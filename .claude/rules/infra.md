@@ -68,6 +68,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 | 응급의료 수집 | 매월 첫째 월 3시 | NEMC 응급의료기관 API |
 | 어린이집 수집 | 매월 첫째 목 6시 | CPMS cpmsapi030 API |
 | 범죄통계 수집 | 분기별 첫째 일 4시 | 경찰청 odcloud API (CSV 폴백) |
+| 단지 상세 backfill | APT 5시·OPST 6시 매일 / JGC·ABYG·OBYG 주1회 7시 | 매물유형별 독립 job, detail_crawled_at NULL 단지 보강 (기본 배치 500) |
 
 ## 공유 인프라 규칙 (mibunyang 프로젝트와 공유)
 
@@ -92,6 +93,9 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 | 03:00 (첫째 월) | naver-estate-web | collect_emergency | 매월 첫째 월 |
 | 03:00 | naver-estate-web | discover_regions | 일요일 |
 | 04:00 | naver-estate-web | collect_prices | 수요일 |
+| 05:00 | naver-estate-web | 단지 상세 backfill APT | 매일 |
+| 06:00 | naver-estate-web | 단지 상세 backfill OPST | 매일 |
+| 07:00 | naver-estate-web | 단지 상세 backfill JGC·ABYG·OBYG | 화·수·목 |
 | 08:00 | mibunyang | 로컬 naver-collect.py | 월/목 |
 | 10:45/14:45/19:15 | naver-estate-web | popular 크롤링 | 매일 |
 | 12h interval | naver-estate-web | crawl_articles | 매일 |

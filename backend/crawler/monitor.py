@@ -6,12 +6,15 @@ APScheduler 의 monitor job 이 주기적으로 run_monitor() 를 호출한다.
 """
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, func, select
 
-from db.models import CrawlJob
+from db.models import CrawlJob, MonitorAlert
 from routers.admin.freshness import compute_freshness
+from services.telegram import send_telegram
+from utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -73,3 +76,67 @@ def detect_issues(db) -> list[dict]:
         logger.warning("[monitor] 신선도 계산 실패 — 이번 스캔 skip", exc_info=True)
 
     return issues
+
+
+def _cooldown_hours() -> int:
+    """쿨다운 시간 (기본 6h)."""
+    return int(os.getenv("MONITOR_COOLDOWN_HOURS", "6"))
+
+
+def run_monitor(db) -> None:
+    """장애 감지 → monitor_alerts 대조 → 쿨다운 적용 → 텔레그램 발송.
+
+    APScheduler monitor job 이 주기적으로 호출. 예외는 자체 흡수.
+    """
+    try:
+        issues = detect_issues(db)
+    except Exception:
+        logger.warning("[monitor] 장애 감지 실패", exc_info=True)
+        return
+
+    now = utcnow()
+    current_keys = {i["alert_key"] for i in issues}
+    cooldown = timedelta(hours=_cooldown_hours())
+
+    # 1. 현재 장애 — 신규 발송 / 쿨다운 억제
+    for issue in issues:
+        key = issue["alert_key"]
+        alert = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == key)
+        ).scalar_one_or_none()
+
+        if alert is None:
+            # 신규 장애 — 발송 + 행 생성
+            send_telegram(f"⚠ 크롤링 장애\n{issue['detail']}")
+            db.add(MonitorAlert(
+                alert_key=key, status="active",
+                detail=issue["detail"], last_notified=now,
+            ))
+        elif alert.status == "resolved":
+            # 해소됐던 장애 재발 — 발송 + 재활성화
+            send_telegram(f"⚠ 크롤링 장애 재발\n{issue['detail']}")
+            alert.status = "active"
+            alert.detail = issue["detail"]
+            alert.last_notified = now
+        else:
+            # 진행 중 장애 — 쿨다운 확인
+            last = alert.last_notified
+            # SQLite 는 DateTime(timezone=True) 라도 naive 로 돌려줄 수 있어
+            # tz-aware now 와 빼면 에러 → freshness._to_utc 와 동일하게 보정
+            if last is not None and last.tzinfo is None:
+                last = last.replace(tzinfo=timezone.utc)
+            if last is None or (now - last) >= cooldown:
+                send_telegram(f"⚠ 크롤링 장애 지속\n{issue['detail']}")
+                alert.last_notified = now
+            alert.detail = issue["detail"]
+
+    # 2. 해소된 장애 — 이번 스캔에 없는 active 행
+    actives = db.execute(
+        select(MonitorAlert).where(MonitorAlert.status == "active")
+    ).scalars().all()
+    for alert in actives:
+        if alert.alert_key not in current_keys:
+            send_telegram(f"✅ 크롤링 복구\n{alert.alert_key} — 정상으로 돌아왔습니다.")
+            alert.status = "resolved"
+
+    db.commit()

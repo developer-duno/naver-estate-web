@@ -2,20 +2,22 @@
  * check-mdx-jsx.mjs scan() 단위 테스트
  * 실행: npx vitest run scripts/__tests__/check-mdx-jsx.test.mjs
  */
-import { describe, it, expect, beforeEach, afterAll } from "vitest";
-import { mkdir, writeFile, rm } from "node:fs/promises";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scan } from "../check-mdx-jsx.mjs";
 
-const FIXTURE = "scripts/__tests__/__fixture_mdx__";
+// 워커별 고유 임시 디렉터리 — 고정 경로 공유 시 병렬 워커가 동시 rm 하다 EPERM 경합 (세션 195).
+// scan() 은 절대경로 정상 처리. hits.file 은 임시폴더 절대경로가 되나 현 테스트는 file 미검증.
+let FIXTURE;
 
 describe("check-mdx-jsx.scan()", () => {
   beforeEach(async () => {
-    await rm(FIXTURE, { recursive: true, force: true });
-    await mkdir(FIXTURE, { recursive: true });
+    FIXTURE = await mkdtemp(join(tmpdir(), "mdxcheck-"));
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await rm(FIXTURE, { recursive: true, force: true });
   });
 

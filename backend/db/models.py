@@ -138,6 +138,12 @@ class Article(Base):
     same_addr_premium_min: Mapped[str | None] = mapped_column(String(30))
     same_addr_premium_max: Mapped[str | None] = mapped_column(String(30))
     premium_prc: Mapped[str | None] = mapped_column(String(30))
+    # #10 매물 상세 4필드 (상세 API articleDetail 응답, 크롤 시점 값)
+    # detail_status_code 는 위 #9 article_status(리스트 API)와 출처가 다름 — 혼동 주의
+    walking_time_to_subway: Mapped[int | None] = mapped_column(Integer)  # 지하철역 도보시간 (분)
+    isale_right_type_name: Mapped[str | None] = mapped_column(String(30))  # 분양권 유형명 (분양권 매물만)
+    detail_status_code: Mapped[str | None] = mapped_column(String(10))  # 상세 API 매물 상태코드
+    trade_complete: Mapped[bool] = mapped_column(Boolean, default=False)  # 거래완료 여부
     # 크롤러 메타데이터
     detail_crawled: Mapped[bool] = mapped_column(Boolean, default=False)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

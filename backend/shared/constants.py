@@ -8,6 +8,18 @@ NAVER_COMPLEX_API = f"{NAVER_LAND_BASE}/api/complexes"
 JWT_TOKEN_LIFETIME = 3000  # 50분
 M2_TO_PYEONG = 3.3058
 
+# 매물유형 코드 → 한국어 이름 (codes.md 7종 답습)
+# 네이버 응답에 realEstateTypeName 누락 시 code 로 폴백하기 위한 매핑.
+REAL_ESTATE_TYPE_NAMES = {
+    "APT": "아파트",
+    "ABYG": "아파트분양권",
+    "JGC": "재건축",
+    "PRE": "분양권",
+    "OPST": "오피스텔",
+    "OBYG": "오피스텔분양권",
+    "RDV": "재개발",
+}
+
 # JWT 토큰 추출 정규식 (네이버 부동산 HTML에서 추출)
 JWT_TOKEN_PATTERN = r'"token":"(eyJ[A-Za-z0-9._-]+)"'
 

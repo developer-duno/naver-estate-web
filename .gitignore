@@ -64,3 +64,7 @@ scripts/uvicorn.log
 
 # 임시 디버그 JS (서브에이전트 생성)
 /test_*.js
+
+# Codex CLI 로컬 설정 (도구별 산출물 — git 비추적)
+.codex/
+AGENTS.md

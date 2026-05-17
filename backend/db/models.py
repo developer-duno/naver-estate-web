@@ -169,6 +169,20 @@ class CrawlJob(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class MonitorAlert(Base):
+    """크롤링 모니터 알림 쿨다운 상태 (V026)."""
+
+    __tablename__ = "monitor_alerts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    alert_key: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    detail: Mapped[str | None] = mapped_column(Text)
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    last_notified: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 

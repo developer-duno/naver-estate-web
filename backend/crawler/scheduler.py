@@ -34,6 +34,8 @@ CHILDCARE_BATCH_SIZE = int(os.getenv("CHILDCARE_BATCH_SIZE", "100"))
 CRIME_STATS_ENABLED = os.getenv("CRIME_STATS_ENABLED", "false").lower() == "true"
 COMPLEX_DETAIL_ENABLED = os.getenv("COMPLEX_DETAIL_ENABLED", "true").lower() == "true"
 COMPLEX_DETAIL_BATCH_SIZE = int(os.getenv("COMPLEX_DETAIL_BATCH_SIZE", "500"))
+MONITOR_ENABLED = os.getenv("MONITOR_ENABLED", "false").lower() == "true"
+MONITOR_INTERVAL_MIN = int(os.getenv("MONITOR_INTERVAL_MIN", "30"))
 
 # 모듈 레벨 스케줄러 참조 — admin API에서 다음 실행 시각 조회용
 _scheduler: BackgroundScheduler | None = None
@@ -236,6 +238,21 @@ def create_scheduler() -> BackgroundScheduler:
             misfire_grace_time=3600,
         )
         logger.info("범죄통계 수집 활성화: 분기별 첫째 일요일 04:00")
+
+    # L. 크롤링 모니터 — N분마다 장애 감지 + 텔레그램 알림
+    if MONITOR_ENABLED:
+        from crawler.monitor import run_monitor_job
+
+        scheduler.add_job(
+            run_monitor_job,
+            "interval",
+            minutes=MONITOR_INTERVAL_MIN,
+            id="crawler_monitor",
+            name="크롤링 모니터",
+            max_instances=1,
+            misfire_grace_time=600,
+        )
+        logger.info("크롤링 모니터 활성화: %d분 간격", MONITOR_INTERVAL_MIN)
 
     global _scheduler
     _scheduler = scheduler

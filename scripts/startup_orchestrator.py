@@ -16,6 +16,8 @@ import sys
 import time
 import urllib.request
 
+from telegram_notify import notify
+
 # ── 경로 상수 ──────────────────────────────────────────────
 PYTHON_EXE = r"C:\Users\user\AppData\Local\Programs\Python\Python312\python.exe"
 CLOUDFLARED_EXE = r"C:\Users\user\AppData\Local\Microsoft\WinGet\Links\cloudflared.exe"
@@ -147,36 +149,65 @@ def _kill_port(port: int):
 
 
 def watchdog(backend_proc: subprocess.Popen, tunnel_proc: subprocess.Popen):
-    """프로세스 생존 감시 + 자동 재시작."""
+    """프로세스 생존 감시 + 자동 재시작. 다운 감지 시 텔레그램 알림."""
     logger.info("Watchdog 시작 (30초 간격 감시)")
     backend_fail_count = 0
+    health_fail_count = 0
+    critical_alerted = False  # 🚨 5회 연속 실패 알림 1회만 — 복구 시 리셋
 
     while True:
         time.sleep(WATCHDOG_INTERVAL)
 
-        # 백엔드 체크
-        if backend_proc.poll() is not None:
-            backend_fail_count += 1
-            logger.warning(f"백엔드 프로세스 종료 감지 — 재시작 (연속 실패: {backend_fail_count})")
+        # 백엔드 다운 판정: 프로세스 종료 OR health 무응답 연속 3회
+        proc_dead = backend_proc.poll() is not None
+        health_ok = _check_health()
+        if health_ok:
+            health_fail_count = 0
+        else:
+            health_fail_count += 1
 
-            # 포트 정리 후 재시작
+        if proc_dead or health_fail_count >= 3:
+            backend_fail_count += 1
+            reason = "프로세스 종료" if proc_dead else "health 무응답 (hang)"
+            logger.warning(f"백엔드 다운 감지 ({reason}) — 재시작 (연속 실패: {backend_fail_count})")
+            notify(f"⚠ 백엔드 다운 ({reason}) — 재시작 시도 중")
+
             _kill_port(BACKEND_PORT)
             backend_proc = start_backend()
+            health_fail_count = 0
             if not wait_for_backend():
                 logger.error("백엔드 재시작 실패")
+                notify("⚠ 백엔드 재시작 실패")
                 if backend_fail_count >= 5:
                     logger.error("연속 5회 재시작 실패 — 60초 대기 후 재시도")
+                    if not critical_alerted:
+                        notify("\U0001f6a8 백엔드 5회 연속 재시작 실패 — 점검 필요")
+                        critical_alerted = True
                     time.sleep(60)
                     backend_fail_count = 0
                 continue
             backend_fail_count = 0
+            critical_alerted = False
+            notify("✅ 백엔드 복구 완료")
         else:
             backend_fail_count = 0
 
         # 터널 체크
         if tunnel_proc.poll() is not None:
             logger.warning("터널 프로세스 종료 감지 — 재시작")
+            notify("⚠ Cloudflare 터널 다운 — 재시작 시도")
             tunnel_proc = start_tunnel()
+
+
+def _check_health() -> bool:
+    """백엔드 /health 응답 확인 (3초 타임아웃)."""
+    try:
+        resp = urllib.request.urlopen(
+            f"http://localhost:{BACKEND_PORT}/health", timeout=3
+        )
+        return resp.status == 200
+    except Exception:
+        return False
 
 
 def _check_already_running() -> bool:

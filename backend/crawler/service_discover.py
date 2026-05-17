@@ -158,6 +158,16 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
             ).all()
         }
 
+        # 매물유형명 폴백용 단지 유형명 1회 조회 — 네이버 매물 리스트
+        # 응답에 realEstateTypeName 이 거의 없어 매물 유형명이 NULL 로
+        # 저장되는 문제(활성매물 78%) 보완. 단지 유형명은 V021 backfill 로
+        # NULL 0건이라 폴백 소스로 신뢰 가능.
+        complex_type_name = (
+            db.query(Complex.real_estate_type_name)
+            .filter(Complex.complex_no == complex_no)
+            .scalar()
+        )
+
         while True:
             record_call("crawl_articles_batch")
             result = NaverEstateAPI.get_complex_articles(complex_no, page=page)
@@ -171,6 +181,8 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
             for a_data in article_list:
                 article = RealEstateArticle.from_dict(a_data)
                 article.complex_no = complex_no
+                if not article.article_real_estate_type_name and complex_type_name:
+                    article.article_real_estate_type_name = complex_type_name
                 upsert_article(db, article, track_price=True, existing_prices=existing_prices)
                 all_article_nos.add(article.article_no)
                 total_articles += 1

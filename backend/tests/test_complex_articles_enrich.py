@@ -105,6 +105,34 @@ class TestCrawlComplexArticlesEnrich:
 
     @patch("services.enricher.NaverEstateAPI")
     @patch("crawler.service_discover.NaverEstateAPI")
+    def test_article_type_name_falls_back_to_complex(self, mock_articles_api, mock_detail_api, db):
+        """정상: 매물 리스트 응답에 유형명이 없으면 단지 유형명으로 폴백한다.
+
+        네이버 매물 리스트 응답에 realEstateTypeName 이 거의 없어 매물
+        유형명이 NULL 로 저장되던 문제(활성매물 78%) 보완.
+        """
+        # APT 단지 — upsert 가 REAL_ESTATE_TYPE_NAMES 폴백으로 "아파트" 저장
+        upsert_complex_from_search(db, _make_complex_data("88891"))
+        db.commit()
+
+        # _make_articles_response 는 realEstateTypeName 키가 없음
+        mock_articles_api.get_complex_articles.return_value = _make_articles_response()
+        mock_detail_api.get_complex_detail.return_value = _make_detail_response()
+
+        from crawler.service_discover import crawl_complex_articles
+        crawl_complex_articles("88891")
+
+        db.expire_all()
+        from db.models import Article as ArticleModel
+        articles = db.query(ArticleModel).filter(ArticleModel.complex_no == "88891").all()
+        assert len(articles) == 2
+        for art in articles:
+            assert art.article_real_estate_type_name == "아파트", (
+                "매물 유형명이 단지 유형명으로 폴백되지 않음"
+            )
+
+    @patch("services.enricher.NaverEstateAPI")
+    @patch("crawler.service_discover.NaverEstateAPI")
     def test_enrich_skipped_when_already_done(self, mock_articles_api, mock_detail_api, db):
         """엣지: detail_crawled_at 이 이미 있으면 단지 상세 API 를 다시 부르지 않는다."""
         from utils import utcnow

@@ -82,6 +82,12 @@ class RealEstateArticle:
     same_addr_premium_max: Optional[str] = None  # 분양권 프리미엄 최고 (ABYG, 문자열)
     premium_prc: Optional[str] = None  # 분양권 개별 매물 프리미엄 (ABYG, 문자열)
 
+    # #10 매물 상세 필드 (상세 API articleDetail 응답, 크롤 시점 값)
+    walking_time_to_subway: Optional[int] = None  # 지하철역 도보시간 (분)
+    isale_right_type_name: Optional[str] = None  # 분양권 유형명 (분양권 매물만)
+    detail_status_code: Optional[str] = None  # 상세 API 매물 상태코드 (cf. article_status = 리스트 API)
+    trade_complete: bool = False  # 거래완료 여부
+
 
     @property
     def display_trade_type(self) -> str:
@@ -213,6 +219,16 @@ class RealEstateArticle:
                     pass
             self.jibun_address = ad.get("jibunAddress")
             self.use_approve_ymd = ad.get("useApproveYmd") or self.use_approve_ymd
+            # #10 매물 상세 4필드
+            wt = ad.get("walkingTimeToNearSubway")
+            if wt is not None:
+                try:
+                    self.walking_time_to_subway = int(wt)
+                except (ValueError, TypeError):
+                    pass
+            self.isale_right_type_name = ad.get("isaleRightTypeName")
+            self.detail_status_code = ad.get("articleStatusCode")
+            self.trade_complete = ad.get("tradeCompleteYN") == "Y"
 
         if aa:
             self.representative_img_url = aa.get("representativeImgUrl")

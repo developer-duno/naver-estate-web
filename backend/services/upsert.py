@@ -290,6 +290,11 @@ def build_detail_update_dict(domain_article, detail_data: dict = None):
         "use_approve_ymd": domain_article.use_approve_ymd,
         "acquisition_tax": domain_article.acquisition_tax,
         "broker_fee": domain_article.broker_fee,
+        # #10 매물 상세 4필드
+        "walking_time_to_subway": domain_article.walking_time_to_subway,
+        "isale_right_type_name": domain_article.isale_right_type_name,
+        "detail_status_code": domain_article.detail_status_code,
+        "trade_complete": domain_article.trade_complete,
         "detail_crawled": True,
         "updated_at": utcnow(),
     }

@@ -19,7 +19,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 CRAWL_INTERVAL_HOURS = int(os.getenv("CRAWL_INTERVAL_HOURS", "12"))
-CRAWL_DETAIL_INTERVAL_MIN = int(os.getenv("CRAWL_DETAIL_INTERVAL_MIN", "240"))
+CRAWL_DETAIL_INTERVAL_MIN = int(os.getenv("CRAWL_DETAIL_INTERVAL_MIN", "120"))
 CRAWL_BATCH_SIZE = int(os.getenv("CRAWL_BATCH_SIZE", "50"))
 POPULAR_CRAWL_ENABLED = os.getenv("POPULAR_CRAWL_ENABLED", "true").lower() == "true"
 POPULAR_CRAWL_BATCH_SIZE = int(os.getenv("POPULAR_CRAWL_BATCH_SIZE", "50"))
@@ -78,7 +78,7 @@ def create_scheduler() -> BackgroundScheduler:
         "interval",
         minutes=CRAWL_DETAIL_INTERVAL_MIN,
         jitter=900,
-        kwargs={"batch_size": 100, "scheduler_job_id": "crawl_details"},
+        kwargs={"batch_size": 300, "scheduler_job_id": "crawl_details"},
         id="crawl_details",
         name="매물 상세 보강",
         misfire_grace_time=900,

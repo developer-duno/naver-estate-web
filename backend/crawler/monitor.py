@@ -57,7 +57,7 @@ def detect_issues(db) -> list[dict]:
     for row in stale:
         issues.append({
             "alert_key": f"crawl_stale:{row.job_type}",
-            "detail": f"{row.job_type} 작업 {row.cnt}건이 1시간 넘게 running 상태 — 마비 의심",
+            "detail": f"{row.job_type} 작업 {row.cnt}건이 {_STALE_HOURS}시간 넘게 running 상태 — 마비 의심",
         })
 
     # 3. 데이터 미축적 — 신선도 red 종목

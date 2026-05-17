@@ -71,3 +71,49 @@ def test_detect_issues_recent_running_not_stale():
         assert "crawl_stale:crawl_details" not in keys
     finally:
         db.close()
+
+
+def test_detect_issues_running_just_under_stale_boundary():
+    """엣지: 59분 전 시작 running 은 마비 아님 (1h 경계 직전)"""
+    db = TestSession()
+    try:
+        db.add(CrawlJob(
+            job_type="crawl_details", status="running",
+            started_at=_utcnow() - timedelta(minutes=59),
+            created_at=_utcnow() - timedelta(minutes=59),
+        ))
+        db.commit()
+        assert "crawl_stale:crawl_details" not in [i["alert_key"] for i in detect_issues(db)]
+    finally:
+        db.close()
+
+
+def test_detect_issues_running_just_over_stale_boundary():
+    """엣지: 61분 전 시작 running 은 마비 (1h 경계 직후)"""
+    db = TestSession()
+    try:
+        db.add(CrawlJob(
+            job_type="crawl_details", status="running",
+            started_at=_utcnow() - timedelta(minutes=61),
+            created_at=_utcnow() - timedelta(minutes=61),
+        ))
+        db.commit()
+        assert "crawl_stale:crawl_details" in [i["alert_key"] for i in detect_issues(db)]
+    finally:
+        db.close()
+
+
+def test_detect_issues_old_failed_job_outside_window():
+    """엣지: 25시간 전 실패 작업은 24h 윈도 밖 — 감지 안 됨"""
+    db = TestSession()
+    try:
+        old = _utcnow() - timedelta(hours=25)
+        db.add(CrawlJob(
+            job_type="complex_articles", status="failed",
+            error_message="오래된 실패", started_at=old,
+            completed_at=old, created_at=old,
+        ))
+        db.commit()
+        assert "crawl_failed:complex_articles" not in [i["alert_key"] for i in detect_issues(db)]
+    finally:
+        db.close()

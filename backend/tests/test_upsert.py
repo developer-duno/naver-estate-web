@@ -9,6 +9,7 @@ from db.models import Article as ArticleModel
 from db.models import ArticlePriceHistory
 from db.models import Complex as ComplexModel
 from services.upsert import (
+    build_detail_update_dict,
     delete_missing_articles,
     upsert_article,
     upsert_complex_from_search,
@@ -320,3 +321,71 @@ class TestArticleValueFields:
         assert saved.is_direct_trade is True
         assert saved.site_image_count == 8
         assert saved.same_addr_premium_min == "-500"
+
+
+class TestArticleDetail4Fields:
+    """#10 매물 상세 4필드 — update_from_detail 파싱 + build_detail_update_dict 변환 검증"""
+
+    @staticmethod
+    def _make_domain():
+        """detail 파싱 대상 RealEstateArticle 인스턴스"""
+        from shared.domain.article import RealEstateArticle
+
+        return RealEstateArticle(article_no="A1", trade_type_name="매매")
+
+    def test_update_from_detail_parses_4fields(self):
+        """정상: 상세 API articleDetail 4키가 속성으로 매핑된다"""
+        art = self._make_domain()
+        art.update_from_detail({"articleDetail": {
+            "walkingTimeToNearSubway": 2,
+            "isaleRightTypeName": "일반분양",
+            "articleStatusCode": "R0",
+            "tradeCompleteYN": "N",
+        }})
+        assert art.walking_time_to_subway == 2
+        assert art.isale_right_type_name == "일반분양"
+        assert art.detail_status_code == "R0"
+        assert art.trade_complete is False  # "N" → False
+
+    def test_update_from_detail_trade_complete_yes(self):
+        """정상: tradeCompleteYN='Y' 면 trade_complete True"""
+        art = self._make_domain()
+        art.update_from_detail({"articleDetail": {"tradeCompleteYN": "Y"}})
+        assert art.trade_complete is True
+
+    def test_update_from_detail_general_article_no_isale(self):
+        """엣지: 일반 매물은 isaleRightTypeName 키가 없어 None"""
+        art = self._make_domain()
+        art.update_from_detail({"articleDetail": {"articleStatusCode": "R0"}})
+        assert art.isale_right_type_name is None
+        assert art.trade_complete is False  # 키 부재 → False
+
+    def test_update_from_detail_walking_time_zero(self):
+        """엣지: 도보시간 0분도 정수 0으로 저장된다 (데이터 보존)"""
+        art = self._make_domain()
+        art.update_from_detail({"articleDetail": {"walkingTimeToNearSubway": 0}})
+        assert art.walking_time_to_subway == 0
+
+    def test_build_detail_update_dict_includes_4fields(self):
+        """정상: build_detail_update_dict 결과에 4키가 값과 함께 포함된다"""
+        art = self._make_domain()
+        art.update_from_detail({"articleDetail": {
+            "walkingTimeToNearSubway": 5,
+            "isaleRightTypeName": "조합원분양",
+            "articleStatusCode": "R1",
+            "tradeCompleteYN": "Y",
+        }})
+        update = build_detail_update_dict(art)
+        assert update["walking_time_to_subway"] == 5
+        assert update["isale_right_type_name"] == "조합원분양"
+        assert update["detail_status_code"] == "R1"
+        assert update["trade_complete"] is True
+
+    def test_build_detail_update_dict_defaults(self):
+        """엣지: detail 미파싱 도메인도 4키가 안전한 기본값으로 존재한다"""
+        art = self._make_domain()
+        update = build_detail_update_dict(art)
+        assert update["walking_time_to_subway"] is None
+        assert update["isale_right_type_name"] is None
+        assert update["detail_status_code"] is None
+        assert update["trade_complete"] is False

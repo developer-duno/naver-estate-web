@@ -116,7 +116,8 @@ def article_to_dict(a, complex_obj=None) -> dict:
         "walking_time_to_subway": getattr(a, "walking_time_to_subway", None),
         "isale_right_type_name": getattr(a, "isale_right_type_name", None),
         "detail_status_code": getattr(a, "detail_status_code", None),
-        "trade_complete": getattr(a, "trade_complete", False),
+        # BOOLEAN 필드 — DB 미저장 ORM(None)도 항상 boolean 으로 정규화
+        "trade_complete": bool(getattr(a, "trade_complete", False)),
         # 수익률 (동적 계산, DB 컬럼 불필요)
         "monthly_rent_yield": _calc_rent_yield(a),
         "article_jeonse_ratio": _calc_jeonse_ratio(a, c),

@@ -70,6 +70,11 @@ export default function PriceHeader({ article: a }: Props) {
             직거래
           </span>
         )}
+        {a.trade_complete && (
+          <span className="text-sm font-medium px-2 py-1 rounded bg-gray-200 text-gray-700">
+            거래완료
+          </span>
+        )}
       </div>
 
       {/* 가격 */}

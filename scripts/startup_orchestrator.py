@@ -153,6 +153,7 @@ def watchdog(backend_proc: subprocess.Popen, tunnel_proc: subprocess.Popen):
     logger.info("Watchdog 시작 (30초 간격 감시)")
     backend_fail_count = 0
     health_fail_count = 0
+    critical_alerted = False  # 🚨 5회 연속 실패 알림 1회만 — 복구 시 리셋
 
     while True:
         time.sleep(WATCHDOG_INTERVAL)
@@ -179,11 +180,14 @@ def watchdog(backend_proc: subprocess.Popen, tunnel_proc: subprocess.Popen):
                 notify("⚠ 백엔드 재시작 실패")
                 if backend_fail_count >= 5:
                     logger.error("연속 5회 재시작 실패 — 60초 대기 후 재시도")
-                    notify("\U0001f6a8 백엔드 5회 연속 재시작 실패 — 점검 필요")
+                    if not critical_alerted:
+                        notify("\U0001f6a8 백엔드 5회 연속 재시작 실패 — 점검 필요")
+                        critical_alerted = True
                     time.sleep(60)
                     backend_fail_count = 0
                 continue
             backend_fail_count = 0
+            critical_alerted = False
             notify("✅ 백엔드 복구 완료")
         else:
             backend_fail_count = 0

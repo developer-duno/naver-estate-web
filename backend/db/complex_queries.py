@@ -78,6 +78,31 @@ def get_article_counts_by_complexes(db: Session, complex_nos: list[str]) -> dict
     return {row[0]: row[1] for row in results}
 
 
+def get_complexes_for_article_crawl(db: Session, limit: int = 50) -> list[Complex]:
+    """매물 수집 배치 대상 단지 — 활성매물 0건 단지를 먼저 반환.
+
+    기존엔 last_crawled_at 오래된 순으로만 골랐는데, 이 컬럼은 2026-04-13
+    SQL 일괄 UPDATE 로 약 75% 가 허수라 매물 0건 단지(약 3.6만 개)가
+    "크롤한 척"하며 영원히 후순위로 밀렸다. 활성매물 유무를 1차 정렬
+    기준으로 삼아 진짜 미수집 단지부터 채운다. 2차는 last_crawled_at
+    오래된 순(NULL 우선).
+    """
+    has_article = (
+        select(Article.complex_no)
+        .where(and_(Article.complex_no == Complex.complex_no, Article.is_active == True))  # noqa: E712
+        .exists()
+    )
+    stmt = (
+        select(Complex)
+        .order_by(
+            has_article.asc(),  # False(매물 0건) 가 먼저
+            Complex.last_crawled_at.asc().nullsfirst(),
+        )
+        .limit(limit)
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
 def get_complexes_for_detail_enrich(db: Session, real_estate_type: str, limit: int = 500) -> list[str]:
     """단지 상세 미수집 단지의 complex_no 목록 (유형별 backfill 용).
 

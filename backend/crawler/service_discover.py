@@ -11,7 +11,10 @@ import os
 from dotenv import load_dotenv
 
 from crawler.utils import get_shared_throttle
-from db.complex_queries import get_complexes_for_detail_enrich
+from db.complex_queries import (
+    get_complexes_for_article_crawl,
+    get_complexes_for_detail_enrich,
+)
 from db.database import SessionLocal
 from db.models import Article, Complex, CrawlJob
 from services.cache import get_cache
@@ -304,23 +307,21 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
 
 
 def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = None):
-    """last_crawled_at이 가장 오래된 단지부터 batch_size만큼 매물 수집.
+    """활성매물 0건 단지를 먼저, 그 다음 last_crawled_at 오래된 순으로 매물 수집.
 
     live 경로(_background_crawl)와 단지별 소유권을 공유 — 이미 live 쪽이
     같은 complex_no를 크롤 중이면 해당 단지는 skip하고 다음으로 넘어간다.
     또한 live 경로의 `crawl_done:{complex_no}` 캐시(get_dynamic_ttl)를 공유해
     최근 크롤된 단지는 동적 TTL 동안 재크롤하지 않는다.
+
+    선정 기준은 get_complexes_for_article_crawl 참조 — last_crawled_at
+    허수(2026-04-13 일괄 UPDATE)로 매물 0건 단지가 후순위로 밀린 문제 보완.
     """
     from routers.live._shared import _cache, release_complex, try_acquire_complex
 
     db = SessionLocal()
     try:
-        complexes = (
-            db.query(Complex)
-            .order_by(Complex.last_crawled_at.asc().nullsfirst())
-            .limit(batch_size)
-            .all()
-        )
+        complexes = get_complexes_for_article_crawl(db, batch_size)
         logger.info("매물 수집 배치 시작: %d개 단지", len(complexes))
         for cpx in complexes:
             done_key = f"crawl_done:{cpx.complex_no}"

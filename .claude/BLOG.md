@@ -77,7 +77,7 @@
 - 시세 분석 6편째: (현재 5편 = 전세가율·시세 분석·호가 vs 실거래가·매수 타이밍·호가 변동 추이) 추가 후보 협의 — 평당가 비교는 complex-price-analysis 중복으로 제외
 - 세금 7편째: (현재 6편 = 계산기 우산 + 양도세·보유세·종부세 합산배제·비과세 요건·보유기간 특례) 추가 후보 협의 — 부부 공동명의·임대주택은 기존 글 중복으로 제외
 - 도구 활용 10편째: (현재 9편 = 도구 5종 사용법 + 비교/검색/인쇄 워크플로 커버, 세션 191 brokerage-area-tool-guide 로 도구 5종 전용 글 공백 해소) 추가 후보 협의
-- 미분양 6편째: 즐겨찾기 일괄 비교 워크플로 (200개 → 4 단지 → 19행) / 자매글 역링크 정합 보강 — 미분양 추이 차트 글은 unsold_history base_month 2개월치(202601·202602)뿐 + post_completion_unsold·change 0% 채움으로 사실상 보류 (185·186 세션 DB 실측)
+- 미분양 7편째: (현재 6편 = for-agents·radar-weights·detail-bars·price-discount·detail-sections·batch-compare, 세션 187 batch-compare-guide 로 즐겨찾기 일괄 비교 워크플로 커버) 추가 후보 협의 — 미분양 추이 차트 글은 unsold_history base_month 2개월치(202601·202602)뿐 + post_completion_unsold·change 0% 채움으로 사실상 보류 (185·186 세션 DB 실측)
 
 ## 회귀 가드 (영구 제외 박제 답습)
 

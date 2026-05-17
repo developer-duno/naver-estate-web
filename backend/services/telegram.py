@@ -35,8 +35,8 @@ def send_telegram(text: str) -> bool:
         if resp.status_code == 200:
             logger.info("[telegram] 발송 성공")
             return True
-        logger.warning("[telegram] 발송 실패 — status %s", resp.status_code)
+        logger.warning("[telegram] 발송 실패 — status %s, %s", resp.status_code, resp.text[:200])
         return False
-    except Exception:
-        logger.warning("[telegram] 발송 예외", exc_info=True)
+    except Exception as e:
+        logger.warning("[telegram] 발송 예외 — %s", type(e).__name__)
         return False

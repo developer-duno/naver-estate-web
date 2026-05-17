@@ -36,13 +36,19 @@ vi.mock("@/components/RegionSelector", () => ({
 import SearchPage from "../search/page";
 
 /** 테스트용 단지 데이터 팩토리 */
-function makeComplex(no: string, name: string, reType = "APT") {
+function makeComplex(
+  no: string,
+  name: string,
+  reType = "APT",
+  tradeTypeCounts?: { 매매: number; 전세: number; 월세: number; 단기임대: number },
+) {
   return {
     complex_no: no,
     complex_name: name,
     real_estate_type_name: reType === "APT" ? "아파트" : "오피스텔",
     real_estate_type_code: reType,
     article_count: 5,
+    trade_type_counts: tradeTypeCounts,
     sido: "서울",
     sigungu: "강남구",
     dong: "역삼동",
@@ -148,5 +154,38 @@ describe("SearchPage", () => {
       const matches = screen.getAllByText(/검색 결과가 없습니다|결과 없음|0개/i);
       expect(matches.length).toBeGreaterThan(0);
     });
+  });
+
+  it("거래유형별 매물 수 → 0보다 큰 유형만 보조 텍스트로 표시", async () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams("q=래미안"));
+    mockSearchComplexes.mockResolvedValue({
+      complexes: [
+        makeComplex("C001", "래미안퍼스티지", "APT", { 매매: 12, 전세: 5, 월세: 0, 단기임대: 0 }),
+      ],
+      total: 1,
+    });
+
+    renderSearch();
+    await waitFor(() => {
+      // 데스크톱 행 + 모바일 카드 양쪽에 렌더 — 0인 월세/단기임대는 생략
+      expect(screen.getAllByText("매매 12·전세 5").length).toBeGreaterThan(0);
+    });
+  });
+
+  it("거래유형별 매물 수 전부 0 → 보조 텍스트 미표시", async () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams("q=래미안"));
+    mockSearchComplexes.mockResolvedValue({
+      complexes: [
+        makeComplex("C001", "래미안블레스티지", "APT", { 매매: 0, 전세: 0, 월세: 0, 단기임대: 0 }),
+      ],
+      total: 1,
+    });
+
+    renderSearch();
+    await waitFor(() => {
+      expect(screen.getAllByText("래미안블레스티지").length).toBeGreaterThan(0);
+    });
+    // 거래유형 보조 텍스트는 렌더되지 않음
+    expect(screen.queryByText(/매매 \d/)).not.toBeInTheDocument();
   });
 });

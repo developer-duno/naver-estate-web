@@ -26,6 +26,13 @@ export default function ComplexBasicInfo({ cpx }: { cpx: Complex }) {
   if (cpx.building_coverage_ratio) rows.push(["건폐율", `${cpx.building_coverage_ratio}%`]);
   if (cpx.real_estate_type_name) rows.push(["유형", cpx.real_estate_type_name]);
   if (cpx.management_office_tel) rows.push(["관리사무소", cpx.management_office_tel]);
+  if (cpx.trade_type_counts) {
+    const tc = cpx.trade_type_counts;
+    const parts = (["매매", "전세", "월세", "단기임대"] as const)
+      .filter((t) => tc[t] > 0)
+      .map((t) => `${t} ${tc[t]}`);
+    if (parts.length > 0) rows.push(["거래유형별 매물", parts.join(" · ")]);
+  }
 
   if (rows.length === 0) {
     return <p className="text-gray-500 text-sm">단지 상세 정보가 아직 수집되지 않았습니다.</p>;

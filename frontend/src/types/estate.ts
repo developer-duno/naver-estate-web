@@ -31,6 +31,8 @@ export interface Complex {
   last_crawled_at?: string;
   detail_crawled_at?: string;
   article_count?: number;
+  /** 거래유형별 활성 매물 수 (매매/전세/월세/단기임대) */
+  trade_type_counts?: { 매매: number; 전세: number; 월세: number; 단기임대: number };
   nearby_median_price?: number;
   jeonse_rate?: number;
   recent_trades_6m?: number;

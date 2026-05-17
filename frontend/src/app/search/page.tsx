@@ -418,12 +418,22 @@ function SearchContent() {
   );
 }
 
+/** 거래유형별 매물 수 → "매매 12·전세 5" 보조 텍스트. 전부 0이면 빈 문자열 */
+function tradeTypeSummary(tc: Complex["trade_type_counts"]): string {
+  if (!tc) return "";
+  return (["매매", "전세", "월세", "단기임대"] as const)
+    .filter((t) => tc[t] > 0)
+    .map((t) => `${t} ${tc[t]}`)
+    .join("·");
+}
+
 const ComplexRow = memo(function ComplexRow({ complex, index, urlFilters, isCompared, compareFull, onToggleCompare }: { complex: Complex; index: number; urlFilters?: ArticleFilters; isCompared?: boolean; compareFull?: boolean; onToggleCompare?: (item: CompareItem) => void }) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const filterURL = buildFilterURL(`/complex/${complex.complex_no}`, undefined, urlFilters);
   const year = complex.use_approve_ymd?.slice(0, 4);
   const articleCount = complex.article_count ?? 0;
+  const tradeSummary = tradeTypeSummary(complex.trade_type_counts);
   const isEven = index % 2 === 0;
 
   /** hover 200ms 유지 시 complex + articles 프리페치 (빠른 스크롤 시 불필요한 요청 방지) */
@@ -468,6 +478,7 @@ const ComplexRow = memo(function ComplexRow({ complex, index, urlFilters, isComp
       </td>
       <td className="px-3 py-2 text-right whitespace-nowrap">
         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${articleCount > 0 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{articleCount}건</span>
+        {tradeSummary && <div className="text-[11px] text-gray-400 mt-0.5">{tradeSummary}</div>}
       </td>
       <td className="px-2 py-2 text-center whitespace-nowrap">
         <button
@@ -496,6 +507,7 @@ const ComplexCardMobile = memo(function ComplexCardMobile({ complex, index, urlF
   const queryClient = useQueryClient();
   const year = complex.use_approve_ymd?.slice(0, 4);
   const articleCount = complex.article_count ?? 0;
+  const tradeSummary = tradeTypeSummary(complex.trade_type_counts);
   const colorClass = complex.real_estate_type_name ? (ESTATE_TYPE_COLORS[complex.real_estate_type_name] ?? ESTATE_TYPE_DEFAULT_COLOR) : "";
   const filterURL = buildFilterURL(`/complex/${complex.complex_no}`, undefined, urlFilters);
 
@@ -549,6 +561,7 @@ const ComplexCardMobile = memo(function ComplexCardMobile({ complex, index, urlF
         <span>{year ? `${year}년` : "-"}</span>
         <span className={`font-medium ${articleCount > 0 ? "text-blue-600" : "text-gray-400"}`}>{articleCount}건</span>
       </div>
+      {tradeSummary && <p className="text-xs text-gray-400 mt-1">{tradeSummary}</p>}
     </div>
   );
 });

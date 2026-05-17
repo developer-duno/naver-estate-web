@@ -228,6 +228,15 @@ export const POSTS: BlogPost[] = [
     category: "세금",
     readingTime: 7,
   },
+  {
+    slug: "brokerage-area-tool-guide",
+    title: "중개수수료·면적 변환 계산기 사용법 — 손님 30초 응대 워크플로",
+    description:
+      "중개수수료 4종 거래유형(매매·전세·월세·토지/상가)·3종 매물유형·부가세 자동 요율 + 면적 변환 평↔㎡ 양방향·퀵 버튼. 월세 환산보증금·오피스텔 주거용 판정·협의형 상한 함정과 매매/월세/오피스텔 손님 응대 시나리오까지.",
+    date: "2026-05-17",
+    category: "도구 활용",
+    readingTime: 6,
+  },
 ];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {

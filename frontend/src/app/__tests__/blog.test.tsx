@@ -46,16 +46,17 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 25편 (전체)", () => {
-    expect(POSTS.length).toBe(25);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 26편 (전체)", () => {
+    expect(POSTS.length).toBe(26);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(25);
+    expect(new Set(slugs).size).toBe(26);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
       "acquisition-tax-tool-guide",
       "agent-verification-guide",
       "asking-price-trend",
       "asking-vs-actual-price",
+      "brokerage-area-tool-guide",
       "buy-timing-signals",
       "compare-workflow",
       "complex-price-analysis",
@@ -270,6 +271,17 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.title).toContain("인쇄·엑셀");
     expect(post?.description).toMatch(/단지비교|미분양|인쇄|수식 인젝션/);
     expect(post?.category).toBe("도구 활용");
+  });
+
+  it("brokerage-area-tool-guide 메타 — 도구 활용 카테고리, 중개수수료·면적 변환 키워드", () => {
+    const post = getPostBySlug("brokerage-area-tool-guide");
+    expect(post).toBeDefined();
+    expect(post?.draft).toBeUndefined();
+    expect(post?.title).toContain("중개수수료");
+    expect(post?.title).toContain("면적 변환");
+    expect(post?.description).toMatch(/거래유형|환산보증금|평↔㎡|오피스텔/);
+    expect(post?.category).toBe("도구 활용");
+    expect(post?.date).toBe("2026-05-17");
   });
 
   it("getPostBySlug — 존재 slug 반환, 미존재 slug 는 undefined", () => {

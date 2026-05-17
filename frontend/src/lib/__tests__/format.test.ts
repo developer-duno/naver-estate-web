@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { formatDateFull, formatDateShort, formatKoreanPrice, formatMaintenanceCost } from "../format";
+import {
+  formatChartPrice,
+  formatDateFull,
+  formatDateShort,
+  formatKoreanPrice,
+  formatMaintenanceCost,
+  formatWon,
+} from "../format";
 
 describe("formatDateFull", () => {
   it("YYYYMMDD → YYYY.MM.DD", () => {
@@ -91,5 +98,57 @@ describe("formatDateFull 추가", () => {
 describe("formatMaintenanceCost 추가", () => {
   it("숫자 0은 0만원 반환", () => {
     expect(formatMaintenanceCost(null, 0)).toBe("0만원");
+  });
+});
+
+// 차트용 가격 포맷 — 억/만 구분자 없는 축약형 (splitEokMan 통합 회귀 가드)
+describe("formatChartPrice", () => {
+  it("1억 미만은 만 단위", () => {
+    expect(formatChartPrice(5000)).toBe("5,000만");
+  });
+
+  it("정확히 N억이면 억만 표기", () => {
+    expect(formatChartPrice(30000)).toBe("3억");
+  });
+
+  it("나머지가 있으면 공백 없이 억+만 연결", () => {
+    expect(formatChartPrice(35000)).toBe("3억5,000만");
+  });
+
+  it("0은 가드에 안 걸려 0만 출력", () => {
+    expect(formatChartPrice(0)).toBe("0만");
+  });
+
+  it("NaN/null은 대시", () => {
+    expect(formatChartPrice(NaN)).toBe("-");
+    expect(formatChartPrice(null as unknown as number)).toBe("-");
+  });
+});
+
+// 원 단위 → 만원/억원 포맷 (splitEokMan 통합 회귀 가드)
+describe("formatWon", () => {
+  it("원 단위를 만원으로 환산", () => {
+    expect(formatWon("50000000")).toBe("5,000만원");
+  });
+
+  it("정확히 N억원", () => {
+    expect(formatWon("1000000000")).toBe("10억원");
+  });
+
+  it("나머지가 있으면 공백 포함 억원+만원", () => {
+    expect(formatWon("1050000000")).toBe("10억 5,000만원");
+  });
+
+  it("0은 0원", () => {
+    expect(formatWon("0")).toBe("0원");
+  });
+
+  it("빈 값/null은 대시", () => {
+    expect(formatWon("")).toBe("-");
+    expect(formatWon(null)).toBe("-");
+  });
+
+  it("음수는 대시", () => {
+    expect(formatWon("-100")).toBe("-");
   });
 });

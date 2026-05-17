@@ -83,8 +83,8 @@
 | V020 | naver_call_counter Supabase 영속화 | 2026-04-22 (세션 54) |
 | V021~V023 | 단지/매물 유형명 backfill + 유형별 인덱스 | 2026-05-17 (세션 195) |
 | V024 | articles 매물 가치 필드 12개 (에픽 D #9) | 2026-05-17 (세션 195) |
-| V025 | articles 매물 상세 4필드 (에픽 D #10) | 미실행 |
-| V026 | monitor_alerts 테이블 (크롤링 모니터) | 미실행 |
+| V025 | articles 매물 상세 4필드 (에픽 D #10) | 2026-05-18 (세션 196) |
+| V026 | monitor_alerts 테이블 (크롤링 모니터) | 2026-05-18 (세션 196) |
 
 - `db/migrations/` 폴더에 `V000__` ~ `V026__` SQL 파일
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)

@@ -9,6 +9,12 @@
 - `PRICE_COLLECT_POLL_MS = 3_000` (실거래가 수집 폴링 간격 3초)
 - `MAX_PRICE_COLLECT_POLLS = 60` (폴링 최대 60회 = 3분 타임아웃)
 
+## 크롤 지표 컬럼 (진단 시 의미 구분)
+
+- `complexes.last_crawled_at` — **매물 크롤 시각** 지표. 단지 상세 수집 여부와 무관 (2026-04-13 SQL 일괄 UPDATE 로 허수 다수 — `infra.md` IP 차단 방지 사건 참조).
+- `complexes.detail_crawled_at` — **단지 상세 수집** 지표. 단지 상세 진단·backfill 우선순위는 이 컬럼 기준.
+- `articles.detail_crawled` — 매물 상세 크롤 완료 여부 (bool).
+
 ## 거래유형 코드
 
 | 코드 | 이름     | 설명                   |

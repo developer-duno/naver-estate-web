@@ -56,7 +56,7 @@
 - **MDX dynamic import**: `@/content/blog/${slug}.mdx`
 - **generateStaticParams** + **dynamicParams=false** (Next 16 정석)
 - **mdx-components.tsx** 17종 매핑 (img→next/Image 강제, 외부 a→target=\_blank rel=noopener)
-- **draft 미사용** = 20편 전부 발행 (영구 제외 박제: "draft N편" 표현 금지)
+- **draft 미사용** = 26편 전부 발행 (영구 제외 박제: "draft N편" 표현 금지)
 
 ## 새 글 발행 4단 절차 (의무)
 
@@ -81,6 +81,6 @@
 
 ## 회귀 가드 (영구 제외 박제 답습)
 
-- "draft N편" 표현 금지 (20편 전부 발행, draft 미사용)
+- "draft N편" 표현 금지 (26편 전부 발행, draft 미사용)
 - 미분양 지도 뷰 / 비교 4→6~8 확장 = 영구 제외 (사용자 명시 제외)
 - 6번째 도구 도입 = 영구 제외 (사용자 명시 요청 0)

@@ -10,7 +10,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 |---|---|---|
 | **자산 인덱스** | `.claude/ASSETS.md` | 한국어 PDF 16장 / 계산기 라이브러리 14개 / 글로벌 자산 / 운영 부채 |
 | **도메인 용어집** | `.claude/GLOSSARY.md` | 한국어 부동산 도메인 용어 30+ 개 |
-| **블로그 라인업** | `.claude/BLOG.md` | /blog MDX 20편 (시세 분석 4 / 세금 3 / 도구 활용 8 / 미분양 5) + 새 글 발행 4단 절차 |
+| **블로그 라인업** | `.claude/BLOG.md` | /blog MDX 26편 (시세 분석 5 / 세금 6 / 도구 활용 9 / 미분양 6) + 새 글 발행 4단 절차 |
 | **FE 깊이 토픽 4종** | `frontend/.claude/{hooks-and-state,ui-patterns,pages-and-mb,tools-lineup}.md` | FE 작업 시 명시 참조 (자동 로드 안 됨) — 훅·UI 패턴·페이지 흐름·도구 5종 |
 | **BE 깊이 토픽 1종** | `backend/.claude/details.md` | BE 작업 시 명시 참조 (자동 로드 안 됨) — 실거래가·mibunyang·검증·중복 제거 |
 | **세션 박제 메모리** | `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\` | 세션 43~126 일자별 정리 + 박제 룰 + 사고 회고 |
@@ -99,13 +99,13 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - `CHILDCARE_DETAIL_API_KEY` — cpmsapi030 운영키
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — Gmail SMTP SSL 465
 
-## 테스트 현황 (2026-05-08 실측, 세션 126)
+## 테스트 현황 (2026-05-17 실측, 세션 192)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` | **1076개** (109 파일) |
-| FE E2E | `frontend/e2e/*.spec.ts` | **18 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **579개** (47 파일) |
+| FE Vitest | `frontend/src/**/__tests__/` | **1336개** (136 파일) |
+| FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
+| BE pytest | `backend/tests/` | **586개** (47 파일) |
 
 ## 커밋 전 필수 검증
 

@@ -73,12 +73,11 @@ def _last_job(db: Session, scheduler_job_id: str) -> dict | None:
     }
 
 
-@router.get("/data-freshness")
-def get_data_freshness(
-    db: Session = Depends(get_db),
-    admin: dict = Depends(get_admin_user),
-):
-    """8개 종목 신선도 + 헛바퀴 감지 신호 일괄 반환."""
+def compute_freshness(db: Session) -> dict:
+    """8개 종목 신선도 + 헛바퀴 감지 신호 계산 (DB 세션만 의존).
+
+    라우터·monitor 양쪽이 호출. 응답 형식은 기존 /data-freshness 와 동일.
+    """
     now = datetime.now(timezone.utc)
 
     # 종목별 (last_updated, count) — 1쿼리씩
@@ -158,3 +157,12 @@ def get_data_freshness(
         })
 
     return {"items": items, "generated_at": now.isoformat()}
+
+
+@router.get("/data-freshness")
+def get_data_freshness(
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_admin_user),
+):
+    """8개 종목 신선도 + 헛바퀴 감지 신호 일괄 반환."""
+    return compute_freshness(db)

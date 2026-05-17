@@ -51,3 +51,27 @@ describe("InfoCards — 매물 가치 정보행", () => {
     expect(screen.queryByText("분양권 프리미엄")).not.toBeInTheDocument();
   });
 });
+
+describe("InfoCards — #10 매물 상세 정보행", () => {
+  it("지하철 도보시간이 있으면 '도보 N분' 행 표시", () => {
+    render(<InfoCards article={makeArticle({ walking_time_to_subway: 5 })} />);
+    expect(screen.getByText("지하철 도보시간")).toBeInTheDocument();
+    expect(screen.getByText("도보 5분")).toBeInTheDocument();
+  });
+
+  it("도보시간 0분은 의미 불명확하므로 행 미표시", () => {
+    render(<InfoCards article={makeArticle({ walking_time_to_subway: 0 })} />);
+    expect(screen.queryByText("지하철 도보시간")).not.toBeInTheDocument();
+  });
+
+  it("분양권 유형명이 있으면 '분양권 유형' 행 표시", () => {
+    render(<InfoCards article={makeArticle({ isale_right_type_name: "일반분양" })} />);
+    expect(screen.getByText("분양권 유형")).toBeInTheDocument();
+    expect(screen.getByText("일반분양")).toBeInTheDocument();
+  });
+
+  it("일반 매물(분양권 유형명 부재)은 '분양권 유형' 행 미표시", () => {
+    render(<InfoCards article={makeArticle()} />);
+    expect(screen.queryByText("분양권 유형")).not.toBeInTheDocument();
+  });
+});

@@ -86,7 +86,8 @@ def _cooldown_hours() -> int:
 def run_monitor(db) -> None:
     """장애 감지 → monitor_alerts 대조 → 쿨다운 적용 → 텔레그램 발송.
 
-    APScheduler monitor job 이 주기적으로 호출. 예외는 자체 흡수.
+    APScheduler monitor job 이 호출. 장애 감지(detect_issues) 단계 예외만
+    자체 흡수하며, 그 뒤 DB·발송 단계 예외는 run_monitor_job 이 감싼다.
     """
     try:
         issues = detect_issues(db)
@@ -154,5 +155,6 @@ def run_monitor_job() -> None:
         run_monitor(db)
     except Exception:
         logger.warning("[monitor] job 실행 실패", exc_info=True)
+        db.rollback()
     finally:
         db.close()

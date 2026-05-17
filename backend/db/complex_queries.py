@@ -76,3 +76,21 @@ def get_article_counts_by_complexes(db: Session, complex_nos: list[str]) -> dict
     )
     results = db.execute(stmt).all()
     return {row[0]: row[1] for row in results}
+
+
+def get_complexes_for_detail_enrich(db: Session, real_estate_type: str, limit: int = 500) -> list[str]:
+    """단지 상세 미수집 단지의 complex_no 목록 (유형별 backfill 용).
+
+    real_estate_type 으로 매물유형을 분리해 backfill 한다 (전 유형 일괄 금지).
+    detail_crawled_at IS NULL 인 단지만 반환 — V022 인덱스
+    (real_estate_type_code, detail_crawled_at) 가 가속.
+    """
+    stmt = (
+        select(Complex.complex_no)
+        .where(and_(
+            Complex.real_estate_type_code == real_estate_type,
+            Complex.detail_crawled_at.is_(None),
+        ))
+        .limit(limit)
+    )
+    return [row[0] for row in db.execute(stmt).all()]

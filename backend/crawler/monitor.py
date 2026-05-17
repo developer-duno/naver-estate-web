@@ -143,3 +143,16 @@ def run_monitor(db) -> None:
                 alert.status = "resolved"
 
     db.commit()
+
+
+def run_monitor_job() -> None:
+    """APScheduler 진입점 — DB 세션 열고 run_monitor 호출."""
+    from db.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        run_monitor(db)
+    except Exception:
+        logger.warning("[monitor] job 실행 실패", exc_info=True)
+    finally:
+        db.close()

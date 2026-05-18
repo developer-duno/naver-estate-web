@@ -1,26 +1,26 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef, memo, Suspense } from "react";
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { searchComplexes, getComplexesByRegion, getComplex, getArticles } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { searchComplexes, getComplexesByRegion } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { createClient } from "@/lib/supabase";
 import RegionSelector from "@/components/RegionSelector";
 import FilterBar from "@/components/FilterBar";
-import type { Complex } from "@/types";
-import { COMPLEX_SORT_OPTIONS, ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_TABS, PAGE_SIZE } from "@/lib/constants";
+import { COMPLEX_SORT_OPTIONS, ESTATE_TYPE_TABS } from "@/lib/constants";
 import EstateTypeTabs from "@/components/EstateTypeTabs";
 import ComplexSortDropdown from "@/components/ComplexSortDropdown";
 import { SkeletonPage } from "@/components/Skeleton";
 import { useSmartBack } from "@/hooks/useSmartBack";
-import { useFilterParams, buildFilterURL } from "@/hooks/useFilterParams";
-import { useCompare, type CompareItem } from "@/hooks/useCompare";
+import { useFilterParams } from "@/hooks/useFilterParams";
+import { useCompare } from "@/hooks/useCompare";
 import { useSearchHistory } from "@/hooks/useSearchHistory";
 import { sortComplexes } from "@/lib/sortComplexes";
 import type { SearchHistoryItem } from "@/lib/storage";
-import type { ArticleFilters } from "@/types";
 import CompareFloatingBar from "@/components/CompareFloatingBar";
+import { ComplexRow } from "@/components/search/ComplexRow";
+import { ComplexCardMobile } from "@/components/search/ComplexCardMobile";
 
 const VALID_COMPLEX_SORT = new Set<string>(COMPLEX_SORT_OPTIONS.map((o) => o.v));
 
@@ -417,154 +417,6 @@ function SearchContent() {
     </div>
   );
 }
-
-/** 거래유형별 매물 수 → "매매 12·전세 5" 보조 텍스트. 전부 0이면 빈 문자열 */
-function tradeTypeSummary(tc: Complex["trade_type_counts"]): string {
-  if (!tc) return "";
-  return (["매매", "전세", "월세", "단기임대"] as const)
-    .filter((t) => tc[t] > 0)
-    .map((t) => `${t} ${tc[t]}`)
-    .join("·");
-}
-
-const ComplexRow = memo(function ComplexRow({ complex, index, urlFilters, isCompared, compareFull, onToggleCompare }: { complex: Complex; index: number; urlFilters?: ArticleFilters; isCompared?: boolean; compareFull?: boolean; onToggleCompare?: (item: CompareItem) => void }) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const filterURL = buildFilterURL(`/complex/${complex.complex_no}`, undefined, urlFilters);
-  const year = complex.use_approve_ymd?.slice(0, 4);
-  const articleCount = complex.article_count ?? 0;
-  const tradeSummary = tradeTypeSummary(complex.trade_type_counts);
-  const isEven = index % 2 === 0;
-
-  /** hover 200ms 유지 시 complex + articles 프리페치 (빠른 스크롤 시 불필요한 요청 방지) */
-  const prefetchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const handlePrefetchEnter = useCallback(() => {
-    prefetchTimer.current = setTimeout(() => {
-      const no = complex.complex_no;
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.complex(no),
-        queryFn: () => getComplex(no),
-        staleTime: 60_000,
-      });
-      queryClient.prefetchQuery({
-        queryKey: queryKeys.articles(no, { page: 1, page_size: PAGE_SIZE }),
-        queryFn: () => getArticles(no, { page: 1, page_size: PAGE_SIZE }),
-        staleTime: 60_000,
-      });
-    }, 200);
-  }, [complex.complex_no, queryClient]);
-  const handlePrefetchLeave = useCallback(() => {
-    clearTimeout(prefetchTimer.current);
-  }, []);
-
-  return (
-    <tr
-      className={`hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-200 ${isEven ? "bg-gray-50/60" : "bg-white"}`}
-      onClick={() => router.push(filterURL || `/complex/${complex.complex_no}`)}
-      onMouseEnter={handlePrefetchEnter}
-      onMouseLeave={handlePrefetchLeave}
-    >
-      <td className="px-3 py-2 text-gray-400 text-center text-xs border-r border-gray-100">{index}</td>
-      <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap border-r border-gray-100">{complex.complex_name}</td>
-      <td className="px-3 py-2 text-gray-600 max-w-[300px] truncate border-r border-gray-100" title={complex.cortar_address || ""}>{complex.cortar_address || "-"}</td>
-      <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.total_household_count ? complex.total_household_count.toLocaleString() : "-"}</td>
-      <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.total_dong_count || "-"}</td>
-      <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.high_floor ? `${complex.high_floor}층` : "-"}</td>
-      <td className="px-3 py-2 text-center text-gray-700 whitespace-nowrap border-r border-gray-100">{year || "-"}</td>
-      <td className="px-3 py-2 text-center whitespace-nowrap border-r border-gray-100">
-        {complex.real_estate_type_name ? (
-          <span className={`text-xs px-1.5 py-0.5 rounded border ${ESTATE_TYPE_COLORS[complex.real_estate_type_name!] ?? ESTATE_TYPE_DEFAULT_COLOR}`}>{complex.real_estate_type_name}</span>
-        ) : "-"}
-      </td>
-      <td className="px-3 py-2 text-right whitespace-nowrap">
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${articleCount > 0 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{articleCount}건</span>
-        {tradeSummary && <div className="text-[11px] text-gray-400 mt-0.5">{tradeSummary}</div>}
-      </td>
-      <td className="px-2 py-2 text-center whitespace-nowrap">
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onToggleCompare?.({ complex_no: complex.complex_no, complex_name: complex.complex_name }); }}
-          disabled={!isCompared && compareFull}
-          className={`text-xs px-2 py-0.5 rounded border transition-colors ${
-            isCompared
-              ? "bg-blue-600 text-white border-blue-600"
-              : compareFull
-                ? "bg-gray-100 text-gray-300 border-gray-200 cursor-not-allowed"
-                : "bg-white text-gray-500 border-gray-300 hover:bg-blue-50 hover:text-blue-600"
-          }`}
-          aria-label={isCompared ? `${complex.complex_name} 비교 해제` : compareFull ? "비교 목록 가득 참 — 기존 단지를 먼저 빼주세요" : `${complex.complex_name} 비교 추가`}
-          title={isCompared ? "비교 해제" : compareFull ? "비교 목록 가득 참 (4/4)" : "비교 추가"}
-        >
-          {isCompared ? "V" : "+"}
-        </button>
-      </td>
-    </tr>
-  );
-});
-
-const ComplexCardMobile = memo(function ComplexCardMobile({ complex, index, urlFilters, isCompared, compareFull, onToggleCompare }: { complex: Complex; index: number; urlFilters?: ArticleFilters; isCompared?: boolean; compareFull?: boolean; onToggleCompare?: (item: CompareItem) => void }) {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const year = complex.use_approve_ymd?.slice(0, 4);
-  const articleCount = complex.article_count ?? 0;
-  const tradeSummary = tradeTypeSummary(complex.trade_type_counts);
-  const colorClass = complex.real_estate_type_name ? (ESTATE_TYPE_COLORS[complex.real_estate_type_name] ?? ESTATE_TYPE_DEFAULT_COLOR) : "";
-  const filterURL = buildFilterURL(`/complex/${complex.complex_no}`, undefined, urlFilters);
-
-  const prefetchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const handlePrefetchEnter = useCallback(() => {
-    prefetchTimer.current = setTimeout(() => {
-      const no = complex.complex_no;
-      queryClient.prefetchQuery({ queryKey: queryKeys.complex(no), queryFn: () => getComplex(no), staleTime: 60_000 });
-      queryClient.prefetchQuery({ queryKey: queryKeys.articles(no, { page: 1, page_size: PAGE_SIZE }), queryFn: () => getArticles(no, { page: 1, page_size: PAGE_SIZE }), staleTime: 60_000 });
-    }, 200);
-  }, [complex.complex_no, queryClient]);
-  const handlePrefetchLeave = useCallback(() => { clearTimeout(prefetchTimer.current); }, []);
-
-  return (
-    <div
-      className="bg-white rounded-lg shadow-sm border p-4 cursor-pointer hover:bg-blue-50 transition-colors active:bg-blue-100"
-      onClick={() => router.push(filterURL || `/complex/${complex.complex_no}`)}
-      onMouseEnter={handlePrefetchEnter}
-      onMouseLeave={handlePrefetchLeave}
-    >
-      <div className="flex justify-between items-start">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-400 shrink-0">{index}</span>
-            <span className="font-medium text-gray-900 truncate">{complex.complex_name}</span>
-            {complex.real_estate_type_name && (
-              <span className={`text-sm px-2 py-1 rounded border shrink-0 ${colorClass}`}>{complex.real_estate_type_name}</span>
-            )}
-          </div>
-          <p className="text-sm text-gray-500 mt-1 truncate">{complex.cortar_address || "-"}</p>
-        </div>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onToggleCompare?.({ complex_no: complex.complex_no, complex_name: complex.complex_name }); }}
-          disabled={!isCompared && compareFull}
-          className={`ml-2 shrink-0 text-sm px-3 py-2 rounded border transition-colors ${
-            isCompared
-              ? "bg-blue-600 text-white border-blue-600"
-              : compareFull
-                ? "bg-gray-100 text-gray-300 border-gray-200 cursor-not-allowed"
-                : "bg-white text-gray-500 border-gray-300 hover:bg-blue-50 hover:text-blue-600"
-          }`}
-          aria-label={isCompared ? `${complex.complex_name} 비교 해제` : compareFull ? "비교 목록 가득 참 — 기존 단지를 먼저 빼주세요" : `${complex.complex_name} 비교 추가`}
-          title={isCompared ? "비교 해제" : compareFull ? "비교 목록 가득 참 (4/4)" : "비교 추가"}
-        >
-          {isCompared ? "V" : "+"}
-        </button>
-      </div>
-      <div className="grid grid-cols-3 gap-2 mt-2.5 text-sm text-gray-600">
-        <span>{complex.total_household_count ? `${complex.total_household_count.toLocaleString()}세대` : "-"}</span>
-        <span>{year ? `${year}년` : "-"}</span>
-        <span className={`font-medium ${articleCount > 0 ? "text-blue-600" : "text-gray-400"}`}>{articleCount}건</span>
-      </div>
-      {tradeSummary && <p className="text-xs text-gray-400 mt-1">{tradeSummary}</p>}
-    </div>
-  );
-});
 
 export default function SearchPage() {
   return (

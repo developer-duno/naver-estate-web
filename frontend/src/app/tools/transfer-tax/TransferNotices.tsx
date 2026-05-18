@@ -67,9 +67,9 @@ const NOTICE_MESSAGES: Record<TransferNoticeKey, { title: string; body: string; 
   },
   "multi-heavy-suspended": {
     tone: "info",
-    title: "한시배제 적용 (다주택 중과 0)",
+    title: "한시배제 (2026-05-09 이전 양도분, 중과 0)",
     body:
-      "정부 2026.2.29 발표: 다주택 중과 한시배제가 2026-05-09까지 연장. 표1 장특공 적용 가능. 종료 후 양도분은 본래 중과 +20%/+30%p 부과.",
+      "다주택 중과 한시배제 2026-05-09 종료 확정. 이 날짜 이하 양도분은 중과 배제 + 표1 장특공 적용 가능. 2026-05-10 이후 양도분은 +20%/+30%p 중과 부과.",
   },
   "multi-heavy-applied": {
     tone: "danger",

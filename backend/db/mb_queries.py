@@ -17,7 +17,6 @@ from db.mb_apartment_queries import (  # noqa: F401
 )
 from db.mb_misc_queries import (  # noqa: F401
     count_trades,
-    get_air_station,
     get_apartment_prices,
     get_builder,
     get_infra,

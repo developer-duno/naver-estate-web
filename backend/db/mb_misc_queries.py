@@ -6,7 +6,6 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from db.mb_models import (
-    AirQualityStation,
     Builder,
     Infra,
     MBPrice,
@@ -134,8 +133,3 @@ def get_transport(db: Session, apartment_id: str) -> Optional[Transport]:
 def get_builder(db: Session, builder_name: str) -> Optional[Builder]:
     """시공사 정보"""
     return db.get(Builder, builder_name)
-
-
-def get_air_station(db: Session, station_name: str) -> Optional[AirQualityStation]:
-    """에어코리아 측정소 캐시 조회"""
-    return db.get(AirQualityStation, station_name)

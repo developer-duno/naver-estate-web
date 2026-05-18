@@ -6,7 +6,7 @@ import { startLiveCrawl, getCrawlStatus, ApiError } from "@/lib/api";
 import { createClient } from "@/lib/supabase";
 import { queryKeys } from "@/lib/query-keys";
 
-type MessageType = "info" | "error" | "success";
+export type MessageType = "info" | "error" | "success";
 
 const POLL_INTERVAL_MS = 2_000;
 

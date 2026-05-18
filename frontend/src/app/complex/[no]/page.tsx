@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import {
   getComplex,
@@ -11,8 +10,7 @@ import {
 } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { createClient } from "@/lib/supabase";
-import { PAGE_SIZE, ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
-import { SkeletonPage } from "@/components/Skeleton";
+import { PAGE_SIZE } from "@/lib/constants";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useExport } from "@/hooks/useExport";
 import { useFilterParams } from "@/hooks/useFilterParams";
@@ -27,16 +25,9 @@ import ArticleCardMobile from "@/components/ArticleCardMobile";
 import ArticleDetail from "@/components/ArticleDetail";
 import Pagination from "@/components/Pagination";
 import HintIcon from "@/components/HintIcon";
-import CrawlProgressBanner from "@/components/CrawlProgressBanner";
-
-function formatTimeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  if (hours < 1) return "방금 전";
-  if (hours < 24) return `${hours}시간 전`;
-  const days = Math.floor(hours / 24);
-  return `${days}일 전`;
-}
+import ComplexHeader from "@/components/complex/ComplexHeader";
+import ComplexLoadState from "@/components/complex/ComplexLoadState";
+import CrawlMessage from "@/components/complex/CrawlMessage";
 
 export default function ComplexDetailPage() {
   const params = useParams();
@@ -216,38 +207,15 @@ export default function ComplexDetailPage() {
   const handleExport = () => doExport(complexNo, selectedArticleNos, filters);
 
   if (!complexNo || !/^\d+$/.test(complexNo)) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <p className="text-red-500 text-lg mb-4">유효하지 않은 단지 번호입니다.</p>
-        <Link href="/" className="text-blue-600 hover:underline">홈으로 돌아가기</Link>
-      </div>
-    );
+    return <ComplexLoadState kind="invalid" />;
   }
 
   if (loading) {
-    return <SkeletonPage message="단지 정보를 불러오는 중..." />;
+    return <ComplexLoadState kind="loading" />;
   }
 
   if (error || !complex) {
-    const is404 = error?.includes("404") || error?.includes("찾을 수 없");
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <h2 className="text-xl font-bold mb-2">{is404 ? "단지를 찾을 수 없습니다" : "오류가 발생했습니다"}</h2>
-        <p className="text-gray-500 text-sm mb-6">{is404 ? "단지번호가 올바른지 확인해주세요." : error}</p>
-        <div className="flex justify-center gap-4">
-          {!is404 && (
-            <button
-              onClick={() => window.location.reload()}
-              className="text-sm border border-gray-300 rounded-md px-4 py-2 text-gray-600 hover:bg-gray-50"
-            >
-              다시 시도
-            </button>
-          )}
-          <Link href="/" className="text-sm bg-blue-600 text-white rounded-md px-4 py-2 hover:bg-blue-700">홈으로 돌아가기</Link>
-          <Link href="/search" className="text-sm border border-blue-300 text-blue-600 rounded-md px-4 py-2 hover:bg-blue-50">단지 검색</Link>
-        </div>
-      </div>
-    );
+    return <ComplexLoadState kind="error" error={error} />;
   }
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
@@ -255,30 +223,12 @@ export default function ComplexDetailPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
       {/* 헤더 */}
-      <div className="flex items-center gap-2 md:gap-4 flex-wrap">
-        <button onClick={goBack} aria-label="이전 페이지" className="text-gray-500 hover:text-gray-600 text-xl">
-          ←
-        </button>
-        <h1 className="text-lg md:text-2xl font-bold truncate">{complex.complex_name}</h1>
-        <button
-          onClick={() => toggleFavorite(complex.complex_name, complex.cortar_address)}
-          className={`text-xl transition-colors ${starred ? "text-yellow-500" : "text-gray-300 hover:text-yellow-400"}`}
-          aria-label={starred ? "즐겨찾기 해제" : "즐겨찾기 추가"}
-          title={starred ? "즐겨찾기 해제" : "즐겨찾기 추가"}
-        >
-          {starred ? "\u2605" : "\u2606"}
-        </button>
-        {complex.real_estate_type_name && (
-          <span className={`text-xs px-1.5 py-0.5 rounded border ${ESTATE_TYPE_COLORS[complex.real_estate_type_name] ?? ESTATE_TYPE_DEFAULT_COLOR}`}>
-            {complex.real_estate_type_name}
-          </span>
-        )}
-        {complex.last_crawled_at && (
-          <span className="hidden sm:inline-flex text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-            마지막 크롤링: {formatTimeAgo(complex.last_crawled_at)}
-          </span>
-        )}
-      </div>
+      <ComplexHeader
+        complex={complex}
+        starred={starred}
+        onBack={goBack}
+        onToggleFavorite={() => toggleFavorite(complex.complex_name, complex.cortar_address)}
+      />
 
       {/* 단지 정보 */}
       <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} onFilterChange={handleFilterChange} accessToken={sessionToken} />
@@ -353,36 +303,14 @@ export default function ComplexDetailPage() {
         </div>
       </div>
 
-      {/* 크롤 메시지: 진행 중(info+crawling)이면 상세 배너, 완료/에러/쿨다운은 기존 1줄 */}
-      {crawling && crawlMessageType === "info" ? (
-        <CrawlProgressBanner
-          progress={crawlProgress}
-          crawling={crawling}
-          fallbackMessage={crawlMessage || undefined}
-        />
-      ) : (
-        crawlMessage && (
-          <div className={`text-sm rounded-md px-4 py-2 flex justify-between items-center gap-3 ${
-            crawlMessageType === "error"
-              ? "bg-red-50 text-red-600"
-              : crawlMessageType === "info"
-                ? "bg-blue-50 text-blue-600"
-                : "bg-green-50 text-green-600"
-          }`}>
-            <span>{crawlMessage}</span>
-            {crawlMessageType === "error" && (
-              <button
-                type="button"
-                onClick={clearCrawlMessage}
-                aria-label="닫기"
-                className="text-red-400 hover:text-red-600 flex-shrink-0"
-              >
-                ×
-              </button>
-            )}
-          </div>
-        )
-      )}
+      {/* 크롤 메시지: 진행 중(info+crawling)이면 상세 배너, 완료/에러/쿨다운은 1줄 */}
+      <CrawlMessage
+        crawling={crawling}
+        message={crawlMessage}
+        messageType={crawlMessageType}
+        progress={crawlProgress}
+        onClear={clearCrawlMessage}
+      />
 
       {/* 매물 API 실패 배너 */}
       {articlesQuery.isError && (

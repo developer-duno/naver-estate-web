@@ -14,7 +14,9 @@ from ._shared import router
 
 logger = logging.getLogger(__name__)
 
-CollectorName = Literal["crime-stats", "air-quality", "emergency", "childcare", "backfill-price"]
+CollectorName = Literal[
+    "crime-stats", "air-quality", "emergency", "childcare", "backfill-price", "metrics"
+]
 
 
 def _get_collector(name: CollectorName):
@@ -34,6 +36,9 @@ def _get_collector(name: CollectorName):
     if name == "backfill-price":
         from crawler.service_public import backfill_price_batch
         return backfill_price_batch
+    if name == "metrics":
+        from crawler.service_metrics import collect_complex_metrics
+        return collect_complex_metrics
     raise HTTPException(status_code=400, detail=f"알 수 없는 수집기: {name}")
 
 

@@ -14,6 +14,7 @@ from crawler.service import (
     crawl_popular_complexes,
     discover_all_regions,
 )
+from crawler.service_metrics import collect_complex_metrics
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -34,6 +35,8 @@ CHILDCARE_BATCH_SIZE = int(os.getenv("CHILDCARE_BATCH_SIZE", "100"))
 CRIME_STATS_ENABLED = os.getenv("CRIME_STATS_ENABLED", "false").lower() == "true"
 COMPLEX_DETAIL_ENABLED = os.getenv("COMPLEX_DETAIL_ENABLED", "true").lower() == "true"
 COMPLEX_DETAIL_BATCH_SIZE = int(os.getenv("COMPLEX_DETAIL_BATCH_SIZE", "500"))
+COMPLEX_METRIC_ENABLED = os.getenv("COMPLEX_METRIC_ENABLED", "true").lower() == "true"
+COMPLEX_METRIC_BATCH_SIZE = int(os.getenv("COMPLEX_METRIC_BATCH_SIZE", "200"))
 MONITOR_ENABLED = os.getenv("MONITOR_ENABLED", "false").lower() == "true"
 MONITOR_INTERVAL_MIN = int(os.getenv("MONITOR_INTERVAL_MIN", "30"))
 
@@ -253,6 +256,24 @@ def create_scheduler() -> BackgroundScheduler:
             misfire_grace_time=600,
         )
         logger.info("크롤링 모니터 활성화: %d분 간격", MONITOR_INTERVAL_MIN)
+
+    # M. 단지 가치지표 수집 — 주 1회 금요일 08:30
+    #    complex_price_history 집계만 (네이버 API 호출 0) → 시간대 충돌 무관.
+    #    08:00 mibunyang 로컬 수집과 30분 분리.
+    if COMPLEX_METRIC_ENABLED:
+        scheduler.add_job(
+            collect_complex_metrics,
+            "cron",
+            day_of_week="fri",
+            hour=8,
+            minute=30,
+            kwargs={"batch_size": COMPLEX_METRIC_BATCH_SIZE, "scheduler_job_id": "collect_metrics"},
+            id="collect_metrics",
+            name="단지 가치지표 수집",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        logger.info("단지 가치지표 수집 활성화: 금요일 08:30 (배치 %d)", COMPLEX_METRIC_BATCH_SIZE)
 
     global _scheduler
     _scheduler = scheduler

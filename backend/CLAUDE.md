@@ -27,7 +27,10 @@
 | `db/article_queries.py` | 매물 조회 쿼리 (필터+정렬+페이지네이션) |
 | `db/price_queries.py` | 가격 이력/통계/추이 쿼리 |
 | `db/stats_queries.py` | DB 통계 + 필터 옵션 쿼리 |
-| `db/mb_queries.py` | mibunyang 읽기 쿼리 함수 |
+| `db/mb_queries.py` | mibunyang 쿼리 barrel re-export (3모듈) |
+| `db/mb_query_helpers.py` | mibunyang 중복 제거 + 정렬 + 필터 헬퍼 |
+| `db/mb_apartment_queries.py` | mibunyang 아파트 단지 + 미분양 조회 쿼리 |
+| `db/mb_misc_queries.py` | mibunyang 지역 통계 + 실거래 + 단지 부속 쿼리 |
 | `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V020) |
 | `shared/naver_api.py` | NaverEstateAPI (수정 금지) |
 | `shared/constants.py` | 상수 (수정 금지) |
@@ -94,7 +97,7 @@
 
 - BE service.py → **5 파일** (`service.py` barrel + `service_common`/`service_discover`/`service_price`/`service_public` 4 분할)
 - BE formatters/ → **5 파일** (`analysis`/`area_price_detail`/`complex_area`/`price_core`/`school`)
-- BE db/ → **10 파일** (`article_queries`/`complex_queries`/`database`/`mb_models`/`mb_queries`/`models`/`price_queries`/`queries` barrel/`query_helpers`/`stats_queries`)
+- BE db/ → **13 파일** (`article_queries`/`complex_queries`/`database`/`mb_apartment_queries`/`mb_misc_queries`/`mb_models`/`mb_queries` barrel/`mb_query_helpers`/`models`/`price_queries`/`queries` barrel/`query_helpers`/`stats_queries`)
 - BE serializers → **3 파일** (`routers/serializers.py` barrel + `routers/estate_serializers.py` + `routers/mb_serializers.py`)
 
 > **공인중개사 검증 + 미분양 중복 제거**: `backend/.claude/details.md` 참조

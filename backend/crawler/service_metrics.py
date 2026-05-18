@@ -54,6 +54,11 @@ def collect_complex_metrics(batch_size: int = 200, scheduler_job_id: str | None 
                 continue
 
             jeonse_median = calc_median_price(db, complex_no, "B1", months=6)
+            # 전세가율은 정의상 전세 < 매매 (100% 미만) 여야 한다.
+            # complex_price_history 의 B1 데이터 84% 가 A1 과 동일값인 결함이
+            # 있어, 전세중앙값 >= 매매중앙값이면 신뢰 불가로 보고 NULL 유지.
+            if jeonse_median is not None and jeonse_median >= median:
+                jeonse_median = None
             jeonse_rate = compute_jeonse_rate(median, jeonse_median)
             recent = count_recent_price_records(db, complex_no, months=6)
 

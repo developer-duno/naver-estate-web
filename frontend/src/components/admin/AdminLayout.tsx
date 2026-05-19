@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { href: "/admin", label: "대시보드" },
   { href: "/admin/users", label: "사용자" },
   { href: "/admin/crawl", label: "크롤링" },
+  { href: "/admin/scheduler-calendar", label: "캘린더" },
   { href: "/admin/data", label: "데이터" },
   { href: "/admin/logs", label: "감사 로그" },
   { href: "/admin/settings", label: "설정" },

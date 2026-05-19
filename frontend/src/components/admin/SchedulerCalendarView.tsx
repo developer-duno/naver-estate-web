@@ -28,15 +28,29 @@ interface Props {
   truncated?: boolean;
 }
 
-const STATUS_STYLES: Record<SchedulerCalendarEvent["status"], { bg: string; text: string; icon: string }> = {
+/** 상태별 색·아이콘 + 강조 여부.
+ *  - emphasize=true: dayMaxEvents 압축에서 우선순위 ↑ (running/failed/cancelled — 운영자 눈에 먼저 들어와야)
+ *  - pulse=true: 깜빡 애니메이션 (running 만 — "지금 돌고 있음" 신호)
+ */
+const STATUS_STYLES: Record<
+  SchedulerCalendarEvent["status"],
+  { bg: string; text: string; icon: string; emphasize?: boolean; pulse?: boolean }
+> = {
   completed: { bg: "bg-green-100", text: "text-green-800", icon: "✓" },
-  running: { bg: "bg-blue-100", text: "text-blue-800", icon: "▶" },
-  failed: { bg: "bg-red-100", text: "text-red-800", icon: "✗" },
-  cancelled: { bg: "bg-gray-100", text: "text-gray-600", icon: "—" },
+  running: { bg: "bg-blue-500", text: "text-white", icon: "▶", emphasize: true, pulse: true },
+  failed: { bg: "bg-red-500", text: "text-white", icon: "✗", emphasize: true },
+  cancelled: { bg: "bg-red-300", text: "text-red-900", icon: "✗", emphasize: true },
   pending: { bg: "bg-yellow-100", text: "text-yellow-800", icon: "…" },
   paused: { bg: "bg-orange-100", text: "text-orange-800", icon: "⏸" },
   upcoming: { bg: "bg-sky-50", text: "text-sky-700", icon: "→" },
 };
+
+/** dayMaxEvents 압축 시 emphasize=true 점이 칸 첫 줄에 노출되도록 우선순위 정렬.
+ *  FullCalendar 의 eventOrder 가 숫자 비교 — 0 (먼저) ~ 1 (나중).
+ */
+function eventPriority(status: SchedulerCalendarEvent["status"]): number {
+  return STATUS_STYLES[status]?.emphasize ? 0 : 1;
+}
 
 const MODE_OPTIONS: { value: CalendarMode; label: string }[] = [
   { value: "both", label: "모두" },
@@ -59,6 +73,8 @@ export default function SchedulerCalendarView({
       events.map((e) => ({
         title: e.name,
         start: e.start,
+        // FullCalendar eventOrder 가 숫자/문자 필드 비교 — order 가 작은 게 먼저 (= 칸 첫 줄)
+        order: eventPriority(e.status),
         extendedProps: {
           status: e.status,
           kind: e.kind,
@@ -129,6 +145,7 @@ export default function SchedulerCalendarView({
         locale={koLocale}
         events={calendarEvents}
         eventContent={renderEventContent}
+        eventOrder="order"
         dayCellContent={renderDayCell}
         dayMaxEvents={3}
         height="auto"
@@ -174,10 +191,10 @@ export default function SchedulerCalendarView({
         </div>
       )}
 
-      {/* 범례 */}
+      {/* 범례 — 강조 상태(running·failed·cancelled) 먼저 표시 */}
       <div className="mt-3 flex items-center gap-3 flex-wrap text-xs text-gray-500">
         <span className="font-medium text-gray-600">범례:</span>
-        {(["completed", "failed", "running", "upcoming"] as const).map((s) => (
+        {(["running", "failed", "cancelled", "completed", "upcoming"] as const).map((s) => (
           <span key={s} className="flex items-center gap-1">
             <span className={`inline-block w-2 h-2 rounded-full ${STATUS_STYLES[s].bg}`} />
             <span>{STATUS_STYLES[s].icon} {s}</span>
@@ -193,7 +210,7 @@ function renderEventContent(arg: EventContentArg) {
   const styles = STATUS_STYLES[status] ?? STATUS_STYLES.upcoming;
   return (
     <div
-      className={`text-[10px] leading-tight px-1 py-0.5 rounded truncate ${styles.bg} ${styles.text}`}
+      className={`text-[10px] leading-tight px-1 py-0.5 rounded truncate font-medium ${styles.bg} ${styles.text} ${styles.pulse ? "animate-pulse" : ""}`}
       title={`${arg.event.title} (${status})`}
     >
       <span aria-hidden="true">{styles.icon} </span>

@@ -39,7 +39,9 @@ CHILDCARE_ENABLED = os.getenv("CHILDCARE_ENABLED", "false").lower() == "true"
 CHILDCARE_BATCH_SIZE = int(os.getenv("CHILDCARE_BATCH_SIZE", "100"))
 CRIME_STATS_ENABLED = os.getenv("CRIME_STATS_ENABLED", "false").lower() == "true"
 COMPLEX_DETAIL_ENABLED = os.getenv("COMPLEX_DETAIL_ENABLED", "true").lower() == "true"
-COMPLEX_DETAIL_BATCH_SIZE = int(os.getenv("COMPLEX_DETAIL_BATCH_SIZE", "500"))
+COMPLEX_DETAIL_BATCH_SIZE = int(os.getenv("COMPLEX_DETAIL_BATCH_SIZE", "1000"))
+COMPLEX_DETAIL_APT_INTERVAL_HOURS = int(os.getenv("COMPLEX_DETAIL_APT_INTERVAL_HOURS", "6"))
+COMPLEX_DETAIL_OPST_INTERVAL_HOURS = int(os.getenv("COMPLEX_DETAIL_OPST_INTERVAL_HOURS", "6"))
 COMPLEX_METRIC_ENABLED = os.getenv("COMPLEX_METRIC_ENABLED", "true").lower() == "true"
 COMPLEX_METRIC_BATCH_SIZE = int(os.getenv("COMPLEX_METRIC_BATCH_SIZE", "200"))
 MONITOR_ENABLED = os.getenv("MONITOR_ENABLED", "false").lower() == "true"
@@ -148,23 +150,35 @@ def create_scheduler() -> BackgroundScheduler:
             )
         logger.info("인기 단지 선제적 크롤링 활성화: 10:45, 14:45, 19:15 (배치 %d)", POPULAR_CRAWL_BATCH_SIZE)
 
-    # K. 단지 상세 유형별 backfill — 매물유형별 독립 job (05~07시 빈 슬롯)
-    #    APT(4.6만)·OPST(1.5만)는 매일, 소수 유형은 주 1회. jitter 로 추가 분산.
+    # K. 단지 상세 유형별 backfill — 매물유형별 독립 job
+    #    APT(4.6만)·OPST(1.5만)는 interval 가속 (PR #19 매물상세 패턴 답습),
+    #    소수 유형은 주 1회 07:00 cron 유지. jitter 로 같은 IP 다른 잡과 분산.
     if COMPLEX_DETAIL_ENABLED:
-        # 대량 유형 — 매일
-        for hour, rtype in [(5, "APT"), (6, "OPST")]:
-            scheduler.add_job(
-                crawl_complex_details_batch,
-                "cron",
-                hour=hour,
-                jitter=600,
-                kwargs={"real_estate_type": rtype, "batch_size": COMPLEX_DETAIL_BATCH_SIZE,
-                        "scheduler_job_id": f"complex_detail_{rtype}"},
-                id=f"complex_detail_{rtype}",
-                name=f"단지 상세 backfill {rtype} {hour:02d}:00",
-                max_instances=1,
-                misfire_grace_time=3600,
-            )
+        # 대량 유형 — interval (env 시간 조절, 자동 감속 throttle 자율 보호)
+        scheduler.add_job(
+            crawl_complex_details_batch,
+            "interval",
+            hours=COMPLEX_DETAIL_APT_INTERVAL_HOURS,
+            jitter=600,
+            kwargs={"real_estate_type": "APT", "batch_size": COMPLEX_DETAIL_BATCH_SIZE,
+                    "scheduler_job_id": "complex_detail_APT"},
+            id="complex_detail_APT",
+            name="단지 상세 backfill APT",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        scheduler.add_job(
+            crawl_complex_details_batch,
+            "interval",
+            hours=COMPLEX_DETAIL_OPST_INTERVAL_HOURS,
+            jitter=600,
+            kwargs={"real_estate_type": "OPST", "batch_size": COMPLEX_DETAIL_BATCH_SIZE,
+                    "scheduler_job_id": "complex_detail_OPST"},
+            id="complex_detail_OPST",
+            name="단지 상세 backfill OPST",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
         # 소수 유형 — 주 1회 07:00 (요일 분산)
         for dow, rtype in [("tue", "JGC"), ("wed", "ABYG"), ("thu", "OBYG")]:
             scheduler.add_job(
@@ -180,7 +194,11 @@ def create_scheduler() -> BackgroundScheduler:
                 max_instances=1,
                 misfire_grace_time=3600,
             )
-        logger.info("단지 상세 backfill 활성화: APT 05:00 / OPST 06:00 매일, JGC·ABYG·OBYG 주1회 07:00 (배치 %d)", COMPLEX_DETAIL_BATCH_SIZE)
+        logger.info(
+            "단지 상세 backfill 활성화: APT %dh interval / OPST %dh interval 매일, "
+            "JGC·ABYG·OBYG 주1회 07:00 (배치 %d)",
+            COMPLEX_DETAIL_APT_INTERVAL_HOURS, COMPLEX_DETAIL_OPST_INTERVAL_HOURS, COMPLEX_DETAIL_BATCH_SIZE,
+        )
 
     # F. 공공데이터 실거래가 수집 — 주 1회 토요일 새벽 5시
     #    네이버 API 보완용, IP 차단 우려 없음

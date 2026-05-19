@@ -70,3 +70,39 @@ def test_crawl_details_uses_batch_size_env():
         scheduler = sched_mod.create_scheduler()
     job = {j.id: j for j in scheduler.get_jobs()}["crawl_details"]
     assert job.kwargs["batch_size"] == 777
+
+
+def test_complex_detail_apt_uses_interval_env():
+    """COMPLEX_DETAIL_APT_INTERVAL_HOURS env 가 APT backfill 잡 interval 에 반영된다.
+
+    PR #19 답습 — cron(매일 5시) → interval(env 시간) 전환 회귀 방지.
+    """
+    with patch.object(sched_mod, "COMPLEX_DETAIL_APT_INTERVAL_HOURS", 9):
+        scheduler = sched_mod.create_scheduler()
+    job = {j.id: j for j in scheduler.get_jobs()}.get("complex_detail_APT")
+    assert job is not None, "complex_detail_APT 잡 미등록"
+    assert job.trigger.interval.total_seconds() == 9 * 3600
+
+
+def test_complex_detail_opst_uses_interval_env():
+    """COMPLEX_DETAIL_OPST_INTERVAL_HOURS env 가 OPST backfill 잡 interval 에 반영된다."""
+    with patch.object(sched_mod, "COMPLEX_DETAIL_OPST_INTERVAL_HOURS", 11):
+        scheduler = sched_mod.create_scheduler()
+    job = {j.id: j for j in scheduler.get_jobs()}.get("complex_detail_OPST")
+    assert job is not None, "complex_detail_OPST 잡 미등록"
+    assert job.trigger.interval.total_seconds() == 11 * 3600
+
+
+def test_complex_detail_batch_size_env():
+    """COMPLEX_DETAIL_BATCH_SIZE 가 5종 backfill 잡 batch_size 에 반영된다.
+
+    한 patch 로 APT/OPST/JGC/ABYG/OBYG 5종 동시 검증.
+    """
+    with patch.object(sched_mod, "COMPLEX_DETAIL_BATCH_SIZE", 999):
+        scheduler = sched_mod.create_scheduler()
+    jobs = {j.id: j for j in scheduler.get_jobs()}
+    for job_id in ["complex_detail_APT", "complex_detail_OPST",
+                   "complex_detail_JGC", "complex_detail_ABYG", "complex_detail_OBYG"]:
+        job = jobs.get(job_id)
+        assert job is not None, f"{job_id} 잡 미등록"
+        assert job.kwargs["batch_size"] == 999, f"{job_id} batch_size 가 env 미반영"

@@ -216,3 +216,99 @@ def get_error_stats(
         out.append({"date": d, **stats})
 
     return {"days": days, "rows": out}
+
+
+# 캘린더 월간 안전 상한 — interval 30분 × 31일 × 20 job 추정 최대 = 29,760
+# 5만 cap 으로 메모리 폭주 차단 (FullCalendar dayMaxEvents 가 화면 압축).
+_CALENDAR_MAX_EVENTS = 50_000
+
+
+def _month_range_utc(year: int, month: int) -> tuple[datetime, datetime]:
+    """KST 기준 (year, month) 의 [월초 00:00, 다음달 00:00) 을 UTC 로 변환."""
+    kst = timezone(timedelta(hours=9))
+    start_kst = datetime(year, month, 1, tzinfo=kst)
+    next_year, next_month = (year, month + 1) if month < 12 else (year + 1, 1)
+    end_kst = datetime(next_year, next_month, 1, tzinfo=kst)
+    return start_kst.astimezone(timezone.utc), end_kst.astimezone(timezone.utc)
+
+
+@router.get("/scheduler-calendar")
+def get_scheduler_calendar(
+    year: int = Query(..., ge=2020, le=2099),
+    month: int = Query(..., ge=1, le=12),
+    mode: str = Query("both", pattern="^(past|upcoming|both)$"),
+    db: Session = Depends(get_db),
+    admin: dict = Depends(get_admin_user),
+):
+    """월 단위 발화 이벤트 — 과거(crawl_jobs) + 미래(trigger 전개).
+
+    응답 = {"events": [{"scheduler_job_id", "name", "start", "status", "kind"}, ...]}
+      - kind: "past" | "upcoming"
+      - start: KST iso (FullCalendar 가 그대로 파싱)
+      - status: past 면 crawl_jobs.status, upcoming 이면 "upcoming"
+    """
+    from crawler.scheduler import get_scheduler
+
+    start_utc, end_utc = _month_range_utc(year, month)
+    kst = timezone(timedelta(hours=9))
+    events: list[dict] = []
+
+    if mode in ("past", "both"):
+        rows = (
+            db.query(
+                CrawlJob.scheduler_job_id,
+                CrawlJob.started_at,
+                CrawlJob.status,
+            )
+            .filter(
+                CrawlJob.scheduler_job_id.isnot(None),
+                CrawlJob.started_at >= start_utc,
+                CrawlJob.started_at < end_utc,
+            )
+            .order_by(CrawlJob.started_at)
+            .all()
+        )
+        for row in rows:
+            if row.started_at is None:
+                continue
+            started = row.started_at
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            meta = SCHEDULER_JOB_META.get(row.scheduler_job_id, {})
+            events.append({
+                "scheduler_job_id": row.scheduler_job_id,
+                "name": meta.get("name", row.scheduler_job_id),
+                "start": started.astimezone(kst).isoformat(),
+                "status": row.status,
+                "kind": "past",
+            })
+            if len(events) >= _CALENDAR_MAX_EVENTS:
+                return {"year": year, "month": month, "mode": mode, "events": events, "truncated": True}
+
+    if mode in ("upcoming", "both"):
+        scheduler = get_scheduler()
+        if scheduler is not None:
+            now_utc = datetime.now(timezone.utc)
+            # 과거 전개 막기 위해 max(now, start_utc) 부터 전개
+            range_start = max(now_utc, start_utc)
+            for job in scheduler.get_jobs():
+                if range_start >= end_utc:
+                    break
+                prev = range_start - timedelta(microseconds=1)
+                while True:
+                    next_t = job.trigger.get_next_fire_time(prev, prev)
+                    if next_t is None or next_t >= end_utc:
+                        break
+                    meta = SCHEDULER_JOB_META.get(job.id, {})
+                    events.append({
+                        "scheduler_job_id": job.id,
+                        "name": meta.get("name", job.name or job.id),
+                        "start": next_t.astimezone(kst).isoformat(),
+                        "status": "upcoming",
+                        "kind": "upcoming",
+                    })
+                    prev = next_t
+                    if len(events) >= _CALENDAR_MAX_EVENTS:
+                        return {"year": year, "month": month, "mode": mode, "events": events, "truncated": True}
+
+    return {"year": year, "month": month, "mode": mode, "events": events, "truncated": False}

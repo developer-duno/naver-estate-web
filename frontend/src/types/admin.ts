@@ -109,6 +109,27 @@ export interface SchedulerStatusResponse {
   };
 }
 
+/** 스케줄러 캘린더 단일 이벤트 (FullCalendar 가 그대로 파싱 가능한 형태) */
+export interface SchedulerCalendarEvent {
+  scheduler_job_id: string;
+  name: string;
+  /** KST iso 문자열 (예: "2026-05-15T12:00:00+09:00") */
+  start: string;
+  /** past 이면 CrawlJob.status, upcoming 이면 "upcoming" */
+  status: "completed" | "failed" | "running" | "paused" | "pending" | "cancelled" | "upcoming";
+  kind: "past" | "upcoming";
+}
+
+/** 스케줄러 캘린더 응답 */
+export interface SchedulerCalendarResponse {
+  year: number;
+  month: number;
+  mode: "past" | "upcoming" | "both";
+  events: SchedulerCalendarEvent[];
+  /** 안전 상한 (5만 이벤트) 도달로 잘려 반환됐는지 */
+  truncated: boolean;
+}
+
 /** 공인중개사 검증 신청 */
 export interface AgentVerification {
   id: number;

@@ -193,8 +193,8 @@ jobs:
 
       - name: Test
         run: |
-          pip install pytest httpx
-          python -m pytest
+          pip install pytest httpx pytest-xdist
+          python -m pytest -n auto
         env:
           DATABASE_URL: sqlite://
           SUPABASE_JWT_SECRET: test-ci-secret

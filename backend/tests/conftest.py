@@ -31,7 +31,11 @@ sqlalchemy.ARRAY = _FakeARRAY
 pg_dialect.ARRAY = _FakeARRAY
 
 # file-based SQLite — NullPool로 SessionLocal() 호출 시 독립 커넥션
-_TEST_DB = os.path.join(tempfile.gettempdir(), "naver_estate_test.db")
+# pytest-xdist 워커별 독립 DB 파일 (PYTEST_XDIST_WORKER: gw0.. / 미사용 시 미설정)
+_WORKER_ID = os.environ.get("PYTEST_XDIST_WORKER", "master")
+_TEST_DB = os.path.join(
+    tempfile.gettempdir(), f"naver_estate_test_{_WORKER_ID}.db"
+)
 for _ext in ("", "-wal", "-shm"):
     try:
         os.unlink(_TEST_DB + _ext)

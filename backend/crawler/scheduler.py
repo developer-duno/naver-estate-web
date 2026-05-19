@@ -21,7 +21,8 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 CRAWL_INTERVAL_HOURS = int(os.getenv("CRAWL_INTERVAL_HOURS", "12"))
-CRAWL_DETAIL_INTERVAL_MIN = int(os.getenv("CRAWL_DETAIL_INTERVAL_MIN", "120"))
+CRAWL_DETAIL_INTERVAL_MIN = int(os.getenv("CRAWL_DETAIL_INTERVAL_MIN", "30"))
+CRAWL_DETAIL_BATCH_SIZE = int(os.getenv("CRAWL_DETAIL_BATCH_SIZE", "500"))
 CRAWL_BATCH_SIZE = int(os.getenv("CRAWL_BATCH_SIZE", "50"))
 POPULAR_CRAWL_ENABLED = os.getenv("POPULAR_CRAWL_ENABLED", "true").lower() == "true"
 POPULAR_CRAWL_BATCH_SIZE = int(os.getenv("POPULAR_CRAWL_BATCH_SIZE", "50"))
@@ -84,14 +85,14 @@ def create_scheduler() -> BackgroundScheduler:
         misfire_grace_time=1800,
     )
 
-    # C. 상세 보강 — N분마다 (jitter: 같은 IP 네이버 요청 분산)
-    #    max_instances=1: B 와 동일 — 120분 주기가 밀려도 중복 실행 안 함.
+    # C. 상세 보강 — 30분마다 (jitter: 같은 IP 네이버 요청 분산)
+    #    max_instances=1: B 와 동일 — 30분 주기가 밀려도 중복 실행 안 함.
     scheduler.add_job(
         crawl_article_details,
         "interval",
         minutes=CRAWL_DETAIL_INTERVAL_MIN,
         jitter=900,
-        kwargs={"batch_size": 300, "scheduler_job_id": "crawl_details"},
+        kwargs={"batch_size": CRAWL_DETAIL_BATCH_SIZE, "scheduler_job_id": "crawl_details"},
         id="crawl_details",
         name="매물 상세 보강",
         max_instances=1,

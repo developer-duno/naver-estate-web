@@ -105,9 +105,35 @@ def test_get_unsold_by_region(db):
     _add_apartment(db, "APT002", "자이", region="서울", unsold=0)
     _add_apartment(db, "APT003", "힐스", region="서울", unsold=None)
 
-    results = mb_queries.get_unsold_by_region(db, region="서울")
+    results, total = mb_queries.get_unsold_by_region(db, region="서울")
     assert len(results) == 1
+    assert total == 1
     assert results[0].unsold == 50
+
+
+def test_get_unsold_by_region_pagination(db):
+    """미분양 조회 페이지네이션 — page/page_size 로 분할, total 은 전체 수"""
+    for i in range(5):
+        _add_apartment(db, f"UNS{i:03d}", f"단지{i}", region="부산", unsold=10 + i)
+
+    # page_size=2 → 1페이지에 2건, total 은 5 유지
+    page1, total = mb_queries.get_unsold_by_region(
+        db, region="부산", page=1, page_size=2
+    )
+    assert len(page1) == 2
+    assert total == 5
+
+    # 마지막 페이지(3페이지)는 1건
+    page3, total3 = mb_queries.get_unsold_by_region(
+        db, region="부산", page=3, page_size=2
+    )
+    assert len(page3) == 1
+    assert total3 == 5
+
+    # 페이지가 겹치지 않음
+    ids1 = {a.id for a in page1}
+    ids3 = {a.id for a in page3}
+    assert ids1.isdisjoint(ids3)
 
 
 def test_get_unsold_history(db):
@@ -319,8 +345,9 @@ def test_unsold_dedup(db):
     _add_apartment(db, "APT01", "푸르지오(1차)", region="서울", unsold=97, created_at=datetime(2026, 1, 1))
     _add_apartment(db, "APT02", "푸르지오(2차)", region="서울", unsold=97, created_at=datetime(2026, 2, 1))
 
-    results = mb_queries.get_unsold_by_region(db, region="서울")
+    results, total = mb_queries.get_unsold_by_region(db, region="서울")
     assert len(results) == 1
+    assert total == 1
     assert results[0].id == "APT02"
 
 

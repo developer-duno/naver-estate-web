@@ -141,11 +141,14 @@ def get_unsold_by_region(
     gu: Optional[str] = None,
     sort_by: str = "unsold_desc",
     keyword: Optional[str] = None,
-) -> list[Apartment]:
-    """지역별 미분양 아파트 (unsold > 0, 중복 제거 + 정렬 + 검색)
+    page: int = 1,
+    page_size: int = 50,
+) -> tuple[list[Apartment], int]:
+    """지역별 미분양 아파트 + 전체 수 (unsold > 0, 중복 제거 + 정렬 + 페이지네이션)
 
     PostgreSQL: SQL CTE + ROW_NUMBER + regexp_replace
     SQLite: Python fallback (CI 테스트 호환)
+    반환: (페이지 행 목록, 중복 제거 후 전체 수)
     """
     conditions = [Apartment.region == region, Apartment.unsold > 0]
     if gu:
@@ -156,7 +159,9 @@ def get_unsold_by_region(
         stmt = select(Apartment).where(and_(*conditions))
         all_rows = list(db.execute(stmt).scalars().all())
         deduped = _deduplicate_apartments(all_rows)
-        return _sort_apartments(deduped, sort_by)
+        sorted_rows = _sort_apartments(deduped, sort_by)
+        start = (page - 1) * page_size
+        return sorted_rows[start : start + page_size], len(deduped)
 
     # PostgreSQL: SQL 레벨 중복 제거
     base_name_expr = func.regexp_replace(Apartment.name, r"\s*\([^)]*\)\s*$", "")
@@ -171,11 +176,18 @@ def get_unsold_by_region(
         .subquery()
     )
 
+    # 전체 수 (중복 제거 후)
+    count_stmt = select(func.count()).select_from(subq).where(subq.c.rn == 1)
+    total = db.execute(count_stmt).scalar() or 0
+
     order = _build_mb_order_clause(sort_by)
     stmt = (
         select(Apartment)
         .join(subq, Apartment.id == subq.c.id)
         .where(subq.c.rn == 1)
         .order_by(order)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     )
-    return list(db.execute(stmt).scalars().all())
+    rows = list(db.execute(stmt).scalars().all())
+    return rows, total

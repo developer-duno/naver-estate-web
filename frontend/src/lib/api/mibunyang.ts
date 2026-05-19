@@ -28,9 +28,16 @@ export async function getMbApartmentDetail(id: string) {
   return fetchApi<MbApartment>(`/api/mb/apartments/${encodeURIComponent(id)}`);
 }
 
-/** 미분양 아파트 목록 (unsold > 0) */
-export async function getMbUnsold(region: string, gu?: string, sortBy?: string, keyword?: string) {
-  const params = new URLSearchParams({ region });
+/** 미분양 아파트 목록 (unsold > 0, 페이지네이션) */
+export async function getMbUnsold(
+  region: string,
+  gu?: string,
+  page = 1,
+  pageSize = 50,
+  sortBy?: string,
+  keyword?: string,
+) {
+  const params = new URLSearchParams({ region, page: String(page), page_size: String(pageSize) });
   if (gu) params.set("gu", gu);
   if (sortBy) params.set("sort_by", sortBy);
   if (keyword) params.set("keyword", keyword);

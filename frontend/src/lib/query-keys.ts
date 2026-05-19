@@ -67,8 +67,8 @@ export const queryKeys = {
     apartments: (region: string, gu?: string, page?: number, sortBy?: string, keyword?: string) =>
       ["mb", "apartments", region, gu, page, ...(sortBy ? [sortBy] : []), ...(keyword ? [keyword] : [])] as const,
     apartmentDetail: (id: string) => ["mb", "apartment", id] as const,
-    unsold: (region: string, gu?: string, sortBy?: string, keyword?: string) =>
-      ["mb", "unsold", region, gu, ...(sortBy ? [sortBy] : []), ...(keyword ? [keyword] : [])] as const,
+    unsold: (region: string, gu?: string, page?: number, sortBy?: string, keyword?: string) =>
+      ["mb", "unsold", region, gu, page, ...(sortBy ? [sortBy] : []), ...(keyword ? [keyword] : [])] as const,
     unsoldHistory: (id: string) => ["mb", "unsoldHistory", id] as const,
     regions: (region: string, gu?: string) =>
       ["mb", "regions", region, gu] as const,

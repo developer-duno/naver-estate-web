@@ -86,7 +86,7 @@ def _body_freshness(data: dict) -> str:
 def _action(kind: str, data: dict) -> str:
     """행동 가이드 한 줄."""
     if kind == "freshness":
-        link = _admin_link(data.get("link_path", "/admin#freshness"))
+        link = _esc(_admin_link(data.get("link_path", "/admin#freshness")))
         return f"→ {link} 데이터 신선도 확인"
     if kind == "crawl_stale":
         return "→ 마비 작업 확인 — 서버·스케줄러 재시작 검토"

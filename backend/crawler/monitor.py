@@ -61,6 +61,7 @@ def detect_issues(db) -> list[dict]:
     issues: list[dict] = []
 
     # 1. 작업 실패 — 최근 24h failed job_type 별
+    # err = 같은 job_type 다중 실패 시 사전순 마지막 1건 (최근순 아님 — count 로 다건 표기)
     cutoff = now - timedelta(hours=_FAILED_WINDOW_HOURS)
     failed = db.execute(
         select(

@@ -12,12 +12,15 @@ import type { SchedulerCalendarEvent } from "@/types/admin";
 // FullCalendar 컴포넌트 자체를 stub — 호출된 props 만 노출
 vi.mock("@fullcalendar/react", () => ({
   default: (props: Record<string, unknown>) => {
-    const events = (props.events ?? []) as Array<{ title: string }>;
+    const events = (props.events ?? []) as Array<{ title: string; order?: number }>;
     return (
       <div data-testid="fc-stub">
         <span data-testid="fc-event-count">{events.length}</span>
+        <span data-testid="fc-event-order">{props.eventOrder as string}</span>
         {events.map((e, i) => (
-          <span key={i} data-testid={`fc-event-${i}`}>{e.title}</span>
+          <span key={i} data-testid={`fc-event-${i}`} data-order={e.order}>
+            {e.title}
+          </span>
         ))}
       </div>
     );
@@ -130,5 +133,27 @@ describe("SchedulerCalendarView", () => {
       "aria-pressed",
       "false",
     );
+  });
+
+  /** running/failed/cancelled 는 order=0 (칸 첫 줄 우선), 나머지는 order=1 */
+  it("강조 상태 (running/failed/cancelled) 가 order=0 으로 우선 정렬", () => {
+    const events: SchedulerCalendarEvent[] = [
+      { scheduler_job_id: "a", name: "완료1", start: "2026-05-15T08:00:00+09:00", status: "completed", kind: "past" },
+      { scheduler_job_id: "b", name: "돌고있음", start: "2026-05-15T09:00:00+09:00", status: "running", kind: "past" },
+      { scheduler_job_id: "c", name: "실패", start: "2026-05-15T10:00:00+09:00", status: "failed", kind: "past" },
+      { scheduler_job_id: "d", name: "취소됨", start: "2026-05-15T11:00:00+09:00", status: "cancelled", kind: "past" },
+      { scheduler_job_id: "e", name: "예정", start: "2026-05-25T12:00:00+09:00", status: "upcoming", kind: "upcoming" },
+    ];
+    render(
+      <SchedulerCalendarView events={events} mode="both" onModeChange={() => {}} yearMonth="2026-05" />,
+    );
+    // FullCalendar 가 eventOrder='order' 받았는지
+    expect(screen.getByTestId("fc-event-order").textContent).toBe("order");
+    // 강조 3개는 0, 나머지 2개는 1
+    expect(screen.getByTestId("fc-event-0").getAttribute("data-order")).toBe("1"); // 완료1
+    expect(screen.getByTestId("fc-event-1").getAttribute("data-order")).toBe("0"); // 돌고있음
+    expect(screen.getByTestId("fc-event-2").getAttribute("data-order")).toBe("0"); // 실패
+    expect(screen.getByTestId("fc-event-3").getAttribute("data-order")).toBe("0"); // 취소됨
+    expect(screen.getByTestId("fc-event-4").getAttribute("data-order")).toBe("1"); // 예정
   });
 });

@@ -40,6 +40,28 @@ def test_send_telegram_success(mock_post):
     "TELEGRAM_ENABLED": "true", "TELEGRAM_BOT_TOKEN": "tok", "TELEGRAM_CHAT_ID": "123",
 }, clear=False)
 @patch("services.telegram.requests.post")
+def test_send_telegram_default_no_parse_mode_key(mock_post):
+    """호환 가드: parse_mode 인자 생략 시 payload 에 parse_mode 키 없음 (기존 평문 동작)"""
+    mock_post.return_value = MagicMock(status_code=200)
+    assert send_telegram("테스트") is True
+    assert "parse_mode" not in mock_post.call_args[1]["json"]
+
+
+@patch.dict("os.environ", {
+    "TELEGRAM_ENABLED": "true", "TELEGRAM_BOT_TOKEN": "tok", "TELEGRAM_CHAT_ID": "123",
+}, clear=False)
+@patch("services.telegram.requests.post")
+def test_send_telegram_html_parse_mode_in_payload(mock_post):
+    """정상: parse_mode="HTML" 주면 payload 에 parse_mode 키 포함"""
+    mock_post.return_value = MagicMock(status_code=200)
+    assert send_telegram("<b>테스트</b>", parse_mode="HTML") is True
+    assert mock_post.call_args[1]["json"]["parse_mode"] == "HTML"
+
+
+@patch.dict("os.environ", {
+    "TELEGRAM_ENABLED": "true", "TELEGRAM_BOT_TOKEN": "tok", "TELEGRAM_CHAT_ID": "123",
+}, clear=False)
+@patch("services.telegram.requests.post")
 def test_send_telegram_http_error_returns_false(mock_post):
     """엣지: requests.post 가 예외 → False (예외 전파 안 함)"""
     mock_post.side_effect = ConnectionError("network down")

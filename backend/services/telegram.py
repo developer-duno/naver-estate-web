@@ -11,10 +11,11 @@ import requests
 logger = logging.getLogger(__name__)
 
 
-def send_telegram(text: str) -> bool:
+def send_telegram(text: str, parse_mode: str | None = None) -> bool:
     """텔레그램 봇으로 메시지 발송. 실패 시 False 반환 (예외 전파 금지).
 
     환경변수: TELEGRAM_ENABLED / TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID.
+    parse_mode: None 이면 평문, "HTML"/"MarkdownV2" 면 텔레그램 서식 적용.
     """
     if os.getenv("TELEGRAM_ENABLED", "false").lower() != "true":
         logger.info("[telegram] TELEGRAM_ENABLED 아님 — 발송 건너뜀")
@@ -26,10 +27,14 @@ def send_telegram(text: str) -> bool:
         logger.info("[telegram] BOT_TOKEN/CHAT_ID 미설정 — 발송 건너뜀")
         return False
 
+    payload: dict = {"chat_id": chat_id, "text": text}
+    if parse_mode is not None:
+        payload["parse_mode"] = parse_mode
+
     try:
         resp = requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": text},
+            json=payload,
             timeout=10,
         )
         if resp.status_code == 200:

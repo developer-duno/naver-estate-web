@@ -62,8 +62,10 @@ def test_scheduler_status_empty(mock_sched, client, db):
     assert "summary" in data
     assert data["summary"]["total_runs_today"] == 0
     assert data["summary"]["failures_today"] == 0
-    # 12개 작업 메타데이터가 모두 반환되어야 함
-    assert len(data["jobs"]) == 12
+    # SCHEDULER_JOB_META 의 모든 키가 응답에 반영되어야 함 (META 갱신 시 자동 확장)
+    from routers.admin.scheduler import SCHEDULER_JOB_META
+    assert len(data["jobs"]) == len(SCHEDULER_JOB_META)
+    assert {j["scheduler_job_id"] for j in data["jobs"]} == set(SCHEDULER_JOB_META.keys())
 
 
 # ── 실행 이력 반영 ──

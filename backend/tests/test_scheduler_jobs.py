@@ -106,3 +106,62 @@ def test_complex_detail_batch_size_env():
         job = jobs.get(job_id)
         assert job is not None, f"{job_id} 잡 미등록"
         assert job.kwargs["batch_size"] == 999, f"{job_id} batch_size 가 env 미반영"
+
+
+def test_complex_detail_small_types_remain_cron():
+    """JGC/ABYG/OBYG 는 cron trigger 유지 (PR #20 의 의도된 분리).
+
+    누군가 실수로 interval 로 바꾸면 호출량 폭증 — 소수 유형은 주1회 cron 고정.
+    """
+    from apscheduler.triggers.cron import CronTrigger
+
+    scheduler = sched_mod.create_scheduler()
+    jobs = {j.id: j for j in scheduler.get_jobs()}
+    for job_id in ["complex_detail_JGC", "complex_detail_ABYG", "complex_detail_OBYG"]:
+        job = jobs.get(job_id)
+        assert job is not None, f"{job_id} 잡 미등록"
+        assert isinstance(job.trigger, CronTrigger), (
+            f"{job_id} 가 cron 이 아님 — 소수 유형은 cron 유지여야 함"
+        )
+
+
+def test_complex_detail_jobs_have_jitter():
+    """5종 backfill 잡 모두 jitter 가 설정돼 있다 (같은 IP 다른 잡과 시간 분산)."""
+    scheduler = sched_mod.create_scheduler()
+    jobs = {j.id: j for j in scheduler.get_jobs()}
+    for job_id in ["complex_detail_APT", "complex_detail_OPST",
+                   "complex_detail_JGC", "complex_detail_ABYG", "complex_detail_OBYG"]:
+        job = jobs.get(job_id)
+        assert job is not None, f"{job_id} 잡 미등록"
+        assert job.trigger.jitter is not None and job.trigger.jitter > 0, (
+            f"{job_id} 에 jitter 미설정 — IP 차단 방지를 위해 jitter 필요"
+        )
+
+
+def test_scheduler_job_meta_covers_all_registered_jobs():
+    """SCHEDULER_JOB_META 가 create_scheduler() 의 모든 등록 job id 를 커버한다.
+
+    META 누락 시 admin UI 의 스케줄러 모니터링 표에 해당 job 이 안 보임.
+    PR #20·#14 가 새 job 추가하면서 META 동기화를 빠뜨린 사고 재발 방지.
+    """
+    from routers.admin.scheduler import SCHEDULER_JOB_META
+
+    # 모든 조건부 job 을 켜야 등록되는 잡까지 다 잡힘
+    with (
+        patch.object(sched_mod, "PUBLIC_DATA_ENABLED", True),
+        patch.object(sched_mod, "POPULAR_CRAWL_ENABLED", True),
+        patch.object(sched_mod, "AIR_QUALITY_ENABLED", True),
+        patch.object(sched_mod, "EMERGENCY_ENABLED", True),
+        patch.object(sched_mod, "CHILDCARE_ENABLED", True),
+        patch.object(sched_mod, "CRIME_STATS_ENABLED", True),
+        patch.object(sched_mod, "COMPLEX_DETAIL_ENABLED", True),
+        patch.object(sched_mod, "COMPLEX_METRIC_ENABLED", True),
+        patch.object(sched_mod, "MONITOR_ENABLED", True),
+    ):
+        scheduler = sched_mod.create_scheduler()
+    registered_ids = {job.id for job in scheduler.get_jobs()}
+    missing = registered_ids - set(SCHEDULER_JOB_META.keys())
+    assert not missing, (
+        f"SCHEDULER_JOB_META 누락: {sorted(missing)} — "
+        "backend/routers/admin/scheduler.py 의 SCHEDULER_JOB_META 에 추가 필요"
+    )

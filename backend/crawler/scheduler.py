@@ -133,7 +133,7 @@ def create_scheduler() -> BackgroundScheduler:
         logger.info("시세 이력 소급 수집 활성화: 매일 03:30 (배치 %d)", PUBLIC_PRICE_BACKFILL_BATCH_SIZE)
 
     # E. 인기 단지 선제적 크롤링 — 하루 3회 (10:45, 14:45, 19:15 KST)
-    #    기존 스케줄(B: 12시간마다, C: 4시간마다)과 충돌 회피
+    #    기존 스케줄(B: 12시간마다, C: 30분마다)과 충돌 회피
     #    2026-04-16: mibunyang 쿨다운 대응 — 기존 10:30/14:30/19:00에서 15분씩 시프트
     if POPULAR_CRAWL_ENABLED:
         for hour, minute, job_id in [(10, 45, "popular_1030"), (14, 45, "popular_1430"), (19, 15, "popular_1900")]:

@@ -24,6 +24,9 @@ from crawler.service_discover import (  # noqa: F401
 from crawler.service_price import (  # noqa: F401
     collect_price_history,
     collect_price_history_for_complex,
+    contaminated_complex_nos,
+    find_contaminated_b1_ids,
+    recollect_b1_price_for_complex,
 )
 from crawler.service_public import (  # noqa: F401
     backfill_price_batch,

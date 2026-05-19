@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, func, select
 
+from crawler.alert_format import format_issue_message
 from db.models import CrawlJob, MonitorAlert
 from routers.admin.freshness import compute_freshness
 from services.telegram import send_telegram
@@ -24,16 +25,43 @@ _STALE_HOURS = 1
 _FAILED_WINDOW_HOURS = 24
 
 
+def _job_stats(db, job_type: str) -> dict | None:
+    """해당 job_type 의 마지막 completed 작업 통계 1건.
+
+    24h 합산이 아니라 마지막 1건만 — completed 여도 처리율이 낮을 수 있어
+    합산하면 의미가 섞인다 (실측: public_trades 가 completed 인데 18% 처리).
+    """
+    row = db.execute(
+        select(
+            CrawlJob.processed_items,
+            CrawlJob.total_items,
+            CrawlJob.completed_at,
+        )
+        .where(and_(CrawlJob.job_type == job_type, CrawlJob.status == "completed"))
+        .order_by(CrawlJob.completed_at.desc())
+        .limit(1)
+    ).first()
+    if row is None:
+        return None
+    return {
+        "processed": int(row.processed_items or 0),
+        "total": int(row.total_items or 0),
+        "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+    }
+
+
 def detect_issues(db) -> list[dict]:
     """현재 크롤링 장애를 감지해 리스트로 반환.
 
-    각 항목: {"alert_key": str, "detail": str}
+    각 항목: {"alert_key": str, "kind": str, "detail": str, "data": dict}
     alert_key 는 장애 종류 식별자 — monitor_alerts 쿨다운 키.
+    detail 은 평문 (MonitorAlert.detail 컬럼 저장용), data 는 메시지 포맷용 구조화 필드.
     """
     now = datetime.now(timezone.utc)
     issues: list[dict] = []
 
     # 1. 작업 실패 — 최근 24h failed job_type 별
+    # err = 같은 job_type 다중 실패 시 사전순 마지막 1건 (최근순 아님 — count 로 다건 표기)
     cutoff = now - timedelta(hours=_FAILED_WINDOW_HOURS)
     failed = db.execute(
         select(
@@ -45,33 +73,73 @@ def detect_issues(db) -> list[dict]:
         .group_by(CrawlJob.job_type)
     ).all()
     for row in failed:
+        stats = _job_stats(db, row.job_type)
         issues.append({
             "alert_key": f"crawl_failed:{row.job_type}",
+            "kind": "crawl_failed",
             "detail": f"{row.job_type} 작업 {row.cnt}건 실패 — {(row.err or '')[:200]}",
+            "data": {
+                "job_type": row.job_type,
+                "count": row.cnt,
+                "error": row.err or "",
+                "processed": stats["processed"] if stats else None,
+                "total": stats["total"] if stats else None,
+                "last_completed_at": stats["completed_at"] if stats else None,
+            },
         })
 
     # 2. 작업 마비 — running 인 채 _STALE_HOURS 초과
     stale_cutoff = now - timedelta(hours=_STALE_HOURS)
     stale = db.execute(
-        select(CrawlJob.job_type, func.count(CrawlJob.id).label("cnt"))
+        select(
+            CrawlJob.job_type,
+            func.count(CrawlJob.id).label("cnt"),
+            func.min(CrawlJob.started_at).label("oldest"),
+        )
         .where(and_(CrawlJob.status == "running", CrawlJob.started_at < stale_cutoff))
         .group_by(CrawlJob.job_type)
     ).all()
     for row in stale:
         issues.append({
             "alert_key": f"crawl_stale:{row.job_type}",
+            "kind": "crawl_stale",
             "detail": f"{row.job_type} 작업 {row.cnt}건이 {_STALE_HOURS}시간 넘게 running 상태 — 마비 의심",
+            "data": {
+                "job_type": row.job_type,
+                "count": row.cnt,
+                "stale_hours": _STALE_HOURS,
+                "started_at": row.oldest.isoformat() if row.oldest else None,
+            },
         })
 
     # 3. 데이터 미축적 — 신선도 red 종목
     try:
         fresh = compute_freshness(db)
         for item in fresh["items"]:
-            if item["status"] == "red":
-                issues.append({
-                    "alert_key": f"freshness:{item['key']}",
-                    "detail": f"{item['label']} 데이터 미축적 (신선도 red, 마지막 갱신 {item['last_updated']})",
-                })
+            if item["status"] != "red":
+                continue
+            # age_hours 는 item 에 없음 — last_updated 로 직접 계산
+            age_hours = None
+            if item["last_updated"]:
+                last = datetime.fromisoformat(item["last_updated"])
+                age_hours = int((now - last).total_seconds() // 3600)
+            job = item.get("last_job") or {}
+            issues.append({
+                "alert_key": f"freshness:{item['key']}",
+                "kind": "freshness",
+                "detail": f"{item['label']} 데이터 미축적 (신선도 red, 마지막 갱신 {item['last_updated']})",
+                "data": {
+                    "label": item["label"],
+                    "status": item["status"],
+                    "spinning": item.get("spinning", False),
+                    "new_rows": item.get("new_rows"),
+                    "last_updated": item["last_updated"],
+                    "age_hours": age_hours,
+                    "processed": job.get("processed_items"),
+                    "total": job.get("total_items"),
+                    "link_path": "/admin#freshness",
+                },
+            })
     except Exception:
         logger.warning("[monitor] 신선도 계산 실패 — 이번 스캔 skip", exc_info=True)
 
@@ -98,17 +166,22 @@ def run_monitor(db) -> None:
     now = utcnow()
     current_keys = {i["alert_key"] for i in issues}
     cooldown = timedelta(hours=_cooldown_hours())
+    # 헤더 "N건 활성" — 이번 스캔 장애 총 건수. 모든 발송에 동일 값 (전체 상황 요약).
+    header_ctx = {"active_count": len(issues), "now": now}
 
     # 1. 현재 장애 — 신규 발송 / 쿨다운 억제
     for issue in issues:
         key = issue["alert_key"]
+        kind = issue["kind"]
+        data = issue["data"]
         alert = db.execute(
             select(MonitorAlert).where(MonitorAlert.alert_key == key)
         ).scalar_one_or_none()
 
         if alert is None:
             # 신규 장애 — 발송 성공 시에만 last_notified 기록
-            sent = send_telegram(f"⚠ 크롤링 장애\n{issue['detail']}")
+            msg = format_issue_message(kind, data, event="new", header_ctx=header_ctx)
+            sent = send_telegram(msg, parse_mode="HTML")
             db.add(MonitorAlert(
                 alert_key=key, status="active",
                 detail=issue["detail"],
@@ -116,7 +189,8 @@ def run_monitor(db) -> None:
             ))
         elif alert.status == "resolved":
             # 해소됐던 장애 재발 — 발송 성공 시에만 last_notified 갱신
-            sent = send_telegram(f"⚠ 크롤링 장애 재발\n{issue['detail']}")
+            msg = format_issue_message(kind, data, event="recur", header_ctx=header_ctx)
+            sent = send_telegram(msg, parse_mode="HTML")
             alert.status = "active"
             alert.detail = issue["detail"]
             if sent:
@@ -129,7 +203,8 @@ def run_monitor(db) -> None:
             if last is not None and last.tzinfo is None:
                 last = last.replace(tzinfo=timezone.utc)
             if last is None or (now - last) >= cooldown:
-                if send_telegram(f"⚠ 크롤링 장애 지속\n{issue['detail']}"):
+                msg = format_issue_message(kind, data, event="ongoing", header_ctx=header_ctx)
+                if send_telegram(msg, parse_mode="HTML"):
                     alert.last_notified = now
             alert.detail = issue["detail"]
 
@@ -140,7 +215,13 @@ def run_monitor(db) -> None:
     for alert in actives:
         if alert.alert_key not in current_keys:
             # 복구 알림 성공 시에만 resolved 처리 — 실패 시 다음 스캔 재시도
-            if send_telegram(f"✅ 크롤링 복구\n{alert.alert_key} — 정상으로 돌아왔습니다."):
+            # 구조화 data 없음 → alert_key·detail 만 전달
+            msg = format_issue_message(
+                "freshness",
+                {"alert_key": alert.alert_key, "detail": alert.detail},
+                event="resolved", header_ctx=header_ctx,
+            )
+            if send_telegram(msg, parse_mode="HTML"):
                 alert.status = "resolved"
 
     db.commit()

@@ -7,10 +7,12 @@ D. 단지별 시세 이력 배치 수집
 import logging
 from typing import Callable
 
+from sqlalchemy.orm import aliased
+
 from crawler.service_common import _checkpoint, _extract_price_list, _upsert_price_history
 from crawler.utils import AdaptiveThrottle
 from db.database import SessionLocal
-from db.models import Complex, CrawlJob
+from db.models import Complex, ComplexPriceHistory, ComplexPyeongDetail, CrawlJob
 from services.naver_call_counter import record_call
 from shared.naver_api import NaverEstateAPI
 from utils import safe_int, utcnow
@@ -33,7 +35,6 @@ def collect_price_history_for_complex(
     on_progress: 진행률 콜백 (collected, failed, total)
     Returns: {"collected": N, "failed": N, "total": N}
     """
-    from db.models import ComplexPyeongDetail
     # 수집할 area_no 목록: DB에 등록된 pyeong 기준, 없으면 기본값(None) 1회만
     area_nos: list[int | None] = [
         p.pyeong_no
@@ -219,3 +220,130 @@ def collect_price_history(batch_size: int = 50, scheduler_job_id: str | None = N
         logger.exception("시세 수집 실패")
     finally:
         db.close()
+
+
+# ── B1(전세) 시세 오염 데이터 정리 헬퍼 ──────────────────────────────
+# 옛 크롤러가 tradeType 무시하던 시절 매매(A1) 값을 B1로 잘못 저장한 행을
+# 식별·재수집한다. 상세 배경: ~/.claude/plans/claude-cosmic-minsky.md
+
+# 정상 B1 데이터는 실측상 전부 2026-04-12 이후 기록 — 그 이전 B1은 오염 의심
+_B1_CONTAMINATION_CUTOFF = "2026-04-12"
+
+
+def find_contaminated_b1_ids(db, before: str | None = _B1_CONTAMINATION_CUTOFF) -> list[int]:
+    """오염된 B1 시세 행의 id 목록.
+
+    오염 B1 = 다음 둘 중 하나:
+      기준1 (A1 동일형): A1 행과 (complex_no, area_no, base_month)가 같으면서
+        price_avg가 동일한 B1 행.
+      기준2 (A1 짝 없음형): recorded_at < before 이면서 동일 키의 A1 행이 없는 B1 행.
+        before=None이면 기준2를 건너뛴다 (dry-run 교차검증용).
+    """
+    a1 = aliased(ComplexPriceHistory)
+    b1 = aliased(ComplexPriceHistory)
+
+    # 기준1: A1과 price_avg가 동일한 B1
+    same_q = (
+        db.query(b1.id)
+        .join(
+            a1,
+            (a1.complex_no == b1.complex_no)
+            & (a1.area_no == b1.area_no)
+            & (a1.base_month == b1.base_month)
+            & (a1.trade_type == "A1")
+            & (a1.price_avg == b1.price_avg),
+        )
+        .filter(b1.trade_type == "B1", b1.price_avg.isnot(None))
+    )
+    ids = {row[0] for row in same_q.all()}
+
+    # 기준2: before 이전 기록 + 동일 키 A1 부재
+    if before is not None:
+        orphan_exists = (
+            db.query(a1.id)
+            .filter(
+                a1.trade_type == "A1",
+                a1.complex_no == b1.complex_no,
+                a1.area_no == b1.area_no,
+                a1.base_month == b1.base_month,
+            )
+            .exists()
+        )
+        orphan_q = db.query(b1.id).filter(
+            b1.trade_type == "B1",
+            b1.recorded_at < before,
+            ~orphan_exists,
+        )
+        ids.update(row[0] for row in orphan_q.all())
+
+    return sorted(ids)
+
+
+def contaminated_complex_nos(db, before: str | None = _B1_CONTAMINATION_CUTOFF) -> list[str]:
+    """오염 B1이 있는 단지 번호 목록 (재수집 대상). 삭제 전에 호출해야 한다."""
+    ids = find_contaminated_b1_ids(db, before=before)
+    if not ids:
+        return []
+    rows = (
+        db.query(ComplexPriceHistory.complex_no)
+        .filter(ComplexPriceHistory.id.in_(ids))
+        .distinct()
+        .all()
+    )
+    return sorted(row[0] for row in rows)
+
+
+def recollect_b1_price_for_complex(db, complex_no: str) -> dict:
+    """단일 단지의 B1(전세) 시세만 재수집 → complex_price_history upsert.
+
+    collect_price_history_for_complex와 달리 A1·실거래가는 건드리지 않는다.
+    멀쩡한 매매 데이터를 불필요하게 재취득하다 손상시키는 위험을 차단.
+    Returns: {"collected": N, "failed": N}
+    """
+    area_nos: list[int | None] = [
+        p.pyeong_no
+        for p in db.query(ComplexPyeongDetail.pyeong_no)
+        .filter(ComplexPyeongDetail.complex_no == complex_no)
+        .all()
+    ]
+    if not area_nos:
+        area_nos = [None]
+
+    collected = 0
+    failed = 0
+    for area_no in area_nos:
+        _throttle.wait()
+        record_call("complex_prices_b1_recollect")
+        try:
+            result = NaverEstateAPI.get_complex_prices(
+                complex_no, trade_type="B1", area_no=area_no
+            )
+            _throttle.on_success()
+        except Exception as e:
+            logger.warning("B1 시세 재수집 실패: %s area=%s -> %s", complex_no, area_no, e)
+            _throttle.on_rate_limit()
+            failed += 1
+            continue
+
+        if not result or "error" in result:
+            failed += 1
+            continue
+
+        for p in _extract_price_list(result):
+            base_month = p.get("baseMonth") or p.get("yearMonth")
+            if not base_month:
+                continue
+            _upsert_price_history(
+                db, complex_no, "B1",
+                area_no=str(p.get("areaNo")) if p.get("areaNo") is not None else None,
+                price_upper=safe_int(p.get("upperPrice") or p.get("dealUpperPrice")),
+                price_lower=safe_int(p.get("lowerPrice") or p.get("dealLowerPrice")),
+                price_avg=safe_int(p.get("averagePrice")),
+                base_month=base_month,
+            )
+            collected += 1
+
+    if collected > 0:
+        db.commit()
+    logger.info("B1 시세 재수집: complex=%s, collected=%d, failed=%d", complex_no, collected, failed)
+    return {"collected": collected, "failed": failed}

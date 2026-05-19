@@ -32,24 +32,39 @@ IS_DEBUG = os.getenv("DEBUG", "").lower() in ("1", "true")
 
 
 def _sweep_stale_running_jobs() -> int:
-    """서버 재시작 시 1시간 이상 running 상태로 방치된 crawl_jobs 행을 failed로 정리.
+    """서버 재시작 시 5분 이상 running 상태로 방치된 crawl_jobs 행을 cancelled 로 정리.
 
-    uvicorn 강제 종료 등으로 중단된 job들이 running인 채 남아 /admin 안전도
-    판정이 항상 '위험'으로 떨어지는 문제 방지.
+    uvicorn 강제 종료로 중단된 job 은 status=running·completed_at=NULL 채로 남음.
+    sweep 임계가 모니터 알림 임계(1h) 와 같았던 v1 은 race 로 매 재시작마다 모니터
+    false alarm 발생 (세션 208 텔레그램 2건 적발). 임계 5분으로 낮춰 새 backend
+    startup 직후 모든 stale 즉시 정리. 가장 짧은 정상 interval = crawl_details 30분
+    이라 5분 임계는 안전.
+
+    상태는 'failed' 대신 'cancelled' — 모니터 실패율 통계에 잡히면 안 됨
+    (강제종료는 실패 아니라 운영자 의도된 중단).
+
+    cutoff 는 Python 측에서 계산해 paramize — PostgreSQL/SQLite 양쪽 호환
+    (테스트 CI 가 SQLite, 운영이 PG 라서 NOW() - INTERVAL syntax 못 씀).
     """
+    from datetime import datetime, timedelta, timezone
+
     from sqlalchemy import text
 
     from db.database import SessionLocal
 
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+    now_utc = datetime.now(timezone.utc)
     db = SessionLocal()
     try:
         res = db.execute(text("""
             UPDATE crawl_jobs
-            SET status = 'failed',
-                completed_at = NOW(),
+            SET status = 'cancelled',
+                completed_at = :now_utc,
                 error_message = COALESCE(error_message, 'stale running — swept on startup')
-            WHERE status = 'running' AND started_at < NOW() - INTERVAL '1 hour'
-        """))
+            WHERE status = 'running'
+              AND completed_at IS NULL
+              AND started_at < :cutoff
+        """), {"cutoff": cutoff, "now_utc": now_utc})
         db.commit()
         return res.rowcount or 0
     except Exception as e:

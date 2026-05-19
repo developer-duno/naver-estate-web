@@ -58,3 +58,15 @@ def test_metrics_job_runs_daily():
         f for f in jobs["collect_metrics"].trigger.fields if f.name == "day_of_week"
     )
     assert str(dow_field) == "*", f"day_of_week 가 매일이 아님: {dow_field}"
+
+
+def test_crawl_details_uses_batch_size_env():
+    """crawl_details job kwargs 의 batch_size 가 CRAWL_DETAIL_BATCH_SIZE 를 따른다.
+
+    배치 크기를 하드코딩 대신 env 상수로 빼면서, 다음 사람이 또 하드코딩하지
+    않도록 회귀 방지 — kwargs 가 module-level 상수를 참조하는지 검증.
+    """
+    with patch.object(sched_mod, "CRAWL_DETAIL_BATCH_SIZE", 777):
+        scheduler = sched_mod.create_scheduler()
+    job = {j.id: j for j in scheduler.get_jobs()}["crawl_details"]
+    assert job.kwargs["batch_size"] == 777

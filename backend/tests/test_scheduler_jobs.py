@@ -42,3 +42,19 @@ def test_interval_jobs_have_max_instances():
         assert jobs[job_id].max_instances == 1, (
             f"{job_id} 의 max_instances 가 1 이 아님"
         )
+
+
+def test_metrics_job_runs_daily():
+    """가치지표 수집 job 이 매일 실행된다 (특정 요일 제한 없음).
+
+    주1회→매일 전환 — cron trigger 의 day_of_week 필드가 '*'(전체) 여야 함.
+    """
+    with patch.object(sched_mod, "COMPLEX_METRIC_ENABLED", True):
+        scheduler = sched_mod.create_scheduler()
+    jobs = {job.id: job for job in scheduler.get_jobs()}
+    assert "collect_metrics" in jobs, "collect_metrics job 미등록"
+    # cron 필드 중 day_of_week 가 특정 요일로 제한돼 있지 않은지 확인
+    dow_field = next(
+        f for f in jobs["collect_metrics"].trigger.fields if f.name == "day_of_week"
+    )
+    assert str(dow_field) == "*", f"day_of_week 가 매일이 아님: {dow_field}"

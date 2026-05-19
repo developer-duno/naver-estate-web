@@ -285,14 +285,15 @@ def create_scheduler() -> BackgroundScheduler:
         )
         logger.info("크롤링 모니터 활성화: %d분 간격", MONITOR_INTERVAL_MIN)
 
-    # M. 단지 가치지표 수집 — 주 1회 금요일 08:30
-    #    complex_price_history 집계만 (네이버 API 호출 0) → 시간대 충돌 무관.
-    #    08:00 mibunyang 로컬 수집과 30분 분리.
+    # M. 단지 가치지표 수집 — 매일 08:30
+    #    complex_price_history 집계만 (네이버 API 호출 0) → IP 차단 무관.
+    #    08:30 = 08:00 mibunyang 로컬 수집과 30분 분리 + 05~07시 단지 상세
+    #    backfill(complexes UPDATE) 시간대 밖 — row 경합 회피.
+    #    주1회→매일 전환: 집계 대상(시세 이력 보유 단지) 완주를 가속.
     if COMPLEX_METRIC_ENABLED:
         scheduler.add_job(
             collect_complex_metrics,
             "cron",
-            day_of_week="fri",
             hour=8,
             minute=30,
             kwargs={"batch_size": COMPLEX_METRIC_BATCH_SIZE, "scheduler_job_id": "collect_metrics"},
@@ -301,7 +302,7 @@ def create_scheduler() -> BackgroundScheduler:
             max_instances=1,
             misfire_grace_time=3600,
         )
-        logger.info("단지 가치지표 수집 활성화: 금요일 08:30 (배치 %d)", COMPLEX_METRIC_BATCH_SIZE)
+        logger.info("단지 가치지표 수집 활성화: 매일 08:30 (배치 %d)", COMPLEX_METRIC_BATCH_SIZE)
 
     global _scheduler
     _scheduler = scheduler

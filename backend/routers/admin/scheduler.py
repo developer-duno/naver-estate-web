@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 SCHEDULER_JOB_META: dict[str, dict] = {
     "discover_regions": {"name": "전국 단지 발견", "schedule": "주 1회 일요일 03:00", "env": None},
     "crawl_articles": {"name": "매물 수집 배치", "schedule": "12시간마다", "env": None},
-    "crawl_details": {"name": "매물 상세 보강", "schedule": "4시간마다", "env": None},
+    "crawl_details": {"name": "매물 상세 보강", "schedule": "30분 interval", "env": None},
     "collect_prices": {"name": "시세 이력 수집", "schedule": "주 1회 수요일 04:00", "env": None},
     "popular_1030": {"name": "인기 단지 크롤링 10:45", "schedule": "매일 10:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true"},
     "popular_1430": {"name": "인기 단지 크롤링 14:45", "schedule": "매일 14:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true"},

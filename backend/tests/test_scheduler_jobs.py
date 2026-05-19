@@ -138,6 +138,67 @@ def test_complex_detail_jobs_have_jitter():
         )
 
 
+def test_meta_schedule_matches_add_job_trigger():
+    """META schedule 문자열이 add_job trigger 의 시간 단위와 일치하는지 검증.
+
+    PR #19 가 crawl_details interval 을 4시간→30분으로 바꾸면서 META schedule 의
+    "4시간마다" 문자열을 안 고친 drift 사고 재발 방지. 한국어 자연어 완전 매칭은
+    불가능하므로 시간 단위 키워드 ("분"/"시간"/"interval"/"cron 표기") 만 휴리스틱
+    검증.
+
+    규칙:
+    - IntervalTrigger 이고 interval < 1시간 → schedule 문자열에 "분" 포함 필수
+    - IntervalTrigger 이고 interval >= 1시간 → schedule 문자열에 "시간" 포함 필수
+    - CronTrigger → schedule 문자열에 "마다" 만 단독 사용 금지
+      (cron 인데 "N시간마다"/"N분마다" 적으면 interval 로 오해 유발)
+    """
+    from apscheduler.triggers.cron import CronTrigger
+    from apscheduler.triggers.interval import IntervalTrigger
+
+    from routers.admin.scheduler import SCHEDULER_JOB_META
+
+    with (
+        patch.object(sched_mod, "PUBLIC_DATA_ENABLED", True),
+        patch.object(sched_mod, "POPULAR_CRAWL_ENABLED", True),
+        patch.object(sched_mod, "AIR_QUALITY_ENABLED", True),
+        patch.object(sched_mod, "EMERGENCY_ENABLED", True),
+        patch.object(sched_mod, "CHILDCARE_ENABLED", True),
+        patch.object(sched_mod, "CRIME_STATS_ENABLED", True),
+        patch.object(sched_mod, "COMPLEX_DETAIL_ENABLED", True),
+        patch.object(sched_mod, "COMPLEX_METRIC_ENABLED", True),
+        patch.object(sched_mod, "MONITOR_ENABLED", True),
+    ):
+        scheduler = sched_mod.create_scheduler()
+    jobs = {job.id: job for job in scheduler.get_jobs()}
+
+    errors: list[str] = []
+    for job_id, meta in SCHEDULER_JOB_META.items():
+        job = jobs.get(job_id)
+        if job is None:
+            # 다른 가드가 잡음 — 여기는 trigger 일치만 검증
+            continue
+        schedule = meta["schedule"]
+        if isinstance(job.trigger, IntervalTrigger):
+            seconds = job.trigger.interval.total_seconds()
+            if seconds < 3600:
+                if "분" not in schedule:
+                    errors.append(
+                        f"{job_id}: IntervalTrigger {seconds}초인데 schedule='{schedule}' 에 '분' 없음"
+                    )
+            else:
+                if "시간" not in schedule:
+                    errors.append(
+                        f"{job_id}: IntervalTrigger {seconds}초인데 schedule='{schedule}' 에 '시간' 없음"
+                    )
+        elif isinstance(job.trigger, CronTrigger):
+            # cron 인데 "마다" 만 적혀있고 시각 표기 없으면 interval 로 오해
+            if "마다" in schedule and ":" not in schedule and "회" not in schedule:
+                errors.append(
+                    f"{job_id}: CronTrigger 인데 schedule='{schedule}' 가 interval 형식"
+                )
+    assert not errors, "META schedule 과 add_job trigger drift:\n  " + "\n  ".join(errors)
+
+
 def test_scheduler_job_meta_covers_all_registered_jobs():
     """SCHEDULER_JOB_META 가 create_scheduler() 의 모든 등록 job id 를 커버한다.
 

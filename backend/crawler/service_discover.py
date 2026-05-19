@@ -452,9 +452,13 @@ def crawl_complex_details_batch(
         for i, complex_no in enumerate(complex_nos):
             _throttle_detail.wait()
             try:
-                enrich_complex_detail(db, complex_no)
-                _throttle_detail.on_success()
-                processed += 1
+                # enrich_complex_detail 은 API 실패 시 예외 대신 False 반환 —
+                # 실패가 성공으로 집계되던 문제를 반환값으로 정확히 구분.
+                if enrich_complex_detail(db, complex_no):
+                    _throttle_detail.on_success()
+                    processed += 1
+                else:
+                    failed += 1
             except Exception:
                 db.rollback()
                 _throttle_detail.on_rate_limit()

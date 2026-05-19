@@ -18,20 +18,22 @@ HEAT_METHOD_MAP = {"HT001": "중앙난방", "HT002": "개별난방", "HT003": "�
 HEAT_FUEL_MAP = {"HF001": "도시가스", "HF002": "LPG", "HF003": "석유", "HF004": "전기"}
 
 
-def enrich_complex_detail(db, complex_no):
+def enrich_complex_detail(db, complex_no) -> bool:
     """단지 상세 정보 보강 (면적별 정보, 난방, 건설사, 주소 등).
 
     live.py와 crawler/service.py 모두 이 함수를 호출.
+    반환: 보강 성공(detail_crawled_at 갱신됨) 시 True, API 실패 시 False.
+    호출자가 성공/실패를 정확히 집계하도록 함 — 실패해도 예외는 던지지 않음.
     """
     try:
         record_call("complex_detail")
         detail = NaverEstateAPI.get_complex_detail(complex_no)
     except Exception as e:
         logger.warning("단지 상세 조회 실패: %s -> %s", complex_no, e)
-        return
+        return False
 
     if not detail or not isinstance(detail, dict) or "error" in detail:
-        return
+        return False
 
     cd = detail.get("complexDetail") or {}
 
@@ -125,3 +127,4 @@ def enrich_complex_detail(db, complex_no):
 
     db.commit()
     logger.info("단지 상세 보강 완료: %s -> %d개 면적", complex_no, len(pyeong_list))
+    return True

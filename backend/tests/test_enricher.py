@@ -80,7 +80,7 @@ class TestEnrichComplexDetail:
         mock_api.get_complex_detail.return_value = _make_detail_response()
 
         from services.enricher import enrich_complex_detail
-        enrich_complex_detail(db, "99999")
+        assert enrich_complex_detail(db, "99999") is True
 
         cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == "99999").first()
         assert cpx.heat_method_type == "개별난방 (도시가스)"
@@ -108,7 +108,8 @@ class TestEnrichComplexDetail:
         mock_api.get_complex_detail.side_effect = Exception("네트워크 타임아웃")
 
         from services.enricher import enrich_complex_detail
-        enrich_complex_detail(db, "99999")
+        # API 예외 시 False 반환 (예외는 던지지 않음)
+        assert enrich_complex_detail(db, "99999") is False
 
         # detail_crawled_at이 업데이트되지 않음
         cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == "99999").first()
@@ -122,7 +123,8 @@ class TestEnrichComplexDetail:
         mock_api.get_complex_detail.return_value = {}
 
         from services.enricher import enrich_complex_detail
-        enrich_complex_detail(db, "99999")
+        # 빈 응답 시 False 반환
+        assert enrich_complex_detail(db, "99999") is False
 
         cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == "99999").first()
         assert cpx.detail_crawled_at is None

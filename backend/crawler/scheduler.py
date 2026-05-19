@@ -7,6 +7,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 
 from crawler.service import (
+    backfill_price_batch,
     collect_price_history,
     crawl_article_details,
     crawl_articles_batch,
@@ -26,6 +27,9 @@ POPULAR_CRAWL_ENABLED = os.getenv("POPULAR_CRAWL_ENABLED", "true").lower() == "t
 POPULAR_CRAWL_BATCH_SIZE = int(os.getenv("POPULAR_CRAWL_BATCH_SIZE", "50"))
 PUBLIC_DATA_ENABLED = os.getenv("PUBLIC_DATA_ENABLED", "false").lower() == "true"
 PUBLIC_DATA_BATCH_SIZE = int(os.getenv("PUBLIC_DATA_BATCH_SIZE", "300"))
+# 시세 이력 부족 단지 소급 수집 (국토교통부 실거래가). PUBLIC_DATA_ENABLED 와 같은
+# data.go.kr 키 사용 — 일일 쿼터(10,000회, mibunyang 공유) 보호 위해 배치 작게.
+PUBLIC_PRICE_BACKFILL_BATCH_SIZE = int(os.getenv("PUBLIC_PRICE_BACKFILL_BATCH_SIZE", "30"))
 AIR_QUALITY_ENABLED = os.getenv("AIR_QUALITY_ENABLED", "false").lower() == "true"
 AIR_QUALITY_BATCH_SIZE = int(os.getenv("AIR_QUALITY_BATCH_SIZE", "100"))
 EMERGENCY_ENABLED = os.getenv("EMERGENCY_ENABLED", "false").lower() == "true"
@@ -100,6 +104,25 @@ def create_scheduler() -> BackgroundScheduler:
         name="시세 이력 수집",
         misfire_grace_time=3600,
     )
+
+    # D-2. 시세 이력 소급 수집 — 매일 새벽 3시 30분
+    #   complex_price_history 6행 미만 단지를 세대수 상위순으로 국토교통부
+    #   실거래가 backfill. 가치지표(M)의 집계 대상 단지를 늘리는 근본 경로.
+    #   공공데이터 API 라 네이버 IP 차단 무관. PUBLIC_DATA_ENABLED 토글 공유
+    #   (같은 data.go.kr 키) — 토요일 collect_public_trades 와 시각 분리.
+    if PUBLIC_DATA_ENABLED:
+        scheduler.add_job(
+            backfill_price_batch,
+            "cron",
+            hour=3,
+            minute=30,
+            kwargs={"batch_size": PUBLIC_PRICE_BACKFILL_BATCH_SIZE},
+            id="backfill_price",
+            name="시세 이력 소급 수집",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        logger.info("시세 이력 소급 수집 활성화: 매일 03:30 (배치 %d)", PUBLIC_PRICE_BACKFILL_BATCH_SIZE)
 
     # E. 인기 단지 선제적 크롤링 — 하루 3회 (10:45, 14:45, 19:15 KST)
     #    기존 스케줄(B: 12시간마다, C: 4시간마다)과 충돌 회피

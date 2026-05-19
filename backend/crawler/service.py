@@ -25,4 +25,7 @@ from crawler.service_price import (  # noqa: F401
     collect_price_history,
     collect_price_history_for_complex,
 )
-from crawler.service_public import collect_public_trade_data  # noqa: F401
+from crawler.service_public import (  # noqa: F401
+    backfill_price_batch,
+    collect_public_trade_data,
+)

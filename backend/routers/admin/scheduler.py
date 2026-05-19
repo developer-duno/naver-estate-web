@@ -27,10 +27,18 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "popular_1430": {"name": "인기 단지 크롤링 14:45", "schedule": "매일 14:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true"},
     "popular_1900": {"name": "인기 단지 크롤링 19:15", "schedule": "매일 19:15", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true"},
     "collect_public_trades": {"name": "공공데이터 실거래가", "schedule": "주 1회 토요일 05:00", "env": "PUBLIC_DATA_ENABLED"},
+    "backfill_price": {"name": "시세 이력 소급 수집", "schedule": "매일 03:30", "env": "PUBLIC_DATA_ENABLED"},
     "collect_air_quality": {"name": "에어코리아 대기질", "schedule": "매일 02:00", "env": "AIR_QUALITY_ENABLED"},
     "collect_emergency": {"name": "응급의료기관", "schedule": "매월 첫째 월요일 03:00", "env": "EMERGENCY_ENABLED"},
     "collect_childcare": {"name": "어린이집", "schedule": "매월 첫째 목요일 06:00", "env": "CHILDCARE_ENABLED"},
     "collect_crime_stats": {"name": "범죄통계", "schedule": "분기별 첫째 일요일 04:00", "env": "CRIME_STATS_ENABLED"},
+    "complex_detail_APT": {"name": "단지 상세 backfill APT", "schedule": "6시간 interval", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
+    "complex_detail_OPST": {"name": "단지 상세 backfill OPST", "schedule": "6시간 interval", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
+    "complex_detail_JGC": {"name": "단지 상세 backfill JGC", "schedule": "주 1회 화요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
+    "complex_detail_ABYG": {"name": "단지 상세 backfill ABYG", "schedule": "주 1회 수요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
+    "complex_detail_OBYG": {"name": "단지 상세 backfill OBYG", "schedule": "주 1회 목요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
+    "collect_metrics": {"name": "단지 가치지표 수집", "schedule": "매일 08:30", "env": "COMPLEX_METRIC_ENABLED", "env_default": "true"},
+    "crawler_monitor": {"name": "크롤링 모니터", "schedule": "30분 interval", "env": "MONITOR_ENABLED"},
 }
 
 

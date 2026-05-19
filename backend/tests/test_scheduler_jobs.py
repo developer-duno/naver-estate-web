@@ -8,6 +8,8 @@ create_scheduler() 는 scheduler 를 만들고 add_job 만 하며 start() 는 �
 
 from unittest.mock import patch
 
+import pytest
+
 from crawler import scheduler as sched_mod
 
 
@@ -136,6 +138,20 @@ def test_complex_detail_jobs_have_jitter():
         assert job.trigger.jitter is not None and job.trigger.jitter > 0, (
             f"{job_id} 에 jitter 미설정 — IP 차단 방지를 위해 jitter 필요"
         )
+
+
+def test_add_job_rejects_duplicate_id():
+    """create_scheduler() 가 같은 id 두 번 등록을 ValueError 로 거부한다.
+
+    APScheduler 기본 동작은 silent 허용 (2026-05-20 실측: jobs_count=2 통과) —
+    동적 id 생성 (예: f"popular_{hour}_{minute}") 충돌 시 발견 지연. 시작 시점에
+    명시적 가드. 본 가드 = crawler/scheduler.py 의 _add_job_unique 래퍼.
+    """
+    scheduler = sched_mod.create_scheduler()
+    # 이미 등록된 id 하나를 골라 같은 id 로 한 번 더 add → ValueError
+    existing_id = next(iter(j.id for j in scheduler.get_jobs()))
+    with pytest.raises(ValueError, match=f"'{existing_id}'"):
+        scheduler.add_job(lambda: None, "interval", minutes=1, id=existing_id)
 
 
 def test_meta_schedule_matches_add_job_trigger():

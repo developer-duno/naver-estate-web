@@ -70,6 +70,8 @@ def create_scheduler() -> BackgroundScheduler:
     )
 
     # B. 매물 수집 — N시간마다 (jitter: mibunyang 08:00 월/목 크롤링과 충돌 회피)
+    #    max_instances=1: 이전 배치가 안 끝났는데 다음 주기가 시작되는 중복 실행 차단
+    #    (cron job 들과 일관성 — 동시 크롤은 같은 IP 부하·DB 경합 유발).
     scheduler.add_job(
         crawl_articles_batch,
         "interval",
@@ -78,10 +80,12 @@ def create_scheduler() -> BackgroundScheduler:
         kwargs={"batch_size": CRAWL_BATCH_SIZE, "scheduler_job_id": "crawl_articles"},
         id="crawl_articles",
         name="매물 수집 배치",
+        max_instances=1,
         misfire_grace_time=1800,
     )
 
     # C. 상세 보강 — N분마다 (jitter: 같은 IP 네이버 요청 분산)
+    #    max_instances=1: B 와 동일 — 120분 주기가 밀려도 중복 실행 안 함.
     scheduler.add_job(
         crawl_article_details,
         "interval",
@@ -90,6 +94,7 @@ def create_scheduler() -> BackgroundScheduler:
         kwargs={"batch_size": 300, "scheduler_job_id": "crawl_details"},
         id="crawl_details",
         name="매물 상세 보강",
+        max_instances=1,
         misfire_grace_time=900,
     )
 

@@ -28,3 +28,17 @@ def test_backfill_price_job_absent_when_public_data_disabled():
     with patch.object(sched_mod, "PUBLIC_DATA_ENABLED", False):
         scheduler = sched_mod.create_scheduler()
     assert "backfill_price" not in _job_ids(scheduler)
+
+
+def test_interval_jobs_have_max_instances():
+    """매물 수집·상세 보강 interval job 에 max_instances=1 이 설정돼 있다.
+
+    동시 중복 실행 방지 — 이전 배치가 안 끝났는데 다음 주기가 시작되면 안 됨.
+    """
+    scheduler = sched_mod.create_scheduler()
+    jobs = {job.id: job for job in scheduler.get_jobs()}
+    for job_id in ("crawl_articles", "crawl_details"):
+        assert job_id in jobs, f"{job_id} job 미등록"
+        assert jobs[job_id].max_instances == 1, (
+            f"{job_id} 의 max_instances 가 1 이 아님"
+        )

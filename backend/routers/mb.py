@@ -119,15 +119,19 @@ def get_apartment_detail(
 def get_unsold(
     region: str = Query(..., min_length=2, max_length=20, description="시도"),
     gu: Optional[str] = Query(None, max_length=20, description="시군구"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
     sort_by: MbAptSortBy = Query("unsold_desc"),
     keyword: Optional[str] = Query(None, min_length=2, max_length=100),
     db: Session = Depends(get_db),
 ):
-    """지역별 미분양 아파트 목록 (unsold > 0, 정렬 + 검색)"""
-    items = mb_queries.get_unsold_by_region(db, region, gu, sort_by, keyword)
+    """지역별 미분양 아파트 목록 (unsold > 0, 정렬 + 검색 + 페이지네이션)"""
+    items, total = mb_queries.get_unsold_by_region(
+        db, region, gu, sort_by, keyword, page, page_size
+    )
     return {
         "unsold": [apartment_to_dict(a) for a in items],
-        "total": len(items),
+        "total": total,
     }
 
 

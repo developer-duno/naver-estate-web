@@ -135,8 +135,8 @@ function MibunyangContent() {
   });
 
   const unsoldQuery = useQuery({
-    queryKey: queryKeys.mb.unsold(region, gu || undefined, sortBy || undefined, keyword || undefined),
-    queryFn: () => getMbUnsold(region, gu || undefined, sortBy || undefined, keyword || undefined),
+    queryKey: queryKeys.mb.unsold(region, gu || undefined, page, sortBy || undefined, keyword || undefined),
+    queryFn: () => getMbUnsold(region, gu || undefined, page, PAGE_SIZE, sortBy || undefined, keyword || undefined),
     enabled: hasRegion && tab === "unsold",
     placeholderData: keepPreviousData,
   });
@@ -239,8 +239,10 @@ function MibunyangContent() {
           {tab === "unsold" && (
             <MbUnsoldTab
               query={unsoldQuery}
+              page={page}
               sort={sortBy}
               onSortChange={handleSortChange}
+              onPageChange={handlePageChange}
               isInCompare={compare.isInCompare}
               onCompareToggle={(id, name) => compare.toggle({ id, name })}
               compareFull={compare.isFull}

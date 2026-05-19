@@ -2,22 +2,28 @@
 
 import type { UseQueryResult } from "@tanstack/react-query";
 import MbApartmentTable from "@/components/mb/MbApartmentTable";
+import Pagination from "@/components/Pagination";
 import { MbTabContent, ExportButton } from "@/components/mb/MbTabContent";
 import { exportMbApartmentsToXlsx } from "@/lib/mb-export";
+import { PAGE_SIZE } from "@/lib/constants";
 import type { MbApartment } from "@/types";
 
-/** 미분양만 탭 — unsold > 0 아파트 목록 */
+/** 미분양만 탭 — unsold > 0 아파트 목록 + 정렬 + 페이지네이션 */
 export default function MbUnsoldTab({
   query,
+  page,
   sort,
   onSortChange,
+  onPageChange,
   isInCompare,
   onCompareToggle,
   compareFull,
 }: {
   query: UseQueryResult<{ unsold: MbApartment[]; total: number }>;
+  page: number;
   sort: string;
   onSortChange: (s: string) => void;
+  onPageChange: (p: number) => void;
   isInCompare: (id: string) => boolean;
   onCompareToggle: (id: string, name: string) => void;
   compareFull: boolean;
@@ -41,6 +47,15 @@ export default function MbUnsoldTab({
         onCompareToggle={onCompareToggle}
         compareFull={compareFull}
       />
+      {query.data && query.data.total > PAGE_SIZE && (
+        <div className="mt-4">
+          <Pagination
+            currentPage={page}
+            totalPages={Math.ceil(query.data.total / PAGE_SIZE)}
+            onPageChange={onPageChange}
+          />
+        </div>
+      )}
     </MbTabContent>
   );
 }

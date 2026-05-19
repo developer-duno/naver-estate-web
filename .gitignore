@@ -27,6 +27,9 @@ Thumbs.db
 dist/
 *.egg-info/
 
+# 일회성 정리 도구 진행 상태 (재수집 체크포인트)
+backend/data/b1_cleanup_checkpoint.json
+
 # CI artifacts (baseline drift 갱신 시 임시)
 .ci-artifacts/
 

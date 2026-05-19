@@ -57,8 +57,31 @@ def get_scheduler() -> BackgroundScheduler | None:
 
 
 def create_scheduler() -> BackgroundScheduler:
-    """크롤러 스케줄러 생성 (BackgroundScheduler — 메인 스레드 차단 없음)"""
+    """크롤러 스케줄러 생성 (BackgroundScheduler — 메인 스레드 차단 없음).
+
+    add_job 호출을 래핑해 같은 id 두 번 등록 시 즉시 ValueError. APScheduler
+    기본 동작은 silent 허용이라 동적 id (예: f"popular_{hour}") 충돌 시 발견
+    지연 — 시작 시점에 즉시 적발.
+    """
     scheduler = BackgroundScheduler()
+    _seen_ids: set[str] = set()
+    _orig_add_job = scheduler.add_job
+
+    def _add_job_unique(*args, **kwargs):
+        job_id = kwargs.get("id")
+        if job_id is None and len(args) >= 4:
+            # add_job(func, trigger, args, kwargs, id, ...) 위치 인자 호환
+            job_id = args[4] if len(args) > 4 else None
+        if job_id is not None:
+            if job_id in _seen_ids:
+                raise ValueError(
+                    f"create_scheduler: 같은 id '{job_id}' 가 두 번 등록됨 — "
+                    "동적 id 생성 시 충돌 의심"
+                )
+            _seen_ids.add(job_id)
+        return _orig_add_job(*args, **kwargs)
+
+    scheduler.add_job = _add_job_unique  # type: ignore[method-assign]
 
     # A. 단지 발견 — 주 1회 일요일 새벽 3시
     scheduler.add_job(

@@ -21,7 +21,7 @@ from telegram_notify import notify
 # ── 경로 상수 ──────────────────────────────────────────────
 PYTHON_EXE = r"C:\Users\user\AppData\Local\Programs\Python\Python312\python.exe"
 CLOUDFLARED_EXE = r"C:\Users\user\AppData\Local\Microsoft\WinGet\Links\cloudflared.exe"
-PROJECT_ROOT = r"F:\cursor\naver-estate-web"
+PROJECT_ROOT = r"D:\naver-estate-web"
 BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend")
 SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "scripts")
 BACKEND_PORT = 8002

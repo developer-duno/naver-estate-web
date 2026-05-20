@@ -8,7 +8,7 @@
 
 ## §1 한국어 PDF 자산 매핑 (16장)
 
-위치: `f:/cursor/naver-estate-web/종합부동산세/`
+위치: `d:/naver-estate-web/종합부동산세/`
 
 다음 세션에서 영문 키워드(`spouse-joint`, `corp-progressive` 등)로 grep 시 권위 출처 PDF 즉시 추적 가능. **한국어 파일명 직접 grep 금지** (Windows 경로 인코딩 깨짐 위험) — 본 표의 영문 alias 사용.
 

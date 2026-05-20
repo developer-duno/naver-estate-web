@@ -14,8 +14,8 @@ Windows Startup 폴더의 BAT가 `scripts/startup_orchestrator.py`를 실행:
 
 ```bash
 # 1. 백엔드 서버 실행 (집 서버 cmd)
-F:
-cd cursor\naver-estate-web\backend
+D:
+cd naver-estate-web\backend
 python -m uvicorn main:app --host 0.0.0.0 --port 8002
 
 # 2. Named Tunnel 실행 (cmd 하나 더)
@@ -47,7 +47,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 
 - 프로젝트: `naver-estate-web` (루트에서 배포, frontend/ 아님)
 - 도메인: `2u.pe.kr`, `www.2u.pe.kr`
-- 배포 명령은 **프로젝트 루트**(`f:/cursor/naver-estate-web`)에서 실행
+- 배포 명령은 **프로젝트 루트**(`d:/naver-estate-web`)에서 실행
 
 ## DB 커넥션 풀
 

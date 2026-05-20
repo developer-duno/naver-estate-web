@@ -14,7 +14,7 @@ mibunyang collector 에서 data.go.kr 호출 직전·직후에 naver-estate-web 
 
 | 항목 | 위치 |
 |---|---|
-| Python 구현 | `f:/cursor/naver-estate-web/backend/crawler/quota_db.py` |
+| Python 구현 | `d:/naver-estate-web/backend/crawler/quota_db.py` |
 | ORM 모델 | `backend/db/models.py:205 RateLimitCounter` |
 | 호출처 1 | `backend/crawler/public_data_base.py:36-40` (스케줄러 진입부) |
 | 호출처 2 | `backend/crawler/public_data_api.py:78-82` (API 호출 전) |
@@ -184,6 +184,6 @@ data.go.kr 를 호출하는 mibunyang collector (각 호출 직전에 카운터 
 
 ## 연관 문서
 
-- `f:/cursor/naver-estate-web/backend/crawler/quota_db.py` — Python 원본 구현
-- `f:/cursor/naver-estate-web/.claude/rules/infra.md` — 공유 인프라 규칙 ("data.go.kr API 쿼터" 표)
-- `f:/cursor/naver-estate-web/CLAUDE.md` — 공유 쿼터 DB 카운터 항목
+- `d:/naver-estate-web/backend/crawler/quota_db.py` — Python 원본 구현
+- `d:/naver-estate-web/.claude/rules/infra.md` — 공유 인프라 규칙 ("data.go.kr API 쿼터" 표)
+- `d:/naver-estate-web/CLAUDE.md` — 공유 쿼터 DB 카운터 항목

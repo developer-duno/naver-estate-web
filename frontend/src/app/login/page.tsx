@@ -75,7 +75,11 @@ function LoginForm() {
               }, { onConflict: "user_id" });
             }
           }
-        } catch (e) { console.error("[Login] login-record failed:", e); }
+        } catch (e) {
+          // login-record 실패는 핵심 로그인 흐름 차단 안 함 (다음 화면으로 진행)
+          // Why: 백엔드 다운 시에도 Supabase 직접 인증은 성공해야 사용자 차단 0
+          console.error("[Login] login-record failed (non-blocking):", e);
+        }
         const rawRedirect = searchParams.get("redirect") || "/";
         let redirectTo = "/";
         try {

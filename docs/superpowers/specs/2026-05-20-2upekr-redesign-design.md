@@ -280,15 +280,19 @@ Claude / Linear / Stripe / Vercel) 을 분석한 결과, 다음 부채가 누적
 
 ### PR 0 — 디자인 토큰 + Pretendard + Claude 5색
 
-**파일**: `frontend/src/app/globals.css`, `frontend/tailwind.config.{js,ts}`, `frontend/src/app/layout.tsx`
+**파일**: `frontend/src/app/globals.css`, `frontend/src/app/layout.tsx`, `frontend/src/app/fonts/PretendardVariable.woff2` (신규)
 
-- globals.css 의 editorial 좀비 토큰 (gold·navy) 제거
+- globals.css 의 editorial 좀비 토큰 (gold·navy·bg·ink) 제거 + `--font-serif` 매핑 제거
 - Claude 9색 토큰 정의 (위 표)
-- Pretendard 로드 (next/font/google)
+- Pretendard Variable 로드 (`next/font/local` — Pretendard 는 next/font/google 미제공)
 - Noto Serif KR 제거 (사용 0 답습)
-- tailwind.config 의 fontFamily·colors 동기화
+- `--font-sans` 매핑을 Pretendard 우선 + Geist 폴백으로 갱신
 
-**시각 변화 0** — 토큰 정의만, 클래스 적용은 PR 2+ 부터. 모든 후속 PR 의 토대.
+> ★ 세션 210 실측 정정: `tailwind.config.{js,ts}` 파일은 본 프로젝트에 부재
+> (Tailwind CSS 4 `@theme` CSS-only 설정). globals.css `@theme inline` 블록만 수정.
+
+**시각 변화 = 폰트 미세 차이만** (Geist → Pretendard, 색·레이아웃 변화 0).
+e2e 시각 회귀 baseline 9 파일은 별도 갱신 동반 (workflow_dispatch `update_snapshots=true`).
 
 ### PR 1 — shadcn/ui + Radix 도입, 공용 컴포넌트 5종
 
@@ -368,7 +372,7 @@ Claude / Linear / Stripe / Vercel) 을 분석한 결과, 다음 부채가 누적
 
 각 PR 마다 의무:
 
-1. **회귀 0** — vitest 1336개 / pytest 676개 베이스라인 답습 (`CLAUDE.md` 답습)
+1. **회귀 0** — vitest 1381개 / pytest 676개 베이스라인 답습 (`CLAUDE.md` 답습)
 2. **typecheck pass** — `cd frontend && npx tsc --noEmit`
 3. **lint pass** — `cd frontend && npm run lint`
 4. **WCAG AA 검사** — PR 0 의 토큰 결정시 1회, 이후 색 변경시 재검사.
@@ -398,7 +402,7 @@ PR 0~7 모두 머지·배포 완료. 사용자 (공인중개사) 가 "이 사이
 - **B2B 단독**: B2C 확대 가설 폐기. "B2B 사용자가 매일 쓸 때 편한가" 단일 잣대
 - **세리프 헤딩 금지**: 한국 SaaS 0 사례 답습. Pretendard 단일
 - **WCAG AA 의무**: 40~60대 노안 사용자가 사실상 100%
-- **회귀 0 의무**: vitest 1336 / pytest 676 베이스라인
+- **회귀 0 의무**: vitest 1381 / pytest 676 베이스라인
 - **사용자 사용 편의 최우선**: 모든 PR · 디자인 결정 · 라이브러리 선택의
   최우선 잣대. 사용자 명시 박제 (2026-05-20) "항상 사용자가 사용하기
   쉽게를 잊으면 안 된다"

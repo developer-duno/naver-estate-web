@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Noto_Serif_KR } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -20,10 +21,10 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-const notoSerifKr = Noto_Serif_KR({
-  variable: "--font-noto-serif-kr",
-  subsets: ["latin"],
-  weight: ["400", "700"],
+const pretendard = localFont({
+  src: "./fonts/PretendardVariable.woff2",
+  variable: "--font-pretendard",
+  weight: "45 920",
   display: "swap",
 });
 
@@ -86,7 +87,7 @@ export default function RootLayout({
   return (
     <html lang="ko" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${notoSerifKr.variable} antialiased bg-gray-50 min-h-screen`}
+        className={`${pretendard.variable} ${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 min-h-screen`}
         suppressHydrationWarning
       >
         <WebSiteJsonLd

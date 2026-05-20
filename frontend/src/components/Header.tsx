@@ -67,7 +67,11 @@ export default function Header() {
         } else {
           await fetchRoleFromSupabase();
         }
-      } catch (e) { console.error("[Header] profile fetch failed:", e); }
+      } catch (e) {
+        // profile fetch 실패해도 로그인 상태 (userEmail) 유지 — role 만 null 로 남음
+        // Why: 네트워크 일시 장애 시 헤더가 갑자기 로그아웃 상태로 안 변하게
+        console.error("[Header] profile fetch failed (role unavailable):", e);
+      }
     };
 
     // 현재 세션 확인

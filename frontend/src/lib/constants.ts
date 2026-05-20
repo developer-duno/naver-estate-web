@@ -25,11 +25,11 @@ export const CRAWL_STATUS_POLL_MS = 3_000;
 /** 매물 목록 폴링 간격 (ms) */
 export const ARTICLES_POLL_MS = 8_000;
 
-/** 실거래가 수집 폴링 간격 (ms) */
-export const PRICE_COLLECT_POLL_MS = 3_000;
+/** 실거래가 수집 폴링 간격 (ms) — 네이버 IP 차단 방지 (spec §네이버 보호 답습) */
+export const PRICE_COLLECT_POLL_MS = 5_000;
 
-/** 실거래가 수집 최대 폴링 횟수 (60회 × 3초 = 3분 타임아웃) */
-export const MAX_PRICE_COLLECT_POLLS = 60;
+/** 실거래가 수집 최대 폴링 횟수 (36회 × 5초 = 3분 타임아웃 유지) */
+export const MAX_PRICE_COLLECT_POLLS = 36;
 
 /** 거래유형별 뱃지 색상 */
 export const TRADE_TYPE_COLORS: Record<string, string> = {

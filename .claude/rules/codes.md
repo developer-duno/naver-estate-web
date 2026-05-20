@@ -6,8 +6,8 @@
 - `LIVE_TIMEOUT_MS = 120_000` (실시간 크롤링 타임아웃)
 - `get_dynamic_ttl()` (live 엔드포인트 시간대별 동적 캐시: 새벽 2시간 / 오전 15분 / 오후 30분 / 저녁 1시간)
 - `_PRICE_COLLECT_TTL = 86400` (실거래가 수집 24시간 TTL)
-- `PRICE_COLLECT_POLL_MS = 3_000` (실거래가 수집 폴링 간격 3초)
-- `MAX_PRICE_COLLECT_POLLS = 60` (폴링 최대 60회 = 3분 타임아웃)
+- `PRICE_COLLECT_POLL_MS = 5_000` (실거래가 수집 폴링 간격 5초, 네이버 IP 차단 방지 — spec §네이버 보호 답습)
+- `MAX_PRICE_COLLECT_POLLS = 36` (폴링 최대 36회 × 5초 = 3분 타임아웃 유지)
 
 ## 크롤 지표 컬럼 (진단 시 의미 구분)
 

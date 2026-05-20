@@ -20,7 +20,7 @@
 - 기간 필터: 6개월/1년/2년/전체
 - 면적 드롭다운: pyeong_no 기반 필터
 - "실거래가 수집" 버튼: 탭 진입 시 자동 트리거 (24시간 TTL)
-- usePriceCollect: useMutation(시작) + useQuery(refetchInterval: 3초) → 완료 시 invalidateQueries(priceHistory)
+- usePriceCollect: useMutation(시작) + useQuery(refetchInterval: 5초, 네이버 IP 차단 방지) → 완료 시 invalidateQueries(priceHistory)
 
 ## RegionSelector (네이버 스타일 3컬럼 팝업)
 - 트리거 버튼 hover → fixed 팝업 패널 (시/도 | 시/군/구 | 읍/면/동)

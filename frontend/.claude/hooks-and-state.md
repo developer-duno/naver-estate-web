@@ -7,7 +7,7 @@
 | 훅 | 역할 |
 |---|------|
 | `useCrawlProgress` | 매물 크롤링 진행률 — useQuery(crawlStatus, refetchInterval) + invalidateQueries |
-| `usePriceCollect` | 실거래가 수집 — useMutation(시작) + useQuery(폴링, 3초 간격, 3분 타임아웃) |
+| `usePriceCollect` | 실거래가 수집 — useMutation(시작) + useQuery(폴링, 5초 간격, 3분 타임아웃 = 36회 × 5초, 네이버 IP 차단 방지) |
 | `useExport` | 엑셀 내보내기 — useMutation 래퍼 |
 | `useAdminQuery` | 관리자 쿼리 유틸 — token 비동기 해소 + useQuery/useMutation 래핑 |
 | `useFilterParams` | URL searchParams ↔ ArticleFilters 양방향 변환 (필터 URL 공유) |

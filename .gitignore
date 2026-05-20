@@ -5,6 +5,9 @@ __pycache__/
 .venv/
 venv/
 
+# Brainstorming session artifacts (Visual Companion)
+.superpowers/
+
 # Next.js
 frontend/.next/
 frontend/out/

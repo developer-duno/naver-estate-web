@@ -18,7 +18,15 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 비즈니스 모델
 
-**공인중개사 B2B 구독** (세션 91~92 결정 박제). 단지 6만개 색인은 일반 사용자 유입용 ≠ 구독 매출. 가치 데이터 무료 공개 + 도구 100% 정확 산정 + /pricing 7일 무료 체험.
+**공인중개사 B2B 구독 단독** (세션 91~92 결정 박제 + 세션 209 재확인 박제: "B2B 단독은 맞다, 단 사용자가 쓰기 편해야"). 단지 6만개 색인 = **SEO 자산 + 구독자가 보는 핵심 데이터** (B2C 확대 아님). 가치 데이터 무료 공개 + 도구 100% 정확 산정 + /pricing 7일 무료 체험.
+
+## 디자인·UX 리뉴얼 (진행 예정 — 진실의 원천 1곳)
+
+**진실의 원천**: [docs/superpowers/specs/2026-05-20-2upekr-redesign-design.md](docs/superpowers/specs/2026-05-20-2upekr-redesign-design.md).
+
+핵심: Claude 디자인 5색 + Pretendard 단일 + shadcn/Radix 도입 (모방 전략). PR 0~7 단계 로드맵. 사용자 명시 잣대 = "사용자가 쓰기 쉽게" + "기능 다 만들지 말고 GitHub 가져다 쓴다" + 네이버 크롤링 IP 차단 방지.
+
+`frontend/.claude/{ui-patterns,hooks-and-state,pages-and-mb,tools-lineup}.md` 의 UI 컴포넌트·페이지 박제는 **각 PR 진행하며 함께 갱신**. spec 와 drift 시 spec 우선.
 
 ## 기술 스택
 

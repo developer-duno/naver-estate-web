@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
+import { Toaster } from "sonner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -107,6 +108,7 @@ export default function RootLayout({
             <main id="main-content">{children}</main>
           </ErrorBoundary>
           <Footer />
+          <Toaster position="bottom-right" richColors />
         </Providers>
       </body>
     </html>

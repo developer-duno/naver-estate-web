@@ -47,7 +47,7 @@ frontend/src/
 - React Query가 요청 중복 제거 + 캐싱 + 자동 재시도 담당
 - `queryKeys` (`lib/query-keys.ts`): 모든 쿼리 키 팩토리 (admin 키에 token 미포함)
 - `Providers.tsx`: QueryClientProvider + 로그아웃 시 `queryClient.clear()`
-- 폴링: `refetchInterval` 옵션 사용 (크롤 상태 3초, 매물 목록 8초, 가격 수집 3초)
+- 폴링: `refetchInterval` 옵션 사용 (크롤 상태 3초, 매물 목록 8초, 가격 수집 5초 — 네이버 IP 차단 방지, spec §네이버 보호)
 
 ### 3. HTML 유효성
 - `<table>` 내부에 `<Link>`(`<a>`) 래퍼 사용 금지 (hydration 에러)

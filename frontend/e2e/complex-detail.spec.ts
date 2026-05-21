@@ -23,3 +23,7 @@ test("엑셀 내보내기 버튼 — 페이지 크래시 없이 로드", async (
   // 페이지가 정상 로드되면 테스트 통과
   await expect(page.locator("header")).toBeVisible();
 });
+
+// 정보 위계 순서 회귀 가드는 page-level vitest 로 이관:
+// frontend/src/app/complex/[no]/__tests__/page-hierarchy.test.tsx
+// e2e 환경은 BE 단지 데이터 의존이라 ComplexLoadState 상태에 머물 수 있어 부적합.

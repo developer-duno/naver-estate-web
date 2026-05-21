@@ -1,4 +1,5 @@
 import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
+import { Badge } from "@/components/ui/badge";
 import type { Complex } from "@/types";
 
 function formatTimeAgo(dateStr: string): string {
@@ -26,11 +27,12 @@ export default function ComplexHeader({
 }: ComplexHeaderProps) {
   return (
     <div className="flex items-center gap-2 md:gap-4 flex-wrap">
-      <button onClick={onBack} aria-label="이전 페이지" className="text-gray-500 hover:text-gray-600 text-xl">
+      <button type="button" onClick={onBack} aria-label="이전 페이지" className="text-gray-500 hover:text-gray-600 text-xl">
         ←
       </button>
       <h1 className="text-lg md:text-2xl font-bold truncate">{complex.complex_name}</h1>
       <button
+        type="button"
         onClick={onToggleFavorite}
         className={`text-xl transition-colors ${starred ? "text-yellow-500" : "text-gray-300 hover:text-yellow-400"}`}
         aria-label={starred ? "즐겨찾기 해제" : "즐겨찾기 추가"}
@@ -39,9 +41,9 @@ export default function ComplexHeader({
         {starred ? "★" : "☆"}
       </button>
       {complex.real_estate_type_name && (
-        <span className={`text-xs px-1.5 py-0.5 rounded border ${ESTATE_TYPE_COLORS[complex.real_estate_type_name] ?? ESTATE_TYPE_DEFAULT_COLOR}`}>
+        <Badge variant="outline" className={ESTATE_TYPE_COLORS[complex.real_estate_type_name] ?? ESTATE_TYPE_DEFAULT_COLOR}>
           {complex.real_estate_type_name}
-        </span>
+        </Badge>
       )}
       {complex.last_crawled_at && (
         <span className="hidden sm:inline-flex text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">

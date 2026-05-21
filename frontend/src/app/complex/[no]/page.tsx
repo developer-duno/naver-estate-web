@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import {
@@ -17,7 +17,6 @@ import { useFilterParams } from "@/hooks/useFilterParams";
 import { useFavoriteStatus } from "@/hooks/useFavorites";
 import { useCrawlAction } from "@/hooks/useCrawlAction";
 import type { Article, ArticleFilters, FilterOptions } from "@/types";
-import ComplexInfo from "@/components/ComplexInfo";
 import FilterBar from "@/components/FilterBar";
 import FilterChipsSummary from "@/components/filter/FilterChipsSummary";
 import ArticleTable from "@/components/ArticleTable";
@@ -25,9 +24,18 @@ import ArticleCardMobile from "@/components/ArticleCardMobile";
 import ArticleDetail from "@/components/ArticleDetail";
 import Pagination from "@/components/Pagination";
 import HintIcon from "@/components/HintIcon";
+import ComplexBasicInfo from "@/components/ComplexBasicInfo";
+import { PyeongDetailsList } from "@/components/ComplexPyeongCard";
 import ComplexHeader from "@/components/complex/ComplexHeader";
 import ComplexLoadState from "@/components/complex/ComplexLoadState";
 import CrawlMessage from "@/components/complex/CrawlMessage";
+import ComplexPriceAreaSection from "@/components/complex/ComplexPriceAreaSection";
+import ComplexPriceFloorSection from "@/components/complex/ComplexPriceFloorSection";
+import PriceChartSection from "@/components/complex/PriceChartSection";
+import PrintButton from "@/components/complex/PrintButton";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 export default function ComplexDetailPage() {
   const params = useParams();
@@ -46,7 +54,10 @@ export default function ComplexDetailPage() {
   const [tokenError, setTokenError] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
 
-  // 브라우저 뒤로/앞으로 시에만 FilterBar 리마운트 (사용자 필터 변경 시에는 유지)
+  // 인쇄 대상 ref — 페이지 본문 전체 (헤더 + 시세 + 매물 + 정보)
+  const printRef = useRef<HTMLDivElement>(null);
+
+  // 브라우저 뒤로/앞으로 시에만 FilterBar 리마운트
   const [navKey, setNavKey] = useState(0);
   useEffect(() => {
     const handler = () => setNavKey(k => k + 1);
@@ -56,7 +67,6 @@ export default function ComplexDetailPage() {
 
   const { exporting, exportError, clearExportError, handleExport: doExport } = useExport();
 
-  // ── useQuery: 단지 정보 ──
   const complexQuery = useQuery({
     queryKey: queryKeys.complex(complexNo),
     queryFn: () => getComplex(complexNo),
@@ -64,14 +74,12 @@ export default function ComplexDetailPage() {
     staleTime: 60_000,
   });
 
-  // filter_options 추출
   useEffect(() => {
     if (complexQuery.data?.filter_options) {
       setFilterOptions(complexQuery.data.filter_options); // eslint-disable-line react-hooks/set-state-in-effect -- 쿼리 데이터 동기화
     }
   }, [complexQuery.data]);
 
-  // ── useQuery: 매물 목록 (필터/페이지/정렬 포함, 폴링 지원) ──
   const articlesQueryKey = queryKeys.articles(complexNo, {
     ...filters,
     page: currentPage,
@@ -90,7 +98,6 @@ export default function ComplexDetailPage() {
     staleTime: 30_000,
   });
 
-  // ── useQuery: 면적별 상세 ──
   const pyeongQuery = useQuery({
     queryKey: queryKeys.pyeongDetails(complexNo),
     queryFn: () => getPyeongDetails(complexNo),
@@ -102,26 +109,22 @@ export default function ComplexDetailPage() {
   const articles = articlesQuery.data?.articles ?? [];
   const totalCount = articlesQuery.data?.total ?? 0;
   const pyeongDetails = pyeongQuery.data?.pyeong_details ?? [];
-  // 분할 로딩: complex 정보만 있으면 페이지 표시 (articles/pyeong은 이후 로드)
   const loading = complexQuery.isLoading;
   const tableLoading = articlesQuery.isFetching && !articlesQuery.isLoading;
 
-  // SEO: dynamic title
   useEffect(() => {
     if (complex) {
       document.title = `${complex.complex_name} - 아파트·오피스텔`;
     }
   }, [complex]);
 
-  // 에러 처리
   useEffect(() => {
     if (complexQuery.isError) {
       setError("단지 정보를 불러올 수 없습니다."); // eslint-disable-line react-hooks/set-state-in-effect -- 에러 상태 동기화
     }
   }, [complexQuery.isError]);
 
-  // sessionToken 추출 — ComplexInfo 의 "실거래가 수집" 버튼이 accessToken 필요.
-  // 자동 크롤 로직은 useCrawlAction(auto) 로 이전됐고, 토큰은 별도로 뽑아둔다.
+  // sessionToken 추출 — 실거래가 수집 버튼이 accessToken 필요
   useEffect(() => {
     (async () => {
       try {
@@ -135,8 +138,6 @@ export default function ComplexDetailPage() {
     })();
   }, []);
 
-  // 자동 크롤 통합 — 초기 3쿼리 성공 시 1회 자동 실행. 이후 폴링·문구·에러
-  // 처리는 수동 버튼과 동일 경로 (useCrawlAction 내부).
   const {
     crawling,
     message: crawlMessage,
@@ -150,7 +151,6 @@ export default function ComplexDetailPage() {
       complexQuery.isSuccess && articlesQuery.isSuccess && pyeongQuery.isSuccess,
   });
 
-  // 핸들러: 정렬 변경 → URL 업데이트 (page 리셋)
   const handleSortChange = useCallback(
     (newSortBy: string) => {
       setSortBy(newSortBy);
@@ -159,7 +159,6 @@ export default function ComplexDetailPage() {
     [setSortBy]
   );
 
-  // 핸들러: 필터 변경 → URL 업데이트 (page 리셋)
   const handleFilterChange = useCallback(
     (newFilters: ArticleFilters) => {
       setFilters(newFilters);
@@ -174,7 +173,6 @@ export default function ComplexDetailPage() {
     setSelectedArticleNos(new Set());
   }, [setFilters]);
 
-  // 핸들러: 페이지 변경 → URL 업데이트
   const handlePageChange = useCallback(
     (newPage: number) => {
       setPage(newPage);
@@ -221,128 +219,184 @@ export default function ComplexDetailPage() {
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
-      {/* 헤더 */}
-      <ComplexHeader
-        complex={complex}
-        starred={starred}
-        onBack={goBack}
-        onToggleFavorite={() => toggleFavorite(complex.complex_name, complex.cortar_address)}
-      />
-
-      {/* 단지 정보 */}
-      <ComplexInfo complex={complex} pyeongDetails={pyeongDetails} complexNo={complexNo} onFilterChange={handleFilterChange} accessToken={sessionToken} />
+    <div ref={printRef} className="max-w-7xl mx-auto px-4 py-6 space-y-8">
+      {/* 헤더 + 인쇄 버튼 */}
+      <div className="flex items-start justify-between gap-2 flex-wrap">
+        <ComplexHeader
+          complex={complex}
+          starred={starred}
+          onBack={goBack}
+          onToggleFavorite={() => toggleFavorite(complex.complex_name, complex.cortar_address)}
+        />
+        <PrintButton contentRef={printRef} documentTitle={complex.complex_name} />
+      </div>
 
       {/* 로그인 세션 경고 */}
       {tokenError && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-md px-3 py-2 flex justify-between items-center gap-2">
-          <span>로그인 세션을 확인할 수 없어 일부 기능(실거래가 수집)이 제한됩니다. 새로고침하거나 다시 로그인해 주세요.</span>
+        <Card className="bg-amber-50 border-amber-200 text-amber-800 px-3 py-2 no-print">
+          <div className="flex justify-between items-center gap-2 text-xs">
+            <span>로그인 세션을 확인할 수 없어 일부 기능(실거래가 수집)이 제한됩니다. 새로고침하거나 다시 로그인해 주세요.</span>
+            <button
+              type="button"
+              onClick={() => setTokenError(false)}
+              aria-label="닫기"
+              className="text-amber-600 hover:text-amber-900 shrink-0"
+            >×</button>
+          </div>
+        </Card>
+      )}
+
+      {/* 🥇 시세 (가격 강조 — spec L323 정보 위계 1순위) */}
+      <section aria-labelledby="section-prices" className="space-y-4">
+        <h2 id="section-prices" className="text-lg md:text-xl font-semibold">시세</h2>
+        <Card className="p-3 md:p-4">
+          <ComplexPriceFloorSection complexNo={complexNo} onFilterChange={handleFilterChange} />
+        </Card>
+        <Card className="p-3 md:p-4">
+          <h3 className="text-sm md:text-base font-semibold mb-3">면적별 가격</h3>
+          <ComplexPriceAreaSection complexNo={complexNo} onFilterChange={handleFilterChange} />
+        </Card>
+      </section>
+
+      <Separator className="no-print" />
+
+      {/* 🥈 매물 리스트 (spec L323 정보 위계 2순위) */}
+      <section aria-labelledby="section-articles" className="space-y-4">
+        <h2 id="section-articles" className="text-lg md:text-xl font-semibold">매물</h2>
+
+        {/* 필터 바 */}
+        <div className="no-print">
           <button
-            onClick={() => setTokenError(false)}
-            aria-label="닫기"
-            className="text-amber-600 hover:text-amber-900 flex-shrink-0"
-          >×</button>
+            type="button"
+            onClick={() => setFilterOpen(v => !v)}
+            className="text-sm text-blue-600 hover:text-blue-800 mb-1 flex items-center gap-1 md:hidden"
+          >
+            {filterOpen ? "▲ 필터 접기" : "▼ 필터 펼치기"}
+          </button>
+          <div className={filterOpen ? "" : "hidden md:block"}>
+            <FilterBar key={navKey} onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} initialFilters={filters} />
+          </div>
         </div>
-      )}
 
-      {/* 필터 바 */}
-      <div>
-        <button
-          onClick={() => setFilterOpen(v => !v)}
-          className="text-sm text-blue-600 hover:text-blue-800 mb-1 flex items-center gap-1 md:hidden"
-        >
-          {filterOpen ? "▲ 필터 접기" : "▼ 필터 펼치기"}
-        </button>
-        <div className={filterOpen ? "" : "hidden md:block"}>
-          <FilterBar key={navKey} onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} initialFilters={filters} />
-        </div>
-      </div>
-
-      {/* 엑셀 내보내기 에러 배너 */}
-      {exportError && (
-        <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-md px-4 py-2 flex justify-between items-center">
-          <span>{exportError}</span>
-          <button onClick={() => clearExportError()} className="text-red-400 hover:text-red-600">×</button>
-        </div>
-      )}
-
-      {/* 적용된 필터 한 줄 요약 — 매물 표 위 읽기 전용 */}
-      {hasActiveFilters && <FilterChipsSummary filters={filters} />}
-
-      {/* 매물 수 + 엑셀 */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2 md:gap-3">
-          <span className="text-base md:text-lg font-semibold">매물 {totalCount}건</span>
-          {tableLoading && (
-            <div className="flex items-center gap-1.5" role="status" aria-label="매물 갱신 중">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
-              <span className="text-xs text-blue-600">갱신 중</span>
+        {/* 엑셀 내보내기 에러 배너 */}
+        {exportError && (
+          <Card className="bg-red-50 border-red-200 text-red-600 text-sm px-4 py-2 no-print">
+            <div className="flex justify-between items-center">
+              <span>{exportError}</span>
+              <button type="button" onClick={() => clearExportError()} className="text-red-400 hover:text-red-600">×</button>
             </div>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5 md:gap-2">
-          <button
-            onClick={handleCrawl}
-            disabled={crawling}
-            className="text-xs md:text-sm border border-blue-300 text-blue-600 rounded-md px-2.5 md:px-3 py-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50"
-          >
-            {crawling ? "갱신 중..." : "데이터 갱신"}
-          </button>
-          <HintIcon text="네이버에서 최신 매물을 다시 가져옵니다 (30초~2분)" />
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="text-xs md:text-sm border border-gray-300 rounded-md px-2.5 md:px-3 py-1.5 text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            {exporting
-              ? "내보내는 중..."
-              : selectedArticleNos.size > 0
-                ? `선택 ${selectedArticleNos.size}건 내보내기`
-                : "엑셀 내보내기"}
-          </button>
-        </div>
-      </div>
+          </Card>
+        )}
 
-      {/* 크롤 메시지: 진행 중(info+crawling)이면 상세 배너, 완료/에러/쿨다운은 1줄 */}
-      <CrawlMessage
-        crawling={crawling}
-        message={crawlMessage}
-        messageType={crawlMessageType}
-        progress={crawlProgress}
-        onClear={clearCrawlMessage}
-      />
+        {/* 적용된 필터 한 줄 요약 */}
+        {hasActiveFilters && <FilterChipsSummary filters={filters} />}
 
-      {/* 매물 API 실패 배너 */}
-      {articlesQuery.isError && (
-        <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-md px-4 py-2 flex justify-between items-center gap-3">
-          <span>매물 목록을 불러올 수 없습니다.</span>
-          <button
-            onClick={() => articlesQuery.refetch()}
-            className="text-xs border border-red-300 rounded px-2 py-1 hover:bg-red-100 flex-shrink-0"
-          >다시 시도</button>
-        </div>
-      )}
-
-      {/* 매물 테이블 (데스크톱) / 카드뷰 (모바일) — isFetching 중엔 반투명 처리 */}
-      {!articlesQuery.isLoading && !articlesQuery.isError && (
-        <div className={`transition-opacity duration-200 ${tableLoading ? "opacity-50" : "opacity-100"}`}>
-          <div className="hidden md:block">
-            <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} />
+        {/* 매물 수 + 데이터 갱신 + 엑셀 */}
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2 md:gap-3">
+            <span className="text-base md:text-lg font-semibold">매물 {totalCount}건</span>
+            {tableLoading && (
+              <div className="flex items-center gap-1.5" role="status" aria-label="매물 갱신 중">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+                <span className="text-xs text-blue-600">갱신 중</span>
+              </div>
+            )}
           </div>
-          <div className="md:hidden">
-            <ArticleCardMobile articles={articles} onRowClick={setSelectedArticle} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} />
+          <div className="flex items-center gap-1.5 md:gap-2 no-print">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleCrawl}
+              disabled={crawling}
+            >
+              {crawling ? "갱신 중..." : "데이터 갱신"}
+            </Button>
+            <HintIcon text="네이버에서 최신 매물을 다시 가져옵니다 (30초~2분)" />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              {exporting
+                ? "내보내는 중..."
+                : selectedArticleNos.size > 0
+                  ? `선택 ${selectedArticleNos.size}건 내보내기`
+                  : "엑셀 내보내기"}
+            </Button>
           </div>
         </div>
-      )}
 
-      {/* 페이지네이션 */}
-      {totalPages > 1 && (
-        <Pagination
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={handlePageChange}
+        <CrawlMessage
+          crawling={crawling}
+          message={crawlMessage}
+          messageType={crawlMessageType}
+          progress={crawlProgress}
+          onClear={clearCrawlMessage}
         />
-      )}
+
+        {/* 매물 API 실패 배너 */}
+        {articlesQuery.isError && (
+          <Card className="bg-red-50 border-red-200 text-red-600 text-sm px-4 py-2">
+            <div className="flex justify-between items-center gap-3">
+              <span>매물 목록을 불러올 수 없습니다.</span>
+              <button
+                type="button"
+                onClick={() => articlesQuery.refetch()}
+                className="text-xs border border-red-300 rounded px-2 py-1 hover:bg-red-100 shrink-0"
+              >다시 시도</button>
+            </div>
+          </Card>
+        )}
+
+        {/* 매물 테이블 / 카드 */}
+        {!articlesQuery.isLoading && !articlesQuery.isError && (
+          <div className={`transition-opacity duration-200 ${tableLoading ? "opacity-50" : "opacity-100"}`}>
+            <div className="hidden md:block">
+              <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} />
+            </div>
+            <div className="md:hidden">
+              <ArticleCardMobile articles={articles} onRowClick={setSelectedArticle} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} />
+            </div>
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
+        )}
+      </section>
+
+      <Separator className="no-print" />
+
+      {/* 🥉 차트 — 실거래가 추이 (spec L323 정보 위계 3순위) */}
+      <section aria-labelledby="section-chart" className="space-y-4">
+        <h2 id="section-chart" className="text-lg md:text-xl font-semibold">실거래가 추이</h2>
+        <Card className="p-3 md:p-4">
+          <PriceChartSection complexNo={complexNo} pyeongDetails={pyeongDetails} accessToken={sessionToken} />
+        </Card>
+      </section>
+
+      <Separator className="no-print" />
+
+      {/* 🏷 단지 정보 (메타 — 위계 4순위) */}
+      <section aria-labelledby="section-info" className="space-y-4">
+        <h2 id="section-info" className="text-lg md:text-xl font-semibold">단지 정보</h2>
+        <Card className="p-3 md:p-4">
+          <ComplexBasicInfo cpx={complex} />
+        </Card>
+        {pyeongDetails.length > 0 && (
+          <Card className="p-3 md:p-4">
+            <h3 className="text-sm md:text-base font-semibold mb-3">면적별 정보</h3>
+            <PyeongDetailsList details={pyeongDetails} />
+          </Card>
+        )}
+      </section>
 
       {/* 매물 상세 모달 */}
       {selectedArticle && (

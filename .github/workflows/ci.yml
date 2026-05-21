@@ -132,7 +132,8 @@ jobs:
 
       # workflow_dispatch + update_snapshots=true 일 때만 baseline 변경분 업로드
       # 다운로드 후 frontend/e2e/admin-dashboard.spec.ts-snapshots/ 에 풀어서 커밋
-      - if: inputs.update_snapshots
+      # always() 필수 — Run E2E step 이 snapshot 갱신 시 실패해도 artifact 는 받아야 함
+      - if: always() && inputs.update_snapshots
         uses: actions/upload-artifact@v6
         with:
           name: updated-snapshots

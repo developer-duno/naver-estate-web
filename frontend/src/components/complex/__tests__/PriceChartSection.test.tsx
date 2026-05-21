@@ -70,4 +70,17 @@ describe("PriceChartSection", () => {
     renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} />);
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
+
+  it("startPriceCollect 가 429 reject 시 '요청 한도 초과' 에러 메시지 노출 (사용자 침묵 방지)", async () => {
+    const apiErr = Object.assign(new Error("rate limit"), { statusCode: 429 });
+    mockStartPriceCollect.mockRejectedValueOnce(apiErr);
+    renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} accessToken="t" />);
+    await waitFor(() => {
+      expect(mockStartPriceCollect).toHaveBeenCalledWith("C001", "t");
+    });
+    // usePriceCollect onError → setMessage("요청 한도 초과", "error")
+    await waitFor(() => {
+      expect(screen.getByText(/요청 한도 초과/)).toBeInTheDocument();
+    });
+  });
 });

@@ -23,3 +23,12 @@ test("엑셀 내보내기 버튼 — 페이지 크래시 없이 로드", async (
   // 페이지가 정상 로드되면 테스트 통과
   await expect(page.locator("header")).toBeVisible();
 });
+
+test("정보 위계 4섹션 순서 — 시세 → 매물 → 실거래가 추이 → 단지 정보 (PR 3a spec L323)", async ({ page }) => {
+  await page.goto("/complex/12345");
+  await page.waitForLoadState("networkidle");
+  // 페이지 본문의 H2 4개가 spec L323 의 정보 위계 순서를 따르는지 검증.
+  // 누군가 섹션 한 줄 옮기면 즉시 회귀.
+  const h2s = await page.getByRole("heading", { level: 2 }).allTextContents();
+  expect(h2s).toEqual(["시세", "매물", "실거래가 추이", "단지 정보"]);
+});

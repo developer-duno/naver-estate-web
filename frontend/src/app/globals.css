@@ -164,3 +164,9 @@
     @apply font-sans;
   }
 }
+/* iOS Safari < 15 svh 폴백 (PR 3b — shadcn Sheet maxHeight) */
+@supports not (height: 85svh) {
+  [data-slot="sheet-content"] {
+    max-height: min(85vh, calc(100vh - 44px)) !important;
+  }
+}

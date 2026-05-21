@@ -9,7 +9,7 @@ test("홈 페이지 로드", async ({ page }) => {
   await page.goto("/");
   await expectHeader(page);
   // strict mode 회피: first() 사용
-  await expect(page.locator("header").locator("text=아파트·오피스텔").first()).toBeVisible();
+  await expect(page.locator("header").locator("text=2u부동산").first()).toBeVisible();
 });
 
 test("검색 결과 페이지 — URL 직접 접근 시 정상 렌더링", async ({ page }) => {

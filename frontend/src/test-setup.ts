@@ -4,6 +4,20 @@ import { vi } from "vitest";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+// Radix UI 가 jsdom 에서 동작하도록 PointerEvent · scrollIntoView 폴리필
+// Why: Radix DropdownMenu·Dialog 등은 PointerEvent API 와 hasPointerCapture 를 호출 — jsdom 미지원
+if (typeof window !== "undefined") {
+  if (!window.HTMLElement.prototype.hasPointerCapture) {
+    window.HTMLElement.prototype.hasPointerCapture = () => false;
+  }
+  if (!window.HTMLElement.prototype.releasePointerCapture) {
+    window.HTMLElement.prototype.releasePointerCapture = () => {};
+  }
+  if (!window.HTMLElement.prototype.scrollIntoView) {
+    window.HTMLElement.prototype.scrollIntoView = () => {};
+  }
+}
+
 /** 테스트용 QueryClient — retry 비활성, gcTime 0 */
 export function createTestQueryClient() {
   return new QueryClient({

@@ -306,7 +306,7 @@ e2e 시각 회귀 baseline 9 파일은 별도 갱신 동반 (workflow_dispatch `
 
 ### PR 2 — Header·Footer·layout 리뉴얼
 
-**파일**: `frontend/src/components/layout/{Header,Footer}.tsx`, `frontend/src/app/layout.tsx`, `frontend/src/icon.tsx`, `frontend/src/components/CommandMenu.tsx` (신규)
+**파일**: `frontend/src/components/{Header,Footer}.tsx`, `frontend/src/app/layout.tsx`, `frontend/src/app/icon.tsx`, `frontend/src/components/CommandMenu.tsx` (신규)
 
 - 로고 SVG 신설 (이모지 🏠 대체. icon.tsx 답습)
 - shadcn Button·DropdownMenu 적용

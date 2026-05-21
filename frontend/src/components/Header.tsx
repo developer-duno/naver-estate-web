@@ -4,6 +4,12 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 
 export default function Header() {
   const pathname = usePathname();
@@ -112,26 +118,11 @@ export default function Header() {
 
   const isAdmin = userRole === "admin";
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
-  const toolsMenuRef = useRef<HTMLDivElement>(null);
 
-  // 경로 변경 시 모바일 메뉴 + 계산기 드롭다운 닫기
+  // 경로 변경 시 모바일 메뉴 닫기 (계산기 드롭다운은 Radix 가 자체 관리)
   useEffect(() => {
     setMobileOpen(false);
-    setToolsMenuOpen(false);
   }, [pathname]);
-
-  // 드롭다운 외부 mousedown 닫기
-  useEffect(() => {
-    if (!toolsMenuOpen) return;
-    const onMouseDown = (e: MouseEvent) => {
-      if (toolsMenuRef.current && !toolsMenuRef.current.contains(e.target as Node)) {
-        setToolsMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, [toolsMenuOpen]);
 
   const toolsActive = pathname?.startsWith("/tools") ?? false;
   const navLinks = [
@@ -148,10 +139,24 @@ export default function Header() {
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50 no-print">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-14">
-          {/* 로고 */}
-          <Link href="/" className="flex items-center gap-2">
-            <span role="img" aria-label="홈" className="text-xl font-bold text-blue-600">🏠</span>
-            <span className="text-lg font-bold text-gray-900">아파트·오피스텔</span>
+          {/* 로고 — icon.tsx 와 동일 톤 (terracotta) */}
+          <Link href="/" className="flex items-center gap-2" aria-label="2u부동산 홈">
+            <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
+              <rect width="32" height="32" rx="7" fill="#d97757" />
+              <text
+                x="50%"
+                y="55%"
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontSize="14"
+                fontWeight="700"
+                fill="#faf9f5"
+                fontFamily="var(--font-pretendard)"
+              >
+                2u
+              </text>
+            </svg>
+            <span className="text-lg font-bold text-gray-900">2u부동산</span>
           </Link>
 
           {/* 데스크톱 네비게이션 */}
@@ -168,72 +173,33 @@ export default function Header() {
               </Link>
             ))}
 
-            {/* 계산기 드롭다운 */}
-            <div ref={toolsMenuRef} className="relative">
-              <button
-                type="button"
-                aria-expanded={toolsMenuOpen}
-                aria-haspopup="menu"
-                aria-controls="tools-menu"
-                onClick={() => setToolsMenuOpen((v) => !v)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") setToolsMenuOpen(false);
-                }}
-                className={`text-sm font-medium ${
+            {/* 계산기 드롭다운 — Radix (ESC·외부클릭·focus trap·keyboard nav 자동) */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={`text-sm font-medium outline-none ${
                   toolsActive ? "text-blue-600" : "text-gray-600 hover:text-gray-900"
                 }`}
               >
                 계산기 ▾
-              </button>
-              {toolsMenuOpen && (
-                <div
-                  id="tools-menu"
-                  role="menu"
-                  className="absolute right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg py-1 min-w-[160px] z-50"
-                >
-                  <Link
-                    href="/tools/brokerage-fee"
-                    role="menuitem"
-                    onClick={() => setToolsMenuOpen(false)}
-                    className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    중개수수료
-                  </Link>
-                  <Link
-                    href="/tools/acquisition-tax"
-                    role="menuitem"
-                    onClick={() => setToolsMenuOpen(false)}
-                    className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    취득세
-                  </Link>
-                  <Link
-                    href="/tools/transfer-tax"
-                    role="menuitem"
-                    onClick={() => setToolsMenuOpen(false)}
-                    className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    양도소득세
-                  </Link>
-                  <Link
-                    href="/tools/property-tax"
-                    role="menuitem"
-                    onClick={() => setToolsMenuOpen(false)}
-                    className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    보유세
-                  </Link>
-                  <Link
-                    href="/tools/area-converter"
-                    role="menuitem"
-                    onClick={() => setToolsMenuOpen(false)}
-                    className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    평·㎡ 변환
-                  </Link>
-                </div>
-              )}
-            </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[160px]">
+                <DropdownMenuItem asChild>
+                  <Link href="/tools/brokerage-fee">중개수수료</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/tools/acquisition-tax">취득세</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/tools/transfer-tax">양도소득세</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/tools/property-tax">보유세</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/tools/area-converter">평·㎡ 변환</Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {!mounted ? (
               <div className="w-[80px] h-[34px]" aria-hidden />
@@ -241,12 +207,12 @@ export default function Header() {
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
                   {isAdmin && (
-                    <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">
+                    <span className="text-xs bg-accent-blue/15 text-[#3a6da0] px-2 py-0.5 rounded-md font-semibold">
                       관리자
                     </span>
                   )}
                   {userRole === "expert" && (
-                    <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">
+                    <span className="text-xs bg-accent-green/15 text-[#4a5a3a] px-2 py-0.5 rounded-md font-semibold">
                       전문가
                     </span>
                   )}
@@ -371,10 +337,10 @@ export default function Header() {
                 <div className="px-3 py-2">
                   <div className="flex items-center gap-1.5 mb-1">
                     {isAdmin && (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium">관리자</span>
+                      <span className="text-xs bg-accent-blue/15 text-[#3a6da0] px-2 py-0.5 rounded-md font-semibold">관리자</span>
                     )}
                     {userRole === "expert" && (
-                      <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">전문가</span>
+                      <span className="text-xs bg-accent-green/15 text-[#4a5a3a] px-2 py-0.5 rounded-md font-semibold">전문가</span>
                     )}
                   </div>
                   <span className="text-sm text-gray-500 break-all">{userEmail}</span>

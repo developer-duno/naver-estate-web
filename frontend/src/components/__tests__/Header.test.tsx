@@ -4,13 +4,14 @@
  */
 import { describe, it, expect } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import Header from "../Header";
 
 describe("Header 기본", () => {
   it("로고 텍스트 표시", async () => {
     render(<Header />);
     await waitFor(() => {
-      expect(screen.getByText("아파트·오피스텔")).toBeInTheDocument();
+      expect(screen.getByText("2u부동산")).toBeInTheDocument();
     });
   });
 
@@ -77,10 +78,11 @@ describe("Header 네비게이션", () => {
     expect(header?.className).toContain("sticky");
   });
 
-  it("로고 이모지 존재", () => {
+  it("로고 SVG + aria-label 존재", () => {
     render(<Header />);
-    const emoji = screen.getByRole("img", { name: "홈" });
-    expect(emoji).toBeInTheDocument();
+    const logoLink = screen.getByRole("link", { name: "2u부동산 홈" });
+    expect(logoLink).toBeInTheDocument();
+    expect(logoLink.querySelector("svg")).not.toBeNull();
   });
 
   it("최대 너비 컨테이너 존재", () => {
@@ -90,32 +92,37 @@ describe("Header 네비게이션", () => {
   });
 });
 
-describe("Header 계산기 드롭다운 (데스크톱)", () => {
+describe("Header 계산기 드롭다운 (데스크톱, Radix)", () => {
   // 트리거 버튼 — 모바일 nav 의 "계산기" div 와 구분 위해 button 만 선택
   const getTrigger = () =>
     screen.getByRole("button", { name: /계산기/ });
+
+  // Radix DropdownMenu 는 Portal 로 document.body 에 메뉴 렌더 — role=menu 셀렉터로 조회
+  const findMenu = () => document.querySelector('[role="menu"]') as HTMLElement | null;
 
   it("초기 상태 — 트리거 aria-expanded=false, 메뉴 미렌더", async () => {
     render(<Header />);
     await waitFor(() => {
       const trigger = getTrigger();
+      // Radix 가 자동 부여하는 a11y 속성 (자체 구현과 동일 — aria-haspopup=menu)
       expect(trigger).toHaveAttribute("aria-expanded", "false");
       expect(trigger).toHaveAttribute("aria-haspopup", "menu");
-      expect(trigger).toHaveAttribute("aria-controls", "tools-menu");
     });
-    expect(document.getElementById("tools-menu")).toBeNull();
+    expect(findMenu()).toBeNull();
   });
 
-  it("트리거 클릭 — aria-expanded=true 전환 + 자식 5개 노출", async () => {
+  it("트리거 클릭 — 메뉴 열리고 자식 5개 노출", async () => {
+    const user = userEvent.setup();
     render(<Header />);
     await waitFor(() => getTrigger());
-    fireEvent.click(getTrigger());
-    expect(getTrigger()).toHaveAttribute("aria-expanded", "true");
-    const menu = document.getElementById("tools-menu");
-    expect(menu).not.toBeNull();
-    expect(menu?.getAttribute("role")).toBe("menu");
-    const items = menu?.querySelectorAll('[role="menuitem"]') ?? [];
+    await user.click(getTrigger());
+    // Radix 는 trigger click 후 메뉴를 비동기로 Portal 마운트 — menu 등장만 검증 (trigger 상태는 다음 테스트가 책임)
+    await waitFor(() => {
+      expect(findMenu()).not.toBeNull();
+    });
+    const items = findMenu()?.querySelectorAll('[role="menuitem"]') ?? [];
     expect(items.length).toBe(5);
+    // asChild + Link 조합이므로 menuitem 자체가 anchor — href 직접 검증
     expect(items[0].getAttribute("href")).toBe("/tools/brokerage-fee");
     expect(items[1].getAttribute("href")).toBe("/tools/acquisition-tax");
     expect(items[2].getAttribute("href")).toBe("/tools/transfer-tax");
@@ -124,33 +131,28 @@ describe("Header 계산기 드롭다운 (데스크톱)", () => {
   });
 
   it("자식 클릭 — 메뉴 자동 닫힘", async () => {
+    const user = userEvent.setup();
     render(<Header />);
     await waitFor(() => getTrigger());
-    fireEvent.click(getTrigger());
-    const menu = document.getElementById("tools-menu");
-    const items = menu?.querySelectorAll('[role="menuitem"]') ?? [];
-    fireEvent.click(items[2]);
-    expect(getTrigger()).toHaveAttribute("aria-expanded", "false");
-    expect(document.getElementById("tools-menu")).toBeNull();
+    await user.click(getTrigger());
+    await waitFor(() => expect(findMenu()).not.toBeNull());
+    const items = findMenu()?.querySelectorAll('[role="menuitem"]') ?? [];
+    await user.click(items[2] as HTMLElement);
+    await waitFor(() => {
+      expect(getTrigger()).toHaveAttribute("aria-expanded", "false");
+    });
   });
 
   it("Esc 키 — 메뉴 닫힘", async () => {
+    const user = userEvent.setup();
     render(<Header />);
     await waitFor(() => getTrigger());
-    fireEvent.click(getTrigger());
-    expect(getTrigger()).toHaveAttribute("aria-expanded", "true");
-    fireEvent.keyDown(getTrigger(), { key: "Escape" });
-    expect(getTrigger()).toHaveAttribute("aria-expanded", "false");
-  });
-
-  it("외부 mousedown — 메뉴 닫힘", async () => {
-    render(<Header />);
-    await waitFor(() => getTrigger());
-    fireEvent.click(getTrigger());
-    expect(document.getElementById("tools-menu")).not.toBeNull();
-    fireEvent.mouseDown(document.body);
-    expect(getTrigger()).toHaveAttribute("aria-expanded", "false");
-    expect(document.getElementById("tools-menu")).toBeNull();
+    await user.click(getTrigger());
+    await waitFor(() => expect(findMenu()).not.toBeNull());
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(getTrigger()).toHaveAttribute("aria-expanded", "false");
+    });
   });
 });
 

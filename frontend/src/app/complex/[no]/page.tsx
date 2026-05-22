@@ -18,6 +18,7 @@ import { useFavoriteStatus } from "@/hooks/useFavorites";
 import { useCrawlAction } from "@/hooks/useCrawlAction";
 import type { Article, ArticleFilters, FilterOptions } from "@/types";
 import FilterBar from "@/components/FilterBar";
+import FilterBarMobileSheet from "@/components/FilterBarMobileSheet";
 import FilterChipsSummary from "@/components/filter/FilterChipsSummary";
 import ArticleTable from "@/components/ArticleTable";
 import ArticleCardMobile from "@/components/ArticleCardMobile";
@@ -266,14 +267,19 @@ export default function ComplexDetailPage() {
 
         {/* 필터 바 */}
         <div className="no-print">
+          {/* 모바일 (< md) — shadcn Sheet 바텀시트 (PR 3b) */}
+          <div className="md:hidden">
+            <FilterBarMobileSheet key={`mobile-${navKey}`} onChange={handleFilterChange} filterOptions={filterOptions} onSortChange={handleSortChange} initialFilters={filters} />
+          </div>
+          {/* 데스크탑 (md+) — 기존 7 드롭다운 툴바 유지 */}
           <button
             type="button"
             onClick={() => setFilterOpen(v => !v)}
-            className="text-sm text-blue-600 hover:text-blue-800 mb-1 flex items-center gap-1 md:hidden"
+            className="text-sm text-blue-600 hover:text-blue-800 mb-1 hidden md:flex items-center gap-1"
           >
             {filterOpen ? "▲ 필터 접기" : "▼ 필터 펼치기"}
           </button>
-          <div className={filterOpen ? "" : "hidden md:block"}>
+          <div className={filterOpen ? "hidden md:block" : "hidden"}>
             <FilterBar key={navKey} onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} initialFilters={filters} />
           </div>
         </div>

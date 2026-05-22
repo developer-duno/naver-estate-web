@@ -104,6 +104,15 @@ export default memo(function FilterBarMobileSheet({
     onChange({});
   };
 
+  // "결과 보기" 즉시 emit: 진행 중인 debounce timeout 을 clear 하고
+  // 최신 state (s) 를 빈 overrides 로 즉시 전달. setTimeout 클리어 안 하면
+  // 사용자가 시트 닫은 후에 옛 콜백이 깨어나 결과를 한 번 더 덮어쓰는 race 발생.
+  const flushDebounce = useCallback(() => {
+    Object.values(debounceMapRef.current).forEach(clearTimeout);
+    debounceMapRef.current = {};
+    emitChangeRef.current({});
+  }, []);
+
   const sectionProps = { s, setImmediate, setDebounced, applyPreset, dispatch, emitChange };
   const activeCount = activeFilterCountImmediate(s);
   const triggerLabel = activeCount > 0 ? `필터 창 열기 (활성 ${activeCount}개)` : "필터 창 열기";
@@ -151,7 +160,10 @@ export default memo(function FilterBarMobileSheet({
           <Button
             variant="default"
             size="sm"
-            onClick={() => setOpen(false)}
+            onClick={() => {
+              flushDebounce();
+              setOpen(false);
+            }}
             className="flex-1"
           >
             결과 보기

@@ -1,14 +1,21 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import ComplexSortDropdown from "../ComplexSortDropdown";
 
 describe("ComplexSortDropdown", () => {
-  // 기본 렌더 + 라벨/옵션 7종 노출 확인
-  it("라벨 '정렬:'과 7개 옵션 노출", () => {
+  // 기본 렌더 + 트리거 클릭 시 7개 옵션 노출 (PR 4 단계 2: shadcn Select 패턴 답습,
+  // Radix Select 는 trigger 닫혀있을 때 SelectItem 이 portal 안에 렌더 안 됨 →
+  // userEvent.click 으로 trigger 열고 옵션 query)
+  it("라벨 '정렬:' + 트리거 클릭 시 7개 옵션 노출", async () => {
+    const user = userEvent.setup();
     render(<ComplexSortDropdown value="default" onChange={() => {}} />);
     expect(screen.getByText("정렬:")).toBeInTheDocument();
-    expect(screen.getByLabelText("단지 정렬")).toBeInTheDocument();
-    // 7개 option 존재 확인
+    const trigger = screen.getByLabelText("단지 정렬");
+    expect(trigger).toBeInTheDocument();
+
+    await user.click(trigger);
+
     expect(screen.getByRole("option", { name: "기본순" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "단지명↓" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "세대수↓" })).toBeInTheDocument();
@@ -18,19 +25,21 @@ describe("ComplexSortDropdown", () => {
     expect(screen.getByRole("option", { name: "매물 많은순" })).toBeInTheDocument();
   });
 
-  // value prop 반영: 외부 상태가 select에 반영되는지 검증
-  it("value='household_desc' 전달 시 해당 옵션 selected", () => {
+  // value prop 반영: SelectValue 에 현 옵션 라벨 표시
+  it("value='household_desc' 전달 시 트리거에 '세대수↓' 라벨 표시", () => {
     render(<ComplexSortDropdown value="household_desc" onChange={() => {}} />);
-    const select = screen.getByLabelText("단지 정렬") as HTMLSelectElement;
-    expect(select.value).toBe("household_desc");
+    const trigger = screen.getByLabelText("단지 정렬");
+    expect(trigger.textContent).toContain("세대수↓");
   });
 
-  // onChange 호출: 선택 변경 시 콜백에 새 값이 전달되는지 검증
-  it("select 변경 시 onChange에 새 값 전달", () => {
+  // onChange 호출: 옵션 선택 시 onValueChange → onChange 콜백
+  it("옵션 선택 시 onChange 에 새 값 전달", async () => {
     const onChange = vi.fn();
+    const user = userEvent.setup();
     render(<ComplexSortDropdown value="default" onChange={onChange} />);
-    const select = screen.getByLabelText("단지 정렬") as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: "year_desc" } });
+    const trigger = screen.getByLabelText("단지 정렬");
+    await user.click(trigger);
+    await user.click(screen.getByRole("option", { name: "신축순" }));
     expect(onChange).toHaveBeenCalledWith("year_desc");
   });
 });

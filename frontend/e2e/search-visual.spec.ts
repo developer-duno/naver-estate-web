@@ -10,8 +10,11 @@ test.describe("search visual regression", () => {
     await expect(page.getByRole("heading", { name: "키워드 검색" })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("heading", { name: "지역 선택" })).toBeVisible();
 
-    // RegionSelector 의 "시/도" select 로딩 해소 대기 (mock 응답 후 sidoList 바인딩)
-    await expect(page.getByRole("option", { name: "서울" })).toBeAttached({ timeout: 5_000 });
+    // RegionSelector 의 "시/도" Combobox input 로딩 해소 대기 (PR 4 단계 3: @base-ui Combobox 전환).
+    // native <select> 의 option 노출 → Combobox input 활성화 (disabled false) 로 대기 조건 변경.
+    const sidoInput = page.getByLabel("시/도");
+    await expect(sidoInput).toBeVisible({ timeout: 5_000 });
+    await expect(sidoInput).toBeEnabled({ timeout: 5_000 });
 
     await page.waitForLoadState("networkidle");
 

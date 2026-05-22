@@ -8,6 +8,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { createClient } from "@/lib/supabase";
 import RegionSelector from "@/components/RegionSelector";
 import FilterBar from "@/components/FilterBar";
+import FilterBarMobileSheet from "@/components/FilterBarMobileSheet";
 import { COMPLEX_SORT_OPTIONS, ESTATE_TYPE_TABS } from "@/lib/constants";
 import EstateTypeTabs from "@/components/EstateTypeTabs";
 import ComplexSortDropdown from "@/components/ComplexSortDropdown";
@@ -210,12 +211,20 @@ function SearchContent() {
         <EstateTypeTabs selected={selectedTypes} onChange={handleTabChange} />
       </div>
 
-      {/* 매물 필터 + 단지 정렬 */}
-      <div className="mb-5 flex flex-wrap items-start gap-2">
-        <div className="flex-1 min-w-0">
-          <FilterBar key={filterKey} onChange={setUrlFilters} initialFilters={urlFilters} />
+      {/* 매물 필터 + 단지 정렬 — 모바일/데스크탑 분기 (PR 4 단계 5) */}
+      <div className="mb-5">
+        {/* 모바일 (< md): FilterBarMobileSheet 시트 + ComplexSortDropdown 별도 (PR 3b 답습) */}
+        <div className="md:hidden flex flex-wrap items-center gap-2">
+          <FilterBarMobileSheet key={`mobile-${filterKey}`} onChange={setUrlFilters} initialFilters={urlFilters} />
+          <ComplexSortDropdown value={complexSort} onChange={setComplexSort} />
         </div>
-        <ComplexSortDropdown value={complexSort} onChange={setComplexSort} />
+        {/* 데스크탑 (md+): 기존 FilterBar + ComplexSortDropdown 유지 (시각 변화 0 약속) */}
+        <div className="hidden md:flex flex-wrap items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <FilterBar key={filterKey} onChange={setUrlFilters} initialFilters={urlFilters} />
+          </div>
+          <ComplexSortDropdown value={complexSort} onChange={setComplexSort} />
+        </div>
       </div>
 
       {/* 검색 파라미터 없을 때: 인라인 검색 폼 */}

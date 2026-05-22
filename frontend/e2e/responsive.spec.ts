@@ -31,6 +31,16 @@ test("모바일 — 검색 결과 페이지 렌더링", async ({ page }) => {
   await expectHeader(page);
 });
 
+// PR 4 단계 7: /search 빈 상태 진입 + FilterBarMobileSheet 트리거 가시성 (BE 의존 0)
+// PR 3b §정정 14 답습 = seed 데이터 없이도 트리거 노출 확인, 인터랙션은 vitest 위임
+test("모바일 — /search 빈 상태 FilterBarMobileSheet 트리거 노출 (PR 4 smoke)", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  const res = await page.goto("/search");
+  expect(res?.status()).toBeLessThan(500);
+  await expectHeader(page);
+  await expect(page.getByRole("button", { name: /필터 창 열기/ })).toBeVisible();
+});
+
 // ── 태블릿 (768x1024) ──
 
 test("태블릿 — 홈 페이지 렌더링", async ({ page }) => {

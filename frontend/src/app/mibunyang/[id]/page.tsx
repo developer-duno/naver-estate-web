@@ -113,7 +113,7 @@ export default function MbDetailPage() {
         <PresaleSection apartment={apt} />
         <EnvironmentSection apartment={apt} />
 
-        {apt.latitude != null && apt.longitude != null && (
+        {apt.latitude != null && apt.longitude != null && apt.latitude !== 0 && apt.longitude !== 0 && (
           <section className="bg-white rounded-lg shadow-sm border p-4 md:p-6">
             <h3 className="text-base font-bold text-gray-800 mb-4 pb-2 border-b border-gray-200">위치</h3>
             <LazyLocationMap latitude={apt.latitude} longitude={apt.longitude} name={apt.name} />

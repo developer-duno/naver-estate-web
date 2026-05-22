@@ -20,6 +20,12 @@ vi.mock("@/lib/api", () => ({
     realtor_name: "행복공인",
     building_name: "101동",
   }),
+  // 부모 ArticleDetailBody 의 useQuery 3개에 응답 — 모두 빈 데이터 → hasContent=false → emptyHint 노출 회귀 가드
+  getPriceStats: vi.fn().mockResolvedValue({ complex_no: "C001", total_articles: 0, by_area: [], by_floor: [] }),
+  getPyeongDetails: vi.fn().mockResolvedValue({ pyeong_details: [] }),
+  getArticles: vi.fn().mockResolvedValue({ articles: [], total: 0 }),
+  // PriceHistoryTable 등 다른 자식이 쓰는 api
+  getArticlePriceHistory: vi.fn().mockResolvedValue({ items: [] }),
 }));
 
 // jsdom 에 window.matchMedia 미존재 — ChartAccordion mount 시 throw 방지 polyfill
@@ -101,6 +107,22 @@ describe("ArticleDetail", () => {
     render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
     // 컴포넌트가 크래시 없이 렌더링됨을 확인
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+// 세션 217: ChartAccordion hasContent=false 시 emptyHint 노출 회귀 가드 (PR ② 빈 박스 정정)
+describe("ArticleDetail — ChartAccordion 빈 박스 정정", () => {
+  it("시세/관리비 데이터 없을 때 ChartAccordion 펼치면 '아직 수집되지 않았습니다' emptyHint 노출", async () => {
+    const onClose = vi.fn();
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
+    // 매물 로드 대기 → ChartAccordion 펼치기 → emptyHint 메시지 확인
+    await waitFor(() => expect(screen.getByText("시세 정보")).toBeInTheDocument(), { timeout: 3000 });
+    // 기본 닫힘 → 펼침
+    const market = screen.getByText("시세 정보");
+    market.click();
+    await waitFor(() => {
+      expect(screen.getByText(/시세 정보가 아직 수집되지 않았습니다/)).toBeInTheDocument();
+    });
   });
 });
 

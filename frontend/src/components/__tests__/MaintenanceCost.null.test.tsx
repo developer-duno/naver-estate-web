@@ -39,6 +39,28 @@ describe("MaintenanceCost - null 분기", () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it("getPyeongDetails 실패(isError) 시 null 반환 (silent failure 정정)", async () => {
+    vi.mocked(getPyeongDetails).mockRejectedValue(new Error("500"));
+    const { container } = render(
+      <MaintenanceCost complexNo="C001" area2M2={84.9} />,
+      { wrapper: TestQueryProvider },
+    );
+    await waitFor(() => expect(getPyeongDetails).toHaveBeenCalled());
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("area2M2=0 일 때 null 반환 (분양권 0 falsy 결함 정정)", async () => {
+    vi.mocked(getPyeongDetails).mockResolvedValue({
+      pyeong_details: [makePyeongDetail()],
+    });
+    const { container } = render(
+      <MaintenanceCost complexNo="C001" area2M2={0} />,
+      { wrapper: TestQueryProvider },
+    );
+    await waitFor(() => expect(getPyeongDetails).toHaveBeenCalled());
+    expect(container.firstChild).toBeNull();
+  });
+
   it("모든 관리비가 null/0 이면 null 반환", async () => {
     vi.mocked(getPyeongDetails).mockResolvedValue({
       pyeong_details: [

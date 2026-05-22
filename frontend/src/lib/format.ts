@@ -52,6 +52,14 @@ export function formatChartMonth(ym: string): string {
   return `${ym.slice(2, 4)}.${ym.slice(4, 6)}`;
 }
 
+/** 완공·입주월 포맷 (YYYYMM → YYYY.MM, YYYYMMDD → YYYY.MM.DD, 그 외 원본 반환) */
+export function formatYearMonth(v?: string | null): string | null {
+  if (!v) return null;
+  if (v.length === 6) return `${v.slice(0, 4)}.${v.slice(4, 6)}`;
+  if (v.length === 8) return `${v.slice(0, 4)}.${v.slice(4, 6)}.${v.slice(6)}`;
+  return v;
+}
+
 /** 차트 기간 필터 cutoff 계산 (N개월 전 → YYYYMM) */
 export function getCutoffMonth(monthsBack: number): string {
   const d = new Date();

@@ -71,7 +71,16 @@ export default function MbLocationMap({ latitude, longitude, name }: Props) {
     };
   }, [latitude, longitude, name]);
 
-  if (error) return null;
+  if (error) {
+    return (
+      <div
+        className="w-full h-80 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center"
+        role="status"
+      >
+        <p className="text-sm text-gray-500">지도를 불러오지 못했습니다.</p>
+      </div>
+    );
+  }
 
   return (
     <div

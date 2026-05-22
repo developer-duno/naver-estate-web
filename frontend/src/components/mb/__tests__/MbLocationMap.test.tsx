@@ -3,7 +3,7 @@
  * 실행: npx vitest run src/components/mb/__tests__/MbLocationMap.test.tsx
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import MbLocationMap from "../MbLocationMap";
 
 const mockMapConstructor = vi.fn();
@@ -44,5 +44,17 @@ describe("MbLocationMap", () => {
     expect(() => {
       render(<MbLocationMap latitude={37.5} longitude={127.0} />);
     }).not.toThrow();
+  });
+
+  /**
+   * 사고 박제 (2026-05-22 세션 216): SDK 로드 실패·throw 시 빈 회색 박스 + h3 "위치" 헤더만 남아
+   * 사용자가 "왜 비었지?" 오해. error 분기에서 명시 안내 메시지가 보여야 함.
+   */
+  it("Map 생성자가 throw 하면 안내 메시지가 표시된다", async () => {
+    mockMapConstructor.mockImplementationOnce(() => { throw new Error("SDK init failed"); });
+    render(<MbLocationMap latitude={37.5} longitude={127.0} />);
+    await waitFor(() => {
+      expect(screen.getByText("지도를 불러오지 못했습니다.")).toBeInTheDocument();
+    });
   });
 });

@@ -6,6 +6,7 @@ import {
   formatKoreanPrice,
   formatMaintenanceCost,
   formatWon,
+  formatYearMonth,
 } from "../format";
 
 describe("formatDateFull", () => {
@@ -150,5 +151,27 @@ describe("formatWon", () => {
 
   it("음수는 대시", () => {
     expect(formatWon("-100")).toBe("-");
+  });
+});
+
+// 완공·입주월 포맷 (미분양 상세 raw "202805" 노출 사고 박제 — 2026-05-22 세션 216)
+describe("formatYearMonth", () => {
+  it("YYYYMM 6자리 → YYYY.MM", () => {
+    expect(formatYearMonth("202805")).toBe("2028.05");
+  });
+
+  it("YYYYMMDD 8자리 → YYYY.MM.DD (입주일 등)", () => {
+    expect(formatYearMonth("20280515")).toBe("2028.05.15");
+  });
+
+  it("null/undefined/빈 문자열은 null 반환 (호출부 가드)", () => {
+    expect(formatYearMonth(null)).toBeNull();
+    expect(formatYearMonth(undefined)).toBeNull();
+    expect(formatYearMonth("")).toBeNull();
+  });
+
+  it("길이 안 맞는 값은 원본 그대로 (사용자 노출 결정은 호출부)", () => {
+    expect(formatYearMonth("2028")).toBe("2028");
+    expect(formatYearMonth("분양중")).toBe("분양중");
   });
 });

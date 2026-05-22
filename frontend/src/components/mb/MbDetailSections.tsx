@@ -2,7 +2,8 @@
 
 import dynamic from "next/dynamic";
 import type { MbApartment, MbPrice } from "@/types";
-import { formatKoreanPrice } from "@/lib/format";
+import { formatKoreanPrice, formatYearMonth } from "@/lib/format";
+import { formatHouseType } from "@/lib/mb-house-type";
 import { MbCancelRatioBar } from "./MbCancelRatioBar";
 import { MbCoverageBar } from "./MbCoverageBar";
 import { MbExclusiveRatioBar } from "./MbExclusiveRatioBar";
@@ -49,7 +50,7 @@ export function OverviewSection({ apartment: a }: SectionProps) {
         <InfoRow label="주소" value={a.address ?? a.road_address} />
         <InfoRow label="지역" value={`${a.region} ${a.gu ?? ""} ${a.dong ?? ""}`.trim()} />
         <InfoRow label="세대수" value={a.units != null ? <MbUnitsBar value={a.units} /> : undefined} />
-        <InfoRow label="완공" value={a.completion} />
+        <InfoRow label="완공" value={formatYearMonth(a.completion)} />
         <InfoRow label="준공연도(네이버)" value={a.naver_build_year != null ? `${a.naver_build_year}년` : undefined} />
         <InfoRow label="난방" value={a.heating} />
         <InfoRow label="최고층" value={a.max_floor != null ? <MbMaxFloorBar value={a.max_floor} /> : undefined} />
@@ -113,7 +114,7 @@ export function PresaleSection({ apartment: a }: SectionProps) {
             <tbody>
               {prices.map((p: MbPrice) => (
                 <tr key={p.id} className="border-b last:border-b-0">
-                  <td className="px-3 py-1.5">{p.house_type ?? "-"}</td>
+                  <td className="px-3 py-1.5">{formatHouseType(p.house_type)}</td>
                   <td className="px-3 py-1.5 text-right">{p.area != null ? `${p.area}㎡` : "-"}</td>
                   <td className="px-3 py-1.5 text-right">{p.supply_area != null ? `${p.supply_area}㎡` : "-"}</td>
                   <td className="px-3 py-1.5 text-right font-medium">{p.price != null ? formatKoreanPrice(p.price) : "-"}</td>

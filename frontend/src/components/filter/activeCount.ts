@@ -9,6 +9,9 @@ export function calcDetailActive(s: FilterState): number {
   if (s.verifiedOnly === "true") count++;
   if (s.tags && s.tags.split(",").filter(Boolean).length > 0) count++;
   if (s.sortBy !== "rank" && SORT_OPTIONS.some((o) => o.v === s.sortBy)) count++;
+  if (s.estateType !== "all") count++;
+  if (s.minMaint || s.maxMaint) count++;
+  if (s.minYield || s.maxYield) count++;
   return count;
 }
 
@@ -30,6 +33,12 @@ export function activeFilterCountImmediate(s: FilterState): number {
   if (s.floorPreset !== "전체") count++;
   if (s.moveInType !== "전체") count++;
   if (s.minRooms !== "0" || s.minBaths !== "0") count++;
-  count += calcDetailActive(s);
+  if (s.buildingName !== "전체") count++;
+  if (s.direction !== "전체") count++;
+  if (s.buildingAge !== "0") count++;
+  if (s.verifiedOnly === "true") count++;
+  if (s.tags && s.tags.split(",").filter(Boolean).length > 0) count++;
+  if (s.sortBy !== "rank" && SORT_OPTIONS.some((o) => o.v === s.sortBy)) count++;
+  if (s.estateType !== "all") count++;
   return count;
 }

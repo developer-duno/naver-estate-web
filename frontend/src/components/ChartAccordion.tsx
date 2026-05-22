@@ -8,6 +8,8 @@ interface ChartAccordionProps {
   children: React.ReactNode;
   defaultOpen?: boolean;
   forceOpen?: boolean;
+  hasContent?: boolean;
+  emptyHint?: string;
 }
 
 export default function ChartAccordion({
@@ -16,6 +18,8 @@ export default function ChartAccordion({
   children,
   defaultOpen = false,
   forceOpen = false,
+  hasContent = true,
+  emptyHint = "표시할 정보가 없습니다.",
 }: ChartAccordionProps) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -42,7 +46,10 @@ export default function ChartAccordion({
           <span className="text-gray-400 text-xs no-print">{isOpen ? "▲" : "▼"}</span>
         </div>
       </button>
-      {isOpen && <div className="p-4 border-t">{children}</div>}
+      {isOpen && hasContent && <div className="p-4 border-t">{children}</div>}
+      {isOpen && !hasContent && (
+        <div className="p-4 border-t text-sm text-gray-500">{emptyHint}</div>
+      )}
     </div>
   );
 }

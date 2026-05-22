@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getArticleLive } from "@/lib/api";
+import { getArticleLive, getArticles, getPriceStats, getPyeongDetails } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import type { Complex } from "@/types";
+import type { Article, Complex } from "@/types";
 import Skeleton from "@/components/Skeleton";
 import ChartAccordion from "@/components/ChartAccordion";
 import PriceHeader from "@/components/article/PriceHeader";
@@ -104,24 +104,117 @@ export default function ArticleDetail({ articleNo, onClose, complex }: Props) {
             <p className="text-center text-gray-500 py-8">매물 정보를 불러올 수 없습니다.</p>
           )}
           {!isLoading && article && (
-            <div className="space-y-4">
-              <PriceHeader article={article} />
-              <PriceHistoryTable articleNo={articleNo} />
-              <InfoCards article={article} complex={complex} />
-              <ChartAccordion title="시세 정보">
-                <MarketPosition complexNo={article.complex_no} tradeTypeName={article.trade_type_name} area2M2={article.area2_m2} />
-              </ChartAccordion>
-              <ChartAccordion title="경쟁 매물">
-                <CompetingListings complexNo={article.complex_no} tradeTypeName={article.trade_type_name} currentArticleNo={articleNo} />
-              </ChartAccordion>
-              <ChartAccordion title="관리비 상세">
-                <MaintenanceCost complexNo={article.complex_no} area2M2={article.area2_m2} />
-              </ChartAccordion>
-              <ArticleDescription article={article} />
-            </div>
+            <ArticleDetailBody article={article} articleNo={articleNo} complex={complex} />
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+interface BodyProps {
+  article: Article;
+  articleNo: string;
+  complex?: Complex;
+}
+
+function tradeKey(name?: string): "maemae" | "jeonse" | "wolse" | null {
+  if (!name) return null;
+  if (name === "매매") return "maemae";
+  if (name === "전세") return "jeonse";
+  if (name === "월세" || name === "단기임대") return "wolse";
+  return null;
+}
+
+function ArticleDetailBody({ article, articleNo, complex }: BodyProps) {
+  const complexNo = article.complex_no;
+  const area2M2 = article.area2_m2;
+  const tradeTypeName = article.trade_type_name;
+  const validArea = area2M2 != null && area2M2 > 0;
+
+  // 자식 컴포넌트와 동일 queryKey — React Query 가 dedupe 하므로 네트워크 호출 증가 0
+  const priceStatsQuery = useQuery({
+    queryKey: queryKeys.priceStats(complexNo),
+    queryFn: () => getPriceStats(complexNo),
+    enabled: !!complexNo,
+  });
+  const pyeongQuery = useQuery({
+    queryKey: queryKeys.pyeongDetails(complexNo),
+    queryFn: () => getPyeongDetails(complexNo),
+    enabled: !!complexNo,
+  });
+  const competingFilters = tradeTypeName ? { trade_types: tradeTypeName } : undefined;
+  const articlesQuery = useQuery({
+    queryKey: queryKeys.articles(complexNo, competingFilters),
+    queryFn: () => getArticles(complexNo, competingFilters),
+    enabled: !!complexNo,
+  });
+
+  const hasMarketPosition = useMemo(() => {
+    if (priceStatsQuery.isError || !priceStatsQuery.data || !validArea) return false;
+    const bucket = Math.floor((area2M2 as number) / 5) * 5;
+    const matched = priceStatsQuery.data.by_area.find((row) => {
+      const num = parseInt(row.label, 10);
+      return !isNaN(num) && num === bucket;
+    });
+    if (!matched) return false;
+    const key = tradeKey(tradeTypeName);
+    if (!key) return false;
+    return matched[key] != null;
+  }, [priceStatsQuery.data, priceStatsQuery.isError, area2M2, validArea, tradeTypeName]);
+
+  const hasMaintenance = useMemo(() => {
+    if (pyeongQuery.isError || !pyeongQuery.data?.pyeong_details?.length || !validArea) return false;
+    return pyeongQuery.data.pyeong_details.some(
+      (p) =>
+        (p.avg_maintenance_cost != null && p.avg_maintenance_cost !== 0) ||
+        (p.summer_maintenance_cost != null && p.summer_maintenance_cost !== 0) ||
+        (p.winter_maintenance_cost != null && p.winter_maintenance_cost !== 0) ||
+        (p.latest_maintenance_cost != null && p.latest_maintenance_cost !== 0),
+    );
+  }, [pyeongQuery.data, pyeongQuery.isError, validArea]);
+
+  const hasCompeting = useMemo(() => {
+    if (articlesQuery.isError || !articlesQuery.data?.articles) return false;
+    // count === 0 도 "단독 매물" 안내 박스 렌더하므로 hasContent = true
+    return true;
+  }, [articlesQuery.data, articlesQuery.isError]);
+
+  return (
+    <div className="space-y-4">
+      <PriceHeader article={article} />
+      <PriceHistoryTable articleNo={articleNo} />
+      <InfoCards article={article} complex={complex} />
+      <ChartAccordion
+        title="시세 정보"
+        hasContent={hasMarketPosition}
+        emptyHint={
+          priceStatsQuery.isError
+            ? "시세 정보를 불러오지 못했습니다."
+            : "이 면적의 시세 정보가 아직 수집되지 않았습니다."
+        }
+      >
+        <MarketPosition complexNo={complexNo} tradeTypeName={tradeTypeName} area2M2={area2M2} />
+      </ChartAccordion>
+      <ChartAccordion
+        title="경쟁 매물"
+        hasContent={hasCompeting}
+        emptyHint="경쟁 매물 정보를 불러오지 못했습니다."
+      >
+        <CompetingListings complexNo={complexNo} tradeTypeName={tradeTypeName} currentArticleNo={articleNo} />
+      </ChartAccordion>
+      <ChartAccordion
+        title="관리비 상세"
+        hasContent={hasMaintenance}
+        emptyHint={
+          pyeongQuery.isError
+            ? "관리비 정보를 불러오지 못했습니다."
+            : "이 면적의 관리비 정보가 아직 수집되지 않았습니다."
+        }
+      >
+        <MaintenanceCost complexNo={complexNo} area2M2={area2M2} />
+      </ChartAccordion>
+      <ArticleDescription article={article} />
     </div>
   );
 }

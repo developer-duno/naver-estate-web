@@ -16,14 +16,14 @@ interface Props {
 export default function CompetingListings({ complexNo, tradeTypeName, currentArticleNo }: Props) {
   const filters = tradeTypeName ? { trade_types: tradeTypeName } : undefined;
 
-  const { data } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: queryKeys.articles(complexNo, filters),
     queryFn: () => getArticles(complexNo, filters),
     enabled: !!complexNo,
   });
 
   const stats = useMemo(() => {
-    if (!data?.articles) return null;
+    if (isError || !data?.articles) return null;
     const others = data.articles.filter((a) => a.article_no !== currentArticleNo);
     if (others.length === 0) return { count: 0 };
 
@@ -36,7 +36,7 @@ export default function CompetingListings({ complexNo, tradeTypeName, currentArt
       maxPrice: prices.length > 0 ? Math.max(...prices) : null,
       avgPpyeong: ppyeongs.length > 0 ? Math.round(ppyeongs.reduce((s, v) => s + v, 0) / ppyeongs.length) : null,
     };
-  }, [data, currentArticleNo]);
+  }, [data, currentArticleNo, isError]);
 
   if (!stats) return null;
 

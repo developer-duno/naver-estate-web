@@ -22,13 +22,13 @@ function tradeKey(name?: string): "maemae" | "jeonse" | "wolse" | null {
 }
 
 export default function MarketPosition({ complexNo, tradeTypeName, area2M2 }: Props) {
-  const { data } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: queryKeys.priceStats(complexNo),
     queryFn: () => getPriceStats(complexNo),
     enabled: !!complexNo,
   });
 
-  if (!data || !area2M2) return null;
+  if (isError || !data || !area2M2 || area2M2 <= 0) return null;
 
   // label 형식: "{int}m²" (5m² 버킷) — area2M2가 속하는 버킷 찾기
   const bucket = Math.floor(area2M2 / 5) * 5;

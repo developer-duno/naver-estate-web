@@ -17,13 +17,13 @@ function fmtCost(v?: number | null): string | null {
 }
 
 export default function MaintenanceCost({ complexNo, area2M2 }: Props) {
-  const { data } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: queryKeys.pyeongDetails(complexNo),
     queryFn: () => getPyeongDetails(complexNo),
     enabled: !!complexNo,
   });
 
-  if (!data?.pyeong_details?.length || !area2M2) return null;
+  if (isError || !data?.pyeong_details?.length || !area2M2 || area2M2 <= 0) return null;
 
   // exclusive_area(문자열)를 숫자로 변환 후 area2M2와 가장 가까운 면적 매칭
   let bestIdx = 0;

@@ -5,6 +5,15 @@ import { useQuery } from "@tanstack/react-query";
 import { getRegions } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import type { Regions } from "@/types";
+import {
+  Combobox,
+  ComboboxCollection,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/components/ui/combobox";
 
 interface Props {
   onSearch: (sido: string, sigungu: string, dong?: string) => void;
@@ -26,10 +35,12 @@ export default function RegionSelector({ onSearch }: Props) {
   const sigunguList = sido ? Object.keys(regions[sido] ?? {}) : [];
   const dongList = sido && sigungu ? regions[sido]?.[sigungu] ?? [] : [];
 
-  const handleSidoChange = (value: string) => {
-    setSido(value);
+  // @base-ui Combobox onValueChange 는 clear 시 null 전달 → "" 로 정규화
+  const handleSidoChange = (value: string | null) => {
+    const v = value ?? "";
+    setSido(v);
     setDong("");
-    const sgList = value ? Object.keys(regions[value] ?? {}) : [];
+    const sgList = v ? Object.keys(regions[v] ?? {}) : [];
     if (sgList.length === 1) {
       setSigungu(sgList[0]);
     } else {
@@ -37,15 +48,16 @@ export default function RegionSelector({ onSearch }: Props) {
     }
   };
 
-  const handleSigunguChange = (value: string) => {
-    setSigungu(value);
+  const handleSigunguChange = (value: string | null) => {
+    setSigungu(value ?? "");
     setDong("");
   };
 
-  const handleDongChange = (value: string) => {
-    setDong(value);
-    if (value && sido && sigungu) {
-      onSearch(sido, sigungu, value);
+  const handleDongChange = (value: string | null) => {
+    const v = value ?? "";
+    setDong(v);
+    if (v && sido && sigungu) {
+      onSearch(sido, sigungu, v);
     }
   };
 
@@ -63,48 +75,55 @@ export default function RegionSelector({ onSearch }: Props) {
     );
   }
 
-  const selectClass = "border border-gray-300 rounded-md px-3 py-2 text-sm w-full";
-
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-      <select
-        aria-label="시/도"
-        value={sido}
-        onChange={(e) => handleSidoChange(e.target.value)}
-        className={selectClass}
-        disabled={loading}
-      >
-        <option value="">{loading ? "로딩..." : "시/도"}</option>
-        {sidoList.map((s) => (
-          <option key={s} value={s}>{s}</option>
-        ))}
-      </select>
+      <Combobox value={sido} onValueChange={handleSidoChange} items={sidoList} disabled={loading}>
+        <ComboboxInput aria-label="시/도" placeholder={loading ? "로딩..." : "시/도"} className="w-full" disabled={loading} />
+        <ComboboxContent>
+          <ComboboxEmpty>일치하는 시/도가 없습니다</ComboboxEmpty>
+          <ComboboxList>
+            <ComboboxCollection>
+              {(item: string) => (
+                <ComboboxItem key={item} value={item}>
+                  {item}
+                </ComboboxItem>
+              )}
+            </ComboboxCollection>
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
 
-      <select
-        aria-label="시/군/구"
-        value={sigungu}
-        onChange={(e) => handleSigunguChange(e.target.value)}
-        className={selectClass}
-        disabled={!sido}
-      >
-        <option value="">시/군/구</option>
-        {sigunguList.map((s) => (
-          <option key={s} value={s}>{s}</option>
-        ))}
-      </select>
+      <Combobox value={sigungu} onValueChange={handleSigunguChange} items={sigunguList} disabled={!sido}>
+        <ComboboxInput aria-label="시/군/구" placeholder="시/군/구" className="w-full" disabled={!sido} />
+        <ComboboxContent>
+          <ComboboxEmpty>일치하는 시/군/구가 없습니다</ComboboxEmpty>
+          <ComboboxList>
+            <ComboboxCollection>
+              {(item: string) => (
+                <ComboboxItem key={item} value={item}>
+                  {item}
+                </ComboboxItem>
+              )}
+            </ComboboxCollection>
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
 
-      <select
-        aria-label="읍/면/동"
-        value={dong}
-        onChange={(e) => handleDongChange(e.target.value)}
-        className={selectClass}
-        disabled={!sigungu}
-      >
-        <option value="">읍/면/동</option>
-        {dongList.map((d) => (
-          <option key={d} value={d}>{d}</option>
-        ))}
-      </select>
+      <Combobox value={dong} onValueChange={handleDongChange} items={dongList} disabled={!sigungu}>
+        <ComboboxInput aria-label="읍/면/동" placeholder="읍/면/동" className="w-full" disabled={!sigungu} />
+        <ComboboxContent>
+          <ComboboxEmpty>일치하는 읍/면/동이 없습니다</ComboboxEmpty>
+          <ComboboxList>
+            <ComboboxCollection>
+              {(item: string) => (
+                <ComboboxItem key={item} value={item}>
+                  {item}
+                </ComboboxItem>
+              )}
+            </ComboboxCollection>
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
     </div>
   );
 }

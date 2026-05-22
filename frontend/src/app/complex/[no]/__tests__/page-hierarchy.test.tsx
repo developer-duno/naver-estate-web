@@ -84,4 +84,12 @@ describe("ComplexDetailPage 정보 위계 (spec L323)", () => {
       expect(texts).toEqual(["시세", "매물", "실거래가 추이", "단지 정보"]);
     });
   });
+
+  it("모바일 필터 시트 트리거가 매물 섹션에 임베드 (PR 3b 회귀 가드)", async () => {
+    renderPage();
+    await waitFor(() => {
+      const trigger = screen.getByRole("button", { name: /필터 창 열기/ });
+      expect(trigger).toBeInTheDocument();
+    });
+  });
 });

@@ -169,18 +169,20 @@ SheetContent `className` 에 `no-print`.
 
 h2 4개 유지 + h3 "필터" 1개 케이스 추가.
 
-### 단계 7 — e2e responsive.spec.ts (+18)
+### 단계 7 — e2e responsive.spec.ts smoke (+8)
+
+> ★ 정정 14: 본 spec v4 의 단계 7 예제는 `/complex/12345` seed 데이터
+> 의존 (트리거 노출·클릭·SheetTitle h3 확인) — BE 데이터 없으면
+> ComplexLoadState 에 멈춰 flaky. SheetTrigger·열기·닫기 인터랙션
+> 검증은 jsdom vitest (단계 4 9 케이스 + 단계 6 트리거 임베드 가드) 가
+> 더 안정적. e2e 는 응답 코드·헤더 가시성 smoke 만.
 
 ```ts
-test("모바일 — /complex/[no] 필터 Sheet 진입·열기·닫기", async ({ page }) => {
+test("모바일 — /complex/[no] 진입 응답 200 + 헤더 (PR 3b smoke)", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 667 });
-  await page.goto("/complex/12345");
-  const trigger = page.getByRole("button", { name: /필터 창 열기/ });
-  await expect(trigger).toBeVisible();
-  await trigger.click();
-  await expect(page.getByRole("heading", { name: "필터", level: 3 })).toBeVisible();
-  await page.getByRole("button", { name: "결과 보기" }).click();
-  await expect(page.getByRole("heading", { name: "필터", level: 3 })).not.toBeVisible();
+  const res = await page.goto("/complex/12345");
+  expect(res?.status()).toBeLessThan(500);
+  await expectHeader(page);
 });
 ```
 

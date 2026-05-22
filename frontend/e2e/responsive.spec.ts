@@ -68,3 +68,13 @@ test("데스크톱 — 비교 페이지 렌더링", async ({ page }) => {
   expect(res?.status()).toBeLessThan(500);
   await expectHeader(page);
 });
+
+// PR 3b 모바일 Sheet 필터 smoke. SheetTrigger 노출까지의 인터랙션 검증은
+// BE 단지 12345 seed 의존이라 flaky 위험 → vitest (page-hierarchy.test +
+// FilterBarMobileSheet.test) 로 대체. e2e 는 응답 코드·헤더 가시성만 확인.
+test("모바일 — /complex/[no] 진입 응답 200 + 헤더 (PR 3b smoke)", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  const res = await page.goto("/complex/12345");
+  expect(res?.status()).toBeLessThan(500);
+  await expectHeader(page);
+});

@@ -52,7 +52,9 @@ def _body_failed(data: dict) -> str:
     extra = f" 외 {count - 1}건" if count > 1 else ""
     lines = [f"▸ <b>{job}</b> 작업 실패 ({count}건)"]
     lines.append(f"  대표 에러{extra}: {_esc(data.get('error'))[:200]}")
-    lines.append(f"  마지막 처리율: {_rate(data.get('processed'), data.get('total'))}")
+    # 처리율 = PR #44 후 batch 합계 (같은 scheduler_job_id 의 60분 윈도우 합산).
+    # 1개 단지 잡이 아니라 batch 통째라는 점을 명시해 오해 차단.
+    lines.append(f"  batch 합계 처리율: {_rate(data.get('processed'), data.get('total'))}")
     if data.get("last_completed_at"):
         lines.append(f"  마지막 완료: {_esc(data['last_completed_at'])}")
     return "\n".join(lines)
@@ -77,9 +79,11 @@ def _body_freshness(data: dict) -> str:
     lines = [f"▸ <b>{label}</b> 데이터 미축적 ({status}{age_str})"]
     if data.get("spinning"):
         lines.append("  헛바퀴: 작업은 도는데 신규행 0")
-    lines.append(f"  마지막 작업 처리율: {_rate(data.get('processed'), data.get('total'))}")
+    # 처리율·신규행 = PR #44 후 batch 합계 기준 (60분 윈도우 같은 scheduler_job_id 합산).
+    # "마지막 작업 1건" 으로 오해하면 batch 32% 가 0/0 단지일 때 false alarm 추정.
+    lines.append(f"  batch 합계 처리율: {_rate(data.get('processed'), data.get('total'))}")
     if data.get("new_rows") is not None:
-        lines.append(f"  작업 후 신규행: {data['new_rows']}")
+        lines.append(f"  batch 시작 후 신규행: {data['new_rows']}")
     return "\n".join(lines)
 
 

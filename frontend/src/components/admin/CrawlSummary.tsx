@@ -27,7 +27,20 @@ export default function CrawlSummary({ token, onJumpToFailed }: Props) {
   });
 
   const isLoading = queries.some((q) => q.isLoading);
+  const isError = queries.some((q) => q.isError);
   const data = queries.map((q) => q.data) as (PaginatedResponse<CrawlJobDetail> | undefined)[];
+
+  if (isError) {
+    return (
+      <div
+        role="alert"
+        className="border border-red-200 bg-red-50 rounded-lg p-3 mb-4 text-sm text-red-700"
+        aria-label="크롤 요약 로드 실패"
+      >
+        크롤 요약을 불러오지 못했습니다.
+      </div>
+    );
+  }
 
   if (isLoading || data.some((d) => !d)) {
     return (

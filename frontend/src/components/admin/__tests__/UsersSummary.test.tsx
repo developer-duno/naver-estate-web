@@ -111,4 +111,16 @@ describe("UsersSummary", () => {
     expect(placeholder).toBeTruthy();
     expect(placeholder?.className).toContain("animate-pulse");
   });
+
+  it("isError 일 때 빨간 에러 박스 + role=alert (영구 스켈레톤 차단)", async () => {
+    // BE 다운 가정 — verif·users 모두 reject
+    mockVerif.mockRejectedValue(new Error("backend down"));
+    mockUsers.mockRejectedValue(new Error("backend down"));
+
+    renderSummary();
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("사용자 요약을 불러오지 못했습니다.");
+    });
+    expect(screen.getByRole("alert").className).toContain("bg-red-50");
+  });
 });

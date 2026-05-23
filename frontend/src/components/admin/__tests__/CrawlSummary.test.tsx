@@ -92,4 +92,15 @@ describe("CrawlSummary", () => {
     fireEvent.click(screen.getByRole("button", { name: /실패 누적 189건/ }));
     expect(onJumpToFailed).toHaveBeenCalledTimes(1);
   });
+
+  it("isError 일 때 빨간 에러 박스 + role=alert (영구 스켈레톤 차단)", async () => {
+    // BE 다운 가정 — 3 status 모두 reject
+    mockGet.mockRejectedValue(new Error("backend down"));
+
+    renderSummary();
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("크롤 요약을 불러오지 못했습니다.");
+    });
+    expect(screen.getByRole("alert").className).toContain("bg-red-50");
+  });
 });

@@ -122,3 +122,40 @@ def test_failed_body_uses_batch_language():
     msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
     assert "batch 합계" in msg, f"본문에 'batch 합계' 표현 필요: {msg}"
     assert "마지막 처리율" not in msg
+
+
+def test_admin_link_skips_localhost_for_comma_separated_urls():
+    """FRONTEND_URL 이 콤마 다중값 (main.py CORS 다중 origin) 일 때
+    localhost 는 skip 하고 첫 운영 도메인을 링크 베이스로.
+
+    실측 backend/.env = "http://localhost:3000,https://2u.pe.kr,https://www.2u.pe.kr".
+    그대로 박으면 알림 링크가 "http://localhost:3000,https://2u.pe.kr,..." 로 깨짐.
+    구독자(공인중개사) 가 텔레그램에서 클릭하니 localhost 는 무의미 → 운영 도메인 선택.
+    """
+    data = {"label": "매물", "status": "red", "spinning": False,
+            "processed": None, "total": None, "new_rows": None, "link_path": "/admin#freshness"}
+    multi = "http://localhost:3000,https://2u.pe.kr,https://www.2u.pe.kr"
+    with patch.dict("os.environ", {"FRONTEND_URL": multi}, clear=False):
+        msg = format_issue_message("freshness", data, event="new", header_ctx=_ctx())
+    # 콤마 통째로 들어가면 안 됨 + localhost 도 skip
+    assert "localhost" not in msg, f"localhost 누출: {msg}"
+    assert "," not in msg.split("→")[-1], f"콤마 누출: {msg}"
+    assert "https://2u.pe.kr/admin#freshness" in msg, f"운영 도메인 사용 필요: {msg}"
+
+
+def test_admin_link_uses_only_origin_when_single():
+    """FRONTEND_URL 이 단일값일 때는 그대로 사용 (회귀 가드)."""
+    data = {"label": "매물", "status": "red", "spinning": False,
+            "processed": None, "total": None, "new_rows": None, "link_path": "/admin#freshness"}
+    with patch.dict("os.environ", {"FRONTEND_URL": "https://example.com"}, clear=False):
+        msg = format_issue_message("freshness", data, event="new", header_ctx=_ctx())
+    assert "https://example.com/admin#freshness" in msg
+
+
+def test_admin_link_only_localhost_falls_back_to_localhost():
+    """FRONTEND_URL 이 localhost 만 있으면 (dev 환경) localhost 그대로 사용."""
+    data = {"label": "매물", "status": "red", "spinning": False,
+            "processed": None, "total": None, "new_rows": None, "link_path": "/admin#freshness"}
+    with patch.dict("os.environ", {"FRONTEND_URL": "http://localhost:3000"}, clear=False):
+        msg = format_issue_message("freshness", data, event="new", header_ctx=_ctx())
+    assert "http://localhost:3000/admin#freshness" in msg

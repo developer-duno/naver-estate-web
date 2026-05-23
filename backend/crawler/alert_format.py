@@ -24,9 +24,20 @@ def _esc(value) -> str:
 
 
 def _admin_link(path: str) -> str:
-    """FRONTEND_URL 있으면 절대 링크, 없으면 경로만."""
-    base = os.getenv("FRONTEND_URL", "").rstrip("/")
-    return f"{base}{path}" if base else path
+    """FRONTEND_URL 있으면 절대 링크, 없으면 경로만.
+
+    FRONTEND_URL 은 CORS 다중 origin 지원 위해 콤마 구분 다중값 가능 (main.py:119).
+    텔레그램 알림 링크는 1개 URL 만 필요 → 비-localhost 운영 도메인을 우선 선택.
+    """
+    raw = os.getenv("FRONTEND_URL", "")
+    candidates = [u.strip().rstrip("/") for u in raw.split(",") if u.strip()]
+    if not candidates:
+        return path
+    # 구독자(공인중개사) 가 텔레그램에서 클릭 — localhost 는 무의미하므로 운영 도메인 우선.
+    # 모두 localhost 면 어쩔 수 없이 그대로 (dev 환경).
+    non_local = [u for u in candidates if "localhost" not in u and "127.0.0.1" not in u]
+    base = (non_local or candidates)[0]
+    return f"{base}{path}"
 
 
 def _header(event: str, header_ctx: dict) -> str:

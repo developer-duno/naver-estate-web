@@ -33,6 +33,7 @@ export interface UnsoldDataset {
   apartmentId: string;
   apartmentName: string;
   items: MbUnsoldHistory[];
+  isError?: boolean;
 }
 
 interface Props {
@@ -88,12 +89,25 @@ export default function MbCompareUnsoldChart({ datasets }: Props) {
   }, [datasets, period]);
 
   const hasData = chartData.length > 0;
+  const erroredNames = datasets.filter((d) => d.isError).map((d) => d.apartmentName);
   if (!hasData) {
+    if (erroredNames.length > 0) {
+      return (
+        <p className="text-sm text-red-600 py-8 text-center">
+          추이 데이터를 불러오지 못했습니다 (영향 받은 단지: {erroredNames.join(", ")}).
+        </p>
+      );
+    }
     return <p className="text-gray-500 text-sm py-8 text-center">미분양 추이 데이터가 없습니다.</p>;
   }
 
   return (
     <div className="bg-white rounded-lg shadow-sm border p-4">
+      {erroredNames.length > 0 && (
+        <p className="mb-2 text-sm text-red-600">
+          추이 데이터를 불러오지 못했습니다 (영향 받은 단지: {erroredNames.join(", ")}).
+        </p>
+      )}
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-700">미분양 추이 비교</h3>
         <div className="flex gap-1">

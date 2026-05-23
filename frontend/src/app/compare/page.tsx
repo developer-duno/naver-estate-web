@@ -119,6 +119,8 @@ function CompareContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [complexIds],
   );
+  const failedIds = ids.filter((_, i) => queries[i]?.isError);
+  const hasAnyError = failedIds.length > 0;
 
   /* 가격 통계 (React Query 캐시 공유 — CompareCharts와 동일 queryKey) */
   const statsQueries = useQueries({
@@ -129,6 +131,13 @@ function CompareContent() {
     })),
   });
   const statsLoading = statsQueries.some((q) => q.isLoading);
+  const statsErrorKey = statsQueries.map((q) => (q.isError ? "1" : "0")).join(",");
+  const statsErrorMap = useMemo(() => {
+    const m: Record<string, boolean> = {};
+    ids.forEach((id, i) => { if (statsQueries[i]?.isError) m[id] = true; });
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ids.join(","), statsErrorKey]);
 
   /* 평당가 맵: { [complex_no]: 만원/평 } */
   const pricePerPyeong: Record<string, number> = useMemo(() => {
@@ -148,6 +157,9 @@ function CompareContent() {
     const ppRow = {
       label: "평당가",
       render: (c: Complex) => {
+        if (statsErrorMap[c.complex_no]) {
+          return <span className="text-xs text-gray-400">불러오기 실패</span>;
+        }
         const pp = pricePerPyeong[c.complex_no];
         if (pp != null) return formatPrice(pp);
         if (statsLoading) {
@@ -165,7 +177,7 @@ function CompareContent() {
     const rows = [...BASE_ROWS];
     rows.splice(17, 0, ppRow);
     return rows;
-  }, [pricePerPyeong, statsLoading]);
+  }, [pricePerPyeong, statsLoading, statsErrorMap]);
 
   /* 우위 인덱스 캐싱 (label → bestIndices) */
   const advantageMap = useMemo(() => {
@@ -229,14 +241,47 @@ function CompareContent() {
 
   if (loading) return <SkeletonPage message="단지 정보를 불러오는 중..." />;
 
+  if (complexes.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+        <p className="bg-red-50 text-red-700 rounded-md px-4 py-3 mb-4 inline-block">
+          비교 단지 정보를 불러오지 못했습니다.
+        </p>
+        <div>
+          <button
+            type="button"
+            onClick={() => queries.forEach((q) => q.refetch())}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            다시 시도
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
+      {hasAnyError && (
+        <div role="alert" className="mb-4 bg-red-50 text-red-700 text-sm rounded-md px-3 py-2 flex items-center justify-between no-print">
+          <span>{failedIds.length}개 단지 정보를 불러오지 못했습니다.</span>
+          <button
+            type="button"
+            onClick={() => queries.forEach((q) => q.refetch())}
+            className="text-red-700 underline"
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2 md:gap-4 mb-6">
         <button onClick={goBack} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl no-print">
           &#8592;
         </button>
         <h1 className="text-xl md:text-2xl font-bold">단지 비교</h1>
-        <span className="text-gray-500 text-sm">({complexes.length}개 단지)</span>
+        <span className="text-gray-500 text-sm">
+          ({complexes.length}개 단지{ids.length !== complexes.length && ` / 선택 ${ids.length}개`})
+        </span>
         <div className="ml-auto flex gap-2 no-print">
           <button
             onClick={handlePrint}

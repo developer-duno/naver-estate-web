@@ -81,6 +81,8 @@ function CompareContent() {
 
   const isLoading = queries.some((q) => q.isLoading);
   const apartments = queries.map((q) => q.data).filter((d): d is NonNullable<typeof d> => !!d);
+  const failedIds = ids.filter((_, i) => queries[i]?.isError);
+  const hasAnyError = failedIds.length > 0;
 
   // 비교 데이터 로드 완료 시 히스토리 자동 저장
   useEffect(() => {
@@ -117,11 +119,16 @@ function CompareContent() {
     [router],
   );
 
-  const unsoldDatasets: UnsoldDataset[] = apartments.map((apt, i) => ({
-    apartmentId: apt.id,
-    apartmentName: apt.name,
-    items: historyQueries[i]?.data?.items ?? [],
-  }));
+  const unsoldDatasets: UnsoldDataset[] = apartments.map((apt) => {
+    const idx = ids.indexOf(apt.id);
+    const hq = historyQueries[idx];
+    return {
+      apartmentId: apt.id,
+      apartmentName: apt.name,
+      items: hq?.data?.items ?? [],
+      isError: !!hq?.isError,
+    };
+  });
 
   const handleExport = useCallback(async () => {
     if (apartments.length < 2) return;
@@ -165,14 +172,47 @@ function CompareContent() {
     return <SkeletonPage message="비교 데이터 로딩 중..." />;
   }
 
+  if (apartments.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-20 text-center">
+        <p className="bg-red-50 text-red-700 rounded-md px-4 py-3 mb-4 inline-block">
+          비교 데이터를 불러오지 못했습니다.
+        </p>
+        <div>
+          <button
+            type="button"
+            onClick={() => queries.forEach((q) => q.refetch())}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            다시 시도
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
+      {hasAnyError && (
+        <div role="alert" className="mb-4 bg-red-50 text-red-700 text-sm rounded-md px-3 py-2 flex items-center justify-between no-print">
+          <span>{failedIds.length}개 아파트 정보를 불러오지 못했습니다.</span>
+          <button
+            type="button"
+            onClick={() => queries.forEach((q) => q.refetch())}
+            className="text-red-700 underline"
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2 md:gap-4 mb-6">
         <button onClick={goBack} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl no-print">
           &#8592;
         </button>
         <h1 className="text-xl md:text-2xl font-bold text-gray-900">미분양 단지 비교</h1>
-        <span className="text-gray-500 text-sm">({apartments.length}개 아파트)</span>
+        <span className="text-gray-500 text-sm">
+          ({apartments.length}개 아파트{ids.length !== apartments.length && ` / 선택 ${ids.length}개`})
+        </span>
         <div className="ml-auto flex flex-wrap gap-2 no-print">
           <button
             onClick={handleCopy}

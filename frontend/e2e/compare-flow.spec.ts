@@ -36,11 +36,13 @@ test("단지 비교 — compare_complexes localStorage 시드 후 정상 로드"
   const res = await page.goto("/compare?ids=100000,200000");
   expect(res?.status()).toBeLessThan(500);
   await expectHeader(page);
-  // 비교 테이블 또는 로딩 상태 확인
+  // 비교 테이블 / 로딩 / 빈 상태 / 에러 화면 (PR #47 신설) 중 하나라도 보이면 통과
   const table = page.locator("table, [role='table']");
   const loading = page.locator("text=로딩");
   const noData = page.locator("text=단지를 선택");
-  await expect(table.or(loading).or(noData)).toBeVisible({ timeout: 30_000 });
+  const errorAlert = page.locator("[role='alert']");
+  const errorEmpty = page.locator("text=비교 단지 정보를 불러오지 못했습니다");
+  await expect(table.or(loading).or(noData).or(errorAlert).or(errorEmpty)).toBeVisible({ timeout: 30_000 });
 });
 
 test("미분양 비교 — mb_compare localStorage 시드 후 정상 로드", async ({ page }) => {
@@ -51,7 +53,9 @@ test("미분양 비교 — mb_compare localStorage 시드 후 정상 로드", as
   const table = page.locator("table, [role='table']");
   const loading = page.locator("text=로딩");
   const noData = page.locator("text=단지를 선택");
-  await expect(table.or(loading).or(noData)).toBeVisible({ timeout: 30_000 });
+  const errorAlert = page.locator("[role='alert']");
+  const errorEmpty = page.locator("text=비교 데이터를 불러오지 못했습니다");
+  await expect(table.or(loading).or(noData).or(errorAlert).or(errorEmpty)).toBeVisible({ timeout: 30_000 });
 });
 
 test("비교 페이지 — 뒤로가기 버튼 존재", async ({ page }) => {

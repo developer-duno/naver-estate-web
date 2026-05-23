@@ -55,6 +55,9 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
 
   const historyLoading = historyQueries.some((q) => q.isLoading);
   const statsLoading = statsQueries.some((q) => q.isLoading);
+  const historyError = historyQueries.some((q) => q.isError);
+  const statsError = statsQueries.some((q) => q.isError);
+  const pyeongError = pyeongQueries.some((q) => q.isError);
 
   // 데이터 조립
   const historyDatasets = complexes
@@ -102,6 +105,8 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
               <span className="sr-only">가격 추이 로딩 중...</span>
               <Skeleton className="h-72 w-full" />
             </div>
+          ) : historyError ? (
+            <p className="text-sm text-red-600 py-4 text-center">가격 추이를 불러오지 못했습니다.</p>
           ) : historyDatasets.length > 0 ? (
             <ComparePriceTrendChart datasets={historyDatasets} />
           ) : (
@@ -118,6 +123,8 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
               <span className="sr-only">가격 통계 로딩 중...</span>
               <Skeleton className="h-72 w-full" />
             </div>
+          ) : statsError ? (
+            <p className="text-sm text-red-600 py-4 text-center">가격 통계를 불러오지 못했습니다.</p>
           ) : statsDatasets.length > 0 ? (
             <ComparePriceBarChart datasets={statsDatasets} />
           ) : (
@@ -134,6 +141,8 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
               <span className="sr-only">층별 가격 로딩 중...</span>
               <Skeleton className="h-72 w-full" />
             </div>
+          ) : statsError ? (
+            <p className="text-sm text-red-600 py-4 text-center">층별 가격을 불러오지 못했습니다.</p>
           ) : statsDatasets.length > 0 ? (
             <CompareFloorChart datasets={statsDatasets} />
           ) : (
@@ -149,7 +158,9 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
             {/* 5-A: 면적별 가격표 */}
             <div>
               <h3 className="text-sm font-semibold mb-2">면적별 가격</h3>
-              {statsDatasets.length > 0 ? (
+              {statsError ? (
+                <p className="text-sm text-red-600">면적별 가격을 불러오지 못했습니다.</p>
+              ) : statsDatasets.length > 0 ? (
                 <CompareAreaPriceTable
                   datasets={statsDatasets.map((ds) => ({
                     name: ds.complexName,
@@ -164,7 +175,9 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
             {/* 5-B: 관리비 비교 */}
             <div>
               <h3 className="text-sm font-semibold mb-2">관리비 비교</h3>
-              {pyeongDatasets.length > 0 ? (
+              {pyeongError ? (
+                <p className="text-sm text-red-600">관리비를 불러오지 못했습니다.</p>
+              ) : pyeongDatasets.length > 0 ? (
                 <CompareMaintenanceTable datasets={pyeongDatasets} />
               ) : (
                 <p className="text-gray-500 text-sm">관리비 데이터 없음</p>
@@ -174,7 +187,9 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
             {/* 5-C: 세대 구성 */}
             <div>
               <h3 className="text-sm font-semibold mb-2">세대 구성</h3>
-              {pyeongDatasets.length > 0 ? (
+              {pyeongError ? (
+                <p className="text-sm text-red-600">세대 구성을 불러오지 못했습니다.</p>
+              ) : pyeongDatasets.length > 0 ? (
                 <CompareUnitCompositionTable datasets={pyeongDatasets} />
               ) : (
                 <p className="text-gray-500 text-sm">세대 구성 데이터 없음</p>

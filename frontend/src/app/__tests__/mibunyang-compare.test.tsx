@@ -6,6 +6,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import MbComparePage from "../mibunyang/compare/page";
 import { TestQueryProvider } from "@/test-setup";
+import * as api from "@/lib/api";
+
 
 const mockPush = vi.fn();
 const mockSearchParams = vi.fn(() => new URLSearchParams());
@@ -29,6 +31,9 @@ function makeApt(id: string, name: string) {
 vi.mock("@/lib/api", () => ({
   getMbApartmentDetail: vi.fn().mockImplementation((id: string) =>
     Promise.resolve(makeApt(id, `단지${id}`)),
+  ),
+  getMbUnsoldHistory: vi.fn().mockImplementation((id: string) =>
+    Promise.resolve({ apartment_id: id, items: [] }),
   ),
 }));
 
@@ -125,4 +130,32 @@ describe("미분양 비교 — 인쇄/복사/링크", () => {
     fireEvent.click(screen.getAllByText("단지A1")[0]);
     expect(mockPush).toHaveBeenCalledWith("/mibunyang/A1");
   });
+});
+
+describe("미분양 비교 — 에러 분기", () => {
+  beforeEach(() => {
+    mockPush.mockClear();
+    // 정상 케이스 복원
+    vi.mocked(api.getMbApartmentDetail).mockImplementation((id: string) =>
+      Promise.resolve(makeApt(id, `단지${id}`)),
+    );
+    vi.mocked(api.getMbUnsoldHistory).mockImplementation((id: string) =>
+      Promise.resolve({ apartment_id: id, items: [] }),
+    );
+  });
+
+  it("일부 단지 fail 시 배너 + 헤더 count 가 표시된다", async () => {
+    // 2개 중 1개(A2) 실패
+    vi.mocked(api.getMbApartmentDetail).mockImplementation((id: string) =>
+      id === "A2"
+        ? Promise.reject(new Error("backend down"))
+        : Promise.resolve(makeApt(id, `단지${id}`)),
+    );
+    renderPage("ids=A1,A2");
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("1개 아파트 정보를 불러오지 못했습니다.");
+    });
+    expect(screen.getByText(/1개 아파트.*\/ 선택 2개/)).toBeInTheDocument();
+  });
+
 });

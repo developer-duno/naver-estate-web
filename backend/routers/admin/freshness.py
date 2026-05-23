@@ -8,7 +8,7 @@
   - status: green/yellow/red/unknown + 헛바퀴면 red 격상
 """
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import Depends
 from sqlalchemy import func, select
@@ -20,6 +20,11 @@ from deps import get_admin_user, get_db
 
 from ._shared import router
 from .freshness_meta import FRESHNESS_ITEMS
+
+# batch 윈도우 — 같은 scheduler_job_id 의 잡들이 이 시간 안에 연속 끝나면 한 batch.
+# crawl_articles_batch (50단지) 가 보통 수 분~10분 안에 끝남. 60분이면 한 batch 가
+# 통째로 들어오고 그 다음 interval (12h) 와는 충분히 구분된다.
+_BATCH_WINDOW_MINUTES = 60
 
 
 def _to_utc(value):
@@ -46,14 +51,17 @@ def _status(last_updated: datetime | None, expected: int, now: datetime) -> str:
 
 
 def _last_job(db: Session, scheduler_job_id: str) -> dict | None:
-    """해당 스케줄러 job 의 마지막 completed 작업 메타 1건."""
-    row = db.execute(
-        select(
-            CrawlJob.started_at,
-            CrawlJob.completed_at,
-            CrawlJob.processed_items,
-            CrawlJob.total_items,
-        )
+    """마지막 batch 통계 — 같은 scheduler_job_id 의 잡들이 _BATCH_WINDOW_MINUTES
+    안에 연속 실행된 묶음의 processed/total 합산.
+
+    `crawl_articles_batch` 가 50단지 한 번에 도는 동안 단지별로 CrawlJob row 가
+    N개 생긴다. 마지막 1건만 보면 0/0 잡 (매물 0건 단지) 이 우연히 마지막이면
+    "처리 0/0" 으로 misleading. batch 합산 = 진짜 활동량 (세션 219 false alarm
+    회귀 가드).
+    """
+    # 1) 가장 최근 completed_at 1건으로 batch 의 "끝" 식별
+    tail = db.execute(
+        select(CrawlJob.completed_at, CrawlJob.started_at)
         .where(
             (CrawlJob.scheduler_job_id == scheduler_job_id)
             & (CrawlJob.status == "completed"),
@@ -61,15 +69,34 @@ def _last_job(db: Session, scheduler_job_id: str) -> dict | None:
         .order_by(CrawlJob.completed_at.desc())
         .limit(1)
     ).first()
-    if row is None:
+    if tail is None:
         return None
-    started, completed, processed, total = row
+    batch_end = tail.completed_at
+    # 2) batch 시작 = 마지막 completed_at 에서 _BATCH_WINDOW_MINUTES 이전까지의 잡들
+    window_start = batch_end - timedelta(minutes=_BATCH_WINDOW_MINUTES)
+    agg = db.execute(
+        select(
+            func.min(CrawlJob.started_at).label("batch_start"),
+            func.max(CrawlJob.completed_at).label("batch_end"),
+            func.coalesce(func.sum(CrawlJob.processed_items), 0).label("proc_sum"),
+            func.coalesce(func.sum(CrawlJob.total_items), 0).label("total_sum"),
+        )
+        .where(
+            (CrawlJob.scheduler_job_id == scheduler_job_id)
+            & (CrawlJob.status == "completed")
+            & (CrawlJob.completed_at >= window_start),
+        )
+    ).first()
+    if agg is None or agg.batch_start is None:
+        return None
+    started = agg.batch_start
+    completed = agg.batch_end
     return {
         "started_at": _to_utc(started).isoformat() if started else None,
         "completed_at": _to_utc(completed).isoformat() if completed else None,
-        "processed_items": int(processed or 0),
-        "total_items": int(total or 0),
-        "_started_at_dt": _to_utc(started),  # 내부 계산용
+        "processed_items": int(agg.proc_sum or 0),
+        "total_items": int(agg.total_sum or 0),
+        "_started_at_dt": _to_utc(started),  # 내부 계산용 (new_rows = batch 시작 기준)
     }
 
 

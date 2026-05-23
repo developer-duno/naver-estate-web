@@ -210,3 +210,132 @@ def test_freshness_no_job_meta_fields_null(client, db):
     assert unsold["last_job"] is None
     assert unsold["new_rows"] is None
     assert unsold["spinning"] is False
+
+
+# ── batch 합산 (세션 219 false alarm 회귀 가드) ──
+# 한 batch = 같은 scheduler_job_id 가 마지막 60분 윈도우 안에 연속 실행된 잡들의 묶음.
+# crawl_articles_batch 가 50단지를 한 번에 도는 동안 단지별로 CrawlJob row N 개가 생기는데,
+# 마지막 1건만 보면 dead 단지(proc=0/total=0)가 우연히 마지막이면 화면이 "처리 0/0" 으로
+# 보여 사용자가 "헛바퀴" 로 오해. 세션 219 텔레그램 false alarm 7건의 root cause.
+
+
+def test_freshness_batch_aggregates_processed_and_total(client, db):
+    """같은 batch (마지막 60분) 의 잡들은 processed/total 을 합산해 노출."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    batch_start = now - timedelta(minutes=30)
+    # 3개 잡 = 정상(20/20) + 정상(15/15) + dead 단지(0/0) — 마지막이 0/0
+    _make_completed_job(
+        db, "crawl_articles",
+        started_at=batch_start, completed_at=batch_start + timedelta(seconds=5),
+        processed=20, total=20,
+    )
+    _make_completed_job(
+        db, "crawl_articles",
+        started_at=batch_start + timedelta(seconds=10),
+        completed_at=batch_start + timedelta(seconds=15),
+        processed=15, total=15,
+    )
+    _make_completed_job(
+        db, "crawl_articles",
+        started_at=batch_start + timedelta(seconds=20),
+        completed_at=batch_start + timedelta(seconds=21),
+        processed=0, total=0,
+    )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    arts = _get_item(res.json()["items"], "articles")
+    assert arts["last_job"]["processed_items"] == 35, arts["last_job"]
+    assert arts["last_job"]["total_items"] == 35, arts["last_job"]
+
+
+def test_freshness_batch_zero_total_only_not_spinning(client, db):
+    """batch 안에 0/0 잡만 있어도 헛바퀴 판정 X — 단지에 매물 0건은 정상.
+
+    세션 219 false alarm 의 root cause. 50단지 중 모두 매물 0건 케이스에
+    sum_total=0 → spinning 조건 (sum_total>0 AND sum_processed==0) 미충족.
+    """
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    batch_start = now - timedelta(minutes=20)
+    for i in range(3):
+        _make_completed_job(
+            db, "crawl_articles",
+            started_at=batch_start + timedelta(seconds=i * 2),
+            completed_at=batch_start + timedelta(seconds=i * 2 + 1),
+            processed=0, total=0,
+        )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    arts = _get_item(res.json()["items"], "articles")
+    assert arts["last_job"]["processed_items"] == 0
+    assert arts["last_job"]["total_items"] == 0
+    # 매물 1건 추가 (batch 시작 후) → new_rows=1 → spinning=False
+    db.add(Article(
+        article_no="N1", complex_no="C1",
+        created_at=batch_start + timedelta(minutes=1),
+        updated_at=batch_start + timedelta(minutes=1),
+    ))
+    db.commit()
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    arts = _get_item(res.json()["items"], "articles")
+    assert arts["new_rows"] == 1
+    assert arts["spinning"] is False
+
+
+def test_freshness_batch_new_rows_uses_batch_start(client, db):
+    """new_rows 카운트는 batch 첫 잡의 started_at 기준 (마지막 잡 X)."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    batch_start = now - timedelta(minutes=40)
+    last_job_start = now - timedelta(minutes=10)
+    # 첫 잡 (batch 시작)
+    _make_completed_job(
+        db, "crawl_articles",
+        started_at=batch_start, completed_at=batch_start + timedelta(seconds=5),
+        processed=10, total=10,
+    )
+    # 마지막 잡 (batch 끝)
+    _make_completed_job(
+        db, "crawl_articles",
+        started_at=last_job_start, completed_at=last_job_start + timedelta(seconds=5),
+        processed=5, total=5,
+    )
+    # batch 시작 후, 마지막 잡 시작 전에 들어온 매물 1건 — batch 기준이면 카운트됨
+    db.add(Article(
+        article_no="MID", complex_no="C1",
+        created_at=batch_start + timedelta(minutes=5),
+        updated_at=batch_start + timedelta(minutes=5),
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    arts = _get_item(res.json()["items"], "articles")
+    # 마지막 잡만 기준이면 0, batch 첫 잡 기준이면 1
+    assert arts["new_rows"] == 1, f"batch_start 기준이어야 함: {arts}"
+
+
+def test_freshness_batch_window_separates_old_batch(client, db):
+    """60분 윈도우 밖 잡은 다른 batch 로 취급 — 합산 안 됨."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    # 오래된 batch (3시간 전, 윈도우 밖)
+    _make_completed_job(
+        db, "crawl_articles",
+        started_at=now - timedelta(hours=3),
+        completed_at=now - timedelta(hours=3) + timedelta(seconds=5),
+        processed=999, total=999,
+    )
+    # 최근 batch (20분 전, 윈도우 안)
+    _make_completed_job(
+        db, "crawl_articles",
+        started_at=now - timedelta(minutes=20),
+        completed_at=now - timedelta(minutes=20) + timedelta(seconds=5),
+        processed=5, total=5,
+    )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    arts = _get_item(res.json()["items"], "articles")
+    # 999 가 합산되면 버그. 최근 batch (5) 만 합산
+    assert arts["last_job"]["processed_items"] == 5, arts["last_job"]
+    assert arts["last_job"]["total_items"] == 5, arts["last_job"]

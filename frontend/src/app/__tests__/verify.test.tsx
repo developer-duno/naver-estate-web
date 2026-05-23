@@ -130,4 +130,18 @@ describe("VerifyPage", () => {
     expect(screen.getByText("거부됨")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /재신청/ })).toBeInTheDocument();
   });
+
+  /** 에러 상태 — useQuery isError silent failure 정정 (세션 219 PR 답습)
+   * 세션 217 ChartAccordion isError 패턴 답습. BE 다운/네트워크 오류 시
+   * data=undefined 가 미제출 폼으로 그냥 표시되던 silent failure 차단. */
+  it("상태 조회 실패 시 안내와 재시도 버튼이 표시된다", async () => {
+    mockGetStatus.mockRejectedValueOnce(new Error("network error"));
+    renderPage();
+    await waitFor(() => {
+      expect(
+        screen.getByText(/인증 상태를 불러오지 못했습니다|상태를 가져오지/),
+      ).toBeInTheDocument();
+    });
+    expect(screen.getByRole("button", { name: /다시 시도/ })).toBeInTheDocument();
+  });
 });

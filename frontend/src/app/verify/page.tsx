@@ -30,7 +30,7 @@ export default function VerifyPage() {
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: status, isLoading } = useQuery({
+  const { data: status, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.verification.status(),
     queryFn: async () => { const t = await getToken(); return t ? getVerificationStatus(t) : null; },
     staleTime: 30_000,
@@ -101,6 +101,21 @@ export default function VerifyPage() {
 
   if (isLoading) {
     return <div className="max-w-md sm:max-w-lg mx-auto px-3 sm:px-4 py-8 sm:py-16"><div className="h-8 bg-gray-200 rounded animate-pulse" /></div>;
+  }
+
+  // 상태 조회 실패 — 미제출 폼이 silent 표시되지 않게 차단 (세션 217 ChartAccordion 패턴 답습)
+  if (isError) {
+    return (
+      <div className="max-w-md sm:max-w-lg mx-auto px-3 sm:px-4 py-8 sm:py-16">
+        <h1 className="text-2xl font-bold text-center mb-8">중개사 인증</h1>
+        <div className="bg-white rounded-lg shadow-sm border p-4 sm:p-6 space-y-4 text-center">
+          <p className="text-sm text-gray-700">인증 상태를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</p>
+          <button type="button" onClick={() => refetch()} className="w-full bg-blue-600 text-white py-2 rounded-md text-sm hover:bg-blue-700">
+            다시 시도
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // 이미 제출한 경우 — 상태 표시

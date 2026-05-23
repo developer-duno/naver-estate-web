@@ -93,3 +93,32 @@ def test_admin_link_without_frontend_url():
     with patch.dict("os.environ", {"FRONTEND_URL": ""}, clear=False):
         msg = format_issue_message("freshness", data, event="new", header_ctx=_ctx())
     assert "→ /admin#freshness 데이터 신선도 확인" in msg
+
+
+# ── PR #44 batch 합산 의미 일관성 (세션 219 후속) ──
+# PR #44 로 freshness._last_job 이 1건 → batch 합산으로 바뀌었는데 알림 본문은
+# 여전히 "마지막 작업 처리율" / "작업 후 신규행" 으로 표현해 사용자가 "작업 1개"
+# 로 오해. 본문도 "batch 합계 처리율" / "batch 시작 후 신규행" 으로 통일.
+
+
+def test_freshness_body_uses_batch_language():
+    """freshness 본문은 'batch 합계' / 'batch 시작 후 신규행' 으로 표현."""
+    data = {"label": "매물", "status": "red", "age_hours": 26, "spinning": True,
+            "processed": 791, "total": 791, "new_rows": 0, "link_path": "/admin#freshness"}
+    msg = format_issue_message("freshness", data, event="new", header_ctx=_ctx())
+    assert "batch 합계" in msg, f"본문에 'batch 합계' 표현 필요: {msg}"
+    assert "batch 시작 후" in msg, f"본문에 'batch 시작 후' 표현 필요: {msg}"
+    # 옛 표현이 남아있으면 안 됨 (회귀 가드)
+    assert "마지막 작업 처리율" not in msg
+    assert "작업 후 신규행" not in msg
+
+
+def test_failed_body_uses_batch_language():
+    """crawl_failed 본문도 'batch 합계 처리율' 로 통일."""
+    data = {
+        "job_type": "complex_articles", "count": 1, "error": "네이버 502",
+        "processed": 791, "total": 791, "last_completed_at": "2026-05-19T04:00:00+00:00",
+    }
+    msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
+    assert "batch 합계" in msg, f"본문에 'batch 합계' 표현 필요: {msg}"
+    assert "마지막 처리율" not in msg

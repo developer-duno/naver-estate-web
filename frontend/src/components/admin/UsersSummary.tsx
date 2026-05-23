@@ -38,7 +38,20 @@ export default function UsersSummary({ token }: Props) {
   });
 
   const isLoading = verifQuery.isLoading || roleQueries.some((q) => q.isLoading);
+  const isError = verifQuery.isError || roleQueries.some((q) => q.isError);
   const roleData = roleQueries.map((q) => q.data) as (PaginatedResponse<UserProfile> | undefined)[];
+
+  if (isError) {
+    return (
+      <div
+        role="alert"
+        className="border border-red-200 bg-red-50 rounded-lg p-3 mb-4 text-sm text-red-700"
+        aria-label="사용자 요약 로드 실패"
+      >
+        사용자 요약을 불러오지 못했습니다.
+      </div>
+    );
+  }
 
   if (isLoading || !verifQuery.data || roleData.some((d) => !d)) {
     return (

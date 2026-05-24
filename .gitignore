@@ -16,6 +16,8 @@ frontend/out/
 .env
 .env.local
 .env.*.local
+.env.bak.*
+.env.bak-*
 
 # IDE
 .vscode/

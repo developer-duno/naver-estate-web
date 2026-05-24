@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getArticleLive, getArticles, getPriceStats, getPyeongDetails } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
+import { tradeKey } from "@/lib/trade-types";
 import type { Article, Complex } from "@/types";
 import Skeleton from "@/components/Skeleton";
 import ChartAccordion from "@/components/ChartAccordion";
@@ -116,14 +117,6 @@ interface BodyProps {
   article: Article;
   articleNo: string;
   complex?: Complex;
-}
-
-function tradeKey(name?: string): "maemae" | "jeonse" | "wolse" | null {
-  if (!name) return null;
-  if (name === "매매") return "maemae";
-  if (name === "전세") return "jeonse";
-  if (name === "월세" || name === "단기임대") return "wolse";
-  return null;
 }
 
 function ArticleDetailBody({ article, articleNo, complex }: BodyProps) {

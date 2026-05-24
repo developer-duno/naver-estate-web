@@ -10,10 +10,9 @@
  *
  * Why: 네이버 거래유형 분류는 4종 (매매/전세/월세/단기임대) 이지만
  * AreaPriceStat 스키마는 3종 (maemae/jeonse/wolse) 로 압축 — 월세·단기임대 동일 키.
- * 새 거래유형 추가 시 본 함수 1곳만 수정.
  *
- * 주의: 단기임대(B3) 의 wolse 매핑은 BE db/price_queries.py 매핑과 어긋남
- * (BE 는 단기임대 제외). 별 세션 BE-FE 매핑 정렬 PR 필요.
+ * BE-FE 매핑 정렬 완료 (세션 225). BE db/price_queries.py:88 tt_key_map 과 짝꿍.
+ * 새 거래유형 추가 시 본 함수 + BE tt_key_map 양쪽 답습.
  */
 export function tradeKey(name?: string): "maemae" | "jeonse" | "wolse" | null {
   if (!name) return null;

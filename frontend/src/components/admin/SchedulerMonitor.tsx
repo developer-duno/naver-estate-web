@@ -7,16 +7,12 @@ import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { getSchedulerStatus } from "@/lib/api";
 import type { SchedulerJobStatus } from "@/types/admin";
+import {
+  JOB_STATUS_STYLES,
+  FALLBACK_CHIP,
+  type JobStatus,
+} from "@/lib/admin/job-status-styles";
 import AdminCard from "./AdminCard";
-
-/** 상태 뱃지 색상 매핑 */
-const STATUS_STYLES: Record<string, string> = {
-  completed: "bg-green-100 text-green-700",
-  running: "bg-blue-100 text-blue-700",
-  failed: "bg-red-100 text-red-700",
-  cancelled: "bg-gray-100 text-gray-500",
-  pending: "bg-yellow-100 text-yellow-700",
-};
 
 /** 상대 시간 포맷 (예: "2시간 전") */
 function relativeTime(iso: string): string {
@@ -162,7 +158,7 @@ function JobRow({
         <td className="py-2 pr-3">
           {job.last_run ? (
             <span
-              className={`inline-block text-xs px-1.5 py-0.5 rounded ${STATUS_STYLES[job.last_run.status] ?? "bg-gray-100 text-gray-600"}`}
+              className={`inline-block text-xs px-1.5 py-0.5 rounded ${JOB_STATUS_STYLES[job.last_run.status as JobStatus]?.chip ?? FALLBACK_CHIP}`}
             >
               {job.last_run.status}
             </span>

@@ -123,9 +123,9 @@ export default function HomePage() {
       <SearchHistory history={history} onSelect={handleHistorySelect} onRemove={removeHistory} onClear={clearHistory} />
 
       {/* 즐겨찾기 단지 */}
-      {favorites.length > 0 && (
-        <div className="mt-4">
-          <span className="text-xs font-semibold text-gray-500 mb-1.5 block">즐겨찾기</span>
+      <div className="mt-4">
+        <span className="text-xs font-semibold text-gray-500 mb-1.5 block">즐겨찾기</span>
+        {favorites.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {favorites.map((f) => (
               <button
@@ -138,8 +138,12 @@ export default function HomePage() {
               </button>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-xs text-gray-500">
+            관심 단지의 ★ 버튼을 누르면 여기에 모입니다.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

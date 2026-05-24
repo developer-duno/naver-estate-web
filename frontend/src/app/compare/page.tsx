@@ -11,6 +11,8 @@ import { useSmartBack } from "@/hooks/useSmartBack";
 import { getAdvantageForRow, getBestIndices, calcAvgPricePerPyeong } from "@/lib/compare-utils";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { SkeletonPage } from "@/components/Skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Scale } from "lucide-react";
 import type { Complex, PriceStats } from "@/types";
 
 const LazyCompareCharts = dynamic(
@@ -232,9 +234,21 @@ function CompareContent() {
 
   if (ids.length < 2) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
-        <p className="text-gray-500 mb-4">비교할 단지를 2개 이상 선택해주세요.</p>
-        <button onClick={goBack} className="text-sm text-blue-600 hover:underline">돌아가기</button>
+      <div className="max-w-4xl mx-auto px-4 py-16">
+        <EmptyState
+          icon={Scale}
+          title="비교할 단지가 2개 이상 필요해요"
+          description="검색 결과에서 ✓ 체크박스로 단지를 골라 비교 버튼을 누르거나, 단지 상세 페이지에서 비교에 추가해주세요."
+          action={
+            <button
+              type="button"
+              onClick={goBack}
+              className="text-sm text-blue-600 hover:underline"
+            >
+              ← 돌아가기
+            </button>
+          }
+        />
       </div>
     );
   }

@@ -135,8 +135,8 @@ describe("SchedulerCalendarView", () => {
     );
   });
 
-  /** running/failed/cancelled 는 order=0 (칸 첫 줄 우선), 나머지는 order=1 */
-  it("강조 상태 (running/failed/cancelled) 가 order=0 으로 우선 정렬", () => {
+  /** running/failed 는 order=0 (칸 첫 줄 우선), 나머지는 order=1 (cancelled 포함 — 회색 격하) */
+  it("강조 상태 (running/failed) 가 order=0 으로 우선 정렬", () => {
     const events: SchedulerCalendarEvent[] = [
       { scheduler_job_id: "a", name: "완료1", start: "2026-05-15T08:00:00+09:00", status: "completed", kind: "past" },
       { scheduler_job_id: "b", name: "돌고있음", start: "2026-05-15T09:00:00+09:00", status: "running", kind: "past" },
@@ -153,7 +153,7 @@ describe("SchedulerCalendarView", () => {
     expect(screen.getByTestId("fc-event-0").getAttribute("data-order")).toBe("1"); // 완료1
     expect(screen.getByTestId("fc-event-1").getAttribute("data-order")).toBe("0"); // 돌고있음
     expect(screen.getByTestId("fc-event-2").getAttribute("data-order")).toBe("0"); // 실패
-    expect(screen.getByTestId("fc-event-3").getAttribute("data-order")).toBe("0"); // 취소됨
+    expect(screen.getByTestId("fc-event-3").getAttribute("data-order")).toBe("1"); // 취소됨 (회색 격하)
     expect(screen.getByTestId("fc-event-4").getAttribute("data-order")).toBe("1"); // 예정
   });
 });

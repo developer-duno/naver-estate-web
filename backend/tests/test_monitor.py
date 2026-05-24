@@ -340,3 +340,100 @@ def test_run_monitor_cooldown_expired_resends():
         assert mock_tg.called  # 쿨다운 만료 → 재발송
     finally:
         db.close()
+
+
+def test_detect_issues_skips_failed_with_later_completed():
+    """버그 가드: 옛 failed + 그 후 completed = 자가 복구로 간주, 발화 skip
+
+    배경: 24h 윈도 안에 옛 failed 가 있으면 매 스캔마다 active 유지되어
+    monitor_alerts auto-resolve 가 영구 차단되던 결함 정정 (사용자 보고 2026-05-24).
+    """
+    db = TestSession()
+    try:
+        now = _utcnow()
+        db.add(CrawlJob(
+            job_type="complex_list", status="failed",
+            error_message="SSL 끊김",
+            started_at=now - timedelta(hours=5),
+            completed_at=now - timedelta(hours=5),
+            created_at=now - timedelta(hours=5),
+        ))
+        db.add(CrawlJob(
+            job_type="complex_list", status="completed",
+            started_at=now - timedelta(hours=1),
+            completed_at=now - timedelta(hours=1),
+            created_at=now - timedelta(hours=1),
+        ))
+        db.commit()
+        issues = detect_issues(db)
+        assert not any(i["alert_key"] == "crawl_failed:complex_list" for i in issues)
+    finally:
+        db.close()
+
+
+def test_detect_issues_still_fires_when_latest_is_failed():
+    """버그 가드: completed 이후 다시 failed 가 발생하면 정상 발화 (skip 로직 과적용 방지)"""
+    db = TestSession()
+    try:
+        now = _utcnow()
+        db.add(CrawlJob(
+            job_type="complex_list", status="completed",
+            started_at=now - timedelta(hours=3),
+            completed_at=now - timedelta(hours=3),
+            created_at=now - timedelta(hours=3),
+        ))
+        db.add(CrawlJob(
+            job_type="complex_list", status="failed",
+            error_message="다시 실패",
+            started_at=now - timedelta(hours=1),
+            completed_at=now - timedelta(hours=1),
+            created_at=now - timedelta(hours=1),
+        ))
+        db.commit()
+        issues = detect_issues(db)
+        keys = [i["alert_key"] for i in issues]
+        assert "crawl_failed:complex_list" in keys
+    finally:
+        db.close()
+
+
+def test_run_monitor_recovered_failed_sends_resolved_alert():
+    """버그 가드 (통합): 옛 failed + 그 후 completed + active alert 존재 →
+    detect_issues 에서 빠짐 → run_monitor line 215 분기 → '✅ 크롤링 복구' 발송 + status='resolved'.
+
+    사용자 인사이트 (2026-05-24): "텔레그램은 현재 상태의 정확한 지표 — 잘 되면 잘 되었다고 알려줘야 함"
+    """
+    db = TestSession()
+    try:
+        now = _utcnow()
+        db.add(CrawlJob(
+            job_type="complex_list", status="failed",
+            error_message="SSL 끊김",
+            started_at=now - timedelta(hours=5),
+            completed_at=now - timedelta(hours=5),
+            created_at=now - timedelta(hours=5),
+        ))
+        db.add(CrawlJob(
+            job_type="complex_list", status="completed",
+            started_at=now - timedelta(hours=1),
+            completed_at=now - timedelta(hours=1),
+            created_at=now - timedelta(hours=1),
+        ))
+        db.add(MonitorAlert(
+            alert_key="crawl_failed:complex_list", status="active",
+            detail="complex_list 작업 1건 실패 — SSL 끊김",
+            last_notified=now - timedelta(hours=4),
+        ))
+        db.commit()
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+        assert mock_tg.called  # 복구 알림 발송됨
+        # 메시지 본문에 "복구" 또는 "정상으로 돌아왔습니다" 포함
+        sent_msg = mock_tg.call_args[0][0]
+        assert "복구" in sent_msg or "정상으로 돌아왔습니다" in sent_msg
+        alert = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed:complex_list")
+        ).scalar_one()
+        assert alert.status == "resolved"
+    finally:
+        db.close()

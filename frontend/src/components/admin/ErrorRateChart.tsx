@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { getAdminErrorStats, type ErrorStatsRow } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
+import { JOB_STATUS_STYLES } from "@/lib/admin/job-status-styles";
 import AdminCard from "./AdminCard";
 
 // Recharts 는 SSR 에서 window 참조 문제 + 번들 크기가 커서 dynamic import
@@ -25,16 +26,10 @@ interface Props {
 
 type Days = 7 | 14 | 30;
 
-const STATUS_COLORS: Record<string, string> = {
-  completed: "#10b981", // green
-  failed: "#ef4444", // red
-  paused: "#f59e0b", // amber
-  cancelled: "#9ca3af", // gray
-};
-
 /**
  * 최근 N일 크롤 잡의 status 분포를 stacked bar 로 시각화.
  * 7/14/30일 토글, 일자별 completed/failed/paused/cancelled 4축 스택.
+ * 색상은 JOB_STATUS_STYLES SSOT 의 hex 필드 사용 (4상태만 hex 정의됨, non-null assert 안전).
  */
 export default function ErrorRateChart({ getToken }: Props) {
   const [days, setDays] = useState<Days>(14);
@@ -100,10 +95,10 @@ export default function ErrorRateChart({ getToken }: Props) {
             <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
             <Tooltip />
             <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar dataKey="completed" stackId="a" fill={STATUS_COLORS.completed} name="완료" />
-            <Bar dataKey="failed" stackId="a" fill={STATUS_COLORS.failed} name="실패" />
-            <Bar dataKey="paused" stackId="a" fill={STATUS_COLORS.paused} name="일시정지" />
-            <Bar dataKey="cancelled" stackId="a" fill={STATUS_COLORS.cancelled} name="취소" />
+            <Bar dataKey="completed" stackId="a" fill={JOB_STATUS_STYLES.completed.hex!} name="완료" />
+            <Bar dataKey="failed" stackId="a" fill={JOB_STATUS_STYLES.failed.hex!} name="실패" />
+            <Bar dataKey="paused" stackId="a" fill={JOB_STATUS_STYLES.paused.hex!} name="일시정지" />
+            <Bar dataKey="cancelled" stackId="a" fill={JOB_STATUS_STYLES.cancelled.hex!} name="취소" />
           </BarChart>
         </ResponsiveContainer>
       )}

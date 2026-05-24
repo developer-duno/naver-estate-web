@@ -16,6 +16,7 @@ import koLocale from "@fullcalendar/core/locales/ko";
 import type { DayCellContentArg, EventContentArg } from "@fullcalendar/core";
 
 import type { SchedulerCalendarEvent } from "@/types/admin";
+import { JOB_STATUS_STYLES } from "@/lib/admin/job-status-styles";
 
 type CalendarMode = "past" | "upcoming" | "both";
 
@@ -28,28 +29,11 @@ interface Props {
   truncated?: boolean;
 }
 
-/** 상태별 색·아이콘 + 강조 여부.
- *  - emphasize=true: dayMaxEvents 압축에서 우선순위 ↑ (running/failed — 운영자 눈에 먼저 들어와야)
- *  - pulse=true: 깜빡 애니메이션 (running 만 — "지금 돌고 있음" 신호)
- */
-const STATUS_STYLES: Record<
-  SchedulerCalendarEvent["status"],
-  { bg: string; text: string; icon: string; emphasize?: boolean; pulse?: boolean }
-> = {
-  completed: { bg: "bg-green-100", text: "text-green-800", icon: "✓" },
-  running: { bg: "bg-blue-500", text: "text-white", icon: "▶", emphasize: true, pulse: true },
-  failed: { bg: "bg-red-500", text: "text-white", icon: "✗", emphasize: true },
-  cancelled: { bg: "bg-gray-100", text: "text-gray-500", icon: "—" },
-  pending: { bg: "bg-yellow-100", text: "text-yellow-800", icon: "…" },
-  paused: { bg: "bg-orange-100", text: "text-orange-800", icon: "⏸" },
-  upcoming: { bg: "bg-sky-50", text: "text-sky-700", icon: "→" },
-};
-
 /** dayMaxEvents 압축 시 emphasize=true 점이 칸 첫 줄에 노출되도록 우선순위 정렬.
  *  FullCalendar 의 eventOrder 가 숫자 비교 — 0 (먼저) ~ 1 (나중).
  */
 function eventPriority(status: SchedulerCalendarEvent["status"]): number {
-  return STATUS_STYLES[status]?.emphasize ? 0 : 1;
+  return JOB_STATUS_STYLES[status]?.emphasize ? 0 : 1;
 }
 
 const MODE_OPTIONS: { value: CalendarMode; label: string }[] = [
@@ -171,7 +155,7 @@ export default function SchedulerCalendarView({
           </div>
           <ul className="space-y-1 max-h-64 overflow-y-auto">
             {selectedDateEvents.map((e, idx) => {
-              const styles = STATUS_STYLES[e.status];
+              const styles = JOB_STATUS_STYLES[e.status];
               const time = new Date(e.start).toLocaleTimeString("ko", {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -179,7 +163,7 @@ export default function SchedulerCalendarView({
               });
               return (
                 <li key={idx} className="flex items-center gap-2 text-xs">
-                  <span className={`inline-block px-1.5 py-0.5 rounded ${styles.bg} ${styles.text}`}>
+                  <span className={`inline-block px-1.5 py-0.5 rounded ${styles.chip}`}>
                     {styles.icon} {e.status}
                   </span>
                   <span className="text-gray-500 font-mono">{time}</span>
@@ -194,12 +178,16 @@ export default function SchedulerCalendarView({
       {/* 범례 — 강조 상태(running·failed·cancelled) 먼저 표시 */}
       <div className="mt-3 flex items-center gap-3 flex-wrap text-xs text-gray-500">
         <span className="font-medium text-gray-600">범례:</span>
-        {(["running", "failed", "cancelled", "completed", "upcoming"] as const).map((s) => (
-          <span key={s} className="flex items-center gap-1">
-            <span className={`inline-block w-2 h-2 rounded-full ${STATUS_STYLES[s].bg}`} />
-            <span>{STATUS_STYLES[s].icon} {s}</span>
-          </span>
-        ))}
+        {(["running", "failed", "cancelled", "completed", "upcoming"] as const).map((s) => {
+          // 범례 dot = emphasized 첫 토큰 = 강조 bg 컬러 (running blue-500 / failed red-500 / cancelled gray-100)
+          const dotBg = JOB_STATUS_STYLES[s].emphasized.split(" ")[0];
+          return (
+            <span key={s} className="flex items-center gap-1">
+              <span className={`inline-block w-2 h-2 rounded-full ${dotBg}`} />
+              <span>{JOB_STATUS_STYLES[s].icon} {s}</span>
+            </span>
+          );
+        })}
       </div>
     </div>
   );
@@ -207,10 +195,10 @@ export default function SchedulerCalendarView({
 
 function renderEventContent(arg: EventContentArg) {
   const status = arg.event.extendedProps.status as SchedulerCalendarEvent["status"];
-  const styles = STATUS_STYLES[status] ?? STATUS_STYLES.upcoming;
+  const styles = JOB_STATUS_STYLES[status] ?? JOB_STATUS_STYLES.upcoming;
   return (
     <div
-      className={`text-[10px] leading-tight px-1 py-0.5 rounded truncate font-medium ${styles.bg} ${styles.text} ${styles.pulse ? "animate-pulse" : ""}`}
+      className={`text-[10px] leading-tight px-1 py-0.5 rounded truncate font-medium ${styles.emphasized} ${styles.pulse ? "animate-pulse" : ""}`}
       title={`${arg.event.title} (${status})`}
     >
       <span aria-hidden="true">{styles.icon} </span>

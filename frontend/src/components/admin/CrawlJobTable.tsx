@@ -2,6 +2,11 @@
 
 import type { CrawlJobDetail } from "@/types/admin";
 import { jobTypeLabel } from "@/lib/crawl-job-labels";
+import {
+  JOB_STATUS_STYLES,
+  FALLBACK_CHIP,
+  type JobStatus,
+} from "@/lib/admin/job-status-styles";
 
 interface Props {
   jobs: CrawlJobDetail[];
@@ -9,24 +14,6 @@ interface Props {
   onPause?: (jobId: number) => Promise<void>;
   onResume?: (jobId: number) => Promise<void>;
 }
-
-const STATUS_COLORS: Record<string, string> = {
-  completed: "bg-green-100 text-green-700",
-  running: "bg-blue-100 text-blue-700",
-  pending: "bg-yellow-100 text-yellow-700",
-  paused: "bg-amber-100 text-amber-700",
-  failed: "bg-red-100 text-red-700",
-  cancelled: "bg-gray-100 text-gray-500",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  completed: "완료",
-  running: "실행 중",
-  pending: "대기",
-  paused: "일시정지",
-  failed: "실패",
-  cancelled: "취소",
-};
 
 export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Props) {
   return (
@@ -55,8 +42,8 @@ export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Pro
               </td>
               <td className="py-2 pr-3 text-xs text-gray-600 max-w-[120px] truncate select-text">{j.target_id || "-"}</td>
               <td className="py-2 pr-3">
-                <span className={`text-xs px-1.5 py-0.5 rounded ${STATUS_COLORS[j.status] || "bg-gray-100"}`}>
-                  {STATUS_LABELS[j.status] || j.status}
+                <span className={`text-xs px-1.5 py-0.5 rounded ${JOB_STATUS_STYLES[j.status as JobStatus]?.chip ?? FALLBACK_CHIP}`}>
+                  {JOB_STATUS_STYLES[j.status as JobStatus]?.label ?? j.status}
                 </span>
               </td>
               <td className="py-2 pr-3 text-xs">

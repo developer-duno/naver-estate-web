@@ -16,6 +16,19 @@ if (typeof window !== "undefined") {
   if (!window.HTMLElement.prototype.scrollIntoView) {
     window.HTMLElement.prototype.scrollIntoView = () => {};
   }
+  // jsdom 에 window.matchMedia 미존재 — ChartAccordion 등 mount 시 throw 방지
+  if (!window.matchMedia) {
+    window.matchMedia = (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }) as MediaQueryList;
+  }
 }
 
 /** 테스트용 QueryClient — retry 비활성, gcTime 0 */

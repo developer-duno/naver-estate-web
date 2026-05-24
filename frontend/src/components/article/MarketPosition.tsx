@@ -4,21 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 import { getPriceStats } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { formatKoreanPrice } from "@/lib/format";
+import { tradeKey } from "@/lib/trade-types";
 import { InfoCard, InfoRow } from "@/components/article/InfoCards";
 
 interface Props {
   complexNo: string;
   tradeTypeName?: string;
   area2M2?: number;
-}
-
-/** 거래유형명 → AreaPriceStat 필드 키 매핑 */
-function tradeKey(name?: string): "maemae" | "jeonse" | "wolse" | null {
-  if (!name) return null;
-  if (name === "매매") return "maemae";
-  if (name === "전세") return "jeonse";
-  if (name === "월세" || name === "단기임대") return "wolse";
-  return null;
 }
 
 export default function MarketPosition({ complexNo, tradeTypeName, area2M2 }: Props) {

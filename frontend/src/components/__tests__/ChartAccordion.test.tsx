@@ -6,19 +6,6 @@ import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import ChartAccordion from "../ChartAccordion";
 
-if (typeof window !== "undefined" && !window.matchMedia) {
-  window.matchMedia = (query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    addListener: () => {},
-    removeListener: () => {},
-    dispatchEvent: () => false,
-  });
-}
-
 describe("ChartAccordion — hasContent 분기", () => {
   it("hasContent=true (기본값) + 펼침 시 children 렌더", () => {
     render(

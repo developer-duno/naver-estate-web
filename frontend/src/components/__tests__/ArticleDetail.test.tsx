@@ -28,20 +28,6 @@ vi.mock("@/lib/api", () => ({
   getArticlePriceHistory: vi.fn().mockResolvedValue({ items: [] }),
 }));
 
-// jsdom 에 window.matchMedia 미존재 — ChartAccordion mount 시 throw 방지 polyfill
-if (typeof window !== "undefined" && !window.matchMedia) {
-  window.matchMedia = (query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    addListener: () => {},
-    removeListener: () => {},
-    dispatchEvent: () => false,
-  });
-}
-
 let ArticleDetail: any;
 beforeEach(async () => {
   vi.resetModules();

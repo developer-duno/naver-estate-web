@@ -29,7 +29,7 @@ interface Props {
 }
 
 /** 상태별 색·아이콘 + 강조 여부.
- *  - emphasize=true: dayMaxEvents 압축에서 우선순위 ↑ (running/failed/cancelled — 운영자 눈에 먼저 들어와야)
+ *  - emphasize=true: dayMaxEvents 압축에서 우선순위 ↑ (running/failed — 운영자 눈에 먼저 들어와야)
  *  - pulse=true: 깜빡 애니메이션 (running 만 — "지금 돌고 있음" 신호)
  */
 const STATUS_STYLES: Record<
@@ -39,7 +39,7 @@ const STATUS_STYLES: Record<
   completed: { bg: "bg-green-100", text: "text-green-800", icon: "✓" },
   running: { bg: "bg-blue-500", text: "text-white", icon: "▶", emphasize: true, pulse: true },
   failed: { bg: "bg-red-500", text: "text-white", icon: "✗", emphasize: true },
-  cancelled: { bg: "bg-red-300", text: "text-red-900", icon: "✗", emphasize: true },
+  cancelled: { bg: "bg-gray-100", text: "text-gray-500", icon: "—" },
   pending: { bg: "bg-yellow-100", text: "text-yellow-800", icon: "…" },
   paused: { bg: "bg-orange-100", text: "text-orange-800", icon: "⏸" },
   upcoming: { bg: "bg-sky-50", text: "text-sky-700", icon: "→" },

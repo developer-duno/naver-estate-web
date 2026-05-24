@@ -9,7 +9,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, select
 
 from crawler.alert_format import format_issue_message
 from db.models import CrawlJob, MonitorAlert
@@ -72,7 +72,28 @@ def detect_issues(db) -> list[dict]:
         .where(and_(CrawlJob.status == "failed", CrawlJob.created_at >= cutoff))
         .group_by(CrawlJob.job_type)
     ).all()
+
+    # 1-a. 자가 복구된 job_type 식별 — 마지막 failed 이후 같은 job_type 에 completed 가 있으면
+    # 이미 정상 복구된 것으로 간주하고 발화 skip. run_monitor 의 line 215 분기가 자동으로
+    # "✅ 크롤링 복구" 텔레그램 알림 + status='resolved' 전이.
+    # (배경: 24h 윈도 안에 옛 failed 가 있으면 매 스캔마다 active 유지되어 stale 알림 결함)
+    recovery = db.execute(
+        select(
+            CrawlJob.job_type,
+            func.max(case((CrawlJob.status == "failed", CrawlJob.created_at))).label("last_failed"),
+            func.max(case((CrawlJob.status == "completed", CrawlJob.created_at))).label("last_completed"),
+        )
+        .where(CrawlJob.created_at >= cutoff)
+        .group_by(CrawlJob.job_type)
+    ).all()
+    recovered = {
+        r.job_type for r in recovery
+        if r.last_failed and r.last_completed and r.last_completed > r.last_failed
+    }
+
     for row in failed:
+        if row.job_type in recovered:
+            continue
         stats = _job_stats(db, row.job_type)
         issues.append({
             "alert_key": f"crawl_failed:{row.job_type}",
@@ -216,8 +237,11 @@ def run_monitor(db) -> None:
         if alert.alert_key not in current_keys:
             # 복구 알림 성공 시에만 resolved 처리 — 실패 시 다음 스캔 재시도
             # 구조화 data 없음 → alert_key·detail 만 전달
+            # kind = alert_key 의 prefix (crawl_failed / crawl_stale / freshness).
+            # 현재 alert_format resolved 분기는 kind 무관이지만 미래 분기 추가 시 안전.
+            kind = alert.alert_key.split(":", 1)[0]
             msg = format_issue_message(
-                "freshness",
+                kind,
                 {"alert_key": alert.alert_key, "detail": alert.detail},
                 event="resolved", header_ctx=header_ctx,
             )

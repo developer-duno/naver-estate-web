@@ -88,8 +88,9 @@
 | V024 | articles 매물 가치 필드 12개 (에픽 D #9) | 2026-05-17 (세션 195) |
 | V025 | articles 매물 상세 4필드 (에픽 D #10) | 2026-05-18 (세션 196) |
 | V026 | monitor_alerts 테이블 (크롤링 모니터) | 2026-05-18 (세션 196) |
+| V027 | crawl_jobs scheduler_started 인덱스 (PR #21) | 2026-05-21 (세션 207) |
 
-- `db/migrations/` 폴더에 `V000__` ~ `V026__` SQL 파일
+- `db/migrations/` 폴더에 `V000__` ~ `V027__` SQL 파일
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
 

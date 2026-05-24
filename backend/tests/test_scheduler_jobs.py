@@ -74,6 +74,23 @@ def test_crawl_details_uses_batch_size_env():
     assert job.kwargs["batch_size"] == 777
 
 
+def test_complex_metric_uses_batch_size_env():
+    """collect_metrics job kwargs 의 batch_size 가 COMPLEX_METRIC_BATCH_SIZE 를 따른다.
+
+    가치지표 가속 PR — 기본값 200 → 1000 으로 격상 (env 미설정 시 1000).
+    가치 3필드 25,262 단지 잔여 / 200/day = 126일 → 1000/day = 25일.
+    회귀 방지 — kwargs 가 module-level 상수를 참조하는지 검증.
+    """
+    with patch.multiple(
+        sched_mod,
+        COMPLEX_METRIC_ENABLED=True,
+        COMPLEX_METRIC_BATCH_SIZE=555,
+    ):
+        scheduler = sched_mod.create_scheduler()
+    job = {j.id: j for j in scheduler.get_jobs()}["collect_metrics"]
+    assert job.kwargs["batch_size"] == 555
+
+
 def test_complex_detail_apt_uses_interval_env():
     """COMPLEX_DETAIL_APT_INTERVAL_HOURS env 가 APT backfill 잡 interval 에 반영된다.
 

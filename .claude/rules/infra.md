@@ -60,7 +60,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 |------|------|------|
 | 전국 단지 발견 | 일요일 3시 | 네이버 키워드 검색으로 신규 단지 수집 |
 | 매물 수집 배치 | 12시간 interval | 최근 조회 단지 매물 크롤링 |
-| 매물 상세 보강 | 30분 interval | 매물 상세 정보 크롤링 (배치 500, 약 27일 내 미처리 63.8만 건 처리 — 약 85%는 dead 매물 청소) |
+| 매물 상세 보강 | 30분 interval | 매물 상세 정보 크롤링 (배치 500, PR #19 답습 ~27일 완주 일정. 2026-05-25 세션 229 실측 = 5일 진행 시 active 570,126건 중 23,019건(4.0%) detail_crawled. 배치당 dead 매물(404 빠른 응답) ~85% 답습 — "27일 완주 63.8만 건" 모집단과 "active 4.0%" 모집단은 다름) |
 | 시세 이력 수집 | 수요일 4시 | 단지별 시세(매매/전세) 주간 수집 |
 | 단지 가치지표 수집 | 매일 8:30 | complex_price_history 집계 → complexes 가치 3필드 (네이버 API 0, 기본 배치 1000) |
 | 인기 단지 크롤링 | 매일 10:45/14:45/19:15 | 자주 조회되는 단지 선제적 크롤링, 개별 try/except (기본 배치 50) |
@@ -70,6 +70,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 | 어린이집 수집 | 매월 첫째 목 6시 | CPMS cpmsapi030 API |
 | 범죄통계 수집 | 분기별 첫째 일 4시 | 경찰청 odcloud API (CSV 폴백) |
 | 단지 상세 backfill | APT/OPST 6시간 interval 매일 / JGC·ABYG·OBYG 주1회 7시 | 매물유형별 독립 job, detail_crawled_at NULL 단지 보강 (APT/OPST 배치 1000 가속 — PR #19 답습, 소수 유형 배치 1000 cron 유지) |
+| 크롤링 모니터 | 20분 interval | crawl_jobs 정합성 점검 후 텔레그램 알림 (운영 토글 MONITOR_ENABLED, 2026-05-25 세션 229 30→10→20 답습. _STALE_HOURS=1·_FAILED_WINDOW_HOURS=24 는 monitor.py:23~25 고정 상수, 인터벌 격하 무관) |
 
 ## 공유 인프라 규칙 (mibunyang 프로젝트와 공유)
 

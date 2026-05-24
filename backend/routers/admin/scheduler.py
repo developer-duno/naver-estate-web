@@ -38,7 +38,7 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "complex_detail_ABYG": {"name": "단지 상세 backfill ABYG", "schedule": "주 1회 수요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
     "complex_detail_OBYG": {"name": "단지 상세 backfill OBYG", "schedule": "주 1회 목요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
     "collect_metrics": {"name": "단지 가치지표 수집", "schedule": "매일 08:30", "env": "COMPLEX_METRIC_ENABLED", "env_default": "true"},
-    "crawler_monitor": {"name": "크롤링 모니터", "schedule": "30분 interval", "env": "MONITOR_ENABLED"},
+    "crawler_monitor": {"name": "크롤링 모니터", "schedule": "20분 interval", "env": "MONITOR_ENABLED"},
 }
 
 

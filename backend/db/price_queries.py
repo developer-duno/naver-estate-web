@@ -42,75 +42,119 @@ def get_price_stats_aggregated(db: Session, complex_no: str) -> dict:
     """).bindparams(cno=complex_no, bucket=AREA_BUCKET)
     area_rows = db.execute(area_stmt).fetchall()
 
-    floor_stmt = text("""
-        SELECT
-            CASE
-                WHEN floor_info ~ '^[0-9]+' THEN
-                    CASE
-                        WHEN CAST(SPLIT_PART(floor_info, '/', 1) AS INTEGER) BETWEEN 1 AND 5 THEN '저층(1-5)'
-                        WHEN CAST(SPLIT_PART(floor_info, '/', 1) AS INTEGER) BETWEEN 6 AND 15 THEN '중층(6-15)'
-                        WHEN CAST(SPLIT_PART(floor_info, '/', 1) AS INTEGER) > 15 THEN '고층(16+)'
-                    END
-                WHEN LEFT(floor_info, 1) IN ('저', '중', '고') THEN
-                    CASE LEFT(floor_info, 1)
-                        WHEN '저' THEN '저층(1-5)'
-                        WHEN '중' THEN '중층(6-15)'
-                        WHEN '고' THEN '고층(16+)'
-                    END
-            END AS floor_tier,
-            trade_type_name,
-            COUNT(*) AS cnt,
-            ROUND(AVG(numeric_price)) AS avg_price,
-            MIN(numeric_price) AS min_price,
-            MAX(numeric_price) AS max_price
-        FROM articles
-        WHERE complex_no = :cno AND is_active = TRUE AND numeric_price IS NOT NULL
-            AND floor_info IS NOT NULL
-        GROUP BY floor_tier, trade_type_name
-        HAVING CASE
-                WHEN floor_info ~ '^[0-9]+' THEN
-                    CASE
-                        WHEN CAST(SPLIT_PART(floor_info, '/', 1) AS INTEGER) BETWEEN 1 AND 5 THEN '저층(1-5)'
-                        WHEN CAST(SPLIT_PART(floor_info, '/', 1) AS INTEGER) BETWEEN 6 AND 15 THEN '중층(6-15)'
-                        WHEN CAST(SPLIT_PART(floor_info, '/', 1) AS INTEGER) > 15 THEN '고층(16+)'
-                    END
-                WHEN LEFT(floor_info, 1) IN ('저', '중', '고') THEN
-                    CASE LEFT(floor_info, 1)
-                        WHEN '저' THEN '저층(1-5)'
-                        WHEN '중' THEN '중층(6-15)'
-                        WHEN '고' THEN '고층(16+)'
-                    END
-            END IS NOT NULL
-        ORDER BY floor_tier, trade_type_name
-    """).bindparams(cno=complex_no)
-    floor_rows = db.execute(floor_stmt).fetchall()
+    # floor_stmt 는 PostgreSQL `~` regex + `SPLIT_PART` 의존 → SQLite 미지원.
+    # 테스트 엔진 (SQLite) 에서는 floor_rows 빈 배열로 우회 (by_floor 만 빈 결과,
+    # by_area + tt_key_map 매핑 검증은 정상 동작). backend/CLAUDE.md §CI 답습.
+    dialect_name = db.bind.dialect.name if db.bind else ""
+    if dialect_name == "postgresql":
+        floor_stmt = text("""
+            SELECT
+                CASE
+                    WHEN floor_info ~ '^[0-9]+' THEN
+                        CASE
+                            WHEN CAST(SPLIT_PART(floor_info, '/', 1) AS INTEGER) BETWEEN 1 AND 5 THEN '저층(1-5)'
+                            WHEN CAST(SPLIT_PART(floor_info, '/', 1) AS INTEGER) BETWEEN 6 AND 15 THEN '중층(6-15)'
+                            WHEN CAST(SPLIT_PART(floor_info, '/', 1) AS INTEGER) > 15 THEN '고층(16+)'
+                        END
+                    WHEN LEFT(floor_info, 1) IN ('저', '중', '고') THEN
+                        CASE LEFT(floor_info, 1)
+                            WHEN '저' THEN '저층(1-5)'
+                            WHEN '중' THEN '중층(6-15)'
+                            WHEN '고' THEN '고층(16+)'
+                        END
+                END AS floor_tier,
+                trade_type_name,
+                COUNT(*) AS cnt,
+                ROUND(AVG(numeric_price)) AS avg_price,
+                MIN(numeric_price) AS min_price,
+                MAX(numeric_price) AS max_price
+            FROM articles
+            WHERE complex_no = :cno AND is_active = TRUE AND numeric_price IS NOT NULL
+                AND floor_info IS NOT NULL
+            GROUP BY floor_tier, trade_type_name
+            HAVING CASE
+                    WHEN floor_info ~ '^[0-9]+' THEN
+                        CASE
+                            WHEN CAST(SPLIT_PART(floor_info, '/', 1) AS INTEGER) BETWEEN 1 AND 5 THEN '저층(1-5)'
+                            WHEN CAST(SPLIT_PART(floor_info, '/', 1) AS INTEGER) BETWEEN 6 AND 15 THEN '중층(6-15)'
+                            WHEN CAST(SPLIT_PART(floor_info, '/', 1) AS INTEGER) > 15 THEN '고층(16+)'
+                        END
+                    WHEN LEFT(floor_info, 1) IN ('저', '중', '고') THEN
+                        CASE LEFT(floor_info, 1)
+                            WHEN '저' THEN '저층(1-5)'
+                            WHEN '중' THEN '중층(6-15)'
+                            WHEN '고' THEN '고층(16+)'
+                        END
+                END IS NOT NULL
+            ORDER BY floor_tier, trade_type_name
+        """).bindparams(cno=complex_no)
+        floor_rows = db.execute(floor_stmt).fetchall()
+    else:
+        floor_rows = []
 
-    tt_key_map = {"매매": "maemae", "전세": "jeonse", "월세": "wolse"}
+    # 단기임대 → wolse 합산: 보증금 단위·구조 월세 동일, FE tradeKey 짝꿍 답습.
+    # 새 거래유형 추가 시 본 dict + frontend/src/lib/trade-types.ts:18 양쪽 답습.
+    # 주의: SQL GROUP BY 가 trade_type_name 별로 나누므로 wolse(월세) + wolse(단기임대)
+    # 두 행이 같은 키에 들어옴 → count 합산 + 평균 가중평균 계산 의무.
+    tt_key_map = {"매매": "maemae", "전세": "jeonse", "월세": "wolse", "단기임대": "wolse"}
     area_data: dict[float, dict] = {}
+    # wolse 합산용 (count, sum) 임시 누적 — 가중평균 계산 후 entry 에 반영
+    area_wolse_accum: dict[float, tuple[int, int]] = {}
     for row in area_rows:
         bucket = float(row[0]) if row[0] is not None else 0
         tt = row[1]
         key = tt_key_map.get(tt)
         if not key:
             continue
+        cnt = int(row[2])
+        avg = int(row[3]) if row[3] else 0
         entry = area_data.setdefault(bucket, {"label": f"{int(bucket)}m²"})
-        entry[key] = int(row[3]) if row[3] else 0
-        entry[f"{key}_count"] = int(row[2])
+        if key == "wolse" and bucket in area_wolse_accum:
+            prev_cnt, prev_sum = area_wolse_accum[bucket]
+            new_cnt = prev_cnt + cnt
+            new_sum = prev_sum + avg * cnt
+            area_wolse_accum[bucket] = (new_cnt, new_sum)
+            entry[key] = new_sum // new_cnt if new_cnt else 0
+            entry[f"{key}_count"] = new_cnt
+        else:
+            if key == "wolse":
+                area_wolse_accum[bucket] = (cnt, avg * cnt)
+            entry[key] = avg
+            entry[f"{key}_count"] = cnt
 
     by_area = [area_data[b] for b in sorted(area_data)]
 
     floor_data: dict[str, dict] = {}
+    floor_wolse_accum: dict[str, tuple[int, int, int, int]] = {}  # (cnt, sum, min, max)
     for row in floor_rows:
         tier = row[0]
         tt = row[1]
         key = tt_key_map.get(tt)
         if not key or not tier:
             continue
+        cnt = int(row[2])
+        avg = int(row[3]) if row[3] else 0
+        row_min = int(row[4]) if row[4] else 0
+        row_max = int(row[5]) if row[5] else 0
         entry = floor_data.setdefault(tier, {"label": tier})
-        entry[f"{key}_avg"] = int(row[3]) if row[3] else 0
-        entry[f"{key}_min"] = int(row[4]) if row[4] else 0
-        entry[f"{key}_max"] = int(row[5]) if row[5] else 0
-        entry[f"{key}_count"] = int(row[2])
+        if key == "wolse" and tier in floor_wolse_accum:
+            prev_cnt, prev_sum, prev_min, prev_max = floor_wolse_accum[tier]
+            new_cnt = prev_cnt + cnt
+            new_sum = prev_sum + avg * cnt
+            new_min = min(prev_min, row_min) if row_min else prev_min
+            new_max = max(prev_max, row_max)
+            floor_wolse_accum[tier] = (new_cnt, new_sum, new_min, new_max)
+            entry[f"{key}_avg"] = new_sum // new_cnt if new_cnt else 0
+            entry[f"{key}_min"] = new_min
+            entry[f"{key}_max"] = new_max
+            entry[f"{key}_count"] = new_cnt
+        else:
+            if key == "wolse":
+                floor_wolse_accum[tier] = (cnt, avg * cnt, row_min, row_max)
+            entry[f"{key}_avg"] = avg
+            entry[f"{key}_min"] = row_min
+            entry[f"{key}_max"] = row_max
+            entry[f"{key}_count"] = cnt
 
     floor_order = ["저층(1-5)", "중층(6-15)", "고층(16+)"]
     by_floor = [floor_data[f] for f in floor_order if f in floor_data]

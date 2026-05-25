@@ -13,6 +13,8 @@ import {
 import type { FilterState, FilterAction } from "./reducer";
 import PresetButtons from "./PresetButtons";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 // ── 공통 Props ──
 
@@ -242,18 +244,18 @@ export function MoveInSection({ s, setImmediate }: Pick<SectionProps, "s" | "set
     <>
       <p className={sectionLabel}>입주가능일</p>
       <div className={separator} />
-      {(MOVE_IN_OPTIONS as readonly string[]).map((m) => (
-        <label key={m} className="flex items-center gap-2 py-1.5 text-sm cursor-pointer">
-          <input
-            type="radio"
-            name="moveInType"
-            checked={s.moveInType === m}
-            onChange={() => setImmediate("moveInType")(m)}
-            className="accent-blue-600"
-          />
-          {m}
-        </label>
-      ))}
+      <RadioGroup
+        value={s.moveInType}
+        onValueChange={(v) => { if (v) setImmediate("moveInType")(v); }}
+        className="flex flex-col gap-1"
+      >
+        {(MOVE_IN_OPTIONS as readonly string[]).map((m) => (
+          <label key={m} htmlFor={`movein-${m}`} className="flex items-center gap-2 py-1.5 text-sm cursor-pointer">
+            <RadioGroupItem value={m} id={`movein-${m}`} />
+            {m}
+          </label>
+        ))}
+      </RadioGroup>
     </>
   );
 }
@@ -264,20 +266,30 @@ export function RoomSection({ s, setImmediate }: Pick<SectionProps, "s" | "setIm
   return (
     <>
       <p className={sectionLabel}>방 수</p>
-      <select value={s.minRooms} onChange={(e) => setImmediate("minRooms")(e.target.value)} className={selectCls} aria-label="최소 방 수">
-        <option value="0">전체</option>
-        <option value="1">1+</option>
-        <option value="2">2+</option>
-        <option value="3">3+</option>
-        <option value="4">4+</option>
-      </select>
+      <Select value={s.minRooms} onValueChange={(v) => setImmediate("minRooms")(v)}>
+        <SelectTrigger size="sm" aria-label="최소 방 수" className="w-full bg-white">
+          <SelectValue placeholder="전체" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="0">전체</SelectItem>
+          <SelectItem value="1">1+</SelectItem>
+          <SelectItem value="2">2+</SelectItem>
+          <SelectItem value="3">3+</SelectItem>
+          <SelectItem value="4">4+</SelectItem>
+        </SelectContent>
+      </Select>
       <div className="mt-3">
         <p className={sectionLabel}>욕실 수</p>
-        <select value={s.minBaths} onChange={(e) => setImmediate("minBaths")(e.target.value)} className={selectCls} aria-label="최소 욕실 수">
-          <option value="0">전체</option>
-          <option value="1">1+</option>
-          <option value="2">2+</option>
-        </select>
+        <Select value={s.minBaths} onValueChange={(v) => setImmediate("minBaths")(v)}>
+          <SelectTrigger size="sm" aria-label="최소 욕실 수" className="w-full bg-white">
+            <SelectValue placeholder="전체" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="0">전체</SelectItem>
+            <SelectItem value="1">1+</SelectItem>
+            <SelectItem value="2">2+</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </>
   );
@@ -295,19 +307,29 @@ export function DetailSection({ s, setImmediate, setDebounced, applyPreset, disp
       {filterOptions && filterOptions.building_names.length > 0 && (
         <div>
           <p className={sectionLabel}>동</p>
-          <select value={s.buildingName} onChange={(e) => setImmediate("buildingName")(e.target.value)} className={selectCls} aria-label="동 선택">
-            <option value="전체">전체</option>
-            {filterOptions.building_names.map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
+          <Select value={s.buildingName} onValueChange={(v) => setImmediate("buildingName")(v)}>
+            <SelectTrigger size="sm" aria-label="동 선택" className="w-full bg-white">
+              <SelectValue placeholder="전체" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="전체">전체</SelectItem>
+              {filterOptions.building_names.map((b) => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       )}
       <div>
         <p className={sectionLabel}>방향</p>
-        <select value={s.direction} onChange={(e) => setImmediate("direction")(e.target.value)} className={selectCls} aria-label="방향 선택">
-          {(filterOptions?.directions?.length ? ["전체", ...filterOptions.directions] : ["전체", "남향", "남동향", "남서향", "동향", "서향", "북향"]).map((d) => (
-            <option key={d} value={d}>{d}</option>
-          ))}
-        </select>
+        <Select value={s.direction} onValueChange={(v) => setImmediate("direction")(v)}>
+          <SelectTrigger size="sm" aria-label="방향 선택" className="w-full bg-white">
+            <SelectValue placeholder="전체" />
+          </SelectTrigger>
+          <SelectContent>
+            {(filterOptions?.directions?.length ? ["전체", ...filterOptions.directions] : ["전체", "남향", "남동향", "남서향", "동향", "서향", "북향"]).map((d) => (
+              <SelectItem key={d} value={d}>{d}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div>
         <p className={sectionLabel}>관리비 (만원)</p>
@@ -323,18 +345,28 @@ export function DetailSection({ s, setImmediate, setDebounced, applyPreset, disp
       </div>
       <div>
         <p className={sectionLabel}>준공년도</p>
-        <select value={s.buildingAge} onChange={(e) => setImmediate("buildingAge")(e.target.value)} className={selectCls} aria-label="준공년도 선택">
-          {(BUILDING_AGE_OPTIONS as readonly { v: string; l: string }[]).map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
-        </select>
+        <Select value={s.buildingAge} onValueChange={(v) => setImmediate("buildingAge")(v)}>
+          <SelectTrigger size="sm" aria-label="준공년도 선택" className="w-full bg-white">
+            <SelectValue placeholder="전체" />
+          </SelectTrigger>
+          <SelectContent>
+            {(BUILDING_AGE_OPTIONS as readonly { v: string; l: string }[]).map((o) => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
       <div>
         <p className={sectionLabel}>매물유형</p>
-        <select value={s.estateType} onChange={(e) => setImmediate("estateType")(e.target.value)} className={selectCls} aria-label="매물유형 선택">
-          <option value="all">전체</option>
-          {ESTATE_TYPE_FILTER_OPTIONS.map((o) => (
-            <option key={o.code} value={o.code}>{o.label}</option>
-          ))}
-        </select>
+        <Select value={s.estateType} onValueChange={(v) => setImmediate("estateType")(v)}>
+          <SelectTrigger size="sm" aria-label="매물유형 선택" className="w-full bg-white">
+            <SelectValue placeholder="전체" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">전체</SelectItem>
+            {ESTATE_TYPE_FILTER_OPTIONS.map((o) => (
+              <SelectItem key={o.code} value={o.code}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <label className="flex items-center gap-2 text-sm cursor-pointer">
         <input

@@ -1,5 +1,5 @@
 /**
- * ArticleTable 컴포넌트 테스트 - 매물 행 렌더링, 빈 상태
+ * ArticleTable 컴포넌트 테스트 - 매물 행 렌더링, 빈 상태, 정렬 토글
  * 실행: npx vitest run src/components/__tests__/ArticleTable.test.tsx
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -22,6 +22,11 @@ const sampleArticle: Article = {
   area2_pyeong: 25.4,
   direction: "남향",
   numeric_price: 50000,
+  article_real_estate_type_name: "아파트",
+  room_count: 3,
+  bathroom_count: 2,
+  price_per_pyeong: 1500,
+  article_confirm_ymd: "20240101",
 };
 
 describe("ArticleTable", () => {
@@ -30,23 +35,22 @@ describe("ArticleTable", () => {
     expect(screen.getByText("101동")).toBeInTheDocument();
   });
 
-describe("ArticleTable — 추가", () => {
-  it("층 정보 표시", () => {
-    render(<ArticleTable articles={[sampleArticle]} />);
-    expect(screen.getByText("10")).toBeInTheDocument();
-  });
+  describe("ArticleTable — 추가", () => {
+    it("층 정보 표시", () => {
+      render(<ArticleTable articles={[sampleArticle]} />);
+      expect(screen.getByText("10")).toBeInTheDocument();
+    });
 
-  it("가격 표시", () => {
-    render(<ArticleTable articles={[sampleArticle]} />);
-    expect(screen.getByText("5억")).toBeInTheDocument();
-  });
+    it("가격 표시", () => {
+      render(<ArticleTable articles={[sampleArticle]} />);
+      expect(screen.getByText("5억")).toBeInTheDocument();
+    });
 
-  it("면적 헤더 존재", () => {
-    render(<ArticleTable articles={[sampleArticle]} />);
-    expect(screen.getByText("면적")).toBeInTheDocument();
+    it("면적 헤더 존재", () => {
+      render(<ArticleTable articles={[sampleArticle]} />);
+      expect(screen.getByText("면적")).toBeInTheDocument();
+    });
   });
-});
-
 
   it("거래유형 뱃지 표시", () => {
     render(<ArticleTable articles={[sampleArticle]} />);
@@ -55,7 +59,9 @@ describe("ArticleTable — 추가", () => {
 
   it("빈 매물 목록", () => {
     render(<ArticleTable articles={[]} />);
-    expect(screen.getByText(/매물이 없습니다|결과가 없습니다|없습니다|No/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/매물이 없습니다|결과가 없습니다|없습니다|No/i)
+    ).toBeInTheDocument();
   });
 
   it("방향 표시", () => {
@@ -71,7 +77,9 @@ describe("ArticleTable — 추가", () => {
 
   it("필터 활성 시 필터 초기화 버튼 노출 + 콜백 호출", () => {
     const onReset = vi.fn();
-    render(<ArticleTable articles={[]} hasActiveFilters onResetFilters={onReset} />);
+    render(
+      <ArticleTable articles={[]} hasActiveFilters onResetFilters={onReset} />
+    );
     const btn = screen.getByText("필터 초기화");
     expect(btn).toBeInTheDocument();
     fireEvent.click(btn);
@@ -110,6 +118,30 @@ describe("ArticleTable — 추가", () => {
       render(<ArticleTable articles={[sampleArticle]} onRowClick={onRow} />);
       fireEvent.click(screen.getByText("101동"));
       expect(onRow).toHaveBeenCalledWith("A001");
+    });
+  });
+
+  // PR 4d-1: react-table 도입 후 정렬 토글 회귀 가드
+  describe("PR 4d-1 — react-table 정렬 토글", () => {
+    it("SERVER_SORT_MAP 컬럼 (가격) 헤더 클릭 → onSortChange('price_asc') 호출", () => {
+      const onSortChange = vi.fn();
+      render(
+        <ArticleTable articles={[sampleArticle]} onSortChange={onSortChange} />
+      );
+      const priceHeader = screen.getByRole("button", { name: /가격/ });
+      fireEvent.click(priceHeader);
+      expect(onSortChange).toHaveBeenCalledWith("price_asc");
+    });
+
+    it("미매핑 컬럼 (방향) 헤더 클릭 → onSortChange 미호출 + 정렬 인디케이터 ▲ 표시", () => {
+      const onSortChange = vi.fn();
+      render(
+        <ArticleTable articles={[sampleArticle]} onSortChange={onSortChange} />
+      );
+      const directionHeader = screen.getByRole("button", { name: /방향/ });
+      fireEvent.click(directionHeader);
+      expect(onSortChange).not.toHaveBeenCalled();
+      expect(screen.getByText("▲")).toBeInTheDocument();
     });
   });
 });

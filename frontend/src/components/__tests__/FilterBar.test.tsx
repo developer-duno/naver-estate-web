@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import FilterBar from "../FilterBar";
 import type { FilterOptions } from "@/types";
 
@@ -440,12 +441,14 @@ describe("FilterBar — 면적 빠른선택 active(파랑) 표시", () => {
     expect(btn.className).toContain("bg-blue-600");
   });
 
-  it("T8: 오피스텔(OPST) + 평 단위 + '투룸(12~18평)' 클릭 후 해당 버튼 파랑", () => {
-    // 매물유형 select 를 OPST 로 변경 → AREA_PRESETS_OFFICETEL_PYEONG 가 노출되어야 함
+  it("T8: 오피스텔(OPST) + 평 단위 + '투룸(12~18평)' 클릭 후 해당 버튼 파랑", async () => {
+    // 매물유형 Select 를 OPST 로 변경 → AREA_PRESETS_OFFICETEL_PYEONG 가 노출되어야 함
+    // PR 4c: native <select> → shadcn Radix Select 마이그. trigger 클릭 + option 클릭 패턴
+    const user = userEvent.setup();
     render(<FilterBar {...defaultProps} />);
     openDropdown("상세");
-    const select = screen.getByLabelText("매물유형 선택") as HTMLSelectElement;
-    fireEvent.change(select, { target: { value: "opst" } });
+    await user.click(screen.getByLabelText("매물유형 선택"));
+    await user.click(screen.getByRole("option", { name: "오피스텔" }));
     openDropdown("면적");
     selectPyeong();
     const btn = screen.getByText("투룸(12~18평)");
@@ -491,11 +494,15 @@ describe("FilterBar — 상세 드롭다운", () => {
     expect(screen.getByText("20만~")).toBeInTheDocument();
   });
 
-  it("동 필터 옵션 표시", () => {
+  it("동 필터 옵션 표시", async () => {
+    // PR 4c: native <select> 였을 때는 옵션이 닫힌 상태에서도 DOM 에 박혀 보였지만,
+    // shadcn Radix Select 는 SelectContent 가 열렸을 때만 옵션을 렌더한다 → trigger 열기 의무
+    const user = userEvent.setup();
     render(<FilterBar {...defaultProps} />);
     openDropdown("상세");
-    expect(screen.getByText("101동")).toBeInTheDocument();
-    expect(screen.getByText("102동")).toBeInTheDocument();
+    await user.click(screen.getByLabelText("동 선택"));
+    expect(screen.getByRole("option", { name: "101동" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "102동" })).toBeInTheDocument();
   });
 
   it("태그 버튼 표시 + 선택 시 tags 쿼리 전달 + 재클릭 시 해제", () => {
@@ -643,35 +650,27 @@ describe("FilterBar — 모바일 필터 칩 +N 더보기 토글", () => {
 });
 
 describe("FilterBar — 매물유형 옵션", () => {
-  it("상세 드롭다운에 확장된 매물유형 옵션 표시", () => {
+  it("상세 드롭다운에 확장된 매물유형 옵션 표시", async () => {
+    // PR 4c: native <select> → Radix Select 마이그. SelectContent 열린 후 옵션 검사
+    const user = userEvent.setup();
     render(<FilterBar {...defaultProps} />);
     openDropdown("상세");
-    // 매물유형 select를 찾기: "오피스텔" option을 포함하는 select
-    const selects = screen.getAllByDisplayValue("전체");
-    const estateSelect = selects.find((s) => {
-      const opts = Array.from(s.querySelectorAll("option")).map((o) => o.textContent);
-      return opts.includes("오피스텔");
-    });
-    expect(estateSelect).toBeDefined();
-    const options = Array.from(estateSelect!.querySelectorAll("option")).map((o) => o.textContent);
-    expect(options).toContain("아파트");
-    expect(options).toContain("오피스텔");
-    expect(options).toContain("분양권");
-    expect(options).toContain("재건축");
-    expect(options).toContain("재개발");
+    await user.click(screen.getByLabelText("매물유형 선택"));
+    expect(screen.getByRole("option", { name: "아파트" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "오피스텔" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "분양권" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "재건축" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "재개발" })).toBeInTheDocument();
   });
 
-  it("매물유형 변경 시 onChange 호출", () => {
+  it("매물유형 변경 시 onChange 호출", async () => {
+    // PR 4c: native <select> → Radix Select 마이그. trigger 클릭 + option 클릭 패턴
+    const user = userEvent.setup();
     const onChange = vi.fn();
     render(<FilterBar {...defaultProps} onChange={onChange} />);
     openDropdown("상세");
-    const selects = screen.getAllByDisplayValue("전체");
-    const estateSelect = selects.find((s) => {
-      const opts = Array.from(s.querySelectorAll("option")).map((o) => o.textContent);
-      return opts.includes("오피스텔");
-    });
-    expect(estateSelect).toBeDefined();
-    fireEvent.change(estateSelect!, { target: { value: "opst" } });
+    await user.click(screen.getByLabelText("매물유형 선택"));
+    await user.click(screen.getByRole("option", { name: "오피스텔" }));
     expect(onChange).toHaveBeenCalled();
   });
 });

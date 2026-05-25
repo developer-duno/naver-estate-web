@@ -10,10 +10,10 @@ naver-estate-web/
 ├── frontend/                    # Next.js 16 App Router (TypeScript + Tailwind CSS 4)
 │   ├── src/
 │   │   ├── app/                 # 31 페이지 (search, complex/[no], compare, mibunyang/*, tools/*5, blog, admin/*)
-│   │   ├── components/          # 141 TSX (admin/30 + filter/4 + mb/23 + article/7 + 루트 41 + 그 외)
+│   │   ├── components/          # 131 TSX (mb/35 + admin/21 + ui/13 + complex/7 + article/7 + filter/4 + search/2 + blog/2 + 루트 40, `__tests__/` 제외)
 │   │   ├── content/blog/        # MDX 26편 (시세분석 5 / 세금 6 / 도구활용 9 / 미분양 6)
-│   │   ├── hooks/               # 17 커스텀 훅 (useFavorites, useMbCompare, useCrawlProgress 등)
-│   │   ├── lib/                 # 40 파일 (api/ 9 모듈 + storage/ + format/ + query-keys/ + 도구 라이브러리 14)
+│   │   ├── hooks/               # 21 커스텀 훅 (useFavorites/useMbCompare/useCrawlProgress 등, `__tests__/` 제외)
+│   │   ├── lib/                 # 47 파일 (최상위 37 + api/ 9 모듈 + admin/ 1, `__tests__/` 제외 — storage/format/query-keys 별도 폴더 아니라 최상위 통합)
 │   │   ├── types/               # TypeScript 인터페이스 (estate + Mb* 10 + naver-maps.d.ts)
 │   │   └── middleware.ts        # Supabase 세션 + /admin/* 라우트 보호
 │   ├── e2e/                     # Playwright 20 spec 파일 (--webpack 모드)
@@ -21,7 +21,7 @@ naver-estate-web/
 │   └── .claude/                 # FE 깊이 토픽 4종 (hooks-and-state, ui-patterns, pages-and-mb, tools-lineup)
 │
 ├── backend/                     # FastAPI + SQLAlchemy 2.0 + curl_cffi
-│   ├── routers/                 # 라우터 9 (live, complexes, articles, mb, crawl, admin/, stats, regions, users, verify)
+│   ├── routers/                 # 라우터 (articles·complexes·live/·mb·regions·stats·users·verify + admin/) + 헬퍼 (serializers·estate_serializers·mb_serializers·filter_builder) = 12 .py + 2 폴더 (admin/, live/)
 │   ├── services/                # 비즈니스 로직 (upsert, cache, enricher, storage, email, naver_call_counter)
 │   ├── crawler/                 # 크롤링 + APScheduler (service.py + service_*.py 4분할 + scheduler.py)
 │   ├── db/                      # 13 파일 (models, queries barrel + 5분할, mb_queries barrel + 3분할, query_helpers, database, migrations/)
@@ -73,8 +73,8 @@ naver-estate-web/
 | **frontend/src/app/** | 31 페이지 (search·complex/[no]·compare·mibunyang/*·tools/*5·blog·admin/*·login·verify) |
 | **frontend/src/lib/api/** | 9 모듈 (admin, analytics, articles, complex, core, crawl, mibunyang, verify, index barrel) |
 | **frontend/src/lib/** 도구 14 | brokerage·acquisition·transfer-tax·property-tax·area (110 케이스 / NoticeKey 60+ / PDF 16장 권위) |
-| **frontend/src/components/** | 141 TSX (admin·filter·mb·article·blog·complex·search·ui 8 폴더) |
-| **frontend/src/hooks/** | 17 훅 (useFavorites/useMbCompare/useCrawlProgress/useFilterParams 등 localStorage·React Query) |
+| **frontend/src/components/** | 131 TSX (mb·admin·ui·complex·article·filter·search·blog 8 폴더, `__tests__/` 제외) |
+| **frontend/src/hooks/** | 21 훅 (useFavorites/useMbCompare/useCrawlProgress/useFilterParams 등 localStorage·React Query) |
 | **frontend/src/content/blog/** | MDX 26편 (시세 5·세금 6·도구활용 9·미분양 6, GATE 10 mdx-jsx + 광고법 가드) |
 | **CLAUDE.md** | 진입점 (비즈니스 모델·기술 스택·아키텍처·데이터흐름·환경변수·테스트 현황·항상 로드 6) |
 | **CONTRIBUTING.md** | pre-commit hook (GATE 10 mdx-jsx + 광고법, husky v9, --no-verify 금지) |

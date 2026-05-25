@@ -210,26 +210,27 @@ export function FloorSection({ s, setImmediate }: Pick<SectionProps, "s" | "setI
   return (
     <>
       <p className={sectionLabel}>층수 필터</p>
-      <div className="flex flex-wrap gap-1 mt-1">
+      <ToggleGroup
+        type="single"
+        value={s.floorPreset}
+        onValueChange={(v) => { if (v) setImmediate("floorPreset")(v); }}
+        className="w-auto flex flex-wrap gap-1 mt-1"
+      >
         {([
           { k: "전체", l: "전체" },
           { k: "저층", l: "저층(1~5)" },
           { k: "중층", l: "중층(6~10)" },
           { k: "고층", l: "고층(11↑)" },
         ] as const).map(({ k, l }) => (
-          <button
+          <ToggleGroupItem
             key={k}
-            onClick={() => setImmediate("floorPreset")(k)}
-            className={`px-2 py-1 text-sm border rounded ${
-              s.floorPreset === k
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
-            }`}
+            value={k}
+            className="h-auto min-w-0 px-2 py-1 text-sm border rounded bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50 hover:text-gray-600 data-[state=on]:bg-blue-600 data-[state=on]:text-white data-[state=on]:border-blue-600"
           >
             {l}
-          </button>
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
     </>
   );
 }
@@ -347,33 +348,26 @@ export function DetailSection({ s, setImmediate, setDebounced, applyPreset, disp
       {filterOptions && filterOptions.tags.length > 0 && (
         <div>
           <p className={sectionLabel}>태그</p>
-          <div className="flex flex-wrap gap-1">
-            {filterOptions.tags.map((t) => {
-              const selected = s.tags.split(",").filter(Boolean);
-              const isOn = selected.includes(t);
-              const toggle = () => {
-                const next = isOn ? selected.filter((x) => x !== t) : [...selected, t];
-                const v = next.join(",");
-                dispatch({ type: "SET", key: "tags", value: v });
-                emitChange({ tags: v });
-              };
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={toggle}
-                  aria-pressed={isOn}
-                  className={`px-2 py-1 text-sm border rounded ${
-                    isOn
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
-                  }`}
-                >
-                  {t}
-                </button>
-              );
-            })}
-          </div>
+          <ToggleGroup
+            type="multiple"
+            value={s.tags.split(",").filter(Boolean)}
+            onValueChange={(next) => {
+              const v = next.join(",");
+              dispatch({ type: "SET", key: "tags", value: v });
+              emitChange({ tags: v });
+            }}
+            className="w-auto flex flex-wrap gap-1"
+          >
+            {filterOptions.tags.map((t) => (
+              <ToggleGroupItem
+                key={t}
+                value={t}
+                className="h-auto min-w-0 px-2 py-1 text-sm border rounded bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50 hover:text-gray-600 data-[state=on]:bg-blue-600 data-[state=on]:text-white data-[state=on]:border-blue-600"
+              >
+                {t}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         </div>
       )}
       <div className="border-t border-gray-200 my-2" />

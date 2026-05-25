@@ -12,6 +12,7 @@ import {
 } from "@/lib/constants";
 import type { FilterState, FilterAction } from "./reducer";
 import PresetButtons from "./PresetButtons";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 // ── 공통 Props ──
 
@@ -35,21 +36,22 @@ export function TradeTypeSection({ s, setImmediate }: Pick<SectionProps, "s" | "
   return (
     <>
       <p className={sectionLabel}>거래유형 선택</p>
-      <div className="flex flex-wrap gap-1 mt-1">
+      <ToggleGroup
+        type="single"
+        value={s.tradeType}
+        onValueChange={(v) => { if (v) setImmediate("tradeType")(v); }}
+        className="w-auto flex flex-wrap gap-1 mt-1"
+      >
         {["전체", "매매", "전세", "월세", "단기임대"].map((t) => (
-          <button
+          <ToggleGroupItem
             key={t}
-            onClick={() => setImmediate("tradeType")(t)}
-            className={`px-2 py-1 text-sm border rounded ${
-              s.tradeType === t
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50"
-            }`}
+            value={t}
+            className="h-auto min-w-0 px-2 py-1 text-sm border rounded bg-gray-50 border-gray-300 text-gray-600 hover:bg-blue-50 hover:text-gray-600 data-[state=on]:bg-blue-600 data-[state=on]:text-white data-[state=on]:border-blue-600"
           >
             {t}
-          </button>
+          </ToggleGroupItem>
         ))}
-      </div>
+      </ToggleGroup>
     </>
   );
 }

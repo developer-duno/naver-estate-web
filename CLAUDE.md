@@ -13,7 +13,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 | **블로그 라인업** | `.claude/BLOG.md` | /blog MDX 26편 (시세 분석 5 / 세금 6 / 도구 활용 9 / 미분양 6) + 새 글 발행 4단 절차 |
 | **FE 깊이 토픽 4종** | `frontend/.claude/{hooks-and-state,ui-patterns,pages-and-mb,tools-lineup}.md` | FE 작업 시 명시 참조 (자동 로드 안 됨) — 훅·UI 패턴·페이지 흐름·도구 5종 |
 | **BE 깊이 토픽 1종** | `backend/.claude/details.md` | BE 작업 시 명시 참조 (자동 로드 안 됨) — 실거래가·mibunyang·검증·중복 제거 |
-| **세션 박제 메모리** | `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\` | 세션 43~126 일자별 정리 + 박제 룰 + 사고 회고 |
+| **세션 박제 메모리** | `C:\Users\user\.claude\projects\d--naver-estate-web\memory\` | 세션 43~231 일자별 정리 + 박제 룰 + 사고 회고 (세션 212 D: 이사 PR #35 답습) |
 | **세션 79~112 archive** | 메모리 폴더 `sessions_79_112_archive.md` | 도구 5종 라인업 진화 + 박제 룰 진화 한 표 요약 |
 
 ## 비즈니스 모델
@@ -135,6 +135,7 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 | `infra.md` | 서버 복구 절차, 스케줄러, 공유 인프라, DB 풀 |
 | `codes.md` | 거래/매물유형 코드, 핵심 상수, localStorage 키 |
 | `planning.md` | /plan 모드 최소 규칙 + 세션 종료 시 메모리 활용 |
+| `domain-mapping-ssot.md` | BE-FE 매핑 SSOT + SQL 집계 N→1 가중평균 + dialect 분기 (세션 226 신설) |
 | `release.md` | PR 머지 후 backend 가동 검증 3중 cross-check (세션 230~231 zombie 답습, 본 PR 신설) |
 
 ### 필요 시 호출 (`.claude/commands/`)

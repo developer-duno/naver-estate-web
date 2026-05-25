@@ -82,7 +82,7 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 | 자산 | 위치 | 사용 시점 |
 |---|---|---|
 | 글로벌 룰 | `~/.claude/CLAUDE.md` | 모든 세션 자동 로드 |
-| 사적 메모리 (이 프로젝트) | `~/.claude/projects/f--cursor-naver-estate-web/memory/` | 세션 42~105 일지·feedback·project 메모 |
+| 사적 메모리 (이 프로젝트) | `~/.claude/projects/d--naver-estate-web/memory/` | 세션 42~231 일지·feedback·project 메모 (세션 212 D: 이사 PR #35 답습) |
 | 메모리 인덱스 | 위 폴더의 `MEMORY.md` | 세션 시작 시 자동 컨텍스트 주입 |
 | Plan 보관소 | `~/.claude/plans/` | 세션 109 plan 30+ 개. 명명 규칙: `<번호>-<형용사>-<명사>.md` |
 | 플러그인·Skill·MCP (도구) | §8 도구 매트릭스 | 작업 종류별 트리거 표 |
@@ -119,9 +119,11 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 > 이 표는 **미해소 부채만** 담는다. 해소된 항목은 §6.1 아카이브로 이동.
 > 새 부채 발견 시 이 표에 한 줄 추가, 해소 시 §6.1 로 이동 (세션 190 운영 룰).
 
-| 부채 | 위치 | 영향 |
-|---|---|---|
-| (현재 미해소 부채 0건) | — | — |
+| 우선순위 | 부채 | 위치 | 영향 |
+|---|---|---|---|
+| 🔴 1순위 | backend 재시작 ritual (zombie 2 세션 연속) | 세션 230~231 박제 → 본 세션 232 `release.md` 신설 예정 | PR #61 가속 효과 검증 차단. 머지된 코드 미반영 위험 영구화 |
+| 🟡 2순위 | 디자인 리뉴얼 PR 4~7 진행 중 | spec = `docs/superpowers/specs/2026-05-20-2upekr-redesign-design.md` | PR 0·1·2a·3a 완료 (세션 210·213·214·215). PR 4~7 시각 변화 작업 = 다음 세션 1순위 |
+| 🟢 3순위 | 가치 3필드 0.88% 채움률 | nearby/jeonse/trades = 558/458/558 / 63,506 (전체 모집단 22,437) | backend 재시작 후 ~33일 자동 완주 = 능동 작업 불필요 (부채 1 해소 의존) |
 
 ### §6.1 해소 완료 아카이브 (이력 보존 — "왜 이렇게 됐나" 추적용)
 
@@ -215,11 +217,11 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 | 명령 | 용도 | 위치 |
 |---|---|---|
 | `npm run dev` | 프론트엔드 dev 서버 (port 3000=sangse / 3100=legal 점유, naver 는 8090 사용 — 세션 114 박제) | `frontend/` |
-| `npm test` / `npx vitest run` | FE 단위·컴포넌트·훅 테스트 (992개) | `frontend/` |
-| `npm run test:e2e` / `npx playwright test` | E2E (16파일, --webpack 모드) | `frontend/` |
+| `npm test` / `npx vitest run` | FE 단위·컴포넌트·훅 테스트 (카운트 = 루트 `CLAUDE.md` §테스트 현황 SSOT) | `frontend/` |
+| `npm run test:e2e` / `npx playwright test` | E2E (카운트 = 루트 `CLAUDE.md` §테스트 현황 SSOT, --webpack 모드) | `frontend/` |
 | `npx tsc --noEmit` | 타입 체크 (커밋 전 필수) | `frontend/` |
 | `npm run lint` (eslint) | 린트 (커밋 전 필수) | `frontend/` |
-| `python -m pytest --tb=short -q` | BE 단위·통합 (563개) | `backend/` |
+| `python -m pytest --tb=short -q` | BE 단위·통합 (카운트 = 루트 `CLAUDE.md` §테스트 현황 SSOT) | `backend/` |
 | `ruff check .` / `ruff check --fix .` | BE 린트 (커밋 전 필수) | `backend/` |
 | `python -m uvicorn main:app --host 0.0.0.0 --port 8002` | BE 수동 실행 | `backend/` |
 | `cloudflared tunnel run naver-estate-backend` | 집 서버 Named Tunnel 수동 | 글로벌 |

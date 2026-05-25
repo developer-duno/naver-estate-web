@@ -23,6 +23,10 @@
 | `useMbCompareBookmarks` | 미분양 비교 북마크 (localStorage, 최대 20개, 수동 저장, 이름 지정, isBookmarked) |
 | `useMbRadarSettings` | 레이더 차트 설정 영속화 (localStorage, 축 선택+가중치 1-5, toggleAxis/setWeight/applyPreset/reset) |
 | `useArticleFavorites` | 매물 즐겨찾기 (localStorage, useArticleFavoriteStatus 포함, 무제한 토글) |
+| `useAdminUserMap` | 관리자 사용자 id ↔ 이메일 매핑 (jobs/logs 표 출력용) |
+| `useComplexPrefetch` | 단지 hover 200ms 후 complex + articles prefetch (검색 결과 성능) |
+| `useCrawlAction` | 크롤 수동 트리거 + invalidateQueries (admin recrawl 버튼) |
+| `useLocalStorageFavorites` / `useLocalStorageList` | 즐겨찾기·리스트 제네릭 훅 (위 useFavorites·useSearchHistory 등의 베이스) |
 
 ## FilterBar 구조 (모듈 분리)
 

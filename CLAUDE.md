@@ -136,6 +136,7 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 | `codes.md` | 거래/매물유형 코드, 핵심 상수, localStorage 키 |
 | `planning.md` | /plan 모드 최소 규칙 + 세션 종료 시 메모리 활용 |
 | `domain-mapping-ssot.md` | BE-FE 매핑 SSOT + SQL 집계 N→1 가중평균 + dialect 분기 (세션 226 신설) |
+| `release.md` | PR 머지 후 backend 가동 검증 3중 cross-check (세션 230~231 zombie 답습, 본 PR 신설) |
 
 ### 필요 시 호출 (`.claude/commands/`)
 | 커맨드 | 내용 |

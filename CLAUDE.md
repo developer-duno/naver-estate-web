@@ -135,6 +135,7 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 | `infra.md` | 서버 복구 절차, 스케줄러, 공유 인프라, DB 풀 |
 | `codes.md` | 거래/매물유형 코드, 핵심 상수, localStorage 키 |
 | `planning.md` | /plan 모드 최소 규칙 + 세션 종료 시 메모리 활용 |
+| `release.md` | PR 머지 후 backend 가동 검증 3중 cross-check (세션 230~231 zombie 답습, 본 PR 신설) |
 
 ### 필요 시 호출 (`.claude/commands/`)
 | 커맨드 | 내용 |

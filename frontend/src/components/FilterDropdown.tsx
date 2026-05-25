@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useRef, useEffect, useCallback, useState } from "react";
+import React from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface Props {
   /** 버튼에 표시할 기본 라벨 */
@@ -18,8 +19,8 @@ interface Props {
 }
 
 /**
- * 필터 툴바 드롭다운 — 데스크톱 앱 FilterDropdownPopup 패턴
- * 버튼 클릭 → 아래에 팝업 표시, 외부 클릭 → 닫기
+ * 필터 툴바 드롭다운 — Radix Popover 기반 (shadcn wrapper)
+ * 외부 클릭/ESC 닫기·우측 오버플로 회피·키보드 a11y 모두 Radix 자동
  */
 const FilterDropdown = React.memo(function FilterDropdown({
   label,
@@ -29,51 +30,6 @@ const FilterDropdown = React.memo(function FilterDropdown({
   onToggle,
   children,
 }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [alignRight, setAlignRight] = useState(false);
-
-  // 드롭다운 우측 오버플로 감지 (rAF로 렌더링 완료 후 측정)
-  useEffect(() => {
-    if (isOpen && panelRef.current) {
-      requestAnimationFrame(() => {
-        if (panelRef.current) {
-          const rect = panelRef.current.getBoundingClientRect();
-          setAlignRight(rect.right > window.innerWidth - 16);
-        }
-      });
-    } else {
-      // 닫힘 시 좌측 정렬 복원 (다음 열림 측정 전 초기화)
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setAlignRight(false);
-    }
-  }, [isOpen]);
-
-  // onToggle을 ref로 안정화 — 부모 리렌더로 인한 useEffect 재실행 방지
-  const onToggleRef = useRef(onToggle);
-  useEffect(() => {
-    onToggleRef.current = onToggle;
-  }, [onToggle]);
-
-  // 외부 클릭 시 닫기 (pointerdown = mouse + touch + pen 통합)
-  const handleClickOutside = useCallback((e: Event) => {
-    if (ref.current && !ref.current.contains(e.target as Node)) {
-      onToggleRef.current();
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    // 같은 이벤트 사이클에서 방금 열린 드롭다운이 즉시 닫히는 race 회피
-    const timer = setTimeout(() => {
-      document.addEventListener("pointerdown", handleClickOutside);
-    }, 0);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("pointerdown", handleClickOutside);
-    };
-  }, [isOpen, handleClickOutside]);
-
   const buttonText = isActive && summary ? `${label}: ${summary} ▾` : `${label} ▾`;
 
   const btnClass = isActive
@@ -81,17 +37,22 @@ const FilterDropdown = React.memo(function FilterDropdown({
     : "px-3 py-2 border rounded text-sm bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100 whitespace-nowrap";
 
   return (
-    <div className="relative" ref={ref}>
-      <button type="button" className={btnClass} onClick={onToggle}>
-        {buttonText}
-      </button>
-
-      {isOpen && (
-        <div ref={panelRef} className={`absolute top-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-50 min-w-[200px] max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto p-3 ${alignRight ? "right-0" : "left-0"}`}>
-          {children}
-        </div>
-      )}
-    </div>
+    <Popover open={isOpen} onOpenChange={(next) => { if (next !== isOpen) onToggle(); }}>
+      <PopoverTrigger asChild>
+        <button type="button" className={btnClass}>
+          {buttonText}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="bottom"
+        align="start"
+        sideOffset={4}
+        collisionPadding={16}
+        className="w-auto min-w-50 max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto bg-white border border-gray-300 rounded-lg shadow-lg p-3 gap-0 ring-0 text-gray-700"
+      >
+        {children}
+      </PopoverContent>
+    </Popover>
   );
 });
 

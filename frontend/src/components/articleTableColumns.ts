@@ -1,121 +1,126 @@
 /**
- * ArticleTable 컬럼 정의 — 테이블 구조 설정 분리
+ * ArticleTable 컬럼 정의 — @tanstack/react-table v8 ColumnDef
  *
- * COLUMNS: 컬럼 메타데이터 (키, 라벨, 정렬 설정)
- * SERVER_SORT_MAP: 서버 정렬 키 매핑
- * getColumnValue: 행 데이터에서 컬럼 값 추출
+ * COLUMNS: 정렬용 메타데이터 (id, accessorFn, header, enableSorting, meta.headerTitle, meta.className)
+ * SERVER_SORT_MAP: 서버 정렬 키 매핑 (FE 정렬 키 → BE sort_by 파라미터)
+ *
+ * 셀 렌더링은 ArticleTable.tsx 의 ArticleRow 가 담당 (옵션 B). cell: 정의 박지 말 것.
  */
+import type { ColumnDef } from "@tanstack/react-table";
 import type { Article } from "@/types";
-import type { ColumnDef } from "@/components/SortableHeader";
 
-export const COLUMNS: ColumnDef[] = [
-  { key: "no", label: "No", className: "w-[40px] text-center" },
+export interface ArticleColumnMeta {
+  headerTitle?: string;
+  className?: string;
+}
+
+export const COLUMNS: ColumnDef<Article>[] = [
+  { id: "no", header: "No", enableSorting: false, meta: { className: "w-[40px] text-center" } },
   {
-    key: "trade_type",
-    label: "거래",
-    className: "w-[55px] text-center",
-    sortable: true,
-    getSortText: (a) => String((a as unknown as Article).trade_type_name || ""),
+    id: "trade_type",
+    header: "거래",
+    enableSorting: true,
+    accessorFn: (a) => a.trade_type_name ?? "",
+    meta: { className: "w-[55px] text-center" },
   },
   {
-    key: "building",
-    label: "동",
-    className: "w-[60px]",
-    sortable: true,
-    getSortText: (a) => String((a as unknown as Article).building_name || ""),
+    id: "building",
+    header: "동",
+    enableSorting: true,
+    accessorFn: (a) => a.building_name ?? "",
+    meta: { className: "w-[60px]" },
   },
   {
-    key: "floor",
-    label: "층",
-    className: "w-[45px] text-center",
-    sortable: true,
-    getSortText: (a) => String((a as unknown as Article).floor_info || ""),
+    id: "floor",
+    header: "층",
+    enableSorting: true,
+    accessorFn: (a) => a.floor_info ?? "",
+    meta: { className: "w-[45px] text-center" },
   },
   {
-    key: "price",
-    label: "가격",
-    className: "w-[120px] text-right",
-    sortable: true,
-    getSortValue: (a) => (a as unknown as Article).numeric_price ?? null,
+    id: "price",
+    header: "가격",
+    enableSorting: true,
+    accessorFn: (a) => a.numeric_price ?? null,
+    meta: { className: "w-[120px] text-right" },
   },
   {
-    key: "area",
-    label: "면적",
-    className: "w-[120px] text-right",
-    sortable: true,
-    getSortValue: (a) => (a as unknown as Article).area2_m2 ?? (a as unknown as Article).area1_m2 ?? null,
+    id: "area",
+    header: "면적",
+    enableSorting: true,
+    // v4 결정 2: area2_m2 ?? area1_m2 폴백 보존 (현재 동작 1:1)
+    accessorFn: (a) => a.area2_m2 ?? a.area1_m2 ?? null,
+    meta: { className: "w-[120px] text-right" },
   },
   {
-    key: "ppyeong",
-    label: "평당가",
-    className: "w-[75px] text-right",
-    sortable: true,
-    getSortValue: (a) => (a as unknown as Article).price_per_pyeong ?? null,
+    id: "ppyeong",
+    header: "평당가",
+    enableSorting: true,
+    accessorFn: (a) => a.price_per_pyeong ?? null,
+    meta: { className: "w-[75px] text-right" },
   },
   {
-    key: "yield",
-    label: "수익률",
-    headerTitle: "월세: (월세×12)/보증금, 전세: 보증금/매매중위가",
-    className: "w-[70px] text-right",
-    sortable: true,
-    getSortValue: (a) => {
-      const art = a as unknown as Article;
-      return art.monthly_rent_yield ?? art.article_jeonse_ratio ?? null;
+    id: "yield",
+    header: "수익률",
+    enableSorting: true,
+    accessorFn: (a) => a.monthly_rent_yield ?? a.article_jeonse_ratio ?? null,
+    meta: {
+      headerTitle: "월세: (월세×12)/보증금, 전세: 보증금/매매중위가",
+      className: "w-[70px] text-right",
     },
   },
   {
-    key: "rooms",
-    label: "방/욕",
-    className: "w-[45px] text-center",
-    sortable: true,
-    getSortValue: (a) => {
-      const art = a as unknown as Article;
-      return art.room_count != null ? (art.room_count * 100 + (art.bathroom_count ?? 0)) : null;
-    },
+    id: "rooms",
+    header: "방/욕",
+    enableSorting: true,
+    accessorFn: (a) =>
+      a.room_count != null ? a.room_count * 100 + (a.bathroom_count ?? 0) : null,
+    meta: { className: "w-[45px] text-center" },
   },
   {
-    key: "move_in",
-    label: "입주가능일",
-    className: "w-[80px] text-center",
-    sortable: true,
-    getSortText: (a) => String((a as unknown as Article).move_in_date || ""),
+    id: "move_in",
+    header: "입주가능일",
+    enableSorting: true,
+    accessorFn: (a) => a.move_in_date ?? "",
+    meta: { className: "w-[80px] text-center" },
   },
   {
-    key: "maint",
-    label: "관리비",
-    className: "w-[55px] text-right",
-    sortable: true,
-    getSortValue: (a) => (a as unknown as Article).numeric_maintenance_cost ?? null,
+    id: "maint",
+    header: "관리비",
+    enableSorting: true,
+    accessorFn: (a) => a.numeric_maintenance_cost ?? null,
+    meta: { className: "w-[55px] text-right" },
   },
   {
-    key: "direction",
-    label: "방향",
-    className: "w-[40px] text-center",
-    sortable: true,
-    getSortText: (a) => String((a as unknown as Article).direction || ""),
+    id: "direction",
+    header: "방향",
+    enableSorting: true,
+    accessorFn: (a) => a.direction ?? "",
+    meta: { className: "w-[40px] text-center" },
   },
   {
-    key: "features",
-    label: "특징",
-    className: "min-w-[150px]",
+    id: "features",
+    header: "특징",
+    enableSorting: false,
+    meta: { className: "min-w-[150px]" },
   },
   {
-    key: "realtor",
-    label: "중개사",
-    className: "w-[80px]",
-    sortable: true,
-    getSortText: (a) => String((a as unknown as Article).realtor_name || ""),
+    id: "realtor",
+    header: "중개사",
+    enableSorting: true,
+    accessorFn: (a) => a.realtor_name ?? "",
+    meta: { className: "w-[80px]" },
   },
   {
-    key: "confirm_date",
-    label: "확인일자",
-    className: "w-[75px] text-center",
-    sortable: true,
-    getSortText: (a) => String((a as unknown as Article).article_confirm_ymd || ""),
+    id: "confirm_date",
+    header: "확인일자",
+    enableSorting: true,
+    accessorFn: (a) => a.article_confirm_ymd ?? "",
+    meta: { className: "w-[75px] text-center" },
   },
 ];
 
-/** 서버 정렬 키 매핑 */
+/** 서버 정렬 키 매핑 (FE 컬럼 id → BE sort_by 파라미터) */
 export const SERVER_SORT_MAP: Record<string, { asc: string; desc: string }> = {
   price: { asc: "price_asc", desc: "price_desc" },
   area: { asc: "area_asc", desc: "area_desc" },
@@ -123,10 +128,3 @@ export const SERVER_SORT_MAP: Record<string, { asc: string; desc: string }> = {
   maint: { asc: "maintenance_asc", desc: "maintenance_desc" },
   confirm_date: { asc: "confirm_asc", desc: "confirm_desc" },
 };
-
-/** 행 데이터에서 컬럼 값 추출 (정렬용) */
-export function getColumnValue(art: Article, col: ColumnDef): unknown {
-  if (col.getSortValue) return col.getSortValue(art as unknown as Record<string, unknown>);
-  if (col.getSortText) return col.getSortText(art as unknown as Record<string, unknown>);
-  return "";
-}

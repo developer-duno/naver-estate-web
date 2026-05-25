@@ -34,11 +34,11 @@
 ### 세션 종료 절차 (정정 후)
 
 1. **글로벌 메모리에 세션 요약 작성** (필수):
-   - 위치: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\session{N}_summary.md`
+   - 위치: `C:\Users\user\.claude\projects\d--naver-estate-web\memory\session{N}_summary.md`
    - 내용: 커밋 해시 목록 + 사고·결정·교훈 + 다음 세션 후보
    - 답습: `session104_summary.md` ~ `session112_summary.md` 패턴
 2. **MEMORY.md 인덱스 1줄 추가**:
-   - 위치: `C:\Users\user\.claude\projects\f--cursor-naver-estate-web\memory\MEMORY.md`
+   - 위치: `C:\Users\user\.claude\projects\d--naver-estate-web\memory\MEMORY.md`
    - 형식: `- [Session N summary](sessionN_summary.md) — 핵심 1줄 요약`
 3. **CLAUDE.md (루트, frontend/, backend/) 진행 박제 금지** (재발방지 핵심):
    - 코드 변경 박제는 git log + 메모리로 충분

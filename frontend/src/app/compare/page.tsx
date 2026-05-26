@@ -12,6 +12,7 @@ import { getAdvantageForRow, getBestIndices, calcAvgPricePerPyeong } from "@/lib
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { SkeletonPage } from "@/components/Skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Scale } from "lucide-react";
 import type { Complex, PriceStats } from "@/types";
 
@@ -372,52 +373,49 @@ function CompareContent() {
 
       {/* 비교 카드 (모바일) */}
       <div className="md:hidden space-y-4">
-        <div role="tablist" aria-label="비교 항목 분류" className="flex gap-1.5 bg-gray-100 rounded-lg p-1 sticky top-0 z-10">
-          {(Object.keys(MOBILE_TAB_LABELS) as MobileTab[]).map((key) => {
-            const active = mobileTab === key;
-            return (
-              <button
+        <Tabs value={mobileTab} onValueChange={(v) => setMobileTab(v as MobileTab)}>
+          <TabsList
+            aria-label="비교 항목 분류"
+            className="flex gap-1.5 bg-gray-100 rounded-lg p-1 sticky top-0 z-10 w-full h-auto"
+          >
+            {(Object.keys(MOBILE_TAB_LABELS) as MobileTab[]).map((key) => (
+              <TabsTrigger
                 key={key}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setMobileTab(key)}
-                className={`flex-1 text-xs font-medium px-2 py-1.5 rounded-md transition-colors ${
-                  active
-                    ? "bg-white text-blue-600 shadow-sm"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
+                value={key}
+                className="flex-1 text-xs font-medium px-2 py-1.5 rounded-md transition-colors text-gray-600 hover:text-gray-900 data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm"
               >
                 {MOBILE_TAB_LABELS[key]}
-              </button>
-            );
-          })}
-        </div>
-        {complexes.map((c, ci) => (
-          <div key={c.complex_no} className="bg-white rounded-lg shadow-sm border p-4">
-            <button
-              onClick={() => router.push(`/complex/${c.complex_no}`)}
-              className="text-blue-600 hover:underline font-semibold text-base mb-3 block"
-            >
-              {c.complex_name}
-            </button>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-              {mobileRows.map((row) => {
-                const best = advantageMap.get(row.label) ?? [];
-                const isBest = best.includes(ci);
-                return (
-                  <Fragment key={row.label}>
-                    <dt className={`text-gray-500 text-xs ${isBest ? "font-bold" : ""}`}>{row.label}</dt>
-                    <dd className={isBest ? "text-green-700 font-bold" : "text-gray-800"}>
-                      {isBest && <span className="text-green-600 mr-0.5">★</span>}
-                      {row.render(c)}
-                    </dd>
-                  </Fragment>
-                );
-              })}
-            </dl>
-          </div>
-        ))}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <TabsContent value={mobileTab} className="mt-4 space-y-4">
+            {complexes.map((c, ci) => (
+              <div key={c.complex_no} className="bg-white rounded-lg shadow-sm border p-4">
+                <button
+                  onClick={() => router.push(`/complex/${c.complex_no}`)}
+                  className="text-blue-600 hover:underline font-semibold text-base mb-3 block"
+                >
+                  {c.complex_name}
+                </button>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+                  {mobileRows.map((row) => {
+                    const best = advantageMap.get(row.label) ?? [];
+                    const isBest = best.includes(ci);
+                    return (
+                      <Fragment key={row.label}>
+                        <dt className={`text-gray-500 text-xs ${isBest ? "font-bold" : ""}`}>{row.label}</dt>
+                        <dd className={isBest ? "text-green-700 font-bold" : "text-gray-800"}>
+                          {isBest && <span className="text-green-600 mr-0.5">★</span>}
+                          {row.render(c)}
+                        </dd>
+                      </Fragment>
+                    );
+                  })}
+                </dl>
+              </div>
+            ))}
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* 차트 섹션 */}

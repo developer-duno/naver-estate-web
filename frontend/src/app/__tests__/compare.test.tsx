@@ -9,6 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import ComparePage from "../compare/page";
 import { TestQueryProvider } from "@/test-setup";
 import * as api from "@/lib/api";
@@ -105,5 +106,57 @@ describe("단지 비교 — 에러 분기", () => {
     await waitFor(() => {
       expect(screen.getByText("불러오기 실패")).toBeInTheDocument();
     });
+  });
+});
+
+describe("모바일 비교 화면 tablist (Radix Tabs, PR 5b)", () => {
+  // PR 5b: raw <div role="tablist"> + <button role="tab"> → shadcn Tabs (Radix) 교체
+  // F-mock 정정: renderPage("ids=A,B") 호출이 mockSearchParams 세팅 (기존 답습)
+  // F7 정정: jsdom 은 md:hidden/hidden md:block CSS 무시 → desktop·mobile DOM 둘 다 존재
+  //          → getByText("난방") 가 desktop 셀에 항상 매칭되어 모바일 탭 미전환도 PASS 위험
+  //          → getAllByText.length 카운트 단언으로 차단
+
+  it("초기 활성 탭 = 기본 (data-state=active), 다른 탭 inactive", async () => {
+    // 검증 의도: Radix Tabs controlled mode 에서 value="basic" 이 정확히 활성, 가격/시설 inactive
+    renderPage("ids=A,B");
+    expect(await screen.findByRole("tab", { name: "기본" })).toHaveAttribute("data-state", "active");
+    expect(screen.getByRole("tab", { name: "가격" })).toHaveAttribute("data-state", "inactive");
+    expect(screen.getByRole("tab", { name: "시설" })).toHaveAttribute("data-state", "inactive");
+  });
+
+  it("탭 클릭 시 mobileRows 가 실제 변경 (시설 → 난방 등장 + 주소 사라짐)", async () => {
+    // 검증 의도: ROW_CATEGORIES.facility 의 "난방" 등장 + ROW_CATEGORIES.basic 의 "주소" 사라짐 양방향 검증
+    // F7: jsdom 은 CSS 무시 → desktop <td>"주소"·"난방" 항상 매칭 → 카운트로 모바일 영역 변경 검증
+    // 초기(basic): desktop "난방" 1 + mobile dl "난방" 0 = 1건 / desktop "주소" 1 + mobile dl "주소" 1 = 2건
+    // 시설 클릭 후: desktop "난방" 1 + mobile dl "난방" 1 (단지 1개) = 2건 / "주소" mobile dl 사라짐 = 1건
+    const user = userEvent.setup();
+    renderPage("ids=A,B");
+    await user.click(await screen.findByRole("tab", { name: "시설" }));
+    // F-it2 정정: 양방향 검증 (등장 + 사라짐 카운트로 silent failure 차단)
+    await waitFor(() => {
+      expect(screen.getAllByText("난방").length).toBeGreaterThanOrEqual(2);
+    });
+    expect(screen.getAllByText("주소").length).toBe(1);
+  });
+
+  it("키보드 ArrowRight 로 다음 탭 활성화 + 이전 탭 inactive (Radix roving focus)", async () => {
+    // 검증 의도: Radix Tabs roving focus = ArrowRight 키 → 다음 TabsTrigger 활성 + 이전 deactive
+    const user = userEvent.setup();
+    renderPage("ids=A,B");
+    const basicTab = await screen.findByRole("tab", { name: "기본" });
+    basicTab.focus();
+    await user.keyboard("{ArrowRight}");
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "가격" })).toHaveAttribute("data-state", "active");
+    });
+    expect(basicTab).toHaveAttribute("data-state", "inactive");
+  });
+
+  it("TabsList className 머지 (w-full + sticky 영역 폭 보존)", async () => {
+    // 검증 의도: TabsList 기본 w-fit 을 w-full 로 override + sticky top-0 z-10 보존
+    //          = 시각 변화 0 약속 jsdom 검증 (F6·F-it4 정정)
+    renderPage("ids=A,B");
+    const tablist = await screen.findByRole("tablist", { name: "비교 항목 분류" });
+    expect(tablist).toHaveClass("w-full", "sticky", "top-0", "z-10");
   });
 });

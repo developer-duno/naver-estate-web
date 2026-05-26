@@ -33,6 +33,7 @@ import CrawlMessage from "@/components/complex/CrawlMessage";
 import ComplexPriceAreaSection from "@/components/complex/ComplexPriceAreaSection";
 import ComplexPriceFloorSection from "@/components/complex/ComplexPriceFloorSection";
 import PriceChartSection from "@/components/complex/PriceChartSection";
+import ComplexDashboardMobile from "@/components/complex/ComplexDashboardMobile";
 import PrintButton from "@/components/complex/PrintButton";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -247,8 +248,21 @@ export default function ComplexDetailPage() {
         </Card>
       )}
 
+      {/* 📱 모바일 한눈 대시보드 (PR 4e-1) — 5장 요약 카드 + Accordion 5 섹션 (중요도순) */}
+      {complex && (
+        <div className="md:hidden">
+          <ComplexDashboardMobile
+            complex={complex}
+            complexNo={complexNo}
+            pyeongDetails={pyeongDetails}
+            sessionToken={sessionToken}
+            onFilterChange={handleFilterChange}
+          />
+        </div>
+      )}
+
       {/* 🥇 시세 (가격 강조 — spec L323 정보 위계 1순위) */}
-      <section aria-labelledby="section-prices" className="space-y-4">
+      <section aria-labelledby="section-prices" className="space-y-4 hidden md:block">
         <h2 id="section-prices" className="text-lg md:text-xl font-semibold">시세</h2>
         <Card className="p-3 md:p-4">
           <ComplexPriceFloorSection complexNo={complexNo} onFilterChange={handleFilterChange} />
@@ -259,7 +273,7 @@ export default function ComplexDetailPage() {
         </Card>
       </section>
 
-      <Separator className="no-print" />
+      <Separator className="no-print hidden md:block" />
 
       {/* 🥈 매물 리스트 (spec L323 정보 위계 2순위) */}
       <section aria-labelledby="section-articles" className="space-y-4">
@@ -378,20 +392,20 @@ export default function ComplexDetailPage() {
         )}
       </section>
 
-      <Separator className="no-print" />
+      <Separator className="no-print hidden md:block" />
 
       {/* 🥉 차트 — 실거래가 추이 (spec L323 정보 위계 3순위) */}
-      <section aria-labelledby="section-chart" className="space-y-4">
+      <section aria-labelledby="section-chart" className="space-y-4 hidden md:block">
         <h2 id="section-chart" className="text-lg md:text-xl font-semibold">실거래가 추이</h2>
         <Card className="p-3 md:p-4">
           <PriceChartSection complexNo={complexNo} pyeongDetails={pyeongDetails} accessToken={sessionToken} />
         </Card>
       </section>
 
-      <Separator className="no-print" />
+      <Separator className="no-print hidden md:block" />
 
       {/* 🏷 단지 정보 (메타 — 위계 4순위) */}
-      <section aria-labelledby="section-info" className="space-y-4">
+      <section aria-labelledby="section-info" className="space-y-4 hidden md:block">
         <h2 id="section-info" className="text-lg md:text-xl font-semibold">단지 정보</h2>
         <Card className="p-3 md:p-4">
           <ComplexBasicInfo cpx={complex} />

@@ -68,6 +68,24 @@ vi.mock("@/hooks/useFavorites", () => ({
 vi.mock("@/hooks/useSmartBack", () => ({
   useSmartBack: () => vi.fn(),
 }));
+vi.mock("@/hooks/useSessionToken", () => ({
+  useSessionToken: () => ({
+    sessionToken: undefined,
+    tokenError: false,
+    dismissTokenError: vi.fn(),
+  }),
+}));
+vi.mock("@/hooks/useArticleViewPreferences", () => ({
+  useArticleViewPreferences: () => ({
+    articleViewMode: "medium",
+    pageSize: 10,
+    setPageSize: vi.fn(),
+    handleViewModeChange: vi.fn(),
+  }),
+}));
+vi.mock("@/hooks/usePopstateRefresh", () => ({
+  usePopstateRefresh: () => ({ navKey: 0 }),
+}));
 
 import ComplexDetailPage from "../page";
 

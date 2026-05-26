@@ -9,7 +9,6 @@ import {
   getPyeongDetails,
 } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import { createClient } from "@/lib/supabase";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useExport } from "@/hooks/useExport";
 import { useFilterParams } from "@/hooks/useFilterParams";
@@ -24,14 +23,10 @@ import ArticleCardMobile from "@/components/ArticleCardMobile";
 import ArticleViewToggle from "@/components/ArticleViewToggle";
 import ArticlePageSizeSelect from "@/components/ArticlePageSizeSelect";
 import ArticleDetail from "@/components/ArticleDetail";
-import {
-  getArticleViewMode,
-  setArticleViewMode,
-  getArticlePageSize,
-  setArticlePageSize,
-  type ArticleViewMode,
-  type ArticlePageSize,
-} from "@/lib/storage";
+import type { ArticlePageSize } from "@/lib/storage";
+import { useArticleViewPreferences } from "@/hooks/useArticleViewPreferences";
+import { usePopstateRefresh } from "@/hooks/usePopstateRefresh";
+import { useSessionToken } from "@/hooks/useSessionToken";
 import Pagination from "@/components/Pagination";
 import HintIcon from "@/components/HintIcon";
 import ComplexBasicInfo from "@/components/ComplexBasicInfo";
@@ -61,30 +56,15 @@ export default function ComplexDetailPage() {
   const [filterOpen, setFilterOpen] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [sessionToken, setSessionToken] = useState<string | undefined>(undefined);
-  const [tokenError, setTokenError] = useState(false);
+  const { sessionToken, tokenError, dismissTokenError } = useSessionToken();
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
-  const [articleViewMode, setArticleViewModeState] = useState<ArticleViewMode>(() =>
-    typeof window !== "undefined" ? getArticleViewMode() : "medium",
-  );
-  const handleViewModeChange = useCallback((mode: ArticleViewMode) => {
-    setArticleViewModeState(mode);
-    setArticleViewMode(mode);
-  }, []);
-  const [pageSize, setPageSizeState] = useState<ArticlePageSize>(() =>
-    typeof window !== "undefined" ? getArticlePageSize() : 10,
-  );
+  const { articleViewMode, pageSize, setPageSize, handleViewModeChange } = useArticleViewPreferences();
 
   // 인쇄 대상 ref — 페이지 본문 전체 (헤더 + 시세 + 매물 + 정보)
   const printRef = useRef<HTMLDivElement>(null);
 
   // 브라우저 뒤로/앞으로 시에만 FilterBar 리마운트
-  const [navKey, setNavKey] = useState(0);
-  useEffect(() => {
-    const handler = () => setNavKey(k => k + 1);
-    window.addEventListener("popstate", handler);
-    return () => window.removeEventListener("popstate", handler);
-  }, []);
+  const { navKey } = usePopstateRefresh();
 
   const { exporting, exportError, clearExportError, handleExport: doExport } = useExport();
 
@@ -145,20 +125,6 @@ export default function ComplexDetailPage() {
     }
   }, [complexQuery.isError]);
 
-  // sessionToken 추출 — 실거래가 수집 버튼이 accessToken 필요
-  useEffect(() => {
-    (async () => {
-      try {
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) setSessionToken(session.access_token);
-      } catch (err) {
-        console.error("Failed to extract sessionToken:", err);
-        setTokenError(true);
-      }
-    })();
-  }, []);
-
   const {
     crawling,
     message: crawlMessage,
@@ -206,11 +172,10 @@ export default function ComplexDetailPage() {
       const firstItemIndex = (currentPage - 1) * pageSize;
       const maxPage = Math.max(1, Math.ceil(totalCount / newSize));
       const newPage = Math.min(Math.floor(firstItemIndex / newSize) + 1, maxPage);
-      setPageSizeState(newSize);
+      setPageSize(newSize);
       setPage(newPage);
-      setArticlePageSize(newSize);
     },
-    [currentPage, pageSize, totalCount, setPage]
+    [currentPage, pageSize, totalCount, setPage, setPageSize]
   );
 
   const handleSelectionChange = (articleNo: string, checked: boolean) => {
@@ -271,7 +236,7 @@ export default function ComplexDetailPage() {
             <span>로그인 세션을 확인할 수 없어 일부 기능(실거래가 수집)이 제한됩니다. 새로고침하거나 다시 로그인해 주세요.</span>
             <button
               type="button"
-              onClick={() => setTokenError(false)}
+              onClick={dismissTokenError}
               aria-label="닫기"
               className="text-amber-600 hover:text-amber-900 shrink-0"
             >×</button>

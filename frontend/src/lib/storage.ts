@@ -360,3 +360,18 @@ export function getArticleViewMode(): ArticleViewMode {
 export function setArticleViewMode(mode: ArticleViewMode): void {
   try { localStorage.setItem(ARTICLE_VIEW_MODE_KEY, JSON.stringify(mode)); } catch { /* private mode quota 무시 */ }
 }
+
+// ── 한 페이지당 매물 개수 (10/20/30/50) ──
+
+const ARTICLE_PAGE_SIZE_KEY = "article_page_size";
+export type ArticlePageSize = 10 | 20 | 30 | 50;
+const PAGE_SIZES: readonly ArticlePageSize[] = [10, 20, 30, 50];
+
+export function getArticlePageSize(): ArticlePageSize {
+  const raw = readJSON<number>(ARTICLE_PAGE_SIZE_KEY, 10);
+  return (PAGE_SIZES as readonly number[]).includes(raw) ? (raw as ArticlePageSize) : 10;
+}
+
+export function setArticlePageSize(size: ArticlePageSize): void {
+  try { localStorage.setItem(ARTICLE_PAGE_SIZE_KEY, JSON.stringify(size)); } catch { /* private mode quota 무시 */ }
+}

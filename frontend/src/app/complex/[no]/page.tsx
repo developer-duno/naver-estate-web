@@ -10,7 +10,6 @@ import {
 } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { createClient } from "@/lib/supabase";
-import { PAGE_SIZE } from "@/lib/constants";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useExport } from "@/hooks/useExport";
 import { useFilterParams } from "@/hooks/useFilterParams";
@@ -23,8 +22,16 @@ import FilterChipsSummary from "@/components/filter/FilterChipsSummary";
 import ArticleTable from "@/components/ArticleTable";
 import ArticleCardMobile from "@/components/ArticleCardMobile";
 import ArticleViewToggle from "@/components/ArticleViewToggle";
+import ArticlePageSizeSelect from "@/components/ArticlePageSizeSelect";
 import ArticleDetail from "@/components/ArticleDetail";
-import { getArticleViewMode, setArticleViewMode, type ArticleViewMode } from "@/lib/storage";
+import {
+  getArticleViewMode,
+  setArticleViewMode,
+  getArticlePageSize,
+  setArticlePageSize,
+  type ArticleViewMode,
+  type ArticlePageSize,
+} from "@/lib/storage";
 import Pagination from "@/components/Pagination";
 import HintIcon from "@/components/HintIcon";
 import ComplexBasicInfo from "@/components/ComplexBasicInfo";
@@ -64,6 +71,9 @@ export default function ComplexDetailPage() {
     setArticleViewModeState(mode);
     setArticleViewMode(mode);
   }, []);
+  const [pageSize, setPageSizeState] = useState<ArticlePageSize>(() =>
+    typeof window !== "undefined" ? getArticlePageSize() : 10,
+  );
 
   // 인쇄 대상 ref — 페이지 본문 전체 (헤더 + 시세 + 매물 + 정보)
   const printRef = useRef<HTMLDivElement>(null);
@@ -94,7 +104,7 @@ export default function ComplexDetailPage() {
   const articlesQueryKey = queryKeys.articles(complexNo, {
     ...filters,
     page: currentPage,
-    page_size: PAGE_SIZE,
+    page_size: pageSize,
   });
 
   const articlesQuery = useQuery({
@@ -102,7 +112,7 @@ export default function ComplexDetailPage() {
     queryFn: () => getArticles(complexNo, {
       ...filters,
       page: currentPage,
-      page_size: PAGE_SIZE,
+      page_size: pageSize,
     }),
     enabled: !!complexNo && /^\d+$/.test(complexNo),
     placeholderData: keepPreviousData,
@@ -191,6 +201,18 @@ export default function ComplexDetailPage() {
     [setPage]
   );
 
+  const handlePageSizeChange = useCallback(
+    (newSize: ArticlePageSize) => {
+      const firstItemIndex = (currentPage - 1) * pageSize;
+      const maxPage = Math.max(1, Math.ceil(totalCount / newSize));
+      const newPage = Math.min(Math.floor(firstItemIndex / newSize) + 1, maxPage);
+      setPageSizeState(newSize);
+      setPage(newPage);
+      setArticlePageSize(newSize);
+    },
+    [currentPage, pageSize, totalCount, setPage]
+  );
+
   const handleSelectionChange = (articleNo: string, checked: boolean) => {
     setSelectedArticleNos(prev => {
       const next = new Set(prev);
@@ -227,7 +249,7 @@ export default function ComplexDetailPage() {
     return <ComplexLoadState kind="error" error={error} />;
   }
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   return (
     <div ref={printRef} className="max-w-7xl mx-auto px-4 py-6 space-y-8">
@@ -384,14 +406,18 @@ export default function ComplexDetailPage() {
         {!articlesQuery.isLoading && !articlesQuery.isError && (
           <div className={`transition-opacity duration-200 ${tableLoading ? "opacity-50" : "opacity-100"}`}>
             <div className="hidden md:block">
+              <div className="flex justify-end mb-2">
+                <ArticlePageSizeSelect pageSize={pageSize} onPageSizeChange={handlePageSizeChange} />
+              </div>
               <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} />
             </div>
             <div className="md:hidden space-y-2">
-              {articles.length > 0 && (
-                <div className="flex justify-end">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <ArticlePageSizeSelect pageSize={pageSize} onPageSizeChange={handlePageSizeChange} />
+                {articles.length > 0 && (
                   <ArticleViewToggle value={articleViewMode} onChange={handleViewModeChange} />
-                </div>
-              )}
+                )}
+              </div>
               <ArticleCardMobile articles={articles} onRowClick={setSelectedArticle} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} viewMode={articleViewMode} />
             </div>
           </div>

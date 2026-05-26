@@ -2,7 +2,7 @@ import { useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getComplex, getArticles } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import { PAGE_SIZE } from "@/lib/constants";
+import { getArticlePageSize } from "@/lib/storage";
 
 /**
  * 단지 행/카드 hover 시 complex + articles 프리페치 훅.
@@ -20,9 +20,10 @@ export function useComplexPrefetch(complexNo: string) {
         queryFn: () => getComplex(complexNo),
         staleTime: 60_000,
       });
+      const ps = getArticlePageSize();
       queryClient.prefetchQuery({
-        queryKey: queryKeys.articles(complexNo, { page: 1, page_size: PAGE_SIZE }),
-        queryFn: () => getArticles(complexNo, { page: 1, page_size: PAGE_SIZE }),
+        queryKey: queryKeys.articles(complexNo, { page: 1, page_size: ps }),
+        queryFn: () => getArticles(complexNo, { page: 1, page_size: ps }),
         staleTime: 60_000,
       });
     }, 200);

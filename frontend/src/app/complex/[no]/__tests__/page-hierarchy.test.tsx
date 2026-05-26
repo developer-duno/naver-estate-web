@@ -92,4 +92,22 @@ describe("ComplexDetailPage 정보 위계 (spec L323)", () => {
       expect(trigger).toBeInTheDocument();
     });
   });
+
+  it("PR 4e-3: ArticlePageSizeSelect 가 데스크톱·모바일 양쪽에 렌더된다 (빈 결과 시에도 노출)", async () => {
+    renderPage();
+    await waitFor(() => {
+      // 데스크톱 1개 + 모바일 1개 = 2개 인스턴스 (articles.length=0 인 빈 결과 상태에서도 노출)
+      const selects = screen.getAllByLabelText("한 페이지당 매물 개수");
+      expect(selects.length).toBe(2);
+    });
+  });
+
+  it("PR 4e-3: 셀렉트 초기값 = localStorage default 10", async () => {
+    renderPage();
+    await waitFor(() => {
+      // 화면에 "10개" 텍스트가 SelectValue 슬롯에 표시 — 데스크톱·모바일 둘 다
+      const tens = screen.getAllByText("10개");
+      expect(tens.length).toBeGreaterThanOrEqual(2);
+    });
+  });
 });

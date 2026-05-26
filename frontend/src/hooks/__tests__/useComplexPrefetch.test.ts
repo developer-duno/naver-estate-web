@@ -29,6 +29,7 @@ describe("useComplexPrefetch", () => {
     vi.useFakeTimers();
     mockGetComplex.mockClear();
     mockGetArticles.mockClear();
+    localStorage.clear();
   });
 
   afterEach(() => {
@@ -49,7 +50,23 @@ describe("useComplexPrefetch", () => {
     expect(mockGetComplex).toHaveBeenCalledTimes(1);
     expect(mockGetComplex).toHaveBeenCalledWith("12345");
     expect(mockGetArticles).toHaveBeenCalledTimes(1);
-    expect(mockGetArticles).toHaveBeenCalledWith("12345", { page: 1, page_size: 50 });
+    // PR 4e-3: prefetch page_size 는 localStorage 의 article_page_size 답습 (default 10)
+    expect(mockGetArticles).toHaveBeenCalledWith("12345", { page: 1, page_size: 10 });
+  });
+
+  /** PR 4e-3 회귀 가드: localStorage 에 박힌 사용자 pageSize 로 prefetch */
+  it("localStorage 에 article_page_size=30 박혀 있으면 prefetch 도 30 으로 호출", () => {
+    localStorage.setItem("article_page_size", JSON.stringify(30));
+    const { result } = renderHook(() => useComplexPrefetch("12345"), {
+      wrapper: TestQueryProvider,
+    });
+
+    act(() => {
+      result.current.onMouseEnter();
+      vi.advanceTimersByTime(200);
+    });
+
+    expect(mockGetArticles).toHaveBeenCalledWith("12345", { page: 1, page_size: 30 });
   });
 
   /** 취소 케이스: 200ms 전에 떠나면 프리페치하지 않는다 (빠른 스크롤 방지) */

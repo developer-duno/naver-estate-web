@@ -7,6 +7,7 @@ import {
   getSearchHistory, addSearchHistory, removeSearchHistory, clearSearchHistory,
   getFavorites, isFavorite, toggleFavorite,
   getArticleViewMode, setArticleViewMode,
+  getArticlePageSize, setArticlePageSize,
 } from "../storage";
 
 beforeEach(() => {
@@ -126,5 +127,39 @@ describe("매물 카드 보기 모양 (article_view_mode)", () => {
     // 미설정 (raw=null) 도 medium fallback
     localStorage.removeItem("article_view_mode");
     expect(getArticleViewMode()).toBe("medium");
+  });
+});
+
+// ── 한 페이지당 매물 개수 ──
+
+describe("한 페이지당 매물 개수 (article_page_size)", () => {
+  it("기본값은 10 (키 없을 때)", () => {
+    expect(getArticlePageSize()).toBe(10);
+  });
+
+  it("10/20/30/50 4단계 round-trip", () => {
+    setArticlePageSize(10);
+    expect(getArticlePageSize()).toBe(10);
+    setArticlePageSize(20);
+    expect(getArticlePageSize()).toBe(20);
+    setArticlePageSize(30);
+    expect(getArticlePageSize()).toBe(30);
+    setArticlePageSize(50);
+    expect(getArticlePageSize()).toBe(50);
+  });
+
+  it("화이트리스트 외 값 (99) 박혀 있으면 10 fallback (type guard)", () => {
+    localStorage.setItem("article_page_size", JSON.stringify(99));
+    expect(getArticlePageSize()).toBe(10);
+  });
+
+  it("문자열 값이 박혀 있어도 10 fallback (type guard)", () => {
+    localStorage.setItem("article_page_size", JSON.stringify("abc"));
+    expect(getArticlePageSize()).toBe(10);
+  });
+
+  it("setArticlePageSize 가 localStorage 에 number 로 저장", () => {
+    setArticlePageSize(30);
+    expect(localStorage.getItem("article_page_size")).toBe("30");
   });
 });

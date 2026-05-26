@@ -11,3 +11,6 @@ python-jose[cryptography]>=3.3,<4
 python-multipart>=0.0.9,<1
 redis>=5.0,<6
 requests>=2.31,<3
+# starlette: fastapi 의 transitive 의존. PYSEC-2026-161 (Host 헤더 우회 → 인증 우회) 는
+# 1.0.1 에서 fix. OSV: https://osv.dev/vulnerability/PYSEC-2026-161 (CVE-2026-48710 alias)
+starlette>=1.0.1,<1.1

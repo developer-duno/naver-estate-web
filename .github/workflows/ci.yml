@@ -171,6 +171,14 @@ jobs:
       - name: Lint (ruff)
         run: ruff check .
 
+      # pip-audit — requirements.txt 보안 advisory 검사 (Python 공식 OSV·PyPI Advisory DB)
+      # MAL-2026-4750 = fastapi 0.136.3 [standard] extra 의 fastar typosquat. 우리는
+      # base 의존성만 설치하므로 (extra 미사용) 실제 영향 0. fix 버전 없음 (2026-05-27 기준).
+      - name: Security audit (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt --strict --ignore-vuln MAL-2026-4750
+
       - name: Syntax validation
         run: |
           python -c "

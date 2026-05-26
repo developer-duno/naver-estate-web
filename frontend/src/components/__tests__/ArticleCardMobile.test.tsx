@@ -130,4 +130,40 @@ describe("ArticleCardMobile", () => {
       expect(onRow).toHaveBeenCalledWith("A001");
     });
   });
+
+  // PR 4e-2: viewMode 3 모양 분기 (large/medium/compact)
+  describe("viewMode prop 분기", () => {
+    it("viewMode='compact' → ArticleCompactRow 자식 렌더 (3·4행 부재)", () => {
+      const art = makeArticle({ monthly_rent_yield: 12 });
+      render(<ArticleCardMobile articles={[art]} viewMode="compact" />);
+      // compact 는 1줄 = 거래·가격·면적·층만. 방·관리비·특징 부재
+      expect(screen.queryByText("3/2")).not.toBeInTheDocument();
+      expect(screen.queryByText(/초역세권/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/수익 12%/)).not.toBeInTheDocument();
+      // 1행 거래·가격은 보존
+      expect(screen.getByText("매매")).toBeInTheDocument();
+      expect(screen.getByText("5억")).toBeInTheDocument();
+    });
+
+    it("viewMode='medium' → 1·2행만 + 3·4행 부재", () => {
+      const art = makeArticle({ monthly_rent_yield: 12 });
+      render(<ArticleCardMobile articles={[art]} viewMode="medium" />);
+      // 1·2행 보존
+      expect(screen.getByText("매매")).toBeInTheDocument();
+      expect(screen.getByText("101동")).toBeInTheDocument();
+      // 3·4행 부재
+      expect(screen.queryByText("3/2")).not.toBeInTheDocument();
+      expect(screen.queryByText(/수익 12%/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/초역세권/)).not.toBeInTheDocument();
+    });
+
+    it("viewMode 미지정 default → 4행 전부 렌더 (large 동작)", () => {
+      const art = makeArticle({ monthly_rent_yield: 12 });
+      render(<ArticleCardMobile articles={[art]} />);
+      // 4행 전부 렌더
+      expect(screen.getByText("3/2")).toBeInTheDocument();
+      expect(screen.getByText(/수익 12%/)).toBeInTheDocument();
+      expect(screen.getByText(/초역세권/)).toBeInTheDocument();
+    });
+  });
 });

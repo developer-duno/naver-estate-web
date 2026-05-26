@@ -21,6 +21,7 @@ import MbApartmentsTab from "@/components/mb/MbApartmentsTab";
 import MbUnsoldTab from "@/components/mb/MbUnsoldTab";
 import MbRegionsTab from "@/components/mb/MbRegionsTab";
 import MbTradesTab from "@/components/mb/MbTradesTab";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type { MbSearchHistoryItem, MbCompareHistoryItem, MbCompareBookmarkItem } from "@/lib/storage";
 
 const TABS = [
@@ -180,88 +181,94 @@ function MibunyangContent() {
       </div>
 
       {/* 탭바 — 항상 표시 (즐겨찾기 탭은 지역 불필요) */}
-      <div className="flex gap-1 mb-4 overflow-x-auto" role="tablist">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            role="tab"
-            aria-selected={tab === t.key}
-            onClick={() => handleTabChange(t.key)}
-            className={`px-4 py-2 text-sm font-medium rounded-t-md whitespace-nowrap transition-colors ${
-              tab === t.key
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            {t.label}
-            {t.key === "favorites" && favorites.length > 0 && (
-              <span className="ml-1 text-xs">({favorites.length})</span>
-            )}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={(v) => handleTabChange(v as TabKey)} className="gap-0">
+        <TabsList className="flex gap-1 mb-4 overflow-x-auto bg-transparent p-0 h-auto rounded-none w-full justify-start">
+          {TABS.map((t) => (
+            <TabsTrigger
+              key={t.key}
+              value={t.key}
+              className="px-4 py-2 text-sm font-medium rounded-t-md rounded-b-none whitespace-nowrap transition-colors flex-none h-auto border-0 bg-gray-100 text-gray-600 hover:bg-gray-200 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-none"
+            >
+              {t.label}
+              {t.key === "favorites" && favorites.length > 0 && (
+                <span className="ml-1 text-xs">({favorites.length})</span>
+              )}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      {/* 즐겨찾기 탭 — 지역 선택 불필요 */}
-      {tab === "favorites" ? (
-        <MbFavoritesTab favorites={favorites} onRemove={toggleFavorite} />
-      ) : !hasRegion ? (
-        <div className="text-center py-16">
-          <p className="text-lg text-gray-500 mb-1">지역을 선택해주세요</p>
-          <p className="text-sm text-gray-400 mb-6">아래에서 바로 선택하거나, 상단의 시/도 드롭다운을 이용하세요</p>
-          <div className="flex flex-wrap justify-center gap-2 max-w-md mx-auto">
-            {["서울", "경기", "부산", "인천", "대구", "대전"].map((sido) => (
-              <button
-                key={sido}
-                onClick={() => handleSearch(sido)}
-                className="px-4 py-2 border border-blue-200 text-blue-600 rounded-md bg-blue-50 hover:bg-blue-100 text-sm font-medium transition-colors"
-              >
-                {sido}
-              </button>
+        {/* 즐겨찾기 탭 — 지역 선택 불필요 */}
+        <TabsContent value="favorites" className="mt-0">
+          <MbFavoritesTab favorites={favorites} onRemove={toggleFavorite} />
+        </TabsContent>
+
+        {/* 4탭 — 지역 미선택 시 안내 */}
+        {!hasRegion ? (
+          <>
+            {(["apartments", "unsold", "regions", "trades"] as const).map((k) => (
+              <TabsContent key={k} value={k} className="mt-0">
+                <div className="text-center py-16">
+                  <p className="text-lg text-gray-500 mb-1">지역을 선택해주세요</p>
+                  <p className="text-sm text-gray-400 mb-6">아래에서 바로 선택하거나, 상단의 시/도 드롭다운을 이용하세요</p>
+                  <div className="flex flex-wrap justify-center gap-2 max-w-md mx-auto">
+                    {["서울", "경기", "부산", "인천", "대구", "대전"].map((sido) => (
+                      <button
+                        key={sido}
+                        onClick={() => handleSearch(sido)}
+                        className="px-4 py-2 border border-blue-200 text-blue-600 rounded-md bg-blue-50 hover:bg-blue-100 text-sm font-medium transition-colors"
+                      >
+                        {sido}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </TabsContent>
             ))}
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* 탭 콘텐츠 */}
-          {tab === "apartments" && (
-            <MbApartmentsTab
-              query={apartmentsQuery}
-              page={page}
-              sort={sortBy}
-              onSortChange={handleSortChange}
-              onPageChange={handlePageChange}
-              isInCompare={compare.isInCompare}
-              onCompareToggle={(id, name) => compare.toggle({ id, name })}
-              compareFull={compare.isFull}
-            />
-          )}
+          </>
+        ) : (
+          <>
+            <TabsContent value="apartments" className="mt-0">
+              <MbApartmentsTab
+                query={apartmentsQuery}
+                page={page}
+                sort={sortBy}
+                onSortChange={handleSortChange}
+                onPageChange={handlePageChange}
+                isInCompare={compare.isInCompare}
+                onCompareToggle={(id, name) => compare.toggle({ id, name })}
+                compareFull={compare.isFull}
+              />
+            </TabsContent>
 
-          {tab === "unsold" && (
-            <MbUnsoldTab
-              query={unsoldQuery}
-              page={page}
-              sort={sortBy}
-              onSortChange={handleSortChange}
-              onPageChange={handlePageChange}
-              isInCompare={compare.isInCompare}
-              onCompareToggle={(id, name) => compare.toggle({ id, name })}
-              compareFull={compare.isFull}
-            />
-          )}
+            <TabsContent value="unsold" className="mt-0">
+              <MbUnsoldTab
+                query={unsoldQuery}
+                page={page}
+                sort={sortBy}
+                onSortChange={handleSortChange}
+                onPageChange={handlePageChange}
+                isInCompare={compare.isInCompare}
+                onCompareToggle={(id, name) => compare.toggle({ id, name })}
+                compareFull={compare.isFull}
+              />
+            </TabsContent>
 
-          {tab === "regions" && <MbRegionsTab query={regionsQuery} />}
+            <TabsContent value="regions" className="mt-0">
+              <MbRegionsTab query={regionsQuery} />
+            </TabsContent>
 
-          {tab === "trades" && (
-            <MbTradesTab
-              query={tradesQuery}
-              page={page}
-              sort={sortBy}
-              onSortChange={handleSortChange}
-              onPageChange={handlePageChange}
-            />
-          )}
-        </>
-      )}
+            <TabsContent value="trades" className="mt-0">
+              <MbTradesTab
+                query={tradesQuery}
+                page={page}
+                sort={sortBy}
+                onSortChange={handleSortChange}
+                onPageChange={handlePageChange}
+              />
+            </TabsContent>
+          </>
+        )}
+      </Tabs>
 
       <MbCompareFloatingBar list={compare.list} onRemove={compare.remove} onClear={compare.clear} />
       {compare.list.length > 0 && <div className="pb-16" />}

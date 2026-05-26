@@ -9,7 +9,7 @@ test("미분양 메인 페이지 로드", async ({ page }) => {
   const res = await page.goto("/mibunyang");
   expect(res?.status()).toBeLessThan(500);
   await expectHeader(page);
-  await expect(page.locator("button").filter({ hasText: "미분양 단지" }).first()).toBeVisible();
+  await expect(page.getByRole("tab", { name: /미분양 단지/ })).toBeVisible();
 });
 
 test("탭 전환 — 크래시 없음", async ({ page }) => {
@@ -18,7 +18,7 @@ test("탭 전환 — 크래시 없음", async ({ page }) => {
 
   const tabs = ["미분양만", "지역 통계", "실거래", "즐겨찾기"];
   for (const tab of tabs) {
-    await page.locator("button").filter({ hasText: tab }).first().click();
+    await page.getByRole("tab", { name: new RegExp(tab) }).click();
     await expectHeader(page);
   }
 });
@@ -49,12 +49,12 @@ test("탭 전환 시 URL tab 파라미터 변경", async ({ page }) => {
   await page.waitForLoadState("domcontentloaded");
 
   // "미분양만" 탭 클릭
-  await page.locator("button").filter({ hasText: "미분양만" }).first().click();
+  await page.getByRole("tab", { name: /미분양만/ }).click();
   await expect(page).toHaveURL(/tab=unsold/);
   await expectHeader(page);
 
   // "실거래" 탭 클릭
-  await page.locator("button").filter({ hasText: "실거래" }).first().click();
+  await page.getByRole("tab", { name: /실거래/ }).click();
   await expect(page).toHaveURL(/tab=trades/);
   await expectHeader(page);
 });

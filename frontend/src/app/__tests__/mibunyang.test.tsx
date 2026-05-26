@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import MibunyangPage from "../mibunyang/page";
 import { TestQueryProvider } from "@/test-setup";
 
@@ -87,11 +88,12 @@ describe("미분양 메인 — 데이터 표시", () => {
   });
 
   it("미분양만 탭으로 전환 시 URL이 업데이트된다", async () => {
+    const user = userEvent.setup();
     renderPage("region=서울특별시&tab=apartments&page=1");
     await waitFor(() => {
       expect(screen.getByRole("tab", { name: "미분양만" })).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole("tab", { name: "미분양만" }));
+    await user.click(screen.getByRole("tab", { name: "미분양만" }));
     expect(mockRouter.replace).toHaveBeenCalled();
   });
 
@@ -101,6 +103,21 @@ describe("미분양 메인 — 데이터 표시", () => {
     await waitFor(() => {
       expect(screen.getAllByText("테스트아파트").length).toBeGreaterThanOrEqual(1);
     });
+  });
+});
+
+describe("미분양 메인 — Radix Tabs 키보드 내비", () => {
+  beforeEach(() => { mockRouter.replace.mockClear(); mockRouter.push.mockClear(); });
+
+  it("ArrowRight 키로 다음 탭으로 포커스가 이동한다 (Radix Tabs roving focus)", async () => {
+    const user = userEvent.setup();
+    renderPage("region=서울특별시&tab=apartments&page=1");
+    const firstTab = screen.getByRole("tab", { name: /미분양 단지/ });
+    firstTab.focus();
+    expect(firstTab).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
+    // Radix Tabs 의 자동 활성화 = ArrowRight 시 다음 탭 (미분양만) 포커스 + onValueChange 트리거 → URL 갱신
+    expect(mockRouter.replace).toHaveBeenCalled();
   });
 });
 

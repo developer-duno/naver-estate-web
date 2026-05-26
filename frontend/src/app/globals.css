@@ -66,6 +66,11 @@
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .recharts-wrapper, table { break-inside: avoid; }
 
+  /* PR 5c — /compare 모바일 viewport 인쇄 시 데스크톱 테이블 강제 표시 + 4단지 가로 폭 보장 */
+  @page { size: A4 landscape; margin: 1cm; }
+  .print-show-md { display: block !important; }
+  .print-hide-md { display: none !important; }
+
   /* 매물 상세 모달 인쇄 최적화 */
   .fixed.inset-0.z-50 {
     position: static !important;

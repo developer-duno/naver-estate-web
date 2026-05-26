@@ -160,3 +160,29 @@ describe("모바일 비교 화면 tablist (Radix Tabs, PR 5b)", () => {
     expect(tablist).toHaveClass("w-full", "sticky", "top-0", "z-10");
   });
 });
+
+describe("인쇄 silent failure 가드 (PR 5c)", () => {
+  // PR 5c: 모바일 viewport (< 768px) 에서 인쇄 시 데스크톱 테이블 강제 표시.
+  // 현재 = 모바일 카드의 활성 탭 행 (basic=10·price=5·facility=9) 만 인쇄됨 (24행 약속 깨짐).
+  // 정정 = globals.css @media print 안에서 .print-show-md/.print-hide-md 룰로 데스크톱 테이블 표시 + 모바일 카드 숨김.
+  // jsdom 은 @media print 평가 0 + getComputedStyle 무력 → className 부착만 단언.
+  // 진짜 인쇄 시뮬 검증은 Playwright emulateMedia("print") 별도 PR (silent-failure F3 박제).
+
+  it("데스크톱 테이블 wrapper 에 print-show-md 클래스 부착", async () => {
+    // 검증 의도: @media print 룰 발화 시 모바일 viewport 에서도 데스크톱 테이블 24행 전체 출력 보장
+    renderPage("ids=A,B");
+    const table = await screen.findByRole("table");
+    const wrapper = table.closest("div.hidden.md\\:block");
+    expect(wrapper).not.toBeNull();
+    expect(wrapper).toHaveClass("print-show-md");
+  });
+
+  it("모바일 카드 wrapper 에 print-hide-md 클래스 부착", async () => {
+    // 검증 의도: @media print 룰 발화 시 모바일 카드 영역 숨김 → 데스크톱 테이블과 중복 출력 방지
+    renderPage("ids=A,B");
+    const tablist = await screen.findByRole("tablist", { name: "비교 항목 분류" });
+    const wrapper = tablist.closest("div.md\\:hidden");
+    expect(wrapper).not.toBeNull();
+    expect(wrapper).toHaveClass("print-hide-md");
+  });
+});

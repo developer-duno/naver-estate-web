@@ -322,7 +322,7 @@ function CompareContent() {
       </p>
 
       {/* 비교 테이블 (데스크톱) */}
-      <div className="hidden md:block overflow-x-auto bg-white rounded-lg shadow-sm border">
+      <div className="hidden md:block print-show-md overflow-x-auto bg-white rounded-lg shadow-sm border">
         <table className="w-full text-sm border-collapse">
           <thead className="bg-gray-100 border-b-2 border-gray-300">
             <tr>
@@ -372,7 +372,7 @@ function CompareContent() {
       </div>
 
       {/* 비교 카드 (모바일) */}
-      <div className="md:hidden space-y-4">
+      <div className="md:hidden print-hide-md space-y-4">
         <Tabs value={mobileTab} onValueChange={(v) => setMobileTab(v as MobileTab)}>
           <TabsList
             aria-label="비교 항목 분류"

@@ -4,7 +4,9 @@ import { memo } from "react";
 import type { Article } from "@/types";
 import { M2_TO_PYEONG, TRADE_TYPE_COLORS, TRADE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
 import { formatMaintenanceCost } from "@/lib/format";
+import type { ArticleViewMode } from "@/lib/storage";
 import ArticleFavoriteButton from "@/components/ArticleFavoriteButton";
+import ArticleCompactRow from "@/components/ArticleCompactRow";
 
 interface Props {
   articles: Article[];
@@ -14,10 +16,11 @@ interface Props {
   onSelectAll?: (checked: boolean, visibleArticles: Article[]) => void;
   hasActiveFilters?: boolean;
   onResetFilters?: () => void;
+  viewMode?: ArticleViewMode;
 }
 
-/** 매물 목록 모바일 카드뷰 (md:hidden) — 데스크톱 ArticleTable의 모바일 대응 */
-function ArticleCardMobile({ articles, onRowClick, selectedArticleNos, onSelectionChange, onSelectAll, hasActiveFilters, onResetFilters }: Props) {
+/** 매물 목록 모바일 카드뷰 (md:hidden) — 데스크톱 ArticleTable의 모바일 대응. viewMode=large(기본 동작 4행) / medium(1·2행만) / compact(별도 1줄 컴포넌트). */
+function ArticleCardMobile({ articles, onRowClick, selectedArticleNos, onSelectionChange, onSelectAll, hasActiveFilters, onResetFilters, viewMode = "large" }: Props) {
   if (articles.length === 0) {
     return (
       <div className="text-center py-12 space-y-2">
@@ -56,13 +59,24 @@ function ArticleCardMobile({ articles, onRowClick, selectedArticleNos, onSelecti
         </label>
       )}
       {articles.map((art) => (
-        <ArticleCardItem
-          key={art.article_no}
-          article={art}
-          onClick={onRowClick}
-          selected={selectedArticleNos?.has(art.article_no)}
-          onCheck={onSelectionChange}
-        />
+        viewMode === "compact" ? (
+          <ArticleCompactRow
+            key={art.article_no}
+            article={art}
+            onClick={onRowClick}
+            selected={selectedArticleNos?.has(art.article_no)}
+            onCheck={onSelectionChange}
+          />
+        ) : (
+          <ArticleCardItem
+            key={art.article_no}
+            article={art}
+            onClick={onRowClick}
+            selected={selectedArticleNos?.has(art.article_no)}
+            onCheck={onSelectionChange}
+            viewMode={viewMode}
+          />
+        )
       ))}
     </div>
   );
@@ -70,8 +84,8 @@ function ArticleCardMobile({ articles, onRowClick, selectedArticleNos, onSelecti
 
 export default memo(ArticleCardMobile);
 
-const ArticleCardItem = memo(function ArticleCardItem({ article: art, onClick, selected, onCheck }: {
-  article: Article; onClick?: (no: string) => void; selected?: boolean; onCheck?: (articleNo: string, checked: boolean) => void;
+const ArticleCardItem = memo(function ArticleCardItem({ article: art, onClick, selected, onCheck, viewMode }: {
+  article: Article; onClick?: (no: string) => void; selected?: boolean; onCheck?: (articleNo: string, checked: boolean) => void; viewMode: "large" | "medium";
 }) {
   const isRent = art.trade_type_name === "월세" || art.trade_type_name === "단기임대";
   const price = isRent
@@ -140,19 +154,23 @@ const ArticleCardItem = memo(function ArticleCardItem({ article: art, onClick, s
         {art.floor_info && <><span className="text-gray-300">·</span><span>{art.floor_info}층</span></>}
       </div>
 
-      {/* 3행: 방/욕·방향·입주·관리비 */}
-      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-1 text-sm text-gray-500">
-        {rooms && <span>{rooms}</span>}
-        {art.direction && <><span className="text-gray-300">·</span><span>{art.direction}</span></>}
-        {art.move_in_date && <><span className="text-gray-300">·</span><span>{art.move_in_date}</span></>}
-        {maint !== "-" && <><span className="text-gray-300">·</span><span>관리비 {maint}</span></>}
-        {art.monthly_rent_yield != null && <><span className="text-gray-300">·</span><span className={`px-1.5 py-0.5 rounded text-sm font-semibold ${art.monthly_rent_yield >= 10 ? "bg-blue-100 text-blue-700" : art.monthly_rent_yield >= 5 ? "bg-emerald-100 text-emerald-700" : art.monthly_rent_yield < 3 ? "bg-yellow-100 text-yellow-700" : "bg-emerald-50 text-emerald-600"}`}>수익 {art.monthly_rent_yield}%</span></>}
-        {art.article_jeonse_ratio != null && <><span className="text-gray-300">·</span><span className={`px-1.5 py-0.5 rounded text-sm font-semibold ${art.article_jeonse_ratio > 80 ? "bg-red-100 text-red-700" : "bg-blue-50 text-blue-600"}`}>전세 {art.article_jeonse_ratio}%</span></>}
-      </div>
+      {viewMode === "large" && (
+        <>
+          {/* 3행: 방/욕·방향·입주·관리비 */}
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-1 text-sm text-gray-500">
+            {rooms && <span>{rooms}</span>}
+            {art.direction && <><span className="text-gray-300">·</span><span>{art.direction}</span></>}
+            {art.move_in_date && <><span className="text-gray-300">·</span><span>{art.move_in_date}</span></>}
+            {maint !== "-" && <><span className="text-gray-300">·</span><span>관리비 {maint}</span></>}
+            {art.monthly_rent_yield != null && <><span className="text-gray-300">·</span><span className={`px-1.5 py-0.5 rounded text-sm font-semibold ${art.monthly_rent_yield >= 10 ? "bg-blue-100 text-blue-700" : art.monthly_rent_yield >= 5 ? "bg-emerald-100 text-emerald-700" : art.monthly_rent_yield < 3 ? "bg-yellow-100 text-yellow-700" : "bg-emerald-50 text-emerald-600"}`}>수익 {art.monthly_rent_yield}%</span></>}
+            {art.article_jeonse_ratio != null && <><span className="text-gray-300">·</span><span className={`px-1.5 py-0.5 rounded text-sm font-semibold ${art.article_jeonse_ratio > 80 ? "bg-red-100 text-red-700" : "bg-blue-50 text-blue-600"}`}>전세 {art.article_jeonse_ratio}%</span></>}
+          </div>
 
-      {/* 4행: 특징 (truncate) */}
-      {art.article_feature_desc && (
-        <p className="mt-1.5 text-sm text-gray-400 truncate">{art.article_feature_desc}</p>
+          {/* 4행: 특징 (truncate) */}
+          {art.article_feature_desc && (
+            <p className="mt-1.5 text-sm text-gray-400 truncate">{art.article_feature_desc}</p>
+          )}
+        </>
       )}
     </div>
   );

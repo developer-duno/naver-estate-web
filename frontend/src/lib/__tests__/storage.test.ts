@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   getSearchHistory, addSearchHistory, removeSearchHistory, clearSearchHistory,
   getFavorites, isFavorite, toggleFavorite,
+  getArticleViewMode, setArticleViewMode,
 } from "../storage";
 
 beforeEach(() => {
@@ -104,5 +105,26 @@ describe("즐겨찾기", () => {
   /** 빈 상태에서 조회 */
   it("즐겨찾기가 없으면 빈 배열을 반환한다", () => {
     expect(getFavorites()).toEqual([]);
+  });
+});
+
+// ── 매물 카드 보기 모양 ──
+
+describe("매물 카드 보기 모양 (article_view_mode)", () => {
+  it("compact/medium/large 셋 다 round-trip", () => {
+    setArticleViewMode("compact");
+    expect(getArticleViewMode()).toBe("compact");
+    setArticleViewMode("medium");
+    expect(getArticleViewMode()).toBe("medium");
+    setArticleViewMode("large");
+    expect(getArticleViewMode()).toBe("large");
+  });
+
+  it("localStorage 에 잘못된 값이 박혀 있어도 medium fallback (type guard)", () => {
+    localStorage.setItem("article_view_mode", JSON.stringify("xyz"));
+    expect(getArticleViewMode()).toBe("medium");
+    // 미설정 (raw=null) 도 medium fallback
+    localStorage.removeItem("article_view_mode");
+    expect(getArticleViewMode()).toBe("medium");
   });
 });

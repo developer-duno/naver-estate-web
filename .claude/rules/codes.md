@@ -52,3 +52,4 @@
 | `mb_compare_bookmarks` | 미분양 비교 북마크    | 최대 20개, 수동 저장, 이름 지정 가능 |
 | `mb_radar_settings`  | 레이더 축 선택+가중치  | 축 13개, 가중치 1-5, 프리셋 3종 |
 | `favorite_articles`  | 매물 즐겨찾기           | 무제한, 토글 방식 |
+| `article_view_mode`  | 매물 카드 모양 (compact/medium/large) | 값 1개, default = medium |

@@ -34,7 +34,7 @@ describe("ArticleCardMobile 수익률/뱃지", () => {
       numeric_rent_price: 50,
       monthly_rent_yield: 12.0,
     });
-    render(<ArticleCardMobile articles={[art]} />);
+    render(<ArticleCardMobile articles={[art]} viewMode="large" />);
     expect(screen.getByText(/수익 12%/)).toBeInTheDocument();
   });
 
@@ -44,33 +44,33 @@ describe("ArticleCardMobile 수익률/뱃지", () => {
       numeric_price: 30000,
       article_jeonse_ratio: 60.0,
     });
-    render(<ArticleCardMobile articles={[art]} />);
+    render(<ArticleCardMobile articles={[art]} viewMode="large" />);
     expect(screen.getByText(/전세 60%/)).toBeInTheDocument();
   });
 
   it("매매 매물은 수익률 미표시", () => {
     const art = makeArticle({ trade_type_name: "매매" });
-    render(<ArticleCardMobile articles={[art]} />);
+    render(<ArticleCardMobile articles={[art]} viewMode="large" />);
     expect(screen.queryByText(/수익 \d+%/)).not.toBeInTheDocument();
     expect(screen.queryByText(/전세 \d+%/)).not.toBeInTheDocument();
   });
 
   it("오피스텔 매물에 유형 뱃지 표시", () => {
     const art = makeArticle({ article_real_estate_type_name: "오피스텔" });
-    render(<ArticleCardMobile articles={[art]} />);
+    render(<ArticleCardMobile articles={[art]} viewMode="large" />);
     expect(screen.getByText("오피스텔")).toBeInTheDocument();
   });
 
   it("아파트 매물은 유형 뱃지 미표시", () => {
     const art = makeArticle({ article_real_estate_type_name: "아파트" });
-    render(<ArticleCardMobile articles={[art]} />);
+    render(<ArticleCardMobile articles={[art]} viewMode="large" />);
     // 아파트는 뱃지로 표시되지 않음 (텍스트 자체가 렌더링 안 됨)
     expect(screen.queryByText("아파트")).not.toBeInTheDocument();
   });
 
   it("유형명이 없으면 뱃지 미표시", () => {
     const art = makeArticle({ article_real_estate_type_name: undefined });
-    render(<ArticleCardMobile articles={[art]} />);
+    render(<ArticleCardMobile articles={[art]} viewMode="large" />);
     // border 클래스를 가진 매물유형 뱃지가 없어야 함
     const container = screen.getByText("매매").closest("div")?.parentElement;
     const estateBadges = container?.querySelectorAll(".border") ?? [];

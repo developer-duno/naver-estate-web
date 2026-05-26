@@ -345,3 +345,18 @@ export function toggleFavoriteArticle(article: Omit<FavoriteArticle, "added_at">
   localStorage.setItem(FAVORITE_ARTICLES_KEY, JSON.stringify(favorites));
   return true;
 }
+
+// ── 매물 카드 보기 모양 (compact/medium/large) ──
+
+const ARTICLE_VIEW_MODE_KEY = "article_view_mode";
+export type ArticleViewMode = "compact" | "medium" | "large";
+const VIEW_MODES: readonly ArticleViewMode[] = ["compact", "medium", "large"];
+
+export function getArticleViewMode(): ArticleViewMode {
+  const raw = readJSON<string>(ARTICLE_VIEW_MODE_KEY, "medium");
+  return (VIEW_MODES as readonly string[]).includes(raw) ? (raw as ArticleViewMode) : "medium";
+}
+
+export function setArticleViewMode(mode: ArticleViewMode): void {
+  try { localStorage.setItem(ARTICLE_VIEW_MODE_KEY, JSON.stringify(mode)); } catch { /* private mode quota 무시 */ }
+}

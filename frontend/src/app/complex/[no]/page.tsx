@@ -22,7 +22,9 @@ import FilterBarMobileSheet from "@/components/FilterBarMobileSheet";
 import FilterChipsSummary from "@/components/filter/FilterChipsSummary";
 import ArticleTable from "@/components/ArticleTable";
 import ArticleCardMobile from "@/components/ArticleCardMobile";
+import ArticleViewToggle from "@/components/ArticleViewToggle";
 import ArticleDetail from "@/components/ArticleDetail";
+import { getArticleViewMode, setArticleViewMode, type ArticleViewMode } from "@/lib/storage";
 import Pagination from "@/components/Pagination";
 import HintIcon from "@/components/HintIcon";
 import ComplexBasicInfo from "@/components/ComplexBasicInfo";
@@ -55,6 +57,13 @@ export default function ComplexDetailPage() {
   const [sessionToken, setSessionToken] = useState<string | undefined>(undefined);
   const [tokenError, setTokenError] = useState(false);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
+  const [articleViewMode, setArticleViewModeState] = useState<ArticleViewMode>(() =>
+    typeof window !== "undefined" ? getArticleViewMode() : "medium",
+  );
+  const handleViewModeChange = useCallback((mode: ArticleViewMode) => {
+    setArticleViewModeState(mode);
+    setArticleViewMode(mode);
+  }, []);
 
   // 인쇄 대상 ref — 페이지 본문 전체 (헤더 + 시세 + 매물 + 정보)
   const printRef = useRef<HTMLDivElement>(null);
@@ -377,8 +386,13 @@ export default function ComplexDetailPage() {
             <div className="hidden md:block">
               <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} />
             </div>
-            <div className="md:hidden">
-              <ArticleCardMobile articles={articles} onRowClick={setSelectedArticle} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} />
+            <div className="md:hidden space-y-2">
+              {articles.length > 0 && (
+                <div className="flex justify-end">
+                  <ArticleViewToggle value={articleViewMode} onChange={handleViewModeChange} />
+                </div>
+              )}
+              <ArticleCardMobile articles={articles} onRowClick={setSelectedArticle} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} viewMode={articleViewMode} />
             </div>
           </div>
         )}

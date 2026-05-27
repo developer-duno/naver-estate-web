@@ -3,17 +3,17 @@
 ## 디렉토리 구조
 
 | 경로 | 역할 |
-|------|------|
+| --- | --- |
 | `main.py` | FastAPI 앱 진입점, 라우터 등록, CORS |
 | `deps.py` | 인증 의존성 (get_current_user, get_approved_user, get_admin_user) |
-| `routers/live.py` | 실시간 크롤링 + 실거래가 on-demand 수집 API |
+| `routers/live/` | 실시간 크롤링 + 실거래가 on-demand 수집 API (search 등 분할) |
 | `routers/complexes.py` | 단지 조회/필터/시세/가격추이 |
 | `routers/articles.py` | 매물 조회/엑셀 내보내기 (xlsxwriter 엔진) |
-| `routers/crawl.py` | 관리자 크롤링 트리거 |
-| `routers/admin.py` | 관리자 API |
+| `routers/admin/` | 관리자 API 분할 9 파일 (`collect`/`data`/`freshness`/`freshness_meta`/`jobs`/`naver_calls`/`recrawl`/`scheduler`/`users` + `_shared`) |
 | `routers/stats.py` | 통계 API |
 | `routers/regions.py` | 지역 데이터 API |
 | `routers/users.py` | 사용자 로그인 기록 |
+| `routers/verify.py` | 공인중개사 검증 (odcloud API) |
 | `routers/serializers.py` | ORM → dict 변환 barrel re-export (3모듈) |
 | `routers/estate_serializers.py` | Complex/Article ORM → dict |
 | `routers/filter_builder.py` | 필터 파라미터 → dict 변환 |
@@ -31,7 +31,7 @@
 | `db/mb_query_helpers.py` | mibunyang 중복 제거 + 정렬 + 필터 헬퍼 |
 | `db/mb_apartment_queries.py` | mibunyang 아파트 단지 + 미분양 조회 쿼리 |
 | `db/mb_misc_queries.py` | mibunyang 지역 통계 + 실거래 + 단지 부속 쿼리 |
-| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V020) |
+| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V027, 28 버전) |
 | `shared/naver_api.py` | NaverEstateAPI (수정 금지) |
 | `shared/constants.py` | 상수 (수정 금지) |
 | `auth/permissions.py` | 역할 체크 (require_role) + 일일 쿼터 (check_quota) |
@@ -58,7 +58,7 @@
 ## 토픽 인덱스 (BE 깊이 자료, 명시 참조 — 자동 로드 안 됨)
 
 | 토픽 파일 | 내용 |
-|---|---|
+| --- | --- |
 | `backend/.claude/details.md` | 실거래가 on-demand + mibunyang 통합 + 공인중개사 검증 워크플로 + 미분양 중복 제거 |
 
 ## CI 테스트 인프라
@@ -77,7 +77,7 @@
 ## DB 마이그레이션 (실행 완료)
 
 | 버전 | 내용 | 실행일 |
-|------|------|--------|
+| --- | --- | --- |
 | V014 | crawl_jobs.scheduler_job_id | 2026-04-03 |
 | V015/V016 | apartments/trades 인덱스 7개 + trigram | 2026-04-07 |
 | V017 | agent_verifications 테이블 | — |
@@ -90,9 +90,10 @@
 | V026 | monitor_alerts 테이블 (크롤링 모니터) | 2026-05-18 (세션 196) |
 | V027 | crawl_jobs scheduler_started 인덱스 (PR #21) | 2026-05-21 (세션 207) |
 
-- `db/migrations/` 폴더에 `V000__` ~ `V027__` SQL 파일
+- `db/migrations/` 폴더에 `V000__` ~ `V027__` SQL 파일 = 28 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
+- 최신 = V027 (2026-05-21 머지). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
 
 ## 코드 구조 (분리 완료)
 

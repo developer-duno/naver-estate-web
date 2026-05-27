@@ -62,15 +62,18 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 |---|---|---|
 | `rules/web-rules.md` | ✅ | React/Next.js + FastAPI 코딩 규칙, DON'T 목록 |
 | `rules/testing.md` | ✅ | 테스트 작성·실행 규칙, 구조표 |
-| `rules/infra.md` | ✅ | 서버 복구 절차, 스케줄러 12개, 공유 인프라(mibun) |
+| `rules/infra.md` | ✅ | 서버 복구 절차, 스케줄러 13개, 공유 인프라(mibun) |
 | `rules/codes.md` | ✅ | 거래/매물 코드, 핵심 상수, localStorage 키 |
 | `rules/planning.md` | ✅ | /plan 모드 최소 규칙, 자동 트리거 |
+| `rules/domain-mapping-ssot.md` | ✅ | BE-FE 매핑 SSOT + SQL 집계 N→1 가중평균 + dialect 분기 (세션 226 신설) |
+| `rules/release.md` | ✅ | PR 머지 후 backend 가동 검증 3중 cross-check (세션 232 신설) |
 | `settings.json` | ✅ | 프로젝트 권한·env (공용) |
 | `ASSETS.md` (본 파일) | ✅ | 자산 인덱스 (Claude 진입점) |
-| `GLOSSARY.md` | ✅ | 한국어 도메인 용어집 (14개) |
+| `GLOSSARY.md` | ✅ | 한국어 도메인 용어집 (30+) |
+| `BLOG.md` | ✅ | /blog MDX 26편 라인업 + 4단 발행 절차 |
+| `STRUCTURE.md` | ✅ | 코드베이스 구조 (자동 분석, 세션 232 신설) |
 | `settings.local.json` | ❌ (.gitignore) | 사적 권한 (본인 PC 한정) |
-| `commands/harness.md` | ❌ (.gitignore) | **사적**. Plan→Guard→Work→Review |
-| `commands/guard.md` | ❌ (.gitignore) | **사적**. 9 GATE 검증 |
+| ~~`commands/harness.md`~~ ~~`commands/guard.md`~~ | (부재) | 세션 245 정리 — 실제로는 `.claude/commands/` 폴더 자체 부재. 그동안 plan·9 GATE 작업은 `rules/planning.md` 자동 트리거 + `rules/self-check.md` (글로벌) + `superpowers:writing-plans` 스킬 + 서브에이전트 3개 병렬 패턴으로 대체되어 실가치 0. 미래에 다시 만들 필요 발견 시 본 행 정정 + 자산 등재 |
 | ~~`worktrees/agent-*/`~~ ✅ 세션 112 폴더 직접 삭제 (git worktree prune + rm -rf) | (해소) | git 무인식 stale 폴더 5개 모두 정리 |
 
 ---
@@ -121,14 +124,14 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 
 | 우선순위 | 부채 | 위치 | 영향 |
 |---|---|---|---|
-| 🔴 1순위 | backend 재시작 ritual (zombie 2 세션 연속) | 세션 230~231 박제 → 본 세션 232 `release.md` 신설 예정 | PR #61 가속 효과 검증 차단. 머지된 코드 미반영 위험 영구화 |
-| 🟡 2순위 | 디자인 리뉴얼 PR 4~7 진행 중 | spec = `docs/superpowers/specs/2026-05-20-2upekr-redesign-design.md` | PR 0·1·2a·3a 완료 (세션 210·213·214·215). PR 4~7 시각 변화 작업 = 다음 세션 1순위 |
-| 🟢 3순위 | 가치 3필드 0.88% 채움률 | nearby/jeonse/trades = 558/458/558 / 63,506 (전체 모집단 22,437) | backend 재시작 후 ~33일 자동 완주 = 능동 작업 불필요 (부채 1 해소 의존) |
+| 🔴 1순위 | 디자인 리뉴얼 PR 4~7 진행 중 | spec = `docs/superpowers/specs/2026-05-20-2upekr-redesign-design.md` | PR 0·1·2a·3a 완료 (세션 210·213·214·215). PR 4·5·6 시각 변화 진행 중 (세션 240~245 = PR 4e·5a·5b·5d·6a·6b·6c). PR 7 미진행 |
+| 🟡 2순위 | 가치 3필드 채움률 진행 중 | `complex_metric` cron 매일 08:30 KST | PR #61 (배치 1000) 가동 확정 (세션 234 4중 cross-check 통과). ~25일 자동 완주 = 능동 작업 불필요. backend zombie 회피 룰 = `release.md` |
 
 ### §6.1 해소 완료 아카이브 (이력 보존 — "왜 이렇게 됐나" 추적용)
 
 | 해소 부채 | 해소 경위 | 효과 |
 |---|---|---|
+| backend 재시작 ritual (zombie 2 세션 연속) | 세션 232 `.claude/rules/release.md` 신설 + 세션 234 PR #61 부팅 로그 `(배치 1000)` 실측 4중 cross-check 통과 | PR 머지 후 3중 cross-check (orchestrator.pid mtime + backend.log 첫 줄 시각 + crawl_jobs 최신 row) 룰화. 세션 245 본 PR 답습 = backend 변경 PR 머지 시 의무 적용 |
 | worktrees 잔재 5개 | 세션 110 prune + 세션 112 폴더 rm -rf 완료 | 세션 109+110 prune 후 잔재 5개 재생성 → 세션 112 rm -rf 완전 정리. 향후 git worktree 사용 후 prune 자동화 검토 권장 |
 | R21 e2e 검증 미완 | 세션 110 재실행 통과 (run 25361059023 success: Frontend CI + Frontend E2E admin 둘 다 🟢) | 부부 공동명의 #10 strict mode 정정 진짜 통과 확증 |
 | complex-visual baseline | 세션 147 근본 fix (98f1f94 — applyComplexMocks 에 /api/users/me + user_profiles mock 2종 추가, 141 010cbea 우연 통과의 진짜 원인 해소) | 세션 190 실측 = main 최근 20건 CI 중 complex-visual 실패 0건 (7건 연속 success). baseline png 마지막 변경 ffe23b0(135) 이후 안정 |
@@ -171,8 +174,8 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 
 | 작업 흐름 | 도구 (슬래시 커맨드 / Skill) | 출처 | 트리거 시점 |
 |---|---|---|---|
-| **Plan→Guard→Work→Review 워크플로우** | `/harness` | `.claude/commands/harness.md` (사적) | 새 기능·5+ 파일 수정 / 사용자 "하네스로 가" |
-| **9 GATE 검증** | `/guard` | `.claude/commands/guard.md` (사적) | 코드 작성 직후·커밋 전 / ExitPlanMode 거부 시 |
+| **Plan→Guard→Work→Review 워크플로우** | `rules/planning.md` 자동 트리거 + `superpowers:writing-plans` 스킬 + 서브에이전트 3개 병렬 (Explore + code-reviewer + silent-failure-hunter) | `.claude/rules/planning.md` (자동 로드) | 새 기능·5+ 파일 수정 / 사용자 "plan 짜" 또는 plan mode 진입 |
+| **9 GATE 검증** | 글로벌 `rules/self-check.md` §자가 점검 1+2 (서브에이전트 3개 병렬, 부재 단정 차단, 맹점·할루시네이션 발굴) | `~/.claude/rules/self-check.md` (글로벌 자동 로드) | 코드 작성 직후·ExitPlanMode 거부 시·사용자 "맹점 찾아라" 명시 |
 | **커밋 작성** | `/commit-commands:commit` | 글로벌 플러그인 | 변경 완료 후 사용자 "커밋해" |
 | **커밋+푸시+PR** | `/commit-commands:commit-push-pr` | 글로벌 플러그인 | PR 만들 때 |
 | **gone 브랜치 정리** | `/commit-commands:clean_gone` | 글로벌 플러그인 | 원격 삭제된 로컬 브랜치 정리 |
@@ -260,7 +263,7 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 | **CLAUDE.md 갱신** | `/claude-md-management:revise-claude-md` | 직접 Edit |
 | **CI 결과 확인** | `gh run list` + `gh run view` | (없음) |
 | **자동 차단 룰** | `/hookify:hookify` | (없음) |
-| **9 GATE 검증** | `/guard` (사적) | `superpowers:verification-before-completion` |
+| **9 GATE 검증** | 글로벌 `rules/self-check.md` 자가 점검 1+2 (서브에이전트 3개 병렬) | `superpowers:verification-before-completion` |
 | **plan 작성** | `superpowers:writing-plans` | `/harness` Phase 1 |
 | **계산기 산식 권위 출처** | §1 PDF 매핑 | `mcp__context7` (법령) |
 

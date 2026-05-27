@@ -16,6 +16,18 @@ from ._shared import router
 logger = logging.getLogger(__name__)
 
 
+def _safe_fill_rate(filled: int, total: int) -> float | None:
+    """채움률 계산 — 모집단 0건이면 None 반환.
+
+    None 반환 = FE 가 "—" 표시 (데이터 없음 / backend 옛 코드 가동 구별 가능).
+    0.0 반환 = FE 가 "0.00%" 표시 (실제 0% 채움률).
+    세션 230 박제 [[feedback-multi-field-fill-silent]] 답습.
+    """
+    if not total:
+        return None
+    return round(filled / total, 4)
+
+
 @router.get("/crawl-jobs")
 def list_crawl_jobs(
     status: str | None = None,
@@ -229,6 +241,27 @@ def get_detailed_stats(
         select(func.max(CrawlJob.completed_at)).where(CrawlJob.status == "completed")
     ).scalar()
 
+    # 채움률 3건 (PR 6a)
+    # `func.count().filter()` = PostgreSQL FILTER + SQLite CASE WHEN SQLAlchemy 자동 변환
+    # 인덱스 부재 풀스캔 발생하나 admin 빈도 낮음 (1~3명) → 허용
+    complex_detail_filled = db.execute(
+        select(func.count()).select_from(Complex).where(Complex.detail_crawled_at.isnot(None))
+    ).scalar() or 0
+    article_detail_filled = db.execute(
+        select(func.count()).select_from(Article).where(
+            and_(Article.detail_crawled == True, Article.is_active == True)
+        )
+    ).scalar() or 0
+    complex_metric_filled = db.execute(
+        select(func.count()).select_from(Complex).where(
+            and_(
+                Complex.nearby_median_price.isnot(None),
+                Complex.jeonse_rate.isnot(None),
+                Complex.recent_trades_6m.isnot(None),
+            )
+        )
+    ).scalar() or 0
+
     return {
         "complex_count": complex_count,
         "article_count": article_count,
@@ -237,6 +270,9 @@ def get_detailed_stats(
         "user_count": user_count,
         "today_crawl_count": today_crawl_count,
         "error_count_24h": error_count,
+        "complex_detail_fill_rate": _safe_fill_rate(complex_detail_filled, complex_count),
+        "article_detail_fill_rate": _safe_fill_rate(article_detail_filled, article_count),
+        "complex_metric_fill_rate": _safe_fill_rate(complex_metric_filled, complex_count),
         "last_crawl_at": last_crawl.isoformat() if last_crawl else None,
         "recent_crawl_jobs": [
             {

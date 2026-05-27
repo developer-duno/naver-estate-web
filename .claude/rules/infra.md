@@ -69,7 +69,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 | 응급의료 수집 | 매월 첫째 월 3시 | NEMC 응급의료기관 API |
 | 어린이집 수집 | 매월 첫째 목 6시 | CPMS cpmsapi030 API |
 | 범죄통계 수집 | 분기별 첫째 일 4시 | 경찰청 odcloud API (CSV 폴백) |
-| 단지 상세 backfill | APT/OPST 6시간 interval 매일 / JGC·ABYG·OBYG 주1회 7시 | 매물유형별 독립 job, detail_crawled_at NULL 단지 보강 (APT/OPST 배치 1000 가속 — PR #19 답습, 소수 유형 배치 1000 cron 유지) |
+| 단지 상세 backfill | APT/OPST 4시간 interval 매일 / JGC·ABYG·OBYG 주1회 7시 | 매물유형별 독립 job, detail_crawled_at NULL 단지 보강 (APT/OPST 배치 1000 가속 — PR #19 답습, 소수 유형 배치 1000 cron 유지. 2026-05-27 PR 6a 답습 6h→4h 33% 가속) |
 | 크롤링 모니터 | 20분 interval | crawl_jobs 정합성 점검 후 텔레그램 알림 (운영 토글 MONITOR_ENABLED, 2026-05-25 세션 229 30→10→20 답습. _STALE_HOURS=1·_FAILED_WINDOW_HOURS=24 는 monitor.py:23~25 고정 상수, 인터벌 격하 무관) |
 
 ## 공유 인프라 규칙 (mibunyang 프로젝트와 공유)

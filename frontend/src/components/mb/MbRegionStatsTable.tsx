@@ -1,7 +1,9 @@
 "use client";
 
+import { MapPin } from "lucide-react";
 import type { MbRegion } from "@/types";
 import { formatKoreanPrice } from "@/lib/format";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface Props {
   regions: MbRegion[];
@@ -10,9 +12,11 @@ interface Props {
 export default function MbRegionStatsTable({ regions }: Props) {
   if (regions.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-500">
-        지역 통계 데이터가 없습니다.
-      </div>
+      <EmptyState
+        icon={MapPin}
+        title="표시할 지역 통계가 없어요"
+        description="조건을 바꿔보거나 잠시 후 다시 조회해주세요"
+      />
     );
   }
 

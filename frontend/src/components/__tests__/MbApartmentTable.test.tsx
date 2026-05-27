@@ -58,10 +58,9 @@ describe("MbApartmentTable 렌더링", () => {
     expect(screen.getAllByText("삼성물산").length).toBeGreaterThanOrEqual(1);
   });
 
-  it("빈 데이터일 때 안내 메시지가 표시된다 (early return)", () => {
+  it("빈 데이터일 때 EmptyState 카피가 표시된다 (early return)", () => {
     render(<MbApartmentTable apartments={[]} />);
-    expect(screen.getByText("미분양 데이터가 없습니다.")).toBeInTheDocument();
-    // 빈 상태에서는 카드 컨테이너도 없어야 함
+    expect(screen.getByText("표시할 미분양 단지가 없어요")).toBeInTheDocument();
     expect(screen.queryByTestId("mb-apt-cards")).not.toBeInTheDocument();
   });
 

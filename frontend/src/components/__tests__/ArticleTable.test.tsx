@@ -57,10 +57,10 @@ describe("ArticleTable", () => {
     expect(screen.getByText("매매")).toBeInTheDocument();
   });
 
-  it("빈 매물 목록", () => {
+  it("빈 매물 목록 (EmptyState 카피)", () => {
     render(<ArticleTable articles={[]} />);
     expect(
-      screen.getByText(/매물이 없습니다|결과가 없습니다|없습니다|No/i)
+      screen.getByText(/매물이 없어요|매물이 없습니다|결과가 없습니다|No/i)
     ).toBeInTheDocument();
   });
 

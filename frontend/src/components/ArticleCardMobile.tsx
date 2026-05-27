@@ -1,12 +1,14 @@
 "use client";
 
 import { memo } from "react";
+import { Search } from "lucide-react";
 import type { Article } from "@/types";
 import { M2_TO_PYEONG, TRADE_TYPE_COLORS, TRADE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
 import { formatMaintenanceCost } from "@/lib/format";
 import type { ArticleViewMode } from "@/lib/storage";
 import ArticleFavoriteButton from "@/components/ArticleFavoriteButton";
 import ArticleCompactRow from "@/components/ArticleCompactRow";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface Props {
   articles: Article[];
@@ -22,26 +24,28 @@ interface Props {
 /** 매물 목록 모바일 카드뷰 (md:hidden) — 데스크톱 ArticleTable의 모바일 대응. viewMode=large(기본 동작 4행) / medium(1·2행만) / compact(별도 1줄 컴포넌트). */
 function ArticleCardMobile({ articles, onRowClick, selectedArticleNos, onSelectionChange, onSelectAll, hasActiveFilters, onResetFilters, viewMode = "large" }: Props) {
   if (articles.length === 0) {
+    const emptyTitle = hasActiveFilters
+      ? "조건에 맞는 매물이 없어요"
+      : "표시할 매물이 없어요";
+    const emptyDescription = hasActiveFilters
+      ? "필터 조건이 너무 좁을 수 있어요"
+      : "위의 \"데이터 갱신\" 버튼을 눌러보세요";
+    const emptyAction = hasActiveFilters && onResetFilters ? (
+      <button
+        type="button"
+        onClick={onResetFilters}
+        className="text-sm text-blue-600 hover:underline py-1"
+      >
+        필터 초기화
+      </button>
+    ) : undefined;
     return (
-      <div className="text-center py-12 space-y-2">
-        <p className="text-gray-500">매물이 없습니다.</p>
-        {hasActiveFilters ? (
-          <>
-            <p className="text-sm text-gray-400">필터 조건이 너무 좁을 수 있어요.</p>
-            {onResetFilters && (
-              <button
-                type="button"
-                onClick={onResetFilters}
-                className="text-sm text-blue-600 hover:underline py-1"
-              >
-                필터 초기화
-              </button>
-            )}
-          </>
-        ) : (
-          <p className="text-sm text-gray-400">위의 &quot;데이터 갱신&quot; 버튼을 눌러보세요.</p>
-        )}
-      </div>
+      <EmptyState
+        icon={Search}
+        title={emptyTitle}
+        description={emptyDescription}
+        action={emptyAction}
+      />
     );
   }
 

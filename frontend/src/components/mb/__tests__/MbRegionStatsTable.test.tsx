@@ -75,8 +75,8 @@ describe("MbRegionStatsTable", () => {
     expect(cards?.textContent).not.toContain("토지비");
   });
 
-  it("빈 배열이면 '지역 통계 데이터가 없습니다.' 표시", () => {
+  it("빈 배열이면 EmptyState 카피 ('표시할 지역 통계가 없어요') 표시", () => {
     render(<MbRegionStatsTable regions={[]} />);
-    expect(screen.getByText("지역 통계 데이터가 없습니다.")).toBeInTheDocument();
+    expect(screen.getByText("표시할 지역 통계가 없어요")).toBeInTheDocument();
   });
 });

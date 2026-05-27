@@ -1,8 +1,11 @@
 /**
- * PR 3a 정보 위계 회귀 가드 — spec L323 "시세 → 매물 → 실거래가 추이 → 단지 정보".
- * 누군가 page.tsx 의 section 한 줄 옮기면 즉시 회귀.
+ * 정보 위계 회귀 가드 (PR 3a 신설 + PR 6d 데스크톱 통합 후 갱신)
  *
- * e2e 환경은 BE 단지 데이터가 없으면 ComplexLoadState 상태에 머물러 H2 가 안 나옴.
+ * PR 6d 이후 = 데스크톱 시세·차트·단지정보 3 섹션이 ComplexDashboard 박스 4 안으로 흡수.
+ * 페이지 H2 = "매물" 1개만. 박스 4 라벨 (시세·실거래가·단지정보·면적별 시세) + 매물 섹션이
+ * 새로운 위계.
+ *
+ * e2e 환경은 BE 단지 데이터가 없으면 ComplexLoadState 상태에 머물러 렌더가 안 나옴.
  * 따라서 useQuery mock 으로 vitest 통합 테스트.
  *
  * 실행: npx vitest run src/app/complex/[no]/__tests__/page-hierarchy.test.tsx
@@ -93,13 +96,26 @@ function renderPage() {
   return render(<ComplexDetailPage />, { wrapper: TestQueryProvider });
 }
 
-describe("ComplexDetailPage 정보 위계 (spec L323)", () => {
-  it("H2 4개가 시세 → 매물 → 실거래가 추이 → 단지 정보 순서로 렌더링", async () => {
+describe("ComplexDetailPage 정보 위계 (PR 6d 데스크톱 통합 후)", () => {
+  it("H2 1개 (매물) + ComplexDashboard 박스 4개 (시세·실거래가·단지정보·면적별 시세) 렌더링", async () => {
     renderPage();
     await waitFor(() => {
+      // H2 = 매물 1개만 (시세·차트·단지정보 3 섹션은 박스 4 안으로 흡수)
       const h2s = screen.getAllByRole("heading", { level: 2 });
       const texts = h2s.map(h => h.textContent);
-      expect(texts).toEqual(["시세", "매물", "실거래가 추이", "단지 정보"]);
+      expect(texts).toEqual(["매물"]);
+
+      // 박스 4 = aria-label "단지 종합 대시보드" 안의 4 button (시세·실거래가·단지정보·면적별 시세)
+      const dashboard = screen.getByLabelText("단지 종합 대시보드");
+      const boxButtons = dashboard.querySelectorAll('button[aria-controls="dashboard-content"]');
+      expect(boxButtons).toHaveLength(4);
+      const labels = Array.from(boxButtons).map(b => b.getAttribute("aria-label"));
+      expect(labels).toEqual([
+        "시세 메뉴 열기",
+        "실거래가 메뉴 열기",
+        "단지정보 메뉴 열기",
+        "면적별 시세 메뉴 열기",
+      ]);
     });
   });
 

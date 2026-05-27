@@ -1,15 +1,15 @@
 /**
- * ComplexDashboardMobile 회귀 가드 (PR 6c §단계 C)
+ * ComplexDashboard 회귀 가드 (PR 6c 신설 + PR 6d 데스크톱 통합)
  *
- * v2 구조: 박스 4개 (2×2) + 별도 펼침 영역 (Radix Accordion 폐기).
+ * 구조: 박스 4개 (모바일 2×2 / 데스크톱 4×1) + 별도 펼침 영역.
  * useComplexArticleAvg mock 의무 (F3 가드).
  *
- * 실행: npx vitest run src/components/complex/__tests__/ComplexDashboardMobile.test.tsx
+ * 실행: npx vitest run src/components/complex/__tests__/ComplexDashboard.test.tsx
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import ComplexDashboardMobile from "../ComplexDashboardMobile";
+import ComplexDashboard from "../ComplexDashboard";
 import type { Complex, PyeongDetail } from "@/types";
 
 // F3 가드: useComplexArticleAvg mock 의무 (TestQueryProvider 없이 render 가능)
@@ -56,7 +56,7 @@ const samplePyeong: PyeongDetail[] = [
   { pyeong_no: 2, pyeong_name: "109B", exclusive_area: "109.95" },
 ];
 
-describe("ComplexDashboardMobile (v2)", () => {
+describe("ComplexDashboard (v2)", () => {
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn();
     mockUseComplexArticleAvg.mockReturnValue({
@@ -69,7 +69,7 @@ describe("ComplexDashboardMobile (v2)", () => {
 
   it("4 박스 라벨 + 핵심 지표 표시 (중요도순)", () => {
     render(
-      <ComplexDashboardMobile
+      <ComplexDashboard
         complex={baseComplex}
         complexNo="C001"
         pyeongDetails={samplePyeong}
@@ -96,7 +96,7 @@ describe("ComplexDashboardMobile (v2)", () => {
 
   it("박스 클릭 시 펼침 영역 노출 + aria-expanded toggle", async () => {
     render(
-      <ComplexDashboardMobile
+      <ComplexDashboard
         complex={baseComplex}
         complexNo="C001"
         pyeongDetails={samplePyeong}
@@ -131,7 +131,7 @@ describe("ComplexDashboardMobile (v2)", () => {
     });
     const empty: Complex = { complex_no: "C002", complex_name: "값없음단지" };
     render(
-      <ComplexDashboardMobile
+      <ComplexDashboard
         complex={empty}
         complexNo="C002"
         pyeongDetails={[]}
@@ -151,7 +151,7 @@ describe("ComplexDashboardMobile (v2)", () => {
   it("면적별 시세 펼친 후 안내 메시지 (평형 0건, F5 가드)", async () => {
     const empty: Complex = { complex_no: "C003", complex_name: "평형없음단지" };
     render(
-      <ComplexDashboardMobile
+      <ComplexDashboard
         complex={empty}
         complexNo="C003"
         pyeongDetails={[]}
@@ -171,7 +171,7 @@ describe("ComplexDashboardMobile (v2)", () => {
 
   it("면적별 시세 펼친 후 PyeongDetailsList + ComplexPriceAreaSection 둘 다 렌더 (F11 가드)", async () => {
     render(
-      <ComplexDashboardMobile
+      <ComplexDashboard
         complex={baseComplex}
         complexNo="C001"
         pyeongDetails={samplePyeong}
@@ -188,7 +188,7 @@ describe("ComplexDashboardMobile (v2)", () => {
   it("avgPrice/count 모두 null/0 → 시세 박스 '-' 표시", () => {
     const empty: Complex = { complex_no: "C004", complex_name: "전체NULL단지" };
     render(
-      <ComplexDashboardMobile
+      <ComplexDashboard
         complex={empty}
         complexNo="C004"
         pyeongDetails={[]}

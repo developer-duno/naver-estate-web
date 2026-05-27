@@ -8,7 +8,8 @@ import {
   getAdminCrawlFailures,
   getAdminNaverCalls,
 } from "@/lib/api";
-import type { CrawlJobDetail, PaginatedResponse, CrawlFailuresResponse, NaverCallStats } from "@/types/admin";
+import type { CrawlFailuresResponse, NaverCallStats } from "@/lib/api/admin";
+import type { CrawlJobDetail, PaginatedResponse } from "@/types/admin";
 import AdminCard from "./AdminCard";
 
 export default function AdminLivePanel() {

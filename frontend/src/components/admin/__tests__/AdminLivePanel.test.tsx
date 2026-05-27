@@ -6,11 +6,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 import AdminLivePanel from "../AdminLivePanel";
-import type {
-  CrawlJobDetail,
-  CrawlFailureItem,
-  NaverCallStats,
-} from "@/types/admin";
+import type { CrawlJobDetail } from "@/types/admin";
+import type { CrawlFailureItem, NaverCallStats } from "@/lib/api/admin";
 
 vi.mock("@/lib/api", () => ({
   getAdminCrawlJobs: vi.fn(),
@@ -36,12 +33,10 @@ const mkJob = (overrides: Partial<CrawlJobDetail>): CrawlJobDetail => ({
   id: 1,
   job_type: "crawl_articles",
   status: "running",
-  target_id: null,
   total_items: 100,
   processed_items: 50,
   started_at: new Date().toISOString(),
-  finished_at: null,
-  error_message: null,
+  created_at: new Date().toISOString(),
   ...overrides,
 });
 

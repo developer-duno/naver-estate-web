@@ -38,9 +38,9 @@ describe("ArticleCardMobile", () => {
     expect(screen.getByText("101동")).toBeInTheDocument();
   });
 
-  it("빈 매물 목록", () => {
+  it("빈 매물 목록 (EmptyState 카피)", () => {
     render(<ArticleCardMobile articles={[]} />);
-    expect(screen.getByText(/매물이 없습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/매물이 없어요|매물이 없습니다/)).toBeInTheDocument();
   });
 
   it("빈 매물 + 필터 활성 → '필터 초기화' 버튼 클릭 시 onResetFilters 호출", () => {

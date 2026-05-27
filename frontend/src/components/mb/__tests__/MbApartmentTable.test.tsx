@@ -65,8 +65,8 @@ describe("MbApartmentTable — 평당가/할인율 컬럼 (단계 5)", () => {
     expect(cards?.textContent).not.toContain("할인");
   });
 
-  it("빈 배열이면 '미분양 데이터가 없습니다.' 표시", () => {
+  it("빈 배열이면 EmptyState 카피 ('표시할 미분양 단지가 없어요') 표시", () => {
     render(<MbApartmentTable apartments={[]} />);
-    expect(screen.getByText("미분양 데이터가 없습니다.")).toBeInTheDocument();
+    expect(screen.getByText("표시할 미분양 단지가 없어요")).toBeInTheDocument();
   });
 });

@@ -1,7 +1,9 @@
 "use client";
 
+import { TrendingUp } from "lucide-react";
 import type { MbTrade } from "@/types";
 import { formatKoreanPrice } from "@/lib/format";
+import { EmptyState } from "@/components/ui/empty-state";
 
 /** 문자열 sort 값 ("price_desc") ↔ SortState 변환 */
 function parseSortString(s?: string): { key: string; dir: "asc" | "desc" | null } {
@@ -62,9 +64,11 @@ export default function MbTradeTable({ trades, sort, onSortChange }: Props) {
   const sortState = parseSortString(sort);
   if (trades.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-500">
-        실거래 데이터가 없습니다.
-      </div>
+      <EmptyState
+        icon={TrendingUp}
+        title="표시할 실거래가 없어요"
+        description="조건을 바꿔보거나 잠시 후 다시 조회해주세요"
+      />
     );
   }
 

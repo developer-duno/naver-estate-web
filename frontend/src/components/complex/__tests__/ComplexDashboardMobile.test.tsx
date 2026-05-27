@@ -1,6 +1,9 @@
 /**
- * ComplexDashboardMobile 회귀 가드 (PR 4e-1)
- * 5장 요약 카드 + Accordion 5 섹션 (중요도순) — 5 자식 섹션은 모킹.
+ * ComplexDashboardMobile 회귀 가드 (PR 6c §단계 C)
+ *
+ * v2 구조: 박스 4개 (2×2) + 별도 펼침 영역 (Radix Accordion 폐기).
+ * useComplexArticleAvg mock 의무 (F3 가드).
+ *
  * 실행: npx vitest run src/components/complex/__tests__/ComplexDashboardMobile.test.tsx
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -9,6 +12,19 @@ import userEvent from "@testing-library/user-event";
 import ComplexDashboardMobile from "../ComplexDashboardMobile";
 import type { Complex, PyeongDetail } from "@/types";
 
+// F3 가드: useComplexArticleAvg mock 의무 (TestQueryProvider 없이 render 가능)
+const mockUseComplexArticleAvg = vi.fn(() => ({
+  avgPrice: null as number | null,
+  count: 0,
+  isLoading: false,
+  isError: false,
+}));
+
+vi.mock("@/hooks/useComplexArticleAvg", () => ({
+  useComplexArticleAvg: () => mockUseComplexArticleAvg(),
+}));
+
+// 자식 섹션 mock (jsdom 환경 + 외부 의존성 차단)
 vi.mock("@/components/complex/ComplexPriceFloorSection", () => ({
   default: () => <div data-testid="mock-price-floor" />,
 }));
@@ -17,6 +33,12 @@ vi.mock("@/components/complex/ComplexPriceAreaSection", () => ({
 }));
 vi.mock("@/components/complex/PriceChartSection", () => ({
   default: () => <div data-testid="mock-price-chart" />,
+}));
+vi.mock("@/components/ComplexPyeongCard", () => ({
+  PyeongDetailsList: () => <div data-testid="mock-pyeong-list" />,
+}));
+vi.mock("@/components/ComplexBasicInfo", () => ({
+  default: () => <div data-testid="mock-basic-info" />,
 }));
 
 const baseComplex: Complex = {
@@ -34,13 +56,18 @@ const samplePyeong: PyeongDetail[] = [
   { pyeong_no: 2, pyeong_name: "109B", exclusive_area: "109.95" },
 ];
 
-describe("ComplexDashboardMobile", () => {
+describe("ComplexDashboardMobile (v2)", () => {
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn();
+    mockUseComplexArticleAvg.mockReturnValue({
+      avgPrice: null,
+      count: 0,
+      isLoading: false,
+      isError: false,
+    });
   });
-  // scrollIntoView 부수효과 검증은 jsdom 환경에서 불안정 — aria-expanded toggle 로 대체 검증
 
-  it("5장 요약 카드 라벨 + 핵심 지표 표시 (중요도순)", () => {
+  it("4 박스 라벨 + 핵심 지표 표시 (중요도순)", () => {
     render(
       <ComplexDashboardMobile
         complex={baseComplex}
@@ -50,18 +77,24 @@ describe("ComplexDashboardMobile", () => {
         onFilterChange={() => {}}
       />,
     );
+
+    // 4 박스 button accessible name (F6 selector 패턴 유지)
     expect(screen.getByRole("button", { name: "시세 메뉴 열기" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "실거래가 메뉴 열기" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "단지정보 메뉴 열기" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "평형 메뉴 열기" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "면적별 시세 메뉴 열기" })).toBeInTheDocument();
+
+    // 평형 박스 부재 (Q4 흡수)
+    expect(screen.queryByRole("button", { name: "평형 메뉴 열기" })).not.toBeInTheDocument();
+
+    // 핵심 지표
     expect(screen.getByText(/전세가율 65%/)).toBeInTheDocument();
     expect(screen.getByText("42건")).toBeInTheDocument();
     expect(screen.getByText("1,234세대")).toBeInTheDocument();
-    expect(screen.getByText("2개")).toBeInTheDocument();
+    expect(screen.getByText("2개 평형")).toBeInTheDocument();
   });
 
-  it("요약 카드 클릭 시 해당 Accordion 펼침 (aria-expanded toggle)", async () => {
+  it("박스 클릭 시 펼침 영역 노출 + aria-expanded toggle", async () => {
     render(
       <ComplexDashboardMobile
         complex={baseComplex}
@@ -71,15 +104,31 @@ describe("ComplexDashboardMobile", () => {
         onFilterChange={() => {}}
       />,
     );
+
     const priceCard = screen.getByRole("button", { name: "시세 메뉴 열기" });
     expect(priceCard).toHaveAttribute("aria-expanded", "false");
+
+    // 펼침 영역 초기 부재
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
+
     await userEvent.click(priceCard);
     expect(priceCard).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("region")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-price-floor")).toBeInTheDocument();
+
+    // 다시 클릭 → 닫힘
     await userEvent.click(priceCard);
     expect(priceCard).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("region")).not.toBeInTheDocument();
   });
 
-  it("값 없을 때 '-' 표시 (silent failure 방지)", () => {
+  it("NULL fallback: 시세는 '매물 평균', 실거래가는 '매물 N건' (F4 가드)", () => {
+    mockUseComplexArticleAvg.mockReturnValue({
+      avgPrice: 75000,
+      count: 46,
+      isLoading: false,
+      isError: false,
+    });
     const empty: Complex = { complex_no: "C002", complex_name: "값없음단지" };
     render(
       <ComplexDashboardMobile
@@ -90,11 +139,16 @@ describe("ComplexDashboardMobile", () => {
         onFilterChange={() => {}}
       />,
     );
-    const dashes = screen.getAllByText("-");
-    expect(dashes.length).toBeGreaterThanOrEqual(3);
+
+    // 시세 박스 = 매물 평균 (formatKoreanPrice(75000))
+    expect(screen.getByText(/매물 평균/)).toBeInTheDocument();
+    // 실거래가 박스 primary = '매물 46건' + 시세 박스 secondary (jeonse_rate NULL fallback) = '매물 46건'
+    // = 2곳 동시 노출 (의도된 fallback 일관성)
+    const occurrences = screen.getAllByText("매물 46건");
+    expect(occurrences.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("평형 데이터 0건일 때 안내 메시지 표시 (Accordion 펼친 후)", async () => {
+  it("면적별 시세 펼친 후 안내 메시지 (평형 0건, F5 가드)", async () => {
     const empty: Complex = { complex_no: "C003", complex_name: "평형없음단지" };
     render(
       <ComplexDashboardMobile
@@ -105,9 +159,46 @@ describe("ComplexDashboardMobile", () => {
         onFilterChange={() => {}}
       />,
     );
-    await userEvent.click(screen.getByRole("button", { name: "평형 메뉴 열기" }));
+
+    // F5: selector = "면적별 시세 메뉴 열기" (구 "평형 메뉴 열기" 제거 답습)
+    await userEvent.click(screen.getByRole("button", { name: "면적별 시세 메뉴 열기" }));
     expect(
       await screen.findByText("면적별 정보가 아직 수집되지 않았습니다."),
     ).toBeInTheDocument();
+    // 평형 0건이어도 면적별 시세 컴포넌트는 함께 렌더
+    expect(screen.getByTestId("mock-price-area")).toBeInTheDocument();
+  });
+
+  it("면적별 시세 펼친 후 PyeongDetailsList + ComplexPriceAreaSection 둘 다 렌더 (F11 가드)", async () => {
+    render(
+      <ComplexDashboardMobile
+        complex={baseComplex}
+        complexNo="C001"
+        pyeongDetails={samplePyeong}
+        sessionToken={undefined}
+        onFilterChange={() => {}}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "면적별 시세 메뉴 열기" }));
+    expect(screen.getByTestId("mock-pyeong-list")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-price-area")).toBeInTheDocument();
+  });
+
+  it("avgPrice/count 모두 null/0 → 시세 박스 '-' 표시", () => {
+    const empty: Complex = { complex_no: "C004", complex_name: "전체NULL단지" };
+    render(
+      <ComplexDashboardMobile
+        complex={empty}
+        complexNo="C004"
+        pyeongDetails={[]}
+        sessionToken={undefined}
+        onFilterChange={() => {}}
+      />,
+    );
+
+    // 시세 박스 primary = '-' (nearby_median_price NULL + avgPrice null)
+    const dashes = screen.getAllByText("-");
+    expect(dashes.length).toBeGreaterThanOrEqual(3); // 시세 + 단지정보 + 면적별 시세
   });
 });

@@ -5,27 +5,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { getDataFreshness } from "@/lib/api";
-import type { DataFreshnessItem } from "@/types/admin";
+import { tally } from "@/lib/admin/status-derivation";
 
 interface Props {
   token: string;
-}
-
-interface Counts {
-  green: number;
-  yellow: number;
-  red: number;
-  unknown: number;
-  spinning: number;
-}
-
-function tally(items: DataFreshnessItem[]): Counts {
-  const c: Counts = { green: 0, yellow: 0, red: 0, unknown: 0, spinning: 0 };
-  for (const it of items) {
-    c[it.status] += 1;
-    if (it.spinning) c.spinning += 1;
-  }
-  return c;
 }
 
 function scrollToFreshness() {

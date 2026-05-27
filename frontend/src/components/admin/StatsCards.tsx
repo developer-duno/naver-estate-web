@@ -1,5 +1,6 @@
 "use client";
 
+import { formatPct } from "@/lib/format";
 import type { DetailedStats } from "@/types/admin";
 
 interface Props {
@@ -43,6 +44,14 @@ export default function StatsCards({ stats, loading }: Props) {
           최근 24시간 에러: {stats.error_count_24h}건
         </div>
       )}
+      <div className="col-span-full bg-accent-blue/10 border border-accent-blue/30 rounded-lg p-3 text-sm">
+        <p className="font-semibold mb-1">데이터 채움률</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+          <div>단지 상세: {formatPct(stats.complex_detail_fill_rate)}</div>
+          <div>매물 상세: {formatPct(stats.article_detail_fill_rate)}</div>
+          <div>가치 지표: {formatPct(stats.complex_metric_fill_rate)}</div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -59,6 +59,10 @@ export interface DetailedStats {
   last_crawl_at?: string;
   error_count_24h: number;
   total_article_count?: number;
+  /** 채움률 3건 (PR 6a). 0건 모집단 = null (FE "—" 표시), 0% 채움률 = 0 (FE "0.00%" 표시) */
+  complex_detail_fill_rate?: number | null;
+  article_detail_fill_rate?: number | null;
+  complex_metric_fill_rate?: number | null;
 }
 
 /** 사용자 역할/상태 업데이트 */

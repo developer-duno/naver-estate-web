@@ -92,3 +92,9 @@ export function formatMaintenanceCost(cost?: string | null, numericCost?: number
   if (numericCost != null) return `${numericCost}만원`;
   return "-";
 }
+
+/** 소수 비율 → 백분율 문자열 (0.1023 → "10.23%"). null/undefined = "—" (admin 채움률 표시 답습) */
+export function formatPct(v: number | null | undefined): string {
+  if (v === null || v === undefined) return "—";
+  return `${(v * 100).toFixed(2)}%`;
+}

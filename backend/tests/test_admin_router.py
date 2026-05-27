@@ -74,6 +74,26 @@ def test_detailed_stats(client, db):
     assert res.status_code == 200
 
 
+def test_detailed_stats_fill_rate_keys(client, db):
+    """PR 6a — 채움률 3 필드 응답 키 검증"""
+    _make_profile(db, "a1", role="admin")
+    res = client.get("/api/admin/stats/detailed", headers=_auth(_token("a1")))
+    assert res.status_code == 200
+    body = res.json()
+    assert "complex_detail_fill_rate" in body
+    assert "article_detail_fill_rate" in body
+    assert "complex_metric_fill_rate" in body
+
+
+def test_safe_fill_rate_zero_total_returns_none():
+    """PR 6a — _safe_fill_rate(0, 0) == None 회귀 가드 (0건 vs 0% 구별 F9 답습)"""
+    from routers.admin.jobs import _safe_fill_rate
+
+    assert _safe_fill_rate(0, 0) is None  # 모집단 0건 = None
+    assert _safe_fill_rate(0, 100) == 0.0  # 실제 0% 채움률 = 0.0
+    assert _safe_fill_rate(10, 100) == 0.1  # 정상 10% 채움률
+
+
 # ── 감사 로그 ──
 
 def test_audit_logs(client, db):

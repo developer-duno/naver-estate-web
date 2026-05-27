@@ -28,7 +28,7 @@ interface BoxData {
   secondary?: string;
 }
 
-export default function ComplexDashboardMobile({
+export default function ComplexDashboard({
   complex,
   complexNo,
   pyeongDetails,
@@ -36,6 +36,7 @@ export default function ComplexDashboardMobile({
   onFilterChange,
 }: Props) {
   const [openSection, setOpenSection] = useState<SectionKey | "">("");
+  const [isPrinting, setIsPrinting] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const { avgPrice, count } = useComplexArticleAvg(complexNo);
 
@@ -43,14 +44,31 @@ export default function ComplexDashboardMobile({
     setOpenSection((prev) => (prev === key ? "" : key));
   };
 
-  // openSection 변경 시 펼침 영역으로 스크롤 (기존 line 75-77 답습)
+  // 모바일에서만 펼침 영역으로 자동 스크롤. 데스크톱은 viewport 안에 다 보임
   useEffect(() => {
-    if (openSection && contentRef.current) {
+    if (
+      openSection &&
+      contentRef.current &&
+      typeof window !== "undefined" &&
+      window.innerWidth < 768
+    ) {
       requestAnimationFrame(() => {
         contentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     }
   }, [openSection]);
+
+  // 인쇄 시 4 박스 본문 모두 펼침 (기존 데스크톱 자동 노출 답습, /compare 패턴 답습)
+  useEffect(() => {
+    const beforePrint = () => setIsPrinting(true);
+    const afterPrint = () => setIsPrinting(false);
+    window.addEventListener("beforeprint", beforePrint);
+    window.addEventListener("afterprint", afterPrint);
+    return () => {
+      window.removeEventListener("beforeprint", beforePrint);
+      window.removeEventListener("afterprint", afterPrint);
+    };
+  }, []);
 
   // 박스 라벨·값 계산 (Q3 NULL fallback)
   const boxes: BoxData[] = [
@@ -88,8 +106,8 @@ export default function ComplexDashboardMobile({
 
   return (
     <div className="space-y-4">
-      {/* 바둑판 박스 4개 (2×2) */}
-      <div className="grid grid-cols-2 gap-2" aria-label="단지 종합 대시보드">
+      {/* 바둑판 박스 4개 (모바일 2×2 / 데스크톱 4×1) */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3" aria-label="단지 종합 대시보드">
         {boxes.map((b) => (
           <button
             key={b.key}
@@ -98,31 +116,31 @@ export default function ComplexDashboardMobile({
             aria-label={`${b.label} 메뉴 열기`}
             aria-expanded={openSection === b.key}
             aria-controls="dashboard-content"
-            className={`flex flex-col items-start rounded-lg border p-3 text-left transition-colors min-h-20 ${
+            className={`flex flex-col items-start rounded-lg border p-3 md:p-4 text-left transition-colors min-h-20 ${
               openSection === b.key
                 ? "border-blue-500 bg-blue-50"
                 : "border-gray-200 hover:border-gray-400"
             }`}
           >
-            <span className="text-[11px] text-gray-500">{b.label}</span>
-            <span className="text-sm font-semibold mt-0.5 break-keep">{b.primary}</span>
-            {b.secondary && <span className="text-[10px] text-gray-400 mt-0.5">{b.secondary}</span>}
+            <span className="text-[11px] md:text-xs text-gray-500">{b.label}</span>
+            <span className="text-sm md:text-base font-semibold mt-0.5 break-keep">{b.primary}</span>
+            {b.secondary && <span className="text-[10px] md:text-xs text-gray-400 mt-0.5">{b.secondary}</span>}
           </button>
         ))}
       </div>
 
-      {/* 펼침 영역 (그리드 밖, 가로 전체) */}
-      {openSection && (
+      {/* 펼침 영역 (그리드 밖, 가로 전체). 인쇄 시 4 박스 본문 모두 노출 */}
+      {(openSection || isPrinting) && (
         <div id="dashboard-content" ref={contentRef} role="region">
-          <Card className="p-3">
-            {openSection === "prices" && (
+          <Card className="p-3 md:p-4 space-y-4">
+            {(openSection === "prices" || isPrinting) && (
               <ComplexPriceFloorSection complexNo={complexNo} onFilterChange={onFilterChange} />
             )}
-            {openSection === "chart" && (
+            {(openSection === "chart" || isPrinting) && (
               <PriceChartSection complexNo={complexNo} pyeongDetails={pyeongDetails} accessToken={sessionToken} />
             )}
-            {openSection === "info" && <ComplexBasicInfo cpx={complex} />}
-            {openSection === "area" && (
+            {(openSection === "info" || isPrinting) && <ComplexBasicInfo cpx={complex} />}
+            {(openSection === "area" || isPrinting) && (
               <div className="space-y-3">
                 {pyeongDetails.length > 0 ? (
                   <PyeongDetailsList details={pyeongDetails} />

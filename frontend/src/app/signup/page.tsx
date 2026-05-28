@@ -90,7 +90,7 @@ export default function SignupPage() {
         <p className="text-sm text-gray-500 mb-6">
           공인중개사이신 경우 로그인 후 <strong>중개사 인증</strong>을 진행해주세요.
         </p>
-        <Link href="/login" className="text-blue-600 hover:underline">
+        <Link href="/login" className="text-accent-blue hover:underline">
           로그인 페이지로 이동
         </Link>
       </div>
@@ -171,8 +171,8 @@ export default function SignupPage() {
             className="mt-0.5 rounded border-gray-300"
           />
           <span>
-            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">이용약관</a> 및{" "}
-            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">개인정보 처리방침</a>에 동의합니다
+            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-accent-blue underline">이용약관</a> 및{" "}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-accent-blue underline">개인정보 처리방침</a>에 동의합니다
           </span>
         </label>
 
@@ -189,14 +189,14 @@ export default function SignupPage() {
         <button
           type="submit"
           disabled={loading || !agreeTerms}
-          className="w-full bg-blue-600 text-white py-2.5 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-300"
+          className="w-full bg-accent-blue text-white py-2.5 rounded-md text-sm font-medium hover:bg-accent-blue/90 transition-colors disabled:bg-gray-300"
         >
           {loading ? "가입 중..." : "회원가입"}
         </button>
 
         <p className="text-center text-sm text-gray-500">
           이미 계정이 있으신가요?{" "}
-          <Link href="/login" className="text-blue-600 hover:underline">
+          <Link href="/login" className="text-accent-blue hover:underline">
             로그인
           </Link>
         </p>

@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
           <p className="text-xs text-gray-400 mb-6">
             링크는 1시간 후 만료됩니다.
           </p>
-          <Link href="/login" className="text-sm text-blue-600 hover:underline">
+          <Link href="/login" className="text-sm text-accent-blue hover:underline">
             로그인으로 돌아가기
           </Link>
         </div>
@@ -90,13 +90,13 @@ export default function ForgotPasswordPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-blue-600 text-white py-1.5 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-300"
+          className="w-full bg-accent-blue text-white py-2.5 rounded-md text-sm font-medium hover:bg-accent-blue/90 transition-colors disabled:bg-gray-300"
         >
           {loading ? "발송 중..." : "재설정 링크 보내기"}
         </button>
 
         <p className="text-center text-sm text-gray-500">
-          <Link href="/login" className="text-blue-600 hover:underline">
+          <Link href="/login" className="text-accent-blue hover:underline">
             로그인으로 돌아가기
           </Link>
         </p>

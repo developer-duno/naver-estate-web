@@ -10,13 +10,15 @@ import { render, screen } from "@testing-library/react";
 import { AuthLayout } from "../AuthLayout";
 
 describe("AuthLayout", () => {
-  it("title 을 CardTitle 로 렌더", () => {
+  it("title 을 heading 으로 렌더 (e2e getByRole 와 동일 셀렉터 회귀 가드)", () => {
     render(
       <AuthLayout title="로그인">
         <div>폼</div>
       </AuthLayout>,
     );
-    expect(screen.getByText("로그인")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "로그인", level: 1 }),
+    ).toBeInTheDocument();
   });
 
   it("description 있으면 CardDescription 표시", () => {

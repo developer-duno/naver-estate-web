@@ -80,8 +80,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // 로그인 사용자가 /login, /signup 접근 시 홈으로 리다이렉트
-  const isAuthPage = pathname === "/login" || pathname === "/signup";
+  // 로그인 사용자가 /login, /signup, /forgot-password 접근 시 홈으로 리다이렉트
+  // /verify 는 인증 후만 접근 의도라 제외 (AUTH_REQUIRED_PATHS 에 포함)
+  const isAuthPage =
+    pathname === "/login" ||
+    pathname === "/signup" ||
+    pathname === "/forgot-password";
   if (isAuthPage && user) {
     return NextResponse.redirect(new URL("/", request.url));
   }

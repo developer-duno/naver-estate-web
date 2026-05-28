@@ -1,8 +1,16 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
+import { UserPlus } from "lucide-react";
 import { createClient } from "@/lib/supabase";
+import { AuthLayout } from "@/components/auth/AuthLayout";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const SPECIAL_CHAR_REGEX = /[!@#$%^&*(),.?":{}|<>]/;
 
@@ -82,56 +90,57 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <div className="max-w-md mx-auto px-4 py-16 text-center">
-        <h1 className="text-2xl font-bold mb-4">회원가입 완료</h1>
-        <p className="text-gray-600 mb-4">
-          이메일로 인증 링크를 보내드렸습니다. 이메일을 확인해주세요.
-        </p>
-        <p className="text-sm text-gray-500 mb-6">
-          공인중개사이신 경우 로그인 후 <strong>중개사 인증</strong>을 진행해주세요.
-        </p>
-        <Link href="/login" className="text-accent-blue hover:underline">
-          로그인 페이지로 이동
-        </Link>
-      </div>
+      <AuthLayout title="가입 신청 접수" hideBadges>
+        <EmptyState
+          icon={UserPlus}
+          title="가입 신청이 접수되었습니다"
+          description="이메일 인증 후 로그인하면 중개사 인증을 진행할 수 있습니다."
+          action={
+            <Button asChild className="bg-accent-blue hover:bg-accent-blue/90 text-white">
+              <Link href="/login">로그인 페이지로 이동</Link>
+            </Button>
+          }
+        />
+      </AuthLayout>
     );
   }
 
   return (
-    <div className="max-w-md mx-auto px-4 py-16">
-      <h1 className="text-2xl font-bold text-center mb-8">회원가입</h1>
-
-      <form onSubmit={handleSignup} className="bg-white rounded-lg shadow-sm border p-6 space-y-4">
+    <AuthLayout
+      title="가입 신청"
+      description="공인중개사 등록 후 7일 무료 체험을 시작합니다"
+    >
+      <form onSubmit={handleSignup} className="space-y-4">
         {error && (
-          <div role="alert" className="bg-red-50 text-red-600 text-sm rounded-md px-3 py-2">{error}</div>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
-        <div>
-          <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="signup-email">이메일</Label>
+          <Input
             id="signup-email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="email@example.com"
           />
         </div>
 
-        <div>
-          <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="signup-password">비밀번호</Label>
+          <Input
             id="signup-password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="8자 이상 (대문자+소문자+숫자+특수문자)"
           />
           {password && (
-            <div className="mt-2">
+            <div>
               <div className="flex gap-1 mb-1">
                 {[1, 2, 3, 4].map((i) => (
                   <div
@@ -147,52 +156,55 @@ export default function SignupPage() {
           )}
         </div>
 
-        <div>
-          <label htmlFor="signup-confirm" className="block text-sm font-medium text-gray-700 mb-1">비밀번호 확인</label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="signup-confirm">비밀번호 확인</Label>
+          <Input
             id="signup-confirm"
             type="password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="비밀번호 재입력"
           />
           {confirmPassword && password !== confirmPassword && (
-            <p className="text-xs text-red-500 mt-1">비밀번호가 일치하지 않습니다</p>
+            <p className="text-xs text-red-500">비밀번호가 일치하지 않습니다</p>
           )}
         </div>
 
-        <label className="flex items-start gap-2 text-sm text-gray-600 cursor-pointer">
-          <input
-            type="checkbox"
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="agree-terms"
             checked={agreeTerms}
-            onChange={(e) => setAgreeTerms(e.target.checked)}
-            className="mt-0.5 rounded border-gray-300"
+            onCheckedChange={(v) => setAgreeTerms(v === true)}
+            className="mt-0.5 data-[state=checked]:bg-accent-blue data-[state=checked]:border-accent-blue"
           />
-          <span>
-            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-accent-blue underline">이용약관</a> 및{" "}
-            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-accent-blue underline">개인정보 처리방침</a>에 동의합니다
-          </span>
-        </label>
+          <div className="text-sm text-gray-600">
+            <Label htmlFor="agree-terms" className="cursor-pointer font-normal">동의합니다 — </Label>
+            <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-accent-blue underline">이용약관</Link>
+            {" 및 "}
+            <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-accent-blue underline">개인정보 처리방침</Link>
+          </div>
+        </div>
 
-        <label className="flex items-start gap-2 text-sm text-gray-600 cursor-pointer">
-          <input
-            type="checkbox"
+        <div className="flex items-start gap-2">
+          <Checkbox
+            id="agree-marketing"
             checked={agreeMarketing}
-            onChange={(e) => setAgreeMarketing(e.target.checked)}
-            className="mt-0.5 rounded border-gray-300"
+            onCheckedChange={(v) => setAgreeMarketing(v === true)}
+            className="mt-0.5 data-[state=checked]:bg-accent-blue data-[state=checked]:border-accent-blue"
           />
-          <span>(선택) 신규 도구·블로그 발행 알림을 이메일로 받겠습니다</span>
-        </label>
+          <Label htmlFor="agree-marketing" className="cursor-pointer text-sm text-gray-600 font-normal">
+            (선택) 신규 도구·블로그 발행 알림을 이메일로 받겠습니다
+          </Label>
+        </div>
 
-        <button
+        <Button
           type="submit"
           disabled={loading || !agreeTerms}
-          className="w-full bg-accent-blue text-white py-2.5 rounded-md text-sm font-medium hover:bg-accent-blue/90 transition-colors disabled:bg-gray-300"
+          className="w-full bg-accent-blue hover:bg-accent-blue/90 text-white"
         >
-          {loading ? "가입 중..." : "회원가입"}
-        </button>
+          {loading ? "가입 중..." : "가입 신청"}
+        </Button>
 
         <p className="text-center text-sm text-gray-500">
           이미 계정이 있으신가요?{" "}
@@ -201,6 +213,6 @@ export default function SignupPage() {
           </Link>
         </p>
       </form>
-    </div>
+    </AuthLayout>
   );
 }

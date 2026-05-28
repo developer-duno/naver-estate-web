@@ -29,6 +29,14 @@ if (typeof window !== "undefined") {
       dispatchEvent: () => false,
     }) as MediaQueryList;
   }
+  // jsdom 에 ResizeObserver 미존재 — Radix Checkbox useSize 훅 mount 시 throw 방지 (PR 7b-1 답습)
+  if (!window.ResizeObserver) {
+    window.ResizeObserver = class ResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+  }
 }
 
 /** 테스트용 QueryClient — retry 비활성, gcTime 0 */

@@ -6,7 +6,6 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { DataSourceBadges } from "@/components/pricing/DataSourceBadges";
 
@@ -22,7 +21,7 @@ export function AuthLayout({ title, description, children, hideBadges }: Props) 
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] px-4 py-8">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-xl">{title}</CardTitle>
+          <h1 className="font-heading text-xl leading-snug font-medium">{title}</h1>
           {description && <CardDescription>{description}</CardDescription>}
         </CardHeader>
         <CardContent>{children}</CardContent>

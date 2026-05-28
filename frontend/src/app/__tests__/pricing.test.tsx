@@ -1,5 +1,5 @@
 /**
- * /pricing 마케팅 페이지 테스트 — Hero/플랜 카드/CTA 링크
+ * /pricing 마케팅 페이지 테스트 — Hero/플랜 카드/CTA 링크/사회적 증명/데이터 출처
  * 실행: npx vitest run src/app/__tests__/pricing.test.tsx
  */
 import { describe, it, expect } from "vitest";
@@ -18,8 +18,8 @@ describe("/pricing 마케팅 페이지", () => {
     render(<PricingPage />);
     expect(screen.getByRole("heading", { name: "기본", level: 3 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "프로", level: 3 })).toBeInTheDocument();
-    // "추후 공개" placeholder 가 두 카드 모두에 있음
-    expect(screen.getAllByText(/추후 공개/).length).toBeGreaterThanOrEqual(2);
+    // PR 7a — "추후 공개" → "출시 시 공개" 변경, 두 카드 모두에 있음
+    expect(screen.getAllByText(/출시 시 공개/).length).toBeGreaterThanOrEqual(2);
     // "인기" 뱃지가 프로 카드에 있음
     expect(screen.getByText("인기")).toBeInTheDocument();
   });
@@ -32,5 +32,36 @@ describe("/pricing 마케팅 페이지", () => {
     expect(signupLinks.length).toBeGreaterThanOrEqual(4);
     // "무료 체험 시작" 텍스트가 카드 버튼에 들어감 (PlanCards 통합 검증)
     expect(screen.getAllByText("무료 체험 시작").length).toBe(2);
+  });
+
+  it("PR 7a — 사회적 증명 4 수치가 모두 렌더된다 (가짜 데이터 0)", () => {
+    render(<PricingPage />);
+    // 실측 수치 4종 (SocialProof 컴포넌트 답습)
+    expect(screen.getByText("6만+")).toBeInTheDocument();
+    expect(screen.getByText("단지 데이터")).toBeInTheDocument();
+    expect(screen.getByText("5종")).toBeInTheDocument();
+    expect(screen.getByText("부동산 계산기")).toBeInTheDocument();
+    expect(screen.getByText("26편")).toBeInTheDocument();
+    expect(screen.getByText("전문 가이드")).toBeInTheDocument();
+    expect(screen.getByText("6종")).toBeInTheDocument();
+    expect(screen.getByText("공공 데이터")).toBeInTheDocument();
+  });
+
+  it("PR 7a — 데이터 출처 6 배지가 모두 렌더된다", () => {
+    render(<PricingPage />);
+    // 6 출처 (DataSourceBadges 컴포넌트 답습)
+    expect(screen.getByText("네이버 부동산")).toBeInTheDocument();
+    expect(screen.getByText("국토교통부")).toBeInTheDocument();
+    expect(screen.getByText("에어코리아")).toBeInTheDocument();
+    expect(screen.getByText("NEMC")).toBeInTheDocument();
+    expect(screen.getByText("CPMS")).toBeInTheDocument();
+    expect(screen.getByText("경찰청")).toBeInTheDocument();
+  });
+
+  it("PR 7a — FAQ 7 항목 (데이터 출처 / 결제 보안 추가)", () => {
+    render(<PricingPage />);
+    expect(screen.getByText(/공인중개사가 아니어도 가입할 수 있나요\?/)).toBeInTheDocument();
+    expect(screen.getByText(/데이터 출처는 어디인가요\?/)).toBeInTheDocument();
+    expect(screen.getByText(/결제·로그인 보안은 어떻게 되나요\?/)).toBeInTheDocument();
   });
 });

@@ -110,7 +110,7 @@ export default function VerifyPage() {
         <h1 className="text-2xl font-bold text-center mb-8">중개사 인증</h1>
         <div className="bg-white rounded-lg shadow-sm border p-4 sm:p-6 space-y-4 text-center">
           <p className="text-sm text-gray-700">인증 상태를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.</p>
-          <button type="button" onClick={() => refetch()} className="w-full bg-blue-600 text-white py-2 rounded-md text-sm hover:bg-blue-700">
+          <button type="button" onClick={() => refetch()} className="w-full bg-accent-blue text-white py-2.5 rounded-md text-sm hover:bg-accent-blue/90">
             다시 시도
           </button>
         </div>
@@ -140,13 +140,13 @@ export default function VerifyPage() {
           )}
           {vs === "rejected" && (
             <button onClick={() => queryClient.setQueryData(queryKeys.verification.status(), { submitted: false })}
-              className="w-full bg-blue-600 text-white py-2 rounded-md text-sm hover:bg-blue-700">
+              className="w-full bg-accent-blue text-white py-2.5 rounded-md text-sm hover:bg-accent-blue/90">
               재신청하기
             </button>
           )}
           {vs === "pending" && <p className="text-xs text-gray-500">관리자 심사 후 결과를 안내드립니다.</p>}
           {vs === "approved" && (
-            <Link href="/" className="block text-center text-sm text-blue-600 hover:underline">홈으로 이동</Link>
+            <Link href="/" className="block text-center text-sm text-accent-blue hover:underline">홈으로 이동</Link>
           )}
         </div>
       </div>
@@ -169,7 +169,7 @@ export default function VerifyPage() {
           {result.auto_approved
             ? <p className="text-sm text-gray-600">전문가(Expert) 권한이 부여되었습니다.</p>
             : <p className="text-sm text-gray-600">관리자 심사 후 승인될 예정입니다.</p>}
-          <Link href="/" className="block text-blue-600 hover:underline text-sm">홈으로 이동</Link>
+          <Link href="/" className="block text-accent-blue hover:underline text-sm">홈으로 이동</Link>
         </div>
       </div>
     );
@@ -229,7 +229,7 @@ export default function VerifyPage() {
         </div>
 
         <button type="submit" disabled={mutation.isPending}
-          className="w-full bg-blue-600 text-white py-2.5 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-300">
+          className="w-full bg-accent-blue text-white py-2.5 rounded-md text-sm font-medium hover:bg-accent-blue/90 transition-colors disabled:bg-gray-300">
           {mutation.isPending ? "검증 중..." : "인증 신청"}
         </button>
       </form>

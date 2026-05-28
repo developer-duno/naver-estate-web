@@ -14,7 +14,30 @@ const SOURCES: Source[] = [
   { name: "경찰청", desc: "범죄통계" },
 ];
 
-export function DataSourceBadges() {
+interface Props {
+  variant?: "default" | "compact";
+}
+
+export function DataSourceBadges({ variant = "default" }: Props = {}) {
+  if (variant === "compact") {
+    return (
+      <div className="text-center">
+        <p className="text-[11px] text-gray-500 mb-2">공식 데이터 출처</p>
+        <div className="flex flex-wrap justify-center gap-1.5">
+          {SOURCES.map((s) => (
+            <Badge
+              key={s.name}
+              variant="secondary"
+              className="text-[11px] px-2 py-0.5 h-auto"
+              title={s.desc}
+            >
+              {s.name}
+            </Badge>
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="mt-6">
       <p className="text-xs text-gray-600 text-center mb-3">공식 데이터 출처</p>

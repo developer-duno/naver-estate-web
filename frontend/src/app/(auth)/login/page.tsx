@@ -1,10 +1,16 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { Eye, EyeOff, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { SkeletonPage } from "@/components/Skeleton";
+import { AuthLayout } from "@/components/auth/AuthLayout";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
   return (
@@ -99,20 +105,27 @@ function LoginForm() {
   const isLocked = failCount >= 5;
 
   return (
-    <div className="max-w-md mx-auto px-4 py-16">
-      <h1 className="text-2xl font-bold text-center mb-8">로그인</h1>
-
-      <form onSubmit={handleLogin} className="bg-white rounded-lg shadow-sm border p-6 space-y-4">
-        {error && (
-          <div role="alert" className={`text-sm rounded-md px-3 py-2 ${isLocked ? "bg-orange-50 text-orange-700" : "bg-red-50 text-red-600"}`}>
-            {isLocked && <span className="font-medium block mb-1">계정 잠김</span>}
-            {error}
-          </div>
+    <AuthLayout
+      title="로그인"
+      description="공인중개사 도구를 사용하려면 로그인해주세요"
+    >
+      <form onSubmit={handleLogin} className="space-y-4">
+        {error && isLocked && (
+          <Alert className="border-orange-200 bg-orange-50 text-orange-700 [&>svg]:text-orange-700">
+            <Lock className="h-4 w-4" />
+            <AlertTitle>계정 잠김</AlertTitle>
+            <AlertDescription className="text-orange-700/90">{error}</AlertDescription>
+          </Alert>
+        )}
+        {error && !isLocked && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
-        <div>
-          <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
-          <input
+        <div className="space-y-1.5">
+          <Label htmlFor="login-email">이메일</Label>
+          <Input
             id="login-email"
             type="email"
             value={email}
@@ -120,41 +133,41 @@ function LoginForm() {
             required
             disabled={isLocked}
             aria-invalid={!!error || undefined}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
             placeholder="email@example.com"
           />
         </div>
 
-        <div>
-          <div className="flex justify-between items-center mb-1">
-            <label htmlFor="login-password" className="block text-sm font-medium text-gray-700">비밀번호</label>
+        <div className="space-y-1.5">
+          <div className="flex justify-between items-center">
+            <Label htmlFor="login-password">비밀번호</Label>
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="text-xs text-gray-500 hover:text-gray-700"
+              className="text-gray-500 hover:text-gray-700 p-1 -m-1"
+              aria-label={showPassword ? "비밀번호 숨기기" : "비밀번호 표시"}
             >
-              {showPassword ? "숨기기" : "표시"}
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              <span className="sr-only">{showPassword ? "숨기기" : "표시"}</span>
             </button>
           </div>
-          <input
+          <Input
             id="login-password"
             type={showPassword ? "text" : "password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
             disabled={isLocked}
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
             placeholder="비밀번호"
           />
         </div>
 
-        <button
+        <Button
           type="submit"
           disabled={loading || isLocked}
-          className="w-full bg-accent-blue text-white py-2.5 rounded-md text-sm font-medium hover:bg-accent-blue/90 transition-colors disabled:bg-gray-300"
+          className="w-full bg-accent-blue hover:bg-accent-blue/90 text-white"
         >
           {loading ? "로그인 중..." : isLocked ? "계정 잠김" : "로그인"}
-        </button>
+        </Button>
 
         <div className="flex justify-between text-sm text-gray-500">
           <Link href="/forgot-password" className="text-accent-blue hover:underline">
@@ -168,6 +181,6 @@ function LoginForm() {
           </span>
         </div>
       </form>
-    </div>
+    </AuthLayout>
   );
 }

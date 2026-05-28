@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
-import VerifyPage from "../verify/page";
+import VerifyPage from "../(auth)/verify/page";
 
 /* api 모킹 */
 vi.mock("@/lib/api", () => ({
@@ -139,7 +139,7 @@ describe("VerifyPage", () => {
     renderPage();
     await waitFor(() => {
       expect(
-        screen.getByText(/인증 상태를 불러오지 못했습니다|상태를 가져오지/),
+        screen.getByText(/인증 상태를 불러오지 못했(?:어요|습니다)|상태를 가져오지/),
       ).toBeInTheDocument();
     });
     expect(screen.getByRole("button", { name: /다시 시도/ })).toBeInTheDocument();

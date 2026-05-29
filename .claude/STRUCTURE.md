@@ -15,7 +15,7 @@ naver-estate-web/
 │   │   ├── hooks/               # 21 커스텀 훅 (useFavorites/useMbCompare/useCrawlProgress 등, `__tests__/` 제외)
 │   │   ├── lib/                 # 47 파일 (최상위 37 + api/ 9 모듈 + admin/ 1, `__tests__/` 제외 — storage/format/query-keys 별도 폴더 아니라 최상위 통합)
 │   │   ├── types/               # TypeScript 인터페이스 (estate + Mb* 10 + naver-maps.d.ts)
-│   │   └── middleware.ts        # Supabase 세션 + /admin/* 라우트 보호
+│   │   └── proxy.ts             # Supabase 세션 + /admin/* 라우트 보호 (Next 16 명칭)
 │   ├── e2e/                     # Playwright 20 spec 파일 (--webpack 모드)
 │   ├── scripts/                 # GATE 10 (check-mdx-jsx + check-ad-compliance)
 │   └── .claude/                 # FE 깊이 토픽 4종 (hooks-and-state, ui-patterns, pages-and-mb, tools-lineup)

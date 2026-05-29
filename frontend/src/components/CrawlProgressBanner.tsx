@@ -30,16 +30,16 @@ function Spinner({ className = "w-4 h-4" }: { className?: string }) {
 function StepIcon({ state }: { state: StepState }) {
   if (state === "done") {
     return (
-      <svg className="w-4 h-4 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
       </svg>
     );
   }
   if (state === "active") {
-    return <Spinner className="w-4 h-4 flex-shrink-0" />;
+    return <Spinner className="w-4 h-4 shrink-0" />;
   }
   return (
-    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+    <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
       <circle cx="12" cy="12" r="8" strokeWidth={2} />
     </svg>
   );

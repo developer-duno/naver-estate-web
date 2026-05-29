@@ -151,7 +151,7 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 - [ ] 새 API 호출 추가? → `frontend/src/lib/api/` 9 모듈에 함수 추가 + 백엔드 라우터 존재 확인
 - [ ] 새 타입 필드 사용? → `frontend/src/types/` + `backend/db/models.py` + `backend/routers/*serializers.py` 동기화
 - [ ] 인증 필요 엔드포인트? → Authorization 헤더 전달 확인 (`session.access_token`)
-- [ ] 관리자 전용? → `frontend/src/middleware.ts` 라우트 보호 확인
+- [ ] 관리자 전용? → `frontend/src/proxy.ts` 라우트 보호 확인 (Next 16: middleware → proxy)
 
 ### BE → FE (backend 변경 시 확인)
 

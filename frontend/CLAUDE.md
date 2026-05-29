@@ -22,7 +22,7 @@ frontend/src/
 ├── lib/           # 47개 (최상위 37 + api/ 9 모듈 + admin/ 1, `__tests__/` 제외 — storage/format/query-keys 별도 폴더 아니라 최상위 .ts 통합)
 ├── types/         # TypeScript 인터페이스 (estate + Mb* 10개 + naver-maps.d.ts)
 ├── content/blog/  # MDX 26편 (.claude/BLOG.md SSOT 참조)
-└── middleware.ts  # Supabase 세션 + 관리자 라우트 보호
+└── proxy.ts       # Supabase 세션 + 관리자 라우트 보호 (Next 16: middleware → proxy)
 ```
 
 ## 토픽 인덱스 (FE 깊이 자료, 명시 참조 — 자동 로드 안 됨)
@@ -39,7 +39,7 @@ frontend/src/
 ### 1. 인증 패턴
 - 항상 `createClient()` from `@/lib/supabase` 사용 (`createBrowserClient` 직접 호출 금지)
 - 보호된 API 호출 시 `session.access_token`을 Authorization 헤더로 전달
-- middleware.ts에서 `/admin/*` 경로 보호 (role 체크)
+- proxy.ts에서 `/admin/*` 경로 보호 (role 체크) — Next 16 middleware 명칭 변경
 
 ### 2. API 호출 패턴 (React Query)
 - 모든 데이터 페칭은 `useQuery`/`useMutation` + `api.ts` 함수 조합

@@ -20,6 +20,28 @@ export default function LoginPage() {
   );
 }
 
+// 로그인 실패 횟수 — sessionStorage 영속화(F5 새로고침에도 잠금 안내 유지, 탭 닫으면 초기화).
+// 진짜 차단은 BE auth/rate_limiter.py 가 담당. FE 는 안내 일관성용.
+const FAIL_COUNT_KEY = "login_fail_count";
+
+function readFailCount(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    return Number(sessionStorage.getItem(FAIL_COUNT_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeFailCount(count: number): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(FAIL_COUNT_KEY, String(count));
+  } catch {
+    /* private mode quota 무시 */
+  }
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -28,7 +50,7 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [failCount, setFailCount] = useState(0);
+  const [failCount, setFailCount] = useState(readFailCount);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,6 +67,7 @@ function LoginForm() {
       if (authError) {
         const newFailCount = failCount + 1;
         setFailCount(newFailCount);
+        writeFailCount(newFailCount);
 
         const msg = authError.message;
         let translated =
@@ -62,6 +85,7 @@ function LoginForm() {
         setError(translated);
       } else {
         setFailCount(0);
+        writeFailCount(0);
         // 로그인 기록 업데이트 (실패해도 로그인은 차단하지 않음)
         try {
           const { data: { session } } = await supabase.auth.getSession();

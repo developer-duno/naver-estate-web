@@ -54,4 +54,41 @@ describe("SignupPage", () => {
       expect(screen.getByText("가입 신청이 접수되었습니다")).toBeInTheDocument();
     });
   });
+
+  it("마케팅 동의 체크 시 signUp options.data.agree_marketing=true 전달", async () => {
+    mockSignUp.mockResolvedValueOnce({ error: null });
+    render(<SignupPage />);
+    fireEvent.change(screen.getByLabelText("이메일"), { target: { value: "mk@example.com" } });
+    fireEvent.change(screen.getByLabelText("비밀번호"), { target: { value: "Strong1!@#" } });
+    fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "Strong1!@#" } });
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[0]); // agreeTerms (필수)
+    fireEvent.click(checkboxes[1]); // agreeMarketing (선택)
+    fireEvent.click(screen.getByRole("button", { name: "가입 신청" }));
+    await waitFor(() => {
+      expect(mockSignUp).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: { data: { agree_marketing: true } },
+        }),
+      );
+    });
+  });
+
+  it("마케팅 미동의 시 signUp options.data.agree_marketing=false 전달", async () => {
+    mockSignUp.mockResolvedValueOnce({ error: null });
+    render(<SignupPage />);
+    fireEvent.change(screen.getByLabelText("이메일"), { target: { value: "nomk@example.com" } });
+    fireEvent.change(screen.getByLabelText("비밀번호"), { target: { value: "Strong1!@#" } });
+    fireEvent.change(screen.getByLabelText("비밀번호 확인"), { target: { value: "Strong1!@#" } });
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[0]); // agreeTerms 만 (마케팅 미체크)
+    fireEvent.click(screen.getByRole("button", { name: "가입 신청" }));
+    await waitFor(() => {
+      expect(mockSignUp).toHaveBeenCalledWith(
+        expect.objectContaining({
+          options: { data: { agree_marketing: false } },
+        }),
+      );
+    });
+  });
 });

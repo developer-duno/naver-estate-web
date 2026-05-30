@@ -89,7 +89,11 @@ def _verify_token_local(token: str) -> dict | None:
         if not user_id:
             logger.warning("[AUTH] JWT에 sub 클레임 없음")
             return None
-        return {"user_id": user_id, "email": payload.get("email", "")}
+        return {
+            "user_id": user_id,
+            "email": payload.get("email", ""),
+            "user_metadata": payload.get("user_metadata") or {},
+        }
     except jwt.ExpiredSignatureError:
         logger.info("[AUTH] JWT 만료됨 (정상 — 토큰 갱신 필요)")
         return None
@@ -126,7 +130,11 @@ def _verify_token_remote(token: str) -> dict:
         user_id = data.get("id")
         if not user_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="유효하지 않은 토큰")
-        return {"user_id": user_id, "email": data.get("email", "")}
+        return {
+            "user_id": user_id,
+            "email": data.get("email", ""),
+            "user_metadata": data.get("user_metadata") or {},
+        }
     except httpx.HTTPError:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="인증 서비스 연결 실패")
 
@@ -155,6 +163,7 @@ def get_current_user(
 
     user_id = verified["user_id"]
     email = verified["email"]
+    meta = verified.get("user_metadata") or {}
 
     # 캐시 확인 (5분 TTL — admin에서 role/status 변경 시 무효화)
     cached_profile = _user_cache.get(f"profile:{user_id}")
@@ -172,6 +181,7 @@ def get_current_user(
                 email=email,
                 role="admin" if is_admin else "user",
                 status="approved" if is_admin else "pending",
+                agree_marketing=bool(meta.get("agree_marketing", False)),
             )
             db.add(profile)
             db.commit()

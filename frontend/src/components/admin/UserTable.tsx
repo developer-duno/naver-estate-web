@@ -95,6 +95,7 @@ export default function UserTable({ users, onUpdate }: Props) {
             <th className="py-2 pr-4">상태</th>
             <th className="py-2 pr-4">승인 기간</th>
             <th className="py-2 pr-4">로그인</th>
+            <th className="py-2 pr-4">마케팅</th>
             <th className="py-2">가입일</th>
           </tr>
         </thead>
@@ -136,6 +137,13 @@ export default function UserTable({ users, onUpdate }: Props) {
                 )}
               </td>
               <td className="py-2 pr-4 text-xs text-gray-500">{u.login_count}회</td>
+              <td className="py-2 pr-4 text-xs">
+                {u.agree_marketing ? (
+                  <span className="text-green-700">동의</span>
+                ) : (
+                  <span className="text-gray-400">-</span>
+                )}
+              </td>
               <td className="py-2 text-xs text-gray-500">
                 {u.created_at ? new Date(u.created_at).toLocaleDateString("ko") : "-"}
               </td>

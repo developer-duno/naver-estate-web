@@ -10,9 +10,12 @@ JWT_SECRET = "test-secret-key-for-testing-only"
 JWT_ALG = "HS256"
 
 
-def _token(sub="user-001", aud="authenticated", email="test@test.com"):
-    """테스트용 JWT 생성"""
-    return jwt.encode({"sub": sub, "aud": aud, "email": email}, JWT_SECRET, algorithm=JWT_ALG)
+def _token(sub="user-001", aud="authenticated", email="test@test.com", user_metadata=None):
+    """테스트용 JWT 생성. user_metadata 는 Supabase signUp options.data → JWT 클레임 모사."""
+    claims = {"sub": sub, "aud": aud, "email": email}
+    if user_metadata is not None:
+        claims["user_metadata"] = user_metadata
+    return jwt.encode(claims, JWT_SECRET, algorithm=JWT_ALG)
 
 
 def _admin_token(sub="admin-001"):
@@ -69,6 +72,26 @@ def test_auto_profile_creation(client, db):
     profile = db.get(UserProfile, "new-user-999")
     assert profile is not None
     assert profile.email == "new@test.com"
+
+
+def test_auto_profile_agree_marketing_saved(client, db):
+    """회원가입 시 동의(user_metadata.agree_marketing=True)가 프로필에 저장됨"""
+    token = _token(sub="mk-user", email="mk@test.com", user_metadata={"agree_marketing": True})
+    res = client.get("/api/users/me", headers=_auth(token))
+    assert res.status_code == 200
+    profile = db.get(UserProfile, "mk-user")
+    assert profile is not None
+    assert profile.agree_marketing is True
+
+
+def test_auto_profile_agree_marketing_default_false(client, db):
+    """user_metadata 없는 토큰 → agree_marketing 기본 False"""
+    token = _token(sub="nomk-user", email="nomk@test.com")
+    res = client.get("/api/users/me", headers=_auth(token))
+    assert res.status_code == 200
+    profile = db.get(UserProfile, "nomk-user")
+    assert profile is not None
+    assert profile.agree_marketing is False
 
 
 def test_suspended_user_403(client, db):

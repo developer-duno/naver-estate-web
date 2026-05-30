@@ -151,7 +151,6 @@ export default function Header() {
                 fontSize="14"
                 fontWeight="700"
                 fill="#faf9f5"
-                fontFamily="var(--font-pretendard)"
               >
                 2u
               </text>

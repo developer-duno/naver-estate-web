@@ -196,6 +196,7 @@ class UserProfile(Base):
     daily_price_collect_quota: Mapped[int] = mapped_column(Integer, default=5)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     login_count: Mapped[int] = mapped_column(Integer, default=0)
+    agree_marketing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     approved_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

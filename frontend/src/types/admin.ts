@@ -10,6 +10,8 @@ export interface UserProfile {
   approved_until?: string | null;
   last_login_at?: string;
   login_count: number;
+  /** 회원가입 마케팅 수신 동의 (V028, BE deps.py 자동 저장) */
+  agree_marketing?: boolean;
   created_at: string;
   updated_at?: string;
 }

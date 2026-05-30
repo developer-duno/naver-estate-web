@@ -66,6 +66,7 @@ def list_users(
                 "approved_until": u.approved_until.isoformat() if u.approved_until else None,
                 "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
                 "login_count": u.login_count,
+                "agree_marketing": u.agree_marketing,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
                 "updated_at": u.updated_at.isoformat() if u.updated_at else None,
             }

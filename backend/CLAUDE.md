@@ -31,7 +31,7 @@
 | `db/mb_query_helpers.py` | mibunyang 중복 제거 + 정렬 + 필터 헬퍼 |
 | `db/mb_apartment_queries.py` | mibunyang 아파트 단지 + 미분양 조회 쿼리 |
 | `db/mb_misc_queries.py` | mibunyang 지역 통계 + 실거래 + 단지 부속 쿼리 |
-| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V027, 28 버전) |
+| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V028, 29 버전) |
 | `shared/naver_api.py` | NaverEstateAPI (수정 금지) |
 | `shared/constants.py` | 상수 (수정 금지) |
 | `auth/permissions.py` | 역할 체크 (require_role) + 일일 쿼터 (check_quota) |
@@ -89,11 +89,12 @@
 | V025 | articles 매물 상세 4필드 (에픽 D #10) | 2026-05-18 (세션 196) |
 | V026 | monitor_alerts 테이블 (크롤링 모니터) | 2026-05-18 (세션 196) |
 | V027 | crawl_jobs scheduler_started 인덱스 (PR #21) | 2026-05-21 (세션 207) |
+| V028 | user_profiles.agree_marketing (회원가입 마케팅 동의) | 2026-05-31 (세션 252) |
 
-- `db/migrations/` 폴더에 `V000__` ~ `V027__` SQL 파일 = 28 버전
+- `db/migrations/` 폴더에 `V000__` ~ `V028__` SQL 파일 = 29 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
-- 최신 = V027 (2026-05-21 머지). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
+- 최신 = V028 (2026-05-31 머지). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
 
 ## 코드 구조 (분리 완료)
 

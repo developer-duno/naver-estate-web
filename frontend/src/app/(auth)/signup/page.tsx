@@ -68,6 +68,8 @@ export default function SignupPage() {
       const { error: authError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
+        // 마케팅 동의 → Supabase user_metadata → BE deps.py 프로필 자동생성 시 저장 (V028)
+        options: { data: { agree_marketing: agreeMarketing } },
       });
 
       if (authError) {

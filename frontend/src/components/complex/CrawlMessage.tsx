@@ -47,7 +47,7 @@ export default function CrawlMessage({
           type="button"
           onClick={onClear}
           aria-label="닫기"
-          className="text-red-400 hover:text-red-600 flex-shrink-0"
+          className="text-red-400 hover:text-red-600 shrink-0"
         >
           ×
         </button>

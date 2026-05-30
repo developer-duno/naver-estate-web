@@ -6,7 +6,7 @@
  *   단일 사용처 (verify 페이지) = 8k★ 라이브러리 over-engineering 회피
  *   lucide 아이콘 + Tailwind 만 사용 = ~35 라인
  */
-import { CheckCircle2, Circle, Clock } from "lucide-react";
+import { CircleCheckBig, Circle, Clock } from "lucide-react";
 
 export type VerifyStep = "signup" | "email_confirm" | "license_submit" | "admin_approve";
 
@@ -30,7 +30,7 @@ export function VerifyProgress({ currentStep }: Props) {
     >
       {STEPS.map((step, i) => {
         const status = i < currentIdx ? "done" : i === currentIdx ? "current" : "pending";
-        const Icon = status === "done" ? CheckCircle2 : status === "current" ? Clock : Circle;
+        const Icon = status === "done" ? CircleCheckBig : status === "current" ? Clock : Circle;
         return (
           <li
             key={step.key}

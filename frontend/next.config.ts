@@ -23,6 +23,10 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "**.naver.net" },
       { protocol: "https", hostname: "**.pstatic.net" },
     ],
+    // Next.js 16 default 명시 박제 (4h = 14400s).
+    // 우리 이미지 = /public 정적 자산 (블로그 hero, 홈) 위주 + 네이버 단지 사진 외부 URL.
+    // 4h cache 가 revalidation 비용·신선도 균형. 외부 URL 자주 갱신 필요 시 60~3600 으로 축소.
+    minimumCacheTTL: 14400,
   },
   async redirects() {
     return [

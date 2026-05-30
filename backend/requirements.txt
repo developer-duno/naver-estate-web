@@ -12,7 +12,9 @@ apscheduler>=3.10,<4
 pandas>=2.0,<4
 xlsxwriter>=3.1,<4
 python-dotenv>=1.0,<2
-python-jose[cryptography]>=3.3,<4
+# python-jose: 유지보수 정체 -> PyJWT 전환 (HS256 대칭키만, 비대칭키 0건 -> [crypto] extra 불필요).
+# 2026-05-31 lock: python-jose>=3.3,<4 -> PyJWT>=2.0,<3.
+PyJWT>=2.0,<3
 python-multipart>=0.0.9,<1
 redis>=5.0,<6
 requests>=2.31,<3

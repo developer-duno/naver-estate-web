@@ -3,7 +3,7 @@
 """
 import time
 
-from jose import jwt
+import jwt
 
 from auth.audit import _mask_ip
 from db import queries

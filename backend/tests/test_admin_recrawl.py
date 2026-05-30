@@ -3,7 +3,7 @@
 """
 from unittest.mock import patch
 
-from jose import jwt
+import jwt
 
 from db.models import UserProfile
 from routers.admin import recrawl as recrawl_mod

@@ -11,7 +11,7 @@
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-from jose import jwt
+import jwt
 
 from db.models import CrawlJob, UserProfile
 

@@ -1,7 +1,7 @@
 """관리자 API 라우터 테스트 — 인증, 사용자 관리, 설정
 실행: python -m pytest tests/test_admin_router.py -v
 """
-from jose import jwt
+import jwt
 
 from db.models import UserProfile
 

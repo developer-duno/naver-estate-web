@@ -4,7 +4,7 @@
 
 from unittest.mock import patch
 
-from jose import jwt
+import jwt
 
 from db.models import AgentVerification, UserProfile
 

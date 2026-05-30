@@ -5,7 +5,7 @@
 from datetime import datetime, timezone
 from unittest.mock import patch
 
-from jose import jwt
+import jwt
 
 from db.models import Complex, UserProfile
 from routers.live._shared import _cache, _crawl_status

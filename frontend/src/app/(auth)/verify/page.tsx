@@ -9,7 +9,7 @@
 import { useCallback, useRef, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Upload } from "lucide-react";
+import { CircleCheckBig, Upload } from "lucide-react";
 import { queryKeys } from "@/lib/query-keys";
 import { ApiError } from "@/lib/api/core";
 import { getVerificationStatus, submitVerification, uploadLicenseDoc } from "@/lib/api";
@@ -213,7 +213,7 @@ export default function VerifyPage() {
       <AuthLayout title={result.auto_approved ? "인증 완료" : "신청 접수됨"} hideBadges>
         <VerifyProgress currentStep="admin_approve" />
         <EmptyState
-          icon={CheckCircle2}
+          icon={CircleCheckBig}
           title={result.auto_approved ? "전문가(Expert) 권한이 부여되었어요" : "관리자 심사 후 승인될 예정입니다"}
           description={desc}
           action={
@@ -299,7 +299,7 @@ export default function VerifyPage() {
             />
             {licenseFile ? (
               <div className="flex items-center justify-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-accent-green" aria-hidden="true" />
+                <CircleCheckBig className="w-5 h-5 text-accent-green" aria-hidden="true" />
                 <span className="text-sm text-gray-700">{licenseFile.name}</span>
                 <button
                   type="button"

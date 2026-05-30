@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckCircle2 } from "lucide-react";
+import { CircleCheckBig } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -62,7 +62,7 @@ function PlanCard({ plan }: { plan: Plan }) {
       <ul className="space-y-2 my-2">
         {features.map((f) => (
           <li key={f} className="flex items-start gap-2 text-sm text-gray-700">
-            <CheckCircle2 className="w-4 h-4 text-accent-green shrink-0 mt-0.5" aria-hidden />
+            <CircleCheckBig className="w-4 h-4 text-accent-green shrink-0 mt-0.5" aria-hidden />
             <span>{f}</span>
           </li>
         ))}

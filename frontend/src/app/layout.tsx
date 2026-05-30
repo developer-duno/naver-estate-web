@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "sonner";
@@ -9,12 +9,6 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import Providers from "@/components/Providers";
 import { WebSiteJsonLd } from "@/components/StructuredData";
 import { SITE_URL } from "@/lib/constants";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-  display: "swap",
-});
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
@@ -86,9 +80,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" suppressHydrationWarning>
+    <html
+      lang="ko"
+      className={`${pretendard.variable} ${geistMono.variable}`}
+      suppressHydrationWarning
+    >
       <body
-        className={`${pretendard.variable} ${geistSans.variable} ${geistMono.variable} antialiased bg-gray-50 min-h-screen`}
+        className="antialiased bg-gray-50 min-h-screen"
         suppressHydrationWarning
       >
         <WebSiteJsonLd

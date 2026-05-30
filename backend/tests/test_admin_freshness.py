@@ -4,7 +4,7 @@
 """
 from datetime import datetime, timedelta, timezone
 
-from jose import jwt
+import jwt
 
 from db.mb_models import Infra
 from db.models import Article, Complex, CrawlJob, UserProfile

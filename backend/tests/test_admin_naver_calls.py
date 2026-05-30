@@ -3,7 +3,7 @@
 실행: python -m pytest tests/test_admin_naver_calls.py -v
 """
 
-from jose import jwt
+import jwt
 
 from db.models import UserProfile
 from services import naver_call_counter

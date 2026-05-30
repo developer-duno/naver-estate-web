@@ -2,7 +2,7 @@
 실행: python -m pytest tests/test_api_auth.py -v
 """
 
-from jose import jwt
+import jwt
 
 from db.models import UserProfile
 

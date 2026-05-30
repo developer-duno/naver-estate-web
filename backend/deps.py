@@ -6,10 +6,9 @@ from datetime import datetime
 from typing import Generator
 
 import httpx
+import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
-from jose.exceptions import ExpiredSignatureError, JWSError, JWTClaimsError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -69,7 +68,7 @@ def _verify_token_local(token: str) -> dict | None:
     # Phase 1: 토큰 헤더 알고리즘 검사
     try:
         header = jwt.get_unverified_header(token)
-    except JWTError:
+    except jwt.PyJWTError:
         logger.warning("[AUTH] JWT 헤더 파싱 실패 (잘못된 토큰 형식)")
         return None
 
@@ -91,16 +90,16 @@ def _verify_token_local(token: str) -> dict | None:
             logger.warning("[AUTH] JWT에 sub 클레임 없음")
             return None
         return {"user_id": user_id, "email": payload.get("email", "")}
-    except ExpiredSignatureError:
+    except jwt.ExpiredSignatureError:
         logger.info("[AUTH] JWT 만료됨 (정상 — 토큰 갱신 필요)")
         return None
-    except JWTClaimsError as e:
+    except (jwt.InvalidAudienceError, jwt.MissingRequiredClaimError) as e:
         logger.warning("[AUTH] JWT 클레임 불일치 (audience 등): %s", e)
         return None
-    except JWSError as e:
+    except jwt.InvalidSignatureError as e:
         logger.warning("[AUTH] JWT 서명 검증 실패 (secret 불일치): %s", e)
         return None
-    except JWTError as e:
+    except jwt.PyJWTError as e:
         logger.warning("[AUTH] JWT 검증 실패 (기타): %s", e)
         return None
 

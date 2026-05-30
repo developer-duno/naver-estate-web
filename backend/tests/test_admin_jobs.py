@@ -3,7 +3,7 @@
 """
 from datetime import datetime, timedelta, timezone
 
-from jose import jwt
+import jwt
 
 from db.models import CrawlJob, UserProfile
 

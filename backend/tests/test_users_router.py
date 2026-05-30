@@ -1,7 +1,7 @@
 """사용자 프로필 API 라우터 테스트
 실행: python -m pytest tests/test_users_router.py -v
 """
-from jose import jwt
+import jwt
 
 from db.models import UserProfile
 

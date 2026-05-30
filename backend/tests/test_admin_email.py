@@ -1,7 +1,7 @@
 """ADMIN_EMAIL 환경변수 테스트 — 미설정 시 관리자 접근 차단 (fail-closed)
 실행: python -m pytest tests/test_admin_email.py -v
 """
-from jose import jwt
+import jwt
 
 from db.models import UserProfile
 

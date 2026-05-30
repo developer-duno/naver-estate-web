@@ -35,6 +35,10 @@ dist/
 # 일회성 정리 도구 진행 상태 (재수집 체크포인트)
 backend/data/b1_cleanup_checkpoint.json
 
+# loop-goal 자율 루프 런타임 체크포인트 (CORE/MINOR 카운터·STOP REASON, 커밋 제외)
+# reports/ (이슈 구현 보고서) 는 PR 본문 인용용으로 git 추적 — 여기 제외 안 함
+docs/loop/
+
 # CI artifacts (baseline drift 갱신 시 임시)
 .ci-artifacts/
 

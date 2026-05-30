@@ -144,6 +144,24 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 | `/harness` | Plan→Guard→Work→Review 전체 워크플로우, Sonnet 분할, 코드 작성 규칙 |
 | `/guard` | 9 GATE 검증 (크기/영향/순서/완전성/적정성/보안/연동/롤백/UX) |
 
+## 자율 발동 도구 (타이핑 0 — Claude 스스로 판단해 발동)
+
+**진실의 원천**: `~/.claude/rules/auto-tool-usage.md` (글로벌, 자동 로드). 사용자가 `/명령어` 를 타이핑하지 않아도 Claude 가 작업 성격을 보고 아래 스킬을 자동 발동한다. 메커니즘 = 스킬 `description` 매칭 (공식 model-invocation) + UserPromptSubmit 훅 매 턴 상기.
+
+| 스킬 (글로벌) | 자동 발동 시점 | 역할 |
+|---|---|---|
+| `session-boot` | 새 세션 첫 작업 / "시작하자"·"이어서" | 부팅 체크리스트 (git·Actions·메모리) |
+| `decision-session` | 작업 2개+ 순서 모호 / "뭐부터"·"순서" | 의존관계 실측 → 실행 순서 확정 |
+| `plan-9gate` | ExitPlanMode·커밋 직전 / "검증해"·"맹점" | 9-GATE 플랜 검증 |
+| `tool-discovery` | "도구 뭐 있어" / 새 외부 연동 직전 | MCP·플러그인 공식 소스 탐색 |
+| `goal-setting` | 완료 조건 모호 / "알아서"·"완벽하게" | 단발 측정가능 `/goal` 한 줄 설계 |
+| `loop-goal` | 여러 이슈 자율 루프 / "이슈 다 구현"·"끝까지 자율로" | DECISION_LOG·CORE/MINOR·STOP 박힌 `/goal` 루프 설계 |
+| `ulw-safe` | 30분+·7파일+·풀스택·마이그 | 통제된 ultrawork (체크포인트+자기정지) |
+
+**역할 분리 (충돌 방지)**: goal-setting=단발 목표 / loop-goal=여러 이슈 루프 / ulw-safe=실행 안전 엔진. 한 task 에 `/goal`·`ralph`·`ulw-safe` 중 1개만 (auto-tool-usage.md §충돌 회피).
+
+**루프 산출물 데이터 관리**: loop-goal 루프는 `docs/loop/DECISION_LOG.md` (런타임 체크포인트, .gitignore) + `reports/` (이슈 구현 보고서, git 추적) 를 만든다. `/명령어` 타이핑도 여전히 동작 (하위호환).
+
 ## 양쪽 영향 체크리스트 (FE↔BE 동기화)
 
 ### FE → BE (frontend 변경 시 확인)

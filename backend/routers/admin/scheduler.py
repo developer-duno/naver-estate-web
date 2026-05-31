@@ -17,10 +17,16 @@ _ERROR_STATS_STATUSES = ("completed", "failed", "paused", "pending", "running", 
 
 logger = logging.getLogger(__name__)
 
-# 스케줄러 작업 메타데이터 (이름/스케줄/환경변수 이름)
+# 스케줄러 작업 메타데이터 (이름/스케줄/환경변수 이름).
+#
+# "schedule" 은 fallback 전용 — 활성 잡은 scheduler-status 가 실제 trigger 에서
+# describe_trigger() 로 한국어를 런타임 생성한다 (SSOT, 세션 256). 이 문자열은
+# 비활성 잡(env=false 라 미등록) + scheduler 미실행(None) 일 때만 화면에 쓰인다.
+# test_meta_fallback_matches_describe_trigger_for_active_jobs 가 모든 활성 잡의
+# trigger 와 강제 대조하므로 손글씨 drift 시 CI 가 빨간불 (PR #99·6a·monitor 답습).
 SCHEDULER_JOB_META: dict[str, dict] = {
     "discover_regions": {"name": "전국 단지 발견", "schedule": "주 1회 일요일 03:00", "env": None},
-    "crawl_articles": {"name": "매물 수집 배치", "schedule": "12시간마다", "env": None},
+    "crawl_articles": {"name": "매물 수집 배치", "schedule": "12시간 interval", "env": None},
     "crawl_details": {"name": "매물 상세 보강", "schedule": "30분 interval", "env": None},
     "collect_prices": {"name": "시세 이력 수집", "schedule": "주 1회 수요일 04:00", "env": None},
     "popular_1030": {"name": "인기 단지 크롤링 10:45", "schedule": "매일 10:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true"},
@@ -32,13 +38,13 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "collect_emergency": {"name": "응급의료기관", "schedule": "매월 첫째 월요일 03:00", "env": "EMERGENCY_ENABLED"},
     "collect_childcare": {"name": "어린이집", "schedule": "매월 첫째 목요일 06:00", "env": "CHILDCARE_ENABLED"},
     "collect_crime_stats": {"name": "범죄통계", "schedule": "분기별 첫째 일요일 04:00", "env": "CRIME_STATS_ENABLED"},
-    "complex_detail_APT": {"name": "단지 상세 backfill APT", "schedule": "6시간 interval", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
-    "complex_detail_OPST": {"name": "단지 상세 backfill OPST", "schedule": "6시간 interval", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
+    "complex_detail_APT": {"name": "단지 상세 backfill APT", "schedule": "4시간 interval", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
+    "complex_detail_OPST": {"name": "단지 상세 backfill OPST", "schedule": "4시간 interval", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
     "complex_detail_JGC": {"name": "단지 상세 backfill JGC", "schedule": "주 1회 화요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
     "complex_detail_ABYG": {"name": "단지 상세 backfill ABYG", "schedule": "주 1회 수요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
     "complex_detail_OBYG": {"name": "단지 상세 backfill OBYG", "schedule": "주 1회 목요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
-    "collect_metrics": {"name": "단지 가치지표 수집", "schedule": "매일 08:30", "env": "COMPLEX_METRIC_ENABLED", "env_default": "true"},
-    "crawler_monitor": {"name": "크롤링 모니터", "schedule": "20분 interval", "env": "MONITOR_ENABLED"},
+    "collect_metrics": {"name": "단지 가치지표 수집", "schedule": "매일 04:30", "env": "COMPLEX_METRIC_ENABLED", "env_default": "true"},
+    "crawler_monitor": {"name": "크롤링 모니터", "schedule": "10분 interval", "env": "MONITOR_ENABLED"},
 }
 
 
@@ -50,6 +56,7 @@ def get_scheduler_status(
     """스케줄러 작업별 실행 이력 + 다음 실행 시각 조회"""
     import os
 
+    from crawler.schedule_describe import describe_trigger
     from crawler.scheduler import get_scheduler
 
     scheduler = get_scheduler()
@@ -141,17 +148,23 @@ def get_scheduler_status(
                 "error_message": last.error_message,
             }
 
-        # 다음 실행 시각 (스케줄러 인스턴스에서 조회)
+        # 다음 실행 시각 + schedule 문구 — 둘 다 스케줄러 인스턴스의 같은 job 에서 조회
+        # (SSOT: 활성 잡은 실제 trigger 에서 한국어 생성. 비활성·미실행 시 meta fallback.)
         next_run_at = None
+        schedule_text = meta["schedule"]  # fallback (비활성 잡 + scheduler=None)
         if scheduler:
             sched_job = scheduler.get_job(job_id)
-            if sched_job and sched_job.next_run_time:
-                next_run_at = sched_job.next_run_time.isoformat()
+            if sched_job:
+                if sched_job.next_run_time:
+                    next_run_at = sched_job.next_run_time.isoformat()
+                generated = describe_trigger(sched_job.trigger)
+                if generated:  # 활성 잡 + 파싱 성공 → trigger 가 진실의 원천
+                    schedule_text = generated
 
         jobs.append({
             "scheduler_job_id": job_id,
             "name": meta["name"],
-            "schedule": meta["schedule"],
+            "schedule": schedule_text,
             "enabled": enabled,
             "last_run": last_run,
             "next_run_at": next_run_at,

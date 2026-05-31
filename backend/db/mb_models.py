@@ -92,6 +92,21 @@ class Apartment(Base):
     maint_elec: Mapped[int | None] = mapped_column(Integer)
     maint_water: Mapped[int | None] = mapped_column(Integer)
 
+    # 청약 경쟁률 (mibunyang 수집, 약 63% 채움)
+    competition_rate: Mapped[float | None] = mapped_column(Float)
+    competition_applicants: Mapped[int | None] = mapped_column(Integer)
+    competition_supply: Mapped[int | None] = mapped_column(Integer)
+
+    # 안전 — 단지 범죄 안전등급 1~5(낮을수록 안전, 약 97% 채움) / 내진설계 여부(약 64%)
+    crime_safety_grade: Mapped[int | None] = mapped_column(Integer)
+    quake_design: Mapped[bool | None] = mapped_column(Boolean)
+
+    # 주거 환경 — 조망 / 주향 / 난방연료 / 복도구조 (mibunyang 수집)
+    view: Mapped[str | None] = mapped_column(Text)
+    primary_direction: Mapped[str | None] = mapped_column(Text)
+    heat_fuel: Mapped[str | None] = mapped_column(Text)
+    corridor_type: Mapped[str | None] = mapped_column(Text)
+
     created_at: Mapped[datetime | None] = mapped_column(DateTime)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
 

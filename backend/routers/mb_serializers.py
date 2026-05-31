@@ -54,6 +54,18 @@ def apartment_to_dict(a) -> dict:
         "maint_gas": a.maint_gas,
         "maint_elec": a.maint_elec,
         "maint_water": a.maint_water,
+        # 청약 경쟁률 (mibunyang)
+        "competition_rate": a.competition_rate,
+        "competition_applicants": a.competition_applicants,
+        "competition_supply": a.competition_supply,
+        # 안전 — 범죄 안전등급 1~5 / 내진설계
+        "crime_safety_grade": a.crime_safety_grade,
+        "quake_design": a.quake_design,
+        # 주거 환경 — 조망 / 주향 / 난방연료 / 복도구조
+        "view": a.view,
+        "primary_direction": a.primary_direction,
+        "heat_fuel": a.heat_fuel,
+        "corridor_type": a.corridor_type,
         "created_at": a.created_at.isoformat() if a.created_at else None,
         "updated_at": a.updated_at.isoformat() if a.updated_at else None,
     }

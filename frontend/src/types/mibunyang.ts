@@ -51,6 +51,22 @@ export interface MbApartment {
   maint_gas?: number;
   maint_elec?: number;
   maint_water?: number;
+  /** 청약 경쟁률 (N:1) — mibunyang 수집 */
+  competition_rate?: number;
+  competition_applicants?: number;
+  competition_supply?: number;
+  /** 단지 범죄 안전등급 1~5 (낮을수록 안전) */
+  crime_safety_grade?: number;
+  /** 내진설계 여부 */
+  quake_design?: boolean;
+  /** 조망 (예: 도시/천변) */
+  view?: string;
+  /** 주향 (예: 남동) */
+  primary_direction?: string;
+  /** 난방연료 (예: 도시가스/LPG) */
+  heat_fuel?: string;
+  /** 복도구조 (계단식/복도식/혼합식) */
+  corridor_type?: string;
   created_at?: string;
   updated_at?: string;
   trade_stats?: MbTradeStats;

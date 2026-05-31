@@ -53,6 +53,10 @@ export function OverviewSection({ apartment: a }: SectionProps) {
         <InfoRow label="완공" value={formatYearMonth(a.completion)} />
         <InfoRow label="준공연도(네이버)" value={a.naver_build_year != null ? `${a.naver_build_year}년` : undefined} />
         <InfoRow label="난방" value={a.heating} />
+        <InfoRow label="난방연료" value={a.heat_fuel} />
+        <InfoRow label="복도구조" value={a.corridor_type} />
+        <InfoRow label="주향" value={a.primary_direction} />
+        <InfoRow label="조망" value={a.view} />
         <InfoRow label="최고층" value={a.max_floor != null ? <MbMaxFloorBar value={a.max_floor} /> : undefined} />
         <InfoRow label="세대당 주차" value={a.parking_ratio != null ? <MbParkingBar value={a.parking_ratio} /> : undefined} />
         <InfoRow label="용적률" value={a.floor_area_ratio != null ? <MbFloorAreaRatioBar value={a.floor_area_ratio} /> : undefined} />
@@ -96,6 +100,9 @@ export function PresaleSection({ apartment: a }: SectionProps) {
         <InfoRow label="발코니 무상" value={a.balcony_free ? "O" : a.balcony_free === false ? "X" : undefined} />
         <InfoRow label="옵션 무상" value={a.option_free ? "O" : a.option_free === false ? "X" : undefined} />
         <InfoRow label="캐시백" value={a.cashback != null ? formatKoreanPrice(a.cashback) : undefined} />
+        <InfoRow label="청약 경쟁률" value={a.competition_rate != null ? `${a.competition_rate.toLocaleString()}:1` : undefined} />
+        <InfoRow label="청약 신청자" value={a.competition_applicants != null ? `${a.competition_applicants.toLocaleString()}명` : undefined} />
+        <InfoRow label="청약 공급세대" value={a.competition_supply != null ? `${a.competition_supply.toLocaleString()}세대` : undefined} />
       </dl>
 
       {prices && prices.length > 0 ? (

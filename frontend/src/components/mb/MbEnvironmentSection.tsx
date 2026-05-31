@@ -52,7 +52,7 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
   const school = a.school;
   const transport = a.transport;
   const noise = a.noise;
-  const hasData = (infra ?? school ?? transport ?? noise) != null || a.naver_school_walk_min != null || a.noxious_dist != null;
+  const hasData = (infra ?? school ?? transport ?? noise) != null || a.naver_school_walk_min != null || a.noxious_dist != null || a.crime_safety_grade != null || a.quake_design != null;
 
   if (!hasData) {
     return (
@@ -161,12 +161,14 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
         </div>
       )}
 
-      {infra?.crime_score != null && (
+      {(infra?.crime_score != null || a.crime_safety_grade != null || a.quake_design != null) && (
         <div className="mb-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-2">치안</h4>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">안전</h4>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <InfoRow label="안전 점수" value={`${infra.crime_score}/100`} />
-            <InfoRow label="안전 등급" value={infra.crime_grade ? <CrimeGradeBadge grade={infra.crime_grade} /> : undefined} />
+            {infra?.crime_score != null && <InfoRow label="안전 점수" value={`${infra.crime_score}/100`} />}
+            {infra?.crime_grade && <InfoRow label="지역 안전 등급" value={<CrimeGradeBadge grade={infra.crime_grade} />} />}
+            {a.crime_safety_grade != null && <InfoRow label="단지 안전 등급" value={`${a.crime_safety_grade}등급 (1=안전)`} />}
+            {a.quake_design != null && <InfoRow label="내진설계" value={a.quake_design ? "적용" : "미적용"} />}
           </dl>
         </div>
       )}

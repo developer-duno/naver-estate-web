@@ -49,7 +49,7 @@ const sampleEvents: SchedulerCalendarEvent[] = [
   {
     scheduler_job_id: "collect_metrics",
     name: "단지 가치지표 수집",
-    start: "2026-05-25T08:30:00+09:00",
+    start: "2026-05-25T04:30:00+09:00",
     status: "upcoming",
     kind: "upcoming",
   },

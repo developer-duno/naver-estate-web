@@ -125,7 +125,7 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 | 우선순위 | 부채 | 위치 | 영향 |
 |---|---|---|---|
 | 🔴 1순위 | 디자인 리뉴얼 PR 4~7 진행 중 | spec = `docs/superpowers/specs/2026-05-20-2upekr-redesign-design.md` | PR 0·1·2a·3a 완료 (세션 210·213·214·215). PR 4·5·6 시각 변화 진행 중 (세션 240~245 = PR 4e·5a·5b·5d·6a·6b·6c). PR 7 미진행 |
-| 🟡 2순위 | 가치 3필드 채움률 진행 중 | `complex_metric` cron 매일 08:30 KST | PR #61 (배치 1000) 가동 확정 (세션 234 4중 cross-check 통과). ~25일 자동 완주 = 능동 작업 불필요. backend zombie 회피 룰 = `release.md` |
+| 🟡 2순위 | 가치 3필드 채움률 진행 중 | `complex_metric` cron 매일 04:30 KST | PR #61 (배치 1000) 가동 확정 (세션 234 4중 cross-check 통과). ~25일 자동 완주 = 능동 작업 불필요. backend zombie 회피 룰 = `release.md` |
 
 ### §6.1 해소 완료 아카이브 (이력 보존 — "왜 이렇게 됐나" 추적용)
 

@@ -186,23 +186,33 @@ def test_add_job_rejects_duplicate_id():
         scheduler.add_job(lambda: None, "interval", minutes=1, id=existing_id)
 
 
-def test_meta_schedule_matches_add_job_trigger():
-    """META schedule 문자열이 add_job trigger 의 시간 단위와 일치하는지 검증.
+# META fallback 이 가정하는 운영 interval/주기 값 (backend/.env 기준).
+# env 가변 잡은 코드 기본값(getenv default)이 CI 와 운영에서 다를 수 있으므로,
+# 가드가 이 운영값으로 env 를 명시 patch 해 환경 독립적으로 검증한다.
+# 메타 fallback 문자열의 시간수를 바꾸면 여기도 함께 바꿔야 한다.
+_OPERATIONAL_INTERVALS = {
+    "CRAWL_INTERVAL_HOURS": 12,        # crawl_articles → "12시간 interval"
+    "CRAWL_DETAIL_INTERVAL_MIN": 30,   # crawl_details → "30분 interval"
+    "COMPLEX_DETAIL_APT_INTERVAL_HOURS": 4,   # → "4시간 interval"
+    "COMPLEX_DETAIL_OPST_INTERVAL_HOURS": 4,  # → "4시간 interval"
+    "MONITOR_INTERVAL_MIN": 10,        # crawler_monitor → "10분 interval" (.env 운영값)
+}
 
-    PR #19 가 crawl_details interval 을 4시간→30분으로 바꾸면서 META schedule 의
-    "4시간마다" 문자열을 안 고친 drift 사고 재발 방지. 한국어 자연어 완전 매칭은
-    불가능하므로 시간 단위 키워드 ("분"/"시간"/"interval"/"cron 표기") 만 휴리스틱
-    검증.
 
-    규칙:
-    - IntervalTrigger 이고 interval < 1시간 → schedule 문자열에 "분" 포함 필수
-    - IntervalTrigger 이고 interval >= 1시간 → schedule 문자열에 "시간" 포함 필수
-    - CronTrigger → schedule 문자열에 "마다" 만 단독 사용 금지
-      (cron 인데 "N시간마다"/"N분마다" 적으면 interval 로 오해 유발)
+def test_meta_fallback_matches_describe_trigger_for_active_jobs():
+    """모든 env on 시: META schedule fallback == describe_trigger(실제 trigger).
+
+    세션 256 — schedule SSOT 도입. META schedule 은 비활성 잡 전용 fallback 으로
+    격하됐다(활성 잡은 scheduler-status 가 trigger 에서 런타임 생성). 그래도 손글씨라
+    drift 위험이 남으므로, 9개 env 강제 on 한 scheduler 의 각 trigger 와 정확 매칭해
+    고정한다. 옛 휴리스틱 가드(키워드 포함 여부)를 정확 매칭으로 대체 —
+    PR #99(08:30↔04:30)·PR 6a(6h↔4h)·monitor(20분↔10분) 류 drift 를 구조적으로 차단.
+
+    env 가변 interval 잡은 _OPERATIONAL_INTERVALS 로 운영값을 명시 patch 한다 —
+    CI 엔 .env 가 없어 코드 기본값(예: MONITOR_INTERVAL_MIN=30)을 쓰므로, patch
+    없이는 메타 fallback(운영 10분)과 환경 불일치로 false fail (CI #823 사고 답습).
     """
-    from apscheduler.triggers.cron import CronTrigger
-    from apscheduler.triggers.interval import IntervalTrigger
-
+    from crawler.schedule_describe import describe_trigger
     from routers.admin.scheduler import SCHEDULER_JOB_META
 
     with (
@@ -215,6 +225,7 @@ def test_meta_schedule_matches_add_job_trigger():
         patch.object(sched_mod, "COMPLEX_DETAIL_ENABLED", True),
         patch.object(sched_mod, "COMPLEX_METRIC_ENABLED", True),
         patch.object(sched_mod, "MONITOR_ENABLED", True),
+        patch.multiple(sched_mod, **_OPERATIONAL_INTERVALS),
     ):
         scheduler = sched_mod.create_scheduler()
     jobs = {job.id: job for job in scheduler.get_jobs()}
@@ -223,28 +234,14 @@ def test_meta_schedule_matches_add_job_trigger():
     for job_id, meta in SCHEDULER_JOB_META.items():
         job = jobs.get(job_id)
         if job is None:
-            # 다른 가드가 잡음 — 여기는 trigger 일치만 검증
+            errors.append(f"{job_id}: 모든 env on 인데 미등록 (META 만 있고 잡 없음)")
             continue
-        schedule = meta["schedule"]
-        if isinstance(job.trigger, IntervalTrigger):
-            seconds = job.trigger.interval.total_seconds()
-            if seconds < 3600:
-                if "분" not in schedule:
-                    errors.append(
-                        f"{job_id}: IntervalTrigger {seconds}초인데 schedule='{schedule}' 에 '분' 없음"
-                    )
-            else:
-                if "시간" not in schedule:
-                    errors.append(
-                        f"{job_id}: IntervalTrigger {seconds}초인데 schedule='{schedule}' 에 '시간' 없음"
-                    )
-        elif isinstance(job.trigger, CronTrigger):
-            # cron 인데 "마다" 만 적혀있고 시각 표기 없으면 interval 로 오해
-            if "마다" in schedule and ":" not in schedule and "회" not in schedule:
-                errors.append(
-                    f"{job_id}: CronTrigger 인데 schedule='{schedule}' 가 interval 형식"
-                )
-    assert not errors, "META schedule 과 add_job trigger drift:\n  " + "\n  ".join(errors)
+        generated = describe_trigger(job.trigger)
+        if generated != meta["schedule"]:
+            errors.append(
+                f"{job_id}: meta fallback='{meta['schedule']}' != describe_trigger='{generated}'"
+            )
+    assert not errors, "META fallback 과 trigger SSOT drift:\n  " + "\n  ".join(errors)
 
 
 def test_scheduler_job_meta_covers_all_registered_jobs():

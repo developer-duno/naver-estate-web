@@ -56,8 +56,11 @@ docs/loop/
 scripts/startup.log
 scripts/backend.log
 scripts/cloudflared.log
+scripts/cloudflared_naver.log
 scripts/orchestrator.pid
 scripts/uvicorn.log
+scripts/backend_recovery.log
+scripts/backend_recovery_err.log
 
 # Playwright MCP 자동 생성 스냅샷/로그 (세션별 디버그용, 커밋 제외)
 .playwright-mcp/

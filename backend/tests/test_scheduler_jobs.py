@@ -91,6 +91,21 @@ def test_complex_metric_uses_batch_size_env():
     assert job.kwargs["batch_size"] == 555
 
 
+def test_complex_metric_runs_offpeak():
+    """collect_metrics 가 새벽 04:30 에 돈다 (09~12시 등록 피크 회피).
+
+    세션 255 — 배치 1000 집계가 사용자 요청과 같은 micro 인스턴스 RAM 을
+    경합하지 않도록 08:30 → 04:30 으로 이동. 다음 사람이 다시 피크 시간대로
+    되돌리지 않도록 cron hour/minute 회귀 방지.
+    """
+    with patch.object(sched_mod, "COMPLEX_METRIC_ENABLED", True):
+        scheduler = sched_mod.create_scheduler()
+    job = {j.id: j for j in scheduler.get_jobs()}["collect_metrics"]
+    fields = {f.name: str(f) for f in job.trigger.fields}
+    assert fields["hour"] == "4", f"collect_metrics 가 04시가 아님: {fields['hour']}시"
+    assert fields["minute"] == "30", f"collect_metrics 가 30분이 아님: {fields['minute']}분"
+
+
 def test_complex_detail_apt_uses_interval_env():
     """COMPLEX_DETAIL_APT_INTERVAL_HOURS env 가 APT backfill 잡 interval 에 반영된다.
 

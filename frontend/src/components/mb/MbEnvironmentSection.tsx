@@ -1,9 +1,16 @@
 "use client";
 
 import type { MbApartment } from "@/types";
+import { freshness } from "@/lib/format";
 import { MbNoiseBar } from "./MbNoiseBar";
 import { MbNoxiousBar } from "./MbNoxiousBar";
 import { MbSchoolWalkBar } from "./MbSchoolWalkBar";
+
+/** 블록 헤더 옆 작은 회색 갱신시각 라벨 (값 없으면 렌더 안 함) */
+function FreshnessTag({ iso }: { iso?: string }) {
+  const label = freshness(iso);
+  return label ? <span className="ml-2 text-xs font-normal text-gray-400">{label}</span> : null;
+}
 
 /** 인프라 정보 행 (label + value) */
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -66,7 +73,7 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
     <SectionCard title="주변 환경">
       {infra && (
         <div className="mb-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-2">인프라</h4>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">인프라<FreshnessTag iso={infra.updated_at} /></h4>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {([
               ["병원", infra.hospital, infra.hospital_dist],
@@ -98,7 +105,7 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
 
       {infra?.air_grade && (
         <div className="mb-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-2">대기질</h4>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">대기질<FreshnessTag iso={infra.air_updated_at} /></h4>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="flex flex-col">
               <dt className="text-xs text-gray-500">종합 등급</dt>
@@ -163,7 +170,7 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
 
       {(infra?.crime_score != null || a.crime_safety_grade != null || a.quake_design != null) && (
         <div className="mb-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-2">안전</h4>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">안전<FreshnessTag iso={infra?.crime_updated_at} /></h4>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {infra?.crime_score != null && <InfoRow label="안전 점수" value={`${infra.crime_score}/100`} />}
             {infra?.crime_grade && <InfoRow label="지역 안전 등급" value={<CrimeGradeBadge grade={infra.crime_grade} />} />}
@@ -202,7 +209,7 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
 
       {school && (
         <div className="mb-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-2">학군</h4>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">학군<FreshnessTag iso={school.updated_at} /></h4>
           <dl className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
             <InfoRow label="학군 점수" value={school.school_score} />
             <InfoRow label="학군 등급" value={school.school_grade} />
@@ -235,7 +242,7 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
 
       {transport && (
         <div>
-          <h4 className="text-sm font-semibold text-gray-700 mb-2">교통</h4>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">교통<FreshnessTag iso={transport.updated_at} /></h4>
           <dl className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <InfoRow label="지하철" value={transport.subway_name} />
             <InfoRow label="노선" value={transport.subway_lines} />

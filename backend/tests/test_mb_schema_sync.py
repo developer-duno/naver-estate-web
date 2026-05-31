@@ -49,19 +49,14 @@ ALLOWLIST: dict[str, set[str]] = {
     "TradeStats": {"apartment_id"},
 }
 
-# 현재 진짜 미노출 — 노출 가치 미정이라 xfail 로 "예상된 누락" 표기 (세션 258 사용자 선택:
-# 빨간불로 드러내되 CI 안 막기). 노출 결정 시 serializer 추가 + 여기서 제거(→ XPASS 신호).
-# updated_at 5건 = 감사 워크플로우가 지적한 "섹션별 데이터 신선도 표시 부재"(medium). 부속
-# 데이터(시세통계/주변시설/학군/교통/시공사)의 갱신 시각이라 화면 노출 가치 있음 → 검토 대기.
+# 현재 진짜 미노출 — 노출 가치 없거나 노출 경로 부재라 xfail 로 "예상된 누락" 표기.
+# 세션 259 에서 updated_at 5건(Infra/TradeStats/School/Transport/Builder) + MBPrice.recorded_at
+# = "섹션별 데이터 신선도 표시 부재"(세션 258 감사 지적, medium) 해소로 노출 → 여기서 제거.
 KNOWN_UNEXPOSED: dict[str, set[str]] = {
-    "Apartment": {"balcony_value", "option_value"},  # 무상여부는 노출, 금액은 미노출
-    "Infra": {"nearby_facilities", "updated_at"},  # JSON 복합시설 + 갱신시각(신선도 표시 후보)
-    "MBTrade": {"recorded_at"},  # 실거래 수집 기준일
-    "MBPrice": {"recorded_at"},  # 분양가 수집 기준일 (추이 차트 미구현)
-    "Builder": {"corp_code", "updated_at"},  # 법인 고유번호 + 갱신시각
-    "TradeStats": {"updated_at"},  # 시세통계 갱신시각 (신선도 표시 후보)
-    "School": {"updated_at"},  # 학군 갱신시각
-    "Transport": {"updated_at"},  # 교통 갱신시각
+    "Apartment": {"balcony_value", "option_value"},  # 채움률 0% 빈칸 — 노출해도 항상 "-"
+    "Infra": {"nearby_facilities"},  # JSON 복합시설 — 표시 UI 미설계(범위 밖)
+    "MBTrade": {"recorded_at"},  # 실거래 region 단위 — 단지 상세 응답에 mb_trade_to_dict 미포함(노출 경로 없음)
+    "Builder": {"corp_code"},  # 법인 고유번호 — 화면 가치 낮음(신용조회 미구현)
 }
 
 

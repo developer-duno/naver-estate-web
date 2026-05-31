@@ -7,6 +7,7 @@ import {
   formatMaintenanceCost,
   formatWon,
   formatYearMonth,
+  freshness,
 } from "../format";
 
 describe("formatDateFull", () => {
@@ -173,5 +174,24 @@ describe("formatYearMonth", () => {
   it("길이 안 맞는 값은 원본 그대로 (사용자 노출 결정은 호출부)", () => {
     expect(formatYearMonth("2028")).toBe("2028");
     expect(formatYearMonth("분양중")).toBe("분양중");
+  });
+});
+
+describe("freshness", () => {
+  it("날짜만 있는 ISO(Date 타입 recorded_at) → 'YYYY. M. D. 기준' (0 패딩 없는 월/일)", () => {
+    expect(freshness("2026-06-01")).toBe("2026. 6. 1. 기준");
+    expect(freshness("2026-12-25")).toBe("2026. 12. 25. 기준");
+  });
+
+  it("일시 포함 ISO(DateTime 타입 updated_at) → 날짜 부분만 사용, 타임존 밀림 없음", () => {
+    // new Date('2026-05-31T16:33:49...').toLocaleDateString 이면 UTC 파싱으로 밀릴 수 있으나,
+    // 문자열 분해 방식이라 어느 타임존에서도 항상 5/31 로 고정됨 (적대검증 타임존 지적 답습).
+    expect(freshness("2026-05-31T16:33:49.776766+00:00")).toBe("2026. 5. 31. 기준");
+    expect(freshness("2026-01-01T00:00:00Z")).toBe("2026. 1. 1. 기준");
+  });
+
+  it("값 없으면 undefined (호출부가 렌더 가드)", () => {
+    expect(freshness(undefined)).toBeUndefined();
+    expect(freshness("")).toBeUndefined();
   });
 });

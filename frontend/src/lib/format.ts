@@ -98,3 +98,11 @@ export function formatPct(v: number | null | undefined): string {
   if (v === null || v === undefined) return "—";
   return `${(v * 100).toFixed(2)}%`;
 }
+
+/** ISO 날짜/일시 → "YYYY. M. D. 기준" 신선도 라벨 (값 없으면 undefined).
+ * 날짜 부분만 문자열로 분해 — new Date() UTC 자정 파싱의 타임존 밀림 회피 (recorded_at=Date 타입 대비). */
+export function freshness(iso?: string): string | undefined {
+  if (!iso) return undefined;
+  const [year, month, day] = iso.split("T")[0].split("-");
+  return `${year}. ${Number(month)}. ${Number(day)}. 기준`;
+}

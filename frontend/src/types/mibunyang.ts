@@ -138,6 +138,8 @@ export interface MbPrice {
   pp?: number;
   house_type?: string;
   supply_count?: number;
+  /** 분양가 수집 기준일 */
+  recorded_at?: string;
 }
 
 /** 거래 통계 */
@@ -155,6 +157,8 @@ export interface MbTradeStats {
   avg_floor?: number;
   floor_range?: string;
   cancel_ratio_6m?: number;
+  /** 시세 통계 갱신시각 (신선도) */
+  updated_at?: string;
 }
 
 /** 시공사 정보 */
@@ -163,6 +167,8 @@ export interface MbBuilder {
   debt_ratio?: number;
   credit_grade?: string;
   hug_guarantee?: boolean;
+  /** 시공사 정보 갱신시각 (신선도) */
+  updated_at?: string;
 }
 
 /** 인프라 정보 */
@@ -211,6 +217,8 @@ export interface MbInfra {
   crime_score?: number;
   crime_grade?: string;
   crime_updated_at?: string;
+  /** 인프라 데이터 갱신시각 (신선도) */
+  updated_at?: string;
 }
 
 /** 학군 정보 — 단지 주변 학교 목록 */
@@ -226,6 +234,8 @@ export interface MbSchool {
   school_score?: number;
   school_grade?: string;
   nearby_schools?: MbNearbySchool[];
+  /** 학군 데이터 갱신시각 (신선도) */
+  updated_at?: string;
 }
 
 /** 교통 정보 */
@@ -237,4 +247,6 @@ export interface MbTransport {
   subway_name?: string;
   subway_lines?: string;
   bus_stop_names?: string;
+  /** 교통 데이터 갱신시각 (신선도) */
+  updated_at?: string;
 }

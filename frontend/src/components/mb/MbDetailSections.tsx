@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { MbApartment, MbPrice } from "@/types";
-import { formatKoreanPrice, formatYearMonth } from "@/lib/format";
+import { formatKoreanPrice, formatYearMonth, freshness } from "@/lib/format";
 import { formatHouseType } from "@/lib/mb-house-type";
 import { MbCancelRatioBar } from "./MbCancelRatioBar";
 import { MbCoverageBar } from "./MbCoverageBar";
@@ -70,6 +70,7 @@ export function OverviewSection({ apartment: a }: SectionProps) {
             <InfoRow label="부채비율" value={b.debt_ratio != null ? `${b.debt_ratio}%` : undefined} />
             <InfoRow label="신용등급" value={b.credit_grade} />
             <InfoRow label="HUG 보증" value={b.hug_guarantee ? "가능" : b.hug_guarantee === false ? "불가" : undefined} />
+            <InfoRow label="시공사 정보 갱신" value={freshness(b.updated_at)} />
           </>
         )}
         <InfoRow label="네이버 인근 시세" value={a.naver_nearby_median != null ? formatKoreanPrice(a.naver_nearby_median) : undefined} />
@@ -131,6 +132,9 @@ export function PresaleSection({ apartment: a }: SectionProps) {
               ))}
             </tbody>
           </table>
+          {prices[0]?.recorded_at && (
+            <p className="px-3 py-1.5 text-xs text-gray-400 border-t bg-gray-50">분양가 {freshness(prices[0].recorded_at)}</p>
+          )}
         </div>
       ) : (
         <p className="text-sm text-gray-400">분양가 데이터가 없습니다.</p>
@@ -164,6 +168,7 @@ export function TradeStatsSection({ apartment: a }: SectionProps) {
         <InfoRow label="평균층" value={ts.avg_floor != null ? `${ts.avg_floor.toFixed(1)}층` : undefined} />
         <InfoRow label="층 범위" value={ts.floor_range} />
         <InfoRow label="6개월 취소율" value={<MbCancelRatioBar value={ts.cancel_ratio_6m} />} />
+        <InfoRow label="통계 갱신" value={freshness(ts.updated_at)} />
       </dl>
       <MbTradeStatsCharts tradeStats={ts} />
     </SectionCard>

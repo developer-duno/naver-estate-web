@@ -139,6 +139,7 @@ def mb_price_to_dict(p) -> dict:
         "pp": p.pp,
         "house_type": p.house_type,
         "supply_count": p.supply_count,
+        "recorded_at": p.recorded_at.isoformat() if p.recorded_at else None,
     }
 
 
@@ -158,6 +159,7 @@ def trade_stats_to_dict(ts) -> dict:
         "avg_floor": ts.avg_floor,
         "floor_range": ts.floor_range,
         "cancel_ratio_6m": ts.cancel_ratio_6m,
+        "updated_at": ts.updated_at.isoformat() if ts.updated_at else None,
     }
 
 
@@ -208,6 +210,8 @@ def infra_to_dict(i) -> dict:
         "crime_score": i.crime_score,
         "crime_grade": i.crime_grade,
         "crime_updated_at": i.crime_updated_at.isoformat() if i.crime_updated_at else None,
+        # 인프라 데이터 갱신시각 (신선도 표시)
+        "updated_at": i.updated_at.isoformat() if i.updated_at else None,
     }
 
 
@@ -217,6 +221,7 @@ def school_to_dict(s) -> dict:
         "school_score": s.school_score,
         "school_grade": s.school_grade,
         "nearby_schools": s.nearby_schools,
+        "updated_at": s.updated_at.isoformat() if s.updated_at else None,
     }
 
 
@@ -230,6 +235,7 @@ def transport_to_dict(t) -> dict:
         "subway_name": t.subway_name,
         "subway_lines": t.subway_lines,
         "bus_stop_names": t.bus_stop_names,
+        "updated_at": t.updated_at.isoformat() if t.updated_at else None,
     }
 
 
@@ -240,4 +246,5 @@ def builder_to_dict(b) -> dict:
         "debt_ratio": b.debt_ratio,
         "credit_grade": b.credit_grade,
         "hug_guarantee": b.hug_guarantee,
+        "updated_at": b.updated_at.isoformat() if b.updated_at else None,
     }

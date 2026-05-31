@@ -66,7 +66,7 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 | `rules/codes.md` | ✅ | 거래/매물 코드, 핵심 상수, localStorage 키 |
 | `rules/planning.md` | ✅ | /plan 모드 최소 규칙, 자동 트리거 |
 | `rules/domain-mapping-ssot.md` | ✅ | BE-FE 매핑 SSOT + SQL 집계 N→1 가중평균 + dialect 분기 (세션 226 신설) |
-| `rules/release.md` | ✅ | PR 머지 후 backend 가동 검증 3중 cross-check (세션 232 신설) |
+| `rules/release.md` | ✅ | PR 머지 후 backend 가동 검증 4중 cross-check (세션 232 신설, 세션 257 라이브 표시값 지표 추가) |
 | `settings.json` | ✅ | 프로젝트 권한·env (공용) |
 | `ASSETS.md` (본 파일) | ✅ | 자산 인덱스 (Claude 진입점) |
 | `GLOSSARY.md` | ✅ | 한국어 도메인 용어집 (30+) |

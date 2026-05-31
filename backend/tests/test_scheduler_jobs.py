@@ -186,6 +186,19 @@ def test_add_job_rejects_duplicate_id():
         scheduler.add_job(lambda: None, "interval", minutes=1, id=existing_id)
 
 
+# META fallback 이 가정하는 운영 interval/주기 값 (backend/.env 기준).
+# env 가변 잡은 코드 기본값(getenv default)이 CI 와 운영에서 다를 수 있으므로,
+# 가드가 이 운영값으로 env 를 명시 patch 해 환경 독립적으로 검증한다.
+# 메타 fallback 문자열의 시간수를 바꾸면 여기도 함께 바꿔야 한다.
+_OPERATIONAL_INTERVALS = {
+    "CRAWL_INTERVAL_HOURS": 12,        # crawl_articles → "12시간 interval"
+    "CRAWL_DETAIL_INTERVAL_MIN": 30,   # crawl_details → "30분 interval"
+    "COMPLEX_DETAIL_APT_INTERVAL_HOURS": 4,   # → "4시간 interval"
+    "COMPLEX_DETAIL_OPST_INTERVAL_HOURS": 4,  # → "4시간 interval"
+    "MONITOR_INTERVAL_MIN": 10,        # crawler_monitor → "10분 interval" (.env 운영값)
+}
+
+
 def test_meta_fallback_matches_describe_trigger_for_active_jobs():
     """모든 env on 시: META schedule fallback == describe_trigger(실제 trigger).
 
@@ -194,6 +207,10 @@ def test_meta_fallback_matches_describe_trigger_for_active_jobs():
     drift 위험이 남으므로, 9개 env 강제 on 한 scheduler 의 각 trigger 와 정확 매칭해
     고정한다. 옛 휴리스틱 가드(키워드 포함 여부)를 정확 매칭으로 대체 —
     PR #99(08:30↔04:30)·PR 6a(6h↔4h)·monitor(20분↔10분) 류 drift 를 구조적으로 차단.
+
+    env 가변 interval 잡은 _OPERATIONAL_INTERVALS 로 운영값을 명시 patch 한다 —
+    CI 엔 .env 가 없어 코드 기본값(예: MONITOR_INTERVAL_MIN=30)을 쓰므로, patch
+    없이는 메타 fallback(운영 10분)과 환경 불일치로 false fail (CI #823 사고 답습).
     """
     from crawler.schedule_describe import describe_trigger
     from routers.admin.scheduler import SCHEDULER_JOB_META
@@ -208,6 +225,7 @@ def test_meta_fallback_matches_describe_trigger_for_active_jobs():
         patch.object(sched_mod, "COMPLEX_DETAIL_ENABLED", True),
         patch.object(sched_mod, "COMPLEX_METRIC_ENABLED", True),
         patch.object(sched_mod, "MONITOR_ENABLED", True),
+        patch.multiple(sched_mod, **_OPERATIONAL_INTERVALS),
     ):
         scheduler = sched_mod.create_scheduler()
     jobs = {job.id: job for job in scheduler.get_jobs()}

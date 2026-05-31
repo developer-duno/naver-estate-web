@@ -1,0 +1,19 @@
+# 줄끝 정규화 — 모든 텍스트 파일은 repo 에 LF 로 저장 (11회 반복된 CRLF diff 부풀림 차단)
+# 세션 259 신설. renormalize 대형 커밋은 의도적으로 안 함(점진적) — 향후 변경분만 LF 로 수렴.
+* text=auto eol=lf
+
+# 바이너리 — 줄끝 변환 금지 (.gitattributes 없을 때 위험했던 파일 보호)
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.webp  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.eot   binary
+*.xlsx  binary
+*.zip   binary
+*.pdf   binary

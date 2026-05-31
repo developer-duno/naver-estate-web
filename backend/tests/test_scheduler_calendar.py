@@ -153,14 +153,18 @@ def _mock_scheduler_with_one_job(job_id: str, name: str, fires: list[datetime]):
 def test_calendar_upcoming_mode_expands_trigger(client, db):
     """mode=upcoming 이면 trigger 전개로 향후 발화 시각 반환."""
     _make_admin(db)
-    # 2026-05-25 14:00 KST = 05:00 UTC, 2026-05-26 14:00 KST = 05:00 UTC
+    # 엔드포인트가 range_start=max(now, 월초)로 과거를 거르므로, 발화 시각은
+    # "현재 이후 + 요청한 달 안"이어야 한다. 하드코딩 날짜는 그 달이 지나면
+    # 과거가 되어 0건으로 깨진다(시한폭탄) → 다음 달을 동적 계산해 영구 해소.
+    now = datetime.now(timezone.utc)
+    nyear, nmonth = (now.year, now.month + 1) if now.month < 12 else (now.year + 1, 1)
     fires = [
-        datetime(2026, 5, 25, 5, 0, tzinfo=timezone.utc),
-        datetime(2026, 5, 26, 5, 0, tzinfo=timezone.utc),
+        datetime(nyear, nmonth, 10, 5, 0, tzinfo=timezone.utc),
+        datetime(nyear, nmonth, 11, 5, 0, tzinfo=timezone.utc),
     ]
     mock_sched = _mock_scheduler_with_one_job("collect_metrics", "단지 가치지표 수집", fires)
     with patch("crawler.scheduler.get_scheduler", return_value=mock_sched):
-        res = client.get(_path(2026, 5, "upcoming"), headers=_auth(_token("admin1")))
+        res = client.get(_path(nyear, nmonth, "upcoming"), headers=_auth(_token("admin1")))
 
     assert res.status_code == 200
     events = res.json()["events"]

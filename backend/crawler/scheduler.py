@@ -327,16 +327,19 @@ def create_scheduler() -> BackgroundScheduler:
         )
         logger.info("크롤링 모니터 활성화: %d분 간격", MONITOR_INTERVAL_MIN)
 
-    # M. 단지 가치지표 수집 — 매일 08:30
+    # M. 단지 가치지표 수집 — 매일 04:30
     #    complex_price_history 집계만 (네이버 API 호출 0) → IP 차단 무관.
-    #    08:30 = 08:00 mibunyang 로컬 수집과 30분 분리 + 05~07시 단지 상세
-    #    backfill(complexes UPDATE) 시간대 밖 — row 경합 회피.
+    #    04:30 = 새벽 저트래픽 창(0~9시 매물 변동 거의 없음, services/cache.py 동적 TTL).
+    #    09~12시 매물 등록 피크를 완전히 비켜감 — 배치 1000 집계가 사용자 요청과
+    #    같은 micro 인스턴스 RAM 을 경합하지 않게 함 (세션 254 micro RAM 스파이크 답습).
+    #    08:00 mibunyang 로컬 수집과도 더 멀어짐(기존 08:30=30분 분리 → 04:30=3.5h 분리).
+    #    03:30 backfill·04:00 Wed 시세와 시작 instant 겹침 없음, 전부 max_instances=1·집계 전용.
     #    주1회→매일 전환: 집계 대상(시세 이력 보유 단지) 완주를 가속.
     if COMPLEX_METRIC_ENABLED:
         scheduler.add_job(
             collect_complex_metrics,
             "cron",
-            hour=8,
+            hour=4,
             minute=30,
             kwargs={"batch_size": COMPLEX_METRIC_BATCH_SIZE, "scheduler_job_id": "collect_metrics"},
             id="collect_metrics",
@@ -344,7 +347,7 @@ def create_scheduler() -> BackgroundScheduler:
             max_instances=1,
             misfire_grace_time=3600,
         )
-        logger.info("단지 가치지표 수집 활성화: 매일 08:30 (배치 %d)", COMPLEX_METRIC_BATCH_SIZE)
+        logger.info("단지 가치지표 수집 활성화: 매일 04:30 (배치 %d)", COMPLEX_METRIC_BATCH_SIZE)
 
     global _scheduler
     _scheduler = scheduler

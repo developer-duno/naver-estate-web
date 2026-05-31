@@ -1,11 +1,14 @@
 """
-Windows 시작 시 백엔드 서버 + Cloudflare Named Tunnel 자동화 스크립트.
+Windows 시작 시 백엔드 서버 자동화 스크립트.
 
 실행 흐름:
-1. 기존 프로세스 정리 (port 8002 + cloudflared)
+1. 기존 프로세스 정리 (port 8002)
 2. 백엔드 서버 시작 → health check 대기
-3. Cloudflare Named Tunnel 시작 (api.2u.pe.kr)
-4. Watchdog (프로세스 생존 감시, 죽으면 재시작)
+3. Watchdog (프로세스 생존 감시, 죽으면 재시작)
+
+터널(api.2u.pe.kr)은 nssm 서비스 cloudflared-naver 가 전담한다 (2026-05-31 naver↔sangse
+공유 터널 분리). 이 스크립트는 cloudflared 를 더 이상 건드리지 않는다 — taskkill /IM
+cloudflared.exe 가 lawbrain·luxury·sangse 등 다른 프로젝트 터널까지 죽이던 크로스킬 해소.
 """
 
 import logging
@@ -16,18 +19,17 @@ import sys
 import time
 import urllib.request
 
+from pid_util import pid_is_live_orchestrator
 from telegram_notify import notify
 
 # ── 경로 상수 ──────────────────────────────────────────────
 PYTHON_EXE = r"C:\Users\user\AppData\Local\Programs\Python\Python312\python.exe"
-CLOUDFLARED_EXE = r"C:\Users\user\AppData\Local\Microsoft\WinGet\Links\cloudflared.exe"
 PROJECT_ROOT = r"D:\naver-estate-web"
 BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend")
 SCRIPTS_DIR = os.path.join(PROJECT_ROOT, "scripts")
 BACKEND_PORT = 8002
 STARTUP_LOG = os.path.join(SCRIPTS_DIR, "startup.log")
 BACKEND_LOG = os.path.join(SCRIPTS_DIR, "backend.log")
-CLOUDFLARED_LOG = os.path.join(SCRIPTS_DIR, "cloudflared.log")
 PID_FILE = os.path.join(SCRIPTS_DIR, "orchestrator.pid")
 
 # ── 타임아웃 설정 ──────────────────────────────────────────
@@ -50,17 +52,10 @@ logger.addHandler(ch)
 
 
 def kill_existing_processes():
-    """기존 cloudflared + port 8002 프로세스 정리."""
+    """기존 port 8002 프로세스 정리 (cloudflared 는 nssm 서비스 cloudflared-naver 전담)."""
     logger.info("기존 프로세스 정리 중...")
 
-    # cloudflared 종료
-    subprocess.run(
-        ["taskkill", "/F", "/IM", "cloudflared.exe"],
-        capture_output=True,
-        timeout=10,
-    )
-
-    # port 8002 점유 프로세스 종료 + 포트 해제 대기
+    # port 8002 점유 프로세스 종료 + 포트 해제 대기 (naver 한정 — 다른 프로젝트 무영향)
     _kill_port(BACKEND_PORT)
     logger.info("프로세스 정리 완료")
 
@@ -103,20 +98,6 @@ def wait_for_backend(timeout: int = BACKEND_HEALTH_TIMEOUT) -> bool:
     return False
 
 
-def start_tunnel() -> subprocess.Popen:
-    """Cloudflare Named Tunnel 시작 (api.2u.pe.kr)."""
-    logger.info("Cloudflare Named Tunnel 시작 중...")
-    log_file = open(CLOUDFLARED_LOG, "w", encoding="utf-8")
-    proc = subprocess.Popen(
-        [CLOUDFLARED_EXE, "tunnel", "run", "naver-estate-backend"],
-        stdout=log_file,
-        stderr=subprocess.STDOUT,
-        creationflags=subprocess.CREATE_NO_WINDOW,
-    )
-    logger.info(f"터널 프로세스 시작됨 (PID: {proc.pid})")
-    return proc
-
-
 def _kill_port(port: int):
     """특정 포트를 점유 중인 프로세스를 강제 종료하고 해제 대기."""
     if not _is_port_in_use(port):
@@ -148,8 +129,9 @@ def _kill_port(port: int):
     logger.warning(f"포트 {port} 해제 대기 타임아웃")
 
 
-def watchdog(backend_proc: subprocess.Popen, tunnel_proc: subprocess.Popen):
-    """프로세스 생존 감시 + 자동 재시작. 다운 감지 시 텔레그램 알림."""
+def watchdog(backend_proc: subprocess.Popen):
+    """백엔드 생존 감시 + 자동 재시작. 다운 감지 시 텔레그램 알림.
+    터널은 nssm 서비스 cloudflared-naver 가 자체 watchdog 으로 감시한다."""
     logger.info("Watchdog 시작 (30초 간격 감시)")
     backend_fail_count = 0
     health_fail_count = 0
@@ -192,12 +174,6 @@ def watchdog(backend_proc: subprocess.Popen, tunnel_proc: subprocess.Popen):
         else:
             backend_fail_count = 0
 
-        # 터널 체크
-        if tunnel_proc.poll() is not None:
-            logger.warning("터널 프로세스 종료 감지 — 재시작")
-            notify("⚠ Cloudflare 터널 다운 — 재시작 시도")
-            tunnel_proc = start_tunnel()
-
 
 def _check_health() -> bool:
     """백엔드 /health 응답 확인 (3초 타임아웃)."""
@@ -211,23 +187,23 @@ def _check_health() -> bool:
 
 
 def _check_already_running() -> bool:
-    """PID 파일로 중복 실행 방지. 이미 실행 중이면 True 반환."""
+    """PID 파일로 중복 실행 방지. 이미 실행 중인 python 오케스트레이터면 True 반환.
+
+    재부팅 후 OS 가 옛 PID 를 무관한 프로세스에 재할당하는 PID 재활용 함정 차단 —
+    pid_util.pid_is_live_orchestrator 가 tasklist CSV 의 PID 컬럼 + 이미지명을
+    정확 비교한다 (substring 오판·재활용 오판 둘 다 차단)."""
     if os.path.exists(PID_FILE):
         try:
             old_pid = int(open(PID_FILE).read().strip())
-            # 프로세스가 살아있는지 확인
-            subprocess.run(
-                ["tasklist", "/FI", f"PID eq {old_pid}"],
-                capture_output=True, text=True, timeout=5,
-            ).stdout
             result = subprocess.run(
-                ["tasklist", "/FI", f"PID eq {old_pid}", "/NH"],
+                ["tasklist", "/FI", f"PID eq {old_pid}", "/FO", "CSV", "/NH"],
                 capture_output=True, text=True, timeout=5,
             )
-            if str(old_pid) in result.stdout:
+            if pid_is_live_orchestrator(result.stdout, old_pid):
                 logger.error(f"오케스트레이터가 이미 실행 중 (PID: {old_pid}). 종료합니다.")
                 return True
-        except Exception:
+            logger.warning(f"PID 파일의 {old_pid} 은(는) 오케스트레이터가 아님 — 무시하고 진행")
+        except (OSError, ValueError, subprocess.TimeoutExpired):
             pass  # PID 파일 손상 — 무시하고 진행
     # 현재 PID 기록
     with open(PID_FILE, "w") as f:
@@ -257,13 +233,10 @@ def main():
         logger.error("백엔드 시작 실패 — 스크립트 종료")
         sys.exit(1)
 
-    # 4. Named Tunnel 시작 (api.2u.pe.kr)
-    tunnel_proc = start_tunnel()
+    logger.info("백엔드 정상 시작 완료! (터널은 nssm 서비스 cloudflared-naver 전담)")
 
-    logger.info("모든 서비스 정상 시작 완료!")
-
-    # 5. Watchdog
-    watchdog(backend_proc, tunnel_proc)
+    # 4. Watchdog
+    watchdog(backend_proc)
 
 
 if __name__ == "__main__":
@@ -275,7 +248,12 @@ if __name__ == "__main__":
         logger.exception("치명적 오류 발생")
         sys.exit(1)
     finally:
+        # 내 PID 가 기록된 경우에만 삭제 — 중복 실행 감지로 일찍 종료할 때
+        # 살아있는 인스턴스의 PID 파일을 지우지 않도록.
         try:
-            os.remove(PID_FILE)
-        except OSError:
+            with open(PID_FILE) as f:
+                mine = f.read().strip() == str(os.getpid())
+            if mine:
+                os.remove(PID_FILE)
+        except (OSError, ValueError):
             pass

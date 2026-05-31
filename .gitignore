@@ -55,8 +55,8 @@ docs/loop/
 .mcp.json
 scripts/startup.log
 scripts/backend.log
+scripts/cloudflared_*.log
 scripts/cloudflared.log
-scripts/cloudflared_naver.log
 scripts/orchestrator.pid
 scripts/uvicorn.log
 scripts/backend_recovery.log
@@ -83,3 +83,6 @@ scripts/backend_recovery_err.log
 # Codex CLI 로컬 설정 (도구별 산출물 — git 비추적)
 .codex/
 AGENTS.md
+
+# OMC 플러그인 런타임 (state/notepad 등 — 루트/backend/frontend 어디서나 생성, 로컬 전용)
+.omc/

@@ -1,0 +1,29 @@
+{
+  "patterns": [
+    {
+      "rule_name": "hardcoded_secret_prefix",
+      "substrings": ["sk_live_", "AKIA", "SUPABASE_JWT_SECRET="],
+      "reminder": "하드코딩된 시크릿/키 접두. os.getenv 또는 .env 로만 로드 (코드/커밋 평문 금지)."
+    },
+    {
+      "rule_name": "cors_wildcard",
+      "substrings": ["allow_origins=[\"*\"]", "allow_origins=['*']"],
+      "reminder": "CORS allow_origins 와일드카드 금지 (web-rules.md). 명시 도메인만 허용."
+    },
+    {
+      "rule_name": "raw_sql_fstring",
+      "regex": "text\\(\\s*f[\"']",
+      "reminder": "raw SQL 에 f-string 보간 = SQL 인젝션 위험. text().bindparams() 또는 ORM 조건 사용."
+    },
+    {
+      "rule_name": "crawl_metric_bulk_update",
+      "regex": "UPDATE\\s+complexes\\s+SET\\s+(last_crawled_at|detail_crawled_at)",
+      "reminder": "크롤 지표 컬럼 SQL 직접 일괄 UPDATE 금지 (infra.md IP차단방지). 실제 크롤 코드(CrawlJob)만 갱신 — 허수 진단 오염."
+    },
+    {
+      "rule_name": "complex_delete",
+      "regex": "DELETE\\s+FROM\\s+complexes",
+      "reminder": "Complex(단지) 레코드 DELETE 금지 (web-rules.md DON'T). 매물은 is_active=FALSE 비활성화만."
+    }
+  ]
+}

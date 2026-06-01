@@ -1,4 +1,7 @@
 {
+  "enabledPlugins": {
+    "security-guidance@claude-plugins-official": true
+  },
   "permissions": {
     "allow": [
       "Bash(python -m uvicorn main:app --host 0.0.0.0 --port 8002)",

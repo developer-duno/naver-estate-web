@@ -16,6 +16,7 @@ from crawler.service import (
     discover_all_regions,
 )
 from crawler.service_metrics import collect_complex_metrics
+from crawler.vacuum_maintenance import run_vacuum_maintenance
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -46,6 +47,8 @@ COMPLEX_METRIC_ENABLED = os.getenv("COMPLEX_METRIC_ENABLED", "true").lower() == 
 COMPLEX_METRIC_BATCH_SIZE = int(os.getenv("COMPLEX_METRIC_BATCH_SIZE", "1000"))
 MONITOR_ENABLED = os.getenv("MONITOR_ENABLED", "false").lower() == "true"
 MONITOR_INTERVAL_MIN = int(os.getenv("MONITOR_INTERVAL_MIN", "30"))
+# 정기 VACUUM (ANALYZE) — articles/trades visibility map 재악화 차단 (세션 260)
+VACUUM_MAINTENANCE_ENABLED = os.getenv("VACUUM_MAINTENANCE_ENABLED", "true").lower() == "true"
 
 # 모듈 레벨 스케줄러 참조 — admin API에서 다음 실행 시각 조회용
 _scheduler: BackgroundScheduler | None = None
@@ -348,6 +351,22 @@ def create_scheduler() -> BackgroundScheduler:
             misfire_grace_time=3600,
         )
         logger.info("단지 가치지표 수집 활성화: 매일 04:30 (배치 %d)", COMPLEX_METRIC_BATCH_SIZE)
+
+    # 정기 VACUUM (ANALYZE) articles/trades — visibility map 재악화 차단 (세션 260).
+    # 03:50 = 03:30 backfill·04:00 Wed 시세·04:30 metrics 와 instant 겹침 없는 빈 슬롯.
+    # DB 전용(네이버 API 0) 이라 IP 차단 무관. VACUUM 은 ACCESS SHARE only = 비차단.
+    if VACUUM_MAINTENANCE_ENABLED:
+        scheduler.add_job(
+            run_vacuum_maintenance,
+            "cron",
+            hour=3,
+            minute=50,
+            id="vacuum_maintenance",
+            name="정기 VACUUM 유지보수",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        logger.info("정기 VACUUM 유지보수 활성화: 매일 03:50 (articles/trades)")
 
     global _scheduler
     _scheduler = scheduler

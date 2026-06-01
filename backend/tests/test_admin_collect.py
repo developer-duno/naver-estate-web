@@ -79,6 +79,32 @@ def test_collect_invalid_name_422(client, db):
     assert res.status_code == 422
 
 
+def test_collect_success_invalidates_freshness_cache(client, db):
+    """정상: 수집 성공 시 freshness 캐시 무효화 → 화면 즉시 반영 (세션 260)"""
+    from services.cache import get_cache
+
+    _make_profile(db, "a4", role="admin")
+    get_cache("freshness").set("data_freshness", {"stale": True})
+    with patch("routers.admin.collect._get_collector") as mock_get:
+        mock_get.return_value.return_value = None
+        res = client.post("/api/admin/collect/air-quality", headers=_auth(_token("a4")))
+    assert res.status_code == 200
+    assert get_cache("freshness").get("data_freshness") is None  # 무효화됨
+
+
+def test_collect_failure_keeps_freshness_cache(client, db):
+    """에러: 수집 실패 시 무효화 안 함 (성공 시에만 무효화)"""
+    from services.cache import get_cache
+
+    _make_profile(db, "a5", role="admin")
+    get_cache("freshness").set("data_freshness", {"keep": True})
+    with patch("routers.admin.collect._get_collector") as mock_get:
+        mock_get.return_value.side_effect = RuntimeError("수집 실패")
+        res = client.post("/api/admin/collect/air-quality", headers=_auth(_token("a5")))
+    assert res.status_code == 500
+    assert get_cache("freshness").get("data_freshness") == {"keep": True}  # 유지됨
+
+
 def test_collect_exception_500(client, db):
     """수집 중 예외 → 500"""
     _make_profile(db, "a4", role="admin")

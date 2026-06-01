@@ -55,6 +55,12 @@ def trigger_collection(
 
     try:
         collector_fn()
+        # 수집 성공 시에만 freshness 캐시 무효화 → 화면 즉시 반영 (세션 260).
+        # lazy import: __init__.py 가 collect 를 freshness 보다 먼저 import 하므로
+        # top-level import 는 순환 → 서버 기동 ImportError (collect.py lazy 관행 답습).
+        from routers.admin.freshness import invalidate_freshness_cache
+
+        invalidate_freshness_cache()
         return {"status": "completed", "collector": collector_name}
     except Exception as e:
         logger.exception("[admin] 수집 실패: %s", collector_name)

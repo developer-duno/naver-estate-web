@@ -76,6 +76,10 @@ from deps import get_db  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def setup_db():
+    # setup 에서도 TTLCache 리셋 — 이전 테스트 teardown 이 예외로 스킵된 경우 대비 (방어적)
+    from services.cache import _registry, _registry_lock
+    with _registry_lock:
+        _registry.clear()
     Base.metadata.create_all(bind=test_engine)
     yield
     Base.metadata.drop_all(bind=test_engine)

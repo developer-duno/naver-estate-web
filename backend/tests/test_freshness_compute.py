@@ -1,8 +1,13 @@
-"""compute_freshness 순수 함수 테스트 — 라우터에서 추출된 신선도 계산
+"""compute_freshness 순수 함수 + 캐시 래퍼 테스트 — 라우터에서 추출된 신선도 계산
 실행: python -m pytest tests/test_freshness_compute.py -v
 """
 
-from routers.admin.freshness import compute_freshness
+from routers.admin import freshness as fr
+from routers.admin.freshness import (
+    compute_freshness,
+    get_freshness_cached,
+    invalidate_freshness_cache,
+)
 
 
 def test_compute_freshness_returns_items_and_generated_at(db):
@@ -20,3 +25,37 @@ def test_compute_freshness_empty_db_status_unknown(db):
     for item in result["items"]:
         assert item["status"] == "unknown"
         assert "key" in item and "label" in item
+
+
+def test_freshness_cache_hit_skips_compute(db, monkeypatch):
+    """정상: 첫 호출 miss→compute, 둘째 호출 hit→compute 미실행 (DB 안 침)"""
+    calls = {"n": 0}
+    real = compute_freshness
+
+    def counting(db_):
+        calls["n"] += 1
+        return real(db_)
+
+    monkeypatch.setattr(fr, "compute_freshness", counting)
+
+    r1 = get_freshness_cached(db)
+    r2 = get_freshness_cached(db)
+    assert calls["n"] == 1  # 둘째는 캐시 적중 → compute 1회만
+    assert r1 == r2
+
+
+def test_invalidate_freshness_cache_forces_recompute(db, monkeypatch):
+    """에러/무효화: invalidate 후 다음 호출은 fresh compute (수집 직후 화면 반영)"""
+    calls = {"n": 0}
+    real = compute_freshness
+
+    def counting(db_):
+        calls["n"] += 1
+        return real(db_)
+
+    monkeypatch.setattr(fr, "compute_freshness", counting)
+
+    get_freshness_cached(db)  # 1회 compute + 캐시
+    invalidate_freshness_cache()  # 무효화
+    get_freshness_cached(db)  # 캐시 비었으니 다시 compute
+    assert calls["n"] == 2

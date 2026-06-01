@@ -263,6 +263,7 @@ def test_scheduler_job_meta_covers_all_registered_jobs():
         patch.object(sched_mod, "COMPLEX_DETAIL_ENABLED", True),
         patch.object(sched_mod, "COMPLEX_METRIC_ENABLED", True),
         patch.object(sched_mod, "MONITOR_ENABLED", True),
+        patch.object(sched_mod, "VACUUM_MAINTENANCE_ENABLED", True),
     ):
         scheduler = sched_mod.create_scheduler()
     registered_ids = {job.id for job in scheduler.get_jobs()}
@@ -271,3 +272,29 @@ def test_scheduler_job_meta_covers_all_registered_jobs():
         f"SCHEDULER_JOB_META 누락: {sorted(missing)} — "
         "backend/routers/admin/scheduler.py 의 SCHEDULER_JOB_META 에 추가 필요"
     )
+
+
+def test_vacuum_maintenance_job_registered_by_default():
+    """VACUUM_MAINTENANCE_ENABLED=true(기본) 면 정기 VACUUM job 이 새벽 03:50 에 등록 (세션 260)"""
+    with patch.object(sched_mod, "VACUUM_MAINTENANCE_ENABLED", True):
+        scheduler = sched_mod.create_scheduler()
+    jobs = {job.id: job for job in scheduler.get_jobs()}
+    assert "vacuum_maintenance" in jobs
+    fields = {f.name: str(f) for f in jobs["vacuum_maintenance"].trigger.fields if not f.is_default}
+    assert fields.get("hour") == "3" and fields.get("minute") == "50"
+
+
+def test_vacuum_maintenance_job_absent_when_disabled():
+    """VACUUM_MAINTENANCE_ENABLED=false 면 정기 VACUUM job 미등록"""
+    with patch.object(sched_mod, "VACUUM_MAINTENANCE_ENABLED", False):
+        scheduler = sched_mod.create_scheduler()
+    assert "vacuum_maintenance" not in _job_ids(scheduler)
+
+
+def test_run_vacuum_maintenance_skips_on_sqlite():
+    """run_vacuum_maintenance 는 SQLite(테스트)에선 no-op (VACUUM 문법 PostgreSQL 전용)"""
+    from crawler.vacuum_maintenance import run_vacuum_maintenance
+
+    result = run_vacuum_maintenance()
+    assert result["skipped"] == "sqlite"
+    assert result["vacuumed"] == []

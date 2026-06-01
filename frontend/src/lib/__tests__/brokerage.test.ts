@@ -133,6 +133,52 @@ describe("calculateBrokerageFee — 일반 케이스", () => {
     expect(calculateBrokerageFee({ ...base, amountWon: 0 }).total).toBe(0);
     expect(calculateBrokerageFee({ ...base, amountWon: -1 }).bracket).toBeNull();
   });
+
+  // 세션 264 검증 갭 보강: 매매 상위 3구간 요율 (기존 테스트는 2억 0.4%까지만 검증, 9억+ 미검증)
+  // 누군가 상위 구간 rate 행을 잘못 수정하면 회귀로 차단. 시행규칙 별표1 (2021.10.19 개정).
+  it("매매 10억 → 0.5% 구간(9억~12억) × 10억 = 500만, 부가세 50만 → 총 550만", () => {
+    const r = calculateBrokerageFee({ ...base, amountWon: 1_000_000_000 });
+    expect(r.bracket?.rate).toBe(0.005);
+    expect(r.feeBeforeTax).toBe(5_000_000);
+    expect(r.vat).toBe(500_000);
+    expect(r.total).toBe(5_500_000);
+  });
+  it("매매 13억 → 0.6% 구간(12억~15억) × 13억 = 780만, 총 858만", () => {
+    const r = calculateBrokerageFee({ ...base, amountWon: 1_300_000_000 });
+    expect(r.bracket?.rate).toBe(0.006);
+    expect(r.feeBeforeTax).toBe(7_800_000);
+    expect(r.total).toBe(8_580_000);
+  });
+  it("매매 16억 → 0.7% 구간(15억+) × 16억 = 1,120만, 총 1,232만", () => {
+    const r = calculateBrokerageFee({ ...base, amountWon: 1_600_000_000 });
+    expect(r.bracket?.rate).toBe(0.007);
+    expect(r.feeBeforeTax).toBe(11_200_000);
+    expect(r.total).toBe(12_320_000);
+  });
+  // 임대 상위 2구간 (기존 테스트는 6억~12억 0.4%까지만)
+  it("임대 13억 → 0.5% 구간(12억~15억) × 13억 = 650만", () => {
+    const r = calculateBrokerageFee({ ...base, tradeType: "lease", amountWon: 1_300_000_000 });
+    expect(r.bracket?.rate).toBe(0.005);
+    expect(r.feeBeforeTax).toBe(6_500_000);
+  });
+  it("임대 16억 → 0.6% 구간(15억+) × 16억 = 960만", () => {
+    const r = calculateBrokerageFee({ ...base, tradeType: "lease", amountWon: 1_600_000_000 });
+    expect(r.bracket?.rate).toBe(0.006);
+    expect(r.feeBeforeTax).toBe(9_600_000);
+  });
+
+  // 세션 264 검증 갭 보강: 표시 레이어 만원 반올림 정확성 (formulaSteps 문자열)
+  // 비정수 만원 금액에서 부가세·합계 표시가 부분합과 일치하는지 (fmt 만원 반올림)
+  it("매매 6.7억(비정수 만원) → 0.4% × 6.7억 = 268만, 부가세 27만(26.8만 반올림), 총 295만(294.8만 반올림)", () => {
+    const r = calculateBrokerageFee({ ...base, amountWon: 670_000_000 });
+    expect(r.feeBeforeTax).toBe(2_680_000);
+    expect(r.vat).toBe(268_000);
+    expect(r.total).toBe(2_948_000);
+    // 표시 문자열: fmt = Math.round(won/10000) → 268만 / 27만(26.8 반올림) / 295만(294.8 반올림)
+    expect(r.formulaSteps.some((s) => s.includes("268만"))).toBe(true);
+    expect(r.formulaSteps.some((s) => s.includes("부가세(10%): 27만"))).toBe(true);
+    expect(r.formulaSteps.some((s) => s.includes("합계: 295만"))).toBe(true);
+  });
   it("Infinity 입력 → total 0 (validateAmount)", () => {
     const r = calculateBrokerageFee({ ...base, amountWon: Infinity });
     expect(r.total).toBe(0);

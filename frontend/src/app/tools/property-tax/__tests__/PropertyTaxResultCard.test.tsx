@@ -96,6 +96,44 @@ describe("PropertyTaxResultCard 분기별 라벨 (4분기 × 누진세율 표기
     expect(screen.getByText(/종부세 \(공제 미만\)/)).toBeInTheDocument();
   });
 
+  // 세션 264 검증 갭 보강: 법인 분기 종부세 5.0% 라벨 렌더 (단일세율 상한). 기존엔 multi-house 2.7% 만 검증됨.
+  it("corporation 분기 + 종부세 5.0% → '종부세 (5%)' 라벨 + 법인 분기 텍스트", () => {
+    render(<PropertyTaxResultCard result={buildTestResult({
+      branch: "corporation",
+      propertyTax: 5_000_000,
+      comprehensiveTaxBeforeDeduction: 50_000_000,
+      comprehensiveTax: 50_000_000, ruralTax: 10_000_000,
+      totalTax: 55_000_000, grandTotal: 65_000_000,
+      // 법인 3주택+ 단일세율 5.0% (재산세 일반 0.4% × FMR 60%)
+      appliedRate: { property: 0.004, comprehensive: 0.05, propertyFairMarketRatio: 0.6 },
+      notes: ["disclaimer", "corporation-flat-rate-applied"],
+    })} />);
+    // 분기 박스 라벨 (하단 안내문 "법인 보유 주택은..." 과 충돌 회피 위해 정확 매칭)
+    expect(screen.getByText("법인 보유 (단일세율 2.7% / 5.0%, 공제 없음)")).toBeInTheDocument();
+    // formatPropertyRateLabel: (0.05*100).toFixed(2).replace(/\.?0+$/,"") = "5"
+    expect(screen.getByText(/종부세 \(5%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/재산세 \(공정시장 60% × 0.4%\)/)).toBeInTheDocument();
+  });
+
+  // 세션 264 검증 갭 보강: 1세대1주택 차등 공정시장가액비율 43~45% 라벨 (§109). 기존엔 60% 만 검증됨.
+  it("single-house 차등 FMR 43% → '재산세 (공정시장 43% × 0.05%)' 라벨", () => {
+    render(<PropertyTaxResultCard result={buildTestResult({
+      branch: "single-house",
+      // 1주택 특례세율 0.05% (6천만 이하 구간) + 차등 FMR 43% (3억 이하)
+      appliedRate: { property: 0.0005, comprehensive: 0, propertyFairMarketRatio: 0.43 },
+    })} />);
+    // Math.round(0.43*100)=43, (0.0005*100).toFixed(2).replace(/\.?0+$/,"") = "0.05"
+    expect(screen.getByText(/재산세 \(공정시장 43% × 0.05%\)/)).toBeInTheDocument();
+  });
+
+  it("single-house 차등 FMR 45% → '재산세 (공정시장 45% × ...)' 라벨 (6억 초과)", () => {
+    render(<PropertyTaxResultCard result={buildTestResult({
+      branch: "single-house",
+      appliedRate: { property: 0.0035, comprehensive: 0, propertyFairMarketRatio: 0.45 },
+    })} />);
+    expect(screen.getByText(/재산세 \(공정시장 45% × 0.35%\)/)).toBeInTheDocument();
+  });
+
   it("세부담 상한 150% 미반영 안내 — Notices 통해 표시 (notes 에 키 포함 시)", () => {
     // 황색 박스는 ResultCard 본체에서 빠지고 Notices 컴포넌트로 위임됨
     render(<PropertyTaxResultCard result={buildTestResult({

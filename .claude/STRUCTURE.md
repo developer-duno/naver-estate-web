@@ -28,7 +28,7 @@ naver-estate-web/
 │   ├── shared/                  # NaverEstateAPI + 상수 (수정 금지, 데스크톱 앱과 공유)
 │   ├── formatters/              # 가격 HTML 포맷 (5 파일 분할)
 │   ├── auth/                    # 인증·권한 (permissions, rate_limiter, audit)
-│   ├── tests/                   # pytest 715 (59 파일, pytest-xdist `-n auto` 병렬)
+│   ├── tests/                   # pytest 790 (68 파일, pytest-xdist `-n auto` 병렬)
 │   ├── .claude/details.md       # BE 깊이 토픽 (실거래가·mibunyang·검증·중복제거)
 │   ├── main.py                  # FastAPI 진입점, CORS, 라우터 등록
 │   └── deps.py                  # 인증 의존성 (get_current_user, get_admin_user)
@@ -122,5 +122,5 @@ BE crawler/service_price.py — Semaphore 3, on_demand throttle 2.0s
 
 - **빌드**: 루트 `CLAUDE.md` §커밋 전 필수 검증 SSOT
 - **실행**: `python -m uvicorn main:app --host 0.0.0.0 --port 8002` (backend) / `npm run dev` (frontend, localhost:8090 — naver 포트, 세션 114 박제)
-- **테스트**: 루트 `CLAUDE.md` §테스트 현황 SSOT (vitest 1458 / e2e 20 / pytest 715)
+- **테스트**: 루트 `CLAUDE.md` §테스트 현황 SSOT
 - **이 파일 갱신**: 코드가 크게 바뀌어 STRUCTURE.md 가 명백히 낡으면 사용자에게 갱신 제안 → 동의 시 덮어쓰기 (글로벌 §14 답습)

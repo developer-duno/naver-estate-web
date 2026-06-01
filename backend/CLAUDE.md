@@ -92,12 +92,14 @@
 | V028 | user_profiles.agree_marketing (회원가입 마케팅 동의) | 2026-05-31 (세션 252) |
 | V029 | RLS 11 테이블 활성화 (anon 노출 차단) | 2026-05-31 (세션 254) |
 | V030 | trades 중복 인덱스 3개 제거 (~57MB, prod 미실행) | 2026-06-02 (세션 260) |
+| V031 | 공유 4테이블 anon/authenticated REST 노출 차단 (prod 미실행) | 2026-06-02 (세션 261) |
 
-- `db/migrations/` 폴더에 `V000__` ~ `V030__` SQL 파일 = 31 버전
+- `db/migrations/` 폴더에 `V000__` ~ `V031__` SQL 파일 = 32 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
-- 최신 = V030 (2026-06-02). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
-- ⚠️ **마이그레이션 자동 러너 없음** — V030 + `db/maintenance/vacuum_analyze_bloated.sql` 은 Supabase SQL Editor **수동 실행** 필수 (파일만 있으면 효과 0). 정기 VACUUM 은 `vacuum_maintenance` 스케줄러 잡(매일 03:50)이 자동 처리.
+- 최신 = V031 (2026-06-02). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
+- ⚠️ **마이그레이션 자동 러너 없음** — V030/V031 + `db/maintenance/*.sql` 은 Supabase SQL Editor **수동 실행** 필수 (파일만 있으면 효과 0). 정기 VACUUM 은 `vacuum_maintenance` 스케줄러 잡(매일 03:50)이 자동 처리.
+  - V031 = anon/authenticated 의 articles/complexes/trades/complex_price_history SELECT·쓰기 GRANT REVOKE + permissive 정책 DROP. 외부가 anon key 로 매물 전량 긁어 micro RAM 압박(세션 261 실증, PostgREST 부하 1위)한 것 차단 + B2B 모델 유출 봉합. 적용 후 `db/maintenance/verify_anon_shared_locked.sql` 로 라이브 검증. 회귀 가드 = `tests/test_migration_v031_anon_lock.py` (SQLite 라 텍스트 자산 검사).
 
 ## 코드 구조 (분리 완료)
 

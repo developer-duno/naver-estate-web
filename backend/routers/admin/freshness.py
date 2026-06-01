@@ -17,9 +17,16 @@ from sqlalchemy.orm import Session
 from db.mb_models import Infra, MBTrade, UnsoldHistory
 from db.models import Article, Complex, ComplexPriceHistory, CrawlJob
 from deps import get_admin_user, get_db
+from services.cache import get_cache
 
 from ._shared import router
 from .freshness_meta import FRESHNESS_ITEMS
+
+# data-freshness 캐시 (세션 260). compute_freshness 가 8종목 풀 테이블 집계라 5초+.
+# 관리자 화면(30초 폴링)·수동 수집 후 무효화만 캐시 공유. monitor 는 직접 compute 유지
+# (10분 1회라 캐시 이득 0 + stale 캐시 false alarm 위험). 고정 5분 TTL.
+_FRESHNESS_CACHE_NAME = "freshness"
+_FRESHNESS_CACHE_KEY = "data_freshness"
 
 # batch 윈도우 — 같은 scheduler_job_id 의 잡들이 이 시간 안에 연속 끝나면 한 batch.
 # crawl_articles_batch (50단지) 가 보통 수 분~10분 안에 끝남. 60분이면 한 batch 가
@@ -186,10 +193,31 @@ def compute_freshness(db: Session) -> dict:
     return {"items": items, "generated_at": now.isoformat()}
 
 
+def get_freshness_cached(db: Session) -> dict:
+    """compute_freshness 의 5분 TTL 캐시 래퍼 (라우터 전용).
+
+    monitor 는 호출하지 않는다 (직접 compute 로 실시간 알림 보장). 관리자 화면은 30초
+    폴링이라 캐시 없이는 풀스캔 부하가 크다. 수집 직후 invalidate_freshness_cache() 로
+    무효화되므로 수동 수집 결과는 즉시 반영된다.
+    """
+    cache = get_cache(_FRESHNESS_CACHE_NAME)  # dynamic 인자 없음 = 고정 5분 TTL
+    cached = cache.get(_FRESHNESS_CACHE_KEY)
+    if cached is not None:
+        return cached
+    result = compute_freshness(db)
+    cache.set(_FRESHNESS_CACHE_KEY, result)
+    return result
+
+
+def invalidate_freshness_cache() -> None:
+    """수집 직후 호출 → 다음 data-freshness 조회가 fresh compute (화면 즉시 반영)."""
+    get_cache(_FRESHNESS_CACHE_NAME).delete(_FRESHNESS_CACHE_KEY)
+
+
 @router.get("/data-freshness")
 def get_data_freshness(
     db: Session = Depends(get_db),
     admin: dict = Depends(get_admin_user),
 ):
-    """8개 종목 신선도 + 헛바퀴 감지 신호 일괄 반환."""
-    return compute_freshness(db)
+    """8개 종목 신선도 + 헛바퀴 감지 신호 일괄 반환 (5분 캐시)."""
+    return get_freshness_cached(db)

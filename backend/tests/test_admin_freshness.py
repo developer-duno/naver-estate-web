@@ -8,6 +8,7 @@ import jwt
 
 from db.mb_models import Infra
 from db.models import Article, Complex, CrawlJob, UserProfile
+from routers.admin.freshness import invalidate_freshness_cache
 
 JWT_SECRET = "test-secret-key-for-testing-only"
 
@@ -277,6 +278,9 @@ def test_freshness_batch_zero_total_only_not_spinning(client, db):
         updated_at=batch_start + timedelta(minutes=1),
     ))
     db.commit()
+    # data-freshness 5분 캐시(세션 260) — 실운영은 수집 후 invalidate 되므로 즉시 반영.
+    # 테스트도 DB 변경 후 무효화해 둘째 GET 이 fresh compute 하도록.
+    invalidate_freshness_cache()
     res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
     arts = _get_item(res.json()["items"], "articles")
     assert arts["new_rows"] == 1

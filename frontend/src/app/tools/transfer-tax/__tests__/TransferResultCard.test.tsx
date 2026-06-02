@@ -1,7 +1,10 @@
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
 import TransferResultCard from "@/app/tools/transfer-tax/TransferResultCard";
 import type { TransferResult } from "@/lib/transfer-tax";
+
+// CopyButton 이 쓰는 sonner 토스트 모킹 (Toaster 미마운트)
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 function buildTestResult(over: Partial<TransferResult>): TransferResult {
   return {
@@ -95,5 +98,22 @@ describe("TransferResultCard R13: 단기+중과 동시 케이스 가산세 별�
   it("surchargeTax = 0 → 가산세 행 숨김 (일반 누진 케이스)", () => {
     render(<TransferResultCard result={buildTestResult({ surchargeTax: 0 })} />);
     expect(screen.queryByText("가산세 (중과 분)")).not.toBeInTheDocument();
+  });
+});
+
+describe("TransferResultCard 결과 복사 버튼 (세션 265)", () => {
+  it("복사 버튼이 렌더되고 클릭 시 산출세액 + 참고용 면책을 복사한다", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true, writable: true });
+    render(<TransferResultCard result={buildTestResult({ totalTax: 1_000_000 })} />);
+
+    const btn = screen.getByRole("button", { name: "양도세 결과 복사" });
+    fireEvent.click(btn);
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain("1,000,000원");
+    // 면책 문구 누락 방지 가드 (사용자 명시 요구)
+    expect(copied).toContain("참고용");
   });
 });

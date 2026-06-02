@@ -2,6 +2,7 @@
 
 import type { PropertyTaxResult, CorporationGeneralRateCategory, SpecialHousesInput } from "@/lib/property-tax-types";
 import PropertyTaxNotices from "./PropertyTaxNotices";
+import CopyButton from "@/components/CopyButton";
 
 interface Props {
   result: PropertyTaxResult;
@@ -162,8 +163,14 @@ export default function PropertyTaxResultCard({ result, excludedHouses, ownershi
             </tbody>
           </table>
           <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-3 text-center">
-            <div className="text-xs text-blue-700 mb-1">총 부담 (재산세 + 종부세 + 농특세)</div>
-            <div className="text-2xl font-bold text-blue-900">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs text-blue-700">총 부담 (재산세 + 종부세 + 농특세)</div>
+              <CopyButton
+                label="보유세 결과 복사"
+                text={`[2u부동산] 보유세 총 부담: ${result.grandTotal.toLocaleString()}원\n※ 참고용 추정치입니다. 정확한 세액은 세무사 상담을 권장합니다.`}
+              />
+            </div>
+            <div className="text-2xl font-bold text-blue-900 mt-1">
               {result.grandTotal.toLocaleString()}원
             </div>
             {result.wasCapped && (

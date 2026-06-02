@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { convertArea } from "@/lib/constants";
+import CopyButton from "@/components/CopyButton";
 
 const QUICK_M2 = [
   { label: "59㎡", value: "59" },
@@ -111,13 +112,19 @@ export default function AreaConverter() {
           <p className="mt-1 text-xs text-blue-700">
             환산식: 1평 = 3.3058㎡ (m² → 평 ÷ 3.3058, 평 → m² × 3.3058)
           </p>
-          <button
-            type="button"
-            onClick={reset}
-            className="mt-3 rounded-md border border-blue-300 bg-white px-3 py-1 text-xs text-blue-700 hover:bg-blue-100"
-          >
-            초기화
-          </button>
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <CopyButton
+              label="환산 결과 복사"
+              text={`[2u부동산] ${m2 || "-"}㎡ = ${pyeong || "-"}평\n※ 참고용 환산값입니다.`}
+            />
+            <button
+              type="button"
+              onClick={reset}
+              className="rounded-md border border-blue-300 bg-white px-3 py-1 text-xs text-blue-700 hover:bg-blue-100"
+            >
+              초기화
+            </button>
+          </div>
         </div>
       )}
     </div>

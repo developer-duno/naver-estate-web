@@ -2,9 +2,12 @@
  * /tools/brokerage-fee 페이지 통합 테스트
  * 실행: npx vitest run src/app/__tests__/brokerage-fee.test.tsx
  */
-import { describe, it, expect } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import BrokerageFeeToolPage from "../tools/brokerage-fee/page";
+
+// CopyButton 이 쓰는 sonner 토스트 모킹 (Toaster 미마운트)
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 describe("/tools/brokerage-fee 페이지", () => {
   it("Hero 제목과 면책 안내가 렌더된다", () => {
@@ -77,5 +80,21 @@ describe("/tools/brokerage-fee 페이지", () => {
     const result = screen.getByRole("status");
     expect(within(result).getByText("총 청구액")).toBeInTheDocument();
     expect(within(result).getAllByText(/275만원/).length).toBeGreaterThan(0);
+  });
+
+  /** 결과 복사 버튼 (세션 265) */
+  it("거래금액 입력 후 복사 버튼 클릭 → 총 청구액 + 참고용 면책 복사", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true, writable: true });
+    render(<BrokerageFeeToolPage />);
+    fireEvent.change(screen.getByLabelText("거래금액 (만원)"), { target: { value: "50000" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "중개수수료 결과 복사" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain("중개수수료 총 청구액");
+    // 면책 문구 누락 방지 가드 (사용자 명시 요구)
+    expect(copied).toContain("참고용");
   });
 });

@@ -1,7 +1,10 @@
-import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
 import PropertyTaxResultCard from "@/app/tools/property-tax/PropertyTaxResultCard";
 import type { PropertyTaxResult } from "@/lib/property-tax-types";
+
+// CopyButton 이 쓰는 sonner 토스트 모킹 (Toaster 미마운트)
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 // 테스트 데이터 팩토리 (testing.md 룰 — 하드코딩 금지)
 function buildTestResult(over: Partial<PropertyTaxResult>): PropertyTaxResult {
@@ -200,5 +203,29 @@ describe("5종 특례주택 (PDF #12, 세션 112) — ResultCard 표시 행", ()
     render(<PropertyTaxResultCard result={buildTestResult({ notes: ["disclaimer"] })} />);
     expect(screen.queryByText(/5종 특례주택 적용/)).not.toBeInTheDocument();
     expect(screen.queryByText(/① 일시적2주택/)).not.toBeInTheDocument();
+  });
+});
+
+describe("PropertyTaxResultCard 결과 복사 버튼 (세션 265)", () => {
+  it("복사 버튼이 렌더되고 클릭 시 총 부담 + 참고용 면책을 복사한다", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true, writable: true });
+    render(<PropertyTaxResultCard result={buildTestResult({ grandTotal: 1_000_000 })} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "보유세 결과 복사" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain("1,000,000원");
+    // 면책 문구 누락 방지 가드 (사용자 명시 요구)
+    expect(copied).toContain("참고용");
+  });
+
+  it("empty 분기에서는 복사 버튼 미렌더 (결과 박스 자체 없음)", () => {
+    render(<PropertyTaxResultCard result={buildTestResult({
+      branch: "empty", propertyTax: 0, totalTax: 0, grandTotal: 0,
+      appliedRate: { property: 0, comprehensive: 0, propertyFairMarketRatio: 0.6 },
+    })} />);
+    expect(screen.queryByRole("button", { name: "보유세 결과 복사" })).not.toBeInTheDocument();
   });
 });

@@ -175,6 +175,26 @@ describe("calculateTransferTax — 도메인 15 케이스 (plan v1.8 매트릭�
     expect(r.totalTax).toBe(341_250_000);
   });
 
+  // 세션 264 검증 갭 보강: 단기+중과 경합에서 *중과가* max로 이기는 케이스 (기존 #8은 단기 우세만).
+  // 소득세법 §104① 단서 "산출세액 중 큰 것" = 중과액. 표시 설계(R11/R13):
+  //   - totalTax = 중과액 (법령 max)
+  //   - appliedRate = 단기율 유지 (단기 note 우선 — 현 의도된 설계)
+  //   - surchargeTax 별도 행으로 중과 가산분 노출 (TransferResultCard R13)
+  // 입력: 단기 60%(보유 1.5y) + 3주택 중과 +30%p + 차익 19.9억 → 중과 14.25억 > 단기 11.93억
+  it("#8b 단기 + 중과 경합에서 중과 승리 → totalTax=중과액, appliedRate=단기율 유지(R13 설계)", () => {
+    const r = calculateTransferTax({
+      ...base, transferWon: 2_500_000_000, acquisitionWon: 500_000_000, expensesWon: 10_000_000,
+      holdYears: 1.5, livedYears: 0, houses: 3,
+      isRegulatedAtTransfer: true, isRegulatedAtAcquisition: true,
+      transferDate: "2026-05-10",
+    });
+    expect(r.branch).toBe("general");
+    expect(r.totalTax).toBe(1_424_685_000); // 중과액 (누진 8.28억 + 가산 5.96억) > 단기 11.93억
+    expect(r.appliedRate).toBeCloseTo(0.60); // 단기율 유지 (R11/R13 설계 — 법령은 세액만 규정)
+    expect(r.surchargeTax).toBe(596_250_000); // 중과 가산분 별도 노출
+    expect(r.notes).toContain("multi-heavy-applied");
+  });
+
   it("#9 1주택 거주 미달 (조정취득) → general 표1 → 149,460,000원", () => {
     const r = calculateTransferTax({
       ...base, transferWon: 1_000_000_000, acquisitionWon: 500_000_000, expensesWon: 10_000_000,

@@ -87,6 +87,19 @@ describe("MbSearchHistory 컴포넌트", () => {
     expect(onRemove).toHaveBeenCalledWith(999);
   });
 
+  /** 접근성 회귀 가드 — 삭제 버튼에 검색 라벨 포함 aria-label */
+  it("삭제 버튼에 검색 라벨을 포함한 aria-label이 있다", () => {
+    render(
+      <MbSearchHistory
+        history={[makeItem("서울", "강남구", "래미안", 1)]}
+        onSelect={vi.fn()}
+        onRemove={vi.fn()}
+        onClear={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText("서울 강남구 '래미안' 검색 기록 삭제")).toBeInTheDocument();
+  });
+
   /** 전체 삭제 → onClear 호출 */
   it("전체 삭제 버튼 클릭 시 onClear가 호출된다", () => {
     const onClear = vi.fn();

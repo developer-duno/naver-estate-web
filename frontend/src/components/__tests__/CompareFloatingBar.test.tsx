@@ -59,6 +59,15 @@ describe("CompareFloatingBar 컴포넌트", () => {
     expect(removeFn).toHaveBeenCalledWith("C1");
   });
 
+  /** 접근성 회귀 가드 — 제거 버튼에 단지명 포함 aria-label */
+  it("제거 버튼에 단지명을 포함한 aria-label이 있다", () => {
+    render(
+      <CompareFloatingBar list={sampleList} onRemove={onRemove} onClear={onClear} />,
+    );
+    expect(screen.getByLabelText("래미안 제거")).toBeInTheDocument();
+    expect(screen.getByLabelText("힐스테이트 제거")).toBeInTheDocument();
+  });
+
   /** 초기화 버튼 */
   it("초기화 버튼 클릭 시 onClear가 호출된다", () => {
     const clearFn = vi.fn();

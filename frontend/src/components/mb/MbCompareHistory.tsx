@@ -45,12 +45,14 @@ function ComparePill({
       title={label}
       className={`inline-flex items-center gap-1 text-xs rounded-full px-2.5 py-1 border cursor-pointer transition-colors ${s.wrapper}`}
     >
-      <button onClick={onSelect} className={`truncate max-w-48 ${s.label}`}>
+      <button type="button" onClick={onSelect} className={`truncate max-w-48 ${s.label}`}>
         {prefix}{label}
       </button>
       <button
+        type="button"
         onClick={(e) => { e.stopPropagation(); onRemove(); }}
         className={`${s.close} hover:text-red-500 ml-0.5`}
+        aria-label={`${label} 삭제`}
       >
         ×
       </button>
@@ -79,7 +81,7 @@ export default function MbCompareHistory({
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs font-semibold text-gray-500">최근 비교</span>
-            <button onClick={onClearHistory} className="text-xs text-gray-400 hover:text-gray-600">
+            <button type="button" onClick={onClearHistory} className="text-xs text-gray-400 hover:text-gray-600">
               전체 삭제
             </button>
           </div>
@@ -101,7 +103,7 @@ export default function MbCompareHistory({
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-xs font-semibold text-amber-600">저장된 비교</span>
             {onClearBookmarks && (
-              <button onClick={onClearBookmarks} className="text-xs text-amber-400 hover:text-amber-600">
+              <button type="button" onClick={onClearBookmarks} className="text-xs text-amber-400 hover:text-amber-600">
                 전체 삭제
               </button>
             )}

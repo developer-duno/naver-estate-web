@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   calculateTransferTax,
   computeHoldYears,
@@ -25,6 +25,22 @@ export default function TransferCalculator() {
   const [areaM2, setAreaM2] = useState(84);
   const [isUnregistered, setIsUnregistered] = useState(false);
   const [exemptionOverride, setExemptionOverride] = useState<TransferExemptionOverride>("auto");
+
+  // 전체 초기화 — 모든 입력을 마운트 초기값으로 복원 (transferDate 는 todayISO() 재호출, 고정/빈값 금지)
+  const handleReset = useCallback(() => {
+    setTransferManwon(0);
+    setAcquisitionManwon(0);
+    setExpensesManwon(0);
+    setAcquisitionDate("");
+    setTransferDate(todayISO());
+    setLivedYears(0);
+    setHouses(1);
+    setIsRegulatedAtTransfer(false);
+    setIsRegulatedAtAcquisition(false);
+    setAreaM2(84);
+    setIsUnregistered(false);
+    setExemptionOverride("auto");
+  }, []);
 
   const result = useMemo(() => {
     const holdYears = acquisitionDate ? computeHoldYears(acquisitionDate, transferDate) : 0;
@@ -67,6 +83,15 @@ export default function TransferCalculator() {
         onIsUnregisteredChange={setIsUnregistered}
         onExemptionOverrideChange={setExemptionOverride}
       />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handleReset}
+          className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
+        >
+          초기화
+        </button>
+      </div>
       <TransferResultCard result={result} />
     </div>
   );

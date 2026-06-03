@@ -82,6 +82,24 @@ describe("/tools/brokerage-fee 페이지", () => {
     expect(within(result).getAllByText(/275만원/).length).toBeGreaterThan(0);
   });
 
+  /** 초기화 버튼 — 입력값을 마운트 초기값으로 복원 */
+  it("초기화 버튼 — 거래금액·거래유형이 마운트 초기값으로 복귀", () => {
+    render(<BrokerageFeeToolPage />);
+    const amount = screen.getByLabelText("거래금액 (만원)") as HTMLInputElement;
+    // 값 변경 + 거래유형 전환
+    fireEvent.change(amount, { target: { value: "50000" } });
+    fireEvent.click(screen.getByLabelText("월세"));
+    // 월세 모드에서 보증금/월세 노출 확인
+    expect(screen.getByLabelText("보증금 (만원)")).toBeInTheDocument();
+    // 초기화
+    fireEvent.click(screen.getByRole("button", { name: "초기화" }));
+    // 마운트 초기값 복귀: 거래유형 sale → 거래금액 단일 입력 + 빈값, placeholder 안내
+    expect(screen.getByText("거래금액을 입력하세요.")).toBeInTheDocument();
+    expect((screen.getByLabelText("거래금액 (만원)") as HTMLInputElement).value).toBe("");
+    // 월세 전용 보증금 입력란이 사라짐 (sale 복귀 확인)
+    expect(screen.queryByLabelText("보증금 (만원)")).not.toBeInTheDocument();
+  });
+
   /** 결과 복사 버튼 (세션 265) */
   it("거래금액 입력 후 복사 버튼 클릭 → 총 청구액 + 참고용 면책 복사", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);

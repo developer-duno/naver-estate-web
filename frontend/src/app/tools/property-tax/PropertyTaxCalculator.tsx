@@ -60,6 +60,26 @@ export default function PropertyTaxCalculator() {
     if (v === "none") setOriginalAcquisitionYear(0);
   };
 
+  // 전체 초기화 — 모든 입력을 마운트 초기값으로 복원 (부수효과 핸들러 경유 금지, raw setState 직접 세팅)
+  const handleReset = useCallback(() => {
+    setPublishedManwon(0);
+    setHouses(1);
+    setIsSingleHouseEligible(false);
+    setAgeYears(0);
+    setHoldYears(0);
+    setPrevYearTaxManwon(0);
+    setExcludedHouses(0);
+    setOwnershipPercent(0);
+    setIsCorporation(false);
+    setIsSpouseJointSingleHouse(false);
+    setCorporationGeneralRateCategory("");
+    setSpecialHouses({});
+    setSpecialHousesRateApply({});
+    setIsReligiousSpecial(false);
+    setHoldPeriodSpecialMode("none");
+    setOriginalAcquisitionYear(0);
+  }, []);
+
   const result = useMemo(() => {
     // single 분기: 본인 단독 1세대1주택 OR 부부 공동명의 1주택 특례 모두 ageYears/holdYears 전달
     const single = (isSingleHouseEligible || isSpouseJointSingleHouse) && houses === 1;
@@ -136,6 +156,15 @@ export default function PropertyTaxCalculator() {
         onHoldPeriodSpecialModeChange={handleHoldPeriodSpecialModeChange}
         onOriginalAcquisitionYearChange={setOriginalAcquisitionYear}
       />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handleReset}
+          className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
+        >
+          초기화
+        </button>
+      </div>
       <PropertyTaxResultCard
         result={result}
         excludedHouses={excludedHouses}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   calculateAcquisitionTax,
   DEFAULT_AREA_M2,
@@ -43,6 +43,16 @@ export default function AcquisitionCalculator() {
     if (next === "officetel-commercial") setIsFirstTime(false);
   };
 
+  // 전체 초기화 — 모든 입력을 마운트 초기값으로 복원 (areaM2 는 DEFAULT_AREA_M2=84, 0 금지)
+  const handleReset = useCallback(() => {
+    setPropertyType("house");
+    setHouses(1);
+    setIsRegulatedArea(false);
+    setIsFirstTime(false);
+    setAreaM2(DEFAULT_AREA_M2);
+    setAmountManwon(0);
+  }, []);
+
   const result = useMemo(() => {
     const input: AcquisitionInput = {
       amountWon,
@@ -72,6 +82,15 @@ export default function AcquisitionCalculator() {
         onAreaM2Change={setAreaM2}
         onAmountChange={setAmountManwon}
       />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handleReset}
+          className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
+        >
+          초기화
+        </button>
+      </div>
       <AcquisitionResultCard result={result} />
     </div>
   );

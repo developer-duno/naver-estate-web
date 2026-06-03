@@ -353,6 +353,27 @@ def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = No
 
 # ── C. 상세 보강 ──
 
+# 네이버 상세 API 가 "매물 없음(진짜 dead)" 으로 응답하는 error code 목록.
+# 라이브 실측: dead 매물은 HTTP 200 + 본문 {"error": {"code": "errorCode.NotExistInformation", ...}}.
+# 반면 transient(401/403/429/5xx/네트워크)는 naver_api 가 {"error": "<문자열 메시지>"} 로 반환한다.
+# 즉 error 값이 dict 이고 code 가 아래 집합이면 진짜 dead, 그 외 error 는 transient.
+_DEAD_ERROR_CODES = frozenset({"errorCode.NotExistInformation"})
+
+
+def _is_dead_detail(detail_data) -> bool:
+    """상세 응답이 '네이버에서 지워진 매물(진짜 dead)' 인지 판정.
+
+    True  = 비활성화 대상 (detail_crawled=True, is_active=False).
+    False = transient 오류 → 플래그 유지하고 다음 배치 재시도 (살아있는 매물 오비활성화 방지).
+    """
+    if not isinstance(detail_data, dict):
+        return False
+    err = detail_data.get("error")
+    if isinstance(err, dict):
+        return err.get("code") in _DEAD_ERROR_CODES
+    return False
+
+
 def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = None):
     """detail_crawled=FALSE인 활성 매물의 상세 정보 크롤링"""
     db = SessionLocal()
@@ -364,6 +385,13 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         articles = (
             db.query(Article)
             .filter(Article.detail_crawled == False, Article.is_active == True)
+            # 신선도 우선: 최근 본(=네이버에 살아있는) 매물부터 상세 크롤. heap 순서면
+            # 2.5개월 묵은 죽은 매물(상세 API 404)부터 픽해 배치가 100% 헛돈다(filled 0).
+            # last_seen_at 최신 = 상세 API 살아있음(라이브 실증). 인덱스 불필요 — 이 쿼리
+            # (ORDER BY 포함) 그대로 라이브 EXPLAIN ANALYZE 실측 = 1584ms cold / 305ms warm
+            # (Gather Merge + top-N heapsort), timeout 8s 의 5배 여유. last_seen_at 단독 인덱스는
+            # 세션266·267 적대검증이 이미 폐기(combined_aggregate_index_void 룰) — 정렬만 추가.
+            .order_by(Article.last_seen_at.desc().nullslast())
             .limit(batch_size)
             .all()
         )
@@ -372,6 +400,7 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         processed = 0
 
         skipped_dead = 0
+        skipped_transient = 0
         for i, art in enumerate(articles):
             record_call("article_detail_batch")
             detail_data = NaverEstateAPI.get_article_detail(art.article_no)
@@ -392,15 +421,20 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
                     update_data, synchronize_session=False
                 )
                 processed += 1
-            else:
-                # 네이버 상세 API가 error/404 → 네이버 쪽에서 이미 지운 매물로 간주.
+            elif _is_dead_detail(detail_data):
+                # 진짜 dead (NotExistInformation) → 네이버에서 이미 지운 매물.
                 # detail_crawled=TRUE + is_active=FALSE로 마크해 같은 매물이 다음
-                # 배치에서 반복 pick되지 않도록 한다. 58만 건이 영원히 pick되던 문제 해결.
+                # 배치에서 반복 pick되지 않도록 한다.
                 db.query(Article).filter(Article.article_no == art.article_no).update(
                     {"detail_crawled": True, "is_active": False},
                     synchronize_session=False,
                 )
                 skipped_dead += 1
+            else:
+                # transient 오류 (401/403/429/5xx/네트워크) → 플래그 안 건드림.
+                # 신선도 우선 정렬로 배치 앞이 살아있는 신선 매물이라, 일시 오류로
+                # 살아있는 매물을 잘못 비활성화하지 않도록 다음 배치 재시도에 맡긴다.
+                skipped_transient += 1
 
             # CV-49: 배치 commit (50건 단위) — 행별 commit 대신
             if (i + 1) % 50 == 0:
@@ -415,8 +449,8 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         )
         db.commit()  # 나머지 flush
         logger.info(
-            "상세 보강 완료: %d/%d건 (dead 매물 %d건 비활성화)",
-            processed, len(articles), skipped_dead,
+            "상세 보강 완료: %d/%d건 (dead %d건 비활성화, transient %d건 재시도 대기)",
+            processed, len(articles), skipped_dead, skipped_transient,
         )
 
     except Exception as e:

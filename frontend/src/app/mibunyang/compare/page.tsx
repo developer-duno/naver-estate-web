@@ -16,6 +16,8 @@ import type { MbCompareHistoryItem, MbCompareBookmarkItem } from "@/lib/storage"
 import MbCompareHistory from "@/components/mb/MbCompareHistory";
 import PromptModal from "@/components/PromptModal";
 import Skeleton, { SkeletonPage } from "@/components/Skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Scale } from "lucide-react";
 import { COMPARE_TEXT_COLORS } from "@/lib/constants";
 
 const LazyMbCompareRadarChart = dynamic(
@@ -152,18 +154,30 @@ function CompareContent() {
 
   if (ids.length === 0) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-20 text-center">
-        <p className="text-gray-600 mb-4">비교할 아파트를 선택해주세요.</p>
-        <button onClick={goBack} className="text-sm text-blue-600 hover:underline">← 미분양 목록</button>
+      <div className="max-w-7xl mx-auto px-4 py-16">
+        <EmptyState
+          icon={Scale}
+          title="비교할 아파트를 선택해주세요."
+          description="미분양 목록에서 ✓ 체크박스로 아파트를 골라 비교 버튼을 누르거나, 즐겨찾기에서 비교에 추가해주세요."
+          action={
+            <button type="button" onClick={goBack} className="text-sm text-blue-600 hover:underline">← 미분양 목록</button>
+          }
+        />
       </div>
     );
   }
 
   if (ids.length < 2 && !isLoading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-20 text-center">
-        <p className="text-gray-600 mb-4">비교할 아파트를 2개 이상 선택해주세요.</p>
-        <button onClick={goBack} className="text-sm text-blue-600 hover:underline">← 미분양 목록</button>
+      <div className="max-w-7xl mx-auto px-4 py-16">
+        <EmptyState
+          icon={Scale}
+          title="비교할 아파트를 2개 이상 선택해주세요."
+          description="아파트를 하나 더 선택하면 나란히 비교할 수 있어요."
+          action={
+            <button type="button" onClick={goBack} className="text-sm text-blue-600 hover:underline">← 미분양 목록</button>
+          }
+        />
       </div>
     );
   }

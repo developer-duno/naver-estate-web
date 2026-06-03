@@ -77,6 +77,26 @@ describe("/tools/acquisition-tax 페이지", () => {
     expect(firstTime.disabled).toBe(true);
   });
 
+  /** 초기화 버튼 — 입력값을 마운트 초기값으로 복원 (areaM2=84, houses=1, propertyType='house', '전부 0' 금지) */
+  it("초기화 버튼 — 매매가·면적·매물유형이 마운트 초기값으로 복귀", () => {
+    render(<AcquisitionTaxToolPage />);
+    const amount = screen.getByLabelText("매매가 (만원)") as HTMLInputElement;
+    const area = screen.getByLabelText("전용면적 (m²)") as HTMLInputElement;
+    const propType = screen.getByLabelText("매물 유형") as HTMLSelectElement;
+    // 값 변경
+    fireEvent.change(amount, { target: { value: "130000" } });
+    fireEvent.change(area, { target: { value: "120" } });
+    fireEvent.change(propType, { target: { value: "officetel-commercial" } });
+    fireEvent.click(screen.getByLabelText("2주택"));
+    expect(amount.value).toBe("130000");
+    // 초기화
+    fireEvent.click(screen.getByRole("button", { name: "초기화" }));
+    // 마운트 초기값 복귀: 매매가 빈값 → placeholder 안내 / 면적 84 (0 아님) / 매물유형 house
+    expect(screen.getByText("매매가를 입력하면 결과가 표시됩니다.")).toBeInTheDocument();
+    expect((screen.getByLabelText("전용면적 (m²)") as HTMLInputElement).value).toBe("84");
+    expect((screen.getByLabelText("매물 유형") as HTMLSelectElement).value).toBe("house");
+  });
+
   /** 결과 복사 버튼 (세션 265) */
   it("결과 입력 후 복사 버튼 클릭 → 합계 + 참고용 면책 복사", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);

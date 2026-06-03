@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   calculateBrokerageFee,
   type BrokerageInput, type TradeType, type PropertyType, type TaxType,
@@ -28,6 +28,16 @@ export default function BrokerageCalculator() {
     setMonthlyRent(0);
   };
 
+  // 전체 초기화 — 모든 입력을 마운트 초기값으로 복원
+  const handleReset = useCallback(() => {
+    setTradeType("sale");
+    setPropertyType("house");
+    setAmountManwon(0);
+    setDeposit(0);
+    setMonthlyRent(0);
+    setTaxType("general");
+  }, []);
+
   const result = useMemo(() => {
     const input: BrokerageInput = {
       tradeType, propertyType,
@@ -51,6 +61,15 @@ export default function BrokerageCalculator() {
         onMonthlyRentChange={setMonthlyRent}
         onTaxTypeChange={setTaxType}
       />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handleReset}
+          className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
+        >
+          초기화
+        </button>
+      </div>
       <BrokerageResultCard result={result} taxType={taxType} />
     </div>
   );

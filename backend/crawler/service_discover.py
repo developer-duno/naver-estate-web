@@ -387,8 +387,10 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
             .filter(Article.detail_crawled == False, Article.is_active == True)
             # 신선도 우선: 최근 본(=네이버에 살아있는) 매물부터 상세 크롤. heap 순서면
             # 2.5개월 묵은 죽은 매물(상세 API 404)부터 픽해 배치가 100% 헛돈다(filled 0).
-            # last_seen_at 최신 = 상세 API 살아있음(라이브 실증). 인덱스는 세션266 EXPLAIN
-            # 실측(~773ms, timeout 8s 의 10배 여유)으로 불필요 확정 — 정렬만 추가.
+            # last_seen_at 최신 = 상세 API 살아있음(라이브 실증). 인덱스 불필요 — 이 쿼리
+            # (ORDER BY 포함) 그대로 라이브 EXPLAIN ANALYZE 실측 = 1584ms cold / 305ms warm
+            # (Gather Merge + top-N heapsort), timeout 8s 의 5배 여유. last_seen_at 단독 인덱스는
+            # 세션266·267 적대검증이 이미 폐기(combined_aggregate_index_void 룰) — 정렬만 추가.
             .order_by(Article.last_seen_at.desc().nullslast())
             .limit(batch_size)
             .all()

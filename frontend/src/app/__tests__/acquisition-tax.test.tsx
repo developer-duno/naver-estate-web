@@ -2,9 +2,12 @@
  * /tools/acquisition-tax 페이지 통합 테스트
  * 실행: npx vitest run src/app/__tests__/acquisition-tax.test.tsx
  */
-import { describe, it, expect } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import AcquisitionTaxToolPage from "../tools/acquisition-tax/page";
+
+// CopyButton 이 쓰는 sonner 토스트 모킹 (Toaster 미마운트)
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 describe("/tools/acquisition-tax 페이지", () => {
   it("Hero 제목과 면책 안내가 렌더된다", () => {
@@ -72,5 +75,21 @@ describe("/tools/acquisition-tax 페이지", () => {
     expect(screen.getByText(/오피스텔·상가는 생애최초 감면 대상이 아닙니다/)).toBeInTheDocument();
     const firstTime = screen.getByRole("checkbox", { name: /무주택 생애최초/ }) as HTMLInputElement;
     expect(firstTime.disabled).toBe(true);
+  });
+
+  /** 결과 복사 버튼 (세션 265) */
+  it("결과 입력 후 복사 버튼 클릭 → 합계 + 참고용 면책 복사", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true, writable: true });
+    render(<AcquisitionTaxToolPage />);
+    fireEvent.change(screen.getByLabelText("매매가 (만원)"), { target: { value: "50000" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "취득세 결과 복사" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain("취득세 합계");
+    // 면책 문구 누락 방지 가드 (사용자 명시 요구)
+    expect(copied).toContain("참고용");
   });
 });

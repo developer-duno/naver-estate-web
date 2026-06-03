@@ -3,6 +3,7 @@
 import type { AcquisitionResult } from "@/lib/acquisition-tax";
 import { fmt, pct } from "@/lib/acquisition-format";
 import AcquisitionNotices from "./AcquisitionNotices";
+import CopyButton from "@/components/CopyButton";
 
 interface Props {
   result: AcquisitionResult;
@@ -37,6 +38,11 @@ export default function AcquisitionResultCard({ result }: Props) {
         <span className="text-sm text-blue-900">합계</span>
         <span className="text-2xl font-bold text-blue-900">{fmt(total)}원</span>
         <span className="text-xs text-blue-700">실효 {pct(effectiveRate)}</span>
+        <CopyButton
+          className="self-center"
+          label="취득세 결과 복사"
+          text={`[2u부동산] 취득세 합계: ${fmt(total)}원\n※ 참고용 추정치입니다. 정확한 세액은 세무사 상담을 권장합니다.`}
+        />
       </div>
 
       <AcquisitionNotices notes={notes} />

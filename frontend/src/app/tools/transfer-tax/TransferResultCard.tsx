@@ -2,6 +2,7 @@
 
 import type { TransferResult } from "@/lib/transfer-tax";
 import TransferNotices from "./TransferNotices";
+import CopyButton from "@/components/CopyButton";
 
 interface Props {
   result: TransferResult;
@@ -65,8 +66,14 @@ export default function TransferResultCard({ result }: Props) {
             </tbody>
           </table>
           <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-3 text-center">
-            <div className="text-xs text-blue-700 mb-1">산출세액 (지방소득세 별도 약 10%)</div>
-            <div className="text-2xl font-bold text-blue-900">{result.totalTax.toLocaleString()}원</div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs text-blue-700">산출세액 (지방소득세 별도 약 10%)</div>
+              <CopyButton
+                label="양도세 결과 복사"
+                text={`[2u부동산] 양도세 산출세액: ${result.totalTax.toLocaleString()}원\n※ 참고용 추정치입니다. 정확한 세액은 세무사 상담을 권장합니다.`}
+              />
+            </div>
+            <div className="text-2xl font-bold text-blue-900 mt-1">{result.totalTax.toLocaleString()}원</div>
           </div>
           <TransferNotices notes={result.notes} />
         </>

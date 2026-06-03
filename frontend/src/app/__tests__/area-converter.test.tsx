@@ -2,9 +2,12 @@
  * /tools/area-converter 페이지 통합 테스트
  * 실행: npx vitest run src/app/__tests__/area-converter.test.tsx
  */
-import { describe, it, expect } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import AreaConverterToolPage from "../tools/area-converter/page";
+
+// CopyButton 이 쓰는 sonner 토스트 모킹 (Toaster 미마운트)
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 describe("/tools/area-converter 페이지", () => {
   it("Hero 제목·환산식 안내·면책 박스 렌더", () => {
@@ -83,5 +86,22 @@ describe("/tools/area-converter 페이지", () => {
     fireEvent.change(m2, { target: { value: "-5" } });
     // convertArea 는 음수면 입력값 그대로 반환 → 두 필드 동일
     expect(pyeong.value).toBe("-5");
+  });
+
+  /** 결과 복사 버튼 (세션 265) */
+  it("환산 후 복사 버튼 클릭 → 환산값 + 참고용 문구 복사", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true, writable: true });
+    render(<AreaConverterToolPage />);
+    fireEvent.change(screen.getByLabelText("제곱미터 입력"), { target: { value: "84" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "환산 결과 복사" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain("84㎡");
+    expect(copied).toContain("25.4평");
+    // 면책 문구 누락 방지 가드 (사용자 명시 요구)
+    expect(copied).toContain("참고용");
   });
 });

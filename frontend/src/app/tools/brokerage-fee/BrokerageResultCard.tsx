@@ -1,6 +1,7 @@
 "use client";
 
 import type { BrokerageResult, TaxType } from "@/lib/brokerage";
+import CopyButton from "@/components/CopyButton";
 
 interface Props {
   result: BrokerageResult;
@@ -64,9 +65,14 @@ export default function BrokerageResultCard({ result, taxType }: Props) {
         </div>
       </div>
 
-      <div className="rounded-md bg-blue-50 border border-blue-200 p-3 flex items-baseline justify-between">
+      <div className="rounded-md bg-blue-50 border border-blue-200 p-3 flex items-baseline justify-between gap-2">
         <span className="text-sm font-semibold text-blue-900">총 청구액</span>
         <span className="text-xl font-bold text-blue-900">{fmtWon(result.total)}</span>
+        <CopyButton
+          className="self-center"
+          label="중개수수료 결과 복사"
+          text={`[2u부동산] 중개수수료 총 청구액: ${fmtWon(result.total)}\n※ 참고용 추정치입니다. 정확한 금액은 별도 확인을 권장합니다.`}
+        />
       </div>
 
       <details className="text-sm">

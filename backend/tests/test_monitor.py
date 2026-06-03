@@ -106,6 +106,45 @@ def test_detect_issues_running_just_over_stale_boundary():
         db.close()
 
 
+def test_detect_issues_public_trade_under_type_threshold_not_stale():
+    """엣지(세션266): public_trade_data 는 정상 80분 도므로 1h 초과여도 마비 아님.
+
+    기본 임계 1h 면 오탐(5/29 가짜 경보)이지만 job_type 임계 3h 미만이라 skip.
+    """
+    db = TestSession()
+    try:
+        started = _utcnow() - timedelta(minutes=80)
+        db.add(CrawlJob(
+            job_type="public_trade_data", status="running",
+            started_at=started, created_at=started,
+        ))
+        db.commit()
+        keys = [i["alert_key"] for i in detect_issues(db)]
+        assert "crawl_stale:public_trade_data" not in keys
+    finally:
+        db.close()
+
+
+def test_detect_issues_public_trade_over_type_threshold_stale():
+    """정상(세션266): public_trade_data 가 3h(job_type 임계) 넘으면 진짜 마비."""
+    db = TestSession()
+    try:
+        started = _utcnow() - timedelta(hours=4)
+        db.add(CrawlJob(
+            job_type="public_trade_data", status="running",
+            started_at=started, created_at=started,
+        ))
+        db.commit()
+        issue = next(
+            (i for i in detect_issues(db) if i["alert_key"] == "crawl_stale:public_trade_data"),
+            None,
+        )
+        assert issue is not None
+        assert issue["data"]["stale_hours"] == 3
+    finally:
+        db.close()
+
+
 def test_detect_issues_old_failed_job_outside_window():
     """엣지: 25시간 전 실패 작업은 24h 윈도 밖 — 감지 안 됨"""
     db = TestSession()

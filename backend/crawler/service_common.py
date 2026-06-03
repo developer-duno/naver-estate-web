@@ -18,6 +18,39 @@ logger = logging.getLogger(__name__)
 _checkpoint = CheckpointManager(checkpoint_interval=5)
 
 
+def fail_job_safely(job_id: int, error_message: str) -> bool:
+    """크롤 작업을 'failed' 로 확실히 마킹 — 깨진 세션 대비 새 세션 사용.
+
+    배경(세션 266): except 블록에서 같은 세션으로 db.rollback()/db.commit() 하다가
+    연결이 끊긴 상태(SSL closed / OperationalError)면 그 호출이 또 예외를 던져
+    except 를 빠져나가 job 이 status='running' 인 채 영원히 남았다. 그러면 모니터가
+    '1시간 넘게 running'(마비) 오탐을 내고, 서버 재시작 때야 sweep 으로 정리됐다
+    (5/31 39,585초 = 11시간 running 실측).
+
+    이 헬퍼는 호출자의 깨진 세션과 무관하게 **새 SessionLocal** 로 job 을 failed 로
+    마킹한다. race guard(_finalize_job)와 동일하게 현재 status='running' 일 때만 덮어쓴다.
+    반환: 마킹 성공 True, 실패/skip False (best-effort — 실패해도 예외 전파 안 함).
+    """
+    from db.database import SessionLocal
+    from db.models import CrawlJob
+
+    fresh = SessionLocal()
+    try:
+        job = fresh.get(CrawlJob, job_id)
+        if job is None or job.status != "running":
+            return False
+        job.status = "failed"
+        job.error_message = (error_message or "")[:500]
+        job.completed_at = utcnow()
+        fresh.commit()
+        return True
+    except Exception:
+        logger.warning("fail_job_safely 실패 (job_id=%s)", job_id, exc_info=True)
+        return False
+    finally:
+        fresh.close()
+
+
 def _extract_price_list(result: dict) -> list[dict]:
     """네이버 API 시세 응답에서 가격 리스트 추출 (응답 형식 호환)
 

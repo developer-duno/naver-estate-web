@@ -10,6 +10,7 @@ import os
 
 from dotenv import load_dotenv
 
+from crawler.service_common import fail_job_safely
 from crawler.utils import get_shared_throttle
 from db.complex_queries import (
     get_complexes_for_article_crawl,
@@ -220,9 +221,13 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
         logger.info("매물 수집 완료: complex %s → %d건", complex_no, total_articles)
 
     except Exception as e:
-        db.rollback()
-        _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
-        db.commit()
+        try:
+            db.rollback()
+            _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
+            db.commit()
+        except Exception:
+            # 연결 끊김 등으로 같은 세션 마킹 실패 → 새 세션으로 보장 (세션 266)
+            fail_job_safely(job.id, str(e))
         logger.exception("매물 수집 실패: complex %s", complex_no)
     finally:
         NaverEstateAPI.clear_cache()
@@ -298,9 +303,12 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
         logger.info("인기 단지 선제적 크롤링 완료: 성공 %d / 실패 %d / 전체 %d", processed, failed, total)
 
     except Exception as e:
-        db.rollback()
-        _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
-        db.commit()
+        try:
+            db.rollback()
+            _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
+            db.commit()
+        except Exception:
+            fail_job_safely(job.id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
         logger.exception("인기 단지 선제적 크롤링 실패")
     finally:
         db.close()
@@ -412,9 +420,12 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         )
 
     except Exception as e:
-        db.rollback()
-        _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
-        db.commit()
+        try:
+            db.rollback()
+            _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
+            db.commit()
+        except Exception:
+            fail_job_safely(job.id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
         logger.exception("상세 보강 실패")
     finally:
         db.close()
@@ -480,9 +491,12 @@ def crawl_complex_details_batch(
         )
 
     except Exception as e:
-        db.rollback()
-        _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
-        db.commit()
+        try:
+            db.rollback()
+            _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
+            db.commit()
+        except Exception:
+            fail_job_safely(job.id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
         logger.exception("단지 상세 backfill 실패: %s", real_estate_type)
     finally:
         NaverEstateAPI.clear_cache()

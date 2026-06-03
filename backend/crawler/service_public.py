@@ -6,7 +6,7 @@ E. 국토교통부 아파트 매매 실거래가 API → complex_price_history �
 import logging
 import os
 
-from crawler.service_common import _checkpoint, _upsert_price_history
+from crawler.service_common import _checkpoint, _upsert_price_history, fail_job_safely
 from db.database import SessionLocal
 from db.models import Complex, CrawlJob
 from utils import safe_int, utcnow
@@ -160,10 +160,13 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
         logger.info("공공데이터 수집 완료: %d건 처리, %d건 매칭", processed, matched)
 
     except Exception as e:
-        db.rollback()
-        job.status = "failed"
-        job.error_message = str(e)[:500]
-        db.commit()
+        try:
+            db.rollback()
+            job.status = "failed"
+            job.error_message = str(e)[:500]
+            db.commit()
+        except Exception:
+            fail_job_safely(job.id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
         logger.exception("공공데이터 수집 실패")
     finally:
         db.close()

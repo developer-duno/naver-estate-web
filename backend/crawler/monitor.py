@@ -19,8 +19,14 @@ from utils import utcnow
 
 logger = logging.getLogger(__name__)
 
-# 작업 마비 판정 — running 인 채 이 시간 넘으면 stale
+# 작업 마비 판정 — running 인 채 이 시간 넘으면 stale (기본)
 _STALE_HOURS = 1
+# job_type 별 stale 임계 override (시간) — 정상적으로 오래 도는 잡의 오탐 방지.
+# 배경(세션 266): public_trade_data 는 정상 69~105분(실측 4139~6291초) 도는데
+# 기본 1h 임계로 "마비" 오탐(5/29 가짜 경보). 정상 최대 소요의 ~2배로 여유.
+_STALE_HOURS_BY_TYPE = {
+    "public_trade_data": 3,
+}
 # 실패 작업 조회 윈도 — 최근 이 시간 내 failed 만
 _FAILED_WINDOW_HOURS = 24
 
@@ -109,26 +115,38 @@ def detect_issues(db) -> list[dict]:
             },
         })
 
-    # 2. 작업 마비 — running 인 채 _STALE_HOURS 초과
-    stale_cutoff = now - timedelta(hours=_STALE_HOURS)
+    # 2. 작업 마비 — running 인 채 job_type 별 임계 초과
+    # 가장 작은 기본 임계(1h)로 후보를 넓게 가져온 뒤 Python 에서 job_type 별 임계로
+    # 필터한다. public_trade_data 처럼 정상적으로 오래 도는 잡(69~105분)의 오탐 방지
+    # (세션 266: 5/29 정상 80분 잡이 1h 임계로 "마비" 가짜 경보).
+    base_cutoff = now - timedelta(hours=_STALE_HOURS)
     stale = db.execute(
         select(
             CrawlJob.job_type,
             func.count(CrawlJob.id).label("cnt"),
             func.min(CrawlJob.started_at).label("oldest"),
         )
-        .where(and_(CrawlJob.status == "running", CrawlJob.started_at < stale_cutoff))
+        .where(and_(CrawlJob.status == "running", CrawlJob.started_at < base_cutoff))
         .group_by(CrawlJob.job_type)
     ).all()
     for row in stale:
+        threshold = _STALE_HOURS_BY_TYPE.get(row.job_type, _STALE_HOURS)
+        # oldest 가 job_type 임계를 아직 안 넘었으면 정상 — skip (오탐 방지).
+        # SQLite 는 DateTime(timezone=True) 라도 naive 로 돌려줄 수 있어 tz 보정
+        # (run_monitor line 224 _to_utc 패턴 답습).
+        oldest = row.oldest
+        if oldest is not None and oldest.tzinfo is None:
+            oldest = oldest.replace(tzinfo=timezone.utc)
+        if oldest is not None and oldest >= now - timedelta(hours=threshold):
+            continue
         issues.append({
             "alert_key": f"crawl_stale:{row.job_type}",
             "kind": "crawl_stale",
-            "detail": f"{row.job_type} 작업 {row.cnt}건이 {_STALE_HOURS}시간 넘게 running 상태 — 마비 의심",
+            "detail": f"{row.job_type} 작업 {row.cnt}건이 {threshold}시간 넘게 running 상태 — 마비 의심",
             "data": {
                 "job_type": row.job_type,
                 "count": row.cnt,
-                "stale_hours": _STALE_HOURS,
+                "stale_hours": threshold,
                 "started_at": row.oldest.isoformat() if row.oldest else None,
             },
         })

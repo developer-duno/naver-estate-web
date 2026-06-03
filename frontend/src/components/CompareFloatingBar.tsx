@@ -33,19 +33,28 @@ export default function CompareFloatingBar({ list, onRemove, onClear }: Props) {
             {list.map((c) => (
               <span key={c.complex_no} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs rounded-full px-2.5 py-1 border border-blue-200">
                 {c.complex_name}
-                <button onClick={() => onRemove(c.complex_no)} className="hover:text-blue-900 font-bold">x</button>
+                <button
+                  type="button"
+                  onClick={() => onRemove(c.complex_no)}
+                  className="hover:text-blue-900 font-bold"
+                  aria-label={`${c.complex_name} 제거`}
+                >
+                  x
+                </button>
               </span>
             ))}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
+            type="button"
             onClick={onClear}
             className="text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded px-2.5 py-1.5"
           >
             초기화
           </button>
           <button
+            type="button"
             onClick={() => router.push(`/compare?ids=${list.map((c) => c.complex_no).join(",")}`)}
             disabled={list.length < 2}
             className="text-xs font-medium bg-blue-600 text-white rounded px-4 py-1.5 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"

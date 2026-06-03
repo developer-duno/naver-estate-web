@@ -64,6 +64,15 @@ describe("SearchHistory 컴포넌트", () => {
     expect(removeFn).toHaveBeenCalledWith(1000);
   });
 
+  /** 접근성 회귀 가드 — 삭제 버튼에 검색어 포함 aria-label */
+  it("삭제 버튼에 검색 라벨을 포함한 aria-label이 있다", () => {
+    render(
+      <SearchHistory history={sampleHistory} onSelect={onSelect} onRemove={onRemove} onClear={onClear} />,
+    );
+    expect(screen.getByLabelText("래미안 검색 기록 삭제")).toBeInTheDocument();
+    expect(screen.getByLabelText("서울특별시 강남구 역삼동 검색 기록 삭제")).toBeInTheDocument();
+  });
+
   /** 전체 삭제 버튼 */
   it("전체 삭제 클릭 시 onClear가 호출된다", () => {
     const clearFn = vi.fn();

@@ -80,6 +80,19 @@ describe("MbCompareHistory 컴포넌트", () => {
     expect(onRemove).toHaveBeenCalledWith(999);
   });
 
+  /** 접근성 회귀 가드 — 삭제 버튼에 비교 라벨 포함 aria-label */
+  it("히스토리 삭제 버튼에 비교 라벨을 포함한 aria-label이 있다", () => {
+    render(
+      <MbCompareHistory
+        history={[makeHistory(["A1", "A2"], ["단지1", "단지2"], 1)]}
+        onSelectHistory={vi.fn()}
+        onRemoveHistory={vi.fn()}
+        onClearHistory={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText("단지1 vs 단지2 삭제")).toBeInTheDocument();
+  });
+
   /** 전체 삭제 → onClearHistory 호출 */
   it("전체 삭제 버튼 클릭 시 onClearHistory가 호출된다", () => {
     const onClear = vi.fn();

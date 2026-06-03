@@ -86,7 +86,7 @@ export default function AcquisitionCalculator() {
         <button
           type="button"
           onClick={handleReset}
-          className="rounded-md border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
+          className="rounded-md border border-pink-300 bg-pink-50 px-3 py-1 text-xs font-medium text-pink-700 hover:bg-pink-100"
         >
           초기화
         </button>

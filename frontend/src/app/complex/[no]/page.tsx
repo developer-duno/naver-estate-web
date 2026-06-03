@@ -277,7 +277,7 @@ export default function ComplexDetailPage() {
           <Card className="bg-red-50 border-red-200 text-red-600 text-sm px-4 py-2 no-print">
             <div className="flex justify-between items-center">
               <span>{exportError}</span>
-              <button type="button" onClick={() => clearExportError()} className="text-red-400 hover:text-red-600">×</button>
+              <button type="button" onClick={() => clearExportError()} className="text-red-400 hover:text-red-600" aria-label="닫기">×</button>
             </div>
           </Card>
         )}

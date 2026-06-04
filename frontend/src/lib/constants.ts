@@ -245,17 +245,6 @@ export const MONTHLY_RENT_PRESETS: RangePreset[] = [
   { label: "200만~", min: 200 },
 ];
 
-/** 미분양 정렬 옵션 */
-export const MB_SORT_OPTIONS = [
-  { v: "name_asc", l: "단지명순" },
-  { v: "unsold_desc", l: "미분양 많은순" },
-  { v: "unsold_asc", l: "미분양 적은순" },
-  { v: "unsold_rate_desc", l: "미분양률 높은순" },
-  { v: "units_desc", l: "세대수순" },
-  { v: "price_asc", l: "분양가 낮은순" },
-  { v: "price_desc", l: "분양가 높은순" },
-] as const;
-
 /** 사이트 절대 URL — SEO 메타·canonical·sitemap·RSS 의 단일 진실 원천.
  *  NEXT_PUBLIC_SITE_URL 미설정 시 운영 도메인으로 fallback. */
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://2u.pe.kr";

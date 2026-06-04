@@ -7,6 +7,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { getPriceHistory } from "@/lib/api";
 import { usePriceCollect } from "@/hooks/usePriceCollect";
 import { Button } from "@/components/ui/button";
+import Skeleton from "@/components/Skeleton";
 import type { PyeongDetail } from "@/types";
 
 const LazyPriceHistory = dynamic(() => import("@/components/PriceHistoryChart"), { ssr: false });
@@ -88,7 +89,10 @@ export default function PriceChartSection({ complexNo, pyeongDetails, accessToke
         )}
       </div>
       {priceHistoryQuery.isLoading ? (
-        <p className="text-gray-500 text-sm">로딩 중...</p>
+        <div role="status" aria-label="로딩 중">
+          <span className="sr-only">실거래가 추이 로딩 중...</span>
+          <Skeleton className="h-72 w-full" />
+        </div>
       ) : priceHistoryQuery.isError ? (
         <p className="text-red-500 text-sm">가격 추이를 불러오지 못했습니다</p>
       ) : (

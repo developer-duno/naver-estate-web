@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { getPriceStats } from "@/lib/api";
+import Skeleton from "@/components/Skeleton";
 import type { ArticleFilters } from "@/types";
 
 const LazyCharts = dynamic(() => import("@/components/PriceChartInner"), { ssr: false });
@@ -24,7 +25,12 @@ export default function ComplexPriceAreaSection({ complexNo, onFilterChange }: P
   });
 
   if (priceStatsQuery.isLoading) {
-    return <div className="h-48 flex items-center justify-center text-gray-400 text-sm">로딩 중...</div>;
+    return (
+      <div role="status" aria-label="로딩 중">
+        <span className="sr-only">면적별 가격 로딩 중...</span>
+        <Skeleton className="h-48 w-full" />
+      </div>
+    );
   }
   if (priceStatsQuery.isError) {
     return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;

@@ -9,7 +9,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, case, func, select, text
 
 from crawler.alert_format import format_issue_message
 from db.models import CrawlJob, MonitorAlert
@@ -190,6 +190,47 @@ def _cooldown_hours() -> int:
     return int(os.getenv("MONITOR_COOLDOWN_HOURS", "6"))
 
 
+def _sweep_stale_jobs(db, issues: list[dict], now: datetime) -> int:
+    """crawl_stale 로 감지된 job_type 의 running 잡을 cancelled 로 정리.
+
+    모니터가 stale 을 감지(알림)만 하던 사각지대 보완 — 부팅 sweep(main.py)이
+    '부팅 직전 시작된 잡'을 5분 임계로 놓치면 고아 running 이 영원히 남아
+    매 사이클 텔레그램 오탐을 유발한다(세션 269: 잡 22665, 6시간 잔존).
+
+    cutoff 는 detect_issues 와 동일한 job_type 별 임계(_STALE_HOURS_BY_TYPE)로
+    계산 — 감지와 정리 조건을 일치시켜 drift 방지. UPDATE 는 run_monitor 의
+    기존 db.commit() 에 함께 묶인다(별도 커밋 없음).
+    'cancelled' 사용(failed 아님) — 강제종료/유령 잔재는 실패 통계에 잡히면 안 됨.
+    """
+    swept = 0
+    for issue in issues:
+        if issue["kind"] != "crawl_stale":
+            continue
+        job_type = issue["data"]["job_type"]
+        threshold = _STALE_HOURS_BY_TYPE.get(job_type, _STALE_HOURS)
+        cutoff = now - timedelta(hours=threshold)
+        # raw text SQL — ORM update() 는 SQLite 에서 in-Python 평가 시 naive/aware
+        # datetime 비교로 깨진다(_sweep_stale_running_jobs main.py 패턴 답습).
+        # cutoff 는 Python 측 계산해 paramize (PG/SQLite 호환, NOW()-INTERVAL 금지).
+        res = db.execute(
+            text("""
+                UPDATE crawl_jobs
+                SET status = 'cancelled',
+                    completed_at = :now,
+                    error_message = COALESCE(error_message, 'stale running — swept by monitor')
+                WHERE status = 'running'
+                  AND completed_at IS NULL
+                  AND job_type = :job_type
+                  AND started_at < :cutoff
+            """),
+            {"now": now, "job_type": job_type, "cutoff": cutoff},
+        )
+        swept += res.rowcount or 0
+    if swept:
+        logger.info("[monitor] stale running crawl_jobs %d개 cancelled 정리", swept)
+    return swept
+
+
 def run_monitor(db) -> None:
     """장애 감지 → monitor_alerts 대조 → 쿨다운 적용 → 텔레그램 발송.
 
@@ -207,6 +248,10 @@ def run_monitor(db) -> None:
     cooldown = timedelta(hours=_cooldown_hours())
     # 헤더 "N건 활성" — 이번 스캔 장애 총 건수. 모든 발송에 동일 값 (전체 상황 요약).
     header_ctx = {"active_count": len(issues), "now": now}
+
+    # 0. stale running 잡 정리 — 감지만 하던 사각지대 보완 (세션 269).
+    #    아래 alert 처리의 db.commit() 에 함께 묶임.
+    _sweep_stale_jobs(db, issues, now)
 
     # 1. 현재 장애 — 신규 발송 / 쿨다운 억제
     for issue in issues:

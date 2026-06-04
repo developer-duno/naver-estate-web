@@ -9,7 +9,12 @@ from typing import Callable
 
 from sqlalchemy.orm import aliased
 
-from crawler.service_common import _checkpoint, _extract_price_list, _upsert_price_history
+from crawler.service_common import (
+    _checkpoint,
+    _extract_price_list,
+    _upsert_price_history,
+    fail_job_safely,
+)
 from crawler.utils import AdaptiveThrottle
 from db.database import SessionLocal
 from db.models import Complex, ComplexPriceHistory, ComplexPyeongDetail, CrawlJob
@@ -213,10 +218,14 @@ def collect_price_history(batch_size: int = 50, scheduler_job_id: str | None = N
         logger.info("시세 수집 완료: %d건", processed)
 
     except Exception as e:
-        db.rollback()
-        job.status = "failed"
-        job.error_message = str(e)[:500]
-        db.commit()
+        try:
+            db.rollback()
+            job.status = "failed"
+            job.error_message = str(e)[:500]
+            db.commit()
+        except Exception:
+            # 연결 끊김 등으로 같은 세션 마킹 실패 → 새 세션으로 보장 (세션 266)
+            fail_job_safely(job.id, str(e))
         logger.exception("시세 수집 실패")
     finally:
         db.close()

@@ -12,7 +12,7 @@ complex_price_history 에서 단지별 가치지표 3필드를 집계해 complex
 import logging
 
 from crawler.metrics_helpers import calc_median_price, count_recent_price_records
-from crawler.service_common import _checkpoint
+from crawler.service_common import _checkpoint, fail_job_safely
 from crawler.stats import compute_jeonse_rate
 from db.database import SessionLocal
 from db.models import Complex, CrawlJob
@@ -87,10 +87,14 @@ def collect_complex_metrics(batch_size: int = 200, scheduler_job_id: str | None 
         logger.info("가치지표 수집 완료: %d건 갱신", processed)
 
     except Exception as e:
-        db.rollback()
-        job.status = "failed"
-        job.error_message = str(e)[:500]
-        db.commit()
+        try:
+            db.rollback()
+            job.status = "failed"
+            job.error_message = str(e)[:500]
+            db.commit()
+        except Exception:
+            # 연결 끊김 등으로 같은 세션 마킹 실패 → 새 세션으로 보장 (세션 266)
+            fail_job_safely(job.id, str(e))
         logger.exception("가치지표 수집 실패")
     finally:
         db.close()

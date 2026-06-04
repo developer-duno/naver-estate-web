@@ -4,7 +4,7 @@
  * 실행: npx vitest run src/components/__tests__/ArticleDetail.test.tsx
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { TestQueryProvider } from "../../test-setup";
 
 vi.mock("@/lib/api", () => ({
@@ -127,5 +127,32 @@ describe("ArticleDetail — 헤더 즐겨찾기 버튼", () => {
     render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
     // 로딩 직후엔 article 데이터가 아직 없어 즐겨찾기 버튼이 렌더되지 않아야 함
     expect(screen.queryByLabelText("매물 즐겨찾기 추가")).not.toBeInTheDocument();
+  });
+});
+
+// 세션 274: 시세 조회(isError) 시 emptyHint 에 "다시 시도" 버튼 노출 + 클릭 시 refetch 회귀 가드
+describe("ArticleDetail — 시세 조회 실패 시 다시 시도", () => {
+  it("getPriceStats 실패 시 ChartAccordion 펼치면 '다시 시도' 버튼 노출 + 클릭 시 재호출", async () => {
+    const api = await import("@/lib/api");
+    // 부모 priceStatsQuery 를 isError 로 만들어 emptyHint 의 실패 분기 트리거
+    vi.mocked(api.getPriceStats).mockRejectedValue(new Error("500"));
+    const onClose = vi.fn();
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={onClose} /></TestQueryProvider>);
+
+    await waitFor(() => expect(screen.getByText("시세 정보")).toBeInTheDocument(), { timeout: 3000 });
+    // 기본 닫힘 → 펼침
+    fireEvent.click(screen.getByText("시세 정보"));
+
+    // isError 분기 → 안내 문구 + 다시 시도 버튼
+    const retryBtn = await screen.findByText("다시 시도");
+    expect(retryBtn).toBeInTheDocument();
+    expect(screen.getByText("시세 정보를 불러오지 못했습니다.")).toBeInTheDocument();
+
+    // 다시 시도 클릭 → getPriceStats 재호출 (refetch)
+    const callsBefore = vi.mocked(api.getPriceStats).mock.calls.length;
+    fireEvent.click(retryBtn);
+    await waitFor(() => {
+      expect(vi.mocked(api.getPriceStats).mock.calls.length).toBeGreaterThan(callsBefore);
+    });
   });
 });

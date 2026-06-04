@@ -9,7 +9,7 @@ interface ChartAccordionProps {
   defaultOpen?: boolean;
   forceOpen?: boolean;
   hasContent?: boolean;
-  emptyHint?: string;
+  emptyHint?: React.ReactNode;
 }
 
 export default function ChartAccordion({

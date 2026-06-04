@@ -295,6 +295,7 @@ export default function VerifyPage() {
               type="file"
               accept=".jpg,.jpeg,.png,.pdf"
               onChange={handleFileChange}
+              aria-label="공인중개사 자격증 파일 선택"
               className="hidden"
             />
             {licenseFile ? (

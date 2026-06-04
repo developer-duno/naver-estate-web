@@ -58,6 +58,8 @@ export default function AdminLogsPage() {
           placeholder="사용자 ID"
           value={filterUserId}
           onChange={(e) => { setFilterUserId(e.target.value); setPage(1); }}
+          title="사용자 ID 필터"
+          aria-label="사용자 ID 필터"
           className="text-sm border rounded px-2 py-1 w-48"
         />
         <button

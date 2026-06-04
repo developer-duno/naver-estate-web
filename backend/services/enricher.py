@@ -66,6 +66,17 @@ def enrich_complex_detail(db, complex_no) -> bool:
     }, synchronize_session=False)
 
     pyeong_list = detail.get("complexPyeongDetailList") or []
+
+    # N+1 제거: 루프 전 이 단지의 기존 평형 행을 한 번에 prefetch (complex_no 인덱스).
+    # 기존엔 평형마다 SELECT .first() 를 돌려 단지당 5~15회 + backfill(최대 1000단지)에서
+    # 수천 회 SELECT 가 발생했다. {pyeong_no: row} dict 로 만들어 루프 안에선 dict 조회만.
+    existing_map = {
+        row.pyeong_no: row
+        for row in db.query(ComplexPyeongDetail)
+        .filter(ComplexPyeongDetail.complex_no == complex_no)
+        .all()
+    }
+
     for p in pyeong_list:
         pyeong_no = safe_int(p.get("pyeongNo"))
         if pyeong_no is None:
@@ -110,20 +121,16 @@ def enrich_complex_detail(db, complex_no) -> bool:
             "updated_at": utcnow(),
         }
 
-        existing = (
-            db.query(ComplexPyeongDetail)
-            .filter(
-                ComplexPyeongDetail.complex_no == complex_no,
-                ComplexPyeongDetail.pyeong_no == pyeong_no,
-            )
-            .first()
-        )
+        existing = existing_map.get(pyeong_no)
         if existing:
             for k, v in values.items():
                 if k not in ("complex_no", "pyeong_no"):
                     setattr(existing, k, v)
         else:
-            db.add(ComplexPyeongDetail(**values))
+            new_row = ComplexPyeongDetail(**values)
+            db.add(new_row)
+            # 같은 응답에 동일 pyeong_no 가 중복으로 와도 두 번 add 하지 않도록 map 갱신.
+            existing_map[pyeong_no] = new_row
 
     db.commit()
     logger.info("단지 상세 보강 완료: %s -> %d개 면적", complex_no, len(pyeong_list))

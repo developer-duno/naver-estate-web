@@ -357,6 +357,31 @@ class TestSearchAllTypes:
         assert nos.count("C500") == 1
 
     @patch(SEARCH_PATCH)
+    def test_group_commit_persists_complexes(self, mock_search, db):
+        """N+1 commit 배치화: 단지별 커밋을 제거하고 그룹 루프 종료 후 한 번에
+        커밋해도 검색된 단지가 모두 DB 에 영속화되는지 검증.
+
+        _search_one_group 은 자체 SessionLocal 을 쓰므로, 같은 DB(SQLite 파일)에
+        다른 세션(db fixture)으로 재조회해 실제 커밋 여부를 확인한다.
+        """
+        from db.models import Complex
+
+        mock_search.return_value = make_search_result([
+            make_complex_data("C601", "배치커밋단지1", re_type="APT"),
+            make_complex_data("C602", "배치커밋단지2", re_type="APT"),
+        ])
+
+        result = _search_all_types("테스트", {"APT"}, db)
+        returned = {c["complex_no"] for c in result}
+        assert {"C601", "C602"} <= returned
+
+        # 별도 세션(db fixture)으로 재조회 → 그룹 커밋이 실제로 영속화했는지 확인
+        db.expire_all()
+        rows = db.query(Complex).filter(Complex.complex_no.in_(["C601", "C602"])).all()
+        persisted = {r.complex_no for r in rows}
+        assert persisted == {"C601", "C602"}
+
+    @patch(SEARCH_PATCH)
     def test_sqlite_sequential_all_fail_502(self, mock_search, db):
         """SQLite 순차 모드에서 모든 그룹 실패 → 502"""
         mock_search.return_value = make_search_result(error="네이버 서버 오류")

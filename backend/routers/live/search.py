@@ -89,7 +89,9 @@ def _search_one_group(keyword: str, suffix: str | None, group_codes: set[str],
                 re_type = c_data.get("realEstateTypeCode", "")
                 if not re_type or re_type not in allowed_types:
                     continue
-                cpx = upsert_complex_from_search(db, c_data, **(upsert_kwargs or {}))
+                # commit=False: 단지마다 COMMIT 하지 않고 그룹 루프가 끝난 뒤 한 번에 커밋.
+                # 기존엔 검색 결과 N개 단지가 각각 flush+fsync 로 N번 커밋했다(write 증폭).
+                cpx = upsert_complex_from_search(db, c_data, commit=False, **(upsert_kwargs or {}))
                 if cpx:
                     complexes.append(cpx)
 
@@ -97,6 +99,7 @@ def _search_one_group(keyword: str, suffix: str | None, group_codes: set[str],
                 break
             page += 1
             time.sleep(INTER_PAGE_DELAY)
+        db.commit()  # 그룹 전체 upsert 를 한 번에 커밋 (단지별 커밋 제거)
     finally:
         db.close()
 

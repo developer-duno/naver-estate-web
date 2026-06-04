@@ -177,3 +177,74 @@ class TestEnrichComplexDetail:
             ComplexPyeongDetail.complex_no == "99999"
         ).count()
         assert count == 1
+
+    @patch("services.enricher.NaverEstateAPI")
+    def test_multi_pyeong_partial_existing(self, mock_api, db):
+        """N+1 prefetch: 여러 평형 중 일부만 기존일 때 prefetch dict 가 정확히 매칭.
+
+        루프 전 1회 prefetch 로 바꾼 뒤에도, 기존 행은 업데이트하고
+        새 행은 INSERT 하며 평형별로 섞여도 정확히 분기되는지 검증.
+        """
+        upsert_complex_from_search(db, _make_complex_data())
+        from services.enricher import enrich_complex_detail
+
+        # 1차: 평형 1001 하나만 보강
+        mock_api.get_complex_detail.return_value = _make_detail_response()
+        enrich_complex_detail(db, "99999")
+
+        # 2차: 기존 1001(관리비 변경) + 신규 2002 함께
+        resp2 = _make_detail_response()
+        resp2["complexPyeongDetailList"][0]["averageMaintenanceCost"]["averageTotalPrice"] = "310000"
+        resp2["complexPyeongDetailList"].append({
+            "pyeongNo": 2002,
+            "pyeongName": "84B",
+            "roomCnt": "4",
+            "bathroomCnt": "2",
+            "averageMaintenanceCost": {"averageTotalPrice": "400000"},
+        })
+        mock_api.get_complex_detail.return_value = resp2
+        enrich_complex_detail(db, "99999")
+
+        # 기존 행 업데이트됨
+        p1 = db.query(ComplexPyeongDetail).filter(
+            ComplexPyeongDetail.complex_no == "99999",
+            ComplexPyeongDetail.pyeong_no == 1001,
+        ).first()
+        assert p1.avg_maintenance_cost == 310000
+        # 신규 행 INSERT 됨
+        p2 = db.query(ComplexPyeongDetail).filter(
+            ComplexPyeongDetail.complex_no == "99999",
+            ComplexPyeongDetail.pyeong_no == 2002,
+        ).first()
+        assert p2 is not None
+        assert p2.room_count == 4
+        # 총 2행 (중복 없음)
+        count = db.query(ComplexPyeongDetail).filter(
+            ComplexPyeongDetail.complex_no == "99999"
+        ).count()
+        assert count == 2
+
+    @patch("services.enricher.NaverEstateAPI")
+    def test_duplicate_pyeong_no_in_one_response(self, mock_api, db):
+        """엣지: 같은 응답에 동일 pyeong_no 가 중복으로 와도 단일 행만 생성.
+
+        prefetch dict 를 루프 안에서 갱신(existing_map[pyeong_no]=new_row)하므로
+        같은 응답의 두 번째 동일 pyeong_no 는 add 가 아닌 update 로 처리되어
+        UniqueConstraint 위반/중복 INSERT 가 발생하지 않아야 한다.
+        """
+        upsert_complex_from_search(db, _make_complex_data())
+        from services.enricher import enrich_complex_detail
+
+        resp = _make_detail_response()
+        dup = dict(resp["complexPyeongDetailList"][0])
+        dup["averageMaintenanceCost"] = {"averageTotalPrice": "999999"}
+        resp["complexPyeongDetailList"].append(dup)  # 같은 pyeongNo=1001 중복
+        mock_api.get_complex_detail.return_value = resp
+
+        enrich_complex_detail(db, "99999")
+
+        count = db.query(ComplexPyeongDetail).filter(
+            ComplexPyeongDetail.complex_no == "99999",
+            ComplexPyeongDetail.pyeong_no == 1001,
+        ).count()
+        assert count == 1

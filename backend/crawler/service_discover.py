@@ -104,7 +104,9 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, sche
                 re_type = c_data.get("realEstateTypeCode", "")
                 if re_type and re_type not in CRAWL_REAL_ESTATE_TYPES:
                     continue
-                upsert_complex_from_search(db, c_data, sido, sigungu, dong)
+                # commit=False: 아래 루프 종료 후 job 갱신과 함께 한 번에 커밋.
+                # 기존엔 단지마다 커밋 + 루프 후 또 커밋 = 단지별 커밋이 순수 낭비였다.
+                upsert_complex_from_search(db, c_data, sido, sigungu, dong, commit=False)
                 total_found += 1
 
             # 다음 페이지가 있는지 확인

@@ -1,4 +1,4 @@
-"""환경 데이터 수집 오케스트레이션 테스트 — collect_crime_stats / collect_emergency_data
+"""환경 데이터 수집 오케스트레이션 테스트 — crime / emergency / childcare / air_quality
 
 기존 test_env_service.py 는 유틸/API 클래스 단위(haversine, _build_population_map,
 find_nearest 등)를 커버하지만, 수집 함수의 **전체 흐름**(외부 API 호출 -> 집계 ->
@@ -188,3 +188,267 @@ class TestCollectEmergencyData:
         # 성공 1 + 실패 1 = total 2, processed 1
         assert job.processed_items == 1
         assert job.total_items == 2
+
+
+# ── collect_childcare_data ──
+
+
+class TestCollectChildcareData:
+    """어린이집 수집 전체 흐름 — 시군구 코드 해석 -> 030 1회 -> 반경 매칭 -> Infra 업데이트.
+
+    과거 4개월 silent failure(stcode 빈 문자열 ERROR-100) 선례가 있어, "조용히 매칭
+    0건"을 잡는 가드(collected_with_matches == 0 and gu_cache > 0)를 핵심으로 검증한다.
+    """
+
+    def test_정상_수집_infra_업데이트(self, db):
+        """030 성공 + 반경 매칭 >0 시 Infra.childcare_* 채워지고 CrawlJob completed"""
+        _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        facilities = [{"name": "행복어린이집", "lat": 37.5, "lng": 127.0}]
+        nearest = {"count": 2, "nearest_dist": 120.0, "nearest_name": "행복어린이집",
+                   "nearest_capacity": 50, "nearest_type": "국공립",
+                   "nearest_teachers": 8}
+        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
+             patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
+             patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
+                   return_value=facilities), \
+             patch("crawler.childcare_api.ChildcareAPI.find_nearest",
+                   return_value=nearest):
+            from crawler.env_childcare import collect_childcare_data
+            collect_childcare_data()
+
+        infra = db.get(Infra, "APT1")
+        assert infra.childcare_count == 2
+        assert infra.childcare_nearest_dist == 120.0
+        assert infra.childcare_nearest_name == "행복어린이집"
+        assert infra.childcare_nearest_capacity == 50
+
+        job = db.query(CrawlJob).filter_by(job_type="childcare").one()
+        assert job.status == "completed"
+        assert job.processed_items == 1
+
+    def test_매칭_0건_silent_failure_감지(self, db):
+        """030 응답은 받았으나 반경 내 매칭이 전무하면 CrawlJob failed 로 알린다"""
+        _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        # 030 은 빈 리스트(시군구 0건) -> find_nearest count=0
+        empty_nearest = {"count": 0, "nearest_dist": None, "nearest_name": "",
+                         "nearest_capacity": 0, "nearest_type": "",
+                         "nearest_teachers": 0}
+        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
+             patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
+             patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
+                   return_value=[]), \
+             patch("crawler.childcare_api.ChildcareAPI.find_nearest",
+                   return_value=empty_nearest):
+            from crawler.env_childcare import collect_childcare_data
+            collect_childcare_data()
+
+        # silent failure 가드: with_matches==0 and gu_cache>0 -> failed
+        job = db.query(CrawlJob).filter_by(job_type="childcare").one()
+        assert job.status == "failed"
+        assert "매칭 0건" in job.error_message
+
+    def test_시군구_코드_매핑_없으면_실패_카운트(self, db):
+        """resolve_sigungu_code -> None 이면 그 단지는 failed, API 호출 안 함"""
+        _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
+             patch("crawler.childcare_api.resolve_sigungu_code", return_value=None), \
+             patch("crawler.childcare_api.ChildcareAPI.get_childcare_list") as mock_list:
+            from crawler.env_childcare import collect_childcare_data
+            collect_childcare_data()
+
+        # 코드 매핑 실패 -> get_childcare_list 호출 0 (gu_cache 비어 있음)
+        mock_list.assert_not_called()
+        infra = db.get(Infra, "APT1")
+        assert infra.childcare_count is None  # 안 건드림
+
+    def test_skip_day_면_cancelled(self, db):
+        """매월 10일 토요일이면 쿼터 보호로 cancelled, API 호출 0"""
+        _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        with patch("crawler.env_childcare._is_skip_day", return_value=True), \
+             patch("crawler.childcare_api.ChildcareAPI.get_childcare_list") as mock_list:
+            from crawler.env_childcare import collect_childcare_data
+            collect_childcare_data()
+
+        mock_list.assert_not_called()
+        job = db.query(CrawlJob).filter_by(job_type="childcare").one()
+        assert job.status == "cancelled"
+
+    def test_CPMS_치명적_에러_배치_중단(self, db):
+        """get_childcare_list 가 ChildcareAPIError(쿼터/인증) -> 배치 중단 + CrawlJob failed.
+
+        이 파일 재작성의 핵심 안전장치(치명적 에러는 silent 폴백 없이 즉시 알림). 안쪽 raise +
+        per-apt raise + 바깥 except _fail_job 사슬을 한 번에 가드한다.
+        """
+        from crawler.childcare_api import ChildcareAPIError
+        _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
+             patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
+             patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
+                   side_effect=ChildcareAPIError("CPMS 일일 쿼터 초과")):
+            from crawler.env_childcare import collect_childcare_data
+            collect_childcare_data()
+
+        # 치명적 에러는 CSV 폴백 없이 job failed 로 알린다
+        job = db.query(CrawlJob).filter_by(job_type="childcare").one()
+        assert job.status == "failed"
+        assert "CPMS 치명적 에러" in job.error_message
+
+    def test_Infra_행_없으면_자동_생성(self, db):
+        """mibunyang 미수집 단지(Infra 행 부재) → collect 가 Infra 신규 생성 후 childcare_* 채움"""
+        # _add_apartment 와 달리 Infra 행을 만들지 않음 (자동 생성 경로 트리거)
+        db.add(Apartment(id="APT_NEW", name="신규단지", region="서울특별시", gu="강남구",
+                         latitude=37.5, longitude=127.0))
+        db.commit()
+
+        nearest = {"count": 1, "nearest_dist": 80.0, "nearest_name": "새싹어린이집",
+                   "nearest_capacity": 30, "nearest_type": "민간",
+                   "nearest_teachers": 5}
+        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
+             patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
+             patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
+                   return_value=[{"name": "새싹어린이집"}]), \
+             patch("crawler.childcare_api.ChildcareAPI.find_nearest",
+                   return_value=nearest):
+            from crawler.env_childcare import collect_childcare_data
+            collect_childcare_data()
+
+        # Infra 행이 없던 단지에 새로 INSERT 되어 값이 채워져야 한다
+        infra = db.get(Infra, "APT_NEW")
+        assert infra is not None
+        assert infra.childcare_count == 1
+        assert infra.childcare_nearest_name == "새싹어린이집"
+
+
+# ── collect_air_quality ──
+
+
+class TestCollectAirQuality:
+    """대기질 수집 전체 흐름 — 근접 측정소 -> 실시간 측정값 -> Infra 업데이트"""
+
+    def test_정상_수집_infra_업데이트(self, db):
+        """측정소+실시간 성공 시 Infra.air_* 채워지고 CrawlJob completed"""
+        _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        station = {"station_name": "강남구", "addr": "서울 강남구", "tm": 1.2}
+        air = {"pm10": 30.0, "pm25": 15.0, "o3": 0.03, "grade": "좋음"}
+        with patch("crawler.env_air._is_skip_day", return_value=False), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+                   return_value=station), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
+                   return_value=air):
+            from crawler.env_air import collect_air_quality
+            collect_air_quality()
+
+        infra = db.get(Infra, "APT1")
+        assert infra.air_station_name == "강남구"
+        assert infra.air_pm10 == 30.0
+        assert infra.air_pm25 == 15.0
+        assert infra.air_grade == "좋음"
+
+        job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
+        assert job.status == "completed"
+        assert job.processed_items == 1
+
+    def test_측정소_없으면_실패_카운트(self, db):
+        """get_nearby_station -> None 이면 그 단지 failed, Infra 안 건드림"""
+        _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        with patch("crawler.env_air._is_skip_day", return_value=False), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+                   return_value=None):
+            from crawler.env_air import collect_air_quality
+            collect_air_quality()
+
+        infra = db.get(Infra, "APT1")
+        assert infra.air_station_name is None  # 안 건드림
+
+        job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
+        assert job.status == "completed"
+        assert job.processed_items == 0
+
+    def test_단지별_오류_격리_배치_생존(self, db):
+        """get_nearby_station 1단지 성공·1단지 raise -> 격리, 배치 안 죽음"""
+        _add_apartment(db, "APT_OK", "서울특별시", "강남구", lat=37.5, lng=127.0)
+        _add_apartment(db, "APT_ERR", "부산광역시", "해운대구", lat=35.1, lng=129.0)
+
+        station = {"station_name": "강남구", "addr": "서울", "tm": 1.0}
+        air = {"pm10": 30.0, "pm25": 15.0, "o3": 0.03, "grade": "좋음"}
+        with patch("crawler.env_air._is_skip_day", return_value=False), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+                   side_effect=[station, RuntimeError("API 오류")]), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
+                   return_value=air):
+            from crawler.env_air import collect_air_quality
+            collect_air_quality()
+
+        # 한 단지 오류가 배치 전체를 죽이지 않고, CrawlJob 은 completed
+        job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
+        assert job.status == "completed"
+        # 성공 1 + 실패 1 = total 2, processed 1
+        assert job.processed_items == 1
+        assert job.total_items == 2
+
+    def test_skip_day_면_cancelled(self, db):
+        """매월 10일 토요일이면 쿼터 보호로 cancelled, API 호출 0"""
+        _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        with patch("crawler.env_air._is_skip_day", return_value=True), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station") as mock_station:
+            from crawler.env_air import collect_air_quality
+            collect_air_quality()
+
+        mock_station.assert_not_called()
+        job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
+        assert job.status == "cancelled"
+
+    def test_전역_장애_job_failed(self, db):
+        """배치 전역(per-단지 try 밖) 장애 시 _fail_job 으로 CrawlJob failed 기록.
+
+        monitor 가 failed 잡을 텔레그램으로 알리므로 failed 기록이 운영 알림의 전제다.
+        _complete_job(per-apt 루프 밖) 에서 raise → 바깥 except 진입을 검증.
+        """
+        _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        station = {"station_name": "강남구", "addr": "서울", "tm": 1.0}
+        air = {"pm10": 30.0, "pm25": 15.0, "o3": 0.03, "grade": "좋음"}
+        with patch("crawler.env_air._is_skip_day", return_value=False), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+                   return_value=station), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
+                   return_value=air), \
+             patch("crawler.env_air._complete_job",
+                   side_effect=RuntimeError("DB 커밋 실패")):
+            from crawler.env_air import collect_air_quality
+            collect_air_quality()
+
+        job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
+        assert job.status == "failed"
+        assert "DB 커밋 실패" in job.error_message
+
+    def test_실시간값_없으면_측정소만_갱신(self, db):
+        """측정소는 찾았으나 실시간값 None → air_station_name 만 채우고 측정값은 NULL 유지.
+
+        현재 의도(측정소 갱신 + completed 카운트)를 고정. 측정값 5필드는 stale/NULL 잔존.
+        """
+        _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        station = {"station_name": "강남구", "addr": "서울", "tm": 1.0}
+        with patch("crawler.env_air._is_skip_day", return_value=False), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+                   return_value=station), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
+                   return_value=None):
+            from crawler.env_air import collect_air_quality
+            collect_air_quality()
+
+        infra = db.get(Infra, "APT1")
+        assert infra.air_station_name == "강남구"  # 측정소는 갱신
+        assert infra.air_pm10 is None  # 실시간 측정값은 NULL 유지
+        job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
+        assert job.status == "completed"
+        assert job.processed_items == 1

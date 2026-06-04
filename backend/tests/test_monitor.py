@@ -298,6 +298,109 @@ def test_run_monitor_same_issue_within_cooldown_suppressed():
         db.close()
 
 
+# ── stale running 잡 감지 즉시 cancelled 정리 (세션 269) ──
+
+
+def test_run_monitor_sweeps_stale_running_to_cancelled():
+    """정상: 1시간 넘게 running 인 잡 → run_monitor 가 cancelled + completed_at 정리"""
+    db = TestSession()
+    try:
+        old = _utcnow() - timedelta(hours=2)
+        job = CrawlJob(
+            job_type="crawl_details", status="running",
+            started_at=old, created_at=old,
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id
+
+        with patch("crawler.monitor.send_telegram", return_value=True):
+            run_monitor(db)
+
+        swept = db.execute(
+            select(CrawlJob).where(CrawlJob.id == job_id)
+        ).scalar_one()
+        assert swept.status == "cancelled"
+        assert swept.completed_at is not None
+        assert swept.error_message == "stale running — swept by monitor"
+    finally:
+        db.close()
+
+
+def test_run_monitor_does_not_sweep_recent_running():
+    """경계: stale 임계 미만(방금 시작) running 잡은 정리 안 됨 (running 유지)"""
+    db = TestSession()
+    try:
+        recent = _utcnow() - timedelta(minutes=10)
+        job = CrawlJob(
+            job_type="crawl_details", status="running",
+            started_at=recent, created_at=recent,
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id
+
+        with patch("crawler.monitor.send_telegram", return_value=True):
+            run_monitor(db)
+
+        still = db.execute(
+            select(CrawlJob).where(CrawlJob.id == job_id)
+        ).scalar_one()
+        assert still.status == "running"
+        assert still.completed_at is None
+    finally:
+        db.close()
+
+
+def test_run_monitor_respects_job_type_threshold():
+    """경계: public_trade_data 는 3h 임계 — 80분 running 은 정리 안 됨 (오탐 방지)"""
+    db = TestSession()
+    try:
+        eighty_min = _utcnow() - timedelta(minutes=80)
+        job = CrawlJob(
+            job_type="public_trade_data", status="running",
+            started_at=eighty_min, created_at=eighty_min,
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id
+
+        with patch("crawler.monitor.send_telegram", return_value=True):
+            run_monitor(db)
+
+        still = db.execute(
+            select(CrawlJob).where(CrawlJob.id == job_id)
+        ).scalar_one()
+        assert still.status == "running"
+    finally:
+        db.close()
+
+
+def test_run_monitor_sweep_preserves_existing_error_message():
+    """엣지: 기존 error_message 가 있으면 COALESCE 로 덮어쓰지 않음"""
+    db = TestSession()
+    try:
+        old = _utcnow() - timedelta(hours=2)
+        job = CrawlJob(
+            job_type="crawl_details", status="running",
+            error_message="이미 있던 에러", started_at=old, created_at=old,
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id
+
+        with patch("crawler.monitor.send_telegram", return_value=True):
+            run_monitor(db)
+
+        swept = db.execute(
+            select(CrawlJob).where(CrawlJob.id == job_id)
+        ).scalar_one()
+        assert swept.status == "cancelled"
+        assert swept.error_message == "이미 있던 에러"
+    finally:
+        db.close()
+
+
 def test_run_monitor_resolved_issue_sends_recovery():
     """정상: 이전 active 장애가 이번 스캔에 없음 → 복구 알림 + resolved"""
     db = TestSession()

@@ -76,9 +76,7 @@ export const SINGLE_HOUSE_FMR_OVER = 0.45;      // 6억 초과 (한도 없음)
 export const SINGLE_HOUSE_DEDUCTION = 1_200_000_000; // 1세대1주택 종부세 공제 12억
 export const GENERAL_DEDUCTION = 900_000_000;        // 일반(2주택+) 종부세 공제 9억
 export const RURAL_TAX_RATE = 0.20;             // 농어촌특별세: 종부세액의 20%
-export const MAX_AGE_DEDUCTION_RATE = 0.40;     // 연령 세액공제 최대 40% (70세+)
-export const MAX_HOLD_DEDUCTION_RATE = 0.50;    // 보유 세액공제 최대 50% (15년+)
-export const MAX_TOTAL_CREDIT = 0.80;           // 합산 최대 80%
+export const MAX_TOTAL_CREDIT = 0.80;           // 합산 최대 80% (연령+보유 세액공제 한도)
 export const TAX_BURDEN_CAP_RATE = 1.5;         // 세부담 상한 — 전년도 보유세의 150% (지방세법 §122)
 
 // ===== 헬퍼 함수 =====

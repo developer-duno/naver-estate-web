@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { PriceStats, ArticleFilters } from "@/types";
 import { formatChartPrice } from "@/lib/format";
+import Skeleton from "@/components/Skeleton";
 
 /** 층수별 가격 탭 — 카드형 UI + 클릭 시 해당 층수 필터 적용 */
 export default function ComplexPriceFloorTab({ priceStats, error, loading, onFilterChange }: {
@@ -13,7 +14,13 @@ export default function ComplexPriceFloorTab({ priceStats, error, loading, onFil
 }) {
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
 
-  if (loading) return <div className="h-48 flex items-center justify-center text-gray-400 text-sm">로딩 중...</div>;
+  if (loading)
+    return (
+      <div role="status" aria-label="로딩 중">
+        <span className="sr-only">층수별 가격 로딩 중...</span>
+        <Skeleton className="h-48 w-full" />
+      </div>
+    );
   if (error) return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
   if (!priceStats || priceStats.by_floor.length === 0)
     return <p className="text-gray-500 text-sm text-center">층수별 가격 데이터가 부족합니다</p>;

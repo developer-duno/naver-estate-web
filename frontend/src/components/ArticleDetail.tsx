@@ -17,6 +17,25 @@ import ArticleDescription from "@/components/article/ArticleDescription";
 import PriceHistoryTable from "@/components/article/PriceHistoryTable";
 import ArticleFavoriteButton from "@/components/ArticleFavoriteButton";
 
+/**
+ * ChartAccordion emptyHint 의 네트워크 실패(isError) 안내 + "다시 시도" 버튼.
+ * onRetry 는 React Query refetch (Promise 반환) 를 받아도 무방 — 반환값 무시.
+ */
+function RetryHint({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <span className="flex items-center justify-between gap-2">
+      {message}
+      <button
+        type="button"
+        onClick={() => onRetry()}
+        className="text-blue-600 hover:underline shrink-0"
+      >
+        다시 시도
+      </button>
+    </span>
+  );
+}
+
 interface Props {
   articleNo: string;
   onClose: () => void;
@@ -183,7 +202,7 @@ function ArticleDetailBody({ article, articleNo, complex }: BodyProps) {
         hasContent={hasMarketPosition}
         emptyHint={
           priceStatsQuery.isError
-            ? "시세 정보를 불러오지 못했습니다."
+            ? <RetryHint message="시세 정보를 불러오지 못했습니다." onRetry={priceStatsQuery.refetch} />
             : "이 면적의 시세 정보가 아직 수집되지 않았습니다."
         }
       >
@@ -192,7 +211,7 @@ function ArticleDetailBody({ article, articleNo, complex }: BodyProps) {
       <ChartAccordion
         title="경쟁 매물"
         hasContent={hasCompeting}
-        emptyHint="경쟁 매물 정보를 불러오지 못했습니다."
+        emptyHint={<RetryHint message="경쟁 매물 정보를 불러오지 못했습니다." onRetry={articlesQuery.refetch} />}
       >
         <CompetingListings complexNo={complexNo} tradeTypeName={tradeTypeName} currentArticleNo={articleNo} />
       </ChartAccordion>
@@ -201,7 +220,7 @@ function ArticleDetailBody({ article, articleNo, complex }: BodyProps) {
         hasContent={hasMaintenance}
         emptyHint={
           pyeongQuery.isError
-            ? "관리비 정보를 불러오지 못했습니다."
+            ? <RetryHint message="관리비 정보를 불러오지 못했습니다." onRetry={pyeongQuery.refetch} />
             : "이 면적의 관리비 정보가 아직 수집되지 않았습니다."
         }
       >

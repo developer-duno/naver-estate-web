@@ -64,6 +64,7 @@ export default function AdminDataPage() {
               value={staleDays}
               onChange={(e) => setStaleDays(Number(e.target.value))}
               min={30}
+              aria-label="삭제 기준 경과 일수"
               className="w-20 text-sm border rounded px-2 py-1"
             />
             <span className="text-sm text-gray-500">일 이상</span>

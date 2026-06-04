@@ -91,7 +91,7 @@
 | V027 | crawl_jobs scheduler_started 인덱스 (PR #21) | 2026-05-21 (세션 207) |
 | V028 | user_profiles.agree_marketing (회원가입 마케팅 동의) | 2026-05-31 (세션 252) |
 | V029 | RLS 11 테이블 활성화 (anon 노출 차단) | 2026-05-31 (세션 254) |
-| V030 | trades 중복 인덱스 3개 제거 (~57MB, prod 미실행) | 2026-06-02 (세션 260) |
+| V030 | trades 중복 인덱스 3개 제거 (~57MB, prod 적용완료 세션 270 라이브검증) | 2026-06-02 (세션 260) |
 | V031 | 공유 4테이블 anon/authenticated REST 노출 차단 (prod 적용완료, 세션 261 라이브검증) | 2026-06-02 (세션 261) |
 
 - `db/migrations/` 폴더에 `V000__` ~ `V031__` SQL 파일 = 32 버전

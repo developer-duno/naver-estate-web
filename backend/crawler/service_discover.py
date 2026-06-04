@@ -122,10 +122,14 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, sche
         logger.info("단지 발견 완료: %s → %d건", keyword, total_found)
 
     except Exception as e:
-        db.rollback()
-        job.status = "failed"
-        job.error_message = str(e)[:500]
-        db.commit()
+        try:
+            db.rollback()
+            job.status = "failed"
+            job.error_message = str(e)[:500]
+            db.commit()
+        except Exception:
+            # 연결 끊김 등으로 같은 세션 마킹 실패 → 새 세션으로 보장 (세션 266)
+            fail_job_safely(job.id, str(e))
         logger.exception("단지 발견 실패: %s", keyword)
     finally:
         db.close()

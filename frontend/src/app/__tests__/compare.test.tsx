@@ -38,6 +38,7 @@ function makeComplex(no: string) {
     parking_count_by_household: 1.2,
     floor_area_ratio: "250",
     building_coverage_ratio: "20",
+    jeonse_rate: 67.7, // BE 저장 단위 = 퍼센트 (crawler/stats.py = jeonse/sale*100)
   };
 }
 
@@ -106,6 +107,16 @@ describe("단지 비교 — 에러 분기", () => {
     await waitFor(() => {
       expect(screen.getByText("불러오기 실패")).toBeInTheDocument();
     });
+  });
+
+  it("전세가율은 BE 퍼센트값을 그대로 표시 (×100 이중적용 회귀 차단)", async () => {
+    // 세션278 발견: BE jeonse_rate=67.7(퍼센트)인데 compare 가 ×100 → 6770% 오표시.
+    // makeComplex jeonse_rate:67.7 → toFixed(0) = "68%" 기대, "6770%" 절대 금지.
+    renderPage("ids=A,B");
+    await waitFor(() => {
+      expect(screen.getAllByText("68%").length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.queryByText("6770%")).toBeNull();
   });
 });
 

@@ -29,7 +29,7 @@ interface AxisDef {
 const BASE_AXES: AxisDef[] = [
   { key: "household", label: "세대수", getValue: (c) => c.total_household_count ?? 0 },
   { key: "parking", label: "세대당 주차", getValue: (c) => c.parking_count_by_household ?? 0 },
-  { key: "jeonse", label: "전세가율", getValue: (c) => (c.jeonse_rate ?? 0) * 100 },
+  { key: "jeonse", label: "전세가율", getValue: (c) => c.jeonse_rate ?? 0 },
   { key: "trades", label: "최근 거래", getValue: (c) => c.recent_trades_6m ?? 0 },
   { key: "articles", label: "매물수", getValue: (c) => c.article_count ?? 0 },
   { key: "newness", label: "신축도", getValue: (c) => getNewness(c.use_approve_ymd) },

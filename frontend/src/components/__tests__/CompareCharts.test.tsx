@@ -50,7 +50,7 @@ function makeComplex(overrides: Partial<Complex> = {}): Complex {
     high_floor: 25,
     low_floor: 3,
     parking_count_by_household: 1.2,
-    jeonse_rate: 0.55,
+    jeonse_rate: 55, // BE 저장 단위 = 퍼센트 (crawler/stats.py compute_jeonse_rate = jeonse/sale*100)
     recent_trades_6m: 15,
     article_count: 42,
     nearby_median_price: 90000,

@@ -68,7 +68,7 @@ const BASE_ROWS: { label: string; render: (c: Complex) => ReactNode }[] = [
   // 평당가는 여기에 동적 삽입 (인덱스 17)
   { label: "매물수", render: (c) => formatCount(c.article_count) },
   { label: "주변 중위가", render: (c) => formatPrice(c.nearby_median_price) },
-  { label: "전세가율", render: (c) => c.jeonse_rate ? `${(c.jeonse_rate * 100).toFixed(0)}%` : "-" },
+  { label: "전세가율", render: (c) => c.jeonse_rate ? `${c.jeonse_rate.toFixed(0)}%` : "-" },
   { label: "최근 6개월 거래", render: (c) => formatCount(c.recent_trades_6m) },
   { label: "수영장", render: (c) => c.has_pool ? "있음" : "없음" },
   { label: "관리사무소", render: (c) => c.management_office_tel || "-" },

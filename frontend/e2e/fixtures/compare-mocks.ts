@@ -23,7 +23,7 @@ const COMPLEX_A: Complex = {
   building_coverage_ratio: "18%",
   article_count: 42,
   nearby_median_price: 120000,
-  jeonse_rate: 0.62,
+  jeonse_rate: 62, // BE 저장 단위 = 퍼센트 (세션278 H2)
   recent_trades_6m: 12,
   has_pool: false,
   management_office_tel: "02-555-1234",
@@ -51,7 +51,7 @@ const COMPLEX_B: Complex = {
   building_coverage_ratio: "20%",
   article_count: 28,
   nearby_median_price: 180000,
-  jeonse_rate: 0.55,
+  jeonse_rate: 55, // BE 저장 단위 = 퍼센트 (세션278 H2)
   recent_trades_6m: 7,
   has_pool: true,
   management_office_tel: "02-555-5678",

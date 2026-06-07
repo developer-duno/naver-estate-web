@@ -67,7 +67,11 @@ def collect_air_quality(batch_size: int = 100):
 
                 infra.air_station_name = sname
                 infra.air_station_dist = round(station.get("tm", 0) * 1000, 1)  # km → m
-                if air:
+                # 측정값이 하나라도 있을 때만 갱신 — get_realtime_air 는 항상 dict 를
+                # 반환하나 pm10/pm25/o3 가 전부 None('-')일 수 있다. 전부 None 인데
+                # air_updated_at 을 찍으면 신선도 green 인데 화면값 빈값(stale 오표시).
+                # 측정값 있을 때만 updated_at 갱신 (세션 280).
+                if air and any(air.get(k) is not None for k in ("pm10", "pm25", "o3")):
                     infra.air_pm10 = air["pm10"]
                     infra.air_pm25 = air["pm25"]
                     infra.air_o3 = air["o3"]
@@ -80,8 +84,14 @@ def collect_air_quality(batch_size: int = 100):
                 failed += 1
 
         db.commit()
-        _complete_job(db, job, collected, failed)
-        logger.info("[air_quality] 완료: %d 수집, %d 실패 (배치 %d)", collected, failed, batch_size)
+        # silent failure 가드 (세션 280 — childcare 패턴 답습): 단지는 있는데 한 건도
+        # 못 채웠으면(전 측정소 None/전 Infra 부재) '완료(0)' 위장 대신 failed 로 알린다.
+        if collected == 0 and len(apts) > 0:
+            _fail_job(db, job, f"단지 {len(apts)}개 전부 측정소 매칭 실패 (수집 0건)")
+            logger.error("[air_quality] silent failure 감지: 단지 %d개 전부 매칭 실패", len(apts))
+        else:
+            _complete_job(db, job, collected, failed)
+            logger.info("[air_quality] 완료: %d 수집, %d 실패 (배치 %d)", collected, failed, batch_size)
     except Exception as exc:
         _fail_job(db, job, str(exc))
         logger.exception("[air_quality] 수집 실패")

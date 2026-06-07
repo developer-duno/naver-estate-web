@@ -19,8 +19,10 @@ def collect_emergency_data(batch_size: int = 100):
         # 전국 응급의료기관 목록 (1회, ~400건)
         facilities = EmergencyAPI.get_emergency_list()
         if not facilities:
+            # 전국 목록이 비면 단지 매칭 자체가 불가 = 명백한 장애.
+            # '완료(0,0)' 위장 대신 failed 로 알려야 monitor 가 텔레그램 알림 (세션 280).
             logger.warning("[emergency] 응급의료기관 목록 조회 실패")
-            _complete_job(db, job, 0, 0)
+            _fail_job(db, job, "응급의료기관 목록 조회 실패 (API 빈 응답)")
             return
 
         logger.info("[emergency] 전국 %d개 응급의료기관 조회 완료", len(facilities))
@@ -49,8 +51,14 @@ def collect_emergency_data(batch_size: int = 100):
                 failed += 1
 
         db.commit()
-        _complete_job(db, job, collected, failed)
-        logger.info("[emergency] 완료: %d 수집, %d 실패 (배치 %d)", collected, failed, batch_size)
+        # silent failure 가드 (세션 280 — childcare 패턴 답습): 단지는 있는데 한 건도
+        # 못 채웠으면(전 단지 Infra 부재/매칭 실패) '완료(0)' 위장 대신 failed 로 알린다.
+        if collected == 0 and len(apts) > 0:
+            _fail_job(db, job, f"단지 {len(apts)}개 전부 매칭 실패 (수집 0건)")
+            logger.error("[emergency] silent failure 감지: 단지 %d개 전부 매칭 실패", len(apts))
+        else:
+            _complete_job(db, job, collected, failed)
+            logger.info("[emergency] 완료: %d 수집, %d 실패 (배치 %d)", collected, failed, batch_size)
     except Exception as exc:
         _fail_job(db, job, str(exc))
         logger.exception("[emergency] 수집 실패")

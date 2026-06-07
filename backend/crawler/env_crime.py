@@ -71,8 +71,11 @@ def collect_crime_stats():
         # 4) 안전 점수 산출
         scored = CrimeStatsAPI.compute_scores(stats, population_map)
         if not scored:
+            # job 은 이미 running 으로 생성됨(:41). API 응답은 받았으나 점수 산출 실패 =
+            # 명백한 장애 → '완료(0,0)' 위장 대신 failed 로 알려야 monitor 알림 (세션 280).
+            # CSV 폴백은 그대로 호출(데이터는 Infra 에 반영). job 과 폴백은 독립.
             logger.warning("[crime] 점수 산출 실패 — CSV 폴백 시도")
-            _complete_job(db, job, 0, 0)
+            _fail_job(db, job, "안전점수 산출 실패 (API 응답은 받음) — CSV 폴백 시도")
             load_crime_stats()
             return
 
@@ -109,11 +112,17 @@ def collect_crime_stats():
                 fallback_count += 1
 
         db.commit()
-        _complete_job(db, job, collected, skipped)
-        logger.info(
-            "[crime] 완료: %d 수집 (중앙값 폴백 %d), %d 건너뜀",
-            collected, fallback_count, skipped,
-        )
+        # silent failure 가드 (세션 280 — childcare 패턴 답습): 단지는 있는데 한 건도
+        # 못 채웠으면(전 단지 점수 조회+중앙값 폴백 실패) '완료(0)' 위장 대신 failed 로 알린다.
+        if collected == 0 and len(apts) > 0:
+            _fail_job(db, job, f"단지 {len(apts)}개 전부 점수 조회 실패 (수집 0건)")
+            logger.error("[crime] silent failure 감지: 단지 %d개 전부 점수 조회 실패", len(apts))
+        else:
+            _complete_job(db, job, collected, skipped)
+            logger.info(
+                "[crime] 완료: %d 수집 (중앙값 폴백 %d), %d 건너뜀",
+                collected, fallback_count, skipped,
+            )
     except Exception as exc:
         _fail_job(db, job, str(exc))
         logger.exception("[crime] 수집 실패")

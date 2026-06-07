@@ -119,6 +119,32 @@ class TestCollectCrimeStats:
         assert infra.crime_score == 50
         assert infra.crime_grade == "C"
 
+    def test_점수산출_실패_job_failed_폴백호출(self, db):
+        """compute_scores -> [] (점수산출 실패) 면 job=failed (monitor 알림) + CSV 폴백 호출.
+
+        job 이 이미 running 으로 생성된 뒤(API 응답은 받음) 점수산출만 실패한 경우.
+        '완료(0,0)' 위장 대신 failed 로 알려야 monitor 가 알림 (세션 280). CSV 폴백은
+        그대로 호출되어 데이터는 Infra 에 반영(여기선 mock 으로 호출만 검증).
+        """
+        _add_apartment(db, "APT1", "서울특별시", "강남구")
+
+        with patch("crawler.crime_stats_api.CrimeStatsAPI.fetch_all",
+                   return_value=[{"dummy": "row"}]), \
+             patch("crawler.crime_stats_api.CrimeStatsAPI.aggregate_by_region",
+                   return_value={"서울특별시_강남구": {"total": 100}}), \
+             patch("crawler.crime_stats_api.CrimeStatsAPI.compute_scores",
+                   return_value={}), \
+             patch("crawler.env_crime.load_crime_stats") as mock_csv:
+            from crawler.env_crime import collect_crime_stats
+            collect_crime_stats()
+
+        # 점수산출 실패는 '완료'가 아니라 'failed' (monitor 알림 전제)
+        job = db.query(CrawlJob).filter_by(job_type="crime_stats").one()
+        assert job.status == "failed"
+        assert "점수 산출 실패" in job.error_message
+        # CSV 폴백은 여전히 호출 (데이터 메꿈은 폴백 책임)
+        mock_csv.assert_called_once()
+
 
 # ── collect_emergency_data ──
 
@@ -151,8 +177,12 @@ class TestCollectEmergencyData:
         assert job.status == "completed"
         assert job.processed_items == 1
 
-    def test_목록_조회_실패_무업데이트(self, db):
-        """get_emergency_list -> [] 이면 CrawlJob completed(0,0), Infra 안 건드림"""
+    def test_목록_조회_실패_failed_알림(self, db):
+        """get_emergency_list -> [] 이면 CrawlJob failed (monitor 알림), Infra 안 건드림.
+
+        전국 목록이 비면 단지 매칭 자체가 불가 = 명백한 장애. '완료(0,0)' 위장 금지
+        (세션 280 — childcare silent 가드 패턴을 emergency 에 전파).
+        """
         _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
 
         with patch("crawler.emergency_api.EmergencyAPI.get_emergency_list",
@@ -164,8 +194,8 @@ class TestCollectEmergencyData:
         assert infra.emergency_hospital is None  # 안 건드림
 
         job = db.query(CrawlJob).filter_by(job_type="emergency").one()
-        assert job.status == "completed"
-        assert job.processed_items == 0
+        assert job.status == "failed"
+        assert "목록 조회 실패" in job.error_message
 
     def test_단지별_오류_격리_배치_생존(self, db):
         """find_nearest 가 1단지 성공·1단지 raise -> 성공 1·실패 1 격리, 배치 안 죽음"""
@@ -368,8 +398,8 @@ class TestCollectAirQuality:
         assert infra.air_station_name is None  # 안 건드림
 
         job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
-        assert job.status == "completed"
-        assert job.processed_items == 0
+        assert job.status == "failed"
+        assert "전부 측정소 매칭 실패" in job.error_message
 
     def test_단지별_오류_격리_배치_생존(self, db):
         """get_nearby_station 1단지 성공·1단지 raise -> 격리, 배치 안 죽음"""
@@ -449,6 +479,34 @@ class TestCollectAirQuality:
         infra = db.get(Infra, "APT1")
         assert infra.air_station_name == "강남구"  # 측정소는 갱신
         assert infra.air_pm10 is None  # 실시간 측정값은 NULL 유지
+        job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
+        assert job.status == "completed"
+        assert job.processed_items == 1
+
+    def test_실시간값_dict이나_전부_None_갱신보류(self, db):
+        """air dict 는 받았으나 pm10/pm25/o3 가 전부 None('-') → 측정소만 갱신, updated_at 보류.
+
+        get_realtime_air 는 항상 dict 를 반환하지만 측정값이 전부 None 일 수 있다.
+        그때 air_updated_at 을 찍으면 신선도 green 인데 화면값 빈값(stale 오표시). 측정값이
+        하나도 없으면 updated_at 갱신을 보류해야 신선도가 정직하다 (세션 280).
+        """
+        _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        station = {"station_name": "강남구", "addr": "서울", "tm": 1.0}
+        # dict 이지만 측정값 전부 None — 에어코리아가 '-' 반환한 경우
+        air_all_none = {"pm10": None, "pm25": None, "o3": None, "grade": ""}
+        with patch("crawler.env_air._is_skip_day", return_value=False), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+                   return_value=station), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
+                   return_value=air_all_none):
+            from crawler.env_air import collect_air_quality
+            collect_air_quality()
+
+        infra = db.get(Infra, "APT1")
+        assert infra.air_station_name == "강남구"  # 측정소는 갱신
+        assert infra.air_pm10 is None  # 측정값 없음
+        assert infra.air_updated_at is None  # 갱신 보류 (신선도 green 오표시 차단)
         job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
         assert job.status == "completed"
         assert job.processed_items == 1

@@ -44,7 +44,7 @@
 - TTL 캐시 필수 (5분) — 동일 요청 반복 시 네이버 API 재호출 방지
 - 첫 페이지 API 실패 시 HTTPException(502) 전파 (빈 배열 반환 금지)
 - DB upsert 패턴: `INSERT ON CONFLICT DO UPDATE`
-- 매물 비활성화만 허용 (`is_active = FALSE`), DELETE 금지
+- 매물(Article)은 크롤링 시 없어진 것 물리 삭제 허용 (`delete_missing_articles`). 단지(Complex)는 DELETE 금지 (line 72 참조)
 
 ### DB 규칙
 - estate 쿼리는 `db/queries.py`, mibunyang 쿼리는 `db/mb_queries.py` 경유 (직접 SQL 금지)

@@ -132,7 +132,7 @@ def _background_crawl(complex_no: str):
 
             _update_crawl_status(complex_no, has_more=False)
 
-            # Deactivate missing articles
+            # 물리 삭제: 이번 크롤링에서 안 보인 매물 (네이버에 없는 매물)
             delete_missing_articles(db, complex_no, all_article_nos)
 
             # Update last_crawled_at

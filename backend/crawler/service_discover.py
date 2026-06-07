@@ -202,7 +202,7 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
             page += 1
             _throttle_articles.wait()
 
-        # 이번 크롤링에서 안 보인 매물 → is_active = False
+        # 이번 크롤링에서 안 보인 매물 → 물리 삭제 (네이버에 없는 매물은 보존 불필요)
         delete_missing_articles(db, complex_no, all_article_nos)
         # /api/stats 캐시 무효화 — 물리 삭제로 article_count 변동
         get_cache("stats", dynamic=True).delete("db_stats")

@@ -36,7 +36,7 @@ export default function CompareFloatingBar({ list, onRemove, onClear }: Props) {
                 <button
                   type="button"
                   onClick={() => onRemove(c.complex_no)}
-                  className="hover:text-blue-900 font-bold"
+                  className="inline-flex items-center justify-center min-h-[24px] min-w-[24px] p-0.5 hover:text-blue-900 font-bold"
                   aria-label={`${c.complex_name} 제거`}
                 >
                   x

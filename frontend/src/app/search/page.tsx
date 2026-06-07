@@ -141,22 +141,25 @@ function SearchContent() {
     [filteredComplexes, complexSort],
   );
 
-  // 로그인 + 승인 상태 확인
+  // 로그인 + 승인 상태 확인 (Header.tsx fetchProfile 답습 — AbortController 로 언마운트 시 fetch 취소)
   useEffect(() => {
     const supabase = createClient();
+    const controller = new AbortController();
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session?.user) { setIsLoggedIn(false); return; }
       setIsLoggedIn(true);
       try {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ""}/api/users/me`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
+          signal: controller.signal,
         });
-        if (res.ok) {
+        if (res.ok && !controller.signal.aborted) {
           const me = await res.json();
-          setUserStatus(me.status);
+          if (!controller.signal.aborted) setUserStatus(me.status);
         }
-      } catch { /* 무시 */ }
+      } catch { /* abort 또는 네트워크 오류 무시 */ }
     }).catch(() => setIsLoggedIn(false));
+    return () => controller.abort();
   }, []);
 
   // SEO: 동적 타이틀

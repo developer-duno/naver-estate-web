@@ -272,3 +272,57 @@ def test_price_collect_status_done(client):
     assert data["status"] == "done"
     assert data["collected"] == 15
     assert data["failed"] == 2
+
+
+@patch("crawler.service.collect_price_history_for_complex")
+@patch("routers.live.price.threading.Thread")
+def test_price_collect_all_failed_status_error(mock_thread, mock_collect, client, db):
+    """수집 0건 + 실패>0 (네이버 차단/오류) → status='error' (세션 280).
+
+    'done' 으로 찍으면 사용자가 "수집 실패"를 "데이터 없음"으로 오인. _run 백그라운드
+    함수의 분기 로직을 검증하기 위해 Thread 를 동기 실행시킨다.
+    """
+    _add_user_profile(db, role="admin")
+    _add_complex(db)
+    # collect 가 전부 실패 결과 반환
+    mock_collect.return_value = {"collected": 0, "failed": 3, "total": 3}
+    # Thread(target=_run) 를 즉시 동기 실행 (start() 호출 시 target 실행)
+    mock_thread.side_effect = lambda target, daemon=None: type(
+        "T", (), {"start": staticmethod(target), "daemon": daemon}
+    )()
+
+    token = _make_jwt()
+    res = client.post("/api/live/C001/price-history/start-collect",
+                      headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+
+    # _run 이 동기 실행되어 status 가 'error' 로 기록됨
+    status_res = client.get("/api/live/C001/price-history/collect-status")
+    data = status_res.json()
+    assert data["status"] == "error"
+    assert data["failed"] == 3
+    assert data["collected"] == 0
+
+
+@patch("crawler.service.collect_price_history_for_complex")
+@patch("routers.live.price.threading.Thread")
+def test_price_collect_empty_no_data_status_done(mock_thread, mock_collect, client, db):
+    """수집 0건 + 실패 0 (진짜 데이터 없는 신축) → status='done' 유지 (차트가 빈 안내).
+
+    전부실패('error')와 구분 — 데이터가 원래 없는 경우는 오류가 아니다 (세션 280).
+    """
+    _add_user_profile(db, role="admin")
+    _add_complex(db)
+    mock_collect.return_value = {"collected": 0, "failed": 0, "total": 0}
+    mock_thread.side_effect = lambda target, daemon=None: type(
+        "T", (), {"start": staticmethod(target), "daemon": daemon}
+    )()
+
+    token = _make_jwt()
+    client.post("/api/live/C001/price-history/start-collect",
+                headers={"Authorization": f"Bearer {token}"})
+
+    status_res = client.get("/api/live/C001/price-history/collect-status")
+    data = status_res.json()
+    assert data["status"] == "done"
+    assert data["failed"] == 0

@@ -120,9 +120,14 @@ def start_price_collect(
             result = collect_price_history_for_complex(
                 collect_db, complex_no, on_progress=_progress_callback,
             )
+            # 전부 실패(수집 0 + 실패>0)면 네이버 차단/오류 → 'error' 로 구분.
+            # 'done' 으로 찍으면 사용자가 "수집 실패"를 "데이터 없음"으로 오인 (세션 280).
+            # collected=0 && failed=0 = 진짜 데이터 없는 신축 → 'done' 유지(차트가 빈 안내).
+            _is_error = result["collected"] == 0 and result["failed"] > 0
             with _price_collect_lock:
                 _price_collect_status[complex_no].update({
-                    "status": "done",
+                    "status": "error" if _is_error else "done",
+                    "error": "시세 조회 실패 (네이버 응답 없음)" if _is_error else None,
                     "collected": result["collected"],
                     "failed": result["failed"],
                     "total": result["total"],

@@ -153,9 +153,9 @@ function SearchContent() {
           headers: { Authorization: `Bearer ${session.access_token}` },
           signal: controller.signal,
         });
-        if (res.ok) {
+        if (res.ok && !controller.signal.aborted) {
           const me = await res.json();
-          setUserStatus(me.status);
+          if (!controller.signal.aborted) setUserStatus(me.status);
         }
       } catch { /* abort 또는 네트워크 오류 무시 */ }
     }).catch(() => setIsLoggedIn(false));

@@ -37,6 +37,13 @@ def collect_air_quality(batch_size: int = 100):
             Apartment.longitude.isnot(None),
         ).limit(batch_size).all()
 
+        # Infra 일괄 prefetch — 루프 내 db.get() 라운드트립 제거 (Supabase pooler 7분 timeout 대응, env_childcare.py:45-50 답습)
+        apt_ids = [row[0] for row in apts]
+        infra_map: dict[str, Infra] = {
+            obj.apartment_id: obj
+            for obj in db.query(Infra).filter(Infra.apartment_id.in_(apt_ids)).all()
+        } if apt_ids else {}
+
         collected, failed = 0, 0
         # 측정소 캐시: {station_name: realtime_data}
         station_cache: dict[str, dict | None] = {}
@@ -59,8 +66,8 @@ def collect_air_quality(batch_size: int = 100):
                     station_cache[sname] = AirQualityAPI.get_realtime_air(sname)
                 air = station_cache[sname]
 
-                # 3) infra 테이블 업데이트
-                infra = db.get(Infra, apt_id)
+                # 3) infra 테이블 업데이트 (prefetch dict 조회 — 없으면 기존처럼 skip)
+                infra = infra_map.get(apt_id)
                 if not infra:
                     failed += 1
                     continue

@@ -145,6 +145,32 @@ class TestCollectCrimeStats:
         # CSV 폴백은 여전히 호출 (데이터 메꿈은 폴백 책임)
         mock_csv.assert_called_once()
 
+    def test_Infra_없으면_skip_자동생성_안함(self, db):
+        """Infra 행 부재 단지는 skip (childcare 와 달리 자동생성 안 함).
+
+        세션 282: db.get(Infra) -> infra_map.get(apt_id) prefetch 전환 후에도
+        '없으면 skip' 동작이 유지되는지 가드 (prefetch 정합 회귀 가드).
+        """
+        # Apartment 만 추가, Infra 행 없음
+        db.add(Apartment(id="APT_NOINFRA", name="단지", region="서울특별시", gu="강남구"))
+        db.commit()
+        _add_region(db, "서울특별시", "강남구", 550000)
+
+        with patch("crawler.crime_stats_api.CrimeStatsAPI.fetch_all",
+                   return_value=[{"dummy": "row"}]), \
+             patch("crawler.crime_stats_api.CrimeStatsAPI.aggregate_by_region",
+                   return_value={"서울특별시_강남구": {"total": 100}}), \
+             patch("crawler.crime_stats_api.CrimeStatsAPI.compute_scores",
+                   return_value={"서울특별시_강남구": {"crime_score": 85, "crime_grade": "A"}}):
+            from crawler.env_crime import collect_crime_stats
+            collect_crime_stats()
+
+        # Infra 행은 여전히 없어야 한다 (자동생성 안 함)
+        assert db.get(Infra, "APT_NOINFRA") is None
+        # 전 단지 skip -> collected 0 -> silent failure 가드가 failed 처리
+        job = db.query(CrawlJob).filter_by(job_type="crime_stats").one()
+        assert job.status == "failed"
+
 
 # ── collect_emergency_data ──
 
@@ -218,6 +244,34 @@ class TestCollectEmergencyData:
         # 성공 1 + 실패 1 = total 2, processed 1
         assert job.processed_items == 1
         assert job.total_items == 2
+
+    def test_Infra_없으면_skip_자동생성_안함(self, db):
+        """Infra 행 부재 단지는 skip (childcare 와 달리 자동생성 안 함).
+
+        세션 282: db.get(Infra) -> infra_map.get(apt_id) prefetch 전환 후에도
+        '없으면 skip' 동작이 유지되는지 가드 (prefetch 정합 회귀 가드).
+        """
+        # Apartment 만 추가, Infra 행은 생성하지 않음 (_add_apartment 안 씀)
+        db.add(Apartment(id="APT_NOINFRA", name="단지", region="서울특별시",
+                         gu="강남구", latitude=37.5, longitude=127.0))
+        db.commit()
+
+        facilities = [{"name": "A병원", "lat": 37.5, "lng": 127.0, "beds": 10,
+                       "level": "권역응급의료센터", "addr": "서울"}]
+        nearest = {"count": 1, "nearest_dist": 50.5, "nearest_beds": 10,
+                   "nearest_level": "권역응급의료센터"}
+        with patch("crawler.emergency_api.EmergencyAPI.get_emergency_list",
+                   return_value=facilities), \
+             patch("crawler.emergency_api.EmergencyAPI.find_nearest",
+                   return_value=nearest):
+            from crawler.env_emergency import collect_emergency_data
+            collect_emergency_data()
+
+        # Infra 행은 여전히 없어야 한다 (자동생성 안 함)
+        assert db.get(Infra, "APT_NOINFRA") is None
+        # 전 단지 skip -> collected 0 -> silent failure 가드가 failed 처리
+        job = db.query(CrawlJob).filter_by(job_type="emergency").one()
+        assert job.status == "failed"
 
 
 # ── collect_childcare_data ──
@@ -510,3 +564,29 @@ class TestCollectAirQuality:
         job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
         assert job.status == "completed"
         assert job.processed_items == 1
+
+    def test_Infra_없으면_skip_자동생성_안함(self, db):
+        """Infra 행 부재 단지는 failed 카운트 (자동생성 안 함).
+
+        세션 282: db.get(Infra) -> infra_map.get(apt_id) prefetch 전환 후에도
+        '없으면 skip' 동작이 유지되는지 가드 (prefetch 정합 회귀 가드).
+        """
+        db.add(Apartment(id="APT_NOINFRA", name="단지", region="서울특별시",
+                         gu="강남구", latitude=37.5, longitude=127.0))
+        db.commit()
+
+        station = {"station_name": "강남구", "addr": "서울", "tm": 1.0}
+        air = {"pm10": 30.0, "pm25": 15.0, "o3": 0.03, "grade": "좋음"}
+        with patch("crawler.env_air._is_skip_day", return_value=False), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+                   return_value=station), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
+                   return_value=air):
+            from crawler.env_air import collect_air_quality
+            collect_air_quality()
+
+        # Infra 행은 여전히 없어야 한다 (자동생성 안 함)
+        assert db.get(Infra, "APT_NOINFRA") is None
+        # 전 단지 skip -> collected 0 -> silent failure 가드가 failed 처리
+        job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
+        assert job.status == "failed"

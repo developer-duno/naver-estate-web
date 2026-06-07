@@ -86,6 +86,14 @@ def collect_crime_stats():
         median_result = _compute_median_score(scored)
 
         apts = db.query(Apartment.id, Apartment.region, Apartment.gu).all()
+
+        # Infra 일괄 prefetch — 루프 내 db.get() 라운드트립 제거 (env_childcare.py:45-50 답습)
+        apt_ids = [row[0] for row in apts]
+        infra_map: dict[str, Infra] = {
+            obj.apartment_id: obj
+            for obj in db.query(Infra).filter(Infra.apartment_id.in_(apt_ids)).all()
+        } if apt_ids else {}
+
         collected, fallback_count, skipped = 0, 0, 0
 
         for apt_id, region, gu in apts:
@@ -99,7 +107,7 @@ def collect_crime_stats():
                 skipped += 1
                 continue
 
-            infra = db.get(Infra, apt_id)
+            infra = infra_map.get(apt_id)
             if not infra:
                 skipped += 1
                 continue
@@ -151,6 +159,14 @@ def load_crime_stats(csv_path: str | None = None):
     db = SessionLocal()
     try:
         apts = db.query(Apartment.id, Apartment.region, Apartment.gu).all()
+
+        # Infra 일괄 prefetch — 루프 내 db.get() 라운드트립 제거 (env_childcare.py:45-50 답습)
+        apt_ids = [row[0] for row in apts]
+        infra_map: dict[str, Infra] = {
+            obj.apartment_id: obj
+            for obj in db.query(Infra).filter(Infra.apartment_id.in_(apt_ids)).all()
+        } if apt_ids else {}
+
         collected, skipped = 0, 0
 
         for apt_id, region, gu in apts:
@@ -161,7 +177,7 @@ def load_crime_stats(csv_path: str | None = None):
                 skipped += 1
                 continue
 
-            infra = db.get(Infra, apt_id)
+            infra = infra_map.get(apt_id)
             if not infra:
                 skipped += 1
                 continue

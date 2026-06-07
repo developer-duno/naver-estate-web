@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS complex_price_history (
     price_avg INTEGER,
     base_month TEXT NOT NULL,           -- YYYYMM
     recorded_at TIMESTAMPTZ DEFAULT NOW(),
+    -- NOTE: prod 는 이 이름·정의가 아니라 complex_price_history_upsert_key
+    --   UNIQUE(complex_no, trade_type, area_no, base_month) 로 out-of-band 존재 (세션 280 실측).
+    --   코드(service_common.py)는 complex_price_history_upsert_key 를 쓴다. 정합은 V032 가 처리.
     CONSTRAINT uq_cph_composite UNIQUE(complex_no, trade_type, COALESCE(area_no, ''), base_month)
 );
 CREATE INDEX IF NOT EXISTS idx_cph_complex ON complex_price_history(complex_no, trade_type);

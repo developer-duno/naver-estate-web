@@ -60,6 +60,8 @@ function CompareContent() {
   const { history: compareHistory, add: addHistory, remove: removeHistory, clear: clearHistory } = useMbCompareHistory();
   const { bookmarks, add: addBookmark, remove: removeBookmark, clear: clearBookmarks, isBookmarked } = useMbCompareBookmarks();
   const historySaved = useRef(false);
+  // "복사됨" 표시 자동 해제 타이머 — 연속 클릭 시 이전 타이머 정리 + 언마운트 cleanup (CopyButton 패턴)
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const idsKey = ids.join(",");
 
   // ids 변경 시 ref 리셋 (같은 컴포넌트 내 pill 클릭으로 URL만 변경될 때)
@@ -146,10 +148,15 @@ function CompareContent() {
     try {
       await navigator.clipboard.writeText(window.location.href);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       alert("복사에 실패했습니다");
     }
+  }, []);
+
+  useEffect(() => () => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
   }, []);
 
   if (ids.length === 0) {

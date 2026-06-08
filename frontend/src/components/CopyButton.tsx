@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,9 @@ interface Props {
  */
 export default function CopyButton({ text, label = "결과 복사", className }: Props) {
   const [copied, setCopied] = useState(false);
+  // "복사됨" 표시 자동 해제 타이머 — 연속 클릭 시 이전 타이머 정리 + 언마운트 cleanup
+  // (선례: useCrawlAction.ts timersRef / VersionWatcher.tsx). web-rules.md 타이머 cleanup 룰.
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -32,11 +35,16 @@ export default function CopyButton({ text, label = "결과 복사", className }:
       await navigator.clipboard.writeText(text);
       setCopied(true);
       toast.success("복사됐어요");
-      setTimeout(() => setCopied(false), 2000);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error("복사하지 못했어요");
     }
   }, [text]);
+
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
 
   return (
     <button

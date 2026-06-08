@@ -34,11 +34,15 @@ export default function AcquisitionTaxToolPage() {
 
       <section className="mt-10 text-center">
         <p className="text-sm text-gray-600">
-          다른 부동산 계산기는{" "}
-          <Link href="/blog/realestate-calculators" className="text-blue-600 hover:underline">
-            계산기 모음 안내
+          다른 계산기는{" "}
+          <Link href="/tools" className="text-blue-600 hover:underline">
+            계산기 모음
           </Link>
-          에서 출시 일정을 확인하세요.
+          에서 찾아보세요. 자세한 사용법은{" "}
+          <Link href="/blog/realestate-calculators" className="text-blue-600 hover:underline">
+            계산기 안내 글
+          </Link>
+          을 참고하세요.
         </p>
       </section>
     </div>

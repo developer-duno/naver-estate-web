@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { SkeletonRows } from "@/components/Skeleton";
 
 /** 미분양 탭 공용 래퍼 — 로딩/에러/빈 데이터 처리 */
@@ -38,6 +38,8 @@ export function MbTabContent({
 export function ExportButton({ disabled, onClick }: { disabled: boolean; onClick: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  // "실패" 표시 자동 해제 타이머 — 연속 클릭 시 이전 타이머 정리 + 언마운트 cleanup (CopyButton 패턴)
+  const failTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handle = async () => {
     setBusy(true);
     setFailed(false);
@@ -45,11 +47,15 @@ export function ExportButton({ disabled, onClick }: { disabled: boolean; onClick
       await onClick();
     } catch {
       setFailed(true);
-      setTimeout(() => setFailed(false), 3000);
+      if (failTimerRef.current) clearTimeout(failTimerRef.current);
+      failTimerRef.current = setTimeout(() => setFailed(false), 3000);
     } finally {
       setBusy(false);
     }
   };
+  useEffect(() => () => {
+    if (failTimerRef.current) clearTimeout(failTimerRef.current);
+  }, []);
   return (
     <button
       type="button"

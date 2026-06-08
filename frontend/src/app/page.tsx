@@ -10,6 +10,7 @@ import RegionSelector from "@/components/RegionSelector";
 import EstateTypeTabs from "@/components/EstateTypeTabs";
 import FilterBar from "@/components/FilterBar";
 import SearchHistory from "@/components/SearchHistory";
+import HomeToolCards from "@/components/HomeToolCards";
 import { ESTATE_TYPE_TABS } from "@/lib/constants";
 import type { ArticleFilters } from "@/types";
 import { buildFilterURL } from "@/hooks/useFilterParams";
@@ -111,12 +112,9 @@ export default function HomePage() {
         <RegionSelector onSearch={handleRegionSearch} />
       </div>
 
-      {/* 미분양 현황 바로가기 */}
+      {/* 도구 4종 카드 (미분양/계산기/블로그/도움말) */}
       <div className="mt-4">
-        <button onClick={() => router.push("/mibunyang")} className="w-full bg-white rounded-lg shadow-sm border p-4 text-left hover:bg-gray-50 transition-colors">
-          <span className="text-sm font-semibold text-gray-700">미분양 현황 바로가기</span>
-          <p className="text-xs text-gray-500 mt-1">전국 미분양 아파트 현황, 지역별 통계를 확인하세요</p>
-        </button>
+        <HomeToolCards />
       </div>
 
       {/* 최근 검색 */}

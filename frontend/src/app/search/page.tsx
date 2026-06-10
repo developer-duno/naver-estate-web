@@ -200,7 +200,7 @@ function SearchContent() {
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* 헤더 */}
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={goBack} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl">
+        <button onClick={goBack} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
           ←
         </button>
         <h1 className="text-2xl font-bold">{title}</h1>

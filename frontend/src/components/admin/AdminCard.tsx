@@ -19,11 +19,7 @@ export default function AdminCard({ title, children, action, help }: AdminCardPr
           <h3 className="text-sm font-medium text-gray-700 flex items-center gap-1.5">
             {title}
             {help && (
-              <span
-                role="img"
-                aria-label={help}
-                className="text-gray-400 text-xs select-none"
-              >
+              <span aria-hidden="true" className="text-gray-400 text-xs select-none">
                 ⓘ
               </span>
             )}

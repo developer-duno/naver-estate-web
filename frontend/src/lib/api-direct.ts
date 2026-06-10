@@ -29,9 +29,14 @@ export async function getStatsDirect(): Promise<DbStats> {
     supabase.from("complexes").select("*", { count: "exact", head: true }),
     supabase.from("articles").select("*", { count: "exact", head: true }).eq("is_active", true),
   ]);
+  // V031 로 anon SELECT 가 차단되면 error(42501) 가 오는데, count 만 보면 silent 0 으로
+  // 위장된다. error 시 throw 해 호출처(React Query)가 isError 로 잡게 한다.
+  if (complexRes.error || articleRes.error) {
+    throw new Error("통계 조회 실패");
+  }
   return {
     complex_count: complexRes.count ?? 0,
-    
+
     article_count: articleRes.count ?? 0,
   };
 }
@@ -51,12 +56,14 @@ export async function getRegionsDirect(): Promise<Regions> {
   let from = 0;
 
   while (true) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("complexes")
       .select("sido, sigungu, dong")
       .not("sido", "is", null)
       .range(from, from + PAGE - 1);
 
+    // V031 anon SELECT 차단(42501) 시 error 가 오면 throw — silent 빈 지역목록 방지
+    if (error) throw new Error("지역 목록 조회 실패");
     if (!data || data.length === 0) break;
 
     for (const row of data) {
@@ -82,11 +89,13 @@ export async function getRegionsDirect(): Promise<Regions> {
 /** 단지 키워드 검색 */
 export async function searchComplexesDirect(keyword: string) {
   const supabase = sb();
-  const { data, count } = await supabase
+  const { data, count, error } = await supabase
     .from("complexes")
     .select("*", { count: "exact" })
     .ilike("complex_name", `%${keyword}%`)
     .limit(50);
+  // V031 anon SELECT 차단(42501) 시 error 를 무시하면 silent 0건으로 위장된다 → throw
+  if (error) throw new Error("단지 검색 실패");
   return { complexes: (data ?? []) as Complex[], total: count ?? 0 };
 }
 
@@ -97,7 +106,10 @@ export async function getComplexesByRegionDirect(sido: string, sigungu?: string,
   let query = supabase.from("complexes").select("*", { count: "exact" }).eq("sido", normalizedSido);
   if (sigungu) query = query.eq("sigungu", sigungu);
   if (dong) query = query.eq("dong", dong);
-  const { data, count } = await query.limit(200);
+  const { data, count, error } = await query.limit(200);
+  // V031 anon SELECT 차단(42501) 시 error 를 무시하면 "이 지역에 등록된 단지가 없습니다"
+  // 빈 화면으로 위장된다(세션 290 사고). throw 해 호출처가 에러 UI 를 띄우게 한다.
+  if (error) throw new Error("지역별 단지 조회 실패");
   return { complexes: (data ?? []) as Complex[], total: count ?? 0 };
 }
 
@@ -135,7 +147,9 @@ export async function getArticlesDirect(complexNo: string, filters?: Record<stri
   const pageSize = Number(filters?.page_size ?? 50);
   query = query.range((page - 1) * pageSize, page * pageSize - 1);
 
-  const { data, count } = await query;
+  const { data, count, error } = await query;
+  // V031 anon SELECT 차단(42501) 시 error 를 무시하면 silent 빈 매물목록으로 위장된다 → throw
+  if (error) throw new Error("매물 조회 실패");
   return {
     articles: (data ?? []) as Article[],
     total: count ?? 0,

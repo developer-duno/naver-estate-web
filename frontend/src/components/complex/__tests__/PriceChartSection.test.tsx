@@ -71,6 +71,34 @@ describe("PriceChartSection", () => {
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 
+  it("priceHistory 실패 시 에러 문구 + '다시 시도' 버튼 노출, 클릭하면 재조회한다", async () => {
+    mockGetPriceHistory.mockRejectedValue(new Error("network"));
+    renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} />);
+    await waitFor(() => {
+      expect(screen.getByText(/가격 추이를 불러오지 못했습니다/)).toBeInTheDocument();
+    });
+    const callsBefore = mockGetPriceHistory.mock.calls.length;
+    await userEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    await waitFor(() => {
+      expect(mockGetPriceHistory.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+    // 다음 테스트 오염 방지 — 기본 성공 응답 복원
+    mockGetPriceHistory.mockResolvedValue({ complex_no: "C001", items: [] });
+  });
+
+  it("accessToken 없으면 수집 버튼 옆에 '로그인 후 수집할 수 있습니다' 안내 노출", async () => {
+    renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} />);
+    expect(await screen.findByText(/로그인 후 수집할 수 있습니다/)).toBeInTheDocument();
+  });
+
+  it("accessToken 있으면 로그인 안내 미노출", async () => {
+    renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} accessToken="t" />);
+    await waitFor(() => {
+      expect(mockStartPriceCollect).toHaveBeenCalled();
+    });
+    expect(screen.queryByText(/로그인 후 수집할 수 있습니다/)).not.toBeInTheDocument();
+  });
+
   it("startPriceCollect 가 429 reject 시 '요청 한도 초과' 에러 메시지 노출 (사용자 침묵 방지)", async () => {
     const apiErr = Object.assign(new Error("rate limit"), { statusCode: 429 });
     mockStartPriceCollect.mockRejectedValueOnce(apiErr);

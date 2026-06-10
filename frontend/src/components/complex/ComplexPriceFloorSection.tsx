@@ -25,6 +25,7 @@ export default function ComplexPriceFloorSection({ complexNo, onFilterChange }: 
       error={priceStatsQuery.isError}
       loading={priceStatsQuery.isLoading}
       onFilterChange={onFilterChange}
+      onRetry={() => priceStatsQuery.refetch()}
     />
   );
 }

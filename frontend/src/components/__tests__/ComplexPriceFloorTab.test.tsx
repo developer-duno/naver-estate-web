@@ -43,6 +43,21 @@ describe("ComplexPriceFloorTab 컴포넌트", () => {
     ).toBeInTheDocument();
   });
 
+  /** 에러 상태 + onRetry — 다시 시도 버튼 */
+  it("error=true 이고 onRetry 가 있으면 '다시 시도' 버튼이 보이고 클릭 시 onRetry 를 호출한다", () => {
+    const onRetry = vi.fn();
+    render(<ComplexPriceFloorTab priceStats={null} error={true} loading={false} onRetry={onRetry} />);
+    const btn = screen.getByRole("button", { name: "다시 시도" });
+    fireEvent.click(btn);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  /** 에러 상태 + onRetry 미전달 — 버튼 숨김 (하위호환) */
+  it("error=true 이고 onRetry 가 없으면 '다시 시도' 버튼을 렌더하지 않는다", () => {
+    render(<ComplexPriceFloorTab priceStats={null} error={true} loading={false} />);
+    expect(screen.queryByRole("button", { name: "다시 시도" })).not.toBeInTheDocument();
+  });
+
   /** priceStats null → 데이터 부족 */
   it("priceStats=null 이면 데이터 부족 메시지를 표시한다", () => {
     render(<ComplexPriceFloorTab priceStats={null} error={false} loading={false} />);

@@ -26,6 +26,8 @@ _GUARDED_JOBS = [
     # 세션 266 에서 이미 가드된 핵심 경로 (회귀 방지로 함께 검증)
     ("service_discover.py", "crawl_complex_articles"),
     ("service_discover.py", "crawl_article_details"),
+    # 세션 288: CrawlJob 기록 신설과 동시에 가드 적용 (last_run null 해소)
+    ("service_public.py", "backfill_price_batch"),
 ]
 
 

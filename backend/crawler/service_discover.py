@@ -116,6 +116,9 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, sche
             _throttle_discover.wait()
 
         job.status = "completed"
+        # total_items 미설정이면 어드민 scheduler-status 에 total 0 / processed N 으로
+        # 어긋나 보였다 (세션 288 라이브 점검 L3). 발견형 잡은 둘이 같은 값.
+        job.total_items = total_found
         job.processed_items = total_found
         job.completed_at = utcnow()
         db.commit()
@@ -388,6 +391,15 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
     db.commit()
 
     try:
+        # 아래 후보 SELECT 가 부하 꼬리에서 간헐적으로 8s statement_timeout 에 잘린다
+        # (2026-06-10 라이브 24h 31회 중 2회 QueryCanceled, 동일 쿼리 EXPLAIN 1.4~3.3s).
+        # 8s 가드(세션 255)는 웹 요청 폭주 보호용 — 배치 잡 세션에 한해 30s 로 상향.
+        # NullPool 이라 연결이 세션 전용이고 종료 시 닫혀 다른 요청에 누수 0.
+        # 인덱스 추가는 세션 266·267 적대검증 폐기 답습 유지(combined_aggregate_index_void).
+        if db.bind is not None and db.bind.dialect.name == "postgresql":
+            from sqlalchemy import text
+            db.execute(text("SET statement_timeout = 30000"))
+
         articles = (
             db.query(Article)
             .filter(Article.detail_crawled == False, Article.is_active == True)

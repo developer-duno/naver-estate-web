@@ -6,11 +6,12 @@ import { formatChartPrice } from "@/lib/format";
 import Skeleton from "@/components/Skeleton";
 
 /** 층수별 가격 탭 — 카드형 UI + 클릭 시 해당 층수 필터 적용 */
-export default function ComplexPriceFloorTab({ priceStats, error, loading, onFilterChange }: {
+export default function ComplexPriceFloorTab({ priceStats, error, loading, onFilterChange, onRetry }: {
   priceStats: PriceStats | null;
   error: boolean;
   loading: boolean;
   onFilterChange?: (filters: ArticleFilters) => void;
+  onRetry?: () => void;
 }) {
   const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
 
@@ -21,7 +22,21 @@ export default function ComplexPriceFloorTab({ priceStats, error, loading, onFil
         <Skeleton className="h-48 w-full" />
       </div>
     );
-  if (error) return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
+  if (error)
+    return (
+      <div className="text-center py-2">
+        <p className="text-red-500 text-sm">가격 통계를 불러오지 못했습니다</p>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={() => onRetry()}
+            className="text-xs text-blue-600 hover:underline mt-2"
+          >
+            다시 시도
+          </button>
+        )}
+      </div>
+    );
   if (!priceStats || priceStats.by_floor.length === 0)
     return <p className="text-gray-500 text-sm text-center">층수별 가격 데이터가 부족합니다</p>;
 

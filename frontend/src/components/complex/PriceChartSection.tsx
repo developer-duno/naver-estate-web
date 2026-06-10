@@ -78,6 +78,9 @@ export default function PriceChartSection({ complexNo, pyeongDetails, accessToke
         >
           {collecting ? "수집 중..." : "실거래가 수집"}
         </Button>
+        {!accessToken && (
+          <span className="text-xs text-gray-400">로그인 후 수집할 수 있습니다</span>
+        )}
         {collectMessage && (
           <span className={`text-xs ${
             collectMessageType === "error" ? "text-red-500" :
@@ -94,7 +97,16 @@ export default function PriceChartSection({ complexNo, pyeongDetails, accessToke
           <Skeleton className="h-72 w-full" />
         </div>
       ) : priceHistoryQuery.isError ? (
-        <p className="text-red-500 text-sm">가격 추이를 불러오지 못했습니다</p>
+        <div className="text-center py-4">
+          <p className="text-red-500 text-sm">가격 추이를 불러오지 못했습니다</p>
+          <button
+            type="button"
+            onClick={() => priceHistoryQuery.refetch()}
+            className="text-xs text-blue-600 hover:underline mt-2"
+          >
+            다시 시도
+          </button>
+        </div>
       ) : (
         <LazyPriceHistory items={historyItems} />
       )}

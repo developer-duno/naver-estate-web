@@ -108,6 +108,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 | 03:00 | naver-estate-web | discover_regions | 일요일 |
 | 03:30 | naver-estate-web | backfill_price (data.go.kr, 네이버 0) | 매일 (PUBLIC_DATA_ENABLED) |
 | 04:00 | naver-estate-web | collect_prices | 수요일 |
+| 05:30 | mibunyang | KOSIS 로컬 러너 10종 (kosis.kr, 네이버 0 — Windows 작업 MibunyangKosisLocal, 세션 289 GH→집서버 이전) | 매일 (일자 디스패치) |
 | 4h interval | naver-estate-web | 단지 상세 backfill APT/OPST | 매일 |
 | 07:00 | naver-estate-web | 단지 상세 backfill JGC·ABYG·OBYG | 화·수·목 |
 | 08:00 | mibunyang | 로컬 naver-collect.py | 월/목 |

@@ -259,7 +259,7 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
         db.close()
 
 
-def backfill_price_batch(batch_size: int = 20):
+def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = None):
     """가격 이력이 부족한 상위 단지 일괄 소급 수집.
 
     선정 기준: 세대수 상위 + price_history 6개월 미만인 단지.
@@ -269,6 +269,17 @@ def backfill_price_batch(batch_size: int = 20):
     from db.models import ComplexPriceHistory
 
     db = SessionLocal()
+    # 어드민 scheduler-status 는 CrawlJob(scheduler_job_id) 최신 행으로 last_run 을
+    # 보여준다 — 본 함수만 기록이 없어 화면에 항상 last_run: null 로 떠 실행 여부를
+    # 알 수 없었다 (세션 288 라이브 점검). 같은 파일 collect_public_trade_data 패턴 답습.
+    job = CrawlJob(
+        job_type="price_backfill", scheduler_job_id=scheduler_job_id,
+        status="running", started_at=utcnow(),
+    )
+    db.add(job)
+    db.commit()
+    job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
+
     try:
         rich_nos = (
             select(ComplexPriceHistory.complex_no)
@@ -299,7 +310,24 @@ def backfill_price_batch(batch_size: int = 20):
                 failed += 1
                 logger.exception("소급 수집 개별 실패: %s", cno)
 
+        job.status = "completed"
+        job.total_items = total
+        job.processed_items = success
+        job.completed_at = utcnow()
+        db.commit()
         logger.info("소급 배치 완료: 성공 %d / 실패 %d / 전체 %d", success, failed, total)
         return {"success": success, "failed": failed, "total": total}
+    except Exception as e:
+        try:
+            db.rollback()
+            job.status = "failed"
+            job.error_message = str(e)[:500]
+            job.completed_at = utcnow()
+            db.commit()
+        except Exception:
+            # 연결이 끊긴 세션이면 위 commit 도 던진다 — 새 세션으로 확실히 마킹
+            fail_job_safely(job_id, str(e)[:500])
+        logger.exception("소급 배치 실패")
+        return {"success": 0, "failed": 0, "total": 0, "error": str(e)[:200]}
     finally:
         db.close()

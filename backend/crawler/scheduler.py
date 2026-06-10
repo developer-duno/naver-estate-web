@@ -150,7 +150,7 @@ def create_scheduler() -> BackgroundScheduler:
             "cron",
             hour=3,
             minute=30,
-            kwargs={"batch_size": PUBLIC_PRICE_BACKFILL_BATCH_SIZE},
+            kwargs={"batch_size": PUBLIC_PRICE_BACKFILL_BATCH_SIZE, "scheduler_job_id": "backfill_price"},
             id="backfill_price",
             name="시세 이력 소급 수집",
             max_instances=1,

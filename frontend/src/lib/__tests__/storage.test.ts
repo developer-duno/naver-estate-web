@@ -2,16 +2,44 @@
  * localStorage 래퍼 테스트 — 검색 히스토리 + 즐겨찾기
  * 실행: npx vitest run src/lib/__tests__/storage.test.ts
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import {
   getSearchHistory, addSearchHistory, removeSearchHistory, clearSearchHistory,
   getFavorites, isFavorite, toggleFavorite,
   getArticleViewMode, setArticleViewMode,
   getArticlePageSize, setArticlePageSize,
+  safeSetItem,
 } from "../storage";
 
 beforeEach(() => {
   localStorage.clear();
+});
+
+// ── safeSetItem 공통 쓰기 헬퍼 (세션 287) ──
+
+describe("safeSetItem", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** 정상 저장: true 반환 + 값 일치 */
+  it("정상 저장 시 true 반환 + localStorage 값 일치", () => {
+    const ok = safeSetItem("test_key", "hello", "TestCtx");
+    expect(ok).toBe(true);
+    expect(localStorage.getItem("test_key")).toBe("hello");
+  });
+
+  /** quota 초과(throw) 시: throw 전파 없이 false 반환 — 호출자 crash 방지 */
+  it("setItem 이 throw 하면 throw 전파 없이 false 반환", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("QuotaExceededError", "QuotaExceededError");
+    });
+    let result: boolean | undefined;
+    expect(() => { result = safeSetItem("k", "v", "TestCtx"); }).not.toThrow();
+    expect(result).toBe(false);
+    expect(warn).toHaveBeenCalled();
+  });
 });
 
 // ── 검색 히스토리 ──

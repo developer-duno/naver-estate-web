@@ -115,13 +115,16 @@ export default function AcquisitionInputs(props: Props) {
             checked={isFirstTime}
             onChange={(e) => onIsFirstTimeChange(e.target.checked)}
             disabled={firstTimeDisabledReason !== null}
+            aria-describedby={firstTimeDisabledReason ? "first-time-disabled-reason" : undefined}
           />
           <span className={`text-sm ${firstTimeDisabledReason ? "text-gray-400" : "text-gray-700"}`}>
             무주택 생애최초 감면 (200만원 한도)
           </span>
         </label>
         {firstTimeDisabledReason && (
-          <p className="text-xs text-amber-700 ml-6 mt-0.5">{firstTimeDisabledReason}</p>
+          <p id="first-time-disabled-reason" className="text-xs text-amber-700 ml-6 mt-0.5">
+            {firstTimeDisabledReason}
+          </p>
         )}
       </div>
     </section>

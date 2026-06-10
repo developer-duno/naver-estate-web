@@ -27,7 +27,7 @@ export default function ComplexHeader({
 }: ComplexHeaderProps) {
   return (
     <div className="flex items-center gap-2 md:gap-4 flex-wrap">
-      <button type="button" onClick={onBack} aria-label="이전 페이지" className="text-gray-500 hover:text-gray-600 text-xl">
+      <button type="button" onClick={onBack} aria-label="이전 페이지" className="text-gray-500 hover:text-gray-600 text-xl rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
         ←
       </button>
       <h1 className="text-lg md:text-2xl font-bold truncate">{complex.complex_name}</h1>

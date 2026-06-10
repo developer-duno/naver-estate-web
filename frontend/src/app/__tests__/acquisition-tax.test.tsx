@@ -77,6 +77,20 @@ describe("/tools/acquisition-tax 페이지", () => {
     expect(firstTime.disabled).toBe(true);
   });
 
+  /** 생애최초 비활성 시 사유 p 를 aria-describedby 로 연결 (스크린리더가 비활성 이유 공지) — 세션 287 */
+  it("생애최초 비활성 시 aria-describedby 가 사유 p 와 연결, 활성 시 미연결", () => {
+    render(<AcquisitionTaxToolPage />);
+    const firstTime = screen.getByRole("checkbox", { name: /무주택 생애최초/ });
+    // 초기(1주택 house) 상태: 활성 → describedby 없음
+    expect(firstTime).not.toHaveAttribute("aria-describedby");
+    // 오피스텔 선택 → 비활성 + describedby 가 사유 p 의 id 를 가리킴
+    fireEvent.change(screen.getByLabelText("매물 유형"), { target: { value: "officetel-commercial" } });
+    expect(firstTime).toHaveAttribute("aria-describedby", "first-time-disabled-reason");
+    const reason = document.getElementById("first-time-disabled-reason");
+    expect(reason).not.toBeNull();
+    expect(reason?.textContent).toMatch(/오피스텔·상가는 생애최초 감면 대상이 아닙니다/);
+  });
+
   /** 초기화 버튼 — 입력값을 마운트 초기값으로 복원 (areaM2=84, houses=1, propertyType='house', '전부 0' 금지) */
   it("초기화 버튼 — 매매가·면적·매물유형이 마운트 초기값으로 복귀", () => {
     render(<AcquisitionTaxToolPage />);

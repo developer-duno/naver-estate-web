@@ -43,27 +43,29 @@ describe("AdminCard", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  /** help prop: ⓘ 아이콘 + 항상 보이는 회색 캡션이 함께 렌더 */
-  it("help prop 이 있으면 ⓘ 아이콘 + 캡션 텍스트 항상 표시", () => {
+  /** help prop: ⓘ 는 aria-hidden 장식, 도움말 텍스트는 항상 보이는 캡션 p 가 단독 노출
+   *  (스크린리더 중복 읽기 방지 — 세션 287 적대검증 답습) */
+  it("help prop 이 있으면 ⓘ(aria-hidden 장식) + 캡션 텍스트 단독 노출", () => {
     render(
       <AdminCard title="도움말 카드" help="이건 도움말 텍스트입니다">
         <p>body</p>
       </AdminCard>,
     );
-    const helpIcon = screen.getByRole("img", { name: "이건 도움말 텍스트입니다" });
-    expect(helpIcon).toBeInTheDocument();
-    expect(helpIcon.textContent).toBe("ⓘ");
-    // 캡션이 항상 보이는 회색 텍스트로 함께 렌더 (hover 없이도 즉시 확인 가능)
+    // 캡션이 항상 보이는 회색 텍스트로 렌더 (sighted + 스크린리더 모두 1회 노출)
     expect(screen.getByText("이건 도움말 텍스트입니다")).toBeInTheDocument();
+    // ⓘ 는 장식이라 role=img 로 노출되지 않음 (aria-hidden → 스크린리더가 무시, help 중복 읽기 방지)
+    expect(screen.queryByRole("img")).toBeNull();
+    // ⓘ 글리프 자체는 시각적으로 존재
+    expect(screen.getByText("ⓘ")).toBeInTheDocument();
   });
 
-  /** help 미지정: ⓘ 아이콘 미렌더 */
-  it("help 미지정 시 ⓘ 아이콘 미렌더", () => {
+  /** help 미지정: ⓘ 글리프 미렌더 */
+  it("help 미지정 시 ⓘ 미렌더", () => {
     render(
       <AdminCard title="기본 카드">
         <p>body</p>
       </AdminCard>,
     );
-    expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.queryByText("ⓘ")).toBeNull();
   });
 });

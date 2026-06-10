@@ -2,7 +2,7 @@
  * useLocalStorageList 제네릭 훅 테스트 — localStorage 기반 리스트 관리
  * 실행: npx vitest run src/hooks/__tests__/useLocalStorageList.test.ts
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useLocalStorageList } from "../useLocalStorageList";
 
@@ -20,6 +20,25 @@ const config = {
 describe("useLocalStorageList 제네릭 훅", () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** quota 초과(setItem throw) 시 crash 없이 메모리 상태만 갱신 — safeSetItem 가드 (s288) */
+  it("localStorage.setItem이 quota로 throw해도 add가 crash 없이 메모리 상태를 갱신한다", () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("quota exceeded", "QuotaExceededError");
+    });
+    const { result } = renderHook(() => useLocalStorageList<TestItem>(config));
+    let returned: boolean | undefined;
+    act(() => {
+      returned = result.current.add({ id: "1", label: "A" });
+    });
+    // throw 전파 없이 add 성공 반환 + 메모리 목록 갱신 (저장만 실패)
+    expect(returned).toBe(true);
+    expect(result.current.list).toHaveLength(1);
   });
 
   /** 초기 상태: 빈 목록 */

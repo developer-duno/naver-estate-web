@@ -46,7 +46,7 @@ export default function ComplexHeader({
         </Badge>
       )}
       {complex.last_crawled_at && (
-        <span className="hidden sm:inline-flex text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+        <span className="inline-flex text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
           마지막 크롤링: {formatTimeAgo(complex.last_crawled_at)}
         </span>
       )}

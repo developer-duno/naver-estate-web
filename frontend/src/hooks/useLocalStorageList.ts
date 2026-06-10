@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { readJSON } from "@/lib/storage";
+import { readJSON, safeSetItem } from "@/lib/storage";
 
 /** localStorage 기반 리스트 관리 제네릭 훅 — useCompare, useMbCompare 공통 로직 */
 interface UseLocalStorageListConfig<T> {
@@ -25,7 +25,9 @@ export function useLocalStorageList<T>({
 
   const save = useCallback(
     (items: T[]) => {
-      localStorage.setItem(storageKey, JSON.stringify(items));
+      // quota 초과/사생활 모드에서 throw 하면 비교 추가·제거 버튼이 통째로 죽는다 —
+      // safeSetItem 은 실패 시 false 만 반환, 메모리 상태(setList)는 계속 진행 (PR #136 패턴)
+      safeSetItem(storageKey, JSON.stringify(items), storageKey);
       setList(items);
     },
     [storageKey],

@@ -118,6 +118,22 @@ describe("단지 비교 — 에러 분기", () => {
     });
     expect(screen.queryByText("6770%")).toBeNull();
   });
+
+  it("평당가 행이 '건폐율' 바로 다음에 삽입된다 (findIndex 위치 가드 — 세션287)", async () => {
+    // 매직넘버 splice(17) → findIndex('건폐율')+1 교체. BASE_ROWS 순서가 바뀌어도
+    // 평당가가 건폐율 다음에 오는지 행 라벨 순서로 가드. (데스크톱 테이블 좌측 라벨 th)
+    renderPage("ids=A,B");
+    await waitFor(() => {
+      expect(screen.getAllByText("68%").length).toBeGreaterThanOrEqual(1);
+    });
+    // 데스크톱 테이블 행의 좌측 라벨(첫 셀) 텍스트를 순서대로 수집
+    const labelCells = Array.from(
+      document.querySelectorAll("table tbody tr th:first-child, table tbody tr td:first-child"),
+    ).map((el) => el.textContent?.trim() ?? "");
+    const bcrIdx = labelCells.indexOf("건폐율");
+    expect(bcrIdx).toBeGreaterThanOrEqual(0);
+    expect(labelCells[bcrIdx + 1]).toBe("평당가");
+  });
 });
 
 describe("모바일 비교 화면 tablist (Radix Tabs, PR 5b)", () => {

@@ -65,7 +65,7 @@ const BASE_ROWS: { label: string; render: (c: Complex) => ReactNode }[] = [
   { label: "시공사", render: (c) => c.construction_company || "-" },
   { label: "용적률", render: (c) => c.floor_area_ratio ? `${c.floor_area_ratio}%` : "-" },
   { label: "건폐율", render: (c) => c.building_coverage_ratio ? `${c.building_coverage_ratio}%` : "-" },
-  // 평당가는 여기에 동적 삽입 (인덱스 17)
+  // 평당가는 "건폐율" 다음에 동적 삽입 (compareRows useMemo 의 findIndex 참조)
   { label: "매물수", render: (c) => formatCount(c.article_count) },
   { label: "주변 중위가", render: (c) => formatPrice(c.nearby_median_price) },
   { label: "전세가율", render: (c) => c.jeonse_rate ? `${c.jeonse_rate.toFixed(0)}%` : "-" },
@@ -176,9 +176,11 @@ function CompareContent() {
         return "-";
       },
     };
-    // 건폐율(인덱스 16) 다음, 매물수(인덱스 17) 앞에 삽입
+    // 평당가는 "건폐율" 행 다음(= 매물수 앞)에 삽입. BASE_ROWS 순서가 바뀌어도
+    // 위치가 따라가도록 라벨로 찾는다. 못 찾으면(라벨 변경 등) 기존 위치 17로 폴백.
     const rows = [...BASE_ROWS];
-    rows.splice(17, 0, ppRow);
+    const bcrIdx = rows.findIndex((r) => r.label === "건폐율");
+    rows.splice(bcrIdx >= 0 ? bcrIdx + 1 : 17, 0, ppRow);
     return rows;
   }, [pricePerPyeong, statsLoading, statsErrorMap]);
 

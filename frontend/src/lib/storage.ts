@@ -24,6 +24,28 @@ export interface FavoriteComplex {
   added_at: number;
 }
 
+// ── 공통 쓰기 헬퍼 ──
+
+/**
+ * localStorage.setItem 안전 래퍼 — quota 초과/사생활 모드 시 throw 대신 false 반환.
+ * try-catch 없이 직접 setItem 하던 곳(toggleFavorite 등)이 quota 초과 시 페이지를 crash 시키던 문제 방어.
+ * @returns 저장 성공 시 true, 실패 시 false (호출자는 무시해도 됨 — 메모리 토글은 별도로 진행)
+ */
+export function safeSetItem(key: string, value: string, context: string): boolean {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err) {
+    // quota 초과는 브라우저에서 DOMException(QuotaExceededError) — instanceof Error 가 환경 따라
+    // false 일 수 있어 메시지만 안전 추출. SSR 가드는 setItem 자체가 catch 로 잡히니 console.warn 만.
+    if (typeof window !== "undefined") {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[${context}] 저장 실패: ${message}`);
+    }
+    return false;
+  }
+}
+
 // ── 검색 히스토리 ──
 
 export function readJSON<T>(key: string, fallback: T): T {
@@ -57,12 +79,12 @@ export function addSearchHistory(item: Omit<SearchHistoryItem, "timestamp">): vo
   });
   const entry: SearchHistoryItem = { ...item, timestamp: uniqueTimestamp() };
   const updated = [entry, ...deduplicated].slice(0, MAX_HISTORY);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+  safeSetItem(HISTORY_KEY, JSON.stringify(updated), "SearchHistory");
 }
 
 export function removeSearchHistory(timestamp: number): void {
   const updated = getSearchHistory().filter((h) => h.timestamp !== timestamp);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+  safeSetItem(HISTORY_KEY, JSON.stringify(updated), "SearchHistory");
 }
 
 export function clearSearchHistory(): void {
@@ -84,11 +106,12 @@ export function toggleFavorite(complex: Omit<FavoriteComplex, "added_at">): bool
   const exists = favorites.findIndex((f) => f.complex_no === complex.complex_no);
   if (exists >= 0) {
     favorites.splice(exists, 1);
-    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+    // 저장 실패해도 메모리 토글 의도(제거)는 그대로 반환 — 별표 UI 일관성 (safeSetItem 반환 무시)
+    safeSetItem(FAVORITES_KEY, JSON.stringify(favorites), "Favorites");
     return false; // 제거됨
   }
   favorites.unshift({ ...complex, added_at: Date.now() });
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+  safeSetItem(FAVORITES_KEY, JSON.stringify(favorites), "Favorites");
   return true; // 추가됨
 }
 
@@ -166,7 +189,7 @@ export function addMbSearchHistory(item: Omit<MbSearchHistoryItem, "timestamp">)
 
 export function removeMbSearchHistory(timestamp: number): void {
   const updated = getMbSearchHistory().filter((h) => h.timestamp !== timestamp);
-  localStorage.setItem(MB_HISTORY_KEY, JSON.stringify(updated));
+  safeSetItem(MB_HISTORY_KEY, JSON.stringify(updated), "MbSearchHistory");
 }
 
 export function clearMbSearchHistory(): void {
@@ -338,11 +361,12 @@ export function toggleFavoriteArticle(article: Omit<FavoriteArticle, "added_at">
   const idx = favorites.findIndex((f) => f.article_no === article.article_no);
   if (idx >= 0) {
     favorites.splice(idx, 1);
-    localStorage.setItem(FAVORITE_ARTICLES_KEY, JSON.stringify(favorites));
+    // 저장 실패해도 메모리 토글 의도(제거)는 그대로 반환 — 별표 UI 일관성 (safeSetItem 반환 무시)
+    safeSetItem(FAVORITE_ARTICLES_KEY, JSON.stringify(favorites), "FavoriteArticles");
     return false;
   }
   favorites.unshift({ ...article, added_at: Date.now() });
-  localStorage.setItem(FAVORITE_ARTICLES_KEY, JSON.stringify(favorites));
+  safeSetItem(FAVORITE_ARTICLES_KEY, JSON.stringify(favorites), "FavoriteArticles");
   return true;
 }
 

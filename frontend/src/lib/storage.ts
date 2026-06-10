@@ -179,7 +179,7 @@ export function addMbSearchHistory(item: Omit<MbSearchHistoryItem, "timestamp">)
     );
     const entry: MbSearchHistoryItem = { ...cleaned, timestamp: uniqueTimestamp() };
     const updated = [entry, ...deduplicated].slice(0, MAX_MB_HISTORY);
-    localStorage.setItem(MB_HISTORY_KEY, JSON.stringify(updated));
+    safeSetItem(MB_HISTORY_KEY, JSON.stringify(updated), "MbSearchHistory");
   } catch (err) {
     if (typeof window !== "undefined" && err instanceof Error) {
       console.warn(`[MbSearchHistory] Failed to add: ${err.message}`);
@@ -224,7 +224,7 @@ export function addMbCompareHistory(item: Omit<MbCompareHistoryItem, "timestamp"
     const deduplicated = history.filter((h) => compareSetKey(h.ids) !== key);
     const entry: MbCompareHistoryItem = { ...item, timestamp: uniqueTimestamp() };
     const updated = [entry, ...deduplicated].slice(0, MAX_MB_COMPARE_HISTORY);
-    localStorage.setItem(MB_COMPARE_HISTORY_KEY, JSON.stringify(updated));
+    safeSetItem(MB_COMPARE_HISTORY_KEY, JSON.stringify(updated), "MbCompareHistory");
   } catch (err) {
     if (typeof window !== "undefined" && err instanceof Error) {
       console.warn(`[MbCompareHistory] Failed to add: ${err.message}`);
@@ -234,7 +234,7 @@ export function addMbCompareHistory(item: Omit<MbCompareHistoryItem, "timestamp"
 
 export function removeMbCompareHistory(timestamp: number): void {
   const updated = getMbCompareHistory().filter((h) => h.timestamp !== timestamp);
-  try { localStorage.setItem(MB_COMPARE_HISTORY_KEY, JSON.stringify(updated)); } catch { /* quota */ }
+  safeSetItem(MB_COMPARE_HISTORY_KEY, JSON.stringify(updated), "MbCompareHistory");
 }
 
 export function clearMbCompareHistory(): void {
@@ -266,7 +266,7 @@ export function addMbCompareBookmark(item: Omit<MbCompareBookmarkItem, "saved_at
     const idx = bookmarks.findIndex((b) => compareSetKey(b.ids) === key);
     if (idx >= 0) {
       bookmarks[idx] = { ...bookmarks[idx], label: item.label, names: item.names };
-      localStorage.setItem(MB_COMPARE_BOOKMARK_KEY, JSON.stringify(bookmarks));
+      safeSetItem(MB_COMPARE_BOOKMARK_KEY, JSON.stringify(bookmarks), "MbCompareBookmark");
       return;
     }
     const entry: MbCompareBookmarkItem = {
@@ -275,7 +275,7 @@ export function addMbCompareBookmark(item: Omit<MbCompareBookmarkItem, "saved_at
       saved_at: uniqueTimestamp(),
     };
     const updated = [entry, ...bookmarks].slice(0, MAX_MB_COMPARE_BOOKMARKS);
-    localStorage.setItem(MB_COMPARE_BOOKMARK_KEY, JSON.stringify(updated));
+    safeSetItem(MB_COMPARE_BOOKMARK_KEY, JSON.stringify(updated), "MbCompareBookmark");
   } catch (err) {
     if (typeof window !== "undefined" && err instanceof Error) {
       console.warn(`[MbCompareBookmark] Failed to add: ${err.message}`);
@@ -285,7 +285,7 @@ export function addMbCompareBookmark(item: Omit<MbCompareBookmarkItem, "saved_at
 
 export function removeMbCompareBookmark(saved_at: number): void {
   const updated = getMbCompareBookmarks().filter((b) => b.saved_at !== saved_at);
-  try { localStorage.setItem(MB_COMPARE_BOOKMARK_KEY, JSON.stringify(updated)); } catch { /* quota */ }
+  safeSetItem(MB_COMPARE_BOOKMARK_KEY, JSON.stringify(updated), "MbCompareBookmark");
 }
 
 export function clearMbCompareBookmarks(): void {

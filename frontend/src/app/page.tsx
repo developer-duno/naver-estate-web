@@ -16,6 +16,8 @@ import type { ArticleFilters } from "@/types";
 import { buildFilterURL } from "@/hooks/useFilterParams";
 import { useSearchHistory } from "@/hooks/useSearchHistory";
 import { useFavorites } from "@/hooks/useFavorites";
+import { useArticleFavorites } from "@/hooks/useArticleFavorites";
+import Link from "next/link";
 import type { SearchHistoryItem } from "@/lib/storage";
 
 export default function HomePage() {
@@ -25,6 +27,7 @@ export default function HomePage() {
   const [articleFilters, setArticleFilters] = useState<ArticleFilters>({});
   const { history, add: addHistory, remove: removeHistory, clear: clearHistory } = useSearchHistory();
   const { favorites } = useFavorites();
+  const { favorites: articleFavorites } = useArticleFavorites();
 
   const { data: stats, isLoading: statsLoading, isError: statsError, refetch: loadStats } = useQuery({
     queryKey: queryKeys.stats,
@@ -141,6 +144,17 @@ export default function HomePage() {
             관심 단지의 ★ 버튼을 누르면 여기에 모입니다.
           </p>
         )}
+      </div>
+
+      {/* 즐겨찾기 매물 모아보기 진입점 (단지 즐겨찾기 칩과 대칭) */}
+      <div className="mt-3">
+        <Link
+          href="/search/favorites"
+          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+        >
+          <span className="text-yellow-500">&#9733;</span>
+          즐겨찾기 매물{articleFavorites.length > 0 ? ` (${articleFavorites.length})` : ""} &#8594;
+        </Link>
       </div>
     </div>
   );

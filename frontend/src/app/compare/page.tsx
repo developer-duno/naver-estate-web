@@ -384,7 +384,7 @@ function CompareContent() {
         <Tabs value={mobileTab} onValueChange={(v) => setMobileTab(v as MobileTab)}>
           <TabsList
             aria-label="비교 항목 분류"
-            className="flex gap-1.5 bg-gray-100 rounded-lg p-1 sticky top-0 z-10 w-full h-auto"
+            className="flex gap-1.5 bg-gray-100 rounded-lg p-1 sticky top-14 z-10 w-full h-auto"
           >
             {(Object.keys(MOBILE_TAB_LABELS) as MobileTab[]).map((key) => (
               <TabsTrigger

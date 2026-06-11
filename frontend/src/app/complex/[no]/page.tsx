@@ -157,6 +157,8 @@ export default function ComplexDetailPage() {
   const handlePageChange = useCallback(
     (newPage: number) => {
       setPage(newPage);
+      // 새 페이지 첫 매물이 보이게 목록 상단 복귀 — smooth 는 직후 리렌더에 취소될 수 있어 auto
+      document.getElementById("section-articles")?.scrollIntoView({ behavior: "auto", block: "start" });
     },
     [setPage]
   );

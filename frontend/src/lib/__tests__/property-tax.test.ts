@@ -63,14 +63,15 @@ describe("1세대1주택 — 공제 12억 + 특례세율", () => {
     // 종부세 = 1.8e8 × 0.5% = 90만
     expect(r.comprehensiveTaxBeforeDeduction).toBe(900_000);
     // v3-A ②: 공제할 재산세액 = 분자 (단일 합산 시 분모 = 재산세 부과액)
-    // 분자 = applyBracket((15억-12억) × 60% × 45%, SINGLE) = applyBracket(8100만, SINGLE)
-    //      = 8100만 × 0.001 - 30000 = 81000 - 30000 = 51000
-    expect(r.comprehensivePropertyTaxCredit).toBe(51_000);
-    // 차감 후 종부세 = 90만 - 5.1만 = 84.9만
-    // 세액공제 80% = 84.9만 × 0.8 = 679,200 (대법원 판결 정합 — 차감 후 기준)
-    expect(r.comprehensiveTaxCredit).toBe(679_200);
-    // 종부세 최종 = 84.9만 - 67.92만 = 16.98만
-    expect(r.comprehensiveTax).toBe(169_800);
+    // 9억 초과 1주택 → 재산세 GENERAL 세율 (§111의2 특례는 9억 이하 한정, 세션 292 결함 수정)
+    // 분자 = applyBracket((15억-12억) × 60% × 45%, GENERAL) = applyBracket(8100만, GENERAL)
+    //      = 8100만 × 0.0015 - 30000 = 121500 - 30000 = 91500
+    expect(r.comprehensivePropertyTaxCredit).toBe(91_500);
+    // 차감 후 종부세 = 90만 - 9.15만 = 80.85만
+    // 세액공제 80% = 80.85만 × 0.8 = 646,800 (대법원 판결 정합 — 차감 후 기준)
+    expect(r.comprehensiveTaxCredit).toBe(646_800);
+    // 종부세 최종 = 80.85만 - 64.68만 = 16.17만
+    expect(r.comprehensiveTax).toBe(161_700);
     expect(r.notes).toContain("age-deduction-eligible");
     expect(r.notes).toContain("hold-deduction-eligible");
     expect(r.notes).toContain("comprehensive-property-tax-credit");
@@ -85,10 +86,11 @@ describe("1세대1주택 — 공제 12억 + 특례세율", () => {
     expect(r.comprehensiveTaxBase).toBe(480_000_000);
     // 종부세 = 4.8e8 × 0.7% - 60만 = 336만 - 60만 = 276만
     expect(r.comprehensiveTaxBeforeDeduction).toBe(2_760_000);
-    // v3-A ②: 공제할 재산세액 = 분자 = applyBracket(2.16억, SINGLE) = 2.16e8 × 0.002 - 18만 = 25.2만
-    expect(r.comprehensivePropertyTaxCredit).toBe(252_000);
-    // 차감 후 = 276만 - 25.2만 = 250.8만, 세액공제 40% = 100.32만 → floor 1,003,200
-    expect(r.comprehensiveTaxCredit).toBe(1_003_200);
+    // 9억 초과 1주택 → 재산세 GENERAL 세율 (§111의2 특례는 9억 이하 한정, 세션 292 결함 수정)
+    // v3-A ②: 공제할 재산세액 = 분자 = applyBracket(2.16억, GENERAL) = 2.16e8 × 0.0025 - 18만 = 36만
+    expect(r.comprehensivePropertyTaxCredit).toBe(360_000);
+    // 차감 후 = 276만 - 36만 = 240만, 세액공제 40% = 96만 → floor 960,000
+    expect(r.comprehensiveTaxCredit).toBe(960_000);
   });
 });
 
@@ -135,6 +137,35 @@ describe("v3-A ① 1주택 재산세 차등 공정시장가액비율 (지방세�
   });
 });
 
+// 결함 수정 (세션 292): §111의2 특례세율(SINGLE)은 "시가표준액 9억원 이하 한정"
+// (지방세법 시행령 §110의2①). FMR(§109 차등 공정시장가액비율)은 9억 초과도 45% 적용이라
+// 두 법령의 9억 게이트가 다르므로 brackets 선택에만 게이트 적용. 9억 초과 1주택은 일반세율.
+describe("v3-A ①-b 1주택 재산세 특례세율 9억 게이트 (지방세법 §111의2)", () => {
+  it("1주택 공시 8억 (9억 이하) → SINGLE 특례세율 + 안내 노출 + FMR 45%", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 800_000_000, houses: 1, isSingleHouseEligible: true,
+    }));
+    expect(r.appliedRate.propertyFairMarketRatio).toBe(0.45); // FMR 6억 초과 45%
+    // 과표 = 8억 × 45% = 3.6억 → SINGLE 3억 초과 0.35%: 3.6e8 × 0.0035 - 63만 = 63만
+    expect(r.propertyTax).toBe(630_000);
+    expect(r.appliedRate.property).toBe(0.0035); // SINGLE 특례세율
+    expect(r.notes).toContain("single-house-special-rate");
+  });
+
+  it("1주택 공시 12억 (9억 초과) → 일반세율(GENERAL) + 특례 안내 미노출, FMR은 45% 유지", () => {
+    const r = calculatePropertyTax(buildInput({
+      publishedPriceWon: 1_200_000_000, houses: 1, isSingleHouseEligible: true,
+    }));
+    // FMR(§109)은 9억 초과도 45% 유지 (게이트 없음) — 불변
+    expect(r.appliedRate.propertyFairMarketRatio).toBe(0.45);
+    // 과표 = 12억 × 45% = 5.4억 → GENERAL 3억 초과 0.4%: 5.4e8 × 0.004 - 63만 = 153만
+    // (결함 시: SINGLE 0.35% = 126만 → 27만 과소산정이었음)
+    expect(r.propertyTax).toBe(1_530_000);
+    expect(r.appliedRate.property).toBe(0.004); // GENERAL 일반세율 (특례 아님)
+    expect(r.notes).not.toContain("single-house-special-rate");
+  });
+});
+
 describe("v3-A ② 종부세 공제할 재산세액 (시행령 §4의2 + 대법원 2019두39796)", () => {
   it("#CPC-1 1주택 12억 (공제 미만) → 종부세 0 → 공제할 재산세액 분기 미진입", () => {
     const r = calculatePropertyTax(buildInput({
@@ -151,11 +182,12 @@ describe("v3-A ② 종부세 공제할 재산세액 (시행령 §4의2 + 대법�
       publishedPriceWon: 1_500_000_000, houses: 1, isSingleHouseEligible: true,
       ageYears: 70, holdYears: 15,
     }));
-    // 분자 = applyBracket((15억-12억) × 0.6 × 0.45, SINGLE) = applyBracket(8100만, SINGLE)
-    //      = 8100만 × 0.001 - 30000 = 5.1만 (1.5억 이하 0.1%)
-    expect(r.comprehensivePropertyTaxCredit).toBe(51_000);
-    // 차감 후 종부세 = 90만 - 5.1만 = 84.9만, 80% 세액공제 = 67.92만 (대법원 정합)
-    expect(r.comprehensiveTaxCredit).toBe(679_200);
+    // 9억 초과 1주택 → 재산세 GENERAL 세율 (§111의2 특례는 9억 이하 한정, 세션 292 결함 수정)
+    // 분자 = applyBracket((15억-12억) × 0.6 × 0.45, GENERAL) = applyBracket(8100만, GENERAL)
+    //      = 8100만 × 0.0015 - 30000 = 9.15만 (1.5억 이하 0.15%)
+    expect(r.comprehensivePropertyTaxCredit).toBe(91_500);
+    // 차감 후 종부세 = 90만 - 9.15만 = 80.85만, 80% 세액공제 = 64.68만 (대법원 정합)
+    expect(r.comprehensiveTaxCredit).toBe(646_800);
     expect(r.notes).toContain("comprehensive-property-tax-credit");
   });
 

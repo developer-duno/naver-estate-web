@@ -78,7 +78,8 @@ function buildResult(opts: {
   const notes: AcquisitionResult["notes"] = ["disclaimer"];
   if (opts.branch === "multi-house") notes.push("multi-house-rural");
   if (opts.branch === "first-time") notes.push("first-time-base-only");
-  if ((opts.branch === "standard" || opts.branch === "first-time")
+  // 농특세 면적 비과세 안내 — standard·first-time·multi-house 공통 (85m² 이하, 중과세율 무관)
+  if ((opts.branch === "standard" || opts.branch === "first-time" || opts.branch === "multi-house")
       && opts.input.area_m2 > 0 && opts.input.area_m2 <= NATIONAL_HOUSING_AREA_M2) {
     notes.push("area-85-exempt");
   }

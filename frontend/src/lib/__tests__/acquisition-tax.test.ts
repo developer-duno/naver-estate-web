@@ -77,6 +77,49 @@ describe("calculateAcquisitionTax — 위택스 6 케이스 (도메인 정확성
     expect(r.notes).toContain("multi-house-rural");
   });
 
+  // 결함 수정 (세션 292): 다주택 중과여도 국민주택규모(85m² 이하)는 농특세 비과세
+  // 행안부 질의회신(olta.re.kr num=60084141) — 중과세율 무관 면적 기준 비과세
+  it("다주택 농특세 면적 비과세: 7억 2주택 조정 84m² → 농특 0 (8% 중과여도 비과세)", () => {
+    const r = calculateAcquisitionTax({
+      ...baseInput,
+      amountWon: 700_000_000,
+      houses: 2,
+      isRegulatedArea: true,
+      area_m2: 84,
+    });
+    expect(r.baseTax).toBe(56_000_000); // 7억 × 8% (중과)
+    expect(r.ruralTax).toBe(0); // 84m² → 농특 비과세 (중과세율 무관)
+    expect(r.branch).toBe("multi-house");
+    expect(r.notes).toContain("area-85-exempt"); // 비과세 안내 노출
+  });
+
+  it("다주택 농특세 면적 비과세: 10억 3주택 조정 84m² → 농특 0 (12% 중과여도 비과세)", () => {
+    const r = calculateAcquisitionTax({
+      ...baseInput,
+      amountWon: 1_000_000_000,
+      houses: 3,
+      isRegulatedArea: true,
+      area_m2: 84,
+    });
+    expect(r.baseTax).toBe(120_000_000); // 10억 × 12% (중과)
+    expect(r.ruralTax).toBe(0); // 84m² → 농특 비과세 (1.0% 분기도 면적 가드)
+    expect(r.branch).toBe("multi-house");
+    expect(r.notes).toContain("area-85-exempt");
+  });
+
+  it("다주택 농특세 면적 과세: 10억 2주택 조정 110m² → 농특 600만 유지 (85m² 초과)", () => {
+    const r = calculateAcquisitionTax({
+      ...baseInput,
+      amountWon: 1_000_000_000,
+      houses: 2,
+      isRegulatedArea: true,
+      area_m2: 110,
+    });
+    expect(r.ruralTax).toBe(6_000_000); // 110m² (85 초과) → 0.6% 과세 (기존 동작 불변)
+    expect(r.branch).toBe("multi-house");
+    expect(r.notes).not.toContain("area-85-exempt");
+  });
+
   it("케이스 6: 5억 생애최초 84m² → 본세 500만, 감면 200만, 농특 0, 교육 50만", () => {
     const r = calculateAcquisitionTax({
       ...baseInput,
@@ -123,12 +166,13 @@ describe("calculateAcquisitionTax — 진입점 분기 5종", () => {
     expect(r.branch).toBe("officetel");
   });
 
-  it("3주택 조정 → 12% 중과 (농특 1.0%)", () => {
+  it("3주택 조정 110m² → 12% 중과 (농특 1.0%, 85m² 초과 과세)", () => {
     const r = calculateAcquisitionTax({
       ...baseInput,
       amountWon: 1_000_000_000,
       houses: 3,
       isRegulatedArea: true,
+      area_m2: 110, // 85m² 초과 → 농특 1.0% 분기 검증
     });
     expect(r.baseTax).toBe(120_000_000); // 10억 × 12%
     expect(r.ruralTax).toBe(10_000_000); // 10억 × 1.0%
@@ -215,16 +259,19 @@ describe("calculateAcquisitionTax — 농특세 면적 가드 (85m² 임계 + ar
     expect(r.notes).not.toContain("area-85-exempt");
   });
 
-  it("다주택 + 작은 면적 → 면적 무관 농특 부과 (multi-house 분기)", () => {
+  // 결함 수정 (세션 292): 다주택 중과여도 국민주택규모(85m² 이하)는 농특세 비과세.
+  // 행안부 질의회신(olta.re.kr num=60084141) — 중과세율 적용 여부 무관, 면적 기준 비과세.
+  // (이전 테스트는 "다주택은 면적 무관 부과"로 결함을 의도된 것처럼 단언했으나 법령 위반이었음)
+  it("다주택 + 작은 면적 → 면적 비과세 (multi-house 분기, 중과세율 무관)", () => {
     const r = calculateAcquisitionTax({
       ...baseInput,
       amountWon: 1_000_000_000,
       houses: 2,
       isRegulatedArea: true,
-      area_m2: 60, // 85m² 미만이지만 다주택은 부과
+      area_m2: 60, // 85m² 이하 → 다주택 중과여도 농특 비과세
     });
-    expect(r.ruralTax).toBe(6_000_000); // 10억 × 0.6%
-    expect(r.notes).not.toContain("area-85-exempt");
+    expect(r.ruralTax).toBe(0); // 60m² → 농특 0 (8% 중과세율 무관)
+    expect(r.notes).toContain("area-85-exempt");
   });
 });
 

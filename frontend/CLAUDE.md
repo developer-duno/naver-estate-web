@@ -16,8 +16,8 @@
 
 ```
 frontend/src/
-├── app/           # Next.js App Router (31 페이지, mibunyang/* + tools/* 5종 + admin/* + blog/* 포함)
-├── components/    # 재사용 컴포넌트 (mb/35 + admin/21 + ui/13 + complex/7 + article/7 + filter/4 + search/2 + blog/2 + 루트 40 = 131 TSX, `__tests__/` 제외)
+├── app/           # Next.js App Router (31 페이지 = page.tsx 실측, mibunyang/* + tools/* 5종 + admin/* + blog/* + search/favorites 매물 즐겨찾기 포함)
+├── components/    # 재사용 컴포넌트 (mb/35 + admin/21 + ui/13 + complex/7 + article/7 + filter/4 + search/2 + blog/2 + 루트 45, `__tests__/` 제외 — 루트에 ArticleFavoritesTab 등 누적)
 ├── hooks/         # 커스텀 훅 (21개, useLocalStorageList + useLocalStorageFavorites 제네릭 훅 포함)
 ├── lib/           # 47개 (최상위 37 + api/ 9 모듈 + admin/ 1, `__tests__/` 제외 — storage/format/query-keys 별도 폴더 아니라 최상위 .ts 통합)
 ├── types/         # TypeScript 인터페이스 (estate + Mb* 10개 + naver-maps.d.ts)

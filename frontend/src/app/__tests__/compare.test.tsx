@@ -190,11 +190,12 @@ describe("모바일 비교 화면 tablist (Radix Tabs, PR 5b)", () => {
   });
 
   it("TabsList className 머지 (w-full + sticky 영역 폭 보존)", async () => {
-    // 검증 의도: TabsList 기본 w-fit 을 w-full 로 override + sticky top-0 z-10 보존
-    //          = 시각 변화 0 약속 jsdom 검증 (F6·F-it4 정정)
+    // 검증 의도: TabsList 기본 w-fit 을 w-full 로 override + sticky z-10 보존 (F6·F-it4 정정)
+    // top-14 = 전역 Header(sticky top-0 z-50 h-14) 아래에 고정 — top-0 이면 헤더에 가려져
+    // 핀 상태에서 보이지도 눌리지도 않음 (세션 295, AdminLivePanel top-20 선례)
     renderPage("ids=A,B");
     const tablist = await screen.findByRole("tablist", { name: "비교 항목 분류" });
-    expect(tablist).toHaveClass("w-full", "sticky", "top-0", "z-10");
+    expect(tablist).toHaveClass("w-full", "sticky", "top-14", "z-10");
   });
 });
 

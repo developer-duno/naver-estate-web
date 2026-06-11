@@ -50,6 +50,13 @@ export default function ArticleDetail({ articleNo, onClose, complex }: Props) {
 
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  // 모달 열린 동안 배경 페이지 스크롤 잠금 — PromptModal.tsx 답습 (prev 보존 후 복원)
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   useEffect(() => {
     const el = dialogRef.current;
     if (!el) return;

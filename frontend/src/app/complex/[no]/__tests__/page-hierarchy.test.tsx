@@ -11,7 +11,7 @@
  * 실행: npx vitest run src/app/complex/[no]/__tests__/page-hierarchy.test.tsx
  */
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 
 // 모든 API 모킹 — 단지/매물/면적/시세 fresh 응답
@@ -143,5 +143,27 @@ describe("ComplexDetailPage 정보 위계 (PR 6d 데스크톱 통합 후)", () =
       const tens = screen.getAllByText("10개");
       expect(tens.length).toBeGreaterThanOrEqual(2);
     });
+  });
+});
+
+describe("매물 페이지네이션 스크롤 복귀 (세션 295)", () => {
+  it("'다음' 페이지 클릭 시 매물 섹션으로 scrollIntoView(auto) 호출", async () => {
+    const api = await import("@/lib/api");
+    vi.mocked(api.getArticles).mockResolvedValue({ articles: [], total: 25 } as never);
+    const scrollSpy = vi.fn();
+    // test-setup.ts 폴리필이 HTMLElement.prototype 에 박혀 있어 같은 레벨에서 스파이
+    const orig = window.HTMLElement.prototype.scrollIntoView;
+    window.HTMLElement.prototype.scrollIntoView = scrollSpy;
+    try {
+      renderPage();
+      const nextBtn = await screen.findByRole("button", { name: "다음" });
+      scrollSpy.mockClear();
+      fireEvent.click(nextBtn);
+      // smooth 는 클릭 직후 리렌더에 취소될 수 있어 auto 고정 (메모리 박제 답습)
+      expect(scrollSpy).toHaveBeenCalledWith({ behavior: "auto", block: "start" });
+    } finally {
+      window.HTMLElement.prototype.scrollIntoView = orig;
+      vi.mocked(api.getArticles).mockResolvedValue({ articles: [], total: 0 } as never);
+    }
   });
 });

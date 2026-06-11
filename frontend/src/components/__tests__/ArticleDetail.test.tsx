@@ -156,3 +156,16 @@ describe("ArticleDetail — 시세 조회 실패 시 다시 시도", () => {
     });
   });
 });
+
+describe("ArticleDetail — 배경 스크롤 잠금 (세션 295)", () => {
+  it("모달이 열리면 body overflow=hidden, 닫히면 이전 값 복원", async () => {
+    document.body.style.overflow = "auto"; // prev 값 시뮬
+    const { unmount } = render(
+      <TestQueryProvider><ArticleDetail articleNo="A001" onClose={vi.fn()} /></TestQueryProvider>,
+    );
+    expect(document.body.style.overflow).toBe("hidden");
+    unmount();
+    expect(document.body.style.overflow).toBe("auto");
+    document.body.style.overflow = "";
+  });
+});

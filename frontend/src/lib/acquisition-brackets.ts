@@ -42,18 +42,23 @@ export function 중과세율(houses: 1 | 2 | 3, isRegulatedArea: boolean): numbe
 /**
  * 농특세율 (농특세법 제5조 + 농특세법 시행령 제4조).
  * standard 1주택 + 면적 ≤85m²: 0 (비과세). standard 1주택 + 면적 >85m²: 0.2%.
- * multi-house 8%: 0.6%, 12%: 1.0% (면적 무관).
+ * multi-house 8%: 0.6%, 12%: 1.0% (단, 면적 ≤85m² 는 중과세율 무관 비과세).
  * officetel: 0.2% 고정.
+ *
+ * 면적 비과세: 국민주택규모(85m²) 이하는 다주택 중과(8%/12%)여도 농특세 0.
+ * 행안부 질의회신(olta.re.kr num=60084141) — "다주택 중과세율 적용 여부와 상관없이
+ * 국민주택규모 기준만으로 농특세 비과세". 입법취지 = 일정규모 이하 주택 조세혜택.
  */
 export function 농특세율(rate: number, area_m2: number, branch: "standard" | "multi-house" | "officetel"): number {
   if (branch === "officetel") return 0.002;
+  // 국민주택규모(85m²) 이하는 standard·multi-house 공통 비과세 (중과세율 무관)
+  if (area_m2 > 0 && area_m2 <= NATIONAL_HOUSING_AREA_M2) return 0;
   if (branch === "multi-house") {
     if (rate >= 0.12) return 0.01;
     if (rate >= 0.08) return 0.006;
     return 0.002;
   }
-  // standard
-  if (area_m2 > 0 && area_m2 <= NATIONAL_HOUSING_AREA_M2) return 0;
+  // standard (면적 >85m²)
   return 0.002;
 }
 

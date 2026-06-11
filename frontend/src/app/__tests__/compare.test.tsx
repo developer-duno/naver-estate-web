@@ -119,6 +119,16 @@ describe("단지 비교 — 에러 분기", () => {
     expect(screen.queryByText("6770%")).toBeNull();
   });
 
+  it("결과 헤더의 '다른 단지 검색' 버튼 클릭 시 /search 로 이동한다 (세션294)", async () => {
+    const user = userEvent.setup();
+    renderPage("ids=A,B");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "다른 단지 검색" })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "다른 단지 검색" }));
+    expect(mockPush).toHaveBeenCalledWith("/search");
+  });
+
   it("평당가 행이 '건폐율' 바로 다음에 삽입된다 (findIndex 위치 가드 — 세션287)", async () => {
     // 매직넘버 splice(17) → findIndex('건폐율')+1 교체. BASE_ROWS 순서가 바뀌어도
     // 평당가가 건폐율 다음에 오는지 행 라벨 순서로 가드. (데스크톱 테이블 좌측 라벨 th)

@@ -79,6 +79,22 @@ describe("미분양 메인 — 데이터 표시", () => {
     });
   });
 
+  it("탭 가로 스크롤 페이드 힌트는 클릭/접근성을 막지 않는다 (세션294)", async () => {
+    // 모바일 360px 탭 잘림 인지용 우측 페이드. pointer-events-none + aria-hidden 이라
+    // 탭 클릭·스크린리더에 영향 0 (탭은 여전히 5개 정상 노출 + 전환 동작).
+    const user = userEvent.setup();
+    renderPage("region=서울특별시&tab=apartments&page=1");
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: /미분양만/ })).toBeInTheDocument();
+    });
+    // 페이드 오버레이는 aria-hidden(접근성 트리 제외) + pointer-events-none(클릭 통과)
+    const fade = document.querySelector('[aria-hidden="true"].pointer-events-none.absolute');
+    expect(fade).not.toBeNull();
+    // 오버레이 존재에도 탭 전환 정상 동작
+    await user.click(screen.getByRole("tab", { name: "미분양만" }));
+    expect(mockRouter.replace).toHaveBeenCalled();
+  });
+
   it("아파트 탭에서 데이터가 표시된다", async () => {
     renderPage("region=서울특별시&tab=apartments&page=1");
     // 카드뷰 + 테이블 양쪽 DOM 렌더 (hidden md:block / md:hidden)

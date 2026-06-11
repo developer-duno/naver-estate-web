@@ -43,6 +43,20 @@ function getUploadErrorMessage(e: unknown): string {
   return "알 수 없는 오류가 발생했습니다.";
 }
 
+/** 인증 승인 직후 핵심 서비스 직행 CTA — "홈으로" 대신 검색·미분양 바로 시작 (온보딩 막힘 해소) */
+function ApprovedActions() {
+  return (
+    <div className="flex flex-col sm:flex-row gap-2 w-full">
+      <Button asChild className="flex-1 bg-accent-blue hover:bg-accent-blue/90 text-white">
+        <Link href="/search">매물 검색 시작</Link>
+      </Button>
+      <Button asChild variant="outline" className="flex-1">
+        <Link href="/mibunyang">미분양 보기</Link>
+      </Button>
+    </div>
+  );
+}
+
 export default function VerifyPage() {
   const getToken = useAdminToken();
   const queryClient = useQueryClient();
@@ -195,11 +209,7 @@ export default function VerifyPage() {
           {vs === "pending" && (
             <p className="text-xs text-gray-500">관리자 심사 후 결과를 안내드립니다.</p>
           )}
-          {vs === "approved" && (
-            <Button asChild className="w-full bg-accent-blue hover:bg-accent-blue/90 text-white">
-              <Link href="/">홈으로 이동</Link>
-            </Button>
-          )}
+          {vs === "approved" && <ApprovedActions />}
         </div>
       </AuthLayout>
     );
@@ -218,9 +228,7 @@ export default function VerifyPage() {
           description={desc}
           action={
             result.auto_approved ? (
-              <Button asChild className="bg-accent-blue hover:bg-accent-blue/90 text-white">
-                <Link href="/">홈으로 이동</Link>
-              </Button>
+              <ApprovedActions />
             ) : uploadStatus === "error" ? (
               <Button
                 onClick={() => { setUploadStatus("idle"); setUploadError(""); }}

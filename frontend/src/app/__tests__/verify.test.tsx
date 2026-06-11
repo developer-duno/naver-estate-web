@@ -91,6 +91,27 @@ describe("VerifyPage", () => {
       expect(screen.getByText("인증 완료")).toBeInTheDocument();
     });
     expect(screen.getByText("사업자등록 확인됨")).toBeInTheDocument();
+    // 승인 직후 핵심 서비스 직행 CTA — "홈으로" 대신 검색·미분양 바로 (온보딩 막힘 해소)
+    const searchLink = screen.getByRole("link", { name: "매물 검색 시작" });
+    const mbLink = screen.getByRole("link", { name: "미분양 보기" });
+    expect(searchLink).toHaveAttribute("href", "/search");
+    expect(mbLink).toHaveAttribute("href", "/mibunyang");
+    expect(screen.queryByRole("link", { name: "홈으로 이동" })).not.toBeInTheDocument();
+  });
+
+  /** 이미 승인됨(status approved) 분기 — 검색·미분양 직행 CTA */
+  it("이미 승인된 상태 시 검색·미분양 직행 버튼이 표시된다", async () => {
+    mockGetStatus.mockResolvedValueOnce({
+      submitted: true,
+      verification_status: "approved",
+      business_verified: true,
+    } as never);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText("승인 완료")).toBeInTheDocument();
+    });
+    expect(screen.getByRole("link", { name: "매물 검색 시작" })).toHaveAttribute("href", "/search");
+    expect(screen.getByRole("link", { name: "미분양 보기" })).toHaveAttribute("href", "/mibunyang");
   });
 
   /** pending 결과 */

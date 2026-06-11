@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { searchComplexes, getComplexesByRegion } from "@/lib/api";
@@ -17,6 +18,7 @@ import { useSmartBack } from "@/hooks/useSmartBack";
 import { useFilterParams } from "@/hooks/useFilterParams";
 import { useCompare } from "@/hooks/useCompare";
 import { useSearchHistory } from "@/hooks/useSearchHistory";
+import { useArticleFavorites } from "@/hooks/useArticleFavorites";
 import { sortComplexes } from "@/lib/sortComplexes";
 import type { SearchHistoryItem } from "@/lib/storage";
 import CompareFloatingBar from "@/components/CompareFloatingBar";
@@ -46,6 +48,7 @@ function SearchContent() {
   const { filters: urlFilters, setFilters: setUrlFilters, filterKey } = useFilterParams();
   const { list: compareList, toggle: toggleCompare, remove: removeCompare, clear: clearCompare, isInCompare, isFull: compareFull } = useCompare();
   const { history } = useSearchHistory();
+  const { favorites: articleFavorites } = useArticleFavorites();
   const recentItems = history.slice(0, 5);
   const hasSearchParams = !!(keyword || (sido && sigungu));
 
@@ -198,8 +201,8 @@ function SearchContent() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
-      {/* 헤더 */}
-      <div className="flex items-center gap-4 mb-6">
+      {/* 헤더 — flex-wrap: 좁은 화면에서 즐겨찾기 링크가 다음 줄로 (PR #152 답습) */}
+      <div className="flex items-center gap-4 mb-6 flex-wrap">
         <button onClick={goBack} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
           ←
         </button>
@@ -207,6 +210,14 @@ function SearchContent() {
         {hasSearchParams && !loading && (
           <span className="text-gray-500 text-sm">({filteredComplexes.length}개 단지)</span>
         )}
+        {/* 즐겨찾기 매물 모아보기 진입점 — 별을 찍는 동선(/search)에서 직접 진입 (홈 칩과 동일 패턴) */}
+        <Link
+          href="/search/favorites"
+          className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline whitespace-nowrap"
+        >
+          <span className="text-yellow-500">&#9733;</span>
+          즐겨찾기 매물{articleFavorites.length > 0 ? ` (${articleFavorites.length})` : ""} &#8594;
+        </Link>
       </div>
 
       {/* 매물유형 탭 */}

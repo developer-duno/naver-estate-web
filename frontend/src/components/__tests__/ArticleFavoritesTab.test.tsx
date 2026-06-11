@@ -52,12 +52,43 @@ describe("ArticleFavoritesTab", () => {
     expect(within(rows[2]).getByText("마바빌")).toBeInTheDocument();
   });
 
-  /** 정상 — 행 클릭 시 articleNo 콜백 */
+  /** 정상 — 행 클릭 시 articleNo 콜백 (단지명 셀은 Link 라 다른 셀로 클릭) */
   it("행을 클릭하면 onRowClick에 article_no가 전달된다", () => {
     const onRowClick = vi.fn();
     render(<ArticleFavoritesTab favorites={makeFavorites()} onRowClick={onRowClick} onRemove={vi.fn()} />);
-    fireEvent.click(screen.getByText("가나아파트"));
+    fireEvent.click(screen.getByText("전세")); // A1 거래유형 셀
     expect(onRowClick).toHaveBeenCalledWith("A1");
+  });
+
+  /** 정상 — 단지명 셀은 단지 페이지 Link + 행 클릭(매물 모달) 미발동 */
+  it("단지명 클릭은 /complex/{no} 링크이고 onRowClick은 발동하지 않는다", () => {
+    const onRowClick = vi.fn();
+    render(<ArticleFavoritesTab favorites={makeFavorites()} onRowClick={onRowClick} onRemove={vi.fn()} />);
+    const link = screen.getByRole("link", { name: "가나아파트 단지 페이지로 이동" });
+    expect(link).toHaveAttribute("href", "/complex/C1");
+    fireEvent.click(link);
+    expect(onRowClick).not.toHaveBeenCalled(); // stopPropagation
+  });
+
+  /** 빈상태 — 검색으로 가는 행동 버튼 (EmptyState action) */
+  it("빈상태에 '매물 검색하러 가기' 링크가 /search 로 노출된다", () => {
+    render(<ArticleFavoritesTab favorites={[]} onRowClick={vi.fn()} onRemove={vi.fn()} />);
+    const cta = screen.getByRole("link", { name: "매물 검색하러 가기" });
+    expect(cta).toHaveAttribute("href", "/search");
+  });
+
+  /** 모바일 — 추가일 컬럼은 sm 미만 숨김 (hidden sm:table-cell) */
+  it("추가일 th/td 에 hidden sm:table-cell 클래스가 적용된다", () => {
+    render(<ArticleFavoritesTab favorites={makeFavorites()} onRowClick={vi.fn()} onRemove={vi.fn()} />);
+    const th = screen.getByText("추가일");
+    expect(th).toHaveClass("hidden", "sm:table-cell");
+  });
+
+  /** 모바일 — × 삭제 버튼 44px 터치 타깃 (PR #130 계보) */
+  it("삭제 버튼에 min-h/min-w 44px 터치 타깃 클래스가 적용된다", () => {
+    render(<ArticleFavoritesTab favorites={makeFavorites()} onRowClick={vi.fn()} onRemove={vi.fn()} />);
+    const btn = screen.getByLabelText("가나아파트 즐겨찾기 해제");
+    expect(btn).toHaveClass("min-h-[44px]", "min-w-[44px]");
   });
 
   /** 정상 — × 삭제 시 added_at 제외한 매물 객체 전달 */

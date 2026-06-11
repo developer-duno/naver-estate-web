@@ -96,4 +96,12 @@ describe("/search 페이지 회귀 가드 (PR 4 단계 6)", () => {
       expect(trigger).toBeInTheDocument();
     });
   });
+
+  it("즐겨찾기 매물 진입점 링크가 /search/favorites 로 노출된다 (세션 295)", async () => {
+    renderPage();
+    await waitFor(() => {
+      const link = screen.getByRole("link", { name: /즐겨찾기 매물/ });
+      expect(link).toHaveAttribute("href", "/search/favorites");
+    });
+  });
 });

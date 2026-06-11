@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import type { FavoriteArticle } from "@/lib/storage";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Star } from "lucide-react";
@@ -42,6 +43,14 @@ export default function ArticleFavoritesTab({ favorites, onRowClick, onRemove }:
         icon={Star}
         title="즐겨찾기한 매물이 없습니다"
         description="매물 목록이나 상세에서 ☆를 눌러 추가해보세요."
+        action={
+          <Link
+            href="/search"
+            className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          >
+            매물 검색하러 가기
+          </Link>
+        }
       />
     );
   }
@@ -68,7 +77,8 @@ export default function ArticleFavoritesTab({ favorites, onRowClick, onRemove }:
               <th className="px-3 py-2 text-left text-gray-600">단지명</th>
               <th className="px-3 py-2 text-left text-gray-600">거래유형</th>
               <th className="px-3 py-2 text-left text-gray-600">가격</th>
-              <th className="px-3 py-2 text-center text-gray-600">추가일</th>
+              {/* 360px 5컬럼 비좁음 — 추가일은 sm 미만 숨김 (정렬축으로는 계속 사용) */}
+              <th className="px-3 py-2 text-center text-gray-600 hidden sm:table-cell">추가일</th>
               <th className="px-3 py-2 text-center text-gray-600 w-16">삭제</th>
             </tr>
           </thead>
@@ -81,10 +91,24 @@ export default function ArticleFavoritesTab({ favorites, onRowClick, onRemove }:
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === "Enter") onRowClick(fav.article_no); }}
               >
-                <td className="px-3 py-2 font-medium text-gray-900">{fav.complex_name ?? "-"}</td>
+                <td className="px-3 py-2 font-medium text-gray-900">
+                  {/* 단지 페이지 직행 링크 — 행 클릭(매물 모달)과 분리 (td 내부 anchor 는 HTML 유효) */}
+                  {fav.complex_no ? (
+                    <Link
+                      href={`/complex/${fav.complex_no}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="hover:text-blue-600 hover:underline"
+                      aria-label={`${fav.complex_name ?? "단지"} 단지 페이지로 이동`}
+                    >
+                      {fav.complex_name ?? "-"}
+                    </Link>
+                  ) : (
+                    fav.complex_name ?? "-"
+                  )}
+                </td>
                 <td className="px-3 py-2 text-gray-500">{fav.trade_type_name ?? "-"}</td>
                 <td className="px-3 py-2 text-gray-700">{fav.price ?? "-"}</td>
-                <td className="px-3 py-2 text-center text-gray-400 text-xs">
+                <td className="px-3 py-2 text-center text-gray-400 text-xs hidden sm:table-cell">
                   {new Date(fav.added_at).toLocaleDateString("ko-KR")}
                 </td>
                 <td className="px-3 py-2 text-center">
@@ -100,7 +124,7 @@ export default function ArticleFavoritesTab({ favorites, onRowClick, onRemove }:
                         price: fav.price,
                       });
                     }}
-                    className="text-gray-300 hover:text-red-500 text-lg leading-none"
+                    className="inline-flex min-h-[44px] min-w-[44px] -my-3 items-center justify-center text-gray-300 hover:text-red-500 text-lg leading-none"
                     aria-label={`${fav.complex_name ?? "매물"} 즐겨찾기 해제`}
                   >
                     ×

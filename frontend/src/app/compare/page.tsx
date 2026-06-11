@@ -299,7 +299,13 @@ function CompareContent() {
         <span className="text-gray-500 text-sm">
           ({complexes.length}개 단지{ids.length !== complexes.length && ` / 선택 ${ids.length}개`})
         </span>
-        <div className="ml-auto flex gap-2 no-print">
+        <div className="ml-auto flex flex-wrap gap-2 no-print">
+          <button
+            onClick={() => router.push("/search")}
+            className="px-3 py-1.5 text-sm border border-blue-300 text-blue-600 rounded-md hover:bg-blue-50"
+          >
+            다른 단지 검색
+          </button>
           <button
             onClick={handlePrint}
             className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-50"

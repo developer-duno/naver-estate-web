@@ -111,9 +111,18 @@ function MibunyangContent() {
       if (t === "regions" || t === "trades") {
         updates.q = undefined;
       }
+      // 탭별 BE 정렬 Literal 이 달라(backend/routers/mb.py:35-41 MbAptSortBy/MbTradeSortBy 와 동기화)
+      // 다른 탭의 정렬값이 그대로 전달되면 422 → 목록 전체 에러. 대상 탭에서 유효하지 않으면 리셋.
+      // 정렬을 안 쓰는 탭(favorites·regions)으로의 이동은 보존 — 둘러보고 돌아와도 정렬 유지.
+      const APT_SORTS = ["name_asc", "unsold_desc", "unsold_asc", "unsold_rate_desc", "units_desc", "price_asc", "price_desc"];
+      const TRADE_SORTS = ["deal_month_desc", "deal_month_asc", "price_desc", "price_asc", "area_desc"];
+      const validSorts = t === "trades" ? TRADE_SORTS : (t === "apartments" || t === "unsold") ? APT_SORTS : null;
+      if (sortBy && validSorts && !validSorts.includes(sortBy)) {
+        updates.sort_by = undefined;
+      }
       updateParams(updates);
     },
-    [updateParams],
+    [sortBy, updateParams],
   );
 
   const handleSortChange = useCallback(

@@ -292,3 +292,41 @@ describe("미분양 메인 — 에러 처리", () => {
     });
   });
 });
+
+describe("미분양 메인 — 탭 전환 시 비호환 sort_by 리셋 (backend mb.py Literal 422 방지)", () => {
+  beforeEach(() => { mockRouter.replace.mockClear(); mockRouter.push.mockClear(); });
+
+  async function switchTab(initialParams: string, tabName: string) {
+    const user = userEvent.setup();
+    renderPage(initialParams);
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: tabName })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("tab", { name: tabName }));
+    const calls = mockRouter.replace.mock.calls;
+    return calls[calls.length - 1][0] as string;
+  }
+
+  it("unsold_desc(단지 전용) 정렬 상태에서 실거래 탭 전환 → sort_by 제거", async () => {
+    const url = await switchTab("region=서울특별시&tab=apartments&page=1&sort_by=unsold_desc", "실거래");
+    expect(url).toContain("tab=trades");
+    expect(url).not.toContain("sort_by");
+  });
+
+  it("deal_month_desc(실거래 전용) 정렬 상태에서 미분양 단지 탭 전환 → sort_by 제거", async () => {
+    const url = await switchTab("region=서울특별시&tab=trades&page=1&sort_by=deal_month_desc", "미분양 단지");
+    expect(url).toContain("tab=apartments");
+    expect(url).not.toContain("sort_by");
+  });
+
+  it("price_asc(양쪽 공용)는 실거래 탭 전환에도 보존", async () => {
+    const url = await switchTab("region=서울특별시&tab=apartments&page=1&sort_by=price_asc", "실거래");
+    expect(url).toContain("sort_by=price_asc");
+  });
+
+  it("정렬 미사용 탭(즐겨찾기) 전환은 sort_by 보존 — 둘러보고 돌아와도 정렬 유지", async () => {
+    const url = await switchTab("region=서울특별시&tab=apartments&page=1&sort_by=unsold_desc", "즐겨찾기");
+    expect(url).toContain("tab=favorites");
+    expect(url).toContain("sort_by=unsold_desc");
+  });
+});

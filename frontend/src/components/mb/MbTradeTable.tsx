@@ -16,20 +16,22 @@ function parseSortString(s?: string): { key: string; dir: "asc" | "desc" | null 
 }
 
 function SortableTh({
-  label, sortKey, align, currentSort, onSort,
+  label, sortKey, align, currentSort, onSort, ascAllowed = true,
 }: {
   label: string;
   sortKey: string;
   align: "left" | "right";
   currentSort: { key: string; dir: "asc" | "desc" | null };
   onSort?: (sort: string) => void;
+  /** 허용 정렬 방향은 backend/routers/mb.py:35-41 Literal 과 동기화 — asc 미지원 컬럼은 desc→해제 2단 사이클 (422 방지) */
+  ascAllowed?: boolean;
 }) {
   const isActive = currentSort.key === sortKey && currentSort.dir !== null;
   const handleClick = () => {
     if (!onSort) return;
     if (currentSort.key !== sortKey) {
       onSort(`${sortKey}_desc`);
-    } else if (currentSort.dir === "desc") {
+    } else if (currentSort.dir === "desc" && ascAllowed) {
       onSort(`${sortKey}_asc`);
     } else {
       onSort("");
@@ -132,7 +134,7 @@ export default function MbTradeTable({ trades, sort, onSortChange }: Props) {
             <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">단지명</th>
             <th className="px-3 py-2.5 text-left text-gray-700 font-semibold">동</th>
             <SortableTh label="거래월" sortKey="deal_month" align="left" currentSort={sortState} onSort={onSortChange} />
-            <SortableTh label="면적(㎡)" sortKey="area" align="right" currentSort={sortState} onSort={onSortChange} />
+            <SortableTh label="면적(㎡)" sortKey="area" align="right" currentSort={sortState} onSort={onSortChange} ascAllowed={false} />
             <SortableTh label="가격" sortKey="price" align="right" currentSort={sortState} onSort={onSortChange} />
             <th className="px-3 py-2.5 text-right text-gray-700 font-semibold">층</th>
             <th className="px-3 py-2.5 text-right text-gray-700 font-semibold hidden sm:table-cell">건축년도</th>

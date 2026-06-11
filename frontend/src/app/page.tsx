@@ -47,6 +47,17 @@ export default function HomePage() {
     router.push(buildFilterURL("/search", extra, articleFilters));
   };
 
+  // 단지명 직접 검색 — /search 인라인 폼과 동일 동선을 홈 첫 화면에서 (세션 295)
+  const [keywordInput, setKeywordInput] = useState("");
+  const handleKeywordSearch = () => {
+    const kw = keywordInput.trim();
+    if (!kw) return; // 빈 값/공백만 입력 가드
+    addHistory({ type: "keyword", keyword: kw });
+    const extra: Record<string, string> = { q: kw };
+    if (typesParam) extra.types = selectedTypes.join(",");
+    router.push(buildFilterURL("/search", extra, articleFilters));
+  };
+
   const handleHistorySelect = (item: SearchHistoryItem) => {
     if (item.type === "keyword" && item.keyword) {
       const extra: Record<string, string> = { q: item.keyword };
@@ -109,8 +120,28 @@ export default function HomePage() {
         <FilterBar onChange={setArticleFilters} />
       </div>
 
-      {/* 검색 영역: 지역 선택 */}
+      {/* 검색 영역: 단지명 검색 + 지역 선택 */}
       <div className="bg-white rounded-lg shadow-sm border p-4">
+        <label htmlFor="home-keyword" className="block text-sm font-semibold text-gray-700 mb-1.5">단지명 검색</label>
+        <div className="flex gap-2 mb-4">
+          <input
+            id="home-keyword"
+            type="text"
+            value={keywordInput}
+            onChange={(e) => setKeywordInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleKeywordSearch()}
+            placeholder="단지명 검색 (예: 래미안, 힐스테이트...)"
+            maxLength={100}
+            className="flex-1 min-w-0 border border-gray-300 rounded-md px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          <button
+            type="button"
+            onClick={handleKeywordSearch}
+            className="bg-blue-600 text-white px-5 py-2.5 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
+          >
+            검색
+          </button>
+        </div>
         <label className="block text-sm font-semibold text-gray-700 mb-1.5">지역 선택</label>
         <RegionSelector onSearch={handleRegionSearch} />
       </div>

@@ -137,10 +137,14 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   const propertyFairMarketRatio = isSingleProperty ? singleHouseFairMarketRatio(input.publishedPriceWon) : FAIR_MARKET_RATIO;
   notes.push(isSingleProperty ? "single-house-fair-market-ratio" : "fair-market-ratio-60");
   const propertyTaxBase = Math.floor(input.publishedPriceWon * propertyFairMarketRatio);
-  const propertyBrackets = isSingleProperty ? PROPERTY_TAX_BRACKETS_SINGLE : PROPERTY_TAX_BRACKETS_GENERAL;
+  // §111의2 특례세율(SINGLE)은 "시가표준액 9억원 이하 주택에 한정" (지방세법 시행령 §110의2①).
+  // FMR(§109 차등 공정시장가액비율)은 9억 초과도 45% 적용(게이트 없음)이라 별도 — 두 법령의 9억
+  // 게이트가 다르므로 brackets 선택에만 게이트 적용. 9억 초과 1주택은 일반세율(GENERAL) 적용.
+  const useSingleRate = isSingleProperty && input.publishedPriceWon <= 900_000_000;
+  const propertyBrackets = useSingleRate ? PROPERTY_TAX_BRACKETS_SINGLE : PROPERTY_TAX_BRACKETS_GENERAL;
   const propertyResult = applyBracket(propertyTaxBase, propertyBrackets);
   const propertyTax = Math.floor(propertyResult.tax);
-  if (isSingleProperty) notes.push("single-house-special-rate");
+  if (useSingleRate) notes.push("single-house-special-rate");
 
   // ===== 2단계: 종합부동산세 (종부세법 §8 §9) =====
   // B-4 법인: 단일세율 시 공제 0원, 일반 누진세율 신청 시 9억 (PDF #2 페이지 3 — 일반과 동일 분기)

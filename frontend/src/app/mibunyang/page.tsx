@@ -182,20 +182,25 @@ function MibunyangContent() {
 
       {/* 탭바 — 항상 표시 (즐겨찾기 탭은 지역 불필요) */}
       <Tabs value={tab} onValueChange={(v) => handleTabChange(v as TabKey)} className="gap-0">
-        <TabsList className="flex gap-1 mb-4 overflow-x-auto bg-transparent p-0 h-auto rounded-none w-full justify-start">
-          {TABS.map((t) => (
-            <TabsTrigger
-              key={t.key}
-              value={t.key}
-              className="px-4 py-2 text-sm font-medium rounded-t-md rounded-b-none whitespace-nowrap transition-colors flex-none h-auto border-0 bg-gray-100 text-gray-600 hover:bg-gray-200 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-none"
-            >
-              {t.label}
-              {t.key === "favorites" && favorites.length > 0 && (
-                <span className="ml-1 text-xs">({favorites.length})</span>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        {/* relative wrapper: 우측 페이드로 가로 스크롤 가능 힌트 (모바일 360px 탭 잘림 인지, 세션294) */}
+        <div className="relative mb-4">
+          <TabsList className="flex gap-1 overflow-x-auto bg-transparent p-0 h-auto rounded-none w-full justify-start">
+            {TABS.map((t) => (
+              <TabsTrigger
+                key={t.key}
+                value={t.key}
+                className="px-4 py-2 text-sm font-medium rounded-t-md rounded-b-none whitespace-nowrap transition-colors flex-none h-auto border-0 bg-gray-100 text-gray-600 hover:bg-gray-200 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-none"
+              >
+                {t.label}
+                {t.key === "favorites" && favorites.length > 0 && (
+                  <span className="ml-1 text-xs">({favorites.length})</span>
+                )}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {/* 우측 페이드 — md 이상은 탭이 다 보이므로 숨김 */}
+          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-linear-to-r from-transparent to-white md:hidden" aria-hidden="true" />
+        </div>
 
         {/* 즐겨찾기 탭 — 지역 선택 불필요 */}
         <TabsContent value="favorites" className="mt-0">

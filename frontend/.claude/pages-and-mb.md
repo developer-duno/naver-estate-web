@@ -56,4 +56,4 @@ components/mb/
 - 지역 변경 시 sort 유지, page=1 리셋
 - 탭 전환 시 apartments/unsold 탭만 keyword 유지, regions/trades/favorites에서 제거
 - 즐겨찾기 탭: hasRegion 바이패스 (탭바 항상 표시, 즐겨찾기만 지역 불필요)
-- `MB_SORT_OPTIONS` (constants.ts): 7개 정렬 옵션
+- `MB_APT_SORT_OPTIONS` 7개 + `MB_TRADE_SORT_OPTIONS` 5개 (lib/mb-sort-options.ts, BE mb.py Literal verbatim 짝꿍): 모바일 MbSortSelect 옵션 + 탭 전환 whitelist derive 공용 (세션 296)

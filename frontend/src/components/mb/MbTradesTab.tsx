@@ -4,7 +4,9 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import MbTradeTable from "@/components/mb/MbTradeTable";
 import Pagination from "@/components/Pagination";
 import { MbTabContent, ExportButton } from "@/components/mb/MbTabContent";
+import MbSortSelect from "@/components/mb/MbSortSelect";
 import { exportMbTradesToXlsx } from "@/lib/mb-export";
+import { MB_TRADE_SORT_OPTIONS } from "@/lib/mb-sort-options";
 import { PAGE_SIZE } from "@/lib/constants";
 import type { MbTrade } from "@/types";
 
@@ -24,14 +26,17 @@ export default function MbTradesTab({
 }) {
   return (
     <MbTabContent loading={query.isLoading} error={query.error} refetch={query.refetch}>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-y-2 mb-3">
         <span className="text-sm text-gray-500">
           총 {query.data?.total?.toLocaleString() ?? 0}건
         </span>
-        <ExportButton
-          disabled={!query.data?.trades?.length}
-          onClick={() => exportMbTradesToXlsx(query.data?.trades ?? [])}
-        />
+        <div className="flex items-center gap-2">
+          <MbSortSelect sort={sort} onSortChange={onSortChange} options={MB_TRADE_SORT_OPTIONS} defaultLabel="기본 (최근 거래월순)" />
+          <ExportButton
+            disabled={!query.data?.trades?.length}
+            onClick={() => exportMbTradesToXlsx(query.data?.trades ?? [])}
+          />
+        </div>
       </div>
       <MbTradeTable
         trades={query.data?.trades ?? []}

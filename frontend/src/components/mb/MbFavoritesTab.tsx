@@ -23,6 +23,18 @@ export default function MbFavoritesTab({ favorites, onRemove }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<FavSortBy>("added_at");
 
+  // 즐겨찾기 해제 시 selected 에 남는 유령 id 정리 — 선택 카운트·'선택 비교' URL 오염 방지
+  // (React 공식 'adjusting state when a prop changes' 렌더 중 조정 패턴 — effect 불필요)
+  const [prevFavorites, setPrevFavorites] = useState(favorites);
+  if (prevFavorites !== favorites) {
+    setPrevFavorites(favorites);
+    const ids = new Set(favorites.map((f) => f.id));
+    setSelected((prev) => {
+      const next = new Set([...prev].filter((id) => ids.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }
+
   const sortedFavorites = useMemo(() => {
     const sorted = [...favorites];
     switch (sortBy) {

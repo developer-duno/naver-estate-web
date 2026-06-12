@@ -14,6 +14,10 @@ import ArticleDetail from "@/components/ArticleDetail";
 export default function ArticleFavoritesPage() {
   const { favorites, toggle } = useArticleFavorites();
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
+  // 삭제된 매물(404) 안내의 '즐겨찾기에서 제거' CTA 용 — toggle 이 내부 refresh 로 목록도 즉시 갱신
+  const selectedFav = selectedArticle
+    ? favorites.find((f) => f.article_no === selectedArticle)
+    : undefined;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
@@ -31,7 +35,18 @@ export default function ArticleFavoritesPage() {
       />
 
       {selectedArticle && (
-        <ArticleDetail articleNo={selectedArticle} onClose={() => setSelectedArticle(null)} />
+        <ArticleDetail
+          articleNo={selectedArticle}
+          onClose={() => setSelectedArticle(null)}
+          onRemoveFavorite={
+            selectedFav
+              ? () => {
+                  toggle(selectedFav);
+                  setSelectedArticle(null);
+                }
+              : undefined
+          }
+        />
       )}
     </div>
   );

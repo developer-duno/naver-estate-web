@@ -169,3 +169,59 @@ describe("ArticleDetail — 배경 스크롤 잠금 (세션 295)", () => {
     document.body.style.overflow = "";
   });
 });
+
+// 세션 297: 삭제된 매물(404) dead-end 해소 — 영원한 "다시 시도" 대신 안내 + 즐겨찾기 제거 CTA
+// ApiError 는 vi.resetModules() 후 컴포넌트가 바인딩한 같은 모듈 인스턴스에서 가져와야 instanceof 통과
+describe("ArticleDetail — 삭제된 매물 404 분기 (세션 297)", () => {
+  async function make404() {
+    const api = await import("@/lib/api");
+    const { ApiError } = await import("@/lib/api/core");
+    vi.mocked(api.getArticleLive).mockRejectedValue(
+      new ApiError("매물 정보를 찾을 수 없습니다", 404),
+    );
+  }
+
+  it("404 이면 '더 이상 확인할 수 없어요' 안내 + '다시 시도' 미노출", async () => {
+    await make404();
+    render(<TestQueryProvider><ArticleDetail articleNo="DEAD01" onClose={vi.fn()} /></TestQueryProvider>);
+    await waitFor(() => {
+      expect(screen.getByText("이 매물은 더 이상 확인할 수 없어요.")).toBeInTheDocument();
+    }, { timeout: 3000 });
+    expect(screen.getByText(/거래가 완료됐거나 네이버에서 내려간/)).toBeInTheDocument();
+    expect(screen.queryByText("다시 시도")).not.toBeInTheDocument();
+  });
+
+  it("onRemoveFavorite prop 있으면 '즐겨찾기에서 제거' 버튼 노출 + 클릭 시 호출", async () => {
+    await make404();
+    const onRemoveFavorite = vi.fn();
+    render(
+      <TestQueryProvider>
+        <ArticleDetail articleNo="DEAD01" onClose={vi.fn()} onRemoveFavorite={onRemoveFavorite} />
+      </TestQueryProvider>,
+    );
+    const removeBtn = await screen.findByText("즐겨찾기에서 제거", undefined, { timeout: 3000 });
+    fireEvent.click(removeBtn);
+    expect(onRemoveFavorite).toHaveBeenCalledTimes(1);
+  });
+
+  it("onRemoveFavorite prop 없으면 (단지 페이지 경유) 제거 버튼 미노출", async () => {
+    await make404();
+    render(<TestQueryProvider><ArticleDetail articleNo="DEAD01" onClose={vi.fn()} /></TestQueryProvider>);
+    await waitFor(() => {
+      expect(screen.getByText("이 매물은 더 이상 확인할 수 없어요.")).toBeInTheDocument();
+    }, { timeout: 3000 });
+    expect(screen.queryByText("즐겨찾기에서 제거")).not.toBeInTheDocument();
+  });
+
+  it("404 아닌 에러(500)는 기존 '다시 시도' 분기 유지", async () => {
+    const api = await import("@/lib/api");
+    const { ApiError } = await import("@/lib/api/core");
+    // 컴포넌트 retry 가 비404 를 1회 재시도하므로 지속형 reject
+    vi.mocked(api.getArticleLive).mockRejectedValue(new ApiError("API 오류: 500", 500));
+    render(<TestQueryProvider><ArticleDetail articleNo="ERR500" onClose={vi.fn()} /></TestQueryProvider>);
+    const retryBtn = await screen.findByText("다시 시도", undefined, { timeout: 3000 });
+    expect(retryBtn).toBeInTheDocument();
+    expect(screen.getByText("매물 정보를 불러올 수 없습니다.")).toBeInTheDocument();
+    expect(screen.queryByText("즐겨찾기에서 제거")).not.toBeInTheDocument();
+  });
+});

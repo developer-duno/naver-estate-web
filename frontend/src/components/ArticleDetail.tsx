@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getArticleLive, getArticles, getPriceStats, getPyeongDetails } from "@/lib/api";
+// ApiError 는 core 직접 import — 테스트의 vi.mock("@/lib/api") factory 교체에 안 휩쓸리게 (verify/page.tsx 답습)
+import { ApiError } from "@/lib/api/core";
 import { queryKeys } from "@/lib/query-keys";
 import { tradeKey } from "@/lib/trade-types";
 import type { Article, Complex } from "@/types";
@@ -40,13 +42,19 @@ interface Props {
   articleNo: string;
   onClose: () => void;
   complex?: Complex;
+  /** 즐겨찾기 모아보기에서 열렸을 때 — 삭제된 매물(404) 안내에 '즐겨찾기에서 제거' CTA 노출용 */
+  onRemoveFavorite?: () => void;
 }
 
-export default function ArticleDetail({ articleNo, onClose, complex }: Props) {
-  const { data: article, isLoading, isError, refetch } = useQuery({
+export default function ArticleDetail({ articleNo, onClose, complex, onRemoveFavorite }: Props) {
+  const { data: article, isLoading, isError, error, refetch } = useQuery({
     queryKey: queryKeys.articleLive(articleNo),
     queryFn: () => getArticleLive(articleNo),
+    // 404 = 매물 삭제 확정 답변 — 재시도 무의미
+    retry: (failureCount, err) =>
+      !(err instanceof ApiError && err.statusCode === 404) && failureCount < 1,
   });
+  const isGone = isError && error instanceof ApiError && error.statusCode === 404;
 
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -121,12 +129,26 @@ export default function ArticleDetail({ articleNo, onClose, complex }: Props) {
               <Skeleton className="h-40 w-full" />
             </div>
           )}
-          {!isLoading && isError && (
+          {!isLoading && isError && (isGone ? (
+            <div className="text-center py-8">
+              <p className="text-gray-700 font-medium mb-1">이 매물은 더 이상 확인할 수 없어요.</p>
+              <p className="text-sm text-gray-500 mb-4">거래가 완료됐거나 네이버에서 내려간 매물이에요.</p>
+              {onRemoveFavorite && (
+                <button
+                  type="button"
+                  onClick={onRemoveFavorite}
+                  className="px-3 py-1.5 text-sm rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
+                >
+                  즐겨찾기에서 제거
+                </button>
+              )}
+            </div>
+          ) : (
             <div className="text-center py-8">
               <p className="text-red-500 mb-3">매물 정보를 불러올 수 없습니다.</p>
               <button onClick={() => refetch()} className="text-sm text-blue-600 hover:underline">다시 시도</button>
             </div>
-          )}
+          ))}
           {!isLoading && !isError && !article && (
             <p className="text-center text-gray-500 py-8">매물 정보를 불러올 수 없습니다.</p>
           )}

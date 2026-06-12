@@ -107,11 +107,11 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - `CHILDCARE_DETAIL_API_KEY` — cpmsapi030 운영키
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — Gmail SMTP SSL 465
 
-## 테스트 현황 (2026-06-11 실측, 세션 289)
+## 테스트 현황 (2026-06-12 실측, 세션 298 — BE 는 세션 289 실측 유지)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1613개** (181 파일) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1691개** (189 파일) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
 | BE pytest | `backend/tests/` | **851개** (75 파일, pytest-xdist `-n auto` 병렬) |
 
@@ -137,6 +137,7 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 | `planning.md` | /plan 모드 최소 규칙 + 세션 종료 시 메모리 활용 |
 | `domain-mapping-ssot.md` | BE-FE 매핑 SSOT + SQL 집계 N→1 가중평균 + dialect 분기 (세션 226 신설) |
 | `derived-display-ssot.md` | 파생 표시값(시각·주기 문구)은 source(trigger)에서 자동생성, 손글씨 중복 금지 (세션 256 신설, PR #102) |
+| `error-propagation.md` | FE 데이터 래퍼 에러 삼킴 금지 + 래퍼 레벨 MSW 가드 의무 (폴백 삼킴 3사고, 세션 298 신설) |
 | `release.md` | PR 머지 후 backend 가동 검증 4중 cross-check (세션 230~231 zombie 답습 신설, 세션 257 라이브 표시값 지표 추가) |
 
 ### 필요 시 호출 (`.claude/commands/`)

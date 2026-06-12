@@ -203,7 +203,8 @@ function SearchContent() {
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* 헤더 — flex-wrap: 좁은 화면에서 즐겨찾기 링크가 다음 줄로 (PR #152 답습) */}
       <div className="flex items-center gap-4 mb-6 flex-wrap">
-        <button onClick={goBack} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+        {/* 터치 44px: 패딩+동치 음수마진 = 히트영역만 확장, 레이아웃 불변 (세션 299) */}
+        <button onClick={goBack} aria-label="이전 페이지" className="px-3.5 py-2 -mx-3.5 -my-2 text-gray-400 hover:text-gray-600 text-xl rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
           ←
         </button>
         <h1 className="text-2xl font-bold">{title}</h1>

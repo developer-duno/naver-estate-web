@@ -140,7 +140,16 @@ export default function MbDetailPage() {
           {historyQuery.isLoading ? (
             <LoadingSpinner size="sm" message="추이 데이터 로딩 중..." />
           ) : historyQuery.error ? (
-            <p className="text-sm text-red-500">추이 데이터를 불러오지 못했습니다.</p>
+            <div>
+              <p className="text-sm text-red-500">추이 데이터를 불러오지 못했습니다.</p>
+              <button
+                type="button"
+                onClick={() => historyQuery.refetch()}
+                className="text-sm text-blue-600 hover:underline mt-1"
+              >
+                다시 시도
+              </button>
+            </div>
           ) : (
             <LazyUnsoldChart items={historyQuery.data?.items ?? []} />
           )}

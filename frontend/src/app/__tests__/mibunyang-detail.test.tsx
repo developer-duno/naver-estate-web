@@ -3,7 +3,7 @@
  * 실행: npx vitest run src/app/__tests__/mibunyang-detail.test.tsx
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import MbDetailPage from "../mibunyang/[id]/page";
 import { TestQueryProvider } from "@/test-setup";
 
@@ -175,6 +175,22 @@ describe("미분양 상세 — 에러 처리", () => {
     await waitFor(() => {
       expect(screen.getByText("뒤로 가기")).toBeInTheDocument();
       expect(screen.getByText("다시 시도")).toBeInTheDocument();
+    });
+  });
+
+  // 세션 298: 추이 섹션 에러 dead-end 해소 — detail 정상 + history 실패 시 retry
+  it("추이 에러 시 '다시 시도' 클릭하면 추이를 재조회한다", async () => {
+    mockDetail.mockResolvedValue(createMockDetail());
+    mockHistory.mockRejectedValueOnce(new Error("서버 오류"));
+    renderDetail();
+    await waitFor(() => {
+      expect(screen.getByText("추이 데이터를 불러오지 못했습니다.")).toBeInTheDocument();
+    });
+    const callsBefore = mockHistory.mock.calls.length;
+    mockHistory.mockResolvedValue({ apartment_id: "APT001", items: [] });
+    fireEvent.click(screen.getByText("다시 시도"));
+    await waitFor(() => {
+      expect(mockHistory.mock.calls.length).toBeGreaterThan(callsBefore);
     });
   });
 });

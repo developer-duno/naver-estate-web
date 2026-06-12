@@ -33,7 +33,18 @@ export default function ComplexPriceAreaSection({ complexNo, onFilterChange }: P
     );
   }
   if (priceStatsQuery.isError) {
-    return <p className="text-red-500 text-sm text-center">가격 통계를 불러오지 못했습니다</p>;
+    return (
+      <div className="text-center py-4">
+        <p className="text-red-500 text-sm">가격 통계를 불러오지 못했습니다</p>
+        <button
+          type="button"
+          onClick={() => priceStatsQuery.refetch()}
+          className="text-xs text-blue-600 hover:underline mt-2"
+        >
+          다시 시도
+        </button>
+      </div>
+    );
   }
   const priceStats = priceStatsQuery.data;
   if (!priceStats || priceStats.by_area.length === 0) {

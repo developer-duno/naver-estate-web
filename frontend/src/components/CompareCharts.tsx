@@ -25,6 +25,25 @@ interface Props {
   expandAll?: boolean;
 }
 
+/**
+ * 에러 분기 공용 안내 + "다시 시도" (ArticleDetail RetryHint 선례).
+ * onRetry 는 실패한 쿼리만 재조회하는 그룹 핸들러를 받는다.
+ */
+function RetryNotice({ message, onRetry, className }: { message: string; onRetry: () => void; className?: string }) {
+  return (
+    <div className={className}>
+      <p className="text-sm text-red-600">{message}</p>
+      <button
+        type="button"
+        onClick={() => onRetry()}
+        className="text-xs text-blue-600 hover:underline mt-1"
+      >
+        다시 시도
+      </button>
+    </div>
+  );
+}
+
 /* ── 메인 컨테이너 ── */
 
 export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong, expandAll = false }: Props) {
@@ -58,6 +77,11 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
   const historyError = historyQueries.some((q) => q.isError);
   const statsError = statsQueries.some((q) => q.isError);
   const pyeongError = pyeongQueries.some((q) => q.isError);
+
+  // 그룹별 재시도 — 실패한 쿼리만 재조회 (성공분 불필요 재호출 방지)
+  const retryHistory = () => historyQueries.forEach((q) => { if (q.isError) q.refetch(); });
+  const retryStats = () => statsQueries.forEach((q) => { if (q.isError) q.refetch(); });
+  const retryPyeong = () => pyeongQueries.forEach((q) => { if (q.isError) q.refetch(); });
 
   // 데이터 조립
   const historyDatasets = complexes
@@ -106,7 +130,7 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
               <Skeleton className="h-72 w-full" />
             </div>
           ) : historyError ? (
-            <p className="text-sm text-red-600 py-4 text-center">가격 추이를 불러오지 못했습니다.</p>
+            <RetryNotice className="py-4 text-center" message="가격 추이를 불러오지 못했습니다." onRetry={retryHistory} />
           ) : historyDatasets.length > 0 ? (
             <ComparePriceTrendChart datasets={historyDatasets} />
           ) : (
@@ -124,7 +148,7 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
               <Skeleton className="h-72 w-full" />
             </div>
           ) : statsError ? (
-            <p className="text-sm text-red-600 py-4 text-center">가격 통계를 불러오지 못했습니다.</p>
+            <RetryNotice className="py-4 text-center" message="가격 통계를 불러오지 못했습니다." onRetry={retryStats} />
           ) : statsDatasets.length > 0 ? (
             <ComparePriceBarChart datasets={statsDatasets} />
           ) : (
@@ -142,7 +166,7 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
               <Skeleton className="h-72 w-full" />
             </div>
           ) : statsError ? (
-            <p className="text-sm text-red-600 py-4 text-center">층별 가격을 불러오지 못했습니다.</p>
+            <RetryNotice className="py-4 text-center" message="층별 가격을 불러오지 못했습니다." onRetry={retryStats} />
           ) : statsDatasets.length > 0 ? (
             <CompareFloorChart datasets={statsDatasets} />
           ) : (
@@ -159,7 +183,7 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
             <div>
               <h3 className="text-sm font-semibold mb-2">면적별 가격</h3>
               {statsError ? (
-                <p className="text-sm text-red-600">면적별 가격을 불러오지 못했습니다.</p>
+                <RetryNotice message="면적별 가격을 불러오지 못했습니다." onRetry={retryStats} />
               ) : statsDatasets.length > 0 ? (
                 <CompareAreaPriceTable
                   datasets={statsDatasets.map((ds) => ({
@@ -176,7 +200,7 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
             <div>
               <h3 className="text-sm font-semibold mb-2">관리비 비교</h3>
               {pyeongError ? (
-                <p className="text-sm text-red-600">관리비를 불러오지 못했습니다.</p>
+                <RetryNotice message="관리비를 불러오지 못했습니다." onRetry={retryPyeong} />
               ) : pyeongDatasets.length > 0 ? (
                 <CompareMaintenanceTable datasets={pyeongDatasets} />
               ) : (
@@ -188,7 +212,7 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
             <div>
               <h3 className="text-sm font-semibold mb-2">세대 구성</h3>
               {pyeongError ? (
-                <p className="text-sm text-red-600">세대 구성을 불러오지 못했습니다.</p>
+                <RetryNotice message="세대 구성을 불러오지 못했습니다." onRetry={retryPyeong} />
               ) : pyeongDatasets.length > 0 ? (
                 <CompareUnitCompositionTable datasets={pyeongDatasets} />
               ) : (

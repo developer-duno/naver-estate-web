@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { TestQueryProvider } from "@/test-setup";
 import ComplexPriceAreaSection from "../ComplexPriceAreaSection";
 
@@ -33,6 +34,23 @@ describe("ComplexPriceAreaSection", () => {
     renderWithQuery(<ComplexPriceAreaSection complexNo="C001" />);
     await waitFor(() => {
       expect(screen.getByText(/가격 통계를 불러오지 못했습니다/)).toBeInTheDocument();
+    });
+  });
+
+  // 세션 298: 에러 dead-end 해소 — 형제 PriceChartSection retry 패턴 답습
+  it("API 에러 시 '다시 시도' 클릭하면 재조회한다", async () => {
+    mockGetPriceStats.mockRejectedValueOnce(new Error("API down"));
+    renderWithQuery(<ComplexPriceAreaSection complexNo="C001" />);
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "다시 시도" })).toBeInTheDocument();
+    });
+    const callsBefore = mockGetPriceStats.mock.calls.length;
+    mockGetPriceStats.mockResolvedValueOnce({
+      complex_no: "C001", total_articles: 0, by_area: [], by_floor: [],
+    });
+    await userEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    await waitFor(() => {
+      expect(mockGetPriceStats.mock.calls.length).toBeGreaterThan(callsBefore);
     });
   });
 

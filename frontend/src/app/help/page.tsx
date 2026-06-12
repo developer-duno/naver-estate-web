@@ -80,7 +80,7 @@ export default function HelpPage() {
         </Tip>
         <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 ml-2">
           <li><strong>데이터 갱신 버튼</strong>: 네이버 부동산에서 최신 매물을 수집합니다 (로그인 필요)</li>
-          <li><strong>마지막 크롤링 시간</strong>: 단지명 옆에 &quot;2시간 전&quot;과 같이 표시됩니다</li>
+          <li><strong>매물 업데이트 시간</strong>: 단지명 옆에 &quot;2시간 전&quot;과 같이 표시됩니다</li>
           <li><strong>크롤링 진행 상황</strong>: 수집 중에는 진행률 배너가 표시됩니다</li>
         </ul>
       </Section>

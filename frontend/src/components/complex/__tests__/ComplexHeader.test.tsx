@@ -49,3 +49,45 @@ describe("ComplexHeader", () => {
     expect(screen.queryByText("아파트")).not.toBeInTheDocument();
   });
 });
+
+describe("ComplexHeader 비교 담기 (세션 296)", () => {
+  it("onToggleCompare 미전달 시 비교 버튼 미렌더 (기존 호출처 안전)", () => {
+    render(
+      <ComplexHeader complex={baseComplex} starred={false} onBack={() => {}} onToggleFavorite={() => {}} />
+    );
+    expect(screen.queryByText("+ 비교")).not.toBeInTheDocument();
+  });
+
+  it("비교 버튼 클릭 → onToggleCompare 호출", async () => {
+    const onCompare = vi.fn();
+    render(
+      <ComplexHeader complex={baseComplex} starred={false} onBack={() => {}} onToggleFavorite={() => {}} isCompared={false} compareFull={false} onToggleCompare={onCompare} />
+    );
+    await userEvent.click(screen.getByRole("button", { name: /래미안테스트 비교 추가/ }));
+    expect(onCompare).toHaveBeenCalled();
+  });
+
+  it("isCompared=true → '✓ 비교중' 표시 + 해제 라벨", () => {
+    render(
+      <ComplexHeader complex={baseComplex} starred={false} onBack={() => {}} onToggleFavorite={() => {}} isCompared={true} compareFull={false} onToggleCompare={() => {}} />
+    );
+    expect(screen.getByText("✓ 비교중")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /래미안테스트 비교 해제/ })).toBeEnabled();
+  });
+
+  it("가득 참(compareFull) + 미포함 → disabled (silent no-op 차단)", () => {
+    render(
+      <ComplexHeader complex={baseComplex} starred={false} onBack={() => {}} onToggleFavorite={() => {}} isCompared={false} compareFull={true} onToggleCompare={() => {}} />
+    );
+    expect(screen.getByRole("button", { name: /비교 목록 가득 참/ })).toBeDisabled();
+  });
+
+  it("크롤 시각 배지는 사용자 언어 '매물 업데이트:' 로 표시", () => {
+    const withCrawl: Complex = { ...baseComplex, last_crawled_at: new Date().toISOString() };
+    render(
+      <ComplexHeader complex={withCrawl} starred={false} onBack={() => {}} onToggleFavorite={() => {}} />
+    );
+    expect(screen.getByText(/매물 업데이트:/)).toBeInTheDocument();
+    expect(screen.queryByText(/마지막 크롤링/)).not.toBeInTheDocument();
+  });
+});

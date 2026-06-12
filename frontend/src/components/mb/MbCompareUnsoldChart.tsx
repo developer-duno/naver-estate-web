@@ -38,9 +38,11 @@ export interface UnsoldDataset {
 
 interface Props {
   datasets: UnsoldDataset[];
+  /** 실패한 추이 쿼리만 재조회하는 콜백 — 미주입 시 "다시 시도" 버튼 미노출 */
+  onRetry?: () => void;
 }
 
-export default function MbCompareUnsoldChart({ datasets }: Props) {
+export default function MbCompareUnsoldChart({ datasets, onRetry }: Props) {
   const [period, setPeriod] = useState<PeriodKey>("ALL");
 
   const { chartData, seriesKeys, latestBest } = useMemo(() => {
@@ -93,9 +95,20 @@ export default function MbCompareUnsoldChart({ datasets }: Props) {
   if (!hasData) {
     if (erroredNames.length > 0) {
       return (
-        <p className="text-sm text-red-600 py-8 text-center">
-          추이 데이터를 불러오지 못했습니다 (영향 받은 단지: {erroredNames.join(", ")}).
-        </p>
+        <div className="py-8 text-center">
+          <p className="text-sm text-red-600">
+            추이 데이터를 불러오지 못했습니다 (영향 받은 단지: {erroredNames.join(", ")}).
+          </p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={() => onRetry()}
+              className="text-xs text-blue-600 hover:underline mt-2"
+            >
+              다시 시도
+            </button>
+          )}
+        </div>
       );
     }
     return <p className="text-gray-500 text-sm py-8 text-center">미분양 추이 데이터가 없습니다.</p>;
@@ -106,6 +119,15 @@ export default function MbCompareUnsoldChart({ datasets }: Props) {
       {erroredNames.length > 0 && (
         <p className="mb-2 text-sm text-red-600">
           추이 데이터를 불러오지 못했습니다 (영향 받은 단지: {erroredNames.join(", ")}).
+          {onRetry && (
+            <button
+              type="button"
+              onClick={() => onRetry()}
+              className="ml-2 text-xs text-blue-600 hover:underline"
+            >
+              다시 시도
+            </button>
+          )}
         </p>
       )}
       <div className="flex items-center justify-between mb-3">

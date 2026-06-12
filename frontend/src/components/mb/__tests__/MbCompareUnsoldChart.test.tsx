@@ -3,7 +3,7 @@
  * 실행: npx vitest run src/components/mb/__tests__/MbCompareUnsoldChart.test.tsx
  */
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import MbCompareUnsoldChart, { type UnsoldDataset } from "../MbCompareUnsoldChart";
 
 // Recharts mock — SVG 대신 간단한 div 반환
@@ -57,5 +57,33 @@ describe("MbCompareUnsoldChart — isError 시각화", () => {
     render(<MbCompareUnsoldChart datasets={datasets} />);
     expect(screen.getByText(/미분양 추이 데이터가 없습니다/)).toBeInTheDocument();
     expect(screen.queryByText(/불러오지 못했습니다/)).toBeNull();
+  });
+});
+
+// 세션 298: 에러 dead-end 해소 — onRetry 주입 시 "다시 시도" 버튼
+describe("MbCompareUnsoldChart — onRetry", () => {
+  it("전체 에러 + onRetry 주입: '다시 시도' 클릭 시 콜백 1회 호출", () => {
+    const onRetry = vi.fn();
+    const datasets: UnsoldDataset[] = [{ ...makeDataset("A1", "단지A1", 0), isError: true }];
+    render(<MbCompareUnsoldChart datasets={datasets} onRetry={onRetry} />);
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("부분 에러(정상 dataset 공존) + onRetry 주입: 상단 배너에도 버튼 렌더 + 클릭 동작", () => {
+    const onRetry = vi.fn();
+    const datasets: UnsoldDataset[] = [
+      makeDataset("A1", "단지A1", 1),
+      { ...makeDataset("A2", "단지A2", 0), isError: true },
+    ];
+    render(<MbCompareUnsoldChart datasets={datasets} onRetry={onRetry} />);
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("onRetry 미주입이면 '다시 시도' 버튼을 렌더하지 않는다", () => {
+    const datasets: UnsoldDataset[] = [{ ...makeDataset("A1", "단지A1", 0), isError: true }];
+    render(<MbCompareUnsoldChart datasets={datasets} />);
+    expect(screen.queryByRole("button", { name: "다시 시도" })).toBeNull();
   });
 });

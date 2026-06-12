@@ -134,6 +134,11 @@ function CompareContent() {
     };
   });
 
+  // 추이 차트 "다시 시도" — 실패한 추이 쿼리만 재조회 (성공분 불필요 재호출 방지)
+  const retryUnsoldHistory = useCallback(() => {
+    historyQueries.forEach((q) => { if (q.isError) q.refetch(); });
+  }, [historyQueries]);
+
   const handleExport = useCallback(async () => {
     if (apartments.length < 2) return;
     setIsExporting(true);
@@ -368,7 +373,7 @@ function CompareContent() {
       <div className="mt-6 space-y-6">
         <LazyMbCompareRadarChart apartments={apartments} />
         <LazyMbComparePriceChart apartments={apartments} />
-        <LazyMbCompareUnsoldChart datasets={unsoldDatasets} />
+        <LazyMbCompareUnsoldChart datasets={unsoldDatasets} onRetry={retryUnsoldHistory} />
       </div>
     </div>
   );

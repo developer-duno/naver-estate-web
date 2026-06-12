@@ -2,14 +2,27 @@
  * CompareCharts + 차트 컴포넌트 통합 테스트
  * 실행: npx vitest run src/components/__tests__/CompareCharts.test.tsx
  */
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { TestQueryProvider } from "@/test-setup";
 
+import CompareCharts from "../CompareCharts";
 import CompareRadarChart from "../CompareRadarChart";
 import ComparePriceTrendChart from "../ComparePriceTrendChart";
 import ComparePriceBarChart from "../ComparePriceBarChart";
 import CompareFloorChart from "../CompareFloorChart";
 import type { Complex, PriceHistoryItem, PriceStats } from "@/types";
+
+// CompareCharts 컨테이너용 API mock (자식 차트 테스트에는 영향 0 — 자식은 @/lib/api 미사용)
+const mockGetPriceHistory = vi.fn();
+const mockGetPriceStats = vi.fn();
+const mockGetPyeongDetails = vi.fn();
+
+vi.mock("@/lib/api", () => ({
+  getPriceHistory: (...args: unknown[]) => mockGetPriceHistory(...args),
+  getPriceStats: (...args: unknown[]) => mockGetPriceStats(...args),
+  getPyeongDetails: (...args: unknown[]) => mockGetPyeongDetails(...args),
+}));
 
 // Recharts mock (ResizeObserver/SVG 불필요)
 vi.mock("recharts", () => ({
@@ -238,5 +251,95 @@ describe("CompareFloorChart", () => {
     );
     // 단지B가 모든 층에서 최고가
     expect(screen.getByText(/저층 최고: 단지B/)).toBeInTheDocument();
+  });
+});
+
+/* ── CompareCharts 컨테이너 — 에러 분기 다시 시도 (세션 298 dead-end 해소) ── */
+
+describe("CompareCharts — 에러 분기 다시 시도 (실패 쿼리만 재조회)", () => {
+  const complexes = [
+    { complex_no: "1", complex_name: "단지A" },
+    { complex_no: "2", complex_name: "단지B" },
+  ];
+  const fullComplexes = [
+    makeComplex({ complex_no: "1", complex_name: "단지A" }),
+    makeComplex({ complex_no: "2", complex_name: "단지B" }),
+  ];
+
+  function renderCharts() {
+    return render(
+      <CompareCharts complexes={complexes} fullComplexes={fullComplexes} expandAll />,
+      { wrapper: TestQueryProvider },
+    );
+  }
+
+  /** mock 호출 중 특정 단지번호로 들어온 횟수 */
+  const callsFor = (mock: ReturnType<typeof vi.fn>, no: string) =>
+    mock.mock.calls.filter((c) => c[0] === no).length;
+
+  beforeEach(() => {
+    mockGetPriceHistory.mockReset();
+    mockGetPriceStats.mockReset();
+    mockGetPyeongDetails.mockReset();
+    mockGetPriceHistory.mockResolvedValue({ complex_no: "X", items: [makePriceItem()] });
+    mockGetPriceStats.mockResolvedValue(makePriceStats());
+    mockGetPyeongDetails.mockResolvedValue({ pyeong_details: [] });
+  });
+
+  it("history 1개 실패 → '다시 시도' 클릭 시 실패한 단지만 재조회", async () => {
+    mockGetPriceHistory.mockImplementation((no: string) =>
+      no === "1"
+        ? Promise.reject(new Error("fail"))
+        : Promise.resolve({ complex_no: no, items: [makePriceItem()] }),
+    );
+    renderCharts();
+    await waitFor(() => {
+      expect(screen.getByText("가격 추이를 불러오지 못했습니다.")).toBeInTheDocument();
+    });
+    const failedBefore = callsFor(mockGetPriceHistory, "1");
+    const okBefore = callsFor(mockGetPriceHistory, "2");
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    await waitFor(() => {
+      expect(callsFor(mockGetPriceHistory, "1")).toBe(failedBefore + 1);
+    });
+    expect(callsFor(mockGetPriceHistory, "2")).toBe(okBefore);
+  });
+
+  it("stats 1개 실패 → 평균가/층별/면적별표 3곳에 '다시 시도' 노출, 클릭 시 실패 쿼리만 재조회", async () => {
+    mockGetPriceStats.mockImplementation((no: string) =>
+      no === "2" ? Promise.reject(new Error("fail")) : Promise.resolve(makePriceStats()),
+    );
+    renderCharts();
+    await waitFor(() => {
+      expect(screen.getByText("가격 통계를 불러오지 못했습니다.")).toBeInTheDocument();
+    });
+    const buttons = screen.getAllByRole("button", { name: "다시 시도" });
+    expect(buttons.length).toBe(3);
+    const failedBefore = callsFor(mockGetPriceStats, "2");
+    const okBefore = callsFor(mockGetPriceStats, "1");
+    fireEvent.click(buttons[0]);
+    await waitFor(() => {
+      expect(callsFor(mockGetPriceStats, "2")).toBe(failedBefore + 1);
+    });
+    expect(callsFor(mockGetPriceStats, "1")).toBe(okBefore);
+  });
+
+  it("pyeong 1개 실패 → 관리비/세대구성 2곳에 '다시 시도' 노출, 클릭 시 실패 쿼리만 재조회", async () => {
+    mockGetPyeongDetails.mockImplementation((no: string) =>
+      no === "1" ? Promise.reject(new Error("fail")) : Promise.resolve({ pyeong_details: [] }),
+    );
+    renderCharts();
+    await waitFor(() => {
+      expect(screen.getByText("관리비를 불러오지 못했습니다.")).toBeInTheDocument();
+    });
+    const buttons = screen.getAllByRole("button", { name: "다시 시도" });
+    expect(buttons.length).toBe(2);
+    const failedBefore = callsFor(mockGetPyeongDetails, "1");
+    const okBefore = callsFor(mockGetPyeongDetails, "2");
+    fireEvent.click(buttons[0]);
+    await waitFor(() => {
+      expect(callsFor(mockGetPyeongDetails, "1")).toBe(failedBefore + 1);
+    });
+    expect(callsFor(mockGetPyeongDetails, "2")).toBe(okBefore);
   });
 });

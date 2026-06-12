@@ -197,7 +197,8 @@ function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompa
             <SortableTh label="세대수" sortKey="units" align="right" currentSort={sortState} onSort={onSortChange} ascAllowed={false} />
             <SortableTh label="미분양" sortKey="unsold" align="right" currentSort={sortState} onSort={onSortChange} />
             <SortableTh label="미분양률" sortKey="unsold_rate" align="right" currentSort={sortState} onSort={onSortChange} ascAllowed={false} />
-            <SortableTh label="평당가" sortKey="price" align="right" currentSort={sortState} onSort={onSortChange} />
+            {/* 셀 값 = presale_pp(평당가) → 정렬도 pp (세션 297 — 종전 sortKey="price"(분양가) mislabel 정정) */}
+            <SortableTh label="평당가" sortKey="pp" align="right" currentSort={sortState} onSort={onSortChange} />
             <th className="px-3 py-2.5 text-right text-gray-700 font-semibold hidden md:table-cell">할인율</th>
             <th className="px-3 py-2.5 text-left text-gray-700 font-semibold hidden sm:table-cell">입주시기</th>
             <th className="px-3 py-2.5 text-left text-gray-700 font-semibold hidden sm:table-cell">시공사</th>

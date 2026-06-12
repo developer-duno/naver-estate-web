@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 MbAptSortBy = Literal[
     "name_asc", "unsold_desc", "unsold_asc", "unsold_rate_desc",
-    "units_desc", "price_asc", "price_desc",
+    "units_desc", "price_asc", "price_desc", "pp_asc", "pp_desc",
 ]
 MbTradeSortBy = Literal[
     "deal_month_desc", "deal_month_asc", "price_desc", "price_asc", "area_desc",

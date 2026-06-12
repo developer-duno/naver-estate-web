@@ -28,6 +28,9 @@ export default function HomePage() {
   const { history, add: addHistory, remove: removeHistory, clear: clearHistory } = useSearchHistory();
   const { favorites } = useFavorites();
   const { favorites: articleFavorites } = useArticleFavorites();
+  // 즐겨찾기 칩 기본 10개 노출 — toggleFavorite 가 unshift 라 최신 추가 10개 (storage.ts:113)
+  const [showAllFavorites, setShowAllFavorites] = useState(false);
+  const visibleFavorites = showAllFavorites ? favorites : favorites.slice(0, 10);
 
   const { data: stats, isLoading: statsLoading, isError: statsError, refetch: loadStats } = useQuery({
     queryKey: queryKeys.stats,
@@ -159,7 +162,7 @@ export default function HomePage() {
         <span className="text-xs font-semibold text-gray-500 mb-1.5 block">즐겨찾기</span>
         {favorites.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
-            {favorites.map((f) => (
+            {visibleFavorites.map((f) => (
               <button
                 key={f.complex_no}
                 onClick={() => router.push(`/complex/${f.complex_no}`)}
@@ -169,6 +172,15 @@ export default function HomePage() {
                 {f.complex_name}
               </button>
             ))}
+            {!showAllFavorites && favorites.length > 10 && (
+              <button
+                type="button"
+                onClick={() => setShowAllFavorites(true)}
+                className="inline-flex items-center gap-1 bg-gray-50 text-gray-600 text-xs rounded-full px-2.5 py-1 border border-gray-200 hover:bg-gray-100 cursor-pointer transition-colors"
+              >
+                +{favorites.length - 10}개 더보기
+              </button>
+            )}
           </div>
         ) : (
           <p className="text-xs text-gray-500">

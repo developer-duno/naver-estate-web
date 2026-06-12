@@ -15,6 +15,7 @@ const { mockRouter, mockSearchParams } = vi.hoisted(() => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: () => mockRouter,
+  usePathname: () => "/mibunyang",
   useSearchParams: () => mockSearchParams(),
 }));
 

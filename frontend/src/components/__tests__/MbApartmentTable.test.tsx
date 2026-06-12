@@ -13,7 +13,9 @@ import type { MbApartment } from "@/types";
 
 const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, replace: vi.fn() }),
+  usePathname: () => "/mibunyang",
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 function createMockApartment(overrides: Partial<MbApartment> = {}): MbApartment {

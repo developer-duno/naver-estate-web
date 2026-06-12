@@ -15,7 +15,7 @@ import EstateTypeTabs from "@/components/EstateTypeTabs";
 import ComplexSortDropdown from "@/components/ComplexSortDropdown";
 import { SkeletonPage } from "@/components/Skeleton";
 import { useSmartBack } from "@/hooks/useSmartBack";
-import { useFilterParams } from "@/hooks/useFilterParams";
+import { useFilterParams, buildFilterURL } from "@/hooks/useFilterParams";
 import { useCompare } from "@/hooks/useCompare";
 import { useSearchHistory } from "@/hooks/useSearchHistory";
 import { useArticleFavorites } from "@/hooks/useArticleFavorites";
@@ -24,6 +24,7 @@ import type { SearchHistoryItem } from "@/lib/storage";
 import CompareFloatingBar from "@/components/CompareFloatingBar";
 import { ComplexRow } from "@/components/search/ComplexRow";
 import { ComplexCardMobile } from "@/components/search/ComplexCardMobile";
+import RecentSearchChips from "@/components/search/RecentSearchChips";
 
 const VALID_COMPLEX_SORT = new Set<string>(COMPLEX_SORT_OPTIONS.map((o) => o.v));
 
@@ -79,18 +80,25 @@ function SearchContent() {
     params.delete("types");
     const qs = params.toString();
     router.replace(qs ? `/search?${qs}` : "/search", { scroll: false });
-  }, [setUrlFilters, allCodes, searchParams, router]);
+    // setSelectedTypes: React Compiler(eslint react-hooks v6)가 칩 컴포넌트에 goToRecent 를 prop 으로
+    // 넘기면서부터 추론 dep 으로 요구 — 안정 setter 라 동작 변화 0 (세션 299)
+  }, [setUrlFilters, setSelectedTypes, allCodes, searchParams, router]);
 
-  // 최근 검색어 칩 클릭 → 같은 검색 재실행
+  // 최근 검색어 칩 클릭 → 같은 검색 재실행 (설정해둔 필터·매물유형 보존 — 홈 buildFilterURL 선례 답습)
   const goToRecent = useCallback((item: SearchHistoryItem) => {
+    const extra: Record<string, string> = {};
     if (item.type === "keyword" && item.keyword) {
-      router.push(`/search?q=${encodeURIComponent(item.keyword)}`);
+      extra.q = item.keyword;
     } else if (item.type === "region" && item.sido && item.sigungu) {
-      let path = `/search?sido=${encodeURIComponent(item.sido)}&sigungu=${encodeURIComponent(item.sigungu)}`;
-      if (item.dong) path += `&dong=${encodeURIComponent(item.dong)}`;
-      router.push(path);
+      extra.sido = item.sido;
+      extra.sigungu = item.sigungu;
+      if (item.dong) extra.dong = item.dong;
+    } else {
+      return;
     }
-  }, [router]);
+    if (selectedTypes.length < allCodes.length) extra.types = selectedTypes.join(",");
+    router.push(buildFilterURL("/search", extra, urlFilters));
+  }, [router, selectedTypes, allCodes, urlFilters]);
 
   const title = keyword
     ? `"${keyword}" 검색 결과`
@@ -190,13 +198,16 @@ function SearchContent() {
   const handleInlineKeywordSearch = () => {
     const q = inlineKeyword.trim();
     if (!q) return;
-    router.push(`/search?q=${encodeURIComponent(q)}${buildTypesParam(selectedTypes)}`);
+    const extra: Record<string, string> = { q };
+    if (selectedTypes.length < allCodes.length) extra.types = selectedTypes.join(",");
+    router.push(buildFilterURL("/search", extra, urlFilters));
   };
 
   const handleInlineRegionSearch = (s: string, sg: string, d?: string) => {
-    let path = `/search?sido=${encodeURIComponent(s)}&sigungu=${encodeURIComponent(sg)}`;
-    if (d) path += `&dong=${encodeURIComponent(d)}`;
-    router.push(path + buildTypesParam(selectedTypes));
+    const extra: Record<string, string> = { sido: s, sigungu: sg };
+    if (d) extra.dong = d;
+    if (selectedTypes.length < allCodes.length) extra.types = selectedTypes.join(",");
+    router.push(buildFilterURL("/search", extra, urlFilters));
   };
 
   return (
@@ -270,6 +281,9 @@ function SearchContent() {
             <h2 className="text-lg font-semibold mb-3">지역 선택</h2>
             <RegionSelector onSearch={handleInlineRegionSearch} />
           </div>
+
+          {/* 직접 진입 시에도 최근 검색 칩 노출 (0건 분기와 동일 컴포넌트) */}
+          <RecentSearchChips items={recentItems} onSelect={goToRecent} />
         </div>
       )}
 
@@ -347,24 +361,7 @@ function SearchContent() {
               </button>
             </div>
           </div>
-          {recentItems.length > 0 && (
-            <div className="max-w-md mx-auto pt-2">
-              <p className="text-xs text-gray-500 mb-2">최근 검색</p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {recentItems.map((item) => (
-                  <button
-                    key={item.timestamp}
-                    onClick={() => goToRecent(item)}
-                    className="text-xs px-2.5 py-1 rounded-full border border-gray-300 bg-white hover:bg-blue-50 hover:border-blue-300 text-gray-700"
-                  >
-                    {item.type === "keyword"
-                      ? item.keyword
-                      : `${item.sido} ${item.sigungu}${item.dong ? ` ${item.dong}` : ""}`}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          <RecentSearchChips items={recentItems} onSelect={goToRecent} />
         </div>
       )}
 

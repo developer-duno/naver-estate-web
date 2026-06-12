@@ -199,4 +199,51 @@ describe("/search 빈 결과·에러 UI 보강", () => {
     expect(screen.getByRole("button", { name: "다시 시도" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "대덕구 단위로 검색" })).toBeInTheDocument();
   });
+
+  it("직접 진입(파라미터 없음) + 히스토리 존재 → 최근 검색 칩 노출 + 클릭 시 push (세션 299 A1)", async () => {
+    localStorage.setItem(
+      "search_history",
+      JSON.stringify([{ type: "keyword", keyword: "래미안", timestamp: 1000 }]),
+    );
+    mockSearchParams.mockReturnValue(new URLSearchParams());
+
+    renderSearch();
+
+    // 인라인 검색 폼과 함께 최근 검색 칩이 보인다
+    await waitFor(() => {
+      expect(screen.getByText("최근 검색")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "래미안" }));
+    expect(mockPush).toHaveBeenCalledWith("/search?q=%EB%9E%98%EB%AF%B8%EC%95%88");
+  });
+
+  it("0건 + 필터·유형 설정 상태에서 최근 검색 칩 클릭 → 필터/유형 보존 push (세션 299 A4)", async () => {
+    localStorage.setItem(
+      "search_history",
+      JSON.stringify([{ type: "keyword", keyword: "래미안", timestamp: 1000 }]),
+    );
+    mockSearchParams.mockReturnValue(new URLSearchParams("q=없는키워드&types=APT&min_price=10000"));
+    mockSearchComplexes.mockResolvedValue({ complexes: [], total: 0 });
+
+    renderSearch();
+
+    await waitFor(() => {
+      expect(screen.getByText("최근 검색")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "래미안" }));
+    expect(mockPush).toHaveBeenCalledWith(
+      "/search?q=%EB%9E%98%EB%AF%B8%EC%95%88&types=APT&min_price=10000",
+    );
+  });
+
+  it("직접 진입 + URL 필터 설정 상태에서 인라인 키워드 검색 → 필터 보존 push (세션 299 A4)", async () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams("min_price=10000"));
+
+    renderSearch();
+
+    const input = await screen.findByLabelText("단지명 검색");
+    fireEvent.change(input, { target: { value: "테스트" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(mockPush).toHaveBeenCalledWith("/search?q=%ED%85%8C%EC%8A%A4%ED%8A%B8&min_price=10000");
+  });
 });

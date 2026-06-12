@@ -33,7 +33,8 @@ export default function ComplexHeader({
 }: ComplexHeaderProps) {
   return (
     <div className="flex items-center gap-2 md:gap-4 flex-wrap">
-      <button type="button" onClick={onBack} aria-label="이전 페이지" className="text-gray-500 hover:text-gray-600 text-xl rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+      {/* 터치 44px: 패딩+동치 음수마진 = 히트영역만 확장, 레이아웃 불변 (세션 299) */}
+      <button type="button" onClick={onBack} aria-label="이전 페이지" className="px-3.5 py-2 -mx-3.5 -my-2 text-gray-500 hover:text-gray-600 text-xl rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
         ←
       </button>
       <h1 className="text-lg md:text-2xl font-bold truncate">{complex.complex_name}</h1>

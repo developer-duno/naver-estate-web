@@ -292,7 +292,8 @@ function CompareContent() {
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2 md:gap-4 mb-6">
-        <button onClick={goBack} aria-label="이전 페이지" className="text-gray-400 hover:text-gray-600 text-xl no-print">
+        {/* 터치 44px: 패딩+동치 음수마진 = 히트영역만 확장, 레이아웃 불변 (세션 299) */}
+        <button onClick={goBack} aria-label="이전 페이지" className="px-3.5 py-2 -mx-3.5 -my-2 text-gray-400 hover:text-gray-600 text-xl no-print">
           &#8592;
         </button>
         <h1 className="text-xl md:text-2xl font-bold">단지 비교</h1>

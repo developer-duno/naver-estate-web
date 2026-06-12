@@ -51,5 +51,8 @@
       "WebFetch(domain:www.law.go.kr)",
       "WebFetch(domain:www.nts.go.kr)"
     ]
-  }
+  },
+  "disabledMcpjsonServers": [
+    "next-devtools"
+  ]
 }

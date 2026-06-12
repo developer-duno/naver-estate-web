@@ -13,6 +13,7 @@ import { useSmartBack } from "@/hooks/useSmartBack";
 import { useExport } from "@/hooks/useExport";
 import { useFilterParams } from "@/hooks/useFilterParams";
 import { useFavoriteStatus } from "@/hooks/useFavorites";
+import { useCompare } from "@/hooks/useCompare";
 import { useCrawlAction } from "@/hooks/useCrawlAction";
 import type { Article, ArticleFilters, FilterOptions } from "@/types";
 import FilterBar from "@/components/FilterBar";
@@ -30,6 +31,7 @@ import { useSessionToken } from "@/hooks/useSessionToken";
 import Pagination from "@/components/Pagination";
 import HintIcon from "@/components/HintIcon";
 import ComplexHeader from "@/components/complex/ComplexHeader";
+import CompareFloatingBar from "@/components/CompareFloatingBar";
 import ComplexLoadState from "@/components/complex/ComplexLoadState";
 import CrawlMessage from "@/components/complex/CrawlMessage";
 import ComplexDashboard from "@/components/complex/ComplexDashboard";
@@ -46,6 +48,7 @@ export default function ComplexDetailPage() {
   // 필터/정렬/페이지 — URL을 단일 소스로 사용
   const { filters, page: currentPage, sortBy: activeSortBy, setFilters, setPage, setSortBy } = useFilterParams();
   const { starred, toggle: toggleFavorite } = useFavoriteStatus(complexNo);
+  const compare = useCompare();
   const [selectedArticleNos, setSelectedArticleNos] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
@@ -221,6 +224,9 @@ export default function ComplexDetailPage() {
           starred={starred}
           onBack={goBack}
           onToggleFavorite={() => toggleFavorite(complex.complex_name, complex.cortar_address)}
+          isCompared={compare.isInCompare(complexNo)}
+          compareFull={compare.isFull}
+          onToggleCompare={() => compare.toggle({ complex_no: complexNo, complex_name: complex.complex_name })}
         />
         <PrintButton contentRef={printRef} documentTitle={complex.complex_name} />
       </div>
@@ -376,6 +382,12 @@ export default function ComplexDetailPage() {
           />
         )}
       </section>
+
+      {/* 비교 플로팅 바 — printRef 내부라 no-print 필수, 모달(아래 조건부)보다 DOM 앞이어야 백드롭이 바를 덮음 */}
+      <div className="no-print">
+        <CompareFloatingBar list={compare.list} onRemove={compare.remove} onClear={compare.clear} />
+        {compare.list.length > 0 && <div className="pb-16" />}
+      </div>
 
       {/* 매물 상세 모달 */}
       {selectedArticle && (

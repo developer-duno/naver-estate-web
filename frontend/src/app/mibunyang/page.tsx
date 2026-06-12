@@ -22,6 +22,7 @@ import MbUnsoldTab from "@/components/mb/MbUnsoldTab";
 import MbRegionsTab from "@/components/mb/MbRegionsTab";
 import MbTradesTab from "@/components/mb/MbTradesTab";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { MB_APT_SORT_OPTIONS, MB_TRADE_SORT_OPTIONS } from "@/lib/mb-sort-options";
 import type { MbSearchHistoryItem, MbCompareHistoryItem, MbCompareBookmarkItem } from "@/lib/storage";
 
 const TABS = [
@@ -111,11 +112,11 @@ function MibunyangContent() {
       if (t === "regions" || t === "trades") {
         updates.q = undefined;
       }
-      // 탭별 BE 정렬 Literal 이 달라(backend/routers/mb.py:35-41 MbAptSortBy/MbTradeSortBy 와 동기화)
-      // 다른 탭의 정렬값이 그대로 전달되면 422 → 목록 전체 에러. 대상 탭에서 유효하지 않으면 리셋.
+      // 탭별 BE 정렬 Literal 이 달라 다른 탭의 정렬값이 그대로 전달되면 422 → 목록 전체 에러.
+      // 대상 탭에서 유효하지 않으면 리셋. 유효값 SSOT = lib/mb-sort-options.ts (BE 짝꿍 주석 그쪽).
       // 정렬을 안 쓰는 탭(favorites·regions)으로의 이동은 보존 — 둘러보고 돌아와도 정렬 유지.
-      const APT_SORTS = ["name_asc", "unsold_desc", "unsold_asc", "unsold_rate_desc", "units_desc", "price_asc", "price_desc"];
-      const TRADE_SORTS = ["deal_month_desc", "deal_month_asc", "price_desc", "price_asc", "area_desc"];
+      const APT_SORTS = MB_APT_SORT_OPTIONS.map((o) => o.v);
+      const TRADE_SORTS = MB_TRADE_SORT_OPTIONS.map((o) => o.v);
       const validSorts = t === "trades" ? TRADE_SORTS : (t === "apartments" || t === "unsold") ? APT_SORTS : null;
       if (sortBy && validSorts && !validSorts.includes(sortBy)) {
         updates.sort_by = undefined;

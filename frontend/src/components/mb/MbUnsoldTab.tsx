@@ -4,7 +4,9 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import MbApartmentTable from "@/components/mb/MbApartmentTable";
 import Pagination from "@/components/Pagination";
 import { MbTabContent, ExportButton } from "@/components/mb/MbTabContent";
+import MbSortSelect from "@/components/mb/MbSortSelect";
 import { exportMbApartmentsToXlsx } from "@/lib/mb-export";
+import { MB_APT_SORT_OPTIONS } from "@/lib/mb-sort-options";
 import { PAGE_SIZE } from "@/lib/constants";
 import type { MbApartment } from "@/types";
 
@@ -30,14 +32,17 @@ export default function MbUnsoldTab({
 }) {
   return (
     <MbTabContent loading={query.isLoading} error={query.error} refetch={query.refetch}>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-y-2 mb-3">
         <span className="text-sm text-gray-500">
           미분양 {query.data?.total?.toLocaleString() ?? 0}개
         </span>
-        <ExportButton
-          disabled={!query.data?.unsold?.length}
-          onClick={() => exportMbApartmentsToXlsx(query.data?.unsold ?? [])}
-        />
+        <div className="flex items-center gap-2">
+          <MbSortSelect sort={sort} onSortChange={onSortChange} options={MB_APT_SORT_OPTIONS} defaultLabel="기본 (미분양 많은순)" />
+          <ExportButton
+            disabled={!query.data?.unsold?.length}
+            onClick={() => exportMbApartmentsToXlsx(query.data?.unsold ?? [])}
+          />
+        </div>
       </div>
       <MbApartmentTable
         apartments={query.data?.unsold ?? []}

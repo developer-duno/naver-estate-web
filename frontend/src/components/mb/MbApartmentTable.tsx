@@ -25,7 +25,7 @@ function SortableTh({
   align: "left" | "right";
   currentSort: { key: string; dir: "asc" | "desc" | null };
   onSort?: (sort: string) => void;
-  /** 허용 정렬 방향은 backend/routers/mb.py:35-41 Literal 과 동기화 — asc 미지원 컬럼은 desc→해제 2단 사이클 (422 방지) */
+  /** 허용 정렬 방향은 backend/routers/mb.py:35-41 Literal 과 동기화 (유효값 SSOT = lib/mb-sort-options.ts) — asc 미지원 컬럼은 desc→해제 2단 사이클 (422 방지) */
   ascAllowed?: boolean;
 }) {
   const isActive = currentSort.key === sortKey && currentSort.dir !== null;

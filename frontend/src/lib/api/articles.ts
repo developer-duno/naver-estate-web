@@ -4,7 +4,7 @@
 
 import type { Article, ArticleFilters, ArticlePriceHistoryItem } from "@/types";
 import * as direct from "@/lib/api-direct";
-import { fetchApi, isBackendAvailable, getApiBase } from "./core";
+import { fetchApi, isBackendAvailable, getApiBase, ApiError } from "./core";
 
 /** 단지별 매물 조회 */
 export async function getArticles(complexNo: string, filters?: ArticleFilters) {
@@ -32,7 +32,9 @@ export async function getArticleLive(articleNo: string) {
   if (!isBackendAvailable()) return direct.getArticleDirect(articleNo);
   try {
     return await fetchApi<Article>(`/api/live/article/${encodeURIComponent(articleNo)}/detail`, { timeoutMs: 30_000 } as RequestInit & { timeoutMs?: number });
-  } catch {
+  } catch (err) {
+    // 404 = backend 의 확정 답변 (매물 삭제/내려감) — 장애가 아니므로 폴백 없이 전파 (ArticleDetail 404 분기 짝꿍)
+    if (err instanceof ApiError && err.statusCode === 404) throw err;
     return direct.getArticleDirect(articleNo);
   }
 }

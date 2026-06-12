@@ -2,13 +2,17 @@
  * MbApartmentTable 테스트 — 평당가 + 할인율 2 컬럼 추가 (단계 5)
  * 실행: npx vitest run src/components/mb/__tests__/MbApartmentTable.test.tsx
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import type { MbApartment } from "@/types";
 
-// next/navigation mock
+// next/navigation mock — 컴포넌트가 useSearchParams 로 q 를 직접 읽음 (세션 299 A3)
+const mockReplace = vi.fn();
+const mockSearchParams = vi.fn(() => new URLSearchParams());
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: mockReplace }),
+  usePathname: () => "/mibunyang",
+  useSearchParams: () => mockSearchParams(),
 }));
 
 import MbApartmentTable from "../MbApartmentTable";
@@ -114,5 +118,38 @@ describe("MbApartmentTable — SortableTh 허용 방향 (backend mb.py MbAptSort
     fireEvent.click(within(table).getByText("평당가"));
     expect(onSortChange).toHaveBeenCalledWith("pp_desc");
     expect(onSortChange).not.toHaveBeenCalledWith("price_desc");
+  });
+});
+
+describe("MbApartmentTable — 키워드 0건 '검색어 지우기' (세션 299 A3)", () => {
+  beforeEach(() => {
+    mockReplace.mockClear();
+    mockSearchParams.mockReturnValue(new URLSearchParams());
+  });
+
+  it("q 존재 + 0건 → 키워드 인용 문구 + '검색어 지우기' 버튼 렌더", () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams("region=서울&q=래미안"));
+    render(<MbApartmentTable apartments={[]} />);
+    expect(screen.getByText('"래미안" 검색 결과가 없어요')).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "검색어 지우기" })).toBeInTheDocument();
+  });
+
+  it("'검색어 지우기' 클릭 → q 제거 + page=1 로 replace (다른 파라미터 보존)", () => {
+    mockSearchParams.mockReturnValue(new URLSearchParams("region=서울&q=래미안&page=3"));
+    render(<MbApartmentTable apartments={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "검색어 지우기" }));
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    const [url, opts] = mockReplace.mock.calls[0];
+    expect(url).toContain("/mibunyang?");
+    expect(url).toContain("region=%EC%84%9C%EC%9A%B8");
+    expect(url).toContain("page=1");
+    expect(url).not.toContain("q=");
+    expect(opts).toEqual({ scroll: false });
+  });
+
+  it("q 없음 + 0건 → 기존 문구 유지 + 지우기 버튼 미노출", () => {
+    render(<MbApartmentTable apartments={[]} />);
+    expect(screen.getByText("표시할 미분양 단지가 없어요")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "검색어 지우기" })).not.toBeInTheDocument();
   });
 });

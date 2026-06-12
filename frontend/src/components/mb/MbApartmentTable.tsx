@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Building } from "lucide-react";
 import type { MbApartment } from "@/types";
 import { useMbFavorites } from "@/hooks/useMbFavorites";
@@ -70,15 +70,40 @@ interface Props {
 
 function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompareToggle, compareFull }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const sortState = parseSortString(sort);
   const { isFavorite, toggle: toggleFav } = useMbFavorites();
+  // 키워드는 /mibunyang URL q 파라미터 (page.tsx) — 부모 4파일 prop-drilling 대신 테이블이 직접 읽음
+  const keyword = searchParams.get("q") ?? "";
 
   if (apartments.length === 0) {
+    const clearKeyword = () => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("q");
+      params.set("page", "1");
+      router.replace(`${pathname}?${params}`, { scroll: false });
+    };
     return (
       <EmptyState
         icon={Building}
-        title="표시할 미분양 단지가 없어요"
-        description="조건을 바꿔보거나 잠시 후 다시 조회해주세요"
+        title={keyword ? `"${keyword}" 검색 결과가 없어요` : "표시할 미분양 단지가 없어요"}
+        description={
+          keyword
+            ? "검색어를 지우면 이 지역 전체 목록을 볼 수 있어요"
+            : "조건을 바꿔보거나 잠시 후 다시 조회해주세요"
+        }
+        action={
+          keyword ? (
+            <button
+              type="button"
+              onClick={clearKeyword}
+              className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+            >
+              검색어 지우기
+            </button>
+          ) : undefined
+        }
       />
     );
   }

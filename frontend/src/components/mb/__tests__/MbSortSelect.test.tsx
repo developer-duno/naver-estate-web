@@ -51,12 +51,12 @@ describe("MbSortSelect", () => {
 });
 
 describe("mb-sort-options ↔ BE Literal 짝꿍 가드 (mb.py:35-41)", () => {
-  // BE MbAptSortBy Literal 7값과 정확 일치 — 옵션 큐레이션/기계 조합으로 인한
+  // BE MbAptSortBy Literal 9값과 정확 일치 — 옵션 큐레이션/기계 조합으로 인한
   // whitelist 무음 축소·422 재발(units_asc 류) 차단. BE Literal 변경 시 양쪽 답습.
-  it("APT 옵션 = MbAptSortBy 7값 verbatim", () => {
+  it("APT 옵션 = MbAptSortBy 9값 verbatim", () => {
     expect(MB_APT_SORT_OPTIONS.map((o) => o.v)).toEqual([
       "name_asc", "unsold_desc", "unsold_asc", "unsold_rate_desc",
-      "units_desc", "price_asc", "price_desc",
+      "units_desc", "price_asc", "price_desc", "pp_asc", "pp_desc",
     ]);
   });
 

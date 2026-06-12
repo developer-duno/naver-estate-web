@@ -106,4 +106,13 @@ describe("MbApartmentTable — SortableTh 허용 방향 (backend mb.py MbAptSort
     fireEvent.click(within(table).getByText("세대수"));
     expect(onSortChange).toHaveBeenCalledWith("units_desc");
   });
+
+  it("'평당가' 헤더 클릭 → pp_desc (셀 값 presale_pp 와 정렬 일치 — 종전 price mislabel 정정, 세션 297)", () => {
+    const onSortChange = vi.fn();
+    render(<MbApartmentTable apartments={apts} onSortChange={onSortChange} />);
+    const table = screen.getByRole("table");
+    fireEvent.click(within(table).getByText("평당가"));
+    expect(onSortChange).toHaveBeenCalledWith("pp_desc");
+    expect(onSortChange).not.toHaveBeenCalledWith("price_desc");
+  });
 });

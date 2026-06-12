@@ -396,3 +396,64 @@ def test_get_apartments_page_returns_items_and_total(db):
     items, total = mb_queries.get_apartments_page(db, region="서울", page=1, page_size=2)
     assert len(items) == 2
     assert total == 3  # 중복 제거 후 3개
+
+
+# ── 정렬 NULLS LAST + pp 정렬 (세션 297) ────────────────────
+
+
+def test_build_mb_order_clause_nullslast():
+    """nullable 정렬 컬럼 전부 NULLS LAST — PG 기본(DESC 시 NULLS FIRST)의 빈 값 상단 노출 차단"""
+    nullable_keys = [
+        "unsold_desc", "unsold_asc", "unsold_rate_desc", "units_desc",
+        "price_asc", "price_desc", "pp_asc", "pp_desc",
+    ]
+    for key in nullable_keys:
+        compiled = str(mb_queries._build_mb_order_clause(key)).upper()
+        assert "NULLS LAST" in compiled, key
+    # name 은 NOT NULL — nullslast 불필요
+    assert "NULLS LAST" not in str(mb_queries._build_mb_order_clause("name_asc")).upper()
+
+
+def test_build_mb_order_clause_pp():
+    """pp_asc/pp_desc → presale_pp 컬럼 정렬 (데스크톱 '평당가' 헤더 짝꿍)"""
+    assert "presale_pp" in str(mb_queries._build_mb_order_clause("pp_desc")).lower()
+    assert "presale_pp" in str(mb_queries._build_mb_order_clause("pp_asc")).lower()
+
+
+def test_build_mb_trade_order_clause_nullslast():
+    """실거래 정렬 전 키 NULLS LAST (deal_month/price/area 전 컬럼 nullable)"""
+    for key in ["deal_month_desc", "deal_month_asc", "price_desc", "price_asc", "area_desc"]:
+        compiled = str(mb_queries._build_mb_trade_order_clause(key)).upper()
+        assert "NULLS LAST" in compiled, key
+
+
+def test_get_apartments_pp_sort_none_last(db):
+    """pp 정렬 — presale_pp 빈 단지는 asc/desc 모두 맨 뒤 (Python 경로 NULLS LAST parity)"""
+    _add_apartment(db, "PP1", "가단지", region="서울", presale_pp=3000)
+    _add_apartment(db, "PP2", "나단지", region="서울", presale_pp=1000)
+    _add_apartment(db, "PP3", "다단지", region="서울")  # presale_pp None
+
+    desc_rows = mb_queries.get_apartments(db, region="서울", sort_by="pp_desc")
+    assert [a.id for a in desc_rows] == ["PP1", "PP2", "PP3"]
+
+    asc_rows = mb_queries.get_apartments(db, region="서울", sort_by="pp_asc")
+    assert [a.id for a in asc_rows] == ["PP2", "PP1", "PP3"]
+
+
+def test_get_apartments_unsold_asc_none_last(db):
+    """unsold_asc — 빈 값 단지가 맨 앞에 오던 마스킹(None→0) 정정 회귀 가드"""
+    _add_apartment(db, "UA1", "가단지", region="서울", unsold=5)
+    _add_apartment(db, "UA2", "나단지", region="서울")  # unsold None
+
+    rows = mb_queries.get_apartments(db, region="서울", sort_by="unsold_asc")
+    assert [a.id for a in rows] == ["UA1", "UA2"]
+
+
+def test_get_trades_price_desc_none_last(db):
+    """실거래 price_desc — price 빈 거래는 맨 뒤 (SQL 경로 NULLS LAST, SQLite 3.30+ 실행)"""
+    _add_trade(db, region="서울", gu="강남", price=50000, deal_month="202601")
+    _add_trade(db, region="서울", gu="강남", price=None, deal_month="202602")
+    _add_trade(db, region="서울", gu="강남", price=80000, deal_month="202603")
+
+    rows = mb_queries.get_trades(db, region="서울", sort_by="price_desc")
+    assert [t.price for t in rows] == [80000, 50000, None]

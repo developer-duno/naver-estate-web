@@ -20,12 +20,12 @@
 - 같은 Supabase DB 공유 → 기존 `Base`/`SessionLocal`/`get_db()` 그대로 사용
 - `db/mb_models.py`: mibunyang 10개 테이블 ORM (Apartment, UnsoldHistory, MBRegion, MBTrade 등)
 - `db/mb_queries.py`: 읽기 쿼리 + 정렬/검색 헬퍼
-  - `_build_mb_order_clause(sort_by)`: 아파트 동적 정렬 (7개 옵션)
-  - `_build_mb_trade_order_clause(sort_by)`: 실거래 동적 정렬 (5개 옵션)
+  - `_build_mb_order_clause(sort_by)`: 아파트 동적 정렬 (9개 옵션, nullable 컬럼 NULLS LAST)
+  - `_build_mb_trade_order_clause(sort_by)`: 실거래 동적 정렬 (5개 옵션, 전 키 NULLS LAST)
   - `_apply_keyword_filter(conditions, keyword)`: 단지명 ILIKE 검색 (%/_ 이스케이프)
 - `routers/mb.py`: `/api/mb/*` 엔드포인트 (인증 없는 공개 API)
-  - `/apartments`: `sort_by` (Literal[7]), `keyword` (min_length=2, max_length=100)
-  - `/unsold`: `sort_by` (Literal[7]), `keyword`
+  - `/apartments`: `sort_by` (Literal[9]), `keyword` (min_length=2, max_length=100)
+  - `/unsold`: `sort_by` (Literal[9]), `keyword`
   - `/trades`: `sort_by` (Literal[5])
   - `MbAptSortBy`, `MbTradeSortBy` Literal 타입 정의
 - mibunyang 테이블: apartments(97col), unsold_history, regions, trades, prices, trade_stats, builders, infra, schools, transport

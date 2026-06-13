@@ -140,11 +140,14 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 | `error-propagation.md` | FE 데이터 래퍼 에러 삼킴 금지 + 래퍼 레벨 MSW 가드 의무 (폴백 삼킴 3사고, 세션 298 신설) |
 | `release.md` | PR 머지 후 backend 가동 검증 4중 cross-check (세션 230~231 zombie 답습 신설, 세션 257 라이브 표시값 지표 추가) |
 
-### 필요 시 호출 (`.claude/commands/`)
-| 커맨드 | 내용 |
+### 플랜·검증 (글로벌 스킬 — 타이핑 0 자동 발동)
+
+> 옛 `/harness`·`/guard` 커맨드는 글로벌 스킬로 이전됨 (`.claude/commands/` 없음). 기능은 아래 스킬이 대체.
+
+| 스킬 | 내용 |
 |--------|------|
-| `/harness` | Plan→Guard→Work→Review 전체 워크플로우, Sonnet 분할, 코드 작성 규칙 |
-| `/guard` | 9 GATE 검증 (크기/영향/순서/완전성/적정성/보안/연동/롤백/UX) |
+| `plan-9gate` | 9 GATE 검증 (크기/영향/순서/완전성/적정성/보안/연동/롤백/UX) — ExitPlanMode·커밋 직전 자동 |
+| `ulw-safe` | Plan→Work→Review 통제 ultrawork (체크포인트+자기정지) — 큰 작업 자동 |
 
 ## 자율 발동 도구 (타이핑 0 — Claude 스스로 판단해 발동)
 

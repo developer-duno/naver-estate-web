@@ -9,7 +9,7 @@
 
 ## 자동 트리거 조건
 
-### /plan 진입 시 → /harness 자동 적용
+### /plan 진입 시 → 단계 분리 규칙 자동 적용 (옛 /harness)
 - 5개+ 파일 수정 계획 → 반드시 단계 분리
 - DB/API/타입/컴포넌트 변경은 각각 별도 단계로
 - 영향받는 파일 목록을 grep으로 실측
@@ -21,7 +21,7 @@
 3. grep으로 참조처 깨짐 확인
 4. grep으로 console.log / 민감정보 잔재 확인
 
-### 커밋 요청 시 → /guard 자동 적용
+### 커밋 요청 시 → plan-9gate 스킬 자동 발동 (옛 /guard)
 - 5개 교차검증 에이전트 병렬 실행 (빌드/null안전/Hook/보안/테스트)
 - 🔴 있으면 커밋 차단, 수정 후 재검증
 
@@ -68,6 +68,6 @@
 - **인덱스 1줄**: MEMORY.md 에 추가 (200줄 한도 — 글로벌 룰)
 
 ## 상세 규칙 참조
-- `/harness` — Plan→Guard→Work→Review 전체 워크플로우
-- `/guard` — 9 GATE 상세 검증
+- `ulw-safe` (글로벌 스킬) — Plan→Work→Review 통제 ultrawork (옛 /harness 대체)
+- `plan-9gate` (글로벌 스킬) — 9 GATE 상세 검증 (옛 /guard 대체)
 - 글로벌 룰 (`C:\Users\user\.claude\CLAUDE.md`) "세션 종료 시 다음 시작 명령어 자동 출력" 섹션 + "메모리 위치 분류" 섹션

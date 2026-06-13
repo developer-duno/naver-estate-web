@@ -171,6 +171,32 @@ describe("VerifyPage", () => {
     expect(screen.getByRole("button", { name: /재신청/ })).toBeInTheDocument();
   });
 
+  /** 제출 직후 휴·폐업 차단 — status=rejected 응답 (세션 305 PR A) */
+  it("휴·폐업 사업자 제출 시 거부 안내와 다시 신청 버튼이 표시된다", async () => {
+    mockGetStatus.mockResolvedValue({ submitted: false } as never);
+    mockSubmit.mockResolvedValueOnce({
+      status: "rejected",
+      business_verified: true,
+      business_message: "국세청에 휴업/폐업 상태로 등록된 사업자입니다. 영업 중인 사업자등록번호로만 인증할 수 있어요.",
+      business_status_code: "03",
+      auto_approved: false,
+    } as never);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/사업자등록번호/)).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByLabelText(/사업자등록번호/), { target: { value: "1234567890" } });
+    fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
+    fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
+    fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText("인증 거부됨")).toBeInTheDocument();
+    });
+    expect(screen.getByText(/휴업\/폐업 상태로 등록/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /다시 신청/ })).toBeInTheDocument();
+  });
+
   /** 에러 상태 — useQuery isError silent failure 정정 (세션 219 PR 답습)
    * 세션 217 ChartAccordion isError 패턴 답습. BE 다운/네트워크 오류 시
    * data=undefined 가 미제출 폼으로 그냥 표시되던 silent failure 차단. */

@@ -108,9 +108,10 @@ def test_submit_pending(mock_biz, client, db):
     assert data["business_verified"] is False
 
 
+@patch("routers.verify.check_business_status", return_value="01")
 @patch("routers.verify.verify_business_registration")
-def test_submit_auto_approved(mock_biz, client, db):
-    """사업자등록 확인 성공 → 자동 승인, role=expert"""
+def test_submit_auto_approved(mock_biz, mock_status, client, db):
+    """사업자등록 확인 성공 + 영업중(01) → 자동 승인, role=expert"""
     mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
     _make_profile(db, "u1")
 
@@ -125,6 +126,85 @@ def test_submit_auto_approved(mock_biz, client, db):
     profile = db.get(UserProfile, "u1")
     assert profile.role == "expert"
     assert profile.status == "approved"
+
+
+# ── 영업상태 게이트 (세션 305 PR A — 휴·폐업 차단) ──
+
+
+@patch("routers.verify.check_business_status", return_value="02")
+@patch("routers.verify.verify_business_registration")
+def test_submit_status_closed_rejected(mock_biz, mock_status, client, db):
+    """진위 통과 + 휴업(02) → rejected, role 미부여"""
+    mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
+    _make_profile(db, "u1")
+
+    res = client.post("/api/verify/submit", json=_valid_body(), headers=_auth(_token("u1")))
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "rejected"
+    assert data["auto_approved"] is False
+    assert data["business_status_code"] == "02"
+
+    # DB: rejected + 사유 + role 미부여
+    v = db.query(AgentVerification).filter_by(user_id="u1").one()
+    assert v.verification_status == "rejected"
+    assert v.rejection_reason is not None and "휴업" in v.rejection_reason
+    assert db.get(UserProfile, "u1").role == "user"
+
+
+@patch("routers.verify.check_business_status", return_value="03")
+@patch("routers.verify.verify_business_registration")
+def test_submit_status_terminated_rejected(mock_biz, mock_status, client, db):
+    """진위 통과 + 폐업(03) → rejected"""
+    mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
+    _make_profile(db, "u1")
+
+    res = client.post("/api/verify/submit", json=_valid_body(), headers=_auth(_token("u1")))
+    data = res.json()
+    assert data["status"] == "rejected"
+    assert data["business_status_code"] == "03"
+    assert db.get(UserProfile, "u1").role == "user"
+
+
+@patch("routers.verify.check_business_status", return_value="")
+@patch("routers.verify.verify_business_registration")
+def test_submit_status_unregistered_pending(mock_biz, mock_status, client, db):
+    """진위 통과 + 미등록("") → pending(수동심사), role 미부여 (validate-status 모순)"""
+    mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
+    _make_profile(db, "u1")
+
+    res = client.post("/api/verify/submit", json=_valid_body(), headers=_auth(_token("u1")))
+    data = res.json()
+    assert data["status"] == "pending"
+    assert data["auto_approved"] is False
+    assert data["business_verified"] is True  # 진위는 통과
+    assert db.get(UserProfile, "u1").role == "user"
+
+
+@patch("routers.verify.check_business_status", return_value=None)
+@patch("routers.verify.verify_business_registration")
+def test_submit_status_lookup_failed_auto_approved(mock_biz, mock_status, client, db):
+    """진위 통과 + status 조회실패(None) → 자동승인 유지 (안전망 실패해도 진위 완료, 가입 마찰 0)"""
+    mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
+    _make_profile(db, "u1")
+
+    res = client.post("/api/verify/submit", json=_valid_body(), headers=_auth(_token("u1")))
+    data = res.json()
+    assert data["status"] == "approved"
+    assert data["auto_approved"] is True
+    assert db.get(UserProfile, "u1").role == "expert"
+
+
+@patch("routers.verify.check_business_status")
+@patch("routers.verify.verify_business_registration")
+def test_submit_validate_failed_skips_status(mock_biz, mock_status, client, db):
+    """진위 실패 → status 미조회(외부호출 절약), pending"""
+    mock_biz.return_value = {"valid": False, "message": "유효하지 않음"}
+    _make_profile(db, "u1")
+
+    res = client.post("/api/verify/submit", json=_valid_body(), headers=_auth(_token("u1")))
+    assert res.json()["status"] == "pending"
+    mock_status.assert_not_called()
 
 
 @patch("routers.verify.verify_business_registration")
@@ -198,8 +278,9 @@ def test_status_pending(client, db):
     assert data["license_doc_uploaded"] is False
 
 
+@patch("routers.verify.check_business_status", return_value="01")
 @patch("routers.verify.verify_business_registration")
-def test_status_approved(mock_biz, client, db):
+def test_status_approved(mock_biz, mock_status, client, db):
     """approved 상태 + business_verified 확인"""
     mock_biz.return_value = {"valid": True, "message": "확인됨"}
     _make_profile(db, "u1")

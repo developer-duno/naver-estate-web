@@ -60,7 +60,7 @@ function ApprovedActions() {
 export default function VerifyPage() {
   const getToken = useAdminToken();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ business_number: "", office_name: "", representative_name: "" });
+  const [form, setForm] = useState({ business_number: "", office_name: "", representative_name: "", start_date: "" });
   const [error, setError] = useState("");
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
@@ -77,7 +77,8 @@ export default function VerifyPage() {
     mutationFn: async () => {
       const t = await getToken();
       if (!t) throw new Error("로그인이 필요합니다");
-      return submitVerification(t, form);
+      // date input 은 YYYY-MM-DD 보관 → BE validator(8자리 숫자)에 맞춰 하이픈 제거
+      return submitVerification(t, { ...form, start_date: form.start_date.replace(/-/g, "") });
     },
     onSuccess: async () => {
       if (licenseFile) {
@@ -135,6 +136,7 @@ export default function VerifyPage() {
     const bn = form.business_number.replace(/-/g, "");
     if (!/^\d{10}$/.test(bn)) { setError("사업자등록번호는 10자리 숫자여야 합니다."); return; }
     if (!form.representative_name.trim()) { setError("대표자명을 입력해주세요."); return; }
+    // 개업일자는 <input type="date" required> 가 빈값 제출을 native 로 차단 → JS 중복 불필요
     mutation.mutate();
   };
 
@@ -274,6 +276,18 @@ export default function VerifyPage() {
             maxLength={12}
             placeholder="000-00-00000"
           />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="v-start">개업일자 *</Label>
+          <Input
+            id="v-start"
+            type="date"
+            value={form.start_date}
+            onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))}
+            required
+          />
+          <p className="text-xs text-gray-400">사업자등록증의 개업연월일과 같아야 자동 인증됩니다.</p>
         </div>
 
         <div className="space-y-1.5">

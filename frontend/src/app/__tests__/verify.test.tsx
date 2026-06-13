@@ -63,10 +63,22 @@ describe("VerifyPage", () => {
       expect(screen.getByLabelText(/사업자등록번호/)).toBeInTheDocument();
     });
     fireEvent.change(screen.getByLabelText(/사업자등록번호/), { target: { value: "12345" } });
+    // 개업일자는 required date input — native 차단을 피하려 유효값 채움 (세션 304)
+    fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
     fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
     fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
 
     expect(screen.getByRole("alert")).toHaveTextContent("10자리");
+  });
+
+  /** 개업일자 입력칸이 폼에 존재한다 (국세청 validate 필수, 세션 304) */
+  it("개업일자 입력칸이 표시된다", async () => {
+    mockGetStatus.mockResolvedValueOnce({ submitted: false } as never);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/개업일자/)).toBeInTheDocument();
+    });
+    expect(screen.getByLabelText(/개업일자/)).toHaveAttribute("required");
   });
 
   /** 자동 승인 결과 */
@@ -84,6 +96,7 @@ describe("VerifyPage", () => {
       expect(screen.getByLabelText(/사업자등록번호/)).toBeInTheDocument();
     });
     fireEvent.change(screen.getByLabelText(/사업자등록번호/), { target: { value: "1234567890" } });
+    fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
     fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
     fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
 
@@ -97,6 +110,11 @@ describe("VerifyPage", () => {
     expect(searchLink).toHaveAttribute("href", "/search");
     expect(mbLink).toHaveAttribute("href", "/mibunyang");
     expect(screen.queryByRole("link", { name: "홈으로 이동" })).not.toBeInTheDocument();
+    // 제출 payload 의 start_date 가 하이픈 제거된 YYYYMMDD 로 정규화됐는지 (세션 304)
+    expect(mockSubmit).toHaveBeenCalledWith(
+      "test-token",
+      expect.objectContaining({ start_date: "19990602" }),
+    );
   });
 
   /** 이미 승인됨(status approved) 분기 — 검색·미분양 직행 CTA */
@@ -128,6 +146,7 @@ describe("VerifyPage", () => {
       expect(screen.getByLabelText(/사업자등록번호/)).toBeInTheDocument();
     });
     fireEvent.change(screen.getByLabelText(/사업자등록번호/), { target: { value: "1234567890" } });
+    fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
     fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
     fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
 

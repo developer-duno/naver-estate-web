@@ -53,6 +53,23 @@ def test_success_valid():
     assert "확인됨" in result["message"]
 
 
+def test_start_date_passed_to_payload():
+    """start_date 가 payload start_dt 로 전달되는지 단언 (세션 304 — 누락 시 odcloud 500)"""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"data": [{"valid": "01", "valid_msg": ""}]}
+    with (
+        patch("crawler.business_api.os.getenv", return_value="test-key"),
+        patch("crawler.business_api.std_requests.post", return_value=mock_resp) as mock_post,
+    ):
+        result = verify_business_registration("1234567890", "홍길동", "19990602")
+    assert result["valid"] is True
+    sent = mock_post.call_args.kwargs["json"]["businesses"][0]
+    assert sent["start_dt"] == "19990602"
+    assert sent["b_no"] == "1234567890"
+    assert sent["p_nm"] == "홍길동"
+
+
 def test_success_invalid():
     """유효하지 않은 사업자번호 (valid_code="02") → valid=False"""
     mock_resp = MagicMock()

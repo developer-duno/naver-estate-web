@@ -8,6 +8,7 @@ interface VerifySubmitBody {
   business_number: string;
   office_name?: string;
   representative_name: string;
+  start_date: string; // 개업일자 YYYYMMDD — 국세청 validate 필수 (BE verify.py start_date 짝꿍)
 }
 
 /** 중개사 검증 신청 */

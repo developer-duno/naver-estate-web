@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 BUSINESS_NUMBER_RE = re.compile(r"^\d{10}$")
+START_DATE_RE = re.compile(r"^\d{8}$")
 
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "application/pdf"}
@@ -27,6 +28,7 @@ class VerifySubmitRequest(BaseModel):
     business_number: str
     office_name: str = ""
     representative_name: str
+    start_date: str  # 개업일자 YYYYMMDD — 국세청 validate 필수 (없으면 항상 500)
 
     @field_validator("business_number")
     @classmethod
@@ -43,6 +45,15 @@ class VerifySubmitRequest(BaseModel):
         if not v:
             raise ValueError("대표자명은 필수입니다")
         return v
+
+    @field_validator("start_date")
+    @classmethod
+    def validate_start_date(cls, v: str) -> str:
+        # 국세청 validate API 는 b_no·p_nm·start_dt 3필드 전부 필수 (세션 304 라이브 실측)
+        clean = v.replace("-", "").strip()
+        if not START_DATE_RE.match(clean):
+            raise ValueError("개업일자는 YYYYMMDD 8자리 숫자여야 합니다")
+        return clean
 
 
 @router.post("/submit")
@@ -81,8 +92,10 @@ def submit_verification(
         )
         db.add(existing)
 
-    # 국세청 사업자등록 진위확인
-    biz_result = verify_business_registration(body.business_number, body.representative_name)
+    # 국세청 사업자등록 진위확인 (b_no·p_nm·start_dt 3필드 전부 전달 — 누락 시 500)
+    biz_result = verify_business_registration(
+        body.business_number, body.representative_name, body.start_date
+    )
     existing.business_verified = biz_result["valid"] is True
 
     # 자동 승인: 사업자등록 확인됨

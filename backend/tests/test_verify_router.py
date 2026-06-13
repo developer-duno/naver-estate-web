@@ -35,6 +35,7 @@ def _valid_body():
         "business_number": "1234567890",
         "representative_name": "홍길동",
         "office_name": "길동부동산",
+        "start_date": "19990602",  # 개업일자 — 국세청 validate 필수 (세션 304)
     }
 
 
@@ -68,6 +69,24 @@ def test_submit_missing_name_422(client, db):
     _make_profile(db, "u1")
     body = _valid_body()
     body["representative_name"] = "   "
+    res = client.post("/api/verify/submit", json=body, headers=_auth(_token("u1")))
+    assert res.status_code == 422
+
+
+def test_submit_missing_start_date_422(client, db):
+    """개업일자 누락 → 422 (국세청 validate 필수, 세션 304)"""
+    _make_profile(db, "u1")
+    body = _valid_body()
+    del body["start_date"]
+    res = client.post("/api/verify/submit", json=body, headers=_auth(_token("u1")))
+    assert res.status_code == 422
+
+
+def test_submit_invalid_start_date_422(client, db):
+    """8자리 아닌 개업일자 → 422"""
+    _make_profile(db, "u1")
+    body = _valid_body()
+    body["start_date"] = "1999"
     res = client.post("/api/verify/submit", json=body, headers=_auth(_token("u1")))
     assert res.status_code == 422
 

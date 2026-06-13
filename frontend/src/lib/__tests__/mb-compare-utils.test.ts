@@ -119,6 +119,30 @@ describe("MB_COMPARE_ROWS (비교 행 정의)", () => {
     expect(row?.direction).toBe("lower");
   });
 
+  /** 평당가 0(미공개) → null 정규화 → 우위(★)·셀에서 제외 (세션 300) */
+  it("평당가 행은 presale_pp=0(미공개)을 null 로 정규화한다", () => {
+    const row = MB_COMPARE_ROWS.find((r) => r.label === "평당가(만원)");
+    expect(row).toBeDefined();
+    expect(row?.direction).toBe("lower");
+    expect(row?.getValue(makeApt({ presale_pp: 2000 }))).toBe(2000);
+    expect(row?.getValue(makeApt({ presale_pp: 0 }))).toBeNull(); // 0 → null
+    expect(row?.getValue(makeApt({ presale_pp: undefined }))).toBeNull();
+  });
+
+  /** 평당가 0 단지는 ★최저 우위 후보에서 제외 (0 이 거짓 최저로 ★ 받던 결함 차단) */
+  it("평당가 0(미공개) 단지는 lower 우위에서 제외된다", () => {
+    const row = MB_COMPARE_ROWS.find((r) => r.label === "평당가(만원)")!;
+    const apts = [
+      makeApt({ presale_pp: 3000 }),
+      makeApt({ presale_pp: 0 }), // 미공개 — 0 이 최저로 ★ 받으면 안 됨
+      makeApt({ presale_pp: 1500 }),
+    ];
+    // 평당가 행 getValue 는 number | null 반환 (MbCompareRow 타입은 string 도 허용하나 pp 는 숫자)
+    const values = apts.map((a) => row.getValue(a) as number | null);
+    // 0 은 null 로 제외 → 실제 최저는 index 2 (1500)
+    expect(getBestIndices(values, "lower")).toEqual([2]);
+  });
+
   /** 모든 행이 MbApartment에서 값을 추출할 수 있다 */
   it("모든 행이 MbApartment에서 값을 추출할 수 있다", () => {
     const apt = makeApt();

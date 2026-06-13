@@ -3,6 +3,7 @@
  */
 import type { MbApartment, MbRegion, MbTrade, MbUnsoldHistory } from "@/types";
 import { downloadXlsxBuffer, safeCellValue } from "./compare-export";
+import { normalizePp } from "./mb-format";
 
 export function today() {
   return new Date().toISOString().slice(0, 10);
@@ -34,7 +35,7 @@ export async function exportMbApartmentsToXlsx(apartments: MbApartment[]) {
     s(a.name), s(a.region), s(a.gu), s(a.units), s(a.unsold),
     a.unsold_rate != null ? s(a.unsold_rate.toFixed(1)) : "",
     s(a.presale_move_in ?? a.completion), s(a.builder),
-    s(a.presale_min_price), s(a.presale_max_price), s(a.presale_pp),
+    s(a.presale_min_price), s(a.presale_max_price), s(normalizePp(a.presale_pp)),
     a.discount_pct != null ? s(a.discount_pct.toFixed(1)) : "",
   ]);
   const buf = await buildWorkbook("미분양단지", header, data, 14);

@@ -6,6 +6,7 @@ import {
   ResponsiveContainer, BarChart, Bar, LabelList,
 } from "recharts";
 import type { MbApartment } from "@/types";
+import { normalizePp } from "@/lib/mb-format";
 
 const BAR_CHART_HEIGHT = 320;
 const BAR_CHART_MARGIN = { top: 20, right: 8, left: 0, bottom: 4 } as const;
@@ -60,7 +61,7 @@ export default function MbComparePriceChart({ apartments }: Props) {
       name: a.name,
       min: a.presale_min_price ?? null,
       max: a.presale_max_price ?? null,
-      pp: a.presale_pp ?? null,
+      pp: normalizePp(a.presale_pp), // 0/미공개 → null (findLowestName ★ 제외 + 막대 미렌더, 세션 300)
     }));
 
     return {

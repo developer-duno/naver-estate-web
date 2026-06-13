@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import type { MbApartment, MbPrice } from "@/types";
 import { formatKoreanPrice, formatYearMonth, freshness } from "@/lib/format";
+import { normalizePp } from "@/lib/mb-format";
 import { formatHouseType } from "@/lib/mb-house-type";
 import { MbCancelRatioBar } from "./MbCancelRatioBar";
 import { MbCoverageBar } from "./MbCoverageBar";
@@ -91,7 +92,7 @@ export function PresaleSection({ apartment: a }: SectionProps) {
       <dl className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
         <InfoRow label="분양 최저가" value={a.presale_min_price != null ? formatKoreanPrice(a.presale_min_price) : undefined} />
         <InfoRow label="분양 최고가" value={a.presale_max_price != null ? formatKoreanPrice(a.presale_max_price) : undefined} />
-        <InfoRow label="평당가" value={a.presale_pp != null ? formatKoreanPrice(a.presale_pp) : undefined} />
+        <InfoRow label="평당가" value={normalizePp(a.presale_pp) != null ? formatKoreanPrice(a.presale_pp!) : undefined} />
         <InfoRow label="분양유형" value={a.presale_type} />
         <InfoRow label="분양단계" value={a.presale_stage} />
         <InfoRow label="입주시기" value={a.presale_move_in} />
@@ -126,7 +127,7 @@ export function PresaleSection({ apartment: a }: SectionProps) {
                   <td className="px-3 py-1.5 text-right">{p.area != null ? `${p.area}㎡` : "-"}</td>
                   <td className="px-3 py-1.5 text-right">{p.supply_area != null ? `${p.supply_area}㎡` : "-"}</td>
                   <td className="px-3 py-1.5 text-right font-medium">{p.price != null ? formatKoreanPrice(p.price) : "-"}</td>
-                  <td className="px-3 py-1.5 text-right">{p.pp != null ? formatKoreanPrice(p.pp) : "-"}</td>
+                  <td className="px-3 py-1.5 text-right">{normalizePp(p.pp) != null ? formatKoreanPrice(p.pp!) : "-"}</td>
                   <td className="px-3 py-1.5 text-right">{p.supply_count ?? "-"}</td>
                 </tr>
               ))}

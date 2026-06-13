@@ -2,6 +2,7 @@
  * 미분양 단지 비교 유틸리티 — 우위 판정 로직
  */
 import type { MbApartment } from "@/types";
+import { normalizePp } from "./mb-format";
 
 /** 비교 우위 방향: "higher"=클수록 우위, "lower"=작을수록 우위, null=비교 불가(텍스트 항목) */
 export type AdvantageDir = "higher" | "lower" | null;
@@ -24,7 +25,8 @@ export const MB_COMPARE_ROWS: MbCompareRow[] = [
   { label: "입주시기", getValue: (a) => a.presale_move_in ?? a.completion, direction: null },
   { label: "분양가 최저(만원)", getValue: (a) => a.presale_min_price, direction: "lower" },
   { label: "분양가 최고(만원)", getValue: (a) => a.presale_max_price, direction: "lower" },
-  { label: "평당가(만원)", getValue: (a) => a.presale_pp, direction: "lower" },
+  // 평당가 0/미공개는 null → getBestIndices 우위(★) 제외 + formatCellValue "-" (세션 300)
+  { label: "평당가(만원)", getValue: (a) => normalizePp(a.presale_pp), direction: "lower" },
   { label: "세대당 주차(대)", getValue: (a) => a.parking_ratio, direction: "higher" },
   { label: "최고층", getValue: (a) => a.max_floor, direction: "higher" },
   { label: "용적률(%)", getValue: (a) => a.floor_area_ratio, direction: "lower" },

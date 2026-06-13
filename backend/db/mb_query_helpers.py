@@ -4,6 +4,7 @@ import re
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from db.mb_models import Apartment, MBTrade
@@ -52,6 +53,9 @@ def _sort_apartments(apartments: list["Apartment"], sort_by: str) -> list["Apart
         "units_desc": (lambda a: (a.units or 0), True),
         "price_asc": (lambda a: (a.presale_min_price or float("inf")), False),
         "price_desc": (lambda a: (a.presale_min_price or 0), True),
+        # pp = 평당가. 0(분양가 양수인데 평당가만 0 적재되는 collector 결함 + 둘다 미공개)도
+        # NULL 과 동급으로 맨 뒤 — `or` 가 falsy 0 을 NULL 과 같게 처리 (SQL 경로
+        # _build_mb_order_clause 의 func.nullif(pp,0) 와 parity, 세션 300).
         "pp_asc": (lambda a: (a.presale_pp or float("inf")), False),
         "pp_desc": (lambda a: (a.presale_pp or 0), True),
     }
@@ -77,9 +81,13 @@ def _build_mb_order_clause(sort_by: str):
         "units_desc": Apartment.units.desc().nullslast(),
         "price_asc": Apartment.presale_min_price.asc().nullslast(),
         "price_desc": Apartment.presale_min_price.desc().nullslast(),
-        # pp = 평당가 — 데스크톱 '평당가' 컬럼(셀 값 presale_pp) 정렬 짝꿍 (FE sortKey="pp")
-        "pp_asc": Apartment.presale_pp.asc().nullslast(),
-        "pp_desc": Apartment.presale_pp.desc().nullslast(),
+        # pp = 평당가 — 데스크톱 '평당가' 컬럼(셀 값 presale_pp) 정렬 짝꿍 (FE sortKey="pp").
+        # nullif(pp, 0) 로 0(분양가 양수인데 평당가만 0 적재되는 collector 결함 254건 + 둘다
+        # 미공개 57건)을 NULL 동급 → nullslast 로 맨 뒤. Python 경로 _sort_apartments 의
+        # `or inf/0` 와 parity (세션 300). ⚠ SQL 경로는 prod(PG) 전용 — CI(SQLite)는 Python
+        # fallback 이라 본 nullif 동작은 PG 라이브 실측으로만 검증 (회귀는 Python 경로 케이스).
+        "pp_asc": func.nullif(Apartment.presale_pp, 0).asc().nullslast(),
+        "pp_desc": func.nullif(Apartment.presale_pp, 0).desc().nullslast(),
     }
     return sort_map.get(sort_by, Apartment.name.asc())
 

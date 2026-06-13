@@ -143,6 +143,20 @@ describe("MbCompareRadarChart", () => {
     expect(screen.getByText(/★ 종합 우위: 단지A/)).toBeInTheDocument();
   });
 
+  /** 평당가 0(미공개) 거짓 우위 차단 — invert 축에서 0 이 만점되던 결함 회귀 (세션 300) */
+  it("평당가 0(미공개) 단지는 평당가 축에서 우위를 못 받는다 (invert 만점 위장 차단)", () => {
+    // 두 단지 모든 축 동일, 평당가만 차이: A=정상(낮음=좋음), B=0(미공개)
+    // 수정 전: B 의 pp=0 이 invert 만점(100) → B 종합 우위 (거짓)
+    // 수정 후: B 는 평당가 0점 → A(정상 평당가) 종합 우위
+    const apts = [
+      makeApt({ id: "A", name: "정상단지", presale_pp: 1500 }),
+      makeApt({ id: "B", name: "미공개단지", presale_pp: 0 }),
+    ];
+    render(<MbCompareRadarChart apartments={apts} />);
+    // 평당가 외 모든 축 동일 → 평당가 축이 우위를 가름. 미공개단지가 거짓 우위면 실패
+    expect(screen.getByText(/★ 종합 우위: 정상단지/)).toBeInTheDocument();
+  });
+
   /** 프리셋 라벨에 "프리셋:" 텍스트 확인 */
   it("프리셋 영역에 '프리셋:' 라벨이 표시된다", () => {
     const apts = [makeApt({ id: "A", name: "단지A" }), makeApt({ id: "B", name: "단지B" })];

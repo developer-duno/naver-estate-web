@@ -440,6 +440,28 @@ def test_get_apartments_pp_sort_none_last(db):
     assert [a.id for a in asc_rows] == ["PP2", "PP1", "PP3"]
 
 
+def test_get_apartments_pp_sort_zero_last(db):
+    """pp 정렬 — presale_pp=0(미공개/적재결함) 단지는 None 과 동급으로 asc/desc 모두 맨 뒤.
+
+    0 과 None 은 별개 케이스 — Python 경로(_sort_apartments)는 `or` 가 falsy 0 을 NULL 과
+    같게 처리해 0 안전. SQL 경로(_build_mb_order_clause func.nullif(pp,0))는 prod(PG) 전용이라
+    CI(SQLite Python fallback)가 직접 검증 못 함 → 본 케이스가 0 처리 실효 회귀 가드 (세션 300).
+    """
+    _add_apartment(db, "PZ1", "가단지", region="서울", presale_pp=2000)
+    _add_apartment(db, "PZ2", "나단지", region="서울", presale_pp=1000)
+    _add_apartment(db, "PZ3", "다단지", region="서울", presale_pp=0)  # 평당가 0 (미공개)
+    _add_apartment(db, "PZ4", "라단지", region="서울")  # presale_pp None
+
+    asc_rows = mb_queries.get_apartments(db, region="서울", sort_by="pp_asc")
+    # 양수 오름차순 먼저, 0/None 은 맨 뒤 (둘의 상호 순서는 미정 — 둘 다 후미면 통과)
+    assert [a.id for a in asc_rows[:2]] == ["PZ2", "PZ1"]
+    assert set(a.id for a in asc_rows[2:]) == {"PZ3", "PZ4"}
+
+    desc_rows = mb_queries.get_apartments(db, region="서울", sort_by="pp_desc")
+    assert [a.id for a in desc_rows[:2]] == ["PZ1", "PZ2"]
+    assert set(a.id for a in desc_rows[2:]) == {"PZ3", "PZ4"}
+
+
 def test_get_apartments_unsold_asc_none_last(db):
     """unsold_asc — 빈 값 단지가 맨 앞에 오던 마스킹(None→0) 정정 회귀 가드"""
     _add_apartment(db, "UA1", "가단지", region="서울", unsold=5)

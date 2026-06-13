@@ -52,6 +52,22 @@ describe("MbApartmentTable — 평당가/할인율 컬럼 (단계 5)", () => {
     expect(dashes.length).toBeGreaterThanOrEqual(2);
   });
 
+  it("presale_pp 가 0(미공개)이면 데스크톱 셀 '-' + '0' 미표시 (세션 300)", () => {
+    render(<MbApartmentTable apartments={[makeApt({ id: "A", name: "단지A", presale_pp: 0 })]} />);
+    // 평당가 0 은 "0" 으로 찍히지 않고 "-" 로 (normalizePp)
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
+    const dashes = screen.getAllByText("-");
+    expect(dashes.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("모바일 카드: presale_pp 가 0(미공개)이면 '평당 0만' 미렌더 (세션 300)", () => {
+    const { container } = render(
+      <MbApartmentTable apartments={[makeApt({ id: "A", name: "단지A", presale_pp: 0 })]} />,
+    );
+    const cards = container.querySelector('[data-testid="mb-apt-cards"]');
+    expect(cards?.textContent).not.toContain("평당");
+  });
+
   it("모바일 카드: presale_pp + discount_pct 인라인 노출", () => {
     const apts = [
       makeApt({ id: "A", name: "단지A", presale_pp: 2500, discount_pct: 5.5 }),

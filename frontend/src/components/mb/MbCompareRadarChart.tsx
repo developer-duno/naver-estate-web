@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { COMPARE_COLORS } from "@/lib/constants";
 import { useMbRadarSettings } from "@/hooks/useMbRadarSettings";
+import { normalizePp } from "@/lib/mb-format";
 import type { MbApartment } from "@/types";
 import HintIcon from "@/components/HintIcon";
 
@@ -22,7 +23,8 @@ const MIN_AXES = 3;
 interface AxisDef {
   key: string;
   label: string;
-  getValue: (a: MbApartment) => number;
+  // null = 미공개(평당가 0 등) — maxMap 제외 + 정규화 0점 강제 (invert 만점 위장 차단, 세션 300)
+  getValue: (a: MbApartment) => number | null;
   invert?: boolean;
 }
 
@@ -34,7 +36,7 @@ const AXES: AxisDef[] = [
   { key: "nearby", label: "주변시세", getValue: (a) => a.naver_nearby_median ?? 0 },
   { key: "discount", label: "할인율", getValue: (a) => a.discount_pct ?? 0 },
   { key: "unsold", label: "미분양률", getValue: (a) => a.unsold_rate ?? 0, invert: true },
-  { key: "pp", label: "평당가", getValue: (a) => a.presale_pp ?? 0, invert: true },
+  { key: "pp", label: "평당가", getValue: (a) => normalizePp(a.presale_pp), invert: true },
   { key: "far", label: "용적률", getValue: (a) => a.floor_area_ratio ?? 0, invert: true },
   { key: "airQuality", label: "대기질", getValue: (a) => ({ "좋음": 100, "보통": 75, "나쁨": 40, "매우나쁨": 10 }[a.infra?.air_grade ?? ""] ?? 0) },
   { key: "medical", label: "의료인프라", getValue: (a) => a.infra?.emergency_hospital ?? 0 },
@@ -87,8 +89,9 @@ export default function MbCompareRadarChart({ apartments }: Props) {
   const { data, scores, bestIdx } = useMemo(() => {
     const maxMap = new Map<string, number>();
     for (const axis of activeAxes) {
-      const max = Math.max(...apartments.map((a) => axis.getValue(a)), 1);
-      maxMap.set(axis.key, max);
+      // null(미공개) 단지는 분모(max) 계산에서 제외 — 정상 단지 정규화값 왜곡 차단 (세션 300)
+      const vals = apartments.map((a) => axis.getValue(a)).filter((v): v is number => v != null);
+      maxMap.set(axis.key, Math.max(...vals, 1));
     }
 
     const rows = activeAxes.map((axis) => {
@@ -96,9 +99,12 @@ export default function MbCompareRadarChart({ apartments }: Props) {
       for (let i = 0; i < apartments.length; i++) {
         const raw = axis.getValue(apartments[i]);
         const max = maxMap.get(axis.key) ?? 1;
-        row[apartments[i].id] = axis.invert
-          ? Math.round(((max - raw) / max) * NORMALIZE_MAX)
-          : Math.round((raw / max) * NORMALIZE_MAX);
+        // raw==null(미공개)이면 invert 공식((max-0)/max=만점) 우회 — 0점 강제 (거짓 우위 차단)
+        row[apartments[i].id] = raw == null
+          ? 0
+          : axis.invert
+            ? Math.round(((max - raw) / max) * NORMALIZE_MAX)
+            : Math.round((raw / max) * NORMALIZE_MAX);
       }
       return row;
     });

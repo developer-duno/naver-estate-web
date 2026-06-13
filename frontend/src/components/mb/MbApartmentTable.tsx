@@ -4,6 +4,7 @@ import { memo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Building } from "lucide-react";
 import type { MbApartment } from "@/types";
+import { normalizePp } from "@/lib/mb-format";
 import { useMbFavorites } from "@/hooks/useMbFavorites";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -181,12 +182,12 @@ function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompa
                   </span>
                 )}
               </div>
-              {/* 4행: 평당가·할인율 */}
-              {(apt.presale_pp != null || apt.discount_pct != null) && (
+              {/* 4행: 평당가·할인율 (평당가 0/미공개는 미렌더 — 세션 300) */}
+              {(normalizePp(apt.presale_pp) != null || apt.discount_pct != null) && (
                 <div className="flex items-center gap-1.5 text-[11px] mb-1">
-                  {apt.presale_pp != null && (
+                  {normalizePp(apt.presale_pp) != null && (
                     <span className="text-amber-700">
-                      평당 {apt.presale_pp.toLocaleString()}만
+                      평당 {apt.presale_pp!.toLocaleString()}만
                     </span>
                   )}
                   {apt.discount_pct != null && (
@@ -285,7 +286,7 @@ function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompa
                 {apt.unsold_rate != null ? `${apt.unsold_rate.toFixed(1)}%` : "-"}
               </td>
               <td className="px-3 py-2 text-right text-amber-700">
-                {apt.presale_pp != null ? apt.presale_pp.toLocaleString() : "-"}
+                {normalizePp(apt.presale_pp) != null ? apt.presale_pp!.toLocaleString() : "-"}
               </td>
               <td className="px-3 py-2 text-right text-green-700 hidden md:table-cell">
                 {apt.discount_pct != null ? `${apt.discount_pct.toFixed(1)}%` : "-"}

@@ -168,9 +168,10 @@ export interface VerificationStatusResponse {
 
 /** 검증 신청 응답 */
 export interface VerifySubmitResponse {
-  status: "approved" | "pending";
+  status: "approved" | "pending" | "rejected";
   business_verified: boolean;
   business_message: string;
+  business_status_code?: string | null; // 국세청 영업상태 "01"/"02"/"03"/"" 또는 null(조회실패)
   auto_approved: boolean;
 }
 

@@ -1,8 +1,8 @@
-"""국세청 사업자등록 진위확인 API
+"""국세청 사업자등록 진위확인 + 영업상태 조회 API
 
-POST https://api.odcloud.kr/api/nts-businessman/v1/validate
-- data.go.kr 통합키(PUBLIC_DATA_API_KEY) 사용
-- 사업자번호 + 대표자명 → 진위 여부 반환
+- POST .../nts-businessman/v1/validate — 사업자번호+대표자명+개업일자 → 진위 여부
+- POST .../nts-businessman/v1/status   — 사업자번호 → 영업상태(b_stt_cd)
+data.go.kr 통합키(PUBLIC_DATA_API_KEY) 공유.
 """
 
 import logging
@@ -13,6 +13,7 @@ import requests as std_requests
 logger = logging.getLogger(__name__)
 
 VALIDATE_URL = "https://api.odcloud.kr/api/nts-businessman/v1/validate"
+STATUS_URL = "https://api.odcloud.kr/api/nts-businessman/v1/status"
 REQUEST_TIMEOUT = 10
 
 
@@ -82,3 +83,53 @@ def verify_business_registration(
     except Exception as e:
         logger.warning("[business_api] 요청 실패: %s", type(e).__name__)
         return {"valid": None, "message": "API 호출 실패"}
+
+
+def check_business_status(business_number: str) -> str | None:
+    """국세청 사업자 영업상태 조회 — odcloud status API
+
+    Args:
+        business_number: 사업자등록번호 (10자리, 하이픈 제거)
+
+    Returns:
+        b_stt_cd 원본 문자열 — "01"(계속)·"02"(휴업)·"03"(폐업)·""(미등록).
+        조회 실패(키 미설정·형식오류·HTTP 에러·타임아웃·빈 데이터)는 None.
+        게이트 판정(휴폐업 차단)은 호출처(verify.py)가 담당.
+    """
+    service_key = os.getenv("PUBLIC_DATA_API_KEY")
+    if not service_key:
+        logger.warning("[business_api] PUBLIC_DATA_API_KEY 미설정 (status)")
+        return None
+
+    # 하이픈 제거 + 형식 검증
+    b_no = business_number.replace("-", "").strip()
+    if len(b_no) != 10 or not b_no.isdigit():
+        return None
+
+    payload = {"b_no": [b_no]}
+
+    try:
+        resp = std_requests.post(
+            STATUS_URL,
+            json=payload,
+            params={"serviceKey": service_key},
+            headers={"Content-Type": "application/json"},
+            timeout=REQUEST_TIMEOUT,
+        )
+        if resp.status_code != 200:
+            logger.warning("[business_api] status HTTP %d", resp.status_code)
+            return None
+
+        items = resp.json().get("data", [])
+        if not items:
+            return None
+
+        # b_stt_cd: "01" 계속 / "02" 휴업 / "03" 폐업 / "" 미등록
+        return items[0].get("b_stt_cd", "")
+
+    except std_requests.Timeout:
+        logger.warning("[business_api] status 타임아웃")
+        return None
+    except Exception as e:
+        logger.warning("[business_api] status 요청 실패: %s", type(e).__name__)
+        return None

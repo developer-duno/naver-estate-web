@@ -220,6 +220,28 @@ export default function VerifyPage() {
   // ── 4 분기: 미제출 → 제출 직후 결과 ──
   const result = mutation.data;
   if (result) {
+    // 휴·폐업 사업자 = rejected (진위는 맞지만 영업 안 함) → 거부 사유 + 재신청 동선
+    if (result.status === "rejected") {
+      return (
+        <AuthLayout title="인증 거부됨" hideBadges>
+          <VerifyProgress currentStep="admin_approve" />
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>
+              <p className="font-medium mb-1">인증할 수 없어요</p>
+              <p>{result.business_message}</p>
+            </AlertDescription>
+          </Alert>
+          <Button
+            type="button"
+            onClick={() => mutation.reset()}
+            variant="outline"
+            className="w-full"
+          >
+            다시 신청하기
+          </Button>
+        </AuthLayout>
+      );
+    }
     const desc = result.business_message + (uploadStatus === "error" ? ` 자격증 업로드 실패: ${uploadError}` : "");
     return (
       <AuthLayout title={result.auto_approved ? "인증 완료" : "신청 접수됨"} hideBadges>

@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from auth.audit import log_action
-from crawler.business_api import verify_business_registration
+from crawler.business_api import check_business_status, verify_business_registration
 from db.models import AgentVerification, UserProfile
 from deps import get_current_user, get_db
 from services.storage import upload_license_doc
@@ -98,18 +98,36 @@ def submit_verification(
     )
     existing.business_verified = biz_result["valid"] is True
 
-    # 자동 승인: 사업자등록 확인됨
+    # 영업상태 게이트 — 진위확인(validate) 통과 시에만 status 조회 (실패면 어차피 pending)
+    # b_stt_cd: "01" 계속 / "02" 휴업 / "03" 폐업 / "" 미등록 / None 조회실패
+    biz_status = check_business_status(body.business_number) if existing.business_verified else None
+    biz_message = biz_result["message"]
+
     auto_approved = False
     if existing.business_verified:
-        existing.verification_status = "approved"
-        profile = db.get(UserProfile, user_id)
-        if profile:
-            profile.role = "expert"
-            profile.status = "approved"
-        auto_approved = True
+        if biz_status in ("02", "03"):
+            # 휴업·폐업 = expert 부적격 (진위는 맞지만 영업 안 함). rejected + 사유 안내.
+            existing.verification_status = "rejected"
+            existing.rejection_reason = (
+                "국세청에 휴업/폐업 상태로 등록된 사업자입니다. "
+                "영업 중인 사업자등록번호로만 인증할 수 있어요."
+            )
+            biz_message = existing.rejection_reason
+        elif biz_status == "":
+            # 미등록 = validate 통과인데 영업상태 미등록 (모순) → 수동심사(pending 유지)
+            biz_message = "사업자 영업상태 확인이 필요해 관리자 심사 후 안내드립니다."
+        else:
+            # "01" 계속 또는 None(조회실패) → 자동 승인 (validate 진위확인 완료, status는 안전망)
+            existing.verification_status = "approved"
+            profile = db.get(UserProfile, user_id)
+            if profile:
+                profile.role = "expert"
+                profile.status = "approved"
+            auto_approved = True
 
     log_action(db, user_id, "verify_submit", "verification", user_id, {
         "business_verified": existing.business_verified,
+        "business_status_code": biz_status,
         "auto_approved": auto_approved,
     })
     db.commit()
@@ -120,9 +138,10 @@ def submit_verification(
         _user_cache.delete(f"profile:{user_id}")
 
     return {
-        "status": "approved" if auto_approved else "pending",
+        "status": existing.verification_status if existing.business_verified else "pending",
         "business_verified": existing.business_verified,
-        "business_message": biz_result["message"],
+        "business_message": biz_message,
+        "business_status_code": biz_status,
         "auto_approved": auto_approved,
     }
 

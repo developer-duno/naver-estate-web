@@ -52,6 +52,7 @@ describe("VerifyPage", () => {
     expect(screen.getByText(/공인중개사 자격증/)).toBeInTheDocument();
     expect(screen.getByText(/클릭 또는 드래그/)).toBeInTheDocument();
     expect(screen.getByLabelText(/중개사무소명/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/연락처/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /인증 신청/ })).toBeInTheDocument();
   });
 
@@ -98,6 +99,7 @@ describe("VerifyPage", () => {
     fireEvent.change(screen.getByLabelText(/사업자등록번호/), { target: { value: "1234567890" } });
     fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
     fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
+    fireEvent.change(screen.getByLabelText(/연락처/), { target: { value: "010-1234-5678" } });
     fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
 
     await waitFor(() => {
@@ -110,10 +112,38 @@ describe("VerifyPage", () => {
     expect(searchLink).toHaveAttribute("href", "/search");
     expect(mbLink).toHaveAttribute("href", "/mibunyang");
     expect(screen.queryByRole("link", { name: "홈으로 이동" })).not.toBeInTheDocument();
-    // 제출 payload 의 start_date 가 하이픈 제거된 YYYYMMDD 로 정규화됐는지 (세션 304)
+    // 제출 payload 의 start_date·phone 이 하이픈 제거되어 정규화됐는지 (세션 304·306)
     expect(mockSubmit).toHaveBeenCalledWith(
       "test-token",
-      expect.objectContaining({ start_date: "19990602" }),
+      expect.objectContaining({ start_date: "19990602", phone: "01012345678" }),
+    );
+  });
+
+  /** 연락처는 선택 입력 — 미입력해도 빈 문자열로 정상 제출된다 (세션 306) */
+  it("연락처 미입력 시에도 정상 제출된다", async () => {
+    mockGetStatus.mockResolvedValue({ submitted: false } as never);
+    mockSubmit.mockResolvedValueOnce({
+      status: "approved",
+      business_verified: true,
+      business_message: "사업자등록 확인됨",
+      auto_approved: true,
+    } as never);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/사업자등록번호/)).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByLabelText(/사업자등록번호/), { target: { value: "1234567890" } });
+    fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
+    fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
+    // 연락처 미입력 (선택)
+    fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText("인증 완료")).toBeInTheDocument();
+    });
+    expect(mockSubmit).toHaveBeenCalledWith(
+      "test-token",
+      expect.objectContaining({ phone: "" }),
     );
   });
 

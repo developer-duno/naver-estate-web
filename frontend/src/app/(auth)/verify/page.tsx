@@ -60,7 +60,7 @@ function ApprovedActions() {
 export default function VerifyPage() {
   const getToken = useAdminToken();
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ business_number: "", office_name: "", representative_name: "", start_date: "" });
+  const [form, setForm] = useState({ business_number: "", office_name: "", representative_name: "", start_date: "", phone: "" });
   const [error, setError] = useState("");
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
@@ -78,7 +78,12 @@ export default function VerifyPage() {
       const t = await getToken();
       if (!t) throw new Error("로그인이 필요합니다");
       // date input 은 YYYY-MM-DD 보관 → BE validator(8자리 숫자)에 맞춰 하이픈 제거
-      return submitVerification(t, { ...form, start_date: form.start_date.replace(/-/g, "") });
+      // 연락처도 하이픈 제거 (BE validator 9~11자리 숫자, 선택 입력이라 빈값 OK)
+      return submitVerification(t, {
+        ...form,
+        start_date: form.start_date.replace(/-/g, ""),
+        phone: form.phone.replace(/-/g, ""),
+      });
     },
     onSuccess: async () => {
       if (licenseFile) {
@@ -373,6 +378,19 @@ export default function VerifyPage() {
             onChange={(e) => setForm((f) => ({ ...f, office_name: e.target.value }))}
             maxLength={100}
             placeholder="선택 입력"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="v-phone">연락처</Label>
+          <Input
+            id="v-phone"
+            type="tel"
+            inputMode="numeric"
+            value={form.phone}
+            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+            maxLength={13}
+            placeholder="선택 입력 (예: 01012345678)"
           />
         </div>
 

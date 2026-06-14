@@ -19,6 +19,7 @@ router = APIRouter()
 
 BUSINESS_NUMBER_RE = re.compile(r"^\d{10}$")
 START_DATE_RE = re.compile(r"^\d{8}$")
+PHONE_RE = re.compile(r"^\d{9,11}$")  # 연락처 9~11자리 (선택 입력)
 
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "application/pdf"}
@@ -29,6 +30,7 @@ class VerifySubmitRequest(BaseModel):
     office_name: str = ""
     representative_name: str
     start_date: str  # 개업일자 YYYYMMDD — 국세청 validate 필수 (없으면 항상 500)
+    phone: str = ""  # 연락처 — 선택 입력 (B2B 가입 마찰 최소화)
 
     @field_validator("business_number")
     @classmethod
@@ -55,6 +57,17 @@ class VerifySubmitRequest(BaseModel):
             raise ValueError("개업일자는 YYYYMMDD 8자리 숫자여야 합니다")
         return clean
 
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        # 선택 입력 — 빈값 허용. 입력 시 하이픈·공백 제거 후 9~11자리 숫자 검증.
+        clean = v.replace("-", "").replace(" ", "").strip()
+        if not clean:
+            return ""
+        if not PHONE_RE.match(clean):
+            raise ValueError("연락처는 9~11자리 숫자여야 합니다")
+        return clean
+
 
 @router.post("/submit")
 def submit_verification(
@@ -75,6 +88,7 @@ def submit_verification(
             existing.business_number = body.business_number
             existing.office_name = body.office_name or None
             existing.representative_name = body.representative_name
+            existing.phone = body.phone or None
             existing.verification_status = "pending"
             existing.rejection_reason = None
             existing.reviewed_by = None
@@ -89,6 +103,7 @@ def submit_verification(
             business_number=body.business_number,
             office_name=body.office_name or None,
             representative_name=body.representative_name,
+            phone=body.phone or None,
         )
         db.add(existing)
 
@@ -129,6 +144,7 @@ def submit_verification(
         "business_verified": existing.business_verified,
         "business_status_code": biz_status,
         "auto_approved": auto_approved,
+        "phone": body.phone or None,
     })
     db.commit()
 
@@ -209,6 +225,7 @@ def get_verification_status(
         "business_verified": v.business_verified,
         "license_doc_uploaded": bool(v.license_doc_path),
         "rejection_reason": v.rejection_reason,
+        "phone": v.phone,
         "submitted_at": v.submitted_at.isoformat() if v.submitted_at else None,
         "reviewed_at": v.reviewed_at.isoformat() if v.reviewed_at else None,
     }

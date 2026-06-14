@@ -213,6 +213,7 @@ class AgentVerification(Base):
     business_number: Mapped[str | None] = mapped_column(String)
     office_name: Mapped[str | None] = mapped_column(String)
     representative_name: Mapped[str] = mapped_column(String, nullable=False)
+    phone: Mapped[str | None] = mapped_column(String)  # 연락처 (선택 입력, V033)
     business_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     license_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     verification_status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")

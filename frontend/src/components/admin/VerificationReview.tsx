@@ -51,6 +51,7 @@ export default function VerificationReview({ token }: Props) {
               <th className="pb-2 pr-3">사업자번호</th>
               <th className="pb-2 pr-3">대표자</th>
               <th className="pb-2 pr-3">사업자 검증</th>
+              <th className="pb-2 pr-3">중개사 검증</th>
               <th className="pb-2 pr-3">자격증 서류</th>
               <th className="pb-2 pr-3">신청일</th>
               <th className="pb-2">작업</th>
@@ -66,6 +67,18 @@ export default function VerificationReview({ token }: Props) {
                   <span className={`text-xs px-1.5 py-0.5 rounded ${v.business_verified ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
                     {v.business_verified ? "확인됨" : "미확인"}
                   </span>
+                </td>
+                <td className="py-2 pr-3">
+                  {v.broker_verified ? (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700"
+                      title={v.broker_jurirno ? `등록번호 ${v.broker_jurirno}` : undefined}>
+                      국토부 확인됨
+                    </span>
+                  ) : (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                      {v.broker_status ?? "미확인"}
+                    </span>
+                  )}
                 </td>
                 <td className="py-2 pr-3">
                   {v.license_doc_url ? (

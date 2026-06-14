@@ -216,6 +216,10 @@ class AgentVerification(Base):
     phone: Mapped[str | None] = mapped_column(String)  # 연락처 (선택 입력, V033)
     business_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     license_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # V-WORLD 부동산중개업사무소 대조 결과 (V034) — "진짜 중개사무소인가" 검증
+    broker_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  # 매칭+영업중
+    broker_jurirno: Mapped[str | None] = mapped_column(String)  # 매칭된 국토부 등록번호
+    broker_status: Mapped[str | None] = mapped_column(String)  # 영업상태명 또는 미매칭 사유
     verification_status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     rejection_reason: Mapped[str | None] = mapped_column(String)
     reviewed_by: Mapped[str | None] = mapped_column(String)

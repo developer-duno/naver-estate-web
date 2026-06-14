@@ -141,6 +141,7 @@ export default function VerifyPage() {
     const bn = form.business_number.replace(/-/g, "");
     if (!/^\d{10}$/.test(bn)) { setError("사업자등록번호는 10자리 숫자여야 합니다."); return; }
     if (!form.representative_name.trim()) { setError("대표자명을 입력해주세요."); return; }
+    if (!form.office_name.trim()) { setError("중개사무소명을 입력해주세요."); return; }
     // 개업일자는 <input type="date" required> 가 빈값 제출을 native 로 차단 → JS 중복 불필요
     mutation.mutate();
   };
@@ -370,15 +371,17 @@ export default function VerifyPage() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="v-office">중개사무소명</Label>
+          <Label htmlFor="v-office">중개사무소명 *</Label>
           <Input
             id="v-office"
             type="text"
             value={form.office_name}
             onChange={(e) => setForm((f) => ({ ...f, office_name: e.target.value }))}
+            required
             maxLength={100}
-            placeholder="선택 입력"
+            placeholder="예: 행복공인중개사사무소"
           />
+          <p className="text-xs text-gray-400">국토부에 등록된 중개사무소 상호와 같아야 자동 인증됩니다.</p>
         </div>
 
         <div className="space-y-1.5">

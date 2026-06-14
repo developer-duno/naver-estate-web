@@ -73,8 +73,8 @@ describe("VerificationReview", () => {
     });
     expect(screen.getByText("1234567890")).toBeInTheDocument();
     expect(screen.getByText("홍길동")).toBeInTheDocument();
-    // 사업자 미확인 + 자격증 미제출
-    expect(screen.getByText("미확인")).toBeInTheDocument();
+    // 사업자 검증 "미확인" + 중개사 검증 "미확인" (V034 broker 컬럼) = 2개
+    expect(screen.getAllByText("미확인")).toHaveLength(2);
     expect(screen.getByText("미제출")).toBeInTheDocument();
   });
 

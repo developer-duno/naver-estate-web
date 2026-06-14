@@ -39,6 +39,17 @@ def _valid_body():
     }
 
 
+# V-WORLD 중개사 대조 결과 — 매칭+영업중 (자동승인 케이스용, 세션 308 PR B)
+_BROKER_MATCH = {
+    "matched": True, "active": True, "status_code": "1",
+    "status_name": "영업중", "jurirno": "나92200000-51", "office_name": "길동부동산",
+}
+_BROKER_NO_MATCH = {
+    "matched": False, "active": False, "status_code": None,
+    "status_name": None, "jurirno": None, "office_name": None,
+}
+
+
 # ── 인증 검증 ──
 
 
@@ -108,10 +119,11 @@ def test_submit_pending(mock_biz, client, db):
     assert data["business_verified"] is False
 
 
+@patch("routers.verify.search_broker_office", return_value=_BROKER_MATCH)
 @patch("routers.verify.check_business_status", return_value="01")
 @patch("routers.verify.verify_business_registration")
-def test_submit_auto_approved(mock_biz, mock_status, client, db):
-    """사업자등록 확인 성공 + 영업중(01) → 자동 승인, role=expert"""
+def test_submit_auto_approved(mock_biz, mock_status, mock_broker, client, db):
+    """사업자등록 확인 성공 + 영업중(01) + V-WORLD 중개사 매칭 → 자동 승인, role=expert"""
     mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
     _make_profile(db, "u1")
 
@@ -122,10 +134,14 @@ def test_submit_auto_approved(mock_biz, mock_status, client, db):
     assert data["auto_approved"] is True
     assert data["business_verified"] is True
 
-    # DB에서 profile.role 확인
+    # DB에서 profile.role + broker 컬럼 확인
     profile = db.get(UserProfile, "u1")
     assert profile.role == "expert"
     assert profile.status == "approved"
+    v = db.query(AgentVerification).filter_by(user_id="u1").one()
+    assert v.broker_verified is True
+    assert v.broker_jurirno == "나92200000-51"
+    assert v.broker_status == "영업중"
 
 
 # ── 영업상태 게이트 (세션 305 PR A — 휴·폐업 차단) ──
@@ -181,10 +197,11 @@ def test_submit_status_unregistered_pending(mock_biz, mock_status, client, db):
     assert db.get(UserProfile, "u1").role == "user"
 
 
+@patch("routers.verify.search_broker_office", return_value=_BROKER_MATCH)
 @patch("routers.verify.check_business_status", return_value=None)
 @patch("routers.verify.verify_business_registration")
-def test_submit_status_lookup_failed_auto_approved(mock_biz, mock_status, client, db):
-    """진위 통과 + status 조회실패(None) → 자동승인 유지 (안전망 실패해도 진위 완료, 가입 마찰 0)"""
+def test_submit_status_lookup_failed_auto_approved(mock_biz, mock_status, mock_broker, client, db):
+    """진위 통과 + status 조회실패(None) + 중개사 매칭 → 자동승인 유지 (안전망 실패해도 진위·중개사 완료)"""
     mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
     _make_profile(db, "u1")
 
@@ -248,12 +265,82 @@ def test_submit_resubmit_after_rejection(mock_biz, client, db):
     assert v.rejection_reason is None
 
 
+# ── V-WORLD 중개사 대조 게이트 (세션 308 PR B — 진짜 중개사무소 검증) ──
+
+
+@patch("routers.verify.search_broker_office", return_value=_BROKER_NO_MATCH)
+@patch("routers.verify.check_business_status", return_value="01")
+@patch("routers.verify.verify_business_registration")
+def test_submit_broker_no_match_pending(mock_biz, mock_status, mock_broker, client, db):
+    """국세청 통과 + 영업중인데 V-WORLD 미매칭(식당·카페 등) → pending(자동승인 안 함)"""
+    mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
+    _make_profile(db, "u1")
+
+    res = client.post("/api/verify/submit", json=_valid_body(), headers=_auth(_token("u1")))
+    data = res.json()
+    assert data["status"] == "pending"
+    assert data["auto_approved"] is False
+    assert data["business_verified"] is True  # 국세청은 통과
+    # role 미부여 + broker 미검증
+    assert db.get(UserProfile, "u1").role == "user"
+    v = db.query(AgentVerification).filter_by(user_id="u1").one()
+    assert v.broker_verified is False
+    assert v.broker_status == "국토부 미매칭"
+
+
+@patch("routers.verify.search_broker_office")
+@patch("routers.verify.check_business_status", return_value="01")
+@patch("routers.verify.verify_business_registration")
+def test_submit_broker_matched_but_closed_pending(mock_biz, mock_status, mock_broker, client, db):
+    """V-WORLD 매칭됐으나 폐업 중개사 → pending (자동승인 안 함)"""
+    mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
+    mock_broker.return_value = {
+        "matched": True, "active": False, "status_code": "5",
+        "status_name": "폐업", "jurirno": "나92...", "office_name": "길동부동산",
+    }
+    _make_profile(db, "u1")
+
+    res = client.post("/api/verify/submit", json=_valid_body(), headers=_auth(_token("u1")))
+    data = res.json()
+    assert data["status"] == "pending"
+    assert data["auto_approved"] is False
+    assert db.get(UserProfile, "u1").role == "user"
+    v = db.query(AgentVerification).filter_by(user_id="u1").one()
+    assert v.broker_verified is False
+    assert v.broker_status == "폐업"
+
+
+@patch("routers.verify.search_broker_office", return_value=None)
+@patch("routers.verify.check_business_status", return_value="01")
+@patch("routers.verify.verify_business_registration")
+def test_submit_broker_api_failure_pending(mock_biz, mock_status, mock_broker, client, db):
+    """V-WORLD 조회 실패(None — 키 미설정·타임아웃) → pending (silent 자동승인 금지)"""
+    mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
+    _make_profile(db, "u1")
+
+    res = client.post("/api/verify/submit", json=_valid_body(), headers=_auth(_token("u1")))
+    data = res.json()
+    assert data["status"] == "pending"
+    assert data["auto_approved"] is False
+    assert db.get(UserProfile, "u1").role == "user"
+
+
+def test_submit_missing_office_name_422(client, db):
+    """중개사무소명 누락 → 422 (V-WORLD 대조 키 필수, 세션 308)"""
+    _make_profile(db, "u1")
+    body = _valid_body()
+    del body["office_name"]
+    res = client.post("/api/verify/submit", json=body, headers=_auth(_token("u1")))
+    assert res.status_code == 422
+
+
 # ── 연락처(phone) 수집 (세션 306 PR C1) ──
 
 
+@patch("routers.verify.search_broker_office", return_value=_BROKER_MATCH)
 @patch("routers.verify.check_business_status", return_value="01")
 @patch("routers.verify.verify_business_registration")
-def test_submit_phone_saved(mock_biz, mock_status, client, db):
+def test_submit_phone_saved(mock_biz, mock_status, mock_broker, client, db):
     """연락처 입력 시 AgentVerification.phone 에 저장 (하이픈 제거)"""
     mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
     _make_profile(db, "u1")
@@ -267,9 +354,10 @@ def test_submit_phone_saved(mock_biz, mock_status, client, db):
     assert v.phone == "01012345678"  # 하이픈 제거 후 저장
 
 
+@patch("routers.verify.search_broker_office", return_value=_BROKER_MATCH)
 @patch("routers.verify.check_business_status", return_value="01")
 @patch("routers.verify.verify_business_registration")
-def test_submit_phone_empty_ok(mock_biz, mock_status, client, db):
+def test_submit_phone_empty_ok(mock_biz, mock_status, mock_broker, client, db):
     """연락처 미입력(선택 입력) → 정상 처리, phone 은 None"""
     mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
     _make_profile(db, "u1")
@@ -321,9 +409,10 @@ def test_status_pending(client, db):
     assert data["license_doc_uploaded"] is False
 
 
+@patch("routers.verify.search_broker_office", return_value=_BROKER_MATCH)
 @patch("routers.verify.check_business_status", return_value="01")
 @patch("routers.verify.verify_business_registration")
-def test_status_approved(mock_biz, mock_status, client, db):
+def test_status_approved(mock_biz, mock_status, mock_broker, client, db):
     """approved 상태 + business_verified 확인"""
     mock_biz.return_value = {"valid": True, "message": "확인됨"}
     _make_profile(db, "u1")

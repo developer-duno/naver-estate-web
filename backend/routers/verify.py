@@ -258,6 +258,8 @@ def get_verification_status(
         "submitted": True,
         "verification_status": v.verification_status,
         "business_verified": v.business_verified,
+        "broker_verified": v.broker_verified,
+        "broker_status": v.broker_status,  # 미매칭 사유 — 재방문 pending 안내 (세션 308 리뷰)
         "license_doc_uploaded": bool(v.license_doc_path),
         "rejection_reason": v.rejection_reason,
         "phone": v.phone,

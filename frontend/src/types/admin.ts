@@ -164,6 +164,8 @@ export interface VerificationStatusResponse {
   submitted: boolean;
   verification_status?: "pending" | "approved" | "rejected";
   business_verified?: boolean;
+  broker_verified?: boolean; // V-WORLD 중개사 매칭+영업중 (BE verify.py 짝꿍, V034)
+  broker_status?: string | null; // 미매칭 사유 — 재방문 pending 안내
   license_doc_uploaded?: boolean;
   rejection_reason?: string;
   phone?: string;

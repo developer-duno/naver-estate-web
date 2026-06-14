@@ -215,7 +215,16 @@ export default function VerifyPage() {
             </Button>
           )}
           {vs === "pending" && (
-            <p className="text-xs text-gray-500">관리자 심사 후 결과를 안내드립니다.</p>
+            <div className="space-y-1">
+              {/* 국세청은 통과했으나 V-WORLD 중개사 미매칭 → 상호 재확인 단서 (세션 308 리뷰) */}
+              {status.business_verified && status.broker_verified === false && (
+                <p className="text-xs text-amber-600">
+                  사업자등록은 확인됐어요. 입력하신 중개사무소명이 국토부 등록 상호와 다르면
+                  심사가 길어질 수 있어요 — 거부 시 정확한 상호로 다시 신청해주세요.
+                </p>
+              )}
+              <p className="text-xs text-gray-500">관리자 심사 후 결과를 안내드립니다.</p>
+            </div>
           )}
           {vs === "approved" && <ApprovedActions />}
         </div>

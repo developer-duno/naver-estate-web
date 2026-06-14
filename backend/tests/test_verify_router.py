@@ -248,6 +248,49 @@ def test_submit_resubmit_after_rejection(mock_biz, client, db):
     assert v.rejection_reason is None
 
 
+# ── 연락처(phone) 수집 (세션 306 PR C1) ──
+
+
+@patch("routers.verify.check_business_status", return_value="01")
+@patch("routers.verify.verify_business_registration")
+def test_submit_phone_saved(mock_biz, mock_status, client, db):
+    """연락처 입력 시 AgentVerification.phone 에 저장 (하이픈 제거)"""
+    mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
+    _make_profile(db, "u1")
+
+    body = _valid_body()
+    body["phone"] = "010-1234-5678"
+    res = client.post("/api/verify/submit", json=body, headers=_auth(_token("u1")))
+    assert res.status_code == 200
+
+    v = db.query(AgentVerification).filter_by(user_id="u1").one()
+    assert v.phone == "01012345678"  # 하이픈 제거 후 저장
+
+
+@patch("routers.verify.check_business_status", return_value="01")
+@patch("routers.verify.verify_business_registration")
+def test_submit_phone_empty_ok(mock_biz, mock_status, client, db):
+    """연락처 미입력(선택 입력) → 정상 처리, phone 은 None"""
+    mock_biz.return_value = {"valid": True, "message": "사업자등록 확인됨"}
+    _make_profile(db, "u1")
+
+    # _valid_body() 는 phone 미포함 (선택 입력)
+    res = client.post("/api/verify/submit", json=_valid_body(), headers=_auth(_token("u1")))
+    assert res.status_code == 200
+
+    v = db.query(AgentVerification).filter_by(user_id="u1").one()
+    assert v.phone is None
+
+
+def test_submit_phone_invalid_422(client, db):
+    """형식 오류 연락처(숫자 외) → 422"""
+    _make_profile(db, "u1")
+    body = _valid_body()
+    body["phone"] = "abc"
+    res = client.post("/api/verify/submit", json=body, headers=_auth(_token("u1")))
+    assert res.status_code == 422
+
+
 # ── 상태 조회 ──
 
 

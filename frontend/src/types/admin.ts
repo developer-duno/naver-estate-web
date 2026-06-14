@@ -145,6 +145,7 @@ export interface AgentVerification {
   business_number?: string;
   office_name?: string;
   representative_name: string;
+  phone?: string;
   business_verified: boolean;
   license_verified: boolean;
   license_doc_url?: string;
@@ -162,6 +163,7 @@ export interface VerificationStatusResponse {
   business_verified?: boolean;
   license_doc_uploaded?: boolean;
   rejection_reason?: string;
+  phone?: string;
   submitted_at?: string;
   reviewed_at?: string;
 }

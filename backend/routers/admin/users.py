@@ -195,6 +195,7 @@ def list_verifications(
                 "business_number": v.business_number,
                 "office_name": v.office_name,
                 "representative_name": v.representative_name,
+                "phone": v.phone,
                 "business_verified": v.business_verified,
                 "license_verified": v.license_verified,
                 "license_doc_url": doc_url_map.get(v.user_id),

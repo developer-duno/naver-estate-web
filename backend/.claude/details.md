@@ -47,8 +47,9 @@ verification_status = "pending"
   → services/email.py Gmail SMTP SSL 465 알림 (best-effort)
 ```
 
-- 핵심 모듈 6종: `routers/verify.py` + `routers/admin/users.py` + `crawler/business_api.py` + `services/storage.py` + `services/email.py` + `db/models.py` (`agent_verifications` 테이블)
-- 환경변수 (backend/.env): `PUBLIC_DATA_API_KEY` (odcloud), `SMTP_HOST/PORT/USER/PASS/FROM` (Gmail)
+- 핵심 모듈 7종: `routers/verify.py` + `routers/admin/users.py` + `crawler/business_api.py` + `crawler/vworld_client.py` + `services/storage.py` + `services/email.py` + `db/models.py` (`agent_verifications` 테이블)
+- **V-WORLD 중개사 대조 (세션 308 PR B)**: 국세청은 "사업자 진위+영업중"만 봐서 식당·카페도 자동승인되는 구멍 → `crawler/vworld_client.py` `search_broker_office`(getEBOfficeInfo)로 "진짜 중개사무소"인지 실시간 대조. 게이트 = 국세청진위 AND 영업중 AND V-WORLD매칭(영업중)→approved, 미매칭/휴폐업/조회실패→pending(false negative 방어). 결과는 `broker_verified`/`broker_jurirno`/`broker_status`(V034) 정식 컬럼에 저장.
+- 환경변수 (backend/.env): `PUBLIC_DATA_API_KEY` (odcloud), `VWORLD_API_KEY`+`VWORLD_DOMAIN` (V-WORLD 중개사 대조, 미설정 시 대조 skip→pending), `SMTP_HOST/PORT/USER/PASS/FROM` (Gmail)
 
 ## 미분양 중복 제거
 

@@ -141,6 +141,7 @@ export default function VerifyPage() {
     const bn = form.business_number.replace(/-/g, "");
     if (!/^\d{10}$/.test(bn)) { setError("사업자등록번호는 10자리 숫자여야 합니다."); return; }
     if (!form.representative_name.trim()) { setError("대표자명을 입력해주세요."); return; }
+    if (!form.office_name.trim()) { setError("중개사무소명을 입력해주세요."); return; }
     // 개업일자는 <input type="date" required> 가 빈값 제출을 native 로 차단 → JS 중복 불필요
     mutation.mutate();
   };
@@ -214,7 +215,16 @@ export default function VerifyPage() {
             </Button>
           )}
           {vs === "pending" && (
-            <p className="text-xs text-gray-500">관리자 심사 후 결과를 안내드립니다.</p>
+            <div className="space-y-1">
+              {/* 국세청은 통과했으나 V-WORLD 중개사 미매칭 → 상호 재확인 단서 (세션 308 리뷰) */}
+              {status.business_verified && status.broker_verified === false && (
+                <p className="text-xs text-amber-600">
+                  사업자등록은 확인됐어요. 입력하신 중개사무소명이 국토부 등록 상호와 다르면
+                  심사가 길어질 수 있어요 — 거부 시 정확한 상호로 다시 신청해주세요.
+                </p>
+              )}
+              <p className="text-xs text-gray-500">관리자 심사 후 결과를 안내드립니다.</p>
+            </div>
           )}
           {vs === "approved" && <ApprovedActions />}
         </div>
@@ -370,15 +380,17 @@ export default function VerifyPage() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="v-office">중개사무소명</Label>
+          <Label htmlFor="v-office">중개사무소명 *</Label>
           <Input
             id="v-office"
             type="text"
             value={form.office_name}
             onChange={(e) => setForm((f) => ({ ...f, office_name: e.target.value }))}
+            required
             maxLength={100}
-            placeholder="선택 입력"
+            placeholder="예: 행복공인중개사사무소"
           />
+          <p className="text-xs text-gray-400">국토부에 등록된 중개사무소 상호와 같아야 자동 인증됩니다.</p>
         </div>
 
         <div className="space-y-1.5">

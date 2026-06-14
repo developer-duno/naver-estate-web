@@ -67,6 +67,7 @@ describe("VerifyPage", () => {
     // 개업일자는 required date input — native 차단을 피하려 유효값 채움 (세션 304)
     fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
     fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
+    fireEvent.change(screen.getByLabelText(/중개사무소명/), { target: { value: "길동부동산" } });
     fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
 
     expect(screen.getByRole("alert")).toHaveTextContent("10자리");
@@ -99,6 +100,7 @@ describe("VerifyPage", () => {
     fireEvent.change(screen.getByLabelText(/사업자등록번호/), { target: { value: "1234567890" } });
     fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
     fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
+    fireEvent.change(screen.getByLabelText(/중개사무소명/), { target: { value: "길동부동산" } });
     fireEvent.change(screen.getByLabelText(/연락처/), { target: { value: "010-1234-5678" } });
     fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
 
@@ -135,6 +137,7 @@ describe("VerifyPage", () => {
     fireEvent.change(screen.getByLabelText(/사업자등록번호/), { target: { value: "1234567890" } });
     fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
     fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
+    fireEvent.change(screen.getByLabelText(/중개사무소명/), { target: { value: "길동부동산" } });
     // 연락처 미입력 (선택)
     fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
 
@@ -178,6 +181,7 @@ describe("VerifyPage", () => {
     fireEvent.change(screen.getByLabelText(/사업자등록번호/), { target: { value: "1234567890" } });
     fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
     fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
+    fireEvent.change(screen.getByLabelText(/중개사무소명/), { target: { value: "길동부동산" } });
     fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
 
     await waitFor(() => {
@@ -218,6 +222,7 @@ describe("VerifyPage", () => {
     fireEvent.change(screen.getByLabelText(/사업자등록번호/), { target: { value: "1234567890" } });
     fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
     fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
+    fireEvent.change(screen.getByLabelText(/중개사무소명/), { target: { value: "길동부동산" } });
     fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
 
     await waitFor(() => {

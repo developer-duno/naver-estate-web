@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from auth.audit import log_action
 from crawler.business_api import check_business_status, verify_business_registration
+from crawler.vworld_client import search_broker_office
 from db.models import AgentVerification, UserProfile
 from deps import get_current_user, get_db
 from services.storage import upload_license_doc
@@ -27,7 +28,7 @@ ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "application/pdf"}
 
 class VerifySubmitRequest(BaseModel):
     business_number: str
-    office_name: str = ""
+    office_name: str  # 중개사무소 상호 — V-WORLD 중개사 대조 키 (필수, V034)
     representative_name: str
     start_date: str  # 개업일자 YYYYMMDD — 국세청 validate 필수 (없으면 항상 500)
     phone: str = ""  # 연락처 — 선택 입력 (B2B 가입 마찰 최소화)
@@ -39,6 +40,15 @@ class VerifySubmitRequest(BaseModel):
         if not BUSINESS_NUMBER_RE.match(clean):
             raise ValueError("사업자등록번호는 10자리 숫자여야 합니다")
         return clean
+
+    @field_validator("office_name")
+    @classmethod
+    def validate_office_name(cls, v: str) -> str:
+        # V-WORLD 중개사 대조에 상호가 필요 — 필수 (국토부 등록 상호와 같아야 자동인증)
+        v = v.strip()
+        if not v:
+            raise ValueError("중개사무소명은 필수입니다")
+        return v
 
     @field_validator("representative_name")
     @classmethod
@@ -95,6 +105,9 @@ def submit_verification(
             existing.reviewed_at = None
             existing.business_verified = False
             existing.license_verified = False
+            existing.broker_verified = False
+            existing.broker_jurirno = None
+            existing.broker_status = None
         else:
             raise HTTPException(status_code=409, detail="이미 검증 신청이 존재합니다")
     else:
@@ -119,6 +132,7 @@ def submit_verification(
     biz_message = biz_result["message"]
 
     auto_approved = False
+    broker = None  # V-WORLD 대조 결과 (audit 기록용)
     if existing.business_verified:
         if biz_status in ("02", "03"):
             # 휴업·폐업 = expert 부적격 (진위는 맞지만 영업 안 함). rejected + 사유 안내.
@@ -132,17 +146,38 @@ def submit_verification(
             # 미등록 = validate 통과인데 영업상태 미등록 (모순) → 수동심사(pending 유지)
             biz_message = "사업자 영업상태 확인이 필요해 관리자 심사 후 안내드립니다."
         else:
-            # "01" 계속 또는 None(조회실패) → 자동 승인 (validate 진위확인 완료, status는 안전망)
-            existing.verification_status = "approved"
-            profile = db.get(UserProfile, user_id)
-            if profile:
-                profile.role = "expert"
-                profile.status = "approved"
-            auto_approved = True
+            # "01" 계속 또는 None(조회실패) → 국세청 진위확인 통과. 추가로 V-WORLD 중개사 대조.
+            # 국세청은 "사업자 진위 + 영업중"만 확인 → 식당·카페도 통과. V-WORLD 로 "진짜 중개사무소"
+            # 인지까지 확인해야 가짜 자동승인을 막는다. 매칭+영업중일 때만 자동 승인.
+            broker = search_broker_office(body.office_name, body.representative_name)
+            if broker and broker["matched"] and broker["active"]:
+                # 진짜 중개사무소 + 영업중 → 자동 승인
+                existing.broker_verified = True
+                existing.broker_jurirno = broker["jurirno"]
+                existing.broker_status = broker["status_name"]
+                existing.verification_status = "approved"
+                profile = db.get(UserProfile, user_id)
+                if profile:
+                    profile.role = "expert"
+                    profile.status = "approved"
+                auto_approved = True
+            else:
+                # 미매칭 / 휴폐업 중개사 / V-WORLD 조회실패(None) → 자동승인 보류(pending), 관리자 수동심사.
+                # rejected 가 아닌 pending 인 이유: 상호 표기차·신규개업 미반영 등 false negative 방어
+                # (진짜 중개사가 막히는 손해 > 가짜가 수동심사로 넘어가는 손해).
+                existing.broker_verified = False
+                existing.broker_status = (broker["status_name"] if broker and broker["matched"]
+                                          else "국토부 미매칭")
+                biz_message = (
+                    "사업자등록은 확인됐어요. 중개사무소 등록 확인을 위해 "
+                    "관리자 심사 후 안내드립니다."
+                )
 
     log_action(db, user_id, "verify_submit", "verification", user_id, {
         "business_verified": existing.business_verified,
         "business_status_code": biz_status,
+        "broker_matched": bool(broker and broker["matched"]) if broker is not None else None,
+        "broker_status": broker["status_name"] if broker and broker["matched"] else None,
         "auto_approved": auto_approved,
         "phone": body.phone or None,
     })
@@ -223,6 +258,8 @@ def get_verification_status(
         "submitted": True,
         "verification_status": v.verification_status,
         "business_verified": v.business_verified,
+        "broker_verified": v.broker_verified,
+        "broker_status": v.broker_status,  # 미매칭 사유 — 재방문 pending 안내 (세션 308 리뷰)
         "license_doc_uploaded": bool(v.license_doc_path),
         "rejection_reason": v.rejection_reason,
         "phone": v.phone,

@@ -6,7 +6,7 @@ import { fetchApi, adminHeaders, getApiBase } from "./core";
 
 interface VerifySubmitBody {
   business_number: string;
-  office_name?: string;
+  office_name: string; // 중개사무소 상호 — V-WORLD 중개사 대조 키 (BE verify.py 필수, V034 짝꿍)
   representative_name: string;
   start_date: string; // 개업일자 YYYYMMDD — 국세청 validate 필수 (BE verify.py start_date 짝꿍)
   phone?: string; // 연락처 — 선택 입력 (BE verify.py phone 짝꿍)

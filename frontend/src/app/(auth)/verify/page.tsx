@@ -78,11 +78,11 @@ export default function VerifyPage() {
       const t = await getToken();
       if (!t) throw new Error("로그인이 필요합니다");
       // date input 은 YYYY-MM-DD 보관 → BE validator(8자리 숫자)에 맞춰 하이픈 제거
-      // 연락처도 하이픈 제거 (BE validator 9~11자리 숫자, 선택 입력이라 빈값 OK)
+      // 연락처도 하이픈·공백 제거 (BE validator 와 동일 정규화, 9~11자리 숫자, 선택 입력 빈값 OK)
       return submitVerification(t, {
         ...form,
         start_date: form.start_date.replace(/-/g, ""),
-        phone: form.phone.replace(/-/g, ""),
+        phone: form.phone.replace(/[-\s]/g, ""),
       });
     },
     onSuccess: async () => {

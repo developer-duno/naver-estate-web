@@ -88,6 +88,8 @@ def test_list_with_data(client, db):
     assert item["business_number"] == "1234567890"
     assert item["representative_name"] == "홍길동"
     assert item["verification_status"] == "pending"
+    # 레거시 행(phone 미입력)은 None 으로 안전 노출 (V033 신규 컬럼, 세션 306)
+    assert item["phone"] is None
 
 
 def test_list_filter_status(client, db):

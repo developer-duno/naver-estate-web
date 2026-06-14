@@ -11,6 +11,30 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * FastAPI 에러 응답의 detail 을 항상 사람이 읽는 문자열로 정규화.
+ * - string detail (HTTPException, 409/404/422-string 등) → 그대로 (한국어 메시지 보존)
+ * - 배열 detail (422 RequestValidationError: [{loc,msg,type}]) → 각 msg 추출 후 " / " join
+ *   (배열을 그대로 ApiError 에 넣으면 String([{..}])="[object Object],..." 로 깨짐)
+ * - 그 외(undefined/null/object/빈 배열) → "API 오류: {status}" 폴백
+ * status 는 폴백 문자열 생성 전용 — 타입 판정에 쓰지 않는다 (422 가 배열 전용이 아님: scheduler 등 422+string 존재).
+ */
+export function normalizeDetail(detail: unknown, status: number): string {
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    const msg = detail
+      .map((item) => {
+        const m = item && typeof item === "object" && "msg" in item ? (item as { msg?: unknown }).msg : item;
+        // pydantic v2 가 ValueError 에 붙이는 "Value error, " 접두 제거 (앵커 ^ 필수)
+        return typeof m === "string" ? m.replace(/^Value error, /, "") : String(m);
+      })
+      .filter(Boolean)
+      .join(" / ");
+    if (msg) return msg;
+  }
+  return `API 오류: ${status}`;
+}
+
 export function getApiBase(): string {
   return process.env.NEXT_PUBLIC_API_URL || "";
 }
@@ -83,7 +107,7 @@ async function _fetchApiImpl<T>(path: string, options?: RequestInit & { timeoutM
           429,
         );
       }
-      throw new ApiError(body.detail || `API 오류: ${res.status}`, res.status);
+      throw new ApiError(normalizeDetail(body.detail, res.status), res.status);
     }
     return res.json();
   } catch (err) {

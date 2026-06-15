@@ -1,7 +1,6 @@
 """대기질 수집 — 에어코리아 API → infra 테이블 반영"""
 
 import logging
-from datetime import datetime
 
 from crawler.env_common import _complete_job, _fail_job, _is_skip_day, _record_job
 from db.database import SessionLocal
@@ -83,7 +82,7 @@ def collect_air_quality(batch_size: int = 100):
                     infra.air_pm25 = air["pm25"]
                     infra.air_o3 = air["o3"]
                     infra.air_grade = air["grade"]
-                    infra.air_updated_at = datetime.now()
+                    infra.air_updated_at = utcnow()
 
                 collected += 1
             except Exception:
@@ -118,7 +117,7 @@ def _upsert_station(db, station_name: str, addr: str):
         {
             "station_name": station_name,
             "address": addr,
-            "updated_at": datetime.now(),
+            "updated_at": utcnow(),
         },
         "station_name",
     )

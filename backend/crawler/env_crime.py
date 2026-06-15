@@ -1,13 +1,13 @@
 """범죄통계 수집 — 경찰청 odcloud API / CSV 폴백 → infra 테이블 반영"""
 
 import logging
-from datetime import datetime
 
 from crawler.env_common import _complete_job, _fail_job, _record_job
 from crawler.env_crime_lookup import _build_score_lookup, _compute_median_score, _lookup_score
 from crawler.env_crime_population import _build_population_map
 from db.database import SessionLocal
 from db.mb_models import Apartment, Infra
+from utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ def collect_crime_stats():
 
             infra.crime_score = result["crime_score"]
             infra.crime_grade = result["crime_grade"]
-            infra.crime_updated_at = datetime.now()
+            infra.crime_updated_at = utcnow()
             collected += 1
             if is_fallback:
                 fallback_count += 1
@@ -184,7 +184,7 @@ def load_crime_stats(csv_path: str | None = None):
 
             infra.crime_score = result["crime_score"]
             infra.crime_grade = result["crime_grade"]
-            infra.crime_updated_at = datetime.now()
+            infra.crime_updated_at = utcnow()
             collected += 1
 
         db.commit()

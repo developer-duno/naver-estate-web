@@ -1,11 +1,15 @@
 """쿼리 공통 헬퍼 — 필터 조건 빌더 + 정렬 빌더"""
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, or_, text
 
 from db.models import Article
+
+# 준공년도·입주가능 개월 필터는 한국 사용자 기준 = KST 고정 (환경 무관).
+# 저장이 아닌 "지금 한국 날짜" 기준 필터라 UTC 가 아니라 KST 가 의도.
+_KST = timezone(timedelta(hours=9))
 
 
 def _build_filter_conditions(filters: dict) -> list:
@@ -83,7 +87,7 @@ def _build_filter_conditions(filters: dict) -> list:
 
     # 준공년도 (N년 이내)
     if (max_age := filters.get("max_building_age")) and max_age > 0:
-        min_year = datetime.now().year - max_age
+        min_year = datetime.now(_KST).year - max_age
         conditions.append(
             text("SUBSTRING(articles.use_approve_ymd, 1, 4)::INTEGER >= :min_year").bindparams(min_year=min_year)
         )
@@ -132,7 +136,7 @@ def _build_filter_conditions(filters: dict) -> list:
         months_match = re.match(r"(\d+)개월", move_in)
         if months_match:
             months = int(months_match.group(1))
-            now = datetime.now()
+            now = datetime.now(_KST)
             new_month = now.month + months
             new_year = now.year + (new_month - 1) // 12
             new_month = (new_month - 1) % 12 + 1

@@ -84,5 +84,8 @@ scripts/backend_recovery_err.log
 .codex/
 AGENTS.md
 
+# Serena MCP 로컬 인덱스/캐시 (도구별 산출물 — git 비추적)
+.serena/
+
 # OMC 플러그인 런타임 (state/notepad 등 — 루트/backend/frontend 어디서나 생성, 로컬 전용)
 .omc/

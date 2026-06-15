@@ -32,6 +32,15 @@
     "additionalDirectories": [
       "C:\\Users\\user\\.claude\\plans",
       "C:\\Users\\user\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(rm -rf /:*)",
+      "Bash(rm -rf ~:*)",
+      "Read(//d/naver-estate-web/backend/.env)",
+      "Read(//d/naver-estate-web/frontend/.env.local)"
     ]
   },
   "hooks": {
@@ -51,6 +60,17 @@
           {
             "type": "command",
             "command": "node -e \"const fs=require('fs');const path=require('path');const i=JSON.parse(fs.readFileSync(0,'utf8'));const p=(i.tool_input?.file_path||'').replace(/\\\\/g,'/');const m=p.match(/frontend\\/src\\/lib\\/((?:transfer-tax|property-tax|acquisition-tax|brokerage|area)[^/]*)\\.ts$/);if(!m||p.includes('__tests__'))process.exit(0);const fname=m[1]+'.ts';try{const a=fs.readFileSync(path.resolve('.claude/ASSETS.md'),'utf8');if(a.includes(fname))process.exit(0);console.error('BLOCKED: 신규 계산기 lib '+fname+' 생성 시 .claude/ASSETS.md §2 표 갱신 필수 (drift 차단). 한 줄 추가 후 재시도.');process.exit(2);}catch(e){console.error('WARN: ASSETS.md 읽기 실패 '+e.message);process.exit(0);}\" < /dev/stdin"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const cp=require('child_process');const i=JSON.parse(require('fs').readFileSync(0,'utf8'));const p=(i.tool_input?.file_path||'').replace(/\\\\\\\\/g,'/');if(/backend\\/.*\\.py$/.test(p)){const rel=p.replace(/.*\\/backend\\//,'');try{cp.execSync('ruff check '+JSON.stringify(rel),{cwd:'backend',stdio:'pipe'});}catch(e){console.error('[PostToolUse 자동검증] ruff 경고 — '+rel+':\\n'+(e.stdout||e.stderr||'').toString().slice(0,1500));}}else if(/frontend\\/.*\\.tsx?$/.test(p)&&!/\\.d\\.ts$/.test(p)){console.error('[PostToolUse 리마인더] frontend TS 변경 — 커밋 전 `cd frontend && npx tsc --noEmit` 실행 권장 (전체 tsc 는 느려서 hook 자동실행 제외).');}process.exit(0);\" < /dev/stdin"
           }
         ]
       }

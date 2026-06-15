@@ -140,6 +140,20 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test
 | `error-propagation.md` | FE 데이터 래퍼 에러 삼킴 금지 + 래퍼 레벨 MSW 가드 의무 (폴백 삼킴 3사고, 세션 298 신설) |
 | `release.md` | PR 머지 후 backend 가동 검증 4중 cross-check (세션 230~231 zombie 답습 신설, 세션 257 라이브 표시값 지표 추가) |
 
+### 프로젝트 자율자산 (`.claude/agents/` · `.claude/skills/` — 세션 309 신설)
+
+repo 에 박혀 git 으로 전파되는 도메인 특화 자산. description 매칭으로 자동 발동 (글로벌 `~/.claude` 가 아니라 프로젝트 추적).
+
+| 종류 | 이름 | 발동 시점 |
+|------|------|----------|
+| agent | `crawl-safety-reviewer` | `backend/crawler/`·`routers/live` 변경 시 — throttle 경유·IP차단 방지(infra.md §IP차단) 검증 |
+| agent | `tax-law-verifier` | `frontend/src/lib/` 계산기(`*tax*.ts`·`brokerage*.ts`) 변경 시 — 법령 cross-check + 결함 박제 테스트 감지(testing.md) |
+| agent | `migration-safety-reviewer` | `backend/db/migrations/V*.sql`·`db/models.py` 변경 시 — 공용 DB(mibunyang) 영향 + prod 컬럼 선행실행 게이트 |
+| skill | `release-verify` | backend PR 머지 직후 — zombie cross-check(release.md §2, PR 성격별 3중/4중) |
+| skill | `live-verify` | "재시작 반영됐나"·정적분석으로 "재시작 불필요" 단정 시 — 라이브 실측 3대 방법 |
+
+> 안전장치(세션 309): `.claude/settings.json` deny(force-push·rm -rf·.env 읽기) + PostToolUse hook(backend .py 저장 시 ruff 경고형).
+
 ### 플랜·검증 (글로벌 스킬 — 타이핑 0 자동 발동)
 
 > 옛 `/harness`·`/guard` 커맨드는 글로벌 스킬로 이전됨 (`.claude/commands/` 없음). 기능은 아래 스킬이 대체.

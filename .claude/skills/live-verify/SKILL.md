@@ -39,7 +39,7 @@ cd backend && PYTHONPATH=. python <읽기전용 스크립트>
 # ⚠ 임시 uvicorn 금지 — lifespan 이 스케줄러를 무조건 start
 ```
 
-OLD/NEW 결과가 다르면 "디스크 코드는 새 버전 정상". 라이브 응답이 OLD 결과면 zombie 확정. 선례: `memory/scripts/session301_verify_pp_nullif.py` (OLD `[0,0,0,0,0]` vs NEW `[1122,...]`).
+OLD/NEW 결과가 다르면 "디스크 코드는 새 버전 정상". 라이브 응답이 OLD 결과면 zombie 확정. 패턴 예시: 정렬 PR 이면 `OLD ORDER BY` 와 `NEW ORDER BY` 를 같은 PG 데이터에 던져 결과 배열을 비교 (예: 옛 정렬 `[0,0,0,0,0]` vs 새 정렬 `[1122,1277,...]`). 스크립트는 1회용이라 글로벌 메모리 `memory/scripts/` 에 보존(repo 비추적).
 
 ### 3️⃣ backend.log / orchestrator.pid 부팅 시각
 

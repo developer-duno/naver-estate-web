@@ -40,7 +40,11 @@
       "Bash(rm -rf /:*)",
       "Bash(rm -rf ~:*)",
       "Read(//d/naver-estate-web/backend/.env)",
-      "Read(//d/naver-estate-web/frontend/.env.local)"
+      "Read(//d/naver-estate-web/frontend/.env.local)",
+      "Bash(cat *.env*)",
+      "Bash(cat */.env*)",
+      "Bash(grep * .env*)",
+      "Bash(grep * */.env*)"
     ]
   },
   "hooks": {

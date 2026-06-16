@@ -15,13 +15,13 @@ describe("Header 기본", () => {
     });
   });
 
-  it("네비게이션 영역에 홈, 검색 텍스트 포함", async () => {
+  it("네비게이션 영역에 홈, 미분양 텍스트 포함 (세션 314: 검색 메뉴 제거, 홈이 검색 겸함)", async () => {
     render(<Header />);
     await waitFor(() => {
       const nav = document.querySelector("nav");
       expect(nav).not.toBeNull();
       expect(nav?.textContent).toContain("홈");
-      expect(nav?.textContent).toContain("검색");
+      expect(nav?.textContent).toContain("미분양");
     });
   });
 
@@ -56,11 +56,14 @@ describe("Header 네비게이션", () => {
     });
   });
 
-  it("검색 링크 href='/search'", async () => {
+  it("검색 메뉴 링크는 제거됨 (세션 314: 홈이 검색 흡수) — 미분양 링크는 존재", async () => {
     render(<Header />);
     await waitFor(() => {
-      const link = document.querySelector("a[href='/search']");
-      expect(link).not.toBeNull();
+      // 검색 전용 nav 링크 없음 (홈이 검색 겸함). 단 /search/favorites 는 별도 라우트라 무관.
+      const searchLink = document.querySelector("nav a[href='/search']");
+      expect(searchLink).toBeNull();
+      const mbLink = document.querySelector("a[href='/mibunyang']");
+      expect(mbLink).not.toBeNull();
     });
   });
 

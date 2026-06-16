@@ -1,26 +1,30 @@
 "use client";
 
-import { Suspense } from "react";
-import SearchExperience from "@/components/search/SearchExperience";
+import { useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { SkeletonPage } from "@/components/Skeleton";
 
 /**
- * 검색 페이지 — 검색 경험은 SearchExperience 공용 컴포넌트가 담당 (홈과 공유, 세션 314).
- * URL(useSearchParams)이 진실의 원천이라 /search?q=... 로 직접 진입해도 결과 표시.
- * (F1 단계에서 홈 리다이렉트로 교체 예정 — 현재는 SearchExperience 직접 렌더로 동작 보존)
+ * /search → 홈(/) 리다이렉트 (세션 314 F1).
+ * 홈이 검색 경험을 흡수(SearchExperience)해 검색 메뉴를 없앴다. 기존 /search?... 북마크·SEO·
+ * 외부 링크는 URL 파라미터를 보존하며 홈으로 보내 동작 유지. (/search/favorites 는 별도 라우트라 영향 0.)
  */
-function SearchPageContent() {
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      <SearchExperience />
-    </div>
-  );
+function SearchRedirect() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const qs = searchParams.toString();
+    router.replace(qs ? `/?${qs}` : "/");
+  }, [router, searchParams]);
+
+  return <SkeletonPage message="홈으로 이동 중입니다..." />;
 }
 
 export default function SearchPage() {
   return (
     <Suspense fallback={<SkeletonPage />}>
-      <SearchPageContent />
+      <SearchRedirect />
     </Suspense>
   );
 }

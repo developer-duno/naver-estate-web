@@ -33,7 +33,9 @@ vi.mock("@/components/RegionSelector", () => ({
   default: () => <div data-testid="region-selector" />,
 }));
 
-import SearchPage from "../search/page";
+// 세션 314: search/page.tsx 는 홈 리다이렉트가 됐고, 검색 로직은 SearchExperience 가 담당.
+// 검색 결과·폼·에러 단언은 SearchExperience 를 직접 대상으로 검증 (동작 동일, URL 기반).
+import SearchExperience from "@/components/search/SearchExperience";
 
 /** 테스트용 단지 데이터 팩토리 */
 function makeComplex(
@@ -60,7 +62,7 @@ function renderSearch() {
   return render(
     <TestQueryProvider>
       <Suspense fallback={<div>loading</div>}>
-        <SearchPage />
+        <SearchExperience />
       </Suspense>
     </TestQueryProvider>,
   );

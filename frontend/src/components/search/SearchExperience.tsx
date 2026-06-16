@@ -24,6 +24,8 @@ import CompareFloatingBar from "@/components/CompareFloatingBar";
 import { ComplexRow } from "@/components/search/ComplexRow";
 import { ComplexCardMobile } from "@/components/search/ComplexCardMobile";
 import RecentSearchChips from "@/components/search/RecentSearchChips";
+import ActiveFilterChips from "@/components/search/ActiveFilterChips";
+import type { ArticleFilters } from "@/types";
 
 const VALID_COMPLEX_SORT = new Set<string>(COMPLEX_SORT_OPTIONS.map((o) => o.v));
 
@@ -209,6 +211,28 @@ export default function SearchExperience({ headerSlot, emptyExtra }: Props) {
     router.push(buildFilterURL(pathname, extra, urlFilters));
   };
 
+  // ── F3: 적용 조건 칩 + 필터 접이식 ──
+  // 결과가 있으면 필터를 평소 접고 칩으로 요약, "조건 수정"으로 펼침. 빈 상태는 항상 펼침.
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const showResults = hasSearchParams && !loading && sortedFilteredComplexes.length > 0;
+  // 결과 화면이면 기본 접힘, 그 외(빈 상태·결과없음)는 펼침
+  const filtersExpanded = !showResults || filtersOpen;
+
+  const estateTypeLabels = typesNarrowed
+    ? ESTATE_TYPE_TABS.filter((t) => selectedTypes.includes(t.code)).map((t) => t.label)
+    : [];
+
+  const removeFilter = (key: keyof ArticleFilters) => {
+    setUrlFilters({ ...urlFilters, [key]: undefined });
+  };
+  const resetEstateTypes = () => {
+    setSelectedTypes([...allCodes]);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("types");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
   return (
     <div>
       {headerSlot}
@@ -230,24 +254,58 @@ export default function SearchExperience({ headerSlot, emptyExtra }: Props) {
         </div>
       )}
 
-      {/* 매물유형 탭 */}
-      <div className="mb-3">
-        <EstateTypeTabs selected={selectedTypes} onChange={handleTabChange} />
-      </div>
+      {/* F3: 결과 화면이면 적용 조건 칩 요약 + "조건 수정" 토글, 빈 상태는 필터 펼침 */}
+      {showResults && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 border border-gray-300 rounded-md px-2.5 py-1 hover:bg-gray-50"
+            aria-expanded={filtersOpen ? "true" : "false"}
+          >
+            {filtersOpen ? "조건 접기 ▲" : "조건 수정 ▼"}
+          </button>
+          {!filtersOpen && (
+            <div className="flex-1 min-w-0">
+              <ActiveFilterChips
+                filters={urlFilters}
+                estateTypeLabels={estateTypeLabels}
+                onRemoveFilter={removeFilter}
+                onResetEstateTypes={resetEstateTypes}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* 매물 필터 + 단지 정렬 — 모바일/데스크탑 분기 */}
-      <div className="mb-5">
-        <div className="md:hidden flex flex-wrap items-center gap-2">
-          <FilterBarMobileSheet key={`mobile-${filterKey}`} onChange={setUrlFilters} initialFilters={urlFilters} />
-          <ComplexSortDropdown value={complexSort} onChange={setComplexSort} />
-        </div>
-        <div className="hidden md:flex flex-wrap items-start gap-2">
-          <div className="flex-1 min-w-0">
-            <FilterBar key={filterKey} onChange={setUrlFilters} initialFilters={urlFilters} />
+      {/* 매물유형 탭 + 필터 — 접이식 (결과 화면은 기본 접힘, 그 외 펼침) */}
+      {filtersExpanded && (
+        <>
+          <div className="mb-3">
+            <EstateTypeTabs selected={selectedTypes} onChange={handleTabChange} />
           </div>
+
+          <div className="mb-5">
+            <div className="md:hidden flex flex-wrap items-center gap-2">
+              <FilterBarMobileSheet key={`mobile-${filterKey}`} onChange={setUrlFilters} initialFilters={urlFilters} />
+              <ComplexSortDropdown value={complexSort} onChange={setComplexSort} />
+            </div>
+            <div className="hidden md:flex flex-wrap items-start gap-2">
+              <div className="flex-1 min-w-0">
+                <FilterBar key={filterKey} onChange={setUrlFilters} initialFilters={urlFilters} />
+              </div>
+              <ComplexSortDropdown value={complexSort} onChange={setComplexSort} />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 결과 화면 접힘 상태에서도 정렬은 항상 접근 가능 */}
+      {showResults && !filtersOpen && (
+        <div className="mb-4 flex justify-end">
           <ComplexSortDropdown value={complexSort} onChange={setComplexSort} />
         </div>
-      </div>
+      )}
 
       {/* 검색 파라미터 없을 때: 인라인 검색 폼 */}
       {!hasSearchParams && (

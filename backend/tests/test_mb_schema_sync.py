@@ -24,7 +24,7 @@ import pytest
 from db import mb_models
 from routers import mb_serializers
 
-# (ORM 모델명, serializer 함수명) 짝 — mb_serializers 10개 전부
+# (ORM 모델명, serializer 함수명) 짝 — mb_serializers 12개 전부
 MODEL_SERIALIZER_PAIRS = [
     ("Apartment", "apartment_to_dict"),
     ("UnsoldHistory", "unsold_history_to_dict"),
@@ -36,6 +36,8 @@ MODEL_SERIALIZER_PAIRS = [
     ("School", "school_to_dict"),
     ("Transport", "transport_to_dict"),
     ("Builder", "builder_to_dict"),
+    ("PresaleScheduleOfficial", "presale_schedule_to_dict"),
+    ("ApplyhomeUnitSupply", "unit_supply_to_dict"),
 ]
 
 # 의도적 미노출 (false positive 제외). 사유 명시 — 새 컬럼은 여기 없으면 가드가 잡는다.
@@ -47,6 +49,8 @@ ALLOWLIST: dict[str, set[str]] = {
     "School": {"apartment_id"},
     "Transport": {"apartment_id"},
     "TradeStats": {"apartment_id"},
+    # fetched_at = 수집 메타(화면 가치 낮음). presale 일정은 모든 날짜 12종을 노출하므로 충분.
+    "ApplyhomeUnitSupply": {"fetched_at"},
 }
 
 # 현재 진짜 미노출 — 노출 가치 없거나 노출 경로 부재라 xfail 로 "예상된 누락" 표기.

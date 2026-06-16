@@ -19,9 +19,12 @@ from routers.serializers import (
     mb_price_to_dict,
     mb_region_to_dict,
     mb_trade_to_dict,
+    presale_schedule_to_dict,
+    presale_summary,
     school_to_dict,
     trade_stats_to_dict,
     transport_to_dict,
+    unit_supply_to_dict,
     unsold_history_to_dict,
 )
 
@@ -184,6 +187,135 @@ def get_trades(
     total = mb_queries.count_trades(db, region, gu, dong)
     return {
         "trades": [mb_trade_to_dict(t) for t in items],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+# ── 분양 단지 ────────────────────────────────────────────────
+
+
+# sort_by Literal 은 db.mb_apartment_queries 의 _presale_sort_order / get_competition_page
+# sort_map 과 짝꿍 — 키 추가·삭제 시 양쪽 답습 (domain-mapping-ssot.md).
+MbPresaleType = Literal["all", "private", "public"]
+MbPresaleSortBy = Literal[
+    "recruit_date_desc", "competition_rate_desc", "units_desc", "price_asc", "price_desc",
+]
+MbCompetitionSortBy = Literal[
+    "competition_rate_desc", "applicants_desc",
+]
+
+
+@router.get("/presale")
+def get_presale(
+    presale_type: MbPresaleType = Query("all", description="all=전체 / private=민간계열 / public=LH·SH 공공계열 (분류 SSOT=db.mb_apartment_queries PRIVATE_TYPES/PUBLIC_TYPES)"),
+    stage: Optional[str] = Query(None, max_length=20, description="분양중|청약중|분양계획"),
+    region: Optional[str] = Query(None, min_length=2, max_length=20, description="시도"),
+    gu: Optional[str] = Query(None, max_length=20, description="시군구"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    sort_by: MbPresaleSortBy = Query("recruit_date_desc"),
+    keyword: Optional[str] = Query(None, min_length=2, max_length=100),
+    db: Session = Depends(get_db),
+):
+    """분양 단지 목록 (민간/공공 분류 + 단계 + 지역 필터)
+
+    분류 정확 리스트는 db.mb_apartment_queries 의 PRIVATE_TYPES/PUBLIC_TYPES (SSOT):
+    - private: 민간 사업자 공급 계열 (민간분양 등 4종)
+    - public: LH/SH 공공기관 공급 계열 (공공분양·국민임대 등 7종)
+    - all: presale_type 있는 전체
+    recruit_date_desc 정렬은 presale_schedule_official.recruit_date(진짜 공고일) 단지별 MAX 기준.
+    """
+    items, total = mb_queries.get_presale_page(
+        db,
+        presale_type=presale_type,
+        stage=stage,
+        region=region,
+        gu=gu,
+        page=page,
+        page_size=page_size,
+        sort_by=sort_by,
+        keyword=keyword,
+    )
+    return {
+        "presale": [apartment_to_dict(a) for a in items],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.get("/presale/{apartment_id}")
+def get_presale_detail(
+    apartment_id: str,
+    db: Session = Depends(get_db),
+):
+    """분양 단지 상세 — 청약 일정(차수별) + 평형별 공급정보 + 시공사/인프라/학군 포함"""
+    apt = mb_queries.get_apartment_by_id(db, apartment_id)
+    if not apt:
+        raise HTTPException(status_code=404, detail="아파트를 찾을 수 없습니다")
+
+    result = apartment_to_dict(apt)
+
+    # 청약홈 공식 분양 일정 (차수별)
+    schedules = mb_queries.get_presale_schedules(db, apartment_id)
+    result["schedules"] = [presale_schedule_to_dict(s) for s in schedules]
+
+    # 평형별 공급정보 (특공 세분화 포함)
+    units = mb_queries.get_unit_supplies(db, apartment_id)
+    result["unit_supplies"] = [unit_supply_to_dict(u) for u in units]
+
+    # 분양 요약 집계 (BE 1회 집계 = SSOT, FE 합산 금지)
+    result["presale_summary"] = presale_summary(units, schedules)
+
+    # 부속 정보
+    ts = mb_queries.get_trade_stats(db, apartment_id)
+    if ts:
+        result["trade_stats"] = trade_stats_to_dict(ts)
+
+    infra = mb_queries.get_infra(db, apartment_id)
+    if infra:
+        result["infra"] = infra_to_dict(infra)
+
+    school = mb_queries.get_school(db, apartment_id)
+    if school:
+        result["school"] = school_to_dict(school)
+
+    transport = mb_queries.get_transport(db, apartment_id)
+    if transport:
+        result["transport"] = transport_to_dict(transport)
+
+    if apt.builder:
+        builder = mb_queries.get_builder(db, apt.builder)
+        if builder:
+            result["builder_info"] = builder_to_dict(builder)
+
+    return result
+
+
+@router.get("/competition")
+def get_competition(
+    region: Optional[str] = Query(None, min_length=2, max_length=20, description="시도"),
+    gu: Optional[str] = Query(None, max_length=20, description="시군구"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    sort_by: MbCompetitionSortBy = Query("competition_rate_desc"),
+    keyword: Optional[str] = Query(None, min_length=2, max_length=100),
+    db: Session = Depends(get_db),
+):
+    """분양결과 — 경쟁률 있는 단지 목록 (presale_stage 또는 competition_rate 보유)"""
+    items, total = mb_queries.get_competition_page(
+        db,
+        region=region,
+        gu=gu,
+        page=page,
+        page_size=page_size,
+        sort_by=sort_by,
+        keyword=keyword,
+    )
+    return {
+        "competition": [apartment_to_dict(a) for a in items],
         "total": total,
         "page": page,
         "page_size": page_size,

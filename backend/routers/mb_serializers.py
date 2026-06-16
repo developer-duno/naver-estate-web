@@ -248,3 +248,123 @@ def builder_to_dict(b) -> dict:
         "hug_guarantee": b.hug_guarantee,
         "updated_at": b.updated_at.isoformat() if b.updated_at else None,
     }
+
+
+def presale_schedule_to_dict(s) -> dict:
+    """PresaleScheduleOfficial ORM → dict (청약홈 공식 분양 일정 12종)"""
+    return {
+        "id": s.id,
+        "apartment_id": s.apartment_id,
+        "house_manage_no": s.house_manage_no,
+        "pblanc_no": s.pblanc_no,
+        "recruit_date": s.recruit_date.isoformat() if s.recruit_date else None,
+        "special_receipt_bgnde": s.special_receipt_bgnde.isoformat() if s.special_receipt_bgnde else None,
+        "special_receipt_endde": s.special_receipt_endde.isoformat() if s.special_receipt_endde else None,
+        "general_rank1_bgnde": s.general_rank1_bgnde.isoformat() if s.general_rank1_bgnde else None,
+        "general_rank1_endde": s.general_rank1_endde.isoformat() if s.general_rank1_endde else None,
+        "general_rank2_bgnde": s.general_rank2_bgnde.isoformat() if s.general_rank2_bgnde else None,
+        "general_rank2_endde": s.general_rank2_endde.isoformat() if s.general_rank2_endde else None,
+        "winner_announce_date": s.winner_announce_date.isoformat() if s.winner_announce_date else None,
+        "contract_bgnde": s.contract_bgnde.isoformat() if s.contract_bgnde else None,
+        "contract_endde": s.contract_endde.isoformat() if s.contract_endde else None,
+        "move_in_ym": s.move_in_ym,
+        "tot_supply": s.tot_supply,
+        "pblanc_url": s.pblanc_url,
+        "biz_entity": s.biz_entity,
+        "constructor": s.constructor,
+        "fetched_at": s.fetched_at.isoformat() if s.fetched_at else None,
+    }
+
+
+# special_by_type JSONB 키 → 한글 라벨 (청약홈 특별공급 8유형, BE 단일 SSOT).
+# 키는 mibunyang collect-applyhome-detail.mjs 가 박는 고정 키 (마이그 주석 답습).
+# FE 는 본 변환 결과 special_supply_breakdown 리스트만 소비 (raw JSONB 키 해독 불필요).
+SPECIAL_TYPE_LABELS = {
+    "dazanyeo": "다자녀",
+    "sinhon": "신혼부부",
+    "saengae_choecho": "생애최초",
+    "nobumo": "노부모부양",
+    "cheongnyeon": "청년",
+    "sinsaenga": "신생아",
+    "gigwan": "기관추천",
+    "etc": "기타",
+}
+
+
+def _special_breakdown(special_by_type) -> list:
+    """special_by_type JSONB(dict) → [{key, label, count}] 리스트 (라벨 순서 고정).
+
+    값 0/None 유형은 제외. 미등록 키는 키 자체를 라벨로 폴백 (신규 유형 추가 시 무손실).
+    """
+    if not isinstance(special_by_type, dict):
+        return []
+    out = []
+    # 알려진 라벨 순서 우선, 그 다음 미등록 키
+    seen = set()
+    for key, label in SPECIAL_TYPE_LABELS.items():
+        cnt = special_by_type.get(key)
+        if cnt:
+            out.append({"key": key, "label": label, "count": cnt})
+        seen.add(key)
+    for key, cnt in special_by_type.items():
+        if key not in seen and cnt:
+            out.append({"key": key, "label": key, "count": cnt})
+    return out
+
+
+def unit_supply_to_dict(u) -> dict:
+    """ApplyhomeUnitSupply ORM → dict (청약홈 평형별 공급정보)"""
+    return {
+        "id": u.id,
+        "apartment_id": u.apartment_id,
+        "house_manage_no": u.house_manage_no,
+        "model_no": u.model_no,
+        "house_ty": u.house_ty,
+        "supply_area": u.supply_area,
+        "general_supply": u.general_supply,
+        "special_supply": u.special_supply,
+        "special_by_type": u.special_by_type,
+        "special_supply_breakdown": _special_breakdown(u.special_by_type),
+        "top_amount": u.top_amount,
+    }
+
+
+def presale_summary(units: list, schedules: list) -> dict:
+    """평형별 공급(ApplyhomeUnitSupply) + 일정(PresaleScheduleOfficial) ORM 리스트 →
+    분양 상세 요약 집계 (BE 1회 집계 = SSOT).
+
+    FE 합산 위임 금지 (N→1 silent 버그 + 코드중복, domain-mapping-ssot.md 룰2).
+    유형별 특공 세대수는 모든 평형의 special_by_type 을 키별 합산.
+    """
+    total_general = sum((u.general_supply or 0) for u in units)
+    total_special = sum((u.special_supply or 0) for u in units)
+    top_amounts = [u.top_amount for u in units if u.top_amount is not None]
+
+    # 유형별 특공 세대수 합산 (전 평형 누적)
+    type_accum: dict[str, int] = {}
+    for u in units:
+        sbt = u.special_by_type
+        if isinstance(sbt, dict):
+            for key, cnt in sbt.items():
+                if cnt:
+                    type_accum[key] = type_accum.get(key, 0) + int(cnt)
+    special_by_type_total = []
+    seen = set()
+    for key, label in SPECIAL_TYPE_LABELS.items():
+        if type_accum.get(key):
+            special_by_type_total.append({"key": key, "label": label, "count": type_accum[key]})
+        seen.add(key)
+    for key, cnt in type_accum.items():
+        if key not in seen and cnt:
+            special_by_type_total.append({"key": key, "label": key, "count": cnt})
+
+    return {
+        "total_general_supply": total_general,
+        "total_special_supply": total_special,
+        "total_supply": total_general + total_special,
+        "special_by_type_total": special_by_type_total,
+        "max_top_amount": max(top_amounts) if top_amounts else None,
+        "min_top_amount": min(top_amounts) if top_amounts else None,
+        "unit_type_count": len(units),
+        "schedule_count": len(schedules),
+    }

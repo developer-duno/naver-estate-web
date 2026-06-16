@@ -44,7 +44,18 @@
       "Bash(cat *.env*)",
       "Bash(cat */.env*)",
       "Bash(grep * .env*)",
-      "Bash(grep * */.env*)"
+      "Bash(grep * */.env*)",
+      "Bash(head *.env*)",
+      "Bash(head */.env*)",
+      "Bash(tail *.env*)",
+      "Bash(tail */.env*)",
+      "Bash(less *.env*)",
+      "Bash(more *.env*)",
+      "Bash(od *.env*)",
+      "Bash(xxd *.env*)",
+      "Bash(printf * < *.env*)",
+      "Bash(sort *.env*)",
+      "Bash(strings *.env*)"
     ]
   },
   "hooks": {
@@ -75,6 +86,15 @@
           {
             "type": "command",
             "command": "node -e \"const cp=require('child_process');const i=JSON.parse(require('fs').readFileSync(0,'utf8'));const p=(i.tool_input?.file_path||'').replace(/\\\\\\\\/g,'/');if(/backend\\/.*\\.py$/.test(p)){const rel=p.replace(/.*\\/backend\\//,'');try{cp.execSync('ruff check '+JSON.stringify(rel),{cwd:'backend',stdio:'pipe'});}catch(e){console.error('[PostToolUse 자동검증] ruff 경고 — '+rel+':\\n'+(e.stdout||e.stderr||'').toString().slice(0,1500));}}else if(/frontend\\/.*\\.tsx?$/.test(p)&&!/\\.d\\.ts$/.test(p)){console.error('[PostToolUse 리마인더] frontend TS 변경 — 커밋 전 `cd frontend && npx tsc --noEmit` 실행 권장 (전체 tsc 는 느려서 hook 자동실행 제외).');}process.exit(0);\" < /dev/stdin"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/post-merge-zombie-reminder.js < /dev/stdin"
           }
         ]
       }

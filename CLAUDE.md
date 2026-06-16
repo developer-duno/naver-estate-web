@@ -153,6 +153,8 @@ repo 에 박혀 git 으로 전파되는 도메인 특화 자산. description 매
 | skill | `live-verify` | "재시작 반영됐나"·정적분석으로 "재시작 불필요" 단정 시 — 라이브 실측 3대 방법 |
 
 > 안전장치(세션 309): `.claude/settings.json` deny(force-push·rm -rf·.env 읽기) + PostToolUse hook(backend .py 저장 시 ruff 경고형).
+>
+> 안전장치 강화(세션 311, Claude Code 신기능 자동적용): ① **`gh pr merge` 직후 zombie 자동 리마인더** — PostToolUse(Bash) hook `.claude/hooks/post-merge-zombie-reminder.js` 가 머지 커밋이 backend 변경이면 release.md §2 cross-check(PID·부팅시각·라이브 GET) 자동 상기, FE/md 전용이면 면제 안내(세션 257~311 zombie 반복 사고 구조 차단). ② **deny .env 우회 읽기 차단 확대** — head/tail/less/more/od/xxd/printf/sort/strings 의 .env 대상 추가(세션 310 heredoc 우회 답습). ③ **글로벌 `fallbackModel: [sonnet, haiku]`** (글로벌 settings, repo 밖) — Opus 과부하 시 Claude 자동 폴백(워크플로 대량 서브에이전트 rate limit 전멸 완화).
 
 ### 플랜·검증 (글로벌 스킬 — 타이핑 0 자동 발동)
 

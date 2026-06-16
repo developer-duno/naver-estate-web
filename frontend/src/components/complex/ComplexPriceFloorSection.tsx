@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { getPriceStats } from "@/lib/api";
 import ComplexPriceFloorTab from "@/components/ComplexPriceFloorTab";
+import LockedDataCard, { isAuthGateError } from "@/components/ui/locked-data-card";
 import type { ArticleFilters } from "@/types";
 
 interface Props {
@@ -19,6 +20,11 @@ export default function ComplexPriceFloorSection({ complexNo, onFilterChange, ac
     queryFn: () => getPriceStats(complexNo, accessToken),
     staleTime: 30_000,
   });
+
+  // 403(승인 권한)은 잠금 안내 — ComplexPriceFloorTab 은 error 를 bool 로만 받아 구분 불가
+  if (priceStatsQuery.isError && isAuthGateError(priceStatsQuery.error)) {
+    return <LockedDataCard label="층별 시세" />;
+  }
 
   return (
     <ComplexPriceFloorTab

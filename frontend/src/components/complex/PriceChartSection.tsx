@@ -8,6 +8,7 @@ import { getPriceHistory } from "@/lib/api";
 import { usePriceCollect } from "@/hooks/usePriceCollect";
 import { Button } from "@/components/ui/button";
 import Skeleton from "@/components/Skeleton";
+import LockedDataCard, { isAuthGateError } from "@/components/ui/locked-data-card";
 import type { PyeongDetail } from "@/types";
 
 const LazyPriceHistory = dynamic(() => import("@/components/PriceHistoryChart"), { ssr: false });
@@ -97,16 +98,20 @@ export default function PriceChartSection({ complexNo, pyeongDetails, accessToke
           <Skeleton className="h-72 w-full" />
         </div>
       ) : priceHistoryQuery.isError ? (
-        <div className="text-center py-4">
-          <p className="text-red-500 text-sm">가격 추이를 불러오지 못했습니다</p>
-          <button
-            type="button"
-            onClick={() => priceHistoryQuery.refetch()}
-            className="text-xs text-blue-600 hover:underline mt-2"
-          >
-            다시 시도
-          </button>
-        </div>
+        isAuthGateError(priceHistoryQuery.error) ? (
+          <LockedDataCard label="실거래가" />
+        ) : (
+          <div className="text-center py-4">
+            <p className="text-red-500 text-sm">가격 추이를 불러오지 못했습니다</p>
+            <button
+              type="button"
+              onClick={() => priceHistoryQuery.refetch()}
+              className="text-xs text-blue-600 hover:underline mt-2"
+            >
+              다시 시도
+            </button>
+          </div>
+        )
       ) : (
         <LazyPriceHistory items={historyItems} />
       )}

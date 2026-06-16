@@ -36,6 +36,14 @@ vi.mock("@/lib/api", () => ({
     trades: [{ id: 1, apt_name: "테스트아파트", deal_month: "202603", price: 50000, trade_type: "매매" }],
     total: 1, page: 1, page_size: 50,
   }),
+  getMbPresale: vi.fn().mockResolvedValue({
+    presale: [{ id: "P1", name: "분양단지", region: "서울", presale_type: "민간분양", presale_stage: "청약중", competition_rate: 12.3 }],
+    total: 1, page: 1, page_size: 50,
+  }),
+  getMbCompetition: vi.fn().mockResolvedValue({
+    competition: [{ id: "C1", name: "경쟁단지", region: "서울", competition_rate: 20, competition_applicants: 2000, competition_supply: 100 }],
+    total: 1, page: 1, page_size: 50,
+  }),
 }));
 
 function renderPage(params = "") {
@@ -55,9 +63,19 @@ describe("미분양 메인 — 초기 상태", () => {
     expect(screen.getByText("미분양 현황")).toBeInTheDocument();
   });
 
-  it("지역 미선택 시 안내 메시지가 표시된다", () => {
-    renderPage();
+  it("지역 미선택 + 미분양 단지 탭이면 안내 메시지가 표시된다", () => {
+    // 기본 탭은 분양(전국 조회)이라, 지역 게이트 안내는 apartments 탭에서 확인
+    renderPage("tab=apartments");
     expect(screen.getByText("지역을 선택해주세요")).toBeInTheDocument();
+  });
+
+  it("기본 탭(분양)은 지역 미선택이어도 안내 없이 조회된다 (전국 조회)", async () => {
+    renderPage();
+    // 분양 탭은 favorites 처럼 지역 게이트 예외 — 안내 미표시
+    expect(screen.queryByText("지역을 선택해주세요")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByText("분양단지").length).toBeGreaterThanOrEqual(1);
+    });
   });
 
   it("지역 셀렉터가 표시된다", () => {
@@ -69,9 +87,10 @@ describe("미분양 메인 — 초기 상태", () => {
 describe("미분양 메인 — 데이터 표시", () => {
   beforeEach(() => { mockRouter.replace.mockClear(); mockRouter.push.mockClear(); });
 
-  it("지역 선택 후 탭이 표시된다 (5개)", async () => {
+  it("지역 선택 후 탭이 표시된다 (6개 — 분양 추가)", async () => {
     renderPage("region=서울특별시&tab=apartments&page=1");
     await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "분양" })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: /미분양 단지/ })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: /미분양만/ })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: /지역 통계/ })).toBeInTheDocument();
@@ -278,6 +297,38 @@ describe("미분양 메인 — 즐겨찾기 정렬", () => {
     // 에러 없이 렌더링되고 3개 행이 표시된다
     const rows = screen.getAllByRole("row");
     expect(rows.length).toBe(4); // thead 1 + tbody 3
+  });
+});
+
+describe("미분양 메인 — 분양 탭 (세션 314)", () => {
+  beforeEach(() => { mockRouter.replace.mockClear(); mockRouter.push.mockClear(); });
+
+  it("분양 탭 진입 시 민간분양 세그먼트 데이터가 표시된다", async () => {
+    renderPage("tab=presale&seg=private");
+    await waitFor(() => {
+      expect(screen.getAllByText("분양단지").length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it("분양결과 세그먼트는 경쟁률 데이터가 표시된다", async () => {
+    renderPage("tab=presale&seg=competition");
+    await waitFor(() => {
+      expect(screen.getAllByText("경쟁단지").length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  it("세그먼트 전환 시 정렬 리셋 + seg 갱신 (presale↔competition 422 방지)", async () => {
+    const user = userEvent.setup();
+    renderPage("tab=presale&seg=private&sort_by=units_desc");
+    await waitFor(() => {
+      // 세그먼트 버튼도 role=tab 이라 exact name 으로 페이지 상위탭 "분양"만 특정
+      expect(screen.getByRole("tab", { name: "분양" })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("tab", { name: "분양결과" }));
+    const calls = mockRouter.replace.mock.calls;
+    const url = calls[calls.length - 1][0] as string;
+    expect(url).toContain("seg=competition");
+    expect(url).not.toContain("sort_by");
   });
 });
 

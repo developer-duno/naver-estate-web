@@ -111,7 +111,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1726개** (194 파일) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1757개** (197 파일) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
 | BE pytest | `backend/tests/` | **958개** (82 파일, pytest-xdist `-n auto` 병렬) |
 

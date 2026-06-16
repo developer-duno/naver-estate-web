@@ -76,5 +76,10 @@ export const queryKeys = {
       ["mb", "regions", region, gu] as const,
     trades: (region: string, gu?: string, dong?: string, page?: number, sortBy?: string) =>
       ["mb", "trades", region, gu, dong, page, ...(sortBy ? [sortBy] : [])] as const,
+    presale: (presaleType: string, region?: string, gu?: string, page?: number, sortBy?: string, keyword?: string) =>
+      ["mb", "presale", presaleType, region, gu, page, ...(sortBy ? [sortBy] : []), ...(keyword ? [keyword] : [])] as const,
+    presaleDetail: (id: string) => ["mb", "presaleDetail", id] as const,
+    competition: (region?: string, gu?: string, page?: number, sortBy?: string, keyword?: string) =>
+      ["mb", "competition", region, gu, page, ...(sortBy ? [sortBy] : []), ...(keyword ? [keyword] : [])] as const,
   },
 } as const;

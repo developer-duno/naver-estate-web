@@ -30,3 +30,19 @@ export const MB_TRADE_SORT_OPTIONS: { v: string; l: string }[] = [
   { v: "price_asc", l: "가격 낮은순" },
   { v: "area_desc", l: "면적 넓은순" },
 ];
+
+/** 분양 정렬 (민간분양·LH공공분양 세그먼트) — BE routers/mb.py MbPresaleSortBy 짝꿍.
+ * recruit_date_desc = presale_schedule_official.recruit_date 단지별 MAX(진짜 공고일, 세션 314). */
+export const MB_PRESALE_SORT_OPTIONS: { v: string; l: string }[] = [
+  { v: "recruit_date_desc", l: "공고일 최신순" },
+  { v: "competition_rate_desc", l: "경쟁률 높은순" },
+  { v: "units_desc", l: "세대수 많은순" },
+  { v: "price_asc", l: "분양가 낮은순" },
+  { v: "price_desc", l: "분양가 높은순" },
+];
+
+/** 분양결과(경쟁률) 정렬 — BE routers/mb.py MbCompetitionSortBy 짝꿍. */
+export const MB_COMPETITION_SORT_OPTIONS: { v: string; l: string }[] = [
+  { v: "competition_rate_desc", l: "경쟁률 높은순" },
+  { v: "applicants_desc", l: "접수자 많은순" },
+];

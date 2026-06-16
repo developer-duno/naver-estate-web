@@ -33,7 +33,8 @@ describe("PriceChartSection", () => {
   it("페이지 진입 시 priceHistory 자동 호출 (enabled: true)", async () => {
     renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} />);
     await waitFor(() => {
-      expect(mockGetPriceHistory).toHaveBeenCalledWith("C001", undefined, undefined);
+      // B2 게이트: 4번째 인자 accessToken (prop 없으면 undefined)
+      expect(mockGetPriceHistory).toHaveBeenCalledWith("C001", undefined, undefined, undefined);
     });
   });
 
@@ -62,7 +63,7 @@ describe("PriceChartSection", () => {
 
     await userEvent.selectOptions(select, "1");
     await waitFor(() => {
-      expect(mockGetPriceHistory).toHaveBeenCalledWith("C001", undefined, "1");
+      expect(mockGetPriceHistory).toHaveBeenCalledWith("C001", undefined, "1", undefined);
     });
   });
 

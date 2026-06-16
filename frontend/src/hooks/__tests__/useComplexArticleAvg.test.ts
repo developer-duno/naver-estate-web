@@ -52,7 +52,8 @@ describe("useComplexArticleAvg — 매물 평균 호가 + 건수", () => {
     expect(result.current.avgPrice).toBe(70000); // (50000+70000+90000)/3
     expect(result.current.count).toBe(3);
     expect(result.current.isError).toBe(false);
-    expect(mockGetArticles).toHaveBeenCalledWith("C001", undefined);
+    // B2 게이트: 3번째 인자 accessToken (미전달 시 undefined)
+    expect(mockGetArticles).toHaveBeenCalledWith("C001", undefined, undefined);
   });
 
   it("numeric_price 전부 null → avgPrice null, count 유지", async () => {

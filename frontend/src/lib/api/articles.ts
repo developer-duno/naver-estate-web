@@ -6,8 +6,8 @@ import type { Article, ArticleFilters, ArticlePriceHistoryItem } from "@/types";
 import * as direct from "@/lib/api-direct";
 import { fetchApi, isBackendAvailable, getApiBase, ApiError } from "./core";
 
-/** 단지별 매물 조회 */
-export async function getArticles(complexNo: string, filters?: ArticleFilters) {
+/** 단지별 매물 조회 (B2 게이트: 승인 중개사 전용 — accessToken 전달) */
+export async function getArticles(complexNo: string, filters?: ArticleFilters, accessToken?: string) {
   if (!isBackendAvailable()) return direct.getArticlesDirect(complexNo, filters as Record<string, string>);
   try {
     const params = new URLSearchParams();
@@ -19,10 +19,15 @@ export async function getArticles(complexNo: string, filters?: ArticleFilters) {
       });
     }
     const qs = params.toString();
+    const opts = accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : undefined;
     return await fetchApi<{ articles: Article[]; total: number; page: number; page_size: number }>(
-      `/api/complexes/${encodeURIComponent(complexNo)}/articles${qs ? `?${qs}` : ""}`
+      `/api/complexes/${encodeURIComponent(complexNo)}/articles${qs ? `?${qs}` : ""}`,
+      opts
     );
-  } catch {
+  } catch (err) {
+    // 401/403 = 인증·승인 권한 답변 — 폴백(api-direct)으로 "조회 실패"로 뭉개면 안 됨
+    // (승인 안내 UX 분기 도달용 rethrow, error-propagation.md / getArticleLive 404 패턴 답습)
+    if (err instanceof ApiError && (err.statusCode === 401 || err.statusCode === 403)) throw err;
     return direct.getArticlesDirect(complexNo, filters as Record<string, string>);
   }
 }

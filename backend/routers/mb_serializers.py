@@ -271,7 +271,9 @@ def presale_schedule_to_dict(s) -> dict:
         "tot_supply": s.tot_supply,
         "pblanc_url": s.pblanc_url,
         "biz_entity": s.biz_entity,
-        "constructor": s.constructor,
+        # 출력 키는 constructor_name — JS 객체 내장 constructor(Function)와의 타입 충돌 회피
+        # (FE MbPresaleSchedule.constructor_name 짝꿍). ORM/DB 컬럼명은 constructor 유지.
+        "constructor_name": s.constructor,
         "fetched_at": s.fetched_at.isoformat() if s.fetched_at else None,
     }
 

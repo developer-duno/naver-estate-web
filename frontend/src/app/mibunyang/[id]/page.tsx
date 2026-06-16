@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import dynamic from "next/dynamic";
 import { queryKeys } from "@/lib/query-keys";
-import { getMbApartmentDetail, getMbUnsoldHistory } from "@/lib/api";
+import { getMbApartmentDetail, getMbUnsoldHistory, getMbPresaleDetail } from "@/lib/api";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import {
   OverviewSection,
@@ -13,6 +13,8 @@ import {
   EnvironmentSection,
   TradeStatsSection,
 } from "@/components/mb/MbDetailSections";
+import MbScheduleTimeline from "@/components/mb/MbScheduleTimeline";
+import MbUnitSupplyTable from "@/components/mb/MbUnitSupplyTable";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { SkeletonPage } from "@/components/Skeleton";
 import { useMbFavoriteStatus } from "@/hooks/useMbFavorites";
@@ -44,6 +46,16 @@ export default function MbDetailPage() {
   });
 
   const apt = detailQuery.data;
+
+  // 분양 단지면(presale_type 보유) 청약 일정·평형별 공급 추가 조회.
+  // detail 로드 후에만 활성화 — presale_type 으로 분양 여부 판별.
+  const isPresale = apt?.presale_type != null;
+  const presaleQuery = useQuery({
+    queryKey: queryKeys.mb.presaleDetail(id),
+    queryFn: () => getMbPresaleDetail(id),
+    enabled: !!id && isPresale,
+  });
+  const presale = presaleQuery.data;
   const { starred, toggle: toggleStar } = useMbFavoriteStatus(id);
   const [exporting, setExporting] = useState(false);
   const handleExportHistory = useCallback(async () => {
@@ -111,6 +123,23 @@ export default function MbDetailPage() {
       <div className="space-y-6">
         <OverviewSection apartment={apt} />
         <PresaleSection apartment={apt} />
+
+        {/* 청약 일정 (차수별 12종) — 분양 단지 + 일정 데이터 있을 때 */}
+        {isPresale && presale && presale.schedules.length > 0 && (
+          <section data-testid="mb-presale-schedule" className="bg-white rounded-lg shadow-sm border p-4 md:p-6">
+            <h3 className="text-base font-bold text-gray-800 mb-4 pb-2 border-b border-gray-200">청약 일정</h3>
+            <MbScheduleTimeline schedules={presale.schedules} />
+          </section>
+        )}
+
+        {/* 평형별 공급 + 특공 세분화 — 분양 단지 + 공급 데이터 있을 때 */}
+        {isPresale && presale && presale.unit_supplies.length > 0 && (
+          <section data-testid="mb-presale-units" className="bg-white rounded-lg shadow-sm border p-4 md:p-6">
+            <h3 className="text-base font-bold text-gray-800 mb-4 pb-2 border-b border-gray-200">평형별 공급 현황</h3>
+            <MbUnitSupplyTable units={presale.unit_supplies} summary={presale.presale_summary} />
+          </section>
+        )}
+
         <EnvironmentSection apartment={apt} />
 
         {apt.latitude != null && apt.longitude != null && apt.latitude !== 0 && apt.longitude !== 0 && (

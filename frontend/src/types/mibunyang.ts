@@ -250,3 +250,81 @@ export interface MbTransport {
   /** 교통 데이터 갱신시각 (신선도) */
   updated_at?: string;
 }
+
+// ── 분양 (청약홈 공식 데이터) — BE routers/mb_serializers.py 짝꿍 verbatim ──
+
+/** 청약홈 공식 분양 일정 12종 (presale_schedule_to_dict). 차수(house_manage_no)별 1행. */
+export interface MbPresaleSchedule {
+  id: number;
+  apartment_id: string;
+  house_manage_no: string;
+  pblanc_no?: string | null;
+  /** 모집공고일 (ISO date) */
+  recruit_date?: string | null;
+  special_receipt_bgnde?: string | null;
+  special_receipt_endde?: string | null;
+  general_rank1_bgnde?: string | null;
+  general_rank1_endde?: string | null;
+  general_rank2_bgnde?: string | null;
+  general_rank2_endde?: string | null;
+  winner_announce_date?: string | null;
+  contract_bgnde?: string | null;
+  contract_endde?: string | null;
+  /** 입주예정월 YYYYMM */
+  move_in_ym?: string | null;
+  tot_supply?: number | null;
+  pblanc_url?: string | null;
+  biz_entity?: string | null;
+  constructor?: string | null;
+  fetched_at?: string | null;
+}
+
+/** 특별공급 유형별 세대수 (BE special_supply_breakdown / special_by_type_total) */
+export interface MbSpecialSupplyItem {
+  key: string;
+  label: string;
+  count: number;
+}
+
+/** 청약홈 평형별 공급정보 (unit_supply_to_dict). 단지당 평형 1:N. */
+export interface MbUnitSupply {
+  id: number;
+  apartment_id: string;
+  house_manage_no: string;
+  model_no: string;
+  house_ty?: string | null;
+  /** 공급면적 ㎡ */
+  supply_area?: number | null;
+  general_supply?: number | null;
+  special_supply?: number | null;
+  /** raw JSONB (FE 는 breakdown 사용 권장) */
+  special_by_type?: Record<string, number> | null;
+  /** 한글 라벨 변환 리스트 (값 0 유형 제외) */
+  special_supply_breakdown: MbSpecialSupplyItem[];
+  /** 분양최고금액 (만원) */
+  top_amount?: number | null;
+}
+
+/** 분양 상세 요약 집계 (BE presale_summary — FE 합산 금지) */
+export interface MbPresaleSummary {
+  total_general_supply: number;
+  total_special_supply: number;
+  total_supply: number;
+  special_by_type_total: MbSpecialSupplyItem[];
+  max_top_amount?: number | null;
+  min_top_amount?: number | null;
+  unit_type_count: number;
+  schedule_count: number;
+}
+
+/** 분양 상세 = MbApartment + 부속 (get_presale_detail 응답) */
+export interface MbPresaleDetail extends MbApartment {
+  schedules: MbPresaleSchedule[];
+  unit_supplies: MbUnitSupply[];
+  presale_summary: MbPresaleSummary;
+  trade_stats?: MbTradeStats;
+  infra?: MbInfra;
+  school?: MbSchool;
+  transport?: MbTransport;
+  builder_info?: MbBuilder;
+}

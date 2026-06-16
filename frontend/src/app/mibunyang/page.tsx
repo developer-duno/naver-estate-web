@@ -4,7 +4,7 @@ import { useCallback, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
-import { getMbApartments, getMbUnsold, getMbRegions, getMbTrades } from "@/lib/api";
+import { getMbApartments, getMbUnsold, getMbRegions, getMbTrades, getMbPresale, getMbCompetition } from "@/lib/api";
 import MbRegionSelector from "@/components/mb/MbRegionSelector";
 import { SkeletonPage } from "@/components/Skeleton";
 import { PAGE_SIZE } from "@/lib/constants";
@@ -21,11 +21,13 @@ import MbApartmentsTab from "@/components/mb/MbApartmentsTab";
 import MbUnsoldTab from "@/components/mb/MbUnsoldTab";
 import MbRegionsTab from "@/components/mb/MbRegionsTab";
 import MbTradesTab from "@/components/mb/MbTradesTab";
+import MbPresaleTab, { PRESALE_SEGMENTS, type PresaleSegment } from "@/components/mb/MbPresaleTab";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { MB_APT_SORT_OPTIONS, MB_TRADE_SORT_OPTIONS } from "@/lib/mb-sort-options";
 import type { MbSearchHistoryItem, MbCompareHistoryItem, MbCompareBookmarkItem } from "@/lib/storage";
 
 const TABS = [
+  { key: "presale", label: "분양" },
   { key: "apartments", label: "미분양 단지" },
   { key: "unsold", label: "미분양만" },
   { key: "regions", label: "지역 통계" },
@@ -34,6 +36,8 @@ const TABS = [
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
+
+const SEGMENT_KEYS = PRESALE_SEGMENTS.map((s) => s.key) as PresaleSegment[];
 
 export default function MibunyangPage() {
   return (
@@ -61,10 +65,12 @@ function MibunyangContent() {
 
   const region = searchParams.get("region") ?? "";
   const gu = searchParams.get("gu") ?? "";
-  const tab = (searchParams.get("tab") as TabKey) || "apartments";
+  const tab = (searchParams.get("tab") as TabKey) || "presale";
   const page = Number(searchParams.get("page")) || 1;
   const sortBy = searchParams.get("sort_by") ?? "";
   const keyword = searchParams.get("q") ?? "";
+  const segRaw = searchParams.get("seg") as PresaleSegment | null;
+  const segment: PresaleSegment = segRaw && SEGMENT_KEYS.includes(segRaw) ? segRaw : "private";
 
   useEffect(() => {
     document.title = region
@@ -115,15 +121,30 @@ function MibunyangContent() {
       // 탭별 BE 정렬 Literal 이 달라 다른 탭의 정렬값이 그대로 전달되면 422 → 목록 전체 에러.
       // 대상 탭에서 유효하지 않으면 리셋. 유효값 SSOT = lib/mb-sort-options.ts (BE 짝꿍 주석 그쪽).
       // 정렬을 안 쓰는 탭(favorites·regions)으로의 이동은 보존 — 둘러보고 돌아와도 정렬 유지.
+      // 분양 탭은 세그먼트별 정렬셋이 다시 갈리므로(민간/공공=presale, 분양결과=competition)
+      // 무조건 리셋해 422 차단 (세그먼트 전환 시 handleSegmentChange 도 동일).
       const APT_SORTS = MB_APT_SORT_OPTIONS.map((o) => o.v);
       const TRADE_SORTS = MB_TRADE_SORT_OPTIONS.map((o) => o.v);
-      const validSorts = t === "trades" ? TRADE_SORTS : (t === "apartments" || t === "unsold") ? APT_SORTS : null;
-      if (sortBy && validSorts && !validSorts.includes(sortBy)) {
+      if (t === "presale") {
         updates.sort_by = undefined;
+      } else {
+        const validSorts = t === "trades" ? TRADE_SORTS : (t === "apartments" || t === "unsold") ? APT_SORTS : null;
+        if (sortBy && validSorts && !validSorts.includes(sortBy)) {
+          updates.sort_by = undefined;
+        }
       }
       updateParams(updates);
     },
     [sortBy, updateParams],
+  );
+
+  const handleSegmentChange = useCallback(
+    (seg: PresaleSegment) => {
+      // 세그먼트 전환 시 정렬 리셋 — 민간/공공(presale)과 분양결과(competition)의 BE 정렬
+      // Literal 이 달라 그대로 전달되면 422. 페이지도 1로.
+      updateParams({ seg, sort_by: undefined, page: "1" });
+    },
+    [updateParams],
   );
 
   const handleSortChange = useCallback(
@@ -163,6 +184,21 @@ function MibunyangContent() {
     queryKey: queryKeys.mb.trades(region, gu || undefined, undefined, page, sortBy || undefined),
     queryFn: () => getMbTrades(region, gu || undefined, undefined, page, PAGE_SIZE, sortBy || undefined),
     enabled: hasRegion && tab === "trades",
+    placeholderData: keepPreviousData,
+  });
+
+  // 분양 탭 — region 선택적(전국 조회). 민간/공공(presale) + 분양결과(competition) 세그먼트.
+  const onPresale = tab === "presale";
+  const presaleQuery = useQuery({
+    queryKey: queryKeys.mb.presale(segment, region || undefined, gu || undefined, page, sortBy || undefined, keyword || undefined),
+    queryFn: () => getMbPresale(segment === "public" ? "public" : "private", region || undefined, gu || undefined, page, PAGE_SIZE, sortBy || undefined, keyword || undefined),
+    enabled: onPresale && segment !== "competition",
+    placeholderData: keepPreviousData,
+  });
+  const competitionQuery = useQuery({
+    queryKey: queryKeys.mb.competition(region || undefined, gu || undefined, page, sortBy || undefined, keyword || undefined),
+    queryFn: () => getMbCompetition(region || undefined, gu || undefined, page, PAGE_SIZE, sortBy || undefined, keyword || undefined),
+    enabled: onPresale && segment === "competition",
     placeholderData: keepPreviousData,
   });
 
@@ -211,6 +247,23 @@ function MibunyangContent() {
           {/* 우측 페이드 — md 이상은 탭이 다 보이므로 숨김 */}
           <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-linear-to-r from-transparent to-white md:hidden" aria-hidden="true" />
         </div>
+
+        {/* 분양 탭 — 지역 선택 불필요 (전국 조회), 세그먼트 민간/공공/분양결과 */}
+        <TabsContent value="presale" className="mt-0">
+          <MbPresaleTab
+            segment={segment}
+            onSegmentChange={handleSegmentChange}
+            presaleQuery={presaleQuery}
+            competitionQuery={competitionQuery}
+            page={page}
+            sort={sortBy}
+            onSortChange={handleSortChange}
+            onPageChange={handlePageChange}
+            isInCompare={compare.isInCompare}
+            onCompareToggle={(id, name) => compare.toggle({ id, name })}
+            compareFull={compare.isFull}
+          />
+        </TabsContent>
 
         {/* 즐겨찾기 탭 — 지역 선택 불필요 */}
         <TabsContent value="favorites" className="mt-0">

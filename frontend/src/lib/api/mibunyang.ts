@@ -2,8 +2,11 @@
  * 미분양 (mibunyang) API — 인증 불필요 (공개 데이터)
  */
 
-import type { MbApartment, MbUnsoldHistory, MbRegion, MbTrade } from "@/types";
+import type { MbApartment, MbUnsoldHistory, MbRegion, MbTrade, MbPresaleDetail } from "@/types";
 import { fetchApi } from "./core";
+
+/** 분양 분류 (BE PRIVATE_TYPES/PUBLIC_TYPES SSOT 짝꿍) */
+export type MbPresaleType = "all" | "private" | "public";
 
 /** 시/도 내 시/군/구 목록 (apartments 기준) */
 export async function getMbGuList(region: string) {
@@ -66,5 +69,57 @@ export async function getMbTrades(region: string, gu?: string, dong?: string, pa
   if (sortBy) params.set("sort_by", sortBy);
   return fetchApi<{ trades: MbTrade[]; total: number; page: number; page_size: number }>(
     `/api/mb/trades?${params}`,
+  );
+}
+
+// ── 분양 (청약홈) — BE routers/mb.py /presale·/competition 짝꿍 ──
+
+/** 분양 단지 목록 (민간/공공 분류 + 단계 + 지역 필터) */
+export async function getMbPresale(
+  presaleType: MbPresaleType = "all",
+  region?: string,
+  gu?: string,
+  page = 1,
+  pageSize = 50,
+  sortBy?: string,
+  keyword?: string,
+  stage?: string,
+) {
+  const params = new URLSearchParams({
+    presale_type: presaleType,
+    page: String(page),
+    page_size: String(pageSize),
+  });
+  if (region) params.set("region", region);
+  if (gu) params.set("gu", gu);
+  if (sortBy) params.set("sort_by", sortBy);
+  if (keyword) params.set("keyword", keyword);
+  if (stage) params.set("stage", stage);
+  return fetchApi<{ presale: MbApartment[]; total: number; page: number; page_size: number }>(
+    `/api/mb/presale?${params}`,
+  );
+}
+
+/** 분양 단지 상세 (청약일정 + 평형별 공급 + 요약 집계) */
+export async function getMbPresaleDetail(id: string) {
+  return fetchApi<MbPresaleDetail>(`/api/mb/presale/${encodeURIComponent(id)}`);
+}
+
+/** 분양결과 (경쟁률 단지 목록) */
+export async function getMbCompetition(
+  region?: string,
+  gu?: string,
+  page = 1,
+  pageSize = 50,
+  sortBy?: string,
+  keyword?: string,
+) {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (region) params.set("region", region);
+  if (gu) params.set("gu", gu);
+  if (sortBy) params.set("sort_by", sortBy);
+  if (keyword) params.set("keyword", keyword);
+  return fetchApi<{ competition: MbApartment[]; total: number; page: number; page_size: number }>(
+    `/api/mb/competition?${params}`,
   );
 }

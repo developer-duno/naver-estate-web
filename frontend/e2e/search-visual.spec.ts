@@ -6,8 +6,9 @@ test.describe("search visual regression", () => {
     await applySearchEmptyMocks(page);
     await page.goto("/search");
 
-    // 검색 폼 섹션 렌더 확인 (hasSearchParams=false 진입)
-    await expect(page.getByRole("heading", { name: "키워드 검색" })).toBeVisible({ timeout: 10_000 });
+    // 검색 폼 섹션 렌더 확인 (hasSearchParams=false 진입) — 세션 314 홈/검색 통합으로
+    // SearchExperience 가 빈 상태 제목을 "단지명 검색" 으로 통일
+    await expect(page.getByRole("heading", { name: "단지명 검색" })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("heading", { name: "지역 선택" })).toBeVisible();
 
     // RegionSelector 의 "시/도" Combobox input 로딩 해소 대기 (PR 4 단계 3: @base-ui Combobox 전환).

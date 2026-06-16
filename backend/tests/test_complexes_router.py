@@ -53,56 +53,56 @@ def test_get_complex_404(client):
     assert res.status_code == 404
 
 
-def test_get_articles_200(client, db):
-    """매물 목록 조회"""
+def test_get_articles_200(client, db, approved_headers):
+    """매물 목록 조회 (승인 중개사)"""
     _add_complex(db, "C001")
     _add_article(db, "A001", "C001")
     _add_article(db, "A002", "C001")
-    res = client.get("/api/complexes/C001/articles")
+    res = client.get("/api/complexes/C001/articles", headers=approved_headers)
     assert res.status_code == 200
     data = res.json()
     assert data["total"] >= 2
 
 
-def test_get_articles_filter_trade(client, db):
+def test_get_articles_filter_trade(client, db, approved_headers):
     """거래유형 필터"""
     _add_complex(db, "C001")
     _add_article(db, "A001", "C001", trade="매매")
     _add_article(db, "A002", "C001", trade="전세")
-    res = client.get("/api/complexes/C001/articles?trade_types=매매")
+    res = client.get("/api/complexes/C001/articles?trade_types=매매", headers=approved_headers)
     assert res.status_code == 200
     data = res.json()
     assert data["total"] == 1
 
 
-def test_get_articles_sort(client, db):
+def test_get_articles_sort(client, db, approved_headers):
     """가격순 정렬"""
     _add_complex(db, "C001")
     _add_article(db, "A001", "C001", price=80000)
     _add_article(db, "A002", "C001", price=30000)
-    res = client.get("/api/complexes/C001/articles?sort_by=price_asc")
+    res = client.get("/api/complexes/C001/articles?sort_by=price_asc", headers=approved_headers)
     assert res.status_code == 200
     articles = res.json()["articles"]
     if len(articles) >= 2:
         assert articles[0]["numeric_price"] <= articles[1]["numeric_price"]
 
 
-def test_get_articles_pagination(client, db):
+def test_get_articles_pagination(client, db, approved_headers):
     """페이지네이션"""
     _add_complex(db, "C001")
     for i in range(5):
         _add_article(db, f"A{i:03d}", "C001")
-    res = client.get("/api/complexes/C001/articles?page=1&page_size=2")
+    res = client.get("/api/complexes/C001/articles?page=1&page_size=2", headers=approved_headers)
     assert res.status_code == 200
     data = res.json()
     assert data["total"] == 5
     assert len(data["articles"]) == 2
 
 
-def test_get_pyeong_details(client, db):
+def test_get_pyeong_details(client, db, approved_headers):
     """평형 상세"""
     _add_complex(db, "C001")
-    res = client.get("/api/complexes/C001/pyeong-details")
+    res = client.get("/api/complexes/C001/pyeong-details", headers=approved_headers)
     assert res.status_code == 200
 
 
@@ -110,23 +110,23 @@ def test_search_korean(client, db):
     _add_complex(db, 'CK', name='자이')
     assert client.get('/api/complexes/search?q=%EC%9E%90%EC%9D%B4').status_code == 200
 
-def test_articles_empty_complex(client, db):
+def test_articles_empty_complex(client, db, approved_headers):
     _add_complex(db, 'CE', name='빈단지')
-    res = client.get('/api/complexes/CE/articles')
+    res = client.get('/api/complexes/CE/articles', headers=approved_headers)
     assert res.status_code == 200 and res.json()['total'] == 0
 
-def test_articles_sort_area(client, db):
+def test_articles_sort_area(client, db, approved_headers):
     _add_complex(db, 'CS')
     _add_article(db, 'SA1', 'CS', area2_m2=60.0)
     _add_article(db, 'SA2', 'CS', area2_m2=84.0)
-    assert client.get('/api/complexes/CS/articles?sort_by=area_asc').status_code == 200
+    assert client.get('/api/complexes/CS/articles?sort_by=area_asc', headers=approved_headers).status_code == 200
 
-def test_articles_multi_trade(client, db):
+def test_articles_multi_trade(client, db, approved_headers):
     _add_complex(db, 'CT')
     _add_article(db, 'MT1', 'CT', trade='매매')
     _add_article(db, 'MT2', 'CT', trade='전세')
     _add_article(db, 'MT3', 'CT', trade='월세')
-    res = client.get('/api/complexes/CT/articles?trade_types=매매,전세')
+    res = client.get('/api/complexes/CT/articles?trade_types=매매,전세', headers=approved_headers)
     assert res.status_code == 200 and res.json()['total'] == 2
 
 def test_search_returns_structure(client, db):
@@ -136,38 +136,93 @@ def test_search_returns_structure(client, db):
 
 
 # 매물유형(estate_type) 필터 테스트
-def test_articles_filter_estate_type_apt(client, db):
+def test_articles_filter_estate_type_apt(client, db, approved_headers):
     """estate_type=apt → 아파트 매물만 반환"""
     _add_complex(db, "CE1")
     _add_article(db, "EA1", "CE1", article_real_estate_type_name="아파트")
     _add_article(db, "EA2", "CE1", article_real_estate_type_name="오피스텔")
-    res = client.get("/api/complexes/CE1/articles?estate_type=apt")
+    res = client.get("/api/complexes/CE1/articles?estate_type=apt", headers=approved_headers)
     assert res.status_code == 200
     assert res.json()["total"] == 1
 
-def test_articles_filter_estate_type_opst(client, db):
+def test_articles_filter_estate_type_opst(client, db, approved_headers):
     """estate_type=opst → 오피스텔 매물만 반환"""
     _add_complex(db, "CE2")
     _add_article(db, "EO1", "CE2", article_real_estate_type_name="오피스텔")
     _add_article(db, "EO2", "CE2", article_real_estate_type_name="아파트")
-    res = client.get("/api/complexes/CE2/articles?estate_type=opst")
+    res = client.get("/api/complexes/CE2/articles?estate_type=opst", headers=approved_headers)
     assert res.status_code == 200
     assert res.json()["total"] == 1
 
-def test_articles_filter_estate_type_jgc(client, db):
+def test_articles_filter_estate_type_jgc(client, db, approved_headers):
     """estate_type=jgc → 재건축 매물만 반환"""
     _add_complex(db, "CE3")
     _add_article(db, "EJ1", "CE3", article_real_estate_type_name="재건축")
     _add_article(db, "EJ2", "CE3", article_real_estate_type_name="아파트")
-    res = client.get("/api/complexes/CE3/articles?estate_type=jgc")
+    res = client.get("/api/complexes/CE3/articles?estate_type=jgc", headers=approved_headers)
     assert res.status_code == 200
     assert res.json()["total"] == 1
 
-def test_articles_filter_estate_type_rdv(client, db):
+def test_articles_filter_estate_type_rdv(client, db, approved_headers):
     """estate_type=rdv → 재개발 매물만 반환"""
     _add_complex(db, "CE4")
     _add_article(db, "ER1", "CE4", article_real_estate_type_name="재개발")
     _add_article(db, "ER2", "CE4", article_real_estate_type_name="아파트")
-    res = client.get("/api/complexes/CE4/articles?estate_type=rdv")
+    res = client.get("/api/complexes/CE4/articles?estate_type=rdv", headers=approved_headers)
     assert res.status_code == 200
     assert res.json()["total"] == 1
+
+
+# ── B2 게이트 신규 가드: 비로그인/pending 403, approved 200 (세션 313 단계2) ──
+
+def test_articles_no_auth_403(client, db):
+    """비로그인 → 매물 목록 403 (B2 게이트)"""
+    _add_complex(db, "CG1")
+    _add_article(db, "GA1", "CG1")
+    res = client.get("/api/complexes/CG1/articles")
+    assert res.status_code in (401, 403)
+
+
+def test_articles_pending_403(client, db):
+    """미승인(pending) 중개사 → 매물 목록 403"""
+    from tests.conftest import make_auth_headers
+    _add_complex(db, "CG2")
+    _add_article(db, "GA2", "CG2")
+    pending = make_auth_headers(db, user_id="pending-user", status="pending")
+    res = client.get("/api/complexes/CG2/articles", headers=pending)
+    assert res.status_code == 403
+
+
+def test_price_stats_no_auth_403(client, db):
+    """비로그인 → 시세 통계 403"""
+    _add_complex(db, "CG3")
+    res = client.get("/api/complexes/CG3/price-stats")
+    assert res.status_code in (401, 403)
+
+
+def test_price_history_no_auth_403(client, db):
+    """비로그인 → 가격 추이 403"""
+    _add_complex(db, "CG4")
+    res = client.get("/api/complexes/CG4/price-history")
+    assert res.status_code in (401, 403)
+
+
+def test_pyeong_details_no_auth_403(client, db):
+    """비로그인 → 면적 상세 403"""
+    _add_complex(db, "CG5")
+    res = client.get("/api/complexes/CG5/pyeong-details")
+    assert res.status_code in (401, 403)
+
+
+def test_price_stats_approved_200(client, db, approved_headers):
+    """승인 중개사 → 시세 통계 200"""
+    _add_complex(db, "CG6")
+    res = client.get("/api/complexes/CG6/price-stats", headers=approved_headers)
+    assert res.status_code == 200
+
+
+def test_search_no_auth_200(client, db):
+    """공개 유지 가드: 검색은 비로그인도 200 (게이트 비적용 — SEO 자산)"""
+    _add_complex(db, "CPUB", name="공개단지")
+    res = client.get("/api/complexes/search?q=공개단지")
+    assert res.status_code == 200

@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from auth.audit import log_action
 from auth.permissions import check_quota
 from db import queries
-from deps import get_db, get_optional_user
+from deps import get_approved_user, get_db, get_optional_user
 from routers.serializers import article_to_dict, build_filter_dict
 from services.naver_call_counter import record_call
 from shared.constants import M2_TO_PYEONG
@@ -123,18 +123,17 @@ def export_articles_to_excel(
     sort_by: str = "rank",  # export는 Literal 미적용 (프론트 FilterBar에서 선택지 제한)
     request: Request = None,
     db: Session = Depends(get_db),
-    user: dict | None = Depends(get_optional_user),
+    user: dict = Depends(get_approved_user),  # B2 게이트: 승인 중개사 전용 (가드3 흡수 — 비로그인 5000행 추출 봉합)
 ):
-    """매물 목록 엑셀 다운로드 (인증 선택, 인증 시 쿼터 적용)"""
-    if user:
-        # admin은 쿼터 무제한
-        if user["role"] != "admin":
-            check_quota(db, user["user_id"], "export", user["daily_export_quota"])
-        client_ip = None
-        if request and request.client:
-            client_ip = request.headers.get("x-forwarded-for", request.client.host)
-        log_action(db, user["user_id"], "export", "complex", complex_no, ip=client_ip)
-        db.commit()
+    """매물 목록 엑셀 다운로드 — 승인 중개사 전용 (쿼터 적용)"""
+    # admin은 쿼터 무제한
+    if user["role"] != "admin":
+        check_quota(db, user["user_id"], "export", user["daily_export_quota"])
+    client_ip = None
+    if request and request.client:
+        client_ip = request.headers.get("x-forwarded-for", request.client.host)
+    log_action(db, user["user_id"], "export", "complex", complex_no, ip=client_ip)
+    db.commit()
     filters = build_filter_dict(
         trade_types=trade_types, min_price=min_price, max_price=max_price,
         min_rent=min_rent, max_rent=max_rent,

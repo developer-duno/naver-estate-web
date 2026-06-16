@@ -37,14 +37,23 @@ def test_price_changes_200(client, db):
     assert isinstance(data, list) or "articles" in data
 
 
-def test_export_no_articles_error(client, db):
-    """매물 없는 단지 내보내기 → 에러"""
+def test_export_no_articles_error(client, db, approved_headers):
+    """매물 없는 단지 내보내기 → 에러 (승인 중개사)"""
     c = Complex(complex_no="EMPTY", complex_name="빈단지", sido="서울", sigungu="강남")
     db.add(c)
     db.commit()
-    res = client.post("/api/articles/export?complex_no=EMPTY")
+    res = client.post("/api/articles/export?complex_no=EMPTY", headers=approved_headers)
     # 빈 결과 → 404 또는 200 빈 파일
     assert res.status_code in [200, 404, 400]
+
+
+def test_export_no_auth_403(client, db):
+    """비로그인 → 엑셀 내보내기 403 (B2 게이트 — 가드3 흡수, 비로그인 5000행 추출 봉합)"""
+    c = Complex(complex_no="EXPGATE", complex_name="t", sido="서울", sigungu="강남")
+    db.add(c)
+    db.commit()
+    res = client.post("/api/articles/export?complex_no=EXPGATE")
+    assert res.status_code in (401, 403)
 
 
 def test_get_article_has_fields(client, db):
@@ -53,9 +62,9 @@ def test_get_article_has_fields(client, db):
     for k in ['article_no','complex_no','trade_type_name']:
         assert k in data
 
-def test_export_with_data(client, db):
+def test_export_with_data(client, db, approved_headers):
     _seed(db)
-    res = client.post('/api/articles/export?complex_no=C001')
+    res = client.post('/api/articles/export?complex_no=C001', headers=approved_headers)
     assert res.status_code == 200
 
 def test_price_changes_empty(client):
@@ -70,9 +79,9 @@ def test_get_article_inactive(client, db):
     db.commit()
     assert client.get("/api/articles/AI").status_code == 200
 
-def test_export_content_disposition(client, db):
+def test_export_content_disposition(client, db, approved_headers):
     _seed(db)
-    res = client.post("/api/articles/export?complex_no=C001")
+    res = client.post("/api/articles/export?complex_no=C001", headers=approved_headers)
     if res.status_code == 200:
         assert "content-disposition" in res.headers
 

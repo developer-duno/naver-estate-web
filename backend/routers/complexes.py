@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from db import queries
-from deps import get_db
+from deps import get_approved_user, get_db
 from routers.serializers import article_to_dict, build_filter_dict, complex_to_dict
 from services.cache import TTLCache, get_cache
 
@@ -157,8 +157,9 @@ def get_complex_articles(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    user: dict = Depends(get_approved_user),  # B2 게이트: 승인 중개사 전용 (매물 목록)
 ):
-    """단지별 매물 조회 (필터 + 정렬 + 페이지네이션, 기본 조회 캐시)"""
+    """단지별 매물 조회 (필터 + 정렬 + 페이지네이션, 기본 조회 캐시) — 승인 중개사 전용"""
     filters = build_filter_dict(
         trade_types=trade_types, min_price=min_price, max_price=max_price,
         min_rent=min_rent, max_rent=max_rent,
@@ -206,8 +207,9 @@ def get_complex_articles(
 def get_pyeong_details(
     complex_no: str,
     db: Session = Depends(get_db),
+    user: dict = Depends(get_approved_user),  # B2 게이트: 승인 중개사 전용 (면적별 상세)
 ):
-    """단지 면적별 상세 정보 (캐시 적용)"""
+    """단지 면적별 상세 정보 (캐시 적용) — 승인 중개사 전용"""
     pyeong_key = f"pyeong_details:{complex_no}"
     cached = _cache.get(pyeong_key)
     if cached is not None:
@@ -253,8 +255,9 @@ def get_pyeong_details(
 def get_price_stats(
     complex_no: str,
     db: Session = Depends(get_db),
+    user: dict = Depends(get_approved_user),  # B2 게이트: 승인 중개사 전용 (시세 통계)
 ):
-    """단지 매물 가격 통계 — 거래유형별 면적/층수 비교 (SQL 집계)"""
+    """단지 매물 가격 통계 — 거래유형별 면적/층수 비교 (SQL 집계) — 승인 중개사 전용"""
     cache_key = f"price_stats:{complex_no}"
     cached = _cache.get(cache_key)
     if cached is not None:
@@ -274,8 +277,9 @@ def get_price_history(
     trade_type: Optional[Literal["A1", "B1", "B2", "B3"]] = Query(None),
     area_no: Optional[str] = Query(None, max_length=20, pattern=r"^[0-9]+$"),
     db: Session = Depends(get_db),
+    user: dict = Depends(get_approved_user),  # B2 게이트: 승인 중개사 전용 (가격 추이)
 ):
-    """단지 월별 가격 추이 (실거래가 + 시세)"""
+    """단지 월별 가격 추이 (실거래가 + 시세) — 승인 중개사 전용"""
     cache_key = f"price_history:{complex_no}:{trade_type or 'all'}:{area_no or 'all'}"
     cached = _price_history_cache.get(cache_key)
     if cached is not None:

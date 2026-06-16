@@ -120,3 +120,32 @@ def client(db):
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+
+
+# ── B2 게이트 인증 헬퍼 (test_api_auth.py 패턴 답습, JWT_SECRET = conftest 상단 env) ──
+
+def make_auth_headers(db, user_id="approved-user", role="user", status="approved", email=None):
+    """승인(또는 지정 status) 사용자의 UserProfile 생성 + JWT Bearer 헤더 반환.
+
+    B2 게이트(get_approved_user) 전용 엔드포인트 테스트용. status="approved" 면 통과,
+    "pending" 이면 403. 비로그인은 헤더 없이 호출(401).
+    """
+    import jwt
+
+    from db.models import UserProfile
+
+    if db.query(UserProfile).filter(UserProfile.user_id == user_id).first() is None:
+        db.add(UserProfile(user_id=user_id, email=email or f"{user_id}@test.com",
+                           role=role, status=status))
+        db.commit()
+    token = jwt.encode(
+        {"sub": user_id, "aud": "authenticated", "email": email or f"{user_id}@test.com"},
+        os.environ["SUPABASE_JWT_SECRET"], algorithm="HS256",
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def approved_headers(db):
+    """승인 중개사(status=approved) Bearer 헤더 — 전용 엔드포인트 200 통과용."""
+    return make_auth_headers(db, user_id="approved-user", status="approved")

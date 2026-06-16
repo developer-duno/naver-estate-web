@@ -27,11 +27,13 @@ from services.upsert import upsert_complex_from_search
 from shared.naver_api import NaverEstateAPI
 
 from ._shared import (
+    _LIVE_SEARCH_ACQUIRE_TIMEOUT,
     CRAWL_REAL_ESTATE_TYPES,
     INTER_PAGE_DELAY,
     KEYWORD_SUFFIX_GROUPS,
     MAX_SEARCH_PAGES,
     _cache,
+    _live_search_semaphore,
     router,
 )
 
@@ -278,17 +280,23 @@ def live_search(
     cache_key = f"search:{q}:{','.join(sorted(allowed_types))}"
     cached = _cache.get(cache_key) or _fallback_cache.get(cache_key)
     if cached is not None:
-        return cached
+        return cached  # 캐시 hit 은 네이버 호출 0 → 세마포어 우회
 
-    response = _search_with_fallback(
-        keyword=q, allowed_types=allowed_types, db=db,
-        fallback=lambda: search_complexes(db, q, limit=50),
-    )
-    if response.get("source") == "db_fallback":
-        _fallback_cache.set(cache_key, response)
-    else:
-        _cache.set(cache_key, response)
-    return response
+    # cache miss = 네이버 실호출 경로만 동시성 제한 (release 는 finally 보장)
+    if not _live_search_semaphore.acquire(blocking=True, timeout=_LIVE_SEARCH_ACQUIRE_TIMEOUT):
+        raise HTTPException(status_code=503, detail="검색 요청이 많아 잠시 후 다시 시도해주세요.")
+    try:
+        response = _search_with_fallback(
+            keyword=q, allowed_types=allowed_types, db=db,
+            fallback=lambda: search_complexes(db, q, limit=50),
+        )
+        if response.get("source") == "db_fallback":
+            _fallback_cache.set(cache_key, response)
+        else:
+            _cache.set(cache_key, response)
+        return response
+    finally:
+        _live_search_semaphore.release()
 
 
 @router.get("/region")
@@ -312,33 +320,40 @@ def live_region(
     if dong:
         keyword += f" {dong}"
 
+    # cache miss = 네이버 실호출 경로만 동시성 제한 (release 는 finally 보장).
+    # 내부 dong→시구 폴백도 네이버/DB 호출이라 슬롯 점유 안에서 수행.
+    if not _live_search_semaphore.acquire(blocking=True, timeout=_LIVE_SEARCH_ACQUIRE_TIMEOUT):
+        raise HTTPException(status_code=503, detail="검색 요청이 많아 잠시 후 다시 시도해주세요.")
     try:
-        response = _search_with_fallback(
-            keyword=keyword, allowed_types=allowed_types, db=db,
-            upsert_kwargs={"sido": sido, "sigungu": sigungu, "dong": dong},
-            fallback=lambda: get_complexes_by_region(db, sido, sigungu, dong, limit=500),
-        )
-    except HTTPException as e:
-        # dong 있는 검색이 완전 실패 (네이버 0 + DB 동 단위 0) → 시구 단위로 한 번 더 폴백
-        # 네이버는 동명 단독 매칭이 약하고, DB 동 메타데이터도 모든 단지에 안 채워져 있어
-        # 사용자에게 "검색 실패" 보다 시구 단위 결과 + 안내 노출이 더 친절.
-        if e.status_code != 502 or not dong:
-            raise
-        sigungu_complexes = get_complexes_by_region(db, sido, sigungu, None, limit=500)
-        if not sigungu_complexes:
-            raise
-        logger.info(
-            "region 동 단위 폴백 실패 → 시구 단위 폴백 (sido=%s, sigungu=%s, dong=%s, %d건)",
-            sido, sigungu, dong, len(sigungu_complexes),
-        )
-        response = _db_fallback_response(sigungu_complexes, db, source="region_fallback")
-        response["notice"] = (
-            f"'{dong}'에 등록된 단지가 아직 없어 '{sigungu}' 단위로 결과를 표시합니다."
-        )
-        response["fallback_dong"] = dong
+        try:
+            response = _search_with_fallback(
+                keyword=keyword, allowed_types=allowed_types, db=db,
+                upsert_kwargs={"sido": sido, "sigungu": sigungu, "dong": dong},
+                fallback=lambda: get_complexes_by_region(db, sido, sigungu, dong, limit=500),
+            )
+        except HTTPException as e:
+            # dong 있는 검색이 완전 실패 (네이버 0 + DB 동 단위 0) → 시구 단위로 한 번 더 폴백
+            # 네이버는 동명 단독 매칭이 약하고, DB 동 메타데이터도 모든 단지에 안 채워져 있어
+            # 사용자에게 "검색 실패" 보다 시구 단위 결과 + 안내 노출이 더 친절.
+            if e.status_code != 502 or not dong:
+                raise
+            sigungu_complexes = get_complexes_by_region(db, sido, sigungu, None, limit=500)
+            if not sigungu_complexes:
+                raise
+            logger.info(
+                "region 동 단위 폴백 실패 → 시구 단위 폴백 (sido=%s, sigungu=%s, dong=%s, %d건)",
+                sido, sigungu, dong, len(sigungu_complexes),
+            )
+            response = _db_fallback_response(sigungu_complexes, db, source="region_fallback")
+            response["notice"] = (
+                f"'{dong}'에 등록된 단지가 아직 없어 '{sigungu}' 단위로 결과를 표시합니다."
+            )
+            response["fallback_dong"] = dong
 
-    if response.get("source") in ("db_fallback", "region_fallback"):
-        _fallback_cache.set(cache_key, response)
-    else:
-        _cache.set(cache_key, response)
-    return response
+        if response.get("source") in ("db_fallback", "region_fallback"):
+            _fallback_cache.set(cache_key, response)
+        else:
+            _cache.set(cache_key, response)
+        return response
+    finally:
+        _live_search_semaphore.release()

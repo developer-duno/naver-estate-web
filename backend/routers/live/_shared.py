@@ -67,6 +67,14 @@ _price_collect_semaphore = threading.Semaphore(3)
 _PRICE_COLLECT_TIMEOUT = 600   # 10분 — stale collection 정리
 _PRICE_COLLECT_TTL = 86400     # 24시간 — 재수집 방지
 
+# -- Live search 동시성 가드 --
+# 캐시 miss 로 네이버를 실제 호출하는 검색의 동시 실행 수 상한. 동시 검색 폭주 시
+# Starlette threadpool 고갈 → 전 sync 라우트 stall + 네이버 IP 차단을 막는다
+# (infra.md §IP차단 방지). 캐시 hit 은 이 세마포어를 우회(네이버 호출 0).
+# _price_collect_semaphore(Semaphore(3)) 선례 답습 — 단 검색은 blocking=True+timeout.
+_live_search_semaphore = threading.Semaphore(10)
+_LIVE_SEARCH_ACQUIRE_TIMEOUT = 20.0   # 슬롯 대기 상한(초). 초과 시 503.
+
 
 def _update_crawl_status(complex_no: str, **kwargs):
     """스레드 안전 크롤 상태 업데이트. key 없으면 신규 생성."""

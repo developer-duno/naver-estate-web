@@ -196,7 +196,9 @@ export default function SignupPage() {
             className="mt-0.5 data-[state=checked]:bg-accent-blue data-[state=checked]:border-accent-blue"
           />
           <Label htmlFor="agree-marketing" className="cursor-pointer text-sm text-gray-600 font-normal">
-            (선택) 신규 도구·블로그 발행 알림을 이메일로 받겠습니다
+            (선택) 신규 도구·서비스 소식, 혜택·이벤트 안내를 이메일 및 카카오톡 등으로 받고,
+            이를 위해 가입 정보(이메일·연락처·사업자번호 등)가 마케팅 목적으로 활용되는 데
+            동의합니다. 미동의해도 가입할 수 있어요.
           </Label>
         </div>
 

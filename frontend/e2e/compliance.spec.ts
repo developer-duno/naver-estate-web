@@ -41,9 +41,11 @@ test.describe("광고법 컴플라이언스 회귀 가드", () => {
   }) => {
     await page.goto("/signup");
 
+    // 마케팅 수신 동의는 (선택) 이어야 함 (정보통신망법: 광고 전송은 선택 동의 원칙)
     await expect(
-      page.getByText(/신규 도구·블로그 발행 알림을 이메일로 받겠습니다/),
+      page.getByText(/이메일 및 카카오톡 등으로 받고/),
     ).toBeVisible();
+    await expect(page.getByText(/미동의해도 가입할 수 있어요/)).toBeVisible();
     await expect(page.getByText(/\(선택\)/)).toBeVisible();
   });
 });

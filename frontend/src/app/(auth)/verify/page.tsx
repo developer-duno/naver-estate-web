@@ -62,6 +62,7 @@ export default function VerifyPage() {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({ business_number: "", office_name: "", representative_name: "", start_date: "", phone: "" });
   const [error, setError] = useState("");
+  const [agreedThirdParty, setAgreedThirdParty] = useState(false);
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const [uploadError, setUploadError] = useState("");
@@ -142,6 +143,7 @@ export default function VerifyPage() {
     if (!/^\d{10}$/.test(bn)) { setError("사업자등록번호는 10자리 숫자여야 합니다."); return; }
     if (!form.representative_name.trim()) { setError("대표자명을 입력해주세요."); return; }
     if (!form.office_name.trim()) { setError("중개사무소명을 입력해주세요."); return; }
+    if (!agreedThirdParty) { setError("개인정보 제3자 제공(자격 확인)에 동의해주세요."); return; }
     // 개업일자는 <input type="date" required> 가 빈값 제출을 native 로 차단 → JS 중복 불필요
     mutation.mutate();
   };
@@ -406,9 +408,27 @@ export default function VerifyPage() {
           />
         </div>
 
+        <div className="flex items-start gap-2 rounded-md bg-gray-50 p-3">
+          <input
+            id="v-agree"
+            type="checkbox"
+            checked={agreedThirdParty}
+            onChange={(e) => setAgreedThirdParty(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0"
+            aria-label="개인정보 제3자 제공 동의"
+          />
+          <span className="text-xs leading-relaxed text-gray-600">
+            입력한 사업자등록번호·중개사무소 상호·대표자명·개업연월일을 자격 확인을 위해 국세청
+            및 국토교통부 V-WORLD에 대조 전송하는 것에 동의합니다. (필수){" "}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-accent-blue underline">
+              개인정보 처리방침
+            </a>
+          </span>
+        </div>
+
         <Button
           type="submit"
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || !agreedThirdParty}
           className="w-full bg-accent-blue hover:bg-accent-blue/90 text-white"
         >
           {mutation.isPending ? "검증 중..." : "인증 신청"}

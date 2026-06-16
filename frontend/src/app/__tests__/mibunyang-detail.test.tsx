@@ -16,10 +16,12 @@ vi.mock("next/navigation", () => ({
 
 const mockDetail = vi.fn();
 const mockHistory = vi.fn();
+const mockPresaleDetail = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getMbApartmentDetail: (...args: unknown[]) => mockDetail(...args),
   getMbUnsoldHistory: (...args: unknown[]) => mockHistory(...args),
+  getMbPresaleDetail: (...args: unknown[]) => mockPresaleDetail(...args),
 }));
 
 function createMockDetail() {
@@ -192,5 +194,56 @@ describe("미분양 상세 — 에러 처리", () => {
     await waitFor(() => {
       expect(mockHistory.mock.calls.length).toBeGreaterThan(callsBefore);
     });
+  });
+});
+
+describe("미분양 상세 — 분양 단지 청약 일정·평형공급 (세션 314 PR E)", () => {
+  beforeEach(() => {
+    mockPresaleDetail.mockClear();
+    mockHistory.mockResolvedValue({ apartment_id: "APT001", items: [] });
+    mockPresaleDetail.mockResolvedValue({
+      ...createMockDetail(),
+      presale_type: "민간분양",
+      schedules: [
+        { id: 1, apartment_id: "APT001", house_manage_no: "H1", recruit_date: "2026-06-05", winner_announce_date: "2026-06-20" },
+      ],
+      unit_supplies: [
+        { id: 1, apartment_id: "APT001", house_manage_no: "H1", model_no: "1", house_ty: "084.0000A", general_supply: 80, special_supply: 20, special_supply_breakdown: [{ key: "dazanyeo", label: "다자녀", count: 10 }], top_amount: 120000 },
+      ],
+      presale_summary: {
+        total_general_supply: 80, total_special_supply: 20, total_supply: 100,
+        special_by_type_total: [{ key: "dazanyeo", label: "다자녀", count: 10 }],
+        max_top_amount: 120000, min_top_amount: 80000, unit_type_count: 1, schedule_count: 1,
+      },
+    });
+  });
+
+  it("분양 단지(presale_type 보유)면 청약 일정 섹션이 렌더된다", async () => {
+    mockDetail.mockResolvedValue({ ...createMockDetail(), presale_type: "민간분양" });
+    renderDetail();
+    await waitFor(() => {
+      expect(screen.getByText("청약 일정")).toBeInTheDocument();
+      expect(screen.getByText("2026.06.05")).toBeInTheDocument();
+    });
+  });
+
+  it("분양 단지면 평형별 공급 섹션이 렌더된다 (특공 한글 라벨)", async () => {
+    mockDetail.mockResolvedValue({ ...createMockDetail(), presale_type: "민간분양" });
+    renderDetail();
+    await waitFor(() => {
+      expect(screen.getByText("평형별 공급 현황")).toBeInTheDocument();
+      expect(screen.getByText("84㎡A")).toBeInTheDocument();
+      expect(screen.getByText("다자녀 10세대")).toBeInTheDocument();
+    });
+  });
+
+  it("미분양 단지(presale_type 없음)면 청약 일정 섹션 미렌더 + getMbPresaleDetail 미호출", async () => {
+    mockDetail.mockResolvedValue(createMockDetail()); // presale_type 없음
+    renderDetail();
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "래미안 테스트" })).toBeInTheDocument();
+    });
+    expect(screen.queryByText("청약 일정")).not.toBeInTheDocument();
+    expect(mockPresaleDetail).not.toHaveBeenCalled();
   });
 });

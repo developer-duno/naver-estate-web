@@ -24,6 +24,7 @@ from db.mb_models import (
 )
 from routers.mb_serializers import (
     SPECIAL_TYPE_LABELS,
+    presale_schedule_to_dict,
     presale_summary,
     unit_supply_to_dict,
 )
@@ -299,3 +300,18 @@ def test_get_presale_schedules_returns_rows(db):
     assert len(rows) == 2
     # recruit_date DESC → 2026-05 먼저
     assert rows[0].recruit_date == date(2026, 5, 1)
+
+
+def test_presale_schedule_serializer_uses_constructor_name_key(db):
+    """시공사 출력 키는 constructor_name (JS 내장 constructor 충돌 회피, FE 짝꿍)."""
+    _add_apt(db, "SER")
+    s = _add_schedule(
+        db, "SER", "H", recruit_date=date(2026, 1, 1),
+        biz_entity="시행사ABC", constructor="시공사XYZ",
+    )
+    d = presale_schedule_to_dict(s)
+    # 출력 키는 constructor_name, 값은 ORM constructor 컬럼
+    assert d["constructor_name"] == "시공사XYZ"
+    assert d["biz_entity"] == "시행사ABC"
+    # 옛 키 constructor 는 출력에 없어야 (FE 타입 충돌 재발 방지)
+    assert "constructor" not in d

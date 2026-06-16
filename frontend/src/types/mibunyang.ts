@@ -275,7 +275,8 @@ export interface MbPresaleSchedule {
   tot_supply?: number | null;
   pblanc_url?: string | null;
   biz_entity?: string | null;
-  constructor?: string | null;
+  /** 시공사 — BE serializer 키 constructor_name (JS 내장 constructor 충돌 회피). */
+  constructor_name?: string | null;
   fetched_at?: string | null;
 }
 

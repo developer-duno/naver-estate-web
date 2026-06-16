@@ -38,6 +38,7 @@ import ComplexDashboard from "@/components/complex/ComplexDashboard";
 import PrintButton from "@/components/complex/PrintButton";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import LockedDataCard, { isAuthGateError } from "@/components/ui/locked-data-card";
 
 export default function ComplexDetailPage() {
   const params = useParams();
@@ -341,18 +342,22 @@ export default function ComplexDetailPage() {
           onClear={clearCrawlMessage}
         />
 
-        {/* 매물 API 실패 배너 */}
+        {/* 매물 API 실패 배너 — 403(승인 권한)은 잠금 안내, 그 외는 다시 시도 */}
         {articlesQuery.isError && (
-          <Card className="bg-red-50 border-red-200 text-red-600 text-sm px-4 py-2">
-            <div className="flex justify-between items-center gap-3">
-              <span>매물 목록을 불러올 수 없습니다.</span>
-              <button
-                type="button"
-                onClick={() => articlesQuery.refetch()}
-                className="text-xs border border-red-300 rounded px-2 py-1 hover:bg-red-100 shrink-0"
-              >다시 시도</button>
-            </div>
-          </Card>
+          isAuthGateError(articlesQuery.error) ? (
+            <LockedDataCard label="매물 목록" />
+          ) : (
+            <Card className="bg-red-50 border-red-200 text-red-600 text-sm px-4 py-2">
+              <div className="flex justify-between items-center gap-3">
+                <span>매물 목록을 불러올 수 없습니다.</span>
+                <button
+                  type="button"
+                  onClick={() => articlesQuery.refetch()}
+                  className="text-xs border border-red-300 rounded px-2 py-1 hover:bg-red-100 shrink-0"
+                >다시 시도</button>
+              </div>
+            </Card>
+          )
         )}
 
         {/* 매물 테이블 / 카드 */}

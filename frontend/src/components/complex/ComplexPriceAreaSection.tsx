@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { getPriceStats } from "@/lib/api";
 import Skeleton from "@/components/Skeleton";
+import LockedDataCard, { isAuthGateError } from "@/components/ui/locked-data-card";
 import type { ArticleFilters } from "@/types";
 
 const LazyCharts = dynamic(() => import("@/components/PriceChartInner"), { ssr: false });
@@ -34,6 +35,9 @@ export default function ComplexPriceAreaSection({ complexNo, onFilterChange, acc
     );
   }
   if (priceStatsQuery.isError) {
+    if (isAuthGateError(priceStatsQuery.error)) {
+      return <LockedDataCard label="면적별 시세" />;
+    }
     return (
       <div className="text-center py-4">
         <p className="text-red-500 text-sm">가격 통계를 불러오지 못했습니다</p>

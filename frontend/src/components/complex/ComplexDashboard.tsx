@@ -38,7 +38,7 @@ export default function ComplexDashboard({
   const [openSection, setOpenSection] = useState<SectionKey | "">("");
   const [isPrinting, setIsPrinting] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const { avgPrice, count } = useComplexArticleAvg(complexNo);
+  const { avgPrice, count } = useComplexArticleAvg(complexNo, sessionToken);
 
   const handleCardClick = (key: SectionKey) => {
     setOpenSection((prev) => (prev === key ? "" : key));
@@ -134,7 +134,7 @@ export default function ComplexDashboard({
         <div id="dashboard-content" ref={contentRef} role="region">
           <Card className="p-3 md:p-4 space-y-4">
             {(openSection === "prices" || isPrinting) && (
-              <ComplexPriceFloorSection complexNo={complexNo} onFilterChange={onFilterChange} />
+              <ComplexPriceFloorSection complexNo={complexNo} onFilterChange={onFilterChange} accessToken={sessionToken} />
             )}
             {(openSection === "chart" || isPrinting) && (
               <PriceChartSection complexNo={complexNo} pyeongDetails={pyeongDetails} accessToken={sessionToken} />
@@ -147,7 +147,7 @@ export default function ComplexDashboard({
                 ) : (
                   <p className="text-gray-500 text-sm">면적별 정보가 아직 수집되지 않았습니다.</p>
                 )}
-                <ComplexPriceAreaSection complexNo={complexNo} onFilterChange={onFilterChange} />
+                <ComplexPriceAreaSection complexNo={complexNo} onFilterChange={onFilterChange} accessToken={sessionToken} />
               </div>
             )}
           </Card>

@@ -14,13 +14,14 @@ const AREA_FILTER_TOLERANCE_M2 = 4;
 interface Props {
   complexNo: string;
   onFilterChange?: (filters: ArticleFilters) => void;
+  accessToken?: string;
 }
 
 /** 면적별 가격 섹션 — 평균/최저/최고 막대 차트 + 클릭 시 해당 면적 필터 적용. */
-export default function ComplexPriceAreaSection({ complexNo, onFilterChange }: Props) {
+export default function ComplexPriceAreaSection({ complexNo, onFilterChange, accessToken }: Props) {
   const priceStatsQuery = useQuery({
     queryKey: queryKeys.priceStats(complexNo),
-    queryFn: () => getPriceStats(complexNo),
+    queryFn: () => getPriceStats(complexNo, accessToken),
     staleTime: 30_000,
   });
 

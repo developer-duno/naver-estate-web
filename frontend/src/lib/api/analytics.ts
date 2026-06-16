@@ -31,24 +31,29 @@ export async function getRegions() {
 // (회귀 가드: lib/__tests__/analytics-error.test.ts).
 const BACKEND_DOWN_MSG = "서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.";
 
-/** 면적별 상세 */
-export async function getPyeongDetails(complexNo: string) {
-  if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
-  return fetchApi<{ pyeong_details: PyeongDetail[] }>(`/api/complexes/${encodeURIComponent(complexNo)}/pyeong-details`);
+/** Authorization 헤더 옵션 생성 (B2 게이트: 승인 중개사 전용 엔드포인트용) */
+function authOpts(accessToken?: string) {
+  return accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : undefined;
 }
 
-/** 가격 통계 (면적별/층수별, 거래유형 구분 포함) */
-export async function getPriceStats(complexNo: string) {
+/** 면적별 상세 (B2 게이트 — accessToken 전달) */
+export async function getPyeongDetails(complexNo: string, accessToken?: string) {
   if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
-  return fetchApi<PriceStats>(`/api/complexes/${encodeURIComponent(complexNo)}/price-stats`);
+  return fetchApi<{ pyeong_details: PyeongDetail[] }>(`/api/complexes/${encodeURIComponent(complexNo)}/pyeong-details`, authOpts(accessToken));
 }
 
-/** 단지 가격 추이 (실거래가 + 시세) */
-export async function getPriceHistory(complexNo: string, tradeType?: string, areaNo?: string) {
+/** 가격 통계 (면적별/층수별, 거래유형 구분 포함) — B2 게이트 */
+export async function getPriceStats(complexNo: string, accessToken?: string) {
+  if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
+  return fetchApi<PriceStats>(`/api/complexes/${encodeURIComponent(complexNo)}/price-stats`, authOpts(accessToken));
+}
+
+/** 단지 가격 추이 (실거래가 + 시세) — B2 게이트 */
+export async function getPriceHistory(complexNo: string, tradeType?: string, areaNo?: string, accessToken?: string) {
   if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
   const params = new URLSearchParams();
   if (tradeType) params.set("trade_type", tradeType);
   if (areaNo) params.set("area_no", areaNo);
   const qs = params.toString();
-  return fetchApi<PriceHistoryResponse>(`/api/complexes/${encodeURIComponent(complexNo)}/price-history${qs ? `?${qs}` : ""}`);
+  return fetchApi<PriceHistoryResponse>(`/api/complexes/${encodeURIComponent(complexNo)}/price-history${qs ? `?${qs}` : ""}`, authOpts(accessToken));
 }

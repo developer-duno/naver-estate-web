@@ -26,7 +26,7 @@ export default function PriceChartSection({ complexNo, pyeongDetails, accessToke
 
   const priceHistoryQuery = useQuery({
     queryKey: queryKeys.priceHistory(complexNo, undefined, historyAreaNo || undefined),
-    queryFn: () => getPriceHistory(complexNo, undefined, historyAreaNo || undefined),
+    queryFn: () => getPriceHistory(complexNo, undefined, historyAreaNo || undefined, accessToken),
     enabled: !!complexNo,
   });
 

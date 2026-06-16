@@ -53,7 +53,7 @@ export default function ComplexDetailPage() {
   const [filterOpen, setFilterOpen] = useState(true);
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const { sessionToken, tokenError, dismissTokenError } = useSessionToken();
+  const { sessionToken, tokenError, tokenReady, dismissTokenError } = useSessionToken();
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
   const { articleViewMode, pageSize, setPageSize, handleViewModeChange } = useArticleViewPreferences();
 
@@ -90,16 +90,18 @@ export default function ComplexDetailPage() {
       ...filters,
       page: currentPage,
       page_size: pageSize,
-    }),
-    enabled: !!complexNo && /^\d+$/.test(complexNo),
+    }, sessionToken),
+    // tokenReady 가드: 토큰 해석 완료 후 실행 — 토큰 도착 전 undefined 로 먼저 쏴서
+    // 403→queryKey 불변 refetch 안 됨(승인 중개사 잠금 오인) 차단 (B2 게이트)
+    enabled: !!complexNo && /^\d+$/.test(complexNo) && tokenReady,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
 
   const pyeongQuery = useQuery({
     queryKey: queryKeys.pyeongDetails(complexNo),
-    queryFn: () => getPyeongDetails(complexNo),
-    enabled: !!complexNo && /^\d+$/.test(complexNo),
+    queryFn: () => getPyeongDetails(complexNo, sessionToken),
+    enabled: !!complexNo && /^\d+$/.test(complexNo) && tokenReady,
     staleTime: 60_000,
   });
 

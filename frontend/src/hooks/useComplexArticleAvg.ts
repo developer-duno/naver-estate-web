@@ -8,7 +8,7 @@ import { queryKeys } from "@/lib/query-keys";
  * complex.nearby_median_price / recent_trades_6m NULL fallback 으로 사용.
  * useCrawlAction prefix invalidation (`["articles", no]`) 으로 자동 갱신.
  */
-export function useComplexArticleAvg(complexNo: string): {
+export function useComplexArticleAvg(complexNo: string, accessToken?: string): {
   avgPrice: number | null;
   count: number;
   isLoading: boolean;
@@ -16,7 +16,7 @@ export function useComplexArticleAvg(complexNo: string): {
 } {
   const { data, isLoading, isError } = useQuery({
     queryKey: queryKeys.articles(complexNo, undefined),
-    queryFn: () => getArticles(complexNo, undefined),
+    queryFn: () => getArticles(complexNo, undefined, accessToken),
     enabled: !!complexNo,
     staleTime: 30_000,
   });

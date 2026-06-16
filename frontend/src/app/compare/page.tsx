@@ -8,6 +8,7 @@ import { getComplex, getPriceStats } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { M2_TO_PYEONG } from "@/lib/constants";
 import { useSmartBack } from "@/hooks/useSmartBack";
+import { useSessionToken } from "@/hooks/useSessionToken";
 import { getAdvantageForRow, getBestIndices, calcAvgPricePerPyeong } from "@/lib/compare-utils";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { SkeletonPage } from "@/components/Skeleton";
@@ -103,6 +104,7 @@ function CompareContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const goBack = useSmartBack();
+  const { sessionToken, tokenReady } = useSessionToken();
   const idsStr = searchParams.get("ids") || "";
   const ids = idsStr.split(",").filter(Boolean).slice(0, 4);
 
@@ -129,7 +131,9 @@ function CompareContent() {
   const statsQueries = useQueries({
     queries: ids.map((id) => ({
       queryKey: queryKeys.priceStats(id),
-      queryFn: () => getPriceStats(id),
+      queryFn: () => getPriceStats(id, sessionToken),
+      // tokenReady 가드 (B2 게이트): 토큰 해석 후 실행 — 승인 중개사 잠금 오인 차단
+      enabled: tokenReady,
       staleTime: 60_000,
     })),
   });
@@ -438,6 +442,8 @@ function CompareContent() {
             fullComplexes={complexes}
             pricePerPyeong={pricePerPyeong}
             expandAll={expandAll}
+            accessToken={sessionToken}
+            tokenReady={tokenReady}
           />
         </div>
       )}

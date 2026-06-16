@@ -23,6 +23,10 @@ interface Props {
   fullComplexes: Complex[];
   pricePerPyeong?: Record<string, number>;
   expandAll?: boolean;
+  /** B2 게이트: 승인 중개사 전용 시세·면적 데이터 조회용 토큰 */
+  accessToken?: string;
+  /** 토큰 해석 완료 여부 — 쿼리 enabled 가드 (승인 중개사 잠금 오인 차단) */
+  tokenReady?: boolean;
 }
 
 /**
@@ -46,12 +50,13 @@ function RetryNotice({ message, onRetry, className }: { message: string; onRetry
 
 /* ── 메인 컨테이너 ── */
 
-export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong, expandAll = false }: Props) {
-  // 데이터 fetch
+export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong, expandAll = false, accessToken, tokenReady = true }: Props) {
+  // 데이터 fetch (B2 게이트: accessToken 전달 + tokenReady enabled 가드)
   const historyQueries = useQueries({
     queries: complexes.map((c) => ({
       queryKey: queryKeys.priceHistory(c.complex_no),
-      queryFn: () => getPriceHistory(c.complex_no),
+      queryFn: () => getPriceHistory(c.complex_no, undefined, undefined, accessToken),
+      enabled: tokenReady,
       staleTime: 60_000,
     })),
   });
@@ -59,7 +64,8 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
   const statsQueries = useQueries({
     queries: complexes.map((c) => ({
       queryKey: queryKeys.priceStats(c.complex_no),
-      queryFn: () => getPriceStats(c.complex_no),
+      queryFn: () => getPriceStats(c.complex_no, accessToken),
+      enabled: tokenReady,
       staleTime: 60_000,
     })),
   });
@@ -67,7 +73,8 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
   const pyeongQueries = useQueries({
     queries: complexes.map((c) => ({
       queryKey: queryKeys.pyeongDetails(c.complex_no),
-      queryFn: () => getPyeongDetails(c.complex_no),
+      queryFn: () => getPyeongDetails(c.complex_no, accessToken),
+      enabled: tokenReady,
       staleTime: 60_000,
     })),
   });

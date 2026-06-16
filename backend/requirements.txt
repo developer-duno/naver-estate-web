@@ -20,4 +20,7 @@ redis>=5.0,<6
 requests>=2.31,<3
 # starlette: fastapi 의 transitive 의존. PYSEC-2026-161 (Host 헤더 우회 → 인증 우회) 는
 # 1.0.1 에서 fix. OSV: https://osv.dev/vulnerability/PYSEC-2026-161 (CVE-2026-48710 alias)
-starlette>=1.0.1,<1.1
+# 2026-06-16(세션 310): 1.0.1 에 신규 CVE 4건 공개 (CVE-2026-48818/48817 fix 1.1.0,
+# CVE-2026-54283 fix 1.3.1, CVE-2026-54282 fix 1.3.0) → 1.3.1 로 bump. fastapi 0.136.3 은
+# starlette>=0.46.0 만 요구(상한 없음) → 1.3.1 호환 실측 확인(앱 import + rate_limiter 테스트 통과).
+starlette>=1.3.1,<1.4

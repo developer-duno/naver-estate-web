@@ -67,13 +67,9 @@ function renderPage() {
   return render(<SearchPage />, { wrapper: TestQueryProvider });
 }
 
-describe("/search 페이지 회귀 가드 (PR 4 단계 6)", () => {
-  it("H1 '검색' 노출 (파라미터 없을 때)", async () => {
-    renderPage();
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { level: 1, name: "검색" })).toBeInTheDocument();
-    });
-  });
+describe("/search 페이지 회귀 가드 (세션 314 홈/검색 통합 후)", () => {
+  // 통합 후: 빈 상태(파라미터 없음)엔 결과 헤더(H1·개수·즐겨찾기 링크) 미노출 —
+  // 입력 폼(검색창·지역선택·필터)만 표시. H1·즐겨찾기 링크는 결과가 있을 때만 또는 홈 emptyExtra.
 
   it("키워드 검색 input 노출 (aria-label '단지명 검색', hasSearchParams=false)", async () => {
     renderPage();
@@ -94,14 +90,6 @@ describe("/search 페이지 회귀 가드 (PR 4 단계 6)", () => {
     await waitFor(() => {
       const trigger = screen.getByRole("button", { name: /필터 창 열기/ });
       expect(trigger).toBeInTheDocument();
-    });
-  });
-
-  it("즐겨찾기 매물 진입점 링크가 /search/favorites 로 노출된다 (세션 295)", async () => {
-    renderPage();
-    await waitFor(() => {
-      const link = screen.getByRole("link", { name: /즐겨찾기 매물/ });
-      expect(link).toHaveAttribute("href", "/search/favorites");
     });
   });
 });

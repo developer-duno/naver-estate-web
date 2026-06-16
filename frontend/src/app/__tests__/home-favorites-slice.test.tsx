@@ -6,17 +6,22 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 
-const { mockRouter } = vi.hoisted(() => ({
+const { mockRouter, mockSearchParams } = vi.hoisted(() => ({
   mockRouter: { push: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() },
+  mockSearchParams: new URLSearchParams(),
 }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => mockRouter,
+  useSearchParams: () => mockSearchParams,
+  usePathname: () => "/",
 }));
 
 vi.mock("@/lib/api", () => ({
   getStats: vi.fn().mockResolvedValue({ complex_count: 100, article_count: 200 }),
   getRegions: vi.fn().mockResolvedValue({}),
+  searchComplexes: vi.fn().mockResolvedValue({ complexes: [] }),
+  getComplexesByRegion: vi.fn().mockResolvedValue({ complexes: [] }),
 }));
 
 import HomePage from "../page";

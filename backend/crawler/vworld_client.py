@@ -39,6 +39,34 @@ def _normalize_office_name(name: str | None) -> str:
     return s.lower()
 
 
+# 접두 매칭 최소 길이 — 정규화 후 2글자 미만 입력은 접두 매칭에서 제외(오매칭 방어).
+# "행복" 같은 1글자 입력이 무수한 중개사무소의 접두로 걸리는 것을 차단.
+_MIN_PREFIX_LEN = 2
+
+
+def _office_name_matches(candidate: str | None, target: str | None) -> bool:
+    """정규화된 상호 두 개가 같은 사무소인지 판정 — 양방향 접두 포함.
+
+    한국 중개사무소 상호는 등록부에 "○○공인중개사사무소" 처럼 접미사("사무소" 등)가 붙는데
+    사용자는 보통 "○○공인중개사" 로 짧게 입력한다. 정확일치(==)면 이 차이로 진짜 중개사가
+    미매칭된다(2026-06-16 라이브 실측: "늘세움공인중개사" vs 등록 "늘세움공인중개사사무소").
+    한쪽이 다른 쪽의 접두면 같은 사무소로 본다. 짧은 입력(<2)은 접두 매칭 제외.
+
+    오매칭은 호출처(search_broker_office)에서 brkrNm(중개업자명) 정확일치를 2차 키로 강제해 방어한다.
+    """
+    c = _normalize_office_name(candidate)
+    t = _normalize_office_name(target)
+    if not c or not t:
+        return False
+    if c == t:
+        return True
+    # 접두 양방향 — 단, 더 짧은 쪽(접두가 되는 쪽)이 최소 길이 이상일 때만
+    shorter, longer = (c, t) if len(c) <= len(t) else (t, c)
+    if len(shorter) < _MIN_PREFIX_LEN:
+        return False
+    return longer.startswith(shorter)
+
+
 def search_broker_office(
     office_name: str,
     representative_name: str = "",
@@ -109,12 +137,11 @@ def search_broker_office(
     if isinstance(fields, dict):
         fields = [fields]
 
-    target_office = _normalize_office_name(office_name)
     target_rep = (representative_name or "").strip()
 
     best = None  # 영업중 우선 매칭 보관
     for f in fields:
-        if _normalize_office_name(f.get("bsnmCmpnm")) != target_office:
+        if not _office_name_matches(f.get("bsnmCmpnm"), office_name):
             continue
         # 중개업자명이 주어졌으면 일치 확인 (불일치 행은 스킵)
         if target_rep and (f.get("brkrNm") or "").strip() != target_rep:

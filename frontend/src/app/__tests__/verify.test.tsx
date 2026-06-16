@@ -68,6 +68,7 @@ describe("VerifyPage", () => {
     fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
     fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
     fireEvent.change(screen.getByLabelText(/중개사무소명/), { target: { value: "길동부동산" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /제3자 제공/ }));
     fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
 
     expect(screen.getByRole("alert")).toHaveTextContent("10자리");
@@ -101,6 +102,7 @@ describe("VerifyPage", () => {
     fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
     fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
     fireEvent.change(screen.getByLabelText(/중개사무소명/), { target: { value: "길동부동산" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /제3자 제공/ }));
     fireEvent.change(screen.getByLabelText(/연락처/), { target: { value: "010-1234-5678" } });
     fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
 
@@ -138,6 +140,7 @@ describe("VerifyPage", () => {
     fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
     fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
     fireEvent.change(screen.getByLabelText(/중개사무소명/), { target: { value: "길동부동산" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /제3자 제공/ }));
     // 연락처 미입력 (선택)
     fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
 
@@ -182,6 +185,7 @@ describe("VerifyPage", () => {
     fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
     fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
     fireEvent.change(screen.getByLabelText(/중개사무소명/), { target: { value: "길동부동산" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /제3자 제공/ }));
     fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
 
     await waitFor(() => {
@@ -223,6 +227,7 @@ describe("VerifyPage", () => {
     fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
     fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
     fireEvent.change(screen.getByLabelText(/중개사무소명/), { target: { value: "길동부동산" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /제3자 제공/ }));
     fireEvent.click(screen.getByRole("button", { name: /인증 신청/ }));
 
     await waitFor(() => {
@@ -230,6 +235,27 @@ describe("VerifyPage", () => {
     });
     expect(screen.getByText(/휴업\/폐업 상태로 등록/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /다시 신청/ })).toBeInTheDocument();
+  });
+
+  /** 제3자 제공 동의(필수) 미체크 시 제출 차단 + 안내 — 세션 311 개인정보 동의 게이트 */
+  it("제3자 제공 동의를 안 하면 제출이 차단되고 안내가 표시된다", async () => {
+    mockGetStatus.mockResolvedValue({ submitted: false } as never);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/사업자등록번호/)).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByLabelText(/사업자등록번호/), { target: { value: "1234567890" } });
+    fireEvent.change(screen.getByLabelText(/개업일자/), { target: { value: "1999-06-02" } });
+    fireEvent.change(screen.getByLabelText(/대표자명/), { target: { value: "홍길동" } });
+    fireEvent.change(screen.getByLabelText(/중개사무소명/), { target: { value: "길동부동산" } });
+    // 동의 체크박스 미클릭 상태 → 제출 버튼이 비활성이라 제출 불가
+    const submitBtn = screen.getByRole("button", { name: /인증 신청/ });
+    expect(submitBtn).toBeDisabled();
+    fireEvent.click(submitBtn);
+    expect(mockSubmit).not.toHaveBeenCalled();
+    // 동의 체크박스 클릭 후에는 활성화됨
+    fireEvent.click(screen.getByRole("checkbox", { name: /제3자 제공/ }));
+    expect(submitBtn).not.toBeDisabled();
   });
 
   /** 에러 상태 — useQuery isError silent failure 정정 (세션 219 PR 답습)

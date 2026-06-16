@@ -2,84 +2,29 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getStats } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import RegionSelector from "@/components/RegionSelector";
-import EstateTypeTabs from "@/components/EstateTypeTabs";
-import FilterBar from "@/components/FilterBar";
-import SearchHistory from "@/components/SearchHistory";
 import HomeToolCards from "@/components/HomeToolCards";
-import { ESTATE_TYPE_TABS } from "@/lib/constants";
-import type { ArticleFilters } from "@/types";
-import { buildFilterURL } from "@/hooks/useFilterParams";
-import { useSearchHistory } from "@/hooks/useSearchHistory";
+import SearchExperience from "@/components/search/SearchExperience";
+import { SkeletonPage } from "@/components/Skeleton";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useArticleFavorites } from "@/hooks/useArticleFavorites";
 import Link from "next/link";
-import type { SearchHistoryItem } from "@/lib/storage";
 
-export default function HomePage() {
-  const router = useRouter();
-  const allCodes = ESTATE_TYPE_TABS.map((t) => t.code) as string[];
-  const [selectedTypes, setSelectedTypes] = useState<string[]>(["APT"]);
-  const [articleFilters, setArticleFilters] = useState<ArticleFilters>({});
-  const { history, add: addHistory, remove: removeHistory, clear: clearHistory } = useSearchHistory();
-  const { favorites } = useFavorites();
-  const { favorites: articleFavorites } = useArticleFavorites();
-  // 즐겨찾기 칩 기본 10개 노출 — toggleFavorite 가 unshift 라 최신 추가 10개 (storage.ts:113)
-  const [showAllFavorites, setShowAllFavorites] = useState(false);
-  const visibleFavorites = showAllFavorites ? favorites : favorites.slice(0, 10);
-
+/** 홈 상단 — hero 이미지 + 타이틀 + 통계 (SEO 랜딩 자산). SearchExperience headerSlot 으로 주입. */
+function HomeHeader() {
   const { data: stats, isLoading: statsLoading, isError: statsError, refetch: loadStats } = useQuery({
     queryKey: queryKeys.stats,
     queryFn: () => getStats(),
     staleTime: 60_000,
   });
-
-  const typesParam = selectedTypes.length < allCodes.length
-    ? `&types=${selectedTypes.join(",")}`
-    : "";
-
-  const handleRegionSearch = (sido: string, sigungu: string, dong?: string) => {
-    addHistory({ type: "region", sido, sigungu, dong });
-    const extra: Record<string, string> = { sido, sigungu };
-    if (dong) extra.dong = dong;
-    if (typesParam) extra.types = selectedTypes.join(",");
-    router.push(buildFilterURL("/search", extra, articleFilters));
-  };
-
-  // 단지명 직접 검색 — /search 인라인 폼과 동일 동선을 홈 첫 화면에서 (세션 295)
-  const [keywordInput, setKeywordInput] = useState("");
-  const handleKeywordSearch = () => {
-    const kw = keywordInput.trim();
-    if (!kw) return; // 빈 값/공백만 입력 가드
-    addHistory({ type: "keyword", keyword: kw });
-    const extra: Record<string, string> = { q: kw };
-    if (typesParam) extra.types = selectedTypes.join(",");
-    router.push(buildFilterURL("/search", extra, articleFilters));
-  };
-
-  const handleHistorySelect = (item: SearchHistoryItem) => {
-    if (item.type === "keyword" && item.keyword) {
-      const extra: Record<string, string> = { q: item.keyword };
-      if (typesParam) extra.types = selectedTypes.join(",");
-      router.push(buildFilterURL("/search", extra, articleFilters));
-    } else if (item.type === "region" && item.sido && item.sigungu) {
-      const extra: Record<string, string> = { sido: item.sido, sigungu: item.sigungu };
-      if (item.dong) extra.dong = item.dong;
-      if (typesParam) extra.types = selectedTypes.join(",");
-      router.push(buildFilterURL("/search", extra, articleFilters));
-    }
-  };
-
   const complexCount = stats?.complex_count ?? 0;
   const articleCount = stats?.article_count ?? 0;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
-      {/* hero band — main-hero.webp + 카피 (LCP 후보) */}
+    <>
       <div className="relative w-full aspect-21/9 sm:aspect-3/1 mb-6 rounded-lg overflow-hidden bg-gray-100">
         <Image
           src="/blog-hero/main-hero.webp"
@@ -91,7 +36,6 @@ export default function HomePage() {
         />
       </div>
 
-      {/* 타이틀 + 통계 인라인 */}
       <div className="text-center mb-4">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">공인중개사를 위한 매물·시세 분석 도구</h1>
         <p className="mt-1 text-sm text-gray-500">손님 응대 자료를 5분 안에 끝내는 데이터 도구</p>
@@ -112,53 +56,23 @@ export default function HomePage() {
           </div>
         )}
       </div>
+    </>
+  );
+}
 
-      {/* 매물유형 탭 */}
-      <div className="flex justify-center mb-4">
-        <EstateTypeTabs selected={selectedTypes} onChange={setSelectedTypes} />
-      </div>
+/** 홈 하단 — 도구 카드 + 즐겨찾기. 검색 결과 없을 때 SearchExperience emptyExtra 로 주입. */
+function HomeExtras() {
+  const router = useRouter();
+  const { favorites } = useFavorites();
+  const { favorites: articleFavorites } = useArticleFavorites();
+  const [showAllFavorites, setShowAllFavorites] = useState(false);
+  const visibleFavorites = showAllFavorites ? favorites : favorites.slice(0, 10);
 
-      {/* 매물 필터 */}
-      <div className="mb-4">
-        <FilterBar onChange={setArticleFilters} />
-      </div>
+  return (
+    <div className="space-y-4">
+      <HomeToolCards />
 
-      {/* 검색 영역: 단지명 검색 + 지역 선택 */}
-      <div className="bg-white rounded-lg shadow-sm border p-4">
-        <label htmlFor="home-keyword" className="block text-sm font-semibold text-gray-700 mb-1.5">단지명 검색</label>
-        <div className="flex gap-2 mb-4">
-          <input
-            id="home-keyword"
-            type="text"
-            value={keywordInput}
-            onChange={(e) => setKeywordInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleKeywordSearch()}
-            placeholder="단지명 검색 (예: 래미안, 힐스테이트...)"
-            maxLength={100}
-            className="flex-1 min-w-0 border border-gray-300 rounded-md px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <button
-            type="button"
-            onClick={handleKeywordSearch}
-            className="bg-blue-600 text-white px-5 py-2.5 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
-          >
-            검색
-          </button>
-        </div>
-        <label className="block text-sm font-semibold text-gray-700 mb-1.5">지역 선택</label>
-        <RegionSelector onSearch={handleRegionSearch} />
-      </div>
-
-      {/* 도구 4종 카드 (미분양/계산기/블로그/도움말) */}
-      <div className="mt-4">
-        <HomeToolCards />
-      </div>
-
-      {/* 최근 검색 */}
-      <SearchHistory history={history} onSelect={handleHistorySelect} onRemove={removeHistory} onClear={clearHistory} />
-
-      {/* 즐겨찾기 단지 */}
-      <div className="mt-4">
+      <div>
         <span className="text-xs font-semibold text-gray-500 mb-1.5 block">즐겨찾기</span>
         {favorites.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
@@ -183,14 +97,11 @@ export default function HomePage() {
             )}
           </div>
         ) : (
-          <p className="text-xs text-gray-500">
-            관심 단지의 ★ 버튼을 누르면 여기에 모입니다.
-          </p>
+          <p className="text-xs text-gray-500">관심 단지의 ★ 버튼을 누르면 여기에 모입니다.</p>
         )}
       </div>
 
-      {/* 즐겨찾기 매물 모아보기 진입점 (단지 즐겨찾기 칩과 대칭) */}
-      <div className="mt-3">
+      <div>
         <Link
           href="/search/favorites"
           className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
@@ -200,5 +111,21 @@ export default function HomePage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+function HomeContent() {
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-6">
+      <SearchExperience headerSlot={<HomeHeader />} emptyExtra={<HomeExtras />} />
+    </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<SkeletonPage />}>
+      <HomeContent />
+    </Suspense>
   );
 }

@@ -126,8 +126,8 @@ export default function Header() {
 
   const toolsActive = pathname?.startsWith("/tools") ?? false;
   const navLinks = [
+    // 세션 314: "검색" 메뉴 제거 — 홈(/)이 검색 경험을 흡수(SearchExperience). 홈이 검색 입구 겸함.
     { href: "/", label: "홈", active: pathname === "/" },
-    { href: "/search", label: "검색", active: pathname?.startsWith("/search") },
     { href: "/mibunyang", label: "미분양", active: pathname?.startsWith("/mibunyang") },
     { href: "/pricing", label: "요금제", active: pathname === "/pricing" },
     { href: "/blog", label: "블로그", active: pathname?.startsWith("/blog") },

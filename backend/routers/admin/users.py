@@ -98,11 +98,15 @@ def update_user(
         changes["status"] = body.status
         profile.status = body.status
     if body.approved_until is not None:
-        from datetime import datetime
         try:
-            profile.approved_until = datetime.fromisoformat(body.approved_until) if body.approved_until else None
+            parsed = datetime.fromisoformat(body.approved_until) if body.approved_until else None
         except ValueError:
             raise HTTPException(status_code=400, detail="잘못된 날짜 형식 (ISO 8601)")
+        # offset 없는 ISO(naive)면 UTC aware 로 통일 — 비교 측(get_approved_user)이
+        # aware utcnow() 와 비교하므로 naive 저장 시 TypeError(500) 발생 (timezone-consistency).
+        if parsed is not None and parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        profile.approved_until = parsed
         changes["approved_until"] = body.approved_until
     if body.daily_crawl_quota is not None:
         changes["daily_crawl_quota"] = body.daily_crawl_quota

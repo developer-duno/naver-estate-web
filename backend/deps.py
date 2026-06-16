@@ -2,7 +2,7 @@
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Generator
 
 import httpx
@@ -234,6 +234,11 @@ def get_approved_user(
     approved_until = user.get("approved_until")
     if approved_until:
         expiry = datetime.fromisoformat(approved_until)
+        # naive datetime 방어 — 기존 DB 에 offset 없이 박힌 approved_until 이 있으면
+        # aware utcnow() 와 비교 시 TypeError(500) 발생. UTC aware 로 통일해 비교.
+        # (저장 측 admin/users.py 도 aware 강제하나, 이미 박힌 행 보호용 이중 방어.)
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=timezone.utc)
         if expiry < utcnow():
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="승인 기간이 만료되었습니다")
     return user

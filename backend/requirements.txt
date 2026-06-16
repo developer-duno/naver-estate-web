@@ -14,8 +14,11 @@ xlsxwriter>=3.1,<4
 python-dotenv>=1.0,<2
 # python-jose: 유지보수 정체 -> PyJWT 전환 (HS256 대칭키만, 비대칭키 0건 -> [crypto] extra 불필요).
 # 2026-05-31 lock: python-jose>=3.3,<4 -> PyJWT>=2.0,<3.
-PyJWT>=2.0,<3
-python-multipart>=0.0.9,<1
+# 2026-06-16 하한 상향: PYSEC-2026-175~179 fix=2.13.0. HS256 대칭키만 + PyJWKClient 미사용이라
+# 실제 영향 0 이나, advisory OSV DB 전파 시 CI(--strict) 빨강 선제 차단 (transitive-security-pin 답습).
+PyJWT>=2.13.0,<3
+# 2026-06-16 하한 상향: CVE-2026-53538~53540 fix=0.0.31 (폼 파싱 DoS). verify.py UploadFile 사용처 있어 선제 차단.
+python-multipart>=0.0.31,<1
 redis>=5.0,<6
 requests>=2.31,<3
 # starlette: fastapi 의 transitive 의존. PYSEC-2026-161 (Host 헤더 우회 → 인증 우회) 는

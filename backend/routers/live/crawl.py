@@ -6,6 +6,7 @@ import threading
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from auth.permissions import check_quota
 from db.models import Article as ArticleModel
 from db.models import Complex as ComplexModel
 from deps import get_approved_user, get_db
@@ -63,6 +64,19 @@ def start_live_crawl(
             "has_more": True,
             "error": None,
         }
+
+    # 일일 크롤 쿼터 차감 — 신규 크롤 시작 경로에서만 (cached·already_running 은 위에서 이미 return).
+    # expert 1명이 전국 단지를 무제한 스크래핑해 네이버 IP 차단을 유발하는 것을 막는다
+    # (infra.md §IP차단 방지). admin 은 무제한 (articles.py export 패턴 답습).
+    # 쿼터 초과(429) 시 위에서 세팅한 started 상태를 되돌려 유령 status 잔존을 막는다.
+    if user["role"] != "admin":
+        try:
+            check_quota(db, user["user_id"], "crawl", user["daily_crawl_quota"])
+            db.commit()
+        except HTTPException:
+            with _crawl_lock:
+                _crawl_status.pop(complex_no, None)
+            raise
 
     t = threading.Thread(target=_background_crawl, args=(complex_no,), daemon=True)
     t.start()

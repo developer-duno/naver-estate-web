@@ -1,7 +1,8 @@
 """mibunyang 테이블 ORM 모델 — 같은 Supabase DB, 기존 Base 상속
 
 apartments(97), unsold_history, regions, trades, prices, trade_stats,
-builders, infra, schools, transport 10개 테이블 매핑.
+builders, infra, schools, transport, presale_schedule_official,
+applyhome_unit_supply 12개 테이블 매핑.
 apartments는 핵심 컬럼만 매핑 (SQLAlchemy는 매핑 안 된 컬럼 무시).
 """
 
@@ -344,3 +345,62 @@ class AirQualityStation(Base):
     lat: Mapped[float | None] = mapped_column(Float)
     lng: Mapped[float | None] = mapped_column(Float)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+# ── 청약홈 공식 분양 일정 (mibunyang collect-applyhome-detail.mjs 수집) ──
+
+
+class PresaleScheduleOfficial(Base):
+    """청약홈 공식 분양 일정 12종 (한국부동산원 getAPTLttotPblancDetail).
+
+    mibunyang 의 collect-applyhome-detail.mjs 가 주 1회 수집.
+    UNIQUE(apartment_id, house_manage_no): 차수별 복합키.
+    """
+
+    __tablename__ = "presale_schedule_official"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    apartment_id: Mapped[str] = mapped_column(Text, nullable=False)
+    house_manage_no: Mapped[str] = mapped_column(Text, nullable=False)
+    pblanc_no: Mapped[str | None] = mapped_column(Text)
+    recruit_date: Mapped[date | None] = mapped_column(Date)
+    special_receipt_bgnde: Mapped[date | None] = mapped_column(Date)
+    special_receipt_endde: Mapped[date | None] = mapped_column(Date)
+    general_rank1_bgnde: Mapped[date | None] = mapped_column(Date)
+    general_rank1_endde: Mapped[date | None] = mapped_column(Date)
+    general_rank2_bgnde: Mapped[date | None] = mapped_column(Date)
+    general_rank2_endde: Mapped[date | None] = mapped_column(Date)
+    winner_announce_date: Mapped[date | None] = mapped_column(Date)
+    contract_bgnde: Mapped[date | None] = mapped_column(Date)
+    contract_endde: Mapped[date | None] = mapped_column(Date)
+    move_in_ym: Mapped[str | None] = mapped_column(Text)        # YYYYMM 문자열
+    tot_supply: Mapped[int | None] = mapped_column(Integer)
+    pblanc_url: Mapped[str | None] = mapped_column(Text)
+    biz_entity: Mapped[str | None] = mapped_column(Text)        # 사업주체/시행
+    constructor: Mapped[str | None] = mapped_column(Text)       # 시공사
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+# ── 청약홈 평형별 공급정보 (mibunyang collect-applyhome-detail.mjs 수집) ──
+
+
+class ApplyhomeUnitSupply(Base):
+    """청약홈 평형별 공급정보 (getAPTLttotPblancMdl). 단지당 평형 1:N.
+
+    special_by_type JSON: 특공유형별 세대수
+    (dazanyeo/sinhon/saengae_choecho/nobumo/cheongnyeon/sinsaenga/gigwan/etc).
+    """
+
+    __tablename__ = "applyhome_unit_supply"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    apartment_id: Mapped[str] = mapped_column(Text, nullable=False)
+    house_manage_no: Mapped[str] = mapped_column(Text, nullable=False)
+    model_no: Mapped[str] = mapped_column(Text, nullable=False)
+    house_ty: Mapped[str | None] = mapped_column(Text)          # 주택형 "051.0000A"
+    supply_area: Mapped[float | None] = mapped_column(Float)    # 공급면적 ㎡
+    general_supply: Mapped[int | None] = mapped_column(Integer) # 일반공급 세대수
+    special_supply: Mapped[int | None] = mapped_column(Integer) # 특별공급 합계
+    special_by_type: Mapped[dict | None] = mapped_column(JSON)  # 유형별 세대수
+    top_amount: Mapped[int | None] = mapped_column(Integer)     # 분양최고금액 (만원)
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime)

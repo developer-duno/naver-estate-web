@@ -174,10 +174,10 @@ def test_sql_injection_search(client, db):
     assert res.status_code == 200
 
 
-def test_xss_building_filter(client, db):
+def test_xss_building_filter(client, db, approved_headers):
     _add_complex(db, "XS")
     _add_article(db, "XS1", "XS", building_name="<script>alert(1)</script>")
-    res = client.get("/api/complexes/XS/articles?building_name=<script>alert(1)</script>")
+    res = client.get("/api/complexes/XS/articles?building_name=<script>alert(1)</script>", headers=approved_headers)
     assert res.status_code == 200
 
 
@@ -199,23 +199,23 @@ def test_search_200chars(client):
     assert client.get(f"/api/complexes/search?q={'a'*200}").status_code == 200
 
 
-def test_max_page_size(client, db):
+def test_max_page_size(client, db, approved_headers):
     _add_complex(db, "MPS")
-    assert client.get("/api/complexes/MPS/articles?page_size=200").status_code == 200
+    assert client.get("/api/complexes/MPS/articles?page_size=200", headers=approved_headers).status_code == 200
 
 
-def test_all_sort_options(client, db):
+def test_all_sort_options(client, db, approved_headers):
     _add_complex(db, "ASO")
     _add_article(db, "ASO1", "ASO")
     for s in ["rank","price_asc","price_desc","area_asc","area_desc",
               "ppyeong_asc","ppyeong_desc","maintenance_asc","maintenance_desc",
               "confirm_asc","confirm_desc"]:
-        assert client.get(f"/api/complexes/ASO/articles?sort_by={s}").status_code == 200, f"{s} failed"
+        assert client.get(f"/api/complexes/ASO/articles?sort_by={s}", headers=approved_headers).status_code == 200, f"{s} failed"
 
 
-def test_export_empty_complex(client, db):
+def test_export_empty_complex(client, db, approved_headers):
     _add_complex(db, "EXE")
-    assert client.post("/api/articles/export?complex_no=EXE").status_code in [200, 400, 404]
+    assert client.post("/api/articles/export?complex_no=EXE", headers=approved_headers).status_code in [200, 400, 404]
 
 
 def test_regions_full_chain(client):

@@ -8,6 +8,7 @@ import {
   getFavorites, isFavorite, toggleFavorite,
   getArticleViewMode, setArticleViewMode,
   getArticlePageSize, setArticlePageSize,
+  getMbViewMode, setMbViewMode,
   safeSetItem,
 } from "../storage";
 
@@ -155,6 +156,28 @@ describe("매물 카드 보기 모양 (article_view_mode)", () => {
     // 미설정 (raw=null) 도 medium fallback
     localStorage.removeItem("article_view_mode");
     expect(getArticleViewMode()).toBe("medium");
+  });
+});
+
+// ── 미분양 탭 보기 방식 (mb_view_mode) ──
+
+describe("미분양 탭 보기 방식 (mb_view_mode)", () => {
+  it("기본값은 list (키 없을 때)", () => {
+    expect(getMbViewMode()).toBe("list");
+  });
+
+  it("list/map round-trip", () => {
+    setMbViewMode("map");
+    expect(getMbViewMode()).toBe("map");
+    setMbViewMode("list");
+    expect(getMbViewMode()).toBe("list");
+  });
+
+  it("localStorage 에 잘못된 값이 박혀 있어도 list fallback (type guard)", () => {
+    localStorage.setItem("mb_view_mode", JSON.stringify("satellite"));
+    expect(getMbViewMode()).toBe("list");
+    localStorage.removeItem("mb_view_mode");
+    expect(getMbViewMode()).toBe("list");
   });
 });
 

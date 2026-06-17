@@ -399,3 +399,18 @@ export function getArticlePageSize(): ArticlePageSize {
 export function setArticlePageSize(size: ArticlePageSize): void {
   try { localStorage.setItem(ARTICLE_PAGE_SIZE_KEY, JSON.stringify(size)); } catch { /* private mode quota 무시 */ }
 }
+
+// ── 미분양 탭 보기 방식 (list/map) ──
+
+const MB_VIEW_MODE_KEY = "mb_view_mode";
+export type MbViewMode = "list" | "map";
+const MB_VIEW_MODES: readonly MbViewMode[] = ["list", "map"];
+
+export function getMbViewMode(): MbViewMode {
+  const raw = readJSON<string>(MB_VIEW_MODE_KEY, "list");
+  return (MB_VIEW_MODES as readonly string[]).includes(raw) ? (raw as MbViewMode) : "list";
+}
+
+export function setMbViewMode(mode: MbViewMode): void {
+  try { localStorage.setItem(MB_VIEW_MODE_KEY, JSON.stringify(mode)); } catch { /* private mode quota 무시 */ }
+}

@@ -248,3 +248,7 @@ export const MONTHLY_RENT_PRESETS: RangePreset[] = [
 /** 사이트 절대 URL — SEO 메타·canonical·sitemap·RSS 의 단일 진실 원천.
  *  NEXT_PUBLIC_SITE_URL 미설정 시 운영 도메인으로 fallback. */
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://2u.pe.kr";
+
+/** 네이버 지도 SDK 활성 여부 — Client ID 가 설정된 경우만 지도 토글 노출.
+ *  미설정 시 SDK 미로드(mibunyang/layout.tsx) → 지도 토글 자체를 숨김(graceful degradation). */
+export const MAP_ENABLED = Boolean(process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID);

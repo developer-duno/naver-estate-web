@@ -45,7 +45,10 @@ components/mb/
 ├── MbCompareRadarChart.tsx    # 레이더 차트 (13축 정규화 = 기본 9축 + 인프라 4축, 가중치프리셋3종+슬라이더1-5+가중점수, 종합우위★, dynamic import)
 ├── MbComparePriceChart.tsx    # 분양가 막대 차트 (min/max/pp, 최저가★, dynamic import)
 ├── MbCompareUnsoldChart.tsx   # 미분양 추이 비교 차트 (ComposedChart, 기간필터 6M/1Y/2Y/ALL, dynamic import)
-├── MbLocationMap.tsx           # Naver Maps v3 지도 (vanilla SDK, dynamic import)
+├── MbLocationMap.tsx           # Naver Maps v3 단일마커 지도 (단지 상세, vanilla SDK, dynamic import)
+├── MbClusterMap.tsx            # 다중마커 지도 (분양/미분양 탭 list↔map 토글, fitBounds, InfoWindow+선택카드, dynamic import)
+├── MbViewToggle.tsx            # 목록↔지도 보기 토글 (mb_view_mode localStorage, MAP_ENABLED 시만 노출)
+├── MbSelectedCard.tsx          # 지도 마커 클릭 시 선택 단지 요약+상세보기 (InfoWindow XSS 회피용 React 카드)
 ├── MbSearchHistory.tsx         # 미분양 검색 히스토리 pill 뱃지 (최근 10개, 클릭→재검색)
 └── MbCompareHistory.tsx        # 비교 히스토리+북마크 pill 뱃지 (ComparePill variant, 최근비교+저장된비교)
 ```

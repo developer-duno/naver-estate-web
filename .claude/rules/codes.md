@@ -54,3 +54,4 @@
 | `favorite_articles`  | 매물 즐겨찾기           | 무제한, 토글 방식 |
 | `article_view_mode`  | 매물 카드 모양 (compact/medium/large) | 값 1개, default = medium |
 | `article_page_size`  | 한 페이지당 매물 개수 (10/20/30/50) | 값 1개, default = 10 |
+| `mb_view_mode`       | 미분양 탭 보기 방식 (list/map)          | 값 1개, default = list |

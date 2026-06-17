@@ -315,3 +315,35 @@ def test_presale_schedule_serializer_uses_constructor_name_key(db):
     assert d["biz_entity"] == "시행사ABC"
     # 옛 키 constructor 는 출력에 없어야 (FE 타입 충돌 재발 방지)
     assert "constructor" not in d
+
+
+def test_presale_pagination_tiebreak_no_dup_no_gap(db):
+    """동률 정렬값(schedule 없어 max_recruit NULL) 단지가 OFFSET 페이지 경계에서
+    중복/누락 안 됨 — PK(id) tie-break 가드 (세션 314 적대리뷰 결함1)."""
+    # 6개 단지 모두 schedule 없음 → max_recruit 전부 NULL → 동률. tie-break 없으면 페이지 경계 불안정.
+    for i in range(6):
+        _add_apt(db, f"T{i}", presale_type="민간분양")
+    p1, total = get_presale_page(db, presale_type="private", page=1, page_size=3, sort_by="recruit_date_desc")
+    p2, _ = get_presale_page(db, presale_type="private", page=2, page_size=3, sort_by="recruit_date_desc")
+    ids1 = [a.id for a in p1]
+    ids2 = [a.id for a in p2]
+    assert total == 6
+    # 중복 0 (page1 ∩ page2 = ∅) + 누락 0 (합집합 = 전체 6)
+    assert set(ids1) & set(ids2) == set()
+    assert set(ids1) | set(ids2) == {f"T{i}" for i in range(6)}
+    # tie-break = id asc → 결정적 순서
+    assert ids1 == ["T0", "T1", "T2"]
+    assert ids2 == ["T3", "T4", "T5"]
+
+
+def test_competition_pagination_tiebreak(db):
+    """경쟁률 NULL/동률 단지가 분양결과 페이지 경계에서 중복/누락 안 됨 (결함1)."""
+    for i in range(5):
+        _add_apt(db, f"C{i}", presale_stage="분양중")  # competition_rate 전부 NULL → 동률
+    p1, total = get_competition_page(db, page=1, page_size=2)
+    p2, _ = get_competition_page(db, page=2, page_size=2)
+    ids1 = {a.id for a in p1}
+    ids2 = {a.id for a in p2}
+    assert total == 5
+    assert ids1 & ids2 == set()  # 중복 0
+    assert len(ids1 | ids2) == 4  # 5개 중 4개 (page1+2 = 4행)

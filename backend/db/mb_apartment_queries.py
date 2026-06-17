@@ -220,6 +220,9 @@ def _presale_sort_order(sort_by: str, recruit_col=None):
     presale_schedule_official.recruit_date(진짜 DATE 공고일)의 단지별 MAX 로 정렬해야
     의미가 맞다 — recruit_col 에 그 MAX 표현식(get_presale_page 가 서브쿼리로 주입)을 받는다.
     recruit_col 미주입 시(테스트·fallback) presale_min_price 기준으로 안전 폴백.
+
+    ⚠ 반환은 [정렬절, Apartment.id.asc()] 리스트 — 동률 행(같은 max_recruit·NULL 다수 등)이
+    OFFSET 페이지 경계에서 중복/누락되지 않도록 PK tie-break 고정 (세션 314 적대리뷰 결함1).
     """
     sort_map = {
         "competition_rate_desc": Apartment.competition_rate.desc().nullslast(),
@@ -228,10 +231,10 @@ def _presale_sort_order(sort_by: str, recruit_col=None):
         "price_desc": Apartment.presale_min_price.desc().nullslast(),
     }
     if sort_by == "recruit_date_desc":
-        if recruit_col is not None:
-            return recruit_col.desc().nullslast()
-        return Apartment.presale_min_price.asc().nullslast()
-    return sort_map.get(sort_by, Apartment.presale_min_price.asc().nullslast())
+        primary = recruit_col.desc().nullslast() if recruit_col is not None else Apartment.presale_min_price.asc().nullslast()
+    else:
+        primary = sort_map.get(sort_by, Apartment.presale_min_price.asc().nullslast())
+    return [primary, Apartment.id.asc()]
 
 
 def get_presale_page(
@@ -289,7 +292,7 @@ def get_presale_page(
         select(Apartment)
         .outerjoin(recruit_subq, Apartment.id == recruit_subq.c.apt_id)
         .where(where_clause)
-        .order_by(order)
+        .order_by(*order)
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
@@ -366,7 +369,8 @@ def get_competition_page(
     stmt = (
         select(Apartment)
         .where(where_clause)
-        .order_by(order)
+        # PK tie-break — 경쟁률 NULL/동률 단지가 OFFSET 페이지 경계에서 중복/누락 안 되게 (세션 314 결함1)
+        .order_by(order, Apartment.id.asc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )

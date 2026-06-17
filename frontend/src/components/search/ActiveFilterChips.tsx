@@ -94,6 +94,44 @@ export default function ActiveFilterChips({ filters, estateTypeLabels, onRemoveF
     chips.push({ label: "확인매물만", onRemove: () => onRemoveFilter("verified_only") });
   }
 
+  // 층수 (min/max_floor)
+  const floorLabel = rangeLabel(filters.min_floor, filters.max_floor, (n) => `${n}층`);
+  if (floorLabel) {
+    chips.push({ label: `층수 ${floorLabel}`, onRemove: () => { onRemoveFilter("min_floor"); onRemoveFilter("max_floor"); } });
+  }
+
+  // 관리비 (min/max_maintenance, 만원)
+  const maintLabel = rangeLabel(filters.min_maintenance, filters.max_maintenance, (n) => `${n}만`);
+  if (maintLabel) {
+    chips.push({ label: `관리비 ${maintLabel}`, onRemove: () => { onRemoveFilter("min_maintenance"); onRemoveFilter("max_maintenance"); } });
+  }
+
+  // 준공연도 (max_building_age = 최대 연식)
+  if (filters.max_building_age != null) {
+    chips.push({ label: `${filters.max_building_age}년 이내`, onRemove: () => onRemoveFilter("max_building_age") });
+  }
+
+  // 수익률 (min/max_yield, %)
+  const yieldLabel = rangeLabel(filters.min_yield, filters.max_yield, (n) => `${n}%`);
+  if (yieldLabel) {
+    chips.push({ label: `수익률 ${yieldLabel}`, onRemove: () => { onRemoveFilter("min_yield"); onRemoveFilter("max_yield"); } });
+  }
+
+  // 입주 가능 시기
+  if (filters.move_in_type) {
+    chips.push({ label: filters.move_in_type, onRemove: () => onRemoveFilter("move_in_type") });
+  }
+
+  // 동(건물)명
+  if (filters.building_name) {
+    chips.push({ label: `동 ${filters.building_name}`, onRemove: () => onRemoveFilter("building_name") });
+  }
+
+  // 태그
+  if (filters.tags) {
+    chips.push({ label: filters.tags, onRemove: () => onRemoveFilter("tags") });
+  }
+
   if (chips.length === 0) return null;
 
   return (

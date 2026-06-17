@@ -14,6 +14,13 @@ vi.mock("@/lib/storage", () => ({
   setMbViewMode: (m: string) => setMbViewModeMock(m),
 }));
 
+// MAP_ENABLED 를 테스트마다 바꾸기 위해 가변 참조로 mock
+let mapEnabled = true;
+vi.mock("@/lib/constants", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/constants")>("@/lib/constants");
+  return { ...actual, get MAP_ENABLED() { return mapEnabled; } };
+});
+
 import { useMbViewMode } from "../useMbViewMode";
 
 describe("useMbViewMode", () => {
@@ -21,6 +28,7 @@ describe("useMbViewMode", () => {
     getMbViewModeMock.mockReset();
     setMbViewModeMock.mockReset();
     getMbViewModeMock.mockReturnValue("list");
+    mapEnabled = true;
   });
 
   afterEach(() => {
@@ -42,5 +50,14 @@ describe("useMbViewMode", () => {
     expect(result.current.viewMode).toBe("map");
     expect(setMbViewModeMock).toHaveBeenCalledWith("map");
     expect(setMbViewModeMock).toHaveBeenCalledTimes(1);
+  });
+
+  /** 결함 A 가드: SDK 미설정 시 저장값이 "map" 이어도 "list" 강제
+   * (토글 숨김 + 빈 지도 에러 갇힘 방지) */
+  it("MAP_ENABLED=false 면 storage 가 map 이어도 list 를 반환한다", () => {
+    mapEnabled = false;
+    getMbViewModeMock.mockReturnValue("map");
+    const { result } = renderHook(() => useMbViewMode());
+    expect(result.current.viewMode).toBe("list");
   });
 });

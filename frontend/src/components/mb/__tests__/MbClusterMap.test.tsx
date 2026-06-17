@@ -98,6 +98,16 @@ describe("MbClusterMap", () => {
     expect(mockMarkerConstructor).toHaveBeenCalledTimes(1);
   });
 
+  /** 결함 C 가드: 0,0 좌표(좌표 미상을 0으로 채운 데이터, 아프리카 앞바다)는 제외 */
+  it("0,0 좌표 단지는 마커를 만들지 않는다", () => {
+    render(
+      <MbClusterMap
+        apartments={[apt("a", "래미안", 37.5, 127.0), apt("z", "0좌표", 0, 0)]}
+      />,
+    );
+    expect(mockMarkerConstructor).toHaveBeenCalledTimes(1);
+  });
+
   /** 마커 클릭 시 InfoWindow 표시 + onSelect 호출 */
   it("마커를 클릭하면 InfoWindow를 열고 onSelect를 호출한다", () => {
     const onSelect = vi.fn();

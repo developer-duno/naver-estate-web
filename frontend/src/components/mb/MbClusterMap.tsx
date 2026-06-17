@@ -14,9 +14,15 @@ interface Props {
   onSelect?: (apt: MbApartment) => void;
 }
 
-/** 좌표(위·경도)가 둘 다 있는 단지만 지도에 찍을 수 있다. */
+/** 좌표(위·경도)가 둘 다 있는 단지만 지도에 찍을 수 있다.
+ * 0,0(좌표 미상을 0으로 채운 데이터)은 아프리카 앞바다라 제외 — 한국 좌표는 위도 33~38, 경도 124~132. */
 function hasCoords(apt: MbApartment): apt is MbApartment & { latitude: number; longitude: number } {
-  return typeof apt.latitude === "number" && typeof apt.longitude === "number";
+  return (
+    typeof apt.latitude === "number" &&
+    typeof apt.longitude === "number" &&
+    apt.latitude !== 0 &&
+    apt.longitude !== 0
+  );
 }
 
 /** InfoWindow 텍스트 이스케이프 — 단지명에 꺾쇠·따옴표가 있어도 HTML 주입 차단 (XSS). */

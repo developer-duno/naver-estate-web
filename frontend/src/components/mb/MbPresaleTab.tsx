@@ -107,7 +107,10 @@ export default function MbPresaleTab({
         {viewMode === "map" ? (
           <>
             <LazyClusterMap apartments={items} selectedId={selected?.id} onSelect={setSelected} />
-            {selected && <MbSelectedCard apt={selected} onClose={() => setSelected(null)} />}
+            {/* 선택 단지가 현재 목록에 있을 때만 카드 표시 — 세그먼트·페이지 전환 후 옛 선택 stale 방지 */}
+            {selected && items.some((a) => a.id === selected.id) && (
+              <MbSelectedCard apt={selected} onClose={() => setSelected(null)} />
+            )}
           </>
         ) : (
           <>

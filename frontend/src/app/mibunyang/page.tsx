@@ -262,6 +262,7 @@ function MibunyangContent() {
             isInCompare={compare.isInCompare}
             onCompareToggle={(id, name) => compare.toggle({ id, name })}
             compareFull={compare.isFull}
+            region={region}
           />
         </TabsContent>
 

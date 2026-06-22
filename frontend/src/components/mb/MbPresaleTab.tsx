@@ -13,6 +13,7 @@ import MbSelectedCard from "@/components/mb/MbSelectedCard";
 import { MB_PRESALE_SORT_OPTIONS, MB_COMPETITION_SORT_OPTIONS } from "@/lib/mb-sort-options";
 import { PAGE_SIZE } from "@/lib/constants";
 import { useMbViewMode } from "@/hooks/useMbViewMode";
+import { useGeolocation } from "@/hooks/useGeolocation";
 import type { MbApartment } from "@/types";
 
 // 지도는 무겁고 SSR 불가(window.naver) → dynamic(ssr:false).
@@ -46,6 +47,7 @@ export default function MbPresaleTab({
   isInCompare,
   onCompareToggle,
   compareFull,
+  region,
 }: {
   segment: PresaleSegment;
   onSegmentChange: (seg: PresaleSegment) => void;
@@ -58,8 +60,13 @@ export default function MbPresaleTab({
   isInCompare: (id: string) => boolean;
   onCompareToggle: (id: string, name: string) => void;
   compareFull: boolean;
+  /** 선택된 시/도 (page.tsx 전달). 분양 탭은 region 선택적(전국) → GPS 게이트·우선순위 판정에 사용. */
+  region?: string;
 }) {
   const { viewMode, setViewMode } = useMbViewMode();
+  const regionSelected = !!region;
+  // 지도 뷰 + region 미선택일 때만 현재 위치 요청 (지역 고른 사용자에겐 불필요 팝업 안 띄움).
+  const { coords: userLocation } = useGeolocation(viewMode === "map" && !regionSelected);
   const [selected, setSelected] = useState<MbApartment | null>(null);
 
   const isCompetition = segment === "competition";
@@ -106,7 +113,7 @@ export default function MbPresaleTab({
 
         {viewMode === "map" ? (
           <>
-            <LazyClusterMap apartments={items} selectedId={selected?.id} onSelect={setSelected} />
+            <LazyClusterMap apartments={items} selectedId={selected?.id} onSelect={setSelected} userLocation={userLocation} regionSelected={regionSelected} />
             {/* 선택 단지가 현재 목록에 있을 때만 카드 표시 — 세그먼트·페이지 전환 후 옛 선택 stale 방지 */}
             {selected && items.some((a) => a.id === selected.id) && (
               <MbSelectedCard apt={selected} onClose={() => setSelected(null)} />

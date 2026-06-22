@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState } from "react";
 import type { MbApartment } from "@/types";
+import type { GeoCoords } from "@/hooks/useGeolocation";
 
 const SDK_POLL_INTERVAL = 200;
 const SDK_POLL_TIMEOUT = 5000;
@@ -12,7 +13,14 @@ interface Props {
   selectedId?: string;
   /** 마커 클릭 콜백 — 부모가 선택카드 렌더에 사용 */
   onSelect?: (apt: MbApartment) => void;
+  /** 접속자 현재 위치(GPS). 있으면 지도 중심을 내 위치로 (region 미선택 시). */
+  userLocation?: GeoCoords | null;
+  /** 지역(시/도) 선택 여부 — true 면 그 지역 단지로 fitBounds(명시 선택 우선, GPS 무시). */
+  regionSelected?: boolean;
 }
+
+/** region 미선택 + GPS 허용 시 내 위치 중심 줌 레벨 (전국보다 좁고 동네보다 넓게). */
+const USER_LOCATION_ZOOM = 12;
 
 /** 좌표(위·경도)가 둘 다 있는 단지만 지도에 찍을 수 있다.
  * 0,0(좌표 미상을 0으로 채운 데이터)은 아프리카 앞바다라 제외 — 한국 좌표는 위도 33~38, 경도 124~132. */
@@ -41,7 +49,7 @@ function escapeHtml(s: string): string {
  * 마커 클릭 → InfoWindow(단지명만) + onSelect(apt). 상세 링크는 부모의 선택카드가 담당
  * (naver InfoWindow 는 HTML 문자열 기반이라 router.push 직접 연결 불가 + XSS 회피).
  */
-export default function MbClusterMap({ apartments, onSelect }: Props) {
+export default function MbClusterMap({ apartments, onSelect, userLocation, regionSelected }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<naver.maps.Map | null>(null);
   const markersRef = useRef<naver.maps.Marker[]>([]);
@@ -105,8 +113,13 @@ export default function MbClusterMap({ apartments, onSelect }: Props) {
           markersRef.current.push(marker);
         });
 
-        // 단지 1개면 fitBounds 가 과도하게 확대 → setCenter+적정 줌으로.
-        if (coordItems.length === 1) {
+        // 지도 중심·줌 우선순위: ① region 선택 → 그 지역 fitBounds(명시 선택 우선)
+        // ② region 미선택 + GPS 허용 → 내 위치 중심 + 적정 줌 ③ 그 외 → 전국 fitBounds 폴백.
+        if (!regionSelected && userLocation) {
+          map.setCenter(new naver.maps.LatLng(userLocation.lat, userLocation.lng));
+          map.setZoom(USER_LOCATION_ZOOM);
+        } else if (coordItems.length === 1) {
+          // 단지 1개면 fitBounds 가 과도하게 확대 → setCenter+적정 줌으로.
           map.setCenter(new naver.maps.LatLng(coordItems[0].latitude, coordItems[0].longitude));
           map.setZoom(15);
         } else {
@@ -144,6 +157,14 @@ export default function MbClusterMap({ apartments, onSelect }: Props) {
     // coordItems 는 apartments 파생 — apartments 변경 시에만 마커 재생성.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apartments]);
+
+  // GPS 좌표는 비동기로 늦게 도착 → 마커 재생성 없이 카메라만 내 위치로 이동.
+  // region 선택 시엔 무시(명시 선택 우선). 좌표 도착 시 1회 setCenter.
+  useEffect(() => {
+    if (regionSelected || !userLocation || !mapInstanceRef.current) return;
+    mapInstanceRef.current.setCenter(new naver.maps.LatLng(userLocation.lat, userLocation.lng));
+    mapInstanceRef.current.setZoom(USER_LOCATION_ZOOM);
+  }, [userLocation, regionSelected]);
 
   // 언마운트 시 지도 인스턴스 정리
   useEffect(() => {

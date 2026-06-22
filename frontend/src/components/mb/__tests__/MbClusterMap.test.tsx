@@ -157,4 +157,41 @@ describe("MbClusterMap", () => {
       expect(screen.getByText("지도를 불러오지 못했습니다.")).toBeInTheDocument();
     });
   });
+
+  // ── 위치 기준 줌 우선순위: region 선택 > GPS > 전국 fitBounds ──
+
+  /** region 미선택 + GPS 좌표 있으면 내 위치 중심 + zoom 12 (fitBounds 아님) */
+  it("userLocation 있고 regionSelected 아니면 내 위치로 setCenter+setZoom(12)", () => {
+    render(
+      <MbClusterMap
+        apartments={[apt("a", "래미안", 37.5, 127.0), apt("b", "자이", 37.6, 127.1)]}
+        userLocation={{ lat: 35.1, lng: 129.0 }}
+      />,
+    );
+    expect(mockMapInstance.setCenter).toHaveBeenCalled();
+    expect(mockMapInstance.setZoom).toHaveBeenCalledWith(12);
+    expect(mockMapInstance.fitBounds).not.toHaveBeenCalled();
+  });
+
+  /** regionSelected true 면 GPS 좌표가 있어도 그 지역 fitBounds (명시 선택 우선) */
+  it("regionSelected 면 userLocation 있어도 fitBounds (GPS 무시)", () => {
+    render(
+      <MbClusterMap
+        apartments={[apt("a", "래미안", 37.5, 127.0), apt("b", "자이", 37.6, 127.1)]}
+        userLocation={{ lat: 35.1, lng: 129.0 }}
+        regionSelected
+      />,
+    );
+    expect(mockMapInstance.fitBounds).toHaveBeenCalled();
+  });
+
+  /** GPS·region 둘 다 없으면 전국 fitBounds 폴백 */
+  it("userLocation 없고 regionSelected 아니면 전국 fitBounds 폴백", () => {
+    render(
+      <MbClusterMap
+        apartments={[apt("a", "래미안", 37.5, 127.0), apt("b", "자이", 37.6, 127.1)]}
+      />,
+    );
+    expect(mockMapInstance.fitBounds).toHaveBeenCalled();
+  });
 });

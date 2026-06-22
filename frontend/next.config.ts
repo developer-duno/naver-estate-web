@@ -43,8 +43,9 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
+            // geolocation=(self): 미분양 지도 "내 위치" 표시용 (동일 출처에서만 허용). camera·microphone 은 차단 유지.
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
+            value: "camera=(), microphone=(), geolocation=(self)",
           },
           {
             key: "Content-Security-Policy",

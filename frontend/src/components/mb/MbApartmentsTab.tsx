@@ -67,7 +67,8 @@ export default function MbApartmentsTab({
 
       {viewMode === "map" ? (
         <>
-          <LazyClusterMap apartments={apartments} selectedId={selected?.id} onSelect={setSelected} />
+          {/* 미분양단지 탭은 지역 선택이 전제(지역 미선택 시 안내 화면) → 항상 그 지역 fitBounds */}
+          <LazyClusterMap apartments={apartments} selectedId={selected?.id} onSelect={setSelected} regionSelected />
           {/* 선택 단지가 현재 목록에 있을 때만 카드 표시 — 페이지·세그먼트 전환 후 옛 선택 stale 방지 */}
           {selected && apartments.some((a) => a.id === selected.id) && (
             <MbSelectedCard apt={selected} onClose={() => setSelected(null)} />

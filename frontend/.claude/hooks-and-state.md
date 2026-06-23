@@ -27,6 +27,8 @@
 | `useComplexPrefetch` | 단지 hover 200ms 후 complex + articles prefetch (검색 결과 성능) |
 | `useCrawlAction` | 크롤 수동 트리거 + invalidateQueries (admin recrawl 버튼) |
 | `useLocalStorageFavorites` / `useLocalStorageList` | 즐겨찾기·리스트 제네릭 훅 (위 useFavorites·useSearchHistory 등의 베이스) |
+| `useMbViewMode` | 미분양 탭 목록↔지도 보기 (localStorage mb_view_mode, MAP_ENABLED=false 시 list 강제 — 세션 315) |
+| `useGeolocation` | 브라우저 현재 위치(GPS) 1회 조회 (enabled 게이트, SSR·타임아웃·거부 안전, status 4종 — 미분양 지도 "내 위치" 줌, 세션 316) |
 
 ## FilterBar 구조 (모듈 분리)
 

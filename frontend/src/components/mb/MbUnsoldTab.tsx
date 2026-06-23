@@ -68,7 +68,7 @@ export default function MbUnsoldTab({
       {viewMode === "map" ? (
         <>
           {/* 미분양만 탭도 지역 선택 전제 → 항상 그 지역 fitBounds */}
-          <LazyClusterMap apartments={apartments} onSelect={setSelected} regionSelected markerKind="unsold" />
+          <LazyClusterMap apartments={apartments} onSelect={setSelected} regionSelected markerKind="unsold" className="h-[calc(100vh-220px)] min-h-100" />
           {/* 선택 단지가 현재 목록에 있을 때만 카드 표시 — 페이지 전환 후 옛 선택 stale 방지 */}
           {selected && apartments.some((a) => a.id === selected.id) && (
             <MbSelectedCard apt={selected} onClose={() => setSelected(null)} />

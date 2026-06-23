@@ -10,6 +10,7 @@ import { SkeletonPage } from "@/components/Skeleton";
 import { PAGE_SIZE } from "@/lib/constants";
 import { useMbCompare } from "@/hooks/useMbCompare";
 import { useMbFavorites } from "@/hooks/useMbFavorites";
+import { useMbViewMode } from "@/hooks/useMbViewMode";
 import { useMbSearchHistory } from "@/hooks/useMbSearchHistory";
 import { useMbCompareHistory } from "@/hooks/useMbCompareHistory";
 import { useMbCompareBookmarks } from "@/hooks/useMbCompareBookmarks";
@@ -52,6 +53,7 @@ function MibunyangContent() {
   const searchParams = useSearchParams();
   const compare = useMbCompare();
   const { favorites, toggle: toggleFavorite } = useMbFavorites();
+  const { viewMode } = useMbViewMode();
   const { history: mbHistory, add: addMbHistory, remove: removeMbHistory, clear: clearMbHistory } = useMbSearchHistory();
   const { history: compareHistory, remove: removeCompareHistory, clear: clearCompareHistory } = useMbCompareHistory();
   const { bookmarks: compareBookmarks, remove: removeCompareBookmark, clear: clearCompareBookmarks } = useMbCompareBookmarks();
@@ -159,6 +161,10 @@ function MibunyangContent() {
 
   const hasRegion = region.length >= 2;
 
+  // 지도뷰 풀스크린 여부 — 지도 있는 탭(presale/apartments/unsold) + 지도모드일 때만 max-w 해제.
+  const MAP_TABS = ["presale", "apartments", "unsold"] as const;
+  const isFullscreenMap = viewMode === "map" && MAP_TABS.includes(tab as typeof MAP_TABS[number]);
+
   const apartmentsQuery = useQuery({
     queryKey: queryKeys.mb.apartments(region, gu || undefined, page, sortBy || undefined, keyword || undefined),
     queryFn: () => getMbApartments(region, gu || undefined, page, PAGE_SIZE, sortBy || undefined, keyword || undefined),
@@ -203,10 +209,10 @@ function MibunyangContent() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">미분양 현황</h1>
+    <div className={isFullscreenMap ? "flex flex-col h-[calc(100vh-64px)]" : "max-w-7xl mx-auto px-4 py-6"}>
+      {!isFullscreenMap && <h1 className="text-2xl font-bold text-gray-900 mb-6">미분양 현황</h1>}
 
-      <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
+      <div className={`bg-white rounded-lg shadow-sm border p-4 ${isFullscreenMap ? "mb-2 flex-none" : "mb-6"}`}>
         <MbRegionSelector onSearch={handleSearch} defaultRegion={region} defaultGu={gu} defaultKeyword={keyword} />
         <MbSearchHistory
           history={mbHistory}
@@ -227,7 +233,7 @@ function MibunyangContent() {
       </div>
 
       {/* 탭바 — 항상 표시 (즐겨찾기 탭은 지역 불필요) */}
-      <Tabs value={tab} onValueChange={(v) => handleTabChange(v as TabKey)} className="gap-0">
+      <Tabs value={tab} onValueChange={(v) => handleTabChange(v as TabKey)} className={`gap-0${isFullscreenMap ? " flex flex-col flex-1 min-h-0" : ""}`}>
         {/* relative wrapper: 우측 페이드로 가로 스크롤 가능 힌트 (모바일 360px 탭 잘림 인지, 세션294) */}
         <div className="relative mb-4">
           <TabsList className="flex gap-1 overflow-x-auto bg-transparent p-0 h-auto rounded-none w-full justify-start">
@@ -249,7 +255,7 @@ function MibunyangContent() {
         </div>
 
         {/* 분양 탭 — 지역 선택 불필요 (전국 조회), 세그먼트 민간/공공/분양결과 */}
-        <TabsContent value="presale" className="mt-0">
+        <TabsContent value="presale" className={`mt-0${isFullscreenMap ? " flex-1 min-h-0 overflow-hidden" : ""}`}>
           <MbPresaleTab
             segment={segment}
             onSegmentChange={handleSegmentChange}
@@ -296,7 +302,7 @@ function MibunyangContent() {
           </>
         ) : (
           <>
-            <TabsContent value="apartments" className="mt-0">
+            <TabsContent value="apartments" className={`mt-0${isFullscreenMap ? " flex-1 min-h-0 overflow-hidden" : ""}`}>
               <MbApartmentsTab
                 query={apartmentsQuery}
                 page={page}
@@ -309,7 +315,7 @@ function MibunyangContent() {
               />
             </TabsContent>
 
-            <TabsContent value="unsold" className="mt-0">
+            <TabsContent value="unsold" className={`mt-0${isFullscreenMap ? " flex-1 min-h-0 overflow-hidden" : ""}`}>
               <MbUnsoldTab
                 query={unsoldQuery}
                 page={page}

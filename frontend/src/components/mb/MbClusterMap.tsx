@@ -18,6 +18,8 @@ interface Props {
   regionSelected?: boolean;
   /** 마커 라벨 종류 — 탭별 핵심 지표(분양가/경쟁률/미분양). 기본 unsold. */
   markerKind?: MarkerKind;
+  /** 지도 컨테이너 외부 className — 2단계 풀스크린 시 높이 주입용. 기본 "h-96". */
+  className?: string;
 }
 
 /** region 미선택 + GPS 허용 시 내 위치 중심 줌 레벨 (전국보다 좁고 동네보다 넓게).
@@ -75,6 +77,7 @@ export default function MbClusterMap({
   userLocation,
   regionSelected,
   markerKind = "unsold",
+  className,
 }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<naver.maps.Map | null>(null);
@@ -238,10 +241,12 @@ export default function MbClusterMap({
     };
   }, []);
 
+  const heightCls = className ?? "h-96";
+
   if (error) {
     return (
       <div
-        className="w-full h-96 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center"
+        className={`w-full ${heightCls} rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center`}
         role="status"
       >
         <p className="text-sm text-gray-500">지도를 불러오지 못했습니다.</p>
@@ -250,10 +255,10 @@ export default function MbClusterMap({
   }
 
   return (
-    <div className="relative">
+    <div className="relative w-full h-full">
       <div
         ref={mapRef}
-        className="w-full h-96 rounded-lg border border-gray-200"
+        className={`w-full ${heightCls} rounded-lg border border-gray-200`}
         aria-label="단지 위치 지도"
       />
       {coordItems.length === 0 && (

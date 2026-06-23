@@ -140,6 +140,27 @@ export async function applyMibunyangDetailMocks(page: Page): Promise<void> {
     await route.fulfill({ status: 404, body: "not found" });
   });
 
+  // 분양 단지(presale_type 보유) 상세는 getMbPresaleDetail 을 호출한다. 막지 않으면 presaleQuery
+  // 가 실패해 청약 에러 섹션이 노출돼 페이지 높이가 달라진다(세션 317). 빈 분양 데이터로 성공 응답 —
+  // schedules·unit_supplies 가 비어 청약/평형 섹션은 미렌더, 에러 섹션도 안 떠 baseline 과 동일.
+  await page.route("**/api/mb/presale/**", async (route) => {
+    await fulfillJson(route, {
+      ...APARTMENT,
+      schedules: [],
+      unit_supplies: [],
+      presale_summary: {
+        total_general_supply: 0,
+        total_special_supply: 0,
+        total_supply: 0,
+        special_by_type_total: [],
+        max_top_amount: null,
+        min_top_amount: null,
+        unit_type_count: 0,
+        schedule_count: 0,
+      },
+    });
+  });
+
   // Header role 결정성 — 147 답습 (98f1f94). 공개 페이지이므로 role="user".
   await page.route("**/api/users/me", async (route) => {
     await fulfillJson(route, { role: "user", email: "test@example.com" });

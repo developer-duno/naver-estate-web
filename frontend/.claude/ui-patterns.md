@@ -70,6 +70,21 @@
 - 즐겨찾기 정렬: FavSortBy 드롭다운 (추가일순↓/단지명순/지역순, useMemo 클라이언트 정렬)
 - MbApartmentTable 액션 열: ★(즐겨찾기) + +(비교) 통합
 - 엑셀: mb-export.ts 4개 함수 (apartments/regions/trades/unsoldHistory) + ExportButton (로딩+실패 피드백)
-- 지도: MbLocationMap (Naver Maps v3 vanilla SDK, dynamic import, 폴링 기반 SDK 대기, lat/lng null 시 미표시)
+- 지도(단일): MbLocationMap (Naver Maps v3 vanilla SDK, dynamic import, 폴링 기반 SDK 대기, lat/lng null 시 미표시) — 단지 상세 1개 마커
+
+## 미분양 지도뷰 — list↔map 토글 (세션 315~316)
+- **MbViewToggle**: 목록↔지도 보기 토글. localStorage `mb_view_mode` (useMbViewMode 훅). `MAP_ENABLED=false`(constants.ts) 시 토글 미노출 + list 강제 (저장값 map 갇힘 방지)
+- **MbClusterMap**: 다중 마커 지도 (현재 페이지 단지 ~50개). 분양/미분양 탭에서 사용. dynamic import(ssr:false). MbLocationMap 패턴 답습(SDK 폴링·에러분기·cleanup) + 다중마커/fitBounds/InfoWindow 확장
+  - 좌표 가드 `hasCoords`: lat·lng 둘 다 number + 0,0 제외 (좌표미상 0채움 = 아프리카 앞바다)
+  - 카메라 우선순위: ① region 선택 → 그 지역 fitBounds(명시 우선) ② region 미선택+GPS → 내 위치 setCenter+zoom 12(`USER_LOCATION_ZOOM`, didCenterOnGpsRef 로 1회만 — 세션 317 점프 가드) ③ 전국 fitBounds 폴백
+  - InfoWindow: HTML 문자열 기반이라 단지명 escapeHtml(XSS 회피) + 상세링크는 React 선택카드(MbSelectedCard)가 담당
+  - 에러: SDK throw try/catch + `window.navermap_authFailure` 전역 콜백(NCP 인증실패 → 에러 UI, 세션 317)
+- **MbSelectedCard**: 마커 클릭 시 선택 단지 요약+상세보기 (InfoWindow router.push 불가 회피용 React 카드). 부모가 `selected && items.some(id 일치)` 가드로 stale 선택 방지
+- **useGeolocation**: 접속자 GPS 1회 조회 (getCurrentPosition, enabled 게이트, SSR·타임아웃·거부 안전, status 4종). region 미선택 시 지도 "내 위치" 줌 (지역선택 > GPS > 전국 폴백, Permissions-Policy geolocation=(self) 필요)
+
+## 홈/검색 통합 (SearchExperience + ActiveFilterChips) — 세션 314
+- **SearchExperience**: 검색 경험 공용 컴포넌트 (입력=매물유형/필터/검색창/지역 + 결과=단지목록/비교/정렬). 홈(`/`)과 옛 `/search` 가 공유 — `/search` 는 `/` 로 리다이렉트(쿼리 보존)
+- **ActiveFilterChips**: 적용 조건 한글 칩 요약 (결과 화면에서 "지금 무슨 조건인지"). urlFilters(ArticleFilters) + 매물유형 narrowing(estateTypeLabels) → 칩, ✕ 클릭 시 개별 해제. 핵심 조건만(YAGNI). verified_only 칩 라벨 "인증매물만"(FilterChips·FilterSections 와 통일, 세션 317)
+- 결과 화면은 필터바 기본 접힘(접이식), 그 외 펼침
 
 > **미분양 중복 제거 (백엔드 로직)**: `backend/.claude/details.md` §미분양 중복 제거 참조 (extract_base_name / _deduplicate_apartments / get_apartments_page / apartment_to_dict).

@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState } from "react";
 import type { MbApartment } from "@/types";
 import type { GeoCoords } from "@/hooks/useGeolocation";
+import { markerLabel, type MarkerKind } from "@/lib/mb-marker-label";
 
 const SDK_POLL_INTERVAL = 200;
 const SDK_POLL_TIMEOUT = 5000;
@@ -15,9 +16,15 @@ interface Props {
   userLocation?: GeoCoords | null;
   /** 지역(시/도) 선택 여부 — true 면 그 지역 단지로 fitBounds(명시 선택 우선, GPS 무시). */
   regionSelected?: boolean;
+  /** 마커 라벨 종류 — 탭별 핵심 지표(분양가/경쟁률/미분양). 기본 unsold. */
+  markerKind?: MarkerKind;
 }
 
-/** region 미선택 + GPS 허용 시 내 위치 중심 줌 레벨 (전국보다 좁고 동네보다 넓게). */
+/** region 미선택 + GPS 허용 시 내 위치 중심 줌 레벨 (전국보다 좁고 동네보다 넓게).
+ * 12 = 시/군 단위(화면 반경 ~7km). 세션 318 실측(분양 728단지 좌표 vs 주요 GPS 거점):
+ * 서울 42 / 부산 28 / 대전 20개가 줌12 화면에 들어옴 — 대도시는 충분. 지방(춘천 1개)은
+ * 분양 자체가 희소해 줌을 낮춰도 효과 0. 11로 낮추면 대도시 마커 과밀(서울 148)로 식별성↓.
+ * → 12 가 균형점(실증). 마커는 전국이 다 그려져 빈 지도 아님(줌아웃하면 더 보임). */
 const USER_LOCATION_ZOOM = 12;
 
 /** 좌표(위·경도)가 둘 다 있는 단지만 지도에 찍을 수 있다.
@@ -31,7 +38,7 @@ function hasCoords(apt: MbApartment): apt is MbApartment & { latitude: number; l
   );
 }
 
-/** InfoWindow 텍스트 이스케이프 — 단지명에 꺾쇠·따옴표가 있어도 HTML 주입 차단 (XSS). */
+/** InfoWindow/마커 텍스트 이스케이프 — 단지명에 꺾쇠·따옴표가 있어도 HTML 주입 차단 (XSS). */
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -41,13 +48,34 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/** 호갱노노식 가격 말풍선 마커 HTML — 탭별 핵심 지표를 핀 위에 직접 표시.
+ * 라벨이 단지명(가격 정보 없음)이면 회색, 가격/지표면 파란 말풍선으로 시각 구분.
+ * 라벨은 markerLabel 이 안전한 텍스트만 만들지만 단지명이 섞일 수 있어 escapeHtml 로 XSS 방어. */
+function buildMarkerContent(apt: MbApartment, kind: MarkerKind): string {
+  const label = markerLabel(apt, kind);
+  const isName = label === apt.name; // 가격 정보 없어 단지명 폴백 → 회색 톤
+  const bg = isName ? "#6b7280" : "#2563eb";
+  return (
+    `<div style="transform:translate(-50%,-100%);white-space:nowrap;` +
+    `background:${bg};color:#fff;font-size:12px;font-weight:700;` +
+    `padding:3px 8px;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.3);` +
+    `border:1px solid rgba(255,255,255,.7);">${escapeHtml(label)}</div>`
+  );
+}
+
 /**
  * 미분양/분양 단지 다중 마커 지도 (현재 페이지 단지 50개 표시).
  * 단일 마커 MbLocationMap 패턴 답습(SDK 폴링·에러분기·cleanup)을 다중 마커로 확장.
  * 마커 클릭 → InfoWindow(단지명만) + onSelect(apt). 상세 링크는 부모의 선택카드가 담당
  * (naver InfoWindow 는 HTML 문자열 기반이라 router.push 직접 연결 불가 + XSS 회피).
  */
-export default function MbClusterMap({ apartments, onSelect, userLocation, regionSelected }: Props) {
+export default function MbClusterMap({
+  apartments,
+  onSelect,
+  userLocation,
+  regionSelected,
+  markerKind = "unsold",
+}: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<naver.maps.Map | null>(null);
   const markersRef = useRef<naver.maps.Marker[]>([]);
@@ -103,10 +131,26 @@ export default function MbClusterMap({ apartments, onSelect, userLocation, regio
         coordItems.forEach((apt) => {
           const pos = new naver.maps.LatLng(apt.latitude, apt.longitude);
           bounds.extend(pos);
-          const marker = new naver.maps.Marker({ position: pos, map, title: apt.name });
+          // 호갱노노식 HTML 가격 말풍선 마커 (기본 핀 대신 icon.content). anchor 는
+          // 말풍선 자체가 transform translate(-50%,-100%) 로 꼭지를 좌표에 맞추므로 (0,0).
+          const marker = new naver.maps.Marker({
+            position: pos,
+            map,
+            title: apt.name,
+            icon: {
+              content: buildMarkerContent(apt, markerKind),
+              anchor: new naver.maps.Point(0, 0),
+            },
+          });
           naver.maps.Event.addListener(marker, "click", () => {
+            // 클릭 즉시 정보 — 단지명 + 핵심 지표(가격/경쟁률/미분양)를 말풍선 위에 바로.
+            const label = markerLabel(apt, markerKind);
+            const sub = label === apt.name ? "" : `<div style="font-size:13px;font-weight:700;color:#2563eb;">${escapeHtml(label)}</div>`;
             infoWindow.setContent(
-              `<div style="padding:6px 10px;font-size:13px;font-weight:600;white-space:nowrap;">${escapeHtml(apt.name)}</div>`,
+              `<div style="padding:6px 10px;white-space:nowrap;">` +
+                `<div style="font-size:13px;font-weight:600;">${escapeHtml(apt.name)}</div>` +
+                sub +
+                `</div>`,
             );
             infoWindow.open(map, marker);
             onSelectRef.current?.(apt);

@@ -36,6 +36,16 @@ declare namespace naver.maps {
     position?: LatLng;
     map?: Map;
     title?: string;
+    /** HTML 마커 아이콘 — content(HTML 문자열) + anchor(기준점). 공식 v3 HtmlIcon. */
+    icon?: HtmlIcon;
+  }
+  interface HtmlIcon {
+    content: string;
+    anchor?: Point;
+    size?: Size;
+  }
+  class Size {
+    constructor(width: number, height: number);
   }
   interface InfoWindowOptions {
     content?: string;

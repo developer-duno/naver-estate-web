@@ -83,6 +83,40 @@ describe("MbClusterMap", () => {
     expect(mockMapInstance.fitBounds).toHaveBeenCalled();
   });
 
+  /** 세션 318: 호갱노노식 HTML 가격 말풍선 마커 — markerKind 별 핵심 지표가 content 에 박힌다 */
+  it("markerKind=presale 이면 마커 content 에 분양가(억)가 박힌다", () => {
+    render(
+      <MbClusterMap
+        apartments={[{ id: "a", name: "래미안", region: "서울", latitude: 37.5, longitude: 127.0, presale_min_price: 46000 }]}
+        markerKind="presale"
+      />,
+    );
+    const opts = mockMarkerConstructor.mock.calls[0][0];
+    expect(opts.icon.content).toContain("4억6,000만");
+  });
+
+  it("markerKind=unsold 이면 마커 content 에 미분양 호수가 박힌다", () => {
+    render(
+      <MbClusterMap
+        apartments={[{ id: "a", name: "래미안", region: "서울", latitude: 37.5, longitude: 127.0, unsold: 120 }]}
+        markerKind="unsold"
+      />,
+    );
+    const opts = mockMarkerConstructor.mock.calls[0][0];
+    expect(opts.icon.content).toContain("미분양120");
+  });
+
+  it("가격 정보 없으면 마커 content 폴백 = 단지명 (빈 말풍선 금지)", () => {
+    render(
+      <MbClusterMap
+        apartments={[{ id: "a", name: "정보없는단지", region: "서울", latitude: 37.5, longitude: 127.0 }]}
+        markerKind="presale"
+      />,
+    );
+    const opts = mockMarkerConstructor.mock.calls[0][0];
+    expect(opts.icon.content).toContain("정보없는단지");
+  });
+
   /** 좌표 NULL 단지는 마커에서 제외 (표는 부모가 전체 표시) */
   it("위경도가 없는 단지는 마커를 만들지 않는다", () => {
     render(

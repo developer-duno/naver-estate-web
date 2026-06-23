@@ -58,6 +58,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ### 매물 (estate)
 ```
+검색 → 홈(/)에서 직접 (SearchExperience 공용, /search→/ 리다이렉트 — 세션 314 홈/검색 통합)
 검색 → /api/live/search (네이버 API → DB upsert → 반환)
 단지 클릭 → DB 즉시 표시 + 자동 매물 크롤링 (start-crawl → 10/20/30초 refetch)
 필터 변경 → /api/complexes/{no}/articles (SQL WHERE) + URL 파라미터 동기화
@@ -70,6 +71,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 ### 미분양 (mibunyang)
 ```
 미분양 조회 → /api/mb/apartments?sort_by=&keyword= (정렬+검색+중복제거)
+분양 조회 → /api/mb/presale, /api/mb/competition (분양 탭: 민간분양/LH공공분양/분양결과 — 세션 314)
+분양 상세 → 청약 일정·평형별 공급·D-day (getMbPresaleDetail, 세션 314)
+지도 뷰 → list↔map 토글 (MbClusterMap 다중마커, 접속자 GPS 위치 기준, mb_view_mode — 세션 315~316)
 미분양 비교 → /mibunyang/compare?ids= (17행 우위 + 레이더13축 + 가중치 + 분양가/추이 차트)
 미분양 즐겨찾기 → localStorage (최대 200개, 일괄 비교, FavSortBy)
 미분양 히스토리/북마크 → localStorage (자동 저장 10개 / 수동 저장 20개)

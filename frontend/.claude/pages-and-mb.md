@@ -7,15 +7,15 @@
 ### 매물 영역 (estate)
 | 페이지 | API 호출 | 백엔드 라우터 |
 |--------|---------|-------------|
-| `/` | `getStats()` + localStorage(히스토리/즐겨찾기) | `/api/stats` |
-| `/search` | `searchComplexes()`, `getComplexesByRegion()` + useCompare + ComplexSortDropdown | `/api/live/search`, `/api/live/region` |
+| `/` (홈=검색 통합, 세션 314) | `getStats()` + **SearchExperience**(검색창/매물유형/필터/지역 → 결과) + localStorage(히스토리/즐겨찾기) | `/api/stats`, `/api/live/search`, `/api/live/region` |
+| `/search` → `/` 리다이렉트 | SearchExperience 공용 — 옛 `/search` 는 쿼리 보존하며 홈으로 redirect (직접 링크 6곳 잔존) | (동일) |
 | `/complex/[no]` | `startLiveCrawl()`, `getCrawlStatus()`, `getArticles()`, `getPyeongDetails()`, `getPriceHistory()`, `startPriceCollect()` + useFavoriteStatus + ComplexNoteButton | `/api/live/{no}/articles/*`, `/api/complexes/{no}/*`, `/api/live/{no}/price-history/*` |
 | `/compare` | `getComplex()` x N + `getPriceStats()` x N (useQueries 병렬) + 인쇄/엑셀 | `/api/complexes/{no}`, `/api/complexes/{no}/price-stats` |
 
 ### 미분양 영역 (mibunyang)
 | 페이지 | API 호출 | 백엔드 라우터 |
 |--------|---------|-------------|
-| `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()`, `getMbGuList()` (5탭) | `/api/mb/*` |
+| `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()`, `getMbGuList()` + **분양 3종** `getMbPresale()`·`getMbCompetition()`·분양결과 (탭: 미분양단지/미분양만/지역통계/실거래/즐겨찾기 + **분양**[민간분양·LH공공분양·분양결과], 세션 314) + **list↔map 토글**(세션 315) | `/api/mb/*`, `/api/mb/presale`, `/api/mb/competition` |
 | `/mibunyang/[id]` | `getMbApartmentDetail()`, `getMbUnsoldHistory()` (5섹션+지도+추이차트) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
 | `/mibunyang/compare` | `getMbApartmentDetail()` x N + `getMbUnsoldHistory()` x N (17행 비교+레이더+막대+추이) | 동일 |
 
@@ -50,8 +50,15 @@ components/mb/
 ├── MbViewToggle.tsx            # 목록↔지도 보기 토글 (mb_view_mode localStorage, MAP_ENABLED 시만 노출)
 ├── MbSelectedCard.tsx          # 지도 마커 클릭 시 선택 단지 요약+상세보기 (InfoWindow XSS 회피용 React 카드)
 ├── MbSearchHistory.tsx         # 미분양 검색 히스토리 pill 뱃지 (최근 10개, 클릭→재검색)
-└── MbCompareHistory.tsx        # 비교 히스토리+북마크 pill 뱃지 (ComparePill variant, 최근비교+저장된비교)
+├── MbCompareHistory.tsx        # 비교 히스토리+북마크 pill 뱃지 (ComparePill variant, 최근비교+저장된비교)
+├── MbPresaleTab.tsx            # 분양 탭 (민간분양/LH공공분양/분양결과 세그먼트, list↔map 토글, 세션 314~315)
+├── MbPresaleTable.tsx          # 분양 단지 목록 테이블 (시공사·분양일정·정렬)
+├── MbCompetitionTable.tsx      # 청약 경쟁률 테이블 (분양결과 세그먼트)
+├── MbScheduleTimeline.tsx      # 청약 일정 타임라인 (차수별, 상세 페이지)
+└── MbUnitSupplyTable.tsx       # 평형별 공급+특공 세분화 (상세 페이지)
 ```
+
+> 지도 3종(MbClusterMap·MbViewToggle·MbSelectedCard)·useGeolocation 상세 = `frontend/.claude/ui-patterns.md` §미분양 지도뷰 참조.
 
 ### 미분양 URL 상태 관리
 - `useSearchParams` + `useRouter` 직접 사용 (useFilterParams 미사용 — ArticleFilters 전용)

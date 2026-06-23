@@ -81,10 +81,11 @@ export default function MbPresaleTab({
   const sortOptions = isCompetition ? MB_COMPETITION_SORT_OPTIONS : MB_PRESALE_SORT_OPTIONS;
   const defaultSortLabel = isCompetition ? "기본 (경쟁률 높은순)" : "기본 (공고일 최신순)";
 
+  const isMap = viewMode === "map";
   return (
-    <div>
+    <div className={isMap ? "flex flex-col flex-1 min-h-0" : ""}>
       {/* 세그먼트 컨트롤 + 보기 토글 */}
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4 flex-none">
         <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5" role="tablist" aria-label="분양 종류">
           {PRESALE_SEGMENTS.map((s) => (
             <button
@@ -107,7 +108,7 @@ export default function MbPresaleTab({
       </div>
 
       <MbTabContent loading={query.isLoading} error={query.error} refetch={query.refetch}>
-        <div className="flex flex-wrap items-center justify-between gap-y-2 mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-y-2 mb-3 flex-none">
           <span className="text-sm text-gray-500">총 {total.toLocaleString()}개</span>
           {viewMode === "list" && (
             <MbSortSelect sort={sort} onSortChange={onSortChange} options={sortOptions} defaultLabel={defaultSortLabel} />
@@ -115,16 +116,19 @@ export default function MbPresaleTab({
         </div>
 
         {viewMode === "map" ? (
-          <div className="relative">
+          <div className="relative flex-1 min-h-0">
             <div className="absolute right-2 top-2 z-10">
               <MbMapToolbar active={activeLayer} onChange={setActiveLayer} />
             </div>
-            <LazyClusterMap apartments={items} onSelect={setSelected} userLocation={userLocation} regionSelected={regionSelected} markerKind={isCompetition ? "competition" : "presale"} className="h-[calc(100vh-220px)] min-h-100" />
-            {/* 선택 단지가 현재 목록에 있을 때만 카드 표시 — 세그먼트·페이지 전환 후 옛 선택 stale 방지 */}
+            <LazyClusterMap apartments={items} onSelect={setSelected} userLocation={userLocation} regionSelected={regionSelected} markerKind={isCompetition ? "competition" : "presale"} className="h-full" />
+            {/* 선택 단지가 현재 목록에 있을 때만 카드 표시 — 세그먼트·페이지 전환 후 옛 선택 stale 방지.
+                지도 위 absolute 좌하단 오버레이 — 부모 overflow-hidden 클립 영역 밖(세션 319 리뷰 B). */}
             {selected && items.some((a) => a.id === selected.id) && (
-              <MbSelectedCard apt={selected} onClose={() => setSelected(null)}>
-                {activeLayer && <MbInfraOverlay apt={selected} layer={activeLayer} />}
-              </MbSelectedCard>
+              <div className="absolute left-2 right-2 bottom-2 z-10 sm:right-auto sm:max-w-md max-h-[55%] overflow-y-auto">
+                <MbSelectedCard apt={selected} onClose={() => setSelected(null)}>
+                  {activeLayer && <MbInfraOverlay apt={selected} layer={activeLayer} />}
+                </MbSelectedCard>
+              </div>
             )}
           </div>
         ) : (

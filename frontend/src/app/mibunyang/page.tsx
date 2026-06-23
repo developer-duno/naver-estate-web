@@ -209,7 +209,7 @@ function MibunyangContent() {
   });
 
   return (
-    <div className={isFullscreenMap ? "flex flex-col h-[calc(100vh-64px)]" : "max-w-7xl mx-auto px-4 py-6"}>
+    <div className={isFullscreenMap ? "flex flex-col h-[calc(100vh-56px)]" : "max-w-7xl mx-auto px-4 py-6"}>
       {!isFullscreenMap && <h1 className="text-2xl font-bold text-gray-900 mb-6">미분양 현황</h1>}
 
       <div className={`bg-white rounded-lg shadow-sm border p-4 ${isFullscreenMap ? "mb-2 flex-none" : "mb-6"}`}>
@@ -255,7 +255,7 @@ function MibunyangContent() {
         </div>
 
         {/* 분양 탭 — 지역 선택 불필요 (전국 조회), 세그먼트 민간/공공/분양결과 */}
-        <TabsContent value="presale" className={`mt-0${isFullscreenMap ? " flex-1 min-h-0 overflow-hidden" : ""}`}>
+        <TabsContent value="presale" className={`mt-0${isFullscreenMap ? " flex flex-col flex-1 min-h-0 overflow-hidden" : ""}`}>
           <MbPresaleTab
             segment={segment}
             onSegmentChange={handleSegmentChange}
@@ -302,7 +302,7 @@ function MibunyangContent() {
           </>
         ) : (
           <>
-            <TabsContent value="apartments" className={`mt-0${isFullscreenMap ? " flex-1 min-h-0 overflow-hidden" : ""}`}>
+            <TabsContent value="apartments" className={`mt-0${isFullscreenMap ? " flex flex-col flex-1 min-h-0 overflow-hidden" : ""}`}>
               <MbApartmentsTab
                 query={apartmentsQuery}
                 page={page}
@@ -315,7 +315,7 @@ function MibunyangContent() {
               />
             </TabsContent>
 
-            <TabsContent value="unsold" className={`mt-0${isFullscreenMap ? " flex-1 min-h-0 overflow-hidden" : ""}`}>
+            <TabsContent value="unsold" className={`mt-0${isFullscreenMap ? " flex flex-col flex-1 min-h-0 overflow-hidden" : ""}`}>
               <MbUnsoldTab
                 query={unsoldQuery}
                 page={page}

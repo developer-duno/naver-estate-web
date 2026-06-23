@@ -6,6 +6,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type { MbApartment } from "@/types";
+import { TestQueryProvider } from "@/test-setup";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
@@ -30,20 +31,23 @@ const presaleData = { presale: [makeApt({ id: "P", name: "민간단지", presale
 const competitionData = { competition: [makeApt({ id: "C", name: "경쟁단지", competition_rate: 20 })], total: 1, page: 1, page_size: 10 };
 
 function renderTab(segment: "private" | "public" | "competition", onSegmentChange = vi.fn()) {
+  // 세션 319: 지도뷰 인프라 lazy fetch(useQuery) 추가로 QueryClientProvider 필요 (web-rules.md).
   return render(
-    <MbPresaleTab
-      segment={segment}
-      onSegmentChange={onSegmentChange}
-      presaleQuery={okQuery(presaleData)}
-      competitionQuery={okQuery(competitionData)}
-      page={1}
-      sort=""
-      onSortChange={vi.fn()}
-      onPageChange={vi.fn()}
-      isInCompare={() => false}
-      onCompareToggle={vi.fn()}
-      compareFull={false}
-    />,
+    <TestQueryProvider>
+      <MbPresaleTab
+        segment={segment}
+        onSegmentChange={onSegmentChange}
+        presaleQuery={okQuery(presaleData)}
+        competitionQuery={okQuery(competitionData)}
+        page={1}
+        sort=""
+        onSortChange={vi.fn()}
+        onPageChange={vi.fn()}
+        isInCompare={() => false}
+        onCompareToggle={vi.fn()}
+        compareFull={false}
+      />
+    </TestQueryProvider>,
   );
 }
 

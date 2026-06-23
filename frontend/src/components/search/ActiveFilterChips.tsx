@@ -91,7 +91,7 @@ export default function ActiveFilterChips({ filters, estateTypeLabels, onRemoveF
 
   // 검증 매물만
   if (filters.verified_only) {
-    chips.push({ label: "확인매물만", onRemove: () => onRemoveFilter("verified_only") });
+    chips.push({ label: "인증매물만", onRemove: () => onRemoveFilter("verified_only") });
   }
 
   // 층수 (min/max_floor)

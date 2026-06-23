@@ -124,6 +124,20 @@ export default function MbDetailPage() {
         <OverviewSection apartment={apt} />
         <PresaleSection apartment={apt} />
 
+        {/* 분양 단지인데 청약·평형 조회가 실패하면 섹션이 조용히 사라지지 않도록 에러+재시도 노출 */}
+        {isPresale && presaleQuery.isError && (
+          <section data-testid="mb-presale-error" className="bg-white rounded-lg shadow-sm border p-4 md:p-6">
+            <p className="text-sm text-red-500">청약 정보를 불러오지 못했습니다.</p>
+            <button
+              type="button"
+              onClick={() => presaleQuery.refetch()}
+              className="text-sm text-blue-600 hover:underline mt-1"
+            >
+              다시 시도
+            </button>
+          </section>
+        )}
+
         {/* 청약 일정 (차수별 12종) — 분양 단지 + 일정 데이터 있을 때 */}
         {isPresale && presale && presale.schedules.length > 0 && (
           <section data-testid="mb-presale-schedule" className="bg-white rounded-lg shadow-sm border p-4 md:p-6">

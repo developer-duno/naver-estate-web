@@ -68,11 +68,11 @@ describe("ActiveFilterChips — 적용 조건 칩", () => {
     expect(onResetEstateTypes).toHaveBeenCalled();
   });
 
-  it("방·욕실·확인매물 칩", () => {
+  it("방·욕실·인증매물 칩", () => {
     renderChips({ min_rooms: 3, min_baths: 2, verified_only: true });
     expect(screen.getByText("방 3개 이상")).toBeInTheDocument();
     expect(screen.getByText("욕실 2개 이상")).toBeInTheDocument();
-    expect(screen.getByText("확인매물만")).toBeInTheDocument();
+    expect(screen.getByText("인증매물만")).toBeInTheDocument();
   });
 
   it("층수·관리비·준공·수익률·입주·동명·태그 칩 (세션 314 누락 키 보강)", () => {

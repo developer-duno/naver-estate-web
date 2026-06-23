@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import type { MbApartment } from "@/types";
@@ -11,9 +12,12 @@ import { normalizePp } from "@/lib/mb-format";
 export default function MbSelectedCard({
   apt,
   onClose,
+  children,
 }: {
   apt: MbApartment;
   onClose?: () => void;
+  /** 툴바 활성 레이어 인프라 정보 — MbInfraOverlay 삽입용 (3단계) */
+  children?: React.ReactNode;
 }) {
   const router = useRouter();
   const pp = normalizePp(apt.presale_pp);
@@ -54,10 +58,12 @@ export default function MbSelectedCard({
         )}
       </div>
 
+      {children}
+
       <button
         type="button"
         onClick={() => router.push(`/mibunyang/${apt.id}`)}
-        className="w-full sm:w-auto px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
+        className="w-full sm:w-auto mt-2.5 px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors"
       >
         상세보기
       </button>

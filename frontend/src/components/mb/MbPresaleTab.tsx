@@ -10,6 +10,8 @@ import { MbTabContent } from "@/components/mb/MbTabContent";
 import MbSortSelect from "@/components/mb/MbSortSelect";
 import MbViewToggle from "@/components/mb/MbViewToggle";
 import MbSelectedCard from "@/components/mb/MbSelectedCard";
+import MbMapToolbar, { type ToolbarLayer } from "@/components/mb/MbMapToolbar";
+import MbInfraOverlay from "@/components/mb/MbInfraOverlay";
 import { MB_PRESALE_SORT_OPTIONS, MB_COMPETITION_SORT_OPTIONS } from "@/lib/mb-sort-options";
 import { PAGE_SIZE } from "@/lib/constants";
 import { useMbViewMode } from "@/hooks/useMbViewMode";
@@ -68,6 +70,7 @@ export default function MbPresaleTab({
   // 지도 뷰 + region 미선택일 때만 현재 위치 요청 (지역 고른 사용자에겐 불필요 팝업 안 띄움).
   const { coords: userLocation } = useGeolocation(viewMode === "map" && !regionSelected);
   const [selected, setSelected] = useState<MbApartment | null>(null);
+  const [activeLayer, setActiveLayer] = useState<ToolbarLayer | null>(null);
 
   const isCompetition = segment === "competition";
   const query = isCompetition ? competitionQuery : presaleQuery;
@@ -112,13 +115,18 @@ export default function MbPresaleTab({
         </div>
 
         {viewMode === "map" ? (
-          <>
+          <div className="relative">
+            <div className="absolute right-2 top-2 z-10">
+              <MbMapToolbar active={activeLayer} onChange={setActiveLayer} />
+            </div>
             <LazyClusterMap apartments={items} onSelect={setSelected} userLocation={userLocation} regionSelected={regionSelected} markerKind={isCompetition ? "competition" : "presale"} className="h-[calc(100vh-220px)] min-h-100" />
             {/* 선택 단지가 현재 목록에 있을 때만 카드 표시 — 세그먼트·페이지 전환 후 옛 선택 stale 방지 */}
             {selected && items.some((a) => a.id === selected.id) && (
-              <MbSelectedCard apt={selected} onClose={() => setSelected(null)} />
+              <MbSelectedCard apt={selected} onClose={() => setSelected(null)}>
+                {activeLayer && <MbInfraOverlay apt={selected} layer={activeLayer} />}
+              </MbSelectedCard>
             )}
-          </>
+          </div>
         ) : (
           <>
             {isCompetition ? (

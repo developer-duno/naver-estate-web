@@ -9,6 +9,8 @@ import { MbTabContent, ExportButton } from "@/components/mb/MbTabContent";
 import MbSortSelect from "@/components/mb/MbSortSelect";
 import MbViewToggle from "@/components/mb/MbViewToggle";
 import MbSelectedCard from "@/components/mb/MbSelectedCard";
+import MbMapToolbar, { type ToolbarLayer } from "@/components/mb/MbMapToolbar";
+import MbInfraOverlay from "@/components/mb/MbInfraOverlay";
 import { exportMbApartmentsToXlsx } from "@/lib/mb-export";
 import { MB_APT_SORT_OPTIONS } from "@/lib/mb-sort-options";
 import { PAGE_SIZE } from "@/lib/constants";
@@ -43,6 +45,7 @@ export default function MbUnsoldTab({
 }) {
   const { viewMode, setViewMode } = useMbViewMode();
   const [selected, setSelected] = useState<MbApartment | null>(null);
+  const [activeLayer, setActiveLayer] = useState<ToolbarLayer | null>(null);
   const apartments = query.data?.unsold ?? [];
 
   return (
@@ -66,14 +69,19 @@ export default function MbUnsoldTab({
       </div>
 
       {viewMode === "map" ? (
-        <>
+        <div className="relative">
+          <div className="absolute right-2 top-2 z-10">
+            <MbMapToolbar active={activeLayer} onChange={setActiveLayer} />
+          </div>
           {/* 미분양만 탭도 지역 선택 전제 → 항상 그 지역 fitBounds */}
           <LazyClusterMap apartments={apartments} onSelect={setSelected} regionSelected markerKind="unsold" className="h-[calc(100vh-220px)] min-h-100" />
           {/* 선택 단지가 현재 목록에 있을 때만 카드 표시 — 페이지 전환 후 옛 선택 stale 방지 */}
           {selected && apartments.some((a) => a.id === selected.id) && (
-            <MbSelectedCard apt={selected} onClose={() => setSelected(null)} />
+            <MbSelectedCard apt={selected} onClose={() => setSelected(null)}>
+              {activeLayer && <MbInfraOverlay apt={selected} layer={activeLayer} />}
+            </MbSelectedCard>
           )}
-        </>
+        </div>
       ) : (
         <>
           <MbApartmentTable

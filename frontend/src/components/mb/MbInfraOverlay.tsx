@@ -12,6 +12,17 @@ import type { ToolbarLayer } from "./MbMapToolbar";
 interface Props {
   apt: MbApartment;
   layer: ToolbarLayer;
+  /** 상세(중첩 infra/school/transport) lazy fetch 진행 중 — 평탄 폴백 없을 때 스켈레톤 표시 (세션 319 A). */
+  loading?: boolean;
+  /** 상세 fetch 실패 — 에러 삼킴 금지(error-propagation.md), 안내 표시 (세션 319 A). */
+  error?: boolean;
+}
+
+/** 각 레이어 컴포넌트 공통 props — apt + lazy fetch 상태 (세션 319 A). */
+interface LayerProps {
+  apt: MbApartment;
+  loading?: boolean;
+  error?: boolean;
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -27,10 +38,18 @@ function noData() {
   return <p className="text-sm text-gray-400">이 단지는 해당 정보가 없습니다.</p>;
 }
 
-function SchoolInfo({ apt }: { apt: MbApartment }) {
+function loadingRow() {
+  return <p className="text-sm text-gray-400">정보를 불러오는 중...</p>;
+}
+
+function errorRow() {
+  return <p className="text-sm text-red-500">정보를 불러오지 못했습니다.</p>;
+}
+
+function SchoolInfo({ apt, loading, error }: LayerProps) {
   const walk = apt.naver_school_walk_min;
   const grade = apt.school?.school_grade;
-  if (walk == null && !grade) return noData();
+  if (walk == null && !grade) return error ? errorRow() : loading ? loadingRow() : noData();
   return (
     <div className="space-y-1">
       {walk != null && <Row label="초등 도보" value={`${walk}분`} />}
@@ -39,11 +58,11 @@ function SchoolInfo({ apt }: { apt: MbApartment }) {
   );
 }
 
-function TransitInfo({ apt }: { apt: MbApartment }) {
+function TransitInfo({ apt, loading, error }: LayerProps) {
   const dist = apt.transport?.subway_dist;
   const name = apt.transport?.subway_name;
   const lines = apt.transport?.subway_lines;
-  if (dist == null && !name) return noData();
+  if (dist == null && !name) return error ? errorRow() : loading ? loadingRow() : noData();
   return (
     <div className="space-y-1">
       {name && <Row label="지하철역" value={name + (lines ? ` (${lines})` : "")} />}
@@ -52,19 +71,23 @@ function TransitInfo({ apt }: { apt: MbApartment }) {
   );
 }
 
-function SafetyInfo({ apt }: { apt: MbApartment }) {
-  const grade = apt.infra?.crime_grade ?? (apt.crime_safety_grade != null ? String(apt.crime_safety_grade) : null);
-  if (!grade) return noData();
+function SafetyInfo({ apt, loading, error }: LayerProps) {
+  // 지역 안전등급(infra.crime_grade, A~E letter)과 단지 안전등급(crime_safety_grade, 1~5 숫자)은
+  // 별개 지표 — 라벨 분리 + 단지 등급엔 범례(1=안전) 명시 (EnvironmentSection:177 답습, 세션 319 C).
+  const regionGrade = apt.infra?.crime_grade;
+  const complexGrade = apt.crime_safety_grade;
+  if (!regionGrade && complexGrade == null) return error ? errorRow() : loading ? loadingRow() : noData();
   return (
     <div className="space-y-1">
-      <Row label="안전 등급" value={grade} />
+      {regionGrade && <Row label="지역 안전 등급" value={regionGrade} />}
+      {complexGrade != null && <Row label="단지 안전 등급" value={`${complexGrade}등급 (1=안전)`} />}
     </div>
   );
 }
 
-function AirInfo({ apt }: { apt: MbApartment }) {
+function AirInfo({ apt, loading, error }: LayerProps) {
   const grade = apt.infra?.air_grade;
-  if (!grade) return noData();
+  if (!grade) return error ? errorRow() : loading ? loadingRow() : noData();
   return (
     <div className="space-y-1">
       <Row label="대기질 등급" value={grade} />
@@ -72,11 +95,11 @@ function AirInfo({ apt }: { apt: MbApartment }) {
   );
 }
 
-function ChildcareInfo({ apt }: { apt: MbApartment }) {
+function ChildcareInfo({ apt, loading, error }: LayerProps) {
   const count = apt.infra?.childcare_count;
   const dist = apt.infra?.childcare_nearest_dist;
   const name = apt.infra?.childcare_nearest_name;
-  if (count == null && !name) return noData();
+  if (count == null && !name) return error ? errorRow() : loading ? loadingRow() : noData();
   return (
     <div className="space-y-1">
       {count != null && <Row label="주변 어린이집" value={`${count}개`} />}
@@ -94,15 +117,15 @@ const LAYER_TITLES: Record<ToolbarLayer, string> = {
   childcare: "👶 어린이집 정보",
 };
 
-export default function MbInfraOverlay({ apt, layer }: Props) {
+export default function MbInfraOverlay({ apt, layer, loading, error }: Props) {
   return (
     <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
       <p className="text-xs font-semibold text-blue-700 mb-2">{LAYER_TITLES[layer]}</p>
-      {layer === "school" && <SchoolInfo apt={apt} />}
-      {layer === "transit" && <TransitInfo apt={apt} />}
-      {layer === "safety" && <SafetyInfo apt={apt} />}
-      {layer === "air" && <AirInfo apt={apt} />}
-      {layer === "childcare" && <ChildcareInfo apt={apt} />}
+      {layer === "school" && <SchoolInfo apt={apt} loading={loading} error={error} />}
+      {layer === "transit" && <TransitInfo apt={apt} loading={loading} error={error} />}
+      {layer === "safety" && <SafetyInfo apt={apt} loading={loading} error={error} />}
+      {layer === "air" && <AirInfo apt={apt} loading={loading} error={error} />}
+      {layer === "childcare" && <ChildcareInfo apt={apt} loading={loading} error={error} />}
     </div>
   );
 }

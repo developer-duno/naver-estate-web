@@ -194,4 +194,26 @@ describe("MbClusterMap", () => {
     );
     expect(mockMapInstance.fitBounds).toHaveBeenCalled();
   });
+
+  // 세션 317: GPS 좌표가 늦게(또는 또) 도착해도 카메라를 단 1회만 내 위치로 — 사용자 조작 강제 점프 방지
+  it("GPS 좌표가 또 갱신돼도 setZoom(12) 센터링은 1회만 한다", () => {
+    const items = [apt("a", "래미안", 37.5, 127.0), apt("b", "자이", 37.6, 127.1)];
+    const { rerender } = render(
+      <MbClusterMap apartments={items} userLocation={{ lat: 35.1, lng: 129.0 }} />,
+    );
+    expect(mockMapInstance.setZoom).toHaveBeenCalledTimes(1);
+    // GPS 응답이 새 객체로 또 도착(혹은 사용자 조작 후 effect 재발동) — 추가 센터링 없어야 함
+    rerender(<MbClusterMap apartments={items} userLocation={{ lat: 35.2, lng: 129.1 }} />);
+    expect(mockMapInstance.setZoom).toHaveBeenCalledTimes(1);
+  });
+
+  // 세션 317: NCP 인증 실패(navermap_authFailure 전역 콜백)는 폴링으로 못 잡으므로 콜백→에러 UI 전환
+  it("navermap_authFailure 콜백이 호출되면 에러 안내를 표시한다", async () => {
+    render(<MbClusterMap apartments={[apt("a", "래미안", 37.5, 127.0)]} />);
+    expect(typeof window.navermap_authFailure).toBe("function");
+    window.navermap_authFailure!();
+    await waitFor(() => {
+      expect(screen.getByText("지도를 불러오지 못했습니다.")).toBeInTheDocument();
+    });
+  });
 });

@@ -9,8 +9,6 @@ const SDK_POLL_TIMEOUT = 5000;
 
 interface Props {
   apartments: MbApartment[];
-  /** 선택된 단지 id (지도 밖 선택카드와 동기화). 마커 클릭 시 onSelect 로 갱신됨. */
-  selectedId?: string;
   /** 마커 클릭 콜백 — 부모가 선택카드 렌더에 사용 */
   onSelect?: (apt: MbApartment) => void;
   /** 접속자 현재 위치(GPS). 있으면 지도 중심을 내 위치로 (region 미선택 시). */
@@ -55,6 +53,9 @@ export default function MbClusterMap({ apartments, onSelect, userLocation, regio
   const markersRef = useRef<naver.maps.Marker[]>([]);
   const infoWindowRef = useRef<naver.maps.InfoWindow | null>(null);
   const onSelectRef = useRef(onSelect);
+  // GPS 좌표 도착 시 카메라를 내 위치로 1회만 옮기기 위한 가드 — 사용자가 이미 지도를 조작했다면
+  // 늦게 도착한 GPS 응답이 화면을 강제로 끌어당기지 않도록 (한 번 센터링하면 true 로 잠금).
+  const didCenterOnGpsRef = useRef(false);
   const [error, setError] = useState(false);
 
   // 최신 onSelect 를 ref 로 유지 — 마커 리스너가 stale 콜백을 부르지 않도록 (마커 재생성 최소화).
@@ -118,6 +119,7 @@ export default function MbClusterMap({ apartments, onSelect, userLocation, regio
         if (!regionSelected && userLocation) {
           map.setCenter(new naver.maps.LatLng(userLocation.lat, userLocation.lng));
           map.setZoom(USER_LOCATION_ZOOM);
+          didCenterOnGpsRef.current = true;
         } else if (coordItems.length === 1) {
           // 단지 1개면 fitBounds 가 과도하게 확대 → setCenter+적정 줌으로.
           map.setCenter(new naver.maps.LatLng(coordItems[0].latitude, coordItems[0].longitude));
@@ -159,12 +161,27 @@ export default function MbClusterMap({ apartments, onSelect, userLocation, regio
   }, [apartments]);
 
   // GPS 좌표는 비동기로 늦게 도착 → 마커 재생성 없이 카메라만 내 위치로 이동.
-  // region 선택 시엔 무시(명시 선택 우선). 좌표 도착 시 1회 setCenter.
+  // region 선택 시엔 무시(명시 선택 우선). 좌표 도착 시 단 1회만 setCenter —
+  // 이미 센터링했거나(didCenterOnGpsRef) 사용자가 그 사이 지도를 조작했어도 강제로 끌어오지 않음.
   useEffect(() => {
     if (regionSelected || !userLocation || !mapInstanceRef.current) return;
+    if (didCenterOnGpsRef.current) return;
+    didCenterOnGpsRef.current = true;
     mapInstanceRef.current.setCenter(new naver.maps.LatLng(userLocation.lat, userLocation.lng));
     mapInstanceRef.current.setZoom(USER_LOCATION_ZOOM);
   }, [userLocation, regionSelected]);
+
+  // NCP 인증 실패(잘못된 ncpKeyId·도메인 미등록)는 SDK 가 throw 하지 않고 회색 빈 지도만 남길 수 있어
+  // 폴링(window.naver.maps 존재 확인)으로는 못 잡는다. 네이버 지도 v3 공식 전역 콜백
+  // window.navermap_authFailure 를 등록해 인증 실패 시 에러 UI 로 전환.
+  // 참고: https://navermaps.github.io/maps.js.ncp/docs/tutorial-1-Getting-Client-ID.html
+  useEffect(() => {
+    const prev = window.navermap_authFailure;
+    window.navermap_authFailure = () => setError(true);
+    return () => {
+      window.navermap_authFailure = prev;
+    };
+  }, []);
 
   // 언마운트 시 지도 인스턴스 정리
   useEffect(() => {

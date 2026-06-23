@@ -64,4 +64,6 @@ interface Window {
   naver?: {
     maps: typeof naver.maps;
   };
+  /** 네이버 지도 v3 인증 실패 시 SDK 가 호출하는 전역 콜백 (ncpKeyId·도메인 인증 실패). */
+  navermap_authFailure?: () => void;
 }

@@ -246,4 +246,32 @@ describe("미분양 상세 — 분양 단지 청약 일정·평형공급 (세션
     expect(screen.queryByText("청약 일정")).not.toBeInTheDocument();
     expect(mockPresaleDetail).not.toHaveBeenCalled();
   });
+
+  // 세션 317: 분양 청약 조회 실패가 섹션 silent 소멸로 끝나지 않도록 에러+재시도 노출
+  it("분양 단지인데 청약 조회 실패 시 에러 문구+다시 시도 노출, 클릭하면 재조회한다", async () => {
+    mockDetail.mockResolvedValue({ ...createMockDetail(), presale_type: "민간분양" });
+    mockPresaleDetail.mockReset();
+    mockPresaleDetail.mockRejectedValueOnce(new Error("서버 오류"));
+    renderDetail();
+    await waitFor(() => {
+      expect(screen.getByText("청약 정보를 불러오지 못했습니다.")).toBeInTheDocument();
+    });
+    const callsBefore = mockPresaleDetail.mock.calls.length;
+    mockPresaleDetail.mockResolvedValue({
+      ...createMockDetail(),
+      presale_type: "민간분양",
+      schedules: [
+        { id: 1, apartment_id: "APT001", house_manage_no: "H1", recruit_date: "2026-06-05", winner_announce_date: "2026-06-20" },
+      ],
+      unit_supplies: [],
+      presale_summary: {
+        total_general_supply: 0, total_special_supply: 0, total_supply: 0,
+        special_by_type_total: [], max_top_amount: 0, min_top_amount: 0, unit_type_count: 0, schedule_count: 1,
+      },
+    });
+    fireEvent.click(screen.getByText("다시 시도"));
+    await waitFor(() => {
+      expect(mockPresaleDetail.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+  });
 });

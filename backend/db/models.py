@@ -198,6 +198,9 @@ class UserProfile(Base):
     login_count: Mapped[int] = mapped_column(Integer, default=0)
     agree_marketing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     approved_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 유료 이용권 만료일 (NULL = 유료 이력 없음). approved_until(무료 검증, 무기한)과 독립 —
+    # 게이트는 둘 중 하나라도 유효하면 통과해 결제가 무료 무기한 승인을 격하시키지 않는다. (V035)
+    paid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
@@ -225,6 +228,29 @@ class AgentVerification(Base):
     reviewed_by: Mapped[str | None] = mapped_column(String)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class Payment(Base):
+    """결제 내역 — 유료 구독 1회 결제 기록 (V035).
+
+    payment_id 가 PK 인 이유: PortOne paymentId 와 동일 값을 우리가 생성해 멱등성 보장
+    (같은 ID 재시도 가능, complete 가 status=paid 면 재연장 거부). 금액 대조·환불 추적은
+    구조화 컬럼이라야 가능해 audit_logs JSON 이 아닌 정식 테이블로 둔다.
+    """
+    __tablename__ = "payments"
+    __table_args__ = (
+        Index("ix_payments_user_id", "user_id"),
+    )
+
+    payment_id: Mapped[str] = mapped_column(String, primary_key=True)  # pay_{uuid}
+    user_id: Mapped[str] = mapped_column(String, nullable=False)
+    plan: Mapped[str] = mapped_column(String, nullable=False)  # PLAN_PRICES 키
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)  # 원 단위, 서버 결정값
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="ready")  # ready|paid|failed|refunded
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    raw: Mapped[dict | None] = mapped_column(JSON)  # PortOne 응답 원본 (감사·환불)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 

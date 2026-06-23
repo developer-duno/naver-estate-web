@@ -72,15 +72,19 @@
 - 엑셀: mb-export.ts 4개 함수 (apartments/regions/trades/unsoldHistory) + ExportButton (로딩+실패 피드백)
 - 지도(단일): MbLocationMap (Naver Maps v3 vanilla SDK, dynamic import, 폴링 기반 SDK 대기, lat/lng null 시 미표시) — 단지 상세 1개 마커
 
-## 미분양 지도뷰 — list↔map 토글 (세션 315~316)
+## 미분양 지도뷰 — list↔map 토글 + 가격마커 + 인프라 툴바 (세션 315~319)
 - **MbViewToggle**: 목록↔지도 보기 토글. localStorage `mb_view_mode` (useMbViewMode 훅). `MAP_ENABLED=false`(constants.ts) 시 토글 미노출 + list 강제 (저장값 map 갇힘 방지)
 - **MbClusterMap**: 다중 마커 지도 (현재 페이지 단지 ~50개). 분양/미분양 탭에서 사용. dynamic import(ssr:false). MbLocationMap 패턴 답습(SDK 폴링·에러분기·cleanup) + 다중마커/fitBounds/InfoWindow 확장
   - 좌표 가드 `hasCoords`: lat·lng 둘 다 number + 0,0 제외 (좌표미상 0채움 = 아프리카 앞바다)
+  - **가격 말풍선 마커 (세션 318)**: 기본 핀 대신 HTML `icon.content` 말풍선. `markerKind`(presale/competition/unsold) 별로 `markerLabel(apt, kind)`(`lib/mb-marker-label.ts`)이 핵심 지표 표시 — presale=분양가→평당가→단지명 / competition=경쟁률 / unsold=미분양N. 가격 있으면 파랑·없으면 회색. label·apt.name 전부 escapeHtml(XSS)
   - 카메라 우선순위: ① region 선택 → 그 지역 fitBounds(명시 우선) ② region 미선택+GPS → 내 위치 setCenter+zoom 12(`USER_LOCATION_ZOOM`, didCenterOnGpsRef 로 1회만 — 세션 317 점프 가드) ③ 전국 fitBounds 폴백
   - InfoWindow: HTML 문자열 기반이라 단지명 escapeHtml(XSS 회피) + 상세링크는 React 선택카드(MbSelectedCard)가 담당
   - 에러: SDK throw try/catch + `window.navermap_authFailure` 전역 콜백(NCP 인증실패 → 에러 UI, 세션 317)
-- **MbSelectedCard**: 마커 클릭 시 선택 단지 요약+상세보기 (InfoWindow router.push 불가 회피용 React 카드). 부모가 `selected && items.some(id 일치)` 가드로 stale 선택 방지
-- **useGeolocation**: 접속자 GPS 1회 조회 (getCurrentPosition, enabled 게이트, SSR·타임아웃·거부 안전, status 4종). region 미선택 시 지도 "내 위치" 줌 (지역선택 > GPS > 전국 폴백, Permissions-Policy geolocation=(self) 필요)
+  - **풀스크린 레이아웃 (세션 318~319)**: 지도탭+지도뷰 시 `page.tsx` `isFullscreenMap`(viewMode=map && MAP_TABS) → `h-[calc(100vh-56px)]`(헤더 h-14=56px) flex 컬럼. TabsContent·탭 root `flex flex-col flex-1 min-h-0`, 카운트행 `flex-none`, 지도 `h-full`로 stretch(고정 calc magic number 제거, 세션 319 B). `className` prop 으로 외부 높이 주입
+- **MbMapToolbar (세션 318)**: 지도 우상단 세로 토글 5종(학군·교통·안전·대기질·어린이집, lucide 아이콘). `active: ToolbarLayer|null` + `onChange`(재클릭 시 null=해제). role=toolbar, aria-pressed
+- **MbInfraOverlay (세션 318~319)**: 선택카드 children 슬롯에 활성 레이어 인프라 표시. 데이터 흐름 = **목록 API(apartment_to_dict)는 평탄 필드만 → 교통·대기질·어린이집(중첩 infra/school/transport)은 빈정보였음 → 세션 319 A 로 마커 클릭 시 `getMbApartmentDetail(id)` lazy fetch(`useQuery`, selected 있을 때만 enabled, 5분 캐시)해 중첩객체 채움.** 도착 전 평탄 폴백(학군 도보분·안전 등급) 즉시 표시, 로딩/에러 분기. 안전등급 "N등급 (1=안전)" + 지역/단지 등급 분리(세션 319 C). dist 1000m↑ = km
+- **MbSelectedCard**: 마커 클릭 시 선택 단지 요약+상세보기 (InfoWindow router.push 불가 회피용 React 카드). 부모가 `selected && items.some(id 일치)` 가드로 stale 선택 방지. 풀스크린 시 지도 위 absolute 좌하단 오버레이로 띄워 overflow-hidden 클립 회피(세션 319 B). 툴바 켰는데 selected 없으면 "단지를 선택하면 정보가 표시됩니다" 안내(세션 319 E)
+- **useGeolocation**: 접속자 GPS 1회 조회 (getCurrentPosition, enabled 게이트, SSR·타임아웃·거부 안전, status 4종). region 미선택 시 지도 "내 위치" 줌 (지역선택 > GPS > 전국 폴백, Permissions-Policy geolocation=(self) 필요). 분양 탭만 전달(전국조회), 미분양·미분양단지 탭은 지역선택 전제라 미전달(의도된 설계)
 
 ## 홈/검색 통합 (SearchExperience + ActiveFilterChips) — 세션 314
 - **SearchExperience**: 검색 경험 공용 컴포넌트 (입력=매물유형/필터/검색창/지역 + 결과=단지목록/비교/정렬). 홈(`/`)과 옛 `/search` 가 공유 — `/search` 는 `/` 로 리다이렉트(쿼리 보존)

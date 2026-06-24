@@ -47,7 +47,11 @@ setup("authenticate as admin", async ({ page }) => {
     await page.locator("#login-password").fill(password!);
     await page.locator('button[type="submit"]').click();
 
-    const errAlert = page.locator('[role="alert"]');
+    // 로그인 폼 에러 alert 만 매칭 — `#main-content` 로 스코프해 sonner Toaster 의
+    // 상시 빈 live-region([role=alert], <main> 밖)을 제외한다. 스코프 안 하면 Supabase
+    // 로그인이 CI 에서 느릴 때 빈 sonner alert 가 visible 로 먼저 잡혀 가짜 "fail"(빈 메시지)
+    // 판정 → flaky. 폼 에러는 error state 있을 때만 텍스트와 함께 렌더된다.
+    const errAlert = page.locator('#main-content [role="alert"]');
     const navigated = page
       .waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 15_000 })
       .then(() => "ok" as const)

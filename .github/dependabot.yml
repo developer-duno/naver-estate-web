@@ -1,0 +1,35 @@
+# Dependabot 자동 의존성 업데이트 — 무료(비공개 레포 포함). 세션 323 신설.
+# 목적: 보안 advisory·버전 업데이트를 주1회 자동 PR. minor/patch 는 묶음(노이즈·Actions분 절약),
+#       major 는 개별 PR 로 와도 머지는 사람이 판단(크롤링 핵심 의존성 curl_cffi 등은 상한 핀으로 자동 major 차단).
+# 답습: .claude/rules 의 transitive 보안 핀 전략 + backend/requirements.txt 상한 핀(>=x,<y) 관행.
+version: 2
+updates:
+  # 프론트엔드 (Next.js 16 / React 19 / TanStack Query 등)
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      fe-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # 백엔드 (FastAPI / curl_cffi / SQLAlchemy 등 — 상한 핀이 major 자동상승 차단)
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      be-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # GitHub Actions 워크플로 액션 버전 (actions/checkout 등)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3

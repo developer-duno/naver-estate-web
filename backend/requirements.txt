@@ -21,6 +21,9 @@ PyJWT>=2.13.0,<3
 python-multipart>=0.0.31,<1
 redis>=5.0,<6
 requests>=2.31,<3
+# portone-server-sdk: 공식 PG 결제 SDK (Apache-2.0/MIT). get_payment 결제검증 + webhook.verify
+# 서명검증(Standard Webhooks)을 직접 구현하지 않게 한다 (oss-first). 결제 PR3, 세션 321.
+portone-server-sdk>=0.21,<1
 # starlette: fastapi 의 transitive 의존. PYSEC-2026-161 (Host 헤더 우회 → 인증 우회) 는
 # 1.0.1 에서 fix. OSV: https://osv.dev/vulnerability/PYSEC-2026-161 (CVE-2026-48710 alias)
 # 2026-06-16(세션 310): 1.0.1 에 신규 CVE 4건 공개 (CVE-2026-48818/48817 fix 1.1.0,

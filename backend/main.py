@@ -18,7 +18,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import Response
 
 from auth.rate_limiter import RateLimitMiddleware
-from routers import admin, articles, complexes, live, mb, regions, stats, users, verify
+from routers import admin, articles, complexes, live, mb, payment, regions, stats, users, verify
 from services.cache import get_dynamic_ttl
 
 # 로깅 설정
@@ -198,6 +198,7 @@ app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
 app.include_router(users.router, prefix="/api/users", tags=["사용자"])
 app.include_router(mb.router, prefix="/api/mb", tags=["미분양"])
 app.include_router(verify.router, prefix="/api/verify", tags=["중개사 검증"])
+app.include_router(payment.router, prefix="/api/payment", tags=["결제"])
 
 
 @app.get("/health")

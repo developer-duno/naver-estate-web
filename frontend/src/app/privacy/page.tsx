@@ -21,11 +21,22 @@ export default function PrivacyPage() {
           <li>연락처 (필수)</li>
           <li>공인중개사 자격증 사본 (선택, 제출 시)</li>
         </ul>
+        <p className="pt-2">
+          유료 구독 이용권을 결제하는 경우, 결제 처리를 위해 아래 정보를 수집·보관합니다:
+        </p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>결제 식별자(주문번호)·결제 금액·결제 상태·결제 일시·요금제 (필수)</li>
+        </ul>
+        <p className="text-xs text-gray-500 pt-1">
+          ※ 카드번호 등 민감한 결제수단 정보는 본 서비스가 직접 수집·보관하지 않으며,
+          결제대행사(포트원)가 직접 처리합니다.
+        </p>
 
         <h2 className="text-lg font-semibold text-gray-900">2. 개인정보의 이용 목적</h2>
         <ul className="list-disc pl-5 space-y-1">
           <li>회원 식별 및 서비스 이용 인증</li>
           <li>공인중개사 자격 진위 확인 및 중개사무소 등록 여부 검증</li>
+          <li>유료 구독 이용권 결제·환불 처리 및 이용 기간 관리</li>
           <li>서비스 이용 기록 관리</li>
           <li>서비스 개선 및 통계 분석</li>
           <li>
@@ -69,6 +80,16 @@ export default function PrivacyPage() {
           위 대조 전송은 입력하신 자격이 실제 등록된 공인중개사인지 확인하기 위한 것이며, 그
           밖에 법령에 의한 요청이 있는 경우 외에는 제3자에게 제공하지 않습니다.
         </p>
+        <p className="pt-2">
+          유료 구독 결제 처리를 위해 아래와 같이 개인정보 처리를 위탁합니다:
+        </p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>
+            포트원(주식회사 코리아포트원): 결제·환불 처리 및 결제 내역 관리 — 결제 식별자·결제
+            금액·결제수단 승인 정보. 위탁 업무 목적 범위 내에서만 처리되며, 결제·환불 처리 완료
+            후 관련 법령이 정한 기간 동안 보관됩니다.
+          </li>
+        </ul>
 
         <h2 className="text-lg font-semibold text-gray-900">5. 개인정보 보호책임자</h2>
         <p>

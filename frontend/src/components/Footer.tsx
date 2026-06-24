@@ -35,6 +35,12 @@ export default function Footer() {
               개인정보처리방침
             </Link>
             <Link
+              href="/refund"
+              className="text-gray-700 hover:text-blue-600 hover:underline"
+            >
+              환불정책
+            </Link>
+            <Link
               href="/help"
               className="text-gray-700 hover:text-blue-600 hover:underline"
             >
@@ -45,6 +51,12 @@ export default function Footer() {
             © {year} 2u부동산 — 공인중개사를 위한 매물·시세 분석 도구
           </p>
         </div>
+
+        <p className="mt-4 text-xs text-gray-400 leading-relaxed">
+          상호: [상호명] · 대표자: [대표자명] · 사업자등록번호: [000-00-00000] ·
+          통신판매업 신고번호: [제0000-지역-0000호] · 주소: [사업장 주소] ·
+          결제대행: 포트원(주식회사 코리아포트원)
+        </p>
       </div>
     </footer>
   );

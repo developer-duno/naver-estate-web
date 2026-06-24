@@ -203,6 +203,7 @@ def get_current_user(
         "role": profile.role,
         "status": profile.status,
         "approved_until": profile.approved_until.isoformat() if profile.approved_until else None,
+        "paid_until": profile.paid_until.isoformat() if profile.paid_until else None,
         "daily_crawl_quota": profile.daily_crawl_quota,
         "daily_export_quota": profile.daily_export_quota,
     }
@@ -223,25 +224,45 @@ def get_optional_user(
         return None
 
 
+def _not_expired(iso: str | None) -> bool:
+    """ISO 만료일이 아직 안 지났는지. naive datetime 방어 포함.
+
+    ⚠ None 은 호출처가 의미를 정한다 — 이 함수는 '값이 있으면 미래인가'만 본다.
+      approved_until=None(무기한 무료)과 paid_until=None(유료 이력 없음)은 의미가 정반대라
+      None 처리를 여기서 하지 않고 get_approved_user 가 분기한다.
+
+    naive datetime — DB 에 offset 없이 박힌 값이 있으면 aware utcnow() 와 비교 시
+    TypeError(500). UTC aware 로 통일. (저장 측도 aware 강제하나 이중 방어.)
+    """
+    if iso is None:
+        return False
+    expiry = datetime.fromisoformat(iso)
+    if expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=timezone.utc)
+    return expiry >= utcnow()
+
+
 def get_approved_user(
     user: dict = Depends(get_current_user),
 ) -> dict:
-    """승인된 사용자 전용 — pending/만료 시 403"""
+    """승인된 사용자 전용 — pending 또는 (무료 승인·유료 이용권 모두 만료) 시 403.
+
+    게이트 통과 = status=approved AND (무료 무기한 승인 OR approved_until 유효 OR paid_until 유효).
+    - approved_until=None: 무기한 무료 승인 → 통과 (verify.py V-WORLD 매칭·관리자 승인 흐름).
+    - approved_until=미래: 관리자 기한부 승인 유효 → 통과.
+    - paid_until=미래: 유료 이용권 유효 → 통과.
+    셋 중 하나라도 만족하면 OK. paid_until=None 은 '유료 이력 없음'이라 통과 근거가 아니다
+    (approved_until=None '무기한 무료'와 의미 정반대 — _not_expired 가 None 처리 안 하고 여기서 분기).
+    """
     if user.get("email") in ADMIN_EMAILS:
         return user  # 관리자는 항상 통과
     if user.get("status") != "approved":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="관리자 승인이 필요합니다")
     approved_until = user.get("approved_until")
-    if approved_until:
-        expiry = datetime.fromisoformat(approved_until)
-        # naive datetime 방어 — 기존 DB 에 offset 없이 박힌 approved_until 이 있으면
-        # aware utcnow() 와 비교 시 TypeError(500) 발생. UTC aware 로 통일해 비교.
-        # (저장 측 admin/users.py 도 aware 강제하나, 이미 박힌 행 보호용 이중 방어.)
-        if expiry.tzinfo is None:
-            expiry = expiry.replace(tzinfo=timezone.utc)
-        if expiry < utcnow():
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="승인 기간이 만료되었습니다")
-    return user
+    free_unlimited = approved_until is None  # 무료 무기한 승인 (관리자 기한 미설정)
+    if free_unlimited or _not_expired(approved_until) or _not_expired(user.get("paid_until")):
+        return user
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="승인 기간이 만료되었습니다")
 
 
 def get_admin_user(

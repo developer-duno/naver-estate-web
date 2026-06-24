@@ -1,10 +1,12 @@
-import Link from "next/link";
 import { CircleCheckBig } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import CheckoutButton from "./CheckoutButton";
+import type { PlanKey } from "@/types/payment";
 
 interface Plan {
   name: string;
+  planKey: PlanKey; // BE PLAN_PRICES(config/plans.py) 키 — 결제 prepare 식별자
   features: string[];
   highlight?: boolean;
 }
@@ -12,10 +14,12 @@ interface Plan {
 const PLANS: Plan[] = [
   {
     name: "기본",
+    planKey: "basic_30d",
     features: ["단지 검색·매물 조회", "시세 조회", "필터 7종", "엑셀 내보내기"],
   },
   {
     name: "프로",
+    planKey: "pro_30d",
     highlight: true,
     features: [
       "기본 플랜 모든 기능",
@@ -38,7 +42,7 @@ export default function PlanCards() {
 }
 
 function PlanCard({ plan }: { plan: Plan }) {
-  const { name, features, highlight } = plan;
+  const { name, planKey, features, highlight } = plan;
   return (
     <Card
       className={
@@ -67,16 +71,7 @@ function PlanCard({ plan }: { plan: Plan }) {
           </li>
         ))}
       </ul>
-      <Link
-        href="/signup"
-        className={
-          highlight
-            ? "block w-full text-center font-medium text-sm py-2.5 rounded-lg bg-accent-blue hover:bg-accent-blue/90 text-white transition"
-            : "block w-full text-center font-medium text-sm py-2.5 rounded-lg bg-neutral-light hover:bg-neutral-light/80 text-text-primary transition"
-        }
-      >
-        무료 체험 시작
-      </Link>
+      <CheckoutButton planKey={planKey} highlight={highlight} />
     </Card>
   );
 }

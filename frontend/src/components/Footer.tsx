@@ -35,6 +35,12 @@ export default function Footer() {
               개인정보처리방침
             </Link>
             <Link
+              href="/refund"
+              className="text-gray-700 hover:text-blue-600 hover:underline"
+            >
+              환불정책
+            </Link>
+            <Link
               href="/help"
               className="text-gray-700 hover:text-blue-600 hover:underline"
             >

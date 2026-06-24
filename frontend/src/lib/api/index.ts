@@ -10,3 +10,4 @@ export * from "./analytics";
 export * from "./admin";
 export * from "./mibunyang";
 export * from "./verify";
+export * from "./payment";

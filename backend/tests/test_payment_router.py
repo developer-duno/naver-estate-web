@@ -364,3 +364,188 @@ def test_complete_lost_race_returns_already_paid(client, db):
                           headers=_auth("u1"))
     assert res.status_code == 200
     assert res.json()["already_paid"] is True
+
+
+# ── 환불·종결상태·감사 회귀 (세션 325 적대 리뷰 #3·#4·#5·#9·#12 — 데이터 정합성) ──
+
+
+def _webhook_obj_typed(payment_id, event_type):
+    """type 지정 가능한 webhook mock (환불/취소 테스트용)."""
+    return SimpleNamespace(type=event_type, data=SimpleNamespace(payment_id=payment_id))
+
+
+def _cancelled_portone(amount=49000):
+    """PortOne get_payment mock — status=CANCELLED (종결 상태)."""
+    return SimpleNamespace(status="CANCELLED", amount=SimpleNamespace(total=amount), id="tx-c")
+
+
+def test_grant_subscription_cancelled_is_permanent(db):
+    """CANCELLED 종결 상태 분기 (#9): status=CANCELLED 는 TransientGrantError(503 재시도)가
+    아니라 PermanentGrantError 로 분기 → webhook 이 200 not_granted 로 재전송 중단."""
+    from routers.payment import PermanentGrantError, _grant_subscription
+
+    _make_profile(db, "u1")
+    _seed_payment(db, "pay_cancel", "u1")
+    raised = None
+    try:
+        _grant_subscription(db, db.get(Payment, "pay_cancel"), _cancelled_portone())
+    except PermanentGrantError as e:
+        raised = e
+    assert raised is not None, "CANCELLED 는 PermanentGrantError 여야 한다"
+    db.expire_all()
+    assert db.get(UserProfile, "u1").paid_until is None
+
+
+def test_webhook_cancelled_returns_200_not_503(client, db):
+    """CANCELLED webhook (#9): 종결 상태는 200 으로 PortOne 재전송 중단 (503 무한루프 차단).
+    paid 아닌 결제(ready)라 환불 롤백 대상도 아님 → not_granted 또는 not_paid 로 멈춤."""
+    _make_profile(db, "u1")
+    _seed_payment(db, "pay_wh_cancel", "u1")
+    with _portone_env(), \
+         patch("routers.payment._verify_webhook",
+               return_value=_webhook_obj_typed("pay_wh_cancel", "Transaction.Paid")), \
+         patch("routers.payment._fetch_portone_payment", return_value=_cancelled_portone()):
+        res = client.post("/api/payment/webhook", content=b'{"any":1}',
+                          headers={"webhook-signature": "v1,ok"})
+    assert res.status_code == 200  # 503 아님 — 재전송 중단
+    assert res.json().get("skipped") == "not_granted"
+
+
+def test_webhook_full_refund_rolls_back_paid_until(client, db):
+    """완전환불 webhook (#4): Transaction.Cancelled → status='refunded' + paid_until 롤백.
+    환불 후 게이트가 더는 통과 안 되도록 이용권을 부여 일수만큼 되돌린다."""
+    from datetime import datetime, timedelta, timezone
+
+    # 30일치 부여된 상태 (paid_until = now + 30일), 결제는 paid
+    future = datetime.now(timezone.utc) + timedelta(days=30)
+    _make_profile(db, "u1", paid_until=future)
+    _seed_payment(db, "pay_refund", "u1", plan="basic_30d", status="paid")
+    with _portone_env(), \
+         patch("routers.payment._verify_webhook",
+               return_value=_webhook_obj_typed("pay_refund", "Transaction.Cancelled")), \
+         patch("routers.payment._fetch_portone_payment", return_value=_cancelled_portone()):
+        res = client.post("/api/payment/webhook", content=b'{"any":1}',
+                          headers={"webhook-signature": "v1,ok"})
+    assert res.status_code == 200
+    assert res.json().get("refunded") is True
+    db.expire_all()
+    assert db.get(Payment, "pay_refund").status == "refunded"
+    # 30일 부여분이 롤백 → paid_until 이 now 이하(만료)로 떨어짐.
+    # SQLite 는 naive datetime 저장 → aware 와 직접 비교 불가, naive 로 통일 후 비교.
+    rolled = db.get(UserProfile, "u1").paid_until
+    if rolled.tzinfo is not None:
+        rolled = rolled.replace(tzinfo=None)
+    assert rolled <= datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=1)
+
+
+def test_webhook_refund_idempotent(client, db):
+    """환불 멱등 (#4): 이미 refunded 인 결제에 환불 webhook 재도착 → no-op (재롤백 안 함)."""
+    _make_profile(db, "u1")
+    _seed_payment(db, "pay_refund2", "u1", status="refunded")
+    with _portone_env(), \
+         patch("routers.payment._verify_webhook",
+               return_value=_webhook_obj_typed("pay_refund2", "Transaction.Cancelled")):
+        res = client.post("/api/payment/webhook", content=b'{"any":1}',
+                          headers={"webhook-signature": "v1,ok"})
+    assert res.status_code == 200
+    assert res.json().get("already_refunded") is True
+
+
+def test_webhook_partial_cancel_alerts_no_rollback(client, db):
+    """부분환불 webhook (사장님 결정): Transaction.PartialCancelled → paid_until 변경 없이
+    telegram 알림 + audit 만. 자동 롤백 안 함 (운영자 수동)."""
+    from datetime import datetime, timedelta, timezone
+
+    future = datetime.now(timezone.utc) + timedelta(days=30)
+    _make_profile(db, "u1", paid_until=future)
+    _seed_payment(db, "pay_partial", "u1", status="paid")
+    _reset_alert_cooldown()
+    with _portone_env(), \
+         patch("routers.payment._verify_webhook",
+               return_value=_webhook_obj_typed("pay_partial", "Transaction.PartialCancelled")), \
+         patch("services.telegram.send_telegram", return_value=True) as mock_tg:
+        res = client.post("/api/payment/webhook", content=b'{"any":1}',
+                          headers={"webhook-signature": "v1,ok"})
+    assert res.status_code == 200
+    assert res.json().get("partial_cancel") == "manual_review"
+    assert mock_tg.called  # 운영자 알림 발사
+    db.expire_all()
+    # 롤백 안 함 (변경 0) — SQLite naive 저장이라 양쪽 naive 로 통일 후 비교.
+    rolled = db.get(UserProfile, "u1").paid_until
+    if rolled.tzinfo is not None:
+        rolled = rolled.replace(tzinfo=None)
+    assert rolled == future.replace(tzinfo=None)
+    assert db.get(Payment, "pay_partial").status == "paid"  # 자동 전이 안 함
+
+
+def test_complete_forgery_logs_audit_and_compare_and_set(client, db):
+    """위변조 거부 audit (#5) + status 오염 차단 (#3): complete 가 금액 불일치(위변조) 거부 시
+    audit_logs 에 payment_forgery_rejected 기록 + status='failed' 는 compare-and-set(ready→failed).
+    동시 webhook 이 이미 paid 박았으면 rowcount=0 으로 paid 보존."""
+    from db.models import AuditLog
+
+    _make_profile(db, "u1")
+    _seed_payment(db, "pay_forge", "u1")  # ready
+    with _portone_env(), \
+         patch("routers.payment._fetch_portone_payment", return_value=_paid_portone(10)):  # 49000≠10
+        res = client.post("/api/payment/complete", json={"payment_id": "pay_forge"},
+                          headers=_auth("u1"))
+    assert res.status_code == 400
+    db.expire_all()
+    assert db.get(Payment, "pay_forge").status == "failed"  # ready→failed compare-and-set 성공
+    logs = db.query(AuditLog).filter(AuditLog.action == "payment_forgery_rejected").all()
+    assert len(logs) == 1  # 위변조 시도 영구 감사 기록
+
+
+def test_webhook_refund_reverifies_portone(client, db):
+    """환불 PortOne 재검증 (리뷰 MEDIUM-1): 서명은 통과해도 PortOne 실제 status 가 CANCELLED
+    아니면 롤백 거부. PortOne 조회 실패 시 503 으로 재시도 유도 (추측 환불 금지)."""
+    from datetime import datetime, timedelta, timezone
+
+    future = datetime.now(timezone.utc) + timedelta(days=30)
+    _make_profile(db, "u1", paid_until=future)
+    _seed_payment(db, "pay_refund_unverified", "u1", status="paid")
+    # 서명은 Cancelled 인데 PortOne 실제 status 는 PAID → 롤백 거부
+    with _portone_env(), \
+         patch("routers.payment._verify_webhook",
+               return_value=_webhook_obj_typed("pay_refund_unverified", "Transaction.Cancelled")), \
+         patch("routers.payment._fetch_portone_payment", return_value=_paid_portone(49000)):
+        res = client.post("/api/payment/webhook", content=b'{"any":1}',
+                          headers={"webhook-signature": "v1,ok"})
+    assert res.status_code == 200
+    assert res.json().get("skipped") == "not_cancelled"
+    db.expire_all()
+    assert db.get(Payment, "pay_refund_unverified").status == "paid"  # 롤백 안 함
+
+
+def _reset_alert_cooldown():
+    """알림 쿨다운 상태 초기화 (테스트 격리 — 모듈 전역 _last_alert_at)."""
+    import routers.payment as pay
+    pay._last_alert_at.clear()
+
+
+def test_webhook_bad_signature_alerts_operator(client, db):
+    """서명검증 실패 운영자 알림 (#12): 지속적 secret 불일치를 telegram 으로 surfacing."""
+    _reset_alert_cooldown()
+    _seed_payment(db, "pay_sig", "u1")
+    with _portone_env(), \
+         patch("routers.payment._verify_webhook", side_effect=Exception("bad sig")), \
+         patch("services.telegram.send_telegram", return_value=True) as mock_tg:
+        res = client.post("/api/payment/webhook", content=b'{"x":1}',
+                          headers={"webhook-signature": "v1,bad"})
+    assert res.status_code == 400
+    assert mock_tg.called  # 운영자 알림 발사
+
+
+def test_webhook_bad_signature_alert_throttled(client, db):
+    """서명실패 알림 쿨다운 (리뷰 HIGH-1): 공개 엔드포인트 폭격 시 알림 스팸 차단.
+    같은 종류 알림은 쿨다운 내 1회만 발사 (가짜 서명 100회 → telegram 1회)."""
+    _reset_alert_cooldown()
+    _seed_payment(db, "pay_sig2", "u1")
+    with _portone_env(), \
+         patch("routers.payment._verify_webhook", side_effect=Exception("bad sig")), \
+         patch("services.telegram.send_telegram", return_value=True) as mock_tg:
+        for _ in range(5):  # 5회 연속 가짜 서명
+            client.post("/api/payment/webhook", content=b'{"x":1}',
+                        headers={"webhook-signature": "v1,bad"})
+    assert mock_tg.call_count == 1  # 쿨다운으로 5회 중 1회만 발사

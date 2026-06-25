@@ -19,6 +19,11 @@ from sqlalchemy.pool import NullPool
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["SUPABASE_JWT_SECRET"] = "test-secret-key-for-testing-only"
+# ⚠ 테스트가 실서비스 텔레그램 봇으로 알림을 쏘지 못하게 강제 비활성 (import 시점 고정).
+# send_telegram 은 TELEGRAM_ENABLED!='true' 면 즉시 False 반환 → 실제 API 호출 0.
+# 로컬 .env 에 TELEGRAM_ENABLED=true 가 로드돼 있어도 본 라인이 덮어써 사고 차단
+# (세션 325 사고: 결제 알림 테스트가 운영자 휴대폰으로 실알림 발사).
+os.environ["TELEGRAM_ENABLED"] = "false"
 
 # ARRAY → JSON 패치 (SQLite 호환)
 

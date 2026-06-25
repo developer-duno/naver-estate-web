@@ -39,10 +39,10 @@ describe("/pricing 마케팅 페이지", () => {
     renderPage();
     const links = screen.getAllByRole("link");
     const signupLinks = links.filter((a) => a.getAttribute("href") === "/signup");
-    // Hero CTA + 카드 2개 + 푸터 CTA = 최소 4개
-    expect(signupLinks.length).toBeGreaterThanOrEqual(4);
-    // "무료 체험 시작" 텍스트가 카드 버튼에 들어감 (PlanCards 통합 검증)
-    expect(screen.getAllByText("무료 체험 시작").length).toBe(2);
+    // Hero CTA + 카드 3개(basic/pro/pro_365) + 푸터 CTA = 최소 5개
+    expect(signupLinks.length).toBeGreaterThanOrEqual(5);
+    // "무료 체험 시작" 텍스트가 카드 버튼에 들어감 (PlanCards 통합 검증, 카드 3종)
+    expect(screen.getAllByText("무료 체험 시작").length).toBe(3);
   });
 
   it("PR 7a — 사회적 증명 4 수치가 모두 렌더된다 (가짜 데이터 0)", () => {

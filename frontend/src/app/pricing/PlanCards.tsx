@@ -29,11 +29,20 @@ const PLANS: Plan[] = [
       "우선 지원",
     ],
   },
+  {
+    name: "프로 연간",
+    planKey: "pro_365d",
+    features: [
+      "프로 플랜 모든 기능",
+      "1년 약정 (월 환산 최대 할인)",
+      "갱신 부담 없이 1년 이용",
+    ],
+  },
 ];
 
 export default function PlanCards() {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-4xl mx-auto">
       {PLANS.map((plan) => (
         <PlanCard key={plan.name} plan={plan} />
       ))}

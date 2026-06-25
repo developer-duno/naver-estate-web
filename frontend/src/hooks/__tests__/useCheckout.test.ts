@@ -15,6 +15,16 @@ vi.mock("@/lib/api", () => ({
   completePayment: (...a: unknown[]) => completePaymentMock(...a),
 }));
 
+// sonner 토스트 — 호출만 확인 (DOM 없는 훅 테스트라 mock)
+const toastSuccessMock = vi.fn();
+const toastInfoMock = vi.fn();
+vi.mock("sonner", () => ({
+  toast: {
+    success: (...a: unknown[]) => toastSuccessMock(...a),
+    info: (...a: unknown[]) => toastInfoMock(...a),
+  },
+}));
+
 vi.mock("@/lib/supabase", () => ({
   createClient: () => ({
     auth: {
@@ -120,5 +130,38 @@ describe("useCheckout 훅", () => {
     expect(requestPaymentMock).not.toHaveBeenCalled();
     expect(res).toBeNull();
     await waitFor(() => expect(result.current.payError).toBe("결제 서비스가 설정되지 않았습니다"));
+  });
+
+  it("409(정산 지연): 실패가 아니라 '잠시 후 반영' 안내 + info 토스트", async () => {
+    const { ApiError } = await import("@/lib/api/core");
+    preparePaymentMock.mockResolvedValue(PREP);
+    requestPaymentMock.mockResolvedValue({ transactionType: "PAYMENT", txId: "tx_1", paymentId: "pay_1" });
+    completePaymentMock.mockRejectedValue(new ApiError("아직 처리중", 409));
+
+    const { useCheckout } = await import("../useCheckout");
+    const { result } = renderHook(() => useCheckout(), { wrapper: TestQueryProvider });
+
+    await act(async () => {
+      await result.current.startCheckout("basic_30d");
+    });
+
+    // 409 는 일반 실패 메시지가 아니라 '접수됨, 잠시 후 반영' 안내 + info 토스트
+    await waitFor(() => expect(result.current.payError).toContain("잠시 후"));
+    expect(toastInfoMock).toHaveBeenCalled();
+  });
+
+  it("결제 성공 시 success 토스트(이용권 만료일 안내) 발사", async () => {
+    preparePaymentMock.mockResolvedValue(PREP);
+    requestPaymentMock.mockResolvedValue({ transactionType: "PAYMENT", txId: "tx_1", paymentId: "pay_1" });
+    completePaymentMock.mockResolvedValue({ paid_until: "2026-07-24T00:00:00+00:00", plan: "basic_30d", already_paid: false });
+
+    const { useCheckout } = await import("../useCheckout");
+    const { result } = renderHook(() => useCheckout(), { wrapper: TestQueryProvider });
+
+    await act(async () => {
+      await result.current.startCheckout("basic_30d");
+    });
+
+    await waitFor(() => expect(toastSuccessMock).toHaveBeenCalled());
   });
 });

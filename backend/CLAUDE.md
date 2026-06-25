@@ -96,13 +96,13 @@
 | V032 | complex_price_history 제약명 정합 (V001 uq_cph_composite → 코드·prod의 complex_price_history_upsert_key, 멱등 no-op on prod) | 2026-06-07 (세션 280) |
 | V033 | agent_verifications.phone 컬럼 추가 (공인중개사 검증 연락처 수집, PR #171) | 2026-06-15 (prod 적용완료, 세션 307 라이브검증: phone 저장 확인) |
 | V034 | agent_verifications broker_verified/broker_jurirno/broker_status 3컬럼 (V-WORLD 중개사 대조 결과, 세션 308 PR B) | 2026-06-15 (prod 적용완료, 세션 308 직접 실측: 3컬럼 확인) |
-| V035 | user_profiles.paid_until + payments 테이블 (결제 시스템 PR1 — 유료 구독 이용권) | ⏳ **prod 미적용** (코드보다 선행 실행 필수 — 사장님 SQL Editor 실행 예정) |
+| V035 | user_profiles.paid_until + payments 테이블 (결제 시스템 PR1 — 유료 구독 이용권) | 2026-06-24 (prod 적용완료, 세션 322: 사장님 SQL Editor 실행 → Claude 재검증 paid_until·payments·인덱스 EXISTS) |
 
 - `db/migrations/` 폴더에 `V000__` ~ `V035__` SQL 파일 = 36 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
-- 최신 = V035 (결제 시스템 PR1, **prod 미적용** — 적용 후 본 표 갱신 의무). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
-  - ⚠ V035 = 코드보다 **prod 선행 실행 필수** — `paid_until`(user_profiles)·`Payment` 가 ORM 매핑돼 INSERT/SELECT 목록 포함 → 컬럼/테이블 부재 시 get_current_user·결제 엔드포인트 500. `ADD COLUMN/CREATE TABLE IF NOT EXISTS` 라 멱등·안전.
+- 최신 = V035 (결제 시스템 PR1, **prod 적용완료** 세션 322). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
+  - V035 = 코드보다 prod 선행 실행 완료 — `paid_until`(user_profiles)·`Payment` 가 ORM 매핑돼 INSERT/SELECT 목록 포함 → 컬럼/테이블 부재 시 get_current_user·결제 엔드포인트 500 이었으나, 세션 322 에 적용·재검증 완료. `ADD COLUMN/CREATE TABLE IF NOT EXISTS` 라 멱등·안전.
   - V034 = 코드보다 prod 선행 실행 완료 — broker_verified 등 3컬럼이 ORM 에 매핑돼 INSERT/SELECT 목록 포함 → 컬럼 부재 시 submit/status/admin 전부 500. `ADD COLUMN IF NOT EXISTS` 라 멱등·안전.
   - ⚠ V033 = 코드보다 **prod 선행 실행 필수** — ORM 에 phone 매핑돼 INSERT/SELECT 컬럼 목록에 포함되므로, 컬럼 부재 시 submit/status/admin 전부 500. `ADD COLUMN IF NOT EXISTS` 라 멱등·안전.
 - ⚠️ **마이그레이션 자동 러너 없음** — V030/V031 + `db/maintenance/*.sql` 은 Supabase SQL Editor **수동 실행** 필수 (파일만 있으면 효과 0). 정기 VACUUM 은 `vacuum_maintenance` 스케줄러 잡(매일 03:50)이 자동 처리.

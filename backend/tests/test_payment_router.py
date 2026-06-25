@@ -139,15 +139,24 @@ def test_complete_amount_mismatch_400(client, db):
     assert db.get(Payment, "pay_bad").status == "failed"
 
 
-def test_complete_not_paid_400(client, db):
-    """PortOne status≠PAID → 400 거부."""
+def test_complete_pending_is_transient_409_keeps_ready(client, db):
+    """PortOne status≠PAID(정산 지연) → 일시 실패 409. payment 행은 'ready' 유지(failed 아님).
+
+    ⚠ 결함 박제 테스트 정정 (testing.md §결함 수정): 기존 test_complete_not_paid_400 은
+    일시 PENDING 을 영구 실패와 같은 400+failed 로 뭉갰다(finding #10). 일시 실패는 재시도·webhook
+    으로 복구 가능해야 하므로 409 + status='ready' 유지로 정정. PortOne 정산지연 PENDING 명세 근거.
+    """
     _make_profile(db, "u1")
     _seed_payment(db, "pay_pending", "u1")
     not_paid = SimpleNamespace(status="READY", amount=SimpleNamespace(total=49000), id="tx")
     with _portone_env(), patch("routers.payment._fetch_portone_payment", return_value=not_paid):
         res = client.post("/api/payment/complete", json={"payment_id": "pay_pending"},
                           headers=_auth("u1"))
-    assert res.status_code == 400
+    assert res.status_code == 409
+    db.expire_all()
+    # 일시 실패는 failed 로 박지 않는다 — webhook·재시도로 복구 가능해야 함
+    assert db.get(Payment, "pay_pending").status == "ready"
+    assert db.get(UserProfile, "u1").paid_until is None
 
 
 def test_complete_idempotent(client, db):
@@ -243,3 +252,115 @@ def test_webhook_unknown_payment_ignored(client):
                           headers={"webhook-signature": "v1,ok"})
     assert res.status_code == 200
     assert res.json().get("skipped") == "unknown_payment"
+
+
+# ── 동시성·멱등성 회귀 (적대 리뷰 #2·#3·#4·#8·#11 — TOCTOU 이중부여 차단) ──
+
+
+def test_grant_subscription_double_call_extends_once(db):
+    """이중 grant 차단 (#2·#3): 같은 payment 에 _grant_subscription 두 번 호출 →
+    첫 호출만 paid_until 연장(1회분 30일), 두 번째는 compare-and-set 선점 실패로 no-op.
+
+    SQLite 단일 세션 순차 호출로 compare-and-set 멱등 로직을 검증한다. 진짜 동시 contention
+    은 SQLite 로 재현 불가하나, rowcount 게이트(ready→paid 원자 선점) 자체는 검증된다.
+    """
+    from routers.payment import _grant_subscription
+
+    profile = _make_profile(db, "u1")
+    _seed_payment(db, "pay_dbl", "u1")
+    amount = PLAN_PRICES["basic_30d"]["amount"]
+    portone = _paid_portone(amount)
+
+    # 1차 — 선점 성공 → paid_until 연장
+    p1 = _grant_subscription(db, db.get(Payment, "pay_dbl"), portone)
+    db.commit()
+    assert p1 is not None
+    first_paid_until = db.get(UserProfile, "u1").paid_until
+    assert first_paid_until is not None
+
+    # 2차 — 같은 payment 재호출 (이미 paid → 빠른 경로 또는 선점 실패) → no-op
+    db.expire_all()
+    p2 = _grant_subscription(db, db.get(Payment, "pay_dbl"), portone)
+    db.commit()
+    assert p2 is None  # 멱등 no-op — 재연장 안 함
+    db.expire_all()
+    # paid_until 이 30일 1회분만 — 두 번 더해 60일(이중부여)이 아님
+    assert db.get(UserProfile, "u1").paid_until == first_paid_until
+    assert profile is not None  # _make_profile 반환 확인 (lint)
+
+
+def test_grant_subscription_failed_status_not_regranted(db):
+    """failed 재grant 차단 (#8): status='failed' 결제는 compare-and-set(WHERE status='ready')
+    선점 실패 → paid_until 미부여. 'failed'/'refunded' 는 종결 상태로 재부여 불가."""
+    from routers.payment import _grant_subscription
+
+    _make_profile(db, "u1")
+    _seed_payment(db, "pay_failed", "u1", status="failed")
+    amount = PLAN_PRICES["basic_30d"]["amount"]
+    result = _grant_subscription(db, db.get(Payment, "pay_failed"), _paid_portone(amount))
+    db.commit()
+    assert result is None  # ready 아니라 선점 실패 — 부여 안 함
+    db.expire_all()
+    assert db.get(UserProfile, "u1").paid_until is None
+    assert db.get(Payment, "pay_failed").status == "failed"  # 상태 변동 없음
+
+
+def test_webhook_transient_pending_503_keeps_ready(client, db):
+    """webhook 일시 실패 503 (#4): PortOne status≠PAID(정산 지연) → 503 으로 PortOne 재전송 유발.
+    payment 행은 'ready' 유지(failed 아님), paid_until 미부여. 200 으로 뭉개면 영구 미부여로 직결."""
+    _make_profile(db, "u1")
+    _seed_payment(db, "pay_wh_pending", "u1")
+    pending = SimpleNamespace(status="PENDING", amount=SimpleNamespace(total=49000), id="tx")
+    with _portone_env(), \
+         patch("routers.payment._verify_webhook", return_value=_webhook_obj("pay_wh_pending")), \
+         patch("routers.payment._fetch_portone_payment", return_value=pending):
+        res = client.post("/api/payment/webhook", content=b'{"any":1}',
+                          headers={"webhook-signature": "v1,ok"})
+    assert res.status_code == 503  # 비-200 → PortOne 재전송
+    db.expire_all()
+    assert db.get(Payment, "pay_wh_pending").status == "ready"  # 일시 실패는 ready 유지
+    assert db.get(UserProfile, "u1").paid_until is None
+
+
+def test_webhook_amount_mismatch_200_not_granted(client, db):
+    """webhook 영구 실패 200 (#7 사각): 금액 불일치(위변조) → 200 not_granted (PortOne 재전송 중단).
+    위변조는 재시도 무의미하므로 200 으로 멈춘다. status='ready' 유지(grant 거부)."""
+    _make_profile(db, "u1")
+    _seed_payment(db, "pay_wh_bad", "u1")
+    with _portone_env(), \
+         patch("routers.payment._verify_webhook", return_value=_webhook_obj("pay_wh_bad")), \
+         patch("routers.payment._fetch_portone_payment", return_value=_paid_portone(10)):  # 49000 ≠ 10
+        res = client.post("/api/payment/webhook", content=b'{"any":1}',
+                          headers={"webhook-signature": "v1,ok"})
+    assert res.status_code == 200
+    assert res.json().get("skipped") == "not_granted"
+    db.expire_all()
+    assert db.get(UserProfile, "u1").paid_until is None
+    assert db.get(Payment, "pay_wh_bad").status == "ready"  # grant 거부, 상태 무변경
+
+
+def test_webhook_no_api_secret_503(client, db):
+    """webhook env 가드 대칭 (#11): WEBHOOK_SECRET 만 있고 API_SECRET 비면 503.
+    complete(_require_portone_config)와 대칭 — 빈 secret 으로 PortOne 호출 차단."""
+    _seed_payment(db, "pay_wh_noenv", "u1")
+    with _portone_env(**{"routers.payment.PORTONE_API_SECRET": ""}), \
+         patch("routers.payment._verify_webhook", return_value=_webhook_obj("pay_wh_noenv")):
+        res = client.post("/api/payment/webhook", content=b'{"any":1}',
+                          headers={"webhook-signature": "v1,ok"})
+    assert res.status_code == 503
+
+
+def test_complete_lost_race_returns_already_paid(client, db):
+    """complete 선점 실패 멱등 (#2): _grant_subscription 이 None 반환(동시 webhook 이 이미 부여)
+    → complete 는 already_paid=True 로 멱등 응답 (크래시·재연장 안 함)."""
+    _make_profile(db, "u1", paid_until=None)
+    _seed_payment(db, "pay_race", "u1")
+    amount = PLAN_PRICES["basic_30d"]["amount"]
+    # _grant_subscription 이 None(선점 실패) 반환하도록 patch → complete 의 profile is None 분기
+    with _portone_env(), \
+         patch("routers.payment._fetch_portone_payment", return_value=_paid_portone(amount)), \
+         patch("routers.payment._grant_subscription", return_value=None):
+        res = client.post("/api/payment/complete", json={"payment_id": "pay_race"},
+                          headers=_auth("u1"))
+    assert res.status_code == 200
+    assert res.json()["already_paid"] is True

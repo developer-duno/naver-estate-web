@@ -33,6 +33,23 @@ from utils import utcnow
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
+class TransientGrantError(Exception):
+    """일시 실패 — PortOne 가 아직 정산중(status != PAID)이라 재시도하면 성공 가능.
+
+    webhook 은 비-200(503)으로 응답해 PortOne 재전송을 유발하고, complete 는 payment 행을
+    'ready' 로 유지(failed 로 박지 않음)해 webhook·재시도로 복구 가능하게 한다.
+    """
+
+
+class PermanentGrantError(Exception):
+    """영구 실패 — 금액 불일치(위변조)·미지원 plan·프로필 부재. 재시도해도 무의미.
+
+    webhook 은 200 not_granted 로 응답해 PortOne 재전송을 멈추고, complete 는 status='failed'
+    로 박아 거부한다.
+    """
+
+
 PORTONE_API_SECRET = os.getenv("PORTONE_API_SECRET", "")
 PORTONE_STORE_ID = os.getenv("PORTONE_STORE_ID", "")
 PORTONE_CHANNEL_KEY = os.getenv("PORTONE_CHANNEL_KEY", "")
@@ -96,35 +113,56 @@ def _portone_amount(payment) -> int | None:
 def _grant_subscription(db: Session, payment: Payment, portone_payment) -> UserProfile | None:
     """결제 검증 통과 시 paid_until 연장 — complete·webhook 공유 멱등 헬퍼.
 
-    멱등: 이미 paid 면 no-op (재연장 거부). PAID 아님/금액 불일치면 ValueError.
+    멱등성은 DB 레벨 compare-and-set 으로 보장한다 (ready → paid 원자적 선점).
+    complete(redirect)와 webhook 이 같은 payment 를 거의 동시에 처리해도 (PortOne 은 둘 다
+    발사함), 단일 행 조건부 UPDATE `WHERE status='ready'` 는 정확히 하나만 rowcount=1 →
+    이용권은 1회만 연장된다 (이중 부여 차단). 행 잠금/FOR UPDATE 불필요 — 단일 행 UPDATE 는
+    READ COMMITTED 에서도 원자적이고 SQLite·PostgreSQL 양쪽 동일 동작.
+
+    실패 분류:
+      - status != PAID  → TransientGrantError (정산 지연, 재시도 시 성공 가능)
+      - 금액 불일치·미지원 plan·프로필 부재 → PermanentGrantError (재시도 무의미)
     호출자가 commit + 캐시 무효화 + audit 를 담당 (단일 트랜잭션, log_action 패턴 답습).
-    반환: 갱신된 profile (이미 paid 면 None — 호출자가 멱등 분기).
+    반환: 갱신된 profile (이미 처리됨/선점 실패면 None — 호출자가 멱등 분기).
     """
     if payment.status == "paid":
-        return None  # 이미 처리됨 — 멱등 no-op
+        return None  # 빠른 경로 — 이미 처리됨 (진짜 멱등 보장은 아래 compare-and-set)
 
     status = _portone_status(portone_payment)
     if status != "PAID":
-        raise ValueError(f"결제가 완료되지 않았습니다 (status={status})")
+        raise TransientGrantError(f"결제가 완료되지 않았습니다 (status={status})")
 
     paid_amount = _portone_amount(portone_payment)
     if paid_amount is None or paid_amount != payment.amount:
-        # 위변조·금액 불일치 — 이용권 부여 거부
-        raise ValueError(
+        # 위변조·금액 불일치 — 이용권 부여 거부 (영구 실패)
+        raise PermanentGrantError(
             f"결제 금액 불일치 (기대={payment.amount}, 실제={paid_amount})"
         )
 
     plan_meta = PLAN_PRICES.get(payment.plan)
     if not plan_meta:
-        raise ValueError(f"알 수 없는 요금제 (plan={payment.plan})")
+        raise PermanentGrantError(f"알 수 없는 요금제 (plan={payment.plan})")
 
     profile = db.get(UserProfile, payment.user_id)
     if not profile:
-        raise ValueError("결제 사용자 프로필이 존재하지 않습니다")
+        raise PermanentGrantError("결제 사용자 프로필이 존재하지 않습니다")
 
-    payment.status = "paid"
-    payment.paid_at = utcnow()
-    payment.raw = _serialize_portone(portone_payment)
+    # ready → paid 원자적 선점 (compare-and-set). 동시 complete+webhook 중 하나만 통과.
+    # status='ready' 조건이 failed/refunded/paid 도 선점 실패시켜 멱등성·재grant 차단 동시 달성.
+    won = db.query(Payment).filter(
+        Payment.payment_id == payment.payment_id,
+        Payment.status == "ready",
+    ).update(
+        {
+            "status": "paid",
+            "paid_at": utcnow(),
+            "raw": _serialize_portone(portone_payment),
+        },
+        synchronize_session=False,
+    )
+    if won == 0:
+        return None  # 다른 트랜잭션이 이미 선점 — 멱등 no-op (이중 연장 안 함)
+
     profile.paid_until = extend_paid_until(profile.paid_until, plan_meta["days"])
     return profile
 
@@ -202,10 +240,25 @@ def complete_payment(
     portone_payment = _fetch_portone_payment(body.payment_id)
     try:
         profile = _grant_subscription(db, payment, portone_payment)
-    except ValueError as e:
+    except TransientGrantError as e:
+        # 정산 지연(PENDING) — payment 행은 'ready' 유지(failed 로 박지 않음)해
+        # webhook·재시도로 복구 가능. 409 로 "아직 처리중, 잠시 후 재시도" 안내.
+        raise HTTPException(status_code=409, detail=str(e))
+    except PermanentGrantError as e:
+        # 위변조·데이터 오류 — 영구 거부. status='failed' 박고 400.
         payment.status = "failed"
         db.commit()
         raise HTTPException(status_code=400, detail=str(e))
+
+    if profile is None:
+        # compare-and-set 선점 실패 — 동시 요청(webhook 등)이 이미 부여함. 멱등 처리.
+        db.rollback()
+        profile = db.get(UserProfile, user["user_id"])
+        return {
+            "paid_until": profile.paid_until.isoformat() if profile and profile.paid_until else None,
+            "plan": payment.plan,
+            "already_paid": True,
+        }
 
     log_action(db, user["user_id"], "payment_complete", "payment", body.payment_id, {
         "plan": payment.plan,
@@ -230,6 +283,9 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
     """
     if not PORTONE_WEBHOOK_SECRET:
         raise HTTPException(status_code=503, detail="결제 웹훅이 설정되지 않았습니다")
+    # complete(187)와 대칭 — _fetch_portone_payment 가 PORTONE_API_SECRET 을 쓰므로
+    # 부분 설정(webhook secret 만 주입) 상태에서 빈 API_SECRET 으로 PortOne 호출 차단.
+    _require_portone_config()
 
     raw_body = await request.body()
     payload_str = raw_body.decode("utf-8")
@@ -258,17 +314,27 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
     portone_payment = _fetch_portone_payment(payment_id)
     try:
         profile = _grant_subscription(db, payment, portone_payment)
-    except ValueError as e:
+    except TransientGrantError as e:
+        # 정산 지연(PENDING) — 503 으로 PortOne 재전송 유발 (안전망 유지).
+        # 200 으로 응답하면 재전송이 막혀 영구 미부여로 직결됨.
+        logger.warning("[PAYMENT] 웹훅 일시 실패 — 재시도 유도 (payment_id=%s): %s", payment_id, e)
+        raise HTTPException(status_code=503, detail="결제 확인 지연 — 재시도 필요")
+    except PermanentGrantError as e:
+        # 위변조·데이터 오류 — 재시도 무의미. 200 으로 PortOne 재전송 중단.
         logger.warning("[PAYMENT] 웹훅 이용권 부여 거부 (payment_id=%s): %s", payment_id, e)
         return {"received": True, "skipped": "not_granted"}
+
+    if profile is None:
+        # compare-and-set 선점 실패 — 동시 요청(complete 등)이 이미 부여함. 멱등 처리.
+        db.rollback()
+        return {"received": True, "already_paid": True}
 
     log_action(db, payment.user_id, "payment_webhook", "payment", payment_id, {
         "plan": payment.plan,
         "amount": payment.amount,
     })
     db.commit()
-    if profile:
-        _user_cache.delete(f"profile:{payment.user_id}")
+    _user_cache.delete(f"profile:{payment.user_id}")
     return {"received": True, "granted": True}
 
 

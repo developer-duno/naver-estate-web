@@ -6,8 +6,10 @@ amount 를 조회해 Payment 행에 박고, complete 가 PortOne 응답 금액�
 """
 
 # plan 키 → {amount(원, 서버 결정값), days(이용권 일수), order_name(PortOne 주문명)}
+# 가격(세션 326 사장님 확정): 월 10,000원(원가 100,000 90%할인) / 연 100,000원(원가 1,000,000 90%할인).
+# 무료체험(기본)은 결제(prepare)를 타지 않으므로 PLAN_PRICES 에 없다 — FE 무료체험 버튼이 /signup 으로 분기.
+# ⚠ FE 표시 할인가(PlanCards.tsx)는 이 amount 와 일치해야 한다 (사용자가 보는 가격=실제 청구가, 정합 가드).
 PLAN_PRICES: dict[str, dict] = {
-    "basic_30d": {"amount": 49000, "days": 30, "order_name": "기본 플랜 30일"},
-    "pro_30d": {"amount": 99000, "days": 30, "order_name": "프로 플랜 30일"},
-    "pro_365d": {"amount": 990000, "days": 365, "order_name": "프로 플랜 1년"},
+    "pro_30d": {"amount": 10000, "days": 30, "order_name": "월간 이용권 30일"},
+    "pro_365d": {"amount": 100000, "days": 365, "order_name": "연간 이용권 1년"},
 }

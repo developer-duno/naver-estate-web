@@ -63,7 +63,7 @@ def _paid_portone(amount):
 def test_prepare_no_auth_401(client):
     """인증 없이 prepare → 401"""
     with _portone_env():
-        assert client.post("/api/payment/prepare", json={"plan": "basic_30d"}).status_code == 401
+        assert client.post("/api/payment/prepare", json={"plan": "pro_30d"}).status_code == 401
 
 
 def test_prepare_unknown_plan_400(client, db):
@@ -78,7 +78,7 @@ def test_prepare_no_portone_config_503(client, db):
     """PortOne env 미설정 → 503"""
     _make_profile(db, "u1")
     with _portone_env(**{"routers.payment.PORTONE_API_SECRET": ""}):
-        res = client.post("/api/payment/prepare", json={"plan": "basic_30d"}, headers=_auth("u1"))
+        res = client.post("/api/payment/prepare", json={"plan": "pro_30d"}, headers=_auth("u1"))
     assert res.status_code == 503
 
 
@@ -86,10 +86,10 @@ def test_prepare_amount_server_decided(client, db):
     """정상 prepare → payments(ready) 생성 + 금액은 서버(PLAN_PRICES)가 결정."""
     _make_profile(db, "u1")
     with _portone_env():
-        res = client.post("/api/payment/prepare", json={"plan": "basic_30d"}, headers=_auth("u1"))
+        res = client.post("/api/payment/prepare", json={"plan": "pro_30d"}, headers=_auth("u1"))
     assert res.status_code == 200
     data = res.json()
-    assert data["amount"] == PLAN_PRICES["basic_30d"]["amount"]  # 서버 결정값
+    assert data["amount"] == PLAN_PRICES["pro_30d"]["amount"]  # 서버 결정값
     assert data["storeId"] == "store-test"
     assert data["channelKey"] == "channel-test"
     # paymentId 가드 (세션 326 라이브 결제창 거부 회귀):
@@ -101,13 +101,13 @@ def test_prepare_amount_server_decided(client, db):
     # DB 에 ready 행 생성 확인
     row = db.get(Payment, data["paymentId"])
     assert row is not None and row.status == "ready"
-    assert row.amount == PLAN_PRICES["basic_30d"]["amount"]
+    assert row.amount == PLAN_PRICES["pro_30d"]["amount"]
 
 
 # ── complete ──
 
 
-def _seed_payment(db, payment_id, uid, plan="basic_30d", status="ready"):
+def _seed_payment(db, payment_id, uid, plan="pro_30d", status="ready"):
     db.add(Payment(payment_id=payment_id, user_id=uid, plan=plan,
                    amount=PLAN_PRICES[plan]["amount"], status=status))
     db.commit()
@@ -117,7 +117,7 @@ def test_complete_paid_extends_paid_until(client, db):
     """complete PAID·금액일치 → paid_until 연장 + payments.status=paid."""
     _make_profile(db, "u1")
     _seed_payment(db, "pay_ok", "u1")
-    amount = PLAN_PRICES["basic_30d"]["amount"]
+    amount = PLAN_PRICES["pro_30d"]["amount"]
     with _portone_env(), patch("routers.payment._fetch_portone_payment",
                                return_value=_paid_portone(amount)):
         res = client.post("/api/payment/complete", json={"payment_id": "pay_ok"},
@@ -135,7 +135,7 @@ def test_complete_amount_mismatch_400(client, db):
     _make_profile(db, "u1")
     _seed_payment(db, "pay_bad", "u1")
     with _portone_env(), patch("routers.payment._fetch_portone_payment",
-                               return_value=_paid_portone(10)):  # 기대 49000 ≠ 10
+                               return_value=_paid_portone(10)):  # 기대 10000 ≠ 10
         res = client.post("/api/payment/complete", json={"payment_id": "pay_bad"},
                           headers=_auth("u1"))
     assert res.status_code == 400
@@ -153,7 +153,7 @@ def test_complete_pending_is_transient_409_keeps_ready(client, db):
     """
     _make_profile(db, "u1")
     _seed_payment(db, "pay_pending", "u1")
-    not_paid = SimpleNamespace(status="READY", amount=SimpleNamespace(total=49000), id="tx")
+    not_paid = SimpleNamespace(status="READY", amount=SimpleNamespace(total=10000), id="tx")
     with _portone_env(), patch("routers.payment._fetch_portone_payment", return_value=not_paid):
         res = client.post("/api/payment/complete", json={"payment_id": "pay_pending"},
                           headers=_auth("u1"))
@@ -192,7 +192,7 @@ def test_complete_cache_invalidated(client, db):
     """complete 성공 시 게이트 캐시(profile:{uid}) 무효화."""
     _make_profile(db, "u1")
     _seed_payment(db, "pay_cache", "u1")
-    amount = PLAN_PRICES["basic_30d"]["amount"]
+    amount = PLAN_PRICES["pro_30d"]["amount"]
     with _portone_env(), patch("routers.payment._fetch_portone_payment",
                                return_value=_paid_portone(amount)), \
          patch("routers.payment._user_cache.delete") as mock_del:
@@ -223,7 +223,7 @@ def test_webhook_paid_grants(client, db):
     """Transaction.Paid 웹훅 → get_payment 재확인 후 이용권 부여."""
     _make_profile(db, "u1")
     _seed_payment(db, "pay_wh2", "u1")
-    amount = PLAN_PRICES["basic_30d"]["amount"]
+    amount = PLAN_PRICES["pro_30d"]["amount"]
     with _portone_env(), \
          patch("routers.payment._verify_webhook", return_value=_webhook_obj("pay_wh2")), \
          patch("routers.payment._fetch_portone_payment", return_value=_paid_portone(amount)):
@@ -273,7 +273,7 @@ def test_grant_subscription_double_call_extends_once(db):
 
     profile = _make_profile(db, "u1")
     _seed_payment(db, "pay_dbl", "u1")
-    amount = PLAN_PRICES["basic_30d"]["amount"]
+    amount = PLAN_PRICES["pro_30d"]["amount"]
     portone = _paid_portone(amount)
 
     # 1차 — 선점 성공 → paid_until 연장
@@ -301,7 +301,7 @@ def test_grant_subscription_failed_status_not_regranted(db):
 
     _make_profile(db, "u1")
     _seed_payment(db, "pay_failed", "u1", status="failed")
-    amount = PLAN_PRICES["basic_30d"]["amount"]
+    amount = PLAN_PRICES["pro_30d"]["amount"]
     result = _grant_subscription(db, db.get(Payment, "pay_failed"), _paid_portone(amount))
     db.commit()
     assert result is None  # ready 아니라 선점 실패 — 부여 안 함
@@ -315,7 +315,7 @@ def test_webhook_transient_pending_503_keeps_ready(client, db):
     payment 행은 'ready' 유지(failed 아님), paid_until 미부여. 200 으로 뭉개면 영구 미부여로 직결."""
     _make_profile(db, "u1")
     _seed_payment(db, "pay_wh_pending", "u1")
-    pending = SimpleNamespace(status="PENDING", amount=SimpleNamespace(total=49000), id="tx")
+    pending = SimpleNamespace(status="PENDING", amount=SimpleNamespace(total=10000), id="tx")
     with _portone_env(), \
          patch("routers.payment._verify_webhook", return_value=_webhook_obj("pay_wh_pending")), \
          patch("routers.payment._fetch_portone_payment", return_value=pending):
@@ -334,7 +334,7 @@ def test_webhook_amount_mismatch_200_not_granted(client, db):
     _seed_payment(db, "pay_wh_bad", "u1")
     with _portone_env(), \
          patch("routers.payment._verify_webhook", return_value=_webhook_obj("pay_wh_bad")), \
-         patch("routers.payment._fetch_portone_payment", return_value=_paid_portone(10)):  # 49000 ≠ 10
+         patch("routers.payment._fetch_portone_payment", return_value=_paid_portone(10)):  # 10000 ≠ 10
         res = client.post("/api/payment/webhook", content=b'{"any":1}',
                           headers={"webhook-signature": "v1,ok"})
     assert res.status_code == 200
@@ -360,7 +360,7 @@ def test_complete_lost_race_returns_already_paid(client, db):
     → complete 는 already_paid=True 로 멱등 응답 (크래시·재연장 안 함)."""
     _make_profile(db, "u1", paid_until=None)
     _seed_payment(db, "pay_race", "u1")
-    amount = PLAN_PRICES["basic_30d"]["amount"]
+    amount = PLAN_PRICES["pro_30d"]["amount"]
     # _grant_subscription 이 None(선점 실패) 반환하도록 patch → complete 의 profile is None 분기
     with _portone_env(), \
          patch("routers.payment._fetch_portone_payment", return_value=_paid_portone(amount)), \
@@ -379,7 +379,7 @@ def _webhook_obj_typed(payment_id, event_type):
     return SimpleNamespace(type=event_type, data=SimpleNamespace(payment_id=payment_id))
 
 
-def _cancelled_portone(amount=49000):
+def _cancelled_portone(amount=10000):
     """PortOne get_payment mock — status=CANCELLED (종결 상태)."""
     return SimpleNamespace(status="CANCELLED", amount=SimpleNamespace(total=amount), id="tx-c")
 
@@ -424,7 +424,7 @@ def test_webhook_full_refund_rolls_back_paid_until(client, db):
     # 30일치 부여된 상태 (paid_until = now + 30일), 결제는 paid
     future = datetime.now(timezone.utc) + timedelta(days=30)
     _make_profile(db, "u1", paid_until=future)
-    _seed_payment(db, "pay_refund", "u1", plan="basic_30d", status="paid")
+    _seed_payment(db, "pay_refund", "u1", plan="pro_30d", status="paid")
     with _portone_env(), \
          patch("routers.payment._verify_webhook",
                return_value=_webhook_obj_typed("pay_refund", "Transaction.Cancelled")), \
@@ -492,7 +492,7 @@ def test_complete_forgery_logs_audit_and_compare_and_set(client, db):
     _make_profile(db, "u1")
     _seed_payment(db, "pay_forge", "u1")  # ready
     with _portone_env(), \
-         patch("routers.payment._fetch_portone_payment", return_value=_paid_portone(10)):  # 49000≠10
+         patch("routers.payment._fetch_portone_payment", return_value=_paid_portone(10)):  # 10000≠10
         res = client.post("/api/payment/complete", json={"payment_id": "pay_forge"},
                           headers=_auth("u1"))
     assert res.status_code == 400
@@ -514,7 +514,7 @@ def test_webhook_refund_reverifies_portone(client, db):
     with _portone_env(), \
          patch("routers.payment._verify_webhook",
                return_value=_webhook_obj_typed("pay_refund_unverified", "Transaction.Cancelled")), \
-         patch("routers.payment._fetch_portone_payment", return_value=_paid_portone(49000)):
+         patch("routers.payment._fetch_portone_payment", return_value=_paid_portone(10000)):
         res = client.post("/api/payment/webhook", content=b'{"any":1}',
                           headers={"webhook-signature": "v1,ok"})
     assert res.status_code == 200

@@ -50,6 +50,21 @@ describe("next.config.ts CSP — PortOne 결제 도메인", () => {
     expect(connectSrc).toContain("https://*.portone.io");
   });
 
+  // SDK 가 결제 준비를 checkout-service.prod.iamport.co (PortOne 옛 도메인) 로 호출 (세션 326 콘솔 확정)
+  it("connect-src 에 *.iamport.co 가 있어야 결제 준비 API(checkout-service)가 통과한다", () => {
+    const connectSrc = configSrc
+      .split("\n")
+      .find((l) => l.includes("connect-src 'self'"));
+    expect(connectSrc).toContain("https://*.iamport.co");
+  });
+
+  it("script-src 에 *.iamport.co 가 있어야 결제창 스크립트가 로드된다", () => {
+    const scriptSrc = configSrc
+      .split("\n")
+      .find((l) => l.includes("script-src 'self'"));
+    expect(scriptSrc).toContain("https://*.iamport.co");
+  });
+
   it("frame-src 에 *.portone.io 가 있어야 결제창 iframe·PG 리다이렉트가 뜬다", () => {
     const frameSrc = configSrc
       .split("\n")

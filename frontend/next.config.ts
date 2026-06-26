@@ -52,13 +52,16 @@ const nextConfig: NextConfig = {
             value: [
               "default-src 'self'",
               // 네이버 지도 SDK: maps.js 본체(oapi/openapi) + 타일 스타일 JSONP(*.pstatic.net) 가 script 로 로드됨
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://oapi.map.naver.com https://openapi.map.naver.com https://*.pstatic.net https://vercel.live`,
+              // PortOne 결제: npm SDK(@portone/browser-sdk)가 런타임에 cdn.portone.io/v2/browser-sdk.js 를 동적 로드 (세션 326 결제창 미표시 = 이 도메인 CSP 누락이 원인)
+              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://oapi.map.naver.com https://openapi.map.naver.com https://*.pstatic.net https://vercel.live https://cdn.portone.io https://*.portone.io`,
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
-              "img-src 'self' data: blob: https://*.naver.net https://*.pstatic.net https://vercel.live https://vercel.com",
+              "img-src 'self' data: blob: https://*.naver.net https://*.pstatic.net https://vercel.live https://vercel.com https://*.portone.io",
               // 네이버 지도 타일 데이터(*.pstatic.net) + 텔레메트리 로그(*.navercorp.com) connect 허용
-              "connect-src 'self' http://localhost:* https://*.supabase.co https://*.railway.app https://api.2u.pe.kr https://oapi.map.naver.com https://openapi.map.naver.com https://*.pstatic.net https://*.navercorp.com https://vercel.live wss://ws-us3.pusher.com",
-              "frame-src 'self' https://vercel.live",
+              // PortOne 결제: SDK 가 결제 준비·상태조회로 *.portone.io API 호출
+              "connect-src 'self' http://localhost:* https://*.supabase.co https://*.railway.app https://api.2u.pe.kr https://oapi.map.naver.com https://openapi.map.naver.com https://*.pstatic.net https://*.navercorp.com https://vercel.live wss://ws-us3.pusher.com https://*.portone.io",
+              // PortOne 결제창·PG사 리다이렉트는 portone 하위 도메인 iframe 으로 뜸 (KPN 등 실 PG 도메인은 결제 진행 중 차단 로그로 추가 — 세션 326 메모)
+              "frame-src 'self' https://vercel.live https://*.portone.io",
               "media-src 'self' data:",
               "frame-ancestors 'none'",
             ].join("; "),

@@ -73,6 +73,14 @@ describe("next.config.ts CSP — PortOne 결제 도메인", () => {
     expect(frameSrc).toContain("https://*.portone.io");
   });
 
+  // KPN(한국결제네트웍스) PG 결제창이 *.firstpay.co.kr iframe 으로 뜸 (세션 326 라이브 확정)
+  it("frame-src 에 *.firstpay.co.kr 가 있어야 KPN PG 결제창 iframe 이 뜬다", () => {
+    const frameSrc = configSrc
+      .split("\n")
+      .find((l) => l.includes("frame-src 'self'"));
+    expect(frameSrc).toContain("https://*.firstpay.co.kr");
+  });
+
   it("directiveLine 헬퍼가 빈 줄을 반환하지 않는지 (가드 자체 sanity)", () => {
     expect(directiveLine("script")).not.toBe("");
   });

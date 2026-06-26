@@ -55,15 +55,16 @@ const nextConfig: NextConfig = {
               // PortOne 결제: npm SDK(@portone/browser-sdk)가 런타임에 cdn.portone.io/v2/browser-sdk.js 동적 로드.
               //   결제창·결제 준비 API 는 PortOne 옛 도메인 *.iamport.co (예: checkout-service.prod.iamport.co) 를 호출하고,
               //   토스 결제수단은 static.tosspayments.com 스크립트를 로드한다 (세션 326 콘솔 차단 로그로 확정).
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://oapi.map.naver.com https://openapi.map.naver.com https://*.pstatic.net https://vercel.live https://cdn.portone.io https://*.portone.io https://*.iamport.co https://*.tosspayments.com`,
+              //   KPN(한국결제네트웍스) PG 결제창은 *.firstpay.co.kr (testpg.firstpay.co.kr) iframe 으로 뜬다 (세션 326 라이브 확정).
+              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://oapi.map.naver.com https://openapi.map.naver.com https://*.pstatic.net https://vercel.live https://cdn.portone.io https://*.portone.io https://*.iamport.co https://*.tosspayments.com https://*.firstpay.co.kr`,
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com",
-              "img-src 'self' data: blob: https://*.naver.net https://*.pstatic.net https://vercel.live https://vercel.com https://*.portone.io https://*.iamport.co",
+              "img-src 'self' data: blob: https://*.naver.net https://*.pstatic.net https://vercel.live https://vercel.com https://*.portone.io https://*.iamport.co https://*.firstpay.co.kr",
               // 네이버 지도 타일 데이터(*.pstatic.net) + 텔레메트리 로그(*.navercorp.com) connect 허용
-              // PortOne 결제: SDK 가 결제 준비·상태조회로 *.portone.io + *.iamport.co(checkout-service) API 호출, 토스 결제수단은 *.tosspayments.com
-              "connect-src 'self' http://localhost:* https://*.supabase.co https://*.railway.app https://api.2u.pe.kr https://oapi.map.naver.com https://openapi.map.naver.com https://*.pstatic.net https://*.navercorp.com https://vercel.live wss://ws-us3.pusher.com https://*.portone.io https://*.iamport.co https://*.tosspayments.com",
-              // PortOne 결제창·PG사 리다이렉트는 portone/iamport 하위 도메인 iframe 으로 뜸 (KPN 등 실 PG 도메인은 결제 진행 중 차단 로그로 추가 — 세션 326 메모)
-              "frame-src 'self' https://vercel.live https://*.portone.io https://*.iamport.co https://*.tosspayments.com",
+              // PortOne 결제: SDK 가 결제 준비·상태조회로 *.portone.io + *.iamport.co(checkout-service) API 호출, 토스 결제수단은 *.tosspayments.com, KPN PG 는 *.firstpay.co.kr
+              "connect-src 'self' http://localhost:* https://*.supabase.co https://*.railway.app https://api.2u.pe.kr https://oapi.map.naver.com https://openapi.map.naver.com https://*.pstatic.net https://*.navercorp.com https://vercel.live wss://ws-us3.pusher.com https://*.portone.io https://*.iamport.co https://*.tosspayments.com https://*.firstpay.co.kr",
+              // PortOne 결제창·PG사 결제 iframe: portone/iamport + KPN PG(*.firstpay.co.kr). 실 카드결제 시 카드사 도메인이 추가 차단되면 콘솔 로그로 추가 (세션 326 메모)
+              "frame-src 'self' https://vercel.live https://*.portone.io https://*.iamport.co https://*.tosspayments.com https://*.firstpay.co.kr",
               "media-src 'self' data:",
               "frame-ancestors 'none'",
             ].join("; "),

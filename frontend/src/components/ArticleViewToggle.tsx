@@ -15,6 +15,7 @@ export default function ArticleViewToggle({ value, onChange }: Props) {
       type="single"
       value={value}
       onValueChange={(v) => { if (v) onChange(v as ArticleViewMode); }}
+      role="group"
       aria-label="매물 카드 모양"
       className="w-auto flex flex-wrap gap-1"
     >

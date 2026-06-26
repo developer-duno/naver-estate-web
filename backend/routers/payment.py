@@ -9,7 +9,7 @@
 
 보안 핵심:
   - 금액은 PLAN_PRICES 에서 서버가 결정. FE 가 보낸 금액 신뢰 0.
-  - paymentId 는 우리가 생성(pay_{uuid}) → 멱등성 (같은 ID 재시도 가능, complete 가 paid 면 재연장 거부).
+  - paymentId 는 우리가 생성(pay{uuid}, 영숫자만) → 멱등성 (같은 ID 재시도 가능, complete 가 paid 면 재연장 거부).
   - complete·webhook 은 _grant_subscription 한 멱등 헬퍼 공유.
 
 verify.py 패턴 답습 (Depends 인증·log_action audit·_user_cache 무효화).
@@ -221,7 +221,10 @@ def prepare_payment(
     if not plan_meta:
         raise HTTPException(status_code=400, detail="알 수 없는 요금제입니다")
 
-    payment_id = f"pay_{uuid.uuid4().hex}"
+    # paymentId 는 영문·숫자만 (PortOne KPN/KCP 는 특수문자 금지 — ALLOWED_CHARACTERS otherCharacters="").
+    # 언더스코어 포함 시 결제창 호출이 "paymentId violates the rule" 로 거부됨 (세션 326 라이브 확정).
+    # uuid4().hex = 32자 영숫자(0-9a-f) → "pay"+hex = 35자 순수 영숫자, 토스·KCP·KPN 전부 통과.
+    payment_id = f"pay{uuid.uuid4().hex}"
     amount = plan_meta["amount"]  # 서버 결정 — FE 금액 신뢰 안 함
 
     db.add(Payment(

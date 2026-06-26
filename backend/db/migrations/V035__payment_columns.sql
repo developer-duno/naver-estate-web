@@ -15,7 +15,7 @@ ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS paid_until TIMESTAMPTZ;
 
 -- 2) 결제 내역 테이블
 CREATE TABLE IF NOT EXISTS payments (
-    payment_id   TEXT PRIMARY KEY,                          -- 우리가 생성 (pay_{uuid}), PortOne paymentId 와 동일
+    payment_id   TEXT PRIMARY KEY,                          -- 우리가 생성 (pay{uuid}, 영숫자만), PortOne paymentId 와 동일
     user_id      TEXT NOT NULL,                             -- UserProfile.user_id (Supabase auth uid)
     plan         TEXT NOT NULL,                             -- PLAN_PRICES 키 (예: basic_30d)
     amount       INTEGER NOT NULL,                          -- 원 단위 결제 금액 (서버가 결정한 값)

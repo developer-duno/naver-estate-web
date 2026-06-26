@@ -51,6 +51,16 @@ describe("CheckoutButton — 로그인 분기", () => {
     expect(startCheckoutMock).toHaveBeenCalledWith("pro_30d");
   });
 
+  it("무료체험(free=true): 로그인해도 결제 안 함 — '무료 체험 시작' /signup 링크 (세션 326)", () => {
+    useSessionTokenMock.mockReturnValue({ sessionToken: "tok", tokenReady: true, tokenError: false, dismissTokenError: vi.fn() });
+    render(<CheckoutButton planKey="basic_30d" free />);
+    const link = screen.getByRole("link", { name: "무료 체험 시작" });
+    expect(link).toHaveAttribute("href", "/signup");
+    // free 면 로그인 상태라도 결제 버튼·startCheckout 호출 없음
+    expect(screen.queryByRole("button", { name: /결제하고 시작/ })).not.toBeInTheDocument();
+    expect(startCheckoutMock).not.toHaveBeenCalled();
+  });
+
   it("결제 진행 중(paying): 버튼 비활성 + '결제 진행 중…' 표시", () => {
     useSessionTokenMock.mockReturnValue({ sessionToken: "tok", tokenReady: true, tokenError: false, dismissTokenError: vi.fn() });
     useCheckoutMock.mockReturnValue({ paying: true, payError: "", clearPayError: vi.fn(), startCheckout: startCheckoutMock });

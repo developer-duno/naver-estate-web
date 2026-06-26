@@ -16,9 +16,12 @@ import type { PlanKey } from "@/types/payment";
 export default function CheckoutButton({
   planKey,
   highlight,
+  free,
 }: {
   planKey: PlanKey;
   highlight?: boolean;
+  /** 무료체험 플랜 — 결제(prepare) 를 타지 않고 항상 /signup(카드 등록 7일 무료) 로 보낸다. */
+  free?: boolean;
 }) {
   const { sessionToken, tokenReady } = useSessionToken();
   const { paying, payError, startCheckout } = useCheckout();
@@ -31,7 +34,8 @@ export default function CheckoutButton({
   // 토큰 해석 전 깜빡임 방지 — 기존 "무료 체험 시작" 링크를 기본 노출 (비로그인과 동일 UX)
   const loggedIn = tokenReady && !!sessionToken;
 
-  if (!loggedIn) {
+  // 무료체험 플랜(기본) 또는 비로그인 = 결제 없이 /signup(카드 등록 → 7일 무료)
+  if (free || !loggedIn) {
     return (
       <Link href="/signup" className={`${base} ${filled}`}>
         무료 체험 시작

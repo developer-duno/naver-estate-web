@@ -14,6 +14,15 @@ updates:
     groups:
       fe-minor-patch:
         update-types: ["minor", "patch"]
+    # major 자동 차단 (세션 325) — 매주 재오픈+CI 실패 노이즈 방지. 근거는 메모리 실측.
+    ignore:
+      # eslint ^10 = React 플러그인 4종(react/react-hooks/jsx-a11y/import) peer 가 ^9 고정
+      # → 강제 설치 시 런타임 깨짐. 플러그인 peer 출시 전 무의미 ([[project-eslint10-query-helpers-hold]]).
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      # @types/node ^23+ = 런타임 Node 22 LTS(engines node>=22) 보다 앞서가면 미존재 API 타입 노출.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # 백엔드 (FastAPI / curl_cffi / SQLAlchemy 등 — 상한 핀이 major 자동상승 차단)
   - package-ecosystem: "pip"

@@ -31,6 +31,7 @@ def get_my_profile(
         "daily_export_quota": profile.daily_export_quota,
         "last_login_at": profile.last_login_at.isoformat() if profile.last_login_at else None,
         "login_count": profile.login_count,
+        "paid_until": profile.paid_until.isoformat() if profile.paid_until else None,
         "created_at": profile.created_at.isoformat() if profile.created_at else None,
         "updated_at": profile.updated_at.isoformat() if profile.updated_at else None,
     }

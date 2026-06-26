@@ -12,7 +12,9 @@
 
 import { useCallback, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { completePayment, preparePayment } from "@/lib/api";
+import { ApiError } from "@/lib/api/core";
 import { createClient } from "@/lib/supabase";
 import { queryKeys } from "@/lib/query-keys";
 import type { CompletePaymentResponse, PlanKey } from "@/types/payment";
@@ -63,11 +65,26 @@ export function useCheckout(): CheckoutHookResult {
       // 3) 서버 complete 로 PAID·금액 재검증 후 paid_until 연장 (위변조 방지 핵심)
       return completePayment(token, prep.paymentId);
     },
-    onSuccess: () => {
+    onSuccess: (res) => {
       // 결제 후 구독 상태가 바뀌므로 프로필·검증상태 캐시 무효화
       queryClient.invalidateQueries({ queryKey: queryKeys.verification.status() });
+      // 결제 완료 피드백 — 이용권 만료일 안내 (화면 변화 0 이던 결함 보강)
+      if (res?.paid_until) {
+        const until = new Date(res.paid_until).toLocaleDateString("ko-KR");
+        toast.success(`결제 완료 · 이용권 ${until}까지`);
+      } else {
+        toast.success("결제 완료");
+      }
     },
     onError: (err: unknown) => {
+      // 409 = 정산 지연(PENDING). 결제는 접수됐고 확정만 늦는 상황 — '실패' 아님.
+      // 재결제 유도(이중결제 불안) 대신 '잠시 후 반영' 안내 (BE 는 ready 유지 + webhook 복구).
+      if (err instanceof ApiError && err.statusCode === 409) {
+        const msg = "결제는 접수됐어요. 정산 확인 중이니 잠시 후 자동 반영됩니다.";
+        setPayError(msg);
+        toast.info(msg);
+        return;
+      }
       setPayError(err instanceof Error ? err.message : "결제에 실패했습니다");
     },
   });

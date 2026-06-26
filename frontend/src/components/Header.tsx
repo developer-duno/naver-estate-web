@@ -16,6 +16,7 @@ export default function Header() {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [paidUntil, setPaidUntil] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   // SSR/CSR mismatch 방지 — 첫 렌더는 항상 placeholder, 이후 실제 UI
@@ -63,9 +64,11 @@ export default function Header() {
             if (res.ok && isMountedRef.current) {
               const data = await res.json();
               setUserRole(data.role || null);
+              setPaidUntil(data.paid_until || null);
             } else if (res.status === 401 && isMountedRef.current) {
               await supabase.auth.signOut();
               setUserRole(null);
+              setPaidUntil(null);
             }
           } catch {
             await fetchRoleFromSupabase();
@@ -102,6 +105,7 @@ export default function Header() {
         fetchProfile(session.access_token);
       } else {
         setUserRole(null);
+        setPaidUntil(null);
       }
     });
 
@@ -113,10 +117,18 @@ export default function Header() {
     await supabase.auth.signOut();
     setUserEmail(null);
     setUserRole(null);
+    setPaidUntil(null);
     router.refresh();
   };
 
   const isAdmin = userRole === "admin";
+  // 구독 D-day — paid_until 이 미래면 남은 일수(올림). 만료·없음이면 null (뱃지 미표시).
+  const subDaysLeft = (() => {
+    if (!paidUntil) return null;
+    const ms = new Date(paidUntil).getTime() - Date.now();
+    if (Number.isNaN(ms) || ms <= 0) return null;
+    return Math.ceil(ms / 86_400_000);
+  })();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // 경로 변경 시 모바일 메뉴 닫기 (계산기 드롭다운은 Radix 가 자체 관리)
@@ -214,6 +226,15 @@ export default function Header() {
                     <span className="text-xs bg-accent-green/15 text-[#4a5a3a] px-2 py-0.5 rounded-md font-semibold">
                       전문가
                     </span>
+                  )}
+                  {subDaysLeft !== null && (
+                    <Link
+                      href="/pricing"
+                      className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-semibold hover:bg-amber-200"
+                      title="유료 구독 이용권 — 클릭 시 요금제"
+                    >
+                      구독 D-{subDaysLeft}
+                    </Link>
                   )}
                   <span className="text-xs text-gray-500 hidden sm:inline max-w-[120px] truncate">
                     {userEmail}
@@ -340,6 +361,9 @@ export default function Header() {
                     )}
                     {userRole === "expert" && (
                       <span className="text-xs bg-accent-green/15 text-[#4a5a3a] px-2 py-0.5 rounded-md font-semibold">전문가</span>
+                    )}
+                    {subDaysLeft !== null && (
+                      <Link href="/pricing" className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-semibold">구독 D-{subDaysLeft}</Link>
                     )}
                   </div>
                   <span className="text-sm text-gray-500 break-all">{userEmail}</span>

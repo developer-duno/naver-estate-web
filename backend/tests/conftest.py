@@ -24,6 +24,12 @@ os.environ["SUPABASE_JWT_SECRET"] = "test-secret-key-for-testing-only"
 # 로컬 .env 에 TELEGRAM_ENABLED=true 가 로드돼 있어도 본 라인이 덮어써 사고 차단
 # (세션 325 사고: 결제 알림 테스트가 운영자 휴대폰으로 실알림 발사).
 os.environ["TELEGRAM_ENABLED"] = "false"
+# ⚠ 같은 사고(세션 325)의 자매 채널 — SMTP 도 차단. 공인중개사 승인/반려 테스트
+# (test_admin_verify_router)가 send_email 을 타는데, 로컬 .env SMTP 자격증명이 로드되면
+# 실메일이 발송된다. email.py 가드(SMTP_USER/PASS 미설정 시 즉시 False)를 강제 발동시켜
+# 실발송 0 (텔레그램 선례 답습 — 알림 채널은 conftest 에서 전역 봉쇄).
+os.environ["SMTP_USER"] = ""
+os.environ["SMTP_PASS"] = ""
 
 # ARRAY → JSON 패치 (SQLite 호환)
 

@@ -25,13 +25,15 @@ describe("/pricing 마케팅 페이지", () => {
     expect(container.textContent).toMatch(/7일 무료 체험/);
   });
 
-  it("기본·프로 두 플랜 카드가 모두 표시된다", () => {
+  it("기본·월간·연간 세 플랜 카드가 모두 표시된다", () => {
     renderPage();
+    // 세션 326 가격 확정: 기본(무료체험) / 월간 / 연간
     expect(screen.getByRole("heading", { name: "기본", level: 3 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "프로", level: 3 })).toBeInTheDocument();
-    // PR 7a — "추후 공개" → "출시 시 공개" 변경, 두 카드 모두에 있음
-    expect(screen.getAllByText(/출시 시 공개/).length).toBeGreaterThanOrEqual(2);
-    // "인기" 뱃지가 프로 카드에 있음
+    expect(screen.getByRole("heading", { name: "월간", level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "연간", level: 3 })).toBeInTheDocument();
+    // 가격 공개: 90% 할인 배지 + 할인가 (월 10,000 / 연 100,000)
+    expect(screen.getAllByText("90% 할인").length).toBe(2);
+    // "인기" 뱃지가 월간 카드에 있음
     expect(screen.getByText("인기")).toBeInTheDocument();
   });
 

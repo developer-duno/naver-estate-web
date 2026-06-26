@@ -19,7 +19,7 @@ python-dotenv>=1.0,<2
 PyJWT>=2.13.0,<3
 # 2026-06-16 하한 상향: CVE-2026-53538~53540 fix=0.0.31 (폼 파싱 DoS). verify.py UploadFile 사용처 있어 선제 차단.
 python-multipart>=0.0.31,<1
-redis>=5.0,<6
+redis>=8.0.1,<9
 requests>=2.34.2,<3
 # portone-server-sdk: 공식 PG 결제 SDK (Apache-2.0/MIT). get_payment 결제검증 + webhook.verify
 # 서명검증(Standard Webhooks)을 직접 구현하지 않게 한다 (oss-first). 결제 PR3, 세션 321.

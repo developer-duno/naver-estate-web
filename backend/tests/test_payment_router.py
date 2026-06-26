@@ -92,9 +92,12 @@ def test_prepare_amount_server_decided(client, db):
     assert data["amount"] == PLAN_PRICES["basic_30d"]["amount"]  # 서버 결정값
     assert data["storeId"] == "store-test"
     assert data["channelKey"] == "channel-test"
-    # paymentId 는 영문·숫자만 (PortOne KPN/KCP 특수문자 금지 — 세션 326 라이브 결제창 거부 회귀 가드)
-    assert data["paymentId"].startswith("pay")
+    # paymentId 가드 (세션 326 라이브 결제창 거부 회귀):
+    #   - 영문·숫자만 (PortOne KPN/KCP 특수문자 금지 — ALLOWED_CHARACTERS otherCharacters="")
+    #   - 32바이트 이내 (KPN MxIssueNO 최대 32byte — 초과 시 오류코드 9104)
+    assert data["paymentId"].startswith("p")
     assert data["paymentId"].isalnum(), f"paymentId 에 특수문자 금지: {data['paymentId']}"
+    assert len(data["paymentId"].encode()) <= 32, f"paymentId 32byte 초과: {data['paymentId']}"
     # DB 에 ready 행 생성 확인
     row = db.get(Payment, data["paymentId"])
     assert row is not None and row.status == "ready"

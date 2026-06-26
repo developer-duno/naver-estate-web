@@ -221,10 +221,12 @@ def prepare_payment(
     if not plan_meta:
         raise HTTPException(status_code=400, detail="알 수 없는 요금제입니다")
 
-    # paymentId 는 영문·숫자만 (PortOne KPN/KCP 는 특수문자 금지 — ALLOWED_CHARACTERS otherCharacters="").
-    # 언더스코어 포함 시 결제창 호출이 "paymentId violates the rule" 로 거부됨 (세션 326 라이브 확정).
-    # uuid4().hex = 32자 영숫자(0-9a-f) → "pay"+hex = 35자 순수 영숫자, 토스·KCP·KPN 전부 통과.
-    payment_id = f"pay{uuid.uuid4().hex}"
+    # paymentId 는 영문·숫자만 + 32바이트 이내 (PortOne KPN 제약 — 세션 326 라이브 확정).
+    #   - 특수문자 금지: ALLOWED_CHARACTERS otherCharacters="" (언더스코어 포함 시 결제창 거부).
+    #   - 길이 32byte: KPN MxIssueNO 최대 32byte (초과 시 오류코드 9104 "MxIssueNO 길이 초과").
+    # "p" + uuid4().hex[:31] = 32자 순수 영숫자 → KPN 32byte 딱 맞음, 토스·KCP 전부 통과.
+    # hex 31자(16^31)라 충돌 확률 무시 가능.
+    payment_id = f"p{uuid.uuid4().hex[:31]}"
     amount = plan_meta["amount"]  # 서버 결정 — FE 금액 신뢰 안 함
 
     db.add(Payment(

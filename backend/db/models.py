@@ -243,7 +243,7 @@ class Payment(Base):
         Index("ix_payments_user_id", "user_id"),
     )
 
-    payment_id: Mapped[str] = mapped_column(String, primary_key=True)  # pay_{uuid}
+    payment_id: Mapped[str] = mapped_column(String, primary_key=True)  # pay{uuid} (영숫자만 — PortOne KPN/KCP 특수문자 금지)
     user_id: Mapped[str] = mapped_column(String, nullable=False)
     plan: Mapped[str] = mapped_column(String, nullable=False)  # PLAN_PRICES 키
     amount: Mapped[int] = mapped_column(Integer, nullable=False)  # 원 단위, 서버 결정값

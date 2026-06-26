@@ -92,7 +92,9 @@ def test_prepare_amount_server_decided(client, db):
     assert data["amount"] == PLAN_PRICES["basic_30d"]["amount"]  # 서버 결정값
     assert data["storeId"] == "store-test"
     assert data["channelKey"] == "channel-test"
-    assert data["paymentId"].startswith("pay_")
+    # paymentId 는 영문·숫자만 (PortOne KPN/KCP 특수문자 금지 — 세션 326 라이브 결제창 거부 회귀 가드)
+    assert data["paymentId"].startswith("pay")
+    assert data["paymentId"].isalnum(), f"paymentId 에 특수문자 금지: {data['paymentId']}"
     # DB 에 ready 행 생성 확인
     row = db.get(Payment, data["paymentId"])
     assert row is not None and row.status == "ready"

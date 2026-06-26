@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 
 from deps import get_approved_user
-from services.subscription import extend_paid_until
+from services.subscription import extend_paid_until, revoke_paid_until
 
 
 def _user(approved_until=None, paid_until=None, status="approved", email="expert@test.com"):
@@ -123,3 +123,45 @@ def test_extend_returns_aware():
     result = extend_paid_until(None, 365, now=datetime(2026, 1, 1, tzinfo=timezone.utc))
     assert result.tzinfo is not None
     assert result == datetime(2027, 1, 1, tzinfo=timezone.utc)
+
+
+# ── revoke_paid_until 환불 롤백 헬퍼 단위 (extend 의 역함수) ──
+
+
+def test_revoke_none_returns_none():
+    """유료 이력 없음(current=None) → 환불할 것도 없어 None."""
+    assert revoke_paid_until(None, 30, now=datetime(2026, 6, 24, tzinfo=timezone.utc)) is None
+
+
+def test_revoke_subtracts_plan_days():
+    """미래 만료에서 부여 일수만큼 차감 (다른 결제로 쌓인 기간 침범 안 함)."""
+    now = datetime(2026, 6, 24, tzinfo=timezone.utc)
+    # 60일 남음(두 결제분) 상태에서 30일 결제 1건 환불 → 30일 남음
+    current = datetime(2026, 8, 23, tzinfo=timezone.utc)
+    result = revoke_paid_until(current, 30, now=now)
+    assert result == datetime(2026, 7, 24, tzinfo=timezone.utc)  # 8/23 − 30일
+
+
+def test_revoke_clamps_to_now_when_consumed():
+    """차감 결과가 now 이전(이미 다 쓴 기간)이면 now 로 클램프(즉시 만료)."""
+    now = datetime(2026, 6, 24, tzinfo=timezone.utc)
+    # 5일 남은 30일권을 환불 → 30일 빼면 과거라 now 로 막음
+    current = datetime(2026, 6, 29, tzinfo=timezone.utc)
+    result = revoke_paid_until(current, 30, now=now)
+    assert result == now
+
+
+def test_revoke_naive_current_defended():
+    """naive current → UTC aware 통일해 TypeError 안 남."""
+    now = datetime(2026, 6, 24, tzinfo=timezone.utc)
+    naive_future = datetime(2026, 8, 23)  # tzinfo 없음
+    result = revoke_paid_until(naive_future, 30, now=now)
+    assert result == datetime(2026, 7, 24, tzinfo=timezone.utc)
+
+
+def test_revoke_inverse_of_extend():
+    """extend 후 revoke 하면 원래 시점(이력 없음 → now)으로 돌아온다."""
+    now = datetime(2026, 6, 24, tzinfo=timezone.utc)
+    extended = extend_paid_until(None, 30, now=now)  # now + 30일
+    reverted = revoke_paid_until(extended, 30, now=now)  # − 30일 → now
+    assert reverted == now

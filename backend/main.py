@@ -114,7 +114,10 @@ app = FastAPI(
 )
 
 # GZip 압축 (1KB 이상 응답 자동 압축)
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+# compresslevel=6: 기본값 9 는 CPU 약 2.9배 더 쓰면서 압축률 이득은 0.3%p 뿐(세션 329 실측:
+# 210KB JSON 응답 level9=8.6ms/87.1% vs level6=3.0ms/86.8%). 단일 집서버라 대형 응답 동시 다발
+# 시 압축 CPU 가 threadpool 점유 → 9 의 추가 CPU 는 순손해. 6 이 CPU/압축률 균형점.
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=6)
 
 # CORS 설정 (FRONTEND_URL: 콤마 구분 복수 도메인 지원)
 _frontend_urls = os.getenv("FRONTEND_URL", "http://localhost:3000" if IS_DEBUG else "")

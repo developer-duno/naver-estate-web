@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy import (
     ARRAY,
     JSON,
+    BigInteger,
     Boolean,
     DateTime,
     Float,
@@ -250,6 +251,43 @@ class Payment(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="ready")  # ready|paid|failed|refunded
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     raw: Mapped[dict | None] = mapped_column(JSON)  # PortOne 응답 원본 (감사·환불)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class BillingKey(Base):
+    """빌링키 등록 — 카드 한 번 등록 → 매달 자동결제 (V036, 방식 B: 우리 cron).
+
+    카드번호는 저장하지 않는다 — PortOne 빌링키 문자열(billing_key)만 보관하는 결제 위임 토큰.
+    자동결제는 APScheduler 잡이 next_charge_at 도래분(status='active')을 찾아 PortOne 빌링키
+    결제(POST /payments/{id}/billing-key)를 호출하고, 성공 시 paid_until 연장 + next_charge_at
+    갱신, 실패 시 retry_count 증가. 해지는 status='deleted' (cron 이 더는 집지 않음).
+
+    customer_name·customer_phone 을 저장하는 이유: KPN 빌링키 결제 호출에 customer.fullName +
+    phoneNumber 가 필수라 발급 시점 값을 보관해 자동결제마다 재사용한다 (KPN 공식 제약).
+    payments 테이블(V035)과의 관계: 자동결제 1건마다 payments 행이 별도 기록된다 — 멱등·금액대조·
+    환불추적은 기존 payments 인프라 재활용. 본 테이블은 "카드 등록 상태"만 보유.
+    """
+    __tablename__ = "billing_keys"
+    __table_args__ = (
+        Index("ix_billing_keys_user_id", "user_id"),
+    )
+
+    # PG=BIGSERIAL(V036), SQLite(CI)=INTEGER autoincrement (BIGINT 은 SQLite ROWID 자동증가 미적용 →
+    # with_variant 로 dialect 분기, domain-mapping-ssot.md dialect 패턴 답습).
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True
+    )
+    user_id: Mapped[str] = mapped_column(String, nullable=False)
+    billing_key: Mapped[str] = mapped_column(String, nullable=False)  # PortOne 빌링키 (카드번호 아님)
+    plan: Mapped[str] = mapped_column(String, nullable=False)  # PLAN_PRICES 키 (자동결제 플랜)
+    card_name: Mapped[str | None] = mapped_column(String)  # 카드사명 (화면 표시)
+    card_last4: Mapped[str | None] = mapped_column(String)  # 카드 마지막 4자리 (화면 표시)
+    customer_name: Mapped[str | None] = mapped_column(String)  # KPN 결제 필수 (customer.fullName)
+    customer_phone: Mapped[str | None] = mapped_column(String)  # KPN 결제 필수 (customer.phoneNumber)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")  # active|deleted|failed
+    next_charge_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # 다음 자동결제 예정
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # 결제 실패 재시도 횟수
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

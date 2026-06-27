@@ -155,6 +155,17 @@ describe("MbClusterMap", () => {
     expect(onSelect).toHaveBeenCalledWith(target);
   });
 
+  /** 가격 없는 단지: 마커도 InfoWindow도 단지명만이면 회색 마커+흰 말풍선에 같은 이름이
+   * 겹쳐 보이는 중복(스크린샷 버그) → InfoWindow 에 지역을 함께 표시해 중복 대신 정보 추가. */
+  it("InfoWindow content 에 지역(region)을 함께 표시한다 (단지명 중복표시 해소)", () => {
+    // apt 팩토리는 region:"서울" — 가격 없는 단지라 마커는 단지명 폴백.
+    render(<MbClusterMap apartments={[apt("a", "더샵관저아르테", 37.5, 127.0)]} />);
+    eventHandlers[0]();
+    const content = mockInfoWindowSetContent.mock.calls[0][0] as string;
+    expect(content).toContain("더샵관저아르테"); // 단지명 (기존 유지)
+    expect(content).toContain("서울"); // 지역 (신규 — 마커엔 없는 정보)
+  });
+
   /** InfoWindow content 는 단지명을 이스케이프해 XSS 차단 */
   it("단지명에 HTML 특수문자가 있어도 이스케이프한다", () => {
     render(<MbClusterMap apartments={[apt("a", '<img src=x onerror="alert(1)">', 37.5, 127.0)]} />);

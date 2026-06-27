@@ -288,6 +288,9 @@ class BillingKey(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")  # active|deleted|failed
     next_charge_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # 다음 자동결제 예정
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # 결제 실패 재시도 횟수
+    # 카드 여러 장 보관 시 자동결제는 is_default=True 1장으로만 (V037). 부분 유니크 인덱스는
+    # prod SQL 에만(SQLite 미지원) — 한 user 당 active 기본 카드 1장 강제. cron(PR3)이 이 카드만 집음.
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 

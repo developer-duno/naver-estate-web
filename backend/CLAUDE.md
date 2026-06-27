@@ -97,7 +97,7 @@
 | V033 | agent_verifications.phone 컬럼 추가 (공인중개사 검증 연락처 수집, PR #171) | 2026-06-15 (prod 적용완료, 세션 307 라이브검증: phone 저장 확인) |
 | V034 | agent_verifications broker_verified/broker_jurirno/broker_status 3컬럼 (V-WORLD 중개사 대조 결과, 세션 308 PR B) | 2026-06-15 (prod 적용완료, 세션 308 직접 실측: 3컬럼 확인) |
 | V035 | user_profiles.paid_until + payments 테이블 (결제 시스템 PR1 — 유료 구독 이용권) | 2026-06-24 (prod 적용완료, 세션 322: 사장님 SQL Editor 실행 → Claude 재검증 paid_until·payments·인덱스 EXISTS) |
-| V036 | billing_keys 테이블 (빌링키 자동결제 — 정기결제 PR1, 방식 B 우리 cron, 세션 327) | 2026-06-27 (⚠ prod 선행 실행 필요 — 머지 후 사장님 SQL Editor 적용 대기. PR1 시점엔 쓰는 코드 없어 즉시 영향 0, PR2+ 결제 엔드포인트가 INSERT/SELECT 하므로 그 전 적용 필수) |
+| V036 | billing_keys 테이블 (빌링키 자동결제 — 정기결제 PR1, 방식 B 우리 cron, 세션 327) | 2026-06-27 (prod 적용완료, 세션 329: 사장님 SQL Editor 실행 → information_schema 13컬럼·타입 일치 확인. PR2+ 결제 엔드포인트 INSERT/SELECT 준비됨) |
 
 - `db/migrations/` 폴더에 `V000__` ~ `V036__` SQL 파일 = 37 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)

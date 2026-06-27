@@ -146,12 +146,17 @@ export default function MbClusterMap({
             },
           });
           naver.maps.Event.addListener(marker, "click", () => {
-            // 클릭 즉시 정보 — 단지명 + 핵심 지표(가격/경쟁률/미분양)를 말풍선 위에 바로.
+            // 클릭 즉시 정보 — 단지명 + 지역 + 핵심 지표. 마커가 가격 없어 단지명만 보일 때
+            // (label===name) InfoWindow 까지 단지명만 띄우면 회색 마커와 흰 말풍선에 같은 이름이
+            // 겹쳐 보인다 → 지역(시도+구)을 항상 함께 표시해 중복 대신 더 자세한 정보로 만든다.
             const label = markerLabel(apt, markerKind);
             const sub = label === apt.name ? "" : `<div style="font-size:13px;font-weight:700;color:#2563eb;">${escapeHtml(label)}</div>`;
+            const area = [apt.region, apt.gu].filter(Boolean).join(" ");
+            const areaLine = area ? `<div style="font-size:12px;color:#6b7280;">${escapeHtml(area)}</div>` : "";
             infoWindow.setContent(
               `<div style="padding:6px 10px;white-space:nowrap;">` +
                 `<div style="font-size:13px;font-weight:600;">${escapeHtml(apt.name)}</div>` +
+                areaLine +
                 sub +
                 `</div>`,
             );

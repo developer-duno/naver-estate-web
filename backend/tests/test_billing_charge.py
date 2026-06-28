@@ -142,17 +142,23 @@ def test_third_consecutive_fail_stops(db):
     mock_alert.assert_called_once()  # 알림 발사
 
 
-def test_amount_mismatch_is_retry(db):
-    """결제됐으나 금액 불일치(위변조) → retry 처리(즉시 중단 아님), paid_until 미연장."""
+def test_amount_mismatch_stops_immediately(db):
+    """금액 불일치(위변조) → 즉시 영구중단(status='failed') + 알림. retry 무한반복 금지.
+
+    적대검증 #2: 금액불일치를 retry 로 두면 환불 없이 매일 재출금. payment.py
+    PermanentGrantError 정책대로 즉시 중단으로 정정(결함 박제 테스트 정정, testing.md).
+    """
     _make_profile(db, "u1")
     _make_billing_key(db, "u1")
-    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_paid(10)):  # 기대 10000≠10
+    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_paid(10)), \
+         patch("crawler.billing_charge._alert_billing") as mock_alert:  # 기대 10000≠10
         from crawler.billing_charge import charge_due_billing_keys
         charge_due_billing_keys()
     db.expire_all()
     bk = db.query(BillingKey).filter(BillingKey.user_id == "u1").one()
-    assert bk.retry_count == 1
+    assert bk.status == "failed"  # 즉시 중단 (retry 아님)
     assert db.get(UserProfile, "u1").paid_until is None
+    mock_alert.assert_called_once()
 
 
 # ── 격리 ──
@@ -178,3 +184,69 @@ def test_one_failure_does_not_block_others(db):
     # u1 = 호출 실패 → retry, u2 = 정상 결제
     assert db.query(BillingKey).filter(BillingKey.user_id == "u1").one().retry_count == 1
     assert db.get(UserProfile, "u2").paid_until is not None
+
+
+# ── 적대검증 결함 수정 회귀 (세션 330) ──
+
+
+def test_deterministic_payment_id_same_charge_cycle(db):
+    """#1 멱등키: 같은 빌링키·같은 next_charge_at 이면 payment_id 가 항상 동일(PortOne dedup).
+
+    payment_id 가 매번 uuid 면 commit 실패 후 재배치가 새 id 로 재출금 → 이중출금.
+    bk.id+next_charge_at epoch 로 결정적 생성해 PortOne 이 같은 결제로 dedup 하게 한다.
+    """
+    from crawler.billing_charge import _billing_payment_id
+    _make_profile(db, "u1")
+    bk = _make_billing_key(db, "u1")
+    pid1 = _billing_payment_id(bk)
+    pid2 = _billing_payment_id(bk)
+    assert pid1 == pid2  # 결정적 (재시도 시 동일)
+    assert pid1.startswith("b") and pid1.isalnum() and len(pid1.encode()) <= 32  # KPN 제약
+
+
+def test_already_paid_cycle_no_recharge(db):
+    """#1 자기복구: 같은 청구 건이 이미 paid(직전 commit 실패로 DB만 롤백)면 재출금 안 하고 동기화만."""
+    from crawler.billing_charge import _billing_payment_id, charge_due_billing_keys
+    _make_profile(db, "u1")
+    bk = _make_billing_key(db, "u1")
+    amount = PLAN_PRICES["pro_30d"]["amount"]
+    # PortOne 출금은 됐는데 DB 만 롤백된 상태 모사 — 그 청구 건 Payment 를 paid 로 미리 심는다.
+    db.add(Payment(payment_id=_billing_payment_id(bk), user_id="u1", plan="pro_30d",
+                   amount=amount, status="paid"))
+    db.commit()
+    with patch("crawler.billing_charge._pay_with_billing_key") as mock_pay:
+        charge_due_billing_keys()
+    mock_pay.assert_not_called()  # 재출금 0 (이미 paid 라 동기화만)
+    db.expire_all()
+    assert db.get(UserProfile, "u1").paid_until is not None  # paid_until 은 복구
+
+
+def test_toctou_card_downgraded_before_charge_skipped(db):
+    """#3 TOCTOU: due 스냅샷 후 결제 직전 is_default=False 로 강등된 카드는 결제 스킵.
+
+    _charge_one 이 db.refresh 로 fresh 재확인 — 배치 중 register 카드교체가 stale 결제를 막는다.
+    """
+    from crawler.billing_charge import _charge_one
+    _make_profile(db, "u1")
+    bk = _make_billing_key(db, "u1")
+    # 결제 직전 다른 경로(register)가 이 카드를 강등했다고 가정 — DB 직접 변경 후 refresh 로 감지.
+    db.query(BillingKey).filter(BillingKey.id == bk.id).update({"is_default": False})
+    db.commit()
+    with patch("crawler.billing_charge._pay_with_billing_key") as mock_pay:
+        result = _charge_one(db, bk)
+    assert result == "skipped"
+    mock_pay.assert_not_called()  # 강등된 카드 결제 0
+
+
+def test_billing_charge_records_crawljob(db):
+    """#4 관찰성: 배치가 CrawlJob 을 기록해 monitor 가 결제 결과를 본다."""
+    from db.models import CrawlJob
+    _make_profile(db, "u1")
+    _make_billing_key(db, "u1")
+    amount = PLAN_PRICES["pro_30d"]["amount"]
+    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_paid(amount)):
+        from crawler.billing_charge import charge_due_billing_keys
+        charge_due_billing_keys(scheduler_job_id="billing_charge")
+    db.expire_all()
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "billing_charge").one()
+    assert job.status == "completed" and job.total_items == 1 and job.processed_items == 1

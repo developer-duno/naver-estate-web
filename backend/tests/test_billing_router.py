@@ -14,7 +14,7 @@ from unittest.mock import patch
 import jwt
 
 from config.plans import PLAN_PRICES
-from db.models import AgentVerification, BillingKey, UserProfile
+from db.models import AgentVerification, BillingKey, Payment, UserProfile
 
 JWT_SECRET = "test-secret-key-for-testing-only"
 
@@ -106,6 +106,19 @@ def test_billing_prepare_unknown_plan_400(client, db):
     _make_verification(db, "u1")
     with _portone_env():
         res = client.post("/api/payment/billing/prepare", json={"plan": "nope"}, headers=_auth("u1"))
+    assert res.status_code == 400
+
+
+def test_billing_prepare_free_plan_400(client, db):
+    """무료 플랜(basic_30d)은 PLAN_PRICES 부재 → prepare 400 (FE free 가드 + BE 이중 방어).
+
+    basic_30d 는 PlanKey 타입엔 유효하나(types/payment.ts) PLAN_PRICES 엔 없는 무료체험 플랜.
+    FE CheckoutButton 의 free 가드가 자동결제 버튼을 막지만, BE 도 plan 미존재로 거부함을 박제."""
+    _make_profile(db, "u1")
+    _make_verification(db, "u1")
+    with _portone_env():
+        res = client.post("/api/payment/billing/prepare",
+                          json={"plan": "basic_30d"}, headers=_auth("u1"))
     assert res.status_code == 400
 
 
@@ -223,6 +236,24 @@ def test_billing_register_no_phone_ok(client, db):
     db.expire_all()
     bk = db.query(BillingKey).filter(BillingKey.user_id == "u1").one()
     assert bk.customer_phone is None
+
+
+def test_billing_register_free_plan_400_no_side_effect(client, db):
+    """무료 플랜(basic_30d) register → 400 + BillingKey/Payment 미저장 + paid_until None.
+
+    plan 검증(billing.py:178-180)이 _pay_with_billing_key·db.add(Payment) 보다 먼저라
+    mock 불필요 — 결제·INSERT 전에 즉시 400. 오염 행이 billing_keys 에 유입되는 경로 봉쇄."""
+    _make_profile(db, "u1")
+    _make_verification(db, "u1")
+    with _portone_env():
+        res = client.post("/api/payment/billing/register",
+                          json={"billing_key": "bk-free", "plan": "basic_30d"},
+                          headers=_auth("u1"))
+    assert res.status_code == 400
+    db.expire_all()
+    assert db.query(BillingKey).filter(BillingKey.user_id == "u1").count() == 0
+    assert db.query(Payment).filter(Payment.user_id == "u1").count() == 0
+    assert db.get(UserProfile, "u1").paid_until is None
 
 
 # ── PR4: 해지 + 목록 조회 ──

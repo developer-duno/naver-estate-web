@@ -13,6 +13,8 @@ export const metadata: Metadata = {
     title: "보유세 계산기 (재산세 + 종부세) | 2u부동산",
     description:
       "공인중개사를 위한 보유세 자동 계산 — 1세대1주택 12억 공제·연령/보유 세액공제·다주택 9억 공제·3주택 25억 초과 중과·농특세 20%",
+    // openGraph 직접 지정 시 root opengraph-image 자동 상속이 끊겨 브랜드 PNG og 를 명시(빌드 실측 확인)
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
   },
 };
 

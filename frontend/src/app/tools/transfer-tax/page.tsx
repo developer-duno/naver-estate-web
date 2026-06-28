@@ -14,6 +14,8 @@ export const metadata: Metadata = {
     title: "양도소득세 계산기 | 2u부동산",
     description:
       "공인중개사를 위한 양도세 자동 계산 — 1세대1주택 비과세·12억 초과 안분·중과 한시배제·미등기·장기보유공제 표1/표2 모두 지원",
+    // openGraph 직접 지정 시 root opengraph-image 자동 상속이 끊겨 브랜드 PNG og 를 명시(빌드 실측 확인)
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
   },
 };
 

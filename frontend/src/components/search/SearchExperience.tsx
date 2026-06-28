@@ -30,8 +30,6 @@ import type { ArticleFilters } from "@/types";
 const VALID_COMPLEX_SORT = new Set<string>(COMPLEX_SORT_OPTIONS.map((o) => o.v));
 
 interface Props {
-  /** 입력 폼·결과 위에 끼울 부가 영역 (홈의 hero/통계/도구카드). 없으면 검색 전용 화면. */
-  headerSlot?: ReactNode;
   /** 결과 영역 위에 끼울 부가 영역 (검색 결과 없을 때 홈의 도구카드 등). */
   emptyExtra?: ReactNode;
 }
@@ -42,7 +40,7 @@ interface Props {
  * 검색 시 현재 pathname(usePathname) 기준으로 URL 갱신 → 홈에선 /?q=, 검색에선 /search?q=.
  * (세션 314 — search/page.tsx SearchContent 본문 이식, 동작 보존)
  */
-export default function SearchExperience({ headerSlot, emptyExtra }: Props) {
+export default function SearchExperience({ emptyExtra }: Props) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname() || "/";
@@ -235,8 +233,6 @@ export default function SearchExperience({ headerSlot, emptyExtra }: Props) {
 
   return (
     <div>
-      {headerSlot}
-
       {/* 검색 결과 헤더 — 결과가 있을 때만 제목/개수/즐겨찾기 링크 */}
       {hasSearchParams && (
         <div className="flex items-center gap-4 mb-6 flex-wrap">

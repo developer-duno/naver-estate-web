@@ -39,16 +39,20 @@ def _make_billing_key(db, uid, *, plan="pro_30d", status="active", is_default=Tr
     return bk
 
 
-def _paid(amount):
-    """_pay_with_billing_key mock 반환 — PAID + 금액 + 카드정보."""
+# ⚠ 실제 SDK 응답 모양 답습 (세션 333 결함 수정):
+#   pay_with_billing_key 응답엔 status·amount 가 없다(payment.pg_tx_id·paid_at 뿐) — 성공 시
+#   단순 truthy, 실패 시 예외. PAID·금액 검증은 get_payment(_fetch_portone_payment) 재조회로.
+def _charge_ok():
+    """pay_with_billing_key 성공 mock — 실제 SDK 모양(status/amount 없음)."""
+    return SimpleNamespace(payment=SimpleNamespace(pg_tx_id="tx", paid_at="2026-06-29T00:00:00Z"))
+
+
+def _fetched(status="PAID", amount=10000):
+    """get_payment 재조회 mock — 검증 대상(status + amount.total + 카드정보)."""
     return SimpleNamespace(
-        status="PAID", amount=SimpleNamespace(total=amount), id="tx",
+        status=status, amount=SimpleNamespace(total=amount), id="tx",
         method=SimpleNamespace(card=SimpleNamespace(name="신한카드", number="111122******3456")),
     )
-
-
-def _not_paid(status="FAILED"):
-    return SimpleNamespace(status=status, amount=SimpleNamespace(total=10000), id="tx")
 
 
 # ── 성공 ──
@@ -59,7 +63,8 @@ def test_due_billing_key_charged_and_extended(db):
     _make_profile(db, "u1")
     _make_billing_key(db, "u1")
     amount = PLAN_PRICES["pro_30d"]["amount"]
-    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_paid(amount)):
+    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_charge_ok()), \
+         patch("crawler.billing_charge._fetch_portone_payment", return_value=_fetched(amount=amount)):
         from crawler.billing_charge import charge_due_billing_keys
         charge_due_billing_keys()
     db.expire_all()
@@ -117,7 +122,8 @@ def test_payment_fail_increments_retry(db):
     _make_profile(db, "u1")
     bk = _make_billing_key(db, "u1", retry_count=0)
     original_due = bk.next_charge_at
-    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_not_paid("FAILED")):
+    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_charge_ok()), \
+         patch("crawler.billing_charge._fetch_portone_payment", return_value=_fetched(status="FAILED")):
         from crawler.billing_charge import charge_due_billing_keys
         charge_due_billing_keys()
     db.expire_all()
@@ -132,7 +138,8 @@ def test_third_consecutive_fail_stops(db):
     """이미 2회 실패한 카드가 3회째 실패 → status='failed' 로 중단."""
     _make_profile(db, "u1")
     _make_billing_key(db, "u1", retry_count=2)  # 이번이 3회째
-    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_not_paid("FAILED")), \
+    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_charge_ok()), \
+         patch("crawler.billing_charge._fetch_portone_payment", return_value=_fetched(status="FAILED")), \
          patch("crawler.billing_charge._alert_billing") as mock_alert:
         from crawler.billing_charge import charge_due_billing_keys
         charge_due_billing_keys()
@@ -150,8 +157,9 @@ def test_amount_mismatch_stops_immediately(db):
     """
     _make_profile(db, "u1")
     _make_billing_key(db, "u1")
-    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_paid(10)), \
-         patch("crawler.billing_charge._alert_billing") as mock_alert:  # 기대 10000≠10
+    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_charge_ok()), \
+         patch("crawler.billing_charge._fetch_portone_payment", return_value=_fetched(amount=10)), \
+         patch("crawler.billing_charge._alert_billing") as mock_alert:  # 재조회 금액 10 ≠ 기대 10000
         from crawler.billing_charge import charge_due_billing_keys
         charge_due_billing_keys()
     db.expire_all()
@@ -175,9 +183,10 @@ def test_one_failure_does_not_block_others(db):
     def _pay_side_effect(payment_id, billing_key, *a):
         if billing_key == "bk-u1":
             raise RuntimeError("PortOne 일시 장애")
-        return _paid(amount)
+        return _charge_ok()
 
-    with patch("crawler.billing_charge._pay_with_billing_key", side_effect=_pay_side_effect):
+    with patch("crawler.billing_charge._pay_with_billing_key", side_effect=_pay_side_effect), \
+         patch("crawler.billing_charge._fetch_portone_payment", return_value=_fetched(amount=amount)):
         from crawler.billing_charge import charge_due_billing_keys
         charge_due_billing_keys()
     db.expire_all()
@@ -244,7 +253,8 @@ def test_billing_charge_records_crawljob(db):
     _make_profile(db, "u1")
     _make_billing_key(db, "u1")
     amount = PLAN_PRICES["pro_30d"]["amount"]
-    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_paid(amount)):
+    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_charge_ok()), \
+         patch("crawler.billing_charge._fetch_portone_payment", return_value=_fetched(amount=amount)):
         from crawler.billing_charge import charge_due_billing_keys
         charge_due_billing_keys(scheduler_job_id="billing_charge")
     db.expire_all()
@@ -256,7 +266,8 @@ def test_third_fail_notifies_user_email(db):
     """#6: 3회째 실패로 중단 시 당사자(공인중개사)에게 이메일 알림 발송 (운영자 텔레그램과 별도)."""
     _make_profile(db, "u1")
     _make_billing_key(db, "u1", retry_count=2)  # 이번이 3회째
-    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_not_paid("FAILED")), \
+    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_charge_ok()), \
+         patch("crawler.billing_charge._fetch_portone_payment", return_value=_fetched(status="FAILED")), \
          patch("crawler.billing_charge._alert_billing"), \
          patch("services.email.send_email") as mock_email:
         from crawler.billing_charge import charge_due_billing_keys

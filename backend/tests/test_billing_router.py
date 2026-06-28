@@ -83,10 +83,19 @@ def _make_verification(db, uid, name="홍길동", phone: str | None = "010123456
     db.commit()
 
 
-def _paid_billing(amount):
-    """pay_with_billing_key mock 반환 — status=PAID + amount.total (카드정보 포함)."""
+# ⚠ 실제 SDK 응답 모양 답습 (세션 333 결함 수정):
+#   - pay_with_billing_key → PayWithBillingKeyResponse(payment=...) : status·amount 없음(pg_tx_id·paid_at 뿐).
+#     실패 시 예외를 던지므로 성공 mock 은 단순 truthy 객체면 충분(반환값은 검증에 안 쓰임).
+#   - 검증은 get_payment(_fetch_portone_payment) 재조회 객체로 한다 → status·amount·method 는 여기에.
+def _charge_ok():
+    """pay_with_billing_key 성공 mock — 실제 SDK 응답 모양(payment.pg_tx_id, status/amount 없음)."""
+    return SimpleNamespace(payment=SimpleNamespace(pg_tx_id="tx-billing", paid_at="2026-06-29T00:00:00Z"))
+
+
+def _fetched(status="PAID", amount=10000):
+    """get_payment 재조회 mock — 검증 대상(status + amount.total + 카드정보)."""
     return SimpleNamespace(
-        status="PAID", amount=SimpleNamespace(total=amount), id="tx-billing",
+        status=status, amount=SimpleNamespace(total=amount), id="tx-billing",
         method=SimpleNamespace(card=SimpleNamespace(name="신한카드", number="123456******1234")),
     )
 
@@ -153,8 +162,9 @@ def test_billing_register_first_payment_ok(client, db):
     _make_profile(db, "u1")
     _make_verification(db, "u1")
     amount = PLAN_PRICES["pro_30d"]["amount"]
-    with _portone_env(), patch("routers.billing._pay_with_billing_key",
-                               return_value=_paid_billing(amount)):
+    with _portone_env(), \
+            patch("routers.billing._pay_with_billing_key", return_value=_charge_ok()), \
+            patch("routers.billing._fetch_portone_payment", return_value=_fetched(amount=amount)):
         res = client.post("/api/payment/billing/register",
                           json={"billing_key": "bk-1", "plan": "pro_30d"}, headers=_auth("u1"))
     assert res.status_code == 200
@@ -176,8 +186,10 @@ def test_billing_register_amount_mismatch_400(client, db):
     """첫 결제 금액 불일치(위변조) → 400, BillingKey 미저장 + Payment failed."""
     _make_profile(db, "u1")
     _make_verification(db, "u1")
-    with _portone_env(), patch("routers.billing._pay_with_billing_key",
-                               return_value=_paid_billing(10)):  # 기대 10000 ≠ 10
+    with _portone_env(), \
+            patch("routers.billing._pay_with_billing_key", return_value=_charge_ok()), \
+            patch("routers.billing._fetch_portone_payment",
+                  return_value=_fetched(amount=10)):  # 재조회 금액 10 ≠ 기대 10000
         res = client.post("/api/payment/billing/register",
                           json={"billing_key": "bk-bad", "plan": "pro_30d"}, headers=_auth("u1"))
     assert res.status_code == 400
@@ -190,13 +202,33 @@ def test_billing_register_pending_409(client, db):
     """첫 결제 status≠PAID(정산 지연) → 409, BillingKey 미저장."""
     _make_profile(db, "u1")
     _make_verification(db, "u1")
-    pending = SimpleNamespace(status="READY", amount=SimpleNamespace(total=10000), id="tx")
-    with _portone_env(), patch("routers.billing._pay_with_billing_key", return_value=pending):
+    with _portone_env(), \
+            patch("routers.billing._pay_with_billing_key", return_value=_charge_ok()), \
+            patch("routers.billing._fetch_portone_payment",
+                  return_value=_fetched(status="READY")):  # 재조회 PAID 아님 = 정산 지연
         res = client.post("/api/payment/billing/register",
                           json={"billing_key": "bk-p", "plan": "pro_30d"}, headers=_auth("u1"))
     assert res.status_code == 409
     db.expire_all()
     assert db.query(BillingKey).filter(BillingKey.user_id == "u1").count() == 0
+
+
+def test_billing_register_charge_raises_400(client, db):
+    """첫 결제 호출 자체 실패(SDK 예외 — 승인거절 등) → 400, BillingKey/paid_until 미반영.
+
+    실제 SDK pay_with_billing_key 는 실패 시 타입드 예외(PgProviderError 등)를 던진다 —
+    예외 계약 회귀 가드(세션 333). 예외면 결제 자체가 안 됐으므로 등록 거부."""
+    _make_profile(db, "u1")
+    _make_verification(db, "u1")
+    with _portone_env(), \
+            patch("routers.billing._pay_with_billing_key",
+                  side_effect=RuntimeError("PG 승인 거절")):
+        res = client.post("/api/payment/billing/register",
+                          json={"billing_key": "bk-decline", "plan": "pro_30d"}, headers=_auth("u1"))
+    assert res.status_code == 400
+    db.expire_all()
+    assert db.query(BillingKey).filter(BillingKey.user_id == "u1").count() == 0
+    assert db.get(UserProfile, "u1").paid_until is None
 
 
 def test_billing_register_replaces_default(client, db):
@@ -208,8 +240,9 @@ def test_billing_register_replaces_default(client, db):
                       customer_name="홍길동", status="active", is_default=True))
     db.commit()
     amount = PLAN_PRICES["pro_30d"]["amount"]
-    with _portone_env(), patch("routers.billing._pay_with_billing_key",
-                               return_value=_paid_billing(amount)):
+    with _portone_env(), \
+            patch("routers.billing._pay_with_billing_key", return_value=_charge_ok()), \
+            patch("routers.billing._fetch_portone_payment", return_value=_fetched(amount=amount)):
         res = client.post("/api/payment/billing/register",
                           json={"billing_key": "bk-new", "plan": "pro_30d"}, headers=_auth("u1"))
     assert res.status_code == 200
@@ -228,8 +261,9 @@ def test_billing_register_no_phone_ok(client, db):
     _make_profile(db, "u1")
     _make_verification(db, "u1", name="무전화", phone=None)
     amount = PLAN_PRICES["pro_30d"]["amount"]
-    with _portone_env(), patch("routers.billing._pay_with_billing_key",
-                               return_value=_paid_billing(amount)):
+    with _portone_env(), \
+            patch("routers.billing._pay_with_billing_key", return_value=_charge_ok()), \
+            patch("routers.billing._fetch_portone_payment", return_value=_fetched(amount=amount)):
         res = client.post("/api/payment/billing/register",
                           json={"billing_key": "bk-np", "plan": "pro_30d"}, headers=_auth("u1"))
     assert res.status_code == 200

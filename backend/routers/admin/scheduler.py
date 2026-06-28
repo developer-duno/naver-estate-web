@@ -44,6 +44,7 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "complex_detail_ABYG": {"name": "단지 상세 backfill ABYG", "schedule": "주 1회 수요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
     "complex_detail_OBYG": {"name": "단지 상세 backfill OBYG", "schedule": "주 1회 목요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
     "collect_metrics": {"name": "단지 가치지표 수집", "schedule": "매일 04:30", "env": "COMPLEX_METRIC_ENABLED", "env_default": "true"},
+    "billing_charge": {"name": "빌링키 자동결제", "schedule": "매일 04:50", "env": "BILLING_AUTO_CHARGE_ENABLED", "env_default": "true"},
     "crawler_monitor": {"name": "크롤링 모니터", "schedule": "10분 interval", "env": "MONITOR_ENABLED"},
     "vacuum_maintenance": {"name": "정기 VACUUM 유지보수", "schedule": "매일 03:50", "env": "VACUUM_MAINTENANCE_ENABLED", "env_default": "true"},
 }

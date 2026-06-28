@@ -6,6 +6,7 @@ import os
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
 
+from crawler.billing_charge import charge_due_billing_keys
 from crawler.service import (
     backfill_price_batch,
     collect_price_history,
@@ -45,6 +46,8 @@ COMPLEX_DETAIL_APT_INTERVAL_HOURS = int(os.getenv("COMPLEX_DETAIL_APT_INTERVAL_H
 COMPLEX_DETAIL_OPST_INTERVAL_HOURS = int(os.getenv("COMPLEX_DETAIL_OPST_INTERVAL_HOURS", "4"))
 COMPLEX_METRIC_ENABLED = os.getenv("COMPLEX_METRIC_ENABLED", "true").lower() == "true"
 COMPLEX_METRIC_BATCH_SIZE = int(os.getenv("COMPLEX_METRIC_BATCH_SIZE", "1000"))
+# 빌링키 자동결제(정기결제 PR3) — 매일 04:50 next_charge_at 도래분 결제. 기본 활성.
+BILLING_AUTO_CHARGE_ENABLED = os.getenv("BILLING_AUTO_CHARGE_ENABLED", "true").lower() == "true"
 MONITOR_ENABLED = os.getenv("MONITOR_ENABLED", "false").lower() == "true"
 MONITOR_INTERVAL_MIN = int(os.getenv("MONITOR_INTERVAL_MIN", "30"))
 # 정기 VACUUM (ANALYZE) — articles/trades visibility map 재악화 차단 (세션 260)
@@ -351,6 +354,25 @@ def create_scheduler() -> BackgroundScheduler:
             misfire_grace_time=3600,
         )
         logger.info("단지 가치지표 수집 활성화: 매일 04:30 (배치 %d)", COMPLEX_METRIC_BATCH_SIZE)
+
+    # M-2. 빌링키 자동결제 — 매일 새벽 4시 50분 (정기결제 PR3, 세션 330).
+    #   next_charge_at 도래분(status='active' AND is_default) 카드를 PortOne 빌링키 결제.
+    #   PortOne 결제라 네이버 IP 차단 무관 → 04:50 = 04:30 metrics·03:50 vacuum 과 instant
+    #   겹침 없는 빈 슬롯. 결제 대상이 소수(active 빌링키)라 가볍다. 3일 연속 실패 시 중단(알림).
+    #   BILLING_AUTO_CHARGE_ENABLED=false 로 끄면 자동결제 미동작(카드 등록·첫결제는 무관).
+    if BILLING_AUTO_CHARGE_ENABLED:
+        scheduler.add_job(
+            charge_due_billing_keys,
+            "cron",
+            hour=4,
+            minute=50,
+            kwargs={"scheduler_job_id": "billing_charge"},
+            id="billing_charge",
+            name="빌링키 자동결제",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        logger.info("빌링키 자동결제 활성화: 매일 04:50")
 
     # 정기 VACUUM (ANALYZE) articles/trades — visibility map 재악화 차단 (세션 260).
     # 03:50 = 03:30 backfill·04:00 Wed 시세·04:30 metrics 와 instant 겹침 없는 빈 슬롯.

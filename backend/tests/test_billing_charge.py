@@ -250,3 +250,16 @@ def test_billing_charge_records_crawljob(db):
     db.expire_all()
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "billing_charge").one()
     assert job.status == "completed" and job.total_items == 1 and job.processed_items == 1
+
+
+def test_third_fail_notifies_user_email(db):
+    """#6: 3회째 실패로 중단 시 당사자(공인중개사)에게 이메일 알림 발송 (운영자 텔레그램과 별도)."""
+    _make_profile(db, "u1")
+    _make_billing_key(db, "u1", retry_count=2)  # 이번이 3회째
+    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_not_paid("FAILED")), \
+         patch("crawler.billing_charge._alert_billing"), \
+         patch("services.email.send_email") as mock_email:
+        from crawler.billing_charge import charge_due_billing_keys
+        charge_due_billing_keys()
+    mock_email.assert_called_once()  # 사용자 이메일 발송
+    assert mock_email.call_args[0][0] == "u1@test.com"  # profile.email 로

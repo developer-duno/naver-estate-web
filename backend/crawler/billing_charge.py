@@ -59,6 +59,22 @@ def _alert_billing(message: str, key: str = "billing_stop") -> None:
         pass
 
 
+def _notify_user_billing_failed(db, user_id: str) -> None:
+    """자동결제 중단을 당사자(공인중개사)에게 이메일로 알림 — 카드 재등록 유도 (적대검증 #6).
+
+    운영자 텔레그램만으론 정작 구독 끊긴 사용자가 모른다. best-effort(이메일 실패는 삼킴).
+    """
+    try:
+        profile = db.get(UserProfile, user_id)
+        if not profile or not profile.email:
+            return
+        from services.email import build_billing_failed_email, send_email
+        subject, html = build_billing_failed_email(profile.email)
+        send_email(profile.email, subject, html)
+    except Exception:
+        pass
+
+
 def _billing_payment_id(bk: BillingKey) -> str:
     """이번 청구 건의 결정적 멱등 payment_id — 같은 빌링키·같은 청구주기면 항상 동일.
 
@@ -180,6 +196,7 @@ def _mark_retry(db, bk: BillingKey, payment_id: str, reason: str) -> str:
             f"[BILLING] 자동결제 {bk.retry_count}회 연속 실패 → 중단 "
             f"(user={bk.user_id}, plan={bk.plan}): {reason}"
         )
+        _notify_user_billing_failed(db, bk.user_id)  # 당사자에게도 알림(적대검증 #6)
         return "stopped"
     # 다음날 재시도 — next_charge_at 은 그대로 둬 다음 배치가 다시 집음(<=now 유지).
     logger.info("[billing] 결제 실패 retry %d/%d (user=%s): %s",

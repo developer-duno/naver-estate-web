@@ -55,6 +55,10 @@ class BillingRegisterRequest(BaseModel):
     plan: str
 
 
+class BillingCancelRequest(BaseModel):
+    billing_key_id: int  # 해지할 BillingKey.id (본인 소유만 해지 가능)
+
+
 def _get_customer(db: Session, user_id: str) -> tuple[str, str | None]:
     """결제자 이름·연락처 — AgentVerification 에서 조회 (KPN customer.fullName 필수).
 
@@ -98,6 +102,17 @@ def _pay_with_billing_key(payment_id: str, billing_key: str, order_name: str,
         amount=PaymentAmountInput(total=amount),
         currency="KRW",
     )
+
+
+def _delete_portone_billing_key(billing_key: str) -> None:
+    """PortOne 빌링키 삭제(해지) — BillingKeyClient.delete_billing_key (lazy import, 테스트 mock).
+
+    requester='CUSTOMER': 사용자 본인 해지. 삭제 실패는 호출처가 처리(이미 삭제된 키 등은 무시 가능).
+    """
+    from portone_server_sdk import BillingKeyClient
+
+    client = BillingKeyClient(secret=PORTONE_API_SECRET)
+    client.delete_billing_key(billing_key=billing_key, reason="사용자 해지", requester="CUSTOMER")
 
 
 def _extract_card_info(portone_payment) -> tuple[str | None, str | None]:
@@ -245,3 +260,62 @@ def _fail_payment(db: Session, payment_id: str) -> None:
     db.query(Payment).filter(
         Payment.payment_id == payment_id, Payment.status == "ready",
     ).update({"status": "failed"}, synchronize_session=False)
+
+
+@router.get("/list")
+def list_billing_keys(
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """내 등록 카드 목록 — active 빌링키만(해지·실패 제외). FE 등록상태 표시·해지 UI 용."""
+    rows = db.execute(
+        select(BillingKey)
+        .where(BillingKey.user_id == user["user_id"], BillingKey.status == "active")
+        .order_by(BillingKey.is_default.desc(), BillingKey.created_at.desc())
+    ).scalars().all()
+    return {
+        "cards": [
+            {
+                "id": bk.id,
+                "plan": bk.plan,
+                "card_name": bk.card_name,
+                "card_last4": bk.card_last4,
+                "is_default": bk.is_default,
+                "next_charge_at": bk.next_charge_at.isoformat() if bk.next_charge_at else None,
+            }
+            for bk in rows
+        ]
+    }
+
+
+@router.post("/cancel")
+def cancel_billing_key(
+    body: BillingCancelRequest,
+    db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """빌링키 해지 — PortOne 삭제 + status='deleted' (cron 이 더는 자동결제 안 함).
+
+    본인 소유만 해지 가능. PortOne 삭제는 best-effort — 실패해도 우리 DB 를 deleted 로 막아
+    자동결제를 확실히 중단한다(외부 삭제 실패가 구독 해지를 막으면 안 됨, 사용자 불이익).
+    이미 deleted 면 멱등 no-op. 기본 카드를 해지하면 다른 active 카드를 기본으로 승격하지 않음
+    (사용자가 명시적으로 재등록 — 단순성). paid_until 은 환불 없이 만료일까지 유지.
+    """
+    bk = db.get(BillingKey, body.billing_key_id)
+    if not bk or bk.user_id != user["user_id"]:
+        raise HTTPException(status_code=404, detail="빌링키를 찾을 수 없습니다")
+    if bk.status == "deleted":
+        return {"cancelled": True, "already": True}  # 멱등
+
+    # PortOne 삭제 (best-effort — 실패해도 DB 차단은 진행).
+    try:
+        _delete_portone_billing_key(bk.billing_key)
+    except Exception as e:
+        logger.warning("[billing] PortOne 빌링키 삭제 실패(무시, DB 차단 진행) id=%s: %s",
+                       body.billing_key_id, e)
+
+    bk.status = "deleted"
+    bk.is_default = False  # 부분 유니크 인덱스(active+is_default) 충돌 방지 + cron 대상 제외
+    log_action(db, user["user_id"], "billing_cancelled", "billing", str(bk.id), {"plan": bk.plan})
+    db.commit()
+    return {"cancelled": True, "already": False}

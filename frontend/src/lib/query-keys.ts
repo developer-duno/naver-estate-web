@@ -63,6 +63,11 @@ export const queryKeys = {
     status: () => ["verification", "status"] as const,
   },
 
+  // 빌링키 자동결제 (등록 카드 목록)
+  billing: {
+    cards: () => ["billing", "cards"] as const,
+  },
+
   // 미분양 (mibunyang)
   mb: {
     guList: (region: string) => ["mb", "guList", region] as const,

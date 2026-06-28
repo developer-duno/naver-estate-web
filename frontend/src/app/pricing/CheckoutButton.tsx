@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSessionToken } from "@/hooks/useSessionToken";
 import { useCheckout } from "@/hooks/useCheckout";
+import { useBillingKey } from "@/hooks/useBillingKey";
 import type { PlanKey } from "@/types/payment";
 
 /**
@@ -25,6 +26,7 @@ export default function CheckoutButton({
 }) {
   const { sessionToken, tokenReady } = useSessionToken();
   const { paying, payError, startCheckout } = useCheckout();
+  const { registering, regError, startBilling } = useBillingKey();
 
   const base = "block w-full text-center font-medium text-sm py-2.5 rounded-lg transition";
   const filled = highlight
@@ -47,15 +49,24 @@ export default function CheckoutButton({
     <div className="w-full">
       <button
         type="button"
-        disabled={paying}
+        disabled={paying || registering}
         onClick={() => startCheckout(planKey)}
         className={`${base} ${filled} disabled:opacity-60 disabled:cursor-not-allowed`}
       >
         {paying ? "결제 진행 중…" : "결제하고 시작"}
       </button>
-      {payError && (
+      {/* 매달 자동결제 등록 (빌링키) — 한 번 등록하면 만료 시 자동 갱신, 해지 전까지 끊김 없음 */}
+      <button
+        type="button"
+        disabled={paying || registering}
+        onClick={() => startBilling(planKey)}
+        className={`${base} mt-2 border border-neutral-light bg-white hover:bg-neutral-light/40 text-text-secondary disabled:opacity-60 disabled:cursor-not-allowed`}
+      >
+        {registering ? "카드 등록 중…" : "매달 자동결제 등록"}
+      </button>
+      {(payError || regError) && (
         <p role="alert" className="mt-2 text-xs text-red-600 text-center">
-          {payError}
+          {payError || regError}
         </p>
       )}
     </div>

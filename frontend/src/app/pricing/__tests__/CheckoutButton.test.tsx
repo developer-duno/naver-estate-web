@@ -8,12 +8,17 @@ import { render, screen, fireEvent } from "@testing-library/react";
 const useSessionTokenMock = vi.fn();
 const startCheckoutMock = vi.fn();
 const useCheckoutMock = vi.fn();
+const startBillingMock = vi.fn();
+const useBillingKeyMock = vi.fn();
 
 vi.mock("@/hooks/useSessionToken", () => ({
   useSessionToken: () => useSessionTokenMock(),
 }));
 vi.mock("@/hooks/useCheckout", () => ({
   useCheckout: () => useCheckoutMock(),
+}));
+vi.mock("@/hooks/useBillingKey", () => ({
+  useBillingKey: () => useBillingKeyMock(),
 }));
 
 import CheckoutButton from "../CheckoutButton";
@@ -26,6 +31,12 @@ describe("CheckoutButton — 로그인 분기", () => {
       payError: "",
       clearPayError: vi.fn(),
       startCheckout: startCheckoutMock,
+    });
+    useBillingKeyMock.mockReturnValue({
+      registering: false,
+      regError: "",
+      clearRegError: vi.fn(),
+      startBilling: startBillingMock,
     });
   });
 
@@ -49,6 +60,14 @@ describe("CheckoutButton — 로그인 분기", () => {
     const btn = screen.getByRole("button", { name: "결제하고 시작" });
     fireEvent.click(btn);
     expect(startCheckoutMock).toHaveBeenCalledWith("pro_30d");
+  });
+
+  it("로그인: '매달 자동결제 등록' 버튼 노출 + 클릭 시 startBilling(planKey) 호출 (PR5)", () => {
+    useSessionTokenMock.mockReturnValue({ sessionToken: "tok", tokenReady: true, tokenError: false, dismissTokenError: vi.fn() });
+    render(<CheckoutButton planKey="pro_30d" />);
+    const btn = screen.getByRole("button", { name: "매달 자동결제 등록" });
+    fireEvent.click(btn);
+    expect(startBillingMock).toHaveBeenCalledWith("pro_30d");
   });
 
   it("무료체험(free=true): 로그인해도 결제 안 함 — '무료 체험 시작' /signup 링크 (세션 326)", () => {

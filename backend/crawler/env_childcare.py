@@ -9,7 +9,13 @@
 
 import logging
 
-from crawler.env_common import _complete_job, _fail_job, _is_skip_day, _record_job
+from crawler.env_common import (
+    _complete_job,
+    _fail_job,
+    _is_skip_day,
+    _prefetch_infra_map,
+    _record_job,
+)
 from db.database import SessionLocal
 from db.mb_models import Apartment, Infra
 from utils import utcnow
@@ -42,12 +48,9 @@ def collect_childcare_data(batch_size: int = 100):
             Apartment.longitude.isnot(None),
         ).limit(batch_size).all()
 
-        # Infra 일괄 prefetch — 루프 내 db.get() 라운드트립 제거 (Supabase pooler 7분 timeout 대응)
+        # Infra 일괄 prefetch — 루프 내 db.get() 라운드트립 제거 (env_common._prefetch_infra_map 공통 답습)
         apt_ids = [row[0] for row in apts]
-        infra_map: dict[str, Infra] = {
-            obj.apartment_id: obj
-            for obj in db.query(Infra).filter(Infra.apartment_id.in_(apt_ids)).all()
-        } if apt_ids else {}
+        infra_map = _prefetch_infra_map(db, apt_ids)
 
         # 시군구별 어린이집 캐시: {sigungu_code: [facilities]}
         gu_cache: dict[str, list[dict]] = {}

@@ -8,10 +8,7 @@ from sqlalchemy.orm import Session
 from db.mb_models import Apartment, ApplyhomeUnitSupply, PresaleScheduleOfficial, UnsoldHistory
 from db.mb_query_helpers import (
     _apply_keyword_filter,
-    _build_mb_order_clause,
-    _deduplicate_apartments,
-    _is_sqlite,
-    _sort_apartments,
+    _paginate_deduped_apartments,
 )
 
 # presale_type 분류 (prod 실측 11종 전수 — 세션 314 워크플로 wf_0ed0ffe6 확증).
@@ -64,44 +61,7 @@ def get_apartments_page(
         conditions.append(Apartment.gu == gu)
     _apply_keyword_filter(conditions, keyword)
 
-    if _is_sqlite(db):
-        # SQLite: regexp_replace 미지원 → Python fallback
-        stmt = select(Apartment).where(and_(*conditions))
-        all_rows = list(db.execute(stmt).scalars().all())
-        deduped = _deduplicate_apartments(all_rows)
-        sorted_rows = _sort_apartments(deduped, sort_by)
-        start = (page - 1) * page_size
-        return sorted_rows[start : start + page_size], len(deduped)
-
-    # PostgreSQL: SQL 레벨 중복 제거
-    base_name_expr = func.regexp_replace(Apartment.name, r"\s*\([^)]*\)\s*$", "")
-    rn = func.row_number().over(
-        partition_by=[base_name_expr, Apartment.region, Apartment.gu],
-        order_by=[Apartment.created_at.desc().nullslast(), Apartment.id.desc()],
-    ).label("rn")
-
-    subq = (
-        select(Apartment.id, rn)
-        .where(and_(*conditions))
-        .subquery()
-    )
-
-    # 전체 수
-    count_stmt = select(func.count()).select_from(subq).where(subq.c.rn == 1)
-    total = db.execute(count_stmt).scalar() or 0
-
-    # 페이지 데이터
-    order = _build_mb_order_clause(sort_by)
-    stmt = (
-        select(Apartment)
-        .join(subq, Apartment.id == subq.c.id)
-        .where(subq.c.rn == 1)
-        .order_by(order)
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-    rows = list(db.execute(stmt).scalars().all())
-    return rows, total
+    return _paginate_deduped_apartments(db, conditions, sort_by, page, page_size)
 
 
 def get_apartments(
@@ -172,42 +132,7 @@ def get_unsold_by_region(
         conditions.append(Apartment.gu == gu)
     _apply_keyword_filter(conditions, keyword)
 
-    if _is_sqlite(db):
-        stmt = select(Apartment).where(and_(*conditions))
-        all_rows = list(db.execute(stmt).scalars().all())
-        deduped = _deduplicate_apartments(all_rows)
-        sorted_rows = _sort_apartments(deduped, sort_by)
-        start = (page - 1) * page_size
-        return sorted_rows[start : start + page_size], len(deduped)
-
-    # PostgreSQL: SQL 레벨 중복 제거
-    base_name_expr = func.regexp_replace(Apartment.name, r"\s*\([^)]*\)\s*$", "")
-    rn = func.row_number().over(
-        partition_by=[base_name_expr, Apartment.region, Apartment.gu],
-        order_by=[Apartment.created_at.desc().nullslast(), Apartment.id.desc()],
-    ).label("rn")
-
-    subq = (
-        select(Apartment.id, rn)
-        .where(and_(*conditions))
-        .subquery()
-    )
-
-    # 전체 수 (중복 제거 후)
-    count_stmt = select(func.count()).select_from(subq).where(subq.c.rn == 1)
-    total = db.execute(count_stmt).scalar() or 0
-
-    order = _build_mb_order_clause(sort_by)
-    stmt = (
-        select(Apartment)
-        .join(subq, Apartment.id == subq.c.id)
-        .where(subq.c.rn == 1)
-        .order_by(order)
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-    rows = list(db.execute(stmt).scalars().all())
-    return rows, total
+    return _paginate_deduped_apartments(db, conditions, sort_by, page, page_size)
 
 
 # ── 분양 단지 조회 ───────────────────────────────────────────

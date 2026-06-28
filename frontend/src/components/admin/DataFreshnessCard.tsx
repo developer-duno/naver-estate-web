@@ -23,6 +23,9 @@ const STATUS_LABEL: Record<DataFreshnessItem["status"], string> = {
   unknown: "미수집",
 };
 
+const HELP_TEXT =
+  "단지·매물·시세 같은 각 종류의 데이터가 제때 갱신되고 있는지 보여줘요. 빨간색은 너무 오래 됐다는 뜻(원래 주기보다 3배 이상 늦음). '헛바퀴 의심'은 작업은 돌긴 돌았는데 실제로 새로 들어온 데이터가 0건이라는 뜻이에요";
+
 interface Props {
   token: string;
 }
@@ -59,7 +62,7 @@ export default function DataFreshnessCard({ token }: Props) {
 
   if (error) {
     return (
-      <AdminCard title="데이터 신선도" help="단지·매물·시세 같은 각 종류의 데이터가 제때 갱신되고 있는지 보여줘요. 빨간색은 너무 오래 됐다는 뜻(원래 주기보다 3배 이상 늦음). '헛바퀴 의심'은 작업은 돌긴 돌았는데 실제로 새로 들어온 데이터가 0건이라는 뜻이에요">
+      <AdminCard title="데이터 신선도" help={HELP_TEXT}>
         <p className="text-sm text-red-600">불러오기 실패: {error.message}</p>
       </AdminCard>
     );
@@ -67,7 +70,7 @@ export default function DataFreshnessCard({ token }: Props) {
 
   if (isLoading || !data) {
     return (
-      <AdminCard title="데이터 신선도" help="단지·매물·시세 같은 각 종류의 데이터가 제때 갱신되고 있는지 보여줘요. 빨간색은 너무 오래 됐다는 뜻(원래 주기보다 3배 이상 늦음). '헛바퀴 의심'은 작업은 돌긴 돌았는데 실제로 새로 들어온 데이터가 0건이라는 뜻이에요">
+      <AdminCard title="데이터 신선도" help={HELP_TEXT}>
         <ul className="space-y-2" aria-label="로딩 중">
           {Array.from({ length: 8 }).map((_, i) => (
             <li key={i} className="h-10 bg-gray-100 rounded animate-pulse" />
@@ -79,14 +82,14 @@ export default function DataFreshnessCard({ token }: Props) {
 
   if (data.items.length === 0) {
     return (
-      <AdminCard title="데이터 신선도" help="단지·매물·시세 같은 각 종류의 데이터가 제때 갱신되고 있는지 보여줘요. 빨간색은 너무 오래 됐다는 뜻(원래 주기보다 3배 이상 늦음). '헛바퀴 의심'은 작업은 돌긴 돌았는데 실제로 새로 들어온 데이터가 0건이라는 뜻이에요">
+      <AdminCard title="데이터 신선도" help={HELP_TEXT}>
         <p className="text-sm text-gray-500">데이터 없음</p>
       </AdminCard>
     );
   }
 
   return (
-    <AdminCard title="데이터 신선도" help="단지·매물·시세 같은 각 종류의 데이터가 제때 갱신되고 있는지 보여줘요. 빨간색은 너무 오래 됐다는 뜻(원래 주기보다 3배 이상 늦음). '헛바퀴 의심'은 작업은 돌긴 돌았는데 실제로 새로 들어온 데이터가 0건이라는 뜻이에요">
+    <AdminCard title="데이터 신선도" help={HELP_TEXT}>
       <p className="text-xs text-gray-500 mb-2">
         <span className="font-medium text-gray-600">처리 N/M</span> = 이번 작업이 끝낸 건수 / 처리 대상이었던 전체 건수 ·{" "}
         <span className="font-medium text-gray-600">신규 K건</span> = 그중 진짜로 새로 들어온 데이터 수

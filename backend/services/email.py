@@ -78,3 +78,17 @@ def build_rejection_email(user_email: str, reason: str) -> tuple[str, str]:
   <p style="color:#888;font-size:12px">본 메일은 자동 발송되었습니다.</p>
 </div>"""
     return subject, html
+
+
+def build_billing_failed_email(user_email: str) -> tuple[str, str]:
+    """자동결제 연속 실패 → 구독 중단 안내. 사용자가 카드를 재등록하도록 유도 (적대검증 #6)."""
+    subject = "[네이버부동산] 자동결제에 실패하여 구독이 중단되었습니다"
+    html = f"""\
+<div style="max-width:480px;margin:0 auto;font-family:sans-serif">
+  <h2 style="color:#d93025">자동결제 실패 안내</h2>
+  <p>{escape(user_email)}님의 이용권 자동결제가 연속 실패하여 <strong>자동결제가 중단</strong>되었습니다.</p>
+  <p>카드 잔액·한도·유효기간을 확인하신 후, 마이페이지에서 <strong>카드를 다시 등록</strong>해 주세요.</p>
+  <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+  <p style="color:#888;font-size:12px">본 메일은 자동 발송되었습니다.</p>
+</div>"""
+    return subject, html

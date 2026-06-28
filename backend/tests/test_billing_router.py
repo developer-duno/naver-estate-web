@@ -223,3 +223,80 @@ def test_billing_register_no_phone_ok(client, db):
     db.expire_all()
     bk = db.query(BillingKey).filter(BillingKey.user_id == "u1").one()
     assert bk.customer_phone is None
+
+
+# ── PR4: 해지 + 목록 조회 ──
+
+
+def _seed_billing_key(db, uid, *, billing_key="bk-x", status="active", is_default=True):
+    bk = BillingKey(user_id=uid, billing_key=billing_key, plan="pro_30d",
+                    card_name="신한카드", card_last4="1234", customer_name="홍길동",
+                    status=status, is_default=is_default)
+    db.add(bk)
+    db.commit()
+    return bk
+
+
+def test_list_billing_keys_active_only(client, db):
+    """목록 조회 — active 카드만(deleted 제외), 기본 카드 먼저."""
+    _make_profile(db, "u1")
+    _seed_billing_key(db, "u1", billing_key="bk-1", is_default=True)
+    _seed_billing_key(db, "u1", billing_key="bk-2", is_default=False)
+    _seed_billing_key(db, "u1", billing_key="bk-del", status="deleted", is_default=False)
+    res = client.get("/api/payment/billing/list", headers=_auth("u1"))
+    assert res.status_code == 200
+    cards = res.json()["cards"]
+    assert len(cards) == 2  # deleted 제외
+    assert cards[0]["is_default"] is True  # 기본 먼저
+    assert cards[0]["card_last4"] == "1234"
+
+
+def test_cancel_billing_key_deletes(client, db):
+    """해지 → PortOne 삭제 호출 + status='deleted' + is_default=False."""
+    _make_profile(db, "u1")
+    bk = _seed_billing_key(db, "u1")
+    with _portone_env(), patch("routers.billing._delete_portone_billing_key") as mock_del:
+        res = client.post("/api/payment/billing/cancel",
+                          json={"billing_key_id": bk.id}, headers=_auth("u1"))
+    assert res.status_code == 200 and res.json()["cancelled"] is True
+    mock_del.assert_called_once()
+    db.expire_all()
+    got = db.get(BillingKey, bk.id)
+    assert got.status == "deleted" and got.is_default is False
+
+
+def test_cancel_portone_fail_still_deletes_in_db(client, db):
+    """PortOne 삭제 실패해도 DB 는 deleted 로 차단(사용자 불이익 방지)."""
+    _make_profile(db, "u1")
+    bk = _seed_billing_key(db, "u1")
+    with _portone_env(), patch("routers.billing._delete_portone_billing_key",
+                               side_effect=RuntimeError("PortOne 장애")):
+        res = client.post("/api/payment/billing/cancel",
+                          json={"billing_key_id": bk.id}, headers=_auth("u1"))
+    assert res.status_code == 200
+    db.expire_all()
+    assert db.get(BillingKey, bk.id).status == "deleted"  # 외부 실패에도 DB 차단
+
+
+def test_cancel_other_user_card_404(client, db):
+    """타인 카드 해지 시도 → 404 (본인 소유만)."""
+    _make_profile(db, "u1")
+    _make_profile(db, "u2")
+    bk = _seed_billing_key(db, "u2")
+    with _portone_env():
+        res = client.post("/api/payment/billing/cancel",
+                          json={"billing_key_id": bk.id}, headers=_auth("u1"))
+    assert res.status_code == 404
+    db.expire_all()
+    assert db.get(BillingKey, bk.id).status == "active"  # 변경 안 됨
+
+
+def test_cancel_already_deleted_idempotent(client, db):
+    """이미 해지된 카드 재해지 → 멱등 no-op."""
+    _make_profile(db, "u1")
+    bk = _seed_billing_key(db, "u1", status="deleted", is_default=False)
+    with _portone_env(), patch("routers.billing._delete_portone_billing_key") as mock_del:
+        res = client.post("/api/payment/billing/cancel",
+                          json={"billing_key_id": bk.id}, headers=_auth("u1"))
+    assert res.status_code == 200 and res.json()["already"] is True
+    mock_del.assert_not_called()  # 이미 deleted 라 PortOne 호출 0

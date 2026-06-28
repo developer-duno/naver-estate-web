@@ -102,10 +102,10 @@
 | V036 | billing_keys 테이블 (빌링키 자동결제 — 정기결제 PR1, 방식 B 우리 cron, 세션 327) | 2026-06-27 (prod 적용완료, 세션 329: 사장님 SQL Editor 실행 → information_schema 13컬럼·타입 일치 확인. PR2+ 결제 엔드포인트 INSERT/SELECT 준비됨) |
 | V037 | billing_keys.is_default 컬럼 + 부분 유니크 인덱스 (카드 여러 장 보관, 자동결제는 기본 1장 — 정기결제 PR2, 세션 329) | 2026-06-27 (prod 적용완료, 세션 329: 사장님 SQL Editor 실행 → Claude prod 직접 실측 is_default(boolean·default true)·uq_billing_keys_default 인덱스 EXISTS 확인) |
 
-- `db/migrations/` 폴더에 `V000__` ~ `V036__` SQL 파일 = 37 버전
+- `db/migrations/` 폴더에 `V000__` ~ `V037__` SQL 파일 = 38 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
-- 최신 = V036 (빌링키 자동결제 PR1, **prod 선행 실행 대기** 세션 327). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
+- 최신 = V037 (빌링키 is_default, prod 적용완료 세션 329). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
   - V036 = billing_keys 신규 테이블 — `BillingKey` 가 ORM 매핑되나 PR1 시점엔 INSERT/SELECT 하는 코드가 없어 즉시 500 위험 0. 빌링키 발급/결제 엔드포인트(PR2+) 머지 전 prod 적용 필수. `CREATE TABLE/INDEX IF NOT EXISTS` 라 멱등·안전. 공유 DB(mibunyang) 영향 = 신규 테이블이라 0.
   - V035 = 코드보다 prod 선행 실행 완료 — `paid_until`(user_profiles)·`Payment` 가 ORM 매핑돼 INSERT/SELECT 목록 포함 → 컬럼/테이블 부재 시 get_current_user·결제 엔드포인트 500 이었으나, 세션 322 에 적용·재검증 완료. `ADD COLUMN/CREATE TABLE IF NOT EXISTS` 라 멱등·안전.
   - V034 = 코드보다 prod 선행 실행 완료 — broker_verified 등 3컬럼이 ORM 에 매핑돼 INSERT/SELECT 목록 포함 → 컬럼 부재 시 submit/status/admin 전부 500. `ADD COLUMN IF NOT EXISTS` 라 멱등·안전.

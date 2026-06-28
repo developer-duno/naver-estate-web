@@ -53,6 +53,14 @@ describe("MyBillingCards", () => {
     expect(container.querySelector("section")).toBeNull();
   });
 
+  it("조회 실패(5xx)면 '카드 없음'과 구분해 에러+다시 시도 노출 (빈 화면 위장 금지)", async () => {
+    listBillingCardsMock.mockRejectedValue(new Error("서버 오류"));
+    render(<MyBillingCards />, { wrapper: TestQueryProvider });
+    // 에러 시 섹션이 사라지지 않고 재시도 버튼 노출 (장애를 '카드 없음'으로 위장하지 않음)
+    expect(await screen.findByText(/불러오지 못했어요/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다시 시도" })).toBeInTheDocument();
+  });
+
   it("카드 있으면 카드사·끝4자리·다음결제일·자동결제 뱃지 표시", async () => {
     listBillingCardsMock.mockResolvedValue({ cards: [CARD] });
     render(<MyBillingCards />, { wrapper: TestQueryProvider });

@@ -25,7 +25,7 @@ export default function MyBillingCards() {
   const queryClient = useQueryClient();
   const [confirmId, setConfirmId] = useState<number | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.billing.cards(),
     queryFn: () => listBillingCards(sessionToken!),
     enabled: tokenReady && !!sessionToken,
@@ -43,10 +43,27 @@ export default function MyBillingCards() {
     },
   });
 
-  // 비로그인·로딩·카드 없음 = 섹션 미표시 (등록 버튼은 상단 PlanCards 가 담당)
+  // 비로그인·로딩 = 섹션 미표시 (등록 버튼은 상단 PlanCards 가 담당)
   if (!tokenReady || !sessionToken || isLoading) return null;
+
+  // 조회 실패 = "카드 없음"(섹션 사라짐)과 구분해 에러+재시도 노출. 장애를 빈 화면으로 위장하면
+  // 카드를 등록한 사용자가 해지 버튼에 도달 못 함 (error-propagation.md §장애 가짜 빈화면 답습).
+  if (isError) {
+    return (
+      <section className="mb-12 sm:mb-16" aria-label="내 자동결제 카드">
+        <h2 className="font-heading text-lg sm:text-xl font-bold text-text-primary mb-4">내 자동결제</h2>
+        <div role="alert" className="rounded-lg border border-neutral-light bg-white px-4 py-3 text-sm text-text-secondary">
+          카드 정보를 불러오지 못했어요.{" "}
+          <button type="button" onClick={() => refetch()} className="font-medium text-accent-blue hover:underline">
+            다시 시도
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   const cards: BillingCard[] = data?.cards ?? [];
-  if (cards.length === 0) return null;
+  if (cards.length === 0) return null; // 정상 조회 + 카드 없음 = 섹션 미표시
 
   return (
     <section className="mb-12 sm:mb-16" aria-label="내 자동결제 카드">

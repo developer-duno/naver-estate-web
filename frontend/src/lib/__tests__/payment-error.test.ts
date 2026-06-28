@@ -34,6 +34,15 @@ const server = setupServer(
     }
     return HttpResponse.json({ paid_until: "2026-07-24T00:00:00+00:00", plan: "basic_30d", already_paid: false });
   }),
+  // 빌링키 4함수 (PR5/6) — error-propagation.md §3 래퍼 가드. 전부 500 응답.
+  http.post(`${API}/api/payment/billing/prepare`, () =>
+    HttpResponse.json({ detail: "Server error" }, { status: 500 })),
+  http.post(`${API}/api/payment/billing/register`, () =>
+    HttpResponse.json({ detail: "Server error" }, { status: 500 })),
+  http.get(`${API}/api/payment/billing/list`, () =>
+    HttpResponse.json({ detail: "Server error" }, { status: 500 })),
+  http.post(`${API}/api/payment/billing/cancel`, () =>
+    HttpResponse.json({ detail: "Server error" }, { status: 500 })),
 );
 
 // HAS_BACKEND 가 core.ts 모듈 로드 시점 상수라 env 스텁 후 fresh import 필수
@@ -74,5 +83,22 @@ describe("payment 래퍼 — 실패 시 reject (삼킴 방지)", () => {
       plan: "basic_30d",
       already_paid: false,
     });
+  });
+
+  // 빌링키 4함수 (PR5/6) — 5xx → reject 단언 (error-propagation.md §3 래퍼당 1건 의무).
+  it("prepareBilling: 500 이면 reject 한다", async () => {
+    await expect(payment.prepareBilling("tok", "pro_30d" as never)).rejects.toThrow();
+  });
+
+  it("registerBilling: 500 이면 reject 한다", async () => {
+    await expect(payment.registerBilling("tok", "bk_x", "pro_30d" as never)).rejects.toThrow();
+  });
+
+  it("listBillingCards: 500 이면 reject 한다", async () => {
+    await expect(payment.listBillingCards("tok")).rejects.toThrow();
+  });
+
+  it("cancelBillingCard: 500 이면 reject 한다", async () => {
+    await expect(payment.cancelBillingCard("tok", 1)).rejects.toThrow();
   });
 });

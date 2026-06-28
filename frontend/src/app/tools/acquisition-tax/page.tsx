@@ -10,6 +10,8 @@ export const metadata: Metadata = {
   openGraph: {
     title: "취득세 계산기 | 2u부동산",
     description: "공인중개사를 위한 취득세 자동 계산 — 1주택 표준·다주택 중과·생애최초 감면·오피스텔까지 모두 지원",
+    // openGraph 직접 지정 시 root opengraph-image 자동 상속이 끊겨 브랜드 PNG og 를 명시(빌드 실측 확인)
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
   },
 };
 

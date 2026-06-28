@@ -11,6 +11,8 @@ export const metadata: Metadata = {
   openGraph: {
     title: "부동산 계산기 5종 | 2u부동산",
     description: "취득세·양도소득세·보유세·중개수수료·평㎡ 변환 — 부동산 계산기 모음",
+    // openGraph 직접 지정 시 root opengraph-image 자동 상속이 끊겨 브랜드 PNG og 를 명시(빌드 실측 확인)
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
   },
 };
 

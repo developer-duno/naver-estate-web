@@ -17,14 +17,10 @@ export const metadata: Metadata = {
     description:
       "전세가율·시세 분석·미분양·매물 조회 노하우. 공인중개사 실무에 바로 쓰는 글 모음.",
     type: "website",
-    images: [
-      {
-        url: "/blog-hero/og-blog.svg",
-        width: 1200,
-        height: 630,
-        alt: "2u부동산 블로그",
-      },
-    ],
+    // 기존 og-blog.svg 는 카톡·페북이 썸네일을 못 띄워 root 의 브랜드 PNG og 로 교체.
+    // (openGraph 객체를 직접 지정하면 root opengraph-image 자동 상속이 끊겨 명시 필요 — 빌드 실측 확인)
+    // metadataBase(root layout)가 상대경로를 절대 URL 로 변환.
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산 블로그" }],
   },
 };
 

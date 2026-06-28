@@ -16,6 +16,8 @@ export const metadata: Metadata = {
     title: "요금제 | 2u부동산",
     description:
       "공인중개사를 위한 부동산 매물·시세 분석 도구 — 7일 무료 체험으로 시작",
+    // openGraph 직접 지정 시 root opengraph-image 자동 상속이 끊겨 브랜드 PNG og 를 명시(빌드 실측 확인)
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
   },
 };
 

@@ -13,7 +13,7 @@ import { useFavorites } from "@/hooks/useFavorites";
 import { useArticleFavorites } from "@/hooks/useArticleFavorites";
 import Link from "next/link";
 
-/** 홈 상단 — hero 이미지 + 타이틀 + 통계 (SEO 랜딩 자산). SearchExperience headerSlot 으로 주입. */
+/** 홈 상단 — hero 이미지 + 타이틀 + 통계 (SEO 랜딩 자산). Suspense 밖에서 렌더해 h1·소개가 첫 HTML 에 포함. */
 function HomeHeader() {
   const { data: stats, isLoading: statsLoading, isError: statsError, refetch: loadStats } = useQuery({
     queryKey: queryKeys.stats,
@@ -114,18 +114,16 @@ function HomeExtras() {
   );
 }
 
-function HomeContent() {
+export default function HomePage() {
+  // HomeHeader(hero·h1·소개·통계)는 Suspense 밖에서 렌더 → 정적 텍스트(h1·소개)가
+  // 검색봇이 받는 첫 HTML 에 포함된다. SearchExperience 는 useSearchParams 를 쓰므로
+  // Suspense 경계 안에 둔다(통계 useQuery 는 클라이언트에서 채워짐, 텍스트는 SSR).
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
-      <SearchExperience headerSlot={<HomeHeader />} emptyExtra={<HomeExtras />} />
+      <HomeHeader />
+      <Suspense fallback={<SkeletonPage />}>
+        <SearchExperience emptyExtra={<HomeExtras />} />
+      </Suspense>
     </div>
-  );
-}
-
-export default function HomePage() {
-  return (
-    <Suspense fallback={<SkeletonPage />}>
-      <HomeContent />
-    </Suspense>
   );
 }

@@ -10,6 +10,8 @@ export const metadata: Metadata = {
   openGraph: {
     title: "평·㎡ 면적 변환 계산기 | 2u부동산",
     description: "공인중개사를 위한 평·㎡ 양방향 즉시 변환 — 1평 = 3.3058㎡ 표준식",
+    // openGraph 직접 지정 시 root opengraph-image 자동 상속이 끊겨 브랜드 PNG og 를 명시(빌드 실측 확인)
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
   },
 };
 

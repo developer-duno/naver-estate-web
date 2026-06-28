@@ -3,10 +3,23 @@
 import logging
 from datetime import date
 
+from db.mb_models import Infra
 from db.models import CrawlJob
 from utils import utcnow
 
 logger = logging.getLogger(__name__)
+
+
+def _prefetch_infra_map(db, apt_ids: list[str]) -> dict[str, Infra]:
+    """Infra 일괄 prefetch — 루프 내 db.get() 라운드트립 제거 (Supabase pooler 7분 timeout 대응).
+
+    env_air/childcare/crime/emergency 5곳 동일 패턴 답습. apt_ids 비면 빈 dict."""
+    if not apt_ids:
+        return {}
+    return {
+        obj.apartment_id: obj
+        for obj in db.query(Infra).filter(Infra.apartment_id.in_(apt_ids)).all()
+    }
 
 
 def _record_job(db, job_type: str, scheduler_job_id: str) -> CrawlJob:

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { BarChart3, Search, TrendingUp, FileSpreadsheet } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import PlanCards from "./PlanCards";
+import MyBillingCards from "./MyBillingCards";
 import { SocialProof } from "@/components/pricing/SocialProof";
 import { DataSourceBadges } from "@/components/pricing/DataSourceBadges";
 
@@ -81,6 +82,9 @@ export default function PricingPage() {
         </p>
         <DataSourceBadges />
       </section>
+
+      {/* 내 자동결제 카드 — 등록 카드 있을 때만 표시 (해지·다음 결제일) */}
+      <MyBillingCards />
 
       {/* FAQ */}
       <section className="mb-12 sm:mb-16">

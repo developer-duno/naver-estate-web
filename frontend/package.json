@@ -68,7 +68,8 @@
     "vitest": "^4.1.9"
   },
   "overrides": {
-    "vite": "8.0.5",
+    "vite": "8.0.16",
+    "@babel/core": "^7.29.6",
     "postcss": "^8.5.14",
     "uuid": "^11.1.1"
   }

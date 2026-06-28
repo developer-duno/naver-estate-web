@@ -34,6 +34,7 @@ from routers.payment import (
     PORTONE_API_SECRET,
     PORTONE_CHANNEL_KEY,
     PORTONE_STORE_ID,
+    _fetch_portone_payment,
     _portone_amount,
     _portone_status,
     _require_portone_config,
@@ -195,9 +196,20 @@ def register_billing(
     db.flush()
 
     # 첫 결제 즉시 실행 (PortOne 빌링키 결제).
-    portone_payment = _pay_with_billing_key(
-        payment_id, body.billing_key, plan_meta["order_name"], name, phone, amount,
-    )
+    # ⚠ pay_with_billing_key 의 응답(PayWithBillingKeyResponse.payment)에는 status·amount 가
+    #   없다(pg_tx_id·paid_at 뿐). SDK 는 실패 시 타입드 예외를 던지고 성공 시에만 반환하므로,
+    #   PAID·금액 검증은 일회성 complete 와 동일하게 get_payment 재조회 객체로 한다(검증 SSOT).
+    try:
+        _pay_with_billing_key(
+            payment_id, body.billing_key, plan_meta["order_name"], name, phone, amount,
+        )
+    except Exception as e:
+        # 승인거절·잔액부족 등 PortOne 결제 자체 실패(SDK 예외) — 카드 무효, 등록 거부.
+        _fail_payment(db, payment_id)
+        db.commit()
+        raise HTTPException(status_code=400, detail="카드 결제에 실패했습니다") from e
+
+    portone_payment = _fetch_portone_payment(payment_id)  # get_payment 재조회 (status·amount SSOT)
 
     # 응답 검증 — payment.py _grant_subscription 의 검증 로직 답습 (PAID + 금액일치).
     status = _portone_status(portone_payment)

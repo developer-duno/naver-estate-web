@@ -24,6 +24,7 @@ from routers.billing import (
     _pay_with_billing_key,
 )
 from routers.payment import (
+    _fetch_portone_payment,
     _portone_amount,
     _portone_status,
     _serialize_portone,
@@ -132,12 +133,16 @@ def _charge_one(db, bk: BillingKey) -> str:
         db.flush()
 
     try:
-        portone_payment = _pay_with_billing_key(
+        # ⚠ pay_with_billing_key 응답엔 status·amount 가 없다(pg_tx_id·paid_at 뿐). SDK 는
+        #   실패 시 예외를 던지므로, 성공 반환 후 get_payment 재조회 객체로 PAID·금액을 검증한다
+        #   (register 첫결제·일회성 complete 와 동일 SSOT).
+        _pay_with_billing_key(
             payment_id, bk.billing_key, plan_meta["order_name"],
             bk.customer_name or "", bk.customer_phone, amount,
         )
+        portone_payment = _fetch_portone_payment(payment_id)  # 검증용 재조회
     except Exception as e:
-        # PortOne 호출 자체 실패(네트워크·SDK) — 일시 실패로 보고 재시도.
+        # PortOne 호출 자체 실패(승인거절·네트워크·SDK) — 일시 실패로 보고 재시도.
         logger.warning("[billing] 결제 호출 실패 (user=%s): %s", bk.user_id, e)
         return _mark_retry(db, bk, payment_id, f"결제 호출 실패: {e}")
 

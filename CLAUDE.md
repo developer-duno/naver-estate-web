@@ -129,6 +129,8 @@ cd backend && ruff check . && python -m pytest --tb=short -q
 cd frontend && npx tsc --noEmit && npm run lint && npm test
 ```
 
+> **CI 보안 게이트 (세션 339)**: CI 는 BE `pip-audit -r requirements.txt --strict`(prod 취약점 자동 차단) + FE `npm audit --omit=dev --audit-level=high`(prod high/critical 자동 차단)를 상시 실행한다. 의존성 추가·bump PR 은 이 게이트를 통과해야 머지된다. 로컬 사전 확인 = `cd frontend && npm audit --omit=dev`. ⚠ 윈도우 로컬 `pip-audit` 은 requirements.txt UTF-8 한글 주석을 cp949 로 읽어 `UnicodeDecodeError` 로 죽으니 `PYTHONUTF8=1 pip-audit ...` 로 실행(CI 리눅스는 정상). dependabot PR 재생성·secrets 처리는 메모리 `[[dependabot-secrets-gate]]` 참조.
+
 ## 규칙 & 커맨드
 
 ### 항상 로드 (`.claude/rules/`)

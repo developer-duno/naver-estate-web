@@ -1,0 +1,45 @@
+# 외부 uptime 모니터 (무료, SaaS 미사용)
+#
+# 목적: 집 서버가 완전히 죽으면(정전/OS 크래시/네트워크 단절) 내부 워치독도
+# 함께 죽어 알림을 못 보낸다. 이 워크플로우는 GitHub Actions 인프라(집 서버와
+# 무관)에서 10분마다 심층 헬스체크(/health/db, DB 연결까지 확인)를 호출해
+# 서버·DB 생사를 외부에서 감시한다.
+#
+# 운영자 설정 필수: 저장소 Settings → Secrets and variables → Actions 에
+# TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 두 시크릿을 등록해야 실패 시 알림이 간다.
+# 시크릿 미설정이어도 워크플로우 자체는 안전하게 동작한다(알림만 스킵).
+
+name: Health Check
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: External health ping
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /health/db
+        id: ping
+        run: |
+          if curl -fsS --max-time 20 https://api.2u.pe.kr/health/db; then
+            echo "healthy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "healthy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 시크릿 미설정(fork 등) 시 이 스텝 자체를 건너뛴다 — 토큰 하드코딩 없음
+      - name: Send Telegram alert on failure
+        if: ${{ steps.ping.outputs.healthy == 'false' && secrets.TELEGRAM_BOT_TOKEN != '' }}
+        run: |
+          curl -fsS --max-time 10 \
+            "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="🚨 naver-estate-web 헬스체크 실패: https://api.2u.pe.kr/health/db 응답 없음 또는 비정상"
+
+      # Actions 탭에서도 실패가 보이도록(두 번째 신호) — 알림 성공/스킵 여부와 무관하게 실패 처리
+      - name: Fail the job if unhealthy
+        if: ${{ steps.ping.outputs.healthy == 'false' }}
+        run: exit 1

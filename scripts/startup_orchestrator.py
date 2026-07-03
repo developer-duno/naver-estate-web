@@ -19,6 +19,7 @@ import sys
 import time
 import urllib.request
 
+from log_rotation import rotate_backend_log
 from pid_util import pid_is_live_orchestrator
 from telegram_notify import notify
 
@@ -68,7 +69,8 @@ def _is_port_in_use(port: int) -> bool:
 def start_backend() -> subprocess.Popen:
     """백엔드 서버 시작, Popen 객체 반환."""
     logger.info("백엔드 서버 시작 중...")
-    log_file = open(BACKEND_LOG, "w", encoding="utf-8")
+    backend_log_path = rotate_backend_log(SCRIPTS_DIR)
+    log_file = open(backend_log_path, "w", encoding="utf-8")
     proc = subprocess.Popen(
         [PYTHON_EXE, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", str(BACKEND_PORT)],
         cwd=BACKEND_DIR,

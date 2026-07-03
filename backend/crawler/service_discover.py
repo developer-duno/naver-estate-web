@@ -51,8 +51,8 @@ def _finalize_job(db, job: CrawlJob, target_status: str, **extra_fields) -> bool
     """
     try:
         db.refresh(job)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[race guard] job refresh 실패(무시): %s", type(e).__name__)
     if job.status != "running":
         logger.info(
             "[race guard] job %s 종료 skip — 현재 status=%s (target=%s)",

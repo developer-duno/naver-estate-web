@@ -56,8 +56,8 @@ def _alert_billing(message: str, key: str = "billing_stop") -> None:
     try:
         from services.telegram import send_telegram
         send_telegram(message)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[billing] 결제 알림 발송 실패(무시): %s", type(e).__name__)
 
 
 def _notify_user_billing_failed(db, user_id: str) -> None:
@@ -72,8 +72,8 @@ def _notify_user_billing_failed(db, user_id: str) -> None:
         from services.email import build_billing_failed_email, send_email
         subject, html = build_billing_failed_email(profile.email)
         send_email(profile.email, subject, html)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[billing] 사용자 결제실패 이메일 발송 실패(무시): %s", type(e).__name__)
 
 
 def _billing_payment_id(bk: BillingKey) -> str:

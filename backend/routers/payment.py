@@ -75,8 +75,8 @@ def _alert_operator_throttled(key: str, message: str) -> None:
     try:
         from services.telegram import send_telegram
         send_telegram(message)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[payment] 운영자 알림 발송 실패(무시): %s", type(e).__name__)
 
 
 def _require_portone_config() -> None:

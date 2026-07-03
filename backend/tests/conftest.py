@@ -30,6 +30,11 @@ os.environ["TELEGRAM_ENABLED"] = "false"
 # 실발송 0 (텔레그램 선례 답습 — 알림 채널은 conftest 에서 전역 봉쇄).
 os.environ["SMTP_USER"] = ""
 os.environ["SMTP_PASS"] = ""
+# ⚠ 스케줄러 단일 인스턴스 파일락 비활성 (세션 341). client fixture 가
+# `with TestClient(app)` 로 lifespan 을 발동하는데, 여러 테스트가 같은
+# scripts/scheduler.lock 을 두고 경합하면 CI 병렬 실행이 flaky 해진다. false 면
+# acquire_scheduler_lock 이 nullcontext sentinel 반환 → 락 없이 진행(경합 0).
+os.environ["SCHEDULER_FILELOCK_ENABLED"] = "false"
 
 # ARRAY → JSON 패치 (SQLite 호환)
 

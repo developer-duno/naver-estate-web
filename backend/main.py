@@ -88,23 +88,38 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("stale sweep 예외: %s", e)
 
+    # 스케줄러 단일 인스턴스 파일락 — uvicorn 여러 개가 뜨면(수동 재시작 경합 등)
+    # 각자 스케줄러를 돌려 같은 잡을 중복 실행하던 것을 프로세스 간 차단(세션 341).
+    # 락 못 잡으면(다른 backend 가 이미 보유) 스케줄러만 스킵, health/API 는 정상.
     scheduler = None
+    lock = None
     try:
         from crawler.job_error_listener import register_job_listener
         from crawler.scheduler import create_scheduler
+        from crawler.scheduler_lock import acquire_scheduler_lock
 
-        scheduler = create_scheduler()
-        register_job_listener(scheduler)  # 잡 예외/misfire 최후 안전망 (텔레그램 알림)
-        scheduler.start()
-        logger.info("크롤러 스케줄러 시작됨")
+        lock = acquire_scheduler_lock()
+        if lock is None:
+            logger.warning("스케줄러 락 미획득 — 스케줄러 시작 스킵. health/API 는 정상 응답")
+        else:
+            scheduler = create_scheduler()
+            register_job_listener(scheduler)  # 잡 예외/misfire 최후 안전망 (텔레그램 알림)
+            scheduler.start()
+            logger.info("크롤러 스케줄러 시작됨 (락 보유)")
     except Exception as e:
         logger.warning("크롤러 스케줄러 시작 실패 (DB 미연결?): %s", e)
 
     yield
 
+    # scheduler / lock 각각 독립적으로 안전 정리 (한쪽 None 이어도 안전).
     if scheduler and scheduler.running:
         scheduler.shutdown(wait=False)
         logger.info("크롤러 스케줄러 종료됨")
+    if lock is not None:
+        try:
+            lock.release()  # nullcontext sentinel 도 release() no-op 지원
+        except Exception:  # release 예외가 다음 재시작 락 획득을 막지 않게
+            pass
     logger.info("FastAPI 서버 종료")
 
 

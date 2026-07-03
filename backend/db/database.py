@@ -29,6 +29,12 @@ engine = create_engine(
     poolclass=NullPool,
     pool_pre_ping=True,
     echo=False,
+    # connect_timeout: TCP 연결 "수립" 단계만 5초로 bound (psycopg2/libpq 네이티브).
+    # Supabase 가 unreachable(느림 아니라 먹통)이면 NullPool 이 매 요청 새 connect →
+    # 기본 ~2min 무한 대기하며 /health/db 워커 스레드가 쌓이던 것 차단(세션 341).
+    # ⚠ 연결 수립만 제한 — 이미 맺은 연결의 쿼리 지속엔 영향 0(그건 statement_timeout
+    # 담당). pool_pre_ping 의 SELECT 1 도 이미 맺은 연결이라 무관 → 크롤 회귀 없음.
+    connect_args={"connect_timeout": 5},
 )
 
 

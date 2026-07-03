@@ -63,6 +63,13 @@ jobs:
 
       - run: npm ci
 
+      # npm audit — package-lock.json 보안 advisory 검사 (BE pip-audit 과 대칭)
+      # --omit=dev = 배포 앱 prod 의존성만 (dev 도구 취약점 노이즈 방지)
+      # --audit-level=high = high·critical 만 실패 (moderate 이하는 dependabot 이 별도 PR 처리)
+      # 오탐 발생 시 = package.json overrides 로 버전 고정 (npm audit 은 per-advisory ignore 플래그 없음, 세션 339)
+      - name: Security audit (npm)
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Lint
         run: npm run lint
 

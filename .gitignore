@@ -58,6 +58,7 @@ scripts/backend.log
 scripts/cloudflared_*.log
 scripts/cloudflared.log
 scripts/orchestrator.pid
+scripts/scheduler.lock
 scripts/uvicorn.log
 scripts/backend_recovery.log
 scripts/backend_recovery_err.log

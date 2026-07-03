@@ -70,7 +70,18 @@ def start_backend() -> subprocess.Popen:
     """백엔드 서버 시작, Popen 객체 반환."""
     logger.info("백엔드 서버 시작 중...")
     backend_log_path = rotate_backend_log(SCRIPTS_DIR)
-    log_file = open(backend_log_path, "w", encoding="utf-8")
+    # 드물게 옛 uvicorn 이 포트는 안 잡고(=_kill_port early-return) backend.log 파일만
+    # 잠근 채면 open("w") 이 PermissionError → start_backend 크래시. 타임스탬프 폴백
+    # 파일명으로 재시도해 기동을 막지 않는다(폴백은 예외 상황만 — 정상 경로는 항상
+    # backend.log 라 release.md §2 `head -1 backend.log` 부팅시각 확인 불변).
+    try:
+        log_file = open(backend_log_path, "w", encoding="utf-8")
+    except PermissionError as e:
+        fallback = os.path.join(
+            SCRIPTS_DIR, f"backend_{time.strftime('%Y%m%dT%H%M%S')}.log"
+        )
+        logger.warning(f"backend.log 잠김({e}) — 폴백 로그 {fallback} 로 기동")
+        log_file = open(fallback, "w", encoding="utf-8")
     proc = subprocess.Popen(
         [PYTHON_EXE, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", str(BACKEND_PORT)],
         cwd=BACKEND_DIR,
@@ -153,7 +164,15 @@ def watchdog(backend_proc: subprocess.Popen):
         if proc_dead or health_fail_count >= 3:
             backend_fail_count += 1
             reason = "프로세스 종료" if proc_dead else "health 무응답 (hang)"
-            logger.warning(f"백엔드 다운 감지 ({reason}) — 재시작 (연속 실패: {backend_fail_count})")
+            # 다운이 프로세스 종료면 returncode(종료 코드/신호)를 남겨 원인 단서 확보.
+            # 무로그 크래시(SIGTERM 등 신호로 죽어 트레이스백 없음) 재발 시 정상 exit vs
+            # signal kill 구분 (세션 341 반복다운 진단 안전망). 음수 = 신호(Windows 는
+            # 종료 코드 그대로), None = 아직 안 죽음(health hang 케이스).
+            rc = backend_proc.returncode if proc_dead else None
+            logger.warning(
+                f"백엔드 다운 감지 ({reason}, returncode={rc}) — 재시작 "
+                f"(연속 실패: {backend_fail_count})"
+            )
             notify(f"⚠ 백엔드 다운 ({reason}) — 재시작 시도 중")
 
             _kill_port(BACKEND_PORT)

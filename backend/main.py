@@ -90,9 +90,11 @@ async def lifespan(app: FastAPI):
 
     scheduler = None
     try:
+        from crawler.job_error_listener import register_job_listener
         from crawler.scheduler import create_scheduler
 
         scheduler = create_scheduler()
+        register_job_listener(scheduler)  # 잡 예외/misfire 최후 안전망 (텔레그램 알림)
         scheduler.start()
         logger.info("크롤러 스케줄러 시작됨")
     except Exception as e:

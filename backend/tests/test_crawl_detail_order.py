@@ -135,3 +135,38 @@ def test_dead_error_deactivates_article(db, no_throttle, monkeypatch):
     row = db.query(Article).filter(Article.article_no == "DEAD").one()
     assert row.is_active is False
     assert row.detail_crawled is True
+
+
+# ── 세션 342: 배치 commit expire 후에도 정상 처리 (lazy-load 제거 회귀) ──
+
+def test_crawl_survives_batch_commit_expire(db, no_throttle, monkeypatch):
+    """50건 배치 commit 경계를 넘어도 모든 매물이 정상 처리된다.
+
+    배경: 루프 전 속성 선추출 전에는 50건마다 db.commit()(expire_on_commit=True)이
+    art 객체를 expired 시켜 다음 순회 art.article_no 접근이 PK 재조회 lazy-load 를
+    유발했다(부하 시 timeout 방아쇠, 세션 342). 선추출 후엔 commit 후에도 ORM 재접근이
+    없어 51건째(commit 경계 다음)도 정상 처리되어야 한다.
+    """
+    now = datetime.now(timezone.utc)
+    # 51건 심기 (50건 commit 경계 + 1) — 최신순 정렬이라 역순 last_seen
+    for i in range(51):
+        _make_pending_article(db, f"A{i:03d}", now - timedelta(minutes=i))
+
+    processed_nos: list[str] = []
+
+    def _fake_detail(article_no):
+        processed_nos.append(article_no)
+        return {"articleDetail": {"articleNo": article_no}}
+
+    monkeypatch.setattr(
+        service_discover.NaverEstateAPI, "get_article_detail", staticmethod(_fake_detail)
+    )
+
+    crawl_article_details(batch_size=51)
+
+    # 51건 전부 상세 API 호출됨 (commit 경계 후 lazy-load 실패 없이)
+    assert len(processed_nos) == 51
+    # commit 경계(50) 다음 51번째도 정상 처리 — 선추출 값으로 article_no 정확 전달
+    db.expire_all()
+    done = db.query(Article).filter(Article.detail_crawled == True).count()
+    assert done == 51

@@ -11,7 +11,7 @@
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import Depends
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from db.mb_models import Infra, MBTrade, UnsoldHistory
@@ -107,6 +107,26 @@ def _last_job(db: Session, scheduler_job_id: str) -> dict | None:
     }
 
 
+def _approx_count(db: Session, table_name: str, exact_stmt) -> int:
+    """대형 테이블 행수 근사 — pg_class.reltuples (인덱스 없이 즉시, 풀스캔 회피).
+
+    articles(121만)·trades(80만)·complex_price_history(36만) 의 정확 count 는 풀스캔이라
+    부하 시 8초 statement_timeout 을 넘겨 monitor 를 죽였다(세션 342). freshness 의 count 는
+    화면 "대략 N건" 표시용이라 근사로 충분. reltuples 는 autovacuum/analyze 후 갱신되며
+    평상시 오차 <1%(실측 0%). SQLite(테스트)는 reltuples 가 없으므로 정확 count 로 폴백.
+    """
+    dialect_name = db.bind.dialect.name if db.bind else ""
+    if dialect_name != "postgresql":
+        return db.execute(exact_stmt).scalar() or 0
+    approx = db.execute(
+        text("SELECT reltuples::bigint FROM pg_class WHERE relname = :t").bindparams(t=table_name)
+    ).scalar()
+    # reltuples = -1 (ANALYZE 한 번도 안 됨) 또는 None 이면 정확 count 로 폴백.
+    if approx is None or approx < 0:
+        return db.execute(exact_stmt).scalar() or 0
+    return int(approx)
+
+
 def compute_freshness(db: Session) -> dict:
     """8개 종목 신선도 + 헛바퀴 감지 신호 계산 (DB 세션만 의존).
 
@@ -114,18 +134,22 @@ def compute_freshness(db: Session) -> dict:
     """
     now = datetime.now(timezone.utc)
 
-    # 종목별 (last_updated, count) — 1쿼리씩
-    # ⚠ articles(121만 행)는 max+count 를 묶으면 count 가 풀스캔을 강제해 max 의 인덱스
-    # (ix_articles_updated_at, V038)를 무효화한다 → 부하 시 8초 statement_timeout 초과로
-    # monitor 가 트랜잭션 aborted 로 반복 크래시(세션 342). max 와 count 를 물리적으로
-    # 2쿼리로 분리해 max 는 인덱스 역스캔(ms), count 만 풀스캔(1.9초, 8초 여유)하게 한다.
-    # 메모리 [[feedback-combined-aggregate-index-void]] 답습.
+    # 종목별 (last_updated, count) — 1쿼리씩.
+    # ⚠ 대형 테이블(articles 121만·trades 80만·complex_price_history 36만)은 max+count 를
+    # 묶으면 count 풀스캔이 max 인덱스(V038 ix_articles_updated_at 등)를 무효화하고, 정확
+    # count 풀스캔 자체가 부하 시 8초 statement_timeout 을 넘겨 monitor 를 죽였다(세션 342).
+    # → max 는 인덱스 역스캔(ms)으로 분리, count 는 reltuples 근사(_approx_count, 즉시)로.
+    # 소형 테이블은 정확 count 유지(풀스캔 부담 0). 메모리 [[feedback-combined-aggregate-index-void]] 답습.
     art_max = db.execute(select(func.max(Article.updated_at))).scalar()
-    art_count = db.execute(select(func.count(Article.article_no))).scalar()
+    art_count = _approx_count(db, "articles", select(func.count(Article.article_no)))
+    cph_max = db.execute(select(func.max(ComplexPriceHistory.recorded_at))).scalar()
+    cph_count = _approx_count(db, "complex_price_history", select(func.count(ComplexPriceHistory.id)))
+    trade_max = db.execute(select(func.max(MBTrade.recorded_at))).scalar()
+    trade_count = _approx_count(db, "trades", select(func.count(MBTrade.id)))
     raw: dict[str, tuple] = {
         "complexes": db.execute(select(func.max(Complex.last_crawled_at), func.count(Complex.complex_no))).one(),
         "articles": (art_max, art_count),
-        "complex_price_history": db.execute(select(func.max(ComplexPriceHistory.recorded_at), func.count(ComplexPriceHistory.id))).one(),
+        "complex_price_history": (cph_max, cph_count),
         "unsold": db.execute(select(func.max(UnsoldHistory.recorded_at), func.count(UnsoldHistory.id))).one(),
         "air_quality": db.execute(select(func.max(Infra.air_updated_at), func.count(Infra.apartment_id).filter(Infra.air_updated_at.isnot(None)))).one(),
         "childcare": db.execute(
@@ -137,7 +161,7 @@ def compute_freshness(db: Session) -> dict:
             )
         ).one(),
         "crime_stats": db.execute(select(func.max(Infra.crime_updated_at), func.count(Infra.apartment_id).filter(Infra.crime_score.isnot(None)))).one(),
-        "public_trades": db.execute(select(func.max(MBTrade.recorded_at), func.count(MBTrade.id))).one(),
+        "public_trades": (trade_max, trade_count),
     }
 
     items = []

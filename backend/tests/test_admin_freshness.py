@@ -2,11 +2,11 @@
 
 실행: python -m pytest tests/test_admin_freshness.py -v
 """
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import jwt
 
-from db.mb_models import Infra
+from db.mb_models import Infra, MBTrade
 from db.models import Article, Complex, CrawlJob, UserProfile
 from routers.admin.freshness import invalidate_freshness_cache
 
@@ -96,6 +96,51 @@ def test_freshness_status_yellow_boundary(client, db):
     item = _get_item(res.json()["items"], "complexes")
     # 15일 / 7일 = 2.14x → yellow (1.5x ~ 3x)
     assert item["status"] == "yellow", item
+
+
+# ── public_trades = mibunyang 외부 월간 테이블 (거짓경보 회귀 가드, 세션 343) ──
+#
+# trades 는 mibunyang 이 매월 6일 단독 write 하는 외부 소유 테이블이고 naver-estate 는
+# read-only 다. 예전엔 이 종목이 7일 주기 + collect_public_trades 잡으로 잘못 붙어, 매월
+# 하순 trades age 가 21일(7일×3)을 넘겨 red → 텔레그램 가짜 경보를 냈다. 30일 주기로
+# 바꿔 red 임계를 90일로 올려 진짜 3개월+ 장기 단절만 잡히게 한다. MBTrade.recorded_at
+# 은 Date 타입이라 주입값은 date(datetime 아님) — freshness._to_utc 가 자정 UTC 로 승격.
+
+def test_public_trades_25days_green(client, db):
+    """trades 최신이 25일 전이면 green — 매월 하순 거짓경보 안 남 (25/30=0.83×, ≤1.5×)."""
+    _make_admin(db)
+    db.add(MBTrade(region="서울", recorded_at=date.today() - timedelta(days=25)))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "public_trades")
+    assert item["status"] == "green", f"25일 전이면 green(0.83×): {item}"
+
+
+def test_public_trades_100days_red(client, db):
+    """trades 최신이 100일 전이면 red — 진짜 장기단절(3개월+)은 여전히 잡힘 (3.33×)."""
+    _make_admin(db)
+    db.add(MBTrade(region="서울", recorded_at=date.today() - timedelta(days=100)))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "public_trades")
+    assert item["status"] == "red", f"100일 전이면 red(3.33×): {item}"
+
+
+def test_public_trades_meta_is_external(client, db):
+    """public_trades 는 외부 월간 테이블 동형 메타 — 주기 30일 + 정기작업 없음(unsold 동형).
+
+    이 단언이 깨지면 누군가 7일/collect_public_trades 로 되돌려 거짓경보를 재도입한 것.
+    """
+    _make_admin(db)
+    db.add(MBTrade(region="서울", recorded_at=date.today() - timedelta(days=10)))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "public_trades")
+    assert item["expected_interval_seconds"] == 86400 * 30, item
+    assert item["last_job"] is None, f"외부 테이블이라 정기작업 메타 없어야: {item}"
 
 
 # ── 응답 스키마 ──

@@ -59,3 +59,38 @@ def test_invalidate_freshness_cache_forces_recompute(db, monkeypatch):
     invalidate_freshness_cache()  # 무효화
     get_freshness_cached(db)  # 캐시 비었으니 다시 compute
     assert calls["n"] == 2
+
+
+# ── 세션 342: _approx_count reltuples 근사 (대형 테이블 count timeout 방지) ──
+
+
+def test_approx_count_sqlite_falls_back_to_exact(db):
+    """SQLite(테스트)는 reltuples 가 없으므로 정확 count 로 폴백해야 한다.
+    (prod PostgreSQL 에서만 reltuples 근사, 그 외 dialect 는 exact.)"""
+    from sqlalchemy import func, select
+
+    from db.models import Article
+    from routers.admin.freshness import _approx_count
+
+    # articles 3건 삽입
+    for i in range(3):
+        db.add(Article(article_no=f"A{i}", complex_no="1", trade_type_name="매매"))
+    db.commit()
+
+    exact_stmt = select(func.count(Article.article_no))
+    # SQLite 폴백 = 정확 count 3
+    assert _approx_count(db, "articles", exact_stmt) == 3
+
+
+def test_compute_freshness_articles_count_present(db):
+    """compute_freshness 가 articles count 를 (근사든 정확이든) 정수로 반환한다."""
+    from db.models import Article
+
+    for i in range(5):
+        db.add(Article(article_no=f"B{i}", complex_no="1", trade_type_name="매매"))
+    db.commit()
+
+    result = compute_freshness(db)
+    art = next(it for it in result["items"] if it["key"] == "articles")
+    assert isinstance(art["count"], int)
+    assert art["count"] == 5  # SQLite 폴백이라 정확

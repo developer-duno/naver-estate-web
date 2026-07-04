@@ -102,11 +102,12 @@
 | V036 | billing_keys 테이블 (빌링키 자동결제 — 정기결제 PR1, 방식 B 우리 cron, 세션 327) | 2026-06-27 (prod 적용완료, 세션 329: 사장님 SQL Editor 실행 → information_schema 13컬럼·타입 일치 확인. PR2+ 결제 엔드포인트 INSERT/SELECT 준비됨) |
 | V037 | billing_keys.is_default 컬럼 + 부분 유니크 인덱스 (카드 여러 장 보관, 자동결제는 기본 1장 — 정기결제 PR2, 세션 329) | 2026-06-27 (prod 적용완료, 세션 329: 사장님 SQL Editor 실행 → Claude prod 직접 실측 is_default(boolean·default true)·uq_billing_keys_default 인덱스 EXISTS 확인) |
 | V038 | articles.updated_at 인덱스 (ix_articles_updated_at DESC — 신선도 monitor timeout 방지, 세션 342) | 2026-07-04 (prod 적용완료, 세션 342: Claude 가 CREATE INDEX CONCURRENTLY autocommit 엔진 실행 5.7초·락0. 라이브 검증 = max(updated_at) 2.7초 Seq Scan → 0.071초 Index Only Scan(38배), EXPLAIN `ix_articles_updated_at` 확인) |
+| V039 | articles.created_at 인덱스 (ix_articles_created_at — 신선도 new_rows 헛바퀴감지 timeout 방지, 세션 342) | 2026-07-04 (prod 적용완료, 세션 342: CREATE INDEX CONCURRENTLY 5.9초·락0. 라이브 검증 = new_rows(created_at≥job_start count) 3.8초 Seq Scan → 0.021초 Index Scan(180배), compute_freshness 전체 9.2초 → 0.6초) |
 
-- `db/migrations/` 폴더에 `V000__` ~ `V038__` SQL 파일 = 39 버전
+- `db/migrations/` 폴더에 `V000__` ~ `V039__` SQL 파일 = 40 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
-- 최신 = V038 (articles.updated_at 인덱스, prod 적용완료 세션 342 라이브검증). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
+- 최신 = V039 (articles.created_at 인덱스, prod 적용완료 세션 342 라이브검증). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
   - V038 = `ix_articles_updated_at` 신규 인덱스 — 코드(freshness.py max/count 분리)는 인덱스 없어도 동작(Seq Scan 느릴 뿐)이라 즉시 500 위험 0. prod 는 CONCURRENTLY 로 락 없이 적용(5.7초). 공유 DB(mibunyang)도 articles upsert 하나 인덱스 유지 오버헤드 미미. `CREATE INDEX IF NOT EXISTS` 라 멱등·안전(마이그 파일은 비-CONCURRENTLY 지만 이미 존재해 no-op).
   - V036 = billing_keys 신규 테이블 — `BillingKey` 가 ORM 매핑되나 PR1 시점엔 INSERT/SELECT 하는 코드가 없어 즉시 500 위험 0. 빌링키 발급/결제 엔드포인트(PR2+) 머지 전 prod 적용 필수. `CREATE TABLE/INDEX IF NOT EXISTS` 라 멱등·안전. 공유 DB(mibunyang) 영향 = 신규 테이블이라 0.
   - V035 = 코드보다 prod 선행 실행 완료 — `paid_until`(user_profiles)·`Payment` 가 ORM 매핑돼 INSERT/SELECT 목록 포함 → 컬럼/테이블 부재 시 get_current_user·결제 엔드포인트 500 이었으나, 세션 322 에 적용·재검증 완료. `ADD COLUMN/CREATE TABLE IF NOT EXISTS` 라 멱등·안전.

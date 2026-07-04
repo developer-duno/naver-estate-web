@@ -579,3 +579,77 @@ def test_run_monitor_recovered_failed_sends_resolved_alert():
         assert alert.status == "resolved"
     finally:
         db.close()
+
+
+# ── 세션 342: compute_freshness timeout 트랜잭션 격리 회귀 ──
+# 배경: monitor 가 compute_freshness(8종목 풀스캔)를 메인 db 로 호출하다 8초
+# statement_timeout 을 넘기면 트랜잭션이 aborted → 그 뒤 monitor_alerts SELECT/UPDATE 가
+# InFailedSqlTransaction 으로 연쇄 실패, 매 10분 크래시. 수정 = freshness 를 별도 세션으로
+# 격리. 아래 테스트는 compute_freshness 가 raise 해도 메인 트랜잭션이 살아있음을 단언.
+
+
+def test_detect_issues_freshness_raise_does_not_poison_main_tx():
+    """compute_freshness 가 예외(timeout 모사)를 던져도 detect_issues 는 정상 반환하고
+    메인 db 세션은 오염되지 않아 이후 쿼리가 살아있다."""
+    from sqlalchemy.exc import OperationalError
+
+    db = TestSession()
+    try:
+        now = _utcnow()
+        # 감지될 failed 잡 1건 (freshness 이전 단계에서 이미 issues 에 담김)
+        db.add(CrawlJob(
+            job_type="complex_list", status="failed",
+            created_at=now - timedelta(hours=1),
+            error_message="SSL 끊김",
+        ))
+        db.commit()
+
+        # compute_freshness 가 timeout 처럼 raise — 별도 세션에서 실패해도 메인 무손상이어야
+        with patch(
+            "crawler.monitor.compute_freshness",
+            side_effect=OperationalError("SELECT ...", {}, Exception("statement timeout")),
+        ):
+            issues = detect_issues(db)
+
+        # freshness 신호는 빠지지만 failed 신호는 정상 감지 (예외가 전파되지 않음)
+        keys = {i["alert_key"] for i in issues}
+        assert "crawl_failed:complex_list" in keys
+        assert not any(k.startswith("freshness:") for k in keys)
+
+        # ★ 핵심: 메인 db 트랜잭션이 살아있어 이후 쿼리가 성공해야 한다
+        #   (격리 실패 시 여기서 InFailedSqlTransaction 이 났었음)
+        row = db.execute(select(CrawlJob).where(CrawlJob.job_type == "complex_list")).scalar_one()
+        assert row is not None
+    finally:
+        db.close()
+
+
+def test_run_monitor_completes_alerts_when_freshness_times_out():
+    """run_monitor 전체가 compute_freshness timeout 후에도 monitor_alerts 를 정상
+    기록/발송한다(트랜잭션 격리 덕에 alert 처리가 통째로 실패하지 않음)."""
+    from sqlalchemy.exc import OperationalError
+
+    db = TestSession()
+    try:
+        now = _utcnow()
+        db.add(CrawlJob(
+            job_type="complex_list", status="failed",
+            created_at=now - timedelta(hours=1),
+            error_message="SSL 끊김",
+        ))
+        db.commit()
+
+        with patch(
+            "crawler.monitor.compute_freshness",
+            side_effect=OperationalError("SELECT ...", {}, Exception("statement timeout")),
+        ), patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        # 알림이 발송되고 monitor_alerts 행이 기록됨 (트랜잭션 안 죽음)
+        assert mock_tg.called
+        alert = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed:complex_list")
+        ).scalar_one()
+        assert alert.status == "active"
+    finally:
+        db.close()

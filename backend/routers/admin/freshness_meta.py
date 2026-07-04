@@ -70,10 +70,18 @@ FRESHNESS_ITEMS: list[dict] = [
         "new_rows_expected": False,
     },
     {
+        # trades 는 mibunyang 이 매월 6일 단독 write 하는 외부 소유 테이블 —
+        # naver-estate 는 read-only(write 0건). 그래서 신선도 주기는 mibunyang 의
+        # 월간 수집(30일) 기준이며 unsold 와 동형. collect_public_trades 잡은
+        # complex_price_history 에 쓰지 trades 에 안 쓰므로 이 종목과 무관 → job_id=None.
+        # ⚠ 거짓경보 회귀 방지(세션 343): 예전엔 7일/collect_public_trades 로 잘못 붙어
+        # 매월 하순 trades age 가 21일(7일×3)을 넘겨 red → 텔레그램 가짜 경보를 냈다
+        # (prod 실측 2026-07-04: max(recorded_at)=6-06, age 28.6일 = 7일 기준 4.09× red).
+        # 30일 기준이면 0.95× green, red 임계 90일 → 진짜 3개월+ 장기 단절만 경보.
         "key": "public_trades",
-        "label": "공공데이터 실거래가",
-        "expected_interval_seconds": 86400 * 7,
-        "scheduler_job_id": "collect_public_trades",
+        "label": "실거래가(미분양 수집)",
+        "expected_interval_seconds": 86400 * 30,
+        "scheduler_job_id": None,
         "new_rows_kind": None,  # trades 외부, created_at 없음
         "new_rows_expected": False,
     },

@@ -417,25 +417,36 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         job.total_items = len(articles)
         processed = 0
 
+        # 루프 전 속성 선추출 — 배치 commit(50건, line 459)이 expire_on_commit=True(기본,
+        # database.py:65)로 art 객체를 expired 시키면, 다음 순회 art.article_no 등 접근이
+        # PK 재조회 lazy-load(SELECT ... WHERE article_no=:pk)를 유발한다. 평상시엔 throttle
+        # 1.5초에 흡수되나 DB 부하 구간엔 이 PK 조회가 20~30초로 치솟아 statement_timeout →
+        # QueryCanceled → 트랜잭션 aborted → _finalize_job 2차 사망(세션 342 실측: 2026-07-04
+        # 21:53·22:26). 루프에 필요한 5개 속성을 미리 뽑아 ORM 재접근을 제거한다.
+        arts = [
+            (a.article_no, a.trade_type_name, a.deal_or_warrant_prc, a.rent_prc, a.area2_m2)
+            for a in articles
+        ]
+
         skipped_dead = 0
         skipped_transient = 0
-        for i, art in enumerate(articles):
+        for i, (article_no, trade_type_name, deal_or_warrant_prc, rent_prc, area2_m2) in enumerate(arts):
             record_call("article_detail_batch")
-            detail_data = NaverEstateAPI.get_article_detail(art.article_no)
+            detail_data = NaverEstateAPI.get_article_detail(article_no)
             if detail_data and "error" not in detail_data:
                 # 도메인 객체로 변환 후 상세 업데이트
                 domain_article = RealEstateArticle(
-                    article_no=art.article_no,
-                    trade_type_name=art.trade_type_name or "",
+                    article_no=article_no,
+                    trade_type_name=trade_type_name or "",
                 )
-                domain_article.deal_or_warrant_prc = art.deal_or_warrant_prc
-                domain_article.rent_prc = art.rent_prc
-                domain_article.area2_m2 = art.area2_m2
+                domain_article.deal_or_warrant_prc = deal_or_warrant_prc
+                domain_article.rent_prc = rent_prc
+                domain_article.area2_m2 = area2_m2
                 domain_article.update_from_detail(detail_data)
 
                 # DB 업데이트 (commit은 배치로)
                 update_data = build_detail_update_dict(domain_article, detail_data)
-                db.query(Article).filter(Article.article_no == art.article_no).update(
+                db.query(Article).filter(Article.article_no == article_no).update(
                     update_data, synchronize_session=False
                 )
                 processed += 1
@@ -443,7 +454,7 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
                 # 진짜 dead (NotExistInformation) → 네이버에서 이미 지운 매물.
                 # detail_crawled=TRUE + is_active=FALSE로 마크해 같은 매물이 다음
                 # 배치에서 반복 pick되지 않도록 한다.
-                db.query(Article).filter(Article.article_no == art.article_no).update(
+                db.query(Article).filter(Article.article_no == article_no).update(
                     {"detail_crawled": True, "is_active": False},
                     synchronize_session=False,
                 )

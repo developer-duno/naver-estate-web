@@ -55,6 +55,7 @@ docs/loop/
 .mcp.json
 scripts/startup.log
 scripts/backend.log
+scripts/backend_*.log
 scripts/cloudflared_*.log
 scripts/cloudflared.log
 scripts/orchestrator.pid

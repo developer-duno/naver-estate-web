@@ -115,9 +115,16 @@ def compute_freshness(db: Session) -> dict:
     now = datetime.now(timezone.utc)
 
     # 종목별 (last_updated, count) — 1쿼리씩
+    # ⚠ articles(121만 행)는 max+count 를 묶으면 count 가 풀스캔을 강제해 max 의 인덱스
+    # (ix_articles_updated_at, V038)를 무효화한다 → 부하 시 8초 statement_timeout 초과로
+    # monitor 가 트랜잭션 aborted 로 반복 크래시(세션 342). max 와 count 를 물리적으로
+    # 2쿼리로 분리해 max 는 인덱스 역스캔(ms), count 만 풀스캔(1.9초, 8초 여유)하게 한다.
+    # 메모리 [[feedback-combined-aggregate-index-void]] 답습.
+    art_max = db.execute(select(func.max(Article.updated_at))).scalar()
+    art_count = db.execute(select(func.count(Article.article_no))).scalar()
     raw: dict[str, tuple] = {
         "complexes": db.execute(select(func.max(Complex.last_crawled_at), func.count(Complex.complex_no))).one(),
-        "articles": db.execute(select(func.max(Article.updated_at), func.count(Article.article_no))).one(),
+        "articles": (art_max, art_count),
         "complex_price_history": db.execute(select(func.max(ComplexPriceHistory.recorded_at), func.count(ComplexPriceHistory.id))).one(),
         "unsold": db.execute(select(func.max(UnsoldHistory.recorded_at), func.count(UnsoldHistory.id))).one(),
         "air_quality": db.execute(select(func.max(Infra.air_updated_at), func.count(Infra.apartment_id).filter(Infra.air_updated_at.isnot(None)))).one(),

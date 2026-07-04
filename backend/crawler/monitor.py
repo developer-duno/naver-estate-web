@@ -152,8 +152,18 @@ def detect_issues(db) -> list[dict]:
         })
 
     # 3. 데이터 미축적 — 신선도 red 종목
+    # ⚠ compute_freshness 는 8종목 풀 테이블 집계라 부하 시 8초 statement_timeout 을
+    # 넘길 수 있다(세션 342 실측: articles slow query 9.6초). timeout 이 나면 트랜잭션이
+    # aborted 되는데, 메인 db 를 공유하면 그 뒤 monitor_alerts SELECT/UPDATE 가 전부
+    # InFailedSqlTransaction 으로 연쇄 실패한다. 그래서 freshness 는 **별도 세션**으로
+    # 격리해 실패해도 메인 트랜잭션을 오염시키지 않게 한다(NullPool 이라 연결 1개 잠깐 추가).
     try:
-        fresh = compute_freshness(db)
+        from db.database import SessionLocal
+        fresh_db = SessionLocal()
+        try:
+            fresh = compute_freshness(fresh_db)
+        finally:
+            fresh_db.close()
         for item in fresh["items"]:
             if item["status"] != "red":
                 continue

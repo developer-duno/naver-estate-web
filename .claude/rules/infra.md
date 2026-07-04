@@ -90,6 +90,29 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 
 `crawler/job_error_listener.py` = `scheduler.add_listener(job_event_listener, EVENT_JOB_ERROR | EVENT_JOB_MISSED)` (main.py lifespan `register_job_listener` 배선). monitor.py 는 **CrawlJob row 가 이미 기록된** 실패만 감지 → 잡이 CrawlJob 기록 **전에** 예외로 죽거나 misfire(누락) 스킵되면 사각지대였음. 리스너가 스케줄러 이벤트 레벨에서 그 두 경우를 포착해 `logger.error/warning` + 텔레그램(`(kind, job_id)` 별 600초 쿨다운). event.code 로 ERROR/MISSED 분기(misfire 는 `.exception` 미접근 — AttributeError 회피). 텔레그램 실패는 best-effort 흡수(리스너 안 죽음). TELEGRAM_ENABLED 공유.
 
+### monitor freshness 풀스캔 timeout 방지 (세션 342, PR #279·#281)
+
+크롤링 monitor(10분 interval)가 `compute_freshness`(routers/admin/freshness.py)로 8종목
+풀 테이블 집계를 하는데, **대형 테이블 풀스캔이 부하 시 8초 statement_timeout 을 넘겨
+트랜잭션 aborted → 같은 세션의 monitor_alerts 쿼리가 InFailedSqlTransaction 으로 연쇄
+실패**하며 매 10분 크래시했다(세션 342 실측, 텔레그램 진단 중 발견). 3겹 처방:
+
+1. **트랜잭션 격리** (monitor.py, 축 A) — `compute_freshness` 를 **별도 `SessionLocal()`
+   세션**으로 실행. timeout 나도 monitor 메인 트랜잭션 무손상(크래시 즉시 차단). 라이브
+   실증: timeout 나도 InFailedSqlTransaction 0.
+2. **max/count 분리 + 인덱스** — max+count 묶으면 count 풀스캔이 max 인덱스를 무효화
+   (`[[feedback-combined-aggregate-index-void]]`). 물리 2쿼리로 분리 + **V038
+   `ix_articles_updated_at`**(max 0.07초). 대형 count 는 **reltuples 근사**(`_approx_count`,
+   articles·trades·complex_price_history 3종, 화면 표시용이라 근사 허용·오차 0%, SQLite
+   폴백). new_rows(헛바퀴 감지 `created_at≥job_start` count)는 **V039 `ix_articles_created_at`**.
+3. **결과**: compute_freshness **9.2초 → 0.6초**(부하 8배도 8초 여유). V038·V039 둘 다
+   CONCURRENTLY prod 적용완료(락0). ⚠ freshness count 는 **순수 표시용**(status=시각 기반,
+   spinning=crawl_jobs 기반) — 근사 오차가 알림 오판 유발 0.
+
+> 교훈: 이 monitor 크래시는 **statement_timeout(8초 안전망)이 오히려 방아쇠**였다 — 폭주
+> 쿼리를 죽이는 게 목적이나, 정상 집계 쿼리가 대형 테이블 성장으로 8초를 넘기면 monitor
+> 자신을 죽인다. 신선도·집계 쿼리는 테이블 성장 대비 **인덱스 or 근사**로 상시 <1초 유지 의무.
+
 ## 관찰성 인프라 (세션 340 — 운영 중 문제를 볼 수 있게)
 
 - **외부 uptime 감시** = `.github/workflows/healthcheck.yml` (10분 cron + workflow_dispatch). GitHub Actions(집서버 무관)가 `curl https://api.2u.pe.kr/health/db` → 실패 시 텔레그램(secrets `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`, 미설정 시 안전 스킵). **집서버가 통째로 죽으면 내부 watchdog 도 함께 죽어 무통지**이던 사각지대를 외부에서 메움. ⚠ GitHub Actions `if:` 에 `secrets` context 사용 불가(공식) → secrets 는 `env:` 로 주입해 shell 판정(PR #276 hotfix). CI 문법은 `gh workflow run` 라이브 실행만 ground truth.

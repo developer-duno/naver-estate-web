@@ -153,6 +153,29 @@ def collect_price_history(batch_size: int = 50, scheduler_job_id: str | None = N
     네이버 API에서 매매(A1)/전세(B1) 시세를 가져와 월별 이력 기록.
     """
     db = SessionLocal()
+
+    # 재개(resume) — 이 함수는 last_crawled_at 을 직접 갱신하지 않아(다른 크롤러가 갱신)
+    # 재시작 시 정렬 기준이 안 바뀌어 매번 같은 top-N 을 다시 뽑는다(public_trade_data 와
+    # 동일 위험, 세션 346 조사). 직전 실행이 중단(failed/cancelled)됐다면 이미 처리한
+    # complex_no 를 쿼리 단계에서 제외 — 이 함수는 목록 전체가 아니라 top-N 만 뽑으므로
+    # public_trade_data 처럼 "이어서 처리"가 아니라 "제외 후 다시 top-N" 방식이 맞다.
+    # 최근 job 1건만 보면 연속 실패 시 진행분이 유실될 수 있어(세션 346 리뷰 발견,
+    # service_public.py 와 동일 처방) 최근 N건을 순회해 체크포인트가 있는 첫 건을 쓴다.
+    done_complex_nos: set[str] = set()
+    recent_stopped_jobs = (
+        db.query(CrawlJob)
+        .filter(CrawlJob.job_type == "price_history", CrawlJob.status.in_(["failed", "cancelled"]))
+        .order_by(CrawlJob.id.desc())
+        .limit(10)
+        .all()
+    )
+    for prev_job in recent_stopped_jobs:
+        prev_state = _checkpoint.load(db, prev_job.id)
+        if prev_state and prev_state.get("done_complex_nos"):
+            done_complex_nos = set(prev_state["done_complex_nos"])
+            logger.info("시세 수집 재개: 이전 job %d 에서 %d개 단지 완료분 이어받음", prev_job.id, len(done_complex_nos))
+            break
+
     job = CrawlJob(
         job_type="price_history", scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow()
     )
@@ -160,14 +183,18 @@ def collect_price_history(batch_size: int = 50, scheduler_job_id: str | None = N
     db.commit()
 
     try:
+        complexes_query = db.query(Complex.complex_no)
+        if done_complex_nos:
+            complexes_query = complexes_query.filter(Complex.complex_no.notin_(done_complex_nos))
         complexes = (
-            db.query(Complex.complex_no)
+            complexes_query
             .order_by(Complex.last_crawled_at.desc().nullslast())
             .limit(batch_size)
             .all()
         )
 
         processed = 0
+        newly_done: set[str] = set()
         for i, (complex_no,) in enumerate(complexes):
             complex_had_success = False
             for trade_type in ("A1", "B1"):  # 매매, 전세
@@ -200,14 +227,19 @@ def collect_price_history(batch_size: int = 50, scheduler_job_id: str | None = N
                     )
                 complex_had_success = True
             # 단지당 한 번만 카운트 (A1, B1 중 하나라도 성공하면)
+            # 실패한 단지는 done 에 안 넣음 — 일시적 API 실패일 수 있어 다음 재개 때 재시도.
             if complex_had_success:
                 processed += 1
+                newly_done.add(complex_no)
 
-            # 체크포인트
+            # 체크포인트 — 완료된 단지 번호 집합을 저장 (재개 시 이 집합을 쿼리에서 제외)
             if _checkpoint.should_save(i + 1):
                 db.commit()
-                _checkpoint.save(db, job.id, {"processed": i + 1, "total": len(complexes)})
-                logger.info("시세 수집 중간 저장: %d/%d", i + 1, len(complexes))
+                _checkpoint.save(
+                    db, job.id,
+                    {"done_complex_nos": sorted(done_complex_nos | newly_done), "total": len(complexes)},
+                )
+                logger.info("시세 수집 중간 저장: %d/%d 완료", len(done_complex_nos | newly_done), len(complexes))
 
         job.status = "completed"
         job.total_items = len(complexes)

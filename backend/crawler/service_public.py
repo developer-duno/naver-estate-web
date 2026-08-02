@@ -60,18 +60,26 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
     # 재개(resume) — 직전 실행이 중단(failed/cancelled)됐다면 그 체크포인트를 이어받는다.
     # 시군구 목록은 매 실행 DB 쿼리로 새로 뽑혀 순서 보장이 없으므로(distinct, ORDER BY 없음),
     # "몇 번째까지"가 아니라 "이미 처리한 시군구 코드 집합"으로 저장해 순서 변동에 안전하게 함.
+    #
+    # ⚠ 가장 최근 job 1건만 보면 안 됨(세션 346 코드리뷰 발견) — 체크포인트는 5개 처리마다
+    # 저장되므로, 연속 2회 실패 중 2번째 job이 자기 체크포인트를 저장하기 전에 죽으면
+    # (예: 1~4개만 처리하고 죽음) "가장 최근 job"엔 체크포인트가 없어 1번째 job이 남긴
+    # 진행분을 못 찾고 처음부터 재시작하게 된다. 최근 N건을 최신순으로 훑어 체크포인트가
+    # 실제로 있는 첫 번째를 찾는다 — 오래된 job까지 무한정 훑지 않도록 상한을 둔다.
     done_codes: set[str] = set()
-    prev_job = (
+    recent_stopped_jobs = (
         db.query(CrawlJob)
         .filter(CrawlJob.job_type == "public_trade_data", CrawlJob.status.in_(["failed", "cancelled"]))
         .order_by(CrawlJob.id.desc())
-        .first()
+        .limit(10)
+        .all()
     )
-    if prev_job:
+    for prev_job in recent_stopped_jobs:
         prev_state = _checkpoint.load(db, prev_job.id)
         if prev_state and prev_state.get("done_codes"):
             done_codes = set(prev_state["done_codes"])
             logger.info("공공데이터 수집 재개: 이전 job %d 에서 %d개 시군구 완료분 이어받음", prev_job.id, len(done_codes))
+            break
 
     job = CrawlJob(
         job_type="public_trade_data", scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow()
@@ -171,7 +179,9 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
 
             done_codes.add(sigungu_cd)
 
-            # 체크포인트 — 완료된 시군구 코드 집합을 저장 (재개 시 이 집합을 건너뜀)
+            # 체크포인트 — 완료된 시군구 코드 집합을 저장 (재개 시 이 집합을 건너뜀).
+            # sorted()는 다음 실행이 순서를 신뢰해서가 아니라(재개 시 다시 set으로 씀),
+            # DB에 저장된 JSON을 사람이 볼 때 순서가 일정해 디버깅하기 편하기 위함.
             if _checkpoint.should_save(i + 1):
                 db.commit()
                 _checkpoint.save(db, job.id, {"done_codes": sorted(done_codes), "total": len(sigungu_codes)})
@@ -333,9 +343,12 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
                 backfill_price_history(cno, months_back=24)
                 success += 1
             except Exception:
-                # rollback 없이 넘어가면 실패한 트랜잭션 상태가 세션에 남아 이후 모든
-                # 쿼리가 InFailedSqlTransaction 으로 연쇄 실패한다 (service_discover
-                # crawl_complex_details_batch 개별 except 패턴 답습).
+                # ⚠ 세션 346 코드리뷰 정정: backfill_price_history()는 이 db와 별개인
+                # 자신만의 SessionLocal()을 열어 쓴다(NullPool=독립 물리 연결)라서,
+                # 여기서 실패해도 바깥 db 트랜잭션이 실제로 오염되지는 않는다 —
+                # crawl_complex_details_batch(같은 db를 파라미터로 공유하는 구조)와는
+                # 다르다. 지금 당장 InFailedSqlTransaction 연쇄를 막는 효과는 없지만,
+                # 향후 리팩터로 db를 공유하게 되면 필요해질 방어 코드라 남겨둔다.
                 db.rollback()
                 failed += 1
                 logger.exception("소급 수집 개별 실패: %s", cno)

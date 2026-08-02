@@ -81,11 +81,38 @@
 - **검증**: `ruff check .` clean, BE pytest 1063 passed / 0 failed(세션 346 실측).
 - **커밋**: `023c6fb`
 
-**보류 — 별도 승인 필요 (규모가 커서 이번 라운드에 포함 안 함)**:
+**✅ 후속 — 독립 코드리뷰로 발견한 버그 수정 + collect_price_history 확장 — 완료 (2026-08-02, PR #309)**:
 
-- article_detail 후보 SELECT 정렬 컬럼(`last_seen_at`) 인덱스 추가 검토.
+- **버그 수정(HIGH)**: `023c6fb`가 "가장 최근 실패/취소 job 1건"만 보던 것을, 연속 2회
+  실패하면(2번째가 자기 체크포인트를 저장하기 전에 또 죽으면) 1번째의 진행분을 잃고
+  처음부터 재시작하는 구조였음(686시간 문제가 한 단계 뒤로 밀려 재발 가능). 최근 실패/
+  취소 job 최대 10건을 순회해 체크포인트가 있는 첫 건을 쓰도록 수정.
+- **범위 확장**: `collect_price_history()`(시세 수집, `service_price.py`)도 동일 패턴
+  (재시작 시 매번 같은 top-N 재처리)임을 조사로 확인 — `last_crawled_at`을 이 함수
+  자신이 갱신하지 않아서. 재개 로직 이식(단 이 함수는 목록 전체가 아닌 top-N만 뽑는
+  구조라 "완료분을 쿼리 단계에서 제외 후 다시 top-N" 방식). `collect_complex_metrics()`는
+  `WHERE nearby_median_price IS NULL` 필터가 자기 UPDATE로 자연 축소되는 자기수정
+  구조라 위험 낮음 — 손대지 않음.
+- **커밋 메시지 정정**: `7671a13`의 `db.rollback()` 추가가 "실패 재현까지 확인한 진짜
+  가드"라는 주장은 과장이었음 — `backfill_price_history()`가 파라미터로 `db`를 공유
+  받지 않고 자신만의 세션을 여는 구조라 바깥 세션이 실제로 오염되지 않음. 코드는 향후
+  리팩터 대비 방어 코드로 유지, 주석만 정확한 이유로 교체.
+- **검증**: BE pytest 1067 passed / 0 failed. **커밋**: `3a6ad11`(PR #309 squash merge)
+- **⚠ 라이브 미반영**: PR은 머지됐으나 집서버 재시작 전이라 다음 크론(토요일/수요일
+  새벽)까지는 옛 코드(zombie)가 돎 — `release.md` §2 cross-check 필요, 다음 세션 최우선.
+
+**보류 — 별도 승인 필요**:
+
 - 3개 텔레그램 채널을 조율하는 로직(서버 다운 시 중복 알림 억제, resolved/cancelled
   구분 문구) — 규모가 있어 별도 트랙.
+
+**❌ 보류 아님 — 착수 불필요로 정정 (2026-08-02, 계획 회고 발견)**:
+
+- article_detail 후보 SELECT 정렬 컬럼(`last_seen_at`) 인덱스 추가는 코드 주석
+  (`backend/crawler/service_discover.py:396-411`)에 이미 "세션 266·267 적대검증으로
+  기각됨"(EXPLAIN ANALYZE 1584ms cold, timeout 8s의 5배 여유)이라는 결론이 박혀 있음.
+  이 문서가 "보류 — 재검토 대상"처럼 다시 올려둔 게 문서-코드 모순이었음. 실측 근거가
+  이미 있으므로 재조사 불필요.
 
 ### ✅ 부수 — brace-expansion DoS 취약점 2건 해소 (2026-08-02)
 

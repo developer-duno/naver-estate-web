@@ -1,15 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  NavermapsProvider,
-  Container as MapDiv,
-  NaverMap,
-  useMap,
-  useNavermaps,
-} from "react-naver-maps";
 import type { Complex } from "@/types";
 import { makeMarkerClustering } from "@/lib/naver-marker-clustering";
+
+const SDK_POLL_INTERVAL = 200;
+const SDK_POLL_TIMEOUT = 5000;
 
 /** 좌표(위·경도)가 둘 다 있는 단지만 지도에 찍을 수 있다.
  * 0,0(좌표 미상을 0으로 채운 데이터)은 아프리카 앞바다라 제외 — 한국 좌표는 위도 33~38, 경도 124~132.
@@ -38,62 +34,6 @@ function buildClusterIcon(navermaps: typeof naver.maps, color: string) {
   };
 }
 
-interface ClusterLayerProps {
-  complexes: (Complex & { latitude: number; longitude: number })[];
-  onSelect?: (complex: Complex) => void;
-}
-
-/** 실제 마커+클러스터링을 그리는 내부 레이어 — NaverMap 안에서만 렌더(useMap 훅 전제). */
-function ClusterLayer({ complexes, onSelect }: ClusterLayerProps) {
-  const navermaps = useNavermaps();
-  const map = useMap();
-  const clusterRef = useRef<InstanceType<ReturnType<typeof makeMarkerClustering>> | null>(null);
-  const onSelectRef = useRef(onSelect);
-
-  useEffect(() => {
-    onSelectRef.current = onSelect;
-  }, [onSelect]);
-
-  useEffect(() => {
-    const MarkerClustering = makeMarkerClustering(window.naver);
-    const markers = complexes.map((cpx) => {
-      const marker = new navermaps.Marker({
-        position: new navermaps.LatLng(cpx.latitude, cpx.longitude),
-        title: cpx.complex_name,
-      });
-      navermaps.Event.addListener(marker, "click", () => onSelectRef.current?.(cpx));
-      return marker;
-    });
-
-    const icons = CLUSTER_COLORS.map((c) => buildClusterIcon(navermaps, c));
-
-    clusterRef.current = new MarkerClustering({
-      minClusterSize: 2,
-      maxZoom: 15,
-      map,
-      markers,
-      disableClickZoom: false,
-      gridSize: 120,
-      icons,
-      indexGenerator: [10, 50, 100, 300, 1000],
-      stylingFunction: (clusterMarker: naver.maps.Marker, count: number) => {
-        const el = clusterMarker.getElement?.();
-        const div = el?.querySelector("div");
-        if (div) div.textContent = String(count);
-      },
-    });
-
-    return () => {
-      clusterRef.current?.setMap(null);
-      clusterRef.current = null;
-    };
-    // complexes 는 부모의 hasCoords 필터 결과 — 필터·정렬 변경 시에만 재생성(전체 재구성 방식,
-    // diff 갱신은 1단계 범위 밖 — 계획 문서 §4 참고).
-  }, [complexes, navermaps, map]);
-
-  return null;
-}
-
 interface Props {
   complexes: Complex[];
   /** 마커 클릭 콜백 — 부모가 선택 단지 카드 렌더에 사용 */
@@ -104,33 +44,153 @@ interface Props {
 
 /**
  * 매물 검색 결과 다중 마커 클러스터링 지도.
- * react-naver-maps(NavermapsProvider/Container/NaverMap)가 SDK 로딩·Suspense·에러 경계를
- * 대신 관리 — MbClusterMap.tsx의 수동 폴링(window.naver.maps)·navermap_authFailure 콜백
- * 등록이 불필요해짐. 클러스터링 자체는 네이버 공식 MarkerClustering(Apache 2.0)을
- * makeMarkerClustering() 팩토리로 감싸 사용(lib/naver-marker-clustering.ts).
  *
- * 완전 지연 로드 설계(계획 §핵심결정4)의 일부 — 이 파일 자체가 SearchExperience.tsx에서
- * next/dynamic(ssr:false)으로 지연 임포트되므로, 지도 토글을 실제로 클릭하기 전까지는
- * react-naver-maps·지도 SDK 스크립트가 전혀 로드되지 않는다.
+ * MbClusterMap.tsx(미분양 지도) 와 완전히 동일한 vanilla JS + SDK 폴링 패턴 — 세션 348
+ * 최초 구현은 react-naver-maps(NavermapsProvider/NaverMap)로 SDK 로딩·React 통합을
+ * 대신 맡겼으나, 라이브 실사용 검증에서 `NaverMap` 언마운트 시 호출하는 `instance.destroy()`
+ * 가 특정 조건(지도가 완전히 idle 되기 전 재마운트 등)에서 네이버 SDK 내부 참조가 비어
+ * `Cannot read properties of null (reading 'isArray')` 로 크래시 → Next.js 전역 에러
+ * 경계가 검색 결과 화면 전체를 500 으로 덮어버리는 사고 발견(react-naver-maps 라이브러리
+ * 자체의 destroy 경로 문제, patch-package 로 고쳤던 StrictMode 재마운트와는 별개 케이스).
+ *
+ * MbClusterMap 은 이미 라이브에서 안전이 검증된 패턴 — 지도 인스턴스를 절대 destroy 하지
+ * 않고(언마운트 시 ref 만 null 처리), 마커만 setMap(null) 로 지도에서 뗀다. 그래서 react-naver-maps
+ * 의존을 버리고 이 패턴으로 재작성했다. 클러스터링 자체(네이버 공식 MarkerClustering)는 그대로
+ * lib/naver-marker-clustering.ts 를 재사용.
  */
 export default function SearchClusterMap({ complexes, onSelect, className }: Props) {
-  const [scriptError, setScriptError] = useState(false);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<naver.maps.Map | null>(null);
+  const clusterRef = useRef<InstanceType<ReturnType<typeof makeMarkerClustering>> | null>(null);
+  const onSelectRef = useRef(onSelect);
+  const [error, setError] = useState(false);
   const clientId = process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID;
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
   const coordItems = complexes.filter(hasCoords);
-  const heightCls = className ?? "h-96";
+
+  useEffect(() => {
+    if (!mapRef.current || !clientId) return;
+
+    let cancelled = false;
+
+    const clearCluster = () => {
+      clusterRef.current?.setMap(null);
+      clusterRef.current = null;
+    };
+
+    const init = () => {
+      if (cancelled || !mapRef.current || !window.naver?.maps) return;
+      try {
+        clearCluster();
+
+        const fallbackCenter = new naver.maps.LatLng(37.5666, 126.9784);
+        const map =
+          mapInstanceRef.current ??
+          new naver.maps.Map(mapRef.current, {
+            center: fallbackCenter,
+            zoom: 12,
+            zoomControl: true,
+          });
+        mapInstanceRef.current = map;
+
+        if (coordItems.length === 0) return;
+
+        const MarkerClustering = makeMarkerClustering(window.naver);
+        const bounds = new naver.maps.LatLngBounds();
+        const markers = coordItems.map((cpx) => {
+          const pos = new naver.maps.LatLng(cpx.latitude, cpx.longitude);
+          bounds.extend(pos);
+          const marker = new naver.maps.Marker({ position: pos, title: cpx.complex_name });
+          naver.maps.Event.addListener(marker, "click", () => onSelectRef.current?.(cpx));
+          return marker;
+        });
+
+        const icons = CLUSTER_COLORS.map((c) => buildClusterIcon(naver.maps, c));
+        clusterRef.current = new MarkerClustering({
+          minClusterSize: 2,
+          maxZoom: 15,
+          map,
+          markers,
+          disableClickZoom: false,
+          gridSize: 120,
+          icons,
+          indexGenerator: [10, 50, 100, 300, 1000],
+          stylingFunction: (clusterMarker: naver.maps.Marker, count: number) => {
+            const el = clusterMarker.getElement?.();
+            const div = el?.querySelector("div");
+            if (div) div.textContent = String(count);
+          },
+        });
+
+        if (coordItems.length === 1) {
+          // 단지 1개면 fitBounds 가 과도하게 확대 → setCenter+적정 줌으로.
+          map.setCenter(new naver.maps.LatLng(coordItems[0].latitude, coordItems[0].longitude));
+          map.setZoom(15);
+        } else {
+          map.fitBounds(bounds);
+        }
+      } catch {
+        setError(true);
+      }
+    };
+
+    if (window.naver?.maps) {
+      init();
+    } else {
+      const start = Date.now();
+      const poll = setInterval(() => {
+        if (window.naver?.maps) {
+          clearInterval(poll);
+          init();
+        } else if (Date.now() - start > SDK_POLL_TIMEOUT) {
+          clearInterval(poll);
+          if (!cancelled) setError(true);
+        }
+      }, SDK_POLL_INTERVAL);
+      return () => {
+        cancelled = true;
+        clearInterval(poll);
+        clearCluster();
+      };
+    }
+
+    return () => {
+      cancelled = true;
+      clearCluster();
+    };
+    // complexes 는 부모의 hasCoords 필터 결과 — 필터·정렬 변경 시에만 재생성(전체 재구성 방식,
+    // diff 갱신은 1단계 범위 밖 — 계획 문서 §4 참고).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complexes, clientId]);
 
   // NCP 인증 실패(잘못된 clientId·도메인 미등록) 감지 — 네이버 지도 v3 공식 전역 콜백.
-  // MbClusterMap.tsx:230-236 패턴 답습(react-naver-maps가 스크립트 로드는 대신하지만
-  // 이 전역 콜백 자체는 네이버 SDK가 직접 호출하므로 여전히 우리가 등록해야 함).
+  // MbClusterMap.tsx:230-236 과 동일 패턴.
   useEffect(() => {
     const prev = window.navermap_authFailure;
-    window.navermap_authFailure = () => setScriptError(true);
+    window.navermap_authFailure = () => setError(true);
     return () => {
       window.navermap_authFailure = prev;
     };
   }, []);
 
-  if (!clientId || scriptError) {
+  // 언마운트 시 지도 인스턴스 정리 — MbClusterMap.tsx:239-247 과 동일하게 destroy() 는
+  // 호출하지 않는다(react-naver-maps 의 instance.destroy() 크래시 재발 방지가 이 재작성의
+  // 핵심 목적). ref 만 비워 다음 마운트가 새 지도를 만들도록 한다.
+  useEffect(() => {
+    return () => {
+      clusterRef.current?.setMap(null);
+      clusterRef.current = null;
+      mapInstanceRef.current = null;
+    };
+  }, []);
+
+  const heightCls = className ?? "h-96";
+
+  if (!clientId || error) {
     return (
       <div
         className={`w-full ${heightCls} rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center`}
@@ -143,17 +203,11 @@ export default function SearchClusterMap({ complexes, onSelect, className }: Pro
 
   return (
     <div className="relative w-full h-full">
-      <NavermapsProvider ncpClientId={clientId}>
-        <MapDiv className={`w-full ${heightCls} rounded-lg border border-gray-200`}>
-          {(navermaps) =>
-            coordItems.length > 0 ? (
-              <NaverMapWithFitBounds coordItems={coordItems} onSelect={onSelect} />
-            ) : (
-              <NaverMap defaultCenter={new navermaps.LatLng(37.5666, 126.9784)} defaultZoom={12} />
-            )
-          }
-        </MapDiv>
-      </NavermapsProvider>
+      <div
+        ref={mapRef}
+        className={`w-full ${heightCls} rounded-lg border border-gray-200`}
+        aria-label="단지 위치 지도"
+      />
       {coordItems.length === 0 && (
         <div
           className="absolute inset-0 flex items-center justify-center bg-white/70 rounded-lg"
@@ -163,30 +217,5 @@ export default function SearchClusterMap({ complexes, onSelect, className }: Pro
         </div>
       )}
     </div>
-  );
-}
-
-interface FitBoundsProps {
-  coordItems: (Complex & { latitude: number; longitude: number })[];
-  onSelect?: (complex: Complex) => void;
-}
-
-/** 좌표 있는 단지 전체가 화면에 들어오도록 fitBounds — 단지 1개면 과확대 방지로 setCenter+고정줌. */
-function NaverMapWithFitBounds({ coordItems, onSelect }: FitBoundsProps) {
-  const navermaps = useNavermaps();
-  const bounds = new navermaps.LatLngBounds();
-  coordItems.forEach((c) => bounds.extend(new navermaps.LatLng(c.latitude, c.longitude)));
-
-  return coordItems.length === 1 ? (
-    <NaverMap
-      defaultCenter={new navermaps.LatLng(coordItems[0].latitude, coordItems[0].longitude)}
-      defaultZoom={15}
-    >
-      <ClusterLayer complexes={coordItems} onSelect={onSelect} />
-    </NaverMap>
-  ) : (
-    <NaverMap defaultBounds={bounds}>
-      <ClusterLayer complexes={coordItems} onSelect={onSelect} />
-    </NaverMap>
   );
 }

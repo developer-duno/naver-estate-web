@@ -16,8 +16,7 @@
     "test:e2e:headed": "playwright test --headed",
     "check:ad-compliance": "node scripts/check-ad-compliance.mjs",
     "check:mdx-jsx": "node scripts/check-mdx-jsx.mjs",
-    "prepare": "cd .. && husky frontend/.husky",
-    "postinstall": "patch-package"
+    "prepare": "cd .. && husky frontend/.husky"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -42,7 +41,6 @@
     "radix-ui": "^1.6.1",
     "react": "19.2.7",
     "react-dom": "19.2.7",
-    "react-naver-maps": "^0.2.2",
     "react-to-print": "^3.3.0",
     "recharts": "^3.9.1",
     "remark-gfm": "^4.0.1",
@@ -65,7 +63,6 @@
     "husky": "^9.1.7",
     "jsdom": "^29.0.2",
     "msw": "^2.12.14",
-    "patch-package": "^8.0.1",
     "tailwindcss": "^4",
     "typescript": "^6",
     "vitest": "^4.1.9"

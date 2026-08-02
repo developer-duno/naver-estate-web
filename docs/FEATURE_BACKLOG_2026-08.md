@@ -45,20 +45,33 @@ UI로 설계돼 있었다 — 우선순위가 밀렸을 뿐 기술적으로 막�
 
 ### 실행 계획 (박제)
 
-- [ ] **1단계 — 재사용 가능성 실측**: `frontend/src/components/mb/MbClusterMap.tsx`·
-      `MbLocationMap.tsx`·`MbInfraOverlay.tsx`·`MbMapToolbar.tsx`·`MbViewToggle.tsx` 코드를
-      직접 읽어, 미분양 전용 데이터 구조(`apartments`/`unsold_history` 좌표)에 얼마나
-      결합돼 있는지 확인. `Complex`(estate) 타입과 `MbApartment` 타입의 좌표 필드명이
-      같은지(`latitude`/`longitude` — `.claude/rules/infra.md`가 이미 "naver-estate-web은
-      latitude/longitude, mibunyang은 lat/lng" 컬럼명 불일치를 명시함) 먼저 확인해야
-      이식 범위를 정확히 잡을 수 있다.
+- [x] **1단계 — 재사용 가능성 실측 (완료, 2026-08-02)**: `MbClusterMap.tsx`(34-41행
+      `hasCoords`)를 확인한 결과, **애플리케이션 코드 레벨(TypeScript/Python)에서는
+      `Complex`(estate) 타입과 `MbApartment` 타입 둘 다 `latitude`/`longitude`로
+      필드명이 완전히 통일돼 있다** — `frontend/src/types/estate.ts:8-9,80-81`,
+      `frontend/src/types/mibunyang.ts:9-10` 실측 확인. `.claude/rules/infra.md:177`이
+      말하는 "컬럼명 불일치"는 **DB 물리 컬럼**(`backend/db/mb_models.py:39-40`이
+      `mapped_column("lat", Float)`로 alias 처리해 파이썬 코드에서만 `latitude`로
+      보이게 한 것)에 관한 것이지, 프론트/백엔드 애플리케이션 코드에는 영향이 없다 —
+      이 부분은 인프라 문서가 틀린 게 아니라, 이번 조사로 "지도 이식엔 무관하다"는
+      **추가 확인**이 된 것. `MbClusterMap.tsx`의 `hasCoords()` 함수(위경도 0,0 방어),
+      마커 escapeHtml(XSS 방어), 마커 라벨 로직은 모두 `latitude`/`longitude` 필드만
+      사용해 estate `Complex` 타입에도 타입 수정 없이 그대로 재사용 가능.
+      **결론: 좌표 필드명 문제로 인한 이식 장벽 없음.**
 - [ ] **2단계 — 데이터 모집단 크기 확인**: 미분양(수백 단지)과 달리 매물 검색 결과는 최대
       수십~수백 건(필터에 따라 다름)이라 클러스터링 파라미터를 다시 튜닝해야 할 수 있음.
       `complexes` 테이블에서 좌표가 NULL인 비율을 실측(향후 SELECT COUNT 쿼리로, 지도에
       안 뜨는 단지가 얼마나 되는지 미리 파악).
-- [ ] **3단계 — UI 배치 결정**: `/search`(홈 흡수형) 결과 화면에 list↔map 토글을 어디에
-      둘지(미분양의 `MbViewToggle` 패턴 참고), `mb_view_mode`(localStorage 키, 이미 있음)
-      옆에 `article_view_mode`(이미 있음)와 별개로 새 localStorage 키 추가할지 결정.
+- [x] **3단계 — UI 배치 패턴 확인 (완료, 2026-08-02)**: `MbViewToggle.tsx`가 그대로
+      재사용 가능한 완성 패턴임을 확인. 특히 `MAP_ENABLED`(`frontend/src/lib/constants.ts`)
+      플래그가 이미 있어 **네이버 지도 SDK Client ID 미설정 시 토글 자체를 렌더하지
+      않는 graceful degradation**이 구현돼 있다(`MbViewToggle.tsx:16` `if (!MAP_ENABLED)
+      return null`) — 이 패턴을 그대로 검색 결과 화면에도 적용하면 배포 리스크(키
+      미설정 시 화면 깨짐) 없이 안전하게 도입 가능. `mb_view_mode`(`frontend/src/lib/
+      storage.ts:405-416`)와 별개로 `article_view_mode`(이미 있음, 매물 카드 모양
+      compact/medium/large 용도라 지도 유무와는 무관한 키)를 침범하지 않고, 신규
+      `search_view_mode` 키를 같은 패턴(`getMbViewMode`/`setMbViewMode` 함수쌍 답습)으로
+      추가하면 된다 — 설계 결정 완료, 구현만 남음.
 - [ ] **4단계 — 구현**: 지도 컴포넌트 이식 + 클러스터 마커 + 단지 클릭 시 정보 팝업.
       네이버 지도 SDK는 이미 `NEXT_PUBLIC_NAVER_MAP_CLIENT_ID`로 연동돼 있음
       (`docs/NAVER_MAP_KEY_SETUP.md` 참조) — 새 키 발급 불필요.

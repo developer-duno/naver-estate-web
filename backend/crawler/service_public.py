@@ -307,6 +307,10 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
                 backfill_price_history(cno, months_back=24)
                 success += 1
             except Exception:
+                # rollback 없이 넘어가면 실패한 트랜잭션 상태가 세션에 남아 이후 모든
+                # 쿼리가 InFailedSqlTransaction 으로 연쇄 실패한다 (service_discover
+                # crawl_complex_details_batch 개별 except 패턴 답습).
+                db.rollback()
                 failed += 1
                 logger.exception("소급 수집 개별 실패: %s", cno)
 

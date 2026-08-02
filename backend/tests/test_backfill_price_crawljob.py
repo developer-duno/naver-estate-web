@@ -54,6 +54,45 @@ class TestBackfillPriceCrawlJob:
         assert job.total_items == 2
         assert job.processed_items == 1
 
+    def test_개별실패시_rollback_호출로_세션이_복구된다(self, db):
+        """개별 단지 실패 → db.rollback() 호출 (InFailedSqlTransaction 연쇄 차단)
+
+        rollback 이 없으면 실패한 트랜잭션 상태가 세션에 남아, 그 뒤 남은 단지 처리와
+        job 완료 commit 이 전부 InFailedSqlTransaction 으로 연쇄 실패한다.
+        service_discover.crawl_complex_details_batch 개별 except 패턴과 동일 보장.
+        """
+        from unittest.mock import MagicMock
+
+        import crawler.service_public as sp
+
+        _add_complex(db, "BF1", 1000)
+
+        real_session_local = sp.SessionLocal
+        rollback_spy = MagicMock()
+
+        def _spy_session_local():
+            session = real_session_local()
+            original_rollback = session.rollback
+
+            def _wrapped():
+                rollback_spy()
+                return original_rollback()
+
+            session.rollback = _wrapped
+            return session
+
+        with patch.object(sp, "SessionLocal", _spy_session_local), \
+             patch("crawler.service_public.backfill_price_history",
+                   side_effect=RuntimeError("api down")):
+            result = sp.backfill_price_batch(batch_size=5, scheduler_job_id="backfill_price")
+
+        assert result == {"success": 0, "failed": 1, "total": 1}
+        assert rollback_spy.call_count >= 1, "개별 단지 실패 시 db.rollback() 이 호출되어야 함"
+        # 세션이 복구되어 job 완료 commit 까지 정상 도달했는지 확인
+        job = db.query(CrawlJob).filter(CrawlJob.scheduler_job_id == "backfill_price").one()
+        assert job.status == "completed"
+        assert job.completed_at is not None
+
     # 전체 예외 → failed 마킹 경로는 ast 가드(test_scheduler_job_fail_guard.py)가
     # fail_job_safely 폴백 존재를 정적 검증한다 — 깨진 세션 흉내 통합 테스트는 과잉.
 

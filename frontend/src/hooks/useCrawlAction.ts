@@ -18,6 +18,12 @@ const TERMINAL_STATUSES = new Set(["done", "done_partial", "error", "idle"]);
 const NAVER_BLOCKED_MESSAGE =
   "네이버가 막아서 지금은 갱신이 안 돼요. 이전에 저장된 데이터로 보여드릴게요. 잠시 뒤 다시 시도해주세요.";
 
+// done_partial = 이미 삭제된 매물이 많아 서버가 상세 수집을 조기 종료한 정상 동작
+// (_detail_worker.py DETAIL_FAILURE_THRESHOLD). "일부만 됐다" 로만 보이면 사용자가
+// 크롤링이 덜 끝난 줄 알고 재시도하므로, 이유를 함께 알린다.
+const PARTIAL_DONE_MESSAGE =
+  "갱신 완료. 이미 삭제된 매물이 많아 일부는 상세 정보를 가져오지 못했어요.";
+
 function formatAgo(iso: string | null | undefined): string {
   if (!iso) return "";
   const then = new Date(iso).getTime();
@@ -160,7 +166,7 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
           }
           refetchComplexQueries(queryClient, complexNo);
           if (status.status === "done_partial") {
-            setMsg("일부 항목 갱신 완료", "success");
+            setMsg(PARTIAL_DONE_MESSAGE, "success");
           } else {
             setMsg("갱신 완료", "success");
           }

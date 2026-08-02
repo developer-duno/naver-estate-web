@@ -20,6 +20,52 @@
 
 ## P0 — 즉시
 
+### P0-0. [진단 완료] 크롤링 장애·텔레그램 신호 불일치 — 30일 실측 재조사 (2026-08-02)
+
+> 사장님이 "네이버 크롤링이 느리다·실패가 많다·텔레그램 신호가 안 맞는다"고 지적 →
+> 1차 조사(몇 시간 치 로그만 봄)가 "정상"이라 오판 → 텔레그램 스크린샷 증거로 재조사 →
+> 30일 DB 실측 + GitHub Actions 로그로 진짜 원인 확정. 아래는 재조사로 밝혀진 사실.
+
+**핵심 발견 — 두 개의 독립된 사건이 섞여 있었다:**
+
+1. **터널 단절 사건 (이미 해결됨, 과거형)**: 2026-07-13 05:04~08-02 00:55(UTC) 사이
+   Cloudflare 터널이 끊겨 외부에서 서버 자체에 도달 불가(HTTP 530). 이 구간은
+   `crawl_jobs` DB 테이블에 전혀 기록이 안 남는다(서버가 요청을 받지도 못했으므로) —
+   1차 조사가 "실패 0건"이라 오판한 이유. 세션344에서 이미 원인 규명·복구 완료.
+   8/1 새벽 20회+ 연속 "헬스체크 실패" 알림이 이 사건의 증거.
+2. **상시 존재하는 설계상 병목 (지금도 있음, 터널과 무관)**:
+   - `article_detail`(단지 상세 매물 크롤) 후보 SELECT가 인덱스 없는 정렬 쿼리라
+     부하 시 30초 override도 넘겨 마비 가능 (`backend/crawler/service_discover.py:386-415`,
+     실측 근거: 최근 30일 중 4건이 19~65분간 running 상태로 멈췄다가 `cancelled` 처리됨).
+   - `public_trade_data`(국토부 실거래가) job은 **체크포인트 저장은 하나 재개(resume)
+     로직이 없어** 중단되면 매번 처음부터 재시작 → 686시간(28일) 미축적·처리율 18%
+     정체 (`backend/crawler/service_public.py:17-172`, checkpoint read 코드 부재).
+   - 상세 크롤 실패율이 50% 넘으면 **의도적으로** `done_partial`로 조기 종료
+     (`backend/routers/live/_detail_worker.py:100-102`, `DETAIL_FAILURE_THRESHOLD=0.5`)
+     — 버그 아닌 설계(죽은 매물 비율이 높은 단지의 정상 동작)지만 사용자에게 이유가
+     안 보임.
+   - 단지 클릭 시 매물 상세 갱신이 매물 건당 0.3초 sleep을 2스레드로만 처리
+     (`backend/routers/live/_detail_worker.py:48-56`) — 매물 수에 선형 비례해 느려짐.
+3. **텔레그램 신호 불일치의 구조적 원인**: 알림 채널이 서로 독립된 3곳
+   (① `.github/workflows/healthcheck.yml` 외부 하루 1회, ② `backend/crawler/monitor.py`
+   내부 10~30분, ③ `backend/crawler/job_error_listener.py` 내부 즉시) — 서버가
+   통째로 죽으면 ②③은 함께 침묵하고 ①만 다음 체크 때 발화. "정상으로 돌아왔습니다"도
+   monitor.py가 stale job을 강제 `cancelled` 처리해도 똑같이 뜨는 얕은 판정
+   (`monitor.py:203-241,305-323`) — false positive 복구 가능.
+
+**즉시 조치 2건 착수됨 (2026-08-02, 서브에이전트 진행 중)**:
+
+- `service_public.py`의 `backfill_price_batch` 개별 except에서 `db.rollback()` 누락
+  수정 (옆 함수 `crawl_complex_details_batch`는 정상 호출 중이던 것과 대조적으로 확인).
+- 진행률 배너 "일부 항목 갱신 완료" 문구를 이유 설명형으로 개선(로직 변경 없음).
+
+**보류 — 별도 승인 필요 (규모가 커서 이번 라운드에 포함 안 함)**:
+
+- `public_trade_data`의 체크포인트 재개(resume) 로직 신설 — 686시간 정체의 근본 해결.
+- article_detail 후보 SELECT 정렬 컬럼(`last_seen_at`) 인덱스 추가 검토.
+- 3개 텔레그램 채널을 조율하는 로직(서버 다운 시 중복 알림 억제, resolved/cancelled
+  구분 문구) — 규모가 있어 별도 트랙.
+
 ### P0-1. 자택 서버 단일 장애점(SPOF) + 감시망이 CI 예산에 종속됨
 
 - **문제**: 백엔드가 사용자 자택 컴퓨터 1대에서만 돈다. 2026-07-18~08-01 사이 15일간 외부

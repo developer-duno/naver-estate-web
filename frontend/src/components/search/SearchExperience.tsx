@@ -32,7 +32,7 @@ import type { ArticleFilters, Complex } from "@/types";
 
 // 완전 지연 로드(계획 §핵심결정4) — 이 dynamic import 문 자체는 모듈 로드 시 평가되지만
 // 실제 청크 네트워크 요청은 컴포넌트가 처음 렌더(= 지도 토글 진입)될 때까지 발생하지 않는다.
-// react-naver-maps·클러스터링 벤더 코드는 목록 뷰만 쓰는 사용자에게 전혀 로드되지 않음.
+// 클러스터링 벤더 코드는 목록 뷰만 쓰는 사용자에게 전혀 로드되지 않음.
 const SearchClusterMap = dynamic(() => import("@/components/search/SearchClusterMap"), {
   ssr: false,
   loading: () => (

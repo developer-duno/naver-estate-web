@@ -47,7 +47,7 @@ export const ComplexRow = memo(function ComplexRow({ complex, index, urlFilters,
           type="button"
           onClick={(e) => { e.stopPropagation(); onToggleCompare?.({ complex_no: complex.complex_no, complex_name: complex.complex_name }); }}
           disabled={!isCompared && compareFull}
-          className={`text-xs px-2.5 py-1 rounded border transition-colors ${
+          className={`text-xs px-2.5 py-1 min-h-[44px] min-w-[44px] rounded border transition-colors ${
             isCompared
               ? "bg-blue-600 text-white border-blue-600"
               : compareFull

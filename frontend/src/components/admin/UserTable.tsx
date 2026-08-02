@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { UserProfile, UserUpdatePayload } from "@/types/admin";
 
 interface Props {
@@ -43,9 +43,49 @@ function isExpired(approvedUntil?: string | null): boolean {
   return new Date(approvedUntil) < new Date();
 }
 
+/** ESC 닫기 + Tab 포커스 트랩 — ArticleDetail.tsx/PromptModal.tsx 답습 */
+function useDialogA11y(open: boolean, onClose: () => void) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const el = dialogRef.current;
+    if (!el) return;
+    const prevFocus = document.activeElement as HTMLElement | null;
+    el.focus();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key !== "Tab") return;
+      const focusable = el.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => { document.removeEventListener("keydown", handleKeyDown); prevFocus?.focus(); };
+  }, [open, onClose]);
+
+  return dialogRef;
+}
+
 export default function UserTable({ users, onUpdate }: Props) {
   const [updating, setUpdating] = useState<string | null>(null);
   const [approvalModal, setApprovalModal] = useState<string | null>(null);
+  const approvalDialogRef = useDialogA11y(approvalModal !== null, () => setApprovalModal(null));
 
   const handleRoleChange = async (userId: string, role: string) => {
     setUpdating(userId);
@@ -155,7 +195,15 @@ export default function UserTable({ users, onUpdate }: Props) {
       {/* 승인 기간 선택 모달 */}
       {approvalModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setApprovalModal(null)}>
-          <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
+          <div
+            ref={approvalDialogRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-label="승인 기간 선택"
+            className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-semibold mb-4">승인 기간 선택</h3>
             <div className="grid grid-cols-2 gap-2">
               {PERIOD_PRESETS.map((p) => (

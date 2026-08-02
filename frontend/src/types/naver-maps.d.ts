@@ -68,6 +68,7 @@ declare namespace naver.maps {
       handler: () => void,
     ): MapEventListener;
     function removeListener(listener: MapEventListener): void;
+    function trigger(target: Map, eventName: string): void;
   }
   interface MapEventListener {
     eventName: string;

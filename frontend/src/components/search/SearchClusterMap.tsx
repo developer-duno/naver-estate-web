@@ -6,6 +6,23 @@ import { makeMarkerClustering } from "@/lib/naver-marker-clustering";
 
 const SDK_POLL_INTERVAL = 200;
 const SDK_POLL_TIMEOUT = 5000;
+const NAVER_SCRIPT_ID = "naver-maps-sdk";
+
+/** 네이버 지도 SDK 스크립트를 동적으로 삽입한다 (최초 1회만, 중복 삽입 방지).
+ *
+ * /mibunyang 하위는 app/mibunyang/layout.tsx 가 <Script strategy="afterInteractive">로
+ * 항상 미리 로드해두지만, 검색 페이지(/)는 대부분 트래픽이 지도를 안 쓰는 SEO 진입점이라
+ * 완전 지연 로드 원칙(계획 §핵심결정4)을 지키기 위해 이 컴포넌트가 실제로 마운트될 때만
+ * (= 사용자가 지도 토글을 눌렀을 때만) 스크립트를 직접 삽입한다. */
+function ensureNaverScriptLoaded(clientId: string) {
+  if (window.naver?.maps) return;
+  if (document.getElementById(NAVER_SCRIPT_ID)) return;
+  const script = document.createElement("script");
+  script.id = NAVER_SCRIPT_ID;
+  script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}`;
+  script.async = true;
+  document.head.appendChild(script);
+}
 
 /** 좌표(위·경도)가 둘 다 있는 단지만 지도에 찍을 수 있다.
  * 0,0(좌표 미상을 0으로 채운 데이터)은 아프리카 앞바다라 제외 — 한국 좌표는 위도 33~38, 경도 124~132.
@@ -74,6 +91,8 @@ export default function SearchClusterMap({ complexes, onSelect, className }: Pro
 
   useEffect(() => {
     if (!mapRef.current || !clientId) return;
+
+    ensureNaverScriptLoaded(clientId);
 
     let cancelled = false;
 

@@ -53,7 +53,7 @@ jobs:
           curl -fsS --max-time 10 \
             "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d text="🚨 naver-estate-web 헬스체크 실패: https://api.2u.pe.kr/health/db 응답 없음 또는 비정상"
+            -d text="[외부감시] 🚨 naver-estate-web 헬스체크 실패: https://api.2u.pe.kr/health/db 응답 없음 또는 비정상"
 
       # Actions 탭에서도 실패가 보이도록(두 번째 신호) — 알림 성공/스킵 여부와 무관하게 실패 처리
       - name: Fail the job if unhealthy

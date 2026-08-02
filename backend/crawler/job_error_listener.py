@@ -48,13 +48,17 @@ def job_event_listener(event) -> None:
 
     monitor.py 가 못 잡는, CrawlJob row 기록 이전 단계의 실패를 last-resort 로 감지.
     """
+    # [내부즉시] 접두어 = 3채널(healthcheck.yml 외부/monitor.py 내부모니터/본 모듈)
+    # 문구 통일 작업의 일부. 옛 [SCHEDULER] 표기를 다른 두 채널과 같은 명명 규칙으로
+    # 교체 — 사장님이 채널명만 보고 어느 감시가 보낸 메시지인지 구분 가능하게 함
+    # (IMPROVEMENT_PLAN P0-0 보류 항목).
     if event.code == EVENT_JOB_ERROR:
         job_id = event.job_id
         exc_text = str(event.exception)[:300]
         logger.error("[scheduler] 잡 예외 job_id=%s: %s", job_id, event.exception)
         key = f"job_error:{job_id}"
         if _should_alert(key):
-            _send_alert(f"[SCHEDULER] 잡 실패 job_id={job_id}: {exc_text}")
+            _send_alert(f"[내부즉시] 잡 실패 job_id={job_id}: {exc_text}")
     elif event.code == EVENT_JOB_MISSED:
         job_id = event.job_id
         logger.warning(
@@ -64,7 +68,7 @@ def job_event_listener(event) -> None:
         key = f"job_missed:{job_id}"
         if _should_alert(key):
             _send_alert(
-                f"[SCHEDULER] 잡 누락(misfire) job_id={job_id} "
+                f"[내부즉시] 잡 누락(misfire) job_id={job_id} "
                 f"예정시각={event.scheduled_run_time}"
             )
 

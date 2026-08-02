@@ -41,12 +41,18 @@ def _admin_link(path: str) -> str:
 
 
 def _header(event: str, header_ctx: dict) -> str:
-    """헤더 한 줄: '🔴 크롤링 장애 — N건 활성 (HH:MM)'."""
+    """헤더 한 줄: '[내부모니터] 🔴 크롤링 장애 — N건 활성 (HH:MM)'.
+
+    [내부모니터] 접두어 = 3채널(healthcheck.yml 외부/본 모듈 내부/job_error_listener
+    즉시) 문구 통일 작업의 일부. 서버가 통째로 죽으면 이 채널은 함께 침묵하므로
+    ([내부모니터] 발화 = 서버가 살아서 DB까지 도달했다는 뜻), 사장님이 어느 감시가
+    보낸 메시지인지 채널명만 보고 구분할 수 있게 함 (IMPROVEMENT_PLAN P0-0 보류 항목).
+    """
     emoji, label = _EVENT_HEADER.get(event, _EVENT_HEADER["new"])
     count = header_ctx.get("active_count", 0)
     now = header_ctx.get("now")
     hhmm = now.strftime("%H:%M") if now is not None else ""
-    return f"{emoji} <b>{label}</b> — {count}건 활성 ({hhmm})"
+    return f"[내부모니터] {emoji} <b>{label}</b> — {count}건 활성 ({hhmm})"
 
 
 def _rate(processed, total) -> str:

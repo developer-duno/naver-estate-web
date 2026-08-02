@@ -25,7 +25,7 @@ def test_failed_message_has_header_and_body():
         "processed": 40, "total": 50, "last_completed_at": "2026-05-19T04:00:00+00:00",
     }
     msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
-    assert msg.startswith("🔴 <b>크롤링 장애</b> — 1건 활성 (17:40)")
+    assert msg.startswith("[내부모니터] 🔴 <b>크롤링 장애</b> — 1건 활성 (17:40)")
     assert "complex_articles" in msg
     assert "40/50 (80%)" in msg
     assert "크롤링 로그 확인" in msg
@@ -73,7 +73,7 @@ def test_resolved_event_uses_check_emoji():
     """정상: event=resolved → ✅ 헤더 + '정상으로 돌아왔습니다'"""
     data = {"alert_key": "crawl_failed:complex_articles", "detail": "이전 장애"}
     msg = format_issue_message("crawl_failed", data, event="resolved", header_ctx=_ctx(0))
-    assert msg.startswith("✅ <b>크롤링 복구</b>")
+    assert msg.startswith("[내부모니터] ✅ <b>크롤링 복구</b>")
     assert "정상으로 돌아왔습니다" in msg
 
 

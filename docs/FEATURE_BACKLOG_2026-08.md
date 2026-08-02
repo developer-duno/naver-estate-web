@@ -127,18 +127,25 @@ localStorage 전용이라 애초에 "서버가 이 사용자가 무엇을 즐겨
       "지난 수집 대비 변동" 계산. 신규 스케줄러 잡이 아니라 **기존 `collect_prices`
       잡(수요일 04시) 완료 후 후처리**로 붙이는 것이 스케줄러 잡 신설보다 안전(infra.md
       스케줄러 표에 새 행 추가 필요 여부는 이 설계에 따라 갈림).
-- [ ] **3단계 — 최소 버전 먼저 구현**: 발송 채널 결정 전에도 "즐겨찾기 페이지 재방문 시
-      변동 배지"는 순수 프론트 계산(서버 알림 인프라 0)으로 먼저 낼 수 있음 — 신규 기능
-      발굴 조사에서 "배관 공사 수준"으로 분류된 항목. 이걸 1차로 내고, 능동 발송은 2차로
-      분리하는 것을 권장.
+- [x] **3단계 — 최소 버전 구현 (완료, 2026-08-02)**: 홈 즐겨찾기 칩(`app/page.tsx`
+      `HomeExtras`)에 빨간 점 배지 추가. `useFavoritePriceChanges`(신규
+      `hooks/useFavoritePriceChanges.ts`)가 `getPriceStats`(compare/page.tsx 와 동일
+      `useQueries` + `enabled: tokenReady` 패턴)로 대표가(첫 면적 매매가, 없으면 전세가)를
+      조회해 `favorite_price_snapshot`(신규 localStorage 키, `codes.md` 등록완료) 스냅샷과
+      대조. **getPriceStats 가 승인 중개사 전용(B2 게이트)이라 배지도 승인 중개사에게만
+      보임** — 비승인/비로그인은 `tokenReady` 가드로 API 자체를 호출 안 해 기존 화면과
+      동일(사장님 확인 완료). 서버 인프라·신규 스케줄러 잡 0.
 - [ ] **4단계 — (발송 채널 확정 시) 알림 발송 인프라**: SMTP 재사용이면 기존
       `SMTP_HOST`/`SMTP_USER`/`SMTP_PASS` 그대로, 발송 실패 시 `logger.warning`
       best-effort 패턴(세션 340의 "알림 삼킴 로그화" 관례 답습 — 결제·크롤 알림처럼
-      알림 실패가 핵심 로직을 깨면 안 됨).
-- [ ] **5단계 — 회귀 테스트**: 변동 계산 로직 단위 테스트(정상 케이스 + 변동 없음 케이스) +
-      (발송 채널 있으면) 발송 실패 시 조용히 넘어가는지 테스트.
-- [ ] **6단계 — 커밋 전 검증**: BE `ruff check . && python -m pytest`, FE 관련 변경 있으면
-      `npx tsc --noEmit && npm run lint && npm test`.
+      알림 실패가 핵심 로직을 깨면 안 됨). **미결 사항(발송 채널·즐겨찾기 서버이전)이
+      먼저 결정돼야 착수 가능 — 3단계와 무관하게 여전히 보류.**
+- [x] **5단계 — 회귀 테스트 (완료, 2026-08-02)**: `hooks/__tests__/useFavoritePriceChanges.test.ts`
+      신규 4케이스(변동 감지·변동 없음·비승인 시 API 미호출·스냅샷 갱신). 기존
+      `home-favorites-slice.test.tsx`·`home-keyword-search.test.tsx` 7케이스 회귀 없음 확인.
+- [x] **6단계 — 커밋 전 검증 (완료, 2026-08-02)**: FE `npx tsc --noEmit`(0 errors) +
+      `npm run lint`(무관 기존 warning 1건만) + 신규/기존 관련 테스트 통과. `npm test`
+      전체는 커밋 직전 마지막 1회 실행.
 
 ### 난이도·리스크
 

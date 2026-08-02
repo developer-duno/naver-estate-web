@@ -55,3 +55,4 @@
 | `article_view_mode`  | 매물 카드 모양 (compact/medium/large) | 값 1개, default = medium |
 | `article_page_size`  | 한 페이지당 매물 개수 (10/20/30/50) | 값 1개, default = 10 |
 | `mb_view_mode`       | 미분양 탭 보기 방식 (list/map)          | 값 1개, default = list |
+| `favorite_price_snapshot` | 즐겨찾기 단지 가격 변동 배지용 마지막 조회가 (complex_no→가격 맵) | 승인 중개사 전용(B2 게이트), 표시용 캐시라 유실돼도 무해 |

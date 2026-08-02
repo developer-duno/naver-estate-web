@@ -11,6 +11,8 @@ import SearchExperience from "@/components/search/SearchExperience";
 import { SkeletonPage } from "@/components/Skeleton";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useArticleFavorites } from "@/hooks/useArticleFavorites";
+import { useSessionToken } from "@/hooks/useSessionToken";
+import { useFavoritePriceChanges } from "@/hooks/useFavoritePriceChanges";
 import Link from "next/link";
 
 /** 홈 상단 — hero 이미지 + 타이틀 + 통계 (SEO 랜딩 자산). Suspense 밖에서 렌더해 h1·소개가 첫 HTML 에 포함. */
@@ -67,6 +69,13 @@ function HomeExtras() {
   const { favorites: articleFavorites } = useArticleFavorites();
   const [showAllFavorites, setShowAllFavorites] = useState(false);
   const visibleFavorites = showAllFavorites ? favorites : favorites.slice(0, 10);
+  // 가격 변동 배지 — 승인 중개사만 조회(B2 게이트), 비승인/비로그인은 changedIds 항상 빈 Set
+  const { sessionToken, tokenReady } = useSessionToken();
+  const { changedIds } = useFavoritePriceChanges(
+    favorites.map((f) => f.complex_no),
+    sessionToken,
+    tokenReady,
+  );
 
   return (
     <div className="space-y-4">
@@ -84,6 +93,12 @@ function HomeExtras() {
               >
                 <span className="text-yellow-500">&#9733;</span>
                 {f.complex_name}
+                {changedIds.has(f.complex_no) && (
+                  <span
+                    className="w-1.5 h-1.5 rounded-full bg-red-500"
+                    title="가격이 변동됐어요"
+                  />
+                )}
               </button>
             ))}
             {!showAllFavorites && favorites.length > 10 && (

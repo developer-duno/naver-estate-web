@@ -414,3 +414,23 @@ export function getMbViewMode(): MbViewMode {
 export function setMbViewMode(mode: MbViewMode): void {
   try { localStorage.setItem(MB_VIEW_MODE_KEY, JSON.stringify(mode)); } catch { /* private mode quota 무시 */ }
 }
+
+// ── 즐겨찾기 단지 가격 변동 배지 (최소버전 — 서버 인프라 0, 승인 중개사 전용) ──
+// FEATURE_BACKLOG_2026-08.md 항목2 3단계: 발송 채널·서버 이전 결정 전에도 낼 수 있는
+// "재방문 시 변동 배지" — getPriceStats(B2 게이트)로 조회한 대표가를 여기 저장해두고
+// 다음 방문 때 대조. 이 값 자체는 표시용 캐시일 뿐 원본 데이터가 아니므로 유실돼도 무해.
+
+const FAVORITE_PRICE_SNAPSHOT_KEY = "favorite_price_snapshot";
+
+/** complex_no → 마지막으로 본 대표가(만원). null 이면 "가격 정보 없음"으로 확인된 상태. */
+export type FavoritePriceSnapshot = Record<string, number | null>;
+
+export function getFavoritePriceSnapshot(): FavoritePriceSnapshot {
+  return readJSON<FavoritePriceSnapshot>(FAVORITE_PRICE_SNAPSHOT_KEY, {});
+}
+
+export function saveFavoritePriceSnapshot(snapshot: FavoritePriceSnapshot): void {
+  try {
+    localStorage.setItem(FAVORITE_PRICE_SNAPSHOT_KEY, JSON.stringify(snapshot));
+  } catch { /* private mode quota 무시 */ }
+}

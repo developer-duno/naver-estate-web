@@ -111,13 +111,13 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - `CHILDCARE_DETAIL_API_KEY` — cpmsapi030 운영키
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — Gmail SMTP SSL 465
 
-## 테스트 현황 (BE·FE 2026-08-02 실측 세션 346)
+## 테스트 현황 (BE·FE 2026-08-02 실측 세션 347)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1930개** (세션 346 접근성 회귀 +11: ComplexRow 터치타겟·VerificationReview/UserTable 모달 a11y) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1934개** (세션 347 가격변동알림 최소버전 +4: useFavoritePriceChanges 변동감지·변동없음·비승인시API미호출·스냅샷갱신) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1063개** (세션 346 크롤링 전수조사 안전조치 +8: backfill_price_batch rollback 가드 1 + 실거래가 재개(resume) 로직 회귀 3 + 관련 기존 스위트 재확인분) |
+| BE pytest | `backend/tests/` | **1067개** (세션 346 크롤링 전수조사 안전조치 +8: backfill_price_batch rollback 가드 1 + 실거래가 재개(resume) 로직 회귀 3 + 관련 기존 스위트 재확인분. 세션 347 텔레그램 문구통일은 기존 테스트 정정만, 신규 0) |
 
 ## 커밋 전 필수 검증
 

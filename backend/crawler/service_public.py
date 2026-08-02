@@ -56,6 +56,23 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
     from crawler.public_data_api import PublicDataAPI, _normalize_apt_name
 
     db = SessionLocal()
+
+    # 재개(resume) — 직전 실행이 중단(failed/cancelled)됐다면 그 체크포인트를 이어받는다.
+    # 시군구 목록은 매 실행 DB 쿼리로 새로 뽑혀 순서 보장이 없으므로(distinct, ORDER BY 없음),
+    # "몇 번째까지"가 아니라 "이미 처리한 시군구 코드 집합"으로 저장해 순서 변동에 안전하게 함.
+    done_codes: set[str] = set()
+    prev_job = (
+        db.query(CrawlJob)
+        .filter(CrawlJob.job_type == "public_trade_data", CrawlJob.status.in_(["failed", "cancelled"]))
+        .order_by(CrawlJob.id.desc())
+        .first()
+    )
+    if prev_job:
+        prev_state = _checkpoint.load(db, prev_job.id)
+        if prev_state and prev_state.get("done_codes"):
+            done_codes = set(prev_state["done_codes"])
+            logger.info("공공데이터 수집 재개: 이전 job %d 에서 %d개 시군구 완료분 이어받음", prev_job.id, len(done_codes))
+
     job = CrawlJob(
         job_type="public_trade_data", scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow()
     )
@@ -85,12 +102,19 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
             .all()
         )
         sigungu_codes = [r.sigungu_cd for r in sigungu_rows if r.sigungu_cd]
-        logger.info("공공데이터 수집 시작: %d개 시군구 x %d개월", len(sigungu_codes), len(months))
+        remaining_codes = [c for c in sigungu_codes if c not in done_codes]
+        if done_codes:
+            logger.info(
+                "공공데이터 수집 시작: %d개 시군구 중 %d개 남음 (재개, %d개월)",
+                len(sigungu_codes), len(remaining_codes), len(months),
+            )
+        else:
+            logger.info("공공데이터 수집 시작: %d개 시군구 x %d개월", len(sigungu_codes), len(months))
 
         processed = 0
         matched = 0
 
-        for i, sigungu_cd in enumerate(sigungu_codes):
+        for i, sigungu_cd in enumerate(remaining_codes):
             # 해당 시군구의 단지 목록 조회 (매칭용)
             complexes_in_region = (
                 db.query(Complex.complex_no, Complex.complex_name, Complex.cortar_no)
@@ -145,11 +169,13 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
 
                 processed += len(trades)
 
-            # 체크포인트
+            done_codes.add(sigungu_cd)
+
+            # 체크포인트 — 완료된 시군구 코드 집합을 저장 (재개 시 이 집합을 건너뜀)
             if _checkpoint.should_save(i + 1):
                 db.commit()
-                _checkpoint.save(db, job.id, {"processed_sigungu": i + 1, "total": len(sigungu_codes)})
-                logger.info("공공데이터 수집 중간 저장: %d/%d 시군구", i + 1, len(sigungu_codes))
+                _checkpoint.save(db, job.id, {"done_codes": sorted(done_codes), "total": len(sigungu_codes)})
+                logger.info("공공데이터 수집 중간 저장: %d/%d 시군구 완료", len(done_codes), len(sigungu_codes))
 
         job.status = "completed"
         job.total_items = processed

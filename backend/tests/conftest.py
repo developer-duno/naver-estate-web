@@ -64,12 +64,25 @@ test_engine = create_engine(
     poolclass=NullPool,
 )
 
+def _pg_left(text, n):
+    """PostgreSQL LEFT(text, n) 흉내 — SQLite 는 이 함수가 없어 직접 등록.
+
+    service_public.py 의 func.left(Complex.cortar_no, 5) 가 이 함수를 쓴다
+    (domain-mapping-ssot.md 룰 3 dialect 의존성과 동일 결 — raw SQL 이 아니라
+    ORM func 호출이라 못 잡던 케이스, 세션 346 에서 재개 로직 테스트 작성 중 발견).
+    """
+    if text is None or n is None:
+        return None
+    return str(text)[: int(n)]
+
+
 @event.listens_for(test_engine, "connect")
 def _set_sqlite_pragma(dbapi_conn, _connection_record):
     cursor = dbapi_conn.cursor()
     cursor.execute("PRAGMA journal_mode = WAL")
     cursor.execute("PRAGMA busy_timeout = 5000")
     cursor.close()
+    dbapi_conn.create_function("left", 2, _pg_left)
 
 TestSession = sessionmaker(bind=test_engine, autocommit=False, autoflush=False)
 

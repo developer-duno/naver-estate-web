@@ -9,7 +9,7 @@
 | `routers/live/` | 실시간 크롤링 + 실거래가 on-demand 수집 API (search 등 분할) |
 | `routers/complexes.py` | 단지 조회/필터/시세/가격추이 |
 | `routers/articles.py` | 매물 조회/엑셀 내보내기 (xlsxwriter 엔진) |
-| `routers/admin/` | 관리자 API 분할 9 파일 (`collect`/`data`/`freshness`/`freshness_meta`/`jobs`/`naver_calls`/`recrawl`/`scheduler`/`users` + `_shared`) |
+| `routers/admin/` | 관리자 API 분할 10 파일 (`collect`/`data`/`freshness`/`freshness_meta`/`jobs`/`naver_calls`/`recrawl`/`scheduler`/`users` + `_shared` 공통 의존성) |
 | `routers/stats.py` | 통계 API |
 | `routers/regions.py` | 지역 데이터 API |
 | `routers/users.py` | 사용자 로그인 기록 |

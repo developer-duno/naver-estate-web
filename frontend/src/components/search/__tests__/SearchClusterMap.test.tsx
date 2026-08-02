@@ -43,7 +43,7 @@ function installNaverMock() {
         LatLngBounds: mockLatLngBoundsConstructor,
         Point: vi.fn(),
         Size: vi.fn(),
-        Event: { addListener: mockAddListener, removeListener: vi.fn() },
+        Event: { addListener: mockAddListener, removeListener: vi.fn(), trigger: vi.fn() },
       },
     },
     writable: true,

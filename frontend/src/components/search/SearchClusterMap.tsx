@@ -116,6 +116,14 @@ export default function SearchClusterMap({ complexes, onSelect, className }: Pro
           });
         mapInstanceRef.current = map;
 
+        // 지도가 next/dynamic 지연 마운트 직후(탭 전환 직후) 생성되면, 컨테이너가 아직
+        // 최종 CSS 크기(h-[70vh])로 자리잡기 전이라 네이버 SDK 가 좁은 크기를 기준으로
+        // 내부 좌표계를 굳혀버린다. 그 뒤 컨테이너가 실제 크기로 커져도 SDK 는 스스로
+        // 재계산하지 않아 모든 마커가 화면 좌상단에 뭉쳐 보이는 결함으로 이어진다(실측:
+        // 브라우저 창 크기를 흔들면 즉시 정상화 — 공식 문서 권장대로 resize 트리거로 강제
+        // 재계산 후 fitBounds 를 호출해야 처음부터 올바른 좌표로 그려진다).
+        naver.maps.Event.trigger(map, "resize");
+
         if (coordItems.length === 0) return;
 
         const MarkerClustering = makeMarkerClustering(window.naver);

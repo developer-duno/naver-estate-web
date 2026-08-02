@@ -118,3 +118,43 @@ class TestPublicTradeResume:
 
         # completed job은 재개 대상이 아니므로 11000도 다시 처리됨
         assert "11000" in seen_sigungu
+
+    def test_연속_2회_실패해도_1번째_진행분이_유실되지_않는다(self, db):
+        """세션 346 코드리뷰 발견 버그 회귀 가드.
+
+        1번째 job이 시군구 1개(11000) 완료 후 체크포인트 저장 → 실패.
+        2번째 job은 11000을 건너뛰고 재개하지만, 자기 체크포인트를 한 번도
+        저장하지 못한 채(should_save 주기 도달 전) 또 실패 — 즉 2번째 job에는
+        체크포인트 row가 없다. "가장 최근 job 1건만" 보는 방식이면 3번째 실행이
+        2번째(체크포인트 없음)만 보고 처음부터 재시작해 1번째의 11000 완료분을
+        잃어버린다. 최근 여러 건을 순회하는 수정 후에는 1번째의 체크포인트를
+        찾아 이어받아야 한다.
+        """
+        _add_complex(db, "C1", "1100000000")
+        _add_complex(db, "C2", "2600000000")
+        _add_complex(db, "C3", "4100000000")
+
+        # 1번째 job: 11000 완료 후 체크포인트 저장, 실패
+        job1 = CrawlJob(job_type="public_trade_data", status="failed")
+        db.add(job1)
+        db.commit()
+        _checkpoint.save(db, job1.id, {"done_codes": ["11000"], "total": 3})
+
+        # 2번째 job: 체크포인트를 저장하지 못한 채 실패 (row 자체가 없음)
+        job2 = CrawlJob(job_type="public_trade_data", status="failed")
+        db.add(job2)
+        db.commit()
+        assert _checkpoint.load(db, job2.id) is None  # 전제조건 확인
+
+        seen_sigungu: list[str] = []
+
+        def _fake_trades(sigungu_cd, deal_ymd):
+            seen_sigungu.append(sigungu_cd)
+            return []
+
+        with patch("crawler.public_data_api.PublicDataAPI.get_all_apt_trades", side_effect=_fake_trades):
+            _run_collect()
+
+        # 1번째가 완료한 11000은 다시 처리되지 않아야 함 (유실 방지)
+        assert "11000" not in seen_sigungu
+        assert set(seen_sigungu) == {"26000", "41000"}

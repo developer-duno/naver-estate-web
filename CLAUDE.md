@@ -111,13 +111,13 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - `CHILDCARE_DETAIL_API_KEY` — cpmsapi030 운영키
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — Gmail SMTP SSL 465
 
-## 테스트 현황 (BE 2026-07-04 실측 세션 340 / FE 세션 329~330)
+## 테스트 현황 (BE·FE 2026-08-02 실측 세션 346)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1919개** (세션 329~330 빌링키 FE 회귀 +33: useBillingKey·MyBillingCards·CheckoutButton·payment-error 래퍼가드) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1930개** (세션 346 접근성 회귀 +11: ComplexRow 터치타겟·VerificationReview/UserTable 모달 a11y) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1055개** (세션 340 관찰성 +19: 스케줄러 EVENT_JOB_ERROR 리스너·/health/db·알림삼킴 로그·로그회전. 세션 329~330 빌링키 회귀 +17: 자동결제 cron·발급·해지·멱등·TOCTOU·관찰성) |
+| BE pytest | `backend/tests/` | **1063개** (세션 346 크롤링 전수조사 안전조치 +8: backfill_price_batch rollback 가드 1 + 실거래가 재개(resume) 로직 회귀 3 + 관련 기존 스위트 재확인분) |
 
 ## 커밋 전 필수 검증
 

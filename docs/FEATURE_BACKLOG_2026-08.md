@@ -72,11 +72,28 @@ UI로 설계돼 있었다 — 우선순위가 밀렸을 뿐 기술적으로 막�
       compact/medium/large 용도라 지도 유무와는 무관한 키)를 침범하지 않고, 신규
       `search_view_mode` 키를 같은 패턴(`getMbViewMode`/`setMbViewMode` 함수쌍 답습)으로
       추가하면 된다 — 설계 결정 완료, 구현만 남음.
-- [ ] **4단계 — 구현**: 지도 컴포넌트 이식 + 클러스터 마커 + 단지 클릭 시 정보 팝업.
-      네이버 지도 SDK는 이미 `NEXT_PUBLIC_NAVER_MAP_CLIENT_ID`로 연동돼 있음
-      (`docs/NAVER_MAP_KEY_SETUP.md` 참조) — 새 키 발급 불필요.
-- [ ] **5단계 — 회귀 테스트**: 지도 렌더링 정상 케이스 + 좌표 없는 단지 처리(에러 케이스).
-- [ ] **6단계 — 커밋 전 검증**: `npx tsc --noEmit` + `npm run lint` + `npx vitest run`.
+- [x] **4단계 — 구현 (완료, 2026-08-02)**: 당초 "MbClusterMap 그대로 이식" 가설은 적대검증으로
+      기각됨 — 실제로는 이름과 달리 진짜 클러스터링(근접 마커 묶기)이 없는 컴포넌트였고,
+      마커 라벨·라우팅이 `MbApartment` 타입에 강결합돼 있었다. 대신 사장님 지시("GitHub 검증된
+      패키지 우선")에 따라 `react-naver-maps`(npm, React 19 전용, 주간다운로드 3,982) 채택 +
+      네이버 공식 `MarkerClustering.js`를 `frontend/src/lib/naver-marker-clustering.ts` 로
+      벤더링(react-naver-maps 도 클러스터링 자체는 이 공식 도구를 감싸 쓰는 구조임을 조사
+      확인). `react-naver-maps` 의 알려진 StrictMode 재마운트 버그(GitHub PR #171, 미병합)는
+      `patch-package`(npm 표준, `frontend/patches/`)로 프로젝트에 고정 적용.
+      신규: `components/search/SearchClusterMap.tsx`(지도+클러스터링), `hooks/
+      useSearchViewMode.ts`, `lib/storage.ts` search_view_mode 키(mb_view_mode 와 물리적
+      분리). `SearchExperience.tsx`에 `next/dynamic(ssr:false)` **완전 지연 로드**로 통합 —
+      지도 뷰를 쓰지 않는 사용자(대부분 목록만 사용)는 지도 관련 코드를 1바이트도 받지 않음
+      (사장님 "속도 저하 우려" 반영). 비로그인/승인대기 사용자도 목록과 동일하게 지도 진입
+      가능(별도 게이트 불필요 — 목록도 이미 노출되는 데이터).
+- [x] **5단계 — 회귀 테스트 (완료, 2026-08-02)**: `SearchClusterMap.test.tsx`(마커 생성·
+      좌표없음/0,0 제외·클릭 콜백·Client ID 미설정 에러 5케이스) + `useSearchViewMode.test.ts`
+      (3케이스) + `storage.test.ts` search_view_mode 4케이스(mb_view_mode 물리적 분리 회귀
+      가드 포함) + `SearchExperience.test.tsx`(토글 aria-selected 전환 2케이스 + dynamic
+      배선 정적 검사 1케이스, SearchExperience 자체 최초 테스트 파일 — 적대검증에서 기존
+      테스트 0건 발견).
+- [x] **6단계 — 커밋 전 검증 (완료, 2026-08-02)**: `npx tsc --noEmit`(0 errors) +
+      `npm run lint`(0 errors) + 신규/관련 테스트 전체 통과.
 
 ### 난이도·리스크
 

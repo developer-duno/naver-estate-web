@@ -9,6 +9,7 @@ import {
   getArticleViewMode, setArticleViewMode,
   getArticlePageSize, setArticlePageSize,
   getMbViewMode, setMbViewMode,
+  getSearchViewMode, setSearchViewMode,
   safeSetItem,
 } from "../storage";
 
@@ -178,6 +179,38 @@ describe("미분양 탭 보기 방식 (mb_view_mode)", () => {
     expect(getMbViewMode()).toBe("list");
     localStorage.removeItem("mb_view_mode");
     expect(getMbViewMode()).toBe("list");
+  });
+});
+
+// ── 매물 검색 결과 보기 방식 (search_view_mode) ──
+
+describe("매물 검색 결과 보기 방식 (search_view_mode)", () => {
+  it("기본값은 list (키 없을 때)", () => {
+    expect(getSearchViewMode()).toBe("list");
+  });
+
+  it("list/map round-trip", () => {
+    setSearchViewMode("map");
+    expect(getSearchViewMode()).toBe("map");
+    setSearchViewMode("list");
+    expect(getSearchViewMode()).toBe("list");
+  });
+
+  it("localStorage 에 잘못된 값이 박혀 있어도 list fallback (type guard)", () => {
+    localStorage.setItem("search_view_mode", JSON.stringify("satellite"));
+    expect(getSearchViewMode()).toBe("list");
+    localStorage.removeItem("search_view_mode");
+    expect(getSearchViewMode()).toBe("list");
+  });
+
+  /** mb_view_mode 와 물리적으로 분리된 키인지 회귀 가드 — 한쪽을 설정해도
+   * 다른 쪽 값이 바뀌지 않아야 한다(탭 간 의도치 않은 상태 결합 방지). */
+  it("mb_view_mode 와 물리적으로 분리되어 서로 영향을 주지 않는다", () => {
+    setMbViewMode("map");
+    expect(getSearchViewMode()).toBe("list");
+    setSearchViewMode("map");
+    setMbViewMode("list");
+    expect(getSearchViewMode()).toBe("map");
   });
 });
 

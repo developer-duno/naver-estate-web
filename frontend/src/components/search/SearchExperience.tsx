@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, type ReactNode } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { searchComplexes, getComplexesByRegion } from "@/lib/api";
@@ -18,6 +19,7 @@ import { useFilterParams, buildFilterURL } from "@/hooks/useFilterParams";
 import { useCompare } from "@/hooks/useCompare";
 import { useSearchHistory } from "@/hooks/useSearchHistory";
 import { useArticleFavorites } from "@/hooks/useArticleFavorites";
+import { useSearchViewMode } from "@/hooks/useSearchViewMode";
 import { sortComplexes } from "@/lib/sortComplexes";
 import type { SearchHistoryItem } from "@/lib/storage";
 import CompareFloatingBar from "@/components/CompareFloatingBar";
@@ -25,7 +27,20 @@ import { ComplexRow } from "@/components/search/ComplexRow";
 import { ComplexCardMobile } from "@/components/search/ComplexCardMobile";
 import RecentSearchChips from "@/components/search/RecentSearchChips";
 import ActiveFilterChips from "@/components/search/ActiveFilterChips";
-import type { ArticleFilters } from "@/types";
+import MbViewToggle from "@/components/mb/MbViewToggle";
+import type { ArticleFilters, Complex } from "@/types";
+
+// 완전 지연 로드(계획 §핵심결정4) — 이 dynamic import 문 자체는 모듈 로드 시 평가되지만
+// 실제 청크 네트워크 요청은 컴포넌트가 처음 렌더(= 지도 토글 진입)될 때까지 발생하지 않는다.
+// react-naver-maps·클러스터링 벤더 코드는 목록 뷰만 쓰는 사용자에게 전혀 로드되지 않음.
+const SearchClusterMap = dynamic(() => import("@/components/search/SearchClusterMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-96 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center">
+      <p className="text-sm text-gray-500">지도를 불러오는 중...</p>
+    </div>
+  ),
+});
 
 const VALID_COMPLEX_SORT = new Set<string>(COMPLEX_SORT_OPTIONS.map((o) => o.v));
 
@@ -47,6 +62,8 @@ export default function SearchExperience({ emptyExtra }: Props) {
   const [inlineKeyword, setInlineKeyword] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [userStatus, setUserStatus] = useState<string | null>(null);
+  const { viewMode, setViewMode } = useSearchViewMode();
+  const [selectedMapComplex, setSelectedMapComplex] = useState<Complex | null>(null);
 
   const keyword = searchParams.get("q") || "";
   const sido = searchParams.get("sido") || "";
@@ -296,9 +313,11 @@ export default function SearchExperience({ emptyExtra }: Props) {
         </>
       )}
 
-      {/* 결과 화면 접힘 상태에서도 정렬은 항상 접근 가능 */}
+      {/* 결과 화면 접힘 상태에서도 정렬은 항상 접근 가능. 지도 토글도 여기 배치
+          (MAP_ENABLED=false 시 MbViewToggle 이 null 반환 — graceful degradation). */}
       {showResults && !filtersOpen && (
-        <div className="mb-4 flex justify-end">
+        <div className="mb-4 flex justify-end gap-2">
+          <MbViewToggle viewMode={viewMode} onChange={setViewMode} />
           <ComplexSortDropdown value={complexSort} onChange={setComplexSort} />
         </div>
       )}
@@ -437,8 +456,35 @@ export default function SearchExperience({ emptyExtra }: Props) {
         </div>
       )}
 
+      {/* 지도 뷰 — SearchClusterMap 은 next/dynamic(ssr:false) 완전 지연 로드(계획 §핵심결정4).
+          비로그인/승인대기 사용자도 목록과 동일하게 진입 가능(목록도 이미 노출되는 데이터라 별도
+          가드 불필요 — 계획 §핵심결정8). loading 중엔 이 블록 자체가 안 그려져(SkeletonPage 가
+          대신 렌더) 빈 지도 깜빡임 없음 — placeholderData 유지 구간(필터 변경 중 isFetching)은
+          loading=false 라 이전 마커가 자연스럽게 유지된다. */}
+      {!loading && sortedFilteredComplexes.length > 0 && viewMode === "map" && (
+        <div className="relative">
+          <SearchClusterMap
+            complexes={sortedFilteredComplexes}
+            onSelect={setSelectedMapComplex}
+            className="h-[70vh]"
+          />
+          {selectedMapComplex && (
+            <div className="absolute left-2 right-2 bottom-2 sm:right-auto sm:max-w-md z-10">
+              <ComplexCardMobile
+                complex={selectedMapComplex}
+                index={0}
+                urlFilters={urlFilters}
+                isCompared={isInCompare(selectedMapComplex.complex_no)}
+                compareFull={compareFull}
+                onToggleCompare={toggleCompare}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 단지 테이블 (데스크톱) */}
-      {!loading && sortedFilteredComplexes.length > 0 && (
+      {!loading && sortedFilteredComplexes.length > 0 && viewMode === "list" && (
         <div className="hidden md:block overflow-x-auto bg-white rounded-lg shadow-sm border">
           <table className="w-full text-sm border-collapse">
             <thead className="bg-gray-100 border-b-2 border-gray-300 sticky top-0 z-10">
@@ -465,7 +511,7 @@ export default function SearchExperience({ emptyExtra }: Props) {
       )}
 
       {/* 단지 카드 (모바일) */}
-      {!loading && sortedFilteredComplexes.length > 0 && (
+      {!loading && sortedFilteredComplexes.length > 0 && viewMode === "list" && (
         <div className="md:hidden space-y-3">
           {sortedFilteredComplexes.map((cpx, idx) => (
             <ComplexCardMobile key={cpx.complex_no} complex={cpx} index={idx + 1} urlFilters={urlFilters} isCompared={isInCompare(cpx.complex_no)} compareFull={compareFull} onToggleCompare={toggleCompare} />

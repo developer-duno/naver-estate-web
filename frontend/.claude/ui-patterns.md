@@ -91,4 +91,34 @@
 - **ActiveFilterChips**: 적용 조건 한글 칩 요약 (결과 화면에서 "지금 무슨 조건인지"). urlFilters(ArticleFilters) + 매물유형 narrowing(estateTypeLabels) → 칩, ✕ 클릭 시 개별 해제. 핵심 조건만(YAGNI). verified_only 칩 라벨 "인증매물만"(FilterChips·FilterSections 와 통일, 세션 317)
 - 결과 화면은 필터바 기본 접힘(접이식), 그 외 펼침
 
+### 검색 결과 지도뷰 (SearchClusterMap) — FEATURE_BACKLOG 항목1, 2026-08-02
+
+- **MbClusterMap 과 다른 구현 방식**: mb 쪽은 vanilla JS(SDK 폴링·수동 마커·InfoWindow HTML)
+  이지만, 검색 지도뷰는 `react-naver-maps`(npm, React 19 전용) 패키지 채택 — mb 코드는
+  1바이트도 안 건드리는 제약(사장님 명시) + "GitHub 검증된 걸 가져다 쓰라"는 재지시에 따른
+  설계 전환. `NavermapsProvider`/`Container`/`NaverMap`/`useMap`/`useNavermaps` 가 SDK
+  로딩·Suspense·에러 경계를 대신 관리해 수동 폴링·`window.navermap_authFailure` 등록이
+  줄어듦(단 authFailure 콜백 자체는 네이버 SDK 가 직접 부르는 전역이라 여전히 등록 필요).
+- **클러스터링**: `MbClusterMap`은 이름과 달리 실제 클러스터링(근접 마커 묶기)이 없었음(실측
+  확인) — 검색 지도뷰는 네이버 공식 `MarkerClustering.js`(Apache 2.0, npm/CDN 배포 없어
+  `frontend/src/lib/naver-marker-clustering.ts` 로 벤더링)를 `makeMarkerClustering(naver)`
+  팩토리로 감싸 진짜 클러스터링 구현. `react-naver-maps` 공식 예제도 동일 소스를 감싸 씀
+  (독자 클러스터링 미제공 — 조사 확인).
+- **`react-naver-maps` StrictMode 버그 패치**: 공식 GitHub PR #171(미병합)이 고치는
+  mount→unmount→remount 시 SDK 인증 오인 버그를 `patch-package`(npm 표준,
+  `frontend/patches/react-naver-maps+0.2.2.patch`)로 프로젝트에 고정. `package.json`
+  `scripts.postinstall`에 등록 — `npm install` 만으로 CI·전 개발자 환경에 자동 적용.
+  (⚠ pnpm 아님 — 이 프로젝트는 `package-lock.json`, pnpm patch 시도는 실행 불가.)
+- **완전 지연 로드**: `SearchClusterMap`은 `next/dynamic(() => import(...), {ssr:false})`
+  로 `SearchExperience.tsx`에 통합 — 지도 뷰를 안 쓰는 사용자(대부분 목록만 사용)는 지도
+  SDK·react-naver-maps·클러스터링 코드를 전혀 받지 않는다(사장님 "지도가 속도를 느리게
+  한다" 우려 반영). `search_view_mode`(localStorage, `useSearchViewMode` 훅)는 `mb_view_mode`
+  와 물리적으로 분리된 키 — 미분양 탭에서 "지도"로 둬도 검색 결과가 강제로 지도로 안 열림.
+- **비로그인/승인대기 노출**: 목록(`ComplexRow`/`ComplexCardMobile`)이 이미 비로그인·
+  승인대기 사용자에게 보이므로(안내 문구만 위에 얹는 구조), 지도도 동일하게 노출 — 별도
+  게이트 없음(막으면 오히려 목록/지도 간 일관성이 깨짐).
+- **마커 클릭**: InfoWindow 는 여전히 HTML 문자열 기반이라 React 라우팅 불가(mb 와 동일
+  제약) — 클릭 시 `onSelect(complex)` 콜백으로 부모(`SearchExperience`)가 지도 위 absolute
+  오버레이로 `ComplexCardMobile`을 얹어 비교 담기 등 기존 기능 그대로 재사용.
+
 > **미분양 중복 제거 (백엔드 로직)**: `backend/.claude/details.md` §미분양 중복 제거 참조 (extract_base_name / _deduplicate_apartments / get_apartments_page / apartment_to_dict).

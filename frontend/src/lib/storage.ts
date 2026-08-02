@@ -404,7 +404,7 @@ export function setArticlePageSize(size: ArticlePageSize): void {
 
 const MB_VIEW_MODE_KEY = "mb_view_mode";
 export type MbViewMode = "list" | "map";
-const MB_VIEW_MODES: readonly MbViewMode[] = ["list", "map"];
+export const MB_VIEW_MODES: readonly MbViewMode[] = ["list", "map"];
 
 export function getMbViewMode(): MbViewMode {
   const raw = readJSON<string>(MB_VIEW_MODE_KEY, "list");
@@ -413,6 +413,21 @@ export function getMbViewMode(): MbViewMode {
 
 export function setMbViewMode(mode: MbViewMode): void {
   try { localStorage.setItem(MB_VIEW_MODE_KEY, JSON.stringify(mode)); } catch { /* private mode quota 무시 */ }
+}
+
+// ── 검색 결과 보기 방식 (list/map) — mb_view_mode 와 물리적으로 분리된 키.
+// 같은 MbViewMode 타입을 재사용하되 값 저장소는 독립시켜, 사용자가 미분양 탭에서
+// "지도"로 둬도 매물 검색 결과가 강제로 지도로 열리는 의도치 않은 결합을 방지한다
+// (계획 문서 §핵심결정 — codes.md 클라이언트 저장소 표 참고).
+const SEARCH_VIEW_MODE_KEY = "search_view_mode";
+
+export function getSearchViewMode(): MbViewMode {
+  const raw = readJSON<string>(SEARCH_VIEW_MODE_KEY, "list");
+  return (MB_VIEW_MODES as readonly string[]).includes(raw) ? (raw as MbViewMode) : "list";
+}
+
+export function setSearchViewMode(mode: MbViewMode): void {
+  try { localStorage.setItem(SEARCH_VIEW_MODE_KEY, JSON.stringify(mode)); } catch { /* private mode quota 무시 */ }
 }
 
 // ── 즐겨찾기 단지 가격 변동 배지 (최소버전 — 서버 인프라 0, 승인 중개사 전용) ──

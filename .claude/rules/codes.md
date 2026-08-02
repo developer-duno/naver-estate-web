@@ -56,3 +56,4 @@
 | `article_page_size`  | 한 페이지당 매물 개수 (10/20/30/50) | 값 1개, default = 10 |
 | `mb_view_mode`       | 미분양 탭 보기 방식 (list/map)          | 값 1개, default = list |
 | `favorite_price_snapshot` | 즐겨찾기 단지 가격 변동 배지용 마지막 조회가 (complex_no→가격 맵) | 승인 중개사 전용(B2 게이트), 표시용 캐시라 유실돼도 무해 |
+| `search_view_mode`   | 매물 검색 결과 보기 방식 (list/map)     | 값 1개, default = list, mb_view_mode 와 물리적으로 분리된 키(탭 간 의도치 않은 결합 방지) |

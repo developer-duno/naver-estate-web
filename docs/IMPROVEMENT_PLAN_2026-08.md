@@ -59,12 +59,44 @@
   수정 (옆 함수 `crawl_complex_details_batch`는 정상 호출 중이던 것과 대조적으로 확인).
 - 진행률 배너 "일부 항목 갱신 완료" 문구를 이유 설명형으로 개선(로직 변경 없음).
 
+**✅ `public_trade_data` 체크포인트 재개(resume) 로직 신설 — 완료 (2026-08-02)**:
+
+- **원인**: `CheckpointManager.save()`는 시군구 처리마다 호출되고 있었으나 `load()`를
+  아무도 호출하지 않아 "저장만 하고 재개는 안 하는" 상태 — job이 실패/취소되면 다음
+  실행이 매번 시군구 목록 처음부터 다시 돌았다(686시간/28일 미축적, 처리율 18% 정체).
+- **조치**: `collect_public_trade_data()`(`backend/crawler/service_public.py`) 시작 시
+  `job_type="public_trade_data"` + `status in (failed, cancelled)`인 가장 최근 job의
+  체크포인트를 조회해 "이미 처리한 시군구 코드 집합(`done_codes`)"을 이어받아 남은
+  시군구만 처리. "몇 번째까지"가 아닌 "코드 집합"으로 저장한 이유 = 시군구 목록이 DB
+  `distinct` 쿼리(정렬 보장 없음)라 실행마다 순서가 바뀔 수 있어, 인덱스 기반 재개는
+  다른 시군구를 건너뛰거나 중복 처리할 위험이 있었음. `completed` job은 재개 대상에서
+  제외(체크포인트도 완료 시 삭제되는 기존 동작 유지).
+- **부수 발견**: `func.left(Complex.cortar_no, 5)`가 PostgreSQL 전용 함수라 SQLite(CI
+  테스트 엔진)에 없어, 이 함수가 지금까지 통합테스트 자체가 불가능했음
+  (`domain-mapping-ssot.md` 룰3 dialect 의존성과 동일 결이나 raw SQL이 아닌 ORM
+  `func` 호출이라 그 룰의 grep 패턴으론 못 잡던 케이스). `tests/conftest.py`에 SQLite용
+  `LEFT()` 함수를 등록해 앞으로 이 경로도 테스트 가능하게 함.
+- **회귀 테스트**: `backend/tests/test_public_trade_resume.py` 신규 3케이스(재개 시
+  완료분 건너뜀 / 체크포인트 없으면 전체처리 / completed job은 재개 대상 아님).
+- **검증**: `ruff check .` clean, BE pytest 1063 passed / 0 failed(세션 346 실측).
+- **커밋**: `023c6fb`
+
 **보류 — 별도 승인 필요 (규모가 커서 이번 라운드에 포함 안 함)**:
 
-- `public_trade_data`의 체크포인트 재개(resume) 로직 신설 — 686시간 정체의 근본 해결.
 - article_detail 후보 SELECT 정렬 컬럼(`last_seen_at`) 인덱스 추가 검토.
 - 3개 텔레그램 채널을 조율하는 로직(서버 다운 시 중복 알림 억제, resolved/cancelled
   구분 문구) — 규모가 있어 별도 트랙.
+
+### ✅ 부수 — brace-expansion DoS 취약점 2건 해소 (2026-08-02)
+
+- Dependabot #18(GHSA-3jxr-9vmj-r5cp)·#35(GHSA-mh99-v99m-4gvg) — `eslint-config-next` →
+  `typescript-eslint` 경유 간접 의존성 `brace-expansion@5.0.6`이 두 DoS 취약점 범위(각각
+  5.0.7·5.0.8 미만) 안에 있었음. `npm audit --omit=dev`(CI 게이트와 동일 조건)는 수정
+  전에도 이미 0건 — 취약 버전이 devDependencies(eslint류) 경유뿐이라 배포 코드 영향 0.
+- **조치**: `npm audit fix`로 `brace-expansion` 5.0.6→5.0.9, `frontend/package-lock.json`만
+  변경(package.json 불변). GitHub API로 두 알림 모두 `state: fixed` 확인.
+- **검증**: `npm audit` 0 vulnerabilities, tsc 0 errors, lint 0 errors, vitest 219파일
+  1930테스트 전원 통과. **커밋**: `dfc54cf`
 
 ### P0-1. 자택 서버 단일 장애점(SPOF) + 감시망이 CI 예산에 종속됨
 

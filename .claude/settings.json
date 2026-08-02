@@ -1,7 +1,4 @@
 {
-  "enabledPlugins": {
-    "security-guidance@claude-plugins-official": true
-  },
   "permissions": {
     "allow": [
       "Bash(python -m uvicorn main:app --host 0.0.0.0 --port 8002)",
@@ -27,11 +24,25 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://api.2u.pe.kr/api/stats)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://www.2u.pe.kr)",
       "Bash(curl -s -I -X OPTIONS http://localhost:8002/api/complexes/*)",
-      "Read(//c/Users/user/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/**)"
-    ],
-    "additionalDirectories": [
-      "C:\\Users\\user\\.claude\\plans",
-      "C:\\Users\\user\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"
+      "Read(//c/Users/user/AppData/Roaming/Microsoft/Windows/Start Menu/Programs/Startup/**)",
+      "Bash(head -1 scripts/backend.log; stat -c '%y' scripts/orchestrator.pid)",
+      "Read(//d/naver-estate-web/**)",
+      "Bash(powershell -NoProfile -Command \"Get-Process cloudflared -ErrorAction SilentlyContinue | Select-Object Id,StartTime | Format-Table -AutoSize; Get-NetTCPConnection -LocalPort 8002 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 3 OwningProcess\")",
+      "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Process -Filter \"Name='\\\\''pythonw.exe'\\\\''\" | Where-Object { $_.CommandLine -like '\\\\''*startup_orchestrator*'\\\\'' } | Select-Object ProcessId,CreationDate | Format-Table -AutoSize')",
+      "Bash(powershell -NoProfile -Command 'Get-Service | Where-Object { $_.Name -like '\\\\''*cloudflared*'\\\\'' -or $_.DisplayName -like '\\\\''*cloudflared*'\\\\'' } | Select-Object Name,Status,StartType | Format-Table -AutoSize')",
+      "Bash(powershell -NoProfile -Command 'Get-CimInstance Win32_Service | Where-Object { $_.PathName -like '\\\\''*cloudflared*'\\\\'' -or $_.PathName -like '\\\\''*nssm*'\\\\'' } | Select-Object Name,State,StartMode,PathName | Format-List')",
+      "Bash(cloudflared tunnel *)",
+      "Read(//c/Users/user/.cloudflared/**)",
+      "Bash(sort -k6,7)",
+      "Read(//c/Users/user/scoop/shims/**)",
+      "Bash(powershell -NoProfile -Command \"\\([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent\\(\\)\\).IsInRole\\([Security.Principal.WindowsBuiltInRole]::Administrator\\)\")",
+      "Read(//c/Users/user/AppData/Local/Microsoft/WinGet/Packages/NSSM.NSSM_Microsoft.Winget.Source_8wekyb3d8bbwe/nssm-2.24-101-g897c7ad/win64/**)",
+      "Read(//c/Users/user/AppData/Local/Microsoft/WinGet/Packages\" 2>/dev/**)",
+      "Bash(Select-Object -ExpandProperty Source\"; echo \"=== upgrade-cloudflared.ps1 전문 ===\"; cat ~/.cloudflared/upgrade-cloudflared.ps1)",
+      "Bash(ls \"C:/Users/user/AppData/Local/Microsoft/WinGet/Packages/\" | grep -i nssm; echo \"---\"; cat ~/.cloudflared/upgrade-cloudflared.ps1)",
+      "Read(//c/Users/user/AppData/Local/Microsoft/WinGet/Packages/**)",
+      "Bash(git -C d:/naver-estate-web status --short --branch)",
+      "Bash(git -C d:/naver-estate-web log --oneline -5)"
     ],
     "deny": [
       "Bash(git push --force:*)",
@@ -56,6 +67,10 @@
       "Bash(printf * < *.env*)",
       "Bash(sort *.env*)",
       "Bash(strings *.env*)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\user\\.claude\\plans",
+      "C:\\Users\\user\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"
     ]
   },
   "hooks": {
@@ -99,5 +114,8 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "security-guidance@claude-plugins-official": true
   }
 }

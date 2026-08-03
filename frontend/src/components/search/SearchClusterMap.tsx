@@ -79,6 +79,7 @@ export default function SearchClusterMap({ complexes, onSelect, className }: Pro
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<naver.maps.Map | null>(null);
   const clusterRef = useRef<InstanceType<ReturnType<typeof makeMarkerClustering>> | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const onSelectRef = useRef(onSelect);
   const [error, setError] = useState(false);
   const clientId = process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID;
@@ -99,6 +100,66 @@ export default function SearchClusterMap({ complexes, onSelect, className }: Pro
     const clearCluster = () => {
       clusterRef.current?.setMap(null);
       clusterRef.current = null;
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
+    };
+
+    // 지도가 next/dynamic 지연 마운트 직후(탭 전환 직후) 생성되면, 컨테이너가 아직 최종
+    // CSS 크기(h-[70vh])로 자리잡기 전이라 네이버 SDK 가 좁은 크기를 기준으로 마커들의
+    // 내부 픽셀 좌표를 굳혀버린다. 라이브 재현 결과 naver.maps.Event.trigger(map,"resize")
+    // 나 window.dispatchEvent(new Event("resize"))·fitBounds 재호출을 동기·requestAnimationFrame
+    // 어느 시점에 조합해도 효과가 없음을 확인 — 네이버 SDK 는 이미 생성된 마커의 좌표를
+    // 이벤트 통지만으로 재투영하지 않는다. 유일하게 효과가 있던 것은 "실제 컨테이너 크기가
+    // 확정된 뒤 지도·마커를 아예 새로 생성"(라이브 콘솔에서 새 Map+새 Marker 245개로 직접
+    // 검증 — 정상 위치로 그려짐). destroy() 는 여전히 호출하지 않는다(react-naver-maps
+    // 크래시 재발 방지가 이 재작성의 핵심 목적) — 옛 인스턴스는 setMap(null) 로 지도에서만
+    // 떼고 참조만 교체한다.
+    const buildMap = (): naver.maps.Map => {
+      const fallbackCenter = new naver.maps.LatLng(37.5666, 126.9784);
+      return new naver.maps.Map(mapRef.current!, {
+        center: fallbackCenter,
+        zoom: 12,
+        zoomControl: true,
+      });
+    };
+
+    const paintMarkers = (map: naver.maps.Map) => {
+      if (coordItems.length === 0) return;
+
+      const MarkerClustering = makeMarkerClustering(window.naver);
+      const bounds = new naver.maps.LatLngBounds();
+      const markers = coordItems.map((cpx) => {
+        const pos = new naver.maps.LatLng(cpx.latitude, cpx.longitude);
+        bounds.extend(pos);
+        const marker = new naver.maps.Marker({ position: pos, title: cpx.complex_name });
+        naver.maps.Event.addListener(marker, "click", () => onSelectRef.current?.(cpx));
+        return marker;
+      });
+
+      const icons = CLUSTER_COLORS.map((c) => buildClusterIcon(naver.maps, c));
+      clusterRef.current = new MarkerClustering({
+        minClusterSize: 2,
+        maxZoom: 15,
+        map,
+        markers,
+        disableClickZoom: false,
+        gridSize: 120,
+        icons,
+        indexGenerator: [10, 50, 100, 300, 1000],
+        stylingFunction: (clusterMarker: naver.maps.Marker, count: number) => {
+          const el = clusterMarker.getElement?.();
+          const div = el?.querySelector("div");
+          if (div) div.textContent = String(count);
+        },
+      });
+
+      if (coordItems.length === 1) {
+        // 단지 1개면 fitBounds 가 과도하게 확대 → setCenter+적정 줌으로.
+        map.setCenter(new naver.maps.LatLng(coordItems[0].latitude, coordItems[0].longitude));
+        map.setZoom(15);
+      } else {
+        map.fitBounds(bounds);
+      }
     };
 
     const init = () => {
@@ -106,60 +167,27 @@ export default function SearchClusterMap({ complexes, onSelect, className }: Pro
       try {
         clearCluster();
 
-        const fallbackCenter = new naver.maps.LatLng(37.5666, 126.9784);
-        const map =
-          mapInstanceRef.current ??
-          new naver.maps.Map(mapRef.current, {
-            center: fallbackCenter,
-            zoom: 12,
-            zoomControl: true,
-          });
+        const map = mapInstanceRef.current ?? buildMap();
         mapInstanceRef.current = map;
+        paintMarkers(map);
 
-        // 지도가 next/dynamic 지연 마운트 직후(탭 전환 직후) 생성되면, 컨테이너가 아직
-        // 최종 CSS 크기(h-[70vh])로 자리잡기 전이라 네이버 SDK 가 좁은 크기를 기준으로
-        // 내부 좌표계를 굳혀버린다. 그 뒤 컨테이너가 실제 크기로 커져도 SDK 는 스스로
-        // 재계산하지 않아 모든 마커가 화면 좌상단에 뭉쳐 보이는 결함으로 이어진다(실측:
-        // 브라우저 창 크기를 흔들면 즉시 정상화 — 공식 문서 권장대로 resize 트리거로 강제
-        // 재계산 후 fitBounds 를 호출해야 처음부터 올바른 좌표로 그려진다).
-        naver.maps.Event.trigger(map, "resize");
-
-        if (coordItems.length === 0) return;
-
-        const MarkerClustering = makeMarkerClustering(window.naver);
-        const bounds = new naver.maps.LatLngBounds();
-        const markers = coordItems.map((cpx) => {
-          const pos = new naver.maps.LatLng(cpx.latitude, cpx.longitude);
-          bounds.extend(pos);
-          const marker = new naver.maps.Marker({ position: pos, title: cpx.complex_name });
-          naver.maps.Event.addListener(marker, "click", () => onSelectRef.current?.(cpx));
-          return marker;
+        // ResizeObserver 로 컨테이너의 실제 크기 확정(0 이 아닌 값으로 안정화)을 기다렸다가,
+        // 최초 페인트 이후 크기가 달라졌으면 지도·마커를 통째로 재생성해 올바른 좌표로
+        // 다시 그린다. 한 번만 재생성(무한 루프 방지) — disconnect 로 이후 변화는 무시.
+        let recreated = false;
+        const resizeObserver = new ResizeObserver((entries) => {
+          const rect = entries[0]?.contentRect;
+          if (!rect || rect.width === 0 || recreated || cancelled || !mapRef.current) return;
+          recreated = true;
+          resizeObserver.disconnect();
+          clusterRef.current?.setMap(null);
+          clusterRef.current = null;
+          const freshMap = buildMap();
+          mapInstanceRef.current = freshMap;
+          paintMarkers(freshMap);
         });
-
-        const icons = CLUSTER_COLORS.map((c) => buildClusterIcon(naver.maps, c));
-        clusterRef.current = new MarkerClustering({
-          minClusterSize: 2,
-          maxZoom: 15,
-          map,
-          markers,
-          disableClickZoom: false,
-          gridSize: 120,
-          icons,
-          indexGenerator: [10, 50, 100, 300, 1000],
-          stylingFunction: (clusterMarker: naver.maps.Marker, count: number) => {
-            const el = clusterMarker.getElement?.();
-            const div = el?.querySelector("div");
-            if (div) div.textContent = String(count);
-          },
-        });
-
-        if (coordItems.length === 1) {
-          // 단지 1개면 fitBounds 가 과도하게 확대 → setCenter+적정 줌으로.
-          map.setCenter(new naver.maps.LatLng(coordItems[0].latitude, coordItems[0].longitude));
-          map.setZoom(15);
-        } else {
-          map.fitBounds(bounds);
-        }
+        resizeObserver.observe(mapRef.current);
+        resizeObserverRef.current = resizeObserver;
       } catch {
         setError(true);
       }
@@ -211,6 +239,8 @@ export default function SearchClusterMap({ complexes, onSelect, className }: Pro
     return () => {
       clusterRef.current?.setMap(null);
       clusterRef.current = null;
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
       mapInstanceRef.current = null;
     };
   }, []);

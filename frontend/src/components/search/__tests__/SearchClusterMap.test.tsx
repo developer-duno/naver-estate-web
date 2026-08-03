@@ -33,6 +33,19 @@ const mockAddListener = vi.fn().mockImplementation((target: unknown, event: stri
   return { eventName: event };
 });
 
+// 실제 ResizeObserver 콜백을 수동으로 발동시킬 수 있는 mock — 전역 test-setup.ts 의 no-op
+// 폴리필(Radix 용)과 달리, 이 컴포넌트의 "컨테이너 실제 크기 확정 후 재생성" 로직을 검증하려면
+// observe() 시점의 콜백을 붙잡아뒀다가 테스트에서 직접 호출할 수 있어야 한다.
+let capturedResizeCallback: ((entries: Array<{ contentRect: { width: number } }>) => void) | null = null;
+const mockResizeObserverDisconnect = vi.fn();
+class MockResizeObserver {
+  constructor(cb: (entries: Array<{ contentRect: { width: number } }>) => void) {
+    capturedResizeCallback = cb;
+  }
+  observe() {}
+  disconnect = mockResizeObserverDisconnect;
+}
+
 function installNaverMock() {
   Object.defineProperty(window, "naver", {
     value: {
@@ -67,7 +80,9 @@ describe("SearchClusterMap", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     eventHandlers.length = 0;
+    capturedResizeCallback = null;
     installNaverMock();
+    vi.stubGlobal("ResizeObserver", MockResizeObserver);
     vi.stubEnv("NEXT_PUBLIC_NAVER_MAP_CLIENT_ID", "test-client-id");
   });
 
@@ -120,6 +135,40 @@ describe("SearchClusterMap", () => {
     expect(mockMapInstance.setCenter).toHaveBeenCalled();
     expect(mockMapInstance.setZoom).toHaveBeenCalledWith(15);
     expect(mockMapInstance.fitBounds).not.toHaveBeenCalled();
+  });
+
+  it("ResizeObserver 가 컨테이너 크기 확정을 감지하면 지도·마커를 재생성한다 (뭉침 결함 회귀 가드)", () => {
+    // 라이브 실측: next/dynamic 지연 마운트 직후엔 컨테이너가 좁은 크기라 마커가 한 점에
+    // 뭉쳐 그려진다. resize 이벤트 트리거만으론 안 고쳐지고, 컨테이너가 실제 최종 크기에
+    // 도달한 뒤 지도·마커를 통째로 재생성해야 정상 위치로 그려짐을 확인(세션 349).
+    const complexes = [
+      complex("1", "래미안1", 37.5, 127.0),
+      complex("2", "래미안2", 37.6, 127.1),
+    ];
+    render(<SearchClusterMap complexes={complexes} />);
+
+    const initialMapCalls = mockMapConstructor.mock.calls.length;
+    const initialMarkerCalls = mockMarkerConstructor.mock.calls.length;
+    expect(initialMapCalls).toBe(1);
+    expect(initialMarkerCalls).toBe(2);
+
+    // ResizeObserver 콜백이 잡혔는지 확인 후, 컨테이너가 최종 크기(0이 아닌 width)에
+    // 도달했다는 신호를 흉내내 수동으로 발동.
+    expect(capturedResizeCallback).not.toBeNull();
+    capturedResizeCallback!([{ contentRect: { width: 1224 } }]);
+
+    // 재생성 = 지도·마커 생성자가 한 번 더 불려야 한다 (총 2회).
+    expect(mockMapConstructor.mock.calls.length).toBe(initialMapCalls + 1);
+    expect(mockMarkerConstructor.mock.calls.length).toBe(initialMarkerCalls + 2);
+    expect(mockResizeObserverDisconnect).toHaveBeenCalled();
+
+    // width:0 은 아직 레이아웃 미확정 상태라 재생성 스킵(가드) — 재발동해도 더 늘지 않는다.
+    capturedResizeCallback!([{ contentRect: { width: 0 } }]);
+    expect(mockMapConstructor.mock.calls.length).toBe(initialMapCalls + 1);
+
+    // 한 번 재생성한 뒤엔 disconnect 됐으니 다시 유효한 크기를 줘도 더 이상 재생성 안 함(1회 한정).
+    capturedResizeCallback!([{ contentRect: { width: 1300 } }]);
+    expect(mockMapConstructor.mock.calls.length).toBe(initialMapCalls + 1);
   });
 
   it("네이버 지도 Client ID 미설정 시 에러 안내를 표시한다", () => {

@@ -148,6 +148,37 @@ describe("SearchClusterMap", () => {
     expect(idleOrder).toBeGreaterThan(fitBoundsOrder);
   });
 
+  it("정렬만 바뀌어 id 집합이 동일하면 클러스터링을 재생성하지 않는다 (성능 회귀 가드)", () => {
+    // 근본 배경(라이브 실측, 세션 349 후속): 강남구 500개 마커 검색 결과에서 지도 탭
+    // 클릭 INP 가 3,212ms 로 실측됨 — 정렬 변경 등으로 배열 참조만 바뀌어도 매번
+    // 클러스터링(O(N) 거리 비교)을 통째로 재계산하던 게 원인 중 하나. id 집합이 실제로는
+    // 동일하면(순서만 변경) 재생성을 skip 해야 한다.
+    const a = complex("1", "래미안1", 37.5, 127.0);
+    const b = complex("2", "래미안2", 37.6, 127.1);
+    const { rerender } = render(<SearchClusterMap complexes={[a, b]} />);
+    expect(mockClusteringConstructor).toHaveBeenCalledTimes(1);
+
+    vi.clearAllMocks();
+    // 정렬 순서만 바뀐 새 배열 (id 집합 동일)
+    rerender(<SearchClusterMap complexes={[b, a]} />);
+    expect(mockClusteringConstructor).not.toHaveBeenCalled();
+    expect(mockMarkerConstructor).not.toHaveBeenCalled();
+  });
+
+  it("필터로 단지 집합(id) 이 실제로 바뀌면 클러스터링을 재생성한다", () => {
+    const a = complex("1", "래미안1", 37.5, 127.0);
+    const b = complex("2", "래미안2", 37.6, 127.1);
+    const c = complex("3", "래미안3", 37.7, 127.2);
+    const { rerender } = render(<SearchClusterMap complexes={[a, b]} />);
+    expect(mockClusteringConstructor).toHaveBeenCalledTimes(1);
+
+    vi.clearAllMocks();
+    // id 집합이 실제로 바뀜(2 → 3 추가) — 재생성돼야 함
+    rerender(<SearchClusterMap complexes={[a, b, c]} />);
+    expect(mockClusteringConstructor).toHaveBeenCalledTimes(1);
+    expect(mockMarkerConstructor).toHaveBeenCalledTimes(3);
+  });
+
   it("네이버 지도 Client ID 미설정 시 에러 안내를 표시한다", () => {
     vi.stubEnv("NEXT_PUBLIC_NAVER_MAP_CLIENT_ID", "");
     render(<SearchClusterMap complexes={[complex("1", "래미안", 37.5, 127.0)]} />);

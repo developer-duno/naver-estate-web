@@ -75,11 +75,22 @@ interface Props {
  * 의존을 버리고 이 패턴으로 재작성했다. 클러스터링 자체(네이버 공식 MarkerClustering)는 그대로
  * lib/naver-marker-clustering.ts 를 재사용.
  */
+/** 단지 집합의 재생성 필요 여부를 판단하는 지문 — id 정렬 join.
+ * 정렬만 바뀌면 배열 참조는 달라져도 마커 위치·클릭 대상은 완전히 동일하므로
+ * 클러스터링 재계산(500개 기준 실측 3.2초 INP, mibunyang perf(map) 패턴 답습)을
+ * 건너뛴다. id 집합이 같으면 화면에 이미 그려진 마커 그대로 유지. */
+function computeSignature(items: Array<{ complex_no: string }>): string {
+  return items.map((c) => c.complex_no).sort().join(",");
+}
+
 export default function SearchClusterMap({ complexes, onSelect, className }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<naver.maps.Map | null>(null);
   const clusterRef = useRef<InstanceType<ReturnType<typeof makeMarkerClustering>> | null>(null);
   const onSelectRef = useRef(onSelect);
+  // 마지막으로 클러스터를 실제 재생성했을 때의 단지 집합 지문. 클러스터러 인스턴스와
+  // 함께 갱신되므로 지도 재초기화(언마운트→재마운트) 시 자동 무효화된다.
+  const signatureRef = useRef<string | null>(null);
   const [error, setError] = useState(false);
   const clientId = process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID;
 
@@ -99,13 +110,12 @@ export default function SearchClusterMap({ complexes, onSelect, className }: Pro
     const clearCluster = () => {
       clusterRef.current?.setMap(null);
       clusterRef.current = null;
+      signatureRef.current = null;
     };
 
     const init = () => {
       if (cancelled || !mapRef.current || !window.naver?.maps) return;
       try {
-        clearCluster();
-
         const fallbackCenter = new naver.maps.LatLng(37.5666, 126.9784);
         const map =
           mapInstanceRef.current ??
@@ -116,7 +126,21 @@ export default function SearchClusterMap({ complexes, onSelect, className }: Pro
           });
         mapInstanceRef.current = map;
 
-        if (coordItems.length === 0) return;
+        if (coordItems.length === 0) {
+          clearCluster();
+          return;
+        }
+
+        // 정렬만 바뀌어 마커 집합(id 기준)이 직전과 동일하면 클러스터링 재계산을
+        // 건너뛴다 — 이미 그려진 마커·카메라를 그대로 두고 새 마커 생성/클러스터
+        // 재구성(O(N) 거리 비교, 500개 기준 대부분의 시간을 차지) 자체를 생략.
+        const signature = computeSignature(coordItems);
+        if (clusterRef.current && signatureRef.current === signature) {
+          return;
+        }
+
+        clearCluster();
+        signatureRef.current = signature;
 
         const MarkerClustering = makeMarkerClustering(window.naver);
         const bounds = new naver.maps.LatLngBounds();
@@ -184,16 +208,20 @@ export default function SearchClusterMap({ complexes, onSelect, className }: Pro
       return () => {
         cancelled = true;
         clearInterval(poll);
-        clearCluster();
       };
     }
 
+    // 클러스터/지도 정리는 하지 않는다 — React 는 effect 재실행마다 "이전 cleanup →
+    // 새 effect" 순서를 지키므로, 여기서 clearCluster() 를 부르면 signature 비교(skip
+    // 조건)가 매번 무력화된다(정렬만 바뀌어도 재생성됨, 실측으로 확인된 실패 패턴).
+    // 실제 정리가 필요한 경우(빈 데이터로 전환·id 집합 변경)는 effect 본문의 clearCluster()
+    // 호출이 담당하고, 완전 언마운트 시 정리는 별도 effect(아래, deps: [])가 전담한다.
     return () => {
       cancelled = true;
-      clearCluster();
     };
-    // complexes 는 부모의 hasCoords 필터 결과 — 필터·정렬 변경 시에만 재생성(전체 재구성 방식,
-    // diff 갱신은 1단계 범위 밖 — 계획 문서 §4 참고).
+    // complexes 는 부모의 hasCoords 필터 결과 — effect 자체는 필터·정렬 변경마다 실행되나,
+    // 위 signature 비교로 id 집합이 실제로 안 바뀌었으면(정렬만 변경) 재생성을 skip 한다.
+    // 완전한 diff 갱신(마커 단위 추가/삭제)은 여전히 범위 밖 — 계획 문서 §4 참고.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complexes, clientId]);
 

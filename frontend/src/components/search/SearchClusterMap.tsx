@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Complex } from "@/types";
 import { makeMarkerClustering } from "@/lib/naver-marker-clustering";
+import type { GeoCoords } from "@/hooks/useGeolocation";
 
 const SDK_POLL_INTERVAL = 200;
 const SDK_POLL_TIMEOUT = 5000;
@@ -51,10 +52,18 @@ function buildClusterIcon(navermaps: typeof naver.maps, color: string) {
   };
 }
 
+/** region 미선택 + GPS 허용 시 내 위치 중심 줌 레벨. MbClusterMap.tsx:30 과 동일 값 —
+ * 시/군 단위(화면 반경 ~7km) 균형점(세션 318 실측 근거 답습). */
+const USER_LOCATION_ZOOM = 12;
+
 interface Props {
   complexes: Complex[];
   /** 마커 클릭 콜백 — 부모가 선택 단지 카드 렌더에 사용 */
   onSelect?: (complex: Complex) => void;
+  /** 접속자 현재 위치(GPS). 있으면 지도 중심을 내 위치로 (region 미선택 시). MbClusterMap.tsx 패턴 답습. */
+  userLocation?: GeoCoords | null;
+  /** 지역(시/도) 선택 여부 — true 면 검색 결과 fitBounds(명시 선택 우선, GPS 무시). */
+  regionSelected?: boolean;
   /** 지도 컨테이너 높이 클래스. 기본 "h-96". */
   className?: string;
 }
@@ -83,7 +92,13 @@ function computeSignature(items: Array<{ complex_no: string }>): string {
   return items.map((c) => c.complex_no).sort().join(",");
 }
 
-export default function SearchClusterMap({ complexes, onSelect, className }: Props) {
+export default function SearchClusterMap({
+  complexes,
+  onSelect,
+  userLocation,
+  regionSelected,
+  className,
+}: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<naver.maps.Map | null>(null);
   const clusterRef = useRef<InstanceType<ReturnType<typeof makeMarkerClustering>> | null>(null);
@@ -91,6 +106,8 @@ export default function SearchClusterMap({ complexes, onSelect, className }: Pro
   // 마지막으로 클러스터를 실제 재생성했을 때의 단지 집합 지문. 클러스터러 인스턴스와
   // 함께 갱신되므로 지도 재초기화(언마운트→재마운트) 시 자동 무효화된다.
   const signatureRef = useRef<string | null>(null);
+  // GPS 좌표 도착 시 카메라를 내 위치로 1회만 옮기기 위한 가드 — MbClusterMap.tsx:89 패턴 답습.
+  const didCenterOnGpsRef = useRef(false);
   const [error, setError] = useState(false);
   const clientId = process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID;
 
@@ -169,7 +186,14 @@ export default function SearchClusterMap({ complexes, onSelect, className }: Pro
           },
         });
 
-        if (coordItems.length === 1) {
+        // 지도 중심·줌 우선순위: ① region 선택 → 검색 결과 fitBounds/setCenter(명시 선택 우선)
+        // ② region 미선택 + GPS 허용 → 내 위치 중심 + 적정 줌 ③ 그 외 → 검색 결과 폴백.
+        // MbClusterMap.tsx:169-181 과 동일 우선순위.
+        if (!regionSelected && userLocation) {
+          map.setCenter(new naver.maps.LatLng(userLocation.lat, userLocation.lng));
+          map.setZoom(USER_LOCATION_ZOOM);
+          didCenterOnGpsRef.current = true;
+        } else if (coordItems.length === 1) {
           // 단지 1개면 fitBounds 가 과도하게 확대 → setCenter+적정 줌으로.
           map.setCenter(new naver.maps.LatLng(coordItems[0].latitude, coordItems[0].longitude));
           map.setZoom(15);
@@ -224,6 +248,18 @@ export default function SearchClusterMap({ complexes, onSelect, className }: Pro
     // 완전한 diff 갱신(마커 단위 추가/삭제)은 여전히 범위 밖 — 계획 문서 §4 참고.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [complexes, clientId]);
+
+  // GPS 좌표는 비동기로 늦게 도착 → 마커 재생성 없이 카메라만 내 위치로 이동.
+  // region 선택 시엔 무시(명시 선택 우선). 좌표 도착 시 단 1회만 setCenter —
+  // 이미 센터링했거나(didCenterOnGpsRef) 사용자가 그 사이 지도를 조작했어도 강제로 끌어오지
+  // 않음. MbClusterMap.tsx:215-224 와 동일 패턴.
+  useEffect(() => {
+    if (regionSelected || !userLocation || !mapInstanceRef.current) return;
+    if (didCenterOnGpsRef.current) return;
+    didCenterOnGpsRef.current = true;
+    mapInstanceRef.current.setCenter(new naver.maps.LatLng(userLocation.lat, userLocation.lng));
+    mapInstanceRef.current.setZoom(USER_LOCATION_ZOOM);
+  }, [userLocation, regionSelected]);
 
   // NCP 인증 실패(잘못된 clientId·도메인 미등록) 감지 — 네이버 지도 v3 공식 전역 콜백.
   // MbClusterMap.tsx:230-236 과 동일 패턴.

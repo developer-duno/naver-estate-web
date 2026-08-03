@@ -20,6 +20,7 @@ import { useCompare } from "@/hooks/useCompare";
 import { useSearchHistory } from "@/hooks/useSearchHistory";
 import { useArticleFavorites } from "@/hooks/useArticleFavorites";
 import { useSearchViewMode } from "@/hooks/useSearchViewMode";
+import { useGeolocation } from "@/hooks/useGeolocation";
 import { sortComplexes } from "@/lib/sortComplexes";
 import type { SearchHistoryItem } from "@/lib/storage";
 import CompareFloatingBar from "@/components/CompareFloatingBar";
@@ -81,6 +82,12 @@ export default function SearchExperience({ emptyExtra }: Props) {
   const { favorites: articleFavorites } = useArticleFavorites();
   const recentItems = history.slice(0, 5);
   const hasSearchParams = !!(keyword || (sido && sigungu));
+  // 지역(시/도+시군구)을 명시적으로 고른 검색인지 — true 면 지도 카메라는 그 지역 결과에
+  // fitBounds(명시 선택 우선, GPS 무시). MbClusterMap.tsx 의 regionSelected 개념 답습.
+  const regionSelected = !!(sido && sigungu);
+  // 지도 뷰 + 지역 미선택일 때만 현재 위치 요청 — 목록 뷰·지역 검색 사용자에겐 불필요한
+  // 위치 권한 팝업을 안 띄운다. MbPresaleTab.tsx:73 과 동일 패턴.
+  const { coords: userLocation } = useGeolocation(viewMode === "map" && !regionSelected);
 
   const filtersActive = Object.keys(urlFilters).some((k) => k !== "sort_by");
   const typesNarrowed = selectedTypes.length < allCodes.length;
@@ -466,6 +473,8 @@ export default function SearchExperience({ emptyExtra }: Props) {
           <SearchClusterMap
             complexes={sortedFilteredComplexes}
             onSelect={setSelectedMapComplex}
+            userLocation={userLocation}
+            regionSelected={regionSelected}
             className="h-[70vh]"
           />
           {selectedMapComplex && (

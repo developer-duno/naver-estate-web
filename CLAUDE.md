@@ -115,7 +115,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1951개** (세션 349 지도 마커 뭉침 근본수정: SearchClusterMap 기존 7개를 idle 트리거 검증 방식으로 교체, 신규 0·순증 0 — 세션 347 가격변동알림 최소버전 +4 누적분 포함) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1956개** (mibunyang 지도성능 이식 재검토 세션 +5: 검색 지도 서명-skip 성능회귀 가드 2 + GPS 카메라 우선순위 3 — 세션 349 idle 트리거 근본수정은 기존 7개 교체·순증 0) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
 | BE pytest | `backend/tests/` | **1067개** (세션 346 크롤링 전수조사 안전조치 +8: backfill_price_batch rollback 가드 1 + 실거래가 재개(resume) 로직 회귀 3 + 관련 기존 스위트 재확인분. 세션 347 텔레그램 문구통일은 기존 테스트 정정만, 신규 0) |
 

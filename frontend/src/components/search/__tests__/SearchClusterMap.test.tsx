@@ -179,6 +179,41 @@ describe("SearchClusterMap", () => {
     expect(mockMarkerConstructor).toHaveBeenCalledTimes(3);
   });
 
+  // ── 위치 기준 줌 우선순위: region 선택 > GPS > 검색 결과 fitBounds ──
+  // MbClusterMap.test.tsx:206-231 패턴 답습(GPS 이식, mibunyang 지도 성능 이식 재검토 세션).
+
+  it("userLocation 있고 regionSelected 아니면 내 위치로 setCenter+setZoom(12)", () => {
+    render(
+      <SearchClusterMap
+        complexes={[complex("1", "래미안1", 37.5, 127.0), complex("2", "래미안2", 37.6, 127.1)]}
+        userLocation={{ lat: 35.1, lng: 129.0 }}
+      />,
+    );
+    expect(mockMapInstance.setCenter).toHaveBeenCalled();
+    expect(mockMapInstance.setZoom).toHaveBeenCalledWith(12);
+    expect(mockMapInstance.fitBounds).not.toHaveBeenCalled();
+  });
+
+  it("regionSelected 면 userLocation 있어도 fitBounds (GPS 무시)", () => {
+    render(
+      <SearchClusterMap
+        complexes={[complex("1", "래미안1", 37.5, 127.0), complex("2", "래미안2", 37.6, 127.1)]}
+        userLocation={{ lat: 35.1, lng: 129.0 }}
+        regionSelected
+      />,
+    );
+    expect(mockMapInstance.fitBounds).toHaveBeenCalled();
+  });
+
+  it("userLocation 없으면 기존처럼 검색 결과 fitBounds", () => {
+    render(
+      <SearchClusterMap
+        complexes={[complex("1", "래미안1", 37.5, 127.0), complex("2", "래미안2", 37.6, 127.1)]}
+      />,
+    );
+    expect(mockMapInstance.fitBounds).toHaveBeenCalled();
+  });
+
   it("네이버 지도 Client ID 미설정 시 에러 안내를 표시한다", () => {
     vi.stubEnv("NEXT_PUBLIC_NAVER_MAP_CLIENT_ID", "");
     render(<SearchClusterMap complexes={[complex("1", "래미안", 37.5, 127.0)]} />);

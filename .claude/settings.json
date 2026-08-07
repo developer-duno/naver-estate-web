@@ -42,7 +42,16 @@
       "Bash(ls \"C:/Users/user/AppData/Local/Microsoft/WinGet/Packages/\" | grep -i nssm; echo \"---\"; cat ~/.cloudflared/upgrade-cloudflared.ps1)",
       "Read(//c/Users/user/AppData/Local/Microsoft/WinGet/Packages/**)",
       "Bash(git -C d:/naver-estate-web status --short --branch)",
-      "Bash(git -C d:/naver-estate-web log --oneline -5)"
+      "Bash(git -C d:/naver-estate-web log --oneline -5)",
+      "WebFetch(domain:code.visualstudio.com)",
+      "Bash(code --version)",
+      "Bash(code tunnel *)",
+      "Bash(python \"C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--naver-estate-web\\\\d2d32fb0-526b-450e-9f95-e74d50932e74\\\\scratchpad\\\\probe_map_impact.py\")",
+      "Bash(PYTHONIOENCODING=utf-8 python \"C:\\\\Users\\\\user\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--naver-estate-web\\\\d2d32fb0-526b-450e-9f95-e74d50932e74\\\\scratchpad\\\\probe_map_impact.py\")",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(npm view *)",
+      "Bash(npm install *)"
     ],
     "deny": [
       "Bash(git push --force:*)",

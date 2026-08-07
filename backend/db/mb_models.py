@@ -379,6 +379,7 @@ class PresaleScheduleOfficial(Base):
     biz_entity: Mapped[str | None] = mapped_column(Text)        # 사업주체/시행
     constructor: Mapped[str | None] = mapped_column(Text)       # 시공사
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime)
+    house_type: Mapped[str] = mapped_column(Text, nullable=False, default="apt")
 
 
 # ── 청약홈 평형별 공급정보 (mibunyang collect-applyhome-detail.mjs 수집) ──
@@ -404,3 +405,4 @@ class ApplyhomeUnitSupply(Base):
     special_by_type: Mapped[dict | None] = mapped_column(JSON)  # 유형별 세대수
     top_amount: Mapped[int | None] = mapped_column(Integer)     # 분양최고금액 (만원)
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime)
+    house_type: Mapped[str] = mapped_column(Text, nullable=False, default="apt")

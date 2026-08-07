@@ -26,6 +26,8 @@ CREATE INDEX IF NOT EXISTS idx_rental_schedule_region ON rental_schedule_officia
 COMMENT ON TABLE rental_schedule_official IS
   '청약홈 공공지원 민간임대 공고 일정 (getPblPvtRentLttotPblancDetail). apartments 테이블과 독립.';
 ALTER TABLE rental_schedule_official ENABLE ROW LEVEL SECURITY;
+-- 의도적 공개: 청약홈 공고 일정은 정부(한국부동산원)가 원래 공개하는 공식 정보라
+-- anon read 제한 불필요 (V029/V031이 차단한 매물·시세 등 B2B 가치 데이터와 다름, 사장님 확인 2026-08-08).
 CREATE POLICY "Public read" ON rental_schedule_official FOR SELECT USING (true);
 CREATE POLICY "Service write" ON rental_schedule_official FOR ALL USING (auth.role() = 'service_role');
 NOTIFY pgrst, 'reload schema';

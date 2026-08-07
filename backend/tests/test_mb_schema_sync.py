@@ -149,3 +149,15 @@ def test_applyhome_unit_supply_has_house_type_column():
     from db.mb_models import ApplyhomeUnitSupply
 
     assert "house_type" in ApplyhomeUnitSupply.__table__.columns
+
+
+def test_rental_schedule_official_model_maps_expected_columns():
+    from db.mb_models import RentalScheduleOfficial
+    cols = set(RentalScheduleOfficial.__table__.columns.keys())
+    assert {"house_manage_no", "house_nm", "recruit_date", "region_code"} <= cols
+
+
+def test_rental_unit_supply_model_maps_expected_columns():
+    from db.mb_models import RentalUnitSupply
+    cols = set(RentalUnitSupply.__table__.columns.keys())
+    assert {"house_manage_no", "model_no", "monthly_rent", "deposit"} <= cols

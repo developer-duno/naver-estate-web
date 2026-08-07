@@ -406,3 +406,59 @@ class ApplyhomeUnitSupply(Base):
     top_amount: Mapped[int | None] = mapped_column(Integer)     # 분양최고금액 (만원)
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime)
     house_type: Mapped[str] = mapped_column(Text, nullable=False, default="apt")
+
+
+# ── 청약홈 공공지원 민간임대 (naver-estate-web 자체 수집, apartments 독립) ──
+
+
+class RentalScheduleOfficial(Base):
+    """청약홈 공공지원 민간임대 공고 일정 (getPblPvtRentLttotPblancDetail).
+
+    apartments 테이블과 독립 — 임대주택은 우리 로스터에 없는 별도 매물.
+    UNIQUE(house_manage_no): 공고 단위 유일.
+    """
+
+    __tablename__ = "rental_schedule_official"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    house_manage_no: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    pblanc_no: Mapped[str | None] = mapped_column(Text)
+    house_nm: Mapped[str] = mapped_column(Text, nullable=False)
+    address: Mapped[str | None] = mapped_column(Text)
+    recruit_date: Mapped[date | None] = mapped_column(Date)
+    receipt_bgnde: Mapped[date | None] = mapped_column(Date)
+    receipt_endde: Mapped[date | None] = mapped_column(Date)
+    winner_announce_date: Mapped[date | None] = mapped_column(Date)
+    contract_bgnde: Mapped[date | None] = mapped_column(Date)
+    contract_endde: Mapped[date | None] = mapped_column(Date)
+    move_in_ym: Mapped[str | None] = mapped_column(Text)
+    tot_supply: Mapped[int | None] = mapped_column(Integer)
+    pblanc_url: Mapped[str | None] = mapped_column(Text)
+    biz_entity: Mapped[str | None] = mapped_column(Text)
+    constructor: Mapped[str | None] = mapped_column(Text)
+    region_code: Mapped[str | None] = mapped_column(Text)
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class RentalUnitSupply(Base):
+    """청약홈 공공지원 민간임대 평형별 공급정보 (getPblPvtRentLttotPblancMdl).
+
+    house_manage_no 로 RentalScheduleOfficial 과 N:1.
+    """
+
+    __tablename__ = "rental_unit_supply"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    house_manage_no: Mapped[str] = mapped_column(Text, nullable=False)
+    model_no: Mapped[str] = mapped_column(Text, nullable=False)
+    house_ty: Mapped[str | None] = mapped_column(Text)
+    supply_area: Mapped[float | None] = mapped_column(Float)
+    exclusive_area: Mapped[float | None] = mapped_column(Float)
+    contract_area: Mapped[float | None] = mapped_column(Float)
+    general_supply: Mapped[int | None] = mapped_column(Integer)
+    youth_supply: Mapped[int | None] = mapped_column(Integer)
+    newlywed_supply: Mapped[int | None] = mapped_column(Integer)
+    elderly_supply: Mapped[int | None] = mapped_column(Integer)
+    monthly_rent: Mapped[int | None] = mapped_column(Integer)
+    deposit: Mapped[int | None] = mapped_column(Integer)
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime)

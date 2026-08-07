@@ -42,6 +42,7 @@ const mockAddListener = vi.fn().mockImplementation((_target, _event, handler) =>
   eventHandlers.push(handler);
   return { eventName: _event };
 });
+const mockEventTrigger = vi.fn();
 
 function installNaverMock() {
   Object.defineProperty(window, "naver", {
@@ -53,7 +54,7 @@ function installNaverMock() {
         LatLngBounds: mockLatLngBoundsConstructor,
         InfoWindow: mockInfoWindowConstructor,
         Point: vi.fn(),
-        Event: { addListener: mockAddListener, removeListener: vi.fn() },
+        Event: { addListener: mockAddListener, removeListener: vi.fn(), trigger: mockEventTrigger },
       },
     },
     writable: true,
@@ -259,6 +260,18 @@ describe("MbClusterMap", () => {
     window.navermap_authFailure!();
     await waitFor(() => {
       expect(screen.getByText("지도를 불러오지 못했습니다.")).toBeInTheDocument();
+    });
+  });
+
+  // 세션 351: page.tsx(풀스크린 높이 클래스) 와 이 컴포넌트를 마운트하는 부모(MbApartmentsTab
+  // 등)가 useMbViewMode() 를 독립 호출해 서로 다른 state 인스턴스를 갖는다 — 지도가 부모의
+  // 높이 클래스가 실제 레이아웃으로 반영되기 전에 생성되면 컨테이너가 0~1px 로 굳는다.
+  // idle 이벤트를 다음 프레임에 명시 트리거해 실제 컨테이너 크기로 재계산을 강제한다
+  // (resize 트리거는 이 프로젝트에서 이미 무효로 실측된 방식 — SearchClusterMap 세션349).
+  it("지도 생성 다음 프레임에 idle 이벤트를 트리거해 레이아웃 확정 후 재계산을 강제한다", async () => {
+    render(<MbClusterMap apartments={[apt("a", "래미안", 37.5, 127.0)]} />);
+    await waitFor(() => {
+      expect(mockEventTrigger).toHaveBeenCalledWith(mockMapInstance, "idle");
     });
   });
 });

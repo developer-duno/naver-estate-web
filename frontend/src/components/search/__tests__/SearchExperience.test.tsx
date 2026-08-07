@@ -93,6 +93,55 @@ describe("SearchExperience — 지도 뷰 토글 배선", () => {
     });
     expect(screen.getByRole("tab", { name: "목록" })).toHaveAttribute("aria-selected", "false");
   });
+
+  it("지도 모드로 바꿔도 목록은 언마운트되지 않고 hidden 으로만 숨는다 (INP 회귀 가드)", async () => {
+    // 근본 배경(세션 351 라이브 트레이스 실측): 지도 탭 클릭 INP 2,647ms 의 진범은
+    // 클러스터링이 아니라 목록 500행을 React 가 해체하는 비용이었다(removeChild 자기시간
+    // 1,477ms + 커밋 트리 순회 1,147ms). 언마운트로 되돌리면 그 비용이 그대로 재발하므로,
+    // "DOM 에 남아 있되 hidden" 을 구조적으로 못 박는다.
+    renderSearchExperience();
+    await waitFor(() => {
+      expect(screen.getAllByText("래미안테스트").length).toBeGreaterThan(0);
+    });
+    const listCountBefore = screen.getAllByText("래미안테스트").length;
+
+    fireEvent.click(screen.getByRole("tab", { name: "지도" }));
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "지도" })).toHaveAttribute("aria-selected", "true");
+    });
+
+    // 목록 행이 DOM 에서 사라지지 않았다 = 언마운트 안 됨(= 해체 비용 0).
+    const rowsAfter = screen.getAllByText("래미안테스트");
+    expect(rowsAfter.length).toBe(listCountBefore);
+    // 그리고 각 행의 뷰 컨테이너는 hidden(display:none)이라 화면·접근성 트리에선 빠진다.
+    rowsAfter.forEach((node) => {
+      expect(node.closest("div.hidden")).not.toBeNull();
+    });
+  });
+
+  it("지도 → 목록으로 되돌리면 목록이 다시 보인다 (hidden 해제)", async () => {
+    renderSearchExperience();
+    await waitFor(() => {
+      expect(screen.getAllByText("래미안테스트").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "지도" }));
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "지도" })).toHaveAttribute("aria-selected", "true");
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "목록" }));
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "목록" })).toHaveAttribute("aria-selected", "true");
+    });
+
+    // 목록 뷰 컨테이너 중 최소 하나는 hidden 이 아닌 상태(모바일 카드: "md:hidden space-y-3")로
+    // 돌아와야 한다 — 데스크톱 표는 원래 "hidden md:block" 이라 jsdom 에선 계속 hidden 클래스를 갖는다.
+    const visibleAgain = screen
+      .getAllByText("래미안테스트")
+      .some((node) => node.closest("div.md\\:hidden.space-y-3") !== null);
+    expect(visibleAgain).toBe(true);
+  });
 });
 
 // dynamic() 호출은 SearchExperience 모듈이 처음 import 될 때 딱 1회만 일어나는

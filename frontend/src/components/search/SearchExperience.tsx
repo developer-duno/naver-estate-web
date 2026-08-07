@@ -492,9 +492,20 @@ export default function SearchExperience({ emptyExtra }: Props) {
         </div>
       )}
 
-      {/* 단지 테이블 (데스크톱) */}
-      {!loading && sortedFilteredComplexes.length > 0 && viewMode === "list" && (
-        <div className="hidden md:block overflow-x-auto bg-white rounded-lg shadow-sm border">
+      {/* 단지 테이블 (데스크톱)
+          ⚠ viewMode 로 언마운트하지 않고 CSS(hidden=display:none)로만 숨긴다 — 목록 500행을
+          React 가 해체하는 비용이 지도 탭 클릭 INP 의 진범이었다(세션 351 라이브 트레이스 실측:
+          removeChild 자기시간 1,477ms + React 커밋 트리 순회 1,147ms). 마운트를 유지하면
+          전환이 display 토글 한 번으로 끝난다. display:none 은 접근성 트리에서도 빠져
+          스크린리더 중복 노출도 없다. */}
+      {!loading && sortedFilteredComplexes.length > 0 && (
+        <div
+          className={
+            viewMode === "map"
+              ? "hidden"
+              : "hidden md:block overflow-x-auto bg-white rounded-lg shadow-sm border"
+          }
+        >
           <table className="w-full text-sm border-collapse">
             <thead className="bg-gray-100 border-b-2 border-gray-300 sticky top-0 z-10">
               <tr>
@@ -519,9 +530,10 @@ export default function SearchExperience({ emptyExtra }: Props) {
         </div>
       )}
 
-      {/* 단지 카드 (모바일) */}
-      {!loading && sortedFilteredComplexes.length > 0 && viewMode === "list" && (
-        <div className="md:hidden space-y-3">
+      {/* 단지 카드 (모바일) — 데스크톱 표와 같은 이유로 언마운트 대신 hidden 으로 숨긴다
+          (세션 351: 500행 해체가 지도 전환 INP 2.6초의 진범). */}
+      {!loading && sortedFilteredComplexes.length > 0 && (
+        <div className={viewMode === "map" ? "hidden" : "md:hidden space-y-3"}>
           {sortedFilteredComplexes.map((cpx, idx) => (
             <ComplexCardMobile key={cpx.complex_no} complex={cpx} index={idx + 1} urlFilters={urlFilters} isCompared={isInCompare(cpx.complex_no)} compareFull={compareFull} onToggleCompare={toggleCompare} />
           ))}

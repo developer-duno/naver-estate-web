@@ -91,11 +91,22 @@ async function _fetchApiImpl<T>(path: string, options?: RequestInit & { timeoutM
       // P1-1: 인증 실패 시 자동 로그아웃 (토큰 만료만 — 403은 승인/권한 문제이므로 유지)
       if (res.status === 401 && !_isLoggingOut) {
         if (typeof window !== "undefined") {
-          _isLoggingOut = true;
           const { createClient } = await import("@/lib/supabase");
           const supabase = createClient();
-          await supabase.auth.signOut();
-          window.location.href = "/login";
+          // 멀티탭 토큰 갱신 경합으로 인한 일시적 401 오탐 방어 — 진짜 세션이 죽었는지
+          // Supabase 클라이언트에 직접 물어본 뒤에만 로그아웃한다 (세션 351).
+          // 여러 탭이 같은 refresh token 으로 동시 갱신을 시도하면 나중 요청이 거부되는데
+          // (supabase/auth-js#213), 그때 401 을 그대로 믿고 로그아웃하면 멀쩡한 탭까지 튕긴다.
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          if (!session) {
+            _isLoggingOut = true;
+            await supabase.auth.signOut();
+            window.location.href = "/login";
+          }
+          // session 이 있으면(다른 탭의 경합이 이미 해소되어 로컬에 유효 세션 존재) 로그아웃하지
+          // 않고 조용히 넘어간다 — 호출자는 이 401 을 ApiError 로 받아 각자의 에러 UI로 처리.
         }
       }
       // Rate limit 사용자 피드백

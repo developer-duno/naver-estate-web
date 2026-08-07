@@ -75,16 +75,6 @@ export async function proxy(request: NextRequest) {
   // 로그인 필수 경로 보호 (/complex/*)
   const isAuthRequired = AUTH_REQUIRED_PATHS.some((p) => pathname.startsWith(p));
   if (isAuthRequired && !user) {
-    // TEMP DIAG (세션351 버그2 조사 — 원인 확정 후 제거): 로그인된 사용자가 지도에서
-    // 단지 클릭 시 /login 으로 튕기는 결함 재현용. 이 요청이 어떤 쿠키를 들고 왔는지·
-    // getUser() 판정이 왜 실패했는지 서버 로그(Vercel Functions 로그)로 남긴다.
-    console.error("[DIAG-351]", {
-      pathname,
-      isRSC: request.headers.get("rsc"),
-      nextUrl: request.headers.get("next-url"),
-      cookieNames: request.cookies.getAll().map((c) => c.name),
-      hasSbCookie: request.cookies.getAll().some((c) => c.name.startsWith("sb-")),
-    });
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", pathname);
     return NextResponse.redirect(loginUrl);

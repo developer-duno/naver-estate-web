@@ -53,7 +53,14 @@ function MibunyangContent() {
   const searchParams = useSearchParams();
   const compare = useMbCompare();
   const { favorites, toggle: toggleFavorite } = useMbFavorites();
-  const { viewMode } = useMbViewMode();
+  // 세션351 근본수정: viewMode 를 이 페이지가 단일 소유하고 자식 3곳(MbApartmentsTab·
+  // MbPresaleTab·MbUnsoldTab)에 props 로 내려준다. 예전엔 각 자식이 useMbViewMode() 를
+  // 독립 호출해 서로 다른 React state 인스턴스를 가졌다 — 자식이 지도 모드로 판정해
+  // naver.maps.Map 을 생성하는 순간에도 이 페이지의 isFullscreenMap(풀스크린 높이 클래스)
+  // 판정은 아직 이전 값일 수 있어, 지도 컨테이너가 0~1px 인 채로 생성되는 레이스가 있었다
+  // (idle 트리거로 재계산은 강제했으나 애초에 풀스크린 클래스 자체가 안 붙는 경우는
+  // 못 고쳤음 — 라이브 재현으로 확인). 단일 소유로 이 레이스 자체를 제거.
+  const { viewMode, setViewMode } = useMbViewMode();
   const { history: mbHistory, add: addMbHistory, remove: removeMbHistory, clear: clearMbHistory } = useMbSearchHistory();
   const { history: compareHistory, remove: removeCompareHistory, clear: clearCompareHistory } = useMbCompareHistory();
   const { bookmarks: compareBookmarks, remove: removeCompareBookmark, clear: clearCompareBookmarks } = useMbCompareBookmarks();
@@ -269,6 +276,8 @@ function MibunyangContent() {
             onCompareToggle={(id, name) => compare.toggle({ id, name })}
             compareFull={compare.isFull}
             region={region}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
           />
         </TabsContent>
 
@@ -312,6 +321,8 @@ function MibunyangContent() {
                 isInCompare={compare.isInCompare}
                 onCompareToggle={(id, name) => compare.toggle({ id, name })}
                 compareFull={compare.isFull}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
               />
             </TabsContent>
 
@@ -325,6 +336,8 @@ function MibunyangContent() {
                 isInCompare={compare.isInCompare}
                 onCompareToggle={(id, name) => compare.toggle({ id, name })}
                 compareFull={compare.isFull}
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
               />
             </TabsContent>
 

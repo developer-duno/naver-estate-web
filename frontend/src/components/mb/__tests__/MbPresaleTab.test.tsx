@@ -32,6 +32,8 @@ const competitionData = { competition: [makeApt({ id: "C", name: "경쟁단지",
 
 function renderTab(segment: "private" | "public" | "competition", onSegmentChange = vi.fn()) {
   // 세션 319: 지도뷰 인프라 lazy fetch(useQuery) 추가로 QueryClientProvider 필요 (web-rules.md).
+  // 세션 351: viewMode 는 page.tsx 가 단일 소유하는 구조로 바뀌어 이 탭은 props 로만 받는다
+  // — 테스트에선 "list" 고정(뷰 전환 자체는 이 컴포넌트 책임이 아니게 됨).
   return render(
     <TestQueryProvider>
       <MbPresaleTab
@@ -46,6 +48,8 @@ function renderTab(segment: "private" | "public" | "competition", onSegmentChang
         isInCompare={() => false}
         onCompareToggle={vi.fn()}
         compareFull={false}
+        viewMode="list"
+        onViewModeChange={vi.fn()}
       />
     </TestQueryProvider>,
   );

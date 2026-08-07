@@ -16,7 +16,7 @@ import MbInfraOverlay from "@/components/mb/MbInfraOverlay";
 import { exportMbApartmentsToXlsx } from "@/lib/mb-export";
 import { MB_APT_SORT_OPTIONS } from "@/lib/mb-sort-options";
 import { PAGE_SIZE } from "@/lib/constants";
-import { useMbViewMode } from "@/hooks/useMbViewMode";
+import type { MbViewMode } from "@/lib/storage";
 import type { MbApartment } from "@/types";
 
 // 지도는 무겁고 SSR 불가(window.naver) → dynamic(ssr:false). MbLocationMap [id]/page 선례 답습.
@@ -35,6 +35,8 @@ export default function MbApartmentsTab({
   isInCompare,
   onCompareToggle,
   compareFull,
+  viewMode,
+  onViewModeChange,
 }: {
   query: UseQueryResult<{ apartments: MbApartment[]; total: number; page: number; page_size: number }>;
   page: number;
@@ -44,8 +46,12 @@ export default function MbApartmentsTab({
   isInCompare: (id: string) => boolean;
   onCompareToggle: (id: string, name: string) => void;
   compareFull: boolean;
+  /** viewMode 는 page.tsx 가 단일 소유(세션351 근본수정) — 이 탭이 독립 호출하면 부모의
+   * isFullscreenMap 판정과 어긋나는 레이스가 있었다(라이브 재현 확인). */
+  viewMode: MbViewMode;
+  onViewModeChange: (m: MbViewMode) => void;
 }) {
-  const { viewMode, setViewMode } = useMbViewMode();
+  const setViewMode = onViewModeChange;
   const [selected, setSelected] = useState<MbApartment | null>(null);
   const [activeLayer, setActiveLayer] = useState<ToolbarLayer | null>(null);
   const apartments = query.data?.apartments ?? [];

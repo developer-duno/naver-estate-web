@@ -5,72 +5,68 @@ data.go.kr 카탈로그 15098547 (한국부동산원_청약홈 분양정보 조�
 오퍼레이션이 함께 포함돼 있다 (2026-08-08 실측, 승인 완료).
 
 API 문서: https://www.data.go.kr/data/15098547/openapi.do
+
+`BasePublicDataAPI`(crime_stats_api.py·air_quality_api.py 와 동일 기반 클래스)를
+상속해 공유 일일 쿼터(9,000회, mibunyang 과 공유) 추적·throttle·재시도를
+그대로 재사용한다 — 별도 재시도 로직을 새로 만들지 않는다 (`oss-first.md` 답습).
 """
 
 import logging
-import os
 from datetime import date, datetime
 
-from curl_cffi import requests as cffi_requests
+from crawler.public_data_base import BasePublicDataAPI
 
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1"
-REQUEST_TIMEOUT = 15
-MAX_RETRIES = 3
-RETRY_DELAYS = [2, 5, 10]
+
+_EMPTY_RESPONSE = {"data": [], "totalCount": 0}
 
 
-def _get_api_key() -> str | None:
-    return os.getenv("PUBLIC_DATA_API_KEY")
+class ApplyhomeOfficetelAPI(BasePublicDataAPI):
+    """청약홈 오피스텔·도시형·공공지원 민간임대 API — odcloud 기반 (BasePublicDataAPI 상속)."""
 
+    _api_name = "applyhome_officetel"
 
-def _call(op: str, page: int, per_page: int) -> dict:
-    """odcloud.kr 오퍼레이션 1페이지 호출 (재시도 내장)."""
-    api_key = _get_api_key()
-    session = cffi_requests.Session()
-    last_exc: Exception | None = None
-    for attempt in range(MAX_RETRIES):
-        try:
-            r = session.get(
-                f"{BASE_URL}/{op}",
-                params={
-                    "serviceKey": api_key,
-                    "page": page,
-                    "perPage": per_page,
-                    "returnType": "JSON",
-                },
-                timeout=REQUEST_TIMEOUT,
-            )
-            r.raise_for_status()
-            return r.json()
-        except Exception as e:  # noqa: BLE001 — 외부 API 예외 유형 다양, 재시도 목적
-            last_exc = e
-            if attempt < MAX_RETRIES - 1:
-                import time
+    @classmethod
+    def _call(cls, op: str, page: int, per_page: int) -> dict:
+        """odcloud.kr 오퍼레이션 1페이지 호출.
 
-                time.sleep(RETRY_DELAYS[attempt])
-    raise RuntimeError(f"{op} 호출 실패 ({MAX_RETRIES}회 재시도)") from last_exc
+        BasePublicDataAPI.call_api() 가 None 을 반환할 수 있다(API 키 없음·
+        쿼터초과·전체 재시도 실패) — 호출자(Task 4·5 collect_*)가
+        `resp.get("data", [])` 형태로 방어 코드 없이 짜여 있으므로,
+        여기서 빈 응답으로 변환해 `-> dict` 계약을 지킨다.
+        """
+        url = f"{BASE_URL}/{op}"
+        data = cls.call_api(url, {
+            "page": str(page),
+            "perPage": str(per_page),
+            "returnType": "JSON",
+        })
+        if data is None:
+            logger.warning("[applyhome_officetel] %s 응답 없음 — 빈 결과로 대체", op)
+            return dict(_EMPTY_RESPONSE)
+        return data
 
 
 def fetch_officetel_detail(page: int = 1, per_page: int = 1000) -> dict:
     """오피스텔/도시형/생숙 공고 상세 (getUrbtyOfctlLttotPblancDetail)."""
-    return _call("getUrbtyOfctlLttotPblancDetail", page, per_page)
+    return ApplyhomeOfficetelAPI._call("getUrbtyOfctlLttotPblancDetail", page, per_page)
 
 
 def fetch_officetel_unit(page: int = 1, per_page: int = 1000) -> dict:
     """오피스텔/도시형/생숙 평형별 공급정보 (getUrbtyOfctlLttotPblancMdl)."""
-    return _call("getUrbtyOfctlLttotPblancMdl", page, per_page)
+    return ApplyhomeOfficetelAPI._call("getUrbtyOfctlLttotPblancMdl", page, per_page)
 
 
 def fetch_rental_detail(page: int = 1, per_page: int = 1000) -> dict:
     """공공지원 민간임대 공고 상세 (getPblPvtRentLttotPblancDetail)."""
-    return _call("getPblPvtRentLttotPblancDetail", page, per_page)
+    return ApplyhomeOfficetelAPI._call("getPblPvtRentLttotPblancDetail", page, per_page)
 
 
 def fetch_rental_unit(page: int = 1, per_page: int = 1000) -> dict:
     """공공지원 민간임대 평형별 공급정보 (getPblPvtRentLttotPblancMdl)."""
-    return _call("getPblPvtRentLttotPblancMdl", page, per_page)
+    return ApplyhomeOfficetelAPI._call("getPblPvtRentLttotPblancMdl", page, per_page)
 
 
 def parse_compact_date(v: str | None) -> date | None:

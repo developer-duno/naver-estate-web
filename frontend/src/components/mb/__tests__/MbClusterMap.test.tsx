@@ -274,4 +274,15 @@ describe("MbClusterMap", () => {
       expect(mockEventTrigger).toHaveBeenCalledWith(mockMapInstance, "idle");
     });
   });
+
+  // 세션 351 적대검증 발견: idle 트리거가 coordItems===0 조기 반환보다 뒤에 있으면 좌표
+  // 있는 단지가 0개인 지역(예: 그 지역에 미분양 단지 없음)에서 레이아웃 재계산이 스킵되는
+  // 회귀가 있었다. 지도 인스턴스는 좌표 유무와 무관하게 항상 생성되므로 트리거도 항상
+  // 실행돼야 한다 — 트리거를 조기 반환 앞으로 이동해 수정.
+  it("좌표 있는 단지가 0개여도 idle 이벤트를 트리거한다", async () => {
+    render(<MbClusterMap apartments={[apt("a", "좌표없음", undefined, undefined)]} />);
+    await waitFor(() => {
+      expect(mockEventTrigger).toHaveBeenCalledWith(mockMapInstance, "idle");
+    });
+  });
 });

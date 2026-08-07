@@ -6,22 +6,29 @@ declare namespace naver.maps {
     fitBounds(bounds: LatLngBounds): void;
     setCenter(latlng: LatLng): void;
     setZoom(level: number): void;
+    /** 현재 화면에 보이는 영역. supercluster 에 넘길 bbox 계산용. */
+    getBounds(): LatLngBounds;
+    /** 현재 줌 레벨. 네이버 v3 줌은 웹메르카토르 타일 줌과 같은 축이라 supercluster 에 그대로 전달 가능. */
+    getZoom(): number;
   }
   class Marker {
     constructor(opts?: MarkerOptions);
     setMap(map: Map | null): void;
     getPosition(): LatLng;
-    /** 클러스터 마커의 DOM 엘리먼트 — stylingFunction 에서 개수 배지 텍스트 조작용
-     *  (naver-marker-clustering.ts 가 감싸는 네이버 공식 클러스터링 전용 API). */
-    getElement(): HTMLElement;
     setIcon(icon: HtmlIcon): void;
   }
   class LatLng {
     constructor(lat: number, lng: number);
+    lat(): number;
+    lng(): number;
   }
   class LatLngBounds {
     constructor();
     extend(latlng: LatLng): void;
+    /** 남서쪽(최소 위·경도) 꼭짓점. getBounds() 결과에서 bbox 를 뽑을 때 사용. */
+    getSW(): LatLng;
+    /** 북동쪽(최대 위·경도) 꼭짓점. */
+    getNE(): LatLng;
   }
   class InfoWindow {
     constructor(opts?: InfoWindowOptions);

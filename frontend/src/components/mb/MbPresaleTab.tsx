@@ -16,7 +16,7 @@ import MbMapToolbar, { type ToolbarLayer } from "@/components/mb/MbMapToolbar";
 import MbInfraOverlay from "@/components/mb/MbInfraOverlay";
 import { MB_PRESALE_SORT_OPTIONS, MB_COMPETITION_SORT_OPTIONS } from "@/lib/mb-sort-options";
 import { PAGE_SIZE } from "@/lib/constants";
-import { useMbViewMode } from "@/hooks/useMbViewMode";
+import type { MbViewMode } from "@/lib/storage";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import type { MbApartment } from "@/types";
 
@@ -52,6 +52,8 @@ export default function MbPresaleTab({
   onCompareToggle,
   compareFull,
   region,
+  viewMode,
+  onViewModeChange,
 }: {
   segment: PresaleSegment;
   onSegmentChange: (seg: PresaleSegment) => void;
@@ -66,8 +68,11 @@ export default function MbPresaleTab({
   compareFull: boolean;
   /** 선택된 시/도 (page.tsx 전달). 분양 탭은 region 선택적(전국) → GPS 게이트·우선순위 판정에 사용. */
   region?: string;
+  /** viewMode 는 page.tsx 가 단일 소유(세션351 근본수정) — 상세 이유는 MbApartmentsTab.tsx 참고. */
+  viewMode: MbViewMode;
+  onViewModeChange: (m: MbViewMode) => void;
 }) {
-  const { viewMode, setViewMode } = useMbViewMode();
+  const setViewMode = onViewModeChange;
   const regionSelected = !!region;
   // 지도 뷰 + region 미선택일 때만 현재 위치 요청 (지역 고른 사용자에겐 불필요 팝업 안 띄움).
   const { coords: userLocation } = useGeolocation(viewMode === "map" && !regionSelected);

@@ -128,12 +128,13 @@ export default function MbClusterMap({
           new naver.maps.InfoWindow({ borderWidth: 0, disableAnchor: false });
         infoWindowRef.current = infoWindow;
 
-        // 근본 원인(세션351 실측): page.tsx 와 부모 MbApartmentsTab.tsx 가 useMbViewMode()
-        // 를 각각 독립 호출해 서로 다른 state 인스턴스를 갖는다. 자식(이 컴포넌트)이 지도
-        // 모드로 판정해 naver.maps.Map 을 생성하는 순간에도, 부모가 부여해야 할 풀스크린
-        // 높이 클래스(h-[calc(100vh-56px)] 등)는 아직 브라우저가 실제 레이아웃으로 계산하기
-        // 전일 수 있다 — 그 찰나에 컨테이너 높이가 0~1px 인 채로 지도가 생성되면 네이버
-        // SDK 가 그 크기를 내부에 스냅샷해버려 이후 컨테이너가 커져도 자동 갱신되지 않는다.
+        // 안전망(세션351): 예전엔 page.tsx 와 부모(MbApartmentsTab 등)가 useMbViewMode()
+        // 를 각각 독립 호출해 서로 다른 state 인스턴스를 가져, 자식이 지도 모드로 판정해
+        // naver.maps.Map 을 생성하는 순간에도 부모의 풀스크린 높이 클래스가 아직 레이아웃에
+        // 반영되기 전이라 컨테이너가 0~1px 로 굳는 레이스가 있었다(라이브 재현 확인). 근본
+        // 원인은 viewMode 를 page.tsx 가 단일 소유하도록 고쳐 해소했지만(app/mibunyang/page.tsx
+        // 참고), 레이아웃 확정 타이밍 자체는 브라우저 페인트 사이클에 달려 있어 유사 레이스가
+        // 다시 생길 수 있는 여지가 남아 — idle 트리거는 최후 안전망으로 유지한다.
         // "resize" 이벤트 트리거는 이 프로젝트에서 이미 실측으로 무효였다(SearchClusterMap.tsx
         // 세션 349, PR #314/#316 — trigger(map,"resize") 무효, trigger(map,"idle") 만 유효
         // 확인). requestAnimationFrame 으로 다음 페인트 이후(레이아웃 확정 후) idle 이벤트를

@@ -16,7 +16,7 @@ import MbInfraOverlay from "@/components/mb/MbInfraOverlay";
 import { exportMbApartmentsToXlsx } from "@/lib/mb-export";
 import { MB_APT_SORT_OPTIONS } from "@/lib/mb-sort-options";
 import { PAGE_SIZE } from "@/lib/constants";
-import { useMbViewMode } from "@/hooks/useMbViewMode";
+import type { MbViewMode } from "@/lib/storage";
 import type { MbApartment } from "@/types";
 
 // 지도는 무겁고 SSR 불가(window.naver) → dynamic(ssr:false).
@@ -35,6 +35,8 @@ export default function MbUnsoldTab({
   isInCompare,
   onCompareToggle,
   compareFull,
+  viewMode,
+  onViewModeChange,
 }: {
   query: UseQueryResult<{ unsold: MbApartment[]; total: number }>;
   page: number;
@@ -44,8 +46,11 @@ export default function MbUnsoldTab({
   isInCompare: (id: string) => boolean;
   onCompareToggle: (id: string, name: string) => void;
   compareFull: boolean;
+  /** viewMode 는 page.tsx 가 단일 소유(세션351 근본수정) — 상세 이유는 MbApartmentsTab.tsx 참고. */
+  viewMode: MbViewMode;
+  onViewModeChange: (m: MbViewMode) => void;
 }) {
-  const { viewMode, setViewMode } = useMbViewMode();
+  const setViewMode = onViewModeChange;
   const [selected, setSelected] = useState<MbApartment | null>(null);
   const [activeLayer, setActiveLayer] = useState<ToolbarLayer | null>(null);
   const apartments = query.data?.unsold ?? [];

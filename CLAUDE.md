@@ -111,11 +111,11 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - `CHILDCARE_DETAIL_API_KEY` — cpmsapi030 운영키
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — Gmail SMTP SSL 465
 
-## 테스트 현황 (BE·FE 2026-08-03 실측 세션 349)
+## 테스트 현황 (BE 2026-08-03 세션 349 / FE 2026-08-07 실측 세션 351)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1956개** (mibunyang 지도성능 이식 재검토 세션 +5: 검색 지도 서명-skip 성능회귀 가드 2 + GPS 카메라 우선순위 3 — 세션 349 idle 트리거 근본수정은 기존 7개 교체·순증 0) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1967개** (세션 351 +11: supercluster 클러스터링 교체 신규 4 + 목록↔지도 CSS 숨김 전환 신규 2 + 멀티탭 401 오탐 로그아웃 방지 신규 3 + 미분양 지도 idle 재계산 신규 2 — 세션 349 기준 1956에서 순증) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
 | BE pytest | `backend/tests/` | **1067개** (세션 346 크롤링 전수조사 안전조치 +8: backfill_price_batch rollback 가드 1 + 실거래가 재개(resume) 로직 회귀 3 + 관련 기존 스위트 재확인분. 세션 347 텔레그램 문구통일은 기존 테스트 정정만, 신규 0) |
 

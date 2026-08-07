@@ -91,29 +91,48 @@
 - **ActiveFilterChips**: 적용 조건 한글 칩 요약 (결과 화면에서 "지금 무슨 조건인지"). urlFilters(ArticleFilters) + 매물유형 narrowing(estateTypeLabels) → 칩, ✕ 클릭 시 개별 해제. 핵심 조건만(YAGNI). verified_only 칩 라벨 "인증매물만"(FilterChips·FilterSections 와 통일, 세션 317)
 - 결과 화면은 필터바 기본 접힘(접이식), 그 외 펼침
 
-### 검색 결과 지도뷰 (SearchClusterMap) — FEATURE_BACKLOG 항목1, 2026-08-02
+### 검색 결과 지도뷰 (SearchClusterMap) — FEATURE_BACKLOG 항목1, 2026-08-02 (세션 351 클러스터링 엔진 교체로 mb 와 분기)
 
-- **MbClusterMap 과 동일한 구현 방식**: 최초(세션 348)에는 `react-naver-maps` 패키지를 썼으나,
-  라이브 검증에서 언마운트 시 `instance.destroy()` 가 SDK 내부 참조 비어 크래시(→ 검색 화면
-  전체가 500) 하는 것이 드러나 폐기. 지금은 mb 쪽과 같은 vanilla JS(SDK 폴링·수동 마커)
-  패턴 — 지도 인스턴스를 **절대 destroy 하지 않고** 언마운트 시 ref 만 비우고 마커만
-  `setMap(null)` 로 뗀다. `window.navermap_authFailure` 는 직접 등록.
-- **클러스터링 = mapbox supercluster**: `MbClusterMap`은 이름과 달리 실제 클러스터링(근접
-  마커 묶기)이 없었음(실측 확인). 검색 지도뷰는 처음에 네이버 공식 `MarkerClustering.js`
-  (Apache 2.0)를 벤더링해 썼으나, ① 마커마다 기존 클러스터 전체를 훑는 O(N×C) 최근접 탐색
-  ② idle 마다 전체 마커 DOM 재생성 구조라 단지 500개에서 지도 탭 INP **3.2초**가 라이브로
-  실측됨(세션 350). `supercluster`(npm, ISC, mapbox) 로 교체 — KD-tree 인덱스라 같은 계산이
-  ms 단위이고, `getClusters(bbox, zoom)` 로 **화면에 보이는 것만** 마커로 만들어 DOM 개수도
-  보통 10~30개로 유지된다. 벤더 파일(`lib/naver-marker-clustering.ts`)은 삭제.
-  클러스터 클릭 확대는 `getClusterExpansionZoom()`(정확한 분리 줌 계산).
+- **vanilla JS 지도 인스턴스 관리는 MbClusterMap 과 동일**: 최초(세션 348)에는
+  `react-naver-maps` 패키지를 썼으나, 라이브 검증에서 언마운트 시 `instance.destroy()` 가
+  SDK 내부 참조 비어 크래시(→ 검색 화면 전체가 500) 하는 것이 드러나 폐기. 지금은 mb 쪽과
+  같은 vanilla JS(SDK 폴링·수동 마커) 패턴 — 지도 인스턴스를 **절대 destroy 하지 않고**
+  언마운트 시 ref 만 비우고 마커만 `setMap(null)` 로 뗀다. `window.navermap_authFailure`
+  는 직접 등록. **이 공통 패턴은 여기까지 — 클러스터링 엔진 자체는 세션 351 부터 갈린다
+  (아래 ⚠ 참고).**
+- ⚠ **클러스터링 엔진 비대칭 (세션 351)**: `SearchClusterMap` 은 `mapbox supercluster`
+  (npm, ISC), `MbClusterMap` 은 네이버 SDK 기본 `Marker`(클러스터링 없음, 마커를 그냥
+  개별로 얹음) — **두 컴포넌트는 이제 같은 클러스터링 버그를 공유하지 않는다.** "형제
+  컴포넌트라 같은 패턴일 것"이라 가정하고 한쪽만 고치면 안 됨. 검색 지도뷰는 처음에 네이버
+  공식 `MarkerClustering.js`(Apache 2.0)를 벤더링해 썼으나, ① 마커마다 기존 클러스터
+  전체를 훑는 O(N×C) 최근접 탐색 ② idle 마다 전체 마커 DOM 재생성 구조라 단지 500개에서
+  지도 탭 INP **3,212ms** 가 라이브로 실측됨(세션 350). `supercluster` 로 교체 — KD-tree
+  인덱스라 같은 계산이 ms 단위이고, `getClusters(bbox, zoom)` 로 **화면에 보이는 것만**
+  마커로 만들어 DOM 개수도 보통 10~30개로 유지된다. 벤더 파일(`lib/naver-marker-clustering.ts`,
+  811줄)은 삭제. 클러스터 클릭 확대는 `getClusterExpansionZoom()`(정확한 분리 줌 계산).
+  **잔여 병목**: supercluster 교체 후에도 지도 탭 INP 는 2,647ms 로만 줄어 라이브 트레이스를
+  함수 단위로 추적한 결과 진범은 목록(500행) React 언마운트 비용(removeChild 1,477ms +
+  커밋 트리 순회 1,147ms) — `SearchExperience.tsx` 에서 목록↔지도 전환 시 목록을 언마운트
+  하지 않고 CSS `hidden`(display:none) 으로만 숨기도록 전환해 최종 **64~96ms** 로 소멸
+  (세션 350 의 "클러스터링이 3.2초" 진단은 부분 오진이었다 — 목록 해체 2.6 + 클러스터링 0.6).
+- **idle 이벤트 트리거 위치도 갈린다**: `SearchClusterMap` 은 최초 마운트 시 `idle` 트리거를
+  **명시 호출로 대체**해 제거했다(supercluster 로 렌더를 직접 호출하므로 idle 발화 여부에
+  더 이상 의존하지 않음 — 세션 349 의 우회 자체가 불필요해짐). 반대로 `MbClusterMap` 은
+  세션 351 에서 **idle 트리거를 신규로 추가**했다(page.tsx 와 부모 컴포넌트가 지도 보기
+  상태를 독립적으로 들고 있어, 부모의 풀스크린 높이 클래스가 실제 레이아웃에 반영되기 전에
+  지도가 생성되면 컨테이너가 0~1px 로 굳는 결함 — `requestAnimationFrame` 으로 다음 프레임에
+  `naver.maps.Event.trigger(map, "idle")`). **resize 트리거는 이 프로젝트에서 이미 실측으로
+  무효로 확인됨** — resize·idle 둘 중 뭘 쓸지 헷갈리면 idle 만 유효.
 - **완전 지연 로드**: `SearchClusterMap`은 `next/dynamic(() => import(...), {ssr:false})`
   로 `SearchExperience.tsx`에 통합 — 지도 뷰를 안 쓰는 사용자(대부분 목록만 사용)는 지도
-  SDK·react-naver-maps·클러스터링 코드를 전혀 받지 않는다(사장님 "지도가 속도를 느리게
-  한다" 우려 반영). `search_view_mode`(localStorage, `useSearchViewMode` 훅)는 `mb_view_mode`
-  와 물리적으로 분리된 키 — 미분양 탭에서 "지도"로 둬도 검색 결과가 강제로 지도로 안 열림.
+  SDK·클러스터링 코드를 전혀 받지 않는다(사장님 "지도가 속도를 느리게 한다" 우려 반영).
+  `search_view_mode`(localStorage, `useSearchViewMode` 훅)는 `mb_view_mode` 와 물리적으로
+  분리된 키 — 미분양 탭에서 "지도"로 둬도 검색 결과가 강제로 지도로 안 열림.
 - **비로그인/승인대기 노출**: 목록(`ComplexRow`/`ComplexCardMobile`)이 이미 비로그인·
   승인대기 사용자에게 보이므로(안내 문구만 위에 얹는 구조), 지도도 동일하게 노출 — 별도
-  게이트 없음(막으면 오히려 목록/지도 간 일관성이 깨짐).
+  게이트 없음(막으면 오히려 목록/지도 간 일관성이 깨짐). 단, 마커→선택카드→상세페이지
+  (`/complex/[no]`) 진입은 `proxy.ts` `AUTH_REQUIRED_PATHS` 로 로그인 필수 — 비로그인
+  클릭 시 `/login` 리다이렉트는 의도된 설계(버그 아님, 세션 351 확인).
 - **마커 클릭**: InfoWindow 는 여전히 HTML 문자열 기반이라 React 라우팅 불가(mb 와 동일
   제약) — 클릭 시 `onSelect(complex)` 콜백으로 부모(`SearchExperience`)가 지도 위 absolute
   오버레이로 `ComplexCardMobile`을 얹어 비교 담기 등 기존 기능 그대로 재사용.

@@ -29,8 +29,9 @@ function okQuery<T>(data: T): UseQueryResult<T> {
 
 const presaleData = { presale: [makeApt({ id: "P", name: "민간단지", presale_type: "민간분양" })], total: 1, page: 1, page_size: 10 };
 const competitionData = { competition: [makeApt({ id: "C", name: "경쟁단지", competition_rate: 20 })], total: 1, page: 1, page_size: 10 };
+const officetelRentalData = { items: [], total: 0, page: 1, page_size: 10 };
 
-function renderTab(segment: "private" | "public" | "competition", onSegmentChange = vi.fn()) {
+function renderTab(segment: "private" | "public" | "competition" | "officetel_rental", onSegmentChange = vi.fn()) {
   // 세션 319: 지도뷰 인프라 lazy fetch(useQuery) 추가로 QueryClientProvider 필요 (web-rules.md).
   // 세션 351: viewMode 는 page.tsx 가 단일 소유하는 구조로 바뀌어 이 탭은 props 로만 받는다
   // — 테스트에선 "list" 고정(뷰 전환 자체는 이 컴포넌트 책임이 아니게 됨).
@@ -41,6 +42,7 @@ function renderTab(segment: "private" | "public" | "competition", onSegmentChang
         onSegmentChange={onSegmentChange}
         presaleQuery={okQuery(presaleData)}
         competitionQuery={okQuery(competitionData)}
+        officetelRentalQuery={okQuery(officetelRentalData)}
         page={1}
         sort=""
         onSortChange={vi.fn()}
@@ -56,11 +58,18 @@ function renderTab(segment: "private" | "public" | "competition", onSegmentChang
 }
 
 describe("MbPresaleTab — 세그먼트 전환", () => {
-  it("세그먼트 3종(민간분양/LH공공분양/분양결과) 버튼이 렌더된다", () => {
+  it("세그먼트 4종(민간분양/LH공공분양/분양결과/오피스텔·임대) 버튼이 렌더된다", () => {
     renderTab("private");
     expect(screen.getByRole("tab", { name: "민간분양" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "LH공공분양" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "분양결과" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "오피스텔·임대" })).toBeInTheDocument();
+  });
+
+  it("officetel_rental 세그먼트는 aria-selected=true + 오피스텔·임대 목록을 렌더", () => {
+    renderTab("officetel_rental");
+    expect(screen.getByRole("tab", { name: "오피스텔·임대" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("등록된 오피스텔·민간임대 청약 공고가 없습니다.")).toBeInTheDocument();
   });
 
   it("private 세그먼트는 presale 데이터(분양 테이블)를 렌더", () => {
@@ -81,6 +90,13 @@ describe("MbPresaleTab — 세그먼트 전환", () => {
     renderTab("private", onSeg);
     fireEvent.click(screen.getByRole("tab", { name: "분양결과" }));
     expect(onSeg).toHaveBeenCalledWith("competition");
+  });
+
+  it("오피스텔·임대 탭 클릭 시 onSegmentChange 가 officetel_rental 로 호출", () => {
+    const onSeg = vi.fn();
+    renderTab("private", onSeg);
+    fireEvent.click(screen.getByRole("tab", { name: "오피스텔·임대" }));
+    expect(onSeg).toHaveBeenCalledWith("officetel_rental");
   });
 
   it("선택된 세그먼트는 aria-selected=true", () => {

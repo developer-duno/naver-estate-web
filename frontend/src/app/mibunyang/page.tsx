@@ -4,7 +4,7 @@ import { useCallback, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
-import { getMbApartments, getMbUnsold, getMbRegions, getMbTrades, getMbPresale, getMbCompetition } from "@/lib/api";
+import { getMbApartments, getMbUnsold, getMbRegions, getMbTrades, getMbPresale, getMbCompetition, getMbOfficetelRental } from "@/lib/api";
 import MbRegionSelector from "@/components/mb/MbRegionSelector";
 import { SkeletonPage } from "@/components/Skeleton";
 import { PAGE_SIZE } from "@/lib/constants";
@@ -214,6 +214,12 @@ function MibunyangContent() {
     enabled: onPresale && segment === "competition",
     placeholderData: keepPreviousData,
   });
+  const officetelRentalQuery = useQuery({
+    queryKey: queryKeys.mb.officetelRental(region || undefined, page),
+    queryFn: () => getMbOfficetelRental(region || undefined, page, PAGE_SIZE),
+    enabled: onPresale && segment === "officetel_rental",
+    placeholderData: keepPreviousData,
+  });
 
   return (
     <div className={isFullscreenMap ? "flex flex-col h-[calc(100vh-56px)]" : "max-w-7xl mx-auto px-4 py-6"}>
@@ -268,6 +274,7 @@ function MibunyangContent() {
             onSegmentChange={handleSegmentChange}
             presaleQuery={presaleQuery}
             competitionQuery={competitionQuery}
+            officetelRentalQuery={officetelRentalQuery}
             page={page}
             sort={sortBy}
             onSortChange={handleSortChange}

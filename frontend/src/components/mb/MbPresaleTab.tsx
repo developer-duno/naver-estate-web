@@ -7,6 +7,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { getMbApartmentDetail } from "@/lib/api";
 import MbPresaleTable from "@/components/mb/MbPresaleTable";
 import MbCompetitionTable from "@/components/mb/MbCompetitionTable";
+import MbOfficetelRentalTable from "@/components/mb/MbOfficetelRentalTable";
 import Pagination from "@/components/Pagination";
 import { MbTabContent } from "@/components/mb/MbTabContent";
 import MbSortSelect from "@/components/mb/MbSortSelect";
@@ -14,11 +15,11 @@ import MbViewToggle from "@/components/mb/MbViewToggle";
 import MbSelectedCard from "@/components/mb/MbSelectedCard";
 import MbMapToolbar, { type ToolbarLayer } from "@/components/mb/MbMapToolbar";
 import MbInfraOverlay from "@/components/mb/MbInfraOverlay";
-import { MB_PRESALE_SORT_OPTIONS, MB_COMPETITION_SORT_OPTIONS } from "@/lib/mb-sort-options";
+import { MB_PRESALE_SORT_OPTIONS, MB_COMPETITION_SORT_OPTIONS, MB_OFFICETEL_RENTAL_SORT_OPTIONS } from "@/lib/mb-sort-options";
 import { PAGE_SIZE } from "@/lib/constants";
 import type { MbViewMode } from "@/lib/storage";
 import { useGeolocation } from "@/hooks/useGeolocation";
-import type { MbApartment } from "@/types";
+import type { MbApartment, MbOfficetelRentalItem } from "@/types";
 
 // 지도는 무겁고 SSR 불가(window.naver) → dynamic(ssr:false).
 const LazyClusterMap = dynamic(() => import("@/components/mb/MbClusterMap"), {
@@ -26,16 +27,18 @@ const LazyClusterMap = dynamic(() => import("@/components/mb/MbClusterMap"), {
   loading: () => <div className="w-full h-96 rounded-lg border border-gray-200 bg-gray-50" />,
 });
 
-export type PresaleSegment = "private" | "public" | "competition";
+export type PresaleSegment = "private" | "public" | "competition" | "officetel_rental";
 
 export const PRESALE_SEGMENTS: { key: PresaleSegment; label: string }[] = [
   { key: "private", label: "민간분양" },
   { key: "public", label: "LH공공분양" },
   { key: "competition", label: "분양결과" },
+  { key: "officetel_rental", label: "오피스텔·임대" },
 ];
 
 type PresaleData = { presale: MbApartment[]; total: number; page: number; page_size: number };
 type CompetitionData = { competition: MbApartment[]; total: number; page: number; page_size: number };
+type OfficetelRentalData = { items: MbOfficetelRentalItem[]; total: number; page: number; page_size: number };
 
 /** 분양 탭 — 세그먼트(민간/LH공공/분양결과) 전환 + 정렬 + 페이지네이션 + 지도 토글.
  * URL ?seg= 동기화는 page.tsx 가 담당, 본 컴포넌트는 props 로 받음. */
@@ -44,6 +47,7 @@ export default function MbPresaleTab({
   onSegmentChange,
   presaleQuery,
   competitionQuery,
+  officetelRentalQuery,
   page,
   sort,
   onSortChange,
@@ -59,6 +63,7 @@ export default function MbPresaleTab({
   onSegmentChange: (seg: PresaleSegment) => void;
   presaleQuery: UseQueryResult<PresaleData>;
   competitionQuery: UseQueryResult<CompetitionData>;
+  officetelRentalQuery: UseQueryResult<OfficetelRentalData>;
   page: number;
   sort: string;
   onSortChange: (s: string) => void;
@@ -74,8 +79,11 @@ export default function MbPresaleTab({
 }) {
   const setViewMode = onViewModeChange;
   const regionSelected = !!region;
+  const isOfficetelRental = segment === "officetel_rental";
   // 지도 뷰 + region 미선택일 때만 현재 위치 요청 (지역 고른 사용자에겐 불필요 팝업 안 띄움).
-  const { coords: userLocation } = useGeolocation(viewMode === "map" && !regionSelected);
+  // 오피스텔·임대는 지도 자체가 없으므로(좌표 데이터 없음) viewMode가 다른 탭에서 넘어온
+  // "map" 값이어도 GPS 팝업을 안 띄운다.
+  const { coords: userLocation } = useGeolocation(viewMode === "map" && !regionSelected && !isOfficetelRental);
   const [selected, setSelected] = useState<MbApartment | null>(null);
   const [activeLayer, setActiveLayer] = useState<ToolbarLayer | null>(null);
 
@@ -91,15 +99,22 @@ export default function MbPresaleTab({
   const detailApt = detailQuery.data ?? selected;
 
   const isCompetition = segment === "competition";
-  const query = isCompetition ? competitionQuery : presaleQuery;
+  const query = isCompetition ? competitionQuery : isOfficetelRental ? officetelRentalQuery : presaleQuery;
   const items = isCompetition
     ? competitionQuery.data?.competition ?? []
-    : presaleQuery.data?.presale ?? [];
+    : isOfficetelRental
+      ? officetelRentalQuery.data?.items ?? []
+      : presaleQuery.data?.presale ?? [];
   const total = query.data?.total ?? 0;
-  const sortOptions = isCompetition ? MB_COMPETITION_SORT_OPTIONS : MB_PRESALE_SORT_OPTIONS;
+  const sortOptions = isCompetition
+    ? MB_COMPETITION_SORT_OPTIONS
+    : isOfficetelRental
+      ? MB_OFFICETEL_RENTAL_SORT_OPTIONS
+      : MB_PRESALE_SORT_OPTIONS;
   const defaultSortLabel = isCompetition ? "기본 (경쟁률 높은순)" : "기본 (공고일 최신순)";
 
-  const isMap = viewMode === "map";
+  // 오피스텔·임대는 좌표 데이터가 없어 지도 표시 불가(1차 구현 범위 밖) — 강제로 목록뷰만 허용.
+  const isMap = viewMode === "map" && !isOfficetelRental;
   return (
     <div className={isMap ? "flex flex-col flex-1 min-h-0" : ""}>
       {/* 세그먼트 컨트롤 + 보기 토글 */}
@@ -122,23 +137,23 @@ export default function MbPresaleTab({
             </button>
           ))}
         </div>
-        <MbViewToggle viewMode={viewMode} onChange={setViewMode} />
+        {!isOfficetelRental && <MbViewToggle viewMode={viewMode} onChange={setViewMode} />}
       </div>
 
       <MbTabContent loading={query.isLoading} error={query.error} refetch={query.refetch}>
         <div className="flex flex-wrap items-center justify-between gap-y-2 mb-3 flex-none">
           <span className="text-sm text-gray-500">총 {total.toLocaleString()}개</span>
-          {viewMode === "list" && (
+          {!isMap && (
             <MbSortSelect sort={sort} onSortChange={onSortChange} options={sortOptions} defaultLabel={defaultSortLabel} />
           )}
         </div>
 
-        {viewMode === "map" ? (
+        {isMap ? (
           <div className="relative flex-1 min-h-0">
             <div className="absolute right-2 top-2 z-10">
               <MbMapToolbar active={activeLayer} onChange={setActiveLayer} />
             </div>
-            <LazyClusterMap apartments={items} onSelect={setSelected} userLocation={userLocation} regionSelected={regionSelected} markerKind={isCompetition ? "competition" : "presale"} className="h-full" />
+            <LazyClusterMap apartments={items as MbApartment[]} onSelect={setSelected} userLocation={userLocation} regionSelected={regionSelected} markerKind={isCompetition ? "competition" : "presale"} className="h-full" />
             {/* 툴바 레이어를 켰는데 단지 선택 전이면 안내 — 버튼만 켜지고 무반응인 혼란 방지(세션 319 E). */}
             {activeLayer && !selected && (
               <div className="absolute left-2 bottom-2 z-10 bg-white/90 rounded-md border border-gray-200 px-3 py-1.5 shadow-sm" role="status">
@@ -161,14 +176,16 @@ export default function MbPresaleTab({
           <>
             {isCompetition ? (
               <MbCompetitionTable
-                apartments={items}
+                apartments={items as MbApartment[]}
                 isInCompare={isInCompare}
                 onCompareToggle={onCompareToggle}
                 compareFull={compareFull}
               />
+            ) : isOfficetelRental ? (
+              <MbOfficetelRentalTable items={items as MbOfficetelRentalItem[]} />
             ) : (
               <MbPresaleTable
-                apartments={items}
+                apartments={items as MbApartment[]}
                 isInCompare={isInCompare}
                 onCompareToggle={onCompareToggle}
                 compareFull={compareFull}

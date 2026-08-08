@@ -1,12 +1,13 @@
 """오피스텔 청약 수집 잡 회귀 가드 (이슈 #323).
 
-핵심 검증: house_manage_no 매칭 대상 단지가 apartments 에 없으면 skip(에러 아님),
-PUBLIC_DATA_API_KEY 미설정 시 조용히 cancelled 기록 (기존 collect_public_trade_data 패턴).
+핵심 검증: house_manage_no 기준 전량 upsert (apartments 로스터 매칭 게이트 없음
+— 2026-08-08 근본수정. mibunyang 은 오피스텔 API 를 아예 호출하지 않아 매칭
+게이트가 구조적으로 항상 0건이었던 결함), PUBLIC_DATA_API_KEY 미설정 시 조용히
+cancelled 기록 (기존 collect_public_trade_data 패턴).
 """
 import os
 from unittest.mock import patch
 
-from db.mb_models import Apartment
 from db.models import CrawlJob
 
 
@@ -29,12 +30,8 @@ def test_collect_officetel_presale_skips_when_key_missing(db):
 
 
 def test_collect_officetel_presale_upserts_matched_apartment(db):
-    """API 응답의 house_manage_no 가 이미 apartments 에 등록돼 있으면 upsert."""
+    """API 응답의 house_manage_no 를 apartments 매칭 여부와 무관하게 upsert."""
     from crawler.service_applyhome_officetel import collect_officetel_presale
-
-    apt = Apartment(id="ah-2026000999", name="테스트오피스텔", region="서울")
-    db.add(apt)
-    db.commit()
 
     fake_detail = {
         "data": [
@@ -75,8 +72,10 @@ def test_collect_officetel_presale_upserts_matched_apartment(db):
     assert row.apartment_id == "ah-2026000999"
 
 
-def test_collect_officetel_presale_skips_unmatched_apartment(db):
-    """apartments 에 없는 house_manage_no 는 저장하지 않고 넘어간다 (에러 아님)."""
+def test_collect_officetel_presale_upserts_without_apartment_row(db):
+    """apartments 로스터에 매칭되는 단지가 전혀 없어도 house_manage_no 기준 upsert
+    (결함 수정 회귀 — 옛 매칭 게이트는 mibunyang 이 오피스텔 API 를 호출하지 않아
+    apartments 에 대응 행이 구조적으로 존재할 수 없다는 사실을 놓쳐 항상 skip시켰다)."""
     from crawler.service_applyhome_officetel import collect_officetel_presale
 
     fake_detail = {
@@ -111,7 +110,9 @@ def test_collect_officetel_presale_skips_unmatched_apartment(db):
         .filter(PresaleScheduleOfficial.house_manage_no == "2026999999")
         .first()
     )
-    assert row is None
+    assert row is not None
+    assert row.house_type == "officetel"
+    assert row.apartment_id == "ah-2026999999"
 
     job = (
         db.query(CrawlJob)

@@ -4,16 +4,14 @@ from datetime import date
 from fastapi.testclient import TestClient
 
 from db.mb_models import (
-    Apartment,
     PresaleScheduleOfficial,
     RentalScheduleOfficial,
 )
 
 
 def test_get_officetel_rental_returns_both_kinds(client: TestClient, db):
-    """오피스텔(apartments 연결) + 민간임대(독립) 를 한 목록에 합쳐 반환, 각 kind 필드로 구분."""
-    apt = Apartment(id="ah-9990001", name="오피스텔A", region="서울")
-    db.add(apt)
+    """오피스텔(house_manage_no 기준 전량 upsert) + 민간임대(독립) 를 한 목록에
+    합쳐 반환, 각 kind 필드로 구분."""
     db.add(
         PresaleScheduleOfficial(
             apartment_id="ah-9990001",
@@ -38,16 +36,17 @@ def test_get_officetel_rental_returns_both_kinds(client: TestClient, db):
     assert kinds == {"officetel", "rental"}
     assert data["total"] == 2
 
-    # 리뷰 결함 수정 회귀: officetel 항목은 apartment_id 뿐 아니라 Apartment.name
-    # 이 apartment_name 으로 JOIN 되어 노출돼야 한다 (내부 ID 노출 방지, 이슈 #323).
+    # 근본수정 회귀(2026-08-08): 오피스텔은 apartments 로스터와 매칭될 상대가
+    # 구조적으로 없다 — apartment_name JOIN 을 기대하지 않는다(항상 None).
+    # apartment_id 는 자체 발급 placeholder 로 그대로 노출.
     officetel_item = next(item for item in data["items"] if item["kind"] == "officetel")
-    assert officetel_item["apartment_name"] == "오피스텔A"
+    assert officetel_item["apartment_name"] is None
     assert officetel_item["apartment_id"] == "ah-9990001"
 
 
 def test_get_officetel_rental_officetel_without_apartment_row_still_returned(client: TestClient, db):
-    """apartments 로스터에 매칭되는 단지가 없어도(데이터 정합성 예외) 목록에서 빠지지 않고
-    apartment_name=None 으로 폴백 — LEFT OUTER JOIN 선택 이유의 회귀 가드."""
+    """apartments 로스터에 매칭되는 단지가 없는 게 정상 상태다 (2026-08-08 근본수정
+    — 매칭 게이트 자체를 제거) — 목록에서 빠지지 않고 apartment_name=None 으로 표시."""
     db.add(
         PresaleScheduleOfficial(
             apartment_id="ah-missing",

@@ -21,13 +21,13 @@ describe("MbOfficetelRentalTable", () => {
     expect(screen.getByText(/등록된.*없습니다/)).toBeInTheDocument();
   });
 
-  it("오피스텔 이름은 apartment_name(단지명)을 apartment_id 보다 우선 표시한다 (리뷰 결함 수정 회귀)", () => {
+  it("오피스텔 이름은 house_nm(청약홈 단지명)을 apartment_id 보다 우선 표시한다 (V043 회귀)", () => {
     const items: MbOfficetelRentalItem[] = [
       {
         kind: "officetel",
         house_manage_no: "1",
         apartment_id: "ah-1",
-        apartment_name: "테스트오피스텔",
+        house_nm: "테스트오피스텔",
         recruit_date: "2026-08-01",
       },
     ];
@@ -37,7 +37,7 @@ describe("MbOfficetelRentalTable", () => {
     expect(screen.queryByText("ah-1")).not.toBeInTheDocument();
   });
 
-  it("apartment_name 이 없으면(로스터 미매칭 예외) apartment_id 로 폴백한다", () => {
+  it("house_nm 이 없으면 apartment_id 로 폴백한다", () => {
     const items: MbOfficetelRentalItem[] = [
       { kind: "officetel", house_manage_no: "1", apartment_id: "ah-missing", recruit_date: "2026-08-01" },
     ];

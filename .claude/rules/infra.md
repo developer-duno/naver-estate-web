@@ -79,6 +79,8 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 | 정기 VACUUM 유지보수 | 매일 03:50 | articles/trades VACUUM (ANALYZE) — visibility map 재악화 차단. Supabase autovacuum 미동작 대비 안전망. DB 전용(네이버 0), 토글 VACUUM_MAINTENANCE_ENABLED (세션 260) |
 | 인기 단지 크롤링 | 매일 10:45/14:45/19:15 | 자주 조회되는 단지 선제적 크롤링, 개별 try/except (기본 배치 50) |
 | 공공데이터 수집 | 토요일 5시 | 국토교통부 실거래가 (10일 토요일 skip) |
+| 청약홈 오피스텔 수집 | 월요일 05:00 | 오피스텔/도시형 청약 공고+평형(getUrbtyOfctlLttotPblancDetail/Mdl), apartments 로스터 매칭분만 upsert (네이버 0, PUBLIC_DATA_ENABLED 공유 — 이슈 #323) |
+| 청약홈 민간임대 수집 | 월요일 05:30 | 공공지원 민간임대 공고+평형(getPblPvtRentLttotPblancDetail/Mdl), 신규 독립 테이블 (네이버 0, PUBLIC_DATA_ENABLED 공유 — 이슈 #323) |
 | 대기질 수집 | 매일 2시 | 에어코리아 API |
 | 응급의료 수집 | 매월 첫째 월 3시 | NEMC 응급의료기관 API |
 | 어린이집 수집 | 매월 첫째 목 6시 | CPMS cpmsapi030 API |

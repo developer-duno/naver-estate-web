@@ -247,6 +247,38 @@ def create_scheduler() -> BackgroundScheduler:
         )
         logger.info("공공데이터 실거래가 수집 활성화: 토요일 05:00 (배치 %d)", PUBLIC_DATA_BATCH_SIZE)
 
+    # F-1. 청약홈 오피스텔·민간임대 수집 — 주 1회 월요일 새벽 5시 (이슈 #323)
+    #      공공데이터 실거래가(토요일 5시)와 겹치지 않게 요일 분리.
+    if PUBLIC_DATA_ENABLED:
+        from crawler.service_applyhome_officetel import collect_officetel_presale
+        from crawler.service_applyhome_rental import collect_rental_presale
+
+        scheduler.add_job(
+            collect_officetel_presale,
+            "cron",
+            day_of_week="mon",
+            hour=5,
+            minute=0,
+            kwargs={"scheduler_job_id": "officetel_presale"},
+            id="collect_officetel_presale",
+            name="청약홈 오피스텔 수집",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        scheduler.add_job(
+            collect_rental_presale,
+            "cron",
+            day_of_week="mon",
+            hour=5,
+            minute=30,
+            kwargs={"scheduler_job_id": "rental_presale"},
+            id="collect_rental_presale",
+            name="청약홈 민간임대 수집",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        logger.info("청약홈 오피스텔·민간임대 수집 활성화: 월요일 05:00/05:30")
+
     # G. 에어코리아 대기질 수집 — 매일 새벽 2시
     if AIR_QUALITY_ENABLED:
         from crawler.env_service import collect_air_quality

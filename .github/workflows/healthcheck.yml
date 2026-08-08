@@ -12,6 +12,10 @@
 #   재부팅 직후 — 터널이 재부팅에서 못 살아난 것을 그날 아침 잡기 위한 시각.
 #   트레이드오프: 장애 인지가 최대 24시간 지연될 수 있음(한도 보호가 우선).
 #
+# 403 구분 알림 (2026-08-09 세션): Cloudflare Bot Fight 모드가 켜지면 GH runner
+# (미국 데이터센터 IP + curl)가 관리 챌린지를 못 풀어 403 — 서버는 멀쩡한데 오탐이
+# 난다. 그래서 HTTP 코드를 캡처해 403 은 "엣지 차단 의심"으로 따로 알린다.
+#
 # 운영자 설정 필수: 저장소 Settings → Secrets and variables → Actions 에
 # TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID 두 시크릿을 등록해야 실패 시 알림이 간다.
 # 시크릿 미설정이어도 워크플로우 자체는 안전하게 동작한다(알림만 스킵).
@@ -31,7 +35,11 @@ jobs:
       - name: Ping /health/db
         id: ping
         run: |
-          if curl -fsS --max-time 20 https://api.2u.pe.kr/health/db; then
+          code=$(curl -sS -o body.txt -w '%{http_code}' --max-time 20 https://api.2u.pe.kr/health/db) || code="000"
+          echo "HTTP $code"
+          cat body.txt 2>/dev/null || true
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" = "200" ]; then
             echo "healthy=true" >> "$GITHUB_OUTPUT"
           else
             echo "healthy=false" >> "$GITHUB_OUTPUT"
@@ -45,15 +53,21 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          HTTP_CODE: ${{ steps.ping.outputs.code }}
         run: |
           if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
             echo "TELEGRAM secrets 미설정 — 알림 스킵"
             exit 0
           fi
+          if [ "$HTTP_CODE" = "403" ]; then
+            MSG="[외부감시] ⚠ 헬스체크 403 — 서버 다운 아님, Cloudflare 엣지 차단 가능성(Bot Fight 모드 등 보안설정 확인, infra.md §관찰성)"
+          else
+            MSG="[외부감시] 🚨 naver-estate-web 헬스체크 실패 (HTTP ${HTTP_CODE}): https://api.2u.pe.kr/health/db 응답 없음 또는 비정상 — 집서버·터널·DB 점검 필요"
+          fi
           curl -fsS --max-time 10 \
             "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d text="[외부감시] 🚨 naver-estate-web 헬스체크 실패: https://api.2u.pe.kr/health/db 응답 없음 또는 비정상"
+            -d text="${MSG}"
 
       # Actions 탭에서도 실패가 보이도록(두 번째 신호) — 알림 성공/스킵 여부와 무관하게 실패 처리
       - name: Fail the job if unhealthy

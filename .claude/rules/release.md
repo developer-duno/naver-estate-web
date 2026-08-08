@@ -38,10 +38,20 @@ FE 만 변경된 PR (frontend/*) 은 본 룰 면제.
 4 지표 중 하나라도 옛 시각/옛값이면:
 
 ```powershell
-# Step 1: orchestrator pythonw 종료
-Get-Process pythonw -ErrorAction SilentlyContinue | Where-Object {
-    $_.CommandLine -like '*startup_orchestrator*'
-} | Stop-Process -Force
+# Step 1: orchestrator 종료 — python.exe·pythonw.exe 둘 다 잡는다
+#   재부팅 경로(Startup BAT)·§3 schtasks 명령은 pythonw 로, 수동·세션 셸 재기동은 python 으로 뜰 수 있어
+#   이름 하나만 필터하면 놓친다. ⚠ Get-Process 는 Windows PowerShell 5.1 에 CommandLine
+#   속성이 없어 필터가 조용히 0건 — Get-CimInstance 필수 (세션 353 발견: 옛 명령은 무동작).
+Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" |
+    Where-Object { $_.CommandLine -like '*startup_orchestrator*' } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+
+# Step 1-b: 사멸 확인 — 0건이어야 다음 단계 진행 (예외 0)
+#   옛 orchestrator 가 살아 있으면 새 인스턴스가 _check_already_running() 에서 조용히
+#   sys.exit(0) → "재시작했다고 믿었는데 안 된" 사고. 세션 352 의 성공은 옛 PID 가
+#   이미 죽어 있던 우연이었다 (§4 세션 352~353 행).
+(Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" |
+    Where-Object { $_.CommandLine -like '*startup_orchestrator*' } | Measure-Object).Count  # 기대: 0
 
 # Step 2: uvicorn 자식 좀비 정리 (port 8002 점유 프로세스 명시 종료)
 $pids = (Get-NetTCPConnection -LocalPort 8002 -ErrorAction SilentlyContinue).OwningProcess
@@ -50,17 +60,25 @@ if ($pids) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction Si
 # Step 3: 3초 대기 (포트 해제 + 프로세스 graceful exit)
 Start-Sleep -Seconds 3
 
-# Step 4: 사용자 환경별 재시작
+# Step 4: 재시작 — 반드시 "세션 수명과 분리된" 방식으로
 #   옵션 A (가장 안전): PC 재부팅 → Windows Startup BAT 가 orchestrator 자동 기동
-#   옵션 B (수동): 사용자가 평소 쓰는 Startup BAT 경로 직접 실행
+#   옵션 B (재부팅 없이): schtasks 일회성 작업 경유 — 부모가 작업 스케줄러 서비스라
+#     Claude 세션·터미널이 닫혀도 살아남는다 (세션 353 라이브 검증 완료)
+schtasks /Create /TN naver-orch-restart /SC ONCE /ST 23:59 /F /TR "C:\Users\user\AppData\Local\Programs\Python\Python312\pythonw.exe D:\naver-estate-web\scripts\startup_orchestrator.py"
+schtasks /Run /TN naver-orch-restart
+schtasks /Delete /TN naver-orch-restart /F   # 정의만 삭제 — 실행 중 프로세스는 안 죽는다
+#   ⛔ 금지: Claude 세션·터미널 셸에서 python 으로 직접 기동 — 그 창이 닫히는 순간
+#     Windows 가 orchestrator+uvicorn 트리를 통째로 죽인다(무로그·무알림 급사,
+#     watchdog 도 같이 죽어 자동복구 0 — §4 세션 352~353 실사고)
 
-# Step 5: 부팅 로그 시각 검증
-Start-Sleep -Seconds 5
-Get-Content scripts\backend.log -Head 5
-# 기대: 첫 줄 시각 = 머지 시각 이후
+# Step 5: 부팅 검증 (셋 다 확인)
+Start-Sleep -Seconds 45   # INITIAL_DELAY 10초 + 백엔드 기동 + health check 여유
+Get-Content scripts\startup.log -Tail 8   # 기대: 새 "서버 자동 시작" 헤더 + "백엔드 정상 시작 완료"
+Get-Content scripts\orchestrator.pid      # 기대: 새 PID (tasklist /FI "PID eq <값>" 생존 확인)
+curl.exe -s https://api.2u.pe.kr/health/db   # 기대: {"status":"ok","db":"ok"} (외부 경로 ground truth)
 ```
 
-**가장 안전한 옵션 (권장)** = **PC 재부팅**. Windows Startup BAT 가 orchestrator + 백엔드 + tunnel 모두 자동 기동. zombie 위험 0, 추측 0.
+**가장 안전한 옵션 (권장)** = **PC 재부팅**. Windows Startup BAT 가 orchestrator + 백엔드 + tunnel 모두 자동 기동. zombie 위험 0, 추측 0. 재부팅이 어려우면 옵션 B(schtasks) — 세션 셸 직접 기동만은 절대 금지.
 
 ### 4. 사건 박제 (왜 이 룰?)
 
@@ -71,6 +89,7 @@ Get-Content scripts\backend.log -Head 5
 | 231 (2026-05-25) | backend 5/24 15:26 부팅 = PR #61 머지 (5/25 06:09) 보다 15시간 전. zombie 동일 패턴 지속 | 사용자 옵션 3 (재시작 보류) 선택. 본 세션 232 룰 git 박제로 재발방지 |
 | 257 (2026-06-01) | PR #102 후 "재시작 불필요" 정적 결론 3회 → 라이브 GET 으로 화면 표시 옛값(08:30/20분/6시간) 확인 = 재시작 필요로 정정. trigger 동작은 새값이나 표시 모듈 본문이 옛 코드 | release.md §2 에 라이브 표시값 4번째 지표 + §5-1 정적분석 함정 추가. 사용자 PC 재부팅 선택 |
 | 301 (2026-06-13) | PR #167 (mb 정렬 nullif) 머지 후 라이브 backend PID 20368 이 머지 19h 전 부팅 = zombie. 라이브 pp_asc 가 0 맨앞(옛 동작). 6렌즈 적대검증 + prod PG 직접 실측(OLD `[0,0,0,0,0]` vs NEW `[1122,...]`)으로 "디스크 정상·라이브만 옛코드" 확정 | §2 에 "4중→PR성격별 3중" + prod DB 직접실측 거짓양성 차단 노하우 추가. 사용자 PC 재부팅 선택 |
+| 352~353 (2026-08-09) | 세션 352 가 zombie 해소를 위해 orchestrator 를 **자기 세션 셸에서 python 으로 직접 재기동**(02:55) → 그 세션 창이 닫히자 05:42 orchestrator+uvicorn 트리 동반 급사(무로그·무알림). watchdog 도 같이 죽어 자동복구 0, 다음 세션(353)이 발견할 때까지 backend 다운 방치. 부수 발견 2건 = ① 옛 §3 `Get-Process pythonw` 는 PS 5.1 CommandLine 속성 부재로 애초에 무동작 ② 수동 재기동 시 프로세스명이 python 이라 pythonw 단일 필터도 미스매치 | §3 전면 보강: Get-CimInstance 양이름 필터 + Step 1-b 사멸확인 + schtasks 세션독립 재기동(세션 353 라이브 검증) + 세션 셸 직접 기동 금지 명문화 |
 
 3 세션 연속 backend 재시작 누락 = 글로벌 메모리 (사적) 박제로는 부족 → 본 룰로 git 추적.
 

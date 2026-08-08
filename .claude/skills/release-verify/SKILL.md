@@ -62,17 +62,24 @@ curl -s http://localhost:8002/api/admin/scheduler-status -H "Authorization: Bear
 
 ## zombie 발견 시 처리
 
+상세 절차의 진실의 원천 = `release.md` §3 (Step 1~5 전문). 요약:
+
 ```powershell
-# orchestrator pythonw 종료
-Get-Process pythonw -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*startup_orchestrator*' } | Stop-Process -Force
+# orchestrator 종료 — python·pythonw 양이름 필터 (⚠ Get-Process 는 PS 5.1 에
+# CommandLine 속성이 없어 무동작 — Get-CimInstance 필수, 세션 353 발견)
+Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" |
+    Where-Object { $_.CommandLine -like '*startup_orchestrator*' } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+# 사멸 확인 0건 필수 — 살아있으면 새 인스턴스가 _check_already_running() 에서 조용히 exit
 # port 8002 명시 종료
 $pids = (Get-NetTCPConnection -LocalPort 8002 -ErrorAction SilentlyContinue).OwningProcess
 if ($pids) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }
 Start-Sleep -Seconds 3
-# 가장 안전: PC 재부팅 → Windows Startup BAT 가 orchestrator + backend + tunnel 자동 기동
+# 재시작: PC 재부팅(최선) 또는 schtasks 일회성 작업 경유 (release.md §3 Step 4)
+# ⛔ Claude 세션 셸에서 python 직접 기동 금지 — 창 닫히면 트리 동반 급사 (세션 352~353 실사고)
 ```
 
-**가장 안전한 옵션 = PC 재부팅** (zombie 위험 0, 추측 0).
+**가장 안전한 옵션 = PC 재부팅** (zombie 위험 0, 추측 0). 재부팅 불가 시 schtasks 경유만.
 
 ## 핵심 경고 (release.md §5-1)
 

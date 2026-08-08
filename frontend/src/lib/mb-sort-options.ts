@@ -46,3 +46,9 @@ export const MB_COMPETITION_SORT_OPTIONS: { v: string; l: string }[] = [
   { v: "competition_rate_desc", l: "경쟁률 높은순" },
   { v: "applicants_desc", l: "접수자 많은순" },
 ];
+
+/** 오피스텔·민간임대 정렬 — BE routers/mb.py MbOfficetelRentalSortBy 짝꿍.
+ * 1차 구현은 공고일순 고정(오피스텔·임대 단위가 달라 가격·경쟁률 정렬은 후속 PR, 이슈 #323). */
+export const MB_OFFICETEL_RENTAL_SORT_OPTIONS: { v: string; l: string }[] = [
+  { v: "recruit_date_desc", l: "공고일 최신순" },
+];

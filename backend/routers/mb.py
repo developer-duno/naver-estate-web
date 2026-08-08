@@ -206,6 +206,11 @@ MbPresaleSortBy = Literal[
 MbCompetitionSortBy = Literal[
     "competition_rate_desc", "applicants_desc",
 ]
+# 1차 구현은 공고일순 고정 — FE lib/mb-sort-options.ts MB_OFFICETEL_RENTAL_SORT_OPTIONS 짝꿍
+# (오피스텔·임대 단위가 달라 가격·경쟁률 정렬은 후속 PR, 이슈 #323)
+MbOfficetelRentalSortBy = Literal[
+    "recruit_date_desc",
+]
 
 
 @router.get("/presale")

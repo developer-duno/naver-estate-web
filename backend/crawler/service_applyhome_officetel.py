@@ -1,9 +1,16 @@
 """오피스텔·도시형 청약 수집 잡 (이슈 #323).
 
 기존 아파트 청약(mibunyang collect-applyhome-detail.mjs)과 별개로
-naver-estate-web 이 자체 수집. apartments 로스터에 이미 있는 단지(house_manage_no
-가 ah-{HOUSE_MANAGE_NO} 형태로 등록된 것)만 매칭해 presale_schedule_official·
-applyhome_unit_supply 에 house_type='officetel' 로 upsert.
+naver-estate-web 이 자체 수집. mibunyang 은 오피스텔 API(getUrbtyOfctl*) 를
+호출하지 않고(설계 §범위 밖 확정) apartments 로스터를 채우는 API 도 청약홈
+아파트/무순위 채널(getRemndrLttotPblancDetail 등)이라 오피스텔 house_manage_no
+와 애초에 매칭될 상대가 없다 — 구조적으로 항상 0건 매칭 (2026-08-08 최종
+전체검토에서 발견, 근본 수정). apartments 매칭 게이트 없이 house_manage_no
+기준 전량 upsert 로 재설계 (rental 수집기와 동일 패턴).
+
+apartment_id 컬럼은 nullable=False 제약이 있어 완전히 비울 수 없다 —
+`ah-{HOUSE_MANAGE_NO}` 형태 값을 자체 발급 placeholder 로 채우되, 이 값이
+apartments 로스터와 실제로 매칭될 필요는 없다(매칭 확인 로직 자체를 제거).
 
 주1회(월요일) 스케줄러 잡. crawler/service_public.py 의 job 기록·에러 처리
 패턴(CrawlJob cancelled/completed/failed)을 그대로 따른다.
@@ -20,7 +27,7 @@ from crawler.applyhome_officetel_api import (
 )
 from crawler.service_common import fail_job_safely
 from db.database import SessionLocal
-from db.mb_models import Apartment, ApplyhomeUnitSupply, PresaleScheduleOfficial
+from db.mb_models import ApplyhomeUnitSupply, PresaleScheduleOfficial
 from db.models import CrawlJob
 from utils import utcnow
 
@@ -60,11 +67,6 @@ def collect_officetel_presale(batch_size: int = 1000, scheduler_job_id: str | No
     job_id = job.id
 
     try:
-        # apartments 로스터에서 오피스텔 house_manage_no → apartment_id 매핑 구축.
-        # mibunyang 관행(ah-{HOUSE_MANAGE_NO} 형태 ID)을 그대로 따른다.
-        apt_rows = db.query(Apartment.id).all()
-        known_ids = {r.id for r in apt_rows}
-
         detail_resp = fetch_officetel_detail(page=1, per_page=batch_size)
         detail_rows = detail_resp.get("data", [])
 
@@ -73,9 +75,7 @@ def collect_officetel_presale(batch_size: int = 1000, scheduler_job_id: str | No
             hmn = row.get("HOUSE_MANAGE_NO")
             if not hmn:
                 continue
-            apartment_id = f"ah-{hmn}"
-            if apartment_id not in known_ids:
-                continue  # 로스터에 없는 오피스텔은 skip (매칭 커버리지 낮음, 설계 §4-2 인용 원칙)
+            apartment_id = f"ah-{hmn}"  # 자체 발급 placeholder (apartments 로스터 매칭 아님)
 
             existing = (
                 db.query(PresaleScheduleOfficial)
@@ -120,9 +120,7 @@ def collect_officetel_presale(batch_size: int = 1000, scheduler_job_id: str | No
             model_no = row.get("MODEL_NO")
             if not hmn or not model_no:
                 continue
-            apartment_id = f"ah-{hmn}"
-            if apartment_id not in known_ids:
-                continue
+            apartment_id = f"ah-{hmn}"  # 자체 발급 placeholder (apartments 로스터 매칭 아님)
 
             existing_unit = (
                 db.query(ApplyhomeUnitSupply)
@@ -159,7 +157,7 @@ def collect_officetel_presale(batch_size: int = 1000, scheduler_job_id: str | No
         job.completed_at = utcnow()
         db.commit()
         logger.info(
-            "오피스텔 청약 수집 완료: 공고 %d/%d 매칭, 평형 %d/%d 매칭",
+            "오피스텔 청약 수집 완료: 공고 %d/%d upsert, 평형 %d/%d upsert",
             matched, len(detail_rows), unit_matched, len(unit_rows),
         )
     except Exception as e:

@@ -13,13 +13,23 @@ from shared.constants import REAL_ESTATE_TYPE_NAMES
 logger = logging.getLogger(__name__)
 
 
-def _do_upsert(db, model, values: dict, pk_col: str, *, exclude_from_update: set | None = None):
+def _do_upsert(
+    db, model, values: dict, pk_col: str | list[str], *, exclude_from_update: set | None = None
+):
     """dialect-aware upsert — PostgreSQL pg_insert / SQLite sqlite_insert 자동 분기.
 
     CI에서 SQLite 사용 시에도 ON CONFLICT DO UPDATE 동작.
     stmt.excluded 참조로 파라미터 중복 바인딩 문제 방지.
+
+    pk_col: 충돌 감지 컬럼. 문자열 1개(단일 PK) 또는 문자열 리스트(복합 키).
+      복합 키를 쓰려면 그 컬럼 조합에 **DB 레벨 UNIQUE 제약(또는 유니크 인덱스)이
+      실제로 존재해야** 한다 — pg/sqlite 모두 `index_elements` 로 나열한 컬럼과
+      일치하는 유니크 인덱스를 찾아 추론하며, 없으면 실행 시 에러가 난다.
+      (예: complex_official_prices_key UNIQUE(complex_no, stdr_year, prvuse_ar))
+      충돌 키 컬럼은 UPDATE SET 목록에서 자동 제외된다.
     """
-    exclude = {pk_col} | (exclude_from_update or set())
+    pk_cols = [pk_col] if isinstance(pk_col, str) else list(pk_col)
+    exclude = set(pk_cols) | (exclude_from_update or set())
 
     dialect = db.bind.dialect.name if db.bind else "postgresql"
     if dialect == "sqlite":
@@ -30,7 +40,7 @@ def _do_upsert(db, model, values: dict, pk_col: str, *, exclude_from_update: set
         stmt = pg_insert(model).values(**values)
 
     update_cols = {k: stmt.excluded[k] for k in values if k not in exclude}
-    stmt = stmt.on_conflict_do_update(index_elements=[pk_col], set_=update_cols)
+    stmt = stmt.on_conflict_do_update(index_elements=pk_cols, set_=update_cols)
     db.execute(stmt)
 
 

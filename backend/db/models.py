@@ -1,6 +1,7 @@
 """SQLAlchemy ORM 모델"""
 
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy import (
     ARRAY,
@@ -9,8 +10,10 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Float,
+    ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -402,3 +405,32 @@ class NaverApiCallCount(Base):
     label: Mapped[str] = mapped_column(String(50), nullable=False)
     bucket_hour: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     call_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class ComplexOfficialPrice(Base):
+    """공동주택 공시가격 (국토교통부 getApartHousingPriceAttr) — V044.
+
+    단지 × 기준연도 × 전용면적 단위 집계. 같은 조합의 여러 호(dongNm/hoNm)를
+    중위값(price_median)으로 묶고 표본 수를 ho_count 에 남긴다.
+
+    값 계약: prvuse_ar 는 반드시 문자열 경유 Decimal 로 넣는다 — float 경유 시
+    NUMERIC(8,2) 반올림으로 인접 면적과 병합될 수 있다(충돌키의 한 축).
+    stdr_year 는 4자리 문자열("2026") 고정.
+    """
+    __tablename__ = "complex_official_prices"
+    __table_args__ = (
+        UniqueConstraint("complex_no", "stdr_year", "prvuse_ar", name="complex_official_prices_key"),
+        # 별도 (complex_no, stdr_year) 인덱스는 두지 않는다 — UNIQUE 인덱스 선두 접두사로 커버 (V030 답습)
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    complex_no: Mapped[str] = mapped_column(
+        String(20), ForeignKey("complexes.complex_no"), nullable=False
+    )
+    stdr_year: Mapped[str] = mapped_column(String(4), nullable=False)
+    prvuse_ar: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
+    price_median: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    ho_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    aphus_code: Mapped[str | None] = mapped_column(String(20))
+    aphus_nm: Mapped[str | None] = mapped_column(String(200))
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

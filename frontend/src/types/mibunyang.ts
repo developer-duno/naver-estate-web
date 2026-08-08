@@ -341,6 +341,9 @@ export interface MbOfficetelRentalItem {
   pblanc_no?: string | null;
   /** kind="officetel" 일 때만 존재 (apartments 로 이동 가능) */
   apartment_id?: string;
+  /** kind="officetel" 일 때만 존재 — Apartment.name JOIN 결과 (사람이 읽는 단지명).
+   * apartments 로스터에 매칭되는 단지가 없으면 null (LEFT OUTER JOIN 폴백, 이슈 #323 리뷰). */
+  apartment_name?: string | null;
   /** kind="rental" 일 때만 존재 (독립 매물명) */
   house_nm?: string;
   address?: string | null;

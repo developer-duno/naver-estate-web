@@ -37,10 +37,11 @@ logger = logging.getLogger(__name__)
 def collect_officetel_presale(batch_size: int = 1000, scheduler_job_id: str | None = None):
     """오피스텔/도시형 청약 공고 + 평형별 공급정보 수집 → 기존 청약 테이블 upsert.
 
-    기존 services/upsert._do_upsert() 는 단일 PK 컬럼(index_elements=[pk_col]) 충돌
-    감지 방식이라, 이 테이블들의 실제 유니크 키인 (apartment_id, house_manage_no)
-    복합 비즈니스 키(DB 레벨 UNIQUE 제약 아님, id 가 별도 SERIAL PK)와 안 맞아
-    재사용하지 않았다 — 수동 SELECT-then-write 유지 (oss-first.md 예외 사유 명시).
+    services/upsert._do_upsert() 는 V044 작업(공시가격 기반)에서 복합 키를 지원하도록
+    확장됐지만(pk_col: str | list[str]), 이 테이블들의 (apartment_id, house_manage_no)
+    는 비즈니스 키일 뿐 **DB 레벨 UNIQUE 제약이 없어**(id 가 별도 SERIAL PK) ON CONFLICT
+    추론 대상이 되지 못한다 — 그래서 여전히 수동 SELECT-then-write 유지
+    (oss-first.md 예외 사유 명시).
     """
     api_key = os.getenv("PUBLIC_DATA_API_KEY")
     if not api_key:

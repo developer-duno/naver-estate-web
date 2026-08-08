@@ -380,6 +380,7 @@ class PresaleScheduleOfficial(Base):
     constructor: Mapped[str | None] = mapped_column(Text)       # 시공사
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime)
     house_type: Mapped[str] = mapped_column(Text, nullable=False, default="apt")
+    house_nm: Mapped[str | None] = mapped_column(Text)  # 오피스텔 청약홈 API 단지명(HOUSE_NM), 아파트 행은 NULL
 
 
 # ── 청약홈 평형별 공급정보 (mibunyang collect-applyhome-detail.mjs 수집) ──

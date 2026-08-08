@@ -61,6 +61,10 @@ KNOWN_UNEXPOSED: dict[str, set[str]] = {
     "Infra": {"nearby_facilities"},  # JSON 복합시설 — 표시 UI 미설계(범위 밖)
     "MBTrade": {"recorded_at"},  # 실거래 region 단위 — 단지 상세 응답에 mb_trade_to_dict 미포함(노출 경로 없음)
     "Builder": {"corp_code"},  # 법인 고유번호 — 화면 가치 낮음(신용조회 미구현)
+    # house_type (V040) — 이슈 #323 오피스텔 편입 최초 태스크(DB 컬럼만). 라우터 분기 노출은
+    # 후속 태스크(Task 5) 범위. 노출 시 이 항목 제거 + serializer 추가.
+    "PresaleScheduleOfficial": {"house_type"},
+    "ApplyhomeUnitSupply": {"house_type"},
 }
 
 
@@ -132,3 +136,28 @@ def test_known_unexposed_still_unexposed(model_name, serializer_name):
         f"{model_name} 미노출 컬럼 {sorted(still_unexposed)} — 노출 가치 검토 대기 "
         f"(세션 258). 노출 결정 시 serializer 추가 + KNOWN_UNEXPOSED 에서 제거."
     )
+
+
+def test_presale_schedule_official_has_house_type_column():
+    """V040 컬럼이 ORM에 매핑돼 있는지 — 마이그 누락 시 즉시 실패."""
+    from db.mb_models import PresaleScheduleOfficial
+
+    assert "house_type" in PresaleScheduleOfficial.__table__.columns
+
+
+def test_applyhome_unit_supply_has_house_type_column():
+    from db.mb_models import ApplyhomeUnitSupply
+
+    assert "house_type" in ApplyhomeUnitSupply.__table__.columns
+
+
+def test_rental_schedule_official_model_maps_expected_columns():
+    from db.mb_models import RentalScheduleOfficial
+    cols = set(RentalScheduleOfficial.__table__.columns.keys())
+    assert {"house_manage_no", "house_nm", "recruit_date", "region_code"} <= cols
+
+
+def test_rental_unit_supply_model_maps_expected_columns():
+    from db.mb_models import RentalUnitSupply
+    cols = set(RentalUnitSupply.__table__.columns.keys())
+    assert {"house_manage_no", "model_no", "monthly_rent", "deposit"} <= cols

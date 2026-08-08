@@ -237,6 +237,28 @@ def get_presale_schedules(
     return list(db.execute(stmt).scalars().all())
 
 
+def get_officetel_schedules(
+    db: Session, region: Optional[str] = None
+) -> list[PresaleScheduleOfficial]:
+    """오피스텔·도시형 청약 일정 전체 (house_type='officetel', recruit_date DESC).
+
+    apartment_id 는 자체 발급 placeholder(`ah-{house_manage_no}`)일 뿐 apartments
+    로스터와 매칭될 상대가 구조적으로 없다(2026-08-08 최종 전체검토 근본수정 —
+    mibunyang 은 오피스텔 API 를 아예 호출하지 않고, apartments 를 채우는 API 도
+    오피스텔과 다른 청약홈 채널). 이전엔 Apartment 와 LEFT OUTER JOIN 해 단지명을
+    함께 반환했으나(이슈 #323 리뷰 수정), 매칭이 항상 0건이라 apartment_name 이
+    영원히 None 인 무의미한 조인이었다 — 제거. 오피스텔 API 응답(HOUSE_NM)에
+    단지명 자체는 있으나 PresaleScheduleOfficial 에 저장할 컬럼이 없어(범위 확대
+    방지, 새 컬럼 추가는 이번 작업 범위 밖) 이번엔 apartment_id 폴백 표시로 둔다.
+    """
+    stmt = (
+        select(PresaleScheduleOfficial)
+        .where(PresaleScheduleOfficial.house_type == "officetel")
+        .order_by(PresaleScheduleOfficial.recruit_date.desc().nullslast())
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
 def get_unit_supplies(
     db: Session, apartment_id: str
 ) -> list[ApplyhomeUnitSupply]:

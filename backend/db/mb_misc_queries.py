@@ -11,6 +11,7 @@ from db.mb_models import (
     MBPrice,
     MBRegion,
     MBTrade,
+    RentalScheduleOfficial,
     School,
     TradeStats,
     Transport,
@@ -133,3 +134,18 @@ def get_transport(db: Session, apartment_id: str) -> Optional[Transport]:
 def get_builder(db: Session, builder_name: str) -> Optional[Builder]:
     """시공사 정보"""
     return db.get(Builder, builder_name)
+
+
+# ── 공공지원 민간임대 (apartments 독립, 이슈 #323) ─────────────
+
+
+def get_rental_schedules(
+    db: Session, region: Optional[str] = None
+) -> list[RentalScheduleOfficial]:
+    """공공지원 민간임대 청약 일정 전체 (region_code 필터, recruit_date DESC)."""
+    stmt = select(RentalScheduleOfficial).order_by(
+        RentalScheduleOfficial.recruit_date.desc().nullslast()
+    )
+    if region:
+        stmt = stmt.where(RentalScheduleOfficial.region_code == region)
+    return list(db.execute(stmt).scalars().all())

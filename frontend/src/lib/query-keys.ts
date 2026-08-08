@@ -86,5 +86,7 @@ export const queryKeys = {
     presaleDetail: (id: string) => ["mb", "presaleDetail", id] as const,
     competition: (region?: string, gu?: string, page?: number, sortBy?: string, keyword?: string) =>
       ["mb", "competition", region, gu, page, ...(sortBy ? [sortBy] : []), ...(keyword ? [keyword] : [])] as const,
+    officetelRental: (region?: string, page?: number) =>
+      ["mb", "officetelRental", region, page] as const,
   },
 } as const;

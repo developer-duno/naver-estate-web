@@ -329,3 +329,47 @@ export interface MbPresaleDetail extends MbApartment {
   transport?: MbTransport;
   builder_info?: MbBuilder;
 }
+
+/** 오피스텔·민간임대 청약 목록 항목 (get_officetel_rental 응답, 이슈 #323).
+ * kind 로 오피스텔(apartments 연결)/민간임대(독립)를 구분 — BE presale_schedule_to_dict
+ * /rental_schedule_to_dict 짝꿍(routers/mb_serializers.py). */
+export interface MbOfficetelRentalItem {
+  kind: "officetel" | "rental";
+  /** kind="officetel" 일 때만 존재 (PresaleScheduleOfficial PK) */
+  id?: number;
+  house_manage_no: string;
+  pblanc_no?: string | null;
+  /** kind="officetel" 일 때만 존재 (apartments 로 이동 가능) */
+  apartment_id?: string;
+  /** kind="officetel" 일 때만 존재 — Apartment.name JOIN 결과 (사람이 읽는 단지명).
+   * apartments 로스터에 매칭되는 단지가 없으면 null (LEFT OUTER JOIN 폴백, 이슈 #323 리뷰). */
+  apartment_name?: string | null;
+  /** officetel·rental 모두에서 쓰임 — 청약홈 API 실제 단지명(HOUSE_NM).
+   * officetel 은 apartments 로스터 매칭 없이 이 값을 우선 표시(V043), rental 은 독립 매물명. */
+  house_nm?: string | null;
+  address?: string | null;
+  recruit_date?: string | null;
+  /** kind="officetel" 전용 — 특별공급 접수기간 */
+  special_receipt_bgnde?: string | null;
+  special_receipt_endde?: string | null;
+  /** kind="officetel" 전용 — 1순위 접수기간 */
+  general_rank1_bgnde?: string | null;
+  general_rank1_endde?: string | null;
+  /** kind="officetel" 전용 — 2순위 접수기간 */
+  general_rank2_bgnde?: string | null;
+  general_rank2_endde?: string | null;
+  /** kind="officetel" 전용 — 계약기간 */
+  contract_bgnde?: string | null;
+  contract_endde?: string | null;
+  /** kind="rental" 전용 — 접수기간 */
+  receipt_bgnde?: string | null;
+  receipt_endde?: string | null;
+  winner_announce_date?: string | null;
+  move_in_ym?: string | null;
+  tot_supply?: number | null;
+  pblanc_url?: string | null;
+  biz_entity?: string | null;
+  constructor_name?: string | null;
+  region_code?: string | null;
+  fetched_at?: string | null;
+}

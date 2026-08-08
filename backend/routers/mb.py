@@ -21,6 +21,7 @@ from routers.serializers import (
     mb_trade_to_dict,
     presale_schedule_to_dict,
     presale_summary,
+    rental_schedule_to_dict,
     school_to_dict,
     trade_stats_to_dict,
     transport_to_dict,
@@ -205,6 +206,11 @@ MbPresaleSortBy = Literal[
 MbCompetitionSortBy = Literal[
     "competition_rate_desc", "applicants_desc",
 ]
+# 1차 구현은 공고일순 고정 — FE lib/mb-sort-options.ts MB_OFFICETEL_RENTAL_SORT_OPTIONS 짝꿍
+# (오피스텔·임대 단위가 달라 가격·경쟁률 정렬은 후속 PR, 이슈 #323)
+MbOfficetelRentalSortBy = Literal[
+    "recruit_date_desc",
+]
 
 
 @router.get("/presale")
@@ -244,6 +250,39 @@ def get_presale(
         "page": page,
         "page_size": page_size,
     }
+
+
+@router.get("/presale/officetel-rental")
+def get_officetel_rental(
+    region: Optional[str] = Query(None, min_length=2, max_length=20, description="시도"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """오피스텔·도시형 + 공공지원 민간임대 청약 목록 (분양 탭 4번째 세그먼트, 이슈 #323).
+
+    오피스텔은 house_manage_no 기준 전량 upsert 분(house_type='officetel',
+    apartments 로스터 매칭 아님 — 2026-08-08 근본수정), 민간임대는 독립 로스터
+    (rental_schedule_official) — 서로 다른 테이블을 한 목록으로 합친다.
+
+    ⚠ 이 정적 경로는 반드시 아래 `/presale/{apartment_id}` 동적 경로보다 먼저 등록해야
+    한다 — FastAPI/Starlette는 등록 순서대로 매칭하므로, 순서가 바뀌면
+    "officetel-rental"이 apartment_id 로 캡처돼 404가 난다.
+    """
+    officetel_rows = mb_queries.get_officetel_schedules(db, region=region)
+    rental_rows = mb_queries.get_rental_schedules(db, region=region)
+
+    items = [presale_schedule_to_dict(s) for s in officetel_rows] + [
+        rental_schedule_to_dict(r) for r in rental_rows
+    ]
+    # 공고일 최신순 통합 정렬 (kind 무관)
+    items.sort(key=lambda x: x.get("recruit_date") or "", reverse=True)
+
+    total = len(items)
+    start = (page - 1) * page_size
+    paged = items[start : start + page_size]
+
+    return {"items": paged, "total": total, "page": page, "page_size": page_size}
 
 
 @router.get("/presale/{apartment_id}")

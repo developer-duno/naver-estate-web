@@ -2,7 +2,14 @@
  * 미분양 (mibunyang) API — 인증 불필요 (공개 데이터)
  */
 
-import type { MbApartment, MbUnsoldHistory, MbRegion, MbTrade, MbPresaleDetail } from "@/types";
+import type {
+  MbApartment,
+  MbUnsoldHistory,
+  MbRegion,
+  MbTrade,
+  MbPresaleDetail,
+  MbOfficetelRentalItem,
+} from "@/types";
 import { fetchApi } from "./core";
 
 /** 분양 분류 (BE PRIVATE_TYPES/PUBLIC_TYPES SSOT 짝꿍) */
@@ -103,6 +110,18 @@ export async function getMbPresale(
 /** 분양 단지 상세 (청약일정 + 평형별 공급 + 요약 집계) */
 export async function getMbPresaleDetail(id: string) {
   return fetchApi<MbPresaleDetail>(`/api/mb/presale/${encodeURIComponent(id)}`);
+}
+
+/** 오피스텔·민간임대 통합 청약 목록 (이슈 #323) */
+export async function getMbOfficetelRental(region?: string, page = 1, pageSize = 50) {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (region) params.set("region", region);
+  return fetchApi<{
+    items: MbOfficetelRentalItem[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>(`/api/mb/presale/officetel-rental?${params}`);
 }
 
 /** 분양결과 (경쟁률 단지 목록) */

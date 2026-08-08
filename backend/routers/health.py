@@ -20,7 +20,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# HEAD 도 허용 — 외부 감시 서비스가 HEAD 프로브를 쓰는데 GET 전용이라 405 를 받던 것 방지 (2026-08-09, 세션 353)
 @router.get("/health/db")
+@router.head("/health/db")
 def health_check_db(response: Response, db: Session = Depends(get_db)):
     """DB 연결까지 확인하는 심층 헬스체크. 외부 uptime 모니터 전용.
 

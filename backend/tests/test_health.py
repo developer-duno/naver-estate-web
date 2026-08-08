@@ -68,3 +68,31 @@ def test_health_db_failure_returns_503(health_client):
 
     assert res.status_code == 503
     assert res.json() == {"status": "degraded", "db": "down"}
+
+
+def test_health_db_head_ok(health_client):
+    """HEAD /health/db → 200 (외부 감시 서비스가 HEAD 프로브를 쓰는데 405 받던 것 방지)"""
+    res = health_client.head("/health/db")
+    assert res.status_code == 200
+
+
+def test_health_db_head_failure_returns_503(health_client):
+    """DB 장애 시 HEAD 도 GET 과 동일하게 503 (HEAD 만 200 으로 새는 일 없게)"""
+
+    class _FailingSession:
+        def execute(self, *args, **kwargs):
+            raise RuntimeError("DB 연결 실패 (시뮬레이션)")
+
+    def _override_get_db():
+        yield _FailingSession()
+
+    from deps import get_db
+    from main import app
+
+    app.dependency_overrides[get_db] = _override_get_db
+    try:
+        res = health_client.head("/health/db")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert res.status_code == 503

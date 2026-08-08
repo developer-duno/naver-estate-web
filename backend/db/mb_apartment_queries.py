@@ -239,14 +239,22 @@ def get_presale_schedules(
 
 def get_officetel_schedules(
     db: Session, region: Optional[str] = None
-) -> list[PresaleScheduleOfficial]:
-    """오피스텔·도시형 청약 일정 전체 (house_type='officetel', recruit_date DESC)."""
+) -> list[tuple[PresaleScheduleOfficial, Optional[str]]]:
+    """오피스텔·도시형 청약 일정 전체 (house_type='officetel', recruit_date DESC).
+
+    Apartment 와 LEFT OUTER JOIN 하여 단지명(Apartment.name)을 함께 반환한다
+    (PresaleScheduleOfficial 자체엔 이름 컬럼이 없어 목록 API가 apartment_id 를
+    그대로 노출하던 결함 수정 — 이슈 #323 리뷰). ORM relationship 미정의라
+    명시적 join + (스케줄, 이름) 튜플 반환 방식 사용. apartment_id 가 apartments
+    테이블에 없는 경우(데이터 정합성 예외)도 배제하지 않도록 LEFT OUTER JOIN.
+    """
     stmt = (
-        select(PresaleScheduleOfficial)
+        select(PresaleScheduleOfficial, Apartment.name)
+        .outerjoin(Apartment, PresaleScheduleOfficial.apartment_id == Apartment.id)
         .where(PresaleScheduleOfficial.house_type == "officetel")
         .order_by(PresaleScheduleOfficial.recruit_date.desc().nullslast())
     )
-    return list(db.execute(stmt).scalars().all())
+    return [(s, name) for s, name in db.execute(stmt).all()]
 
 
 def get_unit_supplies(

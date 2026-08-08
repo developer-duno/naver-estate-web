@@ -38,6 +38,33 @@ def test_get_officetel_rental_returns_both_kinds(client: TestClient, db):
     assert kinds == {"officetel", "rental"}
     assert data["total"] == 2
 
+    # 리뷰 결함 수정 회귀: officetel 항목은 apartment_id 뿐 아니라 Apartment.name
+    # 이 apartment_name 으로 JOIN 되어 노출돼야 한다 (내부 ID 노출 방지, 이슈 #323).
+    officetel_item = next(item for item in data["items"] if item["kind"] == "officetel")
+    assert officetel_item["apartment_name"] == "오피스텔A"
+    assert officetel_item["apartment_id"] == "ah-9990001"
+
+
+def test_get_officetel_rental_officetel_without_apartment_row_still_returned(client: TestClient, db):
+    """apartments 로스터에 매칭되는 단지가 없어도(데이터 정합성 예외) 목록에서 빠지지 않고
+    apartment_name=None 으로 폴백 — LEFT OUTER JOIN 선택 이유의 회귀 가드."""
+    db.add(
+        PresaleScheduleOfficial(
+            apartment_id="ah-missing",
+            house_manage_no="9990003",
+            house_type="officetel",
+            recruit_date=date(2026, 8, 3),
+        )
+    )
+    db.commit()
+
+    resp = client.get("/api/mb/presale/officetel-rental")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert data["items"][0]["apartment_name"] is None
+    assert data["items"][0]["apartment_id"] == "ah-missing"
+
 
 def test_get_officetel_rental_empty_when_no_data(client: TestClient, db):
     """데이터 0건이어도 200 + 빈 배열 (에러 아님, error-propagation.md 반례 아님 — 정상 빈 상태)."""

@@ -250,11 +250,19 @@ def builder_to_dict(b) -> dict:
     }
 
 
-def presale_schedule_to_dict(s) -> dict:
-    """PresaleScheduleOfficial ORM → dict (청약홈 공식 분양 일정 12종)"""
+def presale_schedule_to_dict(s, apartment_name: str | None = None) -> dict:
+    """PresaleScheduleOfficial ORM → dict (청약홈 공식 분양 일정 12종)
+
+    apartment_name: 오피스텔·민간임대 통합 목록(GET /presale/officetel-rental)에서
+    사람이 읽는 단지명 표시용 (이슈 #323 리뷰 수정). PresaleScheduleOfficial 자체엔
+    이름 컬럼이 없어 호출부가 Apartment 와 JOIN 한 결과를 넘겨준다. 단지 상세 API
+    (/presale/{apartment_id})는 이미 apartment_to_dict(apt) 로 이름을 별도 포함하므로
+    생략(None) 호출 유지 — 하위호환.
+    """
     return {
         "id": s.id,
         "apartment_id": s.apartment_id,
+        "apartment_name": apartment_name,
         "house_manage_no": s.house_manage_no,
         "pblanc_no": s.pblanc_no,
         "recruit_date": s.recruit_date.isoformat() if s.recruit_date else None,

@@ -237,6 +237,18 @@ def get_presale_schedules(
     return list(db.execute(stmt).scalars().all())
 
 
+def get_officetel_schedules(
+    db: Session, region: Optional[str] = None
+) -> list[PresaleScheduleOfficial]:
+    """오피스텔·도시형 청약 일정 전체 (house_type='officetel', recruit_date DESC)."""
+    stmt = (
+        select(PresaleScheduleOfficial)
+        .where(PresaleScheduleOfficial.house_type == "officetel")
+        .order_by(PresaleScheduleOfficial.recruit_date.desc().nullslast())
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
 def get_unit_supplies(
     db: Session, apartment_id: str
 ) -> list[ApplyhomeUnitSupply]:

@@ -70,6 +70,7 @@ def test_collect_officetel_presale_upserts_matched_apartment(db):
     assert row is not None
     assert row.house_type == "officetel"
     assert row.apartment_id == "ah-2026000999"
+    assert row.house_nm == "테스트오피스텔"
 
 
 def test_collect_officetel_presale_upserts_without_apartment_row(db):
@@ -113,6 +114,7 @@ def test_collect_officetel_presale_upserts_without_apartment_row(db):
     assert row is not None
     assert row.house_type == "officetel"
     assert row.apartment_id == "ah-2026999999"
+    assert row.house_nm == "미등록오피스텔"
 
     job = (
         db.query(CrawlJob)

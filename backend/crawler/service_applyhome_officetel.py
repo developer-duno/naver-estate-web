@@ -86,8 +86,10 @@ def collect_officetel_presale(batch_size: int = 1000, scheduler_job_id: str | No
                 .first()
             )
             recruit_date = parse_compact_date(row.get("RCRIT_PBLANC_DE"))
+            house_nm = row.get("HOUSE_NM")
             if existing:
                 existing.house_type = "officetel"
+                existing.house_nm = house_nm
                 existing.recruit_date = recruit_date
                 existing.tot_supply = row.get("TOT_SUPLY_HSHLDCO")
                 existing.pblanc_url = row.get("PBLANC_URL")
@@ -100,6 +102,7 @@ def collect_officetel_presale(batch_size: int = 1000, scheduler_job_id: str | No
                         apartment_id=apartment_id,
                         house_manage_no=hmn,
                         pblanc_no=row.get("PBLANC_NO"),
+                        house_nm=house_nm,
                         recruit_date=recruit_date,
                         tot_supply=row.get("TOT_SUPLY_HSHLDCO"),
                         pblanc_url=row.get("PBLANC_URL"),

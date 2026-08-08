@@ -258,13 +258,16 @@ def presale_schedule_to_dict(s, apartment_name: str | None = None) -> dict:
     apartments 로스터와 매칭될 상대가 구조적으로 없다는 게 밝혀져(2026-08-08
     근본수정) 현재 호출부(routers/mb.py)는 이 인자를 넘기지 않는다 — 항상 None.
     단지 상세 API(/presale/{apartment_id})는 이미 apartment_to_dict(apt) 로
-    이름을 별도 포함하므로 그쪽도 생략(None) 호출 유지. 인자 자체는 향후 오피스텔
-    단지명 컬럼이 추가되면 재활용 가능해 남겨둔다 — 하위호환.
+    이름을 별도 포함하므로 그쪽도 생략(None) 호출 유지. 인자 자체는 하위호환 유지.
+
+    house_nm: ORM 컬럼(V043) — 청약홈 API 응답의 실제 단지명(HOUSE_NM). 오피스텔
+    행만 채워지고 기존 아파트 행은 NULL(Apartment JOIN 으로 이름 표시하는 별도 경로).
     """
     return {
         "id": s.id,
         "apartment_id": s.apartment_id,
         "apartment_name": apartment_name,
+        "house_nm": s.house_nm,
         "house_manage_no": s.house_manage_no,
         "pblanc_no": s.pblanc_no,
         "recruit_date": s.recruit_date.isoformat() if s.recruit_date else None,

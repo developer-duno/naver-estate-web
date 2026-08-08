@@ -17,6 +17,7 @@ def test_get_officetel_rental_returns_both_kinds(client: TestClient, db):
             apartment_id="ah-9990001",
             house_manage_no="9990001",
             house_type="officetel",
+            house_nm="테스트오피스텔A",
             recruit_date=date(2026, 8, 1),
         )
     )
@@ -42,6 +43,7 @@ def test_get_officetel_rental_returns_both_kinds(client: TestClient, db):
     officetel_item = next(item for item in data["items"] if item["kind"] == "officetel")
     assert officetel_item["apartment_name"] is None
     assert officetel_item["apartment_id"] == "ah-9990001"
+    assert officetel_item["house_nm"] == "테스트오피스텔A"
 
 
 def test_get_officetel_rental_officetel_without_apartment_row_still_returned(client: TestClient, db):

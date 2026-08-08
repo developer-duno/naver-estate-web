@@ -275,6 +275,8 @@ def presale_schedule_to_dict(s) -> dict:
         # (FE MbPresaleSchedule.constructor_name 짝꿍). ORM/DB 컬럼명은 constructor 유지.
         "constructor_name": s.constructor,
         "fetched_at": s.fetched_at.isoformat() if s.fetched_at else None,
+        # 오피스텔·민간임대 통합 조회(GET /presale/officetel-rental)에서 kind 로 구분 (이슈 #323).
+        "kind": "officetel",
     }
 
 
@@ -328,6 +330,47 @@ def unit_supply_to_dict(u) -> dict:
         "special_by_type": u.special_by_type,
         "special_supply_breakdown": _special_breakdown(u.special_by_type),
         "top_amount": u.top_amount,
+    }
+
+
+def rental_schedule_to_dict(r) -> dict:
+    """RentalScheduleOfficial ORM → dict (공공지원 민간임대 공고 일정)"""
+    return {
+        "kind": "rental",
+        "house_manage_no": r.house_manage_no,
+        "pblanc_no": r.pblanc_no,
+        "house_nm": r.house_nm,
+        "address": r.address,
+        "recruit_date": r.recruit_date.isoformat() if r.recruit_date else None,
+        "receipt_bgnde": r.receipt_bgnde.isoformat() if r.receipt_bgnde else None,
+        "receipt_endde": r.receipt_endde.isoformat() if r.receipt_endde else None,
+        "winner_announce_date": r.winner_announce_date.isoformat() if r.winner_announce_date else None,
+        "move_in_ym": r.move_in_ym,
+        "tot_supply": r.tot_supply,
+        "pblanc_url": r.pblanc_url,
+        "biz_entity": r.biz_entity,
+        "constructor_name": r.constructor,
+        "region_code": r.region_code,
+        "fetched_at": r.fetched_at.isoformat() if r.fetched_at else None,
+    }
+
+
+def rental_unit_supply_to_dict(u) -> dict:
+    """RentalUnitSupply ORM → dict (공공지원 민간임대 평형별 공급정보)"""
+    return {
+        "id": u.id,
+        "house_manage_no": u.house_manage_no,
+        "model_no": u.model_no,
+        "house_ty": u.house_ty,
+        "supply_area": u.supply_area,
+        "exclusive_area": u.exclusive_area,
+        "contract_area": u.contract_area,
+        "general_supply": u.general_supply,
+        "youth_supply": u.youth_supply,
+        "newlywed_supply": u.newlywed_supply,
+        "elderly_supply": u.elderly_supply,
+        "monthly_rent": u.monthly_rent,
+        "deposit": u.deposit,
     }
 
 

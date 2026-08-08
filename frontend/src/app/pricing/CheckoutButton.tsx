@@ -11,8 +11,9 @@ import type { PlanKey } from "@/types/payment";
  * - 비로그인: "무료 체험 시작" → /signup (기존 동작 유지)
  * - 로그인: "결제하고 시작" → PortOne 결제 플로우 (useCheckout)
  *
- * 가격은 카드에서 "출시 시 공개"로 숨김 (PLAN_PRICES amount placeholder). 금액은 prepare
- * 응답으로 결제창에만 전달된다. PortOne env 미설정 시 BE prepare 가 503 → payError 안내.
+ * 가격은 PlanCards.tsx 가 확정가(월 10,000원/연 100,000원, 세션 326)로 화면에 직접 표시한다.
+ * 결제 시 금액은 prepare 응답으로 결제창에 별도 전달된다. PortOne env 미설정 시 BE prepare 가
+ * 503 → payError 안내.
  */
 export default function CheckoutButton({
   planKey,

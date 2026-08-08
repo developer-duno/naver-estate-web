@@ -122,7 +122,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 - **backend.log 회전 보존** = `scripts/log_rotation.py` `rotate_backend_log()`. `start_backend()` 가 매 재시작 backend.log 를 `"w"` 로 truncate 해 어제 크래시 로그 소실되던 것 → 재시작 직전 `backend_<mtime>.log` 로 회전 보존 + 7일 초과분 정리. 안정 경로 backend.log 유지(release.md §2 `head -1 scripts/backend.log` 불변). ⚠ orchestrator(pythonw) 상주 프로세스라 **재부팅해야 회전 코드 적용**(startup_orchestrator.py 수정 = orchestrator zombie 대상).
 - **결제·크롤 알림 삼킴 로그화** = billing_charge.py·payment.py·service_discover.py 의 `except: pass`(알림 발송 실패) → `logger.warning`(best-effort 유지). 결제 로직은 안 깨지되 알림 실패가 관찰 가능.
 
-> 상세 = 글로벌 메모리 `[[session340-summary]]`·`[[project-observability-backlog-s340]]`. 잔여 백로그(connect_timeout 공용엔진·open(w) 파일락) 착수 전 직독.
+> 상세 = 글로벌 메모리 `[[session340-summary]]`·`[[project-observability-backlog-s340]]`. 백로그 2건(connect_timeout 공용엔진·open(w) 파일락)은 PR #278(09b61e4, 2026-07-04)에서 완료 — `db/database.py` connect_args connect_timeout=5, `startup_orchestrator.py` open() try/except 가드로 코드 직독 재확인 완료(세션 352).
 
 ## 공유 인프라 규칙 (mibunyang 프로젝트와 공유)
 

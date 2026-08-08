@@ -92,11 +92,72 @@ jobs:
       - name: Test
         run: npm test
 
-  e2e:
-    name: Frontend E2E (admin)
+  # setup+admin+public+public-visual 4 project 를 한 job 에서 순차 실행하면
+  # 대기시간이 길다(public-visual 이 특히 무거움). GitHub Actions matrix 로
+  # 3 project(admin/public/public-visual)를 병렬 job 으로 쪼개 대기시간을 줄인다
+  # (세션 352). admin 은 setup 산출물(storageState)이 필요하므로 별도 job 에서
+  # 먼저 만들어 artifact 로 넘긴다. public·public-visual 은 인증 불필요라 setup
+  # 과 무관하게 동시 시작.
+  e2e-setup:
+    name: E2E setup (admin auth)
     needs: [changes, frontend]
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    outputs:
+      auth-exists: ${{ steps.check.outputs.exists }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run setup (admin auth)
+        run: npx playwright test --project=setup
+        env:
+          TEST_ADMIN_EMAIL: ${{ secrets.TEST_ADMIN_EMAIL }}
+          TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.TEST_ADMIN_EMAIL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_API_URL: http://localhost:9999
+
+      # secrets 미설정 시 setup 이 skip 되어 admin.json 이 안 생긴다 — 그 경우
+      # admin job 이 storageState 없이 실행되지 않도록 존재 여부를 다음 job 에 전달.
+      - id: check
+        run: |
+          if [ -f "e2e/.auth/admin.json" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.check.outputs.exists == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: admin-auth-state
+          path: frontend/e2e/.auth/admin.json
+          retention-days: 1
+
+  e2e:
+    name: Frontend E2E (${{ matrix.project }})
+    needs: [changes, frontend, e2e-setup]
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [admin, public, public-visual]
     defaults:
       run:
         working-directory: frontend
@@ -114,8 +175,14 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: Run E2E (setup + admin + public + public-visual)
-        run: npx playwright test --project=setup --project=admin --project=public --project=public-visual ${{ inputs.update_snapshots && '--update-snapshots' || '' }}
+      - if: matrix.project == 'admin' && needs.e2e-setup.outputs.auth-exists == 'true'
+        uses: actions/download-artifact@v7
+        with:
+          name: admin-auth-state
+          path: frontend/e2e/.auth
+
+      - name: Run E2E (${{ matrix.project }})
+        run: npx playwright test --project=${{ matrix.project }} ${{ inputs.update_snapshots && '--update-snapshots' || '' }}
         env:
           TEST_ADMIN_EMAIL: ${{ secrets.TEST_ADMIN_EMAIL }}
           TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
@@ -127,14 +194,14 @@ jobs:
       - if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.project }}
           path: frontend/playwright-report
           retention-days: 14
 
       - if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: admin-screenshots
+          name: admin-screenshots-${{ matrix.project }}
           path: frontend/test-results
           retention-days: 14
 
@@ -144,7 +211,7 @@ jobs:
       - if: always() && inputs.update_snapshots
         uses: actions/upload-artifact@v7
         with:
-          name: updated-snapshots
+          name: updated-snapshots-${{ matrix.project }}
           path: frontend/e2e/**/*-snapshots/**
           retention-days: 14
 

@@ -335,6 +335,8 @@ export interface MbPresaleDetail extends MbApartment {
  * /rental_schedule_to_dict 짝꿍(routers/mb_serializers.py). */
 export interface MbOfficetelRentalItem {
   kind: "officetel" | "rental";
+  /** kind="officetel" 일 때만 존재 (PresaleScheduleOfficial PK) */
+  id?: number;
   house_manage_no: string;
   pblanc_no?: string | null;
   /** kind="officetel" 일 때만 존재 (apartments 로 이동 가능) */
@@ -343,6 +345,19 @@ export interface MbOfficetelRentalItem {
   house_nm?: string;
   address?: string | null;
   recruit_date?: string | null;
+  /** kind="officetel" 전용 — 특별공급 접수기간 */
+  special_receipt_bgnde?: string | null;
+  special_receipt_endde?: string | null;
+  /** kind="officetel" 전용 — 1순위 접수기간 */
+  general_rank1_bgnde?: string | null;
+  general_rank1_endde?: string | null;
+  /** kind="officetel" 전용 — 2순위 접수기간 */
+  general_rank2_bgnde?: string | null;
+  general_rank2_endde?: string | null;
+  /** kind="officetel" 전용 — 계약기간 */
+  contract_bgnde?: string | null;
+  contract_endde?: string | null;
+  /** kind="rental" 전용 — 접수기간 */
   receipt_bgnde?: string | null;
   receipt_endde?: string | null;
   winner_announce_date?: string | null;

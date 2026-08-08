@@ -12,6 +12,13 @@ description: 코드 변경이 라이브 backend 에 실제 반영됐는지, 새 
 - "라이브 확인", "실제 동작하나", "재시작 반영됐나"
 - **"재시작 불필요" 를 코드 읽기·pytest 로 단정하려는 순간** ← 세션 257·301 사고 지점
 
+## 사전 체크 — 브라우저 자동화 실계정 분리 (세션 351 실토큰 노출 사고)
+
+브라우저 자동화(chrome-devtools·playwright MCP)로 라이브를 실측하기 전,
+`.claude/rules/browser-automation-isolation.md` 의 분리 확인을 먼저 수행한다 —
+자동화 브라우저에서 대상 사이트가 **로그인 상태면 레드 플래그**(영속 프로필에 실계정
+세션 잔존 가능). 토큰·쿠키 원문을 출력에 찍지 않는다.
+
 ## 핵심 안티패턴 (금지)
 
 - **pytest 통과 = 라이브 증명 아님** — pytest 는 디스크 코드 self-consistency 만 검증(fresh import + fresh scheduler). 부팅 프로세스 메모리와 무관.

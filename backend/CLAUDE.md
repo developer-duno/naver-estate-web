@@ -106,11 +106,13 @@
 | V040 | presale_schedule_official·applyhome_unit_supply 에 house_type 컬럼 추가 (오피스텔·도시형·생활숙박을 기존 아파트 청약 테이블에 흡수, 이슈 #323) | 2026-08-08 (prod 미적용 — PR 머지 후 Supabase SQL Editor 수동 적용 예정) |
 | V041 | rental_schedule_official 신규 테이블 (공공지원 민간임대 공고 일정, apartments 로스터와 독립, 이슈 #323) | 2026-08-08 (prod 미적용 — PR 머지 후 Supabase SQL Editor 수동 적용 예정) |
 | V042 | rental_unit_supply 신규 테이블 (공공지원 민간임대 평형별 공급정보, rental_schedule_official FK, 이슈 #323) | 2026-08-08 (prod 미적용 — PR 머지 후 Supabase SQL Editor 수동 적용 예정) |
+| V043 | presale_schedule_official.house_nm 컬럼 추가 (오피스텔 실제 단지명 저장 — apartments JOIN 제거로 화면에 apartment_id placeholder 만 노출되던 문제 해결, 이슈 #323) | 2026-08-08 (prod 미적용 — PR 머지 후 Supabase SQL Editor 수동 적용 예정) |
 
-- `db/migrations/` 폴더에 `V000__` ~ `V042__` SQL 파일 = 43 버전
+- `db/migrations/` 폴더에 `V000__` ~ `V043__` SQL 파일 = 44 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
-- 최신 = V042 (rental_unit_supply 신규 테이블, prod 미적용 — release.md §1 트리거로 PR 머지 후 수동 적용 + zombie cross-check 필요). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
+- 최신 = V043 (presale_schedule_official.house_nm 컬럼, prod 미적용 — release.md §1 트리거로 PR 머지 후 수동 적용 + zombie cross-check 필요). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
+  - V043 = house_nm TEXT nullable 컬럼 추가 — 기존 아파트 청약 행은 NULL 로 두면 되므로 기존 데이터 영향 0. `ADD COLUMN IF NOT EXISTS` 라 멱등·안전. 코드(`db/mb_models.py`)가 이미 이 컬럼에 매핑돼 SELECT 목록에 포함되므로 **prod 선행 적용 필수** — 미적용 상태로 오피스텔·민간임대 통합 API(`/presale/officetel-rental`)를 호출하면 컬럼 부재로 500.
   - V040~V042 = 이슈 #323(청약홈 오피스텔·도시형·민간임대 편입) 3종 세트 — `CREATE TABLE/ADD COLUMN IF NOT EXISTS` 라 멱등·안전. V040 은 기존 컬럼에 `NOT NULL DEFAULT 'apt'`로 추가해 기존 아파트 데이터에 영향 0. V041/V042 는 신규 독립 테이블이라 공유 DB(mibunyang) 영향 0. 코드(`db/mb_models.py`)는 이미 이 컬럼/테이블에 매핑돼 있으므로 **prod 선행 적용 필수** — 미적용 상태로 backend 가 이 코드를 실행하면 컬럼/테이블 부재로 500.
   - V038 = `ix_articles_updated_at` 신규 인덱스 — 코드(freshness.py max/count 분리)는 인덱스 없어도 동작(Seq Scan 느릴 뿐)이라 즉시 500 위험 0. prod 는 CONCURRENTLY 로 락 없이 적용(5.7초). 공유 DB(mibunyang)도 articles upsert 하나 인덱스 유지 오버헤드 미미. `CREATE INDEX IF NOT EXISTS` 라 멱등·안전(마이그 파일은 비-CONCURRENTLY 지만 이미 존재해 no-op).
   - V036 = billing_keys 신규 테이블 — `BillingKey` 가 ORM 매핑되나 PR1 시점엔 INSERT/SELECT 하는 코드가 없어 즉시 500 위험 0. 빌링키 발급/결제 엔드포인트(PR2+) 머지 전 prod 적용 필수. `CREATE TABLE/INDEX IF NOT EXISTS` 라 멱등·안전. 공유 DB(mibunyang) 영향 = 신규 테이블이라 0.

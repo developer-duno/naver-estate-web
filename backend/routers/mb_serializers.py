@@ -254,10 +254,12 @@ def presale_schedule_to_dict(s, apartment_name: str | None = None) -> dict:
     """PresaleScheduleOfficial ORM → dict (청약홈 공식 분양 일정 12종)
 
     apartment_name: 오피스텔·민간임대 통합 목록(GET /presale/officetel-rental)에서
-    사람이 읽는 단지명 표시용 (이슈 #323 리뷰 수정). PresaleScheduleOfficial 자체엔
-    이름 컬럼이 없어 호출부가 Apartment 와 JOIN 한 결과를 넘겨준다. 단지 상세 API
-    (/presale/{apartment_id})는 이미 apartment_to_dict(apt) 로 이름을 별도 포함하므로
-    생략(None) 호출 유지 — 하위호환.
+    사람이 읽는 단지명 표시용으로 신설됐으나(이슈 #323 리뷰 수정), 오피스텔은
+    apartments 로스터와 매칭될 상대가 구조적으로 없다는 게 밝혀져(2026-08-08
+    근본수정) 현재 호출부(routers/mb.py)는 이 인자를 넘기지 않는다 — 항상 None.
+    단지 상세 API(/presale/{apartment_id})는 이미 apartment_to_dict(apt) 로
+    이름을 별도 포함하므로 그쪽도 생략(None) 호출 유지. 인자 자체는 향후 오피스텔
+    단지명 컬럼이 추가되면 재활용 가능해 남겨둔다 — 하위호환.
     """
     return {
         "id": s.id,

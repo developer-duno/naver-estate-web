@@ -261,8 +261,9 @@ def get_officetel_rental(
 ):
     """오피스텔·도시형 + 공공지원 민간임대 청약 목록 (분양 탭 4번째 세그먼트, 이슈 #323).
 
-    오피스텔은 apartments 로스터 매칭분(house_type='officetel'), 민간임대는
-    독립 로스터(rental_schedule_official) — 서로 다른 테이블을 한 목록으로 합친다.
+    오피스텔은 house_manage_no 기준 전량 upsert 분(house_type='officetel',
+    apartments 로스터 매칭 아님 — 2026-08-08 근본수정), 민간임대는 독립 로스터
+    (rental_schedule_official) — 서로 다른 테이블을 한 목록으로 합친다.
 
     ⚠ 이 정적 경로는 반드시 아래 `/presale/{apartment_id}` 동적 경로보다 먼저 등록해야
     한다 — FastAPI/Starlette는 등록 순서대로 매칭하므로, 순서가 바뀌면
@@ -271,9 +272,9 @@ def get_officetel_rental(
     officetel_rows = mb_queries.get_officetel_schedules(db, region=region)
     rental_rows = mb_queries.get_rental_schedules(db, region=region)
 
-    items = [
-        presale_schedule_to_dict(s, apartment_name=name) for s, name in officetel_rows
-    ] + [rental_schedule_to_dict(r) for r in rental_rows]
+    items = [presale_schedule_to_dict(s) for s in officetel_rows] + [
+        rental_schedule_to_dict(r) for r in rental_rows
+    ]
     # 공고일 최신순 통합 정렬 (kind 무관)
     items.sort(key=lambda x: x.get("recruit_date") or "", reverse=True)
 

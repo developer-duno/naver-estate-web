@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from auth.audit import log_action
 from auth.permissions import check_quota
+from auth.rate_limiter import _get_client_ip
 from db import queries
 from deps import get_approved_user, get_db, get_optional_user
 from routers.serializers import article_to_dict, build_filter_dict
@@ -129,9 +130,8 @@ def export_articles_to_excel(
     # admin은 쿼터 무제한
     if user["role"] != "admin":
         check_quota(db, user["user_id"], "export", user["daily_export_quota"])
-    client_ip = None
-    if request and request.client:
-        client_ip = request.headers.get("x-forwarded-for", request.client.host)
+    # 감사 로그 IP: 위조 가능한 X-Forwarded-For 대신 CF-Connecting-IP 우선 (#339 정책 정렬)
+    client_ip = _get_client_ip(request) if request else None
     log_action(db, user["user_id"], "export", "complex", complex_no, ip=client_ip)
     db.commit()
     filters = build_filter_dict(

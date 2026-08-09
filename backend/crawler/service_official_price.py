@@ -18,6 +18,7 @@ import statistics
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
+from crawler.cortar_legacy import to_standard_cortar
 from crawler.env_common import _complete_job, _fail_job, _record_job
 from crawler.service_common import _checkpoint
 from db.database import SessionLocal
@@ -281,7 +282,12 @@ def collect_official_prices(
         for idx, ld_code in enumerate(remaining):
             # 전 페이지 수집 완료 후에만 매칭 — 부분 수집 시 세대수 게이트가 통째로
             # 어긋난다(V-WORLD 가 대형 단지를 뒷페이지에 배치, 플랜 §3-2-5).
-            rows = fetch_official_prices(ld_code, year)
+            #
+            # ⚠ 조회 직전에만 표준 코드로 번역한다 — 광주·전남은 네이버가 12-프리픽스
+            # (전남광주통합특별시) 코드를 주는데 V-WORLD 는 옛 체계(29/46)만 받아
+            # 12 코드로는 조용히 0건이 온다(cortar_legacy.py 참조). 루프 키·체크포인트
+            # (done_ld_codes)는 **원본 그대로** 둬야 재개 호환이 깨지지 않는다.
+            rows = fetch_official_prices(to_standard_cortar(ld_code), year)
             if rows is None:
                 failed_ld_codes += 1
                 logger.warning("[official_price] 법정동 %s 조회 실패 — 건너뜀", ld_code)

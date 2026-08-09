@@ -85,6 +85,34 @@ def test_export_content_disposition(client, db, approved_headers):
     if res.status_code == 200:
         assert "content-disposition" in res.headers
 
+def test_export_audit_ip_ignores_forged_xff(client, db, approved_headers):
+    """감사 로그 IP: 위조 X-Forwarded-For 무시 + CF-Connecting-IP 채택 (#339 정책 정렬).
+
+    rate_limiter 와 동일하게 XFF 를 신뢰하지 않는다 — 감사 기록이 위조 IP 로
+    오염되면 사후 추적이 무력화된다. 저장값은 _mask_ip 로 마지막 옥텟 마스킹.
+    """
+    from db.models import AuditLog
+
+    _seed(db)
+    headers = {
+        **approved_headers,
+        "x-forwarded-for": "6.6.6.6",
+        "cf-connecting-ip": "1.2.3.4",
+    }
+    res = client.post("/api/articles/export?complex_no=C001", headers=headers)
+    assert res.status_code == 200
+
+    row = (
+        db.query(AuditLog)
+        .filter(AuditLog.action == "export")
+        .order_by(AuditLog.id.desc())
+        .first()
+    )
+    assert row is not None
+    assert row.ip_address == "1.2.3.xxx"  # CF 헤더 채택 + 마스킹
+    assert "6.6.6" not in (row.ip_address or "")  # 위조 XFF 미채택
+
+
 def test_multiple_articles(client, db):
     from db.models import Article as A3
     from db.models import Complex as C3

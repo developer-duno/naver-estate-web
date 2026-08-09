@@ -1,10 +1,57 @@
 "use client";
 
-import type { Complex } from "@/types";
-import { formatDateFull } from "@/lib/format";
+import { useQuery } from "@tanstack/react-query";
+import type { Complex, OfficialPriceItem } from "@/types";
+import { formatDateFull, formatKoreanPrice } from "@/lib/format";
+import { getOfficialPrices } from "@/lib/api/complex";
+import { queryKeys } from "@/lib/query-keys";
+
+/**
+ * 대표평형 = 세대수(ho_count)가 가장 많은 평형.
+ * 동률이면 전용면적(prvuse_ar) 오름차순 첫 번째 — BE 가 이미 prvuse_ar 오름차순으로
+ * 정렬해 내려주므로(routers/complexes.py:338), 엄격 부등호 비교로 첫 최대값을 유지한다.
+ */
+function pickRepresentative(items: OfficialPriceItem[]): OfficialPriceItem | null {
+  let best: OfficialPriceItem | null = null;
+  for (const it of items) {
+    if (best === null || it.ho_count > best.ho_count) best = it;
+  }
+  return best;
+}
+
+/**
+ * 공시가율(%) = 공시가격 ÷ 주변시세 × 100.
+ *
+ * ⚠ 단위 통일: price_median 은 **원** 단위(BE V-WORLD 원본 그대로 — PR-C
+ * PropertyTaxComplexPicker.tsx:122 가 /10_000 으로 만원 환산),
+ * nearby_median_price 는 **만원** 단위(ComplexPriceHistory.price_avg =
+ * 네이버 averagePrice, ComplexDashboard.tsx:79 formatKoreanPrice 사용).
+ * 따라서 공시가격을 만원으로 환산한 뒤 나눈다.
+ *
+ * 표시는 소수 1자리 반올림 — 프로젝트 % 표기 관례(전세가율 toFixed(1)) 답습.
+ */
+function calcOfficialPriceRatio(
+  priceMedianWon: number,
+  nearbyMedianManwon: number,
+): number | null {
+  if (!(nearbyMedianManwon > 0)) return null;
+  const officialManwon = priceMedianWon / 10_000;
+  return Math.round((officialManwon / nearbyMedianManwon) * 1000) / 10;
+}
 
 /** 단지 기본정보 탭 — 주소, 세대수, 층수, 주차 등 */
 export default function ComplexBasicInfo({ cpx }: { cpx: Complex }) {
+  // 공동주택 공시가격 (무료 공개, 게이트 없음). 래퍼가 에러를 그대로 throw 하므로
+  // 실패 시 data 는 undefined → 아래에서 행 자체가 추가되지 않는다 (부가 정보 행이라
+  // 별도 에러 UI 없이 미표시가 이 컴포넌트의 기존 관례 — 값 없으면 행 생략).
+  // queryKeys.officialPrices 는 PR-C 와 동일 키 → React Query 자동 dedupe.
+  const officialQuery = useQuery({
+    queryKey: queryKeys.officialPrices(cpx.complex_no),
+    queryFn: () => getOfficialPrices(cpx.complex_no),
+    enabled: !!cpx.complex_no,
+    staleTime: 60_000,
+  });
+
   const rows: [string, string][] = [];
   const addr = cpx.address || cpx.cortar_address;
   if (addr) rows.push(["주소", addr]);
@@ -32,6 +79,20 @@ export default function ComplexBasicInfo({ cpx }: { cpx: Complex }) {
       .filter((t) => tc[t] > 0)
       .map((t) => `${t} ${tc[t]}`);
     if (parts.length > 0) rows.push(["거래유형별 매물", parts.join(" · ")]);
+  }
+
+  // 공시가격 + 공시가율 (둘 다 무료). 데이터 없으면 행 자체를 추가하지 않는다.
+  const representative = pickRepresentative(officialQuery.data?.items ?? []);
+  if (representative) {
+    const year = officialQuery.data?.year;
+    rows.push([
+      `공시가격(대표평형 중위${year ? `, ${year}년` : ""})`,
+      formatKoreanPrice(Math.round(representative.price_median / 10_000)),
+    ]);
+    if (cpx.nearby_median_price != null) {
+      const ratio = calcOfficialPriceRatio(representative.price_median, cpx.nearby_median_price);
+      if (ratio != null) rows.push(["공시가율(공시가격÷주변시세)", `${ratio.toFixed(1)}%`]);
+    }
   }
 
   if (rows.length === 0) {

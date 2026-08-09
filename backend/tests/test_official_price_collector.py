@@ -386,3 +386,90 @@ def test_extract_wrapper_handles_zero_result_envelope():
     assert _extract_wrapper({"response": {"totalCount": "0"}}) == {"totalCount": "0"}
     assert _extract_wrapper({"apartHousingPrices": {"field": []}}) == {"field": []}
     assert _extract_wrapper({}) == {}
+
+
+# ── 9. 행수 정합성 가드 (은마 미매칭 실사고 회귀) ──
+
+def _patch_pages(monkeypatch, page_size, page_fn):
+    """_fetch_page 를 대체하고 PAGE_SIZE 를 줄여 페이지 루프를 짧게 만든다."""
+    from crawler import vworld_price_api
+
+    monkeypatch.setattr(vworld_price_api, "PAGE_SIZE", page_size)
+    monkeypatch.setattr(vworld_price_api, "_fetch_page", page_fn)
+    return vworld_price_api
+
+
+def test_fetch_returns_rows_when_count_matches(monkeypatch):
+    """정상 — 수신 행수가 totalCount 와 정확히 같으면 그대로 반환."""
+    def fake_page(pnu, year, page_no):
+        return [make_row(ho=f"{page_no}-1"), make_row(ho=f"{page_no}-2")], 4
+
+    vp = _patch_pages(monkeypatch, 2, fake_page)
+    rows = vp.fetch_official_prices("1168010600", _YEAR)
+
+    assert rows is not None
+    assert len(rows) == 4
+
+
+def test_fetch_returns_none_when_rows_fewer_than_total_count(monkeypatch):
+    """모자란 응답 → None.
+
+    2026-08-09 은마(4,424세대) 미매칭 실사고 회귀 가드. 페이지가 통째로 실패한 게 아니라
+    '성공했는데 몇 행 모자란' 응답이라 기존 방어망을 그대로 통과했고, 대형 단지가 뒷
+    페이지에 몰려 있어 호수 부족 → 세대수 ±5% 게이트에서 조용히 탈락했다.
+    """
+    def fake_page(pnu, year, page_no):
+        # totalCount=4 라고 해놓고 2페이지는 1건만 준다 (총 3행 != 4행)
+        if page_no == 1:
+            return [make_row(ho="1-1"), make_row(ho="1-2")], 4
+        return [make_row(ho="2-1")], 4
+
+    vp = _patch_pages(monkeypatch, 2, fake_page)
+
+    assert vp.fetch_official_prices("1168010600", _YEAR) is None
+
+
+def test_fetch_returns_none_when_rows_exceed_total_count(monkeypatch):
+    """초과도 비정상 → None (마지막 페이지 반복 반환 등 중복 누적 → 중위값 왜곡)."""
+    def fake_page(pnu, year, page_no):
+        return [make_row(ho=f"{page_no}-1"), make_row(ho=f"{page_no}-2")], 3
+
+    vp = _patch_pages(monkeypatch, 2, fake_page)
+
+    assert vp.fetch_official_prices("1168010600", _YEAR) is None
+
+
+def test_fetch_zero_rows_still_returns_empty_list(monkeypatch):
+    """0건 조기 반환 경로는 정합성 가드 대상이 아니다 — 빈 리스트 유지."""
+    vp = _patch_pages(monkeypatch, 2, lambda p, y, n: ([], 0))
+
+    assert vp.fetch_official_prices("1168010600", _YEAR) == []
+
+
+def test_fetch_returns_none_when_total_count_unparseable(monkeypatch):
+    """totalCount=0 인데 rows 가 있는 기형 응답도 None — 총량을 모르면 완전성 증명 불가."""
+    def fake_page(pnu, year, page_no):
+        return [make_row(ho="1-1")], 0  # 파싱 실패 시 _fetch_page 가 0 을 돌려준다
+
+    vp = _patch_pages(monkeypatch, 2, fake_page)
+
+    assert vp.fetch_official_prices("1168010600", _YEAR) is None
+
+
+def test_fetch_returns_none_when_exceeding_max_pages(monkeypatch):
+    """MAX_PAGES 캡 초과 → 정합성 가드 오발이 아니라 전용 분기로 포기.
+
+    캡에 걸리면 len(rows) < totalCount 가 정상이라 가드가 오발할 수 있다. 결과는 같은
+    '불완전 스냅샷'이라 동일하게 포기하되, 원인이 다르므로 별도 분기·로그로 구분한다.
+    """
+    from crawler import vworld_price_api
+
+    monkeypatch.setattr(vworld_price_api, "MAX_PAGES", 2)
+
+    def fake_page(pnu, year, page_no):
+        # totalCount=10 (PAGE_SIZE=2 → 5페이지 필요) 인데 캡이 2페이지
+        return [make_row(ho=f"{page_no}-1"), make_row(ho=f"{page_no}-2")], 10
+
+    vp = _patch_pages(monkeypatch, 2, fake_page)
+
+    assert vp.fetch_official_prices("1168010600", _YEAR) is None

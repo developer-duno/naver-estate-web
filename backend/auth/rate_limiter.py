@@ -47,13 +47,18 @@ _ip_counters: dict[str, list[float]] = defaultdict(list)
 
 
 def _get_client_ip(request: Request) -> str:
-    """클라이언트 IP 추출 (프록시 고려)."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        parts = [p.strip() for p in forwarded.split(",")]
-        if len(parts) == 1:
-            return parts[0]
-        return parts[-2]
+    """클라이언트 IP 추출 (Cloudflare Named Tunnel 전제).
+
+    ⚠ X-Forwarded-For 는 신뢰하지 않는다 — 클라이언트가 임의로 위조할 수 있어
+    rate-limit 버킷을 가짜 IP 로 분산시키는 429 우회 통로가 된다(세션 355 라이브 실측:
+    위조 XFF 65회 → 전부 다른 버킷, 차단 0). Cloudflare 는 CF-Connecting-IP 를 실제
+    접속 IP 로 **항상 덮어쓰므로**(클라이언트가 보내도 CF 가 재설정) 이것만 신뢰한다.
+    터널을 안 거치는 로컬 직접 호출(watchdog 헬스체크 등)은 헤더가 없어 직접 연결
+    IP(request.client.host) 로 폴백한다.
+    """
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
     if request.client:
         return request.client.host
     return "unknown"

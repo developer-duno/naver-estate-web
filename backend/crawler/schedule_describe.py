@@ -57,6 +57,8 @@ def describe_cron(trigger: CronTrigger) -> str:
         return f"매월 첫째 {_DOW[dow]} {hm}"
     if dow in _DOW and day is None and month is None:
         return f"주 1회 {_DOW[dow]} {hm}"
+    if day is not None and day.isdigit() and dow is None and month is None:
+        return f"매월 {int(day)}일 {hm}"
     if dow is None and day is None and month is None:
         return f"매일 {hm}"
     return ""  # 미지원 조합 — 라우터가 META fallback

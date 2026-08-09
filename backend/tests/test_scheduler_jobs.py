@@ -217,6 +217,7 @@ def test_meta_fallback_matches_describe_trigger_for_active_jobs():
 
     with (
         patch.object(sched_mod, "PUBLIC_DATA_ENABLED", True),
+        patch.object(sched_mod, "OFFICIAL_PRICE_ENABLED", True),
         patch.object(sched_mod, "POPULAR_CRAWL_ENABLED", True),
         patch.object(sched_mod, "AIR_QUALITY_ENABLED", True),
         patch.object(sched_mod, "EMERGENCY_ENABLED", True),
@@ -255,6 +256,7 @@ def test_scheduler_job_meta_covers_all_registered_jobs():
     # 모든 조건부 job 을 켜야 등록되는 잡까지 다 잡힘
     with (
         patch.object(sched_mod, "PUBLIC_DATA_ENABLED", True),
+        patch.object(sched_mod, "OFFICIAL_PRICE_ENABLED", True),
         patch.object(sched_mod, "POPULAR_CRAWL_ENABLED", True),
         patch.object(sched_mod, "AIR_QUALITY_ENABLED", True),
         patch.object(sched_mod, "EMERGENCY_ENABLED", True),

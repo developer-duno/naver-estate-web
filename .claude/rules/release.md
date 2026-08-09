@@ -70,6 +70,12 @@ schtasks /Delete /TN naver-orch-restart /F   # 정의만 삭제 — 실행 중 �
 #   ⛔ 금지: Claude 세션·터미널 셸에서 python 으로 직접 기동 — 그 창이 닫히는 순간
 #     Windows 가 orchestrator+uvicorn 트리를 통째로 죽인다(무로그·무알림 급사,
 #     watchdog 도 같이 죽어 자동복구 0 — §4 세션 352~353 실사고)
+#   ⚠ 실행 방식: 위 PowerShell 명령들을 bash(Claude 셸)에서 -Command 인라인으로 돌리면
+#     인용부호가 깨져 Get-CimInstance 쿼리가 실패하는데 카운트만 0 으로 찍힌다(가짜 0 —
+#     종료가 실행된 적 없는데 성공처럼 보임, 세션 354 재현). 반드시 .ps1 파일로 저장 후
+#     `powershell -NoProfile -File <경로>` 로 실행할 것. 패턴 필터가 헛돌면 전체 python
+#     프로세스 나열 진단으로 정확한 PID 를 확인해 PID 지정 종료가 최선 — 같은 PC 에
+#     타 프로젝트 python 프로세스가 다수 상주한다(오살 방지).
 
 # Step 5: 부팅 검증 (셋 다 확인)
 Start-Sleep -Seconds 45   # INITIAL_DELAY 10초 + 백엔드 기동 + health check 여유

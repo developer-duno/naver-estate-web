@@ -302,3 +302,41 @@ def get_price_history(
     }
     _price_history_cache.set(cache_key, result)
     return result
+
+
+# 공시가격 캐시 — 월 1회 갱신이라 오래 캐시 가능 (12시간 고정 TTL, price-history 답습)
+_official_price_cache = TTLCache(ttl=43200, max_size=1000)
+
+
+@router.get("/{complex_no}/official-prices")
+def get_official_prices(
+    complex_no: str,
+    db: Session = Depends(get_db),
+):
+    """단지 공동주택 공시가격 (국토교통부) — 무료 공개 (게이트 없음, 플랜 §0-2)"""
+    cache_key = f"official_prices:{complex_no}"
+    cached = _official_price_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    rows = queries.get_complex_official_prices(db, complex_no)
+    years = {r.stdr_year for r in rows}
+    latest_year = max(years) if years else None
+    result = {
+        "complex_no": complex_no,
+        "year": latest_year,
+        "items": sorted(
+            (
+                {
+                    "prvuse_ar": float(r.prvuse_ar),
+                    "price_median": r.price_median,
+                    "ho_count": r.ho_count,
+                }
+                for r in rows
+                if r.stdr_year == latest_year
+            ),
+            key=lambda item: item["prvuse_ar"],
+        ),
+    }
+    _official_price_cache.set(cache_key, result)
+    return result

@@ -48,3 +48,17 @@ export interface PriceHistoryResponse {
   complex_no: string;
   items: PriceHistoryItem[];
 }
+
+/** 단지 공동주택 공시가격 평형별 항목 */
+export interface OfficialPriceItem {
+  prvuse_ar: number;
+  price_median: number;
+  ho_count: number;
+}
+
+/** 단지 공동주택 공시가격 응답 (무료 공개, 게이트 없음) */
+export interface OfficialPriceResponse {
+  complex_no: string;
+  year: string | null;
+  items: OfficialPriceItem[];
+}

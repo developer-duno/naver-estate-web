@@ -30,6 +30,7 @@ POPULAR_CRAWL_ENABLED = os.getenv("POPULAR_CRAWL_ENABLED", "true").lower() == "t
 POPULAR_CRAWL_BATCH_SIZE = int(os.getenv("POPULAR_CRAWL_BATCH_SIZE", "50"))
 PUBLIC_DATA_ENABLED = os.getenv("PUBLIC_DATA_ENABLED", "false").lower() == "true"
 PUBLIC_DATA_BATCH_SIZE = int(os.getenv("PUBLIC_DATA_BATCH_SIZE", "300"))
+OFFICIAL_PRICE_ENABLED = os.getenv("OFFICIAL_PRICE_ENABLED", "false").lower() == "true"
 # 시세 이력 부족 단지 소급 수집 (국토교통부 실거래가). PUBLIC_DATA_ENABLED 와 같은
 # data.go.kr 키 사용 — 일일 쿼터(10,000회, mibunyang 공유) 보호 위해 배치 작게.
 PUBLIC_PRICE_BACKFILL_BATCH_SIZE = int(os.getenv("PUBLIC_PRICE_BACKFILL_BATCH_SIZE", "30"))
@@ -278,6 +279,19 @@ def create_scheduler() -> BackgroundScheduler:
             misfire_grace_time=3600,
         )
         logger.info("청약홈 오피스텔·민간임대 수집 활성화: 월요일 05:00/05:30")
+
+    # F-2. 공동주택 공시가격 수집 — 매월 15일 새벽 6시 30분 (V-WORLD, 네이버 0)
+    if OFFICIAL_PRICE_ENABLED:
+        from crawler.service_official_price import collect_official_prices
+
+        scheduler.add_job(
+            collect_official_prices, "cron",
+            day="15", hour=6, minute=30,
+            kwargs={"scheduler_job_id": "official_price"},
+            id="official_price", name="공동주택 공시가격 수집",
+            max_instances=1, misfire_grace_time=3600,
+        )
+        logger.info("공동주택 공시가격 수집 활성화: 매월 15일 06:30")
 
     # G. 에어코리아 대기질 수집 — 매일 새벽 2시
     if AIR_QUALITY_ENABLED:

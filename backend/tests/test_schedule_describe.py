@@ -37,6 +37,8 @@ _CASES = [
     # cron 분기별 첫째 X요일 (month=1,4,7,10 + day=1-7 + 요일)
     ("분기별 첫째 일요일", CronTrigger(month="1,4,7,10", day="1-7", day_of_week="sun", hour=4),
      "분기별 첫째 일요일 04:00"),
+    # cron 매월 N일 (day=단일 숫자, dow/month 없음 — 공시가격 수집 PR-A3)
+    ("매월 15일", CronTrigger(day="15", hour=6, minute=30), "매월 15일 06:30"),
     # 숫자형 day_of_week 방어 (0=월 ~ 6=일)
     ("숫자형 요일 (6=일요일)", CronTrigger(day_of_week="6", hour=3), "주 1회 일요일 03:00"),
     # 미지원 조합 → 빈 문자열 (라우터 fallback)

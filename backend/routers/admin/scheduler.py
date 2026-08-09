@@ -35,6 +35,7 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "collect_public_trades": {"name": "공공데이터 실거래가", "schedule": "주 1회 토요일 05:00", "env": "PUBLIC_DATA_ENABLED"},
     "collect_officetel_presale": {"name": "청약홈 오피스텔 수집", "schedule": "주 1회 월요일 05:00", "env": "PUBLIC_DATA_ENABLED"},
     "collect_rental_presale": {"name": "청약홈 민간임대 수집", "schedule": "주 1회 월요일 05:30", "env": "PUBLIC_DATA_ENABLED"},
+    "official_price": {"name": "공동주택 공시가격 수집", "schedule": "매월 15일 06:30", "env": "OFFICIAL_PRICE_ENABLED"},
     "backfill_price": {"name": "시세 이력 소급 수집", "schedule": "매일 03:30", "env": "PUBLIC_DATA_ENABLED"},
     "collect_air_quality": {"name": "에어코리아 대기질", "schedule": "매일 02:00", "env": "AIR_QUALITY_ENABLED"},
     "collect_emergency": {"name": "응급의료기관", "schedule": "매월 첫째 월요일 03:00", "env": "EMERGENCY_ENABLED"},

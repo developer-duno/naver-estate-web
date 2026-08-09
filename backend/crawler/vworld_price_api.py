@@ -195,6 +195,13 @@ def fetch_official_prices(pnu: str, stdr_year: str) -> list[dict] | None:
     ⚠ 전 페이지를 다 받은 뒤에만 매칭해야 한다 — V-WORLD 는 소형 빌라를 앞 페이지,
     대형 아파트를 뒷 페이지에 배치해(대치동은 48페이지에야 대형 단지 등장) 부분 수집 시
     매칭률이 3%로 왜곡된다(플랜 §3-2-5 실측).
+
+    ⚠ 마지막에 **행수 정합성(len(rows) == totalCount)** 을 반드시 확인한다. 페이지 하나가
+    통째로 실패하는 경우(위)는 잡히지만, **"성공처럼 보이는데 살짝 모자란 응답"** 은 여기서만
+    잡힌다 — 2026-08-09 첫 전국 수집에서 대치동 은마(4,424세대)가 미매칭된 실사고의 원인이
+    이것이다(사후 재조회로는 48,928행 전량 수신 · ho 비율 0.9851 로 정상 매칭). 대형 단지가
+    뒷 페이지에 몰려 있어, 몇 행만 모자라도 그 단지의 호수가 부족해지고 세대수 ±5% 게이트에서
+    조용히 탈락한다. 불완전 스냅샷은 부분 매칭보다 **통째 포기**가 안전하다.
     """
     first = _fetch_page(pnu, stdr_year, 1)
     if first is None:
@@ -202,9 +209,13 @@ def fetch_official_prices(pnu: str, stdr_year: str) -> list[dict] | None:
 
     rows, total_count = first
     if not rows:
+        # 0건은 정상(빈 동) — 아래 행수 정합성 가드의 대상이 아니다.
+        # (totalCount 가 0 이 아닌데 1페이지가 비어 오는 건 애초에 수집할 게 없는 상태라
+        #  여기서 끊는 편이 뒤에서 0 != totalCount 로 걸리는 것보다 의미가 분명하다.)
         return []
 
-    last_page = min((total_count + PAGE_SIZE - 1) // PAGE_SIZE, MAX_PAGES)
+    full_last_page = (total_count + PAGE_SIZE - 1) // PAGE_SIZE
+    last_page = min(full_last_page, MAX_PAGES)
     for page_no in range(2, last_page + 1):
         page = _fetch_page(pnu, stdr_year, page_no)
         if page is None:
@@ -214,5 +225,31 @@ def fetch_official_prices(pnu: str, stdr_year: str) -> list[dict] | None:
                            page_no, last_page, pnu)
             return None
         rows.extend(page[0])
+
+    # MAX_PAGES 캡에 걸린 경우엔 len(rows) < total_count 가 **정상**이라 아래 정합성 가드가
+    # 오발한다. 그래도 결과는 같은 "불완전 스냅샷"이므로 동일하게 포기하되, 원인이 다르니
+    # 로그를 분리한다(가드 오발이 아니라 캡 부족이라는 신호 — MAX_PAGES 를 올려야 한다).
+    # 실측상 최대 동이 대치동 48,928행(49페이지)이라 200페이지=20만행 캡에는 4배 여유가
+    # 있어 현재 도달 사례는 없다.
+    if full_last_page > MAX_PAGES:
+        logger.warning(
+            "[official_price] 동 %s 총 %d행이 MAX_PAGES(%d=%d행) 캡을 초과 — 수집 포기 "
+            "(캡 상향 검토 필요)",
+            pnu, total_count, MAX_PAGES, MAX_PAGES * PAGE_SIZE,
+        )
+        return None
+
+    # 행수 정합성 가드 — 기대치와 1행이라도 다르면 불완전 스냅샷으로 보고 포기한다.
+    # `!=` 인 이유: 모자란 경우(은마 사고)뿐 아니라 **초과**도 비정상이다(마지막 페이지
+    # 반복 반환 등으로 중복 누적된 상태라 중위값이 왜곡된다).
+    # totalCount 파싱 실패로 0 인데 rows 는 있는 기형 응답도 여기 걸려 None 이 되는데,
+    # 그게 **의도**다 — 총량을 모르는 응답은 완전성을 증명할 수 없으므로 신뢰하지 않는다.
+    if len(rows) != total_count:
+        logger.warning(
+            "[official_price] 동 %s 행수 불일치 — 기대 %d행 / 수신 %d행. 불완전 스냅샷이라 "
+            "수집 포기 (부분 데이터로 매칭하면 대형 단지가 세대수 게이트에서 탈락)",
+            pnu, total_count, len(rows),
+        )
+        return None
 
     return rows

@@ -8,6 +8,8 @@ export const queryKeys = {
   // Search
   search: (keyword: string, types?: string) =>
     ["search", keyword, types] as const,
+  /** DB 단지명 검색 (/api/complexes/search) — 라이브 크롤 search 키와 분리 */
+  complexSearchDb: (keyword: string) => ["complexSearchDb", keyword] as const,
   regionSearch: (
     sido: string,
     sigungu?: string,
@@ -22,6 +24,7 @@ export const queryKeys = {
   /** invalidation prefix — 해당 단지의 모든 articles 쿼리 무효화용 */
   articlesAll: (no: string) => ["articles", no] as const,
   pyeongDetails: (no: string) => ["pyeongDetails", no] as const,
+  officialPrices: (no: string) => ["officialPrices", no] as const,
   priceStats: (no: string) => ["priceStats", no] as const,
   priceHistory: (no: string, tradeType?: string, areaNo?: string) =>
     ["priceHistory", no, tradeType, areaNo] as const,

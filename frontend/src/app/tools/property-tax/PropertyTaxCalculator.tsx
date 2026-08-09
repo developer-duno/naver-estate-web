@@ -5,6 +5,7 @@ import { calculatePropertyTax } from "@/lib/property-tax";
 import type { PropertyTaxInput, CorporationGeneralRateCategory, SpecialHousesInput, SpecialHousesRateApplyInput, PropertyTaxNoticeKey, HoldPeriodSpecialMode } from "@/lib/property-tax-types";
 import PropertyTaxInputs from "./PropertyTaxInputs";
 import PropertyTaxResultCard from "./PropertyTaxResultCard";
+import PropertyTaxComplexPicker from "./PropertyTaxComplexPicker";
 
 export default function PropertyTaxCalculator() {
   const [publishedManwon, setPublishedManwon] = useState(0);
@@ -122,6 +123,11 @@ export default function PropertyTaxCalculator() {
 
   return (
     <div className="space-y-4">
+      <PropertyTaxComplexPicker
+        ownershipPercent={ownershipPercent}
+        publishedManwon={publishedManwon}
+        onFill={setPublishedManwon}
+      />
       <PropertyTaxInputs
         publishedManwon={publishedManwon}
         houses={houses}

@@ -69,3 +69,22 @@ export async function getOfficialPrices(complexNo: string): Promise<OfficialPric
   if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
   return fetchApi<OfficialPriceResponse>(`/api/complexes/${encodeURIComponent(complexNo)}/official-prices`);
 }
+
+/**
+ * 단지명 DB 검색 (GET /api/complexes/search — ILIKE, 네이버 호출 0, 무게이트)
+ *
+ * searchComplexes 와 달리 실시간 네이버 크롤(/api/live/search)을 타지 않는다.
+ * 공개 페이지(계산기 등)에서 단지를 고를 때 쓴다 — IP 차단 위험 0.
+ * ⚠ 폴백 금지: 에러를 삼키면 React Query isError 가 prod 에서 발화하지 않는다
+ * (error-propagation.md §4, 회귀 가드: lib/__tests__/official-price-error.test.ts).
+ */
+export async function searchComplexesDb(
+  keyword: string,
+  signal?: AbortSignal,
+  limit?: number,
+): Promise<SearchResponse> {
+  if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
+  let url = `/api/complexes/search?q=${encodeURIComponent(keyword)}`;
+  if (limit) url += `&limit=${limit}`;
+  return fetchApi<SearchResponse>(url, { signal });
+}

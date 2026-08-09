@@ -7,7 +7,7 @@
  * 실행: npx vitest run src/components/complex/__tests__/ComplexDashboard.test.tsx
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ComplexDashboard from "../ComplexDashboard";
 import type { Complex, PyeongDetail } from "@/types";
@@ -200,5 +200,38 @@ describe("ComplexDashboard (v2)", () => {
     // 시세 박스 primary = '-' (nearby_median_price NULL + avgPrice null)
     const dashes = screen.getAllByText("-");
     expect(dashes.length).toBeGreaterThanOrEqual(3); // 시세 + 단지정보 + 면적별 시세
+  });
+
+  // PR-D: 공시가격·공시가율 행은 ComplexBasicInfo 안에 있으므로, 인쇄 시 그 섹션이
+  // 실제로 마운트되는지를 여기서 가드한다 (isPrinting 소유자 = 이 컴포넌트).
+  it("인쇄(beforeprint) 시 단지정보 섹션 포함 4 섹션 모두 노출 (PR-D 인쇄 경로 가드)", () => {
+    render(
+      <ComplexDashboard
+        complex={baseComplex}
+        complexNo="C001"
+        pyeongDetails={samplePyeong}
+        sessionToken={undefined}
+        onFilterChange={() => {}}
+      />,
+    );
+
+    // 아무 박스도 안 열린 상태 = 펼침 영역 부재
+    expect(screen.queryByTestId("mock-basic-info")).not.toBeInTheDocument();
+
+    act(() => {
+      window.dispatchEvent(new Event("beforeprint"));
+    });
+
+    // 공시가격·공시가율 행이 사는 단지정보 섹션이 인쇄 시 노출돼야 한다
+    expect(screen.getByTestId("mock-basic-info")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-price-floor")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-price-chart")).toBeInTheDocument();
+    expect(screen.getByTestId("mock-pyeong-list")).toBeInTheDocument();
+
+    // 인쇄 종료 시 원래대로 접힘
+    act(() => {
+      window.dispatchEvent(new Event("afterprint"));
+    });
+    expect(screen.queryByTestId("mock-basic-info")).not.toBeInTheDocument();
   });
 });

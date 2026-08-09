@@ -21,6 +21,7 @@ from db.complex_queries import (  # noqa: F401
 )
 from db.price_queries import (  # noqa: F401
     get_article_price_history,
+    get_complex_official_prices,
     get_complex_price_history,
     get_price_changed_articles,
     get_price_stats_aggregated,

@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy import and_, func, select, text
 from sqlalchemy.orm import Session
 
-from db.models import Article, ArticlePriceHistory, ComplexPriceHistory
+from db.models import Article, ArticlePriceHistory, ComplexOfficialPrice, ComplexPriceHistory
 
 
 def get_article_price_history(
@@ -219,3 +219,12 @@ def get_complex_price_history(
         .order_by(month_col.asc())
     )
     return [dict(row._mapping) for row in db.execute(stmt).all()]
+
+
+def get_complex_official_prices(db: Session, complex_no: str) -> list[ComplexOfficialPrice]:
+    """단지의 공동주택 공시가격 전체 행 조회 (연도 필터는 라우터에서 최신값만 선별)"""
+    stmt = (
+        select(ComplexOfficialPrice)
+        .where(ComplexOfficialPrice.complex_no == complex_no)
+    )
+    return list(db.execute(stmt).scalars().all())

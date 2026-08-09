@@ -2,7 +2,7 @@
  * 단지 검색/조회 API
  */
 
-import type { Complex } from "@/types";
+import type { Complex, OfficialPriceResponse } from "@/types";
 import * as direct from "@/lib/api-direct";
 import { fetchApi, isBackendAvailable } from "./core";
 
@@ -58,4 +58,14 @@ export async function getComplex(complexNo: string) {
   } catch {
     return direct.getComplexDirect(complexNo);
   }
+}
+
+// ⚠ 공시가격은 direct(Supabase) 폴백 경로가 없다 — 에러를 삼키지 말고 그대로 throw
+// (error-propagation.md 룰, 회귀 가드: lib/__tests__/official-price-error.test.ts).
+const BACKEND_DOWN_MSG = "서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.";
+
+/** 단지 공동주택 공시가격 (무료 공개, 게이트 없음) */
+export async function getOfficialPrices(complexNo: string): Promise<OfficialPriceResponse> {
+  if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
+  return fetchApi<OfficialPriceResponse>(`/api/complexes/${encodeURIComponent(complexNo)}/official-prices`);
 }

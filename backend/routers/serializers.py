@@ -15,6 +15,7 @@ from routers.mb_serializers import (  # noqa: F401
     mb_price_to_dict,
     mb_region_to_dict,
     mb_trade_to_dict,
+    officetel_schedule_to_dict,
     presale_schedule_to_dict,
     presale_summary,
     rental_schedule_to_dict,

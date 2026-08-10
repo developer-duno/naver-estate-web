@@ -19,6 +19,7 @@ from routers.serializers import (
     mb_price_to_dict,
     mb_region_to_dict,
     mb_trade_to_dict,
+    officetel_schedule_to_dict,
     presale_schedule_to_dict,
     presale_summary,
     rental_schedule_to_dict,
@@ -272,7 +273,7 @@ def get_officetel_rental(
     officetel_rows = mb_queries.get_officetel_schedules(db, region=region)
     rental_rows = mb_queries.get_rental_schedules(db, region=region)
 
-    items = [presale_schedule_to_dict(s) for s in officetel_rows] + [
+    items = [officetel_schedule_to_dict(s) for s in officetel_rows] + [
         rental_schedule_to_dict(r) for r in rental_rows
     ]
     # 공고일 최신순 통합 정렬 (kind 무관)

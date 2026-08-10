@@ -176,7 +176,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - if: matrix.project == 'admin' && needs.e2e-setup.outputs.auth-exists == 'true'
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: admin-auth-state
           path: frontend/e2e/.auth

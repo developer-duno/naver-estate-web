@@ -192,13 +192,32 @@ class PublicDataAPI:
 
         return None
 
+    # 세션 359: 같은 (시군구, 월) 조합을 여러 단지가 반복 호출하는 낭비 발견
+    # (backfill_price_batch 가 세대수 상위 단지 순회 시, 같은 구의 단지 N개가
+    # 정확히 같은 API 응답을 매번 새로 받아옴 — data.go.kr 하루 10,000회 쿼터
+    # 중 실제로는 4.8%만 쓰면서도 이 낭비 때문에 배치를 못 키우고 있었다).
+    # 프로세스 내 메모리 캐시 — TTL 없음(과거 월 실거래는 사후 변경 없음, 당월만
+    # 예외적으로 갱신될 수 있으나 이 캐시는 한 배치 실행(1회 프로세스) 동안만
+    # 유효해 재시작 때마다 자연 초기화됨).
+    _trade_cache: dict[tuple[str, str], list[dict]] = {}
+    _trade_cache_lock = threading.Lock()
+
     @classmethod
     def get_all_apt_trades(cls, lawd_cd: str, deal_ymd: str) -> list[dict]:
-        """아파트 매매 실거래가 전체 페이지 조회 (페이징 자동 처리)
+        """아파트 매매 실거래가 전체 페이지 조회 (페이징 자동 처리, 캐싱).
+
+        같은 (lawd_cd, deal_ymd) 조합은 프로세스 생존 동안 1회만 API 호출 —
+        같은 시군구의 여러 단지가 소급 수집될 때 중복 호출을 없앤다.
 
         Returns:
             거래 건별 dict 리스트
         """
+        cache_key = (lawd_cd, deal_ymd)
+        with cls._trade_cache_lock:
+            cached = cls._trade_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         all_items: list[dict] = []
         page_no = 1
 
@@ -223,11 +242,13 @@ class PublicDataAPI:
                 break
             page_no += 1
 
+        with cls._trade_cache_lock:
+            cls._trade_cache[cache_key] = all_items
         return all_items
 
     @classmethod
     def reset(cls):
-        """세션 초기화"""
+        """세션 초기화 (거래 캐시도 함께 초기화 — 테스트 간 오염 방지)"""
         with cls._lock:
             if cls._session:
                 try:
@@ -236,3 +257,5 @@ class PublicDataAPI:
                     pass
             cls._session = None
             cls._daily_call_count = 0
+        with cls._trade_cache_lock:
+            cls._trade_cache.clear()

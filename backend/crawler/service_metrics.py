@@ -11,11 +11,13 @@ complex_price_history 에서 단지별 가치지표 3필드를 집계해 complex
 
 import logging
 
+from sqlalchemy import exists
+
 from crawler.metrics_helpers import calc_median_price, count_recent_price_records
 from crawler.service_common import _checkpoint, fail_job_safely
 from crawler.stats import compute_jeonse_rate
 from db.database import SessionLocal
-from db.models import Complex, CrawlJob
+from db.models import Complex, ComplexPriceHistory, CrawlJob
 from utils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -26,6 +28,14 @@ def collect_complex_metrics(batch_size: int = 200, scheduler_job_id: str | None 
 
     nearby_median_price 가 NULL 인 단지를 세대수 큰 순으로 우선 처리.
     시세 이력이 없어 중앙값이 None 인 단지는 건너뛴다 (NULL 유지).
+
+    세션 359: 전수조사 중 발견 — 실측 결과 nearby_median_price IS NULL 단지
+    60,217개 중 실제 매매(A1) 시세 이력이 있는 건 22,975개(38%)뿐이었다. 나머지
+    62%는 시세 이력 자체가 없어 calc_median_price() 가 영원히 None 을 반환하는데,
+    이 조건 없이는 세대수만 보고 매일 같은 "채울 수 없는" 단지를 다시 뽑아 배치가
+    거의 0건만 처리하는 게 반복됐다(8/2~8/9 실측: total_items=1000 인데
+    processed_items 0~2건). EXISTS 로 시세 이력이 실제로 있는 단지만 후보로
+    좁혀 이 헛수고를 없앤다 — 매칭 게이트가 아니라 순수 성능/정확성 수정.
     """
     db = SessionLocal()
     job = CrawlJob(
@@ -38,9 +48,14 @@ def collect_complex_metrics(batch_size: int = 200, scheduler_job_id: str | None 
     db.commit()
 
     try:
+        has_price_history = exists().where(
+            ComplexPriceHistory.complex_no == Complex.complex_no,
+            ComplexPriceHistory.trade_type == "A1",
+        )
         complexes = (
             db.query(Complex.complex_no)
             .filter(Complex.nearby_median_price.is_(None))
+            .filter(has_price_history)
             .order_by(Complex.total_household_count.desc().nullslast())
             .limit(batch_size)
             .all()

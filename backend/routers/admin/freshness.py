@@ -14,8 +14,8 @@ from fastapi import Depends
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from db.mb_models import Infra, MBTrade, UnsoldHistory
-from db.models import Article, Complex, ComplexPriceHistory, CrawlJob
+from db.mb_models import Infra, MBTrade, OfficetelPresaleSchedule, RentalScheduleOfficial, UnsoldHistory
+from db.models import Article, Complex, ComplexOfficialPrice, ComplexPriceHistory, CrawlJob
 from deps import get_admin_user, get_db
 from services.cache import get_cache
 
@@ -160,8 +160,50 @@ def compute_freshness(db: Session) -> dict:
                 (CrawlJob.scheduler_job_id == "collect_childcare") & (CrawlJob.status == "completed"),
             )
         ).one(),
+        # 세션 359: Infra.emergency_updated_at 컬럼 없음 — childcare 와 동일하게
+        # CrawlJob.completed_at 경유로 최신성 측정.
+        "emergency": db.execute(
+            select(
+                func.max(CrawlJob.completed_at),
+                func.coalesce(func.max(CrawlJob.processed_items), 0),
+            ).where(
+                (CrawlJob.scheduler_job_id == "collect_emergency") & (CrawlJob.status == "completed"),
+            )
+        ).one(),
         "crime_stats": db.execute(select(func.max(Infra.crime_updated_at), func.count(Infra.apartment_id).filter(Infra.crime_score.isnot(None)))).one(),
         "public_trades": (trade_max, trade_count),
+        # 신규 3종 (세션 359) — "조용한 실패"(0건인데 status=completed) 가 monitor.py
+        # 의 작업실패 감지를 우회하는 사각지대를 이 신선도 축으로 메운다. 전량 upsert
+        # 구조라 created_at 없이 fetched_at/collected_at 최신성만 측정(air_quality 패턴 답습).
+        "officetel_presale": db.execute(
+            select(func.max(OfficetelPresaleSchedule.fetched_at), func.count(OfficetelPresaleSchedule.id))
+        ).one(),
+        "rental_presale": db.execute(
+            select(func.max(RentalScheduleOfficial.fetched_at), func.count(RentalScheduleOfficial.id))
+        ).one(),
+        "official_price": db.execute(
+            select(func.max(ComplexOfficialPrice.collected_at), func.count(ComplexOfficialPrice.id))
+        ).one(),
+        # 세션 359: 매물 상세 보강(crawl_details) — "몇 시간이고 0건만 처리해도
+        # completed 로 조용히 끝나는" 사각지대 사례. articles 카드는 crawl_articles
+        # (매물 목록 수집, 별개 잡) 기준이라 이 잡을 못 잡는다.
+        "article_detail": db.execute(
+            select(
+                func.max(CrawlJob.completed_at),
+                func.coalesce(func.max(CrawlJob.processed_items), 0),
+            ).where(
+                (CrawlJob.scheduler_job_id == "crawl_details") & (CrawlJob.status == "completed"),
+            )
+        ).one(),
+        # 세션 359: 시급하지 않다고 분류됐던 잡도 마저 메움(사장님 지시 — 전체 적용).
+        "complex_metric": db.execute(
+            select(
+                func.max(CrawlJob.completed_at),
+                func.coalesce(func.max(CrawlJob.processed_items), 0),
+            ).where(
+                (CrawlJob.scheduler_job_id == "collect_metrics") & (CrawlJob.status == "completed"),
+            )
+        ).one(),
     }
 
     items = []

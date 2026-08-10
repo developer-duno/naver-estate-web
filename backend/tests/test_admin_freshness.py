@@ -6,8 +6,8 @@ from datetime import date, datetime, timedelta, timezone
 
 import jwt
 
-from db.mb_models import Infra, MBTrade
-from db.models import Article, Complex, CrawlJob, UserProfile
+from db.mb_models import Infra, MBTrade, OfficetelPresaleSchedule, RentalScheduleOfficial
+from db.models import Article, Complex, ComplexOfficialPrice, CrawlJob, UserProfile
 from routers.admin.freshness import invalidate_freshness_cache
 
 JWT_SECRET = "test-secret-key-for-testing-only"
@@ -45,7 +45,7 @@ def test_freshness_empty_db_unknown(client, db):
     res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
     assert res.status_code == 200
     body = res.json()
-    assert len(body["items"]) == 8
+    assert len(body["items"]) == 14  # 세션 359: 신규 6종(오피스텔·민간임대·공시가격·응급의료·매물상세·단지가치지표) 편입
     for item in body["items"]:
         assert item["count"] == 0
         assert item["last_updated"] is None
@@ -143,10 +143,190 @@ def test_public_trades_meta_is_external(client, db):
     assert item["last_job"] is None, f"외부 테이블이라 정기작업 메타 없어야: {item}"
 
 
+# ── 신규 3종(오피스텔·민간임대·공시가격) "조용한 실패" 감시 (세션 359) ──
+#
+# 배경: 세 수집기는 API 가 예외 없이 빈 응답을 줘도 job.status="completed"/
+# total_items=0 으로 정상 기록된다(설계 의도 — 스케줄러를 안 죽임). monitor.py 의
+# "작업 실패"(status=failed) 감지는 status 가 completed 라 이 상황을 못 잡는다.
+# 이 신선도 카드가 "데이터 미축적"(테이블의 실제 최신 시각) 축으로 그 사각지대를
+# 메운다 — 아래 테스트가 실제로 red 로 격상되는지 직접 재현해 회귀를 막는다.
+
+def test_officetel_presale_fresh_green(client, db):
+    """오피스텔 청약 최신 fetched_at 이 1일 전이면 green(주간 7일 주기, 0.14×)."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(OfficetelPresaleSchedule(
+        house_manage_no="H1", house_nm="테스트오피스텔", fetched_at=now - timedelta(days=1),
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "officetel_presale")
+    assert item["count"] == 1
+    assert item["status"] == "green", f"1일 전이면 green: {item}"
+
+
+def test_officetel_presale_stale_goes_red(client, db):
+    """핵심 회귀 가드: 오피스텔 청약이 3주(21일=3×) 넘게 안 갱신되면 red —
+    수집이 '조용히 실패'(0건인데 completed)해도 이 신호로 잡힌다는 증거."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(OfficetelPresaleSchedule(
+        house_manage_no="H1", house_nm="테스트오피스텔", fetched_at=now - timedelta(days=25),
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "officetel_presale")
+    assert item["status"] == "red", f"25일 전(3.57×)이면 red: {item}"
+
+
+def test_rental_presale_fresh_green(client, db):
+    """민간임대 청약도 오피스텔과 동일 주간(7일) 주기 — 1일 전이면 green."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(RentalScheduleOfficial(
+        house_manage_no="R1", house_nm="테스트임대", fetched_at=now - timedelta(days=1),
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "rental_presale")
+    assert item["count"] == 1
+    assert item["status"] == "green", f"1일 전이면 green: {item}"
+
+
+def test_official_price_monthly_meta(client, db):
+    """공시가격은 월간(30일) 주기 — 45일 전(1.5×)이면 아직 green 유지, 100일 전(3.33×)이면 red."""
+    _make_admin(db)
+    db.add(ComplexOfficialPrice(
+        complex_no="1", stdr_year="2026", prvuse_ar="84.00",
+        price_median=500000000, ho_count=10,
+        collected_at=datetime.now(timezone.utc) - timedelta(days=100),
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "official_price")
+    assert item["count"] == 1
+    assert item["expected_interval_seconds"] == 86400 * 30, item
+    assert item["status"] == "red", f"100일 전(3.33×)이면 red: {item}"
+
+
+# ── 전수조사로 발견된 사각지대 2종: 매물 상세 보강·응급의료기관 (세션 359) ──
+#
+# 배경: crawl_details(매물 상세 보강)와 collect_emergency(응급의료기관) 는 몇 시간이고
+# 매번 0건만 처리해도 status="completed"로 정상 종료돼 monitor.py 의 "작업 실패"·
+# "작업 마비" 축 어디도 못 잡는 사각지대였다(17개 스케줄러 잡 전수조사로 발견).
+# air_quality/childcare/crime_stats 는 이미 있는데 emergency 만 등록 누락이었고,
+# crawl_details 는 애초에 전용 카드가 없었다 — CrawlJob.completed_at 경유(childcare 패턴).
+
+def test_article_detail_fresh_green(client, db):
+    """매물 상세 보강 최신 완료가 30분 전이면 green(90분 주기, 0.33×)."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(CrawlJob(
+        job_type="article_detail", scheduler_job_id="crawl_details", status="completed",
+        started_at=now - timedelta(minutes=31), completed_at=now - timedelta(minutes=30),
+        processed_items=100, total_items=100,
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "article_detail")
+    assert item["status"] == "green", f"30분 전이면 green: {item}"
+
+
+def test_article_detail_completed_zero_items_still_stale_goes_red(client, db):
+    """핵심 회귀 가드: '완료(completed)로 기록되지만 매번 0건만 처리'하며 5시간
+    넘게 안 갱신되면 red — 사장님이 지적한 '조용히 뻗어도 아무도 모른다' 시나리오를
+    직접 재현. status가 completed 인데도(작업실패 축은 못 잡음) 이 축이 잡는다."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(CrawlJob(
+        job_type="article_detail", scheduler_job_id="crawl_details", status="completed",
+        started_at=now - timedelta(hours=5, minutes=1), completed_at=now - timedelta(hours=5),
+        processed_items=0, total_items=0,  # 0건 처리 — "완료"지만 사실상 무동작
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "article_detail")
+    assert item["status"] == "red", f"5시간 전(90분×3.33)이면 red: {item}"
+
+
+def test_emergency_fresh_green(client, db):
+    """응급의료기관 최신 완료가 1일 전이면 green(월간 30일 주기, 0.033×)."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(CrawlJob(
+        job_type="emergency", scheduler_job_id="collect_emergency", status="completed",
+        started_at=now - timedelta(days=1, minutes=1), completed_at=now - timedelta(days=1),
+        processed_items=500, total_items=500,
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "emergency")
+    assert item["status"] == "green", f"1일 전이면 green: {item}"
+
+
+def test_emergency_stale_goes_red(client, db):
+    """응급의료기관이 100일(3.33×) 넘게 안 갱신되면 red — air_quality/childcare/
+    crime_stats 는 이미 카드가 있는데 emergency 만 누락됐던 사각지대 회귀 가드."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(CrawlJob(
+        job_type="emergency", scheduler_job_id="collect_emergency", status="completed",
+        started_at=now - timedelta(days=100, minutes=1), completed_at=now - timedelta(days=100),
+        processed_items=500, total_items=500,
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "emergency")
+    assert item["status"] == "red", f"100일 전(3.33×)이면 red: {item}"
+
+
+def test_complex_metric_fresh_green(client, db):
+    """단지 가치지표 최신 완료가 1시간 전이면 green(36시간 주기, 0.028×)."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(CrawlJob(
+        job_type="complex_metric", scheduler_job_id="collect_metrics", status="completed",
+        started_at=now - timedelta(hours=1, minutes=1), completed_at=now - timedelta(hours=1),
+        processed_items=200, total_items=200,
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "complex_metric")
+    assert item["status"] == "green", f"1시간 전이면 green: {item}"
+
+
+def test_complex_metric_completed_zero_items_still_stale_goes_red(client, db):
+    """'완료로 기록되지만 시세이력 없는 단지가 소진돼 매번 0건만 처리'하며
+    6일(144시간, 36시간×4) 넘게 안 갱신되면 red — 전수조사에서 '시급하지
+    않다'고 미뤘던 사각지대를 마저 메운 회귀 가드 (사장님 지시: 전체 적용).
+    red 임계는 주기의 3배(108시간=4.5일) — 여유를 두고 6일로 확실히 넘긴다."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(CrawlJob(
+        job_type="complex_metric", scheduler_job_id="collect_metrics", status="completed",
+        started_at=now - timedelta(days=6, minutes=1), completed_at=now - timedelta(days=6),
+        processed_items=0, total_items=0,
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "complex_metric")
+    assert item["status"] == "red", f"6일 전(144h/36h=4×, red임계 3×초과)이면 red: {item}"
+
+
 # ── 응답 스키마 ──
 
 def test_freshness_response_schema(client, db):
-    """응답에 generated_at + 8 items 필수 필드 모두 포함"""
+    """응답에 generated_at + 14 items 필수 필드 모두 포함 (세션 359: 신규 6종 편입)"""
     _make_admin(db)
     res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
     assert res.status_code == 200
@@ -156,6 +336,8 @@ def test_freshness_response_schema(client, db):
     expected_keys = {
         "complexes", "articles", "complex_price_history", "unsold",
         "air_quality", "childcare", "crime_stats", "public_trades",
+        "officetel_presale", "rental_presale", "official_price",
+        "emergency", "article_detail", "complex_metric",
     }
     assert keys == expected_keys
     for item in body["items"]:

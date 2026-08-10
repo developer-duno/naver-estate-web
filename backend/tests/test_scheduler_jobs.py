@@ -300,3 +300,19 @@ def test_run_vacuum_maintenance_skips_on_sqlite():
     result = run_vacuum_maintenance()
     assert result["skipped"] == "sqlite"
     assert result["vacuumed"] == []
+
+
+def test_run_vacuum_maintenance_records_crawl_job(db):
+    """세션 359: 전수조사로 발견된 사각지대 회귀 가드 — 이전엔 CrawlJob 을 아예
+    안 남겨 monitor.py 3축(작업실패/작업마비/데이터미축적) 어디도 이 잡의 존재
+    자체를 몰랐다. 이제 job_type='vacuum_maintenance' 로 완료 기록이 남아야 하고,
+    이걸로 monitor.py 의 범용 job_type 스캔(작업실패/작업마비)에 자연 편입된다."""
+    from crawler.vacuum_maintenance import run_vacuum_maintenance
+    from db.models import CrawlJob
+
+    run_vacuum_maintenance()
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "vacuum_maintenance").first()
+    assert job is not None, "CrawlJob 기록이 생성되지 않음 — 사각지대 재발"
+    assert job.status == "completed"
+    assert job.completed_at is not None

@@ -329,6 +329,59 @@ def test_collect_skips_non_target_types(db, monkeypatch):
     mock_fetch.assert_not_called()
 
 
+# ── 7-1. 법정동 단위 재시도 (PR-2, vworld_price_api.py 429 재시도 위의 4번째 계층) ──
+
+def test_collect_retries_once_then_succeeds(db, seeded, monkeypatch):
+    """1차 조회가 None(실패)이어도 2차(재시도)가 성공하면 정상 매칭된다."""
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    good_rows = make_rows_for_complex(aphus_nm="은마", ho_count=10, area="84.43")
+
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[None, good_rows],
+    ) as mock_fetch, patch("crawler.service_official_price.time.sleep") as mock_sleep:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 2, "1차 실패 후 정확히 1회 재시도해야 한다"
+    mock_sleep.assert_called_once_with(2)
+
+    saved = db.query(ComplexOfficialPrice).all()
+    assert len(saved) == 1
+    assert saved[0].complex_no == seeded
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed"
+
+
+def test_collect_records_failed_ld_codes_after_retry_exhausted(db, monkeypatch, caplog):
+    """재시도까지 소진(1차+재시도 모두 None)한 법정동은 failed_ld_codes_list 에 쌓인다.
+
+    두 법정동 모두 실패시켜 리스트에 정확히 그 두 코드가 들어갔는지 caplog 로 확인한다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    db.add(Complex(complex_no="C1", complex_name="은마아파트", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.add(Complex(complex_no="C2", complex_name="다른아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[None, None, None, None],
+    ) as mock_fetch, patch("crawler.service_official_price.time.sleep"), caplog.at_level(
+        "WARNING", logger="crawler.service_official_price"
+    ):
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 4, "법정동 2개 × (1차+재시도) = 4회 호출"
+
+    # silent failure 가드가 매칭 0건에서 job 을 failed 로 끊고 return 하므로, 완료 로그
+    # (failed_ld_codes_list 포함)가 아니라 개별 경고 로그 2건으로 검증한다.
+    warning_msgs = [r.message for r in caplog.records if r.levelname == "WARNING"]
+    assert any("1168010600" in m for m in warning_msgs)
+    assert any("1168010700" in m for m in warning_msgs)
+
+
 # ── 8. 페이지네이션 종료 조건 ──
 
 def test_fetch_stops_by_total_count_not_page_length(monkeypatch):

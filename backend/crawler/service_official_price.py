@@ -15,6 +15,7 @@ import logging
 import os
 import re
 import statistics
+import time
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
@@ -278,6 +279,7 @@ def collect_official_prices(
         matched_complexes = 0
         saved_rows = 0
         failed_ld_codes = 0
+        failed_ld_codes_list: list[str] = []
 
         for idx, ld_code in enumerate(remaining):
             # 전 페이지 수집 완료 후에만 매칭 — 부분 수집 시 세대수 게이트가 통째로
@@ -289,7 +291,17 @@ def collect_official_prices(
             # (done_ld_codes)는 **원본 그대로** 둬야 재개 호환이 깨지지 않는다.
             rows = fetch_official_prices(to_standard_cortar(ld_code), year)
             if rows is None:
+                # 4번째 재시도 계층 — vworld_price_api.py 내부에 이미 429 전용
+                # MAX_RETRIES=3 재시도가 있지만, 그건 페이지 단위(1회 호출)의 순간적인
+                # rate limit 만 흡수한다. 이건 그 위에 얹는 법정동 단위 1회 재시도다 —
+                # 대형 법정동(대치동 49페이지 등)은 페이지 수가 많아 그 사이 어딘가
+                # 일시적 네트워크 오류·타임아웃으로 통째 실패하는 빈도가 높은데, 몇 초
+                # 후 재시도하면 살아나는 경우가 실측상 다수라 여기서 한 번 더 감아준다.
+                time.sleep(2)
+                rows = fetch_official_prices(to_standard_cortar(ld_code), year)
+            if rows is None:
                 failed_ld_codes += 1
+                failed_ld_codes_list.append(ld_code)
                 logger.warning("[official_price] 법정동 %s 조회 실패 — 건너뜀", ld_code)
                 continue
 
@@ -360,8 +372,9 @@ def collect_official_prices(
         _complete_job(db, job, matched_complexes, failed_ld_codes)
         _checkpoint.delete(db, job.id)
         logger.info(
-            "[official_price] 완료: 단지 %d개 매칭, 공시행 %d건 저장, 법정동 실패 %d개",
+            "[official_price] 완료: 단지 %d개 매칭, 공시행 %d건 저장, 법정동 실패 %d개 %s",
             matched_complexes, saved_rows, failed_ld_codes,
+            failed_ld_codes_list[:20],
         )
     except Exception as exc:
         _fail_job(db, job, str(exc))

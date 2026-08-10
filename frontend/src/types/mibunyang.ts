@@ -364,5 +364,8 @@ export interface MbOfficetelRentalItem {
   biz_entity?: string | null;
   constructor_name?: string | null;
   region_code?: string | null;
+  /** kind="officetel" 전용 — 청약 지역명(SUBSCRPT_AREA_CODE_NM, V045). 지역 필터 로직은
+   * 미구현(dead parameter)이라 화면 렌더 없이 타입 계약만 맞춘다. */
+  region_name?: string | null;
   fetched_at?: string | null;
 }

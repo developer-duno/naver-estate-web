@@ -5,7 +5,13 @@ from typing import Literal, Optional
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
-from db.mb_models import Apartment, ApplyhomeUnitSupply, PresaleScheduleOfficial, UnsoldHistory
+from db.mb_models import (
+    Apartment,
+    ApplyhomeUnitSupply,
+    OfficetelPresaleSchedule,
+    PresaleScheduleOfficial,
+    UnsoldHistory,
+)
 from db.mb_query_helpers import (
     _apply_keyword_filter,
     _paginate_deduped_apartments,
@@ -239,22 +245,33 @@ def get_presale_schedules(
 
 def get_officetel_schedules(
     db: Session, region: Optional[str] = None
-) -> list[PresaleScheduleOfficial]:
-    """오피스텔·도시형 청약 일정 전체 (house_type='officetel', recruit_date DESC).
+) -> list[OfficetelPresaleSchedule]:
+    """오피스텔·도시형 청약 일정 전체 (recruit_date DESC).
 
-    apartment_id 는 자체 발급 placeholder(`ah-{house_manage_no}`)일 뿐 apartments
-    로스터와 매칭될 상대가 구조적으로 없다(2026-08-08 최종 전체검토 근본수정 —
-    mibunyang 은 오피스텔 API 를 아예 호출하지 않고, apartments 를 채우는 API 도
-    오피스텔과 다른 청약홈 채널). 이전엔 Apartment 와 LEFT OUTER JOIN 해 단지명을
-    함께 반환했으나(이슈 #323 리뷰 수정), 매칭이 항상 0건이라 apartment_name 이
-    영원히 None 인 무의미한 조인이었다 — 제거. 오피스텔 API 응답(HOUSE_NM)에
-    단지명 자체는 있으나 PresaleScheduleOfficial 에 저장할 컬럼이 없어(범위 확대
-    방지, 새 컬럼 추가는 이번 작업 범위 밖) 이번엔 apartment_id 폴백 표시로 둔다.
+    V045 근본수정(2026-08-10): 아파트 청약 전용 테이블(PresaleScheduleOfficial)에
+    apartment_id placeholder(`ah-{house_manage_no}`)로 끼워 넣던 방식을 폐기하고,
+    완전히 독립된 OfficetelPresaleSchedule 테이블로 이전 — house_type 필터·
+    apartments 매칭 게이트가 애초에 불필요해졌다(테이블 자체가 오피스텔 전용).
+
+    region: 여전히 무시된다. 2026-08-10 V045 재설계로 OfficetelPresaleSchedule 에
+    region_name 컬럼(SUBSCRPT_AREA_CODE_NM, 예: "경기")을 추가해 데이터 자체는
+    저장되기 시작했지만, 이 함수는 아직 그 컬럼으로 필터링하지 않는다 — 다음 이유로
+    이번 리뉴얼 범위 밖(구현은 별도 승인 필요, 사장님 지시):
+      1. 이 라우터가 받는 `region` 파라미터는 mibunyang Apartment.region 과 같은
+         "시도명" 문자열 포맷(routers/mb.py get_officetel_rental → 다른 mb 엔드포인트와
+         동일 Query 정의)이라 region_name(SUBSCRPT_AREA_CODE_NM, "경기" 형식)과 포맷은
+         호환돼 보이지만, "서울특별시" vs "서울" 같은 표기 차이·매칭 커버리지를 실측
+         검증하지 않았다.
+      2. region_name 은 한글 필드라 mojibake 위험을 안고 저장된다(V045 마이그 주석
+         참조) — 필터 WHERE 절에 오염된 문자열이 들어가면 조용히 0건 매칭되는 사고가
+         날 수 있어, mojibake 근본 수정(별도 세션 조사 대상)이 선행되는 게 안전하다.
+    다음 후보: region_name 데이터가 몇 주 쌓여 값 분포(mojibake 여부·표기 포맷)를
+    실측한 뒤, `conditions.append(OfficetelPresaleSchedule.region_name == region)` 류
+    필터를 추가하는 별도 PR. 이 파라미터를 dead parameter 로 정직하게 남겨둔다
+    (호출부 시그니처 하위호환 유지).
     """
-    stmt = (
-        select(PresaleScheduleOfficial)
-        .where(PresaleScheduleOfficial.house_type == "officetel")
-        .order_by(PresaleScheduleOfficial.recruit_date.desc().nullslast())
+    stmt = select(OfficetelPresaleSchedule).order_by(
+        OfficetelPresaleSchedule.recruit_date.desc().nullslast()
     )
     return list(db.execute(stmt).scalars().all())
 

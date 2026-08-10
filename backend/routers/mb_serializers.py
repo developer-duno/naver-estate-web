@@ -293,6 +293,43 @@ def presale_schedule_to_dict(s, apartment_name: str | None = None) -> dict:
     }
 
 
+def officetel_schedule_to_dict(s) -> dict:
+    """OfficetelPresaleSchedule ORM → dict (V045 완전 분리 오피스텔 청약 일정).
+
+    presale_schedule_to_dict() 와 달리 apartment_id/apartment_name 키가 없다 —
+    OfficetelPresaleSchedule 은 apartments 로스터와 완전 독립(FK 없음)이라
+    애초에 매칭될 상대가 없다(2026-08-08 근본수정, V045). house_manage_no 가
+    이 테이블의 유일한 식별자.
+    """
+    return {
+        "house_manage_no": s.house_manage_no,
+        "pblanc_no": s.pblanc_no,
+        "house_nm": s.house_nm,
+        "recruit_date": s.recruit_date.isoformat() if s.recruit_date else None,
+        "special_receipt_bgnde": s.special_receipt_bgnde.isoformat() if s.special_receipt_bgnde else None,
+        "special_receipt_endde": s.special_receipt_endde.isoformat() if s.special_receipt_endde else None,
+        "general_rank1_bgnde": s.general_rank1_bgnde.isoformat() if s.general_rank1_bgnde else None,
+        "general_rank1_endde": s.general_rank1_endde.isoformat() if s.general_rank1_endde else None,
+        "general_rank2_bgnde": s.general_rank2_bgnde.isoformat() if s.general_rank2_bgnde else None,
+        "general_rank2_endde": s.general_rank2_endde.isoformat() if s.general_rank2_endde else None,
+        "winner_announce_date": s.winner_announce_date.isoformat() if s.winner_announce_date else None,
+        "contract_bgnde": s.contract_bgnde.isoformat() if s.contract_bgnde else None,
+        "contract_endde": s.contract_endde.isoformat() if s.contract_endde else None,
+        "move_in_ym": s.move_in_ym,
+        "tot_supply": s.tot_supply,
+        "pblanc_url": s.pblanc_url,
+        "biz_entity": s.biz_entity,
+        # 출력 키는 constructor_name — presale_schedule_to_dict 짝꿍 (JS Function 충돌 회피).
+        "constructor_name": s.constructor,
+        # SUBSCRPT_AREA_CODE_NM("경기" 등) — 지역 필터는 아직 미구현(dead parameter,
+        # db/mb_apartment_queries.py get_officetel_schedules() 참조), 데이터만 노출.
+        "region_name": s.region_name,
+        "fetched_at": s.fetched_at.isoformat() if s.fetched_at else None,
+        # 오피스텔·민간임대 통합 조회(GET /presale/officetel-rental)에서 kind 로 구분 (이슈 #323).
+        "kind": "officetel",
+    }
+
+
 # special_by_type JSONB 키 → 한글 라벨 (청약홈 특별공급 8유형, BE 단일 SSOT).
 # 키는 mibunyang collect-applyhome-detail.mjs 가 박는 고정 키 (마이그 주석 답습).
 # FE 는 본 변환 결과 special_supply_breakdown 리스트만 소비 (raw JSONB 키 해독 불필요).

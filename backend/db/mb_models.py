@@ -463,3 +463,74 @@ class RentalUnitSupply(Base):
     monthly_rent: Mapped[int | None] = mapped_column(Integer)
     deposit: Mapped[int | None] = mapped_column(Integer)
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+# ── 청약홈 오피스텔·도시형 (naver-estate-web 자체 소유, V045) ──
+
+
+class OfficetelPresaleSchedule(Base):
+    """청약홈 오피스텔·도시형 청약 공고 일정 (getUrbtyOfctlLttotPblancDetail).
+
+    naver-estate-web 자체 소유, mibunyang/apartments 와 완전 독립(FK 없음) —
+    mibunyang 은 오피스텔 API 를 아예 호출하지 않아 apartments 로스터에 대응
+    행이 구조적으로 존재할 수 없다(2026-08-08 근본수정, 이슈 #323).
+    UNIQUE(house_manage_no): 공고 단위 유일.
+    """
+
+    __tablename__ = "officetel_presale_schedule"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    house_manage_no: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    pblanc_no: Mapped[str | None] = mapped_column(Text)
+    house_nm: Mapped[str] = mapped_column(Text, nullable=False)
+    recruit_date: Mapped[date | None] = mapped_column(Date)
+    special_receipt_bgnde: Mapped[date | None] = mapped_column(Date)
+    special_receipt_endde: Mapped[date | None] = mapped_column(Date)
+    general_rank1_bgnde: Mapped[date | None] = mapped_column(Date)
+    general_rank1_endde: Mapped[date | None] = mapped_column(Date)
+    general_rank2_bgnde: Mapped[date | None] = mapped_column(Date)
+    general_rank2_endde: Mapped[date | None] = mapped_column(Date)
+    winner_announce_date: Mapped[date | None] = mapped_column(Date)
+    contract_bgnde: Mapped[date | None] = mapped_column(Date)
+    contract_endde: Mapped[date | None] = mapped_column(Date)
+    move_in_ym: Mapped[str | None] = mapped_column(Text)
+    tot_supply: Mapped[int | None] = mapped_column(Integer)
+    pblanc_url: Mapped[str | None] = mapped_column(Text)
+    biz_entity: Mapped[str | None] = mapped_column(Text)
+    constructor: Mapped[str | None] = mapped_column(Text)
+    # SUBSCRPT_AREA_CODE_NM(청약 지역명, "경기" 등) — 지역 필터는 아직 미구현(dead),
+    # 향후 필터 후보로 데이터만 미리 적재(V045 재설계, 2026-08-10). 한글 필드라
+    # mojibake 위험 있음(public_data_base.py 공유 인코딩 결함, 별도 조사 필요).
+    region_name: Mapped[str | None] = mapped_column(Text)
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class OfficetelUnitSupply(Base):
+    """청약홈 오피스텔·도시형 평형별 공급정보 (getUrbtyOfctlLttotPblancMdl).
+
+    naver-estate-web 자체 소유, mibunyang/apartments 와 완전 독립(FK 없음) —
+    OfficetelPresaleSchedule 하나만 house_manage_no 로 참조(N:1).
+
+    2026-08-10 재설계: 아파트 청약 API 필드(general_supply/special_supply/
+    special_by_type)를 그대로 복사해 만들었으나 오피스텔 API는 이 필드들을
+    전혀 주지 않는다(라이브 재검증 확정) — 실제 응답 필드(SUPLY_HSHLDCO/
+    SUPLY_AMOUNT/SUBSCRPT_REQST_AMOUNT)로 교체.
+    """
+
+    __tablename__ = "officetel_unit_supply"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    house_manage_no: Mapped[str] = mapped_column(Text, nullable=False)
+    model_no: Mapped[str] = mapped_column(Text, nullable=False)
+    house_ty: Mapped[str | None] = mapped_column(Text)
+    supply_area: Mapped[float | None] = mapped_column(Float)
+    # SUPLY_HSHLDCO — 공급세대수(일반/특별 구분 없는 통합값).
+    supply_hshldco: Mapped[int | None] = mapped_column(Integer)
+    # SUPLY_AMOUNT — 공급금액(단위 미확인, 만원 추정).
+    supply_amount: Mapped[int | None] = mapped_column(Integer)
+    # SUBSCRPT_REQST_AMOUNT — 청약신청금(단위 미확인, 만원 추정).
+    subscrpt_reqst_amount: Mapped[int | None] = mapped_column(Integer)
+    # 아파트 청약(ApplyhomeUnitSupply)과 시리얼라이저·FE(MbUnitSupplyTable)가
+    # 공유하는 키라 컬럼은 유지 — 오피스텔 API 응답엔 대응 필드가 없어 항상 NULL.
+    top_amount: Mapped[int | None] = mapped_column(Integer)
+    fetched_at: Mapped[datetime | None] = mapped_column(DateTime)

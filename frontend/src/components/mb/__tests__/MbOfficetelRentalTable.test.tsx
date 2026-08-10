@@ -6,7 +6,7 @@ import type { MbOfficetelRentalItem } from "@/types";
 describe("MbOfficetelRentalTable", () => {
   it("오피스텔·민간임대 뱃지를 구분해서 표시한다", () => {
     const items: MbOfficetelRentalItem[] = [
-      { kind: "officetel", house_manage_no: "1", apartment_id: "ah-1", recruit_date: "2026-08-01" },
+      { kind: "officetel", house_manage_no: "1", house_nm: "테스트오피스텔A", recruit_date: "2026-08-01" },
       { kind: "rental", house_manage_no: "2", house_nm: "임대주택B", recruit_date: "2026-08-02" },
     ];
     render(<MbOfficetelRentalTable items={items} />);
@@ -21,12 +21,11 @@ describe("MbOfficetelRentalTable", () => {
     expect(screen.getByText(/등록된.*없습니다/)).toBeInTheDocument();
   });
 
-  it("오피스텔 이름은 house_nm(청약홈 단지명)을 apartment_id 보다 우선 표시한다 (V043 회귀)", () => {
+  it("오피스텔 이름은 house_nm(청약홈 단지명)을 표시한다 (V045 회귀 — house_nm NOT NULL)", () => {
     const items: MbOfficetelRentalItem[] = [
       {
         kind: "officetel",
         house_manage_no: "1",
-        apartment_id: "ah-1",
         house_nm: "테스트오피스텔",
         recruit_date: "2026-08-01",
       },
@@ -34,15 +33,5 @@ describe("MbOfficetelRentalTable", () => {
     render(<MbOfficetelRentalTable items={items} />);
 
     expect(screen.getByText("테스트오피스텔")).toBeInTheDocument();
-    expect(screen.queryByText("ah-1")).not.toBeInTheDocument();
-  });
-
-  it("house_nm 이 없으면 apartment_id 로 폴백한다", () => {
-    const items: MbOfficetelRentalItem[] = [
-      { kind: "officetel", house_manage_no: "1", apartment_id: "ah-missing", recruit_date: "2026-08-01" },
-    ];
-    render(<MbOfficetelRentalTable items={items} />);
-
-    expect(screen.getByText("ah-missing")).toBeInTheDocument();
   });
 });

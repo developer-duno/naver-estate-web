@@ -115,9 +115,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1975개** (이슈 #323 +8: 오피스텔·민간임대 API/컴포넌트/탭배선 신규 — 세션 351 기준 1967에서 순증) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1992개** (공시가격 에픽 C·D +17 — 세션 356 실측, 세션 351 기준 1975에서 순증) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1099개** (1086 passed + 7 skipped + 6 xfailed, 이슈 #323 +32: 오피스텔·민간임대 수집기/API/스케줄러 신규 — 세션 346 기준 1067에서 순증) |
+| BE pytest | `backend/tests/` | **1178개** (1165 passed + 7 skipped + 6 xfailed — 세션 357 실측. 세션 351 기준 1099에서 +79: 공시가격 에픽 A2~B + XFF 회귀 + cortar 번역 20 + 페이지네이션 가드 6) |
 
 ## 커밋 전 필수 검증
 

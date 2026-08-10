@@ -115,7 +115,15 @@ def live_article_detail(
     article_no: str,
     db: Session = Depends(get_db),
 ):
-    """매물 상세 실시간 조회 — 네이버 API에서 직접 가져와 DB 반영 후 반환"""
+    """매물 상세 실시간 조회 — 네이버 API에서 직접 가져와 DB 반영 후 반환.
+
+    인증 없음 — 비로그인 매물 상세 열람은 의도된 공개 기능
+    (frontend/src/components/ArticleDetail.tsx 공개 단지 상세 페이지에서 호출,
+    getArticleLive() 는 Authorization 헤더를 보내지 않음).
+    네이버 API 호출(NaverEstateAPI.get_article_detail)은 클래스 레벨 공유 throttle
+    (MIN_REQUEST_INTERVAL=1초 강제 간격 + 429 지수 백오프, shared/naver_api.py)과
+    10분 TTL 캐시(CACHE_TTL=600)로 방어. IP 단위 방어는 RateLimitMiddleware 가
+    /api/* 전체에 이미 분당 60회로 적용 중(auth/rate_limiter.py)."""
     # DB에서 기존 매물 + 단지 정보 조회
     art = db.query(ArticleModel).filter(ArticleModel.article_no == article_no).first()
     complex_obj = None

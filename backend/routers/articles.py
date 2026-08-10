@@ -20,7 +20,7 @@ from auth.audit import log_action
 from auth.permissions import check_quota
 from auth.rate_limiter import _get_client_ip
 from db import queries
-from deps import get_approved_user, get_db, get_optional_user
+from deps import get_approved_user, get_db
 from routers.serializers import article_to_dict, build_filter_dict
 from services.naver_call_counter import record_call
 from shared.constants import M2_TO_PYEONG
@@ -82,9 +82,9 @@ def get_article_price_history_endpoint(
 @router.get("/{article_no}/detail")
 def get_article_realtime_detail(
     article_no: str,
-    user: dict | None = Depends(get_optional_user),
 ):
-    """매물 실시간 상세 조회 (네이버 API 직접 호출, 인증 필수)"""
+    """매물 실시간 상세 조회 (네이버 API 직접 호출, 인증 선택 — 비로그인도 허용.
+    네이버 API 공유 throttle + record_call 카운터로 방어, PR #186 의도적 공개)"""
     record_call("article_detail_realtime")
     detail_data = NaverEstateAPI.get_article_detail(article_no)
     if not detail_data:

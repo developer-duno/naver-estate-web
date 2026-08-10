@@ -46,13 +46,17 @@ def _strip_comments(sql: str) -> str:
     for line in sql.splitlines():
         stripped = line.strip()
         if in_comment_on:
-            if stripped.endswith(";"):
+            # COMMENT ON 문의 진짜 종료는 "닫는 작은따옴표 바로 뒤의 세미콜론"(`';`)
+            # 뿐이다. 문자열 리터럴 설명 텍스트 안에 우연히 세미콜론만 있는 줄
+            # (예: "text\nALTER TABLE apartments...;\nmore text';")은 여기서
+            # 걸리지 않아야 in_comment_on 이 조기에 풀리지 않는다.
+            if stripped.endswith("';"):
                 in_comment_on = False
             continue
         if stripped.startswith("--"):
             continue
         if stripped.startswith("COMMENT ON"):
-            if not stripped.endswith(";"):
+            if not stripped.endswith("';"):
                 in_comment_on = True
             continue
         lines.append(line)
@@ -114,3 +118,33 @@ def test_v045_officetel_unit_supply_no_apartments_fk(v045_sql):
 def test_v045_notifies_postgrest_reload(v045_sql):
     """정책 변경 즉시 반영을 위한 PostgREST 스키마 리로드 NOTIFY 포함."""
     assert "NOTIFY pgrst, 'reload schema';" in v045_sql
+
+
+def test_strip_comments_does_not_leak_string_literal_text_as_executable_sql():
+    """COMMENT ON 문자열 리터럴 내부에 세미콜론이 있으면(설명 텍스트 우연 포함), 옛
+    구현은 그 세미콜론에서 in_comment_on 이 조기에 풀려 **아직 안 닫힌 문자열 리터럴
+    내부 텍스트**(`DROP TABLE presale_schedule_official;` 등)를 실행문으로 오인해
+    결과에 새어 들어가게 했다 — 실제로는 실행되지 않는 텍스트가 위험한 실행 SQL 인
+    것처럼 검사 결과에 섞이는 오탐이었다. 문자열 리터럴은 닫는 따옴표+세미콜론(`';`)
+    으로 끝나는 줄에서만 종료돼야 하고, 리터럴 내부 텍스트는 결과에 전혀 남으면 안
+    되며, 리터럴이 완전히 끝난 뒤의 진짜 실행문(CREATE TABLE 등)은 정상 검사돼야
+    한다."""
+    sql = (
+        "COMMENT ON TABLE x IS 'text\n"
+        "ALTER TABLE apartments DROP COLUMN id;\n"
+        "DROP TABLE presale_schedule_official;\n"
+        "more text';\n"
+        "CREATE TABLE IF NOT EXISTS officetel_presale_schedule (id INT);\n"
+    )
+    executable_sql = _strip_comments(sql)
+    assert "ALTER TABLE apartments" not in executable_sql, (
+        "문자열 리터럴 내부의 텍스트가 실행문으로 새어 나옴 (아직 리터럴이 안 닫혔는데 "
+        "in_comment_on 이 조기에 풀린 옛 결함이 재발)"
+    )
+    assert "DROP TABLE presale_schedule_official" not in executable_sql, (
+        "문자열 리터럴 내부의 텍스트가 실행문으로 새어 나옴 — 옛 구현은 이 줄을 "
+        "위험한 실행 SQL 로 오탐했다"
+    )
+    assert "CREATE TABLE IF NOT EXISTS officetel_presale_schedule" in executable_sql, (
+        "문자열 리터럴이 완전히 닫힌 뒤의 진짜 실행문은 정상적으로 검사 대상에 남아야 함"
+    )

@@ -63,6 +63,8 @@ scripts/scheduler.lock
 scripts/uvicorn.log
 scripts/backend_recovery.log
 scripts/backend_recovery_err.log
+scripts/backfill_price_history.log
+scripts/backfill_public_data.log
 
 # Playwright MCP 자동 생성 스냅샷/로그 (세션별 디버그용, 커밋 제외)
 .playwright-mcp/

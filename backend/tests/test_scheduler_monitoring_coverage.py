@@ -13,7 +13,7 @@ RECORD_ALLOWLIST 패턴을 naver-estate(Python + APScheduler)에 맞게 이식.
 실행: python -m pytest tests/test_scheduler_monitoring_coverage.py -v
 """
 
-from crawler.scheduler import extract_scheduler_job_ids
+from crawler.scheduler import _ADD_JOB_CALL_PATTERN, extract_scheduler_job_ids
 from routers.admin.freshness_meta import FRESHNESS_ITEMS, MONITORING_EXEMPT
 
 with open("crawler/scheduler.py", encoding="utf-8") as f:
@@ -198,3 +198,36 @@ def test_missing_monitoring_coverage_passes_when_job_added_to_exempt():
 
     missing = fake_job_ids - covered
     assert not missing
+
+
+# ── 테스트 E: 정적→동적 id 전환으로 커버리지가 "몰래" 새는 것을 막는다 ──
+#
+# 세션 359 적대검증에서 발견: extract_scheduler_job_ids() 는 동적 id 블록을
+# 오탐 없이 건너뛰도록(의도적) 설계됐는데, 이 설계의 부작용으로 "지금 정적
+# id 로 감시되는 잡을 누군가 반복문(동적 id)으로 리팩토링하면 그 잡이
+# 감시 대상에서 조용히 사라지는데도 테스트 B 는 계속 통과"하는 반대 방향
+# 사각지대가 생긴다 — 오탐(false RED) 걱정과 정반대인 무탐(false GREEN) 위험.
+# .add_job( 호출 총수 vs 정적 id 추출 개수의 차이(=동적 블록 수)가 지금
+# 알려진 값(2, docstring 에 명시된 popular_*/complex_detail_{JGC,ABYG,OBYG})
+# 을 넘어서면 실패시켜, 새로 생긴 동적 전환을 사람이 놓치지 않게 한다.
+_KNOWN_DYNAMIC_ID_BLOCKS = 2  # scheduler.py 82~102줄 docstring 에 명시된 개수
+
+
+def test_dynamic_id_blocks_do_not_silently_increase():
+    """정적 id 로 등록됐던 잡이 동적 id(f-string/루프 변수)로 바뀌면
+    add_job 호출 총수는 그대로인데 정적 id 추출 개수만 줄어든다 — 그 차이가
+    현재 알려진 동적 블록 수(2)를 넘으면 "새로 동적화된 잡"이 생긴 것.
+    """
+    total_calls = len(_ADD_JOB_CALL_PATTERN.findall(_SCHEDULER_SOURCE))
+    static_ids = extract_scheduler_job_ids(_SCHEDULER_SOURCE)
+    dynamic_blocks = total_calls - len(static_ids)
+
+    assert dynamic_blocks == _KNOWN_DYNAMIC_ID_BLOCKS, (
+        f".add_job( 호출 {total_calls}개 중 정적 id 는 {len(static_ids)}개, "
+        f"동적(id 미검출) 블록은 {dynamic_blocks}개 — 기대값 {_KNOWN_DYNAMIC_ID_BLOCKS}개와 "
+        "다릅니다. 정적 id 잡을 동적 id 로 리팩토링했다면, extract_scheduler_job_ids() "
+        "가 그 잡을 더 이상 감시 대상으로 못 뽑아 테스트 B(누락 감지)가 무력화됩니다. "
+        "새 동적 블록을 routers/admin/scheduler.py SCHEDULER_JOB_META 와 이 테스트의 "
+        "_KNOWN_DYNAMIC_ID_BLOCKS 값에 함께 반영하고, 가능하면 freshness_meta.py 쪽 "
+        "감시(또는 MONITORING_EXEMPT 이유 등록)도 갖추세요."
+    )

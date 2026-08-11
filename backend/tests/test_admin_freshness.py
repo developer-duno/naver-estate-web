@@ -45,7 +45,7 @@ def test_freshness_empty_db_unknown(client, db):
     res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
     assert res.status_code == 200
     body = res.json()
-    assert len(body["items"]) == 14  # 세션 359: 신규 6종(오피스텔·민간임대·공시가격·응급의료·매물상세·단지가치지표) 편입
+    assert len(body["items"]) == 16  # 세션 359: 신규 8종(오피스텔·민간임대·공시가격·응급의료·매물상세·단지가치지표·단지상세APT·단지상세OPST) 편입
     for item in body["items"]:
         assert item["count"] == 0
         assert item["last_updated"] is None
@@ -323,10 +323,84 @@ def test_complex_metric_completed_zero_items_still_stale_goes_red(client, db):
     assert item["status"] == "red", f"6일 전(144h/36h=4×, red임계 3×초과)이면 red: {item}"
 
 
+# ── 단지 상세 보강 APT·OPST (세션 359, CI 커버리지 검사가 발견) ──
+#
+# 배경: test_scheduler_monitoring_coverage.py 가 complex_detail_APT/OPST(4시간
+# interval, 대량 단지 4.6만/1.5만개)가 신선도 카드에도 예외 목록에도 없는
+# 사각지대임을 실제로 찾아냈다 — article_detail·complex_metric과 동일 유형.
+
+def test_complex_detail_apt_fresh_green(client, db):
+    """단지 상세 보강(APT) 최신 완료가 1시간 전이면 green(12시간 주기, 0.083×)."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(CrawlJob(
+        job_type="complex_detail_APT", scheduler_job_id="complex_detail_APT", status="completed",
+        started_at=now - timedelta(hours=1, minutes=1), completed_at=now - timedelta(hours=1),
+        processed_items=500, total_items=1000,
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "complex_detail_apt")
+    assert item["status"] == "green", f"1시간 전이면 green: {item}"
+
+
+def test_complex_detail_apt_completed_zero_items_still_stale_goes_red(client, db):
+    """'완료로 기록되지만 detail_crawled_at IS NULL 후보가 소진돼 매번 0건만
+    처리'하며 2일(48시간, 12시간×4) 넘게 안 갱신되면 red — 4.6만 단지 규모라
+    사장님이 지적한 '조용히 죽어도 아무도 모른다' 시나리오가 여기서도 재현
+    가능함을 회귀 가드로 고정."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(CrawlJob(
+        job_type="complex_detail_APT", scheduler_job_id="complex_detail_APT", status="completed",
+        started_at=now - timedelta(days=2, minutes=1), completed_at=now - timedelta(days=2),
+        processed_items=0, total_items=0,
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "complex_detail_apt")
+    assert item["status"] == "red", f"2일 전(48h/12h=4×, red임계 3×초과)이면 red: {item}"
+
+
+def test_complex_detail_opst_fresh_green(client, db):
+    """단지 상세 보강(OPST)도 APT와 동일 주기(12시간) — 1시간 전이면 green."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(CrawlJob(
+        job_type="complex_detail_OPST", scheduler_job_id="complex_detail_OPST", status="completed",
+        started_at=now - timedelta(hours=1, minutes=1), completed_at=now - timedelta(hours=1),
+        processed_items=200, total_items=500,
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "complex_detail_opst")
+    assert item["status"] == "green", f"1시간 전이면 green: {item}"
+
+
+def test_complex_detail_opst_stale_goes_red(client, db):
+    """단지 상세 보강(OPST)이 2일 넘게 안 갱신되면 red — APT와 완전히 독립된
+    잡(별도 job_type)이라 서로 다른 상태가 정확히 구분되는지 확인."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(CrawlJob(
+        job_type="complex_detail_OPST", scheduler_job_id="complex_detail_OPST", status="completed",
+        started_at=now - timedelta(days=2, minutes=1), completed_at=now - timedelta(days=2),
+        processed_items=500, total_items=500,
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "complex_detail_opst")
+    assert item["status"] == "red", f"2일 전(48h/12h=4×, red임계 3×초과)이면 red: {item}"
+
+
 # ── 응답 스키마 ──
 
 def test_freshness_response_schema(client, db):
-    """응답에 generated_at + 14 items 필수 필드 모두 포함 (세션 359: 신규 6종 편입)"""
+    """응답에 generated_at + 16 items 필수 필드 모두 포함 (세션 359: 신규 8종 편입)"""
     _make_admin(db)
     res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
     assert res.status_code == 200
@@ -338,6 +412,7 @@ def test_freshness_response_schema(client, db):
         "air_quality", "childcare", "crime_stats", "public_trades",
         "officetel_presale", "rental_presale", "official_price",
         "emergency", "article_detail", "complex_metric",
+        "complex_detail_apt", "complex_detail_opst",
     }
     assert keys == expected_keys
     for item in body["items"]:

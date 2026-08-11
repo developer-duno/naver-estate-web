@@ -151,4 +151,38 @@ FRESHNESS_ITEMS: list[dict] = [
         "new_rows_kind": None,  # CrawlJob.completed_at 경유(childcare 패턴)
         "new_rows_expected": False,
     },
+    {
+        # 세션 359: test_scheduler_monitoring_coverage.py(CI 강제 커버리지 검사)가
+        # 실제로 찾아낸 사각지대 — article_detail과 정확히 같은 유형이다. 대량
+        # 단지(4.6만개, 배치 1000)를 4시간 interval 로 처리하는데, detail_crawled_at
+        # IS NULL 후보가 소진되거나 API 실패가 반복돼도 completed 로 조용히 끝난다.
+        "key": "complex_detail_apt",
+        "label": "단지 상세 보강(아파트)",
+        "expected_interval_seconds": 14400 * 3,  # 4시간 interval 의 3배(12시간)
+        "scheduler_job_id": "complex_detail_APT",
+        "new_rows_kind": None,  # CrawlJob.completed_at 경유(article_detail 패턴)
+        "new_rows_expected": False,
+    },
+    {
+        # 세션 359: 위와 동일 사유, 오피스텔(1.5만개) 전용 잡.
+        "key": "complex_detail_opst",
+        "label": "단지 상세 보강(오피스텔)",
+        "expected_interval_seconds": 14400 * 3,  # 4시간 interval 의 3배(12시간)
+        "scheduler_job_id": "complex_detail_OPST",
+        "new_rows_kind": None,
+        "new_rows_expected": False,
+    },
 ]
+
+# 세션 359: CI가 "새 스케줄러 잡을 추가하면서 감시 등록을 깜빡하는" 실수를
+# 구조적으로 막기 위한 예외 목록(mibunyang RECORD_ALLOWLIST 패턴 답습).
+# FRESHNESS_ITEMS에 없는 scheduler_job_id는 전부 이 목록에 "왜 정당한 예외인지"
+# 이유와 함께 있어야 한다 — 그렇지 않으면 test_scheduler_monitoring_coverage.py가 실패한다.
+MONITORING_EXEMPT: dict[str, str] = {
+    "discover_regions": "monitor.py 작업실패 축(status=failed 정직 기록)이 이미 커버",
+    "backfill_price": "complex_price_history 카드가 같은 테이블 쓰기라 대신 커버",
+    "collect_public_trades": "complex_price_history 카드가 같은 테이블 쓰기라 대신 커버",
+    "billing_charge": "텔레그램+이메일+monitor.py+CrawlJob 4중 안전망 기존 보유",
+    "vacuum_maintenance": "새 데이터 유입 개념이 없는 유지보수 잡 — 신선도 카드 틀 자체가 안 맞음",
+    "crawler_monitor": "감시자 자기 자신",
+}

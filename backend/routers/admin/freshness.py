@@ -204,6 +204,24 @@ def compute_freshness(db: Session) -> dict:
                 (CrawlJob.scheduler_job_id == "collect_metrics") & (CrawlJob.status == "completed"),
             )
         ).one(),
+        # 세션 359: test_scheduler_monitoring_coverage.py(CI 커버리지 검사)가 실제로
+        # 찾아낸 사각지대 — article_detail과 동일 패턴.
+        "complex_detail_apt": db.execute(
+            select(
+                func.max(CrawlJob.completed_at),
+                func.coalesce(func.max(CrawlJob.processed_items), 0),
+            ).where(
+                (CrawlJob.scheduler_job_id == "complex_detail_APT") & (CrawlJob.status == "completed"),
+            )
+        ).one(),
+        "complex_detail_opst": db.execute(
+            select(
+                func.max(CrawlJob.completed_at),
+                func.coalesce(func.max(CrawlJob.processed_items), 0),
+            ).where(
+                (CrawlJob.scheduler_job_id == "complex_detail_OPST") & (CrawlJob.status == "completed"),
+            )
+        ).one(),
     }
 
     items = []

@@ -16,7 +16,7 @@ def test_compute_freshness_returns_items_and_generated_at(db):
     assert "items" in result
     assert "generated_at" in result
     assert isinstance(result["items"], list)
-    assert len(result["items"]) == 14  # 세션 359: 신규 6종(오피스텔·민간임대·공시가격·응급의료·매물상세·단지가치지표) 편입
+    assert len(result["items"]) == 16  # 세션 359: 신규 8종(오피스텔·민간임대·공시가격·응급의료·매물상세·단지가치지표·단지상세APT·단지상세OPST) 편입
 
 
 def test_compute_freshness_empty_db_status_unknown(db):

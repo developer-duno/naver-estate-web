@@ -66,6 +66,10 @@ scripts/backend_recovery_err.log
 scripts/backfill_price_history.log
 scripts/backfill_public_data.log
 
+# 세션 359 일회성 백필 실행/진단 스크립트 (백필 완료 후 삭제 대상 — 재사용 자산은 별도 이름으로 커밋)
+scripts/*_S359.ps1
+scripts/*_S359.bat
+
 # Playwright MCP 자동 생성 스냅샷/로그 (세션별 디버그용, 커밋 제외)
 .playwright-mcp/
 

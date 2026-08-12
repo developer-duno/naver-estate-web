@@ -7,7 +7,7 @@ uvicorn[standard]>=0.52.1,<1
 # 우리 신식 Mapped[] + mapped_column() 패턴 호환. 2026-05-31 lock: 2.0.49 → 2.0.50.
 sqlalchemy[asyncio]>=2.0.51,<3
 psycopg2-binary>=2.9.12,<3
-curl_cffi>=0.15.0,<1
+curl_cffi>=0.16.0,<1
 apscheduler>=3.11.3,<4
 filelock>=3.32.2,<4
 pandas>=3.0.5,<4

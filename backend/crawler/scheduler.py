@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
@@ -61,6 +62,56 @@ _scheduler: BackgroundScheduler | None = None
 def get_scheduler() -> BackgroundScheduler | None:
     """실행 중인 스케줄러 인스턴스 반환 (미실행 시 None)"""
     return _scheduler
+
+
+# add_job( 호출 시작 지점을 찾는 정규식 — 여기서부터 블록 단위로 id 를 찾는다.
+# 파일 전체를 무차별로 id=<문자열> 패턴 스캔하면 주석·docstring 안에 우연히
+# 같은 모양 문구가 있을 때 오탐한다(구현 중 실측 발견 — 세션 359). add_job(
+# 호출 블록 안에서만 id 를 찾으면 이 오탐이 원천 차단된다.
+#
+# ⚠ 이 헬퍼는 반드시 create_scheduler() 정의보다 "앞"(= 파일의 모든 add_job(
+# 호출보다 앞)에 위치해야 한다 — extract_scheduler_job_ids() 는 "각 add_job(
+# 호출 지점부터 다음 add_job( 또는 파일 끝까지"를 한 블록으로 보는데, 만약
+# 이 함수를 create_scheduler() *뒤*에 두면 마지막 add_job 호출 이후 "파일
+# 끝까지"의 마지막 블록 안에 이 함수 자신의 소스 코드(주석 포함)까지
+# 포함되어 자기 자신을 오탐하는 사고가 난다(구현 중 실측 발견).
+_ADD_JOB_CALL_PATTERN = re.compile(r"\.add_job\(")
+_STATIC_ID_PATTERN = re.compile(r'\bid="([a-zA-Z0-9_]+)"')
+
+
+def extract_scheduler_job_ids(source: str) -> list[str]:
+    """스케줄러 소스 텍스트에서 add_job 호출의 정적 id 리터럴 전부 추출.
+
+    "새 스케줄러 잡을 추가하면서 감시 등록을 깜빡하는" 실수를 CI 가 구조적으로
+    막기 위한 test_scheduler_monitoring_coverage.py 전용 헬퍼 (mibunyang
+    RECORD_ALLOWLIST 패턴 답습). 순수 함수 — 부작용 없음(파일을 열지 않고
+    이미 읽은 소스 텍스트 문자열을 인자로 받는다).
+
+    구현 방식: 각 add_job 호출 지점부터 다음 add_job 호출(또는 파일 끝)까지를
+    한 블록으로 보고, 그 블록 안에서만 id 큰따옴표 문자열 리터럴을 찾는다.
+    파일 전체를 무차별 스캔하지 않으므로 add_job 호출 밖의 주석·docstring 에
+    있는 우연한 문구에 오염되지 않는다.
+
+    ⚠ 커버리지 범위 = "정적 id 문자열"만. create_scheduler() 안에는 for 루프로
+    id 를 동적 생성하는 add_job 호출이 2곳 있다 (popular_1030/1430/1900,
+    complex_detail_JGC/ABYG/OBYG) — 이 6개는 문자열 소스 파싱만으로는 안전하게
+    전개할 수 없어(루프 변수 실행이 필요) 이 함수는 그 블록을 만나면 id 를
+    아예 추가하지 않고 건너뛴다(동적 블록도 오탐 없이 무시). 이 6개는
+    routers/admin/scheduler.py 의 SCHEDULER_JOB_META 표시 메타에는 이미 개별
+    등록돼 있으나, freshness_meta.py(FRESHNESS_ITEMS/MONITORING_EXEMPT) 쪽은
+    세션 359 조사에서 다루지 않은 별도 사각지대로 남아 있다(다음 세션 후보).
+    """
+    call_starts = [m.start() for m in _ADD_JOB_CALL_PATTERN.finditer(source)]
+    call_starts.append(len(source))
+
+    ids: list[str] = []
+    for i in range(len(call_starts) - 1):
+        block = source[call_starts[i] : call_starts[i + 1]]
+        static_match = _STATIC_ID_PATTERN.search(block)
+        if static_match:
+            ids.append(static_match.group(1))
+        # 동적 id(f"..." 또는 job_id 변수)는 의도적으로 건너뜀 — docstring 답습.
+    return ids
 
 
 def create_scheduler() -> BackgroundScheduler:

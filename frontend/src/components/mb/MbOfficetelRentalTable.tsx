@@ -3,8 +3,8 @@
 import type { MbOfficetelRentalItem } from "@/types";
 
 /** 오피스텔·민간임대 통합 목록 (이슈 #323). kind 로 유형 뱃지 구분.
- * 이름은 kind 무관하게 house_nm(청약홈 API 단지명)을 우선 표시하고, house_nm 이
- * 없으면 apartment_id(내부 DB ID)로 폴백한다(V043 — house_nm 컬럼 신설로 kind 분기 불필요).
+ * 이름은 house_nm(청약홈 API 단지명)을 표시한다 — officetel/rental 둘 다 house_nm 이
+ * NOT NULL 이라(V045 완전 분리 테이블) apartment_id 폴백이 더 이상 필요 없다.
  * 민간임대는 독립 매물이라 상세 진입 없이 목록 정보만 표시(1차 구현 범위 — 상세 페이지는 후속 PR). */
 interface Props {
   items: MbOfficetelRentalItem[];
@@ -40,7 +40,7 @@ export default function MbOfficetelRentalTable({ items }: Props) {
                 </span>
               </td>
               <td className="px-3 py-2 font-medium text-gray-800">
-                {item.house_nm ?? item.apartment_id}
+                {item.house_nm}
               </td>
               <td className="px-3 py-2 text-gray-600 hidden sm:table-cell">{item.address ?? "-"}</td>
               <td className="px-3 py-2 text-right text-gray-700">{item.recruit_date ?? "-"}</td>

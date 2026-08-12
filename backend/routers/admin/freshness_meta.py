@@ -1,6 +1,6 @@
 """데이터 신선도 카드 — 종목별 메타·임계치
 
-표시 종목 8개의 라벨, 작업 주기(초), 기준 scheduler_job_id, 헛바퀴 감지 룰.
+표시 종목 13개의 라벨, 작업 주기(초), 기준 scheduler_job_id, 헛바퀴 감지 룰.
 신호등 임계치는 주기의 1.5배(노랑) / 3배(빨강).
 
 - scheduler_job_id: crawler/scheduler.py SCHEDULER_JOB_META 와 일치 유지
@@ -62,6 +62,18 @@ FRESHNESS_ITEMS: list[dict] = [
         "new_rows_expected": False,
     },
     {
+        # 세션 359: 전수조사로 발견된 사각지대. air_quality/childcare/crime_stats 는
+        # 이미 등록됐는데 같은 인프라 계열인 emergency 만 등록 누락 — Infra 테이블에
+        # emergency_updated_at 컬럼이 없어(emergency_hospital 등 값 컬럼만 존재)
+        # CrawlJob.completed_at 경유(childcare 와 동일 패턴)로 최신성을 측정한다.
+        "key": "emergency",
+        "label": "응급의료기관",
+        "expected_interval_seconds": 86400 * 30,  # 매월 첫째 월 03:00
+        "scheduler_job_id": "collect_emergency",
+        "new_rows_kind": None,
+        "new_rows_expected": False,
+    },
+    {
         "key": "crime_stats",
         "label": "범죄통계",
         "expected_interval_seconds": 86400 * 90,
@@ -85,4 +97,92 @@ FRESHNESS_ITEMS: list[dict] = [
         "new_rows_kind": None,  # trades 외부, created_at 없음
         "new_rows_expected": False,
     },
+    {
+        # "조용한 실패" 사각지대 메움 (세션 359) — officetel_presale_schedule 은 매주
+        # 전량 upsert 구조라 created_at 컬럼이 없다(fetched_at 만 존재). API 가 예외 없이
+        # 빈 응답을 줘도 job.status="completed"/total_items=0 으로 기록돼(정상 설계)
+        # monitor.py 의 "작업 실패"(status=failed) 감지를 우회한다 — 이 카드가 "데이터
+        # 미축적"(신선도 red) 축으로 그 우회를 막는 마지막 안전망.
+        "key": "officetel_presale",
+        "label": "오피스텔 청약",
+        "expected_interval_seconds": 86400 * 7,  # 주간(월요일 05:00)
+        "scheduler_job_id": "collect_officetel_presale",
+        "new_rows_kind": None,  # 전량 upsert — "신규 행" 개념 없음, fetched_at 최신성만 측정
+        "new_rows_expected": False,
+    },
+    {
+        "key": "rental_presale",
+        "label": "민간임대 청약",
+        "expected_interval_seconds": 86400 * 7,  # 주간(월요일 05:30)
+        "scheduler_job_id": "collect_rental_presale",
+        "new_rows_kind": None,  # 전량 upsert
+        "new_rows_expected": False,
+    },
+    {
+        "key": "official_price",
+        "label": "공동주택 공시가격",
+        "expected_interval_seconds": 86400 * 30,  # 월간(매월 15일 06:30)
+        "scheduler_job_id": "official_price",
+        "new_rows_kind": None,  # 전량 upsert
+        "new_rows_expected": False,
+    },
+    {
+        # 세션 359: 전수조사로 발견된 사각지대 — 매물 상세 보강(crawl_details)이
+        # 몇 시간이고 매번 0건만 처리(candidates 소진 등)해도 status="completed"로
+        # 정상 종료돼 monitor.py 의 "작업 실패"·"작업 마비" 축 어디도 안 걸린다.
+        # articles 카드(key="articles")는 scheduler_job_id="crawl_articles"(별개 잡,
+        # 매물 목록 수집)에 매여 있어 이 잡을 대신 커버하지 못한다 — 전용 카드 신설.
+        "key": "article_detail",
+        "label": "매물 상세 보강",
+        "expected_interval_seconds": 1800 * 3,  # 30분 interval 의 3배(90분) — 배치 스킵 1~2회 여유
+        "scheduler_job_id": "crawl_details",
+        "new_rows_kind": None,  # CrawlJob.completed_at 경유(childcare 패턴), created_at 무관
+        "new_rows_expected": False,
+    },
+    {
+        # 세션 359: 17개 스케줄러 잡 전수조사에서 "시급하지 않음"으로 분류됐던
+        # 것을 사장님 지시("전체적으로 다 고쳐야")에 맞춰 마저 메운다. 매일 12시간
+        # interval 로 도는데 시세 이력이 없는 단지가 소진되면(nearby_median_price
+        # NULL 단지 고갈) 매번 0건만 처리해도 completed 로 조용히 끝날 수 있다.
+        "key": "complex_metric",
+        "label": "단지 가치지표 수집",
+        "expected_interval_seconds": 43200 * 3,  # 12시간 interval 의 3배(36시간)
+        "scheduler_job_id": "collect_metrics",
+        "new_rows_kind": None,  # CrawlJob.completed_at 경유(childcare 패턴)
+        "new_rows_expected": False,
+    },
+    {
+        # 세션 359: test_scheduler_monitoring_coverage.py(CI 강제 커버리지 검사)가
+        # 실제로 찾아낸 사각지대 — article_detail과 정확히 같은 유형이다. 대량
+        # 단지(4.6만개, 배치 1000)를 4시간 interval 로 처리하는데, detail_crawled_at
+        # IS NULL 후보가 소진되거나 API 실패가 반복돼도 completed 로 조용히 끝난다.
+        "key": "complex_detail_apt",
+        "label": "단지 상세 보강(아파트)",
+        "expected_interval_seconds": 14400 * 3,  # 4시간 interval 의 3배(12시간)
+        "scheduler_job_id": "complex_detail_APT",
+        "new_rows_kind": None,  # CrawlJob.completed_at 경유(article_detail 패턴)
+        "new_rows_expected": False,
+    },
+    {
+        # 세션 359: 위와 동일 사유, 오피스텔(1.5만개) 전용 잡.
+        "key": "complex_detail_opst",
+        "label": "단지 상세 보강(오피스텔)",
+        "expected_interval_seconds": 14400 * 3,  # 4시간 interval 의 3배(12시간)
+        "scheduler_job_id": "complex_detail_OPST",
+        "new_rows_kind": None,
+        "new_rows_expected": False,
+    },
 ]
+
+# 세션 359: CI가 "새 스케줄러 잡을 추가하면서 감시 등록을 깜빡하는" 실수를
+# 구조적으로 막기 위한 예외 목록(mibunyang RECORD_ALLOWLIST 패턴 답습).
+# FRESHNESS_ITEMS에 없는 scheduler_job_id는 전부 이 목록에 "왜 정당한 예외인지"
+# 이유와 함께 있어야 한다 — 그렇지 않으면 test_scheduler_monitoring_coverage.py가 실패한다.
+MONITORING_EXEMPT: dict[str, str] = {
+    "discover_regions": "monitor.py 작업실패 축(status=failed 정직 기록)이 이미 커버",
+    "backfill_price": "complex_price_history 카드가 같은 테이블 쓰기라 대신 커버",
+    "collect_public_trades": "complex_price_history 카드가 같은 테이블 쓰기라 대신 커버",
+    "billing_charge": "텔레그램+이메일+monitor.py+CrawlJob 4중 안전망 기존 보유",
+    "vacuum_maintenance": "새 데이터 유입 개념이 없는 유지보수 잡 — 신선도 카드 틀 자체가 안 맞음",
+    "crawler_monitor": "감시자 자기 자신",
+}

@@ -110,11 +110,12 @@
 | V042 | rental_unit_supply 신규 테이블 (공공지원 민간임대 평형별 공급정보, rental_schedule_official FK, 이슈 #323) | 2026-08-08 (prod 적용완료, 세션 352: 사장님 SQL Editor 실행 → Claude 재검증 테이블 EXISTS) |
 | V043 | presale_schedule_official.house_nm 컬럼 추가 (오피스텔 실제 단지명 저장 — apartments JOIN 제거로 화면에 apartment_id placeholder 만 노출되던 문제 해결, 이슈 #323) | 2026-08-08 (prod 적용완료, 세션 352: 사장님 SQL Editor 실행 → Claude 재검증 house_nm 컬럼 EXISTS) |
 | V044 | complex_official_prices 신규 테이블 (공동주택 공시가격 — V-WORLD getApartHousingPriceAttr, 단지×연도×전용면적 중위값. RLS+GRANT REVOKE 이중 빗장, 세션 354) | 2026-08-09 (prod 적용완료, 세션 355: 사장님 SQL Editor 실행 → Claude information_schema 4요소 재검증(컬럼·RLS·정책·anon/authenticated GRANT 0건) 통과) |
+| V045 | officetel_presale_schedule·officetel_unit_supply 신규 테이블 (오피스텔·도시형 청약 완전 분리 — presale_schedule_official/applyhome_unit_supply/apartments 에 apartment_id placeholder 로 끼워 넣던 방식 폐기, mibunyang 무결성 전제 보존. rental V041/V042 선례 답습). 2026-08-10 재설계: officetel_unit_supply 는 아파트 청약 틀(general_supply/special_supply/special_by_type, 오피스텔 API가 안 주는 죽은 컬럼) 대신 실제 응답 필드(supply_hshldco/supply_amount/subscrpt_reqst_amount)로 재구성, top_amount 는 시리얼라이저·FE 공유 키라 컬럼만 유지(항상 NULL). officetel_presale_schedule 에 region_name(SUBSCRPT_AREA_CODE_NM) 컬럼 신설 — 지역 필터 로직은 미구현(dead parameter), 데이터 적재만 | 2026-08-10 (prod 적용완료, 세션 358: 사장님 SQL Editor 실행 → Claude information_schema 4요소 재검증(officetel_presale_schedule·officetel_unit_supply 두 테이블 존재·FK는 officetel_unit_supply→officetel_presale_schedule만이고 apartments 없음·컬럼 전부·RLS 활성화) 통과, PR #352 커밋 9429522 머지완료) |
 
-- `db/migrations/` 폴더에 `V000__` ~ `V044__` SQL 파일 = 45 버전
+- `db/migrations/` 폴더에 `V000__` ~ `V045__` SQL 파일 = 46 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
-- 최신 = V044 (complex_official_prices 신규 테이블 — prod 적용완료, 세션 355. 수집기(PR-A2)·스케줄 배선(PR-A3) 둘 다 머지 완료, 라이브 매칭 시뮬레이션으로 검증 성공). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
+- 최신 = V045 (officetel_presale_schedule·officetel_unit_supply 신규 테이블, 2026-08-10 컬럼 재설계 반영 — prod 적용완료, 세션 358 라이브 재검증 완료, PR #352 머지 완료). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
   - V043 = prod 적용완료·backend 재시작(zombie 해소) 완료 — 세션 352 라이브 검증: `/presale/officetel-rental` 200 정상 응답 확인.
   - V043 = house_nm TEXT nullable 컬럼 추가 — 기존 아파트 청약 행은 NULL 로 두면 되므로 기존 데이터 영향 0. `ADD COLUMN IF NOT EXISTS` 라 멱등·안전. 코드(`db/mb_models.py`)가 이미 이 컬럼에 매핑돼 SELECT 목록에 포함되므로 **prod 선행 적용 필수** — 세션 352 에 적용·재검증 완료.
   - V040~V042 = 이슈 #323(청약홈 오피스텔·도시형·민간임대 편입) 3종 세트 — `CREATE TABLE/ADD COLUMN IF NOT EXISTS` 라 멱등·안전. V040 은 기존 컬럼에 `NOT NULL DEFAULT 'apt'`로 추가해 기존 아파트 데이터에 영향 0. V041/V042 는 신규 독립 테이블이라 공유 DB(mibunyang) 영향 0. 코드(`db/mb_models.py`)는 이미 이 컬럼/테이블에 매핑돼 있으므로 **prod 선행 적용 필수** — 세션 352 에 적용·재검증 완료.

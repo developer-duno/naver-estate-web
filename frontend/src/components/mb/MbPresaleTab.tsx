@@ -162,7 +162,7 @@ export default function MbPresaleTab({
             )}
             {/* 선택 단지가 현재 목록에 있을 때만 카드 표시 — 세그먼트·페이지 전환 후 옛 선택 stale 방지.
                 지도 위 absolute 좌하단 오버레이 — 부모 overflow-hidden 클립 영역 밖(세션 319 리뷰 B). */}
-            {selected && items.some((a) => a.id === selected.id) && (
+            {selected && (items as MbApartment[]).some((a) => a.id === selected.id) && (
               <div className="absolute left-2 right-2 bottom-2 z-10 sm:right-auto sm:max-w-md max-h-[55%] overflow-y-auto">
                 <MbSelectedCard apt={selected} onClose={() => setSelected(null)}>
                   {activeLayer && (

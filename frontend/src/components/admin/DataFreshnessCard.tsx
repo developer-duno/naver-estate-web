@@ -72,7 +72,7 @@ export default function DataFreshnessCard({ token }: Props) {
     return (
       <AdminCard title="데이터 신선도" help={HELP_TEXT}>
         <ul className="space-y-2" aria-label="로딩 중">
-          {Array.from({ length: 8 }).map((_, i) => (
+          {Array.from({ length: 16 }).map((_, i) => (
             <li key={i} className="h-10 bg-gray-100 rounded animate-pulse" />
           ))}
         </ul>

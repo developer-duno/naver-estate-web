@@ -94,6 +94,7 @@ def test_get_apt_trades_no_api_key(mock_key):
 def test_get_all_apt_trades_pagination(mock_get):
     """페이징 처리 — totalCount 기반 전체 수집"""
     from crawler.public_data_api import PublicDataAPI
+    PublicDataAPI.reset()  # 세션 359: 거래 캐시 초기화 (다른 테스트와 격리)
 
     # 1페이지: 2건 중 1건 반환
     mock_get.side_effect = [
@@ -121,6 +122,86 @@ def test_get_all_apt_trades_pagination(mock_get):
     assert len(result) == 2
     assert result[0]["aptNm"] == "A아파트"
     assert result[1]["aptNm"] == "B아파트"
+
+
+# ── 거래 캐시 (세션 359) ──
+#
+# 배경: backfill_price_batch 가 같은 시군구의 단지 여러 개를 순회할 때, 각
+# 단지가 정확히 같은 (lawd_cd, deal_ymd) 조합을 매번 새로 API 호출하는 낭비가
+# 있었다 — data.go.kr 하루 10,000회 쿼터 중 4.8%만 쓰면서도 배치를 20개로
+# 작게 잡아둔 원인 중 하나. 같은 조합은 프로세스 생존 동안 1회만 호출한다.
+
+@patch("crawler.public_data_api.PublicDataAPI.get_apt_trades")
+def test_get_all_apt_trades_caches_same_key(mock_get):
+    """핵심 회귀 가드: 같은 (lawd_cd, deal_ymd) 를 두 번 호출하면 API 는
+    1회만 나가고, 두 번째 호출은 캐시에서 즉시 반환된다."""
+    from crawler.public_data_api import PublicDataAPI
+    PublicDataAPI.reset()
+
+    mock_get.return_value = {
+        "response": {
+            "header": {"resultCode": "00"},
+            "body": {
+                "totalCount": 1,
+                "items": {"item": [{"aptNm": "캐시아파트", "dealAmount": "50000"}]},
+            },
+        }
+    }
+
+    first = PublicDataAPI.get_all_apt_trades("11680", "202603")
+    second = PublicDataAPI.get_all_apt_trades("11680", "202603")
+
+    assert first == second
+    assert mock_get.call_count == 1, "같은 (lawd_cd, deal_ymd) 재호출 시 API 를 다시 부르면 안 됨"
+
+
+@patch("crawler.public_data_api.PublicDataAPI.get_apt_trades")
+def test_get_all_apt_trades_different_key_not_cached(mock_get):
+    """다른 (lawd_cd, deal_ymd) 조합은 캐시를 공유하지 않고 각각 API 호출된다."""
+    from crawler.public_data_api import PublicDataAPI
+    PublicDataAPI.reset()
+
+    mock_get.side_effect = [
+        {
+            "response": {
+                "header": {"resultCode": "00"},
+                "body": {"totalCount": 1, "items": {"item": [{"aptNm": "A", "dealAmount": "10000"}]}},
+            }
+        },
+        {
+            "response": {
+                "header": {"resultCode": "00"},
+                "body": {"totalCount": 1, "items": {"item": [{"aptNm": "B", "dealAmount": "20000"}]}},
+            }
+        },
+    ]
+
+    result_a = PublicDataAPI.get_all_apt_trades("11680", "202603")
+    result_b = PublicDataAPI.get_all_apt_trades("11680", "202604")  # 다른 월
+
+    assert result_a[0]["aptNm"] == "A"
+    assert result_b[0]["aptNm"] == "B"
+    assert mock_get.call_count == 2
+
+
+@patch("crawler.public_data_api.PublicDataAPI.get_apt_trades")
+def test_reset_clears_trade_cache(mock_get):
+    """reset() 은 세션뿐 아니라 거래 캐시도 비운다 — 재초기화 후 재호출된다."""
+    from crawler.public_data_api import PublicDataAPI
+    PublicDataAPI.reset()
+
+    mock_get.return_value = {
+        "response": {
+            "header": {"resultCode": "00"},
+            "body": {"totalCount": 1, "items": {"item": [{"aptNm": "X", "dealAmount": "10000"}]}},
+        }
+    }
+
+    PublicDataAPI.get_all_apt_trades("11680", "202603")
+    PublicDataAPI.reset()
+    PublicDataAPI.get_all_apt_trades("11680", "202603")
+
+    assert mock_get.call_count == 2, "reset() 이후엔 캐시가 비어 다시 API 를 호출해야 함"
 
 
 # ── 일일 호출 한도 테스트 ──

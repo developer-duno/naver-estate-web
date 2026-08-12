@@ -161,3 +161,67 @@ class TestCollectPriceHistoryForComplex:
         assert mock_api.get_complex_prices.call_count == 4
         assert result["collected"] > 0
         assert result["total"] == 6  # 2 area × 2 trades + 2 real
+
+
+class TestCollectPriceHistoryOnlyMissing:
+    """collect_price_history(only_missing=True) 검증 (세션 359).
+
+    배경: nearby_median_price IS NULL 인 단지 60,217개 중 실제 A1 시세 이력이
+    있는 건 22,975개(38%)뿐이었다 — 시세 수집기(collect_price_history)가 주
+    1회 50개씩만 처리해 6만+ 단지를 완주하려면 수십 년이 걸리는 게 진짜 원인.
+    사장님 지시로 "이미 되는 단지는 다시 안 건드리고, 안 되는 단지만" 일회성
+    대량 수집을 하기 위한 필터 — 기본값(only_missing=False)은 기존 스케줄 동작
+    그대로 유지하고, 이 옵션이 켜졌을 때만 A1 시세 이력이 0건인 단지로 좁힌다.
+    """
+
+    @patch("crawler.service_price._throttle")
+    @patch("crawler.service_price.NaverEstateAPI")
+    def test_only_missing_excludes_complex_with_existing_price(self, mock_api, mock_throttle, db):
+        """핵심 회귀 가드: only_missing=True 면 이미 A1 시세 이력이 있는
+        단지는 후보에서 완전히 빠져 API 호출조차 안 된다(헛수고 재발 방지)."""
+        upsert_complex_from_search(db, _make_complex_data("60001"))
+        upsert_complex_from_search(db, _make_complex_data("60002"))
+        # 60001만 이미 A1 시세 이력 보유
+        db.add(ComplexPriceHistory(
+            complex_no="60001", trade_type="A1", area_no=None,
+            price_upper=160000, price_lower=140000, price_avg=150000,
+            base_month="202603",
+        ))
+        db.commit()
+
+        mock_api.get_complex_prices.return_value = _make_price_response()
+        mock_api.get_complex_real_prices.return_value = _make_real_price_response()
+
+        from crawler.service_price import collect_price_history
+        collect_price_history(batch_size=10, only_missing=True)
+
+        # 60001(이미 시세 보유)에 대해서는 API 가 호출되지 않아야 함
+        called_complex_nos = {
+            call.args[0] for call in mock_api.get_complex_prices.call_args_list
+        }
+        assert "60001" not in called_complex_nos
+        assert "60002" in called_complex_nos
+
+    @patch("crawler.service_price._throttle")
+    @patch("crawler.service_price.NaverEstateAPI")
+    def test_only_missing_false_includes_all(self, mock_api, mock_throttle, db):
+        """기본값(only_missing=False)은 필터 없이 기존 동작 그대로 —
+        이미 시세 있는 단지도 후보에 포함(정기 스케줄 하위호환 보장)."""
+        upsert_complex_from_search(db, _make_complex_data("60003"))
+        db.add(ComplexPriceHistory(
+            complex_no="60003", trade_type="A1", area_no=None,
+            price_upper=160000, price_lower=140000, price_avg=150000,
+            base_month="202603",
+        ))
+        db.commit()
+
+        mock_api.get_complex_prices.return_value = _make_price_response()
+        mock_api.get_complex_real_prices.return_value = _make_real_price_response()
+
+        from crawler.service_price import collect_price_history
+        collect_price_history(batch_size=10)  # only_missing 기본값 False
+
+        called_complex_nos = {
+            call.args[0] for call in mock_api.get_complex_prices.call_args_list
+        }
+        assert "60003" in called_complex_nos

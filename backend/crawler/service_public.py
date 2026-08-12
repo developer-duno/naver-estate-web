@@ -5,6 +5,7 @@ E. 국토교통부 아파트 매매 실거래가 API → complex_price_history �
 
 import logging
 import os
+import re
 
 from crawler.cortar_legacy import to_standard_cortar
 from crawler.service_common import _checkpoint, _upsert_price_history, fail_job_safely
@@ -13,6 +14,43 @@ from db.models import Complex, CrawlJob
 from utils import safe_int, utcnow
 
 logger = logging.getLogger(__name__)
+
+_N_DANJI_SUFFIX = re.compile(r"([0-9]+)단지$")
+
+
+def _strip_n_danji(norm_name: str) -> str:
+    """정규화된 단지명에서 말단 'N단지'(숫자+단지)를 뗀 이름. 없으면 그대로."""
+    return _N_DANJI_SUFFIX.sub("", norm_name)
+
+
+def _has_sibling_n_danji(db, base_norm_name: str, sigungu_cd: str) -> bool:
+    """같은 지역에 'base_norm_name + N단지' 형태로 등록된 형제 단지가 있는지 확인.
+
+    세션 359: "경희궁의아침2단지"·"3단지"·"4단지"가 각각 별도 단지로 DB에
+    존재하는 사례(전국 2,353건)를 발견 — 이런 경우 국토부의 "N단지" 접미사를
+    떼고 매칭하면 서로 다른 단지의 실거래가가 섞여 가격이 왜곡된다(오매칭).
+    형제 단지가 하나라도 있으면 N단지 흡수 매칭 자체를 하지 않는다 — "덜
+    채워지더라도 틀리지 않는 것"이 이 서비스의 신뢰(정확한 시세 산정)에 더
+    중요하다는 판단(CLAUDE.md "도구 100% 정확 산정" 원칙 답습).
+    """
+    from crawler.public_data_api import _normalize_apt_name
+
+    # PostgreSQL 전용 '~' 정규식 연산자는 SQLite(테스트)에서 문법 오류라 쓰지
+    # 않는다(domain-mapping-ssot.md 룰3 답습) — LIKE로 후보만 넓게 좁히고
+    # (숫자+단지 접미사 여부는) Python 레벨에서 정밀 필터링해 dialect 무관하게 동작.
+    candidates = (
+        db.query(Complex.complex_name)
+        .filter(Complex.cortar_no.like(f"{sigungu_cd}%"))
+        .filter(Complex.complex_name.like("%단지"))
+        .all()
+    )
+    for (name,) in candidates:
+        norm = _normalize_apt_name(name)
+        if not _N_DANJI_SUFFIX.search(norm):
+            continue
+        if _strip_n_danji(norm) == base_norm_name:
+            return True
+    return False
 
 
 def _to_standard_lawd_cd(complexes_in_region, fallback_sigungu_cd: str) -> str:
@@ -271,6 +309,17 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
         import re
         norm_short = re.sub(r"단지$", "", norm_name)
 
+        # 세션 359: 우리 DB가 "N단지"로 세분화 안 된 통합 단지명(예: "올림픽선수기자촌"
+        # = 5,540세대·122개동 통합 등록)일 때만, 국토부의 "N단지" 거래를 흡수해
+        # 매칭률을 높인다. 단, 같은 지역에 "본체명+N단지" 형태 형제 단지가 실제로
+        # DB에 존재하면(예: "경희궁의아침2단지"/"3단지"가 각각 별도 등록) 절대
+        # 흡수하지 않는다 — 서로 다른 단지의 실거래가가 섞여 가격이 왜곡되는
+        # 오매칭을 막기 위함(전국 2,353건 형제단지 실측 확인, "덜 채워지더라도
+        # 틀리지 않는다"는 원칙).
+        absorb_n_danji = False
+        if not _N_DANJI_SUFFIX.search(norm_name) and not _has_sibling_n_danji(db, norm_name, sigungu_cd):
+            absorb_n_danji = True
+
         # 소급 대상 월 생성
         today = date.today()
         months = []
@@ -294,7 +343,10 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
                 if not price:
                     continue
                 api_norm = _normalize_apt_name(apt_name)
-                if api_norm == norm_name or api_norm == norm_short:
+                is_match = api_norm == norm_name or api_norm == norm_short
+                if not is_match and absorb_n_danji and _strip_n_danji(api_norm) == norm_name:
+                    is_match = True
+                if is_match:
                     prices.append(price)
 
             if prices:

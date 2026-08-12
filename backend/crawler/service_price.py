@@ -5,8 +5,10 @@ D. 단지별 시세 이력 배치 수집
 """
 
 import logging
+import random
 from typing import Callable
 
+from sqlalchemy import exists
 from sqlalchemy.orm import aliased
 
 from crawler.service_common import (
@@ -147,10 +149,16 @@ def collect_price_history_for_complex(
     return {"collected": collected, "failed": failed, "total": total}
 
 
-def collect_price_history(batch_size: int = 50, scheduler_job_id: str | None = None):
+def collect_price_history(
+    batch_size: int = 50, scheduler_job_id: str | None = None, only_missing: bool = False,
+):
     """단지별 시세 이력 수집 → complex_price_history 테이블 저장.
 
     네이버 API에서 매매(A1)/전세(B1) 시세를 가져와 월별 이력 기록.
+
+    only_missing=True: A1(매매) 시세 이력이 단 1건도 없는 단지만 대상으로 좁힌다
+    (세션 359 — 사장님 지시로 이미 시세가 있는 단지는 건드리지 않고 "안 되는 것만"
+    일괄 처리하는 일회성 대량 수집용. 정기 스케줄 기본값은 False로 기존 동작 유지).
     """
     db = SessionLocal()
 
@@ -186,6 +194,12 @@ def collect_price_history(batch_size: int = 50, scheduler_job_id: str | None = N
         complexes_query = db.query(Complex.complex_no)
         if done_complex_nos:
             complexes_query = complexes_query.filter(Complex.complex_no.notin_(done_complex_nos))
+        if only_missing:
+            has_price_history = exists().where(
+                ComplexPriceHistory.complex_no == Complex.complex_no,
+                ComplexPriceHistory.trade_type == "A1",
+            )
+            complexes_query = complexes_query.filter(~has_price_history)
         complexes = (
             complexes_query
             .order_by(Complex.last_crawled_at.desc().nullslast())
@@ -198,7 +212,11 @@ def collect_price_history(batch_size: int = 50, scheduler_job_id: str | None = N
         for i, (complex_no,) in enumerate(complexes):
             complex_had_success = False
             for trade_type in ("A1", "B1"):  # 매매, 전세
-                _throttle.wait()
+                # 세션 359: 사장님 지시 — 매 요청 간격이 규칙적이면(항상 정확히
+                # min_interval) 자동화 패턴으로 더 쉽게 식별될 수 있다는 지적.
+                # 0~1.5초 무작위 지터를 더해 간격을 흔든다 — AdaptiveThrottle 자체
+                # (429 감지·백오프)는 그대로 유지, 최소 대기시간만 자연스럽게 변주.
+                _throttle.wait(extra_delay=random.uniform(0, 1.5))
                 record_call("complex_prices_batch")
                 try:
                     result = NaverEstateAPI.get_complex_prices(

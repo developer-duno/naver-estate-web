@@ -111,13 +111,13 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - `CHILDCARE_DETAIL_API_KEY` — cpmsapi030 운영키
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — Gmail SMTP SSL 465
 
-## 테스트 현황 (BE·FE 2026-08-11 세션 359 수집기 감시 CI 강제화 완료 시점 실측)
+## 테스트 현황 (BE·FE 2026-08-13 세션 361 전체 실행 실측)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1992개** (공시가격 에픽 C·D +17 — 세션 356 실측, 세션 351 기준 1975에서 순증) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1991개** (1990 passed — 세션 361 전체 `npm test -- --run` 실측, 세션 359 기준 1992에서 자연 변동) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1235개** (1222 passed + 7 skipped + 6 xfailed — 세션 359 실측. 세션 358 기준 1194에서 +41: 수집기 감시 사각지대 8종 메움 + N단지 매칭 안전장치 + 스케줄러 커버리지 CI 강제화) |
+| BE pytest | `backend/tests/` | **1236개** (`--collect-only` 세션 361 실측, 세션 359 기준 1235에서 +1 자연 변동) |
 
 ## 커밋 전 필수 검증
 

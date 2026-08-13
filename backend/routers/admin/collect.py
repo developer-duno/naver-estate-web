@@ -54,14 +54,20 @@ def trigger_collection(
     db.commit()
 
     try:
-        collector_fn()
+        result = collector_fn()
         # 수집 성공 시에만 freshness 캐시 무효화 → 화면 즉시 반영 (세션 260).
         # lazy import: __init__.py 가 collect 를 freshness 보다 먼저 import 하므로
         # top-level import 는 순환 → 서버 기동 ImportError (collect.py lazy 관행 답습).
         from routers.admin.freshness import invalidate_freshness_cache
 
         invalidate_freshness_cache()
-        return {"status": "completed", "collector": collector_name}
+        response = {"status": "completed", "collector": collector_name}
+        # 세션 362: backfill-price(backfill_price_batch)는 quota_exhausted 등을 dict로
+        # 반환하는데 기존엔 이 값을 통째로 버려 "쿼터 소진으로 0단지 처리"도 화면엔 그냥
+        # "완료"로만 보였다. dict 반환 수집기만 응답에 펼쳐 넣는다(나머지 4개는 None 반환).
+        if isinstance(result, dict):
+            response.update(result)
+        return response
     except Exception as e:
         logger.exception("[admin] 수집 실패: %s", collector_name)
         raise HTTPException(status_code=500, detail=f"수집 실패: {e}")

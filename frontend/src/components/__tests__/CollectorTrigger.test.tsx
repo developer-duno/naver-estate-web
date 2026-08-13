@@ -76,4 +76,20 @@ describe("CollectorTrigger 컴포넌트", () => {
       expect(screen.getByText("수집 실패: timeout")).toBeInTheDocument();
     });
   });
+
+  /** 세션 362 회귀 가드: 쿼터 소진 시 "수집 완료"로 오해하지 않도록 별도 경고 표시 */
+  it("backfill-price 가 쿼터 소진으로 조기 종료되면 경고 메시지가 표시된다", async () => {
+    mockTrigger.mockResolvedValueOnce({
+      status: "completed", collector: "backfill-price",
+      quota_exhausted: true, success: 3, failed: 0, total: 20,
+    });
+    renderWithProvider();
+
+    fireEvent.click(screen.getByText("실거래가 소급"));
+
+    await waitFor(() => {
+      expect(screen.getByText("쿼터 소진으로 중단 (처리 3/20)")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("수집 완료")).not.toBeInTheDocument();
+  });
 });

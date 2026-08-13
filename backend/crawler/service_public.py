@@ -438,7 +438,22 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
         total = len(complexes)
         success = 0
         failed = 0
+        quota_exhausted = False
         for (cno,) in complexes:
+            # 세션 361: 쿼터를 이미 다 쓴 뒤에도 남은 단지 수만큼 backfill_price_history()를
+            # 계속 호출하면, 그 안에서 매 단지 x 24개월씩 "쿼터 초과" 경고만 반복하며
+            # 헛돌았다(어제 4500회+ 반복, 로그 5MB). 실제 API 요청은 안 나가 IP차단·데이터
+            # 오염 위험은 없지만, 쿼터 초과가 확인되면 남은 단지는 시도 자체를 접고
+            # 배치를 조기 종료한다 — 어차피 오늘은 더 이상 진행이 안 되므로.
+            from crawler.quota_db import get_api_quota_status
+            quota = get_api_quota_status(SessionLocal)
+            if quota["remaining"] == 0:
+                quota_exhausted = True
+                logger.info(
+                    "국토부 API 쿼터 소진 — 배치 조기 종료 (성공 %d / 처리시도 %d / 전체 %d)",
+                    success, success + failed, total,
+                )
+                break
             try:
                 backfill_price_history(cno, months_back=24)
                 success += 1
@@ -458,8 +473,11 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
         job.processed_items = success
         job.completed_at = utcnow()
         db.commit()
-        logger.info("소급 배치 완료: 성공 %d / 실패 %d / 전체 %d", success, failed, total)
-        return {"success": success, "failed": failed, "total": total}
+        logger.info(
+            "소급 배치 완료: 성공 %d / 실패 %d / 전체 %d%s",
+            success, failed, total, " (쿼터 소진으로 조기 종료)" if quota_exhausted else "",
+        )
+        return {"success": success, "failed": failed, "total": total, "quota_exhausted": quota_exhausted}
     except Exception as e:
         try:
             db.rollback()

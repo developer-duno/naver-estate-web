@@ -32,7 +32,7 @@ class TestBackfillPriceCrawlJob:
             from crawler.service_public import backfill_price_batch
             result = backfill_price_batch(batch_size=5, scheduler_job_id="backfill_price")
 
-        assert result == {"success": 2, "failed": 0, "total": 2}
+        assert result == {"success": 2, "failed": 0, "total": 2, "quota_exhausted": False}
         job = db.query(CrawlJob).filter(CrawlJob.scheduler_job_id == "backfill_price").one()
         assert job.status == "completed"
         assert job.total_items == 2
@@ -48,7 +48,7 @@ class TestBackfillPriceCrawlJob:
             from crawler.service_public import backfill_price_batch
             result = backfill_price_batch(batch_size=5, scheduler_job_id="backfill_price")
 
-        assert result == {"success": 1, "failed": 1, "total": 2}
+        assert result == {"success": 1, "failed": 1, "total": 2, "quota_exhausted": False}
         job = db.query(CrawlJob).filter(CrawlJob.scheduler_job_id == "backfill_price").one()
         assert job.status == "completed"
         assert job.total_items == 2
@@ -86,7 +86,7 @@ class TestBackfillPriceCrawlJob:
                    side_effect=RuntimeError("api down")):
             result = sp.backfill_price_batch(batch_size=5, scheduler_job_id="backfill_price")
 
-        assert result == {"success": 0, "failed": 1, "total": 1}
+        assert result == {"success": 0, "failed": 1, "total": 1, "quota_exhausted": False}
         assert rollback_spy.call_count >= 1, "개별 단지 실패 시 db.rollback() 이 호출되어야 함"
         # 세션이 복구되어 job 완료 commit 까지 정상 도달했는지 확인
         job = db.query(CrawlJob).filter(CrawlJob.scheduler_job_id == "backfill_price").one()

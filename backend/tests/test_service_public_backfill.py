@@ -119,6 +119,36 @@ class TestBackfillPriceHistoryNDanjiMatching:
         rows = db.query(ComplexPriceHistory).filter(ComplexPriceHistory.complex_no == "70302").all()
         assert len(rows) == 0
 
+class TestBackfillPriceBatchQuotaExhausted:
+    """세션 361 회귀 가드: 쿼터 소진 시 배치가 남은 단지를 헛돌지 않고 조기 종료한다.
+
+    사고 재현: 국토부 API 일일 쿼터(9000회)를 다 쓴 뒤에도 backfill_price_batch()가
+    남은 단지 수만큼 backfill_price_history()를 계속 호출 — 그 안에서 단지당
+    24개월씩 "쿼터 초과" 경고만 반복하며 헛돌았다(4500회+ 반복, 로그 5MB).
+    실제 API 요청은 안 나가 데이터 훼손은 없었지만, 쿼터 소진이 확인되면
+    남은 단지는 시도조차 하지 않고 배치를 즉시 끝내야 한다.
+    """
+
+    @patch("crawler.quota_db.get_api_quota_status")
+    def test_stops_before_processing_when_quota_already_exhausted(self, mock_quota, db):
+        from db.models import Complex
+
+        upsert_complex_from_search(db, _make_complex_data("70501", "테스트단지"))
+        db.query(Complex).filter(Complex.complex_no == "70501").update(
+            {"total_household_count": 500}
+        )
+        db.commit()
+
+        mock_quota.return_value = {"remaining": 0, "count": 9000, "limit": 9000}
+
+        with patch("crawler.service_public.backfill_price_history") as mock_backfill:
+            from crawler.service_public import backfill_price_batch
+            result = backfill_price_batch(batch_size=20)
+
+        mock_backfill.assert_not_called()
+        assert result["quota_exhausted"] is True
+        assert result["success"] == 0
+
     @patch("crawler.public_data_api.PublicDataAPI.get_apt_trades")
     def test_exact_n_danji_match_still_works(self, mock_get, db):
         """형제 단지가 있어도, 정확히 같은 N단지 표기끼리는 여전히 매칭된다

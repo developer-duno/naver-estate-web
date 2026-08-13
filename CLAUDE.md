@@ -111,13 +111,13 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - `CHILDCARE_DETAIL_API_KEY` — cpmsapi030 운영키
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — Gmail SMTP SSL 465
 
-## 테스트 현황 (BE·FE 2026-08-13 세션 361 전체 실행 실측)
+## 테스트 현황 (BE·FE 2026-08-13 세션 362 전체 실행 실측)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1991개** (1990 passed — 세션 361 전체 `npm test -- --run` 실측, 세션 359 기준 1992에서 자연 변동) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1992개** (1992 passed — 세션 362 전체 `npm test -- --run` 실측, 세션 361 기준 1991에서 +1, 적대검증 발견 반영 CollectorTrigger 신규 테스트) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1236개** (`--collect-only` 세션 361 실측, 세션 359 기준 1235에서 +1 자연 변동) |
+| BE pytest | `backend/tests/` | **1238개** (`--collect-only` 세션 362 실측, 세션 361 기준 1236에서 +2, admin_collect 신규 테스트 반영) |
 
 ## 커밋 전 필수 검증
 

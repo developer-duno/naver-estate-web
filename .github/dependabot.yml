@@ -23,6 +23,14 @@ updates:
       # @types/node ^23+ = 런타임 Node 22 LTS(engines node>=22) 보다 앞서가면 미존재 API 타입 노출.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # next 16.3.0 (minor) 이 admin E2E 를 3연속 깨뜨려(관리자 배지 로딩 10초 타임아웃)
+      # PR #358 로 16.2.12 되돌림 (세션 361). @next/mdx 는 next 와 항상 짝 버전이어야
+      # 하므로(다르면 세션 361 처럼 어긋남) 둘 다 같은 상한으로 차단 — update-types 로는
+      # 특정 minor 버전 하나만 못 걸러 versions 필드 사용 (공식문서 확인, 세션 362).
+      - dependency-name: "next"
+        versions: [">=16.3.0"]
+      - dependency-name: "@next/mdx"
+        versions: [">=16.3.0"]
 
   # 백엔드 (FastAPI / curl_cffi / SQLAlchemy 등 — 상한 핀이 major 자동상승 차단)
   - package-ecosystem: "pip"

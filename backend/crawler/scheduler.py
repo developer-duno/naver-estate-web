@@ -378,7 +378,11 @@ def create_scheduler() -> BackgroundScheduler:
         )
         logger.info("응급의료기관 수집 활성화: 매월 첫째 월요일 03:00 (배치 %d)", EMERGENCY_BATCH_SIZE)
 
-    # I. 어린이집 수집 — 매월 첫째 목요일 새벽 6시
+    # I. 어린이집 수집 — 매월 첫째 목요일 새벽 1시
+    #    ⚠ 01:00 고정 사유: CPMS cpmsapi030 키를 mibunyang 과 공유하는데, mibunyang
+    #    childcare-detail 이 매일 04:30 에 일일 쿼터(1000건)를 전량 소진한다. 자정 리셋
+    #    직후인 01:00 에 먼저 소량(~40콜) 쓰고 지나가야 INFO-300 즉사를 피한다
+    #    (06:00 시절 2026-07·08 두 달 연속 실패 — 세션 366). 04:30 이후로 되돌리지 말 것.
     if CHILDCARE_ENABLED:
         from crawler.env_service import collect_childcare_data
 
@@ -387,14 +391,14 @@ def create_scheduler() -> BackgroundScheduler:
             "cron",
             day="1-7",
             day_of_week="thu",
-            hour=6,
+            hour=1,
             kwargs={"batch_size": CHILDCARE_BATCH_SIZE},
             id="collect_childcare",
             name="어린이집 수집",
             max_instances=1,
             misfire_grace_time=3600,
         )
-        logger.info("어린이집 수집 활성화: 매월 첫째 목요일 06:00 (배치 %d)", CHILDCARE_BATCH_SIZE)
+        logger.info("어린이집 수집 활성화: 매월 첫째 목요일 01:00 (배치 %d)", CHILDCARE_BATCH_SIZE)
 
     # J. 범죄통계 수집 — 분기 1회 (1/4/7/10월 첫째 일요일 새벽 4시)
     #    경찰청 범죄통계 분기별 공표 주기에 맞춤

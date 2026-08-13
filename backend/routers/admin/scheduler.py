@@ -39,7 +39,7 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "backfill_price": {"name": "시세 이력 소급 수집", "schedule": "매일 03:30", "env": "PUBLIC_DATA_ENABLED"},
     "collect_air_quality": {"name": "에어코리아 대기질", "schedule": "매일 02:00", "env": "AIR_QUALITY_ENABLED"},
     "collect_emergency": {"name": "응급의료기관", "schedule": "매월 첫째 월요일 03:00", "env": "EMERGENCY_ENABLED"},
-    "collect_childcare": {"name": "어린이집", "schedule": "매월 첫째 목요일 06:00", "env": "CHILDCARE_ENABLED"},
+    "collect_childcare": {"name": "어린이집", "schedule": "매월 첫째 목요일 01:00", "env": "CHILDCARE_ENABLED"},
     "collect_crime_stats": {"name": "범죄통계", "schedule": "분기별 첫째 일요일 04:00", "env": "CRIME_STATS_ENABLED"},
     "complex_detail_APT": {"name": "단지 상세 backfill APT", "schedule": "4시간 interval", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
     "complex_detail_OPST": {"name": "단지 상세 backfill OPST", "schedule": "4시간 interval", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},

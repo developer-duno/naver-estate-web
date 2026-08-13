@@ -99,7 +99,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 | 공동주택 공시가격 수집 | 매월 15일 06:30 | V-WORLD getApartHousingPriceAttr 법정동 전량 수집 → 단지(APT·JGC) 세대수 게이트 매칭 → 평형별 중위 공시가격 저장 (네이버 0, VWORLD_API_KEY 공유, 토글 OFFICIAL_PRICE_ENABLED — PR-A3) |
 | 대기질 수집 | 매일 2시 | 에어코리아 API |
 | 응급의료 수집 | 매월 첫째 월 3시 | NEMC 응급의료기관 API |
-| 어린이집 수집 | 매월 첫째 목 6시 | CPMS cpmsapi030 API |
+| 어린이집 수집 | 매월 첫째 목 1시 | CPMS cpmsapi030 API (01:00 고정 — 아래 §CPMS 키 공유 참조, 04:30 이후 금지) |
 | 범죄통계 수집 | 분기별 첫째 일 4시 | 경찰청 odcloud API (CSV 폴백) |
 | 단지 상세 backfill | APT/OPST 4시간 interval 매일 / JGC·ABYG·OBYG 주1회 7시 | 매물유형별 독립 job, detail_crawled_at NULL 단지 보강 (APT/OPST 배치 1000 가속 — PR #19 답습, 소수 유형 배치 1000 cron 유지. 2026-05-27 PR 6a 답습 6h→4h 33% 가속) |
 | 크롤링 모니터 | 10분 interval | crawl_jobs 정합성 점검 후 텔레그램 알림 (운영 토글 MONITOR_ENABLED, 2026-05-25 세션 229 30→10→20 답습 후 현 .env MONITOR_INTERVAL_MIN=10 운영. _STALE_HOURS=1·_FAILED_WINDOW_HOURS=24 는 monitor.py:23~25 고정 상수, 인터벌 격하 무관) |
@@ -154,6 +154,19 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 
 - **위험일**: 매월 10일이 토요일 → 8,500 + 3,600 = 12,100 > 10,000
 - **대응**: collect_public_trade_data()에서 매월 10일 토요일이면 skip
+
+### CPMS cpmsapi030 키 공유 (어린이집 API — 일일 1,000건, 동일 키 공유, 세션 366)
+
+naver 의 `CHILDCARE_DETAIL_API_KEY` == mibunyang 의 `CHILDCARE_BASIC_API_KEY` (같은 키).
+**mibunyang childcare-detail 이 매일 04:30 에 쿼터 1,000건을 설계상 전량 소진**한다
+(전국 시설 23,122곳 70필드 순환 갱신, ~23일 주기 — 의도된 설계, 멈추면 손해).
+
+- naver `collect_childcare` 는 **첫째 목 01:00 고정** (자정 리셋 직후 ~40콜 선사용). 06:00
+  시절 2026-07·08 두 달 연속 INFO-300 즉사가 신설 계기. **04:30 이후로 이동 금지.**
+- 별도 키 발급은 불가 실측(2026-08-14): 포털은 1계정 1API 1키(재신청 버튼 숨김) + 일 한도
+  1,000 하드캡(증량 불가) + 새 키는 신규 회원가입 필요. 상세 = 글로벌 메모리 `[[session366-summary]]`.
+- 이 키의 운영계정 만료 = **2027-04-07** (만료 30일 전부터 포털에서 기간연장 신청 — 놓치면
+  naver·mibunyang 어린이집 수집 동시 정지).
 
 ### 네이버 크롤링 시간 분리 (같은 집 서버 IP)
 

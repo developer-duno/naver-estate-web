@@ -84,7 +84,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 ```
 대기질 → 매일 02:00 (에어코리아 API → infra.air_*)
 응급의료 → 매월 첫째 월 03:00 (NEMC → infra.emergency_*)
-어린이집 → 매월 첫째 목 06:00 (CPMS cpmsapi030 → infra.childcare_*)
+어린이집 → 매월 첫째 목 01:00 (CPMS cpmsapi030 → infra.childcare_*, mibunyang 과 키 공유라 01:00 고정 — infra.md §CPMS 키 공유)
 범죄통계 → 분기별 첫째 일 04:00 (경찰청 odcloud → infra.crime_*, CSV 폴백)
 공공데이터 → 토요일 05:00 (국토교통부 실거래가, 10일 토요일 skip)
 관리자 트리거 → POST /api/admin/collect/{name} (동기 120초)

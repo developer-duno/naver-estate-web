@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
-    "@fullcalendar/core": "^6.1.21",
+    "@fullcalendar/core": "^7.0.2",
     "@fullcalendar/daygrid": "^6.1.21",
     "@fullcalendar/react": "^6.1.21",
     "@mdx-js/loader": "^3.1.1",

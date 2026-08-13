@@ -25,6 +25,7 @@ export const queryKeys = {
   articlesAll: (no: string) => ["articles", no] as const,
   pyeongDetails: (no: string) => ["pyeongDetails", no] as const,
   officialPrices: (no: string) => ["officialPrices", no] as const,
+  complexSubway: (no: string) => ["complexSubway", no] as const,
   priceStats: (no: string) => ["priceStats", no] as const,
   priceHistory: (no: string, tradeType?: string, areaNo?: string) =>
     ["priceHistory", no, tradeType, areaNo] as const,

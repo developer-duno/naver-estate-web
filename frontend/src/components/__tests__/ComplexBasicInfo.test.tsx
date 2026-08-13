@@ -6,12 +6,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 import ComplexBasicInfo from "../ComplexBasicInfo";
-import type { Complex, OfficialPriceResponse } from "@/types";
+import type { Complex, OfficialPriceResponse, SubwayNearResponse } from "@/types";
 
 const mockGetOfficialPrices = vi.fn<(no: string) => Promise<OfficialPriceResponse>>();
+const mockGetComplexSubway = vi.fn<(no: string) => Promise<SubwayNearResponse>>();
 
 vi.mock("@/lib/api/complex", () => ({
   getOfficialPrices: (no: string) => mockGetOfficialPrices(no),
+  getComplexSubway: (no: string) => mockGetComplexSubway(no),
 }));
 
 /** 테스트용 단지 팩토리 */
@@ -27,6 +29,15 @@ function makeComplex(overrides: Partial<Complex> = {}): Complex {
 
 /** 공시가격 없음 (기본) — 각 테스트에서 필요 시 덮어쓴다 */
 const EMPTY_PRICES: OfficialPriceResponse = { complex_no: "C001", year: null, items: [] };
+
+/** 지하철역 없음 (기본) — 지하철 행이 다른 describe 를 오염시키지 않게 매 테스트 초기화 */
+const EMPTY_SUBWAY: SubwayNearResponse = { stations: [] };
+
+// 모든 describe 공통 — 지하철 쿼리는 기본적으로 빈 배열(행 미표시)로 둔다.
+beforeEach(() => {
+  mockGetComplexSubway.mockReset();
+  mockGetComplexSubway.mockResolvedValue(EMPTY_SUBWAY);
+});
 
 function renderInfo(cpx: Complex) {
   return render(
@@ -135,6 +146,58 @@ describe("ComplexBasicInfo — 공시가격 · 공시가율 (PR-D)", () => {
     expect(await screen.findByText("주소")).toBeInTheDocument();
     expect(screen.queryByText(/공시가격\(대표평형 중위/)).not.toBeInTheDocument();
     expect(screen.queryByText("공시가율(공시가격÷주변시세)")).not.toBeInTheDocument();
+  });
+});
+
+describe("ComplexBasicInfo — 가까운 지하철", () => {
+  beforeEach(() => {
+    mockGetOfficialPrices.mockReset();
+    mockGetOfficialPrices.mockResolvedValue(EMPTY_PRICES);
+  });
+
+  it("역이 있으면 행을 표시한다 — 환승역 노선 · 연결 + 거리", async () => {
+    mockGetComplexSubway.mockResolvedValue({
+      stations: [
+        { station_name: "강남", lines: ["2호선", "신분당선"], distance_m: 320 },
+        { station_name: "역삼", lines: ["2호선"], distance_m: 540 },
+      ],
+    });
+
+    renderInfo(makeComplex());
+
+    expect(await screen.findByText("가까운 지하철")).toBeInTheDocument();
+    expect(
+      screen.getByText("강남역 (2호선·신분당선) 320m · 역삼역 (2호선) 540m"),
+    ).toBeInTheDocument();
+  });
+
+  it("역 없음(stations:[]) → 행 미표시, 기존 행은 정상 렌더", async () => {
+    mockGetComplexSubway.mockResolvedValue({ stations: [] });
+
+    renderInfo(makeComplex());
+
+    expect(await screen.findByText("주소")).toBeInTheDocument();
+    expect(screen.queryByText("가까운 지하철")).not.toBeInTheDocument();
+  });
+
+  it("조회 실패(에러) → 행 미표시, 기존 행은 정상 렌더 (크래시 없음)", async () => {
+    mockGetComplexSubway.mockRejectedValue(new Error("500"));
+
+    renderInfo(makeComplex());
+
+    expect(await screen.findByText("주소")).toBeInTheDocument();
+    expect(screen.queryByText("가까운 지하철")).not.toBeInTheDocument();
+  });
+
+  it("1km 이상 역은 km 표기로 나온다", async () => {
+    mockGetComplexSubway.mockResolvedValue({
+      stations: [{ station_name: "선릉역", lines: ["2호선", "수인분당선"], distance_m: 1200 }],
+    });
+
+    renderInfo(makeComplex());
+
+    // 역명이 이미 "역"으로 끝나므로 접미사 중복 없음
+    expect(await screen.findByText("선릉역 (2호선·수인분당선) 1.2km")).toBeInTheDocument();
   });
 });
 

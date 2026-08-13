@@ -62,3 +62,18 @@ export interface OfficialPriceResponse {
   year: string | null;
   items: OfficialPriceItem[];
 }
+
+/**
+ * 단지 인근 지하철역 1건.
+ * lines = 환승역의 전 노선 (BE 가 역명으로 그룹핑해 배열로 내려줌).
+ */
+export interface SubwayStationNear {
+  station_name: string;
+  lines: string[];
+  distance_m: number;
+}
+
+/** 단지 인근 지하철역 응답 — 거리 오름차순 최대 3개, 3km 이내. 없으면 stations: [] */
+export interface SubwayNearResponse {
+  stations: SubwayStationNear[];
+}

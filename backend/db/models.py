@@ -1,6 +1,6 @@
 """SQLAlchemy ORM 모델"""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -8,6 +8,7 @@ from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -437,3 +438,31 @@ class ComplexOfficialPrice(Base):
     aphus_code: Mapped[str | None] = mapped_column(String(20))
     aphus_nm: Mapped[str | None] = mapped_column(String(200))
     collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class SubwayStation(Base):
+    """전국 도시철도 역사 (국가철도공단 레일포털 표준데이터) — V047.
+
+    원본 그대로 "역사 × 노선" 1행 구조를 유지한다 — 환승역은 같은 station_name 이
+    노선 수만큼 여러 행으로 존재하며, 묶는 것은 조회 시점의 책임이다(역명 그룹핑).
+
+    갱신은 연 1회 CSV 전량 재적재(scripts/import_subway_stations.py)라 upsert 키가
+    없다. data_date 는 원본의 행별 게시일이며 결측·비정상값(1900-01-00 등)이 섞여
+    있어 nullable — 데이터셋 기준일은 이 컬럼이 아니라 CSV 파일명이 진실의 원천이다.
+    """
+    __tablename__ = "subway_stations"
+    __table_args__ = (
+        # 1,099행 소형 테이블이라 좌표 인덱스는 두지 않는다 — 조회는 전량 로드 후
+        # 파이썬 haversine 계산이며 결과가 단지별 12시간 캐시된다.
+        Index("ix_subway_stations_name", "station_name"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    station_number: Mapped[str | None] = mapped_column(Text)
+    station_name: Mapped[str] = mapped_column(Text, nullable=False)
+    line_number: Mapped[str | None] = mapped_column(Text)
+    line_name: Mapped[str] = mapped_column(Text, nullable=False)
+    operator: Mapped[str | None] = mapped_column(Text)
+    latitude: Mapped[float] = mapped_column(Float, nullable=False)
+    longitude: Mapped[float] = mapped_column(Float, nullable=False)
+    data_date: Mapped[date | None] = mapped_column(Date)

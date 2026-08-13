@@ -3,7 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Complex, OfficialPriceItem } from "@/types";
 import { formatDateFull, formatKoreanPrice } from "@/lib/format";
-import { getOfficialPrices } from "@/lib/api/complex";
+import { getOfficialPrices, getComplexSubway } from "@/lib/api/complex";
+import { formatSubwayStations } from "@/lib/subway-format";
 import { queryKeys } from "@/lib/query-keys";
 
 /**
@@ -52,6 +53,15 @@ export default function ComplexBasicInfo({ cpx }: { cpx: Complex }) {
     staleTime: 60_000,
   });
 
+  // 인근 지하철역 (거리순 최대 3개). officialQuery 와 동일 구조 — 래퍼가 에러를 그대로
+  // throw 하므로 실패 시 data 는 undefined → 행 자체가 추가되지 않는다.
+  const subwayQuery = useQuery({
+    queryKey: queryKeys.complexSubway(cpx.complex_no),
+    queryFn: () => getComplexSubway(cpx.complex_no),
+    enabled: !!cpx.complex_no,
+    staleTime: 60_000,
+  });
+
   const rows: [string, string][] = [];
   const addr = cpx.address || cpx.cortar_address;
   if (addr) rows.push(["주소", addr]);
@@ -80,6 +90,10 @@ export default function ComplexBasicInfo({ cpx }: { cpx: Complex }) {
       .map((t) => `${t} ${tc[t]}`);
     if (parts.length > 0) rows.push(["거래유형별 매물", parts.join(" · ")]);
   }
+
+  // 가까운 지하철 — 역이 없거나(빈 배열) 조회 실패면 행 자체를 추가하지 않는다.
+  const subwayText = formatSubwayStations(subwayQuery.data?.stations ?? []);
+  if (subwayText) rows.push(["가까운 지하철", subwayText]);
 
   // 공시가격 + 공시가율 (둘 다 무료). 데이터 없으면 행 자체를 추가하지 않는다.
   const representative = pickRepresentative(officialQuery.data?.items ?? []);

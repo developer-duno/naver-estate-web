@@ -5,6 +5,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from crawler.utils import haversine_km
 from db import queries
 from deps import get_approved_user, get_db
 from routers.serializers import article_to_dict, build_filter_dict, complex_to_dict
@@ -339,4 +340,72 @@ def get_official_prices(
         ),
     }
     _official_price_cache.set(cache_key, result)
+    return result
+
+
+# 가까운 지하철 캐시 — 역사 데이터는 연 1회 갱신이라 오래 캐시 가능
+# (12시간 고정 TTL, official-prices 답습)
+_subway_cache = TTLCache(ttl=43200, max_size=1000)
+
+_SUBWAY_RADIUS_KM = 3.0
+_SUBWAY_MAX_STATIONS = 3
+
+
+@router.get("/{complex_no}/subway")
+def get_nearby_subway(
+    complex_no: str,
+    db: Session = Depends(get_db),
+):
+    """단지 반경 3km 내 가까운 지하철역 최대 3곳 — 무료 공개 (게이트 없음, 공시가격 답습)
+
+    같은 역명이 노선별로 여러 행인 원본 구조라 역명으로 묶는다 — 거리는 최단 행 기준,
+    노선명은 반경 안에 든 그 역명의 모든 노선을 모아 보여준다.
+    """
+    cache_key = f"subway:{complex_no}"
+    cached = _subway_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    cpx = queries.get_complex_by_no(db, complex_no)
+    if not cpx:
+        raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다")
+
+    # 좌표 없는 단지는 계산이 불가능 — 에러가 아니라 빈 목록 (FE 계약)
+    if cpx.latitude is None or cpx.longitude is None:
+        result = {"stations": []}
+        _subway_cache.set(cache_key, result)
+        return result
+
+    # 역명 → {최단거리, 노선명 집합}. 반경 밖 행은 노선 수집에서도 제외한다.
+    grouped: dict[str, dict] = {}
+    for station in queries.get_all_subway_stations(db):
+        distance_km = haversine_km(
+            cpx.latitude, cpx.longitude, station.latitude, station.longitude
+        )
+        if distance_km > _SUBWAY_RADIUS_KM:
+            continue
+        entry = grouped.get(station.station_name)
+        if entry is None:
+            grouped[station.station_name] = {
+                "distance_km": distance_km,
+                "lines": {station.line_name},
+            }
+        else:
+            entry["distance_km"] = min(entry["distance_km"], distance_km)
+            entry["lines"].add(station.line_name)
+
+    nearest = sorted(grouped.items(), key=lambda item: item[1]["distance_km"])[
+        :_SUBWAY_MAX_STATIONS
+    ]
+    result = {
+        "stations": [
+            {
+                "station_name": name,
+                "lines": sorted(entry["lines"]),
+                "distance_m": round(entry["distance_km"] * 1000),
+            }
+            for name, entry in nearest
+        ]
+    }
+    _subway_cache.set(cache_key, result)
     return result

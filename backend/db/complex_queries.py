@@ -5,7 +5,16 @@ from typing import Optional
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
-from db.models import Article, Complex, ComplexPyeongDetail
+from db.models import Article, Complex, ComplexPyeongDetail, SubwayStation
+
+
+def get_all_subway_stations(db: Session):
+    """전국 도시철도 역사 전량 조회 (1,099행).
+
+    좌표 프리필터를 두지 않는 것은 의도 — 소형 테이블이고 호출부가 단지별 12시간
+    캐시를 씌우므로, bounding box 분기를 더하는 복잡도가 이득을 넘지 않는다.
+    """
+    return db.execute(select(SubwayStation)).scalars().all()
 
 
 def search_complexes(db: Session, keyword: str, limit: int = 50):

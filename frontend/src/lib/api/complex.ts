@@ -2,7 +2,7 @@
  * 단지 검색/조회 API
  */
 
-import type { Complex, OfficialPriceResponse } from "@/types";
+import type { Complex, OfficialPriceResponse, SubwayNearResponse } from "@/types";
 import * as direct from "@/lib/api-direct";
 import { fetchApi, isBackendAvailable } from "./core";
 
@@ -68,6 +68,19 @@ const BACKEND_DOWN_MSG = "서버에 연결할 수 없습니다. 잠시 후 다�
 export async function getOfficialPrices(complexNo: string): Promise<OfficialPriceResponse> {
   if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
   return fetchApi<OfficialPriceResponse>(`/api/complexes/${encodeURIComponent(complexNo)}/official-prices`);
+}
+
+/**
+ * 단지 인근 지하철역 (GET /api/complexes/{no}/subway — 거리순 최대 3개, 3km 이내)
+ *
+ * ⚠ 공시가격과 동일하게 direct(Supabase) 폴백 경로가 없다 — 에러를 빈 stations 로
+ * 삼키면 React Query isError 가 prod 에서 발화하지 않는다 (error-propagation.md,
+ * 회귀 가드: lib/__tests__/complex-subway-error.test.ts).
+ * 데이터 없음·좌표 없음은 BE 가 200 + stations:[] 로 내려주므로 에러가 아니다.
+ */
+export async function getComplexSubway(complexNo: string): Promise<SubwayNearResponse> {
+  if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
+  return fetchApi<SubwayNearResponse>(`/api/complexes/${encodeURIComponent(complexNo)}/subway`);
 }
 
 /**

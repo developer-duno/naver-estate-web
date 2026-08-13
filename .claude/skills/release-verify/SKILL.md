@@ -62,24 +62,21 @@ curl -s http://localhost:8002/api/admin/scheduler-status -H "Authorization: Bear
 
 ## zombie 발견 시 처리
 
-상세 절차의 진실의 원천 = `release.md` §3 (Step 1~5 전문). 요약:
+상세 절차의 진실의 원천 = `release.md` §3. 현행(세션 363+, nssm 서비스) 요약:
 
 ```powershell
-# orchestrator 종료 — python·pythonw 양이름 필터 (⚠ Get-Process 는 PS 5.1 에
-# CommandLine 속성이 없어 무동작 — Get-CimInstance 필수, 세션 353 발견)
-Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" |
-    Where-Object { $_.CommandLine -like '*startup_orchestrator*' } |
-    ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
-# 사멸 확인 0건 필수 — 살아있으면 새 인스턴스가 _check_already_running() 에서 조용히 exit
-# port 8002 명시 종료
-$pids = (Get-NetTCPConnection -LocalPort 8002 -ErrorAction SilentlyContinue).OwningProcess
-if ($pids) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }
-Start-Sleep -Seconds 3
-# 재시작: PC 재부팅(최선) 또는 schtasks 일회성 작업 경유 (release.md §3 Step 4)
-# ⛔ Claude 세션 셸에서 python 직접 기동 금지 — 창 닫히면 트리 동반 급사 (세션 352~353 실사고)
+# 비관리자 셸 그대로 가능 — 서비스 DACL 에 사용자 시작/중지 권한 등록됨 (훈련 실측 복구 15초)
+Restart-Service naver-orchestrator   # nssm 이 orchestrator+uvicorn 트리 통째 종료 후 재기동
+Start-Sleep -Seconds 40
+Get-Content D:\naver-estate-web\scripts\startup.log -Tail 8   # 기대: 새 "백엔드 정상 시작 완료"
+curl.exe -s https://api.2u.pe.kr/health/db                    # 기대: {"status":"ok","db":"ok"}
 ```
 
-**가장 안전한 옵션 = PC 재부팅** (zombie 위험 0, 추측 0). 재부팅 불가 시 schtasks 경유만.
+- ⛔ 비관리자 `Stop-Process` 로 서비스 프로세스 직접 종료는 액세스 거부로 불가 (세션 363 실측).
+- ⚠ 서비스는 session 0 이라 비관리자 조회에서 CommandLine=NULL — CommandLine grep 0건으로
+  "orchestrator 없음" 단정 금지. 판정은 `orchestrator.pid` + `Get-Service` + startup.log.
+- ⛔ Claude 세션 셸에서 python 직접 기동 금지 — 창 닫히면 트리 동반 급사 (세션 352~353 실사고).
+- 옛 kill+schtasks 절차는 서비스 제거 시 폴백으로만 (release.md §3 레거시 블록).
 
 ## 핵심 경고 (release.md §5-1)
 

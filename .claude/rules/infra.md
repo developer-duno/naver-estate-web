@@ -2,13 +2,28 @@
 
 ## 집 서버 재시작 후 복구 절차
 
-### 자동 시작 (정상 경로)
+### 자동 시작 (정상 경로 — 세션 363부터 nssm 서비스)
 
-Windows Startup 폴더의 BAT가 `scripts/startup_orchestrator.py`를 실행:
-1. 기존 프로세스 정리 (port 8002 + cloudflared)
-2. 백엔드 서버 시작 → health check 대기
-3. Cloudflare Named Tunnel 시작 (api.2u.pe.kr)
-4. Watchdog (30초 간격 생존 감시, 죽으면 재시작)
+**nssm 서비스 `naver-orchestrator`**(부팅 시 지연 자동 시작, **로그인 불필요**, 실행 계정
+`.\user`)가 `scripts/startup_orchestrator.py`를 실행:
+1. 기존 프로세스 정리 (port 8002)
+2. 백엔드 서버 시작 → health check 대기 (터널은 별도 nssm 서비스 `cloudflared-naver` 전담)
+3. Watchdog (30초 간격 생존 감시, backend 죽으면 재시작)
+4. orchestrator 프로세스 자체가 죽으면 **nssm 이 60초 후 자동 재기동** (AppRestartDelay=60000)
+
+- 설치/재설치 = `scripts/install_orchestrator_service.ps1` (관리자 PowerShell 1회). 옛 로그인
+  Startup BAT 는 `startup-server.bat.disabled` 로 보존 (서비스 제거 시 원복 폴백).
+- 서비스 DACL 에 사용자 계정의 시작/중지 권한 등록됨 → **비관리자 세션도
+  `Restart-Service naver-orchestrator` 로 재시작 가능** (재시작 절차 = release.md §3).
+- ⚠ 서비스 프로세스는 session 0 + UAC 필터링 없는 전체 토큰: 비관리자 조회에서
+  CommandLine=NULL(프로세스 grep 무동작), 비관리자 `Stop-Process` 는 액세스 거부(세션 363
+  훈련 실측). 프로세스 탐색은 `scripts/orchestrator.pid`, 재시작은 Restart-Service 로.
+
+> **사건 (2026-08-12~13, 세션 363 규명 — nssm 전환 계기)**: Windows Update(KB5120249)가
+> 야간(18:56) 계획 재부팅 → 옛 Startup BAT 는 사용자 Startup 폴더 소재라 "로그인 시"에만
+> 실행 → PC 는 켜져 있는데 로그인 화면에서 13시간 backend 다운(watchdog 도 같이 미기동,
+> 03:30 정기 백필 등 스케줄 전체 미실행). 로그인만으로 복구되던 사각지대를 서비스 전환으로
+> 근본 해소 (부팅만으로 기동 + orchestrator 급사 자동복구까지 확보).
 
 ### 수동 복구 (자동 시작 실패 시)
 
@@ -120,7 +135,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 
 - **외부 uptime 감시** = `.github/workflows/healthcheck.yml` (매일 05:30 KST cron 1회 + workflow_dispatch. ⚠ 2026-08-02 10분→일1회 격하, 사장님 결정 — 10분 간격이 월 4,300분+로 Actions 무료한도 2,000분을 태워 7/13경 소진 → 모든 CI·감시 월말까지 마비, 7/18 터널 사망을 아무도 못 본 사고. 05:30 = 새벽 재부팅 직후. 주기 되올리려면 한도 계산 먼저). GitHub Actions(집서버 무관)가 `curl https://api.2u.pe.kr/health/db` → 실패 시 텔레그램(secrets `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`, 미설정 시 안전 스킵). **집서버가 통째로 죽으면 내부 watchdog 도 함께 죽어 무통지**이던 사각지대를 외부에서 메움. ⚠ GitHub Actions `if:` 에 `secrets` context 사용 불가(공식) → secrets 는 `env:` 로 주입해 shell 판정(PR #276 hotfix). CI 문법은 `gh workflow run` 라이브 실행만 ground truth. ⚠ **Cloudflare Bot Fight 모드를 켜면 이 외부감시가 오탐으로 전멸** — GH runner(미국 데이터센터 IP + curl)가 "관리 챌린지"를 못 풀어 403 을 받고, origin 로그엔 요청 자체가 안 남는다(2026-08-09 실사고: 8/8~8/9 이틀 연속 오탐, 서버는 정상. 공인 감시봇은 면제라 통과). 무료 플랜 BFM 은 경로 예외를 못 걸어 `/health/db` 만 빼는 것도 불가 → **켜기 전 healthcheck 영향 검토 의무**. 403 을 받으면 집서버가 아니라 CF 보안설정부터 의심 (워크플로가 HTTP 코드를 캡처해 403 을 별도 문구로 구분 알림).
 - **심층 헬스체크** = `backend/routers/health.py` `/health/db` (DB `SELECT 1`, 성공 200 / DB장애 503 클린 JSON, **GET/HEAD 허용** — 외부 감시 HEAD 프로브 405 방지, 세션 353). 외부 모니터 전용. ⚠ 기존 `/health`(정적 200, main.py:208)는 **일부러 얕게 유지** — watchdog 이 폴링하는데 DB 장애 시 503 주면 "backend 죽음" 오판 → 무한 재시작 루프(재시작으로 DB 안 살아남). watchdog=프로세스 생존만, /health/db=DB 포함.
-- **backend.log 회전 보존** = `scripts/log_rotation.py` `rotate_backend_log()`. `start_backend()` 가 매 재시작 backend.log 를 `"w"` 로 truncate 해 어제 크래시 로그 소실되던 것 → 재시작 직전 `backend_<mtime>.log` 로 회전 보존 + 7일 초과분 정리. 안정 경로 backend.log 유지(release.md §2 `head -1 scripts/backend.log` 불변). ⚠ orchestrator 상주 프로세스라 **재부팅(또는 release.md §3 schtasks 재기동)이 있어야 회전 코드 적용**(startup_orchestrator.py 수정 = orchestrator zombie 대상). 프로세스명은 경로 따라 다름 — 재부팅(Startup BAT)=pythonw / 수동·세션 재기동=python 가능 (세션 353 실측, release.md §3).
+- **backend.log 회전 보존** = `scripts/log_rotation.py` `rotate_backend_log()`. `start_backend()` 가 매 재시작 backend.log 를 `"w"` 로 truncate 해 어제 크래시 로그 소실되던 것 → 재시작 직전 `backend_<mtime>.log` 로 회전 보존 + 7일 초과분 정리. 안정 경로 backend.log 유지(release.md §2 `head -1 scripts/backend.log` 불변). ⚠ orchestrator 상주 프로세스라 **재부팅(또는 release.md §3 `Restart-Service naver-orchestrator`)이 있어야 회전 코드 적용**(startup_orchestrator.py 수정 = orchestrator zombie 대상). 프로세스명은 현행(nssm 서비스, 세션 363+) 항상 pythonw — 옛 "경로 따라 python/pythonw 갈림"(세션 353)은 레거시 수동 기동 시에만.
 - **결제·크롤 알림 삼킴 로그화** = billing_charge.py·payment.py·service_discover.py 의 `except: pass`(알림 발송 실패) → `logger.warning`(best-effort 유지). 결제 로직은 안 깨지되 알림 실패가 관찰 가능.
 
 > 상세 = 글로벌 메모리 `[[session340-summary]]`·`[[project-observability-backlog-s340]]`. 백로그 2건(connect_timeout 공용엔진·open(w) 파일락)은 PR #278(09b61e4, 2026-07-04)에서 완료 — `db/database.py` connect_args connect_timeout=5, `startup_orchestrator.py` open() try/except 가드로 코드 직독 재확인 완료(세션 352).

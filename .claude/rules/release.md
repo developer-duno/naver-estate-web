@@ -37,6 +37,29 @@ FE 만 변경된 PR (frontend/*) 은 본 룰 면제.
 
 4 지표 중 하나라도 옛 시각/옛값이면:
 
+**현행 (세션 363+ — nssm 서비스 `naver-orchestrator`, 2026-08-14 00:19 라이브 훈련 검증):**
+
+```powershell
+# 비관리자 셸 그대로 실행 가능 — 서비스 DACL 에 사용자 시작/중지 권한 등록됨
+#   (install_orchestrator_service.ps1 1-b 단계. 훈련 실측: 명령→신규 backend health 성공까지 15초)
+Restart-Service naver-orchestrator        # nssm 이 orchestrator+uvicorn 트리 통째 종료 후 재기동
+Start-Sleep -Seconds 40                   # INITIAL_DELAY 10초 + 백엔드 기동 + health check 여유
+Get-Content D:\naver-estate-web\scripts\startup.log -Tail 8   # 기대: 새 "백엔드 정상 시작 완료"
+Get-Content D:\naver-estate-web\scripts\orchestrator.pid      # 기대: 새 PID
+curl.exe -s https://api.2u.pe.kr/health/db                    # 기대: {"status":"ok","db":"ok"}
+```
+
+- ⛔ **비관리자 `Stop-Process` 로 서비스 프로세스(orchestrator·backend)를 직접 죽이는 것은
+  액세스 거부로 불가** — 서비스는 UAC 필터링 없는 전체 토큰으로 돌아서다 (세션 363 훈련 1차
+  실측). 아래 레거시의 "프로세스 kill 후 재기동" 흐름을 현행 환경에서 쓰지 말 것.
+- ⚠ 서비스 orchestrator 는 session 0 이라 비관리자 조회에서 CommandLine=NULL — CommandLine
+  grep 이 0건이어도 "orchestrator 없음" 단정 금지. 판정은 `orchestrator.pid` + `Get-Service
+  naver-orchestrator` + startup.log 로.
+- orchestrator 급사 시 nssm 이 60초 내 자동 재기동 — 개입 전 startup.log 최신 헤더부터 확인
+  (이미 자가복구됐을 수 있다).
+
+**레거시 (nssm 서비스 제거·수동 운용 폴백 시에만 유효 — 옛 Startup BAT 시절 절차):**
+
 ```powershell
 # Step 1: orchestrator 종료 — python.exe·pythonw.exe 둘 다 잡는다
 #   재부팅 경로(Startup BAT)·§3 schtasks 명령은 pythonw 로, 수동·세션 셸 재기동은 python 으로 뜰 수 있어
@@ -84,7 +107,10 @@ Get-Content scripts\orchestrator.pid      # 기대: 새 PID (tasklist /FI "PID e
 curl.exe -s https://api.2u.pe.kr/health/db   # 기대: {"status":"ok","db":"ok"} (외부 경로 ground truth)
 ```
 
-**가장 안전한 옵션 (권장)** = **PC 재부팅**. Windows Startup BAT 가 orchestrator + 백엔드 + tunnel 모두 자동 기동. zombie 위험 0, 추측 0. 재부팅이 어려우면 옵션 B(schtasks) — 세션 셸 직접 기동만은 절대 금지.
+**통상은 현행 `Restart-Service` 1줄로 충분** (훈련 실측 중단 ~15초). PC 재부팅도 여전히 안전한
+최후 수단 — 세션 363부터는 서비스가 부팅 시 자동 기동하므로 **로그인 없이도** 복구된다(옛
+Startup BAT 시절엔 로그인해야 기동 — infra.md §자동 시작 사건 참조). 세션 셸 직접 기동만은
+여전히 절대 금지.
 
 ### 4. 사건 박제 (왜 이 룰?)
 
@@ -96,6 +122,8 @@ curl.exe -s https://api.2u.pe.kr/health/db   # 기대: {"status":"ok","db":"ok"}
 | 257 (2026-06-01) | PR #102 후 "재시작 불필요" 정적 결론 3회 → 라이브 GET 으로 화면 표시 옛값(08:30/20분/6시간) 확인 = 재시작 필요로 정정. trigger 동작은 새값이나 표시 모듈 본문이 옛 코드 | release.md §2 에 라이브 표시값 4번째 지표 + §5-1 정적분석 함정 추가. 사용자 PC 재부팅 선택 |
 | 301 (2026-06-13) | PR #167 (mb 정렬 nullif) 머지 후 라이브 backend PID 20368 이 머지 19h 전 부팅 = zombie. 라이브 pp_asc 가 0 맨앞(옛 동작). 6렌즈 적대검증 + prod PG 직접 실측(OLD `[0,0,0,0,0]` vs NEW `[1122,...]`)으로 "디스크 정상·라이브만 옛코드" 확정 | §2 에 "4중→PR성격별 3중" + prod DB 직접실측 거짓양성 차단 노하우 추가. 사용자 PC 재부팅 선택 |
 | 352~353 (2026-08-09) | 세션 352 가 zombie 해소를 위해 orchestrator 를 **자기 세션 셸에서 python 으로 직접 재기동**(02:55) → 그 세션 창이 닫히자 05:42 orchestrator+uvicorn 트리 동반 급사(무로그·무알림). watchdog 도 같이 죽어 자동복구 0, 다음 세션(353)이 발견할 때까지 backend 다운 방치. 부수 발견 2건 = ① 옛 §3 `Get-Process pythonw` 는 PS 5.1 CommandLine 속성 부재로 애초에 무동작 ② 수동 재기동 시 프로세스명이 python 이라 pythonw 단일 필터도 미스매치 | §3 전면 보강: Get-CimInstance 양이름 필터 + Step 1-b 사멸확인 + schtasks 세션독립 재기동(세션 353 라이브 검증) + 세션 셸 직접 기동 금지 명문화 |
+
+| 363 (2026-08-14) | (사고 규명+구조 전환) Windows Update(KB5120249) 야간 계획 재부팅 → Startup BAT 가 로그인 의존이라 로그인 화면에서 **13시간 backend 다운**(watchdog·스케줄 전체 미기동, 상세 = infra.md §자동 시작 사건). orchestrator 를 nssm 서비스로 전환. 라이브 훈련 1차에서 비관리자 Stop-Process 액세스 거부 실측 → 서비스 DACL 시작/중지 권한 등록 후 훈련 2차 Restart-Service 15초 복구 검증 | §3 현행 절차를 Restart-Service 1줄로 교체, 옛 schtasks 절차는 레거시 폴백 격하. 부팅 자동 기동(로그인 불필요) + orchestrator 급사 60초 자동복구 확보 |
 
 3 세션 연속 backend 재시작 누락 = 글로벌 메모리 (사적) 박제로는 부족 → 본 룰로 git 추적.
 

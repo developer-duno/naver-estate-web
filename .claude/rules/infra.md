@@ -207,3 +207,37 @@ naver 의 `CHILDCARE_DETAIL_API_KEY` == mibunyang 의 `CHILDCARE_BASIC_API_KEY` 
 - **기존 컬럼 타입 변경/삭제 금지** — 컬럼 추가만 허용
 - ALTER/DROP 전 상대 프로젝트의 SELECT 쿼리/ORM 모델 검색 필수
 - 컬럼명 불일치 주의: naver-estate-web은 `latitude`/`longitude`, mibunyang은 `lat`/`lng` (mb_models.py alias)
+
+## DB 백업·DR — 마이그레이션 전 수동 스냅샷 (세션 367 신설)
+
+**실태 (2026-08-14 실측)**: **Pro 플랜 확정** — 사장님 대시보드 스크린샷 실측(developer-duno's Org **PRO** 뱃지, 프로젝트 naver-estate, main PRODUCTION). Supabase 공식 정책상 Pro = **일일 자동 백업·7일 보존**(PITR 은 별도 유료 애드온 — 가입 여부는 대시보드 Database > Backups 탭 소관). 같은 프로젝트를 쓰는 mibunyang 데이터도 동일 백업에 함께 담긴다. 이 절 신설 전까지 레포에 백업 스크립트·문서 0건. (참고: Free 였다면 자동 백업 0 — 플랜 다운그레이드 시 이 절의 수동 덤프가 유일 안전망으로 승격됨을 유의.)
+
+**도구 (이 PC 실측)**: supabase CLI 2.84.2(scoop shims) + pg_dump 18.4 설치됨. ⚠ 이 PC 의 supabase CLI 활성 로그인은 **플라워 그룹 계정**이라 naver-estate 프로젝트가 `projects list` 에 안 뜬다(gh 계정 전역 스위치와 같은 함정). 단 `supabase db dump --db-url` 방식은 **로그인·link 불필요** — 백업 실행엔 지장 0.
+
+**절차 (마이그레이션 SQL Editor 실행 전 의무)**:
+
+- 컬럼/테이블 **추가만**(CREATE·ADD COLUMN): 스키마 덤프 1회.
+- **DROP·ALTER·대량 UPDATE 동반**: 스키마 + 데이터 덤프까지.
+- 공유 DB 주의: mibunyang 테이블도 같은 DB 라 덤프에 함께 담기는 게 정상(복구 시 양쪽 영향 검토 — 위 §공용 테이블 규칙).
+
+```bash
+# backend cwd. DATABASE_URL 은 dotenv 로드로만 사용 — 값 echo·화면 출력 절대 금지
+# (~/.claude/rules/secret-output-commands.md 답습. .env 직접 read 는 deny 라 python 경유가 표준)
+cd backend && python -c "
+from dotenv import load_dotenv; load_dotenv('.env')
+import os, subprocess, datetime
+os.makedirs('D:/db-backups/naver-estate', exist_ok=True)
+ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+subprocess.run(['pg_dump','--schema-only','--no-owner','--no-privileges','--schema','public',
+                '-f', f'D:/db-backups/naver-estate/schema_{ts}.sql', os.environ['DATABASE_URL']], check=True)
+# DROP/ALTER/대량 UPDATE 동반 마이그레이션이면 '--schema-only' 대신 '--data-only' 로 한 번 더 (data_<ts>.sql)
+"
+```
+
+- **표준 도구 = 로컬 `pg_dump`** (18.4, scoop — 서버 PG 17.6 하위호환 확인). ⚠ `supabase db dump` 는
+  pg_dump 를 **Docker 컨테이너로** 돌려서 Docker Desktop 미실행 시 실패한다 (2026-08-14 V047 사전덤프 실측
+  — "failed to inspect docker image"). 이 PC 평상시엔 Docker 꺼져 있으므로 pg_dump 직행이 표준.
+- 덤프 저장 = 레포 밖 `D:\db-backups\naver-estate\` (git 추적 위험 원천 차단, D=내장 NVMe).
+- `--schema public` 이라 Supabase 관리 스키마(auth·storage 등) 자연 제외 — 앱 스키마만 담긴다.
+- 첫 실전 = 2026-08-14 V047 사전덤프 `schema_20260814_072529.sql` (141KB, 정상).
+- **Pro 확정(현행) 운용**: 일일 자동 백업이 1차 안전망 — 단 백업 시점 이후 그날 유입분은 미보호이므로, **DROP·ALTER·대량 UPDATE 동반 마이그레이션은 실행 직전 수동 덤프 필수** 유지(컬럼 추가만인 건은 권장). 복구가 필요하면 대시보드 Database > Backups 에서 복원 시점 선택 — 복원은 프로젝트 전체 롤백이라 mibunyang 데이터도 함께 되돌아감(양쪽 세션 합의 후 실행).

@@ -248,11 +248,19 @@ def main():
     # 2. 기존 프로세스 정리
     kill_existing_processes()
 
-    # 3. 백엔드 시작
+    # 3. 백엔드 시작 — 첫 시도 실패 시 1회 재시도 (CPU 과부하로 30초 타임아웃
+    # 나는 경우 대비, 세션 359 실측: 동시 세션 8개+로 CPU 91% 부하 시 재기동
+    # 4회 중 3회 실패). watchdog(153행)과 달리 이 시점은 재시도·알림 안전망
+    # 밖이라 여기서 실패하면 무통지로 스크립트가 통째로 죽는다.
     backend_proc = start_backend()
     if not wait_for_backend():
-        logger.error("백엔드 시작 실패 — 스크립트 종료")
-        sys.exit(1)
+        logger.warning("백엔드 첫 시작 실패 — 포트 정리 후 1회 재시도")
+        _kill_port(BACKEND_PORT)
+        backend_proc = start_backend()
+        if not wait_for_backend():
+            logger.error("백엔드 시작 실패 (재시도 포함 2회) — 스크립트 종료")
+            notify("🚨 naver-estate-web 백엔드 시작 실패 (재시도 포함 2회) — 수동 점검 필요")
+            sys.exit(1)
 
     logger.info("백엔드 정상 시작 완료! (터널은 nssm 서비스 cloudflared-naver 전담)")
 

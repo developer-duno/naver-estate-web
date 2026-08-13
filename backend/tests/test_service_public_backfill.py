@@ -119,6 +119,32 @@ class TestBackfillPriceHistoryNDanjiMatching:
         rows = db.query(ComplexPriceHistory).filter(ComplexPriceHistory.complex_no == "70302").all()
         assert len(rows) == 0
 
+    @patch("crawler.public_data_api.PublicDataAPI.get_apt_trades")
+    def test_exact_n_danji_match_still_works(self, mock_get, db):
+        """형제 단지가 있어도, 정확히 같은 N단지 표기끼리는 여전히 매칭된다
+        (완전일치 경로는 흡수 로직과 무관하게 항상 동작)."""
+        upsert_complex_from_search(db, _make_complex_data("70401", "경희궁의아침2단지"))
+        upsert_complex_from_search(db, _make_complex_data("70402", "경희궁의아침3단지"))
+        db.commit()
+
+        mock_get.return_value = {
+            "response": {
+                "header": {"resultCode": "00"},
+                "body": {
+                    "totalCount": 1,
+                    "items": {"item": [_make_trade("경희궁의아침2단지")]},
+                },
+            }
+        }
+
+        from crawler.public_data_api import PublicDataAPI
+        PublicDataAPI.reset()
+        from crawler.service_public import backfill_price_history
+        result = backfill_price_history("70401", months_back=1)  # 정확히 "2단지" 조회
+
+        assert result["collected"] == 1, "완전일치는 형제 단지 존재 여부와 무관하게 매칭돼야 함"
+
+
 class TestBackfillPriceBatchQuotaExhausted:
     """세션 361 회귀 가드: 쿼터 소진 시 배치가 남은 단지를 헛돌지 않고 조기 종료한다.
 
@@ -148,28 +174,3 @@ class TestBackfillPriceBatchQuotaExhausted:
         mock_backfill.assert_not_called()
         assert result["quota_exhausted"] is True
         assert result["success"] == 0
-
-    @patch("crawler.public_data_api.PublicDataAPI.get_apt_trades")
-    def test_exact_n_danji_match_still_works(self, mock_get, db):
-        """형제 단지가 있어도, 정확히 같은 N단지 표기끼리는 여전히 매칭된다
-        (완전일치 경로는 흡수 로직과 무관하게 항상 동작)."""
-        upsert_complex_from_search(db, _make_complex_data("70401", "경희궁의아침2단지"))
-        upsert_complex_from_search(db, _make_complex_data("70402", "경희궁의아침3단지"))
-        db.commit()
-
-        mock_get.return_value = {
-            "response": {
-                "header": {"resultCode": "00"},
-                "body": {
-                    "totalCount": 1,
-                    "items": {"item": [_make_trade("경희궁의아침2단지")]},
-                },
-            }
-        }
-
-        from crawler.public_data_api import PublicDataAPI
-        PublicDataAPI.reset()
-        from crawler.service_public import backfill_price_history
-        result = backfill_price_history("70401", months_back=1)  # 정확히 "2단지" 조회
-
-        assert result["collected"] == 1, "완전일치는 형제 단지 존재 여부와 무관하게 매칭돼야 함"

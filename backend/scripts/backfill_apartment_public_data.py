@@ -120,6 +120,20 @@ if __name__ == "__main__":
         new_remaining = _count_eligible_remaining(db)
         db.close()
 
+        # 세션 362: quota_exhausted 는 backfill_price_batch() 안에서 매 단지 처리
+        # 직전 쿼터를 확인해 소진 시 즉시 세운 안전장치의 결과값이다. 아래
+        # "진행 안 됨" 폴백 판정(new_remaining >= remaining)보다 먼저 명시적으로
+        # 확인하면, 이번 회차 배치 도중 쿼터가 실제로 줄어(success>0) new_remaining
+        # < remaining 이 되더라도 다음 회차를 또 시도하지 않고 바로 멈춘다 —
+        # 쿼터 소진 후 다음 회차가 API 호출 없이 헛도는 1회조차 없앤다.
+        if result.get("quota_exhausted"):
+            print(
+                f"⚠ 국토부 API 쿼터 소진 확인(quota_exhausted=True) — 중단합니다. "
+                f"(남은 {new_remaining}개, 이번 배치 success={result.get('success')})"
+            )
+            remaining = new_remaining
+            break
+
         if new_remaining >= remaining:
             # 세션 360 실측: "쿼터 소진"과 "이번 배치가 전부 매칭 0건"은 원인이
             # 다르다 — success 카운트는 예외만 없으면 올라가므로 이 값만으로는

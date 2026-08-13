@@ -72,6 +72,25 @@ def test_collect_air_quality_success(client, db):
         assert res.json()["collector"] == "air-quality"
 
 
+def test_collect_backfill_price_exposes_quota_exhausted(client, db):
+    """세션 362 회귀 가드: backfill-price 가 반환한 dict(quota_exhausted 등)를
+    응답에 그대로 펼쳐 넣는다 — 이전엔 반환값을 통째로 버려 쿼터 소진으로
+    0단지 처리돼도 화면엔 "completed"만 보였다."""
+    _make_profile(db, "a6", role="admin")
+    with patch("routers.admin.collect._get_collector") as mock_get:
+        mock_get.return_value.return_value = {
+            "success": 0, "failed": 0, "total": 5, "quota_exhausted": True,
+        }
+        res = client.post("/api/admin/collect/backfill-price", headers=_auth(_token("a6")))
+    assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "completed"
+    assert data["collector"] == "backfill-price"
+    assert data["quota_exhausted"] is True
+    assert data["success"] == 0
+    assert data["total"] == 5
+
+
 def test_collect_invalid_name_422(client, db):
     """잘못된 수집기 이름 → 422 (Literal 검증)"""
     _make_profile(db, "a3", role="admin")

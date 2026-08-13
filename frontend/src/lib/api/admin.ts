@@ -112,7 +112,8 @@ export async function getDataFreshness(token: string) {
 export type CollectorName = "crime-stats" | "air-quality" | "emergency" | "childcare" | "backfill-price";
 
 export async function triggerCollection(token: string, name: CollectorName) {
-  return fetchApi<{ status: string; collector: string }>(
+  // quota_exhausted 등은 backfill-price 수집기(국토부 API)만 반환한다 — 세션 362.
+  return fetchApi<{ status: string; collector: string; quota_exhausted?: boolean; success?: number; failed?: number; total?: number }>(
     `/api/admin/collect/${encodeURIComponent(name)}`,
     { method: "POST", headers: adminHeaders(token), timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
   );

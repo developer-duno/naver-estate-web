@@ -24,7 +24,7 @@ export default function CollectorTrigger({ getToken }: CollectorTriggerProps) {
   const [results, setResults] = useState<Record<string, { ok: boolean; message: string }>>({});
 
   const mutation = useMutation<
-    { status: string; collector: string },
+    { status: string; collector: string; quota_exhausted?: boolean; success?: number; failed?: number; total?: number },
     Error,
     CollectorName
   >({
@@ -32,8 +32,14 @@ export default function CollectorTrigger({ getToken }: CollectorTriggerProps) {
       const t = await getToken();
       return triggerCollection(t, name);
     },
-    onSuccess: (_data, name) => {
-      setResults((prev) => ({ ...prev, [name]: { ok: true, message: "수집 완료" } }));
+    onSuccess: (data, name) => {
+      // 세션 362: backfill-price 는 국토부 API 쿼터가 이미 소진돼 있으면 0단지만
+      // 처리하고 조기 종료한다 — 이때 "수집 완료"로만 보이면 관리자가 정상 처리로
+      // 오해한다. quota_exhausted 가 true 면 별도 경고 메시지로 구분해 보여준다.
+      const message = data.quota_exhausted
+        ? `쿼터 소진으로 중단 (처리 ${data.success ?? 0}/${data.total ?? 0})`
+        : "수집 완료";
+      setResults((prev) => ({ ...prev, [name]: { ok: !data.quota_exhausted, message } }));
     },
     onError: (err, name) => {
       setResults((prev) => ({ ...prev, [name]: { ok: false, message: err.message } }));

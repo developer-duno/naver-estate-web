@@ -31,6 +31,11 @@ updates:
         versions: [">=16.3.0"]
       - dependency-name: "@next/mdx"
         versions: [">=16.3.0"]
+      # eslint-config-next 도 PR #358 에서 next 와 짝으로 묶어 취급하기로 한 패키지
+      # (next 코어 의존은 없지만 @next/eslint-plugin-next 를 통해 next 버전과 나란히
+      # 관리하는 관행) — 문서-설정 정합을 위해 동일 상한 적용 (세션 362 적대검증 발견).
+      - dependency-name: "eslint-config-next"
+        versions: [">=16.3.0"]
 
   # 백엔드 (FastAPI / curl_cffi / SQLAlchemy 등 — 상한 핀이 major 자동상승 차단)
   - package-ecosystem: "pip"

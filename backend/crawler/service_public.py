@@ -362,8 +362,11 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
                 )
                 collected += 1
 
-        if collected > 0:
-            db.commit()
+        # V046: 매칭 결과(collected==0 포함)와 무관하게 "시도했다"는 사실만 기록.
+        # 국토부에 원천적으로 실거래가 없는 단지를 무한 재시도하지 않기 위한 마커
+        # (세션 360 — remaining 이 안 줄어드는데 success 로만 카운트되던 문제 근본수정).
+        cpx.public_data_attempted_at = utcnow()
+        db.commit()
         logger.info(
             "소급 수집 완료: complex=%s (%s), %d/%d 월 매칭",
             complex_no, cpx.complex_name, collected, len(months),
@@ -377,12 +380,22 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
         db.close()
 
 
+# V046: 최근 이 기간 내 국토부 백필을 이미 시도한 단지는 재시도 대상에서 뺀다.
+# 국토부에 원천적으로 실거래가 없는 단지(세션 360 실측 92%)를 무한 재시도하며
+# API 쿼터·시간을 낭비하지 않기 위함 — "성공"이 아니라 "시도했다"는 사실만
+# 기준이므로, 지역에 새 거래가 실제로 생겼을 가능성을 감안해 완전 영구제외가
+# 아니라 기간을 두고 재시도 여지를 남긴다.
+PUBLIC_DATA_RETRY_COOLDOWN_DAYS = 90
+
+
 def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = None):
     """가격 이력이 부족한 상위 단지 일괄 소급 수집.
 
-    선정 기준: 세대수 상위 + price_history 6개월 미만인 단지.
+    선정 기준: 세대수 상위 + price_history 6개월 미만 + 최근 90일 내 미시도 단지.
     """
-    from sqlalchemy import func, select
+    from datetime import timedelta
+
+    from sqlalchemy import func, or_, select
 
     from db.models import ComplexPriceHistory
 
@@ -404,6 +417,7 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
             .group_by(ComplexPriceHistory.complex_no)
             .having(func.count() >= 6)
         )
+        retry_cutoff = utcnow() - timedelta(days=PUBLIC_DATA_RETRY_COOLDOWN_DAYS)
 
         complexes = (
             db.query(Complex.complex_no)
@@ -411,6 +425,10 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
                 Complex.total_household_count.isnot(None),
                 Complex.cortar_no.isnot(None),
                 ~Complex.complex_no.in_(rich_nos),
+                or_(
+                    Complex.public_data_attempted_at.is_(None),
+                    Complex.public_data_attempted_at < retry_cutoff,
+                ),
             )
             .order_by(Complex.total_household_count.desc())
             .limit(batch_size)

@@ -57,6 +57,9 @@ class Complex(Base):
     floor_area_ratio: Mapped[str | None] = mapped_column(String(20))
     building_coverage_ratio: Mapped[str | None] = mapped_column(String(20))
     detail_crawled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 국토부 실거래가 백필 마지막 시도 시각 (V046 — 매칭 결과 무관, 시도 사실만 기록.
+    # "이미 시도했지만 국토부 데이터 자체가 없던 단지"의 무한 재시도 방지용)
+    public_data_attempted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 단지 상세 보완 필드
     address: Mapped[str | None] = mapped_column(String(500))
     road_address: Mapped[str | None] = mapped_column(String(500))

@@ -67,19 +67,36 @@ BATCH_PAUSE_SEC = 5
 
 
 def _count_eligible_remaining(db) -> int:
-    """backfill_price_batch 와 동일한 선정 기준(세대수/법정동코드 보유 + 이력 6개월 미만)."""
+    """backfill_price_batch 와 동일한 선정 기준(세대수/법정동코드 보유 + 이력 6개월
+    미만 + 최근 90일 내 미시도, service_public.PUBLIC_DATA_RETRY_COOLDOWN_DAYS 답습).
+
+    세션 360 실측: 남은 대상 대부분(92%)이 국토부에 실거래가 자체가 없는 단지라
+    쿨다운 없이 세면 이 카운트가 영원히 안 줄어 "완주"라는 착시를 만든다.
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import or_
+
+    from crawler.service_public import PUBLIC_DATA_RETRY_COOLDOWN_DAYS
+    from utils import utcnow
+
     rich_nos = (
         db.query(ComplexPriceHistory.complex_no)
         .group_by(ComplexPriceHistory.complex_no)
         .having(func.count() >= 6)
         .subquery()
     )
+    retry_cutoff = utcnow() - timedelta(days=PUBLIC_DATA_RETRY_COOLDOWN_DAYS)
     return (
         db.query(Complex.complex_no)
         .filter(
             Complex.total_household_count.isnot(None),
             Complex.cortar_no.isnot(None),
             ~Complex.complex_no.in_(rich_nos.select()),
+            or_(
+                Complex.public_data_attempted_at.is_(None),
+                Complex.public_data_attempted_at < retry_cutoff,
+            ),
         )
         .count()
     )

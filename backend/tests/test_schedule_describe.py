@@ -12,12 +12,12 @@ from crawler.schedule_describe import describe_trigger
 
 # (설명, trigger, 기대 문구) — 실제 20개 잡 패턴 + 엣지케이스
 _CASES = [
-    # interval (세션 256 "N단위 interval" 통일)
-    ("12시간 interval", IntervalTrigger(hours=12), "12시간 interval"),
-    ("30분 interval", IntervalTrigger(minutes=30), "30분 interval"),
-    ("4시간 interval", IntervalTrigger(hours=4), "4시간 interval"),
-    ("10분 interval (monitor 실값)", IntervalTrigger(minutes=10), "10분 interval"),
-    ("초 단위 폴백", IntervalTrigger(seconds=90), "90초 interval"),
+    # interval — "N단위마다" 한글 표기 (R2 쉬운말 리뉴얼, 옛 "N시간 interval")
+    ("12시간마다", IntervalTrigger(hours=12), "12시간마다"),
+    ("30분마다", IntervalTrigger(minutes=30), "30분마다"),
+    ("4시간마다", IntervalTrigger(hours=4), "4시간마다"),
+    ("10분마다 (monitor 실값)", IntervalTrigger(minutes=10), "10분마다"),
+    ("초 단위 폴백", IntervalTrigger(seconds=90), "90초마다"),
     # cron 매일 (hour 단일 + minute 명시/생략)
     ("매일 시각만 (minute 생략 → 00)", CronTrigger(hour=2), "매일 02:00"),
     ("매일 04:30", CronTrigger(hour=4, minute=30), "매일 04:30"),

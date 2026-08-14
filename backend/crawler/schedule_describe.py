@@ -26,13 +26,19 @@ _DOW = {
 
 
 def describe_interval(trigger: IntervalTrigger) -> str:
-    """IntervalTrigger → "N시간 interval" / "N분 interval" (세션 256 표기 통일)."""
+    """IntervalTrigger → "N시간마다" / "N분마다" (쉬운말 리뉴얼 R2).
+
+    옛 표기는 "N시간 interval"(세션 256) — 관리자 화면에 영어 단어가 그대로 노출돼
+    한글 cron 문구("매일 03:30")와 톤이 어긋났다. 표기를 바꿀 때는 반드시
+    ``SCHEDULER_JOB_META`` 의 폴백 문자열도 함께 바꾼다 (가드 테스트
+    test_meta_fallback_matches_describe_trigger_for_active_jobs 가 == 대조).
+    """
     sec = int(trigger.interval.total_seconds())
     if sec % 3600 == 0:
-        return f"{sec // 3600}시간 interval"
+        return f"{sec // 3600}시간마다"
     if sec % 60 == 0:
-        return f"{sec // 60}분 interval"
-    return f"{sec}초 interval"
+        return f"{sec // 60}분마다"
+    return f"{sec}초마다"
 
 
 def describe_cron(trigger: CronTrigger) -> str:

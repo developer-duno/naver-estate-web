@@ -189,3 +189,66 @@ def test_calendar_rejects_bad_month(client, db):
     _make_admin(db)
     res = client.get(_path(2026, 13), headers=_auth(_token("admin1")))
     assert res.status_code == 422
+
+
+# ── 이름표 3단 폴백 (META → MANUAL_JOB_NAMES → 원문, R2) ──
+
+
+def _add_past_job(db, job_id: str):
+    """2026-05-15 12:00 KST 에 완료된 과거 CrawlJob 1건 추가."""
+    db.add(CrawlJob(
+        job_type="x", scheduler_job_id=job_id,
+        started_at=datetime(2026, 5, 15, 3, 0, tzinfo=timezone.utc),
+        status="completed",
+    ))
+    db.commit()
+
+
+@patch("crawler.scheduler.get_scheduler", return_value=None)
+def test_calendar_manual_job_ids_use_korean_names(mock_sched, client, db):
+    """META 미등록 '수동 실행' 4종은 MANUAL_JOB_NAMES 한국어 이름표로 표시된다.
+
+    이 4개는 관리자 버튼(recrawl)·수동 스크립트(backfill_*)가 남기는 job id 라
+    정기 잡 META 엔 없다. 이름표 없으면 화면에 raw id 가 그대로 노출됐다(R2 수정).
+    """
+    from routers.admin.scheduler import MANUAL_JOB_NAMES
+
+    _make_admin(db)
+    for job_id in MANUAL_JOB_NAMES:
+        _add_past_job(db, job_id)
+
+    res = client.get(_path(2026, 5, "past"), headers=_auth(_token("admin1")))
+    assert res.status_code == 200
+    names = {e["scheduler_job_id"]: e["name"] for e in res.json()["events"]}
+    assert names == dict(MANUAL_JOB_NAMES), names
+    # raw id 가 이름으로 새어나오지 않는다
+    assert all(name != job_id for job_id, name in names.items())
+
+
+@patch("crawler.scheduler.get_scheduler", return_value=None)
+def test_calendar_unknown_job_id_falls_back_to_raw(mock_sched, client, db):
+    """META·MANUAL 어디에도 없는 id 는 원문 그대로 (정보 소실 방지)."""
+    _make_admin(db)
+    _add_past_job(db, "some_unregistered_job")
+
+    res = client.get(_path(2026, 5, "past"), headers=_auth(_token("admin1")))
+    assert res.status_code == 200
+    events = res.json()["events"]
+    assert len(events) == 1
+    assert events[0]["name"] == "some_unregistered_job"
+
+
+@patch("crawler.scheduler.get_scheduler", return_value=None)
+def test_scheduler_status_does_not_list_manual_jobs(mock_sched, client, db):
+    """유령 행 방지 가드 — MANUAL_JOB_NAMES 4종은 scheduler-status 표에 없다.
+
+    이 이름표를 SCHEDULER_JOB_META 에 넣으면 정기 잡이 아닌데도 상태표를 순회해
+    "예정 없음" 유령 행이 생긴다. 별도 dict 로 분리한 이유를 고정한다.
+    """
+    from routers.admin.scheduler import MANUAL_JOB_NAMES
+
+    _make_admin(db)
+    res = client.get("/api/admin/scheduler-status", headers=_auth(_token("admin1")))
+    assert res.status_code == 200
+    listed = {j["scheduler_job_id"] for j in res.json()["jobs"]}
+    assert listed.isdisjoint(MANUAL_JOB_NAMES), listed & set(MANUAL_JOB_NAMES)

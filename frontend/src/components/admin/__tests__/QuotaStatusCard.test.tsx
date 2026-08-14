@@ -65,7 +65,7 @@ describe("QuotaStatusCard 컴포넌트", () => {
   it("쿼터 DB 조회 실패 (count = -1) — 폴백 메시지 표시", async () => {
     mockGet.mockResolvedValueOnce(fixture({ count: -1, remaining: -1, utilization_pct: -1 }));
     renderCard();
-    await waitFor(() => expect(screen.getByText(/쿼터 DB 조회 실패 \(in-memory 폴백 사용 중\)/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/한도 기록을 불러오지 못해 임시 집계로 표시 중이에요/)).toBeInTheDocument());
     expect(screen.queryByText("정상")).not.toBeInTheDocument();
     expect(screen.queryByText("주의")).not.toBeInTheDocument();
     expect(screen.queryByText("위험")).not.toBeInTheDocument();
@@ -74,7 +74,7 @@ describe("QuotaStatusCard 컴포넌트", () => {
   it("API 에러 — 에러 메시지 표시", async () => {
     mockGet.mockRejectedValueOnce(new Error("network error"));
     renderCard();
-    await waitFor(() => expect(screen.getByText(/쿼터 조회 실패/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/오늘 사용량을 불러오지 못했어요/)).toBeInTheDocument());
     expect(screen.getByText(/network error/)).toBeInTheDocument();
   });
 });

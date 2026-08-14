@@ -129,7 +129,7 @@ export default function AdminUsersPage() {
             이전
           </button>
           <span className="text-sm text-gray-500 py-1">
-            {page} / {Math.ceil((usersQuery.data?.total ?? 0) / 20)}
+            {page} / {Math.ceil((usersQuery.data?.total ?? 0) / 20)} 쪽
           </span>
           <button
             onClick={() => setPage((p) => p + 1)}

@@ -206,10 +206,11 @@ def _add_past_job(db, job_id: str):
 
 @patch("crawler.scheduler.get_scheduler", return_value=None)
 def test_calendar_manual_job_ids_use_korean_names(mock_sched, client, db):
-    """META 미등록 '수동 실행' 4종은 MANUAL_JOB_NAMES 한국어 이름표로 표시된다.
+    """META 미등록 '수동 실행' 5종은 MANUAL_JOB_NAMES 한국어 이름표로 표시된다.
 
-    이 4개는 관리자 버튼(recrawl)·수동 스크립트(backfill_*)가 남기는 job id 라
-    정기 잡 META 엔 없다. 이름표 없으면 화면에 raw id 가 그대로 노출됐다(R2 수정).
+    이 5개는 관리자 버튼(recrawl)·수동 스크립트(backfill_*·공시가격 첫 적재)가 남기는
+    job id 라 정기 잡 META 엔 없다. 이름표 없으면 화면에 raw id 가 그대로 노출됐다
+    (R2 수정, R3 에서 collect_official_prices 추가).
     """
     from routers.admin.scheduler import MANUAL_JOB_NAMES
 
@@ -223,6 +224,35 @@ def test_calendar_manual_job_ids_use_korean_names(mock_sched, client, db):
     assert names == dict(MANUAL_JOB_NAMES), names
     # raw id 가 이름으로 새어나오지 않는다
     assert all(name != job_id for job_id, name in names.items())
+
+
+@patch("crawler.scheduler.get_scheduler", return_value=None)
+def test_calendar_official_price_manual_job_has_korean_name(mock_sched, client, db):
+    """R3 — 공시가격 수동 첫 적재(collect_official_prices) 도 한국어 이름표로 표시된다.
+
+    세션 355~356 수동 적재 흔적이 캘린더에 raw id 로 남아 있었다.
+    """
+    _make_admin(db)
+    _add_past_job(db, "collect_official_prices")
+
+    res = client.get(_path(2026, 5, "past"), headers=_auth(_token("admin1")))
+    assert res.status_code == 200
+    events = res.json()["events"]
+    assert len(events) == 1
+    assert events[0]["name"] == "공동주택 공시가격 수집 (수동)"
+
+
+@patch("crawler.scheduler.get_scheduler", return_value=None)
+def test_calendar_debug_leftover_job_ids_stay_raw(mock_sched, client, db):
+    """디버그 잔재(*_TEST·manual_session359)는 일부러 원문 유지 — 이름표 추가 금지 가드.
+
+    "테스트로 돌린 흔적"이라는 정보 자체가 관리자에게 필요해서, 한국어로 포장하면
+    정기 작업처럼 보여 오히려 오해를 부른다.
+    """
+    from routers.admin.scheduler import MANUAL_JOB_NAMES
+
+    for leftover in ("collect_official_prices_TEST", "manual_session359"):
+        assert leftover not in MANUAL_JOB_NAMES
 
 
 @patch("crawler.scheduler.get_scheduler", return_value=None)
@@ -240,7 +270,7 @@ def test_calendar_unknown_job_id_falls_back_to_raw(mock_sched, client, db):
 
 @patch("crawler.scheduler.get_scheduler", return_value=None)
 def test_scheduler_status_does_not_list_manual_jobs(mock_sched, client, db):
-    """유령 행 방지 가드 — MANUAL_JOB_NAMES 4종은 scheduler-status 표에 없다.
+    """유령 행 방지 가드 — MANUAL_JOB_NAMES 5종은 scheduler-status 표에 없다.
 
     이 이름표를 SCHEDULER_JOB_META 에 넣으면 정기 잡이 아닌데도 상태표를 순회해
     "예정 없음" 유령 행이 생긴다. 별도 dict 로 분리한 이유를 고정한다.

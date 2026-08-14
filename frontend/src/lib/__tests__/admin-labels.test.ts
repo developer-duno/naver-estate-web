@@ -10,15 +10,16 @@ import {
   getActionLabel,
   getTargetLabel,
   getDetailsSummary,
+  summarizeDetails,
 } from "../admin-labels";
 
 describe("admin-labels 매핑 카운트", () => {
-  it("ACTION_LABELS = 15개 (BE log_action 호출 답습)", () => {
-    expect(Object.keys(ACTION_LABELS)).toHaveLength(15);
+  it("ACTION_LABELS = 23개 (BE log_action 호출 답습 — R3 결제·정기결제 8종 추가)", () => {
+    expect(Object.keys(ACTION_LABELS)).toHaveLength(23);
   });
 
-  it("TARGET_TYPE_LABELS = 7개 (BE target_type 답습)", () => {
-    expect(Object.keys(TARGET_TYPE_LABELS)).toHaveLength(7);
+  it("TARGET_TYPE_LABELS = 10개 (BE target_type 답습 — R3 매물·결제·정기결제 추가)", () => {
+    expect(Object.keys(TARGET_TYPE_LABELS)).toHaveLength(10);
   });
 
   it("COLLECTOR_LABELS = 5개 (CollectorName Literal 답습)", () => {
@@ -88,9 +89,29 @@ describe("getDetailsSummary", () => {
     expect(getDetailsSummary("admin_verify_reject", { reason: "자격증 미제출" })).toBe("사유: 자격증 미제출");
   });
 
-  it("admin_user_update: 필드 나열", () => {
-    expect(getDetailsSummary("admin_user_update", { role: "admin" })).toBe("role=admin");
-    expect(getDetailsSummary("admin_user_update", { role: "user", status: "approved" })).toBe("role=user, status=approved");
+  it("admin_user_update: 키·값 모두 한글로 (R3 — key=value 덤프 폐기)", () => {
+    expect(getDetailsSummary("admin_user_update", { role: "admin" })).toBe("역할: 관리자");
+    expect(getDetailsSummary("admin_user_update", { role: "user", status: "approved" })).toBe(
+      "역할: 일반, 상태: 승인",
+    );
+    expect(getDetailsSummary("admin_user_update", { daily_crawl_quota: 100 })).toBe(
+      "하루 크롤 한도: 100",
+    );
+  });
+
+  it("admin_user_update: approved_until 은 한국식 날짜로 (R3)", () => {
+    // toLocaleDateString("ko") 는 런타임 로캘 표기에 의존 — 날짜 3요소만 확인
+    const out = getDetailsSummary("admin_user_update", { approved_until: "2026-12-31" });
+    expect(out.startsWith("승인 만료일: ")).toBe(true);
+    expect(out).toContain("2026");
+    expect(out).toContain("12");
+    expect(out).toContain("31");
+  });
+
+  it("admin_user_update: 미등록 키는 영문 원문 유지 (정보 손실 방지, R3)", () => {
+    expect(getDetailsSummary("admin_user_update", { brand_new_field: "x" })).toBe(
+      "brand_new_field: x",
+    );
   });
 
   it("verify_submit: business_verified + auto_approved", () => {
@@ -103,7 +124,50 @@ describe("getDetailsSummary", () => {
     expect(getDetailsSummary("admin_data_cleanup", { days: 90, deleted: 1234 })).toBe("90일 이전 · 1234건 삭제");
   });
 
-  it("미정의 액션은 JSON.stringify fallback", () => {
-    expect(getDetailsSummary("unknown_action", { foo: "bar", num: 42 })).toBe('{"foo":"bar","num":42}');
+  it("미정의 액션도 '이름: 값' 자연문 요약 (R3 — JSON 덤프 폐기)", () => {
+    // 미등록 키는 영문 원문 유지 → 개발자가 툴팁 JSON 과 대조 가능
+    expect(getDetailsSummary("unknown_action", { foo: "bar", num: 42 })).toBe("foo: bar, num: 42");
+  });
+
+  it("미정의 액션 + 등록 키는 한글 요약 (R3)", () => {
+    expect(getDetailsSummary("admin_setting_update", { batch_size: 500, level: "safe" })).toBe(
+      "한 번에: 500건, 안전도: 안전",
+    );
+    expect(getDetailsSummary("billing_cancelled", { plan: "pro" })).toBe("요금제: pro");
+  });
+
+  it("불리언은 예/아니오, null 은 '없음' (R3)", () => {
+    expect(getDetailsSummary("unknown_action", { force: true })).toBe("강제 실행: 예");
+    expect(getDetailsSummary("unknown_action", { force: false })).toBe("강제 실행: 아니오");
+    expect(getDetailsSummary("unknown_action", { approved_until: null })).toBe("승인 만료일: 없음");
+  });
+
+  it("중첩 객체 값은 JSON 원문 유지 (정보 손실 방지, R3)", () => {
+    expect(getDetailsSummary("unknown_action", { nested: { a: 1 } })).toBe('nested: {"a":1}');
+  });
+});
+
+describe("summarizeDetails (R3 공용 키 매핑)", () => {
+  it("여러 키를 쉼표로 이어 붙인다", () => {
+    expect(summarizeDetails({ role: "expert", status: "pending" })).toBe(
+      "역할: 전문가(중개사), 상태: 대기",
+    );
+  });
+
+  it("빈 객체는 빈 문자열", () => {
+    expect(summarizeDetails({})).toBe("");
+  });
+});
+
+describe("getActionLabel — R3 결제 액션 보강", () => {
+  it("결제·정기결제 액션이 한글로 나온다", () => {
+    expect(getActionLabel("payment_complete")).toBe("결제 완료");
+    expect(getActionLabel("billing_registered")).toBe("정기결제 카드 등록");
+    expect(getActionLabel("payment_forgery_rejected")).toBe("결제 위조 감지·거부");
+  });
+
+  it("기존 미등록이던 관리자 액션도 한글", () => {
+    expect(getActionLabel("admin_crawl_cancel")).toBe("크롤 작업 취소");
+    expect(getActionLabel("admin_setting_update")).toBe("설정 변경");
   });
 });

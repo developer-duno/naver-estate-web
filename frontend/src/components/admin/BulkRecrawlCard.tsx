@@ -79,7 +79,7 @@ export default function BulkRecrawlCard({ getToken }: Props) {
         <div className={`mb-3 p-2 border rounded text-xs ${style.border} ${style.text} bg-gray-50`}>
           {status.message}
           <div className="mt-1 text-gray-600">
-            현재 KST {status.current_kst_hour}시 · 자동 크롤 실행 중 {status.running_jobs_count}건 · 추천 시간대 {status.recommended_window_kst} KST
+            지금 한국 시간 {status.current_kst_hour}시 · 자동 수집 실행 중 {status.running_jobs_count}건 · 추천 시간대 {status.recommended_window_kst}
           </div>
         </div>
       )}
@@ -111,7 +111,7 @@ export default function BulkRecrawlCard({ getToken }: Props) {
       </button>
 
       {isDanger && (
-        <p className="mt-2 text-[11px] text-red-700">위험 상태에서는 실행이 차단됩니다. 추천 시간대({status?.recommended_window_kst} KST)에 다시 시도하세요.</p>
+        <p className="mt-2 text-[11px] text-red-700">위험 상태에서는 실행이 막혀 있어요. 추천 시간대({status?.recommended_window_kst})에 다시 눌러 주세요.</p>
       )}
 
       {runMut.data && (
@@ -123,7 +123,7 @@ export default function BulkRecrawlCard({ getToken }: Props) {
         <div className="mt-3 p-2 bg-gray-50 border border-gray-200 rounded">
           <div className="flex items-center justify-between text-xs mb-1">
             <span className="text-gray-700 font-medium">
-              진행: {progressQuery.data.job.processed_items}/{progressQuery.data.job.total_items}
+              진행: {progressQuery.data.job.processed_items}/{progressQuery.data.job.total_items}건
             </span>
             <span
               className={
@@ -134,7 +134,7 @@ export default function BulkRecrawlCard({ getToken }: Props) {
                     : "text-red-700"
               }
             >
-              {progressQuery.data.job.status === "running" && "크롤 중..."}
+              {progressQuery.data.job.status === "running" && "수집 중..."}
               {progressQuery.data.job.status === "completed" && "✓ 완료"}
               {progressQuery.data.job.status === "failed" && "✗ 실패"}
             </span>
@@ -156,7 +156,7 @@ export default function BulkRecrawlCard({ getToken }: Props) {
       )}
 
       <p className="mt-2 text-[11px] text-gray-500">
-        last_crawled_at이 가장 오래된 단지부터 순차 크롤링합니다. 자동 스케줄러와 throttle·단지 락을 공유해 네이버 API에 부담 주지 않습니다.
+        가장 오래 수집 안 된 단지부터 차례대로 다시 가져와요. 자동 작업과 속도 제한을 같이 써서 네이버에 부담을 주지 않아요.
       </p>
     </AdminCard>
   );

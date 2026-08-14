@@ -2,7 +2,7 @@
 
 /** 스케줄러 월간 캘린더 — FullCalendar 6 daygrid view.
  *
- * 과거 (crawl_jobs) + 미래 (APScheduler trigger 전개) 발화 시각을 한 달 격자에 표시.
+ * 과거 (crawl_jobs) + 미래 (APScheduler trigger 전개) 실행 시각을 한 달 격자에 표시.
  * dayMaxEvents=3 으로 칸당 3개만 노출 + "더보기" 자동 압축. mode 토글 = 과거/예정/모두.
  *
  * a11y: 색만 의존하지 않도록 아이콘 약어 (✓·✗·→) 와 상태 한글 라벨 (JOB_STATUS_STYLES.label)
@@ -117,7 +117,7 @@ export default function SchedulerCalendarView({
           ))}
         </div>
         <p className="text-xs text-gray-500">
-          총 {events.length.toLocaleString()}개 발화
+          총 {events.length.toLocaleString()}개 실행
           {truncated && (
             <span className="ml-2 text-amber-700">· 50,000개에서 잘림</span>
           )}
@@ -134,7 +134,7 @@ export default function SchedulerCalendarView({
         eventContent={renderEventContent}
         eventOrder="order"
         // end 없는 이벤트에 붙는 기본 1시간(FullCalendar 기본값 '01:00:00') 때문에 23시대
-        // 발화가 다음날 칸까지 걸쳐 이중 표시되던 것을 0 길이로 차단 (칸별 개수 부풀림 해소).
+        // 실행이 다음날 칸까지 걸쳐 이중 표시되던 것을 0 길이로 차단 (칸별 개수 부풀림 해소).
         defaultTimedEventDuration="00:00"
         dayCellContent={renderDayCell}
         dayMaxEvents={3}
@@ -148,7 +148,7 @@ export default function SchedulerCalendarView({
         <div className="mt-4 border rounded-md p-3 bg-gray-50">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-medium text-gray-800">
-              {selectedDate} 발화 ({selectedDateEvents.length}건)
+              {selectedDate} 실행 ({selectedDateEvents.length}건)
             </h3>
             <button
               type="button"

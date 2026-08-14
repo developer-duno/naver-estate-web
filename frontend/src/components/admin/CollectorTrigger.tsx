@@ -37,7 +37,7 @@ export default function CollectorTrigger({ getToken }: CollectorTriggerProps) {
       // 처리하고 조기 종료한다 — 이때 "수집 완료"로만 보이면 관리자가 정상 처리로
       // 오해한다. quota_exhausted 가 true 면 별도 경고 메시지로 구분해 보여준다.
       const message = data.quota_exhausted
-        ? `쿼터 소진으로 중단 (처리 ${data.success ?? 0}/${data.total ?? 0})`
+        ? `하루 호출 한도를 다 써서 중단 (${data.success ?? 0}/${data.total ?? 0}건)`
         : "수집 완료";
       setResults((prev) => ({ ...prev, [name]: { ok: !data.quota_exhausted, message } }));
     },

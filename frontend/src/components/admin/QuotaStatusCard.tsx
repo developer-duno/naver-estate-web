@@ -32,7 +32,7 @@ export default function QuotaStatusCard({ token }: Props) {
   return (
     <AdminCard
       title="공공데이터 API 쿼터 (오늘 사용량)"
-      help="국토교통부·에어코리아 등 공공데이터 API 가 오늘 몇 번 호출됐는지 보여줘요. 하루 한도 10,000회를 넘으면 크롤링이 멈춰요. 매월 10일이 토요일이면 mibunyang 8,500회 + 토요일 실거래가 3,600회 = 12,100회로 한도 초과 위험이라 자동 skip 돼요."
+      help="국토교통부·에어코리아 등 공공데이터를 오늘 몇 번 받아왔는지 보여줘요. 하루 한도 10,000회를 넘으면 수집이 멈춰요. 매월 10일이 토요일이면 같은 열쇠를 쓰는 자매 서비스 8,500회 + 토요일 실거래가 3,600회 = 12,100회로 한도를 넘길 위험이 있어서, 그날은 실거래가 수집을 자동으로 건너뛰어요."
       action={
         showStatusChip ? (
           <span className={`text-xs px-2 py-0.5 rounded border ${color!.bg} ${color!.text}`}>
@@ -42,11 +42,11 @@ export default function QuotaStatusCard({ token }: Props) {
       }
     >
       {isLoading && !data && <div className="h-[80px] bg-gray-100 animate-pulse rounded" />}
-      {error && <p className="text-xs text-red-700">쿼터 조회 실패: {error.message}</p>}
+      {error && <p className="text-xs text-red-700">오늘 사용량을 불러오지 못했어요: {error.message}</p>}
       {data && (
         <div className="space-y-2">
           {data.count < 0 ? (
-            <p className="text-sm text-gray-500">쿼터 DB 조회 실패 (in-memory 폴백 사용 중)</p>
+            <p className="text-sm text-gray-500">한도 기록을 불러오지 못해 임시 집계로 표시 중이에요</p>
           ) : (
             <>
               <div className="flex items-baseline justify-between">

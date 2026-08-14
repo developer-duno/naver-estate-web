@@ -104,7 +104,7 @@ export default function ErrorRateChart({ getToken }: Props) {
       )}
 
       <p className="mt-2 text-[11px] text-gray-500">
-        KST 기준 일자별 status 집계. running/pending은 생략 (최종 상태만 표시).
+        한국 시간 기준으로 날짜별로 셌어요. 아직 돌고 있거나 순서를 기다리는 작업은 빼고, 끝난 작업만 담았어요.
       </p>
     </AdminCard>
   );

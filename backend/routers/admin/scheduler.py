@@ -66,6 +66,10 @@ MANUAL_JOB_NAMES: dict[str, str] = {
     "backfill_missing_price_history": "시세 이력 보충 (수동)",
     "admin_recrawl": "관리자 일괄 재수집",
     "admin_single_recrawl": "관리자 단지 재수집",
+    # 세션 355~356 공시가격 첫 수동 적재가 남긴 job id (R3 — 캘린더에 raw 노출되던 것).
+    # ⚠ *_TEST 접미사·manual_session359 는 디버그 잔재라 원문 노출이 오히려 정보성 —
+    #   여기 추가하지 말 것.
+    "collect_official_prices": "공동주택 공시가격 수집 (수동)",
 }
 
 

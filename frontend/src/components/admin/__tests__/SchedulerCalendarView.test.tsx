@@ -108,7 +108,7 @@ describe("SchedulerCalendarView", () => {
     expect(onModeChange).toHaveBeenCalledWith("upcoming");
   });
 
-  /** 빈 이벤트 + truncated false 일 때 "총 0개 발화" */
+  /** 빈 이벤트 + truncated false 일 때 "총 0개 실행" */
   it("빈 이벤트도 안전하게 렌더된다", () => {
     render(
       <SchedulerCalendarView
@@ -118,7 +118,7 @@ describe("SchedulerCalendarView", () => {
         yearMonth="2026-05"
       />,
     );
-    expect(screen.getByText(/총 0개 발화/)).toBeInTheDocument();
+    expect(screen.getByText(/총 0개 실행/)).toBeInTheDocument();
     expect(screen.queryByText(/잘림/)).not.toBeInTheDocument();
   });
 
@@ -199,7 +199,7 @@ describe("SchedulerCalendarView", () => {
     // 선택 날짜 상세 목록도 한글 라벨 (5/15 = completed + failed 2건)
     // 범례에도 같은 "✓ 완료" 문구가 있어 목록(li) 안으로 범위를 좁혀 단언한다.
     fireEvent.click(screen.getByRole("button", { name: "2026-05-15 상세 보기" }));
-    expect(screen.getByText(/2026-05-15 발화 \(2건\)/)).toBeInTheDocument();
+    expect(screen.getByText(/2026-05-15 실행 \(2건\)/)).toBeInTheDocument();
     const detailItems = screen.getAllByRole("listitem");
     const detailText = detailItems.map((li) => li.textContent ?? "").join("|");
     expect(detailText).toContain("✓ 완료");
@@ -246,7 +246,7 @@ describe("SchedulerCalendarView", () => {
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "2026-05-25 상세 보기" }));
-    expect(screen.getByText(/2026-05-25 발화 \(1건\)/)).toBeInTheDocument();
+    expect(screen.getByText(/2026-05-25 실행 \(1건\)/)).toBeInTheDocument();
     // 상세 목록(li) 은 1건만 — 그 안에 5/25 이벤트명이 들어야 한다
     // (stub 이벤트 목록에도 같은 제목이 있어 목록 안으로 범위를 좁힌다)
     const detailItems = screen.getAllByRole("listitem");
@@ -255,7 +255,7 @@ describe("SchedulerCalendarView", () => {
   });
 
   /**
-   * [버그B 회귀 가드] end 없는 이벤트에 FullCalendar 기본 1시간이 붙어 23시대 발화가
+   * [버그B 회귀 가드] end 없는 이벤트에 FullCalendar 기본 1시간이 붙어 23시대 실행이
    * 다음날 칸까지 겹쳐 보이던 것 → defaultTimedEventDuration="00:00" 로 0 길이 고정.
    */
   it("defaultTimedEventDuration 00:00 이 FullCalendar 에 전달된다", () => {
@@ -268,5 +268,19 @@ describe("SchedulerCalendarView", () => {
       />,
     );
     expect(screen.getByTestId("fc-default-duration").textContent).toBe("00:00");
+  });
+
+  /** R3 — "발화"(내부 용어)를 화면에서 완전히 몰아냈는지 회귀 가드 */
+  it("화면 어디에도 '발화' 라는 내부 용어가 남지 않는다", () => {
+    const { container } = render(
+      <SchedulerCalendarView
+        events={sampleEvents}
+        mode="both"
+        onModeChange={() => {}}
+        yearMonth="2026-05"
+      />,
+    );
+    expect(container.textContent).not.toContain("발화");
+    expect(container.textContent).toContain("실행");
   });
 });

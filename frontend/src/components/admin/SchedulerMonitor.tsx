@@ -52,7 +52,7 @@ export default function SchedulerMonitor({ token }: Props) {
 
   if (isLoading) {
     return (
-      <AdminCard title="스케줄러 모니터링" help="자동으로 돌아가는 수집 작업들이 마지막에 언제 실행됐고, 다음에 언제 또 돌아갈지 보여줘요. 빨간색은 실패한 작업이에요. 작업이 돌긴 돌았는데 데이터가 진짜 들어왔는지는 아래 '데이터 신선도' 카드에서 확인할 수 있어요">
+      <AdminCard title="스케줄러 모니터링" help="자동으로 돌아가는 수집 작업들이 마지막에 언제 실행됐고, 다음에 언제 또 돌아갈지 보여줘요. 빨간색은 실패한 작업이에요. 작업이 돌긴 돌았는데 데이터가 진짜 들어왔는지는 아래 '데이터 신선도' 카드에서 확인할 수 있어요. '처리' 열은 (처리한 건수)/(할 일 건수) 예요 — 0/0건은 그날 할 일이 없었다는 뜻이라 문제가 아니에요">
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-8 bg-gray-100 rounded animate-pulse" />
@@ -84,7 +84,7 @@ export default function SchedulerMonitor({ token }: Props) {
   );
 
   return (
-    <AdminCard title="스케줄러 모니터링" help="자동으로 돌아가는 수집 작업들이 마지막에 언제 실행됐고, 다음에 언제 또 돌아갈지 보여줘요. 빨간색은 실패한 작업이에요. 작업이 돌긴 돌았는데 데이터가 진짜 들어왔는지는 아래 '데이터 신선도' 카드에서 확인할 수 있어요" action={summaryAction}>
+    <AdminCard title="스케줄러 모니터링" help="자동으로 돌아가는 수집 작업들이 마지막에 언제 실행됐고, 다음에 언제 또 돌아갈지 보여줘요. 빨간색은 실패한 작업이에요. 작업이 돌긴 돌았는데 데이터가 진짜 들어왔는지는 아래 '데이터 신선도' 카드에서 확인할 수 있어요. '처리' 열은 (처리한 건수)/(할 일 건수) 예요 — 0/0건은 그날 할 일이 없었다는 뜻이라 문제가 아니에요" action={summaryAction}>
       {/* 테이블 */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -147,7 +147,7 @@ function JobRow({
         <td className="py-2 pr-3">
           <span className="text-gray-800">{job.name}</span>
           {!job.enabled && (
-            <span className="ml-1 text-[10px] text-gray-400 border border-gray-200 rounded px-1">OFF</span>
+            <span className="ml-1 text-[10px] text-gray-400 border border-gray-200 rounded px-1">꺼짐</span>
           )}
         </td>
 
@@ -180,7 +180,7 @@ function JobRow({
         {/* 처리 건수 */}
         <td className="py-2 pr-3 text-gray-500 hidden lg:table-cell">
           {job.last_run
-            ? `${(job.last_run.processed_items ?? 0).toLocaleString()}/${(job.last_run.total_items ?? 0).toLocaleString()}`
+            ? `${(job.last_run.processed_items ?? 0).toLocaleString()}/${(job.last_run.total_items ?? 0).toLocaleString()}건`
             : "-"}
         </td>
 

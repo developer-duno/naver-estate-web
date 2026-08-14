@@ -37,6 +37,9 @@ export default function SchedulerCalendarPage() {
     [year, month],
   );
 
+  // 카드 제목은 사람이 읽는 "2026년 8월" 형태로 (yearMonth 는 FullCalendar initialDate 용 키)
+  const yearMonthLabel = `${year}년 ${month}월`;
+
   const movePrev = () => {
     if (month === 1) setYM({ year: year - 1, month: 12 });
     else setYM({ year, month: month - 1 });
@@ -80,8 +83,8 @@ export default function SchedulerCalendarPage() {
       <h2 className="text-lg font-semibold mb-4">스케줄러 캘린더</h2>
 
       <AdminCard
-        title={`${yearMonth} 발화 일정`}
-        help="자동으로 돌아가는 작업이 언제 돌았고(과거), 앞으로 언제 돌 예정인지(예정) 달력으로 보여줘요. 같은 날 칸에 점이 빽빽하면 그날 작업이 몰린 거예요. 날짜 칸을 누르면 그날 발화한 작업 목록을 시각순으로 볼 수 있어요."
+        title={`${yearMonthLabel} 실행 일정`}
+        help="자동으로 돌아가는 작업이 언제 돌았고(과거), 앞으로 언제 돌 예정인지(예정) 달력으로 보여줘요. 같은 날 칸에 점이 빽빽하면 그날 작업이 몰린 거예요. 날짜 칸을 누르면 그날 실행된 작업 목록을 시각순으로 볼 수 있어요."
         action={navAction}
       >
         {query.isLoading ? (

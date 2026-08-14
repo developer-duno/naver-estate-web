@@ -89,7 +89,7 @@ export default function AdminLogsPage() {
           >
             이전
           </button>
-          <span className="text-sm text-gray-500 py-1">{page} / {Math.ceil((logsQuery.data?.total ?? 0) / 50)}</span>
+          <span className="text-sm text-gray-500 py-1">{page} / {Math.ceil((logsQuery.data?.total ?? 0) / 50)} 쪽</span>
           <button
             onClick={() => setPage((p) => p + 1)}
             disabled={page >= Math.ceil((logsQuery.data?.total ?? 0) / 50)}

@@ -191,11 +191,11 @@ def test_add_job_rejects_duplicate_id():
 # 가드가 이 운영값으로 env 를 명시 patch 해 환경 독립적으로 검증한다.
 # 메타 fallback 문자열의 시간수를 바꾸면 여기도 함께 바꿔야 한다.
 _OPERATIONAL_INTERVALS = {
-    "CRAWL_INTERVAL_HOURS": 12,        # crawl_articles → "12시간 interval"
-    "CRAWL_DETAIL_INTERVAL_MIN": 30,   # crawl_details → "30분 interval"
-    "COMPLEX_DETAIL_APT_INTERVAL_HOURS": 4,   # → "4시간 interval"
-    "COMPLEX_DETAIL_OPST_INTERVAL_HOURS": 4,  # → "4시간 interval"
-    "MONITOR_INTERVAL_MIN": 10,        # crawler_monitor → "10분 interval" (.env 운영값)
+    "CRAWL_INTERVAL_HOURS": 12,        # crawl_articles → "12시간마다"
+    "CRAWL_DETAIL_INTERVAL_MIN": 30,   # crawl_details → "30분마다"
+    "COMPLEX_DETAIL_APT_INTERVAL_HOURS": 4,   # → "4시간마다"
+    "COMPLEX_DETAIL_OPST_INTERVAL_HOURS": 4,  # → "4시간마다"
+    "MONITOR_INTERVAL_MIN": 10,        # crawler_monitor → "10분마다" (.env 운영값)
 }
 
 

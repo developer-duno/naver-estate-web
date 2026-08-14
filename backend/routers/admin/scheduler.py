@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 # trigger 와 강제 대조하므로 손글씨 drift 시 CI 가 빨간불 (PR #99·6a·monitor 답습).
 SCHEDULER_JOB_META: dict[str, dict] = {
     "discover_regions": {"name": "전국 단지 발견", "schedule": "주 1회 일요일 03:00", "env": None},
-    "crawl_articles": {"name": "매물 수집 배치", "schedule": "12시간 interval", "env": None},
-    "crawl_details": {"name": "매물 상세 보강", "schedule": "30분 interval", "env": None},
+    "crawl_articles": {"name": "매물 수집 배치", "schedule": "12시간마다", "env": None},
+    "crawl_details": {"name": "매물 상세 보강", "schedule": "30분마다", "env": None},
     "collect_prices": {"name": "시세 이력 수집", "schedule": "주 1회 수요일 04:00", "env": None},
     "popular_1030": {"name": "인기 단지 크롤링 10:45", "schedule": "매일 10:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true"},
     "popular_1430": {"name": "인기 단지 크롤링 14:45", "schedule": "매일 14:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true"},
@@ -41,16 +41,43 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "collect_emergency": {"name": "응급의료기관", "schedule": "매월 첫째 월요일 03:00", "env": "EMERGENCY_ENABLED"},
     "collect_childcare": {"name": "어린이집", "schedule": "매월 첫째 목요일 01:00", "env": "CHILDCARE_ENABLED"},
     "collect_crime_stats": {"name": "범죄통계", "schedule": "분기별 첫째 일요일 04:00", "env": "CRIME_STATS_ENABLED"},
-    "complex_detail_APT": {"name": "단지 상세 backfill APT", "schedule": "4시간 interval", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
-    "complex_detail_OPST": {"name": "단지 상세 backfill OPST", "schedule": "4시간 interval", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
+    "complex_detail_APT": {"name": "단지 상세 backfill APT", "schedule": "4시간마다", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
+    "complex_detail_OPST": {"name": "단지 상세 backfill OPST", "schedule": "4시간마다", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
     "complex_detail_JGC": {"name": "단지 상세 backfill JGC", "schedule": "주 1회 화요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
     "complex_detail_ABYG": {"name": "단지 상세 backfill ABYG", "schedule": "주 1회 수요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
     "complex_detail_OBYG": {"name": "단지 상세 backfill OBYG", "schedule": "주 1회 목요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
     "collect_metrics": {"name": "단지 가치지표 수집", "schedule": "매일 04:30", "env": "COMPLEX_METRIC_ENABLED", "env_default": "true"},
     "billing_charge": {"name": "빌링키 자동결제", "schedule": "매일 04:50", "env": "BILLING_AUTO_CHARGE_ENABLED", "env_default": "true"},
-    "crawler_monitor": {"name": "크롤링 모니터", "schedule": "10분 interval", "env": "MONITOR_ENABLED"},
+    "crawler_monitor": {"name": "크롤링 모니터", "schedule": "10분마다", "env": "MONITOR_ENABLED"},
     "vacuum_maintenance": {"name": "정기 VACUUM 유지보수", "schedule": "매일 03:50", "env": "VACUUM_MAINTENANCE_ENABLED", "env_default": "true"},
 }
+
+# 캘린더 전용 이름표 — 스케줄러에 등록되지 않는 "수동 실행" 잡들.
+#
+# 이들은 관리자 버튼(recrawl)·수동 스크립트(backfill_*)가 CrawlJob 을 남길 때 쓰는
+# scheduler_job_id 다. 정기 잡이 아니라 trigger 도 next_run 도 없으므로 캘린더 과거
+# 이벤트에만 등장한다. 이름표가 없으면 화면에 raw id("admin_recrawl")가 그대로 노출된다.
+#
+# ⚠ SCHEDULER_JOB_META 에 넣지 말 것 — scheduler-status 가 META 키를 그대로 순회해
+# (아래 `for job_id, meta in SCHEDULER_JOB_META.items()`) 표에 "예정 없음" 유령 행이
+# 생기고, test_scheduler_job_meta_covers_all_registered_jobs 류 가드와도 어긋난다.
+MANUAL_JOB_NAMES: dict[str, str] = {
+    "backfill_apartment_public_data": "실거래 이력 보충 (수동)",
+    "backfill_missing_price_history": "시세 이력 보충 (수동)",
+    "admin_recrawl": "관리자 일괄 재수집",
+    "admin_single_recrawl": "관리자 단지 재수집",
+}
+
+
+def _calendar_job_name(job_id: str, fallback: str | None = None) -> str:
+    """캘린더 이벤트 표시 이름 — META → MANUAL_JOB_NAMES → 원문 3단 폴백."""
+    meta = SCHEDULER_JOB_META.get(job_id)
+    if meta:
+        return meta["name"]
+    manual = MANUAL_JOB_NAMES.get(job_id)
+    if manual:
+        return manual
+    return fallback or job_id
 
 
 @router.get("/scheduler-status")
@@ -292,10 +319,9 @@ def get_scheduler_calendar(
             started = row.started_at
             if started.tzinfo is None:
                 started = started.replace(tzinfo=timezone.utc)
-            meta = SCHEDULER_JOB_META.get(row.scheduler_job_id, {})
             events.append({
                 "scheduler_job_id": row.scheduler_job_id,
-                "name": meta.get("name", row.scheduler_job_id),
+                "name": _calendar_job_name(row.scheduler_job_id),
                 "start": started.astimezone(kst).isoformat(),
                 "status": row.status,
                 "kind": "past",
@@ -317,10 +343,9 @@ def get_scheduler_calendar(
                     next_t = job.trigger.get_next_fire_time(prev, prev)
                     if next_t is None or next_t >= end_utc:
                         break
-                    meta = SCHEDULER_JOB_META.get(job.id, {})
                     events.append({
                         "scheduler_job_id": job.id,
-                        "name": meta.get("name", job.name or job.id),
+                        "name": _calendar_job_name(job.id, job.name),
                         "start": next_t.astimezone(kst).isoformat(),
                         "status": "upcoming",
                         "kind": "upcoming",

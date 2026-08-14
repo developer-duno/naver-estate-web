@@ -1,0 +1,10 @@
+# CLI 수동 배포용 — 빌드에 불필요한 런타임·백엔드 자산 업로드 제외 (잠긴 파일 EBUSY 회피)
+backend
+scripts
+docs
+memory
+reports
+.claude
+.omc
+*.log
+*.db

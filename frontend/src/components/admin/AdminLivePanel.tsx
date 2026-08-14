@@ -10,6 +10,7 @@ import {
 } from "@/lib/api";
 import type { CrawlFailuresResponse, NaverCallStats } from "@/lib/api/admin";
 import type { CrawlJobDetail, PaginatedResponse } from "@/types/admin";
+import { jobTypeLabel } from "@/lib/crawl-job-labels";
 import AdminCard from "./AdminCard";
 
 export default function AdminLivePanel() {
@@ -53,8 +54,8 @@ export default function AdminLivePanel() {
             {runningJobs.map((j) => (
               <li key={j.id} className="flex items-center justify-between text-sm gap-2">
                 <span className="text-gray-600 truncate">
-                  {j.job_type}
-                  {j.target_id ? ` — ${j.target_id}` : ""}
+                  {jobTypeLabel(j.job_type)}
+                  {j.target_id ? ` — 단지 ${j.target_id}` : ""}
                 </span>
                 <span className="text-xs text-blue-600 shrink-0">
                   {j.processed_items}/{j.total_items}
@@ -76,7 +77,7 @@ export default function AdminLivePanel() {
             {top5Failures.map((item) => (
               <li key={item.job_type} className="text-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-gray-700 font-medium truncate">{item.job_type}</span>
+                  <span className="text-gray-700 font-medium truncate">{jobTypeLabel(item.job_type)}</span>
                   <span className="text-xs text-red-600 shrink-0">{item.count}건</span>
                 </div>
                 {item.last_error && (

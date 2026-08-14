@@ -150,6 +150,57 @@ describe("AdminLivePanel", () => {
     expect(screen.getByText("234")).toBeInTheDocument();
   });
 
+  /** job_type 은 코드 원문이 아니라 crawl-job-labels 한글 라벨로 표시 (탭 간 표기 통일) */
+  it("실행중 작업의 job_type 이 한글 라벨 + '단지 N' 으로 표시된다", async () => {
+    mockJobs.mockResolvedValueOnce({
+      items: [mkJob({ id: 9, job_type: "article_detail", target_id: "12345" })],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    });
+    mockFailures.mockResolvedValueOnce({ window_hours: 24, total: 0, items: [] });
+    mockNaver.mockResolvedValueOnce(mkNaver({ "24h": 0 }));
+    renderPanel();
+    await waitFor(() => {
+      expect(screen.getByText(/매물 상세 보강/)).toBeInTheDocument();
+    });
+    // target_id 는 "단지 12345" 로 무엇을 가리키는 번호인지 밝힌다
+    expect(screen.getByText(/단지 12345/)).toBeInTheDocument();
+    // 코드 원문은 화면에 남지 않는다
+    expect(screen.queryByText(/article_detail/)).not.toBeInTheDocument();
+  });
+
+  /** 최근 실패 목록의 job_type 도 같은 한글 라벨 적용 */
+  it("최근 실패 목록의 job_type 이 한글 라벨로 표시된다", async () => {
+    mockJobs.mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 20 });
+    mockFailures.mockResolvedValueOnce({
+      window_hours: 24,
+      total: 1,
+      items: [mkFailure({ job_type: "complex_articles", count: 2 })],
+    });
+    mockNaver.mockResolvedValueOnce(mkNaver({ "24h": 0 }));
+    renderPanel();
+    await waitFor(() => {
+      expect(screen.getByText("단지 매물 수집")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("complex_articles")).not.toBeInTheDocument();
+  });
+
+  /** 미등록 job_type 코드는 라벨이 없으니 코드 그대로 (안전 폴백) */
+  it("미등록 job_type 코드는 코드명 그대로 표시된다", async () => {
+    mockJobs.mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 20 });
+    mockFailures.mockResolvedValueOnce({
+      window_hours: 24,
+      total: 1,
+      items: [mkFailure({ job_type: "brand_new_job", count: 1 })],
+    });
+    mockNaver.mockResolvedValueOnce(mkNaver({ "24h": 0 }));
+    renderPanel();
+    await waitFor(() => {
+      expect(screen.getByText("brand_new_job")).toBeInTheDocument();
+    });
+  });
+
   it("최근 실패 6건 이상 = 상위 5건만 slice 노출", async () => {
     mockJobs.mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 20 });
     mockFailures.mockResolvedValueOnce({

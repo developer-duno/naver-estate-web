@@ -17,6 +17,7 @@ import AdminCard from "@/components/admin/AdminCard";
 import AdminLeftNav from "@/components/admin/AdminLeftNav";
 import AdminLivePanel from "@/components/admin/AdminLivePanel";
 import { getAdminDetailedStats, getAdminAuditLogs } from "@/lib/api";
+import { getActionLabel, getTargetLabel } from "@/lib/admin-labels";
 import type { DetailedStats, AuditLog } from "@/types/admin";
 import type { PaginatedResponse } from "@/types/admin";
 
@@ -94,8 +95,8 @@ export default function AdminDashboard() {
                   {recentLogs.map((l) => (
                     <li key={l.id} className="flex items-center justify-between text-sm">
                       <span className="text-gray-600">
-                        <span className="bg-gray-100 text-xs px-1.5 py-0.5 rounded mr-1">{l.action}</span>
-                        {l.target_type ? `${l.target_type}:${l.target_id || ""}` : ""}
+                        <span className="bg-gray-100 text-xs px-1.5 py-0.5 rounded mr-1">{getActionLabel(l.action)}</span>
+                        {l.target_type ? getTargetLabel(l.target_type, l.target_id) : ""}
                       </span>
                       <span className="text-xs text-gray-500">
                         {l.created_at ? new Date(l.created_at).toLocaleString("ko") : ""}

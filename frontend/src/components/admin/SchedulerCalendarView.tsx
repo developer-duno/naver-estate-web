@@ -5,8 +5,8 @@
  * 과거 (crawl_jobs) + 미래 (APScheduler trigger 전개) 발화 시각을 한 달 격자에 표시.
  * dayMaxEvents=3 으로 칸당 3개만 노출 + "더보기" 자동 압축. mode 토글 = 과거/예정/모두.
  *
- * a11y: 색만 의존하지 않도록 아이콘 약어 (✓·✗·→) 와 상태 텍스트 병기. DataFreshnessCard
- * 패턴 답습.
+ * a11y: 색만 의존하지 않도록 아이콘 약어 (✓·✗·→) 와 상태 한글 라벨 (JOB_STATUS_STYLES.label)
+ * 병기. DataFreshnessCard 패턴 답습.
  */
 
 import { useMemo, useState } from "react";
@@ -79,7 +79,10 @@ export default function SchedulerCalendarView({
   // dayGridPlugin 만 사용 (interactionPlugin 안 깔아도 되도록), 날짜 클릭은
   // dayCellContent 안 button 으로 직접 처리.
   function renderDayCell(arg: DayCellContentArg) {
-    const iso = arg.date.toISOString().slice(0, 10);
+    // toISOString() 은 UTC 로 바꿔버려 KST 자정이 하루 전으로 밀린다 (8/14 칸 → 8/13 상세).
+    // 이벤트 start 는 +09:00 로컬 문자열이라, 비교 키도 로컬 연·월·일로 조립해야 짝이 맞는다.
+    const d = arg.date;
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     return (
       <button
         type="button"
@@ -130,6 +133,9 @@ export default function SchedulerCalendarView({
         events={calendarEvents}
         eventContent={renderEventContent}
         eventOrder="order"
+        // end 없는 이벤트에 붙는 기본 1시간(FullCalendar 기본값 '01:00:00') 때문에 23시대
+        // 발화가 다음날 칸까지 걸쳐 이중 표시되던 것을 0 길이로 차단 (칸별 개수 부풀림 해소).
+        defaultTimedEventDuration="00:00"
         dayCellContent={renderDayCell}
         dayMaxEvents={3}
         height="auto"
@@ -164,7 +170,7 @@ export default function SchedulerCalendarView({
               return (
                 <li key={idx} className="flex items-center gap-2 text-xs">
                   <span className={`inline-block px-1.5 py-0.5 rounded ${styles.chip}`}>
-                    {styles.icon} {e.status}
+                    {styles.icon} {styles.label}
                   </span>
                   <span className="text-gray-500 font-mono">{time}</span>
                   <span className="text-gray-800">{e.name}</span>
@@ -184,7 +190,7 @@ export default function SchedulerCalendarView({
           return (
             <span key={s} className="flex items-center gap-1">
               <span className={`inline-block w-2 h-2 rounded-full ${dotBg}`} />
-              <span>{JOB_STATUS_STYLES[s].icon} {s}</span>
+              <span>{JOB_STATUS_STYLES[s].icon} {JOB_STATUS_STYLES[s].label}</span>
             </span>
           );
         })}
@@ -199,10 +205,10 @@ function renderEventContent(arg: EventContentArg) {
   return (
     <div
       className={`text-[10px] leading-tight px-1 py-0.5 rounded truncate font-medium ${styles.emphasized} ${styles.pulse ? "animate-pulse" : ""}`}
-      title={`${arg.event.title} (${status})`}
+      title={`${arg.event.title} (${styles.label})`}
     >
       <span aria-hidden="true">{styles.icon} </span>
-      <span className="sr-only">{status}: </span>
+      <span className="sr-only">{styles.label}: </span>
       {arg.event.title}
     </div>
   );

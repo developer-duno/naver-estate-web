@@ -115,7 +115,7 @@ export default function BulkRecrawlCard({ getToken }: Props) {
       )}
 
       {runMut.data && (
-        <p className="mt-2 text-xs text-green-700">✓ {runMut.data.status} — batch_size {runMut.data.batch_size}</p>
+        <p className="mt-2 text-xs text-green-700">✓ 시작됨 — 한 번에 {runMut.data.batch_size}개 단지</p>
       )}
       {runMut.error && <p className="mt-2 text-xs text-red-700">{runMut.error.message}</p>}
 

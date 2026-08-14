@@ -160,7 +160,7 @@ function JobRow({
             <span
               className={`inline-block text-xs px-1.5 py-0.5 rounded ${JOB_STATUS_STYLES[job.last_run.status as JobStatus]?.chip ?? FALLBACK_CHIP}`}
             >
-              {job.last_run.status}
+              {JOB_STATUS_STYLES[job.last_run.status as JobStatus]?.label ?? job.last_run.status}
             </span>
           ) : (
             <span className="text-xs text-gray-400">-</span>

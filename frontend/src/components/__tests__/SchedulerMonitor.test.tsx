@@ -109,14 +109,17 @@ describe("SchedulerMonitor 컴포넌트", () => {
     });
   });
 
-  /** 상태 뱃지 표시 */
-  it("completed/failed 상태 뱃지가 표시된다", async () => {
+  /** 상태 뱃지는 영문 원문(completed/failed)이 아니라 JOB_STATUS_STYLES 한글 라벨로 표시 */
+  it("상태 뱃지가 한글 라벨(완료/실패)로 표시된다", async () => {
     mockGetStatus.mockResolvedValueOnce(MOCK_RESPONSE);
     renderWithProvider();
     await waitFor(() => {
-      expect(screen.getByText("completed")).toBeInTheDocument();
+      expect(screen.getByText("완료")).toBeInTheDocument();
     });
-    expect(screen.getByText("failed")).toBeInTheDocument();
+    expect(screen.getByText("실패")).toBeInTheDocument();
+    // 영문 원문이 화면에 남아 있으면 안 된다 (한글화 회귀 가드)
+    expect(screen.queryByText("completed")).not.toBeInTheDocument();
+    expect(screen.queryByText("failed")).not.toBeInTheDocument();
   });
 
   /** 실행 이력 없는 작업은 - 표시 */

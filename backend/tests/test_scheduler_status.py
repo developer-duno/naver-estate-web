@@ -4,6 +4,7 @@
 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 import jwt
 
@@ -99,6 +100,39 @@ def test_scheduler_status_with_job_history(mock_sched, client, db):
     assert air_job["last_run"]["processed_items"] == 48
     assert air_job["last_run"]["total_items"] == 50
     assert air_job["last_run"]["duration_seconds"] == 300
+
+
+@patch("crawler.scheduler.get_scheduler", return_value=None)
+def test_total_runs_today_uses_kst_midnight(mock_sched, client, db):
+    """'오늘 실행/실패 수' 경계는 UTC 자정이 아니라 KST 자정 — 직전 1건 제외, 직후 1건만 카운트.
+
+    UTC 자정 기준이면 KST 오전 9시에야 리셋돼 관리자 화면의 '오늘'이 하루 어긋난다
+    (같은 파일 error-stats 차트는 이미 KST 버킷이라 한 화면에 두 기준이 섞이던 문제).
+    고정 시각 하드코딩 금지 → 실행 시점의 KST 자정을 계산해 앞뒤 상대값으로 픽스처 생성.
+    """
+    _make_admin(db)
+
+    kst_midnight = datetime.now(ZoneInfo("Asia/Seoul")).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    before = (kst_midnight - timedelta(minutes=1)).astimezone(timezone.utc)  # 어제(제외 기대)
+    after = (kst_midnight + timedelta(minutes=1)).astimezone(timezone.utc)  # 오늘(포함 기대)
+
+    db.add(CrawlJob(
+        job_type="air_quality", scheduler_job_id="collect_air_quality",
+        status="failed", started_at=before, completed_at=before,
+    ))
+    db.add(CrawlJob(
+        job_type="air_quality", scheduler_job_id="collect_air_quality",
+        status="failed", started_at=after, completed_at=after,
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/scheduler-status", headers=_auth(_token("admin1")))
+    assert res.status_code == 200
+    summary = res.json()["summary"]
+    assert summary["total_runs_today"] == 1
+    assert summary["failures_today"] == 1
 
 
 # ── 실패 이력 ──

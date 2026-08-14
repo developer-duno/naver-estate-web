@@ -1,9 +1,12 @@
 """관리자 API 라우터 테스트 — 인증, 사용자 관리, 설정
 실행: python -m pytest tests/test_admin_router.py -v
 """
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
 import jwt
 
-from db.models import UserProfile
+from db.models import CrawlJob, UserProfile
 
 JWT_SECRET = "test-secret-key-for-testing-only"
 
@@ -83,6 +86,30 @@ def test_detailed_stats_fill_rate_keys(client, db):
     assert "complex_detail_fill_rate" in body
     assert "article_detail_fill_rate" in body
     assert "complex_metric_fill_rate" in body
+
+
+def test_today_crawl_count_uses_kst_midnight(client, db):
+    """'오늘 크롤' 경계는 UTC 자정이 아니라 KST 자정 — 자정 직전 1건은 제외, 직후 1건만 카운트.
+
+    UTC 자정 기준이면 KST 오전 9시에야 리셋돼 한국 사용자 화면의 '오늘'이 하루 어긋난다.
+    고정 시각 하드코딩 금지(어느 시각에 실행해도 통과해야 함) → 실행 시점의 KST 자정을
+    계산해 그 앞뒤 상대값으로 픽스처를 만든다. 저장은 UTC aware 로 통일(CI SQLite 문자열 비교).
+    """
+    _make_profile(db, "a1", role="admin")
+
+    kst_midnight = datetime.now(ZoneInfo("Asia/Seoul")).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    before = (kst_midnight - timedelta(minutes=1)).astimezone(timezone.utc)  # 어제(제외 기대)
+    after = (kst_midnight + timedelta(minutes=1)).astimezone(timezone.utc)  # 오늘(포함 기대)
+
+    db.add(CrawlJob(job_type="complex_articles", status="completed", created_at=before))
+    db.add(CrawlJob(job_type="complex_articles", status="completed", created_at=after))
+    db.commit()
+
+    res = client.get("/api/admin/stats/detailed", headers=_auth(_token("a1")))
+    assert res.status_code == 200
+    assert res.json()["today_crawl_count"] == 1
 
 
 def test_safe_fill_rate_zero_total_returns_none():

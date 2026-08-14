@@ -351,6 +351,27 @@ _SUBWAY_RADIUS_KM = 3.0
 _SUBWAY_MAX_STATIONS = 3
 
 
+def _normalize_station_name(name: str) -> str:
+    """역명 끝의 "역" 접미사를 떼어낸 그룹핑 정규형.
+
+    원본이 같은 물리 역을 노선에 따라 "선릉"(2호선)/"선릉역"(분당선) 처럼 다르게 실어서,
+    접미사를 안 떼면 한 역이 결과 슬롯을 두 칸 차지한다(라이브 실측: 역삼IPARK).
+    전국 50개 역이 이 표기 불일치에 걸린다.
+
+    떼어낸 결과가 한 글자 이하면 원본을 유지한다 — "역" 단독 역명 방어(현 데이터엔
+    없지만 갱신본에서 생길 수 있다).
+
+    ⚠ 이름만으로 묶으므로 원리상 동명이역(부산 "송정" vs 부산진구 "송정역", 340km)도
+    같은 키가 된다. 다만 호출부가 3km 반경으로 먼저 거른 뒤 묶어서 실제 충돌은 없다
+    (실측: 한 반경에 동시 등장 가능한 동명 쌍 51건은 전부 4~376m 의 진짜 환승역).
+    """
+    if name.endswith("역"):
+        stripped = name[:-1]
+        if len(stripped) > 1:
+            return stripped
+    return name
+
+
 @router.get("/{complex_no}/subway")
 def get_nearby_subway(
     complex_no: str,
@@ -358,8 +379,12 @@ def get_nearby_subway(
 ):
     """단지 반경 3km 내 가까운 지하철역 최대 3곳 — 무료 공개 (게이트 없음, 공시가격 답습)
 
-    같은 역명이 노선별로 여러 행인 원본 구조라 역명으로 묶는다 — 거리는 최단 행 기준,
-    노선명은 반경 안에 든 그 역명의 모든 노선을 모아 보여준다.
+    같은 역이 노선별로 여러 행인 원본 구조라 역명으로 묶는다 — 거리는 최단 행 기준,
+    노선명은 반경 안에 든 그 역의 모든 노선을 모아 보여준다. 원본이 "선릉"/"선릉역"
+    처럼 접미사를 섞어 쓰므로 정규형(_normalize_station_name)을 그룹핑 키로 쓴다.
+
+    응답 station_name 도 접미사 없는 정규형이다 — FE formatStationName 이 "역"을
+    붙여 표시하므로 화면에는 "선릉역"으로 나온다.
     """
     cache_key = f"subway:{complex_no}"
     cached = _subway_cache.get(cache_key)
@@ -376,7 +401,7 @@ def get_nearby_subway(
         _subway_cache.set(cache_key, result)
         return result
 
-    # 역명 → {최단거리, 노선명 집합}. 반경 밖 행은 노선 수집에서도 제외한다.
+    # 정규화 역명 → {최단거리, 노선명 집합}. 반경 밖 행은 노선 수집에서도 제외한다.
     grouped: dict[str, dict] = {}
     for station in queries.get_all_subway_stations(db):
         distance_km = haversine_km(
@@ -384,9 +409,10 @@ def get_nearby_subway(
         )
         if distance_km > _SUBWAY_RADIUS_KM:
             continue
-        entry = grouped.get(station.station_name)
+        key = _normalize_station_name(station.station_name)
+        entry = grouped.get(key)
         if entry is None:
-            grouped[station.station_name] = {
+            grouped[key] = {
                 "distance_km": distance_km,
                 "lines": {station.line_name},
             }

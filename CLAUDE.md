@@ -63,6 +63,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 단지 클릭 → DB 즉시 표시 + 자동 매물 크롤링 (start-crawl → 10/20/30초 refetch)
 필터 변경 → /api/complexes/{no}/articles (SQL WHERE) + URL 파라미터 동기화
 실거래가 → /api/live/{no}/price-history/start-collect (24시간 TTL, 자동 트리거)
+가까운 지하철 → /api/complexes/{no}/subway (subway_stations 전국 1,099역, 3km 최대 3역·환승 그룹핑·12h 캐시, 연 1회 수동 재적재 — 세션 367)
 단지 비교 → /compare?ids=no1,no2,... (useQueries 병렬 + 평당가 + 인쇄/엑셀)
 엑셀(매물) → /api/articles/export (xlsxwriter)
 엑셀(비교) → 클라이언트 xlsx (safeCellValue 수식 인젝션 방어)
@@ -115,9 +116,9 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **1992개** (1992 passed — 세션 362 전체 `npm test -- --run` 실측, 세션 361 기준 1991에서 +1, 적대검증 발견 반영 CollectorTrigger 신규 테스트) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2045개** (2045 passed — 세션 367 전체 `npm test -- --run` 실측, 세션 362 기준 1992에서 +53: 지하철 표시·포맷·노선명 정규화·MSW 가드·admin 페이드 신규) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1238개** (`--collect-only` 세션 362 실측, 세션 361 기준 1236에서 +2, admin_collect 신규 테스트 반영) |
+| BE pytest | `backend/tests/` | **1251개** (`--collect-only` 세션 367 실측, 세션 362 기준 1238에서 +13 — test_subway.py 신규. ⚠ passed 기준선과 혼동 금지: 전체 실행 시 skipped 7·xfailed 6 제외됨) |
 
 ## 커밋 전 필수 검증
 

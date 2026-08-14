@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, HTTPException, Query
 from sqlalchemy import and_, func, select
@@ -217,8 +218,14 @@ def get_detailed_stats(
     total_article_count = db.execute(select(func.count()).select_from(Article)).scalar() or 0
     user_count = db.execute(select(func.count()).select_from(UserProfile)).scalar() or 0
 
-    # 오늘 크롤 수
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    # 오늘 크롤 수 — 한국 사용자가 보는 화면이라 '오늘'은 KST 자정 기준
+    # (UTC 자정이면 KST 오전 9시에야 리셋돼 하루가 어긋난다)
+    # ⚠ 쿼리 바인딩은 반드시 UTC 로 변환 — created_at 저장값이 UTC(utcnow)라
+    #   CI SQLite 의 ISO 문자열 비교에서 오프셋 표기가 어긋나면 결과가 틀어진다
+    kst_midnight = datetime.now(ZoneInfo("Asia/Seoul")).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    today_start = kst_midnight.astimezone(timezone.utc)
     today_crawl_count = db.execute(
         select(func.count()).select_from(CrawlJob).where(CrawlJob.created_at >= today_start)
     ).scalar() or 0

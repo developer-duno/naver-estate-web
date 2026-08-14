@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, HTTPException, Query
 from sqlalchemy import func
@@ -97,7 +98,13 @@ def get_scheduler_status(
 
     scheduler = get_scheduler()
     now = datetime.now(timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # 오늘 실행/실패 수 — 한국 사용자 화면이라 '오늘'은 KST 자정 기준
+    # (UTC 자정이면 KST 오전 9시에야 리셋. 같은 파일 error-stats 차트도 KST 버킷)
+    # ⚠ 쿼리 바인딩은 UTC 로 변환 — started_at 저장값이 UTC 라 CI SQLite 문자열 비교 안전
+    kst_midnight = datetime.now(ZoneInfo("Asia/Seoul")).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    today_start = kst_midnight.astimezone(timezone.utc)
 
     # scheduler_job_id별 최신 실행 레코드 조회
     latest_subq = (

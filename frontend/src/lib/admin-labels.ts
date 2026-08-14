@@ -63,17 +63,22 @@ export const COLLECTOR_LABELS: Record<string, string> = {
   "backfill-price": "실거래가",
 };
 
+/** 사전에서 own-property 로만 조회 — 상속 키(toString 등)가 native code 로 새는 것 차단. */
+function lookup(table: Record<string, string>, key: string): string | undefined {
+  return Object.hasOwn(table, key) ? table[key] : undefined;
+}
+
 /** 액션 한글 반환. 미매핑 시 영문 원본. */
 export function getActionLabel(action: string): string {
-  return ACTION_LABELS[action] ?? action;
+  return lookup(ACTION_LABELS, action) ?? action;
 }
 
 /** target_type:target_id 한글. collector 는 한글 라벨로, batch 는 "N건" 으로. */
 export function getTargetLabel(targetType?: string, targetId?: string): string {
   if (!targetType) return "-";
-  const typeLabel = TARGET_TYPE_LABELS[targetType] ?? targetType;
+  const typeLabel = lookup(TARGET_TYPE_LABELS, targetType) ?? targetType;
   if (targetType === "collector" && targetId) {
-    return `${typeLabel}: ${COLLECTOR_LABELS[targetId] ?? targetId}`;
+    return `${typeLabel}: ${lookup(COLLECTOR_LABELS, targetId) ?? targetId}`;
   }
   if (targetType === "batch" && targetId) {
     return `${typeLabel} ${targetId}건`;
@@ -107,7 +112,16 @@ const DETAIL_KEY_LABELS: Record<string, string> = {
   phone: "연락처",
   business_verified: "사업자 확인",
   auto_approved: "자동 승인",
+  // 결제 위조 감지·환불 (BE payment.py:290·467, billing.py:226)
+  expected: "기대 금액",
+  actual: "실제 결제액",
+  cancelled_amount: "취소 금액",
+  rolled_back_days: "회수 일수",
+  detail: "오류 내용",
 };
+
+/** 원화 금액으로 표시할 키 (BE 가 정수 원 단위로 담는다). */
+const AMOUNT_KEYS = new Set(["amount", "expected", "actual", "cancelled_amount"]);
 
 /** 값이 열거형인 키의 한글 값 사전 (예: level=safe → 안전). */
 const DETAIL_VALUE_LABELS: Record<string, Record<string, string>> = {
@@ -121,14 +135,47 @@ const DETAIL_VALUE_LABELS: Record<string, Record<string, string>> = {
   },
 };
 
-/** ISO 날짜 문자열이면 한국식 날짜로. 아니면 null. */
+/** ISO 날짜 문자열이면 한국식 날짜로. 아니면 null.
+ *
+ * ⚠ JS Date 는 존재하지 않는 날짜를 조용히 넘긴다 ("2026-02-30" → 3월 2일).
+ * 감사 로그는 원문이 바뀌면 안 되므로, 파싱 결과를 원문 Y-M-D 와 재대조해
+ * 롤오버가 일어났으면 null 을 돌려준다 (호출처가 원문을 그대로 표시).
+ *
+ * 대조는 **날짜만 있는 문자열**("2026-02-30")에 한정한다. 이런 값은 ES 명세상
+ * UTC 자정으로 파싱되므로 getUTC* 가 원문과 정확히 짝을 이룬다(브라우저 시간대 무관).
+ * 반대로 오프셋이 붙은 값("2026-08-14T00:00:00+09:00")은 가리키는 순간이 하나여도
+ * 보는 시간대에 따라 UTC 로도 로컬로도 날짜가 하루 어긋나 보일 수 있어
+ * (UTC 로는 8/13) 대조 자체가 오탐이 된다 — 그래서 대조를 걸지 않는다.
+ */
 function formatIsoDate(value: unknown): string | null {
   if (typeof value !== "string") return null;
   // "2026-08-14" 또는 "2026-08-14T00:00:00+09:00" 형태만 날짜로 다룬다
   if (!/^\d{4}-\d{2}-\d{2}/.test(value)) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
+
+  // 날짜만 있는 값 → UTC 자정 파싱이라 getUTC* 로 원문 재대조 (롤오버 차단)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, dd] = value.split("-").map(Number);
+    if (
+      d.getUTCFullYear() !== y ||
+      d.getUTCMonth() + 1 !== m ||
+      d.getUTCDate() !== dd
+    ) {
+      return null;
+    }
+  }
   return d.toLocaleDateString("ko");
+}
+
+/** 숫자로 볼 수 있는 값이면 Number, 아니면 null (문자열 "12000" 도 허용). */
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 }
 
 /** details 의 값 하나를 사람이 읽을 문자열로. */
@@ -136,13 +183,32 @@ function formatDetailValue(key: string, value: unknown): string {
   if (value === null || value === undefined) return "없음";
   if (typeof value === "boolean") return value ? "예" : "아니오";
 
-  const enumLabel = DETAIL_VALUE_LABELS[key]?.[String(value)];
-  if (enumLabel) return enumLabel;
+  // ⚠ own-property 확인 필수 — Object.prototype 상속 키("toString"·"constructor" 등)가
+  // details 에 오면 인덱스 접근이 함수를 집어와 "function toString() { [native code] }"
+  // 같은 문자열이 화면에 박힌다.
+  if (Object.hasOwn(DETAIL_VALUE_LABELS, key)) {
+    const table = DETAIL_VALUE_LABELS[key];
+    const strValue = String(value);
+    if (Object.hasOwn(table, strValue)) return table[strValue];
+  }
 
   if (key === "approved_until") return formatIsoDate(value) ?? String(value);
   if (key === "batch_size") return `${value}건`;
   if (key === "days") return `${value}일`;
   if (key === "deleted") return `${value}건`;
+
+  // 금액·일수 — 숫자일 때만 포맷, 아니면 원문 유지 (정보 손실 방지)
+  if (AMOUNT_KEYS.has(key)) {
+    const n = asNumber(value);
+    if (n !== null) return `${n.toLocaleString()}원`;
+  }
+  if (key === "rolled_back_days") {
+    const n = asNumber(value);
+    if (n !== null) return `${n}일`;
+  }
+
+  // 배열은 JSON 덤프 대신 쉼표로 이어 읽기 쉽게
+  if (Array.isArray(value)) return value.join(", ");
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
@@ -154,7 +220,11 @@ function formatDetailValue(key: string, value: unknown): string {
  */
 export function summarizeDetails(details: Record<string, unknown>): string {
   return Object.entries(details)
-    .map(([k, v]) => `${DETAIL_KEY_LABELS[k] ?? k}: ${formatDetailValue(k, v)}`)
+    .map(([k, v]) => {
+      // own-property 확인 — 상속 키(toString 등)가 native code 문자열로 새는 것 차단
+      const label = Object.hasOwn(DETAIL_KEY_LABELS, k) ? DETAIL_KEY_LABELS[k] : k;
+      return `${label}: ${formatDetailValue(k, v)}`;
+    })
     .join(", ");
 }
 

@@ -159,6 +159,110 @@ describe("summarizeDetails (R3 공용 키 매핑)", () => {
   });
 });
 
+describe("formatIsoDate 롤오버 방어 (적대리뷰 High①)", () => {
+  it("존재하지 않는 날짜는 원문 유지 — JS Date 롤오버로 값이 둔갑하면 안 된다", () => {
+    // new Date("2026-02-30") 은 3월 2일로 조용히 넘어간다. 감사 로그 값이 바뀌면
+    // "언제까지 승인됐나"를 잘못 읽게 되므로 원문을 그대로 남긴다.
+    expect(getDetailsSummary("admin_user_update", { approved_until: "2026-02-30" })).toBe(
+      "승인 만료일: 2026-02-30",
+    );
+    expect(getDetailsSummary("admin_user_update", { approved_until: "2026-11-31" })).toBe(
+      "승인 만료일: 2026-11-31",
+    );
+  });
+
+  it("윤년 아닌 해의 2월 29일도 원문 유지", () => {
+    // 2026 은 평년 — 2/29 는 3/1 로 롤오버된다
+    expect(getDetailsSummary("admin_user_update", { approved_until: "2026-02-29" })).toBe(
+      "승인 만료일: 2026-02-29",
+    );
+  });
+
+  it("실제 존재하는 날짜는 정상 포맷 (윤년 2/29 포함)", () => {
+    // 2028 은 윤년이라 2/29 가 실재 — 롤오버 가드가 정상 날짜를 막으면 안 된다
+    const out = getDetailsSummary("admin_user_update", { approved_until: "2028-02-29" });
+    expect(out.startsWith("승인 만료일: ")).toBe(true);
+    expect(out).not.toContain("2028-02-29"); // 원문 그대로가 아니라 포맷된 형태
+    expect(out).toContain("2028");
+  });
+
+  it("오프셋이 붙은 값은 대조를 걸지 않아 오탐하지 않는다", () => {
+    // "+09:00" 값은 보는 시간대에 따라 UTC 로는 하루 전으로 보인다 — 여기에 대조를
+    // 걸면 멀쩡한 값이 원문으로 떨어진다. 포맷된 결과가 나와야 정상.
+    const out = getDetailsSummary("admin_user_update", {
+      approved_until: "2026-08-14T00:00:00+09:00",
+    });
+    expect(out.startsWith("승인 만료일: ")).toBe(true);
+    expect(out).toContain("2026");
+    expect(out).not.toContain("T00:00:00"); // 원문 폴백이 아님
+  });
+});
+
+describe("결제 details 키 매핑 (적대리뷰 Med③)", () => {
+  it("위조 감지 details(expected·detail) 가 한글 + 원화로", () => {
+    expect(
+      getDetailsSummary("payment_forgery_rejected", { expected: 12000, detail: "금액 불일치" }),
+    ).toBe("기대 금액: 12,000원, 오류 내용: 금액 불일치");
+  });
+
+  it("정기결제 위조 감지(expected·actual) 가 한글 + 원화로", () => {
+    expect(
+      getDetailsSummary("billing_forgery_rejected", { expected: 12000, actual: 10 }),
+    ).toBe("기대 금액: 12,000원, 실제 결제액: 10원");
+  });
+
+  it("환불 details(cancelled_amount·rolled_back_days) 가 한글 + 단위로", () => {
+    expect(
+      getDetailsSummary("payment_refunded", {
+        plan: "pro",
+        amount: 12000,
+        cancelled_amount: 12000,
+        rolled_back_days: 30,
+      }),
+    ).toBe("요금제: pro, 금액: 12,000원, 취소 금액: 12,000원, 회수 일수: 30일");
+  });
+
+  it("금액 키가 숫자가 아니면 원문 유지 (정보 손실 방지)", () => {
+    expect(getDetailsSummary("payment_refunded", { cancelled_amount: null })).toBe(
+      "취소 금액: 없음",
+    );
+    expect(getDetailsSummary("payment_refunded", { actual: "미확인" })).toBe(
+      "실제 결제액: 미확인",
+    );
+  });
+});
+
+describe("프로토타입 키 방어 (적대리뷰 Med④)", () => {
+  it("toString 키가 native code 문자열로 새지 않는다", () => {
+    expect(getDetailsSummary("unknown_action", { toString: "hack" })).toBe("toString: hack");
+  });
+
+  it("constructor·hasOwnProperty 등 상속 키도 안전", () => {
+    expect(getDetailsSummary("unknown_action", { constructor: "x" })).toBe("constructor: x");
+    expect(getDetailsSummary("unknown_action", { hasOwnProperty: "y" })).toBe(
+      "hasOwnProperty: y",
+    );
+  });
+
+  it("액션·타깃 사전도 상속 키에 오염되지 않는다", () => {
+    expect(getActionLabel("toString")).toBe("toString");
+    expect(getTargetLabel("toString", "1")).toBe("toString: 1");
+    expect(getTargetLabel("collector", "toString")).toBe("수집기: toString");
+  });
+});
+
+describe("배열 값 표시 (적대리뷰 Low②)", () => {
+  it("배열은 JSON 덤프 대신 쉼표로 이어 붙인다", () => {
+    expect(getDetailsSummary("unknown_action", { targets: ["a", "b", "c"] })).toBe(
+      "targets: a, b, c",
+    );
+  });
+
+  it("빈 배열은 빈 문자열", () => {
+    expect(getDetailsSummary("unknown_action", { targets: [] })).toBe("targets: ");
+  });
+});
+
 describe("getActionLabel — R3 결제 액션 보강", () => {
   it("결제·정기결제 액션이 한글로 나온다", () => {
     expect(getActionLabel("payment_complete")).toBe("결제 완료");

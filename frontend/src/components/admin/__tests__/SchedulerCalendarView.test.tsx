@@ -45,12 +45,22 @@ vi.mock("@fullcalendar/react", () => ({
   },
 }));
 
-/** stub 이 렌더할 날짜 칸 — 로컬(KST) 자정 기준. UTC 변환 시 하루 전으로 밀리는 경계. */
+/** stub 이 렌더할 날짜 칸 — 로컬 자정 기준. UTC 변환 시 하루 전으로 밀리는 경계.
+ *
+ * ⚠ 날짜를 하드코딩하면 KST 에서만 맞는다 — 실제 FullCalendar 는 이벤트를 "로컬 시간대"
+ * 로 환산해 칸에 놓으므로, stub 도 같은 기준(로컬 자정)으로 칸을 만들어야 다른 시간대
+ * (CI·해외 브라우저)에서도 테스트가 성립한다. 5/15·5/25 는 기본 대조군으로 유지하고,
+ * 샘플 이벤트가 실제로 놓이는 칸을 추가로 넣는다.
+ */
+function localMidnight(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0);
+}
+
 const DAY_CELL_DATES = [new Date(2026, 4, 15, 0, 0, 0), new Date(2026, 4, 25, 0, 0, 0)];
 vi.mock("@fullcalendar/daygrid", () => ({ default: {} }));
 vi.mock("@fullcalendar/core/locales/ko", () => ({ default: { code: "ko" } }));
 
-import SchedulerCalendarView from "../SchedulerCalendarView";
+import SchedulerCalendarView, { toLocalDateKey } from "../SchedulerCalendarView";
 
 const sampleEvents: SchedulerCalendarEvent[] = [
   {
@@ -75,6 +85,15 @@ const sampleEvents: SchedulerCalendarEvent[] = [
     kind: "upcoming",
   },
 ];
+
+// 샘플 이벤트가 실제로 놓이는 로컬 칸을 stub 목록에 합친다 (중복 제거).
+// KST 에서는 5/15·5/25 와 겹쳐 변화가 없고, UTC 등에서는 5/24 칸이 추가된다.
+for (const ev of sampleEvents) {
+  const cell = localMidnight(new Date(ev.start));
+  if (!DAY_CELL_DATES.some((d) => d.getTime() === cell.getTime())) {
+    DAY_CELL_DATES.push(cell);
+  }
+}
 
 describe("SchedulerCalendarView", () => {
   /** 이벤트가 FullCalendar 에 그대로 전달된다 */
@@ -227,12 +246,11 @@ describe("SchedulerCalendarView", () => {
     expect(
       screen.getByRole("button", { name: "2026-05-25 상세 보기" }),
     ).toBeInTheDocument();
-    // UTC 로 밀린 하루 전 날짜는 없어야 한다 (UTC+ 환경에서만 유의미한 대조군)
-    if (DAY_CELL_DATES[0].getTimezoneOffset() < 0) {
-      expect(
-        screen.queryByRole("button", { name: "2026-05-14 상세 보기" }),
-      ).not.toBeInTheDocument();
-    }
+    // 칸 키를 로컬 축(toLocalDateKey)으로 조립하므로 어떤 시간대에서도 하루 전 날짜는
+    // 나올 수 없다 — 옛 toISOString() 구현에서만 나타나던 증상이라 스킵 가드 없이 단언한다.
+    expect(
+      screen.queryByRole("button", { name: "2026-05-14 상세 보기" }),
+    ).not.toBeInTheDocument();
   });
 
   /** 날짜 칸 클릭 시 그 로컬 날짜의 이벤트만 상세에 뜬다 (버그A 의 사용자 체감 증상) */
@@ -245,8 +263,12 @@ describe("SchedulerCalendarView", () => {
         yearMonth="2026-05"
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "2026-05-25 상세 보기" }));
-    expect(screen.getByText(/2026-05-25 실행 \(1건\)/)).toBeInTheDocument();
+    // 기대 날짜를 하드코딩("2026-05-25")하면 KST 에서만 맞는다 — "04:30+09:00" 은 UTC 로
+    // 보면 5/24 19:30 이라 로컬 축에서는 5/24 칸에 놓인다. 이벤트에서 키를 유도해
+    // 어느 시간대에서도 "배치된 칸 = 클릭 결과" 를 단언한다.
+    const key = toLocalDateKey(new Date(sampleEvents[2].start));
+    fireEvent.click(screen.getByRole("button", { name: `${key} 상세 보기` }));
+    expect(screen.getByText(new RegExp(`${key} 실행 \\(1건\\)`))).toBeInTheDocument();
     // 상세 목록(li) 은 1건만 — 그 안에 5/25 이벤트명이 들어야 한다
     // (stub 이벤트 목록에도 같은 제목이 있어 목록 안으로 범위를 좁힌다)
     const detailItems = screen.getAllByRole("listitem");
@@ -268,6 +290,73 @@ describe("SchedulerCalendarView", () => {
       />,
     );
     expect(screen.getByTestId("fc-default-duration").textContent).toBe("00:00");
+  });
+
+  /**
+   * [적대리뷰 High② 회귀 가드] 칸 배치·라벨·상세 필터가 모두 "로컬 축" 이어야 한다.
+   *
+   * 옛 코드는 상세 필터만 문자열 접두사(`start.startsWith`)로 비교해 +09:00 고정 =
+   * KST 날짜를 봤다. 칸은 로컬로 조립되므로 비-KST 브라우저에서 축이 갈려
+   * "점이 보이는 칸을 눌렀는데 0건" 이 났다.
+   *
+   * 여기서는 KST 와 로컬 날짜가 갈리는 이벤트를 쓴다: "+09:00" 기준으로는 5/16 00:30
+   * 이지만, 그 순간을 로컬(KST 아닌 곳)에서 보면 5/15 일 수 있다. 필터가 로컬 축이면
+   * 이벤트는 항상 "자기가 실제로 배치된 칸" 에서 나온다.
+   */
+  it("상세 필터가 칸과 같은 로컬 축을 써서 배치된 칸에서 반드시 잡힌다", () => {
+    const crossMidnight: SchedulerCalendarEvent = {
+      scheduler_job_id: "late_night",
+      name: "자정 넘긴 작업",
+      start: "2026-05-16T00:30:00+09:00",
+      status: "completed",
+      kind: "past",
+    };
+    // stub 이 이 이벤트가 놓이는 로컬 날짜 칸을 렌더하도록 추가 (FullCalendar 가 실제로
+    // 그 칸에 배치하는 것과 같은 기준 — 로컬 자정). 다른 테스트에 새지 않게 복원한다.
+    const cell = localMidnight(new Date(crossMidnight.start));
+    const saved = [...DAY_CELL_DATES];
+    // 이미 있는 칸이면 추가하지 않는다 — 중복 칸은 getByRole 이 "여러 개 찾음" 으로 죽는다
+    // (UTC 환경에서는 이 이벤트가 5/15 로 떨어져 기본 칸과 겹친다)
+    if (!DAY_CELL_DATES.some((d) => d.getTime() === cell.getTime())) {
+      DAY_CELL_DATES.push(cell);
+    }
+    try {
+      runCrossMidnightAssertions(crossMidnight);
+    } finally {
+      DAY_CELL_DATES.length = 0;
+      DAY_CELL_DATES.push(...saved);
+    }
+  });
+
+  /** 위 테스트 본문 — DAY_CELL_DATES 복원을 finally 로 보장하려 함수로 분리 */
+  function runCrossMidnightAssertions(crossMidnight: SchedulerCalendarEvent) {
+    render(
+      <SchedulerCalendarView
+        events={[crossMidnight]}
+        mode="both"
+        onModeChange={() => {}}
+        yearMonth="2026-05"
+      />,
+    );
+    // 이 이벤트가 실제로 놓이는 로컬 날짜 = FullCalendar 가 칸을 정하는 기준과 동일
+    const localKey = toLocalDateKey(new Date(crossMidnight.start));
+    fireEvent.click(screen.getByRole("button", { name: `${localKey} 상세 보기` }));
+
+    // 축이 일치하면 그 칸에서 1건이 잡힌다 (옛 문자열 필터는 비-KST 에서 0건)
+    expect(screen.getByText(new RegExp(`${localKey} 실행 \\(1건\\)`))).toBeInTheDocument();
+    const detailItems = screen.getAllByRole("listitem");
+    expect(detailItems).toHaveLength(1);
+    expect(detailItems[0].textContent).toContain("자정 넘긴 작업");
+  }
+
+  /** toLocalDateKey 는 UTC 변환 없이 로컬 연·월·일을 그대로 쓴다 */
+  it("toLocalDateKey 가 로컬 자정 날짜를 그대로 돌려준다", () => {
+    // 로컬 자정 → 같은 날짜. toISOString() 이었다면 UTC+ 환경에서 하루 전으로 밀린다.
+    expect(toLocalDateKey(new Date(2026, 4, 15, 0, 0, 0))).toBe("2026-05-15");
+    // 로컬 23:59 → 여전히 같은 날 (UTC 로는 다음날이 될 수 있는 경계)
+    expect(toLocalDateKey(new Date(2026, 4, 15, 23, 59, 0))).toBe("2026-05-15");
+    // 한 자리 월·일 zero-pad
+    expect(toLocalDateKey(new Date(2026, 0, 3, 12, 0, 0))).toBe("2026-01-03");
   });
 
   /** R3 — "발화"(내부 용어)를 화면에서 완전히 몰아냈는지 회귀 가드 */

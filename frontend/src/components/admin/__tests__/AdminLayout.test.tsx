@@ -114,6 +114,24 @@ describe("AdminLayout 가로스크롤 페이드 힌트", () => {
     expect(queryFadeHint(container)).toBeNull();
   });
 
+  it("창 크기가 바뀌어 스크롤이 필요 없어지면 힌트가 사라진다 (resize 대응)", () => {
+    const { container } = renderAt("/admin");
+    const nav = container.querySelector("nav")!;
+    // 좁은 창: 내용 800px > 보이는 폭 400px → 힌트 표시
+    setNavMetrics(nav, { scrollWidth: 800, clientWidth: 400, scrollLeft: 0 });
+    act(() => {
+      fireEvent.scroll(nav);
+    });
+    expect(queryFadeHint(container)).not.toBeNull();
+
+    // 창을 넓혀 탭이 전부 들어오는 상태로 전환 — scroll 이벤트는 안 나므로 resize 로만 갱신돼야 한다
+    setNavMetrics(nav, { scrollWidth: 800, clientWidth: 800, scrollLeft: 0 });
+    act(() => {
+      fireEvent(window, new Event("resize"));
+    });
+    expect(queryFadeHint(container)).toBeNull();
+  });
+
   it("힌트는 aria-hidden + 클릭 통과라 메인으로 링크를 가리지 않는다", () => {
     const { container } = renderAt("/admin");
     const nav = container.querySelector("nav")!;

@@ -40,6 +40,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     [updateHint],
   );
 
+  // 창 크기가 바뀌면 clientWidth 가 달라져 힌트 필요 여부도 뒤집힌다(좁히면 새로 필요, 넓히면 불필요).
+  // 콜백 ref(마운트)·onScroll 만으로는 이 경우가 안 잡혀서 resize 를 따로 구독한다.
+  // ResizeObserver 는 jsdom mock 부담만 크고 여기선 이득이 없어 쓰지 않는다(nav 폭은 창 폭만 따라감).
+  useEffect(() => {
+    window.addEventListener("resize", updateHint);
+    return () => window.removeEventListener("resize", updateHint);
+  }, [updateHint]);
+
   // 모바일 가로 스크롤 시 현재 페이지 탭이 화면 밖이면 안 보이므로 자동으로 보이게 스크롤.
   // 이때 스크롤이 실제로 움직이면 onScroll 이 발화해 힌트가 알아서 갱신되므로 여기서 따로 계산하지 않는다.
   useEffect(() => {

@@ -21,7 +21,7 @@ export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Pro
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b text-left text-gray-500">
-            <th className="py-2 pr-3">ID</th>
+            <th className="py-2 pr-3">번호</th>
             <th className="py-2 pr-3">유형</th>
             <th className="py-2 pr-3">대상</th>
             <th className="py-2 pr-3">상태</th>
@@ -47,7 +47,7 @@ export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Pro
                 </span>
               </td>
               <td className="py-2 pr-3 text-xs">
-                {j.processed_items}/{j.total_items}
+                {j.processed_items}/{j.total_items}건
               </td>
               <td className="py-2 pr-3 text-xs text-gray-500">
                 {j.started_at ? new Date(j.started_at).toLocaleString("ko") : "-"}

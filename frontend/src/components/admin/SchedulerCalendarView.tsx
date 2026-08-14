@@ -2,7 +2,7 @@
 
 /** 스케줄러 월간 캘린더 — FullCalendar 6 daygrid view.
  *
- * 과거 (crawl_jobs) + 미래 (APScheduler trigger 전개) 발화 시각을 한 달 격자에 표시.
+ * 과거 (crawl_jobs) + 미래 (APScheduler trigger 전개) 실행 시각을 한 달 격자에 표시.
  * dayMaxEvents=3 으로 칸당 3개만 노출 + "더보기" 자동 압축. mode 토글 = 과거/예정/모두.
  *
  * a11y: 색만 의존하지 않도록 아이콘 약어 (✓·✗·→) 와 상태 한글 라벨 (JOB_STATUS_STYLES.label)
@@ -34,6 +34,23 @@ interface Props {
  */
 function eventPriority(status: SchedulerCalendarEvent["status"]): number {
   return JOB_STATUS_STYLES[status]?.emphasize ? 0 : 1;
+}
+
+/**
+ * Date → "YYYY-MM-DD" (브라우저 로컬 시간대 기준).
+ *
+ * ⚠ 이 함수가 캘린더의 "날짜 축" 단일 출처다. FullCalendar 는 이벤트를 로컬 시간대로
+ * 칸에 배치하므로, 칸 라벨·클릭 키·상세 필터가 모두 로컬 축이어야 "보이는 칸 = 클릭 결과"
+ * 가 성립한다. 옛 코드는 칸은 로컬로 조립하면서 상세 필터만 문자열(`start.startsWith`)로
+ * 비교해 +09:00 고정 = KST 날짜를 봤다 — KST 브라우저에선 우연히 맞지만 다른 시간대에선
+ * 축이 갈려 "점 있는 칸을 눌러도 0건"이 났다.
+ * toISOString() 은 UTC 로 바꿔버려 쓰면 안 된다 (KST 자정이 하루 전으로 밀림).
+ */
+export function toLocalDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 const MODE_OPTIONS: { value: CalendarMode; label: string }[] = [
@@ -70,7 +87,12 @@ export default function SchedulerCalendarView({
 
   const selectedDateEvents = useMemo(() => {
     if (!selectedDate) return [];
-    return events.filter((e) => e.start.startsWith(selectedDate));
+    // 문자열 접두사 비교(옛 코드)는 +09:00 고정 = KST 날짜라 칸(로컬 축)과 어긋났다.
+    // 파싱 후 로컬 날짜 키로 비교해 배치·라벨·필터 3축을 완전히 일치시킨다.
+    return events.filter((e) => {
+      const d = new Date(e.start);
+      return !Number.isNaN(d.getTime()) && toLocalDateKey(d) === selectedDate;
+    });
   }, [events, selectedDate]);
 
   // FullCalendar 가 initialDate 변경 시 자동으로 해당 월로 이동
@@ -79,10 +101,8 @@ export default function SchedulerCalendarView({
   // dayGridPlugin 만 사용 (interactionPlugin 안 깔아도 되도록), 날짜 클릭은
   // dayCellContent 안 button 으로 직접 처리.
   function renderDayCell(arg: DayCellContentArg) {
-    // toISOString() 은 UTC 로 바꿔버려 KST 자정이 하루 전으로 밀린다 (8/14 칸 → 8/13 상세).
-    // 이벤트 start 는 +09:00 로컬 문자열이라, 비교 키도 로컬 연·월·일로 조립해야 짝이 맞는다.
-    const d = arg.date;
-    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    // 상세 필터(selectedDateEvents)와 같은 함수를 써서 축이 갈리지 않게 한다.
+    const iso = toLocalDateKey(arg.date);
     return (
       <button
         type="button"
@@ -117,7 +137,7 @@ export default function SchedulerCalendarView({
           ))}
         </div>
         <p className="text-xs text-gray-500">
-          총 {events.length.toLocaleString()}개 발화
+          총 {events.length.toLocaleString()}개 실행
           {truncated && (
             <span className="ml-2 text-amber-700">· 50,000개에서 잘림</span>
           )}
@@ -134,7 +154,7 @@ export default function SchedulerCalendarView({
         eventContent={renderEventContent}
         eventOrder="order"
         // end 없는 이벤트에 붙는 기본 1시간(FullCalendar 기본값 '01:00:00') 때문에 23시대
-        // 발화가 다음날 칸까지 걸쳐 이중 표시되던 것을 0 길이로 차단 (칸별 개수 부풀림 해소).
+        // 실행이 다음날 칸까지 걸쳐 이중 표시되던 것을 0 길이로 차단 (칸별 개수 부풀림 해소).
         defaultTimedEventDuration="00:00"
         dayCellContent={renderDayCell}
         dayMaxEvents={3}
@@ -148,7 +168,7 @@ export default function SchedulerCalendarView({
         <div className="mt-4 border rounded-md p-3 bg-gray-50">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-medium text-gray-800">
-              {selectedDate} 발화 ({selectedDateEvents.length}건)
+              {selectedDate} 실행 ({selectedDateEvents.length}건)
             </h3>
             <button
               type="button"

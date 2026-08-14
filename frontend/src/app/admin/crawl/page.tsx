@@ -159,7 +159,7 @@ export default function AdminCrawlPage() {
       <div id="crawl-jobs-list" className="mt-6 scroll-mt-4">
         <AdminCard
           title={`크롤 작업 목록 (총 ${jobsQuery.data?.total ?? 0}건)`}
-          help="지금까지 실행됐거나 대기 중인 모든 자동 수집 작업이에요. 실행 중이거나 대기 중인 작업은 직접 일시정지·취소할 수 있어요"
+          help="지금까지 실행됐거나 대기 중인 모든 자동 수집 작업이에요. 실행 중이거나 대기 중인 작업은 직접 일시정지·취소할 수 있어요. '진행률'은 (처리한 건수)/(할 일 건수) 예요 — 0/0건은 그날 할 일이 없었다는 뜻이라 문제가 아니에요"
         >
           {jobsQuery.isLoading ? (
             <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
@@ -183,7 +183,7 @@ export default function AdminCrawlPage() {
           >
             이전
           </button>
-          <span className="text-sm text-gray-500 py-1">{page} / {Math.ceil((jobsQuery.data?.total ?? 0) / 20)}</span>
+          <span className="text-sm text-gray-500 py-1">{page} / {Math.ceil((jobsQuery.data?.total ?? 0) / 20)} 쪽</span>
           <button
             onClick={() => setPage((p) => p + 1)}
             disabled={page >= Math.ceil((jobsQuery.data?.total ?? 0) / 20)}

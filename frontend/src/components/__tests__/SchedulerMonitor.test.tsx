@@ -105,7 +105,7 @@ describe("SchedulerMonitor 컴포넌트", () => {
     mockGetStatus.mockResolvedValueOnce(MOCK_RESPONSE);
     renderWithProvider();
     await waitFor(() => {
-      expect(screen.getByText("OFF")).toBeInTheDocument();
+      expect(screen.getByText("꺼짐")).toBeInTheDocument();
     });
   });
 

@@ -36,7 +36,7 @@ export default function SingleRecrawlCard({ getToken }: Props) {
   const handleTrigger = () => {
     const value = complexNo.trim();
     if (!value) {
-      setClientError("complex_no를 입력하세요");
+      setClientError("단지번호를 입력하세요");
       return;
     }
     if (!COMPLEX_NO_RE.test(value)) {
@@ -53,7 +53,7 @@ export default function SingleRecrawlCard({ getToken }: Props) {
   return (
     <AdminCard
       title="단지 1개 즉시 다시 수집"
-      help="특정 아파트 단지의 매물 목록을 지금 바로 네이버에서 다시 가져와요. 1시간 안에 이미 한 번 돌렸다면 '강제 실행'에 체크해야 또 돌아가요 (네이버 API 부담 줄이기 위한 안전장치)"
+      help="특정 아파트 단지의 매물 목록을 지금 바로 네이버에서 다시 가져와요. 1시간 안에 이미 한 번 돌렸다면 '강제로 실행'에 체크해야 또 돌아가요 (네이버에 부담을 덜 주기 위한 안전장치예요)"
     >
       <div className="flex flex-col sm:flex-row gap-2 mb-2">
         <input
@@ -84,7 +84,7 @@ export default function SingleRecrawlCard({ getToken }: Props) {
           checked={force}
           onChange={(e) => setForce(e.target.checked)}
         />
-        1시간 내 중복 이력이 있어도 강제 실행 (force)
+        1시간 안에 이미 돌렸어도 강제로 실행
       </label>
 
       {displayError && (
@@ -98,7 +98,7 @@ export default function SingleRecrawlCard({ getToken }: Props) {
       )}
 
       <p className="mt-2 text-[11px] text-gray-500">
-        CrawlJobTable의 target_id 셀에서 단지번호를 복사해 붙여넣을 수 있습니다.
+        아래 &lsquo;크롤 작업 목록&rsquo;의 &lsquo;대상&rsquo; 열에서 단지번호를 복사해 붙여넣을 수 있어요.
       </p>
     </AdminCard>
   );

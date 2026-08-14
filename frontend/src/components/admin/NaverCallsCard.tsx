@@ -20,8 +20,8 @@ const LABEL_META: Record<string, { name: string; group: "user" | "scheduler" }> 
   article_detail_live: { name: "매물 상세 (실시간)", group: "user" },
   article_detail_live_fallback: { name: "매물 상세 폴백", group: "user" },
   article_detail_realtime: { name: "매물 상세 (재시도)", group: "user" },
-  complex_prices_ondemand: { name: "시세 (on-demand)", group: "user" },
-  complex_real_prices_ondemand: { name: "실거래가 (on-demand)", group: "user" },
+  complex_prices_ondemand: { name: "시세 (요청 시)", group: "user" },
+  complex_real_prices_ondemand: { name: "실거래가 (요청 시)", group: "user" },
   complex_detail: { name: "단지 보강", group: "user" },
   search_discover: { name: "단지 발견", group: "scheduler" },
   crawl_articles_batch: { name: "매물 목록 (배치)", group: "scheduler" },
@@ -179,7 +179,7 @@ export default function NaverCallsCard({ getToken }: Props) {
             </table>
           </div>
           <p className="mt-2 text-[11px] text-gray-500">
-            시도 수 기준 (캐시 히트 포함). 60초마다 자동 갱신.
+            실제로 네이버에 보낸 요청과, 저장돼 있던 걸 다시 쓴 것까지 모두 합한 숫자예요. 60초마다 저절로 새로 고쳐져요.
           </p>
         </>
       )}

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import { getAdminSettings, updateAdminSetting } from "@/lib/api";
+import { getSettingLabel } from "@/lib/admin/setting-labels";
 import type { AdminSetting } from "@/types/admin";
 
 export default function AdminSettingsPage() {
@@ -54,13 +55,17 @@ export default function AdminSettingsPage() {
       const parsed = JSON.parse(editValue);
       updateMutation.mutate({ key: editingKey, value: parsed });
     } catch {
-      setJsonError("JSON 형식이 올바르지 않습니다");
+      setJsonError("값의 형식(JSON)이 올바르지 않아요. 따옴표·괄호가 빠지지 않았는지 확인해 주세요");
     }
   };
 
   return (
     <>
-      <h2 className="text-lg font-semibold mb-4">시스템 설정</h2>
+      <h2 className="text-lg font-semibold mb-2">시스템 설정</h2>
+      <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+        수집 속도·묶음 크기처럼 서비스가 돌아가는 방식을 바꾸는 값이에요. 값은 고급 형식(JSON)
+        그대로 보여줘요 — 뜻을 모르는 값은 그대로 두는 게 안전해요.
+      </p>
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">{error}</div>
@@ -72,11 +77,21 @@ export default function AdminSettingsPage() {
         <div className="text-sm text-gray-500 py-8 text-center">등록된 설정이 없습니다</div>
       ) : (
         <div className="space-y-3">
-          {settings.map((s) => (
+          {settings.map((s) => {
+            const label = getSettingLabel(s.key);
+            return (
             <div key={s.key} className="bg-white border rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">{s.key}</span>
-                <div className="flex items-center gap-2">
+              <div className="flex items-start justify-between mb-2 gap-2">
+                <div className="flex flex-col min-w-0">
+                  {/* 한글 이름표가 있으면 크게, 원문 key 는 개발자 대조용으로 작게 병기 */}
+                  <span className="text-sm font-medium text-gray-700">
+                    {label?.name ?? s.key}
+                  </span>
+                  {label && (
+                    <span className="text-[10px] text-gray-400 font-mono">{s.key}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
                   {s.updated_at && (
                     <span className="text-xs text-gray-500">
                       {new Date(s.updated_at).toLocaleString("ko")}
@@ -92,6 +107,10 @@ export default function AdminSettingsPage() {
                   )}
                 </div>
               </div>
+
+              {label && (
+                <p className="text-xs text-gray-500 mb-2 leading-relaxed">{label.description}</p>
+              )}
 
               {editingKey === s.key ? (
                 <div>
@@ -123,7 +142,8 @@ export default function AdminSettingsPage() {
                 </pre>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </>

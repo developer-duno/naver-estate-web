@@ -9,6 +9,7 @@ import type {
   AdminSetting,
   AgentVerification,
   QuotaStatus,
+  DataFreshnessResponse,
 } from "../../src/types/admin";
 import type { NaverCallStats, RecrawlStatus, RecrawlProgress, CrawlFailuresResponse } from "../../src/lib/api/admin";
 
@@ -110,7 +111,7 @@ export const mockSchedulerStatus: SchedulerStatusResponse = {
     {
       scheduler_job_id: "crawl_articles",
       name: "매물 수집 배치",
-      schedule: "12h interval",
+      schedule: "12시간마다",
       enabled: true,
       last_run: {
         status: "completed",
@@ -235,7 +236,42 @@ export const mockCrawlFailures: CrawlFailuresResponse = {
   ],
 };
 
+// 신선도 카드 목 — 이 라우트가 없으면 CI(백엔드 부재)에서 카드가 로딩↔에러 재시도를
+// 반복하며 페이지 높이가 출렁여(≈700px) 대시보드 시각 스크린샷이 영구 flaky 가 된다.
+export const mockDataFreshness: DataFreshnessResponse = {
+  items: [
+    {
+      key: "complexes", label: "단지", count: 1234, last_updated: "2026-04-16T08:00:00+09:00",
+      expected_interval_seconds: 86400, status: "green", spinning: false,
+      last_job: { started_at: "2026-04-16T08:00:00+09:00", completed_at: "2026-04-16T08:01:00+09:00", processed_items: 572, total_items: 572 },
+      new_rows: 8,
+    },
+    {
+      key: "articles", label: "매물", count: 90_000, last_updated: "2026-04-16T08:30:00+09:00",
+      expected_interval_seconds: 43200, status: "green", spinning: false,
+      last_job: { started_at: "2026-04-16T08:30:00+09:00", completed_at: "2026-04-16T08:31:00+09:00", processed_items: 572, total_items: 572 },
+      new_rows: 120,
+    },
+    {
+      key: "air_quality", label: "대기질", count: 1698, last_updated: "2026-04-14T02:00:00+09:00",
+      expected_interval_seconds: 86400, status: "yellow", spinning: false,
+      last_job: { started_at: "2026-04-14T02:00:00+09:00", completed_at: "2026-04-14T02:02:00+09:00", processed_items: 97, total_items: 100 },
+      new_rows: null,
+    },
+    {
+      key: "unsold", label: "미분양 이력", count: 4104, last_updated: "2026-04-11T05:00:00+09:00",
+      expected_interval_seconds: 0, status: "green", spinning: false,
+      last_job: null,
+      new_rows: null,
+    },
+  ],
+  generated_at: "2026-04-16T09:00:00+09:00",
+};
+
 export async function applyAdminMocks(page: Page): Promise<void> {
+  await page.route("**/api/admin/data-freshness", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockDataFreshness) });
+  });
   await page.route("**/api/admin/stats/detailed", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockDetailedStats) });
   });

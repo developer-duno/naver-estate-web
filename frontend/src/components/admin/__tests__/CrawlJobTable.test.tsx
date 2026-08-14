@@ -68,4 +68,22 @@ describe("CrawlJobTable", () => {
     render(<CrawlJobTable jobs={[]} />);
     expect(screen.getByText(/작업이 없습니다/)).toBeInTheDocument();
   });
+
+  // ── R3 문구 총정리 ──
+
+  it("진행률에 '건' 단위가 붙는다 (숫자만 있으면 뭘 센 건지 모름)", () => {
+    render(<CrawlJobTable jobs={[mkJob({ id: 1, processed_items: 480, total_items: 500 })]} />);
+    expect(screen.getByText("480/500건")).toBeInTheDocument();
+  });
+
+  it("0/0건(그날 할 일 없음)도 단위와 함께 표시된다", () => {
+    render(<CrawlJobTable jobs={[mkJob({ id: 1, processed_items: 0, total_items: 0 })]} />);
+    expect(screen.getByText("0/0건")).toBeInTheDocument();
+  });
+
+  it("열 제목 'ID' 대신 '번호'", () => {
+    render(<CrawlJobTable jobs={[]} />);
+    expect(screen.getByRole("columnheader", { name: "번호" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "ID" })).not.toBeInTheDocument();
+  });
 });

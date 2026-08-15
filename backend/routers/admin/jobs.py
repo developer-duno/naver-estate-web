@@ -222,6 +222,8 @@ def get_detailed_stats(
     # (UTC 자정이면 KST 오전 9시에야 리셋돼 하루가 어긋난다)
     # ⚠ 쿼리 바인딩은 반드시 UTC 로 변환 — created_at 저장값이 UTC(utcnow)라
     #   CI SQLite 의 ISO 문자열 비교에서 오프셋 표기가 어긋나면 결과가 틀어진다
+    # ⚠ microsecond=0 은 필수 — 소수부가 남으면 SQLite 바인딩 문자열에 '.xxxxxx' 가 붙어
+    #   저장 포맷(소수부 없음)과의 문자열 비교가 어긋난다 (제약: 지우지 말 것)
     kst_midnight = datetime.now(ZoneInfo("Asia/Seoul")).replace(
         hour=0, minute=0, second=0, microsecond=0
     )

@@ -145,6 +145,46 @@ def test_detect_issues_public_trade_over_type_threshold_stale():
         db.close()
 
 
+def test_detect_issues_official_price_under_type_threshold_not_stale():
+    """엣지(2026-08-15): official_price 는 정상 3~7시간 도므로 10h 여도 마비 아님.
+
+    기본 임계 1h 면 오탐(8/15 job 43010 이 07:31 sweep 당하고 텔레그램 실발화)이지만
+    job_type 임계 16h 미만이라 skip.
+    """
+    db = TestSession()
+    try:
+        started = _utcnow() - timedelta(hours=10)
+        db.add(CrawlJob(
+            job_type="official_price", status="running",
+            started_at=started, created_at=started,
+        ))
+        db.commit()
+        keys = [i["alert_key"] for i in detect_issues(db)]
+        assert "crawl_stale:official_price" not in keys
+    finally:
+        db.close()
+
+
+def test_detect_issues_official_price_over_type_threshold_stale():
+    """정상(2026-08-15): official_price 가 16h(job_type 임계) 넘으면 진짜 마비."""
+    db = TestSession()
+    try:
+        started = _utcnow() - timedelta(hours=17)
+        db.add(CrawlJob(
+            job_type="official_price", status="running",
+            started_at=started, created_at=started,
+        ))
+        db.commit()
+        issue = next(
+            (i for i in detect_issues(db) if i["alert_key"] == "crawl_stale:official_price"),
+            None,
+        )
+        assert issue is not None
+        assert issue["data"]["stale_hours"] == 16
+    finally:
+        db.close()
+
+
 def test_detect_issues_old_failed_job_outside_window():
     """엣지: 25시간 전 실패 작업은 24h 윈도 밖 — 감지 안 됨"""
     db = TestSession()
@@ -372,6 +412,63 @@ def test_run_monitor_respects_job_type_threshold():
             select(CrawlJob).where(CrawlJob.id == job_id)
         ).scalar_one()
         assert still.status == "running"
+    finally:
+        db.close()
+
+
+def test_run_monitor_does_not_sweep_official_price_under_threshold():
+    """경계(2026-08-15): official_price 는 16h 임계 — 10h running 은 정리 안 됨.
+
+    실사고 재현 가드: 8/15 job 43010 이 06:30 시작 → 07:31 에 status='cancelled',
+    error_message='stale running — swept by monitor' 로 오탐 sweep 당했으나 실제로는
+    07:55 까지 44,621행 수집 중이었다. 이 테스트가 그 sweep 을 차단한다.
+    """
+    db = TestSession()
+    try:
+        ten_hours = _utcnow() - timedelta(hours=10)
+        job = CrawlJob(
+            job_type="official_price", status="running",
+            started_at=ten_hours, created_at=ten_hours,
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        still = db.execute(
+            select(CrawlJob).where(CrawlJob.id == job_id)
+        ).scalar_one()
+        assert still.status == "running"
+        assert still.completed_at is None
+        # 알림 경로도 함께 확인 — 오탐 텔레그램이 발화하지 않아야 한다
+        assert not mock_tg.called
+    finally:
+        db.close()
+
+
+def test_run_monitor_sweeps_official_price_over_threshold():
+    """정상(2026-08-15): official_price 도 16h 넘으면 진짜 마비 — sweep 은 계속 동작."""
+    db = TestSession()
+    try:
+        seventeen_hours = _utcnow() - timedelta(hours=17)
+        job = CrawlJob(
+            job_type="official_price", status="running",
+            started_at=seventeen_hours, created_at=seventeen_hours,
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id
+
+        with patch("crawler.monitor.send_telegram", return_value=True):
+            run_monitor(db)
+
+        swept = db.execute(
+            select(CrawlJob).where(CrawlJob.id == job_id)
+        ).scalar_one()
+        assert swept.status == "cancelled"
+        assert swept.completed_at is not None
     finally:
         db.close()
 

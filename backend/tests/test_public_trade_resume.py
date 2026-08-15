@@ -13,12 +13,24 @@ DB distinct 쿼리(정렬 보장 없음)라 "몇 번째까지"가 아니라 "코
 conftest 가 sys.modules["db.database"] 교체로 SessionLocal 이 자동으로 테스트 DB 를 쓴다.
 """
 from datetime import date as _real_date
+from datetime import timedelta
 from unittest.mock import patch
 
 from crawler.utils import CheckpointManager
 from db.models import Complex, CrawlerCheckpoint, CrawlJob
+from utils import utcnow
 
 _checkpoint = CheckpointManager(checkpoint_interval=5)
+
+
+def _stopped_job(job_type: str = "public_trade_data", status: str = "failed", *, hours_ago: int = 1):
+    """중단된 job 픽스처 — started_at 을 반드시 채운다.
+
+    재개 스캔에 신선도 필터(RESUME_MAX_AGE_HOURS)가 걸려 있어 started_at 이 NULL 이면
+    `NULL >= cutoff` 가 NULL 이라 후보에서 빠진다. 운영 코드는 CrawlJob 생성 시 항상
+    started_at=utcnow() 를 넣으므로(전수 확인), NULL 은 테스트 픽스처에서만 생기는 상황.
+    """
+    return CrawlJob(job_type=job_type, status=status, started_at=utcnow() - timedelta(hours=hours_ago))
 
 
 class _FakeDate(_real_date):
@@ -54,7 +66,7 @@ class TestPublicTradeResume:
         _add_complex(db, "C3", "4100000000")
 
         # 이전 실행이 시군구 1개(11000)만 끝내고 실패한 상태를 흉내
-        prev_job = CrawlJob(job_type="public_trade_data", status="failed")
+        prev_job = _stopped_job()
         db.add(prev_job)
         db.commit()
         _checkpoint.save(db, prev_job.id, {"done_codes": ["11000"], "total": 3})
@@ -101,7 +113,7 @@ class TestPublicTradeResume:
         """정상 완료된 job은 재개 후보가 아님 — 체크포인트도 완료 시 삭제되므로 이중 안전"""
         _add_complex(db, "C1", "1100000000")
 
-        completed_job = CrawlJob(job_type="public_trade_data", status="completed")
+        completed_job = _stopped_job(status="completed")
         db.add(completed_job)
         db.commit()
         # 완료된 job에 체크포인트가 남아있더라도(비정상 상황 대비) status 필터로 무시돼야 함
@@ -135,13 +147,13 @@ class TestPublicTradeResume:
         _add_complex(db, "C3", "4100000000")
 
         # 1번째 job: 11000 완료 후 체크포인트 저장, 실패
-        job1 = CrawlJob(job_type="public_trade_data", status="failed")
+        job1 = _stopped_job(hours_ago=2)
         db.add(job1)
         db.commit()
         _checkpoint.save(db, job1.id, {"done_codes": ["11000"], "total": 3})
 
         # 2번째 job: 체크포인트를 저장하지 못한 채 실패 (row 자체가 없음)
-        job2 = CrawlJob(job_type="public_trade_data", status="failed")
+        job2 = _stopped_job(hours_ago=1)
         db.add(job2)
         db.commit()
         assert _checkpoint.load(db, job2.id) is None  # 전제조건 확인
@@ -158,3 +170,32 @@ class TestPublicTradeResume:
         # 1번째가 완료한 11000은 다시 처리되지 않아야 함 (유실 방지)
         assert "11000" not in seen_sigungu
         assert set(seen_sigungu) == {"26000", "41000"}
+
+    def test_오래된_failed_job의_체크포인트는_이어받지_않는다(self, db):
+        """신선도 상한(RESUME_MAX_AGE_HOURS) 회귀 가드 — 세션 370 발견 잠복 결함.
+
+        실패 job 의 체크포인트는 영구 잔존한다(완료 시 자기 것만 삭제). 건수 상한(10)만
+        있으면 어느 토요일 실행이 중간 실패했을 때 그 체크포인트가 **이후 매주** 스캔에
+        걸려 같은 시군구들을 계속 건너뛴다(신규 실패 10건이 쌓여 밀려날 때까지).
+        4일 전(72h 초과) 실패 job 은 재개 후보에서 빠져 전체를 다시 처리해야 한다.
+        """
+        _add_complex(db, "C1", "1100000000")
+        _add_complex(db, "C2", "2600000000")
+
+        stale_job = _stopped_job(hours_ago=96)  # 4일 전 = RESUME_MAX_AGE_HOURS(72h) 초과
+        db.add(stale_job)
+        db.commit()
+        _checkpoint.save(db, stale_job.id, {"done_codes": ["11000"], "total": 2})
+
+        seen_sigungu: list[str] = []
+
+        def _fake_trades(sigungu_cd, deal_ymd):
+            seen_sigungu.append(sigungu_cd)
+            return []
+
+        with patch("crawler.public_data_api.PublicDataAPI.get_all_apt_trades", side_effect=_fake_trades):
+            _run_collect()
+
+        # 낡은 체크포인트를 무시했으므로 11000 도 다시 처리돼야 한다
+        assert "11000" in seen_sigungu, "72h 초과 체크포인트를 이어받아 시군구를 조용히 스킵했다"
+        assert set(seen_sigungu) == {"11000", "26000"}

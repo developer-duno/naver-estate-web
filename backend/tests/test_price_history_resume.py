@@ -12,12 +12,25 @@ complex_no 집합"을 조회해 쿼리 단계에서 제외(NOT IN) — public_tr
 
 검증 메커니즘은 test_public_trade_resume.py 선례 답습.
 """
+from datetime import timedelta
 from unittest.mock import patch
 
 from crawler.utils import CheckpointManager
 from db.models import Complex, CrawlerCheckpoint, CrawlJob
+from utils import utcnow
 
 _checkpoint = CheckpointManager(checkpoint_interval=5)
+
+
+def _stopped_job(status: str = "failed", *, hours_ago: int = 1):
+    """중단된 job 픽스처 — started_at 을 반드시 채운다.
+
+    재개 스캔에 신선도 필터(RESUME_MAX_AGE_HOURS)가 걸려 있어 started_at 이 NULL 이면
+    `NULL >= cutoff` 가 NULL 이라 후보에서 빠진다. 운영 코드는 CrawlJob 생성 시 항상
+    started_at=utcnow() 를 넣으므로(전수 확인), NULL 은 테스트 픽스처에서만 생기는 상황.
+    """
+    return CrawlJob(job_type="price_history", status=status,
+                    started_at=utcnow() - timedelta(hours=hours_ago))
 
 
 def _add_complex(db, no: str, name: str = "테스트단지"):
@@ -39,7 +52,7 @@ class TestPriceHistoryResume:
         _add_complex(db, "C3")
 
         # 이전 실행이 C1만 완료하고 실패한 상태를 흉내
-        prev_job = CrawlJob(job_type="price_history", status="failed")
+        prev_job = _stopped_job()
         db.add(prev_job)
         db.commit()
         _checkpoint.save(db, prev_job.id, {"done_complex_nos": ["C1"], "total": 3})
@@ -66,6 +79,38 @@ class TestPriceHistoryResume:
         assert new_job.status == "completed"
         assert db.get(CrawlerCheckpoint, new_job.id) is None
 
+    def test_오래된_failed_job의_체크포인트는_이어받지_않는다(self, db):
+        """신선도 상한(RESUME_MAX_AGE_HOURS) 회귀 가드 — 세션 370 발견 잠복 결함.
+
+        실패 job 의 체크포인트는 영구 잔존한다(완료 시 자기 것만 삭제). 건수 상한(10)만
+        있으면 어느 수요일 실행이 중간 실패했을 때 그 체크포인트가 **이후 매주** 스캔에
+        걸려 같은 단지들을 계속 제외한다(이 잡도 주 1회 수 04:00 — public_trade_data 와
+        동일한 주간 피해 구조). 4일 전(72h 초과) 실패 job 은 재개 후보에서 빠져야 한다.
+
+        (72h 이내 = 기존대로 이어받음은 위 test_이전_failed_job... 이 이미 커버)
+        """
+        _add_complex(db, "C1")
+        _add_complex(db, "C2")
+
+        stale_job = _stopped_job(hours_ago=96)  # 4일 전 = RESUME_MAX_AGE_HOURS(72h) 초과
+        db.add(stale_job)
+        db.commit()
+        _checkpoint.save(db, stale_job.id, {"done_complex_nos": ["C1"], "total": 2})
+
+        seen_complex_nos: list[str] = []
+
+        def _fake_get_prices(complex_no, trade_type=None, **kwargs):
+            seen_complex_nos.append(complex_no)
+            return _fake_price_result()
+
+        with patch("crawler.service_price.NaverEstateAPI.get_complex_prices", side_effect=_fake_get_prices):
+            from crawler.service_price import collect_price_history
+            collect_price_history(batch_size=10, scheduler_job_id="collect_prices")
+
+        # 낡은 체크포인트를 무시했으므로 C1 도 다시 처리돼야 한다
+        assert "C1" in seen_complex_nos, "72h 초과 체크포인트를 이어받아 단지를 조용히 제외했다"
+        assert set(seen_complex_nos) == {"C1", "C2"}
+
     def test_체크포인트_없으면_처음부터_전체_처리(self, db):
         _add_complex(db, "C1")
         _add_complex(db, "C2")
@@ -88,13 +133,13 @@ class TestPriceHistoryResume:
         _add_complex(db, "C2")
         _add_complex(db, "C3")
 
-        job1 = CrawlJob(job_type="price_history", status="failed")
+        job1 = _stopped_job(hours_ago=2)
         db.add(job1)
         db.commit()
         _checkpoint.save(db, job1.id, {"done_complex_nos": ["C1"], "total": 3})
 
         # 2번째 job: 체크포인트를 저장 못 하고 실패 (row 없음)
-        job2 = CrawlJob(job_type="price_history", status="failed")
+        job2 = _stopped_job(hours_ago=1)
         db.add(job2)
         db.commit()
         assert _checkpoint.load(db, job2.id) is None  # 전제조건 확인

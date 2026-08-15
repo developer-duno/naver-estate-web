@@ -16,14 +16,14 @@ import os
 import re
 import statistics
 import time
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import func
 
 from crawler.cortar_legacy import to_standard_cortar
 from crawler.env_common import _complete_job, _fail_job, _record_job
-from crawler.service_common import _checkpoint
+from crawler.service_common import RESUME_MAX_AGE_HOURS, _checkpoint
 from db.database import SessionLocal
 from db.models import Complex, ComplexOfficialPrice, CrawlJob
 from services.upsert import _do_upsert
@@ -311,12 +311,20 @@ def collect_official_prices(
     # 재개(resume) — 직전 중단분의 체크포인트를 이어받는다. 최근 N건을 최신순으로 훑어
     # 체크포인트가 실제로 있는 첫 job 을 찾는다(연속 2회 실패 시 2번째 job 이 자기
     # 체크포인트를 저장하기 전에 죽으면 진행분이 유실되던 세션 346 사고 답습).
+    #
+    # ⚠ 건수 상한(10)만으론 부족하다(세션 370 발견) — 실패 잡의 체크포인트는 영구 잔존하고
+    # 이 잡은 월 1회라 신규 실패가 쌓여 밀려나지도 않는다. 9/15 실행이 중간 실패하고 아무도
+    # 재트리거 안 하면 10/15 정기 실행이 지난달 "완료 목록"을 이어받아 그 절반을 스킵하고,
+    # 연도가 넘어가면 작년 완료 마커로 올해 수집을 스킵한다(체크포인트에 연도 정보 없음).
+    # 재개는 "중단 직후 곧 재실행" 의도이므로 신선도(RESUME_MAX_AGE_HOURS)로 함께 막는다.
     done_ld_codes: set[str] = set()
+    resume_cutoff = utcnow() - timedelta(hours=RESUME_MAX_AGE_HOURS)
     recent_stopped_jobs = (
         db.query(CrawlJob)
         .filter(
             CrawlJob.job_type == "official_price",
             CrawlJob.status.in_(["failed", "cancelled"]),
+            CrawlJob.started_at >= resume_cutoff,
         )
         .order_by(CrawlJob.id.desc())
         .limit(10)

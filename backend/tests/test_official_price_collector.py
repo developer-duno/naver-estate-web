@@ -382,6 +382,294 @@ def test_collect_records_failed_ld_codes_after_retry_exhausted(db, monkeypatch, 
     assert any("1168010700" in m for m in warning_msgs)
 
 
+# ── 7-2. 매칭 소실 재수집 패스 (세션 370 페이지 드리프트 실사고 회귀) ──
+#
+# V-WORLD 는 같은 법정동을 연속 조회해도 총행수는 같은데 행 구성이 달라진다(중복+누락).
+# 그래서 대형 단지의 유니크 호수가 실행마다 흔들려 세대수 ±5% 게이트를 비결정적으로
+# 통과·탈락한다(은마 1차 3,947 탈락 / 2차 4,320 통과). 행수 정합성 가드는 총량이
+# 맞아떨어져 못 잡으므로, 소실된 단지만 두 번째 표본으로 재조회해 구제한다.
+
+
+def _seed_prior_row(db, complex_no, *, days_ago=30, stdr_year=_YEAR):
+    """과거 실행에서 저장된 공시 행 — '소실' 판정의 전제(이번엔 못 붙었는데 예전엔 붙었다)."""
+    from datetime import timedelta
+
+    from utils import utcnow
+
+    db.add(ComplexOfficialPrice(
+        complex_no=complex_no, stdr_year=stdr_year, prvuse_ar=Decimal("84.43"),
+        price_median=1_000_000_000, ho_count=10, aphus_code="A1", aphus_nm="은마",
+        collected_at=utcnow() - timedelta(days=days_ago),
+    ))
+    db.commit()
+
+
+def test_repass_rescues_regressed_complex(db, seeded, monkeypatch):
+    """구제 성공 — 1차는 드리프트(호수 부족→게이트 탈락), 재수집은 완전 데이터면 저장된다."""
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded)
+
+    # 세대수 10 인데 호 8건만 → 비율 0.8 로 ±5% 게이트 탈락 (드리프트 재현)
+    drifted = make_rows_for_complex(aphus_nm="은마", ho_count=8, base_price=2_000_000_000)
+    complete = make_rows_for_complex(aphus_nm="은마", ho_count=10, base_price=2_700_000_000)
+
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[drifted, complete],
+    ) as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 2, "소실 감지 후 그 법정동을 정확히 1회 재조회해야 한다"
+
+    saved = db.query(ComplexOfficialPrice).all()
+    assert len(saved) == 1
+    assert saved[0].ho_count == 10, "재수집분(완전 데이터)으로 갱신돼야 한다"
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed"
+    assert job.processed_items == 1
+    assert "잔여" not in (job.error_message or ""), "구제됐으므로 잔여 문구가 없어야 한다"
+
+
+def test_repass_failure_records_remaining_in_error_message(db, seeded, monkeypatch):
+    """재수집도 실패 — 행은 안 바뀌고, completed 를 유지하되 잔여 사실을 error_message 에 남긴다.
+
+    다른 법정동의 단지 하나는 정상 매칭시킨다 — 전량 미매칭이면 silent failure 가드가
+    (정당하게) failed 로 끊으므로, '일부만 소실'이라는 이 테스트의 상황이 성립하지 않는다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded)
+    db.add(Complex(complex_no="C9", complex_name="정상아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+
+    drifted = make_rows_for_complex(aphus_nm="은마", ho_count=8)
+    healthy = make_rows_for_complex(aphus_code="A9", aphus_nm="정상", ho_count=10)
+
+    # 법정동 오름차순(1168010600=은마, 1168010700=정상) → 본 루프 2회, 재수집은 은마 1회
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[drifted, healthy, drifted],
+    ) as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 3, "본 루프 2개 법정동 + 소실 1개 법정동 재수집"
+
+    lost_row = db.query(ComplexOfficialPrice).filter(
+        ComplexOfficialPrice.complex_no == seeded
+    ).one()
+    assert lost_row.ho_count == 10, "두 번 다 게이트 탈락이라 과거 행이 그대로여야 한다"
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed", "일부 소실은 전량 실패가 아니라 completed 유지"
+    assert "잔여 1단지" in (job.error_message or "")
+    assert seeded in (job.error_message or ""), "어느 단지가 잔여인지 식별 가능해야 한다"
+
+
+def test_repass_runs_before_silent_failure_guard(db, seeded, monkeypatch):
+    """전량 소실 실행에서도 재수집이 먼저 돈다 — 가드가 앞에 있으면 구제 기회가 사라진다.
+
+    가드를 재수집 앞에 두면 '드리프트로 이번에 전부 탈락'한 실행이 곧바로 failed 로 끊겨
+    재조회 자체를 못 한다. 구제 성공 시 최종 매칭이 0 이 아니므로 가드도 당연히 안 걸린다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded)
+
+    drifted = make_rows_for_complex(aphus_nm="은마", ho_count=8)
+    complete = make_rows_for_complex(aphus_nm="은마", ho_count=10)
+
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[drifted, complete],
+    ):
+        collect_official_prices(stdr_year=_YEAR)
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed", "재수집으로 구제됐는데 silent failure 로 끊겼다"
+    assert job.processed_items == 1
+
+
+def test_repass_skips_complexes_without_prior_rows(db, monkeypatch):
+    """신규 단지는 재수집 대상이 아니다 — 과거 행이 없으면 '소실'이 아니라 그냥 미매칭."""
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    # 과거 행 없는 단지 2개: 하나는 매칭 성공(silent failure 가드 회피), 하나는 미매칭
+    db.add(Complex(complex_no="C1", complex_name="은마아파트", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.add(Complex(complex_no="C2", complex_name="신규아파트", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+
+    rows = make_rows_for_complex(aphus_nm="은마", ho_count=10)
+
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[rows],
+    ) as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 1, "과거 행 없는 미매칭 단지 때문에 재수집이 돌면 안 된다"
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed"
+    assert not (job.error_message or ""), "소실이 아니므로 잔여 문구도 없어야 한다"
+
+
+def test_repass_ignores_checkpoint_skipped_dongs(db, seeded, monkeypatch):
+    """재개(resume) 실행 — 체크포인트로 스킵된 동의 단지는 소실이 아니다.
+
+    스킵된 동은 이번 실행의 관할 밖(조회조차 안 했다)이라, 과거 행이 있다는 이유만으로
+    소실 판정하면 재개 실행마다 수천~만 단지가 거짓 경보로 잡혀 진짜 드리프트 소실이
+    묻힌다. 게다가 스킵된 동을 재조회해 체크포인트의 이득까지 되돌린다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded)
+
+    from crawler.service_common import _checkpoint
+    from utils import utcnow
+
+    prev = CrawlJob(job_type="official_price", scheduler_job_id="collect_official_prices",
+                    status="failed", started_at=utcnow())
+    db.add(prev)
+    db.commit()
+    _checkpoint.save(db, prev.id, {"done_ld_codes": ["1168010600"], "total": 1})
+
+    with patch("crawler.vworld_price_api.fetch_official_prices") as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 0, "스킵된 동을 재수집이 다시 조회했다 = 체크포인트 이득 소멸"
+
+    # 이 실행은 조회한 동이 0개라 매칭도 0 → silent failure 가드가 자기 문구를 남기는 게 정상.
+    # 검증 대상은 '재수집이 관할 밖 단지를 소실로 날조하지 않았는가' 뿐이다.
+    job = db.query(CrawlJob).filter(
+        CrawlJob.job_type == "official_price", CrawlJob.id != prev.id
+    ).one()
+    assert "잔여" not in (job.error_message or ""), "관할 밖 단지가 소실로 잡혀 거짓 경보가 났다"
+
+
+def test_repass_ignores_prior_rows_from_other_year(db, seeded, monkeypatch):
+    """작년 행만 있는 단지는 소실이 아니다 — 올해 공시 미발표 시 오탐 폭발 방지.
+
+    연도 무필터면 연초 실행에서 작년 행 보유 단지가 전부 소실로 잡히고, 영구 미매칭
+    단지가 매달 재판정돼 경보 피로를 만든다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded, stdr_year="2025")  # 작년 행만 보유
+    db.add(Complex(complex_no="C9", complex_name="정상아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+
+    drifted = make_rows_for_complex(aphus_nm="은마", ho_count=8)
+    healthy = make_rows_for_complex(aphus_code="A9", aphus_nm="정상", ho_count=10)
+
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[drifted, healthy],
+    ) as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 2, "작년 행만 있는 단지 때문에 재수집이 돌면 안 된다"
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert not (job.error_message or ""), "작년 행 보유가 소실로 오판됐다"
+
+
+def test_repass_excludes_fetch_failed_dongs(db, seeded, monkeypatch):
+    """본 루프 조회 실패 동의 단지는 '매칭 소실'이 아니다 — 원인은 API 다운.
+
+    실패 동을 소실로 분류하면 진단 문구가 매칭 문제로 나와 원인 추적을 어긋나게 한다.
+    실패 자체는 failed_ld_codes 로 이미 계상된다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded)  # 1168010600 = 조회 실패시킬 동
+    db.add(Complex(complex_no="C9", complex_name="정상아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+
+    healthy = make_rows_for_complex(aphus_code="A9", aphus_nm="정상", ho_count=10)
+
+    # 1168010600: 1차+재시도 모두 None(실패) / 1168010700: 정상
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[None, None, healthy],
+    ) as mock_fetch, patch("crawler.service_official_price.time.sleep"):
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 3, "실패 동(1차+재시도) + 정상 동 = 3회. 재수집은 0회여야"
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed"
+    assert not (job.error_message or ""), "조회 실패 동이 매칭 소실로 오분류됐다"
+    # total_items = processed(1) + failed(1) — 본 루프 실패만 반영, 재수집 실패 계상 없음
+    assert job.total_items == 2
+
+
+def test_repass_exception_does_not_fail_the_job(db, seeded, monkeypatch):
+    """재수집 중 예외가 나도 본 수집 결과는 살린다 (구제는 best-effort).
+
+    감싸지 않으면 outer except 로 빠져 job 이 failed 가 되고, 거의 전량 완료된
+    체크포인트가 잔존해 다음 달 실행이 그걸 이어받아 거의 아무것도 안 하게 된다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded)
+    db.add(Complex(complex_no="C9", complex_name="정상아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+
+    drifted = make_rows_for_complex(aphus_nm="은마", ho_count=8)
+    healthy = make_rows_for_complex(aphus_code="A9", aphus_nm="정상", ho_count=10)
+
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[drifted, healthy, RuntimeError("V-WORLD 폭발")],
+    ):
+        collect_official_prices(stdr_year=_YEAR)
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed", "재수집 예외가 본 수집 성공을 실패로 뒤집었다"
+    assert job.processed_items == 1, "본 루프에서 매칭한 정상 단지는 보존돼야 한다"
+
+    saved = db.query(ComplexOfficialPrice).filter(
+        ComplexOfficialPrice.complex_no == "C9"
+    ).count()
+    assert saved == 1, "본 루프 저장분이 롤백됐다"
+
+
+def test_repass_bails_out_on_collapse(db, monkeypatch):
+    """소실이 임계를 넘으면 재수집 자체를 생략 — 드리프트가 아니라 시스템 이상.
+
+    임계를 넘는 소실은 매칭 규칙 붕괴·API 구조 변경이라 재조회가 구제가 아니라 폭주다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    monkeypatch.setattr(
+        "crawler.service_official_price._REPASS_COLLAPSE_THRESHOLD", 2
+    )
+    # 소실 후보 3개(임계 2 초과) + 매칭 성공 1개(silent failure 가드 회피)
+    for i in range(3):
+        db.add(Complex(complex_no=f"L{i}", complex_name=f"소실{i}아파트",
+                       cortar_no="1168010600", real_estate_type_code="APT",
+                       total_household_count=10))
+    db.add(Complex(complex_no="C9", complex_name="정상아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+    for i in range(3):
+        _seed_prior_row(db, f"L{i}")
+
+    healthy = make_rows_for_complex(aphus_code="A9", aphus_nm="정상", ho_count=10)
+
+    # 1168010600 은 아무것도 매칭 안 되는 데이터 → 3단지 전부 소실
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[make_rows_for_complex(aphus_nm="무관단지", ho_count=10), healthy],
+    ) as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 2, "임계 초과인데 재수집이 돌았다"
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed"
+    assert "임계" in (job.error_message or ""), "붕괴 사실이 기록되지 않았다"
+
+
 # ── 8. 페이지네이션 종료 조건 ──
 
 def test_fetch_stops_by_total_count_not_page_length(monkeypatch):

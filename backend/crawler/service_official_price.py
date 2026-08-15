@@ -19,6 +19,8 @@ import time
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
+from sqlalchemy import func
+
 from crawler.cortar_legacy import to_standard_cortar
 from crawler.env_common import _complete_job, _fail_job, _record_job
 from crawler.service_common import _checkpoint
@@ -40,6 +42,15 @@ HOUSEHOLD_TOLERANCE = 0.05
 # 공시 기준월 방어 필터 — 실측상 전 지역이 '01' 뿐이나, 반기 공시가 생기면
 # 같은 호가 2번 잡혀 중위값이 왜곡되므로 '01' 만 채택한다.
 TARGET_STDR_MT = "01"
+
+# 재수집 패스 상한 — V-WORLD 전면 장애로 전량 소실 판정이 나도 재조회가 폭주하지 않게
+# 법정동 수를 캡한다. 정상 실행의 소실은 한 자릿수라(세션 370 실측 5단지) 충분하다.
+_REPASS_MAX_DONGS = 20
+
+# 붕괴 조기 이탈 임계 — 소실이 이 수를 넘으면 페이지 드리프트가 아니라 시스템 이상
+# (매칭 규칙 붕괴·API 응답 구조 변경 등)으로 본다. 드리프트 소실은 실측 한 자릿수라
+# 200 이면 충분한 여유이며, 이 경우 재수집은 구제가 아니라 무의미한 폭주가 된다.
+_REPASS_COLLAPSE_THRESHOLD = 200
 
 _PAREN = re.compile(r"\([^)]*\)")
 # 꼬리 동목록 — "대치우성아파트1동 2동 3동 5동 6동 7동" 처럼 공시측 단지명 끝에
@@ -178,6 +189,92 @@ def aggregate_area_medians(rows: list[dict]) -> list[tuple[Decimal, int, int]]:
     return result
 
 
+def _save_matched_areas(db, complex_no: str, year: str, aphus_code: str, group: dict) -> int:
+    """매칭된 공시 그룹을 평형별 중위가로 저장. 반환: 저장한 행 수(0 이면 미저장).
+
+    본 루프와 재수집 패스가 같은 저장 규칙을 쓰도록 한 곳에 모은 것뿐이다.
+    """
+    areas = aggregate_area_medians(group["rows"])
+    for area, median_price, ho_count in areas:
+        _do_upsert(
+            db,
+            ComplexOfficialPrice,
+            {
+                "complex_no": complex_no,
+                "stdr_year": year,
+                "prvuse_ar": area,
+                "price_median": median_price,
+                "ho_count": ho_count,
+                "aphus_code": aphus_code,
+                "aphus_nm": group["name"],
+                "collected_at": utcnow(),
+            },
+            ["complex_no", "stdr_year", "prvuse_ar"],
+        )
+    return len(areas)
+
+
+def _index_groups_by_name(rows: list[dict]) -> dict[str, list[tuple[str, dict]]]:
+    """공시 행 → {정규화 단지명: [(aphusCode, group), ...]} 매칭용 색인."""
+    grouped_by_name: dict[str, list[tuple[str, dict]]] = {}
+    for code, group in _group_by_aphus(rows).items():
+        grouped_by_name.setdefault(normalize_complex_name(group["name"]), []).append(
+            (code, group)
+        )
+    return grouped_by_name
+
+
+def _find_regressed_targets(
+    db, targets: list, matched_complex_nos: set[str], processed_ld_codes: set[str], year: str
+):
+    """이번 실행에서 매칭이 '소실'된 단지 목록 — 올해 값이 있었는데 이번엔 못 붙은 것.
+
+    V-WORLD 페이지네이션이 불안정해 같은 법정동을 연속 조회해도 총행수는 같은데 행
+    구성이 다르다(중복+누락). 대형 단지가 뒷페이지에 몰려 유니크 호수가 실행마다
+    흔들리고, 세대수 ±5% 게이트에서 비결정적으로 탈락한다(세션 370 라이브 실증:
+    은마 유니크 호수 1차 3,947(탈락) vs 2차 4,320(통과)). 기존 행수 정합성 가드는
+    총량이 맞아떨어져 못 잡는다.
+
+    소실 판정 3조건 (AND) — 셋 다 있어야 오탐이 안 난다:
+      1) 이번 실행에서 미매칭
+      2) **이번 실행이 실제로 조회한 법정동**(processed_ld_codes)에 속함 — 체크포인트로
+         스킵된 동(재개 실행의 관할 밖)과 조회 실패한 동(원인이 API 다운이지 매칭
+         문제가 아님)을 동시에 배제한다. 이게 빠지면 재개 실행에서 수천~만 단지가
+         한꺼번에 소실로 오판돼 진짜 드리프트 소실이 거짓 경보에 묻힌다.
+      3) **올해(stdr_year=year) 행 보유** — 연도 무필터면 작년 행만 있는 단지가 연초
+         (공시 미발표) 실행마다 소실로 잡혀 오탐이 폭발하고, 영구 미매칭 단지가 매달
+         재판정돼 경보 피로를 만든다.
+
+    collected_at 은 단지당 여러 평형 행이 있어 max() 로 결정론화한다(임의 행이 잡히던
+    비결정성 제거). collected_at 이 NULL 인 행만 가진 단지는 max 결과가 None 이라 자연
+    제외 = 신규 취급 — 수집 시각을 모르면 '과거에 있었다'를 주장할 수 없으므로 맞다.
+    """
+    if not processed_ld_codes:
+        return []
+
+    candidates = [
+        t
+        for t in targets
+        if t.complex_no not in matched_complex_nos and t.cortar_no in processed_ld_codes
+    ]
+    if not candidates:
+        return []
+
+    # 전체 단지를 IN 절에 넣지 않는다(수만 개) — 올해 행을 통째로 집계해 Python 에서 교집합.
+    prior_seen = dict(
+        db.query(
+            ComplexOfficialPrice.complex_no, func.max(ComplexOfficialPrice.collected_at)
+        )
+        .filter(ComplexOfficialPrice.stdr_year == year)
+        .group_by(ComplexOfficialPrice.complex_no)
+        .all()
+    )
+
+    return [
+        t for t in candidates if prior_seen.get(t.complex_no) is not None
+    ]
+
+
 def collect_official_prices(
     stdr_year: str | None = None,
     scheduler_job_id: str | None = None,
@@ -280,6 +377,11 @@ def collect_official_prices(
         saved_rows = 0
         failed_ld_codes = 0
         failed_ld_codes_list: list[str] = []
+        # 이번 실행에서 실제로 매칭된 단지 — 재수집 패스의 '소실' 판정 기준.
+        matched_complex_nos: set[str] = set()
+        # 이번 실행이 **조회에 성공한** 법정동 — 소실 판정의 관할 범위.
+        # 체크포인트로 스킵된 동·조회 실패한 동은 여기 안 들어가 자연 배제된다.
+        processed_ld_codes: set[str] = set()
 
         for idx, ld_code in enumerate(remaining):
             # 전 페이지 수집 완료 후에만 매칭 — 부분 수집 시 세대수 게이트가 통째로
@@ -305,12 +407,9 @@ def collect_official_prices(
                 logger.warning("[official_price] 법정동 %s 조회 실패 — 건너뜀", ld_code)
                 continue
 
-            grouped = _group_by_aphus(rows)
-            grouped_by_name: dict[str, list[tuple[str, dict]]] = {}
-            for code, group in grouped.items():
-                grouped_by_name.setdefault(
-                    normalize_complex_name(group["name"]), []
-                ).append((code, group))
+            # 조회 성공 — 빈 리스트(공시 0건인 동)도 성공이다. 소실 판정 관할에 넣는다.
+            processed_ld_codes.add(ld_code)
+            grouped_by_name = _index_groups_by_name(rows)
 
             for target in by_ld_code[ld_code]:
                 hit = match_complex_group(
@@ -320,28 +419,12 @@ def collect_official_prices(
                     continue
                 aphus_code, group = hit
 
-                areas = aggregate_area_medians(group["rows"])
-                if not areas:
+                n_saved = _save_matched_areas(db, target.complex_no, year, aphus_code, group)
+                if not n_saved:
                     continue
-
-                for area, median_price, ho_count in areas:
-                    _do_upsert(
-                        db,
-                        ComplexOfficialPrice,
-                        {
-                            "complex_no": target.complex_no,
-                            "stdr_year": year,
-                            "prvuse_ar": area,
-                            "price_median": median_price,
-                            "ho_count": ho_count,
-                            "aphus_code": aphus_code,
-                            "aphus_nm": group["name"],
-                            "collected_at": utcnow(),
-                        },
-                        ["complex_no", "stdr_year", "prvuse_ar"],
-                    )
-                    saved_rows += 1
+                saved_rows += n_saved
                 matched_complexes += 1
+                matched_complex_nos.add(target.complex_no)
 
             done_ld_codes.add(ld_code)
 
@@ -359,9 +442,116 @@ def collect_official_prices(
 
         db.commit()
 
+        # 체크포인트는 **본 루프 완주 시점**에 지운다 — 이후 단계(재수집)에서 죽어도
+        # 다음 주기가 낡은 완료 마커를 이어받아 "거의 다 했다"고 착각하며 아무것도
+        # 안 하는 사태를 막는다.
+        _checkpoint.delete(db, job.id)
+
+        # ── 매칭 소실 재수집 패스 ──
+        # V-WORLD 는 같은 법정동을 연속 조회해도 총행수만 같고 행 구성이 달라진다
+        # (중복+누락). 그래서 대형 단지가 한 번은 게이트를 통과하고 한 번은 탈락한다.
+        # 두 번째 표본을 떠서 구제하는 것이 이 패스의 전부다 — 매칭 규칙 자체는 그대로.
+        #
+        # 전체를 try 로 감싼다 — 구제는 best-effort 라, 재수집 중 예외가 본 수집 성공을
+        # 실패로 뒤집으면 안 된다(그 경우 outer except 로 빠져 job 이 failed 가 된다).
+        rescued = 0
+        try:
+            regressed = _find_regressed_targets(
+                db, targets, matched_complex_nos, processed_ld_codes, year
+            )
+
+            if len(regressed) > _REPASS_COLLAPSE_THRESHOLD:
+                # 드리프트가 아니라 시스템 이상 — 재수집은 구제가 아니라 폭주가 된다.
+                logger.error(
+                    "[official_price] 매칭 소실 %d단지로 임계 %d 초과 — 페이지 드리프트가"
+                    " 아니라 시스템 이상 의심, 재수집 생략",
+                    len(regressed), _REPASS_COLLAPSE_THRESHOLD,
+                )
+                job.error_message = (
+                    f"매칭 소실 {len(regressed)}단지로 임계 {_REPASS_COLLAPSE_THRESHOLD} 초과"
+                    " — 시스템 이상 의심, 재수집 생략"
+                )[:500]
+                db.commit()
+                regressed = []
+
+            if regressed:
+                by_dong: dict[str, list] = {}
+                for target in regressed:
+                    by_dong.setdefault(target.cortar_no, []).append(target)
+
+                # 소실 단지가 많은 동부터 — 상시 초과 상황에서 특정 지역이 매달 뒤로
+                # 밀려 영구히 구제받지 못하는 기아를 막는다(오름차순 절단의 함정).
+                repass_dongs = sorted(by_dong, key=lambda c: (-len(by_dong[c]), c))
+                if len(repass_dongs) > _REPASS_MAX_DONGS:
+                    logger.warning(
+                        "[official_price] 재수집 대상 법정동 %d개가 상한 %d개 초과 — 소실"
+                        " 많은 순 %d개만 재조회 (초과 %d개는 잔여로 남김)",
+                        len(repass_dongs), _REPASS_MAX_DONGS, _REPASS_MAX_DONGS,
+                        len(repass_dongs) - _REPASS_MAX_DONGS,
+                    )
+                    repass_dongs = repass_dongs[:_REPASS_MAX_DONGS]
+
+                logger.info(
+                    "[official_price] 매칭 소실 %d단지 감지 — 법정동 %d개 재수집 시작",
+                    len(regressed), len(repass_dongs),
+                )
+                for ld_code in repass_dongs:
+                    rows = fetch_official_prices(to_standard_cortar(ld_code), year)
+                    if rows is None:
+                        failed_ld_codes += 1
+                        failed_ld_codes_list.append(ld_code)
+                        logger.warning("[official_price] 재수집 법정동 %s 조회 실패", ld_code)
+                        continue
+
+                    grouped_by_name = _index_groups_by_name(rows)
+                    for target in by_dong[ld_code]:
+                        hit = match_complex_group(
+                            target.complex_name, target.total_household_count, grouped_by_name
+                        )
+                        if hit is None:
+                            continue
+                        aphus_code, group = hit
+
+                        n_saved = _save_matched_areas(
+                            db, target.complex_no, year, aphus_code, group
+                        )
+                        if not n_saved:
+                            continue
+                        saved_rows += n_saved
+                        matched_complexes += 1
+                        matched_complex_nos.add(target.complex_no)
+                        rescued += 1
+                db.commit()
+
+                remaining_lost = [
+                    t for t in regressed if t.complex_no not in matched_complex_nos
+                ]
+                if remaining_lost:
+                    summary = ", ".join(
+                        f"{t.complex_no}({t.complex_name})" for t in remaining_lost[:10]
+                    )
+                    logger.warning(
+                        "[official_price] 재수집 후에도 미매칭 잔여 %d단지: %s",
+                        len(remaining_lost), summary,
+                    )
+                    # status 는 completed 유지 — 전량 실패가 아니라 일부 소실이라 실패로
+                    # 끊으면 정상 수집분까지 실패로 보인다. 잔여 사실만 남겨 추적 가능하게 한다.
+                    job.error_message = (
+                        f"재수집 후 미매칭 잔여 {len(remaining_lost)}단지: {summary}"
+                    )[:500]
+                    db.commit()
+        except Exception:
+            # 구제 실패는 본 수집 결과를 되돌리지 않는다 — 로그만 남기고 완료 경로 계속.
+            logger.exception("[official_price] 재수집 패스 실패 — 본 수집 결과는 유지")
+            db.rollback()
+
         # silent failure 가드 — 대상 단지는 있는데 한 건도 못 매칭했으면 '완료(0)'
         # 위장 대신 failed 로 알린다 (env_air.py 패턴 답습). 매칭 규칙·API 응답 구조
         # 변경이 조용히 전량 미매칭으로 나타나는 것을 잡는 유일한 그물.
+        #
+        # ⚠ 재수집 패스 **뒤에** 둔다 — 앞에 두면 드리프트로 전량 소실된 실행에서
+        # 구제 기회 자체가 사라진다(가드가 return 으로 끊으므로). 매칭이 진짜로 깨졌다면
+        # 재수집도 0건이라 여기서 똑같이 걸리므로 그물은 그대로 유효하다.
         if targets and matched_complexes == 0:
             _fail_job(db, job, f"대상 단지 {len(targets)}개 전부 매칭 실패 (수집 0건)")
             logger.error(
@@ -370,10 +560,10 @@ def collect_official_prices(
             return
 
         _complete_job(db, job, matched_complexes, failed_ld_codes)
-        _checkpoint.delete(db, job.id)
         logger.info(
-            "[official_price] 완료: 단지 %d개 매칭, 공시행 %d건 저장, 법정동 실패 %d개 %s",
-            matched_complexes, saved_rows, failed_ld_codes,
+            "[official_price] 완료: 단지 %d개 매칭(재수집 구제 %d개), 공시행 %d건 저장,"
+            " 법정동 실패 %d개 %s",
+            matched_complexes, rescued, saved_rows, failed_ld_codes,
             failed_ld_codes_list[:20],
         )
     except Exception as exc:

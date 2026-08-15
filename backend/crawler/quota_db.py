@@ -7,6 +7,7 @@ naver-estate-web과 mibunyang이 같은 Supabase DB를 공유하므로
 
 import logging
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 
@@ -14,16 +15,29 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DAILY_LIMIT = 9000  # 일일 10,000회, 안전 마진 10%
 
+KST = ZoneInfo("Asia/Seoul")
+
+
+def _today_kst() -> date:
+    """오늘 날짜(KST 기준).
+
+    date.today() 는 서버 로컬 시간대에 의존해 CI·컨테이너(UTC)에서 KST 와 하루
+    어긋난다. 집 서버는 KST 라 운영 동작은 동일하고, 환경 의존만 제거한다.
+    """
+    return datetime.now(KST).date()
+
 
 def _quota_key(api_name: str = "data_go_kr") -> str:
-    """오늘 날짜 기반 쿼터 키 생성"""
-    return f"quota:{api_name}:{date.today().isoformat()}"
+    """오늘 날짜(KST) 기반 쿼터 키 생성"""
+    return f"quota:{api_name}:{_today_kst().isoformat()}"
 
 
 def _expires_at_eod() -> datetime:
-    """오늘 자정(UTC+9) + 1시간 여유"""
-    tomorrow = date.today() + timedelta(days=1)
-    return datetime(tomorrow.year, tomorrow.month, tomorrow.day, 1, 0, 0, tzinfo=timezone.utc)
+    """오늘 자정(KST) + 1시간 여유. 저장은 UTC aware 로 변환."""
+    tomorrow = _today_kst() + timedelta(days=1)
+    return datetime(
+        tomorrow.year, tomorrow.month, tomorrow.day, 1, 0, 0, tzinfo=KST
+    ).astimezone(timezone.utc)
 
 
 def increment_api_quota(

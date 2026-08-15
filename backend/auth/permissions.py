@@ -1,6 +1,7 @@
 """역할 기반 권한 검사 + 쿼터 확인"""
 
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -35,7 +36,10 @@ def check_quota(db: Session, user_id: str, quota_type: str, daily_limit: int) ->
         quota_type: 쿼터 종류 (crawl, export)
         daily_limit: 일일 허용 횟수
     """
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # 한국 사용자 서비스라 일일 한도 리셋은 KST 자정 기준
+    # (UTC 날짜를 키로 쓰면 한도가 KST 오전 9시에 리셋돼 하루가 어긋난다)
+    now_kst = datetime.now(ZoneInfo("Asia/Seoul"))
+    today = now_kst.strftime("%Y-%m-%d")
     key = f"user:{user_id}:{quota_type}:{today}"
 
     counter = db.get(RateLimitCounter, key)
@@ -47,9 +51,13 @@ def check_quota(db: Session, user_id: str, quota_type: str, daily_limit: int) ->
             )
         counter.count += 1
     else:
-        expires = datetime.now(timezone.utc).replace(
-            hour=23, minute=59, second=59
-        ) + timedelta(seconds=1)
+        # 키 수명은 리셋 기준(KST 자정)과 정합해야 한다 — UTC 23:59 로 두면
+        # KST 08:59 에 만료돼 아직 살아있어야 할 오늘 버킷이 먼저 사라진다.
+        # 저장은 UTC aware 로 변환 (expires_at = DateTime(timezone=True))
+        next_kst_midnight = now_kst.replace(
+            hour=0, minute=0, second=0, microsecond=0
+        ) + timedelta(days=1)
+        expires = next_kst_midnight.astimezone(timezone.utc)
         counter = RateLimitCounter(key=key, count=1, expires_at=expires)
         db.add(counter)
 

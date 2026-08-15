@@ -2,6 +2,7 @@
 실행: python -m pytest tests/test_admin_router.py -v
 """
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 import jwt
@@ -24,6 +25,24 @@ def _make_profile(db, uid, role="user", status="approved"):
 
 def _auth(token):
     return {"Authorization": f"Bearer {token}"}
+
+
+def _frozen_datetime(fixed: datetime):
+    """datetime 서브클래스를 만들어 now() 만 고정 시각으로 대체한다.
+
+    라우터가 `from datetime import datetime` 로 가져다 쓰므로
+    `patch("routers.admin.jobs.datetime", _frozen_datetime(t))` 로 주입한다.
+    now(tz) 의 tz 인자를 그대로 존중해야 같은 핸들러의 다른 now(timezone.utc)
+    호출도 정상 동작한다. 고정 시각은 실행 시점에 캡처한 aware datetime —
+    날짜 하드코딩 금지(어느 날 실행해도 통과해야 함).
+    """
+
+    class _Frozen(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed.astimezone(tz) if tz else fixed.replace(tzinfo=None)
+
+    return _Frozen
 
 
 # ── 인증 검증 ──
@@ -92,14 +111,19 @@ def test_today_crawl_count_uses_kst_midnight(client, db):
     """'오늘 크롤' 경계는 UTC 자정이 아니라 KST 자정 — 자정 직전 1건은 제외, 직후 1건만 카운트.
 
     UTC 자정 기준이면 KST 오전 9시에야 리셋돼 한국 사용자 화면의 '오늘'이 하루 어긋난다.
-    고정 시각 하드코딩 금지(어느 시각에 실행해도 통과해야 함) → 실행 시점의 KST 자정을
-    계산해 그 앞뒤 상대값으로 픽스처를 만든다. 저장은 UTC aware 로 통일(CI SQLite 문자열 비교).
+    고정 시각 하드코딩 금지(어느 시각에 실행해도 통과해야 함) → 실행 시점 기준 시각을
+    캡처해 라우터의 now() 를 그 값으로 고정(freeze)한 뒤 픽스처를 만든다. 픽스처와 라우터가
+    각자 now() 를 부르면 그 사이에 KST 자정(=UTC 15:00)이 끼는 순간 서로 다른 날을 봐
+    실패하는 race 가 있어(하루 1초 미만 창) 반드시 같은 기준 시각을 공유해야 한다.
+    저장은 UTC aware 로 통일(CI SQLite 문자열 비교).
     """
     _make_profile(db, "a1", role="admin")
 
-    kst_midnight = datetime.now(ZoneInfo("Asia/Seoul")).replace(
-        hour=0, minute=0, second=0, microsecond=0
+    # 실행 시점을 캡처해 KST 정오로 고정 — 자정 경계에서 충분히 떨어뜨려 race 자체를 제거
+    frozen_kst = datetime.now(ZoneInfo("Asia/Seoul")).replace(
+        hour=12, minute=0, second=0, microsecond=0
     )
+    kst_midnight = frozen_kst.replace(hour=0)
     before = (kst_midnight - timedelta(minutes=1)).astimezone(timezone.utc)  # 어제(제외 기대)
     after = (kst_midnight + timedelta(minutes=1)).astimezone(timezone.utc)  # 오늘(포함 기대)
 
@@ -107,7 +131,8 @@ def test_today_crawl_count_uses_kst_midnight(client, db):
     db.add(CrawlJob(job_type="complex_articles", status="completed", created_at=after))
     db.commit()
 
-    res = client.get("/api/admin/stats/detailed", headers=_auth(_token("a1")))
+    with patch("routers.admin.jobs.datetime", _frozen_datetime(frozen_kst)):
+        res = client.get("/api/admin/stats/detailed", headers=_auth(_token("a1")))
     assert res.status_code == 200
     assert res.json()["today_crawl_count"] == 1
 

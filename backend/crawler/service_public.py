@@ -6,9 +6,15 @@ E. 국토교통부 아파트 매매 실거래가 API → complex_price_history �
 import logging
 import os
 import re
+from datetime import timedelta
 
 from crawler.cortar_legacy import to_standard_cortar
-from crawler.service_common import _checkpoint, _upsert_price_history, fail_job_safely
+from crawler.service_common import (
+    RESUME_MAX_AGE_HOURS,
+    _checkpoint,
+    _upsert_price_history,
+    fail_job_safely,
+)
 from db.database import SessionLocal
 from db.models import Complex, CrawlJob
 from utils import safe_int, utcnow
@@ -125,10 +131,20 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
     # (예: 1~4개만 처리하고 죽음) "가장 최근 job"엔 체크포인트가 없어 1번째 job이 남긴
     # 진행분을 못 찾고 처음부터 재시작하게 된다. 최근 N건을 최신순으로 훑어 체크포인트가
     # 실제로 있는 첫 번째를 찾는다 — 오래된 job까지 무한정 훑지 않도록 상한을 둔다.
+    #
+    # ⚠ 건수 상한(10)만으론 부족하다(세션 370 발견) — 실패 잡의 체크포인트는 영구 잔존하므로
+    # 어느 토요일 실행이 중간 실패하면 그 체크포인트가 **이후 매주** 스캔에 걸려 같은
+    # 시군구들을 계속 건너뛴다(신규 실패 10건이 쌓여 창 밖으로 밀릴 때까지). 재개는
+    # "중단 직후 곧 재실행" 의도이므로 신선도(RESUME_MAX_AGE_HOURS)로도 함께 막는다.
     done_codes: set[str] = set()
+    resume_cutoff = utcnow() - timedelta(hours=RESUME_MAX_AGE_HOURS)
     recent_stopped_jobs = (
         db.query(CrawlJob)
-        .filter(CrawlJob.job_type == "public_trade_data", CrawlJob.status.in_(["failed", "cancelled"]))
+        .filter(
+            CrawlJob.job_type == "public_trade_data",
+            CrawlJob.status.in_(["failed", "cancelled"]),
+            CrawlJob.started_at >= resume_cutoff,
+        )
         .order_by(CrawlJob.id.desc())
         .limit(10)
         .all()
@@ -148,7 +164,9 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
 
     try:
         # 수집 대상 월: 최근 24개월 (차트 분별력 확보, 일일 한도 10,000회 충분)
-        from datetime import date, timedelta
+        # timedelta 는 모듈 상단 import 사용 (여기서 다시 import 하면 함수 전체에서
+        # timedelta 가 지역변수가 돼 위쪽 resume_cutoff 계산이 UnboundLocalError).
+        from datetime import date
         today = date.today()
         months = []
         for delta in range(24):

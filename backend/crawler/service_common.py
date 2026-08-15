@@ -17,6 +17,12 @@ logger = logging.getLogger(__name__)
 # 배치 진행 체크포인트 (service_price + service_public 공유)
 _checkpoint = CheckpointManager(checkpoint_interval=5)
 
+# 체크포인트 재개 신선도 상한 — 재개는 "중단 직후 곧 재실행" 의도다. 낡은 실패 잡의
+# 체크포인트를 다음 주기(주간/월간)가 이어받으면 그 주기 수집의 일부가 조용히 스킵된다
+# (실패 잡 체크포인트는 영구 잔존 + 스캔에 시간 제한이 없던 구조 — 세션 370 발견).
+# 72h = 주간(7일)·월간(30일) 주기보다 충분히 짧고, 수동 재트리거 여유는 충분.
+RESUME_MAX_AGE_HOURS = 72
+
 
 def fail_job_safely(job_id: int, error_message: str) -> bool:
     """크롤 작업을 'failed' 로 확실히 마킹 — 깨진 세션 대비 새 세션 사용.

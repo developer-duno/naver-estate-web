@@ -316,6 +316,47 @@ def test_collect_resumes_from_checkpoint(db, seeded, monkeypatch):
     assert mock_fetch.call_count == 0, "이미 완료된 법정동을 다시 조회했다 = 재개 미동작"
 
 
+def test_collect_ignores_stale_checkpoint(db, seeded, monkeypatch):
+    """신선도 상한(RESUME_MAX_AGE_HOURS) 회귀 가드 — 세션 370 발견 잠복 결함.
+
+    실패 job 의 체크포인트는 영구 잔존하고 이 잡은 월 1회라 신규 실패가 쌓여 밀려나지도
+    않는다. 9/15 실행이 중간 실패하고 재트리거가 없으면 10/15 정기 실행이 지난달
+    "완료 목록"을 이어받아 그 절반을 스킵하고, 연도가 바뀌면 작년 마커로 올해 수집을
+    스킵한다(체크포인트에 연도 정보 없음). 72h 초과 체크포인트는 무시해야 한다.
+
+    (72h 이내 = 기존대로 이어받음은 test_collect_resumes_from_checkpoint 가 이미 커버)
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+
+    from datetime import timedelta
+
+    from crawler.service_common import _checkpoint
+    from utils import utcnow
+
+    # 한 달 전 실패 job — 다음 달 정기 실행이 이걸 이어받던 것이 결함
+    stale = CrawlJob(job_type="official_price", scheduler_job_id="collect_official_prices",
+                     status="failed", started_at=utcnow() - timedelta(days=30))
+    db.add(stale)
+    db.commit()
+    _checkpoint.save(db, stale.id, {"done_ld_codes": ["1168010600"], "total": 1})
+
+    rows = make_rows_for_complex(aphus_nm="은마", ho_count=10)
+
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices", side_effect=[rows]
+    ) as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 1, "지난달 체크포인트를 이어받아 법정동을 조용히 스킵했다"
+
+    # 실제로 수집까지 정상 완료됐는지 확인 (스킵됐다면 매칭 0 → silent failure 가드로 failed)
+    job = db.query(CrawlJob).filter(
+        CrawlJob.job_type == "official_price", CrawlJob.id != stale.id
+    ).one()
+    assert job.status == "completed"
+    assert db.query(ComplexOfficialPrice).count() == 1
+
+
 def test_collect_skips_non_target_types(db, monkeypatch):
     """OPST 등 대상 외 유형은 수집 대상에서 제외 (조회 자체가 안 일어남)."""
     monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")

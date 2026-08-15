@@ -643,11 +643,14 @@ def test_repass_ignores_checkpoint_skipped_dongs(db, seeded, monkeypatch):
 
     assert mock_fetch.call_count == 0, "스킵된 동을 재수집이 다시 조회했다 = 체크포인트 이득 소멸"
 
-    # 이 실행은 조회한 동이 0개라 매칭도 0 → silent failure 가드가 자기 문구를 남기는 게 정상.
-    # 검증 대상은 '재수집이 관할 밖 단지를 소실로 날조하지 않았는가' 뿐이다.
+    # 검증 대상은 '재수집이 관할 밖 단지를 소실로 날조하지 않았는가' 다.
+    # 이 실행은 유일한 법정동이 체크포인트로 스킵돼 remaining=0 → 조회 0회 → 매칭 0 인데,
+    # 그건 "시도 0회"라 정상이므로 silent failure 가드가 건너뛰고 completed 가 된다
+    # (가드의 remaining 조건 — test_silent_failure_guard_skips_when_nothing_to_scan 참조).
     job = db.query(CrawlJob).filter(
         CrawlJob.job_type == "official_price", CrawlJob.id != prev.id
     ).one()
+    assert job.status == "completed", "시도 0회 재개가 '전량 매칭 실패'로 오판됐다"
     assert "잔여" not in (job.error_message or ""), "관할 밖 단지가 소실로 잡혀 거짓 경보가 났다"
 
 
@@ -776,6 +779,152 @@ def test_repass_bails_out_on_collapse(db, monkeypatch):
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
     assert job.status == "completed"
     assert "임계" in (job.error_message or ""), "붕괴 사실이 기록되지 않았다"
+
+
+# ── 7-3. 재수집 벽시계 캡 (_REPASS_MAX_SECONDS, 세션 371) ──
+#
+# 현실 소실은 한 자릿수라 재수집이 수 분에 끝나지만, 이론 최악(대형 동 20개)은 ~1.8h 다.
+# 1h 로 끊어 "본 루프 최악 7h + 재수집 1h = 8h < 16h(monitor stale 예외)" 여유를 지킨다.
+
+
+def _fake_time(*values):
+    """수집기 모듈의 `time` 이름 바인딩을 통째로 대체할 페이크 객체.
+
+    ⚠ 공유 time **모듈**을 패치하지 않는다 — `time.monotonic` 을 직접 갈아끼우면 테스트가
+    도는 동안 프로세스 전역 monotonic 이 페이크가 돼, 무관한 컴포넌트가 한 번만 호출해도
+    시퀀스가 어긋나는 취약 구조가 된다. 모듈-로컬 이름만 바꾸면 service_official_price
+    안의 time.* 호출만 영향받고 전역 time 모듈은 무손상이다.
+
+    monotonic 은 호출 순서대로 값을 주고 소진되면 마지막 값을 유지한다(실제 경과 시간에
+    의존하지 않는 게 핵심 — 테스트 시각 하드코딩 금지 답습). sleep 은 no-op — 법정동
+    단위 재시도 경로(time.sleep(2))가 타면 테스트가 실제로 멈추지 않게 한다.
+    """
+    from types import SimpleNamespace
+
+    seq = list(values)
+
+    def _monotonic():
+        return seq.pop(0) if len(seq) > 1 else seq[0]
+
+    return SimpleNamespace(monotonic=_monotonic, sleep=lambda _s: None)
+
+
+def test_repass_stops_when_wall_clock_cap_exceeded(db, monkeypatch):
+    """캡 초과 시 남은 법정동은 재조회하지 않고, 그 단지는 잔여 보고에 합류한다.
+
+    소실 단지를 서로 다른 법정동 2개에 두고 첫 동 재수집 직후 시간이 캡을 넘게 만든다.
+    두 번째 동은 조회조차 되면 안 되고(호출 카운트), 구제 못 한 단지는 error_message
+    잔여 목록에 남아야 하며, job 은 (일부 소실이므로) completed 를 유지해야 한다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    # 소실 후보 2개(서로 다른 동) + 매칭 성공 1개(silent failure 가드 회피)
+    db.add(Complex(complex_no="L1", complex_name="소실일아파트", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.add(Complex(complex_no="L2", complex_name="소실이아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.add(Complex(complex_no="C9", complex_name="정상아파트", cortar_no="1168010800",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+    _seed_prior_row(db, "L1")
+    _seed_prior_row(db, "L2")
+
+    # 본 루프: 두 소실 동은 호수 부족(게이트 탈락), 세 번째 동만 정상 매칭
+    drift1 = make_rows_for_complex(aphus_code="A1", aphus_nm="소실일", ho_count=8)
+    drift2 = make_rows_for_complex(aphus_code="A2", aphus_nm="소실이", ho_count=8)
+    healthy = make_rows_for_complex(aphus_code="A9", aphus_nm="정상", ho_count=10)
+    # 재수집에서 첫 동은 완전 데이터(구제 성공) — 캡이 아니라 데이터 때문에 실패한 게
+    # 아님을 분명히 하려고 성공시킨다. 두 번째 동은 캡에 막혀 아예 조회되지 않아야 한다.
+    rescue1 = make_rows_for_complex(aphus_code="A1", aphus_nm="소실일", ho_count=10)
+
+    # 재수집 시작 시각 0 → 첫 동 처리 전 체크 0(통과) → 두 번째 동 체크에서 캡 초과
+    monkeypatch.setattr(
+        "crawler.service_official_price.time", _fake_time(0, 0, 10_000)
+    )
+
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[drift1, drift2, healthy, rescue1],
+    ) as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 4, (
+        "본 루프 3개 동 + 재수집 1개 동이어야 한다 — 캡 초과인데 두 번째 동을 재조회했다"
+    )
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed", "일부 소실은 전량 실패가 아니라 completed 유지"
+    # 캡으로 못 주운 단지는 별도 채널이 아니라 기존 잔여 보고로 자연 합류해야 한다
+    assert "잔여 1단지" in (job.error_message or "")
+    assert "L2" in (job.error_message or ""), "캡에 막힌 단지가 잔여 목록에 없다"
+    assert "L1" not in (job.error_message or ""), "캡 전에 구제된 단지가 잔여로 잡혔다"
+
+
+def test_repass_completes_all_dongs_when_within_cap(db, monkeypatch):
+    """시간이 캡 안이면 캡은 아무 영향이 없다 — 전 법정동 재수집·구제 성공.
+
+    (기본 구제 경로 자체는 test_repass_rescues_regressed_complex 가 이미 커버하므로,
+    여기서는 '동이 2개일 때도 캡 미발동이면 둘 다 돈다'만 추가로 단언한다.)
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    db.add(Complex(complex_no="L1", complex_name="소실일아파트", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.add(Complex(complex_no="L2", complex_name="소실이아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+    _seed_prior_row(db, "L1")
+    _seed_prior_row(db, "L2")
+
+    drift1 = make_rows_for_complex(aphus_code="A1", aphus_nm="소실일", ho_count=8)
+    drift2 = make_rows_for_complex(aphus_code="A2", aphus_nm="소실이", ho_count=8)
+    rescue1 = make_rows_for_complex(aphus_code="A1", aphus_nm="소실일", ho_count=10)
+    rescue2 = make_rows_for_complex(aphus_code="A2", aphus_nm="소실이", ho_count=10)
+
+    # 시각 고정 — 경과 0 이라 캡 조건이 절대 참이 되지 않는다
+    monkeypatch.setattr("crawler.service_official_price.time", _fake_time(0))
+
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[drift1, drift2, rescue1, rescue2],
+    ) as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 4, "캡 미발동인데 재수집이 중간에 끊겼다"
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed"
+    assert job.processed_items == 2, "두 단지 모두 재수집으로 구제돼야 한다"
+    assert not (job.error_message or ""), "전부 구제됐으므로 잔여 문구가 없어야 한다"
+
+
+def test_silent_failure_guard_skips_when_nothing_to_scan(db, seeded, monkeypatch):
+    """조회할 법정동이 0개인 재개 실행은 '시도 0회'라 매칭 0 이 정상 — failed 아님.
+
+    전량-done 체크포인트를 이어받으면 본 루프가 no-op 이라 matched=0 이 되는데, 이를
+    '전량 매칭 실패'와 구분하지 않으면 정상 재개가 failed 로 오판된다(세션 370 리뷰어
+    2차 함정의 뿌리). 가드가 remaining 조건까지 보는지 확인한다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+
+    from crawler.service_common import _checkpoint
+    from utils import utcnow
+
+    # 72h 이내 실패 job + 전 법정동(seeded 단지의 동) 완료 체크포인트 → remaining=0
+    prev = CrawlJob(job_type="official_price", scheduler_job_id="collect_official_prices",
+                    status="failed", started_at=utcnow())
+    db.add(prev)
+    db.commit()
+    _checkpoint.save(db, prev.id, {"done_ld_codes": ["1168010600"], "total": 1})
+
+    with patch("crawler.vworld_price_api.fetch_official_prices") as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 0, "전량 완료 체크포인트인데 다시 조회했다"
+
+    job = db.query(CrawlJob).filter(
+        CrawlJob.job_type == "official_price", CrawlJob.id != prev.id
+    ).one()
+    assert job.status == "completed", "시도 0회 재개가 '전량 매칭 실패'로 오판됐다"
+    assert "매칭 실패" not in (job.error_message or "")
 
 
 # ── 8. 페이지네이션 종료 조건 ──

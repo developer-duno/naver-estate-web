@@ -50,6 +50,12 @@ _REPASS_MAX_DONGS = 20
 # 200 이면 충분한 여유이며, 이 경우 재수집은 구제가 아니라 무의미한 폭주가 된다.
 _REPASS_COLLAPSE_THRESHOLD = 200
 
+# 재수집 벽시계 캡 — 현실 소실은 한 자릿수라 재수집이 수 분에 끝나지만, 이론 최악
+# (대형 동 20개 전부 재조회)은 ~1.8h 가 된다. 1h 로 끊어 "본 루프 최악 7h + 재수집 1h
+# = 8h < 16h(monitor stale 예외)" 여유를 보장한다. 이로써 재수집 상한이
+# 규모(_REPASS_MAX_DONGS)·이상(_REPASS_COLLAPSE_THRESHOLD)·시간 3중 방어가 된다.
+_REPASS_MAX_SECONDS = 3600
+
 _PAREN = re.compile(r"\([^)]*\)")
 # 꼬리 동목록 — "대치우성아파트1동 2동 3동 5동 6동 7동" 처럼 공시측 단지명 끝에
 # 동 번호가 나열되는 실제 패턴(라이브 실측)을 제거한다.
@@ -465,6 +471,12 @@ def collect_official_prices(
         # 체크포인트는 **본 루프 완주 시점**에 지운다 — 이후 단계(재수집)에서 죽어도
         # 다음 주기가 낡은 완료 마커를 이어받아 "거의 다 했다"고 착각하며 아무것도
         # 안 하는 사태를 막는다.
+        #
+        # 대가로 삭제~완료 사이에 강제종료되면 재실행이 전량 재수집이 되는 창이 생긴다.
+        # 그래도 수용한다 — 월 1회 잡의 수 분짜리 창이고(위 시간 캡이 더 좁힌다) 이미
+        # 커밋된 데이터는 무손실이라 손해가 재크롤 시간뿐이다. 진짜 재개를 하려면 이번
+        # 실행의 매칭 단지 ~2.5만 개를 체크포인트 blob 에 영속해야 해서 그 비용·신규
+        # 실패 모드가 기대이익을 넘는다(세션 371 설계노트).
         _checkpoint.delete(db, job.id)
 
         # ── 매칭 소실 재수집 패스 ──
@@ -521,7 +533,19 @@ def collect_official_prices(
                     "[official_price] 매칭 소실 %d단지 감지 — 법정동 %d개 재수집 시작",
                     len(regressed), len(repass_dongs),
                 )
-                for ld_code in repass_dongs:
+                repass_start = time.monotonic()
+                for repass_idx, ld_code in enumerate(repass_dongs):
+                    # 시간 캡은 **동 경계**에서만 본다 — 페이지 단위로 쪼개면 중간에 끊긴
+                    # 부분 수집이 세대수 게이트를 통째로 어긋나게 한다. 초과분은 대형 동
+                    # 1개(수 분)로 바운드되므로 단순한 이 방식으로 충분하다.
+                    if time.monotonic() - repass_start > _REPASS_MAX_SECONDS:
+                        logger.warning(
+                            "[official_price] 재수집 벽시계 캡 %d초 초과 — 남은 법정동"
+                            " %d개 중단 (미구제 단지는 잔여 보고에 합류)",
+                            _REPASS_MAX_SECONDS, len(repass_dongs) - repass_idx,
+                        )
+                        break
+
                     rows = fetch_official_prices(to_standard_cortar(ld_code), year)
                     if rows is None:
                         # ⚠ failed_ld_codes/리스트에 넣지 않는다 — 재수집 대상 동은 정의상
@@ -588,7 +612,12 @@ def collect_official_prices(
         # ⚠ 재수집 패스 **뒤에** 둔다 — 앞에 두면 드리프트로 전량 소실된 실행에서
         # 구제 기회 자체가 사라진다(가드가 return 으로 끊으므로). 매칭이 진짜로 깨졌다면
         # 재수집도 0건이라 여기서 똑같이 걸리므로 그물은 그대로 유효하다.
-        if targets and matched_complexes == 0:
+        #
+        # ⚠ remaining 조건도 함께 본다 — 조회할 법정동이 0개인 실행(전량-done 체크포인트
+        # 재개)은 "시도 0회"라 매칭 0 이 정상이다. 이걸 "전량 실패"와 구분하지 않으면
+        # 정상 재개가 failed 로 오판된다(세션 370 리뷰어 2차 함정의 뿌리 — 지금은 그
+        # 경로가 실질 불가능하지만, 재개 설계를 손댈 때 되살아나므로 선제 차단).
+        if targets and remaining and matched_complexes == 0:
             _fail_job(db, job, f"대상 단지 {len(targets)}개 전부 매칭 실패 (수집 0건)")
             logger.error(
                 "[official_price] silent failure 감지: 단지 %d개 전부 매칭 실패", len(targets)

@@ -19,8 +19,6 @@ import time
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
-from sqlalchemy import func
-
 from crawler.cortar_legacy import to_standard_cortar
 from crawler.env_common import _complete_job, _fail_job, _record_job
 from crawler.service_common import RESUME_MAX_AGE_HOURS, _checkpoint
@@ -189,6 +187,20 @@ def aggregate_area_medians(rows: list[dict]) -> list[tuple[Decimal, int, int]]:
     return result
 
 
+def _alert_official_price(message: str) -> None:
+    """운영 텔레그램 알림 — 실패해도 수집을 죽이지 않는다(best-effort, lazy import).
+
+    job_error_listener._send_alert 패턴 답습. TELEGRAM_ENABLED 토글을 공유하며,
+    테스트에서는 conftest 가 그 토글을 false 로 강제해 실발송이 0 이다(세션 325 사고 답습).
+    """
+    try:
+        from services.telegram import send_telegram
+
+        send_telegram(message)
+    except Exception:
+        logger.warning("[official_price] 텔레그램 알림 발송 실패", exc_info=True)
+
+
 def _save_matched_areas(db, complex_no: str, year: str, aphus_code: str, group: dict) -> int:
     """매칭된 공시 그룹을 평형별 중위가로 저장. 반환: 저장한 행 수(0 이면 미저장).
 
@@ -245,9 +257,9 @@ def _find_regressed_targets(
          (공시 미발표) 실행마다 소실로 잡혀 오탐이 폭발하고, 영구 미매칭 단지가 매달
          재판정돼 경보 피로를 만든다.
 
-    collected_at 은 단지당 여러 평형 행이 있어 max() 로 결정론화한다(임의 행이 잡히던
-    비결정성 제거). collected_at 이 NULL 인 행만 가진 단지는 max 결과가 None 이라 자연
-    제외 = 신규 취급 — 수집 시각을 모르면 '과거에 있었다'를 주장할 수 없으므로 맞다.
+    판정은 "올해 행이 있었나" **존재 여부만** 본다 — 수집 시각의 크기 비교는 하지 않는다
+    (관할 범위는 위 2)의 processed_ld_codes 가 이미 가른다). collected_at 이 NULL 인
+    행만 가진 단지는 제외 = 신규 취급 — 수집 시각을 모르면 '과거에 있었다'를 주장할 수 없다.
     """
     if not processed_ld_codes:
         return []
@@ -260,19 +272,19 @@ def _find_regressed_targets(
     if not candidates:
         return []
 
-    # 전체 단지를 IN 절에 넣지 않는다(수만 개) — 올해 행을 통째로 집계해 Python 에서 교집합.
-    prior_seen = dict(
-        db.query(
-            ComplexOfficialPrice.complex_no, func.max(ComplexOfficialPrice.collected_at)
+    # 전체 단지를 IN 절에 넣지 않는다(수만 개) — 올해 행 보유 단지를 통째로 뽑아 Python 에서 교집합.
+    prior_seen = {
+        row[0]
+        for row in db.query(ComplexOfficialPrice.complex_no)
+        .filter(
+            ComplexOfficialPrice.stdr_year == year,
+            ComplexOfficialPrice.collected_at.isnot(None),
         )
-        .filter(ComplexOfficialPrice.stdr_year == year)
-        .group_by(ComplexOfficialPrice.complex_no)
+        .distinct()
         .all()
-    )
+    }
 
-    return [
-        t for t in candidates if prior_seen.get(t.complex_no) is not None
-    ]
+    return [t for t in candidates if t.complex_no in prior_seen]
 
 
 def collect_official_prices(
@@ -463,6 +475,7 @@ def collect_official_prices(
         # 전체를 try 로 감싼다 — 구제는 best-effort 라, 재수집 중 예외가 본 수집 성공을
         # 실패로 뒤집으면 안 된다(그 경우 outer except 로 빠져 job 이 failed 가 된다).
         rescued = 0
+        repass_fetch_failed = 0
         try:
             regressed = _find_regressed_targets(
                 db, targets, matched_complex_nos, processed_ld_codes, year
@@ -480,6 +493,11 @@ def collect_official_prices(
                     " — 시스템 이상 의심, 재수집 생략"
                 )[:500]
                 db.commit()
+                _alert_official_price(
+                    f"[내부즉시] 공동주택 공시가격 — 매칭 소실 {len(regressed)}단지로 임계"
+                    f" {_REPASS_COLLAPSE_THRESHOLD} 초과. 페이지 드리프트가 아니라 시스템 이상"
+                    " 의심(매칭 규칙·API 응답 구조 변경 등)이라 재수집을 생략했습니다."
+                )
                 regressed = []
 
             if regressed:
@@ -506,8 +524,11 @@ def collect_official_prices(
                 for ld_code in repass_dongs:
                     rows = fetch_official_prices(to_standard_cortar(ld_code), year)
                     if rows is None:
-                        failed_ld_codes += 1
-                        failed_ld_codes_list.append(ld_code)
+                        # ⚠ failed_ld_codes/리스트에 넣지 않는다 — 재수집 대상 동은 정의상
+                        # 본 루프에서 조회 **성공**한 동이라, 여기 합산하면 "조회 실패 동
+                        # 목록"이 오염되고 total_items(=collected+failed)도 부풀려진다.
+                        # 재수집 실패는 별도로만 세어 완료 로그에 구분 출력한다.
+                        repass_fetch_failed += 1
                         logger.warning("[official_price] 재수집 법정동 %s 조회 실패", ld_code)
                         continue
 
@@ -548,6 +569,13 @@ def collect_official_prices(
                         f"재수집 후 미매칭 잔여 {len(remaining_lost)}단지: {summary}"
                     )[:500]
                     db.commit()
+                    # completed 잡의 error_message 는 admin 화면에서 행을 펼쳐야만 보이고
+                    # monitor 텔레그램은 failed 만 감시한다 — 월 1회 잡이라 이대로면 다음
+                    # 달까지 아무도 모른다. 관찰 가능하게 텔레그램으로 승격(best-effort).
+                    _alert_official_price(
+                        f"[내부즉시] 공동주택 공시가격 — 재수집 후에도 미매칭 잔여"
+                        f" {len(remaining_lost)}단지: {summary}"
+                    )
         except Exception:
             # 구제 실패는 본 수집 결과를 되돌리지 않는다 — 로그만 남기고 완료 경로 계속.
             logger.exception("[official_price] 재수집 패스 실패 — 본 수집 결과는 유지")
@@ -570,9 +598,9 @@ def collect_official_prices(
         _complete_job(db, job, matched_complexes, failed_ld_codes)
         logger.info(
             "[official_price] 완료: 단지 %d개 매칭(재수집 구제 %d개), 공시행 %d건 저장,"
-            " 법정동 실패 %d개 %s",
+            " 법정동 실패 %d개 %s, 재수집 조회실패 %d개",
             matched_complexes, rescued, saved_rows, failed_ld_codes,
-            failed_ld_codes_list[:20],
+            failed_ld_codes_list[:20], repass_fetch_failed,
         )
     except Exception as exc:
         _fail_job(db, job, str(exc))

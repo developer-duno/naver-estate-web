@@ -14,7 +14,7 @@ from utils import utcnow
 
 logger = logging.getLogger(__name__)
 
-# 배치 진행 체크포인트 (service_price + service_public 공유)
+# 배치 진행 체크포인트 (service_price·service_public·service_official_price·service_metrics 공유)
 _checkpoint = CheckpointManager(checkpoint_interval=5)
 
 # 체크포인트 재개 신선도 상한 — 재개는 "중단 직후 곧 재실행" 의도다. 낡은 실패 잡의

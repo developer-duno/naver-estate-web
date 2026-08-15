@@ -96,7 +96,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 | 공공데이터 수집 | 토요일 5시 | 국토교통부 실거래가 (10일 토요일 skip) |
 | 청약홈 오피스텔 수집 | 월요일 05:00 | 오피스텔/도시형 청약 공고+평형(getUrbtyOfctlLttotPblancDetail/Mdl), apartments 로스터 매칭분만 upsert (네이버 0, PUBLIC_DATA_ENABLED 공유 — 이슈 #323) |
 | 청약홈 민간임대 수집 | 월요일 05:30 | 공공지원 민간임대 공고+평형(getPblPvtRentLttotPblancDetail/Mdl), 신규 독립 테이블 (네이버 0, PUBLIC_DATA_ENABLED 공유 — 이슈 #323) |
-| 공동주택 공시가격 수집 | 매월 15일 06:30 | V-WORLD getApartHousingPriceAttr 법정동 전량 수집 → 단지(APT·JGC) 세대수 게이트 매칭 → 평형별 중위 공시가격 저장 (네이버 0, VWORLD_API_KEY 공유, 토글 OFFICIAL_PRICE_ENABLED — PR-A3). ⚠ 정상 소요 3.6~7h — 실행 중(15일 06:30~오후) 재시작 회피(잡이 프로세스 내 상주라 재시작=중단, 익월 트리거까지 미재개·체크포인트는 다음 실행 시 재개 — 세션 369). V-WORLD 페이지네이션 드리프트(총행수 일치·행 구성 상이)로 대형 단지가 세대수 게이트에서 비결정 탈락 → 본 루프 종료 후 **매칭 소실 재수집 패스**가 새 표본으로 구제, 잔여는 completed 잡의 error_message 에 기록(다음 검수 시 이 필드 확인 — 세션 370) |
+| 공동주택 공시가격 수집 | 매월 15일 06:30 | V-WORLD getApartHousingPriceAttr 법정동 전량 수집 → 단지(APT·JGC) 세대수 게이트 매칭 → 평형별 중위 공시가격 저장 (네이버 0, VWORLD_API_KEY 공유, 토글 OFFICIAL_PRICE_ENABLED — PR-A3). ⚠ 정상 소요 3.6~7h — 실행 중(15일 06:30~오후) 재시작 회피(잡이 프로세스 내 상주라 재시작=중단). 체크포인트 재개는 중단 후 **72h 이내 재실행(수동 재트리거)만** 유효(#387 신선도 바운드, 3개 수집기 공통) — 놓치면 익월 정기 실행이 처음부터 전량 재수집(데이터 무손실, 시간 낭비만) (세션 369·370). V-WORLD 페이지네이션 드리프트(총행수 일치·행 구성 상이)로 대형 단지가 세대수 게이트에서 비결정 탈락 → 본 루프 종료 후 **매칭 소실 재수집 패스**가 새 표본으로 구제, 잔여는 completed 잡의 error_message 에 기록 + **잔여·붕괴(소실 200단지 초과)는 텔레그램 알림**(세션 370) |
 | 대기질 수집 | 매일 2시 | 에어코리아 API |
 | 응급의료 수집 | 매월 첫째 월 3시 | NEMC 응급의료기관 API |
 | 어린이집 수집 | 매월 첫째 목 1시 | CPMS cpmsapi030 API (01:00 고정 — 아래 §CPMS 키 공유 참조, 04:30 이후 금지) |

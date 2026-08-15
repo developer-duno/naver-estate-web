@@ -507,6 +507,70 @@ def test_repass_failure_records_remaining_in_error_message(db, seeded, monkeypat
     assert seeded in (job.error_message or ""), "어느 단지가 잔여인지 식별 가능해야 한다"
 
 
+def test_repass_fetch_failure_does_not_pollute_failed_counters(db, seeded, monkeypatch):
+    """재수집 조회 실패는 failed_ld_codes/total_items 를 오염시키지 않는다.
+
+    재수집 대상 동은 **정의상 본 루프에서 조회 성공한 동**이다(processed_ld_codes 필터).
+    그런데도 재수집 실패를 failed_ld_codes 에 합산하면 "조회 실패 동 목록"에 성공했던
+    동이 섞이고 total_items(=collected+failed)가 부풀려진다. 실패 사실은 별도 카운터와
+    잔여 문구로만 남아야 한다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded)
+    db.add(Complex(complex_no="C9", complex_name="정상아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+
+    drifted = make_rows_for_complex(aphus_nm="은마", ho_count=8)
+    healthy = make_rows_for_complex(aphus_code="A9", aphus_nm="정상", ho_count=10)
+
+    # 본 루프: 은마(드리프트 성공)·정상(성공) → 재수집: 은마 조회 실패(None)
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[drifted, healthy, None],
+    ) as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 3
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed"
+    assert job.processed_items == 1, "본 루프에서 매칭한 정상 단지 1개"
+    # 본 루프 조회 실패가 0 이므로 total_items = processed(1) + failed(0) = 1.
+    # 재수집 실패가 여기 섞이면 2 가 된다 = 카운터 오염.
+    assert job.total_items == 1, "재수집 조회 실패가 failed_ld_codes 에 합산돼 total 이 부풀었다"
+    # 조회 실패로 구제 못 했으니 그 단지는 잔여 목록에 남아야 한다
+    assert "잔여 1단지" in (job.error_message or "")
+    assert seeded in (job.error_message or "")
+
+
+def test_repass_remaining_loss_sends_telegram_alert(db, seeded, monkeypatch):
+    """잔여 미매칭은 텔레그램으로 승격 — completed 잡의 error_message 는 아무도 안 본다.
+
+    monitor 텔레그램은 failed 만 감시하고 admin UI 는 행을 펼쳐야 보인다. 월 1회 잡이라
+    이대로면 다음 달까지 소실을 아무도 모르는 게 9/15 유일 맹점이었다.
+    (conftest 가 TELEGRAM_ENABLED=false 를 전역 강제하므로 실발송은 0 — 호출만 단언)
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded)
+    db.add(Complex(complex_no="C9", complex_name="정상아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+
+    drifted = make_rows_for_complex(aphus_nm="은마", ho_count=8)
+    healthy = make_rows_for_complex(aphus_code="A9", aphus_nm="정상", ho_count=10)
+
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[drifted, healthy, drifted],
+    ), patch("services.telegram.send_telegram") as mock_send:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_send.call_count == 1, "잔여 미매칭인데 텔레그램 알림이 안 나갔다"
+    sent = mock_send.call_args[0][0]
+    assert "잔여" in sent and seeded in sent, f"알림 본문에 잔여 단지가 없다: {sent}"
+
+
 def test_repass_runs_before_silent_failure_guard(db, seeded, monkeypatch):
     """전량 소실 실행에서도 재수집이 먼저 돈다 — 가드가 앞에 있으면 구제 기회가 사라진다.
 
@@ -701,10 +765,13 @@ def test_repass_bails_out_on_collapse(db, monkeypatch):
     with patch(
         "crawler.vworld_price_api.fetch_official_prices",
         side_effect=[make_rows_for_complex(aphus_nm="무관단지", ho_count=10), healthy],
-    ) as mock_fetch:
+    ) as mock_fetch, patch("services.telegram.send_telegram") as mock_send:
         collect_official_prices(stdr_year=_YEAR)
 
     assert mock_fetch.call_count == 2, "임계 초과인데 재수집이 돌았다"
+    # 붕괴는 시스템 이상 신호라 error_message 만으론 부족 — 텔레그램으로 승격
+    assert mock_send.call_count == 1, "붕괴 이탈인데 텔레그램 알림이 안 나갔다"
+    assert "임계" in mock_send.call_args[0][0]
 
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
     assert job.status == "completed"

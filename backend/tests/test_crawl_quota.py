@@ -61,9 +61,16 @@ class _FakeThread:
 
 
 def _crawl_count(db, uid):
-    """오늘 user 의 crawl 쿼터 카운터 값 (없으면 0)."""
-    from datetime import datetime, timezone
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    """오늘 user 의 crawl 쿼터 카운터 값 (없으면 0).
+
+    check_quota(auth/permissions.py) 가 KST 자정 기준 "오늘" 키를 쓰므로
+    (세션 369 PR #385) 여기도 같은 축을 써야 한다. UTC 로 "오늘"을 구하면
+    KST 자정~오전 9시 구간(=UTC 전날 15~24시)에 두 축이 어긋나 카운터를
+    못 찾는 flaky 가 난다 — 세션 371 8/17 00:33 KST 실측으로 재현·확정.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    today = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d")
     c = db.get(RateLimitCounter, f"user:{uid}:crawl:{today}")
     return c.count if c else 0
 

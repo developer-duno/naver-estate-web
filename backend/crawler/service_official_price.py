@@ -476,7 +476,7 @@ def collect_official_prices(
         # 안 하는 사태를 막는다.
         #
         # 대가로 삭제~완료 사이에 강제종료되면 재실행이 전량 재수집이 되는 창이 생긴다.
-        # 그래도 수용한다 — 월 1회 잡의 수 분짜리 창이고(위 시간 캡이 더 좁힌다) 이미
+        # 그래도 수용한다 — 월 1회 잡의 최대 ~1시간짜리 창이고(_REPASS_MAX_SECONDS 캡으로 바운드) 이미
         # 커밋된 데이터는 무손실이라 손해가 재크롤 시간뿐이다. 진짜 재개를 하려면 이번
         # 실행의 매칭 단지 ~2.5만 개를 체크포인트 blob 에 영속해야 해서 그 비용·신규
         # 실패 모드가 기대이익을 넘는다(세션 371 설계노트).
@@ -621,9 +621,11 @@ def collect_official_prices(
         # 정상 재개가 failed 로 오판된다(세션 370 리뷰어 2차 함정의 뿌리 — 지금은 그
         # 경로가 실질 불가능하지만, 재개 설계를 손댈 때 되살아나므로 선제 차단).
         if targets and remaining and matched_complexes == 0:
-            _fail_job(db, job, f"대상 단지 {len(targets)}개 전부 매칭 실패 (수집 0건)")
+            # 문구는 remaining(이번 실행에서 실제 시도한 수) 기준 — targets(전체 로스터)를
+            # 쓰면 체크포인트 부분 재개 시 "10,000개 전부 실패"처럼 과장된다(세션 371 백로그).
+            _fail_job(db, job, f"대상 단지 {len(remaining)}개 전부 매칭 실패 (수집 0건)")
             logger.error(
-                "[official_price] silent failure 감지: 단지 %d개 전부 매칭 실패", len(targets)
+                "[official_price] silent failure 감지: 단지 %d개 전부 매칭 실패", len(remaining)
             )
             return
 

@@ -33,7 +33,7 @@
 | `db/mb_query_helpers.py` | mibunyang 중복 제거 + 정렬 + 필터 헬퍼 |
 | `db/mb_apartment_queries.py` | mibunyang 아파트 단지 + 미분양 조회 쿼리 |
 | `db/mb_misc_queries.py` | mibunyang 지역 통계 + 실거래 + 단지 부속 쿼리 |
-| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V028, 29 버전) |
+| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V047, 48 버전 — 최신은 하단 §DB 마이그레이션 표가 진실) |
 | `shared/naver_api.py` | NaverEstateAPI (수정 금지) |
 | `shared/constants.py` | 상수 (수정 금지) |
 | `auth/permissions.py` | 역할 체크 (require_role) + 일일 쿼터 (check_quota) |

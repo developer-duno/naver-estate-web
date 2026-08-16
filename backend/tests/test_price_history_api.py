@@ -224,12 +224,17 @@ def test_price_collect_409_already_running(mock_thread, client, db):
 def test_price_collect_429_quota_exceeded(mock_thread, client, db):
     """쿼터 초과 → 429"""
     from datetime import datetime, timedelta, timezone
+    from zoneinfo import ZoneInfo
 
     from db.models import RateLimitCounter
     _add_user_profile(db, role="admin", price_quota=1)
     _add_complex(db)
-    # 쿼터 카운터를 사전에 1로 설정 (limit=1이므로 다음 요청은 429)
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # 쿼터 카운터를 사전에 1로 설정 (limit=1이므로 다음 요청은 429).
+    # check_quota(auth/permissions.py) 가 KST 자정 기준 "오늘" 키를 쓰므로
+    # (세션 369 PR #385) 여기도 같은 축이어야 한다 — UTC 로 심으면 KST
+    # 자정~오전 9시 구간에 키가 어긋나 429 대신 200 이 나는 flaky 가 난다
+    # (세션 371 8/17 00:33 KST 실측 재현·확정).
+    today = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y-%m-%d")
     counter = RateLimitCounter(
         key=f"user:user-001:price_collect:{today}",
         count=1,

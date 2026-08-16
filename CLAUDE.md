@@ -112,13 +112,13 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - `CHILDCARE_DETAIL_API_KEY` — cpmsapi030 운영키
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — Gmail SMTP SSL 465
 
-## 테스트 현황 (BE·FE 2026-08-13 세션 362 전체 실행 실측)
+## 테스트 현황 (BE·FE 2026-08-16 세션 371 실측)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2045개** (2045 passed — 세션 367 전체 `npm test -- --run` 실측, 세션 362 기준 1992에서 +53: 지하철 표시·포맷·노선명 정규화·MSW 가드·admin 페이드 신규) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2090개** (2090 passed — 세션 368 CI 실측, 세션 369~371 FE 무변경. `vitest list` 세션 371 실측 2,091 = 스킵성 1 포함) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1251개** (`--collect-only` 세션 367 실측, 세션 362 기준 1238에서 +13 — test_subway.py 신규. ⚠ passed 기준선과 혼동 금지: 전체 실행 시 skipped 7·xfailed 6 제외됨) |
+| BE pytest | `backend/tests/` | **1313개** (`--collect-only` 세션 371 실측, 세션 367 기준 1251에서 +62 — 재수집 캡·KST 경계·모니터 예외·재개 바운드·개편 번역맵 신규. ⚠ passed 기준선과 혼동 금지: 전체 실행 = **1300 passed / 7 skipped / 6 xfailed**) |
 
 ## 커밋 전 필수 검증
 

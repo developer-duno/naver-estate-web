@@ -19,7 +19,7 @@ import time
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
-from crawler.cortar_legacy import to_standard_cortar
+from crawler.cortar_legacy import to_vworld_cortar
 from crawler.env_common import _complete_job, _fail_job, _record_job
 from crawler.service_common import RESUME_MAX_AGE_HOURS, _checkpoint
 from db.database import SessionLocal
@@ -413,11 +413,14 @@ def collect_official_prices(
             # 전 페이지 수집 완료 후에만 매칭 — 부분 수집 시 세대수 게이트가 통째로
             # 어긋난다(V-WORLD 가 대형 단지를 뒷페이지에 배치, 플랜 §3-2-5).
             #
-            # ⚠ 조회 직전에만 표준 코드로 번역한다 — 광주·전남은 네이버가 12-프리픽스
-            # (전남광주통합특별시) 코드를 주는데 V-WORLD 는 옛 체계(29/46)만 받아
-            # 12 코드로는 조용히 0건이 온다(cortar_legacy.py 참조). 루프 키·체크포인트
-            # (done_ld_codes)는 **원본 그대로** 둬야 재개 호환이 깨지지 않는다.
-            rows = fetch_official_prices(to_standard_cortar(ld_code), year)
+            # ⚠ 조회 직전에만 V-WORLD 용 코드로 번역한다(cortar_legacy.py 참조).
+            # 두 가지가 걸린다 — ① 광주·전남 12-프리픽스(V-WORLD 는 옛 29/46 만 받음)
+            # ② 2026 개편 신코드(V-WORLD 는 아직 개편 전 옛 코드에만 데이터 보유).
+            # ②는 **공시가격 전용**이라 to_standard_cortar 가 아니라 to_vworld_cortar 를
+            # 쓴다 — 국토부 실거래가는 정반대로 신 코드를 받기 때문이다.
+            # 루프 키·체크포인트(done_ld_codes)는 **원본 그대로** 둬야 재개 호환이
+            # 깨지지 않는다.
+            rows = fetch_official_prices(to_vworld_cortar(ld_code), year)
             if rows is None:
                 # 4번째 재시도 계층 — vworld_price_api.py 내부에 이미 429 전용
                 # MAX_RETRIES=3 재시도가 있지만, 그건 페이지 단위(1회 호출)의 순간적인
@@ -426,7 +429,7 @@ def collect_official_prices(
                 # 일시적 네트워크 오류·타임아웃으로 통째 실패하는 빈도가 높은데, 몇 초
                 # 후 재시도하면 살아나는 경우가 실측상 다수라 여기서 한 번 더 감아준다.
                 time.sleep(2)
-                rows = fetch_official_prices(to_standard_cortar(ld_code), year)
+                rows = fetch_official_prices(to_vworld_cortar(ld_code), year)
             if rows is None:
                 failed_ld_codes += 1
                 failed_ld_codes_list.append(ld_code)
@@ -546,7 +549,7 @@ def collect_official_prices(
                         )
                         break
 
-                    rows = fetch_official_prices(to_standard_cortar(ld_code), year)
+                    rows = fetch_official_prices(to_vworld_cortar(ld_code), year)
                     if rows is None:
                         # ⚠ failed_ld_codes/리스트에 넣지 않는다 — 재수집 대상 동은 정의상
                         # 본 루프에서 조회 **성공**한 동이라, 여기 합산하면 "조회 실패 동

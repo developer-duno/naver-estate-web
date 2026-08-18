@@ -104,6 +104,37 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 | 단지 상세 backfill | APT/OPST 4시간 interval 매일 / JGC·ABYG·OBYG 주1회 7시 | 매물유형별 독립 job, detail_crawled_at NULL 단지 보강 (APT/OPST 배치 1000 가속 — PR #19 답습, 소수 유형 배치 1000 cron 유지. 2026-05-27 PR 6a 답습 6h→4h 33% 가속) |
 | 크롤링 모니터 | 10분 interval | crawl_jobs 정합성 점검 후 텔레그램 알림 (운영 토글 MONITOR_ENABLED, 2026-05-25 세션 229 30→10→20 답습 후 현 .env MONITOR_INTERVAL_MIN=10 운영. 기본 _STALE_HOURS=1h — 정상적으로 오래 도는 잡은 _STALE_HOURS_BY_TYPE 예외 의무: public_trade_data 3h(세션 266)·official_price 16h(세션 369 오탐 sweep 실사고 — 새 장시간 잡 추가 시 이 표 동반 등록). _FAILED_WINDOW_HOURS=24. 전부 monitor.py 상단 상수, 인터벌 격하 무관) |
 
+### 짧은 주기 크론과 재시작 겹침 — 반복 재시작은 몰아서 하지 말 것 (세션 372 실측)
+
+`official_price`(매월 15일, 몇 시간짜리)처럼 **긴** 잡은 위 표에 "실행 중 재시작 회피"로 이미
+박혀 있다. 이 절은 그 반대 — **짧은 주기(10분·30분 interval) 크론이라도, 재시작이 짧은
+시간에 몰리면 도중 작업이 끊기거나 그 순간 DB 부하가 겹쳐 흔들릴 수 있다**는 일반 원칙.
+
+- 서버 재시작 시 `main.py`의 부팅 스윕(SQL, `tests/test_stale_running_sweep.py` 회귀 가드)이
+  재시작 직전에 실행 중이던 잡을 `cancelled`(`error_message="stale running — swept on
+  startup"`)로 정리한다 — 이건 의도된 안전장치라 그 자체는 정상이다. 문제는 **재시작이
+  짧은 간격으로 여러 번 몰리면** 이 정리가 반복되고, 마침 재시작 순간이 크론 실행 시각과
+  겹치면 그 주기의 작업이 스킵되거나 중간에 끊긴 것처럼 보인다.
+- 재시작 순간 DB 커넥션이 새로 맺어지는 타이밍에 다른 크론(예: `complex_articles`)이 마침
+  대량 upsert 중이면 `statement_timeout`(8초, 위 §DB 커넥션 풀)에 걸려 실패할 수도 있다 —
+  DB 자체 장애가 아니라 재시작 타이밍이 만드는 일시적 혼잡.
+- **처방**: 여러 PR을 연속 배포할 때 매 PR마다 재시작하지 말고, 가능하면 **묶어서 한 번에
+  재시작**한다(release.md §2 cross-check 는 PR 단위가 아니라 "이번에 반영할 변경 묶음"
+  단위로 해도 된다). 부득이 짧은 간격으로 여러 번 재시작해야 하면, 크롤링 모니터 텔레그램에
+  "마비→복구" 알림이 여러 건 몰려도 **재시작 시각과 겹치는지부터 대조** — 진짜 장애인지
+  재시작 부작용인지 구분한다(구분법: 아래 사건의 `backend_<mtime>.log` 회전 로그 대조 실측
+  참조).
+
+> **사건**: 2026-08-14 — 세션 369가 PR #381~#385를 순차 배포하며 하루 8회 재시작
+> (00:11·00:19·01:59·03:22·05:57·07:53·11:32·14:56). 01:59:48 재시작이 02:00:00 대기질
+> 크론을 정확히 덮침 + 05:52 무렵 재시작 스윕이 `article_detail`을 cancelled 처리하고
+> 직후 `complex_articles`가 statement_timeout으로 failed → 텔레그램에 "article_detail
+> 마비→복구"·"매물 상세 보강 실패(DB connection timeout)" 알림 4건 발생. 세션 372에서
+> 회전 로그(`backend_2026081*.log`)·`crawl_jobs`·`monitor_alerts`(전부 `status=resolved`)
+> 3중 대조로 "진짜 장애가 아니라 재시작 몰림의 부작용이었고 이후 재발 없음"을 확정.
+> `official_price` 16h 예외(세션 369, #382)가 "긴 잡" 케이스를 이미 막았듯, 이 사건은
+> "짧은 잡 다건"이 재시작과 겹치는 반대 케이스라 본 절로 별도 문서화.
+
 ### 스케줄러 잡 에러 최후 안전망 (세션 340, PR #273)
 
 `crawler/job_error_listener.py` = `scheduler.add_listener(job_event_listener, EVENT_JOB_ERROR | EVENT_JOB_MISSED)` (main.py lifespan `register_job_listener` 배선). monitor.py 는 **CrawlJob row 가 이미 기록된** 실패만 감지 → 잡이 CrawlJob 기록 **전에** 예외로 죽거나 misfire(누락) 스킵되면 사각지대였음. 리스너가 스케줄러 이벤트 레벨에서 그 두 경우를 포착해 `logger.error/warning` + 텔레그램(`(kind, job_id)` 별 600초 쿨다운). event.code 로 ERROR/MISSED 분기(misfire 는 `.exception` 미접근 — AttributeError 회피). 텔레그램 실패는 best-effort 흡수(리스너 안 죽음). TELEGRAM_ENABLED 공유.

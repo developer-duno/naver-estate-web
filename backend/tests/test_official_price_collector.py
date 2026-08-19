@@ -286,6 +286,30 @@ def test_collect_silent_failure_guard(db, seeded, monkeypatch):
     assert db.query(ComplexOfficialPrice).count() == 0
 
 
+def test_collect_silent_failure_guard_counts_complexes_not_ld_codes(db, monkeypatch):
+    """실패 문구의 숫자는 법정동 수가 아니라 단지 수 — 단위 오류 회귀 가드 (세션 372 적대검증).
+
+    seeded fixture(단지 1=법정동 1)는 두 숫자가 우연히 같아 단위 오류를 못 잡는다.
+    여기서는 같은 법정동에 단지 2개를 묶어, len(remaining)(법정동 수=1)이 그대로 새면
+    "대상 단지 1개"로 잘못 찍히고, 단지 수를 정확히 세면 "대상 단지 2개"가 되는 걸로 구분한다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    db.add(Complex(complex_no="C1", complex_name="은마아파트", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.add(Complex(complex_no="C2", complex_name="래미안아파트", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=20))
+    db.commit()
+    # 이름이 전혀 다른 공시 단지만 반환 → 전량 미매칭
+    rows = make_rows_for_complex(aphus_nm="전혀다른단지", ho_count=10)
+
+    with _patch_fetch(rows):
+        collect_official_prices(stdr_year=_YEAR)
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "failed"
+    assert "대상 단지 2개 전부 매칭 실패" in (job.error_message or "")
+
+
 def test_collect_api_failure_does_not_trip_silent_guard_falsely(db, seeded, monkeypatch):
     """API 조회 실패(None)도 매칭 0 이므로 failed 로 잡힌다 — 조용한 완료 위장 금지."""
     monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")

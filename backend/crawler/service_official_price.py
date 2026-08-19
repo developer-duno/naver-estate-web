@@ -621,11 +621,16 @@ def collect_official_prices(
         # 정상 재개가 failed 로 오판된다(세션 370 리뷰어 2차 함정의 뿌리 — 지금은 그
         # 경로가 실질 불가능하지만, 재개 설계를 손댈 때 되살아나므로 선제 차단).
         if targets and remaining and matched_complexes == 0:
-            # 문구는 remaining(이번 실행에서 실제 시도한 수) 기준 — targets(전체 로스터)를
-            # 쓰면 체크포인트 부분 재개 시 "10,000개 전부 실패"처럼 과장된다(세션 371 백로그).
-            _fail_job(db, job, f"대상 단지 {len(remaining)}개 전부 매칭 실패 (수집 0건)")
+            # 문구는 remaining(이번 실행에서 실제 조회한 법정동)이 커버하는 단지 수 기준 —
+            # remaining 자체는 법정동 코드 리스트라 len(remaining)을 그대로 쓰면 "단지 수"라는
+            # 라벨과 단위가 어긋난다(법정동 수 ≠ 단지 수). targets(전체 로스터)를 쓰면
+            # 체크포인트 부분 재개 시 "10,000개 전부 실패"처럼 과장된다(세션 371 백로그) —
+            # 두 문제를 함께 해결하려면 remaining 소속 단지 수를 직접 세야 한다(세션 372 적대검증).
+            attempted_complex_count = sum(len(by_ld_code[c]) for c in remaining)
+            _fail_job(db, job, f"대상 단지 {attempted_complex_count}개 전부 매칭 실패 (수집 0건)")
             logger.error(
-                "[official_price] silent failure 감지: 단지 %d개 전부 매칭 실패", len(remaining)
+                "[official_price] silent failure 감지: 단지 %d개 전부 매칭 실패",
+                attempted_complex_count,
             )
             return
 

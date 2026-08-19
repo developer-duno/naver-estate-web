@@ -104,6 +104,17 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 | 단지 상세 backfill | APT/OPST 4시간 interval 매일 / JGC·ABYG·OBYG 주1회 7시 | 매물유형별 독립 job, detail_crawled_at NULL 단지 보강 (APT/OPST 배치 1000 가속 — PR #19 답습, 소수 유형 배치 1000 cron 유지. 2026-05-27 PR 6a 답습 6h→4h 33% 가속) |
 | 크롤링 모니터 | 10분 interval | crawl_jobs 정합성 점검 후 텔레그램 알림 (운영 토글 MONITOR_ENABLED, 2026-05-25 세션 229 30→10→20 답습 후 현 .env MONITOR_INTERVAL_MIN=10 운영. 기본 _STALE_HOURS=1h — 정상적으로 오래 도는 잡은 _STALE_HOURS_BY_TYPE 예외 의무: public_trade_data 3h(세션 266)·official_price 16h(세션 369 오탐 sweep 실사고 — 새 장시간 잡 추가 시 이 표 동반 등록). _FAILED_WINDOW_HOURS=24. 전부 monitor.py 상단 상수, 인터벌 격하 무관) |
 
+⚠ **위 표의 "잡 이름"은 스케줄러 등록 id(`scheduler.py`의 `id="..."`)이고, DB
+`crawl_jobs.job_type` 컬럼에 실제로 저장되는 값은 이와 다를 수 있다** — 이 프로젝트
+전반의 기존 관례이지 버그가 아니다. 예: 스케줄러 id `collect_officetel_presale` →
+job_type `officetel_presale`(접두어 없음), id `collect_rental_presale` → job_type
+`rental_presale`, id `crawl_details` → job_type `article_detail`(이름 자체가 다름).
+**DB로 "이 잡이 실행됐나" 조회할 때는 반드시 각 서비스 모듈(`crawler/service_*.py`)의
+`CrawlJob(job_type="...")` 호출부를 먼저 grep 해 정확한 job_type 문자열을 확인**한다 —
+스케줄러 id를 그대로 조회하면 0건이 나와 "실행 안 됐다"고 오판하기 쉽다(세션 372
+실사고: 이 함정에 두 번 걸림). 컬럼명도 `finished_at`이 아니라 `completed_at`이니
+`db/models.py`의 `CrawlJob` 정의를 함께 확인할 것.
+
 ### 짧은 주기 크론과 재시작 겹침 — 반복 재시작은 몰아서 하지 말 것 (세션 372 실측)
 
 `official_price`(매월 15일, 몇 시간짜리)처럼 **긴** 잡은 위 표에 "실행 중 재시작 회피"로 이미

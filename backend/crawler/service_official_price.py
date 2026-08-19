@@ -608,6 +608,93 @@ def collect_official_prices(
             logger.exception("[official_price] 재수집 패스 실패 — 본 수집 결과는 유지")
             db.rollback()
 
+        # ── 읍/면 리(里) 확장 패스 ──
+        # 재수집 패스(위)는 "이번 실행에서 소실된" 단지를 다시 줍는다 — 애초에 본루프에서
+        # 한 번은 잡혔던 것들이다. 이 패스는 성격이 다르다: 읍/면 코드로는 **애초에** 공시
+        # 가격이 0건이다(공시가 리 단위 코드에 붙어 있어서, cortar_legacy.py 전국 공통
+        # 한계). 그래서 본루프의 by_ld_code 순회 자체가 그 읍/면에 대해 시도조차 못한다
+        # (동 자체가 매칭 0건으로 지나갔을 뿐 실패로 기록되지도 않는다).
+        #
+        # PR-E2(세션 373) — cortar_ri_map.py 의 정적 dict(사장님 결정: 수동 재생성,
+        # code.go.kr 을 매 실행마다 부르지 않는다)로 "이 읍/면 밑에 어떤 리가 있는지"를
+        # 이미 안다. 리 하나하나는 fetch_official_prices() 입장에서 법정동 코드 하나와
+        # 완전히 동일하게 다뤄진다(실측: 리마다 별도 단지 집합·별도 세대수 매칭이라 부분
+        # 실패를 걱정할 필요가 없다 — 리 하나 실패 = 그 리 소속 단지만 스킵).
+        expanded = 0
+        ri_fetch_failed = 0
+        try:
+            from crawler.cortar_ri_map import expand_to_ri_codes
+
+            # 대상 = 이번 실행이 조회한 읍/면 코드 중 dict 가 아는 것. remaining 이 아니라
+            # processed_ld_codes 를 쓴다 — 체크포인트로 스킵된 동(재개 실행)까지 매번
+            # 재확장하면 이미 저장된 값을 매번 다시 덮어써 낭비다(멱등 upsert 라 안전하긴
+            # 하나, 월 1회 잡의 시간 예산을 아끼는 게 낫다).
+            #
+            # ⚠ cortar_ri_map.py 의 dict 키는 **원본** cortar_no 다(생성 스크립트가
+            # complexes.cortar_no 를 그대로 읽는다) — to_vworld_cortar() 로 번역한
+            # 코드로 조회하면 안 맞는다. 리 코드를 조립한 **뒤**에 번역해야 한다 —
+            # 화성 봉담읍(신 효행구 소속)처럼 "2026 개편 + 리 단위"가 겹친 읍/면은
+            # 조립한 리 코드도 옛 코드로 번역해야 V-WORLD 가 받는다(모듈 docstring
+            # 라이브 실증: 4159025322 는 8,068행, 번역 전 4159325022 는 미검증·매핑
+            # 대상 접두사가 아니라 조용히 0건일 위험).
+            ri_targets: dict[str, list[str]] = {}
+            for ld_code in sorted(processed_ld_codes):
+                ri_codes = expand_to_ri_codes(ld_code)
+                if ri_codes:
+                    ri_targets[ld_code] = ri_codes
+
+            if ri_targets:
+                total_ri = sum(len(v) for v in ri_targets.values())
+                logger.info(
+                    "[official_price] 읍/면 리 확장 시작: 읍/면 %d개 → 리 %d개",
+                    len(ri_targets), total_ri,
+                )
+                # sorted() — processed_ld_codes 가 set 이라 dict 삽입 순서는 그걸 반영해
+                # 결정적이지 않다. 실서비스 로직상 순서는 결과를 안 바꾸지만(리 하나하나가
+                # 독립 단위), 테스트가 side_effect 리스트로 호출 순서를 고정하는 관례와
+                # 맞추려면 여기서도 정렬이 필요하다(all_ld_codes = sorted(by_ld_code) 답습).
+                for ld_code in sorted(ri_targets):
+                    ri_codes = ri_targets[ld_code]
+                    for ri_code in ri_codes:
+                        rows = fetch_official_prices(to_vworld_cortar(ri_code), year)
+                        if rows is None:
+                            # 리 하나의 조회 실패는 그 리만 건너뛴다 — 읍/면 전체를
+                            # 포기할 이유가 없다(리가 독립 단위이므로 위 docstring 답습).
+                            ri_fetch_failed += 1
+                            logger.warning("[official_price] 리 %s 조회 실패", ri_code)
+                            continue
+
+                        grouped_by_name = _index_groups_by_name(rows)
+                        for target in by_ld_code[ld_code]:
+                            if target.complex_no in matched_complex_nos:
+                                continue  # 이미 본루프·재수집에서 매칭된 단지는 재시도 안 함
+                            hit = match_complex_group(
+                                target.complex_name, target.total_household_count,
+                                grouped_by_name,
+                            )
+                            if hit is None:
+                                continue
+                            aphus_code, group = hit
+                            n_saved = _save_matched_areas(
+                                db, target.complex_no, year, aphus_code, group
+                            )
+                            if not n_saved:
+                                continue
+                            saved_rows += n_saved
+                            matched_complexes += 1
+                            matched_complex_nos.add(target.complex_no)
+                            expanded += 1
+                db.commit()
+                logger.info(
+                    "[official_price] 읍/면 리 확장 완료: 단지 %d개 신규 매칭"
+                    " (리 조회실패 %d개)",
+                    expanded, ri_fetch_failed,
+                )
+        except Exception:
+            # 확장 실패도 본 수집 결과를 되돌리지 않는다 — best-effort.
+            logger.exception("[official_price] 읍/면 리 확장 패스 실패 — 본 수집 결과는 유지")
+            db.rollback()
+
         # silent failure 가드 — 대상 단지는 있는데 한 건도 못 매칭했으면 '완료(0)'
         # 위장 대신 failed 로 알린다 (env_air.py 패턴 답습). 매칭 규칙·API 응답 구조
         # 변경이 조용히 전량 미매칭으로 나타나는 것을 잡는 유일한 그물.

@@ -112,13 +112,13 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 - `CHILDCARE_DETAIL_API_KEY` — cpmsapi030 운영키
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — Gmail SMTP SSL 465
 
-## 테스트 현황 (BE·FE 2026-08-16 세션 371 실측)
+## 테스트 현황 (BE·FE 2026-08-19 세션 373 실측)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2090개** (2090 passed — 세션 368 CI 실측, 세션 369~371 FE 무변경. `vitest list` 세션 371 실측 2,091 = 스킵성 1 포함) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2090개** (2090 passed — 세션 368 CI 실측, 세션 369~373 FE 무변경. `vitest list` 세션 371 실측 2,091 = 스킵성 1 포함) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1313개** (`--collect-only` 세션 371 실측, 세션 367 기준 1251에서 +62 — 재수집 캡·KST 경계·모니터 예외·재개 바운드·개편 번역맵 신규. ⚠ passed 기준선과 혼동 금지: 전체 실행 = **1300 passed / 7 skipped / 6 xfailed**) |
+| BE pytest | `backend/tests/` | **1327개** (`--collect-only` 세션 373 실측, 세션 371 기준 1313에서 +14 — 공시가격 읍/면 리(里) 단위 확장 PR-E2(#400) 신규 13 + 카운트 오차 보정 1. 전체 실행 = **1314 passed / 7 skipped / 6 xfailed**) |
 
 ## 커밋 전 필수 검증
 

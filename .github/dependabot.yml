@@ -43,6 +43,22 @@ updates:
       # 전용으로 확정, major 자동 PR 차단 (세션 364).
       - dependency-name: "@fullcalendar/*"
         update-types: ["version-update:semver-major"]
+      # @tanstack/react-table v9 = 우리가 쓰는 API 5종 중 4종이 개명·제거·재작성 대상
+      # (useReactTable→useTable+features 필수, getCoreRowModel 제거, getSortedRowModel→
+      # createSortedRowModel, ColumnDef 제네릭에 TFeatures 첫 인자). GA 2026-08-04 로
+      # 신생(5일간 패치 3연속) + 런타임 의존성 @tanstack/react-store 신규 추가 — 기능
+      # 이득 0 이라 성숙 후 수동 마이그레이션 전용 (fullcalendar 답습, 세션 374 공식
+      # 마이그레이션 가이드 실측).
+      - dependency-name: "@tanstack/react-table"
+        update-types: ["version-update:semver-major"]
+      # typescript 7 (Go 네이티브 컴파일러) = 이중 차단 — ① next build 타입체크가
+      # TS7 을 지원하는 건 Next.js 16.3+ 뿐인데(공식 blog/next-16-3, JS API 제거로
+      # 16.2 는 성립 불가) 16.3 은 위에서 이미 차단된 버전. ② eslint-config-next 가
+      # 의존하는 typescript-eslint peer 가 `<6.1.0` 으로 TS7 명시 배제(이슈 #12518
+      # closed as not planned — TS 7.1 안정 API 대기). 해제 조건 = next 16.3 차단
+      # 해제 + typescript-eslint TS7 지원 출시 둘 다 (세션 374 공식문서 실측).
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # 백엔드 (FastAPI / curl_cffi / SQLAlchemy 등 — 상한 핀이 major 자동상승 차단)
   - package-ecosystem: "pip"

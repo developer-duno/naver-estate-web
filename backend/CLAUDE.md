@@ -44,7 +44,8 @@
 | `crawler/service_discover.py` | 단지 발견 + 매물 수집 + 상세 보강 |
 | `crawler/service_price.py` | 시세 수집 (배치 + on-demand) |
 | `crawler/service_public.py` | 공공데이터 실거래가 수집 |
-| `crawler/service_official_price.py` | 공동주택 공시가격 수집 (법정동 루프 + 단지 매칭 + 평형별 중위가) |
+| `crawler/service_official_price.py` | 공동주택 공시가격 수집 (법정동 루프 + 단지 매칭 + 평형별 중위가 + 읍/면 리 확장 패스) |
+| `crawler/cortar_ri_map.py` | 읍/면→리 코드 정적 dict + expand_to_ri_codes (공시가격 리 단위 확장 전용, PR-E2 세션 373) |
 | `crawler/scheduler.py` | APScheduler 스케줄 (매물/시세/공공데이터/인기단지) |
 | `crawler/public_data_api.py` | 국토교통부 공공데이터 API |
 | `crawler/vworld_price_api.py` | V-WORLD 공동주택 공시가격 API (getApartHousingPriceAttr, 전 페이지 수집) |

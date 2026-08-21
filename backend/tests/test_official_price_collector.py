@@ -1078,6 +1078,125 @@ def test_fetch_returns_none_when_total_count_unparseable(monkeypatch):
     assert vp.fetch_official_prices("1168010600", _YEAR) is None
 
 
+def test_collect_name_secondary_pass_saves_unmatched_complex(db, monkeypatch):
+    """본루프에서 1차 미매칭인 단지가 이름 2차 패스로 저장된다 (PR-E3 통합).
+
+    fixture 설계(testing.md 답습): 같은 법정동에 단지 2개를 둔다 — C1 은 1차 완전일치로,
+    C2 는 표기 차이(공시 "성서주공(2단지)" ↔ 우리 "성서주공2차")라 2차로만 붙는다.
+    세대수도 서로 다르게(10 vs 20) 둬서 두 단지가 상대 그룹으로 교차 매칭되는 사고를
+    세대수 게이트가 실제로 막는지까지 함께 검증한다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    db.add(Complex(complex_no="C1", complex_name="은마아파트", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.add(Complex(complex_no="C2", complex_name="성서주공2차", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=20))
+    db.commit()
+
+    rows = (
+        make_rows_for_complex(aphus_code="A1", aphus_nm="은마", ho_count=10)
+        + make_rows_for_complex(aphus_code="A2", aphus_nm="성서주공(2단지)", ho_count=20,
+                                area="59.98")
+    )
+
+    with _patch_fetch(rows):
+        collect_official_prices(stdr_year=_YEAR)
+
+    saved = {row.complex_no: row for row in db.query(ComplexOfficialPrice).all()}
+    assert set(saved) == {"C1", "C2"}, "2차 매칭 단지(C2)가 저장되지 않았다"
+    assert saved["C1"].aphus_code == "A1", "1차 매칭 단지가 다른 그룹에 붙었다"
+    assert saved["C2"].aphus_code == "A2", "2차가 엉뚱한 그룹을 골랐다"
+    assert saved["C2"].ho_count == 20
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed"
+    assert job.processed_items == 2, "1차·2차 매칭 단지가 모두 매칭 수에 반영돼야 한다"
+
+
+def test_collect_name_secondary_does_not_steal_primary_group(db, monkeypatch):
+    """2차는 1차가 가져간 그룹을 뺏지 않는다 — claimed 제외가 통합 경로에서도 유효.
+
+    우리 단지 두 개("광동" / "광동상가")가 공시 "광동상가" 그룹 하나를 두고 겹친다.
+    1차는 "광동상가" 를 완전일치로 가져가고, 남은 "광동" 은 2차 후보이지만 그 그룹이
+    이미 claimed 라 붙으면 안 된다(붙으면 한쪽은 반드시 오매칭).
+    세대수를 둘 다 10 으로 맞춰 **게이트가 아니라 claimed 가** 막는 것임을 분명히 한다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    db.add(Complex(complex_no="C1", complex_name="광동상가", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.add(Complex(complex_no="C2", complex_name="광동", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+
+    rows = make_rows_for_complex(aphus_code="A1", aphus_nm="광동상가", ho_count=10)
+
+    with _patch_fetch(rows):
+        collect_official_prices(stdr_year=_YEAR)
+
+    saved = {row.complex_no for row in db.query(ComplexOfficialPrice).all()}
+    assert saved == {"C1"}, "2차가 1차 매칭 단지의 그룹을 중복 사용했다(오매칭)"
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.processed_items == 1
+
+
+def test_repass_inherits_claimed_from_main_loop(db, monkeypatch):
+    """재수집 패스의 2차는 본루프가 이미 배정한 그룹을 다시 가져가지 않는다 (MEDIUM-1).
+
+    적대검증이 잡은 이중 배정 시나리오: 본루프에서 C1("광동상가")이 공시 "광동상가"
+    그룹(A1)을 1차 완전일치로 가져간다. 같은 동의 C2("광동")는 과거 행이 있어 재수집
+    대상('소실')이 되는데, 재수집 fetch 에서 repass_claimed 가 빈 set 으로 시작하면
+    2차 매칭이 A1 을 **다시** 집어 C1·C2 두 단지가 같은 공시 그룹을 공유한다 —
+    한쪽은 필연 오매칭이고 월 1회 잡이라 매달 고착된다.
+
+    fixture 두 축 분리: 세대수는 둘 다 10 으로 맞춰(게이트가 아니라 claimed 인계가
+    막는 것임을 분명히) 두고, 저장 여부라는 별개 축으로 판정한다.
+    ⚠ C2 의 과거 행 aphus_code 를 기본값 "A1" 그대로 두면, 이중 배정이 일어나든 말든
+    조회 결과가 "A1" 이라 판정이 무의미해진다(두 축 우연 일치 함정). 과거 행은 이번
+    실행과 무관한 코드("OLD")로 심어 **이번 실행이 A1 을 새로 배정했는지**만 본다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    db.add(Complex(complex_no="C1", complex_name="광동상가", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.add(Complex(complex_no="C2", complex_name="광동", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+    # C2 를 재수집 '소실' 대상으로 만든다 (과거 행 보유). aphus_code 는 A1 과 구분되게.
+    from datetime import timedelta
+
+    from utils import utcnow
+
+    db.add(ComplexOfficialPrice(
+        complex_no="C2", stdr_year=_YEAR, prvuse_ar=Decimal("84.43"),
+        price_median=1_000_000_000, ho_count=10, aphus_code="OLD", aphus_nm="광동",
+        collected_at=utcnow() - timedelta(days=30),
+    ))
+    db.commit()
+
+    rows = make_rows_for_complex(aphus_code="A1", aphus_nm="광동상가", ho_count=10)
+
+    # 본루프 1회(C1 매칭·C2 미매칭) → C2 소실 판정 → 같은 동 재수집 1회
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[rows, rows],
+    ) as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 2, "본루프 1회 + 소실 동 재수집 1회"
+
+    saved = {row.complex_no: row for row in db.query(ComplexOfficialPrice).all()}
+    assert saved["C1"].aphus_code == "A1", "본루프 1차 매칭분이 보존돼야 한다"
+    # C2 의 행은 과거 그대로("OLD")여야 한다 — 이번 실행이 A1 을 새로 배정했다면 오염이다
+    assert saved["C2"].aphus_code == "OLD", (
+        "재수집 2차가 본루프에서 배정된 그룹(A1)을 다시 가져갔다 = 이중 배정"
+    )
+    # 구제 실패이므로 잔여로 보고돼야 한다 (조용히 오매칭으로 덮이지 않았다는 증거)
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed"
+    assert "잔여 1단지" in (job.error_message or "")
+    assert "C2" in (job.error_message or "")
+
+
 def test_fetch_returns_none_when_exceeding_max_pages(monkeypatch):
     """MAX_PAGES 캡 초과 → 정합성 가드 오발이 아니라 전용 분기로 포기.
 

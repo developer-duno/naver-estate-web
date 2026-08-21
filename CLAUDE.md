@@ -118,7 +118,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 |------|------|----------|
 | FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2090개** (2090 passed — 세션 368 CI 실측, 세션 369~373 FE 무변경. `vitest list` 세션 371 실측 2,091 = 스킵성 1 포함) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1327개** (`--collect-only` 세션 373 실측, 세션 371 기준 1313에서 +14 — 공시가격 읍/면 리(里) 단위 확장 PR-E2(#400) 신규 13 + 카운트 오차 보정 1. 전체 실행 = **1314 passed / 7 skipped / 6 xfailed**) |
+| BE pytest | `backend/tests/` | **1344개** (세션 374 실측, 세션 373 기준 1327에서 +17 — 공시가격 이름 2차 매칭 PR-E3(#405) 신규 17. 전체 실행 = **1331 passed / 7 skipped / 6 xfailed**) |
 
 ## 커밋 전 필수 검증
 

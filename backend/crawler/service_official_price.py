@@ -56,6 +56,19 @@ _REPASS_COLLAPSE_THRESHOLD = 200
 # 규모(_REPASS_MAX_DONGS)·이상(_REPASS_COLLAPSE_THRESHOLD)·시간 3중 방어가 된다.
 _REPASS_MAX_SECONDS = 3600
 
+# 신코드 이관 감시 보초 — 옛 데이터셋(개편 전 시군구) 4개마다 대표 1곳(옛 코드 행수가 큰 동).
+# 이관은 옛 시군구 데이터셋 단위로 일어날 것이라 데이터셋당 1곳이면 충분하다(2026-08-22
+# 세션 375 설계, 적대검증이 옛 중구 사각 적발 → 운서동 추가). 옛 데이터셋 = 28110 옛 중구
+# (신 제물포 24동+영종 4동) · 28140 옛 동구 · 28260 옛 서구 · 41590 옛 화성시.
+# 행수 근거 = tests/test_cortar_legacy.py _KNOWN_REFORM 실측 주석.
+# 감시 범위 = 2026 개편맵(VWORLD_REFORM_CORTAR_MAP)만 — 12-프리픽스 광주·전남 맵은 미감시(백로그).
+_MIGRATION_SENTINELS: dict[str, str] = {
+    "2827511100": "인천 서해구 청라동",   # 옛 서구 61,994행 — 28260 옛 서구 대표
+    "2812510700": "인천 제물포구 송림동",  # 옛 동구 17,638행 — 28140 옛 동구 대표
+    "2815510300": "인천 영종구 운서동",   # 옛 중구 20,930행 — 28110 옛 중구 대표
+    "4159710200": "화성 동탄구 반송동",   # 옛 화성시 39,546행 — 41590 옛 화성시 대표
+}
+
 _PAREN = re.compile(r"\([^)]*\)")
 # 꼬리 동목록 — "대치우성아파트1동 2동 3동 5동 6동 7동" 처럼 공시측 단지명 끝에
 # 동 번호가 나열되는 실제 패턴(라이브 실측)을 제거한다.
@@ -362,6 +375,49 @@ def _alert_official_price(message: str) -> None:
         logger.warning("[official_price] 텔레그램 알림 발송 실패", exc_info=True)
 
 
+def _probe_reform_migration(year: str) -> None:
+    """신코드 이관 감시 — 보초 신코드에 데이터가 생겼으면 텔레그램 경보 1회.
+
+    2026 개편 지역은 to_vworld_cortar() 번역(신코드 → 옛코드)으로 조회한다. V-WORLD 가
+    데이터를 신코드로 이관하기 시작하면 그 번역이 오히려 **빈 옛 코드 조회**가 되어
+    조용히 0건이 된다. 보초 신코드를 1페이지만 찔러 총 행수>0 이면 이관 시작으로 본다.
+
+    경보만 하고 자동 전환은 하지 않는다 — 과도기에 신·옛 코드가 양쪽 다 살아 있을 수
+    있어(중복 수집 위험) 전환 시점은 사람이 판단한다.
+
+    감시가 수집을 죽이면 안 되므로 어떤 경우에도 예외를 밖으로 던지지 않는다.
+    조회 실패(None)·0건은 조용히 통과한다(0건 = 아직 이관 전 = 정상).
+    """
+    try:
+        # lazy import — import chain 실패 방지 (collect_official_prices 답습)
+        from crawler.vworld_price_api import probe_official_price_total
+
+        migrated: list[str] = []
+        for code, label in _MIGRATION_SENTINELS.items():
+            try:
+                total = probe_official_price_total(code, year)
+            except Exception:
+                logger.warning(
+                    "[official_price] 이관 감시 프로브 실패 (%s %s)", label, code, exc_info=True
+                )
+                continue
+            if total and total > 0:
+                migrated.append(f"{label}({code}) {total:,}행")
+
+        if not migrated:
+            return
+
+        detail = " / ".join(migrated)
+        logger.warning("[official_price] 신코드 이관 감지 — %s", detail)
+        _alert_official_price(
+            "⚠️ 공시가격 V-WORLD 신코드 이관 감지 — cortar_legacy 개편맵 번역이 역효과 "
+            f"시작. 감지 보초: {detail}. 이관 지역은 번역 해제·신코드 직접 조회 전환 "
+            "검토 필요(과도기 양쪽 공존 가능성 때문에 자동 전환은 하지 않음)."
+        )
+    except Exception:
+        logger.warning("[official_price] 이관 감시 자체 실패 — 수집은 계속", exc_info=True)
+
+
 def _save_matched_areas(db, complex_no: str, year: str, aphus_code: str, group: dict) -> int:
     """매칭된 공시 그룹을 평형별 중위가로 저장. 반환: 저장한 행 수(0 이면 미저장).
 
@@ -478,6 +534,9 @@ def collect_official_prices(
 
     # lazy import — import chain 실패 방지 (service_public.py 답습)
     from crawler.vworld_price_api import fetch_official_prices
+
+    # 신코드 이관 감시 — 경보만 하고 수집 흐름에는 영향 0 (best-effort).
+    _probe_reform_migration(year)
 
     db = SessionLocal()
 

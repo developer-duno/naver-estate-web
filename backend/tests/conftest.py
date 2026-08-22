@@ -30,6 +30,19 @@ os.environ["TELEGRAM_ENABLED"] = "false"
 # 실발송 0 (텔레그램 선례 답습 — 알림 채널은 conftest 에서 전역 봉쇄).
 os.environ["SMTP_USER"] = ""
 os.environ["SMTP_PASS"] = ""
+# ⚠ 같은 결(세션 375) — V-WORLD 외부 API 도 전역 봉쇄. 신코드 이관 감시 프로브
+# (_probe_reform_migration)가 collect_official_prices 시작 시 _fetch_page 를 직접 타는데,
+# 로컬 .env 의 실키가 로드되면 수집기 테스트들이 실제 V-WORLD 를 호출하게 돼 전체 실행에서만
+# 갈리는 flaky 를 만든다(세션 375 실측 — CI 는 키가 없어 원래 무해). 실키 로더는
+# db/database.py 가 **아니다**(아래에서 sys.modules 로 교체돼 테스트에선 import 자체가 안 됨) —
+# crawler/scheduler.py·crawler/service_discover.py·main.py 의 load_dotenv() 를, 이들을 top-level
+# import 하는 test_scheduler_*·test_crawl_detail_order·test_service_discover_race 등 5개 모듈이
+# 전체 회귀 collection 시점에 세션 전역으로 실행한다(적대검증 직독). 그래서 단독·파일 단위
+# 실행은 무해하고 전체 실행에서만 실호출이 생겼다. 빈 값 강제 → _fetch_page 가 키 가드에서
+# 즉시 None 반환(실호출 0·결정론).
+# 프로브 단위 테스트는 _fetch_page/probe 자체를 목킹하므로 영향 없다.
+os.environ["VWORLD_API_KEY"] = ""
+os.environ["VWORLD_DOMAIN"] = ""
 # ⚠ 스케줄러 단일 인스턴스 파일락 비활성 (세션 341). client fixture 가
 # `with TestClient(app)` 로 lifespan 을 발동하는데, 여러 테스트가 같은
 # scripts/scheduler.lock 을 두고 경합하면 CI 병렬 실행이 flaky 해진다. false 면

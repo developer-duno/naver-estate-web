@@ -184,7 +184,9 @@ def probe_official_price_total(pnu: str, stdr_year: str) -> int | None:
     page = _fetch_page(pnu, stdr_year, 1)
     if page is None:
         return None
-    return page[1]
+    # totalCount 파싱실패→0 가짜무음 방지 — 행이 실재하면 행 수를 보조신호로 쓴다
+    # (진짜 0건이면 `0 or len([]) == 0` 이라 동작 불변).
+    return page[1] or len(page[0])
 
 
 def fetch_official_prices(pnu: str, stdr_year: str) -> list[dict] | None:

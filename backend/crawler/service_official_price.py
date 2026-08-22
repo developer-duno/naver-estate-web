@@ -275,6 +275,11 @@ def _to_price(raw) -> int | None:
     return value if value > 0 else None
 
 
+def _ho_key(row: dict) -> tuple:
+    """호 식별 키 (dongNm, hoNm) — 게이트(ho_keys)와 집계(ho_count)가 같은 키를 쓴다."""
+    return (row.get("dongNm"), row.get("hoNm"))
+
+
 def _group_by_aphus(rows: list[dict]) -> dict[str, dict]:
     """공시 행들을 단지(aphusCode) 단위로 묶는다.
 
@@ -292,7 +297,7 @@ def _group_by_aphus(rows: list[dict]) -> dict[str, dict]:
         if group is None:
             group = {"name": (row.get("aphusNm") or "").strip(), "ho_keys": set(), "rows": []}
             grouped[code] = group
-        group["ho_keys"].add((row.get("dongNm"), row.get("hoNm")))
+        group["ho_keys"].add(_ho_key(row))
         group["rows"].append(row)
     return grouped
 
@@ -345,13 +350,24 @@ def aggregate_area_medians(rows: list[dict]) -> list[tuple[Decimal, int, int]]:
 
     Returns: [(prvuse_ar, price_median, ho_count), ...] — 면적 오름차순.
     같은 면적의 여러 호(dongNm/hoNm)를 중위값으로 묶고 표본 수를 남긴다.
+
+    표본 수 = **유니크 호**(dongNm,hoNm). V-WORLD 는 호마다 완전 동일 행을 2회 반환하므로
+    (2026-08-22 실측: pnu=2826011800 2,622행 = 유니크 1,311 × 2; 페이지네이션 드리프트로 1·3회도
+    섞인다 — dedupe 는 배수와 무관하게 옳다), 원본 행 수로 세면 세대수의 2배가 저장된다.
+    fetch 층의 행수 정합성 가드는 raw 행수 기준이라 dedupe 는 여기(집계)에서만 한다 —
+    같은 _ho_key 의 **유효한** 첫 행만 쓴다(앞 복제본이 깨져 있으면 뒤의 멀쩡한 복제본 사용).
     """
     buckets: dict[Decimal, list[int]] = {}
+    seen: set[tuple] = set()
     for row in rows:
+        key = _ho_key(row)
+        if key in seen:
+            continue
         area = _to_area(row.get("prvuseAr"))
         price = _to_price(row.get("pblntfPc"))
         if area is None or price is None:
             continue
+        seen.add(key)  # 유효 행만 '본 것'으로 — 첫 복제본이 깨져도 뒤의 멀쩡한 복제본이 살아남는다
         buckets.setdefault(area, []).append(price)
 
     result = []

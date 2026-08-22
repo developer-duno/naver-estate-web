@@ -21,6 +21,7 @@
 외부 API 호출은 전부 mock — 실호출 0.
 """
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -37,8 +38,9 @@ from db.models import Complex, CrawlJob
 # 원장 갱신에 따른 ±소폭 변동은 허용한다.
 _MIN_ENTRIES = 230
 
-# 개편맵 실제 생성 결과는 85건(88개 동 중 3건은 모호·신설로 제외). 같은 취지의 하한.
-# 생성 스크립트의 MIN_REFORM_ENTRIES 게이트와 같은 값 — 한쪽만 통과하는 일이 없게.
+# 개편맵은 자동 생성 85건 + 수동 확정 2건(금곡동) = 87건(88개 동 중 여울동만 제외).
+# 같은 취지의 하한이며, 생성 스크립트의 MIN_REFORM_ENTRIES 게이트와 같은 값 —
+# 한쪽만 통과하는 일이 없게 한다(스크립트는 자동 구역만 세므로 그 값 그대로 둔다).
 _MIN_REFORM_ENTRIES = 75
 
 # 라이브로 검증한 대표 샘플 (2026-08-09 V-WORLD ldCodeNm 대조 완료)
@@ -60,14 +62,23 @@ _KNOWN_REFORM = {
     # 폐지 필터가 구제한 사례 — 옛 계양구 오류동(2824511800)은 **현존**이라 남의 동이다.
     # 필터 없이는 "모호"로 버려졌고, 잘못 고르면 계양구 공시가격을 긁을 뻔했다.
     "2829010800": "2826011900",  # 인천 검단구 오류동 ← 옛 서구 (3,280행)
+    # 수동 확정 2건 (2026-08-22 실측) — 폐지 원장에 동명 "금곡동"이 2개라 자동 규칙으로는
+    # 못 고르던 것을, V-WORLD 실조회 단지명 대조(검단)와 소거법(제물포)으로 확정했다.
+    "2829010700": "2826011800",  # 인천 검단구 금곡동 ← 옛 서구 (2,622행, 단지명 직접 대조)
+    "2812510600": "2814010600",  # 인천 제물포구 금곡동 ← 옛 동구 (294행, 소거법)
 }
 
-# 개편맵에서 **의도적으로 제외**한 동 — 모호(폐지 원장에 동명이 2개)하거나 개편 후
-# 신설이라 옛 코드가 없다. 맵에 들어오면 오매칭이므로 부재를 못박아 둔다.
+# 개편맵에서 **의도적으로 제외**한 동 — 개편 후 신설이라 옛 코드가 애초에 없다.
+# 맵에 들어오면 오매칭이므로 부재를 못박아 둔다.
+# (금곡동 2건은 2026-08-22 수동 확정으로 제외 해제 — 위 _KNOWN_REFORM 참조)
 _REFORM_EXCLUDED = [
-    "2812510600",  # 제물포구 금곡동 — 옛 동구/서구 **둘 다 폐지**라 못 고른다
-    "2829010700",  # 검단구 금곡동 — 위와 동일
     "4159711500",  # 동탄구 여울동 — 개편 후 신설 동(옛 코드 없음)
+]
+
+# 수동 확정 구역에 있어야 하는 항목 — 자동 생성 마커 뒤에 위치해야 재생성 때 살아남는다.
+_MANUAL_REFORM_ENTRIES = [
+    ('"2812510600": "2814010600"', "제물포구 금곡동"),
+    ('"2829010700": "2826011800"', "검단구 금곡동"),
 ]
 
 
@@ -305,6 +316,27 @@ def test_known_reform_pairs_live_verified(new_code, old_code):
 def test_ambiguous_reform_dong_excluded(excluded):
     """모호·신설 동은 맵에 없어야 한다 — 들어오면 오매칭(틀린 값 < 값 없음)."""
     assert excluded not in VWORLD_REFORM_CORTAR_MAP
+
+
+@pytest.mark.parametrize("entry,label", _MANUAL_REFORM_ENTRIES)
+def test_manual_reform_entries_live_after_generated_marker(entry, label):
+    """수동 확정 항목이 자동 생성 마커 **뒤**에 있는지 소스 파일을 직접 읽어 확인한다.
+
+    생성 스크립트(`write_into_target`)는 GENERATED-REFORM-BEGIN~END 마커 **사이만**
+    갈아끼운다. 누군가 이 항목을 마커 안쪽으로 옮기면 다음 재생성 때 소리 없이 증발하고,
+    금곡동 2개 동이 다시 공시가격 수집에서 통째로 누락된다(0행 = silent failure 라
+    가드에도 안 걸린다). dict 값만 보는 테스트로는 이 사고를 못 잡으므로 위치를 못박는다.
+    """
+    from crawler import cortar_legacy
+
+    src = Path(cortar_legacy.__file__).read_text(encoding="utf-8")
+    marker = "# <<< GENERATED-REFORM-END >>>"
+
+    assert marker in src, "자동 생성 종료 마커가 사라졌다"
+    assert entry in src, f"{label} 수동 확정 항목이 소스에서 사라졌다: {entry}"
+    assert src.index(entry) > src.index(marker), (
+        f"{label} 수동 확정 항목이 자동 생성 구역 안에 있다 — 재생성 시 증발한다: {entry}"
+    )
 
 
 def test_reform_value_duplication_is_allowed_and_expected():

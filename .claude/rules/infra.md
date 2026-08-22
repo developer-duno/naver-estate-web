@@ -80,6 +80,30 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
 
 - `services/slow_query_log.py` — `before/after_cursor_execute` 이벤트로 `SLOW_QUERY_MS`(기본 1000) 초과 SQL 을 `logger.warning` (best-effort). prod `engine` 에만 attach, 테스트는 conftest SQLite 격리로 영향 0.
 
+### Supabase DB 전면 다운 진단 런북 (세션 378 — 2026-08-22 29분 다운 실사고)
+
+`/health/db` 가 `{"status":"degraded","db":"down"}` 이거나 statement timeout 이 연쇄로 터지면,
+**층위 순서대로** 어느 층이 죽었는지 국소화한다 (어느 층이냐로 책임 소재·처방이 갈린다):
+
+1. `curl https://api.2u.pe.kr/health` (정적 200) — 백엔드 프로세스·터널 생존 확인 (DB 무관)
+2. `curl -m 30 https://api.2u.pe.kr/health/db` — 판정에 ~10초(pooler 2 IP × connect_timeout 5s) 걸리니 `-m 10` 이면 빈 응답으로 오판한다
+3. 로컬 → pooler TCP 소켓 연결 (python socket, 5432·6543) — TCP 즉시 OK + pg 연결만 timeout 이면 네트워크 무혐의
+4. pg 연결을 connect_timeout 25s 로 재시도해 **에러 문구** 확보 — `FATAL (ECHECKOUTTIMEOUT) unable to check out` = Supavisor(풀러)는 살아있고 뒤의 DB 컴퓨트가 응답불능(또는 풀 고갈)
+5. REST(PostgREST) 교차 확인 (`{ref}.supabase.co/rest/v1/...` + anon key) — 이것도 timeout 이면 DB 컴퓨트 다운 확정 (별도 경로라 우리 백엔드 무혐의 입증)
+6. `netstat` 으로 이 PC 가 쥔 pooler 연결 수 — 소수면 로컬 연결누수 무혐의
+7. status.supabase.com 은 **공지가 늦을 수 있다** (실사고: 다운 중에도 서울 리전 "Operational")
+
+**처방**: 자가회복 대기 우선 (실사고 29분 자가회복). ⛔ 성급한 backend 재시작 금지 — 재시작은
+DB 를 못 살리고, 부팅 스윕(main.py, **시작 5분 경과한 running 잡** 대상)이 외부 프로세스의 잡
+(수동 재수집 등 — 수 시간 돌므로 항상 해당)까지 cancelled 로 오염시킨다. 근본원인(DB 컴퓨트
+CPU/RAM/IO)은 Supabase 대시보드 그래프로만 확인 가능(사장님 로그인).
+
+**연쇄 함정 2건** (실사고에서 실증, #411 로 폴백 견고화):
+- 잡 실패 마킹 중 DB 가 죽으면 `_fail_job` 폴백까지 동반 사망해 CrawlJob 이 'running' 유령으로
+  잔존할 수 있다 → official_price **체크포인트 재개는 status IN ('failed','cancelled') 만 훑으므로
+  재개가 차단**된다. 프로세스 사망을 실측 확인한 뒤 그 잡을 수동 UPDATE(`AND status='running'` 가드)로
+  failed 정정해야 재기동이 이어받는다 (또는 backend 재시작 시 부팅 스윕의 cancelled 로도 해소).
+
 ## 스케줄러 (APScheduler)
 
 | 작업 | 주기 | 설명 |

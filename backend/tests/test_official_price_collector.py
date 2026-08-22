@@ -1214,3 +1214,71 @@ def test_fetch_returns_none_when_exceeding_max_pages(monkeypatch):
     vp = _patch_pages(monkeypatch, 2, fake_page)
 
     assert vp.fetch_official_prices("1168010600", _YEAR) is None
+
+
+# ── 10. 호 중복 행 dedupe (V-WORLD 가 호마다 동일 행 2회 반환 — 2026-08-22 실측) ──
+
+def test_aggregate_area_medians_counts_unique_ho_not_rows():
+    """표본 수(ho_count)는 원본 행 수가 아니라 유니크 호 개수여야 한다.
+
+    V-WORLD 는 같은 (dongNm,hoNm) 을 완전 동일 행으로 2번 반환하며, 중복은 연속이
+    아니라 섞여 있다. 중위값은 중복에 불변이지만 len(prices) 로 세면 2배가 된다.
+    """
+    a = make_row(area="84.43", price=100, ho="101")
+    b = make_row(area="84.43", price=200, ho="102")
+    c = make_row(area="84.43", price=300, ho="103")
+    d = make_row(area="59.98", price=50, ho="104")
+    # 섞인 순서 (연속 중복이 아님)
+    rows = [a, b, c, d, a, b, c, d]
+
+    result = aggregate_area_medians(rows)
+
+    assert result == [(Decimal("59.98"), 50, 1), (Decimal("84.43"), 200, 3)]
+
+
+def test_aggregate_area_medians_uses_valid_copy_when_first_duplicate_invalid():
+    """같은 호의 첫 복제본이 깨져 있어도(면적 빈값) 뒤의 멀쩡한 복제본으로 집계한다 — 호 유실 방지.
+
+    실측 복제본은 완전 동일이라 현재는 도달 안 하는 분기지만, '본 것' 등록을 유효성 검사 뒤에
+    두는 이유를 테스트로 박아 둔다(앞에 두면 101호가 통째로 사라져 [(84.43, 300, 1)] 이 된다).
+    """
+    rows = [
+        make_row(area="", price=100, ho="101"),       # 깨진 복제본
+        make_row(area="84.43", price=300, ho="102"),
+        make_row(area="84.43", price=100, ho="101"),  # 멀쩡한 복제본
+    ]
+
+    result = aggregate_area_medians(rows)
+
+    assert result == [(Decimal("84.43"), 200, 2)]
+
+
+def test_group_rows_sum_ho_count_equals_ho_keys():
+    """불변식: 모든 행이 유효하면 sum(ho_count) == len(group['ho_keys'])."""
+    rows = make_rows_for_complex(ho_count=10)
+    grouped = _group_by_aphus(rows + rows)
+    group = grouped["A1"]
+
+    assert len(group["rows"]) == 20, "그룹의 원본 행은 중복 그대로 담긴다 (fetch 정합성 축)"
+    assert len(group["ho_keys"]) == 10
+
+    areas = aggregate_area_medians(group["rows"])
+    assert sum(ho_count for _, _, ho_count in areas) == len(group["ho_keys"]) == 10
+
+
+def test_collect_saves_unique_ho_count_when_vworld_duplicates_rows(db, seeded, monkeypatch):
+    """V-WORLD 호마다 동일 행 2회 반환(2026-08-22 실측) 회귀 가드 — 저장 ho_count 는 유니크 호 수."""
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    rows = make_rows_for_complex(aphus_nm="은마", ho_count=10, area="84.43")
+    dup = rows + rows
+
+    with _patch_fetch(dup):
+        collect_official_prices(stdr_year=_YEAR)
+
+    saved = db.query(ComplexOfficialPrice).all()
+    assert len(saved) == 1
+    assert saved[0].complex_no == seeded
+    assert saved[0].ho_count == 10, "원본 행 수(20)가 아니라 유니크 호 수(10)"
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed"

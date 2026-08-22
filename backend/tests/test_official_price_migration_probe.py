@@ -55,6 +55,17 @@ def test_probe_total_returns_zero_for_empty_dong():
         assert probe_official_price_total("2827511100", _YEAR) == 0
 
 
+def test_probe_total_falls_back_to_row_count_when_total_unparsable():
+    """가짜 무음 방지 — totalCount 가 파싱 불가(→0)여도 행이 있으면 행 수를 돌려준다.
+
+    _fetch_page 는 totalCount 파싱 실패 시 total_count=0 으로 삼키므로(TypeError/ValueError),
+    그 0 을 그대로 반환하면 "행은 실재하는데 이관 감시가 조용히 넘어가는" 가짜 무음이 된다.
+    """
+    rows = [{"aphusCode": "A1"}, {"aphusCode": "A2"}, {"aphusCode": "A3"}]
+    with patch("crawler.vworld_price_api._fetch_page", return_value=(rows, 0)):
+        assert probe_official_price_total("2827511100", _YEAR) == 3
+
+
 # ── 2~4. 이관 감시 (_probe_reform_migration) ──
 
 def _patch_probe(side_effect=None, return_value=None):

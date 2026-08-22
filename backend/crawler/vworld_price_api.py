@@ -175,6 +175,18 @@ def _fetch_page(pnu: str, stdr_year: str, page_no: int) -> tuple[list[dict], int
     return None
 
 
+def probe_official_price_total(pnu: str, stdr_year: str) -> int | None:
+    """1페이지만 조회해 총 행수를 돌려준다 — 신코드 이관 감시 프로브 전용.
+
+    fetch_official_prices 는 전 페이지를 다 받아서(이관 뒤라면 보초 1곳이 수만 행)
+    프로브로 부적합하다. 실패(None)는 조용히 None — 감시는 best-effort.
+    """
+    page = _fetch_page(pnu, stdr_year, 1)
+    if page is None:
+        return None
+    return page[1]
+
+
 def fetch_official_prices(pnu: str, stdr_year: str) -> list[dict] | None:
     """법정동 하나의 공시가격 **전 페이지**를 모아서 반환. 실패 시 None.
 

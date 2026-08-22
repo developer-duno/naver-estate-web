@@ -46,6 +46,7 @@ def collect_complex_metrics(batch_size: int = 200, scheduler_job_id: str | None 
     )
     db.add(job)
     db.commit()
+    job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
 
     try:
         has_price_history = exists().where(
@@ -109,7 +110,7 @@ def collect_complex_metrics(batch_size: int = 200, scheduler_job_id: str | None 
             db.commit()
         except Exception:
             # 연결 끊김 등으로 같은 세션 마킹 실패 → 새 세션으로 보장 (세션 266)
-            fail_job_safely(job.id, str(e))
+            fail_job_safely(job_id, str(e))
         logger.exception("가치지표 수집 실패")
     finally:
         db.close()

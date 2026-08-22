@@ -85,6 +85,7 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, sche
     job = CrawlJob(job_type="complex_list", target_id=keyword, scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow())
     db.add(job)
     db.commit()
+    job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
 
     try:
         page = 1
@@ -132,7 +133,7 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, sche
             db.commit()
         except Exception:
             # 연결 끊김 등으로 같은 세션 마킹 실패 → 새 세션으로 보장 (세션 266)
-            fail_job_safely(job.id, str(e))
+            fail_job_safely(job_id, str(e))
         logger.exception("단지 발견 실패: %s", keyword)
     finally:
         db.close()
@@ -155,6 +156,7 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
     job = CrawlJob(job_type="complex_articles", target_id=complex_no, scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow())
     db.add(job)
     db.commit()
+    job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
 
     try:
         page = 1
@@ -236,7 +238,7 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
             db.commit()
         except Exception:
             # 연결 끊김 등으로 같은 세션 마킹 실패 → 새 세션으로 보장 (세션 266)
-            fail_job_safely(job.id, str(e))
+            fail_job_safely(job_id, str(e))
         logger.exception("매물 수집 실패: complex %s", complex_no)
     finally:
         NaverEstateAPI.clear_cache()
@@ -253,6 +255,7 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
     job = CrawlJob(job_type="popular_crawl", scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow())
     db.add(job)
     db.commit()
+    job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
 
     try:
         # 1순위: 사용자가 최근 조회한 단지 (last_crawled_at 최신순)
@@ -317,7 +320,7 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
             _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
             db.commit()
         except Exception:
-            fail_job_safely(job.id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
+            fail_job_safely(job_id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
         logger.exception("인기 단지 선제적 크롤링 실패")
     finally:
         db.close()
@@ -389,6 +392,7 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
     job = CrawlJob(job_type="article_detail", scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow())
     db.add(job)
     db.commit()
+    job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
 
     try:
         # 아래 후보 SELECT 가 부하 꼬리에서 간헐적으로 8s statement_timeout 에 잘린다
@@ -488,7 +492,7 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
             _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
             db.commit()
         except Exception:
-            fail_job_safely(job.id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
+            fail_job_safely(job_id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
         logger.exception("상세 보강 실패")
     finally:
         db.close()
@@ -514,6 +518,7 @@ def crawl_complex_details_batch(
     )
     db.add(job)
     db.commit()
+    job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
 
     try:
         complex_nos = get_complexes_for_detail_enrich(db, real_estate_type, batch_size)
@@ -559,7 +564,7 @@ def crawl_complex_details_batch(
             _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
             db.commit()
         except Exception:
-            fail_job_safely(job.id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
+            fail_job_safely(job_id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
         logger.exception("단지 상세 backfill 실패: %s", real_estate_type)
     finally:
         NaverEstateAPI.clear_cache()

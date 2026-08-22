@@ -161,6 +161,7 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
     )
     db.add(job)
     db.commit()
+    job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
 
     try:
         # 수집 대상 월: 최근 24개월 (차트 분별력 확보, 일일 한도 10,000회 충분)
@@ -286,7 +287,7 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
             job.error_message = str(e)[:500]
             db.commit()
         except Exception:
-            fail_job_safely(job.id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
+            fail_job_safely(job_id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
         logger.exception("공공데이터 수집 실패")
     finally:
         db.close()

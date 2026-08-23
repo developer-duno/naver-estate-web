@@ -49,6 +49,7 @@ jobs:
       # 컨텍스트에 secrets 미포함) env 로 주입해 shell 안에서 미설정(fork 등)을 판정한다.
       # 토큰 하드코딩 없음. 미설정이면 조용히 스킵(exit 0), 배포/알림 실패는 다음 스텝이 처리.
       - name: Send Telegram alert on failure
+        continue-on-error: true
         if: ${{ steps.ping.outputs.healthy == 'false' }}
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

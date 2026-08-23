@@ -20,6 +20,7 @@ from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 from crawler.cortar_legacy import to_vworld_cortar
+from crawler.cortar_ri_map import expand_to_ri_codes
 from crawler.env_common import _complete_job, _fail_job, _record_job
 from crawler.service_common import RESUME_MAX_AGE_HOURS, _checkpoint
 from db.database import SessionLocal
@@ -480,7 +481,7 @@ def _find_regressed_targets(
     은마 유니크 호수 1차 3,947(탈락) vs 2차 4,320(통과)). 기존 행수 정합성 가드는
     총량이 맞아떨어져 못 잡는다.
 
-    소실 판정 3조건 (AND) — 셋 다 있어야 오탐이 안 난다:
+    소실 판정 4조건 (AND) — 넷 다 있어야 오탐이 안 난다:
       1) 이번 실행에서 미매칭
       2) **이번 실행이 실제로 조회한 법정동**(processed_ld_codes)에 속함 — 체크포인트로
          스킵된 동(재개 실행의 관할 밖)과 조회 실패한 동(원인이 API 다운이지 매칭
@@ -489,6 +490,12 @@ def _find_regressed_targets(
       3) **올해(stdr_year=year) 행 보유** — 연도 무필터면 작년 행만 있는 단지가 연초
          (공시 미발표) 실행마다 소실로 잡혀 오탐이 폭발하고, 영구 미매칭 단지가 매달
          재판정돼 경보 피로를 만든다.
+      4) **리 확장 대상 읍/면 소속이 아님** — 읍/면 코드는 V-WORLD 공시가 0건인 것이
+         정상이고(공시가 리 단위 코드에 붙는다), 그 단지들은 이 재수집 패스가 아니라
+         **뒤의 리 확장 패스**가 매칭한다. 본루프 미매칭이 정상 상태라 소실로 볼 수 없다.
+         (세션 380 발견: 8/22 리 확장으로 올해 행을 받은 3,930 단지가 다음 정기 실행에서
+         전부 소실로 잡혀 _REPASS_COLLAPSE_THRESHOLD 를 초과 → "시스템 이상 의심" 오탐
+         텔레그램 + 진짜 드리프트 구제 전면 생략이 될 뻔했다.)
 
     판정은 "올해 행이 있었나" **존재 여부만** 본다 — 수집 시각의 크기 비교는 하지 않는다
     (관할 범위는 위 2)의 processed_ld_codes 가 이미 가른다). collected_at 이 NULL 인
@@ -500,7 +507,9 @@ def _find_regressed_targets(
     candidates = [
         t
         for t in targets
-        if t.complex_no not in matched_complex_nos and t.cortar_no in processed_ld_codes
+        if t.complex_no not in matched_complex_nos
+        and t.cortar_no in processed_ld_codes
+        and not expand_to_ri_codes(t.cortar_no)
     ]
     if not candidates:
         return []
@@ -918,8 +927,6 @@ def collect_official_prices(
         expanded = 0
         ri_fetch_failed = 0
         try:
-            from crawler.cortar_ri_map import expand_to_ri_codes
-
             # 대상 = 이번 실행이 조회한 읍/면 코드 중 dict 가 아는 것. remaining 이 아니라
             # processed_ld_codes 를 쓴다 — 체크포인트로 스킵된 동(재개 실행)까지 매번
             # 재확장하면 이미 저장된 값을 매번 다시 덮어써 낭비다(멱등 upsert 라 안전하긴

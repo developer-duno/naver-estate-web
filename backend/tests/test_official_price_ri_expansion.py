@@ -7,6 +7,7 @@
   4. cortar_ri_map.py 에 없는 읍/면(무매칭 561개 대상 밖)은 확장을 시도하지 않는다
   5. 2026 개편 신코드와 리 단위가 겹친 경우, 리 코드도 옛 코드로 번역해서 조회한다
   6. 확장 패스 예외는 본 수집 결과를 되돌리지 않는다 (best-effort)
+  7. 리 확장 대상 읍/면 소속 단지는 본루프 '소실' 판정에서 제외된다 (B3, 세션 380)
 
 fixture 설계 원칙(testing.md "fixture 우연 일치로 단위오류 은폐" 답습): 읍 1개 아래
 리 2개를 두고, 각 리에 **서로 다른 단지**를 매칭시킨다 — 리별 독립 처리가 실제로
@@ -113,10 +114,55 @@ def test_ri_expansion_skips_already_matched_complex(
 ):
     """본루프에서 이미 매칭된 단지는 리 확장 단계에서 재시도하지 않는다.
 
-    같은 읍/면에 속한 다른 단지(RB)는 애초에 다른 법정동에도 존재할 수 있다는
-    전제가 비현실적이라, 여기서는 '이미 matched_complex_nos 에 들어간 단지를
-    확장 패스가 건드리지 않는지'만 격리해 확인한다 — RA 를 재수집 패스로 먼저
-    구제시키고(과거 행 필요), 확장 단계 mock 호출 횟수로 재시도 여부를 판별한다.
+    RA 를 **본루프에서** 매칭시켜 matched_complex_nos 에 넣고(읍/면 자체 조회가
+    예외적으로 행을 돌려준 상황 가정), 리 21 이 같은 그룹을 다시 돌려줘도 확장
+    패스가 RA 를 건드리지 않는지 본다. RB 는 리 22 에서 정상 매칭돼 두 축이
+    분리된다(스킵 축 = RA, 매칭 축 = RB — testing.md 우연 일치 함정 회피).
+
+    ⚠ 세션 380(B3) 이전에는 RA 를 재수집 패스로 구제시키는 구조였으나, 이제 리 확장
+    대상 읍/면 소속 단지는 소실 판정에서 제외돼(정상 상태이므로) 읍 재조회 자체가
+    일어나지 않는다 — 그 헛조회를 전제로 한 호출 횟수 기대치를 본 구조로 대체했다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    complex_a, complex_b = two_complexes_same_eup
+
+    rows_a = make_rows_for_complex(aphus_code="AA", aphus_nm="리에이단지", ho_count=10)
+    rows_b = make_rows_for_complex(aphus_code="AB", aphus_nm="리비단지", ho_count=10)
+
+    # 호출 순서: ①본루프(읍 자체가 rows_a 반환 → RA 매칭, RB 는 미매칭)
+    #           → 확장 패스 ②리21(rows_a 재등장하나 RA 는 이미 매칭돼 스킵, RB 는 이름 불일치)
+    #           → ③리22(rows_b → RB 매칭)
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[rows_a, rows_a, rows_b],
+    ) as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 3, "본루프1 + 리확장2 = 3회 (읍 재조회 0)"
+
+    saved = {row.complex_no: row for row in db.query(ComplexOfficialPrice).all()}
+    assert set(saved) == {complex_a, complex_b}
+    assert saved[complex_a].aphus_code == "AA", (
+        "본루프에서 매칭된 RA 를 확장 패스가 다시 덮어썼다 = 이미 매칭 단지 스킵 미동작"
+    )
+
+
+def test_ri_eup_complexes_with_prior_rows_are_not_repass_targets(
+    db, two_complexes_same_eup, ri_map_patch, monkeypatch
+):
+    """리 확장 대상 읍/면 소속 단지는 본루프 소실 판정에서 제외된다 (B3, 세션 380).
+
+    읍/면 코드는 V-WORLD 공시 0건이 **정상**이다(공시가 리 단위 코드에 붙는다). 그
+    단지들은 재수집 패스가 아니라 뒤의 리 확장 패스가 매칭한다. 그런데 리 확장으로
+    올해 행을 한 번 받고 나면, 다음 정기 실행의 `_find_regressed_targets` 가
+    "미매칭 + 조회 성공 동 + 올해 행 보유" 3조건을 그대로 충족시켜 **전부 소실**로
+    잡는다 — 8/22 리 확장으로 올해 행을 받은 3,930 단지가 이에 해당해
+    `_REPASS_COLLAPSE_THRESHOLD` 를 초과하고, "시스템 이상 의심 → 재수집 생략"
+    오탐 텔레그램이 나가면서 **진짜 드리프트 구제가 통째로 생략**될 뻔했다.
+
+    fixture 두 축 분리: 임계를 1 로 낮춰(단지 2개 > 1) 제외가 안 되면 반드시 임계
+    분기가 발동하게 만들고, 그와 별개로 "리 확장이 실제로 값을 갱신했는가"를
+    저장된 price_median 변화로 본다 — 호출 횟수 하나에만 기대지 않는다.
     """
     monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
     complex_a, complex_b = two_complexes_same_eup
@@ -124,32 +170,55 @@ def test_ri_expansion_skips_already_matched_complex(
     from datetime import timedelta
     from decimal import Decimal
 
+    import crawler.service_official_price as svc
     from utils import utcnow
 
-    # RA 에 '과거 행'을 심어 재수집 패스의 소실 판정 대상으로 만든다.
-    db.add(ComplexOfficialPrice(
-        complex_no=complex_a, stdr_year=_YEAR, prvuse_ar=Decimal("84.43"),
-        price_median=1_000_000_000, ho_count=10, aphus_code="AA", aphus_nm="리에이단지",
-        collected_at=utcnow() - timedelta(days=30),
-    ))
+    # 지난달 리 확장이 남긴 올해 행 — 소실 판정 3조건 중 "올해 행 보유"를 만든다.
+    for complex_no, aphus_code, aphus_nm in (
+        (complex_a, "AA", "리에이단지"), (complex_b, "AB", "리비단지")
+    ):
+        db.add(ComplexOfficialPrice(
+            complex_no=complex_no, stdr_year=_YEAR, prvuse_ar=Decimal("84.43"),
+            price_median=1_000_000_000, ho_count=10,
+            aphus_code=aphus_code, aphus_nm=aphus_nm,
+            collected_at=utcnow() - timedelta(days=30),
+        ))
     db.commit()
 
-    rows_a = make_rows_for_complex(aphus_code="AA", aphus_nm="리에이단지", ho_count=10)
-    rows_b = make_rows_for_complex(aphus_code="AB", aphus_nm="리비단지", ho_count=10)
+    # 임계를 1 로 낮춘다 — 제외가 없으면 소실 2단지 > 1 이라 반드시 붕괴 분기가 터진다.
+    monkeypatch.setattr(svc, "_REPASS_COLLAPSE_THRESHOLD", 1)
 
-    # 호출 순서: ①본루프(읍 자체, 0건이라 RA·RB 둘 다 미매칭)
-    #           → 재수집 패스가 RA(과거 행 有)를 소실로 감지해 ②같은 읍 재조회(0건, 여전히 미매칭)
-    #           → 확장 패스 ③리21(RA 매칭) ④리22(RB 매칭)
-    with patch(
+    alerts: list[str] = []
+    rows_a = make_rows_for_complex(aphus_code="AA", aphus_nm="리에이단지", ho_count=10,
+                                   base_price=2_700_000_000)
+    rows_b = make_rows_for_complex(aphus_code="AB", aphus_nm="리비단지", ho_count=10,
+                                   base_price=2_700_000_000)
+
+    # 호출 순서: ①본루프(읍 자체 0건 — 둘 다 미매칭이 정상) → ②리21 → ③리22
+    with patch.object(svc, "_alert_official_price", side_effect=alerts.append), patch(
         "crawler.vworld_price_api.fetch_official_prices",
-        side_effect=[[], [], rows_a, rows_b],
+        side_effect=[[], rows_a, rows_b],
     ) as mock_fetch:
         collect_official_prices(stdr_year=_YEAR)
 
-    assert mock_fetch.call_count == 4, "본루프1 + 재수집1 + 리확장2 = 4회"
+    assert mock_fetch.call_count == 3, (
+        "읍/면을 소실로 오판해 재조회했다 = 본루프 소실 판정 제외 미동작"
+    )
+    assert alerts == [], f"소실 오탐 경보가 나갔다: {alerts}"
 
-    saved = {row.complex_no for row in db.query(ComplexOfficialPrice).all()}
-    assert saved == {complex_a, complex_b}
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed"
+    assert "임계" not in (job.error_message or ""), "붕괴 임계 분기가 오발했다"
+    assert "잔여" not in (job.error_message or ""), "정상 상태가 잔여 소실로 보고됐다"
+
+    # 별개 축 — 리 확장이 실제로 새 값을 저장했는지(호출 횟수와 독립적인 증거).
+    saved = {row.complex_no: row for row in db.query(ComplexOfficialPrice).all()}
+    assert set(saved) == {complex_a, complex_b}
+    for complex_no in (complex_a, complex_b):
+        assert saved[complex_no].price_median > 1_000_000_000, (
+            f"{complex_no} 가 리 확장으로 갱신되지 않았다 (과거 행 그대로)"
+        )
+        assert saved[complex_no].ho_count == 10
 
 
 def test_ri_expansion_skipped_when_eup_not_in_map(db, monkeypatch):
@@ -180,8 +249,10 @@ def test_ri_expansion_exception_does_not_fail_the_job(
     complex_a, complex_b = two_complexes_same_eup
 
     # expand_to_ri_codes 를 예외 발생으로 교체 — 확장 패스 진입 직후 실패 재현.
+    # ⚠ patch 타깃은 정의처(cortar_ri_map)가 아니라 **호출부 바인딩**이다 — 세션 380(B3)
+    # 에서 이 함수를 모듈 상단 import 로 올려 이름이 service_official_price 에 묶였다.
     with patch(
-        "crawler.cortar_ri_map.expand_to_ri_codes",
+        "crawler.service_official_price.expand_to_ri_codes",
         side_effect=RuntimeError("code.go.kr 원장 손상 가정"),
     ), patch(
         "crawler.vworld_price_api.fetch_official_prices",

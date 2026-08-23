@@ -16,10 +16,13 @@ import os
 import re
 import statistics
 import time
-from datetime import date, timedelta
+from datetime import date, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
+from sqlalchemy import func
+
 from crawler.cortar_legacy import to_vworld_cortar
+from crawler.cortar_ri_map import expand_to_ri_codes
 from crawler.env_common import _complete_job, _fail_job, _record_job
 from crawler.service_common import RESUME_MAX_AGE_HOURS, _checkpoint
 from db.database import SessionLocal
@@ -480,7 +483,7 @@ def _find_regressed_targets(
     은마 유니크 호수 1차 3,947(탈락) vs 2차 4,320(통과)). 기존 행수 정합성 가드는
     총량이 맞아떨어져 못 잡는다.
 
-    소실 판정 3조건 (AND) — 셋 다 있어야 오탐이 안 난다:
+    소실 판정 4조건 (AND) — 넷 다 있어야 오탐이 안 난다:
       1) 이번 실행에서 미매칭
       2) **이번 실행이 실제로 조회한 법정동**(processed_ld_codes)에 속함 — 체크포인트로
          스킵된 동(재개 실행의 관할 밖)과 조회 실패한 동(원인이 API 다운이지 매칭
@@ -489,10 +492,19 @@ def _find_regressed_targets(
       3) **올해(stdr_year=year) 행 보유** — 연도 무필터면 작년 행만 있는 단지가 연초
          (공시 미발표) 실행마다 소실로 잡혀 오탐이 폭발하고, 영구 미매칭 단지가 매달
          재판정돼 경보 피로를 만든다.
+      4) **리 확장 대상 읍/면 소속이 아님** — 읍/면 코드는 V-WORLD 공시가 0건인 것이
+         정상이고(공시가 리 단위 코드에 붙는다), 그 단지들은 이 재수집 패스가 아니라
+         **뒤의 리 확장 패스**가 매칭한다. 본루프 미매칭이 정상 상태라 소실로 볼 수 없다.
+         (세션 380 발견: 8/22 리 확장으로 올해 행을 받은 3,930 단지가 다음 정기 실행에서
+         전부 소실로 잡혀 _REPASS_COLLAPSE_THRESHOLD 를 초과 → "시스템 이상 의심" 오탐
+         텔레그램 + 진짜 드리프트 구제 전면 생략이 될 뻔했다.)
 
-    판정은 "올해 행이 있었나" **존재 여부만** 본다 — 수집 시각의 크기 비교는 하지 않는다
-    (관할 범위는 위 2)의 processed_ld_codes 가 이미 가른다). collected_at 이 NULL 인
-    행만 가진 단지는 제외 = 신규 취급 — 수집 시각을 모르면 '과거에 있었다'를 주장할 수 없다.
+    본루프 관할의 판정은 "올해 행이 있었나" **존재 여부만** 본다 — 수집 시각의 크기
+    비교는 하지 않는다(관할 범위는 위 2)의 processed_ld_codes 가 이미 가른다). 반면
+    재개 실행이 **이어받은** 동은 여기서 배제되므로, 그쪽은
+    `_find_regressed_in_inherited_dongs` 가 사슬 시작 시각 기준으로 별도 판정한다
+    (세션 380). collected_at 이 NULL 인 행만 가진 단지는 제외 = 신규 취급 — 수집
+    시각을 모르면 '과거에 있었다'를 주장할 수 없다.
     """
     if not processed_ld_codes:
         return []
@@ -500,7 +512,9 @@ def _find_regressed_targets(
     candidates = [
         t
         for t in targets
-        if t.complex_no not in matched_complex_nos and t.cortar_no in processed_ld_codes
+        if t.complex_no not in matched_complex_nos
+        and t.cortar_no in processed_ld_codes
+        and not expand_to_ri_codes(t.cortar_no)
     ]
     if not candidates:
         return []
@@ -518,6 +532,114 @@ def _find_regressed_targets(
     }
 
     return [t for t in candidates if t.complex_no in prior_seen]
+
+
+def _as_aware(dt):
+    """naive datetime 에 UTC 를 부여해 비교 가능하게 만든다 (방어적 정규화).
+
+    비교 대상은 둘 다 DB 에서 나온 값이지만 dialect 가 다르다 — prod PostgreSQL 은
+    timezone-aware, 테스트 SQLite 는 naive datetime 을 돌려준다(세션 380 실측:
+    `func.max(collected_at)` 도 str 이 아니라 naive datetime). 한쪽만 aware 면
+    `<` 비교가 TypeError 로 터져 재수집 패스 전체가 best-effort except 로 조용히
+    삼켜지므로, 양쪽을 이 헬퍼로 통과시킨 뒤에만 비교한다.
+    """
+    if dt is not None and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _find_regressed_in_inherited_dongs(
+    db, targets: list, inherited_cutoff_by_dong: dict, year: str
+) -> tuple[list, dict[str, set[str]]]:
+    """재개 실행이 **이어받은** 동에서 소실된 단지 + 그 동에 이미 배정된 그룹.
+
+    `_find_regressed_targets` 는 이번 실행이 실제 조회한 동(processed_ld_codes)만
+    본다 — 재개로 스킵된 동은 관할 밖이라 일부러 뺐다(그게 없으면 재개마다 수천
+    단지가 거짓 경보가 된다). 그런데 그 배제가 사각을 만든다(세션 379 실증):
+
+      1차 잡이 동 660개를 처리한 뒤 재수집 패스 **전에** 사망 → 2차가 체크포인트로
+      그 660동을 이어받아 스킵 → 1차에서 드리프트로 탈락한 은마(236단지)를 1차도
+      (죽어서) 2차도(관할 밖이라) 아무도 줍지 않는다.
+
+    존재 여부만 보는 본루프 판정과 달리 여기서는 **수집 시각**으로 가른다. 기준은
+    단일 시각이 아니라 **동별 컷오프** = 그 동을 처음 완료한 사슬 잡의 started_at
+    (`inherited_cutoff_by_dong`, 호출부가 오름차순 setdefault 로 만든다). 이어받은
+    동은 그 잡이 조회한 시점 이후로는 다시 조회되지 않았으므로, "컷오프 이후에
+    저장된 적이 있다" 가 곧 "그때 매칭됐다" 이기 때문이다:
+
+      · 단지의 올해 행 max(collected_at) < 그 동의 컷오프 → 소실 (아무도 못 붙였다)
+      · max(collected_at) >= 컷오프                       → 사슬이 이미 매칭 (정상)
+      · 올해 행 없음                                       → 신규 (소실 아님, 제외)
+
+    왜 동별인가 — 사슬 전체의 min(started_at) 하나로 자르면 다음이 새어나간다
+    (세션 380 적대검증): 실패 O(체크포인트 {D0}) 뒤에 **완료된** 실행 C 가 단지 X
+    (동 D1, D1∉{D0})를 저장하고, 이어서 실패 R 이 O 의 옛 체크포인트를 상속한 채
+    D1 을 새로 처리하다 X 를 드리프트로 놓치고 죽으면(체크포인트 {D0,D1}), 단일 min
+    컷오프 = O.start 는 X 의 저장 시각보다 이르므로 "이미 매칭"으로 오판된다. D1 을
+    처음 완료한 잡은 R 이므로 R.start 로 잘라야 X 가 소실로 잡힌다. 연속 사망
+    (Z→A→이번)도 같은 규칙에 포섭된다 — Z 소유 동은 Z.start, A 소유 동은 A.start.
+
+    두 번째 반환값 `claimed` 는 그 동에서 사슬이 이미 배정한 aphusCode 집합이다 —
+    본루프의 `claimed_by_dong` 을 DB 로 복원한 것으로, 재수집의 2차(이름) 매칭이 남의
+    그룹을 다시 집는 이중 배정을 이어받은 동에도 막는다(적대검증 MEDIUM-1 확장).
+
+    리 확장 대상 읍/면은 여기서도 제외한다 — 본루프와 같은 이유로 그 동의 미매칭은
+    정상 상태이고, 구제 관할은 리 확장 패스다(B3 동일 조건).
+    """
+    if not inherited_cutoff_by_dong:
+        return [], {}
+
+    candidates = [
+        t
+        for t in targets
+        if t.cortar_no in inherited_cutoff_by_dong and not expand_to_ri_codes(t.cortar_no)
+    ]
+    if not candidates:
+        return [], {}
+
+    # 전체 단지를 IN 절에 넣지 않는다(수만 개) — 올해 행을 통째로 뽑아 Python 에서 교집합
+    # (_find_regressed_targets 와 같은 관례).
+    latest_by_complex: dict[str, object] = {}
+    seen_by_complex: dict[str, list[tuple[str, object]]] = {}
+    for complex_no, aphus_code, max_collected in (
+        db.query(
+            ComplexOfficialPrice.complex_no,
+            ComplexOfficialPrice.aphus_code,
+            func.max(ComplexOfficialPrice.collected_at),
+        )
+        .filter(
+            ComplexOfficialPrice.stdr_year == year,
+            ComplexOfficialPrice.collected_at.isnot(None),
+        )
+        .group_by(ComplexOfficialPrice.complex_no, ComplexOfficialPrice.aphus_code)
+        .all()
+    ):
+        collected = _as_aware(max_collected)
+        if collected is None:
+            continue
+        seen_by_complex.setdefault(complex_no, []).append((aphus_code, collected))
+        prev = latest_by_complex.get(complex_no)
+        if prev is None or collected > prev:
+            latest_by_complex[complex_no] = collected
+
+    regressed: list = []
+    claimed: dict[str, set[str]] = {}
+    for target in candidates:
+        latest = latest_by_complex.get(target.complex_no)
+        if latest is None:
+            continue  # 올해 행 없음 = 신규, 소실 아님
+        cutoff = _as_aware(inherited_cutoff_by_dong[target.cortar_no])
+        if cutoff is None:
+            continue  # 컷오프 미상 = 판정 근거 없음 (호출부가 warning 으로 이미 알린다)
+        if latest < cutoff:
+            regressed.append(target)
+            continue
+        # 사슬이 이미 매칭한 단지 — 그 단지가 쥔 그룹을 재수집 2차가 못 집게 인계한다.
+        for aphus_code, collected in seen_by_complex.get(target.complex_no, ()):
+            if aphus_code and collected >= cutoff:
+                claimed.setdefault(target.cortar_no, set()).add(aphus_code)
+
+    return regressed, claimed
 
 
 def collect_official_prices(
@@ -578,15 +700,59 @@ def collect_official_prices(
         .limit(10)
         .all()
     )
+    # 동별 컷오프 — "그 동을 **처음 완료한** 사슬 잡의 started_at".
+    #
+    # 이어받은 동의 소실 판정은 "그 동이 마지막으로 조회된 이후에 저장된 적이 있나"를
+    # 봐야 하는데, 그 기준 시각은 동마다 다르다. 체크포인트는 잡마다 누적(이어받은
+    # 집합 + 자기 처리분)이므로, 72h 창의 체크포인트 보유 실패잡을 started_at
+    # **오름차순**으로 훑으며 setdefault 하면 "그 동을 처음 포함한 잡" = 소유 잡이 된다.
+    #
+    # 왜 단일 min(started_at) 이면 안 되는가 (세션 380 적대검증 재반박):
+    #   실패 O(체크포인트 {D0}) → 그 사이 **완료된** 실행 C 가 단지 X(동 D1, D1∉{D0})를
+    #   저장(60h 전) → 실패 R 이 72h 내라 O 의 옛 체크포인트를 상속하고 D1 을 새로
+    #   처리하다 X 를 드리프트로 놓치고 사망(체크포인트 {D0, D1}) → 이번 실행이 R 을
+    #   이어받음. 단일 min 이면 컷오프가 O.start(70h 전)라 X 의 저장 시각(60h 전)이
+    #   그보다 뒤여서 "사슬이 이미 매칭함"으로 오판돼 X 를 영영 못 줍는다. D1 을 처음
+    #   완료한 잡은 R 이므로 정답 컷오프는 R.start(30분 전)다.
+    #   연속 사망(Z→A→이번)도 같은 규칙으로 자연히 처리된다 — Z 소유 동은 Z.start,
+    #   A 소유 동은 A.start 가 각각 컷오프가 된다.
+    checkpointed_runs: list[tuple] = []
     for prev_job in recent_stopped_jobs:
         prev_state = _checkpoint.load(db, prev_job.id)
-        if prev_state and prev_state.get("done_ld_codes"):
+        if not (prev_state and prev_state.get("done_ld_codes")):
+            continue
+        if not done_ld_codes:
+            # 첫(최신) 체크포인트 보유 잡만 완료분을 이어받는다 — 기존 동작 그대로.
             done_ld_codes = set(prev_state["done_ld_codes"])
             logger.info(
                 "[official_price] 재개: 이전 job %d 에서 법정동 %d개 완료분 이어받음",
                 prev_job.id, len(done_ld_codes),
             )
-            break
+        if prev_job.started_at:
+            checkpointed_runs.append((prev_job.started_at, set(prev_state["done_ld_codes"])))
+
+    # 이어받은 동 집합을 여기서 동결한다 — done_ld_codes 는 본루프에서 계속 늘어나므로,
+    # 재수집 시점에 참조하면 이번 실행이 직접 조회한 동까지 섞여 관할이 뭉개진다.
+    inherited_ld_codes = frozenset(done_ld_codes)
+
+    # ⚠ 키를 inherited_ld_codes 로 **한정**한다. 옛 잡(O)의 체크포인트에는 있지만 최신
+    # 잡(R)에는 없는 동이 있을 수 있는데(R 이 O 를 상속하지 않은 경우), 그 동은 이번
+    # 실행이 직접 조회할 대상이라 `_find_regressed_targets` 관할이다. 한정하지 않으면
+    # 같은 단지가 양쪽 판정에 걸려 중복 계상된다.
+    inherited_cutoff_by_dong: dict[str, object] = {}
+    for started_at, done in sorted(checkpointed_runs, key=lambda r: r[0]):
+        for dong in done:
+            if dong in inherited_ld_codes:
+                inherited_cutoff_by_dong.setdefault(dong, started_at)
+    # 이어받은 집합은 정의상 어느 한 체크포인트에서 왔으므로 키 누락은 구조상 없다.
+    # 그래도 방어적으로 확인한다 — 누락된 동은 판정 근거가 없으니 조용히 스킵된다
+    # (아래 헬퍼가 inherited_cutoff_by_dong 키만 후보로 삼으므로 자동 배제).
+    missing_cutoff = inherited_ld_codes - set(inherited_cutoff_by_dong)
+    if missing_cutoff:
+        logger.warning(
+            "[official_price] 이어받은 법정동 %d개의 컷오프 시각을 못 찾음 — 소실 판정 제외",
+            len(missing_cutoff),
+        )
 
     job = _record_job(db, "official_price", scheduler_job_id or "collect_official_prices")
 
@@ -761,6 +927,25 @@ def collect_official_prices(
                 db, targets, matched_complex_nos, processed_ld_codes, year
             )
 
+            # 재개 실행이라면 **이어받은 동**의 소실도 합류시킨다 — 1차가 재수집 전에
+            # 죽으면 그 동에서 드리프트로 탈락한 단지를 1차도(죽어서) 2차도(관할 밖이라)
+            # 줍지 않는 사각이 생긴다(세션 379 은마 실증, 세션 380 수정).
+            if inherited_cutoff_by_dong:
+                inherited_lost, inherited_claimed = _find_regressed_in_inherited_dongs(
+                    db, targets, inherited_cutoff_by_dong, year
+                )
+                if inherited_lost:
+                    regressed.extend(inherited_lost)
+                    logger.info(
+                        "[official_price] 재개 이어받은 동 %d개 중 소실 %d단지 합류",
+                        len(inherited_cutoff_by_dong), len(inherited_lost),
+                    )
+                # claimed 는 소실이 0건이어도 인계한다 — 아래 임계·상한을 통과한 다른
+                # 동의 재수집이 이 동을 건드릴 일은 없지만, 인계 자체가 무해하고
+                # 조건을 늘리면 "소실이 있을 때만 이중 배정을 막는" 비대칭이 생긴다.
+                for dong, codes in inherited_claimed.items():
+                    claimed_by_dong.setdefault(dong, set()).update(codes)
+
             if len(regressed) > _REPASS_COLLAPSE_THRESHOLD:
                 # 드리프트가 아니라 시스템 이상 — 재수집은 구제가 아니라 폭주가 된다.
                 logger.error(
@@ -918,8 +1103,6 @@ def collect_official_prices(
         expanded = 0
         ri_fetch_failed = 0
         try:
-            from crawler.cortar_ri_map import expand_to_ri_codes
-
             # 대상 = 이번 실행이 조회한 읍/면 코드 중 dict 가 아는 것. remaining 이 아니라
             # processed_ld_codes 를 쓴다 — 체크포인트로 스킵된 동(재개 실행)까지 매번
             # 재확장하면 이미 저장된 값을 매번 다시 덮어써 낭비다(멱등 upsert 라 안전하긴

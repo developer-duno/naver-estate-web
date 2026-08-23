@@ -94,3 +94,24 @@ def test_compute_freshness_articles_count_present(db):
     art = next(it for it in result["items"] if it["key"] == "articles")
     assert isinstance(art["count"], int)
     assert art["count"] == 5  # SQLite 폴백이라 정확
+
+
+def test_compute_freshness_complexes_max_count_separated(db):
+    """세션 381: complexes 도 max/count 분리(_approx_count) 후 (max, count) 형태 유지.
+
+    max+count 를 한 SELECT 에 묶으면 count 풀스캔이 max 인덱스(V048
+    ix_complexes_last_crawled_at)를 무효화한다. 분리 후에도 raw 딕셔너리 값은
+    (last_updated, count) 2튜플이라 소비부(`last_raw, count = raw[key]`)가 그대로 동작한다.
+    SQLite 폴백이라 count 는 정확값.
+    """
+    from db.models import Complex
+
+    for i in range(4):
+        db.add(Complex(complex_no=f"C{i}", complex_name=f"단지{i}"))
+    db.commit()
+
+    result = compute_freshness(db)
+    cpx = next(it for it in result["items"] if it["key"] == "complexes")
+    assert isinstance(cpx["count"], int)
+    assert cpx["count"] == 4  # SQLite 폴백이라 정확
+    assert cpx["last_updated"] is None  # last_crawled_at 미설정 → max 는 None

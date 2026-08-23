@@ -110,7 +110,7 @@ def _last_job(db: Session, scheduler_job_id: str) -> dict | None:
 def _approx_count(db: Session, table_name: str, exact_stmt) -> int:
     """대형 테이블 행수 근사 — pg_class.reltuples (인덱스 없이 즉시, 풀스캔 회피).
 
-    articles(121만)·trades(80만)·complex_price_history(36만) 의 정확 count 는 풀스캔이라
+    articles(121만)·trades(80만)·complex_price_history(36만)·complexes(6.4만) 의 정확 count 는 풀스캔이라
     부하 시 8초 statement_timeout 을 넘겨 monitor 를 죽였다(세션 342). freshness 의 count 는
     화면 "대략 N건" 표시용이라 근사로 충분. reltuples 는 autovacuum/analyze 후 갱신되며
     평상시 오차 <1%(실측 0%). SQLite(테스트)는 reltuples 가 없으므로 정확 count 로 폴백.
@@ -135,10 +135,13 @@ def compute_freshness(db: Session) -> dict:
     now = datetime.now(timezone.utc)
 
     # 종목별 (last_updated, count) — 1쿼리씩.
-    # ⚠ 대형 테이블(articles 121만·trades 80만·complex_price_history 36만)은 max+count 를
-    # 묶으면 count 풀스캔이 max 인덱스(V038 ix_articles_updated_at 등)를 무효화하고, 정확
-    # count 풀스캔 자체가 부하 시 8초 statement_timeout 을 넘겨 monitor 를 죽였다(세션 342).
+    # ⚠ 대형 테이블(articles 121만·trades 80만·complex_price_history 36만·complexes 6.4만)은
+    # max+count 를 묶으면 count 풀스캔이 max 인덱스를 무효화하고, 정확 count 풀스캔 자체가
+    # 부하 시 8초 statement_timeout 을 넘겨 monitor 를 죽였다(세션 342).
     # → max 는 인덱스 역스캔(ms)으로 분리, count 는 reltuples 근사(_approx_count, 즉시)로.
+    # ⚠ "max 는 인덱스 역스캔" 은 해당 컬럼에 인덱스가 있어야만 성립한다 — articles 는
+    # V038(updated_at)·V039(created_at), trades·complex_price_history·complexes 는
+    # V048(세션 381) 로 인덱스를 갖췄다. 인덱스 없이 분리만 하면 여전히 풀스캔(Seq Scan)이다.
     # 소형 테이블은 정확 count 유지(풀스캔 부담 0). 메모리 [[feedback-combined-aggregate-index-void]] 답습.
     art_max = db.execute(select(func.max(Article.updated_at))).scalar()
     art_count = _approx_count(db, "articles", select(func.count(Article.article_no)))
@@ -146,8 +149,10 @@ def compute_freshness(db: Session) -> dict:
     cph_count = _approx_count(db, "complex_price_history", select(func.count(ComplexPriceHistory.id)))
     trade_max = db.execute(select(func.max(MBTrade.recorded_at))).scalar()
     trade_count = _approx_count(db, "trades", select(func.count(MBTrade.id)))
+    cpx_max = db.execute(select(func.max(Complex.last_crawled_at))).scalar()
+    cpx_count = _approx_count(db, "complexes", select(func.count(Complex.complex_no)))
     raw: dict[str, tuple] = {
-        "complexes": db.execute(select(func.max(Complex.last_crawled_at), func.count(Complex.complex_no))).one(),
+        "complexes": (cpx_max, cpx_count),
         "articles": (art_max, art_count),
         "complex_price_history": (cph_max, cph_count),
         "unsold": db.execute(select(func.max(UnsoldHistory.recorded_at), func.count(UnsoldHistory.id))).one(),

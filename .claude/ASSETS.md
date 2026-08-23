@@ -124,13 +124,13 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 
 | 우선순위 | 부채 | 위치 | 영향 |
 |---|---|---|---|
-| 🔴 1순위 | 디자인 리뉴얼 PR 4~7 진행 중 | spec = `docs/superpowers/specs/2026-05-20-2upekr-redesign-design.md` | PR 0·1·2a·3a 완료 (세션 210·213·214·215). PR 4·5·6 시각 변화 진행 중 (세션 240~245 = PR 4e·5a·5b·5d·6a·6b·6c). PR 7 미진행 |
 | 🟡 2순위 | 가치 3필드 채움률 진행 중 | `complex_metric` cron 매일 04:30 KST | PR #61 (배치 1000) 가동 확정 (세션 234 4중 cross-check 통과). ~25일 자동 완주 = 능동 작업 불필요. backend zombie 회피 룰 = `release.md` |
 
 ### §6.1 해소 완료 아카이브 (이력 보존 — "왜 이렇게 됐나" 추적용)
 
 | 해소 부채 | 해소 경위 | 효과 |
 |---|---|---|
+| 디자인 리뉴얼 PR 4~7 진행 중 | 완료 (PR 4~7 #66~#94 전량 머지, 세션 381 정정) | spec = `docs/superpowers/specs/2026-05-20-2upekr-redesign-design.md`. PR 0~7 전량 머지 (#28~#94, 세션 188~244) — 후속 UI 작업은 spec 의 디자인 원칙 답습 |
 | backend 재시작 ritual (zombie 2 세션 연속) | 세션 232 `.claude/rules/release.md` 신설 + 세션 234 PR #61 부팅 로그 `(배치 1000)` 실측 4중 cross-check 통과 | PR 머지 후 3중 cross-check (orchestrator.pid mtime + backend.log 첫 줄 시각 + crawl_jobs 최신 row) 룰화. 세션 245 본 PR 답습 = backend 변경 PR 머지 시 의무 적용 |
 | worktrees 잔재 5개 | 세션 110 prune + 세션 112 폴더 rm -rf 완료 | 세션 109+110 prune 후 잔재 5개 재생성 → 세션 112 rm -rf 완전 정리. 향후 git worktree 사용 후 prune 자동화 검토 권장 |
 | R21 e2e 검증 미완 | 세션 110 재실행 통과 (run 25361059023 success: Frontend CI + Frontend E2E admin 둘 다 🟢) | 부부 공동명의 #10 strict mode 정정 진짜 통과 확증 |

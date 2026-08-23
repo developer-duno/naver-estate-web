@@ -39,7 +39,7 @@ cloudflared tunnel run naver-estate-backend
 
 URL이 고정(api.2u.pe.kr)이므로 Vercel 재배포 불필요.
 
-### Named Tunnel 사전 작업 (1회성, 미완료)
+### Named Tunnel 초기 셋업 절차 (1회성 — 완료·운영 중, 재설치 시 참고)
 
 ```bash
 cloudflared tunnel create naver-estate-backend
@@ -56,7 +56,7 @@ ingress:
   - service: http_status:404
 ```
 
-Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정.
+Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정 (설정 완료).
 
 ### Vercel 프로젝트 정보
 

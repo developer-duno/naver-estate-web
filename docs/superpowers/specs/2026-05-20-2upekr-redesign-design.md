@@ -2,6 +2,10 @@
 
 작성일: 2026-05-20
 
+> **상태: 완료** — PR 0~7 전량 머지(#28~#94, 세션 188~244). 디자인 원칙 참조용 역사 기록.
+> 원안 PR 6(로그인 후 /dashboard·driver.js 투어·cmdk 명령메뉴)은 PR 6a~6e(admin 3컬럼·단지상세
+> 대시보드)로 방향 전환돼 미구현 — 필요 시 별도 spec.
+>
 > ★ **본 spec 이 디자인·UX 리뉴얼의 진실의 원천.** 루트 `CLAUDE.md` §디자인·UX
 > 리뉴얼 에서 본 spec 으로 연결. `frontend/.claude/{ui-patterns,hooks-and-state,
 > pages-and-mb,tools-lineup}.md` 의 UI 컴포넌트·페이지 박제는 각 PR 진행하며 함께

@@ -1,5 +1,7 @@
 # 청약홈 오피스텔·도시형·민간임대 편입 Implementation Plan
 
+> **상태: 완료** — 이슈 #323 · PR #326 머지 + 후속 P0 FK 드리프트 근본수정 #352(V045, 세션 358). 스케줄러 월요일 05:00/05:30 정기 운영 중(infra.md). 본 문서는 설계·구현 기록.
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 청약홈 오피스텔·도시형 API 2종(`getUrbtyOfctlLttotPblancDetail`/`Mdl`)과 공공지원 민간임대 API 2종(`getPblPvtRentLttotPblancDetail`/`Mdl`)을 naver-estate-web이 자체 수집해, `/mibunyang` 페이지 "분양" 탭에 새 세그먼트("오피스텔·임대")로 노출한다.

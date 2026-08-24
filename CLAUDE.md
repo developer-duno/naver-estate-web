@@ -158,6 +158,7 @@ repo 에 박혀 git 으로 전파되는 도메인 특화 자산. description 매
 | agent | `crawl-safety-reviewer` | `backend/crawler/`·`routers/live` 변경 시 — throttle 경유·IP차단 방지(infra.md §IP차단) 검증 |
 | agent | `tax-law-verifier` | `frontend/src/lib/` 계산기(`*tax*.ts`·`brokerage*.ts`) 변경 시 — 법령 cross-check + 결함 박제 테스트 감지(testing.md) |
 | agent | `migration-safety-reviewer` | `backend/db/migrations/V*.sql`·`db/models.py` 변경 시 — 공용 DB(mibunyang) 영향 + prod 컬럼 선행실행 게이트 |
+| agent | `payment-safety-reviewer` | `routers/payment.py`·`routers/billing.py`·`crawler/billing_charge.py` 변경 시 — 서버측 금액재산정·PortOne 대조·웹훅 서명검증·3일 중단룰·TOCTOU 원자적 전환 검증 |
 | skill | `release-verify` | backend PR 머지 직후 — zombie cross-check(release.md §2, PR 성격별 3중/4중) |
 | skill | `live-verify` | "재시작 반영됐나"·정적분석으로 "재시작 불필요" 단정 시 — 라이브 실측 3대 방법 |
 

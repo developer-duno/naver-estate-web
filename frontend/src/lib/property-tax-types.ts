@@ -106,8 +106,10 @@ export type PropertyTaxNoticeKey =
   | "age-deduction-eligible"      // 연령 세액공제 가능 (1주택만)
   | "hold-deduction-eligible"     // 보유 세액공제 가능 (1주택만)
   | "rural-tax-20"                // 농어촌특별세 종부세액의 20% 별도
-  | "tax-burden-cap-150"          // 세부담 상한 150% 가드 (전년도 미입력 시)
-  | "tax-burden-cap-applied"      // 세부담 상한 150% 자동 적용됨 (전년도 입력 시)
+  | "tax-burden-cap-150"          // 종부세 세부담 상한 150% 가드 (전년도 미입력 시, 종부세법 §10)
+  | "tax-burden-cap-applied"      // 종부세 세부담 상한 150% 자동 적용됨 (전년도 입력 시, 종부세법 §10)
+  | "property-tax-base-cap-not-input" // 재산세 과세표준상한 5% 가드 (전년도 과세표준 미입력 시, 지방세법 §110③)
+  | "property-tax-base-cap-applied"   // 재산세 과세표준상한 5% 자동 적용됨 (전년도 과세표준 입력 시, 지방세법 §110③)
   | "exclusion-applied"           // 합산배제 신청 주택 N채 → effectiveHouses 산정 (B-2)
   | "ownership-applied"           // 공동명의 본인 지분 N% → 종부세 본인 몫 산정 (B-3)
   | "ownership-single-house-warning" // 공동명의+1세대1주택자 — 명의자별 독립 1주택 자격 충족 필요 안내 (B-3)
@@ -142,7 +144,8 @@ export interface PropertyTaxInput {
   isSingleHouseEligible: boolean; // 1세대1주택자 여부 (공제 12억 + 특례세율)
   ageYears: number;               // 연령 (1주택 세액공제용, 0=공제없음)
   holdYears: number;              // 보유연수 (1주택 세액공제용, 0=공제없음)
-  prevYearTax?: number;           // 전년도 보유세 합계 (원, 옵션) — 세부담 상한 150% cap 자동 적용용
+  prevYearComprehensiveTax?: number; // 전년도 종부세+농특세 합계 (원, 옵션) — 종부세 세부담상한 150% cap 자동 적용용 (종부세법 §10)
+  prevYearPropertyTaxBase?: number;  // 전년도 재산세 과세표준 (원, 옵션) — 재산세 과세표준상한 5% cap 자동 적용용 (지방세법 §110③)
   excludedHouses?: number;        // 합산배제 신청 주택 수 (옵션, 임대등록·종교/사원용 등) — 종부세 산정 전용
   ownershipRatio?: number;        // 공동명의 본인 지분 비율 (0 < x ≤ 1, 옵션) — 종부세 산정 전용
   isCorporation?: boolean;        // 법인 보유 여부 (옵션) — 단일세율 + 공제·세액공제 자동 off

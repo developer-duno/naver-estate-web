@@ -13,7 +13,8 @@ export default function PropertyTaxCalculator() {
   const [isSingleHouseEligible, setIsSingleHouseEligible] = useState(false);
   const [ageYears, setAgeYears] = useState(0);
   const [holdYears, setHoldYears] = useState(0);
-  const [prevYearTaxManwon, setPrevYearTaxManwon] = useState(0);
+  const [prevYearComprehensiveTaxManwon, setPrevYearComprehensiveTaxManwon] = useState(0);
+  const [prevYearPropertyTaxBaseManwon, setPrevYearPropertyTaxBaseManwon] = useState(0);
   const [excludedHouses, setExcludedHouses] = useState(0);
   const [ownershipPercent, setOwnershipPercent] = useState(0);
   const [isCorporation, setIsCorporation] = useState(false);
@@ -68,7 +69,8 @@ export default function PropertyTaxCalculator() {
     setIsSingleHouseEligible(false);
     setAgeYears(0);
     setHoldYears(0);
-    setPrevYearTaxManwon(0);
+    setPrevYearComprehensiveTaxManwon(0);
+    setPrevYearPropertyTaxBaseManwon(0);
     setExcludedHouses(0);
     setOwnershipPercent(0);
     setIsCorporation(false);
@@ -98,7 +100,8 @@ export default function PropertyTaxCalculator() {
       isSingleHouseEligible: isSingleHouseEligible && houses === 1,
       ageYears: single ? ageYears : 0,
       holdYears: single ? effectiveHoldYears : 0,
-      prevYearTax: prevYearTaxManwon > 0 ? prevYearTaxManwon * 10_000 : undefined,
+      prevYearComprehensiveTax: prevYearComprehensiveTaxManwon > 0 ? prevYearComprehensiveTaxManwon * 10_000 : undefined,
+      prevYearPropertyTaxBase: prevYearPropertyTaxBaseManwon > 0 ? prevYearPropertyTaxBaseManwon * 10_000 : undefined,
       excludedHouses,
       ownershipRatio: ownershipPercent > 0 && ownershipPercent <= 100 ? ownershipPercent / 100 : 1,
       isCorporation,
@@ -119,7 +122,7 @@ export default function PropertyTaxCalculator() {
       "religious-joint-liability-cap",
     ];
     return { ...base, notes: [...base.notes, ...religiousNotes] };
-  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon, excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse, corporationGeneralRateCategory, specialHouses, specialHousesRateApply, isReligiousSpecial, holdPeriodSpecialMode, originalAcquisitionYear]);
+  }, [publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearComprehensiveTaxManwon, prevYearPropertyTaxBaseManwon, excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse, corporationGeneralRateCategory, specialHouses, specialHousesRateApply, isReligiousSpecial, holdPeriodSpecialMode, originalAcquisitionYear]);
 
   return (
     <div className="space-y-4">
@@ -134,7 +137,8 @@ export default function PropertyTaxCalculator() {
         isSingleHouseEligible={isSingleHouseEligible}
         ageYears={ageYears}
         holdYears={holdYears}
-        prevYearTaxManwon={prevYearTaxManwon}
+        prevYearComprehensiveTaxManwon={prevYearComprehensiveTaxManwon}
+        prevYearPropertyTaxBaseManwon={prevYearPropertyTaxBaseManwon}
         excludedHouses={excludedHouses}
         ownershipPercent={ownershipPercent}
         isCorporation={isCorporation}
@@ -150,7 +154,8 @@ export default function PropertyTaxCalculator() {
         onIsSingleHouseEligibleChange={setIsSingleHouseEligible}
         onAgeYearsChange={setAgeYears}
         onHoldYearsChange={setHoldYears}
-        onPrevYearTaxManwonChange={setPrevYearTaxManwon}
+        onPrevYearComprehensiveTaxManwonChange={setPrevYearComprehensiveTaxManwon}
+        onPrevYearPropertyTaxBaseManwonChange={setPrevYearPropertyTaxBaseManwon}
         onExcludedHousesChange={setExcludedHouses}
         onOwnershipPercentChange={setOwnershipPercent}
         onIsCorporationChange={handleIsCorporationChange}

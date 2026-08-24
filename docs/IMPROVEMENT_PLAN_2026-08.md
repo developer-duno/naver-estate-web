@@ -206,7 +206,7 @@
 | # | 항목 | 근거 | 난이도 |
 |---|---|---|---|
 | ~~P2-1~~ | ✅ `backend/crawler/` 42개 파일(`__init__.py` 제외) 전부 docstring 이미 존재(2026-08-25 세션 383 AST 기반 재검증으로 "41개" 수치 정정 — 세션382가 적은 41개는 실측과 1개 어긋났었음) — 신규 작업 불필요 | 2026-08-02 조사(35파일 중 다수 docstring 없음 확인) | 완료 |
-| P2-2 | `.claude/hooks/post-merge-zombie-reminder.js`를 경고형에서 `release-verify` 스킬 자동 호출로 승격 검토 | AI 환경 감사 §위험 병목 3 | 보통 |
+| ~~P2-2~~ | ⛔ 불가능 확인, 현행 유지 — Claude Code 공식 문서(code.claude.com/docs/hooks) 확인 결과 PostToolUse 훅은 도구 실행 *후* stderr 텍스트만 Claude에게 보여줄 수 있을 뿐, 스킬을 직접 호출하는 메커니즘 자체가 없음(2026-08-25 세션 384 WebFetch 확인). 현재 훅이 이미 "release-verify 발동" 경고 텍스트를 출력 중이라 이게 이 아키텍처에서 낼 수 있는 최선 — 더 승격할 방법 없음 | AI 환경 감사 §위험 병목 3 | 종결(불가) |
 | ~~P2-3~~ | ✅ Playwright MCP 사용 중(세션 전역 `mcp__playwright__*` 도구 활성, 2026-08-24 확인) — `next-devtools` 재활성화는 불필요 | AI 환경 감사 §위험 병목 4 | 완료 |
 | ~~P2-4~~ | ✅ `.claude/settings.local.json` `f:/cursor/naver-estate-web` 낡은 경로 allow 12건 제거(49→37, 2026-08-24 세션 381) | AI 환경 감사 (settings.local.json 실측) | 완료 |
 | ~~P2-5~~ | ✅ `.claude/agents/payment-safety-reviewer.md` 신설(2026-08-25 세션 383, PR #421) — 실제 결제 커밋(#227)으로 역검증해 TOCTOU 원자적 전환 항목 보강 | 기존 3개 서브에이전트(크롤·세금·마이그레이션)에 결제 영역만 없음 | 완료 |

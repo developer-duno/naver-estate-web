@@ -115,11 +115,12 @@
 | V046 | complexes.public_data_attempted_at 컬럼 (국토부 백필 무한재시도 방지 시도 마커 + 90일 쿨다운 — 세션 360 근본수정, 커밋 fd7219f) | prod 적용완료 (적용일은 표 누락으로 미기록 — 세션 367 소급 보강·재검증: 컬럼 timestamptz EXISTS + 31,979개 단지에 시도시각 기록 중 = 라이브 작동 실측) |
 | V047 | subway_stations 신규 테이블 (전국 도시철도 역사 1,099행 — 국가철도공단 레일포털 표준데이터, 단지 상세 "가까운 지하철" 표시용. RLS+GRANT REVOKE 이중 빗장 V044 답습, 세션 367) | 2026-08-14 (prod 적용완료, 세션 367: 사장님 SQL Editor 실행 → Claude information_schema 재검증(9컬럼·RLS·정책 Service write·anon/authenticated GRANT 0건) → `python -m scripts.import_subway_stations` 1,099행 적재 → 라이브 GET /subway 3개 단지 실측(강남·동탄·대전 — PR #375 그룹핑 정규화 포함)) |
 | V048 | trades·complex_price_history·complexes 3개 테이블에 인덱스 3개 추가 (신선도 monitor 10분 주기 풀스캔 제거 — DB 크래시 2회 원인 가설의 보조 요인, 세션 381) | 2026-08-24 (prod 적용완료·**첫 Claude 직접 적용 사례**(예외적으로 SQL Editor 아님) — `CREATE INDEX CONCURRENTLY` + `SET statement_timeout='10min'`(엔진 기본 8초 우회) 로 1개씩 생성, 매번 `pg_index.indisvalid` 재조회로 확인. 3개 모두 valid, 소요 2.4/2.6/1.7초. `EXPLAIN (ANALYZE, BUFFERS)` 이 Index Only Scan 0.05~0.06ms 로 전환, monitor 주기 slow query 소멸 실측. ⚠ 신규 테스트는 SQLite 환경이라 인덱스 사용 경로 자체는 검증 못함(리팩터링 안전성만 검증), 효과는 위 prod EXPLAIN 으로만 확인됨) |
+| V049 | rental_schedule_official.region_name 컬럼 추가 (민간임대 청약 지역 필터 결함 근본수정 — 세션383이 발견한 region_code 숫자코드 vs 한글 시도명 불일치를, 오피스텔 짝꿍 패턴(V045 region_name)과 동일하게 SUBSCRPT_AREA_CODE_NM 을 저장하는 방식으로 해소, 세션 384) | prod 적용 대기 (코드는 ORM 에 nullable 컬럼으로 매핑돼 있어 컬럼 부재 시에도 SELECT 자체는 500 안 남 — 단 region_name 필터가 항상 빈 결과이던 옛 결함이 **prod 적용 전까지는 그대로 유지**. `ADD COLUMN IF NOT EXISTS` 라 멱등·안전, 공유 DB(mibunyang) 영향 0. 적용 후 재시작 없이도 필터 정상화되나, 기존 저장분은 region_name 이 NULL 이라 다음 정기 수집(월요일)까지 재수집 대기) |
 
-- `db/migrations/` 폴더에 `V000__` ~ `V048__` SQL 파일 = 49 버전
+- `db/migrations/` 폴더에 `V000__` ~ `V049__` SQL 파일 = 50 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
-- 최신 = V048 (trades·complex_price_history·complexes 인덱스 3개, 세션 381 — prod 적용완료·`indisvalid` 재검증·EXPLAIN 라이브 확인 완료). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
+- 최신 = V049 (rental_schedule_official.region_name 컬럼, 세션 384 — **prod 적용 대기**, 사장님 SQL Editor 수동 실행 필요). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
   - V043 = prod 적용완료·backend 재시작(zombie 해소) 완료 — 세션 352 라이브 검증: `/presale/officetel-rental` 200 정상 응답 확인.
   - V043 = house_nm TEXT nullable 컬럼 추가 — 기존 아파트 청약 행은 NULL 로 두면 되므로 기존 데이터 영향 0. `ADD COLUMN IF NOT EXISTS` 라 멱등·안전. 코드(`db/mb_models.py`)가 이미 이 컬럼에 매핑돼 SELECT 목록에 포함되므로 **prod 선행 적용 필수** — 세션 352 에 적용·재검증 완료.
   - V040~V042 = 이슈 #323(청약홈 오피스텔·도시형·민간임대 편입) 3종 세트 — `CREATE TABLE/ADD COLUMN IF NOT EXISTS` 라 멱등·안전. V040 은 기존 컬럼에 `NOT NULL DEFAULT 'apt'`로 추가해 기존 아파트 데이터에 영향 0. V041/V042 는 신규 독립 테이블이라 공유 DB(mibunyang) 영향 0. 코드(`db/mb_models.py`)는 이미 이 컬럼/테이블에 매핑돼 있으므로 **prod 선행 적용 필수** — 세션 352 에 적용·재검증 완료.

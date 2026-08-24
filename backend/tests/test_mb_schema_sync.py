@@ -38,6 +38,7 @@ MODEL_SERIALIZER_PAIRS = [
     ("Builder", "builder_to_dict"),
     ("PresaleScheduleOfficial", "presale_schedule_to_dict"),
     ("ApplyhomeUnitSupply", "unit_supply_to_dict"),
+    ("RentalScheduleOfficial", "rental_schedule_to_dict"),
 ]
 
 # 의도적 미노출 (false positive 제외). 사유 명시 — 새 컬럼은 여기 없으면 가드가 잡는다.
@@ -154,7 +155,9 @@ def test_applyhome_unit_supply_has_house_type_column():
 def test_rental_schedule_official_model_maps_expected_columns():
     from db.mb_models import RentalScheduleOfficial
     cols = set(RentalScheduleOfficial.__table__.columns.keys())
-    assert {"house_manage_no", "house_nm", "recruit_date", "region_code"} <= cols
+    assert {
+        "house_manage_no", "house_nm", "recruit_date", "region_code", "region_name",
+    } <= cols
 
 
 def test_rental_unit_supply_model_maps_expected_columns():

@@ -74,6 +74,7 @@ def collect_rental_presale(batch_size: int = 1000, scheduler_job_id: str | None 
                 existing.biz_entity = row.get("BSNS_MBY_NM")
                 existing.constructor = row.get("CNSTRCT_ENTRPS_NM")
                 existing.region_code = row.get("SUBSCRPT_AREA_CODE")
+                existing.region_name = row.get("SUBSCRPT_AREA_CODE_NM")
                 existing.fetched_at = utcnow()
             else:
                 db.add(
@@ -88,6 +89,7 @@ def collect_rental_presale(batch_size: int = 1000, scheduler_job_id: str | None 
                         biz_entity=row.get("BSNS_MBY_NM"),
                         constructor=row.get("CNSTRCT_ENTRPS_NM"),
                         region_code=row.get("SUBSCRPT_AREA_CODE"),
+                        region_name=row.get("SUBSCRPT_AREA_CODE_NM"),
                         fetched_at=utcnow(),
                     )
                 )

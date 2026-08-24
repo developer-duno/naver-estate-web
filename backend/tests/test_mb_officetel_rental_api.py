@@ -79,9 +79,9 @@ def test_get_officetel_rental_region_filters_officetel_by_region_name(client: Te
     Apartment.region 과 완전 일치 확인)을 근거로 필터링 대상이 됐다 —
     region_name 이 일치하는 행만 반환되고 불일치분은 제외된다.
 
-    민간임대(RentalScheduleOfficial.region_code)는 이 테스트 범위 밖 — 별도
-    도메인 불일치 결함(숫자코드 vs 한글 시도명)이 있어 사장님 확인 후 별도 PR로
-    처리 예정. 이 테스트는 오피스텔 kind 데이터만 다룬다.
+    민간임대(RentalScheduleOfficial.region_name) 는 아래
+    test_get_officetel_rental_region_filters_rental_by_region_name 이 별도로
+    다룬다 (V049 근본수정, 세션 384 — 옛 region_code 숫자코드 결함 해소).
     """
     db.add(
         OfficetelPresaleSchedule(
@@ -127,3 +127,63 @@ def test_get_officetel_rental_no_region_returns_all_officetel(client: TestClient
     data = resp.json()
     house_manage_nos = {item["house_manage_no"] for item in data["items"]}
     assert "8880004" in house_manage_nos
+
+
+def test_get_officetel_rental_region_filters_rental_by_region_name(client: TestClient, db):
+    """민간임대 region_name 필터 회귀 가드 — V049 근본수정 (세션 384).
+
+    옛 region_code(숫자코드, "100" 등) 필터는 한글 시도명과 절대 매칭되지
+    않아 region 파라미터를 넘기면 민간임대 행이 항상 0건이었다(세션 383 발견).
+    region_name(한글 지역명) 필터로 전환한 뒤에는 오피스텔과 동일하게 정상
+    필터링돼야 한다 — 뮤테이션 검증: 이 assert 를 region_code 비교로 되돌리면
+    "서울" 필터에 아무 것도 안 걸려 실패함을 확인(원상복구 완료).
+    """
+    db.add(
+        RentalScheduleOfficial(
+            house_manage_no="7770001",
+            house_nm="서울임대",
+            region_name="서울",
+            recruit_date=date(2026, 8, 1),
+        )
+    )
+    db.add(
+        RentalScheduleOfficial(
+            house_manage_no="7770002",
+            house_nm="부산임대",
+            region_name="부산",
+            recruit_date=date(2026, 8, 2),
+        )
+    )
+    db.commit()
+
+    resp = client.get("/api/mb/presale/officetel-rental", params={"region": "서울"})
+    assert resp.status_code == 200
+    data = resp.json()
+    house_manage_nos = {item["house_manage_no"] for item in data["items"]}
+
+    assert "7770001" in house_manage_nos
+    assert "7770002" not in house_manage_nos
+
+
+def test_get_officetel_rental_region_pending_recollect_rental_excluded(client: TestClient, db):
+    """V049 적용 이전 수집분(region_name NULL)은 region 필터 시 제외된다 —
+    데이터 유실이 아니라 재수집 대기 상태임을 명시하는 회귀 가드 (세션 384)."""
+    db.add(
+        RentalScheduleOfficial(
+            house_manage_no="7770003",
+            house_nm="구버전임대",
+            region_code="100",  # 옛 방식 — region_name 없음
+            recruit_date=date(2026, 8, 3),
+        )
+    )
+    db.commit()
+
+    resp = client.get("/api/mb/presale/officetel-rental", params={"region": "서울"})
+    assert resp.status_code == 200
+    data = resp.json()
+    house_manage_nos = {item["house_manage_no"] for item in data["items"]}
+    assert "7770003" not in house_manage_nos
+
+    # region 파라미터 없이 조회하면 정상적으로 보임 (재수집 전에도 목록 자체는 정상)
+    resp_all = client.get("/api/mb/presale/officetel-rental")
+    assert "7770003" in {item["house_manage_no"] for item in resp_all.json()["items"]}

@@ -38,6 +38,7 @@ def test_collect_rental_presale_inserts_new_listing(db):
                 "RCRIT_PBLANC_DE": "2026-08-06",
                 "TOT_SUPLY_HSHLDCO": 30,
                 "SUBSCRPT_AREA_CODE": "100",
+                "SUBSCRPT_AREA_CODE_NM": "서울",
             }
         ],
         "totalCount": 1,
@@ -67,6 +68,7 @@ def test_collect_rental_presale_inserts_new_listing(db):
     assert row is not None
     assert row.house_nm == "테스트행복주택"
     assert row.region_code == "100"
+    assert row.region_name == "서울"
 
 
 def test_collect_rental_presale_updates_existing_listing(db):

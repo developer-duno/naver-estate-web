@@ -270,14 +270,11 @@ def get_officetel_rental(
     한다 — FastAPI/Starlette는 등록 순서대로 매칭하므로, 순서가 바뀌면
     "officetel-rental"이 apartment_id 로 캡처돼 404가 난다.
 
-    ⚠ **알려진 결함 — `region` 필터가 오피스텔·민간임대 사이에 비대칭이다**
-    (2026-08-25 세션 383 발견, 사장님 판단으로 별도 처리 보류). 오피스텔은
-    `region_name`(한글 시도명, "서울" 등)으로 정상 필터링되지만, 민간임대
-    (`RentalScheduleOfficial.region_code`)는 숫자코드("100" 등)로 저장돼 있어
-    한글 시도명과 절대 매칭되지 않는다 — `region` 파라미터를 넘기면 민간임대
-    행은 **항상 0건**으로 결과에서 빠진다. 상세 = `db/mb_misc_queries.py`
-    `get_rental_schedules()` docstring. 이 함수를 수정할 때는 FE 필터 UI에도
-    "지역 필터는 오피스텔에만 적용됨" 안내가 필요한지 함께 검토할 것.
+    V049 근본수정(세션 384) — 옛 결함(민간임대 `region_code` 가 숫자코드라 한글
+    시도명과 매칭 안 됨, 세션 383 발견)을 오피스텔과 동일한 `region_name` 필터
+    패턴으로 통일했다. 상세 = `db/mb_misc_queries.py` `get_rental_schedules()`
+    docstring. ⚠ V049 적용 이전에 수집된 민간임대 행은 `region_name` 이 아직
+    NULL이라, 다음 정기 수집(월요일) 전까지는 지역 필터에서 제외된다.
     """
     officetel_rows = mb_queries.get_officetel_schedules(db, region=region)
     rental_rows = mb_queries.get_rental_schedules(db, region=region)

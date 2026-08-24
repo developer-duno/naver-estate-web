@@ -116,7 +116,7 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2090개** (2090 passed — 세션 368 CI 실측, 세션 369~381 FE 무변경. `vitest list` 세션 371 실측 2,091 = 스킵성 1 포함) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2097개** (`vitest list` 세션 384 실측, PR #423 보유세 계산기 법령 재검증 결함수정으로 세션 369~381 기준 2090→2097 net +7 — property-tax.test.ts·property-tax-cap.test.ts 신규/재계산. 전체 실행 2096 passed + 1건은 전체스위트 동시실행 리소스경합 일시 타임아웃(RegionSelector, 단독 재실행 시 정상 통과 확인, 결함 아님)) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
 | BE pytest | `backend/tests/` | **1374개** (세션 383 실측, 세션 381 기준 1373에서 +1 — 오피스텔 region 필터 테스트 교체(옛 1개→신규 2개, net +1). 전체 실행 = **1361 passed / 7 skipped / 6 xfailed**) |
 

@@ -503,8 +503,8 @@ class OfficetelPresaleSchedule(Base):
     pblanc_url: Mapped[str | None] = mapped_column(Text)
     biz_entity: Mapped[str | None] = mapped_column(Text)
     constructor: Mapped[str | None] = mapped_column(Text)
-    # SUBSCRPT_AREA_CODE_NM(청약 지역명, "경기" 등) — 지역 필터는 아직 미구현(dead),
-    # 향후 필터 후보로 데이터만 미리 적재(V045 재설계, 2026-08-10). mojibake 우려는
+    # SUBSCRPT_AREA_CODE_NM(청약 지역명, "경기" 등) — 지역 필터 구현 완료
+    # (get_officetel_schedules() region_name 필터, 세션 382). mojibake 우려는
     # 2026-08-24 실측으로 재현 안 됨 확인(API charset=UTF-8 명시, prod 저장값 정상 —
     # backend/db/mb_apartment_queries.py 주석 참조).
     region_name: Mapped[str | None] = mapped_column(Text)

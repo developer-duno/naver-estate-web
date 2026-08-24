@@ -438,6 +438,11 @@ class RentalScheduleOfficial(Base):
     biz_entity: Mapped[str | None] = mapped_column(Text)
     constructor: Mapped[str | None] = mapped_column(Text)
     region_code: Mapped[str | None] = mapped_column(Text)
+    # SUBSCRPT_AREA_CODE_NM(청약 지역명, "서울" 등) — V049 근본수정(세션 384).
+    # region_code(숫자코드)는 필터 비교 대상(한글 시도명)과 맞지 않아 지역 필터가
+    # 항상 빈 결과만 냈다(세션 383 발견). 오피스텔 짝꿍 컬럼(officetel_presale_
+    # schedule.region_name)과 동일 패턴 — get_rental_schedules() 필터 기준 컬럼.
+    region_name: Mapped[str | None] = mapped_column(Text)
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 

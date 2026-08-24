@@ -142,21 +142,23 @@ def get_builder(db: Session, builder_name: str) -> Optional[Builder]:
 def get_rental_schedules(
     db: Session, region: Optional[str] = None
 ) -> list[RentalScheduleOfficial]:
-    """공공지원 민간임대 청약 일정 전체 (region_code 필터, recruit_date DESC).
+    """공공지원 민간임대 청약 일정 전체 (region_name 필터, recruit_date DESC).
 
-    ⚠ **알려진 결함** (2026-08-25 세션 383 발견, 사장님 판단으로 별도 처리 보류) —
-    `region_code` 는 숫자코드("100" 등, SUBSCRPT_AREA_CODE)로 저장되는데, 호출부
-    (`routers/mb.py` `get_officetel_rental`)가 넘기는 `region` 은 한글 시도명
-    ("서울" 등)이라 절대 매칭되지 않는다. `region` 을 넘기면 이 함수는 **항상
-    빈 리스트**를 반환한다 — 오피스텔의 짝꿍 함수 `get_officetel_schedules()`
-    (`db/mb_apartment_queries.py`, `region_name` 한글명 필터라 정상 동작)와
-    비교하면 이 비대칭이 뚜렷하다. 고치려면 region_code → 한글 시도명 매핑
-    테이블 추가 또는 region_code 컬럼 자체를 한글명으로 백필해야 하는데,
-    왜 숫자코드로 저장하게 됐는지 원인 조사가 먼저 필요하다.
+    V049 근본수정(세션 384) — 옛 `region_code` 필터는 숫자코드("100" 등,
+    SUBSCRPT_AREA_CODE)와 한글 시도명("서울" 등)을 비교해 항상 빈 결과만
+    반환했다(세션 383 발견). 오피스텔 짝꿍 함수 `get_officetel_schedules()`
+    (`db/mb_apartment_queries.py`, `region_name` 필터)와 동일하게, 청약홈이
+    함께 주는 `SUBSCRPT_AREA_CODE_NM`(한글 지역명)을 저장하는 `region_name`
+    컬럼으로 필터 기준을 전환했다. `region_code` 컬럼 자체는 유지(삭제 금지
+    원칙) — 데이터로만 남아있고 필터에는 더 이상 쓰이지 않는다.
+
+    ⚠ 기존 저장분(V049 적용 이전 수집)은 `region_name` 이 NULL 이라, 다음
+    정기 수집(월요일 스케줄러) 또는 수동 재수집 전까지는 그 행들이 여전히
+    지역 필터에서 제외된다 — 데이터가 없어서가 아니라 재수집 대기 상태.
     """
     stmt = select(RentalScheduleOfficial).order_by(
         RentalScheduleOfficial.recruit_date.desc().nullslast()
     )
     if region:
-        stmt = stmt.where(RentalScheduleOfficial.region_code == region)
+        stmt = stmt.where(RentalScheduleOfficial.region_name == region)
     return list(db.execute(stmt).scalars().all())

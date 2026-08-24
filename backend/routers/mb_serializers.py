@@ -386,6 +386,7 @@ def unit_supply_to_dict(u) -> dict:
 def rental_schedule_to_dict(r) -> dict:
     """RentalScheduleOfficial ORM → dict (공공지원 민간임대 공고 일정)"""
     return {
+        "id": r.id,
         "kind": "rental",
         "house_manage_no": r.house_manage_no,
         "pblanc_no": r.pblanc_no,
@@ -395,12 +396,20 @@ def rental_schedule_to_dict(r) -> dict:
         "receipt_bgnde": r.receipt_bgnde.isoformat() if r.receipt_bgnde else None,
         "receipt_endde": r.receipt_endde.isoformat() if r.receipt_endde else None,
         "winner_announce_date": r.winner_announce_date.isoformat() if r.winner_announce_date else None,
+        # 오피스텔 짝꿍 officetel_schedule_to_dict() 는 이미 노출 중이던 필드 —
+        # 민간임대만 원래 빠져 있던 것을 test_mb_schema_sync 신규 가드가 적발 (세션 384).
+        "contract_bgnde": r.contract_bgnde.isoformat() if r.contract_bgnde else None,
+        "contract_endde": r.contract_endde.isoformat() if r.contract_endde else None,
         "move_in_ym": r.move_in_ym,
         "tot_supply": r.tot_supply,
         "pblanc_url": r.pblanc_url,
         "biz_entity": r.biz_entity,
         "constructor_name": r.constructor,
         "region_code": r.region_code,
+        # SUBSCRPT_AREA_CODE_NM("서울" 등) — get_rental_schedules() 지역 필터 기준
+        # 컬럼 (V049 근본수정, 세션 384). 오피스텔 짝꿍 officetel_schedule_to_dict()
+        # 의 region_name 노출과 동일 패턴.
+        "region_name": r.region_name,
         "fetched_at": r.fetched_at.isoformat() if r.fetched_at else None,
     }
 

@@ -72,48 +72,58 @@ def test_get_officetel_rental_empty_when_no_data(client: TestClient, db):
     assert resp.json()["total"] == 0
 
 
-def test_get_officetel_rental_region_filters_only_rental_not_officetel(client: TestClient, db):
-    """결함1 회귀 가드 — region 쿼리 파라미터를 넘기면 민간임대만 필터링되고,
-    오피스텔은 region 컬럼 자체가 없어(V045) 전국 그대로 반환된다.
+def test_get_officetel_rental_region_filters_officetel_by_region_name(client: TestClient, db):
+    """오피스텔 region_name 필터 회귀 가드 (2026-08-24 세션382 구현).
 
-    OfficetelPresaleSchedule 에는 region 관련 컬럼이 없어 get_officetel_schedules() 는
-    region 인자를 무시(dead parameter, 문서화됨) — 이 테스트는 그 사실을 오피스텔
-    행이 region 값과 무관하게 항상 나타나는 것으로 검증한다. 민간임대는
-    RentalScheduleOfficial.region_code 로 실제 필터링되므로, region_code 가
-    일치하지 않는 행은 결과에서 빠져야 한다.
+    OfficetelPresaleSchedule.region_name 은 prod 실측(17개 시도명 mibunyang
+    Apartment.region 과 완전 일치 확인)을 근거로 필터링 대상이 됐다 —
+    region_name 이 일치하는 행만 반환되고 불일치분은 제외된다.
+
+    민간임대(RentalScheduleOfficial.region_code)는 이 테스트 범위 밖 — 별도
+    도메인 불일치 결함(숫자코드 vs 한글 시도명)이 있어 사장님 확인 후 별도 PR로
+    처리 예정. 이 테스트는 오피스텔 kind 데이터만 다룬다.
     """
     db.add(
         OfficetelPresaleSchedule(
             house_manage_no="8880001",
-            house_nm="전국오피스텔",
+            house_nm="서울오피스텔",
+            region_name="서울",
             recruit_date=date(2026, 8, 1),
         )
     )
     db.add(
-        RentalScheduleOfficial(
+        OfficetelPresaleSchedule(
             house_manage_no="8880002",
-            house_nm="서울임대",
-            region_code="11",
+            house_nm="부산오피스텔",
+            region_name="부산",
             recruit_date=date(2026, 8, 2),
-        )
-    )
-    db.add(
-        RentalScheduleOfficial(
-            house_manage_no="8880003",
-            house_nm="부산임대",
-            region_code="26",
-            recruit_date=date(2026, 8, 3),
         )
     )
     db.commit()
 
-    resp = client.get("/api/mb/presale/officetel-rental", params={"region": "11"})
+    resp = client.get("/api/mb/presale/officetel-rental", params={"region": "서울"})
     assert resp.status_code == 200
     data = resp.json()
     house_manage_nos = {item["house_manage_no"] for item in data["items"]}
 
-    # 오피스텔은 region 필터와 무관하게 그대로 포함
     assert "8880001" in house_manage_nos
-    # 민간임대는 region_code 일치분만 포함, 불일치분은 제외
-    assert "8880002" in house_manage_nos
-    assert "8880003" not in house_manage_nos
+    assert "8880002" not in house_manage_nos
+
+
+def test_get_officetel_rental_no_region_returns_all_officetel(client: TestClient, db):
+    """region 파라미터 없으면 오피스텔 전량 반환 (정상 케이스 — 필터 부작용 없음)."""
+    db.add(
+        OfficetelPresaleSchedule(
+            house_manage_no="8880004",
+            house_nm="전국오피스텔",
+            region_name="경기",
+            recruit_date=date(2026, 8, 1),
+        )
+    )
+    db.commit()
+
+    resp = client.get("/api/mb/presale/officetel-rental")
+    assert resp.status_code == 200
+    data = resp.json()
+    house_manage_nos = {item["house_manage_no"] for item in data["items"]}
+    assert "8880004" in house_manage_nos

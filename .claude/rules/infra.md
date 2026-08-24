@@ -104,6 +104,40 @@ CPU/RAM/IO)은 Supabase 대시보드 그래프로만 확인 가능(사장님 로
   재개가 차단**된다. 프로세스 사망을 실측 확인한 뒤 그 잡을 수동 UPDATE(`AND status='running'` 가드)로
   failed 정정해야 재기동이 이어받는다 (또는 backend 재시작 시 부팅 스윕의 cancelled 로도 해소).
 
+### 재발 (세션 381 — 2026-08-24 03:22~03:56 34분 다운, 2회째) + 근본원인·처방
+
+같은 런북으로 34분 만에 자가회복. 사장님이 대시보드 Database Health 그래프(스크린샷)를 제공해
+원인을 추적: **Micro(RAM 1GB) 인스턴스가 스왑 1GB 상시 포화·메모리 커밋이 한도의 약 2배로 만성
+압박 상태**였고, 거기에 PostgREST 경유 대량 요청(연결 급증, Logs Explorer 로 재구성 —
+`/rest/v1/apartments` 03:03=1,901건)이 시간상 겹쳤다. 디스크 IOPS 는 거의 0 이라 "IO 예산 소진"
+단독 가설은 기각(단 주간 누적 통계는 82%로 근접 — 10분 풀스캔이 누적 원인, 아래 처방 (b)로 제거).
+
+⚠ **사후 적대검증(세션 381) 결과 — "OOM 크래시"는 확정이 아니라 유력한 가설로 격하한다.**
+Postgres 서버 로그(Database Logs 탭)의 `out of memory`/`terminated by signal`/`PANIC`/`FATAL` 원문은
+한 번도 직접 확인하지 못한 채, 대시보드 그래프(스크린샷) 판독만으로 "OOM"이라 단정했었다.
+Linux 메모리 오버커밋 모델상 "커밋이 물리 한도의 2배"라는 관찰 자체가 자동으로 OOM 을 뜻하지는
+않는다(실제 그 커밋을 프로세스가 소비했는지가 중요 — WebSearch 로 확인). 마찬가지로 "PostgREST
+버스트가 크래시의 마지막 지푸라기였다"는 인과관계도, 버스트(03:03)와 크래시(03:21~03:22) 사이
+19분 공백을 검증 없이 은유로 얼버무린 것으로 확인 — 시간상 근접(상관관계)만 확인됐을 뿐 인과관계는
+미확정. **다음 재발 시 최우선으로 Database Logs 탭에서 OOM/PANIC/FATAL 원문을 확인해 가설을
+확정으로 승격할 것.**
+
+**처방(세션 381 실행 완료)**:
+- 컴퓨트 **Micro → Small** 업그레이드(대시보드 Project Settings → Infrastructure, 다운타임 <2분,
+  자동 재시작 동반, +$5.15/월). RAM 1→2GB·연결한도 60→90·shared_buffers 256MB→512MB(SQL SHOW 로
+  prod 실측 확인).
+- `V048__freshness_max_indexes.sql` — monitor(10분 interval) 의 `compute_freshness` 가 캐시를
+  우회해 매번 스캔하던 trades(347MB)·complex_price_history(72MB)·complexes(44MB) 의 max() 컬럼에
+  인덱스 3개 추가. CIC 로 prod 적용, `pg_index.indisvalid` 3개 전부 True 재확인, `EXPLAIN (ANALYZE,
+  BUFFERS)` 이 Index Only Scan **0.05~0.06ms**로 전환됨을 실측(기존 2~4.6초 Seq Scan). freshness
+  최적화는 과거 `project_freshness_do_not_optimize.md`(세션 262)가 "실익 없음"으로 막았던 항목인데,
+  그 결론의 전제(max+count 미분리)가 세션 342·381 에서 깨져 무효화됨 — 상세는 그 메모리 파일의
+  2026-08-24 갱신분 참조. ⚠ 이 PR(#416)의 신규 테스트는 BE 테스트 환경이 SQLite 고정이라 V048
+  인덱스 사용 경로 자체는 검증하지 못한다(리팩터링 안전성만 검증) — 인덱스 효과는 위처럼 prod
+  EXPLAIN 으로만 확인 가능하다는 걸 유사 PR 작성 시 유념할 것.
+- 외부 uptime 감시(UptimeRobot, 무료, `api.2u.pe.kr/health/db` 5분 간격 + 이메일 알림) 신설 —
+  기존 GitHub Actions 일일 1회 healthcheck 를 보완, 장애 통지까지 5분 내로 단축.
+
 ## 스케줄러 (APScheduler)
 
 | 작업 | 주기 | 설명 |

@@ -112,13 +112,13 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 - `CHILDCARE_DETAIL_API_KEY` — cpmsapi030 운영키
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — Gmail SMTP SSL 465
 
-## 테스트 현황 (BE·FE 2026-08-19 세션 373 실측)
+## 테스트 현황 (BE 2026-08-24 세션 381 실측, FE 2026-08-19 세션 373 실측)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2090개** (2090 passed — 세션 368 CI 실측, 세션 369~373 FE 무변경. `vitest list` 세션 371 실측 2,091 = 스킵성 1 포함) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2090개** (2090 passed — 세션 368 CI 실측, 세션 369~381 FE 무변경. `vitest list` 세션 371 실측 2,091 = 스킵성 1 포함) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1344개** (세션 374 실측, 세션 373 기준 1327에서 +17 — 공시가격 이름 2차 매칭 PR-E3(#405) 신규 17. 전체 실행 = **1331 passed / 7 skipped / 6 xfailed**) |
+| BE pytest | `backend/tests/` | **1373개** (세션 381 실측, 세션 374 기준 1344에서 +29 — freshness 분리 테스트 1건(#416) + 세션 375~380 누적분. 전체 실행 = **1360 passed / 7 skipped / 6 xfailed**) |
 
 ## 커밋 전 필수 검증
 

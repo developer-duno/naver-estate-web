@@ -262,10 +262,13 @@ def get_officetel_schedules(
          동일 Query 정의)이라 region_name(SUBSCRPT_AREA_CODE_NM, "경기" 형식)과 포맷은
          호환돼 보이지만, "서울특별시" vs "서울" 같은 표기 차이·매칭 커버리지를 실측
          검증하지 않았다.
-      2. region_name 은 한글 필드라 mojibake 위험을 안고 저장된다(V045 마이그 주석
-         참조) — 필터 WHERE 절에 오염된 문자열이 들어가면 조용히 0건 매칭되는 사고가
-         날 수 있어, mojibake 근본 수정(별도 세션 조사 대상)이 선행되는 게 안전하다.
-    다음 후보: region_name 데이터가 몇 주 쌓여 값 분포(mojibake 여부·표기 포맷)를
+      2. (2026-08-24 세션 382 실측 정정) region_name 의 mojibake 위험은 이론상
+         우려였을 뿐 — API 응답 Content-Type 이 `charset=UTF-8` 을 명시하고,
+         prod DB officetel_presale_schedule 실측(10건: '경기'·'인천'·'부산'·'서울'·
+         '제주' 등)도 전부 정상이라 mojibake 재현 안 됨 확인. region 필터 미구현은
+         이제 순수하게 "표기 포맷(서울특별시 vs 서울) 매칭 커버리지 미검증" 사유만
+         남는다.
+    다음 후보: region_name 표기 포맷을 mibunyang Apartment.region 포맷과 대조
     실측한 뒤, `conditions.append(OfficetelPresaleSchedule.region_name == region)` 류
     필터를 추가하는 별도 PR. 이 파라미터를 dead parameter 로 정직하게 남겨둔다
     (호출부 시그니처 하위호환 유지).

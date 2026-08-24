@@ -205,11 +205,11 @@
 
 | # | 항목 | 근거 | 난이도 |
 |---|---|---|---|
-| P2-1 | `backend/crawler/` docstring 없는 파일(예: `monitor.py`, `utils.py`, `stats.py`, `env_air.py` 등 다수) 1줄 요약 추가 | 2026-08-02 조사(35파일 중 다수 docstring 없음 확인) | 쉬움 |
+| ~~P2-1~~ | ✅ `backend/crawler/` 전수 확인 결과 41개 파일 전부 docstring 이미 존재(2026-08-24 세션 382 재조사) — 신규 작업 불필요 | 2026-08-02 조사(35파일 중 다수 docstring 없음 확인) | 완료 |
 | P2-2 | `.claude/hooks/post-merge-zombie-reminder.js`를 경고형에서 `release-verify` 스킬 자동 호출로 승격 검토 | AI 환경 감사 §위험 병목 3 | 보통 |
 | ~~P2-3~~ | ✅ Playwright MCP 사용 중(세션 전역 `mcp__playwright__*` 도구 활성, 2026-08-24 확인) — `next-devtools` 재활성화는 불필요 | AI 환경 감사 §위험 병목 4 | 완료 |
 | ~~P2-4~~ | ✅ `.claude/settings.local.json` `f:/cursor/naver-estate-web` 낡은 경로 allow 12건 제거(49→37, 2026-08-24 세션 381) | AI 환경 감사 (settings.local.json 실측) | 완료 |
-| P2-5 | 결제(`payment.py`/`billing.py`) 전용 read-only 서브에이전트 신설 검토 | 기존 3개 서브에이전트(크롤·세금·마이그레이션)에 결제 영역만 없음 | 보통 |
+| ~~P2-5~~ | ✅ `.claude/agents/payment-safety-reviewer.md` 신설(2026-08-25 세션 383, PR #421) — 실제 결제 커밋(#227)으로 역검증해 TOCTOU 원자적 전환 항목 보강 | 기존 3개 서브에이전트(크롤·세금·마이그레이션)에 결제 영역만 없음 | 완료 |
 | P2-6 | `backend/CLAUDE.md`의 DB 마이그레이션 표·테스트 카운트 등 다른 drift 여부 정기 재점검 | 이번 세션에서 admin 폴더 1건 drift 발견 — 유사 패턴 가능성 | 보통(분기 1회 권장) |
 
 ---

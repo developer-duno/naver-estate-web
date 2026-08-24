@@ -205,7 +205,7 @@
 
 | # | 항목 | 근거 | 난이도 |
 |---|---|---|---|
-| ~~P2-1~~ | ✅ `backend/crawler/` 전수 확인 결과 41개 파일 전부 docstring 이미 존재(2026-08-24 세션 382 재조사) — 신규 작업 불필요 | 2026-08-02 조사(35파일 중 다수 docstring 없음 확인) | 완료 |
+| ~~P2-1~~ | ✅ `backend/crawler/` 42개 파일(`__init__.py` 제외) 전부 docstring 이미 존재(2026-08-25 세션 383 AST 기반 재검증으로 "41개" 수치 정정 — 세션382가 적은 41개는 실측과 1개 어긋났었음) — 신규 작업 불필요 | 2026-08-02 조사(35파일 중 다수 docstring 없음 확인) | 완료 |
 | P2-2 | `.claude/hooks/post-merge-zombie-reminder.js`를 경고형에서 `release-verify` 스킬 자동 호출로 승격 검토 | AI 환경 감사 §위험 병목 3 | 보통 |
 | ~~P2-3~~ | ✅ Playwright MCP 사용 중(세션 전역 `mcp__playwright__*` 도구 활성, 2026-08-24 확인) — `next-devtools` 재활성화는 불필요 | AI 환경 감사 §위험 병목 4 | 완료 |
 | ~~P2-4~~ | ✅ `.claude/settings.local.json` `f:/cursor/naver-estate-web` 낡은 경로 allow 12건 제거(49→37, 2026-08-24 세션 381) | AI 환경 감사 (settings.local.json 실측) | 완료 |

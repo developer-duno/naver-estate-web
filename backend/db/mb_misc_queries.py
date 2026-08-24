@@ -142,7 +142,18 @@ def get_builder(db: Session, builder_name: str) -> Optional[Builder]:
 def get_rental_schedules(
     db: Session, region: Optional[str] = None
 ) -> list[RentalScheduleOfficial]:
-    """공공지원 민간임대 청약 일정 전체 (region_code 필터, recruit_date DESC)."""
+    """공공지원 민간임대 청약 일정 전체 (region_code 필터, recruit_date DESC).
+
+    ⚠ **알려진 결함** (2026-08-25 세션 383 발견, 사장님 판단으로 별도 처리 보류) —
+    `region_code` 는 숫자코드("100" 등, SUBSCRPT_AREA_CODE)로 저장되는데, 호출부
+    (`routers/mb.py` `get_officetel_rental`)가 넘기는 `region` 은 한글 시도명
+    ("서울" 등)이라 절대 매칭되지 않는다. `region` 을 넘기면 이 함수는 **항상
+    빈 리스트**를 반환한다 — 오피스텔의 짝꿍 함수 `get_officetel_schedules()`
+    (`db/mb_apartment_queries.py`, `region_name` 한글명 필터라 정상 동작)와
+    비교하면 이 비대칭이 뚜렷하다. 고치려면 region_code → 한글 시도명 매핑
+    테이블 추가 또는 region_code 컬럼 자체를 한글명으로 백필해야 하는데,
+    왜 숫자코드로 저장하게 됐는지 원인 조사가 먼저 필요하다.
+    """
     stmt = select(RentalScheduleOfficial).order_by(
         RentalScheduleOfficial.recruit_date.desc().nullslast()
     )

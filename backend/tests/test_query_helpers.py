@@ -6,16 +6,15 @@ now 를 파라미터로 주입하므로 실행 환경·시간대 무관 (timezon
 시각 하드코딩이 아니라 명시적 datetime 주입).
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from db.query_helpers import _move_in_cutoff
-
-_KST = timezone(timedelta(hours=9))
 
 
 def _kst(year, month, day):
     """테스트용 KST aware datetime 팩토리."""
-    return datetime(year, month, day, tzinfo=_KST)
+    return datetime(year, month, day, tzinfo=ZoneInfo("Asia/Seoul"))
 
 
 def test_month_end_clamps_to_target_month_last_day():

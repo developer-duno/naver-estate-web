@@ -11,6 +11,7 @@ import logging
 import re
 import threading
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import Body, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -25,8 +26,6 @@ from ._shared import router
 _COMPLEX_NO_RE = re.compile(r"^\d{1,20}$")
 
 logger = logging.getLogger(__name__)
-
-_KST = timezone(timedelta(hours=9))
 
 # 전역 재크롤 상태 — APScheduler max_instances=1과 동일 보장을 프로세스 내에서도 수행
 _recrawl_lock = threading.Lock()
@@ -60,7 +59,7 @@ def get_recrawl_status(
     """
     from datetime import datetime as _dt
 
-    now_kst = datetime.now(_KST)
+    now_kst = datetime.now(ZoneInfo("Asia/Seoul"))
     stale_cutoff = _dt.now(timezone.utc) - timedelta(hours=1)
     running_jobs = (
         db.query(CrawlJob)
@@ -171,7 +170,7 @@ def run_recrawl_articles(
             raise HTTPException(status_code=409, detail="이미 일괄 재크롤이 진행 중입니다")
 
         # 안전도 재확인 — 🔴면 force 없이 거부. stale 1시간 이상은 제외
-        now_kst_hour = datetime.now(_KST).hour
+        now_kst_hour = datetime.now(ZoneInfo("Asia/Seoul")).hour
         stale_cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
         running_count = (
             db.query(CrawlJob)

@@ -3,13 +3,10 @@
 import io
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
-
-# 엑셀 파일명 날짜 = 한국 사용자 기준 KST 고정 (환경 무관 — 서버 TZ 와 무관하게 KST).
-# query_helpers.py 의 동명 상수와 동일 의도 (저장 아닌 한국 표시용 시각).
-_KST = timezone(timedelta(hours=9))
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -233,8 +230,8 @@ def export_articles_to_excel(
         logger.exception("엑셀 생성 실패: complex=%s articles=%d", complex_no, len(articles))
         raise HTTPException(status_code=500, detail="엑셀 파일 생성에 실패했습니다")
 
-    # 엑셀 파일명 날짜 = 한국 사용자 기준 KST 고정 (모듈 상수 _KST, 환경 무관)
-    timestamp = datetime.now(_KST).strftime("%Y%m%d_%H%M%S")
+    # 엑셀 파일명 날짜 = 한국 사용자 기준 KST 고정 (환경 무관 — 서버 TZ 와 무관하게 KST)
+    timestamp = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%Y%m%d_%H%M%S")
     raw_name = _complex_name or "매물"
     safe_name = re.sub(r'[^\w가-힣.\-]', '_', raw_name)[:50]
     filename = f"{safe_name}_{timestamp}.xlsx"

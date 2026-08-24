@@ -499,8 +499,9 @@ class OfficetelPresaleSchedule(Base):
     biz_entity: Mapped[str | None] = mapped_column(Text)
     constructor: Mapped[str | None] = mapped_column(Text)
     # SUBSCRPT_AREA_CODE_NM(청약 지역명, "경기" 등) — 지역 필터는 아직 미구현(dead),
-    # 향후 필터 후보로 데이터만 미리 적재(V045 재설계, 2026-08-10). 한글 필드라
-    # mojibake 위험 있음(public_data_base.py 공유 인코딩 결함, 별도 조사 필요).
+    # 향후 필터 후보로 데이터만 미리 적재(V045 재설계, 2026-08-10). mojibake 우려는
+    # 2026-08-24 실측으로 재현 안 됨 확인(API charset=UTF-8 명시, prod 저장값 정상 —
+    # backend/db/mb_apartment_queries.py 주석 참조).
     region_name: Mapped[str | None] = mapped_column(Text)
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime)
 

@@ -92,11 +92,17 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정 (설정 완�
 5. REST(PostgREST) 교차 확인 (`{ref}.supabase.co/rest/v1/...` + anon key) — 이것도 timeout 이면 DB 컴퓨트 다운 확정 (별도 경로라 우리 백엔드 무혐의 입증)
 6. `netstat` 으로 이 PC 가 쥔 pooler 연결 수 — 소수면 로컬 연결누수 무혐의
 7. status.supabase.com 은 **공지가 늦을 수 있다** (실사고: 다운 중에도 서울 리전 "Operational")
+8. **Database Logs 탭에서 OOM/PANIC/FATAL 원문 확인** — 대시보드 그래프(메모리·스왑 등)
+   판독만으로 "OOM 이었다"고 단정하지 말 것(세션 381 사후검증에서 "유력 가설"로 격하된 전례,
+   §DB 크래시 재발 항목 참조). 경로 = **대시보드 → Observability → Logs → Postgres Logs**.
+   서버 로그 원문(`out of memory`/`terminated by signal`/`PANIC`/`FATAL`)을 직접 봐야 가설이
+   확정으로 승격된다 — 급할 때 건너뛰기 쉬우니 진단 순서에서 스킵하지 말 것.
 
 **처방**: 자가회복 대기 우선 (실사고 29분 자가회복). ⛔ 성급한 backend 재시작 금지 — 재시작은
 DB 를 못 살리고, 부팅 스윕(main.py, **시작 5분 경과한 running 잡** 대상)이 외부 프로세스의 잡
 (수동 재수집 등 — 수 시간 돌므로 항상 해당)까지 cancelled 로 오염시킨다. 근본원인(DB 컴퓨트
-CPU/RAM/IO)은 Supabase 대시보드 그래프로만 확인 가능(사장님 로그인).
+CPU/RAM/IO)은 Supabase 대시보드 그래프로만 확인 가능(사장님 로그인), 단 위 8번(서버 로그
+원문)까지 함께 봐야 가설이 아니라 확정 진단이 된다.
 
 **연쇄 함정 2건** (실사고에서 실증, #411 로 폴백 견고화):
 - 잡 실패 마킹 중 DB 가 죽으면 `_fail_job` 폴백까지 동반 사망해 CrawlJob 이 'running' 유령으로

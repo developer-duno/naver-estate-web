@@ -67,6 +67,23 @@ scripts/backfill_price_history.log
 scripts/backfill_public_data.log
 scripts/backfill_public_data_stdout.log
 backend/scripts/official_price_manual.log
+# 위 8개 패턴은 "scripts/"로 시작해 레포 루트 기준으로만 잡힘 — backend/scripts/ 하위
+# 동명 파일은 안 걸림(2026-08-24 세션382 실측 재현). 69번째 줄(정답 선례) 형식대로
+# backend/scripts/ 대응 줄을 별도로 추가한다(슬래시를 앞에 붙이는 방식은 오히려 루트
+# 기준으로 좁아져 더 못 잡음 — 적대검증에서 확인된 함정, 채택하지 않음).
+backend/scripts/startup.log
+backend/scripts/backend.log
+backend/scripts/backend_*.log
+backend/scripts/cloudflared_*.log
+backend/scripts/cloudflared.log
+backend/scripts/orchestrator.pid
+backend/scripts/scheduler.lock
+backend/scripts/uvicorn.log
+backend/scripts/backend_recovery.log
+backend/scripts/backend_recovery_err.log
+backend/scripts/backfill_price_history.log
+backend/scripts/backfill_public_data.log
+backend/scripts/backfill_public_data_stdout.log
 
 # 세션 359 일회성 백필 실행/진단 스크립트 (백필 완료 후 삭제 대상 — 재사용 자산은 별도 이름으로 커밋)
 scripts/*_S359.ps1

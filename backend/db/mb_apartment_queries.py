@@ -253,26 +253,21 @@ def get_officetel_schedules(
     완전히 독립된 OfficetelPresaleSchedule 테이블로 이전 — house_type 필터·
     apartments 매칭 게이트가 애초에 불필요해졌다(테이블 자체가 오피스텔 전용).
 
-    region: 여전히 무시된다. 2026-08-10 V045 재설계로 OfficetelPresaleSchedule 에
-    region_name 컬럼(SUBSCRPT_AREA_CODE_NM, 예: "경기")을 추가해 데이터 자체는
-    저장되기 시작했지만, 이 함수는 아직 그 컬럼으로 필터링하지 않는다 — 다음 이유로
-    이번 리뉴얼 범위 밖(구현은 별도 승인 필요, 사장님 지시):
-      1. 이 라우터가 받는 `region` 파라미터는 mibunyang Apartment.region 과 같은
-         "시도명" 문자열 포맷(routers/mb.py get_officetel_rental → 다른 mb 엔드포인트와
-         동일 Query 정의)이라 region_name(SUBSCRPT_AREA_CODE_NM, "경기" 형식)과 포맷은
-         호환돼 보이지만, "서울특별시" vs "서울" 같은 표기 차이·매칭 커버리지를 실측
-         검증하지 않았다.
-      2. region_name 은 한글 필드라 mojibake 위험을 안고 저장된다(V045 마이그 주석
-         참조) — 필터 WHERE 절에 오염된 문자열이 들어가면 조용히 0건 매칭되는 사고가
-         날 수 있어, mojibake 근본 수정(별도 세션 조사 대상)이 선행되는 게 안전하다.
-    다음 후보: region_name 데이터가 몇 주 쌓여 값 분포(mojibake 여부·표기 포맷)를
-    실측한 뒤, `conditions.append(OfficetelPresaleSchedule.region_name == region)` 류
-    필터를 추가하는 별도 PR. 이 파라미터를 dead parameter 로 정직하게 남겨둔다
-    (호출부 시그니처 하위호환 유지).
+    region: region_name 필터 (get_rental_schedules 의 region_code 필터와 동일 패턴,
+    단 이 테이블은 컬럼명이 region_name).
+    2026-08-24 세션382 실측으로 구현 — OfficetelPresaleSchedule.region_name
+    (SUBSCRPT_AREA_CODE_NM, "경기" 등)과 mibunyang Apartment.region 의 distinct
+    값 17개(강원·경기·경남·경북·광주·대구·대전·부산·서울·세종·울산·인천·전남·
+    전북·제주·충남·충북)를 prod DB 에서 직접 대조해 완전히 일치함을 확인했다 —
+    "서울특별시" 같은 긴 표기는 존재하지 않는다. mojibake 위험도 이미 기각됨
+    (위 §region_name 컬럼 주석 참조). 사장님 승인 후 착수(구 주석의 "별도 승인
+    필요" 조건 충족).
     """
     stmt = select(OfficetelPresaleSchedule).order_by(
         OfficetelPresaleSchedule.recruit_date.desc().nullslast()
     )
+    if region:
+        stmt = stmt.where(OfficetelPresaleSchedule.region_name == region)
     return list(db.execute(stmt).scalars().all())
 
 

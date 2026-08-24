@@ -7,12 +7,11 @@ live.py에서 추출한 인메모리 캐시.
 
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 DEFAULT_TTL_SECONDS = 300  # 5분 (동적 TTL 미사용 시 기본값)
 MAX_CACHE_SIZE = 2000
-
-_KST = timezone(timedelta(hours=9))
 
 
 def get_dynamic_ttl() -> int:
@@ -24,7 +23,7 @@ def get_dynamic_ttl() -> int:
       오후 12~18시: 1시간 (중간 활동)
       저녁 18~24시: 2시간 (활동 감소)
     """
-    hour = datetime.now(_KST).hour
+    hour = datetime.now(ZoneInfo("Asia/Seoul")).hour
     if hour < 9:
         return 10800  # 3시간
     elif hour < 12:

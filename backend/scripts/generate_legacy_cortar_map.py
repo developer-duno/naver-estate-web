@@ -520,6 +520,27 @@ def main() -> int:
         reform_resolved, reform_unresolved = resolve_reform(s, reform_rows)
         print("      해결 %d / 전체 %d" % (len(reform_resolved), len(reform_rows)))
 
+        # 자동 규칙(hits==1)으로는 못 골라도, crawler/cortar_legacy.py 의 "수동 확정 구역"
+        # (GENERATED-REFORM-END 마커 뒤, 재생성해도 보존됨)에 이미 사람이 라이브 실측으로
+        # 넣어둔 항목은 진짜 미해결이 아니다 — 매번 "미해결"로 잘못 찍히던 걸 거른다
+        # (세션 382, 금곡동 2건 재현 확인 — 데이터는 항상 안전했으나 콘솔만 혼란을 줬음).
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from crawler.cortar_legacy import VWORLD_REFORM_CORTAR_MAP
+
+        reform_unresolved, reform_manually_confirmed = (
+            [u for u in reform_unresolved if u["code"] not in VWORLD_REFORM_CORTAR_MAP],
+            [u for u in reform_unresolved if u["code"] in VWORLD_REFORM_CORTAR_MAP],
+        )
+
+        if reform_manually_confirmed:
+            print("")
+            print("(참고) 이미 수동 확정된 %d건 — 자동 규칙은 여전히 모호로 보지만"
+                  " crawler/cortar_legacy.py 수동 확정 구역에 등록돼 있어 정상 반영 중:"
+                  % len(reform_manually_confirmed))
+            for u in sorted(reform_manually_confirmed, key=lambda x: -x["n"]):
+                print("   %s | %s | 단지 %d개" % (u["code"], u["addr"], u["n"]))
+            print("")
+
         if reform_unresolved:
             print("")
             print("!! 개편맵 미해결 %d건 — 아래 동은 맵에서 제외된다(원본 그대로 통과):"

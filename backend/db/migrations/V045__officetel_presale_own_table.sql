@@ -25,8 +25,9 @@
 -- — 청약 지역명("경기" 등, mibunyang Apartment.region 과 동일 포맷)을 미리
 -- 받아두면 나중에 지역 필터를 켜기 쉬워진다(컬럼 추가는 저비용). 단, 이번
 -- 마이그레이션은 region 필터링 로직 자체는 구현하지 않는다(범위 밖 — 다음 후보로
--- get_officetel_schedules() 주석에 명시). 한글 필드라 mojibake 위험을 안고
--- 저장된다(backend/crawler/public_data_base.py 공유 인코딩 결함, 별도 세션 조사 필요).
+-- get_officetel_schedules() 주석에 명시). 한글 필드라 mojibake 우려가 있었으나
+-- (2026-08-24 세션 382 실측 정정) API charset=UTF-8 명시 + prod 저장값 정상 확인
+-- — 이론상 위험이었을 뿐 재현 안 됨. backend/db/mb_apartment_queries.py 주석 참조.
 
 CREATE TABLE IF NOT EXISTS officetel_presale_schedule (
   id SERIAL PRIMARY KEY,
@@ -54,7 +55,7 @@ CREATE TABLE IF NOT EXISTS officetel_presale_schedule (
 COMMENT ON TABLE officetel_presale_schedule IS
   '청약홈 오피스텔·도시형 청약 공고 일정 (getUrbtyOfctlLttotPblancDetail). apartments 테이블과 완전 독립(FK 없음), naver-estate-web 자체 소유.';
 COMMENT ON COLUMN officetel_presale_schedule.region_name IS
-  'SUBSCRPT_AREA_CODE_NM(청약 지역명, 예: "경기") — 지역 필터 미구현(dead), 향후 필터 후보로 데이터만 미리 적재. 한글 필드라 mojibake 위험(공유 인코딩 결함, 별도 조사 필요).';
+  'SUBSCRPT_AREA_CODE_NM(청약 지역명, 예: "경기") — 지역 필터 미구현(dead), 향후 필터 후보로 데이터만 미리 적재. mojibake 우려는 2026-08-24 실측으로 재현 안 됨 확인(API charset=UTF-8 명시).';
 ALTER TABLE officetel_presale_schedule ENABLE ROW LEVEL SECURITY;
 -- 의도적 공개: 청약홈 공고 일정은 정부(한국부동산원)가 원래 공개하는 공식 정보라
 -- anon read 제한 불필요 (V029/V031이 차단한 매물·시세 등 B2B 가치 데이터와 다름,

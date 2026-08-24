@@ -1,7 +1,11 @@
 /**
  * 보유세 (재산세 + 종부세) 누진세율 + 누진공제 + 헬퍼 (2026 기준).
- * 권위 출처: 국세청 종부세 법령 안내자료 PDF + 세액계산 흐름도 PDF + 세율 PDF + 합산배제 PDF.
- * 모든 세율·누진공제는 PDF 표 그대로 박제 (추측 0건).
+ * 권위 출처: 재산세(지방세법 §111·§111의2·§110③·시행령 §109) + 종부세(종합부동산세법 §8·§9·
+ * §10·시행령 §4의2 + 국세청 종부세 법령 안내자료 PDF + 세액계산 흐름도 PDF + 세율 PDF +
+ * 합산배제 PDF). 조문별 정확한 근거는 각 상수·함수 주석에 개별 표기(세션 384 법령 재검증 —
+ * 총괄 주석이 종부세 PDF만 가리켜 재산세 §111 출처가 불명확했던 것 정정, 세율값 자체는
+ * 처음부터 정확했음. 세부담상한 조번호 §122→§10/§110③ 정정은 아래 상수 주석 참조).
+ * 모든 세율·누진공제는 공식 법령·PDF 표 그대로 박제 (추측 0건).
  */
 
 export interface TaxBracket {
@@ -77,7 +81,51 @@ export const SINGLE_HOUSE_DEDUCTION = 1_200_000_000; // 1세대1주택 종부세
 export const GENERAL_DEDUCTION = 900_000_000;        // 일반(2주택+) 종부세 공제 9억
 export const RURAL_TAX_RATE = 0.20;             // 농어촌특별세: 종부세액의 20%
 export const MAX_TOTAL_CREDIT = 0.80;           // 합산 최대 80% (연령+보유 세액공제 한도)
-export const TAX_BURDEN_CAP_RATE = 1.5;         // 세부담 상한 — 전년도 보유세의 150% (지방세법 §122)
+
+/**
+ * 종부세 세부담 상한 150% (종합부동산세법 §10).
+ *
+ * ⚠ 세션 384 근본수정: 옛 이름 `TAX_BURDEN_CAP_RATE` 는 "지방세법 §122" 를 근거로 재산세
+ * 포함 전체 보유세(grandTotal)에 이 150% 를 적용했었다. 그러나 법령 재검증 결과 지방세법
+ * §122 는 2023.3.14. 개정으로 "다만, 주택의 경우에는 적용하지 아니한다" 단서가 신설돼
+ * **주택 재산세에는 이 조문 자체가 적용되지 않는다**(CaseNote 원문 직접 확인). 150% 상한은
+ * 종합부동산세법 §10(종부세 세부담상한) 소관이라 종부세(+농어촌특별세) 몫에만 적용해야
+ * 정확하다. 재산세의 진짜 상한은 지방세법 §110③(과세표준상한제, 아래 참조).
+ */
+export const COMPREHENSIVE_TAX_BURDEN_CAP_RATE = 1.5;
+
+/**
+ * 재산세 과세표준상한율 5% (지방세법 §110③ + 시행령 §109조의2②).
+ *
+ * 세션 384 신설 — 옛 "세부담상한 105/110/130%"(지방세법 §122 구간표)는 2023.3.14. 개정으로
+ * 완전히 삭제됐다(법률 제19230호 개정이유: "주택 재산세의 과세표준상한제 도입에 따라 주택의
+ * 세부담상한제는 폐지함"). 대체 제도인 과세표준상한제는 "전년도 과세표준"을 기준으로 당해년도
+ * 과세표준의 증가를 연 5% 이내로 제한한다(세액이 아니라 과세표준 자체를 제한 — applyBracket
+ * 으로 세율을 곱하기 *전* 단계에 적용). 2024~2028년은 옛 세부담상한(전년세액×105~130%)과
+ * 병행 적용되는 경과기간이나(부칙 경과조치, 정확한 부칙 조번호는 미확정), 이 계산기는
+ * "손님 상담용 추정치" 성격상 2029년 이후 확정 제도(과세표준상한제 단독)만 반영한다 —
+ * 전환기 105/110/130% 는 곧 사라질 한시 제도라 신규 반영하지 않는다(안내문으로 고지).
+ */
+export const PROPERTY_TAX_STD_BASE_CAP_RATE = 0.05;
+
+/**
+ * 재산세 과세표준상한 적용 (지방세법 §110③) — 전년도 과세표준이 있을 때만 활성화.
+ * 과세표준상한액 = 전년도 과세표준 × (1 + 5%). 당해년도 과세표준이 이보다 크면 상한액으로 제한.
+ * @returns cap 적용 후 과세표준, 실제 cap 발동 여부
+ */
+export function applyPropertyTaxBaseCap(
+  currentTaxBase: number,
+  prevYearTaxBase: number | undefined,
+): { cappedBase: number; wasCapped: boolean } {
+  if (prevYearTaxBase === undefined || prevYearTaxBase <= 0) {
+    return { cappedBase: currentTaxBase, wasCapped: false };
+  }
+  const capBase = Math.floor(prevYearTaxBase * (1 + PROPERTY_TAX_STD_BASE_CAP_RATE));
+  if (currentTaxBase <= capBase) {
+    return { cappedBase: currentTaxBase, wasCapped: false };
+  }
+  return { cappedBase: capBase, wasCapped: true };
+}
 
 // ===== 헬퍼 함수 =====
 
@@ -86,6 +134,18 @@ export function applyBracket(taxBase: number, brackets: TaxBracket[]): { tax: nu
   const b = brackets.find((br) => taxBase <= br.max);
   if (!b) return { tax: 0, rate: 0 };
   return { tax: Math.max(0, taxBase * b.rate - b.deduction), rate: b.rate };
+}
+
+/**
+ * 표준세율 적용 (누진공제 미차감) — 종부세 시행령 §4의2 "재산세 상당액" 산정 전용.
+ * elitelaw.kr/23 계산례: "구간세율로 적용하지 않고(누진공제 미차감) 재산세 표준세율만 적용".
+ * applyBracket() 과 달리 해당 구간 세율을 과세표준 전체에 곱하기만 한다 (누진공제 0).
+ */
+export function applyStandardRate(taxBase: number, brackets: TaxBracket[]): { tax: number; rate: number } {
+  if (taxBase <= 0) return { tax: 0, rate: 0 };
+  const b = brackets.find((br) => taxBase <= br.max);
+  if (!b) return { tax: 0, rate: 0 };
+  return { tax: taxBase * b.rate, rate: b.rate };
 }
 
 /**
@@ -102,14 +162,22 @@ export function singleHouseFairMarketRatio(publishedPriceWon: number): number {
 /**
  * 종부세 공제할 재산세액 (이중과세 방지) — 종부세법 시행령 §4의2.
  *
- * 산식 (대법원 2023.8.31. 선고 2019두39796 판결 + 국세청 공식 흐름도 기반):
+ * 산식 (elitelaw.kr/23 구체 계산례 + 국세청 공식 흐름도 기반, 세션 384 재검증):
  *   공제할 재산세액 = 재산세 부과액 × (분자 ÷ 분모)
- *   분자 = applyBracket((공시가 - 종부세 기준금액) × 종부세FMR × 재산세FMR, propertyBrackets).tax
- *   분모 = applyBracket(공시가 × 재산세FMR, propertyBrackets).tax
+ *   분자 = applyStandardRate((공시가 - 종부세 기준금액) × 종부세FMR × 재산세FMR, propertyBrackets).tax
+ *   분모 = applyStandardRate(공시가 × 재산세FMR, propertyBrackets).tax
+ *
+ * ⚠ 세션 384 근본수정: 분자·분모는 "표준세율"(누진공제 미차감, applyStandardRate)로 계산한다.
+ * 옛 버전(~세션 383)은 applyBracket(누진공제 차감)을 썼는데, elitelaw.kr/23 계산례가
+ * "④ 구간세율로 적용하지 않고(3억 초과 구간 570,000원 누진공제 더하지 않음) 재산세
+ * 표준세율만 적용"이라고 명시 — "표준세율"은 지자체 조례 가감 전 법정 기본세율이라는
+ * 뜻일 뿐 "누진 여부"와 무관하다고 오독했던 게 착오였다. 실제로는 해당 구간 세율을
+ * 과세표준 전체에 곱하고 누진공제는 빼지 않는 방식이 맞다(법령상 "표준세율로 계산한
+ * 재산세 상당액" 문구 자체가 이 방식을 가리킴).
  *
  * 권위 출처 (모두 직접 검증):
- *   - 종부세법 시행령 §4의2 (LBOX 법령 + elitelaw.kr/23 직접 fetch)
- *   - 대법원 2023.8.31. 선고 2019두39796 판결 (분자·분모 모두 누진세율 적용 명시)
+ *   - 종부세법 시행령 §4의2 (LBOX 법령 + elitelaw.kr/23 직접 fetch, 계산례 숫자 재검산)
+ *   - 대법원 2019두39796 판결 — "재산세 표준세율로 계산한 재산세 상당액" 문구
  *   - 국세청 공식 흐름도 (nts.go.kr cntntsId=7735) — 종부세 = 산출세액 - 공제할 재산세액 - 세액공제
  *   - KILF 한국지방세연구원 — 법인에도 동일 적용
  *
@@ -128,13 +196,13 @@ export function comprehensivePropertyTaxCredit(args: {
 }): number {
   const { publishedPriceWon, comprehensiveDeduction, comprehensiveFmRatio, propertyFmRatio, propertyTax, propertyBrackets } = args;
 
-  // 분자: 종부세 과세표준 부분의 재산세 상당액
+  // 분자: 종부세 과세표준 부분의 재산세 상당액 (표준세율, 누진공제 미차감)
   const numeratorBase = Math.max(0, publishedPriceWon - comprehensiveDeduction) * comprehensiveFmRatio * propertyFmRatio;
-  const numerator = applyBracket(numeratorBase, propertyBrackets).tax;
+  const numerator = applyStandardRate(numeratorBase, propertyBrackets).tax;
 
-  // 분모: 전체 주택의 재산세 상당액
+  // 분모: 전체 주택의 재산세 상당액 (표준세율, 누진공제 미차감)
   const denominatorBase = publishedPriceWon * propertyFmRatio;
-  const denominator = applyBracket(denominatorBase, propertyBrackets).tax;
+  const denominator = applyStandardRate(denominatorBase, propertyBrackets).tax;
 
   if (denominator <= 0) return 0;
   return Math.floor(propertyTax * (numerator / denominator));

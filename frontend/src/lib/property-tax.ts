@@ -1,7 +1,10 @@
 /**
  * 보유세(재산세 + 종합부동산세) 계산기 진입점.
- * 1년 보유세 = 재산세 + 종부세 (공제할 재산세액은 단순화로 0 가정 — 손님 상담용 추정치).
- * 권위 출처: 국세청 PDF 16개 (지방세법 §111 + 종부세법 §8/§9 + 합산배제 + 세율표).
+ * 1년 보유세 = 재산세 + 종부세 - 공제할 재산세액(이중과세 방지, comprehensivePropertyTaxCredit
+ * 로 실제 산정 — 세션 384: "단순화로 0 가정"이던 옛 주석은 v3-A ② 구현 이후 stale, 정정).
+ * 손님 상담용 추정치이며 정밀 세무신고 대체 아님.
+ * 권위 출처: 국세청 PDF 16개 + 지방세법(§111·§111의2·시행령 §109·§110③) + 종부세법(§8·§9·
+ * 시행령 §4의2) + 합산배제 + 세율표. 조문별 상세는 property-tax-brackets.ts 참조.
  */
 
 import { validateAmount } from "./brokerage";
@@ -16,23 +19,24 @@ import {
   COMPREHENSIVE_BRACKETS_CORP_2, COMPREHENSIVE_BRACKETS_CORP_3,
   applyBracket, totalCreditRate, singleHouseFairMarketRatio, comprehensivePropertyTaxCredit,
   FAIR_MARKET_RATIO, SINGLE_HOUSE_DEDUCTION, GENERAL_DEDUCTION, RURAL_TAX_RATE,
-  TAX_BURDEN_CAP_RATE,
+  COMPREHENSIVE_TAX_BURDEN_CAP_RATE, applyPropertyTaxBaseCap,
 } from "./property-tax-brackets";
 
 /**
- * 세부담 상한 150% cap 적용 — 전년도 보유세가 양수일 때만 활성화.
- * grandTotal 만 cap (내부 분해 propertyTax/comprehensiveTax/ruralTax 는 보존).
- * @returns { capped: cap 적용 후 grandTotal, wasCapped: 실제 cap 발동 여부, capNote: notes 에 추가할 키 }
+ * 종부세 세부담 상한 150% cap 적용 (종합부동산세법 §10) — 전년도 종부세+농특세가 양수일 때만 활성화.
+ * 세션 384 근본수정: cap 대상을 grandTotal(재산세 포함)에서 종부세+농특세 몫으로 좁혔다
+ * (지방세법 §122 는 "주택의 경우 적용하지 아니한다" — 재산세는 대상 아님, brackets.ts 주석 참조).
+ * @returns { capped: cap 적용 후 comprehensivePlusRural, wasCapped, capNote }
  */
-function applyTaxBurdenCap(grandTotal: number, prevYearTax: number | undefined): {
+function applyComprehensiveTaxBurdenCap(comprehensivePlusRural: number, prevYearComprehensiveTax: number | undefined): {
   capped: number; wasCapped: boolean; capNote: PropertyTaxNoticeKey;
 } {
-  if (prevYearTax === undefined || prevYearTax <= 0) {
-    return { capped: grandTotal, wasCapped: false, capNote: "tax-burden-cap-150" };
+  if (prevYearComprehensiveTax === undefined || prevYearComprehensiveTax <= 0) {
+    return { capped: comprehensivePlusRural, wasCapped: false, capNote: "tax-burden-cap-150" };
   }
-  const cap = Math.floor(prevYearTax * TAX_BURDEN_CAP_RATE);
-  if (grandTotal <= cap) {
-    return { capped: grandTotal, wasCapped: false, capNote: "tax-burden-cap-applied" };
+  const cap = Math.floor(prevYearComprehensiveTax * COMPREHENSIVE_TAX_BURDEN_CAP_RATE);
+  if (comprehensivePlusRural <= cap) {
+    return { capped: comprehensivePlusRural, wasCapped: false, capNote: "tax-burden-cap-applied" };
   }
   return { capped: cap, wasCapped: true, capNote: "tax-burden-cap-applied" };
 }
@@ -136,7 +140,12 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   // v3-A ①: 1세대1주택은 시가표준액 구간별 차등 공정시장가액비율 (§109, 43~45%) 적용. 그 외는 60%.
   const propertyFairMarketRatio = isSingleProperty ? singleHouseFairMarketRatio(input.publishedPriceWon) : FAIR_MARKET_RATIO;
   notes.push(isSingleProperty ? "single-house-fair-market-ratio" : "fair-market-ratio-60");
-  const propertyTaxBase = Math.floor(input.publishedPriceWon * propertyFairMarketRatio);
+  const rawPropertyTaxBase = Math.floor(input.publishedPriceWon * propertyFairMarketRatio);
+  // 세션 384 신설: 재산세 과세표준상한 5% (지방세법 §110③) — 전년도 과세표준 입력 시만 활성화.
+  // 세율을 곱하기 전 "과세표준" 단계에 적용 (종부세 150% cap 과는 별개 층위 — brackets.ts 주석 참조).
+  const baseCap = applyPropertyTaxBaseCap(rawPropertyTaxBase, input.prevYearPropertyTaxBase);
+  const propertyTaxBase = baseCap.cappedBase;
+  notes.push(baseCap.wasCapped || input.prevYearPropertyTaxBase ? "property-tax-base-cap-applied" : "property-tax-base-cap-not-input");
   // §111의2 특례세율(SINGLE)은 "시가표준액 9억원 이하 주택에 한정" (지방세법 시행령 §110의2①).
   // FMR(§109 차등 공정시장가액비율)은 9억 초과도 45% 적용(게이트 없음)이라 별도 — 두 법령의 9억
   // 게이트가 다르므로 brackets 선택에만 게이트 적용. 9억 초과 1주택은 일반세율(GENERAL) 적용.
@@ -160,8 +169,8 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   // 종부세 과세표준 0 = 공제 미만 (납부 의무 없음)
   if (comprehensiveTaxBase === 0) {
     notes.push("below-comprehensive-threshold");
-    const cap = applyTaxBurdenCap(propertyTax, input.prevYearTax);
-    notes.push(cap.capNote);
+    // 세션 384 근본수정: 이 분기는 종부세가 0이라 종부세법 §10 150% cap 대상 자체가 없다.
+    // 재산세는 이미 위 1단계(과세표준 계산 직후)에서 §110③ 5% cap 이 반영된 propertyTax.
     notes.push("consult-experts");
     return {
       branch: isCorp ? "corporation" : "below-threshold",
@@ -169,10 +178,10 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
       comprehensiveDeduction, comprehensiveTaxBase: 0,
       comprehensiveTaxBeforeDeduction: 0, comprehensivePropertyTaxCredit: 0, comprehensiveTaxCredit: 0, comprehensiveTax: 0,
       totalTax: propertyTax, ruralTax: 0,
-      grandTotal: cap.capped,
+      grandTotal: propertyTax,
       uncappedGrandTotal: propertyTax,
-      wasCapped: cap.wasCapped,
-      effectiveRate: input.publishedPriceWon > 0 ? cap.capped / input.publishedPriceWon : 0,
+      wasCapped: baseCap.wasCapped,
+      effectiveRate: input.publishedPriceWon > 0 ? propertyTax / input.publishedPriceWon : 0,
       appliedRate: { property: propertyResult.rate, comprehensive: 0, propertyFairMarketRatio },
       notes,
     };
@@ -248,11 +257,14 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
   const ruralTax = Math.floor(comprehensiveTax * RURAL_TAX_RATE);
   if (ruralTax > 0) notes.push("rural-tax-20");
 
-  const totalTax = propertyTax + comprehensiveTax;
-  const uncappedGrandTotal = totalTax + ruralTax;
-  const cap = applyTaxBurdenCap(uncappedGrandTotal, input.prevYearTax);
+  const uncappedGrandTotal = propertyTax + comprehensiveTax + ruralTax;
+  // 세션 384 근본수정: 150% cap 은 종부세+농특세 몫에만 적용 (종합부동산세법 §10 — brackets.ts 주석 참조).
+  // 재산세(propertyTax)는 위 1단계에서 이미 §110③ 5% cap 이 반영돼 있어 여기선 그대로 더한다.
+  const cap = applyComprehensiveTaxBurdenCap(comprehensiveTax + ruralTax, input.prevYearComprehensiveTax);
   notes.push(cap.capNote);
   notes.push("consult-experts");
+  const grandTotal = propertyTax + cap.capped;
+  const totalTax = propertyTax + comprehensiveTax;
 
   return {
     branch: isCorp ? "corporation" : (isSingleComprehensive ? "single-house" : "multi-house"),
@@ -262,10 +274,10 @@ export function calculatePropertyTax(rawInput: PropertyTaxInput): PropertyTaxRes
     comprehensivePropertyTaxCredit: propertyTaxCreditAmount,
     comprehensiveTaxCredit, comprehensiveTax,
     totalTax, ruralTax,
-    grandTotal: cap.capped,
+    grandTotal,
     uncappedGrandTotal,
-    wasCapped: cap.wasCapped,
-    effectiveRate: input.publishedPriceWon > 0 ? cap.capped / input.publishedPriceWon : 0,
+    wasCapped: baseCap.wasCapped || cap.wasCapped,
+    effectiveRate: input.publishedPriceWon > 0 ? grandTotal / input.publishedPriceWon : 0,
     appliedRate: { property: propertyResult.rate, comprehensive: compResult.rate, propertyFairMarketRatio },
     notes,
   };

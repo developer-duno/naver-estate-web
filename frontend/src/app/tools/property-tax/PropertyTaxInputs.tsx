@@ -9,7 +9,8 @@ interface Props {
   isSingleHouseEligible: boolean;
   ageYears: number;
   holdYears: number;
-  prevYearTaxManwon: number;
+  prevYearComprehensiveTaxManwon: number;
+  prevYearPropertyTaxBaseManwon: number;
   excludedHouses: number;
   ownershipPercent: number;
   isCorporation: boolean;
@@ -26,7 +27,8 @@ interface Props {
   onIsSingleHouseEligibleChange: (v: boolean) => void;
   onAgeYearsChange: (v: number) => void;
   onHoldYearsChange: (v: number) => void;
-  onPrevYearTaxManwonChange: (v: number) => void;
+  onPrevYearComprehensiveTaxManwonChange: (v: number) => void;
+  onPrevYearPropertyTaxBaseManwonChange: (v: number) => void;
   onExcludedHousesChange: (v: number) => void;
   onOwnershipPercentChange: (v: number) => void;
   onIsCorporationChange: (v: boolean) => void;
@@ -46,12 +48,14 @@ const RADIO_LABEL_CLASS =
 
 export default function PropertyTaxInputs(props: Props) {
   const {
-    publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears, prevYearTaxManwon,
+    publishedManwon, houses, isSingleHouseEligible, ageYears, holdYears,
+    prevYearComprehensiveTaxManwon, prevYearPropertyTaxBaseManwon,
     excludedHouses, ownershipPercent, isCorporation, isSpouseJointSingleHouse,
     corporationGeneralRateCategory, specialHouses, specialHousesRateApply, isReligiousSpecial,
     holdPeriodSpecialMode, originalAcquisitionYear,
     onPublishedManwonChange, onHousesChange, onIsSingleHouseEligibleChange,
-    onAgeYearsChange, onHoldYearsChange, onPrevYearTaxManwonChange,
+    onAgeYearsChange, onHoldYearsChange,
+    onPrevYearComprehensiveTaxManwonChange, onPrevYearPropertyTaxBaseManwonChange,
     onExcludedHousesChange, onOwnershipPercentChange, onIsCorporationChange,
     onIsSpouseJointSingleHouseChange, onCorporationGeneralRateCategoryChange,
     onSpecialHouseEntryChange, onRateApplyEntryChange, onIsReligiousSpecialChange,
@@ -196,22 +200,42 @@ export default function PropertyTaxInputs(props: Props) {
       )}
 
       <div>
-        <label htmlFor="prevYearTaxManwon" className="block text-sm font-medium text-gray-700 mb-1.5">
-          전년도 보유세 합계 (만원, 선택)
+        <label htmlFor="prevYearComprehensiveTaxManwon" className="block text-sm font-medium text-gray-700 mb-1.5">
+          전년도 종부세+농특세 합계 (만원, 선택)
         </label>
         <input
-          id="prevYearTaxManwon"
+          id="prevYearComprehensiveTaxManwon"
           type="number"
           inputMode="numeric"
           autoComplete="off"
           min={0}
-          value={prevYearTaxManwon || ""}
-          onChange={(e) => onPrevYearTaxManwonChange(Number(e.target.value) || 0)}
-          placeholder="예: 200 (200만원 = 작년 재산세+종부세 합계)"
+          value={prevYearComprehensiveTaxManwon || ""}
+          onChange={(e) => onPrevYearComprehensiveTaxManwonChange(Number(e.target.value) || 0)}
+          placeholder="예: 100 (100만원 = 작년 종합부동산세+농어촌특별세 합계, 재산세 제외)"
           className={INPUT_CLASS}
         />
         <p className="mt-1 text-xs text-gray-500">
-          입력하시면 지방세법 §122 의 <strong>세부담 상한 150% cap</strong>이 자동 적용됩니다 (올해 세금이 작년의 1.5배를 넘지 않도록 자동 제한). 비워두면 cap 미적용.
+          입력하시면 종합부동산세법 §10 의 <strong>세부담 상한 150% cap</strong>이 자동 적용됩니다 (올해 종부세+농특세가 작년의 1.5배를 넘지 않도록 자동 제한). 재산세는 별도 상한(아래)이 적용되므로 여기엔 <strong>종부세+농특세만</strong> 입력해 주세요. 비워두면 cap 미적용.
+        </p>
+      </div>
+
+      <div>
+        <label htmlFor="prevYearPropertyTaxBaseManwon" className="block text-sm font-medium text-gray-700 mb-1.5">
+          전년도 재산세 과세표준 (만원, 선택)
+        </label>
+        <input
+          id="prevYearPropertyTaxBaseManwon"
+          type="number"
+          inputMode="numeric"
+          autoComplete="off"
+          min={0}
+          value={prevYearPropertyTaxBaseManwon || ""}
+          onChange={(e) => onPrevYearPropertyTaxBaseManwonChange(Number(e.target.value) || 0)}
+          placeholder="예: 30000 (작년 공시가격 × 공정시장가액비율 — 작년 재산세 고지서의 '과세표준' 항목)"
+          className={INPUT_CLASS}
+        />
+        <p className="mt-1 text-xs text-gray-500">
+          입력하시면 지방세법 §110③ 의 <strong>재산세 과세표준상한 5% cap</strong>이 자동 적용됩니다 (올해 재산세 과세표준이 작년의 105%를 넘지 않도록 자동 제한). 작년 재산세 고지서에서 확인 가능. 비워두면 cap 미적용(재산세가 다소 크게 나올 수 있음).
         </p>
       </div>
     </section>

@@ -103,7 +103,7 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 - `ADMIN_EMAIL` — 관리자 이메일
 - `NEXT_PUBLIC_API_URL` — 백엔드 API URL (Named Tunnel: https://api.2u.pe.kr)
 
-### SEO (Vercel 등록 필요, 사용자 후속)
+### SEO (Vercel 등록 완료, 세션 388 `vercel env ls` 실측 확인)
 - `NEXT_PUBLIC_SITE_URL=https://2u.pe.kr`
 - `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` / `NEXT_PUBLIC_NAVER_SITE_VERIFICATION` (서치 콘솔 인증)
 

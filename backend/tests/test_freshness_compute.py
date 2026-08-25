@@ -115,3 +115,40 @@ def test_compute_freshness_complexes_max_count_separated(db):
     assert isinstance(cpx["count"], int)
     assert cpx["count"] == 4  # SQLite 폴백이라 정확
     assert cpx["last_updated"] is None  # last_crawled_at 미설정 → max 는 None
+
+
+def test_compute_freshness_official_price_max_count_separated(db):
+    """세션 385(V050): official_price 도 max/count 분리(_approx_count) 후
+    (max, count) 형태 유지 — V048/V050 이 정확히 같은 패턴을 적용한 5번째 테이블.
+
+    complexes 테스트(위)는 last_crawled_at 을 아무도 안 채워 max 가 항상 None 인
+    사각지대가 있었다(스캔 발견 — Low, confident:false) — 이 테스트는 그 사각지대를
+    메워, NULL 이 섞인 여러 행 중 진짜 최신값을 max 가 정확히 고르는지까지 검증한다.
+    """
+    from datetime import datetime, timedelta, timezone
+    from decimal import Decimal
+
+    from db.models import Complex, ComplexOfficialPrice
+
+    db.add(Complex(complex_no="OP1", complex_name="공시가단지"))
+    db.commit()
+
+    now = datetime(2026, 8, 15, 6, 30, tzinfo=timezone.utc)
+    older = now - timedelta(days=30)
+    db.add_all([
+        ComplexOfficialPrice(
+            complex_no="OP1", stdr_year="2025", prvuse_ar=Decimal("84.99"),
+            price_median=500_000_000, ho_count=10, collected_at=older,
+        ),
+        ComplexOfficialPrice(
+            complex_no="OP1", stdr_year="2026", prvuse_ar=Decimal("84.99"),
+            price_median=550_000_000, ho_count=10, collected_at=now,
+        ),
+    ])
+    db.commit()
+
+    result = compute_freshness(db)
+    op = next(it for it in result["items"] if it["key"] == "official_price")
+    assert isinstance(op["count"], int)
+    assert op["count"] == 2  # SQLite 폴백이라 정확
+    assert op["last_updated"] == now.isoformat()  # NULL 없는 여러 행 중 진짜 최신값 선택

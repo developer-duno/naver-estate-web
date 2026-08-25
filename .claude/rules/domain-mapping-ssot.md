@@ -29,7 +29,7 @@ BE Python dict ↔ FE TypeScript 함수 짝꿍 매핑, SQL `GROUP BY` 의 N→1 
 
 ### 확장 후보 (현재 트리거 표 본행 아님, 미래 작업자 판단 근거)
 
-- `CrawlJob.status` (`backend/db/models.py:163`) ↔ `JOB_STATUS_STYLES` (`frontend/src/lib/admin/job-status-styles.ts:38`) — 세션 223 PR #52 답습 패턴이나 양방향 짝꿍 주석 미박힘. 짝꿍 주석 추가가 본행 승격의 전제.
+- `CrawlJob.status` (`backend/db/models.py:171`) ↔ `JOB_STATUS_STYLES` (`frontend/src/lib/admin/job-status-styles.ts:38`) — 세션 223 PR #52 답습 패턴이나 양방향 짝꿍 주석 미박힘. 짝꿍 주석 추가가 본행 승격의 전제.
 - `brokerage.ts` `TradeType` — FE 단독, BE 짝꿍 없음 (공인중개사법 시행규칙 계산 전용 도메인이라 BE 영향 없음).
 - `mb-house-type.ts` `HOUSE_TYPE_LABELS` — FE 단독, BE serializer 짝꿍 없음 (raw 노출 방지용 라벨만).
 
@@ -116,7 +116,7 @@ floor 버킷 (`backend/db/price_queries.py:128~157`) 도 동일 패턴 + min/max
 - 같은 패턴 적용 기존 함수:
     - `backend/services/upsert.py:16` `_do_upsert()` (dialect 분기 line 24, pg_insert / sqlite_insert 자동 분기)
     - `backend/services/naver_call_counter.py:41` `_record_call()` (dialect 분기 line 41)
-    - `backend/routers/live/search.py:128` `_search_all_types()` (SQLite 순차 실행 분기 주석 시작)
+    - `backend/routers/live/search.py:133` `_search_all_types()` (SQLite 순차 실행 분기 주석 시작)
 
 ### 사건
 

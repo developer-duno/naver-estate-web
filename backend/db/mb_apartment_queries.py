@@ -253,8 +253,8 @@ def get_officetel_schedules(
     완전히 독립된 OfficetelPresaleSchedule 테이블로 이전 — house_type 필터·
     apartments 매칭 게이트가 애초에 불필요해졌다(테이블 자체가 오피스텔 전용).
 
-    region: region_name 필터 (get_rental_schedules 의 region_code 필터와 동일 패턴,
-    단 이 테이블은 컬럼명이 region_name).
+    region: region_name 필터 (get_rental_schedules 와 동일 패턴 — 둘 다 세션384
+    V049 로 region_code→region_name 전환 완료, mb_misc_queries.py:142 짝꿍 참조).
     2026-08-24 세션382 실측으로 구현 — OfficetelPresaleSchedule.region_name
     (SUBSCRPT_AREA_CODE_NM, "경기" 등)과 mibunyang Apartment.region 의 distinct
     값 17개(강원·경기·경남·경북·광주·대구·대전·부산·서울·세종·울산·인천·전남·

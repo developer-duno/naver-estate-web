@@ -151,6 +151,11 @@ def compute_freshness(db: Session) -> dict:
     trade_count = _approx_count(db, "trades", select(func.count(MBTrade.id)))
     cpx_max = db.execute(select(func.max(Complex.last_crawled_at))).scalar()
     cpx_count = _approx_count(db, "complexes", select(func.count(Complex.complex_no)))
+    # V050(세션 385): official_price 도 동일 패턴으로 분리 — max 는 ix_complex_official_prices_collected_at
+    # 인덱스 스캔, count 는 _approx_count 근사. 138,795행(28MB)이라 지금 당장 8초 timeout 위험은
+    # 없었으나(EXPLAIN 33.5ms), 월 1회 갱신 데이터를 10분마다 풀스캔하는 낭비를 V048과 함께 정리.
+    op_max = db.execute(select(func.max(ComplexOfficialPrice.collected_at))).scalar()
+    op_count = _approx_count(db, "complex_official_prices", select(func.count(ComplexOfficialPrice.id)))
     raw: dict[str, tuple] = {
         "complexes": (cpx_max, cpx_count),
         "articles": (art_max, art_count),
@@ -186,9 +191,7 @@ def compute_freshness(db: Session) -> dict:
         "rental_presale": db.execute(
             select(func.max(RentalScheduleOfficial.fetched_at), func.count(RentalScheduleOfficial.id))
         ).one(),
-        "official_price": db.execute(
-            select(func.max(ComplexOfficialPrice.collected_at), func.count(ComplexOfficialPrice.id))
-        ).one(),
+        "official_price": (op_max, op_count),
         # 세션 359: 매물 상세 보강(crawl_details) — "몇 시간이고 0건만 처리해도
         # completed 로 조용히 끝나는" 사각지대 사례. articles 카드는 crawl_articles
         # (매물 목록 수집, 별개 잡) 기준이라 이 잡을 못 잡는다.

@@ -19,7 +19,7 @@ apartment_id 매칭 로직 자체가 사라져 house_manage_no 하나만으로 �
     통합 접수기간 하나뿐이다. 계약기간은 `CNTRCT_CNCLS_BGNDE/ENDDE`, 당첨자발표는
     `PRZWNER_PRESNATN_DE`, 입주예정월은 `MVN_PREARNGE_YM`. `CNSTRCT_ENTRPS_NM`(시공사)
     필드는 응답에 없다(항상 None). `SUBSCRPT_AREA_CODE_NM`(청약 지역명, "경기" 등)은
-    region_name 컬럼에 저장(지역 필터는 아직 미구현 — get_officetel_schedules() 참조).
+    region_name 컬럼에 저장(get_officetel_schedules() 에서 필터에 실사용 — 세션382/384).
   - unit: `HOUSE_TY`/`SUPLY_AR`/특별공급 유형별 필드가 없다. 실제로는 `TP`(주택형),
     `EXCLUSE_AR`(전용면적), `SUPLY_HSHLDCO`(공급세대수, 일반/특별 구분 없는 통합값),
     `SUPLY_AMOUNT`(공급금액), `SUBSCRPT_REQST_AMOUNT`(청약신청금)뿐이다. general_supply/
@@ -145,7 +145,7 @@ def collect_officetel_presale(batch_size: int = 1000, scheduler_job_id: str | No
                 "biz_entity": row.get("BSNS_MBY_NM"),
                 # CNSTRCT_ENTRPS_NM(시공사)은 이 오퍼레이션 응답에 없다 — 항상 None.
                 "constructor": row.get("CNSTRCT_ENTRPS_NM"),
-                # 지역 필터는 아직 미구현(get_officetel_schedules() 참조) — 데이터만 미리 적재.
+                # 지역 필터는 get_officetel_schedules() 에서 실사용 중(세션382/384 구현 완료).
                 "region_name": row.get("SUBSCRPT_AREA_CODE_NM"),
             }
             if existing:

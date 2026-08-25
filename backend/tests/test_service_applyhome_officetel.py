@@ -273,8 +273,9 @@ def test_collect_officetel_presale_stores_unit_supply_fields(db):
 def test_collect_officetel_presale_stores_region_name(db):
     """SUBSCRPT_AREA_CODE_NM(청약 지역명) 이 region_name 컬럼에 저장됨을 확인.
 
-    지역 필터 로직 자체는 아직 미구현(get_officetel_schedules() dead parameter) —
-    데이터 적재만 이번 리뉴얼 범위(2026-08-10).
+    지역 필터 로직은 세션382에서 구현 완료(get_officetel_schedules() 참조) — 본
+    테스트는 여전히 region_name 저장 자체(2026-08-10 리뉴얼 범위)만 검증하는
+    characterization test.
     """
     from crawler.service_applyhome_officetel import collect_officetel_presale
 

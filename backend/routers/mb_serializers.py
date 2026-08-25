@@ -321,8 +321,8 @@ def officetel_schedule_to_dict(s) -> dict:
         "biz_entity": s.biz_entity,
         # 출력 키는 constructor_name — presale_schedule_to_dict 짝꿍 (JS Function 충돌 회피).
         "constructor_name": s.constructor,
-        # SUBSCRPT_AREA_CODE_NM("경기" 등) — 지역 필터는 아직 미구현(dead parameter,
-        # db/mb_apartment_queries.py get_officetel_schedules() 참조), 데이터만 노출.
+        # SUBSCRPT_AREA_CODE_NM("경기" 등) — region_name 필터 구현 완료(세션382/384,
+        # db/mb_apartment_queries.py get_officetel_schedules() 참조).
         "region_name": s.region_name,
         "fetched_at": s.fetched_at.isoformat() if s.fetched_at else None,
         # 오피스텔·민간임대 통합 조회(GET /presale/officetel-rental)에서 kind 로 구분 (이슈 #323).

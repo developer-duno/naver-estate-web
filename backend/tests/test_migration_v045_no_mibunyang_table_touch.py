@@ -99,7 +99,9 @@ def test_v045_officetel_unit_supply_has_real_api_columns(v045_sql):
 
 def test_v045_officetel_presale_schedule_has_region_name(v045_sql):
     """SUBSCRPT_AREA_CODE_NM(청약 지역명) 을 저장할 region_name 컬럼이 있는지 —
-    지역 필터 로직 자체는 미구현(dead parameter), 데이터 적재만 이번 리뉴얼 범위."""
+    V045 시점(당시)엔 지역 필터 로직 미구현이었으나, 세션382에서 구현 완료
+    (get_officetel_schedules() 참조). 본 테스트는 region_name 컬럼 존재만 검사하는
+    마이그레이션 가드로 유지."""
     assert "region_name" in v045_sql
 
 

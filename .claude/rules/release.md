@@ -132,6 +132,7 @@ Startup BAT 시절엔 로그인해야 기동 — infra.md §자동 시작 사건
 | 352~353 (2026-08-09) | 세션 352 가 zombie 해소를 위해 orchestrator 를 **자기 세션 셸에서 python 으로 직접 재기동**(02:55) → 그 세션 창이 닫히자 05:42 orchestrator+uvicorn 트리 동반 급사(무로그·무알림). watchdog 도 같이 죽어 자동복구 0, 다음 세션(353)이 발견할 때까지 backend 다운 방치. 부수 발견 2건 = ① 옛 §3 `Get-Process pythonw` 는 PS 5.1 CommandLine 속성 부재로 애초에 무동작 ② 수동 재기동 시 프로세스명이 python 이라 pythonw 단일 필터도 미스매치 | §3 전면 보강: Get-CimInstance 양이름 필터 + Step 1-b 사멸확인 + schtasks 세션독립 재기동(세션 353 라이브 검증) + 세션 셸 직접 기동 금지 명문화 |
 
 | 363 (2026-08-14) | (사고 규명+구조 전환) Windows Update(KB5120249) 야간 계획 재부팅 → Startup BAT 가 로그인 의존이라 로그인 화면에서 **13시간 backend 다운**(watchdog·스케줄 전체 미기동, 상세 = infra.md §자동 시작 사건). orchestrator 를 nssm 서비스로 전환. 라이브 훈련 1차에서 비관리자 Stop-Process 액세스 거부 실측 → 서비스 DACL 시작/중지 권한 등록 후 훈련 2차 Restart-Service 15초 복구 검증 | §3 현행 절차를 Restart-Service 1줄로 교체, 옛 schtasks 절차는 레거시 폴백 격하. 부팅 자동 기동(로그인 불필요) + orchestrator 급사 60초 자동복구 확보 |
+| 386 (2026-08-26) | (무피해, 절차 결함) PR #425(`crawler/service_applyhome_officetel.py`·`routers/mb_serializers.py` 주석 정정)를 "diff가 주석뿐이라 재시작 불필요"로 그 자리에서 판단 → §5 기존 3가지 면제 사유(FE전용/문서전용/테스트전용) 어디에도 안 맞는데도 재시작 생략. 사후검증에서 AST 비교로 실행 코드 무변경을 사후 확인해 결과는 안전했으나, 판단 당시엔 §5-1이 금지한 "정적분석만으로 단정"과 동일 패턴이었음 | §5 에 4번째 면제 조건(AST 비교로 실행 코드 구조 동일 확인된 텍스트 정정) 명문화 — 눈대중 판단과 기계적 확인을 구분 |
 
 3 세션 연속 backend 재시작 누락 = 글로벌 메모리 (사적) 박제로는 부족 → 본 룰로 git 추적.
 
@@ -142,6 +143,12 @@ Startup BAT 시절엔 로그인해야 기동 — infra.md §자동 시작 사건
 - **FE 만 변경 PR** (frontend/* 만) = backend 가동 무관
 - **md 만 변경 PR** (CLAUDE.md, .claude/*, docs/* 만) = 본 PR 같은 문서 정합 작업 = 가동 무관
 - **테스트 만 추가 PR** (backend/tests/* 만) = 새 import 없으면 가동 무관
+- **`crawler/*`·`routers/*` 등 실행 코드 파일이 포함돼도, diff 전체가 순수 주석/docstring
+  텍스트뿐이고 실행 가능한 코드 구조(함수 정의·SQL 호출·조건문·dict 리터럴 등)가 단 한 글자도
+  안 바뀐 경우** = 가동 무관. **단 이 판정은 "diff를 눈으로 봤더니 주석 같다"는 직감만으로
+  내리면 안 되고, AST(추상 구문 트리) 비교 등 기계적 방법으로 "실행 코드 구조 동일"을
+  실제로 확인해야 한다** — 그렇지 않으면 §5-1이 금지하는 "정적 분석만으로 단정"과 같은
+  실수가 된다 (세션 386 사후검증에서 발견).
 
 ### 5-1. 정적 분석만으로 "재시작 면제" 단정 금지 (세션 257 사고)
 

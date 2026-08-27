@@ -155,3 +155,45 @@ def test_crime_stats_status_empty(client, db):
     assert data["total_scored"] == 0
     assert data["last_updated"] is None
     assert data["grade_dist"] == {}
+
+
+# ── K-apt 관리비 연동 (V051) ──
+
+
+def test_collect_kapt_match_success(client, db):
+    """K-apt 단지 매칭 트리거 — 관리자 성공 + dict 반환값 펼침"""
+    _make_profile(db, "a7", role="admin")
+    with patch("routers.admin.collect._get_collector") as mock_get:
+        mock_get.return_value.return_value = {"matched": 12, "skipped": 3}
+        res = client.post("/api/admin/collect/kapt-match", headers=_auth(_token("a7")))
+    assert res.status_code == 200
+    data = res.json()
+    assert data["collector"] == "kapt-match"
+    assert data["matched"] == 12
+
+
+def test_collect_kapt_costs_exposes_empty_count(client, db):
+    """K-apt 관리비 트리거 — 미공개(empty) 건수가 응답에 드러나야 한다.
+
+    단지당 22콜이라 "수집 0건"이 쿼터 소진인지 전량 미공개인지 화면에서
+    구분돼야 한다(세션 362 backfill-price 선례와 동일 결).
+    """
+    _make_profile(db, "a8", role="admin")
+    with patch("routers.admin.collect._get_collector") as mock_get:
+        mock_get.return_value.return_value = {
+            "collected": 0, "failed": 0, "empty": 40, "cost_month": "202605",
+        }
+        res = client.post("/api/admin/collect/kapt-costs", headers=_auth(_token("a8")))
+    assert res.status_code == 200
+    data = res.json()
+    assert data["collector"] == "kapt-costs"
+    assert data["empty"] == 40
+    assert data["cost_month"] == "202605"
+
+
+def test_collect_kapt_names_resolve_to_real_functions(db):
+    """_get_collector 가 실제 수집 함수를 돌려주는지 (Literal 등록 누락 방지)."""
+    from routers.admin.collect import _get_collector
+
+    assert _get_collector("kapt-match").__name__ == "match_kapt_complexes"
+    assert _get_collector("kapt-costs").__name__ == "collect_kapt_costs"

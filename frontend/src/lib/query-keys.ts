@@ -26,6 +26,8 @@ export const queryKeys = {
   pyeongDetails: (no: string) => ["pyeongDetails", no] as const,
   officialPrices: (no: string) => ["officialPrices", no] as const,
   complexSubway: (no: string) => ["complexSubway", no] as const,
+  /** 단지 공동주택 관리비 (K-apt) — 데이터 없는 단지는 null 캐시 */
+  complexKapt: (no: string) => ["complexKapt", no] as const,
   priceStats: (no: string) => ["priceStats", no] as const,
   priceHistory: (no: string, tradeType?: string, areaNo?: string) =>
     ["priceHistory", no, tradeType, areaNo] as const,

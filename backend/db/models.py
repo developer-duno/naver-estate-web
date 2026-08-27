@@ -466,3 +466,63 @@ class SubwayStation(Base):
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
     data_date: Mapped[date | None] = mapped_column(Date)
+
+
+class KaptComplexMap(Base):
+    """우리 단지 ↔ K-apt 단지 매칭 (getTotalAptList4) — V051.
+
+    complex_no 가 PK 라 단지당 매칭은 1건 뿐이다(재매칭 시 upsert 로 덮어씀).
+    저장되는 것은 **3중 게이트를 통과한 매칭만** — 법정동 일치 + 이름 유사도
+    + 세대수 근사. 관리비 오표시가 치명적이라 애매하면 저장하지 않는 보수 원칙.
+
+    match_score 는 이름 유사도(difflib ratio 0~1)로, 매칭 근거를 남겨 사후
+    감사·임계 조정에 쓴다. corridor_type·kapt_household_count 는 매칭 확정 후
+    getAphusBassInfoV5 로 채운다(복도유형은 관리비 수준을 좌우하는 설명 변수).
+    """
+    __tablename__ = "kapt_complex_map"
+    __table_args__ = (
+        Index("ix_kapt_map_code", "kapt_code"),
+    )
+
+    complex_no: Mapped[str] = mapped_column(
+        String(20), ForeignKey("complexes.complex_no"), primary_key=True
+    )
+    kapt_code: Mapped[str] = mapped_column(Text, nullable=False)
+    kapt_name: Mapped[str | None] = mapped_column(Text)
+    match_score: Mapped[float | None] = mapped_column(Float)
+    corridor_type: Mapped[str | None] = mapped_column(Text)
+    kapt_household_count: Mapped[int | None] = mapped_column(Integer)
+    matched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KaptManagementCost(Base):
+    """K-apt 월별 관리비 (공용 V3 17항목 + 개별 V2 5항목) — V051.
+
+    단지 × 조회월(YYYYMM) 1행. 같은 달 재수집 시 최신값으로 덮어쓴다.
+
+    금액 컬럼이 전부 nullable 인 이유: 미공개 단지·미공개 항목이 흔하다.
+    전 항목이 없으면 아예 행을 만들지 않는다(수집기가 skip) — 0원과 미공개를
+    구분하기 위해서다. cost_per_household 는 총액/세대수이며 세대수가 없으면 None.
+
+    breakdown 은 {오퍼레이션명: 금액} 원값으로, 합계가 이상할 때 원인 항목을
+    추적하는 감사 자료다. JSON 타입 사용은 의도 — PG 는 jsonb 로, SQLite(CI)는
+    직렬화로 동작해 dialect 분기 없이 같은 코드가 돈다.
+    """
+    __tablename__ = "kapt_management_costs"
+    __table_args__ = (
+        UniqueConstraint("complex_no", "cost_month", name="kapt_management_costs_key"),
+        Index("ix_kapt_cost_complex", "complex_no", "cost_month"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    complex_no: Mapped[str] = mapped_column(
+        String(20), ForeignKey("complexes.complex_no"), nullable=False
+    )
+    cost_month: Mapped[str] = mapped_column(String(6), nullable=False)
+    common_cost: Mapped[int | None] = mapped_column(BigInteger)
+    individual_cost: Mapped[int | None] = mapped_column(BigInteger)
+    total_cost: Mapped[int | None] = mapped_column(BigInteger)
+    cost_per_household: Mapped[int | None] = mapped_column(Integer)
+    household_count: Mapped[int | None] = mapped_column(Integer)
+    breakdown: Mapped[dict | None] = mapped_column(JSON)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

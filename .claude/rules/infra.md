@@ -166,6 +166,7 @@ Linux 메모리 오버커밋 모델상 "커밋이 물리 한도의 2배"라는 �
 | 어린이집 수집 | 매월 첫째 목 1시 | CPMS cpmsapi030 API (01:00 고정 — 아래 §CPMS 키 공유 참조, 04:30 이후 금지) |
 | 범죄통계 수집 | 분기별 첫째 일 4시 | 경찰청 odcloud API (CSV 폴백) |
 | 단지 상세 backfill | APT/OPST 4시간 interval 매일 / JGC·ABYG·OBYG 주1회 7시 | 매물유형별 독립 job, detail_crawled_at NULL 단지 보강 (APT/OPST 배치 1000 가속 — PR #19 답습, 소수 유형 배치 1000 cron 유지. 2026-05-27 PR 6a 답습 6h→4h 33% 가속) |
+| data.go.kr API 버전 감시 | 일요일 06:40 | 코드가 쓰는 data.go.kr 엔드포인트 8종(실거래가·응급의료·대기질 2종·K-apt 4종)을 serviceKey 만 넣고 최소 호출로 찔러 폐기 감지 → dead 있으면 텔레그램 1건으로 묶어 알림. 판정 = `NO_OPENAPI_SERVICE_ERROR`/returnReasonCode "12" 만 dead, 코드 11(파라미터 부족)·정상응답은 alive, 코드 30(키 미등록)·05(타임아웃)·네트워크 예외는 **degraded(로그만, 알림 0)** — 간헐 오류 오탐 방지. dead 발견은 잡 실패가 아니라 "완료 + 알림"(CrawlJob completed). 네이버 0, data.go.kr 쿼터 8회라 영향 무시, 토글 API_VERSION_MONITOR_ENABLED(기본 true). ⚠ **새 data.go.kr API 도입 시 `crawler/api_version_monitor.py` PROBE_REGISTRY 에 1줄 추가 의무** — 빠지면 그 API 만 감시 사각지대 (2026-08-19 사고: data.go.kr 이 인증 예외 처리 종료로 구버전 엔드포인트(AptListService3·AptBasisInfoServiceV4 등)를 공지 체감 없이 폐기 → 이 프로젝트·mibunyang 동시 수집기 장애) |
 | 크롤링 모니터 | 10분 interval | crawl_jobs 정합성 점검 후 텔레그램 알림 (운영 토글 MONITOR_ENABLED, 2026-05-25 세션 229 30→10→20 답습 후 현 .env MONITOR_INTERVAL_MIN=10 운영. 기본 _STALE_HOURS=1h — 정상적으로 오래 도는 잡은 _STALE_HOURS_BY_TYPE 예외 의무: public_trade_data 3h(세션 266)·official_price 16h(세션 369 오탐 sweep 실사고 — 새 장시간 잡 추가 시 이 표 동반 등록). _FAILED_WINDOW_HOURS=24. 전부 monitor.py 상단 상수, 인터벌 격하 무관) |
 
 ⚠ **위 표의 "잡 이름"은 스케줄러 등록 id(`scheduler.py`의 `id="..."`)이고, DB

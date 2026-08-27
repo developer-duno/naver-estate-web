@@ -172,6 +172,27 @@ FRESHNESS_ITEMS: list[dict] = [
         "new_rows_kind": None,
         "new_rows_expected": False,
     },
+    {
+        # V051: K-apt 단지 매칭 — 매월 21일 1회. K-apt 목록 API 가 조용히 빈
+        # 응답을 주면 매칭이 0건이 되는데, 수집기 자체 가드가 failed 로 알리더라도
+        # "몇 달째 재매칭이 안 돌고 있다"는 정지 상태는 이 신선도 축이 잡는다.
+        "key": "kapt_match",
+        "label": "K-apt 단지 매칭",
+        "expected_interval_seconds": 86400 * 30,
+        "scheduler_job_id": "kapt_match",
+        "new_rows_kind": None,  # CrawlJob.completed_at 경유(childcare 패턴)
+        "new_rows_expected": False,
+    },
+    {
+        # V051: K-apt 관리비 수집 — 매일. 관리비 API 는 오퍼레이션당 쿼터가 작아
+        # 소진 시 전 단지 미공개처럼 보이며 조용히 0건 completed 로 끝날 수 있다.
+        "key": "kapt_costs",
+        "label": "K-apt 관리비",
+        "expected_interval_seconds": 86400 * 3,  # 매일 잡의 3배(3일)
+        "scheduler_job_id": "kapt_costs",
+        "new_rows_kind": None,
+        "new_rows_expected": False,
+    },
 ]
 
 # 세션 359: CI가 "새 스케줄러 잡을 추가하면서 감시 등록을 깜빡하는" 실수를
@@ -185,4 +206,5 @@ MONITORING_EXEMPT: dict[str, str] = {
     "billing_charge": "텔레그램+이메일+monitor.py+CrawlJob 4중 안전망 기존 보유",
     "vacuum_maintenance": "새 데이터 유입 개념이 없는 유지보수 잡 — 신선도 카드 틀 자체가 안 맞음",
     "crawler_monitor": "감시자 자기 자신",
+    "api_version_probe": "외부 API 생사만 확인하고 DB 에 데이터를 안 쌓는 감시 잡 — 신선도 카드 틀이 안 맞음(폐기 감지는 자체 텔레그램 알림이 커버)",
 }

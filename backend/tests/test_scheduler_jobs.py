@@ -226,6 +226,9 @@ def test_meta_fallback_matches_describe_trigger_for_active_jobs():
         patch.object(sched_mod, "COMPLEX_DETAIL_ENABLED", True),
         patch.object(sched_mod, "COMPLEX_METRIC_ENABLED", True),
         patch.object(sched_mod, "MONITOR_ENABLED", True),
+        # V051: KAPT_ENABLED 는 기본 false(첫 배포는 꺼서 나감) — 여기서 켜주지 않으면
+        # 잡이 등록되지 않아 "META 만 있고 잡 없음" drift 로 잡힌다.
+        patch.object(sched_mod, "KAPT_ENABLED", True),
         patch.multiple(sched_mod, **_OPERATIONAL_INTERVALS),
     ):
         scheduler = sched_mod.create_scheduler()

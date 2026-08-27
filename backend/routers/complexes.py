@@ -8,7 +8,12 @@ from sqlalchemy.orm import Session
 from crawler.utils import haversine_km
 from db import queries
 from deps import get_approved_user, get_db
-from routers.serializers import article_to_dict, build_filter_dict, complex_to_dict
+from routers.serializers import (
+    article_to_dict,
+    build_filter_dict,
+    complex_to_dict,
+    kapt_cost_to_dict,
+)
 from services.cache import TTLCache, get_cache
 
 router = APIRouter()
@@ -434,4 +439,34 @@ def get_nearby_subway(
         ]
     }
     _subway_cache.set(cache_key, result)
+    return result
+
+
+# K-apt 관리비 캐시 — 월 1회 갱신이라 오래 캐시 가능 (12시간, official-prices 답습)
+_kapt_cost_cache = TTLCache(ttl=43200, max_size=1000)
+
+
+@router.get("/{complex_no}/kapt")
+def get_kapt_management_cost(
+    complex_no: str,
+    db: Session = Depends(get_db),
+):
+    """단지 월 관리비 (K-apt 공동주택관리정보시스템) — 최신 수집월 1건.
+
+    매칭이 없거나(K-apt 미등록·게이트 탈락) 관리비가 아직 없으면 404 —
+    "관리비 0원"과 "데이터 없음"을 화면이 구분할 수 있어야 하므로 빈 값을
+    200 으로 내리지 않는다.
+    """
+    cache_key = f"kapt:{complex_no}"
+    cached = _kapt_cost_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    row = queries.get_latest_kapt_cost(db, complex_no)
+    if row is None:
+        raise HTTPException(status_code=404, detail="관리비 정보가 없습니다")
+
+    cost, mapping = row
+    result = kapt_cost_to_dict(cost, mapping)
+    _kapt_cost_cache.set(cache_key, result)
     return result

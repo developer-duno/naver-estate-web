@@ -6,14 +6,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 import ComplexBasicInfo from "../ComplexBasicInfo";
-import type { Complex, OfficialPriceResponse, SubwayNearResponse } from "@/types";
+import type { Complex, KaptInfo, OfficialPriceResponse, SubwayNearResponse } from "@/types";
 
 const mockGetOfficialPrices = vi.fn<(no: string) => Promise<OfficialPriceResponse>>();
 const mockGetComplexSubway = vi.fn<(no: string) => Promise<SubwayNearResponse>>();
+const mockGetComplexKapt = vi.fn<(no: string) => Promise<KaptInfo | null>>();
 
 vi.mock("@/lib/api/complex", () => ({
   getOfficialPrices: (no: string) => mockGetOfficialPrices(no),
   getComplexSubway: (no: string) => mockGetComplexSubway(no),
+  getComplexKapt: (no: string) => mockGetComplexKapt(no),
 }));
 
 /** 테스트용 단지 팩토리 */
@@ -33,10 +35,31 @@ const EMPTY_PRICES: OfficialPriceResponse = { complex_no: "C001", year: null, it
 /** 지하철역 없음 (기본) — 지하철 행이 다른 describe 를 오염시키지 않게 매 테스트 초기화 */
 const EMPTY_SUBWAY: SubwayNearResponse = { stations: [] };
 
-// 모든 describe 공통 — 지하철 쿼리는 기본적으로 빈 배열(행 미표시)로 둔다.
+// 관리비 없음 (기본) — K-apt 미매칭 단지는 래퍼가 404 를 null 로 변환한다(다수 케이스).
+const NO_KAPT = null;
+
+/** 테스트용 관리비 팩토리 — 세대당 24만원(240,000원), 2026년 3월분 */
+function makeKapt(overrides: Partial<KaptInfo> = {}): KaptInfo {
+  return {
+    kapt_code: "A13487001",
+    kapt_name: "래미안테스트",
+    corridor_type: "계단식",
+    cost_month: "202603",
+    common_cost: 80_000_000,
+    individual_cost: 40_000_000,
+    total_cost: 120_000_000,
+    cost_per_household: 240_000,
+    household_count: 500,
+    ...overrides,
+  };
+}
+
+// 모든 describe 공통 — 지하철·관리비 쿼리는 기본적으로 "데이터 없음"(행 미표시)으로 둔다.
 beforeEach(() => {
   mockGetComplexSubway.mockReset();
   mockGetComplexSubway.mockResolvedValue(EMPTY_SUBWAY);
+  mockGetComplexKapt.mockReset();
+  mockGetComplexKapt.mockResolvedValue(NO_KAPT);
 });
 
 function renderInfo(cpx: Complex) {
@@ -225,5 +248,82 @@ describe("ComplexBasicInfo — 인쇄 경로 회귀 (PR-D)", () => {
     expect(screen.getByText("공시가격(대표평형 중위, 2026년)")).toBeInTheDocument();
     expect(screen.getByText("공시가율(공시가격÷주변시세)")).toBeInTheDocument();
     expect(screen.getByText("70.0%")).toBeInTheDocument();
+  });
+});
+
+describe("ComplexBasicInfo — 월 관리비 · 복도유형 (K-apt)", () => {
+  beforeEach(() => {
+    mockGetOfficialPrices.mockReset();
+    mockGetOfficialPrices.mockResolvedValue(EMPTY_PRICES);
+  });
+
+  it("데이터 있으면 '세대당 약 N만원 (YYYY년 M월분)' + 총액 보조텍스트 + 복도유형 표시", async () => {
+    mockGetComplexKapt.mockResolvedValue(makeKapt());
+
+    renderInfo(makeComplex());
+
+    expect(await screen.findByText("월 관리비")).toBeInTheDocument();
+    expect(screen.getByText("세대당 약 24만원 (2026년 3월분)")).toBeInTheDocument();
+    // 총액은 보조 텍스트로 (원 단위 → 만원 환산)
+    expect(
+      screen.getByText("총 12,000만원 · 공용 8,000만원 · 개별 4,000만원"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("복도유형")).toBeInTheDocument();
+    expect(screen.getByText("계단식")).toBeInTheDocument();
+  });
+
+  it("데이터 없음(404 → null) → 두 행 모두 미표시, 기존 행은 정상 렌더", async () => {
+    mockGetComplexKapt.mockResolvedValue(null);
+
+    renderInfo(makeComplex());
+
+    expect(await screen.findByText("주소")).toBeInTheDocument();
+    expect(screen.queryByText("월 관리비")).not.toBeInTheDocument();
+    expect(screen.queryByText("복도유형")).not.toBeInTheDocument();
+  });
+
+  it("조회 실패(5xx 에러) → 두 행 미표시, 기존 행은 정상 렌더 (크래시 없음)", async () => {
+    mockGetComplexKapt.mockRejectedValue(new Error("500"));
+
+    renderInfo(makeComplex());
+
+    expect(await screen.findByText("주소")).toBeInTheDocument();
+    expect(screen.queryByText("월 관리비")).not.toBeInTheDocument();
+    expect(screen.queryByText("복도유형")).not.toBeInTheDocument();
+  });
+
+  it("cost_per_household 만 null 이면 관리비 행만 생략, 복도유형은 표시", async () => {
+    mockGetComplexKapt.mockResolvedValue(makeKapt({ cost_per_household: null }));
+
+    renderInfo(makeComplex());
+
+    expect(await screen.findByText("복도유형")).toBeInTheDocument();
+    expect(screen.queryByText("월 관리비")).not.toBeInTheDocument();
+  });
+
+  it("corridor_type 이 null 이면 복도유형 행만 생략, 관리비는 표시", async () => {
+    mockGetComplexKapt.mockResolvedValue(makeKapt({ corridor_type: null }));
+
+    renderInfo(makeComplex());
+
+    expect(await screen.findByText("월 관리비")).toBeInTheDocument();
+    expect(screen.queryByText("복도유형")).not.toBeInTheDocument();
+  });
+
+  it("금액 포맷 — 10만원 미만은 소수 1자리, 총액 항목이 없으면 보조텍스트 생략", async () => {
+    mockGetComplexKapt.mockResolvedValue(
+      makeKapt({
+        cost_per_household: 85_000,
+        cost_month: "202512",
+        total_cost: null,
+        common_cost: null,
+        individual_cost: null,
+      }),
+    );
+
+    renderInfo(makeComplex());
+
+    expect(await screen.findByText("세대당 약 8.5만원 (2025년 12월분)")).toBeInTheDocument();
+    expect(screen.queryByText(/^총 /)).not.toBeInTheDocument();
   });
 });

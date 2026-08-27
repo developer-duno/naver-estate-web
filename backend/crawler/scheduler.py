@@ -32,6 +32,11 @@ POPULAR_CRAWL_BATCH_SIZE = int(os.getenv("POPULAR_CRAWL_BATCH_SIZE", "50"))
 PUBLIC_DATA_ENABLED = os.getenv("PUBLIC_DATA_ENABLED", "false").lower() == "true"
 PUBLIC_DATA_BATCH_SIZE = int(os.getenv("PUBLIC_DATA_BATCH_SIZE", "300"))
 OFFICIAL_PRICE_ENABLED = os.getenv("OFFICIAL_PRICE_ENABLED", "false").lower() == "true"
+# K-apt 관리비 연동 (V051) — 기본 false. 첫 배포는 꺼서 나가고, 관리자 수동 트리거로
+# 매칭·수집을 실측 검증한 뒤 켠다. ⚠ 관리비 API 는 개별/공용 오퍼레이션당 쿼터가
+# 작아(개발계정 일 1,000 추정) 단지 하나에 22콜이 나간다 — 배치 크기가 곧 쿼터 소모량.
+KAPT_ENABLED = os.getenv("KAPT_ENABLED", "false").lower() == "true"
+KAPT_COST_BATCH_SIZE = int(os.getenv("KAPT_COST_BATCH_SIZE", "500"))
 # 시세 이력 부족 단지 소급 수집 (국토교통부 실거래가). PUBLIC_DATA_ENABLED 와 같은
 # data.go.kr 키 사용 — 일일 쿼터(10,000회, mibunyang 공유) 보호 위해 배치 작게.
 PUBLIC_PRICE_BACKFILL_BATCH_SIZE = int(os.getenv("PUBLIC_PRICE_BACKFILL_BATCH_SIZE", "30"))
@@ -54,6 +59,9 @@ MONITOR_ENABLED = os.getenv("MONITOR_ENABLED", "false").lower() == "true"
 MONITOR_INTERVAL_MIN = int(os.getenv("MONITOR_INTERVAL_MIN", "30"))
 # 정기 VACUUM (ANALYZE) — articles/trades visibility map 재악화 차단 (세션 260)
 VACUUM_MAINTENANCE_ENABLED = os.getenv("VACUUM_MAINTENANCE_ENABLED", "true").lower() == "true"
+# data.go.kr API 버전 격변 감시 — 폐기된 엔드포인트 조기 경보 (2026-08-19 사고 재발방지).
+# 기본 활성: 감시 자체가 비용 0 에 가깝고(주 1회 8회 호출), 꺼두면 사고가 그대로 재현된다.
+API_VERSION_MONITOR_ENABLED = os.getenv("API_VERSION_MONITOR_ENABLED", "true").lower() == "true"
 
 # 모듈 레벨 스케줄러 참조 — admin API에서 다음 실행 시각 조회용
 _scheduler: BackgroundScheduler | None = None
@@ -344,6 +352,36 @@ def create_scheduler() -> BackgroundScheduler:
         )
         logger.info("공동주택 공시가격 수집 활성화: 매월 15일 06:30")
 
+    # F-3. K-apt 관리비 연동 (V051) — 매칭 월 1회 + 관리비 매일.
+    #      06:10/06:20 = 매월15일 06:30 official_price·일요일 06:40 api_version_probe 와
+    #      겹치지 않는 빈 슬롯. 네이버 API 0건이라 IP 차단 무관(data.go.kr 전용).
+    if KAPT_ENABLED:
+        from crawler.service_kapt import collect_kapt_costs, match_kapt_complexes
+
+        scheduler.add_job(
+            match_kapt_complexes,
+            "cron",
+            day="21", hour=6, minute=10,
+            kwargs={"scheduler_job_id": "kapt_match"},
+            id="kapt_match", name="K-apt 단지 매칭",
+            max_instances=1, misfire_grace_time=3600,
+        )
+        scheduler.add_job(
+            collect_kapt_costs,
+            "cron",
+            hour=6, minute=20,
+            kwargs={
+                "batch_size": KAPT_COST_BATCH_SIZE,
+                "scheduler_job_id": "kapt_costs",
+            },
+            id="kapt_costs", name="K-apt 관리비 수집",
+            max_instances=1, misfire_grace_time=3600,
+        )
+        logger.info(
+            "K-apt 관리비 연동 활성화: 매칭 매월 21일 06:10 / 관리비 매일 06:20 (배치 %d)",
+            KAPT_COST_BATCH_SIZE,
+        )
+
     # G. 에어코리아 대기질 수집 — 매일 새벽 2시
     if AIR_QUALITY_ENABLED:
         from crawler.env_service import collect_air_quality
@@ -490,6 +528,29 @@ def create_scheduler() -> BackgroundScheduler:
             misfire_grace_time=3600,
         )
         logger.info("정기 VACUUM 유지보수 활성화: 매일 03:50 (articles/trades)")
+
+    # data.go.kr API 버전 격변 감시 — 주 1회 일요일 06:40.
+    # 2026-08-19 사고: data.go.kr 이 구버전 엔드포인트를 공지 체감 없이 폐기해
+    # 수집기들이 조용히 죽었다. 엔드포인트 8개를 최소 호출로 찔러 폐기(코드 12)를
+    # 조기 감지한다. 06:40 = 03:00 일요일 discover_regions·매월15일 06:30
+    # official_price 와 겹치지 않는 빈 슬롯. 네이버 API 0건이라 IP 차단 무관이고,
+    # 호출 8건이라 data.go.kr 일일 쿼터(mibunyang 공유) 영향도 무시 가능.
+    if API_VERSION_MONITOR_ENABLED:
+        from crawler.api_version_monitor import probe_api_versions
+
+        scheduler.add_job(
+            probe_api_versions,
+            "cron",
+            day_of_week="sun",
+            hour=6,
+            minute=40,
+            kwargs={"scheduler_job_id": "api_version_probe"},
+            id="api_version_probe",
+            name="data.go.kr API 버전 감시",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        logger.info("data.go.kr API 버전 감시 활성화: 주 1회 일요일 06:40")
 
     global _scheduler
     _scheduler = scheduler

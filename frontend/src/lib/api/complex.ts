@@ -2,9 +2,9 @@
  * 단지 검색/조회 API
  */
 
-import type { Complex, OfficialPriceResponse, SubwayNearResponse } from "@/types";
+import type { Complex, KaptInfo, OfficialPriceResponse, SubwayNearResponse } from "@/types";
 import * as direct from "@/lib/api-direct";
-import { fetchApi, isBackendAvailable } from "./core";
+import { ApiError, fetchApi, isBackendAvailable } from "./core";
 
 /** 검색 응답 — BE 가 네이버 쿨다운으로 DB 폴백 시 source/notice 포함 */
 export interface SearchResponse {
@@ -81,6 +81,29 @@ export async function getOfficialPrices(complexNo: string): Promise<OfficialPric
 export async function getComplexSubway(complexNo: string): Promise<SubwayNearResponse> {
   if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
   return fetchApi<SubwayNearResponse>(`/api/complexes/${encodeURIComponent(complexNo)}/subway`);
+}
+
+/**
+ * 단지 공동주택 관리비 (GET /api/complexes/{no}/kapt — K-apt 의무관리단지)
+ *
+ * ⚠ 404 는 "데이터 없음"의 **확정 답변**이라 null 로 변환한다. 전국 6.4만 단지 중 K-apt
+ * 의무관리단지는 ~1.5만뿐이라 404 가 다수의 정상 케이스이고, 이를 에러로 전파하면 관리비가
+ * 원래 없는 대부분의 단지에서 React Query 가 isError 로 뜬다(정상 상태를 장애로 표시).
+ *
+ * ⚠ 그 외 상태(5xx·429 등)는 절대 삼키지 않고 그대로 throw — 삼키면 "서버 장애"가
+ * "관리비 없음"으로 위장돼 React Query isError 가 prod 에서 영영 발화하지 않는다
+ * (error-propagation.md §1·§2, 회귀 가드: lib/__tests__/complex-kapt-error.test.ts).
+ * 공시가격·지하철과 마찬가지로 direct(Supabase) 폴백 경로는 없다.
+ */
+export async function getComplexKapt(complexNo: string): Promise<KaptInfo | null> {
+  if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
+  try {
+    return await fetchApi<KaptInfo>(`/api/complexes/${encodeURIComponent(complexNo)}/kapt`);
+  } catch (err) {
+    // 404 만 "데이터 없음"으로 흡수. 나머지는 원본 에러 그대로 전파(타입 보존).
+    if (err instanceof ApiError && err.statusCode === 404) return null;
+    throw err;
+  }
 }
 
 /**

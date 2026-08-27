@@ -5,7 +5,14 @@ from typing import Optional
 from sqlalchemy import and_, func, select, text
 from sqlalchemy.orm import Session
 
-from db.models import Article, ArticlePriceHistory, ComplexOfficialPrice, ComplexPriceHistory
+from db.models import (
+    Article,
+    ArticlePriceHistory,
+    ComplexOfficialPrice,
+    ComplexPriceHistory,
+    KaptComplexMap,
+    KaptManagementCost,
+)
 
 
 def get_article_price_history(
@@ -228,3 +235,23 @@ def get_complex_official_prices(db: Session, complex_no: str) -> list[ComplexOff
         .where(ComplexOfficialPrice.complex_no == complex_no)
     )
     return list(db.execute(stmt).scalars().all())
+
+
+def get_latest_kapt_cost(db: Session, complex_no: str):
+    """단지의 최신월 K-apt 관리비 1건 + 매칭정보. 없으면 None.
+
+    반환은 (KaptManagementCost, KaptComplexMap) 튜플 — 화면이 관리비 금액과 함께
+    "어느 K-apt 단지에 붙은 값인지"(kapt_name·복도유형)를 같이 보여줘야 해서
+    한 번의 조인으로 가져온다.
+
+    매칭은 있는데 관리비가 아직 없을 수 있으므로(수집 대기·미공개 단지) INNER
+    JOIN 이며, 그 경우 None 이 되어 라우터가 404 를 준다.
+    """
+    stmt = (
+        select(KaptManagementCost, KaptComplexMap)
+        .join(KaptComplexMap, KaptComplexMap.complex_no == KaptManagementCost.complex_no)
+        .where(KaptManagementCost.complex_no == complex_no)
+        .order_by(KaptManagementCost.cost_month.desc())
+        .limit(1)
+    )
+    return db.execute(stmt).first()

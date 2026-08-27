@@ -69,6 +69,14 @@ class KaptAPI(BasePublicDataAPI):
     """K-apt 단지·관리비 API — BasePublicDataAPI 상속 (쿼터·throttle·재시도 공유)."""
 
     _api_name = "kapt"
+    # 독립 쿼터 버킷 — data.go.kr 한도는 **활용신청(API)별**이라 전역 9,000 합산이 kapt 에겐
+    # 틀린 모델이다. 전역 버킷에 묶으면 관리비 수집(500단지 x 22콜 = 11,000/일)이 9,000 에서
+    # 잘리고, 매월 21일 매칭(목록 2.2만 + 확정분 basis)도 부분 실행되며 다른 수집기 쿼터까지
+    # 잠식한다. 운영계정 실측 한도는 목록·기본정보 각 10만/일 (2026-08-27 활용신청 완료).
+    # 60,000 은 그 10만에 대한 안전 상한일 뿐이고, 실제 일 사용량(1.1만~1.5만)은 배치 크기
+    # (KAPT_COST_BATCH_SIZE)와 throttle 페이싱이 제어한다 — 이 값은 폭주 시 최후 차단선.
+    _quota_name = "kapt"
+    _quota_daily_limit = 60_000
 
     @classmethod
     def _body(cls, url: str, params: dict) -> dict | None:

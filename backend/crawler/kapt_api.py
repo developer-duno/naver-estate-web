@@ -12,10 +12,18 @@ data.go.kr 1613000 계열 3개 서비스를 한 모듈에서 다룬다 (전부 �
 상속해 공유 일일 쿼터 추적·throttle(0.3초)·429 재시도를 그대로 재사용한다 —
 재시도·세션 관리를 새로 만들지 않는다 (`oss-first.md` 답습).
 
-⚠ 쿼터: 목록·기본정보는 운영계정 10만/일이지만, 관리비 V2/V3 는 개발계정
-(오퍼레이션당 일 1,000 추정)이다. 그래서 `collect_kapt_costs` 는 배치를 작게
-가져가고, 기반 클래스의 전역 카운터(mibunyang 과 공유하는 9,000회)에도 함께
-잡힌다 — 한 단지당 22콜이라 배치 크기가 곧 쿼터 소모량임을 유의.
+⚠ 쿼터: 목록·기본정보는 운영계정 10만/일이지만, 관리비 V2/V3 는 아직 **개발계정**
+이고 한도는 **서비스당 5,000/일 (오퍼레이션 합산)** 이다 — 오퍼레이션마다 따로
+1,000 이 아니다(공개 페이지 실측 2026-08-29). 한 단지당 V3 17콜 + V2 5콜이라
+배치 500 이면 V3 만 8,500콜로 한도를 넘긴다 → 운영은 `KAPT_COST_BATCH_SIZE=250`.
+
+⚠ 3상태 구분 (이 모듈의 핵심 계약): 관리비 호출 결과는 반드시
+  (a) 성공 + 데이터 있음   → item dict
+  (b) 성공 + 데이터 없음   → None ("정상 미공개" — 이 달·이 항목은 원래 없다)
+  (c) 호출 실패           → `KaptApiError` 예외 (쿼터 초과·키 오류·점검·파싱 실패)
+셋으로 갈린다. (b)와 (c)를 둘 다 None 으로 뭉개면, 공용(V3)이 통째로 실패하고
+개별(V2)만 성공한 회차에서 "공용관리비 0원" 인 반쪽 총액이 사실처럼 저장되고
+그 달 행이 생겨 다음 달까지 재수집도 안 된다 — 그래서 (c)는 예외로 올린다.
 """
 
 import logging
@@ -85,6 +93,64 @@ _NON_AMOUNT_KEYS = frozenset({
 })
 
 
+# data.go.kr 이 "한도 초과"를 알리는 신호. 에러 응답은 정상 응답과 구조가 완전히
+# 달라서(`{"response":{"header":{"resultCode":...}}}` 가 아니라 `cmmMsgHeader`)
+# XML/JSON 양쪽으로 오며, JSON 을 요청해도 XML 로 오는 엔드포인트가 있다.
+# 코드와 문자열 어느 쪽으로 와도 잡는다 — api_version_monitor 의 실측 픽스처
+# (tests/test_api_version_monitor.py BODY_DEGRADED_* 2026-08-19 사고 당시 원문) 답습.
+QUOTA_REASON_CODE = "22"
+QUOTA_ERROR_TOKEN = "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR"
+
+
+class KaptApiError(RuntimeError):
+    """K-apt API **호출 실패** — "데이터 없음"과 구분되는 (c) 상태.
+
+    쿼터 초과·키 오류·서비스 점검·HTTP 실패·파싱 실패가 전부 여기로 온다.
+    호출자는 이 예외를 받으면 그 단지를 **저장하지 않고** 실패로 계수해야 한다
+    (부분 breakdown 저장 금지 — 모듈 docstring §3상태 구분).
+
+    Attributes:
+        code: data.go.kr 사유 코드 문자열 (알 수 없으면 None).
+        op:   실패한 오퍼레이션 이름 (진단용).
+        is_quota: 일일 한도 초과(22) 여부 — True 면 호출자가 배치를 즉시 중단한다.
+    """
+
+    def __init__(self, message: str, code: str | None = None,
+                 op: str | None = None, is_quota: bool = False):
+        super().__init__(message)
+        self.code = code
+        self.op = op
+        self.is_quota = is_quota
+
+
+def _looks_like_quota_exceeded(payload) -> bool:
+    """응답(dict 또는 문자열)이 '일일 한도 초과' 신호를 담고 있나.
+
+    문자열화해서 토큰·코드를 찾는다 — 포맷(XML/JSON)·중첩 위치가 응답마다 달라
+    구조 파싱은 오히려 놓치기 쉽다(api_version_monitor `_extract_reason_code` 와 같은 결).
+    """
+    if payload is None:
+        return False
+    text = payload if isinstance(payload, str) else str(payload)
+    if QUOTA_ERROR_TOKEN in text:
+        return True
+    # returnReasonCode / resultCode 어느 쪽에 22 가 실려도 잡는다.
+    for token in ("returnReasonCode", "resultCode"):
+        idx = text.find(token)
+        while idx >= 0:
+            tail = text[idx + len(token): idx + len(token) + 40]
+            digits = ""
+            for ch in tail:
+                if ch.isdigit():
+                    digits += ch
+                elif digits:
+                    break
+            if digits and digits.lstrip("0") == QUOTA_REASON_CODE:
+                return True
+            idx = text.find(token, idx + 1)
+    return False
+
+
 class KaptAPI(BasePublicDataAPI):
     """K-apt 단지·관리비 API — BasePublicDataAPI 상속 (쿼터·throttle·재시도 공유)."""
 
@@ -99,17 +165,34 @@ class KaptAPI(BasePublicDataAPI):
     _quota_daily_limit = 60_000
 
     @classmethod
-    def _body(cls, url: str, params: dict) -> dict | None:
-        """공통 호출 → response.body 반환. 실패·비정상 응답은 None.
+    def _body_or_raise(cls, url: str, params: dict, op: str | None = None) -> dict | None:
+        """공통 호출 → response.body. **호출 실패는 `KaptApiError` 로 올린다.**
 
-        `call_api` 는 키 미설정·쿼터초과·전체 재시도 실패 시 None 을 준다.
-        정상 응답이라도 resultCode 가 '00' 이 아니면(서비스 점검·키 오류 등)
-        본문을 신뢰하지 않고 None 으로 떨어뜨린다 — 호출자가 "데이터 없음"과
-        "호출 실패"를 구분하지 못하면 silent failure 가 되기 때문.
+        반환값이 None 인 경우는 오직 (b) "성공했는데 body 가 비어있음" 하나뿐이다.
+        나머지는 전부 예외 — 호출자가 (b)와 (c)를 구분할 수 있어야 반쪽 저장을 막는다.
+
+        `call_api` 가 None 을 주는 경우는 전부 (c)다:
+          · 키 미설정 · 버킷 일일 한도 도달(우리 쪽 카운터) · HTTP 실패 재시도 소진
+          · 에러 응답이 XML(`cmmMsgHeader`)이라 `resp.json()` 이 터진 경우
+        마지막 항목이 중요하다 — data.go.kr 은 `_type=json` 을 줘도 에러는 XML 로
+        주는 엔드포인트가 있어, **쿼터 초과가 "그냥 None"으로 도착**한다. 그래서
+        None 을 "데이터 없음"으로 해석하면 절대 안 된다.
         """
         data = cls.call_api(url, params)
         if data is None:
-            return None
+            # call_api 는 실패 사유를 안 돌려준다(공유 기반 클래스라 시그니처 불변).
+            # 코드 미상의 실패로 올리고, 쿼터 여부는 아래 정상-구조 경로에서 판정한다.
+            raise KaptApiError(
+                f"호출 실패 — 응답 없음 (op={op or url})", code=None, op=op
+            )
+
+        # 에러 응답은 `{"response": ...}` 구조가 아니라 `cmmMsgHeader` 로 온다.
+        if _looks_like_quota_exceeded(data):
+            raise KaptApiError(
+                f"일일 한도 초과(22) — op={op or url}",
+                code=QUOTA_REASON_CODE, op=op, is_quota=True,
+            )
+
         try:
             response = data["response"]
             header = response.get("header", {})
@@ -118,12 +201,37 @@ class KaptAPI(BasePublicDataAPI):
                 logger.warning(
                     "[kapt] 비정상 resultCode=%s msg=%s", code, header.get("resultMsg")
                 )
-                return None
+                # ⚠ is_quota 는 여기서 다시 보지 않는다 — 한도 초과(22)는 어느 포맷으로
+                # 오든 위 `_looks_like_quota_exceeded` 가 먼저 잡아 이 줄에 닿지 않는다
+                # (dict 를 통째로 문자열화해 보므로 resultCode 자리의 22 도 포함).
+                # 여기서 한 번 더 판정하면 영원히 실행되지 않는 분기가 생겨,
+                # 테스트로 검증할 수 없는 죽은 코드가 된다.
+                raise KaptApiError(
+                    f"비정상 resultCode={code} — op={op or url}",
+                    code=str(code) if code is not None else None, op=op,
+                )
             body = response.get("body")
-        except (KeyError, TypeError, AttributeError):
-            logger.warning("[kapt] 예상과 다른 응답 구조 — 건너뜀")
-            return None
+        except (KeyError, TypeError, AttributeError) as exc:
+            logger.warning("[kapt] 예상과 다른 응답 구조 — op=%s", op or url)
+            raise KaptApiError(
+                f"예상과 다른 응답 구조 — op={op or url}", code=None, op=op
+            ) from exc
         return body if isinstance(body, dict) else None
+
+    @classmethod
+    def _body(cls, url: str, params: dict) -> dict | None:
+        """`_body_or_raise` 의 비-예외 래퍼 — 실패도 None.
+
+        단지 목록·기본정보 호출 전용이다. 이 둘은 실패해도 "그 단지를 이번 회차에
+        못 붙인다" 로 끝나고(다음 달 매칭이 다시 시도), 관리비처럼 **틀린 값을
+        저장할 위험이 없어** 기존 None 계약을 유지한다. 관리비 경로는 반드시
+        `_body_or_raise` 를 쓴다.
+        """
+        try:
+            return cls._body_or_raise(url, params)
+        except KaptApiError as exc:
+            logger.warning("[kapt] 호출 실패 — %s", exc)
+            return None
 
 
 def fetch_apt_list_page(page: int, num_of_rows: int = 1000) -> tuple[list[dict], int]:
@@ -152,9 +260,12 @@ def fetch_apt_basis_info(kapt_code: str) -> dict | None:
 
 
 def fetch_cost_item(base_url: str, op: str, kapt_code: str, search_date: str) -> dict | None:
-    """관리비 오퍼레이션 1건 호출 → item dict (없으면 None)."""
-    body = KaptAPI._body(
-        f"{base_url}/{op}", {"kaptCode": kapt_code, "searchDate": search_date}
+    """관리비 오퍼레이션 1건 호출 → item dict.
+
+    (b) 정상 미공개면 None, (c) 호출 실패면 `KaptApiError` — 둘을 절대 뭉개지 않는다.
+    """
+    body = KaptAPI._body_or_raise(
+        f"{base_url}/{op}", {"kaptCode": kapt_code, "searchDate": search_date}, op=op
     )
     if not body:
         return None
@@ -167,23 +278,36 @@ def fetch_common_cost(kapt_code: str, search_date: str) -> dict[str, int]:
 
     "전 항목 없음"(빈 dict)과 "전 항목 0원"을 호출자가 구분할 수 있도록,
     값이 None 인 항목은 아예 제외한다.
+
+    ⚠ 한 op 라도 호출 실패면 `KaptApiError` 를 올린다(부분 dict 반환 금지) —
+    17항목 중 하나만 빠져도 총액이 조용히 줄어들기 때문.
     """
     return _collect_ops(_CMNUSE_URL, COMMON_COST_OPS, kapt_code, search_date, _extract_amount)
 
 
 def fetch_individual_cost(kapt_code: str, search_date: str) -> dict[str, int]:
-    """개별사용료 5항목 — {op: 공용(C)+전용(P) 합계}. 미공개 항목은 키 제외."""
+    """개별사용료 5항목 — {op: 공용(C)+전용(P) 합계}. 미공개 항목은 키 제외.
+
+    `fetch_common_cost` 와 동일하게, 한 op 라도 실패하면 `KaptApiError`.
+    """
     return _collect_ops(
         _INDVDLZ_URL, INDIVIDUAL_COST_OPS, kapt_code, search_date, _extract_paired_amount
     )
 
 
 def _collect_ops(base_url, ops, kapt_code, search_date, extractor) -> dict[str, int]:
+    """op 목록을 순회해 {op: 금액}. 실패는 즉시 전파(부분 결과 반환 금지).
+
+    `fetch_cost_item` 이 `KaptApiError` 를 올리면 그대로 위로 통과시킨다 —
+    여기서 잡아 `continue` 하면 "17항목 중 3개만 성공한 반쪽 dict" 가 만들어지고,
+    그게 곧 이 PR 이 고치는 결함이다. 남은 op 를 더 부르지 않고 즉시 빠져나오므로
+    쿼터가 이미 바닥난 상황에서 헛호출을 쌓지도 않는다.
+    """
     result: dict[str, int] = {}
     for op in ops:
         item = fetch_cost_item(base_url, op, kapt_code, search_date)
         if not item:
-            continue
+            continue  # (b) 정상 미공개 — 이 항목만 건너뛴다
         amount = extractor(item)
         if amount is not None:
             result[op] = amount

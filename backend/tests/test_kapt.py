@@ -563,13 +563,57 @@ def test_kapt_endpoint_404_when_no_mapping(db, client):
     assert client.get("/api/complexes/1001/kapt").status_code == 404
 
 
-def test_kapt_endpoint_404_when_mapped_but_no_cost(db, client):
-    """매칭은 있는데 관리비가 아직 없으면 404 — 빈 값 200 금지."""
+def test_kapt_endpoint_200_when_mapped_but_no_cost(db, client):
+    """매칭만 있으면 200 + 금액 null — 복도유형까지 숨기지 않는다.
+
+    ⚠ 이 테스트는 옛 동작(404)을 정답으로 박제하고 있던 것을 정정한 것이다
+    (testing.md '결함 박제 테스트' 케이스). 복도유형은 매칭 시점에 이미
+    KaptComplexMap 에 저장되는데, 관리비 기준 INNER JOIN 이라 관리비가 없다는
+    이유만으로 함께 404 로 숨겨졌다 — 매칭 1,212건 중 관리비 보유는 19건뿐이라
+    사실상 대부분의 단지가 가진 정보를 못 보여주던 구조였다.
+    """
     _make_complex(db)
-    db.add(KaptComplexMap(complex_no="1001", kapt_code="A10021295"))
+    db.add(KaptComplexMap(
+        complex_no="1001", kapt_code="A10021295",
+        kapt_name="경희궁의아침4단지", corridor_type="계단식",
+    ))
     db.commit()
 
+    res = client.get("/api/complexes/1001/kapt")
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["corridor_type"] == "계단식"
+    assert body["kapt_name"] == "경희궁의아침4단지"
+    # 금액은 전부 null — "0원"과 구분된다(0 이면 숫자로 내려간다)
+    assert body["cost_month"] is None
+    assert body["total_cost"] is None
+    assert body["cost_per_household"] is None
+
+
+def test_kapt_endpoint_404_is_not_cached(db, client):
+    """미매칭 404 를 캐시에 굳히지 않는다 — 매칭되면 즉시 200 이어야 한다.
+
+    지금은 raise 가 cache.set() 앞에 있어 안전하지만, 순서가 바뀌면 "없음"이
+    12시간(TTL) 동안 굳어 그 사이 매칭된 단지가 계속 404 를 받는다. 그 순서
+    의존을 코드 리뷰가 아니라 테스트로 고정한다.
+    """
+    _make_complex(db)
+
     assert client.get("/api/complexes/1001/kapt").status_code == 404
+
+    db.add(KaptComplexMap(
+        complex_no="1001", kapt_code="A10021295", corridor_type="계단식",
+    ))
+    db.add(KaptManagementCost(
+        complex_no="1001", cost_month="202605", total_cost=17_865_432,
+        cost_per_household=148_879, household_count=120,
+    ))
+    db.commit()
+
+    res = client.get("/api/complexes/1001/kapt")
+    assert res.status_code == 200, "404 가 캐시에 굳어 매칭 후에도 없음으로 응답"
+    assert res.json()["total_cost"] == 17_865_432
 
 
 # ─────────────────────────── API 파서 ───────────────────────────
@@ -608,3 +652,314 @@ def test_as_item_list_normalizes_single_and_many():
     assert _as_item_list({"item": [{"kaptCode": "A1"}, {"kaptCode": "A2"}]}) == [
         {"kaptCode": "A1"}, {"kaptCode": "A2"}
     ]
+
+
+# ─────────────── #1 역방향 중복 배정 (우리 단지 N ↔ kapt 후보 1) ───────────────
+
+
+def test_reverse_tie_only_top_scorer_wins(db, monkeypatch):
+    """한 kaptCode 를 우리 단지 여러 개가 노릴 때 최고점 1개만 배정된다.
+
+    ⚠ 기존 동률 테스트(test_gate_name_tie_rejected)는 전부 **정방향**
+    ("우리 단지 1 vs kapt 후보 N")만 본다. pick_best_match 는 그 방향만
+    막으므로, 반대 방향("우리 단지 N vs kapt 후보 1")은 무방어였다 —
+    라이브 실측에서 10그룹·21단지가 같은 kaptCode 에 중복 배정됐고 전부
+    1차/2차 형제 단지였다(남의 단지 관리비를 보여주는 치명적 오매칭).
+
+    fixture 두 축을 일부러 다르게 잡는다(testing.md 세션372 답습):
+    두 단지의 이름 유사도가 **서로 달라야** "상위 1개만 생존"이 검증된다.
+    같은 점수면 아래 동률 테스트가 담당한다.
+    """
+    _make_complex(db, complex_no="7001", name="래미안퍼스티지1", households=120)
+    _make_complex(db, complex_no="7002", name="래미안퍼스티지2차", households=120)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([_kapt(code="AX", name="래미안퍼스티지1")], True),
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", lambda code: None)
+
+    result = match_kapt_complexes()
+
+    rows = db.query(KaptComplexMap).all()
+    assert len(rows) == 1, f"같은 kaptCode 가 {len(rows)}개 단지에 중복 배정됨"
+    assert rows[0].complex_no == "7001", "이름 유사도 최고점 단지가 가져가야 한다"
+    assert result["matched"] == 1
+
+
+def test_reverse_tie_all_rejected_when_scores_equal(db, monkeypatch):
+    """점수가 완전 동률이면 어느 단지인지 알 수 없으므로 전원 탈락.
+
+    pick_best_match 의 정방향 동률 규칙과 대칭 — 오매칭이 미매칭보다
+    훨씬 나쁘다는 보수 원칙을 양방향에 똑같이 적용한다.
+    """
+    _make_complex(db, complex_no="7101", name="래미안퍼스티지", households=120)
+    _make_complex(db, complex_no="7102", name="래미안퍼스티지", households=120)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([_kapt(code="AY", name="래미안퍼스티지")], True),
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", lambda code: None)
+
+    result = match_kapt_complexes()
+
+    assert db.query(KaptComplexMap).count() == 0, "동률인데 한쪽을 찍어 배정함"
+    assert result["matched"] == 0
+
+
+def test_reverse_dedupe_skips_basis_call_for_losers(db, monkeypatch):
+    """탈락한 경쟁 단지에는 basis(getAphusBassInfoV5)를 부르지 않는다.
+
+    2-pass 구조의 부수 효과이자 쿼터 보호 — 후보 전량에 API 를 태우면
+    매월 매칭이 쿼터를 태운다(모듈 docstring 의 설계 의도).
+    """
+    _make_complex(db, complex_no="7201", name="래미안퍼스티지1", households=120)
+    _make_complex(db, complex_no="7202", name="래미안퍼스티지2차", households=120)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([_kapt(code="AZ", name="래미안퍼스티지1")], True),
+    )
+    calls = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_apt_basis_info",
+        lambda code: calls.append(code) or None,
+    )
+
+    match_kapt_complexes()
+
+    assert len(calls) == 1, f"생존자 1개만 basis 를 불러야 하는데 {len(calls)}회 호출"
+
+
+def test_cross_run_stale_mapping_removed(db, monkeypatch):
+    """옛 실행이 다른 단지에 붙여둔 같은 kapt_code 행은 이번 실행이 정리한다.
+
+    complex_no 가 PK 라 upsert 만으로는 "kaptCode X 를 단지 A 가 쥐고 있는데
+    이번엔 단지 B 에 붙는" 상황을 못 막는다 — 두 행이 공존해 두 단지가 같은
+    관리비를 보여준다(라이브에서 실제로 발생한 형태).
+    """
+    _make_complex(db, complex_no="8001", name="옛단지이름", households=120)
+    _make_complex(db, complex_no="8002", name="자이센트럴", households=120)
+    # 옛 실행 잔재 — kaptCode "AC" 를 단지 8001 이 쥐고 있다
+    db.add(KaptComplexMap(complex_no="8001", kapt_code="AC", kapt_name="자이센트럴"))
+    db.commit()
+
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([_kapt(code="AC", name="자이센트럴")], True),
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", lambda code: None)
+
+    match_kapt_complexes()
+
+    rows = db.query(KaptComplexMap).filter(KaptComplexMap.kapt_code == "AC").all()
+    assert len(rows) == 1, f"kapt_code 'AC' 가 {len(rows)}행에 중복 존재"
+    assert rows[0].complex_no == "8002", "이번 실행 배정분이 남아야 한다"
+
+
+# ─────────────── #3 재매칭으로 kapt_code 가 바뀌면 옛 관리비 무효화 ───────────────
+
+
+def test_rematch_to_new_kapt_code_purges_old_costs(db, monkeypatch):
+    """매칭이 다른 kaptCode 로 바뀌면 옛 코드로 모은 관리비를 지운다.
+
+    kapt_management_costs 는 complex_no 로만 조인되므로(price_queries
+    get_latest_kapt_cost), 매칭만 갈아끼우면 **옛 K-apt 단지의 금액이 새 이름과
+    나란히** 표시된다. 재수집될 때까지 틀린 값이 사실처럼 보이는 구간이 생긴다.
+    """
+    _make_complex(db, complex_no="9001", name="자이센트럴", households=120)
+    db.add(KaptComplexMap(complex_no="9001", kapt_code="A_OLD", kapt_name="옛매칭"))
+    db.add(KaptManagementCost(
+        complex_no="9001", cost_month="202604", total_cost=11_111,
+    ))
+    db.commit()
+
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([_kapt(code="A_NEW", name="자이센트럴")], True),
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", lambda code: None)
+
+    match_kapt_complexes()
+
+    assert db.query(KaptComplexMap).one().kapt_code == "A_NEW"
+    assert db.query(KaptManagementCost).count() == 0, (
+        "옛 kaptCode 로 모은 관리비가 새 매칭에 그대로 붙어 있다"
+    )
+
+
+def test_rematch_same_kapt_code_keeps_costs(db, monkeypatch):
+    """매칭이 그대로면(같은 kaptCode 재확인) 관리비는 보존한다 — 과잉 삭제 금지.
+
+    매월 매칭이 도는데 매번 지우면 관리비를 매달 전량 재수집하게 되어
+    쿼터가 터진다(단지당 22콜).
+    """
+    _make_complex(db, complex_no="9002", name="자이센트럴", households=120)
+    db.add(KaptComplexMap(complex_no="9002", kapt_code="A_SAME", kapt_name="자이센트럴"))
+    db.add(KaptManagementCost(
+        complex_no="9002", cost_month="202604", total_cost=22_222,
+    ))
+    db.commit()
+
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([_kapt(code="A_SAME", name="자이센트럴")], True),
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", lambda code: None)
+
+    match_kapt_complexes()
+
+    assert db.query(KaptManagementCost).count() == 1, "매칭 무변경인데 관리비를 지웠다"
+
+
+# ─────────────── #2 관리비 API 전면 장애가 '정상 완료'로 위장 ───────────────
+
+
+def test_collect_costs_all_empty_with_targets_fails_job(db, monkeypatch):
+    """대상 전량이 빈 응답이면(예: API 폐기·키 만료) failed 로 알린다.
+
+    _body 가 None 을 주면 breakdown 이 빈 dict 가 되어 `empty` 로 계수되고
+    failed 는 0 이라 기존 가드(`and failed > 0`)가 발동하지 않았다 →
+    '완료(0건)' 위장. total_items 도 0 이라 freshness 의 헛바퀴 감지
+    (processed==0 AND total>0)까지 동시에 무력화됐다.
+
+    대상을 _ALL_EMPTY_MIN_TARGETS 이상으로 잡는다 — 표본이 그보다 작으면
+    개별 단지의 정상적인 미공개와 구분되지 않아 판정을 보류하도록 설계했고,
+    그 경계는 아래 test_collect_costs_all_empty_small_sample_stays_completed
+    가 따로 지킨다.
+    """
+    for i in range(service_kapt._ALL_EMPTY_MIN_TARGETS):
+        _make_complex(db, complex_no=f"41{i:02d}")
+        _seed_mapping(db, complex_no=f"41{i:02d}", kapt_code=f"AE{i:02d}")
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", lambda code, month: {})
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert result["error"] == "all_empty"
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "failed"
+    assert "빈 응답" in (job.error_message or "")
+
+
+def test_collect_costs_partial_empty_stays_completed(db, monkeypatch):
+    """일부만 미공개면 정상 — completed 유지(오탐 방지).
+
+    fixture 두 축을 다르게: 단지 2개 중 1개만 값이 있어 '전량 빈 응답'과
+    구분된다. 한 축만 두면 두 분기가 같은 값이 되어 결함을 못 잡는다.
+    """
+    _make_complex(db, complex_no="1001")
+    _make_complex(db, complex_no="1002")
+    _seed_mapping(db, complex_no="1001", kapt_code="AA")
+    _seed_mapping(db, complex_no="1002", kapt_code="BB")
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost",
+        lambda code, month: {"aV3": 500} if code == "AA" else {},
+    )
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert result["collected"] == 1 and result["empty"] == 1
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "completed", "일부 미공개는 정상 — failed 오탐 금지"
+
+
+def test_collect_costs_total_items_counts_targets(db, monkeypatch):
+    """total_items 는 대상 수 — 미공개 단지도 '처리 시도'에 포함된다.
+
+    total=0 이면 freshness 헛바퀴 감지(processed==0 AND total>0)가 영영
+    발동하지 않는다.
+    """
+    _make_complex(db, complex_no="1001")
+    _make_complex(db, complex_no="1002")
+    _seed_mapping(db, complex_no="1001", kapt_code="AA")
+    _seed_mapping(db, complex_no="1002", kapt_code="BB")
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost",
+        lambda code, month: {"aV3": 500} if code == "AA" else {},
+    )
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    collect_kapt_costs(batch_size=10)
+
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.processed_items == 1
+    assert job.total_items == 2, "대상 2개인데 total_items 가 대상 수와 다르다"
+
+
+# ─────────────── #4 skipped 를 failed 통계로 세지 않는다 ───────────────
+
+
+def test_match_job_total_excludes_skipped(db, monkeypatch):
+    """미매칭(skipped)은 '실패'가 아니다 — total_items 에 섞지 않는다.
+
+    _complete_job(total = processed + failed) 규약상 skipped 를 넘기면
+    라이브 total 이 47,606(=1,233+46,373)처럼 부풀어 실패율 지표가 망가진다.
+    fixture 두 축을 다르게: 대상 2개 중 1개만 매칭되어 matched(1) != skipped(1)
+    이 아니라 각각 독립적으로 확인된다.
+    """
+    _make_complex(db, complex_no="1001", name="경희궁의아침4단지")
+    _make_complex(db, complex_no="1002", name="전혀다른이름타워")
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt", lambda *a, **k: ([_kapt()], True)
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", lambda code: None)
+
+    result = match_kapt_complexes()
+
+    assert result["matched"] == 1 and result["skipped"] == 1
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_match").one()
+    assert job.processed_items == 1
+    assert job.total_items == 1, "미매칭이 failed 통계로 들어가 total 이 부풀었다"
+
+
+# ─────────────── #6 금액 파서가 메타 숫자 필드를 금액으로 오채택 ───────────────
+
+
+def test_extract_amount_ignores_search_date_meta():
+    """응답에 searchDate 같은 숫자형 메타가 먼저 와도 금액으로 쓰지 않는다.
+
+    '식별 필드 제외 첫 숫자 필드'라는 규칙은 응답 키 순서에 의존하므로,
+    금액이 아닌 숫자 메타가 앞에 오면 202605(연월)를 관리비로 저장한다.
+    """
+    from crawler.kapt_api import _extract_amount
+
+    assert _extract_amount(
+        {"kaptCode": "A1", "searchDate": "202605", "guardCost": "1234"}
+    ) == 1234
+
+
+def test_extract_paired_amount_ignores_meta_fields():
+    """합산 파서도 같은 메타를 더하지 않는다 — 202605 가 요금에 얹히면 안 된다."""
+    from crawler.kapt_api import _extract_paired_amount
+
+    assert _extract_paired_amount(
+        {"kaptCode": "A1", "searchDate": "202605", "electC": "100", "electP": "200"}
+    ) == 300
+
+
+def test_collect_costs_all_empty_small_sample_stays_completed(db, monkeypatch):
+    """표본이 작으면 '전량 미공개' 를 장애로 단정하지 않는다 (오탐 방지 경계).
+
+    수집이 거의 끝나 잔여 1~2단지만 남은 날이나 수동 소량 트리거에서는
+    '대상 전량 미공개' 가 정상적으로 자주 일어난다. 이때까지 failed 로 올리면
+    official_price 오탐 sweep(세션 369)과 같은 가짜 경보가 매일 울린다.
+
+    위 test_collect_costs_all_empty_with_targets_fails_job 과 **표본 크기만**
+    다른 짝 테스트다 — 두 축(표본 크기 / 응답 내용)이 같은 값이 되지 않도록
+    응답은 양쪽 다 '전량 빈 응답' 으로 고정했다(testing.md 세션372 답습).
+    """
+    _make_complex(db, complex_no="4201")
+    _seed_mapping(db, complex_no="4201", kapt_code="AF01")
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", lambda code, month: {})
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert result["collected"] == 0 and result["empty"] == 1
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "completed", "표본 1개 전량 미공개를 장애로 오판"

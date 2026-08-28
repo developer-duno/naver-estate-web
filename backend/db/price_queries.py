@@ -238,19 +238,29 @@ def get_complex_official_prices(db: Session, complex_no: str) -> list[ComplexOff
 
 
 def get_latest_kapt_cost(db: Session, complex_no: str):
-    """단지의 최신월 K-apt 관리비 1건 + 매칭정보. 없으면 None.
+    """단지의 최신월 K-apt 관리비 1건 + 매칭정보. 매칭 자체가 없으면 None.
 
-    반환은 (KaptManagementCost, KaptComplexMap) 튜플 — 화면이 관리비 금액과 함께
-    "어느 K-apt 단지에 붙은 값인지"(kapt_name·복도유형)를 같이 보여줘야 해서
+    반환은 (KaptManagementCost | None, KaptComplexMap) 튜플 — 화면이 관리비 금액과
+    함께 "어느 K-apt 단지에 붙은 값인지"(kapt_name·복도유형)를 같이 보여줘야 해서
     한 번의 조인으로 가져온다.
 
-    매칭은 있는데 관리비가 아직 없을 수 있으므로(수집 대기·미공개 단지) INNER
-    JOIN 이며, 그 경우 None 이 되어 라우터가 404 를 준다.
+    ⚠ **매칭 기준 LEFT JOIN** 이다(옛 구현은 관리비 기준 INNER JOIN).
+    복도유형은 매칭 시점에 이미 KaptComplexMap 에 저장되므로 관리비가 없어도
+    보여줄 수 있는데, INNER JOIN 이면 관리비가 없다는 이유로 복도유형까지 404 로
+    함께 숨겨졌다 — 매칭 1,212건 중 관리비 보유는 19건뿐이라(2026-08-28 실측)
+    사실상 대부분의 단지가 가진 정보를 못 보여주던 셈이다.
+
+    따라서 반환 튜플의 첫 항목은 None 일 수 있고(매칭만 있고 관리비 미수집),
+    호출자는 그 경우 금액 필드를 전부 null 로 내린다. 매칭 자체가 없을 때만
+    None 을 돌려줘 라우터가 404 를 준다.
     """
     stmt = (
         select(KaptManagementCost, KaptComplexMap)
-        .join(KaptComplexMap, KaptComplexMap.complex_no == KaptManagementCost.complex_no)
-        .where(KaptManagementCost.complex_no == complex_no)
+        .outerjoin(
+            KaptManagementCost,
+            KaptManagementCost.complex_no == KaptComplexMap.complex_no,
+        )
+        .where(KaptComplexMap.complex_no == complex_no)
         .order_by(KaptManagementCost.cost_month.desc())
         .limit(1)
     )

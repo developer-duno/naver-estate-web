@@ -309,3 +309,16 @@ def test_registry_urls_match_actual_collector_modules():
             f"수집기 모듈이 쓰는 {actual} 이 PROBE_REGISTRY 에 없다 — "
             "crawler/api_version_monitor.py PROBE_REGISTRY 에 추가할 것"
         )
+
+    # K-apt 4종 — 2026-08-19 인증 개편으로 **실제로 폐기당한 당사자**라
+    # 이 감시에서 빠지면 재발 방지 장치가 정작 재발 지점을 못 본다.
+    # kapt_api 는 서비스 base URL 만 상수로 들고 오퍼레이션명을 호출부에서
+    # 붙이므로(f"{_LIST_URL}/getTotalAptList4"), 레지스트리의 전체 URL 과는
+    # prefix 로 대조한다.
+    from crawler.kapt_api import _BASIS_URL, _CMNUSE_URL, _INDVDLZ_URL, _LIST_URL
+
+    for base in (_LIST_URL, _BASIS_URL, _CMNUSE_URL, _INDVDLZ_URL):
+        assert any(url.startswith(base + "/") for url in urls), (
+            f"K-apt 수집기가 쓰는 {base} 로 시작하는 프로브가 PROBE_REGISTRY 에 없다 — "
+            "crawler/api_version_monitor.py PROBE_REGISTRY 에 추가할 것"
+        )

@@ -34,7 +34,10 @@ _STALE_HOURS_BY_TYPE = {
     "official_price": 16,
     # kapt(세션 388): 매칭=2.2만 kapt 단지 목록 + 매칭분 기본정보 1콜(0.3s throttle)로
     # 1h 초과 상시. 관리비=500단지×22콜×0.3s≈55min+지연이라 1h 경계 — 둘 다 예외 등록.
-    "kapt_match": 4,
+    # ⚠ kapt_match 4h 는 여유가 부족했다: 매칭 확정분 basis 콜이 2만 건 규모면
+    #    2만×0.8s(RTT 실측) ≈ 4.45h 로 임계를 넘겨 official_price 와 같은 오탐
+    #    sweep(세션 369)이 난다 → 관측 최대 소요의 ~2배인 8h 로 상향.
+    "kapt_match": 8,
     "kapt_costs": 3,
 }
 # 실패 작업 조회 윈도 — 최근 이 시간 내 failed 만

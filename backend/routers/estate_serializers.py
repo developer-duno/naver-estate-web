@@ -155,15 +155,21 @@ def kapt_cost_to_dict(cost, mapping) -> dict:
     금액은 원 단위 원값 그대로 — 만원 환산·반올림은 표시 계층(FE) 책임이라
     여기서 가공하면 정밀도가 한 번 깎인 값이 API 계약이 된다.
     breakdown(항목별 원값)은 감사용이라 응답에 싣지 않는다.
+
+    ⚠ `cost` 는 None 일 수 있다 — 매칭은 됐지만 관리비를 아직 못 모은 단지
+    (수집 대기·미공개). 그때도 매칭 정보(kapt_name·복도유형)는 보여줄 값이
+    있으므로 200 으로 내리고 금액 필드만 전부 null 로 채운다. FE 는 이미
+    null 금액이면 "월 관리비" 행 자체를 생략한다(lib/kapt-format.ts
+    formatCostPerHousehold 가 null 반환).
     """
     return {
         "kapt_code": mapping.kapt_code,
         "kapt_name": mapping.kapt_name,
         "corridor_type": mapping.corridor_type,
-        "cost_month": cost.cost_month,
-        "common_cost": cost.common_cost,
-        "individual_cost": cost.individual_cost,
-        "total_cost": cost.total_cost,
-        "cost_per_household": cost.cost_per_household,
-        "household_count": cost.household_count,
+        "cost_month": cost.cost_month if cost else None,
+        "common_cost": cost.common_cost if cost else None,
+        "individual_cost": cost.individual_cost if cost else None,
+        "total_cost": cost.total_cost if cost else None,
+        "cost_per_household": cost.cost_per_household if cost else None,
+        "household_count": cost.household_count if cost else None,
     }

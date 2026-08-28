@@ -22,10 +22,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from crawler.api_version_monitor import (
+    FLAVOR_DATAGOKR,
+    FLAVOR_ODCLOUD,
     PROBE_REGISTRY,
     STATUS_ALIVE,
     STATUS_DEAD,
     STATUS_DEGRADED,
+    _extract_odcloud_code,
+    classify_by_flavor,
+    classify_odcloud_response,
     classify_response,
     probe_api_versions,
 )
@@ -65,6 +70,15 @@ BODY_DEGRADED_TIMEOUT = (
     '{"cmmMsgHeader":{"returnAuthMsg":"SERVICETIMEOUT_ERROR","returnReasonCode":"05"}}'
 )
 
+OD_ALIVE_LIST = '{"currentCount":1,"data":[{"HOUSE_NM":"테스트오피스텔"}],"totalCount":123}'
+OD_ALIVE_NTS = (
+    '{"request_cnt":1,"status_code":"OK","data":[{"b_no":"0000000000",'
+    '"b_stt":"","b_stt_cd":""}]}'
+)
+OD_DEAD = '{"code":-3,"msg":"등록되지 않은 서비스 입니다."}\n'
+OD_DEGRADED_KEY = '{"code":-4,"msg":"등록되지 않은 인증키 입니다."}\n'
+OD_MALFORMED_BODY = '{"status_code":"REQUEST_DATA_MALFORMED"}\n'
+
 
 def _resp(body: str, status_code: int = 200) -> MagicMock:
     m = MagicMock()
@@ -75,9 +89,41 @@ def _resp(body: str, status_code: int = 200) -> MagicMock:
 
 @pytest.fixture(autouse=True)
 def _no_sleep_no_realkey(monkeypatch):
-    """프로브 간 sleep 제거(테스트 속도) + API 키 고정 주입(실키 의존 제거)."""
+    """프로브 간 sleep 제거(테스트 속도) + API 키 고정 주입(실키 의존 제거).
+
+    ⚠ ``requests.post`` 도 여기서 막는다. 레지스트리에 POST 전용 항목(국세청
+    status)이 생긴 뒤로는, ``requests.get`` 만 목킹하는 테스트가 **실제
+    odcloud 로 POST 를 날린다**(실제로 이 픽스처 추가 전 라이브 401 응답이
+    로그에 찍혀 발견). 개별 테스트의 목킹 누락에 기대지 않고 픽스처에서
+    기본 차단한 뒤, 필요한 테스트만 자기 목으로 덮어쓴다.
+    """
     monkeypatch.setattr("crawler.api_version_monitor.time.sleep", lambda *_: None)
     monkeypatch.setenv("PUBLIC_DATA_API_KEY", "test-service-key")
+
+    def _blocked(*args, **kwargs):  # pragma: no cover - 방어선
+        raise AssertionError("테스트에서 실제 HTTP 호출이 나갔다 (목킹 누락)")
+
+    monkeypatch.setattr("crawler.api_version_monitor.requests.get", _blocked)
+    monkeypatch.setattr("crawler.api_version_monitor.requests.post", _blocked)
+
+
+def _patch_http(get_body=None, post_body=None, get_status=200, post_status=200):
+    """계열별 응답을 한 번에 깔아주는 헬퍼.
+
+    레지스트리에 apis.data.go.kr(GET)·odcloud(GET/POST) 두 계열이 섞여 있어,
+    "모든 엔드포인트에 같은 본문 하나" 를 주면 계열이 안 맞는 응답이 섞인다.
+    그래서 계열별로 알맞은 본문을 지정할 수 있게 한다.
+    """
+    return (
+        patch(
+            "crawler.api_version_monitor.requests.get",
+            return_value=_resp(get_body, status_code=get_status),
+        ),
+        patch(
+            "crawler.api_version_monitor.requests.post",
+            return_value=_resp(post_body, status_code=post_status),
+        ),
+    )
 
 
 # ── classify_response 단위 (분류 규칙 자체) ─────────────────────────────────
@@ -121,19 +167,29 @@ def test_empty_or_gateway_body_is_not_alive():
 
 
 def test_all_alive_sends_no_alert(db):
-    """레지스트리 전부 살아있으면 텔레그램 알림이 나가지 않는다."""
+    """레지스트리 전부 살아있으면 텔레그램 알림이 나가지 않는다.
+
+    계열이 둘이라 GET/POST 각각에 그 계열의 정상 응답을 깐다 — odcloud 항목에
+    datagokr 본문을 주면 판정기가 생존 근거를 못 찾아 degraded 로 샌다.
+    """
+    _, post_patch = _patch_http(post_body=OD_ALIVE_NTS)
+
+    def _by_flavor(url, **kwargs):
+        entry = next(e for e in PROBE_REGISTRY if e["url"] == url)
+        body = OD_ALIVE_LIST if entry.get("flavor") == FLAVOR_ODCLOUD else BODY_ALIVE_NO_PARAMS
+        return _resp(body)
+
     with (
-        patch(
-            "crawler.api_version_monitor.requests.get",
-            return_value=_resp(BODY_ALIVE_NO_PARAMS),
-        ) as mock_get,
+        patch("crawler.api_version_monitor.requests.get", side_effect=_by_flavor) as mock_get,
+        post_patch as mock_post,
         patch("services.telegram.send_telegram") as mock_send,
     ):
         result = probe_api_versions()
 
     assert len(result[STATUS_ALIVE]) == len(PROBE_REGISTRY)
     assert result[STATUS_DEAD] == []
-    assert mock_get.call_count == len(PROBE_REGISTRY)
+    # GET·POST 를 합쳐 레지스트리 전체가 정확히 한 번씩 프로브된다
+    assert mock_get.call_count + mock_post.call_count == len(PROBE_REGISTRY)
     mock_send.assert_not_called()
 
     # 감시 잡은 정상 완료로 기록된다
@@ -151,10 +207,15 @@ def test_one_dead_sends_single_alert_with_api_name(db):
     def _fake_get(url, **kwargs):
         if url == dead_entry["url"]:
             return _resp(BODY_DEAD, status_code=400)
+        entry = next(e for e in PROBE_REGISTRY if e["url"] == url)
+        if entry.get("flavor") == FLAVOR_ODCLOUD:
+            return _resp(OD_ALIVE_LIST)
         return _resp(BODY_ALIVE_NO_PARAMS)
 
+    _, post_patch = _patch_http(post_body=OD_ALIVE_NTS)
     with (
         patch("crawler.api_version_monitor.requests.get", side_effect=_fake_get),
+        post_patch,
         patch("services.telegram.send_telegram") as mock_send,
     ):
         result = probe_api_versions()
@@ -176,13 +237,30 @@ def test_one_dead_sends_single_alert_with_api_name(db):
     assert job.status == "completed"
 
 
+def _all_dead_patches():
+    """레지스트리 전체를 '폐기' 로 만드는 목 — 계열별로 알맞은 폐기 본문을 준다."""
+
+    def _fake_get(url, **kwargs):
+        entry = next(e for e in PROBE_REGISTRY if e["url"] == url)
+        if entry.get("flavor") == FLAVOR_ODCLOUD:
+            return _resp(OD_DEAD, status_code=404)
+        return _resp(BODY_DEAD, status_code=400)
+
+    return (
+        patch("crawler.api_version_monitor.requests.get", side_effect=_fake_get),
+        patch(
+            "crawler.api_version_monitor.requests.post",
+            return_value=_resp(OD_DEAD, status_code=404),
+        ),
+    )
+
+
 def test_multiple_dead_are_batched_into_one_alert():
     """폐기 여러 건이어도 알림은 1건(2026-08-19 처럼 전량 폐기 시 알림 폭탄 방지)."""
+    get_patch, post_patch = _all_dead_patches()
     with (
-        patch(
-            "crawler.api_version_monitor.requests.get",
-            return_value=_resp(BODY_DEAD, status_code=400),
-        ),
+        get_patch,
+        post_patch,
         patch("services.telegram.send_telegram") as mock_send,
     ):
         result = probe_api_versions()
@@ -254,11 +332,10 @@ def test_no_api_key_skips_probe_entirely(monkeypatch):
 
 def test_telegram_failure_does_not_break_probe(db):
     """텔레그램 발송이 터져도 감시 자체는 완료된다 (best-effort, 기존 관례)."""
+    get_patch, post_patch = _all_dead_patches()
     with (
-        patch(
-            "crawler.api_version_monitor.requests.get",
-            return_value=_resp(BODY_DEAD, status_code=400),
-        ),
+        get_patch,
+        post_patch,
         patch("services.telegram.send_telegram", side_effect=RuntimeError("bot down")),
     ):
         result = probe_api_versions()
@@ -322,3 +399,160 @@ def test_registry_urls_match_actual_collector_modules():
             f"K-apt 수집기가 쓰는 {base} 로 시작하는 프로브가 PROBE_REGISTRY 에 없다 — "
             "crawler/api_version_monitor.py PROBE_REGISTRY 에 추가할 것"
         )
+
+
+# ── odcloud 계열 (응답 포맷이 apis.data.go.kr 과 다름) ─────────────────────
+#
+# 아래 픽스처는 **2026-08-29 라이브 프로브 실측 원문**이다(키 값 제외). 추측이 아니라
+# 실제 응답이라야 판정 규칙이 현실과 어긋나지 않는다.
+#   정상(GET)   HTTP 200 {"currentCount":1,"data":[...]}
+#   정상(POST)  HTTP 200 {"request_cnt":1,"status_code":"OK","data":[...]}
+#   폐기        HTTP 404 {"code":-3,"msg":"등록되지 않은 서비스 입니다."}
+#   인증키 오류 HTTP 401 {"code":-4,"msg":"등록되지 않은 인증키 입니다."}
+#   바디 오류   HTTP 411 {"status_code":"REQUEST_DATA_MALFORMED"}
+
+@pytest.mark.parametrize(
+    "body,expected",
+    [
+        (OD_ALIVE_LIST, STATUS_ALIVE),
+        (OD_ALIVE_NTS, STATUS_ALIVE),
+        (OD_DEAD, STATUS_DEAD),
+        # ⚠ 인증키 오류(-4)를 폐기로 세면 키 만료 때마다 가짜 경보가 울린다.
+        (OD_DEGRADED_KEY, STATUS_DEGRADED),
+        # 바디 형식 오류 — 서비스가 요청을 파싱했다는 증거라 폐기 아님
+        (OD_MALFORMED_BODY, STATUS_ALIVE),
+        # 생존 근거 0 → alive 아님 (datagokr 판정기와 같은 원칙)
+        ("", STATUS_DEGRADED),
+        ("<html><body>502 Bad Gateway</body></html>", STATUS_DEGRADED),
+    ],
+)
+def test_classify_odcloud_response(body, expected):
+    """odcloud 응답 → alive/dead/degraded 가 라이브 실측 형태에 맞는가."""
+    assert classify_odcloud_response(body) == expected
+
+
+def test_odcloud_dead_and_key_error_are_distinguished():
+    """폐기(-3)와 인증키 오류(-4)를 부호·숫자까지 정확히 갈라야 한다.
+
+    둘 다 `{"code": -N}` 한 글자 차이다. 절댓값으로 뭉개거나 '-' 를 흘리면
+    키 만료가 폐기로 오탐돼, 진짜 폐기 경보까지 같이 무시하게 된다.
+    """
+    assert classify_odcloud_response(OD_DEAD) == STATUS_DEAD
+    assert classify_odcloud_response(OD_DEGRADED_KEY) == STATUS_DEGRADED
+    assert _extract_odcloud_code(OD_DEAD) == -3
+    assert _extract_odcloud_code(OD_DEGRADED_KEY) == -4
+    # 정상 응답엔 code 키 자체가 없다
+    assert _extract_odcloud_code(OD_ALIVE_LIST) is None
+
+
+def test_datagokr_classifier_would_misjudge_odcloud_bodies():
+    """왜 전용 판정기가 필요한가 — 기존 판정기로는 odcloud 폐기를 못 잡는다.
+
+    이 단언이 깨진다면(= 기존 판정기가 알아서 dead 를 준다면) flavor 분기는
+    불필요한 복잡도이므로 되돌려야 한다. 즉 이 테스트는 '분기의 존재 이유' 가드다.
+    """
+    assert classify_response(OD_DEAD) != STATUS_DEAD
+    assert classify_by_flavor(OD_DEAD, FLAVOR_ODCLOUD) == STATUS_DEAD
+    # datagokr 계열은 flavor 를 생략해도 기존 판정기로 라우팅된다(기존 8종 무변경)
+    assert classify_by_flavor(BODY_DEAD, FLAVOR_DATAGOKR) == STATUS_DEAD
+
+
+def test_odcloud_dead_triggers_alert_with_api_name(db):
+    """odcloud 엔드포인트가 폐기되면 다른 계열과 똑같이 알림 1건이 나간다."""
+    dead_entry = next(e for e in PROBE_REGISTRY if e.get("flavor") == FLAVOR_ODCLOUD)
+
+    def _fake_get(url, **kwargs):
+        return _resp(OD_DEAD, status_code=404) if url == dead_entry["url"] else _resp(
+            BODY_ALIVE_NO_PARAMS
+        )
+
+    def _fake_post(url, **kwargs):
+        return _resp(OD_DEAD, status_code=404) if url == dead_entry["url"] else _resp(
+            OD_ALIVE_NTS
+        )
+
+    with (
+        patch("crawler.api_version_monitor.requests.get", side_effect=_fake_get),
+        patch("crawler.api_version_monitor.requests.post", side_effect=_fake_post),
+        patch("services.telegram.send_telegram") as mock_send,
+    ):
+        result = probe_api_versions()
+
+    assert [d["name"] for d in result[STATUS_DEAD]] == [dead_entry["name"]]
+    assert mock_send.call_count == 1
+    assert dead_entry["name"] in mock_send.call_args.args[0]
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "api_version_probe").one()
+    assert job.status == "completed"
+
+
+def test_post_only_endpoint_is_probed_with_post():
+    """국세청 status 는 POST 전용 — GET 으로 찌르면 405 라 생사를 못 가린다.
+
+    실제 코드와 같은 메서드로 부르는지 단언한다. GET 으로 새면 그 API 는
+    영영 degraded 로만 보고돼 감시 사각지대가 된다(오탐이 아니라 '무탐').
+    """
+    post_entries = [e for e in PROBE_REGISTRY if e.get("method") == "POST"]
+    assert post_entries, "POST 전용 항목이 사라짐 — business_api status 프로브 확인"
+
+    posted, got = [], []
+    with (
+        patch(
+            "crawler.api_version_monitor.requests.get",
+            side_effect=lambda url, **kw: (got.append(url), _resp(BODY_ALIVE_NO_PARAMS))[1],
+        ),
+        patch(
+            "crawler.api_version_monitor.requests.post",
+            side_effect=lambda url, **kw: (posted.append((url, kw.get("json"))), _resp(OD_ALIVE_NTS))[1],
+        ),
+        patch("services.telegram.send_telegram"),
+    ):
+        result = probe_api_versions()
+
+    for entry in post_entries:
+        assert entry["url"] in [u for u, _ in posted], f"{entry['name']} 이 POST 로 안 나감"
+        assert entry["url"] not in got, f"{entry['name']} 이 GET 으로도 나감"
+    # 부수효과 0 — 조회 전용 바디(존재하지 않는 사업자번호)만 보낸다
+    for _, payload in posted:
+        assert payload == {"b_no": ["0000000000"]}
+    assert result[STATUS_DEAD] == []
+
+
+def test_registry_odcloud_urls_match_actual_collector_modules():
+    """odcloud 레지스트리 URL 이 실제 수집기 모듈 상수와 일치하는가 (drift 가드).
+
+    apis.data.go.kr 쪽과 같은 이유 — 수집기가 엔드포인트를 바꿨는데 레지스트리를
+    안 고치면 감시는 옛 URL 만 찔러 "정상" 이라 보고하고 실제 수집기는 죽는다.
+    """
+    from crawler.applyhome_officetel_api import BASE_URL as APPLYHOME_BASE
+    from crawler.business_api import STATUS_URL
+    from crawler.crime_stats_api import CRIME_STATS_URL
+
+    urls = {entry["url"] for entry in PROBE_REGISTRY}
+
+    # 청약홈은 서비스 base 아래 4개 오퍼레이션이라 prefix 로 대조 (K-apt 선례 답습)
+    assert any(url.startswith(APPLYHOME_BASE + "/") for url in urls), (
+        f"청약홈 수집기가 쓰는 {APPLYHOME_BASE} 로 시작하는 프로브가 없다 — "
+        "crawler/api_version_monitor.py PROBE_REGISTRY 에 추가할 것"
+    )
+    # 국세청 status·범죄통계는 전체 URL 이 곧 엔드포인트라 완전일치로 대조
+    for actual in (STATUS_URL, CRIME_STATS_URL):
+        assert actual in urls, (
+            f"수집기 모듈이 쓰는 {actual} 이 PROBE_REGISTRY 에 없다 — "
+            "crawler/api_version_monitor.py PROBE_REGISTRY 에 추가할 것"
+        )
+
+    # odcloud 항목은 flavor 지정이 의무 — 빠뜨리면 판정기가 어긋나 감시가 무력화된다
+    for entry in PROBE_REGISTRY:
+        if "odcloud.kr" in entry["url"]:
+            assert entry.get("flavor") == FLAVOR_ODCLOUD, (
+                f"{entry['name']} 에 flavor=odcloud 누락 — 모든 응답이 degraded 로 뭉개진다"
+            )
+
+
+def test_registry_covers_all_eleven_endpoints():
+    """감시 대상 총 11종 (apis.data.go.kr 8 + odcloud 3) — 누락 시 사각지대."""
+    urls = {entry["url"] for entry in PROBE_REGISTRY}
+    assert len(PROBE_REGISTRY) == len(urls), "레지스트리에 중복 URL 이 있다"
+    assert len(PROBE_REGISTRY) == 11, f"감시 대상이 11종이 아님: {len(PROBE_REGISTRY)}"
+    assert sum(1 for e in PROBE_REGISTRY if e.get("flavor") == FLAVOR_ODCLOUD) == 3

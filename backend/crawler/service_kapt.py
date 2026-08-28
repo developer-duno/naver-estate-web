@@ -69,6 +69,15 @@ _MATCH_COMMIT_EVERY = 200
 # (정상 배치는 500 이라 실제 장애는 이 임계를 여유 있게 넘는다).
 _ALL_EMPTY_MIN_TARGETS = 10
 
+# "연속 N단지 전 op 실패" 조기 중단 임계.
+# 쿼터 초과(22)는 `is_quota` 로 즉시 중단되지만, data.go.kr 은 **에러를 XML 로 주는
+# 엔드포인트가 있어** 그 경우 `resp.json()` 이 터져 call_api 가 None → 코드 미상 실패로
+# 도착한다(kapt_api._body_or_raise docstring). 즉 진짜 한도 초과·서비스 전면 장애인데도
+# is_quota 가 안 서서, 남은 단지(최대 250)에 22콜씩 헛호출을 끝까지 하게 된다.
+# 무결성은 유지되지만(실패는 저장 안 함) 시간·재시도 예산이 통째로 낭비된다.
+# 개별 단지의 일시적 실패와 구분하려고 "연속" 으로 세고, 한 건이라도 성공하면 리셋한다.
+_CONSECUTIVE_FAILURE_LIMIT = 5
+
 _MATCH_JOB_TYPE = "kapt_match"
 _COST_JOB_TYPE = "kapt_costs"
 
@@ -484,9 +493,18 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
       · (c) 호출 실패   → **저장하지 않고** `failed` 계수. 그 달 행이 없으므로
                           다음 회차에 자동 재시도된다(위 `done` 셋에 안 걸림).
       · (c) 중 쿼터 초과(22) → 남은 대상 호출 없이 즉시 중단 + 잡 failed
+      · (c) 가 **연속 5단지** → API 장애/한도 의심으로 중단 + 잡 failed
     부분 저장을 절대 하지 않는 것이 핵심이다 — 공용(V3) 실패 + 개별(V2) 성공으로
     "공용 0원" 총액을 저장하면 틀린 값이 사실처럼 화면에 뜨고, 그 달 행이 생겨
     다음 달까지 고쳐지지도 않는다.
+
+    ⚠ 조기 중단 2종의 관계 (둘 다 "남은 단지에 헛호출하지 않기" 가 목적):
+      ① `is_quota` 즉시 중단 — 한도 초과(22)가 **JSON 으로 와서** 코드가 잡힌 경우.
+         원인이 확정적이라 1건만으로 바로 멈춘다.
+      ② 연속 실패 중단(본 PR) — 같은 한도 초과라도 **에러가 XML 로 오면** call_api 가
+         `resp.json()` 에서 터져 코드 미상 실패로 도착해 ①이 안 선다. 그 사각을
+         "연속 N건" 이라는 정황으로 메운다. 개별 단지의 일시 실패와 구분하려고
+         연속으로 세고, 성공·정상 미공개가 한 건이라도 끼면 리셋한다.
     """
     db = SessionLocal()
     job = _record_job(db, _COST_JOB_TYPE, scheduler_job_id)
@@ -512,6 +530,9 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
 
         collected, failed, empty = 0, 0, 0
         quota_exhausted: KaptApiError | None = None
+        # 연속 전 op 실패 카운터 — 한 단지라도 성공(또는 정상 미공개)하면 리셋한다.
+        consecutive_failures = 0
+        api_down: KaptApiError | None = None
         processed = 0
         for mapping in targets:
             processed += 1
@@ -526,7 +547,11 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                         used_month = month
                         break
                 if not breakdown or used_month is None:
-                    # 미공개 단지 — 실패가 아니라 정상적인 '데이터 없음'
+                    # 미공개 단지 — 실패가 아니라 정상적인 '데이터 없음'.
+                    # ⚠ 호출 자체는 성공했으므로(200 + 빈 body) API 는 살아있다 →
+                    #   연속 실패 카운터를 리셋한다. 여기서 리셋을 빠뜨리면
+                    #   "미공개가 드문드문 섞인 정상 회차" 가 조기 중단될 수 있다.
+                    consecutive_failures = 0
                     empty += 1
                     continue
 
@@ -546,6 +571,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                     ["complex_no", "cost_month"],
                 )
                 collected += 1
+                consecutive_failures = 0
             except KaptApiError as exc:
                 # (c) 호출 실패 — 이 단지는 **저장하지 않는다**. 그 달 행이 안 생기므로
                 # 다음 회차(내일)에 자동으로 다시 대상이 된다(done 셋에 안 걸림).
@@ -554,14 +580,24 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                     mapping.complex_no, exc,
                 )
                 failed += 1
+                consecutive_failures += 1
                 if exc.is_quota:
                     # 일일 한도 초과 — 남은 대상에 호출해봐야 전부 같은 에러다.
                     # 헛호출로 다음 날 쿼터까지 태우지 않도록 배치를 즉시 중단한다.
                     quota_exhausted = exc
                     break
+                if consecutive_failures >= _CONSECUTIVE_FAILURE_LIMIT:
+                    # 코드 미상 실패가 연달아 N건 — 개별 단지 문제가 아니라 API 장애·
+                    # 한도 초과(XML 에러라 is_quota 가 안 선 경우)로 본다. 위 quota 중단이
+                    # 못 잡는 경로를 메우는 2차 방어선이다.
+                    api_down = exc
+                    break
             except Exception:
                 logger.exception("[kapt_costs] 단지 %s 처리 실패", mapping.complex_no)
                 failed += 1
+                # ⚠ 여기(예상 못 한 예외)는 연속 카운터를 올리지 않는다 — API 생사
+                #   신호가 아니라 우리 쪽 처리 버그일 수 있어, 조기 중단의 근거로는
+                #   약하다. 이 경우는 아래 `failed > 0` silent failure 가드가 잡는다.
 
         # 중단 여부와 무관하게 **여기까지 저장한 정상 단지는 지킨다** — 아래 _fail_job
         # 은 별도 트랜잭션이 아니라 같은 세션이라, 먼저 commit 해두지 않으면 쿼터 중단
@@ -581,6 +617,23 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             return {
                 "collected": collected, "failed": failed, "empty": empty,
                 "remaining": remaining, "error": "quota_exceeded",
+            }
+
+        # 연속 전 op 실패로 조기 중단 — 쿼터 중단과 같은 이유로 잡을 failed 로 마감한다.
+        # (쿼터 중단과 별개 분기인 이유: 원인이 확정된 22 와 달리 이쪽은 "코드 미상 실패가
+        #  연달아 났다"는 정황 판단이라, 사람이 로그를 보고 원인을 가려야 한다.)
+        if api_down is not None:
+            remaining = len(targets) - processed
+            message = (
+                f"연속 {_CONSECUTIVE_FAILURE_LIMIT}단지 호출 실패 — API 장애/한도 의심, "
+                f"잔여 {remaining} (수집 {collected}, 실패 {failed}, 미공개 {empty}, "
+                f"마지막 오류: {api_down})"
+            )
+            _fail_job(db, job, message)
+            logger.error("[kapt_costs] %s", message)
+            return {
+                "collected": collected, "failed": failed, "empty": empty,
+                "remaining": remaining, "error": "api_down",
             }
 
         # ── silent failure 가드 2종의 관계 ──

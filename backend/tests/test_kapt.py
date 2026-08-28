@@ -1271,3 +1271,133 @@ def test_collect_costs_partial_failure_through_real_api_layer(db, monkeypatch):
     assert result["failed"] == 1, "공용 전량 실패가 failed 로 안 잡힘"
     assert result["collected"] == 0
     assert db.query(KaptManagementCost).count() == 0, "공용 0원짜리 반쪽 행이 저장됨"
+
+
+# ── 연속 전 op 실패 조기 중단 (API 장애/한도가 XML 로 와서 is_quota 가 안 서는 사각) ──
+#
+# 쿼터 초과(22)가 JSON 으로 오면 `is_quota` 로 1건에 즉시 중단된다. 그런데 같은 상황이
+# XML 로 오면 call_api 가 resp.json() 에서 터져 **코드 미상 실패**로 도착해 그 중단이
+# 발동하지 않는다 → 남은 단지(최대 250) 전부에 22콜씩 헛호출. 아래는 그 사각의 회귀 가드.
+
+
+def test_collect_costs_consecutive_failures_stop_batch(db, monkeypatch):
+    """연속 5단지 전 op 실패 -> 6번째부터 호출 0 · 잡 failed · 잔여 보고.
+
+    fixture 두 축을 다르게 (testing.md 세션372 답습): 대상 8단지 / 임계 5 /
+    잔여 3 이 전부 다른 값이라, 코드가 셋 중 둘을 뒤바꿔 써도 단언이 잡아낸다.
+    """
+    for i in range(8):
+        _make_complex(db, complex_no="60%02d" % i)
+        _seed_mapping(db, complex_no="60%02d" % i, kapt_code="K%d" % i)
+
+    called = []
+
+    def common(code, month):
+        called.append(code)
+        # is_quota 를 세우지 않는다 — XML 에러로 코드 미상 실패가 오는 상황 재현
+        raise KaptApiError("응답 없음", code=None, op="getHsmpGuardCostInfoV3")
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert result["error"] == "api_down"
+    # 임계(5)에서 멈췄으므로 6~8번째 단지에는 호출이 아예 안 나간다
+    assert called == ["K0", "K1", "K2", "K3", "K4"], "임계 후 헛호출 발생: %r" % (called,)
+    assert result["failed"] == 5
+    assert result["remaining"] == 3
+    assert db.query(KaptManagementCost).count() == 0
+
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "failed"
+    assert "연속" in (job.error_message or "")
+    assert "잔여 3" in (job.error_message or "")
+
+
+def test_collect_costs_success_resets_consecutive_counter(db, monkeypatch):
+    """4실패 + 1성공 + 4실패 -> 중단되지 않는다 (연속이 끊기면 리셋).
+
+    '연속' 이 아니라 '누적' 으로 세면 정상 회차가 통째로 중단된다 — 개별 단지의
+    일시적 실패는 흔하기 때문. 두 축을 다르게: 총 실패 8 · 연속 최대 4 · 임계 5.
+    """
+    for i in range(9):
+        _make_complex(db, complex_no="61%02d" % i)
+        _seed_mapping(db, complex_no="61%02d" % i, kapt_code="K%d" % i)
+
+    called = []
+
+    def common(code, month):
+        called.append(code)
+        if code == "K4":  # 5번째만 성공 -> 연속 카운터 리셋
+            return {"aV3": 900}
+        raise KaptApiError("응답 없음", code=None, op="x")
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    # 9단지 전부 시도됐다 — 중간에 끊기지 않았다
+    assert called == ["K%d" % i for i in range(9)], "리셋 실패로 조기 중단됨: %r" % (called,)
+    assert result.get("error") != "api_down"
+    assert result["collected"] == 1
+    assert result["failed"] == 8
+
+
+def test_collect_costs_unpublished_also_resets_counter(db, monkeypatch):
+    """정상 미공개(빈 응답)도 카운터를 리셋한다 — 호출 자체는 성공했으므로.
+
+    미공개는 API 가 살아있다는 증거다. 이걸 리셋에 안 넣으면 '미공개가 드문드문
+    섞인 정상 회차' 가 API 장애로 오판돼 중단된다.
+    두 축을 다르게: 대상 9 · 미공개 1 · 실패 8 · 임계 5.
+    """
+    for i in range(9):
+        _make_complex(db, complex_no="62%02d" % i)
+        _seed_mapping(db, complex_no="62%02d" % i, kapt_code="K%d" % i)
+
+    called = []
+
+    def common(code, month):
+        called.append(code)
+        if code == "K4":
+            return {}  # 미공개 — 예외 아님
+        raise KaptApiError("응답 없음", code=None, op="x")
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    # ⚠ 호출 "횟수" 가 아니라 **시도된 단지** 로 센다 — 미공개(K4)는 후보월을 거슬러
+    #   올라가며 여러 번 불리는 게 정상이라(월 폴백), 횟수로 세면 9가 아니다.
+    assert [c for c in dict.fromkeys(called)] == ["K%d" % i for i in range(9)], (
+        "미공개가 카운터를 리셋하지 않아 조기 중단됨: %r" % (called,)
+    )
+    assert result["empty"] == 1
+    assert result["failed"] == 8
+
+
+def test_collect_costs_quota_stops_before_consecutive_limit(db, monkeypatch):
+    """쿼터(22)는 연속 임계를 기다리지 않고 1건에 즉시 중단한다 (기존 동작 보존).
+
+    두 중단 규칙이 겹칠 때 우선순위 가드 — 원인이 확정된 쿼터가 먼저다.
+    """
+    for i in range(8):
+        _make_complex(db, complex_no="63%02d" % i)
+        _seed_mapping(db, complex_no="63%02d" % i, kapt_code="K%d" % i)
+
+    called = []
+
+    def common(code, month):
+        called.append(code)
+        raise KaptApiError("한도 초과", code="22", op="x", is_quota=True)
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert result["error"] == "quota_exceeded", "쿼터가 연속 임계에 가려짐"
+    assert called == ["K0"], "쿼터인데 임계까지 헛호출함: %r" % (called,)

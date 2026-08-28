@@ -73,6 +73,36 @@ def increment_api_quota(
         return True  # DB 실패 시 호출 허용 (기존 in-memory 폴백이 2차 보호)
 
 
+def purge_expired_counters(db) -> int:
+    """만료된 쿼터 카운터 행을 삭제하고 삭제 건수를 반환.
+
+    `rate_limit_counters` 는 `quota:{api}:{날짜}` 처럼 **날짜별로 새 키**를 만들기
+    때문에 행이 매일 늘어난다. `expires_at` 컬럼은 처음부터 있었지만 이 값을 보고
+    지우는 주체가 아무도 없어, 2026-04-15 이후 만료분이 전부 잔존해 있었다
+    (조사 시점 ~135행). 기능 장애는 아니지만 청소 주체가 없다는 것 자체가 결함이라
+    일일 유지보수 잡(`crawler/vacuum_maintenance.py`)이 함께 치우게 한다.
+
+    ⚠ `expires_at` 이 NULL 인 행은 건드리지 않는다 — 만료 개념이 없는(또는 아직
+    정해지지 않은) 행이라 "만료됐다" 고 단정할 근거가 없다. 컬럼은 NOT NULL 이지만
+    스키마 변경·수동 INSERT 로 NULL 이 생길 가능성에 대비해 조건을 명시한다.
+
+    dialect 분기 없이 한 문장으로 처리한다 — 비교 기준을 DB 함수(now())가 아니라
+    **Python 이 만든 UTC aware 값**으로 바인딩하므로 PostgreSQL·SQLite 양쪽에서
+    같은 의미로 동작한다(`db/price_queries.py:48` 의 dialect 분기가 필요했던
+    PostgreSQL 전용 문법을 애초에 쓰지 않는다).
+    """
+    now = datetime.now(timezone.utc)
+    result = db.execute(
+        text(
+            "DELETE FROM rate_limit_counters "
+            "WHERE expires_at IS NOT NULL AND expires_at < :now"
+        ),
+        {"now": now},
+    )
+    db.commit()
+    return result.rowcount or 0
+
+
 def get_api_quota_status(
     session_factory,
     api_name: str = "data_go_kr",

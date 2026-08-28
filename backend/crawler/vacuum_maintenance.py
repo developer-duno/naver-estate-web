@@ -11,6 +11,12 @@ visibility map 이 stale → 풀 테이블 집계(data-freshness COUNT)가 5초+
 VACUUM 은 트랜잭션 블록 안에서 실행 불가 → autocommit 연결로 문장별 실행.
 SQLite(테스트)는 VACUUM 문법/대상이 달라 no-op (dialect 분기).
 
+곁다리 작업: 만료된 `rate_limit_counters` 행 정리도 여기서 함께 한다. 그 테이블은
+`quota:{api}:{날짜}` 로 **날짜마다 새 키**가 생기는데 `expires_at` 을 보고 지우는
+주체가 없어 만료분이 계속 쌓이고 있었다(2026-04-15 이후 ~135행). 하루 한 번 도는
+청소 잡에 얹는 게 새 스케줄러 잡을 만드는 것보다 단순하다. best-effort 라 실패해도
+VACUUM 결과·잡 상태에 영향이 0 이다.
+
 세션 359: 전수조사에서 이 잡만 CrawlJob 기록을 아예 안 남겨(logger 만) monitor.py
 감시망(작업실패/작업마비/데이터미축적 3축 전부)의 완전한 사각지대였다 — "이 잡이
 오늘 도는지 안 도는지" 자체를 볼 방법이 없었다. VACUUM 은 새 행이 쌓이는 잡이 아니라
@@ -32,6 +38,33 @@ logger = logging.getLogger(__name__)
 _VACUUM_TABLES = ("articles", "trades")
 
 
+def _purge_expired_quota_counters(db) -> int:
+    """만료된 rate_limit_counters 행 정리 — **best-effort 곁다리 작업**.
+
+    이 잡의 본체는 VACUUM 이고, 이건 "청소하는 김에 같이" 하는 일이다. 그래서
+    실패해도 VACUUM 결과·잡 상태에 절대 영향을 주지 않는다(예외를 통째로 삼키고
+    경고만 남긴다) — 곁다리가 본체를 죽이면 안 된다.
+
+    ⚠ 실패 시 `db.rollback()` 이 필요하다. 실패한 문장을 그대로 두면 세션이
+    aborted 상태로 남아, 뒤이은 CrawlJob 마감 commit 까지 연쇄로 터진다
+    (infra.md §monitor freshness 의 InFailedSqlTransaction 연쇄와 같은 결).
+    """
+    try:
+        from crawler.quota_db import purge_expired_counters
+
+        deleted = purge_expired_counters(db)
+        if deleted:
+            logger.info("만료된 쿼터 카운터 %d행 정리", deleted)
+        return deleted
+    except Exception:
+        logger.warning("만료된 쿼터 카운터 정리 실패 (VACUUM 결과에는 영향 없음)", exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            logger.warning("쿼터 정리 실패 후 rollback 도 실패", exc_info=True)
+        return 0
+
+
 def run_vacuum_maintenance() -> dict:
     """articles/trades VACUUM (ANALYZE) 실행. 결과 요약 dict 반환.
 
@@ -51,6 +84,11 @@ def run_vacuum_maintenance() -> dict:
     db.commit()
     job_id = job.id
 
+    # 만료 쿼터 카운터 정리는 **VACUUM 여부와 무관**하게 매일 돌린다 —
+    # dialect 를 안 타는 평범한 DELETE 라, PostgreSQL 전용인 VACUUM 의
+    # early return 앞에 둔다(뒤에 두면 SQLite 경로에선 영영 안 돈다).
+    purged = _purge_expired_quota_counters(db)
+
     dialect = engine.dialect.name
     if dialect != "postgresql":
         logger.info("VACUUM 유지보수 skip (dialect=%s, PostgreSQL 전용)", dialect)
@@ -60,7 +98,7 @@ def run_vacuum_maintenance() -> dict:
         job.processed_items = 0
         db.commit()
         db.close()
-        return {"skipped": dialect, "vacuumed": []}
+        return {"skipped": dialect, "vacuumed": [], "purged_counters": purged}
 
     vacuumed: list[str] = []
     failed: list[str] = []
@@ -93,4 +131,4 @@ def run_vacuum_maintenance() -> dict:
     finally:
         db.close()
 
-    return {"skipped": None, "vacuumed": vacuumed}
+    return {"skipped": None, "vacuumed": vacuumed, "purged_counters": purged}

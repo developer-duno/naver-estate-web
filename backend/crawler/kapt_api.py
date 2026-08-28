@@ -61,8 +61,28 @@ INDIVIDUAL_COST_OPS: tuple[str, ...] = (
     "getHsmpWaterCostInfoV2",
 )
 
-# 응답 dict 에서 금액이 아닌 식별 필드 — 금액 추출 시 건너뛴다.
-_NON_AMOUNT_KEYS = frozenset({"kaptCode", "kaptName"})
+# 응답 dict 에서 금액이 아닌 필드 — 금액 추출 시 건너뛴다.
+#
+# ⚠ 여기에 빠진 "숫자형 메타"는 그대로 금액이 된다. `_extract_amount` 가 필드명을
+# 안 믿고 "첫 숫자 필드"를 쓰는 방어적 파서라, 금액이 아닌 숫자가 응답 앞쪽에
+# 오면 그게 관리비로 저장되기 때문이다(예: searchDate "202605" → 20만원대 금액).
+# kaptCode/kaptName 은 문자열이라 애초에 위험이 낮았고, 진짜 위험한 건
+# **숫자로 변환되는 메타**다:
+#   - searchDate  요청 조회월(YYYYMM)을 응답이 그대로 되돌려주는 관행
+#   - kaptdaCnt   세대수 (basis 응답 계열과 필드명을 공유)
+#   - resultCode / totalCount / pageNo / numOfRows  래퍼가 body 로 새어들 때
+# 금액 필드는 전부 "…Cost"·"…Fee"·"…C"/"…P" 계열이라 이 목록과 겹치지 않는다.
+_NON_AMOUNT_KEYS = frozenset({
+    "kaptCode",
+    "kaptName",
+    "searchDate",
+    "kaptdaCnt",
+    "resultCode",
+    "resultMsg",
+    "totalCount",
+    "pageNo",
+    "numOfRows",
+})
 
 
 class KaptAPI(BasePublicDataAPI):
@@ -173,10 +193,14 @@ def _collect_ops(base_url, ops, kapt_code, search_date, extractor) -> dict[str, 
 def _extract_amount(item: dict) -> int | None:
     """응답 dict 에서 금액 1개 추출 — op 마다 필드명이 달라 이름을 안 믿는다.
 
-    kaptCode/kaptName 을 제외한 **첫 번째 숫자 변환 가능 필드**를 금액으로 본다.
-    (guardCost·cleanCost·laborCost… 17개 이름을 하드코딩하면 API 가 필드명을
-    바꾸거나 op 가 추가될 때 조용히 0원이 된다 — 방어적 파서를 택한 이유.)
+    `_NON_AMOUNT_KEYS`(식별·메타 필드)를 제외한 **첫 번째 숫자 변환 가능 필드**를
+    금액으로 본다. (guardCost·cleanCost·laborCost… 17개 이름을 하드코딩하면 API 가
+    필드명을 바꾸거나 op 가 추가될 때 조용히 0원이 된다 — 방어적 파서를 택한 이유.)
     dict 는 파이썬 3.7+ 삽입 순서를 보존하므로 "첫 필드"가 결정론적이다.
+
+    ⚠ 순서 의존이라 제외 목록이 곧 정확도다 — 응답에 새 숫자형 메타가 늘면
+    그게 금액으로 둔갑한다. 새 오퍼레이션을 추가할 때 응답 키를 실측해
+    `_NON_AMOUNT_KEYS` 를 함께 보강할 것.
     """
     for key, value in item.items():
         if key in _NON_AMOUNT_KEYS:
@@ -191,8 +215,12 @@ def _extract_paired_amount(item: dict) -> int | None:
     """개별사용료 응답의 공용(C)+전용(P) 합산.
 
     한쪽만 값이 있으면 그 한쪽만 (둘 다 없으면 None — "미공개"로 취급).
-    필드명(heatC/heatP…)을 하드코딩하지 않고 식별 필드를 뺀 나머지 숫자를 전부
-    더한다 — `_extract_amount` 와 같은 이유의 방어적 파싱.
+    필드명(heatC/heatP…)을 하드코딩하지 않고 `_NON_AMOUNT_KEYS` 를 뺀 나머지
+    숫자를 전부 더한다 — `_extract_amount` 와 같은 이유의 방어적 파싱.
+
+    ⚠ 여기선 "전부 더하기"라 메타 오염이 더 나쁘다 — 첫 필드만 쓰는
+    `_extract_amount` 와 달리, 제외 목록에 없는 숫자 메타는 순서와 무관하게
+    무조건 요금에 얹힌다.
     """
     total = None
     for key, value in item.items():

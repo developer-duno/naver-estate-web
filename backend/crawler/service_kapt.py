@@ -58,6 +58,16 @@ _COST_LAG_MONTHS = 3
 # 최신 공개월을 못 찾을 때 거슬러 올라가며 시도할 개월 수.
 _COST_MONTH_TRIES = 3
 
+# 매칭 중간 저장 주기(단지 수). 매칭 확정분마다 basis 1콜(0.3s throttle)이 나가
+# 전체가 1~2h+ 도는데, 끝에서 한 번만 commit 하면 크래시·재시작 sweep 한 방에
+# 전량이 날아간다. upsert 라 재실행이 안전해 부분 저장에 부작용이 없다.
+_MATCH_COMMIT_EVERY = 200
+
+# "대상 전량이 빈 응답" 을 API 장애로 판정하기 위한 최소 표본 수.
+# 이보다 적으면 개별 단지의 정상적인 미공개와 구분되지 않아 판정을 보류한다
+# (정상 배치는 500 이라 실제 장애는 이 임계를 여유 있게 넘는다).
+_ALL_EMPTY_MIN_TARGETS = 10
+
 _MATCH_JOB_TYPE = "kapt_match"
 _COST_JOB_TYPE = "kapt_costs"
 
@@ -176,6 +186,101 @@ def _fetch_all_kapt(limit_pages: int = _MAX_LIST_PAGES) -> tuple[list[dict], boo
     return collected, is_complete
 
 
+def _resolve_reverse_conflicts(proposals: list[tuple]) -> tuple[list[tuple], int]:
+    """역방향 충돌 해소 — 한 kaptCode 를 노리는 우리 단지가 여럿이면 최고점 1개만.
+
+    반환 (생존 목록, 탈락 수).
+
+    ⚠ `pick_best_match` 는 **정방향**("우리 단지 1 vs kapt 후보 N")만 막는다.
+    반대 방향("우리 단지 N vs kapt 후보 1")은 무방어였고, 라이브 스모크에서
+    10그룹·21단지가 같은 kaptCode 에 중복 배정됐다(전부 1차/2차 형제 단지).
+    complex_no 가 PK 라 upsert 로는 이 중복을 막을 수 없다 — 서로 다른 행이므로.
+
+    동률이면 **전원 탈락**시킨다. `pick_best_match` 의 정방향 동률 규칙과 대칭인
+    보수 원칙 — 오매칭(남의 단지 관리비를 사실처럼 표시)은 미매칭보다 훨씬 나쁘다.
+    """
+    by_code: dict[str, list[tuple]] = {}
+    for item in proposals:
+        by_code.setdefault(item[1]["kaptCode"], []).append(item)
+
+    survivors: list[tuple] = []
+    dropped = 0
+    for kapt_code, group in by_code.items():
+        if len(group) == 1:
+            survivors.append(group[0])
+            continue
+
+        best_ratio = max(ratio for _, _, ratio in group)
+        top = [item for item in group if item[2] == best_ratio]
+        if len(top) > 1:
+            logger.info(
+                "[kapt_match] kaptCode %s 역방향 동률 %d단지(%s) — 전원 탈락",
+                kapt_code, len(top), ", ".join(c.complex_no for c, _, _ in top),
+            )
+            dropped += len(group)
+            continue
+
+        logger.info(
+            "[kapt_match] kaptCode %s 를 %d단지가 경합 — %s(%.4f) 채택, %d단지 탈락",
+            kapt_code, len(group), top[0][0].complex_no, best_ratio, len(group) - 1,
+        )
+        survivors.append(top[0])
+        dropped += len(group) - 1
+
+    return survivors, dropped
+
+
+def _clear_conflicting_mappings(db, complex_no: str, kapt_code: str) -> None:
+    """이번 배정과 충돌하는 옛 매칭 정리 + 무효해진 관리비 삭제.
+
+    두 가지 cross-run 오염을 함께 막는다:
+
+    1. **다른 단지가 쥔 같은 kapt_code** (#1 cross-run) — 이번 실행이 kaptCode X 를
+       단지 B 에 붙이는데 옛 실행이 X 를 단지 A 에 붙여뒀다면 두 행이 공존해 두
+       단지가 같은 관리비를 보여준다. 이번 배정과 **충돌하는 행만** 지우므로 부분
+       목록 실행에서도 안전하다(무관한 매칭은 건드리지 않는다).
+    2. **이 단지의 kapt_code 가 바뀐 경우** (#3) — kapt_management_costs 는
+       complex_no 로만 조인되므로(price_queries.get_latest_kapt_cost), 매칭만
+       갈아끼우면 옛 K-apt 단지의 금액이 새 이름과 나란히 표시된다. 재수집될
+       때까지 틀린 값이 사실처럼 보이므로 옛 코드 수집분을 무효화한다.
+       (같은 kapt_code 재확인이면 지우지 않는다 — 매달 전량 재수집은 단지당
+       22콜이라 쿼터가 터진다.)
+
+    호출자의 upsert 와 같은 트랜잭션에서 돌아 중간 상태가 노출되지 않는다.
+    """
+    # 1. 다른 단지가 쥔 같은 kapt_code
+    stale = (
+        db.query(KaptComplexMap)
+        .filter(
+            KaptComplexMap.kapt_code == kapt_code,
+            KaptComplexMap.complex_no != complex_no,
+        )
+        .all()
+    )
+    for row in stale:
+        logger.info(
+            "[kapt_match] 중복 배정 정리: kaptCode %s 를 쥐고 있던 단지 %s 매칭 삭제",
+            kapt_code, row.complex_no,
+        )
+        db.query(KaptManagementCost).filter(
+            KaptManagementCost.complex_no == row.complex_no
+        ).delete(synchronize_session=False)
+        db.delete(row)
+
+    # 2. 이 단지의 kapt_code 가 바뀌었으면 옛 코드로 모은 관리비 무효화
+    current = db.query(KaptComplexMap).filter(
+        KaptComplexMap.complex_no == complex_no
+    ).one_or_none()
+    if current is not None and current.kapt_code != kapt_code:
+        logger.info(
+            "[kapt_match] 단지 %s 재매칭 %s → %s — 옛 코드 관리비 무효화",
+            complex_no, current.kapt_code, kapt_code,
+        )
+        db.query(KaptManagementCost).filter(
+            KaptManagementCost.complex_no == complex_no
+        ).delete(synchronize_session=False)
+
+
 def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
     """K-apt 단지 목록 ↔ 우리 단지 매칭 (월 1회).
 
@@ -209,7 +314,11 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
             .all()
         )
 
-        matched, skipped = 0, 0
+        # ── pass 1: 후보 선별만 (API 호출 0) ──
+        # 여기서 kaptCode 별로 모아 "한 K-apt 단지를 여러 우리 단지가 노리는"
+        # 역방향 충돌을 먼저 해소한다. pass 2 에서야 생존자에만 basis 를 부른다.
+        proposals: list[tuple] = []   # (cpx, cand, ratio)
+        skipped = 0
         for cpx in targets:
             candidates = by_bjd.get((cpx.cortar_no or "").strip()[:10])
             if not candidates:
@@ -220,7 +329,14 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
                 skipped += 1
                 continue
             cand, ratio = best
+            proposals.append((cpx, cand, ratio))
 
+        survivors, dropped = _resolve_reverse_conflicts(proposals)
+        skipped += dropped
+
+        # ── pass 2: 생존자만 basis 보강 → 세대수 재게이트 → 저장 ──
+        matched = 0
+        for cpx, cand, ratio in survivors:
             # 확정분만 기본정보 보강 — 실패해도 매칭 자체는 저장한다.
             corridor, household = None, None
             basis = fetch_apt_basis_info(cand["kaptCode"])
@@ -248,6 +364,8 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
                 skipped += 1
                 continue
 
+            _clear_conflicting_mappings(db, cpx.complex_no, cand["kaptCode"])
+
             _do_upsert(
                 db,
                 KaptComplexMap,
@@ -264,6 +382,13 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
             )
             matched += 1
 
+            # 중간 저장 — 이 잡은 basis 호출(0.3s throttle)로 1~2h+ 돌기 때문에,
+            # 끝에서 한 번만 commit 하면 크래시·재시작 sweep 한 방에 전량이 날아간다.
+            # upsert 라 재실행이 안전해 부분 저장에 부작용이 없다.
+            if matched % _MATCH_COMMIT_EVERY == 0:
+                db.commit()
+                logger.info("[kapt_match] 중간 저장: %d건 매칭", matched)
+
         db.commit()
 
         # silent failure 가드 (env_air.py 세션 280 패턴 답습): 대상 단지가 있는데
@@ -273,7 +398,11 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
             logger.error("[kapt_match] silent failure 감지: 대상 %d개 전부 실패", len(targets))
             return {"matched": 0, "skipped": skipped, "error": "no_match"}
 
-        _complete_job(db, job, matched, skipped)
+        # ⚠ 2번째 인자는 _complete_job 규약상 **failed** 다(total = processed + failed).
+        # 미매칭(skipped)은 실패가 아니라 정상적인 '해당 없음'이므로 0 을 넘긴다 —
+        # skipped 를 넘기면 total 이 46,373건만큼 부풀어(라이브 실측 47,606) 실패율
+        # 지표가 통째로 망가진다. skipped 는 아래 로그·error_message 로만 관찰한다.
+        _complete_job(db, job, matched, 0)
         if not list_complete:
             # 부분 목록으로 돈 회차임을 job 에 남긴다 — 매칭 수가 평소보다 낮아도
             # '정상 완료'로만 보이면 조용한 퇴행이 된다(관측 가능성 확보).
@@ -402,7 +531,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
 
         # silent failure 가드: 대상이 있는데 한 건도 저장 못 했고 그 원인이
         # '미공개'가 아니라 실패라면 '완료(0)' 위장 대신 failed 로 알린다.
-        # (전부 미공개인 경우는 정상이므로 completed 로 둔다 — 오탐 방지)
+        # (일부만 미공개인 경우는 정상이므로 completed 로 둔다 — 오탐 방지)
         if collected == 0 and targets and failed > 0:
             _fail_job(
                 db, job,
@@ -414,7 +543,41 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             )
             return {"collected": 0, "failed": failed, "empty": empty, "error": "no_collect"}
 
-        _complete_job(db, job, collected, failed)
+        # ⚠ 전량 빈 응답도 silent failure 다 — 위 가드만으로는 안 잡힌다.
+        # kapt_api._body 는 호출 실패·비정상 resultCode 에 None 을 주고, 그러면
+        # breakdown 이 빈 dict 가 되어 예외 없이 `empty` 로 계수된다 → failed=0 이라
+        # 위 가드가 발동하지 않고 '완료(0건)' 으로 위장된다. API 폐기(2026-08-19
+        # data.go.kr K-apt 구버전 폐기 사고)·키 만료·서비스 점검이 전부 이 모양이다.
+        #
+        # 단 "전량 빈 응답"만으로는 부족하고 **표본이 충분할 때만** 판정한다.
+        # 개별 단지의 미공개는 흔한 정상 상태라, 대상이 1~2개뿐인 회차(수집이
+        # 거의 끝나 잔여분만 남은 날·수동 소량 트리거)에서는 "전량 미공개"가
+        # 정상적으로 자주 발생한다 — 그걸 failed 로 올리면 official_price 오탐
+        # sweep(세션 369)과 같은 종류의 가짜 경보가 매일 울린다. 임계 미만이면
+        # 판정을 보류하고 completed 로 두되, 아래 로그로 관찰은 남긴다.
+        if collected == 0 and targets and empty == len(targets):
+            if len(targets) < _ALL_EMPTY_MIN_TARGETS:
+                logger.warning(
+                    "[kapt_costs] 대상 %d개 전량 미공개 — 표본이 작아 장애 판정 보류",
+                    len(targets),
+                )
+            else:
+                _fail_job(
+                    db, job,
+                    f"대상 {len(targets)}개 전부 빈 응답 — API 폐기/키 만료 의심",
+                )
+                logger.error(
+                    "[kapt_costs] 전량 빈 응답 감지: 대상 %d개 (API 폐기/키 만료 의심)",
+                    len(targets),
+                )
+                return {
+                    "collected": 0, "failed": failed, "empty": empty, "error": "all_empty",
+                }
+
+        # ⚠ total_items 는 **대상 수** 여야 한다. collected+failed 로 두면 전량
+        # 미공개일 때 total=0 이 되어, freshness 의 헛바퀴 감지(processed==0 AND
+        # total>0, routers/admin/freshness.py)가 영영 발동하지 않는다.
+        _complete_job(db, job, collected, len(targets) - collected)
         logger.info(
             "[kapt_costs] 완료: %d 수집, %d 실패, %d 미공개 (대상 %d, 기준월 %s)",
             collected, failed, empty, len(targets), target_month,

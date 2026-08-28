@@ -44,10 +44,10 @@ def test_extract_scheduler_job_ids_finds_static_literals():
     """
     ids = extract_scheduler_job_ids(_SCHEDULER_SOURCE)
 
-    # 정적 리터럴은 정확히 19개 — 중복 없이.
+    # 정적 리터럴은 정확히 22개 — 중복 없이.
     assert len(ids) == len(set(ids)), f"id 중복 발견: {ids}"
-    assert len(ids) == 19, (
-        f"정적 add_job id 리터럴 개수가 19가 아님 (실제 {len(ids)}개): {ids}. "
+    assert len(ids) == 22, (
+        f"정적 add_job id 리터럴 개수가 22가 아님 (실제 {len(ids)}개): {ids}. "
         "scheduler.py 에 잡이 추가/삭제됐으면 이 테스트의 기대값도 함께 갱신할 것."
     )
 
@@ -58,6 +58,10 @@ def test_extract_scheduler_job_ids_finds_static_literals():
         "official_price", "collect_air_quality", "collect_emergency", "collect_childcare",
         "collect_crime_stats", "crawler_monitor", "collect_metrics", "billing_charge",
         "vacuum_maintenance",
+        # K-apt 관리비 연동 (단지 매칭 + 관리비 수집)
+        "kapt_match", "kapt_costs",
+        # data.go.kr API 버전 격변 감시 (주 1회 일요일 06:40) — 2026-08-19 폐기 사고 재발방지
+        "api_version_probe",
     }
     assert set(ids) == expected, (
         f"추출된 id 집합이 기대와 다름. 누락={expected - set(ids)}, 초과={set(ids) - expected}"

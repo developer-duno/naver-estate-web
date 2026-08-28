@@ -15,7 +15,10 @@ from ._shared import router
 logger = logging.getLogger(__name__)
 
 CollectorName = Literal[
-    "crime-stats", "air-quality", "emergency", "childcare", "backfill-price", "metrics"
+    "crime-stats", "air-quality", "emergency", "childcare", "backfill-price", "metrics",
+    # K-apt 관리비 (V051) — 매칭은 월 1회라 수동 트리거가 사실상 주 실행 경로.
+    # ⚠ kapt-costs 는 단지당 22콜이라 기본 배치(500)면 11,000콜 — 수동 실행 전 쿼터 확인.
+    "kapt-match", "kapt-costs",
 ]
 
 
@@ -39,6 +42,12 @@ def _get_collector(name: CollectorName):
     if name == "metrics":
         from crawler.service_metrics import collect_complex_metrics
         return collect_complex_metrics
+    if name == "kapt-match":
+        from crawler.service_kapt import match_kapt_complexes
+        return match_kapt_complexes
+    if name == "kapt-costs":
+        from crawler.service_kapt import collect_kapt_costs
+        return collect_kapt_costs
     raise HTTPException(status_code=400, detail=f"알 수 없는 수집기: {name}")
 
 

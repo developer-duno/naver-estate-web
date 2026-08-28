@@ -51,6 +51,9 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "billing_charge": {"name": "빌링키 자동결제", "schedule": "매일 04:50", "env": "BILLING_AUTO_CHARGE_ENABLED", "env_default": "true"},
     "crawler_monitor": {"name": "크롤링 모니터", "schedule": "10분마다", "env": "MONITOR_ENABLED"},
     "vacuum_maintenance": {"name": "정기 VACUUM 유지보수", "schedule": "매일 03:50", "env": "VACUUM_MAINTENANCE_ENABLED", "env_default": "true"},
+    "api_version_probe": {"name": "data.go.kr API 버전 감시", "schedule": "주 1회 일요일 06:40", "env": "API_VERSION_MONITOR_ENABLED", "env_default": "true"},
+    "kapt_match": {"name": "K-apt 단지 매칭", "schedule": "매월 21일 06:10", "env": "KAPT_ENABLED"},
+    "kapt_costs": {"name": "K-apt 관리비 수집", "schedule": "매일 06:20", "env": "KAPT_ENABLED"},
 }
 
 # 캘린더 전용 이름표 — 스케줄러에 등록되지 않는 "수동 실행" 잡들.

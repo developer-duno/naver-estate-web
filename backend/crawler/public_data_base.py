@@ -59,6 +59,60 @@ def check_global_daily_limit() -> bool:
             return True
 
 
+# ── 버킷별 일일 한도 (별도 활용신청 API 전용) ──
+# data.go.kr 의 실제 한도는 **활용신청(API)별**로 부여된다 — 전역 합산(GLOBAL_DAILY_LIMIT)
+# 은 같은 신청 건을 나눠 쓰는 API 들에만 맞는 모델이다. 운영계정으로 별도 한도를 받은
+# API(예: K-apt 목록·기본정보 일 10만)까지 9,000 한 바구니에 묶으면, 그 API 가 자기
+# 한도의 10%도 못 쓰고 잘리는 데다 다른 수집기의 쿼터까지 잠식한다.
+# → 자기 한도를 가진 API 는 서브클래스에서 _quota_name 을 선언해 독립 버킷을 쓴다.
+_bucket_lock = threading.Lock()
+# {bucket_name: [count, date_iso]} — DB 실패 시 in-memory 폴백 (전역 폴백 패턴 답습)
+_bucket_daily: dict[str, list] = {}
+
+
+def check_api_daily_limit(api_name: str, max_calls: int) -> bool:
+    """버킷별 일일 호출 한도 체크 — DB 기반 (전역 버킷과 완전 분리).
+
+    `quota_db.increment_api_quota` 의 api_name 파라미터로 `quota:{api_name}:{날짜}`
+    키를 따로 쓴다. 전역 버킷(quota:data_go_kr:...) 카운트에는 영향을 주지 않는다.
+    """
+    from datetime import date
+
+    from crawler.quota_db import increment_api_quota
+
+    try:
+        from db.database import SessionLocal
+        result = increment_api_quota(SessionLocal, api_name=api_name, max_calls=max_calls)
+        # in-memory 카운터도 동기화 (로깅/모니터링용)
+        today = date.today().isoformat()
+        with _bucket_lock:
+            entry = _bucket_daily.get(api_name)
+            if entry is None or entry[1] != today:
+                entry = [0, today]
+                _bucket_daily[api_name] = entry
+            entry[0] += 1
+        return result
+    except Exception:
+        # DB 실패 시 in-memory 폴백 (check_global_daily_limit 패턴 답습)
+        today = date.today().isoformat()
+        with _bucket_lock:
+            entry = _bucket_daily.get(api_name)
+            if entry is None or entry[1] != today:
+                entry = [0, today]
+                _bucket_daily[api_name] = entry
+            if entry[0] >= max_calls:
+                return False
+            entry[0] += 1
+            return True
+
+
+def get_api_daily_count(api_name: str) -> int:
+    """현재 버킷 일일 호출 수 조회 (로깅/모니터링용)"""
+    with _bucket_lock:
+        entry = _bucket_daily.get(api_name)
+        return entry[0] if entry else 0
+
+
 def get_global_daily_count() -> int:
     """현재 전역 일일 호출 수 조회 (로깅/모니터링용)"""
     return _global_daily_count
@@ -73,6 +127,11 @@ class BasePublicDataAPI:
     """
 
     _api_name = "base"
+    # 독립 쿼터 버킷 이름. None 이면 기존 전역 버킷(quota:data_go_kr)을 그대로 쓴다 —
+    # 기존 서브클래스(air_quality·emergency·childcare·crime_stats·applyhome…) 동작 무변경.
+    # data.go.kr 한도는 활용신청별이므로, 자기 한도를 따로 받은 API 만 자기 버킷을 선언한다.
+    _quota_name: str | None = None
+    _quota_daily_limit: int = GLOBAL_DAILY_LIMIT
     _lock = threading.Lock()
     _last_request_time = 0.0
     _session: std_requests.Session | None = None
@@ -107,8 +166,19 @@ class BasePublicDataAPI:
             logger.warning("[%s] PUBLIC_DATA_API_KEY 미설정 — 건너뜀", cls._api_name)
             return None
 
-        if not check_global_daily_limit():
-            logger.warning("[%s] 전역 일일 호출 한도(%d) 도달", cls._api_name, GLOBAL_DAILY_LIMIT)
+        # 독립 버킷 선언 시 그 버킷으로, 아니면 기존 전역 버킷으로 (기존 동작 보존)
+        if cls._quota_name:
+            if not check_api_daily_limit(cls._quota_name, cls._quota_daily_limit):
+                logger.warning(
+                    "[%s] '%s' 버킷 일일 호출 한도(%d) 도달",
+                    cls._api_name, cls._quota_name, cls._quota_daily_limit,
+                )
+                return None
+        elif not check_global_daily_limit():
+            logger.warning(
+                "[%s] 전역 버킷(data_go_kr) 일일 호출 한도(%d) 도달",
+                cls._api_name, GLOBAL_DAILY_LIMIT,
+            )
             return None
 
         params = {**params, "serviceKey": service_key, "_type": "json"}

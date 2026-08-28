@@ -32,6 +32,10 @@ _STALE_HOURS = 1
 _STALE_HOURS_BY_TYPE = {
     "public_trade_data": 3,
     "official_price": 16,
+    # kapt(세션 388): 매칭=2.2만 kapt 단지 목록 + 매칭분 기본정보 1콜(0.3s throttle)로
+    # 1h 초과 상시. 관리비=500단지×22콜×0.3s≈55min+지연이라 1h 경계 — 둘 다 예외 등록.
+    "kapt_match": 4,
+    "kapt_costs": 3,
 }
 # 실패 작업 조회 윈도 — 최근 이 시간 내 failed 만
 _FAILED_WINDOW_HOURS = 24

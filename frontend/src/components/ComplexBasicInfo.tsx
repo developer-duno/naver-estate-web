@@ -3,8 +3,9 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Complex, OfficialPriceItem } from "@/types";
 import { formatDateFull, formatKoreanPrice } from "@/lib/format";
-import { getOfficialPrices, getComplexSubway } from "@/lib/api/complex";
+import { getOfficialPrices, getComplexSubway, getComplexKapt } from "@/lib/api/complex";
 import { formatSubwayStations } from "@/lib/subway-format";
+import { formatCostPerHousehold, formatCostBreakdown } from "@/lib/kapt-format";
 import { queryKeys } from "@/lib/query-keys";
 
 /**
@@ -62,7 +63,18 @@ export default function ComplexBasicInfo({ cpx }: { cpx: Complex }) {
     staleTime: 60_000,
   });
 
-  const rows: [string, string][] = [];
+  // 공동주택 관리비 (K-apt). 위 두 쿼리와 같은 구조지만 404 만 다르게 다룬다 — 래퍼가
+  // "데이터 없음"(404)을 null 로 변환하므로, 관리비가 원래 없는 대다수 단지에서 isError
+  // 가 뜨지 않는다. 5xx 는 래퍼가 throw → data 는 undefined → 행 미표시(기존 관례).
+  const kaptQuery = useQuery({
+    queryKey: queryKeys.complexKapt(cpx.complex_no),
+    queryFn: () => getComplexKapt(cpx.complex_no),
+    enabled: !!cpx.complex_no,
+    staleTime: 60_000,
+  });
+
+  // [라벨, 값, 보조텍스트?] — 보조텍스트는 값 아래 작은 회색 글씨로 표시(관리비 총액 등)
+  const rows: [string, string, string?][] = [];
   const addr = cpx.address || cpx.cortar_address;
   if (addr) rows.push(["주소", addr]);
   if (cpx.road_address) rows.push(["도로명", cpx.road_address]);
@@ -95,6 +107,15 @@ export default function ComplexBasicInfo({ cpx }: { cpx: Complex }) {
   const subwayText = formatSubwayStations(subwayQuery.data?.stations ?? []);
   if (subwayText) rows.push(["가까운 지하철", subwayText]);
 
+  // 월 관리비 + 복도유형 (K-apt). 매칭·관리비가 없는 단지(404 → null)나 조회 실패면
+  // 행 자체를 추가하지 않는다 — 빈 상태 문구 없이 생략하는 것이 이 컴포넌트의 관례.
+  const kapt = kaptQuery.data;
+  if (kapt) {
+    const costText = formatCostPerHousehold(kapt.cost_per_household, kapt.cost_month);
+    if (costText) rows.push(["월 관리비", costText, formatCostBreakdown(kapt) ?? undefined]);
+    if (kapt.corridor_type) rows.push(["복도유형", kapt.corridor_type]);
+  }
+
   // 공시가격 + 공시가율 (둘 다 무료). 데이터 없으면 행 자체를 추가하지 않는다.
   const representative = pickRepresentative(officialQuery.data?.items ?? []);
   if (representative) {
@@ -115,10 +136,13 @@ export default function ComplexBasicInfo({ cpx }: { cpx: Complex }) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-      {rows.map(([label, value]) => (
+      {rows.map(([label, value, sub]) => (
         <div key={label} className="flex gap-2">
           <span className="text-sm text-gray-500 font-medium shrink-0 w-24">{label}</span>
-          <span className="text-sm">{value}</span>
+          <span className="text-sm">
+            {value}
+            {sub && <span className="block text-xs text-gray-500">{sub}</span>}
+          </span>
         </div>
       ))}
     </div>

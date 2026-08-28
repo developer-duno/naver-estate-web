@@ -33,7 +33,7 @@
 | `db/mb_query_helpers.py` | mibunyang 중복 제거 + 정렬 + 필터 헬퍼 |
 | `db/mb_apartment_queries.py` | mibunyang 아파트 단지 + 미분양 조회 쿼리 |
 | `db/mb_misc_queries.py` | mibunyang 지역 통계 + 실거래 + 단지 부속 쿼리 |
-| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V048, 49 버전 — 최신은 하단 §DB 마이그레이션 표가 진실) |
+| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V051, 52 버전 — 최신은 하단 §DB 마이그레이션 표가 진실) |
 | `shared/naver_api.py` | NaverEstateAPI (수정 금지) |
 | `shared/constants.py` | 상수 (수정 금지) |
 | `auth/permissions.py` | 역할 체크 (require_role) + 일일 쿼터 (check_quota) |
@@ -45,6 +45,8 @@
 | `crawler/service_price.py` | 시세 수집 (배치 + on-demand) |
 | `crawler/service_public.py` | 공공데이터 실거래가 수집 |
 | `crawler/service_official_price.py` | 공동주택 공시가격 수집 (법정동 루프 + 단지 매칭 + 평형별 중위가 + 읍/면 리 확장 패스 + 이름 2차 매칭 패스) |
+| `crawler/service_kapt.py` | K-apt 관리비 수집 (단지 매칭 3중 게이트 월1회 + 월별 관리비 공용17/개별5 합산 매일) |
+| `crawler/kapt_api.py` | K-apt 단지·관리비 API 클라이언트 (AptListService4·AptBasisInfoServiceV5·관리비 V3/V2, BasePublicDataAPI 상속) |
 | `crawler/cortar_ri_map.py` | 읍/면→리 코드 정적 dict + expand_to_ri_codes (공시가격 리 단위 확장 전용, PR-E2 세션 373) |
 | `crawler/scheduler.py` | APScheduler 스케줄 (매물/시세/공공데이터/인기단지) |
 | `crawler/public_data_api.py` | 국토교통부 공공데이터 API |
@@ -117,11 +119,12 @@
 | V048 | trades·complex_price_history·complexes 3개 테이블에 인덱스 3개 추가 (신선도 monitor 10분 주기 풀스캔 제거 — DB 크래시 2회 원인 가설의 보조 요인, 세션 381) | 2026-08-24 (prod 적용완료·**첫 Claude 직접 적용 사례**(예외적으로 SQL Editor 아님) — `CREATE INDEX CONCURRENTLY` + `SET statement_timeout='10min'`(엔진 기본 8초 우회) 로 1개씩 생성, 매번 `pg_index.indisvalid` 재조회로 확인. 3개 모두 valid, 소요 2.4/2.6/1.7초. `EXPLAIN (ANALYZE, BUFFERS)` 이 Index Only Scan 0.05~0.06ms 로 전환, monitor 주기 slow query 소멸 실측. ⚠ 신규 테스트는 SQLite 환경이라 인덱스 사용 경로 자체는 검증 못함(리팩터링 안전성만 검증), 효과는 위 prod EXPLAIN 으로만 확인됨) |
 | V049 | rental_schedule_official.region_name 컬럼 추가 (민간임대 청약 지역 필터 결함 근본수정 — 세션383이 발견한 region_code 숫자코드 vs 한글 시도명 불일치를, 오피스텔 짝꿍 패턴(V045 region_name)과 동일하게 SUBSCRPT_AREA_CODE_NM 을 저장하는 방식으로 해소, 세션 384) | 2026-08-25 (prod 적용완료, 세션 384: 사장님 SQL Editor 실행 → Claude 가 `information_schema.columns` + `pg_indexes` 직접 조회로 region_name(text·nullable) 컬럼과 `idx_rental_schedule_region_name` 인덱스 EXISTS 재검증 → PR #422 머지·backend 재시작(release.md §2 cross-check 4중 통과)·라이브 GET `/api/mb/presale/officetel-rental?region=서울` 로 오피스텔 200건 전량 지역명 일치 실측 확인. 기존 rental 저장분은 region_name NULL 이라 다음 정기 수집(월요일)까지 rental 필터에서만 제외 — 오피스텔은 즉시 정상 동작) |
 | V050 | complex_official_prices.collected_at 인덱스 추가 (신선도 monitor 10분 주기 풀스캔 제거 — V048(세션381)이 trades/complex_price_history/complexes 3테이블만 고치고 이 5번째 테이블을 놓쳤던 것을 세션385 개선 스캔이 재발견, 동일 패턴 답습) | 2026-08-25 (prod 적용완료, 세션 385: Claude 가 V048 선례대로 `CREATE INDEX CONCURRENTLY` + `SET statement_timeout='10min'` 직접 실행, `pg_index.indisvalid=True` 확인. `EXPLAIN (ANALYZE, BUFFERS)` 33.5ms Seq Scan → 0.106ms Index Only Scan(약 316배) 실측. freshness.py 의 official_price 축을 max(인덱스 스캔)+count(`_approx_count` 근사) 물리 분리, 신규 characterization test 1건(최댓값 선택 로직까지 검증, 뮤테이션 검증 통과) — PR 진행 예정) |
+| V051 | kapt_complex_map·kapt_management_costs 신규 테이블 2개 (K-apt 관리비 연동 — 단지 매칭 결과 + 월별 관리비 공용17/개별5 합산. RLS+GRANT REVOKE 이중 빗장 V044/V047 답습) | 2026-08-27 (prod 적용완료, 세션 388: Claude 가 V048 선례대로 SQLAlchemy raw_connection 으로 직접 실행 — ⚠ 첫 시도는 프록시 객체의 `autocommit` 속성이 드라이버에 안 닿아 통째 롤백(테이블 0개 실측), 명시적 `commit()` 재실행으로 반영. information_schema 4요소 재검증 통과: 테이블 2·RLS 양쪽 True·"Service write" 정책 2·anon/authenticated GRANT 0건·인덱스 5(pkey 2+유니크 1+ix 2)·컬럼 7+10. 신규 테이블 2개라 공유 DB(mibunyang) 영향 0) |
 
-- `db/migrations/` 폴더에 `V000__` ~ `V050__` SQL 파일 = 51 버전
+- `db/migrations/` 폴더에 `V000__` ~ `V051__` SQL 파일 = 52 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
-- 최신 = V050 (complex_official_prices.collected_at 인덱스, 세션 385 — prod 적용완료·재검증 완료). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
+- 최신 = V051 (K-apt 관리비 테이블 2개 — prod 적용완료·재검증 완료). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피)
   - V043 = prod 적용완료·backend 재시작(zombie 해소) 완료 — 세션 352 라이브 검증: `/presale/officetel-rental` 200 정상 응답 확인.
   - V043 = house_nm TEXT nullable 컬럼 추가 — 기존 아파트 청약 행은 NULL 로 두면 되므로 기존 데이터 영향 0. `ADD COLUMN IF NOT EXISTS` 라 멱등·안전. 코드(`db/mb_models.py`)가 이미 이 컬럼에 매핑돼 SELECT 목록에 포함되므로 **prod 선행 적용 필수** — 세션 352 에 적용·재검증 완료.
   - V040~V042 = 이슈 #323(청약홈 오피스텔·도시형·민간임대 편입) 3종 세트 — `CREATE TABLE/ADD COLUMN IF NOT EXISTS` 라 멱등·안전. V040 은 기존 컬럼에 `NOT NULL DEFAULT 'apt'`로 추가해 기존 아파트 데이터에 영향 0. V041/V042 는 신규 독립 테이블이라 공유 DB(mibunyang) 영향 0. 코드(`db/mb_models.py`)는 이미 이 컬럼/테이블에 매핑돼 있으므로 **prod 선행 적용 필수** — 세션 352 에 적용·재검증 완료.

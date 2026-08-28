@@ -77,3 +77,30 @@ export interface SubwayStationNear {
 export interface SubwayNearResponse {
   stations: SubwayStationNear[];
 }
+
+/**
+ * 단지 공동주택 관리비 (K-apt, GET /api/complexes/{no}/kapt).
+ *
+ * 전국 6.4만 단지 중 K-apt 의무관리단지(~1.5만)만 데이터가 존재한다 — 매칭·관리비가
+ * 없으면 BE 가 404 로 응답하므로 **404 는 다수의 정상 케이스**이고, FE 래퍼는 이를
+ * null 로 변환한다 (getComplexKapt 주석 참조).
+ *
+ * 금액 단위는 **원**(won) — 화면 표시 시 만원 환산이 필요하다.
+ */
+export interface KaptInfo {
+  kapt_code: string;
+  kapt_name: string;
+  /** 복도유형 (계단식·복도식·혼합식 등). 미상이면 null */
+  corridor_type: string | null;
+  /** 관리비 기준월 YYYYMM */
+  cost_month: string;
+  /** 공용관리비 총액 (원) */
+  common_cost: number | null;
+  /** 개별사용료 총액 (원) */
+  individual_cost: number | null;
+  /** 관리비 총액 (원) */
+  total_cost: number | null;
+  /** 세대당 관리비 (원) */
+  cost_per_household: number | null;
+  household_count: number | null;
+}

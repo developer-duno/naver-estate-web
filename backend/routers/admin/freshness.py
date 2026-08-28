@@ -230,6 +230,25 @@ def compute_freshness(db: Session) -> dict:
                 (CrawlJob.scheduler_job_id == "complex_detail_OPST") & (CrawlJob.status == "completed"),
             )
         ).one(),
+        # V051: K-apt 관리비 연동 2종 — CrawlJob 경유(childcare 패턴). 관리비
+        # 테이블을 직접 스캔하지 않는 이유는 max+count 풀스캔이 monitor 10분 주기에
+        # 얹히는 것을 피하기 위함(세션 342 답습) + 매칭 잡은 애초에 쓰는 테이블이 다름.
+        "kapt_match": db.execute(
+            select(
+                func.max(CrawlJob.completed_at),
+                func.coalesce(func.max(CrawlJob.processed_items), 0),
+            ).where(
+                (CrawlJob.scheduler_job_id == "kapt_match") & (CrawlJob.status == "completed"),
+            )
+        ).one(),
+        "kapt_costs": db.execute(
+            select(
+                func.max(CrawlJob.completed_at),
+                func.coalesce(func.max(CrawlJob.processed_items), 0),
+            ).where(
+                (CrawlJob.scheduler_job_id == "kapt_costs") & (CrawlJob.status == "completed"),
+            )
+        ).one(),
     }
 
     items = []

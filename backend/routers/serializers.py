@@ -6,7 +6,11 @@
   routers/mb_serializers.py     — apartment_to_dict 외 11개
 """
 
-from routers.estate_serializers import article_to_dict, complex_to_dict  # noqa: F401
+from routers.estate_serializers import (  # noqa: F401
+    article_to_dict,
+    complex_to_dict,
+    kapt_cost_to_dict,
+)
 from routers.filter_builder import build_filter_dict  # noqa: F401
 from routers.mb_serializers import (  # noqa: F401
     apartment_to_dict,

@@ -147,3 +147,23 @@ def _calc_jeonse_ratio(a, c) -> float | None:
     ):
         return round(a.numeric_price / c_median * 100, 1)
     return None
+
+
+def kapt_cost_to_dict(cost, mapping) -> dict:
+    """K-apt 관리비 1건 → 응답 dict (V051).
+
+    금액은 원 단위 원값 그대로 — 만원 환산·반올림은 표시 계층(FE) 책임이라
+    여기서 가공하면 정밀도가 한 번 깎인 값이 API 계약이 된다.
+    breakdown(항목별 원값)은 감사용이라 응답에 싣지 않는다.
+    """
+    return {
+        "kapt_code": mapping.kapt_code,
+        "kapt_name": mapping.kapt_name,
+        "corridor_type": mapping.corridor_type,
+        "cost_month": cost.cost_month,
+        "common_cost": cost.common_cost,
+        "individual_cost": cost.individual_cost,
+        "total_cost": cost.total_cost,
+        "cost_per_household": cost.cost_per_household,
+        "household_count": cost.household_count,
+    }

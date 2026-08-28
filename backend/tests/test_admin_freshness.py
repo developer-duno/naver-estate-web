@@ -45,7 +45,7 @@ def test_freshness_empty_db_unknown(client, db):
     res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
     assert res.status_code == 200
     body = res.json()
-    assert len(body["items"]) == 16  # 세션 359: 신규 8종(오피스텔·민간임대·공시가격·응급의료·매물상세·단지가치지표·단지상세APT·단지상세OPST) 편입
+    assert len(body["items"]) == 18  # 세션 359 신규 8종 + V051 K-apt 2종(단지매칭·관리비) 편입
     for item in body["items"]:
         assert item["count"] == 0
         assert item["last_updated"] is None
@@ -413,6 +413,8 @@ def test_freshness_response_schema(client, db):
         "officetel_presale", "rental_presale", "official_price",
         "emergency", "article_detail", "complex_metric",
         "complex_detail_apt", "complex_detail_opst",
+        # V051: K-apt 관리비 연동 2종
+        "kapt_match", "kapt_costs",
     }
     assert keys == expected_keys
     for item in body["items"]:

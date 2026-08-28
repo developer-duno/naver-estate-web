@@ -5,7 +5,8 @@
 
 import pytest
 
-from crawler import service_kapt
+from crawler import kapt_api, service_kapt
+from crawler.kapt_api import KaptApiError
 from crawler.service_kapt import (
     candidate_cost_months,
     collect_kapt_costs,
@@ -963,3 +964,310 @@ def test_collect_costs_all_empty_small_sample_stays_completed(db, monkeypatch):
     from db.models import CrawlJob
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
     assert job.status == "completed", "표본 1개 전량 미공개를 장애로 오판"
+
+
+# ── (c) 호출 실패 vs (b) 정상 미공개 구분 (반쪽 저장 차단) ──
+#
+# 이 블록은 "공용(V3) 17콜이 통째로 실패하고 개별(V2) 5콜만 성공한 회차에
+# 공용관리비 0원짜리 반쪽 총액이 저장되고, 그 달 행이 생겨 다음 달까지
+# 재수집도 안 되던" 결함의 회귀 가드다.
+
+
+def test_collect_costs_partial_failure_saves_nothing(db, monkeypatch):
+    """공용(V3) 호출 실패 + 개별(V2) 성공 -> 행 0 · failed 계수 (반쪽 저장 금지).
+
+    결함 재현: 예전에는 `_body` 가 실패에도 None 을 줘서 fetch_common_cost 가
+    빈 dict 를 돌려줬고, 개별(V2)만 성공하면 breakdown 이 비어있지 않아
+    `_summarize` 가 common_cost=0 · total_cost=개별만 인 반쪽 값을 저장했다.
+    그러면 그 달 행이 생겨 `done` 셋에 걸리므로 다음 달까지 고쳐지지도 않는다.
+
+    fixture 두 축을 다르게 (testing.md 세션372 답습): 대상 3단지 중 실패는
+    1단지뿐이라 "대상 수"와 "실패 수"가 우연히 같아지지 않는다 — 두 값이
+    같으면 코드가 둘을 뒤바꿔 써도 단언이 통과해버린다.
+    """
+    for i, code in enumerate(("AA", "BB", "CC")):
+        _make_complex(db, complex_no="50%02d" % i)
+        _seed_mapping(db, complex_no="50%02d" % i, kapt_code=code)
+
+    def common(code, month):
+        if code == "AA":
+            raise KaptApiError("서비스 점검", code="99", op="getHsmpGuardCostInfoV3")
+        return {"aV3": 1_000}
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(
+        service_kapt, "fetch_individual_cost",
+        lambda code, month: {"bV2": 500},
+    )
+
+    result = collect_kapt_costs(batch_size=10)
+
+    # 실패 단지는 저장 0 — 반쪽 행이 절대 생기면 안 된다.
+    assert result["failed"] == 1
+    assert result["collected"] == 2
+    saved = {r.complex_no for r in db.query(KaptManagementCost).all()}
+    assert saved == {"5001", "5002"}, "실패 단지가 반쪽 값으로 저장됨"
+    # 저장된 정상 단지는 공용+개별이 온전하다 (반쪽 아님).
+    ok_row = db.query(KaptManagementCost).filter(
+        KaptManagementCost.complex_no == "5001").one()
+    assert ok_row.common_cost == 1_000 and ok_row.individual_cost == 500
+
+
+def test_collect_costs_failed_complex_retried_next_run(db, monkeypatch):
+    """호출 실패 단지는 그 달 행이 없으므로 다음 회차에 자동 재시도된다.
+
+    `done` 셋은 '후보월에 행이 있는 단지'라 실패로 저장을 건너뛴 단지는 걸리지
+    않는다 — 이 성질이 "실패는 저장 안 함" 처방의 안전판이다.
+    """
+    _make_complex(db, complex_no="5101")
+    _seed_mapping(db, complex_no="5101", kapt_code="AA")
+
+    calls = {"n": 0}
+
+    def common(code, month):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise KaptApiError("일시 실패", code=None, op="x")
+        return {"aV3": 700}
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    first = collect_kapt_costs(batch_size=10)
+    assert first["failed"] == 1
+    assert db.query(KaptManagementCost).count() == 0
+
+    second = collect_kapt_costs(batch_size=10)
+    assert second["collected"] == 1, "실패 단지가 다음 회차 대상에서 빠짐"
+    assert db.query(KaptManagementCost).one().common_cost == 700
+
+
+def test_collect_costs_month_fallback_skipped_on_call_failure(db, monkeypatch):
+    """이번 달이 (c) 호출 실패면 이전 달로 폴백하지 않는다 (쿼터 낭비 방지).
+
+    폴백은 (b) '그 달은 아직 미공개' 일 때만 의미가 있다. 죽은 API 에 대고
+    이전 달을 또 부르면 22콜을 헛되이 태우고 결과도 같다.
+    """
+    _make_complex(db, complex_no="5201")
+    _seed_mapping(db, complex_no="5201", kapt_code="AA")
+
+    seen_months = []
+
+    def common(code, month):
+        seen_months.append(month)
+        raise KaptApiError("호출 실패", code=None, op="x")
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert result["failed"] == 1
+    assert len(candidate_cost_months()) > 1, "폴백 후보가 1개면 이 테스트가 무의미"
+    assert len(seen_months) == 1, "실패 후에도 이전 달로 폴백함: %r" % (seen_months,)
+
+
+def test_collect_costs_quota_exceeded_stops_batch(db, monkeypatch):
+    """쿼터 초과(22)면 남은 대상에 호출 0 · 잡 failed · 앞선 성공분은 보존.
+
+    fixture 두 축을 다르게: 대상 5단지 중 3번째에서 한도가 터지도록 해
+    '대상 수'·'처리 수'·'잔여 수'가 서로 다른 값이 되게 했다.
+    """
+    for i in range(5):
+        _make_complex(db, complex_no="53%02d" % i)
+        _seed_mapping(db, complex_no="53%02d" % i, kapt_code="K%d" % i)
+
+    called = []
+
+    def common(code, month):
+        called.append(code)
+        if code == "K2":
+            raise KaptApiError("일일 한도 초과(22)", code="22", op="x", is_quota=True)
+        return {"aV3": 100}
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert result["error"] == "quota_exceeded"
+    # 한도 이후 단지(K3·K4)에는 호출이 아예 나가지 않는다.
+    assert called == ["K0", "K1", "K2"], "한도 후 헛호출 발생: %r" % (called,)
+    assert result["remaining"] == 2
+    # 앞서 성공한 2단지는 커밋돼 보존된다 (중단이 롤백을 뜻하지 않는다).
+    assert {r.complex_no for r in db.query(KaptManagementCost).all()} == {"5300", "5301"}
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "failed"
+    assert "쿼터" in (job.error_message or "") and "22" in (job.error_message or "")
+
+
+def test_collect_costs_unpublished_still_treated_as_empty(db, monkeypatch):
+    """(b) 정상 미공개는 예전 그대로 `empty` 경로 — 실패로 승격되지 않는다.
+
+    이 PR 이 (c)만 골라내는지 확인하는 반대편 가드. 두 축을 다르게: 대상
+    2단지 중 1개만 미공개라 '대상 수'와 '미공개 수'가 갈린다.
+    """
+    _make_complex(db, complex_no="5401")
+    _make_complex(db, complex_no="5402")
+    _seed_mapping(db, complex_no="5401", kapt_code="AA")
+    _seed_mapping(db, complex_no="5402", kapt_code="BB")
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost",
+        lambda code, month: {"aV3": 300} if code == "AA" else {},
+    )
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert result["empty"] == 1 and result["failed"] == 0 and result["collected"] == 1
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "completed", "정상 미공개가 실패로 승격됨"
+
+
+# ── API 계층 3상태 구분 단위 테스트 ──
+
+
+def test_body_or_raise_raises_on_call_failure(monkeypatch):
+    """call_api 가 None(키 미설정·한도·HTTP 실패·XML 파싱 실패)이면 예외.
+
+    ⚠ 이게 (b)와 뭉개지던 지점이다 — data.go.kr 은 `_type=json` 을 줘도 에러는
+    XML(`cmmMsgHeader`)로 주는 엔드포인트가 있어, 쿼터 초과가 `resp.json()`
+    예외 -> call_api None 으로 도착한다.
+    """
+    monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(lambda cls, u, p: None))
+    with pytest.raises(KaptApiError):
+        kapt_api.KaptAPI._body_or_raise("http://x", {}, op="opA")
+
+
+def test_body_or_raise_returns_none_on_empty_body(monkeypatch):
+    """(b) 정상 응답 + 빈 body -> None (예외 아님)."""
+    monkeypatch.setattr(
+        kapt_api.KaptAPI, "call_api",
+        classmethod(
+            lambda cls, u, p: {"response": {"header": {"resultCode": "00"}, "body": None}}
+        ),
+    )
+    assert kapt_api.KaptAPI._body_or_raise("http://x", {}, op="opA") is None
+
+
+@pytest.mark.parametrize("payload", [
+    # 실측 형태 (tests/test_api_version_monitor.py 픽스처 답습) — JSON cmmMsgHeader
+    {"cmmMsgHeader": {"returnAuthMsg": "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR",
+                      "returnReasonCode": "22"}},
+    # 코드만 오는 변형
+    {"cmmMsgHeader": {"returnReasonCode": "22"}},
+    # 정상 구조 안에 22 가 실려 오는 변형
+    {"response": {"header": {"resultCode": "22", "resultMsg": "LIMITED..."}}},
+])
+def test_body_or_raise_flags_quota(monkeypatch, payload):
+    """한도 초과(22)는 is_quota=True 로 올라온다 — 응답 포맷 변형 전부 커버."""
+    monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(lambda cls, u, p: payload))
+    with pytest.raises(KaptApiError) as exc:
+        kapt_api.KaptAPI._body_or_raise("http://x", {}, op="opA")
+    assert exc.value.is_quota is True
+
+
+def test_body_or_raise_non_quota_error_not_flagged(monkeypatch):
+    """키 미등록(30) 등 다른 에러는 실패이되 쿼터 플래그는 꺼둔다.
+
+    두 축 분리: 같은 '예외 발생' 이라도 is_quota 로 배치 중단 여부가 갈린다 —
+    30 을 쿼터로 오판하면 정상 회차가 통째로 중단된다.
+    """
+    monkeypatch.setattr(
+        kapt_api.KaptAPI, "call_api",
+        classmethod(lambda cls, u, p: {"cmmMsgHeader": {
+            "returnAuthMsg": "SERVICE_KEY_IS_NOT_REGISTERED_ERROR",
+            "returnReasonCode": "30"}}),
+    )
+    with pytest.raises(KaptApiError) as exc:
+        kapt_api.KaptAPI._body_or_raise("http://x", {}, op="opA")
+    assert exc.value.is_quota is False
+
+
+def test_collect_ops_propagates_failure_without_partial(monkeypatch):
+    """_collect_ops 는 한 op 라도 실패하면 부분 dict 대신 예외를 올린다."""
+    seen = []
+
+    def fake(base_url, op, kapt_code, search_date):
+        seen.append(op)
+        if len(seen) == 2:
+            raise KaptApiError("실패", code=None, op=op)
+        return {"someCost": 100}
+
+    monkeypatch.setattr(kapt_api, "fetch_cost_item", fake)
+    with pytest.raises(KaptApiError):
+        kapt_api._collect_ops("http://x", ("a", "b", "c"), "K1", "202605",
+                              kapt_api._extract_amount)
+    # 실패 즉시 빠져나와 남은 op("c")를 부르지 않는다 — 쿼터 보호.
+    assert seen == ["a", "b"]
+
+
+def test_body_non_raising_wrapper_keeps_none_contract(monkeypatch):
+    """목록·기본정보용 `_body` 는 기존대로 실패에도 None (예외 전파 안 함)."""
+    monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(lambda cls, u, p: None))
+    assert kapt_api.KaptAPI._body("http://x", {}) is None
+
+
+def test_fetch_common_cost_raises_through_real_chain(monkeypatch):
+    """`fetch_common_cost` -> `fetch_cost_item` -> `_body_or_raise` 실배선 가드.
+
+    ⚠ 위 collect 계열 테스트들은 `fetch_common_cost` 자체를 mock 하므로 이 구간을
+    **한 줄도 지나지 않는다** — 뮤테이션 검증에서 `fetch_cost_item` 을 옛 `_body`
+    (실패를 None 으로 삼키는 버전)로 되돌려도 전부 통과해버렸다. 그래서 API 계층
+    전체를 실제로 통과시키는 이 테스트가 따로 필요하다.
+
+    call_api 만 mock 해서, 그 아래 `_body_or_raise` -> `fetch_cost_item` ->
+    `_collect_ops` -> `fetch_common_cost` 사슬이 예외를 끝까지 올리는지 본다.
+    """
+    monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(lambda cls, u, p: None))
+    with pytest.raises(KaptApiError):
+        kapt_api.fetch_common_cost("K1", "202605")
+
+
+def test_fetch_individual_cost_raises_through_real_chain(monkeypatch):
+    """개별사용료(V2)도 같은 실배선 가드 — 공용(V3)과 별개 함수라 따로 지킨다."""
+    monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(lambda cls, u, p: None))
+    with pytest.raises(KaptApiError):
+        kapt_api.fetch_individual_cost("K1", "202605")
+
+
+def test_fetch_common_cost_returns_empty_on_unpublished(monkeypatch):
+    """(b) 정상 미공개는 실배선에서도 예외가 아니라 빈 dict 다.
+
+    두 축 분리: 위 실패 테스트와 **응답 내용만** 다르다(둘 다 같은 사슬을 통과) —
+    같은 경로에서 (b)와 (c)가 실제로 갈리는지 확인하는 짝 테스트.
+    """
+    monkeypatch.setattr(
+        kapt_api.KaptAPI, "call_api",
+        classmethod(
+            lambda cls, u, p: {"response": {"header": {"resultCode": "00"}, "body": {}}}
+        ),
+    )
+    assert kapt_api.fetch_common_cost("K1", "202605") == {}
+
+
+def test_collect_costs_partial_failure_through_real_api_layer(db, monkeypatch):
+    """실배선 통합: 공용(V3) 전량 실패 + 개별(V2) 성공 -> 저장 0 (반쪽 저장 금지).
+
+    이 PR 이 고치는 **실제 사고 시나리오** 그대로다 — V3 서비스만 한도에 걸려
+    17콜이 전부 죽고 V2 5콜은 성공하는 상황. `fetch_common_cost` 를 mock 하지
+    않고 call_api 레벨에서 URL 로 갈라, API 계층 전체를 실제로 통과시킨다.
+    """
+    _make_complex(db, complex_no="5501")
+    _seed_mapping(db, complex_no="5501", kapt_code="AA")
+
+    def fake_call(cls, url, params):
+        if "AptCmnuseManageCostServiceV3" in url:
+            return None  # 공용 = 호출 실패 (한도 초과가 XML 로 와 json() 이 터진 모양)
+        return {"response": {"header": {"resultCode": "00"},
+                             "body": {"item": {"heatC": "300", "heatP": "200"}}}}
+
+    monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(fake_call))
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert result["failed"] == 1, "공용 전량 실패가 failed 로 안 잡힘"
+    assert result["collected"] == 0
+    assert db.query(KaptManagementCost).count() == 0, "공용 0원짜리 반쪽 행이 저장됨"

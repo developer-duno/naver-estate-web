@@ -27,6 +27,7 @@ from difflib import SequenceMatcher
 
 from crawler.env_common import _complete_job, _fail_job, _record_job
 from crawler.kapt_api import (
+    KaptApiError,
     fetch_apt_basis_info,
     fetch_apt_list_page,
     fetch_common_cost,
@@ -439,7 +440,12 @@ def candidate_cost_months(today: date | None = None) -> list[str]:
 
 
 def _fetch_costs_for_month(kapt_code: str, month: str) -> dict[str, int]:
-    """한 달치 22개 오퍼레이션 호출 → {op: 금액} 병합. 전부 미공개면 빈 dict."""
+    """한 달치 22개 오퍼레이션 호출 → {op: 금액} 병합. 전부 미공개면 빈 dict.
+
+    ⚠ 호출 실패(`KaptApiError`)는 잡지 않고 그대로 올린다. 여기서 삼키면 공용(V3)
+    17콜이 통째로 실패하고 개별(V2) 5콜만 성공한 회차에 "공용관리비 0원" 인 반쪽
+    breakdown 이 만들어지고, 호출자가 그걸 진짜 값으로 저장해버린다.
+    """
     breakdown = dict(fetch_common_cost(kapt_code, month))
     breakdown.update(fetch_individual_cost(kapt_code, month))
     return breakdown
@@ -470,6 +476,17 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
 
     "이번 수집월 행이 아직 없는 단지"를 오래된 매칭 순으로 batch_size 만큼 처리한다.
     ⚠ 단지 하나에 22콜이 나가므로 batch_size 가 곧 쿼터 소모량(×22)이다.
+    관리비 V2/V3 는 개발계정 = 서비스당 5,000/일(오퍼레이션 합산)이라 배치 500 이면
+    V3(17콜)만 8,500 으로 넘친다 → 운영 `KAPT_COST_BATCH_SIZE=250`.
+
+    실패 처리 계약:
+      · (b) 정상 미공개 → 행을 만들지 않고 `empty` 계수, 잡은 completed (정상)
+      · (c) 호출 실패   → **저장하지 않고** `failed` 계수. 그 달 행이 없으므로
+                          다음 회차에 자동 재시도된다(위 `done` 셋에 안 걸림).
+      · (c) 중 쿼터 초과(22) → 남은 대상 호출 없이 즉시 중단 + 잡 failed
+    부분 저장을 절대 하지 않는 것이 핵심이다 — 공용(V3) 실패 + 개별(V2) 성공으로
+    "공용 0원" 총액을 저장하면 틀린 값이 사실처럼 화면에 뜨고, 그 달 행이 생겨
+    다음 달까지 고쳐지지도 않는다.
     """
     db = SessionLocal()
     job = _record_job(db, _COST_JOB_TYPE, scheduler_job_id)
@@ -494,10 +511,16 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         targets = [r for r in rows if r.complex_no not in done][:batch_size]
 
         collected, failed, empty = 0, 0, 0
+        quota_exhausted: KaptApiError | None = None
+        processed = 0
         for mapping in targets:
+            processed += 1
             try:
                 breakdown, used_month = {}, None
                 for month in months:
+                    # ⚠ 월 폴백은 (b) "그 달은 아직 미공개" 일 때만 의미가 있다.
+                    # (c) 호출 실패 때 이전 달로 내려가면, 이미 죽은 API 에 22콜을
+                    # 한 번 더 태워 쿼터만 갉아먹고 결과도 같다 → 예외는 즉시 전파.
                     breakdown = _fetch_costs_for_month(mapping.kapt_code, month)
                     if breakdown:
                         used_month = month
@@ -523,12 +546,54 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                     ["complex_no", "cost_month"],
                 )
                 collected += 1
+            except KaptApiError as exc:
+                # (c) 호출 실패 — 이 단지는 **저장하지 않는다**. 그 달 행이 안 생기므로
+                # 다음 회차(내일)에 자동으로 다시 대상이 된다(done 셋에 안 걸림).
+                logger.warning(
+                    "[kapt_costs] 단지 %s 호출 실패 — 저장 건너뜀 (%s)",
+                    mapping.complex_no, exc,
+                )
+                failed += 1
+                if exc.is_quota:
+                    # 일일 한도 초과 — 남은 대상에 호출해봐야 전부 같은 에러다.
+                    # 헛호출로 다음 날 쿼터까지 태우지 않도록 배치를 즉시 중단한다.
+                    quota_exhausted = exc
+                    break
             except Exception:
                 logger.exception("[kapt_costs] 단지 %s 처리 실패", mapping.complex_no)
                 failed += 1
 
+        # 중단 여부와 무관하게 **여기까지 저장한 정상 단지는 지킨다** — 아래 _fail_job
+        # 은 별도 트랜잭션이 아니라 같은 세션이라, 먼저 commit 해두지 않으면 쿼터 중단
+        # 시 그날 수집분이 통째로 롤백될 수 있다.
         db.commit()
 
+        # 쿼터 초과로 조기 중단 — monitor 가 알아채도록 잡을 failed 로 마감한다.
+        # (completed 로 두면 "오늘도 정상 수집" 으로 위장돼 며칠씩 방치된다.)
+        if quota_exhausted is not None:
+            remaining = len(targets) - processed
+            message = (
+                f"쿼터 초과(22) — {processed}단지 처리 후 중단, 잔여 {remaining} "
+                f"(수집 {collected}, 실패 {failed}, 미공개 {empty})"
+            )
+            _fail_job(db, job, message)
+            logger.error("[kapt_costs] %s", message)
+            return {
+                "collected": collected, "failed": failed, "empty": empty,
+                "remaining": remaining, "error": "quota_exceeded",
+            }
+
+        # ── silent failure 가드 2종의 관계 ──
+        # 아래 두 가드는 "수집 0건" 을 서로 다른 원인으로 잡는다. 이 PR 로 (c) 호출
+        # 실패가 예외 → `failed` 로 잡히게 되면서, 1번 가드가 담당하는 범위가 넓어졌다:
+        #   ① 아래 `failed > 0` 가드  — 예외로 죽은 회차. 이제 API 호출 실패(쿼터·키·
+        #      점검·파싱)가 전부 여기 잡힌다. 예전엔 이것들이 조용한 None → 빈 dict →
+        #      `empty` 로 새어 ②에만 의존했다.
+        #   ② `empty == len(targets)` 가드 — 예외는 없는데 전량 빈 응답. 이제는
+        #      "진짜로 전부 미공개" 이거나, API 가 200 + 빈 body 로 무응답화한 경우다.
+        #      표본이 작으면(임계 미만) 정상 미공개와 구분이 안 돼 판정을 보류한다.
+        # 즉 ①이 1차 방어선이고 ②는 ①을 빠져나가는 무증상 장애용 그물이다.
+        #
         # silent failure 가드: 대상이 있는데 한 건도 저장 못 했고 그 원인이
         # '미공개'가 아니라 실패라면 '완료(0)' 위장 대신 failed 로 알린다.
         # (일부만 미공개인 경우는 정상이므로 completed 로 둔다 — 오탐 방지)
@@ -544,10 +609,11 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             return {"collected": 0, "failed": failed, "empty": empty, "error": "no_collect"}
 
         # ⚠ 전량 빈 응답도 silent failure 다 — 위 가드만으로는 안 잡힌다.
-        # kapt_api._body 는 호출 실패·비정상 resultCode 에 None 을 주고, 그러면
-        # breakdown 이 빈 dict 가 되어 예외 없이 `empty` 로 계수된다 → failed=0 이라
-        # 위 가드가 발동하지 않고 '완료(0건)' 으로 위장된다. API 폐기(2026-08-19
-        # data.go.kr K-apt 구버전 폐기 사고)·키 만료·서비스 점검이 전부 이 모양이다.
+        # (예전엔 `_body` 가 호출 실패·비정상 resultCode 에도 None 을 줘서 breakdown 이
+        # 빈 dict 가 되어 `empty` 로 새어들었고, 그 경로가 이 가드의 주 표적이었다.
+        # 지금은 그것들이 `KaptApiError` → `failed` 로 잡히므로 위 ① 가드가 먼저 발동한다.)
+        # 그래도 이 가드는 남는다 — API 가 HTTP 200 + 정상 구조 + 빈 body 로 무응답화하는
+        # 경우는 여전히 예외 없이 `empty` 로만 나타나기 때문이다.
         #
         # 단 "전량 빈 응답"만으로는 부족하고 **표본이 충분할 때만** 판정한다.
         # 개별 단지의 미공개는 흔한 정상 상태라, 대상이 1~2개뿐인 회차(수집이

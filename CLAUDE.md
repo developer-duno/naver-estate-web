@@ -64,6 +64,7 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 필터 변경 → /api/complexes/{no}/articles (SQL WHERE) + URL 파라미터 동기화
 실거래가 → /api/live/{no}/price-history/start-collect (24시간 TTL, 자동 트리거)
 가까운 지하철 → /api/complexes/{no}/subway (subway_stations 전국 1,099역, 3km 최대 3역·환승 그룹핑·12h 캐시, 연 1회 수동 재적재 — 세션 367)
+관리비·복도유형 → /api/complexes/{no}/kapt (K-apt 단지 매칭 월 1회 + 관리비 매일 500단지 회전, 12h 캐시, 매칭만 있으면 200+금액 null, 미매칭 404 — 세션 388)
 단지 비교 → /compare?ids=no1,no2,... (useQueries 병렬 + 평당가 + 인쇄/엑셀)
 엑셀(매물) → /api/articles/export (xlsxwriter)
 엑셀(비교) → 클라이언트 xlsx (safeCellValue 수식 인젝션 방어)

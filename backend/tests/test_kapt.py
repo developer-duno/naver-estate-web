@@ -8,12 +8,15 @@ import pytest
 from crawler import kapt_api, service_kapt
 from crawler.kapt_api import KaptApiError
 from crawler.service_kapt import (
+    _substring_related,
     candidate_cost_months,
     collect_kapt_costs,
     household_within_tolerance,
     match_kapt_complexes,
     name_similarity,
     normalize_complex_name,
+    ordinal_conflict,
+    ordinal_tokens,
     pick_best_match,
 )
 from db.models import Complex, KaptComplexMap, KaptManagementCost
@@ -1401,3 +1404,211 @@ def test_collect_costs_quota_stops_before_consecutive_limit(db, monkeypatch):
 
     assert result["error"] == "quota_exceeded", "쿼터가 연속 임계에 가려짐"
     assert called == ["K0"], "쿼터인데 임계까지 헛호출함: %r" % (called,)
+
+
+# ─────── 매칭 정밀도 강화 (분류 꼬리표 · 차수 충돌 · 대조불가 임계) ───────
+# prod 실측 발단(2026-08-29): K-apt 세대수가 0/NULL 이라 이름만으로 붙은 533건 중
+# 점수 0.9 미만 165건에 오매칭이 다수 섞여 있었다. 아래 표본은 전부 그 실측 쌍이다.
+
+
+def test_normalize_strips_category_tags():
+    """분류 꼬리표는 '내용째' 제거 — 남기면 같은 단지의 점수를 깎는다."""
+    assert normalize_complex_name("빌리브라디체(주상복합)") == "빌리브라디체"
+    assert normalize_complex_name("보령더포레젠(민간임대)") == "보령더포레젠"
+    assert normalize_complex_name("행복마을(도시형)") == "행복마을"
+    assert normalize_complex_name("실버빌(실버주택)") == "실버빌"
+    assert normalize_complex_name("타워팰리스(주거복합)") == "타워팰리스"
+    # 실측상 태그는 콤마로 섞여 온다 — 태그만 빠지고 동 표기는 남아야 한다.
+    assert normalize_complex_name("래미안(101동,주상복합)") == "래미안101동"
+
+
+def test_normalize_strips_category_tags_without_parens():
+    """K-apt 는 같은 분류어를 **괄호 없이** 본문에 붙여 온다 — 그쪽도 지워야 한다.
+
+    prod 실측: 우리 쪽 분류어는 100% 괄호 안(12,865건), K-apt 쪽은 100% 괄호 밖(79건).
+    괄호 안만 지우면 우리 쪽만 짧아져 격차가 **오히려 벌어진다**.
+    """
+    assert normalize_complex_name("대산주상복합아파트") == "대산"
+    assert normalize_complex_name("루체스타 도시형생활주택") == "루체스타"
+    # "도시형생활주택"을 "도시형"이 먼저 먹으면 "생활주택"이 남는다 — 긴 것부터 제거.
+    assert "생활주택" not in normalize_complex_name("주안웰가도시형생활주택")
+
+
+def test_normalize_category_tag_makes_same_complex_identical():
+    """꼬리표를 걷어내면 실측 정답 쌍이 1.0 이 된다(기존 0.75~0.78 로 깎였던 것)."""
+    assert name_similarity("빌리브라디체(주상복합)", "빌리브라디체") == 1.0
+    assert name_similarity("보령더포레젠(민간임대)", "보령 더포레젠") == 1.0
+    # 양쪽에 꼬리표가 다른 표기로 붙은 실측 쌍 — 한쪽만 지우면 오탈락한다.
+    assert name_similarity("대산(주상복합)", "대산주상복합아파트") == 1.0
+    assert name_similarity("루체스타(도시형)", "루체스타 도시형생활주택") == 1.0
+
+
+def test_normalize_keeps_non_category_paren_content():
+    """차수 괄호는 종전대로 내용 보존 — 형제 단지 구분이 무너지면 안 된다(회귀)."""
+    assert normalize_complex_name("경희궁의아침(4단지)") == "경희궁의아침4단지"
+    assert normalize_complex_name("경희궁의아침(1단지)") != normalize_complex_name(
+        "경희궁의아침(4단지)"
+    )
+
+
+def test_ordinal_tokens_extracted_from_all_notations():
+    """차수 신호는 N차·N단지·N블록·NBL 표기를 모두 잡는다."""
+    assert ordinal_tokens("방주기픈샘2차") == {"2"}
+    assert ordinal_tokens("경희궁의아침(4단지)") == {"4"}
+    assert ordinal_tokens("한빛마을3블록") == {"3"}
+    assert ordinal_tokens("행복도시2BL") == {"2"}
+    assert ordinal_tokens("동익파크") == set()
+
+
+def test_ordinal_conflict_only_when_both_sides_have_one():
+    """양쪽 다 있고 값이 다를 때만 충돌 — 한쪽만 있으면 '정보 부족'이지 충돌이 아니다."""
+    assert ordinal_conflict("방주기픈샘2차", "방주기픈샘1차아파트") is True
+    assert ordinal_conflict("방주기픈샘2차", "방주기픈샘2차아파트") is False
+    assert ordinal_conflict("동익파크", "동익파크1차아파트") is False
+    assert ordinal_conflict("동익파크", "동익파크") is False
+
+
+def test_gate_ordinal_conflict_rejects_even_with_matching_households(db):
+    """차수가 다르면 세대수가 **완전히 같아도** 탈락 — 형제 단지는 세대수도 비슷하다.
+
+    실측 쌍 "방주기픈샘2차" ↔ "방주기픈샘1차아파트"(ratio 0.857)는 점수로도,
+    세대수로도 못 걸러 통과했었다. 차수 축이 없으면 이 오매칭이 되살아난다.
+    """
+    cpx = _make_complex(db, name="방주기픈샘2차", households=300)
+    # 세대수를 일부러 '완전 일치'로 준다 — 세대수 게이트가 통과시키는 조건.
+    cand = _kapt(name="방주기픈샘1차아파트", households=300)
+    assert household_within_tolerance(300, 300) is True, "전제: 세대수 게이트는 통과 상태"
+    assert name_similarity(cpx.complex_name, cand["kaptName"]) >= 0.85, "전제: 점수도 높다"
+    assert pick_best_match(cpx, [cand]) is None
+
+
+def test_gate_one_side_ordinal_rejected_when_household_unknown(db):
+    """한쪽만 차수 + 세대수 대조 불가 = 모호 → 탈락.
+
+    "동익파크"가 무차수 단지인지 "동익파크1차"의 축약인지 가릴 근거가 없다.
+    """
+    cpx = _make_complex(db, name="동익파크", households=300)
+    assert pick_best_match(cpx, [_kapt(name="동익파크1차아파트")]) is None
+
+
+def test_gate_one_side_ordinal_accepted_when_households_match(db):
+    """한쪽만 차수라도 세대수가 대조되면 통과 — 세대수가 모호함을 해소한다.
+
+    ⚠ 위 테스트와 fixture 두 축(이름·세대수)을 일부러 갈라 둔다: 이름 쌍은 똑같이
+    두고 kaptdaCnt 유무만 바꿔, 두 경로가 실제로 갈리는지 확인한다.
+    """
+    cpx = _make_complex(db, name="동익파크", households=300)
+    best = pick_best_match(cpx, [_kapt(name="동익파크1차아파트", households=300)])
+    assert best is not None
+
+
+@pytest.mark.parametrize("ours,theirs", [
+    ("성신2차", "신한2차아파트"),        # 실측 0.75 (차수는 양쪽 2 로 같아 충돌 아님)
+    ("우아효성", "우아우성아파트"),        # 실측 0.75
+    ("엠시티(주상복합)", "포시티주상복합"),  # 실측 0.857 → 꼬리표 제거 후 0.4
+])
+def test_gate_no_household_threshold_rejects_lookalike_names(db, ours, theirs):
+    """대조 불가 임계 0.85 — 0.75 시절 통과하던 '글자 몇 개만 다른 남남'을 막는다."""
+    cpx = _make_complex(db, name=ours)
+    assert pick_best_match(cpx, [_kapt(name=theirs)]) is None
+
+
+def test_gate_no_household_substring_relaxes_threshold(db):
+    """포함 관계면 임계를 0.6 으로 완화 — 지역·동명 접두어 붙은 같은 단지 회수."""
+    cpx = _make_complex(db, name="강릉송정신원아침도시")
+    ratio = name_similarity(cpx.complex_name, "신원아침도시아파트")
+    assert ratio < 0.85, f"전제 깨짐: 포함 완화 없이 통과하는 점수 {ratio}"
+    assert pick_best_match(cpx, [_kapt(name="신원아침도시아파트")]) is not None
+
+    cpx2 = _make_complex(db, complex_no="1002", name="창전쌍용스윗닷홈")
+    assert pick_best_match(cpx2, [_kapt(name="마포창전쌍용스윗닷홈")]) is not None
+
+
+def test_gate_substring_ignores_too_short_stem(db):
+    """짧은 어간(2글자)의 포함은 완화 근거가 못 된다 — 아무 이름에나 걸려 폭발한다.
+
+    "한신아파트"는 접미사 제거 후 "한신" 2글자라 "한신더휴"에 포함된다.
+    """
+    cpx = _make_complex(db, name="한신아파트", households=100)
+    assert _substring_related("한신아파트", "한신더휴") is False, "전제: 짧은 어간은 포함 불인정"
+    assert pick_best_match(cpx, [_kapt(name="한신더휴")]) is None
+
+
+# ─────────────── 전량 실행 정리(reconciliation) ───────────────
+
+
+def _seed_stale_mapping(db, complex_no="9001", kapt_code="OLD1"):
+    """새 규칙에서 탈락할 옛 매칭 1건 + 그 관리비 1건을 과거 시각으로 심는다."""
+    from datetime import timedelta
+
+    from utils import utcnow
+
+    old = utcnow() - timedelta(days=40)
+    db.add(Complex(
+        complex_no=complex_no, complex_name="옛오매칭단지", cortar_no="2611010100",
+        real_estate_type_code="APT", total_household_count=500,
+    ))
+    db.add(KaptComplexMap(
+        complex_no=complex_no, kapt_code=kapt_code, kapt_name="옛오매칭단지",
+        match_score=0.75, matched_at=old,
+    ))
+    db.add(KaptManagementCost(
+        complex_no=complex_no, cost_month="202605", total_cost=1000,
+    ))
+    db.commit()
+
+
+def test_full_run_purges_mappings_not_reconfirmed(db, monkeypatch):
+    """전량 실행에서 재확인 안 된 옛 매칭 + 관리비는 삭제된다.
+
+    ⚠ fixture 두 축을 갈라 둔다: 이번에 매칭될 단지(1001)와 옛 행의 단지(9001)를
+    서로 다른 법정동에 둬서, '전량 삭제'와 '미재확인분만 삭제'가 구분된다.
+    """
+    _make_complex(db)                      # 이번 회차에 정상 매칭될 단지
+    _seed_stale_mapping(db)                # 재확인되지 않을 옛 행 (다른 단지·다른 법정동)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt", lambda *a, **k: ([_kapt(households=120)], True)
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", lambda code: None)
+
+    result = match_kapt_complexes()
+
+    assert result["matched"] == 1
+    assert result["purged"] == 1
+    assert db.query(KaptComplexMap).filter_by(complex_no="9001").count() == 0
+    assert db.query(KaptManagementCost).filter_by(complex_no="9001").count() == 0
+    # 이번에 매칭된 단지는 남아 있어야 한다 (전량 삭제가 아님을 단언)
+    assert db.query(KaptComplexMap).filter_by(complex_no="1001").count() == 1
+
+
+def test_partial_run_never_purges(db, monkeypatch):
+    """부분 목록 회차는 '못 본 단지'와 '탈락 단지'를 구분 못 하므로 절대 안 지운다."""
+    _make_complex(db)
+    _seed_stale_mapping(db)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([_kapt(households=120)], False),   # is_complete=False
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", lambda code: None)
+
+    result = match_kapt_complexes()
+
+    assert result["purged"] == 0
+    assert db.query(KaptComplexMap).filter_by(complex_no="9001").count() == 1
+    assert db.query(KaptManagementCost).filter_by(complex_no="9001").count() == 1
+
+
+def test_purge_skipped_when_run_matched_nothing(db, monkeypatch):
+    """매칭 0건 회차(silent failure)는 정리 전에 멈춘다 — 전량 삭제 사고 차단."""
+    _make_complex(db, name="전혀다른이름타워")   # 매칭 실패하도록
+    _seed_stale_mapping(db)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt", lambda *a, **k: ([_kapt(households=120)], True)
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", lambda code: None)
+
+    result = match_kapt_complexes()
+
+    assert result["matched"] == 0
+    assert result.get("purged") is None, "매칭 0건인데 정리가 돌았다"
+    assert db.query(KaptComplexMap).filter_by(complex_no="9001").count() == 1

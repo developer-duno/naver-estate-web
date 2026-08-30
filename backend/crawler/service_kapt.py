@@ -9,13 +9,15 @@
   ② 이름 유사도   분류 꼬리표(주상복합·도시형·민간임대…) 제거 후 difflib ratio,
                   같은 법정동 최고점 1개만, 최고점 동률이 둘 이상이면 탈락
   ③ 세대수 근사   양쪽 세대수 보유 시 |차이|/max <= 0.15 (임계 0.6),
-                  대조 불가면 임계를 0.85 로 강화(한쪽이 다른 쪽을 통째로 품는
-                  포함 관계면 0.6) + 차수 정보가 한쪽에 치우치면 모호로 보고 탈락
-                  ⚠ 실제 발동 지점은 pick_best_match 가 아니라 **basis(getAphusBassInfoV5)
-                  수신 직후**다 — 목록 API(getTotalAptList4)는 kaptdaCnt 를 안 주므로
-                  후보 선별 단계에선 늘 "대조 불가"(=0.85 강화만 적용)이고, 세대수를
-                  실제로 아는 건 확정분에 basis 를 부른 뒤뿐이다(라이브 실측:
-                  목록 응답 키 = kaptCode/kaptName/bjdCode/as1~as4).
+                  **끝내** 대조 불가면 임계를 0.85 로 강화(한쪽이 다른 쪽을 통째로
+                  품는 포함 관계면 0.6) + 차수 정보가 한쪽에 치우치면 모호로 탈락
+                  ⚠ 세대수 게이트도, 그 "대조 불가 강화 규칙"도 실제 발동 지점은
+                  pick_best_match 가 아니라 **basis(getAphusBassInfoV5) 수신 직후**다
+                  — 목록 API(getTotalAptList4)는 kaptdaCnt 를 안 주므로 후보 선별
+                  단계에선 **모든 단지**가 "아직 모름"이고, 거기서 강화 규칙을 걸면
+                  basis 를 받으면 통과했을 정답까지 잘려나간다(2026-08-31 prod 실측
+                  746건 오탈락). 세대수를 실제로 아는 건 확정분에 basis 를 부른
+                  뒤뿐이다(라이브 실측: 목록 응답 키 = kaptCode/kaptName/bjdCode/as1~as4).
   ④ 차수 모순     양쪽 차수(N차·N단지·N블록)가 서로 부분집합이 아니면 점수·세대수
                   불문 탈락 — 형제 단지는 세대수까지 비슷해 ③으로는 못 거른다.
                   부분집합({2} ⊂ {2,7})은 "한쪽이 시공 차수를 더 적은 것"이라
@@ -283,20 +285,57 @@ def household_within_tolerance(ours: int | None, theirs: int | None) -> bool | N
     return abs(ours - theirs) / max(ours, theirs) <= _HOUSEHOLD_TOLERANCE
 
 
-def pick_best_match(cpx, candidates: list[dict]) -> tuple[dict, float] | None:
+def strict_name_gate_passes(ours: str | None, theirs: str | None, ratio: float) -> bool:
+    """세대수를 **끝내 모를 때** 쓰는 엄격 이름 게이트 — 통과 True.
+
+    두 규칙을 함께 본다(PR #433):
+      · 차수 정보가 한쪽에 치우침(모호) → 탈락. "동익파크" 가 무차수 단지인지
+        "동익파크1차" 의 축약인지 가릴 근거가 없다.
+      · 이름 임계 0.85(한쪽이 다른 쪽을 통째로 품는 포함관계면 0.6).
+
+    ⚠ 이 게이트는 "세대수를 **아직** 모르는" pass 1 이 아니라 "세대수를 **알 수
+    없음이 확정된**" pass 2(basis 수신 후)에서만 발동해야 한다 — 아래
+    `pick_best_match(strict_when_unknown=...)` 주석 참조.
+    """
+    if ordinal_ambiguous(ours, theirs):
+        return False
+    threshold = (
+        _NAME_RATIO_MIN_SUBSTRING
+        if _substring_related(ours, theirs)
+        else _NAME_RATIO_MIN_NO_HOUSEHOLD
+    )
+    return ratio >= threshold
+
+
+def pick_best_match(
+    cpx, candidates: list[dict], *, strict_when_unknown: bool = True
+) -> tuple[dict, float] | None:
     """같은 법정동 후보들 중 최적 1건. 게이트 미통과·동률이면 None.
 
     candidates 는 {"kaptCode","kaptName","kaptdaCnt"(선택)} 형태의 dict 목록.
-    kaptdaCnt 는 목록 API 에 없으므로 보통 None 이며, 그때는 이름 임계가
-    0.85(또는 포함관계 시 0.6)로 강화된다(세대수 대조 불가 보완).
 
-    후보 하나가 통과하려면 세 관문을 다 지나야 한다:
-      (a) **차수 모순 탈락** — 양쪽 차수가 서로 부분집합이 아니면 점수·세대수 불문 탈락
-          ({1} vs {3}). 부분집합({2} vs {2,7})은 모순이 아니라 모호라 (c) 로 넘긴다.
+    ⚠ **`strict_when_unknown` 이 이 함수의 핵심 구분**이다. 세대수가 없는 상태에는
+    성격이 다른 두 가지가 있는데, 이걸 한 덩어리로 다루면 정답을 잘라낸다:
+
+      · **아직 모름**(pass 1, `strict_when_unknown=False`) — 목록 API
+        (getTotalAptList4)는 kaptdaCnt 를 아예 안 준다. 즉 후보 선별 단계에서는
+        **모든 단지**가 예외 없이 "세대수 없음"이다. 여기서 엄격 규칙을 걸면
+        basis 를 받으면 세대수가 일치했을 정답까지 전멸한다(2026-08-31 prod 실측:
+        전국 재매칭에서 746건 오탈락 — 예: "분성마을2단지부영" ↔ "…(북부부영7차)"
+        952/952). 그래서 pass 1 은 **느슨하게** 본다: 차수 **모순**만 탈락시키고
+        이름 임계는 기본값 0.6.
+      · **알 수 없음 확정**(pass 2, `strict_when_unknown=True`) — basis 를 부르고도
+        세대수가 0/NULL 이면 이름 말고는 근거가 없다. 이때 비로소
+        `strict_name_gate_passes` 의 엄격 규칙(0.85 / 차수 모호 탈락)이 정당하다.
+
+    후보 하나가 통과하려면:
+      (a) **차수 모순 탈락** — 양쪽 차수가 서로 부분집합이 아니면 점수·세대수 불문
+          탈락({1} vs {3}). 세대수와 무관한 규칙이라 pass 1 에서 즉시 적용한다
+          (형제 단지에 basis 쿼터를 태우지 않는 이득도 있다). 부분집합
+          ({2} vs {2,7})은 모순이 아니라 모호라 (c) 로 넘긴다.
       (b) **세대수 게이트** — 대조 가능하고 ±15% 밖이면 탈락.
-      (c) **이름 임계** — 대조 가능하면 0.6, 대조 불가면 0.85(포함관계면 0.6).
-          대조 불가인데 차수 정보가 한쪽에 치우쳐 있으면(모호) 이름이 아무리
-          비슷해도 탈락 — 세대수만이 그 모호함을 풀 수 있다.
+      (c) **이름 임계** — 대조 가능하면 0.6. 대조 불가면 `strict_when_unknown` 에
+          따라 갈린다(True 면 엄격 게이트, False 면 기본 0.6).
     """
     scored: list[tuple[float, dict]] = []
     for cand in candidates:
@@ -316,23 +355,13 @@ def pick_best_match(cpx, candidates: list[dict]) -> tuple[dict, float] | None:
         if household_ok is False:
             continue
 
-        if household_ok is True:
-            threshold = _NAME_RATIO_MIN
-        else:
-            # 세대수 대조 불가 + 차수 정보가 한쪽에 치우침 = 모호. "동익파크" 가
-            # 무차수 단지인지 "동익파크1차" 의 축약인지, "분성마을2단지부영" 이
-            # "…부영(북부부영7차)" 와 같은 단지인지 가릴 근거가 없어 버린다
-            # (세대수로 가릴 수 있으면 위 True 분기가 이미 통과시킨다).
-            if ordinal_ambiguous(cpx.complex_name, kapt_name):
-                continue
-            threshold = (
-                _NAME_RATIO_MIN_SUBSTRING
-                if _substring_related(cpx.complex_name, kapt_name)
-                else _NAME_RATIO_MIN_NO_HOUSEHOLD
-            )
-
         # (c) 이름 임계
-        if ratio < threshold:
+        if household_ok is None and strict_when_unknown:
+            # 세대수를 알 수 없음이 **확정**된 상태 — 엄격 게이트.
+            if not strict_name_gate_passes(cpx.complex_name, kapt_name, ratio):
+                continue
+        elif ratio < _NAME_RATIO_MIN:
+            # 세대수 대조 통과, 또는 "아직 모름"(pass 1) — 기본 임계만 본다.
             continue
         scored.append((ratio, cand))
 
@@ -558,7 +587,9 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
             if not candidates:
                 skipped += 1
                 continue
-            best = pick_best_match(cpx, candidates)
+            # 목록 API 에는 kaptdaCnt 가 없어 여기선 세대수가 **아직 모름**이다
+            # (알 수 없음 확정이 아니다) → 엄격 규칙은 pass 2 로 미룬다.
+            best = pick_best_match(cpx, candidates, strict_when_unknown=False)
             if best is None:
                 skipped += 1
                 continue
@@ -589,14 +620,31 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
             # 시점은 방금 getAphusBassInfoV5 를 부른 지금뿐이므로, 여기서 다시 대조하지
             # 않으면 "법정동 같고 이름 0.85 이상이면 세대수가 3배 달라도 확정"이 되어
             # 3중 게이트가 사실상 2중으로 퇴화한다.
-            # ⚠ 차수 충돌(a)은 pass 1 에서 이미 걸러졌고 세대수와 무관한 규칙이라
-            # 여기서 재판정하지 않는다 — "한쪽만 차수 + 대조 불가" 탈락도 마찬가지로
-            # pass 1 소관이다(그 단계에선 세대수가 늘 미상이라 보수적으로 버린다).
-            if household_within_tolerance(cpx.total_household_count, household) is False:
+            # ⚠ 차수 **모순**(a)은 세대수와 무관한 규칙이라 pass 1 에서 이미 걸렀다
+            # (basis 쿼터 절약). 여기서 재판정하지 않는다.
+            household_ok = household_within_tolerance(
+                cpx.total_household_count, household
+            )
+            if household_ok is False:
                 logger.info(
                     "[kapt_match] 세대수 게이트 탈락: %s(%s) 우리 %s vs kapt %s(%s)",
                     cpx.complex_no, cpx.complex_name,
                     cpx.total_household_count, household, cand.get("kaptName"),
+                )
+                skipped += 1
+                continue
+
+            # basis 를 부르고도 세대수를 모르면(0/NULL, 또는 우리 쪽 세대수 없음)
+            # 그때가 "알 수 없음 **확정**" 이다 — 이름 말고 근거가 없으므로 여기서
+            # 비로소 엄격 게이트(0.85 / 차수 모호 탈락)를 적용한다. pass 1 에서
+            # 걸면 목록 API 에 세대수가 없다는 이유만으로 전 단지가 엄격 규칙을
+            # 맞아 정답까지 잘려나간다(2026-08-31 prod 실측 746건 오탈락).
+            if household_ok is None and not strict_name_gate_passes(
+                cpx.complex_name, cand.get("kaptName"), ratio
+            ):
+                logger.info(
+                    "[kapt_match] 대조 불가 확정 — 엄격 이름 게이트 탈락: %s(%s) vs %s (%.4f)",
+                    cpx.complex_no, cpx.complex_name, cand.get("kaptName"), ratio,
                 )
                 skipped += 1
                 continue

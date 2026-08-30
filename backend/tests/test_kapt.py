@@ -1662,3 +1662,140 @@ def test_purge_skipped_when_run_matched_nothing(db, monkeypatch):
     assert result["matched"] == 0
     assert result.get("purged") is None, "매칭 0건인데 정리가 돌았다"
     assert db.query(KaptComplexMap).filter_by(complex_no="9001").count() == 1
+
+
+# ───────────── 엄격 규칙 적용 시점 (pass 1 느슨 / pass 2 엄격) ─────────────
+#
+# PR #433 의 "세대수 대조 불가 시 엄격 규칙"(임계 0.85 / 차수 모호 탈락)이
+# **pass 1(후보 선별)** 에서 발동해, basis 를 받으면 세대수가 일치했을 정답까지
+# 잘라내던 결함의 회귀 가드. 목록 API(getTotalAptList4)는 kaptdaCnt 를 주지 않아
+# pass 1 의 세대수는 **항상** "아직 모름"이지 "알 수 없음 확정"이 아니다.
+
+
+def test_pass1_keeps_ordinal_ambiguous_candidate_until_basis(db, monkeypatch):
+    """차수 모호 후보는 pass 1 에서 살아남아 basis 세대수로 판정돼야 한다.
+
+    prod 실측 표본: 우리 "분성마을2단지부영" ↔ K-apt "분성마을2단지부영(북부부영7차)"
+    — 차수 {2} ⊂ {2,7} 라 모호하지만 세대수가 952/952 로 정확히 같은 단지다.
+
+    ⚠ fixture 두 축을 갈라 둔다(testing.md 세션372 답습):
+      · 목록 mock 은 kaptdaCnt 를 **주지 않는다**(실제 getTotalAptList4 와 동일)
+      · basis mock 만 세대수를 준다
+    목록 mock 에 세대수를 넣으면 pass 1 에서 이미 통과해버려 이 결함을 못 본다.
+    """
+    _make_complex(db, complex_no="7001", name="분성마을2단지부영", households=952)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([_kapt(code="K7", name="분성마을2단지부영(북부부영7차)")], True),
+    )
+    monkeypatch.setattr(
+        service_kapt, "fetch_apt_basis_info",
+        lambda code: {"codeHallNm": "계단식", "kaptdaCnt": 952.0},
+    )
+
+    result = match_kapt_complexes()
+
+    assert result["matched"] == 1, "차수 모호가 pass 1 에서 잘려 정답을 놓쳤다"
+    assert db.query(KaptComplexMap).one().kapt_household_count == 952
+
+
+def test_pass1_keeps_midscore_candidate_until_basis(db, monkeypatch):
+    """0.6~0.85 구간 이름도 pass 1 을 통과해 basis 세대수로 판정돼야 한다.
+
+    포함관계가 아니라 0.85 강화 임계에 걸리던 구간(0.6667)을 표본으로 쓴다 —
+    세대수가 같으면 정답이므로 잘라내면 안 된다.
+    """
+    _make_complex(db, complex_no="7002", name="한신아파트", households=300)
+    borderline = "한신더휴"   # 실측 ratio 0.6667 — 0.6 통과 / 0.85 탈락 구간
+    assert 0.6 <= name_similarity("한신아파트", borderline) < 0.85
+
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([_kapt(code="K8", name=borderline)], True),
+    )
+    monkeypatch.setattr(
+        service_kapt, "fetch_apt_basis_info",
+        lambda code: {"codeHallNm": "계단식", "kaptdaCnt": 300.0},
+    )
+
+    result = match_kapt_complexes()
+
+    assert result["matched"] == 1, "0.85 임계가 pass 1 에서 발동해 정답을 놓쳤다"
+
+
+def test_strict_rules_apply_when_basis_household_still_unknown(db, monkeypatch):
+    """basis 를 받고도 세대수를 모르면(0/NULL) 그때 엄격 규칙이 발동한다.
+
+    #433 의 규칙 자체는 유지 — 적용 **시점**만 basis 뒤로 옮긴 것이다.
+    """
+    _make_complex(db, complex_no="7003", name="한신아파트", households=300)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([_kapt(code="K9", name="한신더휴")], True),   # ratio 0.6667
+    )
+    # kapt 세대수 0 → 끝까지 대조 불가
+    monkeypatch.setattr(
+        service_kapt, "fetch_apt_basis_info",
+        lambda code: {"codeHallNm": "계단식", "kaptdaCnt": 0},
+    )
+
+    result = match_kapt_complexes()
+
+    assert result["matched"] == 0, "대조 불가 확정인데 0.85 미만이 저장됐다"
+    assert db.query(KaptComplexMap).count() == 0
+
+
+def test_high_score_saved_when_basis_household_unknown(db, monkeypatch):
+    """같은 '대조 불가 확정' 경로라도 0.85 이상이면 저장된다(위 테스트의 짝)."""
+    _make_complex(db, complex_no="7004", name="푸르지오시티", households=300)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([_kapt(code="KA", name="푸르지오시티2")], True),   # 0.9231
+    )
+    monkeypatch.setattr(
+        service_kapt, "fetch_apt_basis_info",
+        lambda code: {"codeHallNm": "계단식", "kaptdaCnt": None},
+    )
+
+    result = match_kapt_complexes()
+
+    assert result["matched"] == 1
+    assert db.query(KaptComplexMap).one().kapt_household_count is None
+
+
+def test_ordinal_ambiguous_rejected_when_basis_household_unknown(db, monkeypatch):
+    """차수 모호 + 세대수 대조 불가 확정 = 탈락(#433 규칙이 pass 2 에서 살아있음)."""
+    _make_complex(db, complex_no="7005", name="동익파크", households=300)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([_kapt(code="KB", name="동익파크1차아파트")], True),
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", lambda code: None)
+
+    result = match_kapt_complexes()
+
+    assert result["matched"] == 0, "차수 모호가 대조 불가 확정에서도 통과했다"
+
+
+def test_ordinal_conflict_rejected_in_pass1_without_basis_call(db, monkeypatch):
+    """차수 **모순**은 세대수와 무관한 규칙이라 pass 1 에서 즉시 탈락한다.
+
+    basis 호출 카운트를 단언해 "쿼터를 태우지 않고 앞단에서 걸렀다"를 증명한다.
+    """
+    _make_complex(db, complex_no="7006", name="방주기픈샘2차", households=300)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([_kapt(code="KC", name="방주기픈샘1차아파트")], True),
+    )
+    calls = []
+
+    def _basis(code):
+        calls.append(code)
+        return {"codeHallNm": "계단식", "kaptdaCnt": 300.0}
+
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", _basis)
+
+    result = match_kapt_complexes()
+
+    assert result["matched"] == 0
+    assert calls == [], "차수 모순 후보에 basis 를 불러 쿼터를 태웠다"

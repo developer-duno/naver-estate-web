@@ -15,6 +15,7 @@ from crawler.service_kapt import (
     match_kapt_complexes,
     name_similarity,
     normalize_complex_name,
+    ordinal_ambiguous,
     ordinal_conflict,
     ordinal_tokens,
     pick_best_match,
@@ -1460,12 +1461,26 @@ def test_ordinal_tokens_extracted_from_all_notations():
     assert ordinal_tokens("동익파크") == set()
 
 
-def test_ordinal_conflict_only_when_both_sides_have_one():
-    """양쪽 다 있고 값이 다를 때만 충돌 — 한쪽만 있으면 '정보 부족'이지 충돌이 아니다."""
-    assert ordinal_conflict("방주기픈샘2차", "방주기픈샘1차아파트") is True
-    assert ordinal_conflict("방주기픈샘2차", "방주기픈샘2차아파트") is False
-    assert ordinal_conflict("동익파크", "동익파크1차아파트") is False
-    assert ordinal_conflict("동익파크", "동익파크") is False
+def test_ordinal_conflict_only_when_sets_contradict():
+    """서로 부분집합이 아닐 때만 충돌 — 부분집합은 '한쪽이 더 적은 것'이라 모순 아님."""
+    assert ordinal_conflict("방주기픈샘2차", "방주기픈샘1차아파트") is True   # {2} vs {1}
+    assert ordinal_conflict("방주기픈샘2차", "방주기픈샘2차아파트") is False  # {2} vs {2}
+    assert ordinal_conflict("동익파크", "동익파크1차아파트") is False        # {}  vs {1}
+    assert ordinal_conflict("동익파크", "동익파크") is False                # {}  vs {}
+    # {2} ⊂ {2,7} — 단지 차수는 일치하고 7 은 시공 차수라는 별개 축이다.
+    assert ordinal_conflict("분성마을2단지부영", "분성마을2단지부영(북부부영7차)") is False
+    # {6,1} ⊃ {1} — 역방향 부분집합도 마찬가지.
+    assert ordinal_conflict("현대아이파크홈타운6차1단지", "현대아이파크홈타운1단지") is False
+
+
+def test_ordinal_ambiguous_covers_missing_and_extra_ordinals():
+    """모호 = 차수 정보가 한쪽에 치우침(없거나, 더 많거나). 완전 일치는 모호 아님."""
+    assert ordinal_ambiguous("동익파크", "동익파크1차아파트") is True          # {}  vs {1}
+    assert ordinal_ambiguous("분성마을2단지부영", "분성마을2단지부영(북부부영7차)") is True
+    assert ordinal_ambiguous("현대아이파크홈타운6차1단지", "현대아이파크홈타운1단지") is True
+    assert ordinal_ambiguous("방주기픈샘2차", "방주기픈샘2차아파트") is False   # 완전 일치
+    # 모순({2} vs {1})은 ordinal_conflict 소관 — 모호로 분류되지 않는다.
+    assert ordinal_ambiguous("방주기픈샘2차", "방주기픈샘1차아파트") is False
 
 
 def test_gate_ordinal_conflict_rejects_even_with_matching_households(db):
@@ -1500,6 +1515,41 @@ def test_gate_one_side_ordinal_accepted_when_households_match(db):
     cpx = _make_complex(db, name="동익파크", households=300)
     best = pick_best_match(cpx, [_kapt(name="동익파크1차아파트", households=300)])
     assert best is not None
+
+
+def test_gate_extra_ordinal_accepted_when_households_match(db):
+    """한쪽이 시공 차수를 더 적었을 뿐이면(부분집합) 세대수 게이트가 채택한다.
+
+    실측 쌍 "분성마을2단지부영" ↔ "분성마을2단지부영(북부부영7차)" — 단지 차수 2 는
+    양쪽 일치하고 7 은 시공 차수라는 별개 축이라 형제 단지가 아니다(세대수 952/952).
+    부분집합을 '충돌'로 단정하면 이런 정답이 통째로 탈락한다(드라이런 실측 ~10건).
+    """
+    cpx = _make_complex(db, name="분성마을2단지부영", households=952)
+    cand = _kapt(name="분성마을2단지부영(북부부영7차)", households=952)
+    assert ordinal_conflict(cpx.complex_name, cand["kaptName"]) is False, "전제: 모순 아님"
+    assert pick_best_match(cpx, [cand]) is not None
+
+
+def test_gate_extra_ordinal_rejected_when_household_unknown(db):
+    """같은 부분집합 쌍이라도 세대수 대조가 안 되면 탈락 — 모호는 세대수만이 푼다.
+
+    ⚠ 위 테스트와 fixture 두 축을 갈라 둔다: 이름 쌍은 똑같이 두고 kaptdaCnt 유무만
+    바꿔, 채택/탈락이 세대수 축 하나로 갈리는지 확인한다.
+    """
+    cpx = _make_complex(db, name="분성마을2단지부영", households=952)
+    assert pick_best_match(cpx, [_kapt(name="분성마을2단지부영(북부부영7차)")]) is None
+
+
+def test_gate_extra_ordinal_rejected_when_households_differ(db):
+    """부분집합이어도 세대수가 다르면 탈락 — 형제 오매칭은 세대수 게이트가 막는다.
+
+    "현대아이파크홈타운6차1단지" ↔ "…1단지"({6,1} ⊃ {1})처럼 부분집합 예외를 타는
+    쌍에서, 형제 단지 위험을 실제로 막는 건 세대수 게이트라는 것을 직접 단언한다.
+    """
+    cpx = _make_complex(db, name="현대아이파크홈타운6차1단지", households=1316)
+    cand = _kapt(name="현대아이파크홈타운1단지", households=299)   # 다른 형제 단지 세대수
+    assert ordinal_conflict(cpx.complex_name, cand["kaptName"]) is False, "전제: 모순 아님"
+    assert pick_best_match(cpx, [cand]) is None
 
 
 @pytest.mark.parametrize("ours,theirs", [

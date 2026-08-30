@@ -10,14 +10,16 @@
                   같은 법정동 최고점 1개만, 최고점 동률이 둘 이상이면 탈락
   ③ 세대수 근사   양쪽 세대수 보유 시 |차이|/max <= 0.15 (임계 0.6),
                   대조 불가면 임계를 0.85 로 강화(한쪽이 다른 쪽을 통째로 품는
-                  포함 관계면 0.6) + "한쪽만 차수 있음"은 모호로 보고 탈락
-  ④ 차수 충돌     양쪽 다 차수(N차·N단지·N블록)를 갖고 값이 다르면 점수·세대수
-                  불문 탈락 — 형제 단지는 세대수까지 비슷해 ③으로는 못 거른다
+                  포함 관계면 0.6) + 차수 정보가 한쪽에 치우치면 모호로 보고 탈락
                   ⚠ 실제 발동 지점은 pick_best_match 가 아니라 **basis(getAphusBassInfoV5)
                   수신 직후**다 — 목록 API(getTotalAptList4)는 kaptdaCnt 를 안 주므로
-                  후보 선별 단계에선 늘 "대조 불가"(=0.75 강화만 적용)이고, 세대수를
+                  후보 선별 단계에선 늘 "대조 불가"(=0.85 강화만 적용)이고, 세대수를
                   실제로 아는 건 확정분에 basis 를 부른 뒤뿐이다(라이브 실측:
                   목록 응답 키 = kaptCode/kaptName/bjdCode/as1~as4).
+  ④ 차수 모순     양쪽 차수(N차·N단지·N블록)가 서로 부분집합이 아니면 점수·세대수
+                  불문 탈락 — 형제 단지는 세대수까지 비슷해 ③으로는 못 거른다.
+                  부분집합({2} ⊂ {2,7})은 "한쪽이 시공 차수를 더 적은 것"이라
+                  모순이 아니므로 ③의 세대수 게이트가 결정한다.
 
 세 게이트 모두 "애매하면 버린다"는 방향으로 설계했다 — 놓친 단지는 관리비가
 안 보일 뿐이지만, 잘못 붙인 단지는 틀린 금액을 사실처럼 보여준다.
@@ -207,25 +209,45 @@ def ordinal_tokens(name: str | None) -> set[str]:
 
 
 def ordinal_conflict(a: str | None, b: str | None) -> bool:
-    """양쪽 다 차수를 갖고 값이 다르면 True(= 형제 단지라 탈락).
+    """양쪽 차수가 **서로 모순**이면 True(= 형제 단지라 탈락).
 
-    한쪽만 차수를 가진 경우는 여기서 False — "정보 부족"이지 "충돌"이 아니다.
-    그 처리는 `pick_best_match` 가 세대수 대조 가능 여부와 함께 판단한다.
+    "모순"은 값이 다른 것과 다르다 — 한쪽이 다른 쪽의 부분집합이면 모순이 아니라
+    **한쪽이 차수를 더 적어놓은 것**이다:
 
-    ⚠ 세대수가 일치해도 값이 다른 차수는 탈락시킨다 — 같은 브랜드 1단지/2단지가
+      {1} vs {3}      → 충돌   1단지와 3단지는 양립 불가한 형제 단지
+      {2} vs {2,7}    → 무충돌 "분성마을2단지부영" ↔ "…부영(북부부영7차)" — 단지
+                              차수 2 는 일치하고, 7 은 시공 차수라는 별개 축이다
+      {6,1} vs {1}    → 무충돌 "현대아이파크홈타운6차1단지" ↔ "…1단지" — 같은 이유
+      {} vs {1}       → 무충돌 정보 부족 (`ordinal_ambiguous` 소관)
+
+    부분집합 관계는 "차수가 다르다"가 아니라 "한쪽이 정보를 더 갖고 있다"이므로,
+    충돌로 단정하지 않고 `ordinal_ambiguous` 를 거쳐 **세대수 게이트가 결정**하게
+    넘긴다(대조 가능·±15% 통과면 채택, 대조 불가면 탈락).
+
+    ⚠ 모순인 경우엔 세대수가 일치해도 탈락시킨다 — 같은 브랜드 1단지/2단지가
     비슷한 세대수로 지어지는 게 흔해서, 세대수 게이트가 형제 단지를 못 거른다
     (실측: "방주기픈샘2차" ↔ "방주기픈샘1차아파트" ratio 0.857 로 통과했었다).
     """
     ta, tb = ordinal_tokens(a), ordinal_tokens(b)
     if not ta or not tb:
         return False
-    return ta != tb
+    # 부분집합(같은 집합 포함)이면 모순이 아니다.
+    return not (ta <= tb or tb <= ta)
 
 
-def _one_side_ordinal(a: str | None, b: str | None) -> bool:
-    """한쪽에만 차수가 있으면 True — "동익파크" vs "동익파크1차" 류의 모호 신호."""
+def ordinal_ambiguous(a: str | None, b: str | None) -> bool:
+    """차수 정보가 한쪽에 치우쳐 있으면 True — 세대수 없이는 못 가르는 모호 신호.
+
+    두 경우를 함께 잡는다:
+      · 한쪽에만 차수가 있음    "동익파크" vs "동익파크1차"
+      · 한쪽이 차수를 더 가짐   "분성마을2단지부영" vs "…부영(북부부영7차)"({2} ⊂ {2,7})
+
+    둘 다 "이름만으로는 같은 단지인지 형제인지 알 수 없다"는 같은 상태다. 호출부는
+    세대수를 대조할 수 있으면 그 판정에 맡기고, 대조 불가면 보수적으로 버린다.
+    양쪽 차수가 완전히 같으면(예: {2} vs {2}) 모호하지 않다 — False.
+    """
     ta, tb = ordinal_tokens(a), ordinal_tokens(b)
-    return bool(ta) != bool(tb)
+    return ta != tb and (ta <= tb or tb <= ta)
 
 
 def _substring_related(a: str | None, b: str | None) -> bool:
@@ -269,10 +291,12 @@ def pick_best_match(cpx, candidates: list[dict]) -> tuple[dict, float] | None:
     0.85(또는 포함관계 시 0.6)로 강화된다(세대수 대조 불가 보완).
 
     후보 하나가 통과하려면 세 관문을 다 지나야 한다:
-      (a) **차수 충돌 탈락** — 양쪽 다 차수가 있고 값이 다르면 점수·세대수 불문 탈락.
+      (a) **차수 모순 탈락** — 양쪽 차수가 서로 부분집합이 아니면 점수·세대수 불문 탈락
+          ({1} vs {3}). 부분집합({2} vs {2,7})은 모순이 아니라 모호라 (c) 로 넘긴다.
       (b) **세대수 게이트** — 대조 가능하고 ±15% 밖이면 탈락.
       (c) **이름 임계** — 대조 가능하면 0.6, 대조 불가면 0.85(포함관계면 0.6).
-          대조 불가인데 한쪽에만 차수가 있으면(모호) 이름이 아무리 비슷해도 탈락.
+          대조 불가인데 차수 정보가 한쪽에 치우쳐 있으면(모호) 이름이 아무리
+          비슷해도 탈락 — 세대수만이 그 모호함을 풀 수 있다.
     """
     scored: list[tuple[float, dict]] = []
     for cand in candidates:
@@ -282,8 +306,9 @@ def pick_best_match(cpx, candidates: list[dict]) -> tuple[dict, float] | None:
             cpx.total_household_count, cand.get("kaptdaCnt")
         )
 
-        # (a) 차수 충돌 — 항상 탈락. 세대수가 일치해도 예외 없다(형제 단지는
+        # (a) 차수 모순 — 항상 탈락. 세대수가 일치해도 예외 없다(형제 단지는
         #     세대수가 비슷하게 지어져 세대수 게이트로는 못 거른다).
+        #     부분집합은 모순이 아니라 모호이므로 아래 (c) 로 흘려보낸다.
         if ordinal_conflict(cpx.complex_name, kapt_name):
             continue
 
@@ -294,10 +319,11 @@ def pick_best_match(cpx, candidates: list[dict]) -> tuple[dict, float] | None:
         if household_ok is True:
             threshold = _NAME_RATIO_MIN
         else:
-            # 세대수 대조 불가 + 한쪽만 차수 있음 = 모호. "동익파크" 가 실제로
-            # 무차수 단지인지 "동익파크1차" 의 축약 표기인지 가릴 근거가 없어
-            # 버린다(세대수로 가릴 수 있으면 위 True 분기가 이미 통과시킨다).
-            if _one_side_ordinal(cpx.complex_name, kapt_name):
+            # 세대수 대조 불가 + 차수 정보가 한쪽에 치우침 = 모호. "동익파크" 가
+            # 무차수 단지인지 "동익파크1차" 의 축약인지, "분성마을2단지부영" 이
+            # "…부영(북부부영7차)" 와 같은 단지인지 가릴 근거가 없어 버린다
+            # (세대수로 가릴 수 있으면 위 True 분기가 이미 통과시킨다).
+            if ordinal_ambiguous(cpx.complex_name, kapt_name):
                 continue
             threshold = (
                 _NAME_RATIO_MIN_SUBSTRING

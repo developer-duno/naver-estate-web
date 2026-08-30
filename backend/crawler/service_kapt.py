@@ -6,15 +6,20 @@
 
 매칭 3중 게이트 (보수 원칙 — 오매칭은 "남의 단지 관리비"를 보여주는 치명적 결함):
   ① 법정동 일치   kapt bjdCode(10자리) == complexes.cortar_no
-  ② 이름 유사도   정규화 후 difflib ratio >= 0.6, 같은 법정동 최고점 1개만,
-                  최고점 동률이 둘 이상이면 탈락(어느 쪽인지 알 수 없으므로)
-  ③ 세대수 근사   양쪽 세대수 보유 시 |차이|/max <= 0.15,
-                  한쪽이라도 없으면 ②의 임계를 0.75 로 강화해 보완
+  ② 이름 유사도   분류 꼬리표(주상복합·도시형·민간임대…) 제거 후 difflib ratio,
+                  같은 법정동 최고점 1개만, 최고점 동률이 둘 이상이면 탈락
+  ③ 세대수 근사   양쪽 세대수 보유 시 |차이|/max <= 0.15 (임계 0.6),
+                  대조 불가면 임계를 0.85 로 강화(한쪽이 다른 쪽을 통째로 품는
+                  포함 관계면 0.6) + 차수 정보가 한쪽에 치우치면 모호로 보고 탈락
                   ⚠ 실제 발동 지점은 pick_best_match 가 아니라 **basis(getAphusBassInfoV5)
                   수신 직후**다 — 목록 API(getTotalAptList4)는 kaptdaCnt 를 안 주므로
-                  후보 선별 단계에선 늘 "대조 불가"(=0.75 강화만 적용)이고, 세대수를
+                  후보 선별 단계에선 늘 "대조 불가"(=0.85 강화만 적용)이고, 세대수를
                   실제로 아는 건 확정분에 basis 를 부른 뒤뿐이다(라이브 실측:
                   목록 응답 키 = kaptCode/kaptName/bjdCode/as1~as4).
+  ④ 차수 모순     양쪽 차수(N차·N단지·N블록)가 서로 부분집합이 아니면 점수·세대수
+                  불문 탈락 — 형제 단지는 세대수까지 비슷해 ③으로는 못 거른다.
+                  부분집합({2} ⊂ {2,7})은 "한쪽이 시공 차수를 더 적은 것"이라
+                  모순이 아니므로 ③의 세대수 게이트가 결정한다.
 
 세 게이트 모두 "애매하면 버린다"는 방향으로 설계했다 — 놓친 단지는 관리비가
 안 보일 뿐이지만, 잘못 붙인 단지는 틀린 금액을 사실처럼 보여준다.
@@ -44,8 +49,25 @@ logger = logging.getLogger(__name__)
 _NAME_RATIO_MIN = 0.6
 # 세대수를 대조할 수 없을 때(한쪽이 NULL) 쓰는 강화 임계 — 이름만으로 판단해야
 # 하므로 더 엄격하게 본다.
-_NAME_RATIO_MIN_NO_HOUSEHOLD = 0.75
+#
+# ⚠ 0.75 → 0.85 상향(2026-08-29). prod 실측에서 K-apt 세대수가 0/NULL 이라 이름만으로
+# 붙은 533건 중 점수 0.9 미만 165건에 오매칭이 다수 섞여 있었다("엠시티(주상복합)" ↔
+# "포시티주상복합" 0.857, "성신2차" ↔ "신한2차아파트" 0.75, "우아효성" ↔ "우아우성" 0.75).
+# 0.75~0.85 구간은 "글자 몇 개만 다른 남남"이 사는 구간이라 이름만으로는 못 가른다.
+_NAME_RATIO_MIN_NO_HOUSEHOLD = 0.85
+# 대조 불가 + 임계 미달이어도, **한쪽이 다른 쪽을 통째로 품으면** 이 완화 임계를 쓴다.
+# 지역·동명 접두어가 붙은 같은 단지("강릉송정신원아침도시" ↔ "신원아침도시")는 글자 수
+# 차이 때문에 difflib 점수가 0.75 언저리로 낮게 나오는데, 포함 관계 자체가 강한 증거다.
+# 포함이라는 구조적 조건이 이미 서 있으므로 점수 문턱은 기본값(0.6)까지 내린다.
+_NAME_RATIO_MIN_SUBSTRING = _NAME_RATIO_MIN
+# 부분포함 최소 길이 — 짧은 쪽이 이보다 짧으면 아무 이름에나 걸려 폭발한다
+# (자매 수집기 service_official_price._PARTIAL_MIN_LEN 과 같은 취지·같은 값).
+_SUBSTRING_MIN_LEN = 3
 _HOUSEHOLD_TOLERANCE = 0.15
+
+# 차수 신호 — "2차 / 2단지 / 2블록 / 2BL". 형제 단지를 가르는 결정적 축이라
+# 이름 유사도와 별개로 본다(`ordinal_tokens`).
+_ORDINAL_RE = re.compile(r"(\d+)\s*(?:차|단지|블록|블럭|bl)", re.IGNORECASE)
 
 _LIST_PAGE_SIZE = 1000
 # 페이지네이션 폭주 방지 상한. 전국 22,288단지 / 1000 = 23페이지라 넉넉하다
@@ -89,19 +111,71 @@ _PAREN_RE = re.compile(r"[()（）\[\]]")
 _NON_NAME_RE = re.compile(r"[\s\-·,.]")
 _APT_SUFFIX_RE = re.compile(r"(아파트|APT)$", re.IGNORECASE)
 
+# ── 분류 꼬리표(내용째 제거) ──
+# 우리 DB 이름에만 붙는 **건물 종류 분류**다. K-apt 이름엔 없어서, 남겨두면 같은
+# 단지인데도 유사도가 통째로 깎인다(실측: "빌리브라디체(주상복합)" ↔ "빌리브라디체"
+# = 0.75 로 경계까지 추락, "보령더포레젠(민간임대)" ↔ "보령 더포레젠" 도 0.75).
+# 그 낮은 점수대에 진짜 오매칭("공간라움(주상복합)" ↔ "더라움엠주상복합아파트" 0.75)이
+# 섞여 있어 임계만으로는 정답과 오답을 가를 수 없었다 — 꼬리표를 걷어내야 정답이
+# 0.9+ 로 올라가고 바닥에 오답만 남는다.
+#
+# 목록은 **prod 실측으로 확정한 닫힌 집합**이다(2026-08-29):
+#   우리 이름(complexes APT·JGC 48,202건) — 전부 괄호 안에만 등장한다
+#     주상복합 6,341 / 도시형 6,020 / 민간임대 479 / 주거복합 15 / 실버주택 10
+#   K-apt 이름(kapt_complex_map 11,803건) — 전부 **괄호 없이** 본문에 붙어 온다
+#     주상복합 52 / 도시형생활주택 13 / 도시형 14
+# ⚠ 그래서 "괄호 안만" 지우면 안 된다 — 우리 쪽만 지워지고 K-apt 쪽은 남아 오히려
+# 격차가 벌어진다(드라이런 실측: "대산(주상복합)" ↔ "대산주상복합아파트" 가 1.000
+# → 0.500 으로 추락. 세대수 130/131 로 같은 단지인데 오탈락). **괄호 유무와 무관하게
+# 분류어 자체를 양쪽에서 제거**해야 두 표기가 같은 축에 놓인다.
+#
+# 나머지 괄호 내용(동 101동·A동, 차수 2차, 번지 69-1)은 그대로 **보존**한다 —
+# 지우면 형제 단지가 같은 정규형이 된다(위 경고 참조).
+# 긴 것부터 지운다 — "도시형생활주택" 을 "도시형" 이 먼저 먹으면 "생활주택" 이 남는다.
+_CATEGORY_TAGS = (
+    "도시형생활주택",
+    "주상복합",
+    "주거복합",
+    "실버주택",
+    "민간임대",
+    "도시형",
+)
+_CATEGORY_TAG_RE = re.compile("|".join(_CATEGORY_TAGS))
+
+
+def _strip_category_tags(name: str) -> str:
+    """분류 꼬리표를 괄호 유무와 무관하게 제거 — 동·차수 등 나머지는 보존.
+
+    "빌리브라디체(주상복합)"      → "빌리브라디체()"        (뒤이어 괄호 기호가 제거됨)
+    "대산주상복합아파트"           → "대산아파트"            (K-apt 무괄호 표기)
+    "루체스타 도시형생활주택"       → "루체스타 "
+    "래미안(101동,주상복합)"      → "래미안(101동,)"        (동은 남는다)
+    "경희궁의아침(4단지)"         → "경희궁의아침(4단지)"   (무변경)
+
+    빈 괄호·잔여 콤마는 뒤따르는 `_PAREN_RE`·`_NON_NAME_RE` 가 정리하므로
+    여기서 따로 다듬지 않는다(정규화 단계 하나가 한 가지 일만 하게 둔다).
+    """
+    return _CATEGORY_TAG_RE.sub("", name)
+
 
 def normalize_complex_name(name: str | None) -> str:
-    """단지명 비교용 정규형 — 괄호 기호·공백·구분자·'아파트' 접미사 제거(괄호 안 내용은 보존).
+    """단지명 비교용 정규형 — 분류 꼬리표·괄호 기호·공백·'아파트' 접미사 제거.
 
     K-apt 와 네이버가 같은 단지를 "경희궁의아침4단지" / "경희궁의아침(4단지)"
     처럼 다르게 표기하므로, 표기 차이를 걷어낸 뒤 유사도를 잰다.
-    차수 숫자(4단지의 4)는 **남긴다** — 형제 단지를 가르는 결정적 신호라
-    지우면 1단지와 4단지가 100% 일치해버린다. 그래서 괄호는 기호만 떼고
-    안의 내용은 보존한다(차수가 괄호 안에 들어가는 표기가 흔하다).
+
+    두 가지를 **다르게** 다룬다:
+      · 분류 꼬리표(주상복합·도시형생활주택·민간임대…)는 **괄호 유무와 무관하게
+        제거** — 우리는 "(주상복합)", K-apt 는 "주상복합" 으로 같은 뜻을 다르게
+        표기해서, 한쪽만 지우면 격차가 오히려 벌어진다.
+      · 그 외 괄호 내용(차수 "(4단지)", 동 "(101동)")은 기호만 떼고 **내용 보존** —
+        차수 숫자는 형제 단지를 가르는 결정적 신호라 지우면 1단지와 4단지가
+        100% 일치해버린다.
     """
     if not name:
         return ""
-    text = _PAREN_RE.sub("", name)
+    text = _strip_category_tags(name)
+    text = _PAREN_RE.sub("", text)
     text = _NON_NAME_RE.sub("", text)
     text = _APT_SUFFIX_RE.sub("", text)
     return text.strip().lower()
@@ -113,6 +187,88 @@ def name_similarity(a: str | None, b: str | None) -> float:
     if not na or not nb:
         return 0.0
     return SequenceMatcher(None, na, nb).ratio()
+
+
+def ordinal_tokens(name: str | None) -> set[str]:
+    """이름에서 차수 신호를 뽑는다 — {"1","2"} 같은 숫자 집합. 없으면 빈 집합.
+
+    차수 = "N차 / N단지 / N블록 / NBL". 형제 단지를 가르는 결정적 신호라
+    이름 유사도와 **별개의 축**으로 본다(자매 수집기 service_official_price 의
+    "형제 단지 신호(잉여 숫자) 배제"와 같은 취지지만, 거기가 부분포함 잉여
+    문자열의 숫자 유무를 보는 휴리스틱인 데 반해 여기선 차수 토큰을 명시적으로
+    뽑아 값끼리 비교한다 — 이 수집기는 양쪽 이름 전체를 늘 갖고 있어 더 정확한
+    판정이 가능하다).
+
+    정규화된 문자열에서 뽑는다 — 원문 "제 2 차"·"(2단지)" 의 공백·괄호를 이미
+    걷어낸 뒤라야 같은 패턴 하나로 잡힌다.
+    """
+    text = normalize_complex_name(name)
+    if not text:
+        return set()
+    return {m.group(1).lstrip("0") or "0" for m in _ORDINAL_RE.finditer(text)}
+
+
+def ordinal_conflict(a: str | None, b: str | None) -> bool:
+    """양쪽 차수가 **서로 모순**이면 True(= 형제 단지라 탈락).
+
+    "모순"은 값이 다른 것과 다르다 — 한쪽이 다른 쪽의 부분집합이면 모순이 아니라
+    **한쪽이 차수를 더 적어놓은 것**이다:
+
+      {1} vs {3}      → 충돌   1단지와 3단지는 양립 불가한 형제 단지
+      {2} vs {2,7}    → 무충돌 "분성마을2단지부영" ↔ "…부영(북부부영7차)" — 단지
+                              차수 2 는 일치하고, 7 은 시공 차수라는 별개 축이다
+      {6,1} vs {1}    → 무충돌 "현대아이파크홈타운6차1단지" ↔ "…1단지" — 같은 이유
+      {} vs {1}       → 무충돌 정보 부족 (`ordinal_ambiguous` 소관)
+
+    부분집합 관계는 "차수가 다르다"가 아니라 "한쪽이 정보를 더 갖고 있다"이므로,
+    충돌로 단정하지 않고 `ordinal_ambiguous` 를 거쳐 **세대수 게이트가 결정**하게
+    넘긴다(대조 가능·±15% 통과면 채택, 대조 불가면 탈락).
+
+    ⚠ 모순인 경우엔 세대수가 일치해도 탈락시킨다 — 같은 브랜드 1단지/2단지가
+    비슷한 세대수로 지어지는 게 흔해서, 세대수 게이트가 형제 단지를 못 거른다
+    (실측: "방주기픈샘2차" ↔ "방주기픈샘1차아파트" ratio 0.857 로 통과했었다).
+    """
+    ta, tb = ordinal_tokens(a), ordinal_tokens(b)
+    if not ta or not tb:
+        return False
+    # 부분집합(같은 집합 포함)이면 모순이 아니다.
+    return not (ta <= tb or tb <= ta)
+
+
+def ordinal_ambiguous(a: str | None, b: str | None) -> bool:
+    """차수 정보가 한쪽에 치우쳐 있으면 True — 세대수 없이는 못 가르는 모호 신호.
+
+    두 경우를 함께 잡는다:
+      · 한쪽에만 차수가 있음    "동익파크" vs "동익파크1차"
+      · 한쪽이 차수를 더 가짐   "분성마을2단지부영" vs "…부영(북부부영7차)"({2} ⊂ {2,7})
+
+    둘 다 "이름만으로는 같은 단지인지 형제인지 알 수 없다"는 같은 상태다. 호출부는
+    세대수를 대조할 수 있으면 그 판정에 맡기고, 대조 불가면 보수적으로 버린다.
+    양쪽 차수가 완전히 같으면(예: {2} vs {2}) 모호하지 않다 — False.
+    """
+    ta, tb = ordinal_tokens(a), ordinal_tokens(b)
+    return ta != tb and (ta <= tb or tb <= ta)
+
+
+def _substring_related(a: str | None, b: str | None) -> bool:
+    """정규화 후 한쪽이 다른 쪽을 통째로 품는가 — 지역·동명 프리픽스 회수용.
+
+    실측 패턴: 우리 "강릉송정신원아침도시" ↔ K-apt "신원아침도시아파트"(지역
+    접두어), 우리 "현대4차" ↔ K-apt "상계현대4차아파트". 글자 수 차이가 커서
+    difflib 점수는 0.75~0.8 로 낮지만 포함 관계가 명확한 같은 단지다.
+
+    ⚠ 짧은 쪽이 _SUBSTRING_MIN_LEN 미만이면 포함으로 치지 않는다 — "한신아파트"는
+    접미사 제거 후 "한신"(2글자)이라 "한신더휴"·"한신休"·"한신플러스" 아무 데나
+    걸려 완화 임계가 폭발한다(자매 수집기 service_official_price._PARTIAL_MIN_LEN
+    과 같은 취지·같은 값). 브랜드명 두 글자는 서로 다른 단지의 공통 접두어일 뿐
+    같은 단지라는 증거가 못 된다.
+    """
+    na, nb = normalize_complex_name(a), normalize_complex_name(b)
+    if not na or not nb:
+        return False
+    if min(len(na), len(nb)) < _SUBSTRING_MIN_LEN:
+        return False
+    return na in nb or nb in na
 
 
 def household_within_tolerance(ours: int | None, theirs: int | None) -> bool | None:
@@ -132,20 +288,50 @@ def pick_best_match(cpx, candidates: list[dict]) -> tuple[dict, float] | None:
 
     candidates 는 {"kaptCode","kaptName","kaptdaCnt"(선택)} 형태의 dict 목록.
     kaptdaCnt 는 목록 API 에 없으므로 보통 None 이며, 그때는 이름 임계가
-    0.75 로 강화된다(세대수 대조 불가 보완).
+    0.85(또는 포함관계 시 0.6)로 강화된다(세대수 대조 불가 보완).
+
+    후보 하나가 통과하려면 세 관문을 다 지나야 한다:
+      (a) **차수 모순 탈락** — 양쪽 차수가 서로 부분집합이 아니면 점수·세대수 불문 탈락
+          ({1} vs {3}). 부분집합({2} vs {2,7})은 모순이 아니라 모호라 (c) 로 넘긴다.
+      (b) **세대수 게이트** — 대조 가능하고 ±15% 밖이면 탈락.
+      (c) **이름 임계** — 대조 가능하면 0.6, 대조 불가면 0.85(포함관계면 0.6).
+          대조 불가인데 차수 정보가 한쪽에 치우쳐 있으면(모호) 이름이 아무리
+          비슷해도 탈락 — 세대수만이 그 모호함을 풀 수 있다.
     """
     scored: list[tuple[float, dict]] = []
     for cand in candidates:
-        ratio = name_similarity(cpx.complex_name, cand.get("kaptName"))
+        kapt_name = cand.get("kaptName")
+        ratio = name_similarity(cpx.complex_name, kapt_name)
         household_ok = household_within_tolerance(
             cpx.total_household_count, cand.get("kaptdaCnt")
         )
-        if household_ok is False:
-            # 세대수가 명백히 다르면 이름이 아무리 비슷해도 다른 단지다.
+
+        # (a) 차수 모순 — 항상 탈락. 세대수가 일치해도 예외 없다(형제 단지는
+        #     세대수가 비슷하게 지어져 세대수 게이트로는 못 거른다).
+        #     부분집합은 모순이 아니라 모호이므로 아래 (c) 로 흘려보낸다.
+        if ordinal_conflict(cpx.complex_name, kapt_name):
             continue
-        threshold = (
-            _NAME_RATIO_MIN if household_ok is True else _NAME_RATIO_MIN_NO_HOUSEHOLD
-        )
+
+        # (b) 세대수가 명백히 다르면 이름이 아무리 비슷해도 다른 단지다.
+        if household_ok is False:
+            continue
+
+        if household_ok is True:
+            threshold = _NAME_RATIO_MIN
+        else:
+            # 세대수 대조 불가 + 차수 정보가 한쪽에 치우침 = 모호. "동익파크" 가
+            # 무차수 단지인지 "동익파크1차" 의 축약인지, "분성마을2단지부영" 이
+            # "…부영(북부부영7차)" 와 같은 단지인지 가릴 근거가 없어 버린다
+            # (세대수로 가릴 수 있으면 위 True 분기가 이미 통과시킨다).
+            if ordinal_ambiguous(cpx.complex_name, kapt_name):
+                continue
+            threshold = (
+                _NAME_RATIO_MIN_SUBSTRING
+                if _substring_related(cpx.complex_name, kapt_name)
+                else _NAME_RATIO_MIN_NO_HOUSEHOLD
+            )
+
+        # (c) 이름 임계
         if ratio < threshold:
             continue
         scored.append((ratio, cand))
@@ -291,6 +477,41 @@ def _clear_conflicting_mappings(db, complex_no: str, kapt_code: str) -> None:
         ).delete(synchronize_session=False)
 
 
+def _purge_unconfirmed_mappings(db, run_started_at: datetime) -> int:
+    """이번 전량 실행이 재확인하지 않은 옛 매칭 + 그 관리비 삭제. 반환 = 삭제 건수.
+
+    ⚠ **전량 목록(list_complete=True) 실행에서만** 부른다. 전국 K-apt 목록을 다 받아
+    전 단지를 다시 심사한 회차라면, 여기서 살아남지 못한 옛 행은 "새 규칙에서 통과하지
+    못하는 짝"이라는 뜻이다. upsert 는 갱신만 하므로 그런 행은 손대지 않으면 옛
+    (느슨한) 규칙 시절의 오매칭이 그대로 남아 남의 단지 관리비를 계속 보여준다.
+
+    부분 목록(list_complete=False)에서는 절대 부르지 않는다 — 그 회차가 못 본 단지와
+    "규칙에서 탈락한 단지"를 구분할 수 없어서, 전량 삭제 사고가 난다.
+
+    판정 기준은 `matched_at < 실행 시작 시각` 이다. 이번 실행이 재확인한 행은 upsert 가
+    matched_at 을 갱신하므로 반드시 실행 시작 이후 값을 갖는다.
+
+    관리비도 함께 지운다 — kapt_management_costs 는 complex_no 로만 조인돼서
+    (price_queries.get_latest_kapt_cost) 매칭만 지우면 금액이 고아로 남아, 다음
+    매칭이 붙는 순간 옛 K-apt 단지의 금액이 새 이름과 나란히 표시된다.
+    """
+    stale = (
+        db.query(KaptComplexMap)
+        .filter(KaptComplexMap.matched_at < run_started_at)
+        .all()
+    )
+    for row in stale:
+        logger.info(
+            "[kapt_match] 정리: 단지 %s ↔ %s(%s) 이 새 규칙에서 재확인 안 됨 — 매칭·관리비 삭제",
+            row.complex_no, row.kapt_code, row.kapt_name,
+        )
+        db.query(KaptManagementCost).filter(
+            KaptManagementCost.complex_no == row.complex_no
+        ).delete(synchronize_session=False)
+        db.delete(row)
+    return len(stale)
+
+
 def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
     """K-apt 단지 목록 ↔ 우리 단지 매칭 (월 1회).
 
@@ -300,6 +521,9 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
     """
     db = SessionLocal()
     job = _record_job(db, _MATCH_JOB_TYPE, scheduler_job_id)
+    # 정리(reconciliation) 기준선 — 이 시각보다 오래된 matched_at 은 "이번 실행이
+    # 재확인하지 않은 옛 행"이다. 목록 조회 전에 찍어야 실행 도중 갱신분을 안 놓친다.
+    run_started_at = utcnow()
     try:
         kapt_rows, list_complete = _fetch_all_kapt()
         if not kapt_rows:
@@ -361,10 +585,13 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
             # ⚠ 세대수 게이트 재판정 — 여기가 게이트 ③이 실제로 발동하는 유일한 지점이다.
             # pick_best_match 는 **목록 API 후보**로 호출되는데 getTotalAptList4 응답에는
             # kaptdaCnt 가 없다 → 그 안의 household_within_tolerance 는 항상 None(대조 불가)
-            # 이라 이름 임계 0.75 강화만 걸린다. 세대수를 실제로 아는 시점은 방금
-            # getAphusBassInfoV5 를 부른 지금뿐이므로, 여기서 다시 대조하지 않으면
-            # "법정동 같고 이름 0.75 이상이면 세대수가 3배 달라도 확정"이 되어
+            # 이라 이름 임계 0.85(포함관계 시 0.6) 강화만 걸린다. 세대수를 실제로 아는
+            # 시점은 방금 getAphusBassInfoV5 를 부른 지금뿐이므로, 여기서 다시 대조하지
+            # 않으면 "법정동 같고 이름 0.85 이상이면 세대수가 3배 달라도 확정"이 되어
             # 3중 게이트가 사실상 2중으로 퇴화한다.
+            # ⚠ 차수 충돌(a)은 pass 1 에서 이미 걸러졌고 세대수와 무관한 규칙이라
+            # 여기서 재판정하지 않는다 — "한쪽만 차수 + 대조 불가" 탈락도 마찬가지로
+            # pass 1 소관이다(그 단계에선 세대수가 늘 미상이라 보수적으로 버린다).
             if household_within_tolerance(cpx.total_household_count, household) is False:
                 logger.info(
                     "[kapt_match] 세대수 게이트 탈락: %s(%s) 우리 %s vs kapt %s(%s)",
@@ -408,6 +635,17 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
             logger.error("[kapt_match] silent failure 감지: 대상 %d개 전부 실패", len(targets))
             return {"matched": 0, "skipped": skipped, "error": "no_match"}
 
+        # 전량 실행 정리 — 이번에 재확인되지 않은 옛 매칭은 새 규칙 탈락분이므로 지운다.
+        # 부분 목록 회차에서는 "못 본 단지"와 구분이 안 되므로 절대 지우지 않는다.
+        # 위 silent failure 가드를 통과한 뒤라야 안전하다(매칭 0건 회차가 전량을
+        # 쓸어버리는 사고 차단).
+        purged = 0
+        if list_complete:
+            purged = _purge_unconfirmed_mappings(db, run_started_at)
+            db.commit()
+            if purged:
+                logger.warning("[kapt_match] 새 규칙 미통과 옛 매칭 %d건 정리 완료", purged)
+
         # ⚠ 2번째 인자는 _complete_job 규약상 **failed** 다(total = processed + failed).
         # 미매칭(skipped)은 실패가 아니라 정상적인 '해당 없음'이므로 0 을 넘긴다 —
         # skipped 를 넘기면 total 이 46,373건만큼 부풀어(라이브 실측 47,606) 실패율
@@ -421,10 +659,15 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
             )[:500]
             db.commit()
         logger.info(
-            "[kapt_match] 완료: %d 매칭, %d 미매칭 (대상 %d, K-apt %d건, 목록완전=%s)",
-            matched, skipped, len(targets), len(kapt_rows), list_complete,
+            "[kapt_match] 완료: %d 매칭, %d 미매칭, %d 정리 (대상 %d, K-apt %d건, 목록완전=%s)",
+            matched, skipped, purged, len(targets), len(kapt_rows), list_complete,
         )
-        return {"matched": matched, "skipped": skipped, "list_complete": list_complete}
+        return {
+            "matched": matched,
+            "skipped": skipped,
+            "purged": purged,
+            "list_complete": list_complete,
+        }
     except Exception as exc:
         _fail_job(db, job, str(exc))
         logger.exception("[kapt_match] 매칭 실패")

@@ -348,7 +348,7 @@ e2e 시각 회귀 baseline 9 파일은 별도 갱신 동반 (workflow_dispatch `
 - 모바일 친화 스피너 제거, 큰 숫자 입력
 - 면책 박스 디자인 통일
 
-### PR 6 — 로그인 후 대시보드 신설 + 온보딩
+### PR 6 — 로그인 후 대시보드 신설 + 온보딩 (⚠ 원안 폐기 — 하단 §구현 현황·후속 정리 참조)
 
 **파일**: `frontend/src/app/dashboard/page.tsx` (신규 라우트), `frontend/src/components/onboarding/*`
 
@@ -371,6 +371,23 @@ e2e 시각 회귀 baseline 9 파일은 별도 갱신 동반 (workflow_dispatch `
 - /compare, /mibunyang, /blog 리뉴얼 — 다음 분기 (별 PR 묶음)
 - /admin/* 정비 — 우리만 사용, 우선순위 ↓
 - 알림 시스템 백엔드 (시세 변동 감지·이메일) — PR 6 의 토스트 알림은 클라이언트만
+
+## 구현 현황·후속 정리 (2026-08-31 세션 390 추가 — 보류/폐기 명시)
+
+원안과 실제 구현의 어긋남을 역사 기록에 명시한다 (백로그 survey 2026-08-24 §5-E 종결분).
+실측 근거(2026-08-31): `cmdk`·`driver.js`·`vaul`·`nuqs`·`next-themes` **미설치**,
+`/dashboard` 라우트·`CommandMenu.tsx`·`components/onboarding/` **부재**,
+`react-to-print`·`@tanstack/react-table` 설치·사용 중.
+
+| 원안 항목 | 판정 | 근거 |
+| --- | --- | --- |
+| PR 6 원안 (/dashboard·driver.js 투어·sonner 시세 토스트) | **폐기** | PR 6a~6e(admin 3컬럼·단지상세 대시보드)로 방향 전환(헤더 주석 답습). 재추진 시 별도 spec 필수 |
+| PR 2 의 cmdk Cmd+K 명령 메뉴 | **보류** | PR 2 는 헤더·푸터 리뉴얼만 구현, cmdk 미설치. 6e 진행 중 "Cmd+K·빈도정렬"이 6f 후보로 재거론됐으나 미착수 — 착수 계획 없음 |
+| 6d 인쇄 자동펼침 | **구현 완료** | `components/complex/ComplexDashboard.tsx:65` beforeprint/afterprint 훅 + 가드 테스트(ComplexDashboard.test.tsx "인쇄 시 4 섹션 노출") |
+| 3b sticky 필터 후속 | **보류** | 6a~6e 진행 중 후속 후보로 거론(세션 242 sticky 폭 보존 가드까지만) — 착수 계획 없음 |
+| 비범위: /mibunyang 리뉴얼 | **별도 트랙 완료** | 세션 314~319 미분양→분양 호갱노노 리뉴얼 + 지도뷰 (본 spec 무관 트랙) |
+| 비범위: /compare·/blog 리뉴얼 | **보류 유지** | "다음 분기 별 PR 묶음" 약속은 미이행 — 착수 계획 없음 |
+| 비범위: 알림 시스템 백엔드 | **보류 유지** | 서버 감지·이메일 미구현. 클라이언트 가격변동 배지 최소버전만 구현(세션 348, `favorite_price_snapshot` — B2 게이트) |
 
 ## 검증·테스트
 

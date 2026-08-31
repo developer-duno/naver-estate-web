@@ -382,7 +382,7 @@ e2e 시각 회귀 baseline 9 파일은 별도 갱신 동반 (workflow_dispatch `
 | 원안 항목 | 판정 | 근거 |
 | --- | --- | --- |
 | PR 6 원안 (/dashboard·driver.js 투어·sonner 시세 토스트) | **폐기** | PR 6a~6e(admin 3컬럼·단지상세 대시보드)로 방향 전환(헤더 주석 답습). 재추진 시 별도 spec 필수 |
-| PR 2 의 cmdk Cmd+K 명령 메뉴 | **보류** | PR 2 는 헤더·푸터 리뉴얼만 구현, cmdk 미설치. 6e 진행 중 "Cmd+K·빈도정렬"이 6f 후보로 재거론됐으나 미착수 — 착수 계획 없음 |
+| PR 2 의 cmdk Cmd+K 명령 메뉴 | **보류** | 원안 PR 2 중 **2a(헤더·푸터, 91ff5ec)만 구현** — 2b·2c·2d(cmd+k·다크토글·Header 분할)는 미탄생(git log 0건), 다크모드는 이후 라이트 고정(83766d7)으로 명시 제거. cmdk 미설치. 6e 진행 중 "Cmd+K·빈도정렬"이 6f 후보로 재거론됐으나 미착수 — 착수 계획 없음 |
 | 6d 인쇄 자동펼침 | **구현 완료** | `components/complex/ComplexDashboard.tsx:65` beforeprint/afterprint 훅 + 가드 테스트(ComplexDashboard.test.tsx "인쇄 시 4 섹션 노출") |
 | 3b sticky 필터 후속 | **보류** | 6a~6e 진행 중 후속 후보로 거론(세션 242 sticky 폭 보존 가드까지만) — 착수 계획 없음 |
 | 비범위: /mibunyang 리뉴얼 | **별도 트랙 완료** | 세션 314~319 미분양→분양 호갱노노 리뉴얼 + 지도뷰 (본 spec 무관 트랙) |

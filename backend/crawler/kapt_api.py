@@ -6,23 +6,23 @@ data.go.kr 1613000 계열 3개 서비스를 한 모듈에서 다룬다 (전부 �
 - `AptListService4`            단지 목록 (kaptCode ↔ 법정동·단지명)
 - `AptBasisInfoServiceV5`      단지 기본정보 (세대수·복도유형·사용승인일)
 - `AptCmnuseManageCostServiceV3`  공용관리비 17개 오퍼레이션
-- `AptIndvdlzManageCostServiceV2` 개별사용료 5개 오퍼레이션
+- `AptIndvdlzManageCostServiceV3` 개별사용료 5개 오퍼레이션
 
 `BasePublicDataAPI`(air_quality_api.py·applyhome_officetel_api.py 와 동일 기반)를
 상속해 공유 일일 쿼터 추적·throttle(0.3초)·429 재시도를 그대로 재사용한다 —
 재시도·세션 관리를 새로 만들지 않는다 (`oss-first.md` 답습).
 
-⚠ 쿼터: 목록·기본정보는 운영계정 10만/일이지만, 관리비 V2/V3 는 아직 **개발계정**
+⚠ 쿼터: 목록·기본정보는 운영계정 10만/일이지만, 관리비 두 서비스는 아직 **개발계정**
 이고 한도는 **서비스당 5,000/일 (오퍼레이션 합산)** 이다 — 오퍼레이션마다 따로
-1,000 이 아니다(공개 페이지 실측 2026-08-29). 한 단지당 V3 17콜 + V2 5콜이라
-배치 500 이면 V3 만 8,500콜로 한도를 넘긴다 → 운영은 `KAPT_COST_BATCH_SIZE=250`.
+1,000 이 아니다(공개 페이지 실측 2026-08-29). 한 단지당 공용 17콜 + 개별 5콜이라
+배치 500 이면 공용만 8,500콜로 한도를 넘긴다 → 운영은 `KAPT_COST_BATCH_SIZE=250`.
 
 ⚠ 3상태 구분 (이 모듈의 핵심 계약): 관리비 호출 결과는 반드시
   (a) 성공 + 데이터 있음   → item dict
   (b) 성공 + 데이터 없음   → None ("정상 미공개" — 이 달·이 항목은 원래 없다)
   (c) 호출 실패           → `KaptApiError` 예외 (쿼터 초과·키 오류·점검·파싱 실패)
-셋으로 갈린다. (b)와 (c)를 둘 다 None 으로 뭉개면, 공용(V3)이 통째로 실패하고
-개별(V2)만 성공한 회차에서 "공용관리비 0원" 인 반쪽 총액이 사실처럼 저장되고
+셋으로 갈린다. (b)와 (c)를 둘 다 None 으로 뭉개면, 공용이 통째로 실패하고
+개별만 성공한 회차에서 "공용관리비 0원" 인 반쪽 총액이 사실처럼 저장되고
 그 달 행이 생겨 다음 달까지 재수집도 안 된다 — 그래서 (c)는 예외로 올린다.
 """
 
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 _LIST_URL = "https://apis.data.go.kr/1613000/AptListService4"
 _BASIS_URL = "https://apis.data.go.kr/1613000/AptBasisInfoServiceV5"
 _CMNUSE_URL = "https://apis.data.go.kr/1613000/AptCmnuseManageCostServiceV3"
-_INDVDLZ_URL = "https://apis.data.go.kr/1613000/AptIndvdlzManageCostServiceV2"
+_INDVDLZ_URL = "https://apis.data.go.kr/1613000/AptIndvdlzManageCostServiceV3"
 
 # 공용관리비 V3 오퍼레이션 17종. 각 응답의 금액 필드명이 op 마다 다르므로
 # (guardCost·cleanCost·…) 이름을 하드코딩하지 않고 `_extract_amount` 로 뽑는다.
@@ -59,14 +59,14 @@ COMMON_COST_OPS: tuple[str, ...] = (
     "getHsmpConsignManageFeeInfoV3",
 )
 
-# 개별사용료 V2 오퍼레이션 5종. 응답이 "공용(C) + 전용(P)" 두 필드로 쪼개져 오므로
+# 개별사용료 V3 오퍼레이션 5종. 응답이 "공용(C) + 전용(P)" 두 필드로 쪼개져 오므로
 # (예: {"heatC": "0", "heatP": "0"}) 둘을 더해 항목 금액으로 쓴다.
 INDIVIDUAL_COST_OPS: tuple[str, ...] = (
-    "getHsmpHeatCostInfoV2",
-    "getHsmpHotWaterCostInfoV2",
-    "getHsmpGasRentalFeeInfoV2",
-    "getHsmpElectricityCostInfoV2",
-    "getHsmpWaterCostInfoV2",
+    "getHsmpHeatCostInfoV3",
+    "getHsmpHotWaterCostInfoV3",
+    "getHsmpGasRentalFeeInfoV3",
+    "getHsmpElectricityCostInfoV3",
+    "getHsmpWaterCostInfoV3",
 )
 
 # 응답 dict 에서 금액이 아닌 필드 — 금액 추출 시 건너뛴다.

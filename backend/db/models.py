@@ -496,7 +496,7 @@ class KaptComplexMap(Base):
 
 
 class KaptManagementCost(Base):
-    """K-apt 월별 관리비 (공용 V3 17항목 + 개별 V2 5항목) — V051.
+    """K-apt 월별 관리비 (공용 V3 17항목 + 개별 V3 5항목) — V051.
 
     단지 × 조회월(YYYYMM) 1행. 같은 달 재수집 시 최신값으로 덮어쓴다.
 

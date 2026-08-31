@@ -33,8 +33,9 @@ PUBLIC_DATA_ENABLED = os.getenv("PUBLIC_DATA_ENABLED", "false").lower() == "true
 PUBLIC_DATA_BATCH_SIZE = int(os.getenv("PUBLIC_DATA_BATCH_SIZE", "300"))
 OFFICIAL_PRICE_ENABLED = os.getenv("OFFICIAL_PRICE_ENABLED", "false").lower() == "true"
 # K-apt 관리비 연동 (V051) — 기본 false. 첫 배포는 꺼서 나가고, 관리자 수동 트리거로
-# 매칭·수집을 실측 검증한 뒤 켠다. ⚠ 관리비 API 는 개별/공용 오퍼레이션당 쿼터가
-# 작아(개발계정 일 1,000 추정) 단지 하나에 22콜이 나간다 — 배치 크기가 곧 쿼터 소모량.
+# 매칭·수집을 실측 검증한 뒤 켠다. ⚠ 단지 하나에 22콜(공용 17 + 개별 5)이 나가
+# 배치 크기가 곧 쿼터 소모량이다. 관리비 두 서비스도 운영계정(10만/일) 전환이 끝나
+# 500 으로 운영 중(2026-08-31 실측: 하루 kapt 32,035콜, 실패 0·쿼터 에러 0).
 KAPT_ENABLED = os.getenv("KAPT_ENABLED", "false").lower() == "true"
 KAPT_COST_BATCH_SIZE = int(os.getenv("KAPT_COST_BATCH_SIZE", "500"))
 # 시세 이력 부족 단지 소급 수집 (국토교통부 실거래가). PUBLIC_DATA_ENABLED 와 같은

@@ -176,7 +176,7 @@ def _fetch_page(pnu: str, stdr_year: str, page_no: int) -> tuple[list[dict], int
 
 
 def probe_official_price_total(pnu: str, stdr_year: str) -> int | None:
-    """1페이지만 조회해 총 행수를 돌려준다 — 신코드 이관 감시 프로브 전용.
+    """1페이지만 조회해 총 행수를 돌려준다 — 표준코드 이관 감시 프로브 전용.
 
     fetch_official_prices 는 전 페이지를 다 받아서(이관 뒤라면 보초 1곳이 수만 행)
     프로브로 부적합하다. 실패(None)는 조용히 None — 감시는 best-effort.

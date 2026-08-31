@@ -1611,3 +1611,79 @@ def test_collect_saves_unique_ho_count_when_vworld_duplicates_rows(db, seeded, m
 
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
     assert job.status == "completed"
+
+
+def test_resume_lookback_limit_covers_long_failure_chain(db, monkeypatch):
+    """재개 조회 상한(RESUME_LOOKBACK_LIMIT) — 72h 창의 실패 잡이 10건을 넘어도
+    **동별 소유잡 사슬**이 끊기지 않는다 (세션 391, 백로그 §5-D).
+
+    상한이 10 이던 시절의 구조 결함:
+      · 재개 후보 조회는 `ORDER BY id DESC LIMIT N` 이라, 실패가 N건을 넘으면
+        **가장 오래된 잡부터** 조회에서 밀려난다.
+      · 그런데 동별 컷오프(inherited_cutoff_by_dong)는 "그 동을 **처음 완료한** 잡"의
+        started_at 이어야 한다(세션 380 B3). 소유 잡이 밀려나면 그 동의 컷오프가
+        더 최신 잡으로 오채택되고, 소유 잡 직후에 정상 저장된 단지가 "컷오프 이전
+        저장" = 소실로 오판돼 불필요한 재조회(V-WORLD 호출)와 잔여 보고가 생긴다.
+
+    시나리오: 72h 창 안에 실패 잡 12건. 문제의 동 D_owned 를 처음 완료한 잡은 **가장
+    오래된 J1**(70h 전)이고, J2~J12 는 체크포인트로 상속만 했다. J1 이 68h 전에 저장한
+    단지 Y 는 소유잡 컷오프(70h 전) 이후라 정상이다. 상한이 10 이면 J1·J2 가 조회에서
+    잘려 D_owned 컷오프가 J3.start(60h 전)로 오채택 → Y 가 소실로 오판된다.
+
+    두 축 분리 (testing.md): ① 잡 시각을 70h·66h·60h·…·1h 로 서로 다르게 벌리고
+    ② 동 코드도 잡마다 다르게 준다 — "몇 번째 잡이냐"와 "어느 동이냐"가 우연히 같은
+    값으로 겹치지 않아, 어느 잡을 소유자로 보는지가 결과를 실제로 가른다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+
+    from datetime import timedelta
+
+    from crawler.service_common import _checkpoint
+    from utils import utcnow
+
+    now = utcnow()
+    job_count = 12
+    dong_owned = "1168010600"  # J1 이 처음 완료한 동 — Y 소속
+
+    # Y — D_owned 의 단지. 소유잡 J1(70h 전) 직후인 68h 전에 저장됐다.
+    db.add(Complex(complex_no="Y", complex_name="와이아파트", cortar_no=dong_owned,
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+    _seed_prior_row(db, "Y", days_ago=0, minutes_ago=68 * 60)
+
+    # 잡 시각: J1=70h 전 … J12=1h 전 (서로 다른 간격 — 두 축 분리)
+    hours_ago = [70, 66, 60, 53, 47, 41, 34, 28, 23, 17, 9, 1]
+    assert len(hours_ago) == job_count
+
+    prior_jobs = []
+    done_so_far = [dong_owned]
+    for idx, hours in enumerate(hours_ago):
+        prev = CrawlJob(job_type="official_price",
+                        scheduler_job_id="collect_official_prices",
+                        status="failed", started_at=now - timedelta(hours=hours))
+        db.add(prev)
+        db.commit()
+        if idx > 0:
+            # 잡마다 자기 몫의 동을 추가로 완료 — 동 코드 꼬리를 07,09,11… 로 띄워
+            # "몇 번째 잡"과 "어느 동"이 우연히 같은 숫자가 되지 않게 한다(두 축 분리).
+            done_so_far.append(f"116801{5 + idx * 2:02d}00")
+        _checkpoint.save(db, prev.id, {"done_ld_codes": list(done_so_far),
+                                       "total": len(done_so_far)})
+        prior_jobs.append(prev)
+
+    prior_ids = [j.id for j in prior_jobs]
+
+    with patch("crawler.vworld_price_api.fetch_official_prices") as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 0, (
+        "재개 조회 상한이 낮아 가장 오래된 소유잡(J1)이 잘렸다 — D_owned 컷오프가"
+        " 더 최신 잡으로 오채택돼 정상 저장된 Y 를 소실로 오판했다"
+    )
+
+    job = db.query(CrawlJob).filter(
+        CrawlJob.job_type == "official_price",
+        CrawlJob.id.notin_(prior_ids),
+    ).one()
+    assert job.status == "completed"
+    assert "잔여" not in (job.error_message or "")

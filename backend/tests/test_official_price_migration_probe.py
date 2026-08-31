@@ -1,10 +1,13 @@
-"""V-WORLD 신코드 이관 감시(heartbeat) 회귀 테스트 (세션 375).
+"""V-WORLD 표준코드 이관 감시(heartbeat) 회귀 테스트 (세션 375·391).
 
-배경: 2026 행정구역 개편 지역은 to_vworld_cortar() 번역(신코드 → 옛코드)으로 조회한다.
-V-WORLD 가 데이터를 신코드로 이관하면 그 번역이 **빈 옛 코드 조회**가 되어 조용히 0건이
-된다. 수집 시작 시 보초 신코드를 1페이지만 찔러 행수>0 이면 텔레그램 경보를 띄운다.
+배경: cortar_legacy 의 두 번역맵 — 2026 행정구역 개편맵(VWORLD_REFORM_CORTAR_MAP) ·
+광주·전남 12-프리픽스맵(LEGACY_CORTAR_MAP) — 대상 지역은 조회 전에 코드를 V-WORLD 가
+실제로 쓰는 쪽으로 번역한다. V-WORLD 가 그 데이터를 맵의 **키**(표준·신 코드) 쪽으로
+이관하면 그 번역이 오히려 **빈 코드 조회**가 되어 조용히 0건이 된다. 수집 시작 시
+보초 코드(맵의 키)를 1페이지만 찔러 행수>0 이면 텔레그램 경보를 띄운다.
 
 검증 축:
+  0. 보초가 두 번역맵의 **키**인지 (방향 가드, 세션 391)
   1. probe_official_price_total — 1페이지만 조회해 총 행수 반환 / 실패는 None
   2. 보초 1곳이라도 행수>0 → 경보 1회 + 메시지에 보초 라벨·행수 포함
   3. 전 보초 0건·조회실패 → 경보 0회 (아직 이관 전 = 정상)
@@ -20,6 +23,7 @@ from unittest.mock import patch
 
 import pytest
 
+from crawler.cortar_legacy import LEGACY_CORTAR_MAP, VWORLD_REFORM_CORTAR_MAP
 from crawler.service_official_price import (
     _MIGRATION_SENTINELS,
     _probe_reform_migration,
@@ -28,6 +32,31 @@ from crawler.service_official_price import (
 from crawler.vworld_price_api import probe_official_price_total
 
 _YEAR = "2026"
+
+
+# ── 0. 보초 방향 가드 (세션 391) ──
+
+def test_sentinels_are_translation_map_keys_not_values():
+    """보초는 번역맵의 **키** 쪽이어야 한다 — 값(표준측)을 넣으면 상시 오탐.
+
+    감시 논리 = "우리가 조회 전에 다른 코드로 바꿔치는 쪽(맵의 키)에 데이터가 생겼으면
+    이관 시작". 방향을 뒤집어 맵의 값(V-WORLD 가 지금 실제로 쓰는 표준·옛 코드)을 보초로
+    넣으면 지금도 수만 행이 있어 **매 실행 경보**가 나간다(예: 화정동 표준측 2914011900
+    = 38,530행). 사람 눈으로는 두 코드가 비슷해 보여 실수하기 쉬우니 기계로 막는다.
+
+    두 맵을 합집합으로 보는 이유 = 보초가 2026 개편맵(VWORLD_REFORM_CORTAR_MAP)과
+    광주·전남 12-프리픽스맵(LEGACY_CORTAR_MAP) 양쪽에서 나오기 때문.
+    """
+    valid_keys = set(VWORLD_REFORM_CORTAR_MAP) | set(LEGACY_CORTAR_MAP)
+    invalid = {
+        code: label
+        for code, label in _MIGRATION_SENTINELS.items()
+        if code not in valid_keys
+    }
+    assert not invalid, (
+        "번역맵의 키가 아닌 보초가 있다 — 표준측 코드를 넣었다면 상시 오탐이 된다: "
+        f"{invalid}"
+    )
 
 
 # ── 1. probe_official_price_total (얇은 프로브) ──

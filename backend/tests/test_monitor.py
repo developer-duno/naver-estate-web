@@ -474,7 +474,12 @@ def test_run_monitor_sweeps_official_price_over_threshold():
 
 
 def test_run_monitor_sweep_preserves_existing_error_message():
-    """엣지: 기존 error_message 가 있으면 COALESCE 로 덮어쓰지 않음"""
+    """엣지: 기존 error_message 는 보존하되 스윕 마커를 append 한다.
+
+    세션 391 정정: 옛 구현은 COALESCE 라 값이 있으면 마커를 아예 안 붙였는데,
+    진행 상황을 error_message 에 남기는 잡(official_price)이 그 탓에 해소 사유
+    판정에서 'swept' 가 아니라 '수동 취소' 로 오분류됐다. 원문 보존 + 마커 보장.
+    """
     db = TestSession()
     try:
         old = _utcnow() - timedelta(hours=2)
@@ -493,7 +498,8 @@ def test_run_monitor_sweep_preserves_existing_error_message():
             select(CrawlJob).where(CrawlJob.id == job_id)
         ).scalar_one()
         assert swept.status == "cancelled"
-        assert swept.error_message == "이미 있던 에러"
+        assert "이미 있던 에러" in (swept.error_message or "")  # 원문 보존
+        assert "swept" in (swept.error_message or "")  # 마커 보장
     finally:
         db.close()
 
@@ -748,5 +754,385 @@ def test_run_monitor_completes_alerts_when_freshness_times_out():
             select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed:complex_list")
         ).scalar_one()
         assert alert.status == "active"
+    finally:
+        db.close()
+
+
+# ── 세션 391: 가짜 복구 3경로 구분 (§5-C) ──
+# "이번 스캔에 키가 없다" 를 전부 '✅ 정상으로 돌아왔습니다' 로 통지하던 결함.
+# ① 스윕 강제 cancelled ② 24h 창 이탈(성공 미확인) ③ 신선도 계산 실패로 키 소멸.
+# 사유(reason) 는 문구에만 영향 — status 전환(resolved)은 전부 기존과 동일해야 한다.
+
+
+def _is_resolved_message(msg: str) -> bool:
+    """해소 알림인가 — 사유(reason)에 따라 헤더가 '크롤링 복구'/'알림 종료' 로 갈린다.
+
+    셀렉터를 특정 헤더 문구에 묶으면, 헤더가 사유별로 갈리는 순간 '해소 알림을
+    못 찾음' 으로 오탐한다. 두 헤더를 모두 인정해 사유와 무관하게 고른다.
+    """
+    return "크롤링 복구" in msg or "알림 종료" in msg
+
+
+def _resolved_message(mock_tg) -> str:
+    """발송된 메시지 중 해소 알림 1건을 골라 반환 (사유 무관)."""
+    msgs = [c[0][0] for c in mock_tg.call_args_list if _is_resolved_message(c[0][0])]
+    assert msgs, f"해소 알림이 발송되지 않았다: {[c[0][0] for c in mock_tg.call_args_list]}"
+    return msgs[0]
+
+
+def test_run_monitor_resolved_after_sweep_says_swept():
+    """경로 ①: 직전 스캔 스윕(cancelled + 'swept' 마커) → 다음 스캔 해소는 swept 문구.
+
+    스윕은 '멈춘 잡을 강제로 끊은 것' 이지 복구가 아니다 — 복구라고 통지하면
+    사장님이 원인 미해결 상태를 정상으로 오인한다.
+    """
+    db = TestSession()
+    try:
+        now = _utcnow()
+        # 직전 스캔에서 스윕당한 잡 (monitor 스윕 마커)
+        db.add(CrawlJob(
+            job_type="crawl_details", status="cancelled",
+            error_message="stale running — swept by monitor",
+            started_at=now - timedelta(hours=3), completed_at=now - timedelta(minutes=10),
+            created_at=now - timedelta(hours=3),
+        ))
+        db.add(MonitorAlert(
+            alert_key="crawl_stale:crawl_details", status="active",
+            detail="crawl_details 작업 1건이 1시간 넘게 running 상태 — 마비 의심",
+            last_notified=now - timedelta(hours=1),
+        ))
+        db.commit()
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msg = _resolved_message(mock_tg)
+        assert "강제 정리" in msg and "원인은 미해결" in msg
+        assert "정상으로 돌아왔습니다" not in msg
+        # 헤더도 본문과 같은 결이어야 한다 — "✅ 크롤링 복구" 헤더가 붙으면
+        # 헤더만 본 사장님이 원인 미해결을 정상으로 오인한다(헤더·본문 모순 가드).
+        assert "복구" not in msg, f"swept 인데 헤더에 '복구' 가 남음: {msg}"
+        assert "알림 종료" in msg
+        # 상태 전환 자체는 기존과 동일하게 resolved
+        alert = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_stale:crawl_details")
+        ).scalar_one()
+        assert alert.status == "resolved"
+    finally:
+        db.close()
+
+
+def test_run_monitor_resolved_after_boot_sweep_also_says_swept():
+    """경로 ①-b: 부팅 스윕 마커('swept on startup')도 같은 swept 문구여야 한다.
+
+    마커 문구가 둘(monitor / main.py 부팅)인데 한쪽만 보면 나머지가 가짜 복구로 샌다.
+    """
+    db = TestSession()
+    try:
+        now = _utcnow()
+        db.add(CrawlJob(
+            job_type="crawl_details", status="cancelled",
+            error_message="stale running — swept on startup",
+            started_at=now - timedelta(hours=3), completed_at=now - timedelta(minutes=5),
+            created_at=now - timedelta(hours=3),
+        ))
+        db.add(MonitorAlert(
+            alert_key="crawl_stale:crawl_details", status="active",
+            detail="이전 마비", last_notified=now - timedelta(hours=1),
+        ))
+        db.commit()
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        assert "강제 정리" in _resolved_message(mock_tg)
+    finally:
+        db.close()
+
+
+def test_run_monitor_resolved_swept_job_with_prior_error_message_says_swept():
+    """경로 ①-c: 스윕 전부터 error_message 가 있던 잡도 swept 로 분류돼야 한다.
+
+    official_price 처럼 진행 상황을 error_message 에 남기는 잡이 대표 사례.
+    스윕 마커가 COALESCE 로 안 붙던 시절엔 이런 잡이 '수동 취소' 로 오분류됐다.
+    """
+    db = TestSession()
+    try:
+        now = _utcnow()
+        db.add(CrawlJob(
+            job_type="official_price", status="cancelled",
+            error_message="진행: 1234동 처리 중 | stale running — swept by monitor",
+            started_at=now - timedelta(hours=20), completed_at=now - timedelta(minutes=10),
+            created_at=now - timedelta(hours=20),
+        ))
+        db.add(MonitorAlert(
+            alert_key="crawl_stale:official_price", status="active",
+            detail="이전 마비", last_notified=now - timedelta(hours=1),
+        ))
+        db.commit()
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msg = _resolved_message(mock_tg)
+        assert "강제 정리" in msg
+        assert "취소됨" not in msg, f"기존 error_message 탓에 수동 취소로 오분류: {msg}"
+    finally:
+        db.close()
+
+
+def test_run_monitor_resolved_stale_with_failed_omits_window_wording():
+    """Med-4: crawl_stale 해소는 24h 관찰 창과 무관 — 그 문구를 붙이면 거짓 설명."""
+    db = TestSession()
+    try:
+        now = _utcnow()
+        db.add(CrawlJob(
+            job_type="crawl_details", status="failed", error_message="네이버 502",
+            started_at=now - timedelta(hours=2), completed_at=now - timedelta(hours=2),
+            created_at=now - timedelta(hours=2),
+        ))
+        db.add(MonitorAlert(
+            alert_key="crawl_stale:crawl_details", status="active",
+            detail="이전 마비", last_notified=now - timedelta(hours=1),
+        ))
+        db.commit()
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msg = _resolved_message(mock_tg)
+        assert "마지막 실행: 실패" in msg
+        assert "관찰 창" not in msg, f"crawl_stale 인데 24h 창 문구가 붙음: {msg}"
+    finally:
+        db.close()
+
+
+def test_run_monitor_resolved_other_status_reports_status_verbatim():
+    """Med-4: pending·paused 등은 '실패' 로 뭉개지 않고 상태를 그대로 표기."""
+    db = TestSession()
+    try:
+        now = _utcnow()
+        db.add(CrawlJob(
+            job_type="complex_list", status="paused",
+            started_at=now - timedelta(hours=2), created_at=now - timedelta(hours=2),
+        ))
+        db.add(MonitorAlert(
+            alert_key="crawl_failed:complex_list", status="active",
+            detail="이전 장애", last_notified=now - timedelta(hours=2),
+        ))
+        db.commit()
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msg = _resolved_message(mock_tg)
+        assert "마지막 실행: paused" in msg
+        assert "실패" not in msg, f"paused 를 실패로 오표기: {msg}"
+    finally:
+        db.close()
+
+
+def test_run_monitor_resolution_reason_failure_falls_back_to_legacy_wording():
+    """High-1: 사유 판정이 죽어도 스캔 전체가 죽지 않고 기존 문구로 폴백한다.
+
+    사유는 부가 정보다 — 여기서 예외가 새면 alert 처리 트랜잭션이 통째로
+    되돌아가 monitor 가 매 주기 크래시한다(세션 342 재현 위험).
+    """
+    db = TestSession()
+    try:
+        db.add(MonitorAlert(
+            alert_key="crawl_failed:complex_list", status="active",
+            detail="이전 장애", last_notified=_utcnow() - timedelta(hours=12),
+        ))
+        db.commit()
+
+        with patch(
+            "crawler.monitor._resolution_reason",
+            side_effect=RuntimeError("판정 폭발"),
+        ), patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)  # raise 하면 이 줄에서 테스트 실패
+
+        msg = _resolved_message(mock_tg)
+        assert "정상으로 돌아왔습니다" in msg  # legacy 문구 폴백
+        alert = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed:complex_list")
+        ).scalar_one()
+        assert alert.status == "resolved"
+    finally:
+        db.close()
+
+
+def test_run_monitor_resolved_after_completed_says_recovered():
+    """정상: 마지막 실행이 completed 면 진짜 복구 — '최근 실행 성공 확인' 문구."""
+    db = TestSession()
+    try:
+        now = _utcnow()
+        db.add(CrawlJob(
+            job_type="complex_list", status="completed",
+            started_at=now - timedelta(hours=1), completed_at=now - timedelta(hours=1),
+            created_at=now - timedelta(hours=1),
+        ))
+        db.add(MonitorAlert(
+            alert_key="crawl_failed:complex_list", status="active",
+            detail="complex_list 작업 1건 실패 — SSL 끊김",
+            last_notified=now - timedelta(hours=2),
+        ))
+        db.commit()
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msg = _resolved_message(mock_tg)
+        assert "최근 실행 성공 확인" in msg
+        assert "강제 정리" not in msg
+        alert = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed:complex_list")
+        ).scalar_one()
+        assert alert.status == "resolved"
+    finally:
+        db.close()
+
+
+def test_run_monitor_resolved_only_failed_says_unconfirmed_expired():
+    """경로 ②: 24h 창을 벗어난 failed 만 있고 성공은 없음 → unconfirmed + 실패 detail.
+
+    조건(24h 윈도)은 해소됐지만 그 작업이 성공한 적은 한 번도 없다 —
+    '정상으로 돌아왔습니다' 는 거짓말이 된다.
+    """
+    db = TestSession()
+    try:
+        now = _utcnow()
+        old = now - timedelta(hours=30)  # 24h 관찰 창 밖
+        db.add(CrawlJob(
+            job_type="complex_list", status="failed", error_message="SSL 끊김",
+            started_at=old, completed_at=old, created_at=old,
+        ))
+        db.add(MonitorAlert(
+            alert_key="crawl_failed:complex_list", status="active",
+            detail="complex_list 작업 1건 실패 — SSL 끊김",
+            last_notified=now - timedelta(hours=25),
+        ))
+        db.commit()
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msg = _resolved_message(mock_tg)
+        assert "성공 실행은 확인되지 않았습니다" in msg
+        assert "마지막 실행: 실패" in msg
+        assert "정상으로 돌아왔습니다" not in msg
+    finally:
+        db.close()
+
+
+def test_run_monitor_resolved_manual_cancel_says_unconfirmed_cancelled():
+    """엣지: 'swept' 마커 없는 cancelled(수동 취소·토글 off) 는 swept 도 복구도 아니다.
+
+    v1 설계가 이걸 '24h 경과' 로 뭉뚱그렸던 결함 — 마지막 실행이 취소됨을 명시한다.
+    """
+    db = TestSession()
+    try:
+        now = _utcnow()
+        db.add(CrawlJob(
+            job_type="complex_list", status="cancelled",
+            error_message="관리자 수동 취소",
+            started_at=now - timedelta(hours=2), completed_at=now - timedelta(hours=1),
+            created_at=now - timedelta(hours=2),
+        ))
+        db.add(MonitorAlert(
+            alert_key="crawl_failed:complex_list", status="active",
+            detail="이전 장애", last_notified=now - timedelta(hours=2),
+        ))
+        db.commit()
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msg = _resolved_message(mock_tg)
+        assert "성공 실행은 확인되지 않았습니다" in msg
+        assert "취소됨" in msg
+        assert "강제 정리" not in msg
+    finally:
+        db.close()
+
+
+def test_run_monitor_resolved_no_history_says_unconfirmed_no_runs():
+    """엣지: 그 job_type 의 실행 이력이 아예 없으면 '실행 이력 없음' 으로 명시."""
+    db = TestSession()
+    try:
+        db.add(MonitorAlert(
+            alert_key="crawl_failed:complex_articles", status="active",
+            detail="이전", last_notified=_utcnow() - timedelta(hours=12),
+        ))
+        db.commit()
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msg = _resolved_message(mock_tg)
+        assert "실행 이력 없음" in msg
+        # 기존 계약: 상태는 여전히 resolved 로 전환된다
+        alert = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed:complex_articles")
+        ).scalar_one()
+        assert alert.status == "resolved"
+    finally:
+        db.close()
+
+
+def test_run_monitor_keeps_freshness_alert_when_freshness_computation_fails():
+    """경로 ③: 신선도 계산이 실패한 스캔에서는 freshness:* 알림을 해소하지 않는다.
+
+    계산이 죽으면 freshness:* 키가 통째로 사라진다 — 그걸 '복구' 로 읽으면
+    데이터 미축적이 계속되는데 정상 통지가 나간다.
+    """
+    from sqlalchemy.exc import OperationalError
+
+    db = TestSession()
+    try:
+        db.add(MonitorAlert(
+            alert_key="freshness:articles", status="active",
+            detail="매물 데이터 미축적", last_notified=_utcnow() - timedelta(hours=12),
+        ))
+        db.commit()
+
+        with patch(
+            "crawler.monitor.compute_freshness",
+            side_effect=OperationalError("SELECT ...", {}, Exception("statement timeout")),
+        ), patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        alert = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "freshness:articles")
+        ).scalar_one()
+        assert alert.status == "active", "신선도 계산 실패 스캔에서 가짜 복구로 해소됨"
+        assert not any(_is_resolved_message(c[0][0]) for c in mock_tg.call_args_list)
+    finally:
+        db.close()
+
+
+def test_run_monitor_resolves_freshness_alert_once_computation_recovers():
+    """경로 ③ 대칭: 신선도 계산이 정상인 스캔에서는 freshness 알림이 제대로 해소된다.
+
+    위 가드가 '영영 해소 안 됨' 으로 과적용되지 않았는지 확인 (미해소 고착 방지).
+    """
+    db = TestSession()
+    try:
+        db.add(MonitorAlert(
+            alert_key="freshness:articles", status="active",
+            detail="매물 데이터 미축적", last_notified=_utcnow() - timedelta(hours=12),
+        ))
+        db.commit()
+
+        # 빈 DB → compute_freshness 는 정상 동작하고 articles red 신호가 없다
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        alert = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "freshness:articles")
+        ).scalar_one()
+        assert alert.status == "resolved"
+        # freshness 는 계산 성공 스캔에서만 해소되므로 recovered 문구
+        assert "최근 실행 성공 확인" in _resolved_message(mock_tg)
     finally:
         db.close()

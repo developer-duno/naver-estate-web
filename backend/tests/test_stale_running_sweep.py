@@ -4,7 +4,8 @@
 main.py 의 _sweep_stale_running_jobs() 가:
 1. 5분 이상 running + completed_at NULL 인 row 만 cancelled 로 정정
 2. 정정 status = 'cancelled' (failed 아님 — 실패율 통계 보호)
-3. error_message 기존 값 보존 (COALESCE)
+3. error_message 기존 값 보존 + 스윕 마커 append (세션 391 — 마커는 항상 붙어야
+   monitor 의 해소 사유 판정이 'swept' 를 알아본다)
 4. 5분 미만 running 은 건드리지 않음 (false positive 차단)
 """
 
@@ -36,8 +37,14 @@ def test_sweep_marks_old_running_as_cancelled(db):
     assert "stale running" in (job.error_message or "")
 
 
-def test_sweep_preserves_existing_error_message(db):
-    """error_message 가 이미 있으면 COALESCE 로 보존."""
+def test_sweep_preserves_existing_error_message_and_appends_marker(db):
+    """error_message 가 이미 있으면 원문 보존 + 스윕 마커 append (세션 391 정정).
+
+    옛 구현은 COALESCE 라 값이 있으면 마커를 아예 안 붙였다. 그런데 진행 상황을
+    error_message 에 남기는 잡(official_price)은 스윕 시점에 항상 값이 있어,
+    monitor 의 해소 사유 판정이 그 잡을 'swept' 가 아니라 '수동 취소' 로
+    오분류했다 — 사장님에게 "취소됨" 이라 잘못 통지되는 경로.
+    """
     from main import _sweep_stale_running_jobs
 
     now = datetime.now(timezone.utc)
@@ -53,7 +60,8 @@ def test_sweep_preserves_existing_error_message(db):
 
     _sweep_stale_running_jobs()
     db.refresh(job)
-    assert job.error_message == "기존 에러 메시지"  # COALESCE 보존
+    assert "기존 에러 메시지" in (job.error_message or "")  # 원문 보존
+    assert "swept on startup" in (job.error_message or "")  # 마커 보장
 
 
 def test_sweep_ignores_recent_running(db):

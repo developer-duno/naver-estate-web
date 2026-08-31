@@ -45,6 +45,10 @@ def _sweep_stale_running_jobs() -> int:
 
     cutoff 는 Python 측에서 계산해 paramize — PostgreSQL/SQLite 양쪽 호환
     (테스트 CI 가 SQLite, 운영이 PG 라서 NOW() - INTERVAL syntax 못 씀).
+
+    error_message 는 기존 값을 보존하되 스윕 마커를 **항상 append** 한다 — 진행
+    상황을 error_message 에 남기는 잡(official_price)이 COALESCE 로는 마커를 못 받아
+    monitor 의 해소 사유 판정이 '수동 취소' 로 오분류했다 (세션 391).
     """
     from datetime import datetime, timedelta, timezone
 
@@ -60,7 +64,8 @@ def _sweep_stale_running_jobs() -> int:
             UPDATE crawl_jobs
             SET status = 'cancelled',
                 completed_at = :now_utc,
-                error_message = COALESCE(error_message, 'stale running — swept on startup')
+                error_message = COALESCE(error_message || ' | ', '')
+                                || 'stale running — swept on startup'
             WHERE status = 'running'
               AND completed_at IS NULL
               AND started_at < :cutoff

@@ -159,3 +159,74 @@ def test_admin_link_only_localhost_falls_back_to_localhost():
     with patch.dict("os.environ", {"FRONTEND_URL": "http://localhost:3000"}, clear=False):
         msg = format_issue_message("freshness", data, event="new", header_ctx=_ctx())
     assert "http://localhost:3000/admin#freshness" in msg
+
+
+# ── 세션 391: 해소 알림 사유 3분기 (가짜 복구 통지 차단) ──
+# 배경: "이번 스캔에 키가 없다" 를 전부 "✅ 정상으로 돌아왔습니다" 로 내보내
+# 스윕 강제정리·24h 창 이탈까지 복구로 통지되던 결함. reason 으로 문구를 가른다.
+
+
+def test_resolved_reason_recovered_says_success_confirmed():
+    """reason=recovered → ✅ + '최근 실행 성공 확인' 명시."""
+    data = {"alert_key": "crawl_failed:complex_list", "detail": "이전 장애",
+            "reason": "recovered", "reason_detail": ""}
+    msg = format_issue_message("crawl_failed", data, event="resolved", header_ctx=_ctx(0))
+    assert "✅" in msg
+    assert "정상으로 돌아왔습니다" in msg
+    assert "최근 실행 성공 확인" in msg
+
+
+def test_resolved_reason_swept_warns_cause_unresolved():
+    """reason=swept → ⚠️ + '강제 정리' + '원인은 미해결' (복구라고 말하지 않는다)."""
+    data = {"alert_key": "crawl_stale:crawl_details", "detail": "이전 마비",
+            "reason": "swept", "reason_detail": ""}
+    msg = format_issue_message("crawl_stale", data, event="resolved", header_ctx=_ctx(0))
+    assert "⚠️" in msg
+    assert "강제 정리" in msg
+    assert "원인은 미해결" in msg
+    # 가짜 복구 문구가 섞이면 안 된다 (회귀 가드)
+    assert "정상으로 돌아왔습니다" not in msg
+
+
+def test_resolved_reason_unconfirmed_includes_last_run_detail():
+    """reason=unconfirmed → ℹ️ + '성공 실행은 확인되지 않았습니다' + 마지막 실행 상태."""
+    data = {"alert_key": "crawl_failed:complex_list", "detail": "이전 장애",
+            "reason": "unconfirmed", "reason_detail": "마지막 실행: 실패 (24h 관찰 창 경과)"}
+    msg = format_issue_message("crawl_failed", data, event="resolved", header_ctx=_ctx(0))
+    assert "ℹ️" in msg
+    assert "성공 실행은 확인되지 않았습니다" in msg
+    assert "마지막 실행: 실패 (24h 관찰 창 경과)" in msg
+    assert "정상으로 돌아왔습니다" not in msg
+
+
+def test_resolved_headers_match_reason_not_always_recovery():
+    """헤더도 사유별로 갈린다 — 본문이 '원인 미해결' 인데 헤더가 '✅ 크롤링 복구' 면
+    헤더만 본 사장님이 정상으로 오인한다(헤더·본문 모순 가드)."""
+    base = {"alert_key": "crawl_stale:crawl_details", "detail": "이전 마비"}
+
+    swept = format_issue_message(
+        "crawl_stale", {**base, "reason": "swept"}, event="resolved", header_ctx=_ctx(0)
+    )
+    assert swept.startswith("[내부모니터] ⚠️ <b>알림 종료</b>")
+    assert "복구" not in swept
+
+    unconfirmed = format_issue_message(
+        "crawl_stale", {**base, "reason": "unconfirmed", "reason_detail": "마지막 실행: 실패"},
+        event="resolved", header_ctx=_ctx(0),
+    )
+    assert unconfirmed.startswith("[내부모니터] ℹ️ <b>알림 종료</b>")
+    assert "복구" not in unconfirmed
+
+    # recovered 는 기존 헤더 유지 (진짜 복구니까)
+    recovered = format_issue_message(
+        "crawl_stale", {**base, "reason": "recovered"}, event="resolved", header_ctx=_ctx(0)
+    )
+    assert recovered.startswith("[내부모니터] ✅ <b>크롤링 복구</b>")
+
+
+def test_resolved_without_reason_keeps_legacy_wording():
+    """하위호환: reason 미지정(옛 호출·수동 호출)이면 기존 문구 그대로."""
+    data = {"alert_key": "crawl_failed:complex_articles", "detail": "이전 장애"}
+    msg = format_issue_message("crawl_failed", data, event="resolved", header_ctx=_ctx(0))
+    assert msg.startswith("[내부모니터] ✅ <b>크롤링 복구</b>")
+    assert "▸ 이전 장애 — 정상으로 돌아왔습니다." in msg

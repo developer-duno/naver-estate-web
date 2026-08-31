@@ -17,6 +17,13 @@ _EVENT_HEADER = {
     "resolved": ("✅", "크롤링 복구"),
 }
 
+# resolved 이벤트의 해소 사유(reason) → 헤더 이모지·문구.
+# 여기 없는 값(recovered·미지정)은 _EVENT_HEADER["resolved"] 를 그대로 쓴다 — 하위호환.
+_RESOLVED_HEADER = {
+    "swept": ("⚠️", "알림 종료"),
+    "unconfirmed": ("ℹ️", "알림 종료"),
+}
+
 
 def _esc(value) -> str:
     """텔레그램 HTML 안전 이스케이프 — None 은 빈 문자열."""
@@ -40,15 +47,20 @@ def _admin_link(path: str) -> str:
     return f"{base}{path}"
 
 
-def _header(event: str, header_ctx: dict) -> str:
+def _header(event: str, header_ctx: dict, reason: str = "") -> str:
     """헤더 한 줄: '[내부모니터] 🔴 크롤링 장애 — N건 활성 (HH:MM)'.
 
     [내부모니터] 접두어 = 3채널(healthcheck.yml 외부/본 모듈 내부/job_error_listener
     즉시) 문구 통일 작업의 일부. 서버가 통째로 죽으면 이 채널은 함께 침묵하므로
     ([내부모니터] 발화 = 서버가 살아서 DB까지 도달했다는 뜻), 사장님이 어느 감시가
     보낸 메시지인지 채널명만 보고 구분할 수 있게 함 (IMPROVEMENT_PLAN P0-0 보류 항목).
+
+    resolved 이벤트는 reason 에 따라 헤더도 갈린다 — 본문이 "원인 미해결" 인데
+    헤더만 "✅ 크롤링 복구" 면 서로 모순이라 사장님이 헤더만 보고 안심한다(세션 391).
     """
     emoji, label = _EVENT_HEADER.get(event, _EVENT_HEADER["new"])
+    if event == "resolved":
+        emoji, label = _RESOLVED_HEADER.get(reason, _EVENT_HEADER["resolved"])
     count = header_ctx.get("active_count", 0)
     now = header_ctx.get("now")
     hhmm = now.strftime("%H:%M") if now is not None else ""
@@ -121,18 +133,48 @@ _BODY_BUILDERS = {
 }
 
 
+def _resolved_line(detail: str, data: dict) -> str:
+    """해소 알림 본문 한 줄 — 사유(reason)별 문구·이모지 분기.
+
+    "알림 조건이 사라졌다" 를 전부 "✅ 정상으로 돌아왔습니다" 로 내보내던 것이
+    가짜 복구 통지의 원인이었다(세션 391 §5-C). monitor._resolution_reason 이
+    붙여주는 reason 으로 세 가지를 구분한다. reason 이 없으면(옛 호출·수동 호출)
+    기존 문구 그대로 — 하위호환.
+    """
+    reason = data.get("reason")
+    if reason == "swept":
+        return (
+            f"⚠️ {detail} — 멈춘 작업을 강제 정리해 알림을 종료합니다 "
+            "— 원인은 미해결, 다음 실행을 지켜보세요."
+        )
+    if reason == "unconfirmed":
+        tail = _esc(data.get("reason_detail") or "")
+        suffix = f" {tail}" if tail else ""
+        return (
+            f"ℹ️ {detail} — 알림 조건이 해소됐지만 성공 실행은 확인되지 않았습니다.{suffix}"
+        )
+    if reason == "recovered":
+        return f"✅ {detail} — 정상으로 돌아왔습니다 (최근 실행 성공 확인)."
+    return f"▸ {detail} — 정상으로 돌아왔습니다."
+
+
 def format_issue_message(kind: str, data: dict, *, event: str, header_ctx: dict) -> str:
     """장애 1건 → 텔레그램 HTML 메시지.
 
     kind: "crawl_failed" | "crawl_stale" | "freshness"
     event: "new" | "recur" | "ongoing" | "resolved"
     header_ctx: {"active_count": int, "now": datetime}
+    resolved 이벤트는 data 에 reason("recovered"|"swept"|"unconfirmed")·reason_detail 을
+    선택적으로 받아 문구를 가른다 (미지정 시 기존 문구 유지).
     """
-    header = _header(event, header_ctx)
     if event == "resolved":
-        # 복구 알림 — 구조화 data 없음, 최소 정보만
+        # 복구 알림 — 구조화 data 없음, 최소 정보만.
+        # 헤더·본문 모두 reason 으로 갈려야 서로 모순이 없다.
+        header = _header(event, header_ctx, reason=str(data.get("reason") or ""))
         detail = _esc(data.get("detail") or data.get("alert_key"))
-        return f"{header}\n\n▸ {detail} — 정상으로 돌아왔습니다."
+        return f"{header}\n\n{_resolved_line(detail, data)}"
+
+    header = _header(event, header_ctx)
 
     builder = _BODY_BUILDERS.get(kind)
     body = builder(data) if builder else f"▸ {_esc(data.get('detail'))}"

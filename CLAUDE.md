@@ -119,7 +119,7 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 |------|------|----------|
 | FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2116개** (세션 388 실측, PR #429 kapt-format·complex-kapt-error 등 +19) — 옛 실측: **2097개** (`vitest list` 세션 384 실측, PR #423 보유세 계산기 법령 재검증 결함수정으로 세션 369~381 기준 2090→2097 net +7 — property-tax.test.ts·property-tax-cap.test.ts 신규/재계산. 전체 실행 2096 passed + 1건은 전체스위트 동시실행 리소스경합 일시 타임아웃(RegionSelector, 단독 재실행 시 정상 통과 확인, 결함 아님)) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1529개** (세션 389 실측 `pytest --collect-only`, 세션 388 기준 1463에서 +66 — PR #432~#434 K-apt 이름 매칭 정밀화·엄격 규칙 basis 후 이동·API 버전 감시 odcloud 편입 회귀 테스트) |
+| BE pytest | `backend/tests/` | **1530개** (세션 390 검증 정정 — 세션 389 가 1529 실측한 직후 같은 세션 PR #435 회귀 테스트 +1 로 문서·코드가 1개 어긋나 있던 것. 이전 추이: 세션 388 기준 1463에서 +66 — PR #432~#434 K-apt 이름 매칭 정밀화·엄격 규칙 basis 후 이동·API 버전 감시 odcloud 편입 회귀 테스트) |
 
 ## 커밋 전 필수 검증
 

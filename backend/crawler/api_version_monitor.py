@@ -104,8 +104,8 @@ PROBE_REGISTRY: list[dict] = [
         "url": "https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusBassInfoV5",
     },
     {
-        "name": "K-apt 개별사용료 (AptIndvdlzManageCostServiceV2)",
-        "url": "https://apis.data.go.kr/1613000/AptIndvdlzManageCostServiceV2/getHsmpHeatCostInfoV2",
+        "name": "K-apt 개별사용료 (AptIndvdlzManageCostServiceV3)",
+        "url": "https://apis.data.go.kr/1613000/AptIndvdlzManageCostServiceV3/getHsmpHeatCostInfoV3",
     },
     {
         "name": "K-apt 공용관리비 (AptCmnuseManageCostServiceV3)",

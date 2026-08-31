@@ -34,6 +34,7 @@ from difflib import SequenceMatcher
 
 from crawler.env_common import _complete_job, _fail_job, _record_job
 from crawler.kapt_api import (
+    INDIVIDUAL_COST_OPS,
     KaptApiError,
     fetch_apt_basis_info,
     fetch_apt_list_page,
@@ -742,8 +743,8 @@ def candidate_cost_months(today: date | None = None) -> list[str]:
 def _fetch_costs_for_month(kapt_code: str, month: str) -> dict[str, int]:
     """한 달치 22개 오퍼레이션 호출 → {op: 금액} 병합. 전부 미공개면 빈 dict.
 
-    ⚠ 호출 실패(`KaptApiError`)는 잡지 않고 그대로 올린다. 여기서 삼키면 공용(V3)
-    17콜이 통째로 실패하고 개별(V2) 5콜만 성공한 회차에 "공용관리비 0원" 인 반쪽
+    ⚠ 호출 실패(`KaptApiError`)는 잡지 않고 그대로 올린다. 여기서 삼키면 공용
+    17콜이 통째로 실패하고 개별 5콜만 성공한 회차에 "공용관리비 0원" 인 반쪽
     breakdown 이 만들어지고, 호출자가 그걸 진짜 값으로 저장해버린다.
     """
     breakdown = dict(fetch_common_cost(kapt_code, month))
@@ -754,11 +755,15 @@ def _fetch_costs_for_month(kapt_code: str, month: str) -> dict[str, int]:
 def _summarize(breakdown: dict[str, int], household: int | None) -> dict:
     """항목별 원값 → 공용/개별/총액/세대당 요약.
 
-    공용·개별 구분은 오퍼레이션 접미사(V3=공용, V2=개별)로 판정한다 —
-    두 서비스의 op 이름이 각각 V3/V2 로 끝나 안정적인 구분자다.
+    공용·개별 구분은 **오퍼레이션 이름이 어느 op 목록에 속하는지**로 판정한다.
+    ⚠ 옛 구현은 접미사(V3=공용, V2=개별)로 갈랐는데, 이는 두 서비스의 버전이
+    우연히 달랐던 동안만 맞는 판정이었다 — 개별사용료가 V2→V3 로 올라가자
+    22개 op 이 전부 "V3" 로 끝나 개별 금액이 통째로 공용에 합산됐다.
+    op 목록은 버전이 또 올라가도 함께 갱신되므로 그런 결합이 생기지 않는다.
     """
-    common = sum(v for k, v in breakdown.items() if k.endswith("V3"))
-    individual = sum(v for k, v in breakdown.items() if k.endswith("V2"))
+    individual_ops = frozenset(INDIVIDUAL_COST_OPS)
+    common = sum(v for k, v in breakdown.items() if k not in individual_ops)
+    individual = sum(v for k, v in breakdown.items() if k in individual_ops)
     total = common + individual
     per_household = (
         int(round(total / household)) if household and household > 0 else None
@@ -776,8 +781,10 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
 
     "이번 수집월 행이 아직 없는 단지"를 오래된 매칭 순으로 batch_size 만큼 처리한다.
     ⚠ 단지 하나에 22콜이 나가므로 batch_size 가 곧 쿼터 소모량(×22)이다.
-    관리비 V2/V3 는 개발계정 = 서비스당 5,000/일(오퍼레이션 합산)이라 배치 500 이면
-    V3(17콜)만 8,500 으로 넘친다 → 운영 `KAPT_COST_BATCH_SIZE=250`.
+    관리비 두 서비스도 운영계정(10만/일) 전환이 끝나 기본 500 으로 돈다
+    (2026-08-31 첫 정기 실행 실측: 하루 kapt 32,035콜, 실패 0·쿼터 에러 0).
+    개발계정 시절엔 서비스당 5,000/일(오퍼레이션 합산)이라 배치 500 이면 공용
+    17콜만 8,500 으로 넘겨 `KAPT_COST_BATCH_SIZE=250` 으로 낮춰 돌렸었다.
 
     실패 처리 계약:
       · (b) 정상 미공개 → 행을 만들지 않고 `empty` 계수, 잡은 completed (정상)
@@ -785,7 +792,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                           다음 회차에 자동 재시도된다(위 `done` 셋에 안 걸림).
       · (c) 중 쿼터 초과(22) → 남은 대상 호출 없이 즉시 중단 + 잡 failed
       · (c) 가 **연속 5단지** → API 장애/한도 의심으로 중단 + 잡 failed
-    부분 저장을 절대 하지 않는 것이 핵심이다 — 공용(V3) 실패 + 개별(V2) 성공으로
+    부분 저장을 절대 하지 않는 것이 핵심이다 — 공용 실패 + 개별 성공으로
     "공용 0원" 총액을 저장하면 틀린 값이 사실처럼 화면에 뜨고, 그 달 행이 생겨
     다음 달까지 고쳐지지도 않는다.
 

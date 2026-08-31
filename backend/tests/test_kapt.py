@@ -337,11 +337,11 @@ def test_fetch_all_kapt_reports_completeness(monkeypatch):
 
 
 def test_summarize_splits_common_and_individual():
-    """V3=공용, V2=개별로 갈라 합산하고 세대당 금액을 낸다."""
+    """op 목록 소속으로 공용/개별을 갈라 합산하고 세대당 금액을 낸다."""
     breakdown = {
         "getHsmpGuardCostInfoV3": 7_602_810,
         "getHsmpCleaningCostInfoV3": 2_000_000,
-        "getHsmpElectricityCostInfoV2": 10_262_622,
+        "getHsmpElectricityCostInfoV3": 10_262_622,
     }
     summary = service_kapt._summarize(breakdown, household=120)
 
@@ -353,9 +353,27 @@ def test_summarize_splits_common_and_individual():
 
 def test_summarize_without_household_leaves_per_household_none():
     """세대수를 모르면 세대당 금액은 None — 0 으로 채우지 않는다."""
-    summary = service_kapt._summarize({"aV3": 100}, household=None)
+    summary = service_kapt._summarize(
+        {"getHsmpGuardCostInfoV3": 100}, household=None
+    )
     assert summary["total_cost"] == 100
     assert summary["cost_per_household"] is None
+
+
+def test_summarize_splits_by_op_membership_not_version_suffix():
+    """공용·개별 구분이 버전 접미사에 의존하지 않는다 (V2→V3 전환 회귀 가드).
+
+    두 서비스가 같은 버전(V3)을 쓰는 지금, 접미사로 가르던 옛 구현은 개별
+    금액을 통째로 공용에 합산해버렸다. op 목록 소속으로 갈라야 두 서비스가
+    같은 버전이어도 정확히 나뉜다.
+    """
+    breakdown = {op: 100 for op in service_kapt.INDIVIDUAL_COST_OPS}
+    breakdown["getHsmpGuardCostInfoV3"] = 700
+
+    summary = service_kapt._summarize(breakdown, household=None)
+
+    assert summary["individual_cost"] == 100 * len(service_kapt.INDIVIDUAL_COST_OPS)
+    assert summary["common_cost"] == 700
 
 
 def test_candidate_cost_months_uses_three_month_lag():
@@ -388,7 +406,7 @@ def test_collect_costs_persists_summary(db, monkeypatch):
     )
     monkeypatch.setattr(
         service_kapt, "fetch_individual_cost",
-        lambda code, month: {"getHsmpElectricityCostInfoV2": 10_262_622},
+        lambda code, month: {"getHsmpElectricityCostInfoV3": 10_262_622},
     )
 
     result = collect_kapt_costs(batch_size=10)
@@ -1001,7 +1019,7 @@ def test_collect_costs_partial_failure_saves_nothing(db, monkeypatch):
     monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
     monkeypatch.setattr(
         service_kapt, "fetch_individual_cost",
-        lambda code, month: {"bV2": 500},
+        lambda code, month: {"getHsmpHeatCostInfoV3": 500},
     )
 
     result = collect_kapt_costs(batch_size=10)

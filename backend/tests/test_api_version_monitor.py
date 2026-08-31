@@ -359,7 +359,7 @@ def test_registry_covers_known_datagokr_endpoints():
         "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty",
         "https://apis.data.go.kr/1613000/AptListService4/getSidoAptList4",
         "https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusBassInfoV5",
-        "https://apis.data.go.kr/1613000/AptIndvdlzManageCostServiceV2/getHsmpHeatCostInfoV2",
+        "https://apis.data.go.kr/1613000/AptIndvdlzManageCostServiceV3/getHsmpHeatCostInfoV3",
         "https://apis.data.go.kr/1613000/AptCmnuseManageCostServiceV3/getHsmpGuardCostInfoV3",
     }
     assert expected <= urls, f"레지스트리 누락: {sorted(expected - urls)}"

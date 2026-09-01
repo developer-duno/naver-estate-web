@@ -159,6 +159,8 @@ Startup BAT 시절엔 로그인해야 기동 — infra.md §자동 시작 사건
 
 판정은 **라이브 실측**으로만: 살아있는 엔드포인트를 실제 호출 (`.env` SUPABASE_JWT_SECRET 로 admin 토큰 발급 → GET scheduler-status) 하거나, backend.log 의 trigger/next-run 로그로 현재 프로세스의 실제 등록값을 본다. 글로벌 `[[feedback-browser-measurement-overrides-plan]]` 와 같은 패턴.
 
+⚠ **crawler_monitor(크롤링 모니터) 잡의 실동작 확인은 위 두 방법이 전부 무효**다(세션 391 실측) — monitor 는 CrawlJob 을 안 남겨 scheduler-status 의 last_run/runs 가 영구 null/0 이고, 정상 스캔은 로그도 안 찍는다(무음 설계). 유일한 유효 경로 = prod `pg_stat_user_tables` 에서 freshness 대상 4테이블(trades·complex_price_history·crawl_jobs·complexes)의 **동시 스캔 타임스탬프가 monitor 주기(10분) 간격으로 반복**되는지 확인.
+
 > **사건**: 2026-06-01 세션 257 — PR #102 (표시 SSOT 자동생성) 후 "재시작 불필요"를 정적 분석으로 3회 단정. 라이브 GET 으로 화면 표시가 옛값(08:30/20분/6시간) 잔존 확인 = 재시작 필요로 정정. trigger 동작은 새값이나 표시 모듈 본문이 옛 코드라 split 발생.
 
 ### 6. Cross-link

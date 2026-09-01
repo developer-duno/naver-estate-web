@@ -189,8 +189,10 @@ job_type `officetel_presale`(접두어 없음), id `collect_rental_presale` → 
 시간에 몰리면 도중 작업이 끊기거나 그 순간 DB 부하가 겹쳐 흔들릴 수 있다**는 일반 원칙.
 
 - 서버 재시작 시 `main.py`의 부팅 스윕(SQL, `tests/test_stale_running_sweep.py` 회귀 가드)이
-  재시작 직전에 실행 중이던 잡을 `cancelled`(`error_message="stale running — swept on
-  startup"`)로 정리한다 — 이건 의도된 안전장치라 그 자체는 정상이다. 문제는 **재시작이
+  재시작 직전에 실행 중이던 잡을 `cancelled` 로 정리한다 — error_message 에는
+  `stale running — swept on startup` 마커를 **append** 한다(기존 문구가 있으면
+  `원문 | 마커` 형태 — 세션 391 PR #443 부터. 조회는 정확 일치 대신 `LIKE '%swept%'` 권장).
+  이건 의도된 안전장치라 그 자체는 정상이다. 문제는 **재시작이
   짧은 간격으로 여러 번 몰리면** 이 정리가 반복되고, 마침 재시작 순간이 크론 실행 시각과
   겹치면 그 주기의 작업이 스킵되거나 중간에 끊긴 것처럼 보인다.
 - 재시작 순간 DB 커넥션이 새로 맺어지는 타이밍에 다른 크론(예: `complex_articles`)이 마침

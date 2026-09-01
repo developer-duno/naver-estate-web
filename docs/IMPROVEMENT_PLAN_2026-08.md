@@ -49,9 +49,11 @@
 3. **텔레그램 신호 불일치의 구조적 원인**: 알림 채널이 서로 독립된 3곳
    (① `.github/workflows/healthcheck.yml` 외부 하루 1회, ② `backend/crawler/monitor.py`
    내부 10~30분, ③ `backend/crawler/job_error_listener.py` 내부 즉시) — 서버가
-   통째로 죽으면 ②③은 함께 침묵하고 ①만 다음 체크 때 발화. "정상으로 돌아왔습니다"도
-   monitor.py가 stale job을 강제 `cancelled` 처리해도 똑같이 뜨는 얕은 판정
-   (`monitor.py:203-241,305-323`) — false positive 복구 가능.
+   통째로 죽으면 ②③은 함께 침묵하고 ①만 다음 체크 때 발화. ~~"정상으로 돌아왔습니다"도
+   monitor.py가 stale job을 강제 `cancelled` 처리해도 똑같이 뜨는 얕은 판정 —
+   false positive 복구 가능.~~ → **✅ 해소 (2026-09-01 세션 391, PR #443)**: 해소 사유를
+   recovered(✅)/swept(⚠️ 강제정리)/unconfirmed(ℹ️ 성공 미확인) 3종으로 구분(제목줄 헤더 포함),
+   freshness 계산 실패 스캔은 해소 보류. (옛 줄번호 인용은 +101줄 변경으로 무효라 삭제.)
 
 **즉시 조치 2건 착수됨 (2026-08-02, 서브에이전트 진행 중)**:
 
@@ -110,8 +112,11 @@
 - **✅ 라이브 반영 확인 (세션 347)**: 이 커밋(19:22 KST 머지)이 그 사이의 backend
   재시작(18:31 KST)보다 늦어 또 zombie 발생 — 같은 3중 cross-check로 확정 후 재시작
   (PID 37000, 20:22 KST), 재검증 통과.
-- **보류 유지 — 별도 승인 필요**: 서버 다운 시 중복 알림 억제·resolved/cancelled 구분
-  문구 등 "조율 로직" 자체는 문구 통일과 별개로 여전히 미착수. 규모가 있어 별도 트랙.
+- **✅ 조율 로직 착수·완료 (2026-09-01 세션 391, PR #443 05dea82 — 백로그 §5-C)**:
+  resolved/cancelled 구분 문구(사유 3종 ✅/⚠️/ℹ️, 제목줄 분기) + freshness 계산 실패 시 해소 보류 +
+  스윕 마커 항상 append(monitor·부팅 양쪽) + api_version_probe 이중 알림([내부즉시]+[내부모니터]) 제거.
+  잔여(저우선 — 글로벌 메모리 백로그 survey §5-J): monitor 자기실패 무알림·failed 대표에러
+  func.max 사전순·monitor_alerts 영구 누적·해소 알림 배치 묶음·`_JOB_LABEL_FALLBACK` 5개 결손.
 
 **❌ 보류 아님 — 착수 불필요로 정정 (2026-08-02, 계획 회고 발견)**:
 

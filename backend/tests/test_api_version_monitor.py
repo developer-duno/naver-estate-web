@@ -550,6 +550,46 @@ def test_registry_odcloud_urls_match_actual_collector_modules():
             )
 
 
+# ── 세션 391: 이중 알림 제거 (§5-C) ────────────────────────────────────────
+# CrawlJob 기록에 성공한 뒤 죽으면 monitor 가 그 failed 행을 보고 알린다.
+# 여기서 예외를 재전파하면 스케줄러 리스너([내부즉시])까지 발화해 같은 사고가
+# 두 번 통지된다 — 다른 수집기 전부가 쓰는 '삼킴 + failed 기록' 패턴으로 통일.
+
+
+def test_probe_failure_after_job_recorded_is_swallowed(db):
+    """잡 기록 후 예외 → 재전파 없음 + 부분 result 반환 + CrawlJob failed."""
+    def _boom(*args, **kwargs):
+        raise RuntimeError("프로브 도중 폭발")
+
+    with (
+        patch("crawler.api_version_monitor._probe_one", side_effect=_boom),
+        patch("services.telegram.send_telegram") as mock_send,
+    ):
+        result = probe_api_versions()  # raise 하면 이 줄에서 테스트 실패
+
+    # 반환 계약 유지 — 세 키가 모두 있는 dict (스케줄러·수동 실행이 쓰는 형태)
+    assert set(result) == {STATUS_ALIVE, STATUS_DEAD, STATUS_DEGRADED}
+    assert result[STATUS_DEAD] == []
+    mock_send.assert_not_called()
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "api_version_probe").one()
+    assert job.status == "failed"
+    assert "프로브 도중 폭발" in (job.error_message or "")
+
+
+def test_probe_failure_before_job_recorded_still_raises():
+    """잡 기록 **전** 예외 → 재전파 유지 (monitor 가 볼 행이 없어 리스너가 유일 그물)."""
+    with (
+        patch(
+            "crawler.api_version_monitor._record_job",
+            side_effect=RuntimeError("DB 커넥션 사망"),
+        ),
+        patch("services.telegram.send_telegram"),
+        pytest.raises(RuntimeError, match="DB 커넥션 사망"),
+    ):
+        probe_api_versions()
+
+
 def test_registry_covers_all_eleven_endpoints():
     """감시 대상 총 11종 (apis.data.go.kr 8 + odcloud 3) — 누락 시 사각지대."""
     urls = {entry["url"] for entry in PROBE_REGISTRY}

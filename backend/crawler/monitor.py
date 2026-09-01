@@ -70,14 +70,28 @@ def _job_stats(db, job_type: str) -> dict | None:
 
 
 def detect_issues(db) -> list[dict]:
-    """현재 크롤링 장애를 감지해 리스트로 반환.
+    """현재 크롤링 장애를 감지해 리스트로 반환 (기존 계약 유지 래퍼).
 
     각 항목: {"alert_key": str, "kind": str, "detail": str, "data": dict}
     alert_key 는 장애 종류 식별자 — monitor_alerts 쿨다운 키.
     detail 은 평문 (MonitorAlert.detail 컬럼 저장용), data 는 메시지 포맷용 구조화 필드.
+
+    신선도 계산 성공 여부까지 필요하면 detect_issues_ex 를 쓴다 (세션 391).
+    """
+    return detect_issues_ex(db)[0]
+
+
+def detect_issues_ex(db) -> tuple[list[dict], bool]:
+    """detect_issues + 신선도 계산 성공 여부(freshness_ok).
+
+    freshness_ok=False 는 "compute_freshness 가 예외로 죽어 freshness:* 신호를
+    이번 스캔에서 아예 못 만들었다" 는 뜻이다. 이 경우 freshness:* 키가 통째로
+    사라지므로, 해소 판정에서 그대로 쓰면 "복구됐다" 로 오인한다 (세션 391 §5-C
+    가짜 복구 경로 ③) — run_monitor 가 이 플래그로 해소를 건너뛴다.
     """
     now = datetime.now(timezone.utc)
     issues: list[dict] = []
+    freshness_ok = True
 
     # 1. 작업 실패 — 최근 24h failed job_type 별
     # err = 같은 job_type 다중 실패 시 사전순 마지막 1건 (최근순 아님 — count 로 다건 표기)
@@ -204,8 +218,9 @@ def detect_issues(db) -> list[dict]:
             })
     except Exception:
         logger.warning("[monitor] 신선도 계산 실패 — 이번 스캔 skip", exc_info=True)
+        freshness_ok = False
 
-    return issues
+    return issues, freshness_ok
 
 
 def _cooldown_hours() -> int:
@@ -235,12 +250,18 @@ def _sweep_stale_jobs(db, issues: list[dict], now: datetime) -> int:
         # raw text SQL — ORM update() 는 SQLite 에서 in-Python 평가 시 naive/aware
         # datetime 비교로 깨진다(_sweep_stale_running_jobs main.py 패턴 답습).
         # cutoff 는 Python 측 계산해 paramize (PG/SQLite 호환, NOW()-INTERVAL 금지).
+        #
+        # 마커는 COALESCE(덮어쓰기 방지)가 아니라 **항상 append** 한다 — 진행 상황을
+        # error_message 에 기록하는 잡(official_price 가 대표)은 스윕 시점에 이미 값이
+        # 있어 COALESCE 로는 마커가 안 붙었고, 그러면 _resolution_reason 이 그 잡을
+        # 'swept' 가 아니라 '수동 취소' 로 오분류한다(세션 391). 기존 문구는 보존.
         res = db.execute(
             text("""
                 UPDATE crawl_jobs
                 SET status = 'cancelled',
                     completed_at = :now,
-                    error_message = COALESCE(error_message, 'stale running — swept by monitor')
+                    error_message = COALESCE(error_message || ' | ', '')
+                                    || 'stale running — swept by monitor'
                 WHERE status = 'running'
                   AND completed_at IS NULL
                   AND job_type = :job_type
@@ -254,6 +275,55 @@ def _sweep_stale_jobs(db, issues: list[dict], now: datetime) -> int:
     return swept
 
 
+def _resolution_reason(db, kind: str, job_type: str) -> tuple[str, str]:
+    """해소(resolved) 사유를 판정 — (reason, detail) 반환.
+
+    "이번 스캔에 그 키가 없다" 는 것은 **성공 확인이 아니다**. 원인이 셋인데
+    지금까지 전부 "✅ 정상으로 돌아왔습니다" 한 문구로 나가 사장님이 가짜 복구를
+    믿게 만들었다 (세션 391 §5-C):
+      ① _sweep_stale_jobs 가 running 잡을 강제 cancelled → 다음 스캔에 키 소멸
+      ② 24h 관찰 창에서 failed 가 빠져나감 (성공은 한 번도 없었음)
+      ③ 신선도 계산 실패로 freshness:* 키 통째 소멸 (→ 이건 run_monitor 가 아예 차단)
+
+    reason:
+      "recovered"   — 최근 실행이 completed. 진짜 복구.
+      "swept"       — 모니터/부팅 스윕이 강제 정리(cancelled + 'swept' 마커). 원인 미해결.
+      "unconfirmed" — 조건은 해소됐으나 성공 실행 미확인. detail 에 마지막 실행 상태 명시.
+
+    ⚠ 사유는 문구·이모지에만 영향을 준다 — status 전환(active→resolved)은 전부 기존과 동일.
+    """
+    if kind not in ("crawl_failed", "crawl_stale"):
+        # freshness:* 는 신선도 계산이 성공한 스캔에서만 해소된다(run_monitor 가 보장).
+        # 그 스캔에서 키가 빠졌다 = 실제로 red 를 벗어난 것이므로 진짜 복구.
+        return "recovered", ""
+
+    row = db.execute(
+        select(CrawlJob.status, CrawlJob.error_message)
+        .where(and_(CrawlJob.job_type == job_type, CrawlJob.status != "running"))
+        .order_by(CrawlJob.created_at.desc(), CrawlJob.id.desc())
+        .limit(1)
+    ).first()
+
+    if row is None:
+        return "unconfirmed", "실행 이력 없음"
+    if row.status == "completed":
+        return "recovered", ""
+    if row.status == "cancelled":
+        # monitor 스윕('swept by monitor')·부팅 스윕('swept on startup') 양쪽 포괄.
+        if "swept" in (row.error_message or ""):
+            return "swept", ""
+        return "unconfirmed", "마지막 실행: 취소됨 (수동 취소 또는 토글 꺼짐)"
+    if row.status == "failed":
+        # "24h 관찰 창 경과" 는 crawl_failed 알림의 해소 사유일 때만 참이다.
+        # crawl_stale(마비)은 24h 창과 무관하게 running 소멸로 해소되므로 그 문구를
+        # 붙이면 거짓 설명이 된다.
+        if kind == "crawl_failed":
+            return "unconfirmed", f"마지막 실행: 실패 ({_FAILED_WINDOW_HOURS}h 관찰 창 경과)"
+        return "unconfirmed", "마지막 실행: 실패"
+    # pending·paused 등 그 밖의 상태 — 임의로 "실패" 라 부르지 않고 원문 그대로 전달.
+    return "unconfirmed", f"마지막 실행: {row.status}"
+
+
 def run_monitor(db) -> None:
     """장애 감지 → monitor_alerts 대조 → 쿨다운 적용 → 텔레그램 발송.
 
@@ -261,7 +331,7 @@ def run_monitor(db) -> None:
     자체 흡수하며, 그 뒤 DB·발송 단계 예외는 run_monitor_job 이 감싼다.
     """
     try:
-        issues = detect_issues(db)
+        issues, freshness_ok = detect_issues_ex(db)
     except Exception:
         logger.warning("[monitor] 장애 감지 실패", exc_info=True)
         return
@@ -324,11 +394,28 @@ def run_monitor(db) -> None:
             # 복구 알림 성공 시에만 resolved 처리 — 실패 시 다음 스캔 재시도
             # 구조화 data 없음 → alert_key·detail 만 전달
             # kind = alert_key 의 prefix (crawl_failed / crawl_stale / freshness).
-            # 현재 alert_format resolved 분기는 kind 무관이지만 미래 분기 추가 시 안전.
-            kind = alert.alert_key.split(":", 1)[0]
+            kind, _, target = alert.alert_key.partition(":")
+            # 신선도 계산이 실패한 스캔에서는 freshness:* 키가 통째로 사라진다 —
+            # 이걸 해소로 읽으면 "가짜 복구" 알림이 나간다(세션 391 경로 ③).
+            # 계산이 성공한 다음 스캔에서 판정하도록 이번엔 건드리지 않는다.
+            if not freshness_ok and kind == "freshness":
+                continue
+            try:
+                reason, reason_detail = _resolution_reason(db, kind, target)
+            except Exception:
+                # 사유 판정은 부가 정보일 뿐이다 — 여기서 예외가 새면 스캔 전체
+                # 트랜잭션이 되돌아가 alert 처리가 통째로 죽는다(세션 342 재현).
+                # reason="" 는 alert_format 이 기존 문구로 폴백하는 값.
+                logger.warning("[monitor] 해소 사유 판정 실패 — 기존 문구 폴백", exc_info=True)
+                reason, reason_detail = "", ""
             msg = format_issue_message(
                 kind,
-                {"alert_key": alert.alert_key, "detail": alert.detail},
+                {
+                    "alert_key": alert.alert_key,
+                    "detail": alert.detail,
+                    "reason": reason,
+                    "reason_detail": reason_detail,
+                },
                 event="resolved", header_ctx=header_ctx,
             )
             if send_telegram(msg, parse_mode="HTML"):

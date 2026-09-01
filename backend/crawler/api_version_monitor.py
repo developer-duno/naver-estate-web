@@ -416,7 +416,15 @@ def probe_api_versions(scheduler_job_id: str = "api_version_probe") -> dict:
     except Exception as e:
         logger.error("[api_version] 프로브 실패: %s", e, exc_info=True)
         if job is not None:
+            # 기록 성공 시 재전파하면 [내부즉시](job_error_listener)+[내부모니터](monitor)
+            # 이중 알림 — 삼켜서 monitor 단독 알림으로 통일 (s391).
+            # 다른 수집기 전부가 이미 이 패턴(예외 삼킴 + CrawlJob failed 기록)이다.
+            # 트레이드오프: 즉시 알림 대신 monitor 주기(최대 10분) 지연을 감수 —
+            # 주 1회 도는 감시 잡이라 10분 지연은 수용 가능하다.
             _fail_job(db, job, str(e))
+            return result
+        # CrawlJob 기록 전 사망 — monitor 가 볼 행 자체가 없으므로
+        # 스케줄러 리스너(job_error_listener)가 유일한 그물이다. 재전파 유지.
         raise
     finally:
         db.close()

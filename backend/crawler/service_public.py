@@ -10,6 +10,7 @@ from datetime import timedelta
 
 from crawler.cortar_legacy import to_standard_cortar
 from crawler.service_common import (
+    RESUME_LOOKBACK_LIMIT,
     RESUME_MAX_AGE_HOURS,
     _checkpoint,
     _upsert_price_history,
@@ -132,9 +133,10 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
     # 진행분을 못 찾고 처음부터 재시작하게 된다. 최근 N건을 최신순으로 훑어 체크포인트가
     # 실제로 있는 첫 번째를 찾는다 — 오래된 job까지 무한정 훑지 않도록 상한을 둔다.
     #
-    # ⚠ 건수 상한(10)만으론 부족하다(세션 370 발견) — 실패 잡의 체크포인트는 영구 잔존하므로
-    # 어느 토요일 실행이 중간 실패하면 그 체크포인트가 **이후 매주** 스캔에 걸려 같은
-    # 시군구들을 계속 건너뛴다(신규 실패 10건이 쌓여 창 밖으로 밀릴 때까지). 재개는
+    # ⚠ 건수 상한(RESUME_LOOKBACK_LIMIT)만으론 부족하다(세션 370 발견) — 실패 잡의
+    # 체크포인트는 영구 잔존하므로 어느 토요일 실행이 중간 실패하면 그 체크포인트가
+    # **이후 매주** 스캔에 걸려 같은 시군구들을 계속 건너뛴다(신규 실패가
+    # 상한(RESUME_LOOKBACK_LIMIT)만큼 쌓여 창 밖으로 밀릴 때까지). 재개는
     # "중단 직후 곧 재실행" 의도이므로 신선도(RESUME_MAX_AGE_HOURS)로도 함께 막는다.
     done_codes: set[str] = set()
     resume_cutoff = utcnow() - timedelta(hours=RESUME_MAX_AGE_HOURS)
@@ -146,7 +148,7 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
             CrawlJob.started_at >= resume_cutoff,
         )
         .order_by(CrawlJob.id.desc())
-        .limit(10)
+        .limit(RESUME_LOOKBACK_LIMIT)
         .all()
     )
     for prev_job in recent_stopped_jobs:

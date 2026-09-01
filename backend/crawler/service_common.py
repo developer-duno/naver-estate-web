@@ -23,6 +23,15 @@ _checkpoint = CheckpointManager(checkpoint_interval=5)
 # 72h = 주간(7일)·월간(30일) 주기보다 충분히 짧고, 수동 재트리거 여유는 충분.
 RESUME_MAX_AGE_HOURS = 72
 
+# 재개 후보 조회 건수 상한 — 72h 창 안의 중단(failed/cancelled) 잡을 몇 건까지 훑을지.
+# 10 이면 official_price 의 **동별 소유잡 사슬**(inherited_cutoff_by_dong, 세션 380 B3)이
+# 창 안 실패가 10건을 넘는 극단에서 조용히 절단된다 — 오래된 소유잡이 조회에서 밀려나
+# 그 동의 컷오프가 더 최신 잡으로 오채택되고, 이미 정상 저장된 단지가 소실로 오판된다
+# (public·price 는 체크포인트를 찾으면 break 하므로 비용 영향 0, 상수 통일 목적).
+# 무제한 대신 50 — _checkpoint.load 가 잡당 1쿼리라 폭주 방어가 필요하고, 72h 안에
+# 50회 넘게 중단됐다면 재개보다 그 반복 실패 자체가 먼저 다뤄져야 할 문제다.
+RESUME_LOOKBACK_LIMIT = 50
+
 
 def fail_job_safely(job_id: int, error_message: str) -> bool:
     """크롤 작업을 'failed' 로 확실히 마킹 — 깨진 세션 대비 새 세션 사용.

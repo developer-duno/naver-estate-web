@@ -24,7 +24,11 @@ from sqlalchemy import func
 from crawler.cortar_legacy import to_vworld_cortar
 from crawler.cortar_ri_map import expand_to_ri_codes
 from crawler.env_common import _complete_job, _fail_job, _record_job
-from crawler.service_common import RESUME_MAX_AGE_HOURS, _checkpoint
+from crawler.service_common import (
+    RESUME_LOOKBACK_LIMIT,
+    RESUME_MAX_AGE_HOURS,
+    _checkpoint,
+)
 from db.database import SessionLocal
 from db.models import Complex, ComplexOfficialPrice, CrawlJob
 from services.upsert import _do_upsert
@@ -59,17 +63,29 @@ _REPASS_COLLAPSE_THRESHOLD = 200
 # 규모(_REPASS_MAX_DONGS)·이상(_REPASS_COLLAPSE_THRESHOLD)·시간 3중 방어가 된다.
 _REPASS_MAX_SECONDS = 3600
 
-# 신코드 이관 감시 보초 — 옛 데이터셋(개편 전 시군구) 4개마다 대표 1곳(옛 코드 행수가 큰 동).
-# 이관은 옛 시군구 데이터셋 단위로 일어날 것이라 데이터셋당 1곳이면 충분하다(2026-08-22
-# 세션 375 설계, 적대검증이 옛 중구 사각 적발 → 운서동 추가). 옛 데이터셋 = 28110 옛 중구
-# (신 제물포 24동+영종 4동) · 28140 옛 동구 · 28260 옛 서구 · 41590 옛 화성시.
-# 행수 근거 = tests/test_cortar_legacy.py _KNOWN_REFORM 실측 주석.
-# 감시 범위 = 2026 개편맵(VWORLD_REFORM_CORTAR_MAP)만 — 12-프리픽스 광주·전남 맵은 미감시(백로그).
+# 표준코드 이관 감시 보초 — 번역맵의 **키**(우리가 조회 전에 다른 코드로 바꿔치는 쪽)를 찌른다.
+# 키에 데이터가 생겼다 = V-WORLD 가 그 지역을 표준 코드로 이관하기 시작했다 = 번역이 역효과.
+# ⚠ 방향을 뒤집어 표준측(맵의 값) 코드를 넣으면 지금도 수만 행이 있어 상시 오탐이 된다
+# (tests/test_official_price_migration_probe.py 의 방향 가드가 기계적으로 차단).
+#
+# 감시 범위 = 두 번역맵 전부 (세션 391 에서 12-프리픽스 맵까지 확장):
+#   · VWORLD_REFORM_CORTAR_MAP (2026 행정구역 개편) — 옛 데이터셋 4개마다 대표 1곳.
+#     이관은 옛 시군구 데이터셋 단위로 일어날 것이라 데이터셋당 1곳이면 충분하다(2026-08-22
+#     세션 375 설계, 적대검증이 옛 중구 사각 적발 → 운서동 추가). 옛 데이터셋 = 28110 옛 중구
+#     (신 제물포 24동+영종 4동) · 28140 옛 동구 · 28260 옛 서구 · 41590 옛 화성시.
+#     행수 근거 = tests/test_cortar_legacy.py _KNOWN_REFORM 실측 주석.
+#   · LEGACY_CORTAR_MAP (광주·전남 12-프리픽스) — 광주·전남 각 1곳(표준측 행수가 가장 큰 동).
+#     실측 근거(2026-09-01 라이브 프로브): 화정동 12키 1224011900=0행 / 표준측 2914011900=
+#     38,530행(세션 375 실측을 이번에 재확인) · 조례동 12키 1215013300=0행 / 표준측
+#     4615013300=49,578행(전남 후보 6곳 중 최대 — 옥암 35,506·상동 28,634·연향 24,716·
+#     여서 15,860·문수 15,214).
 _MIGRATION_SENTINELS: dict[str, str] = {
     "2827511100": "인천 서해구 청라동",   # 옛 서구 61,994행 — 28260 옛 서구 대표
     "2812510700": "인천 제물포구 송림동",  # 옛 동구 17,638행 — 28140 옛 동구 대표
     "2815510300": "인천 영종구 운서동",   # 옛 중구 20,930행 — 28110 옛 중구 대표
     "4159710200": "화성 동탄구 반송동",   # 옛 화성시 39,546행 — 41590 옛 화성시 대표
+    "1224011900": "광주 서구 화정동(12-프리픽스)",   # 표준측 2914011900 38,530행 — 광주 대표
+    "1215013300": "전남 순천 조례동(12-프리픽스)",  # 표준측 4615013300 49,578행 — 전남 대표
 }
 
 _PAREN = re.compile(r"\([^)]*\)")
@@ -395,11 +411,13 @@ def _alert_official_price(message: str) -> None:
 
 
 def _probe_reform_migration(year: str) -> None:
-    """신코드 이관 감시 — 보초 신코드에 데이터가 생겼으면 텔레그램 경보 1회.
+    """표준코드 이관 감시 — 보초 코드에 데이터가 생겼으면 텔레그램 경보 1회.
 
-    2026 개편 지역은 to_vworld_cortar() 번역(신코드 → 옛코드)으로 조회한다. V-WORLD 가
-    데이터를 신코드로 이관하기 시작하면 그 번역이 오히려 **빈 옛 코드 조회**가 되어
-    조용히 0건이 된다. 보초 신코드를 1페이지만 찔러 총 행수>0 이면 이관 시작으로 본다.
+    cortar_legacy 의 두 번역맵(2026 개편맵 VWORLD_REFORM_CORTAR_MAP · 광주·전남
+    12-프리픽스맵 LEGACY_CORTAR_MAP) 대상 지역은 조회 전에 코드를 V-WORLD 가 실제로
+    쓰는 쪽으로 번역한다. V-WORLD 가 그 데이터를 맵의 키(표준·신 코드) 쪽으로 이관하기
+    시작하면 그 번역이 오히려 **빈 코드 조회**가 되어 조용히 0건이 된다. 보초 코드를
+    1페이지만 찔러 총 행수>0 이면 이관 시작으로 본다.
 
     경보만 하고 자동 전환은 하지 않는다 — 과도기에 신·옛 코드가 양쪽 다 살아 있을 수
     있어(중복 수집 위험) 전환 시점은 사람이 판단한다.
@@ -427,10 +445,11 @@ def _probe_reform_migration(year: str) -> None:
             return
 
         detail = " / ".join(migrated)
-        logger.warning("[official_price] 신코드 이관 감지 — %s", detail)
+        logger.warning("[official_price] 표준코드 이관 감지 — %s", detail)
         _alert_official_price(
-            "⚠️ 공시가격 V-WORLD 신코드 이관 감지 — cortar_legacy 개편맵 번역이 역효과 "
-            f"시작. 감지 보초: {detail}. 이관 지역은 번역 해제·신코드 직접 조회 전환 "
+            "⚠️ 공시가격 V-WORLD 표준코드 이관 감지 — cortar_legacy 코드 번역"
+            "(2026 개편맵·광주전남 12-프리픽스맵)이 역효과 시작. "
+            f"감지 보초: {detail}. 이관 지역은 번역 해제·표준코드 직접 조회 전환 "
             "검토 필요(과도기 양쪽 공존 가능성 때문에 자동 전환은 하지 않음)."
         )
     except Exception:
@@ -673,7 +692,7 @@ def collect_official_prices(
     # lazy import — import chain 실패 방지 (service_public.py 답습)
     from crawler.vworld_price_api import fetch_official_prices
 
-    # 신코드 이관 감시 — 경보만 하고 수집 흐름에는 영향 0 (best-effort).
+    # 표준코드 이관 감시 — 경보만 하고 수집 흐름에는 영향 0 (best-effort).
     _probe_reform_migration(year)
 
     db = SessionLocal()
@@ -682,10 +701,11 @@ def collect_official_prices(
     # 체크포인트가 실제로 있는 첫 job 을 찾는다(연속 2회 실패 시 2번째 job 이 자기
     # 체크포인트를 저장하기 전에 죽으면 진행분이 유실되던 세션 346 사고 답습).
     #
-    # ⚠ 건수 상한(10)만으론 부족하다(세션 370 발견) — 실패 잡의 체크포인트는 영구 잔존하고
-    # 이 잡은 월 1회라 신규 실패가 쌓여 밀려나지도 않는다. 9/15 실행이 중간 실패하고 아무도
-    # 재트리거 안 하면 10/15 정기 실행이 지난달 "완료 목록"을 이어받아 그 절반을 스킵하고,
-    # 연도가 넘어가면 작년 완료 마커로 올해 수집을 스킵한다(체크포인트에 연도 정보 없음).
+    # ⚠ 건수 상한(RESUME_LOOKBACK_LIMIT)만으론 부족하다(세션 370 발견) — 실패 잡의
+    # 체크포인트는 영구 잔존하고 이 잡은 월 1회라 신규 실패가 쌓여 밀려나지도 않는다.
+    # 9/15 실행이 중간 실패하고 아무도 재트리거 안 하면 10/15 정기 실행이 지난달
+    # "완료 목록"을 이어받아 그 절반을 스킵하고, 연도가 넘어가면 작년 완료 마커로
+    # 올해 수집을 스킵한다(체크포인트에 연도 정보 없음).
     # 재개는 "중단 직후 곧 재실행" 의도이므로 신선도(RESUME_MAX_AGE_HOURS)로 함께 막는다.
     done_ld_codes: set[str] = set()
     resume_cutoff = utcnow() - timedelta(hours=RESUME_MAX_AGE_HOURS)
@@ -697,7 +717,7 @@ def collect_official_prices(
             CrawlJob.started_at >= resume_cutoff,
         )
         .order_by(CrawlJob.id.desc())
-        .limit(10)
+        .limit(RESUME_LOOKBACK_LIMIT)
         .all()
     )
     # 동별 컷오프 — "그 동을 **처음 완료한** 사슬 잡의 started_at".

@@ -13,6 +13,7 @@ from sqlalchemy import exists
 from sqlalchemy.orm import aliased
 
 from crawler.service_common import (
+    RESUME_LOOKBACK_LIMIT,
     RESUME_MAX_AGE_HOURS,
     _checkpoint,
     _extract_price_list,
@@ -172,9 +173,10 @@ def collect_price_history(
     # 최근 job 1건만 보면 연속 실패 시 진행분이 유실될 수 있어(세션 346 리뷰 발견,
     # service_public.py 와 동일 처방) 최근 N건을 순회해 체크포인트가 있는 첫 건을 쓴다.
     #
-    # ⚠ 건수 상한(10)만으론 부족하다(세션 370 발견) — 실패 잡의 체크포인트는 영구 잔존하므로
-    # 어느 수요일 실행이 중간 실패하면 그 체크포인트가 **이후 매주** 스캔에 걸려 같은 단지들을
-    # 계속 제외한다(public_trade_data 와 동일한 주간 피해 구조 — 이 잡도 주 1회 수 04:00).
+    # ⚠ 건수 상한(RESUME_LOOKBACK_LIMIT)만으론 부족하다(세션 370 발견) — 실패 잡의
+    # 체크포인트는 영구 잔존하므로 어느 수요일 실행이 중간 실패하면 그 체크포인트가
+    # **이후 매주** 스캔에 걸려 같은 단지들을 계속 제외한다(public_trade_data 와
+    # 동일한 주간 피해 구조 — 이 잡도 주 1회 수 04:00).
     # 재개는 "중단 직후 곧 재실행" 의도이므로 신선도(RESUME_MAX_AGE_HOURS)로도 함께 막는다.
     done_complex_nos: set[str] = set()
     resume_cutoff = utcnow() - timedelta(hours=RESUME_MAX_AGE_HOURS)
@@ -186,7 +188,7 @@ def collect_price_history(
             CrawlJob.started_at >= resume_cutoff,
         )
         .order_by(CrawlJob.id.desc())
-        .limit(10)
+        .limit(RESUME_LOOKBACK_LIMIT)
         .all()
     )
     for prev_job in recent_stopped_jobs:

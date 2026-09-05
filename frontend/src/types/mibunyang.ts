@@ -213,6 +213,7 @@ export interface MbInfra {
   childcare_nearest_capacity?: number;
   childcare_nearest_type?: string;
   childcare_nearest_teachers?: number;
+  childcare_updated_at?: string; // V053 순환 키 겸 갱신시각
   /** 범죄통계 (V013) */
   crime_score?: number;
   crime_grade?: string;

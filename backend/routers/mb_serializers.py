@@ -206,6 +206,7 @@ def infra_to_dict(i) -> dict:
         "childcare_nearest_capacity": i.childcare_nearest_capacity,
         "childcare_nearest_type": i.childcare_nearest_type,
         "childcare_nearest_teachers": i.childcare_nearest_teachers,
+        "childcare_updated_at": i.childcare_updated_at.isoformat() if i.childcare_updated_at else None,  # V053
         # 범죄통계 (V013)
         "crime_score": i.crime_score,
         "crime_grade": i.crime_grade,

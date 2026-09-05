@@ -21,6 +21,14 @@
 -- 취급돼 순환 최우선이 된다(= 위 901개 미수집 단지가 먼저 채워진다). 이미 값이 있는
 -- 2,037개도 NULL 이라 첫 몇 회차는 뒤섞이지만, 한 바퀴 돌고 나면 전 행에 시각이 박혀
 -- 정상 순환에 진입한다. 공유 DB(mibunyang)는 이 컬럼을 읽지도 쓰지도 않아 영향 0.
+--
+-- ⚠ 코드보다 prod 선행 실행 필수 (V034 관례) — ORM(mb_models.Infra)에 매핑된 컬럼은
+-- Infra 를 SELECT 하는 모든 경로의 컬럼 목록에 포함되므로, prod 에 컬럼이 없는 채로
+-- 새 코드가 뜨면 UndefinedColumn 500. 폭발 반경 = env_common._prefetch_infra_map 을
+-- 공유하는 환경 수집기 4종(air/emergency/crime/childcare) + mb_misc_queries.get_infra
+-- (미분양 단지 상세 인프라 API). SQLite CI 는 create_all() 이 컬럼을 자동 생성해 이
+-- 누락을 못 잡는다. 배포 순서: ① 본 파일 prod 실행 → ② 코드 머지·재시작.
+-- ADD COLUMN IF NOT EXISTS 라 멱등·재실행 안전.
 ALTER TABLE infra ADD COLUMN IF NOT EXISTS childcare_updated_at TIMESTAMP;
 COMMENT ON COLUMN infra.childcare_updated_at IS
   'CPMS 어린이집 수집(childcare_count·childcare_nearest_*) 최종 갱신 시각 — collect_childcare_data 의 "오래된 것 우선" 배치 순환 키 (세션 392). mibunyang 이 갱신하는 공용 infra.updated_at 과는 별개.';

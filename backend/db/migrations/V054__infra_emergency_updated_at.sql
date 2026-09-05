@@ -23,6 +23,10 @@
 -- 첫 회차에 전 단지가 한 바퀴 돌며 시각이 박히고, 그 다음부터 정상 순환에 진입한다.
 -- 공유 DB(mibunyang)는 이 컬럼을 읽지도 쓰지도 않아 영향 0.
 --
+-- ✅ prod 적용완료 2026-09-05 (세션 394 — raw_connection + 명시 commit 으로 직접 실행,
+-- information_schema 재검증 통과: emergency_updated_at / timestamp without time zone /
+-- nullable YES + COMMENT 존재. 사전 스키마 백업 schema_20260905_235622.sql).
+--
 -- ⚠ 코드보다 prod 선행 실행 필수 (V034 관례) — ORM(mb_models.Infra)에 매핑된 컬럼은
 -- Infra 를 SELECT 하는 모든 경로의 컬럼 목록에 포함되므로, prod 에 컬럼이 없는 채로
 -- 새 코드가 뜨면 UndefinedColumn 500. 폭발 반경 = env_common._prefetch_infra_map 을

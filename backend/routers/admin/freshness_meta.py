@@ -63,9 +63,12 @@ FRESHNESS_ITEMS: list[dict] = [
     },
     {
         # 세션 359: 전수조사로 발견된 사각지대. air_quality/childcare/crime_stats 는
-        # 이미 등록됐는데 같은 인프라 계열인 emergency 만 등록 누락 — Infra 테이블에
+        # 이미 등록됐는데 같은 인프라 계열인 emergency 만 등록 누락 — 당시 Infra 테이블에
         # emergency_updated_at 컬럼이 없어(emergency_hospital 등 값 컬럼만 존재)
-        # CrawlJob.completed_at 경유(childcare 와 동일 패턴)로 최신성을 측정한다.
+        # CrawlJob.completed_at 경유(childcare 와 동일 패턴)로 최신성을 측정했다.
+        # 세션 394 현행화: V054 로 컬럼은 생겼으나(배치 순환 키 용도) 월 1회 잡이라
+        # CrawlJob 기준 측정을 유지한다 — air/crime 처럼 max(emergency_updated_at)
+        # 전환은 선택지(전환 시 freshness.py 의 짝꿍 주석도 함께 답습).
         "key": "emergency",
         "label": "응급의료기관",
         "expected_interval_seconds": 86400 * 30,  # 매월 첫째 월 03:00

@@ -13,6 +13,7 @@ RECORD_ALLOWLIST 패턴을 naver-estate(Python + APScheduler)에 맞게 이식.
 실행: python -m pytest tests/test_scheduler_monitoring_coverage.py -v
 """
 
+from crawler.job_error_listener import _JOB_LABEL_FALLBACK
 from crawler.scheduler import _ADD_JOB_CALL_PATTERN, extract_scheduler_job_ids
 from routers.admin.freshness_meta import FRESHNESS_ITEMS, MONITORING_EXEMPT
 
@@ -202,6 +203,43 @@ def test_missing_monitoring_coverage_passes_when_job_added_to_exempt():
 
     missing = fake_job_ids - covered
     assert not missing
+
+
+# ── 테스트 C-2: 잡 실패 즉시알림의 한글 라벨 폴백 표도 잡을 전부 덮는가 ──
+
+
+def test_all_scheduler_jobs_have_job_error_label_fallback():
+    """새 스케줄러 잡을 추가하면서 job_error_listener 의 한글 라벨 등록을
+    깜빡하면 이 테스트가 실패한다 (세션 393 §5-J ⑤).
+
+    _JOB_LABEL_FALLBACK 는 scheduler.get_job(job_id).name 조회가 실패했을 때의
+    최후 폴백이라, 빠져 있으면 텔레그램에 영문 job_id 가 그대로 찍힌다 —
+    "뭐가 문제인지 안 나온다"(세션 359 사장님 지적)의 재발.
+
+    ⚠ 범위 = 정적 id 만. 동적 id(popular_*, complex_detail_{JGC,ABYG,OBYG})는
+    extract_scheduler_job_ids() 가 애초에 추출하지 않아 자연 제외된다.
+    """
+    job_ids = set(extract_scheduler_job_ids(_SCHEDULER_SOURCE))
+    missing = job_ids - set(_JOB_LABEL_FALLBACK)
+    assert not missing, (
+        f"job_error_listener._JOB_LABEL_FALLBACK 에 한글 라벨이 없는 스케줄러 잡 발견: "
+        f"{sorted(missing)}. crawler/scheduler.py 의 해당 add_job(name=\"...\") 값을 "
+        "그대로 복사해 등록할 것."
+    )
+
+
+def test_job_error_label_fallback_keys_exist_in_scheduler():
+    """폴백 표의 키가 실제 scheduler.py 에 실존하는 id 인지 확인 (오타 방지).
+
+    옛 잡을 삭제했는데 라벨만 남거나, 오타로 존재하지 않는 id 를 넣으면 위
+    커버리지 가드가 무력해진다 — MONITORING_EXEMPT 쪽 정합성 가드와 같은 결.
+    """
+    job_ids = set(extract_scheduler_job_ids(_SCHEDULER_SOURCE))
+    bogus = set(_JOB_LABEL_FALLBACK) - job_ids
+    assert not bogus, (
+        f"_JOB_LABEL_FALLBACK 에 scheduler.py 에 실존하지 않는 id 발견(오타·잔재 의심): "
+        f"{sorted(bogus)}"
+    )
 
 
 # ── 테스트 E: 정적→동적 id 전환으로 커버리지가 "몰래" 새는 것을 막는다 ──

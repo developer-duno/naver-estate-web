@@ -230,3 +230,68 @@ def test_resolved_without_reason_keeps_legacy_wording():
     msg = format_issue_message("crawl_failed", data, event="resolved", header_ctx=_ctx(0))
     assert msg.startswith("[내부모니터] ✅ <b>크롤링 복구</b>")
     assert "▸ 이전 장애 — 정상으로 돌아왔습니다." in msg
+
+
+# ── 세션 393 §5-J ④: 해소 알림 묶음 포맷 (format_resolved_batch) ──
+
+
+def test_resolved_batch_all_recovered_uses_recovery_header():
+    """전부 recovered → '✅ 크롤링 복구' 헤더 + 해소 N건 표기 + 항목별 한 줄."""
+    from crawler.alert_format import format_resolved_batch
+
+    items = [
+        {"detail": "A 작업 실패", "reason": "recovered"},
+        {"detail": "B 작업 실패", "reason": "recovered"},
+    ]
+    msg = format_resolved_batch(items, header_ctx=_ctx(0))
+
+    assert msg.startswith("[내부모니터] ✅ <b>크롤링 복구</b>")
+    assert "해소 2건" in msg
+    assert "✅ A 작업 실패 — 정상으로 돌아왔습니다 (최근 실행 성공 확인)." in msg
+    assert "✅ B 작업 실패 — 정상으로 돌아왔습니다 (최근 실행 성공 확인)." in msg
+
+
+def test_resolved_batch_mixed_reason_uses_warning_header():
+    """하나라도 swept·unconfirmed 가 섞이면 '⚠️ 알림 종료' — '복구' 금지."""
+    from crawler.alert_format import format_resolved_batch
+
+    items = [
+        {"detail": "A 작업 실패", "reason": "recovered"},
+        {"detail": "B 작업 마비", "reason": "swept"},
+        {"detail": "C 작업 실패", "reason": "unconfirmed", "reason_detail": "마지막 실행: 실패"},
+    ]
+    msg = format_resolved_batch(items, header_ctx=_ctx(0))
+
+    assert msg.startswith("[내부모니터] ⚠️ <b>알림 종료</b>")
+    assert "복구" not in msg.split("\n")[0]
+    assert "해소 3건" in msg
+    # 각 줄은 자기 사유대로 이모지·문구가 갈린다
+    assert "⚠️ B 작업 마비 — 멈춘 작업을 강제 정리해" in msg
+    assert "ℹ️ C 작업 실패 — 알림 조건이 해소됐지만" in msg
+    assert "마지막 실행: 실패" in msg
+
+
+def test_resolved_batch_escapes_html_in_detail():
+    """detail 에 HTML 특수문자가 들어와도 이스케이프된다(텔레그램 파싱 깨짐 방지)."""
+    from crawler.alert_format import format_resolved_batch
+
+    items = [
+        {"detail": "<b>주입</b> & 시도", "reason": "recovered"},
+        {"detail": "정상 항목", "reason": "recovered"},
+    ]
+    msg = format_resolved_batch(items, header_ctx=_ctx(0))
+
+    assert "&lt;b&gt;주입&lt;/b&gt; &amp; 시도" in msg
+    assert "<b>주입</b>" not in msg
+
+
+def test_resolved_batch_missing_reason_treated_as_recovered_header():
+    """reason 미지정(폴백 경로)은 legacy 문구 + 복구 헤더 — 하위호환."""
+    from crawler.alert_format import format_resolved_batch
+
+    items = [{"detail": "A 장애"}, {"detail": "B 장애"}]
+    msg = format_resolved_batch(items, header_ctx=_ctx(0))
+
+    assert msg.startswith("[내부모니터] ✅ <b>크롤링 복구</b>")
+    assert "▸ A 장애 — 정상으로 돌아왔습니다." in msg
+    assert "▸ B 장애 — 정상으로 돌아왔습니다." in msg

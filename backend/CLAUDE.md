@@ -33,7 +33,7 @@
 | `db/mb_query_helpers.py` | mibunyang 중복 제거 + 정렬 + 필터 헬퍼 |
 | `db/mb_apartment_queries.py` | mibunyang 아파트 단지 + 미분양 조회 쿼리 |
 | `db/mb_misc_queries.py` | mibunyang 지역 통계 + 실거래 + 단지 부속 쿼리 |
-| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V052, 53 버전 — 최신은 하단 §DB 마이그레이션 표가 진실) |
+| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V054, 55 버전 — 최신은 하단 §DB 마이그레이션 표가 진실) |
 | `shared/naver_api.py` | NaverEstateAPI (수정 금지) |
 | `shared/constants.py` | 상수 (수정 금지) |
 | `auth/permissions.py` | 역할 체크 (require_role) + 일일 쿼터 (check_quota) |
@@ -124,10 +124,12 @@
 
 | V053 | infra.childcare_updated_at 컬럼 추가 (어린이집 배치 순환 결함 근본수정 — 선정 쿼리가 ORDER BY 없이 limit(100) 만 걸어 매월 같은 앞쪽 단지만 재갱신, prod 실측 2,938개 중 901개(30.7%)가 5개월간 childcare_count NULL 방치. "오래된 것 우선" 순환 키로 사용. ⚠ 공용 infra.updated_at 은 mibunyang collect-childcare.mjs 가 자기 수집마다 갱신해 순환 키로 쓸 수 없어 전용 컬럼 신설 — air_updated_at·crime_updated_at 선례 답습) | **prod 미적용 (적용 대기)** — nullable 컬럼 추가라 기존 데이터 영향 0, mibunyang 은 이 컬럼을 읽지도 쓰지도 않아 공유 DB 영향 0. ⚠ ORM(`db/mb_models.py`)에 매핑돼 Infra SELECT 컬럼 목록에 포함되므로 **코드 머지 전 prod 선행 적용 필수** (미적용 시 childcare 수집·infra 조회 경로 500). `ADD COLUMN IF NOT EXISTS` 라 멱등·안전 |
 
-- `db/migrations/` 폴더에 `V000__` ~ `V053__` SQL 파일 = 54 버전
+| V054 | infra.emergency_updated_at 컬럼 추가 (응급의료 배치 순환 결함 근본수정 — 선정 쿼리가 ORDER BY 없이 limit(100) 만 걸어 매월 같은 앞쪽 단지만 재갱신, prod 실측 2,938개 중 496개(16.9%)만 emergency_hospital 채워지고 2,442개(83.1%) 영구 방치. "오래된 것 우선" 순환 키로 사용 + 배치 전량 전환. V053(childcare)과 완전히 동일 계열 결함 — 공용 infra.updated_at 은 mibunyang 이 갱신해 순환 키로 못 써 전용 컬럼 신설, air/crime/childcare 선례 답습) | **prod 미적용 (적용 대기)** — nullable 컬럼 추가라 기존 데이터 영향 0, mibunyang 은 이 컬럼을 읽지도 쓰지도 않아 공유 DB 영향 0. ⚠ ORM(`db/mb_models.py`)에 매핑돼 Infra SELECT 컬럼 목록에 포함되므로 **코드 머지 전 prod 선행 적용 필수** (미적용 시 응급의료 수집·infra 조회 경로 500). `ADD COLUMN IF NOT EXISTS` 라 멱등·안전 |
+
+- `db/migrations/` 폴더에 `V000__` ~ `V054__` SQL 파일 = 55 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
-- 최신 = V053 (infra.childcare_updated_at — **prod 미적용, 코드 머지 전 선행 적용 필수**). 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피. ⚠ V052 가 이 의무를 놓쳐 세션 392 P2-6 drift 점검에서 소급 보강된 선례 — 마이그레이션 PR 에 본 표 갱신을 반드시 동반할 것)
+- 최신 = V054 (infra.emergency_updated_at — **prod 미적용, 코드 머지 전 선행 적용 필수**). 직전 V053(infra.childcare_updated_at)도 아직 **prod 미적용** 상태라 둘 다 선행 적용 대상이다. 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피. ⚠ V052 가 이 의무를 놓쳐 세션 392 P2-6 drift 점검에서 소급 보강된 선례 — 마이그레이션 PR 에 본 표 갱신을 반드시 동반할 것)
   - V043 = prod 적용완료·backend 재시작(zombie 해소) 완료 — 세션 352 라이브 검증: `/presale/officetel-rental` 200 정상 응답 확인.
   - V043 = house_nm TEXT nullable 컬럼 추가 — 기존 아파트 청약 행은 NULL 로 두면 되므로 기존 데이터 영향 0. `ADD COLUMN IF NOT EXISTS` 라 멱등·안전. 코드(`db/mb_models.py`)가 이미 이 컬럼에 매핑돼 SELECT 목록에 포함되므로 **prod 선행 적용 필수** — 세션 352 에 적용·재검증 완료.
   - V040~V042 = 이슈 #323(청약홈 오피스텔·도시형·민간임대 편입) 3종 세트 — `CREATE TABLE/ADD COLUMN IF NOT EXISTS` 라 멱등·안전. V040 은 기존 컬럼에 `NOT NULL DEFAULT 'apt'`로 추가해 기존 아파트 데이터에 영향 0. V041/V042 는 신규 독립 테이블이라 공유 DB(mibunyang) 영향 0. 코드(`db/mb_models.py`)는 이미 이 컬럼/테이블에 매핑돼 있으므로 **prod 선행 적용 필수** — 세션 352 에 적용·재검증 완료.

@@ -198,6 +198,7 @@ export interface MbInfra {
   /** 응급의료기관 시설명/분류 (mibunyang W4, 2026-05-13 동기화) */
   emergency_name?: string;
   emergency_type?: string;
+  emergency_updated_at?: string; // V054 순환 키 겸 갱신시각
   /** 대기질 — 에어코리아 (V012) */
   air_station_name?: string;
   air_station_dist?: number;

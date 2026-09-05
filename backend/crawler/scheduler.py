@@ -44,7 +44,9 @@ PUBLIC_PRICE_BACKFILL_BATCH_SIZE = int(os.getenv("PUBLIC_PRICE_BACKFILL_BATCH_SI
 AIR_QUALITY_ENABLED = os.getenv("AIR_QUALITY_ENABLED", "false").lower() == "true"
 AIR_QUALITY_BATCH_SIZE = int(os.getenv("AIR_QUALITY_BATCH_SIZE", "100"))
 EMERGENCY_ENABLED = os.getenv("EMERGENCY_ENABLED", "false").lower() == "true"
-EMERGENCY_BATCH_SIZE = int(os.getenv("EMERGENCY_BATCH_SIZE", "100"))
+# 0 = 전량(위경도 보유 2,938단지). 전국 기관목록을 1회만 받고 단지별 처리는 로컬
+# 거리계산뿐이라 배치 크기가 외부 API 호출 수와 무관 — 전량이어도 비용 증가 0 (세션 394).
+EMERGENCY_BATCH_SIZE = int(os.getenv("EMERGENCY_BATCH_SIZE", "0"))
 CHILDCARE_ENABLED = os.getenv("CHILDCARE_ENABLED", "false").lower() == "true"
 # 0 = 전량(위경도 보유 2,938단지). 시군구당 1콜 + 런 내 캐시 재사용 구조라 전량이어도
 # 호출 상한 = 단지가 걸친 (region,gu) 조합 수 ≈ 248 (2026-09-05 prod 실측).
@@ -402,7 +404,11 @@ def create_scheduler() -> BackgroundScheduler:
         logger.info("에어코리아 대기질 수집 활성화: 매일 02:00 (배치 %d)", AIR_QUALITY_BATCH_SIZE)
 
     # H. 응급의료기관 수집 — 매월 첫째 월요일 새벽 3시
+    #    ⚠ 배치 = 전량(0, 세션 394). 전국 기관목록 1콜 + 단지별 로컬 거리계산 구조라
+    #    배치 크기가 API 호출 수와 무관 — 전량이어도 외부 호출은 여전히 1회다.
+    #    옛 배치 100 은 이득 없이 커버리지만 깎았다(prod 실측 496/2,938만 채워짐).
     if EMERGENCY_ENABLED:
+        from crawler.env_emergency import batch_label
         from crawler.env_service import collect_emergency_data
 
         scheduler.add_job(
@@ -417,7 +423,10 @@ def create_scheduler() -> BackgroundScheduler:
             max_instances=1,
             misfire_grace_time=3600,
         )
-        logger.info("응급의료기관 수집 활성화: 매월 첫째 월요일 03:00 (배치 %d)", EMERGENCY_BATCH_SIZE)
+        logger.info(
+            "응급의료기관 수집 활성화: 매월 첫째 월요일 03:00 (배치 %s)",
+            batch_label(EMERGENCY_BATCH_SIZE),
+        )
 
     # I. 어린이집 수집 — 매월 첫째 목요일 새벽 1시
     #    ⚠ 01:00 고정 사유: CPMS cpmsapi030 키를 mibunyang 과 공유하는데, mibunyang

@@ -191,6 +191,7 @@ def infra_to_dict(i) -> dict:
         # 응급의료기관 시설명/분류 (mibunyang W4)
         "emergency_name": i.emergency_name,
         "emergency_type": i.emergency_type,
+        "emergency_updated_at": i.emergency_updated_at.isoformat() if i.emergency_updated_at else None,  # V054
         # 대기질 — 에어코리아 (V012)
         "air_station_name": i.air_station_name,
         "air_station_dist": i.air_station_dist,

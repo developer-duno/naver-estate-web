@@ -22,9 +22,29 @@ from utils import utcnow
 
 logger = logging.getLogger(__name__)
 
+# 중간 저장 주기 (단지 수). 전량 전환(세션 393)으로 1회 실행이 100단지 ≈ 2분에서
+# 2,938단지 ≈ 15~30분으로 길어져, 마지막 단일 commit 만 두면 도중 사망(DB 다운·
+# 프로세스 종료) 시 그 달 성과가 통째로 증발한다(월 1회 잡이라 피해 = 한 달 지연).
+#
+# ⚠ commit 은 세션의 다른 인스턴스(infra_map 의 나머지 Infra)를 expire 시키지만,
+#   이 루프의 각 순회는 자기 infra 에 **대입만** 하고 읽지 않으므로 lazy-load SELECT
+#   유발 0 이다 (세션 342 lazy-load 폭풍은 "commit 후 속성을 읽는" 다른 조건).
+_COMMIT_EVERY = 500
 
-def collect_childcare_data(batch_size: int = 100):
-    """어린이집 수집 — 시군구별 1회 API 호출 + 단지별 반경 1km 매칭"""
+
+def batch_label(batch_size: int) -> str:
+    """로그용 배치 표시 — 0 은 전량(무제한)을 뜻한다 (scheduler 등록 로그도 공유)"""
+    return "전량" if batch_size <= 0 else str(batch_size)
+
+
+def collect_childcare_data(batch_size: int = 0):
+    """어린이집 수집 — 시군구별 1회 API 호출 + 단지별 반경 1km 매칭
+
+    batch_size=0(기본) = 전량. 이 수집기는 시군구당 1콜 + 런 내 캐시 재사용이라
+    전 단지를 돌아도 호출 상한 = 단지가 걸친 (region,gu) 조합 수 = 248개
+    (2026-09-05 prod 실측) 로, CPMS 일 1,000콜 공유 쿼터 안에서 여유롭다.
+    옛 배치 100 은 전 단지 한 바퀴에 30개월이 걸려 실익이 없었다(사장님 결정 2026-09-05).
+    """
     db = SessionLocal()
     if _is_skip_day():
         logger.info("[childcare] 매월 10일 토요일 — 쿼터 보호를 위해 건너뜀")
@@ -47,7 +67,12 @@ def collect_childcare_data(batch_size: int = 100):
         # 순으로 돌아 전 단지가 한 바퀴씩 채워진다.
         # outerjoin 필수 — Infra 행 자체가 없는 단지도 NULL 로 잡혀 최우선이 된다
         # (inner join 이면 그 단지들이 영영 선정 대상에서 빠진다).
-        apts = db.query(
+        #
+        # ⚠ 전량(batch_size=0)으로 전환된 뒤에도 ORDER BY 는 유지한다 (세션 393):
+        #   ① 쿼터 사정으로 부분 배치로 되돌릴 때의 폴백 ② 전량 실행이 도중에 끊겨도
+        #   다음 회차가 미수집분부터 이어받는 안전망. 정렬을 빼면 그 두 경우에 곧바로
+        #   세션 392 결함(앞쪽만 반복 갱신)이 재현된다.
+        query = db.query(
             Apartment.id, Apartment.latitude, Apartment.longitude,
             Apartment.region, Apartment.gu,
         ).outerjoin(
@@ -57,7 +82,10 @@ def collect_childcare_data(batch_size: int = 100):
             Apartment.longitude.isnot(None),
         ).order_by(
             Infra.childcare_updated_at.asc().nullsfirst(),
-        ).limit(batch_size).all()
+        )
+        if batch_size > 0:
+            query = query.limit(batch_size)
+        apts = query.all()
 
         # Infra 일괄 prefetch — 루프 내 db.get() 라운드트립 제거 (env_common._prefetch_infra_map 공통 답습)
         apt_ids = [row[0] for row in apts]
@@ -122,6 +150,12 @@ def collect_childcare_data(batch_size: int = 100):
                 collected += 1
                 if result["count"] > 0:
                     collected_with_matches += 1
+
+                # 중간 저장 — 전량 실행이 도중에 죽어도 여기까지는 남는다 (세션 393).
+                # 다음 회차는 ORDER BY(오래된 것 우선) 덕에 저장된 단지를 건너뛰고
+                # 미수집분부터 이어받으므로, 부분 성과가 그대로 다음 달로 이어진다.
+                if collected % _COMMIT_EVERY == 0:
+                    db.commit()
             except ChildcareAPIError:
                 raise
             except Exception:
@@ -146,14 +180,14 @@ def collect_childcare_data(batch_size: int = 100):
             db.commit()
             logger.error(
                 "[childcare] silent failure 감지: 시군구 %d개 중 empty %d개, "
-                "collected=%d with_matches=0 (배치 %d)",
-                total_gus, empty_gus, collected, batch_size,
+                "collected=%d with_matches=0 (배치 %s)",
+                total_gus, empty_gus, collected, batch_label(batch_size),
             )
         else:
             _complete_job(db, job, collected, failed)
             logger.info(
-                "[childcare] 완료: %d 수집 (매칭 %d), %d 실패 (배치 %d)",
-                collected, collected_with_matches, failed, batch_size,
+                "[childcare] 완료: %d 수집 (매칭 %d), %d 실패 (배치 %s)",
+                collected, collected_with_matches, failed, batch_label(batch_size),
             )
     except ChildcareAPIError as exc:
         _fail_job(db, job, f"CPMS 치명적 에러: {exc}")

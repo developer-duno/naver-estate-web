@@ -16,7 +16,7 @@ import pytest
 
 from crawler import service_discover
 from crawler.service_discover import _is_dead_detail, crawl_article_details
-from db.models import Article
+from db.models import Article, CrawlJob
 
 
 def _make_pending_article(db, article_no: str, last_seen: datetime) -> None:
@@ -170,3 +170,63 @@ def test_crawl_survives_batch_commit_expire(db, no_throttle, monkeypatch):
     db.expire_all()
     done = db.query(Article).filter(Article.detail_crawled == True).count()
     assert done == 51
+
+
+# ── 세션 393: 소배치 total_items 유실 회귀 (prod job 49181 = 0/39) ──
+
+def test_small_batch_persists_total_items(db, no_throttle, monkeypatch):
+    """50건 미만 배치도 total_items 가 DB 에 저장된다.
+
+    배경: autoflush=False 라 job.total_items 대입이 메모리에만 남고, 50건 배치
+    commit 이 안 오는 소배치에서는 _finalize_job 의 db.refresh(job) 이 그 대입을
+    버려 default=0 으로 복원했다(prod job 49181 = total 0 / processed 39).
+
+    뮤테이션 검증(세션 393): 선추출 뒤 db.commit() 을 제거하면 이 테스트가
+    `assert 0 == 3` 로 실패한다(processed_items 는 3 으로 맞아 결함이 total 만 갉아먹음).
+    """
+    now = datetime.now(timezone.utc)
+    for i in range(3):
+        _make_pending_article(db, f"S{i}", now - timedelta(minutes=i))
+
+    monkeypatch.setattr(
+        service_discover.NaverEstateAPI,
+        "get_article_detail",
+        staticmethod(lambda an: {"articleDetail": {"articleNo": an}}),
+    )
+
+    crawl_article_details(batch_size=10)
+
+    # 크롤 내부 세션과 별개인 db fixture 세션으로 재조회 = "DB 에 실제 저장된 값"
+    db.expire_all()
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "article_detail").one()
+    assert job.total_items == 3
+    assert job.processed_items == 3
+    assert job.status == "completed"
+
+
+def test_small_batch_total_items_counts_dead_articles(db, no_throttle, monkeypatch):
+    """total_items 는 '시도한 건수', processed_items 는 '채운 건수' — 두 축이 갈린다.
+
+    dead(NotExistInformation) 1건이 섞이면 total 3 / processed 2 여야 한다.
+    두 값을 일부러 다르게 둬, total 자리에 processed 를 넣는 오류도 잡는다.
+    """
+    now = datetime.now(timezone.utc)
+    _make_pending_article(db, "OK1", now)
+    _make_pending_article(db, "OK2", now - timedelta(minutes=1))
+    _make_pending_article(db, "GONE", now - timedelta(minutes=2))
+
+    def _fake_detail(article_no):
+        if article_no == "GONE":
+            return {"error": {"code": "errorCode.NotExistInformation", "message": "없음"}}
+        return {"articleDetail": {"articleNo": article_no}}
+
+    monkeypatch.setattr(
+        service_discover.NaverEstateAPI, "get_article_detail", staticmethod(_fake_detail)
+    )
+
+    crawl_article_details(batch_size=10)
+
+    db.expire_all()
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "article_detail").one()
+    assert job.total_items == 3      # 시도 3건 (dead 포함)
+    assert job.processed_items == 2  # 실제 채운 건 2건

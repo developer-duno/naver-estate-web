@@ -286,7 +286,13 @@ class Infra(Base):
     air_pm25: Mapped[float | None] = mapped_column(Float)
     air_o3: Mapped[float | None] = mapped_column(Float)
     air_grade: Mapped[str | None] = mapped_column(Text)
+    # 측정값을 실제로 받았을 때만 찍힌다 (세션 280 — 전부 None 인데 찍으면 신선도 green
+    # 인데 화면은 빈값). 이 의미론 때문에 순환 키로는 못 쓴다 → V055 참조.
     air_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    # V055: 대기질 수집 "시도" 시각 — collect_air_quality 의 "오래된 것 우선" 순환 키.
+    # 측정소 미발견·측정값 전무여도 찍는다(안 찍으면 그 단지가 NULLS FIRST 앞자리를
+    # 영구 독점해 순환이 멈춘다). air_updated_at 과 분리한 사유는 V055 주석 참조.
+    air_attempted_at: Mapped[datetime | None] = mapped_column(DateTime)
     # 어린이집 (V013)
     childcare_count: Mapped[int | None] = mapped_column(Integer)
     childcare_nearest_dist: Mapped[float | None] = mapped_column(Float)

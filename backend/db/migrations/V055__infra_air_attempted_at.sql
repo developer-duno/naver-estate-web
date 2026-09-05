@@ -1,0 +1,65 @@
+-- V055: infra.air_attempted_at 컬럼 추가 (대기질 배치 순환 결함 근본수정, 세션 394)
+--
+-- 결함: crawler/env_air.py 의 대상 선정 쿼리가 ORDER BY 없이 .limit(batch_size)
+-- 만 걸어, 매일 1회 배치(100개)가 DB 가 돌려주는 임의(사실상 고정) 순서의 앞쪽 100개만
+-- 반복 재갱신했다. prod 실측(2026-09-05): 위경도 보유 apartments 2,938개 중 913개는
+-- 한 번도 수집된 적이 없고(air_updated_at NULL), 최근 30일 내 갱신은 977개뿐이다.
+-- 매일 100개 × 30일 = 3,000슬롯을 쓰고도 977개만 닿았다는 것은 같은 단지를 반복해서
+-- 갈아엎고 있었다는 직접 증거다. 세션 392 어린이집(V053)·세션 394 응급의료(V054)와
+-- 완전히 동일한 계열의 결함이다.
+--
+-- 처방: "오래된 것 우선" 순환(air_attempted_at ASC NULLS FIRST). ⚠ 배치 100 은 유지한다
+-- (V054 응급의료와 다른 부분) — 아래 §배치 유지 사유 참조.
+--
+-- ⚠⚠ 왜 기존 infra.air_updated_at 을 순환 키로 쓰지 않는가 (본 마이그레이션의 핵심):
+-- air_updated_at 은 "측정값(pm10/pm25/o3)이 하나라도 있을 때만" 기록된다
+-- (env_air.py 의 세션 280 결정 — 값이 전부 None 인데 시각을 찍으면 신선도는 green 인데
+-- 화면은 빈값인 stale 오표시가 된다). 이 의미론은 화면 정확성의 근거라 그대로 보존해야
+-- 한다. 그런데 그걸 순환 키로 쓰면, 측정값이 안 나오는 단지(측정소 미발견·측정소가
+-- '-' 만 주는 구간)는 시각이 영원히 NULL 로 남아 NULLS FIRST 앞자리를 매일 독점한다
+-- → 순환이 그 단지들에서 그대로 멈춰 뒤 단지들이 영영 순번을 못 받는다. 즉 결함을
+-- 다른 모양으로 재현할 뿐이다.
+--
+-- 그래서 "값을 받았다(updated)"와 "시도했다(attempted)"를 분리해, **시도 시각**을
+-- 순환 키로 새로 둔다. complexes.public_data_attempted_at(V046 — 성공/실패 무관하게
+-- 찍는 시도 마커)이 같은 결의 선례다. air_updated_at 의 기존 의미론은 한 글자도
+-- 바뀌지 않는다.
+--
+-- ⚠ 왜 공용 infra.updated_at 도 안 쓰는가 (공유 DB 함정 — V053·V054 와 동일):
+-- infra 는 mibunyang 과 공용 테이블이고, mibunyang 의 collectors 가 자기 수집마다
+-- 공용 updated_at 을 통째로 갱신한다. 그걸 순환 키로 삼으면 mibunyang 이 전 행의
+-- 시각을 밀어버려 우리 순환이 무너진다.
+--
+-- §배치 유지 사유 (V054 응급의료와의 결정적 차이 — 전량 전환 금지):
+-- 응급의료는 전국 목록을 1회 받고 단지별 처리가 순수 로컬 거리계산이라 배치 크기가
+-- 외부 호출 수와 무관했다(그래서 전량 전환이 공짜였다). 대기질은 반대로 **단지마다**
+-- AirQualityAPI.get_nearby_station 호출이 나간다 — 전량(2,938단지)이면 매일 ~3,000콜로
+-- data.go.kr 공유 쿼터(일 10,000, mibunyang 과 공유)를 압박한다. 배치 100 을 유지하면
+-- 하루 ~100콜이고, 순환이 정상 동작하면 전 단지 한 바퀴 ≈ 30일(2,938 ÷ 100)이다.
+-- 대기질은 매일 잡이므로 30일 주기면 충분히 신선하다.
+--
+-- 기존 데이터 영향 0: nullable 컬럼 추가라 기존 행은 전부 NULL = "한 번도 시도 안 함"
+-- 으로 취급돼 순환 최우선이 된다(= 위 913개 미수집 단지가 먼저 채워진다). 첫 30일에
+-- 전 단지가 한 바퀴 돌며 시각이 박히고, 그 다음부터 정상 순환에 진입한다.
+-- 공유 DB(mibunyang)는 이 컬럼을 읽지도 쓰지도 않아 영향 0.
+--
+-- ✅ prod 적용완료 2026-09-06 (세션 394 — raw_connection + 명시 commit 으로 직접 실행,
+-- information_schema 재검증 통과: air_attempted_at / timestamp without time zone /
+-- nullable YES + COMMENT 존재. 사전 스키마 백업 schema_20260906_003550.sql).
+-- migration-safety-reviewer 4항목 전부 PASS (mibunyang 참조 0건 + 명시 payload upsert 라
+-- NULL 밀림 위험 0 실측 포함).
+--
+-- ⚠ 코드보다 prod 선행 실행 필수 (V034 관례) — ORM(mb_models.Infra)에 매핑된 컬럼은
+-- Infra 를 SELECT 하는 모든 경로의 컬럼 목록에 포함되므로, prod 에 컬럼이 없는 채로
+-- 새 코드가 뜨면 UndefinedColumn 500. 폭발 반경 = env_common._prefetch_infra_map 을
+-- 공유하는 환경 수집기 4종(air/emergency/crime/childcare) + mb_misc_queries.get_infra
+-- (미분양 단지 상세 인프라 API). SQLite CI 는 create_all() 이 컬럼을 자동 생성해 이
+-- 누락을 못 잡는다. 배포 순서: ① 본 파일 prod 실행 → ② 코드 머지·재시작.
+-- ADD COLUMN IF NOT EXISTS 라 멱등·재실행 안전.
+ALTER TABLE infra ADD COLUMN IF NOT EXISTS air_attempted_at TIMESTAMP;
+COMMENT ON COLUMN infra.air_attempted_at IS
+  '에어코리아 대기질 수집을 **시도**한 최종 시각 — collect_air_quality 의 "오래된 것 우선" 배치 순환 키 (세션 394). 측정소 미발견·측정값 전무여도 찍힌다. 측정값을 실제로 받았을 때만 찍히는 air_updated_at(세션 280 의미론)과 별개이며, mibunyang 이 갱신하는 공용 infra.updated_at 과도 별개.';
+NOTIFY pgrst, 'reload schema';
+
+-- 역방향 (롤백):
+-- ALTER TABLE infra DROP COLUMN IF EXISTS air_attempted_at;

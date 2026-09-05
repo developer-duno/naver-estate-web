@@ -206,7 +206,8 @@ export interface MbInfra {
   air_pm25?: number;
   air_o3?: number;
   air_grade?: string;
-  air_updated_at?: string;
+  air_updated_at?: string; // 측정값을 받았을 때만 갱신 (세션 280)
+  air_attempted_at?: string; // V055 순환 키 — 측정값 없어도 찍히는 시도 시각
   /** 어린이집 (V013 + V019 type/teachers) */
   childcare_count?: number;
   childcare_nearest_dist?: number;

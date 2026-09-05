@@ -40,12 +40,23 @@ def collect_childcare_data(batch_size: int = 100):
 
     job = _record_job(db, "childcare", "collect_childcare")
     try:
+        # "오래된 것 우선" 순환 (세션 392 결함 수정).
+        # 이전: ORDER BY 없이 limit(batch_size) → DB 가 돌려주는 임의(사실상 고정)
+        # 순서의 앞쪽 100개만 매월 재갱신 → prod 실측 901/2,938(30.7%)가 5개월간
+        # childcare_count NULL 방치. 이제 ①한 번도 안 받은 것(NULL) ②가장 오래된 것
+        # 순으로 돌아 전 단지가 한 바퀴씩 채워진다.
+        # outerjoin 필수 — Infra 행 자체가 없는 단지도 NULL 로 잡혀 최우선이 된다
+        # (inner join 이면 그 단지들이 영영 선정 대상에서 빠진다).
         apts = db.query(
             Apartment.id, Apartment.latitude, Apartment.longitude,
             Apartment.region, Apartment.gu,
+        ).outerjoin(
+            Infra, Infra.apartment_id == Apartment.id,
         ).filter(
             Apartment.latitude.isnot(None),
             Apartment.longitude.isnot(None),
+        ).order_by(
+            Infra.childcare_updated_at.asc().nullsfirst(),
         ).limit(batch_size).all()
 
         # Infra 일괄 prefetch — 루프 내 db.get() 라운드트립 제거 (env_common._prefetch_infra_map 공통 답습)
@@ -100,6 +111,14 @@ def collect_childcare_data(batch_size: int = 100):
                 infra.childcare_nearest_capacity = result["nearest_capacity"]
                 infra.childcare_nearest_type = result.get("nearest_type", "")
                 infra.childcare_nearest_teachers = result.get("nearest_teachers", 0)
+                # 순환 키 갱신 (세션 392) — 이 시각이 안 찍히면 위 order_by 가 영원히
+                # 같은 단지를 최우선으로 되돌려 순환 자체가 성립하지 않는다.
+                # count=0(반경 내 어린이집 없음)도 정상 수집 결과이므로 함께 찍는다
+                # — 안 찍으면 시골 단지가 매 회차 재조회돼 순환이 그 자리에서 막힌다.
+                # (air_updated_at 의 "측정값 있을 때만" 보류 규칙과 다른 이유: air 는
+                #  값이 전부 None 이면 화면이 빈값이라 신선도 green 이 거짓말이 되지만,
+                #  childcare count=0 은 "주변에 없음"이라는 확정된 참값이다.)
+                infra.childcare_updated_at = utcnow()
                 collected += 1
                 if result["count"] > 0:
                     collected_with_matches += 1

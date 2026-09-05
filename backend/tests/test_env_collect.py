@@ -16,7 +16,7 @@ DB(Infra) 업데이트 -> CrawlJob 기록 -> 폴백)은 0건이었다.
 - 외부 API 정적 메서드는 원본 모듈 경로로 patch (함수 내부 lazy import 라도 적용됨).
 """
 
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import patch
 
 from db.mb_models import Apartment, Infra, MBRegion
@@ -406,6 +406,135 @@ class TestCollectChildcareData:
         assert infra is not None
         assert infra.childcare_count == 1
         assert infra.childcare_nearest_name == "새싹어린이집"
+
+
+# ── collect_childcare_data 배치 순환 (세션 392 결함 수정) ──
+
+
+class TestChildcareBatchRotation:
+    """대상 선정이 "오래된 것 우선"으로 순환하는지 — 세션 392 결함 회귀 가드.
+
+    결함: 선정 쿼리가 ORDER BY 없이 .limit(batch_size) 만 걸어, 매월 1회 배치가 DB 가
+    돌려주는 임의(사실상 고정) 순서의 앞쪽만 반복 재갱신했다. prod 실측 2026-09-05 —
+    위경도 보유 2,938개 중 901개(30.7%)가 childcare_count 를 한 번도 못 받고 5개월간
+    NULL 방치. 이제 childcare_updated_at ASC NULLS FIRST 로 ①미수집 ②최고령 순 순환.
+    """
+
+    @staticmethod
+    def _run_collect():
+        """외부 CPMS 를 절대 안 때리는 목킹 실행 (이 파일의 기존 childcare 테스트 답습).
+
+        resolve_sigungu_code·get_childcare_list·find_nearest 3개를 원본 모듈 경로로
+        patch — 함수 내부 lazy import 라도 적용된다(파일 상단 docstring 참조).
+        """
+        nearest = {"count": 1, "nearest_dist": 100.0, "nearest_name": "테스트어린이집",
+                   "nearest_capacity": 40, "nearest_type": "민간", "nearest_teachers": 6}
+        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
+             patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
+             patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
+                   return_value=[{"name": "테스트어린이집"}]), \
+             patch("crawler.childcare_api.ChildcareAPI.find_nearest",
+                   return_value=nearest):
+            from crawler.env_childcare import collect_childcare_data
+            collect_childcare_data(batch_size=2)
+
+    def test_오래된것_우선_선정_최신은_제외(self, db):
+        """A(오래됨)·B(Infra 행 없음)·C(최신) 중 batch_size=2 면 B·A 만 선정되고 C 는 제외.
+
+        ⚠ 픽스처는 "두 축이 다른 값"이 되게 설계 (testing.md 답습) — 세 단지의
+        childcare_updated_at 을 각각 없음/오래됨/최신 세 갈래로 갈라, 순서를 안 지키면
+        반드시 다른 단지가 뽑히도록 만든다. B 는 아예 Infra 행 자체를 안 만들어
+        outerjoin 경로(행 부재 = NULL = 최우선)까지 함께 가드한다.
+
+        ⚠⚠ **삽입 순서를 일부러 정답의 역순(C→A→B)으로 둔다.** ORDER BY 없는 SELECT 는
+        SQLite 에서 사실상 삽입 순서를 돌려주므로, 정답 순서대로(A→B→C) 넣으면 결함
+        코드도 우연히 A·B 를 뽑아 테스트가 통과해 버린다(뮤테이션 검증 1차에서 실제로
+        이 함정에 걸렸다 — 세션 392). 최신 C 를 맨 앞에 넣어야 "정렬 없음 = C 가 뽑힘"
+        으로 갈려 결함이 드러난다.
+        """
+        old = datetime(2026, 1, 1, 0, 0, 0)
+        recent = datetime(2026, 9, 1, 0, 0, 0)
+
+        # C: 방금 받은 단지 — 일부러 **맨 먼저** 삽입 (위 docstring ⚠⚠ 참조).
+        # batch_size=2 에 밀려 이번 회차 제외되어야 정상.
+        db.add(Apartment(id="APT_C_RECENT", name="최신단지", region="서울특별시",
+                         gu="강남구", latitude=37.5, longitude=127.0))
+        db.add(Infra(apartment_id="APT_C_RECENT", childcare_count=9,
+                     childcare_updated_at=recent))
+        db.commit()
+        # A: 오래 전에 받은 단지 (두 번째 우선)
+        db.add(Apartment(id="APT_A_OLD", name="오래된단지", region="서울특별시",
+                         gu="강남구", latitude=37.5, longitude=127.0))
+        db.add(Infra(apartment_id="APT_A_OLD", childcare_count=1,
+                     childcare_updated_at=old))
+        db.commit()
+        # B: Infra 행 자체가 없는 단지 (NULL 취급 = 최우선, outerjoin 이라야 잡힌다)
+        db.add(Apartment(id="APT_B_NEVER", name="미수집단지", region="서울특별시",
+                         gu="강남구", latitude=37.5, longitude=127.0))
+        db.commit()
+
+        self._run_collect()
+
+        # B(미수집)는 Infra 행이 새로 생기며 채워져야 한다
+        infra_b = db.get(Infra, "APT_B_NEVER")
+        assert infra_b is not None, "Infra 행 없는 단지가 선정에서 누락됨 (outerjoin 결함)"
+        assert infra_b.childcare_count == 1
+        assert infra_b.childcare_updated_at is not None
+
+        # A(오래됨)도 갱신되어 시각이 앞으로 나아가야 한다
+        infra_a = db.get(Infra, "APT_A_OLD")
+        db.refresh(infra_a)
+        assert infra_a.childcare_updated_at is not None
+        assert infra_a.childcare_updated_at > old, "오래된 단지 시각이 안 갱신됨"
+
+        # C(최신)는 batch_size=2 에 밀려 이번 회차엔 손대지 않아야 한다
+        infra_c = db.get(Infra, "APT_C_RECENT")
+        db.refresh(infra_c)
+        assert infra_c.childcare_count == 9, "최신 단지가 재갱신됨 (순환 안 됨)"
+        assert infra_c.childcare_updated_at == recent
+
+        job = db.query(CrawlJob).filter_by(job_type="childcare").one()
+        assert job.status == "completed"
+        assert job.processed_items == 2
+
+    def test_수집시_순환키_갱신(self, db):
+        """수집된 단지는 childcare_updated_at 이 찍혀야 한다 — 안 찍히면 순환 자체가 무효.
+
+        이 시각이 NULL 로 남으면 다음 회차에도 같은 단지가 NULLS FIRST 최우선으로
+        되돌아와 결함이 그대로 재현된다 (순서만 고치고 기록을 빠뜨리는 실수 가드).
+        """
+        _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        self._run_collect()
+
+        infra = db.get(Infra, "APT1")
+        db.refresh(infra)
+        assert infra.childcare_count == 1
+        assert infra.childcare_updated_at is not None, "순환 키 미기록 — 순환 성립 안 함"
+
+    def test_매칭0건도_순환키_갱신(self, db):
+        """반경 내 어린이집 0개(시골 단지)도 정상 수집이므로 시각을 찍는다.
+
+        안 찍으면 그 단지가 매 회차 NULLS FIRST 최우선으로 되돌아와 배치가 그 자리에서
+        막히고, 뒤 단지들이 영영 순번을 못 받는다 (결함의 국소 재현).
+        """
+        _add_apartment(db, "APT_ZERO", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        empty_nearest = {"count": 0, "nearest_dist": None, "nearest_name": "",
+                         "nearest_capacity": 0, "nearest_type": "", "nearest_teachers": 0}
+        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
+             patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
+             patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
+                   return_value=[{"name": "멀리있는집"}]), \
+             patch("crawler.childcare_api.ChildcareAPI.find_nearest",
+                   return_value=empty_nearest):
+            from crawler.env_childcare import collect_childcare_data
+            collect_childcare_data(batch_size=2)
+
+        infra = db.get(Infra, "APT_ZERO")
+        db.refresh(infra)
+        assert infra.childcare_count == 0
+        assert infra.childcare_updated_at is not None
 
 
 # ── collect_air_quality ──

@@ -291,6 +291,9 @@ class Infra(Base):
     childcare_nearest_capacity: Mapped[int | None] = mapped_column(Integer)
     childcare_nearest_type: Mapped[str | None] = mapped_column(Text)  # V019
     childcare_nearest_teachers: Mapped[int | None] = mapped_column(Integer)  # V019
+    # V053: 어린이집 갱신 시각 — collect_childcare_data 의 "오래된 것 우선" 순환 키.
+    # 공용 updated_at 은 mibunyang 도 갱신해 순환 키로 못 쓴다 (V053 주석 참조).
+    childcare_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     # 범죄통계 (V013)
     crime_score: Mapped[int | None] = mapped_column(Integer)
     crime_grade: Mapped[str | None] = mapped_column(Text)

@@ -431,6 +431,12 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
             (a.article_no, a.trade_type_name, a.deal_or_warrant_prc, a.rent_prc, a.area2_m2)
             for a in articles
         ]
+        # total_items 확정 저장 — autoflush=False(database.py:65) 라 위 대입은 메모리에만
+        # 남고, _finalize_job 첫 동작 db.refresh(job) 이 DB 값(default=0)으로 되돌린다.
+        # 50건 미만 배치는 배치 commit(line 473)이 한 번도 안 와 0/N 으로 박제됐다
+        # (세션 393, prod job 49181 = 0/39). 선추출 뒤에 두는 이유는 위 세션 342 주석 —
+        # 선추출 앞에서 commit 하면 articles 가 expire 돼 PK lazy-load 폭풍이 난다.
+        db.commit()
 
         skipped_dead = 0
         skipped_transient = 0

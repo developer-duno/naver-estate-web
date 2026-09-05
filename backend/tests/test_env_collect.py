@@ -537,6 +537,133 @@ class TestChildcareBatchRotation:
         assert infra.childcare_updated_at is not None
 
 
+# ── collect_childcare_data 전량 배치 (세션 393) ──
+
+
+class TestChildcareFullBatch:
+    """batch_size=0 = 전량(무제한) + 중간 저장 — 세션 393 전환 회귀 가드.
+
+    배경: 배치 100 은 전 단지(위경도 보유 2,938개) 한 바퀴에 30개월이 걸려 실익이
+    없었다. 이 수집기는 시군구당 1콜 + 런 내 캐시 재사용이라 전량이어도 호출 상한이
+    (region,gu) 조합 수 = 248콜(2026-09-05 prod 실측)뿐이라, CPMS 일 1,000콜 공유
+    쿼터 안에서 전량 전환이 가능했다(사장님 결정 2026-09-05).
+    """
+
+    @staticmethod
+    def _add_three_apartments(db):
+        """단지 3개 — 시군구 2개로 갈라 캐시 재사용 경로까지 함께 지난다.
+
+        ⚠ "단지 수(3)"와 "시군구 수(2)"를 다른 값으로 둔다 (testing.md 답습) —
+        1:1 이면 두 축을 뒤바꿔 세도 숫자가 같아 결함이 안 드러난다.
+        """
+        _add_apartment(db, "APT_A", "서울특별시", "강남구", lat=37.5, lng=127.0)
+        _add_apartment(db, "APT_B", "서울특별시", "강남구", lat=37.51, lng=127.01)
+        _add_apartment(db, "APT_C", "서울특별시", "서초구", lat=37.49, lng=127.02)
+
+    @staticmethod
+    def _run(batch_size):
+        nearest = {"count": 1, "nearest_dist": 100.0, "nearest_name": "테스트어린이집",
+                   "nearest_capacity": 40, "nearest_type": "민간", "nearest_teachers": 6}
+        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
+             patch("crawler.childcare_api.resolve_sigungu_code",
+                   side_effect=lambda region, gu: "11680" if gu == "강남구" else "11650"), \
+             patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
+                   return_value=[{"name": "테스트어린이집"}]), \
+             patch("crawler.childcare_api.ChildcareAPI.find_nearest",
+                   return_value=nearest):
+            from crawler.env_childcare import collect_childcare_data
+            collect_childcare_data(batch_size=batch_size)
+
+    def test_batch_size_0_이면_전량_수집(self, db):
+        """batch_size=0 = limit 미적용 → 단지 3개 전부 수집.
+
+        같은 픽스처에 batch_size=2 를 주면 2개만 잡히는 것과 대비된다
+        (아래 test_batch_size_양수면_limit_유지) — 두 축의 값을 갈라
+        "limit 이 정말 안 걸렸는지"를 결과 수로 판별한다.
+        """
+        self._add_three_apartments(db)
+
+        self._run(batch_size=0)
+
+        job = db.query(CrawlJob).filter_by(job_type="childcare").one()
+        assert job.status == "completed"
+        assert job.processed_items == 3, "전량인데 일부만 수집됨 (limit 이 걸렸다)"
+        for apt_id in ("APT_A", "APT_B", "APT_C"):
+            infra = db.get(Infra, apt_id)
+            db.refresh(infra)
+            assert infra.childcare_count == 1, f"{apt_id} 미수집"
+
+    def test_batch_size_양수면_limit_유지(self, db):
+        """부분 배치로 되돌릴 수 있어야 한다 — 양수면 그 수만큼만 선정.
+
+        쿼터 사정으로 배치를 다시 줄이는 길이 살아 있는지 가드(전량 전환이
+        limit 코드 자체를 없앤 게 아님을 확인).
+        """
+        self._add_three_apartments(db)
+
+        self._run(batch_size=2)
+
+        job = db.query(CrawlJob).filter_by(job_type="childcare").one()
+        assert job.processed_items == 2, "양수 batch_size 인데 limit 이 안 걸림"
+
+    def test_중간_저장으로_부분_성과_보존(self, db):
+        """루프 도중 ChildcareAPIError 로 죽어도, 중간 저장 시점까지의 성과는 남는다.
+
+        전량 전환으로 1회 실행이 2분 → 15~30분이 되면서 유실 창이 15배 커졌다.
+        마지막 단일 commit 만 두면 도중 사망 시 그 달 성과가 통째 증발한다
+        (월 1회 잡이라 피해 = 한 달 지연).
+
+        ⚠ 뮤테이션 검증 완료 (세션 393): env_childcare 의 루프 내 중간 commit 을
+        제거하면 이 테스트가 실제로 FAIL 한다 (_fail_job 의 db.rollback() 이 미저장
+        변경을 통째로 되돌려 APT_A 의 childcare_count 가 None 으로 남는다).
+        """
+        import crawler.env_childcare as mod
+        from crawler.childcare_api import ChildcareAPIError
+
+        self._add_three_apartments(db)
+        # 단지 1개마다 저장 — 첫 단지 성과가 두 번째 단지의 사망 전에 확정된다
+        monkey_original = mod._COMMIT_EVERY
+        mod._COMMIT_EVERY = 1
+        try:
+            nearest = {"count": 1, "nearest_dist": 100.0, "nearest_name": "테스트어린이집",
+                       "nearest_capacity": 40, "nearest_type": "민간", "nearest_teachers": 6}
+            # 강남구(첫 시군구)는 정상 응답, 서초구 조회에서 치명적 에러 → 배치 중단
+            def _list_side_effect(code):
+                if code == "11650":
+                    raise ChildcareAPIError("CPMS 일일 쿼터 초과")
+                return [{"name": "테스트어린이집"}]
+
+            with patch("crawler.env_childcare._is_skip_day", return_value=False), \
+                 patch("crawler.childcare_api.resolve_sigungu_code",
+                       side_effect=lambda region, gu: "11680" if gu == "강남구" else "11650"), \
+                 patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
+                       side_effect=_list_side_effect), \
+                 patch("crawler.childcare_api.ChildcareAPI.find_nearest",
+                       return_value=nearest):
+                from crawler.env_childcare import collect_childcare_data
+                collect_childcare_data(batch_size=0)
+        finally:
+            mod._COMMIT_EVERY = monkey_original
+
+        # 잡 자체는 실패로 알린다 (치명적 에러는 조용히 삼키지 않는다)
+        job = db.query(CrawlJob).filter_by(job_type="childcare").one()
+        assert job.status == "failed"
+        assert "CPMS 치명적 에러" in job.error_message
+
+        # 그러나 죽기 전 저장된 강남구 단지는 DB 에 남아 있어야 한다
+        saved = []
+        for apt_id in ("APT_A", "APT_B"):
+            infra = db.get(Infra, apt_id)
+            db.refresh(infra)
+            if infra.childcare_count == 1:
+                saved.append(apt_id)
+        assert saved, "중간 저장 부재 — 도중 사망 시 그 달 성과가 통째로 증발한다"
+        # 서초구 단지는 조회 자체가 실패했으므로 미수집이 정상
+        infra_c = db.get(Infra, "APT_C")
+        db.refresh(infra_c)
+        assert infra_c.childcare_count is None
+
+
 # ── collect_air_quality ──
 
 

@@ -200,6 +200,7 @@ def infra_to_dict(i) -> dict:
         "air_o3": i.air_o3,
         "air_grade": i.air_grade,
         "air_updated_at": i.air_updated_at.isoformat() if i.air_updated_at else None,
+        "air_attempted_at": i.air_attempted_at.isoformat() if i.air_attempted_at else None,  # V055
         # 어린이집 (V013)
         "childcare_count": i.childcare_count,
         "childcare_nearest_dist": i.childcare_nearest_dist,

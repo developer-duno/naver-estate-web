@@ -983,7 +983,13 @@ class TestCollectAirQuality:
         assert job.processed_items == 1
 
     def test_측정소_없으면_실패_카운트(self, db):
-        """get_nearby_station -> None 이면 그 단지 failed, Infra 안 건드림"""
+        """get_nearby_station -> None 이면 그 단지 failed, 측정 데이터는 안 건드림.
+
+        ⚠ V055(세션 394) 이후 순환 키 air_attempted_at 만은 이 경로에서도 찍힌다
+        — 안 찍으면 측정소 없는 단지가 NULLS FIRST 앞자리를 매일 독점해 순환이
+        멈춘다. 측정 데이터(air_station_name·air_pm10 등)를 안 건드리는 것은 그대로다
+        (분리 의미론 자체의 가드는 TestAirBatchRotation 참조).
+        """
         _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
 
         with patch("crawler.env_air._is_skip_day", return_value=False), \
@@ -993,7 +999,7 @@ class TestCollectAirQuality:
             collect_air_quality()
 
         infra = db.get(Infra, "APT1")
-        assert infra.air_station_name is None  # 안 건드림
+        assert infra.air_station_name is None  # 측정 데이터는 안 건드림
 
         job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
         assert job.status == "failed"
@@ -1109,11 +1115,17 @@ class TestCollectAirQuality:
         assert job.status == "completed"
         assert job.processed_items == 1
 
-    def test_Infra_없으면_skip_자동생성_안함(self, db):
-        """Infra 행 부재 단지는 failed 카운트 (자동생성 안 함).
+    def test_Infra_행_없으면_자동_생성(self, db):
+        """mibunyang 미수집 단지(Infra 행 부재) → collect 가 Infra 신규 생성 후 air_* 채움.
 
-        세션 282: db.get(Infra) -> infra_map.get(apt_id) prefetch 전환 후에도
-        '없으면 skip' 동작이 유지되는지 가드 (prefetch 정합 회귀 가드).
+        ⚠ 이 테스트는 세션 394(V055)에서 **기대값이 뒤집혔다.** 옛 이름은
+        test_Infra_없으면_skip_자동생성_안함 이었고 "행 없으면 skip"을 정답으로 단언했다
+        (세션 282 prefetch 전환 시 그때의 동작을 그대로 고정한 것). 그런데 그 동작은
+        순환 전환(V055)의 취지를 정면으로 깎는다 — outerjoin 으로 Infra 행 없는 단지를
+        최우선(NULL)으로 뽑아 놓고 정작 루프에서 skip 하면, 그 단지는 매일 1순위로
+        뽑혀 배치 슬롯만 먹고 영영 안 채워지며 뒤 단지들의 순번까지 막는다.
+        결함을 정답으로 박제한 테스트였으므로 정정한다 (testing.md §결함 수정 답습,
+        emergency/V054 에서 같은 판단을 이미 내렸다).
         """
         db.add(Apartment(id="APT_NOINFRA", name="단지", region="서울특별시",
                          gu="강남구", latitude=37.5, longitude=127.0))
@@ -1129,8 +1141,169 @@ class TestCollectAirQuality:
             from crawler.env_air import collect_air_quality
             collect_air_quality()
 
-        # Infra 행은 여전히 없어야 한다 (자동생성 안 함)
-        assert db.get(Infra, "APT_NOINFRA") is None
-        # 전 단지 skip -> collected 0 -> silent failure 가드가 failed 처리
+        infra = db.get(Infra, "APT_NOINFRA")
+        assert infra is not None, "Infra 행 자동 생성 안 됨 — 미수집 단지가 영영 안 채워진다"
+        assert infra.air_station_name == "강남구"
+        assert infra.air_pm10 == 30.0
+        assert infra.air_attempted_at is not None
+
         job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
-        assert job.status == "failed"
+        assert job.status == "completed"
+        assert job.processed_items == 1
+
+
+# ── collect_air_quality 배치 순환 (세션 394 결함 수정, V055) ──
+
+
+class TestAirBatchRotation:
+    """대상 선정이 "오래된 것 우선"으로 순환하는지 — 세션 394 결함 회귀 가드.
+
+    결함: 선정 쿼리가 ORDER BY 없이 .limit(batch_size) 만 걸어, 매일 1회 배치(100개)가
+    DB 가 돌려주는 임의(사실상 고정) 순서의 앞쪽 100개만 반복 재갱신했다. prod 실측
+    2026-09-05 — 위경도 보유 2,938단지 중 913개가 한 번도 수집된 적 없고, 최근 30일 내
+    갱신은 977개뿐(매일 100개 × 30일 = 3,000슬롯을 쓰고도!). 이제 air_attempted_at
+    ASC NULLS FIRST 로 ①미시도 ②최고령 순 순환한다.
+
+    ⚠ 배치 100 은 유지한다(전량 전환 안 함) — 단지당 API 1콜이라 전량이면 공유 쿼터
+    압박. 순환만 고치면 전 단지 한 바퀴 ≈ 30일이고 매일 잡이라 충분하다.
+    """
+
+    _STATION = {"station_name": "강남구", "addr": "서울 강남구", "tm": 1.2}
+    _AIR = {"pm10": 30.0, "pm25": 15.0, "o3": 0.03, "grade": "좋음"}
+
+    @classmethod
+    def _run(cls, batch_size, station=..., air=...):
+        """외부 에어코리아를 절대 안 때리는 목킹 실행 (이 파일의 기존 air 테스트 답습)"""
+        with patch("crawler.env_air._is_skip_day", return_value=False), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+                   return_value=cls._STATION if station is ... else station), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
+                   return_value=cls._AIR if air is ... else air):
+            from crawler.env_air import collect_air_quality
+            collect_air_quality(batch_size=batch_size)
+
+    def test_오래된것_우선_선정_최신은_제외(self, db):
+        """A(오래됨)·B(Infra 행 없음)·C(최신) 중 batch_size=2 면 B·A 만 선정되고 C 는 제외.
+
+        ⚠ 픽스처는 "두 축이 다른 값"이 되게 설계 (testing.md 답습) — 세 단지의
+        air_attempted_at 을 각각 없음/오래됨/최신 세 갈래로 갈라, 순서를 안 지키면
+        반드시 다른 단지가 뽑히도록 만든다. B 는 아예 Infra 행 자체를 안 만들어
+        outerjoin 경로(행 부재 = NULL = 최우선)까지 함께 가드한다.
+
+        ⚠⚠ **삽입 순서를 일부러 정답의 역순(C→A→B)으로 둔다.** ORDER BY 없는 SELECT 는
+        SQLite 에서 사실상 삽입 순서를 돌려주므로, 정답 순서대로(A→B→C) 넣으면 결함
+        코드도 우연히 A·B 를 뽑아 테스트가 통과해 버린다(세션 392 childcare 뮤테이션
+        검증 1차에서 실제로 이 함정에 걸렸다). 최신 C 를 맨 앞에 넣어야
+        "정렬 없음 = C 가 뽑힘" 으로 갈려 결함이 드러난다.
+        """
+        old = datetime(2026, 1, 1, 0, 0, 0)
+        recent = datetime(2026, 9, 1, 0, 0, 0)
+
+        # C: 방금 시도한 단지 — 일부러 **맨 먼저** 삽입 (위 docstring ⚠⚠ 참조).
+        # batch_size=2 에 밀려 이번 회차 제외되어야 정상.
+        db.add(Apartment(id="APT_C_RECENT", name="최신단지", region="서울특별시",
+                         gu="강남구", latitude=37.5, longitude=127.0))
+        db.add(Infra(apartment_id="APT_C_RECENT", air_station_name="옛측정소",
+                     air_attempted_at=recent))
+        db.commit()
+        # A: 오래 전에 시도한 단지 (두 번째 우선)
+        db.add(Apartment(id="APT_A_OLD", name="오래된단지", region="서울특별시",
+                         gu="강남구", latitude=37.5, longitude=127.0))
+        db.add(Infra(apartment_id="APT_A_OLD", air_station_name="예전측정소",
+                     air_attempted_at=old))
+        db.commit()
+        # B: Infra 행 자체가 없는 단지 (NULL 취급 = 최우선, outerjoin 이라야 잡힌다)
+        db.add(Apartment(id="APT_B_NEVER", name="미수집단지", region="서울특별시",
+                         gu="강남구", latitude=37.5, longitude=127.0))
+        db.commit()
+
+        self._run(batch_size=2)
+
+        # B(미시도)는 Infra 행이 새로 생기며 채워져야 한다
+        infra_b = db.get(Infra, "APT_B_NEVER")
+        assert infra_b is not None, "Infra 행 없는 단지가 선정에서 누락됨 (outerjoin 결함)"
+        assert infra_b.air_station_name == "강남구"
+        assert infra_b.air_attempted_at is not None
+
+        # A(오래됨)도 갱신되어 시각이 앞으로 나아가야 한다
+        infra_a = db.get(Infra, "APT_A_OLD")
+        db.refresh(infra_a)
+        assert infra_a.air_attempted_at is not None
+        assert infra_a.air_attempted_at > old, "오래된 단지 시각이 안 갱신됨"
+        assert infra_a.air_station_name == "강남구"
+
+        # C(최신)는 batch_size=2 에 밀려 이번 회차엔 손대지 않아야 한다
+        infra_c = db.get(Infra, "APT_C_RECENT")
+        db.refresh(infra_c)
+        assert infra_c.air_station_name == "옛측정소", "최신 단지가 재갱신됨 (순환 안 됨)"
+        assert infra_c.air_attempted_at == recent
+
+        job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
+        assert job.status == "completed"
+        assert job.processed_items == 2
+
+    def test_측정소_미발견도_순환키_갱신(self, db):
+        """측정소를 못 찾은 단지도 air_attempted_at 은 찍힌다 (updated_at 은 그대로 NULL).
+
+        **분리 의미론의 핵심 가드.** 이 시각을 안 찍으면 측정소 없는 단지가 매 회차
+        NULLS FIRST 최우선으로 되돌아와 배치가 그 자리에서 막히고, 뒤 단지들이 영영
+        순번을 못 받는다 — 정확히 이것이 air_updated_at 을 순환 키로 쓸 수 없는 이유이자
+        V055 로 별도 컬럼을 신설한 이유다.
+        """
+        _add_apartment(db, "APT_NOSTATION", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        self._run(batch_size=2, station=None)
+
+        infra = db.get(Infra, "APT_NOSTATION")
+        db.refresh(infra)
+        assert infra.air_attempted_at is not None, "시도 시각 미기록 — 순환이 여기서 멈춘다"
+        # 측정 데이터·updated_at 은 건드리지 않는다 (세션 280 의미론 보존)
+        assert infra.air_station_name is None
+        assert infra.air_updated_at is None
+
+    def test_측정값_전무여도_순환키_갱신(self, db):
+        """측정소는 찾았으나 pm10/pm25/o3 전부 None → attempted 는 찍고 updated 는 보류.
+
+        세션 280 규칙("측정값 있을 때만 air_updated_at")을 그대로 지키면서도 순환은
+        진행되어야 한다 — 두 시각의 역할 분리가 실제로 갈리는지 확인하는 테스트다.
+        이 단지가 attempted 를 못 받으면 매일 1순위로 되돌아와 순환을 막는다.
+        """
+        _add_apartment(db, "APT_ALLNONE", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        empty_air = {"pm10": None, "pm25": None, "o3": None, "grade": None}
+        self._run(batch_size=2, air=empty_air)
+
+        infra = db.get(Infra, "APT_ALLNONE")
+        db.refresh(infra)
+        assert infra.air_attempted_at is not None, "시도 시각 미기록 — 순환이 여기서 멈춘다"
+        assert infra.air_station_name == "강남구"  # 측정소는 갱신
+        assert infra.air_updated_at is None, "측정값 전무인데 updated_at 이 찍힘 (세션 280 위반)"
+        assert infra.air_pm10 is None
+
+    def test_배치_유지_양수면_limit(self, db):
+        """배치 상한이 살아 있어야 한다 — 전량 전환 금지(단지당 API 1콜 = 쿼터 압박).
+
+        emergency(V054)는 전량으로 갔지만 대기질은 배치를 유지한다는 결정을 고정한다.
+        누군가 "emergency 처럼 전량으로 바꾸자"며 limit 을 걷어내면 이 테스트가 막는다.
+        """
+        for i in range(5):
+            _add_apartment(db, f"APT_{i}", "서울특별시", "강남구",
+                           lat=37.5 + i * 0.0001, lng=127.0)
+
+        self._run(batch_size=2)
+
+        job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
+        assert job.total_items == 2, "batch_size 상한이 안 걸림 (전량으로 새어나감)"
+
+    def test_기본_배치는_100_유지(self, db):
+        """인자 없이 호출하면 기본 배치 100 — 시그니처 드리프트 가드.
+
+        스케줄러는 인자 없이 부르므로(crawler/scheduler.py) 기본값이 곧 운영값이다.
+        전 단지 한 바퀴 ≈ 30일(2,938 ÷ 100)이라는 문서·주석의 산술이 이 값에 의존한다.
+        """
+        import inspect
+
+        from crawler.env_air import collect_air_quality
+
+        default = inspect.signature(collect_air_quality).parameters["batch_size"].default
+        assert default == 100, "기본 배치가 바뀜 — 완주 주기(≈30일) 문서와 어긋난다"

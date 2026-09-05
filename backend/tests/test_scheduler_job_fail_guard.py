@@ -28,6 +28,8 @@ _GUARDED_JOBS = [
     ("service_discover.py", "crawl_article_details"),
     # 세션 288: CrawlJob 기록 신설과 동시에 가드 적용 (last_run null 해소)
     ("service_public.py", "backfill_price_batch"),
+    # 세션 394: 결제 배치는 이 가드가 유일하게 빠져 있었다 (running 유령 → 모니터 오탐)
+    ("billing_charge.py", "charge_due_billing_keys"),
 ]
 
 

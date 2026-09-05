@@ -262,6 +262,57 @@ def test_billing_charge_records_crawljob(db):
     assert job.status == "completed" and job.total_items == 1 and job.processed_items == 1
 
 
+def test_batch_failure_marks_job_failed_via_new_session_fallback(db, monkeypatch):
+    """실패 마킹 2중 방어(세션 394) — 배치 예외 + 같은 세션 rollback/commit 도 예외인데도
+    job 이 'running' 으로 잔존하지 않고 fail_job_safely(새 세션)로 failed 마킹된다.
+
+    배경(세션 266/271/278): DB 연결이 끊긴 상태에서는 except 안의 rollback/commit 이 재차
+    예외를 던져 except 를 빠져나가 job 이 status='running' 인 채 영원히 남는다. 결제 배치는
+    이 폴백이 유일하게 빠져 있어 running 유령 → 모니터 마비 오탐이 가능했다.
+    """
+    import crawler.service_common as service_common
+    from db.models import CrawlJob
+
+    _make_profile(db, "u1")
+    _make_billing_key(db, "u1")
+
+    # 배치 본문을 터뜨린다(due 조회 이후 어디서든 나는 예외의 대역).
+    def _boom(*a, **kw):
+        raise RuntimeError("SSL connection closed")
+
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        service_common,
+        "fail_job_safely",
+        lambda job_id, error: calls.append((job_id, error)),
+    )
+
+    with patch("crawler.billing_charge._charge_one", side_effect=_boom), \
+         patch("crawler.billing_charge.SessionLocal") as mock_sl:
+        # cron 이 여는 세션 = 테스트 세션. 단 commit 은 job 생성 1회만 성공시키고
+        # 그 뒤로는 전부 터뜨려 '깨진 세션'을 결정론적으로 재현한다.
+        real_commit = db.commit
+        state = {"n": 0}
+
+        def _commit_then_break():
+            state["n"] += 1
+            if state["n"] == 1:
+                return real_commit()
+            raise RuntimeError("SSL connection closed")
+
+        mock_sl.return_value = db
+        monkeypatch.setattr(db, "commit", _commit_then_break)
+        monkeypatch.setattr(db, "close", lambda: None)  # 테스트 세션 보존
+        from crawler.billing_charge import charge_due_billing_keys
+        charge_due_billing_keys()  # 예외가 밖으로 새면 실패
+
+    # 같은-세션 마킹이 전부 실패했으므로 새-세션 폴백이 원래 job id 로 호출돼야 한다.
+    assert len(calls) == 1, f"fail_job_safely 폴백 미호출 — job 이 running 으로 잔존 ({calls})"
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "billing_charge").one()
+    assert calls[0][0] == job.id
+    assert "SSL connection closed" in calls[0][1]
+
+
 def test_third_fail_notifies_user_email(db):
     """#6: 3회째 실패로 중단 시 당사자(공인중개사)에게 이메일 알림 발송 (운영자 텔레그램과 별도)."""
     _make_profile(db, "u1")

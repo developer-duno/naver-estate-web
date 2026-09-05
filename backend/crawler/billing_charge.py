@@ -227,6 +227,7 @@ def charge_due_billing_keys(batch_size: int = 500, scheduler_job_id: str | None 
     )
     db.add(job)
     db.commit()
+    job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
 
     counts = {"paid": 0, "retry": 0, "stopped": 0, "skipped": 0}
     try:
@@ -262,11 +263,20 @@ def charge_due_billing_keys(batch_size: int = 500, scheduler_job_id: str | None 
         logger.info("[billing] 자동결제 완료 — 성공 %d, 재시도 %d, 중단 %d, 스킵 %d",
                     counts["paid"], counts["retry"], counts["stopped"], counts["skipped"])
     except Exception as e:
-        db.rollback()
-        job.status = "failed"
-        job.error_message = str(e)[:500]
-        job.completed_at = utcnow()
-        db.commit()
+        # 실패 마킹 2중 방어(세션 266/271/278 답습) — DB 연결이 끊긴 상태면 같은 세션의
+        # rollback/commit 이 또 예외를 던져 except 를 빠져나가고, job 이 status='running'
+        # 인 채 영구 잔존한다(모니터 마비 오탐 + 다음날 04:50 까지 방치). 같은-세션 마킹을
+        # 먼저 시도하고 그것마저 실패하면 새 SessionLocal 로 확실히 failed 로 박는다.
+        try:
+            db.rollback()
+            job.status = "failed"
+            job.error_message = str(e)[:500]
+            job.completed_at = utcnow()
+            db.commit()
+        except Exception:
+            from crawler.service_common import fail_job_safely
+
+            fail_job_safely(job_id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
         logger.error("[billing] 자동결제 배치 실패: %s", e)
     finally:
         db.close()

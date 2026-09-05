@@ -17,6 +17,7 @@
 실행: python -m pytest tests/test_api_version_monitor.py -q
 """
 
+import json
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -493,7 +494,7 @@ def test_post_only_endpoint_is_probed_with_post():
     영영 degraded 로만 보고돼 감시 사각지대가 된다(오탐이 아니라 '무탐').
     """
     post_entries = [e for e in PROBE_REGISTRY if e.get("method") == "POST"]
-    assert post_entries, "POST 전용 항목이 사라짐 — business_api status 프로브 확인"
+    assert post_entries, "POST 전용 항목이 사라짐 — business_api status/validate 프로브 확인"
 
     posted, got = [], []
     with (
@@ -512,9 +513,15 @@ def test_post_only_endpoint_is_probed_with_post():
     for entry in post_entries:
         assert entry["url"] in [u for u, _ in posted], f"{entry['name']} 이 POST 로 안 나감"
         assert entry["url"] not in got, f"{entry['name']} 이 GET 으로도 나감"
-    # 부수효과 0 — 조회 전용 바디(존재하지 않는 사업자번호)만 보낸다
-    for _, payload in posted:
-        assert payload == {"b_no": ["0000000000"]}
+    # 실제로 나간 바디가 레지스트리에 적힌 그대로인가 (status·validate 는 스키마가 다르다)
+    expected_bodies = {e["url"]: e["json"] for e in post_entries}
+    for url, payload in posted:
+        assert payload == expected_bodies[url], f"{url} 바디가 레지스트리와 다름"
+    # 부수효과 0 — 조회 전용이라 더미 사업자번호(0000000000)만 실려 나간다
+    for url, payload in posted:
+        assert "0000000000" in json.dumps(payload, ensure_ascii=False), (
+            f"{url} 바디에 더미 사업자번호가 없다 — 실제 번호가 새어나갈 위험"
+        )
     assert result[STATUS_DEAD] == []
 
 
@@ -525,7 +532,7 @@ def test_registry_odcloud_urls_match_actual_collector_modules():
     안 고치면 감시는 옛 URL 만 찔러 "정상" 이라 보고하고 실제 수집기는 죽는다.
     """
     from crawler.applyhome_officetel_api import BASE_URL as APPLYHOME_BASE
-    from crawler.business_api import STATUS_URL
+    from crawler.business_api import STATUS_URL, VALIDATE_URL
     from crawler.crime_stats_api import CRIME_STATS_URL
 
     urls = {entry["url"] for entry in PROBE_REGISTRY}
@@ -535,8 +542,10 @@ def test_registry_odcloud_urls_match_actual_collector_modules():
         f"청약홈 수집기가 쓰는 {APPLYHOME_BASE} 로 시작하는 프로브가 없다 — "
         "crawler/api_version_monitor.py PROBE_REGISTRY 에 추가할 것"
     )
-    # 국세청 status·범죄통계는 전체 URL 이 곧 엔드포인트라 완전일치로 대조
-    for actual in (STATUS_URL, CRIME_STATS_URL):
+    # 국세청 status·validate·범죄통계는 전체 URL 이 곧 엔드포인트라 완전일치로 대조.
+    # ⚠ 국세청 두 오퍼레이션은 서비스가 같아도 개별 폐기가 가능해 각각 등록한다
+    #   (청약홈처럼 대표 1개 prefix 대조로 갈음하지 않는다).
+    for actual in (STATUS_URL, VALIDATE_URL, CRIME_STATS_URL):
         assert actual in urls, (
             f"수집기 모듈이 쓰는 {actual} 이 PROBE_REGISTRY 에 없다 — "
             "crawler/api_version_monitor.py PROBE_REGISTRY 에 추가할 것"
@@ -590,9 +599,33 @@ def test_probe_failure_before_job_recorded_still_raises():
         probe_api_versions()
 
 
-def test_registry_covers_all_eleven_endpoints():
-    """감시 대상 총 11종 (apis.data.go.kr 8 + odcloud 3) — 누락 시 사각지대."""
+def test_registry_covers_all_twelve_endpoints():
+    """감시 대상 총 12종 (apis.data.go.kr 8 + odcloud 4) — 누락 시 사각지대."""
     urls = {entry["url"] for entry in PROBE_REGISTRY}
     assert len(PROBE_REGISTRY) == len(urls), "레지스트리에 중복 URL 이 있다"
-    assert len(PROBE_REGISTRY) == 11, f"감시 대상이 11종이 아님: {len(PROBE_REGISTRY)}"
-    assert sum(1 for e in PROBE_REGISTRY if e.get("flavor") == FLAVOR_ODCLOUD) == 3
+    assert len(PROBE_REGISTRY) == 12, f"감시 대상이 12종이 아님: {len(PROBE_REGISTRY)}"
+    assert sum(1 for e in PROBE_REGISTRY if e.get("flavor") == FLAVOR_ODCLOUD) == 4
+
+
+def test_registry_covers_nts_validate_operation():
+    """국세청 진위확인(validate)이 status 와 **별개 오퍼레이션**으로 등록돼 있는가.
+
+    두 오퍼레이션은 같은 서비스(nts-businessman/v1) 아래지만 data.go.kr 은
+    오퍼레이션 단위로도 폐기·개편한다. status 만 감시하면 validate 만 죽었을 때
+    공인중개사 **가입 검증**(routers/verify.py)이 조용히 막혀도 감시망이 못 잡는다.
+    """
+    from crawler.business_api import VALIDATE_URL
+
+    entry = next((e for e in PROBE_REGISTRY if e["url"] == VALIDATE_URL), None)
+    assert entry is not None, (
+        f"국세청 진위확인 {VALIDATE_URL} 이 PROBE_REGISTRY 에 없다 — "
+        "crawler/api_version_monitor.py PROBE_REGISTRY 에 추가할 것"
+    )
+    # POST 전용이라 GET 으로 찌르면 405 → 생사 판별 불가
+    assert entry.get("method") == "POST", "validate 는 POST 전용 — method 지정 필수"
+    # flavor 를 빠뜨리면 판정기가 어긋나 모든 응답이 degraded 로 뭉개진다
+    assert entry.get("flavor") == FLAVOR_ODCLOUD, "validate 에 flavor=odcloud 누락"
+    # 실제 코드(business_api.verify_business_registration)와 같은 바디 스키마 +
+    # 조회 전용 더미 번호 (부수효과 0)
+    businesses = entry["json"]["businesses"]
+    assert businesses[0]["b_no"] == "0000000000"

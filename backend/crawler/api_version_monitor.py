@@ -43,9 +43,14 @@ odcloud.kr 은 응답 포맷이 다르다 (2026-08-29 라이브 실측)
 나오는 응답이므로 폐기가 아니다. 여기서도 "alive 는 양성 증거가 있을 때만" 원칙을
 유지한다 — 빈 응답·HTML 게이트웨이 페이지는 degraded.
 
-⚠ 국세청 사업자 상태 API 는 **POST 전용**이라 GET 으로 찌르면 405 가 떠서 생사를
-가릴 수 없다. 레지스트리 항목마다 method/body 를 지정해 실제 코드와 같은 방식으로
+⚠ 국세청 사업자 API(status·validate)는 **POST 전용**이라 GET 으로 찌르면 405 가 떠서
+생사를 가릴 수 없다. 레지스트리 항목마다 method/body 를 지정해 실제 코드와 같은 방식으로
 프로브한다(``b_no`` 는 존재하지 않는 번호 1개 — 조회만 하고 부수효과 0).
+
+⚠ **오퍼레이션 단위로 등록한다.** 같은 서비스(nts-businessman/v1) 아래여도 status 와
+validate 는 별개 오퍼레이션이라 한쪽만 폐기·개편될 수 있다. 서비스가 통째로 죽을 때만
+잡히면 되는 청약홈(4 오퍼레이션 → 대표 1개)과 달리, 국세청 두 오퍼레이션은 각각
+공인중개사 **휴폐업 차단**(status)과 **가입 진위확인**(validate)의 생명줄이라 둘 다 건다.
 
 네이버 API 는 0건이라 IP 차단 무관(.claude/rules/infra.md §IP 차단 방지 대상 아님).
 """
@@ -132,6 +137,19 @@ PROBE_REGISTRY: list[dict] = [
         "flavor": FLAVOR_ODCLOUD,
         "method": "POST",
         "json": {"b_no": ["0000000000"]},
+    },
+    # crawler/business_api.py VALIDATE_URL — 공인중개사 **가입 검증**(진위확인)의 생명줄.
+    # ⚠ status 와 같은 서비스 이름을 쓰지만 **오퍼레이션이 다르다**. data.go.kr 은
+    #   오퍼레이션 단위로도 폐기·개편되므로(2026-08-19 격변이 그랬다), status 하나만
+    #   감시하면 validate 만 죽었을 때 가입 검증이 조용히 막혀도 아무도 모른다.
+    #   bodies 스키마도 status(b_no 배열)와 달리 businesses 배열이라 따로 지정한다.
+    #   b_no 는 존재하지 않는 번호 1개 — 조회 전용이라 부수효과 0.
+    {
+        "name": "국세청 사업자 진위확인 (nts-businessman/v1/validate)",
+        "url": "https://api.odcloud.kr/api/nts-businessman/v1/validate",
+        "flavor": FLAVOR_ODCLOUD,
+        "method": "POST",
+        "json": {"businesses": [{"b_no": "0000000000", "p_nm": "", "start_dt": ""}]},
     },
     # crawler/crime_stats_api.py CRIME_STATS_URL (uddi 포함 전체 URL 이 곧 데이터셋 주소)
     {

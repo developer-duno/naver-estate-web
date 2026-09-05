@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, case, func, select, text
 
-from crawler.alert_format import format_issue_message
+from crawler.alert_format import format_issue_message, format_resolved_batch
 from db.models import CrawlJob, MonitorAlert
 from routers.admin.freshness import compute_freshness
 from services.telegram import send_telegram
@@ -69,6 +69,29 @@ def _job_stats(db, job_type: str) -> dict | None:
     }
 
 
+def _latest_failure_error(db, job_type: str, cutoff: datetime) -> str:
+    """관찰 창(cutoff 이후) 안에서 가장 최근 실패 1건의 error_message.
+
+    옛 구현은 func.max(error_message) 로 뽑아 "사전순 마지막"을 대표 에러로 썼다 —
+    같은 job_type 이 여러 번 실패하면 옛 에러가 최신 에러를 가려(예: "zzz 옛 원인"이
+    "aaa 새 원인"을 이김) 사장님이 이미 해결된 원인을 계속 보게 된다(세션 393 §5-J ②).
+    created_at 동률(같은 초 저장)일 때를 대비해 id 로 2차 정렬한다.
+    """
+    row = db.execute(
+        select(CrawlJob.error_message)
+        .where(and_(
+            CrawlJob.job_type == job_type,
+            CrawlJob.status == "failed",
+            CrawlJob.created_at >= cutoff,
+        ))
+        .order_by(CrawlJob.created_at.desc(), CrawlJob.id.desc())
+        .limit(1)
+    ).first()
+    if row is None:
+        return ""
+    return row.error_message or ""
+
+
 def detect_issues(db) -> list[dict]:
     """현재 크롤링 장애를 감지해 리스트로 반환 (기존 계약 유지 래퍼).
 
@@ -94,13 +117,14 @@ def detect_issues_ex(db) -> tuple[list[dict], bool]:
     freshness_ok = True
 
     # 1. 작업 실패 — 최근 24h failed job_type 별
-    # err = 같은 job_type 다중 실패 시 사전순 마지막 1건 (최근순 아님 — count 로 다건 표기)
+    # 대표 에러는 아래 _latest_failure_error() 로 job_type 마다 따로 조회한다.
+    # (옛 구현은 func.max(error_message) = 사전순 마지막이라 "가장 최근 실패"가 아니었다 —
+    #  옛 에러가 최신 에러를 가려 원인 진단을 어긋나게 함, 세션 393 §5-J ②)
     cutoff = now - timedelta(hours=_FAILED_WINDOW_HOURS)
     failed = db.execute(
         select(
             CrawlJob.job_type,
             func.count(CrawlJob.id).label("cnt"),
-            func.max(CrawlJob.error_message).label("err"),
         )
         .where(and_(CrawlJob.status == "failed", CrawlJob.created_at >= cutoff))
         .group_by(CrawlJob.job_type)
@@ -128,14 +152,16 @@ def detect_issues_ex(db) -> tuple[list[dict], bool]:
         if row.job_type in recovered:
             continue
         stats = _job_stats(db, row.job_type)
+        # 실패 job_type 은 평시 0~2개라 job_type 당 1쿼리(N+1)의 부담이 무시 가능하다.
+        err = _latest_failure_error(db, row.job_type, cutoff)
         issues.append({
             "alert_key": f"crawl_failed:{row.job_type}",
             "kind": "crawl_failed",
-            "detail": f"{row.job_type} 작업 {row.cnt}건 실패 — {(row.err or '')[:200]}",
+            "detail": f"{row.job_type} 작업 {row.cnt}건 실패 — {err[:200]}",
             "data": {
                 "job_type": row.job_type,
                 "count": row.cnt,
-                "error": row.err or "",
+                "error": err,
                 "processed": stats["processed"] if stats else None,
                 "total": stats["total"] if stats else None,
                 "last_completed_at": stats["completed_at"] if stats else None,
@@ -327,14 +353,18 @@ def _resolution_reason(db, kind: str, job_type: str) -> tuple[str, str]:
 def run_monitor(db) -> None:
     """장애 감지 → monitor_alerts 대조 → 쿨다운 적용 → 텔레그램 발송.
 
-    APScheduler monitor job 이 호출. 장애 감지(detect_issues) 단계 예외만
-    자체 흡수하며, 그 뒤 DB·발송 단계 예외는 run_monitor_job 이 감싼다.
+    APScheduler monitor job 이 호출. 예외는 흡수하지 않고 전부 위로 던진다 —
+    run_monitor_job → APScheduler EVENT_JOB_ERROR → job_error_listener 텔레그램
+    경로가 발화해야 "감시자 자신이 죽은 것"을 사장님이 알 수 있다(세션 393 §5-J ①).
+    옛 구현은 여기서 흡수해 monitor 가 매 주기 죽어도 무알림이었다.
+    freshness 계산 실패 격리(detect_issues_ex 내부 try/except)는 그대로 유지 —
+    그건 "부분 신호 결손" 이라 스캔 전체를 죽일 이유가 아니다.
     """
     try:
         issues, freshness_ok = detect_issues_ex(db)
     except Exception:
         logger.warning("[monitor] 장애 감지 실패", exc_info=True)
-        return
+        raise
 
     now = utcnow()
     current_keys = {i["alert_key"] for i in issues}
@@ -386,9 +416,12 @@ def run_monitor(db) -> None:
             alert.detail = issue["detail"]
 
     # 2. 해소된 장애 — 이번 스캔에 없는 active 행
+    #    발송은 "먼저 전부 모은 뒤" 1건이면 단건, 2건 이상이면 1통 묶음 (세션 393 §5-J ④).
+    #    DB 장애 복구 직후처럼 여러 건이 한 스캔에 해소되면 건당 1통이 알림 폭탄이 됐다.
     actives = db.execute(
         select(MonitorAlert).where(MonitorAlert.status == "active")
     ).scalars().all()
+    resolved_targets: list[tuple[MonitorAlert, str, dict]] = []
     for alert in actives:
         if alert.alert_key not in current_keys:
             # 복구 알림 성공 시에만 resolved 처리 — 실패 시 다음 스캔 재시도
@@ -408,24 +441,40 @@ def run_monitor(db) -> None:
                 # reason="" 는 alert_format 이 기존 문구로 폴백하는 값.
                 logger.warning("[monitor] 해소 사유 판정 실패 — 기존 문구 폴백", exc_info=True)
                 reason, reason_detail = "", ""
-            msg = format_issue_message(
-                kind,
-                {
-                    "alert_key": alert.alert_key,
-                    "detail": alert.detail,
-                    "reason": reason,
-                    "reason_detail": reason_detail,
-                },
-                event="resolved", header_ctx=header_ctx,
-            )
-            if send_telegram(msg, parse_mode="HTML"):
+            resolved_targets.append((alert, kind, {
+                "alert_key": alert.alert_key,
+                "detail": alert.detail,
+                "reason": reason,
+                "reason_detail": reason_detail,
+            }))
+
+    if len(resolved_targets) == 1:
+        alert, kind, data = resolved_targets[0]
+        msg = format_issue_message(kind, data, event="resolved", header_ctx=header_ctx)
+        if send_telegram(msg, parse_mode="HTML"):
+            alert.status = "resolved"
+    elif resolved_targets:
+        # 묶음 발송 1회가 성공해야만 전부 resolved 로 전이 — 실패하면 아무도 전이하지
+        # 않고 다음 스캔에서 재시도(단건 경로의 "성공 시에만 전이" 의미 그대로 보존).
+        msg = format_resolved_batch(
+            [data for _, _, data in resolved_targets], header_ctx=header_ctx
+        )
+        if send_telegram(msg, parse_mode="HTML"):
+            for alert, _, _ in resolved_targets:
                 alert.status = "resolved"
 
     db.commit()
 
 
 def run_monitor_job() -> None:
-    """APScheduler 진입점 — DB 세션 열고 run_monitor 호출."""
+    """APScheduler 진입점 — DB 세션 열고 run_monitor 호출.
+
+    예외는 rollback 후 **재던진다** — APScheduler EVENT_JOB_ERROR 가 떠야
+    job_error_listener 가 텔레그램으로 "크롤링 모니터 작업 실패" 를 알린다.
+    옛 구현은 logger.warning 으로 삼켜 감시자 자신의 사망이 무알림이었다
+    (감시 사각, 세션 393 §5-J ①). 리스너는 in-process 쿨다운(600초)이라 DB 가
+    죽은 상황에서도 동작하고, 스팸도 억제된다.
+    """
     from db.database import SessionLocal
 
     db = SessionLocal()
@@ -434,5 +483,6 @@ def run_monitor_job() -> None:
     except Exception:
         logger.warning("[monitor] job 실행 실패", exc_info=True)
         db.rollback()
+        raise
     finally:
         db.close()

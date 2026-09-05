@@ -158,6 +158,37 @@ def _resolved_line(detail: str, data: dict) -> str:
     return f"▸ {detail} — 정상으로 돌아왔습니다."
 
 
+def format_resolved_batch(items: list[dict], *, header_ctx: dict) -> str:
+    """해소 알림 N건 → 텔레그램 HTML 메시지 1통 (세션 393 §5-J ④).
+
+    items: [{"detail": str, "reason": str, "reason_detail": str}, ...]
+
+    DB 장애 복구 직후처럼 여러 알림이 한 스캔에 동시 해소되면 건당 1통씩 나가
+    사장님 폰에 알림 폭탄이 됐다(세션 381 실사고 배경). 2건 이상이면 이 함수로
+    묶는다 — 1건일 때는 호출부가 기존 format_issue_message 를 그대로 쓰므로
+    단건 문구는 변하지 않는다.
+
+    헤더: 전부 recovered(또는 사유 미지정)면 "✅ 크롤링 복구", 하나라도
+    swept·unconfirmed 가 섞이면 "⚠️ 알림 종료" — 한 건이라도 원인 미해결이면
+    헤더가 "복구" 라고 말해선 안 된다(헤더·본문 모순 방지, _header 와 같은 결).
+    본문은 항목마다 기존 _resolved_line 한 줄 (각 줄이 ✅/⚠️/ℹ️ 를 자체 표기).
+    """
+    reasons = {str(item.get("reason") or "") for item in items}
+    mixed = bool(reasons - {"", "recovered"})
+    emoji, label = ("⚠️", "알림 종료") if mixed else _EVENT_HEADER["resolved"]
+
+    count = header_ctx.get("active_count", 0)
+    now = header_ctx.get("now")
+    hhmm = now.strftime("%H:%M") if now is not None else ""
+    header = (
+        f"[내부모니터] {emoji} <b>{label}</b> — {count}건 활성 ({hhmm})"
+        f" — 해소 {len(items)}건"
+    )
+
+    lines = [_resolved_line(_esc(item.get("detail") or ""), item) for item in items]
+    return f"{header}\n\n" + "\n".join(lines)
+
+
 def format_issue_message(kind: str, data: dict, *, event: str, header_ctx: dict) -> str:
     """장애 1건 → 텔레그램 HTML 메시지.
 

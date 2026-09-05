@@ -43,6 +43,8 @@ _JOB_LABEL_FALLBACK = {
     "crawl_details": "매물 상세 보강",
     "collect_prices": "시세 이력 수집",
     "backfill_price": "시세 이력 소급 수집",
+    "complex_detail_APT": "단지 상세 backfill APT",
+    "complex_detail_OPST": "단지 상세 backfill OPST",
     "collect_public_trades": "공공데이터 실거래가 수집",
     "collect_officetel_presale": "청약홈 오피스텔 수집",
     "collect_rental_presale": "청약홈 민간임대 수집",
@@ -55,6 +57,11 @@ _JOB_LABEL_FALLBACK = {
     "collect_metrics": "단지 가치지표 수집",
     "billing_charge": "빌링키 자동결제",
     "vacuum_maintenance": "정기 VACUUM 유지보수",
+    # K-apt 관리비 연동 + data.go.kr 버전 감시 (세션 393 결손 보강 — 라벨은
+    # crawler/scheduler.py 의 해당 add_job(name=...) 값을 그대로 복사)
+    "kapt_match": "K-apt 단지 매칭",
+    "kapt_costs": "K-apt 관리비 수집",
+    "api_version_probe": "data.go.kr API 버전 감시",
 }
 
 

@@ -1136,3 +1136,228 @@ def test_run_monitor_resolves_freshness_alert_once_computation_recovers():
         assert "최근 실행 성공 확인" in _resolved_message(mock_tg)
     finally:
         db.close()
+
+
+# ── 세션 393 §5-J: 알림 조율 4건 회귀 가드 ──
+# ① monitor 자기실패 무알림 → 예외 재던지기(리스너 경유 텔레그램)
+# ② crawl_failed 대표 에러 = 사전순 max → 최신 실패의 error_message
+# ④ 해소 알림 여러 건 → 1통 묶음
+
+
+def test_run_monitor_job_reraises_so_scheduler_listener_fires():
+    """① monitor 자신이 죽으면 예외를 삼키지 않고 위로 던진다.
+
+    삼키면 APScheduler EVENT_JOB_ERROR 가 안 떠서 job_error_listener 텔레그램이
+    영영 발화하지 못한다 — 감시자의 사망이 무알림이 되는 사각지대.
+
+    ⚠ 뮤테이션 검증(세션 393): run_monitor_job 의 raise 를 지워 옛 코드
+    (logger.warning + rollback 후 흡수)로 되돌리면 pytest.raises 가
+    "DID NOT RAISE <class 'RuntimeError'>" 로 실패함을 확인 후 복원.
+    """
+    import pytest
+
+    from crawler.monitor import run_monitor_job
+
+    fake_db = TestSession()
+    try:
+        with patch("db.database.SessionLocal", return_value=fake_db), patch(
+            "crawler.monitor.run_monitor", side_effect=RuntimeError("모니터 폭발")
+        ):
+            with pytest.raises(RuntimeError, match="모니터 폭발"):
+                run_monitor_job()
+    finally:
+        fake_db.close()
+
+
+def test_run_monitor_reraises_detect_failure():
+    """① detect 단계 실패도 흡수하지 않고 전파 — run_monitor_job 이 받아 재던진다."""
+    import pytest
+
+    db = TestSession()
+    try:
+        with patch(
+            "crawler.monitor.detect_issues_ex", side_effect=RuntimeError("감지 폭발")
+        ), patch("crawler.monitor.send_telegram", return_value=True):
+            with pytest.raises(RuntimeError, match="감지 폭발"):
+                run_monitor(db)
+    finally:
+        db.close()
+
+
+def test_detect_issues_failed_uses_latest_error_not_alphabetical_max():
+    """② 대표 에러는 '가장 최근 실패' — 사전순 최대가 아니다.
+
+    fixture 는 시간축과 사전순이 **서로 반대**가 되도록 설계했다:
+      먼저 실패(옛)   = "zzz 옛 에러"   (사전순으로는 최대)
+      나중 실패(최신) = "aaa 최신 에러" (사전순으로는 최소)
+    → func.max(error_message) 로 되돌리면 "zzz 옛 에러" 가 뽑혀 실패한다.
+
+    ⚠ 뮤테이션 검증(세션 393): _latest_failure_error 호출을 옛
+    func.max(CrawlJob.error_message) 로 되돌리면 이 단언이
+    "assert 'zzz 옛 에러' == 'aaa 최신 에러'" 로 실패함을 확인 후 복원.
+    """
+    db = TestSession()
+    try:
+        now = _utcnow()
+        db.add(CrawlJob(
+            job_type="complex_list", status="failed", error_message="zzz 옛 에러",
+            started_at=now - timedelta(hours=10), completed_at=now - timedelta(hours=10),
+            created_at=now - timedelta(hours=10),
+        ))
+        db.add(CrawlJob(
+            job_type="complex_list", status="failed", error_message="aaa 최신 에러",
+            started_at=now - timedelta(hours=1), completed_at=now - timedelta(hours=1),
+            created_at=now - timedelta(hours=1),
+        ))
+        db.commit()
+
+        issue = next(i for i in detect_issues(db) if i["kind"] == "crawl_failed")
+        assert issue["data"]["error"] == "aaa 최신 에러"
+        assert issue["data"]["count"] == 2  # 집계(건수)는 그대로 유지
+        assert "aaa 최신 에러" in issue["detail"]
+    finally:
+        db.close()
+
+
+def test_detect_issues_failed_error_null_message_is_empty_string():
+    """② error_message 가 NULL 인 최신 실패도 안전하게 빈 문자열로 처리."""
+    db = TestSession()
+    try:
+        now = _utcnow()
+        db.add(CrawlJob(
+            job_type="complex_list", status="failed", error_message=None,
+            created_at=now - timedelta(hours=1),
+        ))
+        db.commit()
+
+        issue = next(i for i in detect_issues(db) if i["kind"] == "crawl_failed")
+        assert issue["data"]["error"] == ""
+    finally:
+        db.close()
+
+
+def _seed_three_resolvable_alerts(db, now):
+    """해소 대상 3건 (전부 마지막 실행 completed = recovered) 심기."""
+    for job_type in ("complex_list", "crawl_details", "collect_prices"):
+        db.add(CrawlJob(
+            job_type=job_type, status="completed",
+            started_at=now - timedelta(hours=1), completed_at=now - timedelta(hours=1),
+            created_at=now - timedelta(hours=1),
+        ))
+        db.add(MonitorAlert(
+            alert_key=f"crawl_failed:{job_type}", status="active",
+            detail=f"{job_type} 작업 1건 실패 — 옛 원인",
+            last_notified=now - timedelta(hours=2),
+        ))
+    db.commit()
+
+
+def test_run_monitor_batches_multiple_resolved_into_one_message():
+    """④ 3건 동시 해소 → 텔레그램 1통 + 3행 모두 resolved.
+
+    DB 장애 복구 직후처럼 여러 건이 한 스캔에 해소되면 건당 1통이 알림 폭탄이
+    됐다(세션 381 배경).
+
+    ⚠ 뮤테이션 검증(세션 393): run_monitor 의 묶음 분기를 옛 '건마다 발송'
+    루프로 되돌리면 "발송 3통 — 묶이지 않음" 으로 이 단언이 실패함을 확인 후 복원.
+    """
+    db = TestSession()
+    try:
+        now = _utcnow()
+        _seed_three_resolvable_alerts(db, now)
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        resolved_msgs = [c[0][0] for c in mock_tg.call_args_list if _is_resolved_message(c[0][0])]
+        assert len(resolved_msgs) == 1, f"발송 {len(resolved_msgs)}통 — 묶이지 않음"
+        msg = resolved_msgs[0]
+        assert "해소 3건" in msg
+        for job_type in ("complex_list", "crawl_details", "collect_prices"):
+            assert f"{job_type} 작업 1건 실패" in msg, f"{job_type} detail 누락: {msg}"
+
+        rows = db.execute(select(MonitorAlert)).scalars().all()
+        assert all(r.status == "resolved" for r in rows), [(r.alert_key, r.status) for r in rows]
+    finally:
+        db.close()
+
+
+def test_run_monitor_batch_send_failure_keeps_all_active():
+    """④ 묶음 발송이 실패하면 아무도 resolved 로 전이하지 않는다 (다음 스캔 재시도).
+
+    단건 경로의 '발송 성공 시에만 전이' 의미를 묶음에서도 그대로 보존.
+    """
+    db = TestSession()
+    try:
+        now = _utcnow()
+        _seed_three_resolvable_alerts(db, now)
+
+        with patch("crawler.monitor.send_telegram", return_value=False):
+            run_monitor(db)
+
+        rows = db.execute(select(MonitorAlert)).scalars().all()
+        assert all(r.status == "active" for r in rows), [(r.alert_key, r.status) for r in rows]
+    finally:
+        db.close()
+
+
+def test_run_monitor_batch_header_warns_when_reason_mixed():
+    """④ 사유가 섞이면(복구 + 강제정리) 헤더는 '⚠️ 알림 종료' — '복구' 라 하면 안 된다."""
+    db = TestSession()
+    try:
+        now = _utcnow()
+        # 1) 진짜 복구
+        db.add(CrawlJob(
+            job_type="complex_list", status="completed",
+            started_at=now - timedelta(hours=1), completed_at=now - timedelta(hours=1),
+            created_at=now - timedelta(hours=1),
+        ))
+        db.add(MonitorAlert(
+            alert_key="crawl_failed:complex_list", status="active",
+            detail="complex_list 작업 1건 실패 — SSL 끊김",
+            last_notified=now - timedelta(hours=2),
+        ))
+        # 2) 스윕당한 잡 (원인 미해결)
+        db.add(CrawlJob(
+            job_type="crawl_details", status="cancelled",
+            error_message="stale running — swept by monitor",
+            started_at=now - timedelta(hours=3), completed_at=now - timedelta(minutes=10),
+            created_at=now - timedelta(hours=3),
+        ))
+        db.add(MonitorAlert(
+            alert_key="crawl_stale:crawl_details", status="active",
+            detail="crawl_details 작업 1건이 1시간 넘게 running 상태 — 마비 의심",
+            last_notified=now - timedelta(hours=1),
+        ))
+        db.commit()
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msgs = [c[0][0] for c in mock_tg.call_args_list if _is_resolved_message(c[0][0])]
+        assert len(msgs) == 1
+        msg = msgs[0]
+        assert "알림 종료" in msg
+        assert "크롤링 복구" not in msg, f"원인 미해결이 섞였는데 헤더가 '복구': {msg}"
+        # 각 줄은 자기 사유대로 표기 — 복구는 성공확인, 스윕은 강제 정리 문구
+        assert "최근 실행 성공 확인" in msg
+        assert "강제 정리" in msg and "원인은 미해결" in msg
+    finally:
+        db.close()
+
+
+def test_run_monitor_batch_header_ok_when_all_recovered():
+    """④ 전부 recovered 면 헤더는 '✅ 크롤링 복구' 유지."""
+    db = TestSession()
+    try:
+        now = _utcnow()
+        _seed_three_resolvable_alerts(db, now)
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msg = _resolved_message(mock_tg)
+        assert "크롤링 복구" in msg
+        assert "알림 종료" not in msg
+    finally:
+        db.close()

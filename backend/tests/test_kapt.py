@@ -990,13 +990,13 @@ def test_collect_costs_all_empty_small_sample_stays_completed(db, monkeypatch):
 
 # ── (c) 호출 실패 vs (b) 정상 미공개 구분 (반쪽 저장 차단) ──
 #
-# 이 블록은 "공용(V3) 17콜이 통째로 실패하고 개별(V2) 5콜만 성공한 회차에
+# 이 블록은 "공용(V3) 17콜이 통째로 실패하고 개별(사고 당시 V2, 현행 V3 — PR #435) 5콜만 성공한 회차에
 # 공용관리비 0원짜리 반쪽 총액이 저장되고, 그 달 행이 생겨 다음 달까지
 # 재수집도 안 되던" 결함의 회귀 가드다.
 
 
 def test_collect_costs_partial_failure_saves_nothing(db, monkeypatch):
-    """공용(V3) 호출 실패 + 개별(V2) 성공 -> 행 0 · failed 계수 (반쪽 저장 금지).
+    """공용(V3) 호출 실패 + 개별(V3) 성공 -> 행 0 · failed 계수 (반쪽 저장 금지).
 
     결함 재현: 예전에는 `_body` 가 실패에도 None 을 줘서 fetch_common_cost 가
     빈 dict 를 돌려줬고, 개별(V2)만 성공하면 breakdown 이 비어있지 않아
@@ -1249,7 +1249,7 @@ def test_fetch_common_cost_raises_through_real_chain(monkeypatch):
 
 
 def test_fetch_individual_cost_raises_through_real_chain(monkeypatch):
-    """개별사용료(V2)도 같은 실배선 가드 — 공용(V3)과 별개 함수라 따로 지킨다."""
+    """개별사용료(V3)도 같은 실배선 가드 — 공용(V3)과 별개 함수라 따로 지킨다."""
     monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(lambda cls, u, p: None))
     with pytest.raises(KaptApiError):
         kapt_api.fetch_individual_cost("K1", "202605")
@@ -1271,10 +1271,10 @@ def test_fetch_common_cost_returns_empty_on_unpublished(monkeypatch):
 
 
 def test_collect_costs_partial_failure_through_real_api_layer(db, monkeypatch):
-    """실배선 통합: 공용(V3) 전량 실패 + 개별(V2) 성공 -> 저장 0 (반쪽 저장 금지).
+    """실배선 통합: 공용(V3) 전량 실패 + 개별(V3) 성공 -> 저장 0 (반쪽 저장 금지).
 
-    이 PR 이 고치는 **실제 사고 시나리오** 그대로다 — V3 서비스만 한도에 걸려
-    17콜이 전부 죽고 V2 5콜은 성공하는 상황. `fetch_common_cost` 를 mock 하지
+    이 PR 이 고치는 **실제 사고 시나리오** 그대로다 — 공용 V3 서비스만 한도에 걸려
+    17콜이 전부 죽고 개별(사고 당시 V2, 현행 V3) 5콜은 성공하는 상황. `fetch_common_cost` 를 mock 하지
     않고 call_api 레벨에서 URL 로 갈라, API 계층 전체를 실제로 통과시킨다.
     """
     _make_complex(db, complex_no="5501")

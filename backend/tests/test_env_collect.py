@@ -245,11 +245,16 @@ class TestCollectEmergencyData:
         assert job.processed_items == 1
         assert job.total_items == 2
 
-    def test_Infra_없으면_skip_자동생성_안함(self, db):
-        """Infra 행 부재 단지는 skip (childcare 와 달리 자동생성 안 함).
+    def test_Infra_행_없으면_자동_생성(self, db):
+        """mibunyang 미수집 단지(Infra 행 부재) → collect 가 Infra 신규 생성 후 emergency_* 채움.
 
-        세션 282: db.get(Infra) -> infra_map.get(apt_id) prefetch 전환 후에도
-        '없으면 skip' 동작이 유지되는지 가드 (prefetch 정합 회귀 가드).
+        ⚠ 세션 394 동작 전환 — 이 테스트는 옛 '없으면 skip' 을 정답으로 단언하고
+        있었다(세션 282 prefetch 정합 가드). 그 동작은 mibunyang 이 아직 안 훑은 단지를
+        영영 못 채워, 같은 세션이 도입하는 전량 순환(전 단지 커버)의 취지를 정면으로
+        깎는다. childcare 가 이미 검증한 자동 생성 패턴(env_childcare, 세션 41)으로
+        통일하고, 본 테스트도 그에 맞춰 정정한다 (testing.md §결함 박제 테스트 정정).
+        prefetch 정합 가드로서의 역할은 그대로 — 'infra_map 에 없을 때 어떻게 되는가'를
+        여전히 지나가되, 기대 동작만 skip → 자동 생성으로 바뀐 것이다.
         """
         # Apartment 만 추가, Infra 행은 생성하지 않음 (_add_apartment 안 씀)
         db.add(Apartment(id="APT_NOINFRA", name="단지", region="서울특별시",
@@ -267,11 +272,294 @@ class TestCollectEmergencyData:
             from crawler.env_emergency import collect_emergency_data
             collect_emergency_data()
 
-        # Infra 행은 여전히 없어야 한다 (자동생성 안 함)
-        assert db.get(Infra, "APT_NOINFRA") is None
-        # 전 단지 skip -> collected 0 -> silent failure 가드가 failed 처리
+        # Infra 행이 없던 단지에 새로 INSERT 되어 값이 채워져야 한다
+        infra = db.get(Infra, "APT_NOINFRA")
+        assert infra is not None, "Infra 행 부재 단지가 자동 생성되지 않음"
+        assert infra.emergency_hospital == 1
+        assert infra.emergency_hospital_dist == 50.5
+
         job = db.query(CrawlJob).filter_by(job_type="emergency").one()
-        assert job.status == "failed"
+        assert job.status == "completed"
+        assert job.processed_items == 1
+
+
+# ── collect_emergency_data 배치 순환 + 전량 (세션 394 결함 수정) ──
+
+
+class TestEmergencyBatchRotation:
+    """대상 선정이 "오래된 것 우선"으로 순환하는지 — 세션 394 결함 회귀 가드.
+
+    결함: 선정 쿼리가 ORDER BY 없이 .limit(batch_size) 만 걸어, 매월 1회 배치가 DB 가
+    돌려주는 임의(사실상 고정) 순서의 앞쪽 100개만 반복 재갱신했다. prod 실측
+    2026-09-05 — 위경도 보유 2,938개 중 496개(16.9%)만 emergency_hospital 이 채워지고
+    2,442개(83.1%)는 영구 방치. 이제 emergency_updated_at ASC NULLS FIRST 로
+    ①미수집 ②최고령 순 순환한다 (세션 392 childcare/V053 선례와 동일 계열).
+    """
+
+    _FACILITIES = [{"name": "A병원", "lat": 37.5, "lng": 127.0, "beds": 10,
+                    "level": "권역응급의료센터", "addr": "서울"}]
+    _NEAREST = {"count": 1, "nearest_dist": 50.5, "nearest_beds": 10,
+                "nearest_level": "권역응급의료센터"}
+
+    @classmethod
+    def _run(cls, batch_size, nearest=None):
+        """외부 NEMC 를 절대 안 때리는 목킹 실행 (이 파일의 기존 emergency 테스트 답습)"""
+        with patch("crawler.emergency_api.EmergencyAPI.get_emergency_list",
+                   return_value=cls._FACILITIES), \
+             patch("crawler.emergency_api.EmergencyAPI.find_nearest",
+                   return_value=nearest if nearest is not None else cls._NEAREST):
+            from crawler.env_emergency import collect_emergency_data
+            collect_emergency_data(batch_size=batch_size)
+
+    def test_오래된것_우선_선정_최신은_제외(self, db):
+        """A(오래됨)·B(Infra 행 없음)·C(최신) 중 batch_size=2 면 B·A 만 선정되고 C 는 제외.
+
+        ⚠ 픽스처는 "두 축이 다른 값"이 되게 설계 (testing.md 답습) — 세 단지의
+        emergency_updated_at 을 각각 없음/오래됨/최신 세 갈래로 갈라, 순서를 안 지키면
+        반드시 다른 단지가 뽑히도록 만든다. B 는 아예 Infra 행 자체를 안 만들어
+        outerjoin 경로(행 부재 = NULL = 최우선)까지 함께 가드한다.
+
+        ⚠⚠ **삽입 순서를 일부러 정답의 역순(C→A→B)으로 둔다.** ORDER BY 없는 SELECT 는
+        SQLite 에서 사실상 삽입 순서를 돌려주므로, 정답 순서대로(A→B→C) 넣으면 결함
+        코드도 우연히 A·B 를 뽑아 테스트가 통과해 버린다(세션 392 childcare 뮤테이션
+        검증 1차에서 실제로 이 함정에 걸렸다). 최신 C 를 맨 앞에 넣어야
+        "정렬 없음 = C 가 뽑힘" 으로 갈려 결함이 드러난다.
+        """
+        old = datetime(2026, 1, 1, 0, 0, 0)
+        recent = datetime(2026, 9, 1, 0, 0, 0)
+
+        # C: 방금 받은 단지 — 일부러 **맨 먼저** 삽입 (위 docstring ⚠⚠ 참조).
+        # batch_size=2 에 밀려 이번 회차 제외되어야 정상.
+        db.add(Apartment(id="APT_C_RECENT", name="최신단지", region="서울특별시",
+                         gu="강남구", latitude=37.5, longitude=127.0))
+        db.add(Infra(apartment_id="APT_C_RECENT", emergency_hospital=9,
+                     emergency_updated_at=recent))
+        db.commit()
+        # A: 오래 전에 받은 단지 (두 번째 우선)
+        db.add(Apartment(id="APT_A_OLD", name="오래된단지", region="서울특별시",
+                         gu="강남구", latitude=37.5, longitude=127.0))
+        db.add(Infra(apartment_id="APT_A_OLD", emergency_hospital=1,
+                     emergency_updated_at=old))
+        db.commit()
+        # B: Infra 행 자체가 없는 단지 (NULL 취급 = 최우선, outerjoin 이라야 잡힌다)
+        db.add(Apartment(id="APT_B_NEVER", name="미수집단지", region="서울특별시",
+                         gu="강남구", latitude=37.5, longitude=127.0))
+        db.commit()
+
+        self._run(batch_size=2)
+
+        # B(미수집)는 Infra 행이 새로 생기며 채워져야 한다
+        infra_b = db.get(Infra, "APT_B_NEVER")
+        assert infra_b is not None, "Infra 행 없는 단지가 선정에서 누락됨 (outerjoin 결함)"
+        assert infra_b.emergency_hospital == 1
+        assert infra_b.emergency_updated_at is not None
+
+        # A(오래됨)도 갱신되어 시각이 앞으로 나아가야 한다
+        infra_a = db.get(Infra, "APT_A_OLD")
+        db.refresh(infra_a)
+        assert infra_a.emergency_updated_at is not None
+        assert infra_a.emergency_updated_at > old, "오래된 단지 시각이 안 갱신됨"
+
+        # C(최신)는 batch_size=2 에 밀려 이번 회차엔 손대지 않아야 한다
+        infra_c = db.get(Infra, "APT_C_RECENT")
+        db.refresh(infra_c)
+        assert infra_c.emergency_hospital == 9, "최신 단지가 재갱신됨 (순환 안 됨)"
+        assert infra_c.emergency_updated_at == recent
+
+        job = db.query(CrawlJob).filter_by(job_type="emergency").one()
+        assert job.status == "completed"
+        assert job.processed_items == 2
+
+    def test_수집시_순환키_갱신(self, db):
+        """수집된 단지는 emergency_updated_at 이 찍혀야 한다 — 안 찍히면 순환 자체가 무효.
+
+        이 시각이 NULL 로 남으면 다음 회차에도 같은 단지가 NULLS FIRST 최우선으로
+        되돌아와 결함이 그대로 재현된다 (순서만 고치고 기록을 빠뜨리는 실수 가드).
+        """
+        _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        self._run(batch_size=2)
+
+        infra = db.get(Infra, "APT1")
+        db.refresh(infra)
+        assert infra.emergency_hospital == 1
+        assert infra.emergency_updated_at is not None, "순환 키 미기록 — 순환 성립 안 함"
+
+    def test_매칭0건도_순환키_갱신(self, db):
+        """반경 내 응급의료기관 0개(외딴 단지)도 정상 수집이므로 시각을 찍는다.
+
+        안 찍으면 그 단지가 매 회차 NULLS FIRST 최우선으로 되돌아와 배치가 그 자리에서
+        막히고, 뒤 단지들이 영영 순번을 못 받는다 (결함의 국소 재현).
+        """
+        _add_apartment(db, "APT_ZERO", "서울특별시", "강남구", lat=37.5, lng=127.0)
+
+        empty_nearest = {"count": 0, "nearest_dist": None, "nearest_beds": 0,
+                         "nearest_level": ""}
+        self._run(batch_size=2, nearest=empty_nearest)
+
+        infra = db.get(Infra, "APT_ZERO")
+        db.refresh(infra)
+        assert infra.emergency_hospital == 0
+        assert infra.emergency_updated_at is not None
+
+
+class TestEmergencyFullBatch:
+    """batch_size=0 = 전량(무제한) + 중간 저장 — 세션 394 전환 회귀 가드.
+
+    배경: 배치 100 은 전 단지(위경도 보유 2,938개) 한 바퀴에 30개월이 걸려 실익이
+    없었다. 이 수집기는 전국 기관목록을 **1회** 받고 단지별 처리는 find_nearest(순수
+    로컬 거리계산)뿐이라, 배치 크기가 외부 API 호출 수와 전혀 무관하다 — 전량이어도
+    NEMC 호출은 여전히 1회이므로 비용 증가 없이 커버리지만 100% 로 올라간다.
+    """
+
+    @staticmethod
+    def _add_three_apartments(db):
+        """단지 3개 — 시군구 2개로 갈라 둔다.
+
+        ⚠ "단지 수(3)"와 "시군구 수(2)"를 다른 값으로 둔다 (testing.md 답습) —
+        1:1 이면 두 축을 뒤바꿔 세도 숫자가 같아 결함이 안 드러난다.
+        """
+        _add_apartment(db, "APT_A", "서울특별시", "강남구", lat=37.5, lng=127.0)
+        _add_apartment(db, "APT_B", "서울특별시", "강남구", lat=37.51, lng=127.01)
+        _add_apartment(db, "APT_C", "서울특별시", "서초구", lat=37.49, lng=127.02)
+
+    # 옛 고정 배치 크기 — 전량 가드의 픽스처 규모를 이 값 위로 잡아야 뮤테이션이 잡힌다.
+    _OLD_FIXED_BATCH = 100
+
+    @classmethod
+    def _add_many_apartments(cls, db, n):
+        """단지 n개 — 옛 배치 상한(100)보다 많이 만들어야 "전량"이 검증된다.
+
+        ⚠ 픽스처 규모가 옛 상한 이하(예: 3개)면 limit(100) 을 되살리는 뮤테이션에서도
+        3개가 그대로 다 잡혀 테스트가 통과해 버린다 — 실제로 1차 시도에서 이 함정에
+        걸렸다(세션 394). 상한을 **넘는** 규모라야 "limit 이 걸렸는지"가 결과 수로 갈린다.
+        """
+        for i in range(n):
+            _add_apartment(db, f"APT_{i:04d}", "서울특별시", "강남구",
+                           lat=37.5 + i * 0.0001, lng=127.0)
+
+    def test_batch_size_0_이면_전량_수집(self, db):
+        """batch_size=0 = limit 미적용 → 옛 상한(100)을 넘는 단지도 전부 수집.
+
+        같은 픽스처에 양수 batch_size 를 주면 그만큼만 잡히는 것과 대비된다
+        (아래 test_batch_size_양수면_limit_유지) — 두 축의 값을 갈라
+        "limit 이 정말 안 걸렸는지"를 결과 수로 판별한다.
+        """
+        total = self._OLD_FIXED_BATCH + 5
+        self._add_many_apartments(db, total)
+
+        TestEmergencyBatchRotation._run(batch_size=0)
+
+        job = db.query(CrawlJob).filter_by(job_type="emergency").one()
+        assert job.status == "completed"
+        assert job.processed_items == total, (
+            f"전량인데 {job.processed_items}건만 수집됨 (limit 이 걸렸다)"
+        )
+
+    def test_기본값이_전량(self, db):
+        """인자 없이 호출(스케줄러 기본값 경로)해도 전량이어야 한다.
+
+        scheduler 의 EMERGENCY_BATCH_SIZE 기본값과 함수 시그니처 기본값이 갈리면
+        "코드는 전량인데 운영은 100" 같은 조용한 드리프트가 난다 — 시그니처 쪽 가드.
+        """
+        total = self._OLD_FIXED_BATCH + 5
+        self._add_many_apartments(db, total)
+
+        with patch("crawler.emergency_api.EmergencyAPI.get_emergency_list",
+                   return_value=TestEmergencyBatchRotation._FACILITIES), \
+             patch("crawler.emergency_api.EmergencyAPI.find_nearest",
+                   return_value=TestEmergencyBatchRotation._NEAREST):
+            from crawler.env_emergency import collect_emergency_data
+            collect_emergency_data()  # 인자 없음 = 기본값
+
+        job = db.query(CrawlJob).filter_by(job_type="emergency").one()
+        assert job.processed_items == total, "기본값이 전량이 아님 (시그니처 드리프트)"
+
+    def test_batch_size_양수면_limit_유지(self, db):
+        """부분 배치로 되돌릴 수 있어야 한다 — 양수면 그 수만큼만 선정.
+
+        운영 사정으로 배치를 다시 줄이는 길이 살아 있는지 가드(전량 전환이
+        limit 코드 자체를 없앤 게 아님을 확인).
+        """
+        self._add_three_apartments(db)
+
+        TestEmergencyBatchRotation._run(batch_size=2)
+
+        job = db.query(CrawlJob).filter_by(job_type="emergency").one()
+        assert job.processed_items == 2, "양수 batch_size 인데 limit 이 안 걸림"
+
+    def test_중간_저장으로_부분_성과_보존(self, db):
+        """루프 도중 배치가 통째로 죽어도, 중간 저장 시점까지의 성과는 남는다.
+
+        전량 전환으로 1회 실행 길이가 30배 가까이 늘면서 유실 창도 그만큼 커졌다.
+        마지막 단일 commit 만 두면 도중 사망(DB 다운·프로세스 종료) 시 그 달 성과가
+        통째 증발한다(월 1회 잡이라 피해 = 한 달 지연).
+
+        재현: 단지별 예외는 루프 안에서 격리되므로(failed+=1) 배치를 죽이지 못한다.
+        실제 사망 경로는 outer except → _fail_job(db.rollback()) 이므로, 루프가 마지막
+        단지를 처리하는 순간 세션을 통째로 죽여 그 경로를 지난다. 중간 저장이 없으면
+        rollback 이 앞 단지들의 미저장 변경을 통째로 되돌린다.
+
+        ⚠ 뮤테이션 검증 완료 (세션 394): env_emergency 의 루프 내 중간 commit 을
+        제거하면 이 테스트가 실제로 FAIL 한다 (앞 두 단지가 미저장 상태로 rollback 돼
+        emergency_hospital 이 None 으로 남는다).
+
+        ⚠ 사망 트리거를 "commit 호출 N회째"로 잡으면 안 된다 — 중간 저장을 제거한
+        뮤테이션에서는 commit 총 횟수 자체가 줄어 임계값에 도달하지 못하고, 예외가
+        아예 안 나서 "정상 실행"으로 통과해 버린다(1차 시도에서 실제로 이 함정에
+        걸렸다). 그래서 트리거를 **find_nearest 가 마지막 단지를 처리하는 시점**
+        (중간 저장 유무와 무관하게 항상 도달)으로 잡고, 그 순간 세션을 깨뜨린다.
+        """
+        import crawler.env_emergency as mod
+
+        self._add_three_apartments(db)
+        # 단지 1개마다 저장 — 앞 단지 성과가 사망 전에 확정된다
+        monkey_original = mod._COMMIT_EVERY
+        mod._COMMIT_EVERY = 1
+        try:
+            captured = {}
+
+            from db.database import SessionLocal as _SL
+
+            def _patched_sessionlocal(*args, **kwargs):
+                session = _SL(*args, **kwargs)
+                captured["session"] = session
+                return session
+
+            seen = {"n": 0}
+
+            def _find_nearest(lat, lng, facilities):
+                seen["n"] += 1
+                # 3번째(마지막) 단지 차례에 세션을 깨뜨려 배치를 통째로 죽인다.
+                # 앞 두 단지는 이미 루프를 지났으므로, 중간 저장이 있으면 살아남고
+                # 없으면 _fail_job 의 rollback 에 함께 쓸려간다 — 이 갈림이 곧 가드다.
+                if seen["n"] == 3:
+                    def _boom():
+                        raise RuntimeError("DB 연결 끊김 (중간 저장 이후 사망 시뮬)")
+                    captured["session"].commit = _boom
+                return dict(TestEmergencyBatchRotation._NEAREST)
+
+            with patch("crawler.env_emergency.SessionLocal",
+                       side_effect=_patched_sessionlocal), \
+                 patch("crawler.emergency_api.EmergencyAPI.get_emergency_list",
+                       return_value=TestEmergencyBatchRotation._FACILITIES), \
+                 patch("crawler.emergency_api.EmergencyAPI.find_nearest",
+                       side_effect=_find_nearest):
+                from crawler.env_emergency import collect_emergency_data
+                collect_emergency_data(batch_size=0)
+        finally:
+            mod._COMMIT_EVERY = monkey_original
+
+        # 죽기 전 중간 저장된 단지는 DB 에 남아 있어야 한다
+        saved = []
+        for apt_id in ("APT_A", "APT_B", "APT_C"):
+            infra = db.get(Infra, apt_id)
+            if infra is None:
+                continue
+            db.refresh(infra)
+            if infra.emergency_hospital == 1:
+                saved.append(apt_id)
+        assert saved, "중간 저장 부재 — 도중 사망 시 그 달 성과가 통째로 증발한다"
 
 
 # ── collect_childcare_data ──

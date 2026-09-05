@@ -170,8 +170,12 @@ def compute_freshness(db: Session) -> dict:
                 (CrawlJob.scheduler_job_id == "collect_childcare") & (CrawlJob.status == "completed"),
             )
         ).one(),
-        # 세션 359: Infra.emergency_updated_at 컬럼 없음 — childcare 와 동일하게
-        # CrawlJob.completed_at 경유로 최신성 측정.
+        # 세션 359: 당시 Infra.emergency_updated_at 컬럼이 없어 childcare 와 동일하게
+        # CrawlJob.completed_at 경유로 최신성을 측정했다.
+        # 세션 394 현행화: V054 로 컬럼 자체는 생겼지만(배치 순환 키 용도), 월 1회 잡이라
+        # CrawlJob 기준 측정을 그대로 유지한다. air/crime 처럼 max(emergency_updated_at)
+        # 으로 전환하는 것도 선택지이나, 지금 방식으로도 신선도 판정이 정확해 굳이 바꾸지
+        # 않는다(전환하려면 childcare 와 함께 같은 결로 옮기는 편이 일관적).
         "emergency": db.execute(
             select(
                 func.max(CrawlJob.completed_at),

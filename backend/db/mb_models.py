@@ -276,6 +276,9 @@ class Infra(Base):
     # 응급의료기관 시설명/분류 (mibunyang W4, 2026-05-13 동기화)
     emergency_name: Mapped[str | None] = mapped_column(Text)
     emergency_type: Mapped[str | None] = mapped_column(Text)
+    # V054: 응급의료 갱신 시각 — collect_emergency_data 의 "오래된 것 우선" 순환 키.
+    # 공용 updated_at 은 mibunyang 도 갱신해 순환 키로 못 쓴다 (V054 주석 참조).
+    emergency_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     # 대기질 — 에어코리아 (V012)
     air_station_name: Mapped[str | None] = mapped_column(Text)
     air_station_dist: Mapped[float | None] = mapped_column(Float)

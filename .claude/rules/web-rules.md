@@ -58,6 +58,7 @@
   으로 로컬 세션 생존을 재확인한 뒤에만 로그아웃(세션 351: 멀티탭에서 Supabase 토큰 갱신
   경합으로 오탐 401 발생 시 멀쩡한 세션까지 튕기던 결함 방지, `_isLoggingOut` mutex는
   실제 로그아웃 분기 안으로 이동해 중복 방지). 403 은 승인/권한 문제라 로그아웃 대상 아님
+- Supabase 토큰은 HS256(레거시 secret)·ES256(JWKS 로컬 검증, 10분 캐시) 둘 다 로컬 검증, 원격 `/auth/v1/user` 는 최후 폴백(2026-09-09 서명키 전환 사고)
 - Rate limiting: `auth/rate_limiter.py` — Redis/in-memory 분기 구현 완료. `REDIS_URL` 환경변수 설정 시 Redis sorted set, 미설정 시 in-memory 폴백 자동 선택 (분산 환경 대비 완료, 단일 집 서버는 in-memory 로 충분)
 
 ### 보안

@@ -11,15 +11,24 @@
 ⚠ 뮤테이션 검증 (세션 395 수행): deps._verify_token_local 의 ES256 분기를 제거하면
   test_es256_token_verified_locally_without_remote_call 이 FAIL 한다(로컬 검증이 None 을
   반환해 user_id 단언에서 깨짐)를 확인 후 코드 복원. 즉 이 테스트는 결함을 실제로 본다.
+  네거티브 캐시도 동일 — _unknown_kid_seen.get(...) 조회 줄을 제거하면
+  test_unknown_kid_negative_cache_skips_second_lookup 이 FAIL(조회 2회)한다.
 
 실행: python -m pytest tests/test_deps_es256.py -v
 """
 
+import base64
+import hashlib
+import hmac
+import json
+
 import jwt
 import pytest
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 import deps
+from services.cache import TTLCache
 
 JWT_SECRET = "test-secret-key-for-testing-only"  # conftest 가 env 로 고정한 값과 동일
 
@@ -163,3 +172,104 @@ def test_rs256_token_rejected(monkeypatch):
 def test_allowed_algorithms_contains_both():
     """허용 알고리즘 목록 자체를 단언 — 한쪽이 지워지면 즉시 실패."""
     assert deps._ALLOWED_ALGORITHMS == ["HS256", "ES256"]
+
+
+@pytest.fixture(autouse=True)
+def _clear_unknown_kid_cache(monkeypatch):
+    """테스트 간 네거티브 캐시 격리 — 앞 테스트의 실패 kid 가 뒤 테스트를 오염시키지 않게."""
+    monkeypatch.setattr(deps, "_unknown_kid_seen", TTLCache(ttl=deps._UNKNOWN_KID_TTL, max_size=64))
+
+
+def _b64(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+
+
+def test_alg_confusion_es256_public_key_as_hmac_secret_rejected(monkeypatch, no_remote):
+    """(f) alg confusion: ES256 공개키 PEM 을 HMAC 비밀로 쓴 HS256 위조 토큰 → None.
+
+    고전적 공격: 공개키는 누구나 얻을 수 있으므로, 서버가 alg 를 토큰 헤더만 보고
+    믿으면 공격자가 '공개키를 비밀번호처럼' 써서 서명한 HS256 토큰으로 인증을 통과한다.
+    우리 코드는 alg 별로 검증 키를 고정(HS256=서버 secret)하므로 통과하면 안 된다.
+    PyJWT 의 encode 는 PEM 을 HMAC 비밀로 쓰는 것을 InvalidKeyError 로 막으므로,
+    공격자와 동일하게 base64 + HMAC 으로 직접 서명해 만든다.
+    """
+    priv, pub = _ec_keypair()
+    pem = pub.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    header = _b64(json.dumps({"alg": "HS256", "typ": "JWT", "kid": "test-kid-1ceb2299"}).encode())
+    payload = _b64(json.dumps({"sub": "attacker", "aud": "authenticated", "email": "a@evil.test"}).encode())
+    sig = _b64(hmac.new(pem, f"{header}.{payload}".encode(), hashlib.sha256).digest())
+    forged = f"{header}.{payload}.{sig}"
+
+    # JWKS 는 정상 동작한다고 가정 — 그래도 통과하면 안 된다(HS256 은 secret 경로 고정).
+    monkeypatch.setattr(deps, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(deps, "_get_jwks_client", lambda: _FakeJWKSClient(key=pub))
+
+    assert deps._verify_token_local(forged) is None, "공개키를 HMAC 비밀로 쓴 위조 토큰이 통과했다"
+    assert no_remote == []
+
+
+def test_unknown_kid_negative_cache_skips_second_lookup(monkeypatch):
+    """(g) 네거티브 캐시: 같은 미지 kid 로 2회 호출해도 JWKS 조회는 1회.
+
+    PyJWKClient 는 kid 미스마다 캐시를 우회해 JWKS 를 강제 재조회하므로,
+    네거티브 캐시가 없으면 랜덤 kid 요청이 Supabase JWKS 호출로 증폭된다.
+    """
+    priv, _ = _ec_keypair()
+    err = jwt.PyJWKClientError("Unable to find a signing key that matches")
+    fake = _FakeJWKSClient(exc=err)
+    monkeypatch.setattr(deps, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(deps, "_get_jwks_client", lambda: fake)
+
+    token = _es256_token(priv)
+    assert deps._verify_token_local(token) is None
+    assert fake.calls == 1
+    # 2회차: 네거티브 캐시가 히트해 JWKS 조회 자체를 건너뛴다
+    assert deps._verify_token_local(token) is None
+    assert fake.calls == 1, "미지 kid 재요청이 JWKS 를 재조회했다 (증폭 차단 실패)"
+
+
+def test_unknown_kid_negative_cache_expires(monkeypatch):
+    """(g-2) TTL 만료 후에는 다시 조회한다 — 키 회전 직후 새 kid 가 영구 차단되면 안 됨.
+
+    ttl=0 캐시를 주입해 '만료된 상태'를 결정론적으로 재현(시간 대기 없음).
+    """
+    priv, _ = _ec_keypair()
+    fake = _FakeJWKSClient(exc=jwt.PyJWKClientError("no matching key"))
+    monkeypatch.setattr(deps, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(deps, "_get_jwks_client", lambda: fake)
+    monkeypatch.setattr(deps, "_unknown_kid_seen", TTLCache(ttl=0, max_size=64))
+
+    token = _es256_token(priv)
+    assert deps._verify_token_local(token) is None
+    assert deps._verify_token_local(token) is None
+    assert fake.calls == 2, "TTL 만료 후에도 조회를 건너뛰면 회전된 새 kid 가 영구 차단된다"
+
+
+def test_unknown_kid_without_kid_header_not_cached(monkeypatch):
+    """(g-3) kid 헤더가 없으면 네거티브 캐시에 기록하지 않는다 (빈 키 오염 방지)."""
+    priv, _ = _ec_keypair()
+    fake = _FakeJWKSClient(exc=jwt.PyJWKClientError("no kid"))
+    monkeypatch.setattr(deps, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(deps, "_get_jwks_client", lambda: fake)
+
+    # kid 헤더 없는 ES256 토큰
+    token = jwt.encode({"sub": "no-kid", "aud": "authenticated"}, priv, algorithm="ES256")
+    assert deps._verify_token_local(token) is None
+    assert deps._verify_token_local(token) is None
+    assert fake.calls == 2, "kid 없는 토큰이 빈 문자열 키로 캐시돼 조회를 건너뛰었다"
+
+
+def test_network_error_not_negative_cached(monkeypatch):
+    """(g-4) 네트워크 예외는 kid 문제가 아니므로 네거티브 캐시에 넣지 않는다."""
+    priv, _ = _ec_keypair()
+    fake = _FakeJWKSClient(exc=TimeoutError("timed out"))
+    monkeypatch.setattr(deps, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(deps, "_get_jwks_client", lambda: fake)
+
+    token = _es256_token(priv)
+    assert deps._verify_token_local(token) is None
+    assert deps._verify_token_local(token) is None
+    assert fake.calls == 2, "일시적 네트워크 장애가 kid 를 영구(60s) 차단했다"

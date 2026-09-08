@@ -41,6 +41,17 @@ _ALLOWED_ALGORITHMS = ["HS256", "ES256"]
 _JWKS_LIFESPAN_SECONDS = 600  # 공식 권장 10분
 _jwks_client: PyJWKClient | None = None
 
+# 미지 kid 네거티브 캐시 (보안 리뷰 LOW — DoS 증폭 차단).
+# PyJWKClient 는 kid 미스마다 캐시를 우회해 JWKS 를 강제 재조회한다
+# (리뷰어 실측: 서로 다른 미지 kid 10개 → 조회 11회). 공격자가 랜덤 kid 를 흘리면
+# 우리 서버가 Supabase JWKS 로 요청을 증폭시키는 꼴이라, 최근 실패한 kid 는 잠시 기억해
+# 조회 자체를 건너뛴다.
+# ⚠ 안전 방향의 대가: 키 회전 직후의 "진짜 새 kid" 도 최대 _UNKNOWN_KID_TTL 초 동안은
+#   JWKS 조회를 건너뛰고 원격 폴백(_verify_token_remote)으로 흐른다 — 느려질 뿐
+#   인증이 실패하지는 않으며, TTL 이 지나면 정상적으로 JWKS 를 다시 조회한다.
+_UNKNOWN_KID_TTL = 60
+_unknown_kid_seen = TTLCache(ttl=_UNKNOWN_KID_TTL, max_size=64)
+
 
 def _get_jwks_client() -> PyJWKClient | None:
     """JWKS 클라이언트 싱글턴. SUPABASE_URL 미설정이면 None (ES256 검증 불가)."""
@@ -117,14 +128,23 @@ def _verify_token_local(token: str) -> dict | None:
         if client is None:
             logger.warning("[AUTH] ES256 토큰이나 SUPABASE_URL 미설정 — JWKS 검증 불가")
             return None
+        token_kid = header.get("kid") or ""
+        # 최근 실패한 kid 면 JWKS 조회를 건너뛴다 (증폭 차단). kid 가 없으면 기록 대상 아님.
+        if token_kid and _unknown_kid_seen.get(token_kid) is not None:
+            logger.debug("[AUTH] 최근 실패한 kid — JWKS 조회 생략 (원격 폴백): %s", token_kid)
+            return None
         try:
             key = client.get_signing_key_from_jwt(token).key
         except jwt.PyJWKClientError as e:
-            # kid 미매칭·JWKS 응답 이상 등 (키 회전 직후 일시적일 수 있음 → 원격 폴백)
+            # kid 미매칭·JWKS 응답 이상 등 (키 회전 직후 일시적일 수 있음 → 원격 폴백).
+            # 이 kid 는 잠시 기억해 같은 kid 의 반복 요청이 JWKS 를 재조회하지 않게 한다.
+            if token_kid:
+                _unknown_kid_seen.set(token_kid, True)
             logger.warning("[AUTH] JWKS 서명키 조회 실패 (kid 미매칭 등): %s", e)
             return None
         except Exception as e:
-            # 네트워크·타임아웃 등 (PyJWKClient 는 urllib 예외를 그대로 올릴 수 있음)
+            # 네트워크·타임아웃 등 (PyJWKClient 는 urllib 예외를 그대로 올릴 수 있음).
+            # kid 문제가 아니라 일시적 장애이므로 네거티브 캐시에 넣지 않는다.
             logger.warning("[AUTH] JWKS 조회 중 오류 (네트워크 등): %s", e)
             return None
         decode_key = key

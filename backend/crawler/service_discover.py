@@ -7,6 +7,7 @@ C. 상세 보강: 매물 상세 정보 크롤링
 
 import logging
 import os
+from collections import Counter
 
 from dotenv import load_dotenv
 
@@ -386,6 +387,48 @@ def _is_dead_detail(detail_data) -> bool:
     return False
 
 
+# 매물 단위 오류 연속 허용 횟수. 상세 보강 잡은 30분 interval 이므로 6회 ≈ 3시간 연속으로
+# 같은 매물에 대해 네이버가 매물 단위 오류를 답했다는 뜻 = 영구성으로 간주한다.
+# 초과 시 그 매물의 **상세 시도만** 중단한다(선정 쿼리에서 제외). is_active 는 건드리지
+# 않는다 — 상세 API 가 오류를 줘도 매물이 네이버 목록에 살아 있을 수 있고, 살아있는
+# 매물을 오비활성화하지 않는다는 원칙(_is_dead_detail docstring)은 그대로 유지된다.
+# 수동 복구: UPDATE articles SET detail_fail_count = 0 WHERE article_no = '...';
+_DETAIL_FAIL_CAP = 6
+
+# 배치 전수 매물단위 오류 = 시스템성(소프트 차단) 의심 임계. 이 크기 이상의 배치에서
+# **모든** 매물이 매물단위 오류로 돌아오면, 매물 하나하나의 문제가 아니라 네이버가 우리
+# 세션 전체를 앱 레벨에서 소프트 차단(HTTP 200 + dict 오류 일괄 응답)했을 가능성이 높다.
+# 그대로 카운트하면 살아있는 매물 100건이 6회(≈3시간) 뒤 통째로 상한에 걸려 상세 보강에서
+# 조용히 빠진다(24시간 차단이면 최대 800건). 그래서 그 회차는 카운트를 **보류**한다 —
+# "문자열 오류(전체 장애)는 안 센다"와 같은 결의 안전핀이다.
+# 배치가 작을 때(라이브 실측의 2건 케이스처럼 대기 매물 자체가 적을 때)는 "전수"가
+# 우연히 성립하기 쉬워 판정 근거가 못 되므로, 임계 미만이면 그대로 카운트해 원래 목적
+# (개별 매물 무한 재시도 차단)을 유지한다.
+_ARTICLE_ERROR_SYSTEMIC_MIN = 20
+
+
+def _is_article_error(detail_data) -> bool:
+    """상세 응답이 '이 매물에 한정된(= 재시도해도 안 풀릴 가능성이 높은) 오류' 인지 판정.
+
+    shared/naver_api.py _request_with_retry 의 오류 형태 구분을 그대로 따른다:
+    - 시스템성 transient(401/403/429/5xx/네트워크) → {"error": "<문자열>"} → False.
+      전체 장애라 카운트하면 안 된다(네이버 4시간 장애에 살아있는 매물 수백 개가
+      한꺼번에 상한에 걸려 상세 보강에서 통째로 빠진다).
+    - 네이버가 매물 단위로 답한 오류 → {"error": {"code": ..., "message": ...}} → True.
+      단 진짜 dead(_DEAD_ERROR_CODES)는 별도 비활성화 경로가 처리하므로 제외한다.
+
+    라이브 실측 사례(2026-09-08): 매물 2643869752·2643862927 이 HTTP 200 +
+    {"error": {"code": "ERROR", "message": "알수없는 오류(시스템 오류)"}} 를 이틀째
+    일관 반환 → dead 집합에 없어 transient 로 분류돼 30분마다 영원히 재시도됐다.
+    """
+    if not isinstance(detail_data, dict):
+        return False
+    err = detail_data.get("error")
+    if not isinstance(err, dict):
+        return False
+    return err.get("code") not in _DEAD_ERROR_CODES
+
+
 def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = None):
     """detail_crawled=FALSE인 활성 매물의 상세 정보 크롤링"""
     db = SessionLocal()
@@ -406,7 +449,13 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
 
         articles = (
             db.query(Article)
-            .filter(Article.detail_crawled == False, Article.is_active == True)
+            .filter(
+                Article.detail_crawled == False,
+                Article.is_active == True,
+                # 매물 단위 오류가 상한(_DETAIL_FAIL_CAP)에 도달한 매물은 제외 —
+                # 영원히 헛도는 재시도 차단(세션 395, V056).
+                Article.detail_fail_count < _DETAIL_FAIL_CAP,
+            )
             # 신선도 우선: 최근 본(=네이버에 살아있는) 매물부터 상세 크롤. heap 순서면
             # 2.5개월 묵은 죽은 매물(상세 API 404)부터 픽해 배치가 100% 헛돈다(filled 0).
             # last_seen_at 최신 = 상세 API 살아있음(라이브 실증). 인덱스 불필요 — 이 쿼리
@@ -426,9 +475,16 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         # PK 재조회 lazy-load(SELECT ... WHERE article_no=:pk)를 유발한다. 평상시엔 throttle
         # 1.5초에 흡수되나 DB 부하 구간엔 이 PK 조회가 20~30초로 치솟아 statement_timeout →
         # QueryCanceled → 트랜잭션 aborted → _finalize_job 2차 사망(세션 342 실측: 2026-07-04
-        # 21:53·22:26). 루프에 필요한 5개 속성을 미리 뽑아 ORM 재접근을 제거한다.
+        # 21:53·22:26). 루프에 필요한 6개 속성을 미리 뽑아 ORM 재접근을 제거한다.
         arts = [
-            (a.article_no, a.trade_type_name, a.deal_or_warrant_prc, a.rent_prc, a.area2_m2)
+            (
+                a.article_no,
+                a.trade_type_name,
+                a.deal_or_warrant_prc,
+                a.rent_prc,
+                a.area2_m2,
+                a.detail_fail_count,
+            )
             for a in articles
         ]
         # total_items 확정 저장 — autoflush=False(database.py:65) 라 위 대입은 메모리에만
@@ -440,7 +496,21 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
 
         skipped_dead = 0
         skipped_transient = 0
-        for i, (article_no, trade_type_name, deal_or_warrant_prc, rent_prc, area2_m2) in enumerate(arts):
+        skipped_article_error = 0
+        # 매물 단위 오류 사유 집계 — 로그에 (code, message) 별 건수를 남겨야 다음 진단이
+        # 가능하다(세션 395 이전엔 오류 내용이 로그에 전혀 안 남아 원인 추적이 불가능했다).
+        article_error_reasons: Counter[tuple[str, str]] = Counter()
+        # 매물단위 오류 매물 (article_no, 선추출 detail_fail_count, code, message) —
+        # 루프 뒤 시스템성 판정 후 일괄 적용/보류한다.
+        article_error_hits: list[tuple[str, int, str, str]] = []
+        for i, (
+            article_no,
+            trade_type_name,
+            deal_or_warrant_prc,
+            rent_prc,
+            area2_m2,
+            detail_fail_count,
+        ) in enumerate(arts):
             record_call("article_detail_batch")
             detail_data = NaverEstateAPI.get_article_detail(article_no)
             if detail_data and "error" not in detail_data:
@@ -469,10 +539,23 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
                     synchronize_session=False,
                 )
                 skipped_dead += 1
+            elif _is_article_error(detail_data):
+                # 매물 단위 오류 (error 가 dict, code 는 dead 집합 밖) → 실패 후보로 적립.
+                # 여기서 바로 UPDATE 하지 않는 이유: 배치 **전수**가 이 갈래면 개별 매물
+                # 문제가 아니라 시스템성 소프트 차단 의심이라 회차 통째로 보류해야 하는데,
+                # 그 판정은 배치를 다 돌아봐야 가능하다(루프 뒤에서 일괄 적용).
+                # detail_crawled·is_active 는 어느 경우에도 건드리지 않는다.
+                err = detail_data.get("error") or {}
+                code = str(err.get("code") or "")
+                message = str(err.get("message") or "")
+                skipped_article_error += 1
+                article_error_reasons[(code, message)] += 1
+                article_error_hits.append((article_no, detail_fail_count or 0, code, message))
             else:
-                # transient 오류 (401/403/429/5xx/네트워크) → 플래그 안 건드림.
-                # 신선도 우선 정렬로 배치 앞이 살아있는 신선 매물이라, 일시 오류로
-                # 살아있는 매물을 잘못 비활성화하지 않도록 다음 배치 재시도에 맡긴다.
+                # 시스템성 transient 오류 (401/403/429/5xx/네트워크 = error 가 문자열)
+                # → 플래그·카운터 모두 안 건드림. 신선도 우선 정렬로 배치 앞이 살아있는
+                # 신선 매물이라, 전체 장애로 살아있는 매물을 잘못 끊지 않도록 다음 배치
+                # 재시도에 맡긴다.
                 skipped_transient += 1
 
             # CV-49: 배치 commit (50건 단위) — 행별 commit 대신
@@ -481,15 +564,53 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
 
             _throttle_details.wait()
 
+        # ── 매물단위 오류 카운트 적용 (시스템성 소프트 차단 차단기) ──
+        # 배치가 판정 가능한 크기인데 **전수**가 매물단위 오류면 = 개별 매물 문제가 아니라
+        # 네이버 세션 전체가 소프트 차단됐을 가능성 → 그 회차는 증가를 보류한다.
+        # 보류해도 손해는 "이번 회차만큼 상한 도달이 늦어지는 것"뿐이고, 반대로 잘못
+        # 카운트하면 살아있는 매물이 통째로 상세 보강에서 빠진다(비대칭 위험).
+        systemic_suspected = (
+            len(arts) >= _ARTICLE_ERROR_SYSTEMIC_MIN and skipped_article_error == len(arts)
+        )
+        reason_summary = ", ".join(
+            f"{code or '?'}/{message or '?'}×{cnt}"
+            for (code, message), cnt in article_error_reasons.most_common(3)
+        )
+        if systemic_suspected:
+            logger.warning(
+                "배치 전수 매물단위 오류 %d건 — 시스템성(소프트 차단) 의심,"
+                " detail_fail_count 증가 보류 (사유 %s)",
+                skipped_article_error, reason_summary or "?",
+            )
+        elif article_error_hits:
+            db.query(Article).filter(
+                Article.article_no.in_([an for an, _, _, _ in article_error_hits])
+            ).update(
+                {"detail_fail_count": Article.detail_fail_count + 1},
+                synchronize_session=False,
+            )
+            for article_no, prev_fail_count, code, message in article_error_hits:
+                # 선추출값 + 1 = 이번 갱신 후의 값
+                if prev_fail_count + 1 >= _DETAIL_FAIL_CAP:
+                    logger.warning(
+                        "상세 시도 중단(연속 %d회 매물단위 오류): article %s code=%s msg=%s",
+                        prev_fail_count + 1, article_no, code, message,
+                    )
+
         _finalize_job(
             db, job, "completed",
             processed_items=processed,
             completed_at=utcnow(),
         )
         db.commit()  # 나머지 flush
+        error_note = f"({reason_summary})" if reason_summary else ""
+        if systemic_suspected:
+            error_note += "(카운트 보류)"
         logger.info(
-            "상세 보강 완료: %d/%d건 (dead %d건 비활성화, transient %d건 재시도 대기)",
+            "상세 보강 완료: %d/%d건 (dead %d건 비활성화, transient %d건 재시도 대기,"
+            " 매물오류 %d건%s)",
             processed, len(articles), skipped_dead, skipped_transient,
+            skipped_article_error, error_note,
         )
 
     except Exception as e:

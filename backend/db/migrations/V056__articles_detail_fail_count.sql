@@ -1,0 +1,63 @@
+-- V056: articles.detail_fail_count 컬럼 추가 (매물 상세 보강 무한 재시도 상한, 세션 395)
+--
+-- 결함: crawler/service_discover.py 의 crawl_article_details 는 상세 API 응답을 3갈래로
+-- 분류한다 — ① 정상 → 채움, ② _is_dead_detail(error 가 dict 이고 code 가
+-- 'errorCode.NotExistInformation') → detail_crawled=TRUE·is_active=FALSE 로 종료,
+-- ③ 그 외 전부 "transient" → 플래그를 안 건드리고 다음 배치에 재시도.
+-- 그런데 네이버가 **매물 단위로** 영구성 오류를 돌려주는 경우가 ③ 에 섞인다.
+-- 라이브 실측(2026-09-08): 매물 2643869752·2643862927(단지 173241)에 대해 상세 API 가
+-- HTTP 200 + {"error": {"code": "ERROR", "message": "알수없는 오류(시스템 오류)"}} 를
+-- 2026-09-07 08:29 KST 이후 이틀째 일관되게 반환한다. code 가 dead 집합에 없어 ③ 으로
+-- 분류되고, 30분 interval 잡이 이 두 건을 **영원히** 재시도한다(24시간 로그: "상세 보강
+-- 완료: 0/2건 (dead 0건, transient 2건 재시도 대기)" 32회). 로그에 오류 내용이 안 남아
+-- 진단조차 불가능했다.
+--
+-- 처방: 매물 단위 오류에 한해 실패 횟수를 세고, 상한(_DETAIL_FAIL_CAP = 6, 30분 주기 ×
+-- 6 ≈ 3시간 연속)을 넘으면 그 매물의 **상세 시도만** 중단한다(선정 쿼리에서 제외).
+--
+-- ⚠ 소프트 차단 오탐 방지: 배치가 판정 가능한 크기(_ARTICLE_ERROR_SYSTEMIC_MIN = 20) 이상인데
+-- **전수**가 매물 단위 오류면 그 회차는 카운트를 보류한다. 네이버가 봇 의심 세션에 모든
+-- 매물로 HTTP 200 + dict 오류를 일괄 반환하는 앱 레벨 소프트 차단을 하면, 그걸 매물 하나하나의
+-- 문제로 세어 살아있는 매물 100건이 3시간 뒤 통째로 상세 보강에서 빠지기 때문이다.
+--
+-- ⚠ is_active 는 절대 건드리지 않는다 — 상세 API 가 오류를 줘도 그 매물이 네이버 목록에
+-- 살아 있을 수 있다(dead 판정은 여전히 NotExistInformation 전용). 상한은 "헛도는 시도를
+-- 멈추는 것"이지 "매물을 죽이는 것"이 아니다.
+--
+-- ⚠ 왜 "문자열 오류"는 세지 않는가 (이 설계의 핵심):
+-- shared/naver_api.py 의 _request_with_retry 는 오류 형태를 구분해 돌려준다 —
+-- 시스템성 transient(401/403/429/5xx/네트워크)는 {"error": "<문자열>"}, 네이버가 매물
+-- 단위로 답한 오류는 {"error": {"code": ..., "message": ...}} dict. 문자열 오류까지
+-- 세면 네이버 전체 장애 3시간에 살아있는 매물 수백 개가 한꺼번에 상한에 걸려 상세
+-- 보강 대상에서 통째로 빠진다. 그래서 dict 오류(= 매물 단위)만 카운트한다.
+--
+-- 수동 복구법 (오류 원인이 해소돼 다시 시도시키고 싶을 때):
+--   UPDATE articles SET detail_fail_count = 0 WHERE article_no = '2643869752';
+--   -- 전체 리셋: UPDATE articles SET detail_fail_count = 0 WHERE detail_fail_count > 0;
+--
+-- 기존 데이터 영향 0: NOT NULL DEFAULT 0 이라 기존 행은 전부 0 = "실패 이력 없음"으로
+-- 취급돼 지금과 동일하게 동작한다. PostgreSQL 11+ 는 상수 DEFAULT 의 ADD COLUMN 을
+-- 카탈로그만 갱신하므로 테이블 재작성 0(articles 는 대형 테이블이라 이 점이 중요).
+--
+-- ⚠ 공유 DB 주의: articles 는 mibunyang 과 공용 테이블이다. 다만 본 변경은 **컬럼 추가만**
+-- (기존 컬럼 타입 변경·삭제 없음)이고 mibunyang 은 이 컬럼을 읽지도 쓰지도 않으므로 영향 0.
+-- mibunyang 의 upsert 는 명시 payload 방식이라 이 컬럼을 NULL 로 밀 위험도 없다
+-- (NOT NULL DEFAULT 라 명시하지 않으면 0 이 들어간다).
+--
+-- ⚠⚠ 코드보다 prod 선행 실행 필수 (V034 관례) — ORM(db.models.Article)에 매핑된 컬럼은
+-- Article 을 SELECT 하는 모든 경로의 컬럼 목록에 포함되므로, prod 에 컬럼이 없는 채로
+-- 새 코드가 뜨면 UndefinedColumn 500. 폭발 반경 = 매물 조회 API 전체
+-- (/api/complexes/{no}/articles, /api/live/*, 매물 상세, 엑셀 export) + 크롤러 upsert.
+-- SQLite CI 는 create_all() 이 컬럼을 자동 생성해 이 누락을 못 잡는다.
+-- 배포 순서: ① 본 파일 prod 실행 → ② 코드 머지·재시작.
+-- ADD COLUMN IF NOT EXISTS 라 멱등·재실행 안전.
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS detail_fail_count SMALLINT NOT NULL DEFAULT 0;
+COMMENT ON COLUMN articles.detail_fail_count IS
+  '상세 API 가 이 매물에 대해 "매물 단위 오류"(error 가 dict 이고 code 가 NotExistInformation 이 아님)를 연속으로 돌려준 횟수 — crawl_article_details 의 무한 재시도 상한 키 (세션 395). _DETAIL_FAIL_CAP(6) 이상이면 상세 시도 대상에서 제외된다(is_active 는 불변). 시스템성 transient(error 가 문자열: 401/403/429/5xx/네트워크)는 세지 않는다. 수동 복구 = UPDATE articles SET detail_fail_count=0 WHERE article_no=...';
+NOTIFY pgrst, 'reload schema';
+
+-- 역방향 (롤백):
+-- 롤백 순서: ① 코드 롤백·backend 재시작 → ② 아래 DROP
+--   (ORM 매핑이 남은 채 DROP 하면 Article SELECT 전 경로가 UndefinedColumn 500 — 적용의 역순)
+-- ALTER TABLE articles DROP COLUMN IF EXISTS detail_fail_count;
+-- NOTIFY pgrst, 'reload schema';

@@ -15,6 +15,11 @@
 -- 처방: 매물 단위 오류에 한해 실패 횟수를 세고, 상한(_DETAIL_FAIL_CAP = 6, 30분 주기 ×
 -- 6 ≈ 3시간 연속)을 넘으면 그 매물의 **상세 시도만** 중단한다(선정 쿼리에서 제외).
 --
+-- ⚠ 소프트 차단 오탐 방지: 배치가 판정 가능한 크기(_ARTICLE_ERROR_SYSTEMIC_MIN = 20) 이상인데
+-- **전수**가 매물 단위 오류면 그 회차는 카운트를 보류한다. 네이버가 봇 의심 세션에 모든
+-- 매물로 HTTP 200 + dict 오류를 일괄 반환하는 앱 레벨 소프트 차단을 하면, 그걸 매물 하나하나의
+-- 문제로 세어 살아있는 매물 100건이 3시간 뒤 통째로 상세 보강에서 빠지기 때문이다.
+--
 -- ⚠ is_active 는 절대 건드리지 않는다 — 상세 API 가 오류를 줘도 그 매물이 네이버 목록에
 -- 살아 있을 수 있다(dead 판정은 여전히 NotExistInformation 전용). 상한은 "헛도는 시도를
 -- 멈추는 것"이지 "매물을 죽이는 것"이 아니다.
@@ -52,4 +57,7 @@ COMMENT ON COLUMN articles.detail_fail_count IS
 NOTIFY pgrst, 'reload schema';
 
 -- 역방향 (롤백):
+-- 롤백 순서: ① 코드 롤백·backend 재시작 → ② 아래 DROP
+--   (ORM 매핑이 남은 채 DROP 하면 Article SELECT 전 경로가 UndefinedColumn 500 — 적용의 역순)
 -- ALTER TABLE articles DROP COLUMN IF EXISTS detail_fail_count;
+-- NOTIFY pgrst, 'reload schema';

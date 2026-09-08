@@ -16,6 +16,7 @@ import pytest
 
 from crawler import service_discover
 from crawler.service_discover import (
+    _ARTICLE_ERROR_SYSTEMIC_MIN,
     _DETAIL_FAIL_CAP,
     _is_article_error,
     _is_dead_detail,
@@ -381,3 +382,76 @@ def test_dead_and_ok_paths_unchanged_by_fail_count(db, no_throttle, monkeypatch)
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "article_detail").one()
     assert job.total_items == 2
     assert job.processed_items == 1
+
+
+# ── 세션 395 (후속): 배치 전수 매물오류 = 소프트 차단 의심 → 카운트 보류 ──
+
+def test_systemic_all_error_batch_holds_fail_count(db, no_throttle, monkeypatch):
+    """판정 가능한 크기의 배치가 **전수** 매물단위 오류면 카운트를 보류한다.
+
+    위험: 네이버가 봇 의심 세션에 모든 매물로 HTTP 200 + dict 오류를 일괄 반환하는
+    앱 레벨 소프트 차단을 하면, 그걸 매물 하나하나의 문제로 세어 살아있는 매물이
+    6회(≈3시간) 뒤 통째로 상한에 걸린다(24시간 차단이면 최대 800건). 문자열 오류를
+    안 세는 것과 같은 결의 안전핀.
+
+    뮤테이션 검증(세션 395): 차단기 조건(systemic_suspected)을 False 로 고정하면 이
+    테스트가 `assert [1, 1, ...] == [0, 0, ...]` 로 실패한다(전 건이 +1 됨).
+    """
+    now = datetime.now(timezone.utc)
+    total = _ARTICLE_ERROR_SYSTEMIC_MIN  # 임계 정확히 충족 (경계값)
+    for i in range(total):
+        _make_pending_article(db, f"SYS{i:03d}", now - timedelta(minutes=i))
+
+    monkeypatch.setattr(
+        service_discover.NaverEstateAPI,
+        "get_article_detail",
+        staticmethod(
+            lambda an: {"error": {"code": "ERROR", "message": "알수없는 오류(시스템 오류)"}}
+        ),
+    )
+
+    crawl_article_details(batch_size=total)
+
+    db.expire_all()
+    rows = db.query(Article).filter(Article.article_no.like("SYS%")).all()
+    assert len(rows) == total
+    # 전수 오류 = 소프트 차단 의심 → 한 건도 올리지 않는다
+    assert [r.detail_fail_count for r in rows] == [0] * total
+    # 플래그는 어느 경우에도 불변
+    assert all(r.is_active is True and r.detail_crawled is False for r in rows)
+
+
+def test_partial_error_batch_still_counts(db, no_throttle, monkeypatch):
+    """전수가 아니면(1건이라도 정상) 차단기가 발동하지 않고 그대로 카운트한다.
+
+    "같은 시각 다른 매물은 정상"이라는 대조군이 있으면 개별 매물 문제로 확정할 수
+    있으므로 원래 목적(무한 재시도 차단)을 유지해야 한다.
+    """
+    now = datetime.now(timezone.utc)
+    total = _ARTICLE_ERROR_SYSTEMIC_MIN
+    for i in range(total):
+        _make_pending_article(db, f"MIX{i:03d}", now - timedelta(minutes=i))
+
+    def _fake_detail(article_no):
+        if article_no == "MIX000":  # 1건만 정상 = 대조군
+            return {"articleDetail": {"articleNo": article_no}}
+        return {"error": {"code": "ERROR", "message": "알수없는 오류(시스템 오류)"}}
+
+    monkeypatch.setattr(
+        service_discover.NaverEstateAPI, "get_article_detail", staticmethod(_fake_detail)
+    )
+
+    crawl_article_details(batch_size=total)
+
+    db.expire_all()
+    ok = db.query(Article).filter(Article.article_no == "MIX000").one()
+    assert ok.detail_crawled is True
+    assert ok.detail_fail_count == 0
+
+    errored = (
+        db.query(Article)
+        .filter(Article.article_no.like("MIX%"), Article.article_no != "MIX000")
+        .all()
+    )
+    assert len(errored) == total - 1
+    assert [r.detail_fail_count for r in errored] == [1] * (total - 1)

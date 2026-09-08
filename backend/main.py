@@ -206,6 +206,11 @@ async def security_headers_middleware(request: Request, call_next):
             response.headers["Cache-Control"] = "public, max-age=86400"  # 24시간 (정적 데이터)
         elif "/articles" not in path and path.startswith("/api/complexes/"):
             response.headers["Cache-Control"] = "private, max-age=3600"  # 1시간 (단지 정보)
+        elif path.endswith("/crawl-status") or path.endswith("/collect-status"):
+            # 진행 상태 폴링 응답이 브라우저에 캐시되면 완료를 영영 감지 못 한다
+            # (세션 395 라이브 재현: 폴링 44회 중 서버 도착 1회, 크롤이 끝나도 화면은 "크롤 중").
+            # 아래 /api/live/ 의 max-age 는 실시간 검색·상세 결과 캐시라 의도된 동작이므로 그대로 둔다.
+            response.headers["Cache-Control"] = "no-store"
         elif path.startswith("/api/live/"):
             response.headers["Cache-Control"] = f"private, max-age={_get_cached_ttl()}"
         else:

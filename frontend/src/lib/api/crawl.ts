@@ -28,7 +28,9 @@ export async function startLiveCrawl(
 export async function getCrawlStatus(complexNo: string) {
   return fetchApi<CrawlProgress>(
     `/api/live/${encodeURIComponent(complexNo)}/articles/crawl-status`,
-    { timeoutMs: DEFAULT_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
+    // no-store = 서버 no-store 헤더에 대한 이중 방어 (프록시·미들웨어 회귀 시에도 브라우저가
+    // 폴링 응답을 저장하지 않게 — 캐시되면 완료를 감지 못 한다, 세션 395)
+    { timeoutMs: DEFAULT_TIMEOUT_MS, cache: "no-store" } as RequestInit & { timeoutMs?: number },
   );
 }
 
@@ -46,6 +48,7 @@ export async function startPriceCollect(complexNo: string, token?: string) {
 export async function getPriceCollectStatus(complexNo: string) {
   return fetchApi<PriceCollectProgress>(
     `/api/live/${encodeURIComponent(complexNo)}/price-history/collect-status`,
-    { timeoutMs: DEFAULT_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
+    // no-store = 서버 no-store 헤더에 대한 이중 방어 (위 getCrawlStatus 와 같은 이유, 세션 395)
+    { timeoutMs: DEFAULT_TIMEOUT_MS, cache: "no-store" } as RequestInit & { timeoutMs?: number },
   );
 }

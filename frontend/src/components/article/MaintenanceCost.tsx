@@ -8,6 +8,10 @@ import { InfoCard, InfoRow } from "@/components/article/InfoCards";
 interface Props {
   complexNo: string;
   area2M2?: number;
+  /** B2 게이트 토큰 — 부모(ArticleDetail)와 같은 queryKey 라 토큰도 같이 받아야 한다 (세션 395) */
+  accessToken?: string;
+  /** 세션 해석 완료 여부. 부모가 안 넘기면(단독 사용) 기존 동작 유지 */
+  tokenReady?: boolean;
 }
 
 /** 관리비를 "N만원" 형식으로 포맷 */
@@ -16,11 +20,11 @@ function fmtCost(v?: number | null): string | null {
   return `${v.toLocaleString()}만원`;
 }
 
-export default function MaintenanceCost({ complexNo, area2M2 }: Props) {
+export default function MaintenanceCost({ complexNo, area2M2, accessToken, tokenReady = true }: Props) {
   const { data, isError } = useQuery({
     queryKey: queryKeys.pyeongDetails(complexNo),
-    queryFn: () => getPyeongDetails(complexNo),
-    enabled: !!complexNo,
+    queryFn: () => getPyeongDetails(complexNo, accessToken),
+    enabled: !!complexNo && tokenReady,
   });
 
   if (isError || !data?.pyeong_details?.length || !area2M2 || area2M2 <= 0) return null;

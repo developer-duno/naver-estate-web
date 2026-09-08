@@ -6,6 +6,7 @@ import { getArticleLive, getArticles, getPriceStats, getPyeongDetails } from "@/
 // ApiError 는 core 직접 import — 테스트의 vi.mock("@/lib/api") factory 교체에 안 휩쓸리게 (verify/page.tsx 답습)
 import { ApiError } from "@/lib/api/core";
 import { queryKeys } from "@/lib/query-keys";
+import { useSessionToken } from "@/hooks/useSessionToken";
 import { tradeKey } from "@/lib/trade-types";
 import type { Article, Complex } from "@/types";
 import Skeleton from "@/components/Skeleton";
@@ -18,6 +19,7 @@ import MaintenanceCost from "@/components/article/MaintenanceCost";
 import ArticleDescription from "@/components/article/ArticleDescription";
 import PriceHistoryTable from "@/components/article/PriceHistoryTable";
 import ArticleFavoriteButton from "@/components/ArticleFavoriteButton";
+import LockedDataCard, { isAuthGateError } from "@/components/ui/locked-data-card";
 
 /**
  * ChartAccordion emptyHint 의 네트워크 실패(isError) 안내 + "다시 시도" 버튼.
@@ -172,23 +174,30 @@ function ArticleDetailBody({ article, articleNo, complex }: BodyProps) {
   const area2M2 = article.area2_m2;
   const tradeTypeName = article.trade_type_name;
   const validArea = area2M2 != null && area2M2 > 0;
+  // B2 게이트(세션 313) 이후 price-stats·pyeong-details·articles 는 승인 중개사 토큰 필요.
+  // 모달만 토큰을 안 넘겨 로그인한 전문가에게도 항상 401 이던 결함 수정 (세션 395).
+  const { sessionToken, tokenReady } = useSessionToken();
 
-  // 자식 컴포넌트와 동일 queryKey — React Query 가 dedupe 하므로 네트워크 호출 증가 0
+  // 자식 컴포넌트와 동일 queryKey — React Query 가 dedupe 하므로 네트워크 호출 증가 0.
+  // queryKey 에 토큰을 넣지 않으므로 자식에도 같은 토큰·tokenReady 를 내려야 한다
+  // (토큰 없는 자식이 먼저 쏘면 401 이 같은 키로 캐시돼 부모 수정이 무효화됨)
   const priceStatsQuery = useQuery({
     queryKey: queryKeys.priceStats(complexNo),
-    queryFn: () => getPriceStats(complexNo),
-    enabled: !!complexNo,
+    queryFn: () => getPriceStats(complexNo, sessionToken),
+    // tokenReady 가드: 토큰 해석 완료 후 실행 — 토큰 도착 전 undefined 로 먼저 쏴서
+    // 401→queryKey 불변 refetch 안 됨(잠금 오인) 차단 (page.tsx 답습)
+    enabled: !!complexNo && tokenReady,
   });
   const pyeongQuery = useQuery({
     queryKey: queryKeys.pyeongDetails(complexNo),
-    queryFn: () => getPyeongDetails(complexNo),
-    enabled: !!complexNo,
+    queryFn: () => getPyeongDetails(complexNo, sessionToken),
+    enabled: !!complexNo && tokenReady,
   });
   const competingFilters = tradeTypeName ? { trade_types: tradeTypeName } : undefined;
   const articlesQuery = useQuery({
     queryKey: queryKeys.articles(complexNo, competingFilters),
-    queryFn: () => getArticles(complexNo, competingFilters),
-    enabled: !!complexNo,
+    queryFn: () => getArticles(complexNo, competingFilters, sessionToken),
+    enabled: !!complexNo && tokenReady,
   });
 
   const hasMarketPosition = useMemo(() => {
@@ -230,30 +239,55 @@ function ArticleDetailBody({ article, articleNo, complex }: BodyProps) {
         title="시세 정보"
         hasContent={hasMarketPosition}
         emptyHint={
-          priceStatsQuery.isError
-            ? <RetryHint message="시세 정보를 불러오지 못했습니다." onRetry={priceStatsQuery.refetch} />
-            : "이 면적의 시세 정보가 아직 수집되지 않았습니다."
+          isAuthGateError(priceStatsQuery.error)
+            ? <LockedDataCard label="시세 정보" />
+            : priceStatsQuery.isError
+              ? <RetryHint message="시세 정보를 불러오지 못했습니다." onRetry={priceStatsQuery.refetch} />
+              : "이 면적의 시세 정보가 아직 수집되지 않았습니다."
         }
       >
-        <MarketPosition complexNo={complexNo} tradeTypeName={tradeTypeName} area2M2={area2M2} />
+        <MarketPosition
+          complexNo={complexNo}
+          tradeTypeName={tradeTypeName}
+          area2M2={area2M2}
+          accessToken={sessionToken}
+          tokenReady={tokenReady}
+        />
       </ChartAccordion>
       <ChartAccordion
         title="경쟁 매물"
         hasContent={hasCompeting}
-        emptyHint={<RetryHint message="경쟁 매물 정보를 불러오지 못했습니다." onRetry={articlesQuery.refetch} />}
+        emptyHint={
+          isAuthGateError(articlesQuery.error)
+            ? <LockedDataCard label="경쟁 매물" />
+            : <RetryHint message="경쟁 매물 정보를 불러오지 못했습니다." onRetry={articlesQuery.refetch} />
+        }
       >
-        <CompetingListings complexNo={complexNo} tradeTypeName={tradeTypeName} currentArticleNo={articleNo} />
+        <CompetingListings
+          complexNo={complexNo}
+          tradeTypeName={tradeTypeName}
+          currentArticleNo={articleNo}
+          accessToken={sessionToken}
+          tokenReady={tokenReady}
+        />
       </ChartAccordion>
       <ChartAccordion
         title="관리비 상세"
         hasContent={hasMaintenance}
         emptyHint={
-          pyeongQuery.isError
-            ? <RetryHint message="관리비 정보를 불러오지 못했습니다." onRetry={pyeongQuery.refetch} />
-            : "이 면적의 관리비 정보가 아직 수집되지 않았습니다."
+          isAuthGateError(pyeongQuery.error)
+            ? <LockedDataCard label="관리비 정보" />
+            : pyeongQuery.isError
+              ? <RetryHint message="관리비 정보를 불러오지 못했습니다." onRetry={pyeongQuery.refetch} />
+              : "이 면적의 관리비 정보가 아직 수집되지 않았습니다."
         }
       >
-        <MaintenanceCost complexNo={complexNo} area2M2={area2M2} />
+        <MaintenanceCost
+          complexNo={complexNo}
+          area2M2={area2M2}
+          accessToken={sessionToken}
+          tokenReady={tokenReady}
+        />
       </ChartAccordion>
       <ArticleDescription article={article} />
     </div>

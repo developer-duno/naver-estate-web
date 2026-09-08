@@ -2,10 +2,19 @@
 /**
  * ArticleDetail 컴포넌트 테스트 - 모달 렌더링, 닫기
  * 실행: npx vitest run src/components/__tests__/ArticleDetail.test.tsx
+ *
+ * 뮤테이션 검증(세션 395): ArticleDetailBody 의 queryFn 에서 sessionToken 인자를 제거하면
+ * "세션 토큰 전달" describe 의 3 케이스가 FAIL 하는 것을 확인한 뒤 복원했다.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { TestQueryProvider } from "../../test-setup";
+
+// B2 게이트 토큰 훅 — 케이스별로 반환값을 바꾼다 (CheckoutButton.test.tsx 패턴 답습)
+const useSessionTokenMock = vi.fn();
+vi.mock("@/hooks/useSessionToken", () => ({
+  useSessionToken: () => useSessionTokenMock(),
+}));
 
 vi.mock("@/lib/api", () => ({
   getArticleLive: vi.fn().mockResolvedValue({
@@ -31,6 +40,10 @@ vi.mock("@/lib/api", () => ({
 let ArticleDetail: any;
 beforeEach(async () => {
   vi.resetModules();
+  // 기본값 = 승인 중개사 로그인 상태 (토큰 있음 + 해석 완료)
+  useSessionTokenMock.mockReturnValue({
+    sessionToken: "tok", tokenReady: true, tokenError: false, dismissTokenError: vi.fn(),
+  });
   const mod = await import("../ArticleDetail");
   ArticleDetail = mod.default;
 });
@@ -223,5 +236,75 @@ describe("ArticleDetail — 삭제된 매물 404 분기 (세션 297)", () => {
     expect(retryBtn).toBeInTheDocument();
     expect(screen.getByText("매물 정보를 불러올 수 없습니다.")).toBeInTheDocument();
     expect(screen.queryByText("즐겨찾기에서 제거")).not.toBeInTheDocument();
+  });
+});
+
+// 세션 395: B2 게이트 이후 모달이 토큰 없이 호출해 항상 401 이던 결함 회귀 가드.
+// 라이브 로그 2026-09-09 01:54:36 — price-stats/pyeong-details/articles 가 모달에서만 401.
+describe("ArticleDetail — 세션 토큰 전달 (B2 게이트, 세션 395)", () => {
+  // 앞 describe 들이 getArticleLive 를 지속형 reject 로 덮어써 mock 구현이 파일 내에서
+  // 이월된다(vi.resetModules() 는 모듈만 리셋, mock 구현은 유지) → 매물 본문부터 복원
+  beforeEach(async () => {
+    const api = await import("@/lib/api");
+    vi.mocked(api.getArticleLive).mockResolvedValue({
+      article_no: "A001",
+      complex_no: "C001",
+      complex_name: "래미안테스트",
+      trade_type_name: "매매",
+      deal_or_warrant_prc: "5억",
+      area2_m2: 84,
+      floor_info: "10/25",
+      direction: "남향",
+      realtor_name: "행복공인",
+      building_name: "101동",
+    } as any);
+    vi.mocked(api.getPriceStats).mockResolvedValue({
+      complex_no: "C001", total_articles: 0, by_area: [], by_floor: [],
+    } as any);
+  });
+
+  it("토큰이 있으면 시세·면적·경쟁매물 조회에 토큰 인자를 함께 넘긴다", async () => {
+    const api = await import("@/lib/api");
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={vi.fn()} /></TestQueryProvider>);
+
+    await waitFor(() => {
+      expect(vi.mocked(api.getPriceStats)).toHaveBeenCalledWith("C001", "tok");
+    }, { timeout: 3000 });
+    expect(vi.mocked(api.getPyeongDetails)).toHaveBeenCalledWith("C001", "tok");
+    expect(vi.mocked(api.getArticles)).toHaveBeenCalledWith("C001", { trade_types: "매매" }, "tok");
+  });
+
+  it("tokenReady=false 면 세 조회 모두 실행되지 않는다 (토큰 도착 전 401 캐시 방지)", async () => {
+    useSessionTokenMock.mockReturnValue({
+      sessionToken: undefined, tokenReady: false, tokenError: false, dismissTokenError: vi.fn(),
+    });
+    const api = await import("@/lib/api");
+    // 앞 케이스들의 호출 이력이 같은 mock 인스턴스에 누적되므로 "미호출" 단언 전 초기화
+    vi.mocked(api.getPriceStats).mockClear();
+    vi.mocked(api.getPyeongDetails).mockClear();
+    vi.mocked(api.getArticles).mockClear();
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={vi.fn()} /></TestQueryProvider>);
+
+    // 매물 본문은 뜨지만(getArticleLive 는 게이트 밖) B2 게이트 3종은 미호출
+    await waitFor(() => expect(screen.getByText("시세 정보")).toBeInTheDocument(), { timeout: 3000 });
+    expect(vi.mocked(api.getPriceStats)).not.toHaveBeenCalled();
+    expect(vi.mocked(api.getPyeongDetails)).not.toHaveBeenCalled();
+    expect(vi.mocked(api.getArticles)).not.toHaveBeenCalled();
+  });
+
+  it("401(비로그인·미승인) 이면 '다시 시도' 대신 승인 중개사 잠금 안내를 보여준다", async () => {
+    useSessionTokenMock.mockReturnValue({
+      sessionToken: undefined, tokenReady: true, tokenError: false, dismissTokenError: vi.fn(),
+    });
+    const api = await import("@/lib/api");
+    const { ApiError } = await import("@/lib/api/core");
+    vi.mocked(api.getPriceStats).mockRejectedValue(new ApiError("Unauthorized", 401));
+
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={vi.fn()} /></TestQueryProvider>);
+    await waitFor(() => expect(screen.getByText("시세 정보")).toBeInTheDocument(), { timeout: 3000 });
+    fireEvent.click(screen.getByText("시세 정보"));
+
+    expect(await screen.findByText(/승인된 공인중개사만 볼 수 있어요/)).toBeInTheDocument();
+    expect(screen.queryByText("시세 정보를 불러오지 못했습니다.")).not.toBeInTheDocument();
   });
 });

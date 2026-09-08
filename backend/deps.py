@@ -9,6 +9,7 @@ import httpx
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import PyJWKClient
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -30,7 +31,41 @@ if not ADMIN_EMAILS:
 if not SUPABASE_JWT_SECRET and not SUPABASE_URL:
     logger.critical("SUPABASE_JWT_SECRET 또는 SUPABASE_URL 미설정 — JWT 인증이 작동하지 않습니다")
 
-_ALLOWED_ALGORITHMS = ["HS256"]
+# HS256 = 레거시 대칭키(SUPABASE_JWT_SECRET). ES256 = 2026-09-09 Supabase 비대칭 서명키 전환분(JWKS).
+# 전환 후에도 옛 HS256 토큰은 만료 전까지 유효하므로 두 경로를 함께 유지한다.
+_ALLOWED_ALGORITHMS = ["HS256", "ES256"]
+
+# JWKS 원격 조회 클라이언트 (지연 생성 싱글턴).
+# PyJWKClient 가 키셋을 lifespan 초 동안 캐시하므로 요청마다 나가지 않는다
+# (Supabase 공식 권장: 서버는 JWKS 로 로컬 검증, Auth 서버를 핫패스에 두지 말 것).
+_JWKS_LIFESPAN_SECONDS = 600  # 공식 권장 10분
+_jwks_client: PyJWKClient | None = None
+
+# 미지 kid 네거티브 캐시 (보안 리뷰 LOW — DoS 증폭 차단).
+# PyJWKClient 는 kid 미스마다 캐시를 우회해 JWKS 를 강제 재조회한다
+# (리뷰어 실측: 서로 다른 미지 kid 10개 → 조회 11회). 공격자가 랜덤 kid 를 흘리면
+# 우리 서버가 Supabase JWKS 로 요청을 증폭시키는 꼴이라, 최근 실패한 kid 는 잠시 기억해
+# 조회 자체를 건너뛴다.
+# ⚠ 안전 방향의 대가: 키 회전 직후의 "진짜 새 kid" 도 최대 _UNKNOWN_KID_TTL 초 동안은
+#   JWKS 조회를 건너뛰고 원격 폴백(_verify_token_remote)으로 흐른다 — 느려질 뿐
+#   인증이 실패하지는 않으며, TTL 이 지나면 정상적으로 JWKS 를 다시 조회한다.
+_UNKNOWN_KID_TTL = 60
+_unknown_kid_seen = TTLCache(ttl=_UNKNOWN_KID_TTL, max_size=64)
+
+
+def _get_jwks_client() -> PyJWKClient | None:
+    """JWKS 클라이언트 싱글턴. SUPABASE_URL 미설정이면 None (ES256 검증 불가)."""
+    global _jwks_client
+    if not SUPABASE_URL:
+        return None
+    if _jwks_client is None:
+        _jwks_client = PyJWKClient(
+            f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json",
+            cache_keys=True,
+            lifespan=_JWKS_LIFESPAN_SECONDS,
+            timeout=5,
+        )
+    return _jwks_client
 
 
 def _check_jwt_secret():
@@ -41,14 +76,16 @@ def _check_jwt_secret():
     logger.info("[AUTH] JWT secret 설정됨 (길이: %d)", secret_len)
     try:
         test_payload = {"sub": "_selftest", "aud": "authenticated"}
-        token = jwt.encode(test_payload, SUPABASE_JWT_SECRET, algorithm=_ALLOWED_ALGORITHMS[0])
-        jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=_ALLOWED_ALGORITHMS, audience="authenticated")
+        token = jwt.encode(test_payload, SUPABASE_JWT_SECRET, algorithm="HS256")
+        jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
         logger.info("[AUTH] JWT secret 자가진단 통과 (HS256 라운드트립 성공)")
     except Exception as e:
         logger.error("[AUTH] JWT secret 자가진단 실패 — 로컬 검증이 작동하지 않을 수 있음: %s", e)
 
 
 _check_jwt_secret()
+# 부팅 로그로 새 코드 반영 여부를 판별하는 관례 (release.md §2 — zombie cross-check).
+logger.info("[AUTH] 허용 알고리즘: HS256(secret) + ES256(JWKS)")
 
 # 사용자 프로필 캐시 (5분 TTL — role/status 변경 시 admin.py에서 무효화)
 _user_cache = TTLCache(ttl=300, max_size=200)
@@ -64,7 +101,15 @@ def get_db() -> Generator:
 
 
 def _verify_token_local(token: str) -> dict | None:
-    """JWT secret으로 로컬 검증. 실패 시 None 반환 (원격 폴백 허용)."""
+    """토큰을 로컬 검증. 실패 시 None 반환 (원격 폴백 허용).
+
+    두 서명 방식을 모두 로컬에서 처리한다:
+    - HS256: 레거시 대칭키(SUPABASE_JWT_SECRET). 비대칭 전환 전 발급분이 만료될 때까지 유효.
+    - ES256: 2026-09-09 Supabase 비대칭 서명키 전환분. JWKS 공개키로 검증(10분 캐시).
+
+    ES256 을 여기서 처리하지 않으면 매 요청이 _verify_token_remote(GoTrue /auth/v1/user)로
+    폴백해 요청당 +0.3~0.5초가 붙는다 (세션 395 라이브 실측).
+    """
     # Phase 1: 토큰 헤더 알고리즘 검사
     try:
         header = jwt.get_unverified_header(token)
@@ -77,12 +122,43 @@ def _verify_token_local(token: str) -> dict | None:
         logger.warning("[AUTH] JWT 알고리즘 불일치: 토큰=%s, 서버=%s", token_alg, _ALLOWED_ALGORITHMS)
         return None
 
+    # Phase 1-b: 알고리즘별 검증 키 확보
+    if token_alg == "ES256":
+        client = _get_jwks_client()
+        if client is None:
+            logger.warning("[AUTH] ES256 토큰이나 SUPABASE_URL 미설정 — JWKS 검증 불가")
+            return None
+        token_kid = header.get("kid") or ""
+        # 최근 실패한 kid 면 JWKS 조회를 건너뛴다 (증폭 차단). kid 가 없으면 기록 대상 아님.
+        if token_kid and _unknown_kid_seen.get(token_kid) is not None:
+            logger.debug("[AUTH] 최근 실패한 kid — JWKS 조회 생략 (원격 폴백): %s", token_kid)
+            return None
+        try:
+            key = client.get_signing_key_from_jwt(token).key
+        except jwt.PyJWKClientError as e:
+            # kid 미매칭·JWKS 응답 이상 등 (키 회전 직후 일시적일 수 있음 → 원격 폴백).
+            # 이 kid 는 잠시 기억해 같은 kid 의 반복 요청이 JWKS 를 재조회하지 않게 한다.
+            if token_kid:
+                _unknown_kid_seen.set(token_kid, True)
+            logger.warning("[AUTH] JWKS 서명키 조회 실패 (kid 미매칭 등): %s", e)
+            return None
+        except Exception as e:
+            # 네트워크·타임아웃 등 (PyJWKClient 는 urllib 예외를 그대로 올릴 수 있음).
+            # kid 문제가 아니라 일시적 장애이므로 네거티브 캐시에 넣지 않는다.
+            logger.warning("[AUTH] JWKS 조회 중 오류 (네트워크 등): %s", e)
+            return None
+        decode_key = key
+        decode_algorithms = ["ES256"]
+    else:
+        decode_key = SUPABASE_JWT_SECRET
+        decode_algorithms = ["HS256"]
+
     # Phase 2: 서명 + 클레임 검증
     try:
         payload = jwt.decode(
             token,
-            SUPABASE_JWT_SECRET,
-            algorithms=_ALLOWED_ALGORITHMS,
+            decode_key,
+            algorithms=decode_algorithms,
             audience="authenticated",
         )
         user_id = payload.get("sub")
@@ -153,8 +229,10 @@ def get_current_user(
     token = credentials.credentials
 
     # 1) 로컬 검증 시도 (빠름), 2) 실패 시 원격 검증 폴백
+    # HS256 은 secret, ES256 은 JWKS(SUPABASE_URL) 로 검증하므로 둘 중 하나만 있어도 로컬 시도.
+    # (secret 만 보고 게이트하면, 레거시 secret 을 제거한 뒤 ES256 이 매번 원격으로 새어 나간다.)
     verified = None
-    if SUPABASE_JWT_SECRET:
+    if SUPABASE_JWT_SECRET or SUPABASE_URL:
         verified = _verify_token_local(token)
     if verified is None and SUPABASE_URL:
         verified = _verify_token_remote(token)

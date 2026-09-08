@@ -15,12 +15,22 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from crawler import service_discover
-from crawler.service_discover import _is_dead_detail, crawl_article_details
+from crawler.service_discover import (
+    _DETAIL_FAIL_CAP,
+    _is_article_error,
+    _is_dead_detail,
+    crawl_article_details,
+)
 from db.models import Article, CrawlJob
 
 
-def _make_pending_article(db, article_no: str, last_seen: datetime) -> None:
-    """detail_crawled=False, is_active=True 인 상세 미완 매물 1건 심기."""
+def _make_pending_article(
+    db, article_no: str, last_seen: datetime, fail_count: int = 0
+) -> None:
+    """detail_crawled=False, is_active=True 인 상세 미완 매물 1건 심기.
+
+    fail_count = 매물 단위 오류 누적 횟수(세션 395, V056). 기본 0 = 실패 이력 없음.
+    """
     db.add(
         Article(
             article_no=article_no,
@@ -29,6 +39,7 @@ def _make_pending_article(db, article_no: str, last_seen: datetime) -> None:
             detail_crawled=False,
             is_active=True,
             last_seen_at=last_seen,
+            detail_fail_count=fail_count,
         )
     )
     db.commit()
@@ -230,3 +241,143 @@ def test_small_batch_total_items_counts_dead_articles(db, no_throttle, monkeypat
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "article_detail").one()
     assert job.total_items == 3      # 시도 3건 (dead 포함)
     assert job.processed_items == 2  # 실제 채운 건 2건
+
+
+# ── 세션 395: 매물 단위 오류 무한 재시도 상한 (V056 detail_fail_count) ──
+
+def test_is_article_error_true_for_unknown_dict_code():
+    """error 가 dict 이고 code 가 dead 집합 밖 = 매물 단위 오류 → True."""
+    assert _is_article_error(
+        {"error": {"code": "ERROR", "message": "알수없는 오류(시스템 오류)"}}
+    ) is True
+
+
+def test_is_article_error_false_for_string_and_dead_and_none():
+    """문자열 오류(전체 장애)·진짜 dead·비 dict 는 카운트 대상이 아니다."""
+    # 시스템성 transient — 세면 네이버 장애 시 살아있는 매물이 무더기 제외된다
+    assert _is_article_error({"error": "API 요청 실패: 상태 코드 503"}) is False
+    # 진짜 dead 는 별도 비활성화 경로 소관
+    assert _is_article_error(
+        {"error": {"code": "errorCode.NotExistInformation", "message": "없음"}}
+    ) is False
+    assert _is_article_error(None) is False
+    assert _is_article_error({"articleDetail": {}}) is False
+
+
+def test_article_error_increments_fail_count_without_touching_flags(
+    db, no_throttle, monkeypatch
+):
+    """매물 단위 dict 오류(code 'ERROR') → detail_fail_count +1, 플래그는 불변.
+
+    라이브 실측(2026-09-08) 매물 2643869752 재현: HTTP 200 + dict 오류라 dead 도
+    아니고 문자열 transient 도 아닌 제3의 갈래. is_active 를 건드리지 않는 것이
+    핵심(살아있는 매물 오비활성화 금지 원칙 유지).
+
+    뮤테이션 검증(세션 395): 루프의 detail_fail_count +1 UPDATE 를 제거하면 이
+    테스트가 `assert 0 == 1` 로 실패한다.
+    """
+    now = datetime.now(timezone.utc)
+    _make_pending_article(db, "ARTERR", now)
+
+    monkeypatch.setattr(
+        service_discover.NaverEstateAPI,
+        "get_article_detail",
+        staticmethod(
+            lambda an: {"error": {"code": "ERROR", "message": "알수없는 오류(시스템 오류)"}}
+        ),
+    )
+
+    crawl_article_details(batch_size=10)
+
+    db.expire_all()
+    row = db.query(Article).filter(Article.article_no == "ARTERR").one()
+    assert row.detail_fail_count == 1
+    assert row.is_active is True         # 살아있는 매물 보호 (dead 취급 금지)
+    assert row.detail_crawled is False   # 상한 전까지는 재시도 여지 유지
+
+
+def test_article_error_at_cap_excluded_from_next_batch(db, no_throttle, monkeypatch):
+    """상한 도달 매물은 다음 배치 선정 쿼리에서 제외돼 재시도가 멈춘다.
+
+    CAP-1 상태로 심고 1회 실행 → CAP 도달. 2회차 실행에서는 상세 API 가 아예
+    호출되지 않아야 한다(= 무한 재시도 차단의 본질).
+    """
+    now = datetime.now(timezone.utc)
+    _make_pending_article(db, "NEARCAP", now, fail_count=_DETAIL_FAIL_CAP - 1)
+
+    calls: list[str] = []
+
+    def _fake_detail(article_no):
+        calls.append(article_no)
+        return {"error": {"code": "ERROR", "message": "알수없는 오류(시스템 오류)"}}
+
+    monkeypatch.setattr(
+        service_discover.NaverEstateAPI, "get_article_detail", staticmethod(_fake_detail)
+    )
+
+    crawl_article_details(batch_size=10)  # 1회차: 호출됨 → CAP 도달
+    assert calls == ["NEARCAP"]
+
+    db.expire_all()
+    row = db.query(Article).filter(Article.article_no == "NEARCAP").one()
+    assert row.detail_fail_count == _DETAIL_FAIL_CAP
+    assert row.is_active is True  # 상한은 "시도 중단"이지 "매물 비활성화"가 아니다
+
+    crawl_article_details(batch_size=10)  # 2회차: 선정에서 제외 → 추가 호출 0
+    assert calls == ["NEARCAP"]
+
+
+def test_string_error_does_not_increment_fail_count(db, no_throttle, monkeypatch):
+    """문자열 오류(HTTP 503 등 전체 장애)는 detail_fail_count 를 올리지 않는다.
+
+    네이버 장애 몇 시간이면 살아있는 매물 수백 개가 한꺼번에 상한에 걸려 상세
+    보강 대상에서 통째로 빠지는 사고를 막는 갈래 분리의 회귀 가드.
+    """
+    now = datetime.now(timezone.utc)
+    _make_pending_article(db, "SYSDOWN", now)
+
+    monkeypatch.setattr(
+        service_discover.NaverEstateAPI,
+        "get_article_detail",
+        staticmethod(lambda an: {"error": "API 요청 실패: 상태 코드 503"}),
+    )
+
+    crawl_article_details(batch_size=10)
+
+    db.expire_all()
+    row = db.query(Article).filter(Article.article_no == "SYSDOWN").one()
+    assert row.detail_fail_count == 0     # 카운트 금지
+    assert row.is_active is True
+    assert row.detail_crawled is False
+
+
+def test_dead_and_ok_paths_unchanged_by_fail_count(db, no_throttle, monkeypatch):
+    """회귀: dead 는 여전히 비활성화, 정상 응답은 여전히 processed — 둘 다 카운터 불변."""
+    now = datetime.now(timezone.utc)
+    _make_pending_article(db, "OKROW", now)
+    _make_pending_article(db, "DEADROW", now - timedelta(minutes=1))
+
+    def _fake_detail(article_no):
+        if article_no == "DEADROW":
+            return {"error": {"code": "errorCode.NotExistInformation", "message": "없음"}}
+        return {"articleDetail": {"articleNo": article_no}}
+
+    monkeypatch.setattr(
+        service_discover.NaverEstateAPI, "get_article_detail", staticmethod(_fake_detail)
+    )
+
+    crawl_article_details(batch_size=10)
+
+    db.expire_all()
+    ok = db.query(Article).filter(Article.article_no == "OKROW").one()
+    assert ok.detail_crawled is True
+    assert ok.detail_fail_count == 0
+
+    dead = db.query(Article).filter(Article.article_no == "DEADROW").one()
+    assert dead.is_active is False
+    assert dead.detail_crawled is True
+    assert dead.detail_fail_count == 0  # dead 는 별도 경로 — 카운트하지 않는다
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "article_detail").one()
+    assert job.total_items == 2
+    assert job.processed_items == 1

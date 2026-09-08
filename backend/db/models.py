@@ -15,6 +15,7 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -154,6 +155,13 @@ class Article(Base):
     trade_complete: Mapped[bool] = mapped_column(Boolean, default=False)  # 거래완료 여부
     # 크롤러 메타데이터
     detail_crawled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 상세 API 가 이 매물에 "매물 단위 오류"(error 가 dict, code != NotExistInformation)를
+    # 연속으로 답한 횟수. _DETAIL_FAIL_CAP 이상이면 상세 시도 대상에서 제외 (V056, 세션 395).
+    # 시스템성 transient(error 가 문자열)는 세지 않는다 — 네이버 전체 장애로 살아있는 매물이
+    # 무더기 제외되는 것을 막기 위함.
+    detail_fail_count: Mapped[int] = mapped_column(
+        SmallInteger, nullable=False, default=0, server_default="0"
+    )
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

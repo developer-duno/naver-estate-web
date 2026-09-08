@@ -14,6 +14,7 @@
 - `complexes.last_crawled_at` — **매물 크롤 시각** 지표. 단지 상세 수집 여부와 무관 (2026-04-13 SQL 일괄 UPDATE 로 허수 다수 — `infra.md` IP 차단 방지 사건 참조).
 - `complexes.detail_crawled_at` — **단지 상세 수집** 지표. 단지 상세 진단·backfill 우선순위는 이 컬럼 기준.
 - `articles.detail_crawled` — 매물 상세 크롤 완료 여부 (bool).
+- `articles.detail_fail_count` — 상세 API 가 그 매물에 **매물 단위 오류**(error 가 dict 이고 code 가 `errorCode.NotExistInformation` 이 아님)를 연속으로 답한 횟수 (V056, 세션 395). `_DETAIL_FAIL_CAP`(6 ≈ 30분 주기 × 6 = 3시간) 이상이면 상세 보강 선정 쿼리에서 제외돼 무한 재시도가 멈춘다 — **is_active 는 불변**("시도 중단"이지 "매물 비활성화"가 아니다). 시스템성 transient(error 가 문자열: 401/403/429/5xx/네트워크)는 세지 않는다. 수동 복구 = `UPDATE articles SET detail_fail_count = 0 WHERE article_no = '...';`
 
 ## 거래유형 코드
 

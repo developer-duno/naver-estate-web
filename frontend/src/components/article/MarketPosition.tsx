@@ -11,13 +11,17 @@ interface Props {
   complexNo: string;
   tradeTypeName?: string;
   area2M2?: number;
+  /** B2 게이트 토큰 — 부모(ArticleDetail)와 같은 queryKey 라 토큰도 같이 받아야 한다 (세션 395) */
+  accessToken?: string;
+  /** 세션 해석 완료 여부. 부모가 안 넘기면(단독 사용) 기존 동작 유지 */
+  tokenReady?: boolean;
 }
 
-export default function MarketPosition({ complexNo, tradeTypeName, area2M2 }: Props) {
+export default function MarketPosition({ complexNo, tradeTypeName, area2M2, accessToken, tokenReady = true }: Props) {
   const { data, isError } = useQuery({
     queryKey: queryKeys.priceStats(complexNo),
-    queryFn: () => getPriceStats(complexNo),
-    enabled: !!complexNo,
+    queryFn: () => getPriceStats(complexNo, accessToken),
+    enabled: !!complexNo && tokenReady,
   });
 
   if (isError || !data || !area2M2 || area2M2 <= 0) return null;

@@ -58,3 +58,17 @@ def test_live_non_status_cache_unchanged(mock_search, client, db):
     cache_control = res.headers["Cache-Control"]
     assert cache_control.startswith("private, max-age="), cache_control
     assert cache_control != "no-store"
+
+
+def test_admin_recrawl_progress_no_store(client):
+    """관리자 대량 재크롤 진행률 폴링 → Cache-Control: no-store (세션 395 맹점 검증).
+
+    FE components/admin/BulkRecrawlCard.tsx 가 3초 간격으로 이 엔드포인트를 폴링하는데,
+    기본 분기(private, max-age=30)를 받아 #466 과 같은 브라우저 캐시 결함이 있었다.
+    인증(401)이어도 Cache-Control 은 미들웨어가 붙이므로 헤더만 단언한다(위 패턴 답습).
+
+    ⚠ 뮤테이션 검증 (세션 395 수행): main.py 분기에서 "/progress" 를 빼면 이 테스트가
+      FAIL(private, max-age=30) 함을 확인 후 복원.
+    """
+    res = client.get("/api/admin/recrawl/progress")
+    assert res.headers["Cache-Control"] == "no-store"

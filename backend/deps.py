@@ -52,6 +52,34 @@ _jwks_client: PyJWKClient | None = None
 _UNKNOWN_KID_TTL = 60
 _unknown_kid_seen = TTLCache(ttl=_UNKNOWN_KID_TTL, max_size=64)
 
+# kid 헤더가 없는 ES256 토큰용 고정 센티널 키.
+# kid 가 빈 문자열이면 캐시에 기록하지 않던 옛 코드는 네거티브 캐시에 사각을 남겼다 —
+# kid 를 일부러 생략한 토큰을 반복해 보내면 매 요청이 get_signing_key_from_jwt 로 흘러
+# JWKS 강제 재조회를 유발한다(위 증폭 시나리오와 동일). kid 없는 ES256 토큰은
+# PyJWKClient.get_signing_key(None) 이 JWKS 어느 키와도 매칭되지 않아 refresh 후에도
+# PyJWKClientError 로 끝난다(항상 로컬 검증 실패) — 즉 이 센티널은 검증 결과를 바꾸지
+# 않고 실패가 확정된 JWKS 왕복만 생략한다(정상 토큰 영향 0; Supabase 문서상 kid 는
+# optional 이라 "항상 kid 를 붙인다"에 기대지 않는다 — 보안 리뷰 L-1).
+_NO_KID_SENTINEL = "__no_kid__"
+
+# JWT 클레임 시각 검증 허용 오차(초). Supabase 발급 서버와 우리 집 서버의 시계가
+# 수 초 어긋나 iat 가 미래로 보이는 clock skew 를 흡수한다.
+# 라이브 근거 (2026-09-09 02:02~16:30 backend.log): 토큰 갱신 직후 첫 요청마다
+# "[AUTH] JWT 검증 실패 (기타): The token is not yet valid (iat)" 가 약 58분 간격으로
+# 10건 발생했고, 각각 직후 httpx GET /auth/v1/user 원격 폴백이 뒤따랐다.
+# exp 에도 같은 여유가 생기지만 Supabase 기본 만료가 1시간이라 허용 범위.
+_JWT_LEEWAY_SECONDS = 60
+
+
+def _safe_log_value(v: str) -> str:
+    """로그에 찍기 전 공격자 제어 문자열을 정화한다 (로그 위조 방지).
+
+    kid·alg 는 토큰 헤더에서 그대로 온 값이라 개행을 넣으면 가짜 로그 줄을 만들 수 있다.
+    개행·캐리지리턴·탭을 제거하고 64자로 절단한다.
+    """
+    cleaned = str(v).replace("\r", "").replace("\n", "").replace("\t", " ")
+    return cleaned[:64]
+
 
 def _get_jwks_client() -> PyJWKClient | None:
     """JWKS 클라이언트 싱글턴. SUPABASE_URL 미설정이면 None (ES256 검증 불가)."""
@@ -80,7 +108,39 @@ def _check_jwt_secret():
         jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
         logger.info("[AUTH] JWT secret 자가진단 통과 (HS256 라운드트립 성공)")
     except Exception as e:
-        logger.error("[AUTH] JWT secret 자가진단 실패 — 로컬 검증이 작동하지 않을 수 있음: %s", e)
+        logger.error(
+            "[AUTH] JWT secret 자가진단 실패 — 로컬 검증이 작동하지 않을 수 있음: %s",
+            _safe_log_value(str(e)),
+        )
+
+
+def _check_jwks_reachable() -> None:
+    """부팅 시 JWKS 도달 여부 자가진단 (ES256 로컬 검증이 실제로 가능한지).
+
+    _check_jwt_secret() 은 HS256(secret) 라운드트립만 보므로, SUPABASE_URL 오설정·방화벽·
+    DNS 등으로 JWKS 를 못 받아오는 상태를 부팅 로그만 보고는 알 수 없었다 — 그 경우 ES256
+    토큰이 매 요청 원격 폴백(_verify_token_remote)으로 조용히 새어 나간다(세션 395 사고와
+    같은 증상, 경고 한 줄 없이 느려짐). 여기서 한 번 찔러 보고 로그로 남긴다.
+
+    ⚠ 호출 위치는 main.py lifespan(startup) — 모듈 import 시점은 uvicorn 로깅 설정 전이라
+      logger.info 가 부팅 로그에 안 남는다(이 프로젝트 실측: [AUTH] JWT secret info 줄 부재).
+    ⚠ 예외는 전부 흡수 — 자가진단 실패가 서버 기동을 막으면 안 된다(원격 폴백으로 동작 가능).
+    타임아웃은 PyJWKClient 생성 시 지정한 5초(_get_jwks_client)를 그대로 쓴다.
+    """
+    if not SUPABASE_URL:
+        logger.info("[AUTH] SUPABASE_URL 미설정 — JWKS 자가진단 생략 (ES256 로컬 검증 불가)")
+        return
+    try:
+        client = _get_jwks_client()
+        if client is None:  # pragma: no cover - 위 가드와 동일 조건
+            return
+        jwk_set = client.get_jwk_set()
+        logger.info("[AUTH] JWKS 도달 확인 (키 %d개)", len(jwk_set.keys))
+    except Exception as e:
+        logger.error(
+            "[AUTH] JWKS 도달 실패 — ES256 로컬 검증 불가, 원격 폴백으로 동작: %s",
+            _safe_log_value(str(e)),
+        )
 
 
 _check_jwt_secret()
@@ -119,7 +179,11 @@ def _verify_token_local(token: str) -> dict | None:
 
     token_alg = header.get("alg", "unknown")
     if token_alg not in _ALLOWED_ALGORITHMS:
-        logger.warning("[AUTH] JWT 알고리즘 불일치: 토큰=%s, 서버=%s", token_alg, _ALLOWED_ALGORITHMS)
+        logger.warning(
+            "[AUTH] JWT 알고리즘 불일치: 토큰=%s, 서버=%s",
+            _safe_log_value(token_alg),
+            _ALLOWED_ALGORITHMS,
+        )
         return None
 
     # Phase 1-b: 알고리즘별 검증 키 확보
@@ -128,24 +192,29 @@ def _verify_token_local(token: str) -> dict | None:
         if client is None:
             logger.warning("[AUTH] ES256 토큰이나 SUPABASE_URL 미설정 — JWKS 검증 불가")
             return None
-        token_kid = header.get("kid") or ""
-        # 최근 실패한 kid 면 JWKS 조회를 건너뛴다 (증폭 차단). kid 가 없으면 기록 대상 아님.
-        if token_kid and _unknown_kid_seen.get(token_kid) is not None:
-            logger.debug("[AUTH] 최근 실패한 kid — JWKS 조회 생략 (원격 폴백): %s", token_kid)
+        # kid 가 없는 토큰도 고정 센티널로 묶어 캐시한다 (사각 제거 — _NO_KID_SENTINEL 주석 참조).
+        token_kid = header.get("kid") or _NO_KID_SENTINEL
+        # 최근 실패한 kid 면 JWKS 조회를 건너뛴다 (증폭 차단).
+        if _unknown_kid_seen.get(token_kid) is not None:
+            logger.debug(
+                "[AUTH] 최근 실패한 kid — JWKS 조회 생략 (원격 폴백): %s",
+                _safe_log_value(token_kid),
+            )
             return None
         try:
             key = client.get_signing_key_from_jwt(token).key
         except jwt.PyJWKClientError as e:
             # kid 미매칭·JWKS 응답 이상 등 (키 회전 직후 일시적일 수 있음 → 원격 폴백).
             # 이 kid 는 잠시 기억해 같은 kid 의 반복 요청이 JWKS 를 재조회하지 않게 한다.
-            if token_kid:
-                _unknown_kid_seen.set(token_kid, True)
-            logger.warning("[AUTH] JWKS 서명키 조회 실패 (kid 미매칭 등): %s", e)
+            _unknown_kid_seen.set(token_kid, True)
+            logger.warning(
+                "[AUTH] JWKS 서명키 조회 실패 (kid 미매칭 등): %s", _safe_log_value(str(e))
+            )
             return None
         except Exception as e:
             # 네트워크·타임아웃 등 (PyJWKClient 는 urllib 예외를 그대로 올릴 수 있음).
             # kid 문제가 아니라 일시적 장애이므로 네거티브 캐시에 넣지 않는다.
-            logger.warning("[AUTH] JWKS 조회 중 오류 (네트워크 등): %s", e)
+            logger.warning("[AUTH] JWKS 조회 중 오류 (네트워크 등): %s", _safe_log_value(str(e)))
             return None
         decode_key = key
         decode_algorithms = ["ES256"]
@@ -160,6 +229,7 @@ def _verify_token_local(token: str) -> dict | None:
             decode_key,
             algorithms=decode_algorithms,
             audience="authenticated",
+            leeway=_JWT_LEEWAY_SECONDS,  # clock skew 흡수 — 상수 주석의 라이브 근거 참조
         )
         user_id = payload.get("sub")
         if not user_id:
@@ -174,13 +244,13 @@ def _verify_token_local(token: str) -> dict | None:
         logger.info("[AUTH] JWT 만료됨 (정상 — 토큰 갱신 필요)")
         return None
     except (jwt.InvalidAudienceError, jwt.MissingRequiredClaimError) as e:
-        logger.warning("[AUTH] JWT 클레임 불일치 (audience 등): %s", e)
+        logger.warning("[AUTH] JWT 클레임 불일치 (audience 등): %s", _safe_log_value(str(e)))
         return None
     except jwt.InvalidSignatureError as e:
-        logger.warning("[AUTH] JWT 서명 검증 실패 (secret 불일치): %s", e)
+        logger.warning("[AUTH] JWT 서명 검증 실패 (secret 불일치): %s", _safe_log_value(str(e)))
         return None
     except jwt.PyJWTError as e:
-        logger.warning("[AUTH] JWT 검증 실패 (기타): %s", e)
+        logger.warning("[AUTH] JWT 검증 실패 (기타): %s", _safe_log_value(str(e)))
         return None
 
 

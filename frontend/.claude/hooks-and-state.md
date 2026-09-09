@@ -25,7 +25,8 @@
 | `useArticleFavorites` | 매물 즐겨찾기 (localStorage, useArticleFavoriteStatus 포함, 무제한 토글) |
 | `useAdminUserMap` | 관리자 사용자 id ↔ 이메일 매핑 (jobs/logs 표 출력용) |
 | `useComplexPrefetch` | 단지 hover 200ms 후 complex + articles prefetch (검색 결과 성능) |
-| `useCrawlAction` | 크롤 수동 트리거 + invalidateQueries (admin recrawl 버튼) |
+| `useCrawlAction` | 단지 페이지 크롤 트리거(마운트 자동 1회 + "데이터 갱신" 수동) + `crawl-status` **2초 폴링**(`cache:"no-store"` — 서버도 `no-store`; 폴링 응답이 브라우저에 3시간 캐시돼 완료를 영영 못 보던 결함, #466 세션 395) + terminal(done/done_partial/error/idle) 수신 시 refetchComplexQueries·메시지. 진행 배너는 `CrawlMessage`→`CrawlProgressBanner` |
+| `useSessionToken` | Supabase 세션 토큰 + `tokenReady` — `getSession()` 1회 + **`onAuthStateChange` 구독**으로 1시간 주기 토큰 갱신을 반영(구독 먼저 등록, 늦게 끝난 getSession 의 stale 토큰은 무시 — 세션 395 후속 PR). 승인 전용 API(`getArticles`·`getPriceStats`·`getPyeongDetails` 등) 호출부는 **반드시** 이 토큰을 넘기고 `enabled: tokenReady` 로 게이트. `page.tsx` 와 `ArticleDetail`(모달, 자식 MarketPosition·CompetingListings·MaintenanceCost 까지 props 전달 — #467 세션 395: 모달만 누락돼 B2 게이트 이후 항상 401 이던 결함) |
 | `useLocalStorageFavorites` / `useLocalStorageList` | 즐겨찾기·리스트 제네릭 훅 (위 useFavorites·useSearchHistory 등의 베이스) |
 | `useMbViewMode` | 미분양 탭 목록↔지도 보기 (localStorage mb_view_mode, MAP_ENABLED=false 시 list 강제 — 세션 315) |
 | `useGeolocation` | 브라우저 현재 위치(GPS) 1회 조회 (enabled 게이트, SSR·타임아웃·거부 안전, status 4종 — 미분양 지도 "내 위치" 줌, 세션 316) |

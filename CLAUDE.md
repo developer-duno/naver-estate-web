@@ -113,13 +113,13 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 - `CHILDCARE_DETAIL_API_KEY` — cpmsapi030 운영키
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — Gmail SMTP SSL 465
 
-## 테스트 현황 (BE·FE 2026-08-28 세션 388 실측)
+## 테스트 현황 (BE·FE 2026-09-09 세션 395 CI 실측)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2116개** (세션 388 실측, PR #429 kapt-format·complex-kapt-error 등 +19) — 옛 실측: **2097개** (`vitest list` 세션 384 실측, PR #423 보유세 계산기 법령 재검증 결함수정으로 세션 369~381 기준 2090→2097 net +7 — property-tax.test.ts·property-tax-cap.test.ts 신규/재계산. 전체 실행 2096 passed + 1건은 전체스위트 동시실행 리소스경합 일시 타임아웃(RegionSelector, 단독 재실행 시 정상 통과 확인, 결함 아님)) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2131개** (세션 395 CI 실측 run 34364208132 `2131 passed`(238 files) — 세션 388 실측 2116 에 #466 crawl-status-no-store +2·#467 ArticleDetail 토큰 +3 = 2121(run 34255542873), 이어 #471 Header.strictmode +4·#469 useSessionToken 갱신 구독 +6. 옛 실측 2097(세션 384)·2090(세션 369~381). 전체 실행 시 RegionSelector 1건이 리소스 경합으로 일시 타임아웃될 수 있음 — 단독 재실행 시 통과, 결함 아님) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1596개** (세션 395 — 전체 1회 실측 1574 passed + 8 skipped + 6 xfailed = **1588**(합산 관례, 세션 393) + 본 세션 매물 상세 재시도 상한 PR #464 회귀 8건(상한 6 + 회로차단기 2). 이전 문서값 1530(세션 390)과 +58 = 50차 규칙 갱신. 세션 391~394 PR #442~#459 누적분) |
+| BE pytest | `backend/tests/` | **1626개** (세션 395 실측 — main 1f36512 CI run 34327870417: **1612 passed + 8 skipped + 6 xfailed** — 합산 관례(세션 393). 세션 395 시작 기준선 1588(로컬 전체 1회 1574/8/6)에 #464 +8·#465 +13·#466 +5 = 1614(CI 34252301158·로컬 12m24s 동일 실측), 이어 사후검증 PR #470·#472 +12. 이전 문서값 1530(세션 390) 대비 +96 = 50차 규칙 갱신) |
 
 ## 커밋 전 필수 검증
 

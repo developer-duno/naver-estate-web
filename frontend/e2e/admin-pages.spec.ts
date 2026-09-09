@@ -20,6 +20,11 @@ test.describe("admin sub-pages", () => {
       page.getByText("비활성 상태(is_active=false)이며 지정 일수 이상 경과된 매물을 삭제합니다."),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "삭제" })).toBeVisible();
+    // StatsCards 는 토큰 취득 → /api/admin/stats/detailed(mock) 순으로 비동기 렌더된다.
+    // 카드가 뜨기 전에 찍으면 페이지 높이가 달라져 baseline 과 어긋나는 경합(세션 396, PR #480 CI 1회 실패)
+    // — 다른 admin 시각 스펙처럼 mock 데이터가 화면에 보인 뒤 찍는다.
+    await expect(page.getByText("단지 수")).toBeVisible();
+    await expect(page.getByText("1,234")).toBeVisible();
 
     await expect(page).toHaveScreenshot("admin-data.png", {
       fullPage: true,

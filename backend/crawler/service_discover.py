@@ -429,6 +429,30 @@ def _is_article_error(detail_data) -> bool:
     return err.get("code") not in _DEAD_ERROR_CODES
 
 
+def _apply_article_error_counts(db, hits: list[tuple[str, int, str, str]]) -> None:
+    """매물단위 오류 매물의 detail_fail_count 를 일괄 +1 하고 상한 도달을 로그한다.
+
+    hits = (article_no, 선추출 detail_fail_count, code, message). 차단기 보류 회차의
+    "되살린 매물 예외"와 평시 경로가 **같은 갱신 로직**을 쓰도록 분리한 것뿐이고,
+    동작은 세션 395 원본과 동일하다.
+    """
+    if not hits:
+        return
+    db.query(Article).filter(
+        Article.article_no.in_([an for an, _, _, _ in hits])
+    ).update(
+        {"detail_fail_count": Article.detail_fail_count + 1},
+        synchronize_session=False,
+    )
+    for article_no, prev_fail_count, code, message in hits:
+        # 선추출값 + 1 = 이번 갱신 후의 값
+        if prev_fail_count + 1 >= _DETAIL_FAIL_CAP:
+            logger.warning(
+                "상세 시도 중단(연속 %d회 매물단위 오류): article %s code=%s msg=%s",
+                prev_fail_count + 1, article_no, code, message,
+            )
+
+
 def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = None):
     """detail_crawled=FALSE인 활성 매물의 상세 정보 크롤링"""
     db = SessionLocal()
@@ -577,25 +601,28 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
             for (code, message), cnt in article_error_reasons.most_common(3)
         )
         if systemic_suspected:
+            # ⚠ 차단기에도 **예외**가 있다 — 정비 잡(vacuum_maintenance, 매일 03:50)이
+            # 되살린 매물(선추출 카운터가 이미 CAP-1)은 보류하지 않고 +1 을 적용한다.
+            # 그 매물들은 과거에 이미 혼합 배치(전수 아님)에서 6회 확정된 이력이 있어
+            # "개별 매물 문제"가 입증된 쪽이다. 이걸 보류하면, 되살린 매물만으로 배치가
+            # 채워졌을 때 배치가 항상 전수 매물오류 → 항상 보류 → 카운터가 CAP-1 에
+            # 머물러 다음 배치에 같은 매물이 또 선정되는 **무한 반복**이 된다(정비 잡이
+            # 의도한 "하루 1콜" 바운드가 깨진다). 예외를 두면 그 매물은 이번 회차에
+            # CAP 으로 복귀해 즉시 재제외되므로 바운드가 유지된다.
+            # 반대로 카운터가 낮은(=한 번도 상한에 간 적 없는) 살아있는 매물은 그대로
+            # 보류돼, 소프트 차단으로 수백 건이 통째로 빠지는 원래 사고는 계속 막힌다.
+            revived_hits = [
+                h for h in article_error_hits if h[1] >= _DETAIL_FAIL_CAP - 1
+            ]
             logger.warning(
                 "배치 전수 매물단위 오류 %d건 — 시스템성(소프트 차단) 의심,"
-                " detail_fail_count 증가 보류 (사유 %s)",
-                skipped_article_error, reason_summary or "?",
+                " detail_fail_count 증가 보류 %d건 (되살린 매물 %d건은 예외 적용, 사유 %s)",
+                skipped_article_error, len(article_error_hits) - len(revived_hits),
+                len(revived_hits), reason_summary or "?",
             )
+            _apply_article_error_counts(db, revived_hits)
         elif article_error_hits:
-            db.query(Article).filter(
-                Article.article_no.in_([an for an, _, _, _ in article_error_hits])
-            ).update(
-                {"detail_fail_count": Article.detail_fail_count + 1},
-                synchronize_session=False,
-            )
-            for article_no, prev_fail_count, code, message in article_error_hits:
-                # 선추출값 + 1 = 이번 갱신 후의 값
-                if prev_fail_count + 1 >= _DETAIL_FAIL_CAP:
-                    logger.warning(
-                        "상세 시도 중단(연속 %d회 매물단위 오류): article %s code=%s msg=%s",
-                        prev_fail_count + 1, article_no, code, message,
-                    )
+            _apply_article_error_counts(db, article_error_hits)
 
         _finalize_job(
             db, job, "completed",

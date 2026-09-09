@@ -21,6 +21,8 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
+from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
@@ -248,8 +250,19 @@ def test_unknown_kid_negative_cache_expires(monkeypatch):
     assert fake.calls == 2, "TTL 만료 후에도 조회를 건너뛰면 회전된 새 kid 가 영구 차단된다"
 
 
-def test_unknown_kid_without_kid_header_not_cached(monkeypatch):
-    """(g-3) kid 헤더가 없으면 네거티브 캐시에 기록하지 않는다 (빈 키 오염 방지)."""
+def test_unknown_kid_without_kid_header_uses_sentinel_cache(monkeypatch):
+    """(c) kid 헤더가 없는 ES256 토큰도 고정 센티널 키로 네거티브 캐시된다.
+
+    ⚠ 이 테스트는 세션 395 사후검증에서 **정정**됐다. 옛 버전
+    (test_unknown_kid_without_kid_header_not_cached)은 kid 없는 토큰이 캐시되지 **않는** 것을
+    정답으로 단언했는데, 그게 바로 결함이었다 — kid 를 일부러 생략한 토큰을 반복해 보내면
+    매 요청이 get_signing_key_from_jwt 로 흘러 JWKS 강제 재조회를 유발한다(네거티브 캐시가
+    막으려던 증폭이 그대로 뚫림). Supabase 는 kid 없는 토큰을 발급하지 않으므로 정상 토큰이
+    센티널에 걸릴 위험은 없다. (testing.md §"결함 수정 시 — 통과하던 테스트가 결함을 박제")
+
+    ⚠ 뮤테이션 검증: deps._NO_KID_SENTINEL 을 쓰던 자리를 옛 코드(`header.get("kid") or ""`
+    + `if token_kid and ...`)로 되돌리면 이 테스트가 FAIL(calls == 2)함을 확인 후 복원.
+    """
     priv, _ = _ec_keypair()
     fake = _FakeJWKSClient(exc=jwt.PyJWKClientError("no kid"))
     monkeypatch.setattr(deps, "SUPABASE_URL", "https://example.supabase.co")
@@ -258,8 +271,10 @@ def test_unknown_kid_without_kid_header_not_cached(monkeypatch):
     # kid 헤더 없는 ES256 토큰
     token = jwt.encode({"sub": "no-kid", "aud": "authenticated"}, priv, algorithm="ES256")
     assert deps._verify_token_local(token) is None
+    assert fake.calls == 1
     assert deps._verify_token_local(token) is None
-    assert fake.calls == 2, "kid 없는 토큰이 빈 문자열 키로 캐시돼 조회를 건너뛰었다"
+    assert fake.calls == 1, "kid 없는 토큰의 재요청이 JWKS 를 재조회했다 (센티널 캐시 사각)"
+    assert deps._unknown_kid_seen.get(deps._NO_KID_SENTINEL) is not None
 
 
 def test_network_error_not_negative_cached(monkeypatch):
@@ -273,3 +288,201 @@ def test_network_error_not_negative_cached(monkeypatch):
     assert deps._verify_token_local(token) is None
     assert deps._verify_token_local(token) is None
     assert fake.calls == 2, "일시적 네트워크 장애가 kid 를 영구(60s) 차단했다"
+
+
+# ---------------------------------------------------------------------------
+# 세션 395 사후검증 — clock skew leeway + 로그 값 정화
+# ---------------------------------------------------------------------------
+
+
+def test_es256_future_iat_within_leeway_verified_locally(monkeypatch, no_remote):
+    """(a) iat 가 미래(+20초)인 ES256 토큰도 leeway 60초 안이면 로컬 검증 통과 (원격 0회).
+
+    라이브 근거 (2026-09-09 02:02~16:30 backend.log): Supabase 발급 서버 시계가 우리 집
+    서버보다 수 초 앞서 "The token is not yet valid (iat)" 가 약 58분 간격(토큰 갱신 직후
+    첫 요청)으로 10건 발생했고, 각각 직후 httpx GET /auth/v1/user 원격 폴백이 뒤따랐다.
+
+    ⚠ 뮤테이션 검증 (세션 395 수행): deps._JWT_LEEWAY_SECONDS 를 0 으로 바꾸면 이 테스트가
+      FAIL(로컬 검증이 None 반환) 함을 확인 후 60 으로 복원. 즉 이 테스트는 결함을 실제로 본다.
+    """
+    priv, pub = _ec_keypair()
+    fake = _FakeJWKSClient(key=pub)
+    monkeypatch.setattr(deps, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(deps, "_get_jwks_client", lambda: fake)
+
+    future_iat = datetime.now(timezone.utc) + timedelta(seconds=20)
+    token = jwt.encode(
+        {
+            "sub": "skew-user",
+            "aud": "authenticated",
+            "email": "skew@test.com",
+            "iat": future_iat,
+            "nbf": future_iat,
+            "exp": future_iat + timedelta(hours=1),
+        },
+        priv,
+        algorithm="ES256",
+        headers={"kid": "test-kid-1ceb2299"},
+    )
+
+    result = deps._verify_token_local(token)
+
+    assert result is not None, "clock skew(iat +20초)로 로컬 검증이 실패했다 — leeway 미적용"
+    assert result["user_id"] == "skew-user"
+    assert no_remote == []
+
+
+def test_hs256_future_iat_within_leeway_verified_locally(no_remote):
+    """(b) HS256(레거시 secret) 경로도 같은 leeway 를 받는다 — 두 분기 공통 적용 확인."""
+    future_iat = datetime.now(timezone.utc) + timedelta(seconds=20)
+    token = jwt.encode(
+        {
+            "sub": "hs256-skew",
+            "aud": "authenticated",
+            "email": "hs256skew@test.com",
+            "iat": future_iat,
+            "nbf": future_iat,
+            "exp": future_iat + timedelta(hours=1),
+        },
+        JWT_SECRET,
+        algorithm="HS256",
+    )
+
+    result = deps._verify_token_local(token)
+
+    assert result is not None, "HS256 분기에 leeway 가 빠져 clock skew 로 원격 폴백된다"
+    assert result["user_id"] == "hs256-skew"
+    assert no_remote == []
+
+
+def test_iat_beyond_leeway_still_rejected(monkeypatch, no_remote):
+    """(a-2) leeway 를 넘는 미래 iat(+10분)는 여전히 거부 — 무제한 허용이 아님을 고정."""
+    priv, pub = _ec_keypair()
+    monkeypatch.setattr(deps, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(deps, "_get_jwks_client", lambda: _FakeJWKSClient(key=pub))
+
+    far_future = datetime.now(timezone.utc) + timedelta(minutes=10)
+    token = jwt.encode(
+        {
+            "sub": "far-future",
+            "aud": "authenticated",
+            "iat": far_future,
+            "nbf": far_future,
+            "exp": far_future + timedelta(hours=1),
+        },
+        priv,
+        algorithm="ES256",
+        headers={"kid": "test-kid-1ceb2299"},
+    )
+
+    assert deps._verify_token_local(token) is None
+
+
+def test_log_value_sanitized_no_newline_injection(monkeypatch, caplog):
+    """(d) 공격자 제어 kid 의 개행이 로그에 그대로 나가지 않는다 (로그 위조 차단).
+
+    kid 는 토큰 헤더에서 온 값이라 개행을 넣으면 가짜 로그 줄을 만들어낼 수 있다.
+    정화 후에도 원래 내용(INJECTED)은 같은 줄에 남아 조사 가능해야 한다.
+
+    ⚠ 뮤테이션 검증 (세션 395 수행): _safe_log_value 를 항등 함수(`return str(v)`)로 바꾸면
+      이 테스트가 FAIL(메시지에 개행 포함) 함을 확인 후 복원.
+    """
+    priv, _ = _ec_keypair()
+    fake = _FakeJWKSClient(exc=jwt.PyJWKClientError("no matching key"))
+    monkeypatch.setattr(deps, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(deps, "_get_jwks_client", lambda: fake)
+
+    token = jwt.encode(
+        {"sub": "attacker", "aud": "authenticated"},
+        priv,
+        algorithm="ES256",
+        headers={"kid": "abc\nINJECTED"},
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="deps"):
+        assert deps._verify_token_local(token) is None
+        # 2회차: 네거티브 캐시 히트 경로(debug 로그)도 같은 값을 찍는다
+        assert deps._verify_token_local(token) is None
+
+    messages = [rec.getMessage() for rec in caplog.records]
+    assert messages, "로그 레코드가 캡처되지 않았다"
+    for msg in messages:
+        assert "\n" not in msg, f"로그 메시지에 개행이 그대로 들어갔다: {msg!r}"
+        assert "\r" not in msg
+    kid_msgs = [m for m in messages if "INJECTED" in m]
+    assert kid_msgs, "kid 값이 로그에 전혀 안 나타났다 (조사 가능성 상실)"
+    assert any("abcINJECTED" in m for m in kid_msgs), (
+        f"정화 후 kid 가 한 줄로 붙어 있어야 한다: {kid_msgs!r}"
+    )
+
+
+def test_safe_log_value_truncates_long_input():
+    """(d-2) 과도하게 긴 kid 는 64자로 절단 — 로그 폭탄 방지."""
+    assert deps._safe_log_value("x" * 500) == "x" * 64
+    assert deps._safe_log_value("a\r\nb\tc") == "ab c"
+
+
+# ---------------------------------------------------------------------------
+# 세션 395 맹점 검증 — JWKS 부팅 자가진단 (_check_jwks_reachable)
+# ---------------------------------------------------------------------------
+
+
+class _FakeJWKSet:
+    """PyJWKClient.get_jwk_set() 반환값 모사 (.keys 길이만 사용됨)."""
+
+    def __init__(self, n):
+        self.keys = [object()] * n
+
+
+class _FakeJWKSetClient:
+    def __init__(self, jwk_set=None, exc=None):
+        self._jwk_set = jwk_set
+        self._exc = exc
+        self.calls = 0
+
+    def get_jwk_set(self, refresh=False):
+        self.calls += 1
+        if self._exc is not None:
+            raise self._exc
+        return self._jwk_set
+
+
+def test_check_jwks_reachable_logs_key_count(monkeypatch, caplog):
+    """JWKS 도달 성공 → info 로그에 키 개수. 네트워크 실호출 없음(monkeypatch)."""
+    fake = _FakeJWKSetClient(jwk_set=_FakeJWKSet(2))
+    monkeypatch.setattr(deps, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(deps, "_get_jwks_client", lambda: fake)
+
+    with caplog.at_level(logging.INFO, logger="deps"):
+        deps._check_jwks_reachable()
+
+    assert fake.calls == 1
+    msgs = [r.getMessage() for r in caplog.records if r.levelno == logging.INFO]
+    assert any("JWKS 도달 확인" in m and "2" in m for m in msgs), msgs
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+def test_check_jwks_reachable_logs_error_and_swallows(monkeypatch, caplog):
+    """JWKS 도달 실패 → error 로그만 남기고 예외를 전파하지 않는다 (기동 차단 금지)."""
+    fake = _FakeJWKSetClient(exc=TimeoutError("timed out"))
+    monkeypatch.setattr(deps, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(deps, "_get_jwks_client", lambda: fake)
+
+    with caplog.at_level(logging.ERROR, logger="deps"):
+        deps._check_jwks_reachable()  # 예외가 새어 나오면 이 줄에서 테스트가 깨진다
+
+    errors = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
+    assert any("JWKS 도달 실패" in m for m in errors), errors
+
+
+def test_check_jwks_reachable_skips_without_url(monkeypatch, caplog):
+    """SUPABASE_URL 미설정이면 조회 자체를 건너뛴다 (불필요한 네트워크·에러 로그 방지)."""
+    fake = _FakeJWKSetClient(jwk_set=_FakeJWKSet(1))
+    monkeypatch.setattr(deps, "SUPABASE_URL", "")
+    monkeypatch.setattr(deps, "_get_jwks_client", lambda: fake)
+
+    with caplog.at_level(logging.INFO, logger="deps"):
+        deps._check_jwks_reachable()
+
+    assert fake.calls == 0
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]

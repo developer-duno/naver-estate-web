@@ -455,3 +455,159 @@ def test_partial_error_batch_still_counts(db, no_throttle, monkeypatch):
     )
     assert len(errored) == total - 1
     assert [r.detail_fail_count for r in errored] == [1] * (total - 1)
+
+
+# ── 일일 정비 잡의 상한 매물 재시도 자격 부여 (세션 395 사후검증) ──
+#
+# 사각: V056 상한은 "영원히 헛도는 30분 재시도"를 막았지만, 상한에 걸린 매물이
+# 나중에 네이버 쪽 오류가 풀려도 자동으로 후보에 복귀할 경로가 없었다(목록 재크롤은
+# detail_fail_count 를 안 건드리고, 유일한 탈출구가 수동 SQL). 일일 VACUUM 정비 잡이
+# 카운터를 CAP-1 로 되돌려 하루 1회 재시도 자격을 준다.
+#
+# ⚠ 뮤테이션 검증 (2026-09-09 실측): vacuum_maintenance.py 의
+# `retry_granted = _grant_detail_retry_for_capped_articles(db)` 호출 배선을
+# `retry_granted = 0` 으로 죽이면 아래 두 테스트가 각각
+# `assert 0 == 1` / `assert [] == ['REVIVED']` 로 FAIL 하는 것을 확인한 뒤
+# 복원했다(2 failed, 18 passed) = 이 두 테스트는 장식이 아니라 실제로 이 결함을 본다.
+
+
+def _make_article(
+    db, article_no: str, *, fail_count: int, detail_crawled: bool, is_active: bool
+) -> None:
+    """재시도 자격 부여 대상/비대상 조합 매물 1건 심기."""
+    db.add(
+        Article(
+            article_no=article_no,
+            complex_no="100",
+            trade_type_name="매매",
+            detail_crawled=detail_crawled,
+            is_active=is_active,
+            last_seen_at=datetime.now(timezone.utc),
+            detail_fail_count=fail_count,
+        )
+    )
+    db.commit()
+
+
+def test_daily_maintenance_grants_retry_to_capped_articles(db):
+    """상한 도달 매물만 CAP-1 로 되돌아간다 (대상/비대상 4조합).
+
+    - 상한 도달 + 상세 미완 + 활성  → CAP-1 (재시도 자격 부여)
+    - 상한 미만(3)                  → 그대로 3 (건드리면 재시도 예산 낭비)
+    - detail_crawled=True           → 그대로 (이미 끝난 매물)
+    - is_active=False               → 그대로 (선정 쿼리 대상 자체가 아님)
+    """
+    from crawler.vacuum_maintenance import run_vacuum_maintenance
+
+    _make_article(db, "CAPPED", fail_count=_DETAIL_FAIL_CAP,
+                  detail_crawled=False, is_active=True)
+    _make_article(db, "BELOWCAP", fail_count=3,
+                  detail_crawled=False, is_active=True)
+    _make_article(db, "DONE", fail_count=_DETAIL_FAIL_CAP,
+                  detail_crawled=True, is_active=True)
+    _make_article(db, "INACTIVE", fail_count=_DETAIL_FAIL_CAP,
+                  detail_crawled=False, is_active=False)
+
+    result = run_vacuum_maintenance()
+
+    assert result["detail_retry_granted"] == 1
+
+    db.expire_all()
+    counts = {
+        r.article_no: r.detail_fail_count
+        for r in db.query(Article).filter(
+            Article.article_no.in_(["CAPPED", "BELOWCAP", "DONE", "INACTIVE"])
+        )
+    }
+    assert counts["CAPPED"] == _DETAIL_FAIL_CAP - 1, "상한 매물이 재시도 자격을 못 받았다"
+    assert counts["BELOWCAP"] == 3
+    assert counts["DONE"] == _DETAIL_FAIL_CAP
+    assert counts["INACTIVE"] == _DETAIL_FAIL_CAP
+
+
+def test_capped_article_retried_after_daily_maintenance(db, no_throttle, monkeypatch):
+    """정비 잡 이후 상한 매물이 다시 선정되고, 여전히 오류면 곧바로 재제외된다.
+
+    영구 방치 사각의 본질 = "복귀 경로 0". 정비 잡 → 상세 배치 1회 호출 → 카운터
+    CAP 복귀 → 그 다음 배치는 다시 0콜 = 하루 1콜 유계.
+    """
+    from crawler.vacuum_maintenance import run_vacuum_maintenance
+
+    _make_article(db, "REVIVED", fail_count=_DETAIL_FAIL_CAP,
+                  detail_crawled=False, is_active=True)
+
+    calls: list[str] = []
+
+    def _fake_detail(article_no):
+        calls.append(article_no)
+        return {"error": {"code": "ERROR", "message": "알수없는 오류(시스템 오류)"}}
+
+    monkeypatch.setattr(
+        service_discover.NaverEstateAPI, "get_article_detail", staticmethod(_fake_detail)
+    )
+
+    crawl_article_details(batch_size=10)   # 정비 전: 상한이라 선정 제외
+    assert calls == []
+
+    run_vacuum_maintenance()               # 일일 정비 → CAP-1 로 재시도 자격
+
+    crawl_article_details(batch_size=10)   # 정비 후: 딱 1회 재시도
+    assert calls == ["REVIVED"]
+
+    db.expire_all()
+    row = db.query(Article).filter(Article.article_no == "REVIVED").one()
+    assert row.detail_fail_count == _DETAIL_FAIL_CAP, "재실패가 상한으로 복귀 안 했다"
+    assert row.is_active is True           # 상한은 "시도 중단"이지 "비활성화"가 아니다
+
+    crawl_article_details(batch_size=10)   # 다음 배치: 다시 제외 (하루 1콜 유계)
+    assert calls == ["REVIVED"]
+
+
+def test_systemic_batch_still_counts_revived_articles(db, no_throttle, monkeypatch):
+    """차단기 보류 회차라도 **되살린 매물**(카운터 CAP-1)은 예외로 +1 이 적용된다.
+
+    사각(크롤 안전 리뷰 권고 A): 정비 잡이 되살린 매물은 카운터가 CAP-1 이라 다음
+    배치에 다시 선정된다. 그런데 되살린 매물만으로 배치가 채워지면 그 배치는 늘
+    "전수 매물오류"라 차단기가 매번 보류 → 카운터가 CAP-1 에 영원히 머물러 같은
+    매물이 매 배치(30분)마다 재선정되는 무한 반복이 된다(정비 잡이 의도한 "하루 1콜"
+    바운드 붕괴 + 네이버 부하). 되살린 매물은 과거 혼합 배치에서 이미 6회 확정된
+    이력이 있어 "개별 매물 문제"가 입증된 쪽이므로 보류 대상이 아니다.
+
+    ⚠ 뮤테이션 검증 (2026-09-09 실측): service_discover 의 보류 분기에서 예외
+    (`revived_hits` 추출 + `_apply_article_error_counts` 호출)를 지우면 이 테스트가
+    `assert [5, 5, ...] == [6, 6, ...]` 로 FAIL 한다. 같은 뮤테이션에서
+    test_systemic_all_error_batch_holds_fail_count(신규 매물 전수 → 보류)는 계속
+    통과하므로, 이 예외가 기존 차단기를 무력화하지 않는다는 것도 함께 증명된다.
+    """
+    now = datetime.now(timezone.utc)
+    total = _ARTICLE_ERROR_SYSTEMIC_MIN  # 임계 정확히 충족 = 차단기 발동 조건
+    for i in range(total):
+        # 전부 "정비 잡이 되살린" 상태 (카운터 CAP-1)
+        _make_pending_article(
+            db, f"REV{i:03d}", now - timedelta(minutes=i),
+            fail_count=_DETAIL_FAIL_CAP - 1,
+        )
+
+    calls: list[str] = []
+
+    def _fake_detail(article_no):
+        calls.append(article_no)
+        return {"error": {"code": "ERROR", "message": "알수없는 오류(시스템 오류)"}}
+
+    monkeypatch.setattr(
+        service_discover.NaverEstateAPI, "get_article_detail", staticmethod(_fake_detail)
+    )
+
+    crawl_article_details(batch_size=total)
+    assert len(calls) == total  # 1회차는 전원 선정됨 (CAP-1 이라 아직 후보)
+
+    db.expire_all()
+    rows = db.query(Article).filter(Article.article_no.like("REV%")).all()
+    assert len(rows) == total
+    # 차단기 보류 회차여도 되살린 매물은 CAP 으로 복귀 = 다음 배치에서 재제외
+    assert [r.detail_fail_count for r in rows] == [_DETAIL_FAIL_CAP] * total
+    # 플래그는 어느 경우에도 불변 ("시도 중단"이지 "비활성화"가 아니다)
+    assert all(r.is_active is True and r.detail_crawled is False for r in rows)
+
+    crawl_article_details(batch_size=total)  # 2회차: 전원 제외 → 추가 호출 0
+    assert len(calls) == total, "되살린 매물이 상한 복귀에 실패해 무한 재선정된다"

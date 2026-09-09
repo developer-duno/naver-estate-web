@@ -100,6 +100,14 @@ def _grant_detail_retry_for_capped_articles(db) -> int:
         from crawler.service_discover import _DETAIL_FAIL_CAP
 
         cap = _DETAIL_FAIL_CAP
+        # detail_fail_count 에 인덱스가 없어 이 UPDATE 는 articles 순차 스캔이다.
+        # 기본 statement_timeout(8초, infra.md §DB 커넥션 풀)에 꼬리가 잘리면 예외를
+        # 흡수하는 best-effort 규약 탓에 **조용한 기능 사망**(매일 warning 만 남고
+        # 되살아나는 매물은 0)이 된다. 배치 잡 세션에 한해 30초로 상향 —
+        # service_discover.crawl_article_details 의 후보 SELECT 선례와 동일하다.
+        # NullPool 이라 연결이 세션 전용이고 종료 시 닫혀 다른 요청에 누수 0.
+        if db.bind is not None and db.bind.dialect.name == "postgresql":
+            db.execute(text("SET statement_timeout = 30000"))
         result = db.execute(
             # dialect 무관 표준 SQL (PostgreSQL·SQLite 동일 동작)
             text(

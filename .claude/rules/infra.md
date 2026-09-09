@@ -304,6 +304,7 @@ naver 의 `CHILDCARE_DETAIL_API_KEY` == mibunyang 의 `CHILDCARE_BASIC_API_KEY` 
 
 1. **모든 네이버 수집 코드는 `AdaptiveThrottle` 경유 필수.** `crawler/utils.py` 의 `get_shared_throttle(name, ...)` 로 인스턴스를 받아 단지·페이지 루프마다 `.wait()` 호출. 429 응답 시 자동 감속(`on_rate_limit`). throttle 우회한 직접 반복 호출 금지.
 2. **크롤 지표 컬럼을 SQL 직접 일괄 UPDATE 로 찍지 말 것.** `complexes.last_crawled_at`·`complexes.detail_crawled_at`·`articles.detail_crawled` 는 실제 크롤 코드(`CrawlJob` 생성 경유)만 갱신한다. SQL 로 일괄 UPDATE 하면 "크롤된 것처럼" 보이지만 실제 데이터는 없어 진단을 망친다.
+3. **`articles.detail_fail_count` 일괄 리셋은 정비 잡 전용, 수동은 단건만.** 상한 매물 되살리기는 일일 정비 잡(정기 VACUUM 유지보수, 매일 03:50)이 CAP-1 부여로 이미 한다(매물당 하루 1콜 유계). 손으로 `WHERE detail_fail_count > 0` 같은 일괄 0 리셋을 박으면 그 매물들이 상한까지 N매물×6콜을 다시 태우며 한꺼번에 재유입돼 네이버 부하가 튄다. 수동 개입은 특정 매물 1건(`WHERE article_no = '...'`)만.
 
 > **사건**: 2026-04-13 — `last_crawled_at` 이 하루에 29,944개(전체 75%) 동일 날짜로 찍힘. 그날 `crawl_jobs` 0건 → 크롤이 아니라 SQL 직접 일괄 UPDATE. 그 단지들의 단지상세 채움률은 2.6%뿐 — `last_crawled_at` 이 허수가 되어 데이터 진단을 장기간 어지럽힘.
 

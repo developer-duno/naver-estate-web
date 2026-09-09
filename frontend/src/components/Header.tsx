@@ -33,6 +33,10 @@ export default function Header() {
   }, []);
 
   useEffect(() => {
+    // StrictMode(dev) 는 mount→cleanup→mount 를 시뮬레이션하는데, 위 cleanup 이 isMountedRef 를
+    // false 로 내린 뒤 다시 true 로 올리는 곳이 없어 두 번째 실행의 세션 로드가 전부 조기 이탈했다
+    // (헤더가 로그인 상태로 안 바뀜 — next 16.3.4 admin E2E 회귀 실측, 세션 395). 매 실행 시작 시 재설정.
+    isMountedRef.current = true;
     const supabase = createClient();
 
     const fetchRoleFromSupabase = async () => {

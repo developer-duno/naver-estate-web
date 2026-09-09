@@ -93,6 +93,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("stale sweep 예외: %s", e)
 
+    # JWKS 도달 자가진단 — ES256 로컬 검증이 실제로 가능한지 부팅 로그로 남긴다.
+    # (모듈 import 시점이 아니라 여기서 부르는 이유는 deps._check_jwks_reachable docstring 참조)
+    try:
+        from deps import _check_jwks_reachable
+
+        _check_jwks_reachable()
+    except Exception as e:  # pragma: no cover - 자가진단이 기동을 막으면 안 됨
+        logger.warning("JWKS 자가진단 예외: %s", e)
+
     # 스케줄러 단일 인스턴스 파일락 — uvicorn 여러 개가 뜨면(수동 재시작 경합 등)
     # 각자 스케줄러를 돌려 같은 잡을 중복 실행하던 것을 프로세스 간 차단(세션 341).
     # 락 못 잡으면(다른 backend 가 이미 보유) 스케줄러만 스킵, health/API 는 정상.
@@ -206,9 +215,11 @@ async def security_headers_middleware(request: Request, call_next):
             response.headers["Cache-Control"] = "public, max-age=86400"  # 24시간 (정적 데이터)
         elif "/articles" not in path and path.startswith("/api/complexes/"):
             response.headers["Cache-Control"] = "private, max-age=3600"  # 1시간 (단지 정보)
-        elif path.endswith("/crawl-status") or path.endswith("/collect-status"):
+        elif path.endswith(("/crawl-status", "/collect-status", "/progress")):
             # 진행 상태 폴링 응답이 브라우저에 캐시되면 완료를 영영 감지 못 한다
             # (세션 395 라이브 재현: 폴링 44회 중 서버 도착 1회, 크롤이 끝나도 화면은 "크롤 중").
+            # 진행률 폴링 계열은 전부 no-store — /api/admin/recrawl/progress(FE BulkRecrawlCard 3초 폴링)도
+            # 기본 분기의 private, max-age=30 을 받아 같은 결함이었다 (세션 395 맹점 검증).
             # 아래 /api/live/ 의 max-age 는 실시간 검색·상세 결과 캐시라 의도된 동작이므로 그대로 둔다.
             response.headers["Cache-Control"] = "no-store"
         elif path.startswith("/api/live/"):

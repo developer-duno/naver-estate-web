@@ -33,6 +33,10 @@ export default function Header() {
   }, []);
 
   useEffect(() => {
+    // Why: StrictMode(dev) 는 mount→cleanup→mount 를 이중 실행하는데, 위 cleanup effect 가
+    // 내린 isMountedRef 를 다시 올리는 곳이 없어 2번째 실행의 getSession/onAuthStateChange
+    // 후속이 전부 조기 이탈했다(헤더가 로그아웃 상태로 굳음 — next 16.3.4 admin E2E 회귀 실측, 세션 395).
+    isMountedRef.current = true;
     const supabase = createClient();
 
     const fetchRoleFromSupabase = async () => {

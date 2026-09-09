@@ -55,8 +55,11 @@ _unknown_kid_seen = TTLCache(ttl=_UNKNOWN_KID_TTL, max_size=64)
 # kid 헤더가 없는 ES256 토큰용 고정 센티널 키.
 # kid 가 빈 문자열이면 캐시에 기록하지 않던 옛 코드는 네거티브 캐시에 사각을 남겼다 —
 # kid 를 일부러 생략한 토큰을 반복해 보내면 매 요청이 get_signing_key_from_jwt 로 흘러
-# JWKS 강제 재조회를 유발한다(위 증폭 시나리오와 동일). Supabase 는 kid 없는 토큰을
-# 발급하지 않으므로 이 센티널로 묶어 캐시해도 정상 토큰이 걸릴 일은 없다.
+# JWKS 강제 재조회를 유발한다(위 증폭 시나리오와 동일). kid 없는 ES256 토큰은
+# PyJWKClient.get_signing_key(None) 이 JWKS 어느 키와도 매칭되지 않아 refresh 후에도
+# PyJWKClientError 로 끝난다(항상 로컬 검증 실패) — 즉 이 센티널은 검증 결과를 바꾸지
+# 않고 실패가 확정된 JWKS 왕복만 생략한다(정상 토큰 영향 0; Supabase 문서상 kid 는
+# optional 이라 "항상 kid 를 붙인다"에 기대지 않는다 — 보안 리뷰 L-1).
 _NO_KID_SENTINEL = "__no_kid__"
 
 # JWT 클레임 시각 검증 허용 오차(초). Supabase 발급 서버와 우리 집 서버의 시계가
@@ -105,7 +108,10 @@ def _check_jwt_secret():
         jwt.decode(token, SUPABASE_JWT_SECRET, algorithms=["HS256"], audience="authenticated")
         logger.info("[AUTH] JWT secret 자가진단 통과 (HS256 라운드트립 성공)")
     except Exception as e:
-        logger.error("[AUTH] JWT secret 자가진단 실패 — 로컬 검증이 작동하지 않을 수 있음: %s", e)
+        logger.error(
+            "[AUTH] JWT secret 자가진단 실패 — 로컬 검증이 작동하지 않을 수 있음: %s",
+            _safe_log_value(str(e)),
+        )
 
 
 def _check_jwks_reachable() -> None:

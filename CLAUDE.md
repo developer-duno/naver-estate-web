@@ -113,7 +113,7 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 - `CHILDCARE_DETAIL_API_KEY` — cpmsapi030 운영키
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — Gmail SMTP SSL 465
 
-## 테스트 현황 (BE·FE 2026-08-28 세션 388 실측)
+## 테스트 현황 (BE·FE 2026-09-09 세션 395 CI 실측)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|

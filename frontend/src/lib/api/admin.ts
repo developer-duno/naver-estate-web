@@ -186,7 +186,12 @@ export interface RecrawlProgress {
 }
 
 export async function getRecrawlProgress(token: string) {
-  return fetchApi<RecrawlProgress>("/api/admin/recrawl/progress", { headers: adminHeaders(token) });
+  return fetchApi<RecrawlProgress>("/api/admin/recrawl/progress", {
+    headers: adminHeaders(token),
+    // no-store = 서버 no-store 헤더에 대한 이중 방어 (crawl.ts getCrawlStatus 와 같은 이유 —
+    // 3초 폴링 응답이 캐시되면 진행률이 멈춘 것처럼 보인다, 세션 395)
+    cache: "no-store",
+  });
 }
 
 /** 관리자: 단건 강제 재크롤 (특정 단지 1개 즉시 트리거) */

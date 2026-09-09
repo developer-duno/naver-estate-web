@@ -5,11 +5,11 @@
  * 이 옵션은 프록시·미들웨어 회귀 시에도 브라우저가 폴링 응답을 저장하지 않게 하는 이중 방어다.
  * 캐시되면 크롤이 끝나도 화면이 "크롤 중"에 멈춘다(라이브 재현: 폴링 44회 중 서버 도착 1회).
  *
- * ⚠ 뮤테이션 검증 완료 — crawl.ts 의 `cache: "no-store"` 를 제거하면 아래 두 테스트가
- * 실패한다(세션 395 실측).
+ * ⚠ 뮤테이션 검증 완료 — crawl.ts / admin.ts 의 `cache: "no-store"` 를 제거하면 해당
+ * 테스트가 실패한다(세션 395 실측).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getCrawlStatus, getPriceCollectStatus } from "@/lib/api";
+import { getCrawlStatus, getPriceCollectStatus, getRecrawlProgress } from "@/lib/api";
 
 /** fetch 두 번째 인자(RequestInit)를 캡처하기 위한 spy */
 function spyFetch(body: unknown) {
@@ -40,6 +40,18 @@ describe("진행 상태 폴링 — 브라우저 캐시 차단", () => {
 
     const [url, init] = fetchSpy.mock.calls[0];
     expect(String(url)).toContain("/price-history/collect-status");
+    expect((init as RequestInit).cache).toBe("no-store");
+  });
+
+  // 관리자 대량 재크롤 진행률도 같은 결함 구조 — BulkRecrawlCard 가 running 중 3초 간격으로
+  // 폴링하므로, 캐시되면 진행률이 멈춘 것처럼 보인다(맹점 검증 HIGH, 세션 395).
+  it("getRecrawlProgress 는 cache: no-store 로 요청한다", async () => {
+    const fetchSpy = spyFetch({ running: false, job: null });
+
+    await getRecrawlProgress("admin-token");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/api/admin/recrawl/progress");
     expect((init as RequestInit).cache).toBe("no-store");
   });
 });

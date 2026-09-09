@@ -59,7 +59,9 @@ export function useSessionToken(): {
           if (session?.access_token) setSessionToken(session.access_token);
         } catch (err) {
           console.error("Failed to extract sessionToken:", err);
-          if (!cancelled) setTokenError(true);
+          // 구독이 이미 진실을 배달했으면 늦게 끝난 getSession() 실패는 사용자 상태와
+          // 무관하다 — 정상 로그인인데 오류 배너가 뜨던 경합. 성공 경로 가드와 대칭(세션 396).
+          if (!cancelled && !deliveredBySubscription) setTokenError(true);
         } finally {
           if (!cancelled) setTokenReady(true);
         }

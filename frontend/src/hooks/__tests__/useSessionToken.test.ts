@@ -133,4 +133,26 @@ describe("useSessionToken", () => {
     });
     expect(result.current.sessionToken).toBe("fresh-token");
   });
+
+  it("구독이 먼저 토큰을 준 뒤 늦게 실패한 getSession() 은 tokenError 를 세우지 않는다 (경합 가드 대칭)", async () => {
+    // 위 케이스의 reject 버전 — 구독(INITIAL_SESSION 등)이 유효 토큰을 배달한 정상 로그인
+    // 상태에서 늦게 끝난 getSession() 이 실패해도 /complex 오류 배너가 뜨면 안 된다(세션 396).
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    let rejectSession: ((e: unknown) => void) | undefined;
+    getSessionMock.mockReturnValue(new Promise((_, rej) => { rejectSession = rej; }));
+
+    const { result } = renderHook(() => useSessionToken());
+    act(() => {
+      authCallback?.("INITIAL_SESSION", { access_token: "live-token" });
+    });
+    await waitFor(() => expect(result.current.sessionToken).toBe("live-token"));
+    expect(result.current.tokenReady).toBe(true);
+
+    await act(async () => {
+      rejectSession?.(new Error("late failure"));
+    });
+    expect(result.current.tokenError).toBe(false);
+    expect(result.current.sessionToken).toBe("live-token");
+    consoleError.mockRestore();
+  });
 });

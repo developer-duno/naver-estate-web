@@ -121,3 +121,60 @@ class TestCrawlComplexDetailsBatch:
         db.expire_all()
         cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == "c1").first()
         assert cpx.detail_crawled_at is None  # 실패 → 미수집 유지 (다음 배치 재시도)
+
+    @patch("services.enricher.NaverEstateAPI")
+    def test_commits_each_write_before_throttle(self, mock_api, db, monkeypatch):
+        """단지 상세 backfill 도 순회마다 commit — throttle 대기 전에 행 잠금을 놓는다.
+
+        배경(세션 396): 옛 "50건마다 commit" 은 enrich_complex_detail 이 잡은 complexes
+        행 잠금을 최대 50 × _throttle_detail(2s) ≈ 100초 쥔 채 대기해, 같은 단지를
+        upsert 하는 실시간 검색·인기 크롤이 8초 statement_timeout 에 걸릴 수 있었다
+        (crawl_article_details 와 같은 기전).
+
+        검증: _throttle_detail.wait 호출 시점의 누적 commit 횟수가 순회마다 증가한다.
+        뮤테이션: 순회 commit 을 지우면 3단지 배치에서 증가가 없어 FAIL.
+        """
+        from crawler import service_discover
+
+        for i in range(3):
+            upsert_complex_from_search(db, _make_complex_data(f"cc{i}", "APT"))
+        db.commit()
+        mock_api.get_complex_detail.return_value = _make_detail_response()
+
+        commit_counts = {"n": 0}
+        _real_factory = service_discover.SessionLocal
+
+        def _counting_session_factory():
+            session = _real_factory()
+            real_commit = session.commit
+
+            def _counting_commit():
+                commit_counts["n"] += 1
+                return real_commit()
+
+            session.commit = _counting_commit  # 인스턴스 단위 (다른 세션 영향 0)
+            return session
+
+        monkeypatch.setattr(service_discover, "SessionLocal", _counting_session_factory)
+
+        commits_at_wait: list[int] = []
+        monkeypatch.setattr(
+            service_discover._throttle_detail,
+            "wait",
+            lambda *a, **k: commits_at_wait.append(commit_counts["n"]),
+        )
+        monkeypatch.setattr(
+            service_discover._throttle_detail, "on_success", lambda *a, **k: None
+        )
+        monkeypatch.setattr(
+            service_discover._throttle_detail, "on_rate_limit", lambda *a, **k: None
+        )
+
+        service_discover.crawl_complex_details_batch("APT", batch_size=10)
+
+        # wait 은 각 단지 처리 **앞**에서 호출되므로, 2번째 wait 시점엔 1번째 단지의
+        # commit 이 이미 반영돼 있어야 한다(대기 전에 잠금 해제됨).
+        assert len(commits_at_wait) == 3
+        assert all(
+            commits_at_wait[i] > commits_at_wait[i - 1] for i in range(1, 3)
+        ), f"throttle 대기 전에 커밋되지 않음: {commits_at_wait}"

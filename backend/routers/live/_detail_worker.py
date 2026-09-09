@@ -11,7 +11,6 @@ from shared.domain.article import RealEstateArticle
 from shared.naver_api import NaverEstateAPI
 
 from ._shared import (
-    DETAIL_COMMIT_INTERVAL,
     DETAIL_CRAWL_DELAY,
     DETAIL_FAILURE_THRESHOLD,
     _update_crawl_status,
@@ -55,8 +54,20 @@ def _crawl_details_for_complex(db, complex_no: str):
             logger.warning("Article detail fetch failed: %s → %s", article_no, e)
             return article_no, None
 
-    # article_no → DB article 매핑
-    art_map = {art.article_no: art for art in articles}
+    # article_no → 루프에 필요한 속성 튜플 (ORM 인스턴스 아님)
+    # 아래 순회마다 db.commit() 을 하는데 expire_on_commit=True(database.py) 라
+    # ORM 인스턴스를 들고 있으면 다음 순회 art.* 접근이 PK 재조회 lazy-load 를 유발한다
+    # (부하 구간엔 이 조회가 statement_timeout 방아쇠 — 세션 342 실사고).
+    # crawler/service_discover.py crawl_article_details 의 선추출 패턴을 그대로 답습한다.
+    art_map = {
+        art.article_no: (
+            art.trade_type_name,
+            art.deal_or_warrant_prc,
+            art.rent_prc,
+            art.area2_m2,
+        )
+        for art in articles
+    }
     crawled_count = 0
     failed_count = 0
 
@@ -66,34 +77,38 @@ def _crawl_details_for_complex(db, complex_no: str):
 
         for i, future in enumerate(as_completed(futures)):
             article_no, detail_data = future.result()
-            art = art_map[article_no]
+            trade_type_name, deal_or_warrant_prc, rent_prc, area2_m2 = art_map[article_no]
 
             if detail_data and "error" not in detail_data:
                 try:
                     domain_article = RealEstateArticle(
-                        article_no=art.article_no,
-                        trade_type_name=art.trade_type_name or "",
+                        article_no=article_no,
+                        trade_type_name=trade_type_name or "",
                     )
-                    domain_article.deal_or_warrant_prc = art.deal_or_warrant_prc
-                    domain_article.rent_prc = art.rent_prc
-                    domain_article.area2_m2 = art.area2_m2
+                    domain_article.deal_or_warrant_prc = deal_or_warrant_prc
+                    domain_article.rent_prc = rent_prc
+                    domain_article.area2_m2 = area2_m2
                     domain_article.update_from_detail(detail_data)
 
                     update_data = build_detail_update_dict(domain_article, detail_data)
                     db.query(ArticleModel).filter(
-                        ArticleModel.article_no == art.article_no
+                        ArticleModel.article_no == article_no
                     ).update(update_data, synchronize_session=False)
                     crawled_count += 1
                 except Exception as e:
-                    logger.warning("Article detail update failed: %s → %s", art.article_no, e)
+                    logger.warning("Article detail update failed: %s → %s", article_no, e)
                     failed_count += 1
             else:
                 failed_count += 1
 
             _update_crawl_status(complex_no, detail_crawled_count=i + 1)
 
-            if (i + 1) % DETAIL_COMMIT_INTERVAL == 0:
-                db.commit()
+            # 순회마다 commit — 옛 DETAIL_COMMIT_INTERVAL(50건) 배치 commit 은 위 UPDATE 가
+            # 잡은 articles 행 잠금을 최대 50건 × (0.3s + shared throttle) 동안 쥔 채
+            # 다음 fetch 를 기다려, 같은 매물을 upsert 하는 인기 크롤·12h 배치가 8초
+            # statement_timeout 에 잘리게 했다(세션 396, 2026-09-09 14:45 13건 failed).
+            # 위 선추출 덕에 commit expire 로 인한 lazy-load 폭풍은 없다.
+            db.commit()
 
     db.commit()  # 나머지 커밋
 

@@ -33,7 +33,10 @@
 --
 -- 수동 복구법 (오류 원인이 해소돼 다시 시도시키고 싶을 때):
 --   UPDATE articles SET detail_fail_count = 0 WHERE article_no = '2643869752';
---   -- 전체 리셋: UPDATE articles SET detail_fail_count = 0 WHERE detail_fail_count > 0;
+--   -- ⚠ 전체 리셋(UPDATE articles SET detail_fail_count = 0 WHERE detail_fail_count > 0)은 금지 —
+--   --   일일 정비 잡(vacuum_maintenance, 매일 03:50)이 상한 매물에 CAP-1 을 부여해 이 역할을
+--   --   이미 하고 있다(하루 1콜 유계). 손으로 일괄 0 을 박으면 그 매물들이 상한까지 N매물×6콜을
+--   --   다시 태우며 재유입돼 네이버 부하가 튄다(infra.md §IP 차단 방지). 수동은 단건만.
 --
 -- 기존 데이터 영향 0: NOT NULL DEFAULT 0 이라 기존 행은 전부 0 = "실패 이력 없음"으로
 -- 취급돼 지금과 동일하게 동작한다. PostgreSQL 11+ 는 상수 DEFAULT 의 ADD COLUMN 을

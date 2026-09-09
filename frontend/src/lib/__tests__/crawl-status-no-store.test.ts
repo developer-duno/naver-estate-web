@@ -9,7 +9,13 @@
  * 테스트가 실패한다(세션 395 실측).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { getCrawlStatus, getPriceCollectStatus, getRecrawlProgress } from "@/lib/api";
+import {
+  getCrawlStatus,
+  getPriceCollectStatus,
+  getRecrawlProgress,
+  getRecrawlStatus,
+  getSchedulerStatus,
+} from "@/lib/api";
 
 /** fetch 두 번째 인자(RequestInit)를 캡처하기 위한 spy */
 function spyFetch(body: unknown) {
@@ -52,6 +58,29 @@ describe("진행 상태 폴링 — 브라우저 캐시 차단", () => {
 
     const [url, init] = fetchSpy.mock.calls[0];
     expect(String(url)).toContain("/api/admin/recrawl/progress");
+    expect((init as RequestInit).cache).toBe("no-store");
+  });
+
+  // 세션 396: 관리자 카드 폴링 2종도 같은 결함 구조였다 — 끝말 매칭(/progress)에 안 걸려
+  // 서버가 private, max-age=30 을 붙였고 화면이 최대 30초 옛값을 보여줬다(#466 과 같은 기전).
+  // 서버는 /api/admin/ 전부 no-store 로 고쳤고, 아래는 그에 대한 FE 이중 방어 가드.
+  it("getRecrawlStatus 는 cache: no-store 로 요청한다", async () => {
+    const fetchSpy = spyFetch({ level: "safe", message: "", running_jobs: [] });
+
+    await getRecrawlStatus("admin-token");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/api/admin/recrawl/status");
+    expect((init as RequestInit).cache).toBe("no-store");
+  });
+
+  it("getSchedulerStatus 는 cache: no-store 로 요청한다", async () => {
+    const fetchSpy = spyFetch({ jobs: [] });
+
+    await getSchedulerStatus("admin-token");
+
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/api/admin/scheduler-status");
     expect((init as RequestInit).cache).toBe("no-store");
   });
 });

@@ -5,6 +5,7 @@
 
 import logging
 import os
+import re
 import time
 from contextlib import asynccontextmanager
 
@@ -184,6 +185,10 @@ async def log_response_time(request: Request, call_next):
     return response
 
 
+# 단지 상세 1건 정확 매칭 (/api/complexes/{no} — 하위 경로는 제외)
+_COMPLEX_DETAIL_PATH = re.compile(r"/api/complexes/[^/]+")
+
+
 # TTL 캐시 (get_dynamic_ttl 호출 최적화 — 60초 간격으로 갱신)
 _cached_ttl: int = 300
 _cached_ttl_time: float = 0
@@ -213,13 +218,31 @@ async def security_headers_middleware(request: Request, call_next):
         path = request.url.path
         if path.startswith("/api/regions"):
             response.headers["Cache-Control"] = "public, max-age=86400"  # 24시간 (정적 데이터)
-        elif "/articles" not in path and path.startswith("/api/complexes/"):
-            response.headers["Cache-Control"] = "private, max-age=3600"  # 1시간 (단지 정보)
+        elif path.startswith("/api/admin/"):
+            # 관리자 API 는 전부 no-store (세션 396). 카드 8종이 30~60초 간격으로 폴링하는데
+            # 끝말 매칭(/progress 등)에 안 걸리는 것들이 기본 분기의 private, max-age=30 을 받아
+            # 최대 30초 옛값을 보여줬다 (#466 과 같은 기전 — recrawl/status·scheduler-status·quota-status).
+            # 관리자 전용·소량·폴링이라 브라우저 캐시 이득이 0 이므로 접두어 단위로 일반화한다.
+            response.headers["Cache-Control"] = "no-store"
+        elif _COMPLEX_DETAIL_PATH.fullmatch(path) or (
+            path.startswith("/api/complexes/") and "/articles" in path
+        ):
+            # 단지 상세 1건 + 매물 목록은 no-cache (세션 396 §5-N).
+            # 크롤 완료 직후 FE 가 재조회해도 브라우저 HTTP 캐시(3600s/30s)가 답해 배지·건수가
+            # 옛값이었다(9/9 01:53 단지 15111 실측). 클라 캐시는 React Query staleTime 이 이미
+            # 담당하므로 HTTP 캐시는 정합성 구멍만 만든다.
+            # no-store 가 아니라 no-cache 인 이유: 의미론 구분(저장은 허용, 재검증 없는 재사용만 금지)
+            # 뿐이다 — ETag/Last-Modified 가 없어 실제 네트워크 동작은 no-store 와 같다(매번 원본 재전송, 의도된 동작).
+            response.headers["Cache-Control"] = "no-cache"
+        elif path.startswith("/api/complexes/"):
+            response.headers["Cache-Control"] = "private, max-age=3600"  # 1시간 (단지 하위 정보)
         elif path.endswith(("/crawl-status", "/collect-status", "/progress")):
             # 진행 상태 폴링 응답이 브라우저에 캐시되면 완료를 영영 감지 못 한다
             # (세션 395 라이브 재현: 폴링 44회 중 서버 도착 1회, 크롤이 끝나도 화면은 "크롤 중").
             # 진행률 폴링 계열은 전부 no-store — /api/admin/recrawl/progress(FE BulkRecrawlCard 3초 폴링)도
             # 기본 분기의 private, max-age=30 을 받아 같은 결함이었다 (세션 395 맹점 검증).
+            # ⚠ 세션 396 이후 /api/admin/ 은 위 admin 분기가 먼저 잡는다. 이 줄은 /api/live/ 계열
+            #   (crawl-status·collect-status)을 아래 동적 TTL 분기보다 앞서 no-store 로 잡기 위해 유지.
             # 아래 /api/live/ 의 max-age 는 실시간 검색·상세 결과 캐시라 의도된 동작이므로 그대로 둔다.
             response.headers["Cache-Control"] = "no-store"
         elif path.startswith("/api/live/"):

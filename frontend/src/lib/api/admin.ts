@@ -85,7 +85,12 @@ export async function deleteStaleData(token: string, days: number) {
 
 /** 관리자: 스케줄러 모니터링 상태 조회 */
 export async function getSchedulerStatus(token: string) {
-  return fetchApi<SchedulerStatusResponse>(`/api/admin/scheduler-status`, { headers: adminHeaders(token) });
+  return fetchApi<SchedulerStatusResponse>(`/api/admin/scheduler-status`, {
+    headers: adminHeaders(token),
+    // no-store = 서버 no-store 헤더에 대한 이중 방어 (60초 폴링 카드가 캐시된 옛값을 보여주지
+    // 않게 — getRecrawlProgress 와 같은 이유, 세션 396)
+    cache: "no-store",
+  });
 }
 
 /** 관리자: 스케줄러 월간 캘린더 (과거 crawl_jobs + 미래 trigger 전개) */
@@ -157,7 +162,12 @@ export interface RecrawlStatus {
 }
 
 export async function getRecrawlStatus(token: string) {
-  return fetchApi<RecrawlStatus>("/api/admin/recrawl/status", { headers: adminHeaders(token) });
+  return fetchApi<RecrawlStatus>("/api/admin/recrawl/status", {
+    headers: adminHeaders(token),
+    // no-store = 서버 no-store 헤더에 대한 이중 방어 (30초 폴링 카드가 캐시된 옛값을 보여주지
+    // 않게 — getRecrawlProgress 와 같은 이유, 세션 396)
+    cache: "no-store",
+  });
 }
 
 /** 관리자: 매물 일괄 재크롤 즉시 실행 */

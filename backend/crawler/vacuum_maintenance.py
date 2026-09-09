@@ -17,6 +17,16 @@ SQLite(테스트)는 VACUUM 문법/대상이 달라 no-op (dialect 분기).
 청소 잡에 얹는 게 새 스케줄러 잡을 만드는 것보다 단순하다. best-effort 라 실패해도
 VACUUM 결과·잡 상태에 영향이 0 이다.
 
+곁다리 작업 2 (세션 395 사후검증): 상세 보강 상한(_DETAIL_FAIL_CAP)에 걸린 매물의
+`detail_fail_count` 를 CAP-1 로 되돌려 **하루 1회** 재시도 자격을 준다. V056 상한은
+"영원히 헛도는 30분 재시도"를 막았지만, 상한에 걸린 매물이 나중에 네이버 쪽 오류가
+풀려도 자동으로 후보에 복귀할 경로가 없어(목록 재크롤(services/upsert.py)은 이 컬럼을
+안 건드리고, 유일한 탈출구가 수동 SQL) **영구 방치** 사각이 생겼다. 매물이 수 시간
+산발 오류만 겪어도(배치 전수 오류 회로차단기는 20건 이상에서만 발동) 그대로 굳는다.
+CAP-1 로 되돌리면 다음 배치에서 딱 1회 재시도되고, 또 매물 단위 오류면 카운터가 다시
+CAP 이 되어 즉시 제외된다 = 매물당 **하루 1콜**로 유계, 오류가 풀렸으면 정상 처리되어
+detail_crawled=True. 이것도 best-effort(쿼터 정리와 동일 규약).
+
 세션 359: 전수조사에서 이 잡만 CrawlJob 기록을 아예 안 남겨(logger 만) monitor.py
 감시망(작업실패/작업마비/데이터미축적 3축 전부)의 완전한 사각지대였다 — "이 잡이
 오늘 도는지 안 도는지" 자체를 볼 방법이 없었다. VACUUM 은 새 행이 쌓이는 잡이 아니라
@@ -65,6 +75,60 @@ def _purge_expired_quota_counters(db) -> int:
         return 0
 
 
+def _grant_detail_retry_for_capped_articles(db) -> int:
+    """상세 상한 매물에 하루 1회 재시도 자격 부여 — **best-effort 곁다리 작업**.
+
+    `detail_fail_count >= _DETAIL_FAIL_CAP` 인 살아있는 상세 미완 매물의 카운터를
+    CAP-1 로 되돌린다. 그러면 다음 상세 보강 배치의 선정 쿼리
+    (`detail_fail_count < _DETAIL_FAIL_CAP`)에 딱 한 번 다시 들어가고, 여전히 매물
+    단위 오류면 그 배치에서 카운터가 다시 CAP 이 되어 즉시 제외된다.
+    → 매물당 하루 1콜로 유계(네이버 부하 무시 가능), 오류가 풀렸으면 정상 수집.
+
+    ⚠ `detail_crawled=True` 로 이미 끝난 매물과 `is_active=False` 매물은 대상이
+    아니다(선정 쿼리와 같은 조건을 그대로 쓴다 — 안 맞추면 이미 끝난 매물의 카운터를
+    무의미하게 흔든다).
+
+    쿼터 정리와 동일한 best-effort 규약: 실패해도 VACUUM 결과·잡 상태에 영향 0,
+    실패 시 `db.rollback()` 으로 세션 aborted 연쇄를 끊는다.
+    """
+    try:
+        from sqlalchemy import text
+
+        # 상수 import 는 함수 안에서 — service_discover 는 top-level 에서
+        # load_dotenv() + shared.naver_api 등 무거운 것을 끌어오므로, 청소 잡이
+        # 그걸 항상 로드하게 만들지 않는다(quota_db 지연 import 와 같은 결).
+        from crawler.service_discover import _DETAIL_FAIL_CAP
+
+        cap = _DETAIL_FAIL_CAP
+        result = db.execute(
+            # dialect 무관 표준 SQL (PostgreSQL·SQLite 동일 동작)
+            text(
+                "UPDATE articles SET detail_fail_count = :cap_minus_one"
+                " WHERE is_active = TRUE AND detail_crawled = FALSE"
+                " AND detail_fail_count >= :cap"
+            ),
+            {"cap_minus_one": cap - 1, "cap": cap},
+        )
+        granted = result.rowcount or 0
+        db.commit()
+        if granted:
+            logger.info(
+                "상세 상한 매물 %d건 재시도 자격 부여(카운터 %d→%d)",
+                granted, cap, cap - 1,
+            )
+        return granted
+    except Exception:
+        logger.warning(
+            "상세 상한 매물 재시도 자격 부여 실패 (VACUUM 결과에는 영향 없음)",
+            exc_info=True,
+        )
+        try:
+            db.rollback()
+        except Exception:
+            logger.warning("재시도 자격 부여 실패 후 rollback 도 실패", exc_info=True)
+        return 0
+
+
 def run_vacuum_maintenance() -> dict:
     """articles/trades VACUUM (ANALYZE) 실행. 결과 요약 dict 반환.
 
@@ -88,6 +152,8 @@ def run_vacuum_maintenance() -> dict:
     # dialect 를 안 타는 평범한 DELETE 라, PostgreSQL 전용인 VACUUM 의
     # early return 앞에 둔다(뒤에 두면 SQLite 경로에선 영영 안 돈다).
     purged = _purge_expired_quota_counters(db)
+    # 상세 상한 매물 재시도 자격도 dialect 무관 UPDATE 라 같은 자리(early return 앞).
+    retry_granted = _grant_detail_retry_for_capped_articles(db)
 
     dialect = engine.dialect.name
     if dialect != "postgresql":
@@ -98,7 +164,12 @@ def run_vacuum_maintenance() -> dict:
         job.processed_items = 0
         db.commit()
         db.close()
-        return {"skipped": dialect, "vacuumed": [], "purged_counters": purged}
+        return {
+            "skipped": dialect,
+            "vacuumed": [],
+            "purged_counters": purged,
+            "detail_retry_granted": retry_granted,
+        }
 
     vacuumed: list[str] = []
     failed: list[str] = []
@@ -131,4 +202,9 @@ def run_vacuum_maintenance() -> dict:
     finally:
         db.close()
 
-    return {"skipped": None, "vacuumed": vacuumed, "purged_counters": purged}
+    return {
+        "skipped": None,
+        "vacuumed": vacuumed,
+        "purged_counters": purged,
+        "detail_retry_granted": retry_granted,
+    }

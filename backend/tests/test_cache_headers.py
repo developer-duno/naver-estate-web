@@ -72,3 +72,50 @@ def test_admin_recrawl_progress_no_store(client):
     """
     res = client.get("/api/admin/recrawl/progress")
     assert res.headers["Cache-Control"] == "no-store"
+
+
+# ─── 세션 396: 단지·매물 목록 no-cache + 관리자 API 전부 no-store ───────────────
+#
+# §5-N: 크롤 완료 직후 FE 가 /api/complexes/{no}·{no}/articles 를 재조회해도 브라우저
+# HTTP 캐시(3600s/30s)가 답해 배지·건수가 옛값이었다(9/9 01:53 단지 15111 실측).
+# 클라 캐시는 React Query staleTime 이 이미 담당하므로 HTTP 캐시는 정합성 구멍만 만든다.
+#
+# ⚠ 아래 테스트들은 404/401 상태에서 헤더만 단언한다 — Cache-Control 은 미들웨어가 붙이므로
+#   본문·상태코드와 무관하다(위 test_admin_recrawl_progress_no_store 패턴 답습).
+#   실측(세션 396): /api/complexes/102102 → 404, 나머지 5개 → 401. 헤더는 6개 모두 부착 확인.
+
+
+def test_complex_detail_no_cache(client):
+    """단지 상세 1건 → Cache-Control: no-cache (매번 재검증 — 세션 396 §5-N)"""
+    res = client.get("/api/complexes/102102")
+    assert res.headers["Cache-Control"] == "no-cache"
+
+
+def test_complex_articles_no_cache(client):
+    """단지 매물 목록 → Cache-Control: no-cache (크롤 완료 직후 건수 정합 — 세션 396 §5-N)"""
+    res = client.get("/api/complexes/102102/articles?page=1")
+    assert res.headers["Cache-Control"] == "no-cache"
+
+
+def test_complex_subresource_cache_unchanged(client):
+    """회귀: 단지 하위 경로(price-stats 등)는 기존 1시간 캐시 유지 — no-cache 범위는 2종뿐"""
+    res = client.get("/api/complexes/102102/price-stats")
+    assert res.headers["Cache-Control"] == "private, max-age=3600"
+
+
+def test_admin_recrawl_status_no_store(client):
+    """관리자 재크롤 안전도(FE 30초 폴링) → no-store (세션 396)"""
+    res = client.get("/api/admin/recrawl/status")
+    assert res.headers["Cache-Control"] == "no-store"
+
+
+def test_admin_scheduler_status_no_store(client):
+    """관리자 스케줄러 상태(FE 60초 폴링) → no-store (세션 396)"""
+    res = client.get("/api/admin/scheduler-status")
+    assert res.headers["Cache-Control"] == "no-store"
+
+
+def test_admin_quota_status_no_store(client):
+    """관리자 쿼터 상태(FE 60초 폴링) → no-store (세션 396)"""
+    res = client.get("/api/admin/quota-status")
+    assert res.headers["Cache-Control"] == "no-store"

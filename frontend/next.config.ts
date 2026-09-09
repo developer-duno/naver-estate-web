@@ -12,6 +12,7 @@ const buildId =
   `dev-${Date.now()}`;
 
 const nextConfig: NextConfig = {
+  experimental: { useNodeStreams: false } as NextConfig["experimental"], // DEBUG E1: 16.3 Node streams 되돌림
   // .mdx 파일을 페이지/라우트로 인식. Turbopack·webpack 양쪽 호환 위해 문자열 플러그인.
   pageExtensions: ["ts", "tsx", "md", "mdx"],
   env: {

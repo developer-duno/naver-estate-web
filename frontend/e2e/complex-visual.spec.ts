@@ -3,6 +3,9 @@ import { applyComplexMocks } from "./fixtures/complex-mocks";
 
 test.describe("complex detail visual regression", () => {
   test("/complex/[no] 단지 상세 페이지 렌더 + 시각 회귀", async ({ page }) => {
+    page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") console.log("[DEBUG-16.3] console." + m.type() + ":", m.text().slice(0, 200)); });
+    page.on("pageerror", (e) => console.log("[DEBUG-16.3] pageerror:", String(e).slice(0, 200)));
+    page.on("response", (r) => { const u = r.url(); if (u.includes("/auth/v1/") || u.includes("/rest/v1/user_profiles") || u.includes("/api/users/me")) console.log("[DEBUG-16.3] resp:", r.status(), u.replace(/\?.*$/, "").slice(0, 110)); });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await applyComplexMocks(page);
     await page.goto("/complex/100000");
@@ -25,6 +28,23 @@ test.describe("complex detail visual regression", () => {
 
     // Header role 결정: Supabase user_profiles 응답이 admin 으로 들어와야 "관리자"
     // 뱃지(banner [ref=e8] 영역)가 렌더. 응답이 늦으면 spec 이 public 헤더로 찍힘.
+    // ── DEBUG (임시, next 16.3.4 admin E2E 회귀 진단): 세션 인식 상태 덤프 (값 미출력, 이름만) ──
+    const probe = await page.evaluate(async () => {
+      const cookieNames = document.cookie.split(";").map((c) => c.trim().split("=")[0]).filter(Boolean);
+      const lsKeys = Object.keys(localStorage);
+      let sessionPresent = "n/a";
+      try {
+        const mod = await import("@/lib/supabase");
+        const sb = mod.createClient();
+        const { data } = await sb.auth.getSession();
+        sessionPresent = data.session ? `yes(exp=${data.session.expires_at})` : "no";
+      } catch (e) {
+        sessionPresent = "err:" + String(e).slice(0, 120);
+      }
+      const headerText = document.querySelector("header, [role=banner]")?.textContent?.slice(0, 120) ?? "(no banner)";
+      return { cookieNames, lsKeys, sessionPresent, headerText, ua: navigator.userAgent.slice(0, 40) };
+    });
+    console.log("[DEBUG-16.3] probe:", JSON.stringify(probe));
     await expect(page.getByText("관리자", { exact: true })).toBeVisible({ timeout: 10_000 });
 
     await page.waitForLoadState("networkidle");

@@ -49,6 +49,18 @@ _STALE_HOURS_BY_TYPE = {
 # 실패 작업 조회 윈도 — 최근 이 시간 내 failed 만
 _FAILED_WINDOW_HOURS = 24
 
+# 실패 버스트 판정 — 이 창 안에 이만큼 failed 가 몰리면 "묶음 실패" 로 별도 발화.
+# 배경(2026-09-09 14:45~14:47): 인기 단지 크롤(부모 popular, 50단지)의 자식
+# complex_articles 잡 13건이 statement_timeout 으로 failed 했는데, 같은 배치의
+# 나머지 37건이 그 뒤에 completed 되면서 아래 "1-a. 자가 복구" 선필터(job_type
+# 단위 max(failed) < max(completed))가 13건을 통째로 삼켜 경보가 0건이었다.
+# 자가복구 판정은 "같은 잡이 다음 회차에 성공한 경우"를 위한 것이지 한 배치
+# 안의 부분 실패용이 아니므로, 그 판정과 무관한 별도 신호를 둔다.
+# 임계 근거: 사건이 3분에 13건이었고 평시 failed 는 0~2건이라 5건이면 충분히
+# 이례적이다. env 오버라이드 없이 상수 — 튜닝 대상이 아니라 사각 차단용.
+_BURST_WINDOW_MIN = 60
+_BURST_MIN_FAILED = 5
+
 
 def _job_stats(db, job_type: str) -> dict | None:
     """해당 job_type 의 마지막 completed 작업 통계 1건.
@@ -171,6 +183,44 @@ def detect_issues_ex(db) -> tuple[list[dict], bool]:
                 "processed": stats["processed"] if stats else None,
                 "total": stats["total"] if stats else None,
                 "last_completed_at": stats["completed_at"] if stats else None,
+            },
+        })
+
+    # 1-b. 실패 버스트 — 짧은 창(60분)에 failed 가 몰리면 recovered 와 무관하게 발화.
+    # 위 1-a 자가복구 선필터는 job_type 단위라, 한 배치의 일부만 실패하고 나머지가
+    # 그 뒤 completed 되면 실패가 통째로 은폐된다(2026-09-09 complex_articles 13건).
+    # 이 신호는 그 선필터를 타지 않는다 — "복구됐는가" 가 아니라 "한꺼번에 무너졌는가"
+    # 를 보기 때문이다. 다만 같은 job_type 에 crawl_failed 가 이미 발화 중이면(=자가복구가
+    # 아니어서 위 루프가 이미 알렸으면) 같은 사실을 두 번 알리는 셈이라 생략한다.
+    burst_cutoff = now - timedelta(minutes=_BURST_WINDOW_MIN)
+    already_failed = {i["data"]["job_type"] for i in issues if i["kind"] == "crawl_failed"}
+    bursts = db.execute(
+        select(
+            CrawlJob.job_type,
+            func.count(CrawlJob.id).label("cnt"),
+            func.count(func.distinct(CrawlJob.target_id)).label("targets"),
+        )
+        .where(and_(CrawlJob.status == "failed", CrawlJob.created_at >= burst_cutoff))
+        .group_by(CrawlJob.job_type)
+        .having(func.count(CrawlJob.id) >= _BURST_MIN_FAILED)
+    ).all()
+    for row in bursts:
+        if row.job_type in already_failed:
+            continue
+        err = _latest_failure_error(db, row.job_type, burst_cutoff)
+        issues.append({
+            "alert_key": f"crawl_failed_burst:{row.job_type}",
+            "kind": "crawl_failed_burst",
+            "detail": (
+                f"{row.job_type} 작업 최근 {_BURST_WINDOW_MIN}분 내 {row.cnt}건 실패 "
+                f"(일부 성공이 섞여 자가복구로 분류됐지만 묶음 실패) — {err[:200]}"
+            ),
+            "data": {
+                "job_type": row.job_type,
+                "count": row.cnt,
+                "window_min": _BURST_WINDOW_MIN,
+                "error": err,
+                "targets": row.targets,
             },
         })
 
@@ -324,7 +374,7 @@ def _resolution_reason(db, kind: str, job_type: str) -> tuple[str, str]:
 
     ⚠ 사유는 문구·이모지에만 영향을 준다 — status 전환(active→resolved)은 전부 기존과 동일.
     """
-    if kind not in ("crawl_failed", "crawl_stale"):
+    if kind not in ("crawl_failed", "crawl_stale", "crawl_failed_burst"):
         # freshness:* 는 신선도 계산이 성공한 스캔에서만 해소된다(run_monitor 가 보장).
         # 그 스캔에서 키가 빠졌다 = 실제로 red 를 벗어난 것이므로 진짜 복구.
         return "recovered", ""
@@ -351,6 +401,8 @@ def _resolution_reason(db, kind: str, job_type: str) -> tuple[str, str]:
         # 붙이면 거짓 설명이 된다.
         if kind == "crawl_failed":
             return "unconfirmed", f"마지막 실행: 실패 ({_FAILED_WINDOW_HOURS}h 관찰 창 경과)"
+        if kind == "crawl_failed_burst":
+            return "unconfirmed", f"마지막 실행: 실패 ({_BURST_WINDOW_MIN}분 창 이탈 — 추가 실패만 멈춤)"
         return "unconfirmed", "마지막 실행: 실패"
     # pending·paused 등 그 밖의 상태 — 임의로 "실패" 라 부르지 않고 원문 그대로 전달.
     return "unconfirmed", f"마지막 실행: {row.status}"

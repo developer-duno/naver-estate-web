@@ -1361,3 +1361,97 @@ def test_run_monitor_batch_header_ok_when_all_recovered():
         assert "알림 종료" not in msg
     finally:
         db.close()
+
+
+# ── 세션 396: 실패 버스트 — 배치 부분 실패가 job_type 단위 자가복구에 은폐되던 사각 ──
+#
+# 2026-09-09 14:45~14:47 인기 단지 크롤(부모 popular, 50단지)의 자식
+# complex_articles 잡 13건이 statement_timeout 으로 failed 했는데, 같은 배치의
+# 나머지 37건이 그 뒤 completed 되면서 "1-a. 자가 복구" 선필터가 통째로 삼켜
+# 경보가 0건이었다. 아래 테스트들이 그 조합을 직접 재현한다.
+
+
+def _add_jobs(db, job_type, status, count, *, base, step_min, error=None, target_prefix=None):
+    """같은 job_type 잡 N건을 base 시각부터 1분 간격으로 적재하는 팩토리."""
+    for i in range(count):
+        ts = base + timedelta(minutes=i * step_min)
+        db.add(CrawlJob(
+            job_type=job_type, status=status, error_message=error,
+            target_id=f"{target_prefix}{i}" if target_prefix else None,
+            started_at=ts, completed_at=ts, created_at=ts,
+        ))
+
+
+def test_detect_issues_burst_not_hidden_by_recovered():
+    """핵심 가드: failed 13건 + 그 뒤 completed 37건 → 기존 crawl_failed 는 여전히
+    자가복구로 침묵하지만(기존 동작 불변), crawl_failed_burst 가 대신 발화한다."""
+    db = TestSession()
+    try:
+        now = _utcnow()
+        # 14:45~14:47 사건 재현: failed 가 먼저, completed 가 더 늦게 끝난다
+        _add_jobs(db, "complex_articles", "failed", 13,
+                  base=now - timedelta(minutes=10), step_min=0,
+                  error="statement timeout", target_prefix="c")
+        _add_jobs(db, "complex_articles", "completed", 37,
+                  base=now - timedelta(minutes=7), step_min=0)
+        db.commit()
+        issues = detect_issues(db)
+        keys = [i["alert_key"] for i in issues]
+        # 기존 동작 불변 — 자가복구 선필터가 crawl_failed 는 계속 억제
+        assert "crawl_failed:complex_articles" not in keys
+        # 신설 신호가 사각을 메운다
+        assert "crawl_failed_burst:complex_articles" in keys
+        burst = next(i for i in issues if i["kind"] == "crawl_failed_burst")
+        assert burst["data"]["count"] == 13
+        assert burst["data"]["window_min"] == 60
+        assert burst["data"]["targets"] == 13
+        assert "statement timeout" in burst["data"]["error"]
+    finally:
+        db.close()
+
+
+def test_detect_issues_burst_below_threshold():
+    """엣지: 임계 미만(4건)이면 버스트 아님 — 평시 0~2건 실패로 알림 폭탄 방지."""
+    db = TestSession()
+    try:
+        now = _utcnow()
+        _add_jobs(db, "complex_articles", "failed", 4,
+                  base=now - timedelta(minutes=10), step_min=0, error="타임아웃")
+        _add_jobs(db, "complex_articles", "completed", 10,
+                  base=now - timedelta(minutes=5), step_min=0)
+        db.commit()
+        keys = [i["alert_key"] for i in detect_issues(db)]
+        assert "crawl_failed_burst:complex_articles" not in keys
+    finally:
+        db.close()
+
+
+def test_detect_issues_burst_outside_window():
+    """엣지: 90분 전 실패 13건은 60분 창 밖 → 버스트 아님 (창 이탈 시 자동 해소)."""
+    db = TestSession()
+    try:
+        now = _utcnow()
+        _add_jobs(db, "complex_articles", "failed", 13,
+                  base=now - timedelta(minutes=90), step_min=0, error="타임아웃")
+        _add_jobs(db, "complex_articles", "completed", 37,
+                  base=now - timedelta(minutes=80), step_min=0)
+        db.commit()
+        keys = [i["alert_key"] for i in detect_issues(db)]
+        assert "crawl_failed_burst:complex_articles" not in keys
+    finally:
+        db.close()
+
+
+def test_detect_issues_burst_skipped_when_crawl_failed_active():
+    """중복 방지: 자가복구가 아니어서 crawl_failed 가 이미 발화 중이면 버스트는 생략."""
+    db = TestSession()
+    try:
+        now = _utcnow()
+        _add_jobs(db, "complex_articles", "failed", 6,
+                  base=now - timedelta(minutes=10), step_min=0, error="타임아웃")
+        db.commit()
+        keys = [i["alert_key"] for i in detect_issues(db)]
+        assert "crawl_failed:complex_articles" in keys
+        assert "crawl_failed_burst:complex_articles" not in keys
+    finally:
+        db.close()

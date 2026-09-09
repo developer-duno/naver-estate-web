@@ -45,7 +45,7 @@
 - 첫 페이지 API 실패 시 HTTPException(502) 전파 (빈 배열 반환 금지)
 - DB upsert 패턴: `INSERT ON CONFLICT DO UPDATE`
 - 매물(Article)은 크롤링 시 없어진 것 물리 삭제 허용 (`delete_missing_articles`). 단지(Complex)는 DELETE 금지 (line 72 참조)
-- 진행 상태 폴링 응답(`crawl-status`·`collect-status`·관리자 `recrawl/progress`)은 `Cache-Control: no-store` 필수. `/api/live/` 검색 결과 max-age 를 폴링에 물려 브라우저가 3시간 캐시 → 완료 감지 불가였던 결함(세션 395)
+- 진행 상태 폴링 응답(`crawl-status`·`collect-status`·관리자 `recrawl/progress`)은 `Cache-Control: no-store` 필수. **관리자 API(`/api/admin/*`) GET 은 전부 `no-store`**, 정확히 `/api/complexes/{no}` 와 `/api/complexes/{no}/articles*` 는 `no-cache`(React Query staleTime 이 클라 캐시를 담당하므로 HTTP max-age 는 "새로 받았다고 믿는 옛값"만 만든다 — 세션 396 PR #484). 하위 경로(price-stats 등)는 3600 유지. `/api/live/` 검색 결과 max-age 를 폴링에 물려 브라우저가 3시간 캐시 → 완료 감지 불가였던 결함(세션 395)
 
 ### DB 규칙
 - estate 쿼리는 `db/queries.py`, mibunyang 쿼리는 `db/mb_queries.py` 경유 (직접 SQL 금지)

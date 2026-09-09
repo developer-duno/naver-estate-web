@@ -7,11 +7,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from db.models import Article as ArticleModel
 from services.naver_call_counter import record_call
 from services.upsert import build_detail_update_dict
+from shared.constants import DETAIL_FAIL_CAP
 from shared.domain.article import RealEstateArticle
 from shared.naver_api import NaverEstateAPI
 
 from ._shared import (
-    DETAIL_COMMIT_INTERVAL,
     DETAIL_CRAWL_DELAY,
     DETAIL_FAILURE_THRESHOLD,
     _update_crawl_status,
@@ -32,9 +32,18 @@ def _crawl_details_for_complex(db, complex_no: str):
             ArticleModel.complex_no == complex_no,
             ArticleModel.is_active == True,
             ArticleModel.detail_crawled == False,
+            # 매물 단위 오류가 상한(DETAIL_FAIL_CAP)에 도달한 매물은 제외 — 상세 보강
+            # 배치(crawler/service_discover.py crawl_article_details)와 같은 기준이다.
+            # 이 필터가 없으면 배치가 이미 포기한 매물을 사용자가 단지를 열 때마다
+            # 다시 긁어 네이버 콜만 태운다(세션 396 백로그 §5-L). 온디맨드 경로는
+            # detail_fail_count 를 올리지 않으므로 일일 정비 잡(03:50 CAP-1 부여)이
+            # 설계한 "매물당 하루 1콜" 바운드와 경합하지 않는다.
+            ArticleModel.detail_fail_count < DETAIL_FAIL_CAP,
         )
         .all()
     )
+    # 상한 매물도 skipped 에 합산된다 — 화면의 "건너뜀"은 "이번에 상세를 안 긁는 매물"
+    # 이라는 뜻이므로(이미 상세가 있는 매물 + 상한 매물) 의도된 집계다.
     skipped = total_active - len(articles)
     if not articles:
         _update_crawl_status(complex_no, detail_total=0, detail_crawled_count=0,
@@ -55,8 +64,20 @@ def _crawl_details_for_complex(db, complex_no: str):
             logger.warning("Article detail fetch failed: %s → %s", article_no, e)
             return article_no, None
 
-    # article_no → DB article 매핑
-    art_map = {art.article_no: art for art in articles}
+    # article_no → 루프에 필요한 속성 튜플 (ORM 인스턴스 아님)
+    # 아래 순회마다 db.commit() 을 하는데 expire_on_commit=True(database.py) 라
+    # ORM 인스턴스를 들고 있으면 다음 순회 art.* 접근이 PK 재조회 lazy-load 를 유발한다
+    # (부하 구간엔 이 조회가 statement_timeout 방아쇠 — 세션 342 실사고).
+    # crawler/service_discover.py crawl_article_details 의 선추출 패턴을 그대로 답습한다.
+    art_map = {
+        art.article_no: (
+            art.trade_type_name,
+            art.deal_or_warrant_prc,
+            art.rent_prc,
+            art.area2_m2,
+        )
+        for art in articles
+    }
     crawled_count = 0
     failed_count = 0
 
@@ -66,34 +87,42 @@ def _crawl_details_for_complex(db, complex_no: str):
 
         for i, future in enumerate(as_completed(futures)):
             article_no, detail_data = future.result()
-            art = art_map[article_no]
+            trade_type_name, deal_or_warrant_prc, rent_prc, area2_m2 = art_map[article_no]
 
             if detail_data and "error" not in detail_data:
                 try:
                     domain_article = RealEstateArticle(
-                        article_no=art.article_no,
-                        trade_type_name=art.trade_type_name or "",
+                        article_no=article_no,
+                        trade_type_name=trade_type_name or "",
                     )
-                    domain_article.deal_or_warrant_prc = art.deal_or_warrant_prc
-                    domain_article.rent_prc = art.rent_prc
-                    domain_article.area2_m2 = art.area2_m2
+                    domain_article.deal_or_warrant_prc = deal_or_warrant_prc
+                    domain_article.rent_prc = rent_prc
+                    domain_article.area2_m2 = area2_m2
                     domain_article.update_from_detail(detail_data)
 
                     update_data = build_detail_update_dict(domain_article, detail_data)
                     db.query(ArticleModel).filter(
-                        ArticleModel.article_no == art.article_no
+                        ArticleModel.article_no == article_no
                     ).update(update_data, synchronize_session=False)
                     crawled_count += 1
                 except Exception as e:
-                    logger.warning("Article detail update failed: %s → %s", art.article_no, e)
+                    logger.warning("Article detail update failed: %s → %s", article_no, e)
+                    # DB 레벨 오류로 트랜잭션이 aborted 되면 다음 순회의 commit 이 통째로
+                    # 실패하므로 되돌리고 계속 간다(crawl_complex_details_batch 의 rollback 답습,
+                    # 세션 396 리뷰 LOW). 순회마다 commit 이라 잃는 변경은 이 매물 1건뿐.
+                    db.rollback()
                     failed_count += 1
             else:
                 failed_count += 1
 
             _update_crawl_status(complex_no, detail_crawled_count=i + 1)
 
-            if (i + 1) % DETAIL_COMMIT_INTERVAL == 0:
-                db.commit()
+            # 순회마다 commit — 옛 DETAIL_COMMIT_INTERVAL(50건) 배치 commit 은 위 UPDATE 가
+            # 잡은 articles 행 잠금을 최대 50건 × (0.3s + shared throttle) 동안 쥔 채
+            # 다음 fetch 를 기다려, 같은 매물을 upsert 하는 인기 크롤·12h 배치가 8초
+            # statement_timeout 에 잘리게 했다(세션 396, 2026-09-09 14:45 13건 failed).
+            # 위 선추출 덕에 commit expire 로 인한 lazy-load 폭풍은 없다.
+            db.commit()
 
     db.commit()  # 나머지 커밋
 

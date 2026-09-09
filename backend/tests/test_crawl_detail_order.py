@@ -611,3 +611,63 @@ def test_systemic_batch_still_counts_revived_articles(db, no_throttle, monkeypat
 
     crawl_article_details(batch_size=total)  # 2회차: 전원 제외 → 추가 호출 0
     assert len(calls) == total, "되살린 매물이 상한 복귀에 실패해 무한 재선정된다"
+
+
+# ── 세션 396: 행 잠금 장기 보유 회귀 (동시 upsert statement_timeout) ──
+
+def test_detail_batch_commits_each_write_before_throttle(db, monkeypatch):
+    """UPDATE 로 잡은 articles 행 잠금을 throttle 대기 **전에** 놓는다.
+
+    배경(세션 396): 옛 "50건마다 commit" 은 행 잠금을 최대 50 × _throttle_details(1.5s)
+    ≈ 75초 쥔 채 다음 상세 요청을 기다렸다. 그 사이 같은 매물을 INSERT ... ON CONFLICT
+    DO UPDATE 하는 인기 크롤·12h 배치·사용자 온디맨드 크롤이 8초 statement_timeout 에
+    잘렸다(2026-09-09 14:45 complex_articles 13건 failed).
+
+    검증 방식: db.commit 을 카운팅 래퍼로 감싸고(원 commit 은 그대로 호출),
+    _throttle_details.wait 를 "그 시점의 commit 횟수"를 기록하는 fake 로 바꾼다.
+    대기 전에 커밋됐다면 wait 시점의 누적 commit 횟수가 순회마다 최소 1씩 증가한다.
+
+    뮤테이션(세션 396 확인): 순회 commit 을 `if (i + 1) % 50 == 0` 로 되돌리면
+    3건 배치에서 commit 이 한 번도 안 늘어 이 단언이 FAIL 한다.
+    """
+    now = datetime.now(timezone.utc)
+    for i in range(3):
+        _make_pending_article(db, f"L{i}", now - timedelta(minutes=i))
+
+    monkeypatch.setattr(service_discover, "record_call", lambda *a, **k: None)
+    monkeypatch.setattr(
+        service_discover.NaverEstateAPI,
+        "get_article_detail",
+        staticmethod(lambda an: {"articleDetail": {"articleNo": an}}),
+    )
+
+    commit_counts: dict[str, int] = {"n": 0}
+    _real_session_factory = service_discover.SessionLocal
+
+    def _counting_session_factory():
+        session = _real_session_factory()
+        real_commit = session.commit
+
+        def _counting_commit():
+            commit_counts["n"] += 1
+            return real_commit()
+
+        session.commit = _counting_commit  # 인스턴스 단위 래핑 (다른 세션 영향 0)
+        return session
+
+    monkeypatch.setattr(service_discover, "SessionLocal", _counting_session_factory)
+
+    commits_at_wait: list[int] = []
+    monkeypatch.setattr(
+        service_discover._throttle_details,
+        "wait",
+        lambda: commits_at_wait.append(commit_counts["n"]),
+    )
+
+    crawl_article_details(batch_size=10)
+
+    # 순회 3회 = wait 3회, 각 대기 시점의 누적 commit 이 직전보다 최소 1 증가
+    assert len(commits_at_wait) == 3
+    assert all(
+        commits_at_wait[i] > commits_at_wait[i - 1] for i in range(1, 3)
+    ), f"throttle 대기 전에 커밋되지 않음: {commits_at_wait}"

@@ -8,6 +8,13 @@ NAVER_COMPLEX_API = f"{NAVER_LAND_BASE}/api/complexes"
 JWT_TOKEN_LIFETIME = 3000  # 50분
 M2_TO_PYEONG = 3.3058
 
+# 매물 단위 오류 연속 허용 횟수 (V056, 세션 395). 이 횟수 이상 연속으로 네이버가
+# 그 매물에 대해 매물 단위 오류를 답하면 **상세 시도만** 중단한다(선정 쿼리에서 제외) —
+# is_active 는 건드리지 않는다. 상세 보강 배치(30분 interval)와 온디맨드 상세 워커가
+# 같은 상한을 봐야 해서(세션 396) crawler·routers 어느 쪽에도 안 속하는 leaf 모듈인
+# 여기에 둔다. 의미·복구 절차 상세는 crawler/service_discover.py 참조.
+DETAIL_FAIL_CAP = 6
+
 # 매물유형 코드 → 한국어 이름 (codes.md 7종 답습)
 # 네이버 응답에 realEstateTypeName 누락 시 code 로 폴백하기 위한 매핑.
 REAL_ESTATE_TYPE_NAMES = {

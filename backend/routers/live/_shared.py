@@ -19,7 +19,6 @@ INTER_PAGE_DELAY = 0.1           # 페이지 간 대기 (초) — shared _thrott
 INTER_GROUP_DELAY = 0.2          # 검색 그룹 간 대기 (초)
 DETAIL_CRAWL_DELAY = 0.3         # 상세 크롤링 건별 대기 (초) — shared _throttle과 합산
 PAGE_COMMIT_INTERVAL = 1         # 매 페이지마다 DB 커밋 (크롤 중 FE 실시간 반영용)
-DETAIL_COMMIT_INTERVAL = 50      # N건마다 DB 커밋
 DETAIL_FAILURE_THRESHOLD = 0.5   # 상세 크롤 실패율 임계치 (50% 초과 시 done_partial)
 
 # 네이버 검색 API 키워드 접미사 그룹

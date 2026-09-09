@@ -34,6 +34,20 @@
 > 계산례로 검증**해야 한다 — 같은 단어("표준세율")가 조문마다 다른 걸 가리킬 수 있다.
 > PR #423.
 
+## effect 가드 플래그(isMounted 류) 컴포넌트는 `<StrictMode>` 래핑 케이스를 포함한다 (세션 395 답습)
+
+React StrictMode(dev, App Router 기본 on)는 effect 를 mount→cleanup→mount 로 이중 실행한다. cleanup 이 ref 플래그를
+`false` 로 내리는 컴포넌트는 두 번째 실행에서 그 플래그가 되살아나지 않으면 비동기 후속이 전부 조기 이탈하는데,
+**일반 렌더 테스트는 이 결함을 절대 못 본다**(effect 가 1회만 돌기 때문). vitest 는 React dev 빌드로 돌아 `<StrictMode>` 로
+감싸기만 하면 이중 실행이 실제로 재현된다.
+
+체크리스트:
+1. `useRef(true)` + cleanup `false` 패턴이 있는 컴포넌트의 회귀 테스트에는 `render(<StrictMode><X/></StrictMode>)` 케이스를
+   최소 1건 둔다(로그인 상태 등 비동기 후속의 결과가 화면에 보이는지 단언).
+2. 뮤테이션 검증: 재설정 줄(`ref.current = true`)을 제거하면 그 케이스가 FAIL 하는지 확인 후 복원.
+3. 선례 = `frontend/src/components/__tests__/Header.strictmode.test.tsx`(세션 395, next 16.3.4 admin E2E 회귀 근본수정 — E2E 는
+   dev 서버라 StrictMode 결함이 드러났고 prod 빌드는 이중 실행이 없어 사용자 영향 0 이었다).
+
 ## fixture 의 서로 다른 두 축이 우연히 같은 값이면 단위 오류를 못 잡는다 (세션 372 답습)
 
 두 개의 서로 다른 개념(예: "단지 수"와 "법정동 수")을 세는 코드에서, 테스트 fixture 가

@@ -94,12 +94,13 @@ def _grant_detail_retry_for_capped_articles(db) -> int:
     try:
         from sqlalchemy import text
 
-        # 상수 import 는 함수 안에서 — service_discover 는 top-level 에서
-        # load_dotenv() + shared.naver_api 등 무거운 것을 끌어오므로, 청소 잡이
-        # 그걸 항상 로드하게 만들지 않는다(quota_db 지연 import 와 같은 결).
-        from crawler.service_discover import _DETAIL_FAIL_CAP
+        # 상수는 leaf 모듈 shared.constants 에서 직접 — 옛 경로였던
+        # crawler.service_discover 는 top-level 에서 load_dotenv() + shared.naver_api
+        # 등 무거운 것을 끌어와 함수 안 지연 import 가 필요했지만, 상수가
+        # shared/constants.py 로 승격돼(세션 396) 그 사유는 더 이상 해당 없다.
+        from shared.constants import DETAIL_FAIL_CAP
 
-        cap = _DETAIL_FAIL_CAP
+        cap = DETAIL_FAIL_CAP
         # detail_fail_count 에 인덱스가 없어 이 UPDATE 는 articles 순차 스캔이다.
         # 기본 statement_timeout(8초, infra.md §DB 커넥션 풀)에 꼬리가 잘리면 예외를
         # 흡수하는 best-effort 규약 탓에 **조용한 기능 사망**(매일 warning 만 남고

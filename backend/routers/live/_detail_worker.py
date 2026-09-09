@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from db.models import Article as ArticleModel
 from services.naver_call_counter import record_call
 from services.upsert import build_detail_update_dict
+from shared.constants import DETAIL_FAIL_CAP
 from shared.domain.article import RealEstateArticle
 from shared.naver_api import NaverEstateAPI
 
@@ -31,9 +32,18 @@ def _crawl_details_for_complex(db, complex_no: str):
             ArticleModel.complex_no == complex_no,
             ArticleModel.is_active == True,
             ArticleModel.detail_crawled == False,
+            # 매물 단위 오류가 상한(DETAIL_FAIL_CAP)에 도달한 매물은 제외 — 상세 보강
+            # 배치(crawler/service_discover.py crawl_article_details)와 같은 기준이다.
+            # 이 필터가 없으면 배치가 이미 포기한 매물을 사용자가 단지를 열 때마다
+            # 다시 긁어 네이버 콜만 태운다(세션 396 백로그 §5-L). 온디맨드 경로는
+            # detail_fail_count 를 올리지 않으므로 일일 정비 잡(03:50 CAP-1 부여)이
+            # 설계한 "매물당 하루 1콜" 바운드와 경합하지 않는다.
+            ArticleModel.detail_fail_count < DETAIL_FAIL_CAP,
         )
         .all()
     )
+    # 상한 매물도 skipped 에 합산된다 — 화면의 "건너뜀"은 "이번에 상세를 안 긁는 매물"
+    # 이라는 뜻이므로(이미 상세가 있는 매물 + 상한 매물) 의도된 집계다.
     skipped = total_active - len(articles)
     if not articles:
         _update_crawl_status(complex_no, detail_total=0, detail_crawled_count=0,

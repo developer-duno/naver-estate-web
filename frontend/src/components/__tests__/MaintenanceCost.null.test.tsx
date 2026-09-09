@@ -22,7 +22,7 @@ describe("MaintenanceCost - null 분기", () => {
     vi.mocked(getPyeongDetails).mockResolvedValue({
       pyeong_details: [makePyeongDetail()],
     });
-    const { container } = render(<MaintenanceCost complexNo="C001" />, {
+    const { container } = render(<MaintenanceCost complexNo="C001" tokenReady />, {
       wrapper: TestQueryProvider,
     });
     await waitFor(() => expect(getPyeongDetails).toHaveBeenCalled());
@@ -32,7 +32,7 @@ describe("MaintenanceCost - null 분기", () => {
   it("pyeong_details 빈 배열이면 null 반환", async () => {
     vi.mocked(getPyeongDetails).mockResolvedValue({ pyeong_details: [] });
     const { container } = render(
-      <MaintenanceCost complexNo="C001" area2M2={84.9} />,
+      <MaintenanceCost complexNo="C001" area2M2={84.9} tokenReady />,
       { wrapper: TestQueryProvider },
     );
     await waitFor(() => expect(getPyeongDetails).toHaveBeenCalled());
@@ -42,7 +42,7 @@ describe("MaintenanceCost - null 분기", () => {
   it("getPyeongDetails 실패(isError) 시 null 반환 (silent failure 정정)", async () => {
     vi.mocked(getPyeongDetails).mockRejectedValue(new Error("500"));
     const { container } = render(
-      <MaintenanceCost complexNo="C001" area2M2={84.9} />,
+      <MaintenanceCost complexNo="C001" area2M2={84.9} tokenReady />,
       { wrapper: TestQueryProvider },
     );
     await waitFor(() => expect(getPyeongDetails).toHaveBeenCalled());
@@ -54,7 +54,7 @@ describe("MaintenanceCost - null 분기", () => {
       pyeong_details: [makePyeongDetail()],
     });
     const { container } = render(
-      <MaintenanceCost complexNo="C001" area2M2={0} />,
+      <MaintenanceCost complexNo="C001" area2M2={0} tokenReady />,
       { wrapper: TestQueryProvider },
     );
     await waitFor(() => expect(getPyeongDetails).toHaveBeenCalled());
@@ -73,7 +73,7 @@ describe("MaintenanceCost - null 분기", () => {
       ],
     });
     const { container } = render(
-      <MaintenanceCost complexNo="C001" area2M2={84.9} />,
+      <MaintenanceCost complexNo="C001" area2M2={84.9} tokenReady />,
       { wrapper: TestQueryProvider },
     );
     await waitFor(() => expect(getPyeongDetails).toHaveBeenCalled());

@@ -20,7 +20,7 @@ describe("CompetingListings — isError 분기", () => {
   it("getArticles 실패 시 null 반환 (silent failure 정정)", async () => {
     vi.mocked(getArticles).mockRejectedValue(new Error("500"));
     const { container } = render(
-      <CompetingListings complexNo="C001" tradeTypeName="매매" currentArticleNo="A001" />,
+      <CompetingListings complexNo="C001" tradeTypeName="매매" currentArticleNo="A001" tokenReady />,
       { wrapper: TestQueryProvider },
     );
     await waitFor(() => expect(getArticles).toHaveBeenCalled());

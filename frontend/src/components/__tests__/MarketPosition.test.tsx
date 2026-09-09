@@ -20,7 +20,7 @@ describe("MarketPosition — isError 분기", () => {
   it("getPriceStats 실패 시 null 반환 (silent failure 정정)", async () => {
     vi.mocked(getPriceStats).mockRejectedValue(new Error("500"));
     const { container } = render(
-      <MarketPosition complexNo="C001" tradeTypeName="매매" area2M2={84.9} />,
+      <MarketPosition complexNo="C001" tradeTypeName="매매" area2M2={84.9} tokenReady />,
       { wrapper: TestQueryProvider },
     );
     await waitFor(() => expect(getPriceStats).toHaveBeenCalled());
@@ -36,7 +36,7 @@ describe("MarketPosition — isError 분기", () => {
       by_floor: [],
     });
     const { container } = render(
-      <MarketPosition complexNo="C001" tradeTypeName="매매" area2M2={0} />,
+      <MarketPosition complexNo="C001" tradeTypeName="매매" area2M2={0} tokenReady />,
       { wrapper: TestQueryProvider },
     );
     await waitFor(() => expect(getPriceStats).toHaveBeenCalled());

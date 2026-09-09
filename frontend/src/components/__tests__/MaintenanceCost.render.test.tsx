@@ -22,7 +22,7 @@ describe("MaintenanceCost - 정상 렌더", () => {
     vi.mocked(getPyeongDetails).mockResolvedValue({
       pyeong_details: [makePyeongDetail()],
     });
-    render(<MaintenanceCost complexNo="C001" area2M2={84.9} />, {
+    render(<MaintenanceCost complexNo="C001" area2M2={84.9} tokenReady />, {
       wrapper: TestQueryProvider,
     });
     await waitFor(() =>
@@ -43,7 +43,7 @@ describe("MaintenanceCost - 정상 렌더", () => {
         makePyeongDetail({ pyeong_no: 3, exclusive_area: "114.3", avg_maintenance_cost: 22 }),
       ],
     });
-    render(<MaintenanceCost complexNo="C001" area2M2={85} />, {
+    render(<MaintenanceCost complexNo="C001" area2M2={85} tokenReady />, {
       wrapper: TestQueryProvider,
     });
     await waitFor(() =>

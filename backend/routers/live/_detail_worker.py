@@ -107,6 +107,10 @@ def _crawl_details_for_complex(db, complex_no: str):
                     crawled_count += 1
                 except Exception as e:
                     logger.warning("Article detail update failed: %s → %s", article_no, e)
+                    # DB 레벨 오류로 트랜잭션이 aborted 되면 다음 순회의 commit 이 통째로
+                    # 실패하므로 되돌리고 계속 간다(crawl_complex_details_batch 의 rollback 답습,
+                    # 세션 396 리뷰 LOW). 순회마다 commit 이라 잃는 변경은 이 매물 1건뿐.
+                    db.rollback()
                     failed_count += 1
             else:
                 failed_count += 1

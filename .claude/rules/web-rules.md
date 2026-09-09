@@ -25,7 +25,7 @@
 ### State Management (메모리 누수 방지)
 - useQuery/useMutation이 아닌 순수 로컬 상태(UI 토글 등)에만 useEffect + setState 사용
 - 타이머(setInterval/setTimeout)는 useEffect cleanup에서 반드시 clear
-- useRef로 isMounted 패턴: Header 등 전역 컴포넌트에서 필수
+- useRef로 isMounted 패턴(Header 등 전역 컴포넌트): cleanup 에서 `false` 로 내렸다면 **effect 시작부에서 반드시 `true` 로 재설정**한다. StrictMode(dev, App Router 기본 on)는 mount→cleanup→mount 를 이중 실행하므로 재설정이 없으면 두 번째 실행의 비동기 후속(getSession·구독 콜백)이 전부 조기 이탈해 화면이 옛 상태로 굳는다 — 세션 395 `Header.tsx` 실사고(next 16.3.4 admin E2E 회귀의 진짜 원인, 8월 16.3.0 사고도 같은 결함으로 추정). 회귀 테스트는 `<StrictMode>` 래핑 케이스를 포함(`Header.strictmode.test.tsx` 답습)
 
 ### 성능
 - 무거운 컴포넌트는 `dynamic(() => import(...), { ssr: false })` 사용 (예: PriceChart)
@@ -45,7 +45,7 @@
 - 첫 페이지 API 실패 시 HTTPException(502) 전파 (빈 배열 반환 금지)
 - DB upsert 패턴: `INSERT ON CONFLICT DO UPDATE`
 - 매물(Article)은 크롤링 시 없어진 것 물리 삭제 허용 (`delete_missing_articles`). 단지(Complex)는 DELETE 금지 (line 72 참조)
-- 진행 상태 폴링 응답(`crawl-status`·`collect-status`)은 `Cache-Control: no-store` 필수. `/api/live/` 검색 결과 max-age 를 폴링에 물려 브라우저가 3시간 캐시 → 완료 감지 불가였던 결함(세션 395)
+- 진행 상태 폴링 응답(`crawl-status`·`collect-status`·관리자 `recrawl/progress`)은 `Cache-Control: no-store` 필수. `/api/live/` 검색 결과 max-age 를 폴링에 물려 브라우저가 3시간 캐시 → 완료 감지 불가였던 결함(세션 395)
 
 ### DB 규칙
 - estate 쿼리는 `db/queries.py`, mibunyang 쿼리는 `db/mb_queries.py` 경유 (직접 SQL 금지)
@@ -59,7 +59,7 @@
   으로 로컬 세션 생존을 재확인한 뒤에만 로그아웃(세션 351: 멀티탭에서 Supabase 토큰 갱신
   경합으로 오탐 401 발생 시 멀쩡한 세션까지 튕기던 결함 방지, `_isLoggingOut` mutex는
   실제 로그아웃 분기 안으로 이동해 중복 방지). 403 은 승인/권한 문제라 로그아웃 대상 아님
-- Supabase 토큰은 HS256(레거시 secret)·ES256(JWKS 로컬 검증, 10분 캐시) 둘 다 로컬 검증, 원격 `/auth/v1/user` 는 최후 폴백(2026-09-09 서명키 전환 사고). 두 분기 공통 leeway 60초(발급 서버와의 clock skew 로 `iat` 가 미래여도 통과 — 없으면 갱신 직후 첫 요청마다 원격 폴백), 미지 kid 네거티브 캐시는 kid 없는 토큰도 고정 센티널로 기록해 JWKS 재조회 증폭을 막고, 로그에 찍는 kid·alg·예외 메시지는 `_safe_log_value` 로 개행 제거(로그 위조 차단). 부팅 시 `_check_jwks_reachable()`(main.py lifespan)이 JWKS 도달 여부를 로그로 남긴다
+- Supabase 토큰은 HS256(레거시 secret)·ES256(JWKS 로컬 검증, 10분 캐시) 둘 다 로컬 검증, 원격 `/auth/v1/user` 는 최후 폴백(2026-09-09 서명키 전환 사고). 두 분기 공통 leeway 60초(발급 서버와의 clock skew 로 `iat` 가 미래여도 통과 — 없으면 갱신 직후 첫 요청마다 원격 폴백. PyJWT 의 leeway 는 `exp`·`nbf` 에도 같이 적용돼 만료 토큰이 60초 더 통과한다 — Supabase 기본 만료 1시간 대비 의도된 트레이드오프), 미지 kid 네거티브 캐시는 kid 없는 토큰도 고정 센티널로 기록해 JWKS 재조회 증폭을 막고, 로그에 찍는 kid·alg·예외 메시지는 `_safe_log_value` 로 개행 제거(로그 위조 차단). 부팅 시 `_check_jwks_reachable()`(main.py lifespan)이 JWKS 도달 여부를 로그로 남긴다
 - Rate limiting: `auth/rate_limiter.py` — Redis/in-memory 분기 구현 완료. `REDIS_URL` 환경변수 설정 시 Redis sorted set, 미설정 시 in-memory 폴백 자동 선택 (분산 환경 대비 완료, 단일 집 서버는 in-memory 로 충분)
 
 ### 보안

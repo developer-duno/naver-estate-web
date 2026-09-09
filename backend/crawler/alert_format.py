@@ -99,6 +99,24 @@ def _body_stale(data: dict) -> str:
     return "\n".join(lines)
 
 
+def _body_failed_burst(data: dict) -> str:
+    """실패 묶음(버스트) 본문 — 짧은 창에 실패가 몰린 경우 (세션 396).
+
+    crawl_failed 와 달리 "일부는 성공했는데도 알린다" 는 점이 핵심이라, 첫 줄에
+    묶음이라는 표식을 둔다 — 사장님이 crawl_failed 알림과 구분해서 읽어야 한다.
+    """
+    job = _esc(data.get("job_type"))
+    window = data.get("window_min", 60)
+    count = data.get("count", 0)
+    lines = [f"🟠 <b>{job}</b> 실패 묶음 — 최근 {window}분 내 {count}건 실패"]
+    targets = data.get("targets")
+    if targets:
+        lines.append(f"  대상 {targets}개")
+    lines.append("  같은 배치의 다른 건은 성공해 자가복구로 분류됐지만, 묶음 실패입니다.")
+    lines.append(f"  대표 에러: {_esc(data.get('error'))[:200]}")
+    return "\n".join(lines)
+
+
 def _body_freshness(data: dict) -> str:
     """데이터 미축적 본문."""
     label = _esc(data.get("label"))
@@ -128,6 +146,7 @@ def _action(kind: str, data: dict) -> str:
 
 _BODY_BUILDERS = {
     "crawl_failed": _body_failed,
+    "crawl_failed_burst": _body_failed_burst,
     "crawl_stale": _body_stale,
     "freshness": _body_freshness,
 }
@@ -192,7 +211,7 @@ def format_resolved_batch(items: list[dict], *, header_ctx: dict) -> str:
 def format_issue_message(kind: str, data: dict, *, event: str, header_ctx: dict) -> str:
     """장애 1건 → 텔레그램 HTML 메시지.
 
-    kind: "crawl_failed" | "crawl_stale" | "freshness"
+    kind: "crawl_failed" | "crawl_failed_burst" | "crawl_stale" | "freshness"
     event: "new" | "recur" | "ongoing" | "resolved"
     header_ctx: {"active_count": int, "now": datetime}
     resolved 이벤트는 data 에 reason("recovered"|"swept"|"unconfirmed")·reason_detail 을

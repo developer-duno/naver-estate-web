@@ -295,3 +295,27 @@ def test_resolved_batch_missing_reason_treated_as_recovered_header():
     assert msg.startswith("[내부모니터] ✅ <b>크롤링 복구</b>")
     assert "▸ A 장애 — 정상으로 돌아왔습니다." in msg
     assert "▸ B 장애 — 정상으로 돌아왔습니다." in msg
+
+
+def test_failed_burst_message_uses_dedicated_builder():
+    """정상: crawl_failed_burst → 전용 본문(창·건수·대상 수·대표 에러).
+
+    ⚠ 등록 누락 가드: format_issue_message 는 미등록 kind 를 '▸ {detail}' 한 줄로
+    조용히 폴백한다(빈 본문이 아니라서 눈에 안 띈다). 그래서 "비어있지 않다" 가
+    아니라 "폴백 형태가 아니다 + 전용 필드가 보인다" 를 단언한다.
+    """
+    data = {
+        "job_type": "complex_articles", "count": 13, "window_min": 60,
+        "error": "statement timeout", "targets": 13,
+        "detail": "폴백이면 이 문자열이 그대로 본문이 된다",
+    }
+    msg = format_issue_message("crawl_failed_burst", data, event="new", header_ctx=_ctx())
+    assert msg.startswith("[내부모니터] 🔴 <b>크롤링 장애</b> — 1건 활성 (17:40)")
+    # 전용 빌더가 등록됐다 = detail 폴백 문자열이 본문으로 쓰이지 않는다
+    assert "폴백이면 이 문자열이" not in msg
+    assert "complex_articles" in msg
+    assert "60분" in msg
+    assert "13건" in msg
+    assert "대상 13개" in msg
+    assert "statement timeout" in msg
+    assert "크롤링 로그 확인" in msg

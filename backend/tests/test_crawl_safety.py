@@ -85,10 +85,11 @@ class TestCrawlConstants:
         from routers.live._shared import PAGE_COMMIT_INTERVAL
         assert PAGE_COMMIT_INTERVAL == 1
 
-    def test_detail_commit_interval_fifty(self):
-        """상세 크롤 50건마다 커밋 — 과부하 방지"""
-        from routers.live._shared import DETAIL_COMMIT_INTERVAL
-        assert DETAIL_COMMIT_INTERVAL == 50
+    # DETAIL_COMMIT_INTERVAL(=50) 잠금 테스트는 세션 396 에 상수와 함께 제거됐다.
+    # 상세 워커는 이제 순회마다 commit 한다 — 50건 배치 commit 이 articles 행 잠금을
+    # 수십 초 쥔 채 대기해 동시 upsert 를 statement_timeout 으로 죽였기 때문
+    # (routers/live/_detail_worker.py 주석 참조). 새 회귀 가드는
+    # tests/test_detail_worker_live.py test_detail_worker_commits_each_update.
 
     def test_detail_failure_threshold_half(self):
         """상세 실패율 50% 초과 시 done_partial 판정"""

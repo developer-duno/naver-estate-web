@@ -28,7 +28,7 @@ from services.upsert import (
     upsert_article,
     upsert_complex_from_search,
 )
-from shared.constants import KOREA_REGIONS
+from shared.constants import DETAIL_FAIL_CAP, KOREA_REGIONS
 from shared.domain.article import RealEstateArticle
 from shared.naver_api import NaverEstateAPI
 from utils import utcnow
@@ -151,8 +151,13 @@ def discover_all_regions(scheduler_job_id: str | None = None):
 
 # ── B. 매물 수집 ──
 
-def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = None, scheduler_job_id: str | None = None):
-    """단지의 전체 매물 크롤링 → articles 테이블 upsert"""
+def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = None, scheduler_job_id: str | None = None) -> bool:
+    """단지의 전체 매물 크롤링 → articles 테이블 upsert.
+
+    반환: 크롤이 정상 완료(자식 잡 completed)면 True, 예외로 실패(자식 잡 failed)면 False.
+    예외는 여기서 흡수한다(정책 불변) — 그래서 호출자가 실패를 알 유일한 경로가 반환값이다.
+    부모 잡(crawl_popular_complexes)이 이 값으로 자식 실패를 집계한다(세션 396).
+    """
     db = SessionLocal()
     job = CrawlJob(job_type="complex_articles", target_id=complex_no, scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow())
     db.add(job)
@@ -231,6 +236,7 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
         )
         db.commit()
         logger.info("매물 수집 완료: complex %s → %d건", complex_no, total_articles)
+        return True
 
     except Exception as e:
         try:
@@ -241,6 +247,7 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
             # 연결 끊김 등으로 같은 세션 마킹 실패 → 새 세션으로 보장 (세션 266)
             fail_job_safely(job_id, str(e))
         logger.exception("매물 수집 실패: complex %s", complex_no)
+        return False
     finally:
         NaverEstateAPI.clear_cache()
         db.close()
@@ -287,8 +294,16 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
         failed_nos: list[str] = []
         for cpx in complexes:
             try:
-                crawl_complex_articles(cpx.complex_no, cpx.sido, cpx.sigungu)
-                processed += 1
+                # crawl_complex_articles 는 예외를 자체 흡수하므로(정책 불변) 아래 except
+                # 는 자식 실패에 도달하지 않는다 — 실패는 반환값 False 로만 드러난다.
+                # 반환값을 무시하던 옛 코드는 자식이 13건 failed 여도 부모를
+                # 50/50 completed·error_message None 으로 보고했다(2026-09-09 사건).
+                # except 안전망은 그대로 둔다(예외 정책이 바뀌면 여전히 잡힌다).
+                if crawl_complex_articles(cpx.complex_no, cpx.sido, cpx.sigungu):
+                    processed += 1
+                else:
+                    failed += 1
+                    failed_nos.append(str(cpx.complex_no))
             except Exception:
                 failed += 1
                 failed_nos.append(str(cpx.complex_no))
@@ -393,7 +408,11 @@ def _is_dead_detail(detail_data) -> bool:
 # 않는다 — 상세 API 가 오류를 줘도 매물이 네이버 목록에 살아 있을 수 있고, 살아있는
 # 매물을 오비활성화하지 않는다는 원칙(_is_dead_detail docstring)은 그대로 유지된다.
 # 수동 복구: UPDATE articles SET detail_fail_count = 0 WHERE article_no = '...';
-_DETAIL_FAIL_CAP = 6
+# 값 자체는 shared/constants.py 로 옮겼다(세션 396) — 온디맨드 상세 워커
+# (routers/live/_detail_worker.py)도 같은 상한을 봐야 하는데, routers 가 무거운
+# crawler.service_discover 를 top-level import 하게 만들지 않기 위해서다.
+# 이 별칭은 기존 참조(같은 파일·vacuum_maintenance·테스트)를 그대로 두기 위해 유지한다.
+_DETAIL_FAIL_CAP = DETAIL_FAIL_CAP
 
 # 배치 전수 매물단위 오류 = 시스템성(소프트 차단) 의심 임계. 이 크기 이상의 배치에서
 # **모든** 매물이 매물단위 오류로 돌아오면, 매물 하나하나의 문제가 아니라 네이버가 우리
@@ -582,9 +601,19 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
                 # 재시도에 맡긴다.
                 skipped_transient += 1
 
-            # CV-49: 배치 commit (50건 단위) — 행별 commit 대신
-            if (i + 1) % 50 == 0:
-                db.commit()
+            # 순회마다 commit — throttle 대기 **전에** 행 잠금을 놓는다.
+            # (옛 "CV-49: 배치 commit(50건 단위)" 를 세션 396 에 되돌린 이유)
+            # 50건 배치 commit 은 위 UPDATE 가 잡은 articles 행 잠금을
+            # 최대 50 × _throttle_details(1.5s) ≈ 75초 동안 쥔 채 대기했다. 그 사이
+            # 같은 매물을 INSERT ... ON CONFLICT DO UPDATE 하는 인기 크롤·12h 배치·
+            # 사용자 온디맨드 크롤이 8초 statement_timeout 에 잘렸다(2026-09-09 14:45
+            # complex_articles 13건 failed, 원문 "canceling statement due to statement
+            # timeout ... while inserting index tuple ... relation articles").
+            # 순회마다 commit 하면 잠금 보유가 1순회(대기 전)로 줄어든다.
+            # 루프 안에 ORM 인스턴스 재접근이 없어(위 선추출, 세션 342) expire 폭풍 없음.
+            # 쓰기가 없는 순회의 commit 은 no-op 수준이라 분기 없이 매 순회 호출한다.
+            # 네이버 호출 간격(_throttle_details)은 손대지 않는다 — infra.md §IP차단.
+            db.commit()
 
             _throttle_details.wait()
 
@@ -697,6 +726,15 @@ def crawl_complex_details_batch(
                 _throttle_detail.on_rate_limit()
                 failed += 1
                 logger.exception("단지 상세 보강 개별 실패: complex %s", complex_no)
+            # 순회마다 commit — enrich_complex_detail 이 잡은 complexes/평형 행 잠금을
+            # 다음 _throttle_detail.wait()(2s) 대기 전에 놓는다. 옛 50건 배치 commit 은
+            # 잠금을 최대 50 × 2s ≈ 100초 쥔 채 대기해, 같은 단지를 upsert 하는 실시간
+            # 검색·인기 크롤이 8초 statement_timeout 에 걸릴 수 있었다(세션 396,
+            # crawl_article_details 와 같은 기전). 루프 변수 complex_no 는 평범한 str
+            # (get_complexes_for_detail_enrich → list[str])이라 commit expire 영향 없음.
+            # 단 job 은 ORM 인스턴스라 commit 마다 대입하면 순회마다 PK 재조회가 붙는다
+            # → 진행률 표시용 job.processed_items 갱신만 기존 50건 주기를 유지한다.
+            db.commit()
             if (i + 1) % 50 == 0:
                 job.processed_items = processed
                 db.commit()

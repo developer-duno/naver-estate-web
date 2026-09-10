@@ -47,11 +47,40 @@ FE 만 변경된 PR (frontend/*) 은 본 룰 면제.
 
 **현행 (세션 363+ — nssm 서비스 `naver-orchestrator`, 2026-08-14 00:19 라이브 훈련 검증):**
 
+**3-0. 재시작 직전 확인 (예외 0 — 세션 397 절차 누락)**
+
+재시작은 **돌고 있는 잡을 끊는다**(부팅 스윕이 running 잡을 cancelled 처리). 명령을 치기 전에
+① 지금 running 인 잡이 있는지 ② 앞으로 5분 안에 도래할 크론이 있는지 둘 다 본다.
+
+```bash
+# (1) running 잡 — 있으면 끝날 때까지 대기. 특히 official_price 는 3~7h 라 절대 중단 금지
+cd /d/naver-estate-web/backend && PYTHONPATH=. PYTHONUTF8=1 python -c "
+from sqlalchemy import text; from db.database import SessionLocal
+with SessionLocal() as db:
+    print(db.execute(text(\"SELECT job_type FROM crawl_jobs WHERE status='running'\")).fetchall())"
+# (2) 5분 내 크론 — 현재 KST 를 아래 시각표와 대조 (정본 = infra.md 스케줄러 표)
+#     02:00 대기질 / 03:30 백필 / 03:50 정비 / 04:30 가치지표 / 04:50 자동결제 / 06:20 관리비
+#     10:45·14:45·19:15 인기 크롤 / 매 30분 ±15분 상세 배치 / 매월 15일 06:30 official_price(3~7h)
+date "+%H:%M"
+```
+
+겹치면 **그 회차가 끝난 뒤로 미룬다.** 여러 PR 을 묶어 한 번에 재시작하는 것도 겹침을 줄인다(§1 말미).
+
+**3-1. 재시작 실행**
+
 ```powershell
 # 비관리자 셸 그대로 실행 가능 — 서비스 DACL 에 사용자 시작/중지 권한 등록됨
-#   (install_orchestrator_service.ps1 1-b 단계. 훈련 실측: 명령→신규 backend health 성공까지 15초)
+#   (install_orchestrator_service.ps1 1-b 단계)
+# 대기는 90초 이상. 옛 40~45초는 부족 — 세션 397 실측: 서비스 "중지 대기"에만 약 1분,
+#   기동까지 약 65초. 45초 시점의 빈 포트 출력을 "실패"로 오판해 재실행할 뻔했다.
+$before = (Get-NetTCPConnection -LocalPort 8002 -State Listen -ErrorAction SilentlyContinue).OwningProcess
 Restart-Service naver-orchestrator        # nssm 이 orchestrator+uvicorn 트리 통째 종료 후 재기동
-Start-Sleep -Seconds 40                   # INITIAL_DELAY 10초 + 백엔드 기동 + health check 여유
+$deadline = (Get-Date).AddSeconds(120)    # 고정 Sleep 대신 포트가 뜰 때까지 폴링
+do {
+  Start-Sleep -Seconds 5
+  $after = (Get-NetTCPConnection -LocalPort 8002 -State Listen -ErrorAction SilentlyContinue).OwningProcess
+} while (-not $after -and (Get-Date) -lt $deadline)
+"before=$before after=$after"                                 # 기대: 서로 다른 값 (같으면 재시작 미발생)
 Get-Content D:\naver-estate-web\scripts\startup.log -Tail 8   # 기대: 새 "백엔드 정상 시작 완료"
 Get-Content D:\naver-estate-web\scripts\orchestrator.pid      # 기대: 새 PID
 curl.exe -s https://api.2u.pe.kr/health/db                    # 기대: {"status":"ok","db":"ok"}
@@ -142,6 +171,7 @@ Startup BAT 시절엔 로그인해야 기동 — infra.md §자동 시작 사건
 | 363 (2026-08-14) | (사고 규명+구조 전환) Windows Update(KB5120249) 야간 계획 재부팅 → Startup BAT 가 로그인 의존이라 로그인 화면에서 **13시간 backend 다운**(watchdog·스케줄 전체 미기동, 상세 = infra.md §자동 시작 사건). orchestrator 를 nssm 서비스로 전환. 라이브 훈련 1차에서 비관리자 Stop-Process 액세스 거부 실측 → 서비스 DACL 시작/중지 권한 등록 후 훈련 2차 Restart-Service 15초 복구 검증 | §3 현행 절차를 Restart-Service 1줄로 교체, 옛 schtasks 절차는 레거시 폴백 격하. 부팅 자동 기동(로그인 불필요) + orchestrator 급사 60초 자동복구 확보 |
 | 386 (2026-08-26) | (무피해, 절차 결함) PR #425(`crawler/service_applyhome_officetel.py`·`routers/mb_serializers.py` 주석 정정)를 "diff가 주석뿐이라 재시작 불필요"로 그 자리에서 판단 → §5 기존 3가지 면제 사유(FE전용/문서전용/테스트전용) 어디에도 안 맞는데도 재시작 생략. 사후검증에서 AST 비교로 실행 코드 무변경을 사후 확인해 결과는 안전했으나, 판단 당시엔 §5-1이 금지한 "정적분석만으로 단정"과 동일 패턴이었음 | §5 에 4번째 면제 조건(AST 비교로 실행 코드 구조 동일 확인된 텍스트 정정) 명문화 — 눈대중 판단과 기계적 확인을 구분 |
 | 396 (2026-09-10) | (무피해, 절차 결함 2건) ① PR #486·#487 머지 후 `Restart-Service naver-orchestrator` 첫 시도가 **조용히 실패** — 45초 대기 후에도 8002 포트 소유 PID·startup.log 시각이 그대로였고, bash 파이프에서 PowerShell 출력이 "Binary file matches" 로 가려져 실패가 안 보였다. try/catch + 전후 상태 출력으로 재실행하니 정상 (orchestrator 6080→61116, backend 7500→62280, 07:56:40). ② 같은 세션의 레포 삭제 사고로 `orchestrator.pid` 가 사라져 4중 cross-check 의 한 축이 무력화된 채였다(재시작 후 자동 복구됨) | §3 에 "포트 소유 PID 변화로 판정"·"pid 파일 부재 시 3축 판정" 2줄 추가. 라이브 검증은 캐시 헤더 4종 HTTP 실측으로 대체 확인 |
+| 397 (2026-09-11) | (무피해, 절차 결함 2건) ① 재시작 직전 "5분 내 도래 크론·running 잡" 확인을 생략 — 다행히 겹친 잡이 없었으나, official_price(3~7h) 같은 장시간 잡과 겹쳤으면 부팅 스윕이 cancelled 처리했을 것. ② `Restart-Service` 후 45초에 포트 소유 PID 가 빈값이라 "실패"로 오판할 뻔함 — 실측하니 서비스 "중지 대기"에만 약 1분, 기동까지 약 65초라 **45초는 판정 시점 자체가 이름**. | §3 을 3-0(사전 확인)·3-1(실행)으로 분리, 대기를 고정 40초 → 포트 폴링(최대 120초)으로 교체 |
 
 3 세션 연속 backend 재시작 누락 = 글로벌 메모리 (사적) 박제로는 부족 → 본 룰로 git 추적.
 

@@ -247,12 +247,14 @@ jobs:
         run: ruff check .
 
       # pip-audit — requirements.txt 보안 advisory 검사 (Python 공식 OSV·PyPI Advisory DB)
-      # MAL-2026-4750 = fastapi 0.136.3 [standard] extra 의 fastar typosquat. 우리는
-      # base 의존성만 설치하므로 (extra 미사용) 실제 영향 0. fix 버전 없음 (2026-05-27 기준).
+      # 예외 0 — MAL-2026-4750(fastapi 0.136.3 [standard] extra 의 fastar typosquat) 예외는
+      # 세션 398(2026-09-11)에 제거. requirements.txt 가 fastapi>=0.141.1 로 올라가 해당
+      # advisory 가 더 이상 매칭되지 않음(예외 없이 `--strict` 통과 실측). 앞으로 예외를
+      # 추가할 때는 "언제 뺄 수 있는지"를 같은 자리에 함께 적어야 잊히지 않는다.
       - name: Security audit (pip-audit)
         run: |
           pip install pip-audit
-          pip-audit -r requirements.txt --strict --ignore-vuln MAL-2026-4750
+          pip-audit -r requirements.txt --strict
 
       - name: Syntax validation
         run: |

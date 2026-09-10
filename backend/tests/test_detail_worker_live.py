@@ -205,3 +205,50 @@ def test_detail_worker_all_capped_reports_zero_total(
             "detail_skipped_count": 2,
         }
     ]
+
+
+def test_detail_worker_rollback_called_on_update_error(
+    db, no_delay, status_calls, monkeypatch
+):
+    """UPDATE 가 터지면 db.rollback() 을 호출하고 다음 매물을 계속 처리한다.
+
+    세션 396 사후검증(mut-3): `db.rollback()` 예외 경로가 어떤 테스트에도 안 닿았다.
+    PostgreSQL 이면 rollback 없이 다음 순회 commit 이 InFailedSqlTransaction 으로
+    연쇄 실패하지만, **SQLite 는 aborted 트랜잭션 상태가 없어 그 증상이 재현되지 않는다**
+    (실측: rollback 줄을 지워도 결과가 같음 — dialect 한계).
+
+    그래서 "결과"가 아니라 **rollback 호출 자체**를 단언한다. 뮤테이션 검증:
+    `_detail_worker.py` 의 `db.rollback()` 을 지우면 아래 `rollbacks` 가 0 이 되어 FAIL.
+    """
+    _make_article(db, "BAD1")
+    _make_article(db, "OK1")
+
+    calls: list[str] = []
+    _patch_detail(monkeypatch, calls)
+
+    rollbacks = {"n": 0}
+    real_rollback = db.rollback
+
+    def _counting_rollback():
+        rollbacks["n"] += 1
+        return real_rollback()
+
+    monkeypatch.setattr(db, "rollback", _counting_rollback)
+
+    real_update = _detail_worker.build_detail_update_dict
+
+    def _boom(domain_article, detail_data):
+        if domain_article.article_no == "BAD1":
+            raise RuntimeError("simulated DB error")
+        return real_update(domain_article, detail_data)
+
+    monkeypatch.setattr(_detail_worker, "build_detail_update_dict", _boom)
+
+    _detail_worker._crawl_details_for_complex(db, "100")
+
+    assert rollbacks["n"] >= 1, "UPDATE 예외에서 db.rollback() 이 호출되지 않았다"
+    # 실패 뒤에도 나머지 매물이 계속 처리된다 (조기 종료 없음)
+    assert set(calls) == {"BAD1", "OK1"}
+    db.expire_all()
+    assert db.query(Article).filter(Article.article_no == "OK1").one().detail_crawled is True
+    assert db.query(Article).filter(Article.article_no == "BAD1").one().detail_crawled is False

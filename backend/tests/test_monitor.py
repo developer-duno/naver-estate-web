@@ -1455,3 +1455,44 @@ def test_detect_issues_burst_skipped_when_crawl_failed_active():
         assert "crawl_failed_burst:complex_articles" not in keys
     finally:
         db.close()
+
+
+def test_run_monitor_resolved_burst_says_window_exit():
+    """경로 ①-c: crawl_failed_burst 해소는 "60분 창 이탈 — 추가 실패만 멈춤" 문구.
+
+    세션 396 사후검증(mut-2): _resolution_reason 의 crawl_failed_burst 분기가 어떤
+    테스트에서도 실행되지 않아, 이 문구가 "정상 복구" 로 잘못 나가도 CI 가 못 잡았다.
+    버스트는 "실패가 60분 창을 벗어난 것"이지 복구가 아니므로, 복구 문구가 붙으면
+    사장님이 원인 미해결을 정상으로 오인한다(swept 케이스와 같은 결).
+    """
+    db = TestSession()
+    try:
+        now = _utcnow()
+        # 90분 전 실패 다수 → 60분 창 밖이라 이번 스캔의 버스트 발화는 없다.
+        for i in range(6):
+            db.add(CrawlJob(
+                job_type="complex_articles", status="failed",
+                error_message="statement timeout",
+                started_at=now - timedelta(minutes=95 - i),
+                completed_at=now - timedelta(minutes=94 - i),
+                created_at=now - timedelta(minutes=95 - i),
+            ))
+        db.add(MonitorAlert(
+            alert_key="crawl_failed_burst:complex_articles", status="active",
+            detail="complex_articles 작업 최근 60분 내 6건 실패",
+            last_notified=now - timedelta(hours=1),
+        ))
+        db.commit()
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msg = _resolved_message(mock_tg)
+        assert "창 이탈" in msg or "추가 실패만 멈춤" in msg, msg
+        assert "정상으로 돌아왔습니다" not in msg, msg
+        alert = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed_burst:complex_articles")
+        ).scalar_one()
+        assert alert.status == "resolved"
+    finally:
+        db.close()

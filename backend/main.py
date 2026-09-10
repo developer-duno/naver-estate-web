@@ -214,7 +214,17 @@ async def security_headers_middleware(request: Request, call_next):
     if not IS_DEBUG:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     # GET 응답에 엔드포인트별 캐시 적용
-    if request.method == "GET" and request.url.path.startswith("/api/") and "Cache-Control" not in response.headers:
+    if (
+        request.method == "GET"
+        and request.url.path.startswith("/api/")
+        and "Cache-Control" not in response.headers
+        # 오류 응답(4xx/5xx)은 캐시 대상에서 제외한다 — 인증 게이트 엔드포인트
+        # (price-stats·pyeong-details·price-history)가 비승인 사용자에게 401 을 주는데,
+        # 그 401 이 private, max-age=3600 으로 캐시돼 **승인 직후에도 최대 1시간 잠긴 화면**이
+        # 유지됐다(세션 396 라이브 실측). 404(kapt 미매칭)도 같은 기전으로 굳는다.
+        # 성공 응답만 엔드포인트별 정책을 받고, 오류는 매번 서버 판정을 다시 받게 한다.
+        and response.status_code < 400
+    ):
         path = request.url.path
         if path.startswith("/api/regions"):
             response.headers["Cache-Control"] = "public, max-age=86400"  # 24시간 (정적 데이터)

@@ -1496,3 +1496,136 @@ def test_run_monitor_resolved_burst_says_window_exit():
         assert alert.status == "resolved"
     finally:
         db.close()
+
+
+def test_run_monitor_resolved_burst_superseded_by_crawl_failed():
+    """경로 ①-d: 버스트가 같은 job_type 의 crawl_failed 로 승계되면 "이어짐" 문구.
+
+    세션 396 사후검증 → 세션 397: 버스트 경보가 떠 있는 상태에서 실패가 한 건 더 나면
+    1-a 가 그 job_type 을 crawl_failed 로 올리고, 1-b 는 already_failed 로 버스트를
+    생략한다. 그 결과 버스트 키가 사라져 해소로 판정되는데, 옛 코드는 이걸 "60분 창
+    이탈 — 추가 실패만 멈춤" 으로 통지했다. 실패는 오히려 계속·증가하는 중이라 정반대의
+    거짓 안심 문구다.
+
+    ⚠ "crawl_failed 가 같이 떠 있는가" 만으로는 판별되지 않는다 — 진짜 창 이탈일 때도
+    24h 관찰 창에는 옛 failed 가 남아 crawl_failed 가 함께 뜬다(위 window_exit 테스트가
+    바로 그 상태다). 갈리는 지점은 "버스트 조건(60분 내 5건)이 아직 성립하는가" 뿐이라,
+    이 테스트는 실패를 전부 창 **안**에 두어 위 테스트와 대비시킨다.
+    """
+    db = TestSession()
+    try:
+        now = _utcnow()
+        # 60분 창 안 6건 — 버스트 조건 성립 유지.
+        for i in range(6):
+            db.add(CrawlJob(
+                job_type="complex_articles", status="failed",
+                error_message="statement timeout",
+                started_at=now - timedelta(minutes=50 - i),
+                completed_at=now - timedelta(minutes=49 - i),
+                created_at=now - timedelta(minutes=50 - i),
+            ))
+        # 방금 한 건 더 실패 — 뒤에 completed 가 없어 1-a 가 crawl_failed 를 올린다.
+        db.add(CrawlJob(
+            job_type="complex_articles", status="failed",
+            error_message="statement timeout",
+            started_at=now - timedelta(minutes=2),
+            completed_at=now - timedelta(minutes=1),
+            created_at=now - timedelta(minutes=2),
+        ))
+        db.add(MonitorAlert(
+            alert_key="crawl_failed_burst:complex_articles", status="active",
+            detail="complex_articles 작업 최근 60분 내 6건 실패",
+            last_notified=now - timedelta(hours=1),
+        ))
+        db.commit()
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        # 이 스캔은 crawl_failed 신규 알림도 함께 보낸다 — 헬퍼가 해소 알림만 고른다.
+        msg = _resolved_message(mock_tg)
+        assert "이어짐" in msg, msg
+        assert "창 이탈" not in msg, msg
+        assert "추가 실패만 멈춤" not in msg, msg
+        assert "정상으로 돌아왔습니다" not in msg, msg
+
+        burst = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed_burst:complex_articles")
+        ).scalar_one()
+        assert burst.status == "resolved"
+
+        # 승계한 쪽(crawl_failed)은 새로 active 로 떠 있어야 한다 — 실패는 진행 중이다.
+        failed_alert = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed:complex_articles")
+        ).scalar_one()
+        assert failed_alert.status == "active"
+    finally:
+        db.close()
+
+
+def test_run_monitor_burst_still_true_query_failure_degrades_to_window_exit():
+    """경로 ①-e: 승계 판정용 집계(burst_still_true)가 죽어도 스캔은 살고 문구만 폴백.
+
+    세션 397 독립 리뷰 MEDIUM: run_monitor 의 burst_still_true 집계는 사유 판정용 부가
+    쿼리인데 예외 가드 밖에 있었다 — statement_timeout 류로 죽으면 스캔 전체(다른 종류의
+    해소·sweep 커밋까지)가 동반 사망한다(세션 342 재현 유형). 가드 후 기대 동작 =
+    ① run_monitor 가 예외를 던지지 않고 ② 버스트 경보는 여전히 resolved 로 전이하며
+    ③ 문구는 옛 "창 이탈" 로 폴백(부정확하지만 스캔 사망보다 낫다).
+    _burst_rows 는 1-b(detect_issues_ex)와 run_monitor 가 한 번씩 부르므로 두 번째
+    호출만 죽여 "판정용 집계만 실패" 를 재현한다. 가드를 지우면 RuntimeError 가 새어
+    이 테스트가 FAIL 한다(뮤테이션 검증).
+    """
+    from crawler import monitor as monitor_mod
+
+    real_burst_rows = monitor_mod._burst_rows
+    calls = {"n": 0}
+
+    def flaky_burst_rows(db_, cutoff):
+        calls["n"] += 1
+        if calls["n"] >= 2:  # 1회차 = 1-b 발화(정상), 2회차 = run_monitor 판정용 → 실패
+            raise RuntimeError("simulated statement_timeout")
+        return real_burst_rows(db_, cutoff)
+
+    db = TestSession()
+    try:
+        now = _utcnow()
+        for i in range(6):
+            db.add(CrawlJob(
+                job_type="complex_articles", status="failed",
+                error_message="statement timeout",
+                started_at=now - timedelta(minutes=50 - i),
+                completed_at=now - timedelta(minutes=49 - i),
+                created_at=now - timedelta(minutes=50 - i),
+            ))
+        db.add(CrawlJob(
+            job_type="complex_articles", status="failed",
+            error_message="statement timeout",
+            started_at=now - timedelta(minutes=2),
+            completed_at=now - timedelta(minutes=1),
+            created_at=now - timedelta(minutes=2),
+        ))
+        db.add(MonitorAlert(
+            alert_key="crawl_failed_burst:complex_articles", status="active",
+            detail="complex_articles 작업 최근 60분 내 6건 실패",
+            last_notified=now - timedelta(hours=1),
+        ))
+        db.commit()
+
+        with patch("crawler.monitor._burst_rows", side_effect=flaky_burst_rows), \
+                patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)  # 예외가 새면 여기서 터진다
+
+        assert calls["n"] == 2, calls
+        msg = _resolved_message(mock_tg)
+        assert "창 이탈" in msg, msg          # 폴백 문구
+        assert "이어짐" not in msg, msg
+        burst = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed_burst:complex_articles")
+        ).scalar_one()
+        assert burst.status == "resolved"
+        failed_alert = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed:complex_articles")
+        ).scalar_one()
+        assert failed_alert.status == "active"
+    finally:
+        db.close()

@@ -57,6 +57,14 @@ Get-Content D:\naver-estate-web\scripts\orchestrator.pid      # 기대: 새 PID
 curl.exe -s https://api.2u.pe.kr/health/db                    # 기대: {"status":"ok","db":"ok"}
 ```
 
+- ⚠ **`Restart-Service` 는 조용히 실패할 수 있다 — 실행 후 "포트 소유 PID 가 바뀌었는지"로 판정한다**
+  (세션 396 실측: 첫 시도 후 45초를 기다렸는데 `startup.log` 시각·8002 포트 소유 PID 가 그대로였다. 같은 명령을
+  `try/catch` + 전후 상태 출력으로 감싸 재실행하니 정상 동작). **판정 지표 = `(Get-NetTCPConnection -LocalPort 8002
+  -State Listen).OwningProcess` 가 재시작 전과 다른 값**. 기다림만으로 성공을 단정하지 말 것 — bash 파이프에서
+  PowerShell 출력이 "Binary file matches" 로 가려지는 경우도 있어(로그가 cp949) 출력 부재 = 성공 아님.
+- ⚠ **`orchestrator.pid` 는 검증 지표로 쓰기 전에 "존재하는지"부터 본다** — 파일이 사라진 상태(세션 396 사고로
+  삭제)에서는 4중 cross-check 의 한 축이 조용히 무력화된다. 없으면 재시작 후 orchestrator 가 새로 쓰므로,
+  그 전까지는 포트 소유 PID·`startup.log` 시각·`backend.log` 첫 줄 PID 세 축으로 판정한다.
 - ⛔ **비관리자 `Stop-Process` 로 서비스 프로세스(orchestrator·backend)를 직접 죽이는 것은
   액세스 거부로 불가** — 서비스는 UAC 필터링 없는 전체 토큰으로 돌아서다 (세션 363 훈련 1차
   실측). 아래 레거시의 "프로세스 kill 후 재기동" 흐름을 현행 환경에서 쓰지 말 것.
@@ -133,6 +141,7 @@ Startup BAT 시절엔 로그인해야 기동 — infra.md §자동 시작 사건
 
 | 363 (2026-08-14) | (사고 규명+구조 전환) Windows Update(KB5120249) 야간 계획 재부팅 → Startup BAT 가 로그인 의존이라 로그인 화면에서 **13시간 backend 다운**(watchdog·스케줄 전체 미기동, 상세 = infra.md §자동 시작 사건). orchestrator 를 nssm 서비스로 전환. 라이브 훈련 1차에서 비관리자 Stop-Process 액세스 거부 실측 → 서비스 DACL 시작/중지 권한 등록 후 훈련 2차 Restart-Service 15초 복구 검증 | §3 현행 절차를 Restart-Service 1줄로 교체, 옛 schtasks 절차는 레거시 폴백 격하. 부팅 자동 기동(로그인 불필요) + orchestrator 급사 60초 자동복구 확보 |
 | 386 (2026-08-26) | (무피해, 절차 결함) PR #425(`crawler/service_applyhome_officetel.py`·`routers/mb_serializers.py` 주석 정정)를 "diff가 주석뿐이라 재시작 불필요"로 그 자리에서 판단 → §5 기존 3가지 면제 사유(FE전용/문서전용/테스트전용) 어디에도 안 맞는데도 재시작 생략. 사후검증에서 AST 비교로 실행 코드 무변경을 사후 확인해 결과는 안전했으나, 판단 당시엔 §5-1이 금지한 "정적분석만으로 단정"과 동일 패턴이었음 | §5 에 4번째 면제 조건(AST 비교로 실행 코드 구조 동일 확인된 텍스트 정정) 명문화 — 눈대중 판단과 기계적 확인을 구분 |
+| 396 (2026-09-10) | (무피해, 절차 결함 2건) ① PR #486·#487 머지 후 `Restart-Service naver-orchestrator` 첫 시도가 **조용히 실패** — 45초 대기 후에도 8002 포트 소유 PID·startup.log 시각이 그대로였고, bash 파이프에서 PowerShell 출력이 "Binary file matches" 로 가려져 실패가 안 보였다. try/catch + 전후 상태 출력으로 재실행하니 정상 (orchestrator 6080→61116, backend 7500→62280, 07:56:40). ② 같은 세션의 레포 삭제 사고로 `orchestrator.pid` 가 사라져 4중 cross-check 의 한 축이 무력화된 채였다(재시작 후 자동 복구됨) | §3 에 "포트 소유 PID 변화로 판정"·"pid 파일 부재 시 3축 판정" 2줄 추가. 라이브 검증은 캐시 헤더 4종 HTTP 실측으로 대체 확인 |
 
 3 세션 연속 backend 재시작 누락 = 글로벌 메모리 (사적) 박제로는 부족 → 본 룰로 git 추적.
 

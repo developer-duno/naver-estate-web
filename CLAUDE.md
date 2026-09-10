@@ -117,9 +117,9 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2131개** (세션 395 CI 실측 run 34364208132 `2131 passed`(238 files) — 세션 388 실측 2116 에 #466 crawl-status-no-store +2·#467 ArticleDetail 토큰 +3 = 2121(run 34255542873), 이어 #471 Header.strictmode +4·#469 useSessionToken 갱신 구독 +6. 옛 실측 2097(세션 384)·2090(세션 369~381). 전체 실행 시 RegionSelector 1건이 리소스 경합으로 일시 타임아웃될 수 있음 — 단독 재실행 시 통과, 결함 아님) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2135개** (세션 396 CI 실측 run 34397473731 `2135 passed`(239 files) — 세션 395 실측 2131 에 #485 useSessionToken 경합 가드 +1, #484 crawl-status-no-store +2, #483 는 E2E 라 vitest 수 불변. 옛 실측 2116(세션 388)·2097(세션 384). 전체 실행 시 RegionSelector 1건이 리소스 경합으로 일시 타임아웃될 수 있음 — 단독 재실행 시 통과, 결함 아님) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1626개** (세션 395 실측 — main 1f36512 CI run 34327870417: **1612 passed + 8 skipped + 6 xfailed** — 합산 관례(세션 393). 세션 395 시작 기준선 1588(로컬 전체 1회 1574/8/6)에 #464 +8·#465 +13·#466 +5 = 1614(CI 34252301158·로컬 12m24s 동일 실측), 이어 사후검증 PR #470·#472 +12. 이전 문서값 1530(세션 390) 대비 +96 = 50차 규칙 갱신) |
+| BE pytest | `backend/tests/` | **1645개** (세션 396 CI 실측 — main `ac304df` run 34414437315: **1631 passed + 8 skipped + 6 xfailed** — 합산 관례(세션 393). 세션 396 시작 기준선 1626 에 #484 캐시 헤더 +6·#486 버스트 경보 +5·#487 상세 크롤 정합 +8(온디맨드 워커 첫 테스트 5 포함) = 1645. 이전 문서값 1530(세션 390)·1626(세션 395) 대비 누적 +115) |
 
 ## 커밋 전 필수 검증
 

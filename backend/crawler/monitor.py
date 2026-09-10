@@ -62,6 +62,25 @@ _BURST_WINDOW_MIN = 60
 _BURST_MIN_FAILED = 5
 
 
+def _burst_rows(db, burst_cutoff):
+    """실패 버스트 조건(창 안 failed >= 임계)을 만족하는 job_type 집계 행.
+
+    detect_issues_ex 의 1-b 발화와 run_monitor 의 해소 사유 판정이 **같은 조건**을
+    봐야 해서 함수로 뽑았다 — 한쪽만 고치면 "발화 기준과 해소 문구 기준이 어긋나는"
+    silent drift 가 난다(세션 397).
+    """
+    return db.execute(
+        select(
+            CrawlJob.job_type,
+            func.count(CrawlJob.id).label("cnt"),
+            func.count(func.distinct(CrawlJob.target_id)).label("targets"),
+        )
+        .where(and_(CrawlJob.status == "failed", CrawlJob.created_at >= burst_cutoff))
+        .group_by(CrawlJob.job_type)
+        .having(func.count(CrawlJob.id) >= _BURST_MIN_FAILED)
+    ).all()
+
+
 def _job_stats(db, job_type: str) -> dict | None:
     """해당 job_type 의 마지막 completed 작업 통계 1건.
 
@@ -192,18 +211,12 @@ def detect_issues_ex(db) -> tuple[list[dict], bool]:
     # 이 신호는 그 선필터를 타지 않는다 — "복구됐는가" 가 아니라 "한꺼번에 무너졌는가"
     # 를 보기 때문이다. 다만 같은 job_type 에 crawl_failed 가 이미 발화 중이면(=자가복구가
     # 아니어서 위 루프가 이미 알렸으면) 같은 사실을 두 번 알리는 셈이라 생략한다.
+    # 이 생략으로 활성 버스트 경보의 키가 사라지면 run_monitor 의 해소 판정이 "창 이탈"이
+    # 아니라 "같은 작업의 실패 경보로 이어짐" 문구를 붙인다 — 실패가 계속되는 중에 "추가
+    # 실패만 멈춤" 으로 나가면 거짓 안심이 되기 때문이다(세션 397).
     burst_cutoff = now - timedelta(minutes=_BURST_WINDOW_MIN)
     already_failed = {i["data"]["job_type"] for i in issues if i["kind"] == "crawl_failed"}
-    bursts = db.execute(
-        select(
-            CrawlJob.job_type,
-            func.count(CrawlJob.id).label("cnt"),
-            func.count(func.distinct(CrawlJob.target_id)).label("targets"),
-        )
-        .where(and_(CrawlJob.status == "failed", CrawlJob.created_at >= burst_cutoff))
-        .group_by(CrawlJob.job_type)
-        .having(func.count(CrawlJob.id) >= _BURST_MIN_FAILED)
-    ).all()
+    bursts = _burst_rows(db, burst_cutoff)
     for row in bursts:
         if row.job_type in already_failed:
             continue
@@ -479,6 +492,19 @@ def run_monitor(db) -> None:
     actives = db.execute(
         select(MonitorAlert).where(MonitorAlert.status == "active")
     ).scalars().all()
+    # 버스트 조건이 "아직" 성립하는 job_type — 해소 사유가 '창 이탈'인지 'crawl_failed
+    # 승계'인지 가르는 유일한 지표다(세션 397). 1-b 와 같은 헬퍼를 써 기준을 일치시킨다.
+    # 사유 판정용 부가 정보라 아래 _resolution_reason 과 같은 결로 예외를 흡수한다 —
+    # 집계가 statement_timeout 등으로 죽으면 빈 집합으로 격하(승계 케이스가 옛 "창 이탈"
+    # 문구로 나갈 뿐, 스캔·alert 전이는 무손상). 세션 342 의 "부가 쿼리 예외가 스캔
+    # 전체를 죽임" 재발 방지(세션 397 독립 리뷰 MEDIUM 반영).
+    try:
+        burst_still_true = {
+            r.job_type for r in _burst_rows(db, now - timedelta(minutes=_BURST_WINDOW_MIN))
+        }
+    except Exception:
+        logger.warning("[monitor] 버스트 성립 집계 실패 — 해소 문구 '창 이탈' 폴백", exc_info=True)
+        burst_still_true = set()
     resolved_targets: list[tuple[MonitorAlert, str, dict]] = []
     for alert in actives:
         if alert.alert_key not in current_keys:
@@ -491,14 +517,30 @@ def run_monitor(db) -> None:
             # 계산이 성공한 다음 스캔에서 판정하도록 이번엔 건드리지 않는다.
             if not freshness_ok and kind == "freshness":
                 continue
-            try:
-                reason, reason_detail = _resolution_reason(db, kind, target)
-            except Exception:
-                # 사유 판정은 부가 정보일 뿐이다 — 여기서 예외가 새면 스캔 전체
-                # 트랜잭션이 되돌아가 alert 처리가 통째로 죽는다(세션 342 재현).
-                # reason="" 는 alert_format 이 기존 문구로 폴백하는 값.
-                logger.warning("[monitor] 해소 사유 판정 실패 — 기존 문구 폴백", exc_info=True)
-                reason, reason_detail = "", ""
+            if (
+                kind == "crawl_failed_burst"
+                and f"crawl_failed:{target}" in current_keys
+                and target in burst_still_true
+            ):
+                # 버스트 키가 사라진 이유가 "60분 창 이탈"이 아니라, 같은 job_type 의
+                # crawl_failed 로 승계된 것(1-b 의 already_failed 생략). 실패가 계속·증가하는
+                # 중이라 "추가 실패만 멈춤" 은 거짓 안심 문구가 된다(세션 396 사후검증 → 세션 397).
+                # ⚠ crawl_failed 존재만으로는 판별이 안 된다 — 진짜 창 이탈 때도 24h 창에는
+                # 옛 failed 가 남아 crawl_failed 가 함께 떠 있다. 버스트 조건 자체가 아직
+                # 성립하는지(burst_still_true)를 같이 봐야 둘이 갈린다.
+                # (역은 성립: 키가 사라졌는데 burst_still_true 면 1-b 가 already_failed 로
+                # 생략한 것뿐이라 crawl_failed 는 항상 current_keys 에 있다. 그 conjunct 는
+                # 논리상 군더더기지만 1-b 와의 결합을 명시하는 방어선으로 둔다 — 세션 397 리뷰.)
+                reason, reason_detail = "unconfirmed", "같은 작업의 실패 경보로 이어짐 — 실패가 계속되는 중"
+            else:
+                try:
+                    reason, reason_detail = _resolution_reason(db, kind, target)
+                except Exception:
+                    # 사유 판정은 부가 정보일 뿐이다 — 여기서 예외가 새면 스캔 전체
+                    # 트랜잭션이 되돌아가 alert 처리가 통째로 죽는다(세션 342 재현).
+                    # reason="" 는 alert_format 이 기존 문구로 폴백하는 값.
+                    logger.warning("[monitor] 해소 사유 판정 실패 — 기존 문구 폴백", exc_info=True)
+                    reason, reason_detail = "", ""
             resolved_targets.append((alert, kind, {
                 "alert_key": alert.alert_key,
                 "detail": alert.detail,

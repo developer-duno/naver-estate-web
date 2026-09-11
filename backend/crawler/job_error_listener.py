@@ -62,6 +62,19 @@ _JOB_LABEL_FALLBACK = {
     "kapt_match": "K-apt 단지 매칭",
     "kapt_costs": "K-apt 관리비 수집",
     "api_version_probe": "data.go.kr API 버전 감시",
+    # 동적 id 6종 (세션 399 결손 보강) — scheduler.py 가 루프로 등록하는 잡들.
+    # extract_scheduler_job_ids() 가 동적 id 를 의도적으로 건너뛰는 탓에, 기존
+    # 커버리지 가드(정적 id 대상)가 이 6종의 누락을 **구조적으로 못 봤다**.
+    # 그래서 실제로 빠진 채 방치됐고, 이 잡들이 실패하면 텔레그램에 영문 job_id 가
+    # 그대로 찍혔다("뭐가 문제인지 안 나온다"의 재발).
+    # 라벨은 SCHEDULER_JOB_META 의 공식 명칭을 그대로 복사(화면·알림 표기 통일).
+    # 누락 재발은 test_all_dynamic_jobs_have_job_error_label_fallback 가 차단.
+    "popular_1030": "인기 단지 크롤링 10:45",
+    "popular_1430": "인기 단지 크롤링 14:45",
+    "popular_1900": "인기 단지 크롤링 19:15",
+    "complex_detail_JGC": "단지 상세 backfill JGC",
+    "complex_detail_ABYG": "단지 상세 backfill ABYG",
+    "complex_detail_OBYG": "단지 상세 backfill OBYG",
 }
 
 

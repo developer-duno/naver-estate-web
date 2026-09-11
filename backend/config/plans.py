@@ -1,6 +1,9 @@
 """유료 구독 요금제 상수 — 결제 prepare/complete 가 금액·기간을 서버에서 결정 (PR3).
 
-⚠ amount(원) 는 placeholder — 정식 가격 확정 시 amount 1줄만 교체 (사장님).
+amount(원) 는 세션 326 에서 사장님이 확정한 값이다(아래 PLAN_PRICES 주석 참조).
+⚠ 실 PG 정식 계약 시 재확인 대상 — 바꿀 땐 amount 1줄만 교체하고 FE PlanCards 표시가와
+함께 맞춘다. (옛 "placeholder" 표기는 확정가가 들어온 뒤에도 남아 있어 자기모순이었다 —
+세션 399 정정. 확정 전이었다면 금액을 신뢰하지 말라는 뜻으로 읽혀 오해 소지가 컸다.)
 FE 가 보낸 금액은 절대 신뢰하지 않는다 (위변조 방지). prepare 가 plan 키로 본 dict 에서
 amount 를 조회해 Payment 행에 박고, complete 가 PortOne 응답 금액과 이 값을 대조한다.
 """

@@ -85,8 +85,20 @@ React StrictMode(dev, App Router 기본 on)는 effect 를 mount→cleanup→moun
 ### 대기 조건을 고를 때
 
 - ⛔ **카드 제목은 쓰지 마라** — 로딩 중에도 보이므로 대기 기준이 못 된다.
-- ✅ **데이터 도착 후에만 렌더되는 텍스트**를 고른다(표 헤더·집계 라벨 등).
-  예: TrafficCard → `"속도(중간)"`(표 헤더), StatsCards → mock 값 `"단지 수"`·`"1,234"`.
+- ✅ **스켈레톤이 사라지고 "최종 상태로 굳은" 시점**을 기다린다.
+- ⚠ **최종 상태가 환경에 따라 둘로 갈린다** — E2E 는 `NEXT_PUBLIC_API_URL=http://localhost:9999`
+  (미기동)라 **조회가 실패해 에러 문구로 굳고**, 실제 운영에서는 정상 데이터로 굳는다.
+  **한쪽만 기다리면 CI 에서 `element(s) not found` 로 죽는다.**
+  → `page.getByText(A).or(page.getByText(B))` 로 **둘 중 먼저 나타나는 것**을 기다린다.
+
+  ```ts
+  await expect(
+    page.getByText("속도(중간)").or(page.getByText(/트래픽 통계를 불러오지 못했습니다/)),
+  ).toBeVisible();
+  ```
+
+  (`StatsCards` 처럼 `page.route` mock 이 붙어 있는 카드는 정상 경로만 기다려도 된다 —
+   그 카드가 mock 을 갖는지 먼저 확인하고 고를 것.)
 
 ### baseline 재생성 절차 (윈도우 로컬 촬영 금지 — 폰트 렌더 차이)
 

@@ -69,6 +69,39 @@ React StrictMode(dev, App Router 기본 on)는 effect 를 mount→cleanup→moun
 > `test_collect_silent_failure_guard_counts_complexes_not_ld_codes` 를 추가하고 뮤테이션
 > 검증(수정 전 코드로 되돌리면 실제로 실패)까지 거쳐 PR #399 로 반영.
 
+## 시각 회귀(toHaveScreenshot) — 화면에 카드를 추가하면 대기 조건도 추가한다 (같은 사고 2회)
+
+`e2e/admin-dashboard.spec.ts` · `admin-pages.spec.ts` 등은 촬영 전에 **카드별 가시성을 하나씩
+기다린 뒤** `toHaveScreenshot` 을 찍는다. 그 목록에 없는 카드를 화면에 추가하면 **스켈레톤 →
+실제 내용으로 바뀌는 사이에 촬영**돼 fullPage 높이가 요동치고 실패한다.
+
+### 실패를 보면 먼저 두 갈래로 가른다
+
+| 로그 신호 | 뜻 | 처방 |
+|---|---|---|
+| `Expected an image WxH, received WxH` 만 (수신 크기가 회차마다 **일정**) | baseline 이 낡음 | baseline 재생성만 |
+| **`Failed to take two consecutive stable screenshots`** / 수신 높이가 회차마다 **다름**(예: 3339→3642→3498) | **촬영이 불안정** | **대기 조건 추가가 먼저** — baseline 재생성은 증상만 덮고 다음 회차에 또 깨진다 |
+
+### 대기 조건을 고를 때
+
+- ⛔ **카드 제목은 쓰지 마라** — 로딩 중에도 보이므로 대기 기준이 못 된다.
+- ✅ **데이터 도착 후에만 렌더되는 텍스트**를 고른다(표 헤더·집계 라벨 등).
+  예: TrafficCard → `"속도(중간)"`(표 헤더), StatsCards → mock 값 `"단지 수"`·`"1,234"`.
+
+### baseline 재생성 절차 (윈도우 로컬 촬영 금지 — 폰트 렌더 차이)
+
+```bash
+gh workflow run ci.yml --ref <브랜치> -f update_snapshots=true
+# 완료 후 artifact `updated-snapshots-<project>` 다운로드 → e2e/**/*-snapshots/ 에 풀어서 커밋
+```
+baseline 파일명이 `-linux.png` 인 이유가 이것이다.
+
+> **사건**: 세션 396(PR #483) `/admin/data` — 6월 baseline 이 "통계 카드 뜨기 전" 상태라
+> mock 이 먼저 뜨는 회차에 불일치(flaky). 대기 2줄 + baseline 재생성으로 해결.
+> **재발**: 세션 398(PR #492) `/admin` — TrafficCard 추가 후 동일 기전. 처음엔 "baseline 이
+> 낡은 것"으로 오진했다가 로그의 `stable screenshots` 문구로 정정(`c945bcf`).
+> 2회 반복이라 본 절 신설.
+
 ## 테스트 코드 작성 기준
 - 파일명: [대상].test.ts 또는 [대상].spec.ts
 - 한국어 주석으로 "이 테스트가 뭘 검증하는지" 설명

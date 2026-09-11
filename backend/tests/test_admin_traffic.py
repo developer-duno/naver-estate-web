@@ -122,6 +122,44 @@ def test_middleware_records_error_status(client, db):
     assert w["rate_4xx"] > 0
 
 
+def test_middleware_records_unhandled_exception_as_500():
+    """핸들러가 raise 하면(진짜 500) 그것도 5xx 로 계측돼야 한다 (세션 398 적대검증 HIGH).
+
+    `call_next` 를 try 로 감싸지 않으면 예외가 계측 줄을 건너뛰어 **5xx 율이 구조적으로
+    항상 0** 이 된다 — 오류율을 보려고 만든 계측이 정작 진짜 오류를 못 보는 사각.
+    기존 test_middleware_records_error_status 는 앱이 얌전히 돌려준 401 만 확인하므로
+    이 경로를 못 잡는다(그래서 별도 케이스가 필요하다).
+
+    뮤테이션 검증: rate_limiter.dispatch 의 `except Exception: _record_traffic(...); raise` 를
+    지우면 아래 5xx 단언이 FAIL 한다.
+    """
+    from fastapi import FastAPI
+    from starlette.testclient import TestClient
+
+    from auth.rate_limiter import RateLimitMiddleware
+    from services import traffic_metrics
+
+    app = FastAPI()
+    app.add_middleware(RateLimitMiddleware)
+
+    @app.get("/api/boom")
+    def _boom():
+        raise RuntimeError("의도된 폭발")
+
+    @app.get("/api/ok")
+    def _ok():
+        return {"ok": True}
+
+    traffic_metrics.reset()
+    with TestClient(app, raise_server_exceptions=False) as c:
+        c.get("/api/ok")
+        c.get("/api/boom")
+
+    w = traffic_metrics.get_stats()["windows"]["1h"]
+    assert w["total_requests"] == 2, f"예외 요청이 누락됐다: {w['total_requests']}"
+    assert w["rate_5xx"] > 0, "unhandled 예외가 5xx 로 계측되지 않았다"
+
+
 def test_query_params_limit_top_n(client, db):
     """top_paths 파라미터로 상위 N 을 제한할 수 있다"""
     _make_admin(db)

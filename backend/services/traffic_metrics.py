@@ -103,7 +103,30 @@ def record_request(
     identity = _hash_identity(identity_raw)
 
     with _lock:
-        # 새 그룹이 상한을 넘으면 "other" 로 합침 (경로 폭발 방어)
+        # ⚠ 순서 주의: **정리 → 그룹 재파생 → 그룹 판정 → append**.
+        #    판정을 먼저 하면 이미 만료된 옛 그룹이 상한을 점유한 채로 새 경로가 "other" 로
+        #    확정돼, 뒤늦게 재구축해도 그 레코드는 이미 other 로 박힌다(세션 398 실패 테스트로 확인).
+
+        # 1) 24시간 초과 레코드 정리
+        cutoff = now - _WINDOW_SECONDS
+        while _records and _records[0][0] < cutoff:
+            _records.popleft()
+
+        # 2) 총량 상한 초과 시 오래된 쪽부터 버림 (메모리 보호)
+        while len(_records) > _MAX_RECORDS:
+            _records.popleft()
+            _evicted = True
+
+        # 3) _known_groups 를 **현재 창의 레코드에서 파생**시킨다(상시 누적 집합 금지).
+        #    누적만 하면 집합이 영원히 줄지 않아, 공격자가 /api/<랜덤> 을 상한만큼만 난사해도
+        #    그 그룹들이 자리를 영구 점유하고 이후의 진짜 경로가 전부 "other" 로 합쳐진다
+        #    (세션 398 적대검증 재현: 공격 40회 → 레코드 만료 → 실제 경로 4종이 모두 other).
+        #    상한에 닿았을 때만 재구축하므로 평상시 비용은 0 이다.
+        if len(_known_groups) >= _MAX_PATH_GROUPS:
+            _known_groups.clear()
+            _known_groups.update(r[1] for r in _records)
+
+        # 4) 새 그룹이 상한을 넘으면 "other" 로 합침 (경로 폭발 방어)
         if group not in _known_groups:
             if len(_known_groups) >= _MAX_PATH_GROUPS:
                 group = "other"
@@ -112,12 +135,8 @@ def record_request(
 
         _records.append((now, group, status_code, duration_ms, identity))
 
-        # 24시간 초과 레코드 정리
-        cutoff = now - _WINDOW_SECONDS
-        while _records and _records[0][0] < cutoff:
-            _records.popleft()
-
-        # 총량 상한 초과 시 오래된 쪽부터 버림 (메모리 보호)
+        # 5) append 로 상한을 넘겼으면 즉시 회수한다. (2)의 정리는 append **전** 상태를 보므로
+        #    이 줄이 없으면 항상 상한+1 로 유지된다.
         while len(_records) > _MAX_RECORDS:
             _records.popleft()
             _evicted = True

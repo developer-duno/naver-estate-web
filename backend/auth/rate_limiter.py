@@ -172,6 +172,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 headers={"Retry-After": str(window)},
             )
 
-        response = await call_next(request)
+        # unhandled 예외(진짜 500)도 계측해야 한다 — try 없이 두면 예외가 아래 줄을
+        # 건너뛰어 **5xx 율이 구조적으로 항상 0** 이 된다(세션 398 적대검증이 TestClient 로
+        # 재현: /api/boom 이 레코드에 아예 안 남고 total 도 1 로 집계). 오류율을 보려고 만든
+        # 계측이 정작 진짜 오류를 못 보는 사각이라 반드시 예외 경로에서도 기록한 뒤 재전파한다.
+        try:
+            response = await call_next(request)
+        except Exception:
+            _record_traffic(request, ip, 500, started)
+            raise
         _record_traffic(request, ip, response.status_code, started)
         return response

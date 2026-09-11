@@ -268,6 +268,35 @@ export const mockDataFreshness: DataFreshnessResponse = {
   generated_at: "2026-04-16T09:00:00+09:00",
 };
 
+/** 트래픽 관측 (세션 398) — 고정값이라야 대시보드 fullPage 높이가 회차마다 일정하다.
+ *  mock 이 없으면 React Query 기본 retry(3회) 동안 로딩 스켈레톤(h-160px) → 에러 문구(짧음)로
+ *  바뀌는 타이밍에 따라 높이가 3642/3498px 로 갈려 시각 회귀가 간헐 실패한다(s398 실사고). */
+const mockTrafficWindow = {
+  total_requests: 1234,
+  unique_visitors: 56,
+  p50_ms: 42.5,
+  p95_ms: 180.0,
+  rate_4xx: 0.012,
+  rate_5xx: 0.0,
+  top_paths: [
+    { path: "/api/complexes", count: 620 },
+    { path: "/api/live", count: 380 },
+    { path: "/api/admin", count: 234 },
+  ],
+  top_identities: [] as { identity: string; count: number }[],
+};
+const mockTraffic = {
+  windows: {
+    "10m": mockTrafficWindow,
+    "1h": { ...mockTrafficWindow, top_identities: [{ identity: "a1b2c3d4", count: 87 }] },
+    "24h": mockTrafficWindow,
+  },
+  process_uptime_seconds: 7200,
+  window_truncated: false,
+  record_count: 1234,
+  max_records: 200000,
+};
+
 export async function applyAdminMocks(page: Page): Promise<void> {
   await page.route("**/api/admin/data-freshness", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockDataFreshness) });
@@ -295,6 +324,9 @@ export async function applyAdminMocks(page: Page): Promise<void> {
   });
   await page.route("**/api/admin/verifications*", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockVerifications) });
+  });
+  await page.route("**/api/admin/traffic", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockTraffic) });
   });
   await page.route("**/api/admin/recrawl/status", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockRecrawlStatus) });

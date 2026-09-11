@@ -168,6 +168,31 @@ def test_record_cap_evicts_oldest_and_flags():
         traffic_metrics._MAX_RECORDS = original
 
 
+def test_known_groups_rebuilt_after_records_expire():
+    """경로 그룹 집합이 레코드 만료와 함께 재구축돼야 한다 (세션 398 적대검증 HIGH).
+
+    이 재구축이 없으면 집합이 **영원히 줄지 않아**, 공격자가 /api/<랜덤> 을 상한만큼만
+    난사해도 그 그룹들이 자리를 영구 점유하고 이후의 진짜 경로가 전부 "other" 로 합쳐진다.
+    = 경로별 관측이 프로세스 수명 내내 무력화되는 사각.
+
+    뮤테이션 검증: record_request 의 `if dropped: _known_groups.clear()/update(...)` 를
+    지우면 마지막 단언(그룹이 other 가 아님)이 FAIL 한다.
+    """
+    # 1) 상한을 꽉 채우도록 랜덤 경로를 난사 (공격 모사)
+    for i in range(traffic_metrics._MAX_PATH_GROUPS):
+        record_request(f"/api/zz{i}/x", 200, 10.0, "ip:9.9.9.9")
+    assert len(traffic_metrics._known_groups) == traffic_metrics._MAX_PATH_GROUPS
+
+    # 2) 그 레코드들이 24h 창을 벗어난 상황을 모사 (전량 만료)
+    traffic_metrics._records.clear()
+
+    # 3) 이후 들어온 **진짜 경로**가 other 로 뭉개지지 않아야 한다
+    record_request("/api/live/search", 200, 10.0, "ip:1.1.1.1")
+    groups = {t["path"] for t in get_stats()["windows"]["1h"]["top_paths"]}
+    assert "/api/live" in groups, f"만료 후에도 공격 그룹이 자리를 점유했다: {groups}"
+    assert "other" not in groups
+
+
 def test_reset_clears_everything():
     """reset 후 상태가 완전히 비워진다"""
     record_request("/api/live/search", 200, 10.0, "ip:1.1.1.1")

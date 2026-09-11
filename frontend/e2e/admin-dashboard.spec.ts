@@ -42,9 +42,18 @@ test.describe("admin dashboard", () => {
     ).toBeVisible();
 
     // 시각 회귀: chromium-{platform} 별 baseline 자동 생성 (e2e/admin-dashboard.spec.ts-snapshots/)
+    //
+    // ⚠ TrafficCard 는 mask 로 가린다(세션 398). 이 카드만 **E2E 에서 높이가 확정되지 않는다** —
+    //    API 미기동이라 에러 문구로 굳지만, `가동 N` 배지(data 있을 때만)·에러 메시지 길이·
+    //    표/에러 분기에 따라 fullPage 높이가 3642 / 3498px 사이를 오간다. 위 대기 조건으로
+    //    "stable screenshot" 캡처까지는 해결됐으나(로그에 captured a stable screenshot),
+    //    **회차마다 굳는 높이가 달라** baseline 이 매번 어긋난다.
+    //    다른 카드는 page.route mock 이 있어 값이 고정되지만 이 카드는 mock 대상이 아니다.
+    //    → 카드 존재·가시성은 위에서 이미 단언했으므로, 픽셀 비교에서만 제외한다.
     await expect(page).toHaveScreenshot("admin-dashboard.png", {
       fullPage: true,
       maxDiffPixelRatio: 0.02,
+      mask: [page.locator("#traffic")],
     });
   });
 });

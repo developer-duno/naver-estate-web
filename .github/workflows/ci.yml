@@ -248,9 +248,13 @@ jobs:
 
       # pip-audit — requirements.txt 보안 advisory 검사 (Python 공식 OSV·PyPI Advisory DB)
       # 예외 0 — MAL-2026-4750(fastapi 0.136.3 [standard] extra 의 fastar typosquat) 예외는
-      # 세션 398(2026-09-11)에 제거. requirements.txt 가 fastapi>=0.141.1 로 올라가 해당
-      # advisory 가 더 이상 매칭되지 않음(예외 없이 `--strict` 통과 실측). 앞으로 예외를
-      # 추가할 때는 "언제 뺄 수 있는지"를 같은 자리에 함께 적어야 잊히지 않는다.
+      # 세션 398(2026-09-11)에 제거. 제거 사유 = **OSV 에서 2026-05-26 withdrawn(철회)** 되어
+      # 어떤 버전에서도 더 이상 매칭되지 않는다(api.osv.dev/v1/vulns/MAL-2026-4750 의
+      # withdrawn: 2026-05-26T13:04:03Z). 취약 버전 `fastapi==0.136.3` 으로 고정해 돌려도
+      # `No known vulnerabilities found` 임을 실측 확인 — 즉 버전 상향(>=0.141.1)이 아니라
+      # advisory 철회가 사유다.
+      # 앞으로 예외 해제 판정은 두 가지로 한다: ① OSV 에서 그 ID 의 withdrawn/affected 범위 확인
+      # ② 취약 버전으로 고정해 재현되는지 확인. 예외를 추가할 때도 이 판정 기준을 같은 자리에 적는다.
       - name: Security audit (pip-audit)
         run: |
           pip install pip-audit

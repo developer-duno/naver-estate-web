@@ -58,24 +58,56 @@ cd /d/naver-estate-web/backend && PYTHONPATH=. PYTHONUTF8=1 python -c "
 from sqlalchemy import text; from db.database import SessionLocal
 with SessionLocal() as db:
     print(db.execute(text(\"SELECT job_type FROM crawl_jobs WHERE status='running'\")).fetchall())"
-# (2) 5분 내 크론 — 현재 KST 를 아래 시각표와 대조 (정본 = infra.md 스케줄러 표)
-#     02:00 대기질 / 03:30 백필 / 03:50 정비 / 04:30 가치지표 / 04:50 자동결제 / 06:20 관리비
-#     10:45·14:45·19:15 인기 크롤 / 매 30분 ±15분 상세 배치 / 매월 15일 06:30 official_price(3~7h)
-date "+%H:%M"
+# (2) 5분 내 크론 — 현재 KST(요일·일자 포함)를 아래 전수 시각표와 대조
+date "+%F(%a) %H:%M"
 ```
 
+**스케줄 전수 (scheduler.py `id=` 기준 실측, 세션 398). ⏰ = 장시간 잡 = 재시작 절대 금지 구간:**
+
+| 시각 | 잡 | 주기 | 소요 |
+|---|---|---|---|
+| 01:00 | collect_childcare | 매월 첫째 목 | ~20~30분 |
+| 02:00 | collect_air_quality | 매일 | 짧음 |
+| 03:00 | discover_regions(일) / collect_emergency(매월 첫째 월) | 주·월 | 중간 |
+| 03:30 | backfill_price | 매일 | 중간 |
+| 03:50 | vacuum_maintenance | 매일 | 중간 |
+| 04:00 | collect_prices | 수 | 중간 |
+| 04:30 | collect_metrics | 매일 | 짧음 |
+| 04:50 | billing_charge | 매일 | 짧음 |
+| 05:00 | collect_public_trades(토) ⏰3h / collect_officetel_presale(월) | 주 | ⏰ |
+| 05:30 | collect_rental_presale | 월 | 중간 |
+| **06:10** | **kapt_match** | **매월 21일** | **⏰ 최대 8h** |
+| **06:20** | **kapt_costs** | **매일** | **⏰ ~1h(예외 3h)** |
+| **06:30** | **official_price** | **매월 15일** | **⏰ 3~7h** |
+| 06:40 | api_version_probe | 일 | 짧음 |
+| 10:45·14:45·19:15 | popular_crawl | 매일 | 중간 |
+| 매 12h | crawl_articles | interval | 중간 |
+| 매 30분 ±15분 jitter | crawl_details | interval | 중간 |
+| 매 4h | complex_detail_APT / OPST | interval | 중간 |
+| 매 10분 | crawler_monitor | interval | 짧음 |
+
+⏰ 판정 기준 = `crawler/monitor.py` `_STALE_HOURS_BY_TYPE` 에 예외 등록된 잡
+(public_trade_data 3h · official_price 16h · **kapt_match 8h** · kapt_costs 3h · childcare).
+**이 dict 에 새 잡이 추가되면 위 표도 함께 갱신한다** — 표가 낡으면 장시간 잡을 끊는다.
+
 겹치면 **그 회차가 끝난 뒤로 미룬다.** 여러 PR 을 묶어 한 번에 재시작하는 것도 겹침을 줄인다(§1 말미).
+
+⚠ **(1) 의 running 조회는 DB 에 접속한다.** DB 장애로 재시작하려는 상황이면 이 명령도 실패한다 —
+그때는 **조회 실패 자체를 "확인 불가"로 받아들이고** `scripts/backend.log` 마지막 줄과 위 시각표만으로
+판단한다(DB 가 죽었으면 크론도 대부분 실패 중이므로 끊을 작업이 없을 가능성이 높다).
+DB 다운 진단·처방은 infra.md §Supabase DB 전면 다운 런북이 우선.
 
 **3-1. 재시작 실행**
 
 ```powershell
 # 비관리자 셸 그대로 실행 가능 — 서비스 DACL 에 사용자 시작/중지 권한 등록됨
 #   (install_orchestrator_service.ps1 1-b 단계)
-# 대기는 90초 이상. 옛 40~45초는 부족 — 세션 397 실측: 서비스 "중지 대기"에만 약 1분,
-#   기동까지 약 65초. 45초 시점의 빈 포트 출력을 "실패"로 오판해 재실행할 뻔했다.
+# 고정 Sleep 금지 — 포트가 뜰 때까지 폴링(최대 120초). 세션 397 실측: 서비스 "중지 대기"에만
+#   약 1분, 기동까지 약 65초라 45초 시점의 빈 포트 출력을 "실패"로 오판해 재실행할 뻔했다.
+#   즉 판정 기준은 "얼마나 기다렸나"가 아니라 "포트 소유 PID 가 바뀌었나"다.
 $before = (Get-NetTCPConnection -LocalPort 8002 -State Listen -ErrorAction SilentlyContinue).OwningProcess
 Restart-Service naver-orchestrator        # nssm 이 orchestrator+uvicorn 트리 통째 종료 후 재기동
-$deadline = (Get-Date).AddSeconds(120)    # 고정 Sleep 대신 포트가 뜰 때까지 폴링
+$deadline = (Get-Date).AddSeconds(120)
 do {
   Start-Sleep -Seconds 5
   $after = (Get-NetTCPConnection -LocalPort 8002 -State Listen -ErrorAction SilentlyContinue).OwningProcess
@@ -85,6 +117,12 @@ Get-Content D:\naver-estate-web\scripts\startup.log -Tail 8   # 기대: 새 "백
 Get-Content D:\naver-estate-web\scripts\orchestrator.pid      # 기대: 새 PID
 curl.exe -s https://api.2u.pe.kr/health/db                    # 기대: {"status":"ok","db":"ok"}
 ```
+
+**120초 안에 포트가 안 뜨면**(`$after` 가 빈값): 재실행하지 말고 **원인부터 본다.**
+① `Get-Service naver-orchestrator` 상태 확인(Stopped 면 `Start-Service`) ②
+`Get-Content scripts\startup.log -Tail 20` 으로 기동 실패 사유 확인 ③ `scripts\backend.log` 첫 줄
+(uvicorn 부팅 로그)이 갱신됐는지 — 셋 다 이상 없는데 포트만 없으면 DB 연결 실패로 기동이 막힌 것일 수 있으니
+infra.md §Supabase DB 전면 다운 런북으로 넘어간다. **무작정 Restart-Service 재실행은 상황을 악화시킨다.**
 
 - ⚠ **`Restart-Service` 는 조용히 실패할 수 있다 — 실행 후 "포트 소유 PID 가 바뀌었는지"로 판정한다**
   (세션 396 실측: 첫 시도 후 45초를 기다렸는데 `startup.log` 시각·8002 포트 소유 PID 가 그대로였다. 같은 명령을

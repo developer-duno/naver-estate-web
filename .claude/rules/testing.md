@@ -100,6 +100,27 @@ React StrictMode(dev, App Router 기본 on)는 effect 를 mount→cleanup→moun
   (`StatsCards` 처럼 `page.route` mock 이 붙어 있는 카드는 정상 경로만 기다려도 된다 —
    그 카드가 mock 을 갖는지 먼저 확인하고 고를 것.)
 
+### 그래도 계속 어긋나면 — **그 요소만 mask 로 제외**한다
+
+대기 조건을 고쳐 `captured a stable screenshot` 이 로그에 찍히는데도
+`Expected an image 1280px by A, received 1280px by B` 가 **회차마다 반복**되면,
+그 카드는 **"굳는 높이 자체가 회차마다 다른"** 것이다(한 회차 안에서는 안정, 회차 간에는 불안정).
+
+전형적 원인 = 그 카드에 `page.route` mock 이 없어 **실패 응답의 내용·조건부 배지**가 매번 달라짐.
+예: TrafficCard 의 `가동 N` 배지는 `data` 가 있을 때만 렌더돼 높이를 바꾼다.
+
+→ **가시성은 위 대기 조건에서 이미 단언했으므로, 픽셀 비교에서만 뺀다.**
+
+```ts
+await expect(page).toHaveScreenshot("admin-dashboard.png", {
+  fullPage: true,
+  maxDiffPixelRatio: 0.02,
+  mask: [page.locator("#traffic")],   // 이미 있는 id 를 재사용 — 앱 코드 변경 0
+});
+```
+
+⚠ mask 를 넣으면 **baseline 도 mask 적용 상태로 다시 찍어야** 한다(재생성 1회 더).
+
 ### baseline 재생성 절차 (윈도우 로컬 촬영 금지 — 폰트 렌더 차이)
 
 ```bash

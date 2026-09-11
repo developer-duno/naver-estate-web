@@ -71,7 +71,7 @@ date "+%F(%a) %H:%M"
 | 03:00 | discover_regions(일) / collect_emergency(매월 첫째 월) | 주·월 | 중간 |
 | 03:30 | backfill_price | 매일 | 중간 |
 | 03:50 | vacuum_maintenance | 매일 | 중간 |
-| 04:00 | collect_prices | 수 | 중간 |
+| 04:00 | collect_prices(수) / **collect_crime_stats**(분기별 1·4·7·10월 첫째 일) | 주·분기 | 중간 |
 | 04:30 | collect_metrics | 매일 | 짧음 |
 | 04:50 | billing_charge | 매일 | 짧음 |
 | 05:00 | collect_public_trades(토) ⏰3h / collect_officetel_presale(월) | 주 | ⏰ |
@@ -85,6 +85,15 @@ date "+%F(%a) %H:%M"
 | 매 30분 ±15분 jitter | crawl_details | interval | 중간 |
 | 매 4h | complex_detail_APT / OPST | interval | 중간 |
 | 매 10분 | crawler_monitor | interval | 짧음 |
+
+✅ **표 행의 잡 개수 = `scheduler.py` 의 `id=` 개수(현재 22)와 일치해야 한다.** 갱신 시 기계적으로 대조:
+```bash
+cd /d/naver-estate-web && grep -oE 'id="[a-zA-Z_]+"' backend/crawler/scheduler.py | sed 's/id="//;s/"//' | sort > /tmp/ids.txt
+while read id; do grep -q "$id" .claude/rules/release.md || echo "MISSING: $id"; done < /tmp/ids.txt
+```
+(세션 398 에서 이 표를 "누락을 고치려고" 만들었는데 `collect_crime_stats` 를 또 빠뜨렸다 — 눈으로 옮기면 반드시 빠진다.)
+⚠ 위 스니펫은 `complex_detail_OPST` 를 MISSING 으로 보고하는데, 표의 `complex_detail_APT / OPST` 행에
+슬래시로 묶여 수록된 것이라 **실제 누락이 아니다**(알려진 오탐 1건). 그 외가 뜨면 진짜 누락이다.
 
 ⏰ 판정 기준 = `crawler/monitor.py` `_STALE_HOURS_BY_TYPE` 에 예외 등록된 잡
 (public_trade_data 3h · official_price 16h · **kapt_match 8h** · kapt_costs 3h · childcare).

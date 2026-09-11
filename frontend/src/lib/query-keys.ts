@@ -59,6 +59,7 @@ export const queryKeys = {
       ["admin", "verifications", params] as const,
     errorStats: (days: number) => ["admin", "errorStats", days] as const,
     naverCalls: () => ["admin", "naverCalls"] as const,
+    traffic: () => ["admin", "traffic"] as const,
     dataFreshness: () => ["admin", "dataFreshness"] as const,
     crawlFailures: (hours: number = 24) => ["admin", "crawlFailures", hours] as const,
     quotaStatus: () => ["admin", "quotaStatus"] as const,

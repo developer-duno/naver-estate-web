@@ -18,6 +18,7 @@ const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { id: "health", label: "건강도", colorize: "health" },
   { id: "weekly-issues", label: "이번 주 이슈", colorize: false },
   { id: "stats", label: "통계", colorize: false },
+  { id: "traffic", label: "트래픽", colorize: false },
   { id: "scheduler", label: "스케줄러", colorize: false },
   { id: "freshness", label: "데이터 신선도", colorize: "freshness" },
   { id: "naver-calls", label: "네이버 호출", colorize: false },

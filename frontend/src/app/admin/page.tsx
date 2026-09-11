@@ -11,6 +11,7 @@ import DataFreshnessCard from "@/components/admin/DataFreshnessCard";
 import HealthSummary from "@/components/admin/HealthSummary";
 import WeeklyIssuesCard from "@/components/admin/WeeklyIssuesCard";
 import NaverCallsCard from "@/components/admin/NaverCallsCard";
+import TrafficCard from "@/components/admin/TrafficCard";
 import QuotaStatusCard from "@/components/admin/QuotaStatusCard";
 import FailureBreakdown from "@/components/admin/FailureBreakdown";
 import AdminCard from "@/components/admin/AdminCard";
@@ -65,6 +66,10 @@ export default function AdminDashboard() {
           <div id="weekly-issues" className="mb-4"><WeeklyIssuesCard token={token} /></div>
 
           <div id="stats"><StatsCards stats={stats} loading={loading} /></div>
+
+          <div id="traffic" className="mt-6">
+            <TrafficCard getToken={getToken} />
+          </div>
 
           <div id="scheduler" className="mt-6">
             <SchedulerMonitor token={token} />

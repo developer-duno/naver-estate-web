@@ -69,6 +69,83 @@ React StrictMode(dev, App Router 기본 on)는 effect 를 mount→cleanup→moun
 > `test_collect_silent_failure_guard_counts_complexes_not_ld_codes` 를 추가하고 뮤테이션
 > 검증(수정 전 코드로 되돌리면 실제로 실패)까지 거쳐 PR #399 로 반영.
 
+## 시각 회귀(toHaveScreenshot) — 화면에 카드를 추가하면 대기 조건도 추가한다 (같은 사고 2회)
+
+`e2e/admin-dashboard.spec.ts` · `admin-pages.spec.ts` 등은 촬영 전에 **카드별 가시성을 하나씩
+기다린 뒤** `toHaveScreenshot` 을 찍는다. 그 목록에 없는 카드를 화면에 추가하면 **스켈레톤 →
+실제 내용으로 바뀌는 사이에 촬영**돼 fullPage 높이가 요동치고 실패한다.
+
+### 실패를 보면 먼저 두 갈래로 가른다
+
+| 로그 신호 | 뜻 | 처방 |
+|---|---|---|
+| `Expected an image WxH, received WxH` 만 (수신 크기가 회차마다 **일정**) | baseline 이 낡음 | baseline 재생성만 |
+| **`Failed to take two consecutive stable screenshots`** / 수신 높이가 회차마다 **다름**(예: 3339→3642→3498) | **촬영이 불안정** | **대기 조건 추가가 먼저** — baseline 재생성은 증상만 덮고 다음 회차에 또 깨진다 |
+
+### 대기 조건을 고를 때
+
+- ⛔ **카드 제목은 쓰지 마라** — 로딩 중에도 보이므로 대기 기준이 못 된다.
+- ✅ **스켈레톤이 사라지고 "최종 상태로 굳은" 시점**을 기다린다.
+- ⚠ **최종 상태가 환경에 따라 둘로 갈린다** — E2E 는 `NEXT_PUBLIC_API_URL=http://localhost:9999`
+  (미기동)라 **조회가 실패해 에러 문구로 굳고**, 실제 운영에서는 정상 데이터로 굳는다.
+  **한쪽만 기다리면 CI 에서 `element(s) not found` 로 죽는다.**
+  → `page.getByText(A).or(page.getByText(B))` 로 **둘 중 먼저 나타나는 것**을 기다린다.
+
+  ```ts
+  await expect(
+    page.getByText("속도(중간)").or(page.getByText(/트래픽 통계를 불러오지 못했습니다/)),
+  ).toBeVisible();
+  ```
+
+  (`StatsCards` 처럼 `page.route` mock 이 붙어 있는 카드는 정상 경로만 기다려도 된다 —
+   그 카드가 mock 을 갖는지 먼저 확인하고 고를 것.)
+
+### 그래도 계속 어긋나면 — **그 요소만 mask 로 제외**한다
+
+대기 조건을 고쳐 `captured a stable screenshot` 이 로그에 찍히는데도
+`Expected an image 1280px by A, received 1280px by B` 가 **회차마다 반복**되면,
+그 카드는 **"굳는 높이 자체가 회차마다 다른"** 것이다(한 회차 안에서는 안정, 회차 간에는 불안정).
+
+전형적 원인 = 그 카드에 `page.route` mock 이 없어 **실패 응답의 내용·조건부 배지**가 매번 달라짐.
+예: TrafficCard 의 `가동 N` 배지는 `data` 가 있을 때만 렌더돼 높이를 바꾼다.
+
+→ **가시성은 위 대기 조건에서 이미 단언했으므로, 픽셀 비교에서만 뺀다.**
+
+```ts
+await expect(page).toHaveScreenshot("admin-dashboard.png", {
+  fullPage: true,
+  maxDiffPixelRatio: 0.02,
+  mask: [page.locator("#traffic")],   // 이미 있는 id 를 재사용 — 앱 코드 변경 0
+});
+```
+
+⚠ mask 를 넣으면 **baseline 도 mask 적용 상태로 다시 찍어야** 한다(재생성 1회 더).
+
+### baseline 재생성 절차 (윈도우 로컬 촬영 금지 — 폰트 렌더 차이)
+
+```bash
+gh workflow run ci.yml --ref <브랜치> -f update_snapshots=true
+# 완료 후 artifact `updated-snapshots-<project>` 다운로드
+```
+baseline 파일명이 `-linux.png` 인 이유가 이것이다.
+
+⚠ **artifact 를 통째로 덮어쓰지 마라.** 그 안에는 그 project 의 **모든** baseline 이 들어 있어
+(admin artifact 에 blog·compare·home 까지 19장) 전량 복사하면 **무관한 baseline 변경이 커밋에 섞인다.**
+sha256 으로 대조해 **실제로 달라진 것만** 교체한다:
+
+```bash
+cd frontend/e2e
+for f in $(cd "$DL" && find . -name "*.png" | sed 's|^\./||'); do
+  [ -f "$f" ] && [ "$(sha256sum "$f" | cut -c1-12)" != "$(sha256sum "$DL/$f" | cut -c1-12)" ]     && echo "변경: $f"
+done
+```
+
+> **사건**: 세션 396(PR #483) `/admin/data` — 6월 baseline 이 "통계 카드 뜨기 전" 상태라
+> mock 이 먼저 뜨는 회차에 불일치(flaky). 대기 2줄 + baseline 재생성으로 해결.
+> **재발**: 세션 398(PR #492) `/admin` — TrafficCard 추가 후 동일 기전. 처음엔 "baseline 이
+> 낡은 것"으로 오진했다가 로그의 `stable screenshots` 문구로 정정(`c945bcf`).
+> 2회 반복이라 본 절 신설.
+
 ## 테스트 코드 작성 기준
 - 파일명: [대상].test.ts 또는 [대상].spec.ts
 - 한국어 주석으로 "이 테스트가 뭘 검증하는지" 설명

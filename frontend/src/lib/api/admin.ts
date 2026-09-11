@@ -297,6 +297,48 @@ export async function getAdminNaverCalls(token: string) {
   });
 }
 
+export interface TrafficTopPath {
+  path: string;
+  count: number;
+}
+
+export interface TrafficTopIdentity {
+  identity: string;
+  count: number;
+}
+
+export interface TrafficWindow {
+  total_requests: number;
+  unique_visitors: number;
+  p50_ms: number;
+  p95_ms: number;
+  rate_4xx: number;
+  rate_5xx: number;
+  top_paths: TrafficTopPath[];
+  /** 최근 1시간 창에만 채워진다 (남용 감지용) */
+  top_identities: TrafficTopIdentity[];
+}
+
+export interface TrafficStats {
+  windows: {
+    "10m": TrafficWindow;
+    "1h": TrafficWindow;
+    "24h": TrafficWindow;
+  };
+  process_uptime_seconds: number;
+  /** true = 레코드 상한에 걸려 오래된 기록을 버림 → 24h 수치가 실제보다 작다 */
+  window_truncated: boolean;
+  record_count: number;
+  max_records: number;
+}
+
+/** 트래픽 관측 — 요청 수·고유 방문자·응답시간·에러율 (10분/1시간/24시간) */
+export async function getAdminTraffic(token: string) {
+  return fetchApi<TrafficStats>(`/api/admin/traffic`, {
+    headers: adminHeaders(token),
+  });
+}
+
 /** 공공데이터 API 쿼터 현황 (오늘) */
 export async function getAdminQuotaStatus(token: string) {
   return fetchApi<QuotaStatus>(`/api/admin/quota-status`, {

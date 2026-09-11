@@ -13,6 +13,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from auth.audit import _mask_ip
+from services import traffic_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -90,10 +91,53 @@ def _check_rate_limit_memory(rate_key: str, max_req: int, window: int) -> bool:
     return False
 
 
+def _traffic_identity(request: Request, ip: str) -> str:
+    """트래픽 집계용 식별자 원문 (traffic_metrics 안에서 즉시 해시된다).
+
+    로그인 사용자는 Authorization 토큰, 비로그인은 IP.
+
+    ⚠ 미들웨어는 의존성 주입(get_current_user) 전이라 **검증된 user_id 를 알 수 없다**.
+    미검증 JWT payload 의 sub 를 꺼내 쓰면 위조된 sub 가 집계에 섞인다. 토큰 문자열
+    자체를 식별자로 삼으면 위조해도 "다른 방문자 1명"이 될 뿐 남을 사칭할 수 없고,
+    같은 사람의 연속 요청은 같은 토큰이라 하나로 묶인다. 토큰은 저장되지 않는다
+    (traffic_metrics._hash_identity 가 salt+SHA-256 앞 12자만 남긴다).
+    토큰은 갱신되면(기본 1시간) 다른 식별자가 되므로 고유 방문자 수는 과대추정될 수
+    있다 — 정확한 사용자 수가 아니라 "대략적인 활동 주체 수"로 읽어야 한다.
+    """
+    auth_header = request.headers.get("authorization")
+    if auth_header and auth_header.lower().startswith("bearer "):
+        token = auth_header[7:].strip()
+        if token:
+            return f"u:{token}"
+    return f"ip:{ip}"
+
+
+def _record_traffic(request: Request, ip: str, status_code: int, started: float) -> None:
+    """트래픽 계측 1건 기록 (best-effort).
+
+    계측 실패가 실제 응답을 깨뜨려서는 안 되므로 흡수하되, **조용히 삼키지 않고**
+    로그를 남긴다(관측 장치가 죽은 걸 관측할 수 없으면 의미가 없다).
+    """
+    try:
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        traffic_metrics.record_request(
+            path=request.url.path,
+            status_code=status_code,
+            duration_ms=elapsed_ms,
+            identity_raw=_traffic_identity(request, ip),
+        )
+    except Exception:
+        logger.warning("traffic_metrics 기록 실패 (요청 처리에는 영향 없음)", exc_info=True)
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """IP 기반 Rate Limiting.
+    """IP 기반 Rate Limiting + 트래픽 계측.
 
     Redis 가용 시 분산 환경 지원, 불가 시 프로세스 단위 in-memory.
+
+    트래픽 계측을 별도 미들웨어로 분리하지 않은 이유 = 이 미들웨어가 이미 모든
+    `/api/` 요청이 반드시 지나는 길목이고 클라이언트 IP 추출까지 끝내 두기 때문.
+    미들웨어를 하나 더 쌓으면 요청마다 ASGI 래핑이 한 겹 더 늘 뿐 얻는 게 없다.
     """
 
     async def dispatch(self, request: Request, call_next):
@@ -103,6 +147,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         ip = _get_client_ip(request)
+        started = time.perf_counter()
 
         if path == "/api/auth/login" or (path == "/api/signup" and request.method == "POST"):
             max_req, window = LOGIN_RATE_LIMIT
@@ -119,10 +164,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         if exceeded:
             logger.warning("Rate limit exceeded: ip=%s path=%s", _mask_ip(ip), path)
+            # 차단된 요청도 계측한다 — 남용 감지에 가장 중요한 신호라 빠뜨리면 안 된다.
+            _record_traffic(request, ip, 429, started)
             return JSONResponse(
                 status_code=429,
                 content={"detail": "요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요."},
                 headers={"Retry-After": str(window)},
             )
 
-        return await call_next(request)
+        response = await call_next(request)
+        _record_traffic(request, ip, response.status_code, started)
+        return response

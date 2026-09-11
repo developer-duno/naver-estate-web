@@ -11,5 +11,6 @@ from routers.admin import jobs as _jobs_mod  # noqa: F401, I001
 from routers.admin import naver_calls as _naver_calls_mod  # noqa: F401, I001
 from routers.admin import recrawl as _recrawl_mod  # noqa: F401, I001
 from routers.admin import scheduler as _sched_mod  # noqa: F401, I001
+from routers.admin import traffic as _traffic_mod  # noqa: F401, I001
 from routers.admin import users as _users_mod  # noqa: F401, I001
 from routers.admin._shared import router as router  # noqa: I001

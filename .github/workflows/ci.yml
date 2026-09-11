@@ -89,6 +89,9 @@ jobs:
       - name: Mdx-JSX guard
         run: npm run check:mdx-jsx
 
+      - name: Job label guard
+        run: npm run check:job-labels
+
       - name: Test
         run: npm test
 

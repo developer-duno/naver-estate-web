@@ -16,6 +16,7 @@
     "test:e2e:headed": "playwright test --headed",
     "check:ad-compliance": "node scripts/check-ad-compliance.mjs",
     "check:mdx-jsx": "node scripts/check-mdx-jsx.mjs",
+    "check:job-labels": "node scripts/check-job-labels.mjs",
     "prepare": "cd .. && husky frontend/.husky"
   },
   "dependencies": {

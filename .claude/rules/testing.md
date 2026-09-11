@@ -104,9 +104,20 @@ React StrictMode(dev, App Router 기본 on)는 effect 를 mount→cleanup→moun
 
 ```bash
 gh workflow run ci.yml --ref <브랜치> -f update_snapshots=true
-# 완료 후 artifact `updated-snapshots-<project>` 다운로드 → e2e/**/*-snapshots/ 에 풀어서 커밋
+# 완료 후 artifact `updated-snapshots-<project>` 다운로드
 ```
 baseline 파일명이 `-linux.png` 인 이유가 이것이다.
+
+⚠ **artifact 를 통째로 덮어쓰지 마라.** 그 안에는 그 project 의 **모든** baseline 이 들어 있어
+(admin artifact 에 blog·compare·home 까지 19장) 전량 복사하면 **무관한 baseline 변경이 커밋에 섞인다.**
+sha256 으로 대조해 **실제로 달라진 것만** 교체한다:
+
+```bash
+cd frontend/e2e
+for f in $(cd "$DL" && find . -name "*.png" | sed 's|^\./||'); do
+  [ -f "$f" ] && [ "$(sha256sum "$f" | cut -c1-12)" != "$(sha256sum "$DL/$f" | cut -c1-12)" ]     && echo "변경: $f"
+done
+```
 
 > **사건**: 세션 396(PR #483) `/admin/data` — 6월 baseline 이 "통계 카드 뜨기 전" 상태라
 > mock 이 먼저 뜨는 회차에 불일치(flaky). 대기 2줄 + baseline 재생성으로 해결.

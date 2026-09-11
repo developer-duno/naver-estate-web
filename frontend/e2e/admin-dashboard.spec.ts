@@ -27,6 +27,14 @@ test.describe("admin dashboard", () => {
     // 세션 146: FailureBreakdown 12번째 카드 가시성 회귀 가드
     await expect(page.getByText(/유형별 실패 분포/)).toBeVisible();
 
+    // 세션 398: TrafficCard 가시성 가드 + **촬영 타이밍 경합 차단**.
+    // 카드 제목은 로딩 중에도 보이므로 대기 기준이 못 된다 — 데이터 도착 후에만 렌더되는
+    // 표 헤더("속도(중간)")를 기다려야 한다. 이걸 빠뜨리면 스켈레톤(h-[160px]) → 표로
+    // 바뀌는 사이에 촬영돼 "Failed to take two consecutive stable screenshots"
+    // (fullPage 높이가 3339→3642→3498px 로 요동)로 실패한다. 선례 = 세션 396 PR #483.
+    await expect(page.getByText("트래픽 (요청 수 · 방문자 · 속도 · 오류)")).toBeVisible();
+    await expect(page.getByText("속도(중간)")).toBeVisible();
+
     // 시각 회귀: chromium-{platform} 별 baseline 자동 생성 (e2e/admin-dashboard.spec.ts-snapshots/)
     await expect(page).toHaveScreenshot("admin-dashboard.png", {
       fullPage: true,

@@ -21,6 +21,7 @@ function emptyWindow(): TrafficWindow {
   return {
     total_requests: 0,
     unique_visitors: 0,
+    visitors_capped: false,
     p50_ms: 0,
     p95_ms: 0,
     rate_4xx: 0,
@@ -57,7 +58,9 @@ describe("TrafficCard 컴포넌트", () => {
     await waitFor(() => {
       expect(screen.getByText("요청 수")).toBeInTheDocument();
     });
-    expect(screen.getByText("방문자")).toBeInTheDocument();
+    // "방문자" 가 아니라 "방문자(대략)" — 토큰 갱신으로 과대추정되는 값이라
+    // 라벨 자체가 근사임을 알린다(세션 398 W8).
+    expect(screen.getByText("방문자(대략)")).toBeInTheDocument();
     expect(screen.getByText("속도(중간)")).toBeInTheDocument();
     expect(screen.getByText("속도(느림)")).toBeInTheDocument();
     // 세 윈도우 행 라벨

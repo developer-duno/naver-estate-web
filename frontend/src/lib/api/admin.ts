@@ -309,7 +309,14 @@ export interface TrafficTopIdentity {
 
 export interface TrafficWindow {
   total_requests: number;
+  /**
+   * 고유 식별자 수 — **실제 인원보다 부풀려진 근사치**.
+   * 로그인 사용자는 토큰 해시로 식별하는데 토큰이 기본 1시간마다 갱신돼,
+   * 같은 사람이 갱신 때마다 새 방문자로 잡힌다. 화면 라벨도 "방문자(대략)".
+   */
   unique_visitors: number;
+  /** true = 식별자 상한 초과로 일부가 방문자 수에서 빠짐 (실제보다 적게 나옴) */
+  visitors_capped: boolean;
   p50_ms: number;
   p95_ms: number;
   rate_4xx: number;

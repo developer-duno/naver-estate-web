@@ -26,6 +26,7 @@
 
 import hashlib
 import logging
+import math
 import os
 import re
 import threading
@@ -148,10 +149,19 @@ def get_uptime_seconds() -> float:
 
 
 def _percentile(sorted_values: list[float], pct: float) -> float:
-    """정렬된 리스트에서 백분위수 (nearest-rank). 빈 리스트면 0."""
+    """정렬된 리스트에서 백분위수 (nearest-rank). 빈 리스트면 0.
+
+    nearest-rank 정의 = ceil(pct/100 * n) 번째 값(1-based) → 0-based 는 -1.
+
+    ⚠ 옛 구현 `int(round(pct/100*n + 0.5)) - 1` 은 **한 칸 위쪽 값을 골랐다**
+    (세션 398 적대검증 W7). n=100·p95 에서 95번째가 아니라 96번째를 반환 —
+    하필 방향이 나빠서 **느린 쪽을 실제보다 빠른 것처럼** 보이게 했다.
+    n=10·p50 도 5번째 대신 6번째. (n=20·p50, n=1000·p95 처럼 값이 우연히
+    일치하는 조합도 있어 "가끔만 틀리는" 형태라 눈에 잘 안 띄었다.)
+    """
     if not sorted_values:
         return 0.0
-    idx = int(round(pct / 100 * len(sorted_values) + 0.5)) - 1
+    idx = math.ceil(pct / 100 * len(sorted_values)) - 1
     idx = max(0, min(idx, len(sorted_values) - 1))
     return sorted_values[idx]
 
@@ -167,6 +177,7 @@ def _summarize(
         return {
             "total_requests": 0,
             "unique_visitors": 0,
+            "visitors_capped": False,
             "p50_ms": 0.0,
             "p95_ms": 0.0,
             "rate_4xx": 0.0,
@@ -181,11 +192,16 @@ def _summarize(
 
     per_group: dict[str, int] = {}
     per_identity: dict[str, int] = {}
+    identities_capped = False
     for _, group, _status, _ms, identity in rows:
         per_group[group] = per_group.get(group, 0) + 1
         # 고유 방문자 dict 도 상한을 둔다 (극단적 분산 공격 시 메모리 보호)
         if identity in per_identity or len(per_identity) < _MAX_IDENTITIES_PER_WINDOW:
             per_identity[identity] = per_identity.get(identity, 0) + 1
+        else:
+            # 상한 초과분은 방문자 수에서 빠진다 — 조용히 누락시키지 않고 알린다
+            # (세션 398 적대검증 W10). window_truncated 를 성실히 고지하는 것과 같은 결.
+            identities_capped = True
 
     sorted_groups = sorted(per_group.items(), key=lambda kv: (-kv[1], kv[0]))[:top_paths]
     sorted_ids = sorted(per_identity.items(), key=lambda kv: (-kv[1], kv[0]))[:top_identities]
@@ -193,6 +209,8 @@ def _summarize(
     return {
         "total_requests": total,
         "unique_visitors": len(per_identity),
+        # True = 식별자 상한(_MAX_IDENTITIES_PER_WINDOW) 초과로 일부가 방문자 수에서 빠짐
+        "visitors_capped": identities_capped,
         "p50_ms": round(_percentile(durations, 50), 1),
         "p95_ms": round(_percentile(durations, 95), 1),
         "rate_4xx": round(count_4xx / total * 100, 2),
@@ -217,7 +235,11 @@ def get_stats(top_paths: int = 10, top_identities: int = 10) -> dict:
         while _records and _records[0][0] < cutoff_24h:
             _records.popleft()
         snapshot = list(_records)
-        evicted = _evicted
+        # ⚠ _evicted 는 "한 번이라도 상한에 걸렸다"는 래치(latch)다. 그대로 쓰면
+        #   트래픽이 줄어 상한을 한참 밑돌아도 경고가 영원히 켜져 있다(세션 398 W9).
+        #   지금 창이 실제로 상한에 닿아 있을 때만 알린다 — 레코드가 상한 미만으로
+        #   내려오면 24h 수치는 더 이상 잘리지 않으므로 경고의 근거가 사라진다.
+        evicted = _evicted and len(_records) >= _MAX_RECORDS
 
     result: dict[str, dict] = {}
     for key, seconds in windows.items():

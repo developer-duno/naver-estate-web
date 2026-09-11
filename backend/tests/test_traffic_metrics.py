@@ -87,13 +87,41 @@ def test_error_rates():
 
 
 def test_percentiles():
-    """p50 / p95 응답시간 — 1~100ms 균등 분포"""
+    """p50 / p95 응답시간 — 1~100ms 균등 분포.
+
+    ⚠ 기대값을 **정확히** 못박는다(옛 범위 단언 `94 <= p95 <= 96` 은 옛 구현의
+    96 과 올바른 95 를 **둘 다 통과**시켜, W7 오프바이원을 전혀 못 봤다 —
+    "테스트가 있다"와 "그 테스트가 이 결함을 볼 수 있다"는 별개다).
+
+    nearest-rank 정의: ceil(pct/100 * n) 번째 값(1-based).
+    n=100 → p50 = 50번째 = 50.0, p95 = 95번째 = 95.0.
+    """
     for i in range(1, 101):
         record_request("/api/live/search", 200, float(i), "ip:1.1.1.1")
 
     w = get_stats()["windows"]["1h"]
-    assert 49 <= w["p50_ms"] <= 52
-    assert 94 <= w["p95_ms"] <= 96
+    assert w["p50_ms"] == 50.0, "p50 은 50번째 값이어야 한다"
+    assert w["p95_ms"] == 95.0, (
+        "p95 는 95번째 값(95.0)이어야 한다. 96.0 이 나오면 한 칸 위쪽을 고르는 "
+        "옛 계산식으로 되돌아간 것 — 느린 쪽을 실제보다 빠르게 보이게 한다."
+    )
+
+
+def test_percentile_nearest_rank_exact_small_n():
+    """작은 n 에서도 nearest-rank 정의를 정확히 따른다 (W7 회귀 가드).
+
+    n=10·p50 은 5번째(=5.0)다. 옛 식은 6번째(6.0)를 골랐다. n 이 작을수록
+    한 칸 차이가 비율로는 크다 — 10분 창처럼 표본이 적은 구간이 특히 취약.
+
+    뮤테이션 검증: _percentile 을 옛 식(int(round(pct/100*n + 0.5)) - 1)으로
+    되돌리면 이 테스트가 FAIL 한다.
+    """
+    for i in range(1, 11):
+        record_request("/api/live/search", 200, float(i), "ip:1.1.1.1")
+
+    w = get_stats()["windows"]["1h"]
+    assert w["p50_ms"] == 5.0, "n=10 의 p50 은 5번째 값(5.0)"
+    assert w["p95_ms"] == 10.0, "n=10 의 p95 는 ceil(9.5)=10번째 값(10.0)"
 
 
 def test_top_paths_sorted_desc():
@@ -166,6 +194,67 @@ def test_record_cap_evicts_oldest_and_flags():
         assert stats["window_truncated"] is True
     finally:
         traffic_metrics._MAX_RECORDS = original
+
+
+def test_truncated_flag_clears_when_records_fall_below_cap():
+    """트래픽이 줄어 상한 아래로 내려오면 잘림 경고가 꺼진다 (W9 회귀 가드).
+
+    _evicted 는 "한 번이라도 버린 적 있다"는 래치라, 그대로 노출하면 트래픽이
+    한참 줄어도 "24시간 숫자가 실제보다 작습니다" 경고가 **영원히** 켜져 있다.
+    거짓 경고가 상시 떠 있으면 진짜 잘림을 알리는 신호로서 쓸모가 없어진다.
+
+    뮤테이션 검증: get_stats 의 `evicted = _evicted and len(_records) >= _MAX_RECORDS`
+    를 `evicted = _evicted` 로 되돌리면 마지막 단언이 FAIL 한다.
+    """
+    original = traffic_metrics._MAX_RECORDS
+    traffic_metrics._MAX_RECORDS = 5
+    try:
+        # 1) 상한을 넘겨 잘림 발생 → 경고 켜짐
+        for _ in range(8):
+            record_request("/api/live/search", 200, 10.0, "ip:1.1.1.1")
+        assert get_stats()["window_truncated"] is True
+
+        # 2) 트래픽이 줄어 상한 아래로 내려온 상황 (레코드 일부 만료 모사)
+        while len(traffic_metrics._records) >= traffic_metrics._MAX_RECORDS:
+            traffic_metrics._records.popleft()
+
+        # 3) 더 이상 잘리지 않으므로 경고도 꺼져야 한다
+        assert get_stats()["window_truncated"] is False, (
+            "상한 아래로 내려왔는데도 잘림 경고가 켜져 있다 — 래치가 영구 true 로 남았다"
+        )
+    finally:
+        traffic_metrics._MAX_RECORDS = original
+
+
+def test_visitors_capped_flag_when_identity_limit_exceeded():
+    """식별자 상한 초과분이 방문자 수에서 빠지면 그 사실을 알린다 (W10 회귀 가드).
+
+    상한을 넘으면 방문자 수가 **실제보다 적게** 나오는데, 옛 구현은 이를
+    조용히 누락시켜 화면이 틀린 수치를 사실처럼 보여줬다. 같은 카드가
+    window_truncated 는 성실히 고지하므로 일관성 결여이기도 했다.
+
+    뮤테이션 검증: _summarize 의 else 분기(identities_capped = True)를 지우면
+    두 번째 단언이 FAIL 한다.
+    """
+    original = traffic_metrics._MAX_IDENTITIES_PER_WINDOW
+    traffic_metrics._MAX_IDENTITIES_PER_WINDOW = 3
+    try:
+        # 상한(3) 안이면 깃발 꺼짐
+        for i in range(3):
+            record_request("/api/live/search", 200, 10.0, f"ip:1.1.1.{i}")
+        w = get_stats()["windows"]["1h"]
+        assert w["unique_visitors"] == 3
+        assert w["visitors_capped"] is False
+
+        # 상한을 넘는 새 식별자가 오면 방문자 수에서 빠지고 깃발이 켜진다
+        record_request("/api/live/search", 200, 10.0, "ip:9.9.9.9")
+        w = get_stats()["windows"]["1h"]
+        assert w["unique_visitors"] == 3, "상한 초과분은 방문자 수에 안 들어간다"
+        assert w["visitors_capped"] is True, (
+            "상한 초과로 누락이 생겼는데 고지 깃발이 꺼져 있다 — 조용한 누락"
+        )
+    finally:
+        traffic_metrics._MAX_IDENTITIES_PER_WINDOW = original
 
 
 def test_known_groups_rebuilt_after_records_expire():

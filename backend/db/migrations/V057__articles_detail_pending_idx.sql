@@ -1,0 +1,165 @@
+-- V057: 매물 상세 후보 SELECT 부분 인덱스 (30분 배치의 636MB 전량 스캔 제거 — 세션 400)
+--
+-- 배경: crawler/service_discover.py 의 crawl_article_details 후보 SELECT 가
+--   SELECT * FROM articles
+--    WHERE detail_crawled = false AND is_active = true AND detail_fail_count < 6
+--    ORDER BY last_seen_at DESC NULLS LAST LIMIT 500
+-- 인데, 스케줄 crawl_details(30분 interval ± 15분 jitter, **실측 37회/일** —
+-- crawl_jobs 7일 261건 ÷ 7) 마다 articles 힙을 통째로 훑는다.
+--
+-- EXPLAIN (ANALYZE, BUFFERS) 6회 실측에서 **변하지 않는 지표**:
+--   Buffers: shared hit≈43K read≈37K (합 81,480 = 힙 636MB 전량)
+--   Rows Removed by Filter: 1,494,491
+--   Parallel Seq Scan (Workers 2), **결과 0행**
+-- 실행시간은 373~808ms 로 회차마다 변동하므로 근거로 쓰지 않는다(단발 표본 금지).
+--
+-- ⚠ 진짜 비용은 시간이 아니라 **버퍼 캐시 축출**이다: 매회 ≈290MB 를 디스크에서 읽어
+-- shared_buffers 512MB(Small 인스턴스)의 절반 이상을 하루 37번 밀어낸다. 이 DB 는
+-- 8/22·8/24 DB 다운 2회 이력(메모리 포화가 유력 가설 — 서버 로그 원문 미확인, infra.md
+-- §재발 / 세션 378·381)이 있고, V048(10분 주기 풀스캔
+-- 제거)이 정확히 같은 논리로 승인됐다 — 본 인덱스는 그 선례의 연장이다.
+--
+-- ── 옛 판정("인덱스 금지")의 전제 반전 ──────────────────────────────────────
+--
+--  시점             | 대기(false&active) | 쿼리 동작                         | 판정
+--  -----------------+--------------------+-----------------------------------+----------------------
+--  세션 266 (6/2)   | 384,034            | LIMIT 500 조기 종료 → 163~199ms   | 미머지 초안 부분 인덱스
+--                   |                    |                                   | (당시 가칭 "V032" — 현
+--                   |                    |                                   | V032__cph_constraint_name_align.sql
+--                   |                    |                                   | 과 무관) 폐기 — 정당
+--  세션 268 (6/4)   | 374,865            | 1584ms cold / 305ms warm, 30s 여유| last_seen_at 인덱스
+--                   |                    |                                   | "절대 금지" — 정당
+--  세션 400 (9/12)  | **2 (실질 0)**     | 매칭 행 없음 → 조기 종료 불가     | 전제 소멸
+--                   |                    | → **매회 전량 스캔**              |
+--
+-- 즉 옛 판정은 "불필요"였지 "유해"가 아니었다. 대기가 다시 수만으로 튀는 국면
+-- (일별 신규 유입 실측 562~11,314건)에서도 Index Scan DESC + LIMIT 500 은 Seq Scan +
+-- top-N sort 보다 우세하다(조기 종료 논리가 그 구간에 부활) → 어느 국면에서도 손해 없음.
+-- 메모리 룰 `combined_aggregate_index_void`(max+count 를 한 SELECT 에 묶으면 인덱스가
+-- 무효화됨)는 **집계 묶음 전용**이라 이 쿼리(집계 없는 LIMIT 단순 조회)에 적용되지 않는다.
+--
+-- ── 키를 `last_seen_at DESC NULLS LAST` 로 명시해야 하는 이유 (실측) ────────
+-- 인덱스 indoption 이 ORDER BY 절과 **정확히** 일치해야 플래너가 쓴다. 실측: 기존
+-- `(updated_at DESC)` 인덱스에 `ORDER BY updated_at DESC NULLS LAST` 를 던지면 NOT NULL
+-- 컬럼인데도 인덱스를 통째로 무시하고 Seq Scan(cost 119,598)으로 간다. 그래서 코드의
+-- `.order_by(Article.last_seen_at.desc().nullslast())` 와 자 단위로 맞춘다.
+-- (술어 쪽은 안전: PG 가 `= false`→`NOT col`, `= true`→`col` 로 양쪽 동일 정규화한다 —
+--  기존 부분 인덱스 `WHERE is_active = true` 가 정상 사용됨을 실측.)
+--
+-- ── 술어에 `detail_fail_count < 6` 을 **넣지 않은** 이유 ───────────────────
+-- 넣으면 잔여 필터가 0 이 되지만, `DETAIL_FAIL_CAP`(shared/constants.py:16 — 사용처 3곳:
+-- service_discover 별칭 `_DETAIL_FAIL_CAP`·_detail_worker·vacuum_maintenance)을
+-- 6→8 로 바꾸는 순간 쿼리 `< 8` 이 술어 `< 6` 을 함의하지 않아 **인덱스가 조용히 무시**
+-- 된다(오늘 상태로 그대로 회귀하며, 아무 신호도 안 난다). 반면 제외해서 생기는 비용은
+-- 작다 — 이 인덱스의 엔트리 수 = 술어 만족 행 = **대기 매물 수**(현재 2건, 유입 피크에
+-- 수천)뿐이므로 잔여 필터가 "인덱스 전체를 걷는" 최악 비용도 수천 엔트리 = ms 급이다.
+-- (설계 리뷰에서 "포함 안 하면 3,316ms 로 8배 악화"라는 HIGH 지적이 있었으나, 그 실측은
+--  엔트리 285,311개인 `idx_articles_floor_number` 를 대리로 쓴 것이라 엔트리 수가 10만 배
+--  달라 이 설계에 이전되지 않는다. 대신 아래 "적용 후 판정 기준"으로 실측 확정한다.)
+--
+-- ── 쓰기 부담 (정확히) ─────────────────────────────────────────────────────
+-- * services/upsert.py 의 매물 upsert 는 first_seen_at 만 빼고 48컬럼을 전량 재기록하고
+--   (`:210` last_seen_at = utcnow()), 이미 인덱스된 컬럼(updated_at·created_at·complex_no…)을
+--   매번 덮어써 **HOT 이 이미 전면 차단**되어 있다(pg_stat 실측 hot_upd 230 / n_tup_upd
+--   211,063 = 0.1%). 따라서 이 인덱스로 인한 HOT 추가 손실은 0 이다.
+-- * 비-HOT UPDATE 는 모든 인덱스에 새 튜플 엔트리 삽입을 시도하되, 부분 인덱스는
+--   **술어 평가 후 불만족이면 삽입을 생략**한다("무접촉"이 아니라 "평가 후 생략").
+--   술어 불만족 행(= 상세 완료 매물, 대다수)의 실질 비용은 술어 평가뿐.
+-- * `last_seen_at` 은 이 인덱스로 **처음 인덱스 컬럼이 된다.** 술어를 만족하는(대기) 행이
+--   상세가 채워지기 전에 12h 배치·인기 크롤로 재upsert 되면 키가 바뀌어 dead 엔트리 +
+--   신규 삽입이 생긴다 — 양은 유계(대기 수 × 체류 중 upsert 횟수)이고, 매일 03:50
+--   정기 VACUUM 유지보수 잡이 정리한다.
+--   ⚠ 이 테이블은 autovacuum 0회(실측)로 정리가 그 03:50 잡 단독에 의존한다. 다만 부분
+--     인덱스라 절대량이 KB 급이어서 잡이 며칠 밀려도 실질 영향은 없다.
+-- * 진입/이탈: 신규 INSERT(ORM default False + mibunyang DB DEFAULT false)만 진입,
+--   upsert.py:308 의 detail_crawled=True 갱신 시 이탈. 그 밖의 이탈 경로 = naver 목록 크롤
+--   누락분 물리 삭제(delete_missing_articles) / dead-detail 판정(service_discover 의
+--   is_active=False 마킹) / mibunyang 소프트삭제(is_active=false) — 셋 다 이탈이라 인덱스
+--   정합에 영향 0. inactive 행의 24h 갱신은 0건(재활성화 미발생) — 실측.
+--
+-- ── 공유 DB 영향 (articles 는 mibunyang 과 공용 테이블) ────────────────────
+-- mibunyang 은 이 인덱스의 두 술어 컬럼을 **실제로 write** 한다(무관하지 않다):
+--   F:/mibunyang/scripts/collectors/naver-collect.py:325~326  upsert (is_active·last_seen_at)
+--   F:/mibunyang/scripts/collectors/naver-collect.py:331,335   소프트 삭제 (is_active=false)
+--   F:/mibunyang/scripts/collectors/naver-collect.py:406       resume SELECT
+-- 또한 is_active·last_seen_at·detail_crawled 3컬럼의 **DB DEFAULT 소유자**가 그쪽이다:
+--   F:/mibunyang/supabase/migrations/20260321000000_naver_tables_default.sql:11·13·15
+-- mibunyang 신규 INSERT 는 DEFAULT detail_crawled=false 로 이 인덱스에 진입하고, naver
+-- 배치가 그 상세를 채우며 이탈시킨다(긍정적 결합 — 양쪽 동작 변화 0).
+-- 스키마 호환 영향 0: 신규 인덱스라 기존 쿼리는 인덱스 유무와 무관하게 동작한다
+-- (있으면 빨라질 뿐, 컬럼 타입·제약 변경 없음).
+-- ⚠ mibunyang `supabase/schema.sql` 은 손으로 관리하는 스냅샷이라 이 인덱스가 안 실린다
+--   (갱신 여부는 그쪽 세션 판단 — 본 마이그레이션이 그 파일을 건드리지 않는다).
+--
+-- ── prod 적용법 (V048:24~32 선례 답습) ─────────────────────────────────────
+-- 본 파일 본문은 멱등·비-CONCURRENTLY(CI 는 SQLite 라 미실행, 문서·재현용 — V048 관례).
+-- 이 인덱스를 ORM `__table_args__` 에 넣지 않는 것도 V038·V039·V048 과 같은 SQL 전용
+-- 관례(Article 의 기존 Index 3개 선언과는 별개).
+-- prod 은 아래 순서로 Claude 가 실행한다:
+--
+--  1) **세션 모드(5432) + AUTOCOMMIT** 연결. transaction 모드 풀러(6543)는 SET 이 고정되지
+--     않고, CREATE INDEX CONCURRENTLY 는 트랜잭션 블록 안에서 실행 자체가 불가능하다.
+--  2) **CIC 와 같은 연결에서** 먼저:
+--       SET statement_timeout = '10min';   -- db/database.py connect 이벤트가 매 연결
+--                                          -- STATEMENT_TIMEOUT_MS(기본 8000)를 박는다.
+--                                          -- 8초로는 CIC 가 QueryCanceled → INVALID 잔존.
+--       SET lock_timeout = '5s';           -- 다른 세션의 장기 트랜잭션 뒤에 무한 대기하지
+--                                          -- 않고 빠르게 실패 → 재시도 가능 상태 유지.
+--     그 다음:
+--       CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_articles_detail_pending
+--       ON articles (last_seen_at DESC NULLS LAST)
+--       WHERE detail_crawled = false AND is_active = true;
+--     (소요는 선례가 없어 미지 — 힙 2회 스캔이므로 실측해 기록한다.)
+--  3) **직후 유효성 확인** (실패한 CIC 는 조용히 INVALID 인덱스를 남기고, 그 인덱스는
+--     쿼리에 안 쓰이면서 쓰기 비용만 물린다):
+--       SELECT c.relname, i.indisvalid
+--         FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+--        WHERE c.relname = 'ix_articles_detail_pending';
+--     ⚠ indisvalid = false 면 **`CREATE INDEX CONCURRENTLY IF NOT EXISTS` 재실행으로는
+--       못 고친다** — 동명 INVALID 인덱스가 있으면 이름만 보고 NOTICE 만 내고 no-op 이다.
+--       반드시 `DROP INDEX CONCURRENTLY IF EXISTS ix_articles_detail_pending;`(autocommit)
+--       후 2) 를 재실행한다.
+--  4) `NOTIFY pgrst, 'reload schema';` **불필요** — 인덱스는 PostgREST 스키마 캐시 대상이
+--     아니다(테이블·컬럼·함수만 해당). V056 이 NOTIFY 를 넣은 것은 컬럼 추가였기 때문.
+--
+-- ── 실행 회피 시각 (release.md §3-0 전수표 대조) ───────────────────────────
+-- CIC 는 힙을 두 번 훑고 다른 세션의 장기 트랜잭션을 기다리므로, 크론 밀집·장시간 잡과
+-- 겹치면 lock_timeout 실패나 INVALID 잔존으로 끝난다. 아래를 피한다:
+--   * 03:30~05:00  크론 밀집 (특히 03:50 정기 VACUUM 유지보수 — CIC 와 락 충돌)
+--   * 매일 06:20~07:30  kapt_costs (약 1시간, 예외 3h)
+--   * 10:45 / 14:45 / 19:15  popular_crawl (대량 upsert)
+--   * 토 05:00~08:00  public_trade_data (3h)
+--   * 매월 15일 06:30~오후  official_price (3~7h)
+--   * 매월 21일 06:10~      kapt_match (최대 8h)
+-- 권장 창 = 평일 08:00~10:30 또는 11:00~14:30, 혹은 popular 19:15 종료 후 21:30~02:00
+-- (단 월/목 08:00~10:00 은 mibunyang naver-collect 가 articles 를 1.5s 마다 upsert 하니 제외).
+-- 첫 적용 실측(2026-09-12 22:41): CIC 2.5초 · valid · 16KB · 적용 후 Buffers 81,480→2, 0.08ms.
+-- 실행 **직전** 두 가지 확인:
+--   (a) crawl_jobs 에 running 잡 없음 (complex_articles·article_detail 진행 중이면 종료 대기)
+--   (b) DB 전체 장기 트랜잭션 0건 — mibunyang 러너·대시보드 세션은 crawl_jobs 에 안 잡힌다:
+--       SELECT pid, now() - xact_start AS age, state, left(query, 80)
+--         FROM pg_stat_activity
+--        WHERE xact_start < now() - interval '1 min' AND pid <> pg_backend_pid();
+--
+-- ── 적용 후 판정 기준 (미달 시 즉시 롤백) ──────────────────────────────────
+-- 30s timeout 세션에서 코드 쿼리 그대로 EXPLAIN (ANALYZE, BUFFERS):
+--   기대 = `Index Scan using ix_articles_detail_pending`, **Buffers ≤ 10**, Sort 노드 없음.
+--   미달 시 `ANALYZE articles` 후 재확인 → 그래도 미달이면
+--   `DROP INDEX CONCURRENTLY IF EXISTS ix_articles_detail_pending;`(롤백 비용 0) 후
+--   술어에 `detail_fail_count < 6` 을 포함한 버전으로 재생성한다(그때는 가드 테스트에
+--   `_DETAIL_FAIL_CAP` 상수 결합 단언을 함께 추가해야 한다 — 위 "넣지 않은 이유" 참조).
+-- 인덱스 크기는 `pg_relation_size` 로 확인(기대 8~16KB). 다음 crawl_details 회차(≤45분)
+-- 후 `pg_stat_user_indexes.idx_scan` 증가 + crawl_jobs article_detail 최신 completed 확인.
+--
+-- ── 재시작 ────────────────────────────────────────────────────────────────
+-- backend 재시작 불필요: db/database.py 는 NullPool(매 요청 새 연결)이고 psycopg2
+-- 서버측 prepared statement 를 쓰지 않으므로 라이브 프로세스도 다음 쿼리부터 새 플랜을
+-- 만든다. 동반 코드 변경은 **주석뿐**(AST 대조로 실행 코드 무변경 기계 확인 —
+-- release.md §5 의 텍스트 정정 면제 조건).
+
+CREATE INDEX IF NOT EXISTS ix_articles_detail_pending
+ON articles (last_seen_at DESC NULLS LAST)
+WHERE detail_crawled = false AND is_active = true;
+
+-- 역방향 (롤백 — prod 은 CONCURRENTLY 로 락 0. DROP INDEX CONCURRENTLY 는 트랜잭션 블록 안 실행 불가 → autocommit):
+-- DROP INDEX CONCURRENTLY IF EXISTS ix_articles_detail_pending;

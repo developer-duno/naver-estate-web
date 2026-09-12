@@ -490,7 +490,9 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         #   이벤트가 STATEMENT_TIMEOUT_MS(기본 8000)로 다시 SET 한다. 세션 396 에서 루프가
         #   순회마다 commit 하도록 바뀌었으므로 루프 안 UPDATE 들은 8s 로 보호된다(의도된 동작 —
         #   개별 UPDATE 는 단건이라 8s 로 충분하고, 길게 잡으면 잠금 보유가 다시 늘어난다).
-        # 인덱스 추가는 세션 266·267 적대검증 폐기 답습 유지(combined_aggregate_index_void).
+        # 아래 후보 SELECT 는 V057 부분 인덱스(ix_articles_detail_pending, 세션 400)로
+        # 커버된다 — 옛 "인덱스 추가 폐기"(세션 266·267) 판정의 전제가 반전됐다(대기 38만 →
+        # 실질 0 으로 수렴해 LIMIT 조기 종료가 불가능해지고 매회 전량 스캔).
         if db.bind is not None and db.bind.dialect.name == "postgresql":
             from sqlalchemy import text
             db.execute(text("SET statement_timeout = 30000"))
@@ -506,10 +508,19 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
             )
             # 신선도 우선: 최근 본(=네이버에 살아있는) 매물부터 상세 크롤. heap 순서면
             # 2.5개월 묵은 죽은 매물(상세 API 404)부터 픽해 배치가 100% 헛돈다(filled 0).
-            # last_seen_at 최신 = 상세 API 살아있음(라이브 실증). 인덱스 불필요 — 이 쿼리
-            # (ORDER BY 포함) 그대로 라이브 EXPLAIN ANALYZE 실측 = 1584ms cold / 305ms warm
-            # (Gather Merge + top-N heapsort), timeout 8s 의 5배 여유. last_seen_at 단독 인덱스는
-            # 세션266·267 적대검증이 이미 폐기(combined_aggregate_index_void 룰) — 정렬만 추가.
+            # last_seen_at 최신 = 상세 API 살아있음(라이브 실증).
+            # ⚠ 이 SELECT 의 술어·정렬은 V057 부분 인덱스와 글자 단위로 맞춰져 있다
+            #   (ix_articles_detail_pending: ON articles (last_seen_at DESC NULLS LAST)
+            #    WHERE detail_crawled = false AND is_active = true, 세션 400).
+            #   옛 "인덱스 불필요"(세션 266·268, 1584ms cold / 305ms warm 근거)는 대기 38만
+            #   국면의 판정이었다 — LIMIT 500 이 조기 종료되던 전제가 대기 실질 0 으로 반전돼
+            #   매회 636MB 힙 전량 스캔(81,480 buffers·290MB 디스크 읽기·결과 0행, 37회/일)이
+            #   됐고, 그게 shared_buffers 512MB 의 절반을 상시 축출한다.
+            #   술어(detail_crawled/is_active)나 정렬(last_seen_at DESC NULLS LAST)을 바꾸면
+            #   인덱스가 **조용히** 무시된다 — tests/test_migration_v057_detail_pending_idx.py
+            #   의 드리프트 가드가 실행 SQL 을 캡처해 대조하므로, 바꿀 땐 인덱스도 함께
+            #   재검토(새 마이그레이션)해야 한다. detail_fail_count 는 일부러 인덱스 술어에서
+            #   제외했다(상수 _DETAIL_FAIL_CAP 변경 시 인덱스가 죽는 것 방지 — V057 헤더 참조).
             .order_by(Article.last_seen_at.desc().nullslast())
             .limit(batch_size)
             .all()

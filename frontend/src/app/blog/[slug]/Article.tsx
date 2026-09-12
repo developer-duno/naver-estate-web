@@ -63,10 +63,10 @@ export default function Article({
       <footer className="mt-12 pt-8 border-t border-gray-200">
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 sm:p-8 text-center">
           <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
-            지금 바로 7일 무료 체험을 시작하세요
+            지금 바로 시작해 보세요
           </h2>
           <p className="text-sm text-gray-600 mb-4">
-            글에서 다룬 분석 도구를 직접 써볼 수 있어요. 신용카드 등록 없이 시작합니다.
+            글에서 다룬 분석 도구를 직접 써볼 수 있어요. 가입은 무료입니다.
           </p>
           <Link
             href="/signup"

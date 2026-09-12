@@ -110,7 +110,7 @@ export default function SignupPage() {
   return (
     <AuthLayout
       title="가입 신청"
-      description="공인중개사 등록 후 7일 무료 체험을 시작합니다"
+      description="가입 후 바로 시작할 수 있습니다"
     >
       <form onSubmit={handleSignup} className="space-y-4">
         {error && (

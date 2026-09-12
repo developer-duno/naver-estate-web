@@ -21,6 +21,8 @@ export default function robots(): MetadataRoute.Robots {
           "/complex/",
           "/mibunyang/",
           "/search",
+          // 세션 400 무료 전환 — 잠긴 페이지(리다이렉트만으론 기존 색인·스니펫이 오래 남음)
+          "/pricing",
         ],
       },
     ],

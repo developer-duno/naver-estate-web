@@ -24,7 +24,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   return [
     { url: SITE_URL, lastModified: lastmod, changeFrequency: "weekly", priority: 1.0 },
-    { url: `${SITE_URL}/pricing`, lastModified: lastmod, changeFrequency: "monthly", priority: 0.9 },
+    // 세션 400: /pricing 은 무료 전환으로 잠긴 페이지라 sitemap 제외 (lib/locked-paths.ts)
     { url: `${SITE_URL}/tools/brokerage-fee`, lastModified: lastmod, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/tools/acquisition-tax`, lastModified: lastmod, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/tools/transfer-tax`, lastModified: lastmod, changeFrequency: "monthly", priority: 0.8 },

@@ -228,14 +228,45 @@ def test_all_scheduler_jobs_have_job_error_label_fallback():
     )
 
 
+def test_all_dynamic_jobs_have_job_error_label_fallback():
+    """루프로 등록되는 동적 id 잡도 한글 라벨을 갖는다 (세션 399 결손 보강).
+
+    위 정적 id 가드는 extract_scheduler_job_ids() 결과만 보는데, 그 함수는
+    동적 id 블록을 **의도적으로 건너뛴다**(오탐 방지). 그 설계의 부작용으로
+    popular_*·complex_detail_{JGC,ABYG,OBYG} 6종은 라벨이 빠져 있어도 어느
+    가드에도 안 걸렸고, 실제로 세션 399 까지 6종 전부 누락된 채 방치됐다
+    (그 잡이 실패하면 텔레그램에 영문 job_id 노출).
+
+    동적 id 는 소스 파싱으로 못 펼치므로 SCHEDULER_JOB_META(개별 등록돼 있음)를
+    기준 삼아 대조한다 — META 에 있는데 폴백 표에 없으면 누락이다.
+    """
+    from routers.admin.scheduler import SCHEDULER_JOB_META
+
+    static_ids = set(extract_scheduler_job_ids(_SCHEDULER_SOURCE))
+    dynamic_ids = set(SCHEDULER_JOB_META) - static_ids
+
+    missing = dynamic_ids - set(_JOB_LABEL_FALLBACK)
+    assert not missing, (
+        f"동적 id 잡 중 _JOB_LABEL_FALLBACK 에 한글 라벨이 없는 것: {sorted(missing)}. "
+        "routers/admin/scheduler.py SCHEDULER_JOB_META 의 name 값을 그대로 복사해 "
+        "crawler/job_error_listener.py 에 등록할 것."
+    )
+
+
 def test_job_error_label_fallback_keys_exist_in_scheduler():
     """폴백 표의 키가 실제 scheduler.py 에 실존하는 id 인지 확인 (오타 방지).
 
     옛 잡을 삭제했는데 라벨만 남거나, 오타로 존재하지 않는 id 를 넣으면 위
     커버리지 가드가 무력해진다 — MONITORING_EXEMPT 쪽 정합성 가드와 같은 결.
+
+    ⚠ 비교 대상 = 정적 id ∪ SCHEDULER_JOB_META 키. 동적 id(popular_* 등)는
+    extract_scheduler_job_ids() 가 안 뽑으므로 정적 id 만으로 비교하면 정당한
+    동적 라벨이 "실존하지 않는 id" 로 오판된다(세션 399 에 6종 추가하며 확인).
     """
-    job_ids = set(extract_scheduler_job_ids(_SCHEDULER_SOURCE))
-    bogus = set(_JOB_LABEL_FALLBACK) - job_ids
+    from routers.admin.scheduler import SCHEDULER_JOB_META
+
+    known_ids = set(extract_scheduler_job_ids(_SCHEDULER_SOURCE)) | set(SCHEDULER_JOB_META)
+    bogus = set(_JOB_LABEL_FALLBACK) - known_ids
     assert not bogus, (
         f"_JOB_LABEL_FALLBACK 에 scheduler.py 에 실존하지 않는 id 발견(오타·잔재 의심): "
         f"{sorted(bogus)}"

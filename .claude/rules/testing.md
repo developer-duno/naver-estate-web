@@ -136,9 +136,17 @@ sha256 으로 대조해 **실제로 달라진 것만** 교체한다:
 ```bash
 cd frontend/e2e
 for f in $(cd "$DL" && find . -name "*.png" | sed 's|^\./||'); do
-  [ -f "$f" ] && [ "$(sha256sum "$f" | cut -c1-12)" != "$(sha256sum "$DL/$f" | cut -c1-12)" ]     && echo "변경: $f"
+  if [ ! -f "$f" ]; then
+    echo "신규: $f"          # ← 새 baseline (기존 파일만 비교하면 조용히 놓친다)
+  elif [ "$(sha256sum "$f" | cut -c1-12)" != "$(sha256sum "$DL/$f" | cut -c1-12)" ]; then
+    echo "변경: $f"
+  fi
 done
 ```
+
+⚠ **`[ -f "$f" ] &&` 로 시작하는 옛 스니펫은 신규 baseline 을 조용히 건너뛴다** — 로컬에
+없는 파일은 조건에서 탈락해 아무것도 출력하지 않으므로, 스펙을 새로 추가한 회차에
+"변경 없음"으로 보이고 새 baseline 을 커밋에서 빠뜨리게 된다(세션 398 적대검증 W12).
 
 > **사건**: 세션 396(PR #483) `/admin/data` — 6월 baseline 이 "통계 카드 뜨기 전" 상태라
 > mock 이 먼저 뜨는 회차에 불일치(flaky). 대기 2줄 + baseline 재생성으로 해결.

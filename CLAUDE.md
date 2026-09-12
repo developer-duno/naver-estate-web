@@ -112,6 +112,7 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 - `AIR_QUALITY_ENABLED`, `EMERGENCY_ENABLED`, `CHILDCARE_ENABLED`, `CRIME_STATS_ENABLED` — 수집 토글
 - `CHILDCARE_DETAIL_API_KEY` — cpmsapi030 운영키
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — Gmail SMTP SSL 465
+- `PAYMENT_ENABLED` — 결제 기능 전역 스위치 (**코드 기본값 false = 꺼짐**, 세션 400 무료 전환). 꺼져 있으면 결제 API 7종(`/api/payment/{prepare,complete,webhook}`·`/api/payment/billing/{prepare,register,list,cancel}`)이 전부 **403**(`결제 기능이 비활성화되어 있습니다`)이고 04:50 빌링키 자동결제 잡도 미등록. 라이브 `.env` 에 항목이 없으므로 배포·재시작만으로 잠긴다(`.env` 편집 불필요). 매출 시작 시 `PAYMENT_ENABLED=true` 한 줄 추가 + 재시작으로 결제 코드 그대로 재개. 게이트 구현 = `config/payment_flags.py`, 회귀 = `tests/test_payment_disabled.py`
 
 ## 테스트 현황 (BE·FE 2026-09-09 세션 395 CI 실측)
 

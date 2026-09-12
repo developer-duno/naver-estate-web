@@ -229,6 +229,10 @@ def test_meta_fallback_matches_describe_trigger_for_active_jobs():
         # V051: KAPT_ENABLED 는 기본 false(첫 배포는 꺼서 나감) — 여기서 켜주지 않으면
         # 잡이 등록되지 않아 "META 만 있고 잡 없음" drift 로 잡힌다.
         patch.object(sched_mod, "KAPT_ENABLED", True),
+        # 세션 400: PAYMENT_ENABLED 도 코드 기본값 false(무료 전환) — 명시하지 않으면 이
+        # 가드가 conftest 의 env 봉쇄 한 줄에 조용히 의존한다(그 줄이 바뀌면 무관한 이
+        # 테스트가 엉뚱한 이유로 깨진다). KAPT_ENABLED 와 같은 이유로 여기서 켠다.
+        patch.object(sched_mod, "PAYMENT_ENABLED", True),
         patch.multiple(sched_mod, **_OPERATIONAL_INTERVALS),
     ):
         scheduler = sched_mod.create_scheduler()

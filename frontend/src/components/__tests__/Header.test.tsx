@@ -67,6 +67,23 @@ describe("Header 네비게이션", () => {
     });
   });
 
+  it("요금제 메뉴가 없다 (세션 400: 무료 전환으로 /pricing 잠김)", async () => {
+    render(<Header />);
+    await waitFor(() => {
+      expect(screen.getByText("2u부동산")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("요금제")).not.toBeInTheDocument();
+    expect(document.querySelector('a[href="/pricing"]')).toBeNull();
+
+    // navLinks 는 데스크톱·모바일 공용이라 햄버거 열린 상태도 함께 확인
+    fireEvent.click(screen.getByRole("button", { name: "메뉴 열기" }));
+    await waitFor(() => {
+      expect(document.querySelector('a[href="/blog"]')).not.toBeNull();
+    });
+    expect(screen.queryByText("요금제")).not.toBeInTheDocument();
+    expect(document.querySelector('a[href="/pricing"]')).toBeNull();
+  });
+
   it("로그인 링크 href='/login'", async () => {
     render(<Header />);
     await waitFor(() => {

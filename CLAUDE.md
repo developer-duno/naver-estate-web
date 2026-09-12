@@ -117,9 +117,9 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2135개** (세션 396 CI 실측 run 34397473731 `2135 passed`(239 files) — 세션 395 실측 2131 에 #485 useSessionToken 경합 가드 +1, #484 crawl-status-no-store +2, #483 는 E2E 라 vitest 수 불변. 옛 실측 2116(세션 388)·2097(세션 384). 전체 실행 시 RegionSelector 1건이 리소스 경합으로 일시 타임아웃될 수 있음 — 단독 재실행 시 통과, 결함 아님) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2148개** (세션 399 실측 — 2147 passed + RegionSelector 1건은 이 PC 리소스 경합 flaky(단독 재실행 통과, 결함 아님). 세션 396 문서값 2135 에 PR #494 가드 13 신설 = 2148. 옛 실측 2131(s395)·2116(s388)) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1645개** (세션 396 CI 실측 — main `ac304df` run 34414437315: **1631 passed + 8 skipped + 6 xfailed** — 합산 관례(세션 393). 세션 396 시작 기준선 1626 에 #484 캐시 헤더 +6·#486 버스트 경보 +5·#487 상세 크롤 정합 +8(온디맨드 워커 첫 테스트 5 포함) = 1645. 이전 문서값 1530(세션 390)·1626(세션 395) 대비 누적 +115) |
+| BE pytest | `backend/tests/` | **1680개** (세션 399 실측 — 1666 passed + 8 skipped + 6 xfailed, 합산 관례(세션 393). 세션 396 문서값 1645 에 PR #495 동적라벨 가드 +1·#496 트래픽 회귀 +3·적대검증 후속 W9 테스트 분리 +1 = 1680. 옛 문서값 1626(s395)·1530(s390)) |
 
 ## 커밋 전 필수 검증
 

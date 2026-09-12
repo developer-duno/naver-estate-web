@@ -35,17 +35,17 @@
    8/1 새벽 20회+ 연속 "헬스체크 실패" 알림이 이 사건의 증거.
 2. **상시 존재하는 설계상 병목 (지금도 있음, 터널과 무관)**:
    - `article_detail`(단지 상세 매물 크롤) 후보 SELECT가 인덱스 없는 정렬 쿼리라
-     부하 시 30초 override도 넘겨 마비 가능 (`backend/crawler/service_discover.py:386-415`,
+     부하 시 30초 override도 넘겨 마비 가능 (`backend/crawler/service_discover.py:496-515` — 세션 399 실측 정정, 옛 인용 386-415 는 drift,
      실측 근거: 최근 30일 중 4건이 19~65분간 running 상태로 멈췄다가 `cancelled` 처리됨).
    - `public_trade_data`(국토부 실거래가) job은 **체크포인트 저장은 하나 재개(resume)
      로직이 없어** 중단되면 매번 처음부터 재시작 → 686시간(28일) 미축적·처리율 18%
-     정체 (`backend/crawler/service_public.py:17-172`, checkpoint read 코드 부재).
+     정체 (`backend/crawler/service_public.py` — 옛 인용 17-172 는 drift, 재확인 필요).
    - 상세 크롤 실패율이 50% 넘으면 **의도적으로** `done_partial`로 조기 종료
-     (`backend/routers/live/_detail_worker.py:100-102`, `DETAIL_FAILURE_THRESHOLD=0.5`)
+     (`backend/routers/live/_detail_worker.py` `DETAIL_FAILURE_THRESHOLD=0.5` — 옛 줄 인용 100-102 는 drift)
      — 버그 아닌 설계(죽은 매물 비율이 높은 단지의 정상 동작)지만 사용자에게 이유가
      안 보임.
    - 단지 클릭 시 매물 상세 갱신이 매물 건당 0.3초 sleep을 2스레드로만 처리
-     (`backend/routers/live/_detail_worker.py:48-56`) — 매물 수에 선형 비례해 느려짐.
+     (`backend/routers/live/_detail_worker.py` 워커 루프 — 옛 줄 인용 48-56 은 drift) — 매물 수에 선형 비례해 느려짐.
 3. **텔레그램 신호 불일치의 구조적 원인**: 알림 채널이 서로 독립된 3곳
    (① `.github/workflows/healthcheck.yml` 외부 하루 1회, ② `backend/crawler/monitor.py`
    내부 10~30분, ③ `backend/crawler/job_error_listener.py` 내부 즉시) — 서버가
@@ -143,8 +143,10 @@
 > 사장님이 직접 이메일함 스크린샷으로 재확인해 완료로 재격상. 아래 "작동 확인" 절 참조.
 
 - **문제(발생 당시)**: 백엔드가 사용자 자택 컴퓨터 1대에서만 돈다. 2026-07-18~08-01 사이 15일간
-  외부 터널·서비스가 전멸했는데, 그 원인이 GitHub Actions 헬스체크(10분 간격)가 무료 한도
-  2,000분/월을 소진해 **감시 자체가 먼저 죽었기 때문**이었다(`.github/workflows/healthcheck.yml`
+  외부 터널·서비스가 전멸했다. ⚠ **원인 서술 정정(세션 398 규명, 399 재확인)**: 당시 문서는
+  "GitHub Actions 헬스체크가 무료 한도 2,000분/월을 소진해 감시가 먼저 죽었다"고 적었으나
+  **거짓 전제**다 — 이 레포는 public 이라 Actions 가 무제한이고(billable 0), 그 기간 Health
+  Check 는 306회 failure + 5회 success 로 **계속 실행되며 터널 사망을 정확히 포착하고 있었다**(`.github/workflows/healthcheck.yml`
   상단 주석 + 메모리 `session344_summary.md`). 이미 한 번 실제로 겪은 사고다.
 - **1차 조치**: healthcheck를 10분→일 1회로 낮춰 예산 소모는 막았으나(`healthcheck.yml`), 이는
   "감시 빈도를 낮춘 것"이지 "감시망을 예산과 독립시킨 것"은 아니었다 — 일 1회로는 장애를 최대

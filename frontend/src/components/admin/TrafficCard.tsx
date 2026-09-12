@@ -71,7 +71,7 @@ export default function TrafficCard({ getToken }: Props) {
   return (
     <AdminCard
       title="트래픽 (요청 수 · 방문자 · 속도 · 오류)"
-      help="사람들이 우리 서비스를 얼마나 쓰고 있는지 보여줘요. 요청 수는 총 몇 번 불렀는지, 방문자는 몇 명이 썼는지예요. 속도는 절반의 사람이 그 시간 안에 답을 받았다는 뜻(중간)과, 느린 쪽 5%가 겪는 시간(느림)이고요. 오류가 늘거나 느림이 몇 초까지 올라가면 서버가 버거워진다는 신호예요. 서버를 껐다 켜면 숫자는 0부터 다시 세요"
+      help="사람들이 우리 서비스를 얼마나 쓰고 있는지 보여줘요. 요청 수는 총 몇 번 불렀는지예요. 방문자는 '대략 몇 명'으로만 보세요 — 로그인한 분은 한 시간마다 표가 새로 발급되는데 그때마다 다른 사람으로 세어져서, 실제 인원보다 부풀려 나옵니다. 속도는 절반의 사람이 그 시간 안에 답을 받았다는 뜻(중간)과, 느린 쪽 5%가 겪는 시간(느림)이고요. 오류가 늘거나 느림이 몇 초까지 올라가면 서버가 버거워진다는 신호예요. 서버를 껐다 켜면 숫자는 0부터 다시 세요"
       action={
         uptime != null ? (
           <span
@@ -104,13 +104,31 @@ export default function TrafficCard({ getToken }: Props) {
             </p>
           )}
 
+          {/* 방문자 상한 초과 고지 — 조용히 누락시키지 않는다(세션 398 W10).
+              ⚠ 어느 기간이 잘렸는지까지 밝힌다(세션 399 적대검증): 전 기간 OR 로 묶으면
+                 24h 만 상한을 넘어도 정확한 10분·1시간 숫자까지 "실제보다 적다"고
+                 오고지해 맞는 수치의 신뢰도를 깎는다.
+              ⚠ `data.windows[k]` 는 옵셔널 체이닝으로 읽는다 — 응답이 3키를 다 안 주면
+                 가드 없는 역참조가 TypeError 를 던지고, 이 카드는 /admin 에 무조건
+                 마운트되는데 에러 바운더리가 없어 대시보드 전체가 백지가 된다. */}
+          {(() => {
+            const capped = WINDOW_ORDER.filter((k) => data.windows[k]?.visitors_capped);
+            if (capped.length === 0) return null;
+            return (
+              <p className="mb-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                {capped.map((k) => WINDOW_LABEL[k]).join(" · ")} 기간은 방문자가 너무 많아 세는
+                한도를 넘었어요. 그 기간의 방문자 숫자는 실제보다 적게 나옵니다.
+              </p>
+            );
+          })()}
+
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-gray-500 border-b">
                   <th className="text-left py-1.5 font-medium">기간</th>
                   <th className="text-right py-1.5 font-medium">요청 수</th>
-                  <th className="text-right py-1.5 font-medium">방문자</th>
+                  <th className="text-right py-1.5 font-medium">방문자(대략)</th>
                   <th className="text-right py-1.5 font-medium">속도(중간)</th>
                   <th className="text-right py-1.5 font-medium">속도(느림)</th>
                   <th className="text-right py-1.5 font-medium">오류 4xx</th>

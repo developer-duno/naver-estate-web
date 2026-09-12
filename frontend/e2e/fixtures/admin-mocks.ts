@@ -274,6 +274,9 @@ export const mockDataFreshness: DataFreshnessResponse = {
 const mockTrafficWindow = {
   total_requests: 1234,
   unique_visitors: 56,
+  // 실제 API 응답에 있는 필드 — mock 이 계약과 어긋나면 그만큼 회귀를 못 잡는다.
+  // false = 식별자 상한 미도달(평상시). true 로 두면 고지 배너가 렌더돼 baseline 높이가 바뀐다.
+  visitors_capped: false,
   p50_ms: 42.5,
   p95_ms: 180.0,
   rate_4xx: 0.012,

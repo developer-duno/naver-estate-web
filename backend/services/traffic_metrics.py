@@ -26,6 +26,7 @@
 
 import hashlib
 import logging
+import math
 import os
 import re
 import threading
@@ -52,8 +53,17 @@ _lock = threading.Lock()
 # (ts_monotonic, group, status_code, duration_ms, identity)
 _records: deque[tuple[float, str, int, float, str]] = deque()
 _known_groups: set[str] = set()
-# 상한 때문에 오래된 레코드를 버린 적이 있는가 (24h 창 신뢰도 표시용)
-_evicted = False
+# 상한 때문에 오래된 레코드를 마지막으로 버린 시각(monotonic). None = 버린 적 없음.
+#
+# ⚠ 왜 bool 이 아니라 시각인가 (세션 399 적대검증):
+#   · bool 래치(`_evicted = True`)만 쓰면 트래픽이 줄어도 경고가 **영원히** 켜진다(W9).
+#   · 그렇다고 "지금 상한에 닿아 있나"(`len(_records) >= _MAX_RECORDS`)로 바꾸면
+#     정반대 사각이 생긴다 — 버린 뒤 만료로 상한 아래로 내려오면 경고가 꺼지는데,
+#     버려진 레코드는 **아직 24h 창 안의 요청**이라 24h 수치는 여전히 실제보다 작다.
+#     (실측 재현: 9건 기록·상한 5 → 4건만 남고 경고 OFF = "9건 중 4건만 보여주며 침묵")
+#   window_truncated 의 명제는 "지금 메모리가 빡빡한가"가 아니라 **"이 24h 수치가 잘렸나"**다.
+#   따라서 마지막 폐기가 24h 창 안이면 켜고, 창을 벗어나면 끈다.
+_last_evicted_at: float | None = None
 
 # 경로 세그먼트가 식별자(숫자·UUID·해시 등)인지 판정 — 그룹 카디널리티 폭발 방지
 _ID_SEGMENT = re.compile(r"^[0-9]+$|^[0-9a-fA-F-]{8,}$")
@@ -97,7 +107,7 @@ def record_request(
 
     identity_raw 는 원문(IP 또는 토큰) — 이 함수 안에서 즉시 해시되며 원문은 보관되지 않는다.
     """
-    global _evicted
+    global _last_evicted_at
     now = monotonic()
     group = normalize_path(path)
     identity = _hash_identity(identity_raw)
@@ -115,7 +125,7 @@ def record_request(
         # 2) 총량 상한 초과 시 오래된 쪽부터 버림 (메모리 보호)
         while len(_records) > _MAX_RECORDS:
             _records.popleft()
-            _evicted = True
+            _last_evicted_at = now
 
         # 3) _known_groups 를 **현재 창의 레코드에서 파생**시킨다(상시 누적 집합 금지).
         #    누적만 하면 집합이 영원히 줄지 않아, 공격자가 /api/<랜덤> 을 상한만큼만 난사해도
@@ -139,7 +149,7 @@ def record_request(
         #    이 줄이 없으면 항상 상한+1 로 유지된다.
         while len(_records) > _MAX_RECORDS:
             _records.popleft()
-            _evicted = True
+            _last_evicted_at = now
 
 
 def get_uptime_seconds() -> float:
@@ -148,10 +158,19 @@ def get_uptime_seconds() -> float:
 
 
 def _percentile(sorted_values: list[float], pct: float) -> float:
-    """정렬된 리스트에서 백분위수 (nearest-rank). 빈 리스트면 0."""
+    """정렬된 리스트에서 백분위수 (nearest-rank). 빈 리스트면 0.
+
+    nearest-rank 정의 = ceil(pct/100 * n) 번째 값(1-based) → 0-based 는 -1.
+
+    ⚠ 옛 구현 `int(round(pct/100*n + 0.5)) - 1` 은 **한 칸 위쪽 값을 골랐다**
+    (세션 398 적대검증 W7). n=100·p95 에서 95번째가 아니라 96번째를 반환 —
+    하필 방향이 나빠서 **느린 쪽을 실제보다 빠른 것처럼** 보이게 했다.
+    n=10·p50 도 5번째 대신 6번째. (n=20·p50, n=1000·p95 처럼 값이 우연히
+    일치하는 조합도 있어 "가끔만 틀리는" 형태라 눈에 잘 안 띄었다.)
+    """
     if not sorted_values:
         return 0.0
-    idx = int(round(pct / 100 * len(sorted_values) + 0.5)) - 1
+    idx = math.ceil(pct / 100 * len(sorted_values)) - 1
     idx = max(0, min(idx, len(sorted_values) - 1))
     return sorted_values[idx]
 
@@ -167,6 +186,7 @@ def _summarize(
         return {
             "total_requests": 0,
             "unique_visitors": 0,
+            "visitors_capped": False,
             "p50_ms": 0.0,
             "p95_ms": 0.0,
             "rate_4xx": 0.0,
@@ -181,11 +201,16 @@ def _summarize(
 
     per_group: dict[str, int] = {}
     per_identity: dict[str, int] = {}
+    identities_capped = False
     for _, group, _status, _ms, identity in rows:
         per_group[group] = per_group.get(group, 0) + 1
         # 고유 방문자 dict 도 상한을 둔다 (극단적 분산 공격 시 메모리 보호)
         if identity in per_identity or len(per_identity) < _MAX_IDENTITIES_PER_WINDOW:
             per_identity[identity] = per_identity.get(identity, 0) + 1
+        else:
+            # 상한 초과분은 방문자 수에서 빠진다 — 조용히 누락시키지 않고 알린다
+            # (세션 398 적대검증 W10). window_truncated 를 성실히 고지하는 것과 같은 결.
+            identities_capped = True
 
     sorted_groups = sorted(per_group.items(), key=lambda kv: (-kv[1], kv[0]))[:top_paths]
     sorted_ids = sorted(per_identity.items(), key=lambda kv: (-kv[1], kv[0]))[:top_identities]
@@ -193,6 +218,8 @@ def _summarize(
     return {
         "total_requests": total,
         "unique_visitors": len(per_identity),
+        # True = 식별자 상한(_MAX_IDENTITIES_PER_WINDOW) 초과로 일부가 방문자 수에서 빠짐
+        "visitors_capped": identities_capped,
         "p50_ms": round(_percentile(durations, 50), 1),
         "p95_ms": round(_percentile(durations, 95), 1),
         "rate_4xx": round(count_4xx / total * 100, 2),
@@ -217,7 +244,12 @@ def get_stats(top_paths: int = 10, top_identities: int = 10) -> dict:
         while _records and _records[0][0] < cutoff_24h:
             _records.popleft()
         snapshot = list(_records)
-        evicted = _evicted
+        # 마지막 폐기가 **지금 24h 창 안**이면 그 창 수치가 실제보다 작다는 뜻이라 켠다.
+        #   · bool 래치 그대로 = 트래픽이 줄어도 영원히 켜짐(W9, 세션 398)
+        #   · "지금 상한에 닿아 있나" = 버린 뒤 만료로 내려오면 꺼지는데 버려진 요청은
+        #     아직 24h 안이라 수치는 여전히 작음(세션 399 적대검증 실측 재현)
+        #   두 오류 모두 "폐기 시각이 창 안인가" 한 조건으로 해소된다.
+        evicted = _last_evicted_at is not None and (now - _last_evicted_at) < _WINDOW_SECONDS
 
     result: dict[str, dict] = {}
     for key, seconds in windows.items():
@@ -239,8 +271,8 @@ def get_stats(top_paths: int = 10, top_identities: int = 10) -> dict:
 
 def reset() -> None:
     """테스트 전용: 카운터 전체 초기화."""
-    global _evicted
+    global _last_evicted_at
     with _lock:
         _records.clear()
         _known_groups.clear()
-        _evicted = False
+        _last_evicted_at = None

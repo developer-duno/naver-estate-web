@@ -53,7 +53,8 @@
       "Bash(cd d:/naver-estate-web)",
       "Bash(git -C /d/naver-estate-web pull --ff-only)",
       "Bash(git -C /d/naver-estate-web fetch origin)",
-      "Bash(git -C /d/naver-estate-web log *)"
+      "Bash(git -C /d/naver-estate-web log *)",
+      "Bash(gh workflow *)"
     ],
     "deny": [
       "Bash(git push --force:*)",

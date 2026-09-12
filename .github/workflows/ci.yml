@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       update_snapshots:
-        description: "Playwright 시각 회귀 baseline 갱신 (Linux). artifact 'updated-snapshots' 다운로드해서 커밋"
+        description: "Playwright 시각 회귀 baseline 갱신 (Linux). artifact 3개(updated-snapshots-admin/-public/-public-visual) — 각 꾸러미는 자기 프로젝트 접미사(-<project>-linux.png) 파일만 유효. sha256 대조 후 달라진 것만 커밋. 절차 = .claude/rules/testing.md"
         type: boolean
         default: false
 
@@ -91,6 +91,14 @@ jobs:
 
       - name: Job label guard
         run: npm run check:job-labels
+
+      # 시각회귀 안전망 되돌림 가드 (세션 400) — 아래 넷이 조용히 무력화되는 것을 막는다:
+      #   ① 갱신 플래그가 `=all` 이 아닌 값으로 되돌아가는 것(파일 미갱신)
+      #   ② 헤더 전용 스냅샷의 임계가 완화·mask 추가·skip 되는 것
+      #   ③ per-call maxDiffPixelRatio 가 0.02 초과 또는 변수 우회로 바뀌는 것
+      #   ④ 전역 임계·프로젝트 매칭이 바뀌어 헤더 스냅샷이 아예 안 돌게 되는 것
+      - name: Visual regression guard
+        run: npm run check:visual-guard
 
       - name: Test
         run: npm test
@@ -184,8 +192,17 @@ jobs:
           name: admin-auth-state
           path: frontend/e2e/.auth
 
+      # ⚠ 반드시 `--update-snapshots=all` — 값 없는 `--update-snapshots`(= changed 모드)는
+      #   **허용오차 안이면 PNG 파일을 아예 건드리지 않는다**(playwright 1.63.0
+      #   lib/matchers/expect.js handleMatching 이 미기록). 그래서 baseline 을 갱신하려고
+      #   dispatch 를 돌려도 artifact 에 옛 파일이 그대로 담겨 "변경 없음"으로 오판한다 —
+      #   #498 dispatch run 34699999010 의 3 job 로그에 `is re-generated` 줄이 0건인 것이
+      #   그 실증이다. `=all` 은 오차 무관 덮어쓰되 바이트 동일이면 안 써서 멱등하다.
+      #   갱신 여부 판정 = 로그의 `is re-generated, writing actual.` 줄 수(신규 장은
+      #   `A snapshot doesn't exist ... writing actual.`) == sha 변경 장 수. 절차·판정 =
+      #   .claude/rules/testing.md §baseline 재생성.
       - name: Run E2E (${{ matrix.project }})
-        run: npx playwright test --project=${{ matrix.project }} ${{ inputs.update_snapshots && '--update-snapshots' || '' }}
+        run: npx playwright test --project=${{ matrix.project }} ${{ inputs.update_snapshots && '--update-snapshots=all' || '' }}
         env:
           TEST_ADMIN_EMAIL: ${{ secrets.TEST_ADMIN_EMAIL }}
           TEST_ADMIN_PASSWORD: ${{ secrets.TEST_ADMIN_PASSWORD }}
@@ -208,9 +225,18 @@ jobs:
           path: frontend/test-results
           retention-days: 14
 
-      # workflow_dispatch + update_snapshots=true 일 때만 baseline 변경분 업로드
-      # 다운로드 후 frontend/e2e/admin-dashboard.spec.ts-snapshots/ 에 풀어서 커밋
-      # always() 필수 — Run E2E step 이 snapshot 갱신 시 실패해도 artifact 는 받아야 함
+      # workflow_dispatch + update_snapshots=true 일 때만 baseline 업로드.
+      #
+      # ⚠ 이 꾸러미는 **그 프로젝트가 재촬영한 것만이 아니라 e2e/ 의 PNG 전량**(현재 19장, 헤더 baseline 생성 후 20장)**을 담는다
+      #   (path 글롭이 전체 스냅샷 디렉터리). 따라서 3꾸러미를 한 폴더에 통째로 합치면 옛본이
+      #   새본을 덮는다 — 꾸러미 p 에서는 `*-<p>-linux.png` 파일만 유효한 재촬영본이다.
+      #   sha256 대조 후 달라진 것만 커밋. 절차 = .claude/rules/testing.md §baseline 재생성.
+      #
+      # always() 필수 — 갱신 run 에서 어느 test 가 실패해도 나머지 PNG 는 받아야 하기 때문.
+      #   단 그 대가로 **촬영 전 단언에서 죽은 장은 옛 PNG 가 그대로 담긴다(sha 불변 ≠ 동일)** —
+      #   각 job 의 스냅샷 테스트 pass 여부를 함께 볼 것. 특히 baseline 이 없는 신규 장은
+      #   불안정하면 PNG 가 아예 생성되지 않고 job 이 빨강이 된다(그 경우 재dispatch 가 아니라
+      #   촬영 전 대기 조건을 보강해야 한다).
       - if: always() && inputs.update_snapshots
         uses: actions/upload-artifact@v7
         with:

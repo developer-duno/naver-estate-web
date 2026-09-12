@@ -79,7 +79,7 @@ React StrictMode(dev, App Router 기본 on)는 effect 를 mount→cleanup→moun
 
 | 로그 신호 | 뜻 | 처방 |
 |---|---|---|
-| `Expected an image WxH, received WxH` 만 (수신 크기가 회차마다 **일정**) | baseline 이 낡음 | baseline 재생성만 |
+| `Expected an image WxH, received WxH` 만 (수신 크기가 회차마다 **일정**) | baseline 이 낡음 | 재생성(`--update-snapshots=all`) + **갱신 여부 실측**(로그 줄 수·sha 대조). ⚠ 값 없는 `--update-snapshots`(= changed 모드)는 **허용오차 안이면 파일을 아예 안 건드린다** — 재생성했다고 믿고 넘어가는 함정 |
 | **`Failed to take two consecutive stable screenshots`** / 수신 높이가 회차마다 **다름**(예: 3339→3642→3498) | **촬영이 불안정** | **대기 조건 추가가 먼저** — baseline 재생성은 증상만 덮고 다음 회차에 또 깨진다 |
 
 ### 대기 조건을 고를 때
@@ -100,7 +100,7 @@ React StrictMode(dev, App Router 기본 on)는 effect 를 mount→cleanup→moun
   (`StatsCards` 처럼 `page.route` mock 이 붙어 있는 카드는 정상 경로만 기다려도 된다 —
    그 카드가 mock 을 갖는지 먼저 확인하고 고를 것.)
 
-### 그래도 계속 어긋나면 — **그 요소만 mask 로 제외**한다
+### 그래도 계속 어긋나면 — **그 카드의 응답을 mock 으로 고정**한다
 
 대기 조건을 고쳐 `captured a stable screenshot` 이 로그에 찍히는데도
 `Expected an image 1280px by A, received 1280px by B` 가 **회차마다 반복**되면,
@@ -109,38 +109,62 @@ React StrictMode(dev, App Router 기본 on)는 effect 를 mount→cleanup→moun
 전형적 원인 = 그 카드에 `page.route` mock 이 없어 **실패 응답의 내용·조건부 배지**가 매번 달라짐.
 예: TrafficCard 의 `가동 N` 배지는 `data` 가 있을 때만 렌더돼 높이를 바꾼다.
 
-→ **가시성은 위 대기 조건에서 이미 단언했으므로, 픽셀 비교에서만 뺀다.**
+→ **응답을 고정하면 높이도 고정된다.** `e2e/fixtures/admin-mocks.ts` 처럼 그 엔드포인트에
+`page.route` mock 을 추가한다(#493 선례 = `/api/admin/traffic`). 이게 유일하게 실효가 있는 처방이다.
 
 ```ts
-await expect(page).toHaveScreenshot("admin-dashboard.png", {
-  fullPage: true,
-  maxDiffPixelRatio: 0.02,
-  mask: [page.locator("#traffic")],   // 이미 있는 id 를 재사용 — 앱 코드 변경 0
-});
+// e2e/fixtures/admin-mocks.ts — 응답 내용을 고정해 조건부 렌더(배지·빈 상태)를 결정론화
+await page.route("**/api/admin/traffic**", (route) =>
+  route.fulfill({ status: 200, json: FIXED_TRAFFIC }),
+);
 ```
 
-⚠ mask 를 넣으면 **baseline 도 mask 적용 상태로 다시 찍어야** 한다(재생성 1회 더).
+⛔ **mask 는 이 문제에 쓰지 말 것** — mask 는 그 영역 픽셀만 덮을 뿐 **fullPage 높이 자체를
+고정하지 못한다.** Playwright 는 크기가 다르면 작은 쪽을 패딩한 뒤 그 패딩 영역을 diff 로
+세므로(coreBundle `padImageToSize`), 3498 baseline 에 3642 가 오면 184,320/4,661,760 =
+비율 0.0395 로 임계 0.02 를 초과해 그대로 실패한다. 세션 398 에 mask 로 "해결했다"고
+잘못 보고했다가 적대검증이 실험으로 반증했다(반증 근거 = `e2e/admin-dashboard.spec.ts:38-50` 주석).
+mask 가 유효한 경우는 **높이와 무관한 내용 가리기**(예: baseline 에 박힌 실계정 이메일)뿐이다.
 
 ### baseline 재생성 절차 (윈도우 로컬 촬영 금지 — 폰트 렌더 차이)
 
-```bash
-gh workflow run ci.yml --ref <브랜치> -f update_snapshots=true
-# 완료 후 artifact `updated-snapshots-<project>` 다운로드
-```
-baseline 파일명이 `-linux.png` 인 이유가 이것이다.
+⛔ **로컬 Windows 로 찍지 마라.** 폰트 렌더가 달라 CI(Linux)와 절대 일치하지 않는다 —
+baseline 파일명이 `-linux.png` 인 이유가 이것이다. 재생성은 **오직 CI dispatch** 경로뿐이다.
 
-⚠ **artifact 를 통째로 덮어쓰지 마라.** 그 안에는 그 project 의 **모든** baseline 이 들어 있어
-(admin artifact 에 blog·compare·home 까지 19장) 전량 복사하면 **무관한 baseline 변경이 커밋에 섞인다.**
-sha256 으로 대조해 **실제로 달라진 것만** 교체한다:
+**① dispatch — 반드시 작업 브랜치로**
+
+```bash
+gh workflow run ci.yml --ref <작업 브랜치> -f update_snapshots=true
+```
+
+⚠ `--ref main` 은 paths-filter(`getChangesInLastCommit`)가 마지막 커밋만 보므로 **e2e job 이
+skip 될 수 있다**(소스로 확정). dispatch 직후 run 페이지에 **e2e 3 job(admin/public/public-visual)이
+실재하는지** 먼저 확인한다 — 없으면 그 run 은 아무것도 재촬영하지 않았다.
+
+**② artifact 3개 전부 다운로드**
+
+```bash
+for p in admin public public-visual; do
+  gh run download <RUN_ID> -n updated-snapshots-$p -D "$DL/$p"
+done
+```
+
+**③ 꾸러미별 접미사 필터로 sha256 대조**
+
+⚠ **artifact 를 통째로 덮어쓰지 마라.** 각 꾸러미에는 그 프로젝트가 재촬영한 것만이 아니라
+**e2e/ 의 PNG 전량**(현재 19장 — 헤더 baseline 생성 후 20장)이 담긴다(path 글롭이 전체 스냅샷 디렉터리). 3꾸러미를 한 폴더에
+합치면 **옛본이 새본을 덮는다.** 꾸러미 `p` 에서 유효한 재촬영본은 `*-<p>-linux.png` 뿐이다.
 
 ```bash
 cd frontend/e2e
-for f in $(cd "$DL" && find . -name "*.png" | sed 's|^\./||'); do
-  if [ ! -f "$f" ]; then
-    echo "신규: $f"          # ← 새 baseline (기존 파일만 비교하면 조용히 놓친다)
-  elif [ "$(sha256sum "$f" | cut -c1-12)" != "$(sha256sum "$DL/$f" | cut -c1-12)" ]; then
-    echo "변경: $f"
-  fi
+for p in admin public public-visual; do
+  for f in $(cd "$DL/$p" && find . -name "*-$p-linux.png" | sed 's|^\./||'); do
+    if [ ! -f "$f" ]; then
+      echo "신규: $f"          # ← 새 baseline (기존 파일만 비교하면 조용히 놓친다)
+    elif [ "$(sha256sum "$f" | cut -c1-12)" != "$(sha256sum "$DL/$p/$f" | cut -c1-12)" ]; then
+      echo "변경: $f"
+    fi
+  done
 done
 ```
 
@@ -148,11 +172,99 @@ done
 없는 파일은 조건에서 탈락해 아무것도 출력하지 않으므로, 스펙을 새로 추가한 회차에
 "변경 없음"으로 보이고 새 baseline 을 커밋에서 빠뜨리게 된다(세션 398 적대검증 W12).
 
+**④ 갱신이 실제로 일어났는지 로그로 판정** (이 단계를 건너뛰면 "재생성했다"가 추측이 된다)
+
+`list` reporter 가 워커 stdout 을 CI 로그에 찍으므로 job 로그에서 직접 센다:
+
+| 로그 문구 | 뜻 |
+|---|---|
+| `... is re-generated, writing actual.` | **기존** baseline 을 새로 썼다 |
+| `A snapshot doesn't exist ..., writing actual.` | **신규** baseline 을 만들었다 |
+
+판정 = **그 프로젝트 job 의 위 두 문구 줄 수 == 그 프로젝트의 sha 변경·신규 장 수.**
+어긋나면 어딘가 안 찍혔거나 안 갱신된 것이다.
+
+⛔ **"`Failed to take two consecutive stable screenshots` 0건" 을 판정 근거로 쓰지 마라** —
+그 문구는 **통과 경로에 절대 안 찍힌다**(재현 실측: 안정화 타임아웃이 나도 마지막 프레임을
+그대로 쓰고 passed·sha 변경까지 난다). 즉 갱신 run 의 초록은 "갱신됨"도 "안정함"도 증명하지
+못한다. **안정성의 유일한 판정은 baseline 을 커밋한 뒤 도는 일반 CI(비갱신)의 초록**이다.
+
+⚠ 한 가지 예외 — **baseline 이 없는 신규 장**은 `=all` 의 "조용히 덮어씀"이 적용되지 않아,
+불안정하면 **dispatch run 자체가 빨강이고 PNG 가 아예 생성되지 않는다**(그러면 위 `[ ! -f ]`
+분기도 "신규"를 못 찍는다). 그래서 신규 장을 추가한 회차엔 그 job 의 **스냅샷 테스트 수가
+기대대로 전부 passed 인지**(예: public-visual = 기존 5 + 헤더 1 = 6/6) 함께 확인한다.
+빨강이면 **재dispatch 가 아니라** 촬영 전 대기 조건을 보강해야 한다.
+
+**⑤ 기계 diff 로 변경 위치 확인** (눈보다 먼저)
+
+```bash
+python -c "
+from PIL import Image, ImageChops
+a, b = Image.open('old.png').convert('RGB'), Image.open('new.png').convert('RGB')
+d = ImageChops.difference(a, b)
+print('bbox', d.getbbox(), 'px', sum(1 for p in d.getdata() if p != (0,0,0)))
+"
+```
+
+bbox 가 **기대한 영역 밖**이면 보류하고 원인을 찾는다. 장별 기대 변경은
+`git log <그 PNG 의 마지막 커밋>..HEAD -- <그 페이지 경로>` 로 좁힌다.
+
+⚠ Chromium 범프(@playwright/test 가 5/31 이후 4회 올라 1.58→1.63)가 있으면 `=all` 재촬영 시
+**19장 대부분이 바이트 변경**된다 — 그 상태에서 눈 검토만으로는 "기대한 변경"과 "숨은 회귀"를
+분간할 수 없다. 그래서 기계 diff(bbox)로 먼저 위치를 좁히는 순서가 중요하다.
+
+**⑥ 눈 검토 → ⑦ 커밋 → 일반 CI 초록 확인**(④의 마지막 문장 = 안정성의 유일 판정).
+
+## 전 페이지가 공유하는 작은 영역(헤더)은 좁은 전용 스냅샷으로 감시한다
+
+**비율 임계는 프레임 면적에 비례한다** — 그래서 전 페이지 공유 헤더처럼 얇은 띠의 변경은
+`fullPage` 장에서 **구조적으로 감지가 불가능**하다. 실측: 헤더 띠(1280×57)는 fullPage 의
+1.5~6.8%, 메뉴 1개 diff ≈ 4,300~8,400px = 전체의 0.1~0.8% → 임계 2%에 절대 안 걸린다.
+(그래서 "요금제" 메뉴 제거가 19장 어디에서도 빨강을 만들지 못했다.)
+
+처방 = **헤더만 잘라 분모를 작게 만든 프레임 + 절대 픽셀 임계**:
+`e2e/public-flow.spec.ts` 의 `header-public-desktop.png`(`maxDiffPixels: 100`,
+전역 비율과 `Math.min` 으로 합성되어 실효 100px). 이 프레임에서 메뉴 1개 = 약 6% 라 확실히 잡힌다.
+
+- **관리자 헤더**는 전용 장을 두지 않는다 — admin fullPage 5장이 이미 로그인 헤더를 담고 있고,
+  전문가·구독 배지가 계정 상태에 따라 흔들려(비결정) flaky 가 된다.
+- **모바일 헤더**는 `hidden md:flex` 라 nav 자체가 렌더되지 않는다(닫힌 햄버거뿐). 열린 드로어의
+  링크 집합은 **DOM 레인**(`Header.test.tsx` 의 집합 동일성 단언 + `LOCKED_PATHS` 음성 순회)이 본다.
+- **전역 `maxDiffPixelRatio: 0.02` 와 per-call 19곳의 역할은 "레이아웃 붕괴 전용"** 이다.
+  올리면 붕괴조차 통과하고, 내리면 19장이 전부 flaky 가 된다 — **상향 금지**.
+
+**보장 범위(정직하게)**: 시각회귀는 **레이아웃 붕괴·빈 화면이 아님**까지 보장한다.
+"의도된 변경만 반영됐다"는 **보장하지 못한다**(Chromium 드리프트로 19장 대부분이 바이트
+변경되는 회차가 있으므로).
+
+### 이 안전망은 되돌리기 쉬우므로 CI 가 지킨다
+
+임계를 올리거나 mask 를 넣거나 갱신 플래그를 changed 로 되돌려도 **CI 는 초록**이라
+사람 눈에 안 보인다(세션 398~400 에 세 번 겪음). `npm run check:visual-guard`
+(`frontend/scripts/check-visual-guard.mjs`, Frontend CI 의 `Visual regression guard` step)가
+네 가지를 기계적으로 막는다:
+
+1. `ci.yml` 의 **실행되는 run 줄**에 `--update-snapshots=all` 유지(주석만 남는 거짓 PASS 차단,
+   `-u`·`--ignore-snapshots` 금지, matrix 에 `public-visual` 존재)
+2. 헤더 스냅샷 옵션의 `maxDiffPixels` ≤ 200, `mask`·`fullPage`·`maxDiffPixelRatio` 부재,
+   `test.skip/fixme` 부재, 촬영 전 `toBeVisible` 대기 존재
+3. `e2e/*.spec.ts` 전수의 per-call `maxDiffPixelRatio` ≤ 0.02 — **숫자 리터럴만 인정**(변수 우회 FAIL)
+4. `playwright.config.ts` 의 전역 임계 0.02 고정 + `public-visual` testMatch 가 public-flow 를
+   **실제로 매칭**(정규식을 돌려 확인) + `public` testIgnore 가 public-flow 제외 유지
+
+단위 테스트(`scripts/__tests__/check-visual-guard.test.mjs`)가 되돌림 7종이 **실제로 FAIL 하는지**
+각각 단언한다 — "가드가 있다"와 "가드가 이 되돌림을 본다"는 별개이므로(세션 372 교훈).
+
 > **사건**: 세션 396(PR #483) `/admin/data` — 6월 baseline 이 "통계 카드 뜨기 전" 상태라
 > mock 이 먼저 뜨는 회차에 불일치(flaky). 대기 2줄 + baseline 재생성으로 해결.
 > **재발**: 세션 398(PR #492) `/admin` — TrafficCard 추가 후 동일 기전. 처음엔 "baseline 이
 > 낡은 것"으로 오진했다가 로그의 `stable screenshots` 문구로 정정(`c945bcf`).
 > 2회 반복이라 본 절 신설.
+> **안전망 자체의 결함 3건**: 세션 400 — ① 갱신 플래그가 `--update-snapshots`(changed)라
+> **파일이 안 갱신되고 있었다**(실증 = #498 dispatch run 34699999010 의 3 job 로그에
+> `is re-generated` 줄 0건). ② 세션 398 의 mask 처방이 반증됐는데 이 문서엔 처방으로 남아
+> 있었다. ③ 전 페이지 공유 헤더의 메뉴 변경이 비율 임계로 감지 불가("요금제" 제거가 19장
+> 어디서도 안 걸림). → `=all` 전환 + mask 절 재작성 + 헤더 전용 장 신설 + `check:visual-guard`.
 
 ## 테스트 코드 작성 기준
 - 파일명: [대상].test.ts 또는 [대상].spec.ts

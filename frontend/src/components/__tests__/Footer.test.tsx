@@ -5,6 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import Footer from "@/components/Footer";
+import { LOCKED_PATHS } from "@/lib/locked-paths";
 
 describe("Footer — 광고법 면책 조항", () => {
   it("면책 텍스트 노출 — '보장하지 않습니다' + '공인중개사 확인'", () => {
@@ -34,6 +35,18 @@ describe("Footer — 광고법 면책 조항", () => {
       "href",
       "/help",
     );
+  });
+
+  /**
+   * 세션 400 — 잠긴 경로로 가는 뒷문이 푸터에 없는지. 헤더 메뉴만 막고 푸터 링크를
+   * 남기면 사용자가 그리로 들어간다(무료 전환의 구멍). 상수를 순회하므로 나중에
+   * 잠기는 경로가 늘어도 함께 본다. LOCKED_PATHS 가 비면 0단언 = 의도된 상태.
+   */
+  it("잠긴 경로(LOCKED_PATHS)로 가는 링크가 푸터에 없다", () => {
+    render(<Footer />);
+    for (const locked of LOCKED_PATHS) {
+      expect(document.querySelector(`a[href^="${locked}"]`)).toBeNull();
+    }
   });
 
   it("데이터 출처 6종 + 카피라이트(연도 포함) 노출", () => {

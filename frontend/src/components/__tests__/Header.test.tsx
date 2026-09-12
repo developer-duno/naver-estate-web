@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Header from "../Header";
+import { LOCKED_PATHS } from "@/lib/locked-paths";
 
 describe("Header 기본", () => {
   it("로고 텍스트 표시", async () => {
@@ -173,6 +174,115 @@ describe("Header 계산기 드롭다운 (데스크톱, Radix)", () => {
     await waitFor(() => {
       expect(getTrigger()).toHaveAttribute("aria-expanded", "false");
     });
+  });
+});
+
+/**
+ * 세션 400 — 헤더 메뉴 집합의 DOM 레인 감시.
+ *
+ * 왜 필요한가: 기존 시각회귀 19장은 전부 `fullPage` + 비율 임계(0.02)라 **전 페이지가
+ * 공유하는 얇은 헤더 띠의 변경을 구조적으로 못 본다**(메뉴 1개 diff = 전체의 0.1~0.8%).
+ * 실제로 "요금제" 제거가 어느 baseline 에서도 빨강을 만들지 못했다. 시각 레인은
+ * `header-public-desktop.png`(좁은 프레임·절대 픽셀)이 보완하고, 이 레인은 **링크 집합
+ * 자체를 값으로** 단언해 "메뉴가 하나 늘거나 줄었다"를 이름으로 알려준다.
+ *
+ * 데스크톱 nav 와 모바일 드로어는 같은 `navLinks` 배열을 공유하므로(Header.tsx),
+ * 두 집합이 **동일**한지까지 본다 — 한쪽에만 메뉴를 추가하는 회귀를 잡기 위함.
+ */
+describe("Header 메뉴 집합 (세션 400 DOM 레인)", () => {
+  /** navLinks 로 렌더되는 경로만 — 로그인(상태 의존)·계산기 드롭다운(별도 단언) 제외 */
+  const NAV_LINK_PATHS = ["/", "/mibunyang", "/blog", "/help"];
+  const CALC_PATHS = [
+    "/tools/brokerage-fee",
+    "/tools/acquisition-tax",
+    "/tools/transfer-tax",
+    "/tools/property-tax",
+    "/tools/area-converter",
+  ];
+
+  /** 주어진 nav 안의 a[href] 중 navLinks 후보만 집합으로 — 정렬해 비교 가능하게 */
+  const navPathSet = (nav: Element | null) =>
+    [
+      ...new Set(
+        [...(nav?.querySelectorAll("a[href]") ?? [])]
+          .map((a) => a.getAttribute("href") ?? "")
+          .filter((h) => !h.startsWith("/tools/") && h !== "/login"),
+      ),
+    ].sort();
+
+  it("데스크톱 nav 의 메뉴 경로 집합이 정확히 navLinks 와 같다 (비로그인)", async () => {
+    render(<Header />);
+    await waitFor(() => {
+      expect(screen.getByText("로그인")).toBeInTheDocument();
+    });
+    // 데스크톱 nav = 첫 번째 nav (모바일 드로어는 닫혀 있어 미렌더)
+    const desktopNav = document.querySelector("nav");
+    expect(navPathSet(desktopNav)).toEqual([...NAV_LINK_PATHS].sort());
+  });
+
+  it("모바일 드로어의 메뉴 경로 집합이 데스크톱과 동일하다 (navLinks 공용 회귀)", async () => {
+    render(<Header />);
+    await waitFor(() => {
+      expect(screen.getByText("로그인")).toBeInTheDocument();
+    });
+    const desktopSet = navPathSet(document.querySelector("nav"));
+
+    fireEvent.click(screen.getByRole("button", { name: "메뉴 열기" }));
+    await waitFor(() => {
+      expect(document.querySelectorAll("nav").length).toBeGreaterThan(1);
+    });
+    // 드로어는 두 번째 nav (Header.tsx 모바일 메뉴)
+    const drawerNav = document.querySelectorAll("nav")[1];
+    expect(navPathSet(drawerNav)).toEqual(desktopSet);
+  });
+
+  it("드로어에 계산기 자식 5링크가 모두 있다", async () => {
+    render(<Header />);
+    await waitFor(() => {
+      expect(screen.getByText("로그인")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "메뉴 열기" }));
+    await waitFor(() => {
+      expect(document.querySelector('a[href="/tools/brokerage-fee"]')).not.toBeNull();
+    });
+    const drawerNav = document.querySelectorAll("nav")[1];
+    for (const p of CALC_PATHS) {
+      expect(drawerNav.querySelector(`a[href="${p}"]`)).not.toBeNull();
+    }
+  });
+
+  it("비로그인 데스크톱 nav 에 로그인 링크가 있다", async () => {
+    render(<Header />);
+    await waitFor(() => {
+      const nav = document.querySelector("nav");
+      expect(nav?.querySelector('a[href="/login"]')).not.toBeNull();
+    });
+  });
+
+  /**
+   * 음성 단언 — 잠긴 경로(LOCKED_PATHS)로 들어가는 길이 헤더에 없어야 한다.
+   * 상수를 import 해 순회하므로 나중에 잠기는 경로가 늘어도 이 테스트가 자동으로 함께 본다
+   * (하드코딩 "/pricing" 은 새로 잠긴 경로를 놓친다).
+   * ⚠ LOCKED_PATHS 가 빈 배열이면 이 순회는 0단언이 된다 — 그건 "잠긴 게 없다"는 의도된
+   *   상태이므로 실패가 아니다(무료↔유료 전환 시 정상 경로).
+   */
+  it("잠긴 경로(LOCKED_PATHS)로 가는 링크가 데스크톱·드로어 양쪽에 없다", async () => {
+    render(<Header />);
+    await waitFor(() => {
+      expect(screen.getByText("로그인")).toBeInTheDocument();
+    });
+
+    for (const locked of LOCKED_PATHS) {
+      expect(document.querySelector(`a[href^="${locked}"]`)).toBeNull();
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "메뉴 열기" }));
+    await waitFor(() => {
+      expect(document.querySelector('a[href="/blog"]')).not.toBeNull();
+    });
+    for (const locked of LOCKED_PATHS) {
+      expect(document.querySelector(`a[href^="${locked}"]`)).toBeNull();
+    }
   });
 });
 

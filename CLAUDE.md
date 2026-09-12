@@ -118,9 +118,9 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2148개** (세션 399 실측 — 2147 passed + RegionSelector 1건은 이 PC 리소스 경합 flaky(단독 재실행 통과, 결함 아님). 세션 396 문서값 2135 에 PR #494 가드 13 신설 = 2148. 옛 실측 2131(s395)·2116(s388)) |
-| FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드) |
-| BE pytest | `backend/tests/` | **1680개** (세션 399 실측 — 1666 passed + 8 skipped + 6 xfailed, 합산 관례(세션 393). 세션 396 문서값 1645 에 PR #495 동적라벨 가드 +1·#496 트래픽 회귀 +3·적대검증 후속 W9 테스트 분리 +1 = 1680. 옛 문서값 1626(s395)·1530(s390)) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2205개** (세션 400 실측 — 2204 passed + **RegionSelector 1건 flaky**(이 PC 리소스 경합, 단독 재실행 통과 = 결함 아님. s399 에도 같은 파일에서 동일 현상) / 245 파일. 직전 기준선 2174 에 시각회귀 안전망 +31 신설(check-visual-guard 25 · Header 메뉴집합 5 · Footer LOCKED_PATHS 1). 옛 문서값 2148(s399)·2135(s396)) |
+| FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드. 시각회귀 baseline PNG **19장** — 세션 400 에 헤더 전용 `header-public-desktop` **테스트만** 신설했고 baseline 은 머지 후 CI dispatch(`update_snapshots=true`)로 생성한다(생성되면 20장). ⚠ 미생성 상태에서 일반 CI 를 돌리면 `missing` 모드라 public-visual 이 1회 빨강 — 순서는 testing.md §baseline 재생성 참조. project 별 대응표 = `frontend/e2e/README.md`) |
+| BE pytest | `backend/tests/` | **1722개** (세션 400 실측 — 1708 passed + 8 skipped + 6 xfailed, 합산 관례(세션 393). 세션 399 문서값 1680 → PR #500(결제 게이트) +41, 세션 400 후속 정정 +1 = 1722. 옛 문서값 1645(s396)·1626(s395)) |
 
 ## 커밋 전 필수 검증
 

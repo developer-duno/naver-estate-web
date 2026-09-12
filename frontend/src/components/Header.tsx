@@ -145,7 +145,7 @@ export default function Header() {
     // 세션 314: "검색" 메뉴 제거 — 홈(/)이 검색 경험을 흡수(SearchExperience). 홈이 검색 입구 겸함.
     { href: "/", label: "홈", active: pathname === "/" },
     { href: "/mibunyang", label: "미분양", active: pathname?.startsWith("/mibunyang") },
-    { href: "/pricing", label: "요금제", active: pathname === "/pricing" },
+    // 세션 400: "요금제" 메뉴 제거 — 무료 전환으로 /pricing 진입 차단(lib/locked-paths.ts).
     { href: "/blog", label: "블로그", active: pathname?.startsWith("/blog") },
     { href: "/help", label: "도움말", active: pathname === "/help" },
     ...(isAdmin ? [{ href: "/admin", label: "관리", active: pathname?.startsWith("/admin") }] : []),
@@ -231,14 +231,11 @@ export default function Header() {
                       전문가
                     </span>
                   )}
+                  {/* 세션 400: 요금제가 잠겨 링크 제거 — 남은 기간 표시만 유지 */}
                   {subDaysLeft !== null && (
-                    <Link
-                      href="/pricing"
-                      className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-semibold hover:bg-amber-200"
-                      title="유료 구독 이용권 — 클릭 시 요금제"
-                    >
+                    <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-semibold">
                       구독 D-{subDaysLeft}
-                    </Link>
+                    </span>
                   )}
                   <span className="text-xs text-gray-500 hidden sm:inline max-w-[120px] truncate">
                     {userEmail}
@@ -367,7 +364,7 @@ export default function Header() {
                       <span className="text-xs bg-accent-green/15 text-[#4a5a3a] px-2 py-0.5 rounded-md font-semibold">전문가</span>
                     )}
                     {subDaysLeft !== null && (
-                      <Link href="/pricing" className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-semibold">구독 D-{subDaysLeft}</Link>
+                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-semibold">구독 D-{subDaysLeft}</span>
                     )}
                   </div>
                   <span className="text-sm text-gray-500 break-all">{userEmail}</span>

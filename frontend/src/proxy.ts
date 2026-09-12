@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isLockedPath } from "@/lib/locked-paths";
 
 // 관리자 페이지 보호 대상 경로
 const ADMIN_PATHS = ["/admin"];
@@ -15,6 +16,15 @@ const ADMIN_EMAILS = new Set(
 );
 
 export async function proxy(request: NextRequest) {
+  // 잠긴 페이지(세션 400 무료 전환 — /pricing)는 로그인 여부·역할 무관 전원 홈으로.
+  // 아래 분기들보다 먼저 두는 이유 2가지:
+  //   1) 인증 분기 뒤면 미인증자가 /login?redirect=/pricing 을 거쳐 로그인 후 잠긴 화면에 도달한다.
+  //   2) Supabase env 가드(조기 return) 뒤면 env 가 비는 환경에서 잠금이 통째로 풀린다 —
+  //      잠금은 인증과 무관한 정책이라 세션 조회 성공 여부에 의존하지 않아야 한다.
+  if (isLockedPath(request.nextUrl.pathname)) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
   let response = NextResponse.next({
     request: { headers: request.headers },
   });

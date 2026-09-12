@@ -15,7 +15,8 @@
 --
 -- ⚠ 진짜 비용은 시간이 아니라 **버퍼 캐시 축출**이다: 매회 ≈290MB 를 디스크에서 읽어
 -- shared_buffers 512MB(Small 인스턴스)의 절반 이상을 하루 37번 밀어낸다. 이 DB 는
--- 8/22·8/24 메모리 포화 크래시 2회 이력(세션 378·381)이 있고, V048(10분 주기 풀스캔
+-- 8/22·8/24 DB 다운 2회 이력(메모리 포화가 유력 가설 — 서버 로그 원문 미확인, infra.md
+-- §재발 / 세션 378·381)이 있고, V048(10분 주기 풀스캔
 -- 제거)이 정확히 같은 논리로 승인됐다 — 본 인덱스는 그 선례의 연장이다.
 --
 -- ── 옛 판정("인덱스 금지")의 전제 반전 ──────────────────────────────────────
@@ -46,7 +47,8 @@
 --  기존 부분 인덱스 `WHERE is_active = true` 가 정상 사용됨을 실측.)
 --
 -- ── 술어에 `detail_fail_count < 6` 을 **넣지 않은** 이유 ───────────────────
--- 넣으면 잔여 필터가 0 이 되지만, `_DETAIL_FAIL_CAP`(shared/constants.py, 2곳 공유)을
+-- 넣으면 잔여 필터가 0 이 되지만, `DETAIL_FAIL_CAP`(shared/constants.py:16 — 사용처 3곳:
+-- service_discover 별칭 `_DETAIL_FAIL_CAP`·_detail_worker·vacuum_maintenance)을
 -- 6→8 로 바꾸는 순간 쿼리 `< 8` 이 술어 `< 6` 을 함의하지 않아 **인덱스가 조용히 무시**
 -- 된다(오늘 상태로 그대로 회귀하며, 아무 신호도 안 난다). 반면 제외해서 생기는 비용은
 -- 작다 — 이 인덱스의 엔트리 수 = 술어 만족 행 = **대기 매물 수**(현재 2건, 유입 피크에
@@ -70,8 +72,10 @@
 --   ⚠ 이 테이블은 autovacuum 0회(실측)로 정리가 그 03:50 잡 단독에 의존한다. 다만 부분
 --     인덱스라 절대량이 KB 급이어서 잡이 며칠 밀려도 실질 영향은 없다.
 -- * 진입/이탈: 신규 INSERT(ORM default False + mibunyang DB DEFAULT false)만 진입,
---   upsert.py:308 의 detail_crawled=True 갱신 시 이탈. 없어진 매물은 물리 삭제(비활성화가
---   아님)이고, inactive 행의 24h 갱신은 0건(재활성화 미발생) — 실측.
+--   upsert.py:308 의 detail_crawled=True 갱신 시 이탈. 그 밖의 이탈 경로 = naver 목록 크롤
+--   누락분 물리 삭제(delete_missing_articles) / dead-detail 판정(service_discover 의
+--   is_active=False 마킹) / mibunyang 소프트삭제(is_active=false) — 셋 다 이탈이라 인덱스
+--   정합에 영향 0. inactive 행의 24h 갱신은 0건(재활성화 미발생) — 실측.
 --
 -- ── 공유 DB 영향 (articles 는 mibunyang 과 공용 테이블) ────────────────────
 -- mibunyang 은 이 인덱스의 두 술어 컬럼을 **실제로 write** 한다(무관하지 않다):
@@ -89,7 +93,8 @@
 --
 -- ── prod 적용법 (V048:24~32 선례 답습) ─────────────────────────────────────
 -- 본 파일 본문은 멱등·비-CONCURRENTLY(CI 는 SQLite 라 미실행, 문서·재현용 — V048 관례).
--- ORM `__table_args__` 미선언도 같은 관례이자 CI 안전(부분 인덱스는 SQLite 방언 차이).
+-- 이 인덱스를 ORM `__table_args__` 에 넣지 않는 것도 V038·V039·V048 과 같은 SQL 전용
+-- 관례(Article 의 기존 Index 3개 선언과는 별개).
 -- prod 은 아래 순서로 Claude 가 실행한다:
 --
 --  1) **세션 모드(5432) + AUTOCOMMIT** 연결. transaction 모드 풀러(6543)는 SET 이 고정되지
@@ -126,7 +131,9 @@
 --   * 토 05:00~08:00  public_trade_data (3h)
 --   * 매월 15일 06:30~오후  official_price (3~7h)
 --   * 매월 21일 06:10~      kapt_match (최대 8h)
--- 권장 창 = 평일 08:00~10:30 또는 11:00~14:30, 혹은 popular 19:15 종료 후 21:30~02:00.
+-- 권장 창 = 평일 08:00~10:30 또는 11:00~14:30, 혹은 popular 19:15 종료 후 21:30~02:00
+-- (단 월/목 08:00~10:00 은 mibunyang naver-collect 가 articles 를 1.5s 마다 upsert 하니 제외).
+-- 첫 적용 실측(2026-09-12 22:41): CIC 2.5초 · valid · 16KB · 적용 후 Buffers 81,480→2, 0.08ms.
 -- 실행 **직전** 두 가지 확인:
 --   (a) crawl_jobs 에 running 잡 없음 (complex_articles·article_detail 진행 중이면 종료 대기)
 --   (b) DB 전체 장기 트랜잭션 0건 — mibunyang 러너·대시보드 세션은 crawl_jobs 에 안 잡힌다:

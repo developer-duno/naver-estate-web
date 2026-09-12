@@ -62,7 +62,7 @@ export default function BlogIndexPage() {
         <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
           글에서 다룬 도구를 직접 써보세요
         </h2>
-        <p className="text-sm text-gray-600 mb-4">7일 무료 체험으로 모든 분석 기능을 이용할 수 있어요.</p>
+        <p className="text-sm text-gray-600 mb-4">가입하면 바로 분석 기능을 써볼 수 있어요.</p>
         <Link
           href="/signup"
           className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm sm:text-base px-6 py-3 rounded-lg shadow-sm transition"

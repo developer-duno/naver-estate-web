@@ -21,6 +21,12 @@ from crawler.service_metrics import collect_complex_metrics
 from crawler.vacuum_maintenance import run_vacuum_maintenance
 
 load_dotenv()
+
+# ⚠ load_dotenv() **뒤에** import 해야 한다 — config.payment_flags 는 import 시점에
+# os.getenv("PAYMENT_ENABLED") 를 읽으므로, 먼저 import 되면 .env 값을 못 보고 기본값
+# (꺼짐)으로 굳는다. main.py 도 같은 이유로 load_dotenv() 를 앱 import 앞에 둔다.
+from config import payment_flags  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 CRAWL_INTERVAL_HOURS = int(os.getenv("CRAWL_INTERVAL_HOURS", "12"))
@@ -60,6 +66,11 @@ COMPLEX_METRIC_ENABLED = os.getenv("COMPLEX_METRIC_ENABLED", "true").lower() == 
 COMPLEX_METRIC_BATCH_SIZE = int(os.getenv("COMPLEX_METRIC_BATCH_SIZE", "1000"))
 # 빌링키 자동결제(정기결제 PR3) — 매일 04:50 next_charge_at 도래분 결제. 기본 활성.
 BILLING_AUTO_CHARGE_ENABLED = os.getenv("BILLING_AUTO_CHARGE_ENABLED", "true").lower() == "true"
+# 결제 기능 전역 스위치(세션 400 무료 전환, 기본 꺼짐) — 결제 API 게이트와 같은 값을 본다.
+# 이 모듈 상수로 한 번 더 받는 이유: create_scheduler() 가 조건에서 읽을 때 테스트가
+# patch.object(sched_mod, "PAYMENT_ENABLED", ...) 로 켜고 끌 수 있게 하려는 것
+# (다른 토글들과 같은 패턴 — tests/test_scheduler_jobs.py 답습).
+PAYMENT_ENABLED = payment_flags.PAYMENT_ENABLED
 MONITOR_ENABLED = os.getenv("MONITOR_ENABLED", "false").lower() == "true"
 MONITOR_INTERVAL_MIN = int(os.getenv("MONITOR_INTERVAL_MIN", "30"))
 # 정기 VACUUM (ANALYZE) — articles/trades visibility map 재악화 차단 (세션 260)
@@ -518,7 +529,10 @@ def create_scheduler() -> BackgroundScheduler:
     #   PortOne 결제라 네이버 IP 차단 무관 → 04:50 = 04:30 metrics·03:50 vacuum 과 instant
     #   겹침 없는 빈 슬롯. 결제 대상이 소수(active 빌링키)라 가볍다. 3일 연속 실패 시 중단(알림).
     #   BILLING_AUTO_CHARGE_ENABLED=false 로 끄면 자동결제 미동작(카드 등록·첫결제는 무관).
-    if BILLING_AUTO_CHARGE_ENABLED:
+    #   PAYMENT_ENABLED 가 꺼짐이면(기본, 세션 400 무료 전환) 이 잡을 아예 등록하지 않는다 —
+    #   결제 API 7종이 403 인데 새벽 자동결제만 도는 모순을 막는다. 관리자 스케줄러 화면에서
+    #   사라지는 것도 다른 토글과 같은 동작. 켤 땐 PAYMENT_ENABLED=true 후 재시작.
+    if BILLING_AUTO_CHARGE_ENABLED and PAYMENT_ENABLED:
         scheduler.add_job(
             charge_due_billing_keys,
             "cron",

@@ -43,6 +43,13 @@ os.environ["SMTP_PASS"] = ""
 # 프로브 단위 테스트는 _fetch_page/probe 자체를 목킹하므로 영향 없다.
 os.environ["VWORLD_API_KEY"] = ""
 os.environ["VWORLD_DOMAIN"] = ""
+# ⚠ 결제 기능 토글을 테스트에서만 강제 활성 (세션 400). 코드 기본값은 꺼짐(false)이므로
+# 명시하지 않으면 CI 에서 결제 API 7종이 전부 403 이 되어 기존 결제 테스트 4파일
+# (test_payment_router·test_billing_router·test_billing_charge·test_billing_key_model)이
+# 통째로 깨진다. 로컬은 .env 가 로드돼 우연히 통과할 수 있어 CI 에서만 갈리는 함정이므로
+# 여기서 못박는다(~/.claude/rules feedback_local_env_false_ci_pass 답습).
+# "꺼진 상태" 자체를 검증하는 tests/test_payment_disabled.py 는 patch.object 로 끈다.
+os.environ["PAYMENT_ENABLED"] = "true"
 # ⚠ 스케줄러 단일 인스턴스 파일락 비활성 (세션 341). client fixture 가
 # `with TestClient(app)` 로 lifespan 을 발동하는데, 여러 테스트가 같은
 # scripts/scheduler.lock 을 두고 경합하면 CI 병렬 실행이 flaky 해진다. false 면

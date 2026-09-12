@@ -48,7 +48,11 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "complex_detail_ABYG": {"name": "단지 상세 backfill ABYG", "schedule": "주 1회 수요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
     "complex_detail_OBYG": {"name": "단지 상세 backfill OBYG", "schedule": "주 1회 목요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
     "collect_metrics": {"name": "단지 가치지표 수집", "schedule": "매일 04:30", "env": "COMPLEX_METRIC_ENABLED", "env_default": "true"},
-    "billing_charge": {"name": "빌링키 자동결제", "schedule": "매일 04:50", "env": "BILLING_AUTO_CHARGE_ENABLED", "env_default": "true"},
+    # env_extra: 이 잡이 등록되려면 env 와 **함께** 참이어야 하는 추가 토글 (AND).
+    #   scheduler.py 의 `if BILLING_AUTO_CHARGE_ENABLED and PAYMENT_ENABLED:` 와 짝을 맞춘다 —
+    #   없으면 PAYMENT_ENABLED 가 꺼진 무료 전환 기간에도 화면이 "활성 · 매일 04:50"으로
+    #   거짓 표시된다(세션 400 적대검증 HIGH). 새 잡에 토글이 둘 이상이면 여기에 추가.
+    "billing_charge": {"name": "빌링키 자동결제", "schedule": "매일 04:50", "env": "BILLING_AUTO_CHARGE_ENABLED", "env_default": "true", "env_extra": [("PAYMENT_ENABLED", "false")]},
     "crawler_monitor": {"name": "크롤링 모니터", "schedule": "10분마다", "env": "MONITOR_ENABLED"},
     "vacuum_maintenance": {"name": "정기 VACUUM 유지보수", "schedule": "매일 03:50", "env": "VACUUM_MAINTENANCE_ENABLED", "env_default": "true"},
     "api_version_probe": {"name": "data.go.kr API 버전 감시", "schedule": "주 1회 일요일 06:40", "env": "API_VERSION_MONITOR_ENABLED", "env_default": "true"},
@@ -178,6 +182,9 @@ def get_scheduler_status(
         if env_key:
             env_default = meta.get("env_default", "false")
             enabled = os.getenv(env_key, env_default).lower() == "true"
+        # 추가 토글(AND) — 등록 조건이 토글 둘 이상인 잡. META 의 env_extra 참조.
+        for extra_key, extra_default in meta.get("env_extra", []):
+            enabled = enabled and os.getenv(extra_key, extra_default).lower() == "true"
 
         # 마지막 실행 정보
         last = latest_map.get(job_id)

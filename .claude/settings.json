@@ -54,7 +54,10 @@
       "Bash(git -C /d/naver-estate-web pull --ff-only)",
       "Bash(git -C /d/naver-estate-web fetch origin)",
       "Bash(git -C /d/naver-estate-web log *)",
-      "Bash(gh workflow *)"
+      "Bash(gh workflow *)",
+      "Bash(powershell -NoProfile -Command '\\(Get-NetTCPConnection -LocalPort 8002 -State Listen -ErrorAction SilentlyContinue\\).OwningProcess')",
+      "Bash(echo \"port 8002: $\\(powershell -NoProfile -Command '\\(Get-NetTCPConnection -LocalPort 8002 -State Listen -ErrorAction SilentlyContinue\\).OwningProcess'\\)\")",
+      "Bash(PYTHONUTF8=1 python -c \"print\\('backend.log 첫줄 PID:', open\\('scripts/backend.log',encoding='cp949',errors='replace'\\).readline\\(\\).split\\('['\\)[1].split\\(']'\\)[0]\\)\")"
     ],
     "deny": [
       "Bash(git push --force:*)",

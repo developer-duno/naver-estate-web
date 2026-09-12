@@ -92,8 +92,9 @@ cd /d/naver-estate-web && grep -oE 'id="[a-zA-Z_]+"' backend/crawler/scheduler.p
 while read id; do grep -q "$id" .claude/rules/release.md || echo "MISSING: $id"; done < /tmp/ids.txt
 ```
 (세션 398 에서 이 표를 "누락을 고치려고" 만들었는데 `collect_crime_stats` 를 또 빠뜨렸다 — 눈으로 옮기면 반드시 빠진다.)
-⚠ 위 스니펫은 `complex_detail_OPST` 를 MISSING 으로 보고하는데, 표의 `complex_detail_APT / OPST` 행에
-슬래시로 묶여 수록된 것이라 **실제 누락이 아니다**(알려진 오탐 1건). 그 외가 뜨면 진짜 누락이다.
+⚠ 세션 399 재실행 결과 **MISSING 0건** — 옛 "알려진 오탐 1건(`complex_detail_OPST`)" 경고는 현재 거짓이다.
+표가 그 사이 보강돼 스니펫이 더 이상 오탐을 내지 않는다. 무엇이든 뜨면 **진짜 누락**으로 다루라
+(없는 오탐을 미리 면제해 두면 진짜 누락을 그 이름으로 넘겨버린다).
 
 ⏰ 판정 기준 = `crawler/monitor.py` `_STALE_HOURS_BY_TYPE` 에 예외 등록된 잡
 (public_trade_data 3h · official_price 16h · **kapt_match 8h** · kapt_costs 3h · childcare).
@@ -251,7 +252,7 @@ Startup BAT 시절엔 로그인해야 기동 — infra.md §자동 시작 사건
 
 ### 6. Cross-link
 
-- `.claude/rules/infra.md` §스케줄러 (APScheduler) = 13 잡 + 운영 토글
+- `.claude/rules/infra.md` §스케줄러 (APScheduler) = 22 잡 + 운영 토글 (세션 399 실측 정정: 옛 '13 잡'은 낡은 수치)
 - `.claude/rules/infra.md` §IP 차단 방지 = 네이버 호출 보호
 - 글로벌 메모리 박제 = `[[feedback-orchestrator-restart-zombie-risk]]` + `[[feedback-backend-process-zombie-grep]]`
 - 사건 일지 = `~/.claude/projects/d--naver-estate-web/memory/session{229,230,231}_summary.md`

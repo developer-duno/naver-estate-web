@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
+import type { TrafficWindow } from "@/lib/api";
 
 const API = "http://test-api:8000";
 
@@ -36,10 +37,14 @@ const server = setupServer(
   }),
 );
 
-function emptyWindow() {
+// ⚠ 반환 타입을 명시한다 — 타입 미지정이면 TrafficWindow 로 문맥 타이핑되지 않아
+//   계약에 필드가 추가돼도 tsc 가 이 픽스처의 결손을 못 잡는다(세션 399 적대검증:
+//   visitors_capped 추가 시 형제 픽스처 2곳은 갱신됐는데 이 파일만 조용히 뒤처졌다).
+function emptyWindow(): TrafficWindow {
   return {
     total_requests: 0,
     unique_visitors: 0,
+    visitors_capped: false,
     p50_ms: 0,
     p95_ms: 0,
     rate_4xx: 0,

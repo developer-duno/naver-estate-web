@@ -67,6 +67,6 @@ trigger=SSOT 자동생성으로 근본 전환. 손글씨 정정 PR 과 SSOT PR �
 ## Cross-link
 
 - `.claude/rules/domain-mapping-ssot.md` — BE dict ↔ FE 함수 짝꿍 SSOT (매핑 동기화 결, 본 룰과 상보)
-- `.claude/rules/infra.md` §스케줄러 — 13 잡 + 운영 토글 (표시값 source)
+- `.claude/rules/infra.md` §스케줄러 — 22 잡 + 운영 토글 (표시값 source, 세션 399 실측 정정: 옛 '13 잡'은 낡은 수치)
 - `backend/crawler/schedule_describe.py` — `describe_trigger()` 선례
 - `backend/tests/test_schedule_describe.py` — 순수 단위 가드 선례

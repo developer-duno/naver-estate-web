@@ -196,31 +196,67 @@ def test_record_cap_evicts_oldest_and_flags():
         traffic_metrics._MAX_RECORDS = original
 
 
-def test_truncated_flag_clears_when_records_fall_below_cap():
-    """트래픽이 줄어 상한 아래로 내려오면 잘림 경고가 꺼진다 (W9 회귀 가드).
+def test_truncated_flag_stays_on_while_evicted_records_are_still_in_window():
+    """버린 기록이 아직 24h 창 안이면 경고가 **켜져 있어야** 한다 (세션 399 적대검증).
 
-    _evicted 는 "한 번이라도 버린 적 있다"는 래치라, 그대로 노출하면 트래픽이
-    한참 줄어도 "24시간 숫자가 실제보다 작습니다" 경고가 **영원히** 켜져 있다.
-    거짓 경고가 상시 떠 있으면 진짜 잘림을 알리는 신호로서 쓸모가 없어진다.
+    핵심 명제: window_truncated 는 "지금 메모리가 빡빡한가"가 아니라
+    **"이 24h 수치가 실제보다 작은가"**다. 둘은 다른 질문이다.
 
-    뮤테이션 검증: get_stats 의 `evicted = _evicted and len(_records) >= _MAX_RECORDS`
-    를 `evicted = _evicted` 로 되돌리면 마지막 단언이 FAIL 한다.
+    ⚠ 이 테스트의 전신은 정반대를 단언했다 — 상한 아래로 내려오기만 하면 경고를
+    끄는 게 맞다고 못박아, "9건 중 4건만 보여주면서 침묵"하는 상태를 정답으로
+    박제했다(testing.md §"통과하던 테스트가 결함을 박제"의 실사례). 옛 구현
+    `_evicted and len(_records) >= _MAX_RECORDS` 로는 이 케이스가 False 가 된다.
+
+    뮤테이션 검증: get_stats 의 판정을
+    `evicted = _last_evicted_at is not None and (now - _last_evicted_at) < _WINDOW_SECONDS`
+    → `evicted = _last_evicted_at is not None and len(_records) >= _MAX_RECORDS`
+    로 되돌리면 이 테스트가 FAIL 한다.
     """
     original = traffic_metrics._MAX_RECORDS
     traffic_metrics._MAX_RECORDS = 5
     try:
-        # 1) 상한을 넘겨 잘림 발생 → 경고 켜짐
-        for _ in range(8):
+        # 1) 상한을 넘겨 실제로 폐기 발생 → 경고 켜짐
+        for _ in range(9):
             record_request("/api/live/search", 200, 10.0, "ip:1.1.1.1")
         assert get_stats()["window_truncated"] is True
 
-        # 2) 트래픽이 줄어 상한 아래로 내려온 상황 (레코드 일부 만료 모사)
+        # 2) 레코드가 상한 아래로 내려가도(메모리 압박 해소) 버려진 요청은
+        #    **아직 24h 창 안**이므로 24h 수치는 여전히 실제보다 작다.
         while len(traffic_metrics._records) >= traffic_metrics._MAX_RECORDS:
             traffic_metrics._records.popleft()
 
-        # 3) 더 이상 잘리지 않으므로 경고도 꺼져야 한다
+        stats = get_stats()
+        assert stats["window_truncated"] is True, (
+            "상한 아래로 내려왔다고 경고를 껐다 — 그러나 버려진 요청이 아직 24h 안이라 "
+            "24h 수치는 실제보다 작다(조용한 과소 보고)."
+        )
+    finally:
+        traffic_metrics._MAX_RECORDS = original
+
+
+def test_truncated_flag_clears_after_eviction_leaves_the_window():
+    """마지막 폐기가 24h 창을 벗어나면 경고가 꺼진다 (W9 영구 점등 회귀 가드).
+
+    bool 래치를 그대로 노출하면 트래픽이 한참 줄어도 경고가 **영원히** 켜진다.
+    거짓 경고가 상시 떠 있으면 진짜 잘림 신호로서 쓸모가 없어진다.
+
+    뮤테이션 검증: 판정을 `evicted = _last_evicted_at is not None` 으로 되돌리면
+    (창 조건 제거) 이 테스트가 FAIL 한다.
+    """
+    original = traffic_metrics._MAX_RECORDS
+    traffic_metrics._MAX_RECORDS = 5
+    try:
+        for _ in range(9):
+            record_request("/api/live/search", 200, 10.0, "ip:1.1.1.1")
+        assert get_stats()["window_truncated"] is True
+
+        # 마지막 폐기가 24h 를 넘긴 과거가 된 상황 모사 (창 이탈)
+        last = traffic_metrics._last_evicted_at
+        assert last is not None, "폐기가 기록되지 않았다 — 상한 설정이 안 먹은 것"
+        traffic_metrics._last_evicted_at = last - (traffic_metrics._WINDOW_SECONDS + 1)
+
         assert get_stats()["window_truncated"] is False, (
-            "상한 아래로 내려왔는데도 잘림 경고가 켜져 있다 — 래치가 영구 true 로 남았다"
+            "폐기가 24h 창을 벗어났는데도 경고가 켜져 있다 — 래치가 영구 true 로 남았다"
         )
     finally:
         traffic_metrics._MAX_RECORDS = original

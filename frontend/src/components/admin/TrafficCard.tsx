@@ -104,12 +104,23 @@ export default function TrafficCard({ getToken }: Props) {
             </p>
           )}
 
-          {/* 방문자 상한 초과 고지 — 조용히 누락시키지 않는다(세션 398 W10) */}
-          {WINDOW_ORDER.some((k) => data.windows[k].visitors_capped) && (
-            <p className="mb-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-              방문자가 너무 많아 세는 한도를 넘었어요. 방문자 숫자는 실제보다 적게 나옵니다.
-            </p>
-          )}
+          {/* 방문자 상한 초과 고지 — 조용히 누락시키지 않는다(세션 398 W10).
+              ⚠ 어느 기간이 잘렸는지까지 밝힌다(세션 399 적대검증): 전 기간 OR 로 묶으면
+                 24h 만 상한을 넘어도 정확한 10분·1시간 숫자까지 "실제보다 적다"고
+                 오고지해 맞는 수치의 신뢰도를 깎는다.
+              ⚠ `data.windows[k]` 는 옵셔널 체이닝으로 읽는다 — 응답이 3키를 다 안 주면
+                 가드 없는 역참조가 TypeError 를 던지고, 이 카드는 /admin 에 무조건
+                 마운트되는데 에러 바운더리가 없어 대시보드 전체가 백지가 된다. */}
+          {(() => {
+            const capped = WINDOW_ORDER.filter((k) => data.windows[k]?.visitors_capped);
+            if (capped.length === 0) return null;
+            return (
+              <p className="mb-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                {capped.map((k) => WINDOW_LABEL[k]).join(" · ")} 기간은 방문자가 너무 많아 세는
+                한도를 넘었어요. 그 기간의 방문자 숫자는 실제보다 적게 나옵니다.
+              </p>
+            );
+          })()}
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

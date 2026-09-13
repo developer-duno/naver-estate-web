@@ -71,4 +71,9 @@ npx playwright test --project=admin  # 관리자 (TEST_ADMIN_* 5종 .env.test �
 
 ## 배포
 
-Vercel `naver-estate-web` 프로젝트 (루트에서 배포, frontend/ 아님). 도메인 `2u.pe.kr` · `www.2u.pe.kr`.
+Vercel `naver-estate-web` 프로젝트. **Root Directory = `frontend`** (2026-09-13 `vercel project inspect`
+라이브 실측 — 옛 표기 "루트에서 배포, frontend/ 아님"은 **거짓이었다**). 도메인 `2u.pe.kr` · `www.2u.pe.kr`.
+
+⚠ `vercel.json` 의 `ignoreCommand`(`git diff --quiet HEAD^ HEAD -- .`)가 Root Directory(= `frontend`)
+안에서 실행되므로 경로가 `-- .` 이다. 루트 기준 경로로 바꾸면 **모든 빌드가 영구 스킵**된다.
+상세 = [.claude/rules/infra.md](../.claude/rules/infra.md) §Vercel 프로젝트 정보.

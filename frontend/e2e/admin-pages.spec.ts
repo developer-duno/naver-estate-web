@@ -11,15 +11,14 @@ test.describe("admin sub-pages", () => {
     await applyAdminMocks(page);
   });
 
-  test("/admin/data 렌더 + 오래된 데이터 정리 카드", async ({ page }) => {
+  test("/admin/data 렌더 + 통계 카드", async ({ page }) => {
     await page.goto("/admin/data");
 
     await expect(page.getByRole("heading", { name: "데이터 관리" })).toBeVisible();
-    await expect(page.getByText("오래된 데이터 정리")).toBeVisible();
-    await expect(
-      page.getByText("비활성 상태(is_active=false)이며 지정 일수 이상 경과된 매물을 삭제합니다."),
-    ).toBeVisible();
-    await expect(page.getByRole("button", { name: "삭제" })).toBeVisible();
+    // 세션 401: "오래된 데이터 정리" 카드 제거 — 그 카드/문구/삭제 버튼 단언 3건도 함께 삭제.
+    // (제거 사유는 app/admin/data/page.tsx 헤더 주석. 화면에서 없어진 요소를 계속 단언하면
+    //  스냅샷보다 먼저 이 단언이 깨져 baseline 재촬영조차 불가능해진다.)
+    await expect(page.getByText("오래된 데이터 정리")).toHaveCount(0);
     // StatsCards 는 토큰 취득 → /api/admin/stats/detailed(mock) 순으로 비동기 렌더된다.
     // 카드가 뜨기 전에 찍으면 페이지 높이가 달라져 baseline 과 어긋나는 경합(세션 396, PR #480 CI 1회 실패)
     // — 다른 admin 시각 스펙처럼 mock 데이터가 화면에 보인 뒤 찍는다.

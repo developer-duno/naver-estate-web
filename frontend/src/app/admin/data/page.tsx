@@ -1,20 +1,34 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import StatsCards from "@/components/admin/StatsCards";
-import AdminCard from "@/components/admin/AdminCard";
-import { getAdminDetailedStats, deleteStaleData } from "@/lib/api";
+import { getAdminDetailedStats } from "@/lib/api";
 import type { DetailedStats } from "@/types/admin";
 
+/**
+ * 관리자 데이터 현황.
+ *
+ * 세션 401: "오래된 데이터 정리"(비활성 매물 물리삭제) 카드를 **제거**했다. 사장님 결정.
+ * 근거 — prod 실측(2026-09-13):
+ *   · 기본값 90일로 한 번 누르면 934,258건(전체 매물의 63%)이 **3초 만에** 영구 삭제된다
+ *     (무제한 DELETE 실측 2.55s·2.88s — 8초 statement_timeout 이 막아주지 못한다).
+ *   · 대상 93만 건은 **전부 2026년 생성분**이고, 그중 466,530건은 상세 수집까지 끝난 것이라
+ *     네이버에서 이미 내려간 매물이라 재수집이 원리적으로 불가능하다.
+ *   · **7,076개 단지는 지우는 순간 가격 근거가 0 이 된다**(시세이력 없음 + 살아있는 매물 없음 +
+ *     complexes 집계 3필드 전부 NULL). 반포주공1단지·잠실주공5단지·고덕래미안힐스테이트 등
+ *     재건축 대단지가 여기 포함된다.
+ *   · 되돌리려면 Supabase 프로젝트 전체 롤백(mibunyang 데이터 동반) 외에 방법이 없다.
+ *   · 그런데 `audit_logs` 의 `admin_data_cleanup` 이력은 **0건** — 만들어진 뒤 한 번도 눌린 적이 없다.
+ * ⇒ 쓰지 않는데 누르면 재앙인 버튼이라, 안전장치를 붙이는 대신 제거하는 쪽을 택했다.
+ *
+ * 서버 엔드포인트(`DELETE /api/admin/data/stale`)도 함께 제거했다 — 화면만 지우면
+ * 토큰으로 직접 호출하는 경로가 남는다.
+ * `admin-labels.ts` 의 `admin_data_cleanup` 라벨은 **유지**한다(과거 감사 로그 표시용).
+ */
 export default function AdminDataPage() {
-  const [staleDays, setStaleDays] = useState(90);
-  const [deleteResult, setDeleteResult] = useState("");
-
-  const { token, getToken } = useTokenReady();
-  const queryClient = useQueryClient();
+  const { token } = useTokenReady();
 
   const statsQuery = useQuery<DetailedStats, Error>({
     queryKey: queryKeys.admin.stats(),
@@ -23,24 +37,7 @@ export default function AdminDataPage() {
     staleTime: 30_000,
   });
 
-  const deleteMutation = useMutation<{ deleted: number }, Error, number>({
-    mutationFn: async (days) => {
-      const t = await getToken();
-      return deleteStaleData(t, days);
-    },
-    onSuccess: (data) => {
-      setDeleteResult(`${data.deleted}건 삭제 완료`);
-      queryClient.invalidateQueries({ queryKey: queryKeys.admin.stats() });
-    },
-  });
-
-  const error = statsQuery.error?.message ?? deleteMutation.error?.message ?? "";
-
-  const handleDeleteStale = () => {
-    if (!confirm(`${staleDays}일 이상 된 비활성 매물 데이터를 삭제하시겠습니까?`)) return;
-    setDeleteResult("");
-    deleteMutation.mutate(staleDays);
-  };
+  const error = statsQuery.error?.message ?? "";
 
   return (
     <>
@@ -51,36 +48,6 @@ export default function AdminDataPage() {
       )}
 
       <StatsCards stats={statsQuery.data ?? null} loading={statsQuery.isLoading} />
-
-      {/* 데이터 정리 */}
-      <div className="mt-6">
-        <AdminCard title="오래된 데이터 정리">
-          <p className="text-xs text-gray-500 mb-3">
-            비활성 상태(is_active=false)이며 지정 일수 이상 경과된 매물을 삭제합니다.
-          </p>
-          <div className="flex items-center gap-3">
-            <input
-              type="number"
-              value={staleDays}
-              onChange={(e) => setStaleDays(Number(e.target.value))}
-              min={30}
-              aria-label="삭제 기준 경과 일수"
-              className="w-20 text-sm border rounded px-2 py-1"
-            />
-            <span className="text-sm text-gray-500">일 이상</span>
-            <button
-              onClick={handleDeleteStale}
-              disabled={deleteMutation.isPending}
-              className="text-sm px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
-            >
-              {deleteMutation.isPending ? "삭제 중..." : "삭제"}
-            </button>
-          </div>
-          {deleteResult && (
-            <p className="text-sm text-green-600 mt-2">{deleteResult}</p>
-          )}
-        </AdminCard>
-      </div>
     </>
   );
 }

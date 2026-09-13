@@ -327,3 +327,24 @@ def delete_missing_articles(db, complex_no, seen_article_nos, commit=True):
     ).delete(synchronize_session=False)
     if commit:
         db.commit()
+
+
+def deactivate_complex_articles(db, complex_no, commit=True) -> int:
+    """단지의 활성 매물을 전부 소프트 비활성화(is_active=False).
+
+    목록 API 1페이지가 정상 응답(error 없음)이었는데 articleList 가 진짜로
+    빈 배열인 경우에 쓴다. 물리 삭제(delete_missing_articles)가 아니라
+    소프트 비활성인 이유(사장님 결정 2026-09-13): 네이버가 그 순간 일시적으로
+    빈 목록을 오응답할 위험이 있는데, 물리 삭제하면 실수 한 번에 그 단지의
+    가격 근거 데이터(과거 시세 이력 등)가 영구 소실된다. 소프트 비활성이면
+    ① 다음 방문에서 매물이 다시 보이면 upsert 가 is_active=True 로 되살리고
+    ② 그 사이에도 행 자체는 남아 가격 근거로 계속 조회 가능하다.
+    """
+    updated = (
+        db.query(ArticleModel)
+        .filter(ArticleModel.complex_no == complex_no, ArticleModel.is_active == True)
+        .update({"is_active": False, "updated_at": utcnow()}, synchronize_session=False)
+    )
+    if commit:
+        db.commit()
+    return updated

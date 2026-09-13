@@ -29,10 +29,15 @@ from config import payment_flags  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-CRAWL_INTERVAL_HOURS = int(os.getenv("CRAWL_INTERVAL_HOURS", "12"))
 CRAWL_DETAIL_INTERVAL_MIN = int(os.getenv("CRAWL_DETAIL_INTERVAL_MIN", "30"))
 CRAWL_DETAIL_BATCH_SIZE = int(os.getenv("CRAWL_DETAIL_BATCH_SIZE", "500"))
-CRAWL_BATCH_SIZE = int(os.getenv("CRAWL_BATCH_SIZE", "50"))
+# 세션 402: 50 → 150. 목록 크롤 네이버 호출은 하루 280~430 으로 상세(565~12,141)의
+# 소수라 3배로 올려도 총량 영향이 미미하고, 호출 속도 자체는 _throttle_articles 가
+# 그대로 제한한다(간격 불변 = IP 차단 위험 불변). 목표 = 활성 매물 보유 단지 10,567
+# 한 바퀴 ≈ 30일(150 × 2회/일 × 30일 ≈ 9,000 단지, PR-2 선정 키 교체와 함께).
+# ⚠ .env 에 같은 키가 있으면 그 값이 우선한다 — 적용 후 crawl_jobs 의 자식 잡 수·
+# 회차로 실효값을 판정할 것(코드 기본값만 보고 "150 이 돈다"고 단정 금지).
+CRAWL_BATCH_SIZE = int(os.getenv("CRAWL_BATCH_SIZE", "150"))
 POPULAR_CRAWL_ENABLED = os.getenv("POPULAR_CRAWL_ENABLED", "true").lower() == "true"
 POPULAR_CRAWL_BATCH_SIZE = int(os.getenv("POPULAR_CRAWL_BATCH_SIZE", "50"))
 PUBLIC_DATA_ENABLED = os.getenv("PUBLIC_DATA_ENABLED", "false").lower() == "true"
@@ -177,13 +182,20 @@ def create_scheduler() -> BackgroundScheduler:
         misfire_grace_time=3600,
     )
 
-    # B. 매물 수집 — N시간마다 (jitter: mibunyang 08:00 월/목 크롤링과 충돌 회피)
+    # B. 매물 수집 — 매일 01:00 / 13:00 (jitter: mibunyang 08:00 월/목 크롤링과 충돌 회피)
     #    max_instances=1: 이전 배치가 안 끝났는데 다음 주기가 시작되는 중복 실행 차단
     #    (cron job 들과 일관성 — 동시 크롤은 같은 IP 부하·DB 경합 유발).
+    #    ⚠ 세션 402: interval(12h) → cron 전환. APScheduler 3.11.3 IntervalTrigger 는
+    #    start_date 를 `now + interval` 로 잡으므로(소스 실측) 재시작할 때마다 다음
+    #    실행이 12시간 뒤로 밀린다 — 최근 14일 중 9일이 하루 1회만 돌았다(crawl_jobs
+    #    실측). cron 은 벽시계 기준이라 재시작 횟수와 무관하게 하루 2회가 보장된다.
+    #    01:00/13:00 ± 45분(jitter)은 release.md 시각표에서 네이버 호출 잡과 겹치지
+    #    않는다 (01:00 childcare 는 data.go.kr 호출이라 네이버 IP 부하 무관, 13:00 공백).
     scheduler.add_job(
         crawl_articles_batch,
-        "interval",
-        hours=CRAWL_INTERVAL_HOURS,
+        "cron",
+        hour="1,13",
+        minute=0,
         jitter=2700,
         kwargs={"batch_size": CRAWL_BATCH_SIZE, "scheduler_job_id": "crawl_articles"},
         id="crawl_articles",
@@ -238,7 +250,7 @@ def create_scheduler() -> BackgroundScheduler:
         logger.info("시세 이력 소급 수집 활성화: 매일 03:30 (배치 %d)", PUBLIC_PRICE_BACKFILL_BATCH_SIZE)
 
     # E. 인기 단지 선제적 크롤링 — 하루 3회 (10:45, 14:45, 19:15 KST)
-    #    기존 스케줄(B: 12시간마다, C: 30분마다)과 충돌 회피
+    #    기존 스케줄(B: 매일 01:00/13:00, C: 30분마다)과 충돌 회피
     #    2026-04-16: mibunyang 쿨다운 대응 — 기존 10:30/14:30/19:00에서 15분씩 시프트
     if POPULAR_CRAWL_ENABLED:
         for hour, minute, job_id in [(10, 45, "popular_1030"), (14, 45, "popular_1430"), (19, 15, "popular_1900")]:

@@ -52,6 +52,20 @@ def describe_cron(trigger: CronTrigger) -> str:
     month, day, dow = f.get("month"), f.get("day"), f.get("day_of_week")
 
     hour_v = f.get("hour")
+    if (
+        hour_v is not None
+        and dow is None
+        and day is None
+        and month is None
+        and "," in hour_v
+        and all(h.isdigit() for h in hour_v.split(","))
+    ):
+        # 하루에 여러 번 도는 매일 cron (세션 402 crawl_articles hour="1,13").
+        # 정수 목록만 지원 — 범위·step 이 섞인 조합은 아래 폴백으로 내려간다.
+        minute = int(f.get("minute", "0"))
+        times = ", ".join(f"{int(h):02d}:{minute:02d}" for h in hour_v.split(","))
+        return f"매일 {times}"
+
     if hour_v is None or not hour_v.isdigit():
         # 시각이 단일 정수가 아니면(범위·step·미지정) 안전 폴백
         return ""

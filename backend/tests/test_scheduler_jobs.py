@@ -32,10 +32,12 @@ def test_backfill_price_job_absent_when_public_data_disabled():
     assert "backfill_price" not in _job_ids(scheduler)
 
 
-def test_interval_jobs_have_max_instances():
-    """매물 수집·상세 보강 interval job 에 max_instances=1 이 설정돼 있다.
+def test_crawl_jobs_have_max_instances():
+    """매물 수집·상세 보강 job 에 max_instances=1 이 설정돼 있다.
 
     동시 중복 실행 방지 — 이전 배치가 안 끝났는데 다음 주기가 시작되면 안 됨.
+    (crawl_articles 는 세션 402 부터 cron, crawl_details 는 여전히 interval —
+    trigger 종류와 무관하게 둘 다 중복 실행을 막아야 한다.)
     """
     scheduler = sched_mod.create_scheduler()
     jobs = {job.id: job for job in scheduler.get_jobs()}
@@ -44,6 +46,28 @@ def test_interval_jobs_have_max_instances():
         assert jobs[job_id].max_instances == 1, (
             f"{job_id} 의 max_instances 가 1 이 아님"
         )
+
+
+def test_crawl_articles_runs_on_cron_twice_daily():
+    """매물 수집 배치가 cron(매일 01:00/13:00)으로 등록된다.
+
+    세션 402: interval(12h) 은 APScheduler 가 start_date 를 `now + interval` 로
+    잡아 재시작할 때마다 다음 실행이 밀렸다(14일 중 9일이 하루 1회만 실행).
+    벽시계 기준 cron 이라야 재시작 횟수와 무관하게 하루 2회가 보장된다.
+    누군가 interval 로 되돌리면 이 테스트가 잡는다.
+    """
+    from apscheduler.triggers.cron import CronTrigger
+
+    scheduler = sched_mod.create_scheduler()
+    job = {j.id: j for j in scheduler.get_jobs()}["crawl_articles"]
+    assert isinstance(job.trigger, CronTrigger), (
+        "crawl_articles 가 cron 이 아님 — interval 은 재시작마다 실행이 밀린다"
+    )
+    fields = {f.name: str(f) for f in job.trigger.fields}
+    assert fields["hour"] == "1,13", f"hour 가 1,13 이 아님: {fields['hour']}"
+    assert fields["minute"] == "0", f"minute 이 0 이 아님: {fields['minute']}"
+    # jitter(±45분) 유지 — 같은 IP 네이버 요청 분산
+    assert job.trigger.jitter == 2700, "crawl_articles jitter 가 2700 이 아님"
 
 
 def test_metrics_job_runs_daily():
@@ -191,7 +215,7 @@ def test_add_job_rejects_duplicate_id():
 # 가드가 이 운영값으로 env 를 명시 patch 해 환경 독립적으로 검증한다.
 # 메타 fallback 문자열의 시간수를 바꾸면 여기도 함께 바꿔야 한다.
 _OPERATIONAL_INTERVALS = {
-    "CRAWL_INTERVAL_HOURS": 12,        # crawl_articles → "12시간마다"
+    # crawl_articles 는 세션 402 부터 cron 고정(매일 01:00/13:00) — env 가변 아님
     "CRAWL_DETAIL_INTERVAL_MIN": 30,   # crawl_details → "30분마다"
     "COMPLEX_DETAIL_APT_INTERVAL_HOURS": 4,   # → "4시간마다"
     "COMPLEX_DETAIL_OPST_INTERVAL_HOURS": 4,  # → "4시간마다"

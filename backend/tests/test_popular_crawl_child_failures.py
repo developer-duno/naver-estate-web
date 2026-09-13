@@ -46,10 +46,10 @@ def test_parent_job_counts_child_failure(mock_api, _mock_detail_api, db, monkeyp
     """
     for no in ("p1", "p2"):
         upsert_complex_from_search(db, _make_complex_data(no))
-    # 인기 단지 선정 조건 = last_crawled_at IS NOT NULL
+    # 인기 단지 선정 조건 = last_viewed_at 최근 7일 이내 (V058, 세션 402)
     from db.models import Complex as ComplexModel
     db.query(ComplexModel).filter(ComplexModel.complex_no.in_(["p1", "p2"])).update(
-        {"last_crawled_at": utcnow()}, synchronize_session=False
+        {"last_viewed_at": utcnow()}, synchronize_session=False
     )
     db.commit()
 

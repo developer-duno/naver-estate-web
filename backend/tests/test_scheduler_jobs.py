@@ -275,6 +275,8 @@ def test_meta_fallback_matches_describe_trigger_for_active_jobs():
         # 가드가 conftest 의 env 봉쇄 한 줄에 조용히 의존한다(그 줄이 바뀌면 무관한 이
         # 테스트가 엉뚱한 이유로 깨진다). KAPT_ENABLED 와 같은 이유로 여기서 켠다.
         patch.object(sched_mod, "PAYMENT_ENABLED", True),
+        # 세션 402: BACKFILL_DETAIL_ENABLED 도 기본 false — 같은 이유로 여기서 켠다.
+        patch.object(sched_mod, "BACKFILL_DETAIL_ENABLED", True),
         patch.multiple(sched_mod, **_OPERATIONAL_INTERVALS),
     ):
         scheduler = sched_mod.create_scheduler()
@@ -315,6 +317,7 @@ def test_scheduler_job_meta_covers_all_registered_jobs():
         patch.object(sched_mod, "COMPLEX_METRIC_ENABLED", True),
         patch.object(sched_mod, "MONITOR_ENABLED", True),
         patch.object(sched_mod, "VACUUM_MAINTENANCE_ENABLED", True),
+        patch.object(sched_mod, "BACKFILL_DETAIL_ENABLED", True),
     ):
         scheduler = sched_mod.create_scheduler()
     registered_ids = {job.id for job in scheduler.get_jobs()}

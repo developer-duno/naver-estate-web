@@ -210,15 +210,33 @@ class RealEstateArticle:
             pc = ad.get("aptParkingCount") or ad.get("parkingCount")
             if pc is not None and isinstance(pc, (int, float, str)):
                 self.parking_count = str(pc)
-            self.heating_type = ad.get("heatingTypeName")
+            # ⚠ 네이버 articleDetail 키 드리프트 (세션 401 라이브 실측으로 확인).
+            #   옛 키(heatingTypeName·jibunAddress·useApproveYmd)는 현재 응답에 **존재하지 않는다**.
+            #   그 결과 세 컬럼이 전 행 NULL 이 됐고(prod 실측 285,321/285,321),
+            #   live_article_detail 의 조기 반환 조건(routers/live/crawl.py:135-138
+            #   `detail_crawled AND (heating_type OR jibun_address OR use_approve_ymd)`)이
+            #   **한 번도 성립하지 못해** 매물 상세를 열 때마다 네이버를 실시간 재호출했다
+            #   (IP 차단 방지가 절대 규칙인 프로젝트에서 순수 낭비).
+            #   실측(article_no=2644366360, 2026-09-13): aptHeatMethodTypeName=개별난방 /
+            #   aptUseApproveYmd=19911217 / exposureAddress=대전시 유성구 구암동.
+            # ⚠ 가드 없는 `.get()` 직대입은 키가 사라지면 기존 저장값을 None 으로 덮어쓴다.
+            #   같은 함수의 room_count/bathroom_count/parking_count 는 이미 `is not None`
+            #   가드를 거치는데 이 줄들만 빠져 있어, 드리프트가 곧 데이터 소실이 됐다.
+            heat = ad.get("aptHeatMethodTypeName")
+            if heat is not None:
+                self.heating_type = heat
+            # ⚠ totalFloorCount 는 현재 응답에 없다. 대체 키를 **확증하지 못해 매핑하지 않고**
+            #   가드만 둔다(추측 매핑 금지 — floorLayerName='단층' 은 층수가 아니다).
             tfc = ad.get("totalFloorCount")
             if tfc is not None:
                 try:
                     self.total_floor_count = int(tfc)
                 except (ValueError, TypeError):
                     pass
-            self.jibun_address = ad.get("jibunAddress")
-            self.use_approve_ymd = ad.get("useApproveYmd") or self.use_approve_ymd
+            jibun = ad.get("exposureAddress")
+            if jibun is not None:
+                self.jibun_address = jibun
+            self.use_approve_ymd = ad.get("aptUseApproveYmd") or self.use_approve_ymd
             # #10 매물 상세 4필드
             wt = ad.get("walkingTimeToNearSubway")
             if wt is not None:

@@ -389,3 +389,98 @@ class TestArticleDetail4Fields:
         assert update["isale_right_type_name"] is None
         assert update["detail_status_code"] is None
         assert update["trade_complete"] is False
+
+
+class TestArticleDetailKeyDrift:
+    """네이버 articleDetail 키 드리프트 회귀 가드 (세션 401)
+
+    배경: 네이버가 상세 응답 키를 바꿨는데(heatingTypeName→aptHeatMethodTypeName,
+    useApproveYmd→aptUseApproveYmd, jibunAddress→exposureAddress) 파서가 옛 키를 읽어
+    세 컬럼이 **전 행 NULL** 이 됐다(prod 실측 285,321/285,321). 그 결과
+    routers/live/crawl.py:135-138 의 조기 반환 조건
+    `detail_crawled AND (heating_type OR jibun_address OR use_approve_ymd)` 가
+    한 번도 성립하지 못해 매물 상세를 열 때마다 네이버를 실시간 재호출했다.
+
+    라이브 실측 근거(article_no=2644366360, 2026-09-13):
+      aptHeatMethodTypeName=개별난방 / aptUseApproveYmd=19911217 /
+      exposureAddress=대전시 유성구 구암동 (옛 키 3종은 전부 부재)
+    """
+
+    @staticmethod
+    def _make_domain():
+        from shared.domain.article import RealEstateArticle
+
+        return RealEstateArticle(article_no="A1", trade_type_name="매매")
+
+    def test_new_keys_are_parsed(self):
+        """정상: 현행 네이버 키 3종이 속성으로 매핑된다"""
+        art = self._make_domain()
+        art.update_from_detail({"articleDetail": {
+            "aptHeatMethodTypeName": "개별난방",
+            "aptUseApproveYmd": "19911217",
+            "exposureAddress": "대전시 유성구 구암동",
+        }})
+        assert art.heating_type == "개별난방"
+        assert art.use_approve_ymd == "19911217"
+        assert art.jibun_address == "대전시 유성구 구암동"
+
+    def test_old_keys_no_longer_honored(self):
+        """회귀: 옛 키만 오면 채워지지 않는다 (드리프트를 되돌리면 이 테스트가 잡는다)"""
+        art = self._make_domain()
+        art.update_from_detail({"articleDetail": {
+            "heatingTypeName": "중앙난방",
+            "useApproveYmd": "20200101",
+            "jibunAddress": "서울시 강남구",
+        }})
+        assert art.heating_type is None
+        assert art.use_approve_ymd is None
+        assert art.jibun_address is None
+
+    def test_absent_keys_do_not_overwrite_existing(self):
+        """핵심 가드: 키가 없는 응답이 와도 기존 값을 None 으로 덮어쓰지 않는다.
+
+        가드 없는 `ad.get()` 직대입이었을 때는 드리프트가 곧 데이터 소실이었다 —
+        키가 사라진 순간 이미 저장돼 있던 값까지 NULL 로 밀렸다.
+        """
+        art = self._make_domain()
+        art.heating_type = "개별난방"
+        art.jibun_address = "대전시 유성구 구암동"
+        art.use_approve_ymd = "19911217"
+
+        art.update_from_detail({"articleDetail": {"roomCount": 3}})
+
+        assert art.heating_type == "개별난방"
+        assert art.jibun_address == "대전시 유성구 구암동"
+        assert art.use_approve_ymd == "19911217"
+
+    def test_build_detail_update_dict_carries_new_keys(self):
+        """정상: 파싱 결과가 DB 업데이트 dict 까지 전달된다"""
+        art = self._make_domain()
+        art.update_from_detail({"articleDetail": {
+            "aptHeatMethodTypeName": "지역난방",
+            "aptUseApproveYmd": "20051130",
+            "exposureAddress": "부산시 해운대구 우동",
+        }})
+        update = build_detail_update_dict(art)
+        assert update["heating_type"] == "지역난방"
+        assert update["use_approve_ymd"] == "20051130"
+        assert update["jibun_address"] == "부산시 해운대구 우동"
+
+    def test_early_return_gate_is_satisfiable(self):
+        """통합: 파싱 후 crawl.py 조기 반환 조건이 실제로 성립한다.
+
+        `has_detail = heating_type or jibun_address or use_approve_ymd` (OR) 이므로
+        셋 중 하나만 채워져도 네이버 재호출 없이 DB 값으로 응답한다.
+        드리프트 상태에서는 이 값이 영원히 falsy 였다.
+        """
+        art = self._make_domain()
+        art.update_from_detail({"articleDetail": {
+            "aptHeatMethodTypeName": "개별난방",
+            "aptUseApproveYmd": "19911217",
+            "exposureAddress": "대전시 유성구 구암동",
+        }})
+        update = build_detail_update_dict(art)
+        has_detail = (
+            update["heating_type"] or update["jibun_address"] or update["use_approve_ymd"]
+        )
+        assert has_detail, "조기 반환 게이트가 성립해야 네이버 재호출이 멈춘다"

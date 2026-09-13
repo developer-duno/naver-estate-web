@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 from crawler.billing_charge import charge_due_billing_keys
 from crawler.service import (
+    backfill_article_details,
     backfill_price_batch,
     collect_price_history,
     crawl_article_details,
@@ -31,6 +32,24 @@ logger = logging.getLogger(__name__)
 
 CRAWL_DETAIL_INTERVAL_MIN = int(os.getenv("CRAWL_DETAIL_INTERVAL_MIN", "30"))
 CRAWL_DETAIL_BATCH_SIZE = int(os.getenv("CRAWL_DETAIL_BATCH_SIZE", "500"))
+# 상세 백필(세션 402) — 네이버 상세 API 키 드리프트(세션 401)로 detail_crawled=True 인데
+# heating_type 등 3컬럼이 NULL 인 기존 매물을 재크롤한다. 기본 꺼짐(이 레포 관례 —
+# KAPT_ENABLED·OFFICIAL_PRICE_ENABLED 와 동일하게 배포 후 관리자 수동 확인 뒤 켠다).
+BACKFILL_DETAIL_ENABLED = os.getenv("BACKFILL_DETAIL_ENABLED", "false").lower() == "true"
+# 백필 배치 — 회차별로 크기가 다르다(사장님 결정 2026-09-13: 하루 5,500건, 완주 약 19일).
+#
+# 왜 새벽과 낮이 다른가 = **소요 시간이 다음 크론과 겹치면 안 되기 때문**.
+# 한 건당 _throttle_details(1.5초)가 붙으므로 소요 = 배치 × 1.5초.
+#   * 00:20 회차: 다음이 01:00 crawl_articles(cron, jitter ±45분이라 00:15부터 시작 가능).
+#     안전 여유를 두고 1,500건(약 38분) — 01:00 정시 시작 기준으로 끝난다.
+#   * 12:20 회차: 다음 네이버 호출 잡이 14:45 popular_crawl 로 145분 여유.
+#     4,000건(약 100분, 14:00 종료)이라 45분 여유를 남긴다.
+# 총량 근거: 네이버 상세 호출 실적 실측(9/7 12,141건 · 9/10 9,993건을 문제없이 소화)에
+# 비해 +5,500 은 여력 안. 호출 간격은 불변이라 순간 부하도 안 오른다.
+# env 로 덮으면 두 회차 모두 그 값이 된다(개별 조정이 필요하면 env 를 분리할 것).
+BACKFILL_DETAIL_BATCH_SIZE = int(os.getenv("BACKFILL_DETAIL_BATCH_SIZE", "0")) or None
+_BACKFILL_DAWN_SIZE = BACKFILL_DETAIL_BATCH_SIZE or 1500
+_BACKFILL_NOON_SIZE = BACKFILL_DETAIL_BATCH_SIZE or 4000
 # 세션 402: 50 → 150. 목록 크롤 네이버 호출은 하루 280~430 으로 상세(565~12,141)의
 # 소수라 3배로 올려도 총량 영향이 미미하고, 호출 속도 자체는 _throttle_articles 가
 # 그대로 제한한다(간격 불변 = IP 차단 위험 불변). 목표 = 활성 매물 보유 단지 10,567
@@ -217,6 +236,38 @@ def create_scheduler() -> BackgroundScheduler:
         max_instances=1,
         misfire_grace_time=900,
     )
+
+    # C-2. 상세 백필 — 매일 00:20 / 12:20 (세션 402, PR #503 네이버 키 드리프트 대응)
+    #    detail_crawled=True 인데 heating_type 등 3컬럼이 NULL 인 기존 매물(최근 30일
+    #    활성만) 재크롤. crawl_details(C, 30분마다 상시)와 같은 상세 API 를 쓰므로
+    #    "완전히 안 겹치는 시각"은 존재하지 않는다 — 대신 아래 두 시각을 고른 근거는
+    #    ①대량 상세 API 소비 잡(complex_detail_APT/OPST interval, popular_1030/1430/1900,
+    #    crawl_details 자체는 상시)과 겹치지 않는 새벽·정오 한산 시각이라는 점,
+    #    ②B(crawl_articles, 01:00/13:00)와 40분 간격을 둬 그 배치 시작과 겹치지 않는다는
+    #    점이다. 00:20 은 기존 스케줄 표(release.md §3-0) 전체를 통틀어 완전히 빈 슬롯,
+    #    12:20 도 마찬가지(가장 가까운 게 10:45 popular 와 1시간35분 차, 13:00 B 와 40분 차).
+    #    max_instances=1: 이전 배치가 안 끝났는데 다음 회차가 겹치는 것 방지.
+    if BACKFILL_DETAIL_ENABLED:
+        # 두 회차를 별도 잡으로 등록한다 — 배치 크기가 다르기 때문(위 상수 주석의 소요 시간 근거).
+        # ⚠ jitter 를 두지 않는다: 소요 시간이 다음 크론과 겹치지 않게 계산한 시각이라
+        #    앞뒤로 흔들리면 그 계산이 무너진다(특히 00:20 회차는 01:00 순찰과 여유가 적다).
+        for _hour, _size, _job_id in ((0, _BACKFILL_DAWN_SIZE, "backfill_detail_dawn"),
+                                      (12, _BACKFILL_NOON_SIZE, "backfill_detail_noon")):
+            scheduler.add_job(
+                backfill_article_details,
+                "cron",
+                hour=_hour,
+                minute=20,
+                kwargs={"batch_size": _size, "scheduler_job_id": _job_id},
+                id=_job_id,
+                name=f"상세 백필 {_hour:02d}:20(키 드리프트 대응)",
+                max_instances=1,
+                misfire_grace_time=1800,
+            )
+        logger.info(
+            "상세 백필 활성화: 00:20(배치 %d) · 12:20(배치 %d) = 하루 %d건",
+            _BACKFILL_DAWN_SIZE, _BACKFILL_NOON_SIZE, _BACKFILL_DAWN_SIZE + _BACKFILL_NOON_SIZE,
+        )
 
     # D. 시세 수집 — 주 1회 수요일 새벽 4시 (Phase 1)
     scheduler.add_job(

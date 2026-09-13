@@ -9,6 +9,7 @@ import logging
 import os
 import threading
 from collections import Counter
+from datetime import timedelta
 
 from dotenv import load_dotenv
 
@@ -557,6 +558,103 @@ def _apply_article_error_counts(db, hits: list[tuple[str, int, str, str]]) -> No
             )
 
 
+def _process_detail_batch(db, arts: list[tuple], record_call_label: str) -> dict:
+    """상세 API 순회 처리 공통 루프 — crawl_article_details·backfill_article_details 공유.
+
+    arts = (article_no, trade_type_name, deal_or_warrant_prc, rent_prc, area2_m2,
+    detail_fail_count) 튜플 리스트(호출측이 선추출, 세션 342 PK lazy-load 폭풍 방지 답습).
+    record_call_label 만 호출측마다 다르다(관측 구분용, naver_call_counter 집계 키).
+
+    반환 dict: processed/skipped_dead/skipped_transient/skipped_article_error/
+    article_error_reasons/systemic_suspected — crawl_article_details 의 기존 로그·
+    _finalize_job 문구를 그대로 재사용할 수 있도록 원본과 동일한 키로 돌려준다.
+
+    ⚠ crawl_article_details 본문은 이 함수 추출 전과 동일 동작을 유지한다(로직 이동만,
+    분기·commit 타이밍·systemic 판정 전부 원본 그대로). backfill_article_details 는
+    이 루프를 그대로 재사용해 "선정만 다르고 처리는 같다"는 요구를 만족한다.
+    """
+    processed = 0
+    skipped_dead = 0
+    skipped_transient = 0
+    skipped_article_error = 0
+    article_error_reasons: Counter[tuple[str, str]] = Counter()
+    article_error_hits: list[tuple[str, int, str, str]] = []
+
+    for (
+        article_no,
+        trade_type_name,
+        deal_or_warrant_prc,
+        rent_prc,
+        area2_m2,
+        detail_fail_count,
+    ) in arts:
+        record_call(record_call_label)
+        detail_data = NaverEstateAPI.get_article_detail(article_no)
+        if detail_data and "error" not in detail_data:
+            domain_article = RealEstateArticle(
+                article_no=article_no,
+                trade_type_name=trade_type_name or "",
+            )
+            domain_article.deal_or_warrant_prc = deal_or_warrant_prc
+            domain_article.rent_prc = rent_prc
+            domain_article.area2_m2 = area2_m2
+            domain_article.update_from_detail(detail_data)
+
+            update_data = build_detail_update_dict(domain_article, detail_data)
+            db.query(Article).filter(Article.article_no == article_no).update(
+                update_data, synchronize_session=False
+            )
+            processed += 1
+        elif _is_dead_detail(detail_data):
+            db.query(Article).filter(Article.article_no == article_no).update(
+                {"detail_crawled": True, "is_active": False},
+                synchronize_session=False,
+            )
+            skipped_dead += 1
+        elif _is_article_error(detail_data):
+            err = detail_data.get("error") or {}
+            code = str(err.get("code") or "")
+            message = str(err.get("message") or "")
+            skipped_article_error += 1
+            article_error_reasons[(code, message)] += 1
+            article_error_hits.append((article_no, detail_fail_count or 0, code, message))
+        else:
+            skipped_transient += 1
+
+        # 순회마다 commit — 네이버 호출 간격(_throttle_details)은 손대지 않는다
+        # (infra.md §IP차단, crawl_article_details 원본과 동일 기전 — 세션 396 참조).
+        db.commit()
+        _throttle_details.wait()
+
+    systemic_suspected = (
+        len(arts) >= _ARTICLE_ERROR_SYSTEMIC_MIN and skipped_article_error == len(arts)
+    )
+    reason_summary = ", ".join(
+        f"{code or '?'}/{message or '?'}×{cnt}"
+        for (code, message), cnt in article_error_reasons.most_common(3)
+    )
+    if systemic_suspected:
+        revived_hits = [h for h in article_error_hits if h[1] >= _DETAIL_FAIL_CAP - 1]
+        logger.warning(
+            "배치 전수 매물단위 오류 %d건 — 시스템성(소프트 차단) 의심,"
+            " detail_fail_count 증가 보류 %d건 (되살린 매물 %d건은 예외 적용, 사유 %s)",
+            skipped_article_error, len(article_error_hits) - len(revived_hits),
+            len(revived_hits), reason_summary or "?",
+        )
+        _apply_article_error_counts(db, revived_hits)
+    elif article_error_hits:
+        _apply_article_error_counts(db, article_error_hits)
+
+    return {
+        "processed": processed,
+        "skipped_dead": skipped_dead,
+        "skipped_transient": skipped_transient,
+        "skipped_article_error": skipped_article_error,
+        "systemic_suspected": systemic_suspected,
+        "reason_summary": reason_summary,
+    }
+
+
 def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = None):
     """detail_crawled=FALSE인 활성 매물의 상세 정보 크롤링"""
     db = SessionLocal()
@@ -778,6 +876,116 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         except Exception:
             fail_job_safely(job_id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
         logger.exception("상세 보강 실패")
+    finally:
+        db.close()
+
+
+# ── C-2. 상세 백필 (네이버 키 드리프트 대응, 세션 402) ──
+#
+# 세션 401(PR #503)에서 네이버 매물 상세 API 응답 키가 바뀐 것을 발견해 파서를 고쳤다
+# (heatingTypeName→aptHeatMethodTypeName 등, shared/domain/article.py 참조). 그런데
+# 그 수정은 **앞으로 새로 긁는 매물에만** 적용된다 — 이미 detail_crawled=True 로
+# 마킹된 기존 매물은 3컬럼(heating_type·use_approve_ymd·jibun_address)이 NULL 인
+# 채 남아 있고, crawl_article_details 는 detail_crawled=False 후보만 고르므로
+# 이 매물들은 영원히 재선정되지 않는다. 이 함수가 그 사각을 메운다.
+#
+# ⚠ 후보 SELECT 가 crawl_article_details 와 정반대 술어(detail_crawled=True)라
+# V057 부분 인덱스(ix_articles_detail_pending, WHERE detail_crawled=false)를 타지
+# 못한다 — 의도된 정상 동작이다(그 인덱스의 대상이 애초에 아니다). 이 잡은 하루
+# 1~2회(BACKFILL_DETAIL_ENABLED 스케줄, crawler/scheduler.py)만 돌고 대상이
+# "최근 30일 활성 매물" 로 좁혀져 있어(사장님 결정, 비활성 매물 ~120만건 제외)
+# 인덱스 없이도 감당 가능한 규모다(prod 실측 2026-09-13: 대상 105,675건).
+# 대상이 더 늘거나 호출 빈도가 오르면 부분 인덱스 신설을 검토할 것
+# (WHERE detail_crawled=true AND heating_type IS NULL AND is_active=true 형태).
+def backfill_article_details(batch_size: int = 300, scheduler_job_id: str | None = None):
+    """이미 detail_crawled=True 인 매물 중 heating_type 이 NULL 인 최근 매물을 재크롤.
+
+    네이버 상세 API 키 드리프트(세션 401)로 3컬럼(heating_type·use_approve_ymd·
+    jibun_address)이 NULL 인 채 굳어버린 기존 매물을 구제한다. crawl_article_details
+    와 처리 로직(dead·매물오류 판정, throttle, commit 타이밍)은 완전히 동일하게
+    _process_detail_batch 를 공유하고, **후보 선정 쿼리만 다르다**:
+
+    - detail_crawled == True  (crawl_article_details 는 False — 이게 핵심 차이)
+    - heating_type IS NULL    (드리프트로 비어버린 매물만)
+    - last_seen_at > 30일 전  (사장님 결정: 비활성 매물 ~120만건은 제외 — 아무도
+      안 보는 죽은 매물에 재크롤 콜을 쓰면 IP 차단 위험만 키운다)
+    - is_active == True       (활성 매물만)
+    - detail_fail_count < DETAIL_FAIL_CAP (매물오류 상한 매물 제외 — crawl_article_details 와 동일 원칙)
+    """
+    db = SessionLocal()
+    job = CrawlJob(
+        job_type="article_detail_backfill", scheduler_job_id=scheduler_job_id,
+        status="running", started_at=utcnow(),
+    )
+    db.add(job)
+    db.commit()
+    job_id = job.id
+
+    try:
+        if db.bind is not None and db.bind.dialect.name == "postgresql":
+            from sqlalchemy import text
+            db.execute(text("SET statement_timeout = 30000"))
+
+        cutoff = utcnow() - timedelta(days=30)
+        articles = (
+            db.query(Article)
+            .filter(
+                Article.is_active == True,
+                Article.detail_crawled == True,
+                Article.heating_type.is_(None),
+                Article.last_seen_at > cutoff,
+                Article.detail_fail_count < _DETAIL_FAIL_CAP,
+            )
+            .order_by(Article.last_seen_at.desc().nullslast())
+            .limit(batch_size)
+            .all()
+        )
+
+        job.total_items = len(articles)
+        arts = [
+            (
+                a.article_no,
+                a.trade_type_name,
+                a.deal_or_warrant_prc,
+                a.rent_prc,
+                a.area2_m2,
+                a.detail_fail_count,
+            )
+            for a in articles
+        ]
+        db.commit()
+
+        result = _process_detail_batch(db, arts, "article_detail_backfill")
+
+        _finalize_job(
+            db, job, "completed",
+            processed_items=result["processed"],
+            completed_at=utcnow(),
+        )
+        db.commit()
+
+        error_note = f"({result['reason_summary']})" if result["reason_summary"] else ""
+        if result["systemic_suspected"]:
+            error_note += "(카운트 보류)"
+        # 남은 대상 추정 — 이번 배치가 batch_size 를 다 채웠으면 다음 회차에도
+        # 대기 매물이 남아있을 가능성이 높다는 신호(정확한 잔여 COUNT 는 별도
+        # 쿼리 비용이 들어 로그 문구로 근사만 남긴다).
+        remaining_hint = "배치 마감(잔여 가능성 높음)" if len(arts) >= batch_size else "배치 미달(잔여 소진 근접)"
+        logger.info(
+            "상세 백필 완료: 채움 %d건 / dead %d건 / transient %d건 / 매물오류 %d건%s"
+            " (%s, 대상 %d건)",
+            result["processed"], result["skipped_dead"], result["skipped_transient"],
+            result["skipped_article_error"], error_note, remaining_hint, len(arts),
+        )
+
+    except Exception as e:
+        try:
+            db.rollback()
+            _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
+            db.commit()
+        except Exception:
+            fail_job_safely(job_id, str(e))
+        logger.exception("상세 백필 실패")
     finally:
         db.close()
 

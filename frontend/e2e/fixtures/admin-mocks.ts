@@ -111,7 +111,7 @@ export const mockSchedulerStatus: SchedulerStatusResponse = {
     {
       scheduler_job_id: "crawl_articles",
       name: "매물 수집 배치",
-      schedule: "12시간마다",
+      schedule: "매일 01:00, 13:00",
       enabled: true,
       last_run: {
         status: "completed",

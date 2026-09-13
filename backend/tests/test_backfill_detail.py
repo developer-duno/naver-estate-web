@@ -351,6 +351,26 @@ def test_total_floor_count_dash_value_is_ignored():
     assert art.total_floor_count is None
 
 
+def test_total_floor_count_zero_string_is_not_falsy_fallback():
+    """articleFloor 가 "0" 을 줘도 옛 위치로 폴백하지 않는다 — 세션 402 적대검증 MEDIUM.
+
+    `af.get(...) or ad.get(...)` 로 쓰면 문자열 "0" 이 falsy 라 옛 위치(항상 None 인
+    articleDetail)로 폴백해 값이 **조용히 소실**된다. 폴백은 "키가 없을 때"만 의미가
+    있으므로 `is None` 으로 판정해야 한다.
+
+    뮤테이션: `or` 로 되돌리면 total_floor_count 가 None 이 돼 이 테스트가 FAIL 한다.
+    """
+    art = _make_domain()
+    art.total_floor_count = None
+    art.update_from_detail({
+        "articleDetail": {"roomCount": 3},
+        "articleFloor": {"totalFloorCount": "0"},
+    })
+    assert art.total_floor_count == 0, (
+        "articleFloor 의 '0' 이 falsy 폴백으로 소실됐다 — `or` 대신 `is None` 분기 필요"
+    )
+
+
 def test_total_floor_count_mutation_check_article_floor_removed(monkeypatch):
     """뮤테이션 검증: af.get(...) 을 제거하고 ad.get(...) 만 쓰면 신규 위치 테스트가 FAIL 한다.
 
@@ -362,7 +382,8 @@ def test_total_floor_count_mutation_check_article_floor_removed(monkeypatch):
     path = "shared/domain/article.py"
     original = io.open(path, encoding="utf-8", newline="").read()
     mutated = original.replace(
-        'tfc = af.get("totalFloorCount") or ad.get("totalFloorCount")',
+        'tfc = af.get("totalFloorCount")\n            if tfc is None:\n'
+        '                tfc = ad.get("totalFloorCount")',
         'tfc = ad.get("totalFloorCount")',
     )
     assert mutated != original, "뮤테이션 대상 라인을 찾지 못함 — 소스가 바뀌었는지 확인"

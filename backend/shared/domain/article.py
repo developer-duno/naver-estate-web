@@ -242,7 +242,14 @@ class RealEstateArticle:
             #   는 그 자리에 없다(None). articleDetail 쪽은 옛 위치일 수 있어 폴백으로 유지
             #   (네이버가 되돌릴 가능성 대비). undergroundFloorCount 처럼 '-' 문자열이 오는
             #   경우가 있어(실측) int() 가 ValueError 로 흡수 — 저장하지 않고 넘어간다.
-            tfc = af.get("totalFloorCount") or ad.get("totalFloorCount")
+            # ⚠ `or` 가 아니라 `is not None` 으로 분기한다(세션 402 적대검증 MEDIUM 지적):
+            #   `or` 를 쓰면 articleFloor 가 문자열 "0" 을 줄 때 falsy 로 판정돼 옛 위치
+            #   (항상 None 인 articleDetail)로 폴백하고, 결과적으로 값이 조용히 소실된다.
+            #   0층 응답이 실제로 오는지는 미확인이나, 폴백은 "키가 없을 때"만 의미가 있으므로
+            #   존재 여부로 판정하는 것이 옳다.
+            tfc = af.get("totalFloorCount")
+            if tfc is None:
+                tfc = ad.get("totalFloorCount")
             if tfc is not None:
                 try:
                     self.total_floor_count = int(tfc)

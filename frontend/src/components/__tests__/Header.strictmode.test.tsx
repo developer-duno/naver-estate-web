@@ -15,6 +15,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { StrictMode } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import Header from "../Header";
 
 const TEST_EMAIL = "admin@example.com";
@@ -68,12 +69,32 @@ describe("Header — StrictMode 이중 실행에서도 세션 로드 (세션 395
     vi.restoreAllMocks();
   });
 
-  it("StrictMode 렌더 — 세션 이메일이 헤더에 표시된다", async () => {
+  // 세션 401: 이메일은 "내 계정 ▾" 드롭다운 안으로 옮겨져 기본 상태(닫힘)에서는 DOM 에 없다
+  // (Radix 는 열기 전까지 Content 를 렌더하지 않는다). 이 테스트가 지키려는 것은 "이메일 글자"가
+  // 아니라 **StrictMode 이중 마운트 뒤에도 세션 로드가 완료된다**는 사실(세션 395 회귀 가드)이므로,
+  // userEmail 이 있을 때만 렌더되는 트리거로 단언 대상을 옮긴다 — 증명력은 동일하다.
+  it("StrictMode 렌더 — 세션 로드 완료 후 계정 메뉴가 표시된다", async () => {
     render(
       <StrictMode>
         <Header />
       </StrictMode>
     );
+    await waitFor(() => {
+      expect(screen.getAllByText("내 계정 ▾").length).toBeGreaterThan(0);
+    });
+  });
+
+  it("StrictMode 렌더 — 계정 메뉴를 열면 세션 이메일이 보인다", async () => {
+    render(
+      <StrictMode>
+        <Header />
+      </StrictMode>
+    );
+    // Radix 는 pointerdown 으로 열린다 — fireEvent.click 은 안 먹는다(직접 실측).
+    // 기존 계산기 드롭다운 테스트와 같은 방식(userEvent) 답습 — Header.test.tsx:136-140
+    const user = userEvent.setup();
+    const trigger = await waitFor(() => screen.getAllByText("내 계정 ▾")[0]);
+    await user.click(trigger);
     await waitFor(() => {
       expect(screen.getAllByText(TEST_EMAIL).length).toBeGreaterThan(0);
     });
@@ -111,7 +132,8 @@ describe("Header — StrictMode 이중 실행에서도 세션 로드 (세션 395
   it("비-StrictMode 렌더 — 동일하게 세션이 로드된다 (기존 동작 유지)", async () => {
     render(<Header />);
     await waitFor(() => {
-      expect(screen.getAllByText(TEST_EMAIL).length).toBeGreaterThan(0);
+      // 세션 401: 이메일은 드롭다운 안으로 이동 — 세션 로드 증거는 트리거로 본다
+      expect(screen.getAllByText("내 계정 ▾").length).toBeGreaterThan(0);
       expect(screen.getAllByText("관리자").length).toBeGreaterThan(0);
     });
   });

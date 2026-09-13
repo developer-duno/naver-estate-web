@@ -117,6 +117,35 @@ def test_compute_fill_rates_excludes_old_articles():
         db.close()
 
 
+def test_compute_fill_rates_excludes_backfill_targets():
+    """백필 대상(heating_type IS NULL)은 모집단에서 제외된다 — 세션 402 적대검증 HIGH.
+
+    백필 잡은 하루 5,500건을 처리하며 그때마다 updated_at 을 갱신한다. 48시간 창의
+    자연 모집단이 8,832건(2026-09-13 prod 실측)이므로, 제외하지 않으면 **모집단의
+    55%가 백필 매물**이 된다. 그 집단은 성격이 달라(관리비 채움률 43.1% vs 정상
+    63.4%) 채움률 지표가 "이상 발생"이 아니라 "백필이 얼마나 돌았나"를 재게 된다.
+
+    백필 대상의 정의가 heating_type IS NULL 이므로 그 조건으로 걸러낸다.
+
+    뮤테이션: base_filter 에서 `Article.heating_type.isnot(None)` 을 빼면 population 이
+    늘어나 이 테스트가 FAIL 한다.
+    """
+    db = TestSession()
+    try:
+        _seed_population(db, total=_MIN_SAMPLE + 50, filled=_MIN_SAMPLE + 50)
+        # 백필 대상(heating_type 이 비어 있고 창 안에서 갱신된 매물)을 대량 투입
+        for i in range(500):
+            db.add(_make_article(f"BF{i}", heating_type=None))
+        db.commit()
+        population, _ = compute_fill_rates(db)
+        assert population == _MIN_SAMPLE + 50, (
+            f"백필 대상 500건이 모집단에 섞였다(population={population}) — "
+            "감시가 '이상'이 아니라 '백필 진행량'을 재게 된다"
+        )
+    finally:
+        db.close()
+
+
 def test_run_field_drift_monitor_violation_sends_alert_and_records_job():
     """정상: 채움률이 임계 아래로 떨어지면 위반 판정 + CrawlJob.error_message 기록 + 텔레그램 호출."""
     db = TestSession()

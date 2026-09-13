@@ -93,6 +93,12 @@ _THRESHOLDS: dict[str, int] = {
 _PENDING_FIX: frozenset[str] = frozenset(
     {"heating_type", "use_approve_ymd", "jibun_address", "total_floor_count"}
 )
+# ⚠ 이 중 heating_type 은 **구조적으로 이 감시의 대상이 될 수 없다** — 모집단 조건이
+#   `heating_type IS NOT NULL`(백필 매물 제외, compute_fill_rates 의 base_filter 참조)이라
+#   비어 있는 매물은 애초에 분모에 안 들어간다. 즉 채움률이 늘 100%로 나온다.
+#   heating_type 의 진척은 백필 지표(count WHERE heating_type IS NOT NULL)로 따로 본다.
+#   나머지 3종(use_approve_ymd·jibun_address·total_floor_count)은 정상적으로 측정되며,
+#   백필·파서 수정이 끝나면 _PENDING_FIX 에서 빼 정식 감시로 승격한다.
 
 _ALERT_PREFIX = "field_drift"
 

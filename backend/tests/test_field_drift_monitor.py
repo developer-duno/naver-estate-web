@@ -269,7 +269,10 @@ def test_pending_fix_fields_violation_logged_not_alerted():
     """
     db = TestSession()
     try:
-        pending_field = next(iter(_PENDING_FIX))
+        # ⚠ heating_type 은 쓸 수 없다 — 모집단 조건이 `heating_type IS NOT NULL`(백필 매물
+        #   제외, 세션 402 적대검증)이라 그 필드를 0%로 만들면 매물이 모집단에서 통째로
+        #   빠져 위반 자체가 생기지 않는다. 나머지 3종은 정상적으로 잴 수 있다.
+        pending_field = next(f for f in sorted(_PENDING_FIX) if f != "heating_type")
         assert pending_field in _THRESHOLDS
 
         # pending_field(heating_type 등)만 0%, 나머지 필드는 전부 채워 정상으로 둔다.

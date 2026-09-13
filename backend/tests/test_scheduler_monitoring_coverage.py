@@ -45,14 +45,15 @@ def test_extract_scheduler_job_ids_finds_static_literals():
     """
     ids = extract_scheduler_job_ids(_SCHEDULER_SOURCE)
 
-    # 정적 리터럴은 정확히 22개 — 중복 없이.
+    # 정적 리터럴은 정확히 23개 — 중복 없이. (세션 402: field_drift_monitor 신설로 22 → 23)
     assert len(ids) == len(set(ids)), f"id 중복 발견: {ids}"
-    assert len(ids) == 22, (
-        f"정적 add_job id 리터럴 개수가 22가 아님 (실제 {len(ids)}개): {ids}. "
+    assert len(ids) == 23, (
+        f"정적 add_job id 리터럴 개수가 23이 아님 (실제 {len(ids)}개): {ids}. "
         "scheduler.py 에 잡이 추가/삭제됐으면 이 테스트의 기대값도 함께 갱신할 것."
     )
 
     expected = {
+        "field_drift_monitor",
         "discover_regions", "crawl_articles", "crawl_details", "collect_prices",
         "backfill_price", "complex_detail_APT", "complex_detail_OPST",
         "collect_public_trades", "collect_officetel_presale", "collect_rental_presale",

@@ -209,5 +209,6 @@ MONITORING_EXEMPT: dict[str, str] = {
     "billing_charge": "텔레그램+이메일+monitor.py+CrawlJob 4중 안전망 기존 보유",
     "vacuum_maintenance": "새 데이터 유입 개념이 없는 유지보수 잡 — 신선도 카드 틀 자체가 안 맞음",
     "crawler_monitor": "감시자 자기 자신",
+    "field_drift_monitor": "채움률을 재는 감시 잡 자신 — DB 에 데이터를 안 쌓아 신선도 카드 틀이 안 맞음(이상은 자체 텔레그램 알림이 커버)",
     "api_version_probe": "외부 API 생사만 확인하고 DB 에 데이터를 안 쌓는 감시 잡 — 신선도 카드 틀이 안 맞음(폐기 감지는 자체 텔레그램 알림이 커버)",
 }

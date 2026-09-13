@@ -8,9 +8,27 @@ create_scheduler() 는 scheduler 를 만들고 add_job 만 하며 start() 는 �
 
 from unittest.mock import patch
 
+import jwt
 import pytest
 
 from crawler import scheduler as sched_mod
+from db.models import UserProfile
+
+# test_admin_jobs.py 와 동일한 관례 (conftest 가 SUPABASE_JWT_SECRET 를 이 값으로 세팅).
+_JWT_SECRET = "test-secret-key-for-testing-only"
+
+
+def _admin_token(uid: str) -> str:
+    return jwt.encode(
+        {"sub": uid, "aud": "authenticated", "email": f"{uid}@test.com"},
+        _JWT_SECRET,
+        algorithm="HS256",
+    )
+
+
+def _make_admin(db, uid: str) -> None:
+    db.add(UserProfile(user_id=uid, email=f"{uid}@test.com", role="admin", status="approved"))
+    db.commit()
 
 
 def _job_ids(scheduler):
@@ -347,3 +365,105 @@ def test_run_vacuum_maintenance_records_crawl_job(db):
     assert job is not None, "CrawlJob 기록이 생성되지 않음 — 사각지대 재발"
     assert job.status == "completed"
     assert job.completed_at is not None
+
+
+# ── source(출처) 필드 회귀 가드 (세션 402 — 관리자 화면 출처 표시) ──────────────
+
+
+def test_scheduler_job_meta_all_jobs_have_source_key():
+    """SCHEDULER_JOB_META 의 모든 잡에 "source" 키가 존재한다 (값은 None 가능).
+
+    누락되면 dict.get("source") 는 조용히 None 을 반환해 이 가드 없인 "출처 없음"과
+    "그 필드를 아예 안 채웠음"이 구분되지 않는다 — 새 잡 추가 시 source 명시를 강제.
+    """
+    from routers.admin.scheduler import SCHEDULER_JOB_META
+
+    missing = [job_id for job_id, meta in SCHEDULER_JOB_META.items() if "source" not in meta]
+    assert not missing, f"source 키 누락: {missing}"
+
+
+def test_scheduler_job_meta_probe_refs_match_registry():
+    """META 의 {"probe": "..."} 참조가 실제 PROBE_REGISTRY name 과 정확히 일치한다.
+
+    오타로 존재하지 않는 이름을 적으면 _source_text() 가 그 원문 문자열을 그대로
+    돌려주는 폴백이 있어(눈에 띄게 하려는 의도적 설계) 화면이 깨지진 않지만, 그러면
+    "PROBE_REGISTRY 에서 조회했다"는 설계 취지가 무력화되고 이름이 레지스트리와
+    따로 논다 — CI 가 이 drift 를 잡는다.
+    """
+    from crawler.api_version_monitor import PROBE_REGISTRY
+    from routers.admin.scheduler import SCHEDULER_JOB_META
+
+    registry_names = {entry["name"] for entry in PROBE_REGISTRY}
+    errors = []
+    for job_id, meta in SCHEDULER_JOB_META.items():
+        source = meta.get("source")
+        if isinstance(source, dict) and "probe" in source:
+            if source["probe"] not in registry_names:
+                errors.append(f"{job_id}: probe 참조 '{source['probe']}' 가 PROBE_REGISTRY 에 없음")
+    assert not errors, "\n".join(errors)
+
+
+def test_source_text_resolves_probe_reference():
+    """_source_text() 가 {"probe": name} 을 PROBE_REGISTRY 의 실제 (name, url) 로 조회한다."""
+    from routers.admin.scheduler import _source_text
+
+    name, url = _source_text({"probe": "국토교통부 아파트 매매 실거래가"})
+    assert name == "국토교통부 아파트 매매 실거래가"
+    assert url == "https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade"
+
+
+def test_source_text_handles_string_and_none():
+    """_source_text() 가 문자열은 그대로, None 은 (None, None) 을 반환한다."""
+    from routers.admin.scheduler import _source_text
+
+    assert _source_text("네이버 부동산 (https://new.land.naver.com)") == (
+        "네이버 부동산 (https://new.land.naver.com)",
+        None,
+    )
+    assert _source_text(None) == (None, None)
+
+
+def test_source_text_unknown_probe_falls_back_to_raw_key():
+    """존재하지 않는 probe 참조는 원문 키를 그대로 노출한다 (drift 를 숨기지 않음).
+
+    뮤테이션 검증용 — 이 동작 자체가 "오타를 조용히 삼키지 않는다"는 설계 의도.
+    """
+    from routers.admin.scheduler import _source_text
+
+    name, url = _source_text({"probe": "존재하지-않는-이름"})
+    assert name == "존재하지-않는-이름"
+    assert url is None
+
+
+def test_scheduler_status_response_includes_source(client, db):
+    """GET /api/admin/scheduler-status 응답의 각 job 에 source/source_url 이 포함된다.
+
+    기존 필드(scheduler_job_id/name/schedule/enabled/last_run/next_run_at/stats_24h)
+    구조는 절대 안 바뀌었는지도 같이 확인 (FE 타입 하위호환).
+    """
+    _make_admin(db, "sched-src-1")
+    resp = client.get(
+        "/api/admin/scheduler-status",
+        headers={"Authorization": f"Bearer {_admin_token('sched-src-1')}"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["jobs"], "jobs 배열이 비어있음"
+    for job in body["jobs"]:
+        assert "source" in job
+        assert "source_url" in job
+        # 기존 필드 존재 확인 (하위호환 회귀 가드)
+        for key in (
+            "scheduler_job_id", "name", "schedule", "enabled",
+            "last_run", "next_run_at", "stats_24h",
+        ):
+            assert key in job, f"기존 필드 '{key}' 누락 — FE 타입 호환 깨짐"
+
+    # 네이버 출처 잡 하나를 골라 실제 내용 확인
+    crawl_articles = next(j for j in body["jobs"] if j["scheduler_job_id"] == "crawl_articles")
+    assert "네이버" in crawl_articles["source"]
+
+    # 내부 DB 전용 잡은 source 가 None (화면에 "-" 로 표시)
+    vacuum = next(j for j in body["jobs"] if j["scheduler_job_id"] == "vacuum_maintenance")
+    assert vacuum["source"] is None
+    assert vacuum["source_url"] is None

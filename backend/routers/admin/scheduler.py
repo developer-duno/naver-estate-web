@@ -8,10 +8,30 @@ from fastapi import Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from crawler.api_version_monitor import PROBE_REGISTRY
 from db.models import CrawlJob
 from deps import get_admin_user, get_db
+from shared.constants import NAVER_LAND_BASE
 
 from ._shared import router
+
+# PROBE_REGISTRY 안의 "name" → 그 항목 dict. 출처 이름·URL 을 손글씨로 다시 적지
+# 않고 여기서 조회해 재사용한다 (derived-display-ssot.md — 파생 표시값은 source 에서
+# 자동생성, 손글씨 중복 금지). PROBE_REGISTRY 자체가 이미 "이 API 가 어디서 오는지"의
+# SSOT(각 크롤러 모듈의 BASE_URL 상수와 1:1 대응, 세션 코멘트 참조)이므로 재사용이 자연스럽다.
+_PROBE_BY_NAME: dict[str, dict] = {entry["name"]: entry for entry in PROBE_REGISTRY}
+
+# PROBE_REGISTRY 에 없는 출처 (data.go.kr 감시 대상이 아닌 API·플랫폼).
+# PROBE_REGISTRY 는 "data.go.kr 격변 감시" 전용이라 네이버·V-WORLD·CPMS 는 원래
+# 대상이 아니다 — 이 항목들은 각 크롤러 모듈의 실제 호출 상수를 그대로 재사용한다.
+#   - 네이버: shared/constants.py NAVER_LAND_BASE (여러 크롤러 잡이 공유하는 단일 상수)
+#   - V-WORLD 공동주택 공시가격: crawler/vworld_price_api.py APART_HOUSING_PRICE_URL
+#   - CPMS 어린이집: crawler/childcare_api.py CHILDCARE_LIST_URL
+# 손글씨 URL 은 이 두 곳(V-WORLD·CPMS)만 — 각 모듈에 이미 있는 상수를 그대로 옮긴
+# 값이며, 모듈이 바뀌면 이 두 줄도 함께 바꿔야 한다(그 외엔 PROBE_REGISTRY 참조로 자동 추종).
+_NAVER_SOURCE = f"네이버 부동산 ({NAVER_LAND_BASE})"
+_VWORLD_OFFICIAL_PRICE_SOURCE = "V-WORLD 공동주택 공시가격 (api.vworld.kr/ned/data/getApartHousingPriceAttr)"
+_CPMS_CHILDCARE_SOURCE = "보육정보공개포털 CPMS (api.childcare.go.kr cpmsapi030)"
 
 # 에러율 차트에서 집계할 status 값 (crawl_jobs 테이블 실측 기준)
 _ERROR_STATS_STATUSES = ("completed", "failed", "paused", "pending", "running", "cancelled")
@@ -25,39 +45,46 @@ logger = logging.getLogger(__name__)
 # 비활성 잡(env=false 라 미등록) + scheduler 미실행(None) 일 때만 화면에 쓰인다.
 # test_meta_fallback_matches_describe_trigger_for_active_jobs 가 모든 활성 잡의
 # trigger 와 강제 대조하므로 손글씨 drift 시 CI 가 빨간불 (PR #99·6a·monitor 답습).
+#
+# "source" 는 출처 표시용 필드 (세션 402 — 관리자 화면에 "이 데이터가 어디서 오는가"
+# 노출 요청). 손글씨 중복을 피하려고 두 형태만 허용한다:
+#   - {"probe": "<PROBE_REGISTRY 안의 name 문자열>"} — 이름·URL 을 PROBE_REGISTRY 에서
+#     런타임 조회(_source_text 참조). data.go.kr/odcloud 계열 API 는 전부 이 형태.
+#   - 문자열 그대로 — PROBE_REGISTRY 밖(네이버·V-WORLD·CPMS, 위 _NAVER_SOURCE 등 상수 참조)
+#   - None — 외부 API 호출이 없는 내부 DB 전용 잡 (화면에 "-" 로 표시)
 SCHEDULER_JOB_META: dict[str, dict] = {
-    "discover_regions": {"name": "전국 단지 발견", "schedule": "주 1회 일요일 03:00", "env": None},
-    "crawl_articles": {"name": "매물 수집 배치", "schedule": "매일 01:00, 13:00", "env": None},
-    "crawl_details": {"name": "매물 상세 보강", "schedule": "30분마다", "env": None},
-    "collect_prices": {"name": "시세 이력 수집", "schedule": "주 1회 수요일 04:00", "env": None},
-    "popular_1030": {"name": "인기 단지 크롤링 10:45", "schedule": "매일 10:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true"},
-    "popular_1430": {"name": "인기 단지 크롤링 14:45", "schedule": "매일 14:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true"},
-    "popular_1900": {"name": "인기 단지 크롤링 19:15", "schedule": "매일 19:15", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true"},
-    "collect_public_trades": {"name": "공공데이터 실거래가", "schedule": "주 1회 토요일 05:00", "env": "PUBLIC_DATA_ENABLED"},
-    "collect_officetel_presale": {"name": "청약홈 오피스텔 수집", "schedule": "주 1회 월요일 05:00", "env": "PUBLIC_DATA_ENABLED"},
-    "collect_rental_presale": {"name": "청약홈 민간임대 수집", "schedule": "주 1회 월요일 05:30", "env": "PUBLIC_DATA_ENABLED"},
-    "official_price": {"name": "공동주택 공시가격 수집", "schedule": "매월 15일 06:30", "env": "OFFICIAL_PRICE_ENABLED"},
-    "backfill_price": {"name": "시세 이력 소급 수집", "schedule": "매일 03:30", "env": "PUBLIC_DATA_ENABLED"},
-    "collect_air_quality": {"name": "에어코리아 대기질", "schedule": "매일 02:00", "env": "AIR_QUALITY_ENABLED"},
-    "collect_emergency": {"name": "응급의료기관", "schedule": "매월 첫째 월요일 03:00", "env": "EMERGENCY_ENABLED"},
-    "collect_childcare": {"name": "어린이집", "schedule": "매월 첫째 목요일 01:00", "env": "CHILDCARE_ENABLED"},
-    "collect_crime_stats": {"name": "범죄통계", "schedule": "분기별 첫째 일요일 04:00", "env": "CRIME_STATS_ENABLED"},
-    "complex_detail_APT": {"name": "단지 상세 backfill APT", "schedule": "4시간마다", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
-    "complex_detail_OPST": {"name": "단지 상세 backfill OPST", "schedule": "4시간마다", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
-    "complex_detail_JGC": {"name": "단지 상세 backfill JGC", "schedule": "주 1회 화요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
-    "complex_detail_ABYG": {"name": "단지 상세 backfill ABYG", "schedule": "주 1회 수요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
-    "complex_detail_OBYG": {"name": "단지 상세 backfill OBYG", "schedule": "주 1회 목요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true"},
-    "collect_metrics": {"name": "단지 가치지표 수집", "schedule": "매일 04:30", "env": "COMPLEX_METRIC_ENABLED", "env_default": "true"},
+    "discover_regions": {"name": "전국 단지 발견", "schedule": "주 1회 일요일 03:00", "env": None, "source": _NAVER_SOURCE},
+    "crawl_articles": {"name": "매물 수집 배치", "schedule": "매일 01:00, 13:00", "env": None, "source": _NAVER_SOURCE},
+    "crawl_details": {"name": "매물 상세 보강", "schedule": "30분마다", "env": None, "source": _NAVER_SOURCE},
+    "collect_prices": {"name": "시세 이력 수집", "schedule": "주 1회 수요일 04:00", "env": None, "source": _NAVER_SOURCE},
+    "popular_1030": {"name": "인기 단지 크롤링 10:45", "schedule": "매일 10:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "popular_1430": {"name": "인기 단지 크롤링 14:45", "schedule": "매일 14:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "popular_1900": {"name": "인기 단지 크롤링 19:15", "schedule": "매일 19:15", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "collect_public_trades": {"name": "공공데이터 실거래가", "schedule": "주 1회 토요일 05:00", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "국토교통부 아파트 매매 실거래가"}},
+    "collect_officetel_presale": {"name": "청약홈 오피스텔 수집", "schedule": "주 1회 월요일 05:00", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "청약홈 오피스텔·민간임대 분양정보 (ApplyhomeInfoDetailSvc/v1)"}},
+    "collect_rental_presale": {"name": "청약홈 민간임대 수집", "schedule": "주 1회 월요일 05:30", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "청약홈 오피스텔·민간임대 분양정보 (ApplyhomeInfoDetailSvc/v1)"}},
+    "official_price": {"name": "공동주택 공시가격 수집", "schedule": "매월 15일 06:30", "env": "OFFICIAL_PRICE_ENABLED", "source": _VWORLD_OFFICIAL_PRICE_SOURCE},
+    "backfill_price": {"name": "시세 이력 소급 수집", "schedule": "매일 03:30", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "국토교통부 아파트 매매 실거래가"}},
+    "collect_air_quality": {"name": "에어코리아 대기질", "schedule": "매일 02:00", "env": "AIR_QUALITY_ENABLED", "source": {"probe": "에어코리아 실시간 대기질"}},
+    "collect_emergency": {"name": "응급의료기관", "schedule": "매월 첫째 월요일 03:00", "env": "EMERGENCY_ENABLED", "source": {"probe": "응급의료기관 목록"}},
+    "collect_childcare": {"name": "어린이집", "schedule": "매월 첫째 목요일 01:00", "env": "CHILDCARE_ENABLED", "source": _CPMS_CHILDCARE_SOURCE},
+    "collect_crime_stats": {"name": "범죄통계", "schedule": "분기별 첫째 일요일 04:00", "env": "CRIME_STATS_ENABLED", "source": {"probe": "경찰청 범죄통계 (3074462)"}},
+    "complex_detail_APT": {"name": "단지 상세 backfill APT", "schedule": "4시간마다", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "complex_detail_OPST": {"name": "단지 상세 backfill OPST", "schedule": "4시간마다", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "complex_detail_JGC": {"name": "단지 상세 backfill JGC", "schedule": "주 1회 화요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "complex_detail_ABYG": {"name": "단지 상세 backfill ABYG", "schedule": "주 1회 수요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "complex_detail_OBYG": {"name": "단지 상세 backfill OBYG", "schedule": "주 1회 목요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "collect_metrics": {"name": "단지 가치지표 수집", "schedule": "매일 04:30", "env": "COMPLEX_METRIC_ENABLED", "env_default": "true", "source": None},
     # env_extra: 이 잡이 등록되려면 env 와 **함께** 참이어야 하는 추가 토글 (AND).
     #   scheduler.py 의 `if BILLING_AUTO_CHARGE_ENABLED and PAYMENT_ENABLED:` 와 짝을 맞춘다 —
     #   없으면 PAYMENT_ENABLED 가 꺼진 무료 전환 기간에도 화면이 "활성 · 매일 04:50"으로
     #   거짓 표시된다(세션 400 적대검증 HIGH). 새 잡에 토글이 둘 이상이면 여기에 추가.
-    "billing_charge": {"name": "빌링키 자동결제", "schedule": "매일 04:50", "env": "BILLING_AUTO_CHARGE_ENABLED", "env_default": "true", "env_extra": [("PAYMENT_ENABLED", "false")]},
-    "crawler_monitor": {"name": "크롤링 모니터", "schedule": "10분마다", "env": "MONITOR_ENABLED"},
-    "vacuum_maintenance": {"name": "정기 VACUUM 유지보수", "schedule": "매일 03:50", "env": "VACUUM_MAINTENANCE_ENABLED", "env_default": "true"},
-    "api_version_probe": {"name": "data.go.kr API 버전 감시", "schedule": "주 1회 일요일 06:40", "env": "API_VERSION_MONITOR_ENABLED", "env_default": "true"},
-    "kapt_match": {"name": "K-apt 단지 매칭", "schedule": "매월 21일 06:10", "env": "KAPT_ENABLED"},
-    "kapt_costs": {"name": "K-apt 관리비 수집", "schedule": "매일 06:20", "env": "KAPT_ENABLED"},
+    "billing_charge": {"name": "빌링키 자동결제", "schedule": "매일 04:50", "env": "BILLING_AUTO_CHARGE_ENABLED", "env_default": "true", "env_extra": [("PAYMENT_ENABLED", "false")], "source": None},
+    "crawler_monitor": {"name": "크롤링 모니터", "schedule": "10분마다", "env": "MONITOR_ENABLED", "source": None},
+    "vacuum_maintenance": {"name": "정기 VACUUM 유지보수", "schedule": "매일 03:50", "env": "VACUUM_MAINTENANCE_ENABLED", "env_default": "true", "source": None},
+    "api_version_probe": {"name": "data.go.kr API 버전 감시", "schedule": "주 1회 일요일 06:40", "env": "API_VERSION_MONITOR_ENABLED", "env_default": "true", "source": "data.go.kr / odcloud.kr API 12종 전수 감시 (PROBE_REGISTRY)"},
+    "kapt_match": {"name": "K-apt 단지 매칭", "schedule": "매월 21일 06:10", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 단지 기본정보 (AptBasisInfoServiceV5)"}},
+    "kapt_costs": {"name": "K-apt 관리비 수집", "schedule": "매일 06:20", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 공용관리비 (AptCmnuseManageCostServiceV3)"}},
 }
 
 # 캘린더 전용 이름표 — 스케줄러에 등록되지 않는 "수동 실행" 잡들.
@@ -79,6 +106,27 @@ MANUAL_JOB_NAMES: dict[str, str] = {
     #   여기 추가하지 말 것.
     "collect_official_prices": "공동주택 공시가격 수집 (수동)",
 }
+
+
+def _source_text(source: dict | str | None) -> tuple[str | None, str | None]:
+    """META 의 "source" 값을 (표시용 이름, 출처 URL) 로 변환.
+
+    {"probe": "<PROBE_REGISTRY name>"} 형태면 PROBE_REGISTRY 에서 실제 url 을
+    조회해 조립 (손글씨 URL 중복 저장 금지, derived-display-ssot.md 답습).
+    문자열이면 그대로(이름에 URL 이 괄호로 이미 포함돼 있어 url 은 None).
+    None 이면 (None, None) — 화면에 "-" 로 표시.
+    """
+    if source is None:
+        return None, None
+    if isinstance(source, str):
+        return source, None
+    probe_name = source.get("probe")
+    entry = _PROBE_BY_NAME.get(probe_name)
+    if entry is None:
+        # PROBE_REGISTRY 항목명이 바뀌었는데 META 를 안 고친 경우 — drift 를 숨기지
+        # 않고 원문 키를 그대로 노출해 눈에 띄게 한다(테스트가 이 경로를 가드).
+        return probe_name, None
+    return entry["name"], entry["url"]
 
 
 def _calendar_job_name(job_id: str, fallback: str | None = None) -> str:
@@ -216,6 +264,8 @@ def get_scheduler_status(
                 if generated:  # 활성 잡 + 파싱 성공 → trigger 가 진실의 원천
                     schedule_text = generated
 
+        source_name, source_url = _source_text(meta.get("source"))
+
         jobs.append({
             "scheduler_job_id": job_id,
             "name": meta["name"],
@@ -224,6 +274,8 @@ def get_scheduler_status(
             "last_run": last_run,
             "next_run_at": next_run_at,
             "stats_24h": stats_24h.get(job_id, {"runs": 0, "failures": 0}),
+            "source": source_name,
+            "source_url": source_url,
         })
 
     return {

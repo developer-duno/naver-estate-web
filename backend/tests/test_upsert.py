@@ -437,17 +437,47 @@ class TestArticleDetailKeyDrift:
         assert art.jibun_address is None
 
     def test_absent_keys_do_not_overwrite_existing(self):
-        """핵심 가드: 키가 없는 응답이 와도 기존 값을 None 으로 덮어쓰지 않는다.
+        """가드 전용 케이스: 키가 없는 응답이 **도메인 객체**의 기존 값을 지우지 않는다.
 
-        가드 없는 `ad.get()` 직대입이었을 때는 드리프트가 곧 데이터 소실이었다 —
-        키가 사라진 순간 이미 저장돼 있던 값까지 NULL 로 밀렸다.
+        ⚠ 이 테스트가 덮는 범위는 "같은 도메인 객체를 재파싱할 때"까지다.
+        DB 덮어쓰기는 이 가드로 막지 못한다 — 운영 경로는 매 회차 빈 객체를 새로 만들고
+        build_detail_update_dict 가 세 필드를 무조건 UPDATE 에 싣기 때문(세션 401 감사 지적).
+        키 매핑 회귀는 test_old_keys_no_longer_honored 담당(역할 분리).
+        """
+        art = self._make_domain()
+        art.heating_type = "개별난방"
+        art.jibun_address = "대전시 유성구 구암동"
+        art.use_approve_ymd = "19911217"
+        art.total_floor_count = 15
+
+        art.update_from_detail({"articleDetail": {"roomCount": 3}})
+
+        assert art.heating_type == "개별난방"
+        assert art.jibun_address == "대전시 유성구 구암동"
+        assert art.use_approve_ymd == "19911217"
+        # totalFloorCount 가드 — 이 단언이 없으면 가드를 제거해도 어느 테스트도 못 잡는다
+        # (세션 401 적대검증 M8: 가드 제거 뮤테이션 검출 0건이던 빈틈).
+        assert art.total_floor_count == 15
+
+    def test_empty_string_does_not_overwrite_existing(self):
+        """빈 문자열 방어: 네이버가 ""를 보내도 기존 값을 ""로 덮지 않는다.
+
+        네이버는 이 페이로드에서 없는 값을 null 이 아니라 **빈 문자열**로 주는 습관이 있다
+        (세션 401 실측: 매물 5/5 의 articleSubName·detailAddress 가 ""). ""가 저장되면
+        FE InfoRow(`if (!value) return null`)가 행을 통째로 지우고, `??` 는 ""를 폴백
+        대상으로 보지 않아 complex_address 폴백까지 막힌다 — None 보다 나쁜 값이다.
+        그래서 `is not None` 이 아니라 falsy 가드를 쓴다.
         """
         art = self._make_domain()
         art.heating_type = "개별난방"
         art.jibun_address = "대전시 유성구 구암동"
         art.use_approve_ymd = "19911217"
 
-        art.update_from_detail({"articleDetail": {"roomCount": 3}})
+        art.update_from_detail({"articleDetail": {
+            "aptHeatMethodTypeName": "",
+            "exposureAddress": "",
+            "aptUseApproveYmd": "",
+        }})
 
         assert art.heating_type == "개별난방"
         assert art.jibun_address == "대전시 유성구 구암동"

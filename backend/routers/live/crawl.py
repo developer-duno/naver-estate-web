@@ -15,6 +15,7 @@ from services.naver_call_counter import record_call
 from services.upsert import build_detail_update_dict
 from shared.domain.article import RealEstateArticle
 from shared.naver_api import NaverEstateAPI
+from utils import utcnow
 
 from ._crawl_bg import _background_crawl
 from ._shared import _cache, _crawl_lock, _crawl_status, router
@@ -35,6 +36,14 @@ def start_live_crawl(
     사용자가 수동 버튼을 10초 내 재클릭한 경우 FE 가 force=1 을 붙임.
     네이버 API 과호출 방지는 `_active_complexes` 가드가 담당.
     """
+    # V058 last_viewed_at 도장 (세션 402) — "사용자가 이 단지를 봤다"는 인기 크롤 선정 키.
+    # 아래 cached / already_running / 쿼터 초과 등 어느 경로로 끝나든 호출 자체가 "봤다"의
+    # 증거이므로 함수 맨 앞(조기 return 보다 앞)에서 찍는다. 없는 단지면 0행 — 무해.
+    db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).update(
+        {"last_viewed_at": utcnow()}, synchronize_session=False
+    )
+    db.commit()
+
     # 최근 크롤링 완료 여부 확인 (동적 TTL 적용) — force=True 면 스킵
     done_key = f"crawl_done:{complex_no}"
     if not force and _cache.get(done_key) is not None:

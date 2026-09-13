@@ -189,11 +189,20 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
             .scalar()
         )
 
+        # V058 완주 판정 플래그 (세션 402) — "완주" = 1페이지가 정상 dict(error 없음)였고
+        # 마지막 페이지까지 오류 0. 오류로 끊긴 회차는 articles_crawled_at 을 안 찍어야
+        # 선정 키가 오염되지 않는다(last_crawled_at 이 정확히 그렇게 오염됐다).
+        first_page_ok = False
+        completed_all_pages = True
+
         while True:
             record_call("crawl_articles_batch")
             result = NaverEstateAPI.get_complex_articles(complex_no, page=page)
             if not result or "error" in result:
+                completed_all_pages = False
                 break
+            if page == 1:
+                first_page_ok = True
 
             article_list = result.get("articleList") or []
             if not article_list:
@@ -218,10 +227,11 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
         # /api/stats 캐시 무효화 — 물리 삭제로 article_count 변동
         get_cache("stats", dynamic=True).delete("db_stats")
 
-        # 단지 last_crawled_at 업데이트
-        db.query(Complex).filter(Complex.complex_no == complex_no).update(
-            {"last_crawled_at": utcnow()}
-        )
+        # 단지 last_crawled_at 업데이트 (+ 완주했으면 V058 articles_crawled_at 도 같이)
+        complex_update = {"last_crawled_at": utcnow()}
+        if first_page_ok and completed_all_pages:
+            complex_update["articles_crawled_at"] = utcnow()
+        db.query(Complex).filter(Complex.complex_no == complex_no).update(complex_update)
 
         # 단지 상세 정보 보강 (1회성: detail_crawled_at이 없는 경우만)
         cpx = db.query(Complex).filter(Complex.complex_no == complex_no).first()

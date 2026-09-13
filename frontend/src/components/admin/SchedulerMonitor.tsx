@@ -143,11 +143,21 @@ function JobRow({
         className={`border-b last:border-b-0 ${rowBg} ${hasError ? "cursor-pointer hover:bg-gray-50" : ""}`}
         onClick={hasError ? onToggle : undefined}
       >
-        {/* 작업명 + 활성화 여부 */}
+        {/* 작업명 + 활성화 여부 + 출처 (한 줄 보조 텍스트, 세션 402) */}
         <td className="py-2 pr-3">
-          <span className="text-gray-800">{job.name}</span>
-          {!job.enabled && (
-            <span className="ml-1 text-[10px] text-gray-400 border border-gray-200 rounded px-1">꺼짐</span>
+          <div>
+            <span className="text-gray-800">{job.name}</span>
+            {!job.enabled && (
+              <span className="ml-1 text-[10px] text-gray-400 border border-gray-200 rounded px-1">꺼짐</span>
+            )}
+          </div>
+          {job.source && (
+            <div
+              className="text-[11px] text-gray-400 truncate max-w-[220px]"
+              title={job.source_url ?? job.source}
+            >
+              출처: {job.source}
+            </div>
           )}
         </td>
 

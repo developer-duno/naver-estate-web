@@ -104,6 +104,10 @@ export interface SchedulerJobStatus {
   last_run: SchedulerLastRun | null;
   next_run_at?: string;
   stats_24h: { runs: number; failures: number };
+  /** 이 데이터가 어느 기관/API 에서 오는지 (세션 402, 옵셔널 — 하위호환) */
+  source?: string | null;
+  /** source 의 실제 호출 엔드포인트 URL (없으면 null) */
+  source_url?: string | null;
 }
 
 /** 스케줄러 모니터링 응답 */

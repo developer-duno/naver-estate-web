@@ -127,6 +127,22 @@ def compute_fill_rates(db) -> tuple[int, dict[str, float]]:
         Article.is_active.is_(True),
         Article.detail_crawled.is_(True),
         Article.updated_at > cutoff,
+        # ⚠ 백필 매물 제외 (세션 402 적대검증 HIGH 지적, 실측으로 확인):
+        #   백필 잡(backfill_article_details)은 하루 5,500건을 처리하며 그때마다
+        #   build_detail_update_dict 가 updated_at 을 갱신한다. 48시간 창의 자연 모집단은
+        #   8,832건(2026-09-13 실측)인데 백필이 켜지면 11,000건이 더 들어와 **모집단의
+        #   55%가 백필 매물**이 된다. 게다가 그 집단은 성격이 다르다 — 백필 대상군의
+        #   maintenance_cost 채움률 43.1% vs 정상군 63.4%(실측). 그대로 두면 이 감시는
+        #   "이상이 생겼나"가 아니라 "이번 48시간에 백필이 얼마나 돌았나"를 재게 된다.
+        #
+        #   백필 대상의 정의가 "heating_type IS NULL"(service_discover.backfill_article_details)
+        #   이므로, heating_type 이 이미 채워진 매물만 보면 백필분이 자연히 빠진다.
+        #   백필이 성공해 채워진 매물은 다음 회차부터 정상 모집단에 합류한다(그때는
+        #   정상 크롤과 같은 성격이므로 섞여도 무방).
+        #   ⚠ 이 조건 때문에 heating_type 자체는 이 감시로 못 잰다 — 그건 백필 진척
+        #   지표(count(*) WHERE heating_type IS NOT NULL)로 따로 본다. _PENDING_FIX 에
+        #   이미 들어 있어 지금도 알림 대상이 아니다.
+        Article.heating_type.isnot(None),
     )
 
     field_columns = list(_THRESHOLDS.keys())

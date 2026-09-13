@@ -32,7 +32,7 @@ class SettingUpdateRequest(BaseModel):
 #   · **7,076개 단지는 삭제 즉시 가격 근거가 0** 이 된다(complex_price_history 없음 +
 #     살아있는 매물 없음 + complexes 의 nearby_median_price·jeonse_rate·recent_trades_6m 전부 NULL).
 #     반포주공1단지·잠실주공5단지·고덕래미안힐스테이트 등 재건축 대단지가 포함된다.
-#   · 되돌리는 유일한 경로 = Supabase 프로젝트 전체 롤백(mibunyang 데이터 동반) — infra.md §DB 백업.
+#   · 되돌리려면 Supabase 프로젝트 전체 롤백(mibunyang 데이터 동반) 외에 방법이 없다 — infra.md §DB 백업.
 #   · 입력 상한이 없어 days=10**9 이면 timedelta OverflowError → **HTTP 500**(실측 재현).
 #   · 그런데 audit_logs 의 admin_data_cleanup 이력은 **0건** = 만들어진 뒤 한 번도 안 눌렸다.
 # ⇒ 쓰지 않는데 누르면 재앙인 경로라, 안전장치를 붙이는 대신 제거를 택했다.

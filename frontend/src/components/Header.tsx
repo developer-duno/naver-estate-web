@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 
 export default function Header() {
@@ -237,9 +238,25 @@ export default function Header() {
                       구독 D-{subDaysLeft}
                     </span>
                   )}
-                  <span className="text-xs text-gray-500 hidden sm:inline max-w-[120px] truncate">
-                    {userEmail}
-                  </span>
+                  {/* 세션 401: 이메일을 항상 노출하지 않고 "내 계정 ▾" 안으로 옮겼다.
+                      이유 = 로그인 상태로 찍히는 시각회귀 baseline PNG 5장(admin 4 + complex 1)에
+                      실계정 이메일이 픽셀로 박혀 public 레포에 공개되던 것(세션 400 발견).
+                      화면에서 감추면 사진에도 안 박히므로 mask 같은 땜질이 불필요하다.
+                      모바일 드로어(:279 mobileOpen 게이트)는 이미 클릭 후에만 보여 그대로 둔다.
+                      Radix 라 ESC·외부클릭·포커스 트랩 자동 — frontend/CLAUDE.md §모달 규칙 충족. */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      className="text-xs text-gray-500 hover:text-gray-700 outline-none hidden sm:inline"
+                      aria-label="내 계정"
+                    >
+                      내 계정 ▾
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-[200px]">
+                      <DropdownMenuLabel className="break-all font-normal text-gray-600">
+                        {userEmail}
+                      </DropdownMenuLabel>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
                 <button
                   onClick={handleLogout}

@@ -79,7 +79,7 @@ React StrictMode(dev, App Router 기본 on)는 effect 를 mount→cleanup→moun
 
 | 로그 신호 | 뜻 | 처방 |
 |---|---|---|
-| `Expected an image WxH, received WxH` 만 (수신 크기가 회차마다 **일정**) | baseline 이 낡음 | 재생성(`--update-snapshots=all`) + **갱신 여부 실측**(로그 줄 수·sha 대조). ⚠ 값 없는 `--update-snapshots`(= changed 모드)는 **허용오차 안이면 파일을 아예 안 건드린다** — 재생성했다고 믿고 넘어가는 함정 |
+| `Expected an image WxH, received WxH` 만 (수신 크기가 회차마다 **일정**) | baseline 이 낡음 | 재생성(`--update-snapshots=all`) + **갱신 여부 실측**(로그 줄 수 ÷ 2 · sha 대조 — 아래 ④ 참조). ⚠ 값 없는 `--update-snapshots`(= changed 모드)는 **허용오차 안이면 파일을 아예 안 건드린다** — 재생성했다고 믿고 넘어가는 함정 |
 | **`Failed to take two consecutive stable screenshots`** / 수신 높이가 회차마다 **다름**(예: 3339→3642→3498) | **촬영이 불안정** | **대기 조건 추가가 먼저** — baseline 재생성은 증상만 덮고 다음 회차에 또 깨진다 |
 
 ### 대기 조건을 고를 때
@@ -181,8 +181,39 @@ done
 | `... is re-generated, writing actual.` | **기존** baseline 을 새로 썼다 |
 | `A snapshot doesn't exist ..., writing actual.` | **신규** baseline 을 만들었다 |
 
-판정 = **그 프로젝트 job 의 위 두 문구 줄 수 == 그 프로젝트의 sha 변경·신규 장 수.**
+판정 = **그 프로젝트 job 의 위 두 문구 줄 수 ÷ 2 == 그 프로젝트의 sha 변경·신규 장 수.**
 어긋나면 어딘가 안 찍혔거나 안 갱신된 것이다.
+
+⚠ **÷ 2 인 이유 — 한 장을 갱신할 때 같은 문구가 두 줄 찍힌다**(세션 401 실측으로 정정.
+그 전까지 이 문서는 `==` 라고 적어 두었고, 그대로 세면 정상 run 을 "불일치"로 오판한다).
+run 34726189807 실측: admin 10줄/5장 · public 12줄/6장 · public-visual 6줄/3장 = 전부 정확히 2배.
+같은 파일명이 수십 ms 간격으로 연속 2줄인 것이 증거 —
+`admin-data-admin-linux.png` 가 `23:49:40.6060` 과 `23:49:40.6503`(44ms 차),
+`complex-admin-linux.png` 가 `.2321`/`.2323`(2ms 차). 즉 재생성 1회가 2줄을 남긴다.
+장 수를 세려면 **줄 수가 아니라 파일명 종류 수**(`sort -u`)를 세는 편이 더 안전하다.
+
+⚠ **`=all` 재촬영은 "내 변경과 무관한 장"까지 바꿔 놓는다 — 전부 커밋하지 말 것**(세션 401 실측).
+
+로그인 헤더만 고친 PR 에서 **13장**이 변경으로 나왔는데 그중 **5장만** 그 변경으로 설명됐다.
+나머지 8장(blog 6 · compare · home · mibunyang)은 **`public`/`public-visual` 프로젝트 = storageState
+없음 = 비로그인 헤더**라, 로그인 상태에서만 렌더되는 코드가 닿을 수 없는 프레임이다.
+
+원인 = **폰트 확정 전 촬영**(추정이나 근거 4종):
+- 그 8장의 직전 baseline 이 전부 **90분 전 같은 CI 이미지**에서 나왔고 `@playwright/test` 버전도 동일
+  → Chromium 드리프트로 설명 안 됨
+- 픽셀 분포가 **재래스터화** 특성: 변경 대역 median **10~14** · 미세차(≤8) **42~47%**
+  (반면 진짜 내용 변경인 admin 헤더 띠는 median **85~102** · 미세 **4~5%**)
+- `blog-visual.spec.ts` 는 **heading 가시성만** 기다리고 `fonts`/`networkidle` 대기가 없다.
+  Pretendard 는 `next/font/local` 이라 dev 서버 콜드 컴파일 시 첫 페인트 뒤에 확정될 수 있다
+- **대조군**: `login`·`header-public-desktop`(둘 다 비로그인 헤더 프레임) = **변경 0**
+
+✅ **이 변동은 CI 를 빨갛게 만들지 않는다** — 전역 2% 비율 임계 아래라 일반 CI 는 통과한다
+(PR #502 에서 그 8장을 **그대로 둔 채** `public`·`public-visual` 둘 다 success 로 실증).
+즉 "재촬영했더니 바뀌었다" ≠ "고쳐야 한다".
+
+⇒ **처방**: 재촬영 후 반드시 **bbox·픽셀 분포로 장별 원인을 갈라** 내 변경으로 설명되는 장만
+커밋한다. 설명 안 되는 장을 함께 커밋하면 원인 불명 변경을 내 작업에 묻는 셈이고, 되돌릴 때
+무엇이 의도된 변경이었는지 분간할 수 없게 된다.
 
 ⛔ **"`Failed to take two consecutive stable screenshots` 0건" 을 판정 근거로 쓰지 마라** —
 그 문구는 **통과 경로에 절대 안 찍힌다**(재현 실측: 안정화 타임아웃이 나도 마지막 프레임을

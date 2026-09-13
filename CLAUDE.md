@@ -118,9 +118,9 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2205개** (세션 400 실측 — 2204 passed + **RegionSelector 1건 flaky**(이 PC 리소스 경합, 단독 재실행 통과 = 결함 아님. s399 에도 같은 파일에서 동일 현상) / 245 파일. 직전 기준선 2174 에 시각회귀 안전망 +31 신설(check-visual-guard 25 · Header 메뉴집합 5 · Footer LOCKED_PATHS 1). 옛 문서값 2148(s399)·2135(s396)) |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2205개** (세션 401 실측 — 2205 passed / 245 파일. ⚠ **옛 표기 "RegionSelector 는 단독 재실행하면 통과 = 결함 아님" 은 거짓**이었다(s399·s400 이 확인 없이 flaky 로 분류). 세션 401 에 유휴 상태 **단독 실행에서도 실패**(EXIT=1) 실측 — 사유는 단언 실패가 아니라 `Error: Hook timed out in 10000ms`(10,270ms). 원인 = `beforeEach` 가 매 테스트 `vi.resetModules()` + `@base-ui` 동적 재import 로 모듈 그래프를 6회 재구성. 전량 실행에선 통과하기도 해 회차마다 갈린다. 판정법도 정정: "단독 재실행"이 아니라 **`git diff origin/main` 으로 그 파일 무변경 확인 + 사유가 타임아웃인지 확인**. 구조 수정(훅 상한 상향 또는 resetModules 제거)은 별건. 직전 기준선 2174 에 시각회귀 안전망 +31 신설(check-visual-guard 25 · Header 메뉴집합 5 · Footer LOCKED_PATHS 1). 옛 문서값 2148(s399)·2135(s396)) |
 | FE E2E | `frontend/e2e/*.spec.ts` | **20 파일** (Playwright, --webpack 모드. 시각회귀 baseline PNG **19장** — 세션 400 에 헤더 전용 `header-public-desktop` **테스트만** 신설했고 baseline 은 머지 후 CI dispatch(`update_snapshots=true`)로 생성한다(생성되면 20장). ⚠ 미생성 상태에서 일반 CI 를 돌리면 `missing` 모드라 public-visual 이 1회 빨강 — 순서는 testing.md §baseline 재생성 참조. project 별 대응표 = `frontend/e2e/README.md`) |
-| BE pytest | `backend/tests/` | **1722개** (세션 400 실측 — 1708 passed + 8 skipped + 6 xfailed, 합산 관례(세션 393). 세션 399 문서값 1680 → PR #500(결제 게이트) +41, 세션 400 후속 정정 +1 = 1722. 옛 문서값 1645(s396)·1626(s395)) |
+| BE pytest | `backend/tests/` | **1733개** (세션 401 실측 `--collect-only` — 1727 + PR #503 `TestArticleDetailKeyDrift` 6건. ⚠ 세션 400 이 표에 적은 **1722 는 그 시점에도 틀린 값**이었다(실측 1727) — 작업반 보고를 검산 없이 옮긴 결과, [[feedback-baseline-number-needs-own-measure]]. 옛 문서값 1680(s399)·1645(s396)) |
 
 ## 커밋 전 필수 검증
 
@@ -128,10 +128,19 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 # BE 변경 시
 cd backend && ruff check . && python -m pytest --tb=short -q
 
-# FE 변경 시
-cd frontend && npx tsc --noEmit && npm run lint && npm test
+# FE 변경 시 — ⚠ tsc·lint·test 만으로는 CI 를 통과 못 한다. 게이트 3종을 같이 돌릴 것
+cd frontend && npx tsc --noEmit && npm run lint && npm test \
+  && npm run check:ad-compliance && npm run check:mdx-jsx && npm run check:job-labels \
+  && npm run check:visual-guard
 ```
 
+> ⚠ **게이트 3종 누락이 CI 왕복을 만든다 (세션 401 실사고)**: `src/app`·`src/components`·
+> `src/content/blog` 하위 텍스트는 `check:ad-compliance` 가 광고법 위험 단어(최고·유일한·100% 등,
+> `scripts/check-ad-compliance.mjs` RISKY)를 검사한다. **코드 주석도 검사 대상**이다 — 세션 401 에
+> 주석에 쓴 "유일한" 한 단어로 Frontend CI 가 실패했고, 그 여파로 e2e job 이 통째로 skip 돼
+> baseline 재촬영 dispatch 까지 헛돌았다. 표현을 바꿔 해결할 것 — **WHITELIST 추가는 금지**
+> (내 주석 하나 때문에 법령 준수 게이트를 느슨하게 만드는 잘못된 교환).
+>
 > **CI 보안 게이트 (세션 339)**: CI 는 BE `pip-audit -r requirements.txt --strict`(prod 취약점 자동 차단) + FE `npm audit --omit=dev --audit-level=high`(prod high/critical 자동 차단)를 상시 실행한다. 의존성 추가·bump PR 은 이 게이트를 통과해야 머지된다. 로컬 사전 확인 = `cd frontend && npm audit --omit=dev`. ⚠ 윈도우 로컬 `pip-audit` 은 requirements.txt UTF-8 한글 주석을 cp949 로 읽어 `UnicodeDecodeError` 로 죽으니 `PYTHONUTF8=1 pip-audit ...` 로 실행(CI 리눅스는 정상). dependabot PR 재생성·secrets 처리는 메모리 `[[dependabot-secrets-gate]]` 참조.
 
 ## 규칙 & 커맨드

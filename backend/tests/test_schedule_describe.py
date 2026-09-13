@@ -24,6 +24,8 @@ _CASES = [
     ("매일 10:45", CronTrigger(hour=10, minute=45), "매일 10:45"),
     ("매일 19:15", CronTrigger(hour=19, minute=15), "매일 19:15"),
     ("매일 03:30 (backfill)", CronTrigger(hour=3, minute=30), "매일 03:30"),
+    # cron 매일 여러 번 (hour 정수 목록 — 세션 402 crawl_articles)
+    ("매일 2회 (01:00, 13:00)", CronTrigger(hour="1,13", minute=0), "매일 01:00, 13:00"),
     # cron 주 1회 (단일 요일)
     ("주 1회 일요일", CronTrigger(day_of_week="sun", hour=3), "주 1회 일요일 03:00"),
     ("주 1회 수요일", CronTrigger(day_of_week="wed", hour=4), "주 1회 수요일 04:00"),

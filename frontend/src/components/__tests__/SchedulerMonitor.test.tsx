@@ -34,6 +34,8 @@ const MOCK_RESPONSE = {
       },
       next_run_at: new Date(Date.now() + 86400_000).toISOString(),
       stats_24h: { runs: 1, failures: 0 },
+      source: "에어코리아 실시간 대기질",
+      source_url: "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty",
     },
     {
       scheduler_job_id: "collect_crime_stats",
@@ -51,6 +53,8 @@ const MOCK_RESPONSE = {
       },
       next_run_at: undefined,
       stats_24h: { runs: 1, failures: 1 },
+      source: "경찰청 범죄통계 (3074462)",
+      source_url: null,
     },
     {
       scheduler_job_id: "collect_childcare",
@@ -60,6 +64,9 @@ const MOCK_RESPONSE = {
       last_run: null,
       next_run_at: undefined,
       stats_24h: { runs: 0, failures: 0 },
+      // source 없는 잡(내부 DB 전용 등) — null/undefined 여도 렌더가 깨지지 않아야 함
+      source: null,
+      source_url: null,
     },
   ],
   summary: { total_runs_today: 3, failures_today: 1 },
@@ -162,6 +169,29 @@ describe("SchedulerMonitor 컴포넌트", () => {
     await waitFor(() => {
       expect(screen.getByText(/스케줄러 상태 조회 실패/)).toBeInTheDocument();
     });
+  });
+
+  /** 출처(source)가 작업명 아래 보조 텍스트로 표시된다 (세션 402) */
+  it("출처가 있으면 작업명 아래 표시된다", async () => {
+    mockGetStatus.mockResolvedValueOnce(MOCK_RESPONSE);
+    renderWithProvider();
+    await waitFor(() => {
+      expect(screen.getByText("에어코리아 대기질")).toBeInTheDocument();
+    });
+    expect(screen.getByText("출처: 에어코리아 실시간 대기질")).toBeInTheDocument();
+    expect(screen.getByText("출처: 경찰청 범죄통계 (3074462)")).toBeInTheDocument();
+  });
+
+  /** source 가 null 이어도 렌더가 깨지지 않는다 */
+  it("출처가 없는 작업은 출처 텍스트 없이 정상 렌더된다", async () => {
+    mockGetStatus.mockResolvedValueOnce(MOCK_RESPONSE);
+    renderWithProvider();
+    await waitFor(() => {
+      expect(screen.getByText("어린이집")).toBeInTheDocument();
+    });
+    // 어린이집 행에는 출처 텍스트가 없어야 함
+    const childcareCell = screen.getByText("어린이집").closest("td");
+    expect(childcareCell?.textContent).not.toContain("출처:");
   });
 
   /** 빈 jobs 배열 시 빈 상태 메시지 */

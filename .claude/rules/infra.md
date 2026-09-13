@@ -313,7 +313,8 @@ naver 의 `CHILDCARE_DETAIL_API_KEY` == mibunyang 의 `CHILDCARE_BASIC_API_KEY` 
 | 07:00 | naver-estate-web | 단지 상세 backfill JGC·ABYG·OBYG | 화·수·목 |
 | 08:00 | mibunyang | 로컬 naver-collect.py | 월/목 |
 | 10:45/14:45/19:15 | naver-estate-web | popular 크롤링 | 매일 |
-| 12h interval | naver-estate-web | crawl_articles | 매일 |
+| 01:00 / 13:00 | naver-estate-web | crawl_articles (cron, ±45분 jitter — 세션 402 에 12h interval 에서 전환) | 매일 |
+| 00:20 / 12:20 | naver-estate-web | ⚠ **설계 완료·PR #511 미머지(2026-09-13 기준)** — 머지·재시작·토글 ON 전에는 **돌지 않는다**. backfill_detail_dawn(배치 1500·약 38분) / backfill_detail_noon(배치 4000·약 100분), 상세 API, `BACKFILL_DETAIL_ENABLED` 기본 false. 머지되면 이 경고를 지울 것 | 매일(켠 뒤) |
 | 30m interval | naver-estate-web | crawl_details | 매일 |
 
 ### IP 차단 방지 (절대 규칙)

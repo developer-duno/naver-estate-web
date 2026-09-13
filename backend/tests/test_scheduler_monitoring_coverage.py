@@ -45,16 +45,18 @@ def test_extract_scheduler_job_ids_finds_static_literals():
     """
     ids = extract_scheduler_job_ids(_SCHEDULER_SOURCE)
 
-    # 정적 리터럴은 정확히 24개 — 중복 없이.
-    # (세션 402: 상세 백필 2회차 신설로 22 → 24. 두 회차는 배치 크기가 달라 별도 잡이고,
-    #  루프가 아니라 풀어 쓴 이유는 id 리터럴이 있어야 이 추출기가 잡을 인식하기 때문이다.)
+    # 정적 리터럴은 정확히 25개 — 중복 없이.
+    # (세션 402: 상세 백필 2회차 + 채움률 감시 신설로 22 → 25. 백필 두 회차는 배치 크기가
+    #  달라 별도 잡이고, 루프가 아니라 풀어 쓴 이유는 id 리터럴이 있어야 이 추출기가 잡을
+    #  인식하기 때문이다.)
     assert len(ids) == len(set(ids)), f"id 중복 발견: {ids}"
-    assert len(ids) == 24, (
-        f"정적 add_job id 리터럴 개수가 24가 아님 (실제 {len(ids)}개): {ids}. "
+    assert len(ids) == 25, (
+        f"정적 add_job id 리터럴 개수가 25가 아님 (실제 {len(ids)}개): {ids}. "
         "scheduler.py 에 잡이 추가/삭제됐으면 이 테스트의 기대값도 함께 갱신할 것."
     )
 
     expected = {
+        "field_drift_monitor",
         "backfill_detail_dawn", "backfill_detail_noon",
         "discover_regions", "crawl_articles", "crawl_details", "collect_prices",
         "backfill_price", "complex_detail_APT", "complex_detail_OPST",

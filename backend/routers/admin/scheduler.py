@@ -83,6 +83,7 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     #   거짓 표시된다(세션 400 적대검증 HIGH). 새 잡에 토글이 둘 이상이면 여기에 추가.
     "billing_charge": {"name": "빌링키 자동결제", "schedule": "매일 04:50", "env": "BILLING_AUTO_CHARGE_ENABLED", "env_default": "true", "env_extra": [("PAYMENT_ENABLED", "false")], "source": None},
     "crawler_monitor": {"name": "크롤링 모니터", "schedule": "10분마다", "env": "MONITOR_ENABLED", "source": None},
+    "field_drift_monitor": {"name": "상세 필드 채움률 드리프트 감시", "schedule": "매일 04:40", "env": "FIELD_DRIFT_MONITOR_ENABLED", "source": None},
     "vacuum_maintenance": {"name": "정기 VACUUM 유지보수", "schedule": "매일 03:50", "env": "VACUUM_MAINTENANCE_ENABLED", "env_default": "true", "source": None},
     "api_version_probe": {"name": "data.go.kr API 버전 감시", "schedule": "주 1회 일요일 06:40", "env": "API_VERSION_MONITOR_ENABLED", "env_default": "true", "source": "data.go.kr / odcloud.kr API 12종 전수 감시 (PROBE_REGISTRY)"},
     "kapt_match": {"name": "K-apt 단지 매칭", "schedule": "매월 21일 06:10", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 단지 기본정보 (AptBasisInfoServiceV5)"}},

@@ -102,6 +102,10 @@ VACUUM_MAINTENANCE_ENABLED = os.getenv("VACUUM_MAINTENANCE_ENABLED", "true").low
 # data.go.kr API 버전 격변 감시 — 폐기된 엔드포인트 조기 경보 (2026-08-19 사고 재발방지).
 # 기본 활성: 감시 자체가 비용 0 에 가깝고(주 1회 8회 호출), 꺼두면 사고가 그대로 재현된다.
 API_VERSION_MONITOR_ENABLED = os.getenv("API_VERSION_MONITOR_ENABLED", "true").lower() == "true"
+# 상세 필드 채움률 드리프트 감시 — 네이버 상세 API 응답 키가 조용히 바뀌어(2026-09-13
+# heating_type 등 4필드 0% 사고) 에러 없이 데이터만 안 쌓이는 장애를 조기 경보한다.
+# DB 집계만(네이버 API 호출 0) 이라 부하 없음 — 기본 false 로 나가고, 검증 후 켠다.
+FIELD_DRIFT_MONITOR_ENABLED = os.getenv("FIELD_DRIFT_MONITOR_ENABLED", "false").lower() == "true"
 
 # 모듈 레벨 스케줄러 참조 — admin API에서 다음 실행 시각 조회용
 _scheduler: BackgroundScheduler | None = None
@@ -659,6 +663,26 @@ def create_scheduler() -> BackgroundScheduler:
             misfire_grace_time=3600,
         )
         logger.info("data.go.kr API 버전 감시 활성화: 주 1회 일요일 06:40")
+
+    # 상세 필드 채움률 드리프트 감시 — 매일 04:40.
+    # 2026-09-13 사고: 네이버 상세 API 응답 키가 바뀌어(heating_type 등) 에러 없이
+    # 4개 필드가 6개월 넘게 0% 채움으로 방치됐다. DB 집계만(네이버 API 0)이라
+    # 04:30 collect_metrics·04:50 billing_charge 사이 빈 슬롯인 04:40 에 배치한다.
+    if FIELD_DRIFT_MONITOR_ENABLED:
+        from crawler.field_drift_monitor import run_field_drift_monitor
+
+        scheduler.add_job(
+            run_field_drift_monitor,
+            "cron",
+            hour=4,
+            minute=40,
+            kwargs={"scheduler_job_id": "field_drift_monitor"},
+            id="field_drift_monitor",
+            name="상세 필드 채움률 드리프트 감시",
+            max_instances=1,
+            misfire_grace_time=3600,
+        )
+        logger.info("상세 필드 채움률 드리프트 감시 활성화: 매일 04:40")
 
     global _scheduler
     _scheduler = scheduler

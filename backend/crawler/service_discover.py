@@ -7,6 +7,7 @@ C. 상세 보강: 매물 상세 정보 크롤링
 
 import logging
 import os
+import threading
 from collections import Counter
 
 from dotenv import load_dotenv
@@ -25,6 +26,7 @@ from services.enricher import enrich_complex_detail
 from services.naver_call_counter import record_call
 from services.upsert import (
     build_detail_update_dict,
+    deactivate_complex_articles,
     delete_missing_articles,
     upsert_article,
     upsert_complex_from_search,
@@ -42,6 +44,43 @@ logger = logging.getLogger(__name__)
 # 인스턴스를 참조하므로 네이버 API 호출이 서로의 간격을 존중한다.
 _throttle_discover = get_shared_throttle("discover", min_interval=2.0, max_interval=10.0)
 _throttle_articles = get_shared_throttle("articles", min_interval=2.0, max_interval=10.0)
+
+# 연속 빈응답 차단기 (세션 402) — "직전에 활성 매물이 있던 단지인데 진짜 0건이 나온" 경우만
+# 카운트한다. 네이버가 세션 단위로 일시 소프트 차단하면 활성 단지들이 갑자기 전부 빈
+# 목록을 반환할 수 있는데, 그 오응답을 곧이곧대로 믿고 계속 소프트 비활성화를 진행하면
+# 짧은 시간에 대량의 매물이 부당하게 비활성화된다. 임계 도달 시 배치/인기 루프가 그
+# 회차를 중단해 피해를 막는다(가정이 틀렸으면 되돌릴 수 있는 소프트 비활성이 최후 방어선).
+_empty_after_active_streak = 0
+_empty_streak_lock = threading.Lock()
+
+
+def _note_empty_result(had_existing_active: bool) -> None:
+    """진짜 0건 결과 발생 시 연속 카운터 갱신. 정상 결과(오류·비어있지 않음)는 별도로 reset_empty_streak() 호출.
+
+    ⚠ 원래 활성 매물이 없던 단지의 0건은 **카운터를 건드리지 않는다**(증가도 리셋도 아님).
+    그런 단지의 0건은 정상 결과이지 차단 신호가 아니고, 반대로 여기서 리셋해 버리면
+    배치가 활성 lane 80% + 발굴 lane 20% 로 섞여 도는 구조상 발굴 단지 하나만 끼어도
+    카운터가 0 으로 돌아가 차단기가 사실상 발동하지 못한다(세션 402 검토에서 실측 확인).
+    리셋은 "매물이 실제로 보였다" = reset_empty_streak() 경로에서만 일어난다.
+    """
+    global _empty_after_active_streak
+    if not had_existing_active:
+        return
+    with _empty_streak_lock:
+        _empty_after_active_streak += 1
+
+
+def reset_empty_streak() -> None:
+    """정상(비어있지 않은) 목록 결과가 나왔을 때 연속 카운터를 0으로 되돌린다."""
+    global _empty_after_active_streak
+    with _empty_streak_lock:
+        _empty_after_active_streak = 0
+
+
+def get_empty_streak() -> int:
+    """현재 연속 빈응답 카운터 값(활성 매물 보유 단지 기준)."""
+    with _empty_streak_lock:
+        return _empty_after_active_streak
 
 
 def _finalize_job(db, job: CrawlJob, target_status: str, **extra_fields) -> bool:
@@ -195,12 +234,23 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
         # 선정 키가 오염되지 않는다(last_crawled_at 이 정확히 그렇게 오염됐다).
         first_page_ok = False
         completed_all_pages = True
+        partial_error_message = None
 
         while True:
             record_call("crawl_articles_batch")
             result = NaverEstateAPI.get_complex_articles(complex_no, page=page)
             if not result or "error" in result:
+                if page == 1:
+                    # 1페이지 오류는 "빈 단지"가 아니라 API 실패다 — 예외로 승격해
+                    # 아래 except 가 job 을 failed 로 마킹하고 스탬프를 전혀 안 찍게 한다
+                    # (last_crawled_at·articles_crawled_at 모두 미도달, 세션 402 ⑥).
+                    err_detail = result.get("error") if isinstance(result, dict) else "응답 없음"
+                    raise RuntimeError(f"목록 API 1페이지 실패: {err_detail}")
+                # 페이지≥2 오류 — 부분 목록이므로 delete_missing_articles 를 호출하면
+                # 아직 못 본 뒷 페이지 매물이 부당 삭제된다(세션 402 ⑥-b). 삭제는
+                # 생략하고 completed 로 마무리하되 부분 수집 사실을 남긴다.
                 completed_all_pages = False
+                partial_error_message = f"부분 수집: {page}페이지에서 오류 — 삭제 단계 생략"
                 break
             if page == 1:
                 first_page_ok = True
@@ -223,10 +273,28 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
             page += 1
             _throttle_articles.wait()
 
-        # 이번 크롤링에서 안 보인 매물 → 물리 삭제 (네이버에 없는 매물은 보존 불필요)
-        delete_missing_articles(db, complex_no, all_article_nos)
-        # /api/stats 캐시 무효화 — 물리 삭제로 article_count 변동
-        get_cache("stats", dynamic=True).delete("db_stats")
+        # 진짜 0건(1페이지 정상 dict + articleList 빈 배열) 인지 판정 — 이때만
+        # 활성 매물을 소프트 비활성화한다. 페이지≥2 오류로 끊긴 부분 목록은
+        # 위에서 이미 break 했으므로 이 지점의 all_article_nos 는 "0건"이 아니라
+        # "미완주"라 여기 도달하지 않는다(completed_all_pages=False 로 아래 분기).
+        is_genuine_empty = first_page_ok and completed_all_pages and not all_article_nos
+        had_existing_active = bool(existing_prices)
+
+        if completed_all_pages:
+            if is_genuine_empty:
+                deactivate_complex_articles(db, complex_no)
+            else:
+                # 이번 크롤링에서 안 보인 매물 → 물리 삭제 (네이버에 없는 매물은 보존 불필요)
+                delete_missing_articles(db, complex_no, all_article_nos)
+            # /api/stats 캐시 무효화 — 매물 활성 상태 변동
+            get_cache("stats", dynamic=True).delete("db_stats")
+
+        # 차단기 갱신 — 활성 매물이 있던 단지가 진짜 0건이면 연속 카운터 증가,
+        # 그 외 정상 결과(오류는 이미 raise/break 로 여기 도달 안 함)는 리셋.
+        if is_genuine_empty:
+            _note_empty_result(had_existing_active)
+        else:
+            reset_empty_streak()
 
         # 단지 last_crawled_at 업데이트 (+ 완주했으면 V058 articles_crawled_at 도 같이)
         complex_update = {"last_crawled_at": utcnow()}
@@ -244,6 +312,7 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
             total_items=total_articles,
             processed_items=total_articles,
             completed_at=utcnow(),
+            error_message=partial_error_message,
         )
         db.commit()
         logger.info("매물 수집 완료: complex %s → %d건", complex_no, total_articles)
@@ -289,6 +358,8 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
         processed = 0
         failed = 0
         failed_nos: list[str] = []
+        streak_aborted = False
+        reset_empty_streak()  # 회차 시작 전 리셋 — 이전 회차 카운터가 누적되지 않게 한다
         for cpx in complexes:
             try:
                 # crawl_complex_articles 는 예외를 자체 흡수하므로(정책 불변) 아래 except
@@ -305,6 +376,13 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
                 failed += 1
                 failed_nos.append(str(cpx.complex_no))
                 logger.exception("인기 단지 크롤링 개별 실패: complex %s", cpx.complex_no)
+            if get_empty_streak() >= 5:
+                logger.error(
+                    "활성 단지 %d개 연속 목록 0건 — 네이버 소프트 차단 의심, 인기 크롤 회차 중단",
+                    get_empty_streak(),
+                )
+                streak_aborted = True
+                break
             _throttle_articles.wait(extra_delay=0.5)
 
         # race guard: 아래 status 판정 결과를 일괄로 _finalize_job 에 전달
@@ -317,6 +395,9 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
         else:
             target_status = "completed"
             err_msg = f"{failed}/{total}개 단지 실패: {', '.join(failed_nos[:20])}"
+        if streak_aborted:
+            abort_note = "연속 빈응답 5회로 회차 중단"
+            err_msg = f"{err_msg} | {abort_note}" if err_msg else abort_note
         _finalize_job(
             db, job, target_status,
             total_items=total,
@@ -356,6 +437,7 @@ def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = No
     try:
         complexes = get_complexes_for_article_crawl(db, batch_size)
         logger.info("매물 수집 배치 시작: %d개 단지", len(complexes))
+        reset_empty_streak()  # 회차 시작 전 리셋 — 이전 회차 카운터가 누적되지 않게 한다
         for cpx in complexes:
             done_key = f"crawl_done:{cpx.complex_no}"
             if _cache.get(done_key) is not None:
@@ -371,6 +453,12 @@ def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = No
                 _cache.set(done_key, True)
             finally:
                 release_complex(cpx.complex_no)
+            if get_empty_streak() >= 5:
+                logger.error(
+                    "활성 단지 %d개 연속 목록 0건 — 네이버 소프트 차단 의심, 배치 회차 중단",
+                    get_empty_streak(),
+                )
+                break
             _throttle_articles.wait()
     finally:
         db.close()

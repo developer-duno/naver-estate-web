@@ -81,7 +81,7 @@ date "+%F(%a) %H:%M"
 | **06:30** | **official_price** | **매월 15일** | **⏰ 3~7h** |
 | 06:40 | api_version_probe | 일 | 짧음 |
 | 10:45·14:45·19:15 | popular_crawl | 매일 | 중간 |
-| 매 12h | crawl_articles | interval | 중간 |
+| 01:00·13:00 | crawl_articles | 매일 (cron, ±45분 jitter) | 중간 |
 | 매 30분 ±15분 jitter | crawl_details | interval | 중간 |
 | 매 4h | complex_detail_APT / OPST | interval | 중간 |
 | 매 10분 | crawler_monitor | interval | 짧음 |

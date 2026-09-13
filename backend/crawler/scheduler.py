@@ -251,19 +251,31 @@ def create_scheduler() -> BackgroundScheduler:
         # 두 회차를 별도 잡으로 등록한다 — 배치 크기가 다르기 때문(위 상수 주석의 소요 시간 근거).
         # ⚠ jitter 를 두지 않는다: 소요 시간이 다음 크론과 겹치지 않게 계산한 시각이라
         #    앞뒤로 흔들리면 그 계산이 무너진다(특히 00:20 회차는 01:00 순찰과 여유가 적다).
-        for _hour, _size, _job_id in ((0, _BACKFILL_DAWN_SIZE, "backfill_detail_dawn"),
-                                      (12, _BACKFILL_NOON_SIZE, "backfill_detail_noon")):
-            scheduler.add_job(
-                backfill_article_details,
-                "cron",
-                hour=_hour,
-                minute=20,
-                kwargs={"batch_size": _size, "scheduler_job_id": _job_id},
-                id=_job_id,
-                name=f"상세 백필 {_hour:02d}:20(키 드리프트 대응)",
-                max_instances=1,
-                misfire_grace_time=1800,
-            )
+        # ⚠ 루프로 묶지 않고 풀어 쓴다 — id 를 리터럴로 둬야 정적 추출기가 잡을 인식한다.
+        #    루프 변수로 쓰면 tests/test_scheduler_monitoring_coverage.py 가 "동적 id 블록이
+        #    늘었다"고 잡는다(그 잡이 감시 대상에서 조용히 빠지는 것을 막는 안전장치).
+        scheduler.add_job(
+            backfill_article_details,
+            "cron",
+            hour=0,
+            minute=20,
+            kwargs={"batch_size": _BACKFILL_DAWN_SIZE, "scheduler_job_id": "backfill_detail_dawn"},
+            id="backfill_detail_dawn",
+            name="상세 백필 00:20(키 드리프트 대응)",
+            max_instances=1,
+            misfire_grace_time=1800,
+        )
+        scheduler.add_job(
+            backfill_article_details,
+            "cron",
+            hour=12,
+            minute=20,
+            kwargs={"batch_size": _BACKFILL_NOON_SIZE, "scheduler_job_id": "backfill_detail_noon"},
+            id="backfill_detail_noon",
+            name="상세 백필 12:20(키 드리프트 대응)",
+            max_instances=1,
+            misfire_grace_time=1800,
+        )
         logger.info(
             "상세 백필 활성화: 00:20(배치 %d) · 12:20(배치 %d) = 하루 %d건",
             _BACKFILL_DAWN_SIZE, _BACKFILL_NOON_SIZE, _BACKFILL_DAWN_SIZE + _BACKFILL_NOON_SIZE,

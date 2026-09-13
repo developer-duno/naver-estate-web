@@ -52,6 +52,10 @@ class Complex(Base):
     sigungu: Mapped[str | None] = mapped_column(String(30))
     dong: Mapped[str | None] = mapped_column(String(30))
     last_crawled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # V058 — 우리 목록 크롤 완주 시각(1페이지 정상 응답 + 마지막 페이지까지 오류 0). 자매 일괄 스탬프·오류 경로가 못 찍는 배치 선정 키
+    articles_crawled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # V058 — 사용자가 start-crawl 을 호출한 시각(= 사람이 그 단지를 봤다). 인기 크롤 선정 키
+    last_viewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 단지 상세 정보 (get_complex_detail API)
     heat_method_type: Mapped[str | None] = mapped_column(String(50))
     total_parking_count: Mapped[int | None] = mapped_column(Integer)

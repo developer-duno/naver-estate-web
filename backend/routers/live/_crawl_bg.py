@@ -86,6 +86,9 @@ def _background_crawl(complex_no: str):
                 }
             all_article_nos = set()
             page = 1
+            # V058 완주 판정 (세션 402) — 1페이지 오류는 아래에서 이미 return 하므로
+            # 여기 도달했다는 것 자체가 1페이지 정상. 페이지≥2 오류로 break 하면 False.
+            completed_all_pages = True
 
             # 기존 가격 일괄 조회 (N+1 방지)
             existing_prices = {
@@ -106,6 +109,7 @@ def _background_crawl(complex_no: str):
                             error=str(result.get("error", "네이버 API 요청 실패") if result else "네이버 API 응답 없음"),
                         )
                         return
+                    completed_all_pages = False
                     break
 
                 article_list = result.get("articleList") or []
@@ -135,9 +139,12 @@ def _background_crawl(complex_no: str):
             # 물리 삭제: 이번 크롤링에서 안 보인 매물 (네이버에 없는 매물)
             delete_missing_articles(db, complex_no, all_article_nos)
 
-            # Update last_crawled_at
+            # Update last_crawled_at (+ 완주했으면 V058 articles_crawled_at 도 같이)
+            complex_update = {"last_crawled_at": utcnow()}
+            if completed_all_pages:
+                complex_update["articles_crawled_at"] = utcnow()
             db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).update(
-                {"last_crawled_at": utcnow()}
+                complex_update
             )
             db.commit()
 

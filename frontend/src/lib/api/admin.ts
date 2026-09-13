@@ -75,13 +75,8 @@ export async function updateAdminSetting(token: string, key: string, value: Reco
   });
 }
 
-/** 관리자: 오래된 데이터 삭제 */
-export async function deleteStaleData(token: string, days: number) {
-  return fetchApi<{ deleted: number }>(`/api/admin/data/stale?days=${days}`, {
-    method: "DELETE",
-    headers: adminHeaders(token),
-  });
-}
+// 세션 401: deleteStaleData 제거 — 서버 엔드포인트(DELETE /api/admin/data/stale)와 함께 삭제.
+// 사유는 app/admin/data/page.tsx 헤더 주석 참조(93만건·7,076단지 가격근거 소실·사용 이력 0건).
 
 /** 관리자: 스케줄러 모니터링 상태 조회 */
 export async function getSchedulerStatus(token: string) {

@@ -1,7 +1,7 @@
 """관리자 데이터/감사/설정 관리 라우트"""
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import Depends, Query
 from pydantic import BaseModel
@@ -9,7 +9,7 @@ from sqlalchemy import and_, delete, func, select
 from sqlalchemy.orm import Session
 
 from auth.audit import log_action
-from db.models import AdminSetting, Article, AuditLog, RateLimitCounter
+from db.models import AdminSetting, AuditLog, RateLimitCounter
 from deps import get_admin_user, get_db
 
 from ._shared import router
@@ -21,23 +21,24 @@ class SettingUpdateRequest(BaseModel):
     value: dict
 
 
-@router.delete("/data/stale")
-def delete_stale_data(
-    days: int = Query(90, ge=30),
-    db: Session = Depends(get_db),
-    admin: dict = Depends(get_admin_user),
-):
-    """오래된 비활성 매물 데이터 삭제"""
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    stmt = (
-        delete(Article)
-        .where(and_(Article.is_active == False, Article.updated_at < cutoff))
-    )
-    result = db.execute(stmt)
-    deleted = result.rowcount
-    log_action(db, admin["user_id"], "admin_data_cleanup", details={"days": days, "deleted": deleted})
-    db.commit()
-    return {"deleted": deleted, "cutoff_days": days}
+# 세션 401: `DELETE /data/stale`(오래된 비활성 매물 물리삭제) **제거**. 사장님 결정.
+#
+# prod 실측(2026-09-13)으로 드러난 위험:
+#   · 기본값 days=90 으로 한 번 호출하면 934,258건(전체 매물 1,494,484 의 63%)이 지워진다.
+#     무제한 DELETE 소요 실측 **2.55s·2.88s** — 8초 statement_timeout 이 막아주지 못한다
+#     (조사 착수 시엔 "타임아웃이 우연히 막아줄 것"으로 봤으나 실측이 그 가정을 반증했다).
+#   · 대상은 **전부 2026년 생성분**이고 466,530건은 상세 수집 완료분이라,
+#     네이버에서 이미 내려간 매물이라 재수집이 원리적으로 불가능하다.
+#   · **7,076개 단지는 삭제 즉시 가격 근거가 0** 이 된다(complex_price_history 없음 +
+#     살아있는 매물 없음 + complexes 의 nearby_median_price·jeonse_rate·recent_trades_6m 전부 NULL).
+#     반포주공1단지·잠실주공5단지·고덕래미안힐스테이트 등 재건축 대단지가 포함된다.
+#   · 되돌리는 유일한 경로 = Supabase 프로젝트 전체 롤백(mibunyang 데이터 동반) — infra.md §DB 백업.
+#   · 입력 상한이 없어 days=10**9 이면 timedelta OverflowError → **HTTP 500**(실측 재현).
+#   · 그런데 audit_logs 의 admin_data_cleanup 이력은 **0건** = 만들어진 뒤 한 번도 안 눌렸다.
+# ⇒ 쓰지 않는데 누르면 재앙인 경로라, 안전장치를 붙이는 대신 제거를 택했다.
+#   화면(app/admin/data/page.tsx 카드)·FE 래퍼(lib/api/admin.ts deleteStaleData)도 함께 제거 —
+#   화면만 지우면 관리자 토큰으로 직접 호출하는 경로가 남는다.
+#   admin-labels.ts 의 `admin_data_cleanup` 라벨은 과거 감사 로그 표시용으로 유지.
 
 
 @router.get("/audit-logs")

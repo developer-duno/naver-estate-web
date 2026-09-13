@@ -43,6 +43,10 @@ _JOB_LABEL_FALLBACK = {
     "crawl_details": "매물 상세 보강",
     # 세션 402 — scheduler.py add_job(name=...) 과 글자 단위로 같아야 한다.
     "field_drift_monitor": "상세 필드 채움률 드리프트 감시",
+    # 상세 백필(세션 402) — 두 회차가 반복문으로 등록돼 id 가 정적 추출에 안 잡히므로
+    # 여기에 직접 등록한다. 값은 SCHEDULER_JOB_META 의 name 과 글자 단위로 같아야 한다.
+    "backfill_detail_dawn": "상세 백필 00:20(키 드리프트 대응)",
+    "backfill_detail_noon": "상세 백필 12:20(키 드리프트 대응)",
     "collect_prices": "시세 이력 수집",
     "backfill_price": "시세 이력 소급 수집",
     "complex_detail_APT": "단지 상세 backfill APT",

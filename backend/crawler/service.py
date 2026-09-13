@@ -13,6 +13,7 @@ from crawler.service_common import (  # noqa: F401
 )
 from crawler.service_discover import (  # noqa: F401
     CRAWL_REAL_ESTATE_TYPES,
+    backfill_article_details,
     crawl_article_details,
     crawl_articles_batch,
     crawl_complex_articles,

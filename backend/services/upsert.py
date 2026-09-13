@@ -254,24 +254,53 @@ def upsert_article(db, article, commit=True, track_price=False, existing_prices=
 
 
 def _extract_maintenance_from_detail(detail_data: dict) -> str | None:
-    """상세 API에서 관리비 추출 (dict 형식 호환)"""
+    """상세 API에서 관리비 추출 (dict 형식 호환)
+
+    ⚠ 오피스텔 폴백(세션 402, 2026-09-13 라이브 실측): 아파트는 articleDetail.
+    maintenanceCost 가 채워지지만(prod 79.6%), 오피스텔은 이 필드가 통째로 null 이고
+    대신 최상위 administrationCostInfo 블록에 온다 — prod 채움률 0.5%(230/50,291)가
+    그 증거. 구조:
+        administrationCostInfo.etcFeeDetails.etcFeeAmount = 90000 (원 단위 정수)
+        administrationCostInfo.unableCheckDetails = {...}  (관리비 확인 불가 — 저장 안 함)
+    아파트 경로(위 mc 처리)는 이 폴백과 무관하게 그대로 두고 손대지 않는다.
+    """
     ad = detail_data.get("articleDetail", {})
     mc = ad.get("maintenanceCost")
-    if mc is None:
+    if mc is not None:
+        # 단순 값 (int/float/str)
+        if isinstance(mc, (int, float)):
+            return str(mc)
+        if isinstance(mc, str):
+            return mc
+        # dict 형식: {averageTotalPrice: "297616", ...} (원 단위 → 만원 변환)
+        if isinstance(mc, dict):
+            avg = mc.get("averageTotalPrice")
+            if avg:
+                try:
+                    return str(round(int(avg) / 10000))
+                except (ValueError, TypeError):
+                    pass
         return None
-    # 단순 값 (int/float/str)
-    if isinstance(mc, (int, float)):
-        return str(mc)
-    if isinstance(mc, str):
-        return mc
-    # dict 형식: {averageTotalPrice: "297616", ...} (원 단위 → 만원 변환)
-    if isinstance(mc, dict):
-        avg = mc.get("averageTotalPrice")
-        if avg:
-            try:
-                return str(round(int(avg) / 10000))
-            except (ValueError, TypeError):
-                pass
+
+    # mc 가 None(주로 오피스텔) — administrationCostInfo 폴백.
+    # ⚠ 추측 매핑 금지: chargeCodeType·includeCodeTypes 등 코드값의 의미는 모르므로
+    # 해석하지 않고 etcFeeAmount 숫자만 쓴다. unableCheckDetails 만 있으면(확인 불가)
+    # None 유지 — 잘못된 0 원·빈 값을 저장하지 않는다.
+    aci = detail_data.get("administrationCostInfo")
+    if isinstance(aci, dict):
+        etc = aci.get("etcFeeDetails")
+        if isinstance(etc, dict):
+            amount = etc.get("etcFeeAmount")
+            if amount is not None:
+                try:
+                    # ⚠ 단위 변환 필수 — maintenance_cost 컬럼의 관례는 "만원 단위 숫자
+                    # 문자열"이다(FE formatMaintenanceCost 가 무조건 "만원"을 붙임,
+                    # frontend/src/lib/format.ts). etcFeeAmount 는 원 단위(90000)라
+                    # 그대로 저장하면 "90000만원"으로 표시되는 사고가 난다 — 위 아파트
+                    # dict 분기(averageTotalPrice /10000)와 같은 단위로 맞춘다.
+                    return str(round(int(amount) / 10000))
+                except (ValueError, TypeError):
+                    pass
     return None
 
 

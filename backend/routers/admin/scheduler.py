@@ -56,6 +56,8 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "discover_regions": {"name": "전국 단지 발견", "schedule": "주 1회 일요일 03:00", "env": None, "source": _NAVER_SOURCE},
     "crawl_articles": {"name": "매물 수집 배치", "schedule": "매일 01:00, 13:00", "env": None, "source": _NAVER_SOURCE},
     "crawl_details": {"name": "매물 상세 보강", "schedule": "30분마다", "env": None, "source": _NAVER_SOURCE},
+    "backfill_detail_dawn": {"name": "상세 백필 00:20(키 드리프트 대응)", "schedule": "매일 00:20", "env": "BACKFILL_DETAIL_ENABLED", "source": _NAVER_SOURCE},
+    "backfill_detail_noon": {"name": "상세 백필 12:20(키 드리프트 대응)", "schedule": "매일 12:20", "env": "BACKFILL_DETAIL_ENABLED", "source": _NAVER_SOURCE},
     "collect_prices": {"name": "시세 이력 수집", "schedule": "주 1회 수요일 04:00", "env": None, "source": _NAVER_SOURCE},
     "popular_1030": {"name": "인기 단지 크롤링 10:45", "schedule": "매일 10:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
     "popular_1430": {"name": "인기 단지 크롤링 14:45", "schedule": "매일 14:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},

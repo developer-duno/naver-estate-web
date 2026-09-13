@@ -187,6 +187,7 @@ class RealEstateArticle:
         aa = detail_data.get("articleAddition", {})
         ar = detail_data.get("articleRealtor", {})
         at = detail_data.get("articleTax", {})
+        af = detail_data.get("articleFloor", {})
         photos = detail_data.get("articlePhotos", [])
 
         if ad:
@@ -234,10 +235,21 @@ class RealEstateArticle:
             heat = ad.get("aptHeatMethodTypeName")
             if heat:
                 self.heating_type = heat
-            # ⚠ totalFloorCount 는 현재 응답에 없다. 대체 키를 **확증하지 못해 매핑하지 않고**
-            #   가드만 둔다(추측 매핑 금지 — floorLayerName='단층' 은 층수가 아니다).
-            #   (isaleRightTypeName 은 정상 수신 중이다 — prod 27,285건 보유. 드리프트 아님.)
-            tfc = ad.get("totalFloorCount")
+            # ⚠ totalFloorCount 실제 위치 = articleDetail 블록이 아니라 최상위
+            #   articleFloor 블록이다(세션 402 라이브 실측, 2026-09-13, 표본 5건 — 아파트2·
+            #   오피스텔2·분양권1 전수 일치). articleFloor.totalFloorCount='10'(문자열),
+            #   분양권도 articleFloor.totalFloorCount='44' 확인. articleDetail.totalFloorCount
+            #   는 그 자리에 없다(None). articleDetail 쪽은 옛 위치일 수 있어 폴백으로 유지
+            #   (네이버가 되돌릴 가능성 대비). undergroundFloorCount 처럼 '-' 문자열이 오는
+            #   경우가 있어(실측) int() 가 ValueError 로 흡수 — 저장하지 않고 넘어간다.
+            # ⚠ `or` 가 아니라 `is not None` 으로 분기한다(세션 402 적대검증 MEDIUM 지적):
+            #   `or` 를 쓰면 articleFloor 가 문자열 "0" 을 줄 때 falsy 로 판정돼 옛 위치
+            #   (항상 None 인 articleDetail)로 폴백하고, 결과적으로 값이 조용히 소실된다.
+            #   0층 응답이 실제로 오는지는 미확인이나, 폴백은 "키가 없을 때"만 의미가 있으므로
+            #   존재 여부로 판정하는 것이 옳다.
+            tfc = af.get("totalFloorCount")
+            if tfc is None:
+                tfc = ad.get("totalFloorCount")
             if tfc is not None:
                 try:
                     self.total_floor_count = int(tfc)

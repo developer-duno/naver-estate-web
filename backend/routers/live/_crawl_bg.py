@@ -10,7 +10,7 @@ from db.models import Complex as ComplexModel
 from services.cache import get_cache
 from services.enricher import enrich_complex_detail
 from services.naver_call_counter import record_call
-from services.upsert import delete_missing_articles, upsert_article
+from services.upsert import deactivate_complex_articles, delete_missing_articles, upsert_article
 from shared.constants import NAVER_COMPLEX_ARTICLES_API, NAVER_LAND_BASE
 from shared.domain.article import RealEstateArticle
 from shared.naver_api import NaverEstateAPI
@@ -136,8 +136,16 @@ def _background_crawl(complex_no: str):
 
             _update_crawl_status(complex_no, has_more=False)
 
-            # 물리 삭제: 이번 크롤링에서 안 보인 매물 (네이버에 없는 매물)
-            delete_missing_articles(db, complex_no, all_article_nos)
+            # 진짜 0건(1페이지 정상 + 마지막 페이지까지 정상인데 매물 자체가 0건)이면
+            # 유령 매물이 화면에 안 보이도록 소프트 비활성화. 페이지≥2 오류로 끊긴
+            # 부분 목록(completed_all_pages=False)은 뒷 페이지 매물이 부당 삭제/비활성화
+            # 되지 않도록 아래 두 처리 모두 생략한다(세션 402 ⑥-b).
+            if completed_all_pages:
+                if not all_article_nos:
+                    deactivate_complex_articles(db, complex_no)
+                else:
+                    # 물리 삭제: 이번 크롤링에서 안 보인 매물 (네이버에 없는 매물)
+                    delete_missing_articles(db, complex_no, all_article_nos)
 
             # Update last_crawled_at (+ 완주했으면 V058 articles_crawled_at 도 같이)
             complex_update = {"last_crawled_at": utcnow()}

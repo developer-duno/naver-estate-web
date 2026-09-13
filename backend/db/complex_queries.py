@@ -1,11 +1,13 @@
 """단지 조회 쿼리"""
 
+from datetime import timedelta
 from typing import Optional
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from db.models import Article, Complex, ComplexPyeongDetail, SubwayStation
+from utils import utcnow
 
 
 def get_all_subway_stations(db: Session):
@@ -130,28 +132,136 @@ def get_trade_type_counts_by_complexes(
 
 
 def get_complexes_for_article_crawl(db: Session, limit: int = 50) -> list[Complex]:
-    """매물 수집 배치 대상 단지 — 활성매물 0건 단지를 먼저 반환.
+    """매물 수집 배치 대상 단지 — 활성 lane + 발굴 lane 두 몫 (세션 402, V058).
 
-    기존엔 last_crawled_at 오래된 순으로만 골랐는데, 이 컬럼은 2026-04-13
-    SQL 일괄 UPDATE 로 약 75% 가 허수라 매물 0건 단지(약 3.6만 개)가
-    "크롤한 척"하며 영원히 후순위로 밀렸다. 활성매물 유무를 1차 정렬
-    기준으로 삼아 진짜 미수집 단지부터 채운다. 2차는 last_crawled_at
-    오래된 순(NULL 우선).
+    2026-04-13 에 `has_article.asc()`(매물 0건 단지 우선)를 넣은 것은 그 시점엔
+    정당했다 — 당시 `last_crawled_at` 이 SQL 일괄 UPDATE 로 약 75% 허수라, 매물
+    0건 단지(약 3.6만 개)가 "크롤한 척"하며 영원히 후순위로 밀렸기 때문이다.
+
+    그런데 2026-09-13 prod 실측으로 그 전제가 반전됐다: 매물 0건 풀이
+    53,581 로 불어나 있어 `has_article.asc()` 1차 정렬이 걸리는 한 활성 매물을
+    가진 10,567 단지에는 사실상 도달하지 못한다. 그 결과 활성 단지의 76%
+    (8,066개)가 30일 넘게, 그중 2,429개는 90일 넘게 목록 갱신을 못 받고
+    있었다 — "매물 0건 단지를 먼저 본다"는 원래 선의가 정반대로 활성 단지를
+    영구 사각으로 밀어낸 것이다.
+
+    처방 = 몫 분할(lane). 발굴을 완전히 배제하면 `articles_crawled_at` 이
+    한 번도 안 찍힌 14,923 단지가 이번엔 반대로 영구 사각이 되므로, 완전
+    배제 대신 활성 80% + 발굴 20% 로 몫을 고정해 양쪽 다 굶기지 않는다.
+    한쪽이 모자라면(활성 단지가 적거나 발굴 대상이 바닥나면) 남는 몫을
+    다른 lane 이 흡수해 limit 을 최대한 채운다.
+
+    - 활성 lane: 활성 매물이 있는 단지. `articles_crawled_at` 오래된 순
+      (NULL 우선 — 아직 완주 스탬프가 없는 단지가 최우선), 동률은
+      `last_crawled_at` 오래된 순.
+    - 발굴 lane: 활성 매물이 없고 `articles_crawled_at` 도 없는(=한 번도
+      완주한 적 없는) 단지. `last_crawled_at` 오래된 순(NULL 우선).
+
+    "호출 총량 불변"은 **단지 수** 기준이지 **네이버 호출 수** 기준이
+    아니다 — 매물을 가진 단지는 페이지네이션이 붙어 단지당 호출이 여러 번
+    나갈 수 있다(발굴 lane 단지는 대개 0~1 페이지). 실제 네이버 호출량
+    변화는 `record_call("crawl_articles_batch")` 로 1주 관찰 대상이다.
+
+    인덱스: 이 PR 에서는 새 인덱스를 만들지 않는다. V058 적용 직후(신규
+    컬럼 전부 NULL) prod EXPLAIN (ANALYZE, BUFFERS) 실측(2026-09-13 14:38) —
+    활성 lane(LIMIT 120): 180ms · Buffers 70,841(전부 shared hit,
+    `ix_articles_complex_active` 로 Index Only Scan). 발굴 lane(LIMIT 30):
+    413ms · Buffers 208,497(NOT EXISTS 가 64,148 단지를 전수 프로브). 이
+    쿼리는 배치가 하루 2회(cron 01:00/13:00)만 호출하므로 비용 무시 가능 —
+    다음에 재측정할 사람을 위해 수치를 남긴다.
     """
-    has_article = (
+    n_active = max(1, round(limit * 0.8))
+
+    has_active_article = (
         select(Article.complex_no)
         .where(and_(Article.complex_no == Complex.complex_no, Article.is_active == True))  # noqa: E712
         .exists()
     )
-    stmt = (
-        select(Complex)
-        .order_by(
-            has_article.asc(),  # False(매물 0건) 가 먼저
-            Complex.last_crawled_at.asc().nullsfirst(),
+
+    def _fetch_active(n: int) -> list[Complex]:
+        stmt = (
+            select(Complex)
+            .where(has_active_article)
+            .order_by(
+                Complex.articles_crawled_at.asc().nullsfirst(),
+                Complex.last_crawled_at.asc().nullsfirst(),
+            )
+            .limit(n)
         )
+        return list(db.execute(stmt).scalars().all())
+
+    active_complexes = _fetch_active(n_active)
+
+    # 발굴 lane 부족분 = 활성 lane 이 다 못 채운 몫까지 흡수
+    n_discover_actual = limit - len(active_complexes)
+    discover_stmt = (
+        select(Complex)
+        .where(and_(~has_active_article, Complex.articles_crawled_at.is_(None)))
+        .order_by(Complex.last_crawled_at.asc().nullsfirst())
+        .limit(n_discover_actual)
+    )
+    discover_complexes = list(db.execute(discover_stmt).scalars().all())
+
+    # 발굴 lane 이 모자라면(대상 고갈) 활성 lane 을 더 큰 limit 으로 재조회해 채운다
+    # (같은 정렬 기준의 접두어 확장이라 앞서 뽑은 것과 중복되지 않는다)
+    remaining = limit - len(active_complexes) - len(discover_complexes)
+    if remaining > 0:
+        active_complexes = _fetch_active(len(active_complexes) + remaining)
+
+    return active_complexes + discover_complexes
+
+
+def get_complexes_for_popular_crawl(db: Session, limit: int) -> list[Complex]:
+    """인기 단지 선제적 크롤링 대상 — 최근 7일 사용자 클릭 우선 (세션 402, V058).
+
+    기존 선정 키 `last_crawled_at DESC` 는 이 컬럼이 배치·자매 프로젝트의
+    일괄 스탬프에 함께 오염돼 있어, "사용자가 최근 조회한 단지"가 아니라
+    "아무나 최근에 건드린 단지"를 뽑고 있었다. 실측(2026-09-13, 최근 7일
+    1,050회 인기 크롤 중 846회=81%)이 직전 24시간 안에 배치가 이미 긁은
+    단지를 그대로 재방문한 낭비였음을 보여준다.
+
+    처방 = `last_viewed_at`(V058, 사용자가 `start-crawl` 을 호출한 시각)을
+    1순위로 쓴다. 최근 7일 안에 조회된 단지만 인정하고(그보다 오래된
+    조회는 "최근 인기"로 보기 어렵다), 그 조건을 만족하는 단지가 limit 에
+    못 미치면 활성 lane(articles_crawled_at 오래된 순)에서 부족분을 채워
+    배치를 놀리지 않는다.
+
+    7일 컷오프는 Python 에서 계산해 파라미터로 넘긴다 — SQL `now()` 함수는
+    SQLite 테스트 환경에서 못 쓴다(domain-mapping-ssot.md 룰 3 dialect
+    분기 원칙과 같은 결).
+    """
+    cutoff = utcnow() - timedelta(days=7)
+
+    viewed_stmt = (
+        select(Complex)
+        .where(and_(Complex.last_viewed_at.isnot(None), Complex.last_viewed_at > cutoff))
+        .order_by(Complex.last_viewed_at.desc())
         .limit(limit)
     )
-    return list(db.execute(stmt).scalars().all())
+    viewed_complexes = list(db.execute(viewed_stmt).scalars().all())
+
+    remaining = limit - len(viewed_complexes)
+    if remaining <= 0:
+        return viewed_complexes
+
+    picked_nos = [c.complex_no for c in viewed_complexes]
+    has_active_article = (
+        select(Article.complex_no)
+        .where(and_(Article.complex_no == Complex.complex_no, Article.is_active == True))  # noqa: E712
+        .exists()
+    )
+    fallback_stmt = (
+        select(Complex)
+        .where(has_active_article, Complex.complex_no.notin_(picked_nos))
+        .order_by(
+            Complex.articles_crawled_at.asc().nullsfirst(),
+            Complex.last_crawled_at.asc().nullsfirst(),
+        )
+        .limit(remaining)
+    )
+    fallback_complexes = list(db.execute(fallback_stmt).scalars().all())
+
+    return viewed_complexes + fallback_complexes
 
 
 def get_complexes_for_detail_enrich(db: Session, real_estate_type: str, limit: int = 500) -> list[str]:

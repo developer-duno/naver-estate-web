@@ -17,6 +17,7 @@ from crawler.utils import get_shared_throttle
 from db.complex_queries import (
     get_complexes_for_article_crawl,
     get_complexes_for_detail_enrich,
+    get_complexes_for_popular_crawl,
 )
 from db.database import SessionLocal
 from db.models import Article, Complex, CrawlJob
@@ -333,10 +334,15 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
 
 
 def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None = None):
-    """인기 단지 선제적 크롤링 — 최근 사용자가 조회한 단지 우선.
+    """인기 단지 선제적 크롤링 — 최근 7일 사용자 클릭 단지 우선.
 
-    선정 기준: last_crawled_at 최근순 (= 사용자가 실제 검색/조회한 단지)
-    IP 차단 방지를 위해 단지 간 2초 대기.
+    선정 기준: last_viewed_at 최근순(V058, 사용자가 start-crawl 을 호출한
+    시각). 부족분은 활성 lane(articles_crawled_at 오래된 순)으로 채운다.
+
+    옛 키 `last_crawled_at DESC` 는 배치·자매 프로젝트의 일괄 스탬프에
+    함께 오염돼, 최근 7일 1,050회 인기 크롤 중 846회(81%)가 직전 24시간
+    안에 배치가 이미 긁은 단지를 그대로 재방문하는 낭비였다(세션 402 실측).
+    `get_complexes_for_popular_crawl` 로 교체해 진짜 사용자 클릭을 반영한다.
     """
     db = SessionLocal()
     job = CrawlJob(job_type="popular_crawl", scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow())
@@ -345,26 +351,7 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
     job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
 
     try:
-        # 1순위: 사용자가 최근 조회한 단지 (last_crawled_at 최신순)
-        complexes = (
-            db.query(Complex)
-            .filter(Complex.last_crawled_at.isnot(None))
-            .order_by(Complex.last_crawled_at.desc())
-            .limit(batch_size)
-            .all()
-        )
-
-        # 폴백: 인기 단지가 없으면 최근 등록된 단지로 로테이션
-        if not complexes:
-            complexes = (
-                db.query(Complex)
-                .filter(Complex.total_household_count.isnot(None))
-                .order_by(Complex.total_household_count.desc())
-                .limit(batch_size)
-                .all()
-            )
-            if complexes:
-                logger.info("인기 단지 0개 → 세대수 상위 %d개 단지로 폴백", len(complexes))
+        complexes = get_complexes_for_popular_crawl(db, batch_size)
 
         total = len(complexes)
         logger.info("인기 단지 선제적 크롤링 시작: %d개 단지", total)

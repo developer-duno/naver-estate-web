@@ -30,9 +30,11 @@ def test_failed_message_has_header_and_body():
     }
     msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
     assert msg.startswith("[내부모니터] 🔴 <b>크롤링 장애</b> — 1건 활성 (17:40)")
-    assert "complex_articles" in msg
+    # 세션 407 — 영문 job_type 대신 우리말 이름. 영문이 다시 보이면 회귀다.
+    assert "단지 매물 가져오기" in msg
+    assert "complex_articles" not in msg
     assert "40/50 (80%)" in msg
-    assert "크롤링 로그 확인" in msg
+    assert "Claude 에게 알려주세요" in msg
 
 
 def test_failed_message_multiple_count_shows_extra():
@@ -46,12 +48,17 @@ def test_failed_message_multiple_count_shows_extra():
 
 def test_stale_message_body():
     """정상: crawl_stale → 마비 본문 + 재시작 가이드"""
-    data = {"job_type": "crawl_details", "count": 2, "stale_hours": 1,
+    # ⚠ job_type 은 DB 값(article_detail)이지 스케줄러 잡 id(crawl_details)가 아니다.
+    #   옛 픽스처는 스케줄러 id 를 넣고 있었다 — 실제 알림에 그 값이 올 일은 없다
+    #   (monitor.py 는 CrawlJob.job_type 을 넣는다). 세션 407 에 실제 값으로 정정.
+    data = {"job_type": "article_detail", "count": 2, "stale_hours": 1,
             "started_at": "2026-05-19T15:00:00+00:00"}
     msg = format_issue_message("crawl_stale", data, event="new", header_ctx=_ctx())
-    assert "crawl_details" in msg
-    assert "마비" in msg
-    assert "재시작" in msg
+    # 세션 407 — 영문 job_type·"마비"(어려운 말) 대신 우리말.
+    assert "매물 상세 내용 채우기" in msg
+    assert "article_detail" not in msg
+    assert "멈춰 있어요" in msg
+    assert "서버를 다시 켜야" in msg
 
 
 # ── 시각 표기 = KST 통일 가드 (세션 406) ──────────────────────────────────
@@ -95,7 +102,8 @@ def test_stale_started_at_is_readable_kst():
     data = {"job_type": "article_detail_backfill", "count": 1, "stale_hours": 4,
             "started_at": "2026-09-14T03:20:00.008990+00:00"}
     msg = format_issue_message("crawl_stale", data, event="new", header_ctx=_ctx())
-    assert "시작: 09-14 12:20" in msg, f"KST MM-DD HH:MM 이어야 한다: {msg}"
+    # 세션 407 에 "시작:" → "시작한 때:" 로 낱말만 바뀌었다(시각 형식은 그대로).
+    assert "시작한 때: 09-14 12:20" in msg, f"KST MM-DD HH:MM 이어야 한다: {msg}"
     assert "T03:20" not in msg, "ISO 원문이 그대로 노출됐다"
     assert "+00:00" not in msg, "UTC 오프셋이 그대로 노출됐다"
 
@@ -106,7 +114,8 @@ def test_failed_last_completed_at_is_readable_kst():
             "processed": 40, "total": 50,
             "last_completed_at": "2026-05-19T04:00:00+00:00"}
     msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
-    assert "마지막 완료: 05-19 13:00" in msg, f"KST 변환이 빠졌다: {msg}"
+    # 세션 407 에 "마지막 완료:" → "마지막으로 잘 됐던 때:" 로 낱말만 바뀌었다.
+    assert "마지막으로 잘 됐던 때: 05-19 13:00" in msg, f"KST 변환이 빠졌다: {msg}"
     assert "+00:00" not in msg
 
 
@@ -114,7 +123,7 @@ def test_stamp_falls_back_to_raw_on_unparsable():
     """파싱 불가한 값이면 원문 그대로 — 시각 표시 때문에 알림 자체가 깨지면 안 된다."""
     data = {"job_type": "x", "count": 1, "stale_hours": 1, "started_at": "알 수 없음"}
     msg = format_issue_message("crawl_stale", data, event="new", header_ctx=_ctx())
-    assert "시작: 알 수 없음" in msg
+    assert "시작한 때: 알 수 없음" in msg
 
 
 def test_freshness_message_spinning():
@@ -122,7 +131,9 @@ def test_freshness_message_spinning():
     data = {"label": "매물", "status": "red", "age_hours": 26, "spinning": True,
             "processed": 53, "total": 53, "new_rows": 0, "link_path": "/admin#freshness"}
     msg = format_issue_message("freshness", data, event="new", header_ctx=_ctx())
-    assert "매물" in msg and "red" in msg and "26h" in msg
+    # 세션 407 — 색 코드(red)·"26h" 대신 우리말. 링크는 부연으로 남는다.
+    assert "매물" in msg and "한참 안 들어옴" in msg and "26시간째" in msg
+    assert "red" not in msg
     assert "헛바퀴" in msg
     assert "/admin#freshness" in msg
 
@@ -159,7 +170,9 @@ def test_admin_link_without_frontend_url():
             "processed": None, "total": None, "new_rows": None, "link_path": "/admin#freshness"}
     with patch.dict("os.environ", {"FRONTEND_URL": ""}, clear=False):
         msg = format_issue_message("freshness", data, event="new", header_ctx=_ctx())
-    assert "→ /admin#freshness 데이터 신선도 확인" in msg
+    # 세션 407 — "데이터 신선도" 라는 말을 빼고, 링크는 부연 괄호로만 남긴다.
+    assert "(자료가 언제 들어왔는지 보는 화면: /admin#freshness)" in msg
+    assert "신선도" not in msg
 
 
 # ── PR #44 batch 합산 의미 일관성 (세션 219 후속) ──
@@ -169,25 +182,31 @@ def test_admin_link_without_frontend_url():
 
 
 def test_freshness_body_uses_batch_language():
-    """freshness 본문은 'batch 합계' / 'batch 시작 후 신규행' 으로 표현."""
+    """freshness 본문은 '한 회차 합계' 의미를 우리말로 표현 (세션 407).
+
+    PR #44 의 취지("1건이 아니라 회차 통째의 합계")는 그대로 지키되, 사장님이 모르는
+    'batch' 라는 말을 쓰지 않는다 — "이번에 처리한 양" / "이번에 새로 쌓인 건수".
+    """
     data = {"label": "매물", "status": "red", "age_hours": 26, "spinning": True,
             "processed": 791, "total": 791, "new_rows": 0, "link_path": "/admin#freshness"}
     msg = format_issue_message("freshness", data, event="new", header_ctx=_ctx())
-    assert "batch 합계" in msg, f"본문에 'batch 합계' 표현 필요: {msg}"
-    assert "batch 시작 후" in msg, f"본문에 'batch 시작 후' 표현 필요: {msg}"
+    assert "이번에 처리한 양" in msg, f"회차 합계 표현 필요: {msg}"
+    assert "이번에 새로 쌓인 건수" in msg, f"회차 신규 건수 표현 필요: {msg}"
+    assert "batch" not in msg, f"영문 'batch' 가 남아 있다: {msg}"
     # 옛 표현이 남아있으면 안 됨 (회귀 가드)
     assert "마지막 작업 처리율" not in msg
     assert "작업 후 신규행" not in msg
 
 
 def test_failed_body_uses_batch_language():
-    """crawl_failed 본문도 'batch 합계 처리율' 로 통일."""
+    """crawl_failed 본문도 같은 우리말 표현으로 통일 (세션 407)."""
     data = {
         "job_type": "complex_articles", "count": 1, "error": "네이버 502",
         "processed": 791, "total": 791, "last_completed_at": "2026-05-19T04:00:00+00:00",
     }
     msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
-    assert "batch 합계" in msg, f"본문에 'batch 합계' 표현 필요: {msg}"
+    assert "이번에 처리한 양" in msg, f"회차 합계 표현 필요: {msg}"
+    assert "batch" not in msg, f"영문 'batch' 가 남아 있다: {msg}"
     assert "마지막 처리율" not in msg
 
 
@@ -380,9 +399,12 @@ def test_failed_burst_message_uses_dedicated_builder():
     assert msg.startswith("[내부모니터] 🔴 <b>크롤링 장애</b> — 1건 활성 (17:40)")
     # 전용 빌더가 등록됐다 = detail 폴백 문자열이 본문으로 쓰이지 않는다
     assert "폴백이면 이 문자열이" not in msg
-    assert "complex_articles" in msg
+    # 세션 407 — 영문 job_type·개발자 에러 원문 대신 우리말.
+    assert "단지 매물 가져오기" in msg
+    assert "complex_articles" not in msg
     assert "60분" in msg
     assert "13건" in msg
-    assert "대상 13개" in msg
-    assert "statement timeout" in msg
-    assert "크롤링 로그 확인" in msg
+    assert "실패한 대상 13개" in msg
+    assert "statement timeout" not in msg, f"개발자 에러 원문이 그대로 노출됐다: {msg}"
+    assert "데이터베이스가 너무 오래 걸려" in msg
+    assert "Claude 에게 알려주세요" in msg

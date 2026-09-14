@@ -17,6 +17,14 @@ import os
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
+from crawler.plain_words import (
+    action_words,
+    explain_error,
+    job_words,
+    plainify_detail,
+    status_words,
+)
+
 # 이 레포 관습 — quota_db.KST·auth.permissions 등과 동일 (Asia/Seoul 고정).
 # 서버 로컬 시간대에 의존하는 astimezone() 무인자 호출은 CI·컨테이너(UTC)에서
 # 어긋나므로 쓰지 않는다(timezone-consistency 룰).
@@ -125,26 +133,27 @@ def _rate(processed, total) -> str:
 
 def _body_failed(data: dict) -> str:
     """작업 실패 본문."""
-    job = _esc(data.get("job_type"))
+    job = _esc(job_words(data.get("job_type")))
     count = data.get("count", 1)
     extra = f" 외 {count - 1}건" if count > 1 else ""
-    lines = [f"▸ <b>{job}</b> 작업 실패 ({count}건)"]
-    lines.append(f"  대표 에러{extra}: {_esc(data.get('error'))[:200]}")
+    lines = [f"▸ <b>{job}</b> 작업이 실패했어요 ({count}건)"]
+    lines.append(f"  까닭{extra}: {_esc(explain_error(data.get('error')))}")
     # 처리율 = PR #44 후 batch 합계 (같은 scheduler_job_id 의 60분 윈도우 합산).
-    # 1개 단지 잡이 아니라 batch 통째라는 점을 명시해 오해 차단.
-    lines.append(f"  batch 합계 처리율: {_rate(data.get('processed'), data.get('total'))}")
+    # "batch" 는 사장님이 모르는 말이라 "이번에 처리한 양" 으로 부른다 — 뜻은 같다
+    # (1개 단지가 아니라 한 회차 통째의 합계라는 것이 요점, 세션 219 PR #44 취지 보존).
+    lines.append(f"  이번에 처리한 양: {_rate(data.get('processed'), data.get('total'))}")
     if data.get("last_completed_at"):
-        lines.append(f"  마지막 완료: {_esc(_kst_stamp(data['last_completed_at']))}")
+        lines.append(f"  마지막으로 잘 됐던 때: {_esc(_kst_stamp(data['last_completed_at']))}")
     return "\n".join(lines)
 
 
 def _body_stale(data: dict) -> str:
     """작업 마비 본문."""
-    job = _esc(data.get("job_type"))
-    lines = [f"▸ <b>{job}</b> 작업 마비 ({data.get('count', 1)}건)"]
-    lines.append(f"  {data.get('stale_hours', 1)}시간 넘게 running 상태")
+    job = _esc(job_words(data.get("job_type")))
+    lines = [f"▸ <b>{job}</b> 작업이 멈춰 있어요 ({data.get('count', 1)}건)"]
+    lines.append(f"  {data.get('stale_hours', 1)}시간 넘게 끝나지 않고 있어요")
     if data.get("started_at"):
-        lines.append(f"  시작: {_esc(_kst_stamp(data['started_at']))}")
+        lines.append(f"  시작한 때: {_esc(_kst_stamp(data['started_at']))}")
     return "\n".join(lines)
 
 
@@ -154,43 +163,49 @@ def _body_failed_burst(data: dict) -> str:
     crawl_failed 와 달리 "일부는 성공했는데도 알린다" 는 점이 핵심이라, 첫 줄에
     묶음이라는 표식을 둔다 — 사장님이 crawl_failed 알림과 구분해서 읽어야 한다.
     """
-    job = _esc(data.get("job_type"))
+    job = _esc(job_words(data.get("job_type")))
     window = data.get("window_min", 60)
     count = data.get("count", 0)
-    lines = [f"🟠 <b>{job}</b> 실패 묶음 — 최근 {window}분 내 {count}건 실패"]
+    lines = [f"🟠 <b>{job}</b> 작업이 짧은 사이에 여러 번 실패했어요 — {window}분 동안 {count}건"]
     targets = data.get("targets")
     if targets:
-        lines.append(f"  대상 {targets}개")
-    lines.append("  같은 배치의 다른 건은 성공해 자가복구로 분류됐지만, 묶음 실패입니다.")
-    lines.append(f"  대표 에러: {_esc(data.get('error'))[:200]}")
+        lines.append(f"  실패한 대상 {targets}개")
+    lines.append("  같은 회차의 다른 건은 성공해서 그냥 넘어갈 뻔했지만, 몰려서 실패해 알려드려요.")
+    lines.append(f"  까닭: {_esc(explain_error(data.get('error')))}")
     return "\n".join(lines)
 
 
 def _body_freshness(data: dict) -> str:
     """데이터 미축적 본문."""
     label = _esc(data.get("label"))
-    status = _esc(data.get("status"))
+    status = _esc(status_words(data.get("status")))
     age = data.get("age_hours")
-    age_str = f", {age}h" if age is not None else ""
-    lines = [f"▸ <b>{label}</b> 데이터 미축적 ({status}{age_str})"]
+    age_str = f", {age}시간째" if age is not None else ""
+    lines = [f"▸ <b>{label}</b> 자료가 새로 안 들어오고 있어요 ({status}{age_str})"]
     if data.get("spinning"):
-        lines.append("  헛바퀴: 작업은 도는데 신규행 0")
+        lines.append("  작업은 도는데 새로 저장된 게 하나도 없어요(헛바퀴).")
     # 처리율·신규행 = PR #44 후 batch 합계 기준 (60분 윈도우 같은 scheduler_job_id 합산).
-    # "마지막 작업 1건" 으로 오해하면 batch 32% 가 0/0 단지일 때 false alarm 추정.
-    lines.append(f"  batch 합계 처리율: {_rate(data.get('processed'), data.get('total'))}")
+    # "마지막 작업 1건" 으로 오해하면 batch 32% 가 0/0 단지일 때 false alarm 추정 —
+    # 그 "합계" 라는 뜻은 그대로 두고 말만 우리말로 옮긴다("batch" 는 사장님이 모르는 말).
+    lines.append(f"  이번에 처리한 양: {_rate(data.get('processed'), data.get('total'))}")
     if data.get("new_rows") is not None:
-        lines.append(f"  batch 시작 후 신규행: {data['new_rows']}")
+        lines.append(f"  이번에 새로 쌓인 건수: {data['new_rows']}")
     return "\n".join(lines)
 
 
 def _action(kind: str, data: dict) -> str:
-    """행동 가이드 한 줄."""
+    """행동 가이드 한 줄 — 사장님이 실제로 할 수 있는 것만 (세션 407).
+
+    옛 문구는 "크롤링 로그 확인 — 네이버 응답·서버 상태 점검" 처럼 **개발자가 할 일**을
+    적어 두어, 알림을 읽은 사장님이 할 수 있는 게 없었다. 문구는 plain_words 가 갖고
+    있고(한 곳에서 관리), 여기서는 freshness 만 화면 링크를 덧붙인다 —
+    "신선도" 라는 말은 빼고 무엇을 보는 화면인지로 부른다.
+    """
+    base = action_words(kind)
     if kind == "freshness":
         link = _esc(_admin_link(data.get("link_path", "/admin#freshness")))
-        return f"→ {link} 데이터 신선도 확인"
-    if kind == "crawl_stale":
-        return "→ 마비 작업 확인 — 서버·스케줄러 재시작 검토"
-    return "→ 크롤링 로그 확인 — 네이버 응답·서버 상태 점검"
+        return f"{base}\n  (자료가 언제 들어왔는지 보는 화면: {link})"
+    return base
 
 
 _BODY_BUILDERS = {
@@ -209,6 +224,12 @@ def _resolved_line(detail: str, data: dict) -> str:
     붙여주는 reason 으로 세 가지를 구분한다. reason 이 없으면(옛 호출·수동 호출)
     기존 문구 그대로 — 하위호환.
     """
+    # detail 은 monitor_alerts 에 **저장돼 있던 옛 문장**일 수 있다(장애 발생 시점에
+    # 저장 → 해소 시점에 재발송). 세션 407 이전 형식은 영문 job_type + 개발자 에러
+    # 원문이라 그대로 내보내면 "새 알림은 우리말인데 복구 알림만 영문" 이 된다.
+    # 사장님 결정(2026-09-15): 저장된 값은 건드리지 않고 **보낼 때** 우리말로 바꾼다
+    # — DB 무변경이라 되돌리기가 안전하고, 옛 22건도 전부 우리말로 나간다.
+    detail = plainify_detail(detail)
     reason = data.get("reason")
     if reason == "swept":
         return (

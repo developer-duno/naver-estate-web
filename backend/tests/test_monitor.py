@@ -8,6 +8,7 @@ from unittest.mock import patch
 from sqlalchemy import select
 
 from crawler.monitor import _job_stats, detect_issues, run_monitor
+from crawler.plain_words import job_words
 from db.models import Article, CrawlJob, MonitorAlert
 from tests.conftest import TestSession
 
@@ -569,7 +570,9 @@ def test_run_monitor_sends_html_parse_mode():
         text, kwargs = mock_tg.call_args[0][0], mock_tg.call_args[1]
         assert kwargs["parse_mode"] == "HTML"
         assert "<b>" in text
-        assert "complex_articles" in text
+        # 세션 407 — 알림은 영문 job_type 이 아니라 우리말 이름으로 나간다.
+        assert "단지 매물 가져오기" in text
+        assert "complex_articles" not in text
     finally:
         db.close()
 
@@ -1245,8 +1248,14 @@ def test_detect_issues_failed_error_null_message_is_empty_string():
 
 
 def _seed_three_resolvable_alerts(db, now):
-    """해소 대상 3건 (전부 마지막 실행 completed = recovered) 심기."""
-    for job_type in ("complex_list", "crawl_details", "collect_prices"):
+    """해소 대상 3건 (전부 마지막 실행 completed = recovered) 심기.
+
+    ⚠ 세션 407: job_type 은 DB 값이어야 한다. 옛 픽스처는 crawl_details·collect_prices
+    라는 **스케줄러 잡 id** 를 넣고 있었는데, 실제 CrawlJob.job_type 에 그 값이 저장될
+    일은 없다(infra.md §잡 이름 ≠ job_type). 알림이 우리말로 나가는지 검증하려면
+    실제로 오는 값(article_detail·price_history)을 써야 한다.
+    """
+    for job_type in ("complex_list", "article_detail", "price_history"):
         db.add(CrawlJob(
             job_type=job_type, status="completed",
             started_at=now - timedelta(hours=1), completed_at=now - timedelta(hours=1),
@@ -1281,8 +1290,12 @@ def test_run_monitor_batches_multiple_resolved_into_one_message():
         assert len(resolved_msgs) == 1, f"발송 {len(resolved_msgs)}통 — 묶이지 않음"
         msg = resolved_msgs[0]
         assert "해소 3건" in msg
-        for job_type in ("complex_list", "crawl_details", "collect_prices"):
-            assert f"{job_type} 작업 1건 실패" in msg, f"{job_type} detail 누락: {msg}"
+        # ⚠ 세션 407: 저장된 detail 은 발송 직전 우리말로 바뀐다(plainify_detail).
+        #   그래서 영문 job_type 이 아니라 **우리말 이름**이 메시지에 있어야 한다.
+        #   영문이 다시 보이면 사장님이 못 읽는 알림으로 되돌아간 것이므로 같이 막는다.
+        for job_type in ("complex_list", "article_detail", "price_history"):
+            assert f"{job_words(job_type)} 작업 1건 실패" in msg, f"{job_type} detail 누락: {msg}"
+            assert job_type not in msg, f"영문 작업명이 그대로 노출됐다: {msg}"
 
         rows = db.execute(select(MonitorAlert)).scalars().all()
         assert all(r.status == "resolved" for r in rows), [(r.alert_key, r.status) for r in rows]

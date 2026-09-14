@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import and_, case, func, select, text
 
 from crawler.alert_format import _kst_stamp, format_issue_message, format_resolved_batch
+from crawler.plain_words import explain_error, job_words, status_words
 from db.models import CrawlJob, MonitorAlert
 from routers.admin.freshness import compute_freshness
 from services.telegram import send_telegram
@@ -209,7 +210,11 @@ def detect_issues_ex(db) -> tuple[list[dict], bool]:
         issues.append({
             "alert_key": f"crawl_failed:{row.job_type}",
             "kind": "crawl_failed",
-            "detail": f"{row.job_type} 작업 {row.cnt}건 실패 — {err[:200]}",
+            # 이 문장은 monitor_alerts.detail 에 저장돼 **해소 알림 때 재발송**된다
+            # (monitor 가 alert.detail 을 그대로 넘김). 그래서 만들 때부터 우리말이어야
+            # 한다 — 영문 job_type·개발자 에러가 여기 박히면 복구 알림까지 오염된다
+            # (세션 407 사장님 지시: "어려운 말은 금지").
+            "detail": f"{job_words(row.job_type)} 작업 {row.cnt}건 실패 — {explain_error(err)}",
             "data": {
                 "job_type": row.job_type,
                 "count": row.cnt,
@@ -240,8 +245,8 @@ def detect_issues_ex(db) -> tuple[list[dict], bool]:
             "alert_key": f"crawl_failed_burst:{row.job_type}",
             "kind": "crawl_failed_burst",
             "detail": (
-                f"{row.job_type} 작업 최근 {_BURST_WINDOW_MIN}분 내 {row.cnt}건 실패 "
-                f"(일부 성공이 섞여 자가복구로 분류됐지만 묶음 실패) — {err[:200]}"
+                f"{job_words(row.job_type)} 작업 최근 {_BURST_WINDOW_MIN}분 내 {row.cnt}건 실패 "
+                f"(일부는 성공했지만 몰려서 실패) — {explain_error(err)}"
             ),
             "data": {
                 "job_type": row.job_type,
@@ -279,7 +284,10 @@ def detect_issues_ex(db) -> tuple[list[dict], bool]:
         issues.append({
             "alert_key": f"crawl_stale:{row.job_type}",
             "kind": "crawl_stale",
-            "detail": f"{row.job_type} 작업 {row.cnt}건이 {threshold}시간 넘게 running 상태 — 마비 의심",
+            "detail": (
+                f"{job_words(row.job_type)} 작업 {row.cnt}건이 "
+                f"{threshold}시간 넘게 끝나지 않고 있어요 — 멈춘 것으로 보입니다"
+            ),
             "data": {
                 "job_type": row.job_type,
                 "count": row.cnt,
@@ -321,7 +329,11 @@ def detect_issues_ex(db) -> tuple[list[dict], bool]:
                 # f-string 직접 삽입은 str() 과 결과가 완전히 동일한데(실측), 세션 406 이
                 # 처음 만든 가드는 `str(` 글자만 찾아 이 형태를 못 잡았다 — 그래서
                 # test_alert_time_kst_guard 에 f-string 패턴을 추가했다.
-                "detail": f"{item['label']} 데이터 미축적 (신선도 red, 마지막 갱신 {_kst_stamp(item['last_updated'])})",
+                "detail": (
+                    f"{item['label']} 자료가 새로 안 들어오고 있어요 "
+                    f"({status_words(item['status'])}, 마지막으로 들어온 때 "
+                    f"{_kst_stamp(item['last_updated'])})"
+                ),
                 "data": {
                     "label": item["label"],
                     "status": item["status"],

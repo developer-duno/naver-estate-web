@@ -67,11 +67,17 @@ def _kst_stamp(value) -> str:
     return dt.astimezone(KST).strftime("%m-%d %H:%M")
 
 # event → 헤더 이모지·문구
+#
+# ⚠ 헤더는 **사장님이 목록에서 가장 먼저(때로는 유일하게) 읽는 줄**이다.
+#    세션 407 적대검증 HIGH-1: 본문에서 "크롤"을 전부 "가져오기"로 바꿔 놓고
+#    헤더에는 `[내부모니터] 크롤링 장애 — N건 활성` 을 그대로 남겨, 같은 알림
+#    안에서 앞뒤가 어긋났다. 접두어도 발신 모듈 이름(내부모니터)이 아니라
+#    **뜻**으로 부른다.
 _EVENT_HEADER = {
-    "new": ("🔴", "크롤링 장애"),
-    "recur": ("🔴", "크롤링 장애 재발"),
-    "ongoing": ("🔴", "크롤링 장애 지속"),
-    "resolved": ("✅", "크롤링 복구"),
+    "new": ("🔴", "자료 수집에 문제가 생겼어요"),
+    "recur": ("🔴", "같은 문제가 또 생겼어요"),
+    "ongoing": ("🔴", "문제가 계속되고 있어요"),
+    "resolved": ("✅", "문제가 풀렸어요"),
 }
 
 # resolved 이벤트의 해소 사유(reason) → 헤더 이모지·문구.
@@ -96,6 +102,12 @@ def _admin_link(path: str) -> str:
     raw = os.getenv("FRONTEND_URL", "")
     candidates = [u.strip().rstrip("/") for u in raw.split(",") if u.strip()]
     if not candidates:
+        # ⚠ 이 분기는 운영에서 도달하지 않는다 — 라이브 backend/.env 는 FRONTEND_URL 을
+        #    3값으로 갖고 있고(localhost + 2u.pe.kr + www), 아래 non_local 선택이
+        #    https://2u.pe.kr 을 고른다(세션 407 실측). 세션 407 적대검증이 "미설정이면
+        #    텔레그램에서 /admin#freshness 가 링크가 아니라 봇 명령으로 렌더된다"고
+        #    지적했으나 전제(미설정)가 운영과 달라 실무 영향 0 — 다음 세션이 같은 조사를
+        #    반복하지 않도록 박아 둔다. dev/CI 에서만 경로가 그대로 나온다.
         return path
     # 구독자(공인중개사) 가 텔레그램에서 클릭 — localhost 는 무의미하므로 운영 도메인 우선.
     # 모두 localhost 면 어쩔 수 없이 그대로 (dev 환경).
@@ -105,9 +117,9 @@ def _admin_link(path: str) -> str:
 
 
 def _header(event: str, header_ctx: dict, reason: str = "") -> str:
-    """헤더 한 줄: '[내부모니터] 🔴 크롤링 장애 — N건 활성 (HH:MM)'.
+    """헤더 한 줄: '[서버 알림] 🔴 자료 수집에 문제가 생겼어요 — 안 풀린 문제 N개 (HH:MM)'.
 
-    [내부모니터] 접두어 = 3채널(healthcheck.yml 외부/본 모듈 내부/job_error_listener
+    [서버 알림] 접두어 = 3채널(healthcheck.yml 외부/본 모듈 내부/job_error_listener
     즉시) 문구 통일 작업의 일부. 서버가 통째로 죽으면 이 채널은 함께 침묵하므로
     ([내부모니터] 발화 = 서버가 살아서 DB까지 도달했다는 뜻), 사장님이 어느 감시가
     보낸 메시지인지 채널명만 보고 구분할 수 있게 함 (IMPROVEMENT_PLAN P0-0 보류 항목).
@@ -121,13 +133,17 @@ def _header(event: str, header_ctx: dict, reason: str = "") -> str:
     count = header_ctx.get("active_count", 0)
     now = header_ctx.get("now")
     hhmm = _kst_hhmm(now)
-    return f"[내부모니터] {emoji} <b>{label}</b> — {count}건 활성 ({hhmm})"
+    return f"[서버 알림] {emoji} <b>{label}</b> — 안 풀린 문제 {count}개 ({hhmm})"
 
 
 def _rate(processed, total) -> str:
-    """처리율 문자열 — total 0/None 이면 '통계 없음' (0 나눗셈 회피)."""
+    """처리율 문자열 — total 0/None 이면 건수를 안 세는 작업 (0 나눗셈 회피).
+
+    옛 문구 "통계 없음" 은 사장님께 "처리한 양이 통계가 없다"로 읽혀 뜻이 안 통했다
+    (세션 407 적대검증 HIGH-2). 실제 뜻은 "이 작업은 건수를 세지 않는 종류" 다.
+    """
     if not total:
-        return "통계 없음"
+        return "건수를 세지 않는 작업이에요"
     return f"{processed or 0}/{total} ({round((processed or 0) / total * 100)}%)"
 
 
@@ -183,7 +199,10 @@ def _body_freshness(data: dict) -> str:
     age_str = f", {age}시간째" if age is not None else ""
     lines = [f"▸ <b>{label}</b> 자료가 새로 안 들어오고 있어요 ({status}{age_str})"]
     if data.get("spinning"):
-        lines.append("  작업은 도는데 새로 저장된 게 하나도 없어요(헛바퀴).")
+        # ⚠ "(헛바퀴)" 를 괄호로 덧붙이던 것을 뺐다 — 앞 문장에서 이미 쉬운 말로
+        #    설명했는데 뒤에 은어를 붙이면 마지막 인상이 어려운 말이 된다
+        #    (세션 407 적대검증 HIGH-2).
+        lines.append("  작업은 도는데 새로 저장된 게 하나도 없어요.")
     # 처리율·신규행 = PR #44 후 batch 합계 기준 (60분 윈도우 같은 scheduler_job_id 합산).
     # "마지막 작업 1건" 으로 오해하면 batch 32% 가 0/0 단지일 때 false alarm 추정 —
     # 그 "합계" 라는 뜻은 그대로 두고 말만 우리말로 옮긴다("batch" 는 사장님이 모르는 말).
@@ -270,7 +289,10 @@ def format_resolved_batch(items: list[dict], *, header_ctx: dict) -> str:
     now = header_ctx.get("now")
     hhmm = _kst_hhmm(now)
     header = (
-        f"[내부모니터] {emoji} <b>{label}</b> — {count}건 활성 ({hhmm})"
+        # ⚠ 헤더 문구가 _header() 와 **글자 단위로 같아야** 한다 — 이 줄은 별도 리터럴이라
+        #    세션 407 에 _header() 만 고쳤을 때 묶음 알림만 옛 문구(`[내부모니터] … N건 활성`)로
+        #    남았다. 한쪽만 고치면 사장님 폰에 두 말투가 섞인다.
+        f"[서버 알림] {emoji} <b>{label}</b> — 안 풀린 문제 {count}개 ({hhmm})"
         f" — 해소 {len(items)}건"
     )
 

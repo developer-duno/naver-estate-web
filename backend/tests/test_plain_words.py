@@ -51,9 +51,15 @@ def test_be_dict_covers_every_fe_job_type():
     assert not missing, f"알림 사전에 우리말 이름이 없는 작업: {missing}"
 
 
+# FE 사전이 일부러 비워 둔 값 — `check-job-labels.mjs` 의 LABEL_EXEMPT 와 같은 뜻.
+# 화면에는 이름표가 불필요하지만 **알림에는 영문이 그대로 찍히므로** BE 사전에는 둔다
+# (세션 407 적대검증 MEDIUM-8).
+_FE_EXEMPT = {"manual", "test", "x"}
+
+
 def test_fe_dict_covers_every_be_job_type():
     """반대 방향 — 알림만 알고 화면이 모르는 작업이 없어야 한다(양쪽 표기 통일)."""
-    missing = sorted(set(JOB_WORDS) - _fe_job_type_keys())
+    missing = sorted(set(JOB_WORDS) - _fe_job_type_keys() - _FE_EXEMPT)
     assert not missing, f"화면 사전(crawl-job-labels.ts)에 없는 작업: {missing}"
 
 
@@ -103,10 +109,15 @@ def test_explain_error_translates_real_prod_errors():
 
 
 def test_explain_error_keeps_short_clue_for_unknown():
-    """모르는 에러는 버리지 않고 앞부분만 짧게 남긴다 (원인 추적 단서 보존)."""
+    """모르는 에러는 버리지 않되 **'개발자용 기록'이라고 이름표를 달아** 짧게 남긴다.
+
+    맨몸으로 원문을 내보내면 사장님은 그게 무슨 글자인지 몰라 불안해진다
+    (세션 407 적대검증 MEDIUM-4). 단서는 보존하되 "이건 개발자용" 이라고 알린다.
+    """
     plain = explain_error("완전히 새로운 종류의 문제 " + "x" * 300)
-    assert plain.startswith("완전히 새로운 종류의 문제")
-    assert len(plain) <= 90, f"너무 길다: {len(plain)}"
+    assert plain.startswith("처음 보는 문제예요"), plain
+    assert "완전히 새로운 종류의 문제" in plain, plain
+    assert len(plain) <= 120, f"너무 길다: {len(plain)}"
 
 
 def test_explain_error_empty_is_empty():
@@ -165,6 +176,98 @@ def test_plainify_freshness_status_word():
     out = plainify_detail("매물 데이터 미축적 (신선도 red, 마지막 갱신 09-12 19:29)")
     assert "red" not in out, out
     assert "한참 안 들어옴" in out, out
+
+
+def test_dev_error_hint_catches_python_exceptions():
+    """파이썬 예외(`XxxError: …`)가 '이미 사람 말'로 오판되면 안 된다.
+
+    ⚠ 세션 407 적대검증 HIGH-1 회귀 가드. 옛 `_DEV_ERROR_HINT` 는 `Error\\)` 로
+    **닫는 괄호가 붙은** 형태만 잡아서, `KeyError: articleList` 처럼 괄호 없는 표준
+    파이썬 예외가 통째로 샜다. 이 경로는 `explain_error` 조차 우회해 80자 컷도
+    안 걸리므로, 원문이 그대로 텔레그램에 나갔다 — 이 PR 이 없애려던 바로 그 증상.
+    """
+    leaky = [
+        "KeyError: articleList",
+        "ValueError: bad literal",
+        "TypeError: NoneType is not subscriptable",
+        "IndexError: list index out of range",
+        "AttributeError: 'NoneType' object has no attribute 'get'",
+        "RuntimeError: session closed",
+        "Traceback (most recent call last):",
+    ]
+    for raw in leaky:
+        out = plainify_detail(f"complex_articles 작업 1건 실패 — {raw}")
+        # 맨몸 노출이 아니라 "개발자용 기록" 이라는 이름표가 달려야 한다.
+        # (옛 코드는 이 경로 자체를 건너뛰어 원문이 그대로 나갔다.)
+        assert "처음 보는 문제예요" in out, f"개발자 예외가 그대로 노출됐다: {out}"
+        assert "개발자용 기록" in out, out
+
+
+def test_error_rules_do_not_misfire_on_plain_numbers():
+    """평범한 개수를 HTTP 상태코드로 오인하면 안 된다 (적대검증 MEDIUM-9).
+
+    `\\b50[0234]\\b` 는 "504 단지 수집 실패"·"complex 500 건 처리" 를 서버 오류로
+    오역했다. 틀린 번역은 번역 안 함보다 나쁘다 — 원인이 통째로 바뀌어 전달된다.
+    """
+    assert "상대 서버" not in explain_error("504 단지 수집 실패")
+    assert "상대 서버" not in explain_error("complex 500 건 처리 후 중단")
+    # 맥락이 있으면 제대로 잡는다
+    assert "상대 서버" in explain_error("HTTP 502 Bad Gateway")
+
+
+def test_quota_rule_needs_context():
+    """`quota` 단독 매칭은 무관한 에러를 오역한다 (적대검증 MEDIUM-2)."""
+    assert "정부 자료 요청 횟수" not in explain_error("disk quota warning")
+    assert "정부 자료 요청 횟수" not in explain_error("QuotaManager init failed")
+    assert "정부 자료 요청 횟수" in explain_error("일 요청 건수(1000건)를 초과하였습니다")
+
+
+def test_unknown_error_is_labeled_as_developer_text():
+    """모르는 에러는 맨몸으로 내보내지 않고 '개발자용 기록' 이라고 알려 준다."""
+    out = explain_error("(psycopg2.errors.UniqueViolation) duplicate key value")
+    # UniqueViolation 은 실측 규칙에 있으므로 번역돼야 한다
+    assert "두 번 저장" in out, out
+    out2 = explain_error("SomethingCompletelyNew: 처음 보는 형식")
+    assert "개발자용 기록" in out2, out2
+
+
+def test_traceback_keeps_last_line_not_first():
+    """트레이스백은 첫 줄이 정보 0 — 마지막 줄을 단서로 남긴다 (적대검증 MEDIUM-9)."""
+    tb = "Traceback (most recent call last):\n  File x, line 1\nValueError: 진짜 원인"
+    out = explain_error(tb)
+    assert "ValueError: 진짜 원인" in out, out
+    assert not out.startswith("처음 보는 문제예요 (개발자용 기록: Traceback"), out
+
+
+def test_rendered_alert_has_no_english_identifiers():
+    """렌더된 알림 전문에 영문 식별자가 없어야 한다 (적대검증 MEDIUM-8).
+
+    기존 테스트는 `assert "complex_articles" not in msg` 처럼 **이미 아는 문자열만**
+    막아서, 사전에 없는 새 job_type 이 생기면 영문이 그대로 나가는 것을 못 잡았다.
+    허용 목록(고유명사·URL)을 뺀 뒤 영문 낱말이 남으면 실패한다.
+    """
+    from datetime import datetime, timezone
+
+    from crawler.alert_format import format_issue_message
+
+    ctx = {"active_count": 1, "now": datetime(2026, 9, 14, 19, 4, tzinfo=timezone.utc)}
+    cases = [
+        ("crawl_failed", {"job_type": "field_drift_monitor", "count": 1,
+                          "error": "(psycopg2.errors.QueryCanceled) statement timeout",
+                          "processed": 0, "total": 0}),
+        ("crawl_stale", {"job_type": "article_detail_backfill", "count": 1, "stale_hours": 4}),
+        ("crawl_failed_burst", {"job_type": "complex_articles", "count": 13,
+                                "window_min": 60, "error": "statement timeout", "targets": 13}),
+    ]
+    # 허용: HTML 태그·고유명사. URL 이 나오는 freshness 는 별도 케이스라 여기서 제외.
+    allowed = ("b", "K-apt", "Claude", "data.go.kr")
+    for kind, data in cases:
+        msg = format_issue_message(kind, data, event="new", header_ctx=ctx)
+        stripped = re.sub(r"<[^>]+>", "", msg)
+        for a in allowed:
+            stripped = stripped.replace(a, "")
+        leftovers = re.findall(r"[A-Za-z][A-Za-z0-9_.]{2,}", stripped)
+        assert not leftovers, f"{kind}: 영문이 남아 있다 {leftovers}\n{msg}"
 
 
 def test_plainify_new_format_not_double_translated():

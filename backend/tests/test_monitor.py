@@ -655,7 +655,7 @@ def test_detect_issues_still_fires_when_latest_is_failed():
 
 def test_run_monitor_recovered_failed_sends_resolved_alert():
     """버그 가드 (통합): 옛 failed + 그 후 completed + active alert 존재 →
-    detect_issues 에서 빠짐 → run_monitor line 215 분기 → '✅ 크롤링 복구' 발송 + status='resolved'.
+    detect_issues 에서 빠짐 → run_monitor line 215 분기 → '✅ 문제가 풀렸어요' 발송 + status='resolved'.
 
     사용자 인사이트 (2026-05-24): "텔레그램은 현재 상태의 정확한 지표 — 잘 되면 잘 되었다고 알려줘야 함"
     """
@@ -776,12 +776,12 @@ def test_run_monitor_completes_alerts_when_freshness_times_out():
 
 
 def _is_resolved_message(msg: str) -> bool:
-    """해소 알림인가 — 사유(reason)에 따라 헤더가 '크롤링 복구'/'알림 종료' 로 갈린다.
+    """해소 알림인가 — 사유(reason)에 따라 헤더가 '문제가 풀렸어요'/'알림 종료' 로 갈린다.
 
     셀렉터를 특정 헤더 문구에 묶으면, 헤더가 사유별로 갈리는 순간 '해소 알림을
     못 찾음' 으로 오탐한다. 두 헤더를 모두 인정해 사유와 무관하게 고른다.
     """
-    return "크롤링 복구" in msg or "알림 종료" in msg
+    return "문제가 풀렸어요" in msg or "알림 종료" in msg
 
 
 def _resolved_message(mock_tg) -> str:
@@ -820,7 +820,7 @@ def test_run_monitor_resolved_after_sweep_says_swept():
         msg = _resolved_message(mock_tg)
         assert "강제 정리" in msg and "원인은 미해결" in msg
         assert "정상으로 돌아왔습니다" not in msg
-        # 헤더도 본문과 같은 결이어야 한다 — "✅ 크롤링 복구" 헤더가 붙으면
+        # 헤더도 본문과 같은 결이어야 한다 — "✅ 문제가 풀렸어요" 헤더가 붙으면
         # 헤더만 본 사장님이 원인 미해결을 정상으로 오인한다(헤더·본문 모순 가드).
         assert "복구" not in msg, f"swept 인데 헤더에 '복구' 가 남음: {msg}"
         assert "알림 종료" in msg
@@ -1359,7 +1359,7 @@ def test_run_monitor_batch_header_warns_when_reason_mixed():
         assert len(msgs) == 1
         msg = msgs[0]
         assert "알림 종료" in msg
-        assert "크롤링 복구" not in msg, f"원인 미해결이 섞였는데 헤더가 '복구': {msg}"
+        assert "문제가 풀렸어요" not in msg, f"원인 미해결이 섞였는데 헤더가 '복구': {msg}"
         # 각 줄은 자기 사유대로 표기 — 복구는 성공확인, 스윕은 강제 정리 문구
         assert "최근 실행 성공 확인" in msg
         assert "강제 정리" in msg and "원인은 미해결" in msg
@@ -1368,7 +1368,7 @@ def test_run_monitor_batch_header_warns_when_reason_mixed():
 
 
 def test_run_monitor_batch_header_ok_when_all_recovered():
-    """④ 전부 recovered 면 헤더는 '✅ 크롤링 복구' 유지."""
+    """④ 전부 recovered 면 헤더는 '✅ 문제가 풀렸어요' 유지."""
     db = TestSession()
     try:
         now = _utcnow()
@@ -1378,7 +1378,7 @@ def test_run_monitor_batch_header_ok_when_all_recovered():
             run_monitor(db)
 
         msg = _resolved_message(mock_tg)
-        assert "크롤링 복구" in msg
+        assert "문제가 풀렸어요" in msg
         assert "알림 종료" not in msg
     finally:
         db.close()

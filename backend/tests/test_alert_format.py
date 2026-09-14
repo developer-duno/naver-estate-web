@@ -29,12 +29,14 @@ def test_failed_message_has_header_and_body():
         "processed": 40, "total": 50, "last_completed_at": "2026-05-19T04:00:00+00:00",
     }
     msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
-    assert msg.startswith("[내부모니터] 🔴 <b>크롤링 장애</b> — 1건 활성 (17:40)")
+    assert msg.startswith("[서버 알림] 🔴 <b>자료 수집에 문제가 생겼어요</b> — 안 풀린 문제 1개 (17:40)")
     # 세션 407 — 영문 job_type 대신 우리말 이름. 영문이 다시 보이면 회귀다.
     assert "단지 매물 가져오기" in msg
     assert "complex_articles" not in msg
     assert "40/50 (80%)" in msg
-    assert "Claude 에게 알려주세요" in msg
+    # 세션 407 — 행동 안내는 "손님 화면 영향 + 아침에 알려주세요" 두 줄이 됐다.
+    assert "손님 화면은 그대로" in msg
+    assert "Claude" in msg
 
 
 def test_failed_message_multiple_count_shows_extra():
@@ -43,7 +45,8 @@ def test_failed_message_multiple_count_shows_extra():
             "processed": 0, "total": 0}
     msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
     assert "외 2건" in msg
-    assert "통계 없음" in msg  # total=0 → 0 나눗셈 없이 처리
+    # 세션 407 — "통계 없음" 은 뜻이 안 통해 "건수를 세지 않는 작업" 으로 바꿨다.
+    assert "건수를 세지 않는 작업" in msg  # total=0 → 0 나눗셈 없이 처리
 
 
 def test_stale_message_body():
@@ -134,7 +137,9 @@ def test_freshness_message_spinning():
     # 세션 407 — 색 코드(red)·"26h" 대신 우리말. 링크는 부연으로 남는다.
     assert "매물" in msg and "한참 안 들어옴" in msg and "26시간째" in msg
     assert "red" not in msg
-    assert "헛바퀴" in msg
+    # 세션 407 — "(헛바퀴)" 괄호 은어를 뺐다. 쉬운 설명 문장만 남는다.
+    assert "새로 저장된 게 하나도 없어요" in msg
+    assert "헛바퀴" not in msg
     assert "/admin#freshness" in msg
 
 
@@ -151,7 +156,7 @@ def test_resolved_event_uses_check_emoji():
     """정상: event=resolved → ✅ 헤더 + '정상으로 돌아왔습니다'"""
     data = {"alert_key": "crawl_failed:complex_articles", "detail": "이전 장애"}
     msg = format_issue_message("crawl_failed", data, event="resolved", header_ctx=_ctx(0))
-    assert msg.startswith("[내부모니터] ✅ <b>크롤링 복구</b>")
+    assert msg.startswith("[서버 알림] ✅ <b>문제가 풀렸어요</b>")
     assert "정상으로 돌아왔습니다" in msg
 
 
@@ -293,28 +298,28 @@ def test_resolved_headers_match_reason_not_always_recovery():
     swept = format_issue_message(
         "crawl_stale", {**base, "reason": "swept"}, event="resolved", header_ctx=_ctx(0)
     )
-    assert swept.startswith("[내부모니터] ⚠️ <b>알림 종료</b>")
-    assert "복구" not in swept
+    assert swept.startswith("[서버 알림] ⚠️ <b>알림 종료</b>")
+    assert "풀렸어요" not in swept
 
     unconfirmed = format_issue_message(
         "crawl_stale", {**base, "reason": "unconfirmed", "reason_detail": "마지막 실행: 실패"},
         event="resolved", header_ctx=_ctx(0),
     )
-    assert unconfirmed.startswith("[내부모니터] ℹ️ <b>알림 종료</b>")
-    assert "복구" not in unconfirmed
+    assert unconfirmed.startswith("[서버 알림] ℹ️ <b>알림 종료</b>")
+    assert "풀렸어요" not in unconfirmed
 
     # recovered 는 기존 헤더 유지 (진짜 복구니까)
     recovered = format_issue_message(
         "crawl_stale", {**base, "reason": "recovered"}, event="resolved", header_ctx=_ctx(0)
     )
-    assert recovered.startswith("[내부모니터] ✅ <b>크롤링 복구</b>")
+    assert recovered.startswith("[서버 알림] ✅ <b>문제가 풀렸어요</b>")
 
 
 def test_resolved_without_reason_keeps_legacy_wording():
     """하위호환: reason 미지정(옛 호출·수동 호출)이면 기존 문구 그대로."""
     data = {"alert_key": "crawl_failed:complex_articles", "detail": "이전 장애"}
     msg = format_issue_message("crawl_failed", data, event="resolved", header_ctx=_ctx(0))
-    assert msg.startswith("[내부모니터] ✅ <b>크롤링 복구</b>")
+    assert msg.startswith("[서버 알림] ✅ <b>문제가 풀렸어요</b>")
     assert "▸ 이전 장애 — 정상으로 돌아왔습니다." in msg
 
 
@@ -331,7 +336,7 @@ def test_resolved_batch_all_recovered_uses_recovery_header():
     ]
     msg = format_resolved_batch(items, header_ctx=_ctx(0))
 
-    assert msg.startswith("[내부모니터] ✅ <b>크롤링 복구</b>")
+    assert msg.startswith("[서버 알림] ✅ <b>문제가 풀렸어요</b>")
     assert "해소 2건" in msg
     assert "✅ A 작업 실패 — 정상으로 돌아왔습니다 (최근 실행 성공 확인)." in msg
     assert "✅ B 작업 실패 — 정상으로 돌아왔습니다 (최근 실행 성공 확인)." in msg
@@ -348,7 +353,7 @@ def test_resolved_batch_mixed_reason_uses_warning_header():
     ]
     msg = format_resolved_batch(items, header_ctx=_ctx(0))
 
-    assert msg.startswith("[내부모니터] ⚠️ <b>알림 종료</b>")
+    assert msg.startswith("[서버 알림] ⚠️ <b>알림 종료</b>")
     assert "복구" not in msg.split("\n")[0]
     assert "해소 3건" in msg
     # 각 줄은 자기 사유대로 이모지·문구가 갈린다
@@ -378,7 +383,7 @@ def test_resolved_batch_missing_reason_treated_as_recovered_header():
     items = [{"detail": "A 장애"}, {"detail": "B 장애"}]
     msg = format_resolved_batch(items, header_ctx=_ctx(0))
 
-    assert msg.startswith("[내부모니터] ✅ <b>크롤링 복구</b>")
+    assert msg.startswith("[서버 알림] ✅ <b>문제가 풀렸어요</b>")
     assert "▸ A 장애 — 정상으로 돌아왔습니다." in msg
     assert "▸ B 장애 — 정상으로 돌아왔습니다." in msg
 
@@ -396,7 +401,7 @@ def test_failed_burst_message_uses_dedicated_builder():
         "detail": "폴백이면 이 문자열이 그대로 본문이 된다",
     }
     msg = format_issue_message("crawl_failed_burst", data, event="new", header_ctx=_ctx())
-    assert msg.startswith("[내부모니터] 🔴 <b>크롤링 장애</b> — 1건 활성 (17:40)")
+    assert msg.startswith("[서버 알림] 🔴 <b>자료 수집에 문제가 생겼어요</b> — 안 풀린 문제 1개 (17:40)")
     # 전용 빌더가 등록됐다 = detail 폴백 문자열이 본문으로 쓰이지 않는다
     assert "폴백이면 이 문자열이" not in msg
     # 세션 407 — 영문 job_type·개발자 에러 원문 대신 우리말.

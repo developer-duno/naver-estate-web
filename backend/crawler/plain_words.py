@@ -62,8 +62,12 @@ JOB_WORDS: dict[str, str] = {
     "kapt_costs": "단지 관리비 받기",
     # 살림
     "billing_charge": "구독료 자동 결제",
-    "vacuum_maintenance": "데이터베이스 청소",
+    "vacuum_maintenance": "자료 보관함 정리",
     "api_version_probe": "정부 자료 창구 살아있나 확인",
+    # 수동·테스트 실행 — FE 가드는 이 셋을 "이름표 불필요"로 면제하지만, 알림에는
+    # 그대로 영문이 찍힌다(적대검증 MEDIUM-8). 알림 사전에는 우리말을 둔다.
+    "manual": "사람이 직접 실행",
+    "test": "시험 실행",
     # 단지 상세 보강 — 매물 유형별. FE label 의 "backfill" 영문을 우리말로 바꿨다.
     "complex_detail_APT": "아파트 단지 정보 채우기",
     "complex_detail_OPST": "오피스텔 단지 정보 채우기",
@@ -109,15 +113,41 @@ _ERROR_RULES: list[tuple[re.Pattern, str]] = [
         "짝이 맞는 자료가 없어 저장하지 못했어요.",
     ),
     (
-        re.compile(r"일 요청 건수.*초과|INFO-300|한도.*초과|quota", re.I),
+        # ⚠ `quota` 를 단어 경계 없이 잡으면 `disk quota`·`QuotaManager init failed` 까지
+        #    "정부 자료 요청 횟수 소진"으로 오역한다(세션 407 적대검증 MEDIUM-2).
+        #    틀린 번역은 번역 안 함보다 나쁘다 — 사장님이 "내일 풀리겠지" 하고 기다리는데
+        #    실제 원인은 디스크 부족일 수 있다. 이 레포엔 일일 크롤 쿼터(auth/permissions.py
+        #    check_quota)가 따로 있어 정부 API 무관 맥락에서 그 낱말이 나올 여지가 실재한다.
+        re.compile(r"일 요청 건수.*초과|INFO-300|한도.*초과|\bquota exceeded\b|\bdaily quota\b", re.I),
         "오늘 쓸 수 있는 정부 자료 요청 횟수를 다 썼어요.",
     ),
+    (
+        # 실측에 있던 것 — 2026-04 air_quality 10건.
+        re.compile(r"UniqueViolation|duplicate key value", re.I),
+        "같은 자료를 두 번 저장하려다 멈췄어요.",
+    ),
+    (
+        # 실측에 있던 것 — 2026-03 article_detail 2건.
+        re.compile(r"NUL \(0x00\)|cannot contain NUL", re.I),
+        "받아온 글자에 저장할 수 없는 문자가 섞여 있었어요.",
+    ),
+    # ── 여기부터는 **아직 prod 에 나온 적 없는** 선제 규칙 ──────────────────
+    # 세션 407 적대검증이 정확히 짚었다: 위 문단은 "실측만 넣는다"고 적어 놓고
+    # 아래 3종(429·50x·timeout)은 전 기간 0건인 선제 작성이었다 — 글과 코드가
+    # 어긋난 상태였다. 지우지 않고 **남기되 구분해서 표시**한다:
+    #   ① 네이버·정부 API 를 HTTP 로 부르는 코드라 언젠가 반드시 나올 형태이고
+    #   ② 안 맞아도 폴백(앞 80자)으로 안전하게 처리되며
+    #   ③ 미리 있으면 그날 사장님이 읽을 수 있는 문장을 받는다.
+    # 실측으로 승격되면 이 구분선 위로 올린다.
     (
         re.compile(r"\b(429|too many requests)\b", re.I),
         "상대 서버가 너무 자주 왔다며 잠시 막았어요.",
     ),
     (
-        re.compile(r"\b(50[0234])\b|Bad Gateway|Service Unavailable", re.I),
+        # ⚠ 맨숫자 `\b50[0234]\b` 로 잡으면 "504 단지 수집 실패"·"complex 500 건 처리 후
+        #    중단" 처럼 **평범한 개수**를 HTTP 상태코드로 오인한다(세션 407 적대검증
+        #    MEDIUM-9 실측). 원인이 통째로 다른 것으로 바뀌어 전달되므로 맥락을 요구한다.
+        re.compile(r"(?:HTTP|status[ _]?code)\D{0,6}(?:50[0234])\b|Bad Gateway|Service Unavailable", re.I),
         "상대 서버(네이버·정부 자료)가 응답하지 못했어요.",
     ),
     (
@@ -151,14 +181,23 @@ def explain_error(raw) -> str:
     if not raw:
         return ""
     text = str(raw).strip()
-    for pattern, plain in _ERROR_RULES:
-        if pattern.search(text):
-            return plain
-    # 못 알아본 에러 — 첫 줄만, 그것도 짧게. 줄바꿈·SQL 덤프가 붙어 오기 때문.
-    head = text.splitlines()[0].strip()
+    plain = _translate_known(text)
+    if plain is not None:
+        return plain
+
+    # 못 알아본 에러 — 단서만 짧게 남긴다.
+    # ⚠ 파이썬 트레이스백은 **첫 줄이 정보 0** 이다("Traceback (most recent call last):").
+    #    진짜 원인은 마지막 줄에 있다(세션 407 적대검증 MEDIUM-9). 첫 줄만 자르던 옛
+    #    구현은 트레이스백에서 아무 쓸모 없는 줄만 남겼다.
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    head = lines[0] if lines else ""
+    if head.startswith("Traceback") and len(lines) > 1:
+        head = lines[-1]
     if len(head) > _UNKNOWN_HEAD:
         head = head[:_UNKNOWN_HEAD].rstrip() + "…"
-    return head
+    # 원문을 그대로 보여 주면 사장님은 읽을 수 없다 — "이건 개발자용 글자"라고
+    # 알려 주고 다음 행동까지 붙인다(맨몸으로 내보내던 것, 적대검증 MEDIUM-4).
+    return f"처음 보는 문제예요 (개발자용 기록: {head})" if head else ""
 
 
 # ── 3. 행동 안내 — 사장님이 실제로 할 수 있는 것만 ────────────────────────
@@ -166,13 +205,34 @@ def explain_error(raw) -> str:
 # 옛 문구("크롤링 로그 확인 — 네이버 응답·서버 상태 점검", "/admin#freshness 데이터
 # 신선도 확인")는 사장님이 직접 할 수 있는 행동이 아니다. 알림을 읽고 **무엇을 하면
 # 되는지**가 남아야 알림이 쓸모가 있다 — 그래서 전부 "Claude 에게 알려주세요" 로 끝난다.
+# ⚠ "저절로 낫는 경우가 많아요" 는 **사실과 반대**였다(세션 407 적대검증 HIGH-5).
+#    monitor.py 의 자가복구 선필터가 "마지막 failed 뒤 completed 가 있으면" 알림을
+#    아예 안 보낸다 — 즉 **이 알림이 왔다는 건 아직 복구가 안 됐다는 뜻**인데 문구는
+#    안심시키고 있었다. 사장님이 알림을 무시하는 습관이 들면 진짜 급한 알림도 묻힌다.
+#
+# 또 하나: 이 알림은 대부분 **새벽 2~6시 크론**에서 난다. 그 시각엔 Claude 세션이
+#    없어 "알려주세요" 만으로는 할 수 있는 게 없다. 그래서 행동 안내보다 **"지금
+#    손님 화면은 어떤가 / 자고 일어나도 되는가"** 를 먼저 말한다 — 사장님이 그 시각에
+#    실제로 내리는 결정은 그것 하나뿐이다.
 ACTION_WORDS: dict[str, str] = {
-    "crawl_failed": "→ 저절로 낫는 경우가 많아요. 다음 알림에서도 또 나오면 Claude 에게 알려주세요.",
-    "crawl_failed_burst": "→ 같은 작업이 짧은 사이에 여러 번 실패했어요. Claude 에게 알려주세요.",
-    "crawl_stale": "→ 작업이 멈춘 채로 있어요. 서버를 다시 켜야 할 수 있으니 Claude 에게 알려주세요.",
-    "freshness": "→ 새 자료가 안 쌓이고 있어요. 하루가 지나도 그대로면 Claude 에게 알려주세요.",
+    "crawl_failed": (
+        "→ 손님 화면은 그대로 보입니다(예전에 받아둔 자료). 새 자료만 안 들어와요.\n"
+        "   아침에 Claude 에게 알려주시면 됩니다."
+    ),
+    "crawl_failed_burst": (
+        "→ 같은 작업이 짧은 사이에 여러 번 실패했어요. 손님 화면은 그대로 보입니다.\n"
+        "   아침에 Claude 에게 알려주세요."
+    ),
+    "crawl_stale": (
+        "→ 작업이 멈춘 채로 있어요. 손님 화면은 그대로 보입니다.\n"
+        "   서버를 다시 켜야 할 수 있으니 아침에 Claude 에게 알려주세요."
+    ),
+    "freshness": (
+        "→ 손님 화면은 그대로 보이지만 자료가 오래됐어요.\n"
+        "   하루가 지나도 그대로면 Claude 에게 알려주세요."
+    ),
 }
-_ACTION_DEFAULT = "→ 무슨 일인지 확인이 필요해요. Claude 에게 알려주세요."
+_ACTION_DEFAULT = "→ 무슨 일인지 확인이 필요해요. 아침에 Claude 에게 알려주세요."
 
 
 def action_words(kind: str) -> str:
@@ -228,6 +288,9 @@ _LEGACY_WORDS = (
     ("running 상태", "돌고 있는 상태"),
     ("신선도 red", "한참 안 들어옴"),
     ("신선도 yellow", "조금 늦음"),
+    # 버스트(몰려서 실패) 옛 문장 — "자가복구로 분류" 는 순수 개발자 말이다
+    # (세션 407 적대검증 MEDIUM-7).
+    ("(일부 성공이 섞여 자가복구로 분류됐지만 묶음 실패)", "(일부는 됐지만 몰려서 실패)"),
 )
 
 
@@ -277,8 +340,22 @@ def plainify_detail(detail) -> str:
     return text.rstrip().rstrip(".")
 
 
-# 꼬리가 이미 우리말 안내인지 — 영문 식별자·괄호 모듈명이 없으면 우리말로 본다.
-_DEV_ERROR_HINT = re.compile(r"[A-Za-z]{3,}[._][A-Za-z]|\(psycopg2|Error\)|SQL:|[A-Z]{2,}-\d")
+# 꼬리가 이미 우리말 안내인지 — 개발자 에러 흔적이 하나라도 있으면 우리말이 아니다.
+#
+# ⚠ 이 정규식이 못 잡으면 **번역도 80자 컷도 건너뛰고 원문이 통째로 나간다**
+#    (`plainify_detail` ②단계에서 `explain_error` 조차 우회하는 유일한 경로).
+#    세션 407 적대검증 HIGH-1: 처음엔 `Error\)` 로 **닫는 괄호가 붙은** 형태
+#    `(psycopg2.errors.X)` 만 잡아서, 파이썬 예외의 표준 형태인 `KeyError: articleList`
+#    가 통째로 샜다. 네이버가 상세 API 응답 키를 바꾸면 실제로 나는 오류다(세션 401
+#    키 드리프트 실사고) — 즉 이 PR 이 없애려던 증상이 그 입력에서 살아 있었다.
+_DEV_ERROR_HINT = re.compile(
+    r"[A-Za-z]{3,}[._][A-Za-z]"      # psycopg2.errors / module.attr
+    r"|\(psycopg2"
+    r"|[A-Za-z]+Error\b"             # KeyError: / ValueError: / RuntimeError …
+    r"|\bTraceback\b|\bException\b"
+    r"|SQL:"
+    r"|[A-Z]{2,}-\d"                 # INFO-300 류
+)
 
 
 def _is_plain_korean_tail(text: str) -> bool:

@@ -309,3 +309,115 @@ def test_dynamic_id_blocks_do_not_silently_increase():
         "_KNOWN_DYNAMIC_ID_BLOCKS 값에 함께 반영하고, 가능하면 freshness_meta.py 쪽 "
         "감시(또는 MONITORING_EXEMPT 이유 등록)도 갖추세요."
     )
+
+
+# ── 테스트 D: 1시간 넘게 도는 잡은 _STALE_HOURS_BY_TYPE 에 등록돼야 한다 ──
+#
+# 2026-09-14 실사고: 상세 백필(12:20 배치 4000, 설계 소요 ~100분)이 이 표에 없어
+# 기본 1h 판정으로 **66분에 cancelled** 됐다("stale running — swept by monitor").
+# 같은 오탐 sweep 이 official_price(세션 369)·kapt_match(세션 388)에서 이미 두 번
+# 났는데도 새 잡에서 또 재발했다 — 사람 기억에 의존하는 한 계속 재발한다.
+#
+# 감시 방식: "오래 도는 잡"을 코드가 스스로 선언하게 하고(아래 표), 선언된 것이
+# _STALE_HOURS_BY_TYPE 에 실제로 있는지 CI 가 대조한다. 새 장시간 잡을 만들면
+# 이 표에 한 줄 추가해야 하고, 그 순간 등록 누락이 드러난다.
+
+# 설계상 1시간을 넘길 수 있는 job_type → 관측·설계 최대 소요(분).
+# ⚠ 새 장시간 잡을 추가하면 여기에도 등록한다. 값은 "관측 최대"이지 임계가 아니다.
+# 설계상 1시간을 넘길 수 있는 job_type → **prod 실측 최대 소요(분)**.
+#
+# 2026-09-14 실측(crawl_jobs 90일, status='completed'):
+#     SELECT job_type, round(max(extract(epoch from (completed_at-started_at)))/60)
+#       FROM crawl_jobs WHERE status='completed'
+#        AND started_at > now() - interval '90 days' GROUP BY 1;
+#
+# ⚠ 값은 '관측 최대'이지 임계가 아니다. **추측으로 적지 말고 위 쿼리로 재실측**할 것
+#   — 이 표를 처음 쓸 때 임계값을 그대로 베껴 적었다가 아래 가드에 걸렸다
+#   ([[feedback-baseline-number-needs-own-measure]] 와 같은 뿌리).
+# ⚠ 새 장시간 잡을 추가하면 여기에도 등록한다 — 그래야 누락 가드가 작동한다.
+_LONG_RUNNING_JOB_TYPES = {
+    "price_backfill": 354,
+    "public_trade_data": 262,
+    "official_price": 256,
+    "kapt_costs": 96,
+    "kapt_match": 76,
+    "price_history": 38,
+    # 12:20 회차 배치 4000 ≈ 100분 (2026-09-14 첫 실전에서 66분 시점 sweep 당함)
+    "article_detail_backfill": 100,
+}
+
+
+def test_long_running_jobs_registered_in_stale_hours():
+    """장시간 잡이 _STALE_HOURS_BY_TYPE 에 전부 등록돼 있는가.
+
+    누락 시 monitor 가 기본 1h 로 판정해 **정상 동작 중인 잡을 cancelled** 시킨다.
+    """
+    from crawler.monitor import _STALE_HOURS_BY_TYPE
+
+    missing = sorted(set(_LONG_RUNNING_JOB_TYPES) - set(_STALE_HOURS_BY_TYPE))
+    assert not missing, (
+        f"장시간 잡인데 _STALE_HOURS_BY_TYPE 에 없음: {missing} — "
+        "crawler/monitor.py 의 _STALE_HOURS_BY_TYPE 에 등록하지 않으면 기본 1h 로 "
+        "판정돼 정상 실행 중인 잡이 'stale running' 으로 취소된다."
+    )
+
+
+def test_stale_hours_thresholds_exceed_observed_duration():
+    """임계가 관측 최대 소요보다 넉넉한가(최소 1.5배).
+
+    임계를 소요와 비슷하게 잡으면 네트워크가 조금만 느려져도 sweep 된다 —
+    kapt_match 가 4h→8h 로 상향된 이유가 정확히 이것이다(세션 388).
+    """
+    from crawler.monitor import _STALE_HOURS_BY_TYPE
+
+    too_tight = []
+    for job_type, observed_min in _LONG_RUNNING_JOB_TYPES.items():
+        threshold_min = _STALE_HOURS_BY_TYPE.get(job_type, 1) * 60
+        if threshold_min < observed_min * 1.5:
+            too_tight.append(
+                f"{job_type}: 임계 {threshold_min}분 < 관측 {observed_min}분 x1.5"
+            )
+    assert not too_tight, (
+        "임계가 관측 소요 대비 빠듯해 오탐 sweep 위험: " + "; ".join(too_tight)
+    )
+
+
+def test_stale_hours_keys_are_real_job_types():
+    """_STALE_HOURS_BY_TYPE 의 키가 실제 코드가 쓰는 job_type 인가(오타 방지).
+
+    ⚠ scheduler id 와 job_type 은 다르다(infra.md 경고) — 여기 키는 **job_type** 이다.
+    예: id=backfill_detail_dawn/noon → job_type=article_detail_backfill (2:1).
+    오타가 있으면 그 잡은 조용히 기본 1h 로 떨어져 사고가 재발한다.
+    """
+    import re
+    from pathlib import Path
+
+    from crawler.monitor import _STALE_HOURS_BY_TYPE
+
+    # ⚠ job_type 은 세 가지 형태로 쓰인다 — 하나만 훑으면 가드가 조용히 헛돈다:
+    #   (a) job_type="x"        CrawlJob(job_type="popular_crawl", ...)
+    #   (b) _X_JOB_TYPE = "x"   service_kapt.py 의 상수
+    #   (c) 위치 인자            _record_job(db, "official_price", ...)
+    # 그래서 job_type 을 다루는 파일에서 job_type 모양 문자열을 폭넓게 모은다.
+    used: set[str] = set()
+    for path in Path("crawler").glob("*.py"):
+        # ⚠ monitor.py 는 **제외**한다 — 검사 대상인 _STALE_HOURS_BY_TYPE 이 그 안에
+        #    있어서, 표에 오타를 내면 그 오타 문자열이 스캔에 잡혀 **스스로를 증명**한다.
+        #    (뮤테이션 검증에서 실제로 이 자기참조 때문에 가드가 통과해 버렸다 — 즉
+        #     "가드가 있다"와 "가드가 이 오타를 본다"는 별개라는 걸 또 확인했다.)
+        if path.name == "monitor.py":
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "job_type" not in text and "_record_job" not in text:
+            continue
+        used |= set(re.findall(r"""["']([a-z][a-z_]{3,40})["']""", text))
+    # env_*.py 등 다른 모듈이 쓰는 job_type 도 있으므로, 발견된 것이 없으면 가드 자체가
+    # 헛도는 것 — 그것부터 잡는다.
+    assert used, "crawler/*.py 에서 job_type 리터럴을 하나도 못 찾았다 — 이 가드가 헛돈다"
+
+    bogus = sorted(k for k in _STALE_HOURS_BY_TYPE if k not in used)
+    assert not bogus, (
+        f"_STALE_HOURS_BY_TYPE 에 코드가 안 쓰는 job_type 발견(오타 의심): {bogus}. "
+        "scheduler id 를 넣지 않았는지 확인할 것 — 이 표의 키는 job_type 이다."
+    )
+

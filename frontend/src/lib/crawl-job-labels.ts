@@ -23,13 +23,16 @@ export const CRAWL_JOB_LABELS: Record<string, { label: string; desc: string }> =
   // 스케줄러에는 backfill_detail_dawn(00:20) · backfill_detail_noon(12:20) 두 잡으로
   // 등록돼 있으나 DB 에 남는 job_type 은 둘 다 article_detail_backfill 하나다.
   // 화면은 job_type 을 보므로 여기도 한 항목만 둔다 (infra.md §잡 이름 ≠ job_type).
+  // ⚠ 라벨은 BE SCHEDULER_JOB_META 의 name 과 글자가 달라도 된다 — 가드
+  //   (check-job-labels.mjs extractLabelKeys)는 **키 존재만** 보고 값은 대조하지 않는다.
+  //   화면은 사장님이 보는 곳이라 쉬운 말을 우선한다(세션 403 지시).
   article_detail_backfill: {
-    label: "매물 상세 백필",
-    desc: "네이버가 항목 이름을 바꿔 비어버린 상세 항목(난방·총층수 등)을 뒤늦게 채우는 작업 (매일 00:20·12:20)",
+    label: "빠진 정보 뒤늦게 채우기",
+    desc: "네이버가 항목 이름을 바꿔 비어버린 정보(난방 방식·건물 층수 등)를 나중에 다시 채우는 작업 (매일 0시 20분·낮 12시 20분)",
   },
   field_drift_monitor: {
-    label: "상세 필드 채움률 드리프트 감시",
-    desc: "상세 항목이 갑자기 안 채워지기 시작하면 조기에 알리는 감시 작업 (매일 04:40)",
+    label: "정보 안 채워지면 알림",
+    desc: "매물 정보가 갑자기 안 채워지기 시작하면 바로 알려주는 감시 작업 (매일 새벽 4시 40분)",
   },
   price_history: {
     label: "시세 이력 수집",

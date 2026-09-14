@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from crawler.plain_words import (
-    action_words,
+    action_words_for_job_type,
     explain_error,
     job_words,
     plainify_detail,
@@ -220,7 +220,12 @@ def _action(kind: str, data: dict) -> str:
     있고(한 곳에서 관리), 여기서는 freshness 만 화면 링크를 덧붙인다 —
     "신선도" 라는 말은 빼고 무엇을 보는 화면인지로 부른다.
     """
-    base = action_words(kind)
+    # ⚠ 결제·정산 잡은 "자료가 안 들어온다"가 아니라 **돈이 안 걷힌다**는 뜻이라
+    #   crawl_failed 안내를 그대로 쓰면 심각도를 정반대로 알린다. 이 경로(monitor →
+    #   alert_format)가 결제 실패 알림의 **주 발화 경로**다 — 세션 408 적대검증이
+    #   "리스너만 고치고 여기를 안 고쳐 실제로는 그대로 나간다"고 지적해 함께 고쳤다.
+    #   렌더 실측(수정 전): "구독료 자동 결제 작업이 실패했어요 … 새 자료만 안 들어와요".
+    base = action_words_for_job_type(kind, data.get("job_type"))
     if kind == "freshness":
         link = _esc(_admin_link(data.get("link_path", "/admin#freshness")))
         return f"{base}\n  (자료가 언제 들어왔는지 보는 화면: {link})"

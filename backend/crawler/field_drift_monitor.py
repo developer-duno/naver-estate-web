@@ -447,8 +447,12 @@ def run_field_drift_monitor(scheduler_job_id: str = "field_drift_monitor") -> di
 
         error_message = None
         if violations:
-            parts = [f"{f}={rates[f]}%" for f in violations]
-            error_message = "필드 드리프트 위반: " + ", ".join(parts)
+            # ⚠ 이 값은 관리자 화면 crawl_jobs 목록에 그대로 보인다 — 텔레그램만
+            #   우리말로 바꾸고 여기는 영문 컬럼명을 남기면 "사전을 만들어 놓고 안 쓴"
+            #   반쪽이 된다(세션 408 적대검증 지적, 실측: "필드 드리프트 위반:
+            #   total_floor_count=73.7%" 가 09-15 04:40 기록에 그대로 박혀 있었다).
+            parts = [f"{field_words(f)} {rates[f]}%" for f in violations]
+            error_message = "덜 채워진 정보: " + ", ".join(parts)
 
         _complete_job(db, job, error_message=error_message)
         db.commit()

@@ -405,7 +405,9 @@ def _alert_official_price(message: str) -> None:
     try:
         from services.telegram import send_telegram
 
-        send_telegram(message)
+        # ⚠ parse_mode 를 안 넘기면 <b> 가 **글자 그대로** 나간다(세션 408 실측 — 본문을
+        #   우리말로 고치며 굵게 표시를 넣었다가 이 누락으로 오히려 더 읽기 나빠질 뻔했다).
+        send_telegram(message, parse_mode="HTML")
     except Exception:
         logger.warning("[official_price] 텔레그램 알림 발송 실패", exc_info=True)
 
@@ -978,10 +980,16 @@ def collect_official_prices(
                     " — 시스템 이상 의심, 재수집 생략"
                 )[:500]
                 db.commit()
+                # ⚠ 월 1회 잡이라 사장님이 이 알림을 **가장 낯선 상태로** 받는다
+                #   (매일 오는 알림과 달리 학습이 안 된다). 내부 용어를 쓰면 안 된다
+                #   — 세션 408 적대검증 지적.
                 _alert_official_price(
-                    f"[서버 알림] 공동주택 공시가격 — 매칭 소실 {len(regressed)}단지로 임계"
-                    f" {_REPASS_COLLAPSE_THRESHOLD} 초과. 페이지 드리프트가 아니라 시스템 이상"
-                    " 의심(매칭 규칙·API 응답 구조 변경 등)이라 재수집을 생략했습니다."
+                    f"[서버 알림] 🔴 <b>정부 공시가격 받기</b> — 이상이 있어 중간에 멈췄어요\n\n"
+                    f"▸ 값을 못 찾은 단지가 {len(regressed)}곳이나 돼요"
+                    f" (평소 {_REPASS_COLLAPSE_THRESHOLD}곳을 넘으면 이상으로 봅니다)\n"
+                    "  정부 쪽 자료 모양이 바뀌었을 수 있어 다시 받기는 건너뛰었어요.\n"
+                    "→ 손님 화면은 그대로 보입니다(지난달 받아둔 값). 이번 달 것만 안 들어와요.\n"
+                    "   아침에 Claude 에게 알려주시면 됩니다."
                 )
                 regressed = []
 
@@ -1100,8 +1108,10 @@ def collect_official_prices(
                     # monitor 텔레그램은 failed 만 감시한다 — 월 1회 잡이라 이대로면 다음
                     # 달까지 아무도 모른다. 관찰 가능하게 텔레그램으로 승격(best-effort).
                     _alert_official_price(
-                        f"[서버 알림] 공동주택 공시가격 — 재수집 후에도 미매칭 잔여"
-                        f" {len(remaining_lost)}단지: {summary}"
+                        f"[서버 알림] ⚠ <b>정부 공시가격 받기</b> — 일부 단지는 못 받았어요\n\n"
+                        f"▸ 다시 시도했는데도 값이 없는 단지 {len(remaining_lost)}곳: {summary}\n"
+                        "→ 손님 화면은 그대로 보입니다. 그 단지들만 공시가격이 빈칸이에요.\n"
+                        "   급하지 않으니 아침에 Claude 에게 알려주세요."
                     )
         except Exception:
             # 구제 실패는 본 수집 결과를 되돌리지 않는다 — 로그만 남기고 완료 경로 계속.

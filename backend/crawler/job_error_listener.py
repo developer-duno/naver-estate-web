@@ -196,7 +196,10 @@ def job_event_listener(event, scheduler=None) -> None:
         key = f"job_error:{job_id}"
         if _should_alert(key):
             lines = [f"[서버 알림] 🔴 <b>{safe_label}</b> 작업이 실패했어요"]
-            lines.append(f"까닭: {html.escape(explain_error(exc_text))}")
+            # ⚠ 메시지 없는 예외(`raise ValueError()`)면 explain_error 가 빈 문자열을
+            #   돌려줘 "까닭: " 만 덩그러니 나간다(세션 408 적대검증 LOW-1).
+            reason = explain_error(exc_text) or "무슨 일인지 메시지가 남지 않았어요"
+            lines.append(f"까닭: {html.escape(reason)}")
             # 결제 잡은 "돈이 안 걷혔다", 수집 잡은 "자료가 안 들어온다" — 뜻이 다르다.
             lines.append(action_words_for_job(job_id))
             _send_alert("\n".join(lines), parse_mode="HTML")

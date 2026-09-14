@@ -333,6 +333,23 @@ def _telegram_modules() -> list[Path]:
     return found
 
 
+def _telegram_workflow_files() -> list[Path]:
+    """텔레그램 API 를 직접 부르는 **워크플로 YAML** — `.py` 전용 스캔의 사각지대.
+
+    ⚠ `[외부감시]` 는 이 레포에서 **오직 healthcheck.yml 만** 쓰던 접두어인데,
+       모듈 스캔이 `.py` 만 보는 탓에 legacy 목록에 넣어 둔 의미가 0 이었다
+       (세션 408 적대검증 MEDIUM-1: YAML 문구를 옛날로 되돌려도 CI 는 초록).
+       파일명을 손으로 적지 않고 `api.telegram.org` 호출로 추출한다.
+    """
+    wf_dir = _BACKEND.parent / ".github" / "workflows"
+    if not wf_dir.is_dir():
+        return []
+    return [
+        p for p in wf_dir.rglob("*.yml")
+        if "api.telegram.org" in p.read_text(encoding="utf-8")
+    ]
+
+
 def _code_lines(text: str) -> list[tuple[int, str]]:
     """주석·docstring 을 걷어낸 (줄번호, 코드줄) — 설계 근거 주석이 옛 접두어를
     인용하는 경우가 실제로 있어(job_error_listener 의 세션 359 설명 등) 걷어내지
@@ -372,9 +389,34 @@ def test_no_legacy_alert_prefix_in_any_telegram_module():
             for bad in _LEGACY_PREFIXES:
                 if bad in code:
                     hits.append(f"    {rel}:{lineno}  {bad}  {code.strip()}")
+
+    # 워크플로 YAML 도 함께 본다 — `[외부감시]` 는 거기서만 쓰이던 접두어라
+    # .py 만 훑으면 그 항목이 장식이 된다(세션 408 적대검증 MEDIUM-1).
+    # YAML 은 `#` 주석만 걷어낸다(docstring 개념 없음).
+    for path in _telegram_workflow_files():
+        rel = path.relative_to(_BACKEND.parent).as_posix()
+        for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if raw.lstrip().startswith("#"):
+                continue
+            for bad in _LEGACY_PREFIXES:
+                if bad in raw:
+                    hits.append(f"    {rel}:{lineno}  {bad}  {raw.strip()}")
+
     assert not hits, (
         "\n알림 문구에 옛 채널별 접두어가 남아 있다 — 전부 '[서버 알림]' 로 통일한다:\n"
         + "\n".join(hits)
+    )
+
+
+def test_prefix_guard_also_scans_workflow_yaml():
+    """가드가 워크플로 YAML 도 보고 있는지 — `[외부감시]` 항목이 장식이 되지 않게.
+
+    뮤테이션: healthcheck.yml 의 `[서버 알림]` 을 `[외부감시]` 로 되돌리면
+    test_no_legacy_alert_prefix_in_any_telegram_module 이 그 줄을 대며 FAIL 한다.
+    """
+    scanned = {p.name for p in _telegram_workflow_files()}
+    assert "healthcheck.yml" in scanned, (
+        f"텔레그램을 부르는 워크플로를 못 찾았다 (스캔: {sorted(scanned)})"
     )
 
 

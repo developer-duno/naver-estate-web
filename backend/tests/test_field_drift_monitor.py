@@ -18,6 +18,7 @@ from crawler.field_drift_monitor import (
     _THRESHOLDS,
     _WINDOW_HOURS,
     compute_fill_rates,
+    field_words,
     run_field_drift_monitor,
 )
 from db.models import Article, CrawlJob, MonitorAlert
@@ -169,7 +170,12 @@ def test_run_field_drift_monitor_violation_sends_alert_and_records_job():
         ).scalars().first()
         assert job is not None
         assert job.status == "completed"
-        assert _NORMAL_FIELD in (job.error_message or "")
+        # ⚠ 단언의 의도("어느 필드가 몇 % 인지 기록에 남는가")는 그대로 두고 표기만
+        #   새 동작에 맞춘다. 세션 408 에 error_message 도 우리말로 바꿨다 —
+        #   이 값은 관리자 화면에 그대로 보이므로 영문 컬럼명을 남기면 반쪽이 된다
+        #   (§testing.md "통과하던 테스트가 결함을 박제했을 수 있다" 답습).
+        assert field_words(_NORMAL_FIELD) in (job.error_message or "")
+        assert _NORMAL_FIELD not in (job.error_message or ""), "영문 컬럼명이 남았다"
         assert "50.0%" in (job.error_message or "")
     finally:
         db.close()
@@ -520,9 +526,13 @@ def test_number_words_take_correct_korean_particle():
     # 받침 있는 말 → 은
     for word in ("영", "둘", "셋", "일곱", "여덟", "아홉", "열"):
         assert _eun_neun(word) == "은", f"{word} 의 조사가 틀렸다"
-    # 사전의 모든 숫자말이 어색한 조사와 붙지 않는지 전수 확인
+    # 전수 확인 — 받침 계산과 반환값이 실제로 일치하는지.
+    # ⚠ 옛 단언 `f"{w}{_eun_neun(w)}" != f"{w}은" or _eun_neun(w) == "은"` 은
+    #    **무엇을 반환하든 통과하는 동어반복**이었다(세션 408 적대검증 LOW-2:
+    #    "항상 은 반환"으로 망가뜨려도 11단어 전부 통과). 계산식과 직접 대조한다.
     for word in _TENTH_WORDS:
-        assert f"{word}{_eun_neun(word)}" != f"{word}은" or _eun_neun(word) == "은"
+        expected = "은" if (ord(word[-1]) - 0xAC00) % 28 else "는"
+        assert _eun_neun(word) == expected, f"{word}: {_eun_neun(word)} (기대 {expected})"
 
 
 def test_rate_words_never_claim_threshold_is_met_while_violating():

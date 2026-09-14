@@ -10,7 +10,7 @@ TELEGRAM_ENABLED=false 로 전역 봉쇄하지만(세션 325 실사고 답습), 
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
-from sqlalchemy import select
+from sqlalchemy import Integer, Numeric, select
 
 from crawler.field_drift_monitor import (
     _MIN_SAMPLE,
@@ -29,7 +29,12 @@ def _utcnow():
 
 
 # 감시 대상 각 필드의 "채워진 값" — Integer 컬럼(room_count 등)엔 정수, 나머지는 문자열.
-_INT_FIELDS = {"room_count", "bathroom_count", "walking_time_to_subway"}
+# ⚠ 하드코딩 금지 — 감시 대상에 숫자 컬럼이 새로 들어오면(예: #511 의 total_floor_count)
+# 이 집합이 낡아 정수 컬럼에 문자열을 넣게 된다. 모델의 타입에서 판정한다.
+_INT_FIELDS = {
+    f for f in _THRESHOLDS
+    if isinstance(getattr(Article, f).type, (Integer, Numeric))
+}
 
 
 def _fill_value(field: str):
@@ -316,3 +321,58 @@ def test_field_drift_monitor_job_absent_when_disabled():
         scheduler = sched_mod.create_scheduler()
     jobs = {job.id: job for job in scheduler.get_jobs()}
     assert "field_drift_monitor" not in jobs
+
+
+def test_numeric_columns_never_compared_to_empty_string():
+    """회귀: 숫자 컬럼에 `!= ''` 를 붙이면 PostgreSQL 이 즉사한다.
+
+    2026-09-14 04:40 첫 실전에서 이 잡이 통째로 죽었다 —
+    `invalid input syntax for type integer: ""`.
+    total_floor_count(Integer)가 #511 로 감시 대상에 들어왔는데, 빈 문자열 비교를
+    문자열 컬럼과 똑같이 붙였기 때문이다.
+
+    **이 결함은 일반 테스트로는 절대 안 잡힌다** — CI 는 SQLite 라 정수 컬럼을
+    ''와 비교해도 조용히 통과한다(그래서 기존 12건이 전부 초록인 채 배포됐다).
+    그래서 실행 결과가 아니라 **PostgreSQL 방언으로 생성되는 SQL 자체**를 검사한다.
+    """
+    from sqlalchemy.dialects import postgresql
+
+    numeric_fields = sorted(_INT_FIELDS)
+    # 감시 대상에 숫자 컬럼이 하나도 없으면 이 가드가 무의미해진다 — 그것부터 잡는다.
+    assert numeric_fields, "숫자 컬럼이 감시 대상에 없다 — 이 가드가 헛돈다"
+    assert "total_floor_count" in numeric_fields, (
+        "total_floor_count 가 숫자로 인식되지 않는다 — 이 사고의 당사자 컬럼이다"
+    )
+
+    with TestSession() as db:
+        _seed_population(db, _MIN_SAMPLE + 1, _MIN_SAMPLE + 1)
+
+        captured: list[str] = []
+        original = db.execute
+
+        def _spy(stmt, *a, **kw):
+            try:
+                captured.append(
+                    str(stmt.compile(dialect=postgresql.dialect(),
+                                     compile_kwargs={"literal_binds": True}))
+                )
+            except Exception:
+                pass
+            return original(stmt, *a, **kw)
+
+        db.execute = _spy  # type: ignore[method-assign]
+        try:
+            compute_fill_rates(db)
+        finally:
+            db.execute = original  # type: ignore[method-assign]
+
+    sql = chr(10).join(captured)
+    assert sql, "집계 SQL 이 캡처되지 않았다"
+    for field in numeric_fields:
+        assert f"articles.{field} != ''" not in sql, (
+            f"{field} 은 숫자 컬럼인데 빈 문자열과 비교한다 — "
+            "PostgreSQL 에서 InvalidTextRepresentation 으로 잡이 죽는다"
+        )
+    # 문자열 컬럼은 여전히 빈 문자열을 걸러야 한다(과잉 수정 방지).
+    assert "articles.heating_type != ''" in sql
+

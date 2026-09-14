@@ -38,7 +38,7 @@ import logging
 import os
 from datetime import timedelta, timezone
 
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import Integer, Numeric, and_, case, func, select
 
 from db.models import Article, CrawlJob, MonitorAlert
 from services.telegram import send_telegram
@@ -159,7 +159,11 @@ def compute_fill_rates(db) -> tuple[int, dict[str, float]]:
     select_cols = [func.count(Article.article_no).label("population")]
     for field in field_columns:
         col = getattr(Article, field)
-        if field in ("room_count", "bathroom_count", "walking_time_to_subway"):
+        # ⚠ 빈 문자열 비교는 **문자열 컬럼에만** 붙인다. 숫자 컬럼에 `!= ''` 를 붙이면
+        # PostgreSQL 이 InvalidTextRepresentation 으로 죽는다(SQLite 는 조용히 통과해
+        # 테스트가 못 잡는다 — 2026-09-14 04:40 첫 실전에서 잡 전체가 즉사한 실사고).
+        # 감시 대상에 숫자 컬럼이 새로 들어와도 자동으로 맞도록 **모델의 타입에서 판정**한다.
+        if isinstance(col.type, (Integer, Numeric)):
             cond = col.is_not(None)
         else:
             cond = and_(col.is_not(None), col != "")

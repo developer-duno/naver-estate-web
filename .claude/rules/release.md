@@ -66,6 +66,7 @@ date "+%F(%a) %H:%M"
 
 | 시각 | 잡 | 주기 | 소요 |
 |---|---|---|---|
+| 00:20 | backfill_detail_dawn | 매일 | ~38분 |
 | 01:00 | collect_childcare | 매월 첫째 목 | ~20~30분 |
 | 02:00 | collect_air_quality | 매일 | 짧음 |
 | 03:00 | discover_regions(일) / collect_emergency(매월 첫째 월) | 주·월 | 중간 |
@@ -73,6 +74,7 @@ date "+%F(%a) %H:%M"
 | 03:50 | vacuum_maintenance | 매일 | 중간 |
 | 04:00 | collect_prices(수) / **collect_crime_stats**(분기별 1·4·7·10월 첫째 일) | 주·분기 | 중간 |
 | 04:30 | collect_metrics | 매일 | 짧음 |
+| 04:40 | field_drift_monitor | 매일 | 짧음 |
 | 04:50 | billing_charge | 매일 | 짧음 |
 | 05:00 | collect_public_trades(토) ⏰3h / collect_officetel_presale(월) | 주 | ⏰ |
 | 05:30 | collect_rental_presale | 월 | 중간 |
@@ -80,13 +82,14 @@ date "+%F(%a) %H:%M"
 | **06:20** | **kapt_costs** | **매일** | **⏰ ~1h(예외 3h)** |
 | **06:30** | **official_price** | **매월 15일** | **⏰ 3~7h** |
 | 06:40 | api_version_probe | 일 | 짧음 |
+| 12:20 | backfill_detail_noon | 매일 | ~100분 |
 | 10:45·14:45·19:15 | popular_crawl | 매일 | 중간 |
 | 01:00·13:00 | crawl_articles | 매일 (cron, ±45분 jitter) | 중간 |
 | 매 30분 ±15분 jitter | crawl_details | interval | 중간 |
 | 매 4h | complex_detail_APT / OPST | interval | 중간 |
 | 매 10분 | crawler_monitor | interval | 짧음 |
 
-✅ **표 행의 잡 개수 = `scheduler.py` 의 `id=` 개수(현재 22)와 일치해야 한다.** 갱신 시 기계적으로 대조:
+✅ **표 행의 잡 개수 = `scheduler.py` 의 `id=` 개수(현재 25)와 일치해야 한다.** 갱신 시 기계적으로 대조:
 ```bash
 cd /d/naver-estate-web && grep -oE 'id="[a-zA-Z_]+"' backend/crawler/scheduler.py | sed 's/id="//;s/"//' | sort > /tmp/ids.txt
 while read id; do grep -q "$id" .claude/rules/release.md || echo "MISSING: $id"; done < /tmp/ids.txt
@@ -252,7 +255,7 @@ Startup BAT 시절엔 로그인해야 기동 — infra.md §자동 시작 사건
 
 ### 6. Cross-link
 
-- `.claude/rules/infra.md` §스케줄러 (APScheduler) = 22 잡 + 운영 토글 (세션 399 실측 정정: 옛 '13 잡'은 낡은 수치)
+- `.claude/rules/infra.md` §스케줄러 (APScheduler) = 25 잡 + 운영 토글 (세션 402 실측: 상세 백필 2 + 채움률 감시 1 신설로 22 → 25. ⚠ 라이브 `scheduler-status` 는 31개로 보이는데, popular 3회차·complex_detail 5유형이 개별 등록돼 정적 id 수와 다른 것이 정상이다 — 두 수를 맞추려 하지 말 것)
 - `.claude/rules/infra.md` §IP 차단 방지 = 네이버 호출 보호
 - 글로벌 메모리 박제 = `[[feedback-orchestrator-restart-zombie-risk]]` + `[[feedback-backend-process-zombie-grep]]`
 - 사건 일지 = `~/.claude/projects/d--naver-estate-web/memory/session{229,230,231}_summary.md`

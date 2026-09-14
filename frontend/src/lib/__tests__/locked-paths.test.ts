@@ -10,11 +10,40 @@
  * 로 되돌리면 "이름이 겹치는 다른 경로" 케이스가 실패한다.
  */
 import { describe, it, expect } from "vitest";
-import { LOCKED_PATHS, isLockedPath } from "@/lib/locked-paths";
+import {
+  LOCKED_PATHS,
+  isLockedPath,
+  isPaidServicePaused,
+} from "@/lib/locked-paths";
 
 describe("LOCKED_PATHS", () => {
   it("/pricing 을 잠긴 경로로 포함한다", () => {
     expect(LOCKED_PATHS).toContain("/pricing");
+  });
+});
+
+/**
+ * 세션 405 — 배너의 "유료 재개 시 자동 소멸"을 지키는 **실제 배선** 가드.
+ *
+ * `PaidServicePausedNotice.test.tsx` 는 `locked-paths` 를 통째로 모킹하므로 컴포넌트의
+ * 분기만 보고 이 연결선(`isPaidServicePaused` → `isLockedPath("/pricing")` → LOCKED_PATHS)은
+ * 못 본다. 그래서 누가 `isPaidServicePaused` 를 `return false` 로 하드코딩하거나 다른 경로를
+ * 보도록 바꿔도 그쪽 테스트는 전부 초록이다 — 그 사각을 여기서 모킹 없이 막는다.
+ *
+ * ⚠ 뮤테이션 검증(세션 405 수행): `isPaidServicePaused` 본문을 `return false;` 로 바꾸면
+ * 아래 첫 케이스가 FAIL 한다.
+ */
+describe("isPaidServicePaused — 결제 중단 판정 (모킹 없음)", () => {
+  it("/pricing 이 잠긴 동안에는 true (지금 상태)", () => {
+    expect(isPaidServicePaused()).toBe(true);
+  });
+
+  it("LOCKED_PATHS 의 /pricing 잠금과 판정이 항상 일치한다", () => {
+    // 유료를 재개하며 배열에서 /pricing 을 빼면 이 동치가 배너를 자동으로 끈다.
+    expect(isPaidServicePaused()).toBe(isLockedPath("/pricing"));
+    expect(isPaidServicePaused()).toBe(
+      (LOCKED_PATHS as readonly string[]).includes("/pricing"),
+    );
   });
 });
 

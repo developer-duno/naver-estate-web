@@ -53,6 +53,42 @@ _SCANNED_FILES = (
 # KST 변환을 거친 것으로 인정하는 헬퍼.
 _KST_HELPERS = ("_kst_hhmm", "_kst_stamp")
 
+# ── 스캔 범위 드리프트 차단 (세션 406 맹점검증 M1·M2) ──────────────────────
+#
+# _SCANNED_FILES 는 손으로 적은 3줄이라, **10번째 텔레그램 모듈이 생겨도 아무것도
+# 실패하지 않는다.** 그 모듈에 시각 한 줄이 추가되면 가드는 조용히 통과시킨다 —
+# 이 레포가 이미 데인 실패 모드다([[feedback_guard_skipped_by_path_filter]], s403 #521:
+# 양쪽 대조 가드를 한쪽 CI job 에 두는 바람에 정작 그 가드가 필요한 PR 에서만 skip 됐다).
+#
+# 그래서 "send_telegram 을 부르는 모듈 전수"를 코드에서 **추출**해, 아래 두 선언과의
+# 차집합이 공집합인지 본다. 같은 폴더의 test_scheduler_monitoring_coverage.py:357 이
+# 쓰는 검증된 패턴(추출 → 차집합 → 실패 메시지에 이름 명시)을 그대로 답습한다.
+#
+# 시각을 안 쓰는 모듈은 _NO_TIME_MODULES 에 **사유와 함께** 등록하게 강제한다
+# (_EXEMPT 관습 답습 — 사유를 쓰게 만드는 것이 목적).
+_TELEGRAM_SEARCH_DIRS = ("crawler", "routers", "services")
+_TELEGRAM_CALL = "send_telegram"
+
+# 발송기 자신 — 메시지를 만들지 않고 전달만 한다. 스캔 대상도 예외도 아니다.
+_TELEGRAM_SENDER = "services/telegram.py"
+
+_NO_TIME_MODULES: dict[str, str] = {
+    "crawler/api_version_monitor.py":
+        "폐기 감지 알림은 엔드포인트명·사유만 — 시각 표기 0건(세션 406 재확인)",
+    "crawler/billing_charge.py":
+        "결제 실패/중단 알림은 건수·사유만 — 시각 표기 0건",
+    "crawler/field_drift_monitor.py":
+        "채움률 드리프트 알림은 필드명·비율만 — 시각 표기 0건",
+    "crawler/scheduler_lock.py":
+        "락 에러 알림은 상태 문구만 — 시각 표기 0건",
+    "crawler/service_official_price.py":
+        "수집 결과 알림은 매칭수·잔여만 — 시각 표기 0건",
+    "routers/payment.py":
+        "운영자 알림(_alert_operator_throttled)은 사유 문구만. 이 파일의 isoformat 3곳은 "
+        "API 응답 JSON 의 paid_until 필드이고, 쿨다운의 now 는 time.monotonic()(단조시계)라 "
+        "사람이 읽는 시각이 아니다 — 세션 406 이 grep 오탐으로 한 번 의심했다가 직독으로 확인",
+}
+
 # 예외 — "파일:줄에 있는 코드 조각" → 사유. 사유 없이 추가 금지.
 #
 # ⚠ 줄 번호로 고정하지 않는다(코드가 밀리면 조용히 무효가 된다). 코드 조각 자체를
@@ -199,3 +235,66 @@ def test_scanned_files_all_exist():
     """스캔 대상 파일이 실제로 존재하는지 — 경로가 바뀌면 가드가 조용히 0건이 된다."""
     for rel in _SCANNED_FILES:
         assert (_BACKEND / rel).exists(), f"스캔 대상 파일 부재: {rel}"
+
+
+# ── 스캔 범위 드리프트 차단 (핵심) ─────────────────────────────────────────
+
+
+def _telegram_modules() -> set[str]:
+    """`send_telegram` 을 호출하는 모듈 경로 전수 — 소스에서 추출(손 목록 아님).
+
+    테스트 파일과 발송기 자신은 제외한다. 주석 안의 언급까지 세어도 무방하다 —
+    과다 검출은 "등록하라"는 요구로 끝나지만, 과소 검출은 사각지대를 만든다.
+    """
+    found: set[str] = set()
+    for d in _TELEGRAM_SEARCH_DIRS:
+        for path in (_BACKEND / d).rglob("*.py"):
+            if "__pycache__" in path.parts or path.name.startswith("test_"):
+                continue
+            rel = path.relative_to(_BACKEND).as_posix()
+            if rel == _TELEGRAM_SENDER:
+                continue
+            if _TELEGRAM_CALL in path.read_text(encoding="utf-8"):
+                found.add(rel)
+    return found
+
+
+def test_every_telegram_module_is_scanned_or_declared_timeless():
+    """텔레그램 알림을 보내는 모듈은 **스캔되거나, 시각 미노출로 선언되거나** 둘 중 하나.
+
+    이 테스트가 없으면 10번째 알림 모듈이 생겨도 가드가 조용하다. 세션 406 의
+    여섯 번째 누수(monitor.py f-string)가 정확히 "가드가 조용한" 형태였고, 그때는
+    monitor.py 가 스캔 대상이라도 패턴이 못 잡은 경우였다. 이건 그 반대편 구멍
+    — **패턴은 맞는데 파일이 아예 안 보이는** 경우를 막는다.
+    """
+    declared = set(_SCANNED_FILES) | set(_NO_TIME_MODULES)
+    missing = sorted(_telegram_modules() - declared)
+    assert not missing, (
+        "\n텔레그램 알림 모듈인데 시각 가드에 미등록:\n"
+        + "\n".join(f"    {m}" for m in missing)
+        + "\n\n  둘 중 하나를 하세요:\n"
+        "    (a) 그 모듈이 시각을 알림에 찍는다 → _SCANNED_FILES 에 추가\n"
+        "    (b) 시각을 안 찍는다 → _NO_TIME_MODULES 에 '경로: 사유' 로 등록\n"
+        "        (사유는 직접 확인하고 쓸 것 — 세션 406 은 grep 오탐으로 payment.py 를\n"
+        "         한 번 잘못 의심했다가 직독으로 정정했다)"
+    )
+
+
+def test_no_time_modules_still_send_telegram():
+    """_NO_TIME_MODULES 에 등록된 모듈이 실제로 존재하고 여전히 알림을 보내는지.
+
+    죽은 예외 청소 — 그 모듈이 알림을 더 이상 안 보내면 등록이 무의미하고,
+    나중에 같은 경로에 새 코드가 들어와도 조용히 면제된다.
+    """
+    actual = _telegram_modules()
+    stale = sorted(m for m in _NO_TIME_MODULES if m not in actual)
+    assert not stale, (
+        "_NO_TIME_MODULES 에 더 이상 send_telegram 을 안 부르는(또는 사라진) 모듈이 "
+        "남아 있다 — 제거할 것:\n" + "\n".join(f"    {m}" for m in stale)
+    )
+
+
+def test_no_time_modules_have_reasons():
+    """등록된 예외에 사유가 비어 있지 않은지 — 사유 없는 면제는 다음 사람이 못 믿는다."""
+    empty = sorted(m for m, why in _NO_TIME_MODULES.items() if not why.strip())
+    assert not empty, f"_NO_TIME_MODULES 에 사유가 빈 항목: {empty}"

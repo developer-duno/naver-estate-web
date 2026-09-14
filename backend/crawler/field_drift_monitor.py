@@ -102,6 +102,108 @@ _PENDING_FIX: frozenset[str] = frozenset(
 
 _ALERT_PREFIX = "field_drift"
 
+# 알림에 나가는 필드 이름 — 사장님이 읽는 우리말. DB 컬럼명(영문)은 알림에 내보내지 않는다.
+# ⚠ _THRESHOLDS 에 필드를 추가하면 여기도 추가한다(테스트가 누락을 잡는다).
+_FIELD_WORDS: dict[str, str] = {
+    "room_count": "방 개수",
+    "bathroom_count": "욕실 개수",
+    "realtor_address": "부동산 주소",
+    "parking_count": "주차 대수",
+    "broker_fee": "중개 수수료",
+    "acquisition_tax": "취득세",
+    "detail_description": "매물 설명글",
+    "walking_time_to_subway": "지하철역까지 걷는 시간",
+    "detail_status_code": "매물 상태",
+    "move_in_date": "입주 가능일",
+    "maintenance_cost": "관리비",
+    "heating_type": "난방 방식",
+    "use_approve_ymd": "사용 승인일",
+    "jibun_address": "지번 주소",
+    "total_floor_count": "건물 전체 층수",
+}
+
+# 비율을 "열에 N" 으로 풀 때 쓰는 우리말 숫자 — 사장님이 읽는 문장은 아라비아 숫자보다
+# 이 표현이 감이 빨리 온다("임계 80% 미만" → "열에 여덟은 들어와야 정상").
+_TENTH_WORDS = ("영", "하나", "둘", "셋", "넷", "다섯", "여섯", "일곱", "여덟", "아홉", "열")
+
+
+def field_words(field: str) -> str:
+    """필드 이름 → 사장님이 읽는 우리말. 모르는 필드는 영문 그대로(단서 보존)."""
+    return _FIELD_WORDS.get(field, field)
+
+
+def _eun_neun(word: str) -> str:
+    """앞말 받침 유무로 '은/는' 을 고른다 — "하나은" 같은 어색한 조사 방지.
+
+    한글 음절의 종성 유무는 유니코드 계산으로 판정한다((코드포인트 - 0xAC00) % 28).
+    한글이 아닌 글자로 끝나면 안전하게 '는' 을 쓴다.
+    """
+    if not word:
+        return "는"
+    last = word[-1]
+    if "가" <= last <= "힣":
+        return "은" if (ord(last) - 0xAC00) % 28 else "는"
+    return "는"
+
+
+def _tenths(percent: float) -> int:
+    """비율(%) → 0~10 의 '열에 몇' 값. 반올림하되 0·10 경계를 넘지 않는다."""
+    return max(0, min(10, round(percent / 10)))
+
+
+def _threshold_in_words(threshold: int) -> str:
+    """임계(%) → "열에 아홉은 들어와야 정상" 식 문구.
+
+    _THRESHOLDS 에 실재하는 값은 90/60/30 셋뿐이지만, 임계가 바뀌어도 문장이 깨지지
+    않도록 10 단위로 일반화한다.
+
+    ⚠ 임계는 **반올림이 아니라 내림**이다(_tenths 와 다르다). 임계의 뜻이 "최소 이만큼은
+    들어와야 한다"라서, 95 를 반올림해 "열에 열은 들어와야 정상"이라고 하면 열 개 전부를
+    요구하는 뜻이 되어 실제보다 엄격해진다. 5 는 "열에 영"(하나도 안 들어와도 정상)이라는
+    말이 되어 아예 뜻이 뒤집힌다 — 둘 다 세션 408 경계 점검에서 실측으로 잡았다.
+    내림이면 95→"아홉", 5→"하나"로 "적어도 이만큼"의 뜻이 보존된다(0 은 그대로 0).
+    """
+    n = max(0, min(10, int(threshold // 10)))
+    if threshold > 0 and n == 0:
+        n = 1  # 1~9% 임계 — "열에 영" 은 뜻이 뒤집히므로 최소 "하나"로 올린다.
+    word = _TENTH_WORDS[n]
+    # 받침 유무로 조사를 고른다 — "하나은/둘은/다섯은" 은 어색하다(세션 408 경계 점검).
+    return f"열에 {word}{_eun_neun(word)} 들어와야 정상"
+
+
+def _rate_in_words(rate: float, threshold: int | None = None) -> str:
+    """실제 비율(%) → "일곱뿐이에요" 식 문구. 0·10 경계는 따로 말한다.
+
+    ⚠ threshold 를 넘기면 **문장이 거짓말하지 않도록** 한 칸 낮춘다. 이 문구는 늘
+    "열에 N은 들어와야 정상인데 지금은 M뿐이에요" 꼴로 임계와 나란히 쓰이는데,
+    임계는 내림이고 비율은 반올림이라 서로 같은 칸에 걸릴 수 있다.
+    실제 사례: 입주 가능일 55.0% / 임계 60 → "열에 여섯은 들어와야 정상인데 지금은
+    여섯뿐이에요" — 위반이라고 알리면서 정작 기준을 채운 것처럼 읽힌다(세션 408 실측).
+    위반 상황에서 M 이 N 이상으로 반올림되면 M 을 한 칸 내려 뜻을 지킨다.
+    """
+    n = _tenths(rate)
+    if threshold is not None:
+        floor_n = max(0, min(10, int(threshold // 10)))
+        if rate < threshold and n >= floor_n:
+            n = max(0, floor_n - 1)
+    if n == 0:
+        return "지금은 거의 하나도 안 들어와요"
+    if n == 10:
+        return "지금은 거의 다 들어와요"
+    return f"지금은 {_TENTH_WORDS[n]}뿐이에요"
+
+
+# 날짜 우리말 — _window_in_words 전용(하루·이틀·사흘…).
+_DAY_WORDS = ("", "하루", "이틀", "사흘", "나흘", "닷새", "엿새", "이레", "여드레", "아흐레", "열흘")
+
+
+def _window_in_words() -> str:
+    """관찰 창(_WINDOW_HOURS) → "최근 이틀간" 식 문구. 상수가 바뀌면 문구도 따라간다."""
+    days, remainder = divmod(_WINDOW_HOURS, 24)
+    if remainder == 0 and 1 <= days < len(_DAY_WORDS):
+        return f"최근 {_DAY_WORDS[days]}간"
+    return f"최근 {_WINDOW_HOURS}시간 동안"
+
 
 def _cooldown_hours() -> int:
     """쿨다운 시간 — monitor.py 와 같은 env 키 재사용(기본 6h)."""
@@ -214,12 +316,19 @@ def _alert_key(field: str) -> str:
 
 
 def _send_violation_alert(field: str, rate: float, threshold: int, population: int) -> bool:
-    """위반 1건 텔레그램 발송 — best-effort(예외 흡수)."""
+    """위반 1건 텔레그램 발송 — best-effort(예외 흡수).
+
+    ⚠ population(표본 건수)은 **문구에 넣지 않는다** — 사장님이 판단에 쓰는 수치는
+    비율이지 표본수가 아니다(세션 408 사장님 결정). 인자는 호출부 계약 유지를 위해
+    남겨 두고, 표본 건수는 관리자 화면(MonitorAlert.detail)에 그대로 기록된다.
+    """
     msg = (
-        f"[내부모니터] 🔴 <b>상세 필드 채움률 이상</b>\n\n"
-        f"▸ <b>{field}</b> 채움률 {rate}% (임계 {threshold}% 미만)\n"
-        f"  최근 {_WINDOW_HOURS}시간 표본 {population}건 기준\n"
-        f"→ 네이버 상세 API 응답 키 변경 여부 확인 (2026-09-13 heating_type 등 유사 사고)"
+        f"[서버 알림] 🔴 <b>매물 정보 한 가지가 잘 안 들어오고 있어요</b>\n\n"
+        f"▸ <b>{field_words(field)}</b> — {_window_in_words()} 받은 매물 중 "
+        f"{rate}%만 채워졌어요\n"
+        f"  ({_threshold_in_words(threshold)}인데 {_rate_in_words(rate, threshold)})\n"
+        f"→ 손님 화면은 그대로 보입니다. 그 항목만 빈칸으로 보여요.\n"
+        f"   아침에 Claude 에게 알려주시면 됩니다."
     )
     try:
         return send_telegram(msg, parse_mode="HTML")
@@ -231,8 +340,9 @@ def _send_violation_alert(field: str, rate: float, threshold: int, population: i
 def _send_resolved_alert(field: str, rate: float, threshold: int) -> bool:
     """해소 알림 — best-effort(예외 흡수)."""
     msg = (
-        f"[내부모니터] ✅ <b>상세 필드 채움률 정상 복귀</b>\n\n"
-        f"▸ <b>{field}</b> 채움률 {rate}% (임계 {threshold}% 이상 회복)"
+        f"[서버 알림] ✅ <b>매물 정보가 다시 잘 들어와요</b>\n\n"
+        f"▸ <b>{field_words(field)}</b> — 이제 {rate}%까지 채워졌어요 "
+        f"(정상으로 돌아왔어요)"
     )
     try:
         return send_telegram(msg, parse_mode="HTML")

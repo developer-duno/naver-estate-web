@@ -231,7 +231,46 @@ ACTION_WORDS: dict[str, str] = {
         "→ 손님 화면은 그대로 보이지만 자료가 오래됐어요.\n"
         "   하루가 지나도 그대로면 Claude 에게 알려주세요."
     ),
+    # ⚠ 결제·정산 잡은 "자료가 안 들어온다"가 아니라 **돈이 안 걷힌다**는 뜻이라
+    #    crawl_failed 문구를 쓰면 심각도를 정반대로 안내하게 된다(세션 408 실측:
+    #    빌링키 자동결제 실패에 "새 자료만 안 들어와요"가 붙어 나갔다).
+    "billing_failed": (
+        "→ 구독료가 자동으로 걷히지 않았어요. 손님 화면은 그대로 쓰입니다.\n"
+        "   돈이 걸린 일이라 아침에 꼭 Claude 에게 알려주세요."
+    ),
 }
+
+
+def _has_final_consonant(word: str) -> bool:
+    """마지막 글자에 받침이 있나 — 한글이 아니면 False(안전한 기본값)."""
+    if not word:
+        return False
+    last = word[-1]
+    if "가" <= last <= "힣":
+        return bool((ord(last) - 0xAC00) % 28)
+    return False
+
+
+def eul_reul(word: str) -> str:
+    """앞말 받침 유무로 '을/를' 선택 — "공시가격 수집를" 같은 문장 방지(세션 408)."""
+    return "을" if _has_final_consonant(word) else "를"
+
+
+# 결제·정산 성격의 잡 — 이 목록에 있으면 billing_failed 안내를 쓴다.
+# 키는 **스케줄러 잡 id**(job_error_listener 가 받는 값)다 — job_type 이 아니다.
+_BILLING_JOB_IDS: frozenset[str] = frozenset({"billing_charge"})
+
+
+def action_words_for_job(job_id: str) -> str:
+    """잡 id → 그 잡 성격에 맞는 행동 안내.
+
+    결제 잡과 수집 잡은 사장님이 받아야 할 뜻이 다르다(돈 vs 자료).
+    """
+    if job_id in _BILLING_JOB_IDS:
+        return ACTION_WORDS["billing_failed"]
+    return ACTION_WORDS["crawl_failed"]
+
+
 _ACTION_DEFAULT = "→ 무슨 일인지 확인이 필요해요. 아침에 Claude 에게 알려주세요."
 
 

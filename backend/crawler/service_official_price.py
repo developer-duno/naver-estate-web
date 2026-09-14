@@ -979,7 +979,7 @@ def collect_official_prices(
                 )[:500]
                 db.commit()
                 _alert_official_price(
-                    f"[내부즉시] 공동주택 공시가격 — 매칭 소실 {len(regressed)}단지로 임계"
+                    f"[서버 알림] 공동주택 공시가격 — 매칭 소실 {len(regressed)}단지로 임계"
                     f" {_REPASS_COLLAPSE_THRESHOLD} 초과. 페이지 드리프트가 아니라 시스템 이상"
                     " 의심(매칭 규칙·API 응답 구조 변경 등)이라 재수집을 생략했습니다."
                 )
@@ -1100,7 +1100,7 @@ def collect_official_prices(
                     # monitor 텔레그램은 failed 만 감시한다 — 월 1회 잡이라 이대로면 다음
                     # 달까지 아무도 모른다. 관찰 가능하게 텔레그램으로 승격(best-effort).
                     _alert_official_price(
-                        f"[내부즉시] 공동주택 공시가격 — 재수집 후에도 미매칭 잔여"
+                        f"[서버 알림] 공동주택 공시가격 — 재수집 후에도 미매칭 잔여"
                         f" {len(remaining_lost)}단지: {summary}"
                     )
         except Exception:

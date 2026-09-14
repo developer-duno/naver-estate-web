@@ -73,14 +73,21 @@ def test_job_error_sends_telegram_with_job_id_and_exception():
 
 
 def test_job_missed_sends_telegram_with_misfire_wording():
-    """EVENT_JOB_MISSED → 메시지에 누락/misfire 표현 + 한글 라벨 포함 (세션 359 정정)."""
+    """EVENT_JOB_MISSED → "정해진 시각에 못 돌렸다"는 뜻 + 한글 라벨 포함.
+
+    단언의 의도는 "이 알림이 '예정된 실행을 건너뛴 것'임을 사장님이 알 수 있는가" 다
+    — 그 의도는 그대로 두고 표현만 새 문구에 맞춘다. 세션 408 에 '누락(misfire)' 을
+    뺀 이유: 둘 다 사장님이 쓰지 않는 말이다(지시: "어려운 말은 금지").
+    """
     with patch("services.telegram.send_telegram") as mock_send:
         event = _missed_event(job_id="collect_prices")
         job_event_listener(event)
 
     mock_send.assert_called_once()
     msg = mock_send.call_args[0][0]
-    assert "누락" in msg or "misfire" in msg.lower()
+    assert "정해진 시각에 못 돌렸어요" in msg, msg
+    # 개발자용 낱말이 되돌아오지 않았는지도 함께 지킨다
+    assert "누락" not in msg and "misfire" not in msg.lower(), msg
     assert "시세 이력 수집" in msg  # 영문 job_id 대신 한글 라벨
 
 
@@ -179,13 +186,18 @@ def test_job_error_message_falls_back_to_label_table_without_scheduler():
     assert "PortOne 500" in msg  # 실제 예외 메시지는 항상 보존
 
 
-def test_job_error_message_extracts_own_code_location_not_library_frame():
-    """traceback 에 우리 코드+라이브러리 프레임이 섞이면 우리 코드 위치를 우선 노출.
+def test_job_error_location_goes_to_log_not_telegram(caplog):
+    """traceback 의 우리 코드 위치는 **서버 로그**에 남고 텔레그램에는 안 나간다.
 
-    오늘 실사고 재현: crawl_details 가 service_discover.py 에서 db.commit() 하다
-    InFailedSqlTransaction 으로 죽고, 그 아래 sqlalchemy 내부 프레임까지 traceback
-    에 남는 상황. site-packages 프레임이 아니라 우리 소스 위치가 나와야 한다.
+    세션 359 의 원래 의도("라이브러리 프레임이 아니라 우리 소스 위치를 우선 뽑는다")는
+    그대로 지킨다 — 다만 그 값이 나가는 곳이 바뀌었다. 파일명·줄번호는 사장님께
+    의미가 없는 개발자용 단서라 세션 408 에 알림 본문에서 빼고 logger.error 로 옮겼다
+    (사장님 지시: "어려운 말은 금지"). 내가 원인을 추적할 근거는 로그에 그대로 있다.
+
+    뮤테이션: job_event_listener 의 logger.error 에서 위치=%s 를 빼면 이 테스트가 FAIL.
     """
+    import logging as _logging
+
     tb = (
         '  File "/app/backend/crawler/service_discover.py", line 481, in crawl_article_details\n'
         "    db.commit()\n"
@@ -195,26 +207,107 @@ def test_job_error_message_extracts_own_code_location_not_library_frame():
         "commands ignored until end of transaction block"
     )
     scheduler = _FakeScheduler({"crawl_details": _FakeJob("매물 상세 보강")})
+    with caplog.at_level(_logging.ERROR, logger="crawler.job_error_listener"):
+        with patch("services.telegram.send_telegram") as mock_send:
+            event = _error_event_with_traceback(
+                "crawl_details", ValueError("InFailedSqlTransaction"), tb,
+            )
+            job_event_listener(event, scheduler)
+
+    # ① 로그에는 우리 코드 위치가 남는다 (라이브러리 프레임이 아니라)
+    log_text = caplog.text
+    assert "service_discover.py" in log_text, log_text
+    assert "481" in log_text, log_text
+    assert "site-packages" not in log_text, log_text
+
+    # ② 텔레그램 본문에는 개발자용 위치가 없다
+    msg = mock_send.call_args[0][0]
+    assert "service_discover.py" not in msg, msg
+    assert "File " not in msg, msg
+    assert "line " not in msg, msg
+
+
+def test_job_error_alert_has_no_developer_jargon():
+    """알림 본문에 개발자용 글자(트레이스백·라이브러리명·영문 예외)가 없어야 한다.
+
+    사장님 지시(2026-09-15): "텔레그램 알림은 일반인이 봐도 무엇이 어떻게 잘못되었는지
+    손쉽게 알 수 있어야 해. 어려운 말은 금지야."
+
+    뮤테이션: `explain_error(exc_text)` 를 `exc_text` 로 되돌리면 psycopg2 가 새어 FAIL.
+    """
+    tb = (
+        '  File "/app/backend/crawler/service_discover.py", line 481, in crawl\n'
+        "psycopg2.errors.QueryCanceled: canceling statement due to statement timeout"
+    )
     with patch("services.telegram.send_telegram") as mock_send:
         event = _error_event_with_traceback(
-            "crawl_details", ValueError("InFailedSqlTransaction"), tb,
+            "crawl_details",
+            ValueError("(psycopg2.errors.QueryCanceled) canceling statement due to "
+                       "statement timeout"),
+            tb,
         )
-        job_event_listener(event, scheduler)
+        job_event_listener(event, None)
 
     msg = mock_send.call_args[0][0]
-    assert "service_discover.py" in msg
-    assert "481" in msg
-    assert "site-packages" not in msg  # 라이브러리 내부 프레임이 아니라 우리 코드가 나와야 함
+    for jargon in ('File "', "line ", "psycopg2", "Error", "Traceback", "statement timeout"):
+        assert jargon not in msg, f"개발자용 글자가 남았다({jargon}): {msg}"
+    # 아는 에러는 우리말 한 줄로 번역돼 있어야 한다
+    assert "데이터베이스가 너무 오래 걸려" in msg, msg
 
 
-def test_job_error_message_includes_admin_link():
-    """모든 실패 알림에 관리자 화면 바로가기 링크가 포함된다."""
+def test_job_error_alert_uses_unified_prefix():
+    """접두어가 3채널 공통 `[서버 알림]` 이고 옛 `[내부즉시]` 가 없어야 한다."""
+    with patch("services.telegram.send_telegram") as mock_send:
+        job_event_listener(_error_event(job_id="billing_charge"), None)
+    err_msg = mock_send.call_args[0][0]
+
+    with patch("services.telegram.send_telegram") as mock_send:
+        job_event_listener(_missed_event(job_id="collect_prices"), None)
+    missed_msg = mock_send.call_args[0][0]
+
+    for msg in (err_msg, missed_msg):
+        assert msg.startswith("[서버 알림]"), msg
+        assert "[내부즉시]" not in msg, msg
+
+
+def test_job_error_alert_tells_owner_what_to_do():
+    """알림 끝에 사장님이 실제로 할 수 있는 행동이 붙는다 (plain_words.action_words)."""
+    with patch("services.telegram.send_telegram") as mock_send:
+        job_event_listener(_error_event(job_id="billing_charge"), None)
+
+    msg = mock_send.call_args[0][0]
+    assert "Claude" in msg, msg
+    assert "손님 화면" in msg, msg
+
+
+def test_admin_link_helper_still_resolves_operational_domain():
+    """`_admin_link` 는 살아 있고 운영 도메인을 고른다 — 알림 본문에서만 뺐다.
+
+    옛 테스트(test_job_error_message_includes_admin_link)는 "모든 실패 알림에 관리자
+    화면 링크가 포함된다"를 단언했다. 세션 408 에 알림 본문을 사장님용 3줄로 줄이면서
+    링크 줄을 뺐다 — 새벽 크론 알림에서 사장님이 관리자 화면을 여실 일이 없고, 그
+    자리에 "무엇을 하면 되는지"(action_words)를 두는 편이 낫다는 판단(spec 2-B).
+
+    그렇다고 헬퍼의 의도까지 지우지는 않는다 — 나중에 링크를 다시 붙일 때 이 로직이
+    맞는지(localhost 가 아니라 운영 도메인을 고르는지) 여기서 계속 지킨다.
+    """
+    from crawler.job_error_listener import _admin_link
+
+    with patch.dict(
+        "os.environ",
+        {"FRONTEND_URL": "http://localhost:3000,https://2u.pe.kr"},
+    ):
+        assert _admin_link("/admin#scheduler") == "https://2u.pe.kr/admin#scheduler"
+
+
+def test_job_error_alert_omits_admin_link():
+    """알림 본문에는 관리자 링크가 없다 — 위 테스트와 짝(의도가 어디로 갔는지 명시)."""
     with patch("services.telegram.send_telegram") as mock_send:
         event = _error_event(job_id="collect_emergency", exception=ValueError("API 실패"))
         job_event_listener(event, None)
 
     msg = mock_send.call_args[0][0]
-    assert "/admin#scheduler" in msg
+    assert "/admin#scheduler" not in msg, msg
 
 
 def test_job_error_message_sends_as_html_and_escapes_label():
@@ -263,3 +356,52 @@ def test_job_error_without_traceback_still_shows_exception_message():
 
     msg = mock_send.call_args[0][0]
     assert "PortOne 500" in msg
+
+
+# ── 세션 408: 안내 문구가 잡 성격과 어긋나던 2건 회귀 ──────────────────────
+
+
+def test_billing_job_failure_says_money_not_stale_data():
+    """결제 잡 실패에 수집용 안내가 붙으면 심각도를 정반대로 알리게 된다.
+
+    실측(세션 408): 빌링키 자동결제가 실패했는데 "새 자료만 안 들어와요"가 붙어
+    나갔다 — 실제로는 **구독료가 안 걷힌** 상황이라 뜻이 완전히 다르다.
+    """
+    with patch("services.telegram.send_telegram") as mock_send:
+        job_event_listener(_error_event(job_id="billing_charge", exception=ValueError("PG 오류")), None)
+
+    msg = mock_send.call_args[0][0]
+    assert "구독료" in msg, f"결제 실패인데 돈 이야기가 없다: {msg}"
+    assert "새 자료만 안 들어와요" not in msg, f"수집용 안내가 결제 알림에 붙었다: {msg}"
+
+    # 수집 잡은 반대로 수집용 안내를 그대로 써야 한다(회귀 방향 양쪽 고정).
+    job_error_listener._last_alert_at.clear()
+    with patch("services.telegram.send_telegram") as mock_send2:
+        job_event_listener(_error_event(job_id="crawl_details", exception=ValueError("타임아웃")), None)
+
+    msg2 = mock_send2.call_args[0][0]
+    assert "새 자료만 안 들어와요" in msg2
+    assert "구독료" not in msg2
+
+
+def test_misfire_message_uses_correct_korean_particle():
+    """받침 유무에 맞는 조사(을/를) — "공시가격 수집를" 같은 문장이 나가면 안 된다."""
+    from datetime import datetime, timezone
+
+    # ⚠ 라벨은 <b>…</b> 로 감싸여 나가므로 조사는 닫는 태그 **뒤**에 붙는다
+    #    ("…수집</b>을"). "수집을" 처럼 붙여서 찾으면 코드가 맞아도 실패한다
+    #    (세션 408 실측 — 전체 실행에서 이 테스트만 빨갛게 나온 원인).
+    cases = [
+        ("official_price", "</b>을"),   # 받침 있음 → 을
+        ("crawl_articles", "</b>를"),   # 받침 없음 → 를
+    ]
+    for job_id, expected in cases:
+        job_error_listener._last_alert_at.clear()
+        event = SimpleNamespace(
+            code=EVENT_JOB_MISSED, job_id=job_id, jobstore="default",
+            scheduled_run_time=datetime(2026, 9, 15, 6, 30, tzinfo=timezone.utc),
+        )
+        with patch("services.telegram.send_telegram") as mock_send:
+            job_event_listener(event, None)
+        msg = mock_send.call_args[0][0]
+        assert expected in msg, f"{job_id}: 조사가 틀렸다 — {msg.splitlines()[0]}"

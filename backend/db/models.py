@@ -90,7 +90,10 @@ class Article(Base):
     )
 
     article_no: Mapped[str] = mapped_column(String(20), primary_key=True)
-    complex_no: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    # index=True 없음 (V059, 세션 406) — 단독 인덱스 ix_articles_complex_no 는
+    # 위 ix_articles_complex_active/idx_articles_confirm_sort 의 선행 칼럼에 완전히
+    # 포섭돼 읽기에 기여하지 않으면서 쓰기 비용만 더했다. 되살리면 prod 와 어긋난다.
+    complex_no: Mapped[str] = mapped_column(String(20), nullable=False)
     trade_type_name: Mapped[str | None] = mapped_column(String(20))
     building_name: Mapped[str | None] = mapped_column(String(50))
     floor_info: Mapped[str | None] = mapped_column(String(20))

@@ -1,0 +1,92 @@
+-- V059: 중복 인덱스 ix_articles_complex_no 제거 (24MB 회수 — 세션 406)
+--
+-- 배경: articles 에 complex_no 선행 인덱스가 3개 겹쳐 있었다.
+--   ix_articles_complex_no        (complex_no)                                  24MB
+--   ix_articles_complex_active    (complex_no, is_active)                       24MB
+--   idx_articles_confirm_sort     (complex_no, is_active, article_confirm_ymd)  26MB
+-- B-tree 는 선행 칼럼만으로도 검색되므로 1칼럼짜리는 나머지 둘에 완전히 포섭된다.
+-- 쓰기마다 3개를 다 갱신하는데(articles 는 크롤러가 상시 upsert/update 하는 테이블)
+-- 그중 하나는 읽기에 기여하지 않는다.
+--
+-- ── 제거해도 되는 근거 (세션 406 prod 실측) ─────────────────────────────────
+--
+-- (1) 앱 쿼리 플랜 불변. 트랜잭션 안에서 DROP → EXPLAIN → ROLLBACK 으로 대조:
+--
+--     쿼리                                      있을 때                  없을 때
+--     ----------------------------------------- ------------------------ ------------------------
+--     count(complex_no+is_active)               confirm_sort cost=8.85   confirm_sort cost=8.85
+--     목록 ORDER BY article_confirm_ymd DESC    confirm_sort cost=88.84  confirm_sort cost=88.84
+--
+--     cost 가 소수점까지 동일 = 플래너 선택이 전혀 안 바뀐다.
+--
+-- (2) complex_no 를 **단독으로** 거르는 유일한 경로인 services/upsert.py
+--     delete_missing_articles(complex_no + article_no NOT IN ...) 조차
+--     지금도 이 인덱스를 안 쓴다 — EXPLAIN 상 Bitmap Index Scan on
+--     idx_articles_confirm_sort (제거 전후 동일).
+--
+-- (3) 코드 전수 확인: Article 을 complex_no 로 거르는 곳은 전부 is_active 와 짝이다
+--     (article_queries.py:26-27 · complex_queries.py:74,101 · stats_queries.py:29,38 ·
+--      _detail_worker.py:25-32 · _crawl_bg.py:99 · service_discover.py:219 ·
+--      price_queries.py:188-192 는 is_active 로 시작하는 조건 목록에 덧붙임).
+--
+-- (4) 공유 DB 영향 0: mibunyang 은 PostgREST 경유로 articles 를 읽는데
+--     pg_stat_statements 상위 쿼리가 전부 is_active / article_no 로 거르고
+--     **complex_no 단독 필터 0건**. articles 에 외래키 제약도 0개.
+--
+-- ⚠ idx_scan 이 95,343(통계창 2026-08-24~, 하루 약 4,500회)으로 non-zero 인 것은
+--    맞다. 그러나 위 (1)(2) 가 보여주듯 그 호출들은 인덱스가 없으면 그대로
+--    confirm_sort 로 흡수된다 — "쓰인 적 있다"와 "없으면 안 된다"는 다르다.
+--
+-- ── ORM 동반 수정 (이 파일만 적용하면 반쪽이다) ─────────────────────────────
+--
+-- 이 인덱스의 진짜 출처는 db/models.py 의 Article.complex_no 에 붙은 index=True 다.
+-- tests/conftest.py 가 Base.metadata.create_all() 로 스키마를 만들므로, SQL 만
+-- 적용하고 ORM 선언을 두면 테스트 환경에서 계속 재생성된다. 같은 커밋에서
+-- index=True 를 제거했다(tests/test_migration_v059_drop_redundant_idx.py 가 가드).
+--
+-- ── prod 적용 ───────────────────────────────────────────────────────────────
+--
+-- DROP INDEX CONCURRENTLY 는 락 0·무중단이고 backend 재시작과 무관하다(V050·V057 선례).
+--
+-- ⚠ 연결 만드는 법에서 두 번 막힌다 (세션 406 실측 — 아래 ✓ 형태를 그대로 쓸 것).
+--    이 문은 트랜잭션 블록 안에서 실행 자체가 불가능한데, 이 레포의 평소 연결 경로로는
+--    트랜잭션을 벗어나기가 생각보다 까다롭다:
+--
+--      ✗ engine.raw_connection() → raw.set_session(autocommit=True)
+--        "set_session cannot be used inside a transaction" (raw_connection 이 이미 트랜잭션 안)
+--      ✗ raw.rollback() → raw.autocommit = True → SET statement_timeout ...
+--        SET 이 트랜잭션을 다시 열어 DROP 에서
+--        "DROP INDEX CONCURRENTLY cannot run inside a transaction block"
+--      ✓ 별도 엔진 + AUTOCOMMIT + **서버측 옵션으로 timeout 지정**(SET 문을 아예 안 쓴다)
+--
+--    성공한 형태 (backend/ cwd, PYTHONPATH=.):
+--      from sqlalchemy import create_engine
+--      from db.database import DATABASE_URL
+--      eng = create_engine(
+--          DATABASE_URL,
+--          isolation_level="AUTOCOMMIT",
+--          connect_args={"options": "-c statement_timeout=600000"},  # SET 대신 이것
+--      )
+--      with eng.connect() as conn:
+--          conn.exec_driver_sql("DROP INDEX CONCURRENTLY IF EXISTS ix_articles_complex_no")
+--
+--    connect_args 로 넘기는 이유 = db/database.py connect 이벤트가 연결마다
+--    statement_timeout=8000 을 박는데, 그걸 SET 으로 풀면 트랜잭션이 열려 위 ✗ 가 된다.
+--    (Supavisor 풀러가 startup options 를 무시할 수 있다 — infra.md §statement_timeout.
+--     세션 406 실측에서 SHOW 는 2min 으로 보였으나 DROP 이 0.0초라 무관했다.)
+--
+-- ⚠ running 잡이 없는 시점에 하면 즉시 끝난다(세션 406: 0.0초). 잡이 돌고 있어도
+--    CONCURRENTLY 는 그 잡을 끊지 않고 기다렸다 지운다 — 재시작과 달리 중단 위험 0.
+--
+-- 적용 후 확인:
+--   SELECT indexrelname, idx_scan FROM pg_stat_user_indexes WHERE relname='articles';
+--   -- ix_articles_complex_no 행이 사라지고, complex_active/confirm_sort 는 그대로여야 한다.
+--   SELECT pg_size_pretty(pg_indexes_size('articles'));  -- 292MB → 약 268MB 기대
+--
+-- 본 파일 본문은 멱등·비-CONCURRENTLY (CI 는 SQLite 라 미실행, 문서·재현용 — V050/V057 관례).
+
+DROP INDEX IF EXISTS ix_articles_complex_no;
+
+-- 역방향 (롤백 — prod 은 CONCURRENTLY 로 락 0. 트랜잭션 블록 안 실행 불가 → autocommit):
+-- CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_articles_complex_no ON articles (complex_no);
+-- 롤백 시 db/models.py 의 index=True 도 함께 되돌릴 것.

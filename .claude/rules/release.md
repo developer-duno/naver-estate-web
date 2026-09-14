@@ -10,7 +10,14 @@
 
 - backend 스케줄러 설정 변경 (`crawler/scheduler.py`, `crawler/monitor.py`, `crawler/service_metrics.py`)
 - 환경변수 추가/변경 (`backend/.env.example`, 새 `os.getenv` 호출)
-- backend 의존성 변경 (`backend/requirements.txt`)
+- backend 의존성 변경 (`backend/requirements.txt`) — ⚠ **머지만으로는 부품이 안 바뀐다.** `requirements.txt` 는
+  *주문서*이고 실제 설치본은 그대로다(세션 404 실측: 머지 후에도 psycopg2 2.9.12·filelock 3.32.5 상주).
+  **머지 → `pip install` → 재시작 3단계**를 다 해야 반영이다. 2단계를 건너뛰고 재시작만 하면 4중 지표가
+  전부 초록인데 **옛 부품이 도는** zombie 와 같은 상태가 되고, "반영 완료"는 거짓 보고가 된다.
+  검증은 라이브가 쓰는 파이썬으로 `python -c "import psycopg2; print(psycopg2.__version__)"` —
+  `pip` 의 `Successfully installed` 출력은 그 자체로 증거가 아니다(설치 대상 인터프리터가 다를 수 있다).
+  ⚠ 이 PC 파이썬은 **전역 공유**(`Python312`, 집서버 4프로젝트 동거)라 교체는 다른 프로젝트에도 적용된다 —
+  사장님 승인 후 진행하고, 되돌리기는 `pip install "<패키지>==<옛버전>"`.
 - DB 마이그레이션 (`backend/db/migrations/V*.sql`)
 - backend 모듈 import 흐름 변경 (`main.py`, `routers/*`, `crawler/*`)
 

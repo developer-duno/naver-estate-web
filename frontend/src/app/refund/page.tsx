@@ -7,10 +7,16 @@ export const metadata: Metadata = {
   alternates: { canonical: "/refund" },
 };
 
+import PaidServicePausedNotice from "@/components/PaidServicePausedNotice";
+
 export default function RefundPage() {
   return (
     <main className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-2xl font-bold mb-6">환불정책</h1>
+
+      {/* 무료 운영 중 현황 고지 — 문서 전체가 유료 결제를 전제하므로(세션 405).
+          유료 재개 시 LOCKED_PATHS 에서 /pricing 이 빠지면 자동으로 사라진다. */}
+      <PaidServicePausedNotice />
 
       <section className="space-y-4 text-sm text-gray-700 leading-relaxed">
         <h2 className="text-lg font-semibold text-gray-900">제1조 (목적)</h2>

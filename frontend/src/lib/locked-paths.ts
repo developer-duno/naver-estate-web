@@ -28,3 +28,23 @@ export function isLockedPath(pathname: string): boolean {
     (locked) => pathname === locked || pathname.startsWith(`${locked}/`),
   );
 }
+
+/**
+ * 유료 결제가 지금 중단된 상태인지.
+ *
+ * 약관(`/terms` 제5조)·환불정책(`/refund`)은 유료 구독이 돌아가는 것을 전제로 쓰여
+ * 있는데, 무료 전환으로 결제를 잠근 동안에는 그 설명이 현재 사실과 어긋난다. 두 문서는
+ * 푸터에서 누구나 열 수 있으므로(잠긴 `/pricing` 과 달리) **현황 한 줄을 덧붙여** 고지한다.
+ * 문서 본문은 고치지 않는다 — 유료를 재개하면 그대로 다시 유효해지는 내용이기 때문.
+ *
+ * **판정을 `LOCKED_PATHS` 에서 파생시키는 이유**: 별도 플래그를 새로 두면 결제를 재개할 때
+ * 두 곳을 고쳐야 하고, 한쪽만 고치면 "결제는 되는데 무료라고 적힌" 더 나쁜 상태가 된다.
+ * 이 파일 상단 주석이 안내하는 재개 절차("이 배열에서 해당 경로를 뺀다")를 따르면
+ * 배너는 **자동으로 사라진다** — 따로 기억할 단계가 늘지 않는다.
+ *
+ * ⚠ 이 함수는 화면 고지 전용이다. 결제 API·자동결제 스케줄러를 실제로 막는 것은
+ * 백엔드의 `PAYMENT_ENABLED` 환경변수이며, 그쪽이 진짜 스위치다.
+ */
+export function isPaidServicePaused(): boolean {
+  return isLockedPath("/pricing");
+}

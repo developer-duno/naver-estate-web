@@ -1,7 +1,13 @@
+import PaidServicePausedNotice from "@/components/PaidServicePausedNotice";
+
 export default function TermsPage() {
   return (
     <main className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-2xl font-bold mb-6">이용약관</h1>
+
+      {/* 무료 운영 중 현황 고지 — 제5조·제7조가 유료 구독을 전제하므로(세션 405).
+          유료 재개 시 LOCKED_PATHS 에서 /pricing 이 빠지면 자동으로 사라진다. */}
+      <PaidServicePausedNotice />
 
       <section className="space-y-4 text-sm text-gray-700 leading-relaxed">
         <h2 className="text-lg font-semibold text-gray-900">제1조 (목적)</h2>

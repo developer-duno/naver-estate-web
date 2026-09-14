@@ -126,10 +126,18 @@ def test_detect_issues_public_trade_under_type_threshold_not_stale():
 
 
 def test_detect_issues_public_trade_over_type_threshold_stale():
-    """정상(세션266): public_trade_data 가 3h(job_type 임계) 넘으면 진짜 마비."""
+    """정상: public_trade_data 가 job_type 임계를 넘으면 진짜 마비.
+
+    ⚠ 임계를 테스트에 **하드코딩하지 않는다** — 2026-09-14 에 3h → 8h 로 올렸더니
+    3h 를 박아둔 이 테스트가 깨졌다(prod 관측 최대 262분이라 3h 는 오탐 구간이었다).
+    임계는 운영 실측에 따라 바뀌는 값이므로 source 에서 읽어 쓴다.
+    """
+    from crawler.monitor import _STALE_HOURS_BY_TYPE
+
+    threshold = _STALE_HOURS_BY_TYPE["public_trade_data"]
     db = TestSession()
     try:
-        started = _utcnow() - timedelta(hours=4)
+        started = _utcnow() - timedelta(hours=threshold + 1)
         db.add(CrawlJob(
             job_type="public_trade_data", status="running",
             started_at=started, created_at=started,
@@ -140,7 +148,7 @@ def test_detect_issues_public_trade_over_type_threshold_stale():
             None,
         )
         assert issue is not None
-        assert issue["data"]["stale_hours"] == 3
+        assert issue["data"]["stale_hours"] == threshold
     finally:
         db.close()
 

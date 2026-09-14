@@ -231,6 +231,23 @@ def test_job_error_message_sends_as_html_and_escapes_label():
     assert "&lt;script&gt;" in msg
 
 
+def test_misfire_alert_shows_kst_not_raw_iso():
+    """misfire 알림의 예정시각이 KST `MM-DD HH:MM` 인지 — 세션 406 다섯 번째 누수.
+
+    원래 `str(event.scheduled_run_time)` 로 `2026-07-04T04:50:00+00:00` 가 그대로
+    나갔다. 이 파일엔 strftime·isoformat 이 한 건도 없어 그 두 이름으로 훑는
+    방식으로는 안 잡히던 형태다 — 기존 13개 테스트가 전부 통과하면서도 이 누수를
+    못 본 이유가 "아무도 시각 형식을 단언하지 않았기" 때문이라, 여기서 단언한다.
+    """
+    with patch("services.telegram.send_telegram") as mock_send:
+        job_event_listener(_missed_event(scheduled_run_time="2026-07-04T04:50:00+00:00"), None)
+
+    msg = mock_send.call_args[0][0]
+    assert "예정시각: 07-04 13:50" in msg, f"KST 변환이 빠졌다: {msg}"
+    assert "T04:50" not in msg, "UTC ISO 원문이 그대로 노출됐다"
+    assert "+00:00" not in msg, "UTC 오프셋이 그대로 노출됐다"
+
+
 def test_job_error_without_traceback_still_shows_exception_message():
     """traceback 이 없거나 File 줄이 없어도 실제 예외 메시지는 반드시 보여준다.
 

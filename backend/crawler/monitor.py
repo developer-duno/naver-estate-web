@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, case, func, select, text
 
-from crawler.alert_format import format_issue_message, format_resolved_batch
+from crawler.alert_format import _kst_stamp, format_issue_message, format_resolved_batch
 from db.models import CrawlJob, MonitorAlert
 from routers.admin.freshness import compute_freshness
 from services.telegram import send_telegram
@@ -313,7 +313,15 @@ def detect_issues_ex(db) -> tuple[list[dict], bool]:
             issues.append({
                 "alert_key": f"freshness:{item['key']}",
                 "kind": "freshness",
-                "detail": f"{item['label']} 데이터 미축적 (신선도 red, 마지막 갱신 {item['last_updated']})",
+                # ⏰ 시각은 반드시 _kst_stamp 경유 (세션 406 적대검증 HIGH-1).
+                # 원래 `{item['last_updated']}` 로 ISO 원문을 f-string 에 직접 끼워
+                # 넣어 UTC(`2026-09-12T19:29:08.510825+00:00`)가 그대로 나갔다.
+                # 이 detail 은 monitor_alerts.detail 에 저장되고 **해소 알림 때 그대로
+                # 재송출**되므로 사장님이 9시간 어긋난 시각을 읽게 된다.
+                # f-string 직접 삽입은 str() 과 결과가 완전히 동일한데(실측), 세션 406 이
+                # 처음 만든 가드는 `str(` 글자만 찾아 이 형태를 못 잡았다 — 그래서
+                # test_alert_time_kst_guard 에 f-string 패턴을 추가했다.
+                "detail": f"{item['label']} 데이터 미축적 (신선도 red, 마지막 갱신 {_kst_stamp(item['last_updated'])})",
                 "data": {
                     "label": item["label"],
                     "status": item["status"],

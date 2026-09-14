@@ -24,6 +24,8 @@ import time
 
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
 
+from crawler.alert_format import _kst_stamp
+
 logger = logging.getLogger(__name__)
 
 # 두 이벤트를 한 리스너에서 같이 받기 위한 마스크 (add_listener 두 번째 인자)
@@ -202,9 +204,16 @@ def job_event_listener(event, scheduler=None) -> None:
         )
         key = f"job_missed:{job_id}"
         if _should_alert(key):
+            # ⏰ KST 로 변환해 내보낸다 (세션 406). 이 자리는 원래
+            # `str(event.scheduled_run_time)` 로 APScheduler 의 datetime 을 그대로
+            # 문자열화해 UTC ISO(`2026-07-04T04:50:00+00:00`)가 텔레그램에 나갔다.
+            # 이 파일엔 strftime·isoformat 이 한 건도 없어서 그 두 이름으로 훑는
+            # 방식으로는 구조적으로 안 잡히던 누수다 — alert_format 의 4곳을 고칠 때
+            # 함께 놓쳤고, tests/test_alert_time_kst_guard.py 가 이런 형태까지
+            # 잡도록 만들어진 계기다.
             _send_alert(
                 f"[내부즉시] 🔴 <b>{safe_label}</b> 실행 누락(예정 시각을 건너뜀)\n"
-                f"예정시각: {html.escape(str(event.scheduled_run_time))}\n"
+                f"예정시각: {html.escape(_kst_stamp(event.scheduled_run_time))}\n"
                 f"→ {safe_link} 확인",
                 parse_mode="HTML",
             )

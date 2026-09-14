@@ -10,32 +10,51 @@
 --
 -- ── 제거해도 되는 근거 (세션 406 prod 실측) ─────────────────────────────────
 --
--- (1) 앱 쿼리 플랜 불변. 트랜잭션 안에서 DROP → EXPLAIN → ROLLBACK 으로 대조:
+-- ⚠ 아래 근거는 세션 406 이 적었고, **같은 세션의 적대검증·할루시네이션 감사에서
+--    3건이 사실과 다르다고 적발돼 정정한 판**이다. 원래 서술은 "전부/0건/동일" 같은
+--    단정어를 썼는데 실제로는 반례가 있었다. 결론(제거해도 안전)은 반박 실패로
+--    유지됐으나, 근거 문장을 그대로 믿고 인용하지 말 것.
 --
---     쿼리                                      있을 때                  없을 때
---     ----------------------------------------- ------------------------ ------------------------
---     count(complex_no+is_active)               confirm_sort cost=8.85   confirm_sort cost=8.85
---     목록 ORDER BY article_confirm_ymd DESC    confirm_sort cost=88.84  confirm_sort cost=88.84
+-- (1) 앱 쿼리 플랜 불변. 트랜잭션 안에서 DROP → EXPLAIN → ROLLBACK 으로 대조.
+--     세션 406 이 단지 15111(13행)로 측정한 값은 count cost≈8.85 / 목록 cost≈88.84 가
+--     제거 전후 동일이었다.
+--     ⚠ 이 수치는 **재현 불가**로 판정됐다(감사 결과): 인덱스가 이미 삭제돼 "있을 때"를
+--     다시 잴 수 없고, 45개 단지 재측정에서 count 8.91 / 목록 84.63 등 다른 값이 나왔다.
+--     통계 갱신(ANALYZE)으로 설명 가능한 폭이라 조작으로 보지는 않으나, **이 숫자를
+--     근거로 재인용하지 말 것.** 플랜 불변 자체는 아래 (2)(5)로 뒷받침된다.
 --
---     cost 가 소수점까지 동일 = 플래너 선택이 전혀 안 바뀐다.
---
--- (2) complex_no 를 **단독으로** 거르는 유일한 경로인 services/upsert.py
---     delete_missing_articles(complex_no + article_no NOT IN ...) 조차
---     지금도 이 인덱스를 안 쓴다 — EXPLAIN 상 Bitmap Index Scan on
---     idx_articles_confirm_sort (제거 전후 동일).
+-- (2) complex_no 를 **단독으로** 거르는 앱 경로는 services/upsert.py
+--     delete_missing_articles(complex_no + article_no NOT IN ...) 하나이고, 이 쿼리는
+--     제거 전후 모두 포섭 인덱스로 간다.
+--     ⚠ 원래 "idx_articles_confirm_sort (제거 전후 동일)"이라고 단정했으나 **틀렸다**:
+--     단지 크기에 따라 플래너가 갈린다 — 189717(4,994행)은 ix_articles_complex_active,
+--     15352(103행)은 idx_articles_confirm_sort. 어느 쪽이든 포섭 인덱스라 결론은 같다.
 --
 -- (3) 코드 전수 확인: Article 을 complex_no 로 거르는 곳은 전부 is_active 와 짝이다
 --     (article_queries.py:26-27 · complex_queries.py:74,101 · stats_queries.py:29,38 ·
 --      _detail_worker.py:25-32 · _crawl_bg.py:99 · service_discover.py:219 ·
 --      price_queries.py:188-192 는 is_active 로 시작하는 조건 목록에 덧붙임).
+--     이 file:line 인용 8곳은 감사에서 **전부 정확**으로 확인됐다(직접 읽고 적은 것).
+--     적대검증이 raw SQL 3곳(price_queries.py:44,78 · stats_queries.py:50)까지 추가로
+--     훑었고 역시 전부 is_active 와 짝 — 반례 0건.
 --
--- (4) 공유 DB 영향 0: mibunyang 은 PostgREST 경유로 articles 를 읽는데
---     pg_stat_statements 상위 쿼리가 전부 is_active / article_no 로 거르고
---     **complex_no 단독 필터 0건**. articles 에 외래키 제약도 0개.
+-- (4) 공유 DB(mibunyang) 영향 0.
+--     ⚠ 원래 "PostgREST 상위 쿼리에 complex_no 단독 필터 **0건**"이라고 적었으나
+--     **거짓이다**: PostgREST 경유 + complex_no + is_active 없음 = 실측 5~7종·수십 회가
+--     실재한다(`SELECT ... FROM articles WHERE complex_no = $1 LIMIT ...` 형태).
+--     다만 **전부 complex_no 가 선행 칼럼**이라 ix_articles_complex_active 가 그대로
+--     흡수한다(EXPLAIN: Index Only Scan using ix_articles_complex_active) — 영향 0 이라는
+--     결론은 유지되나, 근거는 "그런 쿼리가 없다"가 아니라 "있어도 포섭된다"이다.
+--     articles 에 외래키 제약 0개는 참(pg_constraint 확인).
 --
--- ⚠ idx_scan 이 95,343(통계창 2026-08-24~, 하루 약 4,500회)으로 non-zero 인 것은
---    맞다. 그러나 위 (1)(2) 가 보여주듯 그 호출들은 인덱스가 없으면 그대로
---    confirm_sort 로 흡수된다 — "쓰인 적 있다"와 "없으면 안 된다"는 다르다.
+-- (5) 대형 단지 재검증(적대검증, 단지 134062 = 7,974행): count·목록·DELETE 세 형태 모두
+--     Index Only/Bitmap Index Scan 으로 처리되고 Seq Scan 폴백 0건.
+--
+-- ⚠ idx_scan 이 95,343(통계창 2026-08-24~, 하루 약 4,373회)으로 non-zero 인 것은
+--    맞다. 그러나 그 호출들은 인덱스가 없으면 포섭 인덱스로 흡수된다 —
+--    "쓰인 적 있다"와 "없으면 안 된다"는 다르다.
+--    (이 수치 자체는 인덱스 삭제와 함께 통계도 사라져 **재현 불가**. 통계창 시각과
+--     일일 환산은 감사에서 참으로 확인됐다.)
 --
 -- ── ORM 동반 수정 (이 파일만 적용하면 반쪽이다) ─────────────────────────────
 --

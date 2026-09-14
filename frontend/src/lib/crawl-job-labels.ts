@@ -20,6 +20,17 @@ export const CRAWL_JOB_LABELS: Record<string, { label: string; desc: string }> =
     label: "매물 상세 보강",
     desc: "이미 가져온 매물에 사진·설명·중개사 정보 등 상세 항목을 채우는 작업",
   },
+  // 스케줄러에는 backfill_detail_dawn(00:20) · backfill_detail_noon(12:20) 두 잡으로
+  // 등록돼 있으나 DB 에 남는 job_type 은 둘 다 article_detail_backfill 하나다.
+  // 화면은 job_type 을 보므로 여기도 한 항목만 둔다 (infra.md §잡 이름 ≠ job_type).
+  article_detail_backfill: {
+    label: "매물 상세 백필",
+    desc: "네이버가 항목 이름을 바꿔 비어버린 상세 항목(난방·총층수 등)을 뒤늦게 채우는 작업 (매일 00:20·12:20)",
+  },
+  field_drift_monitor: {
+    label: "상세 필드 채움률 드리프트 감시",
+    desc: "상세 항목이 갑자기 안 채워지기 시작하면 조기에 알리는 감시 작업 (매일 04:40)",
+  },
   price_history: {
     label: "시세 이력 수집",
     desc: "단지별 매매·전세 시세의 월별 변동 이력 수집",

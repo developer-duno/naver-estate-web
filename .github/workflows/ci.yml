@@ -89,8 +89,11 @@ jobs:
       - name: Mdx-JSX guard
         run: npm run check:mdx-jsx
 
-      - name: Job label guard
-        run: npm run check:job-labels
+      # ⚠ Job label guard 는 여기 있지 않다 — 아래 job-labels job 으로 분리했다.
+      #   그 검사는 backend 소스를 읽어 FE 사전과 대조하는 "양쪽 정합성" 검사라,
+      #   frontend 변경 조건에 매달아 두면 backend-only PR 에서 통째로 skip 된다
+      #   (세션 403 실사고 — 새 잡 2종이 이름표 없이 머지되고, 이틀 뒤 무관한
+      #    dependabot PR #519 가 대신 빨갛게 막혔다).
 
       # 시각회귀 안전망 되돌림 가드 (세션 400) — 아래 넷이 조용히 무력화되는 것을 막는다:
       #   ① 갱신 플래그가 `=all` 이 아닌 값으로 되돌아가는 것(파일 미갱신)
@@ -102,6 +105,37 @@ jobs:
 
       - name: Test
         run: npm test
+
+  # job_type 한글 이름표 정합 가드 (세션 399 신설 → 세션 403 에 독립 job 으로 분리)
+  #
+  # 이 검사는 backend 소스에서 실제 job_type 을 추출해 frontend 사전
+  # (crawl-job-labels.ts)과 대조한다. 즉 어느 한쪽에 속한 검사가 아니라
+  # 양쪽 사이의 정합성 검사다. 그래서 frontend 조건에 매달려 있던 동안은
+  # backend-only PR 에서 영영 skip 됐고, "새 잡을 추가하는 PR"(정확히 이
+  # 가드가 필요한 PR)은 구조적으로 이 가드를 통과할 수 없었다.
+  #
+  # 실제 사고(세션 403): #511·#512 가 backend-only 라 skip → 새 잡 2종
+  # (article_detail_backfill · field_drift_monitor)이 이름표 없이 머지 →
+  # 관리자 화면에 영문 노출 → 이틀 뒤 frontend 를 건드린 dependabot #519 가
+  # 대신 실패. 원인 PR 이 아니라 무관한 PR 이 막히는 구조였다.
+  #
+  # 그래서 frontend·backend 어느 쪽이 바뀌어도 돈다. npm ci 없이 node 만으로
+  # 실행되는 단일 스크립트라 30초면 끝난다(설치·빌드 불필요).
+  job-labels:
+    name: Job label guard
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Job label guard
+        run: npm run check:job-labels
 
   # setup+admin+public+public-visual 4 project 를 한 job 에서 순차 실행하면
   # 대기시간이 길다(public-visual 이 특히 무거움). GitHub Actions matrix 로

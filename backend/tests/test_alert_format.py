@@ -9,8 +9,12 @@ from unittest.mock import patch
 
 from crawler.alert_format import format_issue_message
 
-# 테스트용 헤더 컨텍스트 — 17:40 KST 가정
-_NOW = datetime(2026, 5, 19, 17, 40, tzinfo=timezone.utc)
+# 테스트용 헤더 컨텍스트 — 17:40 KST (= 08:40 UTC).
+# ⚠ 세션 406 정정: 원래 이 줄은 "17:40 KST 가정" 주석을 달고 값은 `17:40 UTC`(= KST
+# 02:40)를 넣고 있었다. 주석과 값이 9시간 어긋나 있었던 것 — 알림 시각이 UTC 로
+# 나가던 실제 버그와 같은 혼동이다. 이제 헤더는 KST 로 찍히므로, 주석이 말하던
+# 의도대로 값도 KST 17:40 이 되게 UTC 08:40 을 넣는다(단언의 (17:40) 은 그대로 유효).
+_NOW = datetime(2026, 5, 19, 8, 40, tzinfo=timezone.utc)
 
 
 def _ctx(active_count: int = 1) -> dict:
@@ -48,6 +52,69 @@ def test_stale_message_body():
     assert "crawl_details" in msg
     assert "마비" in msg
     assert "재시작" in msg
+
+
+# ── 시각 표기 = KST 통일 가드 (세션 406) ──────────────────────────────────
+#
+# 사장님이 읽는 알림에 UTC 가 그대로 나가 "언제 난 장애인지" 혼동을 일으킨 실사고
+# (2026-09-14 알림 6건)의 회귀 가드. 헤더(HH:MM)와 본문(MM-DD HH:MM) 양쪽을 본다.
+
+
+def test_header_time_is_kst_not_utc():
+    """헤더 괄호 시각이 KST 로 변환되는지 — UTC 원본이 그대로 나가면 FAIL.
+
+    08:40 UTC = 17:40 KST. 변환이 빠지면 (08:40) 이 찍힌다.
+    """
+    data = {"job_type": "x", "count": 1, "error": "e", "processed": 1, "total": 1}
+    msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
+    assert "(17:40)" in msg, f"헤더가 KST 가 아니다: {msg.splitlines()[0]}"
+    assert "(08:40)" not in msg, "UTC 시각이 그대로 노출됐다"
+
+
+def test_header_time_handles_naive_datetime_as_utc():
+    """naive datetime 도 UTC 로 간주해 KST 변환 — 로컬 시간대 의존 차단.
+
+    서버 로컬(KST)에서는 우연히 맞고 CI·컨테이너(UTC)에서 어긋나는 종류의
+    버그를 막는다(timezone-consistency 룰).
+    """
+    naive = datetime(2026, 5, 19, 8, 40)  # tzinfo 없음
+    data = {"job_type": "x", "count": 1, "error": "e", "processed": 1, "total": 1}
+    msg = format_issue_message(
+        "crawl_failed", data, event="new",
+        header_ctx={"active_count": 1, "now": naive},
+    )
+    assert "(17:40)" in msg, f"naive 를 UTC 로 보고 KST 변환해야 한다: {msg.splitlines()[0]}"
+
+
+def test_stale_started_at_is_readable_kst():
+    """본문 '시작:' 이 ISO 원문이 아니라 KST `MM-DD HH:MM` 인지.
+
+    실사고 알림에 `2026-09-14T03:20:00.008990+00:00` 가 그대로 찍혔다 —
+    길고 UTC 라 사장님이 읽을 수 없었다.
+    """
+    data = {"job_type": "article_detail_backfill", "count": 1, "stale_hours": 4,
+            "started_at": "2026-09-14T03:20:00.008990+00:00"}
+    msg = format_issue_message("crawl_stale", data, event="new", header_ctx=_ctx())
+    assert "시작: 09-14 12:20" in msg, f"KST MM-DD HH:MM 이어야 한다: {msg}"
+    assert "T03:20" not in msg, "ISO 원문이 그대로 노출됐다"
+    assert "+00:00" not in msg, "UTC 오프셋이 그대로 노출됐다"
+
+
+def test_failed_last_completed_at_is_readable_kst():
+    """본문 '마지막 완료:' 도 동일하게 KST `MM-DD HH:MM`."""
+    data = {"job_type": "complex_articles", "count": 1, "error": "네이버 502",
+            "processed": 40, "total": 50,
+            "last_completed_at": "2026-05-19T04:00:00+00:00"}
+    msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
+    assert "마지막 완료: 05-19 13:00" in msg, f"KST 변환이 빠졌다: {msg}"
+    assert "+00:00" not in msg
+
+
+def test_stamp_falls_back_to_raw_on_unparsable():
+    """파싱 불가한 값이면 원문 그대로 — 시각 표시 때문에 알림 자체가 깨지면 안 된다."""
+    data = {"job_type": "x", "count": 1, "stale_hours": 1, "started_at": "알 수 없음"}
+    msg = format_issue_message("crawl_stale", data, event="new", header_ctx=_ctx())
+    assert "시작: 알 수 없음" in msg
 
 
 def test_freshness_message_spinning():

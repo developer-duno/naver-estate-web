@@ -4,10 +4,59 @@ monitor.detect_issues 가 만든 구조화 data(dict) 를 텔레그램 HTML 메�
 DB 세션 의존 없는 순수 함수 — dict in / str out.
 
 메시지 = 헤더 한 줄 + 빈 줄 + 본문 + 행동 가이드. parse_mode="HTML" 로 발송.
+
+⏰ **이 메시지에 찍히는 모든 시각은 KST 다** (세션 406). 사장님이 읽는 화면이라
+UTC 를 그대로 내보내면 9시간 어긋난 시각을 보고 장애 시점을 오판한다 — 실제로
+2026-09-14 알림 6건의 괄호 시각이 전부 UTC 로 나가 "언제 난 장애인지" 혼동을
+일으켰다. 시각을 새로 노출할 때는 반드시 `_kst_hhmm()`/`_kst_stamp()` 를 거칠 것
+(직접 strftime 하거나 ISO 원문을 그대로 넣지 말 것).
 """
 
 import html
 import os
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
+# 이 레포 관습 — quota_db.KST·auth.permissions 등과 동일 (Asia/Seoul 고정).
+# 서버 로컬 시간대에 의존하는 astimezone() 무인자 호출은 CI·컨테이너(UTC)에서
+# 어긋나므로 쓰지 않는다(timezone-consistency 룰).
+KST = ZoneInfo("Asia/Seoul")
+
+
+def _kst_hhmm(now) -> str:
+    """헤더 괄호 시각 — KST `HH:MM`. None 이면 빈 문자열.
+
+    naive datetime 은 UTC 로 간주한다(monitor 는 utcnow() 로 aware 를 넘기지만,
+    호출처가 늘어도 조용히 로컬 시간대로 해석되지 않게 고정한다).
+    """
+    if now is None:
+        return ""
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return now.astimezone(KST).strftime("%H:%M")
+
+
+def _kst_stamp(value) -> str:
+    """본문 시각 — ISO 문자열/datetime → KST `MM-DD HH:MM` (사람이 읽는 형태).
+
+    monitor 가 넣는 값은 `row.oldest.isoformat()` 같은 ISO 문자열이라 그대로
+    쓰면 `2026-09-14T03:20:00.008990+00:00` 처럼 길고 UTC 인 채로 나간다.
+    파싱 실패 시에는 원문을 그대로 돌려준다 — 형식이 바뀌어도 알림 자체는
+    깨지지 않아야 하기 때문(시각 표시보다 장애 통지가 우선).
+    """
+    if not value:
+        return ""
+    dt = value
+    if isinstance(value, str):
+        try:
+            dt = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    if not isinstance(dt, datetime):
+        return str(value)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(KST).strftime("%m-%d %H:%M")
 
 # event → 헤더 이모지·문구
 _EVENT_HEADER = {
@@ -63,7 +112,7 @@ def _header(event: str, header_ctx: dict, reason: str = "") -> str:
         emoji, label = _RESOLVED_HEADER.get(reason, _EVENT_HEADER["resolved"])
     count = header_ctx.get("active_count", 0)
     now = header_ctx.get("now")
-    hhmm = now.strftime("%H:%M") if now is not None else ""
+    hhmm = _kst_hhmm(now)
     return f"[내부모니터] {emoji} <b>{label}</b> — {count}건 활성 ({hhmm})"
 
 
@@ -85,7 +134,7 @@ def _body_failed(data: dict) -> str:
     # 1개 단지 잡이 아니라 batch 통째라는 점을 명시해 오해 차단.
     lines.append(f"  batch 합계 처리율: {_rate(data.get('processed'), data.get('total'))}")
     if data.get("last_completed_at"):
-        lines.append(f"  마지막 완료: {_esc(data['last_completed_at'])}")
+        lines.append(f"  마지막 완료: {_esc(_kst_stamp(data['last_completed_at']))}")
     return "\n".join(lines)
 
 
@@ -95,7 +144,7 @@ def _body_stale(data: dict) -> str:
     lines = [f"▸ <b>{job}</b> 작업 마비 ({data.get('count', 1)}건)"]
     lines.append(f"  {data.get('stale_hours', 1)}시간 넘게 running 상태")
     if data.get("started_at"):
-        lines.append(f"  시작: {_esc(data['started_at'])}")
+        lines.append(f"  시작: {_esc(_kst_stamp(data['started_at']))}")
     return "\n".join(lines)
 
 
@@ -198,7 +247,7 @@ def format_resolved_batch(items: list[dict], *, header_ctx: dict) -> str:
 
     count = header_ctx.get("active_count", 0)
     now = header_ctx.get("now")
-    hhmm = now.strftime("%H:%M") if now is not None else ""
+    hhmm = _kst_hhmm(now)
     header = (
         f"[내부모니터] {emoji} <b>{label}</b> — {count}건 활성 ({hhmm})"
         f" — 해소 {len(items)}건"

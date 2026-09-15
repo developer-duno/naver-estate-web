@@ -25,6 +25,7 @@ import time
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
 
 from crawler.alert_format import _kst_stamp
+from crawler.plain_words import action_words_for_job, eul_reul, explain_error
 
 logger = logging.getLogger(__name__)
 
@@ -169,17 +170,14 @@ def job_event_listener(event, scheduler=None) -> None:
     monitor.py 가 못 잡는, CrawlJob row 기록 이전 단계의 실패를 last-resort 로 감지.
     scheduler 인자는 register_job_listener 가 클로저로 주입(잡 이름 조회용).
     """
-    # [내부즉시] 접두어 = 3채널(healthcheck.yml 외부/monitor.py 내부모니터/본 모듈)
-    # 문구 통일 작업의 일부. 옛 [SCHEDULER] 표기를 다른 두 채널과 같은 명명 규칙으로
-    # 교체 — 사장님이 채널명만 보고 어느 감시가 보낸 메시지인지 구분 가능하게 함
-    # (IMPROVEMENT_PLAN P0-0 보류 항목).
+    # [서버 알림] 접두어 = 3채널(healthcheck.yml 외부/monitor.py 내부/본 모듈 즉시)
+    # 공통 접두어. 세션 408 에 이 파일의 옛 [내부즉시] 를 다른 두 채널과 같은 값으로
+    # 맞췄다 — 사장님이 발신 채널마다 다른 이름을 외울 필요가 없게 한다
+    # (alert_format._header 가 같은 접두어를 쓴다).
     # _job_label 은 scheduler=None(테스트·초기화 전)도 안전 — get_job() 호출이
     # AttributeError 로 죽어도 내부 try/except 가 흡수해 폴백 표로 넘어간다.
     label = _job_label(scheduler, event.job_id)
-    link = _admin_link("/admin#scheduler")
-
     safe_label = html.escape(str(label))
-    safe_link = html.escape(link)
 
     if event.code == EVENT_JOB_ERROR:
         job_id = event.job_id
@@ -187,14 +185,23 @@ def job_event_listener(event, scheduler=None) -> None:
         # 이걸 가리면 안 된다(테스트 fixture 처럼 traceback 이 비정형일 때 발생).
         exc_text = str(event.exception)[:300]
         location = _root_cause_location(getattr(event, "traceback", None))
-        logger.error("[scheduler] 잡 예외 job_id=%s: %s", job_id, event.exception)
+        # ⚠ 위치(파일:줄)는 **로그에만** 남긴다 — 사장님께는 의미가 없는 개발자용
+        #   단서라 텔레그램 본문에서 뺐다(세션 408). 대신 여기 logger.error 에 붙여
+        #   내가 언제든 추적할 수 있게 한다. _root_cause_location 의 "우리 코드 프레임
+        #   우선" 의도는 그대로 보존되며, 그 단언은 테스트가 로그를 검사한다.
+        logger.error(
+            "[scheduler] 잡 예외 job_id=%s 위치=%s: %s",
+            job_id, location or "(위치 미상)", event.exception,
+        )
         key = f"job_error:{job_id}"
         if _should_alert(key):
-            lines = [f"[내부즉시] 🔴 <b>{safe_label}</b> 작업 실패"]
-            if location:
-                lines.append(f"위치: {html.escape(location)}")
-            lines.append(f"오류: {html.escape(exc_text)}")
-            lines.append(f"→ {safe_link} 확인")
+            lines = [f"[서버 알림] 🔴 <b>{safe_label}</b> 작업이 실패했어요"]
+            # ⚠ 메시지 없는 예외(`raise ValueError()`)면 explain_error 가 빈 문자열을
+            #   돌려줘 "까닭: " 만 덩그러니 나간다(세션 408 적대검증 LOW-1).
+            reason = explain_error(exc_text) or "무슨 일인지 메시지가 남지 않았어요"
+            lines.append(f"까닭: {html.escape(reason)}")
+            # 결제 잡은 "돈이 안 걷혔다", 수집 잡은 "자료가 안 들어온다" — 뜻이 다르다.
+            lines.append(action_words_for_job(job_id))
             _send_alert("\n".join(lines), parse_mode="HTML")
     elif event.code == EVENT_JOB_MISSED:
         job_id = event.job_id
@@ -212,9 +219,9 @@ def job_event_listener(event, scheduler=None) -> None:
             # 함께 놓쳤고, tests/test_alert_time_kst_guard.py 가 이런 형태까지
             # 잡도록 만들어진 계기다.
             _send_alert(
-                f"[내부즉시] 🔴 <b>{safe_label}</b> 실행 누락(예정 시각을 건너뜀)\n"
+                f"[서버 알림] 🔴 <b>{safe_label}</b>{eul_reul(str(label))} 정해진 시각에 못 돌렸어요\n"
                 f"예정시각: {html.escape(_kst_stamp(event.scheduled_run_time))}\n"
-                f"→ {safe_link} 확인",
+                f"{action_words_for_job(job_id)}",
                 parse_mode="HTML",
             )
 

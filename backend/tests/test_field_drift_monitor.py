@@ -18,6 +18,7 @@ from crawler.field_drift_monitor import (
     _THRESHOLDS,
     _WINDOW_HOURS,
     compute_fill_rates,
+    field_words,
     run_field_drift_monitor,
 )
 from db.models import Article, CrawlJob, MonitorAlert
@@ -169,7 +170,12 @@ def test_run_field_drift_monitor_violation_sends_alert_and_records_job():
         ).scalars().first()
         assert job is not None
         assert job.status == "completed"
-        assert _NORMAL_FIELD in (job.error_message or "")
+        # ⚠ 단언의 의도("어느 필드가 몇 % 인지 기록에 남는가")는 그대로 두고 표기만
+        #   새 동작에 맞춘다. 세션 408 에 error_message 도 우리말로 바꿨다 —
+        #   이 값은 관리자 화면에 그대로 보이므로 영문 컬럼명을 남기면 반쪽이 된다
+        #   (§testing.md "통과하던 테스트가 결함을 박제했을 수 있다" 답습).
+        assert field_words(_NORMAL_FIELD) in (job.error_message or "")
+        assert _NORMAL_FIELD not in (job.error_message or ""), "영문 컬럼명이 남았다"
         assert "50.0%" in (job.error_message or "")
     finally:
         db.close()
@@ -375,4 +381,183 @@ def test_numeric_columns_never_compared_to_empty_string():
         )
     # 문자열 컬럼은 여전히 빈 문자열을 걸러야 한다(과잉 수정 방지).
     assert "articles.heating_type != ''" in sql
+
+
+# ── 세션 408: 알림 문구 우리말화 (사장님 지시 2026-09-15) ──────────────────
+#
+# "텔레그램 알림은 일반인이 봐도 무엇이 어떻게 잘못되었는지 손쉽게 알 수 있어야 해.
+#  어려운 말은 금지야." — 영문 DB 컬럼명이 그대로 나가던 것을 우리말 이름으로 바꿨다.
+
+
+def test_field_words_covers_every_watched_field():
+    """_FIELD_WORDS 가 _THRESHOLDS 의 감시 필드를 **전부** 덮는지 (차집합 공집합).
+
+    빠지면 그 필드가 위반일 때 영문 컬럼명이 그대로 텔레그램에 나간다 — 이 PR 이
+    없애려던 바로 그 증상. 감시 대상을 늘릴 때 사전 갱신을 강제한다.
+    """
+    from crawler.field_drift_monitor import _FIELD_WORDS
+
+    missing = sorted(set(_THRESHOLDS) - set(_FIELD_WORDS))
+    assert not missing, f"우리말 이름이 없는 감시 필드: {missing}"
+
+    # 반대 방향 — 감시하지 않는 필드가 사전에 남아 있으면 죽은 항목이다.
+    stale = sorted(set(_FIELD_WORDS) - set(_THRESHOLDS))
+    assert not stale, f"감시 대상이 아닌데 사전에 남은 필드: {stale}"
+
+
+def test_field_words_values_are_korean():
+    """우리말 이름에 영문이 섞이면 안 된다 (병기 금지 — 사장님 결정)."""
+    import re as _re
+
+    from crawler.field_drift_monitor import _FIELD_WORDS
+
+    offenders = [
+        (k, v) for k, v in _FIELD_WORDS.items()
+        if _re.search(r"[A-Za-z]", v) or not _re.search(r"[가-힣]", v)
+    ]
+    assert not offenders, f"우리말이 아닌 필드 이름: {offenders}"
+
+
+def test_violation_alert_has_no_english_field_name():
+    """위반 알림 본문: 영문 컬럼명 0, 우리말 이름·통일 접두어 포함.
+
+    뮤테이션: _send_violation_alert 의 `field_words(field)` 를 `field` 로 되돌리면
+    영문이 새어 FAIL.
+    """
+    db = TestSession()
+    try:
+        _seed_population(db, total=300, filled=150)  # 50% — realtor_address 위반
+
+        with patch("crawler.field_drift_monitor.send_telegram", return_value=True) as mock_tg:
+            run_field_drift_monitor()
+
+        msg = mock_tg.call_args[0][0]
+        assert msg.startswith("[서버 알림]"), msg
+        assert "[내부모니터]" not in msg, msg
+        assert _NORMAL_FIELD not in msg, f"영문 컬럼명이 그대로 나갔다: {msg}"
+        assert "부동산 주소" in msg, msg
+        # 임계·비율이 "열에 몇" 우리말로 풀려 있다
+        assert "열에 아홉은 들어와야 정상" in msg, msg
+        assert "다섯뿐이에요" in msg, msg
+        # 사장님이 판단에 쓰지 않는 표본 건수는 문구에서 뺀다
+        assert "표본" not in msg, msg
+        # 개발자용 행동 지시가 아니라 사장님이 할 수 있는 안내로 끝난다
+        assert "네이버 상세 API" not in msg, msg
+        assert "Claude" in msg, msg
+    finally:
+        db.close()
+
+
+def test_resolved_alert_has_no_english_field_name():
+    """해소 알림도 동일 — 우리말 이름 + `[서버 알림]` 접두어."""
+    db = TestSession()
+    try:
+        _seed_population(db, total=300, filled=150)
+        with patch("crawler.field_drift_monitor.send_telegram", return_value=True):
+            run_field_drift_monitor()
+
+        for a in db.execute(select(Article).where(Article.article_no.like("A%"))).scalars():
+            if getattr(a, _NORMAL_FIELD) is None:
+                setattr(a, _NORMAL_FIELD, "서울시 강남구")
+        db.commit()
+
+        with patch("crawler.field_drift_monitor.send_telegram", return_value=True) as mock_tg:
+            run_field_drift_monitor()
+
+        msg = mock_tg.call_args[0][0]
+        assert msg.startswith("[서버 알림]"), msg
+        assert "[내부모니터]" not in msg, msg
+        assert _NORMAL_FIELD not in msg, f"영문 컬럼명이 그대로 나갔다: {msg}"
+        assert "부동산 주소" in msg, msg
+    finally:
+        db.close()
+
+
+def test_threshold_and_rate_words_handle_boundaries():
+    """"열에 몇" 변환의 0·10 경계 — 0% 와 100% 가 어색한 문장이 되지 않아야 한다."""
+    from crawler.field_drift_monitor import (
+        _rate_in_words,
+        _threshold_in_words,
+        _window_in_words,
+    )
+
+    assert _threshold_in_words(90) == "열에 아홉은 들어와야 정상"
+    assert _threshold_in_words(60) == "열에 여섯은 들어와야 정상"
+    assert _threshold_in_words(30) == "열에 셋은 들어와야 정상"
+
+    assert _rate_in_words(0.0) == "지금은 거의 하나도 안 들어와요"
+    assert _rate_in_words(2.0) == "지금은 거의 하나도 안 들어와요"  # 반올림 0
+    assert _rate_in_words(100.0) == "지금은 거의 다 들어와요"
+    assert _rate_in_words(96.0) == "지금은 거의 다 들어와요"  # 반올림 10
+    assert _rate_in_words(73.7) == "지금은 일곱뿐이에요"
+
+    # _WINDOW_HOURS=48 → "최근 이틀간"
+    assert _window_in_words() == "최근 이틀간"
+
+
+# ── 세션 408: 문구가 "사실과 다르게" 읽히던 3건 회귀 ────────────────────────
+#
+# 아래 셋은 전부 사람 눈 검토를 통과했다가 경계값을 직접 렌더해 보고서야 잡힌 것들이다.
+# 알림 문구는 코드가 맞아도 **뜻이 틀리면 장애**라, 값마다 문장을 실제로 만들어 확인한다.
+
+
+def test_threshold_words_floor_not_round():
+    """임계는 내림이어야 한다 — 반올림하면 뜻이 더 엄격해지거나 아예 뒤집힌다.
+
+    임계의 뜻은 "최소 이만큼은 들어와야 한다"이다. 95 를 반올림해 "열에 열"이라고 하면
+    열 개 전부를 요구하는 말이 되고, 5 를 "열에 영"이라고 하면 하나도 안 들어와도
+    정상이라는 반대 뜻이 된다(세션 408 실측).
+    """
+    from crawler.field_drift_monitor import _threshold_in_words
+
+    assert _threshold_in_words(95) == "열에 아홉은 들어와야 정상"  # 열(X)
+    assert _threshold_in_words(25) == "열에 둘은 들어와야 정상"  # 셋(X)
+    # 1~9% 는 내림하면 "영"이 되어 뜻이 뒤집히므로 최소 "하나"로 올린다.
+    assert _threshold_in_words(5) == "열에 하나는 들어와야 정상"
+    assert _threshold_in_words(1) == "열에 하나는 들어와야 정상"
+
+
+def test_number_words_take_correct_korean_particle():
+    """받침 유무에 맞는 조사(은/는) — "하나은" 같은 문장이 나가면 안 된다."""
+    from crawler.field_drift_monitor import _TENTH_WORDS, _eun_neun
+
+    # 받침 없는 말 → 는
+    assert _eun_neun("하나") == "는"
+    # 받침 있는 말 → 은
+    for word in ("영", "둘", "셋", "일곱", "여덟", "아홉", "열"):
+        assert _eun_neun(word) == "은", f"{word} 의 조사가 틀렸다"
+    # 전수 확인 — 받침 계산과 반환값이 실제로 일치하는지.
+    # ⚠ 옛 단언 `f"{w}{_eun_neun(w)}" != f"{w}은" or _eun_neun(w) == "은"` 은
+    #    **무엇을 반환하든 통과하는 동어반복**이었다(세션 408 적대검증 LOW-2:
+    #    "항상 은 반환"으로 망가뜨려도 11단어 전부 통과). 계산식과 직접 대조한다.
+    for word in _TENTH_WORDS:
+        expected = "은" if (ord(word[-1]) - 0xAC00) % 28 else "는"
+        assert _eun_neun(word) == expected, f"{word}: {_eun_neun(word)} (기대 {expected})"
+
+
+def test_rate_words_never_claim_threshold_is_met_while_violating():
+    """위반인데 "기준을 채웠다"로 읽히면 안 된다 — 임계는 내림, 비율은 반올림이라 충돌한다.
+
+    실제 사례(세션 408): 입주 가능일 55.0% / 임계 60 이 "열에 여섯은 들어와야 정상인데
+    지금은 여섯뿐이에요" 로 나갔다 — 위반을 알리면서 정작 기준을 충족한 것처럼 읽힌다.
+    """
+    # ⚠ 헬퍼를 직접 호출해 단언하면 **호출부가 threshold 를 안 넘기는 실수를 못 잡는다**
+    #    (세션 408 뮤테이션 실측: 호출부에서 인자를 빼도 헬퍼 단언은 그대로 통과했다).
+    #    그래서 실제로 발송되는 알림 본문을 렌더해서 본다.
+    from crawler import field_drift_monitor as fd
+    from crawler.field_drift_monitor import _rate_in_words, _threshold_in_words
+
+    for rate, threshold in ((55.0, 60), (89.9, 90), (29.0, 30)):
+        with patch("crawler.field_drift_monitor.send_telegram") as mock_tg:
+            fd._send_violation_alert("move_in_date", rate, threshold, 8832)
+        body = mock_tg.call_args[0][0]
+        thr_text = _threshold_in_words(threshold)
+        # 임계 문구에 쓰인 숫자말이 비율 자리에 그대로 나오면 "N인데 N뿐" 이 된다.
+        thr_word = thr_text.removeprefix("열에 ").split("은")[0].split("는")[0]
+        assert f"{thr_word}뿐" not in body, (
+            f"{rate}% / 임계 {threshold} 알림이 위반인데 충족처럼 읽힌다:\n{body}"
+        )
+
+    # threshold 를 안 넘기면 기존 동작(순수 반올림) 유지 — 하위호환.
+    assert _rate_in_words(55.0) == "지금은 여섯뿐이에요"
 

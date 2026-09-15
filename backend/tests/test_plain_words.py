@@ -299,6 +299,146 @@ def test_status_words_covers_all_freshness_states():
         assert re.search(r"[가-힣]", status_words(code)), code
 
 
+# ── ⑤ 접두어 통일 — 알림 모듈 전수 스캔 (세션 408) ────────────────────────
+#
+# 텔레그램 알림 접두어는 3채널 공통 `[서버 알림]` 이다. 채널마다 다른 이름
+# (`[내부모니터]`·`[내부즉시]`)을 쓰면 사장님이 발신처마다 다른 낱말을 외워야 하고,
+# 무엇보다 "내부/즉시" 는 개발자 관점의 분류라 읽는 사람에게 뜻이 없다.
+#
+# ⚠ 손으로 파일 목록을 적지 않는다 — 이 레포는 "가드가 한쪽만 봐서 놓친" 전례가 있다
+#    ([[feedback_guard_skipped_by_path_filter]], s403 #521). send_telegram 을 부르는
+#    모듈을 **소스에서 추출**해 전수 대조한다(test_alert_time_kst_guard 의 검증된 패턴).
+# ⚠ 테스트 파일은 스캔 대상에서 뺀다 — 이 파일 자신이 금지 문자열을 담고 있어
+#    스스로를 잡는다(가드가 자기 오탐으로 죽는 것 방지).
+
+_BACKEND = Path(__file__).resolve().parent.parent
+_TELEGRAM_SEARCH_DIRS = ("crawler", "routers", "services")
+_TELEGRAM_SENDER = "services/telegram.py"
+
+# 옛 채널별 접두어 — 알림 문구에 다시 나타나면 안 된다.
+_LEGACY_PREFIXES = ("[내부모니터]", "[내부즉시]", "[외부감시]")
+
+
+def _telegram_modules() -> list[Path]:
+    """`send_telegram` 을 호출하는 모듈 전수 — 손 목록이 아니라 추출."""
+    found: list[Path] = []
+    for d in _TELEGRAM_SEARCH_DIRS:
+        for path in (_BACKEND / d).rglob("*.py"):
+            if "__pycache__" in path.parts or path.name.startswith("test_"):
+                continue
+            if path.relative_to(_BACKEND).as_posix() == _TELEGRAM_SENDER:
+                continue
+            if "send_telegram" in path.read_text(encoding="utf-8"):
+                found.append(path)
+    return found
+
+
+def _telegram_workflow_files() -> list[Path]:
+    """텔레그램 API 를 직접 부르는 **워크플로 YAML** — `.py` 전용 스캔의 사각지대.
+
+    ⚠ `[외부감시]` 는 이 레포에서 **오직 healthcheck.yml 만** 쓰던 접두어인데,
+       모듈 스캔이 `.py` 만 보는 탓에 legacy 목록에 넣어 둔 의미가 0 이었다
+       (세션 408 적대검증 MEDIUM-1: YAML 문구를 옛날로 되돌려도 CI 는 초록).
+       파일명을 손으로 적지 않고 `api.telegram.org` 호출로 추출한다.
+    """
+    wf_dir = _BACKEND.parent / ".github" / "workflows"
+    if not wf_dir.is_dir():
+        return []
+    return [
+        p for p in wf_dir.rglob("*.yml")
+        if "api.telegram.org" in p.read_text(encoding="utf-8")
+    ]
+
+
+def _code_lines(text: str) -> list[tuple[int, str]]:
+    """주석·docstring 을 걷어낸 (줄번호, 코드줄) — 설계 근거 주석이 옛 접두어를
+    인용하는 경우가 실제로 있어(job_error_listener 의 세션 359 설명 등) 걷어내지
+    않으면 자기오탐이 된다. test_alert_time_kst_guard._strip_comments_and_docstrings
+    와 같은 패턴."""
+    out: list[tuple[int, str]] = []
+    in_doc = False
+    doc_delim = ""
+    for i, raw in enumerate(text.splitlines(), start=1):
+        stripped = raw.strip()
+        if in_doc:
+            if doc_delim in stripped:
+                in_doc = False
+            continue
+        for delim in ('"""', "'''"):
+            if stripped.startswith(delim):
+                if stripped.count(delim) == 1:
+                    in_doc = True
+                    doc_delim = delim
+                break
+        if in_doc or stripped.startswith("#"):
+            continue
+        out.append((i, raw.split("  # ")[0]))
+    return out
+
+
+def test_no_legacy_alert_prefix_in_any_telegram_module():
+    """알림 모듈 전수에 옛 채널별 접두어가 남아 있으면 실패.
+
+    뮤테이션: field_drift_monitor 나 job_error_listener 의 `[서버 알림]` 을 옛 값으로
+    되돌리면 이 테스트가 그 파일:줄을 대며 FAIL 한다.
+    """
+    hits: list[str] = []
+    for path in _telegram_modules():
+        rel = path.relative_to(_BACKEND).as_posix()
+        for lineno, code in _code_lines(path.read_text(encoding="utf-8")):
+            for bad in _LEGACY_PREFIXES:
+                if bad in code:
+                    hits.append(f"    {rel}:{lineno}  {bad}  {code.strip()}")
+
+    # 워크플로 YAML 도 함께 본다 — `[외부감시]` 는 거기서만 쓰이던 접두어라
+    # .py 만 훑으면 그 항목이 장식이 된다(세션 408 적대검증 MEDIUM-1).
+    # YAML 은 `#` 주석만 걷어낸다(docstring 개념 없음).
+    for path in _telegram_workflow_files():
+        rel = path.relative_to(_BACKEND.parent).as_posix()
+        for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if raw.lstrip().startswith("#"):
+                continue
+            for bad in _LEGACY_PREFIXES:
+                if bad in raw:
+                    hits.append(f"    {rel}:{lineno}  {bad}  {raw.strip()}")
+
+    assert not hits, (
+        "\n알림 문구에 옛 채널별 접두어가 남아 있다 — 전부 '[서버 알림]' 로 통일한다:\n"
+        + "\n".join(hits)
+    )
+
+
+def test_prefix_guard_also_scans_workflow_yaml():
+    """가드가 워크플로 YAML 도 보고 있는지 — `[외부감시]` 항목이 장식이 되지 않게.
+
+    뮤테이션: healthcheck.yml 의 `[서버 알림]` 을 `[외부감시]` 로 되돌리면
+    test_no_legacy_alert_prefix_in_any_telegram_module 이 그 줄을 대며 FAIL 한다.
+    """
+    scanned = {p.name for p in _telegram_workflow_files()}
+    assert "healthcheck.yml" in scanned, (
+        f"텔레그램을 부르는 워크플로를 못 찾았다 (스캔: {sorted(scanned)})"
+    )
+
+
+def test_prefix_guard_actually_scans_alert_modules():
+    """가드가 실제로 알림 모듈을 보고 있는지 (장식 방지 — 0건 스캔이면 무의미).
+
+    경로가 바뀌거나 추출이 깨지면 위 테스트가 조용히 통과한다. 알림의 두 당사자
+    모듈이 스캔 목록에 실재하는지 직접 확인한다.
+    """
+    scanned = {p.relative_to(_BACKEND).as_posix() for p in _telegram_modules()}
+    for must in ("crawler/field_drift_monitor.py", "crawler/job_error_listener.py",
+                 "crawler/monitor.py"):
+        assert must in scanned, f"가드가 {must} 을 안 보고 있다 (스캔: {sorted(scanned)})"
+
+
+def test_unified_prefix_actually_used():
+    """통일 접두어가 실제로 쓰이고 있는지 — 옛 것을 지우기만 하고 새 것을 안 넣는 것 방지."""
+    for rel in ("crawler/field_drift_monitor.py", "crawler/job_error_listener.py"):
+        text = (_BACKEND / rel).read_text(encoding="utf-8")
+        assert "[서버 알림]" in text, f"{rel} 에 통일 접두어가 없다"
+
+
 def test_action_words_tell_owner_what_they_can_do():
     """행동 안내는 사장님이 실제로 할 수 있는 것이어야 한다.
 

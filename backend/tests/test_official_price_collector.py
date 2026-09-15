@@ -597,7 +597,10 @@ def test_repass_remaining_loss_sends_telegram_alert(db, seeded, monkeypatch):
 
     assert mock_send.call_count == 1, "잔여 미매칭인데 텔레그램 알림이 안 나갔다"
     sent = mock_send.call_args[0][0]
-    assert "잔여" in sent and seeded in sent, f"알림 본문에 잔여 단지가 없다: {sent}"
+    # 단언 의도("못 받은 단지가 무엇인지 본문에 남는가")는 그대로, 표기만 새 문구에 맞춘다.
+    # 세션 408 에 이 알림을 쉬운 우리말로 바꿨다("잔여" → "다시 시도했는데도 값이 없는 단지").
+    assert seeded in sent, f"알림 본문에 못 받은 단지 번호가 없다: {sent}"
+    assert "값이 없는 단지" in sent, f"무엇이 문제인지 안 나온다: {sent}"
 
 
 def test_repass_runs_before_silent_failure_guard(db, seeded, monkeypatch):
@@ -1127,7 +1130,11 @@ def test_repass_bails_out_on_collapse(db, monkeypatch):
     assert mock_fetch.call_count == 2, "임계 초과인데 재수집이 돌았다"
     # 붕괴는 시스템 이상 신호라 error_message 만으론 부족 — 텔레그램으로 승격
     assert mock_send.call_count == 1, "붕괴 이탈인데 텔레그램 알림이 안 나갔다"
-    assert "임계" in mock_send.call_args[0][0]
+    # 단언 의도("기준치를 넘은 이상 상황임이 알림에 드러나는가")는 그대로.
+    # 세션 408 에 "임계 초과" 를 쉬운 말로 바꿨다("평소 N곳을 넘으면 이상으로 봅니다").
+    sent = mock_send.call_args[0][0]
+    assert "이상으로 봅니다" in sent, f"기준 초과라는 뜻이 안 드러난다: {sent}"
+    assert "중간에 멈췄어요" in sent, f"수집이 중단됐다는 뜻이 안 드러난다: {sent}"
 
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
     assert job.status == "completed"

@@ -231,7 +231,66 @@ ACTION_WORDS: dict[str, str] = {
         "→ 손님 화면은 그대로 보이지만 자료가 오래됐어요.\n"
         "   하루가 지나도 그대로면 Claude 에게 알려주세요."
     ),
+    # ⚠ 결제·정산 잡은 "자료가 안 들어온다"가 아니라 **돈이 안 걷힌다**는 뜻이라
+    #    crawl_failed 문구를 쓰면 심각도를 정반대로 안내하게 된다(세션 408 실측:
+    #    빌링키 자동결제 실패에 "새 자료만 안 들어와요"가 붙어 나갔다).
+    "billing_failed": (
+        "→ 구독료가 자동으로 걷히지 않았어요. 손님 화면은 그대로 쓰입니다.\n"
+        "   돈이 걸린 일이라 아침에 꼭 Claude 에게 알려주세요."
+    ),
 }
+
+
+def _has_final_consonant(word: str) -> bool:
+    """마지막 글자에 받침이 있나 — 한글이 아니면 False(안전한 기본값)."""
+    if not word:
+        return False
+    last = word[-1]
+    if "가" <= last <= "힣":
+        return bool((ord(last) - 0xAC00) % 28)
+    return False
+
+
+def eul_reul(word: str) -> str:
+    """앞말 받침 유무로 '을/를' 선택 — "공시가격 수집를" 같은 문장 방지(세션 408)."""
+    return "을" if _has_final_consonant(word) else "를"
+
+
+# 결제·정산 성격의 잡 — 이 목록에 있으면 billing_failed 안내를 쓴다.
+#
+# ⚠ 이 레포엔 잡 이름 체계가 **둘** 있고 서로 다르다(infra.md §잡 이름 ≠ job_type).
+#    두 경로가 서로 다른 값을 넘기므로 집합도 둘로 나눈다 — 한쪽만 채우면
+#    "고쳤는데 실제로는 그대로 나가는" 상태가 된다(세션 408 적대검증 실사고).
+#      · 스케줄러 잡 id : job_error_listener 가 APScheduler event.job_id 로 받음
+#      · DB job_type    : monitor.py → alert_format 이 CrawlJob.job_type 으로 받음 (주 경로)
+#    billing 은 두 체계에서 이름이 같지만(둘 다 "billing_charge"), 그건 우연이라
+#    의존하지 않는다.
+_BILLING_JOB_IDS: frozenset[str] = frozenset({"billing_charge"})
+_BILLING_JOB_TYPES: frozenset[str] = frozenset({"billing_charge"})
+
+
+def action_words_for_job(job_id: str) -> str:
+    """스케줄러 잡 id → 그 잡 성격에 맞는 행동 안내 (job_error_listener 경로).
+
+    결제 잡과 수집 잡은 사장님이 받아야 할 뜻이 다르다(돈 vs 자료).
+    """
+    if job_id in _BILLING_JOB_IDS:
+        return ACTION_WORDS["billing_failed"]
+    return ACTION_WORDS["crawl_failed"]
+
+
+def action_words_for_job_type(kind: str, job_type=None) -> str:
+    """장애 종류 + DB job_type → 행동 안내 (monitor → alert_format 주 경로).
+
+    kind 가 크롤 실패 계열이고 job_type 이 결제 잡이면 결제 안내로 갈린다.
+    freshness 등 job_type 이 없는 알림은 기존 kind 기반 문구를 그대로 쓴다.
+    """
+    if job_type and str(job_type) in _BILLING_JOB_TYPES:
+        if kind in ("crawl_failed", "crawl_failed_burst", "crawl_stale"):
+            return ACTION_WORDS["billing_failed"]
+    return action_words(kind)
+
+
 _ACTION_DEFAULT = "→ 무슨 일인지 확인이 필요해요. 아침에 Claude 에게 알려주세요."
 
 

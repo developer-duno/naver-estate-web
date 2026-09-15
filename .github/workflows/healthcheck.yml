@@ -74,10 +74,17 @@ jobs:
             echo "TELEGRAM secrets 미설정 — 알림 스킵"
             exit 0
           fi
+          # 문구는 사장님이 읽는 우리말만 — 영문 레포명·전문용어(터널·Bot Fight 등)를
+          # 쓰지 않는다(세션 408, 3채널 통일). 여기는 셸이라 파이썬 사전을 못 쓰므로
+          # crawler/plain_words.py 와 같은 톤으로 직접 적는다.
+          # ⚠ 여러 줄 메시지를 `MSG="1줄\n  2줄"` 로 쓰면 **YAML 들여쓰기 공백이
+          #    메시지 본문에 그대로 들어간다**(셸 큰따옴표 안이라 공백이 보존됨).
+          #    사장님 텔레그램에 둘째 줄부터 공백 10칸이 붙어 보인다 — 세션 408 실측.
+          #    그래서 줄바꿈은 $'...' (ANSI-C quoting) 의 \n 으로 명시한다.
           if [ "$HTTP_CODE" = "403" ]; then
-            MSG="[외부감시] ⚠ 헬스체크 403 — 서버 다운 아님, Cloudflare 엣지 차단 가능성(Bot Fight 모드 등 보안설정 확인, infra.md §관찰성)"
+            MSG=$'[서버 알림] ⚠ 서버는 살아 있는데 바깥에서 막혔어요 (응답 코드 403)\n보안 설정이 검사 요청을 차단한 것으로 보여요 — 서버가 죽은 게 아닙니다.\n→ 급하지 않아요. Claude 에게 알려주시면 확인합니다.'
           else
-            MSG="[외부감시] 🚨 naver-estate-web 헬스체크 실패 (HTTP ${HTTP_CODE}): https://api.2u.pe.kr/health/db 응답 없음 또는 비정상 — 집서버·터널·DB 점검 필요"
+            MSG=$'[서버 알림] 🚨 서버가 응답하지 않아요 (응답 코드 '"${HTTP_CODE}"$')\n집에 있는 서버나 인터넷 연결에 문제가 생긴 것 같아요.\n→ 손님들이 지금 사이트를 못 쓸 수 있어요. Claude 에게 알려주세요.'
           fi
           curl -fsS --max-time 10 \
             "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \

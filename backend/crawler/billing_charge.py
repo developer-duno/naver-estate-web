@@ -17,6 +17,7 @@ import logging
 import time
 
 from config.plans import PLAN_PRICES
+from crawler.plain_words import explain_error
 from db.database import SessionLocal
 from db.models import BillingKey, CrawlJob, Payment, UserProfile
 from routers.billing import (
@@ -161,9 +162,17 @@ def _charge_one(db, bk: BillingKey) -> str:
         bk.status = "failed"
         logger.warning("[billing] 금액 불일치(기대=%s, 실제=%s) → 영구중단 (user=%s)",
                        amount, paid_amount, bk.user_id)
+        # ⚠ 쉬운 우리말만(infra.md §텔레그램 알림 문구). user_id·plan 같은 식별자는
+        #   위 logger.warning 에 남아 있어 추적에 지장 없다 — 세션 409.
+        # ⚠ paid_amount 는 int | None (routers/payment._portone_amount) — None 에
+        #   `{:,}` 를 쓰면 TypeError 로 알림 경로가 죽는다(세션 409 사전 차단).
+        _paid_text = f"{paid_amount:,}원" if paid_amount is not None else "확인되지 않는 금액"
         _alert_billing(
-            f"[BILLING] 자동결제 금액 불일치 → 중단 "
-            f"(user={bk.user_id}, plan={bk.plan}, 기대={amount}, 실제={paid_amount})"
+            "[서버 알림] 🔴 구독료 자동 결제를 멈췄어요 (금액이 안 맞아요)\n\n"
+            f"▸ 받아야 할 돈은 {amount:,}원인데 실제로는 {_paid_text}이 결제됐어요\n"
+            "  금액이 다르면 안전을 위해 그 회원의 자동 결제를 멈춥니다.\n"
+            "→ 손님 화면은 그대로 쓰입니다. 그 회원 구독료만 안 걷혀요.\n"
+            "   돈이 걸린 일이라 아침에 꼭 Claude 에게 알려주세요."
         )
         return "stopped"
 
@@ -197,9 +206,13 @@ def _mark_retry(db, bk: BillingKey, payment_id: str, reason: str) -> str:
         bk.status = "failed"
         logger.warning("[billing] %d회 연속 실패 → 자동결제 중단 (user=%s): %s",
                        bk.retry_count, bk.user_id, reason)
+        # ⚠ 쉬운 우리말만. 식별자·원문 사유는 위 logger.warning 에 남는다 — 세션 409.
         _alert_billing(
-            f"[BILLING] 자동결제 {bk.retry_count}회 연속 실패 → 중단 "
-            f"(user={bk.user_id}, plan={bk.plan}): {reason}"
+            "[서버 알림] 🔴 구독료 자동 결제를 멈췄어요 (여러 번 실패)\n\n"
+            f"▸ 한 회원의 결제가 {bk.retry_count}번 잇따라 실패해서 더 시도하지 않습니다\n"
+            f"  까닭: {explain_error(reason)}\n"
+            "→ 손님 화면은 그대로 쓰입니다. 그 회원 구독료만 안 걷혀요.\n"
+            "   돈이 걸린 일이라 아침에 꼭 Claude 에게 알려주세요."
         )
         _notify_user_billing_failed(db, bk.user_id)  # 당사자에게도 알림(적대검증 #6)
         return "stopped"

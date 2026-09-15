@@ -87,11 +87,22 @@ def _alert_scheduler_lock_error(path: str, err: Exception) -> None:
     발송 실패해도 앱을 죽이지 않는다(job_error_listener._send_alert 선례 답습).
     경합(Timeout)에는 호출 안 함 — 그건 정상 중복방지라 알림 노이즈만 된다.
     """
+    # ⚠ 파일경로·예외 원문은 **로그에만** 남긴다 — 사장님께는 의미 없는 개발자용
+    #   단서라 텔레그램에서 뺐지만(아래), 내가 추적할 근거는 잃으면 안 된다.
+    logger.error("[scheduler_lock] 락 파일 에러 path=%s: %s", path, err)
     try:
+        from crawler.plain_words import explain_error
         from services.telegram import send_telegram
+
+        # ⚠ 쉬운 우리말만(infra.md §텔레그램 알림 문구). 세션 409 에 `락 파일`·
+        #   `backend`·`VACUUM`·파일경로·예외 원문을 걷어냈다 — 위 logger.error 에
+        #   그대로 남아 내가 추적한다.
         send_telegram(
-            f"🚨 스케줄러 락 파일 에러 — 이 backend 가 스케줄러(크롤/결제/VACUUM)를 "
-            f"시작하지 못했습니다. 확인 필요: {path} ({err})"
+            "[서버 알림] 🔴 정해진 일들이 아예 시작되지 못했어요\n\n"
+            "▸ 자료 받기·결제·정리 같은 예약 작업이 하나도 안 돌고 있어요\n"
+            f"  까닭: {explain_error(str(err))}\n"
+            "→ 손님 화면은 그대로 보입니다(예전에 받아둔 자료). 새 자료만 안 들어와요.\n"
+            "   서버를 다시 켜야 할 수 있으니 아침에 Claude 에게 알려주세요."
         )
     except Exception:
         logger.warning("스케줄러 락 에러 텔레그램 알림 발송 실패", exc_info=True)

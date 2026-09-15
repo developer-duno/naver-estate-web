@@ -52,8 +52,8 @@ _JOB_LABEL_FALLBACK = {
     "backfill_detail_noon": "상세 백필 12:20(키 드리프트 대응)",
     "collect_prices": "시세 이력 수집",
     "backfill_price": "시세 이력 소급 수집",
-    "complex_detail_APT": "단지 상세 backfill APT",
-    "complex_detail_OPST": "단지 상세 backfill OPST",
+    "complex_detail_APT": "아파트 단지 정보 채우기",
+    "complex_detail_OPST": "오피스텔 단지 정보 채우기",
     "collect_public_trades": "공공데이터 실거래가 수집",
     "collect_officetel_presale": "청약홈 오피스텔 수집",
     "collect_rental_presale": "청약홈 민간임대 수집",
@@ -65,12 +65,12 @@ _JOB_LABEL_FALLBACK = {
     "crawler_monitor": "크롤링 모니터",
     "collect_metrics": "단지 가치지표 수집",
     "billing_charge": "빌링키 자동결제",
-    "vacuum_maintenance": "정기 VACUUM 유지보수",
+    "vacuum_maintenance": "자료 보관함 정리",
     # K-apt 관리비 연동 + data.go.kr 버전 감시 (세션 393 결손 보강 — 라벨은
     # crawler/scheduler.py 의 해당 add_job(name=...) 값을 그대로 복사)
-    "kapt_match": "K-apt 단지 매칭",
-    "kapt_costs": "K-apt 관리비 수집",
-    "api_version_probe": "data.go.kr API 버전 감시",
+    "kapt_match": "관리비 단지 연결하기",
+    "kapt_costs": "단지 관리비 받기",
+    "api_version_probe": "정부 자료 창구 살아있나 확인",
     # 동적 id 6종 (세션 399 결손 보강) — scheduler.py 가 루프로 등록하는 잡들.
     # extract_scheduler_job_ids() 가 동적 id 를 의도적으로 건너뛰는 탓에, 기존
     # 커버리지 가드(정적 id 대상)가 이 6종의 누락을 **구조적으로 못 봤다**.
@@ -81,9 +81,9 @@ _JOB_LABEL_FALLBACK = {
     "popular_1030": "인기 단지 크롤링 10:45",
     "popular_1430": "인기 단지 크롤링 14:45",
     "popular_1900": "인기 단지 크롤링 19:15",
-    "complex_detail_JGC": "단지 상세 backfill JGC",
-    "complex_detail_ABYG": "단지 상세 backfill ABYG",
-    "complex_detail_OBYG": "단지 상세 backfill OBYG",
+    "complex_detail_JGC": "재건축 단지 정보 채우기",
+    "complex_detail_ABYG": "아파트 분양권 단지 정보 채우기",
+    "complex_detail_OBYG": "오피스텔 분양권 단지 정보 채우기",
 }
 
 

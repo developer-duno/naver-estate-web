@@ -439,6 +439,76 @@ def test_unified_prefix_actually_used():
         assert "[서버 알림]" in text, f"{rel} 에 통일 접두어가 없다"
 
 
+# ── ⑥ 어려운 말 재유입 차단 — 알림 모듈 전수 (세션 409) ────────────────────
+#
+# 세션 408 까지 8개 창구 중 4곳만 우리말이었다("3창구 완료" 는 과장된 보고였다).
+# 세션 409 에 나머지 4곳(api_version_monitor·scheduler_lock·billing_charge·payment)을
+# 고치면서, **같은 말이 다시 새는 것**을 기계로 막는다.
+#
+# ⚠ 파일 목록을 손으로 적지 않는다 — `_telegram_modules()` 가 send_telegram 호출
+#    모듈을 소스에서 추출하므로, 9번째 창구가 생겨도 자동으로 스캔된다
+#    ([[feedback_guard_skipped_by_path_filter]] 답습).
+
+# 알림 본문에 다시 나타나면 안 되는 말 — 사장님이 쓰지 않는 개발자 어휘.
+_FORBIDDEN_IN_ALERTS = (
+    "엔드포인트", "웹훅", "NO_OPENAPI", "[BILLING]", "[PAYMENT]",
+    "PORTONE_WEBHOOK_SECRET", "VACUUM", "락 파일",
+)
+
+
+def test_no_developer_jargon_in_any_alert_module():
+    """알림을 만드는 모듈 전수에 개발자 어휘가 남아 있으면 실패.
+
+    뮤테이션: 어느 창구든 옛 문구(예: "[BILLING] 자동결제 …")로 되돌리면
+    이 테스트가 그 파일:줄을 대며 FAIL 한다.
+
+    ⚠ **알림으로 나가는 줄만** 본다. 아래는 전부 정당해서 제외한다(세션 409 실측으로
+       하나씩 확인) — 이걸 안 거르면 가드가 거짓 경보만 내고 결국 꺼진다:
+         - logger.*(...)      개발자가 보는 로그 (오히려 여기 남겨야 추적된다)
+         - os.getenv("X")     환경변수 **이름**
+         - X = "상수"          API 응답 판정용 토큰 등
+         - HTTPException(...) 텔레그램이 아니라 API 응답 본문
+    """
+    # 한 줄 docstring(`"""설명"""`)은 _code_lines 가 못 거른다 — 여기서 함께 제외.
+    skip_markers = ("logger.", "os.getenv", "HTTPException", "raise ", "= \"", "= '", '"""')
+    hits: list[str] = []
+    for path in _telegram_modules():
+        rel = path.relative_to(_BACKEND).as_posix()
+        for lineno, code in _code_lines(path.read_text(encoding="utf-8")):
+            stripped = code.strip()
+            if any(m in stripped for m in skip_markers):
+                continue
+            for bad in _FORBIDDEN_IN_ALERTS:
+                if bad in stripped and ('"' in stripped or "'" in stripped):
+                    hits.append(f"    {rel}:{lineno}  {bad}  {stripped[:90]}")
+    assert not hits, (
+        "\n알림 문구에 사장님이 못 읽는 말이 남아 있다 (infra.md §텔레그램 알림 문구):\n"
+        + "\n".join(hits)
+    )
+
+
+def test_all_eight_alert_channels_use_unified_prefix():
+    """8개 창구 전부 `[서버 알림]` 접두어를 쓰는지 — 하나라도 빠지면 실패.
+
+    세션 409 에 마지막 4곳을 채웠다. 새 창구가 생기면 이 목록이 아니라
+    `_telegram_modules()` 추출 결과가 늘어나므로 자동으로 검사 대상이 된다.
+    """
+    # 본문 조립을 alert_format 에 **위임**하는 모듈은 제외 — 접두어가 없는 게 정상이다
+    # (monitor.py 는 format_issue_message 를 부르고, 그 안에서 접두어가 붙는다).
+    missing = []
+    for path in _telegram_modules():
+        text = path.read_text(encoding="utf-8")
+        rel = path.relative_to(_BACKEND).as_posix()
+        if "format_issue_message" in text or "format_resolved_batch" in text:
+            continue
+        if "[서버 알림]" not in text:
+            missing.append(rel)
+    assert not missing, (
+        f"통일 접두어 `[서버 알림]` 가 없는 알림 모듈: {missing}\n"
+        "새 창구를 만들면 접두어도 함께 붙인다(infra.md §텔레그램 알림 문구)."
+    )
+
+
 def test_action_words_tell_owner_what_they_can_do():
     """행동 안내는 사장님이 실제로 할 수 있는 것이어야 한다.
 

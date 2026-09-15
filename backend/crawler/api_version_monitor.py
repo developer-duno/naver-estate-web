@@ -348,18 +348,22 @@ def _probe_one(entry: dict, service_key: str) -> tuple[str, str]:
 
 
 def _build_alert_message(dead: list[dict]) -> str:
-    """폐기 감지 텔레그램 본문 — 평문(parse_mode 없음, HTML 이스케이프 불필요)."""
-    lines = [
-        "🔴 data.go.kr API 폐기 감지",
+    """폐기 감지 텔레그램 본문 — 평문(parse_mode 없음, HTML 이스케이프 불필요).
+
+    ⚠ 문구는 전부 쉬운 우리말이어야 한다(infra.md §텔레그램 알림 문구). 세션 409 에
+    `엔드포인트`·`NO_OPENAPI_SERVICE_ERROR`·`버전 개편`·URL 나열을 걷어냈다 —
+    사장님이 읽고 **무엇이 멈췄고 무엇을 하면 되는지**만 남긴다. 기술 세부(어느 URL 이
+    죽었는지)는 서버 로그와 관리자 화면에 그대로 남아 내가 언제든 본다.
+    """
+    names = ", ".join(item["name"] for item in dead)
+    return "\n".join([
+        "[서버 알림] 🔴 정부 자료 창구가 닫혔어요",
         "",
-        f"아래 {len(dead)}개 엔드포인트가 폐기 응답(NO_OPENAPI_SERVICE_ERROR)을 반환합니다.",
-        "버전 개편 가능성 — data.go.kr 공지를 확인하고 신버전 엔드포인트로 교체하세요.",
-        "",
-    ]
-    for item in dead:
-        lines.append(f"• {item['name']}")
-        lines.append(f"  {item['url']}")
-    return "\n".join(lines)
+        f"▸ 정부가 자료 주는 곳 {len(dead)}군데가 응답을 멈췄어요: {names}",
+        "  정부 쪽에서 주소를 바꿨을 때 이렇게 됩니다.",
+        "→ 손님 화면은 그대로 보입니다(예전에 받아둔 자료). 그 자료만 새로 안 들어와요.",
+        "   아침에 Claude 에게 알려주시면 새 주소로 바꿉니다.",
+    ])
 
 
 def _alert_api_version(message: str) -> None:

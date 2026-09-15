@@ -187,11 +187,19 @@ Linux 메모리 오버커밋 모델상 "커밋이 물리 한도의 2배"라는 �
 - `crawl_jobs.error_message` 도 관리자 화면에 보이므로 같은 기준을 적용한다.
 - 접두어 회귀는 `test_plain_words.py` 가 **`.py` 8모듈 + 워크플로 YAML** 을 전수 추출해 막는다.
 
-### 아직 안 고친 창구 (세션 408 기준 — 다음 작업 대상)
+### 적용 현황 — **8창구 전부 완료** (세션 409)
 
-`api_version_monitor.py`(일요일 06:40 발화 가능) · `scheduler_lock.py`(재시작마다) ·
-`billing_charge.py:165,201`(`[BILLING]`) · `routers/payment.py:350,418`(`[PAYMENT]`).
-뒤 둘은 `PAYMENT_ENABLED=false` 라 현재 발화 불가.
+`monitor`(#524) · `field_drift_monitor`·`job_error_listener`·`healthcheck.yml`·
+`service_official_price`(#526) · `api_version_monitor`·`scheduler_lock`·
+`billing_charge`·`routers/payment`(세션 409).
+
+잡 라벨(`_JOB_LABEL_FALLBACK`) 9개에 남아 있던 영문(`단지 상세 backfill APT`,
+`정기 VACUUM 유지보수`, `K-apt 관리비 수집`, `data.go.kr API 버전 감시` 등)도 함께
+우리말로 바꿨다 — 라벨은 알림 본문에 그대로 찍히므로 사전만 고쳐선 부족했다.
+
+**재유입 차단**: `test_plain_words.py` 가 `send_telegram` 호출 모듈을 **소스에서 추출**해
+전수 검사한다(`test_no_developer_jargon_in_any_alert_module`·접두어 가드 2종 + 워크플로
+YAML). 9번째 창구가 생겨도 자동으로 검사 대상이 된다 — 손 목록이 아니다.
 
 ## 스케줄러 (APScheduler)
 

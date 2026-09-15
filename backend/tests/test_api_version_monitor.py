@@ -228,10 +228,15 @@ def test_one_dead_sends_single_alert_with_api_name(db):
     # 알림은 여러 건이 아니라 묶어서 1건
     assert mock_send.call_count == 1
     message = mock_send.call_args.args[0]
+    # 단언 의도("어느 API 가 죽었는지 알림에 드러나는가")는 그대로 — 이름은 유지.
     assert dead_entry["name"] in message
-    assert dead_entry["url"] in message
-    # 사람이 다음에 할 행동(공지 확인)이 안내되는가
-    assert "data.go.kr" in message
+    # ⚠ URL 은 세션 409 에 알림에서 뺐다 — 사장님께 의미 없는 개발자용 단서라
+    #   logger.error 로 옮겼다(추적 근거는 서버 로그에 그대로). 되돌리지 말 것.
+    assert dead_entry["url"] not in message, f"URL 이 알림에 다시 들어왔다: {message}"
+    assert "엔드포인트" not in message and "NO_OPENAPI" not in message, message
+    # 사람이 다음에 할 행동이 안내되는가 — 세션 409 에 "data.go.kr 공지를 확인하고
+    # 신버전 엔드포인트로 교체하세요"(개발자가 할 일)를 사장님이 할 수 있는 안내로 바꿨다.
+    assert "Claude" in message, f"무엇을 하면 되는지가 없다: {message}"
 
     # dead 발견은 잡 실패가 아니다 — 감시기는 제 할 일을 다 했다
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "api_version_probe").one()

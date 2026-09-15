@@ -345,9 +345,15 @@ async def payment_webhook(request: Request, db: Session = Depends(get_db)):
         # PortOne 재전송 예산이 소진되고 진짜 결제 사용자가 미부여됨, finding #12).
         # ⚠ /webhook 은 공개·비인증 → 쿨다운 필수 (가짜 서명 폭격 시 알림 스팸·rate limit 소진
         # 으로 진짜 알림 누락 차단). _alert_operator_throttled 가 10분 1회로 억제.
+        # ⚠ 쉬운 우리말만(infra.md §텔레그램 알림 문구). `웹훅`·`서명 검증`·env 변수명은
+        #   사장님이 읽을 말이 아니다 — 위 logger.warning 에 남아 내가 추적한다(세션 409).
         _alert_operator_throttled(
             "webhook_bad_signature",
-            "[PAYMENT] 웹훅 서명 검증 실패 — PORTONE_WEBHOOK_SECRET 불일치 의심 (10분 내 반복 억제)",
+            "[서버 알림] 🔴 결제 회사에서 온 연락이 진짜가 아닌 것 같아요\n\n"
+            "▸ 결제 결과를 알려주는 연락이 왔는데 확인 도장이 안 맞아 받지 않았습니다\n"
+            "  설정이 어긋났거나, 누군가 가짜로 보냈을 수 있어요.\n"
+            "→ 손님 결제 자체는 그대로 됩니다. 같은 일이 10분 안에 반복되면 한 번만 알려요.\n"
+            "   아침에 Claude 에게 알려주세요.",
         )
         raise HTTPException(status_code=400, detail="웹훅 검증 실패")
 
@@ -413,10 +419,14 @@ def _handle_refund_webhook(db: Session, payment: Payment, event_type: str) -> di
         # 부분환불 — 자동 롤백 안 함(사장님 수동). 알림 + 감사만.
         # payment_id 별 쿨다운 key — 서로 다른 결제는 각각 알림(부분환불은 빈도 낮음),
         # 같은 결제 중복 웹훅은 10분 억제.
+        # ⚠ 쉬운 우리말만. 식별자는 아래 log_action 감사기록에 그대로 남는다(세션 409).
         _alert_operator_throttled(
             f"partial_cancel:{payment.payment_id}",
-            f"[PAYMENT] 부분환불 발생 — 수동 확인 필요 (payment_id={payment.payment_id}, "
-            f"user={payment.user_id}, plan={payment.plan})",
+            "[서버 알림] ⚠ 결제 금액 일부가 환불됐어요\n\n"
+            f"▸ 한 회원의 결제 중 일부가 환불 처리됐습니다 (결제번호 {payment.payment_id})\n"
+            "  자동으로 되돌리지 않으니 사장님이 확인하셔야 합니다.\n"
+            "→ 손님 화면은 그대로 쓰입니다.\n"
+            "   돈이 걸린 일이라 아침에 꼭 Claude 에게 알려주세요.",
         )
         log_action(db, payment.user_id, "payment_partial_cancelled", "payment", payment.payment_id, {
             "plan": payment.plan,

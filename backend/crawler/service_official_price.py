@@ -448,11 +448,16 @@ def _probe_reform_migration(year: str) -> None:
 
         detail = " / ".join(migrated)
         logger.warning("[official_price] 표준코드 이관 감지 — %s", detail)
+        # ⚠ 쉬운 우리말만(infra.md §텔레그램 알림 문구). 세션 409 적대검증이 **이 한 곳만
+        #   안 고쳐진 것**을 잡았다 — 같은 파일의 다른 2곳(986·1110)만 고쳐서 "전부 완료"가
+        #   거짓이 됐다. 기술 세부(어느 코드가 바뀌었는지)는 위 logger.warning 에 그대로 남는다.
         _alert_official_price(
-            "⚠️ 공시가격 V-WORLD 표준코드 이관 감지 — cortar_legacy 코드 번역"
-            "(2026 개편맵·광주전남 12-프리픽스맵)이 역효과 시작. "
-            f"감지 보초: {detail}. 이관 지역은 번역 해제·표준코드 직접 조회 전환 "
-            "검토 필요(과도기 양쪽 공존 가능성 때문에 자동 전환은 하지 않음)."
+            "[서버 알림] ⚠ <b>정부 공시가격 받기</b> — 정부가 지역 번호를 바꾸는 중이에요\n\n"
+            f"▸ 바뀌기 시작한 지역: {detail}\n"
+            "  우리가 쓰던 옛 지역 번호가 곧 안 통할 수 있어요.\n"
+            "  지금은 자료가 정상으로 들어오지만, 그대로 두면 그 지역이 빠질 수 있습니다.\n"
+            "→ 손님 화면은 그대로 보입니다. 당장 문제가 생긴 건 아니에요.\n"
+            "   아침에 Claude 에게 알려주시면 새 번호로 맞춥니다."
         )
     except Exception:
         logger.warning("[official_price] 이관 감시 자체 실패 — 수집은 계속", exc_info=True)

@@ -187,7 +187,14 @@ Linux 메모리 오버커밋 모델상 "커밋이 물리 한도의 2배"라는 �
 - `crawl_jobs.error_message` 도 관리자 화면에 보이므로 같은 기준을 적용한다.
 - 접두어 회귀는 `test_plain_words.py` 가 **`.py` 8모듈 + 워크플로 YAML** 을 전수 추출해 막는다.
 
-### 적용 현황 — **8창구 전부 완료** (세션 409)
+### 적용 현황 — **모듈 8개 / 호출부 11곳 전부 완료** (세션 409)
+
+⚠ **"창구 수"를 셀 때 모듈 수와 호출부 수를 구분하라.** `send_telegram` 을 부르는
+**모듈은 8개**지만, 한 모듈이 여러 곳에서 알림을 쏜다(`service_official_price` 는 3곳).
+세션 409 가 모듈만 세고 "8창구 전부"라 보고했다가, `service_official_price:451`
+표준코드 이관 알림 **한 곳이 안 고쳐진 채** 남아 적대검증에 적발됐다.
+→ 판정은 `scripts/verify_alert_wording.py` 로. 그 스크립트가 호출부를 **소스에서 추출**해
+   전수 검사한다(⑧은 3곳으로 나뉘어 출력된다).
 
 `monitor`(#524) · `field_drift_monitor`·`job_error_listener`·`healthcheck.yml`·
 `service_official_price`(#526) · `api_version_monitor`·`scheduler_lock`·
@@ -199,7 +206,22 @@ Linux 메모리 오버커밋 모델상 "커밋이 물리 한도의 2배"라는 �
 
 **재유입 차단**: `test_plain_words.py` 가 `send_telegram` 호출 모듈을 **소스에서 추출**해
 전수 검사한다(`test_no_developer_jargon_in_any_alert_module`·접두어 가드 2종 + 워크플로
-YAML). 9번째 창구가 생겨도 자동으로 검사 대상이 된다 — 손 목록이 아니다.
+YAML). 새 창구가 생겨도 자동으로 검사 대상이 된다 — 손 목록이 아니다.
+⚠ 이 가드는 **알림 문구만** 본다. `logger.*`(여러 줄 호출의 이어지는 줄 포함)·환경변수·
+API 응답·데이터 사전은 제외한다 — 거짓 경보를 내는 가드는 결국 꺼지기 때문이다.
+단 `_JOB_LABEL_FALLBACK` 은 사전이어도 **값이 알림 본문에 찍히므로** 검사 대상이다.
+
+**라이브 확인 (재시작 후 한 줄)**:
+```bash
+cd backend && PYTHONPATH=. PYTHONUTF8=1 python scripts/verify_alert_wording.py
+# 종료 0 = 전부 우리말 / 1 = 어려운 말이 남은 창구를 지목해 출력
+```
+
+⚠ **잡 이름은 두 곳에 있고 라이브는 스케줄러 쪽을 쓴다** (세션 409 HIGH-1):
+`job_error_listener._job_label()` 은 `scheduler.get_job(id).name` 을 **우선**하고
+`_JOB_LABEL_FALLBACK` 은 그게 실패할 때만 본다. 라이브는 scheduler 가 주입되므로
+**폴백 표만 고치면 알림에 안 반영된다** — `crawler/scheduler.py` 의 `add_job(name=...)`
+을 함께 고쳐야 한다. 두 곳의 값은 `plain_words.JOB_WORDS` 와 같은 표현으로 맞춘다.
 
 ## 스케줄러 (APScheduler)
 

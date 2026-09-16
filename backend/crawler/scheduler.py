@@ -201,7 +201,7 @@ def create_scheduler() -> BackgroundScheduler:
         hour=3,
         kwargs={"scheduler_job_id": "discover_regions"},
         id="discover_regions",
-        name="전국 단지 발견",
+        name="새 단지 찾기",
         misfire_grace_time=3600,
     )
 
@@ -222,7 +222,7 @@ def create_scheduler() -> BackgroundScheduler:
         jitter=2700,
         kwargs={"batch_size": CRAWL_BATCH_SIZE, "scheduler_job_id": "crawl_articles"},
         id="crawl_articles",
-        name="매물 수집 배치",
+        name="단지 매물 가져오기",
         max_instances=1,
         misfire_grace_time=1800,
     )
@@ -236,7 +236,7 @@ def create_scheduler() -> BackgroundScheduler:
         jitter=900,
         kwargs={"batch_size": CRAWL_DETAIL_BATCH_SIZE, "scheduler_job_id": "crawl_details"},
         id="crawl_details",
-        name="매물 상세 보강",
+        name="매물 상세 내용 채우기",
         max_instances=1,
         misfire_grace_time=900,
     )
@@ -265,7 +265,7 @@ def create_scheduler() -> BackgroundScheduler:
             minute=20,
             kwargs={"batch_size": _BACKFILL_DAWN_SIZE, "scheduler_job_id": "backfill_detail_dawn"},
             id="backfill_detail_dawn",
-            name="상세 백필 00:20(키 드리프트 대응)",
+            name="빠진 정보 뒤늦게 채우기 00:20",
             max_instances=1,
             misfire_grace_time=1800,
         )
@@ -276,7 +276,7 @@ def create_scheduler() -> BackgroundScheduler:
             minute=20,
             kwargs={"batch_size": _BACKFILL_NOON_SIZE, "scheduler_job_id": "backfill_detail_noon"},
             id="backfill_detail_noon",
-            name="상세 백필 12:20(키 드리프트 대응)",
+            name="빠진 정보 뒤늦게 채우기 12:20",
             max_instances=1,
             misfire_grace_time=1800,
         )
@@ -293,7 +293,7 @@ def create_scheduler() -> BackgroundScheduler:
         hour=4,
         kwargs={"batch_size": CRAWL_BATCH_SIZE, "scheduler_job_id": "collect_prices"},
         id="collect_prices",
-        name="시세 이력 수집",
+        name="단지 시세 기록 모으기",
         misfire_grace_time=3600,
     )
 
@@ -310,7 +310,7 @@ def create_scheduler() -> BackgroundScheduler:
             minute=30,
             kwargs={"batch_size": PUBLIC_PRICE_BACKFILL_BATCH_SIZE, "scheduler_job_id": "backfill_price"},
             id="backfill_price",
-            name="시세 이력 소급 수집",
+            name="옛 시세 채워 넣기",
             max_instances=1,
             misfire_grace_time=3600,
         )
@@ -328,7 +328,7 @@ def create_scheduler() -> BackgroundScheduler:
                 minute=minute,
                 kwargs={"batch_size": POPULAR_CRAWL_BATCH_SIZE, "scheduler_job_id": job_id},
                 id=job_id,
-                name=f"인기 단지 크롤링 {hour:02d}:{minute:02d}",
+                name=f"자주 보는 단지 미리 갱신 {hour:02d}:{minute:02d}",
                 max_instances=1,
                 misfire_grace_time=1800,
             )
@@ -347,7 +347,7 @@ def create_scheduler() -> BackgroundScheduler:
             kwargs={"real_estate_type": "APT", "batch_size": COMPLEX_DETAIL_BATCH_SIZE,
                     "scheduler_job_id": "complex_detail_APT"},
             id="complex_detail_APT",
-            name="단지 상세 backfill APT",
+            name="아파트 단지 정보 채우기",
             max_instances=1,
             misfire_grace_time=3600,
         )
@@ -359,10 +359,14 @@ def create_scheduler() -> BackgroundScheduler:
             kwargs={"real_estate_type": "OPST", "batch_size": COMPLEX_DETAIL_BATCH_SIZE,
                     "scheduler_job_id": "complex_detail_OPST"},
             id="complex_detail_OPST",
-            name="단지 상세 backfill OPST",
+            name="오피스텔 단지 정보 채우기",
             max_instances=1,
             misfire_grace_time=3600,
         )
+        # ⚠ 알림 본문에 그대로 찍히는 이름이라 우리말만 쓴다(infra.md §텔레그램 알림 문구).
+        #    plain_words.JOB_WORDS 와 같은 표현으로 맞춘다 — 두 곳이 어긋나면
+        #    사장님이 화면과 알림에서 다른 이름을 보게 된다(세션 409 적대검증 HIGH-1).
+        _DETAIL_TYPE_WORDS = {"JGC": "재건축", "ABYG": "아파트 분양권", "OBYG": "오피스텔 분양권"}
         # 소수 유형 — 주 1회 07:00 (요일 분산)
         for dow, rtype in [("tue", "JGC"), ("wed", "ABYG"), ("thu", "OBYG")]:
             scheduler.add_job(
@@ -374,7 +378,7 @@ def create_scheduler() -> BackgroundScheduler:
                 kwargs={"real_estate_type": rtype, "batch_size": COMPLEX_DETAIL_BATCH_SIZE,
                         "scheduler_job_id": f"complex_detail_{rtype}"},
                 id=f"complex_detail_{rtype}",
-                name=f"단지 상세 backfill {rtype} {dow} 07:00",
+                name=f"{_DETAIL_TYPE_WORDS[rtype]} 단지 정보 채우기",
                 max_instances=1,
                 misfire_grace_time=3600,
             )
@@ -396,7 +400,7 @@ def create_scheduler() -> BackgroundScheduler:
             hour=5,
             kwargs={"batch_size": PUBLIC_DATA_BATCH_SIZE, "scheduler_job_id": "collect_public_trades"},
             id="collect_public_trades",
-            name="공공데이터 실거래가 수집",
+            name="정부 실거래가 받기",
             max_instances=1,
             misfire_grace_time=3600,
         )
@@ -416,7 +420,7 @@ def create_scheduler() -> BackgroundScheduler:
             minute=0,
             kwargs={"scheduler_job_id": "collect_officetel_presale"},
             id="collect_officetel_presale",
-            name="청약홈 오피스텔 수집",
+            name="오피스텔 청약 공고 받기",
             max_instances=1,
             misfire_grace_time=3600,
         )
@@ -428,7 +432,7 @@ def create_scheduler() -> BackgroundScheduler:
             minute=30,
             kwargs={"scheduler_job_id": "collect_rental_presale"},
             id="collect_rental_presale",
-            name="청약홈 민간임대 수집",
+            name="민간임대 청약 공고 받기",
             max_instances=1,
             misfire_grace_time=3600,
         )
@@ -442,7 +446,7 @@ def create_scheduler() -> BackgroundScheduler:
             collect_official_prices, "cron",
             day="15", hour=6, minute=30,
             kwargs={"scheduler_job_id": "official_price"},
-            id="official_price", name="공동주택 공시가격 수집",
+            id="official_price", name="정부 공시가격 받기",
             max_instances=1, misfire_grace_time=3600,
         )
         logger.info("공동주택 공시가격 수집 활성화: 매월 15일 06:30")
@@ -458,7 +462,7 @@ def create_scheduler() -> BackgroundScheduler:
             "cron",
             day="21", hour=6, minute=10,
             kwargs={"scheduler_job_id": "kapt_match"},
-            id="kapt_match", name="K-apt 단지 매칭",
+            id="kapt_match", name="관리비 단지 연결하기",
             max_instances=1, misfire_grace_time=3600,
         )
         scheduler.add_job(
@@ -469,7 +473,7 @@ def create_scheduler() -> BackgroundScheduler:
                 "batch_size": KAPT_COST_BATCH_SIZE,
                 "scheduler_job_id": "kapt_costs",
             },
-            id="kapt_costs", name="K-apt 관리비 수집",
+            id="kapt_costs", name="단지 관리비 받기",
             max_instances=1, misfire_grace_time=3600,
         )
         logger.info(
@@ -487,7 +491,7 @@ def create_scheduler() -> BackgroundScheduler:
             hour=2,
             kwargs={"batch_size": AIR_QUALITY_BATCH_SIZE},
             id="collect_air_quality",
-            name="에어코리아 대기질 수집",
+            name="동네 공기질 받기",
             max_instances=1,
             misfire_grace_time=3600,
         )
@@ -509,7 +513,7 @@ def create_scheduler() -> BackgroundScheduler:
             hour=3,
             kwargs={"batch_size": EMERGENCY_BATCH_SIZE},
             id="collect_emergency",
-            name="응급의료기관 수집",
+            name="응급실 위치 받기",
             max_instances=1,
             misfire_grace_time=3600,
         )
@@ -538,7 +542,7 @@ def create_scheduler() -> BackgroundScheduler:
             hour=1,
             kwargs={"batch_size": CHILDCARE_BATCH_SIZE},
             id="collect_childcare",
-            name="어린이집 수집",
+            name="어린이집 정보 받기",
             max_instances=1,
             misfire_grace_time=3600,
         )
@@ -560,7 +564,7 @@ def create_scheduler() -> BackgroundScheduler:
             day_of_week="sun",
             hour=4,
             id="collect_crime_stats",
-            name="범죄통계 수집",
+            name="동네 범죄 통계 받기",
             max_instances=1,
             misfire_grace_time=3600,
         )
@@ -575,7 +579,7 @@ def create_scheduler() -> BackgroundScheduler:
             "interval",
             minutes=MONITOR_INTERVAL_MIN,
             id="crawler_monitor",
-            name="크롤링 모니터",
+            name="서버 일감 점검",
             max_instances=1,
             misfire_grace_time=600,
         )
@@ -597,7 +601,7 @@ def create_scheduler() -> BackgroundScheduler:
             minute=30,
             kwargs={"batch_size": COMPLEX_METRIC_BATCH_SIZE, "scheduler_job_id": "collect_metrics"},
             id="collect_metrics",
-            name="단지 가치지표 수집",
+            name="단지 가치 점수 계산",
             max_instances=1,
             misfire_grace_time=3600,
         )
@@ -635,7 +639,7 @@ def create_scheduler() -> BackgroundScheduler:
             hour=3,
             minute=50,
             id="vacuum_maintenance",
-            name="정기 VACUUM 유지보수",
+            name="자료 보관함 정리",
             max_instances=1,
             misfire_grace_time=3600,
         )
@@ -658,7 +662,7 @@ def create_scheduler() -> BackgroundScheduler:
             minute=40,
             kwargs={"scheduler_job_id": "api_version_probe"},
             id="api_version_probe",
-            name="data.go.kr API 버전 감시",
+            name="정부 자료 창구 살아있나 확인",
             max_instances=1,
             misfire_grace_time=3600,
         )
@@ -678,7 +682,7 @@ def create_scheduler() -> BackgroundScheduler:
             minute=40,
             kwargs={"scheduler_job_id": "field_drift_monitor"},
             id="field_drift_monitor",
-            name="상세 필드 채움률 드리프트 감시",
+            name="정보 안 채워지면 알림",
             max_instances=1,
             misfire_grace_time=3600,
         )

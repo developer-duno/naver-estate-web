@@ -453,6 +453,10 @@ def test_unified_prefix_actually_used():
 _FORBIDDEN_IN_ALERTS = (
     "엔드포인트", "웹훅", "NO_OPENAPI", "[BILLING]", "[PAYMENT]",
     "PORTONE_WEBHOOK_SECRET", "VACUUM", "락 파일",
+    # 세션 409 적대검증: 위 8단어만으로는 `service_official_price` 의 표준코드 이관
+    # 알림("V-WORLD 표준코드 이관 감지 — cortar_legacy 코드 번역…")과 교집합이 0 이라
+    # 그 창구가 영문인 채로 통과했다. 판정 로직에 능력은 있었는데 낱말이 부족했던 것.
+    "cortar_legacy", "V-WORLD", "프리픽스", "표준코드", "드리프트", "백필",
 )
 
 
@@ -470,13 +474,43 @@ def test_no_developer_jargon_in_any_alert_module():
          - HTTPException(...) 텔레그램이 아니라 API 응답 본문
     """
     # 한 줄 docstring(`"""설명"""`)은 _code_lines 가 못 거른다 — 여기서 함께 제외.
+    # 한 줄 docstring(`"""설명"""`)은 _code_lines 가 못 거른다 — 여기서 함께 제외.
+    # `"키": "값",` 형태(지역코드·설정 사전)도 알림 문구가 아니라 데이터다 — 세션 409.
     skip_markers = ("logger.", "os.getenv", "HTTPException", "raise ", "= \"", "= '", '"""')
+    dict_entry = re.compile(r'^"[^"]+":\s')
+
+    def _log_continuation_lines(pairs):
+        """여러 줄 `logger.xxx(...)` 의 **이어지는 줄** 번호 집합.
+
+        첫 줄에만 `logger.` 가 있어 줄 단위 마커로는 못 거른다 — 세션 409 에
+        `logger.warning(\\n  "…드리프트…"` 형태가 오탐으로 잡혔다. 로그는 개발자용이라
+        어려운 말이 남아 있는 게 **정상**이므로 검사 대상에서 뺀다.
+        """
+        out, open_depth = set(), 0
+        for no, raw in pairs:
+            st = raw.strip()
+            if open_depth > 0:
+                out.add(no)
+                open_depth += st.count("(") - st.count(")")
+                continue
+            if "logger." in st:
+                open_depth = max(0, st.count("(") - st.count(")"))
+        return out
     hits: list[str] = []
     for path in _telegram_modules():
         rel = path.relative_to(_BACKEND).as_posix()
-        for lineno, code in _code_lines(path.read_text(encoding="utf-8")):
+        code_lines = _code_lines(path.read_text(encoding="utf-8"))
+        log_lines = _log_continuation_lines(code_lines)
+        for lineno, code in code_lines:
+            if lineno in log_lines:
+                continue
             stripped = code.strip()
             if any(m in stripped for m in skip_markers):
+                continue
+            # 데이터 사전 항목은 알림 문구가 아니다(지역코드 표 등).
+            # ⚠ 단 **잡 라벨 사전**(_JOB_LABEL_FALLBACK)은 값이 알림 본문에 그대로
+            #    찍히므로 예외에서 제외한다 — 그게 세션 409 의 HIGH-1 이었다.
+            if dict_entry.match(stripped) and "job_error_listener" not in rel:
                 continue
             for bad in _FORBIDDEN_IN_ALERTS:
                 if bad in stripped and ('"' in stripped or "'" in stripped):

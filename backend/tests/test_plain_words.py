@@ -12,13 +12,17 @@
 DB 의존 없는 순수 함수 테스트.
 """
 
+import logging
 import re
 from pathlib import Path
 
 from crawler.plain_words import (
     JOB_WORDS,
+    STALE_SWEPT_WORDS,
+    UNKNOWN_ERROR_WORDS,
     action_words,
     explain_error,
+    explain_stored_error,
     job_words,
     plainify_detail,
     status_words,
@@ -168,6 +172,123 @@ def test_explain_error_empty_is_empty():
     assert explain_error(None) == ""
     # 공백뿐인 원문도 "메시지 없음" — job_error_listener 가 더 정확한 문구로 폴백한다
     assert explain_error("   ") == ""
+
+
+# ── ②-b 관리자 화면에 뜨는 저장된 에러 (세션 411) ───────────────────────
+#
+# `crawl_jobs.error_message` 는 알림뿐 아니라 관리자 화면(스케줄러 표·일괄 재크롤
+# 진행률)에도 그대로 보인다 — 같은 기준(전부 쉬운 우리말)을 적용한다.
+
+
+def test_explain_stored_error_translates_known():
+    """아는 에러는 저장값이어도 우리말 한 줄로."""
+    out = explain_stored_error(
+        '(psycopg2.errors.QueryCanceled) canceling statement due to statement timeout'
+    )
+    assert out == "데이터베이스가 너무 오래 걸려 스스로 멈췄어요."
+
+
+def test_explain_stored_error_keeps_already_plain_korean():
+    """이미 우리말인 저장값은 **원문 그대로** — 뭉개면 정보가 오히려 줄어든다.
+
+    prod 저장값 상당수가 우리 코드가 직접 쓴 우리말 문장이다("3/50개 단지 실패").
+    이걸 '처음 보는 문제' 로 바꾸면 화면이 더 불친절해진다.
+    """
+    assert explain_stored_error("3/50개 단지 실패") == "3/50개 단지 실패"
+
+
+def test_explain_stored_error_translates_korean_mixed_english():
+    """우리말이 섞여 있어도 아는 에러면 번역한다 (판정 순서 회귀 — 세션 407).
+
+    '이미 사람 말인가' 를 먼저 보면 이 입력이 통과해버려 `statement timeout` 이
+    화면에 그대로 남는다.
+    """
+    out = explain_stored_error("(s378 수동 정정) 14:54 statement timeout 연쇄 크래시")
+    assert out == "데이터베이스가 너무 오래 걸려 스스로 멈췄어요."
+    assert "timeout" not in out
+
+
+def test_explain_stored_error_unknown_falls_back_to_fixed_sentence():
+    """모르는 영문은 고정 문장 — 원문은 화면의 title 과 DB 에 그대로 남는다."""
+    out = explain_stored_error("KeyError: articleList")
+    assert out == explain_error("KeyError: articleList")
+    assert "KeyError" not in out
+
+
+def test_explain_stored_error_translates_stale_running_marker():
+    """스윕 마커(화면 최다 값)도 우리말로 — 개발자 흔적이 없어 '우리말' 로 오판되던 값."""
+    for raw in (
+        "stale running — swept by monitor",
+        "stale running — swept on startup",
+    ):
+        out = explain_stored_error(raw)
+        assert out == "작업이 오래 멈춰 있어 자동으로 정리됐어요.", raw
+        assert "stale" not in out, raw
+
+
+def test_explain_stored_error_splits_appended_stale_marker():
+    """스윕 마커가 **뒤에 붙은** 형태 — 앞의 진짜 사유를 살리고 정리 문장을 잇는다.
+
+    두 스윕 모두 `COALESCE(error_message || ' | ', '') || 'stale running — …'` 로
+    원문 뒤에 덧붙인다(main.py / crawler/monitor.py, #443). 이게 오히려 흔한 모양인데
+    앵커(`^stale running`) 규칙만으로는 안 맞아 영문이 그대로 샜다(세션 411 HIGH-1).
+    """
+    out = explain_stored_error("3/50개 단지 실패 | stale running — swept by monitor")
+    assert out == "3/50개 단지 실패 — 그 뒤 " + STALE_SWEPT_WORDS
+    assert "stale" not in out
+
+
+def test_explain_stored_error_translates_head_before_appended_marker():
+    """앞머리가 개발자 에러면 그것도 번역한 뒤 정리 문장을 잇는다 (꼬리 마침표는 뗀다)."""
+    out = explain_stored_error(
+        "(psycopg2.errors.QueryCanceled) canceling statement due to statement timeout"
+        " | stale running — swept on startup"
+    )
+    assert out == "데이터베이스가 너무 오래 걸려 스스로 멈췄어요 — 그 뒤 " + STALE_SWEPT_WORDS
+    assert "psycopg2" not in out and "stale" not in out
+
+
+def test_explain_stored_error_pure_stale_marker_still_uses_rule():
+    """원문 없이 마커만 있는 순수형은 규칙 경로 그대로 — ⓪단계가 이걸 망치지 않는다."""
+    assert explain_stored_error("stale running — swept on startup") == STALE_SWEPT_WORDS
+
+
+def test_explain_stored_error_does_not_log_unknown_original(caplog):
+    """화면용 경로는 **수집 로그를 남기지 않는다** (세션 411).
+
+    관리자 화면은 스케줄러 상태를 60초, 재크롤 진행률을 3~15초마다 다시 부른다.
+    여기서 `explain_error` 를 부르면 페이지를 열어둔 내내 같은 원문이 INFO 로 쌓여,
+    "같은 원문 3번 이상 = 새 규칙 후보" 집계가 **화면을 켜둔 시간에 좌우된다**.
+    원문은 `crawl_jobs.error_message` 에 이미 있으므로 추적에는 지장이 없다.
+    """
+    with caplog.at_level(logging.INFO, logger="crawler.plain_words"):
+        out = explain_stored_error("KeyError: articleList")
+
+    assert out == UNKNOWN_ERROR_WORDS
+    leaked = [r for r in caplog.records if "번역 사전에 없는" in r.getMessage()]
+    assert not leaked, f"화면 경로가 수집 로그를 남겼다 — P1-2 집계 오염: {leaked}"
+
+
+def test_explain_error_still_logs_unknown_original(caplog):
+    """반대로 알림 경로(`explain_error`)는 예전처럼 수집 로그를 남긴다 (대조군).
+
+    위 테스트가 '로그가 안 찍힌다' 를 단언하는데, 로거 이름이나 레벨이 틀려서
+    애초에 아무것도 안 잡히는 것이면 그 단언은 늘 통과한다 — 이 대조군이 그걸 막는다.
+    """
+    with caplog.at_level(logging.INFO, logger="crawler.plain_words"):
+        out = explain_error("KeyError: articleList")
+
+    assert out == UNKNOWN_ERROR_WORDS
+    assert [r for r in caplog.records if "번역 사전에 없는" in r.getMessage()], (
+        "알림 경로의 새 규칙 후보 수집 로그가 사라졌다 — 유일한 grep 자리다"
+    )
+
+
+def test_explain_stored_error_empty_is_empty():
+    """빈값은 빈 문자열 — 화면이 '에러 없음' 을 스스로 판단한다."""
+    assert explain_stored_error("") == ""
+    assert explain_stored_error(None) == ""
+    assert explain_stored_error("   ") == ""
 
 
 # ── ③ 저장된 옛 문장 되살리기 (render-time) ──────────────────────────────

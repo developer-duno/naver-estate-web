@@ -182,6 +182,9 @@ def test_scheduler_status_failed_job(mock_sched, client, db):
     crime_job = next(j for j in data["jobs"] if j["scheduler_job_id"] == "collect_crime_stats")
     assert crime_job["last_run"]["status"] == "failed"
     assert crime_job["last_run"]["error_message"] == "API 연결 실패"
+    # 화면이 보여줄 우리말 한 줄도 함께 온다 (세션 411). 이 값은 이미 우리말이라
+    # 원문 그대로가 정답 — 뭉개면 정보가 줄어든다(test_plain_words 유지 케이스).
+    assert crime_job["last_run"]["error_plain"] == "API 연결 실패"
     assert crime_job["stats_24h"]["failures"] >= 1
 
 

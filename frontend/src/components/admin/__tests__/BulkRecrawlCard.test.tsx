@@ -82,4 +82,31 @@ describe("BulkRecrawlCard", () => {
     });
     expect(screen.queryByText(/시작됨/)).not.toBeInTheDocument();
   });
+
+  /** 진행률 카드의 에러 줄 — 쉬운 우리말을 보여주고 원문은 title 로 (세션 411) */
+  it("진행률 에러에 우리말이 보이고 원문은 title 에 남는다", async () => {
+    const raw =
+      "(psycopg2.errors.QueryCanceled) canceling statement due to statement timeout";
+    const plain = "데이터베이스가 너무 오래 걸려 스스로 멈췄어요.";
+    mockProgress.mockResolvedValue({
+      job: {
+        id: 1,
+        status: "failed",
+        total_items: 50,
+        processed_items: 13,
+        started_at: null,
+        completed_at: null,
+        error_message: raw,
+        error_plain: plain,
+      },
+    } as RecrawlProgress);
+    renderCard();
+
+    await waitFor(() => {
+      expect(screen.getByText(plain)).toBeInTheDocument();
+    });
+    // 개발자 에러 원문은 화면 글자로 보이지 않고, 추적용으로 title 에만 남는다
+    expect(screen.queryByText(raw)).toBeNull();
+    expect(screen.getByText(plain).getAttribute("title")).toBe(raw);
+  });
 });

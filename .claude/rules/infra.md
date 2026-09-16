@@ -173,7 +173,7 @@ Linux 메모리 오버커밋 모델상 "커밋이 물리 한도의 2배"라는 �
 | 작업 이름 30종 | `crawler/plain_words.py` `JOB_WORDS` | **DB `job_type`** |
 | 매물 필드 15종 | `crawler/field_drift_monitor.py` `_FIELD_WORDS` | `articles` 컬럼명 |
 | 잡 라벨 31종 | `crawler/job_error_listener.py` `_JOB_LABEL_FALLBACK` | **스케줄러 잡 id** |
-| 에러 번역·행동 안내·조사 | `crawler/plain_words.py` `explain_error`·`action_words*`·`eul_reul` | — |
+| 에러 번역·행동 안내·조사 | `crawler/plain_words.py` `explain_error`·`action_words*`·`eul_reul` — ⚠ 못 알아본 에러는 **원문 없이 고정 문장**만 나간다(세션 410, 원문은 로그·`crawl_jobs.error_message` 에), 결제 사유는 PortOne 상태별 4규칙이 **목록 맨 앞** | — |
 
 ⚠ **잡 이름 체계가 둘이고 서로 다르다**(`crawl_details`(id) vs `article_detail`(job_type)).
 한쪽 사전만 채우면 "고쳤는데 실제로는 그대로 나가는" 상태가 된다 — 세션 408 에 실제로
@@ -215,6 +215,9 @@ API 응답·데이터 사전은 제외한다 — 거짓 경보를 내는 가드�
 ```bash
 cd backend && PYTHONPATH=. PYTHONUTF8=1 python scripts/verify_alert_wording.py
 # 종료 0 = 전부 우리말 / 1 = 어려운 말이 남은 창구를 지목해 출력
+# 세션 410 확장: ⓪ 못 알아본 에러 렌더(새 알림 + 해소 알림 — 내부 마침표 검사) ·
+#   ⑨ 자동결제 중단 사유 6종(_mark_retry 실호출) · ⑩ 부분환불(이메일 마스킹 검사) 포함 = "10창구 + 미지 에러 렌더".
+#   텔레그램·이메일·log_action 은 전부 patch — 실발송 0. 워크트리(.env 없음)에선 DATABASE_URL="sqlite:///:memory:" 를 앞에 붙인다
 ```
 
 ⚠ **잡 이름은 두 곳에 있고 라이브는 스케줄러 쪽을 쓴다** (세션 409 HIGH-1):
@@ -248,7 +251,7 @@ cd backend && PYTHONPATH=. PYTHONUTF8=1 python scripts/verify_alert_wording.py
 | K-apt 단지 매칭 | 매월 21일 06:10 | 국토부 K-apt 전국 목록 ↔ 우리 단지 4중 게이트 매칭. 네이버 0 (상세: [§잡 상세 — K-apt 단지 매칭](#잡-상세--k-apt-단지-매칭)) |
 | K-apt 관리비 수집 | 매일 06:20 | kapt_complex_map 중 이번 수집월 행 없는 단지 오래된 순 500개 × 22항목(공용 V3 17 + 개별 V3 5, 관리비 두 서비스도 **운영계정(10만/일) 전환 완료** → `KAPT_COST_BATCH_SIZE` 기본 500 으로 운영 중(2026-08-31 첫 정기 실행 실측: 하루 kapt 32,035콜, 실패 0·쿼터 에러 0). 개발계정 시절엔 한도가 서비스당 5,000/일 오퍼레이션 합산이라(공개 페이지 실측 2026-08-29 — 옛 "op당 1,000" 추정은 틀림) 배치 500 이면 공용만 8,500콜로 초과해 250 으로 낮춰 돌렸었고, 그 .env 오버라이드는 제거됨) 합산 → kapt_management_costs 월별 upsert(공개 지연 3개월 실측, target_month 기준으로 폴백월 무한 재조회 차단). 500×22×0.3s≈55min+지연이라 1h 경계 → _STALE_HOURS_BY_TYPE 3h. 단지 상세 GET /api/complexes/{no}/kapt(12h 캐시)·기본정보 "월 관리비(세대당)·복도유형" 표시 원천. 배치 500 기준 하루 11,000콜 — 전역 쿼터가 아닌 kapt 버킷(6만 상한) 소모. **호출 실패 단지는 저장 안 하고(반쪽 총액 방지) 다음 회차 재시도, 한도 초과(22)는 배치 조기 중단 + 잡 failed.** 네이버 0, 토글 KAPT_ENABLED 공유 |
 | data.go.kr API 버전 감시 | 일요일 06:40 | 코드가 쓰는 엔드포인트 12종 생사 확인 → dead 시 텔레그램 (상세: [§잡 상세 — data.go.kr API 버전 감시](#잡-상세--datagokr-api-버전-감시)) |
-| 크롤링 모니터 | 10분 interval | crawl_jobs 정합성 점검 → 텔레그램. **알림은 전부 쉬운 우리말**(§텔레그램 알림 문구) (상세: [§잡 상세 — 크롤링 모니터](#잡-상세--크롤링-모니터)) |
+| 크롤링 모니터 | 10분 interval | crawl_jobs 정합성 점검 → 텔레그램. **알림은 전부 쉬운 우리말**(§텔레그램 알림 문구). **stale running 잡을 `_STALE_HOURS_BY_TYPE` 임계로 자동 cancelled(`swept by monitor`)** — 부팅 스윕(5분)이 못 잡은 "재시작 직전 시작 잡"도 1h 뒤 여기서 정리된다(세션 410 정정, release.md §3-0) (상세: [§잡 상세 — 크롤링 모니터](#잡-상세--크롤링-모니터)) |
 
 ⚠ **위 표의 "잡 이름"은 스케줄러 등록 id(`scheduler.py`의 `id="..."`)이고, DB
 `crawl_jobs.job_type` 컬럼에 실제로 저장되는 값은 이와 다를 수 있다** — 이 프로젝트
@@ -363,7 +366,7 @@ NEMC 응급의료기관 API. **배치 = 전량**(`EMERGENCY_BATCH_SIZE=0`, 세�
 
 **주기**: 10분 interval
 
-crawl_jobs 정합성 점검 후 텔레그램 알림. ⚠ **알림 문구는 전부 쉬운 우리말이어야 한다**(사장님 지시 2026-09-15, 세션 407 PR #524) — 사전 = `crawler/plain_words.py`(작업이름 28종 `JOB_WORDS` + 에러 번역 `explain_error` + 행동문구 `action_words` + 상태어 `status_words` + 옛 문장 변환 `plainify_detail`). **새 job_type 을 만들면 `JOB_WORDS` 와 FE `crawl-job-labels.ts` 양쪽에 등록**(`tests/test_plain_words.py` 가 양방향 대조로 차단). 알림 문구에 영문 job_type·개발자 에러 원문(psycopg2 등)·`batch`·`running`·`red` 를 다시 넣지 말 것. 저장된 옛 `monitor_alerts.detail` 은 **발송 직전** `plainify_detail()` 로 변환한다(DB 무변경). (운영 토글 MONITOR_ENABLED, 2026-05-25 세션 229 30→10→20 답습 후 현 .env MONITOR_INTERVAL_MIN=10 운영. 기본 _STALE_HOURS=1h — 정상적으로 오래 도는 잡은 _STALE_HOURS_BY_TYPE 예외 의무: public_trade_data 3h(세션 266)·official_price 16h(세션 369 오탐 sweep 실사고 — 새 장시간 잡 추가 시 이 표 동반 등록)·kapt_match 8h·kapt_costs 3h(세션 388 — 배포 전 사전 등록, kapt_match 는 basis 콜 소요 재산정으로 4h→8h). _FAILED_WINDOW_HOURS=24. 전부 monitor.py 상단 상수, 인터벌 격하 무관) **실패 버스트 경보**(세션 396 PR #486): 60분 창 안 같은 job_type failed ≥5 이면 `crawl_failed_burst:<job_type>` 1건 발화 — job_type 단위 "자가복구" 선필터(마지막 failed 뒤 completed 가 있으면 skip)가 배치 부분 실패(9/9 14:45 13/50)를 통째로 은폐하던 사각 보완. 같은 job_type 의 `crawl_failed` 가 활성이면 생략, 쿨다운 6h 공통, 창 이탈 해소 문구는 "추가 실패만 멈춤"(정상 복구 오보 방지), 같은 job_type 의 crawl_failed 로 승계돼 사라진 경우는 "같은 작업의 실패 경보로 이어짐" 문구(세션 397 — 승계를 창 이탈로 오보하던 결함).
+crawl_jobs 정합성 점검 후 텔레그램 알림. ⚠ **알림 문구는 전부 쉬운 우리말이어야 한다**(사장님 지시 2026-09-15, 세션 407 PR #524) — 사전 = `crawler/plain_words.py`(작업이름 `JOB_WORDS` — 개수는 `len(JOB_WORDS)` 로 센다, 세션 410 실측 30 + 에러 번역 `explain_error` + 행동문구 `action_words` + 상태어 `status_words` + 옛 문장 변환 `plainify_detail`). **새 job_type 을 만들면 `JOB_WORDS` 와 FE `crawl-job-labels.ts` 양쪽에 등록**(`tests/test_plain_words.py` 가 양방향 대조로 차단). 알림 문구에 영문 job_type·개발자 에러 원문(psycopg2 등)·`batch`·`running`·`red` 를 다시 넣지 말 것. 저장된 옛 `monitor_alerts.detail` 은 **발송 직전** `plainify_detail()` 로 변환한다(DB 무변경). (운영 토글 MONITOR_ENABLED, 2026-05-25 세션 229 30→10→20 답습 후 현 .env MONITOR_INTERVAL_MIN=10 운영. 기본 _STALE_HOURS=1h — 정상적으로 오래 도는 잡은 _STALE_HOURS_BY_TYPE 예외 의무: public_trade_data 3h(세션 266)·official_price 16h(세션 369 오탐 sweep 실사고 — 새 장시간 잡 추가 시 이 표 동반 등록)·kapt_match 8h·kapt_costs 3h(세션 388 — 배포 전 사전 등록, kapt_match 는 basis 콜 소요 재산정으로 4h→8h). _FAILED_WINDOW_HOURS=24. 전부 monitor.py 상단 상수, 인터벌 격하 무관) **실패 버스트 경보**(세션 396 PR #486): 60분 창 안 같은 job_type failed ≥5 이면 `crawl_failed_burst:<job_type>` 1건 발화 — job_type 단위 "자가복구" 선필터(마지막 failed 뒤 completed 가 있으면 skip)가 배치 부분 실패(9/9 14:45 13/50)를 통째로 은폐하던 사각 보완. 같은 job_type 의 `crawl_failed` 가 활성이면 생략, 쿨다운 6h 공통, 창 이탈 해소 문구는 "추가 실패만 멈춤"(정상 복구 오보 방지), 같은 job_type 의 crawl_failed 로 승계돼 사라진 경우는 "같은 작업의 실패 경보로 이어짐" 문구(세션 397 — 승계를 창 이탈로 오보하던 결함).
 
 ## 관찰성 인프라 (세션 340 — 운영 중 문제를 볼 수 있게)
 

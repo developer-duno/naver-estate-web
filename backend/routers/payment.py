@@ -79,6 +79,14 @@ def _alert_operator_throttled(key: str, message: str) -> None:
         logger.warning("[payment] 운영자 알림 발송 실패(무시): %s", type(e).__name__)
 
 
+def _mask_email(email: str) -> str:
+    """운영자 알림용 마스킹 — 앞 두 글자 + *** + @도메인 (사장님이 /admin/users 에서 찾기엔 충분, 유출 피해는 0에 수렴)."""
+    local, sep, domain = email.partition("@")
+    if not sep:
+        return email[:2] + "***"
+    return local[:2] + "***" + "@" + domain
+
+
 def _require_portone_config() -> None:
     """PortOne env 미설정 시 503 (사장님 가입 전이거나 미주입). deps._verify_token_remote 패턴."""
     if not (PORTONE_API_SECRET and PORTONE_STORE_ID and PORTONE_CHANNEL_KEY):
@@ -420,12 +428,13 @@ def _handle_refund_webhook(db: Session, payment: Payment, event_type: str) -> di
         # payment_id 별 쿨다운 key — 서로 다른 결제는 각각 알림(부분환불은 빈도 낮음),
         # 같은 결제 중복 웹훅은 10분 억제.
         # ⚠ 쉬운 우리말만. 그 밖의 식별자는 아래 log_action 감사기록에 남는다(세션 409).
-        #    단 **회원 이메일은 일부러 싣는다**(세션 410 적대검증 MEDIUM): 이 알림은
-        #    사장님이 직접 손으로 처리해야 하는 유일한 결제 알림인데, 결제번호만으로는
-        #    누구인지 알 수 없어 관리자 화면(/admin/users)에서 찾을 방법이 없었다.
-        #    이메일은 사장님이 그 화면에서 실제로 보는 값이라 바로 대조가 된다.
+        #    회원 식별은 **마스킹한 이메일**로 싣는다(세션 410 검사관 D5): 텔레그램은
+        #    제3자 서버에 평문으로 남고 전달된 메시지는 회수할 수 없어, 회원 이메일 전체를
+        #    그대로 보내면 알림 하나가 개인정보 유출 경로가 된다. 앞 두 글자 + 도메인이면
+        #    사장님이 /admin/users 에서 찾기엔 충분하고, 온전한 신원은 log_action 감사기록에
+        #    남아 추적에도 지장이 없다.
         profile = db.get(UserProfile, payment.user_id)
-        who = profile.email if profile and profile.email else "이메일을 못 찾은 회원"
+        who = _mask_email(profile.email) if profile and profile.email else "이메일을 못 찾은 회원"
         _alert_operator_throttled(
             f"partial_cancel:{payment.payment_id}",
             "[서버 알림] ⚠ 결제 금액 일부가 환불됐어요\n\n"

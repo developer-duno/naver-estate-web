@@ -151,12 +151,33 @@ def test_html_escape_in_error_message():
     그 필드로는 이스케이프가 **작동해도 관측이 안 되므로** 가드가 장식이 된다.
     `job_type` 은 사전에 없으면 원문이 그대로 흘러 `_esc` 를 실제로 통과하는 값이라
     (job_words 폴백), 이스케이프가 깨지면 이 단언이 FAIL 한다.
+
+    ⚠ 다만 `job_type` 경로는 **운영에서는 도달하지 않는다**(세션 410 검사관 LOW):
+    사전에 없는 job_type 은 `tests/test_plain_words.py` 가 CI 에서 막으므로 폴백이
+    실제로 쓰일 일이 없다. 그래서 운영 데이터가 실제로 닿는 필드 하나를 함께 본다 —
+    해소 알림의 `reason_detail`(`_resolved_line`, reason="unconfirmed")은
+    monitor 가 만든 문자열이 `_esc` 를 지나 그대로 본문에 실리는 자리다.
     """
     data = {"job_type": "<script>alert(1)</script>", "count": 1, "error": "boom",
             "processed": 0, "total": 0}
     msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
     assert "<script>" not in msg
     assert "&lt;script&gt;" in msg
+
+    # 운영 도달 경로 — 해소 알림의 reason_detail
+    resolved = format_issue_message(
+        "crawl_failed",
+        {
+            "alert_key": "crawl_failed:complex_articles",
+            "detail": "이전 장애",
+            "reason": "unconfirmed",
+            "reason_detail": "<script>alert(1)</script>",
+        },
+        event="resolved",
+        header_ctx=_ctx(0),
+    )
+    assert "<script>" not in resolved, resolved
+    assert "&lt;script&gt;" in resolved, resolved
 
 
 def test_resolved_event_uses_check_emoji():

@@ -132,17 +132,35 @@ def test_explain_error_translates_billing_reasons():
     """
     assert "카드 결제가 승인되지 않았어요" in explain_error("결제 미완료 (status=FAILED)")
     # 상태값마다 원인이 다르다 — 처리 중·취소됨을 "승인 안 됨" 으로 뭉개면 틀린 안내
-    # (세션 410 결제 검사관 MEDIUM). 목록에 없는 상태는 추측하지 않고 "처음 보는 문제" 로.
+    # (세션 410 결제 검사관 MEDIUM). 목록에 없는 상태는 원인을 추측하지 않되,
+    # **결제 맥락은 지키는** 포괄 규칙이 받는다(D3 — 옛 코드는 "처음 보는 문제" 로
+    # 떨어져 결제 알림인지조차 사라졌다).
     assert "아직 처리 중" in explain_error("결제 미완료 (status=PENDING)")
     assert "아직 처리 중" in explain_error("결제 미완료 (status=READY)")
     assert "취소됐어요" in explain_error("결제 미완료 (status=CANCELLED)")
     assert "취소됐어요" in explain_error("결제 미완료 (status=PARTIAL_CANCELLED)")
     unknown = explain_error("결제 미완료 (status=SOMETHING_NEW)")
-    assert unknown.startswith("처음 보는 문제예요") and "SOMETHING_NEW" not in unknown, unknown
+    assert "결제가 완료되지 않았어요" in unknown and "SOMETHING_NEW" not in unknown, unknown
+    # `_portone_status()` 가 빈 문자열을 돌려주는 실경로 (routers/payment.py)
+    empty = explain_error("결제 미완료 (status=)")
+    assert "결제가 완료되지 않았어요" in empty, empty
     assert "결제 대행 회사" in explain_error("결제 호출 실패: boom")
     # 규칙이 맨 앞이라 예외 본문의 timeout 낱말보다 결제 접두어가 이긴다(결제 맥락 보존, 세션 410)
     assert "결제 대행 회사" in explain_error("결제 호출 실패: ReadTimeout")
     assert "결제 대행 회사" in explain_error("결제 호출 실패: HTTP 502 Bad Gateway")
+
+
+def test_unknown_sentence_has_no_internal_period():
+    """'처음 보는 문제' 문장에는 마침표가 **맨 끝 하나뿐**이어야 한다 (세션 410 검사관 MEDIUM).
+
+    해소 알림은 `plainify_detail()` 이 꼬리 마침표만 떼고 " — 정상으로 돌아왔습니다" 를
+    이어 붙인다. 문장 중간에 마침표가 있으면 "…문제예요. …남아 있어요 — 정상으로…"
+    처럼 한 줄 안에서 흐름이 두 번 끊긴다(세션 407 이 같은 증상을 고쳤던 자리).
+    """
+    out = explain_error("SomethingNew: zzz")
+    assert out.endswith("."), out
+    assert out.count(".") == 1, out
+    assert "." not in out[:-1], out
 
 
 def test_explain_error_empty_is_empty():

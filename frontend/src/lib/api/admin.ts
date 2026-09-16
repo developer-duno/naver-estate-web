@@ -187,6 +187,8 @@ export interface RecrawlProgress {
     started_at: string | null;
     completed_at: string | null;
     error_message: string | null;
+    /** error_message 의 쉬운 우리말 한 줄 (BE 생성, 세션 411). 옛 백엔드는 안 보낸다. */
+    error_plain?: string | null;
   } | null;
 }
 

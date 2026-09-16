@@ -17,6 +17,7 @@ from fastapi import Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from auth.audit import log_action
+from crawler.plain_words import explain_stored_error
 from db.models import Complex, CrawlJob
 from deps import get_admin_user, get_db
 
@@ -267,6 +268,8 @@ def get_recrawl_progress(
             "started_at": parent.started_at.isoformat() if parent.started_at else None,
             "completed_at": parent.completed_at.isoformat() if parent.completed_at else None,
             "error_message": parent.error_message,
+            # 원문 옆 우리말 한 줄 (scheduler.py last_run 과 같은 방식, 세션 411)
+            "error_plain": explain_stored_error(parent.error_message),
         }
     }
 

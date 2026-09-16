@@ -149,8 +149,11 @@ export default function BulkRecrawlCard({ getToken }: Props) {
               }}
             />
           </div>
+          {/* 쉬운 우리말을 보여주고 원문은 title 로 (세션 411, SchedulerMonitor 와 같은 방식) */}
           {progressQuery.data.job.error_message && (
-            <p className="mt-1 text-[11px] text-red-700">{progressQuery.data.job.error_message}</p>
+            <p className="mt-1 text-[11px] text-red-700" title={progressQuery.data.job.error_message}>
+              {progressQuery.data.job.error_plain ?? progressQuery.data.job.error_message}
+            </p>
           )}
         </div>
       )}

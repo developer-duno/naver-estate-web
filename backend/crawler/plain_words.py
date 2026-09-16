@@ -97,6 +97,9 @@ def job_words(job_type) -> str:
 # (세션 407, 최근 14일 + monitor_alerts 저장분 22건 전수). 실제로 나온 적 없는
 # 에러를 미리 번역해 두지 않는다 — 안 맞는 번역이 오히려 오해를 만든다.
 #
+# 부팅 스윕·모니터 스윕이 남기는 정리 문장 (아래 규칙 + explain_stored_error ⓪ 공용).
+STALE_SWEPT_WORDS = "작업이 오래 멈춰 있어 자동으로 정리됐어요."
+
 # (정규식, 사장님이 읽을 한 줄)  — 위에서부터 먼저 맞는 것을 쓴다.
 _ERROR_RULES: list[tuple[re.Pattern, str]] = [
     # ── 결제 사유 2종 — billing_charge._mark_retry 가 만드는 우리 접두어 (세션 410) ──
@@ -191,6 +194,18 @@ _ERROR_RULES: list[tuple[re.Pattern, str]] = [
         re.compile(r"timed? ?out|ReadTimeout|ConnectTimeout", re.I),
         "상대 서버가 제때 답하지 않아 기다리다 멈췄어요.",
     ),
+    (
+        # 관리자 화면(스케줄러 표)에 가장 많이 뜨는 값 — 부팅 스윕·모니터 스윕이 붙이는
+        # 영문 마커다(최근 90일 약 36건, `main.py` / `crawler/monitor.py`).
+        # ⚠ 이 규칙이 없으면 `_is_plain_korean_tail` 이 이 영문을 "이미 우리말"로 오판한다
+        #    — 개발자 흔적 정규식(`_DEV_ERROR_HINT`)에 걸리는 글자가 하나도 없어서다.
+        #    그러면 `explain_stored_error` 3단계에서 원문이 그대로 화면에 남는다.
+        # ⚠ 앵커(`^`)를 뗄 수 없다 — 이 마커는 원문 **뒤에** 붙는 형태가 더 흔한데
+        #    (`원문 | stale running — …`), 앵커를 떼면 앞의 진짜 사유가 통째로 지워진다.
+        #    붙은 형태는 `explain_stored_error` ⓪단계가 갈라서 처리한다(세션 411).
+        re.compile(r"^stale running"),
+        STALE_SWEPT_WORDS,
+    ),
 ]
 
 
@@ -203,6 +218,16 @@ def _translate_known(raw) -> str | None:
         if pattern.search(text):
             return plain
     return None
+
+
+# 못 알아본 에러에 쓰는 고정 문장.
+# ⚠ 한 문장 안에 마침표를 **두 번** 넣지 않는다. 이 문장은 해소 알림에서
+#    `plainify_detail()` 이 꼬리 마침표만 떼고 " — 정상으로 돌아왔습니다" 를 붙이므로,
+#    내부 마침표가 있으면 "…문제예요. …남아 있어요 — 정상으로…" 처럼 중간에 끊긴다
+#    (세션 407 이 같은 증상을 고쳤던 자리 — 세션 410 검사관 MEDIUM 재발 지적).
+# 상수로 뺀 까닭: 화면용 `explain_stored_error` 가 **로그 없이** 같은 문장을 써야 한다
+#    (세션 411 — 아래 explain_stored_error docstring ④).
+UNKNOWN_ERROR_WORDS = "처음 보는 문제예요(자세한 내용은 서버 기록에 남아 있어요)."
 
 
 def explain_error(raw) -> str:
@@ -231,11 +256,7 @@ def explain_error(raw) -> str:
     # crawl_jobs 뒤지기뿐이다. INFO 인 이유: 이 경로는 해소 알림 재렌더·검증 스크립트
     # 에서도 지나가므로 WARNING 이면 멀쩡한 실행이 경보처럼 보인다.
     logger.info("[plain_words] 번역 사전에 없는 에러 원문: %s", text[:300])
-    # ⚠ 한 문장 안에 마침표를 **두 번** 넣지 않는다. 이 문장은 해소 알림에서
-    #    `plainify_detail()` 이 꼬리 마침표만 떼고 " — 정상으로 돌아왔습니다" 를 붙이므로,
-    #    내부 마침표가 있으면 "…문제예요. …남아 있어요 — 정상으로…" 처럼 중간에 끊긴다
-    #    (세션 407 이 같은 증상을 고쳤던 자리 — 세션 410 검사관 MEDIUM 재발 지적).
-    return "처음 보는 문제예요(자세한 내용은 서버 기록에 남아 있어요)."
+    return UNKNOWN_ERROR_WORDS
 
 
 # ── 3. 행동 안내 — 사장님이 실제로 할 수 있는 것만 ────────────────────────
@@ -458,3 +479,66 @@ _DEV_ERROR_HINT = re.compile(
 def _is_plain_korean_tail(text: str) -> bool:
     """꼬리 문구가 이미 사람 말인지 판정 — 개발자 에러 흔적이 없으면 True."""
     return not _DEV_ERROR_HINT.search(text)
+
+
+def explain_stored_error(raw) -> str:
+    """저장된 `crawl_jobs.error_message` → 관리자 화면에 보여줄 한 줄 (세션 411).
+
+    화면(스케줄러 표·일괄 재크롤 진행률)에 뜨는 값도 알림과 같은 기준으로 다룬다
+    (infra.md §텔레그램 알림 문구: "error_message 도 관리자 화면에 보이므로 같은 기준").
+    원문은 지우지 않는다 — 라우터가 raw 를 그대로 함께 내보내고 화면은 `title` 로 남긴다.
+
+    판정 순서 (`plainify_detail` ②단계와 **같은 순서, 같은 이유**):
+      ⓪ 뒤에 붙은 스윕 마커 분리 — 앞의 원문이 진짜 사유라 그것부터 판정한다
+      ① 빈값 → 빈 문자열 (호출부가 "메시지 없음" 을 스스로 판단하게)
+      ② 아는 에러인가 — 실측 규칙에 맞으면 우리말이 섞여 있든 말든 번역한다
+      ③ 규칙에 안 맞을 때만 "이미 사람 말인가" — 맞으면 **원문 그대로**
+      ④ 그래도 아니면 고정 문장, 로그는 남기지 않는다 — 화면 폴링(60초·3~15초)마다
+         수집 로그가 반복돼 P1-2 재료를 오염시키기 때문. 원문은 crawl_jobs 에 이미 있다
+
+    ⚠ ②와 ③의 순서를 거꾸로 하면 실제로 샌다(세션 407 실측). 저장값 중에는
+      `(s378 수동 정정) 14:54 statement timeout 연쇄 크래시` 처럼 **우리말이 섞인 영문**이
+      있는데, ③을 먼저 보면 "사람 말" 로 오판해 번역을 건너뛰고 정작 사장님이 모르는
+      `statement timeout` 이 화면에 그대로 남는다.
+
+    ③이 필요한 까닭은 반대 방향이다. 저장값 상당수가 이미 우리말 문장
+    (`3/50개 단지 실패`·`필드 드리프트 위반: …`)인데, ③ 없이 ④로 떨어뜨리면 멀쩡한
+    설명이 "처음 보는 문제예요" 로 뭉개져 정보가 오히려 줄어든다.
+    """
+    if not raw:
+        return ""
+    text = str(raw).strip()
+    if not text:
+        return ""
+
+    # `.strip()` 뒤라 앞머리가 비어 있으면 구분자의 앞 공백도 함께 깎인다
+    # (`" | stale running …"` → `"| stale running …"`). 실제로는 `COALESCE(… , '')` 가
+    # 원문 없는 경우 순수형을 만들어 이 모양이 안 나오지만, 한 글자 차이로 영문이
+    # 새는 자리라 두 모양을 함께 본다.
+    head, sep, _ = text.partition(" | stale running")
+    if not sep and text.startswith("| stale running"):
+        head, sep = "", "| stale running"
+    if sep:
+        # 부팅 스윕·모니터 스윕이 `원문 || ' | ' || 'stale running — …'` 로 뒤에 붙인다
+        # (main.py / crawler/monitor.py, #443). 앞의 원문이 진짜 사유라 그것부터 판정하고
+        # 정리 문장을 뒤에 잇는다 — 앵커 규칙만으로는 이 형태가 영문 그대로 샜다
+        # (세션 411 검사관 HIGH-1).
+        # 되돌이(재귀) 깊이는 1이다: `partition` 은 **처음 나온** 구분자에서 자르므로
+        # head 에는 그 구분자가 다시 들어갈 수 없고, 위 `startswith` 보조 분기는 head 를
+        # 빈 문자열로 만들어 두 번째 호출이 빈값 검사에서 바로 끝난다 — 어느 경로든
+        # 두 번째 호출은 이 분기를 지나친다.
+        head_plain = explain_stored_error(head)
+        if not head_plain:
+            return STALE_SWEPT_WORDS
+        return f"{head_plain.rstrip('.')} — 그 뒤 {STALE_SWEPT_WORDS}"
+
+    plain = _translate_known(text)
+    if plain is not None:
+        return plain
+    if _is_plain_korean_tail(text):
+        return text
+    # ⚠ `explain_error(text)` 를 부르지 않는다 — 그 함수의 INFO 로그는 "새 규칙 후보"를
+    #    모으는 자리인데, 이 경로는 관리자 화면 폴링(스케줄러 60초·재크롤 진행률 3~15초)이
+    #    페이지를 열어둔 내내 반복 호출한다. 같은 원문이 수십 번 쌓여 "3번 이상 나온 원문
+    #    = 규칙 후보" 집계가 화면을 켜둔 시간에 좌우된다. 원문은 crawl_jobs 에 이미 있다.
+    return UNKNOWN_ERROR_WORDS

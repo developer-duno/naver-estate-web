@@ -162,6 +162,59 @@ describe("SchedulerMonitor 컴포넌트", () => {
     });
   });
 
+  /** 펼침 영역은 쉬운 우리말(error_plain)을 보여주고 원문은 title 로 남긴다 (세션 411) */
+  it("에러 펼침에 우리말이 보이고 원문은 title 에 남는다", async () => {
+    const raw =
+      "(psycopg2.errors.QueryCanceled) canceling statement due to statement timeout";
+    const plain = "데이터베이스가 너무 오래 걸려 스스로 멈췄어요.";
+    mockGetStatus.mockResolvedValueOnce({
+      ...MOCK_RESPONSE,
+      jobs: [
+        {
+          ...MOCK_RESPONSE.jobs[1],
+          last_run: {
+            status: "failed",
+            started_at: new Date(Date.now() - 7200_000).toISOString(),
+            completed_at: new Date(Date.now() - 7100_000).toISOString(),
+            duration_seconds: 100,
+            total_items: 0,
+            processed_items: 0,
+            error_message: raw,
+            error_plain: plain,
+          },
+        },
+      ],
+    });
+    renderWithProvider();
+    await waitFor(() => {
+      expect(screen.getByText("범죄통계")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("범죄통계").closest("tr")!);
+
+    await waitFor(() => {
+      expect(screen.getByText(plain)).toBeInTheDocument();
+    });
+    // 개발자 에러 원문은 화면 글자로 보이지 않는다
+    expect(screen.queryByText(raw)).toBeNull();
+    // 다만 추적용 원문은 title 로 남아 있어야 한다
+    expect(screen.getByText(plain).getAttribute("title")).toBe(raw);
+  });
+
+  /** 옛 백엔드(error_plain 없음)면 원문으로 폴백 — 화면이 비지 않는다 */
+  it("error_plain 이 없으면 원문으로 폴백한다", async () => {
+    const raw = "API 연결 실패: timeout";
+    mockGetStatus.mockResolvedValueOnce(MOCK_RESPONSE);
+    renderWithProvider();
+    await waitFor(() => {
+      expect(screen.getByText("범죄통계")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("범죄통계").closest("tr")!);
+
+    await waitFor(() => {
+      expect(screen.getByText(raw)).toBeInTheDocument();
+    });
+  });
+
   /** API 에러 시 에러 메시지 표시 */
   it("API 에러 시 에러 UI가 표시된다", async () => {
     mockGetStatus.mockRejectedValueOnce(new Error("네트워크 에러"));

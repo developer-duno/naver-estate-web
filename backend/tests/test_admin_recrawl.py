@@ -325,3 +325,37 @@ def test_recrawl_single_force_bypasses_duplicate(client, db):
         )
         assert res.status_code == 200
         mock_thread.assert_called_once()
+
+
+# ── 진행률 응답 — 화면에 뜨는 에러 문구 (세션 411) ──
+
+
+def test_recrawl_progress_error_plain_is_korean(client, db):
+    """부모 잡의 영문 에러가 화면용 우리말 한 줄로 함께 온다.
+
+    원문(`error_message`)은 그대로 둔다 — 화면이 title 로 남기고 추적 근거가 된다.
+    """
+    from datetime import datetime, timezone
+
+    from db.models import CrawlJob
+
+    _make_profile(db, "sp1", role="admin")
+    db.add(CrawlJob(
+        job_type="bulk_recrawl",
+        scheduler_job_id="admin_recrawl",
+        status="failed",
+        total_items=50,
+        processed_items=13,
+        error_message="(psycopg2.errors.QueryCanceled) canceling statement due to statement timeout",
+        started_at=datetime.now(timezone.utc),
+        completed_at=datetime.now(timezone.utc),
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/recrawl/progress", headers=_auth(_token("sp1")))
+    assert res.status_code == 200
+    job = res.json()["job"]
+    assert job is not None
+    assert job["error_plain"] == "데이터베이스가 너무 오래 걸려 스스로 멈췄어요."
+    # 원문은 보존 — 없애면 추적 근거가 사라진다
+    assert "psycopg2" in job["error_message"]

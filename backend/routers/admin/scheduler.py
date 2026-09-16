@@ -9,6 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from crawler.api_version_monitor import PROBE_REGISTRY
+from crawler.plain_words import explain_stored_error
 from db.models import CrawlJob
 from deps import get_admin_user, get_db
 from shared.constants import NAVER_LAND_BASE
@@ -252,6 +253,9 @@ def get_scheduler_status(
                 "total_items": last.total_items,
                 "processed_items": last.processed_items,
                 "error_message": last.error_message,
+                # 원문 옆에 우리말 한 줄을 함께 보낸다 — 화면은 이쪽을 보여주고 원문은
+                # title 로 남긴다(infra.md §텔레그램 알림 문구, 세션 411).
+                "error_plain": explain_stored_error(last.error_message),
             }
 
         # 다음 실행 시각 + schedule 문구 — 둘 다 스케줄러 인스턴스의 같은 job 에서 조회

@@ -65,7 +65,7 @@ export default function SchedulerMonitor({ token }: Props) {
   if (error) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-        스케줄러 상태 조회 실패: {(error as Error).message}
+        스케줄러 상태를 불러오지 못했어요.
       </div>
     );
   }

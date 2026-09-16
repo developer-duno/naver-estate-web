@@ -78,7 +78,7 @@ export default function ErrorRateChart({ getToken }: Props) {
 
       {error && (
         <p className="text-xs text-red-700">
-          에러율 데이터를 불러오지 못했습니다: {error.message}
+          에러율 자료를 불러오지 못했어요.
         </p>
       )}
 

@@ -91,7 +91,7 @@ export default function TrafficCard({ getToken }: Props) {
 
       {error && (
         <p className="text-xs text-red-700">
-          트래픽 통계를 불러오지 못했습니다: {error.message}
+          트래픽 통계를 불러오지 못했어요.
         </p>
       )}
 

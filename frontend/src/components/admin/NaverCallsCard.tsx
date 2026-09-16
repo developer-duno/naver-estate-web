@@ -124,7 +124,7 @@ export default function NaverCallsCard({ getToken }: Props) {
 
       {error && (
         <p className="text-xs text-red-700">
-          호출 통계를 불러오지 못했습니다: {error.message}
+          호출 통계를 불러오지 못했어요.
         </p>
       )}
 

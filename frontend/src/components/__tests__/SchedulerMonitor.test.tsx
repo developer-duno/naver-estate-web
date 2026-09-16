@@ -167,8 +167,10 @@ describe("SchedulerMonitor 컴포넌트", () => {
     mockGetStatus.mockRejectedValueOnce(new Error("네트워크 에러"));
     renderWithProvider();
     await waitFor(() => {
-      expect(screen.getByText(/스케줄러 상태 조회 실패/)).toBeInTheDocument();
+      expect(screen.getByText(/스케줄러 상태를 불러오지 못했어요/)).toBeInTheDocument();
     });
+    // 개발자 에러 원문은 사장님 화면에 노출하지 않는다 (세션 410)
+    expect(screen.queryByText(/네트워크 에러/)).toBeNull();
   });
 
   /** 출처(source)가 작업명 아래 보조 텍스트로 표시된다 (세션 402) */

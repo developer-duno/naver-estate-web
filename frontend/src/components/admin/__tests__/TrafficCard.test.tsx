@@ -193,9 +193,11 @@ describe("TrafficCard 컴포넌트", () => {
     renderWithProvider();
     await waitFor(() => {
       expect(
-        screen.getByText(/트래픽 통계를 불러오지 못했습니다.*network down/),
+        screen.getByText(/트래픽 통계를 불러오지 못했어요/),
       ).toBeInTheDocument();
     });
+    // 에러는 UI 까지 전파되지만(삼키지 않음), 개발자 에러 원문은 일부러 안 그린다 (세션 410)
+    expect(screen.queryByText(/network down/)).toBeNull();
   });
 
   it("업타임 24시간 미만이면 경고색 뱃지", async () => {

@@ -93,7 +93,7 @@ export default function SchedulerCalendarPage() {
           </div>
         ) : query.error ? (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-            캘린더 조회 실패: {query.error.message}
+            캘린더를 불러오지 못했어요.
           </div>
         ) : query.data ? (
           <SchedulerCalendarView

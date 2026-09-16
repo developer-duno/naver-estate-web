@@ -42,7 +42,7 @@ export default function QuotaStatusCard({ token }: Props) {
       }
     >
       {isLoading && !data && <div className="h-[80px] bg-gray-100 animate-pulse rounded" />}
-      {error && <p className="text-xs text-red-700">오늘 사용량을 불러오지 못했어요: {error.message}</p>}
+      {error && <p className="text-xs text-red-700">오늘 사용량을 불러오지 못했어요.</p>}
       {data && (
         <div className="space-y-2">
           {data.count < 0 ? (

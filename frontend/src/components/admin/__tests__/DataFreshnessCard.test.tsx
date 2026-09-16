@@ -106,8 +106,10 @@ describe("DataFreshnessCard 컴포넌트", () => {
     mockGet.mockRejectedValueOnce(new Error("network down"));
     renderCard();
     await waitFor(() => {
-      expect(screen.getByText(/불러오기 실패.*network down/)).toBeInTheDocument();
+      expect(screen.getByText(/데이터 신선도를 불러오지 못했어요/)).toBeInTheDocument();
     });
+    // 개발자 에러 원문은 사장님 화면에 노출하지 않는다 (세션 410)
+    expect(screen.queryByText(/network down/)).toBeNull();
   });
 
   it("토큰이 빈 문자열이면 fetch 실행하지 않음", async () => {

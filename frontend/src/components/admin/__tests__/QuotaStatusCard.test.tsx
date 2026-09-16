@@ -75,6 +75,7 @@ describe("QuotaStatusCard 컴포넌트", () => {
     mockGet.mockRejectedValueOnce(new Error("network error"));
     renderCard();
     await waitFor(() => expect(screen.getByText(/오늘 사용량을 불러오지 못했어요/)).toBeInTheDocument());
-    expect(screen.getByText(/network error/)).toBeInTheDocument();
+    // 개발자 에러 원문은 사장님 화면에 노출하지 않는다 (세션 410)
+    expect(screen.queryByText(/network error/)).toBeNull();
   });
 });

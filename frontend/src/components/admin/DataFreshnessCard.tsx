@@ -63,7 +63,7 @@ export default function DataFreshnessCard({ token }: Props) {
   if (error) {
     return (
       <AdminCard title="데이터 신선도" help={HELP_TEXT}>
-        <p className="text-sm text-red-600">불러오기 실패: {error.message}</p>
+        <p className="text-sm text-red-600">데이터 신선도를 불러오지 못했어요.</p>
       </AdminCard>
     );
   }

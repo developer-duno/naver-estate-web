@@ -48,7 +48,7 @@ export default function UsersSummary({ token }: Props) {
         className="border border-red-200 bg-red-50 rounded-lg p-3 mb-4 text-sm text-red-700"
         aria-label="사용자 요약 로드 실패"
       >
-        사용자 요약을 불러오지 못했습니다.
+        사용자 요약을 불러오지 못했어요.
       </div>
     );
   }

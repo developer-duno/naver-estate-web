@@ -119,8 +119,10 @@ describe("UsersSummary", () => {
 
     renderSummary();
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent("사용자 요약을 불러오지 못했습니다.");
+      expect(screen.getByRole("alert")).toHaveTextContent("사용자 요약을 불러오지 못했어요.");
     });
     expect(screen.getByRole("alert").className).toContain("bg-red-50");
+    // 개발자 에러 원문은 사장님 화면에 노출하지 않는다 (세션 410)
+    expect(screen.queryByText(/backend down/)).toBeNull();
   });
 });

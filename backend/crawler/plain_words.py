@@ -26,7 +26,10 @@
    키 누락은 `tests/test_plain_words.py` 가 FE 사전과 대조해 막는다.
 """
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 # ── 1. 작업 이름 — 영문 job_type → 사장님이 읽는 우리말 ──────────────────
 #
@@ -103,7 +106,11 @@ _ERROR_RULES: list[tuple[re.Pattern, str]] = [
     #   확실하다 — 구체 원인은 billing 로그(logger.warning)에 그대로 있다.
     #   상태값(PortOne SDK PaymentStatus)에 따라 원인이 다르다 — 처리 중·취소됨을 "승인 안 됨"
     #   으로 뭉개면 틀린 안내가 된다(세션 410 결제 검사관 MEDIUM). 목록에 없는 상태는
-    #   일부러 안 잡아 "처음 보는 문제" 로 흘려보낸다(추측 번역 금지).
+    #   **원인을 추측하지 않되 결제 맥락은 지키는** 맨 아래 포괄 규칙이 받는다 —
+    #   `_portone_status()` 가 빈 문자열을 돌려주면(`routers/payment.py`, SDK 응답에
+    #   status 가 없는 경우) `결제 미완료 (status=)` 가 만들어지는데, 옛 코드에선 이게
+    #   아무 규칙에도 안 맞아 "처음 보는 문제" 로 떨어져 **결제 알림인지조차 사라졌다**
+    #   (세션 410 결제 검사관 D3).
     (
         re.compile(r"결제 미완료 \(status=(?:PENDING|READY|VIRTUAL_ACCOUNT_ISSUED)\)"),
         "결제 대행 회사에서 아직 처리 중이라 결제가 확인되지 않았어요.",
@@ -115,6 +122,12 @@ _ERROR_RULES: list[tuple[re.Pattern, str]] = [
     (
         re.compile(r"결제 미완료 \(status=FAILED\)"),
         "카드 결제가 승인되지 않았어요(잔액 부족·한도 초과·카드 정지 등).",
+    ),
+    (
+        # 위 세 줄이 못 잡은 상태값(빈 문자열 포함)을 받는 포괄 규칙 — 반드시 셋 **뒤**다.
+        # 까닭은 추측하지 않되 "결제 문제"라는 맥락만은 남긴다.
+        re.compile(r"결제 미완료 \(status="),
+        "결제가 완료되지 않았어요(까닭은 서버 기록에 있어요).",
     ),
     (
         re.compile(r"결제 호출 실패"),
@@ -213,7 +226,16 @@ def explain_error(raw) -> str:
     plain = _translate_known(text)
     if plain is not None:
         return plain
-    return "처음 보는 문제예요. 자세한 내용은 서버 기록에 남아 있어요."
+    # 새 규칙 후보를 모으는 유일한 grep 자리 — 못 알아본 원문은 알림에 싣지 않으므로
+    # (위 docstring) 이 로그가 없으면 "어떤 말을 번역해야 하는지"를 뒤늦게 알 길이
+    # crawl_jobs 뒤지기뿐이다. INFO 인 이유: 이 경로는 해소 알림 재렌더·검증 스크립트
+    # 에서도 지나가므로 WARNING 이면 멀쩡한 실행이 경보처럼 보인다.
+    logger.info("[plain_words] 번역 사전에 없는 에러 원문: %s", text[:300])
+    # ⚠ 한 문장 안에 마침표를 **두 번** 넣지 않는다. 이 문장은 해소 알림에서
+    #    `plainify_detail()` 이 꼬리 마침표만 떼고 " — 정상으로 돌아왔습니다" 를 붙이므로,
+    #    내부 마침표가 있으면 "…문제예요. …남아 있어요 — 정상으로…" 처럼 중간에 끊긴다
+    #    (세션 407 이 같은 증상을 고쳤던 자리 — 세션 410 검사관 MEDIUM 재발 지적).
+    return "처음 보는 문제예요(자세한 내용은 서버 기록에 남아 있어요)."
 
 
 # ── 3. 행동 안내 — 사장님이 실제로 할 수 있는 것만 ────────────────────────

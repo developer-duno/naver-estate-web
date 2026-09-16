@@ -474,8 +474,10 @@ def test_webhook_partial_cancel_alerts_no_rollback(client, db):
     assert res.status_code == 200
     assert res.json().get("partial_cancel") == "manual_review"
     assert mock_tg.called  # 운영자 알림 발사
-    # 사장님이 손으로 처리해야 하는 알림이라 **누구인지**가 있어야 한다 (세션 410).
-    assert "u1@test.com" in mock_tg.call_args[0][0]
+    # 사장님이 손으로 처리해야 하는 알림이라 **누구인지**가 있어야 하되, 텔레그램은
+    # 제3자 서버에 평문으로 남으므로 이메일은 마스킹해 싣는다 (세션 410 검사관 D5).
+    msg = mock_tg.call_args[0][0]
+    assert "u1***@test.com" in msg and "u1@test.com" not in msg, msg
     db.expire_all()
     # 롤백 안 함 (변경 0) — SQLite naive 저장이라 양쪽 naive 로 통일 후 비교.
     rolled = db.get(UserProfile, "u1").paid_until
@@ -483,6 +485,15 @@ def test_webhook_partial_cancel_alerts_no_rollback(client, db):
         rolled = rolled.replace(tzinfo=None)
     assert rolled == future.replace(tzinfo=None)
     assert db.get(Payment, "pay_partial").status == "paid"  # 자동 전이 안 함
+
+
+def test_mask_email_edges():
+    """마스킹 규칙 — 앞 두 글자만 남기고, @ 가 없는 값도 안전하게 처리 (세션 410 D5)."""
+    from routers.payment import _mask_email
+
+    assert _mask_email("ab@x.com") == "ab***@x.com"
+    assert _mask_email("a@x.com") == "a***@x.com"      # 아이디가 한 글자여도 깨지지 않는다
+    assert _mask_email("noat") == "no***"              # @ 없는 값(비정상 데이터)도 그대로 새지 않는다
 
 
 def test_complete_forgery_logs_audit_and_compare_and_set(client, db):

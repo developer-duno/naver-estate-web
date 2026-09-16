@@ -1,12 +1,17 @@
-"""알림 8창구가 전부 쉬운 우리말로 나가는지 한 번에 확인 (세션 409).
+"""알림 10창구 + 미지 에러 렌더가 전부 쉬운 우리말로 나가는지 한 번에 확인 (세션 409·410).
 
 재시작 직후 "PR 이 라이브에 반영됐나"를 판정하는 용도. 텔레그램은 mock 이라
 **실발송 0** (conftest 없이 단독 실행되므로 patch 로 직접 막는다).
 
-실행:
-    cd backend && PYTHONPATH=. PYTHONUTF8=1 python scripts/verify_alert_wording.py
+⚠ 세션 410 확장: 옛 판은 "번역 사전에 걸린 말"만 렌더해서, 정작 사전에 **안 걸렸을 때**
+   나가는 문장("처음 보는 문제…")과 결제 중단·부분환불 알림을 한 번도 안 찍어 봤다.
+   ⓪⑨⑩ 이 그 자리다 — 사장님이 실제로 읽을 문장을 눈으로 확인하는 것이 이 스크립트의 값이다.
 
-종료 코드: 0 = 8창구 전부 우리말 / 1 = 어려운 말이 남아 있음(그 창구를 출력)
+실행:
+    cd backend && DATABASE_URL="sqlite:///:memory:" PYTHONPATH=. PYTHONUTF8=1 \
+        python scripts/verify_alert_wording.py
+
+종료 코드: 0 = 전부 우리말 / 1 = 어려운 말이 남아 있음(그 창구를 출력)
 """
 import re
 import sys
@@ -39,6 +44,36 @@ def main() -> int:
 
     # ── 1·2. monitor → alert_format (주 경로: 수집 실패 / 결제 실패) ──
     from crawler.alert_format import format_issue_message
+
+    # ── 0. 번역 사전에 **없는** 에러가 났을 때 나가는 문장 (새 알림 + 해소 알림) ──
+    #
+    # 사전에 걸린 말만 확인하면 정작 "모르는 에러" 경로는 한 번도 안 찍힌다. 이 경로의
+    # 고정 문장은 해소 알림에서 `plainify_detail()` 이 꼬리 마침표만 떼고
+    # " — 정상으로 돌아왔습니다" 를 이어 붙이므로, 문장 **안**에 마침표가 있으면
+    # "…문제예요. …남아 있어요 — 정상으로…" 처럼 한 줄에서 흐름이 두 번 끊긴다
+    # (세션 407 이 고쳤던 증상, 세션 410 검사관 MEDIUM 재발 지적).
+    unknown_data = {"job_type": "article_detail", "count": 1,
+                    "error": "card_declined", "processed": 0, "total": 0}
+    msg = format_issue_message("crawl_failed", unknown_data, event="new",
+                               header_ctx={"active_count": 1, "now": now})
+    results.append(("⓪-1 미지 에러 — 새 알림", msg, check("", msg)))
+
+    # 해소 알림 — monitor.py:217 이 만드는 detail 모양 그대로 재현한다.
+    from crawler.plain_words import explain_error, job_words
+
+    resolved_detail = (f"{job_words('article_detail')} 작업 1건 실패"
+                       f" — {explain_error('card_declined')}")
+    msg = format_issue_message(
+        "crawl_failed",
+        {"alert_key": "crawl_failed:article_detail", "detail": resolved_detail,
+         "reason": "recovered", "reason_detail": ""},
+        event="resolved", header_ctx={"active_count": 0, "now": now},
+    )
+    bad = check("", msg)
+    # " — 정상으로…" 앞에 마침표가 남으면 문장이 중간에 끊긴다.
+    if "요. " in msg:
+        bad.append("내부 마침표")
+    results.append(("⓪-2 미지 에러 — 해소 알림", msg, bad))
 
     for label, job_type in [("① 수집 잡 실패", "article_detail"),
                             ("② 결제 잡 실패", "billing_charge")]:
@@ -112,6 +147,55 @@ def main() -> int:
         msg = re.sub(r'f?"|\'', "", msg).replace("\\n", "\n")
         results.append((f"⑧-{i} 공시가격 알림", msg, check("", msg)))
 
+    # ── 9. billing_charge._mark_retry — 자동결제 3회 실패 중단 알림 ──
+    #
+    # 사유 문자열마다 사장님이 읽는 까닭 한 줄이 달라진다(explain_error). 특히
+    # `status=` 가 **빈 문자열**인 경우(`routers/payment._portone_status()` 가 SDK 응답에
+    # status 가 없으면 "" 를 돌려준다)는 옛 사전에서 아무 규칙에도 안 맞아 "처음 보는
+    # 문제" 로 떨어져 결제 알림인지조차 사라졌다 — 여기서 여섯 사유를 전부 렌더해 본다.
+    from unittest.mock import MagicMock
+
+    import crawler.billing_charge as bc
+
+    billing_reasons = [
+        "결제 미완료 (status=FAILED)",
+        "결제 미완료 (status=PENDING)",
+        "결제 미완료 (status=CANCELLED)",
+        "결제 미완료 (status=)",
+        "결제 호출 실패: HTTP 502 Bad Gateway",
+        "card_declined",
+    ]
+    for i, reason in enumerate(billing_reasons, 1):
+        db = MagicMock()
+        bk = SimpleNamespace(user_id="u-verify", retry_count=2, status="active")
+        bc._last_alert_at.clear()  # 회원별 쿨다운 키 — 안 지우면 두 번째부터 안 나간다
+        with patch("services.telegram.send_telegram") as tg, \
+             patch("crawler.billing_charge._notify_user_billing_failed"):
+            bc._mark_retry(db, bk, "pay-verify", reason)
+        msg = tg.call_args[0][0]
+        results.append((f"⑨-{i} 자동결제 중단 ({reason})", msg, check("", msg)))
+
+    # ── 10. routers.payment._handle_refund_webhook — 부분환불 알림 ──
+    #
+    # 사장님이 손으로 처리해야 하는 유일한 결제 알림이라 "누구인지"가 들어간다. 단
+    # 텔레그램은 제3자 서버에 평문으로 남고 전달된 메시지는 회수할 수 없으므로
+    # 이메일은 **마스킹**돼야 한다(세션 410 검사관 D5).
+    import routers.payment as pay
+
+    db = MagicMock()
+    db.get.return_value = SimpleNamespace(email="sajang@example.com")
+    payment_row = SimpleNamespace(payment_id="pay-verify", user_id="u-verify",
+                                  plan="pro_30d", amount=10000, status="paid")
+    pay._last_alert_at.clear()
+    with patch("routers.payment.log_action"), \
+         patch("services.telegram.send_telegram") as tg:
+        pay._handle_refund_webhook(db, payment_row, "Transaction.PartialCancelled")
+    msg = tg.call_args[0][0]
+    bad = check("", msg)
+    if "sa***@example.com" not in msg or "sajang@example.com" in msg:
+        bad.append("이메일 마스킹 안 됨")
+    results.append(("⑩ 부분환불 알림", msg, bad))
+
     # ── 출력 ──
     failed = 0
     for label, msg, bad in results:
@@ -124,9 +208,9 @@ def main() -> int:
 
     print(f"\n{'=' * 64}")
     if failed:
-        print(f"❌ 8창구 중 {failed}곳에 어려운 말이 남아 있다")
+        print(f"❌ 10창구 + 미지 에러 렌더 중 {failed}곳에 어려운 말이 남아 있다")
         return 1
-    print("✅ 8창구 전부 쉬운 우리말 — 라이브 반영 확인")
+    print("✅ 10창구 + 미지 에러 렌더 전부 쉬운 우리말 — 라이브 반영 확인")
     return 0
 
 

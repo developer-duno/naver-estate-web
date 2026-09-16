@@ -89,17 +89,28 @@ def main() -> int:
         sl._alert_scheduler_lock_error("D:/x/scheduler.lock", OSError("Permission denied"))
     results.append(("⑦ 예약작업 실패", tg.call_args[0][0], check("", tg.call_args[0][0])))
 
-    # ── 8. service_official_price (공시가격 이상) ──
-    import crawler.service_official_price as op
+    # ── 8. service_official_price — **호출부 전수를 소스에서 추출**해 검사 ──
+    #
+    # ⚠ 옛 구현은 여기에 이미 우리말인 문자열을 **손으로 써 넣고** _alert_official_price
+    #    에 통과시켰다. 그건 "전달 함수가 문자열을 그대로 넘기나"를 볼 뿐 **어느 호출부도
+    #    검증하지 않는다** — 실제로 이 파일의 세 호출부 중 하나(표준코드 이관 감지)가
+    #    영문·전문용어인 채로 남아 있었는데 스크립트는 초록을 냈다(세션 409 적대검증).
+    #    그래서 소스에서 호출부 문자열을 직접 긁어 검사한다.
+    import pathlib
 
-    with patch("services.telegram.send_telegram") as tg:
-        op._alert_official_price(
-            "[서버 알림] ⚠ <b>정부 공시가격 받기</b> — 일부 단지는 못 받았어요\n\n"
-            "▸ 다시 시도했는데도 값이 없는 단지 1곳: 132662(더레이크원)\n"
-            "→ 손님 화면은 그대로 보입니다. 그 단지들만 공시가격이 빈칸이에요.\n"
-            "   급하지 않으니 아침에 Claude 에게 알려주세요."
-        )
-    results.append(("⑧ 공시가격 이상", tg.call_args[0][0], check("", tg.call_args[0][0])))
+    op_src = (pathlib.Path(__file__).resolve().parent.parent
+              / "crawler" / "service_official_price.py").read_text(encoding="utf-8")
+    calls = re.findall(r"_alert_official_price\(\s*((?:\s*(?:f?\"[^\"]*\"|'[^']*')\s*)+)\)", op_src)
+    if not calls:
+        results.append(("⑧ 공시가격 (호출부 추출 실패)", "(패턴 미검출 — 스크립트 점검 필요)",
+                        ["호출부를 하나도 못 찾았다"]))
+    for i, raw in enumerate(calls, 1):
+        # 소스 리터럴 → 사람이 볼 문구.
+        # ⚠ f-string 자리표시자 `{len(x)}` 는 실제 알림에선 **숫자로 치환**되므로
+        #    변수명을 영문 식별자로 오탐하면 안 된다 — 먼저 걷어낸다.
+        msg = re.sub(r"\{[^}]*\}", "○", raw)
+        msg = re.sub(r'f?"|\'', "", msg).replace("\\n", "\n")
+        results.append((f"⑧-{i} 공시가격 알림", msg, check("", msg)))
 
     # ── 출력 ──
     failed = 0

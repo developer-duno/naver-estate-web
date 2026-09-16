@@ -1225,7 +1225,11 @@ def test_detect_issues_failed_uses_latest_error_not_alphabetical_max():
         issue = next(i for i in detect_issues(db) if i["kind"] == "crawl_failed")
         assert issue["data"]["error"] == "aaa 최신 에러"
         assert issue["data"]["count"] == 2  # 집계(건수)는 그대로 유지
-        assert "aaa 최신 에러" in issue["detail"]
+        # ⚠ detail 에는 이제 원문이 안 실린다(세션 410 — explain_error 가 모르는 원문을
+        #    고정 문장으로 바꾼다). "최신 것을 골랐나" 를 지키는 단언은 위의 data["error"]
+        #    이고, 원문은 crawl_jobs.error_message 에 그대로 남는다(monitor_alerts 엔 detail 만).
+        #    사전순 max 로 되돌리면 위 단언이 "zzz 옛 에러" 로 FAIL 한다(뮤테이션 불변).
+        assert "zzz 옛 에러" not in issue["detail"]
     finally:
         db.close()
 

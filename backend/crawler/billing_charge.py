@@ -38,8 +38,17 @@ logger = logging.getLogger(__name__)
 # 3일(=결제 시도 3회) 연속 실패하면 자동결제 중단(status='failed'). 사장님 확정(세션 330).
 MAX_BILLING_RETRY = 3
 
-# 알림 쿨다운(적대검증 #5) — 대규모 PortOne 장애로 다수 카드가 동시 중단되면 카드마다 알림이
-# 발사돼 텔레그램 rate limit 소진 → 진짜 알림 누락. payment.py _ALERT_COOLDOWN_SEC 패턴 답습.
+# 알림 쿨다운 — payment.py _ALERT_COOLDOWN_SEC 패턴 답습.
+#
+# ⚠ key 에 **회원 id 를 넣는다**(세션 410 적대검증 MEDIUM). 옛 코드는 두 호출부가 key 를
+#    생략해 전부 기본값 "billing_stop" 을 공유했다 — 한 배치에서 3명이 중단되면 알림은
+#    1건만 나가고 나머지 2명은 통째로 사라졌다(돈이 안 걷히는데 사장님이 모른다).
+#    key 를 회원별로 나누면 쿨다운은 "같은 회원의 같은 사고가 10분 안에 또 발사되는 것"만
+#    누른다. 원래 걱정(대규모 PortOne 장애 시 알림 폭주)의 하드 상한은 배치 크기
+#    (`limit(batch_size)`=500)이고 실제로는 그 배치에서 **중단된** 회원 수다 — 3일 규칙은
+#    지연이지 상한이 아니라 PortOne 이 3일 내리 죽으면 그날 due 회원 전원이 한 번에
+#    중단된다. 그 규모의 사고면 회원 수만큼 알림이 오는 게 오히려 맞다(세션 410).
+#    payment.py 의 `f"partial_cancel:{payment.payment_id}"` 선례와 같은 결.
 _ALERT_COOLDOWN_SEC = 600  # 같은 종류 알림 10분 1회
 _last_alert_at: dict[str, float] = {}
 
@@ -172,7 +181,8 @@ def _charge_one(db, bk: BillingKey) -> str:
             f"▸ 받아야 할 돈은 {amount:,}원인데 실제로는 {_paid_text}이 결제됐어요\n"
             "  금액이 다르면 안전을 위해 그 회원의 자동 결제를 멈춥니다.\n"
             "→ 손님 화면은 그대로 쓰입니다. 그 회원 구독료만 안 걷혀요.\n"
-            "   돈이 걸린 일이라 아침에 꼭 Claude 에게 알려주세요."
+            "   돈이 걸린 일이라 아침에 꼭 Claude 에게 알려주세요.",
+            key=f"billing_mismatch:{bk.user_id}",  # 회원별 — 여러 명이 멈춰도 각각 알림(세션 410)
         )
         return "stopped"
 
@@ -212,7 +222,8 @@ def _mark_retry(db, bk: BillingKey, payment_id: str, reason: str) -> str:
             f"▸ 한 회원의 결제가 {bk.retry_count}번 잇따라 실패해서 더 시도하지 않습니다\n"
             f"  까닭: {explain_error(reason)}\n"
             "→ 손님 화면은 그대로 쓰입니다. 그 회원 구독료만 안 걷혀요.\n"
-            "   돈이 걸린 일이라 아침에 꼭 Claude 에게 알려주세요."
+            "   돈이 걸린 일이라 아침에 꼭 Claude 에게 알려주세요.",
+            key=f"billing_stop:{bk.user_id}",  # 회원별 — 여러 명이 멈춰도 각각 알림(세션 410)
         )
         _notify_user_billing_failed(db, bk.user_id)  # 당사자에게도 알림(적대검증 #6)
         return "stopped"

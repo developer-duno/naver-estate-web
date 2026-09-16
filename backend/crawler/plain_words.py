@@ -96,6 +96,30 @@ def job_words(job_type) -> str:
 #
 # (정규식, 사장님이 읽을 한 줄)  — 위에서부터 먼저 맞는 것을 쓴다.
 _ERROR_RULES: list[tuple[re.Pattern, str]] = [
+    # ── 결제 사유 2종 — billing_charge._mark_retry 가 만드는 우리 접두어 (세션 410) ──
+    # ⚠ 반드시 **맨 앞**이다. 사유 문자열 뒤에 PortOne 예외 원문이 이어 붙는데, 그 안의
+    #   timeout·50x 가 먼저 이기면 "상대 서버(네이버·정부 자료)가 …" 안내가 나가 결제
+    #   맥락이 통째로 지워진다. 우리 코드가 박은 접두어가 예외 본문의 낱말 추측보다
+    #   확실하다 — 구체 원인은 billing 로그(logger.warning)에 그대로 있다.
+    #   상태값(PortOne SDK PaymentStatus)에 따라 원인이 다르다 — 처리 중·취소됨을 "승인 안 됨"
+    #   으로 뭉개면 틀린 안내가 된다(세션 410 결제 검사관 MEDIUM). 목록에 없는 상태는
+    #   일부러 안 잡아 "처음 보는 문제" 로 흘려보낸다(추측 번역 금지).
+    (
+        re.compile(r"결제 미완료 \(status=(?:PENDING|READY|VIRTUAL_ACCOUNT_ISSUED)\)"),
+        "결제 대행 회사에서 아직 처리 중이라 결제가 확인되지 않았어요.",
+    ),
+    (
+        re.compile(r"결제 미완료 \(status=(?:CANCELLED|PARTIAL_CANCELLED)\)"),
+        "결제됐다가 취소됐어요.",
+    ),
+    (
+        re.compile(r"결제 미완료 \(status=FAILED\)"),
+        "카드 결제가 승인되지 않았어요(잔액 부족·한도 초과·카드 정지 등).",
+    ),
+    (
+        re.compile(r"결제 호출 실패"),
+        "결제 대행 회사 서버를 부르다 실패했어요.",
+    ),
     (
         re.compile(r"statement timeout|QueryCanceled", re.I),
         "데이터베이스가 너무 오래 걸려 스스로 멈췄어요.",
@@ -156,9 +180,6 @@ _ERROR_RULES: list[tuple[re.Pattern, str]] = [
     ),
 ]
 
-# 원문을 못 알아봤을 때 덧붙일 길이 — 단서는 남기되 알림이 길어지지 않게.
-_UNKNOWN_HEAD = 80
-
 
 def _translate_known(raw) -> str | None:
     """실측 규칙에 맞으면 우리말 한 줄, 아니면 None ('모르는 에러'와 구분)."""
@@ -174,30 +195,25 @@ def _translate_known(raw) -> str | None:
 def explain_error(raw) -> str:
     """에러 원문 → 사장님이 읽는 한 줄.
 
-    실측 패턴에 맞으면 우리말 한 줄로 바꾸고, 못 알아본 것은 원문 앞부분만 짧게
-    남긴다(단서 보존 — 여기서 통째로 버리면 내가 나중에 원인을 못 찾는다).
-    원문 전체는 언제나 관리자 화면·서버 로그에 그대로 남아 있다.
+    실측 패턴에 맞으면 우리말 한 줄로 바꾸고, **못 알아본 것은 원문을 싣지 않는다**
+    — 원문은 로그·`crawl_jobs.error_message` 에 그대로 남아
+    추적에 지장이 없다(세션 410 적대검증 MEDIUM).
+
+    옛 구현은 앞 80자를 "개발자용 기록"이라는 이름표를 달아 실어 보냈는데, PG·PortOne
+    사유(`card_declined`)나 우리 사유(`결제 미완료 (status=FAILED)`)가 영문 그대로
+    나가 "어려운 말 금지" 지시를 어겼다. 이름표를 달아도 못 읽는 글자는 못 읽는다.
     """
     if not raw:
         return ""
     text = str(raw).strip()
+    # 공백뿐인 원문도 "메시지 없음"으로 본다 — 빈 문자열을 돌려주면 호출부가 더 정확한
+    # 문구로 폴백한다(job_error_listener: "무슨 일인지 메시지가 남지 않았어요").
+    if not text:
+        return ""
     plain = _translate_known(text)
     if plain is not None:
         return plain
-
-    # 못 알아본 에러 — 단서만 짧게 남긴다.
-    # ⚠ 파이썬 트레이스백은 **첫 줄이 정보 0** 이다("Traceback (most recent call last):").
-    #    진짜 원인은 마지막 줄에 있다(세션 407 적대검증 MEDIUM-9). 첫 줄만 자르던 옛
-    #    구현은 트레이스백에서 아무 쓸모 없는 줄만 남겼다.
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    head = lines[0] if lines else ""
-    if head.startswith("Traceback") and len(lines) > 1:
-        head = lines[-1]
-    if len(head) > _UNKNOWN_HEAD:
-        head = head[:_UNKNOWN_HEAD].rstrip() + "…"
-    # 원문을 그대로 보여 주면 사장님은 읽을 수 없다 — "이건 개발자용 글자"라고
-    # 알려 주고 다음 행동까지 붙인다(맨몸으로 내보내던 것, 적대검증 MEDIUM-4).
-    return f"처음 보는 문제예요 (개발자용 기록: {head})" if head else ""
+    return "처음 보는 문제예요. 자세한 내용은 서버 기록에 남아 있어요."
 
 
 # ── 3. 행동 안내 — 사장님이 실제로 할 수 있는 것만 ────────────────────────

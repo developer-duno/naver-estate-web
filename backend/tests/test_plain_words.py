@@ -108,21 +108,48 @@ def test_explain_error_translates_real_prod_errors():
         assert plain.endswith("요."), f"설명 문장이 아니다: {plain}"
 
 
-def test_explain_error_keeps_short_clue_for_unknown():
-    """모르는 에러는 버리지 않되 **'개발자용 기록'이라고 이름표를 달아** 짧게 남긴다.
+def test_explain_error_unknown_has_no_raw_text():
+    """모르는 에러는 **원문을 한 조각도 싣지 않는다** (세션 410 적대검증 MEDIUM).
 
-    맨몸으로 원문을 내보내면 사장님은 그게 무슨 글자인지 몰라 불안해진다
-    (세션 407 적대검증 MEDIUM-4). 단서는 보존하되 "이건 개발자용" 이라고 알린다.
+    옛 구현은 앞 80자를 "개발자용 기록"이라는 이름표를 달아 실어 보냈는데, 이름표를
+    달아도 못 읽는 글자는 못 읽는다 — PG 사유(`card_declined`) 같은 영문이 그대로
+    나갔다. 원문은 로그·crawl_jobs.error_message 에 남으므로
+    알림에서 빼도 추적에 지장이 없다.
     """
     plain = explain_error("완전히 새로운 종류의 문제 " + "x" * 300)
     assert plain.startswith("처음 보는 문제예요"), plain
-    assert "완전히 새로운 종류의 문제" in plain, plain
+    assert "완전히 새로운 종류의 문제" not in plain, plain
+    assert "xxx" not in plain, plain
+    assert re.search(r"[A-Za-z]", plain) is None, f"영문이 남았다: {plain}"
     assert len(plain) <= 120, f"너무 길다: {len(plain)}"
+
+
+def test_explain_error_translates_billing_reasons():
+    """billing_charge._mark_retry 가 만드는 두 사유가 우리말이 된다 (세션 410).
+
+    옛 코드에선 이 둘이 '모르는 에러' 로 빠져 `결제 미완료 (status=FAILED)` 처럼
+    영문 상태값이 그대로 텔레그램에 실렸다.
+    """
+    assert "카드 결제가 승인되지 않았어요" in explain_error("결제 미완료 (status=FAILED)")
+    # 상태값마다 원인이 다르다 — 처리 중·취소됨을 "승인 안 됨" 으로 뭉개면 틀린 안내
+    # (세션 410 결제 검사관 MEDIUM). 목록에 없는 상태는 추측하지 않고 "처음 보는 문제" 로.
+    assert "아직 처리 중" in explain_error("결제 미완료 (status=PENDING)")
+    assert "아직 처리 중" in explain_error("결제 미완료 (status=READY)")
+    assert "취소됐어요" in explain_error("결제 미완료 (status=CANCELLED)")
+    assert "취소됐어요" in explain_error("결제 미완료 (status=PARTIAL_CANCELLED)")
+    unknown = explain_error("결제 미완료 (status=SOMETHING_NEW)")
+    assert unknown.startswith("처음 보는 문제예요") and "SOMETHING_NEW" not in unknown, unknown
+    assert "결제 대행 회사" in explain_error("결제 호출 실패: boom")
+    # 규칙이 맨 앞이라 예외 본문의 timeout 낱말보다 결제 접두어가 이긴다(결제 맥락 보존, 세션 410)
+    assert "결제 대행 회사" in explain_error("결제 호출 실패: ReadTimeout")
+    assert "결제 대행 회사" in explain_error("결제 호출 실패: HTTP 502 Bad Gateway")
 
 
 def test_explain_error_empty_is_empty():
     assert explain_error("") == ""
     assert explain_error(None) == ""
+    # 공백뿐인 원문도 "메시지 없음" — job_error_listener 가 더 정확한 문구로 폴백한다
+    assert explain_error("   ") == ""
 
 
 # ── ③ 저장된 옛 문장 되살리기 (render-time) ──────────────────────────────
@@ -197,10 +224,11 @@ def test_dev_error_hint_catches_python_exceptions():
     ]
     for raw in leaky:
         out = plainify_detail(f"complex_articles 작업 1건 실패 — {raw}")
-        # 맨몸 노출이 아니라 "개발자용 기록" 이라는 이름표가 달려야 한다.
-        # (옛 코드는 이 경로 자체를 건너뛰어 원문이 그대로 나갔다.)
+        # 예외 이름·원문이 한 조각도 안 남아야 한다 (세션 410 — 옛 코드는 "개발자용
+        # 기록" 이라는 이름표를 달아 앞 80자를 그대로 실어 보냈다).
         assert "처음 보는 문제예요" in out, f"개발자 예외가 그대로 노출됐다: {out}"
-        assert "개발자용 기록" in out, out
+        exc_name = raw.split(":")[0].strip()  # KeyError / Traceback (most recent call last) …
+        assert exc_name.split()[0] not in out, out
 
 
 def test_error_rules_do_not_misfire_on_plain_numbers():
@@ -222,21 +250,28 @@ def test_quota_rule_needs_context():
     assert "정부 자료 요청 횟수" in explain_error("일 요청 건수(1000건)를 초과하였습니다")
 
 
-def test_unknown_error_is_labeled_as_developer_text():
-    """모르는 에러는 맨몸으로 내보내지 않고 '개발자용 기록' 이라고 알려 준다."""
+def test_unknown_error_has_no_raw_text():
+    """아는 에러는 번역하고, 모르는 에러는 원문 없이 고정 문장만 내보낸다 (세션 410)."""
     out = explain_error("(psycopg2.errors.UniqueViolation) duplicate key value")
     # UniqueViolation 은 실측 규칙에 있으므로 번역돼야 한다
     assert "두 번 저장" in out, out
     out2 = explain_error("SomethingCompletelyNew: 처음 보는 형식")
-    assert "개발자용 기록" in out2, out2
+    assert "처음 보는 문제예요" in out2, out2
+    assert "SomethingCompletelyNew" not in out2, out2
 
 
-def test_traceback_keeps_last_line_not_first():
-    """트레이스백은 첫 줄이 정보 0 — 마지막 줄을 단서로 남긴다 (적대검증 MEDIUM-9)."""
+def test_traceback_is_not_leaked():
+    """트레이스백은 어느 줄도 알림에 싣지 않는다 (세션 410).
+
+    옛 구현은 마지막 줄을 '단서'로 남겼는데, 그 줄이 곧 개발자 원문이라
+    "어려운 말 금지" 지시와 충돌했다. 원문은 서버 로그에 그대로 있다.
+    """
     tb = "Traceback (most recent call last):\n  File x, line 1\nValueError: 진짜 원인"
     out = explain_error(tb)
-    assert "ValueError: 진짜 원인" in out, out
-    assert not out.startswith("처음 보는 문제예요 (개발자용 기록: Traceback"), out
+    assert out.startswith("처음 보는 문제예요"), out
+    assert "Traceback" not in out, out
+    assert "ValueError" not in out, out
+    assert "진짜 원인" not in out, out
 
 
 def test_rendered_alert_has_no_english_identifiers():

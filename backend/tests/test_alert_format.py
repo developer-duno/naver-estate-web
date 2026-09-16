@@ -144,8 +144,15 @@ def test_freshness_message_spinning():
 
 
 def test_html_escape_in_error_message():
-    """엣지: error 에 <script> 가 있으면 HTML 이스케이프 (태그 깨짐·XSS 방어)"""
-    data = {"job_type": "x", "count": 1, "error": "<script>alert(1)</script>",
+    """엣지: 본문에 실리는 값에 <script> 가 있으면 HTML 이스케이프 (태그 깨짐·XSS 방어).
+
+    ⚠ 세션 410 에 검사 대상을 `error` → `job_type` 으로 옮겼다. `error` 원문은 이제
+    알림에 아예 안 실린다(explain_error 가 모르는 원문을 고정 문장으로 바꾼다) —
+    그 필드로는 이스케이프가 **작동해도 관측이 안 되므로** 가드가 장식이 된다.
+    `job_type` 은 사전에 없으면 원문이 그대로 흘러 `_esc` 를 실제로 통과하는 값이라
+    (job_words 폴백), 이스케이프가 깨지면 이 단언이 FAIL 한다.
+    """
+    data = {"job_type": "<script>alert(1)</script>", "count": 1, "error": "boom",
             "processed": 0, "total": 0}
     msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
     assert "<script>" not in msg

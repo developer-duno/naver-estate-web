@@ -149,6 +149,30 @@ def test_third_consecutive_fail_stops(db):
     mock_alert.assert_called_once()  # 알림 발사
 
 
+def test_three_members_stopped_send_three_alerts(db):
+    """같은 배치에서 3명이 중단되면 알림도 3건 (세션 410 적대검증 MEDIUM).
+
+    옛 코드는 두 호출부가 key 를 생략해 전부 기본값 "billing_stop" 을 공유했고,
+    10분 쿨다운이 같은 배치의 2·3번째 회원을 통째로 삼켜 **알림이 1건만** 나갔다
+    (돈이 안 걷히는데 사장님은 한 명분만 안다). key 에 회원 id 를 넣어 갈랐다.
+
+    ⚠ `_alert_billing` 자체를 patch 하면 쿨다운을 건너뛰어 이 테스트가 무의미해진다.
+       실제 발송 지점(services.telegram.send_telegram)을 세야 한다.
+    """
+    import crawler.billing_charge as bc
+
+    for uid in ("u1", "u2", "u3"):
+        _make_profile(db, uid)
+        _make_billing_key(db, uid, retry_count=2)  # 셋 다 이번이 3회째
+    bc._last_alert_at.clear()  # 앞 테스트가 남긴 쿨다운 제거
+    with patch("crawler.billing_charge._pay_with_billing_key", return_value=_charge_ok()), \
+         patch("crawler.billing_charge._fetch_portone_payment", return_value=_fetched(status="FAILED")), \
+         patch("crawler.billing_charge._notify_user_billing_failed"), \
+         patch("services.telegram.send_telegram", return_value=True) as tg:
+        bc.charge_due_billing_keys()
+    assert tg.call_count == 3, f"회원 3명이 멈췄는데 알림은 {tg.call_count}건"
+
+
 def test_amount_mismatch_stops_immediately(db):
     """금액 불일치(위변조) → 즉시 영구중단(status='failed') + 알림. retry 무한반복 금지.
 

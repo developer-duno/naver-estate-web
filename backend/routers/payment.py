@@ -419,11 +419,17 @@ def _handle_refund_webhook(db: Session, payment: Payment, event_type: str) -> di
         # 부분환불 — 자동 롤백 안 함(사장님 수동). 알림 + 감사만.
         # payment_id 별 쿨다운 key — 서로 다른 결제는 각각 알림(부분환불은 빈도 낮음),
         # 같은 결제 중복 웹훅은 10분 억제.
-        # ⚠ 쉬운 우리말만. 식별자는 아래 log_action 감사기록에 그대로 남는다(세션 409).
+        # ⚠ 쉬운 우리말만. 그 밖의 식별자는 아래 log_action 감사기록에 남는다(세션 409).
+        #    단 **회원 이메일은 일부러 싣는다**(세션 410 적대검증 MEDIUM): 이 알림은
+        #    사장님이 직접 손으로 처리해야 하는 유일한 결제 알림인데, 결제번호만으로는
+        #    누구인지 알 수 없어 관리자 화면(/admin/users)에서 찾을 방법이 없었다.
+        #    이메일은 사장님이 그 화면에서 실제로 보는 값이라 바로 대조가 된다.
+        profile = db.get(UserProfile, payment.user_id)
+        who = profile.email if profile and profile.email else "이메일을 못 찾은 회원"
         _alert_operator_throttled(
             f"partial_cancel:{payment.payment_id}",
             "[서버 알림] ⚠ 결제 금액 일부가 환불됐어요\n\n"
-            f"▸ 한 회원의 결제 중 일부가 환불 처리됐습니다 (결제번호 {payment.payment_id})\n"
+            f"▸ 회원 {who} 의 결제 중 일부가 환불 처리됐습니다 (결제번호 {payment.payment_id})\n"
             "  자동으로 되돌리지 않으니 사장님이 확인하셔야 합니다.\n"
             "→ 손님 화면은 그대로 쓰입니다.\n"
             "   돈이 걸린 일이라 아침에 꼭 Claude 에게 알려주세요.",

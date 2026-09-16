@@ -55,7 +55,7 @@ def test_job_listener_mask_combines_both_events():
 
 def test_job_error_sends_telegram_with_job_id_and_exception():
     """EVENT_JOB_ERROR → send_telegram 1회 호출, 메시지에 (한글 라벨로 치환된)
-    잡 식별 정보·예외 텍스트 포함.
+    잡 식별 정보 + 우리말 까닭 한 줄 포함.
 
     세션 359: 예전엔 영문 job_id 를 그대로 노출했으나(사장님이 "뭔지 모르겠다"고
     지적), 이제 한글 라벨로 치환한다 — 이 테스트도 새 동작에 맞게 정정
@@ -69,7 +69,11 @@ def test_job_error_sends_telegram_with_job_id_and_exception():
     mock_send.assert_called_once()
     msg = mock_send.call_args[0][0]
     assert "빌링키 자동결제" in msg  # 영문 job_id 대신 한글 라벨(폴백 표 경유)
-    assert "PortOne 500" in msg
+    # 세션 410: 예외 원문("PortOne 500")은 알림에 안 싣는다 — 사장님이 못 읽는 글자라서.
+    # 대신 "왜 실패했는지 한 줄"이 반드시 있어야 알림이 쓸모가 있다. 원문은 바로 위
+    # logger.error 에 남아 추적에 지장 없다(test_job_error_location_goes_to_log_not_telegram).
+    assert "PortOne 500" not in msg, msg
+    assert "까닭:" in msg and "처음 보는 문제예요" in msg, msg
 
 
 def test_job_missed_sends_telegram_with_misfire_wording():
@@ -183,7 +187,9 @@ def test_job_error_message_falls_back_to_label_table_without_scheduler():
 
     msg = mock_send.call_args[0][0]
     assert "빌링키 자동결제" in msg
-    assert "PortOne 500" in msg  # 실제 예외 메시지는 항상 보존
+    # 세션 410: 예외 원문은 알림에 안 싣는다(로그에 보존). 이 테스트의 주제는
+    # "scheduler 없이도 한글 라벨이 채워지나" 이므로 위 단언이 본체다.
+    assert "PortOne 500" not in msg, msg
 
 
 def test_job_error_location_goes_to_log_not_telegram(caplog):
@@ -342,11 +348,14 @@ def test_misfire_alert_shows_kst_not_raw_iso():
 
 
 def test_job_error_without_traceback_still_shows_exception_message():
-    """traceback 이 없거나 File 줄이 없어도 실제 예외 메시지는 반드시 보여준다.
+    """traceback 이 없거나 File 줄이 없어도 **까닭 한 줄은 반드시 나온다**.
 
-    위치 추출 실패가 정작 중요한 예외 메시지를 가리면 안 된다(회귀 재발 방지 —
-    이전 구현이 traceback 마지막 줄을 잘못 원인으로 채택해 실제 예외 메시지가
-    통째로 누락된 적이 있었다)."""
+    위치 추출 실패가 정작 중요한 까닭을 가리면 안 된다(회귀 재발 방지 — 이전 구현이
+    traceback 마지막 줄을 잘못 원인으로 채택해 예외 메시지가 통째로 누락된 적이 있었다).
+
+    ⚠ 세션 410 에 단언 대상이 바뀌었다: 예외 **원문**("PortOne 500")은 이제 알림에
+    안 실린다(사장님이 못 읽는 글자). 원문은 logger.error 에 남고, 알림에는 우리말
+    까닭이 남는지를 본다 — "까닭 줄이 통째로 비면 안 된다"는 원래 의도는 그대로다."""
     with patch("services.telegram.send_telegram") as mock_send:
         event = _error_event_with_traceback(
             "billing_charge", ValueError("PortOne 500"),
@@ -355,7 +364,10 @@ def test_job_error_without_traceback_still_shows_exception_message():
         job_event_listener(event, None)
 
     msg = mock_send.call_args[0][0]
-    assert "PortOne 500" in msg
+    assert "PortOne 500" not in msg, msg
+    # 까닭 줄이 비어 "까닭: " 만 덩그러니 나가면 안 된다(세션 408 LOW-1 회귀도 함께 방어).
+    reason_line = next(ln for ln in msg.splitlines() if ln.startswith("까닭:"))
+    assert len(reason_line.removeprefix("까닭:").strip()) > 5, msg
 
 
 # ── 세션 408: 안내 문구가 잡 성격과 어긋나던 2건 회귀 ──────────────────────

@@ -474,6 +474,8 @@ def test_webhook_partial_cancel_alerts_no_rollback(client, db):
     assert res.status_code == 200
     assert res.json().get("partial_cancel") == "manual_review"
     assert mock_tg.called  # 운영자 알림 발사
+    # 사장님이 손으로 처리해야 하는 알림이라 **누구인지**가 있어야 한다 (세션 410).
+    assert "u1@test.com" in mock_tg.call_args[0][0]
     db.expire_all()
     # 롤백 안 함 (변경 0) — SQLite naive 저장이라 양쪽 naive 로 통일 후 비교.
     rolled = db.get(UserProfile, "u1").paid_until

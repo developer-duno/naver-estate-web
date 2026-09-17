@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       update_snapshots:
-        description: "Playwright 시각 회귀 baseline 갱신 (Linux). artifact 3개(updated-snapshots-admin/-public/-public-visual) — 각 꾸러미는 자기 프로젝트 접미사(-<project>-linux.png) 파일만 유효. sha256 대조 후 달라진 것만 커밋. 절차 = .claude/rules/testing.md"
+        description: "Playwright 시각 회귀 baseline 갱신 (Linux). artifact 3개(updated-snapshots-admin/-public/-public-visual) — 각 꾸러미는 자기 프로젝트 접미사(-<project>-linux.png) 파일만 유효. sha256 대조 후 달라진 것만 커밋. 절차 = frontend/e2e/README.md §baseline 재생성 절차"
         type: boolean
         default: false
 

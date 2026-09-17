@@ -52,6 +52,18 @@ TARGET_STDR_MT = "01"
 # 법정동 수를 캡한다. 정상 실행의 소실은 한 자릿수라(세션 370 실측 5단지) 충분하다.
 _REPASS_MAX_DONGS = 20
 
+# 한 법정동당 재수집 시도 횟수 — 표본을 여러 번 떠서 **호 키 합집합**으로 게이트를 넘긴다.
+# V-WORLD 는 같은 법정동을 다시 조회해도 raw 행수만 같고 어떤 (dongNm,hoNm) 이 담기는지가
+# 매번 달라, 한 표본만으로는 대형 단지가 ±5% 게이트를 우연히 넘느냐에 운을 건다.
+# 2026-09-17 라이브 프로브(연속 3회):
+#   · 은마(4,424세대, 게이트 하한 4,203): 유니크 호 4,356 통과 / 3,597 탈락 / 3,199 탈락 — 누적 합집합 4,424(100%)
+#   · 단지 127894(1,725세대): 1,725 / 1,530 / 1,405 — 누적 합집합 1,725(100%)
+# 단발 통과율이 ~1/3 이라 2회로는 "둘 다 탈락" 이 남아 합집합 성공률이 ~95% 에 걸친다.
+# 3회면 실측 두 단지 모두 합집합이 세대수 100% 에 도달했고, 상한 20개 동 × 3회여도
+# 벽시계 캡(_REPASS_MAX_SECONDS)이 여전히 바깥 방어선으로 남는다. 구제되면 즉시 중단하므로
+# 정상 실행(한 번에 구제)의 호출 수는 종전과 같은 1회다.
+_REPASS_MAX_ATTEMPTS = 3
+
 # 붕괴 조기 이탈 임계 — 소실이 이 수를 넘으면 페이지 드리프트가 아니라 시스템 이상
 # (매칭 규칙 붕괴·API 응답 구조 변경 등)으로 본다. 드리프트 소실은 실측 한 자릿수라
 # 200 이면 충분한 여유이며, 이 경우 재수집은 구제가 아니라 무의미한 폭주가 된다.
@@ -496,6 +508,39 @@ def _index_groups_by_name(rows: list[dict]) -> dict[str, list[tuple[str, dict]]]
             (code, group)
         )
     return grouped_by_name
+
+
+def _log_unrescued_targets(ld_code: str, targets: list, grouped_by_name: dict) -> None:
+    """재수집을 마쳤는데도 못 구제한 단지를 단지별 한 줄로 남긴다 (진단 전용, 로그만).
+
+    다음 달 실행이 "게이트를 몇 % 차이로 놓쳤나"와 "단지명이 바뀌어 애초에 이름 후보가
+    없나(개명)"를 로그만 보고 가를 수 있게 하는 것이 목적이다. 이름 후보가 하나도 없으면
+    합집합을 아무리 키워도 못 붙으므로 처방 자체가 다르다(재시도 증설 vs 이름 보정).
+    """
+    for target in targets:
+        candidates = grouped_by_name.get(normalize_complex_name(target.complex_name)) or []
+        if not candidates:
+            logger.warning(
+                "[official_price] 재수집 미구제 %s(%s) 법정동 %s 세대수 %s —"
+                " 이름 그룹 없음(개명 의심)",
+                target.complex_no, target.complex_name, ld_code,
+                target.total_household_count,
+            )
+            continue
+        detail = ", ".join(
+            "%s:호%d(%.3f배)" % (
+                code, len(group["ho_keys"]),
+                len(group["ho_keys"]) / target.total_household_count
+                if target.total_household_count else 0,
+            )
+            for code, group in candidates
+        )
+        logger.warning(
+            "[official_price] 재수집 미구제 %s(%s) 법정동 %s 세대수 %s —"
+            " 이름 후보 %d그룹 [%s]",
+            target.complex_no, target.complex_name, ld_code,
+            target.total_household_count, len(candidates), detail,
+        )
 
 
 def _find_regressed_targets(
@@ -943,7 +988,16 @@ def collect_official_prices(
         # ── 매칭 소실 재수집 패스 ──
         # V-WORLD 는 같은 법정동을 연속 조회해도 총행수만 같고 행 구성이 달라진다
         # (중복+누락). 그래서 대형 단지가 한 번은 게이트를 통과하고 한 번은 탈락한다.
-        # 두 번째 표본을 떠서 구제하는 것이 이 패스의 전부다 — 매칭 규칙 자체는 그대로.
+        # 표본을 최대 _REPASS_MAX_ATTEMPTS 번 떠서 **누적한 행 전체**를 색인하는 것이 이
+        # 패스의 전부다 — 매칭 규칙 자체는 그대로.
+        #
+        # 왜 누적이 곧 합집합인가: 세대수 게이트가 보는 group["ho_keys"] 는 set 이고
+        # 저장 집계(aggregate_area_medians)도 _ho_key 로 dedupe 한다. 둘 다 **키 기반**이라
+        # 여러 표본의 행을 이어붙여 다시 색인하면 그 자체가 호 키 합집합이 된다(행수 중복은
+        # 무해). 표본마다 빠뜨리는 호가 다르기 때문에 합집합은 단발보다 훨씬 빨리 세대수에
+        # 수렴한다(상단 _REPASS_MAX_ATTEMPTS 주석의 라이브 프로브 실측).
+        #
+        # 구제가 끝나면 즉시 중단한다 — 한 번에 구제되는 평시 실행의 조회 수는 종전과 같다.
         #
         # 전체를 try 로 감싼다 — 구제는 best-effort 라, 재수집 중 예외가 본 수집 성공을
         # 실패로 뒤집으면 안 된다(그 경우 outer except 로 빠져 job 이 failed 가 된다).
@@ -1021,9 +1075,10 @@ def collect_official_prices(
                 )
                 repass_start = time.monotonic()
                 for repass_idx, ld_code in enumerate(repass_dongs):
-                    # 시간 캡은 **동 경계**에서만 본다 — 페이지 단위로 쪼개면 중간에 끊긴
-                    # 부분 수집이 세대수 게이트를 통째로 어긋나게 한다. 초과분은 대형 동
-                    # 1개(수 분)로 바운드되므로 단순한 이 방식으로 충분하다.
+                    # 시간 캡은 **동 경계 + 조회 경계**에서 본다 — 페이지 단위로 쪼개면
+                    # 중간에 끊긴 부분 수집이 세대수 게이트를 통째로 어긋나게 하지만,
+                    # 조회 하나는 통째로 끝나므로 회차 사이도 안전한 절단점이다(아래 회차
+                    # 루프의 같은 조건). 초과분은 대형 동 1회 조회로 바운드된다.
                     if time.monotonic() - repass_start > _REPASS_MAX_SECONDS:
                         logger.warning(
                             "[official_price] 재수집 벽시계 캡 %d초 초과 — 남은 법정동"
@@ -1032,43 +1087,113 @@ def collect_official_prices(
                         )
                         break
 
-                    rows = fetch_official_prices(to_vworld_cortar(ld_code), year)
-                    if rows is None:
-                        # ⚠ failed_ld_codes/리스트에 넣지 않는다 — 재수집 대상 동은 정의상
-                        # 본 루프에서 조회 **성공**한 동이라, 여기 합산하면 "조회 실패 동
-                        # 목록"이 오염되고 total_items(=collected+failed)도 부풀려진다.
-                        # 재수집 실패는 별도로만 세어 완료 로그에 구분 출력한다.
-                        repass_fetch_failed += 1
-                        logger.warning("[official_price] 재수집 법정동 %s 조회 실패", ld_code)
-                        continue
-
-                    grouped_by_name = _index_groups_by_name(rows)
                     # 본루프가 이 동에서 이미 배정한 그룹을 이어받아 시작한다 —
                     # 빈 set 으로 시작하면 재수집의 2차가 그 그룹을 다시 집어 이중
                     # 배정이 된다(적대검증 MEDIUM-1). 복사본을 쓴다(원본 불변).
                     repass_claimed: set[str] = set(claimed_by_dong.get(ld_code, ()))
-                    repass_unmatched: list = []
-                    for target in by_dong[ld_code]:
-                        hit = match_complex_group(
-                            target.complex_name, target.total_household_count, grouped_by_name
-                        )
-                        if hit is None:
-                            repass_unmatched.append(target)
-                            continue
-                        aphus_code, group = hit
+                    acc_rows: list[dict] = []          # 이 동에서 성공한 조회의 행 누적 = 키 합집합
+                    grouped_by_name: dict = {}         # acc_rows 를 색인한 최신 결과
+                    pending: list = list(by_dong[ld_code])  # 아직 구제 못 한 이 동의 대상
+                    # 1차 완전일치는 붙었는데 저장 행이 0 이었던 대상 — 다음 회차 합집합에서
+                    # 1차를 다시 시도하되, **2차로는 떨어뜨리지 않는다**(종전 동작 보존:
+                    # 옛 코드는 n_saved==0 일 때 repass_unmatched 에 넣지 않고 continue 했다).
+                    # 이름이 완전일치한 그룹이 있는데 부분일치로 다른 그룹을 집으면 오매칭
+                    # 위험이 더 크다.
+                    exact_hit_unsaved: set[str] = set()
+                    fetched_ok = 0
+                    capped = False
 
-                        n_saved = _save_matched_areas(
-                            db, target.complex_no, year, aphus_code, group
-                        )
-                        if not n_saved:
-                            continue
-                        saved_rows += n_saved
-                        matched_complexes += 1
-                        matched_complex_nos.add(target.complex_no)
-                        repass_claimed.add(aphus_code)
-                        rescued += 1
+                    for attempt in range(1, _REPASS_MAX_ATTEMPTS + 1):
+                        # 시간 캡은 **조회 경계**에서 본다 — 동 경계뿐 아니라 2·3회차
+                        # 시작 전에도. 조회 하나는 통째로 끝나므로(페이지 단위로 쪼개지
+                        # 않는다) 세대수 게이트가 어긋날 여지가 없어 안전한 입도다.
+                        if attempt > 1 and time.monotonic() - repass_start > _REPASS_MAX_SECONDS:
+                            capped = True
+                            logger.warning(
+                                "[official_price] 재수집 벽시계 캡 %d초 초과 — 법정동 %s"
+                                " 재시도 %d회차부터 중단 (누적분으로만 판정)",
+                                _REPASS_MAX_SECONDS, ld_code, attempt,
+                            )
+                            break
 
-                    for target in repass_unmatched:
+                        rows = fetch_official_prices(to_vworld_cortar(ld_code), year)
+                        if rows is None:
+                            logger.warning(
+                                "[official_price] 재수집 법정동 %s 조회 실패 (%d/%d회차)",
+                                ld_code, attempt, _REPASS_MAX_ATTEMPTS,
+                            )
+                            continue
+
+                        fetched_ok += 1
+                        acc_rows.extend(rows)
+                        grouped_by_name = _index_groups_by_name(acc_rows)
+
+                        still_pending: list = []
+                        for target in pending:
+                            hit = match_complex_group(
+                                target.complex_name, target.total_household_count,
+                                grouped_by_name,
+                            )
+                            if hit is None:
+                                still_pending.append(target)
+                                continue
+                            aphus_code, group = hit
+
+                            n_saved = _save_matched_areas(
+                                db, target.complex_no, year, aphus_code, group
+                            )
+                            if not n_saved:
+                                # 1차가 붙었는데 저장 행이 0 = 그룹 행이 전부 무효(면적·
+                                # 가격 파싱 불가). 다음 회차 합집합에서 1차를 다시 시도하게
+                                # pending 에 남기되, 표시를 남겨 2차 대상에서는 뺀다.
+                                exact_hit_unsaved.add(target.complex_no)
+                                still_pending.append(target)
+                                continue
+                            exact_hit_unsaved.discard(target.complex_no)
+                            saved_rows += n_saved
+                            matched_complexes += 1
+                            matched_complex_nos.add(target.complex_no)
+                            repass_claimed.add(aphus_code)
+                            rescued += 1
+
+                        pending = still_pending
+                        logger.info(
+                            "[official_price] 재수집 법정동 %s %d/%d회차: 행 %d건 수집"
+                            " (누적 %d건), 남은 대상 %d단지",
+                            ld_code, attempt, _REPASS_MAX_ATTEMPTS, len(rows),
+                            len(acc_rows), len(pending),
+                        )
+                        if not pending:
+                            break  # 전부 구제 — 더 뜰 이유가 없다(평시 조회 1회 유지)
+
+                    if fetched_ok == 0:
+                        # ⚠ failed_ld_codes/리스트에 넣지 않는다 — 재수집 대상 동은 정의상
+                        # 본 루프에서 조회 **성공**한 동이라, 여기 합산하면 "조회 실패 동
+                        # 목록"이 오염되고 total_items(=collected+failed)도 부풀려진다.
+                        # 재수집 실패는 별도로만 세어 완료 로그에 구분 출력한다.
+                        # ⚠ 회차마다가 아니라 **동마다 1회**만 센다 — 카운터의 뜻이
+                        # "재수집을 아예 못 뜬 동의 수"라, 회차마다 올리면 시도 상한배로
+                        # 부풀어 완료 로그가 다른 말을 하게 된다.
+                        repass_fetch_failed += 1
+                        # 여기서는 단지별 진단을 남기지 않는다 — 표본을 한 번도 못 받아
+                        # 이름 후보를 셀 근거 자체가 없다. 빈 색인으로 부르면 전부
+                        # "이름 그룹 없음(개명 의심)"으로 찍혀 원인을 정반대로 가리킨다
+                        # (원인은 조회 실패이고, 그건 위 회차별 warning 이 이미 남겼다).
+                        if capped:
+                            break
+                        continue
+
+                    # 2차(부분일치)는 동당 **한 번**, 최종 합집합 색인 위에서만 돌린다.
+                    # 회차마다 돌리면 부분 표본에서 붙은 느슨한 부분일치가 그룹을 선점해,
+                    # 합집합이 완성된 뒤라면 완전일치로 갔을 그룹을 가로챈다 — 1차 우선.
+                    for target in pending:
+                        if target.complex_no in exact_hit_unsaved:
+                            # 1차가 붙었던 대상은 2차로 떨어뜨리지 않는다(종전 동작 보존).
+                            # ⚠ 현재로선 방어적 가드다 — 2차의 (a') 규칙(이름-쌍둥이 키가
+                            # 색인에 있으면 부분포함으로 안 내려간다)이 이 경로를 이미
+                            # 막고 있어 도달 불가에 가깝다. 두 정규화(1차/alt)가 갈라지면
+                            # 그때 실제로 필요해지므로 명시적으로 남긴다.
+                            continue
                         hit = match_complex_group_secondary(
                             target.complex_name, target.total_household_count,
                             grouped_by_name, repass_claimed,
@@ -1090,6 +1215,16 @@ def collect_official_prices(
                         # 의미("재수집이 되찾은 단지 수") 유지.
                         rescued += 1
                         name_matched += 1
+
+                    _log_unrescued_targets(
+                        ld_code,
+                        [t for t in pending if t.complex_no not in matched_complex_nos],
+                        grouped_by_name,
+                    )
+                    if capped:
+                        # 캡이 회차 사이에서 터졌으면 누적분으로 이 동까지만 마무리하고
+                        # 동 루프도 멈춘다(동 경계 캡과 같은 결론).
+                        break
                 db.commit()
 
                 remaining_lost = [

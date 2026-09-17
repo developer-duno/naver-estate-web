@@ -14,6 +14,8 @@ DB·네트워크·scheduler.start() 없음 — create_scheduler() 는 add_job �
 
 import argparse
 import difflib
+import inspect
+import re
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -73,11 +75,43 @@ _ID_TO_JOB_TYPE = {
 }
 
 
+# 트리거 간격을 .env 가 덮는 모듈 상수(`*_INTERVAL_*`). 표는 "코드 기본값" 기준이므로 원래 값으로 되돌려 만든다.
+# 라이브 폴더(.env 있음)에서 만들면 crawler_monitor 가 10분으로 나와 CI·워크트리(.env 없음)의 30분과
+# 어긋났다(세션 412 머지 직후 실측 — --check 실패). 기본값은 scheduler.py 소스의
+# `NAME = int(os.getenv("NAME", "기본값"))` 줄에서 읽는다 — 숫자를 여기 또 적지 않는다(손글씨 재유입 금지).
+_ENV_INT_DEFAULT = re.compile(
+    r'^(?P<name>[A-Z_]*INTERVAL[A-Z_]*) = int\(os\.getenv\("(?P=name)", "(?P<default>\d+)"\)\)$', re.M
+)
+
+
+# add_job(...) 트리거 인자에 우변으로 쓰인 대문자 상수(`minutes=NAME` / `hours=NAME`). 리터럴·루프 변수는 안 잡힌다.
+_TRIGGER_CONST_REF = re.compile(r"\b(?:minutes|hours)=([A-Z][A-Z0-9_]+)\b")
+
+
+def _interval_code_defaults(sched_mod) -> dict[str, int]:
+    """scheduler.py 소스에서 간격 상수의 코드 기본값을 읽는다(.env 로 덮인 현재값이 아니라).
+
+    기본값 줄에서 읽은 상수 집합이 add_job 트리거에 실제로 쓰인 상수 집합과 다르면 즉시 중단한다 —
+    개수를 손으로 박지 않고도, 간격 상수를 `*_INTERVAL_*` 아닌 이름으로 만들면 조용히 빠지는 일을 막는다
+    (세션 412 검사관 LOW: 개명 변이에서 3개만 파싱되고 무경고였다).
+    """
+    source = inspect.getsource(sched_mod)
+    found = {m["name"]: int(m["default"]) for m in _ENV_INT_DEFAULT.finditer(source)}
+    used = set(_TRIGGER_CONST_REF.findall(source))
+    if not found or used != set(found):
+        raise SystemExit(
+            "트리거 간격 상수와 기본값 파싱이 어긋난다 — add_job 에 쓰인 상수 "
+            f"{sorted(used)} vs 기본값 줄에서 읽은 {sorted(found)}. 상수 이름 규칙(*_INTERVAL_*)이나 정규식을 맞출 것"
+        )
+    return found
+
+
 def build_jobs() -> list:
-    """토글을 전부 켠 채 스케줄러를 만들어 등록된 잡 목록을 돌려준다(start 안 함)."""
+    """토글을 전부 켜고 간격 상수를 코드 기본값으로 되돌린 채 스케줄러를 만들어 등록된 잡 목록을 돌려준다(start 안 함)."""
     from crawler import scheduler as sched_mod
 
     patches = [patch.object(sched_mod, name, True) for name in _ENABLE_TOGGLES]
+    patches += [patch.object(sched_mod, name, value) for name, value in _interval_code_defaults(sched_mod).items()]
     for p in patches:
         p.start()
     try:

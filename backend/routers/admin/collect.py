@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from auth.audit import log_action
+from crawler.plain_words import explain_error
 from deps import get_admin_user, get_db
 
 from ._shared import router
@@ -78,8 +79,10 @@ def trigger_collection(
             response.update(result)
         return response
     except Exception as e:
+        # 원문은 로그에만 남긴다 — 화면(CollectorTrigger 카드)에는 우리말 한 줄만
+        # 내보낸다(세션 411 검사관 C-A1: 이 detail 이 세 번째 노출 창구였다).
         logger.exception("[admin] 수집 실패: %s", collector_name)
-        raise HTTPException(status_code=500, detail=f"수집 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"수집 실패: {explain_error(str(e))}")
 
 
 @router.get("/collect/crime-stats/status")
@@ -131,5 +134,6 @@ def backfill_price(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        # 위와 같은 까닭 — 원문은 로그, 화면에는 우리말 한 줄.
         logger.exception("[admin] 소급 수집 실패: %s", complex_no)
-        raise HTTPException(status_code=500, detail=f"소급 수집 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"소급 수집 실패: {explain_error(str(e))}")

@@ -197,3 +197,34 @@ def test_collect_kapt_names_resolve_to_real_functions(db):
 
     assert _get_collector("kapt-match").__name__ == "match_kapt_complexes"
     assert _get_collector("kapt-costs").__name__ == "collect_kapt_costs"
+
+
+# ── 실패 응답 문구 (세션 411 C-A1) ──
+#
+# 이 detail 은 FE `CollectorTrigger.tsx` 카드에 그대로 뜬다(lib/api/core.ts
+# normalizeDetail). 개발자용 예외 원문이 새면 관리자 화면 세 번째 노출 창구가 된다.
+
+
+def test_collect_failure_detail_is_plain_korean(client, db):
+    """수동 수집 실패 — 응답 문구가 우리말이고 예외 원문이 안 샌다"""
+    _make_profile(db, "a9", role="admin")
+    raw = "(psycopg2.errors.QueryCanceled) canceling statement due to statement timeout"
+    with patch("routers.admin.collect._get_collector") as mock_get:
+        mock_get.return_value.side_effect = RuntimeError(raw)
+        res = client.post("/api/admin/collect/crime-stats", headers=_auth(_token("a9")))
+    assert res.status_code == 500
+    detail = res.json()["detail"]
+    assert detail == "수집 실패: 데이터베이스가 너무 오래 걸려 스스로 멈췄어요."
+    assert "psycopg2" not in detail
+
+
+def test_backfill_price_failure_detail_is_plain_korean(client, db):
+    """소급 수집 실패 — 같은 기준 (라우트가 달라 따로 지킨다)"""
+    _make_profile(db, "a10", role="admin")
+    raw = "(psycopg2.errors.QueryCanceled) canceling statement due to statement timeout"
+    with patch("crawler.service_public.backfill_price_history", side_effect=RuntimeError(raw)):
+        res = client.post("/api/admin/backfill-price/12345", headers=_auth(_token("a10")))
+    assert res.status_code == 500
+    detail = res.json()["detail"]
+    assert detail == "소급 수집 실패: 데이터베이스가 너무 오래 걸려 스스로 멈췄어요."
+    assert "psycopg2" not in detail

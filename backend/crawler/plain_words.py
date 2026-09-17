@@ -100,6 +100,12 @@ def job_words(job_type) -> str:
 # 부팅 스윕·모니터 스윕이 남기는 정리 문장 (아래 규칙 + explain_stored_error ⓪ 공용).
 STALE_SWEPT_WORDS = "작업이 오래 멈춰 있어 자동으로 정리됐어요."
 
+# 원문 뒤에 붙은 스윕 마커를 갈라내는 정규식 (`explain_stored_error` ⓪단계 전용).
+# `.*?` 가 **처음 나온** 구분자에서 끊으므로 head 에는 `| stale running` 이 다시
+# 들어갈 수 없다 — 되돌이(재귀) 깊이 1 의 근거. `\s*` 덕에 앞머리가 비어 구분자의
+# 앞 공백이 깎인 형태(`| stale running …`)도 head 빈 문자열로 함께 잡힌다.
+_STALE_TAIL = re.compile(r"^(?P<head>.*?)\s*\|\s*stale running.*$", re.I | re.S)
+
 # (정규식, 사장님이 읽을 한 줄)  — 위에서부터 먼저 맞는 것을 쓴다.
 _ERROR_RULES: list[tuple[re.Pattern, str]] = [
     # ── 결제 사유 2종 — billing_charge._mark_retry 가 만드는 우리 접두어 (세션 410) ──
@@ -200,10 +206,22 @@ _ERROR_RULES: list[tuple[re.Pattern, str]] = [
         # ⚠ 이 규칙이 없으면 `_is_plain_korean_tail` 이 이 영문을 "이미 우리말"로 오판한다
         #    — 개발자 흔적 정규식(`_DEV_ERROR_HINT`)에 걸리는 글자가 하나도 없어서다.
         #    그러면 `explain_stored_error` 3단계에서 원문이 그대로 화면에 남는다.
-        # ⚠ 앵커(`^`)를 뗄 수 없다 — 이 마커는 원문 **뒤에** 붙는 형태가 더 흔한데
-        #    (`원문 | stale running — …`), 앵커를 떼면 앞의 진짜 사유가 통째로 지워진다.
-        #    붙은 형태는 `explain_stored_error` ⓪단계가 갈라서 처리한다(세션 411).
-        re.compile(r"^stale running"),
+        # ⚠ **줄머리 또는 구분자(`|`) 바로 뒤**에서만 맞춘다 — 완전히 앵커를 떼면 안 된다.
+        #    이 사전은 관리자 화면(`explain_stored_error`)과 텔레그램(`explain_error`)이
+        #    함께 쓰는데, 아무 데서나 맞으면 `3/50개 단지 실패 (stale running 뒤처리)`
+        #    처럼 **우리말 앞머리가 있는 값**이 통째로 "자동 정리됐어요" 한 줄로 뭉개져
+        #    진짜 사유가 사라진다(세션 411 리뷰어 MEDIUM 실측).
+        #    반대로 앵커만 두면 `원문 | stale running …` 형태를 놓치는데, 그 형태는
+        #    `explain_stored_error` ⓪단계가 **먼저** 갈라 앞 원문을 따로 판정하므로
+        #    여기까지 오지 않는다 — 다만 ⓪이 없는 알림 경로를 위해 `|` 뒤도 함께 본다.
+        #    대소문자는 무시한다(`STALE RUNNING`).
+        # ⚠ 생산자는 마커를 줄머리(`main.py:70`) 또는 `' | '` 뒤(`crawler/monitor.py:394`)
+        #    에만 붙인다. prod 90일 실측(재현 가능한 질의):
+        #      SELECT count(*) FROM crawl_jobs WHERE error_message LIKE 'stale running%'
+        #        → 80
+        #      SELECT count(*) FROM crawl_jobs WHERE error_message LIKE '%stale running%'
+        #        AND error_message NOT LIKE 'stale running%'   → 0
+        re.compile(r"(?:^|\|\s*)stale running", re.I),
         STALE_SWEPT_WORDS,
     ),
 ]
@@ -511,22 +529,16 @@ def explain_stored_error(raw) -> str:
     if not text:
         return ""
 
-    # `.strip()` 뒤라 앞머리가 비어 있으면 구분자의 앞 공백도 함께 깎인다
-    # (`" | stale running …"` → `"| stale running …"`). 실제로는 `COALESCE(… , '')` 가
-    # 원문 없는 경우 순수형을 만들어 이 모양이 안 나오지만, 한 글자 차이로 영문이
-    # 새는 자리라 두 모양을 함께 본다.
-    head, sep, _ = text.partition(" | stale running")
-    if not sep and text.startswith("| stale running"):
-        head, sep = "", "| stale running"
-    if sep:
-        # 부팅 스윕·모니터 스윕이 `원문 || ' | ' || 'stale running — …'` 로 뒤에 붙인다
-        # (main.py / crawler/monitor.py, #443). 앞의 원문이 진짜 사유라 그것부터 판정하고
-        # 정리 문장을 뒤에 잇는다 — 앵커 규칙만으로는 이 형태가 영문 그대로 샜다
-        # (세션 411 검사관 HIGH-1).
-        # 되돌이(재귀) 깊이는 1이다: `partition` 은 **처음 나온** 구분자에서 자르므로
-        # head 에는 그 구분자가 다시 들어갈 수 없고, 위 `startswith` 보조 분기는 head 를
-        # 빈 문자열로 만들어 두 번째 호출이 빈값 검사에서 바로 끝난다 — 어느 경로든
-        # 두 번째 호출은 이 분기를 지나친다.
+    # 부팅 스윕·모니터 스윕이 `원문 || ' | ' || 'stale running — …'` 로 뒤에 붙인다
+    # (main.py / crawler/monitor.py, #443). 앞의 원문이 진짜 사유라 그것부터 판정하고
+    # 정리 문장을 뒤에 잇는다 — 규칙 하나로는 이 형태가 영문 그대로 샜다
+    # (세션 411 검사관 HIGH-1).
+    # 대소문자·구분자 앞뒤 공백은 `_STALE_TAIL` 이 함께 흡수한다. 되돌이(재귀) 깊이는
+    # 1이다: head 에는 구분자가 다시 들어갈 수 없고(non-greedy), head 가 비면 두 번째
+    # 호출이 빈값 검사에서 바로 끝난다.
+    stale_m = _STALE_TAIL.match(text)
+    if stale_m:
+        head = stale_m.group("head").strip()
         head_plain = explain_stored_error(head)
         if not head_plain:
             return STALE_SWEPT_WORDS

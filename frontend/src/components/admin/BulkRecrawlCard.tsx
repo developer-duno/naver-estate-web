@@ -149,10 +149,11 @@ export default function BulkRecrawlCard({ getToken }: Props) {
               }}
             />
           </div>
-          {/* 쉬운 우리말을 보여주고 원문은 title 로 (세션 411, SchedulerMonitor 와 같은 방식) */}
+          {/* 쉬운 우리말을 보여주고 원문은 title 로 (세션 411, SchedulerMonitor 와 같은 방식).
+              빈 문자열도 원문으로 폴백해야 하므로 `??` 가 아니라 `||` 를 쓴다. */}
           {progressQuery.data.job.error_message && (
             <p className="mt-1 text-[11px] text-red-700" title={progressQuery.data.job.error_message}>
-              {progressQuery.data.job.error_plain ?? progressQuery.data.job.error_message}
+              {progressQuery.data.job.error_plain || progressQuery.data.job.error_message}
             </p>
           )}
         </div>

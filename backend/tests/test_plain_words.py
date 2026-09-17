@@ -253,6 +253,47 @@ def test_explain_stored_error_pure_stale_marker_still_uses_rule():
     assert explain_stored_error("stale running — swept on startup") == STALE_SWEPT_WORDS
 
 
+def test_explain_stored_error_stale_marker_is_case_insensitive():
+    """대문자로 저장돼도 정리 문장으로 — 마커 문구는 사람이 손으로 쓰는 자리라 흔들린다."""
+    assert explain_stored_error("STALE RUNNING — swept") == STALE_SWEPT_WORDS
+
+
+def test_explain_stored_error_korean_head_with_marker_inside_is_kept():
+    """우리말 앞머리 뒤에 마커가 섞여 있으면 **원문 그대로** — 진짜 사유를 지우지 않는다.
+
+    규칙을 완전히 앵커 없이 두면 이 값이 통째로 "자동 정리됐어요" 로 뭉개져
+    `3/50개 단지 실패` 라는 진짜 사유가 사라진다(세션 411 리뷰어 MEDIUM 실측).
+    생산자는 마커를 줄머리나 `' | '` 뒤에만 붙이므로, 이런 값은 ③(이미 우리말)
+    경로로 가는 게 맞다.
+    """
+    raw = "3/50개 단지 실패 (stale running 뒤처리)"
+    assert explain_stored_error(raw) == raw
+
+
+def test_explain_stored_error_manual_stale_marker_at_line_start():
+    """줄머리 마커는 뒤에 우리말 설명이 붙어도 정리 문장으로 — 사람이 손으로 쓴 값."""
+    out = explain_stored_error(
+        "stale running — 세션409 수동 재시작(02:24)으로 중단, 부팅 스윕 5분 임계 사각"
+    )
+    assert out == STALE_SWEPT_WORDS
+
+
+def test_explain_error_does_not_swallow_korean_head_with_marker():
+    """알림 경로(`explain_error`)에는 ③이 없다 — 규칙이 안 맞으면 고정 문장이 정답.
+
+    이 사전은 화면과 알림이 함께 쓴다. 규칙을 앵커 없이 되돌리면 이 값이 정리 문장으로
+    바뀌어(진짜 사유 소실) 이 단언이 깨진다 — 알림 경로의 계약을 박제하는 자리다.
+    """
+    assert explain_error("작업 3건 실패 stale running 관련") == UNKNOWN_ERROR_WORDS
+
+
+def test_explain_stored_error_appended_stale_marker_case_insensitive():
+    """뒤에 붙은 마커도 대소문자를 가리지 않고 갈라낸다 — 앞의 사유는 그대로 살린다."""
+    out = explain_stored_error("3/50개 단지 실패 | Stale Running — swept by monitor")
+    assert out == "3/50개 단지 실패 — 그 뒤 " + STALE_SWEPT_WORDS
+    assert "Stale" not in out
+
+
 def test_explain_stored_error_does_not_log_unknown_original(caplog):
     """화면용 경로는 **수집 로그를 남기지 않는다** (세션 411).
 

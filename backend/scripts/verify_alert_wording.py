@@ -1,4 +1,4 @@
-"""알림 10창구 + 미지 에러 렌더가 전부 쉬운 우리말로 나가는지 한 번에 확인 (세션 409·410).
+"""알림 11창구 + 미지 에러 렌더가 전부 쉬운 우리말로 나가는지 한 번에 확인 (세션 409·410·411).
 
 재시작 직후 "PR 이 라이브에 반영됐나"를 판정하는 용도. 텔레그램은 mock 이라
 **실발송 0** (conftest 없이 단독 실행되므로 patch 로 직접 막는다).
@@ -6,6 +6,9 @@
 ⚠ 세션 410 확장: 옛 판은 "번역 사전에 걸린 말"만 렌더해서, 정작 사전에 **안 걸렸을 때**
    나가는 문장("처음 보는 문제…")과 결제 중단·부분환불 알림을 한 번도 안 찍어 봤다.
    ⓪⑨⑩ 이 그 자리다 — 사장님이 실제로 읽을 문장을 눈으로 확인하는 것이 이 스크립트의 값이다.
+
+⚠ 세션 411 확장: ⑪ 은 텔레그램이 아니라 **관리자 화면**(스케줄러 표·일괄 재크롤 진행률)의
+   `error_plain` 이다. 사장님이 읽는 창구라 같은 기준으로 함께 검사한다.
 
 실행:
     cd backend && DATABASE_URL="sqlite:///:memory:" PYTHONPATH=. PYTHONUTF8=1 \
@@ -196,6 +199,25 @@ def main() -> int:
         bad.append("이메일 마스킹 안 됨")
     results.append(("⑩ 부분환불 알림", msg, bad))
 
+    # ── 11. crawler.plain_words.explain_stored_error — 관리자 화면 error_plain ──
+    #
+    # 텔레그램은 아니지만 사장님이 읽는 창구라 같은 기준을 적용한다(infra.md
+    # §텔레그램 알림 문구: "error_message 도 관리자 화면에 보이므로 같은 기준").
+    # 스케줄러 표(`/api/admin/scheduler-status`)와 일괄 재크롤 진행률이 이 값을 띄운다.
+    from crawler.plain_words import explain_stored_error
+
+    stored_raws = [
+        "stale running — swept by monitor",
+        "(psycopg2.errors.QueryCanceled) canceling statement due to statement timeout",
+        "3/50개 단지 실패 | stale running — swept by monitor",
+    ]
+    for i, raw in enumerate(stored_raws, 1):
+        rendered = explain_stored_error(raw)
+        bad = check("", rendered)
+        if "stale" in rendered.lower():
+            bad.append("영문 마커 잔존")
+        results.append((f"⑪-{i} 관리자 화면 에러 문구", rendered, bad))
+
     # ── 출력 ──
     failed = 0
     for label, msg, bad in results:
@@ -208,9 +230,9 @@ def main() -> int:
 
     print(f"\n{'=' * 64}")
     if failed:
-        print(f"❌ 10창구 + 미지 에러 렌더 중 {failed}곳에 어려운 말이 남아 있다")
+        print(f"❌ 11창구 + 미지 에러 렌더 중 {failed}곳에 어려운 말이 남아 있다")
         return 1
-    print("✅ 10창구 + 미지 에러 렌더 전부 쉬운 우리말 — 라이브 반영 확인")
+    print("✅ 11창구 + 미지 에러 렌더 전부 쉬운 우리말 — 라이브 반영 확인")
     return 0
 
 

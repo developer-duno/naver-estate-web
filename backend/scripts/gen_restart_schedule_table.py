@@ -14,6 +14,8 @@ DB·네트워크·scheduler.start() 없음 — create_scheduler() 는 add_job �
 
 import argparse
 import difflib
+import inspect
+import re
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -73,11 +75,29 @@ _ID_TO_JOB_TYPE = {
 }
 
 
+# 트리거 간격을 .env 가 덮는 모듈 상수(`*_INTERVAL_*`). 표는 "코드 기본값" 기준이므로 원래 값으로 되돌려 만든다.
+# 라이브 폴더(.env 있음)에서 만들면 crawler_monitor 가 10분으로 나와 CI·워크트리(.env 없음)의 30분과
+# 어긋났다(세션 412 머지 직후 실측 — --check 실패). 기본값은 scheduler.py 소스의
+# `NAME = int(os.getenv("NAME", "기본값"))` 줄에서 읽는다 — 숫자를 여기 또 적지 않는다(손글씨 재유입 금지).
+_ENV_INT_DEFAULT = re.compile(
+    r'^(?P<name>[A-Z_]*INTERVAL[A-Z_]*) = int\(os\.getenv\("(?P=name)", "(?P<default>\d+)"\)\)$', re.M
+)
+
+
+def _interval_code_defaults(sched_mod) -> dict[str, int]:
+    """scheduler.py 소스에서 간격 상수의 코드 기본값을 읽는다(.env 로 덮인 현재값이 아니라)."""
+    found = {m["name"]: int(m["default"]) for m in _ENV_INT_DEFAULT.finditer(inspect.getsource(sched_mod))}
+    if not found:
+        raise SystemExit("scheduler.py 에서 *_INTERVAL_* 기본값 줄을 찾지 못했다 — 소스 형식이 바뀌었으면 정규식을 맞출 것")
+    return found
+
+
 def build_jobs() -> list:
-    """토글을 전부 켠 채 스케줄러를 만들어 등록된 잡 목록을 돌려준다(start 안 함)."""
+    """토글을 전부 켜고 간격 상수를 코드 기본값으로 되돌린 채 스케줄러를 만들어 등록된 잡 목록을 돌려준다(start 안 함)."""
     from crawler import scheduler as sched_mod
 
     patches = [patch.object(sched_mod, name, True) for name in _ENABLE_TOGGLES]
+    patches += [patch.object(sched_mod, name, value) for name, value in _interval_code_defaults(sched_mod).items()]
     for p in patches:
         p.start()
     try:

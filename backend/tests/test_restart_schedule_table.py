@@ -61,6 +61,23 @@ def test_release_md_block_matches_generated():
     )
 
 
+def test_generated_block_ignores_env_interval_overrides(monkeypatch):
+    """라이브 .env 가 간격 상수를 덮어도(예: MONITOR_INTERVAL_MIN=10) 표는 코드 기본값으로 나온다.
+
+    세션 412: #539 머지 직후 라이브 폴더에서 --check 가 실패했다 — 워크트리·CI(.env 없음)에서는
+    crawler_monitor 30분, 라이브(.env 10분)에서는 10분. 표는 "코드 기본값" 기준이므로 생성기가
+    간격 상수를 소스 기본값으로 되돌려야 하고, 그래야 라이브 폴더 전체 pytest 도 초록이다.
+    """
+    import crawler.scheduler as sched_mod
+
+    baseline = generate_block()
+    assert "| `crawler_monitor` | 30분마다 |" in baseline
+    monkeypatch.setattr(sched_mod, "MONITOR_INTERVAL_MIN", 10)
+    monkeypatch.setattr(sched_mod, "CRAWL_DETAIL_INTERVAL_MIN", 7)
+    monkeypatch.setattr(sched_mod, "COMPLEX_DETAIL_APT_INTERVAL_HOURS", 9)
+    assert generate_block() == baseline, "간격 상수가 .env 값으로 덮인 채 표가 만들어졌다 — 코드 기본값으로 되돌려야 한다"
+
+
 @pytest.mark.parametrize(
     "broken",
     [

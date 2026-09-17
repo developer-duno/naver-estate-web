@@ -184,7 +184,13 @@ Linux 메모리 오버커밋 모델상 "커밋이 물리 한도의 2배"라는 �
 - 새 `job_type` → `JOB_WORDS` + FE `crawl-job-labels.ts` 양쪽 등록(`test_plain_words.py` 가 대조).
 - 결제·정산 잡은 **"돈이 안 걷힌다"** 안내로 갈린다(`action_words_for_job*`) — 수집용
   "새 자료만 안 들어와요" 를 쓰면 심각도를 정반대로 알린다.
-- `crawl_jobs.error_message` 도 관리자 화면에 보이므로 같은 기준을 적용한다.
+- `crawl_jobs.error_message` 도 관리자 화면에 보이므로 같은 기준을 적용한다. **단 알림과 화면은 함수가 다르다**(세션 411 PR #534):
+  알림 = `explain_error`(아는 에러면 번역, 못 알아보면 고정 문장 + INFO 수집 로그) / 화면 = `explain_stored_error`
+  (⓪붙은 스윕 마커 분리 → ②번역 → ③**이미 우리말이면 원문 유지** → ④고정 문장, **로그 없음** — 화면 폴링 60초·3~15초가
+  P1-2 수집 로그를 오염시키므로). 그래서 `세션388 수동 중단 — kaptCode …` 같은 사람이 쓴 문장은 알림에선 "처음 보는 문제",
+  화면에선 원문 그대로 보인다 — **화면이 더 자세한 것은 의도**(검사관 C A-2). 라우터는 `error_plain` 을 raw 옆에 실어 주고
+  FE 는 `error_plain || error_message` + `title=raw`. 관리자 카드의 **버튼 조작 오류**(`detail`)도 창구다 —
+  `routers/admin/collect.py` 가 `수집 실패: {e}` 로 raw 예외를 실어 보내던 것을 `explain_error` 로 감쌌다(세션 411 후속).
 - 접두어 회귀는 `test_plain_words.py` 가 **`.py` 8모듈 + 워크플로 YAML** 을 전수 추출해 막는다.
 
 ### 적용 현황 — **모듈 8개 / 호출부 11곳 전부 완료** (세션 409)
@@ -216,7 +222,8 @@ API 응답·데이터 사전은 제외한다 — 거짓 경보를 내는 가드�
 cd backend && PYTHONPATH=. PYTHONUTF8=1 python scripts/verify_alert_wording.py
 # 종료 0 = 전부 우리말 / 1 = 어려운 말이 남은 창구를 지목해 출력
 # 세션 410 확장: ⓪ 못 알아본 에러 렌더(새 알림 + 해소 알림 — 내부 마침표 검사) ·
-#   ⑨ 자동결제 중단 사유 6종(_mark_retry 실호출) · ⑩ 부분환불(이메일 마스킹 검사) 포함 = "10창구 + 미지 에러 렌더".
+#   ⑨ 자동결제 중단 사유 6종(_mark_retry 실호출) · ⑩ 부분환불(이메일 마스킹 검사) · ⑪ 관리자 화면 `explain_stored_error`
+#   (스윕 마커·psycopg2·붙는 형태 3입력, 세션 411 후속) 포함 = "11창구 + 미지 에러 렌더".
 #   텔레그램·이메일·log_action 은 전부 patch — 실발송 0. 워크트리(.env 없음)에선 DATABASE_URL="sqlite:///:memory:" 를 앞에 붙인다
 ```
 
@@ -266,8 +273,9 @@ job_type `officetel_presale`(접두어 없음), id `collect_rental_presale` → 
 
 ### 짧은 주기 크론과 재시작 겹침 — 반복 재시작은 몰아서 하지 말 것 (세션 372 실측)
 
-`official_price`(매월 15일, 몇 시간짜리)처럼 **긴** 잡은 위 표에 "실행 중 재시작 회피"로 이미
-박혀 있다. 이 절은 그 반대 — **짧은 주기(10분·30분 interval) 크론이라도, 재시작이 짧은
+`official_price`(매월 15일, 몇 시간짜리)처럼 **긴** 잡은 release.md §3-0 ⏰ 시각표(재시작 절대
+금지 구간)와 `backend/.claude/details.md` §잡 상세 — 공동주택 공시가격 수집 에 "실행 중 재시작 회피"로
+이미 박혀 있다(세션 411 에 그 원문이 이 파일 하단에서 details.md 로 옮겨졌다 — "위 표" 가 아니다). 이 절은 그 반대 — **짧은 주기(10분·30분 interval) 크론이라도, 재시작이 짧은
 시간에 몰리면 도중 작업이 끊기거나 그 순간 DB 부하가 겹쳐 흔들릴 수 있다**는 일반 원칙.
 
 - 서버 재시작 시 `main.py`의 부팅 스윕(SQL, `tests/test_stale_running_sweep.py` 회귀 가드)이

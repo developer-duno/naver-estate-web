@@ -61,7 +61,7 @@ secrets 미설정 시 `setup` project 가 `TEST_ADMIN_*` missing 로그와 함�
 - `playwright-report-<project>` — HTML 리포트 (14일 보관)
 - `admin-screenshots-<project>` — `test-results/` 실패 시 자동 캡처 (14일 보관)
 - `updated-snapshots-<project>` — workflow_dispatch + `update_snapshots=true` 일 때만.
-  ⚠ 각 꾸러미에 PNG **전량**(현재 19장, 헤더 baseline 생성 후 20장)이 담기지만 유효한 재촬영본은 `*-<project>-linux.png` 뿐이다
+  ⚠ 각 꾸러미에 PNG **전량**(현재 20장 — 세는 법 `find frontend/e2e -name "*.png" | wc -l`)이 담기지만 유효한 재촬영본은 `*-<project>-linux.png` 뿐이다
   (합치면 옛본이 새본을 덮는다). 대조·판정 절차 = 아래 §baseline 재생성 절차.
 
 ## 시각 회귀 (toHaveScreenshot)
@@ -72,7 +72,7 @@ baseline 은 spec 파일별 `*-snapshots/` 디렉토리에 `<이름>-<project>-l
 (파일명에 project 가 들어가므로 같은 spec 을 두 project 에서 돌리면 장이 이중 생성된다 —
 `public` 의 testIgnore 가 `public-flow` 를 제외하는 이유).
 
-| project | PNG (현재 **19장** 실측 2026-09-13 — `header-public-desktop` 은 테스트만 있고 baseline 미생성, CI dispatch 후 20장) |
+| project | PNG (현재 **20장** 실측 2026-09-17 — `header-public-desktop` baseline 은 PR #501 에서 생성·커밋됨) |
 |---|---|
 | `public` (10) | `blog-index-{desktop,iphone}` · `blog-slug-{desktop,iphone}` · `blog-slug-realtime-{desktop,iphone}` · `blog-slug-radar-weights-{desktop,iphone}` · `blog-slug-for-agents-{desktop,iphone}` |
 | `public-visual` (5) | `home` · `login` · `compare` · `mibunyang` · **`header-public-desktop`**(세션 400 신설) |
@@ -111,7 +111,7 @@ gh workflow run ci.yml --ref <작업 브랜치> -f update_snapshots=true
 
 ---
 
-# 시각 회귀 절차·판정·함정 (정본)
+## 시각 회귀 절차·판정·함정 (정본)
 
 > 아래 두 절은 규칙 파일 다이어트(세션 412)로 `.claude/rules/testing.md` 에서 **원문 그대로** 옮겨 왔다.
 > testing.md 에는 세 줄 요약과 이 파일로의 포인터만 남는다(내용 무손실). 새 함정·사건은 여기에 보탠다.
@@ -199,7 +199,7 @@ done
 **③ 꾸러미별 접미사 필터로 sha256 대조**
 
 ⚠ **artifact 를 통째로 덮어쓰지 마라.** 각 꾸러미에는 그 프로젝트가 재촬영한 것만이 아니라
-**e2e/ 의 PNG 전량**(현재 19장 — 헤더 baseline 생성 후 20장)이 담긴다(path 글롭이 전체 스냅샷 디렉터리). 3꾸러미를 한 폴더에
+**e2e/ 의 PNG 전량**(현재 20장)이 담긴다(path 글롭이 전체 스냅샷 디렉터리). 3꾸러미를 한 폴더에
 합치면 **옛본이 새본을 덮는다.** 꾸러미 `p` 에서 유효한 재촬영본은 `*-<p>-linux.png` 뿐이다.
 
 ```bash

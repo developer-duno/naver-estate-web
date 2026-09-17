@@ -76,8 +76,8 @@ baseline 을 만질 때만 필요해 **`frontend/e2e/README.md` §시각 회귀 
 e2e spec 이나 baseline 을 고치기 전에 그 절을 읽는다. 여기 남기는 것은 어기면 CI 가 못 잡는 세 줄뿐:
 
 - 화면에 카드를 **추가하면 촬영 전 대기 조건도 추가**한다 — 스켈레톤이 사라지고 굳은 시점을, 정상·에러 두 갈래 `.or()` 로 기다린다. 카드 제목은 로딩 중에도 보여 대기 기준이 못 된다(같은 사고 2회, 세션 396·398).
-- baseline 재촬영은 **CI dispatch 만**(로컬 Windows 촬영 금지, `--update-snapshots=all`), 재촬영본 중 **내 변경으로 설명되는 장만** 커밋한다(세션 401: 13장 중 5장만 설명됨).
-- 전역 `maxDiffPixelRatio 0.02` 상향·`mask` 로 높이 문제 덮기 금지 — `npm run check:visual-guard` 가 기계적으로 막는다.
+- baseline 재촬영은 **CI dispatch 만**(로컬 Windows 촬영 금지, `--update-snapshots=all`), 재촬영본 중 **내 변경으로 설명되는 장만** 커밋한다(세션 401: 13장 중 5장만 설명됨). artifact 3꾸러미는 통째로 덮지 말고 `*-<project>-linux.png` 접미사로 걸러 sha 대조(각 꾸러미에 PNG 전량이 담겨 옛본이 새본을 덮는다).
+- 전역 `maxDiffPixelRatio 0.02` 상향 금지. **fullPage 높이가 회차마다 다른 문제는 `mask` 로 못 덮는다**(크기가 다르면 작은 쪽을 패딩해 그 영역을 diff 로 센다) — 그 카드의 응답을 `page.route` mock 으로 고정하는 것이 유일한 처방(세션 398 반증). 임계·mask·갱신 플래그 되돌림은 `npm run check:visual-guard` 가 기계적으로 막는다.
 
 ## 테스트 코드 작성 기준
 - 파일명: [대상].test.ts 또는 [대상].spec.ts

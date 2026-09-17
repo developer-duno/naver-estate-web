@@ -22,6 +22,11 @@ from unittest.mock import patch
 
 from apscheduler.triggers.cron import CronTrigger
 
+# `cd backend && python scripts/gen_restart_schedule_table.py …` 를 PYTHONPATH 없이 그대로 칠 수 있게 backend/ 를 경로에 넣는다
+# (형제 스크립트 관례). 없으면 `crawler` 를 못 찾아 ModuleNotFoundError — CI 는 pytest rootdir 가 넣어 줘서 구조적으로 못 잡는다
+# (세션 412 검사관 A: release.md 가 안내하는 갱신 명령이 그대로는 실패했다).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 BLOCK_START = "<!-- restart-schedule:start -->"
 BLOCK_END = "<!-- restart-schedule:end -->"
 

@@ -28,3 +28,4 @@
 
 - [ ] 머지 후 zombie cross-check 필요 (`.claude/rules/release.md` §2) — PID·부팅시각·라이브 GET
 - [ ] V0xx 마이그레이션 = prod 선행 실행 필요 (사장님 SQL Editor)
+- [ ] 코드에서 **생성하는 문서·표·가드**(예: `gen_restart_schedule_table.py`)를 바꿨다면 **라이브 폴더(.env 로드)와 워크트리·CI(.env 없음) 양쪽**에서 1회 실행 — 세션 412 #539→#540: .env 없는 곳에서만 초록이었다

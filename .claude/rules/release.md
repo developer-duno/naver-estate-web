@@ -24,7 +24,7 @@
 FE 만 변경된 PR (frontend/*) 은 본 룰 면제.
 
 ⚠ **여러 PR을 짧은 간격으로 연속 머지할 때는 매번 재시작하지 말고 묶어서 한 번에
-재시작해도 된다**(infra.md "짧은 주기 크론과 재시작 겹침" 답습 — 반복 재시작이 크론
+재시작해도 된다**(`backend/.claude/details.md` §스케줄러 운영 배경 3절 「짧은 주기 크론과 재시작 겹침」 답습 — 반복 재시작이 크론
 실행 시각과 겹쳐 일시적 오탐을 낼 수 있다, 세션 372 실사고). 단 묶어서 재시작하면
 **그 안의 어느 PR이 zombie였는지 개별 구분이 안 되는 대가**가 있다 — 재시작 후 4중
 지표가 옛값이면, 묶음 안의 PR을 머지 순서 역순으로 하나씩 되짚어(이분 탐색 재시작)
@@ -59,7 +59,7 @@ FE 만 변경된 PR (frontend/*) 은 본 룰 면제.
 재시작은 **돌고 있는 잡을 끊는다**(부팅 스윕이 running 잡을 cancelled 처리). 명령을 치기 전에
 ① 지금 running 인 잡이 있는지 ② 앞으로 5분 안에 도래할 크론이 있는지 둘 다 본다.
 
-⛔ **판정 명령에 파이프를 붙이지 말 것**(세션 411 실사고, §4 411 행): `python check.py | grep -v "slow query" && Restart-Service …`
+⛔ **판정 명령에 파이프를 붙이지 말 것**(세션 411 실사고, details.md §release 사건 박제 표 411 행): `python check.py | grep -v "slow query" && Restart-Service …`
 는 파이프 종료코드가 **grep 의 0** 이라 스크립트가 WAIT(exit 1)를 내도 `&&` 가 통과한다. 잡음 제거는 스크립트 안에서 하거나
 `out=$(python check.py 2>&1); echo "$out"; [[ "$out" == *GO* ]] && …` 처럼 **문자열로 판정**한다(꼭 파이프면 `set -o pipefail`).
 ②의 "5분 안" 판정에는 `GET /api/admin/scheduler-status` 의 `next_run_at` 을 써도 된다 — jitter 가 이미 반영된 확정값이라
@@ -141,7 +141,7 @@ while read id; do grep -q "$id" .claude/rules/release.md || echo "MISSING: $id";
 ⚠ **(1) 의 running 조회는 DB 에 접속한다.** DB 장애로 재시작하려는 상황이면 이 명령도 실패한다 —
 그때는 **조회 실패 자체를 "확인 불가"로 받아들이고** `scripts/backend.log` 마지막 줄과 위 시각표만으로
 판단한다(DB 가 죽었으면 크론도 대부분 실패 중이므로 끊을 작업이 없을 가능성이 높다).
-DB 다운 진단·처방은 infra.md §Supabase DB 전면 다운 런북이 우선.
+DB 다운 진단·처방은 `backend/.claude/details.md` §Supabase DB 전면 다운 런북과 재발 이력이 우선.
 
 **3-1. 재시작 실행**
 
@@ -168,7 +168,7 @@ curl.exe -s https://api.2u.pe.kr/health/db                    # 기대: {"status
 ① `Get-Service naver-orchestrator` 상태 확인(Stopped 면 `Start-Service`) ②
 `Get-Content scripts\startup.log -Tail 20` 으로 기동 실패 사유 확인 ③ `scripts\backend.log` 첫 줄
 (uvicorn 부팅 로그)이 갱신됐는지 — 셋 다 이상 없는데 포트만 없으면 DB 연결 실패로 기동이 막힌 것일 수 있으니
-infra.md §Supabase DB 전면 다운 런북으로 넘어간다. **무작정 Restart-Service 재실행은 상황을 악화시킨다.**
+`backend/.claude/details.md` §Supabase DB 전면 다운 런북과 재발 이력으로 넘어간다. **무작정 Restart-Service 재실행은 상황을 악화시킨다.**
 
 - ⚠ **`Restart-Service` 는 조용히 실패할 수 있다 — 실행 후 "포트 소유 PID 가 바뀌었는지"로 판정한다**
   (세션 396 실측: 첫 시도 후 45초를 기다렸는데 `startup.log` 시각·8002 포트 소유 PID 가 그대로였다. 같은 명령을
@@ -180,61 +180,14 @@ infra.md §Supabase DB 전면 다운 런북으로 넘어간다. **무작정 Rest
   그 전까지는 포트 소유 PID·`startup.log` 시각·`backend.log` 첫 줄 PID 세 축으로 판정한다.
 - ⛔ **비관리자 `Stop-Process` 로 서비스 프로세스(orchestrator·backend)를 직접 죽이는 것은
   액세스 거부로 불가** — 서비스는 UAC 필터링 없는 전체 토큰으로 돌아서다 (세션 363 훈련 1차
-  실측). 아래 레거시의 "프로세스 kill 후 재기동" 흐름을 현행 환경에서 쓰지 말 것.
+  실측). 레거시(details.md 로 이동)의 "프로세스 kill 후 재기동" 흐름을 현행 환경에서 쓰지 말 것.
 - ⚠ 서비스 orchestrator 는 session 0 이라 비관리자 조회에서 CommandLine=NULL — CommandLine
   grep 이 0건이어도 "orchestrator 없음" 단정 금지. 판정은 `orchestrator.pid` + `Get-Service
   naver-orchestrator` + startup.log 로.
 - orchestrator 급사 시 nssm 이 60초 내 자동 재기동 — 개입 전 startup.log 최신 헤더부터 확인
   (이미 자가복구됐을 수 있다).
 
-**레거시 (nssm 서비스 제거·수동 운용 폴백 시에만 유효 — 옛 Startup BAT 시절 절차):**
-
-```powershell
-# Step 1: orchestrator 종료 — python.exe·pythonw.exe 둘 다 잡는다
-#   재부팅 경로(Startup BAT)·§3 schtasks 명령은 pythonw 로, 수동·세션 셸 재기동은 python 으로 뜰 수 있어
-#   이름 하나만 필터하면 놓친다. ⚠ Get-Process 는 Windows PowerShell 5.1 에 CommandLine
-#   속성이 없어 필터가 조용히 0건 — Get-CimInstance 필수 (세션 353 발견: 옛 명령은 무동작).
-Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" |
-    Where-Object { $_.CommandLine -like '*startup_orchestrator*' } |
-    ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
-
-# Step 1-b: 사멸 확인 — 0건이어야 다음 단계 진행 (예외 0)
-#   옛 orchestrator 가 살아 있으면 새 인스턴스가 _check_already_running() 에서 조용히
-#   sys.exit(0) → "재시작했다고 믿었는데 안 된" 사고. 세션 352 의 성공은 옛 PID 가
-#   이미 죽어 있던 우연이었다 (§4 세션 352~353 행).
-(Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" |
-    Where-Object { $_.CommandLine -like '*startup_orchestrator*' } | Measure-Object).Count  # 기대: 0
-
-# Step 2: uvicorn 자식 좀비 정리 (port 8002 점유 프로세스 명시 종료)
-$pids = (Get-NetTCPConnection -LocalPort 8002 -ErrorAction SilentlyContinue).OwningProcess
-if ($pids) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }
-
-# Step 3: 3초 대기 (포트 해제 + 프로세스 graceful exit)
-Start-Sleep -Seconds 3
-
-# Step 4: 재시작 — 반드시 "세션 수명과 분리된" 방식으로
-#   옵션 A (가장 안전): PC 재부팅 → Windows Startup BAT 가 orchestrator 자동 기동
-#   옵션 B (재부팅 없이): schtasks 일회성 작업 경유 — 부모가 작업 스케줄러 서비스라
-#     Claude 세션·터미널이 닫혀도 살아남는다 (세션 353 라이브 검증 완료)
-schtasks /Create /TN naver-orch-restart /SC ONCE /ST 23:59 /F /TR "C:\Users\user\AppData\Local\Programs\Python\Python312\pythonw.exe D:\naver-estate-web\scripts\startup_orchestrator.py"
-schtasks /Run /TN naver-orch-restart
-schtasks /Delete /TN naver-orch-restart /F   # 정의만 삭제 — 실행 중 프로세스는 안 죽는다
-#   ⛔ 금지: Claude 세션·터미널 셸에서 python 으로 직접 기동 — 그 창이 닫히는 순간
-#     Windows 가 orchestrator+uvicorn 트리를 통째로 죽인다(무로그·무알림 급사,
-#     watchdog 도 같이 죽어 자동복구 0 — §4 세션 352~353 실사고)
-#   ⚠ 실행 방식: 위 PowerShell 명령들을 bash(Claude 셸)에서 -Command 인라인으로 돌리면
-#     인용부호가 깨져 Get-CimInstance 쿼리가 실패하는데 카운트만 0 으로 찍힌다(가짜 0 —
-#     종료가 실행된 적 없는데 성공처럼 보임, 세션 354 재현). 반드시 .ps1 파일로 저장 후
-#     `powershell -NoProfile -File <경로>` 로 실행할 것. 패턴 필터가 헛돌면 전체 python
-#     프로세스 나열 진단으로 정확한 PID 를 확인해 PID 지정 종료가 최선 — 같은 PC 에
-#     타 프로젝트 python 프로세스가 다수 상주한다(오살 방지).
-
-# Step 5: 부팅 검증 (셋 다 확인)
-Start-Sleep -Seconds 45   # INITIAL_DELAY 10초 + 백엔드 기동 + health check 여유
-Get-Content scripts\startup.log -Tail 8   # 기대: 새 "서버 자동 시작" 헤더 + "백엔드 정상 시작 완료"
-Get-Content scripts\orchestrator.pid      # 기대: 새 PID (tasklist /FI "PID eq <값>" 생존 확인)
-curl.exe -s https://api.2u.pe.kr/health/db   # 기대: {"status":"ok","db":"ok"} (외부 경로 ground truth)
-```
+**레거시(nssm 서비스 제거·수동 운용 폴백 시에만 유효 — 옛 Startup BAT 시절 kill+schtasks 5단계)** 는 세션 412 에 `backend/.claude/details.md` §release 레거시 재기동 절차 로 원문 이동. 현행 환경에서 그 흐름(비관리자 Stop-Process·세션 셸 직접 기동)은 쓰지 말 것.
 
 **통상은 현행 `Restart-Service` 1줄로 충분** (훈련 실측 중단 ~15초). PC 재부팅도 여전히 안전한
 최후 수단 — 세션 363부터는 서비스가 부팅 시 자동 기동하므로 **로그인 없이도** 복구된다(옛
@@ -243,21 +196,9 @@ Startup BAT 시절엔 로그인해야 기동 — infra.md §자동 시작 사건
 
 ### 4. 사건 박제 (왜 이 룰?)
 
-| 세션 | 사고 | 영향 |
-|---|---|---|
-| 229 (2026-05-24) | PR #61 (가치지표 배치 200→1000, 25일 완주) 머지 후 backend 재시작 안 됨 | 가속 효과 검증 시각 미도래로 다음 세션 이월 |
-| 230 (2026-05-25) | 5/25 08:30 KST cron 도래했으나 total=200 옛 코드 가동 발견 | 사용자 watchdog 수동 재시작 + 5/26 cron 검증 이월 |
-| 231 (2026-05-25) | backend 5/24 15:26 부팅 = PR #61 머지 (5/25 06:09) 보다 15시간 전. zombie 동일 패턴 지속 | 사용자 옵션 3 (재시작 보류) 선택. 본 세션 232 룰 git 박제로 재발방지 |
-| 257 (2026-06-01) | PR #102 후 "재시작 불필요" 정적 결론 3회 → 라이브 GET 으로 화면 표시 옛값(08:30/20분/6시간) 확인 = 재시작 필요로 정정. trigger 동작은 새값이나 표시 모듈 본문이 옛 코드 | release.md §2 에 라이브 표시값 4번째 지표 + §5-1 정적분석 함정 추가. 사용자 PC 재부팅 선택 |
-| 301 (2026-06-13) | PR #167 (mb 정렬 nullif) 머지 후 라이브 backend PID 20368 이 머지 19h 전 부팅 = zombie. 라이브 pp_asc 가 0 맨앞(옛 동작). 6렌즈 적대검증 + prod PG 직접 실측(OLD `[0,0,0,0,0]` vs NEW `[1122,...]`)으로 "디스크 정상·라이브만 옛코드" 확정 | §2 에 "4중→PR성격별 3중" + prod DB 직접실측 거짓양성 차단 노하우 추가. 사용자 PC 재부팅 선택 |
-| 352~353 (2026-08-09) | 세션 352 가 zombie 해소를 위해 orchestrator 를 **자기 세션 셸에서 python 으로 직접 재기동**(02:55) → 그 세션 창이 닫히자 05:42 orchestrator+uvicorn 트리 동반 급사(무로그·무알림). watchdog 도 같이 죽어 자동복구 0, 다음 세션(353)이 발견할 때까지 backend 다운 방치. 부수 발견 2건 = ① 옛 §3 `Get-Process pythonw` 는 PS 5.1 CommandLine 속성 부재로 애초에 무동작 ② 수동 재기동 시 프로세스명이 python 이라 pythonw 단일 필터도 미스매치 | §3 전면 보강: Get-CimInstance 양이름 필터 + Step 1-b 사멸확인 + schtasks 세션독립 재기동(세션 353 라이브 검증) + 세션 셸 직접 기동 금지 명문화 |
-
-| 363 (2026-08-14) | (사고 규명+구조 전환) Windows Update(KB5120249) 야간 계획 재부팅 → Startup BAT 가 로그인 의존이라 로그인 화면에서 **13시간 backend 다운**(watchdog·스케줄 전체 미기동, 상세 = infra.md §자동 시작 사건). orchestrator 를 nssm 서비스로 전환. 라이브 훈련 1차에서 비관리자 Stop-Process 액세스 거부 실측 → 서비스 DACL 시작/중지 권한 등록 후 훈련 2차 Restart-Service 15초 복구 검증 | §3 현행 절차를 Restart-Service 1줄로 교체, 옛 schtasks 절차는 레거시 폴백 격하. 부팅 자동 기동(로그인 불필요) + orchestrator 급사 60초 자동복구 확보 |
-| 386 (2026-08-26) | (무피해, 절차 결함) PR #425(`crawler/service_applyhome_officetel.py`·`routers/mb_serializers.py` 주석 정정)를 "diff가 주석뿐이라 재시작 불필요"로 그 자리에서 판단 → §5 기존 3가지 면제 사유(FE전용/문서전용/테스트전용) 어디에도 안 맞는데도 재시작 생략. 사후검증에서 AST 비교로 실행 코드 무변경을 사후 확인해 결과는 안전했으나, 판단 당시엔 §5-1이 금지한 "정적분석만으로 단정"과 동일 패턴이었음 | §5 에 4번째 면제 조건(AST 비교로 실행 코드 구조 동일 확인된 텍스트 정정) 명문화 — 눈대중 판단과 기계적 확인을 구분 |
-| 396 (2026-09-10) | (무피해, 절차 결함 2건) ① PR #486·#487 머지 후 `Restart-Service naver-orchestrator` 첫 시도가 **조용히 실패** — 45초 대기 후에도 8002 포트 소유 PID·startup.log 시각이 그대로였고, bash 파이프에서 PowerShell 출력이 "Binary file matches" 로 가려져 실패가 안 보였다. try/catch + 전후 상태 출력으로 재실행하니 정상 (orchestrator 6080→61116, backend 7500→62280, 07:56:40). ② 같은 세션의 레포 삭제 사고로 `orchestrator.pid` 가 사라져 4중 cross-check 의 한 축이 무력화된 채였다(재시작 후 자동 복구됨) | §3 에 "포트 소유 PID 변화로 판정"·"pid 파일 부재 시 3축 판정" 2줄 추가. 라이브 검증은 캐시 헤더 4종 HTTP 실측으로 대체 확인 |
-| 397 (2026-09-11) | (무피해, 절차 결함 2건) ① 재시작 직전 "5분 내 도래 크론·running 잡" 확인을 생략 — 다행히 겹친 잡이 없었으나, official_price(3~7h) 같은 장시간 잡과 겹쳤으면 부팅 스윕이 cancelled 처리했을 것. ② `Restart-Service` 후 45초에 포트 소유 PID 가 빈값이라 "실패"로 오판할 뻔함 — 실측하니 서비스 "중지 대기"에만 약 1분, 기동까지 약 65초라 **45초는 판정 시점 자체가 이름**. | §3 을 3-0(사전 확인)·3-1(실행)으로 분리, 대기를 고정 40초 → 포트 폴링(최대 120초)으로 교체 |
-| 409 (2026-09-17) | (무피해, 절차 결함) §3-0 (1) 을 재시작 **4분 전**에 확인하고 그대로 믿은 채 02:24 재시작 → 그 사이 02:21:49 에 시작한 `article_detail`(#53918) 이 끊김. 부팅 스윕은 시작 5분 넘은 잡만 정리해 그 잡은 `running` 으로 남았고 02:30 수동 cancelled 처리(경보 미발화). 5분 임계 자체는 세션 208 근거로 유지. ⚠ 세션 410 정정: 손대지 않았어도 monitor 10분 스윕이 1h 뒤 자동 정리했을 것(영구 고착 아님) | §3-0 에 "직전 재조회(1분 룰)" + monitor 이중 스윕 명시 + 긴 임계 잡만 수동 정리 SQL |
-| 411 (2026-09-17) | (무피해, 절차 결함) §3-0 을 한 호출로 묶은 판정 스크립트가 **WAIT(exit 1)** — crawl_details 4.3분·monitor 4.1분 내 도래 — 를 냈는데, 뒤에 붙인 `\| grep -v "slow query"` 가 파이프 종료코드를 grep 의 0 으로 바꿔 `&&` 게이트가 통과 → 08:04:07 재시작 실행(44056→27348). 실측: running 0, 그 창(08:03~08:10)에 시작·swept 잡 0, 08:08 예정분은 새 프로세스의 interval start_date 로 08:43 으로 이동. 부수 확인: `next_run_at` 은 jitter 가 **이미 반영된 확정값**이라 5분 판정에 그대로 써도 된다(검사관 C 실측, ±15분 오차 없음) | §3-0 명령 블록에 "판정 명령 파이프 금지" 1줄 + 글로벌 메모리 `feedback_pipe_hides_gate_exit_code` |
+세션 229~411 의 사건 12행(zombie 3연속·정적분석 오판(257)·세션 셸 직접 기동 급사(352~353)·nssm 전환(363)·AST 미확인 면제(386)·
+조용한 Restart-Service 실패(396)·사전 확인 생략(397)·재시작 직전 재조회 누락(409)·파이프가 게이트 종료코드 삼킴(411))은
+세션 412 에 **`backend/.claude/details.md` §release 사건 박제 표** 로 원문 그대로 옮겼다. 새 사건은 그 표에 행을 추가하고, 절차가 바뀌면 위 §3 을 고친다.
 
 3 세션 연속 backend 재시작 누락 = 글로벌 메모리 (사적) 박제로는 부족 → 본 룰로 git 추적.
 

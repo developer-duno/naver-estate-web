@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       update_snapshots:
-        description: "Playwright 시각 회귀 baseline 갱신 (Linux). artifact 3개(updated-snapshots-admin/-public/-public-visual) — 각 꾸러미는 자기 프로젝트 접미사(-<project>-linux.png) 파일만 유효. sha256 대조 후 달라진 것만 커밋. 절차 = .claude/rules/testing.md"
+        description: "Playwright 시각 회귀 baseline 갱신 (Linux). artifact 3개(updated-snapshots-admin/-public/-public-visual) — 각 꾸러미는 자기 프로젝트 접미사(-<project>-linux.png) 파일만 유효. sha256 대조 후 달라진 것만 커밋. 절차 = frontend/e2e/README.md §baseline 재생성 절차"
         type: boolean
         default: false
 
@@ -234,7 +234,7 @@ jobs:
       #   그 실증이다. `=all` 은 오차 무관 덮어쓰되 바이트 동일이면 안 써서 멱등하다.
       #   갱신 여부 판정 = 로그의 `is re-generated, writing actual.` 줄 수(신규 장은
       #   `A snapshot doesn't exist ... writing actual.`) == sha 변경 장 수. 절차·판정 =
-      #   .claude/rules/testing.md §baseline 재생성.
+      #   frontend/e2e/README.md §baseline 재생성 절차.
       - name: Run E2E (${{ matrix.project }})
         run: npx playwright test --project=${{ matrix.project }} ${{ inputs.update_snapshots && '--update-snapshots=all' || '' }}
         env:
@@ -264,7 +264,7 @@ jobs:
       # ⚠ 이 꾸러미는 **그 프로젝트가 재촬영한 것만이 아니라 e2e/ 의 PNG 전량**(현재 19장, 헤더 baseline 생성 후 20장)**을 담는다
       #   (path 글롭이 전체 스냅샷 디렉터리). 따라서 3꾸러미를 한 폴더에 통째로 합치면 옛본이
       #   새본을 덮는다 — 꾸러미 p 에서는 `*-<p>-linux.png` 파일만 유효한 재촬영본이다.
-      #   sha256 대조 후 달라진 것만 커밋. 절차 = .claude/rules/testing.md §baseline 재생성.
+      #   sha256 대조 후 달라진 것만 커밋. 절차 = frontend/e2e/README.md §baseline 재생성 절차.
       #
       # always() 필수 — 갱신 run 에서 어느 test 가 실패해도 나머지 PNG 는 받아야 하기 때문.
       #   단 그 대가로 **촬영 전 단언에서 죽은 장은 옛 PNG 가 그대로 담긴다(sha 불변 ≠ 동일)** —

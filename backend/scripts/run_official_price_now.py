@@ -4,7 +4,7 @@
 
 ⚠ 관리자 API(routers/admin/collect.py)에는 official_price 가 등록돼 있지 않다(동기 호출
 구조라 3.6~7h 짜리 잡에 안 맞음) — 그래서 스케줄러가 매달 15일에 부르는 것과 동일한
-함수를 여기서 직접 부른다. schtasks 로 세션 독립 실행해야 한다(release.md §3 절차 답습 —
+함수를 여기서 직접 부른다. schtasks 로 세션 독립 실행해야 한다(backend/.claude/details.md §release 레거시 재기동 절차 답습 —
 터미널 세션에서 직접 python 으로 띄우면 세션이 끊길 때 같이 죽는다).
 
 실행 (schtasks 경유, 세션 독립):

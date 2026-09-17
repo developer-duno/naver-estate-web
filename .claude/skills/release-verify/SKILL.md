@@ -76,7 +76,7 @@ curl.exe -s https://api.2u.pe.kr/health/db                    # 기대: {"status
 - ⚠ 서비스는 session 0 이라 비관리자 조회에서 CommandLine=NULL — CommandLine grep 0건으로
   "orchestrator 없음" 단정 금지. 판정은 `orchestrator.pid` + `Get-Service` + startup.log.
 - ⛔ Claude 세션 셸에서 python 직접 기동 금지 — 창 닫히면 트리 동반 급사 (세션 352~353 실사고).
-- 옛 kill+schtasks 절차는 서비스 제거 시 폴백으로만 (release.md §3 레거시 블록).
+- 옛 kill+schtasks 절차는 서비스 제거 시 폴백으로만 (backend/.claude/details.md §release 레거시 재기동 절차).
 
 ## 핵심 경고 (release.md §5-1)
 

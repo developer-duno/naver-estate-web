@@ -165,7 +165,7 @@ PK 가 `apartment_id`(자매 `apartments.id`)인 **자매 소유 테이블**인�
 
 ### 5-5. 서버·DB 자체가 이상하다
 
-`.claude/rules/infra.md` §Supabase DB 전면 다운 런북 · `.claude/rules/release.md` §3 재시작 절차.
+`backend/.claude/details.md` §Supabase DB 전면 다운 런북과 재발 이력 · `.claude/rules/release.md` §3 재시작 절차.
 
 ---
 
@@ -204,7 +204,8 @@ GitHub 자동실행(대부분 자매 전용 테이블): 매일 04:00 단지 동�
 | 무엇 | 어디 |
 |---|---|
 | 잡 전수 시각표·재시작 절차 | `.claude/rules/release.md` §3-0, §3 |
-| 스케줄러 상세·쿼터 공유·DB 다운 런북 | `.claude/rules/infra.md` |
+| 스케줄러 표·쿼터 공유 | `.claude/rules/infra.md` |
+| 잡 상세·DB 다운 런북·운영 배경 3절 | `backend/.claude/details.md` |
 | 네이버 IP 차단 방지 절대 규칙 | `.claude/rules/infra.md` §IP 차단 방지 |
 | 공유 DB 마이그레이션 주의 | `.claude/rules/infra.md` §공용 테이블 규칙 |
 | 코드↔화면 표시 drift 방지 | `.claude/rules/derived-display-ssot.md` |

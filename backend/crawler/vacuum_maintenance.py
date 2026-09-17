@@ -57,7 +57,7 @@ def _purge_expired_quota_counters(db) -> int:
 
     ⚠ 실패 시 `db.rollback()` 이 필요하다. 실패한 문장을 그대로 두면 세션이
     aborted 상태로 남아, 뒤이은 CrawlJob 마감 commit 까지 연쇄로 터진다
-    (infra.md §monitor freshness 의 InFailedSqlTransaction 연쇄와 같은 결).
+    (backend/.claude/details.md §스케줄러 운영 배경 3절 monitor freshness 의 InFailedSqlTransaction 연쇄와 같은 결).
     """
     try:
         from crawler.quota_db import purge_expired_counters

@@ -66,7 +66,7 @@
 
 | 토픽 파일 | 내용 |
 | --- | --- |
-| `backend/.claude/details.md` | 실거래가 on-demand + mibunyang 통합 + 공인중개사 검증 워크플로 + 미분양 중복 제거 + **스케줄러 잡 상세 6절**(매물 상세 보강·공시가격·응급의료·K-apt 매칭·API 버전 감시·크롤링 모니터 — infra.md 표에서 이동, 세션 411) |
+| `backend/.claude/details.md` | 실거래가 on-demand + mibunyang 통합 + 공인중개사 검증 워크플로 + 미분양 중복 제거 + **스케줄러 잡 상세 6절**(매물 상세 보강·공시가격·응급의료·K-apt 매칭·API 버전 감시·크롤링 모니터 — infra.md 표에서 이동, 세션 411) + **Supabase 다운 런북·재발**(infra.md, 세션 412) + **스케줄러 운영 배경 3절**(재시작 겹침·잡 에러 리스너·monitor freshness — infra.md, 세션 412) + **release 레거시 재기동 절차·사건 박제 표**(release.md, 세션 412) |
 
 ## CI 테스트 인프라
 

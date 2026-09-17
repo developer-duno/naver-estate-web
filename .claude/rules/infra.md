@@ -87,69 +87,13 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정 (설정 완�
 
 - `services/slow_query_log.py` — `before/after_cursor_execute` 이벤트로 `SLOW_QUERY_MS`(기본 1000) 초과 SQL 을 `logger.warning` (best-effort). prod `engine` 에만 attach, 테스트는 conftest SQLite 격리로 영향 0.
 
-### Supabase DB 전면 다운 진단 런북 (세션 378 — 2026-08-22 29분 다운 실사고)
+### Supabase DB 전면 다운 — 런북·재발 이력은 `backend/.claude/details.md` (세션 412 이동)
 
-`/health/db` 가 `{"status":"degraded","db":"down"}` 이거나 statement timeout 이 연쇄로 터지면,
-**층위 순서대로** 어느 층이 죽었는지 국소화한다 (어느 층이냐로 책임 소재·처방이 갈린다):
+`/health/db` 가 `degraded` 이거나 statement timeout 이 연쇄로 터지면 **[details.md §Supabase DB 전면 다운 런북과 재발 이력](../../backend/.claude/details.md#supabase-db-전면-다운-런북과-재발-이력)** 의
+8단계(층위 순서로 국소화 → Postgres Logs 원문 확인)를 따른다. 여기 남기는 결론 두 줄:
 
-1. `curl https://api.2u.pe.kr/health` (정적 200) — 백엔드 프로세스·터널 생존 확인 (DB 무관)
-2. `curl -m 30 https://api.2u.pe.kr/health/db` — 판정에 ~10초(pooler 2 IP × connect_timeout 5s) 걸리니 `-m 10` 이면 빈 응답으로 오판한다
-3. 로컬 → pooler TCP 소켓 연결 (python socket, 5432·6543) — TCP 즉시 OK + pg 연결만 timeout 이면 네트워크 무혐의
-4. pg 연결을 connect_timeout 25s 로 재시도해 **에러 문구** 확보 — `FATAL (ECHECKOUTTIMEOUT) unable to check out` = Supavisor(풀러)는 살아있고 뒤의 DB 컴퓨트가 응답불능(또는 풀 고갈)
-5. REST(PostgREST) 교차 확인 (`{ref}.supabase.co/rest/v1/...` + anon key) — 이것도 timeout 이면 DB 컴퓨트 다운 확정 (별도 경로라 우리 백엔드 무혐의 입증)
-6. `netstat` 으로 이 PC 가 쥔 pooler 연결 수 — 소수면 로컬 연결누수 무혐의
-7. status.supabase.com 은 **공지가 늦을 수 있다** (실사고: 다운 중에도 서울 리전 "Operational")
-8. **Database Logs 탭에서 OOM/PANIC/FATAL 원문 확인** — 대시보드 그래프(메모리·스왑 등)
-   판독만으로 "OOM 이었다"고 단정하지 말 것(세션 381 사후검증에서 "유력 가설"로 격하된 전례,
-   §DB 크래시 재발 항목 참조). 경로 = **대시보드 → Observability → Logs → Postgres Logs**.
-   서버 로그 원문(`out of memory`/`terminated by signal`/`PANIC`/`FATAL`)을 직접 봐야 가설이
-   확정으로 승격된다 — 급할 때 건너뛰기 쉬우니 진단 순서에서 스킵하지 말 것.
-
-**처방**: 자가회복 대기 우선 (실사고 29분 자가회복). ⛔ 성급한 backend 재시작 금지 — 재시작은
-DB 를 못 살리고, 부팅 스윕(main.py, **시작 5분 경과한 running 잡** 대상)이 외부 프로세스의 잡
-(수동 재수집 등 — 수 시간 돌므로 항상 해당)까지 cancelled 로 오염시킨다. 근본원인(DB 컴퓨트
-CPU/RAM/IO)은 Supabase 대시보드 그래프로만 확인 가능(사장님 로그인), 단 위 8번(서버 로그
-원문)까지 함께 봐야 가설이 아니라 확정 진단이 된다.
-
-**연쇄 함정 2건** (실사고에서 실증, #411 로 폴백 견고화):
-- 잡 실패 마킹 중 DB 가 죽으면 `_fail_job` 폴백까지 동반 사망해 CrawlJob 이 'running' 유령으로
-  잔존할 수 있다 → official_price **체크포인트 재개는 status IN ('failed','cancelled') 만 훑으므로
-  재개가 차단**된다. 프로세스 사망을 실측 확인한 뒤 그 잡을 수동 UPDATE(`AND status='running'` 가드)로
-  failed 정정해야 재기동이 이어받는다 (또는 backend 재시작 시 부팅 스윕의 cancelled 로도 해소).
-
-### 재발 (세션 381 — 2026-08-24 03:22~03:56 34분 다운, 2회째) + 근본원인·처방
-
-같은 런북으로 34분 만에 자가회복. 사장님이 대시보드 Database Health 그래프(스크린샷)를 제공해
-원인을 추적: **Micro(RAM 1GB) 인스턴스가 스왑 1GB 상시 포화·메모리 커밋이 한도의 약 2배로 만성
-압박 상태**였고, 거기에 PostgREST 경유 대량 요청(연결 급증, Logs Explorer 로 재구성 —
-`/rest/v1/apartments` 03:03=1,901건)이 시간상 겹쳤다. 디스크 IOPS 는 거의 0 이라 "IO 예산 소진"
-단독 가설은 기각(단 주간 누적 통계는 82%로 근접 — 10분 풀스캔이 누적 원인, 아래 처방 (b)로 제거).
-
-⚠ **사후 적대검증(세션 381) 결과 — "OOM 크래시"는 확정이 아니라 유력한 가설로 격하한다.**
-Postgres 서버 로그(Database Logs 탭)의 `out of memory`/`terminated by signal`/`PANIC`/`FATAL` 원문은
-한 번도 직접 확인하지 못한 채, 대시보드 그래프(스크린샷) 판독만으로 "OOM"이라 단정했었다.
-Linux 메모리 오버커밋 모델상 "커밋이 물리 한도의 2배"라는 관찰 자체가 자동으로 OOM 을 뜻하지는
-않는다(실제 그 커밋을 프로세스가 소비했는지가 중요 — WebSearch 로 확인). 마찬가지로 "PostgREST
-버스트가 크래시의 마지막 지푸라기였다"는 인과관계도, 버스트(03:03)와 크래시(03:21~03:22) 사이
-19분 공백을 검증 없이 은유로 얼버무린 것으로 확인 — 시간상 근접(상관관계)만 확인됐을 뿐 인과관계는
-미확정. **다음 재발 시 최우선으로 Database Logs 탭에서 OOM/PANIC/FATAL 원문을 확인해 가설을
-확정으로 승격할 것.**
-
-**처방(세션 381 실행 완료)**:
-- 컴퓨트 **Micro → Small** 업그레이드(대시보드 Project Settings → Infrastructure, 다운타임 <2분,
-  자동 재시작 동반, +$5.15/월). RAM 1→2GB·연결한도 60→90·shared_buffers 256MB→512MB(SQL SHOW 로
-  prod 실측 확인).
-- `V048__freshness_max_indexes.sql` — monitor(10분 interval) 의 `compute_freshness` 가 캐시를
-  우회해 매번 스캔하던 trades(347MB)·complex_price_history(72MB)·complexes(44MB) 의 max() 컬럼에
-  인덱스 3개 추가. CIC 로 prod 적용, `pg_index.indisvalid` 3개 전부 True 재확인, `EXPLAIN (ANALYZE,
-  BUFFERS)` 이 Index Only Scan **0.05~0.06ms**로 전환됨을 실측(기존 2~4.6초 Seq Scan). freshness
-  최적화는 과거 `project_freshness_do_not_optimize.md`(세션 262)가 "실익 없음"으로 막았던 항목인데,
-  그 결론의 전제(max+count 미분리)가 세션 342·381 에서 깨져 무효화됨 — 상세는 그 메모리 파일의
-  2026-08-24 갱신분 참조. ⚠ 이 PR(#416)의 신규 테스트는 BE 테스트 환경이 SQLite 고정이라 V048
-  인덱스 사용 경로 자체는 검증하지 못한다(리팩터링 안전성만 검증) — 인덱스 효과는 위처럼 prod
-  EXPLAIN 으로만 확인 가능하다는 걸 유사 PR 작성 시 유념할 것.
-- 외부 uptime 감시(UptimeRobot, 무료, `api.2u.pe.kr/health/db` 5분 간격 + 이메일 알림) 신설 —
-  기존 GitHub Actions 일일 1회 healthcheck 를 보완, 장애 통지까지 5분 내로 단축.
+- **처방 = 자가회복 대기 우선**(실사고 2건 29분·34분 자가회복). ⛔ 성급한 backend 재시작 금지 — 재시작은 DB 를 못 살리고, 부팅 스윕(시작 5분 경과 running 잡)이 외부 프로세스의 잡까지 cancelled 로 오염시킨다.
+- 컴퓨트 Micro→Small·V048 freshness 인덱스·UptimeRobot 5분 감시는 세션 381 에 적용 완료. "OOM 크래시"는 확정이 아니라 **가설** — 재발 시 대시보드 → Observability → Logs → Postgres Logs 에서 `out of memory`/`PANIC`/`FATAL` 원문부터 확인해 승격한다.
 
 ## 텔레그램 알림 문구 — 전부 쉬운 우리말 (전 창구 공통, 예외 0)
 
@@ -271,66 +215,14 @@ job_type `officetel_presale`(접두어 없음), id `collect_rental_presale` → 
 실사고: 이 함정에 두 번 걸림). 컬럼명도 `finished_at`이 아니라 `completed_at`이니
 `db/models.py`의 `CrawlJob` 정의를 함께 확인할 것.
 
-### 짧은 주기 크론과 재시작 겹침 — 반복 재시작은 몰아서 하지 말 것 (세션 372 실측)
+### 재시작 겹침·잡 에러 리스너·monitor freshness — 원문은 `backend/.claude/details.md` (세션 412 이동)
 
-`official_price`(매월 15일, 몇 시간짜리)처럼 **긴** 잡은 release.md §3-0 ⏰ 시각표(재시작 절대
-금지 구간)와 `backend/.claude/details.md` §잡 상세 — 공동주택 공시가격 수집 에 "실행 중 재시작 회피"로
-이미 박혀 있다(세션 411 에 그 원문이 이 파일 하단에서 details.md 로 옮겨졌다 — "위 표" 가 아니다). 이 절은 그 반대 — **짧은 주기(10분·30분 interval) 크론이라도, 재시작이 짧은
-시간에 몰리면 도중 작업이 끊기거나 그 순간 DB 부하가 겹쳐 흔들릴 수 있다**는 일반 원칙.
+세 절(짧은 주기 크론과 재시작 겹침 · 스케줄러 잡 에러 최후 안전망 · monitor freshness 풀스캔 timeout 방지 — 세션 340~372)의
+원문은 **[details.md §스케줄러 운영 배경 3절](../../backend/.claude/details.md#스케줄러-운영-배경-3절)** 에 있다. 여기 남기는 규칙 세 줄:
 
-- 서버 재시작 시 `main.py`의 부팅 스윕(SQL, `tests/test_stale_running_sweep.py` 회귀 가드)이
-  재시작 직전에 실행 중이던 잡을 `cancelled` 로 정리한다 — error_message 에는
-  `stale running — swept on startup` 마커를 **append** 한다(기존 문구가 있으면
-  `원문 | 마커` 형태 — 세션 391 PR #443 부터. 조회는 정확 일치 대신 `LIKE '%swept%'` 권장).
-  이건 의도된 안전장치라 그 자체는 정상이다. 문제는 **재시작이
-  짧은 간격으로 여러 번 몰리면** 이 정리가 반복되고, 마침 재시작 순간이 크론 실행 시각과
-  겹치면 그 주기의 작업이 스킵되거나 중간에 끊긴 것처럼 보인다.
-- 재시작 순간 DB 커넥션이 새로 맺어지는 타이밍에 다른 크론(예: `complex_articles`)이 마침
-  대량 upsert 중이면 `statement_timeout`(8초, 위 §DB 커넥션 풀)에 걸려 실패할 수도 있다 —
-  DB 자체 장애가 아니라 재시작 타이밍이 만드는 일시적 혼잡.
-- **처방**: 여러 PR을 연속 배포할 때 매 PR마다 재시작하지 말고, 가능하면 **묶어서 한 번에
-  재시작**한다(release.md §2 cross-check 는 PR 단위가 아니라 "이번에 반영할 변경 묶음"
-  단위로 해도 된다). 부득이 짧은 간격으로 여러 번 재시작해야 하면, 크롤링 모니터 텔레그램에
-  "마비→복구" 알림이 여러 건 몰려도 **재시작 시각과 겹치는지부터 대조** — 진짜 장애인지
-  재시작 부작용인지 구분한다(구분법: 아래 사건의 `backend_<mtime>.log` 회전 로그 대조 실측
-  참조).
-
-> **사건**: 2026-08-14 — 세션 369가 PR #381~#385를 순차 배포하며 하루 8회 재시작
-> (00:11·00:19·01:59·03:22·05:57·07:53·11:32·14:56). 01:59:48 재시작이 02:00:00 대기질
-> 크론을 정확히 덮침 + 05:52 무렵 재시작 스윕이 `article_detail`을 cancelled 처리하고
-> 직후 `complex_articles`가 statement_timeout으로 failed → 텔레그램에 "article_detail
-> 마비→복구"·"매물 상세 보강 실패(DB connection timeout)" 알림 4건 발생. 세션 372에서
-> 회전 로그(`backend_2026081*.log`)·`crawl_jobs`·`monitor_alerts`(전부 `status=resolved`)
-> 3중 대조로 "진짜 장애가 아니라 재시작 몰림의 부작용이었고 이후 재발 없음"을 확정.
-> `official_price` 16h 예외(세션 369, #382)가 "긴 잡" 케이스를 이미 막았듯, 이 사건은
-> "짧은 잡 다건"이 재시작과 겹치는 반대 케이스라 본 절로 별도 문서화.
-
-### 스케줄러 잡 에러 최후 안전망 (세션 340, PR #273)
-
-`crawler/job_error_listener.py` = `scheduler.add_listener(job_event_listener, EVENT_JOB_ERROR | EVENT_JOB_MISSED)` (main.py lifespan `register_job_listener` 배선). monitor.py 는 **CrawlJob row 가 이미 기록된** 실패만 감지 → 잡이 CrawlJob 기록 **전에** 예외로 죽거나 misfire(누락) 스킵되면 사각지대였음. 리스너가 스케줄러 이벤트 레벨에서 그 두 경우를 포착해 `logger.error/warning` + 텔레그램(`(kind, job_id)` 별 600초 쿨다운). event.code 로 ERROR/MISSED 분기(misfire 는 `.exception` 미접근 — AttributeError 회피). 텔레그램 실패는 best-effort 흡수(리스너 안 죽음). TELEGRAM_ENABLED 공유.
-
-### monitor freshness 풀스캔 timeout 방지 (세션 342, PR #279·#281)
-
-크롤링 monitor(10분 interval)가 `compute_freshness`(routers/admin/freshness.py)로 8종목
-풀 테이블 집계를 하는데, **대형 테이블 풀스캔이 부하 시 8초 statement_timeout 을 넘겨
-트랜잭션 aborted → 같은 세션의 monitor_alerts 쿼리가 InFailedSqlTransaction 으로 연쇄
-실패**하며 매 10분 크래시했다(세션 342 실측, 텔레그램 진단 중 발견). 3겹 처방:
-
-1. **트랜잭션 격리** (monitor.py, 축 A) — `compute_freshness` 를 **별도 `SessionLocal()`
-   세션**으로 실행. timeout 나도 monitor 메인 트랜잭션 무손상(크래시 즉시 차단). 라이브
-   실증: timeout 나도 InFailedSqlTransaction 0.
-2. **max/count 분리 + 인덱스** — max+count 묶으면 count 풀스캔이 max 인덱스를 무효화
-   (`[[feedback-combined-aggregate-index-void]]`). 물리 2쿼리로 분리 + **V038
-   `ix_articles_updated_at`**(max 0.07초). 대형 count 는 **reltuples 근사**(`_approx_count`,
-   articles·trades·complex_price_history 3종, 화면 표시용이라 근사 허용·오차 0%, SQLite
-   폴백). new_rows(헛바퀴 감지 `created_at≥job_start` count)는 **V039 `ix_articles_created_at`**.
-3. **결과**: compute_freshness **9.2초 → 0.6초**(부하 8배도 8초 여유). V038·V039 둘 다
-   CONCURRENTLY prod 적용완료(락0). ⚠ freshness count 는 **순수 표시용**(status=시각 기반,
-   spinning=crawl_jobs 기반) — 근사 오차가 알림 오판 유발 0.
-
-> 교훈: 이 monitor 크래시는 **statement_timeout(8초 안전망)이 오히려 방아쇠**였다 — 폭주
-> 쿼리를 죽이는 게 목적이나, 정상 집계 쿼리가 대형 테이블 성장으로 8초를 넘기면 monitor
-> 자신을 죽인다. 신선도·집계 쿼리는 테이블 성장 대비 **인덱스 or 근사**로 상시 <1초 유지 의무.
+- 여러 PR 을 연속 배포할 때 **매 PR 마다 재시작하지 말고 묶어서 한 번**. 텔레그램 "마비→복구" 알림이 몰리면 진짜 장애인지 재시작 부작용인지 **재시작 시각과 먼저 대조**한다(세션 372: 하루 8회 재시작이 만든 오탐 4건).
+- CrawlJob 기록 **전에** 예외로 죽거나 misfire 로 스킵된 잡은 `crawler/job_error_listener.py`(EVENT_JOB_ERROR|MISSED, `(kind, job_id)` 별 600초 쿨다운, best-effort)가 잡는다 — monitor 의 사각을 메우는 최후 안전망(세션 340, PR #273).
+- monitor 의 `compute_freshness` 는 별도 세션 격리 + max/count 분리 + reltuples 근사(V038·V039)로 **상시 1초 미만**을 유지한다(9.2초→0.6초). 신선도·집계 쿼리에 새 대형 테이블을 붙이면 인덱스 또는 근사가 의무 — 8초 statement_timeout 이 monitor 자신을 죽인다(세션 342).
 
 
 ### 잡 상세 (표에서 덜어낸 원문)
@@ -352,7 +244,7 @@ job_type `officetel_presale`(접두어 없음), id `collect_rental_presale` → 
   같은 창 Health Check 는 **306회 failure + 5회 success** 로 **실행 자체는 계속됐다**(= 쿼터 차단이 아니라 대상(터널)이 실제로 죽어 있었던 것).
   즉 그 시기 감시는 정상 작동해 터널 사망을 **정확히 포착하고 있었다**.
   → **비용 제약이 없으므로 일 1회 유지의 근거가 사라졌다.** 현재 최대 24시간 통지 지연은 근거 없는 손실이다.
-  다만 UptimeRobot 5분 감시(아래 §DB 크래시 처방)가 그 공백을 이미 메우고 있는지 먼저 확인해 **중복 여부를 판단한 뒤**
+  다만 UptimeRobot 5분 감시(`backend/.claude/details.md` §Supabase DB 전면 다운 런북과 재발 이력 의 처방)가 그 공백을 이미 메우고 있는지 먼저 확인해 **중복 여부를 판단한 뒤**
   주기 상향을 사장님께 재문의할 것(세션 398 백로그 §12). GitHub Actions(집서버 무관)가 `curl https://api.2u.pe.kr/health/db` → 실패 시 텔레그램(secrets `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID`, 미설정 시 안전 스킵). **집서버가 통째로 죽으면 내부 watchdog 도 함께 죽어 무통지**이던 사각지대를 외부에서 메움. ⚠ GitHub Actions `if:` 에 `secrets` context 사용 불가(공식) → secrets 는 `env:` 로 주입해 shell 판정(PR #276 hotfix). CI 문법은 `gh workflow run` 라이브 실행만 ground truth. ⚠ **Cloudflare Bot Fight 모드를 켜면 이 외부감시가 오탐으로 전멸** — GH runner(미국 데이터센터 IP + curl)가 "관리 챌린지"를 못 풀어 403 을 받고, origin 로그엔 요청 자체가 안 남는다(2026-08-09 실사고: 8/8~8/9 이틀 연속 오탐, 서버는 정상. 공인 감시봇은 면제라 통과). 무료 플랜 BFM 은 경로 예외를 못 걸어 `/health/db` 만 빼는 것도 불가 → **켜기 전 healthcheck 영향 검토 의무**. 403 을 받으면 집서버가 아니라 CF 보안설정부터 의심 (워크플로가 HTTP 코드를 캡처해 403 을 별도 문구로 구분 알림).
 - **심층 헬스체크** = `backend/routers/health.py` `/health/db` (DB `SELECT 1`, 성공 200 / DB장애 503 클린 JSON, **GET/HEAD 허용** — 외부 감시 HEAD 프로브 405 방지, 세션 353). 외부 모니터 전용. ⚠ 기존 `/health`(정적 200, main.py:208)는 **일부러 얕게 유지** — watchdog 이 폴링하는데 DB 장애 시 503 주면 "backend 죽음" 오판 → 무한 재시작 루프(재시작으로 DB 안 살아남). watchdog=프로세스 생존만, /health/db=DB 포함.
 - **backend.log 회전 보존** = `scripts/log_rotation.py` `rotate_backend_log()`. `start_backend()` 가 매 재시작 backend.log 를 `"w"` 로 truncate 해 어제 크래시 로그 소실되던 것 → 재시작 직전 `backend_<mtime>.log` 로 회전 보존 + 7일 초과분 정리. 안정 경로 backend.log 유지(release.md §2 `head -1 scripts/backend.log` 불변). ⚠ orchestrator 상주 프로세스라 **재부팅(또는 release.md §3 `Restart-Service naver-orchestrator`)이 있어야 회전 코드 적용**(startup_orchestrator.py 수정 = orchestrator zombie 대상). 프로세스명은 현행(nssm 서비스, 세션 363+) 항상 pythonw — 옛 "경로 따라 python/pythonw 갈림"(세션 353)은 레거시 수동 기동 시에만.

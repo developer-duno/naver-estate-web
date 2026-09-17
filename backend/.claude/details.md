@@ -103,3 +103,209 @@ NEMC 응급의료기관 API. **배치 = 전량**(`EMERGENCY_BATCH_SIZE=0`, 세�
 **주기**: 10분 interval
 
 crawl_jobs 정합성 점검 후 텔레그램 알림. ⚠ **알림 문구는 전부 쉬운 우리말이어야 한다**(사장님 지시 2026-09-15, 세션 407 PR #524) — 사전 = `crawler/plain_words.py`(작업이름 `JOB_WORDS` — 개수는 `len(JOB_WORDS)` 로 센다, 세션 410 실측 30 + 에러 번역 `explain_error` + 행동문구 `action_words` + 상태어 `status_words` + 옛 문장 변환 `plainify_detail`). **새 job_type 을 만들면 `JOB_WORDS` 와 FE `crawl-job-labels.ts` 양쪽에 등록**(`tests/test_plain_words.py` 가 양방향 대조로 차단). 알림 문구에 영문 job_type·개발자 에러 원문(psycopg2 등)·`batch`·`running`·`red` 를 다시 넣지 말 것. 저장된 옛 `monitor_alerts.detail` 은 **발송 직전** `plainify_detail()` 로 변환한다(DB 무변경). (운영 토글 MONITOR_ENABLED, 2026-05-25 세션 229 30→10→20 답습 후 현 .env MONITOR_INTERVAL_MIN=10 운영. 기본 _STALE_HOURS=1h — 정상적으로 오래 도는 잡은 _STALE_HOURS_BY_TYPE 예외 의무: public_trade_data 3h(세션 266)·official_price 16h(세션 369 오탐 sweep 실사고 — 새 장시간 잡 추가 시 이 표 동반 등록)·kapt_match 8h·kapt_costs 3h(세션 388 — 배포 전 사전 등록, kapt_match 는 basis 콜 소요 재산정으로 4h→8h). _FAILED_WINDOW_HOURS=24. 전부 monitor.py 상단 상수, 인터벌 격하 무관) **실패 버스트 경보**(세션 396 PR #486): 60분 창 안 같은 job_type failed ≥5 이면 `crawl_failed_burst:<job_type>` 1건 발화 — job_type 단위 "자가복구" 선필터(마지막 failed 뒤 completed 가 있으면 skip)가 배치 부분 실패(9/9 14:45 13/50)를 통째로 은폐하던 사각 보완. 같은 job_type 의 `crawl_failed` 가 활성이면 생략, 쿨다운 6h 공통, 창 이탈 해소 문구는 "추가 실패만 멈춤"(정상 복구 오보 방지), 같은 job_type 의 crawl_failed 로 승계돼 사라진 경우는 "같은 작업의 실패 경보로 이어짐" 문구(세션 397 — 승계를 창 이탈로 오보하던 결함).
+
+## Supabase DB 전면 다운 런북과 재발 이력
+
+> `.claude/rules/infra.md` §DB 커넥션 풀 아래에 있던 두 절(세션 378 런북 · 세션 381 재발+근본원인·처방)을 세션 412 규칙 파일 다이어트로 **원문 그대로** 옮겼다. infra.md 에는 결론 두 줄과 이 절로의 포인터만 남는다.
+
+### Supabase DB 전면 다운 진단 런북 (세션 378 — 2026-08-22 29분 다운 실사고)
+
+`/health/db` 가 `{"status":"degraded","db":"down"}` 이거나 statement timeout 이 연쇄로 터지면,
+**층위 순서대로** 어느 층이 죽었는지 국소화한다 (어느 층이냐로 책임 소재·처방이 갈린다):
+
+1. `curl https://api.2u.pe.kr/health` (정적 200) — 백엔드 프로세스·터널 생존 확인 (DB 무관)
+2. `curl -m 30 https://api.2u.pe.kr/health/db` — 판정에 ~10초(pooler 2 IP × connect_timeout 5s) 걸리니 `-m 10` 이면 빈 응답으로 오판한다
+3. 로컬 → pooler TCP 소켓 연결 (python socket, 5432·6543) — TCP 즉시 OK + pg 연결만 timeout 이면 네트워크 무혐의
+4. pg 연결을 connect_timeout 25s 로 재시도해 **에러 문구** 확보 — `FATAL (ECHECKOUTTIMEOUT) unable to check out` = Supavisor(풀러)는 살아있고 뒤의 DB 컴퓨트가 응답불능(또는 풀 고갈)
+5. REST(PostgREST) 교차 확인 (`{ref}.supabase.co/rest/v1/...` + anon key) — 이것도 timeout 이면 DB 컴퓨트 다운 확정 (별도 경로라 우리 백엔드 무혐의 입증)
+6. `netstat` 으로 이 PC 가 쥔 pooler 연결 수 — 소수면 로컬 연결누수 무혐의
+7. status.supabase.com 은 **공지가 늦을 수 있다** (실사고: 다운 중에도 서울 리전 "Operational")
+8. **Database Logs 탭에서 OOM/PANIC/FATAL 원문 확인** — 대시보드 그래프(메모리·스왑 등)
+   판독만으로 "OOM 이었다"고 단정하지 말 것(세션 381 사후검증에서 "유력 가설"로 격하된 전례,
+   §DB 크래시 재발 항목 참조). 경로 = **대시보드 → Observability → Logs → Postgres Logs**.
+   서버 로그 원문(`out of memory`/`terminated by signal`/`PANIC`/`FATAL`)을 직접 봐야 가설이
+   확정으로 승격된다 — 급할 때 건너뛰기 쉬우니 진단 순서에서 스킵하지 말 것.
+
+**처방**: 자가회복 대기 우선 (실사고 29분 자가회복). ⛔ 성급한 backend 재시작 금지 — 재시작은
+DB 를 못 살리고, 부팅 스윕(main.py, **시작 5분 경과한 running 잡** 대상)이 외부 프로세스의 잡
+(수동 재수집 등 — 수 시간 돌므로 항상 해당)까지 cancelled 로 오염시킨다. 근본원인(DB 컴퓨트
+CPU/RAM/IO)은 Supabase 대시보드 그래프로만 확인 가능(사장님 로그인), 단 위 8번(서버 로그
+원문)까지 함께 봐야 가설이 아니라 확정 진단이 된다.
+
+**연쇄 함정 2건** (실사고에서 실증, #411 로 폴백 견고화):
+- 잡 실패 마킹 중 DB 가 죽으면 `_fail_job` 폴백까지 동반 사망해 CrawlJob 이 'running' 유령으로
+  잔존할 수 있다 → official_price **체크포인트 재개는 status IN ('failed','cancelled') 만 훑으므로
+  재개가 차단**된다. 프로세스 사망을 실측 확인한 뒤 그 잡을 수동 UPDATE(`AND status='running'` 가드)로
+  failed 정정해야 재기동이 이어받는다 (또는 backend 재시작 시 부팅 스윕의 cancelled 로도 해소).
+
+### 재발 (세션 381 — 2026-08-24 03:22~03:56 34분 다운, 2회째) + 근본원인·처방
+
+같은 런북으로 34분 만에 자가회복. 사장님이 대시보드 Database Health 그래프(스크린샷)를 제공해
+원인을 추적: **Micro(RAM 1GB) 인스턴스가 스왑 1GB 상시 포화·메모리 커밋이 한도의 약 2배로 만성
+압박 상태**였고, 거기에 PostgREST 경유 대량 요청(연결 급증, Logs Explorer 로 재구성 —
+`/rest/v1/apartments` 03:03=1,901건)이 시간상 겹쳤다. 디스크 IOPS 는 거의 0 이라 "IO 예산 소진"
+단독 가설은 기각(단 주간 누적 통계는 82%로 근접 — 10분 풀스캔이 누적 원인, 아래 처방 (b)로 제거).
+
+⚠ **사후 적대검증(세션 381) 결과 — "OOM 크래시"는 확정이 아니라 유력한 가설로 격하한다.**
+Postgres 서버 로그(Database Logs 탭)의 `out of memory`/`terminated by signal`/`PANIC`/`FATAL` 원문은
+한 번도 직접 확인하지 못한 채, 대시보드 그래프(스크린샷) 판독만으로 "OOM"이라 단정했었다.
+Linux 메모리 오버커밋 모델상 "커밋이 물리 한도의 2배"라는 관찰 자체가 자동으로 OOM 을 뜻하지는
+않는다(실제 그 커밋을 프로세스가 소비했는지가 중요 — WebSearch 로 확인). 마찬가지로 "PostgREST
+버스트가 크래시의 마지막 지푸라기였다"는 인과관계도, 버스트(03:03)와 크래시(03:21~03:22) 사이
+19분 공백을 검증 없이 은유로 얼버무린 것으로 확인 — 시간상 근접(상관관계)만 확인됐을 뿐 인과관계는
+미확정. **다음 재발 시 최우선으로 Database Logs 탭에서 OOM/PANIC/FATAL 원문을 확인해 가설을
+확정으로 승격할 것.**
+
+**처방(세션 381 실행 완료)**:
+- 컴퓨트 **Micro → Small** 업그레이드(대시보드 Project Settings → Infrastructure, 다운타임 <2분,
+  자동 재시작 동반, +$5.15/월). RAM 1→2GB·연결한도 60→90·shared_buffers 256MB→512MB(SQL SHOW 로
+  prod 실측 확인).
+- `V048__freshness_max_indexes.sql` — monitor(10분 interval) 의 `compute_freshness` 가 캐시를
+  우회해 매번 스캔하던 trades(347MB)·complex_price_history(72MB)·complexes(44MB) 의 max() 컬럼에
+  인덱스 3개 추가. CIC 로 prod 적용, `pg_index.indisvalid` 3개 전부 True 재확인, `EXPLAIN (ANALYZE,
+  BUFFERS)` 이 Index Only Scan **0.05~0.06ms**로 전환됨을 실측(기존 2~4.6초 Seq Scan). freshness
+  최적화는 과거 `project_freshness_do_not_optimize.md`(세션 262)가 "실익 없음"으로 막았던 항목인데,
+  그 결론의 전제(max+count 미분리)가 세션 342·381 에서 깨져 무효화됨 — 상세는 그 메모리 파일의
+  2026-08-24 갱신분 참조. ⚠ 이 PR(#416)의 신규 테스트는 BE 테스트 환경이 SQLite 고정이라 V048
+  인덱스 사용 경로 자체는 검증하지 못한다(리팩터링 안전성만 검증) — 인덱스 효과는 위처럼 prod
+  EXPLAIN 으로만 확인 가능하다는 걸 유사 PR 작성 시 유념할 것.
+- 외부 uptime 감시(UptimeRobot, 무료, `api.2u.pe.kr/health/db` 5분 간격 + 이메일 알림) 신설 —
+  기존 GitHub Actions 일일 1회 healthcheck 를 보완, 장애 통지까지 5분 내로 단축.
+
+## 스케줄러 운영 배경 3절
+
+> `.claude/rules/infra.md` §스케줄러 표 아래에 있던 세 절(짧은 주기 크론과 재시작 겹침 · 스케줄러 잡 에러 최후 안전망 · monitor freshness 풀스캔 timeout 방지)을 세션 412 에 **원문 그대로** 옮겼다. infra.md 에는 규칙 세 줄과 포인터만 남는다.
+
+### 짧은 주기 크론과 재시작 겹침 — 반복 재시작은 몰아서 하지 말 것 (세션 372 실측)
+
+`official_price`(매월 15일, 몇 시간짜리)처럼 **긴** 잡은 release.md §3-0 ⏰ 시각표(재시작 절대
+금지 구간)와 `backend/.claude/details.md` §잡 상세 — 공동주택 공시가격 수집 에 "실행 중 재시작 회피"로
+이미 박혀 있다(세션 411 에 그 원문이 이 파일 하단에서 details.md 로 옮겨졌다 — "위 표" 가 아니다). 이 절은 그 반대 — **짧은 주기(10분·30분 interval) 크론이라도, 재시작이 짧은
+시간에 몰리면 도중 작업이 끊기거나 그 순간 DB 부하가 겹쳐 흔들릴 수 있다**는 일반 원칙.
+
+- 서버 재시작 시 `main.py`의 부팅 스윕(SQL, `tests/test_stale_running_sweep.py` 회귀 가드)이
+  재시작 직전에 실행 중이던 잡을 `cancelled` 로 정리한다 — error_message 에는
+  `stale running — swept on startup` 마커를 **append** 한다(기존 문구가 있으면
+  `원문 | 마커` 형태 — 세션 391 PR #443 부터. 조회는 정확 일치 대신 `LIKE '%swept%'` 권장).
+  이건 의도된 안전장치라 그 자체는 정상이다. 문제는 **재시작이
+  짧은 간격으로 여러 번 몰리면** 이 정리가 반복되고, 마침 재시작 순간이 크론 실행 시각과
+  겹치면 그 주기의 작업이 스킵되거나 중간에 끊긴 것처럼 보인다.
+- 재시작 순간 DB 커넥션이 새로 맺어지는 타이밍에 다른 크론(예: `complex_articles`)이 마침
+  대량 upsert 중이면 `statement_timeout`(8초, 위 §DB 커넥션 풀)에 걸려 실패할 수도 있다 —
+  DB 자체 장애가 아니라 재시작 타이밍이 만드는 일시적 혼잡.
+- **처방**: 여러 PR을 연속 배포할 때 매 PR마다 재시작하지 말고, 가능하면 **묶어서 한 번에
+  재시작**한다(release.md §2 cross-check 는 PR 단위가 아니라 "이번에 반영할 변경 묶음"
+  단위로 해도 된다). 부득이 짧은 간격으로 여러 번 재시작해야 하면, 크롤링 모니터 텔레그램에
+  "마비→복구" 알림이 여러 건 몰려도 **재시작 시각과 겹치는지부터 대조** — 진짜 장애인지
+  재시작 부작용인지 구분한다(구분법: 아래 사건의 `backend_<mtime>.log` 회전 로그 대조 실측
+  참조).
+
+> **사건**: 2026-08-14 — 세션 369가 PR #381~#385를 순차 배포하며 하루 8회 재시작
+> (00:11·00:19·01:59·03:22·05:57·07:53·11:32·14:56). 01:59:48 재시작이 02:00:00 대기질
+> 크론을 정확히 덮침 + 05:52 무렵 재시작 스윕이 `article_detail`을 cancelled 처리하고
+> 직후 `complex_articles`가 statement_timeout으로 failed → 텔레그램에 "article_detail
+> 마비→복구"·"매물 상세 보강 실패(DB connection timeout)" 알림 4건 발생. 세션 372에서
+> 회전 로그(`backend_2026081*.log`)·`crawl_jobs`·`monitor_alerts`(전부 `status=resolved`)
+> 3중 대조로 "진짜 장애가 아니라 재시작 몰림의 부작용이었고 이후 재발 없음"을 확정.
+> `official_price` 16h 예외(세션 369, #382)가 "긴 잡" 케이스를 이미 막았듯, 이 사건은
+> "짧은 잡 다건"이 재시작과 겹치는 반대 케이스라 본 절로 별도 문서화.
+
+### 스케줄러 잡 에러 최후 안전망 (세션 340, PR #273)
+
+`crawler/job_error_listener.py` = `scheduler.add_listener(job_event_listener, EVENT_JOB_ERROR | EVENT_JOB_MISSED)` (main.py lifespan `register_job_listener` 배선). monitor.py 는 **CrawlJob row 가 이미 기록된** 실패만 감지 → 잡이 CrawlJob 기록 **전에** 예외로 죽거나 misfire(누락) 스킵되면 사각지대였음. 리스너가 스케줄러 이벤트 레벨에서 그 두 경우를 포착해 `logger.error/warning` + 텔레그램(`(kind, job_id)` 별 600초 쿨다운). event.code 로 ERROR/MISSED 분기(misfire 는 `.exception` 미접근 — AttributeError 회피). 텔레그램 실패는 best-effort 흡수(리스너 안 죽음). TELEGRAM_ENABLED 공유.
+
+### monitor freshness 풀스캔 timeout 방지 (세션 342, PR #279·#281)
+
+크롤링 monitor(10분 interval)가 `compute_freshness`(routers/admin/freshness.py)로 8종목
+풀 테이블 집계를 하는데, **대형 테이블 풀스캔이 부하 시 8초 statement_timeout 을 넘겨
+트랜잭션 aborted → 같은 세션의 monitor_alerts 쿼리가 InFailedSqlTransaction 으로 연쇄
+실패**하며 매 10분 크래시했다(세션 342 실측, 텔레그램 진단 중 발견). 3겹 처방:
+
+1. **트랜잭션 격리** (monitor.py, 축 A) — `compute_freshness` 를 **별도 `SessionLocal()`
+   세션**으로 실행. timeout 나도 monitor 메인 트랜잭션 무손상(크래시 즉시 차단). 라이브
+   실증: timeout 나도 InFailedSqlTransaction 0.
+2. **max/count 분리 + 인덱스** — max+count 묶으면 count 풀스캔이 max 인덱스를 무효화
+   (`[[feedback-combined-aggregate-index-void]]`). 물리 2쿼리로 분리 + **V038
+   `ix_articles_updated_at`**(max 0.07초). 대형 count 는 **reltuples 근사**(`_approx_count`,
+   articles·trades·complex_price_history 3종, 화면 표시용이라 근사 허용·오차 0%, SQLite
+   폴백). new_rows(헛바퀴 감지 `created_at≥job_start` count)는 **V039 `ix_articles_created_at`**.
+3. **결과**: compute_freshness **9.2초 → 0.6초**(부하 8배도 8초 여유). V038·V039 둘 다
+   CONCURRENTLY prod 적용완료(락0). ⚠ freshness count 는 **순수 표시용**(status=시각 기반,
+   spinning=crawl_jobs 기반) — 근사 오차가 알림 오판 유발 0.
+
+> 교훈: 이 monitor 크래시는 **statement_timeout(8초 안전망)이 오히려 방아쇠**였다 — 폭주
+> 쿼리를 죽이는 게 목적이나, 정상 집계 쿼리가 대형 테이블 성장으로 8초를 넘기면 monitor
+> 자신을 죽인다. 신선도·집계 쿼리는 테이블 성장 대비 **인덱스 or 근사**로 상시 <1초 유지 의무.
+
+## release 레거시 재기동 절차
+
+> `.claude/rules/release.md` §3 의 레거시 블록(nssm 서비스 제거·수동 운용 폴백 시에만 유효 — 옛 Startup BAT 시절 kill+schtasks 절차)을 세션 412 에 **원문 그대로** 옮겼다(§4 참조 2곳만 이 파일의 절 이름으로 고침). 현행 절차 = release.md §3-1 `Restart-Service naver-orchestrator`.
+
+**레거시 (nssm 서비스 제거·수동 운용 폴백 시에만 유효 — 옛 Startup BAT 시절 절차):**
+
+```powershell
+# Step 1: orchestrator 종료 — python.exe·pythonw.exe 둘 다 잡는다
+#   재부팅 경로(Startup BAT)·§3 schtasks 명령은 pythonw 로, 수동·세션 셸 재기동은 python 으로 뜰 수 있어
+#   이름 하나만 필터하면 놓친다. ⚠ Get-Process 는 Windows PowerShell 5.1 에 CommandLine
+#   속성이 없어 필터가 조용히 0건 — Get-CimInstance 필수 (세션 353 발견: 옛 명령은 무동작).
+Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" |
+    Where-Object { $_.CommandLine -like '*startup_orchestrator*' } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+
+# Step 1-b: 사멸 확인 — 0건이어야 다음 단계 진행 (예외 0)
+#   옛 orchestrator 가 살아 있으면 새 인스턴스가 _check_already_running() 에서 조용히
+#   sys.exit(0) → "재시작했다고 믿었는데 안 된" 사고. 세션 352 의 성공은 옛 PID 가
+#   이미 죽어 있던 우연이었다 (§release 사건 박제 표 세션 352~353 행).
+(Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" |
+    Where-Object { $_.CommandLine -like '*startup_orchestrator*' } | Measure-Object).Count  # 기대: 0
+
+# Step 2: uvicorn 자식 좀비 정리 (port 8002 점유 프로세스 명시 종료)
+$pids = (Get-NetTCPConnection -LocalPort 8002 -ErrorAction SilentlyContinue).OwningProcess
+if ($pids) { $pids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue } }
+
+# Step 3: 3초 대기 (포트 해제 + 프로세스 graceful exit)
+Start-Sleep -Seconds 3
+
+# Step 4: 재시작 — 반드시 "세션 수명과 분리된" 방식으로
+#   옵션 A (가장 안전): PC 재부팅 → Windows Startup BAT 가 orchestrator 자동 기동
+#   옵션 B (재부팅 없이): schtasks 일회성 작업 경유 — 부모가 작업 스케줄러 서비스라
+#     Claude 세션·터미널이 닫혀도 살아남는다 (세션 353 라이브 검증 완료)
+schtasks /Create /TN naver-orch-restart /SC ONCE /ST 23:59 /F /TR "C:\Users\user\AppData\Local\Programs\Python\Python312\pythonw.exe D:\naver-estate-web\scripts\startup_orchestrator.py"
+schtasks /Run /TN naver-orch-restart
+schtasks /Delete /TN naver-orch-restart /F   # 정의만 삭제 — 실행 중 프로세스는 안 죽는다
+#   ⛔ 금지: Claude 세션·터미널 셸에서 python 으로 직접 기동 — 그 창이 닫히는 순간
+#     Windows 가 orchestrator+uvicorn 트리를 통째로 죽인다(무로그·무알림 급사,
+#     watchdog 도 같이 죽어 자동복구 0 — §release 사건 박제 표 세션 352~353 실사고)
+#   ⚠ 실행 방식: 위 PowerShell 명령들을 bash(Claude 셸)에서 -Command 인라인으로 돌리면
+#     인용부호가 깨져 Get-CimInstance 쿼리가 실패하는데 카운트만 0 으로 찍힌다(가짜 0 —
+#     종료가 실행된 적 없는데 성공처럼 보임, 세션 354 재현). 반드시 .ps1 파일로 저장 후
+#     `powershell -NoProfile -File <경로>` 로 실행할 것. 패턴 필터가 헛돌면 전체 python
+#     프로세스 나열 진단으로 정확한 PID 를 확인해 PID 지정 종료가 최선 — 같은 PC 에
+#     타 프로젝트 python 프로세스가 다수 상주한다(오살 방지).
+
+# Step 5: 부팅 검증 (셋 다 확인)
+Start-Sleep -Seconds 45   # INITIAL_DELAY 10초 + 백엔드 기동 + health check 여유
+Get-Content scripts\startup.log -Tail 8   # 기대: 새 "서버 자동 시작" 헤더 + "백엔드 정상 시작 완료"
+Get-Content scripts\orchestrator.pid      # 기대: 새 PID (tasklist /FI "PID eq <값>" 생존 확인)
+curl.exe -s https://api.2u.pe.kr/health/db   # 기대: {"status":"ok","db":"ok"} (외부 경로 ground truth)
+```
+
+## release 사건 박제 표
+
+> `.claude/rules/release.md` §4 의 사건 표(세션 229~411, 12행)를 세션 412 에 **원문 그대로** 옮겼다. 새 사건은 여기 행을 추가한다(release.md §4 에는 요약 한 단락만 남는다).
+
+| 세션 | 사고 | 영향 |
+|---|---|---|
+| 229 (2026-05-24) | PR #61 (가치지표 배치 200→1000, 25일 완주) 머지 후 backend 재시작 안 됨 | 가속 효과 검증 시각 미도래로 다음 세션 이월 |
+| 230 (2026-05-25) | 5/25 08:30 KST cron 도래했으나 total=200 옛 코드 가동 발견 | 사용자 watchdog 수동 재시작 + 5/26 cron 검증 이월 |
+| 231 (2026-05-25) | backend 5/24 15:26 부팅 = PR #61 머지 (5/25 06:09) 보다 15시간 전. zombie 동일 패턴 지속 | 사용자 옵션 3 (재시작 보류) 선택. 본 세션 232 룰 git 박제로 재발방지 |
+| 257 (2026-06-01) | PR #102 후 "재시작 불필요" 정적 결론 3회 → 라이브 GET 으로 화면 표시 옛값(08:30/20분/6시간) 확인 = 재시작 필요로 정정. trigger 동작은 새값이나 표시 모듈 본문이 옛 코드 | release.md §2 에 라이브 표시값 4번째 지표 + §5-1 정적분석 함정 추가. 사용자 PC 재부팅 선택 |
+| 301 (2026-06-13) | PR #167 (mb 정렬 nullif) 머지 후 라이브 backend PID 20368 이 머지 19h 전 부팅 = zombie. 라이브 pp_asc 가 0 맨앞(옛 동작). 6렌즈 적대검증 + prod PG 직접 실측(OLD `[0,0,0,0,0]` vs NEW `[1122,...]`)으로 "디스크 정상·라이브만 옛코드" 확정 | §2 에 "4중→PR성격별 3중" + prod DB 직접실측 거짓양성 차단 노하우 추가. 사용자 PC 재부팅 선택 |
+| 352~353 (2026-08-09) | 세션 352 가 zombie 해소를 위해 orchestrator 를 **자기 세션 셸에서 python 으로 직접 재기동**(02:55) → 그 세션 창이 닫히자 05:42 orchestrator+uvicorn 트리 동반 급사(무로그·무알림). watchdog 도 같이 죽어 자동복구 0, 다음 세션(353)이 발견할 때까지 backend 다운 방치. 부수 발견 2건 = ① 옛 §3 `Get-Process pythonw` 는 PS 5.1 CommandLine 속성 부재로 애초에 무동작 ② 수동 재기동 시 프로세스명이 python 이라 pythonw 단일 필터도 미스매치 | §3 전면 보강: Get-CimInstance 양이름 필터 + Step 1-b 사멸확인 + schtasks 세션독립 재기동(세션 353 라이브 검증) + 세션 셸 직접 기동 금지 명문화 |
+
+| 363 (2026-08-14) | (사고 규명+구조 전환) Windows Update(KB5120249) 야간 계획 재부팅 → Startup BAT 가 로그인 의존이라 로그인 화면에서 **13시간 backend 다운**(watchdog·스케줄 전체 미기동, 상세 = infra.md §자동 시작 사건). orchestrator 를 nssm 서비스로 전환. 라이브 훈련 1차에서 비관리자 Stop-Process 액세스 거부 실측 → 서비스 DACL 시작/중지 권한 등록 후 훈련 2차 Restart-Service 15초 복구 검증 | §3 현행 절차를 Restart-Service 1줄로 교체, 옛 schtasks 절차는 레거시 폴백 격하. 부팅 자동 기동(로그인 불필요) + orchestrator 급사 60초 자동복구 확보 |
+| 386 (2026-08-26) | (무피해, 절차 결함) PR #425(`crawler/service_applyhome_officetel.py`·`routers/mb_serializers.py` 주석 정정)를 "diff가 주석뿐이라 재시작 불필요"로 그 자리에서 판단 → §5 기존 3가지 면제 사유(FE전용/문서전용/테스트전용) 어디에도 안 맞는데도 재시작 생략. 사후검증에서 AST 비교로 실행 코드 무변경을 사후 확인해 결과는 안전했으나, 판단 당시엔 §5-1이 금지한 "정적분석만으로 단정"과 동일 패턴이었음 | §5 에 4번째 면제 조건(AST 비교로 실행 코드 구조 동일 확인된 텍스트 정정) 명문화 — 눈대중 판단과 기계적 확인을 구분 |
+| 396 (2026-09-10) | (무피해, 절차 결함 2건) ① PR #486·#487 머지 후 `Restart-Service naver-orchestrator` 첫 시도가 **조용히 실패** — 45초 대기 후에도 8002 포트 소유 PID·startup.log 시각이 그대로였고, bash 파이프에서 PowerShell 출력이 "Binary file matches" 로 가려져 실패가 안 보였다. try/catch + 전후 상태 출력으로 재실행하니 정상 (orchestrator 6080→61116, backend 7500→62280, 07:56:40). ② 같은 세션의 레포 삭제 사고로 `orchestrator.pid` 가 사라져 4중 cross-check 의 한 축이 무력화된 채였다(재시작 후 자동 복구됨) | §3 에 "포트 소유 PID 변화로 판정"·"pid 파일 부재 시 3축 판정" 2줄 추가. 라이브 검증은 캐시 헤더 4종 HTTP 실측으로 대체 확인 |
+| 397 (2026-09-11) | (무피해, 절차 결함 2건) ① 재시작 직전 "5분 내 도래 크론·running 잡" 확인을 생략 — 다행히 겹친 잡이 없었으나, official_price(3~7h) 같은 장시간 잡과 겹쳤으면 부팅 스윕이 cancelled 처리했을 것. ② `Restart-Service` 후 45초에 포트 소유 PID 가 빈값이라 "실패"로 오판할 뻔함 — 실측하니 서비스 "중지 대기"에만 약 1분, 기동까지 약 65초라 **45초는 판정 시점 자체가 이름**. | §3 을 3-0(사전 확인)·3-1(실행)으로 분리, 대기를 고정 40초 → 포트 폴링(최대 120초)으로 교체 |
+| 409 (2026-09-17) | (무피해, 절차 결함) §3-0 (1) 을 재시작 **4분 전**에 확인하고 그대로 믿은 채 02:24 재시작 → 그 사이 02:21:49 에 시작한 `article_detail`(#53918) 이 끊김. 부팅 스윕은 시작 5분 넘은 잡만 정리해 그 잡은 `running` 으로 남았고 02:30 수동 cancelled 처리(경보 미발화). 5분 임계 자체는 세션 208 근거로 유지. ⚠ 세션 410 정정: 손대지 않았어도 monitor 10분 스윕이 1h 뒤 자동 정리했을 것(영구 고착 아님) | §3-0 에 "직전 재조회(1분 룰)" + monitor 이중 스윕 명시 + 긴 임계 잡만 수동 정리 SQL |
+| 411 (2026-09-17) | (무피해, 절차 결함) §3-0 을 한 호출로 묶은 판정 스크립트가 **WAIT(exit 1)** — crawl_details 4.3분·monitor 4.1분 내 도래 — 를 냈는데, 뒤에 붙인 `\| grep -v "slow query"` 가 파이프 종료코드를 grep 의 0 으로 바꿔 `&&` 게이트가 통과 → 08:04:07 재시작 실행(44056→27348). 실측: running 0, 그 창(08:03~08:10)에 시작·swept 잡 0, 08:08 예정분은 새 프로세스의 interval start_date 로 08:43 으로 이동. 부수 확인: `next_run_at` 은 jitter 가 **이미 반영된 확정값**이라 5분 판정에 그대로 써도 된다(검사관 C 실측, ±15분 오차 없음) | §3-0 명령 블록에 "판정 명령 파이프 금지" 1줄 + 글로벌 메모리 `feedback_pipe_hides_gate_exit_code` |

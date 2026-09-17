@@ -467,7 +467,7 @@ if (isMain) {
   for (const p of problems) console.error(`  • ${p}`);
   console.error(
     `\n이 항목들은 어겨도 CI 가 초록이라 사람 눈에 안 보인다(세션 398~400 에 세 번 겪음).\n` +
-      `배경·판정 절차 = .claude/rules/testing.md §시각 회귀.`,
+      `배경·판정 절차 = frontend/e2e/README.md §시각 회귀 절차·판정·함정.`,
   );
   process.exit(1);
 }

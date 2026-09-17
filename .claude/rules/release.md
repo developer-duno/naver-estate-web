@@ -95,46 +95,52 @@ date "+%F(%a) %H:%M"
    WHERE id = <id> AND status = 'running';   -- 가드 필수: 그 사이 끝났으면 no-op
   ```
   (부팅 스윕 마커와 같은 접두어라 `LIKE '%stale running%'` 한 조건으로 함께 조회된다.)
-**스케줄 전수 (scheduler.py `id=` 기준 실측, 세션 398). ⏰ = 장시간 잡 = 재시작 절대 금지 구간:**
+아래 표는 `backend/scripts/gen_restart_schedule_table.py` 가 scheduler.py·monitor.py 에서 생성한다.
+손으로 고치지 말 것 — `tests/test_restart_schedule_table.py` 가 코드와의 드리프트를 막는다.
+갱신 = `cd backend && python scripts/gen_restart_schedule_table.py --write ../.claude/rules/release.md`
+interval 잡(시각 `—` 행)의 주기는 **코드 기본값**이다 — 라이브 `.env` 가 덮을 수 있고(`crawler_monitor`: 코드 30분·라이브 10분) jitter 도 붙으므로
+5분 판정은 위 `next_run_at` 으로 한다. 표는 토글을 전부 켠 상태로 만들어 라이브에서 꺼진 잡(`billing_charge` 등)도 보인다 — "언제든 돌 수 있는 잡 전부"가 기준.
+(세션 412 에 이 생성기가 옛 손글씨 표의 **세 번째 누락** — 주 1회 07:00 `complex_detail_JGC/ABYG/OBYG` 3행 — 을 찾아냈다.)
 
-| 시각 | 잡 | 주기 | 소요 |
+<!-- restart-schedule:start -->
+<!-- 이 표는 backend/scripts/gen_restart_schedule_table.py 가 생성한다. 손으로 고치지 말 것. -->
+
+| 시각 | 잡 | 주기 | 스윕 임계 |
 |---|---|---|---|
-| 00:20 | backfill_detail_dawn | 매일 | ~38분 |
-| 01:00 | collect_childcare | 매월 첫째 목 | ~20~30분 |
-| 02:00 | collect_air_quality | 매일 | 짧음 |
-| 03:00 | discover_regions(일) / collect_emergency(매월 첫째 월) | 주·월 | 중간 |
-| 03:30 | backfill_price | 매일 | 중간 |
-| 03:50 | vacuum_maintenance | 매일 | 중간 |
-| 04:00 | collect_prices(수) / **collect_crime_stats**(분기별 1·4·7·10월 첫째 일) | 주·분기 | 중간 |
-| 04:30 | collect_metrics | 매일 | 짧음 |
-| 04:40 | field_drift_monitor | 매일 | 짧음 |
-| 04:50 | billing_charge | 매일 | 짧음 |
-| 05:00 | collect_public_trades(토) ⏰3h / collect_officetel_presale(월) | 주 | ⏰ |
-| 05:30 | collect_rental_presale | 월 | 중간 |
-| **06:10** | **kapt_match** | **매월 21일** | **⏰ 최대 8h** |
-| **06:20** | **kapt_costs** | **매일** | **⏰ ~1h(예외 3h)** |
-| **06:30** | **official_price** | **매월 15일** | **⏰ 3~7h** |
-| 06:40 | api_version_probe | 일 | 짧음 |
-| 12:20 | backfill_detail_noon | 매일 | ~100분 |
-| 10:45·14:45·19:15 | popular_crawl | 매일 | 중간 |
-| 01:00·13:00 | crawl_articles | 매일 (cron, ±45분 jitter) | 중간 |
-| 매 30분 ±15분 jitter | crawl_details | interval | 중간 |
-| 매 4h | complex_detail_APT / OPST | interval | 중간 |
-| 매 10분 | crawler_monitor | interval | 짧음 |
+| 00:20 | ⏰ `backfill_detail_dawn` | 매일 00:20 | 4h |
+| 01:00 | ⏰ `collect_childcare` | 매월 첫째 목요일 01:00 | 3h |
+| 01:00·13:00 | `crawl_articles` | 매일 01:00, 13:00 | 1h |
+| 02:00 | `collect_air_quality` | 매일 02:00 | 1h |
+| 03:00 | `collect_emergency` | 매월 첫째 월요일 03:00 | 1h |
+| 03:00 | `discover_regions` | 주 1회 일요일 03:00 | 1h |
+| 03:30 | ⏰ `backfill_price` | 매일 03:30 | 12h |
+| 03:50 | `vacuum_maintenance` | 매일 03:50 | 1h |
+| 04:00 | `collect_crime_stats` | 분기별 첫째 일요일 04:00 | 1h |
+| 04:00 | ⏰ `collect_prices` | 주 1회 수요일 04:00 | 3h |
+| 04:30 | `collect_metrics` | 매일 04:30 | 1h |
+| 04:40 | `field_drift_monitor` | 매일 04:40 | 1h |
+| 04:50 | `billing_charge` | 매일 04:50 | 1h |
+| 05:00 | `collect_officetel_presale` | 주 1회 월요일 05:00 | 1h |
+| 05:00 | ⏰ `collect_public_trades` | 주 1회 토요일 05:00 | 8h |
+| 05:30 | `collect_rental_presale` | 주 1회 월요일 05:30 | 1h |
+| 06:10 | ⏰ `kapt_match` | 매월 21일 06:10 | 8h |
+| 06:20 | ⏰ `kapt_costs` | 매일 06:20 | 3h |
+| 06:30 | ⏰ `official_price` | 매월 15일 06:30 | 16h |
+| 06:40 | `api_version_probe` | 주 1회 일요일 06:40 | 1h |
+| 07:00 | `complex_detail_ABYG` | 주 1회 수요일 07:00 | 1h |
+| 07:00 | `complex_detail_JGC` | 주 1회 화요일 07:00 | 1h |
+| 07:00 | `complex_detail_OBYG` | 주 1회 목요일 07:00 | 1h |
+| 10:45 | `popular_1030` | 매일 10:45 | 1h |
+| 12:20 | ⏰ `backfill_detail_noon` | 매일 12:20 | 4h |
+| 14:45 | `popular_1430` | 매일 14:45 | 1h |
+| 19:15 | `popular_1900` | 매일 19:15 | 1h |
+| — | `crawl_details` | 30분마다 | 1h |
+| — | `crawler_monitor` | 30분마다 | 1h |
+| — | `complex_detail_APT` | 4시간마다 | 1h |
+| — | `complex_detail_OPST` | 4시간마다 | 1h |
 
-✅ **표 행의 잡 개수 = `scheduler.py` 의 `id=` 개수(현재 25)와 일치해야 한다.** 갱신 시 기계적으로 대조:
-```bash
-cd /d/naver-estate-web && grep -oE 'id="[a-zA-Z_]+"' backend/crawler/scheduler.py | sed 's/id="//;s/"//' | sort > /tmp/ids.txt
-while read id; do grep -q "$id" .claude/rules/release.md || echo "MISSING: $id"; done < /tmp/ids.txt
-```
-(세션 398 에서 이 표를 "누락을 고치려고" 만들었는데 `collect_crime_stats` 를 또 빠뜨렸다 — 눈으로 옮기면 반드시 빠진다.)
-⚠ 세션 399 재실행 결과 **MISSING 0건** — 옛 "알려진 오탐 1건(`complex_detail_OPST`)" 경고는 현재 거짓이다.
-표가 그 사이 보강돼 스니펫이 더 이상 오탐을 내지 않는다. 무엇이든 뜨면 **진짜 누락**으로 다루라
-(없는 오탐을 미리 면제해 두면 진짜 누락을 그 이름으로 넘겨버린다).
-
-⏰ 판정 기준 = `crawler/monitor.py` `_STALE_HOURS_BY_TYPE` 에 예외 등록된 잡
-(public_trade_data 3h · official_price 16h · **kapt_match 8h** · kapt_costs 3h · childcare).
-**이 dict 에 새 잡이 추가되면 위 표도 함께 갱신한다** — 표가 낡으면 장시간 잡을 끊는다.
+⏰ = 재시작 절대 금지 구간(스윕 임계 1h 초과 = 오래 도는 잡): backfill_detail_dawn(4h) · collect_childcare(3h) · backfill_price(12h) · collect_prices(3h) · collect_public_trades(8h) · kapt_match(8h) · kapt_costs(3h) · official_price(16h) · backfill_detail_noon(4h)
+<!-- restart-schedule:end -->
 
 겹치면 **그 회차가 끝난 뒤로 미룬다.** 여러 PR 을 묶어 한 번에 재시작하는 것도 겹침을 줄인다(§1 말미).
 

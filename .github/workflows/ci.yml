@@ -43,6 +43,9 @@ jobs:
               - 'backend/**'
               - 'scripts/**'
               - '.github/workflows/ci.yml'
+              # release.md § 3-0 표는 backend 코드에서 생성된다 — 손으로 고치면
+              # tests/test_restart_schedule_table.py 가 잡아야 하니 여기에도 넣는다(세션 403 선례: 가드가 경로 필터에 막혀 skip).
+              - '.claude/rules/release.md'
 
   frontend:
     name: Frontend CI

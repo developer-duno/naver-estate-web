@@ -510,6 +510,43 @@ def _index_groups_by_name(rows: list[dict]) -> dict[str, list[tuple[str, dict]]]
     return grouped_by_name
 
 
+def _row_identity(row: dict) -> tuple:
+    """누적 중복 제거용 행 동일성 키 — 파이프라인이 실제로 읽는 필드만 명시적으로 나열한다.
+
+    ⚠ `frozenset(row.items())` 를 쓰지 않는다 — 값에 비해시(list·dict) 가 하나라도 섞이면
+    TypeError 가 best-effort 블록 안에서 터져 재수집 패스가 통째로 날아간다. 여기 나열한
+    7개 필드가 게이트(`_group_by_aphus` → ho_keys)·집계(`aggregate_area_medians`)·
+    stdrMt 필터가 읽는 전부라, 이 튜플이 같으면 파이프라인 관점에서 완전히 같은 행이다.
+
+    무손실인 이유: 같은 `_ho_key` 라도 가격·면적이 다르면 튜플이 달라져 **버려지지 않는다**.
+    `aggregate_area_medians` 는 같은 호의 **유효한 첫 행**을 쓰므로(앞 복제본이 깨져 있으면
+    뒤의 멀쩡한 복제본 사용) 그 성질이 그대로 보존된다.
+    """
+    return (
+        row.get("aphusCode"), row.get("aphusNm"), row.get("stdrMt"),
+        row.get("dongNm"), row.get("hoNm"), row.get("prvuseAr"), row.get("pblntfPc"),
+    )
+
+
+def _extend_unique(acc: list, seen: set, rows: list) -> int:
+    """`rows` 중 아직 누적되지 않은 행만 `acc` 에 덧붙인다. 반환: 실제로 더해진 행 수.
+
+    V-WORLD 는 호마다 **완전 동일한 행을 2회** 반환하고(세션 376 실측), 재수집은 같은
+    법정동을 최대 3회 뜬다 — 대치동이면 3회 누적이 ~147,000 dict 가 된다. 표본이 겹치는
+    부분은 정의상 똑같은 행이므로, 누적 시점에 걸러도 합집합의 의미가 전혀 안 바뀐다
+    (게이트도 집계도 키 기반 — 위 `_row_identity` docstring 참조).
+    """
+    added = 0
+    for row in rows:
+        key = _row_identity(row)
+        if key in seen:
+            continue
+        seen.add(key)
+        acc.append(row)
+        added += 1
+    return added
+
+
 def _log_unrescued_targets(ld_code: str, targets: list, grouped_by_name: dict) -> None:
     """재수집을 마쳤는데도 못 구제한 단지를 단지별 한 줄로 남긴다 (진단 전용, 로그만).
 
@@ -999,6 +1036,15 @@ def collect_official_prices(
         #
         # 구제가 끝나면 즉시 중단한다 — 한 번에 구제되는 평시 실행의 조회 수는 종전과 같다.
         #
+        # ⓐ 합집합은 **단조 증가**라 게이트의 위쪽 경계(세대수×1.05)와 상호작용한다:
+        # 공시측 진짜 유니크 호수가 우리 세대수보다 5% 넘게 많은 단지는, 예전이라면
+        # "불완전한 표본이 우연히 [0.95,1.05] 안에 떨어져" 통과할 수 있었지만 이제는
+        # 합집합이 진짜 값에 수렴해 통과하지 못한다. **이게 의도다** — 옛 통과는 결손
+        # 데이터에 대고 게이트를 통과시킨 것(저장되는 평형·중위값도 그만큼 결손)이고,
+        # 합집합은 (거의) 진짜 호수로 판정한다. 그런 단지는 미구제 진단 줄에 비율이
+        # 찍혀 보이므로(1.05 초과가 눈에 드러난다) 이름·세대수 쪽을 고치면 된다.
+        # ⛔ 단일 표본 폴백을 다시 넣지 말 것 — 그건 결손 데이터 통과를 되살리는 것이다.
+        #
         # 전체를 try 로 감싼다 — 구제는 best-effort 라, 재수집 중 예외가 본 수집 성공을
         # 실패로 뒤집으면 안 된다(그 경우 outer except 로 빠져 job 이 failed 가 된다).
         rescued = 0
@@ -1092,6 +1138,7 @@ def collect_official_prices(
                     # 배정이 된다(적대검증 MEDIUM-1). 복사본을 쓴다(원본 불변).
                     repass_claimed: set[str] = set(claimed_by_dong.get(ld_code, ()))
                     acc_rows: list[dict] = []          # 이 동에서 성공한 조회의 행 누적 = 키 합집합
+                    acc_seen: set = set()              # 누적 중복 제거용(_row_identity)
                     grouped_by_name: dict = {}         # acc_rows 를 색인한 최신 결과
                     pending: list = list(by_dong[ld_code])  # 아직 구제 못 한 이 동의 대상
                     # 1차 완전일치는 붙었는데 저장 행이 0 이었던 대상 — 다음 회차 합집합에서
@@ -1122,10 +1169,16 @@ def collect_official_prices(
                                 "[official_price] 재수집 법정동 %s 조회 실패 (%d/%d회차)",
                                 ld_code, attempt, _REPASS_MAX_ATTEMPTS,
                             )
+                            if attempt < _REPASS_MAX_ATTEMPTS:
+                                # 본 루프의 법정동 단위 재시도와 같은 간격 — 실패 직후
+                                # 곧바로 다시 찌르면 같은 이유(일시 네트워크 오류·rate
+                                # limit)로 또 실패할 확률이 높다. 마지막 회차 뒤에는
+                                # 더 뜰 게 없으므로 자지 않는다.
+                                time.sleep(2)
                             continue
 
                         fetched_ok += 1
-                        acc_rows.extend(rows)
+                        _extend_unique(acc_rows, acc_seen, rows)
                         grouped_by_name = _index_groups_by_name(acc_rows)
 
                         still_pending: list = []
@@ -1165,6 +1218,13 @@ def collect_official_prices(
                         )
                         if not pending:
                             break  # 전부 구제 — 더 뜰 이유가 없다(평시 조회 1회 유지)
+                        # ⓑ 앞 회차에 구제된 단지는 **그때의 (작은) 합집합 값**으로 저장된
+                        # 채 남는다 — pending 에서 빠지므로, 뒤 회차가 다른 단지 때문에
+                        # 합집합을 키워도 다시 저장하지 않는다. 수용한다: 차이는 이미 게이트
+                        # ±5% 안(호 몇 개)이라 중위 공시가격에 미치는 영향이 미미하고,
+                        # 재저장하면 saved_rows·matched_complexes 의 중복 계상을 피하려고
+                        # "이번에 새로 구제한 것" 과 "값만 갱신한 것" 을 나누는 카운터가
+                        # 하나 더 필요해진다.
 
                     if fetched_ok == 0:
                         # ⚠ failed_ld_codes/리스트에 넣지 않는다 — 재수집 대상 동은 정의상
@@ -1221,6 +1281,13 @@ def collect_official_prices(
                         [t for t in pending if t.complex_no not in matched_complex_nos],
                         grouped_by_name,
                     )
+                    # 동 하나가 끝날 때마다 커밋한다 — 이 패스 전체가 best-effort
+                    # try/except(+rollback) 안이라, 뒤쪽 동에서 예외가 나면 앞선 동들이
+                    # 이미 구제해 둔 저장분까지 통째로 롤백된다. 그런데 rescued·
+                    # matched_complexes·saved_rows 는 파이썬 변수라 롤백되지 않아,
+                    # "구제 N개" 라고 보고하면서 DB 에는 없는 상태가 된다. 동당 최대
+                    # 3회 조회로 예외 창이 3배가 됐으므로 커밋 입도를 동 단위로 좁힌다.
+                    db.commit()
                     if capped:
                         # 캡이 회차 사이에서 터졌으면 누적분으로 이 동까지만 마무리하고
                         # 동 루프도 멈춘다(동 경계 캡과 같은 결론).

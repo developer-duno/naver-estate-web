@@ -20,6 +20,7 @@ import pytest
 
 from crawler.service_official_price import (
     _REPASS_MAX_ATTEMPTS,
+    _extend_unique,
     _group_by_aphus,
     _household_gate_ok,
     aggregate_area_medians,
@@ -1538,30 +1539,40 @@ def test_repass_wall_clock_cap_stops_between_attempts(db, monkeypatch):
 def test_repass_secondary_runs_once_after_union_and_yields_to_exact_match(db, monkeypatch):
     """2차(부분일치)는 최종 합집합에서 **한 번만** 돌고, 1차 완전일치가 우선한다.
 
-    시나리오: 공시 그룹은 "광동상가"(A1) 하나뿐이고, 우리 단지는
-      · S1 "광동상가"  — 1차 완전일치 대상. 단 1회차 표본에서는 호 8건이라 게이트 탈락.
-      · S2 "광동"      — 완전일치 후보가 없어 2차(부분일치) 대상.
-    회차마다 2차를 돌리면 1회차 시점에 S2 가 A1 을 선점해(2차는 게이트가 느슨) S1 은
-    합집합이 완성돼도 이미 claimed 라 영영 못 붙는다. 2차를 마지막 합집합에서 한 번만
-    돌리면 S1 이 1차로 A1 을 가져가고 S2 는 잔여로 남는다 — 이름이 정확히 같은 쪽이
-    이기는 것이 옳다.
+    공시 그룹은 "꿈에그린상가"(A1, 진짜 20호) 하나뿐이고 우리 단지는 둘이다:
+      · S1 "꿈에그린상가" 세대수 20 — 1차 완전일치 대상. **합집합이 20 이 돼야** 통과.
+      · S2 "신당꿈에그린" 세대수 16 — 완전일치 이름이 없어 2차 부분포함(동명 프리픽스)
+        대상. 세대수가 16 이라 **1회차 부분표본(16호)에서는 게이트를 통과**하고,
+        합집합이 완성된 20호에서는 16/20=0.80 으로 탈락한다.
+
+    ⚠ 이 세대수 배치가 이 테스트의 전부다(축 분리): S2 의 게이트 통과 여부가 표본 크기에
+    따라 **뒤집히게** 잡아야, 2차를 회차마다 돌릴 때와 마지막에 한 번만 돌릴 때의 결과가
+    갈린다. 두 단지 세대수를 같게 두면(옛 버전) 부분표본에서 S2 도 함께 탈락해 순서가
+    결과에 아무 영향을 못 준다 = 장식 테스트.
+    또 S1·S2 의 alt 정규화 키가 달라야 한다("꿈에그린" vs "신당꿈에그린") — 같으면 2차의
+    (a') 이름-쌍둥이 규칙이 부분포함 경로를 통째로 막아 역시 순서가 드러나지 않는다.
+
+    회차마다 2차를 돌리면: 1회차에 S2 가 A1 을 선점 → 2회차 합집합에서 S1 의 **1차**가
+    (1차는 claimed 를 안 본다) 같은 A1 을 또 가져가 **이중 배정**. 2차를 최종 합집합에서
+    한 번만 돌리면: S1 이 1차로 A1 을 갖고, S2 는 게이트 탈락으로 잔여에 남는다.
     """
     monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
-    db.add(Complex(complex_no="S1", complex_name="광동상가", cortar_no="1168010600",
+    db.add(Complex(complex_no="S1", complex_name="꿈에그린상가", cortar_no="1168010600",
                    real_estate_type_code="APT", total_household_count=20))
-    db.add(Complex(complex_no="S2", complex_name="광동", cortar_no="1168010600",
-                   real_estate_type_code="APT", total_household_count=20))
+    db.add(Complex(complex_no="S2", complex_name="신당꿈에그린", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=16))
     db.commit()
     # 두 단지 모두 과거 행 보유 = 재수집 대상. aphus_code 는 이번 실행과 무관한 값으로
     # 심어(두 축 우연 일치 함정) "이번에 A1 을 새로 배정했는지"만 보게 한다.
     _seed_prior_row(db, "S1", aphus_code="OLD1")
     _seed_prior_row(db, "S2", aphus_code="OLD2")
 
-    main_sample = _rows_ho_range(100, 104, aphus_nm="광동상가")
-    sample_a = _rows_ho_range(100, 116, aphus_nm="광동상가")   # 0.80배 — 1차 탈락
-    sample_b = _rows_ho_range(112, 120, aphus_nm="광동상가")   # 합집합 20건 → 1차 통과
+    nm = "꿈에그린상가"
+    main_sample = _rows_ho_range(100, 104, aphus_nm=nm)      # 4호 — 둘 다 탈락(소실 유도)
+    sample_a = _rows_ho_range(100, 116, aphus_nm=nm)         # 16호 — S1 탈락 / S2 는 통과
+    sample_b = _rows_ho_range(112, 120, aphus_nm=nm)         # 합집합 20호 → S1 통과
     # 2회차에 S1 이 구제돼도 S2 가 아직 pending 이라 조기 중단은 안 걸린다(3회차까지 간다).
-    sample_c = _rows_ho_range(100, 120, aphus_nm="광동상가")
+    sample_c = _rows_ho_range(100, 120, aphus_nm=nm)
 
     with patch(
         "crawler.vworld_price_api.fetch_official_prices",
@@ -1574,13 +1585,19 @@ def test_repass_secondary_runs_once_after_union_and_yields_to_exact_match(db, mo
     )
 
     saved = {row.complex_no: row for row in db.query(ComplexOfficialPrice).all()}
+    # A1 의 주인은 이름이 정확히 같은 S1 이어야 한다
     assert saved["S1"].aphus_code == "A1", (
         "합집합 완성 후 1차 완전일치가 A1 을 가져가야 하는데,"
         " 부분표본의 2차가 먼저 선점했다"
     )
     assert saved["S1"].ho_count == 20, "1차가 붙은 시점의 합집합(20호)으로 저장돼야 한다"
+    # S2 는 이번 실행에서 아무것도 저장하지 못했어야 한다 — 과거 행이 그대로.
+    # (2차를 회차마다 돌리면 S2 가 부분표본으로 A1 을 집어 16호짜리 행이 저장된다)
     assert saved["S2"].aphus_code == "OLD2", (
-        "2차가 이미 배정된 그룹(A1)을 가져가 이중 배정이 됐다"
+        "부분표본의 2차가 A1 을 선점했다 = S1 과 이중 배정"
+    )
+    assert saved["S2"].ho_count == 10, (
+        "S2 에 이번 실행의 행이 새로 저장됐다 — 2차가 부분표본에서 돌았다는 뜻"
     )
 
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
@@ -1637,6 +1654,185 @@ def test_repass_exact_hit_without_saved_rows_retries_on_next_attempt(db, monkeyp
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
     assert job.status == "completed"
     assert "잔여" not in (job.error_message or "")
+
+
+def test_repass_commits_each_dong_so_later_exception_keeps_earlier_rescue(db, monkeypatch):
+    """동 하나가 끝날 때마다 커밋 — 뒤쪽 동의 예외가 앞선 동의 구제를 롤백하면 안 된다.
+
+    재수집 패스 전체가 best-effort try/except(+`db.rollback()`) 안이라, 커밋이 패스 끝에만
+    있으면 두 번째 동에서 예외가 날 때 첫 동의 저장분까지 되돌아간다. 그런데 rescued·
+    matched_complexes·saved_rows 는 파이썬 변수라 롤백되지 않아 "구제했다"고 보고하면서
+    DB 에는 없는 상태가 된다. 동당 최대 3회 조회로 그 창이 3배가 됐다.
+
+    축 분리: 소실 동 2개 · 시도 상한 3 · 구제 대상 1+1 — 숫자가 서로 달라야 카운터 혼동이
+    드러난다. 첫 동은 1회차에 구제(조기 중단), 두 번째 동의 첫 조회에서 예외를 던진다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    db.add(Complex(complex_no="D1", complex_name="가아파트", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.add(Complex(complex_no="D2", complex_name="나아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+    _seed_prior_row(db, "D1", aphus_code="OLD1")
+    _seed_prior_row(db, "D2", aphus_code="OLD2")
+
+    drift1 = make_rows_for_complex(aphus_code="A1", aphus_nm="가", ho_count=8)
+    drift2 = make_rows_for_complex(aphus_code="A2", aphus_nm="나", ho_count=8)
+    rescue1 = make_rows_for_complex(aphus_code="A1", aphus_nm="가", ho_count=10)
+
+    # 본루프 2동(둘 다 드리프트 탈락) → 재수집: 1168010600 구제 성공(1회) → 1168010700 예외
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[drift1, drift2, rescue1, RuntimeError("V-WORLD 폭발")],
+    ):
+        collect_official_prices(stdr_year=_YEAR)
+
+    saved = {row.complex_no: row for row in db.query(ComplexOfficialPrice).all()}
+    assert saved["D1"].aphus_code == "A1", (
+        "두 번째 동의 예외가 첫 동의 구제를 롤백했다 — 카운터는 구제했다고 하는데 DB 엔 없다"
+    )
+    assert saved["D2"].aphus_code == "OLD2", "예외가 난 동은 당연히 그대로"
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed", "재수집 예외가 본 수집 성공을 실패로 뒤집었다"
+
+
+def test_repass_sleeps_between_failed_attempts_but_not_after_the_last(db, seeded, monkeypatch):
+    """조회 실패 뒤 다음 회차가 남았을 때만 2초 쉰다 (본 루프 재시도와 같은 간격).
+
+    실패 직후 곧바로 다시 찌르면 같은 이유(일시 네트워크 오류·rate limit)로 또 실패하기
+    쉽다. 반대로 마지막 회차 뒤에는 더 뜰 게 없으므로 자면 순수 낭비다.
+    축: 시도 3회 · 실패 3회 · 기대 sleep 2회 — 셋이 다 달라 off-by-one 이 드러난다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded)
+    db.add(Complex(complex_no="C9", complex_name="정상아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+
+    drifted = make_rows_for_complex(aphus_nm="은마", ho_count=8)
+    healthy = make_rows_for_complex(aphus_code="A9", aphus_nm="정상", ho_count=10)
+
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[drifted, healthy] + [None] * _REPASS_MAX_ATTEMPTS,
+    ), patch("crawler.service_official_price.time.sleep") as mock_sleep:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_sleep.call_count == _REPASS_MAX_ATTEMPTS - 1, (
+        f"실패 {_REPASS_MAX_ATTEMPTS}회에 sleep 은 {_REPASS_MAX_ATTEMPTS - 1}회여야 한다"
+        f" (마지막 회차 뒤엔 자지 않는다) — 실제 {mock_sleep.call_count}회"
+    )
+    assert all(call.args == (2,) for call in mock_sleep.call_args_list), (
+        f"본 루프 재시도와 같은 2초여야 한다: {mock_sleep.call_args_list}"
+    )
+
+
+def test_repass_does_not_sleep_on_success_path(db, seeded, monkeypatch):
+    """조회가 성공하면 회차 사이에 자지 않는다 — 간격은 실패 뒤 완충일 뿐이다."""
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded)
+
+    drifted = make_rows_for_complex(aphus_nm="은마", ho_count=8)
+    complete = make_rows_for_complex(aphus_nm="은마", ho_count=10)
+
+    with patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[drifted, complete],
+    ), patch("crawler.service_official_price.time.sleep") as mock_sleep:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_sleep.call_count == 0, (
+        f"성공 경로인데 {mock_sleep.call_count}회 잤다 — 월 1회 잡의 시간 예산 낭비"
+    )
+
+
+# ── 7-5. 누적 중복 제거 (_extend_unique, 세션 413 리뷰 반영) ──
+#
+# V-WORLD 는 호마다 완전 동일한 행을 2회 준다(세션 376). 재수집이 같은 동을 3회 뜨면
+# 대치동 기준 누적이 ~147,000 dict 라 메모리·재색인 비용이 헛되이 커진다. 파이프라인이
+# 읽는 필드가 전부 같은 행은 합집합의 의미를 안 바꾸므로 누적 시점에 거른다.
+
+
+def test_extend_unique_skips_identical_rows_across_attempts():
+    """완전히 같은 행은 두 번 누적되지 않는다 (표본이 겹치는 부분 = 같은 행)."""
+    acc: list = []
+    seen: set = set()
+
+    first = make_rows_for_complex(ho_count=3)
+    added1 = _extend_unique(acc, seen, first)
+    # 같은 표본을 그대로 다시 — V-WORLD 의 행 2회 반환 + 표본 겹침 재현
+    added2 = _extend_unique(acc, seen, list(first))
+
+    assert added1 == 3
+    assert added2 == 0, "같은 행이 또 누적됐다"
+    assert len(acc) == 3, f"누적이 중복으로 불었다: {len(acc)}"
+
+
+def test_repass_accumulation_uses_dedupe_at_the_call_site(db, seeded, monkeypatch, caplog):
+    """호출부도 dedupe 를 쓴다 — 헬퍼 단위 테스트만으론 `acc_rows.extend()` 회귀를 못 잡는다.
+
+    회차 로그가 찍는 "누적 N건" 으로 확인한다: 1회차 8행, 2회차에 **같은 8행**이 다시 오면
+    누적은 8 이어야 한다(그냥 extend 면 16). 축 분리 — 호 8 · 회차 2 · 기대 누적 8.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded)
+    db.add(Complex(complex_no="C9", complex_name="정상아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+
+    drifted = make_rows_for_complex(aphus_nm="은마", ho_count=8)
+    healthy = make_rows_for_complex(aphus_code="A9", aphus_nm="정상", ho_count=10)
+
+    with caplog.at_level("INFO", logger="crawler.service_official_price"):
+        with patch(
+            "crawler.vworld_price_api.fetch_official_prices",
+            # 재수집 3회차 모두 **완전히 같은** 표본 — 누적은 8 에서 더 늘면 안 된다
+            side_effect=[drifted, healthy] + [list(drifted)] * _REPASS_MAX_ATTEMPTS,
+        ), patch("crawler.service_official_price.time.sleep"):
+            collect_official_prices(stdr_year=_YEAR)
+
+    lines = [r.getMessage() for r in caplog.records if "회차: 행" in r.getMessage()]
+    assert len(lines) == _REPASS_MAX_ATTEMPTS, f"회차 로그가 모자라다: {lines}"
+    assert "누적 8건" in lines[-1], (
+        f"마지막 회차 누적이 8 이 아니다 = 호출부가 dedupe 없이 extend 했다: {lines[-1]}"
+    )
+
+
+def test_extend_unique_keeps_same_ho_with_different_price():
+    """같은 호라도 가격·면적이 다르면 **버리지 않는다** (집계의 '유효한 첫 행' 성질 보존).
+
+    aggregate_area_medians 는 같은 _ho_key 의 유효한 첫 행을 쓴다 — 앞 복제본이 깨져
+    있으면 뒤의 멀쩡한 복제본이 살아남아야 하므로, 여기서 호 키만 보고 거르면 손실이다.
+    """
+    acc: list = []
+    seen: set = set()
+
+    broken = make_row(ho="101", price=0)          # 가격 0 = 집계에서 무효
+    fixed = make_row(ho="101", price=2_700_000_000)  # 같은 호, 멀쩡한 가격
+
+    _extend_unique(acc, seen, [broken])
+    added = _extend_unique(acc, seen, [fixed])
+
+    assert added == 1, "같은 호의 다른 가격 행이 중복으로 잘렸다 = 집계 손실"
+    assert len(acc) == 2
+    # 실제 집계가 뒤의 멀쩡한 행을 살려내는지까지 확인
+    assert aggregate_area_medians(acc) == [(Decimal("84.43"), 2_700_000_000, 1)]
+
+
+def test_extend_unique_tolerates_unhashable_field_values():
+    """값에 list 가 섞여도 죽지 않는다 — frozenset(row.items()) 였다면 TypeError.
+
+    이 함수는 best-effort 블록 안에서 도므로, 여기서 예외가 나면 재수집 패스가 통째로
+    날아간다(그 실행의 구제 전량 소실). 명시 필드 튜플이라 무관한 필드는 손대지 않는다.
+    """
+    acc: list = []
+    seen: set = set()
+    row = make_row(ho="101")
+    row["someList"] = [1, 2, 3]  # V-WORLD 가 언젠가 배열 필드를 추가해도 안전해야 한다
+
+    assert _extend_unique(acc, seen, [row]) == 1
+    assert len(acc) == 1
 
 
 def test_repass_logs_gate_ratio_for_unrescued_target(db, seeded, monkeypatch, caplog):

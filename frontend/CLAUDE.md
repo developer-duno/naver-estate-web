@@ -33,6 +33,7 @@ frontend/src/
 | `frontend/.claude/ui-patterns.md` | UI 패턴 8 하위 (FilterBar / 뱃지 / 차트 / RegionSelector / 비교 / 레이더 / 히스토리·북마크 / 즐겨찾기) |
 | `frontend/.claude/pages-and-mb.md` | 페이지별 데이터 흐름 28 페이지 + 미분양 컴포넌트 + URL 상태 관리 |
 | `frontend/.claude/tools-lineup.md` | /tools 도구 5종 라인업 + 매물 상세 모달 + 모바일 반응형 + 코드 구조 |
+| `frontend/e2e/README.md` | **E2E·시각회귀 정본** — project 구조·로컬 실행·baseline 재생성 7단계·촬영 전 대기 조건 두 갈래·헤더 전용 스냅샷·`check:visual-guard` (세션 412 에 `.claude/rules/testing.md` 에서 원문 이동 — 자동 로드 아님. **`e2e/*.spec.ts`·baseline PNG 를 고치기 전에 반드시 읽는다**) |
 
 ## Critical Rules
 

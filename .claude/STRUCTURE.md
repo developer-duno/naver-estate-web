@@ -33,8 +33,8 @@ naver-estate-web/
 │   ├── main.py                  # FastAPI 진입점, CORS, 라우터 등록
 │   └── deps.py                  # 인증 의존성 (get_current_user, get_admin_user)
 │
-├── .claude/                     # 프로젝트 가이드 (자동 로드 5 + 명시 참조 3)
-│   ├── rules/                   # 자동 로드 6 (web-rules, testing, infra, codes, planning, domain-mapping-ssot)
+├── .claude/                     # 프로젝트 가이드 (rules/ 11종 자동 로드 + 명시 참조 문서)
+│   ├── rules/                   # 자동 로드 11 (세는 법 = `ls .claude/rules/*.md | wc -l`) — web-rules·testing·infra·codes·planning·domain-mapping-ssot·derived-display-ssot·error-propagation·release·seo-metadata·browser-automation-isolation
 │   ├── ASSETS.md                # 자산 인덱스 (PDF 16 / 도구 14 / 글로벌 / 운영 부채)
 │   ├── GLOSSARY.md              # 한국어 도메인 용어 30+
 │   ├── BLOG.md                  # /blog 운영 가이드 (MDX 26편 + 4단 발행 절차)

@@ -13,12 +13,16 @@ RECORD_ALLOWLIST 패턴을 naver-estate(Python + APScheduler)에 맞게 이식.
 실행: python -m pytest tests/test_scheduler_monitoring_coverage.py -v
 """
 
+from pathlib import Path
+
 from crawler.job_error_listener import _JOB_LABEL_FALLBACK
 from crawler.scheduler import _ADD_JOB_CALL_PATTERN, extract_scheduler_job_ids
 from routers.admin.freshness_meta import FRESHNESS_ITEMS, MONITORING_EXEMPT
 
-with open("crawler/scheduler.py", encoding="utf-8") as f:
-    _SCHEDULER_SOURCE = f.read()
+# 절대경로로 연다 — 상대경로(`open("crawler/scheduler.py")`·`Path("crawler")`)였을 때는 레포 루트에서
+# pytest 를 돌리면 수집 단계에서 FileNotFoundError 가 났다(세션 407 실측 → 세션 412 수정).
+_BACKEND = Path(__file__).resolve().parents[1]
+_SCHEDULER_SOURCE = (_BACKEND / "crawler" / "scheduler.py").read_text(encoding="utf-8")
 
 
 def _covered_job_ids() -> set[str]:
@@ -390,7 +394,6 @@ def test_stale_hours_keys_are_real_job_types():
     오타가 있으면 그 잡은 조용히 기본 1h 로 떨어져 사고가 재발한다.
     """
     import re
-    from pathlib import Path
 
     from crawler.monitor import _STALE_HOURS_BY_TYPE
 
@@ -400,7 +403,7 @@ def test_stale_hours_keys_are_real_job_types():
     #   (c) 위치 인자            _record_job(db, "official_price", ...)
     # 그래서 job_type 을 다루는 파일에서 job_type 모양 문자열을 폭넓게 모은다.
     used: set[str] = set()
-    for path in Path("crawler").glob("*.py"):
+    for path in (_BACKEND / "crawler").glob("*.py"):
         # ⚠ monitor.py 는 **제외**한다 — 검사 대상인 _STALE_HOURS_BY_TYPE 이 그 안에
         #    있어서, 표에 오타를 내면 그 오타 문자열이 스캔에 잡혀 **스스로를 증명**한다.
         #    (뮤테이션 검증에서 실제로 이 자기참조 때문에 가드가 통과해 버렸다 — 즉

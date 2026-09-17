@@ -61,8 +61,8 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 | 파일 | git 추적 | 한 줄 설명 |
 |---|---|---|
 | `rules/web-rules.md` | ✅ | React/Next.js + FastAPI 코딩 규칙, DON'T 목록 |
-| `rules/testing.md` | ✅ | 테스트 작성·실행 규칙, 구조표 |
-| `rules/infra.md` | ✅ | 서버 복구 절차, 스케줄러 13개, 공유 인프라(mibun) |
+| `rules/testing.md` | ✅ | 테스트 작성·실행 규칙, 구조표 (시각회귀 절차·판정 정본은 `frontend/e2e/README.md` — 세션 412 이동) |
+| `rules/infra.md` | ✅ | 서버 복구 절차, 스케줄러 25잡(정적 id 기준 — 재시작 판정용 전수 시각표는 `rules/release.md` §3-0 생성 표), 공유 인프라(mibun). 잡 상세·DB 다운 런북·운영 배경 3절은 `backend/.claude/details.md` |
 | `rules/codes.md` | ✅ | 거래/매물 코드, 핵심 상수, localStorage 키 |
 | `rules/planning.md` | ✅ | /plan 모드 최소 규칙, 자동 트리거 |
 | `rules/domain-mapping-ssot.md` | ✅ | BE-FE 매핑 SSOT + SQL 집계 N→1 가중평균 + dialect 분기 (세션 226 신설) |

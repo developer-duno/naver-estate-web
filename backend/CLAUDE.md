@@ -68,6 +68,27 @@
 | --- | --- |
 | `backend/.claude/details.md` | 실거래가 on-demand + mibunyang 통합 + 공인중개사 검증 워크플로 + 미분양 중복 제거 + **스케줄러 잡 상세 6절**(매물 상세 보강·공시가격·응급의료·K-apt 매칭·API 버전 감시·크롤링 모니터 — infra.md 표에서 이동, 세션 411) + **Supabase 다운 런북·재발**(infra.md, 세션 412) + **스케줄러 운영 배경 3절**(재시작 겹침·잡 에러 리스너·monitor freshness — infra.md, 세션 412) + **release 레거시 재기동 절차·사건 박제 표**(release.md, 세션 412) |
 
+## 새 스케줄러 잡 추가 체크리스트 (흩어져 있던 안내를 한곳에 — 세션 412)
+
+| # | 어디에 | 무엇을 | 빠뜨리면 |
+| --- | --- | --- | --- |
+| 1 | `crawler/scheduler.py` `add_job(id="…", name="…")` | id 는 **문자열 리터럴**, `name` 은 알림 본문에 그대로 찍히므로 쉬운 우리말(라이브는 폴백표보다 이 name 을 우선한다) | 루프로 만든 동적 id 는 정적 가드가 못 본다 / 영문 name 은 텔레그램에 그대로 나간다 |
+| 2 | `crawler/job_error_listener.py` `_JOB_LABEL_FALLBACK` | 1번과 같은 우리말 라벨(**스케줄러 id** 키) | `tests/test_scheduler_monitoring_coverage.py` 실패 |
+| 3 | `routers/admin/freshness_meta.py` `FRESHNESS_ITEMS` 또는 `MONITORING_EXEMPT`(정당한 사유와 함께) | 신선도 감시 등록 또는 예외 | 같은 테스트 실패 — 잡 이름을 메시지가 알려준다 |
+| 4 | `routers/admin/scheduler.py` `SCHEDULER_JOB_META` | 관리자 스케줄러 화면의 행(등록 토글이 둘이면 `env_extra`) | 화면에 행이 없거나 "활성" 표시가 거짓이 된다 |
+| 5 | `crawler/plain_words.py` `JOB_WORDS` + FE `frontend/src/lib/crawl-job-labels.ts` | **job_type** 키(스케줄러 id 와 다른 이름 체계) 양쪽 등록 | `tests/test_plain_words.py`·`npm run check:job-labels` 실패 |
+| 6 | `crawler/monitor.py` `_STALE_HOURS_BY_TYPE` | 1시간 넘게 도는 잡이면 **실측** 최대 소요의 약 2배(job_type 키) | 모니터가 정상 실행 중인 잡을 cancelled 처리(90일 15건 오탐 전례) |
+| 7 | `scripts/gen_restart_schedule_table.py` `_ID_TO_JOB_TYPE`(id ≠ job_type 일 때) → `python scripts/gen_restart_schedule_table.py --write ../.claude/rules/release.md` | 재시작 금지 시각표 재생성 후 함께 커밋 | `tests/test_restart_schedule_table.py` 실패 |
+| 8 | `.claude/rules/infra.md` §스케줄러 표 (+ 네이버를 호출하면 §네이버 크롤링 시간 분리) | 설명 행 추가 | ⚠ **가드 없음** — 세션 403 에 만든 3잡(상세 백필 2·채움률 감시)이 세션 412 까지 이 표에서 빠져 있었다 |
+
+## 운영 스크립트 (라이브 판정·문서 생성 — `backend/scripts/`)
+
+| 스크립트 | 용도 |
+| --- | --- |
+| `scripts/verify_alert_wording.py` | 알림 11창구 + 미지 에러 렌더가 쉬운 우리말인지 **실발송 없이** 검사(exit 0/1). 워크트리에선 `DATABASE_URL="sqlite:///:memory:"` 를 앞에 붙인다 — `.claude/rules/infra.md` §텔레그램 알림 문구 |
+| `scripts/gen_restart_schedule_table.py` | `.claude/rules/release.md` §3-0 재시작 금지 시각표를 `scheduler.py`·`monitor.py` 에서 **생성** / `--check`(다르면 diff + exit 1) / `--write`. **잡을 추가·삭제하거나 시각·임계를 바꾸면 `--write ../.claude/rules/release.md` 후 함께 커밋** — `tests/test_restart_schedule_table.py` 가 드리프트를 막는다. 간격 상수는 소스 기본값으로 되돌려 만들므로 `.env` 유무와 무관하게 같은 결과(세션 412 #540) |
+| `scripts/run_official_price_now.py` | 공동주택 공시가격 수동 재수집 — 3~7시간이라 세션 독립 실행 필수(`backend/.claude/details.md` §release 레거시 재기동 절차의 schtasks 방식) |
+
 ## CI 테스트 인프라
 
 - **엔진**: file-based SQLite + NullPool + WAL + busy_timeout 5초

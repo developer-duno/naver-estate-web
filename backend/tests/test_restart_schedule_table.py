@@ -1,14 +1,16 @@
 """release.md §3-0 스케줄 전수 표가 코드와 어긋나지 않게 막는 가드 (세션 412)
 
-옛 표는 손으로 옮겨 적은 것이라 두 번 잡을 빠뜨렸다(세션 398 collect_crime_stats,
-세션 403 새 잡 2종). 이제 scripts/gen_restart_schedule_table.py 가 scheduler.py·
-monitor.py 에서 표를 생성하고, 이 테스트가 문서와 코드의 드리프트를 잡는다.
+옛 표는 손으로 옮겨 적은 것이라 세 번 잡을 빠뜨렸다(세션 398 collect_crime_stats,
+세션 403 새 잡 2종, 세션 412 주 1회 07:00 complex_detail 3종). 이제 scripts/gen_restart_schedule_table.py 가
+scheduler.py·monitor.py 에서 표를 생성하고, 이 테스트가 문서와 코드의 드리프트를 잡는다.
 
 실행: python -m pytest tests/test_restart_schedule_table.py -v
 """
 
 import sys
 from pathlib import Path
+
+import pytest
 
 import crawler.monitor as monitor_mod
 from crawler.scheduler import extract_scheduler_job_ids
@@ -18,6 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from gen_restart_schedule_table import (  # noqa: E402
     _ID_TO_JOB_TYPE,
+    BLOCK_END,
+    BLOCK_START,
     _split,
     build_jobs,
     generate_block,
@@ -55,6 +59,21 @@ def test_release_md_block_matches_generated():
         "release.md 의 스케줄 전수 표가 코드(scheduler.py·monitor.py)와 다르다. "
         "표는 손으로 고치는 것이 아니다 — " + _HOWTO
     )
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [
+        f"A{BLOCK_END}B{BLOCK_START}C",  # 끝 마커가 앞 — 그대로 쓰면 본문이 중복되고 START 가 떠돈다
+        f"A{BLOCK_START}X{BLOCK_END}B{BLOCK_START}Y{BLOCK_END}C",  # 두 쌍 — 둘째 쌍이 유령 표로 남는데 --check 는 통과
+        "마커 없음",
+    ],
+    ids=["reversed", "duplicated", "missing"],
+)
+def test_split_rejects_broken_markers(broken):
+    """마커가 뒤집히거나 두 쌍이거나 없으면 --write/--check 전에 즉시 거부한다(세션 412 검사관 MED 2건)."""
+    with pytest.raises(SystemExit):
+        _split(broken)
 
 
 def test_stale_hours_job_types_all_map_to_registered_jobs():

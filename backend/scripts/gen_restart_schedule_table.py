@@ -1,7 +1,8 @@
 """release.md §3-0 "스케줄 전수" 표 생성기 — scheduler.py·monitor.py 가 진실의 원천.
 
-옛 표는 손으로 옮겨 적은 것이라 두 번 잡을 빠뜨렸다(세션 398 collect_crime_stats,
-세션 403 새 잡 2종). 손글씨를 없애고 코드에서 뽑는다 — derived-display-ssot.md 의
+옛 표는 손으로 옮겨 적은 것이라 세 번 잡을 빠뜨렸다(세션 398 collect_crime_stats,
+세션 403 새 잡 2종, 세션 412 주 1회 07:00 complex_detail_JGC/ABYG/OBYG — 이 생성기의 첫 실행이
+찾아냈다). 손글씨를 없애고 코드에서 뽑는다 — derived-display-ssot.md 의
 "파생 표시값은 source 에서 자동생성" 원칙을 문서 표에 적용한 것이다.
 
   생성  : python scripts/gen_restart_schedule_table.py
@@ -140,10 +141,16 @@ def generate_block() -> str:
 
 
 def _split(text: str) -> tuple[str, str, str]:
-    """파일 본문을 (앞, 블록, 뒤) 로 쪼갠다. 마커가 없으면 에러."""
+    """파일 본문을 (앞, 블록, 뒤) 로 쪼갠다.
+
+    마커가 없거나·두 쌍이거나·끝이 시작보다 앞이면 즉시 거부한다 — 그대로 진행하면 --write 가
+    본문을 중복시키거나 유령 표를 남기는데 --check 는 통과해 버린다(세션 412 검사관 MED 2건).
+    """
+    if text.count(BLOCK_START) != 1 or text.count(BLOCK_END) != 1:
+        raise SystemExit(f"마커({BLOCK_START} / {BLOCK_END})가 정확히 한 쌍이 아니다: 파일이 손상됐는지 확인할 것")
     i, j = text.find(BLOCK_START), text.find(BLOCK_END)
-    if i < 0 or j < 0:
-        raise SystemExit(f"마커({BLOCK_START} / {BLOCK_END})를 찾지 못했다: 파일이 손상됐는지 확인할 것")
+    if j < i:
+        raise SystemExit("끝 마커가 시작 마커보다 앞에 있다: 파일이 손상됐는지 확인할 것")
     return text[:i], text[i : j + len(BLOCK_END)], text[j + len(BLOCK_END) :]
 
 

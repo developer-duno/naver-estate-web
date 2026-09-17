@@ -163,14 +163,21 @@ def test_total_runs_today_uses_kst_midnight(mock_sched, client, db):
 
 @patch("crawler.scheduler.get_scheduler", return_value=None)
 def test_scheduler_status_failed_job(mock_sched, client, db):
-    """실패한 작업의 에러 메시지가 반환되는지 확인"""
+    """실패한 작업의 에러 메시지가 반환되는지 확인
+
+    ⚠ 픽스처를 **영문 원문**으로 둔다 (세션 411 검사관 A-HIGH). 우리말 원문
+    (`"API 연결 실패"`)으로 두면 번역해도 안 해도 `error_plain == error_message` 라
+    라우터에서 `explain_stored_error` 를 빼도 테스트가 통과하는 가짜 가드가 된다.
+    우리말이 그대로 유지되는 ③ 경로는 아래 별도 잡이 계속 지킨다.
+    """
     _make_admin(db)
     now = datetime.now(timezone.utc)
+    raw = "(psycopg2.errors.QueryCanceled) canceling statement due to statement timeout"
     job = CrawlJob(
         job_type="crime_stats",
         scheduler_job_id="collect_crime_stats",
         status="failed",
-        error_message="API 연결 실패",
+        error_message=raw,
         started_at=now - timedelta(minutes=1),
         completed_at=now,
     )
@@ -181,11 +188,33 @@ def test_scheduler_status_failed_job(mock_sched, client, db):
     data = res.json()
     crime_job = next(j for j in data["jobs"] if j["scheduler_job_id"] == "collect_crime_stats")
     assert crime_job["last_run"]["status"] == "failed"
-    assert crime_job["last_run"]["error_message"] == "API 연결 실패"
-    # 화면이 보여줄 우리말 한 줄도 함께 온다 (세션 411). 이 값은 이미 우리말이라
-    # 원문 그대로가 정답 — 뭉개면 정보가 줄어든다(test_plain_words 유지 케이스).
-    assert crime_job["last_run"]["error_plain"] == "API 연결 실패"
+    # 원문은 그대로 온다 — 화면이 `title` 로 남겨 추적 근거를 지키기 때문.
+    assert crime_job["last_run"]["error_message"] == raw
+    # 화면이 보여줄 우리말 한 줄은 번역된 값이어야 한다 (세션 411).
+    assert crime_job["last_run"]["error_plain"] == "데이터베이스가 너무 오래 걸려 스스로 멈췄어요."
+    assert crime_job["last_run"]["error_plain"] != crime_job["last_run"]["error_message"]
     assert crime_job["stats_24h"]["failures"] >= 1
+
+
+@patch("crawler.scheduler.get_scheduler", return_value=None)
+def test_scheduler_status_failed_job_korean_message_kept(mock_sched, client, db):
+    """이미 우리말인 에러는 원문 그대로 나온다 (뭉개면 정보가 줄어든다)"""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    db.add(CrawlJob(
+        job_type="complex_articles",
+        scheduler_job_id="crawl_articles",
+        status="failed",
+        error_message="3/50개 단지 실패",
+        started_at=now - timedelta(minutes=1),
+        completed_at=now,
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/scheduler-status", headers=_auth(_token("admin1")))
+    data = res.json()
+    art_job = next(j for j in data["jobs"] if j["scheduler_job_id"] == "crawl_articles")
+    assert art_job["last_run"]["error_plain"] == "3/50개 단지 실패"
 
 
 # ── 24시간 통계 ──

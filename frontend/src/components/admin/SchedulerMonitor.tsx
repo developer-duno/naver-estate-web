@@ -204,13 +204,14 @@ function JobRow({
       {expanded && job.last_run?.error_message && (
         <tr>
           {/* 보여주는 건 쉬운 우리말, 원문은 title 로 남긴다 (세션 411).
-              error_plain 이 없으면(옛 백엔드) 원문으로 폴백 — 화면이 비지 않는다. */}
+              error_plain 이 없거나 빈 문자열이면(옛 백엔드·번역 결과 없음) 원문으로
+              폴백한다 — `??` 를 쓰면 빈 문자열이 통과해 화면이 비어 버린다. */}
           <td
             colSpan={7}
             className="px-3 py-2 bg-red-50 text-xs text-red-700 whitespace-pre-wrap"
             title={job.last_run.error_message}
           >
-            {job.last_run.error_plain ?? job.last_run.error_message}
+            {job.last_run.error_plain || job.last_run.error_message}
           </td>
         </tr>
       )}

@@ -215,6 +215,29 @@ describe("SchedulerMonitor 컴포넌트", () => {
     });
   });
 
+  /** error_plain 이 빈 문자열이어도 원문으로 폴백 — `??` 였다면 화면이 비어 버린다 (세션 411) */
+  it("error_plain 이 빈 문자열이면 원문으로 폴백한다", async () => {
+    const raw = "API 연결 실패: timeout";
+    mockGetStatus.mockResolvedValueOnce({
+      ...MOCK_RESPONSE,
+      jobs: [
+        {
+          ...MOCK_RESPONSE.jobs[1],
+          last_run: { ...MOCK_RESPONSE.jobs[1].last_run!, error_message: raw, error_plain: "" },
+        },
+      ],
+    });
+    renderWithProvider();
+    await waitFor(() => {
+      expect(screen.getByText("범죄통계")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText("범죄통계").closest("tr")!);
+
+    await waitFor(() => {
+      expect(screen.getByText(raw)).toBeInTheDocument();
+    });
+  });
+
   /** API 에러 시 에러 메시지 표시 */
   it("API 에러 시 에러 UI가 표시된다", async () => {
     mockGetStatus.mockRejectedValueOnce(new Error("네트워크 에러"));

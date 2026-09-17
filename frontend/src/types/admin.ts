@@ -95,7 +95,7 @@ export interface SchedulerLastRun {
   error_message?: string;
   /** error_message 를 쉬운 우리말 한 줄로 바꾼 값 (BE 생성, 세션 411).
    *  옵셔널 — 옛 백엔드가 아직 안 보내면 화면이 원문으로 폴백한다. */
-  error_plain?: string;
+  error_plain?: string | null;
 }
 
 /** 스케줄러 작업별 상태 */

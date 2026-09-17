@@ -80,11 +80,16 @@ def _alert_operator_throttled(key: str, message: str) -> None:
 
 
 def _mask_email(email: str) -> str:
-    """운영자 알림용 마스킹 — 앞 두 글자 + *** + @도메인 (사장님이 /admin/users 에서 찾기엔 충분, 유출 피해는 0에 수렴)."""
+    """운영자 알림용 마스킹 — 앞 두 글자 + *** + @도메인 (사장님이 /admin/users 에서 찾기엔 충분, 유출 피해는 0에 수렴).
+
+    ⚠ 아이디가 두 글자면 앞 **한 글자**만 보여준다 — `ab@x.com` 을 `ab***@x.com` 으로
+    두면 가린 글자가 하나도 없어 마스킹이 아니게 된다(세션 411 검사관 C-D2).
+    """
     local, sep, domain = email.partition("@")
     if not sep:
-        return email[:2] + "***"
-    return local[:2] + "***" + "@" + domain
+        return (email[:2] if len(email) > 2 else email[:1]) + "***"
+    shown = local[:2] if len(local) > 2 else local[:1]
+    return shown + "***" + "@" + domain
 
 
 def _require_portone_config() -> None:

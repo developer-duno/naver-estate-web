@@ -1536,6 +1536,76 @@ def test_repass_wall_clock_cap_stops_between_attempts(db, monkeypatch):
     assert "W1" in (job.error_message or "")
 
 
+def test_repass_all_attempts_none_with_cap_stops_the_dong_loop(db, monkeypatch, caplog):
+    """조회를 **한 번도 못 받은 동**에서 캡이 터지면 뒤따르는 동을 건드리지 않는다.
+
+    `fetched_ok == 0` 분기는 진단도 2차도 건너뛰고 곧장 다음 동으로 가는데, 그때
+    캡이 이미 터져 있으면 동 루프 자체를 멈춰야 한다. 이 분기가 없어도 다음 동
+    진입 시 동 경계 캡이 곧 잡으므로 **중복 방어**지만, 동 경계 캡을 나중에 손대면
+    이쪽이 유일한 방어선이 되므로 가드를 남긴다(세션 413 검사관 A 지적).
+
+    구성: 소실 단지가 있는 동 2개(W1 이 소실 2건이라 먼저 처리된다 — 재수집 순서는
+    '소실 많은 동 우선'). W1 의 3회차 조회가 전부 None 이고 그 사이 캡이 터지면,
+    두 번째 동(W2)의 재수집 조회는 **한 번도 일어나면 안 된다**.
+
+    ⚠ 호출 수만으로는 이 분기를 지켜내지 못한다 — 지워도 `continue` 로 다음 동에
+    가고 거기서 동 경계 캡이 곧바로 잡아 조회 수가 같다(세션 413 뮤테이션 실측).
+    두 경로를 가르는 관측 가능한 차이는 **동 경계 캡의 경고 로그**다: 이 분기가
+    살아 있으면 그 로그가 안 찍히고, 지우면 "남은 법정동 N개 중단"이 추가로 찍힌다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    # 소실 2건인 동(먼저 처리) + 소실 1건인 동(캡 때문에 도달하면 안 됨)
+    db.add(Complex(complex_no="W1", complex_name="첫번째아파트", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=20))
+    db.add(Complex(complex_no="W1B", complex_name="첫번째비아파트", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=20))
+    db.add(Complex(complex_no="W2", complex_name="두번째아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=20))
+    # 정상 매칭되는 단지 — silent failure 가드(전량 실패 시 잡을 failed 로) 회피용
+    db.add(Complex(complex_no="C9", complex_name="정상아파트", cortar_no="1168010800",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+    for cno in ("W1", "W1B", "W2"):
+        _seed_prior_row(db, cno)
+
+    # 본루프: 소실 동 2개는 조회는 되지만 아무 단지도 못 붙는 표본(전부 소실 판정)
+    main_miss = _rows_ho_range(500, 504, aphus_code="ZZ", aphus_nm="무관")
+    healthy = make_rows_for_complex(aphus_code="A9", aphus_nm="정상", ho_count=10)
+
+    # monotonic: repass_start(0) → W1 동경계(0, 통과) → W1 2회차 직전(0, 통과)
+    #            → W1 3회차 직전(10_000, 캡) → 이후 값 유지
+    monkeypatch.setattr(
+        "crawler.service_official_price.time", _fake_time(0, 0, 0, 10_000)
+    )
+
+    with caplog.at_level("WARNING", logger="crawler.service_official_price"), patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        # 본루프 3동 + W1 재수집 1·2회차(None) — 그 뒤로는 아무 호출도 없어야 한다
+        side_effect=[main_miss, main_miss, healthy, None, None],
+    ) as mock_fetch:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_fetch.call_count == 5, (
+        "본루프 3회 + W1 재수집 2회까지여야 한다 — 캡이 터졌는데 W1 3회차나 "
+        f"W2 재수집을 조회했다(실제 {mock_fetch.call_count}회). side_effect 가 "
+        "소진돼 StopIteration 이 났다면 그것도 같은 결함이다"
+    )
+
+    # 이 분기가 살아 있으면 동 루프가 여기서 끝나므로 **동 경계 캡 경고는 안 찍힌다**.
+    # 지우면 다음 동으로 넘어가 거기서 동 경계 캡이 잡고 그 경고를 남긴다 — 뮤테이션 감지점.
+    assert "남은 법정동" not in caplog.text, (
+        "조회를 한 번도 못 받은 동에서 캡이 터지면 동 루프를 여기서 멈춰야 한다 — "
+        "동 경계 캡 경고가 찍혔다는 건 다음 동으로 넘어갔다는 뜻이다"
+    )
+
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed", "재수집 캡은 본 수집 성공을 뒤집지 않는다"
+    # W2 는 재수집을 아예 못 받았으므로 잔여로 남는다
+    assert "W2" in (job.error_message or ""), (
+        f"캡으로 건너뛴 동의 단지는 잔여 보고에 남아야 한다: {job.error_message!r}"
+    )
+
+
 def test_repass_secondary_runs_once_after_union_and_yields_to_exact_match(db, monkeypatch):
     """2차(부분일치)는 최종 합집합에서 **한 번만** 돌고, 1차 완전일치가 우선한다.
 

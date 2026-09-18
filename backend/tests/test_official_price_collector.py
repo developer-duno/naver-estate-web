@@ -1536,6 +1536,79 @@ def test_repass_wall_clock_cap_stops_between_attempts(db, monkeypatch):
     assert "W1" in (job.error_message or "")
 
 
+def test_repass_dong_cap_keeps_the_dongs_with_most_losses(db, monkeypatch, caplog):
+    """재수집 동 상한 절단은 **소실이 많은 동부터** 남긴다(기아 방지).
+
+    상한(`_REPASS_MAX_DONGS`)을 넘는 동이 생기면 잘라내야 하는데, 잘라내는 순서가
+    법정동 코드 오름차순이면 **번호가 큰 지역이 매달 영구히 구제받지 못한다**.
+    그래서 정렬 키는 `(-소실수, 코드)` 다.
+
+    ⚠ 이 테스트가 없으면 정렬을 `-len` → `len` 으로 뒤집어도 repass 테스트 34건이
+    전부 통과한다(세션 413 검사관 A 실측) — 기존 테스트들은 동이 2개뿐이고 코드
+    오름차순과 소실 많은 순이 **우연히 일치**해 정렬을 구분하지 못하기 때문이다.
+    여기서는 일부러 **어긋나게** 만든다: 소실이 많은 동에 **더 큰 법정동 코드**를 준다.
+
+    구성(축을 전부 다르게): 동 3개 · 상한 2 · 소실 단지 4개.
+      · 1168010900 (코드 최대) — 소실 2건  → 소실 많은 순 1위, 코드 순 꼴찌
+      · 1168010800                — 소실 1건
+      · 1168010700 (코드 최소) — 소실 1건  → 코드 순 1위
+    올바른 정렬 `(-소실수, 코드)` 로 상한 2를 자르면 **0900(소실 2) + 0700(동점 중
+    작은 코드)** 가 남고 0800 이 잘린다. 정렬을 코드 오름차순으로 뒤집으면 0700·0800
+    이 남고 **0900 이 잘려 나간다** — 두 경우가 `0900 이 살아남았는가`로 갈린다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    monkeypatch.setattr("crawler.service_official_price._REPASS_MAX_DONGS", 2)
+
+    # 소실 2건인 동(코드 최대) — 살아남아야 한다
+    db.add(Complex(complex_no="M1", complex_name="많은동첫째", cortar_no="1168010900",
+                   real_estate_type_code="APT", total_household_count=20))
+    db.add(Complex(complex_no="M2", complex_name="많은동둘째", cortar_no="1168010900",
+                   real_estate_type_code="APT", total_household_count=20))
+    # 소실 1건인 동 둘
+    db.add(Complex(complex_no="S1", complex_name="적은동가", cortar_no="1168010800",
+                   real_estate_type_code="APT", total_household_count=20))
+    db.add(Complex(complex_no="S2", complex_name="적은동나", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=20))
+    db.commit()
+    for cno in ("M1", "M2", "S1", "S2"):
+        _seed_prior_row(db, cno)
+
+    # 본루프: 어느 동에서도 아무도 못 붙는다 → 4단지 전부 소실 판정
+    main_miss = _rows_ho_range(500, 504, aphus_code="ZZ", aphus_nm="무관")
+    # 재수집도 구제 실패(상한까지 조회) — 여기선 "어느 동을 조회했는가"만 본다
+    repass_miss = _rows_ho_range(600, 604, aphus_code="YY", aphus_nm="무관2")
+
+    calls: list[str] = []
+
+    def _record(cortar, year):
+        calls.append(cortar)
+        # 본루프 3동 먼저, 그 뒤 재수집
+        return main_miss if len(calls) <= 3 else repass_miss
+
+    with caplog.at_level("WARNING", logger="crawler.service_official_price"), patch(
+        "crawler.vworld_price_api.fetch_official_prices", side_effect=_record
+    ):
+        collect_official_prices(stdr_year=_YEAR)
+
+    repass_calls = calls[3:]  # 본루프 3동 이후가 재수집
+    assert repass_calls, "재수집이 아예 안 돌았다 — 픽스처 전제가 깨졌다"
+    assert "1168010900" in repass_calls, (
+        "소실이 가장 많은 동(1168010900)이 상한 절단에서 살아남아야 한다 — "
+        f"실제 재수집한 동: {sorted(set(repass_calls))}. 정렬이 코드 오름차순이면 "
+        "이 동이 가장 먼저 잘려 영구 기아가 된다"
+    )
+    assert len(set(repass_calls)) == 2, (
+        f"상한 2를 넘겨 조회했다 — 절단 미작동: {sorted(set(repass_calls))}"
+    )
+    assert "1168010800" not in repass_calls, (
+        "동점(소실 1건)에서는 코드가 작은 1168010700 이 남아야 한다 — "
+        f"실제: {sorted(set(repass_calls))}"
+    )
+    assert "상한 2개 초과" in caplog.text or "초과" in caplog.text, (
+        "상한 초과 경고가 남아야 한다"
+    )
+
+
 def test_repass_all_attempts_none_with_cap_stops_the_dong_loop(db, monkeypatch, caplog):
     """조회를 **한 번도 못 받은 동**에서 캡이 터지면 뒤따르는 동을 건드리지 않는다.
 

@@ -70,9 +70,12 @@ _REPASS_MAX_ATTEMPTS = 3
 _REPASS_COLLAPSE_THRESHOLD = 200
 
 # 재수집 벽시계 캡 — 현실 소실은 한 자릿수라 재수집이 수 분에 끝나지만, 이론 최악
-# (대형 동 20개 전부 재조회)은 ~1.8h 가 된다. 1h 로 끊어 "본 루프 최악 7h + 재수집 1h
-# = 8h < 16h(monitor stale 예외)" 여유를 보장한다. 이로써 재수집 상한이
-# 규모(_REPASS_MAX_DONGS)·이상(_REPASS_COLLAPSE_THRESHOLD)·시간 3중 방어가 된다.
+# (대형 동 20개 × 시도 3회 전부 미구제)은 ~5.4h 가 된다(1회 조회 30~42초 실측 × 50~60페이지
+# 규모의 대형 동 기준). 1h 로 끊어 "본 루프 최악 7h + 재수집 1h = 8h < 16h(monitor stale
+# 예외)" 여유를 보장한다. 이로써 재수집 상한이 규모(_REPASS_MAX_DONGS)·이상
+# (_REPASS_COLLAPSE_THRESHOLD)·시간 3중 방어가 된다.
+# ⚠ 이 캡을 늘리려면 위 이론 최악(~5.4h)이 8h 여유 안에 들어오는지 다시 계산할 것 —
+#   _REPASS_MAX_ATTEMPTS 를 올리면 최악도 비례해 늘어난다(K=1 시절 근거 ~1.8h 는 낡았다).
 _REPASS_MAX_SECONDS = 3600
 
 # 표준코드 이관 감시 보초 — 번역맵의 **키**(우리가 조회 전에 다른 코드로 바꿔치는 쪽)를 찌른다.

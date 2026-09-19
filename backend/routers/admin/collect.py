@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 CollectorName = Literal[
     "crime-stats", "air-quality", "emergency", "childcare", "backfill-price", "metrics",
     # K-apt 관리비 (V051) — 매칭은 월 1회라 수동 트리거가 사실상 주 실행 경로.
-    # ⚠ kapt-costs 는 단지당 22콜이라 기본 배치(500)면 11,000콜 — 수동 실행 전 쿼터 확인.
+    # ⚠ kapt-costs 는 공개 단지당 22콜(미공개는 3콜 — 세션 414)이라 기본 배치(500)면 최대 11,000콜 — 수동 실행 전 쿼터 확인.
     "kapt-match", "kapt-costs",
 ]
 

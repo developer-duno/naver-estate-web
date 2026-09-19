@@ -2373,3 +2373,63 @@ def test_collect_costs_processes_complexes_without_rows_first(db, monkeypatch):
     collect_kapt_costs(batch_size=500)
 
     assert order[0] == "JB", f"행 없는 단지가 뒤로 밀렸다: {order}"
+
+
+def test_collect_costs_stops_exactly_at_batch_size(db, monkeypatch):
+    """공개 단지가 batch_size 보다 많아도 정확히 batch_size 개에서 멈춘다.
+
+    슬롯 사전 체크(`if collected + failed >= batch_size: break`)가 없으면 큐 전체를
+    순회해 저장행·호출 수가 batch_size 를 넘는다. 기존 슬롯 테스트는 공개 단지 수가
+    batch_size 와 같아 이 결함을 못 잡는다(상한이 없어도 결과가 같음) — 여기서는
+    공개 5단지 · batch_size=3 으로 의도적으로 어긋나게 둔다.
+    """
+    for i in range(5):
+        _make_complex(db, complex_no=f"61{i:02d}")
+        _seed_mapping(db, complex_no=f"61{i:02d}", kapt_code=f"LP{i}")
+
+    called = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost",
+        lambda code, month: called.append(code) or {"aV3": 500},
+    )
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=3)
+
+    assert result["collected"] == 3, f"정확히 3개가 아니다: {result}"
+    rows = db.query(KaptManagementCost).all()
+    assert len(rows) == 3, f"저장행이 batch_size 를 넘었다: {len(rows)}"
+    assert len(set(called)) == 3, f"서로 다른 단지 호출 수가 3이 아니다: {called}"
+    assert set(called) == {"LP0", "LP1", "LP2"}, f"4번째/5번째가 불려서는 안 된다: {called}"
+
+
+def test_collect_costs_canary_sample_stays_within_candidate_window(db, monkeypatch):
+    """카나리 표본은 후보월 창 밖의 옛 행을 생존 증거로 쓰지 않는다.
+
+    `_probe_api_alive` 의 `.filter(KaptManagementCost.cost_month.in_(months))` 가 없으면
+    창 훨씬 밖(예: 2020년)의 옛 행도 표본으로 찔려, 그 응답이 '살아있다' 오판을 만들 수
+    있다. 여기서는 매핑된 단지 전량이 이번 회차에 미공개(전량 빈 응답)이고, 유일하게
+    저장된 KaptManagementCost 행은 후보월 창 밖(202001)인 상황을 만든다 — 필터가 있으면
+    표본 0건 → failed, 없으면 창 밖 행이 뽑혀 프로브가 불리고 '살아있다' 오판이 난다.
+    """
+    for i in range(service_kapt._ALL_EMPTY_MIN_TARGETS):
+        _make_complex(db, complex_no=f"62{i:02d}")
+        _seed_mapping(db, complex_no=f"62{i:02d}", kapt_code=f"MA{i:02d}")
+    # 창 밖의 옛 행 하나 — 매핑된 단지 중 하나에 붙여 join 이 성립하게 한다.
+    _seed_cost(db, "6200", "202001", total=999)
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", lambda code, month: {})
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    probes = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost_probe",
+        lambda code, month: probes.append((code, month)) or {"laborCost": 1},
+    )
+
+    result = collect_kapt_costs(batch_size=500)
+
+    assert probes == [], f"창 밖 행이 표본으로 뽑혀 프로브가 불렸다: {probes}"
+    assert result["error"] == "all_empty", f"창 밖 행으로 생존이 오판됐다: {result}"
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "failed"

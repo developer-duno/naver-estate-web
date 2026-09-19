@@ -3,6 +3,8 @@
 외부 API 호출은 전부 mock — 실제 data.go.kr 호출 0 (conftest 의 외부발송 봉쇄 관례 답습).
 """
 
+from datetime import datetime, timezone
+
 import pytest
 
 from crawler import kapt_api, service_kapt
@@ -554,11 +556,15 @@ def test_collect_costs_skips_already_collected_month(db, monkeypatch):
     assert called == [], "이미 수집한 달을 다시 호출하면 쿼터 낭비"
 
 
-def test_collect_costs_skips_complex_collected_at_fallback_month(db, monkeypatch):
-    """폴백으로 과거 달을 받은 단지도 재조회하지 않는다 (쿼터 무한소모 방지).
+def test_collect_costs_retries_only_newer_months_than_stored(db, monkeypatch):
+    """폴백으로 과거 달을 받은 단지는 **더 새 달만** 시도한다 (보유월 이하 재조회 0).
 
-    target_month(months[0]) 행만 보고 판단하면, months[1] 로 저장된 단지는
-    target_month 행이 영영 안 생겨 매일 22콜 x 3개월을 다시 태운다.
+    ⚠ 계약이 바뀐 테스트다 — 결함 박제가 아니라 **정당한 새 계약**이다(2026-09-19
+    사장님 결정: 관리비를 매월 갱신). 옛 계약은 "후보월 중 아무 달이나 가지고 있으면
+    통째로 건너뛴다"(called == [])였고, 그 목적은 "매일 22콜 x 3개월 무한 재조회"를
+    막는 것이었다. 새 계약은 그 목적을 **더 강하게** 지킨다 — 보유월(months[1]) 이하는
+    어떤 경우에도 다시 부르지 않고, 아직 안 받은 months[0] 만 첫 op 1콜로 찔러본다.
+    미공개면 거기서 끝이라 이 단지가 한 달에 무는 비용은 하루 1콜이다.
     """
     _make_complex(db)
     _seed_mapping(db)
@@ -579,7 +585,9 @@ def test_collect_costs_skips_complex_collected_at_fallback_month(db, monkeypatch
     result = collect_kapt_costs(batch_size=10)
 
     assert result["collected"] == 0
-    assert called == [], f"과거 달 보유 단지를 재조회함(쿼터 낭비): {called}"
+    assert called == [months[0]], (
+        f"보유월({months[1]}) 이하를 다시 불렀거나 새 달을 안 불렀다: {called}"
+    )
 
 
 # ─────────────────────────── 조회 API ───────────────────────────
@@ -881,6 +889,10 @@ def test_collect_costs_all_empty_with_targets_fails_job(db, monkeypatch):
     개별 단지의 정상적인 미공개와 구분되지 않아 판정을 보류하도록 설계했고,
     그 경계는 아래 test_collect_costs_all_empty_small_sample_stays_completed
     가 따로 지킨다.
+
+    ⚠ 계약 변경(매월 갱신 PR): 이 경로는 이제 **카나리**를 거친다. 여기선 저장된
+    관리비 행이 하나도 없어 찔러볼 표본이 0건이므로 옛 결론(failed)이 그대로 유지된다
+    — 표본이 있는 경우는 test_collect_costs_canary_* 가 따로 지킨다.
     """
     for i in range(service_kapt._ALL_EMPTY_MIN_TARGETS):
         _make_complex(db, complex_no=f"41{i:02d}")
@@ -921,11 +933,16 @@ def test_collect_costs_partial_empty_stays_completed(db, monkeypatch):
     assert job.status == "completed", "일부 미공개는 정상 — failed 오탐 금지"
 
 
-def test_collect_costs_total_items_counts_targets(db, monkeypatch):
-    """total_items 는 대상 수 — 미공개 단지도 '처리 시도'에 포함된다.
+def test_collect_costs_total_items_counts_scanned(db, monkeypatch):
+    """total_items 는 **훑은 단지 수** — 미공개 단지도 '처리 시도'에 포함된다.
 
     total=0 이면 freshness 헛바퀴 감지(processed==0 AND total>0)가 영영
     발동하지 않는다.
+
+    ⚠ 계약 변경(매월 갱신 PR): 선자르기 `targets[:batch_size]` 가 없어져 기준이
+    `len(targets)` → `collected + failed + empty` 로 바뀌었다. 취지(전량 미공개여도
+    total>0 이라 헛바퀴가 감지된다)는 그대로다 — 이 회차는 둘 다 2 라 값이 같지만,
+    "훑지도 않은 큐 뒤쪽"이 total 에 섞이지 않는지는 아래 슬롯 테스트가 지킨다.
     """
     _make_complex(db, complex_no="1001")
     _make_complex(db, complex_no="1002")
@@ -942,7 +959,7 @@ def test_collect_costs_total_items_counts_targets(db, monkeypatch):
     from db.models import CrawlJob
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
     assert job.processed_items == 1
-    assert job.total_items == 2, "대상 2개인데 total_items 가 대상 수와 다르다"
+    assert job.total_items == 2, "훑은 2개(수집1+미공개1)인데 total_items 가 다르다"
 
 
 # ─────────────── #4 skipped 를 failed 통계로 세지 않는다 ───────────────
@@ -1007,6 +1024,9 @@ def test_collect_costs_all_empty_small_sample_stays_completed(db, monkeypatch):
     위 test_collect_costs_all_empty_with_targets_fails_job 과 **표본 크기만**
     다른 짝 테스트다 — 두 축(표본 크기 / 응답 내용)이 같은 값이 되지 않도록
     응답은 양쪽 다 '전량 빈 응답' 으로 고정했다(testing.md 세션372 답습).
+
+    ⚠ 계약 변경(매월 갱신 PR): 임계 미만은 카나리를 **거치지 않는다**(경고 로그 후
+    completed 유지) — 옛 동작 그대로다.
     """
     _make_complex(db, complex_no="4201")
     _seed_mapping(db, complex_no="4201", kapt_code="AF01")
@@ -1452,6 +1472,41 @@ def test_fetch_common_cost_returns_empty_on_unpublished(monkeypatch):
         ),
     )
     assert kapt_api.fetch_common_cost("K1", "202605") == {}
+
+
+@pytest.mark.parametrize(
+    "item, expect_none",
+    [
+        ({"laborCost": "1000"}, False),  # (a) 성공 + 공개 — item dict 반환
+        ({}, True),                       # (b) 성공 + 미공개 — None 반환
+    ],
+)
+def test_fetch_common_cost_probe_makes_exactly_one_low_level_call(
+    monkeypatch, item, expect_none
+):
+    """`fetch_common_cost_probe` 는 첫 op 1콜만 쓴다 — 17콜(`fetch_common_cost`)로
+
+    바뀌어도 기존 카나리 테스트는 전부 `service_kapt.fetch_common_cost_probe` 자체를
+    monkeypatch 하므로 이 구간을 한 줄도 지나지 않아 못 잡는다(위
+    `test_fetch_common_cost_raises_through_real_chain` 과 같은 이유). 최하위 seam
+    (`kapt_api.fetch_cost_item`)을 스파이해 호출 횟수·op 를 직접 단언한다.
+    """
+    calls = []
+
+    def spy(base_url, op, kapt_code, search_date):
+        calls.append((base_url, op, kapt_code, search_date))
+        return dict(item) if item else None
+
+    monkeypatch.setattr(kapt_api, "fetch_cost_item", spy)
+
+    result = kapt_api.fetch_common_cost_probe("K1", "202605")
+
+    assert len(calls) == 1, "카나리가 1콜을 넘었다 — 실제 %d콜: %r" % (len(calls), calls)
+    _base_url, op, kapt_code, search_date = calls[0]
+    assert op == kapt_api.COMMON_COST_OPS[0] == "getHsmpLaborCostInfoV3"
+    assert kapt_code == "K1"
+    assert search_date == "202605"
+    assert (result is None) == expect_none
 
 
 def test_collect_costs_partial_failure_through_real_api_layer(db, monkeypatch):
@@ -2001,3 +2056,320 @@ def test_ordinal_conflict_rejected_in_pass1_without_basis_call(db, monkeypatch):
 
     assert result["matched"] == 0
     assert calls == [], "차수 모순 후보에 basis 를 불러 쿼터를 태웠다"
+
+
+# ─────────── 매월 갱신 + 슬롯·카나리 (2026-09-19 사장님 결정) ───────────
+#
+# 옛 계약: "후보월 창(3개월) 안에 아무 달이라도 있으면 그 단지는 건너뛴다" →
+#          단지별 갱신이 사실상 3개월에 1회.
+# 새 계약: 보유한 가장 최신 달보다 **새 달만** 시도 → 매월 갱신. 재조회 상한은
+#          "보유월 이하는 절대 안 부른다" 로 옛 `done` 셋보다 강하게 유지된다.
+
+
+def _seed_cost(db, complex_no, month, total=100):
+    """저장된 관리비 행 1건 (카나리 표본·보유월 fixture 용)."""
+    db.add(KaptManagementCost(
+        complex_no=complex_no, cost_month=month, total_cost=total,
+        common_cost=total, individual_cost=0, household_count=120,
+    ))
+    db.commit()
+
+
+def test_collect_costs_stored_newest_month_is_never_refetched(db, monkeypatch):
+    """보유월 **이하**는 어떤 경우에도 다시 부르지 않는다 (무한 재조회 방지).
+
+    두 단지를 서로 다른 상태로 둬서 두 축(호출 여부 / 호출한 달)이 한 값으로
+    뭉개지지 않게 한다: months[0] 보유 단지는 0콜, months[1] 보유 단지는
+    months[0] 1콜뿐이고 months[1]·months[2] 는 안 부른다.
+    """
+    months = candidate_cost_months()
+    _make_complex(db, complex_no="5101")
+    _seed_mapping(db, complex_no="5101", kapt_code="CA")
+    _seed_cost(db, "5101", months[0])          # 최신달 보유 → 0콜
+    _make_complex(db, complex_no="5102")
+    _seed_mapping(db, complex_no="5102", kapt_code="CB")
+    _seed_cost(db, "5102", months[1])          # 폴백달 보유 → months[0] 만
+
+    called = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost",
+        lambda code, month: called.append((code, month)) or {},
+    )
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    collect_kapt_costs(batch_size=10)
+
+    assert [c for c, _ in called] == ["CB"], f"최신달 보유 단지를 다시 불렀다: {called}"
+    assert [m for _, m in called] == [months[0]], f"보유월 이하를 불렀다: {called}"
+
+
+def test_collect_costs_newer_month_row_coexists_with_older(db, monkeypatch):
+    """months[1] 보유 단지에 months[0] 이 공개되면 **두 행이 공존**하고 API 는 최신월.
+
+    매월 갱신은 옛 행을 덮어쓰는 게 아니라 달마다 쌓는 구조다(스키마 무변경).
+    """
+    months = candidate_cost_months()
+    _make_complex(db, complex_no="5103")
+    _seed_mapping(db, complex_no="5103", kapt_code="CC")
+    _seed_cost(db, "5103", months[1], total=111)
+
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost",
+        lambda code, month: {"aV3": 222} if month == months[0] else {},
+    )
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert result["collected"] == 1
+    rows = {r.cost_month: r.total_cost for r in db.query(KaptManagementCost).all()}
+    assert rows == {months[1]: 111, months[0]: 222}, f"행이 덮어써졌다: {rows}"
+
+
+def test_kapt_endpoint_serves_newest_of_accumulated_months(db, client):
+    """행이 쌓여도 /kapt 는 최신 달을 준다 (매월 갱신이 화면에 반영되는 경로)."""
+    months = candidate_cost_months()
+    _make_complex(db, complex_no="5104")
+    db.add(KaptComplexMap(
+        complex_no="5104", kapt_code="CD", kapt_name="경희궁의아침4단지",
+        corridor_type="계단식", kapt_household_count=120,
+    ))
+    db.commit()
+    _seed_cost(db, "5104", months[1], total=111)
+    _seed_cost(db, "5104", months[0], total=222)
+
+    body = client.get("/api/complexes/5104/kapt").json()
+
+    assert body["cost_month"] == months[0]
+    assert body["total_cost"] == 222
+
+
+def test_collect_costs_unpublished_does_not_consume_slots(db, monkeypatch):
+    """미공개 단지는 슬롯을 먹지 않는다 — 앞줄이 전부 미공개여도 batch_size 만큼 수집.
+
+    두 축을 다르게: 미공개 3 + 공개 2, batch_size=2. 슬롯을 미공개까지 세면
+    앞 2단지(미공개)에서 배치가 끝나 collected 가 0 이 된다.
+    """
+    for i in range(3):                       # 큐 앞줄 = 미공개
+        _make_complex(db, complex_no=f"52{i:02d}")
+        _seed_mapping(db, complex_no=f"52{i:02d}", kapt_code=f"DE{i}")
+    for i in range(2):                       # 뒷줄 = 공개
+        _make_complex(db, complex_no=f"53{i:02d}")
+        _seed_mapping(db, complex_no=f"53{i:02d}", kapt_code=f"DP{i}")
+
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost",
+        lambda code, month: {"aV3": 500} if code.startswith("DP") else {},
+    )
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=2)
+
+    assert result["collected"] == 2, "미공개가 슬롯을 먹어 수집이 막혔다"
+    assert result["empty"] == 3
+
+
+def test_collect_costs_empty_scan_cap_stops_loop(db, monkeypatch):
+    """미공개 스캔 상한에 닿으면 루프를 멈춘다 (큐 전량 순회 방지).
+
+    상한(2)을 넘는 미공개 5단지를 두고, 훑은 수(total_items)가 상한에서
+    멈췄는지로 확인한다 — 미공개를 상한보다 넉넉히 많이 둬서 "상한이 없어도
+    같은 값" 인 fixture 를 피한다.
+    """
+    monkeypatch.setattr(service_kapt, "_EMPTY_SCAN_CAP", 2)
+    for i in range(5):
+        _make_complex(db, complex_no=f"54{i:02d}")
+        _seed_mapping(db, complex_no=f"54{i:02d}", kapt_code=f"EC{i}")
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", lambda code, month: {})
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=500)
+
+    assert result["empty"] == 2, f"스캔 상한에서 안 멈췄다: {result}"
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.total_items == 2, "훑지도 않은 큐 뒤쪽이 total 에 섞였다"
+
+
+def test_collect_costs_canary_alive_keeps_job_completed(db, monkeypatch):
+    """전량 미공개라도 저장행 생존 확인이 되면 정상 완료 (월초 거짓 경보 차단).
+
+    processed=0 · total=0 이어야 freshness 헛바퀴 감지(processed==0 AND total>0)가
+    '정상인데 빨강' 을 만들지 않는다.
+    """
+    months = candidate_cost_months()
+    for i in range(service_kapt._ALL_EMPTY_MIN_TARGETS):
+        _make_complex(db, complex_no=f"55{i:02d}")
+        _seed_mapping(db, complex_no=f"55{i:02d}", kapt_code=f"FA{i:02d}")
+    # 지난달까지 받아둔 단지 1곳 — 카나리 표본
+    _make_complex(db, complex_no="5599")
+    _seed_mapping(db, complex_no="5599", kapt_code="FZ")
+    _seed_cost(db, "5599", months[1])
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", lambda code, month: {})
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    probes = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost_probe",
+        lambda code, month: probes.append((code, month)) or {"laborCost": 1},
+    )
+
+    result = collect_kapt_costs(batch_size=500)
+
+    assert result.get("canary") == "alive"
+    assert probes == [("FZ", months[1])], f"표본당 1콜이 아니거나 달이 틀렸다: {probes}"
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "completed"
+    assert (job.processed_items, job.total_items) == (0, 0)
+
+
+def test_collect_costs_canary_dead_fails_job(db, monkeypatch):
+    """표본 3건이 전부 빈 응답이면 API 사망으로 보고 failed."""
+    months = candidate_cost_months()
+    for i in range(service_kapt._ALL_EMPTY_MIN_TARGETS):
+        _make_complex(db, complex_no=f"56{i:02d}")
+        _seed_mapping(db, complex_no=f"56{i:02d}", kapt_code=f"GA{i:02d}")
+    for i in range(3):
+        _make_complex(db, complex_no=f"569{i}")
+        _seed_mapping(db, complex_no=f"569{i}", kapt_code=f"GZ{i}")
+        _seed_cost(db, f"569{i}", months[1])
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", lambda code, month: {})
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    probes = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost_probe",
+        lambda code, month: probes.append(code) or None,
+    )
+
+    result = collect_kapt_costs(batch_size=500)
+
+    assert result["error"] == "all_empty"
+    assert len(probes) == 3, f"표본 3건을 다 안 찔렀다: {probes}"
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "failed"
+
+
+def test_collect_costs_canary_uses_older_month_rows_at_month_rollover(db, monkeypatch):
+    """months[0] 행이 0건이어도 months[1] 행으로 생존 확인한다 (월 전환일 거짓 경보 차단).
+
+    표본을 months[0] 로 제한하면 달이 막 바뀐 날 표본이 0건이 되어 매월 초
+    '표본 없음 → failed' 가짜 경보가 울린다.
+    """
+    months = candidate_cost_months()
+    for i in range(service_kapt._ALL_EMPTY_MIN_TARGETS):
+        _make_complex(db, complex_no=f"57{i:02d}")
+        _seed_mapping(db, complex_no=f"57{i:02d}", kapt_code=f"HA{i:02d}")
+    _make_complex(db, complex_no="5799")
+    _seed_mapping(db, complex_no="5799", kapt_code="HZ")
+    _seed_cost(db, "5799", months[2])        # 창 안이지만 months[0] 은 아님
+
+    assert db.query(KaptManagementCost).filter(
+        KaptManagementCost.cost_month == months[0]
+    ).count() == 0, "fixture 전제: months[0] 행이 0건이어야 한다"
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", lambda code, month: {})
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    probes = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost_probe",
+        lambda code, month: probes.append((code, month)) or {"laborCost": 1},
+    )
+
+    result = collect_kapt_costs(batch_size=500)
+
+    assert result.get("canary") == "alive"
+    assert probes == [("HZ", months[2])], f"옛 달 표본을 못 썼다: {probes}"
+
+
+def test_collect_costs_canary_without_sample_fails_job(db, monkeypatch):
+    """찔러볼 저장행이 하나도 없으면 생존을 증명할 수 없다 → failed 유지."""
+    for i in range(service_kapt._ALL_EMPTY_MIN_TARGETS):
+        _make_complex(db, complex_no=f"58{i:02d}")
+        _seed_mapping(db, complex_no=f"58{i:02d}", kapt_code=f"IA{i:02d}")
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", lambda code, month: {})
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    probes = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost_probe",
+        lambda code, month: probes.append(code) or {"laborCost": 1},
+    )
+
+    result = collect_kapt_costs(batch_size=500)
+
+    assert result["error"] == "all_empty"
+    assert probes == [], "표본이 없는데 호출이 나갔다"
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "failed"
+    assert "표본 없음" in (job.error_message or "")
+
+
+def test_collect_costs_canary_call_failure_fails_job_with_reason(db, monkeypatch):
+    """카나리 호출이 (c) 실패면 삼키지 않고 failed — '살아있다'의 반대 증거다.
+
+    여기서 KaptApiError 를 잡아 "생존 불명 → 그냥 완료" 로 넘기면, 키 만료·서비스
+    폐기가 '정상 완료' 로 위장돼 며칠씩 방치된다(이 모듈이 통째로 막는 결함 유형).
+    """
+    months = candidate_cost_months()
+    for i in range(service_kapt._ALL_EMPTY_MIN_TARGETS):
+        _make_complex(db, complex_no=f"60{i:02d}")
+        _seed_mapping(db, complex_no=f"60{i:02d}", kapt_code=f"KA{i:02d}")
+    _make_complex(db, complex_no="6099")
+    _seed_mapping(db, complex_no="6099", kapt_code="KZ")
+    _seed_cost(db, "6099", months[1])
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", lambda code, month: {})
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    def _boom(code, month):
+        raise KaptApiError("일일 한도 초과(22) — op=getHsmpLaborCostInfoV3", code="22")
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost_probe", _boom)
+
+    result = collect_kapt_costs(batch_size=500)
+
+    assert "error" in result, f"카나리 호출 실패를 삼켰다: {result}"
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "failed"
+    assert "한도 초과" in (job.error_message or ""), (
+        f"실패 사유가 잡에 안 남았다: {job.error_message}"
+    )
+
+
+def test_collect_costs_processes_complexes_without_rows_first(db, monkeypatch):
+    """관리비 행이 **아예 없는** 단지를 갱신 대상보다 먼저 처리한다.
+
+    화면에 관리비가 통째로 안 뜨는 단지가 '한 달 낡은 단지' 보다 급하다.
+    두 축을 다르게: 갱신 대상(행 보유)을 matched_at 이 더 오래된 쪽으로 두어,
+    정렬 키가 matched_at 뿐이면 그쪽이 먼저 뽑히도록 만들었다.
+    """
+    months = candidate_cost_months()
+    old = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    new = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    db.add(KaptComplexMap(                     # 행 보유 + 더 오래된 matched_at
+        complex_no="5901", kapt_code="JA", kapt_name="갱신대상",
+        kapt_household_count=120, matched_at=old,
+    ))
+    db.add(KaptComplexMap(                     # 행 없음 + 더 최근 matched_at
+        complex_no="5902", kapt_code="JB", kapt_name="신규대상",
+        kapt_household_count=120, matched_at=new,
+    ))
+    db.commit()
+    _make_complex(db, complex_no="5901")
+    _make_complex(db, complex_no="5902")
+    _seed_cost(db, "5901", months[1])
+
+    order = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost",
+        lambda code, month: order.append(code) or {},
+    )
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    collect_kapt_costs(batch_size=500)
+
+    assert order[0] == "JB", f"행 없는 단지가 뒤로 밀렸다: {order}"

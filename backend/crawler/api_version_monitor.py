@@ -112,9 +112,14 @@ PROBE_REGISTRY: list[dict] = [
         "name": "K-apt 개별사용료 (AptIndvdlzManageCostServiceV3)",
         "url": "https://apis.data.go.kr/1613000/AptIndvdlzManageCostServiceV3/getHsmpHeatCostInfoV3",
     },
+    # ⚠ 공용관리비는 반드시 **첫 op**(COMMON_COST_OPS[0] = getHsmpLaborCostInfoV3)를 찌른다.
+    #   수집기가 "첫 op 가 비면 그 서비스·월 전체 미공개" 로 보고 나머지 16콜을 건너뛰고
+    #   (kapt_api._collect_ops), 카나리도 그 op 하나로 API 생사를 판정하기 때문이다 —
+    #   즉 첫 op 가 죽으면 관리비 수집이 통째로 "전량 미공개" 로 보인다. 감시가 다른 op 를
+    #   보고 있으면 정작 그 단일 실패점을 못 본다.
     {
         "name": "K-apt 공용관리비 (AptCmnuseManageCostServiceV3)",
-        "url": "https://apis.data.go.kr/1613000/AptCmnuseManageCostServiceV3/getHsmpGuardCostInfoV3",
+        "url": "https://apis.data.go.kr/1613000/AptCmnuseManageCostServiceV3/getHsmpLaborCostInfoV3",
     },
     # ── odcloud.kr 계열 3종 (응답 포맷이 달라 flavor 지정 필수 — 모듈 docstring 참조) ──
     # crawler/applyhome_officetel_api.py BASE_URL + 오퍼레이션.

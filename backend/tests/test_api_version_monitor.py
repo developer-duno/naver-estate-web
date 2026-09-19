@@ -366,7 +366,7 @@ def test_registry_covers_known_datagokr_endpoints():
         "https://apis.data.go.kr/1613000/AptListService4/getSidoAptList4",
         "https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusBassInfoV5",
         "https://apis.data.go.kr/1613000/AptIndvdlzManageCostServiceV3/getHsmpHeatCostInfoV3",
-        "https://apis.data.go.kr/1613000/AptCmnuseManageCostServiceV3/getHsmpGuardCostInfoV3",
+        "https://apis.data.go.kr/1613000/AptCmnuseManageCostServiceV3/getHsmpLaborCostInfoV3",
     }
     assert expected <= urls, f"레지스트리 누락: {sorted(expected - urls)}"
 
@@ -610,6 +610,26 @@ def test_registry_covers_all_twelve_endpoints():
     assert len(PROBE_REGISTRY) == len(urls), "레지스트리에 중복 URL 이 있다"
     assert len(PROBE_REGISTRY) == 12, f"감시 대상이 12종이 아님: {len(PROBE_REGISTRY)}"
     assert sum(1 for e in PROBE_REGISTRY if e.get("flavor") == FLAVOR_ODCLOUD) == 4
+
+
+def test_registry_common_cost_probe_uses_first_op():
+    """공용관리비 프로브가 수집기의 **첫 op** 를 찌르는가 (단일 실패점 감시).
+
+    수집기는 첫 op(`COMMON_COST_OPS[0]`)가 비면 그 서비스·월 전체를 미공개로 보고
+    나머지 16콜을 건너뛰고(kapt_api._collect_ops), "전량 미공개" 회차의 카나리도
+    그 op 하나로 API 생사를 판정한다. 그래서 첫 op 만 죽어도 관리비 수집이 통째로
+    멈추는데, 감시가 다른 op(옛 getHsmpGuardCostInfoV3)를 보고 있으면 그 사이
+    "정상" 이라고 보고한다 — 2026-08-19 사고가 만든 감시 원칙("코드가 의지하는
+    지점을 본다")의 직접 적용이다.
+    """
+    from crawler.kapt_api import _CMNUSE_URL, COMMON_COST_OPS
+
+    expected = f"{_CMNUSE_URL}/{COMMON_COST_OPS[0]}"
+    urls = {entry["url"] for entry in PROBE_REGISTRY}
+    assert expected in urls, (
+        f"공용관리비 프로브가 첫 op 가 아니다 — {expected} 를 PROBE_REGISTRY 에 넣을 것 "
+        f"(현재: {sorted(u for u in urls if u.startswith(_CMNUSE_URL))})"
+    )
 
 
 def test_registry_covers_nts_validate_operation():

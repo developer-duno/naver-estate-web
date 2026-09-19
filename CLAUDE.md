@@ -64,7 +64,7 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 필터 변경 → /api/complexes/{no}/articles (SQL WHERE) + URL 파라미터 동기화
 실거래가 → /api/live/{no}/price-history/start-collect (24시간 TTL, 자동 트리거)
 가까운 지하철 → /api/complexes/{no}/subway (subway_stations 전국 1,099역, 3km 최대 3역·환승 그룹핑·12h 캐시, 연 1회 수동 재적재 — 세션 367)
-관리비·복도유형 → /api/complexes/{no}/kapt (K-apt 단지 매칭 월 1회 + 관리비 매일 500단지 회전 — 단지당 1개월치만 보유하고 후보월 창(3개월)이 밀려야 재수집되므로 단지별 갱신은 약 3개월에 1회·화면에 기준월 표시, 12h 캐시, 매칭만 있으면 200+금액 null, 미매칭 404 — 세션 388)
+관리비·복도유형 → /api/complexes/{no}/kapt (K-apt 단지 매칭 월 1회 + 관리비 매일 500단지 회전 — **매월 최신 공개월로 갱신**(보유한 가장 최신 달보다 새 달만 시도, 달마다 행이 쌓이고 화면은 최신월 1건 표시)·화면에 기준월 표시, 12h 캐시, 매칭만 있으면 200+금액 null, 미매칭 404 — 세션 388)
 단지 비교 → /compare?ids=no1,no2,... (useQueries 병렬 + 평당가 + 인쇄/엑셀)
 엑셀(매물) → /api/articles/export (xlsxwriter)
 엑셀(비교) → 클라이언트 xlsx (safeCellValue 수식 인젝션 방어)

@@ -115,8 +115,10 @@
 - **✅ 조율 로직 착수·완료 (2026-09-01 세션 391, PR #443 05dea82 — 백로그 §5-C)**:
   resolved/cancelled 구분 문구(사유 3종 ✅/⚠️/ℹ️, 제목줄 분기) + freshness 계산 실패 시 해소 보류 +
   스윕 마커 항상 append(monitor·부팅 양쪽) + api_version_probe 이중 알림([내부즉시]+[내부모니터]) 제거.
-  잔여(저우선 — 글로벌 메모리 백로그 survey §5-J): monitor 자기실패 무알림·failed 대표에러
-  func.max 사전순·monitor_alerts 영구 누적·해소 알림 배치 묶음·`_JOB_LABEL_FALLBACK` 5개 결손.
+  잔여(저우선 — 글로벌 메모리 백로그 survey §5-J): monitor 자기실패 무알림·monitor_alerts
+  영구 누적·해소 알림 배치 묶음. (세션 416 코드 대조로 2건은 완료 확인 — failed 대표에러
+  func.max 사전순 = `crawler/monitor.py` 가 최근 실패 기준으로 교체됨, `_JOB_LABEL_FALLBACK`
+  결손 = 31개 전부 등록 + `tests/test_scheduler_monitoring_coverage.py` 가 결손을 막는다.)
 
 **❌ 보류 아님 — 착수 불필요로 정정 (2026-08-02, 계획 회고 발견)**:
 

@@ -12,7 +12,7 @@
 | Dependabot 버전 PR | Actions 분 소비 | 주1회·grouped(minor/patch 묶음)·PR 상한 5로 절약 |
 
 - **초과 거동**: 해당 없음(무제한). ⚠ 과거 문서·메모리의 "한도 소진으로 감시가 죽었다"는 서술은 **거짓 전제**였다 — 그 시기 Health Check 는 계속 실행됐고 실제로 터널이 죽어 있었다(세션 398 규명).
-- **🔴 재검토 필요**: secret scanning·push protection 은 **public 레포에 무료**인데 현재 `disabled` 다(세션 399 실측 `gh api repos/... --jq .security_and_analysis`). "비공개라 불가"는 틀린 근거였다 — 켤지 여부는 사장님 결정 대기. CodeQL 도 public 무료.
+- **✅ secret scanning·push protection = 켜짐** (2026-09-19 세션 416 실측 `gh api repos/developer-duno/naver-estate-web --jq .security_and_analysis` → `secret_scanning`·`secret_scanning_push_protection`·`dependabot_security_updates` 모두 `enabled`). 세션 399 실측 때는 `disabled` 였고 "켤지 사장님 결정 대기"로 적혀 있었으나 그 뒤 켜졌다 — public 레포에 무료. 남은 선택지(꺼짐): `secret_scanning_non_provider_patterns`·`secret_scanning_validity_checks`, CodeQL(public 무료)은 미도입.
 - **브랜치 보호**: 현행 Ruleset 유지(동작 중). public 이면 클래식 보호도 무료지만 교체 실익 없음.
 
 ## Vercel (Hobby + 프로젝트 `naver-estate-web`, Root Directory=`frontend`)

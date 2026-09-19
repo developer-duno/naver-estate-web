@@ -438,6 +438,39 @@ def test_collect_costs_falls_back_to_older_month(db, monkeypatch):
     assert db.query(KaptManagementCost).one().cost_month == months[1]
 
 
+def test_collect_costs_prefers_newest_month_when_several_published(db, monkeypatch):
+    """두 후보월 모두 공개돼 있으면 더 최신인 months[0] 을 저장한다.
+
+    기존 `test_collect_costs_falls_back_to_older_month` 는 months[1] 에만 데이터를
+    publish 해서, 루프 순서를 `for month in months:` → `for month in reversed(months):`
+    로 뒤집어도(= 과거달부터 조회) 결국 같은 months[1] 이 저장돼 통과해버린다
+    (두 축 — "조회 순서"와 "그 결과로 저장되는 달" — 이 이 fixture 에서는 우연히 같은
+    값을 낸다는 뜻). 이 테스트는 두 달 모두 공개해 순서를 뒤집으면 저장되는 달이
+    갈리도록(= 두 축이 서로 다른 값이 되도록) 만들어 그 함정을 막는다.
+    """
+    _make_complex(db)
+    _seed_mapping(db)
+    months = candidate_cost_months()
+
+    def common(code, month):
+        if month == months[0]:
+            return {"aV3": 100}
+        if month == months[1]:
+            return {"aV3": 200}
+        return {}
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert result["collected"] == 1
+    row = db.query(KaptManagementCost).one()
+    assert row.cost_month == months[0]
+    assert row.common_cost == 100
+    assert row.breakdown["aV3"] == 100
+
+
 def test_collect_costs_skips_unpublished_without_failing(db, monkeypatch):
     """전 항목 미공개면 행을 만들지 않되, 실패가 아니라 정상 완료로 본다."""
     _make_complex(db)

@@ -746,8 +746,16 @@ def _fetch_costs_for_month(kapt_code: str, month: str) -> dict[str, int]:
     ⚠ 호출 실패(`KaptApiError`)는 잡지 않고 그대로 올린다. 여기서 삼키면 공용
     17콜이 통째로 실패하고 개별 5콜만 성공한 회차에 "공용관리비 0원" 인 반쪽
     breakdown 이 만들어지고, 호출자가 그걸 진짜 값으로 저장해버린다.
+
+    ⚠ 공용이 비면(= 그 달 미공개) **개별을 아예 부르지 않는다.** 저장된 7,757행
+    전수 실측(2026-09-19)에서 "개별은 있는데 공용이 없는" 행은 0건이라 잃는 값이
+    없고, 설령 그런 응답이 오더라도 개별만 저장하면 "공용관리비 0원" 인 반쪽 총액이
+    되어 위 문단이 금지하는 것과 같은 결함이 된다. 미공개 단지가 한 달에 무는 비용이
+    22콜 → 1콜(공용 첫 op)로 줄어든다(`_collect_ops` 의 첫 op 조기 이탈과 짝).
     """
     breakdown = dict(fetch_common_cost(kapt_code, month))
+    if not breakdown:
+        return {}
     breakdown.update(fetch_individual_cost(kapt_code, month))
     return breakdown
 
@@ -780,7 +788,9 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
     """매칭된 단지의 월별 관리비 수집 (매일).
 
     "이번 수집월 행이 아직 없는 단지"를 오래된 매칭 순으로 batch_size 만큼 처리한다.
-    ⚠ 단지 하나에 22콜이 나가므로 batch_size 가 곧 쿼터 소모량(×22)이다.
+    ⚠ **공개** 단지 하나에 22콜이 나가므로 batch_size 가 곧 쿼터 소모량(×22)이다.
+    미공개 단지는 후보월마다 공용 첫 op 1콜에서 끊겨 **3콜**로 끝난다
+    (옛 22콜×3개월=66콜 — `_fetch_costs_for_month` 의 근거 참조).
     관리비 두 서비스도 운영계정(10만/일) 전환이 끝나 기본 500 으로 돈다
     (2026-08-31 첫 정기 실행 실측: 하루 kapt 32,035콜, 실패 0·쿼터 에러 0).
     개발계정 시절엔 서비스당 5,000/일(오퍼레이션 합산)이라 배치 500 이면 공용

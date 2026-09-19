@@ -306,11 +306,23 @@ def _collect_ops(base_url, ops, kapt_code, search_date, extractor) -> dict[str, 
     여기서 잡아 `continue` 하면 "17항목 중 3개만 성공한 반쪽 dict" 가 만들어지고,
     그게 곧 이 PR 이 고치는 결함이다. 남은 op 를 더 부르지 않고 즉시 빠져나오므로
     쿼터가 이미 바닥난 상황에서 헛호출을 쌓지도 않는다.
+
+    ⚠ **첫 op 가 (b) 정상 미공개면 나머지 op 를 부르지 않고 즉시 빈 dict** —
+    미공개 단지의 헛호출 차단. 근거 = 저장된 7,757행 전수 실측(2026-09-19):
+    존재하는 조합이 (공용 17·개별 5) 6,825행과 (공용 17·개별 0) 932행 둘뿐이고,
+    한 서비스가 부분만 실린 행은 0건이다 — 즉 API 는 서비스·월 단위로
+    전부 아니면 전무라, 첫 op 유무가 그 서비스 공개 여부와 같다.
+    ⚠ 조기 이탈은 **첫 op 에만** 건다. 뒤쪽 op 가 비는 것은 기존대로 그 항목만
+    건너뛴다(`continue`) — 위 전수 실측에 없는 조합이라도 값을 버리지 않기 위해.
+    첫 op 가 item 은 줬는데 금액 파싱이 None 인 경우도 "공개"로 보고 계속한다
+    (응답이 온 이상 미공개가 아니다).
     """
     result: dict[str, int] = {}
-    for op in ops:
+    for index, op in enumerate(ops):
         item = fetch_cost_item(base_url, op, kapt_code, search_date)
         if not item:
+            if index == 0:
+                return {}  # (b) 첫 op 미공개 = 이 서비스·월 전체 미공개
             continue  # (b) 정상 미공개 — 이 항목만 건너뛴다
         amount = extractor(item)
         if amount is not None:

@@ -1226,6 +1226,157 @@ def test_collect_ops_propagates_failure_without_partial(monkeypatch):
     assert seen == ["a", "b"]
 
 
+# ── 미공개 단지 조기 이탈 (첫 op 이 비면 그 서비스·월 전체 미공개) ──────────────
+#
+# 근거 = 저장 7,757행 전수 실측: 한 서비스가 부분만 실린 행 0건 · 개별만 있고 공용이
+# 없는 행 0건. 아래 4 테스트는 전부 "실제로 나간 호출 목록"을 단언한다 — 반환값만
+# 보면 조기 이탈을 지워도 (빈 dict 라는) 같은 결과가 나와 장식 테스트가 된다.
+
+
+def test_collect_ops_first_op_empty_stops_immediately(monkeypatch):
+    """[T1] 첫 op 이 미공개면 나머지 op 를 부르지 않고 빈 dict.
+
+    호출 목록이 ["a"] 하나뿐임을 단언한다 — 조기 이탈을 지우면 3콜이 다 나가 FAIL.
+    """
+    seen = []
+
+    def fake(base_url, op, kapt_code, search_date):
+        seen.append(op)
+        return None  # 전 op 미공개 (HTTP 200 + 빈 body)
+
+    monkeypatch.setattr(kapt_api, "fetch_cost_item", fake)
+    result = kapt_api._collect_ops("http://x", ("a", "b", "c"), "K1", "202605",
+                                   kapt_api._extract_amount)
+
+    assert result == {}
+    assert seen == ["a"], "첫 op 미공개인데 남은 op 까지 호출됨"
+
+
+def test_collect_ops_later_empty_op_does_not_stop(monkeypatch):
+    """[T2] 첫 op 이 공개면 뒤쪽 빈 op 은 그 항목만 건너뛰고 끝까지 돈다.
+
+    조기 이탈을 "아무 빈 op" 으로 넓히면 "c" 가 안 불려 FAIL — 첫 op 전용임을 고정.
+    """
+    seen = []
+
+    def fake(base_url, op, kapt_code, search_date):
+        seen.append(op)
+        return None if op == "b" else {"someCost": 100}
+
+    monkeypatch.setattr(kapt_api, "fetch_cost_item", fake)
+    result = kapt_api._collect_ops("http://x", ("a", "b", "c"), "K1", "202605",
+                                   kapt_api._extract_amount)
+
+    assert seen == ["a", "b", "c"], "중간 빈 op 에서 남은 op 이 잘림"
+    assert result == {"a": 100, "c": 100}, "빈 op 만 제외되고 나머지는 남아야"
+
+
+def test_collect_ops_first_op_failure_still_raises(monkeypatch):
+    """[T3] 첫 op 의 (c) 호출 실패는 조기 이탈이 아니라 예외 그대로.
+
+    "미공개(빈 응답)"와 "호출 실패"는 뭉개면 안 된다 — 실패를 빈 dict 로 바꾸면
+    저장할 값이 없는데도 정상 미공개로 계수돼 다음 회차 재시도가 사라진다.
+    """
+    def fake(base_url, op, kapt_code, search_date):
+        raise KaptApiError("실패", code=None, op=op)
+
+    monkeypatch.setattr(kapt_api, "fetch_cost_item", fake)
+    with pytest.raises(KaptApiError):
+        kapt_api._collect_ops("http://x", ("a", "b", "c"), "K1", "202605",
+                              kapt_api._extract_amount)
+
+
+def test_collect_ops_first_op_unparsable_amount_continues(monkeypatch):
+    """첫 op 이 item 은 줬으면 금액 파싱이 None 이어도 계속 돈다.
+
+    item 이 왔다 = 그 서비스는 공개 중 — 조기 이탈 조건을 `not item` 이 아니라
+    "금액 없음"으로 잡으면 공개 단지의 뒤쪽 16항목이 통째로 날아간다.
+    """
+    seen = []
+
+    def fake(base_url, op, kapt_code, search_date):
+        seen.append(op)
+        return {"kaptCode": "K1"} if op == "a" else {"someCost": 100}
+
+    monkeypatch.setattr(kapt_api, "fetch_cost_item", fake)
+    result = kapt_api._collect_ops("http://x", ("a", "b", "c"), "K1", "202605",
+                                   kapt_api._extract_amount)
+
+    assert seen == ["a", "b", "c"]
+    assert result == {"b": 100, "c": 100}
+
+
+def test_fetch_costs_for_month_skips_individual_when_common_empty(monkeypatch):
+    """[T4] 공용이 비면 개별 서비스를 아예 호출하지 않는다.
+
+    저장 7,757행 중 "개별만 있고 공용이 없는" 행은 0건 — 부를 이유가 없고,
+    부르면 '공용 0원' 반쪽 총액을 저장할 위험만 생긴다. 실배선(call_api 만 mock)
+    으로 재서, 스킵을 지우면 개별 첫 op 이 더 불려 총 호출 수가 어긋나 FAIL.
+    """
+    calls = []
+
+    def fake_call(cls, url, params):
+        calls.append(url)
+        return {"response": {"header": {"resultCode": "00"}, "body": {}}}
+
+    monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(fake_call))
+
+    assert service_kapt._fetch_costs_for_month("K1", "202605") == {}
+    assert len(calls) == 1, "공용 미공개인데 개별까지 호출됨 — 실제 호출 %d건" % len(calls)
+    assert "AptCmnuseManageCostServiceV3" in calls[0], "첫 호출은 공용 서비스여야"
+
+
+def test_fetch_costs_for_month_individual_empty_keeps_common(monkeypatch):
+    """[T5] 공용은 공개·개별은 미공개 -> 공용 17키만, 호출은 17 + 1콜.
+
+    실측에 존재하는 조합(공용 17·개별 0) 그대로 — 개별이 비어도 공용 값은 살린다.
+    """
+    calls = []
+
+    def fake_call(cls, url, params):
+        calls.append(url)
+        if "AptCmnuseManageCostServiceV3" in url:
+            return {"response": {"header": {"resultCode": "00"},
+                                 "body": {"item": {"someCost": "100"}}}}
+        return {"response": {"header": {"resultCode": "00"}, "body": {}}}
+
+    monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(fake_call))
+
+    result = service_kapt._fetch_costs_for_month("K1", "202605")
+
+    assert set(result) == set(kapt_api.COMMON_COST_OPS), "공용 17항목이 그대로 남아야"
+    assert len(calls) == len(kapt_api.COMMON_COST_OPS) + 1, (
+        "공용 17콜 + 개별 첫 op 1콜 = 18 이어야 하는데 %d콜" % len(calls)
+    )
+
+
+def test_collect_costs_unpublished_complex_costs_three_calls(db, monkeypatch):
+    """[T6] 통합: 전 후보월 미공개 단지는 총 3콜(월당 1콜)로 끝난다.
+
+    옛 동작은 22콜 × 3개월 = 66콜을 매일 태웠다(미공개 ~228단지 = 하루 ~15,000 헛콜).
+    호출 수를 세는 것이 핵심 단언 — empty 계수·저장 0 은 옛 코드도 만족했다.
+    """
+    _make_complex(db, complex_no="7701")
+    _seed_mapping(db, complex_no="7701", kapt_code="U1")
+
+    calls = []
+
+    def fake_call(cls, url, params):
+        calls.append(url)
+        return {"response": {"header": {"resultCode": "00"}, "body": {}}}
+
+    monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(fake_call))
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert len(calls) == len(candidate_cost_months()), (
+        "미공개 단지가 후보월당 1콜을 넘겼다 — 실제 %d콜" % len(calls)
+    )
+    assert result["empty"] == 1
+    assert result["collected"] == 0
+    assert db.query(KaptManagementCost).count() == 0
+
+
 def test_body_non_raising_wrapper_keeps_none_contract(monkeypatch):
     """목록·기본정보용 `_body` 는 기존대로 실패에도 None (예외 전파 안 함)."""
     monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(lambda cls, u, p: None))

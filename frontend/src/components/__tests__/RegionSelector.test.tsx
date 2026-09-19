@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * RegionSelector 컴포넌트 테스트 — @base-ui Combobox 3종 (PR 4 단계 4)
  * 실행: npx vitest run src/components/__tests__/RegionSelector.test.tsx
@@ -9,32 +8,32 @@
  * - 옵션 선택은 trigger 클릭 → portal [role="option"] 클릭 (Header.test.tsx:101 패턴 답습)
  * - onValueChange 콜백 = string | null (clear 시 null) — handler 가 "" 로 정규화
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TestQueryProvider } from "../../test-setup";
+import RegionSelector from "../RegionSelector";
 
-const mockRegions = {
-  "서울특별시": {
-    "강남구": ["역삼동", "삼성동"],
-    "서초구": ["서초동"],
+// vi.mock 공장은 import 보다 먼저 실행되므로 그 안에서 쓰는 값은 vi.hoisted 로 함께 올린다.
+const { mockRegions } = vi.hoisted(() => ({
+  mockRegions: {
+    "서울특별시": {
+      "강남구": ["역삼동", "삼성동"],
+      "서초구": ["서초동"],
+    },
+    "부산광역시": {
+      "해운대구": ["우동"],
+    },
   },
-  "부산광역시": {
-    "해운대구": ["우동"],
-  },
-};
+}));
 
 vi.mock("@/lib/api", () => ({
   getRegions: vi.fn().mockResolvedValue(mockRegions),
 }));
 
-let RegionSelector: any;
-
-beforeEach(async () => {
-  vi.resetModules();
-  const mod = await import("../RegionSelector");
-  RegionSelector = mod.default;
-});
+// 옛 구현은 beforeEach 마다 vi.resetModules() + 동적 재import 로 @base-ui 모듈 그래프를
+// 6회 재구성해 훅이 10초 타임아웃에 걸렸다(세션 401 실측). 컴포넌트에 모듈 단위 상태가 없고
+// TestQueryProvider 가 마운트마다 새 QueryClient 를 만들므로 재적재는 필요 없다.
 
 describe("RegionSelector — @base-ui Combobox 3종", () => {
   it("시/도 input 렌더링 + aria-label 노출", async () => {

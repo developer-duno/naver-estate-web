@@ -5,9 +5,11 @@ WAL + busy_timeout으로 동시 쓰기 안전하게 처리.
 live router는 dialect 분기로 SQLite에서 ThreadPoolExecutor 미사용.
 """
 
+import atexit
 import os
 import sys
 import tempfile
+import time
 import types
 
 import pytest
@@ -68,21 +70,86 @@ pg_dialect.ARRAY = _FakeARRAY
 
 # file-based SQLite — NullPool로 SessionLocal() 호출 시 독립 커넥션
 # pytest-xdist 워커별 독립 DB 파일 (PYTEST_XDIST_WORKER: gw0.. / 미사용 시 미설정)
+# ⚠ 파일명에 PID 를 붙인다 (세션 415). 워커 id 만으로는 **같은 PC 의 두 pytest 실행**
+# (구현자 + 검사관이 동시에 돌리는 경우, 둘 다 xdist 미사용이면 워커 id 가 똑같이
+# "master")이 같은 파일을 잡아 서로의 DB 를 drop_all 하거나 파일을 지워 버린다
+# → `no such table` · `WinError 32` 같은 거짓 실패. PID 는 프로세스마다 다르므로 충돌 0.
 _WORKER_ID = os.environ.get("PYTEST_XDIST_WORKER", "master")
 _TEST_DB = os.path.join(
-    tempfile.gettempdir(), f"naver_estate_test_{_WORKER_ID}.db"
+    tempfile.gettempdir(), f"naver_estate_test_{_WORKER_ID}_{os.getpid()}.db"
 )
-for _ext in ("", "-wal", "-shm"):
+
+
+def _sweep_stale_test_dbs(directory: str, max_age_sec: float, now: float | None = None) -> int:
+    """오래된 테스트 DB 찌꺼기를 지우고 지운 개수를 돌려준다.
+
+    PID 를 붙이면 파일명이 매번 달라져 예전처럼 "다음 실행이 덮어써서" 정리되지 않는다.
+    그래서 import 시점에 한 번 쓸어 낸다. 옛 고정 이름 파일도 같은 패턴이라 함께 지워진다.
+    지금 돌고 있는 다른 실행의 파일을 건드리지 않도록 **오래된 것만**(mtime 기준) 대상이고,
+    삭제는 전부 best-effort — 윈도우에서는 다른 프로세스가 쥔 파일이 삭제되지 않는다.
+    """
+    deleted = 0
+    cutoff = (time.time() if now is None else now) - max_age_sec
     try:
-        os.unlink(_TEST_DB + _ext)
-    except FileNotFoundError:
-        pass
+        names = os.listdir(directory)
+    except OSError:
+        return 0
+    for name in names:
+        if not name.startswith("naver_estate_test_"):
+            continue
+        if not (name.endswith(".db") or name.endswith(".db-wal") or name.endswith(".db-shm")):
+            continue
+        path = os.path.join(directory, name)
+        try:
+            if os.path.getmtime(path) >= cutoff:
+                continue
+            os.unlink(path)
+        except OSError:
+            continue
+        deleted += 1
+    return deleted
+
+
+def _unlink_db_files(path: str) -> int:
+    """SQLite DB 한 벌(본체 + -wal + -shm)을 지우고 지운 개수를 돌려준다.
+
+    삭제는 전부 best-effort — 없는 파일도, 다른 프로세스가 쥔 파일도 예외를 올리지 않는다
+    (윈도우에서는 사용 중인 파일 삭제가 거부된다). 종료 훅에서도 쓰이므로 절대 안 터진다.
+    """
+    deleted = 0
+    for ext in ("", "-wal", "-shm"):
+        try:
+            os.unlink(path + ext)
+        except OSError:
+            continue
+        deleted += 1
+    return deleted
+
+
+# 6시간 = 가장 긴 전체 실행(약 15분)보다 충분히 길다 → 살아 있는 실행의 파일은 안 건드린다.
+_sweep_stale_test_dbs(tempfile.gettempdir(), 6 * 3600)
+
+# PID 는 재사용될 수 있으므로 내 파일은 시작 전에 한 번 더 지운다.
+_unlink_db_files(_TEST_DB)
 
 test_engine = create_engine(
     f"sqlite:///{_TEST_DB}",
     connect_args={"check_same_thread": False},
     poolclass=NullPool,
 )
+
+
+@atexit.register
+def _cleanup_test_db() -> None:
+    """실행이 끝나면 내 DB 파일을 지운다 — PID 가 붙어 파일명이 매번 달라지므로 쌓인다.
+
+    종료 훅이라 무슨 일이 있어도 예외를 올리지 않는다(올리면 종료 코드가 더럽혀진다).
+    """
+    try:
+        test_engine.dispose()
+    except Exception:  # noqa: BLE001 — 종료 경로, 실패해도 삭제는 시도한다
+        pass
+    _unlink_db_files(_TEST_DB)
 
 def _pg_left(text, n):
     """PostgreSQL LEFT(text, n) 흉내 — SQLite 는 이 함수가 없어 직접 등록.

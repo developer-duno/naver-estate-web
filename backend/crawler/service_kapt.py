@@ -32,6 +32,8 @@ import re
 from datetime import date, datetime, timezone
 from difflib import SequenceMatcher
 
+from sqlalchemy import func
+
 from crawler.env_common import _complete_job, _fail_job, _record_job
 from crawler.kapt_api import (
     INDIVIDUAL_COST_OPS,
@@ -39,6 +41,7 @@ from crawler.kapt_api import (
     fetch_apt_basis_info,
     fetch_apt_list_page,
     fetch_common_cost,
+    fetch_common_cost_probe,
     fetch_individual_cost,
 )
 from db.database import SessionLocal
@@ -93,6 +96,18 @@ _MATCH_COMMIT_EVERY = 200
 # 이보다 적으면 개별 단지의 정상적인 미공개와 구분되지 않아 판정을 보류한다
 # (정상 배치는 500 이라 실제 장애는 이 임계를 여유 있게 넘는다).
 _ALL_EMPTY_MIN_TARGETS = 10
+
+# 한 회차에서 훑을 "미공개 단지" 상한 — 슬롯(batch_size)은 수집·실패만 소모하므로,
+# 미공개가 줄줄이 이어지면 루프가 매칭 전량(1.4만)까지 흘러갈 수 있다. 그 상한.
+#
+# 최악 산식(이 값을 바꾸면 함께 다시 계산할 것):
+#   공개 500단지 × (폴백 첫 op 2콜 + 22콜) + 미공개 2,000단지 × 3콜 = 18,000콜
+#   ≈ 90분 (throttle 0.3초, 2026-09-19 실측 0.303초/콜)
+# → kapt_costs 스윕 임계 3h 안이고, kapt 버킷 일 60,000 의 절반 이하다.
+_EMPTY_SCAN_CAP = 2000
+
+# 카나리 표본 수 — "전량 미공개" 회차에서 API 생사를 확인할 때 찔러볼 저장행 개수.
+_CANARY_SAMPLE_SIZE = 3
 
 # "연속 N단지 전 op 실패" 조기 중단 임계.
 # 쿼터 초과(22)는 `is_quota` 로 즉시 중단되지만, data.go.kr 은 **에러를 XML 로 주는
@@ -784,10 +799,65 @@ def _summarize(breakdown: dict[str, int], household: int | None) -> dict:
     }
 
 
-def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_costs") -> dict:
-    """매칭된 단지의 월별 관리비 수집 (매일).
+def _probe_api_alive(db, months: list[str]) -> tuple[bool, int]:
+    """카나리 — "전량 미공개" 회차에서 K-apt 관리비 API 가 살아있나 직접 확인.
 
-    "이번 수집월 행이 아직 없는 단지"를 오래된 매칭 순으로 batch_size 만큼 처리한다.
+    반환 (살아있음, 찔러본 표본 수). 표본이 0건이면 (False, 0).
+
+    표본 = 후보월 창 안에 **이미 저장된** 관리비 행 중 최신 3건. 이 달들은 과거에 실제로
+    응답이 왔던 (단지, 달) 조합이라, 지금도 응답하면 API 는 살아있고 이번 회차의 전량
+    미공개는 "그 달이 아직 안 열렸다"는 정상 상태다.
+
+    ⚠ 표본을 `months[0]` 행으로 **제한하지 않는다.** 매월 갱신 체제에서는 달이 막 바뀐
+    날 months[0] 행이 0건인 게 정상이라, 제한하면 "표본 없음 → failed" 거짓 경보가
+    매월 초 울린다. 창 안의 아무 달이나 쓰되 최신 달 우선으로 고른다.
+
+    ⚠ 현재 매핑(kapt_complex_map)과 inner join 한다 — 재매칭·중복 배정 정리는 옛 코드로
+    모은 관리비 행을 함께 지우므로(`_clear_conflicting_mappings`), 살아남은 행의
+    complex_no 에 붙은 kapt_code 는 그 행을 받아온 바로 그 코드다.
+
+    ⚠ 한 표본당 **첫 op 1콜만** 쓴다(`fetch_common_cost_probe`). 17콜을 다 태우면
+    확인 비용이 수집 비용과 같아진다. `KaptApiError` 는 삼키지 않고 올린다 — 호출이
+    실패했다면 그건 "살아있다"의 반대 증거라, 호출자의 예외 처리가 받아야 한다.
+    """
+    samples = (
+        db.query(KaptManagementCost.cost_month, KaptComplexMap.kapt_code)
+        .join(KaptComplexMap, KaptComplexMap.complex_no == KaptManagementCost.complex_no)
+        .filter(KaptManagementCost.cost_month.in_(months))
+        .order_by(
+            KaptManagementCost.cost_month.desc(),
+            KaptManagementCost.fetched_at.desc(),
+        )
+        .limit(_CANARY_SAMPLE_SIZE)
+        .all()
+    )
+    for cost_month, kapt_code in samples:
+        if fetch_common_cost_probe(kapt_code, cost_month):
+            return True, len(samples)
+    return False, len(samples)
+
+
+def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_costs") -> dict:
+    """매칭된 단지의 월별 관리비 수집 (매일) — **매월 최신 공개월로 갱신**.
+
+    대상 선정 계약(2026-09-19 사장님 결정으로 "단지별 3개월에 1회" → "매월 갱신"):
+      newest = {단지: 보유한 가장 최신 cost_month}   (후보월 창 밖의 옛 달도 포함)
+      to_try = [m for m in months if 그 단지에 행이 없거나 m > newest[단지]]
+      to_try 가 비면 → 이번 달치를 이미 가진 단지 → **0콜로 건너뛴다**(훑은 수에도 안 센다)
+      아니면 to_try 를 최신 달부터 시도하고, 처음으로 비어있지 않은 달에 저장한다.
+
+    ⚠ **보유월 이하의 달은 절대 다시 부르지 않는다.** 옛 구현은 "후보월 중 아무 달이나
+    가지고 있으면 제외(done 셋)" 였는데, 그 규칙의 존재 이유였던 경고 — "target_month
+    행만 보면 폴백으로 과거 달을 받은 단지가 매일 22콜×3개월을 무한 재조회한다" — 는
+    월 비교로 더 강하게 유지된다. months[1] 보유 단지는 months[0] 첫 op **1콜**(미공개면
+    거기서 끝), months[0] 보유 단지는 **0콜**이다.
+
+    저장은 (complex_no, cost_month) upsert 그대로라 달마다 행이 쌓이고, 조회 API 는
+    `cost_month DESC` 최신 1건을 주므로 화면은 자동으로 최신 달을 본다 — **DB 스키마 변경 0.**
+
+    처리 순서: **관리비 행이 아예 없는 단지 먼저**, 그다음 `matched_at` 오래된 순.
+    화면에 관리비가 아예 안 뜨는 단지가 "한 달 낡은 단지" 보다 급하다(추가 호출 0).
+
     ⚠ **공개** 단지 하나에 22콜이 나가므로 batch_size 가 곧 쿼터 소모량(×22)이다.
     미공개 단지는 후보월마다 공용 첫 op 1콜에서 끊겨 **3콜**로 끝난다
     (옛 22콜×3개월=66콜 — `_fetch_costs_for_month` 의 근거 참조).
@@ -796,10 +866,15 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
     개발계정 시절엔 서비스당 5,000/일(오퍼레이션 합산)이라 배치 500 이면 공용
     17콜만 8,500 으로 넘겨 `KAPT_COST_BATCH_SIZE=250` 으로 낮춰 돌렸었다.
 
+    슬롯 회계: 큐를 순회하며 `collected + failed >= batch_size` 에서 멈춘다.
+    **미공개(empty)는 슬롯을 소모하지 않는다** — 3콜로 끝나 쿼터 부담이 공개 단지의
+    1/8 이라, 미공개가 앞줄에 몰린 날 배치가 수집 없이 끝나면 안 되기 때문이다.
+    대신 `_EMPTY_SCAN_CAP`(2,000) 에 닿으면 루프를 멈춘다(그 상한의 최악 산식은 상수 주석).
+
     실패 처리 계약:
       · (b) 정상 미공개 → 행을 만들지 않고 `empty` 계수, 잡은 completed (정상)
       · (c) 호출 실패   → **저장하지 않고** `failed` 계수. 그 달 행이 없으므로
-                          다음 회차에 자동 재시도된다(위 `done` 셋에 안 걸림).
+                          다음 회차에 자동 재시도된다(to_try 가 그대로 남는다).
       · (c) 중 쿼터 초과(22) → 남은 대상 호출 없이 즉시 중단 + 잡 failed
       · (c) 가 **연속 5단지** → API 장애/한도 의심으로 중단 + 잡 failed
     부분 저장을 절대 하지 않는 것이 핵심이다 — 공용 실패 + 개별 성공으로
@@ -820,33 +895,58 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         months = candidate_cost_months()
         target_month = months[0]
 
-        # 후보월 중 **아무 달이라도** 이미 수집한 단지는 제외.
-        # ⚠ target_month 만 보면 안 된다 — 폴백으로 더 과거 달(months[1:])을 받은 단지는
-        # target_month 행이 영영 안 생겨서 매일 22콜 × 3개월을 무한 재조회한다(쿼터 소진).
-        done = {
-            row[0]
-            for row in db.query(KaptManagementCost.complex_no)
-            .filter(KaptManagementCost.cost_month.in_(months))
-            .all()
+        # 단지별 **보유한 가장 최신 수집월** — GROUP BY 1쿼리. 후보월 창 밖의 옛 달도
+        # 함께 봐야 "그 단지가 어디까지 받았나"를 알 수 있어 필터를 걸지 않는다.
+        # ⚠ 옛 구현은 "후보월 중 아무 달이나 있으면 제외"(done 셋)였다. 그 규칙이 막던
+        # 결함 — target_month 행만 보면 폴백으로 과거 달을 받은 단지를 매일 22콜×3개월
+        # 무한 재조회 — 은 아래 `m > newest` 월 비교로 더 강하게 유지된다(보유월 이하는
+        # 어떤 경우에도 다시 부르지 않는다).
+        newest = {
+            row[0]: row[1]
+            for row in db.query(
+                KaptManagementCost.complex_no,
+                func.max(KaptManagementCost.cost_month),
+            ).group_by(KaptManagementCost.complex_no).all()
         }
+
+        def _to_try(complex_no: str) -> list[str]:
+            """이 단지에 아직 시도할 만한 후보월 — 최신 달부터. YYYYMM 문자열 비교."""
+            have = newest.get(complex_no)
+            if have is None:
+                return list(months)
+            return [m for m in months if m > have]
+
         rows = (
             db.query(KaptComplexMap)
             .order_by(KaptComplexMap.matched_at.asc())
             .all()
         )
-        targets = [r for r in rows if r.complex_no not in done][:batch_size]
+        # 행이 아예 없는 단지 먼저(관리비가 화면에 통째로 안 뜨는 쪽이 급하다), 그다음
+        # matched_at 순. sorted 는 안정 정렬이라 같은 그룹 안에서 위 order_by 가 보존된다.
+        queue = [r for r in rows if _to_try(r.complex_no)]
+        queue.sort(key=lambda r: r.complex_no in newest)
 
         collected, failed, empty = 0, 0, 0
         quota_exhausted: KaptApiError | None = None
         # 연속 전 op 실패 카운터 — 한 단지라도 성공(또는 정상 미공개)하면 리셋한다.
         consecutive_failures = 0
         api_down: KaptApiError | None = None
-        processed = 0
-        for mapping in targets:
-            processed += 1
+        scan_capped = False
+        for mapping in queue:
+            # 슬롯: 수집·실패만 센다. 미공개는 3콜뿐이라 슬롯을 먹이면 미공개가 앞줄에
+            # 몰린 날 수집이 0건으로 끝난다.
+            if collected + failed >= batch_size:
+                break
+            if empty >= _EMPTY_SCAN_CAP:
+                scan_capped = True
+                logger.warning(
+                    "[kapt_costs] 미공개 %d단지 누적 — 스캔 상한(%d) 도달로 중단",
+                    empty, _EMPTY_SCAN_CAP,
+                )
+                break
             try:
                 breakdown, used_month = {}, None
-                for month in months:
+                for month in _to_try(mapping.complex_no):
                     # ⚠ 월 폴백은 (b) "그 달은 아직 미공개" 일 때만 의미가 있다.
                     # (c) 호출 실패 때 이전 달로 내려가면, 이미 죽은 API 에 22콜을
                     # 한 번 더 태워 쿼터만 갉아먹고 결과도 같다 → 예외는 즉시 전파.
@@ -882,7 +982,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                 consecutive_failures = 0
             except KaptApiError as exc:
                 # (c) 호출 실패 — 이 단지는 **저장하지 않는다**. 그 달 행이 안 생기므로
-                # 다음 회차(내일)에 자동으로 다시 대상이 된다(done 셋에 안 걸림).
+                # 다음 회차(내일)에 자동으로 다시 대상이 된다(to_try 가 그대로 남는다).
                 logger.warning(
                     "[kapt_costs] 단지 %s 호출 실패 — 저장 건너뜀 (%s)",
                     mapping.complex_no, exc,
@@ -912,12 +1012,16 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         # 시 그날 수집분이 통째로 롤백될 수 있다.
         db.commit()
 
+        # 훑은 단지 수 = 수집 + 실패 + 미공개. 선자르기(`targets[:batch_size]`)가 없어져
+        # `len(targets)` 를 대신한다. 잔여는 "아직 안 훑은 후보" = 큐 길이 - 훑은 수.
+        scanned = collected + failed + empty
+
         # 쿼터 초과로 조기 중단 — monitor 가 알아채도록 잡을 failed 로 마감한다.
         # (completed 로 두면 "오늘도 정상 수집" 으로 위장돼 며칠씩 방치된다.)
         if quota_exhausted is not None:
-            remaining = len(targets) - processed
+            remaining = len(queue) - scanned
             message = (
-                f"쿼터 초과(22) — {processed}단지 처리 후 중단, 잔여 {remaining} "
+                f"쿼터 초과(22) — {scanned}단지 처리 후 중단, 잔여 {remaining} "
                 f"(수집 {collected}, 실패 {failed}, 미공개 {empty})"
             )
             _fail_job(db, job, message)
@@ -931,7 +1035,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         # (쿼터 중단과 별개 분기인 이유: 원인이 확정된 22 와 달리 이쪽은 "코드 미상 실패가
         #  연달아 났다"는 정황 판단이라, 사람이 로그를 보고 원인을 가려야 한다.)
         if api_down is not None:
-            remaining = len(targets) - processed
+            remaining = len(queue) - scanned
             message = (
                 f"연속 {_CONSECUTIVE_FAILURE_LIMIT}단지 호출 실패 — API 장애/한도 의심, "
                 f"잔여 {remaining} (수집 {collected}, 실패 {failed}, 미공개 {empty}, "
@@ -950,22 +1054,23 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         #   ① 아래 `failed > 0` 가드  — 예외로 죽은 회차. 이제 API 호출 실패(쿼터·키·
         #      점검·파싱)가 전부 여기 잡힌다. 예전엔 이것들이 조용한 None → 빈 dict →
         #      `empty` 로 새어 ②에만 의존했다.
-        #   ② `empty == len(targets)` 가드 — 예외는 없는데 전량 빈 응답. 이제는
+        #   ② 전량 빈 응답 가드 — 예외는 없는데 훑은 단지가 전부 미공개. 이제는
         #      "진짜로 전부 미공개" 이거나, API 가 200 + 빈 body 로 무응답화한 경우다.
-        #      표본이 작으면(임계 미만) 정상 미공개와 구분이 안 돼 판정을 보류한다.
+        #      표본이 작으면(임계 미만) 정상 미공개와 구분이 안 돼 판정을 보류하고,
+        #      표본이 충분하면 **카나리**(아래)로 API 생사를 직접 확인한다.
         # 즉 ①이 1차 방어선이고 ②는 ①을 빠져나가는 무증상 장애용 그물이다.
         #
         # silent failure 가드: 대상이 있는데 한 건도 저장 못 했고 그 원인이
         # '미공개'가 아니라 실패라면 '완료(0)' 위장 대신 failed 로 알린다.
         # (일부만 미공개인 경우는 정상이므로 completed 로 둔다 — 오탐 방지)
-        if collected == 0 and targets and failed > 0:
+        if collected == 0 and scanned and failed > 0:
             _fail_job(
                 db, job,
-                f"대상 {len(targets)}개 중 수집 0건 (실패 {failed}, 미공개 {empty})",
+                f"대상 {scanned}개 중 수집 0건 (실패 {failed}, 미공개 {empty})",
             )
             logger.error(
                 "[kapt_costs] silent failure 감지: 대상 %d개 수집 0건 (실패 %d)",
-                len(targets), failed,
+                scanned, failed,
             )
             return {"collected": 0, "failed": failed, "empty": empty, "error": "no_collect"}
 
@@ -982,32 +1087,52 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         # 정상적으로 자주 발생한다 — 그걸 failed 로 올리면 official_price 오탐
         # sweep(세션 369)과 같은 종류의 가짜 경보가 매일 울린다. 임계 미만이면
         # 판정을 보류하고 completed 로 두되, 아래 로그로 관찰은 남긴다.
-        if collected == 0 and targets and empty == len(targets):
-            if len(targets) < _ALL_EMPTY_MIN_TARGETS:
-                logger.warning(
-                    "[kapt_costs] 대상 %d개 전량 미공개 — 표본이 작아 장애 판정 보류",
-                    len(targets),
-                )
-            else:
-                _fail_job(
-                    db, job,
-                    f"대상 {len(targets)}개 전부 빈 응답 — API 폐기/키 만료 의심",
-                )
-                logger.error(
-                    "[kapt_costs] 전량 빈 응답 감지: 대상 %d개 (API 폐기/키 만료 의심)",
-                    len(targets),
+        #
+        # ⚠ 매월 갱신으로 바뀐 뒤로는 "전량 미공개" 가 **장애가 아닌 정상 회차**로도
+        # 흔해졌다. 월이 막 바뀌어 K-apt 가 아직 그 달을 안 열었으면, 이미 지난달까지
+        # 받아둔 단지들이 줄줄이 months[0] 첫 op 1콜에서 비어 돌아온다 — 그대로 두면
+        # 매월 초 며칠간 가짜 경보가 울린다. 그래서 표본이 충분하면 판정을 바로
+        # 내리지 않고 **카나리**로 API 생사를 직접 확인한다.
+        if collected == 0 and failed == 0 and empty >= _ALL_EMPTY_MIN_TARGETS:
+            alive, probed = _probe_api_alive(db, months)
+            if alive:
+                # API 는 살아있다 = 이번 회차의 전량 미공개는 정상(그 달 미공개).
+                # ⚠ total 도 0 으로 둔다 — freshness 헛바퀴 감지가 processed==0 AND
+                #   total>0 이라, total 만 남기면 "정상인데 빨강" 이 된다.
+                _complete_job(db, job, 0, 0)
+                logger.info(
+                    "[kapt_costs] 훑은 %d단지 전량 미공개 — 저장행 %d건 생존 확인, "
+                    "그 달 미공개로 판단 (기준월 %s)",
+                    empty, probed, target_month,
                 )
                 return {
-                    "collected": 0, "failed": failed, "empty": empty, "error": "all_empty",
+                    "collected": 0, "failed": failed, "empty": empty,
+                    "cost_month": target_month, "canary": "alive",
                 }
+            message = (
+                f"대상 {scanned}개 전부 빈 응답 — API 폐기/키 만료 의심"
+                + (f" (생존 확인용 {probed}건도 전부 빈 응답)" if probed else " (생존 확인 표본 없음)")
+            )
+            _fail_job(db, job, message)
+            logger.error("[kapt_costs] 전량 빈 응답 감지: %s", message)
+            return {
+                "collected": 0, "failed": failed, "empty": empty, "error": "all_empty",
+            }
+        if collected == 0 and scanned and empty == scanned:
+            logger.warning(
+                "[kapt_costs] 대상 %d개 전량 미공개 — 표본이 작아 장애 판정 보류",
+                scanned,
+            )
 
-        # ⚠ total_items 는 **대상 수** 여야 한다. collected+failed 로 두면 전량
+        # ⚠ total_items 는 **훑은 단지 수** 여야 한다. collected+failed 로 두면 전량
         # 미공개일 때 total=0 이 되어, freshness 의 헛바퀴 감지(processed==0 AND
         # total>0, routers/admin/freshness.py)가 영영 발동하지 않는다.
-        _complete_job(db, job, collected, len(targets) - collected)
+        # (위 카나리 경로만은 의도적으로 total=0 — 거기선 "정상"이 확인됐다.)
+        _complete_job(db, job, collected, scanned - collected)
         logger.info(
-            "[kapt_costs] 완료: %d 수집, %d 실패, %d 미공개 (대상 %d, 기준월 %s)",
-            collected, failed, empty, len(targets), target_month,
+            "[kapt_costs] 완료: %d 수집, %d 실패, %d 미공개 (대상 %d, 기준월 %s)%s",
+            collected, failed, empty, scanned, target_month,
+            f" — 미공개 스캔 상한 {_EMPTY_SCAN_CAP} 도달로 중단" if scan_capped else "",
         )
         return {
             "collected": collected,

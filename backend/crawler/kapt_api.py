@@ -289,6 +289,18 @@ def fetch_common_cost(kapt_code: str, search_date: str) -> dict[str, int]:
     return _collect_ops(_CMNUSE_URL, COMMON_COST_OPS, kapt_code, search_date, _extract_amount)
 
 
+def fetch_common_cost_probe(kapt_code: str, search_date: str) -> dict | None:
+    """공용관리비 **첫 op 1콜만** — 그 (단지, 달)이 공개돼 있나 확인용.
+
+    `_collect_ops` 의 조기 이탈이 "첫 op 유무 = 그 서비스·월 전체 공개 여부"를 전제로
+    하므로(같은 함수 docstring 의 전수 실측 근거), 생사 확인도 같은 op 하나로 충분하다.
+    17콜을 다 태우면 확인 비용이 수집 비용과 같아져 카나리의 의미가 사라진다.
+
+    (b) 미공개면 None, (c) 호출 실패면 `KaptApiError` — 3상태 계약은 그대로다.
+    """
+    return fetch_cost_item(_CMNUSE_URL, COMMON_COST_OPS[0], kapt_code, search_date)
+
+
 def fetch_individual_cost(kapt_code: str, search_date: str) -> dict[str, int]:
     """개별사용료 5항목 — {op: 공용(C)+전용(P) 합계}. 미공개 항목은 키 제외.
 

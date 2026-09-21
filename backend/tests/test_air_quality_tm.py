@@ -26,7 +26,6 @@ from crawler.air_quality_api import (
     wgs84_to_tm,
 )
 
-
 # 2026-09-22 라이브 실측으로 확정한 EPSG:5181 값.
 # 각 지점은 `getNearbyMsrstnList` 가 **0.5km 이내 관측소**를 돌려준 것이 확인된 좌표다
 #   서울시청 → "중구" 0.5km · 수원시청 → "인계동" 0.3km · 부산시청 → "연산동" 0.3km

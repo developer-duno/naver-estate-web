@@ -13,20 +13,35 @@ class TestWgs84ToTm:
     """WGS84 → TM 좌표 변환 테스트"""
 
     def test_서울시청_변환(self):
+        """⚠️ 2026-09-22 정정 — 이 테스트가 **결함을 정답으로 못 박고 있었다.**
+
+        옛 기대값은 `-60000 < tm_y < -30000` 이었다. 즉 "서울시청의 Y 는 -48,000 근처" 라고
+        단언했는데, **그게 바로 고쳐야 할 버그**였다(`tm_y` 에 false northing 이 통째로 빠짐).
+        그 좌표로 에어코리아를 부르면 서울시청인데 **제주 "남원읍"(35km)** 이 돌아왔고,
+        공유 DB `infra.air_station_name` 이 3,068단지에 **8종류**만 붙었다
+        (제주 남원읍 한 곳에 2,007곳). 자세한 경위는 `tests/test_air_quality_tm.py` 머리 주석.
+
+        정답(EPSG:5181, 라이브 실측으로 확정): 서울시청 ≈ (198092, 451896).
+        그 좌표로 물으면 **"중구" 0.5km** 가 돌아온다.
+        """
         from crawler.air_quality_api import wgs84_to_tm
 
         tm_x, tm_y = wgs84_to_tm(37.5665, 126.978)
-        # 서울시청 TM 좌표 대략 (198000, -48000) 근처
         assert 190000 < tm_x < 210000
-        assert -60000 < tm_y < -30000
+        assert 445000 < tm_y < 460000
 
     def test_원점_근처_변환(self):
-        """기준점(38N, 127E) 근처는 false easting 200000에 가까워야 함"""
+        """기준점(38N, 127E)은 false easting/northing 그 자체여야 한다.
+
+        ⚠️ 옛 기대값 `abs(tm_y) < 100` 도 같은 결함을 못 박은 것이었다 —
+        false northing 이 빠져 있을 때만 원점 Y 가 0 이 된다.
+        EPSG:5181 의 원점 Y 는 **500,000** 이다.
+        """
         from crawler.air_quality_api import wgs84_to_tm
 
         tm_x, tm_y = wgs84_to_tm(38.0, 127.0)
         assert abs(tm_x - 200000) < 100
-        assert abs(tm_y) < 100
+        assert abs(tm_y - 500000) < 100
 
 
 # ── 응급의료 유틸 테스트 ──

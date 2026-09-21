@@ -20,25 +20,93 @@ NEARBY_STATION_URL = "https://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getNea
 REALTIME_AIR_URL = "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty"
 
 
-def wgs84_to_tm(lat: float, lng: float) -> tuple[float, float]:
-    """WGS84 → TM(중부원점) 근사 변환
+# 에어코리아 `getNearbyMsrstnList` 가 요구하는 좌표계 = **EPSG:5181**(TM 중부원점, y_0=500,000)
+#   +proj=tmerc +lat_0=38 +lon_0=127 +k=1 +x_0=200000 +y_0=500000 +ellps=GRS80
+#
+# ⚠️ 공식 문서(data.go.kr 15073877)는 "TM 좌표" 라고만 적고 **원점을 명시하지 않는다.**
+#    2026-09-22 에 서울시청(37.5666,126.9784)으로 후보 5종을 실측해 확정했다:
+#
+#        y_0=500,000 (5181) → "중구" 0.5km    ✅ 정답
+#        y_0=600,000 (5186) → "철원(DMZ)" 26.2km
+#        y_0=0       (옛 코드) → "남원읍" 35.2km  (제주!)
+#        서부 5185          → "금호동" 46.6km
+#        동부 5187          → "백령도" 64.9km
+#
+#    즉 y_0 가 100,000 만 달라도 26km 엉뚱한 곳이 나온다. **바꾸기 전에 반드시 위 실측을 다시 하라.**
+TM_ORIGIN_LAT = 38.0
+TM_ORIGIN_LNG = 127.0
+TM_FALSE_EASTING = 200000.0
+TM_FALSE_NORTHING = 500000.0
 
-    Bessel 타원체 기반 간이 변환. 정밀도 ~10m 수준으로
-    근접 측정소 매칭에는 충분하다.
+
+def wgs84_to_tm(lat: float, lng: float) -> tuple[float, float]:
+    """WGS84 → 한국 TM 중부원점(**EPSG:5181**) 변환. 에어코리아 API 전용.
+
+    ## ⚠️ 2026-09-22 정정 — 옛 구현은 결함이 **둘**이었다
+
+    옛 구현은 Bessel 타원체 기반 간이식이었고 주석은 "정밀도 ~10m" 라고 적었지만 실제로는:
+
+    1. **`tm_y` 에 false northing 이 통째로 빠져** 한국 전역이 **음수**로 나왔다
+       (실측: 서울시청 tmY=-48,300 · 수원 -82,067 · 제주 -525,896).
+       그 좌표로 부르면 **제주 "남원읍"(35km)** 이 돌아온다 — 서울시청인데.
+    2. false northing 을 더해도 **Bessel 타원체·1차 근사**라 Y 오차가 컸다
+       — 서울 -196m · 수원 -334m · **부산 -3,271m**. 관측소 선택이 바뀌는 크기다.
+
+    그 결과 공유 DB `infra.air_station_name` 이 **전국 3,068 단지에 8종류**만 붙었다
+    (제주 "남원읍" 한 곳에 **2,007곳** — 서울·수원 아파트 포함). 전국 측정소는 600곳이 넘는다.
+    `air_quality_stations` 표도 **8행**뿐이고 `lat`/`lng` 가 전부 NULL 이다.
+
+    ## 지금 구현
+
+    EPSG:5181 사양 그대로의 Transverse Mercator 전개식(원점은 위 상수 주석의 실측 근거 참조):
+
+        +proj=tmerc +lat_0=38 +lon_0=127 +k=1 +x_0=200000 +y_0=500000 +ellps=GRS80
+
+    검증(2026-09-22 라이브): 서울시청 → **"중구" 0.5km** · 수원시청 → 수원 관측소 · 부산시청 → 부산 관측소.
+    전개식 자체는 정확한 TM 공식과 X·Y 오차 **0m**(Bessel 근사를 GRS80 정식으로 교체).
     """
-    # 중부원점 기준 (origin: 38N, 127E, false easting 200000)
     lat_rad = math.radians(lat)
     lng_rad = math.radians(lng)
-    ref_lat = math.radians(38.0)
-    ref_lng = math.radians(127.0)
+    lat0 = math.radians(TM_ORIGIN_LAT)
+    lon0 = math.radians(TM_ORIGIN_LNG)
 
-    # 간이 변환 계수 (미터 단위)
-    a = 6377397.155  # Bessel 장반경
-    e2 = 0.006674372  # 이심률 제곱
+    # GRS80 타원체 (EPSG:5186)
+    a = 6378137.0
+    f = 1 / 298.257222101
+    e2 = f * (2 - f)
+    ep2 = e2 / (1 - e2)
+
     n = a / math.sqrt(1 - e2 * math.sin(lat_rad) ** 2)
+    t = math.tan(lat_rad) ** 2
+    c = ep2 * math.cos(lat_rad) ** 2
+    A = (lng_rad - lon0) * math.cos(lat_rad)
 
-    tm_x = 200000 + n * math.cos(lat_rad) * (lng_rad - ref_lng)
-    tm_y = n * (lat_rad - ref_lat)
+    e4 = e2 * e2
+    e6 = e4 * e2
+
+    def meridian_arc(phi: float) -> float:
+        """적도에서 위도 phi 까지의 자오선 호장."""
+        return a * (
+            (1 - e2 / 4 - 3 * e4 / 64 - 5 * e6 / 256) * phi
+            - (3 * e2 / 8 + 3 * e4 / 32 + 45 * e6 / 1024) * math.sin(2 * phi)
+            + (15 * e4 / 256 + 45 * e6 / 1024) * math.sin(4 * phi)
+            - (35 * e6 / 3072) * math.sin(6 * phi)
+        )
+
+    tm_x = TM_FALSE_EASTING + n * (
+        A + (1 - t + c) * A**3 / 6 + (5 - 18 * t + t * t + 72 * c - 58 * ep2) * A**5 / 120
+    )
+    tm_y = TM_FALSE_NORTHING + (
+        meridian_arc(lat_rad)
+        - meridian_arc(lat0)
+        + n
+        * math.tan(lat_rad)
+        * (
+            A * A / 2
+            + (5 - t + 9 * c + 4 * c * c) * A**4 / 24
+            + (61 - 58 * t + t * t + 600 * c - 330 * ep2) * A**6 / 720
+        )
+    )
 
     return tm_x, tm_y
 

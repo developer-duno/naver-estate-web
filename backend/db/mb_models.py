@@ -477,8 +477,15 @@ class RentalUnitSupply(Base):
     youth_supply: Mapped[int | None] = mapped_column(Integer)
     newlywed_supply: Mapped[int | None] = mapped_column(Integer)
     elderly_supply: Mapped[int | None] = mapped_column(Integer)
+    # 월세·보증금 — **청약홈 민간임대 API 는 이 둘을 주지 않는다**(2026-09-22 라이브 100행
+    # 전수 확인). 대신 SUPLY_AMOUNT(공급금액)·SUBSCRPT_REQST_AMOUNT(청약신청금)를 준다.
+    # 컬럼은 남겨 두되 **비어 있는 것이 정상**이며, 다른 출처가 생기면 그때 채운다.
     monthly_rent: Mapped[int | None] = mapped_column(Integer)
     deposit: Mapped[int | None] = mapped_column(Integer)
+    # SUPLY_AMOUNT — 공급금액. 이름은 OfficetelUnitSupply 와 맞춘다.
+    supply_amount: Mapped[int | None] = mapped_column(Integer)
+    # SUBSCRPT_REQST_AMOUNT — 청약신청금.
+    subscrpt_reqst_amount: Mapped[int | None] = mapped_column(Integer)
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 

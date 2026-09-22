@@ -23,7 +23,6 @@
       "Bash(curl -s --max-time 10 \"https://api.2u.pe.kr/api/stats\")",
       "Bash(curl -s --connect-timeout 5 http://192.168.219.101:8002/health)",
       "Bash(cat .github/workflows/*.yml)",
-      "Bash(python -c ':*)",
       "Bash(python -m ruff check crawler/childcare_api.py crawler/env_childcare.py tests/test_childcare_api.py scripts/test_childcare_api.py)",
       "Bash(python -m ruff check .)",
       "Bash(python -m scripts.test_childcare_api)",

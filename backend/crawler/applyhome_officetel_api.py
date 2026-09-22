@@ -102,10 +102,20 @@ def parse_comma_amount(v) -> int | None:
     if not s or s == "-":
         return None
     try:
-        return int(float(s))
+        n = int(float(s))
     except (ValueError, OverflowError):
         # OverflowError: float(s) 가 "inf"/거대 지수 문자열로 무한대가 되면
         # int() 변환이 ValueError 가 아니라 OverflowError 를 던진다(세션557 적대검증 발견,
         # 재현: int(float("1e400")) → OverflowError). 실제 청약홈 응답에서 관측된 적은
         # 없으나, 외부 API 응답을 신뢰 경계로 다루는 원칙상 방어한다.
         return None
+    # ⚠ 파싱에 성공해도 **PostgreSQL INTEGER(INT4) 범위를 넘으면 INSERT 에서 죽는다** —
+    # 위 except 만으로는 못 막는다(세션558 적대검증 실측: `"9"*20` → 1e20 → 파싱 성공 →
+    # `select 100000000000000000000::integer` → NumericValueOutOfRange "integer out of range").
+    # 이 함수의 반환값은 전부 INTEGER 컬럼(ApplyhomeUnitSupply.top_amount·
+    # RentalUnitSupply.supply_amount/subscrpt_reqst_amount 등)에 들어가므로, 여기서 걸러야
+    # 값 하나 때문에 그 배치의 나머지 행까지 롤백되는 것을 막는다. 범위 밖은 정상 금액이
+    # 아니므로(21억 만원 = 21조 원) 저장하지 않고 None 으로 넘긴다.
+    if not (-2147483648 <= n <= 2147483647):
+        return None
+    return n

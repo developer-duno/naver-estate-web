@@ -103,5 +103,9 @@ def parse_comma_amount(v) -> int | None:
         return None
     try:
         return int(float(s))
-    except ValueError:
+    except (ValueError, OverflowError):
+        # OverflowError: float(s) 가 "inf"/거대 지수 문자열로 무한대가 되면
+        # int() 변환이 ValueError 가 아니라 OverflowError 를 던진다(세션557 적대검증 발견,
+        # 재현: int(float("1e400")) → OverflowError). 실제 청약홈 응답에서 관측된 적은
+        # 없으나, 외부 API 응답을 신뢰 경계로 다루는 원칙상 방어한다.
         return None

@@ -431,8 +431,12 @@ def rental_unit_supply_to_dict(u) -> dict:
         "youth_supply": u.youth_supply,
         "newlywed_supply": u.newlywed_supply,
         "elderly_supply": u.elderly_supply,
+        # 월세·보증금은 청약홈 민간임대 API 가 주지 않아 항상 None 이다(모델 주석 참조).
+        # 화면은 아래 공급금액·청약신청금을 쓴다.
         "monthly_rent": u.monthly_rent,
         "deposit": u.deposit,
+        "supply_amount": u.supply_amount,
+        "subscrpt_reqst_amount": u.subscrpt_reqst_amount,
     }
 
 

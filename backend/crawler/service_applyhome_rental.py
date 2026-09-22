@@ -65,6 +65,18 @@ def collect_rental_presale(batch_size: int = 1000, scheduler_job_id: str | None 
                 .first()
             )
             recruit_date = parse_compact_date(row.get("RCRIT_PBLANC_DE"))
+            # 일정 4종 — DB 컬럼은 처음부터 있었으나 **매핑이 아예 없어** 전수 NULL 이었다.
+            # API 는 이 값을 정상으로 준다(2026-09-22 라이브 100행 전수 확인).
+            schedule_fields = {
+                "receipt_bgnde": parse_compact_date(row.get("SUBSCRPT_RCEPT_BGNDE")),
+                "receipt_endde": parse_compact_date(row.get("SUBSCRPT_RCEPT_ENDDE")),
+                "winner_announce_date": parse_compact_date(
+                    row.get("PRZWNER_PRESNATN_DE")
+                ),
+                "contract_bgnde": parse_compact_date(row.get("CNTRCT_CNCLS_BGNDE")),
+                "contract_endde": parse_compact_date(row.get("CNTRCT_CNCLS_ENDDE")),
+                "move_in_ym": row.get("MVN_PREARNGE_YM"),
+            }
             if existing:
                 existing.house_nm = house_nm
                 existing.address = row.get("HSSPLY_ADRES")
@@ -75,6 +87,8 @@ def collect_rental_presale(batch_size: int = 1000, scheduler_job_id: str | None 
                 existing.constructor = row.get("CNSTRCT_ENTRPS_NM")
                 existing.region_code = row.get("SUBSCRPT_AREA_CODE")
                 existing.region_name = row.get("SUBSCRPT_AREA_CODE_NM")
+                for _k, _v in schedule_fields.items():
+                    setattr(existing, _k, _v)
                 existing.fetched_at = utcnow()
             else:
                 db.add(
@@ -90,6 +104,7 @@ def collect_rental_presale(batch_size: int = 1000, scheduler_job_id: str | None 
                         constructor=row.get("CNSTRCT_ENTRPS_NM"),
                         region_code=row.get("SUBSCRPT_AREA_CODE"),
                         region_name=row.get("SUBSCRPT_AREA_CODE_NM"),
+                        **schedule_fields,
                         fetched_at=utcnow(),
                     )
                 )
@@ -113,17 +128,27 @@ def collect_rental_presale(batch_size: int = 1000, scheduler_job_id: str | None 
                 )
                 .first()
             )
+            # 필드명은 **라이브 응답 실측**(2026-09-22, 100행 전수 · 전 필드 100/100 출현)이
+            # 정본이다. 옛 이름(HOUSE_TY·EXCLU_AR·GNRL_HSHLDCO·YGMN_HSHLDCO·
+            # NWWDS_HSHLDCO·OLD_PARNTS_SUPORT_HSHLDCO)은 응답에 **없어서** 8칸이 전수
+            # NULL 이었고, 그 빈 값이 mb_serializers 를 거쳐 손님에게 그대로 나갔다.
+            # 회귀 가드 = tests/test_service_applyhome_rental.py 의 LIVE_UNIT_ROW.
             fields = {
-                "house_ty": row.get("HOUSE_TY"),
-                "supply_area": row.get("SUPLY_AR"),
-                "exclusive_area": row.get("EXCLU_AR"),
-                "contract_area": row.get("CNTRCT_AR"),
-                "general_supply": row.get("GNRL_HSHLDCO"),
-                "youth_supply": row.get("YGMN_HSHLDCO"),
-                "newlywed_supply": row.get("NWWDS_HSHLDCO"),
-                "elderly_supply": row.get("OLD_PARNTS_SUPORT_HSHLDCO"),
-                "monthly_rent": parse_comma_amount(row.get("MTH_RENT_AMOUNT")),
-                "deposit": parse_comma_amount(row.get("DEPOSIT_AMOUNT")),
+                "house_ty": row.get("TP"),
+                "supply_area": _to_float(row.get("SUPLY_AR")),
+                "exclusive_area": _to_float(row.get("EXCLUSE_AR")),
+                "contract_area": _to_float(row.get("CNTRCT_AR")),
+                "general_supply": row.get("GNSPLY_HSHLDCO"),
+                "youth_supply": row.get("SPSPLY_YGMN_HSHLDCO"),
+                "newlywed_supply": row.get("SPSPLY_NEW_MRRG_HSHLDCO"),
+                "elderly_supply": row.get("SPSPLY_AGED_HSHLDCO"),
+                "supply_amount": parse_comma_amount(row.get("SUPLY_AMOUNT")),
+                "subscrpt_reqst_amount": parse_comma_amount(
+                    row.get("SUBSCRPT_REQST_AMOUNT")
+                ),
+                # 월세·보증금은 이 API 가 주지 않는다 — 모델 주석 참조.
+                "monthly_rent": None,
+                "deposit": None,
             }
             if existing_unit:
                 for k, v in fields.items():
@@ -158,3 +183,20 @@ def collect_rental_presale(batch_size: int = 1000, scheduler_job_id: str | None 
         logger.exception("민간임대 청약 수집 실패")
     finally:
         db.close()
+
+def _to_float(v) -> float | None:
+    """odcloud 숫자 문자열("59.8947")을 float 로. None·빈문자열·파싱불가는 None.
+
+    service_applyhome_officetel.py 의 동명 헬퍼와 집을 맞추는다(적대검증 2026-09-22 지적) —
+    문자열을 Float 컴럼에 그대로 넣으면 Postgres 암묵 캐스트로 저장은 안전하나,
+    커믷 전 같은 세션 안에서 그 값을 다시 읽으면 str 이 돌아오는 타입 불일치가 생긴다.
+    """
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s or s == "-":
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None

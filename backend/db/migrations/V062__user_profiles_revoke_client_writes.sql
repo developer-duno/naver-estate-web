@@ -1,0 +1,25 @@
+-- V062: user_profiles — anon·authenticated 의 쓰기 권한 회수 (자기 등급 올리기 구멍 봉합)
+--        mibunyang 세션566 (2026-09-23) · 사장님 승인 "칸 권한 조정" · prod 적용완료(Claude 직접 실행, 아래 검증)
+--
+-- 구멍: Supabase 기본 GRANT(ALL → anon, authenticated) + RLS "own profile insert/update"(auth.uid() = user_id)
+--   는 **행만** 막고 **칸은** 막지 않는다. 그래서 로그인 사용자가 자기 행의
+--   role · status · paid_until · approved_until · daily_*_quota · email 을 PostgREST 로 직접 고칠 수 있었다.
+--   deps.py get_admin_user 는 role == "admin" 또는 profile.email ∈ ADMIN_EMAILS 면 통과한다
+--   (get_current_user 가 "email": profile.email 을 돌려준다) → 가입만 하면 관리자.
+--   Supabase Auth "신규 가입 허용" ON + 이메일 확인 OFF + anon key 는 로그인 화면 JS 번들에 있다 → 누구나 가능했다.
+--   실제로 뚫린 흔적은 없다(auth.users 1명 = 사장님, role expert).
+--
+-- 조치: 클라이언트 역할(anon · authenticated)의 쓰기를 전부 회수한다. 프로필 쓰기는 backend(postgres 역할)만 한다.
+--   유지: authenticated SELECT(frontend Header.tsx 의 role 조회) · service_role · postgres.
+--   영향: frontend/src/app/(auth)/login/page.tsx 의 "백엔드 없이 Supabase 직접 업데이트" 보조 upsert 는
+--         이제 permission denied 로 실패한다(try/catch 비차단이라 로그인은 된다) → 정리 권장.
+--
+-- 검증(prod, 한 트랜잭션 안 자체검사 후 COMMIT):
+--   적용 전 SET ROLE authenticated + 가짜 sub 로 UPDATE → 허용(RLS 로 0행) = 구멍 확인
+--   적용 후 같은 UPDATE → "permission denied for table user_profiles"
+--   role_table_grants: anon · authenticated = REFERENCES, SELECT, TRIGGER / service_role = 전부 유지
+--
+-- ROLLBACK:
+-- GRANT INSERT, UPDATE, DELETE, TRUNCATE ON public.user_profiles TO anon, authenticated;
+
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON public.user_profiles FROM anon, authenticated;

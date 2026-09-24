@@ -397,6 +397,55 @@ def test_collect_officetel_presale_fills_address_on_existing_row(db):
     assert rows[0].address == "서울특별시 관악구 신림동 505-1"
 
 
+def test_collect_officetel_presale_keeps_existing_address_when_response_lacks_it(db):
+    """기존 행에 주소가 있는데 이번 회차 응답에 HSSPLY_ADRES 가 없으면(키 없음·빈 값)
+    주소를 None 으로 지우지 않고 그대로 둔다. 다른 필드는 평소대로 갱신된다."""
+    from datetime import date
+
+    from db.mb_models import OfficetelPresaleSchedule
+
+    db.add_all([
+        OfficetelPresaleSchedule(
+            house_manage_no="ADDR-KEEP",
+            house_nm="옛이름",
+            address="서울특별시 강남구 역삼동 1",
+            recruit_date=date(2026, 8, 1),
+        ),
+        OfficetelPresaleSchedule(
+            house_manage_no="ADDR-KEEP-EMPTY",
+            house_nm="옛이름2",
+            address="서울특별시 강남구 역삼동 2",
+            recruit_date=date(2026, 8, 1),
+        ),
+    ])
+    db.commit()
+
+    _run_collect_with_detail([
+        {
+            "HOUSE_MANAGE_NO": "ADDR-KEEP",
+            "HOUSE_NM": "새이름",
+            "RCRIT_PBLANC_DE": "2026-08-01",
+        },
+        {
+            "HOUSE_MANAGE_NO": "ADDR-KEEP-EMPTY",
+            "HOUSE_NM": "새이름2",
+            "RCRIT_PBLANC_DE": "2026-08-01",
+            "HSSPLY_ADRES": "",
+        },
+    ])
+
+    db.expire_all()
+    kept = {
+        r.house_manage_no: r
+        for r in db.query(OfficetelPresaleSchedule)
+        .filter(OfficetelPresaleSchedule.house_manage_no.in_(["ADDR-KEEP", "ADDR-KEEP-EMPTY"]))
+        .all()
+    }
+    assert kept["ADDR-KEEP"].address == "서울특별시 강남구 역삼동 1"
+    assert kept["ADDR-KEEP"].house_nm == "새이름"  # 다른 필드는 갱신됨
+    assert kept["ADDR-KEEP-EMPTY"].address == "서울특별시 강남구 역삼동 2"
+
+
 def test_collect_officetel_presale_address_missing_is_none(db):
     """경계: 응답에 HSSPLY_ADRES 가 없으면 address 는 None(수집은 정상 완료)."""
     from db.mb_models import OfficetelPresaleSchedule

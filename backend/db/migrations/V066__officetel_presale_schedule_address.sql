@@ -11,6 +11,8 @@
 --
 -- 기존 데이터 영향 0: nullable 컬럼 추가. 다음 주간 수집(월요일 05:00 collect_officetel_presale)이
 -- 전량 upsert 하며 기존 행까지 채운다(수집 코드의 fields dict 가 insert·갱신 공용).
+-- ("영향 0" 은 이 컬럼 추가 자체 한정이다. 이후 수집은 주소를 채우며, 갱신 경로는 응답에
+--  HSSPLY_ADRES 가 없거나 빈 값이면 기존 주소를 지우지 않고 보존한다.)
 -- 공유 DB(mibunyang)는 officetel_* 을 읽지도 쓰지도 않는다(V045 신설 테이블, naver 자체 소유).
 --
 -- ⚠ 코드보다 prod 선행 실행 필수 (V034·V055·V060 관례) — ORM(mb_models.OfficetelPresaleSchedule)

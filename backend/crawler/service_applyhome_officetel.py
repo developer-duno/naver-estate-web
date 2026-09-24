@@ -131,6 +131,7 @@ def collect_officetel_presale(batch_size: int = 1000, scheduler_job_id: str | No
                 "house_nm": house_nm,
                 # HSSPLY_ADRES(공급위치) — V066(세션 417). 이 dict 는 신규 insert 와 기존 행
                 # 갱신 양쪽이 같이 쓰므로, 다음 정기 실행이 기존 620건도 채운다.
+                # 단 갱신 경로는 값이 있을 때만 덮어쓴다(아래 루프 — 빈 응답이 주소를 지우지 않게).
                 "address": row.get("HSSPLY_ADRES"),
                 "recruit_date": recruit_date,
                 # odcloud 오피스텔 오퍼레이션은 특별공급/1·2순위 접수기간이 분리돼
@@ -153,6 +154,10 @@ def collect_officetel_presale(batch_size: int = 1000, scheduler_job_id: str | No
             }
             if existing:
                 for k, v in fields.items():
+                    # 주소는 새 값이 있을 때만 덮어쓴다 — 어느 회차 응답에서 HSSPLY_ADRES 가
+                    # 빠지거나 빈 문자열이면 이미 채워진 주소를 None 으로 지우지 않고 보존(V066).
+                    if k == "address" and not v:
+                        continue
                     setattr(existing, k, v)
                 existing.fetched_at = utcnow()
             else:

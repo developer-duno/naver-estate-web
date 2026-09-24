@@ -4,6 +4,7 @@
  * - failCount 5회 잠금 + Lock 아이콘 + Alert
  * - redirect URL 보안 가드 (외부 origin 차단 → / 폴백)
  * - 비밀번호 표시 토글 aria-label
+ * - user_profiles 직접 upsert 미호출 (세션 417: V062 뒤 항상 실패하는 죽은 코드 제거)
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -11,6 +12,9 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 const mockPush = vi.fn();
 const mockRefresh = vi.fn();
 const mockSignIn = vi.fn();
+const mockFrom = vi.fn().mockReturnValue({
+  upsert: vi.fn().mockResolvedValue({}),
+});
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -29,11 +33,11 @@ vi.mock("@/lib/supabase", () => ({
   createClient: () => ({
     auth: {
       signInWithPassword: mockSignIn,
-      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+      getSession: vi.fn().mockResolvedValue({
+        data: { session: { user: { id: "u1", email: "a@b.com" }, access_token: "tok" } },
+      }),
     },
-    from: vi.fn().mockReturnValue({
-      upsert: vi.fn().mockResolvedValue({}),
-    }),
+    from: mockFrom,
   }),
 }));
 
@@ -44,6 +48,7 @@ describe("LoginPage", () => {
     mockPush.mockClear();
     mockRefresh.mockClear();
     mockSignIn.mockReset();
+    mockFrom.mockClear();
   });
 
   it("이메일·비밀번호 input 과 로그인 버튼이 렌더", () => {
@@ -83,5 +88,17 @@ describe("LoginPage", () => {
     render(<LoginPage />);
     const toggle = screen.getByRole("button", { name: /비밀번호 표시/ });
     expect(toggle).toBeInTheDocument();
+  });
+
+  it("로그인 성공 시 user_profiles 직접 upsert 를 호출하지 않는다 (V062 뒤 항상 실패하는 죽은 코드 제거)", async () => {
+    mockSignIn.mockResolvedValueOnce({ error: null });
+    render(<LoginPage />);
+    fireEvent.change(screen.getByLabelText("이메일"), { target: { value: "a@b.com" } });
+    fireEvent.change(screen.getByLabelText("비밀번호"), { target: { value: "pw" } });
+    fireEvent.click(screen.getByRole("button", { name: "로그인" }));
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/");
+    });
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 });

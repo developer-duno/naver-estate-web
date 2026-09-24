@@ -314,3 +314,112 @@ def test_collect_officetel_presale_stores_region_name(db):
     )
     assert row is not None
     assert row.region_name == "경기"
+
+
+def _run_collect_with_detail(detail_rows: list[dict]):
+    """detail 응답만 바꿔 수집 잡을 1회 돌린다(unit 은 빈 응답)."""
+    from crawler.service_applyhome_officetel import collect_officetel_presale
+
+    fake_detail = {"data": detail_rows, "totalCount": len(detail_rows)}
+    fake_unit = {"data": [], "totalCount": 0}
+    with (
+        patch.dict(os.environ, {"PUBLIC_DATA_API_KEY": "fake-key-for-test"}),
+        patch(
+            "crawler.service_applyhome_officetel.fetch_officetel_detail",
+            return_value=fake_detail,
+        ),
+        patch(
+            "crawler.service_applyhome_officetel.fetch_officetel_unit",
+            return_value=fake_unit,
+        ),
+    ):
+        collect_officetel_presale(scheduler_job_id="test_officetel")
+
+
+def test_collect_officetel_presale_stores_address_on_insert(db):
+    """신규 공고: HSSPLY_ADRES(공급위치)가 address 칸에 저장된다 (V066, 세션 417).
+
+    이 칸이 없어 목록 표 "주소" 열이 오피스텔 행에서 항상 "-" 였다.
+    """
+    from db.mb_models import OfficetelPresaleSchedule
+
+    _run_collect_with_detail([
+        {
+            "HOUSE_MANAGE_NO": "ADDR-NEW",
+            "HOUSE_NM": "주소신규오피스텔",
+            "RCRIT_PBLANC_DE": "2026-09-01",
+            "HSSPLY_ADRES": "인천광역시 미추홀구 숭의동 350-1번지 일원",
+        }
+    ])
+
+    row = (
+        db.query(OfficetelPresaleSchedule)
+        .filter(OfficetelPresaleSchedule.house_manage_no == "ADDR-NEW")
+        .first()
+    )
+    assert row is not None
+    assert row.address == "인천광역시 미추홀구 숭의동 350-1번지 일원"
+
+
+def test_collect_officetel_presale_fills_address_on_existing_row(db):
+    """기존 행 갱신: 주소 칸이 비어 있던 행(V066 이전 수집분 620건 상황)이
+    다음 정기 수집에서 HSSPLY_ADRES 로 채워진다 — 갱신 경로에서 address 가
+    빠지면 기존 행은 영영 "-" 로 남는다."""
+    from datetime import date
+
+    from db.mb_models import OfficetelPresaleSchedule
+
+    db.add(
+        OfficetelPresaleSchedule(
+            house_manage_no="ADDR-OLD",
+            house_nm="기존오피스텔",
+            recruit_date=date(2026, 8, 1),
+        )
+    )
+    db.commit()
+
+    _run_collect_with_detail([
+        {
+            "HOUSE_MANAGE_NO": "ADDR-OLD",
+            "HOUSE_NM": "기존오피스텔",
+            "RCRIT_PBLANC_DE": "2026-08-01",
+            "HSSPLY_ADRES": "서울특별시 관악구 신림동 505-1",
+        }
+    ])
+
+    db.expire_all()
+    rows = (
+        db.query(OfficetelPresaleSchedule)
+        .filter(OfficetelPresaleSchedule.house_manage_no == "ADDR-OLD")
+        .all()
+    )
+    assert len(rows) == 1  # 새 행이 아니라 기존 행이 갱신됐다
+    assert rows[0].address == "서울특별시 관악구 신림동 505-1"
+
+
+def test_collect_officetel_presale_address_missing_is_none(db):
+    """경계: 응답에 HSSPLY_ADRES 가 없으면 address 는 None(수집은 정상 완료)."""
+    from db.mb_models import OfficetelPresaleSchedule
+
+    _run_collect_with_detail([
+        {
+            "HOUSE_MANAGE_NO": "ADDR-NONE",
+            "HOUSE_NM": "주소없는오피스텔",
+            "RCRIT_PBLANC_DE": "2026-09-02",
+        }
+    ])
+
+    row = (
+        db.query(OfficetelPresaleSchedule)
+        .filter(OfficetelPresaleSchedule.house_manage_no == "ADDR-NONE")
+        .first()
+    )
+    assert row is not None
+    assert row.address is None
+    job = (
+        db.query(CrawlJob)
+        .filter(CrawlJob.job_type == "officetel_presale")
+        .order_by(CrawlJob.id.desc())
+        .first()
+    )
+    assert job.status == "completed"

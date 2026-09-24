@@ -129,6 +129,9 @@ def collect_officetel_presale(batch_size: int = 1000, scheduler_job_id: str | No
             fields = {
                 "pblanc_no": row.get("PBLANC_NO"),
                 "house_nm": house_nm,
+                # HSSPLY_ADRES(공급위치) — V066(세션 417). 이 dict 는 신규 insert 와 기존 행
+                # 갱신 양쪽이 같이 쓰므로, 다음 정기 실행이 기존 620건도 채운다.
+                "address": row.get("HSSPLY_ADRES"),
                 "recruit_date": recruit_date,
                 # odcloud 오피스텔 오퍼레이션은 특별공급/1·2순위 접수기간이 분리돼
                 # 있지 않다 — 통합 청약접수기간(SUBSCRPT_RCEPT_*)을 general_rank1

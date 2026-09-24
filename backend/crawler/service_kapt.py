@@ -38,6 +38,7 @@ from crawler.env_common import _complete_job, _fail_job, _record_job
 from crawler.kapt_api import (
     INDIVIDUAL_COST_OPS,
     KaptApiError,
+    cost_calls_made,
     fetch_apt_basis_info,
     fetch_apt_list_page,
     fetch_common_cost,
@@ -932,6 +933,11 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         consecutive_failures = 0
         api_down: KaptApiError | None = None
         scan_capped = False
+        # 호출 계측 — 미공개 단지가 **실제로** 쓴 콜 수(설계값 월당 1콜이 지켜지나)와
+        # 이번 회차 관리비 호출 총수. 세션 417 전에는 조기 이탈이 한 번도 안 섰는데
+        # 로그에 콜 수가 없어 쿼터 카운터를 역산해야만 알 수 있었다.
+        run_calls_start = cost_calls_made()
+        empty_calls = 0
         for mapping in queue:
             # 슬롯: 수집·실패만 센다. 미공개는 3콜뿐이라 슬롯을 먹이면 미공개가 앞줄에
             # 몰린 날 수집이 0건으로 끝난다.
@@ -944,6 +950,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                     empty, _EMPTY_SCAN_CAP,
                 )
                 break
+            calls_before = cost_calls_made()
             try:
                 breakdown, used_month = {}, None
                 for month in _to_try(mapping.complex_no):
@@ -961,6 +968,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                     #   "미공개가 드문드문 섞인 정상 회차" 가 조기 중단될 수 있다.
                     consecutive_failures = 0
                     empty += 1
+                    empty_calls += cost_calls_made() - calls_before
                     continue
 
                 household = mapping.kapt_household_count
@@ -1011,6 +1019,15 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         # 은 별도 트랜잭션이 아니라 같은 세션이라, 먼저 commit 해두지 않으면 쿼터 중단
         # 시 그날 수집분이 통째로 롤백될 수 있다.
         db.commit()
+
+        # 호출 집계 한 줄 — 중단·완료 어느 경로든 남도록 분기 전에 찍는다.
+        # 정상이면 미공개 단지당 평균 ≈ 후보월 수(3) 이하, 17 근처면 조기 이탈이 또 안 선 것.
+        logger.info(
+            "[kapt_costs] 호출 집계: 미공개 %d단지가 %d콜 사용(단지당 평균 %.1f콜), "
+            "이번 회차 관리비 호출 총 %d콜",
+            empty, empty_calls, (empty_calls / empty) if empty else 0.0,
+            cost_calls_made() - run_calls_start,
+        )
 
         # 훑은 단지 수 = 수집 + 실패 + 미공개. 선자르기(`targets[:batch_size]`)가 없어져
         # `len(targets)` 를 대신한다. 잔여는 "아직 안 훑은 후보" = 큐 길이 - 훑은 수.

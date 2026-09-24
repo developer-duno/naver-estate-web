@@ -2433,3 +2433,150 @@ def test_collect_costs_canary_sample_stays_within_candidate_window(db, monkeypat
     from db.models import CrawlJob
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
     assert job.status == "failed"
+
+
+# ── 미공개 응답의 실제 모양 = "값이 전부 null 인 item" (세션 417) ────────────────────
+#
+# #545(세션 414)의 조기 이탈은 미공개를 "빈 body" 로 가정했고 위 T1~T6 도 전부 빈 body
+# 로 재서 초록이었다. 그런데 실제 K-apt 는 미공개 (단지, 달)에 **키는 다 있고 값이 전부
+# null 인 item** 을 준다 — `if not item` 에 안 걸려 조기 이탈이 실전에서 한 번도 서지
+# 않았고, 미공개 단지가 월마다 공용 17콜씩(3개월 51콜) 태웠다(09-24 회차 26,351콜).
+# 아래 픽스처는 2026-09-24 라이브 원문 그대로다(KaptAPI.call_api 반환값, 4콜).
+# 호출 수는 전부 **API 층(KaptAPI.call_api) 스파이**로 센다 — 헬퍼(fetch_cost_item)를
+# 갈아끼우면 그 안의 미공개 판정을 한 줄도 안 지나 장식 테스트가 된다(세션 415 교훈).
+
+# A10022507 · 202606 · getHsmpLaborCostInfoV3 (미공개)
+RAW_BLANK_LABOR = {"response": {"body": {"item": {
+    "kaptCode": None, "kaptName": None, "pay": None, "sundryCost": None, "bonus": None,
+    "pension": None, "accidentPremium": None, "employPremium": None,
+    "nationalPension": None, "healthPremium": None, "welfareBenefit": None,
+}}, "header": {"resultCode": "00", "resultMsg": "NORMAL SERVICE."}}}
+
+# A10022507 · 202606 · getHsmpTaxdueInfoV3 (미공개 — 둘째 op 도 같은 모양)
+RAW_BLANK_TAXDUE = {"response": {"body": {"item": {
+    "kaptCode": None, "kaptName": None, "electCost": None, "telCost": None,
+    "postageCost": None, "taxrestCost": None,
+}}, "header": {"resultCode": "00", "resultMsg": "NORMAL SERVICE."}}}
+
+# A50630215 · 202606 · getHsmpLaborCostInfoV3 (공개 — 대조군)
+RAW_PUBLISHED_LABOR = {"response": {"body": {"item": {
+    "kaptCode": "A50630215", "kaptName": "건영아파트", "pay": 7190420,
+    "sundryCost": 1088560, "bonus": 0, "pension": 924360, "accidentPremium": 78460,
+    "employPremium": 94710, "nationalPension": 250360, "healthPremium": 335140,
+    "welfareBenefit": 300000,
+}}, "header": {"resultCode": "00", "resultMsg": "NORMAL SERVICE."}}}
+
+# 공개 단지의 나머지 op 용 일반 응답(값 있음)
+RAW_PUBLISHED_GENERIC = {"response": {"body": {"item": {
+    "kaptCode": "A50630215", "kaptName": "건영아파트", "someCost": 100,
+}}, "header": {"resultCode": "00", "resultMsg": "NORMAL SERVICE."}}}
+
+
+def _spy_call_api(monkeypatch, responder):
+    """KaptAPI.call_api 를 스파이로 교체 — 나간 URL 을 순서대로 기록해 돌려준다."""
+    calls = []
+
+    def fake_call(cls, url, params):
+        calls.append(url)
+        return responder(url)
+
+    monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(fake_call))
+    return calls
+
+
+def test_blank_item_first_op_stops_after_one_call(monkeypatch):
+    """(a) 첫 op 가 실제 미공개 원문(값 전부 null) → 그 달 공용은 1콜로 끝, 빈 dict.
+
+    뮤테이션: `fetch_cost_item` 의 `_is_blank_item` 판정을 지우면 17콜이 나가 FAIL.
+    """
+    calls = _spy_call_api(monkeypatch, lambda url: RAW_BLANK_LABOR)
+
+    assert kapt_api.fetch_common_cost("A10022507", "202606") == {}
+    assert len(calls) == 1, "미공개인데 공용 op 를 %d콜 불렀다(기대 1)" % len(calls)
+    assert calls[0].endswith("/" + kapt_api.COMMON_COST_OPS[0])
+
+
+def test_blank_item_unpublished_complex_three_calls_and_logged(db, monkeypatch, caplog):
+    """(a) 통합: 실제 미공개 원문 단지 → 후보월마다 1콜(총 3콜) · 다음 후보월로 진행.
+
+    회차 요약 로그에 "미공개 N단지가 M콜" 이 실제 소비량으로 찍히는지도 함께 본다 —
+    다음 회차(09-25 06:20) 판정을 로그 한 줄로 하기 위한 계측이다.
+    """
+    import logging
+
+    _make_complex(db, complex_no="8801")
+    _seed_mapping(db, complex_no="8801", kapt_code="A10022507")
+    calls = _spy_call_api(monkeypatch, lambda url: RAW_BLANK_LABOR)
+
+    with caplog.at_level(logging.INFO, logger="crawler.service_kapt"):
+        result = collect_kapt_costs(batch_size=10)
+
+    months = candidate_cost_months()
+    assert len(calls) == len(months) == 3, "미공개 단지 호출 %d콜(기대 3)" % len(calls)
+    assert all(u.endswith("/" + kapt_api.COMMON_COST_OPS[0]) for u in calls)
+    assert result["empty"] == 1 and result["collected"] == 0 and result["failed"] == 0
+    assert db.query(KaptManagementCost).count() == 0
+    assert "미공개 1단지가 3콜 사용" in caplog.text
+    assert "이번 회차 관리비 호출 총 3콜" in caplog.text
+
+
+def test_published_first_op_with_some_blank_ops_collects_partial(monkeypatch):
+    """(b) 첫 op 공개(실제 원문) · 둘째 op 만 값 전부 null → 둘째만 빼고 끝까지 수집.
+
+    조기 이탈이 "아무 빈 op" 로 넓어지면 셋째 op 부터 안 불려 FAIL — 첫 op 전용 고정.
+    """
+    second = kapt_api.COMMON_COST_OPS[1]
+
+    def responder(url):
+        if url.endswith("/" + kapt_api.COMMON_COST_OPS[0]):
+            return RAW_PUBLISHED_LABOR
+        if url.endswith("/" + second):
+            return RAW_BLANK_TAXDUE
+        return RAW_PUBLISHED_GENERIC
+
+    calls = _spy_call_api(monkeypatch, responder)
+
+    result = kapt_api.fetch_common_cost("A50630215", "202606")
+
+    assert len(calls) == len(kapt_api.COMMON_COST_OPS) == 17
+    assert second not in result
+    assert len(result) == 16
+    assert result[kapt_api.COMMON_COST_OPS[0]] == 7190420
+
+
+def test_first_op_call_failure_still_counts_as_failure(db, monkeypatch):
+    """(c) 첫 op 호출 실패(응답 없음) → 미공개로 삼키지 않고 failed · 1콜에서 멈춤.
+
+    실패를 빈 응답처럼 다루면 다음 후보월로 내려가 2·3콜을 더 태우고 empty 로 새는데,
+    그러면 다음 회차 재시도 대상이라는 사실이 로그·잡 상태에서 사라진다.
+    """
+    _make_complex(db, complex_no="8802")
+    _seed_mapping(db, complex_no="8802", kapt_code="A10022507")
+    calls = _spy_call_api(monkeypatch, lambda url: None)
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert len(calls) == 1, "첫 op 실패 뒤에도 %d콜 더 나감" % (len(calls) - 1)
+    assert result["failed"] == 1 and result["empty"] == 0 and result["collected"] == 0
+
+
+def test_probe_treats_blank_item_as_unpublished(monkeypatch):
+    """카나리도 같은 판정 — 값 전부 null 인 응답을 "살아있다"로 오판하지 않는다."""
+    calls = _spy_call_api(monkeypatch, lambda url: RAW_BLANK_LABOR)
+    assert kapt_api.fetch_common_cost_probe("A10022507", "202606") is None
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    "item, blank",
+    [
+        (RAW_BLANK_LABOR["response"]["body"]["item"], True),   # 실제 미공개 원문
+        ({"kaptCode": None, "memo": "  "}, True),              # 공백 문자열도 비어 있음
+        ({"kaptCode": "K1"}, False),                           # 식별값만 있어도 공개
+        ({"kaptCode": None, "bonus": 0}, False),               # 0원은 값이다
+        ({"kaptCode": None, "pay": None, "bonus": "0"}, False),
+    ],
+)
+def test_is_blank_item_boundaries(item, blank):
+    """"전부 비어야" 미공개 — 하나라도 값(0 포함)이 있으면 공개."""
+    assert kapt_api._is_blank_item(item) is blank

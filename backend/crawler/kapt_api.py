@@ -23,7 +23,9 @@ data.go.kr 1613000 계열 3개 서비스를 한 모듈에서 다룬다 (전부 �
 
 ⚠ 3상태 구분 (이 모듈의 핵심 계약): 관리비 호출 결과는 반드시
   (a) 성공 + 데이터 있음   → item dict
-  (b) 성공 + 데이터 없음   → None ("정상 미공개" — 이 달·이 항목은 원래 없다)
+  (b) 성공 + 데이터 없음   → None ("정상 미공개" — 이 달·이 항목은 원래 없다.
+                             실제 응답은 빈 body 가 아니라 **값이 전부 null 인 item**
+                             이다 — `_is_blank_item` 참조)
   (c) 호출 실패           → `KaptApiError` 예외 (쿼터 초과·키 오류·점검·파싱 실패)
 셋으로 갈린다. (b)와 (c)를 둘 다 None 으로 뭉개면, 공용이 통째로 실패하고
 개별만 성공한 회차에서 "공용관리비 0원" 인 반쪽 총액이 사실처럼 저장되고
@@ -263,18 +265,57 @@ def fetch_apt_basis_info(kapt_code: str) -> dict | None:
     return item if isinstance(item, dict) else None
 
 
+def _is_blank_item(item: dict) -> bool:
+    """item 의 값이 **전부** 비어 있나(None 또는 공백 문자열) — K-apt 의 실제 "미공개" 모양.
+
+    ⚠ K-apt 관리비 API 는 미공개 (단지, 달)에 빈 body 를 주지 않는다. HTTP 200 +
+    resultCode "00" + **키는 다 있고 값이 전부 null 인 item** 을 준다(kaptCode 도 null).
+    2026-09-24 실측 원문(A10022507 · 202606/202605 · 공용 첫·둘째 op):
+      {"item": {"kaptCode": null, "kaptName": null, "pay": null, "sundryCost": null, ...}}
+    옛 판정 `if not item` 은 이 dict 를 "공개"로 봐, 첫 op 조기 이탈이 한 번도 서지 않고
+    미공개 단지가 월마다 공용 17콜씩(3개월 51콜) 태웠다(09-24 회차 미공개 299단지 = 15,351콜).
+
+    "전부" 비어야만 미공개다 — kaptCode 같은 값이 하나라도 있으면 공개로 본다
+    (응답이 온 이상 금액 파싱 실패는 미공개가 아니다 — `_collect_ops` docstring).
+    """
+    for value in item.values():
+        if value is None:
+            continue
+        if isinstance(value, str) and not value.strip():
+            continue
+        return False
+    return True
+
+
+# 관리비 오퍼레이션 **호출 시도 수** 누적 — 회차 요약 로그가 "미공개 단지가 실제로 몇 콜을
+# 썼나"를 찍기 위한 계측(설계값 월당 1콜이 실제로 지켜지는지 로그만으로 판정하려고).
+# 호출 **직전**에 올리므로 실패한 호출도 센다 — 쿼터 카운터(call_api 당 1)와 같은 단위.
+# 스케줄러 잡은 한 번에 하나만 돌아 동시성 문제는 없다. 차이값(전후 뺄셈)으로만 쓴다.
+_cost_call_count = 0
+
+
+def cost_calls_made() -> int:
+    """지금까지 `fetch_cost_item` 이 시도한 관리비 호출 수(프로세스 누적)."""
+    return _cost_call_count
+
+
 def fetch_cost_item(base_url: str, op: str, kapt_code: str, search_date: str) -> dict | None:
     """관리비 오퍼레이션 1건 호출 → item dict.
 
     (b) 정상 미공개면 None, (c) 호출 실패면 `KaptApiError` — 둘을 절대 뭉개지 않는다.
+    (b)는 빈 body 와 **값이 전부 null 인 item** 두 모양 모두다(`_is_blank_item`).
     """
+    global _cost_call_count
+    _cost_call_count += 1
     body = KaptAPI._body_or_raise(
         f"{base_url}/{op}", {"kaptCode": kapt_code, "searchDate": search_date}, op=op
     )
     if not body:
         return None
     item = body.get("item")
-    return item if isinstance(item, dict) else None
+    if not isinstance(item, dict) or _is_blank_item(item):
+        return None
+    return item
 
 
 def fetch_common_cost(kapt_code: str, search_date: str) -> dict[str, int]:
@@ -329,7 +370,9 @@ def _collect_ops(base_url, ops, kapt_code, search_date, extractor) -> dict[str, 
     ⚠ 조기 이탈은 **첫 op 에만** 건다. 뒤쪽 op 가 비는 것은 기존대로 그 항목만
     건너뛴다(`continue`) — 위 전수 실측에 없는 조합이라도 값을 버리지 않기 위해.
     첫 op 가 item 은 줬는데 금액 파싱이 None 인 경우도 "공개"로 보고 계속한다
-    (응답이 온 이상 미공개가 아니다).
+    (응답이 온 이상 미공개가 아니다). 단 **값이 전부 null 인 item** 은 K-apt 의 실제
+    미공개 모양이라 `fetch_cost_item` 이 이미 None 으로 바꿔 준다 — 세션 417 전까지는
+    이 변환이 없어 조기 이탈이 실전에서 한 번도 서지 않았다(`_is_blank_item`).
     """
     result: dict[str, int] = {}
     for index, op in enumerate(ops):

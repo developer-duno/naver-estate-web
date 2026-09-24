@@ -43,8 +43,8 @@ _BASIS_URL = "https://apis.data.go.kr/1613000/AptBasisInfoServiceV5"
 _CMNUSE_URL = "https://apis.data.go.kr/1613000/AptCmnuseManageCostServiceV3"
 _INDVDLZ_URL = "https://apis.data.go.kr/1613000/AptIndvdlzManageCostServiceV3"
 
-# 공용관리비 V3 오퍼레이션 17종. 각 응답의 금액 필드명이 op 마다 다르므로
-# (guardCost·cleanCost·…) 이름을 하드코딩하지 않고 `_extract_amount` 로 뽑는다.
+# 공용관리비 V3 오퍼레이션 17종. 각 op 의 금액 칸 이름·개수는 `_COST_AMOUNT_FIELDS` 에
+# 명시돼 있고 `_extract_amount` 가 그 칸들을 **전부 더한다**(세션 417 정정).
 COMMON_COST_OPS: tuple[str, ...] = (
     "getHsmpLaborCostInfoV3",
     "getHsmpTaxdueInfoV3",
@@ -75,11 +75,50 @@ INDIVIDUAL_COST_OPS: tuple[str, ...] = (
     "getHsmpWaterCostInfoV3",
 )
 
+# 공용관리비 op → 그 op 의 **금액 칸 전부**. `_extract_amount` 가 이 칸들을 더한다.
+#
+# ⚠ 세션 417 이전엔 "식별 칸을 뺀 첫 숫자 칸 하나"만 저장했다. 1칸 op 는 그래도 맞았지만
+# 다칸 op 5종은 첫 칸만 남아 월 관리비가 과소 집계됐다 — 인건비는 급여(pay) 하나만,
+# 제세공과금은 전기료(electCost, 대개 0) 하나만 저장돼 통신료·우편료가 통째로 빠졌다.
+# 실측 원문(A50630215 · 202606, 2026-09-24): 인건비 9칸 합 10,262,010 인데 7,190,420 저장.
+#
+# 칸 이름은 그 원문 17건에서 그대로 옮겼다. 전 칸이 원 단위 금액이다(건수·비율·코드 칸 0):
+#   인건비       급여·제수당·상여금·퇴직금·산재보험·고용보험·국민연금·건강보험·식대 등 복리후생
+#   제세공과금   전기료·통신료·우편료·세금 등
+#   차량유지비   연료비·수리비·보험료·기타 차량유지비
+#   그밖의부대비용 관리용품 구입비·회계감사비(전문가 자문)·잡비
+#   사무비       일반사무용품비·도서인쇄비·교통통신비
+# 사전에 없는 op 는 저장하지 않고 경고한다(조용히 추측하지 않는다) — op 를 새로 붙이면
+# 원문을 한 번 받아 이 표부터 채울 것. 가드 = tests/test_kapt.py 의 전 op 등록 확인.
+_COST_AMOUNT_FIELDS: dict[str, tuple[str, ...]] = {
+    "getHsmpLaborCostInfoV3": (
+        "pay", "sundryCost", "bonus", "pension", "accidentPremium",
+        "employPremium", "nationalPension", "healthPremium", "welfareBenefit",
+    ),
+    "getHsmpTaxdueInfoV3": ("electCost", "telCost", "postageCost", "taxrestCost"),
+    "getHsmpVhcleMntncCostInfoV3": ("fuelCost", "refairCost", "carInsurance", "carEtc"),
+    "getHsmpEtcCostInfoV3": ("careItemCost", "accountingCost", "hiddenCost"),
+    "getHsmpOfcrkCostInfoV3": ("officeSupply", "bookSupply", "transportCost"),
+    "getHsmpClothingCostInfoV3": ("clothesCost",),
+    "getHsmpEduTraingCostInfoV3": ("eduCost",),
+    "getHsmpCleaningCostInfoV3": ("cleanCost",),
+    "getHsmpGuardCostInfoV3": ("guardCost",),
+    "getHsmpDisinfectionCostInfoV3": ("disinfCost",),
+    "getHsmpElevatorMntncCostInfoV3": ("elevCost",),
+    "getHsmpHomeNetworkMntncCostInfoV3": ("hnetwCost",),
+    "getHsmpRepairsCostInfoV3": ("lrefCost1",),
+    "getHsmpFacilityMntncCostInfoV3": ("lrefCost2",),
+    "getHsmpSafetyCheckUpCostInfoV3": ("lrefCost3",),
+    "getHsmpDisasterPreventionCostInfoV3": ("lrefCost4",),
+    "getHsmpConsignManageFeeInfoV3": ("manageCost",),
+}
+
 # 응답 dict 에서 금액이 아닌 필드 — 금액 추출 시 건너뛴다.
 #
-# ⚠ 여기에 빠진 "숫자형 메타"는 그대로 금액이 된다. `_extract_amount` 가 필드명을
-# 안 믿고 "첫 숫자 필드"를 쓰는 방어적 파서라, 금액이 아닌 숫자가 응답 앞쪽에
-# 오면 그게 관리비로 저장되기 때문이다(예: searchDate "202605" → 20만원대 금액).
+# ⚠ 개별사용료 `_extract_paired_amount` 는 칸 이름을 안 믿고 "이 목록을 뺀 숫자 전부"를
+# 더하므로, 여기에 빠진 숫자형 메타는 그대로 요금에 얹힌다(예: searchDate "202605").
+# 공용 `_extract_amount` 는 `_COST_AMOUNT_FIELDS` 의 칸만 읽으므로 메타가 섞일 수 없고,
+# 이 목록은 거기선 "모르는 칸 경고"에서 빼는 용도로만 쓴다.
 # kaptCode/kaptName 은 문자열이라 애초에 위험이 낮았고, 진짜 위험한 건
 # **숫자로 변환되는 메타**다:
 #   - searchDate  요청 조회월(YYYYMM)을 응답이 그대로 되돌려주는 관행
@@ -348,7 +387,8 @@ def fetch_individual_cost(kapt_code: str, search_date: str) -> dict[str, int]:
     `fetch_common_cost` 와 동일하게, 한 op 라도 실패하면 `KaptApiError`.
     """
     return _collect_ops(
-        _INDVDLZ_URL, INDIVIDUAL_COST_OPS, kapt_code, search_date, _extract_paired_amount
+        _INDVDLZ_URL, INDIVIDUAL_COST_OPS, kapt_code, search_date,
+        lambda _op, item: _extract_paired_amount(item),
     )
 
 
@@ -373,6 +413,8 @@ def _collect_ops(base_url, ops, kapt_code, search_date, extractor) -> dict[str, 
     (응답이 온 이상 미공개가 아니다). 단 **값이 전부 null 인 item** 은 K-apt 의 실제
     미공개 모양이라 `fetch_cost_item` 이 이미 None 으로 바꿔 준다 — 세션 417 전까지는
     이 변환이 없어 조기 이탈이 실전에서 한 번도 서지 않았다(`_is_blank_item`).
+
+    `extractor(op, item)` — 공용은 op 마다 금액 칸이 달라 op 를 함께 넘긴다.
     """
     result: dict[str, int] = {}
     for index, op in enumerate(ops):
@@ -381,31 +423,36 @@ def _collect_ops(base_url, ops, kapt_code, search_date, extractor) -> dict[str, 
             if index == 0:
                 return {}  # (b) 첫 op 미공개 = 이 서비스·월 전체 미공개
             continue  # (b) 정상 미공개 — 이 항목만 건너뛴다
-        amount = extractor(item)
+        amount = extractor(op, item)
         if amount is not None:
             result[op] = amount
     return result
 
 
-def _extract_amount(item: dict) -> int | None:
-    """응답 dict 에서 금액 1개 추출 — op 마다 필드명이 달라 이름을 안 믿는다.
+def _extract_amount(op: str, item: dict) -> int | None:
+    """공용관리비 op 1건의 금액 = `_COST_AMOUNT_FIELDS[op]` 칸의 **합**.
 
-    `_NON_AMOUNT_KEYS`(식별·메타 필드)를 제외한 **첫 번째 숫자 변환 가능 필드**를
-    금액으로 본다. (guardCost·cleanCost·laborCost… 17개 이름을 하드코딩하면 API 가
-    필드명을 바꾸거나 op 가 추가될 때 조용히 0원이 된다 — 방어적 파서를 택한 이유.)
-    dict 는 파이썬 3.7+ 삽입 순서를 보존하므로 "첫 필드"가 결정론적이다.
-
-    ⚠ 순서 의존이라 제외 목록이 곧 정확도다 — 응답에 새 숫자형 메타가 늘면
-    그게 금액으로 둔갑한다. 새 오퍼레이션을 추가할 때 응답 키를 실측해
-    `_NON_AMOUNT_KEYS` 를 함께 보강할 것.
+    - 사전에 없는 op → 경고 + None(저장 안 함). 옛 "첫 숫자 칸" 추측으로 돌아가지 않는다.
+    - 값이 None(또는 숫자 아님)인 칸은 0 이 아니라 "없음"으로 건너뛴다.
+      칸이 **전부** 없으면 None — 그 항목은 저장하지 않는다(전 칸 null item 은
+      이미 `fetch_cost_item` 이 미공개로 걸러 주고, 여기 오는 것은 부분 null 뿐이다).
+    - 사전에 없는 칸이 응답에 오면 경고만 남긴다 — K-apt 가 칸을 늘리거나 이름을 바꾸면
+      그 금액이 빠진 채 저장되므로, 합계는 그대로 내되 로그로 드러낸다.
     """
-    for key, value in item.items():
-        if key in _NON_AMOUNT_KEYS:
+    fields = _COST_AMOUNT_FIELDS.get(op)
+    if fields is None:
+        logger.warning("[kapt] 금액 칸 사전에 없는 op — 저장 안 함 (op=%s, 칸=%s)", op, list(item))
+        return None
+    unknown = [k for k in item if k not in fields and k not in _NON_AMOUNT_KEYS]
+    if unknown:
+        logger.warning("[kapt] 사전에 없는 응답 칸 — 합계에서 빠짐 (op=%s, 칸=%s)", op, unknown)
+    total = None
+    for field in fields:
+        amount = _safe_int(item.get(field))
+        if amount is None:
             continue
-        amount = _safe_int(value)
-        if amount is not None:
-            return amount
-    return None
+        total = amount if total is None else total + amount
+    return total
 
 
 def _extract_paired_amount(item: dict) -> int | None:
@@ -413,11 +460,11 @@ def _extract_paired_amount(item: dict) -> int | None:
 
     한쪽만 값이 있으면 그 한쪽만 (둘 다 없으면 None — "미공개"로 취급).
     필드명(heatC/heatP…)을 하드코딩하지 않고 `_NON_AMOUNT_KEYS` 를 뺀 나머지
-    숫자를 전부 더한다 — `_extract_amount` 와 같은 이유의 방어적 파싱.
+    숫자를 전부 더한다(5 op 모두 원문 실측 결과 C·P 두 칸뿐이라 결과가 같다 —
+    세션 417, A50630215 · 202606).
 
-    ⚠ 여기선 "전부 더하기"라 메타 오염이 더 나쁘다 — 첫 필드만 쓰는
-    `_extract_amount` 와 달리, 제외 목록에 없는 숫자 메타는 순서와 무관하게
-    무조건 요금에 얹힌다.
+    ⚠ "전부 더하기"라 제외 목록에 없는 숫자 메타는 순서와 무관하게 무조건 요금에
+    얹힌다 — 공용 `_extract_amount` 처럼 칸 사전을 쓰지 않는 쪽의 대가.
     """
     total = None
     for key, value in item.items():

@@ -683,16 +683,16 @@ def test_kapt_endpoint_404_is_not_cached(db, client):
 # ─────────────────────────── API 파서 ───────────────────────────
 
 
-@pytest.mark.parametrize("item,expected", [
-    ({"kaptCode": "A1", "kaptName": "이름", "guardCost": 7602810}, 7602810),
-    ({"kaptCode": "A1", "kaptName": "이름", "cleaningCost": "2,000,000"}, 2000000),
-    ({"kaptCode": None, "kaptName": None, "guardCost": None}, None),
+@pytest.mark.parametrize("op,item,expected", [
+    ("getHsmpGuardCostInfoV3", {"kaptCode": "A1", "kaptName": "이름", "guardCost": 7602810}, 7602810),
+    ("getHsmpCleaningCostInfoV3", {"kaptCode": "A1", "kaptName": "이름", "cleanCost": "2,000,000"}, 2000000),
+    ("getHsmpGuardCostInfoV3", {"kaptCode": None, "kaptName": None, "guardCost": None}, None),
 ])
-def test_extract_amount_is_field_name_agnostic(item, expected):
-    """op 마다 다른 금액 필드명을 이름으로 찾지 않는다 — 식별 필드만 제외."""
+def test_extract_amount_reads_fields_from_op_table(op, item, expected):
+    """공용 금액은 op 별 칸 사전(`_COST_AMOUNT_FIELDS`)의 칸을 읽는다 — 쉼표 문자열·None 포함."""
     from crawler.kapt_api import _extract_amount
 
-    assert _extract_amount(item) == expected
+    assert _extract_amount(op, item) == expected
 
 
 def test_extract_paired_amount_sums_common_and_private():
@@ -995,13 +995,14 @@ def test_match_job_total_excludes_skipped(db, monkeypatch):
 def test_extract_amount_ignores_search_date_meta():
     """응답에 searchDate 같은 숫자형 메타가 먼저 와도 금액으로 쓰지 않는다.
 
-    '식별 필드 제외 첫 숫자 필드'라는 규칙은 응답 키 순서에 의존하므로,
-    금액이 아닌 숫자 메타가 앞에 오면 202605(연월)를 관리비로 저장한다.
+    옛 '식별 필드 제외 첫 숫자 필드' 규칙은 응답 키 순서에 의존해, 금액이 아닌 숫자
+    메타가 앞에 오면 202605(연월)를 관리비로 저장했다. 칸 사전은 그 칸을 아예 안 읽는다.
     """
     from crawler.kapt_api import _extract_amount
 
     assert _extract_amount(
-        {"kaptCode": "A1", "searchDate": "202605", "guardCost": "1234"}
+        "getHsmpGuardCostInfoV3",
+        {"kaptCode": "A1", "searchDate": "202605", "guardCost": "1234"},
     ) == 1234
 
 
@@ -1261,6 +1262,13 @@ def test_body_or_raise_non_quota_error_not_flagged(monkeypatch):
     assert exc.value.is_quota is False
 
 
+def _any_amount(_op, item):
+    """`_collect_ops` 흐름 테스트용 추출기 — 가짜 op("a"·"b"·"c")는 칸 사전에 없으므로
+    실제 공용 추출기 대신 '메타 뺀 숫자 합'(개별 파서)을 쓴다. 이 테스트들이 보는 것은
+    호출 흐름(조기 이탈·실패 전파)이지 금액 칸이 아니다."""
+    return kapt_api._extract_paired_amount(item)
+
+
 def test_collect_ops_propagates_failure_without_partial(monkeypatch):
     """_collect_ops 는 한 op 라도 실패하면 부분 dict 대신 예외를 올린다."""
     seen = []
@@ -1274,7 +1282,7 @@ def test_collect_ops_propagates_failure_without_partial(monkeypatch):
     monkeypatch.setattr(kapt_api, "fetch_cost_item", fake)
     with pytest.raises(KaptApiError):
         kapt_api._collect_ops("http://x", ("a", "b", "c"), "K1", "202605",
-                              kapt_api._extract_amount)
+                              _any_amount)
     # 실패 즉시 빠져나와 남은 op("c")를 부르지 않는다 — 쿼터 보호.
     assert seen == ["a", "b"]
 
@@ -1299,7 +1307,7 @@ def test_collect_ops_first_op_empty_stops_immediately(monkeypatch):
 
     monkeypatch.setattr(kapt_api, "fetch_cost_item", fake)
     result = kapt_api._collect_ops("http://x", ("a", "b", "c"), "K1", "202605",
-                                   kapt_api._extract_amount)
+                                   _any_amount)
 
     assert result == {}
     assert seen == ["a"], "첫 op 미공개인데 남은 op 까지 호출됨"
@@ -1318,7 +1326,7 @@ def test_collect_ops_later_empty_op_does_not_stop(monkeypatch):
 
     monkeypatch.setattr(kapt_api, "fetch_cost_item", fake)
     result = kapt_api._collect_ops("http://x", ("a", "b", "c"), "K1", "202605",
-                                   kapt_api._extract_amount)
+                                   _any_amount)
 
     assert seen == ["a", "b", "c"], "중간 빈 op 에서 남은 op 이 잘림"
     assert result == {"a": 100, "c": 100}, "빈 op 만 제외되고 나머지는 남아야"
@@ -1336,7 +1344,7 @@ def test_collect_ops_first_op_failure_still_raises(monkeypatch):
     monkeypatch.setattr(kapt_api, "fetch_cost_item", fake)
     with pytest.raises(KaptApiError):
         kapt_api._collect_ops("http://x", ("a", "b", "c"), "K1", "202605",
-                              kapt_api._extract_amount)
+                              _any_amount)
 
 
 def test_collect_ops_first_op_unparsable_amount_continues(monkeypatch):
@@ -1353,7 +1361,7 @@ def test_collect_ops_first_op_unparsable_amount_continues(monkeypatch):
 
     monkeypatch.setattr(kapt_api, "fetch_cost_item", fake)
     result = kapt_api._collect_ops("http://x", ("a", "b", "c"), "K1", "202605",
-                                   kapt_api._extract_amount)
+                                   _any_amount)
 
     assert seen == ["a", "b", "c"]
     assert result == {"b": 100, "c": 100}
@@ -1389,8 +1397,11 @@ def test_fetch_costs_for_month_individual_empty_keeps_common(monkeypatch):
     def fake_call(cls, url, params):
         calls.append(url)
         if "AptCmnuseManageCostServiceV3" in url:
+            op = url.rsplit("/", 1)[-1]
+            # 공용은 op 별 칸 사전의 칸 이름으로 줘야 금액이 잡힌다(세션 417).
+            fields = kapt_api._COST_AMOUNT_FIELDS[op]
             return {"response": {"header": {"resultCode": "00"},
-                                 "body": {"item": {"someCost": "100"}}}}
+                                 "body": {"item": {f: "100" for f in fields}}}}
         return {"response": {"header": {"resultCode": "00"}, "body": {}}}
 
     monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(fake_call))
@@ -2466,11 +2477,6 @@ RAW_PUBLISHED_LABOR = {"response": {"body": {"item": {
     "welfareBenefit": 300000,
 }}, "header": {"resultCode": "00", "resultMsg": "NORMAL SERVICE."}}}
 
-# 공개 단지의 나머지 op 용 일반 응답(값 있음)
-RAW_PUBLISHED_GENERIC = {"response": {"body": {"item": {
-    "kaptCode": "A50630215", "kaptName": "건영아파트", "someCost": 100,
-}}, "header": {"resultCode": "00", "resultMsg": "NORMAL SERVICE."}}}
-
 
 def _spy_call_api(monkeypatch, responder):
     """KaptAPI.call_api 를 스파이로 교체 — 나간 URL 을 순서대로 기록해 돌려준다."""
@@ -2532,7 +2538,10 @@ def test_published_first_op_with_some_blank_ops_collects_partial(monkeypatch):
             return RAW_PUBLISHED_LABOR
         if url.endswith("/" + second):
             return RAW_BLANK_TAXDUE
-        return RAW_PUBLISHED_GENERIC
+        # 나머지 op 는 같은 단지·달의 실측 원문(아래 `_RAW_A50630215_202606`, 세션 417).
+        op = url.rsplit("/", 1)[-1]
+        return {"response": {"body": {"item": dict(_RAW_A50630215_202606[op])},
+                             "header": {"resultCode": "00", "resultMsg": "NORMAL SERVICE."}}}
 
     calls = _spy_call_api(monkeypatch, responder)
 
@@ -2541,7 +2550,9 @@ def test_published_first_op_with_some_blank_ops_collects_partial(monkeypatch):
     assert len(calls) == len(kapt_api.COMMON_COST_OPS) == 17
     assert second not in result
     assert len(result) == 16
-    assert result[kapt_api.COMMON_COST_OPS[0]] == 7190420
+    # 인건비 = 9칸 합. 세션 417 전엔 첫 칸(급여 7,190,420)만 저장했고 이 단언도 그 값을
+    # 정답으로 박제하고 있었다(testing.md "결함 박제 테스트").
+    assert result[kapt_api.COMMON_COST_OPS[0]] == 10_262_010
 
 
 def test_first_op_call_failure_still_counts_as_failure(db, monkeypatch):
@@ -2580,3 +2591,171 @@ def test_probe_treats_blank_item_as_unpublished(monkeypatch):
 def test_is_blank_item_boundaries(item, blank):
     """"전부 비어야" 미공개 — 하나라도 값(0 포함)이 있으면 공개."""
     assert kapt_api._is_blank_item(item) is blank
+
+
+# ── 공용 금액 = 세부 칸 합 (세션 417) ────────────────────────────────────────
+#
+# 옛 파서는 "식별 칸을 뺀 첫 숫자 칸 하나"만 저장해 다칸 op 5종(인건비 9칸·제세공과금 4칸·
+# 차량유지비 4칸·그밖의부대비용 3칸·사무비 3칸)이 과소 집계됐다. 아래 원문은 공개 단지
+# A50630215(건영아파트)·202606 의 22 op 실측 응답 item 그대로다(2026-09-24, 키 순서 포함).
+
+_RAW_A50630215_202606 = {
+    "getHsmpLaborCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "pay": 7190420, "sundryCost": 1088560, "bonus": 0, "pension": 924360, "accidentPremium": 78460, "employPremium": 94710, "nationalPension": 250360, "healthPremium": 335140, "welfareBenefit": 300000},
+    "getHsmpTaxdueInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "electCost": 0, "telCost": 31180, "postageCost": 2000, "taxrestCost": 0},
+    "getHsmpVhcleMntncCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "fuelCost": 0, "refairCost": 0, "carInsurance": 0, "carEtc": 0},
+    "getHsmpEtcCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "careItemCost": 84900, "accountingCost": 0, "hiddenCost": 22900},
+    "getHsmpOfcrkCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "officeSupply": 0, "bookSupply": 97440, "transportCost": 15000},
+    "getHsmpClothingCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "clothesCost": 0},
+    "getHsmpEduTraingCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "eduCost": 0},
+    "getHsmpCleaningCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "cleanCost": 5161430},
+    "getHsmpGuardCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "guardCost": 11012010},
+    "getHsmpDisinfectionCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "disinfCost": 245000},
+    "getHsmpElevatorMntncCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "elevCost": 1320000},
+    "getHsmpHomeNetworkMntncCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "hnetwCost": 0},
+    "getHsmpRepairsCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "lrefCost1": 3435000},
+    "getHsmpFacilityMntncCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "lrefCost2": 665000},
+    "getHsmpSafetyCheckUpCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "lrefCost3": 0},
+    "getHsmpDisasterPreventionCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "lrefCost4": 0},
+    "getHsmpConsignManageFeeInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "manageCost": 319330},
+    "getHsmpHeatCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "heatC": "0", "heatP": "0"},
+    "getHsmpHotWaterCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "waterHotC": "0", "waterHotP": "0"},
+    "getHsmpGasRentalFeeInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "gasC": "0", "gasP": "0"},
+    "getHsmpElectricityCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "electC": "157860", "electP": "15989840"},
+    "getHsmpWaterCostInfoV3": {"kaptCode": "A50630215", "kaptName": "건영아파트", "waterCoolC": "267170", "waterCoolP": "6644740"},
+}
+
+# op → 정정 후 금액(원문 칸 합). 주석 = 옛 파서가 저장한 값(운영 DB 10465·202606 실측).
+_EXPECTED_A50630215_202606 = {
+    "getHsmpLaborCostInfoV3": 10_262_010,        # 옛 7,190,420 (급여 칸만)
+    "getHsmpTaxdueInfoV3": 33_180,               # 옛 0 (전기료 칸만)
+    "getHsmpVhcleMntncCostInfoV3": 0,            # 옛 0 (이 달은 4칸 전부 0)
+    "getHsmpEtcCostInfoV3": 107_800,             # 옛 84,900
+    "getHsmpOfcrkCostInfoV3": 112_440,           # 옛 0
+    "getHsmpClothingCostInfoV3": 0,
+    "getHsmpEduTraingCostInfoV3": 0,
+    "getHsmpCleaningCostInfoV3": 5_161_430,
+    "getHsmpGuardCostInfoV3": 11_012_010,
+    "getHsmpDisinfectionCostInfoV3": 245_000,
+    "getHsmpElevatorMntncCostInfoV3": 1_320_000,
+    "getHsmpHomeNetworkMntncCostInfoV3": 0,
+    "getHsmpRepairsCostInfoV3": 3_435_000,
+    "getHsmpFacilityMntncCostInfoV3": 665_000,
+    "getHsmpSafetyCheckUpCostInfoV3": 0,
+    "getHsmpDisasterPreventionCostInfoV3": 0,
+    "getHsmpConsignManageFeeInfoV3": 319_330,
+    "getHsmpHeatCostInfoV3": 0,
+    "getHsmpHotWaterCostInfoV3": 0,
+    "getHsmpGasRentalFeeInfoV3": 0,
+    "getHsmpElectricityCostInfoV3": 16_147_700,
+    "getHsmpWaterCostInfoV3": 6_911_910,
+}
+
+
+def test_cost_amount_fields_cover_every_common_op():
+    """공용 17 op 전부가 칸 사전에 있다 — 빠진 op 는 저장이 안 되므로(경고만) 여기서 막는다.
+
+    칸 이름이 식별·메타 목록(`_NON_AMOUNT_KEYS`)과 겹치면 안 되고, 원문 22 op 가 이 표와
+    같은 op 목록이어야 한다(원문 없이 표를 늘리지 않게).
+    """
+    assert set(kapt_api._COST_AMOUNT_FIELDS) == set(kapt_api.COMMON_COST_OPS)
+    for op, fields in kapt_api._COST_AMOUNT_FIELDS.items():
+        assert fields, op
+        assert not set(fields) & kapt_api._NON_AMOUNT_KEYS, op
+    assert set(_RAW_A50630215_202606) == (
+        set(kapt_api.COMMON_COST_OPS) | set(kapt_api.INDIVIDUAL_COST_OPS)
+    )
+    # 원문의 금액 칸 = 사전의 칸 (전부 0 인 op 도 칸 누락이 드러나게 — 차량유지비 4칸 등)
+    for op in kapt_api.COMMON_COST_OPS:
+        raw_fields = set(_RAW_A50630215_202606[op]) - kapt_api._NON_AMOUNT_KEYS
+        assert raw_fields == set(kapt_api._COST_AMOUNT_FIELDS[op]), op
+
+
+@pytest.mark.parametrize("op", list(_EXPECTED_A50630215_202606))
+def test_cost_amount_matches_raw_field_sum(op):
+    """22 op 각각: 실측 원문 → 저장 금액 = 표의 정정 후 값(세부 칸 합)."""
+    item = dict(_RAW_A50630215_202606[op])
+    if op in kapt_api.INDIVIDUAL_COST_OPS:
+        amount = kapt_api._extract_paired_amount(item)
+    else:
+        amount = kapt_api._extract_amount(op, item)
+    assert amount == _EXPECTED_A50630215_202606[op]
+
+
+@pytest.mark.parametrize("op", list(kapt_api.COMMON_COST_OPS))
+def test_extract_amount_sums_every_listed_field(op):
+    """칸마다 서로 다른 자릿수 값을 넣어, 한 칸이라도 빠지면 합이 달라지게 한다.
+
+    원문은 0 인 칸이 많아(차량유지비 4칸 전부 0) 칸 누락을 못 볼 수 있다 — 이 테스트가
+    모든 op 의 모든 칸을 보장한다(testing.md 세션372: 두 축이 우연히 같은 값이면 못 잡는다).
+    """
+    fields = kapt_api._COST_AMOUNT_FIELDS[op]
+    item = {"kaptCode": "A1", "kaptName": "n"}
+    item.update({f: 10 ** i for i, f in enumerate(fields)})
+    assert kapt_api._extract_amount(op, item) == sum(10 ** i for i in range(len(fields)))
+
+
+def test_extract_amount_unknown_op_warns_and_returns_none(caplog):
+    """사전에 없는 op 는 첫 칸을 추측하지 않고 None + 경고(저장 안 됨)."""
+    with caplog.at_level("WARNING", logger="crawler.kapt_api"):
+        assert kapt_api._extract_amount(
+            "getHsmpNewCostInfoV9", {"kaptCode": "A1", "newCost": 5000}
+        ) is None
+    assert "getHsmpNewCostInfoV9" in caplog.text
+
+
+def test_extract_amount_unknown_field_warns_but_keeps_known_sum(caplog):
+    """사전에 없는 칸이 응답에 새로 오면 합에서 빠진 채 경고 — 조용히 넘어가지 않는다."""
+    with caplog.at_level("WARNING", logger="crawler.kapt_api"):
+        amount = kapt_api._extract_amount(
+            "getHsmpTaxdueInfoV3",
+            {"kaptCode": "A1", "searchDate": "202606", "telCost": 100, "newTaxCost": 7},
+        )
+    assert amount == 100
+    assert "newTaxCost" in caplog.text
+    assert "searchDate" not in caplog.text, "메타 칸은 '모르는 칸' 경고 대상이 아니다"
+
+
+def test_extract_amount_partial_none_skips_and_all_none_is_none():
+    """None 칸은 0 이 아니라 '없음' — 나머지만 더한다. 전 칸 None 이면 None(저장 안 함)."""
+    op = "getHsmpOfcrkCostInfoV3"
+    assert kapt_api._extract_amount(
+        op, {"officeSupply": None, "bookSupply": "97,440", "transportCost": 15000}
+    ) == 112_440
+    assert kapt_api._extract_amount(
+        op, {"kaptCode": "A1", "officeSupply": None, "bookSupply": None, "transportCost": None}
+    ) is None
+
+
+def test_collect_costs_raw_a50630215_through_api_to_endpoint(db, client, monkeypatch):
+    """실배선 끝까지: 원문 22건(call_api mock) → 수집·저장 → /kapt 응답 합계.
+
+    화면값(total_cost·cost_per_household)이 항목 합의 합과 같은지 본다 — 옛 파서면
+    공용 29,433,090 · 세대당 150,841 로 저장됐다(운영 DB 10465·202606 실측).
+    """
+    _make_complex(db, complex_no="10465")
+    _seed_mapping(db, complex_no="10465", kapt_code="A50630215", households=348)
+
+    def fake_call(cls, url, params):
+        op = url.rsplit("/", 1)[-1]
+        return {"response": {"header": {"resultCode": "00"},
+                             "body": {"item": dict(_RAW_A50630215_202606[op])}}}
+
+    monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(fake_call))
+
+    result = collect_kapt_costs(batch_size=10)
+    assert result["collected"] == 1
+
+    row = db.query(KaptManagementCost).one()
+    assert row.breakdown == _EXPECTED_A50630215_202606
+
+    common = sum(v for k, v in _EXPECTED_A50630215_202606.items()
+                 if k in kapt_api.COMMON_COST_OPS)
+    individual = sum(v for k, v in _EXPECTED_A50630215_202606.items()
+                     if k in kapt_api.INDIVIDUAL_COST_OPS)
+    assert (common, individual) == (32_673_200, 23_059_610)
+
+    body = client.get("/api/complexes/10465/kapt").json()
+    assert body["common_cost"] == common
+    assert body["individual_cost"] == individual
+    assert body["total_cost"] == common + individual == 55_732_810
+    assert body["cost_per_household"] == 160_152  # 55,732,810 / 348 반올림

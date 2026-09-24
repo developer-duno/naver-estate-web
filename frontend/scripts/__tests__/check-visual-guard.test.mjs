@@ -384,6 +384,27 @@ describe("check-visual-guard — 추가 되돌림 경로", () => {
     expect(joined(r)).toMatch(/public-visual/);
   });
 
+  // 세션 417: 'public-visual-mobile' 이 matrix 에 생기면서 부분 문자열 검사는 public-visual 이
+  // 빠져도 mobile 쪽에 걸려 통과했다 — 목록 항목 단위로 맞추는지 확인한다.
+  it("matrix 에 public-visual-mobile 만 남고 public-visual 이 빠지면 FAIL", async () => {
+    const f = await makeFixture({
+      ci: CI_OK.replace("project: [admin, public, public-visual]", "project: [admin, public, public-visual-mobile]"),
+    });
+    const r = await scanVisualGuard(f);
+    expect(joined(r)).toMatch(/project 목록에 'public-visual' 이 없다/);
+  });
+
+  it("matrix 에 public-visual 과 public-visual-mobile 이 함께 있으면 통과", async () => {
+    const f = await makeFixture({
+      ci: CI_OK.replace(
+        "project: [admin, public, public-visual]",
+        "project: [admin, public, public-visual, public-visual-mobile]",
+      ),
+    });
+    const r = await scanVisualGuard(f);
+    expect(r.problems).toEqual([]);
+  });
+
   it("--ignore-snapshots 를 넣으면 FAIL", async () => {
     const f = await makeFixture({
       ci: CI_OK.replace("--project=${{ matrix.project }}", "--project=${{ matrix.project }} --ignore-snapshots"),

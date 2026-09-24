@@ -34,4 +34,28 @@ describe("MbOfficetelRentalTable", () => {
 
     expect(screen.getByText("테스트오피스텔")).toBeInTheDocument();
   });
+
+  it("오피스텔 행도 address 가 있으면 주소 열에 표시하고, 없으면 '-' 를 표시한다 (V066)", () => {
+    const items: MbOfficetelRentalItem[] = [
+      {
+        kind: "officetel",
+        house_manage_no: "1",
+        house_nm: "주소있는오피스텔",
+        address: "서울특별시 관악구 신림동 505-1",
+        recruit_date: "2026-09-01",
+      },
+      {
+        kind: "officetel",
+        house_manage_no: "2",
+        house_nm: "주소없는오피스텔",
+        address: null,
+        recruit_date: "2026-09-02",
+      },
+    ];
+    render(<MbOfficetelRentalTable items={items} />);
+
+    expect(screen.getByText("서울특별시 관악구 신림동 505-1")).toBeInTheDocument();
+    const emptyRow = screen.getByText("주소없는오피스텔").closest("tr");
+    expect(emptyRow?.querySelectorAll("td")[2]?.textContent).toBe("-");
+  });
 });

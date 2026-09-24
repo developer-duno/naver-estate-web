@@ -308,6 +308,8 @@ def officetel_schedule_to_dict(s) -> dict:
         "house_manage_no": s.house_manage_no,
         "pblanc_no": s.pblanc_no,
         "house_nm": s.house_nm,
+        # HSSPLY_ADRES(공급위치, V066) — FE MbOfficetelRentalTable "주소" 열이 읽는 키.
+        "address": s.address,
         "recruit_date": s.recruit_date.isoformat() if s.recruit_date else None,
         "special_receipt_bgnde": s.special_receipt_bgnde.isoformat() if s.special_receipt_bgnde else None,
         "special_receipt_endde": s.special_receipt_endde.isoformat() if s.special_receipt_endde else None,

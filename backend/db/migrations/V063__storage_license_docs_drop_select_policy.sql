@@ -1,0 +1,19 @@
+-- V063: storage.objects 정책 "Admins can view license docs" 삭제 (세션 417, 2026-09-24)
+--
+-- 배경: 이 정책의 실제 정의는 FOR SELECT TO authenticated USING (bucket_id = 'license-docs') 로,
+--   이름("관리자만")과 달리 로그인한 사용자 전체에게 license-docs 버킷(중개사 자격 서류) 읽기를
+--   허용했다(mibunyang 세션570 발견 → 2u 세션417 pg_policies 재확인, 버킷 파일 2건).
+--   2u 는 이 버킷을 클라이언트에서 직접 읽지 않는다 — 관리자 화면은 backend 가 service key 로
+--   1시간짜리 서명 URL 을 만들어 준다(services/storage.py create_signed_url,
+--   routers/admin/users.py), 업로드도 backend 경유(routers/verify.py → upload_license_doc).
+--   프론트에 storage 직접 호출 0건(2026-09-24 grep). 그래서 "관리자 조건"으로 좁히는 대신
+--   정책 자체를 없앤다: RLS 켜짐 + SELECT 정책 0 = 클라이언트 읽기 전면 거부, 서명 URL 은
+--   service role 이라 영향 없음. 업로드 정책 "Users can upload own license docs"(INSERT,
+--   자기 폴더 제한)는 그대로 둔다.
+-- 적용: 운영 DB 에 2u 세션 417 이 직접 실행(BEGIN → DROP → pg_policies 확인 → COMMIT).
+-- 적용 뒤 의무: mibunyang 권한 지문 기준선 재승인 요청(.claude/rules/infra.md
+--   §권한·정책·뷰·함수를 바꾸는 마이그) — 기대 차이 = 이 정책 1건 삭제뿐(146 → 145항목).
+-- 되돌리기:
+--   CREATE POLICY "Admins can view license docs" ON storage.objects
+--     FOR SELECT TO authenticated USING (bucket_id = 'license-docs');
+DROP POLICY IF EXISTS "Admins can view license docs" ON storage.objects;

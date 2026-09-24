@@ -1,4 +1,4 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
 
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 3000);
 
@@ -38,6 +38,23 @@ export default defineConfig({
     {
       name: "public-visual",
       testMatch: /(public-flow|compare-visual|mibunyang-visual|search-visual)\.spec\.ts$/,
+    },
+    {
+      // 휴대폰 화면 시각 회귀(세션 417) — 미분양 상세의 분양가 표가 390px 에서 눌려 머리글이
+      // 세로로 꺾이던 결함을 데스크톱 전용 장이 못 잡았다. 범위는 mibunyang-visual 하나로 좁힌다
+      // (다른 시각 spec 은 데스크톱 기준 대기 조건이라 모바일에서 검증되지 않았다).
+      // - browserName: iPhone 13 기술자는 기본 엔진이 webkit 인데 CI 는 chromium 만 설치한다.
+      //   뷰포트·isMobile·터치·UA 만 빌려 쓰고 엔진은 chromium 으로 고정한다.
+      // - deviceScaleFactor 1: 기본 3배면 fullPage PNG 가 가로·세로 3배(면적 9배)로 커진다.
+      //   레이아웃 회귀 감지는 CSS 픽셀 1배로 충분하다(blog iphone 장과 같은 배율).
+      // baseline = mibunyang-public-visual-mobile-linux.png
+      name: "public-visual-mobile",
+      testMatch: /mibunyang-visual\.spec\.ts$/,
+      use: {
+        ...devices["iPhone 13"],
+        browserName: "chromium",
+        deviceScaleFactor: 1,
+      },
     },
     {
       name: "admin",

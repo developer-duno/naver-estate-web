@@ -155,7 +155,7 @@
 | V061 | field_drift_monitor 쿼리 부분 인덱스 `ix_articles_field_drift_window` 추가 (새벽 statement timeout 반복 — 세션 561) | prod 적용완료 (2026-09-24 세션 417 information_schema/pg_indexes/role_table_grants 실측: 인덱스 `ix_articles_field_drift_window` 존재 ✓) |
 | V062 | user_profiles — anon·authenticated 의 쓰기 권한(INSERT/UPDATE/DELETE/TRUNCATE) 회수 (자기 등급 올리기 구멍 봉합 — mibunyang 세션566) | prod 적용완료 (mibunyang 세션 09-23 적용 · 2026-09-24 세션 417 information_schema/pg_indexes/role_table_grants 실측: user_profiles 에 anon/authenticated INSERT/UPDATE/DELETE/TRUNCATE 없음 ✓) |
 | V063 | storage.objects 정책 "Admins can view license docs" 삭제 (이름과 달리 로그인 사용자 전체에 license-docs 버킷 읽기를 허용 → 클라이언트 읽기 0, backend 서명 URL 만 — 세션 417) | **prod 적용완료 2026-09-24 18:06:03 KST**(세션 417 — raw_connection + 시험 모드 ROLLBACK 1회 통과 뒤 COMMIT, pg_policies 2→1·RLS 켜짐 유지·INSERT 정책 잔존 사후 확인, 사전 스키마 백업 `D:/db-backups/naver-estate/schema_20260924_174934.sql`. mibunyang 기준선 재승인 요청 18:07 발송) |
-| V064 | articles 가격변동 조회 부분 인덱스 `ix_articles_price_changed_active` 추가 (`/api/articles/price-changes` 4.2~5.5초 Parallel Seq Scan 149만 행 풀스캔 제거 — 조사반 C 실측, 세션 417) | 적용 예정 — 세션 417 메인이 운영 적용 뒤 시각 기입 |
+| V064 | articles 가격변동 조회 부분 인덱스 `ix_articles_price_changed_active` 추가 (`/api/articles/price-changes` 4.2~5.5초 Parallel Seq Scan 149만 행 풀스캔 제거 — 조사반 C 실측, 세션 417) | **prod 적용완료 2026-09-24 19:21 KST**(세션 417 — AUTOCOMMIT 연결로 `CREATE INDEX CONCURRENTLY` 8.5초, 88KB, `indisvalid` True, EXPLAIN ANALYZE = Index Scan 3.6ms, 라이브 `/api/articles/price-changes` 5.8초 → 0.6초 실측. ⚠ 풀 프록시 `raw_connection().autocommit` 은 드라이버에 안 닿아 `ActiveSqlTransaction` — `engine.connect().execution_options(isolation_level='AUTOCOMMIT')` 로 실행) |
 
 - `db/migrations/` 폴더에 `V000__` ~ `V064__` SQL 파일 = 65 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)

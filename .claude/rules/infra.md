@@ -329,6 +329,20 @@ naver 의 `CHILDCARE_DETAIL_API_KEY` == mibunyang 의 `CHILDCARE_BASIC_API_KEY` 
 - ALTER/DROP 전 상대 프로젝트의 SELECT 쿼리/ORM 모델 검색 필수
 - 컬럼명 불일치 주의: naver-estate-web은 `latitude`/`longitude`, mibunyang은 `lat`/`lng` (mb_models.py alias)
 
+### 권한·정책·뷰·함수를 바꾸는 마이그 = mibunyang 기준선 재승인 요청 (세션 417 신설, 2026-09-24)
+
+공유 DB(`rwdtljipvmqpazrimyns`)의 public·storage **표/뷰/정책/GRANT/함수 SECURITY 속성/기본 권한/확장/역할/버킷**(146항목)은
+mibunyang 쪽 감시가 **매주 월요일 09:00 KST** 에 사장님 승인 기준선(#1, 2026-09-24)과 대조해 하나라도 다르면 텔레그램 경보를 낸다.
+열 추가·데이터 변경·인덱스는 지문에 안 들어간다(경보 없음). 따라서 그런 것을 바꾸는 마이그(V0xx)를 운영에 적용한 뒤에는
+**반드시 mibunyang 세션에 재승인 요청을 남긴다** — 바뀐 물건 이름·명령·역할·조건을 한 줄씩
+(`~/.claude/projects/f--mibunyang/memory/handoff_from_2u_<날짜>_<주제>.md` + 그 폴더 `MEMORY.md` 맨 위 한 줄, 또는 그 세션에 SendMessage).
+mibunyang 이 미리보기로 "달라진 것이 그것뿐"인지 대조해 accept 한다(다른 변경이 섞이면 멈추고 사장님께). 첫 사례 = V063(세션 417).
+
+- 새 public 표는 Supabase 기본 권한으로 anon/authenticated 에 전권한이 자동 부여된다 → **RLS 를 켜지 않은 새 표는 즉시 공개.**
+  새 표·정책은 **클라이언트 쓰기 정책 없이 backend 경유**가 원칙(`user_profiles` 는 V062 로 클라이언트 쓰기 회수, `login/page.tsx` 보조 upsert 는 정리 대상).
+- `payments`·`billing_keys` 는 RLS 켜짐·정책 0·anon/authenticated 7권한 보유 = 지금은 닫혀 있으나 **정책 하나만 붙이면 그대로 열린다** — 붙일 땐 service_role 전용.
+- 관리자 판정은 **user_id 기반**이 원칙(이메일 판정 금지 — `backend/deps.py` ADMIN_EMAILS 는 정리 대상, 사장님 결정 대기).
+
 ## DB 백업·DR — 마이그레이션 전 수동 스냅샷 (세션 367 신설)
 
 **실태 (2026-08-14 실측)**: **Pro 플랜 확정** — 사장님 대시보드 스크린샷 실측(developer-duno's Org **PRO** 뱃지, 프로젝트 naver-estate, main PRODUCTION). Supabase 공식 정책상 Pro = **일일 자동 백업·7일 보존**(PITR 은 별도 유료 애드온 — 가입 여부는 대시보드 Database > Backups 탭 소관). 같은 프로젝트를 쓰는 mibunyang 데이터도 동일 백업에 함께 담긴다. 이 절 신설 전까지 레포에 백업 스크립트·문서 0건. (참고: Free 였다면 자동 백업 0 — 플랜 다운그레이드 시 이 절의 수동 덤프가 유일 안전망으로 승격됨을 유의.)

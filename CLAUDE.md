@@ -101,7 +101,7 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 ## 환경변수
 
 ### 필수 (3곳 동기화: Vercel + backend/.env + frontend/.env.local)
-- `ADMIN_EMAIL` — 관리자 이메일
+- `ADMIN_USER_IDS` — 관리자 user_id(Supabase `auth.users.id`, 쉼표 구분). BE `deps.is_admin_user`(= `role == "admin"` 또는 이 목록) + FE `src/proxy.ts`(/admin 은 이 목록만, 서버 전용 env) 가 같은 값을 쓴다. 미설정이면 BE 는 role=admin 만·FE /admin 은 전원 차단. CI e2e 는 secret `TEST_ADMIN_USER_ID` 로 주입. ⛔ 옛 `ADMIN_EMAIL` 은 세션 417 에 폐지 — **이메일로 관리자 판정 금지**(가입 안 된 주소가 목록에 들어가면 그 주소로 가입한 사람이 관리자가 된다)
 - `NEXT_PUBLIC_API_URL` — 백엔드 API URL (Named Tunnel: https://api.2u.pe.kr)
 
 ### SEO (Vercel 등록 완료, 세션 388 `vercel env ls` 실측 확인)

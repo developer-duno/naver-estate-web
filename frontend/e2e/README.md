@@ -25,7 +25,7 @@
    NEXT_PUBLIC_API_URL=http://localhost:8002
    ```
 
-   `TEST_ADMIN_EMAIL` 은 `ADMIN_EMAIL` 환경변수에 등록된 관리자 이메일이어야 한다 (미들웨어의 `ADMIN_EMAILS` 매칭).
+   `TEST_ADMIN_EMAIL` 계정의 user_id 가 dev 서버의 `ADMIN_USER_IDS` 환경변수(`.env.local`)에 들어 있어야 한다 (`src/proxy.ts` 가 `user.id ∈ ADMIN_USER_IDS` 로 /admin 을 연다 — 세션 417 에 이메일 판정 폐지).
 
 2. setup + admin 만 실행 (이 PC 에서는 3000=sangse / 3100=legal 가 점유 중이므로 naver 는 8090 사용 — 세션 114 박제):
 
@@ -52,6 +52,7 @@ npx playwright test --project=public-visual # 비인증 시각 회귀 6개
 GitHub secrets 5개 필요:
 - `TEST_ADMIN_EMAIL`
 - `TEST_ADMIN_PASSWORD`
+- `TEST_ADMIN_USER_ID` — 위 계정의 user_id. ci.yml 이 `ADMIN_USER_IDS` 로 넘겨 proxy 의 /admin 판정을 통과시킨다(없으면 admin e2e 가 홈으로 튕겨 실패)
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 

@@ -24,9 +24,30 @@ security = HTTPBearer(auto_error=False)
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
-ADMIN_EMAILS = set(filter(None, os.getenv("ADMIN_EMAIL", "").split(",")))
-if not ADMIN_EMAILS:
-    logger.warning("[AUTH] ADMIN_EMAIL 환경변수 미설정 — 관리자 접근이 차단됩니다")
+# 관리자 판정 = user_profiles.role == "admin" 또는 user_id ∈ ADMIN_USER_IDS (쉼표 구분).
+# ⛔ 이메일로 판정하지 않는다(세션 417): 이메일 목록은 "아직 가입 안 된 주소"가 들어가는 순간
+#    그 주소로 가입한 사람이 관리자가 되는 구조라, 가입 뒤에만 생기는 user_id(Supabase sub)로 바꿨다.
+ADMIN_USER_IDS = {u.strip() for u in os.getenv("ADMIN_USER_IDS", "").split(",") if u.strip()}
+
+
+def _warn_admin_config() -> None:
+    """부팅 시 관리자 설정 점검 로그 — 미설정이면 경고, 옛 ADMIN_EMAIL 만 남아 있으면 이전 안내."""
+    if ADMIN_USER_IDS:
+        return
+    logger.warning("[AUTH] 관리자 user_id 미설정(ADMIN_USER_IDS) — role=admin 계정 외 관리자 0명")
+    if os.getenv("ADMIN_EMAIL", "").strip():
+        logger.warning(
+            "[AUTH] ADMIN_EMAIL 은 더 이상 관리자 판정에 쓰이지 않습니다 — ADMIN_USER_IDS 를 설정하세요"
+        )
+
+
+_warn_admin_config()
+
+
+def is_admin_user(user: dict) -> bool:
+    """관리자 판정 — role == "admin" 또는 user_id ∈ ADMIN_USER_IDS. 이메일은 보지 않는다."""
+    return user.get("role") == "admin" or user.get("user_id") in ADMIN_USER_IDS
+
 
 if not SUPABASE_JWT_SECRET and not SUPABASE_URL:
     logger.critical("SUPABASE_JWT_SECRET 또는 SUPABASE_URL 미설정 — JWT 인증이 작동하지 않습니다")
@@ -322,7 +343,7 @@ def get_current_user(
     profile = db.get(UserProfile, user_id)
     if not profile:
         # 첫 로그인 시 프로필 자동 생성
-        is_admin = email in ADMIN_EMAILS
+        is_admin = user_id in ADMIN_USER_IDS
         try:
             profile = UserProfile(
                 user_id=user_id,
@@ -402,7 +423,7 @@ def get_approved_user(
     셋 중 하나라도 만족하면 OK. paid_until=None 은 '유료 이력 없음'이라 통과 근거가 아니다
     (approved_until=None '무기한 무료'와 의미 정반대 — _not_expired 가 None 처리 안 하고 여기서 분기).
     """
-    if user.get("email") in ADMIN_EMAILS:
+    if is_admin_user(user):
         return user  # 관리자는 항상 통과
     if user.get("status") != "approved":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="관리자 승인이 필요합니다")
@@ -416,8 +437,8 @@ def get_approved_user(
 def get_admin_user(
     user: dict = Depends(get_current_user),
 ) -> dict:
-    """관리자 전용 의존성 — role이 admin이거나 관리자 이메일이면 통과"""
-    if user.get("role") != "admin" and user.get("email") not in ADMIN_EMAILS:
+    """관리자 전용 의존성 — role이 admin이거나 user_id 가 ADMIN_USER_IDS 에 있으면 통과"""
+    if not is_admin_user(user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="관리자 권한이 필요합니다",

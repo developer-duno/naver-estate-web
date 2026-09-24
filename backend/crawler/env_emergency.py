@@ -44,7 +44,7 @@ def collect_emergency_data(batch_size: int = 0):
     db = SessionLocal()
     job = _record_job(db, "emergency", "collect_emergency")
     try:
-        # 전국 응급의료기관 목록 (1회, ~400건)
+        # 전국 응급의료기관 목록 (목록 op 528건 = 100건씩 6콜 + 병상 op 1콜 — 세션 417 실측)
         facilities = EmergencyAPI.get_emergency_list()
         if not facilities:
             # 전국 목록이 비면 단지 매칭 자체가 불가 = 명백한 장애.
@@ -102,6 +102,8 @@ def collect_emergency_data(batch_size: int = 0):
 
                 infra.emergency_hospital = result["count"]
                 infra.emergency_hospital_dist = result["nearest_dist"]
+                # 병상·등급은 모르면 None 그대로 저장한다(세션 417 — 옛 코드는 없는 필드를
+                # 읽어 0·빈값을 저장해 화면이 "0"과 "모름"을 구분 못 했다). 컬럼은 NULL 허용(V012).
                 infra.emergency_beds = result["nearest_beds"]
                 infra.emergency_level = result["nearest_level"]
                 # 순환 키 갱신 (세션 394) — 이 시각이 안 찍히면 위 order_by 가 영원히

@@ -86,7 +86,7 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "crawler_monitor": {"name": "크롤링 모니터", "schedule": "10분마다", "env": "MONITOR_ENABLED", "source": None},
     "field_drift_monitor": {"name": "상세 필드 채움률 드리프트 감시", "schedule": "매일 04:40", "env": "FIELD_DRIFT_MONITOR_ENABLED", "source": None},
     "vacuum_maintenance": {"name": "정기 VACUUM 유지보수", "schedule": "매일 03:50", "env": "VACUUM_MAINTENANCE_ENABLED", "env_default": "true", "source": None},
-    "api_version_probe": {"name": "data.go.kr API 버전 감시", "schedule": "주 1회 일요일 06:40", "env": "API_VERSION_MONITOR_ENABLED", "env_default": "true", "source": "data.go.kr / odcloud.kr API 12종 전수 감시 (PROBE_REGISTRY)"},
+    "api_version_probe": {"name": "data.go.kr API 버전 감시", "schedule": "주 1회 일요일 06:40", "env": "API_VERSION_MONITOR_ENABLED", "env_default": "true", "source": "data.go.kr / odcloud.kr API 13종 전수 감시 (PROBE_REGISTRY)"},
     "kapt_match": {"name": "K-apt 단지 매칭", "schedule": "매월 21일 06:10", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 단지 기본정보 (AptBasisInfoServiceV5)"}},
     "kapt_costs": {"name": "K-apt 관리비 수집", "schedule": "매일 06:20", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 공용관리비 (AptCmnuseManageCostServiceV3)"}},
 }

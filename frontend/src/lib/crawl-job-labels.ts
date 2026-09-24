@@ -106,7 +106,7 @@ export const CRAWL_JOB_LABELS: Record<string, { label: string; desc: string }> =
   },
   api_version_probe: {
     label: "data.go.kr API 버전 감시",
-    desc: "우리가 쓰는 공공데이터 API 12종이 폐기되지 않았는지 확인 (매주 일요일 06:40)",
+    desc: "우리가 쓰는 공공데이터 API 13종이 폐기되지 않았는지 확인 (매주 일요일 06:40)",
   },
   complex_detail_APT: {
     label: "단지 상세 backfill APT",

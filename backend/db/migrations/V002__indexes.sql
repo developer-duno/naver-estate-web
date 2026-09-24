@@ -16,9 +16,12 @@ CREATE INDEX IF NOT EXISTS idx_articles_tags_gin ON articles USING GIN(tags);
 
 -- 단지명 검색용 (trigram) — pg_trgm 확장 필요
 -- 확장이 없으면 무시됨
+-- WITH SCHEMA extensions: public 스키마에 확장을 두지 않는다 (Supabase 보안 고문 0014,
+-- 2026-09-23 운영에서 extensions 스키마로 이관됨 — 세션 417). extensions 스키마가 없는
+-- 로컬 PG 에서도 실패하지 않도록 기존 예외 처리(EXCEPTION WHEN OTHERS) 구조는 유지.
 DO $$
 BEGIN
-    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+    CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions;
     CREATE INDEX IF NOT EXISTS idx_complexes_name_trgm
         ON complexes USING GIN(complex_name gin_trgm_ops);
 EXCEPTION WHEN OTHERS THEN

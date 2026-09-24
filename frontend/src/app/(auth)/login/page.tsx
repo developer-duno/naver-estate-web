@@ -87,6 +87,8 @@ function LoginForm() {
         setFailCount(0);
         writeFailCount(0);
         // 로그인 기록 업데이트 (실패해도 로그인은 차단하지 않음)
+        // Why: 프로필 생성·갱신은 backend `get_current_user` 가 첫 요청에서 자동 생성
+        // (V062 뒤 클라이언트 쓰기 권한 없음 — user_profiles 직접 upsert 는 항상 실패)
         try {
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user?.id) {
@@ -96,13 +98,6 @@ function LoginForm() {
                 method: "POST",
                 headers: { Authorization: `Bearer ${session.access_token}` },
               });
-            } else {
-              // 백엔드 없이 Supabase 직접 업데이트
-              await supabase.from("user_profiles").upsert({
-                user_id: session.user.id,
-                email: session.user.email || "",
-                last_login_at: new Date().toISOString(),
-              }, { onConflict: "user_id" });
             }
           }
         } catch (e) {

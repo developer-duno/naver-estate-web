@@ -383,11 +383,13 @@ def test_registry_urls_match_actual_collector_modules():
     "정상"이라 보고하고 실제 수집기는 죽는다 — 감시가 오히려 안심을 파는 최악의 경우.
     """
     from crawler.air_quality_api import NEARBY_STATION_URL, REALTIME_AIR_URL
-    from crawler.emergency_api import EMERGENCY_LIST_URL
+    from crawler.emergency_api import EMERGENCY_BEDS_URL, EMERGENCY_LIST_URL
     from crawler.public_data_api import BASE_URL
 
     urls = {entry["url"] for entry in PROBE_REGISTRY}
-    for actual in (BASE_URL, EMERGENCY_LIST_URL, NEARBY_STATION_URL, REALTIME_AIR_URL):
+    for actual in (
+        BASE_URL, EMERGENCY_LIST_URL, EMERGENCY_BEDS_URL, NEARBY_STATION_URL, REALTIME_AIR_URL,
+    ):
         assert actual in urls, (
             f"수집기 모듈이 쓰는 {actual} 이 PROBE_REGISTRY 에 없다 — "
             "crawler/api_version_monitor.py PROBE_REGISTRY 에 추가할 것"
@@ -604,11 +606,14 @@ def test_probe_failure_before_job_recorded_still_raises():
         probe_api_versions()
 
 
-def test_registry_covers_all_twelve_endpoints():
-    """감시 대상 총 12종 (apis.data.go.kr 8 + odcloud 4) — 누락 시 사각지대."""
+def test_registry_covers_all_thirteen_endpoints():
+    """감시 대상 총 13종 (apis.data.go.kr 9 + odcloud 4) — 누락 시 사각지대.
+
+    세션 417: 응급실 실시간 가용병상 op 추가(병상 수를 이 op 에서만 받는다) 12 → 13.
+    """
     urls = {entry["url"] for entry in PROBE_REGISTRY}
     assert len(PROBE_REGISTRY) == len(urls), "레지스트리에 중복 URL 이 있다"
-    assert len(PROBE_REGISTRY) == 12, f"감시 대상이 12종이 아님: {len(PROBE_REGISTRY)}"
+    assert len(PROBE_REGISTRY) == 13, f"감시 대상이 13종이 아님: {len(PROBE_REGISTRY)}"
     assert sum(1 for e in PROBE_REGISTRY if e.get("flavor") == FLAVOR_ODCLOUD) == 4
 
 

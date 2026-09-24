@@ -193,7 +193,8 @@ export interface MbInfra {
   /** 응급의료기관 (V012) */
   emergency_hospital?: number;
   emergency_hospital_dist?: number;
-  emergency_beds?: number;
+  /** 응급실 일반병상(NEMC hvs01). null = 모름(실시간 op 에 없는 기관·반경 내 기관 없음) — 0 과 구분 */
+  emergency_beds?: number | null;
   emergency_level?: string;
   /** 응급의료기관 시설명/분류 (mibunyang W4, 2026-05-13 동기화) */
   emergency_name?: string;

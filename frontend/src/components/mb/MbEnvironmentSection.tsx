@@ -148,7 +148,8 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <InfoRow label="기관 수 (3km)" value={`${infra.emergency_hospital}개`} />
             <InfoRow label="최근접 거리" value={infra.emergency_hospital_dist != null ? `${infra.emergency_hospital_dist}m` : undefined} />
-            <InfoRow label="병상 수" value={infra.emergency_beds ? `${infra.emergency_beds}개` : undefined} />
+            {/* 0 은 확정값("0병상"), null 은 모름("-") — 세션 417. 값 = NEMC 실시간 op 의 응급실 일반병상 기준값(hvs01) */}
+            <InfoRow label="응급실 일반병상" value={infra.emergency_beds != null ? `${infra.emergency_beds}병상` : undefined} />
             <InfoRow label="기관 등급" value={infra.emergency_level || undefined} />
           </dl>
         </div>

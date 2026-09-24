@@ -86,6 +86,20 @@ V-WORLD getApartHousingPriceAttr 법정동 전량 수집 → 단지(APT·JGC) �
 
 NEMC 응급의료기관 API. **배치 = 전량**(`EMERGENCY_BATCH_SIZE=0`, 세션 394): 위경도 보유 2,938단지를 매월 전부 갱신한다. 전량이 가능한 근거 = 이 수집기는 **전국 기관목록을 1회만** 받고(`EmergencyAPI.get_emergency_list`) 단지별 처리는 `find_nearest`(순수 로컬 거리계산)뿐이라, **배치 크기가 외부 API 호출 수와 아무 상관이 없다** — 전량이어도 NEMC 호출은 여전히 1회라 비용 증가 0(어린이집이 "시군구당 1콜이라 쿼터 안에서 여유"였던 것보다 더 강한 조건). 옛 배치 100 은 아무 이득 없이 커버리지만 깎았다: **prod 실측 2026-09-05 — 2,938단지 중 496개(16.9%)만 emergency_hospital 이 채워지고 2,442개(83.1%)가 영구 방치**(ORDER BY 없는 `.limit(100)` 이라 DB 임의·사실상 고정 순서의 앞쪽 100개만 매월 재갱신). `infra.emergency_updated_at` 오래된 순(NULL 최우선) 순환 키(V054·세션 394)는 **안전망으로 유지** — 부분 배치로 되돌릴 때의 폴백 + 전량 실행이 도중에 끊겨도 다음 회차가 미수집분부터 이어받게 한다(500단지마다 중간 저장). Infra 행이 없는 단지(mibunyang 미수집분)는 **자동 생성**으로 전환 — 옛 skip 동작은 그 단지들을 영영 못 채워 전량 순환의 취지를 깎았다(childcare 검증 패턴 답습). **첫 실전 = 2026-09-07(월) 이미 완주·합격** — 2,938/2,938 completed(직전 8/3·7/6 은 100/100), prod `emergency_hospital` 채움 2,938 실측(세션 398). 옛 "첫 실전 = 2026-10-05" 표기는 9월 첫째 월요일을 9/1(화)로 오인한 것 — 실제로는 PR #458 머지(9/5) 직후 9/7 에 도래해 관찰 없이 지나갔다. 다음 회차 = 2026-10-05(월)
 
+**병상·등급 필드 (세션 417 정정 — 실응답 확인 2026-09-24)**: 옛 코드는 목록 op 응답에 **없는** `hvec`·`dutyLevel` 을 읽어, 운영 DB 2,938행이 전부 `emergency_beds=0`·`emergency_level=""` 이었다(화면 "병상 수" 전 단지 "-"). 목록 op 응답 항목은 `dutyAddr·dutyEmcls·dutyEmclsName·dutyName·dutyTel1·dutyTel3·hpid·phpid·rnum·wgs84Lat·wgs84Lon` 11개뿐이다. 정정 후 필드 근거:
+
+| op | 필드 | 뜻 | 회차당 호출 |
+|---|---|---|---|
+| `getEgytListInfoInqire`(목록) | `hpid`·좌표·`dutyEmclsName` | 기관 ID·위치·종별 이름(예: 지역응급의료기관, 응급실운영신고기관) → `emergency_level` | 528기관 ÷ 100 = **6콜** |
+| `getEmrrmRltmUsefulSckbdInfoInqire`(실시간 가용병상) | `hvs01` | 응급실 **일반**병상 기준값(고정 수용량) → `emergency_beds` | STAGE1 없이 numOfRows=1000 **1콜**(전국 416기관) |
+| (안 씀) 같은 op | `hvec` | "지금 남은" 응급실 병상 — 음수도 옴, 월 1회 스냅샷에 안 맞음 | — |
+| (안 씀) `getEgytBassInfoInqire`(기본정보) | `hperyn`·`hpbdn` | 응급실 병상 전체·총 병상 | 기관당 1콜 = 528콜 → 쿼터 부담이라 제외 |
+
+- ⚠ **`hvs01` 은 응급실 병상 전체가 아니다** — 울산대병원 실측: 기본정보 `hperyn` 31 vs 실시간 `hvs01` 21(+`hvs02` 8). 그래서 화면 라벨은 "응급실 일반병상"(사장님이 바꿀 수 있는 문구).
+- **실시간 op 에는 목록 528기관 중 416기관만 있다**(응급실운영신고기관 등은 빠짐) → 그 기관이 최근접이면 병상 None → 화면 "-". 0 은 "0병상"으로 보인다(확정값).
+- 병상 op 가 실패해도 잡은 계속된다(병상만 전부 None + 경고 로그) — 목록이 비는 것만 failed.
+- 반경 3km 안에 기관이 없으면 병상·등급은 None(옛 코드는 0·빈값).
+
 ### 잡 상세 — K-apt 단지 매칭
 
 **주기**: 매월 21일 06:10
@@ -137,7 +151,7 @@ NEMC 응급의료기관 API. **배치 = 전량**(`EMERGENCY_BATCH_SIZE=0`, 세�
 
 **주기**: 일요일 06:40
 
-코드가 쓰는 엔드포인트 **12종(apis.data.go.kr 8 + odcloud 4)** — 실거래가·응급의료·대기질 2종·K-apt 4종 + **odcloud 4종(청약홈 오피스텔/민간임대·국세청 사업자상태·국세청 진위확인·경찰청 범죄통계)** 을 serviceKey 만 넣고 최소 호출로 찔러 폐기 감지 → dead 있으면 텔레그램 1건으로 묶어 알림. 판정은 **계열별로 다르다**(레지스트리 `flavor`): ① apis.data.go.kr = `NO_OPENAPI_SERVICE_ERROR`/returnReasonCode "12" 만 dead, 코드 11(파라미터 부족)·정상응답은 alive, 코드 30(키 미등록)·05(타임아웃)·네트워크 예외는 **degraded(로그만, 알림 0)**. ② odcloud = `returnReasonCode` 를 안 쓰고 `{"code":-N,"msg":...}` 를 주므로 **`code:-3`("등록되지 않은 서비스", HTTP 404) 만 dead**, `code:-4`(인증키 오류)·411(바디 형식)은 degraded/alive, `currentCount`·`data`·`status_code` 등 양성 증거가 있을 때만 alive (2026-08-29 라이브 실측). ⚠ odcloud 항목에 `flavor` 를 빠뜨리면 판정기가 어긋나 **전부 degraded 로 뭉개져** 그 API 만 감시 사각지대가 된다. ⚠ 국세청 사업자 API 2종(사업자상태 status·진위확인 validate)은 **POST 전용**이라 레지스트리에 `method:"POST"` + 조회 전용 바디를 명시(GET 으로 찌르면 405 라 생사 판별 불가) — 바디 스키마도 서로 다르다(status=`{"b_no":[...]}`, validate=`{"businesses":[{...}]}`). ⚠ **국세청 두 오퍼레이션은 같은 서비스(nts-businessman/v1) 아래여도 각각 등록**한다 — data.go.kr 은 오퍼레이션 단위로도 폐기·개편하므로, 서비스 통째 폐기만 잡으면 되는 청약홈(4 오퍼레이션 → 대표 1개)과 달리 status(휴폐업 차단)·validate(가입 진위확인)는 둘 다 공인중개사 검증의 생명줄이라 개별 감시가 필요하다(세션 394 신설). dead 발견은 잡 실패가 아니라 "완료 + 알림"(CrawlJob completed). 네이버 0, data.go.kr 쿼터 12회라 영향 무시, 토글 API_VERSION_MONITOR_ENABLED(기본 true). ⚠ **새 data.go.kr API 도입 시 `crawler/api_version_monitor.py` PROBE_REGISTRY 에 1줄 추가 의무** — 빠지면 그 API 만 감시 사각지대 (2026-08-19 사고: data.go.kr 이 인증 예외 처리 종료로 구버전 엔드포인트(AptListService3·AptBasisInfoServiceV4 등)를 공지 체감 없이 폐기 → 이 프로젝트·mibunyang 동시 수집기 장애)
+코드가 쓰는 엔드포인트 **13종(apis.data.go.kr 9 + odcloud 4)** — 실거래가·응급의료 2종(목록·실시간 가용병상 — 세션 417 추가)·대기질 2종·K-apt 4종 + **odcloud 4종(청약홈 오피스텔/민간임대·국세청 사업자상태·국세청 진위확인·경찰청 범죄통계)** 을 serviceKey 만 넣고 최소 호출로 찔러 폐기 감지 → dead 있으면 텔레그램 1건으로 묶어 알림. 판정은 **계열별로 다르다**(레지스트리 `flavor`): ① apis.data.go.kr = `NO_OPENAPI_SERVICE_ERROR`/returnReasonCode "12" 만 dead, 코드 11(파라미터 부족)·정상응답은 alive, 코드 30(키 미등록)·05(타임아웃)·네트워크 예외는 **degraded(로그만, 알림 0)**. ② odcloud = `returnReasonCode` 를 안 쓰고 `{"code":-N,"msg":...}` 를 주므로 **`code:-3`("등록되지 않은 서비스", HTTP 404) 만 dead**, `code:-4`(인증키 오류)·411(바디 형식)은 degraded/alive, `currentCount`·`data`·`status_code` 등 양성 증거가 있을 때만 alive (2026-08-29 라이브 실측). ⚠ odcloud 항목에 `flavor` 를 빠뜨리면 판정기가 어긋나 **전부 degraded 로 뭉개져** 그 API 만 감시 사각지대가 된다. ⚠ 국세청 사업자 API 2종(사업자상태 status·진위확인 validate)은 **POST 전용**이라 레지스트리에 `method:"POST"` + 조회 전용 바디를 명시(GET 으로 찌르면 405 라 생사 판별 불가) — 바디 스키마도 서로 다르다(status=`{"b_no":[...]}`, validate=`{"businesses":[{...}]}`). ⚠ **국세청 두 오퍼레이션은 같은 서비스(nts-businessman/v1) 아래여도 각각 등록**한다 — data.go.kr 은 오퍼레이션 단위로도 폐기·개편하므로, 서비스 통째 폐기만 잡으면 되는 청약홈(4 오퍼레이션 → 대표 1개)과 달리 status(휴폐업 차단)·validate(가입 진위확인)는 둘 다 공인중개사 검증의 생명줄이라 개별 감시가 필요하다(세션 394 신설). dead 발견은 잡 실패가 아니라 "완료 + 알림"(CrawlJob completed). 네이버 0, data.go.kr 쿼터 13회라 영향 무시, 토글 API_VERSION_MONITOR_ENABLED(기본 true). ⚠ **새 data.go.kr API 도입 시 `crawler/api_version_monitor.py` PROBE_REGISTRY 에 1줄 추가 의무** — 빠지면 그 API 만 감시 사각지대 (2026-08-19 사고: data.go.kr 이 인증 예외 처리 종료로 구버전 엔드포인트(AptListService3·AptBasisInfoServiceV4 등)를 공지 체감 없이 폐기 → 이 프로젝트·mibunyang 동시 수집기 장애)
 
 ### 잡 상세 — 크롤링 모니터
 

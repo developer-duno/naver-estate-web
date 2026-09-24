@@ -125,3 +125,23 @@ describe("MbEnvironmentSection — 교통 정류장 / 보육 type·teachers / �
     expect(screen.getByText("60 dB")).toBeInTheDocument();
   });
 });
+
+describe("MbEnvironmentSection — 응급실 일반병상 0/모름 구분 (세션 417)", () => {
+  // 옛 화면은 `emergency_beds ? … : undefined` 라 0 과 null 이 똑같이 "-" 였다.
+  it("emergency_beds 가 0 이면 '0병상' 으로 보인다 (확정값)", () => {
+    const apt = makeApt({
+      infra: { emergency_hospital: 1, emergency_hospital_dist: 120, emergency_beds: 0, emergency_level: "지역응급의료기관" },
+    });
+    render(<EnvironmentSection apartment={apt} />);
+    expect(screen.getByText("응급실 일반병상").nextElementSibling?.textContent).toBe("0병상");
+  });
+
+  it("emergency_beds 가 null 이면 '-' 로 보인다 (모름)", () => {
+    const apt = makeApt({
+      infra: { emergency_hospital: 1, emergency_hospital_dist: 120, emergency_beds: null, emergency_level: "지역응급의료기관" },
+    });
+    render(<EnvironmentSection apartment={apt} />);
+    expect(screen.getByText("응급실 일반병상").nextElementSibling?.textContent).toBe("-");
+    expect(screen.queryByText("0병상")).not.toBeInTheDocument();
+  });
+});

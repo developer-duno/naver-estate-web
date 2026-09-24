@@ -88,6 +88,11 @@ PROBE_REGISTRY: list[dict] = [
         "name": "응급의료기관 목록",
         "url": "https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytListInfoInqire",
     },
+    # crawler/emergency_api.py EMERGENCY_BEDS_URL (세션 417 — 응급실 병상은 이 op 에서만 받는다)
+    {
+        "name": "응급실 실시간 가용병상",
+        "url": "https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEmrrmRltmUsefulSckbdInfoInqire",
+    },
     # crawler/air_quality_api.py NEARBY_STATION_URL
     {
         "name": "에어코리아 근접 측정소",

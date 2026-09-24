@@ -106,6 +106,47 @@ NEMC 응급의료기관 API. **배치 = 전량**(`EMERGENCY_BATCH_SIZE=0`, 세�
 
 국토부 K-apt(AptListService4 getTotalAptList4, 운영계정 일 10만) 전국 목록 ~2.2만 단지 → 우리 APT·JGC 단지와 4중 게이트 매칭(법정동 cortar_no=bjdCode + 이름 유사도 ≥0.6/세대수 대조불가 시 ≥0.85(한쪽이 다른 쪽을 통째로 품는 포함관계면 0.6, 짧은 어간 3글자 미만은 포함 불인정) + basis 수신 후 세대수 ±15% — ⚠ **엄격 규칙(≥0.85·차수 모호 탈락)은 basis 수신 후에만 적용**한다(pass 2). 목록 API 에 kaptdaCnt 가 없어 후보 선별(pass 1)에선 전 단지가 "아직 모름"이라, 거기서 걸면 basis 로 세대수가 일치했을 정답까지 잘린다(2026-08-31 prod 실측 746건 오탈락 → 세션 389 정정) + **차수 모순 탈락**(양쪽 차수 집합 N차·N단지·N블록이 서로 **부분집합이 아니면** 점수·세대수 불문 탈락 — `{1}` vs `{3}`. 부분집합 `{2}` vs `{2,7}`(예: 분성마을2단지부영 ↔ …(북부부영7차) — 단지 차수는 일치하고 7 은 시공 차수라는 별개 축)은 모순이 아니라 **모호**로 보고 세대수 게이트가 결정: 대조 가능·±15% 통과면 채택, 대조 불가면 탈락. 한쪽만 차수인 경우도 같은 모호 경로), 최고점 동률 탈락). 이름 정규화는 분류 꼬리표(주상복합·도시형생활주택·민간임대·주거복합·실버주택)를 **괄호 유무와 무관하게** 제거 — 우리는 "(주상복합)", K-apt 는 무괄호 "주상복합" 이라 한쪽만 지우면 격차가 벌어진다(세션 389 실측). **전량 목록 회차(list_complete=True)는 이번에 재확인 안 된 옛 매칭 + 그 관리비를 삭제**(`purged`), 부분 목록·매칭 0건 회차는 절대 삭제 안 함 → kapt_complex_map upsert + 복도유형·세대수(AptBasisInfoServiceV5). 매칭분마다 basis 1콜(0.3s throttle)이라 1h 초과 상시 → _STALE_HOURS_BY_TYPE 8h 등록(2.2만 basis 콜 × RTT 0.8s ≈ 4.45h 라 옛 4h 는 오탐 sweep 구간 — 관측 최대의 ~2배로 상향). 네이버 0, 토글 KAPT_ENABLED(기본 false — 세션 388 첫 배포는 꺼서, 수동 트리거 라이브 검증 후 ON). 쿼터 버킷은 kapt 전용(전역 9,000 과 격리, 세션 388)
 
+### 잡 상세 — K-apt 관리비 수집 (항목별 금액 = 세부 칸 합, 세션 417)
+
+공용관리비 op 는 op 마다 금액 칸이 1~9개다. 세션 417 전 파서(`kapt_api._extract_amount`)는 **식별 칸을 뺀 첫 숫자 칸 하나**만
+저장해, 다칸 op 5종(인건비·제세공과금·차량유지비·그밖의부대비용·사무비)이 과소 집계됐다. 지금은 `_COST_AMOUNT_FIELDS`
+(op → 금액 칸 목록) 사전의 칸을 전부 더하고, **사전에 없는 op 는 저장하지 않고 경고**, 사전에 없는 칸이 오면 합계는 내되
+경고한다. 개별사용료 5 op 는 전과 같이 공용(C)+전용(P) 두 칸 합(`_extract_paired_amount`).
+
+22 op 전수표 — 공개 단지 A50630215(건영아파트, complex_no 10465)·202606 실측 원문(2026-09-24, 19콜 + D2 3콜). 전 칸이 원 단위
+금액이라 **제외 칸은 식별 칸(kaptCode·kaptName)뿐**이다(공식 명세 페이지는 찾지 못해 칸 이름·값으로 판정).
+
+| op | 칸 (값) | 옛 저장값 | 정정 후 |
+|---|---|---:|---:|
+| 인건비 LaborCost | pay 7,190,420 · sundryCost 1,088,560 · bonus 0 · pension 924,360 · accidentPremium 78,460 · employPremium 94,710 · nationalPension 250,360 · healthPremium 335,140 · welfareBenefit 300,000 | 7,190,420 | **10,262,010** |
+| 제세공과금 Taxdue | electCost 0 · telCost 31,180 · postageCost 2,000 · taxrestCost 0 | 0 | **33,180** |
+| 차량유지비 VhcleMntnc | fuelCost 0 · refairCost 0 · carInsurance 0 · carEtc 0 | 0 | 0 |
+| 그밖의부대비용 Etc | careItemCost 84,900 · accountingCost 0 · hiddenCost 22,900 | 84,900 | **107,800** |
+| 사무비 Ofcrk | officeSupply 0 · bookSupply 97,440 · transportCost 15,000 | 0 | **112,440** |
+| 피복비 Clothing | clothesCost 0 | 0 | 0 |
+| 교육훈련비 EduTraing | eduCost 0 | 0 | 0 |
+| 청소비 Cleaning | cleanCost 5,161,430 | 5,161,430 | 5,161,430 |
+| 경비비 Guard | guardCost 11,012,010 | 11,012,010 | 11,012,010 |
+| 소독비 Disinfection | disinfCost 245,000 | 245,000 | 245,000 |
+| 승강기유지비 ElevatorMntnc | elevCost 1,320,000 | 1,320,000 | 1,320,000 |
+| 지능형홈네트워크 HomeNetworkMntnc | hnetwCost 0 | 0 | 0 |
+| 수선비 Repairs | lrefCost1 3,435,000 | 3,435,000 | 3,435,000 |
+| 시설유지비 FacilityMntnc | lrefCost2 665,000 | 665,000 | 665,000 |
+| 안전점검비 SafetyCheckUp | lrefCost3 0 | 0 | 0 |
+| 재해예방비 DisasterPrevention | lrefCost4 0 | 0 | 0 |
+| 위탁관리수수료 ConsignManageFee | manageCost 319,330 | 319,330 | 319,330 |
+| 난방비 Heat (개별) | heatC 0 · heatP 0 | 0 | 0 |
+| 급탕비 HotWater (개별) | waterHotC 0 · waterHotP 0 | 0 | 0 |
+| 가스사용료 GasRentalFee (개별) | gasC 0 · gasP 0 | 0 | 0 |
+| 전기료 Electricity (개별) | electC 157,860 · electP 15,989,840 | 16,147,700 | 16,147,700 |
+| 수도료 Water (개별) | waterCoolC 267,170 · waterCoolP 6,644,740 | 6,911,910 | 6,911,910 |
+
+이 단지 합계: 공용 29,433,090 → **32,673,200**, 총액 52,492,700 → **55,732,810**, 세대당(348세대) 150,841 → **160,152**(−5.8% 과소였다).
+⚠ **기존 저장분은 재계산 불가** — breakdown 이 op 당 정수 1개(첫 칸)만 보관해 나머지 칸이 없다. 바로잡으려면 재수집뿐이다
+(2026-09-24 실측: 10,521행 전부 다칸 op 5종 보유, 제세공과금은 10,357행이 0 으로 저장). 새 달이 공개돼 수집되면 그 달 행은 정정된
+값으로 쌓이고 화면은 최신월을 보므로, 재수집 없이도 단지마다 다음 공개월부터 바른 값이 보인다.
+가드 = `tests/test_kapt.py` 의 원문 22건 표 대조 · 칸 사전 ↔ 원문 칸 일치 · 전 칸 자릿수 합 · `/kapt` 응답 합계.
+
 ### 잡 상세 — data.go.kr API 버전 감시
 
 **주기**: 일요일 06:40

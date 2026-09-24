@@ -1,0 +1,32 @@
+-- V065: payments·billing_keys — anon·authenticated 의 전 권한 회수 (세션 417, 2026-09-24)
+--
+-- 배경: 2026-09-24 17:30 메인 실측(information_schema.role_table_grants) — payments·
+--   billing_keys 두 표에 anon·authenticated 역할이 DELETE,INSERT,REFERENCES,SELECT,
+--   TRIGGER,TRUNCATE,UPDATE 7권한을 그대로 보유(Supabase 신규 표 기본 GRANT). RLS 는
+--   켜져 있고 정책은 0건(pg_policies) — 지금은 정책이 없어 닫혀 있으나, 누군가 정책을
+--   하나만 추가하면(예: "본인 결제내역 조회" 류) 그 순간 클라이언트에 열린다. 이 프로젝트의
+--   결제(payments)·정기결제 카드(billing_keys)는 전부 backend(postgres 역할, DATABASE_URL)
+--   가 처리한다 — frontend 에 `supabase.from("payments"|"billing_keys")` 호출 0건
+--   (2026-09-24 세션 417 grep 재확인). mibunyang 도 이 두 표를 쓰지 않는다(전용 표 아님,
+--   grep 결과 있는 파일은 권한 지문 감시 대상 상수 나열뿐 — 실사용 아님).
+--   선례 = V062(user_profiles 클라이언트 쓰기 회수) — 이번엔 쓰기뿐 아니라 SELECT 등
+--   전 권한을 회수한다(클라이언트가 이 표를 조회할 이유 자체가 없으므로).
+--
+-- 조치: anon·authenticated 의 payments·billing_keys 전 권한을 회수한다.
+--   유지: service_role · postgres(불변, REVOKE 대상 아님).
+--
+-- 검증(prod, 트랜잭션 안 자체검사 후 COMMIT):
+--   적용 전 role_table_grants: anon·authenticated = DELETE,INSERT,REFERENCES,SELECT,
+--     TRIGGER,TRUNCATE,UPDATE (7권한)
+--   적용 후 role_table_grants: anon·authenticated = 행 없음(권한 0) / service_role·postgres 는 그대로
+--
+-- 적용 뒤 의무: mibunyang 권한 지문 기준선 재승인 요청(.claude/rules/infra.md
+--   §권한·정책·뷰·함수를 바꾸는 마이그) — 기대 차이 = payments·billing_keys 두 표의
+--   anon·authenticated REVOKE ALL 뿐(V063 과 같은 절차).
+--
+-- 되돌리기:
+--   GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.payments TO anon, authenticated;
+--   GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON public.billing_keys TO anon, authenticated;
+
+REVOKE ALL ON public.payments FROM anon, authenticated;
+REVOKE ALL ON public.billing_keys FROM anon, authenticated;

@@ -187,3 +187,34 @@ def test_get_officetel_rental_region_pending_recollect_rental_excluded(client: T
     # region 파라미터 없이 조회하면 정상적으로 보임 (재수집 전에도 목록 자체는 정상)
     resp_all = client.get("/api/mb/presale/officetel-rental")
     assert "7770003" in {item["house_manage_no"] for item in resp_all.json()["items"]}
+
+
+def test_get_officetel_rental_officetel_exposes_address(client: TestClient, db):
+    """오피스텔 행도 address 키로 주소를 내보낸다 (V066, 세션 417).
+
+    FE MbOfficetelRentalTable 의 "주소" 열은 item.address 를 읽는다 — 오피스텔
+    serializer 가 이 키를 안 주면 620건 전부 "-" 로 보인다. 값이 없으면 null.
+    """
+    db.add(
+        OfficetelPresaleSchedule(
+            house_manage_no="9990101",
+            house_nm="주소있는오피스텔",
+            address="서울특별시 관악구 신림동 505-1",
+            recruit_date=date(2026, 9, 1),
+        )
+    )
+    db.add(
+        OfficetelPresaleSchedule(
+            house_manage_no="9990102",
+            house_nm="주소없는오피스텔",
+            recruit_date=date(2026, 9, 2),
+        )
+    )
+    db.commit()
+
+    resp = client.get("/api/mb/presale/officetel-rental")
+    assert resp.status_code == 200
+    by_hmn = {item["house_manage_no"]: item for item in resp.json()["items"]}
+    assert by_hmn["9990101"]["address"] == "서울특별시 관악구 신림동 505-1"
+    assert "address" in by_hmn["9990102"]
+    assert by_hmn["9990102"]["address"] is None

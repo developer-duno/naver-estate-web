@@ -205,8 +205,10 @@ export async function checkCi(ciPath = DEFAULTS.ciPath) {
   }
 
   // 헤더 스냅샷이 실행되는 프로젝트가 matrix 에 있는지 (없으면 CI 에서 아예 안 돎)
+  // ⚠ 부분 문자열이 아니라 **목록 항목 하나**로 맞춘다 — 'public-visual-mobile'(세션 417)이
+  //   생긴 뒤로 /public-visual/ 는 public-visual 이 빠져도 mobile 쪽에 걸려 거짓 PASS 가 난다.
   const matrixLine = lines.find((l) => /project:\s*\[/.test(l));
-  if (!matrixLine || !/public-visual/.test(matrixLine)) {
+  if (!matrixLine || !/[[\s,]public-visual\s*[,\]]/.test(matrixLine)) {
     problems.push(
       `${ciPath}: e2e matrix 의 project 목록에 'public-visual' 이 없다 —\n` +
         `    헤더 전용 스냅샷(${HEADER_SNAPSHOT})이 CI 에서 실행되지 않는다.`,

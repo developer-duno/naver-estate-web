@@ -507,6 +507,10 @@ class OfficetelPresaleSchedule(Base):
     house_manage_no: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     pblanc_no: Mapped[str | None] = mapped_column(Text)
     house_nm: Mapped[str] = mapped_column(Text, nullable=False)
+    # HSSPLY_ADRES(공급위치, "인천광역시 미추홀구 숭의동 350-1번지 일원" 등) — V066(세션 417).
+    # 이 칸이 없어 목록 표 "주소" 열이 오피스텔 행에서 항상 "-" 였다. 민간임대 짝꿍
+    # (rental_schedule_official.address)과 같은 출처 필드.
+    address: Mapped[str | None] = mapped_column(Text)
     recruit_date: Mapped[date | None] = mapped_column(Date)
     special_receipt_bgnde: Mapped[date | None] = mapped_column(Date)
     special_receipt_endde: Mapped[date | None] = mapped_column(Date)

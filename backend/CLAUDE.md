@@ -33,7 +33,7 @@
 | `db/mb_query_helpers.py` | mibunyang 중복 제거 + 정렬 + 필터 헬퍼 |
 | `db/mb_apartment_queries.py` | mibunyang 아파트 단지 + 미분양 조회 쿼리 |
 | `db/mb_misc_queries.py` | mibunyang 지역 통계 + 실거래 + 단지 부속 쿼리 |
-| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V064, 65 버전 — 최신은 하단 §DB 마이그레이션 표가 진실) |
+| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V065, 66 버전 — 최신은 하단 §DB 마이그레이션 표가 진실) |
 | `shared/naver_api.py` | NaverEstateAPI (수정 금지) |
 | `shared/constants.py` | 상수 (수정 금지) |
 | `auth/permissions.py` | 역할 체크 (require_role) + 일일 쿼터 (check_quota) |
@@ -156,11 +156,12 @@
 | V062 | user_profiles — anon·authenticated 의 쓰기 권한(INSERT/UPDATE/DELETE/TRUNCATE) 회수 (자기 등급 올리기 구멍 봉합 — mibunyang 세션566) | prod 적용완료 (mibunyang 세션 09-23 적용 · 2026-09-24 세션 417 information_schema/pg_indexes/role_table_grants 실측: user_profiles 에 anon/authenticated INSERT/UPDATE/DELETE/TRUNCATE 없음 ✓) |
 | V063 | storage.objects 정책 "Admins can view license docs" 삭제 (이름과 달리 로그인 사용자 전체에 license-docs 버킷 읽기를 허용 → 클라이언트 읽기 0, backend 서명 URL 만 — 세션 417) | **prod 적용완료 2026-09-24 18:06:03 KST**(세션 417 — raw_connection + 시험 모드 ROLLBACK 1회 통과 뒤 COMMIT, pg_policies 2→1·RLS 켜짐 유지·INSERT 정책 잔존 사후 확인, 사전 스키마 백업 `D:/db-backups/naver-estate/schema_20260924_174934.sql`. mibunyang 기준선 재승인 요청 18:07 발송) |
 | V064 | articles 가격변동 조회 부분 인덱스 `ix_articles_price_changed_active` 추가 (`/api/articles/price-changes` 4.2~5.5초 Parallel Seq Scan 149만 행 풀스캔 제거 — 조사반 C 실측, 세션 417) | **prod 적용완료 2026-09-24 19:21 KST**(세션 417 — AUTOCOMMIT 연결로 `CREATE INDEX CONCURRENTLY` 8.5초, 88KB, `indisvalid` True, EXPLAIN ANALYZE = Index Scan 3.6ms, 라이브 `/api/articles/price-changes` 5.8초 → 0.6초 실측. ⚠ 풀 프록시 `raw_connection().autocommit` 은 드라이버에 안 닿아 `ActiveSqlTransaction` — `engine.connect().execution_options(isolation_level='AUTOCOMMIT')` 로 실행) |
+| V065 | payments·billing_keys — anon·authenticated 전 권한(SELECT/INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER) 회수 (RLS 켜짐·정책 0·클라이언트 미사용인데 7권한 보유 = 정책 하나 추가되면 열리는 구조 차단 — 세션 417, mibunyang 인계 09-24) | **prod 적용완료 2026-09-24 19:31:41 KST**(세션 417 — raw_connection + 시험 모드 ROLLBACK 1회 통과 뒤 COMMIT, `role_table_grants` 대조: anon/authenticated 권한 0·service_role/postgres 불변·RLS 켜짐 유지. mibunyang 기준선 재승인 요청 발송) |
 
-- `db/migrations/` 폴더에 `V000__` ~ `V064__` SQL 파일 = 65 버전
+- `db/migrations/` 폴더에 `V000__` ~ `V065__` SQL 파일 = 66 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
-- 최신 = V064 (articles 가격변동 부분 인덱스 — **적용 예정**, 세션 417). 직전 V063 (storage 정책 삭제 — **prod 적용완료 2026-09-24**, 세션 417). V057~V062 는 위 표 참조(전부 prod 적용완료). 그 이전 최신 V056 (articles.detail_fail_count — **prod 적용완료 2026-09-09**, 세션 395: 코드보다 선행 실행 필수 게이트를 머지 전 적용으로 준수). 직전 V055 (infra.air_attempted_at — **prod 적용완료 2026-09-06**, 세션 394). 직전 V054(infra.emergency_updated_at)·V053(infra.childcare_updated_at)도 **prod 적용완료**(둘 다 2026-09-05, 세션 394·392) — 다만 V053 표기가 오래 "적용 대기"로 방치돼 있어 세션 394 가 소급 정정했다. V053~V055 는 childcare·emergency·air 세 수집기의 **동일 계열 순환 결함**(ORDER BY 부재)을 차례로 메운 3부작이다. 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피. ⚠ V052 가 이 의무를 놓쳐 세션 392 P2-6 drift 점검에서 소급 보강된 선례 — 마이그레이션 PR 에 본 표 갱신을 반드시 동반할 것)
+- 최신 = V065 (payments·billing_keys 클라이언트 권한 회수 — **prod 적용완료 2026-09-24 19:31**, 세션 417). 직전 V064 (articles 가격변동 부분 인덱스 — **prod 적용완료 2026-09-24 19:21**, 세션 417). 그 직전 V063 (storage 정책 삭제 — **prod 적용완료 2026-09-24**, 세션 417). V057~V062 는 위 표 참조(전부 prod 적용완료). 그 이전 최신 V056 (articles.detail_fail_count — **prod 적용완료 2026-09-09**, 세션 395: 코드보다 선행 실행 필수 게이트를 머지 전 적용으로 준수). 직전 V055 (infra.air_attempted_at — **prod 적용완료 2026-09-06**, 세션 394). 직전 V054(infra.emergency_updated_at)·V053(infra.childcare_updated_at)도 **prod 적용완료**(둘 다 2026-09-05, 세션 394·392) — 다만 V053 표기가 오래 "적용 대기"로 방치돼 있어 세션 394 가 소급 정정했다. V053~V055 는 childcare·emergency·air 세 수집기의 **동일 계열 순환 결함**(ORDER BY 부재)을 차례로 메운 3부작이다. 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피. ⚠ V052 가 이 의무를 놓쳐 세션 392 P2-6 drift 점검에서 소급 보강된 선례 — 마이그레이션 PR 에 본 표 갱신을 반드시 동반할 것)
   - V043 = prod 적용완료·backend 재시작(zombie 해소) 완료 — 세션 352 라이브 검증: `/presale/officetel-rental` 200 정상 응답 확인.
   - V043 = house_nm TEXT nullable 컬럼 추가 — 기존 아파트 청약 행은 NULL 로 두면 되므로 기존 데이터 영향 0. `ADD COLUMN IF NOT EXISTS` 라 멱등·안전. 코드(`db/mb_models.py`)가 이미 이 컬럼에 매핑돼 SELECT 목록에 포함되므로 **prod 선행 적용 필수** — 세션 352 에 적용·재검증 완료.
   - V040~V042 = 이슈 #323(청약홈 오피스텔·도시형·민간임대 편입) 3종 세트 — `CREATE TABLE/ADD COLUMN IF NOT EXISTS` 라 멱등·안전. V040 은 기존 컬럼에 `NOT NULL DEFAULT 'apt'`로 추가해 기존 아파트 데이터에 영향 0. V041/V042 는 신규 독립 테이블이라 공유 DB(mibunyang) 영향 0. 코드(`db/mb_models.py`)는 이미 이 컬럼/테이블에 매핑돼 있으므로 **prod 선행 적용 필수** — 세션 352 에 적용·재검증 완료.

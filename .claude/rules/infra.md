@@ -340,7 +340,7 @@ mibunyang 이 미리보기로 "달라진 것이 그것뿐"인지 대조해 accep
 
 - 새 public 표는 Supabase 기본 권한으로 anon/authenticated 에 전권한이 자동 부여된다 → **RLS 를 켜지 않은 새 표는 즉시 공개.**
   새 표·정책은 **클라이언트 쓰기 정책 없이 backend 경유**가 원칙(`user_profiles` 는 V062 로 클라이언트 쓰기 회수, `login/page.tsx` 보조 upsert 는 정리 대상).
-- `payments`·`billing_keys` 는 RLS 켜짐·정책 0·anon/authenticated 7권한 보유 = 지금은 닫혀 있으나 **정책 하나만 붙이면 그대로 열린다** — 붙일 땐 service_role 전용.
+- `payments`·`billing_keys` 는 V065 로 anon/authenticated 전 권한을 회수했다(2026-09-24, 세션 417) — RLS 켜짐·정책 0·클라이언트 권한 0. 새 정책을 붙일 땐 service_role 전용으로.
 - 관리자 판정은 **user_id 기반**이 원칙(이메일 판정 금지 — `backend/deps.py` ADMIN_EMAILS 는 정리 대상, 사장님 결정 대기).
 
 ## DB 백업·DR — 마이그레이션 전 수동 스냅샷 (세션 367 신설)

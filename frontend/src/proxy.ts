@@ -7,13 +7,19 @@ import { isLockedPath } from "@/lib/locked-paths";
 const ADMIN_PATHS = ["/admin"];
 // 로그인 필수 경로
 const AUTH_REQUIRED_PATHS = ["/complex", "/verify"];
-// 관리자 이메일 (환경변수 필수, 쉼표 구분 다중 지원, 미설정 시 관리자 접근 차단)
-const ADMIN_EMAILS = new Set(
-  (process.env.ADMIN_EMAIL ?? "")
-    .split(",")
-    .map((e) => e.trim())
-    .filter(Boolean),
-);
+// 관리자 user_id 목록 — 서버 전용 env `ADMIN_USER_IDS`(쉼표 구분, NEXT_PUBLIC 아님).
+// ⛔ 이메일로 판정하지 않는다(세션 417): 이메일 목록은 가입 안 된 주소가 들어가는 순간
+//    그 주소로 가입한 사람이 관리자가 되는 구조다. user.id 는 getUser() 가 Supabase 서버에서
+//    검증한 값이라 위조할 수 없다. backend `deps.is_admin_user` 와 같은 목록을 쓴다.
+// 요청마다 읽는다(테스트에서 env 를 바꿔 끼울 수 있게 — 쉼표 분리라 비용 무시 가능).
+function adminUserIds(): Set<string> {
+  return new Set(
+    (process.env.ADMIN_USER_IDS ?? "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean),
+  );
+}
 
 export async function proxy(request: NextRequest) {
   // 잠긴 페이지(세션 400 무료 전환 — /pricing)는 로그인 여부·역할 무관 전원 홈으로.
@@ -76,8 +82,12 @@ export async function proxy(request: NextRequest) {
       }
       return NextResponse.redirect(loginUrl);
     }
-    // 관리자 이메일이 아니면 차단 (ADMIN_EMAIL 미설정 시 전원 차단)
-    if (!ADMIN_EMAILS.has(user.email ?? "")) {
+    // 관리자 user_id 가 아니면 차단 (ADMIN_USER_IDS 미설정 시 전원 차단 = 안전한 쪽 실패)
+    const adminIds = adminUserIds();
+    if (adminIds.size === 0) {
+      console.warn("[proxy] ADMIN_USER_IDS 미설정 — /admin 전원 차단");
+    }
+    if (!adminIds.has(user.id)) {
       return NextResponse.redirect(new URL("/", request.url));
     }
   }

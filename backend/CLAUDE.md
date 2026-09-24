@@ -5,7 +5,7 @@
 | 경로 | 역할 |
 | --- | --- |
 | `main.py` | FastAPI 앱 진입점, 라우터 등록, CORS |
-| `deps.py` | 인증 의존성 (get_current_user, get_approved_user, get_admin_user) |
+| `deps.py` | 인증 의존성 (get_current_user, get_approved_user, get_admin_user). 관리자 판정 = `is_admin_user()` = `role == "admin"` 또는 `user_id ∈ ADMIN_USER_IDS` — **이메일 판정 금지**(세션 417) |
 | `routers/live/` | 실시간 크롤링 + 실거래가 on-demand 수집 API (search 등 분할) |
 | `routers/complexes.py` | 단지 조회/필터/시세/가격추이 |
 | `routers/articles.py` | 매물 조회/엑셀 내보내기 (xlsxwriter 엔진) |

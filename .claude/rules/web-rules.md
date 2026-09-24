@@ -55,6 +55,7 @@
 
 ### 인증
 - 보호 엔드포인트: `Depends(get_current_user)` 또는 `Depends(get_admin_user)`
+- 관리자 판정 = `role == "admin"` 또는 `user_id ∈ ADMIN_USER_IDS`(`deps.is_admin_user`). **이메일로 판정 금지** — 가입 안 된 주소가 목록에 들어가면 그 주소로 가입한 사람이 관리자가 된다(세션 417)
 - 401 응답 시 프론트엔드 자동 로그아웃 — 단 즉시 로그아웃하지 않고 `supabase.auth.getSession()`
   으로 로컬 세션 생존을 재확인한 뒤에만 로그아웃(세션 351: 멀티탭에서 Supabase 토큰 갱신
   경합으로 오탐 401 발생 시 멀쩡한 세션까지 튕기던 결함 방지, `_isLoggingOut` mutex는

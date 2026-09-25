@@ -129,6 +129,13 @@ _CONSECUTIVE_FAILURE_LIMIT = 5
 # 실측)라 이 잡의 time.sleep 은 자기 스레드 하나만 붙잡는다 — 다른 잡은 안 막힌다.
 _API_DOWN_BACKOFF_SEC: tuple[int, ...] = (30, 60, 120)
 
+# 회차 시간 예산(초). 일시 오류 재시도(호출당 최악 43초)·카나리 대기가 겹치면 회차가
+# 9시간 넘게 늘어날 수 있다(카나리 살아있음 + 전 단지 첫 op 실패 시 산출 약 9.6h).
+# monitor 는 kapt_costs 를 3h 에 cancelled 로 찍지만 스레드는 계속 돌아 다음날 06:20
+# 회차와 겹칠 수 있다 — 그래서 150분(스윕 임계 3h 보다 30분 앞)에서 스스로 멈춘다.
+# 남은 단지는 행이 안 생기므로 다음 회차에 그대로 대상이 된다. 테스트가 monkeypatch 한다.
+_RUN_TIME_BUDGET_SEC = 150 * 60
+
 _MATCH_JOB_TYPE = "kapt_match"
 _COST_JOB_TYPE = "kapt_costs"
 
@@ -1022,10 +1029,22 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         run_calls_start = cost_calls_made()
         run_retries_start = retry_calls_made()
         empty_calls = 0
+        run_started = time.monotonic()
+        budget_exhausted = False
         for mapping in queue:
             # 슬롯: 수집·실패만 센다. 미공개는 3콜뿐이라 슬롯을 먹이면 미공개가 앞줄에
             # 몰린 날 수집이 0건으로 끝난다.
             if collected + failed >= batch_size:
+                break
+            # 시간 예산 — 최소 1단지는 처리한 뒤부터 본다(예산이 아무리 작아도 회차가
+            # 빈손으로 끝나지 않게). 카나리 대기·일시 오류 재시도 sleep 도 경과에 들어간다.
+            if (collected + failed + empty) and time.monotonic() - run_started >= _RUN_TIME_BUDGET_SEC:
+                budget_exhausted = True
+                logger.warning(
+                    "[kapt_costs] 시간 예산 %d분 소진 — 수집 %d·실패 %d·미공개 %d 에서 중단, "
+                    "남은 단지는 다음 회차",
+                    _RUN_TIME_BUDGET_SEC // 60, collected, failed, empty,
+                )
                 break
             if empty >= _EMPTY_SCAN_CAP:
                 scan_capped = True
@@ -1186,6 +1205,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             message = (
                 f"공공데이터 서버는 응답하지만 {failed}단지 전부 오류 — 수집 0 "
                 f"(미공개 {empty}, 마지막 오류: {last_failure})"
+                + (" — 시간 예산 소진으로 중단" if budget_exhausted else "")
             )
             _fail_job(db, job, message)
             logger.error("[kapt_costs] %s", message)
@@ -1215,7 +1235,8 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         if collected == 0 and scanned and failed > 0:
             _fail_job(
                 db, job,
-                f"대상 {scanned}개 중 수집 0건 (실패 {failed}, 미공개 {empty})",
+                f"대상 {scanned}개 중 수집 0건 (실패 {failed}, 미공개 {empty})"
+                + (" — 시간 예산 소진으로 중단" if budget_exhausted else ""),
             )
             logger.error(
                 "[kapt_costs] silent failure 감지: 대상 %d개 수집 0건 (실패 %d)",
@@ -1281,7 +1302,8 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         logger.info(
             "[kapt_costs] 완료: %d 수집, %d 실패, %d 미공개 (대상 %d, 기준월 %s)%s",
             collected, failed, empty, scanned, target_month,
-            f" — 미공개 스캔 상한 {_EMPTY_SCAN_CAP} 도달로 중단" if scan_capped else "",
+            (f" — 미공개 스캔 상한 {_EMPTY_SCAN_CAP} 도달로 중단" if scan_capped else "")
+            + (" — 시간 예산 소진으로 중단" if budget_exhausted else ""),
         )
         return {
             "collected": collected,

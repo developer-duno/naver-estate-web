@@ -3,6 +3,7 @@
 외부 API 호출은 전부 mock — 실제 data.go.kr 호출 0 (conftest 의 외부발송 봉쇄 관례 답습).
 """
 
+import time as _real_time
 from datetime import datetime, timezone
 
 import pytest
@@ -1560,6 +1561,8 @@ def _fake_sleep(monkeypatch, module):
     slept: list = []
 
     class _T:
+        monotonic = staticmethod(_real_time.monotonic)  # 회차 시간 예산 검사용 — 진짜 시계
+
         @staticmethod
         def sleep(seconds):
             slept.append(seconds)
@@ -3135,3 +3138,64 @@ def test_retry_calls_logged_in_run_summary(db, monkeypatch, caplog):
 
     assert result["collected"] == 1
     assert "일시 오류 재시도 1콜" in caplog.text, caplog.text
+
+
+# ── 회차 시간 예산 (항목 9): 재시도·카나리 대기가 겹쳐도 스윕 임계 3h 전에 스스로 멈춘다 ──
+
+
+@pytest.mark.parametrize("first_ok,expected_status", [
+    (True, "completed"),   # 수집 ≥1 → 부분 성공이라 completed
+    (False, "failed"),     # 수집 0·실패 1 → 기존 ① 가드로 failed
+])
+def test_collect_costs_time_budget_stops_after_first_complex(
+    db, monkeypatch, caplog, first_ok, expected_status,
+):
+    """예산 0초 → 첫 단지만 처리하고 중단 · 남은 단지 호출 0 · 마감은 기존 규칙 그대로.
+
+    두 축을 다르게: 대상 4 · 처리 1 · 잔여 3.
+    뮤테이션: 예산 검사를 지우면 4단지가 전부 불려 FAIL.
+    """
+    for i in range(4):
+        _make_complex(db, complex_no=f"72{i:02d}")
+        _seed_mapping(db, complex_no=f"72{i:02d}", kapt_code=f"T{i}")
+    called = []
+
+    def common(code, month):
+        called.append(code)
+        if first_ok:
+            return {"aV3": 100}
+        raise KaptApiError("data.go.kr 오류 코드 04(HTTP 에러) — op=x", code="04", op="x")
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    monkeypatch.setattr(service_kapt, "_RUN_TIME_BUDGET_SEC", 0)
+    caplog.set_level("WARNING", logger="crawler.service_kapt")
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert called == ["T0"], f"예산 소진 뒤에도 호출이 나갔다: {called}"
+    assert "시간 예산 0분 소진" in caplog.text, caplog.text
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == expected_status, (job.status, job.error_message, result)
+    if not first_ok:
+        assert "시간 예산 소진" in (job.error_message or ""), job.error_message
+
+
+def test_collect_costs_time_budget_ample_has_no_effect(db, monkeypatch, caplog):
+    """예산이 충분하면 영향 0 — 모든 단지를 처리하고 예산 문구가 안 찍힌다."""
+    for i in range(4):
+        _make_complex(db, complex_no=f"73{i:02d}")
+        _seed_mapping(db, complex_no=f"73{i:02d}", kapt_code=f"U{i}")
+    called = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost",
+        lambda code, month: called.append(code) or {"aV3": 100},
+    )
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    caplog.set_level("INFO", logger="crawler.service_kapt")
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert result["collected"] == 4 and called == ["U0", "U1", "U2", "U3"]
+    assert "시간 예산" not in caplog.text

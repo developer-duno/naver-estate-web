@@ -9,6 +9,7 @@ import { getAdminVerifications, approveVerification, rejectVerification } from "
 import type { AgentVerification } from "@/types/admin";
 import { getBrokerStatusLabel } from "@/lib/admin-labels";
 import AdminCard from "./AdminCard";
+import RawDetail from "./RawDetail";
 
 interface Props {
   token: string;
@@ -89,7 +90,8 @@ export default function VerificationReview({ token }: Props) {
       help="승인은 바로 반영돼요 — 이 사람이 전문가로 바뀌어 구독자 자료를 볼 수 있게 되고, 승인 안내 메일이 나가요. 거부는 사유를 적어야 하고, 적은 사유가 메일로 전달돼요"
     >
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        {/* 8열 — 휴대폰에서 칸이 눌리지 않게 최소 폭을 두고 가로로 넘긴다 */}
+        <table className="w-full min-w-[760px] text-sm">
           <thead>
             <tr className="border-b text-left text-xs text-gray-500">
               <th className="pb-2 pr-3">이메일</th>
@@ -114,16 +116,21 @@ export default function VerificationReview({ token }: Props) {
                   </span>
                 </td>
                 <td className="py-2 pr-3">
+                  {/* 등록번호·국토부 원래 상태값은 마우스를 올리거나(데스크톱) 칩을 누르면(휴대폰) 보인다 */}
                   {v.broker_verified ? (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700"
-                      title={v.broker_jurirno ? `등록번호 ${v.broker_jurirno}` : undefined}>
-                      국토부 확인됨
-                    </span>
+                    <RawDetail raw={v.broker_jurirno ? `등록번호 ${v.broker_jurirno}` : ""}>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700"
+                        title={v.broker_jurirno ? `등록번호 ${v.broker_jurirno}` : undefined}>
+                        국토부 확인됨
+                      </span>
+                    </RawDetail>
                   ) : (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700"
-                      title={v.broker_status ?? undefined}>
-                      {getBrokerStatusLabel(v.broker_status)}
-                    </span>
+                    <RawDetail raw={v.broker_status}>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700"
+                        title={v.broker_status ?? undefined}>
+                        {getBrokerStatusLabel(v.broker_status)}
+                      </span>
+                    </RawDetail>
                   )}
                 </td>
                 <td className="py-2 pr-3">

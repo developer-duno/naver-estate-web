@@ -10,6 +10,7 @@ import {
   type RecrawlStatus,
 } from "@/lib/api";
 import AdminCard from "./AdminCard";
+import RawDetail from "./RawDetail";
 
 interface Props {
   getToken: () => Promise<string>;
@@ -155,6 +156,10 @@ export default function BulkRecrawlCard({ getToken }: Props) {
             <p className="mt-1 text-[11px] text-red-700" title={progressQuery.data.job.error_message}>
               {progressQuery.data.job.error_plain || progressQuery.data.job.error_message}
             </p>
+          )}
+          {/* 우리말 번역이 따로 있을 때만 원문을 눌러서 펼친다(휴대폰) — 번역이 없으면 위 줄이 이미 원문이다 */}
+          {progressQuery.data.job.error_plain && (
+            <RawDetail raw={progressQuery.data.job.error_message} className="mt-0.5" />
           )}
         </div>
       )}

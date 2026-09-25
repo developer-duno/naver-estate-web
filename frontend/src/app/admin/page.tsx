@@ -30,6 +30,7 @@ import FailureBreakdown from "@/components/admin/FailureBreakdown";
 import AdminCard from "@/components/admin/AdminCard";
 import AdminSection from "@/components/admin/AdminSection";
 import RunningJobsLine from "@/components/admin/RunningJobsLine";
+import RawDetail from "@/components/admin/RawDetail";
 import { getAdminDetailedStats, getAdminAuditLogs } from "@/lib/api";
 import { getActionLabel, getTargetLabel } from "@/lib/admin-labels";
 import type { DetailedStats, AuditLog } from "@/types/admin";
@@ -130,17 +131,24 @@ export default function AdminDashboard() {
           <ul className="space-y-2">
             {recentLogs.map((l) => (
               <li key={l.id} className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">
-                  <span className="bg-gray-100 text-xs px-1.5 py-0.5 rounded mr-1">{getActionLabel(l.action)}</span>
-                  {/* 사용자 대상은 36자 UUID 대신 앞 8자 + "…" (전체는 마우스를 올리면) */}
-                  {l.target_type === "user" && l.target_id && l.target_id.length > 8 ? (
-                    <span title={l.target_id}>{getTargetLabel("user", `${l.target_id.slice(0, 8)}…`)}</span>
-                  ) : l.target_type ? (
-                    getTargetLabel(l.target_type, l.target_id)
-                  ) : (
-                    ""
-                  )}
-                </span>
+                {/* 사용자 대상은 36자 UUID 대신 앞 8자 + "…". 전체는 마우스를 올리거나, 휴대폰에서는
+                    왼쪽 글자를 누르면 펼쳐진다(RawDetail — 접힌 모양은 그대로라 대시보드 사진 불변).
+                    원문이 필요 없는 줄은 raw 가 비어 옛 모양 그대로 그린다. */}
+                <RawDetail
+                  raw={l.target_type === "user" && l.target_id && l.target_id.length > 8 ? l.target_id : ""}
+                  className="min-w-0"
+                >
+                  <span className="text-gray-600">
+                    <span className="bg-gray-100 text-xs px-1.5 py-0.5 rounded mr-1">{getActionLabel(l.action)}</span>
+                    {l.target_type === "user" && l.target_id && l.target_id.length > 8 ? (
+                      <span title={l.target_id}>{getTargetLabel("user", `${l.target_id.slice(0, 8)}…`)}</span>
+                    ) : l.target_type ? (
+                      getTargetLabel(l.target_type, l.target_id)
+                    ) : (
+                      ""
+                    )}
+                  </span>
+                </RawDetail>
                 <span className="text-xs text-gray-500">
                   {l.created_at ? new Date(l.created_at).toLocaleString("ko") : ""}
                 </span>

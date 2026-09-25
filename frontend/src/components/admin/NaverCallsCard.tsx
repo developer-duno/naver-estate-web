@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getAdminNaverCalls, type NaverCallStats } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import AdminCard from "./AdminCard";
+import RawDetail from "./RawDetail";
 
 interface Props {
   getToken: () => Promise<string>;
@@ -133,7 +134,8 @@ export default function NaverCallsCard({ getToken, hideTitle = false }: Props) {
       {data && (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            {/* 5열 — 휴대폰에서 칸이 눌리지 않게 최소 폭을 두고 가로로 넘긴다 */}
+            <table className="w-full min-w-[420px] text-sm">
               <thead>
                 <tr className="text-xs text-gray-500 border-b">
                   <th className="text-left py-1.5 font-medium">누가</th>
@@ -158,9 +160,11 @@ export default function NaverCallsCard({ getToken, hideTitle = false }: Props) {
                         {GROUP_LABEL[r.group]}
                       </span>
                     </td>
-                    {/* 코드 원문(label)은 본문에 두지 않고 마우스를 올리면 보이게 한다 */}
+                    {/* 코드 원문(label)은 본문에 두지 않는다 — 마우스를 올리거나 이름을 누르면 보인다 */}
                     <td className="py-1.5 text-gray-700" title={r.label}>
-                      {r.name}
+                      <RawDetail raw={r.label}>
+                        <span>{r.name}</span>
+                      </RawDetail>
                     </td>
                     <td className="py-1.5 text-right tabular-nums">{r.counts["10m"].toLocaleString("ko")}</td>
                     <td className="py-1.5 text-right tabular-nums">{r.counts["1h"].toLocaleString("ko")}</td>

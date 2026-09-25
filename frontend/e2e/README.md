@@ -2,7 +2,7 @@
 
 ## Project 구조
 
-`playwright.config.ts` 에 5개 project (CI e2e job matrix 는 이 중 4개 = admin/public/public-visual/public-visual-mobile).
+`playwright.config.ts` 에 6개 project (CI e2e job matrix 는 이 중 5개 = admin/admin-mobile/public/public-visual/public-visual-mobile).
 
 | project | 대상 파일 | storageState | 용도 (테스트 수는 2026-09-13 `--list` 실측) |
 |---|---|---|---|
@@ -10,9 +10,10 @@
 | `public` | 전부 (setup·admin·시각 스펙 제외) | 없음 | 비인증 경로 회귀 **85개 / 13파일** |
 | `public-visual` | `public-flow`·`compare-visual`·`mibunyang-visual`·`search-visual` | 없음 | 비인증 시각 회귀 **6개 / 4파일** |
 | `public-visual-mobile` | `mibunyang-visual` | 없음 | 휴대폰 화면 시각 회귀 **1개 / 1파일**(세션 417) — `devices["iPhone 13"]` 뷰포트·isMobile·터치·UA 를 쓰되 엔진은 chromium(CI 가 chromium 만 설치), 배율 1 |
-| `admin` | `admin-dashboard`·`admin-pages`·`complex-visual` | 읽기 (setup 산출물) | 관리자 화면 + 단지 상세 시각 회귀 **6개 / 4파일**(setup 포함) |
+| `admin` | `admin-dashboard`·`admin-dashboard-sections`·`admin-pages`·`complex-visual` | 읽기 (setup 산출물) | 관리자 화면 + 단지 상세 시각 회귀 **6개 / 4파일**(setup 포함, 2026-09-13 실측 — 그 뒤 `admin-dashboard-sections` 추가) |
+| `admin-mobile` | `admin-dashboard` | 읽기 (setup 산출물) | 관리자 대시보드 휴대폰 화면 **1개 / 1파일**(세션 419, 사장님 "폰도 쓴다") — `public-visual-mobile` 과 같은 iPhone 13 뷰포트·chromium·배율 1 |
 
-`admin` project 는 `setup` 에 `dependencies` 로 묶여 있어서 `--project=admin` 실행 시 setup 이 먼저 돈다.
+`admin`·`admin-mobile` project 는 `setup` 에 `dependencies` 로 묶여 있어서 `--project=admin`(또는 `admin-mobile`) 실행 시 setup 이 먼저 돈다. CI 는 두 job 모두에 로그인 산출물(`admin-auth-state`)을 내려받는다.
 
 ## 로컬에서 admin e2e 돌리기
 
@@ -59,11 +60,11 @@ GitHub secrets 5개 필요:
 
 secrets 미설정 시 `setup` project 가 `TEST_ADMIN_*` missing 로그와 함께 skip → `admin` project 는 dependency 실패로 같이 skip → job 자체는 green. secrets 등록 순간 자동으로 진짜 테스트 시작.
 
-아티팩트 (project 별로 4벌씩 — matrix job 이름이 접미사):
+아티팩트 (project 별로 5벌씩 — matrix job 이름이 접미사):
 - `playwright-report-<project>` — HTML 리포트 (14일 보관)
 - `admin-screenshots-<project>` — `test-results/` 실패 시 자동 캡처 (14일 보관)
 - `updated-snapshots-<project>` — workflow_dispatch + `update_snapshots=true` 일 때만.
-  ⚠ 각 꾸러미에 PNG **전량**(현재 20장 — 세는 법 `find frontend/e2e -name "*.png" | wc -l`)이 담기지만 유효한 재촬영본은 `*-<project>-linux.png` 뿐이다
+  ⚠ 각 꾸러미에 PNG **전량**(현재 21장, `admin-mobile` baseline 생성 후 22장 — 세는 법 `find frontend/e2e -name "*.png" | wc -l`)이 담기지만 유효한 재촬영본은 `*-<project>-linux.png` 뿐이다
   (합치면 옛본이 새본을 덮는다). 대조·판정 절차 = 아래 §baseline 재생성 절차.
 
 ## 시각 회귀 (toHaveScreenshot)
@@ -74,11 +75,12 @@ baseline 은 spec 파일별 `*-snapshots/` 디렉토리에 `<이름>-<project>-l
 (파일명에 project 가 들어가므로 같은 spec 을 두 project 에서 돌리면 장이 이중 생성된다 —
 `public` 의 testIgnore 가 `public-flow` 를 제외하는 이유).
 
-| project | PNG (현재 **20장** — 2026-09-17 실측 20장 + 세션 417 `public-visual-mobile` 1장 − 세션 419 `admin-settings` 1장(설정 화면 삭제). `header-public-desktop` baseline 은 PR #501 에서 생성·커밋됨) |
+| project | PNG (현재 **21장** — 2026-09-17 실측 20장 + 세션 417 `public-visual-mobile` 1장 − 세션 419 `admin-settings` 1장(설정 화면 삭제) + #589 `admin-dashboard-sections` 1장. 세션 419 `admin-mobile` baseline 생성 후 **22장**. `header-public-desktop` baseline 은 PR #501 에서 생성·커밋됨) |
 |---|---|
 | `public` (10) | `blog-index-{desktop,iphone}` · `blog-slug-{desktop,iphone}` · `blog-slug-realtime-{desktop,iphone}` · `blog-slug-radar-weights-{desktop,iphone}` · `blog-slug-for-agents-{desktop,iphone}` |
 | `public-visual` (5) | `home` · `login` · `compare` · `mibunyang` · **`header-public-desktop`**(세션 400 신설) |
-| `admin` (4) | `admin-dashboard` · `admin-data` · `admin-users` · `complex` (옛 `admin-settings` 는 세션 419 에 설정 화면과 함께 삭제) |
+| `admin` (5) | `admin-dashboard` · `admin-dashboard-sections` · `admin-data` · `admin-users` · `complex` (옛 `admin-settings` 는 세션 419 에 설정 화면과 함께 삭제) |
+| `admin-mobile` (1) | `admin-dashboard`(파일명 `admin-dashboard-admin-mobile-linux.png` — 데스크톱 장 `admin-dashboard-admin-linux.png` 와 접미사로 갈린다. ⚠ 접미사 필터 `*-admin-linux.png` 에는 안 걸리므로 두 꾸러미가 섞이지 않는다) |
 | `public-visual-mobile` (1) | `mibunyang`(파일명 `mibunyang-public-visual-mobile-linux.png` — 같은 spec 의 데스크톱 장 `mibunyang-public-visual-linux.png` 와 접미사로 갈린다) |
 
 임계: 전역 `maxDiffPixelRatio: 0.02` + `animations: "disabled"`(playwright.config.ts). 단
@@ -98,7 +100,7 @@ baseline 은 spec 파일별 `*-snapshots/` 디렉토리에 `<이름>-<project>-l
 gh workflow run ci.yml --ref <작업 브랜치> -f update_snapshots=true
 ```
 
-이후 artifact 4개 다운로드 → 접미사 필터 sha256 대조 → 갱신 로그 줄 수 대조 → 기계 diff →
+이후 artifact 5개 다운로드 → 접미사 필터 sha256 대조 → 갱신 로그 줄 수 대조 → 기계 diff →
 눈 검토 → 커밋 → 일반 CI 초록 확인. **각 단계의 기대값과 함정은 아래 §baseline 재생성 절차 를 그대로 따른다**
 (특히 값 없는 `--update-snapshots` 는 파일을 안 갱신한다는 함정, 그리고 "stable 실패 0건"을
 판정 근거로 쓰면 안 되는 이유).
@@ -188,13 +190,13 @@ gh workflow run ci.yml --ref <작업 브랜치> -f update_snapshots=true
 ```
 
 ⚠ `--ref main` 은 paths-filter(`getChangesInLastCommit`)가 마지막 커밋만 보므로 **e2e job 이
-skip 될 수 있다**(소스로 확정). dispatch 직후 run 페이지에 **e2e 4 job(admin/public/public-visual/public-visual-mobile)이
+skip 될 수 있다**(소스로 확정). dispatch 직후 run 페이지에 **e2e 5 job(admin/admin-mobile/public/public-visual/public-visual-mobile)이
 실재하는지** 먼저 확인한다 — 없으면 그 run 은 아무것도 재촬영하지 않았다.
 
-**② artifact 4개 전부 다운로드**
+**② artifact 5개 전부 다운로드**
 
 ```bash
-for p in admin public public-visual public-visual-mobile; do
+for p in admin admin-mobile public public-visual public-visual-mobile; do
   gh run download <RUN_ID> -n updated-snapshots-$p -D "$DL/$p"
 done
 ```
@@ -202,12 +204,12 @@ done
 **③ 꾸러미별 접미사 필터로 sha256 대조**
 
 ⚠ **artifact 를 통째로 덮어쓰지 마라.** 각 꾸러미에는 그 프로젝트가 재촬영한 것만이 아니라
-**e2e/ 의 PNG 전량**(현재 20장)이 담긴다(path 글롭이 전체 스냅샷 디렉터리). 4꾸러미를 한 폴더에
+**e2e/ 의 PNG 전량**(현재 21장)이 담긴다(path 글롭이 전체 스냅샷 디렉터리). 5꾸러미를 한 폴더에
 합치면 **옛본이 새본을 덮는다.** 꾸러미 `p` 에서 유효한 재촬영본은 `*-<p>-linux.png` 뿐이다.
 
 ```bash
 cd frontend/e2e
-for p in admin public public-visual public-visual-mobile; do
+for p in admin admin-mobile public public-visual public-visual-mobile; do
   for f in $(cd "$DL/$p" && find . -name "*-$p-linux.png" | sed 's|^\./||'); do
     if [ ! -f "$f" ]; then
       echo "신규: $f"          # ← 새 baseline (기존 파일만 비교하면 조용히 놓친다)

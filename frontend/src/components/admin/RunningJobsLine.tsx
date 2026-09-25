@@ -12,6 +12,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { getAdminCrawlJobs } from "@/lib/api";
 import { jobTypeLabel } from "@/lib/crawl-job-labels";
 import type { CrawlJobDetail, PaginatedResponse } from "@/types/admin";
+import RawDetail from "./RawDetail";
 
 export const RUNNING_JOBS_REFETCH_MS = 15_000;
 
@@ -62,10 +63,13 @@ export default function RunningJobsLine({ token }: Props) {
       <ul className="space-y-1">
         {jobs.map((j) => (
           <li key={j.id} className="flex flex-wrap items-baseline gap-x-2 text-gray-600">
-            <span className="text-gray-800" title={j.job_type}>
-              {jobTypeLabel(j.job_type)}
-              {j.target_id ? ` — 단지 ${j.target_id}` : ""}
-            </span>
+            {/* 작업 코드 원문은 이름을 누르면 펼쳐진다(휴대폰) — 접힌 모양은 그대로라 대시보드 사진 불변 */}
+            <RawDetail raw={j.job_type}>
+              <span className="text-gray-800" title={j.job_type}>
+                {jobTypeLabel(j.job_type)}
+                {j.target_id ? ` — 단지 ${j.target_id}` : ""}
+              </span>
+            </RawDetail>
             <span className="text-xs text-blue-700 tabular-nums">{progressText(j)}</span>
             {j.started_at && <span className="text-xs text-gray-500">{startedText(j.started_at)}</span>}
           </li>

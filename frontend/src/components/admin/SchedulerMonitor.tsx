@@ -19,6 +19,7 @@ import {
   type JobStatus,
 } from "@/lib/admin/job-status-styles";
 import AdminCard from "./AdminCard";
+import RawDetail from "./RawDetail";
 
 /** 상대 시간 포맷 (예: "2시간 전") */
 function relativeTime(iso: string): string {
@@ -159,13 +160,17 @@ function JobRow({
               <span className="ml-1 text-[10px] text-gray-400 border border-gray-200 rounded px-1">꺼짐</span>
             )}
           </div>
+          {/* 출처 주소 원문은 마우스를 올리거나(데스크톱) 출처 글자를 누르면(휴대폰) 보인다.
+              누름은 행 펼침(onToggle)으로 올라가지 않는다(RawDetail 이 막는다) */}
           {job.source && (
-            <div
-              className="text-[11px] text-gray-400 truncate max-w-[220px]"
-              title={job.source_url ?? job.source}
-            >
-              자료 출처: {job.source}
-            </div>
+            <RawDetail raw={job.source_url ?? ""}>
+              <span
+                className="block text-[11px] text-gray-400 truncate max-w-[220px]"
+                title={job.source_url ?? job.source}
+              >
+                자료 출처: {job.source}
+              </span>
+            </RawDetail>
           )}
         </td>
 
@@ -221,6 +226,8 @@ function JobRow({
             title={job.last_run.error_message}
           >
             {job.last_run.error_plain || UNKNOWN_ERROR_TEXT}
+            {/* 휴대폰에는 마우스가 없으므로 원문은 눌러서 펼친다 */}
+            <RawDetail raw={job.last_run.error_message} className="mt-1" />
           </td>
         </tr>
       )}

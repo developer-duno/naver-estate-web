@@ -55,7 +55,6 @@ export const queryKeys = {
         : (["admin", "crawlJobs", params] as const),
     auditLogs: (params?: Record<string, unknown>) =>
       ["admin", "auditLogs", params] as const,
-    settings: () => ["admin", "settings"] as const,
     schedulerStatus: () => ["admin", "schedulerStatus"] as const,
     schedulerCalendar: (year: number, month: number, mode: string) =>
       ["admin", "schedulerCalendar", year, month, mode] as const,

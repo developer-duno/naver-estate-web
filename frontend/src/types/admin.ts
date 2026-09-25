@@ -28,7 +28,8 @@ export interface AuditLog {
   created_at: string;
 }
 
-/** 관리자 설정 */
+/** 관리자 설정 — 화면·API 는 세션 419(2026-09-26)에 삭제됐다.
+ *  e2e/fixtures/admin-mocks.ts 의 옛 mock 이 아직 이 타입을 import 해서만 남겨 둔다(후속 정리 대상). */
 export interface AdminSetting {
   key: string;
   value: unknown;

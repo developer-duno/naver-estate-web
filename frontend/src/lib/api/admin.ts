@@ -2,7 +2,7 @@
  * 관리자 API — 모든 호출에 Bearer 토큰 필수
  */
 
-import type { UserProfile, AuditLog, AdminSetting, AgentVerification, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail, SchedulerStatusResponse, SchedulerCalendarResponse, DataFreshnessResponse, QuotaStatus } from "@/types/admin";
+import type { UserProfile, AuditLog, AgentVerification, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail, SchedulerStatusResponse, SchedulerCalendarResponse, DataFreshnessResponse, QuotaStatus } from "@/types/admin";
 import { fetchApi, adminHeaders, LIVE_TIMEOUT_MS } from "./core";
 
 /** 관리자: 사용자 목록 */
@@ -68,19 +68,8 @@ export async function getAdminAuditLogs(token: string, params?: { user_id?: stri
   return fetchApi<PaginatedResponse<AuditLog>>(`/api/admin/audit-logs?${qs}`, { headers: adminHeaders(token) });
 }
 
-/** 관리자: 설정 목록 */
-export async function getAdminSettings(token: string) {
-  return fetchApi<{ items: AdminSetting[] }>(`/api/admin/settings`, { headers: adminHeaders(token) });
-}
-
-/** 관리자: 설정 변경 */
-export async function updateAdminSetting(token: string, key: string, value: Record<string, unknown>) {
-  return fetchApi<{ status: string }>(`/api/admin/settings/${encodeURIComponent(key)}`, {
-    method: "PATCH",
-    headers: { ...adminHeaders(token), "Content-Type": "application/json" },
-    body: JSON.stringify({ value }),
-  });
-}
+// 세션 419(2026-09-26 사장님 결정): getAdminSettings·updateAdminSetting 제거 — 서버 엔드포인트
+// (GET /api/admin/settings·PATCH /api/admin/settings/{key})와 설정 화면을 함께 삭제했다.
 
 // 세션 401: deleteStaleData 제거 — 서버 엔드포인트(DELETE /api/admin/data/stale)와 함께 삭제.
 // 사유는 app/admin/data/page.tsx 헤더 주석 참조(93만건·7,076단지 가격근거 소실·사용 이력 0건).

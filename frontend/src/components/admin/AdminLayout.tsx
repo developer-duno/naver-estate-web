@@ -7,11 +7,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const NAV_ITEMS = [
   { href: "/admin", label: "대시보드" },
   { href: "/admin/users", label: "사용자" },
-  { href: "/admin/crawl", label: "크롤링" },
-  { href: "/admin/scheduler-calendar", label: "캘린더" },
+  { href: "/admin/crawl", label: "자료 수집" },
+  { href: "/admin/scheduler-calendar", label: "수집 일정" },
   { href: "/admin/data", label: "데이터" },
   { href: "/admin/logs", label: "감사 로그" },
-  { href: "/admin/settings", label: "설정" },
+  // 세션 419(2026-09-26 사장님 결정): "설정" 탭 삭제 — 저장해도 아무것도 바뀌지 않는 화면이었다.
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

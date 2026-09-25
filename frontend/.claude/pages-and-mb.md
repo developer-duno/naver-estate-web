@@ -34,8 +34,9 @@
 > ③ 원인 5절(`AdminSection` = `<details>` 기반, 기본 접힘, **펼쳤을 때만 안쪽 렌더 = 접힌 동안 API 0**, `#id` 해시로 자동 열림: 자동 작업 현황·데이터 신선도·실패 자세히·네이버 호출·방문·요청 통계)
 > ④ 작업(`CollectorTrigger`/`BulkRecrawlCard`) + 최근 활동. 옛 3열(좌 `AdminLeftNav` 목차·우 `AdminLivePanel`)은 삭제됐다(경위 = `docs/archive/superpowers/2026-05-28-pr-6e-admin-dashboard-3column-design.md` 머리 주석).
 > `AdminCard` 의 `help` 는 ⓘ 버튼(`aria-label="설명 보기"`) 토글로 기본 숨김 — 문구는 그대로 보존. 24시간 오류·채워진 비율·가치 점수는 `/admin/data` "숫자 자세히 보기" 로 이동.
-> 하위 화면 규칙: 필터는 **목록 카드 헤더(`AdminCard action`)** 에 둔다(크롤·사용자·감사 로그·달력 통일) · 되돌릴 수 없는 조작(정지·거부·관리자 승격·크롤 취소·설정 저장)은 `window.confirm` + 무엇이 바뀌는지 한 줄 · 개발자 원문(job_type·영어 오류·ms·4xx)은 본문에 두지 않고 `title` 로만.
-> 작업 이름 사전 `src/lib/crawl-job-labels.ts` 의 `label` 은 BE `crawler/plain_words.py JOB_WORDS` 와 **글자까지 동일**해야 한다(가드 `crawl-job-labels-sync.test.ts` 가 BE 파일을 읽어 대조). 시각 회귀 baseline 4장(dashboard·data·users·settings)은 이 배치 기준(CI run 36156873895).
+> 하위 화면 규칙: 필터는 **목록 카드 헤더(`AdminCard action`)** 에 둔다(크롤·사용자·감사 로그·달력 통일) · 되돌릴 수 없는 조작(정지·거부·관리자 승격·크롤 취소)은 `window.confirm` + 무엇이 바뀌는지 한 줄 · 개발자 원문(job_type·영어 오류·ms·4xx)은 본문에 두지 않고 `title` 로만.
+> 작업 이름 사전 `src/lib/crawl-job-labels.ts` 의 `label` 은 BE `crawler/plain_words.py JOB_WORDS` 와 **글자까지 동일**해야 한다(가드 `crawl-job-labels-sync.test.ts` 가 BE 파일을 읽어 대조). 시각 회귀 baseline 4장(dashboard·data·users·settings)은 이 배치 기준(CI run 36156873895) — settings 장은 아래 설정 삭제로 제거됐다.
+> **탭 6개(세션 419, 2026-09-26 사장님 결정)**: 대시보드·사용자·**자료 수집**(옛 "크롤링", `/admin/crawl`)·**수집 일정**(옛 "캘린더", `/admin/scheduler-calendar`, 제목 "수집 일정표")·데이터·감사 로그. 옛 **"설정" 탭(`/admin/settings`)은 삭제됨** — `admin_settings` 값을 읽는 백엔드 코드가 없어 저장해도 아무것도 바뀌지 않는 화면이었다. API(`GET /api/admin/settings`·`PATCH /api/admin/settings/{key}`)도 함께 삭제, 표(`AdminSetting`)는 기록 보존용으로 남김, 감사 로그 `admin_setting_update` 라벨은 과거 기록 표시용으로 유지.
 | `/pricing` | 정적 (B2B 구독 안내) | — |
 | `/blog` + `/blog/[slug]` | 라인업 = `.claude/BLOG.md` (단일 진실 공급원) | — |
 

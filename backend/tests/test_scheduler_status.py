@@ -318,9 +318,10 @@ def test_scheduler_status_non_env_job(mock_sched, client, db):
 # 겹쳐 쿨다운이 재발할 수 있어 회귀 테스트로 고정한다.
 
 POPULAR_EXPECTED = [
-    ("popular_1030", 10, 45, "인기 단지 크롤링 10:45", "매일 10:45"),
-    ("popular_1430", 14, 45, "인기 단지 크롤링 14:45", "매일 14:45"),
-    ("popular_1900", 19, 15, "인기 단지 크롤링 19:15", "매일 19:15"),
+    # 이름 = crawler/scheduler.py add_job(name=...) 정본 (세션 418 — 화면·알림 이름 통일)
+    ("popular_1030", 10, 45, "자주 보는 단지 미리 갱신 10:45", "매일 10:45"),
+    ("popular_1430", 14, 45, "자주 보는 단지 미리 갱신 14:45", "매일 14:45"),
+    ("popular_1900", 19, 15, "자주 보는 단지 미리 갱신 19:15", "매일 19:15"),
 ]
 
 
@@ -371,3 +372,34 @@ def test_scheduler_status_exposes_popular_15min_shift(mock_sched, client, db):
         assert jobs[job_id]["name"] == expected_name
         assert jobs[job_id]["schedule"] == expected_schedule
         assert jobs[job_id]["enabled"] is True  # POPULAR_CRAWL_ENABLED 기본 true
+
+
+# ── 이름 원천 — 활성 잡은 스케줄러 이름을 먼저 쓴다 (세션 418) ──
+#
+# 텔레그램 알림(job_error_listener._job_label)이 스케줄러 이름을 우선하므로 화면도
+# 같은 원천을 먼저 본다. META 이름은 비활성·미실행 때의 폴백이다.
+
+
+def test_scheduler_status_prefers_scheduler_job_name(client, db):
+    """스케줄러에 등록된 잡이면 응답 name = sched_job.name, 없는 잡은 META 이름.
+
+    뮤테이션: 라우터의 `name_text = sched_job.name` 을 지우면 첫 단언이 FAIL.
+    """
+    from types import SimpleNamespace
+
+    from routers.admin.scheduler import SCHEDULER_JOB_META
+
+    fake_job = SimpleNamespace(name="스케줄러가 가진 이름", next_run_time=None, trigger=None)
+
+    class _FakeScheduler:
+        def get_job(self, job_id):
+            return fake_job if job_id == "collect_prices" else None
+
+    _make_admin(db)
+    with patch("crawler.scheduler.get_scheduler", return_value=_FakeScheduler()):
+        res = client.get("/api/admin/scheduler-status", headers=_auth(_token("admin1")))
+    assert res.status_code == 200
+    jobs = {j["scheduler_job_id"]: j for j in res.json()["jobs"]}
+    assert jobs["collect_prices"]["name"] == "스케줄러가 가진 이름"
+    # 스케줄러에 없는(비활성) 잡은 META 폴백 그대로
+    assert jobs["crawl_articles"]["name"] == SCHEDULER_JOB_META["crawl_articles"]["name"]

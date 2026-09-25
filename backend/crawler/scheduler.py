@@ -623,7 +623,7 @@ def create_scheduler() -> BackgroundScheduler:
             minute=50,
             kwargs={"scheduler_job_id": "billing_charge"},
             id="billing_charge",
-            name="빌링키 자동결제",
+            name="구독료 자동 결제",
             max_instances=1,
             misfire_grace_time=3600,
         )

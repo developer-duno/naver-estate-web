@@ -805,3 +805,46 @@ def test_kapt_job_messages_translate_to_plain_words():
     ):
         assert "사유 번호 04" in explain_error(raw)
         assert "사유 번호 04" in explain_stored_error(raw)
+
+
+# ── ⑦ 관리자 스케줄러 표 이름·주기·출처 — 개발자 낱말 금지 (세션 418) ────────────
+#
+# 관리자 화면의 잡 이름은 텔레그램 알림과 같은 이름(add_job 정본)이라 같은 기준을 쓴다.
+# 세션 418 전에는 "단지 상세 backfill APT"·"상세 백필 00:20(키 드리프트 대응)"·
+# "정기 VACUUM 유지보수" 처럼 사장님이 못 읽는 말이 화면에 그대로 떴다.
+
+# 알림 금지어에 더해, 관리자 표에서 실제로 보였던 개발자 낱말.
+_FORBIDDEN_IN_ADMIN_TABLE = ("배치", "크롤링", "backfill", "빌링키", "API", "PROBE_REGISTRY")
+# 매물 유형 영문 코드 — 이름에 그대로 붙어 나가던 것(단어 경계로만 잡는다).
+_TYPE_CODE = re.compile(r"\b(APT|OPST|JGC|ABYG|OBYG)\b")
+
+
+def test_scheduler_meta_has_no_developer_words():
+    """SCHEDULER_JOB_META 의 이름·주기 폴백·출처 표시에 개발자 낱말이 없어야 한다.
+
+    이름·주기 = 알림 금지어 + 관리자 표 금지어 + 영문 유형 코드 전부.
+    출처 = 관리자 표 금지어 + 영문 유형 코드만 — 출처 칸은 "이 자료가 어느 기관에서
+    오나" 를 적는 자리라 기관의 고유 이름(V-WORLD 등)과 주소는 정보다.
+
+    뮤테이션: 이름 하나를 "단지 상세 backfill APT" 로 되돌리거나 출처에
+    "(PROBE_REGISTRY)" 를 되살리면 FAIL.
+    """
+    from routers.admin.scheduler import SCHEDULER_JOB_META, _source_text
+
+    hits: list[str] = []
+    for job_id, meta in SCHEDULER_JOB_META.items():
+        for field in ("name", "schedule"):
+            text = meta[field]
+            for bad in _FORBIDDEN_IN_ALERTS + _FORBIDDEN_IN_ADMIN_TABLE:
+                if bad in text:
+                    hits.append(f"{job_id}.{field}: '{bad}' — {text}")
+            if _TYPE_CODE.search(text):
+                hits.append(f"{job_id}.{field}: 영문 유형 코드 — {text}")
+        source_name, _url = _source_text(meta.get("source"))
+        if source_name:
+            for bad in _FORBIDDEN_IN_ADMIN_TABLE:
+                if bad in source_name:
+                    hits.append(f"{job_id}.source: '{bad}' — {source_name}")
+            if _TYPE_CODE.search(source_name):
+                hits.append(f"{job_id}.source: 영문 유형 코드 — {source_name}")
+    assert not hits, "관리자 스케줄러 표에 사장님이 못 읽는 말:\n  " + "\n  ".join(hits)

@@ -41,6 +41,13 @@ logger = logging.getLogger(__name__)
 
 # 스케줄러 작업 메타데이터 (이름/스케줄/환경변수 이름).
 #
+# "name" 의 정본은 crawler/scheduler.py 의 add_job(name=...) 이다 — 화면·달력·텔레그램
+# 알림이 같은 이름을 쓰도록 여기 값은 그 글자를 그대로 옮긴다(세션 418, 옛 META 이름은
+# 알림과 30개가 달랐다). 활성 잡은 scheduler-status 가 스케줄러의 이름을 먼저 쓰고,
+# 이 값은 비활성·미실행 때의 폴백이다. 일치는 test_meta_names_match_add_job_names 가 막는다.
+# 이름·schedule 에 개발자 낱말(배치·백필·크롤링·영문 유형 코드 등)을 쓰지 않는다
+# (test_scheduler_meta_has_no_developer_words).
+#
 # "schedule" 은 fallback 전용 — 활성 잡은 scheduler-status 가 실제 trigger 에서
 # describe_trigger() 로 한국어를 런타임 생성한다 (SSOT, 세션 256). 이 문자열은
 # 비활성 잡(env=false 라 미등록) + scheduler 미실행(None) 일 때만 화면에 쓰인다.
@@ -54,41 +61,41 @@ logger = logging.getLogger(__name__)
 #   - 문자열 그대로 — PROBE_REGISTRY 밖(네이버·V-WORLD·CPMS, 위 _NAVER_SOURCE 등 상수 참조)
 #   - None — 외부 API 호출이 없는 내부 DB 전용 잡 (화면에 "-" 로 표시)
 SCHEDULER_JOB_META: dict[str, dict] = {
-    "discover_regions": {"name": "전국 단지 발견", "schedule": "주 1회 일요일 03:00", "env": None, "source": _NAVER_SOURCE},
-    "crawl_articles": {"name": "매물 수집 배치", "schedule": "매일 01:00, 13:00", "env": None, "source": _NAVER_SOURCE},
-    "crawl_details": {"name": "매물 상세 보강", "schedule": "30분마다", "env": None, "source": _NAVER_SOURCE},
-    "backfill_detail_dawn": {"name": "상세 백필 00:20(키 드리프트 대응)", "schedule": "매일 00:20", "env": "BACKFILL_DETAIL_ENABLED", "source": _NAVER_SOURCE},
-    "backfill_detail_noon": {"name": "상세 백필 12:20(키 드리프트 대응)", "schedule": "매일 12:20", "env": "BACKFILL_DETAIL_ENABLED", "source": _NAVER_SOURCE},
-    "collect_prices": {"name": "시세 이력 수집", "schedule": "주 1회 수요일 04:00", "env": None, "source": _NAVER_SOURCE},
-    "popular_1030": {"name": "인기 단지 크롤링 10:45", "schedule": "매일 10:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
-    "popular_1430": {"name": "인기 단지 크롤링 14:45", "schedule": "매일 14:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
-    "popular_1900": {"name": "인기 단지 크롤링 19:15", "schedule": "매일 19:15", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
-    "collect_public_trades": {"name": "공공데이터 실거래가", "schedule": "주 1회 토요일 05:00", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "국토교통부 아파트 매매 실거래가"}},
-    "collect_officetel_presale": {"name": "청약홈 오피스텔 수집", "schedule": "주 1회 월요일 05:00", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "청약홈 오피스텔·민간임대 분양정보 (ApplyhomeInfoDetailSvc/v1)"}},
-    "collect_rental_presale": {"name": "청약홈 민간임대 수집", "schedule": "주 1회 월요일 05:30", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "청약홈 오피스텔·민간임대 분양정보 (ApplyhomeInfoDetailSvc/v1)"}},
-    "official_price": {"name": "공동주택 공시가격 수집", "schedule": "매월 15일 06:30", "env": "OFFICIAL_PRICE_ENABLED", "source": _VWORLD_OFFICIAL_PRICE_SOURCE},
-    "backfill_price": {"name": "시세 이력 소급 수집", "schedule": "매일 03:30", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "국토교통부 아파트 매매 실거래가"}},
-    "collect_air_quality": {"name": "에어코리아 대기질", "schedule": "매일 02:00", "env": "AIR_QUALITY_ENABLED", "source": {"probe": "에어코리아 실시간 대기질"}},
-    "collect_emergency": {"name": "응급의료기관", "schedule": "매월 첫째 월요일 03:00", "env": "EMERGENCY_ENABLED", "source": {"probe": "응급의료기관 목록"}},
-    "collect_childcare": {"name": "어린이집", "schedule": "매월 첫째 목요일 01:00", "env": "CHILDCARE_ENABLED", "source": _CPMS_CHILDCARE_SOURCE},
-    "collect_crime_stats": {"name": "범죄통계", "schedule": "분기별 첫째 일요일 04:00", "env": "CRIME_STATS_ENABLED", "source": {"probe": "경찰청 범죄통계 (3074462)"}},
-    "complex_detail_APT": {"name": "단지 상세 backfill APT", "schedule": "4시간마다", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
-    "complex_detail_OPST": {"name": "단지 상세 backfill OPST", "schedule": "4시간마다", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
-    "complex_detail_JGC": {"name": "단지 상세 backfill JGC", "schedule": "주 1회 화요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
-    "complex_detail_ABYG": {"name": "단지 상세 backfill ABYG", "schedule": "주 1회 수요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
-    "complex_detail_OBYG": {"name": "단지 상세 backfill OBYG", "schedule": "주 1회 목요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
-    "collect_metrics": {"name": "단지 가치지표 수집", "schedule": "매일 04:30", "env": "COMPLEX_METRIC_ENABLED", "env_default": "true", "source": None},
+    "discover_regions": {"name": "새 단지 찾기", "schedule": "주 1회 일요일 03:00", "env": None, "source": _NAVER_SOURCE},
+    "crawl_articles": {"name": "단지 매물 가져오기", "schedule": "매일 01:00, 13:00", "env": None, "source": _NAVER_SOURCE},
+    "crawl_details": {"name": "매물 상세 내용 채우기", "schedule": "30분마다", "env": None, "source": _NAVER_SOURCE},
+    "backfill_detail_dawn": {"name": "빠진 정보 뒤늦게 채우기 00:20", "schedule": "매일 00:20", "env": "BACKFILL_DETAIL_ENABLED", "source": _NAVER_SOURCE},
+    "backfill_detail_noon": {"name": "빠진 정보 뒤늦게 채우기 12:20", "schedule": "매일 12:20", "env": "BACKFILL_DETAIL_ENABLED", "source": _NAVER_SOURCE},
+    "collect_prices": {"name": "단지 시세 기록 모으기", "schedule": "주 1회 수요일 04:00", "env": None, "source": _NAVER_SOURCE},
+    "popular_1030": {"name": "자주 보는 단지 미리 갱신 10:45", "schedule": "매일 10:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "popular_1430": {"name": "자주 보는 단지 미리 갱신 14:45", "schedule": "매일 14:45", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "popular_1900": {"name": "자주 보는 단지 미리 갱신 19:15", "schedule": "매일 19:15", "env": "POPULAR_CRAWL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "collect_public_trades": {"name": "정부 실거래가 받기", "schedule": "주 1회 토요일 05:00", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "국토교통부 아파트 매매 실거래가"}},
+    "collect_officetel_presale": {"name": "오피스텔 청약 공고 받기", "schedule": "주 1회 월요일 05:00", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "청약홈 오피스텔·민간임대 분양정보 (ApplyhomeInfoDetailSvc/v1)"}},
+    "collect_rental_presale": {"name": "민간임대 청약 공고 받기", "schedule": "주 1회 월요일 05:30", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "청약홈 오피스텔·민간임대 분양정보 (ApplyhomeInfoDetailSvc/v1)"}},
+    "official_price": {"name": "정부 공시가격 받기", "schedule": "매월 15일 06:30", "env": "OFFICIAL_PRICE_ENABLED", "source": _VWORLD_OFFICIAL_PRICE_SOURCE},
+    "backfill_price": {"name": "옛 시세 채워 넣기", "schedule": "매일 03:30", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "국토교통부 아파트 매매 실거래가"}},
+    "collect_air_quality": {"name": "동네 공기질 받기", "schedule": "매일 02:00", "env": "AIR_QUALITY_ENABLED", "source": {"probe": "에어코리아 실시간 대기질"}},
+    "collect_emergency": {"name": "응급실 위치 받기", "schedule": "매월 첫째 월요일 03:00", "env": "EMERGENCY_ENABLED", "source": {"probe": "응급의료기관 목록"}},
+    "collect_childcare": {"name": "어린이집 정보 받기", "schedule": "매월 첫째 목요일 01:00", "env": "CHILDCARE_ENABLED", "source": _CPMS_CHILDCARE_SOURCE},
+    "collect_crime_stats": {"name": "동네 범죄 통계 받기", "schedule": "분기별 첫째 일요일 04:00", "env": "CRIME_STATS_ENABLED", "source": {"probe": "경찰청 범죄통계 (3074462)"}},
+    "complex_detail_APT": {"name": "아파트 단지 정보 채우기", "schedule": "4시간마다", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "complex_detail_OPST": {"name": "오피스텔 단지 정보 채우기", "schedule": "4시간마다", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "complex_detail_JGC": {"name": "재건축 단지 정보 채우기", "schedule": "주 1회 화요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "complex_detail_ABYG": {"name": "아파트 분양권 단지 정보 채우기", "schedule": "주 1회 수요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "complex_detail_OBYG": {"name": "오피스텔 분양권 단지 정보 채우기", "schedule": "주 1회 목요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
+    "collect_metrics": {"name": "단지 가치 점수 계산", "schedule": "매일 04:30", "env": "COMPLEX_METRIC_ENABLED", "env_default": "true", "source": None},
     # env_extra: 이 잡이 등록되려면 env 와 **함께** 참이어야 하는 추가 토글 (AND).
     #   scheduler.py 의 `if BILLING_AUTO_CHARGE_ENABLED and PAYMENT_ENABLED:` 와 짝을 맞춘다 —
     #   없으면 PAYMENT_ENABLED 가 꺼진 무료 전환 기간에도 화면이 "활성 · 매일 04:50"으로
     #   거짓 표시된다(세션 400 적대검증 HIGH). 새 잡에 토글이 둘 이상이면 여기에 추가.
-    "billing_charge": {"name": "빌링키 자동결제", "schedule": "매일 04:50", "env": "BILLING_AUTO_CHARGE_ENABLED", "env_default": "true", "env_extra": [("PAYMENT_ENABLED", "false")], "source": None},
-    "crawler_monitor": {"name": "크롤링 모니터", "schedule": "10분마다", "env": "MONITOR_ENABLED", "source": None},
-    "field_drift_monitor": {"name": "상세 필드 채움률 드리프트 감시", "schedule": "매일 04:40", "env": "FIELD_DRIFT_MONITOR_ENABLED", "source": None},
-    "vacuum_maintenance": {"name": "정기 VACUUM 유지보수", "schedule": "매일 03:50", "env": "VACUUM_MAINTENANCE_ENABLED", "env_default": "true", "source": None},
-    "api_version_probe": {"name": "data.go.kr API 버전 감시", "schedule": "주 1회 일요일 06:40", "env": "API_VERSION_MONITOR_ENABLED", "env_default": "true", "source": "data.go.kr / odcloud.kr API 13종 전수 감시 (PROBE_REGISTRY)"},
-    "kapt_match": {"name": "K-apt 단지 매칭", "schedule": "매월 21일 06:10", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 단지 기본정보 (AptBasisInfoServiceV5)"}},
-    "kapt_costs": {"name": "K-apt 관리비 수집", "schedule": "매일 06:20", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 공용관리비 (AptCmnuseManageCostServiceV3)"}},
+    "billing_charge": {"name": "구독료 자동 결제", "schedule": "매일 04:50", "env": "BILLING_AUTO_CHARGE_ENABLED", "env_default": "true", "env_extra": [("PAYMENT_ENABLED", "false")], "source": None},
+    "crawler_monitor": {"name": "서버 일감 점검", "schedule": "10분마다", "env": "MONITOR_ENABLED", "source": None},
+    "field_drift_monitor": {"name": "정보 안 채워지면 알림", "schedule": "매일 04:40", "env": "FIELD_DRIFT_MONITOR_ENABLED", "source": None},
+    "vacuum_maintenance": {"name": "자료 보관함 정리", "schedule": "매일 03:50", "env": "VACUUM_MAINTENANCE_ENABLED", "env_default": "true", "source": None},
+    "api_version_probe": {"name": "정부 자료 창구 살아있나 확인", "schedule": "주 1회 일요일 06:40", "env": "API_VERSION_MONITOR_ENABLED", "env_default": "true", "source": f"data.go.kr / odcloud.kr 정부 자료 창구 {len(PROBE_REGISTRY)}곳 모두 확인 (감시 목록)"},
+    "kapt_match": {"name": "관리비 단지 연결하기", "schedule": "매월 21일 06:10", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 단지 기본정보 (AptBasisInfoServiceV5)"}},
+    "kapt_costs": {"name": "단지 관리비 받기", "schedule": "매일 06:20", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 공용관리비 (AptCmnuseManageCostServiceV3)"}},
 }
 
 # 캘린더 전용 이름표 — 스케줄러에 등록되지 않는 "수동 실행" 잡들.
@@ -262,9 +269,14 @@ def get_scheduler_status(
         # (SSOT: 활성 잡은 실제 trigger 에서 한국어 생성. 비활성·미실행 시 meta fallback.)
         next_run_at = None
         schedule_text = meta["schedule"]  # fallback (비활성 잡 + scheduler=None)
+        name_text = meta["name"]  # fallback — 활성 잡은 아래에서 스케줄러 이름으로 덮는다
         if scheduler:
             sched_job = scheduler.get_job(job_id)
             if sched_job:
+                # 텔레그램 알림(job_error_listener._job_label)과 같은 원천 — 화면과 알림이
+                # 같은 이름을 보인다(세션 418).
+                if sched_job.name:
+                    name_text = sched_job.name
                 if sched_job.next_run_time:
                     next_run_at = sched_job.next_run_time.isoformat()
                 generated = describe_trigger(sched_job.trigger)
@@ -275,7 +287,7 @@ def get_scheduler_status(
 
         jobs.append({
             "scheduler_job_id": job_id,
-            "name": meta["name"],
+            "name": name_text,
             "schedule": schedule_text,
             "enabled": enabled,
             "last_run": last_run,

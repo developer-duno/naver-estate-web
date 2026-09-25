@@ -261,12 +261,47 @@ def _error_envelope(data) -> tuple[str | None, str | None] | None:
         header = data.get("cmmMsgHeader")
     if not isinstance(header, dict):
         return None
-    code = header.get("returnReasonCode")
     reason = header.get("returnAuthMsg") or header.get("errMsg")
     return (
-        str(code).strip() if code is not None else None,
+        _norm_reason_code(header.get("returnReasonCode")),
         str(reason).strip() if reason is not None else None,
     )
+
+
+def _norm_reason_code(code) -> str | None:
+    """사유 코드 정규화 — 숫자면 두 자리 문자열(정수 4·"4" → "04", 0 → "00").
+
+    같은 사유가 봉투(`returnReasonCode`)·정상 모양(`resultCode`) 어느 쪽으로, 문자열·정수
+    어느 형으로 와도 **같은 일시성 판정·같은 우리말 규칙**을 타게 한다. 빈 값은 None.
+    """
+    if code is None:
+        return None
+    text = str(code).strip()
+    if not text:
+        return None
+    return text.zfill(2) if text.isdigit() else text
+
+
+def _result_code_failure(data) -> tuple[str | None, str | None] | None:
+    """정상 모양(`response.header.resultCode`)인데 코드가 00 이 아니면 (코드, 문구).
+
+    00 이거나 `response`/`header` 가 dict 모양이 아니면 None — 모양 오류는 호출부의
+    구조 판정("예상과 다른 응답 구조")이 받는다. header 가 통째로 없으면 코드 None 인
+    실패다(옛 동작 "비정상 resultCode=None" 과 같은 판정).
+    """
+    if not isinstance(data, dict):
+        return None
+    response = data.get("response")
+    if not isinstance(response, dict):
+        return None
+    header = response.get("header", {})
+    if not isinstance(header, dict):
+        return None
+    code = _norm_reason_code(header.get("resultCode"))
+    if code == "00":
+        return None
+    message = header.get("resultMsg")
+    return code, (str(message).strip() if message is not None else None)
 
 
 class KaptAPI(BasePublicDataAPI):
@@ -322,12 +357,16 @@ class KaptAPI(BasePublicDataAPI):
                     code=QUOTA_REASON_CODE, op=op, is_quota=True,
                 )
 
-            # 쿼터가 아닌 오류 봉투 — 사유 코드째 올린다(쿼터 22 는 바로 위에서 먼저 잡혀
-            # 여기 닿지 않는다. 순서를 바꾸면 22 가 is_quota 없이 올라가 배치가 안 멈춘다).
-            envelope = _error_envelope(data)
-            if envelope is None:
+            # 쿼터가 아닌 오류 — 봉투든 정상 모양의 resultCode 든 사유 코드째 올린다
+            # (쿼터 22 는 바로 위에서 먼저 잡혀 여기 닿지 않는다. 순서를 바꾸면 22 가
+            # is_quota 없이 올라가 배치가 안 멈춘다. 같은 까닭으로 여기서 is_quota 를
+            # 다시 보지 않는다 — 영원히 실행되지 않는 죽은 분기가 된다).
+            failure = _error_envelope(data)
+            if failure is None:
+                failure = _result_code_failure(data)
+            if failure is None:
                 break
-            reason_code, reason_msg = envelope
+            reason_code, reason_msg = failure
             if reason_code in _TRANSIENT_REASON_CODES and attempt < len(_TRANSIENT_RETRY_DELAYS):
                 delay = _TRANSIENT_RETRY_DELAYS[attempt]
                 attempt += 1
@@ -347,22 +386,10 @@ class KaptAPI(BasePublicDataAPI):
             raise KaptApiError(message, code=reason_code, op=op)
 
         try:
+            # resultCode 판정은 위 루프(`_result_code_failure`)가 이미 했다 — 여기는 모양만 본다.
             response = data["response"]
-            header = response.get("header", {})
-            code = header.get("resultCode")
-            if code not in ("00", "0"):
-                logger.warning(
-                    "[kapt] 비정상 resultCode=%s msg=%s", code, header.get("resultMsg")
-                )
-                # ⚠ is_quota 는 여기서 다시 보지 않는다 — 한도 초과(22)는 어느 포맷으로
-                # 오든 위 `_looks_like_quota_exceeded` 가 먼저 잡아 이 줄에 닿지 않는다
-                # (dict 를 통째로 문자열화해 보므로 resultCode 자리의 22 도 포함).
-                # 여기서 한 번 더 판정하면 영원히 실행되지 않는 분기가 생겨,
-                # 테스트로 검증할 수 없는 죽은 코드가 된다.
-                raise KaptApiError(
-                    f"비정상 resultCode={code} — op={op or url}",
-                    code=str(code) if code is not None else None, op=op,
-                )
+            if not isinstance(response.get("header", {}), dict):
+                raise TypeError("header 가 dict 모양이 아님")
             body = response.get("body")
         except (KeyError, TypeError, AttributeError) as exc:
             # 오류 봉투도 정상 구조도 아닌 **진짜 미지 모양**만 여기 온다. 다음에 원인을

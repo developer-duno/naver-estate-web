@@ -3089,7 +3089,7 @@ def test_probe_uses_older_month_sample_when_newest_month_broken(db, monkeypatch)
 
     monkeypatch.setattr(service_kapt, "fetch_common_cost_probe", probe)
 
-    assert service_kapt._probe_api_alive(db, months) == (True, 4)
+    assert service_kapt._probe_api_alive(db, months, include_older_month=True) == (True, 4)
     assert probes[-1] == ("OLD", months[1]), probes
     assert len(probes) == 4
 
@@ -3113,7 +3113,7 @@ def test_probe_extra_sample_capped_and_never_outside_window(db, monkeypatch):
         lambda code, month: probes.append((code, month)) or None,
     )
 
-    assert service_kapt._probe_api_alive(db, months) == (False, 4)
+    assert service_kapt._probe_api_alive(db, months, include_older_month=True) == (False, 4)
     assert [m for _, m in probes] == [months[0]] * 3 + [months[1]], probes
     assert all(code != "OUT" for code, _ in probes)
 
@@ -3179,7 +3179,9 @@ def test_collect_costs_time_budget_stops_after_first_complex(
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
     assert job.status == expected_status, (job.status, job.error_message, result)
     if not first_ok:
-        assert "시간 예산 소진" in (job.error_message or ""), job.error_message
+        assert "시간 예산 0분 소진으로 중단" in (job.error_message or ""), job.error_message
+    else:
+        assert job.error_message is None, "실패 0 인 부분 성공에 error_message 가 붙었다"
 
 
 def test_collect_costs_time_budget_ample_has_no_effect(db, monkeypatch, caplog):
@@ -3199,3 +3201,106 @@ def test_collect_costs_time_budget_ample_has_no_effect(db, monkeypatch, caplog):
 
     assert result["collected"] == 4 and called == ["U0", "U1", "U2", "U3"]
     assert "시간 예산" not in caplog.text
+
+
+# ── 검사관 🟡 반영 (세션 417 후속) ─────────────────────────────────────────────
+
+
+def test_all_empty_guard_ignores_older_month_sample(db, monkeypatch):
+    """전량 빈 응답 가드는 **최신 3건만** 본다 — 이전 달이 응답해도 all_empty failed.
+
+    검사관 실측 시나리오: 저장된 months[0] 행 3건이 지금 전부 빈 응답이고 months[1] 만
+    응답한다 = "자료가 빠졌다". 이전 달 표본을 여기서도 쓰면 alive → completed 로 묻힌다.
+    뮤테이션: `include_older_month` 조건을 지우면(항상 추가) alive 로 끝나 FAIL.
+    """
+    months = candidate_cost_months()
+    for i in range(service_kapt._ALL_EMPTY_MIN_TARGETS):
+        _make_complex(db, complex_no=f"74{i:02d}")
+        _seed_mapping(db, complex_no=f"74{i:02d}", kapt_code=f"V{i:02d}")
+    for i in range(3):
+        _make_complex(db, complex_no=f"749{i}")
+        _seed_mapping(db, complex_no=f"749{i}", kapt_code=f"VN{i}")
+        _seed_cost(db, f"749{i}", months[0])
+    _make_complex(db, complex_no="7499")
+    _seed_mapping(db, complex_no="7499", kapt_code="VOLD")
+    _seed_cost(db, "7499", months[1])
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", lambda code, month: {})
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    probes = []
+
+    def probe(code, month):
+        probes.append((code, month))
+        return {"pay": 1} if month == months[1] else None
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost_probe", probe)
+
+    result = collect_kapt_costs(batch_size=500)
+
+    assert result.get("error") == "all_empty", result
+    assert [m for _, m in probes] == [months[0]] * 3, probes
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "failed"
+
+
+@pytest.mark.parametrize("responses,expected_code", [
+    # 정상 모양 resultCode 가 정수 4 → "04" 로 정규화, 일시성이라 재시도 → 세 번째에 정상
+    ([{"response": {"header": {"resultCode": 4, "resultMsg": "HTTP ERROR"}}}] * 2
+     + [{"response": {"header": {"resultCode": "00"}, "body": {"item": {"pay": 1}}}}], None),
+    # 봉투 returnReasonCode 가 정수 4 → "04"
+    ([{"OpenAPI_ServiceResponse": {"cmmMsgHeader": {"returnReasonCode": 4}}}], "04"),
+])
+def test_reason_code_normalized_to_two_digits(monkeypatch, responses, expected_code):
+    """사유 코드 정규화(zfill 2) — 형(정수·문자열)·위치(봉투·resultCode)가 달라도 같은 판정.
+
+    뮤테이션: `_norm_reason_code` 의 zfill 을 지우면 "4" 가 일시성 목록에 안 걸려 FAIL.
+    """
+    calls = _sequence_call_api(monkeypatch, responses)
+    slept = _fake_sleep(monkeypatch, kapt_api)
+
+    if expected_code is None:
+        assert kapt_api.KaptAPI._body_or_raise("http://x", {}, op="opA") == {"item": {"pay": 1}}
+        assert slept == [3, 10] and len(calls) == 3
+    else:
+        with pytest.raises(KaptApiError) as exc:
+            kapt_api.KaptAPI._body_or_raise("http://x", {}, op="opA")
+        assert exc.value.code == expected_code
+        assert "data.go.kr 오류 코드 04(" in str(exc.value)
+        assert slept == [3, 10, 30]
+
+
+def test_partial_success_with_failures_records_reason(db, monkeypatch):
+    """수집 ≥1 · 실패 ≥1 → completed 로 두되 error_message 에 실패 수·마지막 사유.
+
+    인기 단지 잡의 "N/50개 단지 실패" 선례와 같은 방식. 관리자 화면은 그 문장을
+    `explain_stored_error` 로 우리말로 보여준다(렌더 1회 단언).
+    뮤테이션: 부분 성공 기록 분기를 지우면 error_message 가 None 이라 FAIL.
+    """
+    from crawler.plain_words import explain_stored_error
+
+    for i in range(3):
+        _make_complex(db, complex_no=f"75{i:02d}")
+        _seed_mapping(db, complex_no=f"75{i:02d}", kapt_code=f"W{i}")
+
+    def common(code, month):
+        if code == "W1":
+            raise KaptApiError(
+                "data.go.kr 오류 코드 04(HTTP 에러) 재시도 3회 후 — op=getHsmpLaborCostInfoV3",
+                code="04", op="getHsmpLaborCostInfoV3",
+            )
+        return {"aV3": 100}
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert (result["collected"], result["failed"]) == (2, 1)
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "completed"
+    msg = job.error_message or ""
+    assert msg.startswith("1단지 호출 실패(마지막 사유: data.go.kr 오류 코드 04"), msg
+    rendered = explain_stored_error(msg)
+    assert "사유 번호 04" in rendered and "data.go.kr" not in rendered, rendered

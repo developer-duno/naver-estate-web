@@ -817,7 +817,9 @@ def _summarize(breakdown: dict[str, int], household: int | None) -> dict:
     }
 
 
-def _probe_api_alive(db, months: list[str]) -> tuple[bool, int]:
+def _probe_api_alive(
+    db, months: list[str], include_older_month: bool = False,
+) -> tuple[bool, int]:
     """카나리 — "전량 미공개" 회차에서 K-apt 관리비 API 가 살아있나 직접 확인.
 
     반환 (살아있음, 찔러본 표본 수). 표본이 0건이면 (False, 0).
@@ -850,6 +852,11 @@ def _probe_api_alive(db, months: list[str]) -> tuple[bool, int]:
     하나뿐이면 표본 0 → failed)은 그대로다. 창 밖 행의 응답은 "엔드포인트가 답한다"
     까지만 증명하고 "지금 창의 달들을 준다" 는 증명하지 못하기 때문이다. 창 안 표본이
     0건이면 추가 표본도 없다(창 안 행이 있었다면 위 3건에 먼저 뽑혔다) → (False, 0).
+    ⚠ 이 추가 표본은 `include_older_month=True` 일 때만 — **연속 실패 재확인 경로
+    (`_recheck_api_after_failures`) 전용**이다. 전량 빈 응답 가드는 옛 동작(최신 3건)
+    그대로다: 거기서 이전 달이 응답해 "살아있음" 이 되면, 저장된 최신 달 조합이 전부
+    빈 응답으로 바뀐 상황("자료가 빠졌다")이 completed 로 묻힌다(세션 417 검사관 실측).
+    연속 실패 경로의 질문은 "서버가 아예 죽었나" 라 이전 달 응답이 정확한 답이다.
     """
     base = (
         db.query(KaptManagementCost.cost_month, KaptComplexMap.kapt_code)
@@ -864,7 +871,7 @@ def _probe_api_alive(db, months: list[str]) -> tuple[bool, int]:
         .limit(_CANARY_SAMPLE_SIZE)
         .all()
     )
-    if samples:
+    if include_older_month and samples:
         oldest_sampled = min(month for month, _ in samples)
         older_in_window = [m for m in months if m < oldest_sampled]
         if older_in_window:
@@ -903,7 +910,7 @@ def _recheck_api_after_failures(db, months: list[str]) -> tuple[bool, int, KaptA
             )
             time.sleep(delay)
         try:
-            alive, probed = _probe_api_alive(db, months)
+            alive, probed = _probe_api_alive(db, months, include_older_month=True)
             error = None
         except KaptApiError as exc:
             if exc.is_quota:
@@ -1155,6 +1162,9 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         # 훑은 단지 수 = 수집 + 실패 + 미공개. 선자르기(`targets[:batch_size]`)가 없어져
         # `len(targets)` 를 대신한다. 잔여는 "아직 안 훑은 후보" = 큐 길이 - 훑은 수.
         scanned = collected + failed + empty
+        budget_note = (
+            f" — 시간 예산 {_RUN_TIME_BUDGET_SEC // 60}분 소진으로 중단" if budget_exhausted else ""
+        )
 
         # 쿼터 초과로 조기 중단 — monitor 가 알아채도록 잡을 failed 로 마감한다.
         # (completed 로 두면 "오늘도 정상 수집" 으로 위장돼 며칠씩 방치된다.)
@@ -1205,7 +1215,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             message = (
                 f"공공데이터 서버는 응답하지만 {failed}단지 전부 오류 — 수집 0 "
                 f"(미공개 {empty}, 마지막 오류: {last_failure})"
-                + (" — 시간 예산 소진으로 중단" if budget_exhausted else "")
+                + budget_note
             )
             _fail_job(db, job, message)
             logger.error("[kapt_costs] %s", message)
@@ -1236,7 +1246,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             _fail_job(
                 db, job,
                 f"대상 {scanned}개 중 수집 0건 (실패 {failed}, 미공개 {empty})"
-                + (" — 시간 예산 소진으로 중단" if budget_exhausted else ""),
+                + budget_note,
             )
             logger.error(
                 "[kapt_costs] silent failure 감지: 대상 %d개 수집 0건 (실패 %d)",
@@ -1299,11 +1309,20 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         # total>0, routers/admin/freshness.py)가 영영 발동하지 않는다.
         # (위 카나리 경로만은 의도적으로 total=0 — 거기선 "정상"이 확인됐다.)
         _complete_job(db, job, collected, scanned - collected)
+        if failed:
+            # 부분 성공(수집 ≥1 · 실패 ≥1)은 completed 로 두되, 실패가 있었다는 사실과 마지막
+            # 사유를 남긴다 — 인기 단지 잡의 "N/50개 단지 실패" 선례(completed + error_message)와
+            # 같은 방식. 이 줄이 없으면 관리자 화면에서 04 부분 장애가 "정상 완료" 로만 보인다.
+            job.error_message = (
+                f"{failed}단지 호출 실패(마지막 사유: {last_failure or '서버 기록 참고'})"
+                + budget_note
+            )
+            db.commit()
         logger.info(
             "[kapt_costs] 완료: %d 수집, %d 실패, %d 미공개 (대상 %d, 기준월 %s)%s",
             collected, failed, empty, scanned, target_month,
             (f" — 미공개 스캔 상한 {_EMPTY_SCAN_CAP} 도달로 중단" if scan_capped else "")
-            + (" — 시간 예산 소진으로 중단" if budget_exhausted else ""),
+            + budget_note,
         )
         return {
             "collected": collected,

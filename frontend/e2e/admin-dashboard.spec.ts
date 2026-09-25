@@ -48,8 +48,10 @@ test.describe("admin dashboard", () => {
     }
     await expect(page.getByText(/펼치기/)).toHaveCount(5);
 
-    // 4층 작업 + 최근 활동 (감사 로그 mock 이 그려진 시점)
-    await expect(page.getByText("외부 데이터 지금 받아오기")).toBeVisible();
+    // 4층 작업 + 최근 활동 (감사 로그 mock 이 그려진 시점).
+    // 외부 자료 버튼 카드는 /admin/crawl 로 옮겼다(사장님 결정 2026-09-26) — 4층은 이 카드 한 장
+    await expect(page.getByText("오래된 단지 한 번에 다시 수집")).toBeVisible();
+    await expect(page.getByText("외부 자료 지금 받아오기")).toHaveCount(0);
     await expect(page.getByText("최근 활동")).toBeVisible();
     // 감사 로그 mock 5건이 그려진 시점 (라벨 문구는 admin-labels 사전 소관이라 건수로 본다)
     await expect(

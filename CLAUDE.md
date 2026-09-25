@@ -89,7 +89,7 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 어린이집 → 매월 첫째 목 01:00 (CPMS cpmsapi030 → infra.childcare_*, mibunyang 과 키 공유라 01:00 고정 — infra.md §CPMS 키 공유)
 범죄통계 → 분기별 첫째 일 04:00 (경찰청 odcloud → infra.crime_*, CSV 폴백)
 공공데이터 → 토요일 05:00 (국토교통부 실거래가, 10일 토요일 skip)
-관리자 트리거 → POST /api/admin/collect/{name} (동기 120초)
+관리자 트리거 → POST /api/admin/collect/{name} (수집기 8종, 끝날 때까지 답을 안 주는 동기 실행 — 화면은 최대 120초만 기다리고 서버는 계속 돈다. 버튼 = /admin/crawl)
 ```
 
 ## 주요 기능·구현 사항

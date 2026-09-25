@@ -164,6 +164,10 @@ def _upsert_station(db, station_name: str, addr: str):
 
     동일 배치 내 같은 station_name이 여러 단지에서 반복 호출돼도
     UniqueViolation 없이 안전 (기존 db.merge + SELECT 체크는 flush 전 중복 감지 불가).
+
+    표 현황(행 수 추이, `lat`/`lng` 가 전부 NULL 인 사유 = 여기서 쓰지 않고 읽는 코드도 없음)은
+    `air_quality_api.py` 좌표 변환 함수 docstring 의 "세션 418 실측" 문단 참조. `updated_at` 은
+    시간대 없는 UTC 라 날짜 집계는 `AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul'` 두 번.
     """
     _do_upsert(
         db,

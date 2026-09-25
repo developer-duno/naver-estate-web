@@ -69,7 +69,7 @@ def wgs84_to_tm(lat: float, lng: float) -> tuple[float, float]:
     `air_quality_stations` 캐시 표가 오래 **8행(제주·거제·가거도 계열)** 에 머문 것도 같은
     뿌리였다 — 전국이 제주 관측소로 몰리니 `_upsert_station` 이 그 이름들만 받았다. 이 수정
     (PR #556, 2026-09-22 적용) 뒤로는 매일 100단지 순환이 닿는 관측소가 그대로 쌓인다
-    (세션 418 실측 2026-09-25: 177행 — 09-22 47·09-23 50·09-24 73. `infra.air_station_name`
+    (세션 418 실측 2026-09-25: 177행 — 마지막 갱신일(KST) 09-23 47·09-24 50·09-25 73. `infra.air_station_name`
     394종 중 220종이 아직 없고, 한 바퀴 ≈30일이라 10월 하순쯤 수렴). `lat`/`lng` 칸은
     `_upsert_station` 이 쓰지 않고 읽는 코드도 양쪽 레포에 0건이라 **전부 NULL 인 것이 정상**
     (무해한 빈 칸 — 세는 명령: `SELECT count(*), count(lat) FROM air_quality_stations`).

@@ -239,7 +239,7 @@ def test_calendar_official_price_manual_job_has_korean_name(mock_sched, client, 
     assert res.status_code == 200
     events = res.json()["events"]
     assert len(events) == 1
-    assert events[0]["name"] == "공동주택 공시가격 수집 (수동)"
+    assert events[0]["name"] == "정부 공시가격 받기 (수동)"
 
 
 @patch("crawler.scheduler.get_scheduler", return_value=None)

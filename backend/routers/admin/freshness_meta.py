@@ -136,7 +136,7 @@ FRESHNESS_ITEMS: list[dict] = [
         # articles 카드(key="articles")는 scheduler_job_id="crawl_articles"(별개 잡,
         # 매물 목록 수집)에 매여 있어 이 잡을 대신 커버하지 못한다 — 전용 카드 신설.
         "key": "article_detail",
-        "label": "매물 상세 보강",
+        "label": "매물 상세 내용 채우기",
         "expected_interval_seconds": 1800 * 3,  # 30분 interval 의 3배(90분) — 배치 스킵 1~2회 여유
         "scheduler_job_id": "crawl_details",
         "new_rows_kind": None,  # CrawlJob.completed_at 경유(childcare 패턴), created_at 무관
@@ -148,7 +148,7 @@ FRESHNESS_ITEMS: list[dict] = [
         # interval 로 도는데 시세 이력이 없는 단지가 소진되면(nearby_median_price
         # NULL 단지 고갈) 매번 0건만 처리해도 completed 로 조용히 끝날 수 있다.
         "key": "complex_metric",
-        "label": "단지 가치지표 수집",
+        "label": "단지 가치 점수 계산",
         "expected_interval_seconds": 43200 * 3,  # 12시간 interval 의 3배(36시간)
         "scheduler_job_id": "collect_metrics",
         "new_rows_kind": None,  # CrawlJob.completed_at 경유(childcare 패턴)
@@ -160,7 +160,7 @@ FRESHNESS_ITEMS: list[dict] = [
         # 단지(4.6만개, 배치 1000)를 4시간 interval 로 처리하는데, detail_crawled_at
         # IS NULL 후보가 소진되거나 API 실패가 반복돼도 completed 로 조용히 끝난다.
         "key": "complex_detail_apt",
-        "label": "단지 상세 보강(아파트)",
+        "label": "아파트 단지 정보 채우기",
         "expected_interval_seconds": 14400 * 3,  # 4시간 interval 의 3배(12시간)
         "scheduler_job_id": "complex_detail_APT",
         "new_rows_kind": None,  # CrawlJob.completed_at 경유(article_detail 패턴)
@@ -169,7 +169,7 @@ FRESHNESS_ITEMS: list[dict] = [
     {
         # 세션 359: 위와 동일 사유, 오피스텔(1.5만개) 전용 잡.
         "key": "complex_detail_opst",
-        "label": "단지 상세 보강(오피스텔)",
+        "label": "오피스텔 단지 정보 채우기",
         "expected_interval_seconds": 14400 * 3,  # 4시간 interval 의 3배(12시간)
         "scheduler_job_id": "complex_detail_OPST",
         "new_rows_kind": None,
@@ -180,7 +180,7 @@ FRESHNESS_ITEMS: list[dict] = [
         # 응답을 주면 매칭이 0건이 되는데, 수집기 자체 가드가 failed 로 알리더라도
         # "몇 달째 재매칭이 안 돌고 있다"는 정지 상태는 이 신선도 축이 잡는다.
         "key": "kapt_match",
-        "label": "K-apt 단지 매칭",
+        "label": "관리비 단지 연결하기",
         "expected_interval_seconds": 86400 * 30,
         "scheduler_job_id": "kapt_match",
         "new_rows_kind": None,  # CrawlJob.completed_at 경유(childcare 패턴)
@@ -190,7 +190,7 @@ FRESHNESS_ITEMS: list[dict] = [
         # V051: K-apt 관리비 수집 — 매일. 관리비 API 는 오퍼레이션당 쿼터가 작아
         # 소진 시 전 단지 미공개처럼 보이며 조용히 0건 completed 로 끝날 수 있다.
         "key": "kapt_costs",
-        "label": "K-apt 관리비",
+        "label": "단지 관리비 받기",
         "expected_interval_seconds": 86400 * 3,  # 매일 잡의 3배(3일)
         "scheduler_job_id": "kapt_costs",
         "new_rows_kind": None,

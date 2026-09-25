@@ -848,3 +848,144 @@ def test_scheduler_meta_has_no_developer_words():
             if _TYPE_CODE.search(source_name):
                 hits.append(f"{job_id}.source: 영문 유형 코드 — {source_name}")
     assert not hits, "관리자 스케줄러 표에 사장님이 못 읽는 말:\n  " + "\n  ".join(hits)
+
+
+# ── ⑧ 달력 수동 잡·신선도 카드 이름 — 같은 작업은 같은 이름 (세션 419) ────────────
+#
+# 관리자 화면에는 작업 이름이 네 군데서 나온다: 자동 작업 표(add_job(name)) · 작업 목록
+# (FE crawl-job-labels.ts) · 달력의 수동 실행(MANUAL_JOB_NAMES) · 신선도 카드(freshness_meta).
+# 앞의 둘은 위 가드와 FE crawl-job-labels-sync 가 JOB_WORDS 에 묶었고, 뒤의 둘이
+# "관리자 일괄 재수집"·"K-apt 관리비" 처럼 세 번째·네 번째 이름을 쓰고 있었다.
+
+# 수동 실행 잡 id → 그 실행이 남기는 crawl_jobs.job_type.
+# 근거 = 각 실행 경로의 CrawlJob(job_type=…) 호출부:
+#   backfill_apartment_public_data → scripts/…public_data.py → service_public.backfill_price_batch
+#   backfill_missing_price_history → scripts/…price_history.py → service_price.collect_price_history
+#   admin_recrawl        → routers/admin/recrawl.py 부모 CrawlJob(job_type="bulk_recrawl")
+#   admin_single_recrawl → service_discover.crawl_complex_articles
+#   collect_official_prices → service_official_price._record_job(db, "official_price", …)
+_MANUAL_ID_TO_JOB_TYPE = {
+    "backfill_apartment_public_data": "price_backfill",
+    "backfill_missing_price_history": "price_history",
+    "admin_recrawl": "bulk_recrawl",
+    "admin_single_recrawl": "complex_articles",
+    "collect_official_prices": "official_price",
+}
+
+# 신선도 카드 중 "자료 이름"(단지·매물·대기질…)이 아니라 "작업 이름"을 라벨로 쓰는 카드.
+# 이 카드들은 테이블이 아니라 그 작업의 CrawlJob 완료 시각을 재므로 작업 이름이 곧 라벨이다.
+_JOB_NAMED_FRESHNESS_KEYS = {
+    "article_detail", "complex_metric", "complex_detail_apt",
+    "complex_detail_opst", "kapt_match", "kapt_costs",
+}
+
+# 관리자 화면 이름에 다시 나오면 안 되는 영문 서비스명(옛 라벨 "K-apt 관리비").
+_FORBIDDEN_IN_JOB_NAMES = ("K-apt", "kapt")
+
+# 스케줄러 잡 중 crawl_jobs 를 남기지 않아 job_type 이 없는 것 — 이름 대조 대상이 아니다.
+_NO_JOB_TYPE_IDS = {
+    "crawler_monitor": "감시 잡 자신은 crawl_jobs 에 기록을 남기지 않는다(monitor.py 무음 설계)",
+}
+
+
+def _gen_schedule_module():
+    """scripts/gen_restart_schedule_table 을 불러온다(패키지가 아니라 sys.path 에 얹는다)."""
+    import sys
+
+    scripts_dir = str(Path(__file__).resolve().parents[1] / "scripts")
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    import gen_restart_schedule_table
+
+    return gen_restart_schedule_table
+
+
+def _dev_word_hits(where: str, text: str) -> list[str]:
+    hits = []
+    for bad in _FORBIDDEN_IN_ALERTS + _FORBIDDEN_IN_ADMIN_TABLE + _FORBIDDEN_IN_JOB_NAMES:
+        if bad in text:
+            hits.append(f"{where}: '{bad}' — {text}")
+    if _TYPE_CODE.search(text):
+        hits.append(f"{where}: 영문 유형 코드 — {text}")
+    return hits
+
+
+def test_manual_names_and_freshness_labels_have_no_developer_words():
+    """달력 수동 잡 이름·신선도 카드 라벨에도 개발자 낱말이 없어야 한다.
+
+    뮤테이션: 신선도 라벨 하나를 "K-apt 관리비" 로, 수동 이름 하나를 "관리자 일괄
+    재수집 배치" 로 되돌리면 FAIL.
+    """
+    from routers.admin.freshness_meta import FRESHNESS_ITEMS
+    from routers.admin.scheduler import MANUAL_JOB_NAMES
+
+    hits: list[str] = []
+    for job_id, name in MANUAL_JOB_NAMES.items():
+        hits += _dev_word_hits(f"MANUAL_JOB_NAMES[{job_id}]", name)
+    for item in FRESHNESS_ITEMS:
+        hits += _dev_word_hits(f"freshness[{item['key']}].label", item["label"])
+    assert not hits, "관리자 화면 이름에 사장님이 못 읽는 말:\n  " + "\n  ".join(hits)
+
+
+def test_manual_job_names_use_job_words_plus_manual_suffix():
+    """수동 실행 이름 = 그 job_type 의 JOB_WORDS + " (수동)" — 자동 작업과 같은 낱말.
+
+    짝 표(_MANUAL_ID_TO_JOB_TYPE)와 MANUAL_JOB_NAMES 의 키가 어긋나도 실패한다 —
+    새 수동 잡을 이름표에만 넣고 짝을 빠뜨리면 이 가드가 조용히 그 잡을 건너뛰기 때문.
+    뮤테이션: "admin_recrawl" 값을 "관리자 일괄 재수집" 으로 되돌리면 FAIL.
+    """
+    from routers.admin.scheduler import MANUAL_JOB_NAMES
+
+    assert set(MANUAL_JOB_NAMES) == set(_MANUAL_ID_TO_JOB_TYPE)
+    wrong = {
+        job_id: (name, f"{JOB_WORDS[_MANUAL_ID_TO_JOB_TYPE[job_id]]} (수동)")
+        for job_id, name in MANUAL_JOB_NAMES.items()
+        if name != f"{JOB_WORDS[_MANUAL_ID_TO_JOB_TYPE[job_id]]} (수동)"
+    }
+    assert not wrong, f"수동 실행 이름이 JOB_WORDS 와 다르다 (현재, 기대): {wrong}"
+
+
+def test_job_named_freshness_labels_equal_job_words():
+    """작업 이름을 라벨로 쓰는 신선도 카드 = 그 잡의 JOB_WORDS (잡 id → job_type 다리 경유).
+
+    뮤테이션: "kapt_costs" 카드 라벨을 "K-apt 관리비" 로 되돌리면 FAIL.
+    """
+    from routers.admin.freshness_meta import FRESHNESS_ITEMS
+
+    id_to_type = _gen_schedule_module()._ID_TO_JOB_TYPE
+    by_key = {item["key"]: item for item in FRESHNESS_ITEMS}
+    assert _JOB_NAMED_FRESHNESS_KEYS <= set(by_key), _JOB_NAMED_FRESHNESS_KEYS - set(by_key)
+    wrong = {}
+    for key in sorted(_JOB_NAMED_FRESHNESS_KEYS):
+        item = by_key[key]
+        expected = JOB_WORDS[id_to_type[item["scheduler_job_id"]]]
+        if item["label"] != expected:
+            wrong[key] = (item["label"], expected)
+    assert not wrong, f"신선도 카드 라벨이 JOB_WORDS 와 다르다 (현재, 기대): {wrong}"
+
+
+def test_every_registered_job_name_starts_with_job_words():
+    """등록된 스케줄러 잡 전부 — add_job(name) 이 JOB_WORDS[job_type] 로 시작해야 한다.
+
+    잡 id 와 job_type 은 이름 체계가 다르다(infra.md 경고). 다리는
+    scripts/gen_restart_schedule_table.py `_ID_TO_JOB_TYPE`(재시작 시각표와 같은 표) 이고,
+    거기 없는 id 는 id 가 곧 job_type 이다. popular_1030 처럼 뒤에 시각이 붙는 것은 허용.
+    뮤테이션: scheduler.py 의 add_job(name=...) 하나를 옛 이름으로 되돌리면 FAIL.
+    """
+    gen = _gen_schedule_module()
+    jobs = gen.build_jobs()
+    registered = {job.id for job in jobs}
+    # 예외 목록이 낡지 않게 — 등록되지 않은 id 를 예외로 들고 있으면 실패
+    assert set(_NO_JOB_TYPE_IDS) <= registered, set(_NO_JOB_TYPE_IDS) - registered
+
+    wrong = []
+    for job in jobs:
+        if job.id in _NO_JOB_TYPE_IDS:
+            continue
+        job_type = gen._ID_TO_JOB_TYPE.get(job.id, job.id)
+        words = JOB_WORDS.get(job_type)
+        if words is None:
+            wrong.append(f"{job.id}: job_type '{job_type}' 이 JOB_WORDS 에 없다")
+        elif not job.name.startswith(words):
+            wrong.append(f"{job.id}: '{job.name}' 가 '{words}' 로 시작하지 않는다")
+    assert not wrong, "스케줄러 잡 이름이 JOB_WORDS 와 어긋난다:\n  " + "\n  ".join(wrong)

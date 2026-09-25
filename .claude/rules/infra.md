@@ -101,7 +101,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정 (설정 완�
 > 손쉽게 알 수 있어야 해. 그 부분을 절대로 간과하면 안 돼. 어려운 말은 금지야."*
 
 ⚠ **이 규칙은 특정 잡이 아니라 텔레그램을 쓰는 모든 코드에 적용된다.** 세션 408 까지는
-`크롤링 모니터` 표 행 안에만 적혀 있어서, 새 알림을 만드는 사람이 못 보고 지나쳤다
+`크롤링 모니터`(서버 일감 점검) 표 행 안에만 적혀 있어서, 새 알림을 만드는 사람이 못 보고 지나쳤다
 (그 결과 8개 창구 중 4곳이 영문·개발자 용어인 채로 남았다) — 그래서 독립 절로 올린다.
 
 ### 금지 (알림 본문에 다시 넣지 말 것)
@@ -177,38 +177,79 @@ cd backend && PYTHONPATH=. PYTHONUTF8=1 python scripts/verify_alert_wording.py
 **폴백 표만 고치면 알림에 안 반영된다** — `crawler/scheduler.py` 의 `add_job(name=...)`
 을 함께 고쳐야 한다. 두 곳의 값은 `plain_words.JOB_WORDS` 와 같은 표현으로 맞춘다.
 
+## 잡 이름 대조표 (옛 → 새, 세션 419 #585)
+
+관리자 화면·텔레그램 알림·달력의 잡 이름을 한 벌로 맞추면서 옛 표시 이름(관리자 스케줄러 표)이 바뀌었다.
+**정본 = `backend/crawler/scheduler.py` 의 `add_job(name=…)`** 이고, 그 이름은 `crawler/plain_words.py JOB_WORDS[job_type]` 로 시작한다
+(crawl_jobs 를 안 남기는 `crawler_monitor` 만 예외 — 가드 = `tests/test_plain_words.py test_every_registered_job_name_starts_with_job_words`). 옛 이름으로 문서를 찾다 여기 왔다면 오른쪽이 지금 화면에 보이는 이름이다.
+아래 표·다른 문서에서는 옛 이름을 "옛 이름(새 이름)" 으로 함께 적어 두었다.
+
+| 잡 id | 옛 이름 | 새 이름 |
+|---|---|---|
+| `discover_regions` | 전국 단지 발견 | 새 단지 찾기 |
+| `crawl_articles` | 매물 수집 배치 | 단지 매물 가져오기 |
+| `crawl_details` | 매물 상세 보강 | 매물 상세 내용 채우기 |
+| `backfill_detail_dawn` | 상세 백필 00:20(키 드리프트 대응) | 빠진 정보 뒤늦게 채우기 00:20 |
+| `backfill_detail_noon` | 상세 백필 12:20(키 드리프트 대응) | 빠진 정보 뒤늦게 채우기 12:20 |
+| `collect_prices` | 시세 이력 수집 | 단지 시세 기록 모으기 |
+| `popular_1030` | 인기 단지 크롤링 10:45 | 자주 보는 단지 미리 갱신 10:45 |
+| `popular_1430` | 인기 단지 크롤링 14:45 | 자주 보는 단지 미리 갱신 14:45 |
+| `popular_1900` | 인기 단지 크롤링 19:15 | 자주 보는 단지 미리 갱신 19:15 |
+| `collect_public_trades` | 공공데이터 실거래가 | 정부 실거래가 받기 |
+| `collect_officetel_presale` | 청약홈 오피스텔 수집 | 오피스텔 청약 공고 받기 |
+| `collect_rental_presale` | 청약홈 민간임대 수집 | 민간임대 청약 공고 받기 |
+| `official_price` | 공동주택 공시가격 수집 | 정부 공시가격 받기 |
+| `backfill_price` | 시세 이력 소급 수집 | 옛 시세 채워 넣기 |
+| `collect_air_quality` | 에어코리아 대기질 | 동네 공기질 받기 |
+| `collect_emergency` | 응급의료기관 | 응급실 위치 받기 |
+| `collect_childcare` | 어린이집 | 어린이집 정보 받기 |
+| `collect_crime_stats` | 범죄통계 | 동네 범죄 통계 받기 |
+| `complex_detail_APT` | 단지 상세 backfill APT | 아파트 단지 정보 채우기 |
+| `complex_detail_OPST` | 단지 상세 backfill OPST | 오피스텔 단지 정보 채우기 |
+| `complex_detail_JGC` | 단지 상세 backfill JGC | 재건축 단지 정보 채우기 |
+| `complex_detail_ABYG` | 단지 상세 backfill ABYG | 아파트 분양권 단지 정보 채우기 |
+| `complex_detail_OBYG` | 단지 상세 backfill OBYG | 오피스텔 분양권 단지 정보 채우기 |
+| `collect_metrics` | 단지 가치지표 수집 | 단지 가치 점수 계산 |
+| `billing_charge` | 빌링키 자동결제 | 구독료 자동 결제 |
+| `crawler_monitor` | 크롤링 모니터 | 서버 일감 점검 |
+| `field_drift_monitor` | 상세 필드 채움률 드리프트 감시 | 정보 안 채워지면 알림 |
+| `vacuum_maintenance` | 정기 VACUUM 유지보수 | 자료 보관함 정리 |
+| `api_version_probe` | data.go.kr API 버전 감시 | 정부 자료 창구 살아있나 확인 |
+| `kapt_match` | K-apt 단지 매칭 | 관리비 단지 연결하기 |
+| `kapt_costs` | K-apt 관리비 수집 | 단지 관리비 받기 |
+
 ## 스케줄러 (APScheduler)
 
 > **재시작 판정용 전수 시각표는 `release.md` §3-0 의 생성 표**다(`backend/scripts/gen_restart_schedule_table.py` 가 코드에서 생성 — 등록 잡 31행·⏰ 장시간 잡).
-> 아래 표는 **설명 + 라이브 실값** 기준이라 interval 이 그 표와 다를 수 있다(크롤링 모니터 = 라이브 `.env` 10분, 코드 기본값·생성 표 30분).
+> 아래 표는 **설명 + 라이브 실값** 기준이라 interval 이 그 표와 다를 수 있다(크롤링 모니터(서버 일감 점검) = 라이브 `.env` 10분, 코드 기본값·생성 표 30분).
 > 잡을 추가·삭제하거나 시각을 바꾸면 이 표의 행을 고치고 `--write` 로 생성 표도 갱신한다(가드 = `tests/test_restart_schedule_table.py`).
 
 | 작업 | 주기 | 설명 |
 |------|------|------|
-| 전국 단지 발견 | 일요일 3시 | 네이버 키워드 검색으로 신규 단지 수집 |
-| 매물 수집 배치 | **매일 01:00 / 13:00** cron (±45분 jitter) | 활성 lane + 발굴 lane 두 몫으로 단지 선정해 매물 목록 크롤링 (배치 기본 **150**, 세션 402 PR #506). ⚠ 옛 "12시간 interval" 은 APScheduler `IntervalTrigger` 가 `start_date = now + interval` 이라 **재시작마다 다음 실행이 12h 밀렸다** — 최근 14일 중 9일이 하루 1회만 돌았다(crawl_jobs 실측). cron 은 벽시계 기준이라 재시작 무관. **선정 키**(`db/complex_queries.py get_complexes_for_article_crawl`, 세션 402 PR #507): 활성 lane 80% = 활성 매물 보유 단지를 `complexes.articles_crawled_at` 오래된 순(NULL 우선), 발굴 lane 20% = 활성 0 + `articles_crawled_at IS NULL` 단지. 한쪽이 모자라면 남는 몫을 다른 lane 이 흡수. 옛 1순위 `has_article.asc()`(매물 0건 우선)는 2026-04-13 엔 정당했으나 그 풀이 53,581 로 불어나 활성 10,567 단지의 76%가 30일+ 미방문이 됐다. **호출 총량 불변은 단지 수 기준**이지 콜 수 기준이 아니다(매물 보유 단지는 페이지네이션) — `record_call("crawl_articles_batch")` 로 1주 관찰. ⚠ 라이브 `.env` 에 `CRAWL_BATCH_SIZE` 가 있으면 코드 기본값 150 을 덮는다 |
-| 매물 상세 보강 | 30분 interval (±15분 jitter) | 매물 상세 크롤링(배치 500). 매물오류 상한·부분 인덱스·순회마다 commit (상세: [§잡 상세 — 매물 상세 보강](../../backend/.claude/details.md#잡-상세--매물-상세-보강)) |
-| 상세 백필 (새벽·낮) | 매일 00:20 / 12:20 | 스케줄러 id `backfill_detail_dawn`(배치 1500·약 38분)·`backfill_detail_noon`(배치 4000·실측 113~134분), job_type 은 둘 다 `article_detail_backfill`. 네이버가 상세 응답 키를 바꿔 빈 채 굴러간 필드(난방·사용승인일·지번주소·총층수)를 상세 API 로 사후 보강한다. 소요 = 배치 × 1.5초(throttle)라 다음 네이버 잡(01:00 매물 수집·14:45 인기 단지)과 안 겹치게 회차별 배치를 달리했다 — **낮 회차가 145분을 넘기면 14:45 와 겹친다**(2026-09-18 실측 133.9분 — 원인은 네이버 차단이 아니라 30분 주기 상세 보강과의 겹침, 세션 414). 스윕 임계 4h(⏰ 재시작 금지 구간). 토글 `BACKFILL_DETAIL_ENABLED`(코드 기본 false — 2026-09-14 라이브 `.env` 에서 ON), 배치 `BACKFILL_DETAIL_BATCH_SIZE`(덮으면 두 회차 모두 그 값) |
-| 시세 이력 수집 | 수요일 4시 | 단지별 시세(매매/전세) 주간 수집 |
-| 시세 이력 소급 수집 | 매일 03:30 | complex_price_history 6행 미만 단지 세대수 상위순 국토교통부 backfill (PUBLIC_DATA_ENABLED 토글, 네이버 0 — 세션 288 표 누락 정정) |
-| 단지 가치지표 수집 | 매일 04:30 | complex_price_history 집계 → complexes 가치 3필드 (네이버 API 0, 기본 배치 1000) |
-| 상세 필드 채움률 감시 | 매일 04:40 | 스케줄러 id `field_drift_monitor`(잡 이름 "정보 안 채워지면 알림"). 최근 48시간에 상세를 받은 활성 매물의 **필드별 채움률**을 DB 집계만으로 점검(네이버 0)해 임계 미달이면 텔레그램. 2026-09-13 실사고(네이버가 상세 응답 키를 바꿔 `heating_type` 등 4필드가 6개월 넘게 0% — HTTP 200 이라 에러·경보 0)의 조기 경보. 04:30 가치지표·04:50 자동결제 사이 빈 슬롯. 토글 `FIELD_DRIFT_MONITOR_ENABLED`(코드 기본 false — 라이브 ON) |
-| 빌링키 자동결제 | 매일 04:50 | billing_keys 의 next_charge_at 도래분(status='active' AND is_default) PortOne 빌링키 결제 → paid_until 연장 + next_charge_at 갱신. 3일 연속 실패 시 status='failed' 중단+알림. PortOne 결제라 네이버 0, 토글 BILLING_AUTO_CHARGE_ENABLED (정기결제 PR3, 세션 330). ⚠ **`PAYMENT_ENABLED`(코드 기본값 false, 세션 400 무료 전환) 가 꺼짐이면 이 잡이 아예 등록되지 않는다** — 관리자 스케줄러 화면에는 **행이 남고 "비활성"으로 표시**된다(그 화면은 등록된 잡이 아니라 `SCHEDULER_JOB_META` 사전을 순회하므로 행 자체는 안 사라진다 — 활성 판정은 META 의 `env_extra` 로 두 토글의 AND 를 본다. 이 장치가 없던 초안은 꺼진 기간에도 "활성 · 매일 04:50"으로 거짓 표시했다 — 세션 400 적대검증 HIGH). 같은 토글로 결제 API 7종(`/api/payment/*`·`/api/payment/billing/*`)도 403 이 된다. 즉 `BILLING_AUTO_CHARGE_ENABLED=true` 만 보고 "자동결제가 돈다"고 판정하면 오판 — 두 토글의 **AND** 다(`crawler/scheduler.py` 등록 조건). 켜려면 `.env` 에 `PAYMENT_ENABLED=true` 추가 + 재시작. 게이트 = `config/payment_flags.py` |
-| 정기 VACUUM 유지보수 | 매일 03:50 | articles/trades VACUUM (ANALYZE) — visibility map 재악화 차단. Supabase autovacuum 미동작 대비 안전망. **+ rate_limit_counters 만료 행 정리**(`quota_db.purge_expired_counters`, `expires_at < now()` 만 삭제·NULL 미대상. 날짜별 키가 쌓이는데 청소 주체가 없어 2026-04-15 이후 만료분 ~135행 잔존하던 것 — best-effort 라 실패해도 VACUUM 결과·잡 상태 영향 0, dialect 무관이라 VACUUM 의 PostgreSQL early-return **앞**에서 실행). **+ 상세 상한(detail_fail_count≥6) 매물 카운터를 5 로 되돌려 하루 1회 재시도 자격 부여** — 영구 방치 사각 차단, 세션 395(상한 매물이 네이버 쪽 오류가 풀려도 자동 복귀할 경로가 없어 수동 SQL 이 유일 탈출구이던 것. 되돌린 매물은 다음 배치에서 딱 1회 재시도되고 또 매물오류면 즉시 재제외 = 매물당 하루 1콜 유계. 쿼터 정리와 동일한 best-effort·early-return 앞). DB 전용(네이버 0), 토글 VACUUM_MAINTENANCE_ENABLED (세션 260) |
-| 인기 단지 크롤링 | 매일 10:45/14:45/19:15 | 자주 조회되는 단지 선제적 크롤링, 개별 try/except (기본 배치 50) **부모 잡이 자식 실패를 집계**(세션 396 PR #487) — `crawl_complex_articles` 가 성공/실패 bool 을 돌려주고 부모가 "N/50개 단지 실패" 를 error_message 에 남긴다(옛 코드는 자식이 예외를 흡수해 항상 50/50 completed 로 보였다). **선정 키 = `complexes.last_viewed_at` 최근 7일**(사용자가 `start-crawl` 을 호출한 시각, V058·세션 402 PR #507), 부족분은 활성 lane(`articles_crawled_at` 오래된 순)으로 채운다. 옛 키 `last_crawled_at DESC` 는 배치·자매 일괄 스탬프에 오염돼 7일 1,050회 중 **846회(81%)** 가 직전 24h 내 배치가 이미 긁은 단지 재방문이었다. 세대수 상위 폴백은 제거(빈 DB 외 도달 불가). |
-| 공공데이터 수집 | 토요일 5시 | 국토교통부 실거래가 (10일 토요일 skip) |
-| 청약홈 오피스텔 수집 | 월요일 05:00 | 오피스텔/도시형 청약 공고+평형(getUrbtyOfctlLttotPblancDetail/Mdl), 독립 테이블 officetel_presale_schedule·officetel_unit_supply 저장 (V045 재설계 — apartments 무관, 옛 "로스터 매칭분만 upsert" 방식 폐기. 네이버 0, PUBLIC_DATA_ENABLED 공유 — 이슈 #323) |
-| 청약홈 민간임대 수집 | 월요일 05:30 | 공공지원 민간임대 공고+평형(getPblPvtRentLttotPblancDetail/Mdl), 신규 독립 테이블 (네이버 0, PUBLIC_DATA_ENABLED 공유 — 이슈 #323) |
-| 공동주택 공시가격 수집 | 매월 15일 06:30 | V-WORLD 공시가격 → 단지 매칭(세대수 게이트). 3~7시간 소요, 네이버 0 (상세: [§잡 상세 — 공동주택 공시가격 수집](../../backend/.claude/details.md#잡-상세--공동주택-공시가격-수집)) |
-| 대기질 수집 | 매일 2시 | 에어코리아 API. **배치 100 은 `infra.air_attempted_at` 오래된 순(NULL 최우선) 순환**(V055·PR #459, 세션 394 — 옛 ORDER BY 부재로 매일 같은 앞쪽 100개만 재갱신되던 결함 수정. prod 실측 2026-09-05: 2,938단지 중 913개가 한 번도 수집된 적 없고 최근 30일 갱신은 977개뿐 — 매일 100×30일=3,000슬롯을 쓰고도). **전 단지 한 바퀴 ≈ 30일**(2,938 ÷ 100). ⚠ **배치 유지·전량 전환 금지** — 단지마다 `get_nearby_station` 1콜이 나가 전량이면 매일 ~3,000콜로 data.go.kr 공유 쿼터(일 10,000, mibunyang 과 공유)를 압박한다(응급의료 V054 는 전국 목록 1회 + 로컬 계산뿐이라 전량이 공짜였던 것과 다름). ⚠ **순환 키가 `air_updated_at` 이 아니라 신설 `air_attempted_at`("시도" 시각)인 이유**: `air_updated_at` 은 측정값(pm10/pm25/o3)이 하나라도 있을 때만 찍힌다(세션 280 — 전부 None 인데 찍으면 신선도 green 인데 화면은 빈값). 그 의미론은 보존해야 하는데, 그걸 순환 키로 쓰면 측정값이 안 나오는 단지가 영원히 NULL 로 남아 NULLS FIRST 앞자리를 매일 독점 → 순환이 그 자리에서 멈춘다. 그래서 측정소 미발견·측정값 전무여도 찍는 시도 마커를 분리 신설(`complexes.public_data_attempted_at`(V046) 선례와 같은 결) |
-| 응급의료 수집 | 매월 첫째 월 3시 | NEMC 응급의료기관 → infra.emergency_*. 전량 갱신(회차당 목록 6콜 + 병상 1콜 = 7콜). **병상 = 실시간 op `hvs01`(응급실 일반병상), 등급 = 목록 `dutyEmclsName`, 모르면 None** — 세션 417 전까지는 목록 op 에 없는 필드를 읽어 병상 0·등급 빈값만 저장됐다 (상세: [§잡 상세 — 응급의료 수집](../../backend/.claude/details.md#잡-상세--응급의료-수집)) |
-| 어린이집 수집 | 매월 첫째 목 1시 | CPMS cpmsapi030 API (01:00 고정 — 아래 §CPMS 키 공유 참조, 04:30 이후 금지). **배치 = 전량**(`CHILDCARE_BATCH_SIZE=0`, 사장님 결정 2026-09-05 / 세션 393): 위경도 보유 2,938단지를 매월 전부 갱신한다. 전량이 가능한 근거 = 이 수집기는 **시군구당 1콜 + 런 내 캐시 재사용**이라 호출 상한 = 단지가 걸친 (region,gu) 조합 수 = **248콜**(2026-09-05 prod 실측)로, CPMS 일 1,000콜 공유 쿼터 안에서 여유. 옛 배치 100 은 한 바퀴 ≈ 30개월이라 실익이 없었다. `infra.childcare_updated_at` 오래된 순(NULL 최우선) 순환 키(V053·PR #451, 세션 392)는 **안전망으로 유지** — 부분 배치로 되돌릴 때의 폴백 + 전량 실행이 도중에 끊겨도 다음 회차가 미수집분부터 이어받게 한다(500단지마다 중간 저장). 첫 실전 = 2026-10-01 목, 이때 NULL 방치 901단지가 일괄 해소될 전망 |
-| 범죄통계 수집 | 분기별 첫째 일 4시 | 경찰청 odcloud API (CSV 폴백) |
-| 단지 상세 backfill | APT/OPST 4시간 interval 매일 / JGC·ABYG·OBYG 주1회 7시 | 매물유형별 독립 job, detail_crawled_at NULL 단지 보강 (APT/OPST 배치 1000 가속 — PR #19 답습, 소수 유형 배치 1000 cron 유지. 2026-05-27 PR 6a 답습 6h→4h 33% 가속) |
-| K-apt 단지 매칭 | 매월 21일 06:10 | 국토부 K-apt 전국 목록 ↔ 우리 단지 4중 게이트 매칭. 네이버 0 (상세: [§잡 상세 — K-apt 단지 매칭](../../backend/.claude/details.md#잡-상세--k-apt-단지-매칭)) |
-| K-apt 관리비 수집 | 매일 06:20 | **매월 최신 공개월로 갱신**(2026-09-19 사장님 결정 — 옛 "단지별 약 3개월에 1회"). 대상 = kapt_complex_map 중 **보유한 가장 최신 달보다 새 달이 남은 단지**(보유월 이하는 절대 재조회 안 함 → 옛 무한 재조회 가드를 더 강한 형태로 유지), 순서는 **관리비 행이 아예 없는 단지 먼저 → matched_at 오래된 순**. **미공개 단지는 슬롯을 소모하지 않고**(3콜뿐) 수집·실패만 batch_size(500)를 채우며, 미공개 **스캔 상한 2,000** 에서 루프 중단. 훑은 단지가 전량 미공개면 저장행 표본 3건에 첫 op 1콜씩 찔러 **카나리**로 API 생사를 확인한다(살아있으면 정상 완료 — 월 전환일 거짓 경보 차단, 표본 0건·전부 빔이면 failed). 달마다 행이 쌓이고 조회 API 는 최신월 1건. 500개 × 22항목(공용 V3 17 + 개별 V3 5, 관리비 두 서비스도 **운영계정(10만/일) 전환 완료** → `KAPT_COST_BATCH_SIZE` 기본 500 으로 운영 중(2026-08-31 첫 정기 실행 실측: 하루 kapt 32,035콜, 실패 0·쿼터 에러 0). 개발계정 시절엔 한도가 서비스당 5,000/일 오퍼레이션 합산이라(공개 페이지 실측 2026-08-29 — 옛 "op당 1,000" 추정은 틀림) 배치 500 이면 공용만 8,500콜로 초과해 250 으로 낮춰 돌렸었고, 그 .env 오버라이드는 제거됨) 합산 → kapt_management_costs 월별 upsert(**항목별 금액 = 세부 칸 합** — 세션 417 정정, 옛 파서는 첫 칸만 저장해 인건비·제세공과금 등 다칸 op 5종이 과소. 22항목 표: [§잡 상세 — K-apt 관리비 수집](../../backend/.claude/details.md#잡-상세--k-apt-관리비-수집-항목별-금액--세부-칸-합-세션-417))(공개 지연 3개월 실측. 폴백월 무한 재조회 차단은 옛 "후보월 중 아무 달이나 보유 시 제외" 에서 **보유월 이하 재조회 금지**로 승계 — 더 강한 형태). 실측 87~107분(2026-09, 조기 탈출 전 — 미공개 단지가 66콜씩 먹던 시기. 조기 탈출 후 기대 33~40분). **매월 갱신 전환 후 평시 기대 ≈63분**(500×22 + 상시 미공개 ~516×3 ≈ 12,500콜), **최악 ≈90분**(500×24 + 2,000×3 = 18,000콜 × 0.303초 실측 throttle — 스캔 상한이 이 최악을 묶는다)이라 1h 경계를 넘는다 → _STALE_HOURS_BY_TYPE 3h. 단지 상세 GET /api/complexes/{no}/kapt(12h 캐시)·기본정보 "월 관리비(세대당)·복도유형" 표시 원천. 배치 500 기준 하루 11,000콜 — 전역 쿼터가 아닌 kapt 버킷(6만 상한) 소모. **호출 실패 단지는 저장 안 하고(반쪽 총액 방지) 다음 회차 재시도, 한도 초과(22)는 배치 조기 중단 + 잡 failed.** **미공개 단지는 첫 op 에서 끊어 66콜→3콜**(근거 = 저장 7,757행 전수 실측, 세션 414). ⚠ **이 조기 탈출은 세션 417 전까지 실전에서 한 번도 서지 않았다** — K-apt 의 실제 미공개 응답은 빈 body 가 아니라 **키는 다 있고 값이 전부 null 인 item** 이라(2026-09-24 원문 실측) 옛 판정 `if not item` 을 통과해, 미공개 단지가 공용 17콜 × 3개월 = **51콜**씩 태웠다(09-24 회차 실측 26,351콜·약 132분 = 수집 500×22 + 미공개 299×51). 세션 417 에 `kapt_api._is_blank_item` 으로 정정 → 기대 **수집 500·미공개 ≈300 이면 ≈11,900콜·55~65분**(위 "33~40분"은 이 결함 때문에 한 번도 실현되지 않은 옛 예측). 판정은 회차 로그 한 줄 `[kapt_costs] 호출 집계: 미공개 N단지가 M콜 사용(단지당 평균 X콜), 이번 회차 관리비 호출 총 T콜` — 평균이 3 이하면 정상, 17 근처면 조기 탈출이 또 안 선 것. 네이버 0, 토글 KAPT_ENABLED 공유. 제공기관 오류 봉투(코드 04 등)는 사유째 기록(일시성 01·02·04·05·99 는 3/10/30초 재시도 뒤에만 실패), 연속 실패는 카나리·대기(30/60/120초) 뒤에만 중단 — 세션 417 후속, 09-25 실사고. **수집 0 인 채로 "카나리 살아있음 — 계속" 은 2회까지**(`_ALIVE_CONTINUE_CAP_WHILE_EMPTY`), 3번째면 `partial_outage` 로 마감 — 09-25 14:47~17:21 수동 회차가 이 상한 없이 수집 0·실패 75·미공개 162·1,276콜(재시도 585 포함)로 예산을 다 태웠다. 수집 ≥1 이어도 실패 > 수집이면 failed(`mostly_failed` — 한 단지 성공으로 monitor 가 "복구" 를 알리지 않게), 이미 running 인 회차가 있으면 새 잡 없이 반환. 회차 시간 예산 120분(단지 사이에서만 검사 — 최악 120 + 마지막 단지 17.6분 + 카나리 15분 ≈ 152분 < 3h, 옛 150분은 09-25 실측 154.6분). 카나리 표본 4건은 논리 호출이고 재시도 포함 최대 16콜·표본당 43초. 재시도·실패 로그와 잡 기록에 `kaptCode=… searchDate=…` 가 붙는다. `kapt_match` 의 **기본정보는 재시도하지 않는다**(실패 1건 = 1콜 — 장애일에 14,747건 × 4콜·대기 176시간이 되는 것을 막음). 목록(약 22페이지)은 재시도 유지 — 한 페이지가 끊기면 일부 목록으로 매칭돼 멀쩡한 매핑·관리비 행이 지워질 수 있다 (상세: [§잡 상세 — K-apt 관리비 수집](../../backend/.claude/details.md#잡-상세--k-apt-관리비-수집-항목별-금액--세부-칸-합-세션-417)) |
-| data.go.kr API 버전 감시 | 일요일 06:40 | 코드가 쓰는 엔드포인트 13종 생사 확인 → dead 시 텔레그램 (상세: [§잡 상세 — data.go.kr API 버전 감시](../../backend/.claude/details.md#잡-상세--datagokr-api-버전-감시)) |
-| 크롤링 모니터 | 10분 interval(라이브 `.env` `MONITOR_INTERVAL_MIN` — 코드 기본·release.md 생성 표는 30분) | crawl_jobs 정합성 점검 → 텔레그램. **알림은 전부 쉬운 우리말**(§텔레그램 알림 문구). **stale running 잡을 `_STALE_HOURS_BY_TYPE` 임계로 자동 cancelled(`swept by monitor`)** — 부팅 스윕(5분)이 못 잡은 "재시작 직전 시작 잡"도 1h 뒤 여기서 정리된다(세션 410 정정, release.md §3-0) (상세: [§잡 상세 — 크롤링 모니터](../../backend/.claude/details.md#잡-상세--크롤링-모니터)) |
+| 새 단지 찾기 (전국 단지 발견) | 일요일 3시 | 네이버 키워드 검색으로 신규 단지 수집 |
+| 단지 매물 가져오기 (매물 수집 배치) | **매일 01:00 / 13:00** cron (±45분 jitter) | 활성 lane + 발굴 lane 두 몫으로 단지 선정해 매물 목록 크롤링 (배치 기본 **150**, 세션 402 PR #506). ⚠ 옛 "12시간 interval" 은 APScheduler `IntervalTrigger` 가 `start_date = now + interval` 이라 **재시작마다 다음 실행이 12h 밀렸다** — 최근 14일 중 9일이 하루 1회만 돌았다(crawl_jobs 실측). cron 은 벽시계 기준이라 재시작 무관. **선정 키**(`db/complex_queries.py get_complexes_for_article_crawl`, 세션 402 PR #507): 활성 lane 80% = 활성 매물 보유 단지를 `complexes.articles_crawled_at` 오래된 순(NULL 우선), 발굴 lane 20% = 활성 0 + `articles_crawled_at IS NULL` 단지. 한쪽이 모자라면 남는 몫을 다른 lane 이 흡수. 옛 1순위 `has_article.asc()`(매물 0건 우선)는 2026-04-13 엔 정당했으나 그 풀이 53,581 로 불어나 활성 10,567 단지의 76%가 30일+ 미방문이 됐다. **호출 총량 불변은 단지 수 기준**이지 콜 수 기준이 아니다(매물 보유 단지는 페이지네이션) — `record_call("crawl_articles_batch")` 로 1주 관찰. ⚠ 라이브 `.env` 에 `CRAWL_BATCH_SIZE` 가 있으면 코드 기본값 150 을 덮는다 |
+| 매물 상세 내용 채우기 (매물 상세 보강) | 30분 interval (±15분 jitter) | 매물 상세 크롤링(배치 500). 매물오류 상한·부분 인덱스·순회마다 commit (상세: [§잡 상세 — 매물 상세 보강](../../backend/.claude/details.md#잡-상세--매물-상세-보강)) |
+| 빠진 정보 뒤늦게 채우기 00:20·12:20 (상세 백필 새벽·낮) | 매일 00:20 / 12:20 | 스케줄러 id `backfill_detail_dawn`(배치 1500·약 38분)·`backfill_detail_noon`(배치 4000·실측 113~134분), job_type 은 둘 다 `article_detail_backfill`. 네이버가 상세 응답 키를 바꿔 빈 채 굴러간 필드(난방·사용승인일·지번주소·총층수)를 상세 API 로 사후 보강한다. 소요 = 배치 × 1.5초(throttle)라 다음 네이버 잡(01:00 매물 수집·14:45 인기 단지)과 안 겹치게 회차별 배치를 달리했다 — **낮 회차가 145분을 넘기면 14:45 와 겹친다**(2026-09-18 실측 133.9분 — 원인은 네이버 차단이 아니라 30분 주기 상세 보강과의 겹침, 세션 414). 스윕 임계 4h(⏰ 재시작 금지 구간). 토글 `BACKFILL_DETAIL_ENABLED`(코드 기본 false — 2026-09-14 라이브 `.env` 에서 ON), 배치 `BACKFILL_DETAIL_BATCH_SIZE`(덮으면 두 회차 모두 그 값) |
+| 단지 시세 기록 모으기 (시세 이력 수집) | 수요일 4시 | 단지별 시세(매매/전세) 주간 수집 |
+| 옛 시세 채워 넣기 (시세 이력 소급 수집) | 매일 03:30 | complex_price_history 6행 미만 단지 세대수 상위순 국토교통부 backfill (PUBLIC_DATA_ENABLED 토글, 네이버 0 — 세션 288 표 누락 정정) |
+| 단지 가치 점수 계산 (단지 가치지표 수집) | 매일 04:30 | complex_price_history 집계 → complexes 가치 3필드 (네이버 API 0, 기본 배치 1000) |
+| 정보 안 채워지면 알림 (상세 필드 채움률 감시) | 매일 04:40 | 스케줄러 id `field_drift_monitor`(잡 이름 "정보 안 채워지면 알림"). 최근 48시간에 상세를 받은 활성 매물의 **필드별 채움률**을 DB 집계만으로 점검(네이버 0)해 임계 미달이면 텔레그램. 2026-09-13 실사고(네이버가 상세 응답 키를 바꿔 `heating_type` 등 4필드가 6개월 넘게 0% — HTTP 200 이라 에러·경보 0)의 조기 경보. 04:30 가치지표·04:50 자동결제 사이 빈 슬롯. 토글 `FIELD_DRIFT_MONITOR_ENABLED`(코드 기본 false — 라이브 ON) |
+| 구독료 자동 결제 (빌링키 자동결제) | 매일 04:50 | billing_keys 의 next_charge_at 도래분(status='active' AND is_default) PortOne 빌링키 결제 → paid_until 연장 + next_charge_at 갱신. 3일 연속 실패 시 status='failed' 중단+알림. PortOne 결제라 네이버 0, 토글 BILLING_AUTO_CHARGE_ENABLED (정기결제 PR3, 세션 330). ⚠ **`PAYMENT_ENABLED`(코드 기본값 false, 세션 400 무료 전환) 가 꺼짐이면 이 잡이 아예 등록되지 않는다** — 관리자 스케줄러 화면에는 **행이 남고 "비활성"으로 표시**된다(그 화면은 등록된 잡이 아니라 `SCHEDULER_JOB_META` 사전을 순회하므로 행 자체는 안 사라진다 — 활성 판정은 META 의 `env_extra` 로 두 토글의 AND 를 본다. 이 장치가 없던 초안은 꺼진 기간에도 "활성 · 매일 04:50"으로 거짓 표시했다 — 세션 400 적대검증 HIGH). 같은 토글로 결제 API 7종(`/api/payment/*`·`/api/payment/billing/*`)도 403 이 된다. 즉 `BILLING_AUTO_CHARGE_ENABLED=true` 만 보고 "자동결제가 돈다"고 판정하면 오판 — 두 토글의 **AND** 다(`crawler/scheduler.py` 등록 조건). 켜려면 `.env` 에 `PAYMENT_ENABLED=true` 추가 + 재시작. 게이트 = `config/payment_flags.py` |
+| 자료 보관함 정리 (정기 VACUUM 유지보수) | 매일 03:50 | articles/trades VACUUM (ANALYZE) — visibility map 재악화 차단. Supabase autovacuum 미동작 대비 안전망. **+ rate_limit_counters 만료 행 정리**(`quota_db.purge_expired_counters`, `expires_at < now()` 만 삭제·NULL 미대상. 날짜별 키가 쌓이는데 청소 주체가 없어 2026-04-15 이후 만료분 ~135행 잔존하던 것 — best-effort 라 실패해도 VACUUM 결과·잡 상태 영향 0, dialect 무관이라 VACUUM 의 PostgreSQL early-return **앞**에서 실행). **+ 상세 상한(detail_fail_count≥6) 매물 카운터를 5 로 되돌려 하루 1회 재시도 자격 부여** — 영구 방치 사각 차단, 세션 395(상한 매물이 네이버 쪽 오류가 풀려도 자동 복귀할 경로가 없어 수동 SQL 이 유일 탈출구이던 것. 되돌린 매물은 다음 배치에서 딱 1회 재시도되고 또 매물오류면 즉시 재제외 = 매물당 하루 1콜 유계. 쿼터 정리와 동일한 best-effort·early-return 앞). DB 전용(네이버 0), 토글 VACUUM_MAINTENANCE_ENABLED (세션 260) |
+| 자주 보는 단지 미리 갱신 (인기 단지 크롤링) | 매일 10:45/14:45/19:15 | 자주 조회되는 단지 선제적 크롤링, 개별 try/except (기본 배치 50) **부모 잡이 자식 실패를 집계**(세션 396 PR #487) — `crawl_complex_articles` 가 성공/실패 bool 을 돌려주고 부모가 "N/50개 단지 실패" 를 error_message 에 남긴다(옛 코드는 자식이 예외를 흡수해 항상 50/50 completed 로 보였다). **선정 키 = `complexes.last_viewed_at` 최근 7일**(사용자가 `start-crawl` 을 호출한 시각, V058·세션 402 PR #507), 부족분은 활성 lane(`articles_crawled_at` 오래된 순)으로 채운다. 옛 키 `last_crawled_at DESC` 는 배치·자매 일괄 스탬프에 오염돼 7일 1,050회 중 **846회(81%)** 가 직전 24h 내 배치가 이미 긁은 단지 재방문이었다. 세대수 상위 폴백은 제거(빈 DB 외 도달 불가). |
+| 정부 실거래가 받기 (공공데이터 수집) | 토요일 5시 | 국토교통부 실거래가 (10일 토요일 skip) |
+| 오피스텔 청약 공고 받기 (청약홈 오피스텔 수집) | 월요일 05:00 | 오피스텔/도시형 청약 공고+평형(getUrbtyOfctlLttotPblancDetail/Mdl), 독립 테이블 officetel_presale_schedule·officetel_unit_supply 저장 (V045 재설계 — apartments 무관, 옛 "로스터 매칭분만 upsert" 방식 폐기. 네이버 0, PUBLIC_DATA_ENABLED 공유 — 이슈 #323) |
+| 민간임대 청약 공고 받기 (청약홈 민간임대 수집) | 월요일 05:30 | 공공지원 민간임대 공고+평형(getPblPvtRentLttotPblancDetail/Mdl), 신규 독립 테이블 (네이버 0, PUBLIC_DATA_ENABLED 공유 — 이슈 #323) |
+| 정부 공시가격 받기 (공동주택 공시가격 수집) | 매월 15일 06:30 | V-WORLD 공시가격 → 단지 매칭(세대수 게이트). 3~7시간 소요, 네이버 0 (상세: [§잡 상세 — 공동주택 공시가격 수집](../../backend/.claude/details.md#잡-상세--공동주택-공시가격-수집)) |
+| 동네 공기질 받기 (대기질 수집) | 매일 2시 | 에어코리아 API. **배치 100 은 `infra.air_attempted_at` 오래된 순(NULL 최우선) 순환**(V055·PR #459, 세션 394 — 옛 ORDER BY 부재로 매일 같은 앞쪽 100개만 재갱신되던 결함 수정. prod 실측 2026-09-05: 2,938단지 중 913개가 한 번도 수집된 적 없고 최근 30일 갱신은 977개뿐 — 매일 100×30일=3,000슬롯을 쓰고도). **전 단지 한 바퀴 ≈ 30일**(2,938 ÷ 100). ⚠ **배치 유지·전량 전환 금지** — 단지마다 `get_nearby_station` 1콜이 나가 전량이면 매일 ~3,000콜로 data.go.kr 공유 쿼터(일 10,000, mibunyang 과 공유)를 압박한다(응급의료 V054 는 전국 목록 1회 + 로컬 계산뿐이라 전량이 공짜였던 것과 다름). ⚠ **순환 키가 `air_updated_at` 이 아니라 신설 `air_attempted_at`("시도" 시각)인 이유**: `air_updated_at` 은 측정값(pm10/pm25/o3)이 하나라도 있을 때만 찍힌다(세션 280 — 전부 None 인데 찍으면 신선도 green 인데 화면은 빈값). 그 의미론은 보존해야 하는데, 그걸 순환 키로 쓰면 측정값이 안 나오는 단지가 영원히 NULL 로 남아 NULLS FIRST 앞자리를 매일 독점 → 순환이 그 자리에서 멈춘다. 그래서 측정소 미발견·측정값 전무여도 찍는 시도 마커를 분리 신설(`complexes.public_data_attempted_at`(V046) 선례와 같은 결) |
+| 응급실 위치 받기 (응급의료 수집) | 매월 첫째 월 3시 | NEMC 응급의료기관 → infra.emergency_*. 전량 갱신(회차당 목록 6콜 + 병상 1콜 = 7콜). **병상 = 실시간 op `hvs01`(응급실 일반병상), 등급 = 목록 `dutyEmclsName`, 모르면 None** — 세션 417 전까지는 목록 op 에 없는 필드를 읽어 병상 0·등급 빈값만 저장됐다 (상세: [§잡 상세 — 응급의료 수집](../../backend/.claude/details.md#잡-상세--응급의료-수집)) |
+| 어린이집 정보 받기 (어린이집 수집) | 매월 첫째 목 1시 | CPMS cpmsapi030 API (01:00 고정 — 아래 §CPMS 키 공유 참조, 04:30 이후 금지). **배치 = 전량**(`CHILDCARE_BATCH_SIZE=0`, 사장님 결정 2026-09-05 / 세션 393): 위경도 보유 2,938단지를 매월 전부 갱신한다. 전량이 가능한 근거 = 이 수집기는 **시군구당 1콜 + 런 내 캐시 재사용**이라 호출 상한 = 단지가 걸친 (region,gu) 조합 수 = **248콜**(2026-09-05 prod 실측)로, CPMS 일 1,000콜 공유 쿼터 안에서 여유. 옛 배치 100 은 한 바퀴 ≈ 30개월이라 실익이 없었다. `infra.childcare_updated_at` 오래된 순(NULL 최우선) 순환 키(V053·PR #451, 세션 392)는 **안전망으로 유지** — 부분 배치로 되돌릴 때의 폴백 + 전량 실행이 도중에 끊겨도 다음 회차가 미수집분부터 이어받게 한다(500단지마다 중간 저장). 첫 실전 = 2026-10-01 목, 이때 NULL 방치 901단지가 일괄 해소될 전망 |
+| 동네 범죄 통계 받기 (범죄통계 수집) | 분기별 첫째 일 4시 | 경찰청 odcloud API (CSV 폴백) |
+| 유형별 단지 정보 채우기 (단지 상세 backfill) | APT/OPST 4시간 interval 매일 / JGC·ABYG·OBYG 주1회 7시 | 매물유형별 독립 job, detail_crawled_at NULL 단지 보강 (APT/OPST 배치 1000 가속 — PR #19 답습, 소수 유형 배치 1000 cron 유지. 2026-05-27 PR 6a 답습 6h→4h 33% 가속) |
+| 관리비 단지 연결하기 (K-apt 단지 매칭) | 매월 21일 06:10 | 국토부 K-apt 전국 목록 ↔ 우리 단지 4중 게이트 매칭. 네이버 0 (상세: [§잡 상세 — K-apt 단지 매칭](../../backend/.claude/details.md#잡-상세--k-apt-단지-매칭)) |
+| 단지 관리비 받기 (K-apt 관리비 수집) | 매일 06:20 | **매월 최신 공개월로 갱신**(2026-09-19 사장님 결정 — 옛 "단지별 약 3개월에 1회"). 대상 = kapt_complex_map 중 **보유한 가장 최신 달보다 새 달이 남은 단지**(보유월 이하는 절대 재조회 안 함 → 옛 무한 재조회 가드를 더 강한 형태로 유지), 순서는 **관리비 행이 아예 없는 단지 먼저 → matched_at 오래된 순**. **미공개 단지는 슬롯을 소모하지 않고**(3콜뿐) 수집·실패만 batch_size(500)를 채우며, 미공개 **스캔 상한 2,000** 에서 루프 중단. 훑은 단지가 전량 미공개면 저장행 표본 3건에 첫 op 1콜씩 찔러 **카나리**로 API 생사를 확인한다(살아있으면 정상 완료 — 월 전환일 거짓 경보 차단, 표본 0건·전부 빔이면 failed). 달마다 행이 쌓이고 조회 API 는 최신월 1건. 500개 × 22항목(공용 V3 17 + 개별 V3 5, 관리비 두 서비스도 **운영계정(10만/일) 전환 완료** → `KAPT_COST_BATCH_SIZE` 기본 500 으로 운영 중(2026-08-31 첫 정기 실행 실측: 하루 kapt 32,035콜, 실패 0·쿼터 에러 0). 개발계정 시절엔 한도가 서비스당 5,000/일 오퍼레이션 합산이라(공개 페이지 실측 2026-08-29 — 옛 "op당 1,000" 추정은 틀림) 배치 500 이면 공용만 8,500콜로 초과해 250 으로 낮춰 돌렸었고, 그 .env 오버라이드는 제거됨) 합산 → kapt_management_costs 월별 upsert(**항목별 금액 = 세부 칸 합** — 세션 417 정정, 옛 파서는 첫 칸만 저장해 인건비·제세공과금 등 다칸 op 5종이 과소. 22항목 표: [§잡 상세 — K-apt 관리비 수집](../../backend/.claude/details.md#잡-상세--k-apt-관리비-수집-항목별-금액--세부-칸-합-세션-417))(공개 지연 3개월 실측. 폴백월 무한 재조회 차단은 옛 "후보월 중 아무 달이나 보유 시 제외" 에서 **보유월 이하 재조회 금지**로 승계 — 더 강한 형태). 실측 87~107분(2026-09, 조기 탈출 전 — 미공개 단지가 66콜씩 먹던 시기. 조기 탈출 후 기대 33~40분). **매월 갱신 전환 후 평시 기대 ≈63분**(500×22 + 상시 미공개 ~516×3 ≈ 12,500콜), **최악 ≈90분**(500×24 + 2,000×3 = 18,000콜 × 0.303초 실측 throttle — 스캔 상한이 이 최악을 묶는다)이라 1h 경계를 넘는다 → _STALE_HOURS_BY_TYPE 3h. 단지 상세 GET /api/complexes/{no}/kapt(12h 캐시)·기본정보 "월 관리비(세대당)·복도유형" 표시 원천. 배치 500 기준 하루 11,000콜 — 전역 쿼터가 아닌 kapt 버킷(6만 상한) 소모. **호출 실패 단지는 저장 안 하고(반쪽 총액 방지) 다음 회차 재시도, 한도 초과(22)는 배치 조기 중단 + 잡 failed.** **미공개 단지는 첫 op 에서 끊어 66콜→3콜**(근거 = 저장 7,757행 전수 실측, 세션 414). ⚠ **이 조기 탈출은 세션 417 전까지 실전에서 한 번도 서지 않았다** — K-apt 의 실제 미공개 응답은 빈 body 가 아니라 **키는 다 있고 값이 전부 null 인 item** 이라(2026-09-24 원문 실측) 옛 판정 `if not item` 을 통과해, 미공개 단지가 공용 17콜 × 3개월 = **51콜**씩 태웠다(09-24 회차 실측 26,351콜·약 132분 = 수집 500×22 + 미공개 299×51). 세션 417 에 `kapt_api._is_blank_item` 으로 정정 → 기대 **수집 500·미공개 ≈300 이면 ≈11,900콜·55~65분**(위 "33~40분"은 이 결함 때문에 한 번도 실현되지 않은 옛 예측). 판정은 회차 로그 한 줄 `[kapt_costs] 호출 집계: 미공개 N단지가 M콜 사용(단지당 평균 X콜), 이번 회차 관리비 호출 총 T콜` — 평균이 3 이하면 정상, 17 근처면 조기 탈출이 또 안 선 것. 네이버 0, 토글 KAPT_ENABLED 공유. 제공기관 오류 봉투(코드 04 등)는 사유째 기록(일시성 01·02·04·05·99 는 3/10/30초 재시도 뒤에만 실패), 연속 실패는 카나리·대기(30/60/120초) 뒤에만 중단 — 세션 417 후속, 09-25 실사고. **수집 0 인 채로 "카나리 살아있음 — 계속" 은 2회까지**(`_ALIVE_CONTINUE_CAP_WHILE_EMPTY`), 3번째면 `partial_outage` 로 마감 — 09-25 14:47~17:21 수동 회차가 이 상한 없이 수집 0·실패 75·미공개 162·1,276콜(재시도 585 포함)로 예산을 다 태웠다. 수집 ≥1 이어도 실패 > 수집이면 failed(`mostly_failed` — 한 단지 성공으로 monitor 가 "복구" 를 알리지 않게), 이미 running 인 회차가 있으면 새 잡 없이 반환. 회차 시간 예산 120분(단지 사이에서만 검사 — 최악 120 + 마지막 단지 17.6분 + 카나리 15분 ≈ 152분 < 3h, 옛 150분은 09-25 실측 154.6분). 카나리 표본 4건은 논리 호출이고 재시도 포함 최대 16콜·표본당 43초. 재시도·실패 로그와 잡 기록에 `kaptCode=… searchDate=…` 가 붙는다. `kapt_match` 의 **기본정보는 재시도하지 않는다**(실패 1건 = 1콜 — 장애일에 14,747건 × 4콜·대기 176시간이 되는 것을 막음). 목록(약 22페이지)은 재시도 유지 — 한 페이지가 끊기면 일부 목록으로 매칭돼 멀쩡한 매핑·관리비 행이 지워질 수 있다 (상세: [§잡 상세 — K-apt 관리비 수집](../../backend/.claude/details.md#잡-상세--k-apt-관리비-수집-항목별-금액--세부-칸-합-세션-417)) |
+| 정부 자료 창구 살아있나 확인 (data.go.kr API 버전 감시) | 일요일 06:40 | 코드가 쓰는 엔드포인트 13종 생사 확인 → dead 시 텔레그램 (상세: [§잡 상세 — data.go.kr API 버전 감시](../../backend/.claude/details.md#잡-상세--datagokr-api-버전-감시)) |
+| 서버 일감 점검 (크롤링 모니터) | 10분 interval(라이브 `.env` `MONITOR_INTERVAL_MIN` — 코드 기본·release.md 생성 표는 30분) | crawl_jobs 정합성 점검 → 텔레그램. **알림은 전부 쉬운 우리말**(§텔레그램 알림 문구). **stale running 잡을 `_STALE_HOURS_BY_TYPE` 임계로 자동 cancelled(`swept by monitor`)** — 부팅 스윕(5분)이 못 잡은 "재시작 직전 시작 잡"도 1h 뒤 여기서 정리된다(세션 410 정정, release.md §3-0) (상세: [§잡 상세 — 크롤링 모니터](../../backend/.claude/details.md#잡-상세--크롤링-모니터)) |
 
 ⚠ **위 표의 "잡 이름"은 스케줄러 등록 id(`scheduler.py`의 `id="..."`)이고, DB
 `crawl_jobs.job_type` 컬럼에 실제로 저장되는 값은 이와 다를 수 있다** — 이 프로젝트
@@ -233,7 +274,7 @@ job_type `officetel_presale`(접두어 없음), id `collect_rental_presale` → 
 
 ### 잡 상세 (표에서 덜어낸 원문)
 
-> 여섯 잡(매물 상세 보강·공동주택 공시가격·응급의료·K-apt 단지 매칭·data.go.kr API 버전 감시·크롤링 모니터)의
+> 여섯 잡(매물 상세 보강(매물 상세 내용 채우기)·공동주택 공시가격·응급의료·K-apt 단지 매칭(관리비 단지 연결하기)·data.go.kr API 버전 감시(정부 자료 창구 살아있나 확인)·크롤링 모니터(서버 일감 점검))의
 > 원문은 **`backend/.claude/details.md` §스케줄러 잡 상세** 에 있다(세션 411 이동 — 이 규칙 파일은 세션·서브에이전트마다
 > 통째로 읽히므로, 파고들 때만 필요한 원문은 명시 참조 파일로 뺐다. 내용 무손실). 위 표의 `§잡 상세 — …` 링크가
 > 그쪽을 가리킨다. **잡의 동작을 바꾸면 표와 그 절을 함께 갱신**한다.
@@ -298,8 +339,8 @@ naver 의 `CHILDCARE_DETAIL_API_KEY` == mibunyang 의 `CHILDCARE_BASIC_API_KEY` 
 | 04:00 | naver-estate-web | collect_prices | 수요일 |
 | 06:30 (15일) | naver-estate-web | official_price (V-WORLD, 네이버 0) | 매월 15일 (OFFICIAL_PRICE_ENABLED) |
 | 05:30 | mibunyang | KOSIS 로컬 러너 10종 (kosis.kr, 네이버 0 — Windows 작업 MibunyangKosisLocal, 세션 289 GH→집서버 이전) | 매일 (일자 디스패치) |
-| 4h interval | naver-estate-web | 단지 상세 backfill APT/OPST | 매일 |
-| 07:00 | naver-estate-web | 단지 상세 backfill JGC·ABYG·OBYG | 화·수·목 |
+| 4h interval | naver-estate-web | 단지 상세 backfill APT/OPST(아파트·오피스텔 단지 정보 채우기) | 매일 |
+| 07:00 | naver-estate-web | 단지 상세 backfill JGC·ABYG·OBYG(재건축·분양권 단지 정보 채우기) | 화·수·목 |
 | 08:00 | mibunyang | 로컬 naver-collect.py | 월/목 |
 | 10:45/14:45/19:15 | naver-estate-web | popular 크롤링 | 매일 |
 | 01:00 / 13:00 | naver-estate-web | crawl_articles (cron, ±45분 jitter — 세션 402 에 12h interval 에서 전환) | 매일 |
@@ -312,7 +353,7 @@ naver 의 `CHILDCARE_DETAIL_API_KEY` == mibunyang 의 `CHILDCARE_BASIC_API_KEY` 
 
 1. **모든 네이버 수집 코드는 `AdaptiveThrottle` 경유 필수.** `crawler/utils.py` 의 `get_shared_throttle(name, ...)` 로 인스턴스를 받아 단지·페이지 루프마다 `.wait()` 호출. 429 응답 시 자동 감속(`on_rate_limit`). throttle 우회한 직접 반복 호출 금지.
 2. **크롤 지표 컬럼을 SQL 직접 일괄 UPDATE 로 찍지 말 것.** `complexes.last_crawled_at`·`complexes.detail_crawled_at`·`articles.detail_crawled` 는 실제 크롤 코드(`CrawlJob` 생성 경유)만 갱신한다. SQL 로 일괄 UPDATE 하면 "크롤된 것처럼" 보이지만 실제 데이터는 없어 진단을 망친다.
-3. **`articles.detail_fail_count` 일괄 리셋은 정비 잡 전용, 수동은 단건만.** 상한 매물 되살리기는 일일 정비 잡(정기 VACUUM 유지보수, 매일 03:50)이 CAP-1 부여로 이미 한다(매물당 하루 1콜 유계). 손으로 `WHERE detail_fail_count > 0` 같은 일괄 0 리셋을 박으면 그 매물들이 상한까지 N매물×6콜을 다시 태우며 한꺼번에 재유입돼 네이버 부하가 튄다. 수동 개입은 특정 매물 1건(`WHERE article_no = '...'`)만.
+3. **`articles.detail_fail_count` 일괄 리셋은 정비 잡 전용, 수동은 단건만.** 상한 매물 되살리기는 일일 정비 잡(정기 VACUUM 유지보수(자료 보관함 정리), 매일 03:50)이 CAP-1 부여로 이미 한다(매물당 하루 1콜 유계). 손으로 `WHERE detail_fail_count > 0` 같은 일괄 0 리셋을 박으면 그 매물들이 상한까지 N매물×6콜을 다시 태우며 한꺼번에 재유입돼 네이버 부하가 튄다. 수동 개입은 특정 매물 1건(`WHERE article_no = '...'`)만.
 
 > **사건**: 2026-04-13 — `last_crawled_at` 이 하루에 29,944개(전체 75%) 동일 날짜로 찍힘. 그날 `crawl_jobs` 0건 → 크롤이 아니라 SQL 직접 일괄 UPDATE. 그 단지들의 단지상세 채움률은 2.6%뿐 — `last_crawled_at` 이 허수가 되어 데이터 진단을 장기간 어지럽힘.
 

@@ -122,8 +122,13 @@ jobs:
   # 관리자 화면에 영문 노출 → 이틀 뒤 frontend 를 건드린 dependabot #519 가
   # 대신 실패. 원인 PR 이 아니라 무관한 PR 이 막히는 구조였다.
   #
-  # 그래서 frontend·backend 어느 쪽이 바뀌어도 돈다. npm ci 없이 node 만으로
-  # 실행되는 단일 스크립트라 30초면 끝난다(설치·빌드 불필요).
+  # 그래서 frontend·backend 어느 쪽이 바뀌어도 돈다. 키 대조(check:job-labels)는
+  # node 만으로 도는 단일 스크립트다.
+  #
+  # 세션 419: 이름 값 대조(crawl-job-labels-sync.test.ts — BE JOB_WORDS 와 FE 라벨을
+  # 글자까지 대조)도 여기서 돈다. 그 테스트는 Frontend CI 의 `npm test` 에도 있지만
+  # Frontend CI 는 frontend/** 변경에만 돌아서, JOB_WORDS 만 고친 backend 단독 PR 에선
+  # skip 됐다 — 세션 403 과 같은 구조의 구멍. vitest 가 필요해 npm ci 를 한다(캐시 사용).
   job-labels:
     name: Job label guard
     needs: changes
@@ -137,8 +142,13 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - name: Job label guard
         run: npm run check:job-labels
+      - run: npm ci
+      - name: Job label name sync (BE JOB_WORDS = FE labels)
+        run: npx vitest run src/lib/__tests__/crawl-job-labels-sync.test.ts
 
   # setup+admin+public+public-visual 4 project 를 한 job 에서 순차 실행하면
   # 대기시간이 길다(public-visual 이 특히 무거움). GitHub Actions matrix 로

@@ -318,7 +318,8 @@ class KaptAPI(BasePublicDataAPI):
     _quota_daily_limit = 60_000
 
     @classmethod
-    def _body_or_raise(cls, url: str, params: dict, op: str | None = None) -> dict | None:
+    def _body_or_raise(cls, url: str, params: dict, op: str | None = None,
+                       ctx: str | None = None, retry_transient: bool = True) -> dict | None:
         """공통 호출 → response.body. **호출 실패는 `KaptApiError` 로 올린다.**
 
         반환값이 None 인 경우는 오직 (b) "성공했는데 body 가 비어있음" 하나뿐이다.
@@ -338,8 +339,16 @@ class KaptAPI(BasePublicDataAPI):
         정상). 한 단지 22콜 중 하나만 04 를 맞아도 그 단지 전체가 실패가 되므로, 재시도
         없이는 회차가 거의 못 모은다. 쿼터(22)·설정 오류는 기다려도 안 바뀌어 즉시 올린다.
         재시도도 `call_api` 를 거치므로 쿼터 카운터에 그대로 잡힌다(`retry_calls_made`).
+
+        `ctx` — 로그·예외 메시지에 op 옆에 붙일 호출 맥락(관리비 = `kaptCode=… searchDate=…`).
+        "특정 달·단지만 고장인가" 를 로그로 가르려고 넣는다(세션 417 최종 검사관 C). 텔레그램에는
+        `plain_words.explain_error` 가 사유 번호 문장으로 통째로 바꿔 내보내므로 영문 키가 새지 않는다.
+        `retry_transient=False` 면 일시성 코드도 재시도 없이 즉시 올린다 — 기본정보
+        (`fetch_apt_basis_info`)만 쓴다(장애일에 kapt_match 기본정보 14,747건이 4콜씩·대기 176시간이
+        되는 것을 막는다). 목록 페이지는 재시도를 유지한다 — `fetch_apt_list_page` docstring 참조.
         """
         global _retry_call_count
+        where = f"op={op or url}" + (f" {ctx}" if ctx else "")
         attempt = 0
         while True:
             data = cls.call_api(url, params)
@@ -347,13 +356,13 @@ class KaptAPI(BasePublicDataAPI):
                 # call_api 는 실패 사유를 안 돌려준다(공유 기반 클래스라 시그니처 불변).
                 # 코드 미상의 실패로 올리고, 쿼터 여부는 아래 정상-구조 경로에서 판정한다.
                 raise KaptApiError(
-                    f"호출 실패 — 응답 없음 (op={op or url})", code=None, op=op
+                    f"호출 실패 — 응답 없음 ({where})", code=None, op=op
                 )
 
             # 에러 응답은 `{"response": ...}` 구조가 아니라 `cmmMsgHeader` 로 온다.
             if _looks_like_quota_exceeded(data):
                 raise KaptApiError(
-                    f"일일 한도 초과(22) — op={op or url}",
+                    f"일일 한도 초과(22) — {where}",
                     code=QUOTA_REASON_CODE, op=op, is_quota=True,
                 )
 
@@ -367,12 +376,13 @@ class KaptAPI(BasePublicDataAPI):
             if failure is None:
                 break
             reason_code, reason_msg = failure
-            if reason_code in _TRANSIENT_REASON_CODES and attempt < len(_TRANSIENT_RETRY_DELAYS):
+            if (retry_transient and reason_code in _TRANSIENT_REASON_CODES
+                    and attempt < len(_TRANSIENT_RETRY_DELAYS)):
                 delay = _TRANSIENT_RETRY_DELAYS[attempt]
                 attempt += 1
                 logger.info(
-                    "[kapt] data.go.kr 일시 오류 코드 %s — %s초 뒤 재시도 %d/%d (op=%s)",
-                    reason_code, delay, attempt, len(_TRANSIENT_RETRY_DELAYS), op or url,
+                    "[kapt] data.go.kr 일시 오류 코드 %s — %s초 뒤 재시도 %d/%d (%s)",
+                    reason_code, delay, attempt, len(_TRANSIENT_RETRY_DELAYS), where,
                 )
                 time.sleep(delay)
                 _retry_call_count += 1
@@ -380,7 +390,7 @@ class KaptAPI(BasePublicDataAPI):
             message = (
                 f"data.go.kr 오류 코드 {reason_code or '미상'}({reason_msg or '사유 문구 없음'})"
                 + (f" 재시도 {attempt}회 후" if attempt else "")
-                + f" — op={op or url}"
+                + f" — {where}"
             )
             logger.warning("[kapt] %s", message)
             raise KaptApiError(message, code=reason_code, op=op)
@@ -397,27 +407,27 @@ class KaptAPI(BasePublicDataAPI):
             # 돌려준 **응답 본문**(resp.json())뿐이라 serviceKey 는 실리지 않는다 — 키는
             # 요청 params 에만 있다(public_data_base.call_api).
             logger.warning(
-                "[kapt] 예상과 다른 응답 구조 — op=%s 최상위 키=%s 앞부분=%s",
-                op or url,
+                "[kapt] 예상과 다른 응답 구조 — %s 최상위 키=%s 앞부분=%s",
+                where,
                 list(data) if isinstance(data, dict) else type(data).__name__,
                 str(data)[:200],
             )
             raise KaptApiError(
-                f"예상과 다른 응답 구조 — op={op or url}", code=None, op=op
+                f"예상과 다른 응답 구조 — {where}", code=None, op=op
             ) from exc
         return body if isinstance(body, dict) else None
 
     @classmethod
-    def _body(cls, url: str, params: dict) -> dict | None:
+    def _body(cls, url: str, params: dict, retry_transient: bool = True) -> dict | None:
         """`_body_or_raise` 의 비-예외 래퍼 — 실패도 None.
 
         단지 목록·기본정보 호출 전용이다. 이 둘은 실패해도 "그 단지를 이번 회차에
         못 붙인다" 로 끝나고(다음 달 매칭이 다시 시도), 관리비처럼 **틀린 값을
         저장할 위험이 없어** 기존 None 계약을 유지한다. 관리비 경로는 반드시
-        `_body_or_raise` 를 쓴다.
+        `_body_or_raise` 를 쓴다. `retry_transient` 는 `_body_or_raise` 로 그대로 넘긴다.
         """
         try:
-            return cls._body_or_raise(url, params)
+            return cls._body_or_raise(url, params, retry_transient=retry_transient)
         except KaptApiError as exc:
             logger.warning("[kapt] 호출 실패 — %s", exc)
             return None
@@ -429,6 +439,8 @@ def fetch_apt_list_page(page: int, num_of_rows: int = 1000) -> tuple[list[dict],
     호출 실패 시 ([], 0) — 호출자는 items 가 비면 페이지네이션을 멈춘다.
     ⚠ 실패와 "마지막 페이지"가 같은 신호로 보이므로, 호출자는 totalCount 기준
     진행률도 함께 확인해 조용한 조기 종료를 감지해야 한다.
+    일시 오류(04 등)는 **재시도한다** — 약 22페이지뿐이라 비용이 작고, 한 페이지가 04 로 끊기면
+    일부 목록으로 매칭돼 `_clear_conflicting_mappings` 가 멀쩡한 매핑·관리비 행을 지울 수 있다.
     """
     body = KaptAPI._body(
         f"{_LIST_URL}/getTotalAptList4",
@@ -441,7 +453,11 @@ def fetch_apt_list_page(page: int, num_of_rows: int = 1000) -> tuple[list[dict],
 
 def fetch_apt_basis_info(kapt_code: str) -> dict | None:
     """단지 기본정보 (getAphusBassInfoV5) — 세대수·복도유형·사용승인일 등."""
-    body = KaptAPI._body(f"{_BASIS_URL}/getAphusBassInfoV5", {"kaptCode": kapt_code})
+    # 일시 오류 재시도 안 함 — 단지마다 1건이라 장애일엔 14,747건 × 4콜·대기 176시간이 된다.
+    # 실패는 "그 단지를 이번 달에 못 붙인다" 로 끝나고 다음 달 매칭이 다시 시도한다.
+    body = KaptAPI._body(
+        f"{_BASIS_URL}/getAphusBassInfoV5", {"kaptCode": kapt_code}, retry_transient=False
+    )
     if not body:
         return None
     item = body.get("item")
@@ -491,7 +507,8 @@ def fetch_cost_item(base_url: str, op: str, kapt_code: str, search_date: str) ->
     global _cost_call_count
     _cost_call_count += 1
     body = KaptAPI._body_or_raise(
-        f"{base_url}/{op}", {"kaptCode": kapt_code, "searchDate": search_date}, op=op
+        f"{base_url}/{op}", {"kaptCode": kapt_code, "searchDate": search_date}, op=op,
+        ctx=f"kaptCode={kapt_code} searchDate={search_date}",
     )
     if not body:
         return None

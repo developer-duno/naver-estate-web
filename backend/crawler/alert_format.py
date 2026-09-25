@@ -159,7 +159,11 @@ def _body_failed(data: dict) -> str:
     # "이번에 처리한 양" 은 실패 알림에서 "이번 회차가 500/799 처리했다" 로 읽혀 거짓이
     # 됐다(2026-09-25 kapt_costs 12초 실패 알림에 500/799(63%) 표기 — 세션 417 후속).
     # 바로 아래 "마지막으로 잘 됐던 때" 와 짝이 맞게 부른다. "batch" 는 여전히 쓰지 않는다.
-    lines.append(f"  마지막으로 잘 됐을 때 처리한 양: {_rate(data.get('processed'), data.get('total'))}")
+    # 마지막 completed 기록이 없거나(None) 그 회차가 건수를 안 남겼으면(0) 이 줄을 **뺀다** —
+    # 옛 코드는 `_rate` 의 "건수를 세지 않는 작업이에요" 를 찍었는데, kapt_costs 처럼 건수를
+    # 세는 작업이 한 번도 성공하지 못한 경우엔 거짓이다(세션 417 최종 검사관 A).
+    if data.get("total"):
+        lines.append(f"  마지막으로 잘 됐을 때 처리한 양: {_rate(data.get('processed'), data.get('total'))}")
     if data.get("last_completed_at"):
         lines.append(f"  마지막으로 잘 됐던 때: {_esc(_kst_stamp(data['last_completed_at']))}")
     return "\n".join(lines)

@@ -48,7 +48,7 @@ from crawler.kapt_api import (
     retry_calls_made,
 )
 from db.database import SessionLocal
-from db.models import Complex, KaptComplexMap, KaptManagementCost
+from db.models import Complex, CrawlJob, KaptComplexMap, KaptManagementCost
 from services.upsert import _do_upsert
 from utils import utcnow
 
@@ -129,12 +129,23 @@ _CONSECUTIVE_FAILURE_LIMIT = 5
 # 실측)라 이 잡의 time.sleep 은 자기 스레드 하나만 붙잡는다 — 다른 잡은 안 막힌다.
 _API_DOWN_BACKOFF_SEC: tuple[int, ...] = (30, 60, 120)
 
+# 연속 실패 뒤 카나리가 "살아있음" 이라 계속 가는 것을, **수집이 아직 0건인 동안** 몇 번까지
+# 허용하나. 이 횟수를 넘겨 또 살아있음이 나오면 `partial_outage` 로 회차를 마감한다.
+# 2026-09-25 14:47~17:21 수동 회차(잡 58219) 실사고: 포털이 공개 단지 첫 op 에 04 를 계속
+# 주는데 표본(보유월)은 정상이라 "살아있음 — 계속" 이 15번 반복돼 150분 예산을 **수집 0** 으로
+# 다 태웠다(실패 75·미공개 162·1,276콜). 그동안 재시작 금지·재수집 스크립트 거부가 이어진다.
+# 수집이 1건이라도 있으면 이 상한은 보지 않는다 — 부분 성공은 정상이다. 테스트가 patch 한다.
+_ALIVE_CONTINUE_CAP_WHILE_EMPTY = 2
+
 # 회차 시간 예산(초). 일시 오류 재시도(호출당 최악 43초)·카나리 대기가 겹치면 회차가
 # 9시간 넘게 늘어날 수 있다(카나리 살아있음 + 전 단지 첫 op 실패 시 산출 약 9.6h).
 # monitor 는 kapt_costs 를 3h 에 cancelled 로 찍지만 스레드는 계속 돌아 다음날 06:20
-# 회차와 겹칠 수 있다 — 그래서 150분(스윕 임계 3h 보다 30분 앞)에서 스스로 멈춘다.
+# 회차와 겹칠 수 있다 — 그래서 120분에서 스스로 멈춘다. 예산은 단지 사이에서만 검사하므로
+# 최악 = 예산 120 + 마지막 단지 17.6분(22콜 × 43초 재시도 + throttle) + 카나리 대기 15분
+# ≈ 152분 < 스윕 임계 3h. (옛 150분은 2026-09-25 오후 실측 154.6분 = 예산 150 + 4.6분으로,
+# 최악 겹침이면 3h 를 넘을 수 있었다 — 세션 417 최종 검사관 A.)
 # 남은 단지는 행이 안 생기므로 다음 회차에 그대로 대상이 된다. 테스트가 monkeypatch 한다.
-_RUN_TIME_BUDGET_SEC = 150 * 60
+_RUN_TIME_BUDGET_SEC = 120 * 60
 
 _MATCH_JOB_TYPE = "kapt_match"
 _COST_JOB_TYPE = "kapt_costs"
@@ -965,7 +976,11 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
       · (c) 가 **연속 5단지** → 카나리로 확인. 살아있으면 개별 조합 오류로 보고 계속,
                           죽어 있으면 30/60/120초 쉬며 재확인한 뒤에만 중단 + 잡 failed
       · 카나리 "살아있음" 으로 계속 갔는데 수집 0·실패 ≥1 → 잡 failed(사유 코드 포함).
-                          수집 ≥1 이면 부분 성공이라 completed
+                          수집 0 인 채로 "살아있음 — 계속" 은 `_ALIVE_CONTINUE_CAP_WHILE_EMPTY`(2)회
+                          까지 — 그다음 살아있음이면 그 자리에서 `partial_outage` 로 마감
+      · 수집 ≥1 이고 실패 > 수집 → 잡 failed("대부분 오류"). 실패 ≤ 수집이면 부분 성공이라
+                          completed + error_message
+      · 이미 running 인 kapt_costs 가 있으면 잡 행을 만들지 않고 바로 반환(`already_running`)
     부분 저장을 절대 하지 않는 것이 핵심이다 — 공용 실패 + 개별 성공으로
     "공용 0원" 총액을 저장하면 틀린 값이 사실처럼 화면에 뜨고, 그 달 행이 생겨
     다음 달까지 고쳐지지도 않는다.
@@ -983,6 +998,18 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
          재확인 뒤에만 멈춘다.
     """
     db = SessionLocal()
+    # 이미 도는 회차가 있으면 잡 행을 만들지 않고 바로 돌아간다 — 관리자 버튼 이중 실행·
+    # 수동 회차 중 06:20 정기 발화가 같은 단지를 두 스레드로 부르는 것을 막는다.
+    # 죽은 채 남은 running 행은 monitor 가 3h(`_STALE_HOURS_BY_TYPE`)에 정리하므로 영구히 막히지 않는다.
+    if (
+        db.query(CrawlJob.id)
+        .filter(CrawlJob.job_type == _COST_JOB_TYPE, CrawlJob.status == "running")
+        .first()
+        is not None
+    ):
+        db.close()
+        logger.warning("[kapt_costs] 이미 도는 회차 있음 — 이번 실행은 건너뜀")
+        return {"collected": 0, "error": "already_running", "message": "이미 도는 회차 있음"}
     job = _record_job(db, _COST_JOB_TYPE, scheduler_job_id)
     try:
         months = candidate_cost_months()
@@ -1028,6 +1055,9 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         api_down_probed = 0
         # 연속 실패 뒤 카나리가 "살아있음" 이라 계속 간 적이 있나 — 회차 마감 규칙(아래)용.
         canary_kept_going = False
+        # 수집 0 인 동안 "살아있음 — 계속" 을 몇 번 했나 / 그 상한에 걸려 멈췄나.
+        alive_continues_while_empty = 0
+        alive_cap_hit = False
         last_failure: KaptApiError | None = None
         scan_capped = False
         # 호출 계측 — 미공개 단지가 **실제로** 쓴 콜 수(설계값 월당 1콜이 지켜지나)와
@@ -1124,6 +1154,14 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                     except KaptApiError as quota_exc:
                         quota_exhausted = quota_exc  # 카나리가 한도 초과(22) — 즉시 중단
                         break
+                    if alive and collected == 0:
+                        # 수집 0 인 채로 "살아있음 — 계속" 을 상한만큼 했으면 여기서 마감한다
+                        # (표본은 응답하지만 수집 대상은 계속 오류 — 09-25 오후 실사고).
+                        if alive_continues_while_empty >= _ALIVE_CONTINUE_CAP_WHILE_EMPTY:
+                            canary_kept_going = True
+                            alive_cap_hit = True
+                            break
+                        alive_continues_while_empty += 1
                     if alive:
                         logger.warning(
                             "[kapt_costs] 연속 %d단지 오류(마지막: %s)지만 표본 %d건 중 응답 정상"
@@ -1211,6 +1249,21 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         # 회차 — 아래 ① 가드도 잡지만, 그 문구("대상 N개 중 수집 0건")로는 "우리 쪽이
         # 아니라 제공기관이 조합마다 오류를 준다" 는 사실과 사유 코드가 안 보인다.
         # 수집이 1건이라도 있으면 부분 성공이라 정상(completed) — 이 분기에 안 온다.
+        # 그중 "살아있음 — 계속" 을 수집 0 인 채로 상한만큼 하고 또 살아있음이 나와 멈춘
+        # 회차는 사유를 따로 적는다 — 끝까지 간 것이 아니라 도중에 스스로 멈췄다(잔여 포함).
+        if alive_cap_hit:
+            remaining = len(queue) - scanned
+            message = (
+                f"표본은 응답하지만 수집 0인 채 실패 {failed}·미공개 {empty} — 회차 중단"
+                f"(카나리 '살아있음' {_ALIVE_CONTINUE_CAP_WHILE_EMPTY}회 뒤), 잔여 {remaining} "
+                f"(마지막 오류: {last_failure})"
+            )
+            _fail_job(db, job, message)
+            logger.error("[kapt_costs] %s", message)
+            return {
+                "collected": 0, "failed": failed, "empty": empty,
+                "remaining": remaining, "error": "partial_outage",
+            }
         if canary_kept_going and collected == 0 and failed > 0:
             message = (
                 f"공공데이터 서버는 응답하지만 {failed}단지 전부 오류 — 수집 0 "
@@ -1308,6 +1361,23 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         # 미공개일 때 total=0 이 되어, freshness 의 헛바퀴 감지(processed==0 AND
         # total>0, routers/admin/freshness.py)가 영영 발동하지 않는다.
         # (위 카나리 경로만은 의도적으로 total=0 — 거기선 "정상"이 확인됐다.)
+        #
+        # 수집은 있었지만 실패가 수집보다 많으면 failed 로 마감한다 — 한 단지만 성공해도
+        # completed 가 되면 monitor 가 직전 crawl_failed 를 "✅ 복구" 로 풀어 버려, 대부분이
+        # 오류인 장애가 정상 복구로 보인다(세션 417 최종 검사관 A). 실패 ≤ 수집은 아래 그대로
+        # completed + error_message(부분 성공).
+        if collected and failed > collected:
+            message = (
+                f"실패 {failed}단지 > 수집 {collected}단지 — 대부분 오류"
+                f"(마지막 사유: {last_failure or '서버 기록 참고'}, 미공개 {empty})"
+                + budget_note
+            )
+            _fail_job(db, job, message)
+            logger.error("[kapt_costs] %s", message)
+            return {
+                "collected": collected, "failed": failed, "empty": empty,
+                "cost_month": target_month, "error": "mostly_failed",
+            }
         _complete_job(db, job, collected, scanned - collected)
         if failed:
             # 부분 성공(수집 ≥1 · 실패 ≥1)은 completed 로 두되, 실패가 있었다는 사실과 마지막

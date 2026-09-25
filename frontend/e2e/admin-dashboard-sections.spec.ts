@@ -185,10 +185,22 @@ test.describe("admin dashboard — 원인 절 전부 펼침", () => {
     await page.goto("/admin");
     await expect(page.getByRole("heading", { name: "대시보드" })).toBeVisible();
 
-    for (const title of SECTIONS) {
-      await page.getByText(title, { exact: true }).click();
+    // 절을 하나씩 순서대로 연다 — 제목 글자로 잇달아 누르면 앞 절이 펼쳐지며 아래가 밀려
+    // 클릭이 빗나가거나 이미 열린 절을 다시 닫았다(CI run 36184982249: 5개 중 4개만 열림).
+    // 닫혀 있을 때만 summary 를 누르고, 열림 속성을 확인한 뒤에 다음 절로 간다.
+    // toPass 로 감싸 빗나간 클릭은 다시 시도하되, 이미 열렸으면 누르지 않아 닫힐 일이 없다.
+    for (const id of SECTION_IDS) {
+      const d = page.locator(`details#${id}`);
+      await expect(async () => {
+        const isOpen = await d.evaluate((e) => (e as HTMLDetailsElement).open);
+        if (!isOpen) await d.locator("summary").click();
+        await expect(d).toHaveAttribute("open", "", { timeout: 2_000 });
+      }).toPass({ timeout: 15_000 });
     }
-    await expect(page.getByText(/접기 ▲/)).toHaveCount(SECTIONS.length);
+    await expect(page.locator("details[open]")).toHaveCount(SECTION_IDS.length);
+    for (const id of SECTION_IDS) {
+      await expect(page.locator(`details#${id} > summary`).getByText("접기 ▲")).toBeVisible();
+    }
 
     // 각 절 안쪽 — 데이터가 그려진 뒤에만 나오는 글자를 기다린다(카드 제목은 로딩 중에도 보여 기준 금지)
     const scheduler = page.locator("#scheduler");

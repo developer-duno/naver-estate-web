@@ -21,6 +21,7 @@ from crawler.plain_words import explain_stored_error
 from db.models import Complex, CrawlJob
 from deps import get_admin_user, get_db
 
+from ._running import running_not_stale_clause
 from ._shared import router
 
 # complex_no 형식: 숫자 1~20자리 (Complex.complex_no = String(20))
@@ -54,17 +55,15 @@ def get_recrawl_status(
 ):
     """일괄 재크롤 안전도 + 현재 실행 중 작업 목록 반환.
 
-    started_at이 1시간 이상 지난 running 행은 stale(유령)로 간주해 count에서
-    제외 — startup sweep의 런타임 방어 레이어. 운영자 안전도 판정이 방치된
-    crawl_jobs 잔재로 위험으로 떨어지는 문제 방지.
+    started_at이 그 잡 유형의 임계(모니터 `_STALE_HOURS_BY_TYPE`, 기본 1시간)를
+    넘긴 running 행은 stale(유령)로 간주해 count에서 제외 — startup sweep의 런타임
+    방어 레이어. 운영자 안전도 판정이 방치된 crawl_jobs 잔재로 위험으로 떨어지는
+    문제 방지. 정상적으로 오래 도는 작업(관리비·공시가격 등)은 임계 안이라 보인다.
     """
-    from datetime import datetime as _dt
-
     now_kst = datetime.now(ZoneInfo("Asia/Seoul"))
-    stale_cutoff = _dt.now(timezone.utc) - timedelta(hours=1)
     running_jobs = (
         db.query(CrawlJob)
-        .filter(CrawlJob.status == "running", CrawlJob.started_at >= stale_cutoff)
+        .filter(CrawlJob.status == "running", running_not_stale_clause())
         .order_by(CrawlJob.started_at.desc())
         .limit(10)
         .all()
@@ -170,12 +169,11 @@ def run_recrawl_articles(
         if _recrawl_running:
             raise HTTPException(status_code=409, detail="이미 일괄 재크롤이 진행 중입니다")
 
-        # 안전도 재확인 — 🔴면 force 없이 거부. stale 1시간 이상은 제외
+        # 안전도 재확인 — 🔴면 force 없이 거부. 잡 유형별 임계를 넘긴 stale 은 제외
         now_kst_hour = datetime.now(ZoneInfo("Asia/Seoul")).hour
-        stale_cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
         running_count = (
             db.query(CrawlJob)
-            .filter(CrawlJob.status == "running", CrawlJob.started_at >= stale_cutoff)
+            .filter(CrawlJob.status == "running", running_not_stale_clause())
             .count()
         )
         level, message = _classify_safety(now_kst_hour, running_count)

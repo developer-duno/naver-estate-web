@@ -13,6 +13,7 @@ from crawler.plain_words import explain_stored_error
 from db.models import Article, Complex, CrawlJob, UserProfile
 from deps import get_admin_user, get_db
 
+from ._running import running_not_stale_clause
 from ._shared import router
 
 logger = logging.getLogger(__name__)
@@ -45,10 +46,10 @@ def list_crawl_jobs(
         conditions.append(CrawlJob.job_type == job_type)
     if status:
         conditions.append(CrawlJob.status == status)
-        # running 필터에는 stale(유령) 1시간 컷오프 적용 — recrawl/status와 동일 정책
+        # running 필터에는 stale(유령) 컷오프 적용 — 잡 유형별 임계(모니터와 같은 기준).
+        # 옛 1시간 고정은 관리비(3h)·공시가격(16h) 처럼 오래 도는 작업을 화면에서 지웠다.
         if status == "running":
-            stale_cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
-            conditions.append(CrawlJob.started_at >= stale_cutoff)
+            conditions.append(running_not_stale_clause())
 
     where = and_(*conditions) if conditions else True
     total = db.execute(select(func.count()).select_from(CrawlJob).where(where)).scalar() or 0

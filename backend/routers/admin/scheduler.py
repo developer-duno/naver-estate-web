@@ -108,14 +108,17 @@ SCHEDULER_JOB_META: dict[str, dict] = {
 # (아래 `for job_id, meta in SCHEDULER_JOB_META.items()`) 표에 "예정 없음" 유령 행이
 # 생기고, test_scheduler_job_meta_covers_all_registered_jobs 류 가드와도 어긋난다.
 MANUAL_JOB_NAMES: dict[str, str] = {
-    "backfill_apartment_public_data": "실거래 이력 보충 (수동)",
-    "backfill_missing_price_history": "시세 이력 보충 (수동)",
-    "admin_recrawl": "관리자 일괄 재수집",
-    "admin_single_recrawl": "관리자 단지 재수집",
+    # 이름 = 그 실행이 남기는 job_type 의 JOB_WORDS + " (수동)" — 자동 작업과 같은 낱말을 써야
+    # 달력·작업 목록·알림이 같은 작업을 같은 이름으로 부른다(세션 419, 이름 한 벌).
+    # 짝(잡 id → job_type)과 가드 = tests/test_plain_words.py `_MANUAL_ID_TO_JOB_TYPE`.
+    "backfill_apartment_public_data": "옛 시세 채워 넣기 (수동)",
+    "backfill_missing_price_history": "단지 시세 기록 모으기 (수동)",
+    "admin_recrawl": "여러 단지 한꺼번에 다시 받기 (수동)",
+    "admin_single_recrawl": "단지 매물 가져오기 (수동)",
     # 세션 355~356 공시가격 첫 수동 적재가 남긴 job id (R3 — 캘린더에 raw 노출되던 것).
     # ⚠ *_TEST 접미사·manual_session359 는 디버그 잔재라 원문 노출이 오히려 정보성 —
     #   여기 추가하지 말 것.
-    "collect_official_prices": "공동주택 공시가격 수집 (수동)",
+    "collect_official_prices": "정부 공시가격 받기 (수동)",
 }
 
 

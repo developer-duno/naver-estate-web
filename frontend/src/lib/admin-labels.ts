@@ -48,19 +48,27 @@ export const TARGET_TYPE_LABELS: Record<string, string> = {
   complex: "단지",
   user: "사용자",
   verification: "인증 요청",
-  crawl_job: "크롤 작업",
+  crawl_job: "수집 작업",
   setting: "설정",
   article: "매물",
   payment: "결제",
   billing: "정기결제",
 };
 
+/**
+ * 수집기 이름(BE routers/admin/collect.py _resolve_collector 의 name) → 한글.
+ * 화면 버튼(CollectorName)에 없는 수집기도 감사 로그에는 남으므로 BE 가 받는 이름을 전부 적는다.
+ * 뒤 셋은 BE crawler/plain_words.py JOB_WORDS 와 같은 표현이다.
+ */
 export const COLLECTOR_LABELS: Record<string, string> = {
   "crime-stats": "범죄통계",
   "air-quality": "대기질",
   "emergency": "응급의료",
   "childcare": "어린이집",
   "backfill-price": "실거래가",
+  "metrics": "단지 가치 점수 계산",
+  "kapt-match": "관리비 단지 연결하기",
+  "kapt-costs": "단지 관리비 받기",
 };
 
 /**

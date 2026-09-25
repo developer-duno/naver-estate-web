@@ -34,10 +34,12 @@ export async function suspendAdminUser(token: string, userId: string) {
 /** 관리자: 크롤 작업 목록 */
 export async function getAdminCrawlJobs(
   token: string,
-  params?: { status?: string; page?: number; page_size?: number },
+  params?: { status?: string; job_type?: string; page?: number; page_size?: number },
 ) {
   const qs = new URLSearchParams();
   if (params?.status) qs.set("status", params.status);
+  // 작업 유형(job_type)은 BE 가 전체 이력에서 거른다. 옛 BE 는 모르는 파라미터를 무시한다.
+  if (params?.job_type) qs.set("job_type", params.job_type);
   if (params?.page) qs.set("page", String(params.page));
   // BE 상한 100 (routers/admin/jobs.py list_crawl_jobs page_size le=100)
   if (params?.page_size) qs.set("page_size", String(params.page_size));

@@ -114,7 +114,7 @@ export const mockSchedulerStatus: SchedulerStatusResponse = {
   jobs: [
     {
       scheduler_job_id: "collect_air_quality",
-      name: "대기질 수집",
+      name: "동네 공기질 받기",
       schedule: "daily 02:00",
       enabled: true,
       last_run: {
@@ -130,7 +130,7 @@ export const mockSchedulerStatus: SchedulerStatusResponse = {
     },
     {
       scheduler_job_id: "crawl_articles",
-      name: "매물 수집 배치",
+      name: "단지 매물 가져오기",
       schedule: "매일 01:00, 13:00",
       enabled: true,
       last_run: {

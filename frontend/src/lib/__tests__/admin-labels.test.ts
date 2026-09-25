@@ -23,8 +23,8 @@ describe("admin-labels 매핑 카운트", () => {
     expect(Object.keys(TARGET_TYPE_LABELS)).toHaveLength(10);
   });
 
-  it("COLLECTOR_LABELS = 5개 (CollectorName Literal 답습)", () => {
-    expect(Object.keys(COLLECTOR_LABELS)).toHaveLength(5);
+  it("COLLECTOR_LABELS = 8개 (BE routers/admin/collect.py 가 받는 수집기 이름 전부)", () => {
+    expect(Object.keys(COLLECTOR_LABELS)).toHaveLength(8);
   });
 });
 
@@ -53,6 +53,10 @@ describe("getTargetLabel", () => {
   it("collector + 수집기명 → 한글 collector 라벨", () => {
     expect(getTargetLabel("collector", "backfill-price")).toBe("수집기: 실거래가");
     expect(getTargetLabel("collector", "crime-stats")).toBe("수집기: 범죄통계");
+    // 화면 버튼에는 없어도 감사 로그에 남는 수집기 — 원문(kapt-costs) 대신 JOB_WORDS 와 같은 우리말
+    expect(getTargetLabel("collector", "kapt-costs")).toBe("수집기: 단지 관리비 받기");
+    expect(getTargetLabel("collector", "kapt-match")).toBe("수집기: 관리비 단지 연결하기");
+    expect(getTargetLabel("collector", "metrics")).toBe("수집기: 단지 가치 점수 계산");
   });
 
   it("일반 type + id → '타입: id' 형식", () => {

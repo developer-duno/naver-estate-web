@@ -45,6 +45,9 @@ export interface CrawlJobDetail {
   total_items: number;
   processed_items: number;
   error_message?: string;
+  /** error_message 를 쉬운 우리말 한 줄로 바꾼 값 (BE explain_stored_error, 세션 418).
+   *  옵셔널 — 재시작 전 옛 백엔드는 안 보낸다. 없으면 화면에 오류 줄을 그리지 않는다. */
+  error_plain?: string | null;
   started_at?: string;
   completed_at?: string;
   created_at: string;

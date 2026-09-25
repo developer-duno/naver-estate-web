@@ -52,6 +52,16 @@ export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Pro
                     알 수 없음
                   </span>
                 )}
+                {/* 실패 사유 — BE 가 준 우리말 한 줄(error_plain)만 보이고, 원문은 마우스를 올렸을 때만.
+                    옛 BE 처럼 error_plain 이 없으면 줄 자체를 그리지 않는다 */}
+                {j.status === "failed" && j.error_plain && (
+                  <span
+                    className="mt-1 block max-w-[16rem] text-xs text-red-700 whitespace-normal"
+                    title={j.error_message || undefined}
+                  >
+                    {j.error_plain}
+                  </span>
+                )}
               </td>
               <td className="py-2 pr-3 text-xs">
                 {j.processed_items}/{j.total_items}건

@@ -9,6 +9,7 @@
  *  4층 작업      : 외부 데이터 받아오기 / 오래된 단지 다시 수집 → 최근 활동
  *
  * 24시간 오류·채워진 비율·가치 점수는 /admin/data 에서 본다(한 화면에 같은 숫자는 한 번만).
+ * 단 24시간 실패 건수는 3층 "실패 자세히" 절 제목 옆 칩으로도 알린다(접힌 채로 보이게).
  */
 
 import { useQuery } from "@tanstack/react-query";
@@ -100,7 +101,12 @@ export default function AdminDashboard() {
         <AdminSection id="freshness" title="데이터 신선도">
           <DataFreshnessCard token={token} />
         </AdminSection>
-        <AdminSection id="failure" title="실패 자세히 (최근 24시간)">
+        {/* 24시간 실패가 있으면 절을 안 열어도 제목 옆 칩으로 건수를 보인다(없으면 칩 없음) */}
+        <AdminSection
+          id="failure"
+          title="실패 자세히 (최근 24시간)"
+          badge={stats && stats.error_count_24h > 0 ? `${stats.error_count_24h}건` : undefined}
+        >
           <FailureBreakdown token={token} onJumpToFailed={jumpToFailed} />
         </AdminSection>
         <AdminSection id="naver-calls" title="네이버 호출 횟수">
@@ -126,7 +132,14 @@ export default function AdminDashboard() {
               <li key={l.id} className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">
                   <span className="bg-gray-100 text-xs px-1.5 py-0.5 rounded mr-1">{getActionLabel(l.action)}</span>
-                  {l.target_type ? getTargetLabel(l.target_type, l.target_id) : ""}
+                  {/* 사용자 대상은 36자 UUID 대신 앞 8자 + "…" (전체는 마우스를 올리면) */}
+                  {l.target_type === "user" && l.target_id && l.target_id.length > 8 ? (
+                    <span title={l.target_id}>{getTargetLabel("user", `${l.target_id.slice(0, 8)}…`)}</span>
+                  ) : l.target_type ? (
+                    getTargetLabel(l.target_type, l.target_id)
+                  ) : (
+                    ""
+                  )}
                 </span>
                 <span className="text-xs text-gray-500">
                   {l.created_at ? new Date(l.created_at).toLocaleString("ko") : ""}

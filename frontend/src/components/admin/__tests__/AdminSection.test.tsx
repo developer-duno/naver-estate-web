@@ -95,4 +95,23 @@ describe("AdminSection", () => {
     act(() => openAdminSection("freshness"));
     expect(screen.getByText("안쪽 카드")).toBeInTheDocument();
   });
+
+  it("badge 가 있으면 접힌 채로도 제목 옆에 칩으로 보이고, 없으면 칩이 없다", () => {
+    const { rerender } = render(
+      <AdminSection id="failure" title="실패 자세히" badge="3건">
+        <Probe />
+      </AdminSection>,
+    );
+    // 접힌 상태(안쪽 미렌더)에서도 칩은 summary 안에 있다
+    expect(screen.queryByText("안쪽 카드")).toBeNull();
+    const chip = screen.getByText("3건");
+    expect(chip.closest("summary")).not.toBeNull();
+
+    rerender(
+      <AdminSection id="failure" title="실패 자세히">
+        <Probe />
+      </AdminSection>,
+    );
+    expect(screen.queryByText("3건")).toBeNull();
+  });
 });

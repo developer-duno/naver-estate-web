@@ -15,6 +15,8 @@ interface Props {
   id: string;
   title: string;
   defaultOpen?: boolean;
+  /** 제목 오른쪽 작은 빨간 칩(예: "3건") — 접힌 채로도 보인다. 없거나 빈 문자열이면 안 그린다 */
+  badge?: string;
   children: ReactNode;
 }
 
@@ -33,7 +35,7 @@ export function openAdminSection(id: string) {
   });
 }
 
-export default function AdminSection({ id, title, defaultOpen = false, children }: Props) {
+export default function AdminSection({ id, title, defaultOpen = false, badge, children }: Props) {
   const [open, setOpen] = useState(defaultOpen);
 
   useEffect(() => {
@@ -60,7 +62,14 @@ export default function AdminSection({ id, title, defaultOpen = false, children 
         }}
         className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg list-none [&::-webkit-details-marker]:hidden"
       >
-        <span>{title}</span>
+        <span className="flex items-center gap-2 min-w-0">
+          <span>{title}</span>
+          {badge && (
+            <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 shrink-0">
+              {badge}
+            </span>
+          )}
+        </span>
         <span className="text-xs font-normal text-gray-500 shrink-0">{open ? "접기 ▲" : "펼치기 ▼"}</span>
       </summary>
       {open && <div className="px-2 pb-2">{children}</div>}

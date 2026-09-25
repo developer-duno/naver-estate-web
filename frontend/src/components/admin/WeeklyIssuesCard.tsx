@@ -10,6 +10,7 @@ import {
   getDataFreshness,
 } from "@/lib/api";
 import AdminCard from "./AdminCard";
+import { openAdminSection } from "./AdminSection";
 
 interface Props {
   token: string;
@@ -46,19 +47,13 @@ export default function WeeklyIssuesCard({ token }: Props) {
     failuresQuery.isLoading ||
     freshnessQuery.isLoading;
 
-  const scrollToFreshness = () => {
-    document
-      .getElementById("freshness")
-      ?.scrollIntoView({ behavior: "smooth" });
-  };
-
   const linkClass = (n: number) =>
     n > 0 ? "text-red-700 font-medium hover:underline" : "text-gray-400";
 
   return (
     <AdminCard
       title={`이번 주 챙길 일 ${isLoading ? "" : `${totalIssues}건`}`}
-      help="공인중개사 검증 대기, 최근 7일 실패한 크롤 작업, 데이터가 안 들어오는 헛바퀴 종목 — 관리자가 직접 손봐야 하는 일들을 모아 보여줘요. 0건이면 이번 주는 한가해요"
+      help="공인중개사 검증 대기, 최근 7일 실패한 수집 작업, 데이터가 안 들어오는 헛바퀴(돌았는데 새 자료 0건) 종목 — 관리자가 직접 손봐야 하는 일들을 모아 보여줘요. 0건이면 이번 주는 한가해요"
     >
       <ul className="space-y-2 text-sm">
         <li className="flex items-center justify-between">
@@ -72,22 +67,22 @@ export default function WeeklyIssuesCard({ token }: Props) {
           </a>
         </li>
         <li className="flex items-center justify-between">
-          <span className="text-gray-700">최근 7일 실패한 크롤</span>
-          <button
-            type="button"
-            onClick={scrollToFreshness}
-            aria-label={`최근 7일 실패한 크롤 ${failuresCount}건 — 클릭 시 신선도 카드로 이동`}
+          <span className="text-gray-700">최근 7일 실패한 수집</span>
+          {/* 실패는 "실패 목록"으로 보낸다 — 신선도 카드엔 실패 원인이 없다(원칙 2: 다음 행동으로 잇기) */}
+          <a
+            href="/admin/crawl?status=failed"
+            aria-label={`최근 7일 실패한 수집 ${failuresCount}건 — 누르면 실패한 작업 목록으로 이동`}
             className={linkClass(failuresCount)}
           >
             {failuresCount}건 →
-          </button>
+          </a>
         </li>
         <li className="flex items-center justify-between">
           <span className="text-gray-700">데이터 헛바퀴 종목</span>
           <button
             type="button"
-            onClick={scrollToFreshness}
-            aria-label={`데이터 헛바퀴 종목 ${spinningCount}건 — 클릭 시 신선도 카드로 이동`}
+            onClick={() => openAdminSection("freshness")}
+            aria-label={`데이터 헛바퀴 종목 ${spinningCount}건 — 누르면 아래 '데이터 신선도' 절이 열려요`}
             className={linkClass(spinningCount)}
           >
             {spinningCount}건 →

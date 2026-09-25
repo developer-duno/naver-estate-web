@@ -142,8 +142,8 @@ describe("DataFreshnessCard 컴포넌트", () => {
       expect(screen.getByText("어린이집")).toBeInTheDocument();
     });
     expect(screen.getByText("헛바퀴 의심")).toBeInTheDocument();
-    // 처리 0/100 표시
-    expect(screen.getByText(/처리 0\/100/)).toBeInTheDocument();
+    // "처리 0/100" 대신 우리말 문장 (세션 419)
+    expect(screen.getByText(/100건 중 0건 처리/)).toBeInTheDocument();
   });
 
   it("new_rows=0 이면 빨간 강조 텍스트로 '신규 0건' 표시", async () => {

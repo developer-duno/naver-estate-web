@@ -130,4 +130,15 @@ describe("WeeklyIssuesCard", () => {
       expect(link.getAttribute("href")).toBe("/admin/users#verification-review");
     });
   });
+
+  /** 실패 건수는 신선도 카드가 아니라 "실패한 작업 목록"으로 잇는다 (세션 419 원칙 2) */
+  it("최근 7일 실패 링크는 /admin/crawl?status=failed 로 간다", async () => {
+    mockVerifications.mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 20 });
+    mockFailures.mockResolvedValueOnce({ window_hours: 168, total: 4, items: [] });
+    mockFreshness.mockResolvedValueOnce({ generated_at: new Date().toISOString(), items: [] });
+
+    renderCard();
+    const link = await screen.findByRole("link", { name: /최근 7일 실패한 수집 4건/ });
+    expect(link.getAttribute("href")).toBe("/admin/crawl?status=failed");
+  });
 });

@@ -85,7 +85,7 @@ describe("CollectorTrigger 컴포넌트", () => {
     });
     renderWithProvider();
 
-    fireEvent.click(screen.getByText("실거래가 소급"));
+    fireEvent.click(screen.getByText("실거래가 지난 자료 채우기"));
 
     await waitFor(() => {
       expect(screen.getByText("하루 호출 한도를 다 써서 중단 (3/20건)")).toBeInTheDocument();

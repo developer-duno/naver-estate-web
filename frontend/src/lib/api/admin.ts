@@ -32,10 +32,15 @@ export async function suspendAdminUser(token: string, userId: string) {
 }
 
 /** 관리자: 크롤 작업 목록 */
-export async function getAdminCrawlJobs(token: string, params?: { status?: string; page?: number }) {
+export async function getAdminCrawlJobs(
+  token: string,
+  params?: { status?: string; page?: number; page_size?: number },
+) {
   const qs = new URLSearchParams();
   if (params?.status) qs.set("status", params.status);
   if (params?.page) qs.set("page", String(params.page));
+  // BE 상한 100 (routers/admin/jobs.py list_crawl_jobs page_size le=100)
+  if (params?.page_size) qs.set("page_size", String(params.page_size));
   return fetchApi<PaginatedResponse<CrawlJobDetail>>(`/api/admin/crawl-jobs?${qs}`, { headers: adminHeaders(token) });
 }
 
@@ -259,6 +264,8 @@ export interface CrawlFailureItem {
   job_type: string;
   count: number;
   last_error: string | null;
+  /** last_error 의 쉬운 우리말 한 줄 (BE 후속 PR 에서 추가 예정 — 옛 백엔드는 안 보낸다) */
+  last_error_plain?: string | null;
   last_failed_at: string | null;
 }
 

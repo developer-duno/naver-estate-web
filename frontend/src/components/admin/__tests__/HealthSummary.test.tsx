@@ -57,7 +57,8 @@ describe("HealthSummary", () => {
     });
     expect(screen.getByText(/주의 1/)).toBeInTheDocument();
     expect(screen.getByText(/지연 1/)).toBeInTheDocument();
-    expect(screen.getByText(/헛바퀴 0/)).toBeInTheDocument();
+    // 첫 등장에 뜻풀이를 붙인다 (세션 419)
+    expect(screen.getByText(/헛바퀴\(돌았는데 새 자료 0건\) 0/)).toBeInTheDocument();
   });
 
   it("헛바퀴 의심 종목이 1+ 이면 빨간 배경 + 강조 텍스트", async () => {
@@ -70,13 +71,14 @@ describe("HealthSummary", () => {
     });
     const { container } = renderSummary();
     await waitFor(() => {
-      expect(screen.getByText(/헛바퀴 1/)).toBeInTheDocument();
+      expect(screen.getByText(/헛바퀴\(돌았는데 새 자료 0건\) 1/)).toBeInTheDocument();
     });
     const button = container.querySelector("button");
     expect(button?.className).toContain("bg-red-50");
   });
 
-  it("클릭 시 신선도 카드로 스크롤 (scrollIntoView 호출)", async () => {
+  /** 누르면 주소 끝이 #freshness 가 돼 접힌 '데이터 신선도' 절이 열리고(AdminSection), 그리로 스크롤 */
+  it("클릭 시 #freshness 로 주소를 바꾸고 신선도 절로 스크롤", async () => {
     mockGet.mockResolvedValueOnce({
       generated_at: new Date().toISOString(),
       items: [mkItem({ key: "a", status: "green" })],
@@ -93,8 +95,10 @@ describe("HealthSummary", () => {
       expect(screen.getByText(/정상 1/)).toBeInTheDocument();
     });
     fireEvent.click(screen.getByRole("button"));
-    expect(scrollSpy).toHaveBeenCalled();
+    expect(window.location.hash).toBe("#freshness");
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalled());
 
     document.body.removeChild(target);
+    window.history.replaceState(null, "", window.location.pathname);
   });
 });

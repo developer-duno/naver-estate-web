@@ -1,6 +1,12 @@
 "use client";
 
-/** 스케줄러 모니터링 — 작업별 실행 이력 + 다음 실행 시각 테이블 */
+/** 자동 작업 현황 — 작업별 실행 이력 + 다음 실행 시각 테이블 */
+
+const HELP_TEXT =
+  "자동으로 돌아가는 수집 작업들이 마지막에 언제 실행됐고, 다음에 언제 또 돌아갈지 보여줘요. 빨간색은 실패한 작업이에요. 작업이 돌긴 돌았는데 데이터가 진짜 들어왔는지는 아래 '데이터 신선도' 절에서 확인할 수 있어요. '처리' 열은 (처리한 건수)/(할 일 건수) 예요 — 0/0건은 그날 할 일이 없었다는 뜻이라 문제가 아니에요";
+
+/** 우리말 번역(error_plain)이 없을 때 본문에 보이는 문구 — 원문은 title(마우스 올리기)로만 */
+export const UNKNOWN_ERROR_TEXT = "알 수 없는 오류 (원문은 마우스를 올려 보세요)";
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -52,7 +58,7 @@ export default function SchedulerMonitor({ token }: Props) {
 
   if (isLoading) {
     return (
-      <AdminCard title="스케줄러 모니터링" help="자동으로 돌아가는 수집 작업들이 마지막에 언제 실행됐고, 다음에 언제 또 돌아갈지 보여줘요. 빨간색은 실패한 작업이에요. 작업이 돌긴 돌았는데 데이터가 진짜 들어왔는지는 아래 '데이터 신선도' 카드에서 확인할 수 있어요. '처리' 열은 (처리한 건수)/(할 일 건수) 예요 — 0/0건은 그날 할 일이 없었다는 뜻이라 문제가 아니에요">
+      <AdminCard title="자동 작업 현황" help={HELP_TEXT}>
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-8 bg-gray-100 rounded animate-pulse" />
@@ -65,7 +71,7 @@ export default function SchedulerMonitor({ token }: Props) {
   if (error) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-        스케줄러 상태를 불러오지 못했어요.
+        자동 작업 현황을 불러오지 못했어요.
       </div>
     );
   }
@@ -84,14 +90,14 @@ export default function SchedulerMonitor({ token }: Props) {
   );
 
   return (
-    <AdminCard title="스케줄러 모니터링" help="자동으로 돌아가는 수집 작업들이 마지막에 언제 실행됐고, 다음에 언제 또 돌아갈지 보여줘요. 빨간색은 실패한 작업이에요. 작업이 돌긴 돌았는데 데이터가 진짜 들어왔는지는 아래 '데이터 신선도' 카드에서 확인할 수 있어요. '처리' 열은 (처리한 건수)/(할 일 건수) 예요 — 0/0건은 그날 할 일이 없었다는 뜻이라 문제가 아니에요" action={summaryAction}>
+    <AdminCard title="자동 작업 현황" help={HELP_TEXT} action={summaryAction}>
       {/* 테이블 */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-left text-xs text-gray-500">
               <th className="pb-2 pr-3 font-medium">작업</th>
-              <th className="pb-2 pr-3 font-medium hidden sm:table-cell">스케줄</th>
+              <th className="pb-2 pr-3 font-medium hidden sm:table-cell">주기</th>
               <th className="pb-2 pr-3 font-medium">상태</th>
               <th className="pb-2 pr-3 font-medium hidden md:table-cell">마지막 실행</th>
               <th className="pb-2 pr-3 font-medium hidden md:table-cell">소요시간</th>
@@ -117,7 +123,7 @@ export default function SchedulerMonitor({ token }: Props) {
       </div>
 
       {jobs.length === 0 && (
-        <p className="text-sm text-gray-500 text-center py-4">등록된 스케줄러 작업이 없습니다</p>
+        <p className="text-sm text-gray-500 text-center py-4">등록된 자동 작업이 없습니다</p>
       )}
     </AdminCard>
   );
@@ -156,7 +162,7 @@ function JobRow({
               className="text-[11px] text-gray-400 truncate max-w-[220px]"
               title={job.source_url ?? job.source}
             >
-              출처: {job.source}
+              자료 출처: {job.source}
             </div>
           )}
         </td>
@@ -204,14 +210,15 @@ function JobRow({
       {expanded && job.last_run?.error_message && (
         <tr>
           {/* 보여주는 건 쉬운 우리말, 원문은 title 로 남긴다 (세션 411).
-              error_plain 이 없거나 빈 문자열이면(옛 백엔드·번역 결과 없음) 원문으로
-              폴백한다 — `??` 를 쓰면 빈 문자열이 통과해 화면이 비어 버린다. */}
+              error_plain 이 없거나 빈 문자열이면(옛 백엔드·번역 결과 없음) 영어 원문을 본문에
+              그대로 두지 않고 고정 문구로 바꾼다(세션 419, 원칙 3) — `??` 를 쓰면 빈 문자열이
+              통과해 화면이 비어 버리므로 `||` 를 유지한다. */}
           <td
             colSpan={7}
             className="px-3 py-2 bg-red-50 text-xs text-red-700 whitespace-pre-wrap"
             title={job.last_run.error_message}
           >
-            {job.last_run.error_plain || job.last_run.error_message}
+            {job.last_run.error_plain || UNKNOWN_ERROR_TEXT}
           </td>
         </tr>
       )}

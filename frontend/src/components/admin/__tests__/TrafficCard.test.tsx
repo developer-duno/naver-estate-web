@@ -85,10 +85,22 @@ describe("TrafficCard 컴포넌트", () => {
     });
     expect(screen.getByText("1,500")).toBeInTheDocument();
     expect(screen.getByText("120")).toBeInTheDocument();
-    expect(screen.getByText("620ms")).toBeInTheDocument();
+    // 밀리초 대신 초 (세션 419) — 620ms → 0.62초, "ms" 표기는 본문에 없다
+    expect(screen.getByText("0.62초")).toBeInTheDocument();
+    expect(screen.queryByText(/ms$/)).toBeNull();
   });
 
-  it("경로 그룹을 한글 이름 + 원본 경로로 표시한다", async () => {
+  it("오류 열은 '요청 오류·서버 오류' 로, 4xx·5xx 원문은 title 로만", async () => {
+    mockGet.mockResolvedValueOnce(stats());
+    renderWithProvider();
+    await waitFor(() => {
+      expect(screen.getByText("요청 오류")).toBeInTheDocument();
+    });
+    expect(screen.getByText("서버 오류")).toHaveAttribute("title", expect.stringContaining("5xx"));
+    expect(screen.queryByText(/4xx|5xx/)).toBeNull();
+  });
+
+  it("경로 그룹을 한글 이름으로, 원본 경로는 title 로 표시한다", async () => {
     mockGet.mockResolvedValueOnce(
       stats({
         windows: {
@@ -107,10 +119,11 @@ describe("TrafficCard 컴포넌트", () => {
     );
     renderWithProvider();
     await waitFor(() => {
-      expect(screen.getByText("실시간 검색·크롤")).toBeInTheDocument();
+      expect(screen.getByText("실시간 조회")).toBeInTheDocument();
     });
     expect(screen.getByText("단지·매물")).toBeInTheDocument();
-    expect(screen.getByText("(/api/live)")).toBeInTheDocument();
+    expect(screen.queryByText("(/api/live)")).toBeNull();
+    expect(screen.getByText("실시간 조회")).toHaveAttribute("title", "/api/live");
   });
 
   it("알 수 없는 경로 그룹은 원본 그대로 표시한다", async () => {
@@ -204,8 +217,8 @@ describe("TrafficCard 컴포넌트", () => {
     mockGet.mockResolvedValueOnce(stats({ process_uptime_seconds: 7200 }));
     renderWithProvider();
     await waitFor(() => {
-      expect(screen.getByText("가동 2시간 0분")).toBeInTheDocument();
+      expect(screen.getByText("켜진 지 2시간 0분")).toBeInTheDocument();
     });
-    expect(screen.getByText("가동 2시간 0분").className).toContain("bg-amber-50");
+    expect(screen.getByText("켜진 지 2시간 0분").className).toContain("bg-amber-50");
   });
 });

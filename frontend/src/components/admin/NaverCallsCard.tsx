@@ -18,15 +18,15 @@ const LABEL_META: Record<string, { name: string; group: "user" | "scheduler" }> 
   search: { name: "검색", group: "user" },
   crawl_articles_live: { name: "매물 목록 (실시간)", group: "user" },
   article_detail_live: { name: "매물 상세 (실시간)", group: "user" },
-  article_detail_live_fallback: { name: "매물 상세 폴백", group: "user" },
+  article_detail_live_fallback: { name: "매물 상세 (대체 경로)", group: "user" },
   article_detail_realtime: { name: "매물 상세 (재시도)", group: "user" },
   complex_prices_ondemand: { name: "시세 (요청 시)", group: "user" },
   complex_real_prices_ondemand: { name: "실거래가 (요청 시)", group: "user" },
   complex_detail: { name: "단지 보강", group: "user" },
   search_discover: { name: "단지 발견", group: "scheduler" },
-  crawl_articles_batch: { name: "매물 목록 (배치)", group: "scheduler" },
-  article_detail_batch: { name: "매물 상세 (배치)", group: "scheduler" },
-  complex_prices_batch: { name: "시세 (배치)", group: "scheduler" },
+  crawl_articles_batch: { name: "매물 목록 (자동)", group: "scheduler" },
+  article_detail_batch: { name: "매물 상세 (자동)", group: "scheduler" },
+  complex_prices_batch: { name: "시세 (자동)", group: "scheduler" },
 };
 
 interface Row {
@@ -57,7 +57,7 @@ function buildRows(stats: NaverCallStats): Row[] {
 
 const GROUP_LABEL: Record<Row["group"], string> = {
   user: "사용자",
-  scheduler: "스케줄러",
+  scheduler: "자동",
   other: "기타",
 };
 
@@ -111,9 +111,9 @@ export default function NaverCallsCard({ getToken }: Props) {
                 ? "bg-amber-50 text-amber-700 border-amber-300"
                 : "bg-green-50 text-green-700 border-green-300"
             }`}
-            title="프로세스 재시작 후 카운터가 리셋됩니다"
+            title="서버를 다시 켜면 0부터 다시 셉니다"
           >
-            가동 {formatUptime(uptime)}
+            켜진 지 {formatUptime(uptime)}
           </span>
         ) : undefined
       }
@@ -134,8 +134,8 @@ export default function NaverCallsCard({ getToken }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-gray-500 border-b">
-                  <th className="text-left py-1.5 font-medium">경로</th>
-                  <th className="text-left py-1.5 font-medium">라벨</th>
+                  <th className="text-left py-1.5 font-medium">누가</th>
+                  <th className="text-left py-1.5 font-medium">작업</th>
                   <th className="text-right py-1.5 font-medium">10분</th>
                   <th className="text-right py-1.5 font-medium">1시간</th>
                   <th className="text-right py-1.5 font-medium">24시간</th>
@@ -156,11 +156,9 @@ export default function NaverCallsCard({ getToken }: Props) {
                         {GROUP_LABEL[r.group]}
                       </span>
                     </td>
-                    <td className="py-1.5 text-gray-700">
+                    {/* 코드 원문(label)은 본문에 두지 않고 마우스를 올리면 보이게 한다 */}
+                    <td className="py-1.5 text-gray-700" title={r.label}>
                       {r.name}
-                      {r.name !== r.label && (
-                        <span className="ml-1 text-[10px] text-gray-400">({r.label})</span>
-                      )}
                     </td>
                     <td className="py-1.5 text-right tabular-nums">{r.counts["10m"].toLocaleString("ko")}</td>
                     <td className="py-1.5 text-right tabular-nums">{r.counts["1h"].toLocaleString("ko")}</td>

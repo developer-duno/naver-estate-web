@@ -47,6 +47,12 @@ export default function AdminDataPage() {
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">{error}</div>
       )}
 
+      {/* 관리자 화면 리뉴얼(세션 419): 대시보드의 숫자 줄은 4칸(compact)만 남기고,
+          24시간 오류·채워진 비율·가치 점수는 이 화면에서 전부 보여 준다. */}
+      <h3 className="text-base font-semibold mb-1">숫자 자세히 보기</h3>
+      <p className="text-sm text-gray-500 mb-4">
+        대시보드에는 큰 숫자 4개만 있어요. 24시간 오류·채워진 비율·가치 점수까지 전부 여기서 봅니다.
+      </p>
       <StatsCards stats={statsQuery.data ?? null} loading={statsQuery.isLoading} />
     </>
   );

@@ -1,6 +1,18 @@
 "use client";
 
+/**
+ * 관리자 대시보드 — 세로 한 열 4층 (세션 419 리뉴얼, 사장님 지시 "뭐가 이리 난잡해?")
+ *
+ *  1층 지금 상태 : 데이터 상태 한 줄 + 지금 돌아가는 작업 / 이번 주 챙길 일
+ *  2층 숫자      : 핵심 숫자 4칸 / 공공데이터 하루 사용량
+ *  3층 원인      : 접힌 절 5개(펼쳤을 때만 불러온다 — AdminSection)
+ *  4층 작업      : 외부 데이터 받아오기 / 오래된 단지 다시 수집 → 최근 활동
+ *
+ * 24시간 오류·채워진 비율·가치 점수는 /admin/data 에서 본다(한 화면에 같은 숫자는 한 번만).
+ */
+
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import StatsCards from "@/components/admin/StatsCards";
@@ -15,8 +27,8 @@ import TrafficCard from "@/components/admin/TrafficCard";
 import QuotaStatusCard from "@/components/admin/QuotaStatusCard";
 import FailureBreakdown from "@/components/admin/FailureBreakdown";
 import AdminCard from "@/components/admin/AdminCard";
-import AdminLeftNav from "@/components/admin/AdminLeftNav";
-import AdminLivePanel from "@/components/admin/AdminLivePanel";
+import AdminSection from "@/components/admin/AdminSection";
+import RunningJobsLine from "@/components/admin/RunningJobsLine";
 import { getAdminDetailedStats, getAdminAuditLogs } from "@/lib/api";
 import { getActionLabel, getTargetLabel } from "@/lib/admin-labels";
 import type { DetailedStats, AuditLog } from "@/types/admin";
@@ -24,6 +36,14 @@ import type { PaginatedResponse } from "@/types/admin";
 
 export default function AdminDashboard() {
   const { token, getToken } = useTokenReady();
+  const router = useRouter();
+
+  /** 실패 유형을 누르면 수집 작업 목록을 "실패 + 그 유형" 으로 걸러 연다 (원칙 2: 다음 행동으로 잇기) */
+  const jumpToFailed = (jobType?: string) => {
+    const qs = new URLSearchParams({ status: "failed" });
+    if (jobType) qs.set("job_type", jobType);
+    router.push(`/admin/crawl?${qs.toString()}`);
+  };
 
   const statsQuery = useQuery<DetailedStats, Error>({
     queryKey: queryKeys.admin.stats(),
@@ -55,76 +75,67 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      <div className="lg:grid lg:grid-cols-[180px_1fr_280px] lg:gap-4">
-        {/* 좌측 anchor nav (lg+ 만 노출) */}
-        <div className="hidden lg:block lg:self-start"><AdminLeftNav /></div>
-
-        {/* 중앙 본문 (RunningJobs 제거 = 11 카드 + 최근 활동 단독 렌더링) */}
-        <div className="min-w-0">
-          <div id="health"><HealthSummary token={token} /></div>
-
-          <div id="weekly-issues" className="mb-4"><WeeklyIssuesCard token={token} /></div>
-
-          <div id="stats"><StatsCards stats={stats} loading={loading} /></div>
-
-          <div id="traffic" className="mt-6">
-            <TrafficCard getToken={getToken} />
-          </div>
-
-          <div id="scheduler" className="mt-6">
-            <SchedulerMonitor token={token} />
-          </div>
-
-          <div id="freshness" className="mt-6">
-            <DataFreshnessCard token={token} />
-          </div>
-
-          <div id="naver-calls" className="mt-6">
-            <NaverCallsCard getToken={getToken} />
-          </div>
-
-          <div id="quota" className="mt-6">
-            <QuotaStatusCard token={token} />
-          </div>
-
-          <div id="failure" className="mt-6">
-            <FailureBreakdown token={token} />
-          </div>
-
-          <div className="mt-6">
-            <AdminCard title="최근 활동" help="관리자가 직접 누른 작업이나 자동으로 실행된 트리거 기록이에요 (최근 5건). 누가 언제 무슨 작업을 시작했는지 한눈에 볼 수 있어요">
-              {recentLogs.length === 0 ? (
-                <p className="text-sm text-gray-500">활동 기록이 없습니다</p>
-              ) : (
-                <ul className="space-y-2">
-                  {recentLogs.map((l) => (
-                    <li key={l.id} className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">
-                        <span className="bg-gray-100 text-xs px-1.5 py-0.5 rounded mr-1">{getActionLabel(l.action)}</span>
-                        {l.target_type ? getTargetLabel(l.target_type, l.target_id) : ""}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {l.created_at ? new Date(l.created_at).toLocaleString("ko") : ""}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </AdminCard>
-          </div>
-
-          <div className="mt-6">
-            <CollectorTrigger getToken={getToken} />
-          </div>
-
-          <div className="mt-6">
-            <BulkRecrawlCard getToken={getToken} />
-          </div>
-        </div>
-
-        {/* 우측 라이브 패널 (lg+ 만 노출) */}
-        <div className="hidden lg:block lg:self-start"><AdminLivePanel /></div>
+      {/* 1층 — 지금 상태 */}
+      <div className="grid gap-4 lg:grid-cols-2 mb-4 items-start">
+        <AdminCard title="지금 상태">
+          <HealthSummary token={token} />
+          <RunningJobsLine token={token} />
+        </AdminCard>
+        <WeeklyIssuesCard token={token} />
       </div>
+
+      {/* 2층 — 숫자 (핵심 4칸만) */}
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px] mb-4 items-start">
+        <div className="min-w-0">
+          <StatsCards stats={stats} loading={loading} compact />
+        </div>
+        <QuotaStatusCard token={token} />
+      </div>
+
+      {/* 3층 — 원인 (기본 접힘, 펼쳤을 때만 불러온다) */}
+      <div className="space-y-3 mb-4">
+        <AdminSection id="scheduler" title="자동 작업 현황">
+          <SchedulerMonitor token={token} />
+        </AdminSection>
+        <AdminSection id="freshness" title="데이터 신선도">
+          <DataFreshnessCard token={token} />
+        </AdminSection>
+        <AdminSection id="failure" title="실패 자세히 (최근 24시간)">
+          <FailureBreakdown token={token} onJumpToFailed={jumpToFailed} />
+        </AdminSection>
+        <AdminSection id="naver-calls" title="네이버 호출 횟수">
+          <NaverCallsCard getToken={getToken} />
+        </AdminSection>
+        <AdminSection id="traffic" title="방문·요청 통계">
+          <TrafficCard getToken={getToken} />
+        </AdminSection>
+      </div>
+
+      {/* 4층 — 작업 */}
+      <div className="grid gap-4 lg:grid-cols-2 mb-4 items-start">
+        <CollectorTrigger getToken={getToken} />
+        <BulkRecrawlCard getToken={getToken} />
+      </div>
+
+      <AdminCard title="최근 활동" help="관리자가 직접 누른 작업이나 자동으로 실행된 트리거 기록이에요 (최근 5건). 누가 언제 무슨 작업을 시작했는지 한눈에 볼 수 있어요">
+        {recentLogs.length === 0 ? (
+          <p className="text-sm text-gray-500">활동 기록이 없습니다</p>
+        ) : (
+          <ul className="space-y-2">
+            {recentLogs.map((l) => (
+              <li key={l.id} className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">
+                  <span className="bg-gray-100 text-xs px-1.5 py-0.5 rounded mr-1">{getActionLabel(l.action)}</span>
+                  {l.target_type ? getTargetLabel(l.target_type, l.target_id) : ""}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {l.created_at ? new Date(l.created_at).toLocaleString("ko") : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </AdminCard>
     </>
   );
 }

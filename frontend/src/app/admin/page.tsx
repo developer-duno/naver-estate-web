@@ -6,7 +6,8 @@
  *  1층 지금 상태 : 데이터 상태 한 줄 + 지금 돌아가는 작업 / 이번 주 챙길 일
  *  2층 숫자      : 핵심 숫자 4칸 / 공공데이터 하루 사용량
  *  3층 원인      : 접힌 절 5개(펼쳤을 때만 불러온다 — AdminSection)
- *  4층 작업      : 외부 데이터 받아오기 / 오래된 단지 다시 수집 → 최근 활동
+ *  4층 작업      : 오래된 단지 다시 수집(전폭) → 최근 활동
+ *                  (외부 자료 받아오기 버튼은 /admin/crawl 로 옮겼다 — 사장님 결정 2026-09-26)
  *
  * 24시간 오류·채워진 비율·가치 점수는 /admin/data 에서 본다(한 화면에 같은 숫자는 한 번만).
  * 단 24시간 실패 건수는 3층 "실패 자세히" 절 제목 옆 칩으로도 알린다(접힌 채로 보이게).
@@ -18,7 +19,6 @@ import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import StatsCards from "@/components/admin/StatsCards";
 import BulkRecrawlCard from "@/components/admin/BulkRecrawlCard";
-import CollectorTrigger from "@/components/admin/CollectorTrigger";
 import SchedulerMonitor from "@/components/admin/SchedulerMonitor";
 import DataFreshnessCard from "@/components/admin/DataFreshnessCard";
 import HealthSummary from "@/components/admin/HealthSummary";
@@ -119,8 +119,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* 4층 — 작업 */}
-      <div className="grid gap-4 lg:grid-cols-2 mb-4 items-start">
-        <CollectorTrigger getToken={getToken} />
+      <div className="mb-4">
         <BulkRecrawlCard getToken={getToken} />
       </div>
 

@@ -55,10 +55,10 @@ describe("AuditLogTable", () => {
     expect(screen.getByText("안전")).toBeInTheDocument();
   });
 
-  it("collector target — '수집기: 실거래가' 표시", async () => {
+  it("collector target — '수집기: 옛 시세 채워 넣기' 표시", async () => {
     renderTable([baseLog({ target_type: "collector", target_id: "backfill-price", action: "admin_collect_trigger", details: {} })]);
     await waitFor(() => expect(screen.getByText("데이터 수집 시작")).toBeInTheDocument());
-    expect(screen.getByText("수집기: 실거래가")).toBeInTheDocument();
+    expect(screen.getByText("수집기: 옛 시세 채워 넣기")).toBeInTheDocument();
   });
 
   it("userMap 미로드 — UUID 앞 8자 표시", async () => {

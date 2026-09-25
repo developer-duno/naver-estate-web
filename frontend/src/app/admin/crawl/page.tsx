@@ -10,6 +10,7 @@ import CrawlJobTable from "@/components/admin/CrawlJobTable";
 import CrawlSummary from "@/components/admin/CrawlSummary";
 import FailureBreakdown from "@/components/admin/FailureBreakdown";
 import SingleRecrawlCard from "@/components/admin/SingleRecrawlCard";
+import CollectorTrigger from "@/components/admin/CollectorTrigger";
 import ErrorRateChart from "@/components/admin/ErrorRateChart";
 import { CRAWL_JOB_LABELS, jobTypeLabel } from "@/lib/crawl-job-labels";
 import {
@@ -195,6 +196,13 @@ function AdminCrawlContent() {
       </p>
 
       {token && <CrawlSummary token={token} onJumpToFailed={() => handleJumpToFailed()} />}
+
+      {/* 외부 자료 버튼 8종 — 대시보드에서 옮겨 왔다(사장님 결정 2026-09-26: 필요할 때만 찾아가는 도구) */}
+      {token && (
+        <div className="mt-2 mb-4">
+          <CollectorTrigger token={token} getToken={getToken} />
+        </div>
+      )}
 
       {token && (
         <div className="mt-2 mb-4">

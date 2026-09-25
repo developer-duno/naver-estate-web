@@ -37,7 +37,11 @@ vi.mock("@/hooks/useAdminQuery", () => ({
   useTokenReady: () => ({ token: "test-token", getToken: vi.fn(async () => "test-token") }),
 }));
 
-vi.mock("@/components/admin/CrawlSummary", () => ({ default: () => null }));
+vi.mock("@/components/admin/CrawlSummary", () => ({ default: () => <div>가짜 요약</div> }));
+// 외부 자료 버튼 카드 — 자기 테스트(CollectorTrigger.test.tsx)가 있어 여기선 자리·받는 값만 본다
+vi.mock("@/components/admin/CollectorTrigger", () => ({
+  default: ({ token }: { token: string }) => <div>가짜 외부 자료 카드 {token}</div>,
+}));
 vi.mock("@/components/admin/SingleRecrawlCard", () => ({ default: () => null }));
 vi.mock("@/components/admin/ErrorRateChart", () => ({ default: () => null }));
 // 실패 분포 카드: 행을 누르면 유형 코드를 넘기는 계약만 흉내 낸다 (FailureBreakdown.tsx onJumpToFailed(it.job_type))
@@ -261,6 +265,16 @@ describe("/admin/crawl 주소 쿼리 동기화", () => {
     expect(await screen.findByRole("heading", { level: 2, name: "자료 수집 관리" })).toBeInTheDocument();
     expect(screen.getByText("자료 수집이란?")).toBeInTheDocument();
     expect(screen.queryByText(/크롤링/)).not.toBeInTheDocument();
+  });
+
+  /** 사장님 결정 2026-09-26: 대시보드에서 옮겨 온 외부 자료 버튼 — 요약 아래, 실패 분포 위 */
+  it("외부 자료 버튼 카드가 요약 아래·실패 분포 위에 있고 토큰을 받는다", async () => {
+    renderPage();
+    const card = await screen.findByText("가짜 외부 자료 카드 test-token");
+    const summary = screen.getByText("가짜 요약");
+    const failure = screen.getByText("가짜 실패 행");
+    expect(summary.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(card.compareDocumentPosition(failure) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

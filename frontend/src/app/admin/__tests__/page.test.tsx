@@ -181,6 +181,15 @@ describe("AdminDashboard 4층 배치 (세션 419)", () => {
     });
   });
 
+  /** 사장님 결정 2026-09-26: 외부 자료 버튼은 "필요할 때만 찾아가는 도구" 라 /admin/crawl 로 옮겼다 */
+  it("4층은 '오래된 단지 한 번에 다시 수집' 한 장뿐 — 외부 자료 버튼 카드는 대시보드에 없다", async () => {
+    renderDashboard();
+    expect(await screen.findByText("오래된 단지 한 번에 다시 수집")).toBeInTheDocument();
+    expect(screen.queryByText("외부 자료 지금 받아오기")).toBeNull();
+    expect(screen.queryByText("외부 데이터 지금 받아오기")).toBeNull();
+    expect(document.querySelectorAll("button[data-collector]")).toHaveLength(0);
+  });
+
   it("1층 '지금 상태' 카드 + 지금 돌아가는 작업 한 줄, 좌측 목차·우측 라이브 패널은 없다", async () => {
     renderDashboard();
     expect(screen.getByRole("heading", { name: "지금 상태" })).toBeInTheDocument();

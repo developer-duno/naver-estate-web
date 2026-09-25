@@ -4,6 +4,7 @@
 
 import type { UserProfile, AuditLog, AgentVerification, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail, SchedulerStatusResponse, SchedulerCalendarResponse, DataFreshnessResponse, QuotaStatus } from "@/types/admin";
 import { fetchApi, adminHeaders, LIVE_TIMEOUT_MS } from "./core";
+import type { CollectorName } from "@/lib/admin/collectors";
 
 /** 관리자: 사용자 목록 */
 export async function getAdminUsers(token: string, params?: { status?: string; role?: string; page?: number }) {
@@ -104,14 +105,32 @@ export async function getDataFreshness(token: string) {
   return fetchApi<DataFreshnessResponse>(`/api/admin/data-freshness`, { headers: adminHeaders(token) });
 }
 
-/** 관리자: 데이터 수집 트리거 (동기 블로킹, 최대 120초) */
-export type CollectorName = "crime-stats" | "air-quality" | "emergency" | "childcare" | "backfill-price";
+/** 관리자: 데이터 수집 트리거 — BE 는 수집이 끝날 때까지 답을 안 준다(동기 실행).
+ *  수집기 8종의 정본 = lib/admin/collectors.ts. */
+export type { CollectorName } from "@/lib/admin/collectors";
 
-export async function triggerCollection(token: string, name: CollectorName) {
-  // quota_exhausted 등은 backfill-price 수집기(국토부 API)만 반환한다 — 세션 362.
-  return fetchApi<{ status: string; collector: string; quota_exhausted?: boolean; success?: number; failed?: number; total?: number }>(
+/** 수집 트리거 응답 — 수집기가 dict 를 돌려주면 BE 가 그 칸을 펼쳐 넣는다(routers/admin/collect.py).
+ *  quota_exhausted·success·total = backfill-price(세션 362) / matched = kapt-match / collected = kapt-costs /
+ *  error·message = 수집기가 실패를 예외 대신 값으로 돌려준 경우(HTTP 200 이어도 실패다). */
+export interface CollectionResult {
+  status: string;
+  collector: string;
+  quota_exhausted?: boolean;
+  success?: number;
+  failed?: number;
+  total?: number;
+  matched?: number;
+  collected?: number;
+  error?: string;
+  message?: string;
+}
+
+/** signal 을 주면 그 signal 로 끊는다(오래 도는 수집기는 화면이 먼저 손을 뗀다 — CollectorTrigger).
+ *  주지 않으면 LIVE_TIMEOUT_MS 뒤 끊는다. */
+export async function triggerCollection(token: string, name: CollectorName, signal?: AbortSignal) {
+  return fetchApi<CollectionResult>(
     `/api/admin/collect/${encodeURIComponent(name)}`,
-    { method: "POST", headers: adminHeaders(token), timeoutMs: LIVE_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
+    { method: "POST", headers: adminHeaders(token), timeoutMs: LIVE_TIMEOUT_MS, signal } as RequestInit & { timeoutMs?: number },
   );
 }
 

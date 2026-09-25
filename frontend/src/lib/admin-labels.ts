@@ -61,11 +61,11 @@ export const TARGET_TYPE_LABELS: Record<string, string> = {
  * 뒤 셋은 BE crawler/plain_words.py JOB_WORDS 와 같은 표현이다.
  */
 export const COLLECTOR_LABELS: Record<string, string> = {
-  "crime-stats": "범죄통계",
-  "air-quality": "대기질",
-  "emergency": "응급의료",
-  "childcare": "어린이집",
-  "backfill-price": "실거래가",
+  "crime-stats": "동네 범죄 통계 받기",
+  "air-quality": "동네 공기질 받기",
+  "emergency": "응급실 위치 받기",
+  "childcare": "어린이집 정보 받기",
+  "backfill-price": "옛 시세 채워 넣기",
   "metrics": "단지 가치 점수 계산",
   "kapt-match": "관리비 단지 연결하기",
   "kapt-costs": "단지 관리비 받기",

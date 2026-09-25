@@ -35,7 +35,7 @@ export default function StatsCards({ stats, loading, compact = false }: Props) {
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div data-testid="stats-cards" className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {cards.map((card) => (
         <div key={card.label} className="bg-white border rounded-lg p-4">
           <p className="text-xs text-gray-500 mb-1">{card.label}</p>

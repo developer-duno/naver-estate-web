@@ -56,14 +56,14 @@ describe("FailureBreakdown", () => {
     });
     renderCard();
     await waitFor(() => {
-      expect(screen.getByText("단지 매물 수집")).toBeInTheDocument();
+      expect(screen.getByText("단지 매물 가져오기")).toBeInTheDocument();
     });
-    expect(screen.getByText("시세 이력 수집")).toBeInTheDocument();
+    expect(screen.getByText("단지 시세 기록 모으기")).toBeInTheDocument();
     expect(screen.getByText("3건")).toBeInTheDocument();
     expect(screen.getByText("1건")).toBeInTheDocument();
     // 코드명은 본문에 없고 라벨의 title 로만 (세션 419 원칙 3)
     expect(screen.queryByText("complex_articles")).toBeNull();
-    expect(screen.getByText("단지 매물 수집")).toHaveAttribute("title", "complex_articles");
+    expect(screen.getByText("단지 매물 가져오기")).toHaveAttribute("title", "complex_articles");
     // 오류 원문은 본문에 없고, 번역이 없으면 고정 안내 문구 + title 원문
     expect(screen.queryByText(/네이버 API 차단/)).toBeNull();
     const notes = screen.getAllByText(/최근 오류 기록 있음/);
@@ -119,9 +119,9 @@ describe("FailureBreakdown", () => {
     const spy = vi.fn();
     renderCard(spy);
     await waitFor(() => {
-      expect(screen.getByText("단지 매물 수집")).toBeInTheDocument();
+      expect(screen.getByText("단지 매물 가져오기")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole("button", { name: /단지 매물 수집/ }));
+    fireEvent.click(screen.getByRole("button", { name: /단지 매물 가져오기/ }));
     expect(spy).toHaveBeenCalledWith("complex_articles");
   });
 

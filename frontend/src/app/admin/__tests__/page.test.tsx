@@ -200,7 +200,7 @@ describe("AdminDashboard 4층 배치 (세션 419)", () => {
   it("실패 절을 열고 유형을 누르면 /admin/crawl 로 '실패 + 그 유형' 필터를 들고 간다", async () => {
     renderDashboard();
     fireEvent.click(screen.getByText("실패 자세히 (최근 24시간)"));
-    const row = await screen.findByRole("button", { name: /단지 매물 수집 2건 실패/ });
+    const row = await screen.findByRole("button", { name: /단지 매물 가져오기 2건 실패/ });
     expect(mockFailures).toHaveBeenCalledWith("test-token", 24);
     fireEvent.click(row);
     expect(pushMock).toHaveBeenCalledWith("/admin/crawl?status=failed&job_type=complex_articles");

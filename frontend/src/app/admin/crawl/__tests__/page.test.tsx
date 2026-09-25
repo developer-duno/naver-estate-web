@@ -117,14 +117,14 @@ describe("/admin/crawl 목록 필터", () => {
     );
     expect(screen.getByLabelText("상태로 거르기")).toHaveValue("failed");
     expect(screen.getByLabelText("유형으로 거르기")).toHaveValue("price_history");
-    // 다른 유형(단지 매물 수집) 행은 걸러진다
-    await waitFor(() => expect(screen.getAllByText("시세 이력 수집").length).toBeGreaterThan(0));
+    // 다른 유형(단지 매물 가져오기) 행은 걸러진다
+    await waitFor(() => expect(screen.getAllByText("단지 시세 기록 모으기").length).toBeGreaterThan(0));
     expect(screen.getByText("11")).toBeInTheDocument();
     expect(screen.getByText("13")).toBeInTheDocument();
     expect(screen.queryByText("12")).not.toBeInTheDocument();
     // 한계를 숨기지 않는다
     expect(screen.getByText(/가장 최근 작업 100건 안에서만/)).toBeInTheDocument();
-    expect(screen.getByText(/시세 이력 수집 2건 · 최근 3건 중/)).toBeInTheDocument();
+    expect(screen.getByText(/단지 시세 기록 모으기 2건 · 최근 3건 중/)).toBeInTheDocument();
   });
 
   it("모르는 상태값 쿼리는 버리고 전체로 시작한다", async () => {

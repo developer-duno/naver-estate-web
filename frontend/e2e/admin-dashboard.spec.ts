@@ -24,8 +24,11 @@ test.describe("admin dashboard", () => {
 
     // 2층 숫자 (compact 4칸) + 공공데이터 하루 사용량 — 라벨이 아니라 값을 기다린다.
     // "1,234" 는 단지 수(mockDetailedStats)와 오늘 사용량(mockQuotaStatus) 두 곳 — 둘 다 그려져야 2개.
-    await expect(page.getByText("단지 수")).toBeVisible();
-    await expect(page.getByText("오늘 수집")).toBeVisible();
+    // "단지 수" 는 4층 BulkRecrawlCard 의 입력 라벨에도 있어 페이지 전체로 찾으면 두 요소에 걸려
+    // strict mode 위반이 된다 — 숫자 카드 묶음(data-testid="stats-cards") 안에서만 찾는다.
+    const statsCards = page.getByTestId("stats-cards");
+    await expect(statsCards.getByText("단지 수", { exact: true })).toBeVisible();
+    await expect(statsCards.getByText("오늘 수집", { exact: true })).toBeVisible();
     await expect(page.getByText("공공데이터 하루 사용량")).toBeVisible();
     await expect(page.getByText("1,234", { exact: true })).toHaveCount(2);
     await expect(page.getByText(/남은 호출/)).toBeVisible();

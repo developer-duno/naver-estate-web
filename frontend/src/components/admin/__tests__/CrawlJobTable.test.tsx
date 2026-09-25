@@ -34,13 +34,13 @@ describe("CrawlJobTable", () => {
         ]}
       />,
     );
-    expect(screen.getByText("단지 매물 수집")).toBeInTheDocument();
-    expect(screen.getByText("시세 이력 수집")).toBeInTheDocument();
-    expect(screen.getByText("공공 실거래가 수집")).toBeInTheDocument();
+    expect(screen.getByText("단지 매물 가져오기")).toBeInTheDocument();
+    expect(screen.getByText("단지 시세 기록 모으기")).toBeInTheDocument();
+    expect(screen.getByText("정부 실거래가 받기")).toBeInTheDocument();
     // 코드명은 본문 글자가 아니라 title 속성에만 있다 (원칙 3 — 개발자 원문은 마우스 올리면)
     expect(screen.queryByText("complex_articles")).not.toBeInTheDocument();
-    expect(screen.getByText("단지 매물 수집")).toHaveAttribute("title", "complex_articles");
-    expect(screen.getByText("시세 이력 수집")).toHaveAttribute("title", "price_history");
+    expect(screen.getByText("단지 매물 가져오기")).toHaveAttribute("title", "complex_articles");
+    expect(screen.getByText("단지 시세 기록 모으기")).toHaveAttribute("title", "price_history");
   });
 
   it("status 코드를 한글로 표시 (running → 실행 중, failed → 실패 등)", () => {

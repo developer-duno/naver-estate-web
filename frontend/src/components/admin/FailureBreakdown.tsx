@@ -15,6 +15,8 @@ interface Props {
   token: string;
   /** 클릭 시 상위에서 필터를 "failed" 로 적용 + 해당 유형으로 점프 (선택) */
   onJumpToFailed?: (jobType?: string) => void;
+  /** true 면 카드 제목을 숨긴다 — 대시보드 접힌 절 안에서 절 제목과 두 줄로 겹치지 않게 (AdminCard.hideTitle) */
+  hideTitle?: boolean;
 }
 
 function formatRelative(iso: string | null): string {
@@ -26,7 +28,7 @@ function formatRelative(iso: string | null): string {
   return `${Math.floor(ms / 86_400_000)}일 전`;
 }
 
-export default function FailureBreakdown({ token, onJumpToFailed }: Props) {
+export default function FailureBreakdown({ token, onJumpToFailed, hideTitle = false }: Props) {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.admin.crawlFailures(24),
     queryFn: () => getAdminCrawlFailures(token, 24),
@@ -37,7 +39,7 @@ export default function FailureBreakdown({ token, onJumpToFailed }: Props) {
 
   if (isLoading || !data) {
     return (
-      <AdminCard
+      <AdminCard hideTitle={hideTitle}
         title="유형별 실패 분포 (최근 24시간)"
         help="어떤 종류의 작업이 많이 실패했는지 묶어서 보여줘요. 같은 종류가 반복 실패하면 원인을 한 곳에서 잡을 수 있어요"
       >
@@ -48,7 +50,7 @@ export default function FailureBreakdown({ token, onJumpToFailed }: Props) {
 
   if (data.total === 0) {
     return (
-      <AdminCard
+      <AdminCard hideTitle={hideTitle}
         title="유형별 실패 분포 (최근 24시간)"
         help="어떤 종류의 작업이 많이 실패했는지 묶어서 보여줘요. 같은 종류가 반복 실패하면 원인을 한 곳에서 잡을 수 있어요"
       >
@@ -60,7 +62,7 @@ export default function FailureBreakdown({ token, onJumpToFailed }: Props) {
   }
 
   return (
-    <AdminCard
+    <AdminCard hideTitle={hideTitle}
       title={`유형별 실패 분포 (최근 24시간 · 총 ${data.total}건)`}
       help="어떤 종류의 작업이 많이 실패했는지 묶어서 보여줘요. 같은 종류가 반복 실패하면 원인을 한 곳에서 잡을 수 있어요. 행을 누르면 아래 표에서 그 유형의 실패 작업만 보여줘요"
     >

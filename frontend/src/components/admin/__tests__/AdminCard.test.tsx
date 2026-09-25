@@ -74,6 +74,54 @@ describe("AdminCard", () => {
     expect(screen.getByRole("heading", { level: 3, name: "도움말 카드" })).toBeInTheDocument();
   });
 
+  /** aria-controls 는 가리킬 설명 문단이 DOM 에 있을 때(열림)만 단다 — 닫힘 땐 없는 id 참조가 되므로 */
+  it("ⓘ 버튼의 aria-controls 는 열렸을 때만 있고, 그때 설명 문단의 id 를 가리킨다", () => {
+    render(
+      <AdminCard title="도움말 카드" help="연결 확인용 설명">
+        <p>body</p>
+      </AdminCard>,
+    );
+    const btn = screen.getByRole("button", { name: "설명 보기" });
+    expect(btn).not.toHaveAttribute("aria-controls");
+
+    fireEvent.click(btn);
+    const controls = btn.getAttribute("aria-controls");
+    expect(controls).toBeTruthy();
+    expect(document.getElementById(controls!)).toHaveTextContent("연결 확인용 설명");
+
+    fireEvent.click(btn);
+    expect(btn).not.toHaveAttribute("aria-controls");
+  });
+
+  /** hideTitle: 대시보드 접힌 절 안에서 절 제목과 두 줄로 겹치지 않게 제목(h3)만 뺀다.
+   *  도움말(ⓘ)·action·본문은 그대로 남아야 한다 */
+  it("hideTitle 이면 제목 h3 를 그리지 않되 ⓘ·action·본문은 남는다", () => {
+    render(
+      <AdminCard title="숨길 제목" help="숨김 카드 설명" action={<button>새로고침</button>} hideTitle>
+        <p>본문 그대로</p>
+      </AdminCard>,
+    );
+    expect(screen.queryByRole("heading")).toBeNull();
+    expect(screen.queryByText("숨길 제목")).toBeNull();
+    expect(screen.getByText("본문 그대로")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "새로고침" })).toBeInTheDocument();
+    const btn = screen.getByRole("button", { name: "설명 보기" });
+    fireEvent.click(btn);
+    expect(screen.getByText("숨김 카드 설명")).toBeInTheDocument();
+  });
+
+  /** hideTitle 인데 help·action 이 모두 없으면 빈 머리줄(여백)을 만들지 않고 본문만 */
+  it("hideTitle + help·action 없음이면 본문만 그린다", () => {
+    const { container } = render(
+      <AdminCard title="숨길 제목" hideTitle>
+        <p>본문만</p>
+      </AdminCard>,
+    );
+    const card = container.firstElementChild!;
+    expect(card.children).toHaveLength(1);
+    expect(card.firstElementChild).toHaveTextContent("본문만");
+  });
+
   /** help 미지정: ⓘ 버튼 미렌더 */
   it("help 미지정 시 ⓘ 미렌더", () => {
     render(

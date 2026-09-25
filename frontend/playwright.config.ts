@@ -27,6 +27,7 @@ export default defineConfig({
       testIgnore: [
         /global\.setup\.ts$/,
         /admin-dashboard\.spec\.ts$/,
+        /admin-dashboard-sections\.spec\.ts$/,
         /admin-pages\.spec\.ts$/,
         /public-flow\.spec\.ts$/,
         /compare-visual\.spec\.ts$/,
@@ -58,7 +59,7 @@ export default defineConfig({
     },
     {
       name: "admin",
-      testMatch: /(admin-(dashboard|pages)|complex-visual)\.spec\.ts$/,
+      testMatch: /(admin-(dashboard|dashboard-sections|pages)|complex-visual)\.spec\.ts$/,
       dependencies: ["setup"],
       use: {
         storageState: "e2e/.auth/admin.json",

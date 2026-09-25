@@ -10,8 +10,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, writeFile, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { scan, extractBackendJobTypes, extractLabelKeys } from "../check-job-labels.mjs";
+import { join, isAbsolute, sep } from "node:path";
+import {
+  scan,
+  extractBackendJobTypes,
+  extractLabelKeys,
+  BACKEND_DIR,
+  LABELS_PATH,
+} from "../check-job-labels.mjs";
 
 // 워커별 고유 임시 디렉터리 — check-mdx-jsx.test.mjs 답습(세션 195 EPERM 경합).
 let FIXTURE;
@@ -187,8 +193,18 @@ describe("check-job-labels", () => {
     expect([...keys].sort()).toEqual(["air_quality", "childcare"]);
   });
 
+  /** 기본 경로가 cwd 상대("../backend")면 실행 위치에 따라 엉뚱한 폴더를 읽어 간헐 실패한다
+   *  → 스크립트 파일 위치 기준 절대경로여야 한다 */
+  it("기본 backend·사전 경로는 실행 위치와 무관한 절대경로다", () => {
+    expect(isAbsolute(BACKEND_DIR)).toBe(true);
+    expect(isAbsolute(LABELS_PATH)).toBe(true);
+    expect(BACKEND_DIR.split(sep).join("/")).toMatch(/[/]backend$/);
+    expect(LABELS_PATH.split(sep).join("/")).toMatch(/[/]frontend[/]src[/]lib[/]crawl-job-labels[.]ts$/);
+  });
+
   it("실제 backend 를 스캔하면 job_type 을 여러 종 찾아낸다 (파서 살아있음 확인)", async () => {
-    const { types } = await extractBackendJobTypes("../backend");
+    // 인자 없이 = 기본 경로(절대경로)로 — cwd 에 기대지 않는다
+    const { types } = await extractBackendJobTypes();
     expect(types.size).toBeGreaterThan(10);
     expect(types.has("complex_articles")).toBe(true);
     // f-string 전개가 실제 소스에서도 동작하는지

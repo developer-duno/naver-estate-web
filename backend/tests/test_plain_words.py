@@ -768,3 +768,40 @@ def test_action_words_tell_owner_what_they_can_do():
         line = action_words(kind)
         assert "Claude" in line, f"{kind}: 무엇을 하면 되는지가 없다 — {line}"
         assert "로그" not in line, f"{kind}: 개발자용 행동이 남아 있다 — {line}"
+
+
+# ── data.go.kr 오류 봉투 (세션 417 후속, 09-25 실사고) ─────────────────────────
+
+
+def test_explain_error_data_go_kr_reason_codes():
+    """(h) "data.go.kr 오류 코드 NN" 이 텔레그램에 그대로 나가지 않는다 — 번호별 우리말 한 줄.
+
+    ⚠ 05 의 원문 사유(SERVICETIMEOUT_ERROR)가 timeout 규칙에 먼저 걸리면 사유 번호가
+    사라진다 — 규칙 순서 가드. 뮤테이션: 04 규칙을 지우면 포괄 규칙으로 떨어져 FAIL.
+    """
+    cases = {
+        "data.go.kr 오류 코드 04(HTTP 에러) 재시도 3회 후 — op=getHsmpLaborCostInfoV3": "사유 번호 04",
+        "data.go.kr 오류 코드 05(SERVICETIMEOUT_ERROR) — op=x": "사유 번호 05",
+        "data.go.kr 오류 코드 12(NO_OPENAPI_SERVICE_ERROR) — op=x": "사유 번호 12",
+        "data.go.kr 오류 코드 30(SERVICE_KEY_IS_NOT_REGISTERED_ERROR) — op=x": "사유 번호 30",
+        "data.go.kr 오류 코드 31(DEADLINE) — op=x": "공공데이터 서버가 오류를 알려 왔어요",
+    }
+    for raw, expected in cases.items():
+        plain = explain_error(raw)
+        assert expected in plain, (raw, plain)
+        assert "data.go.kr" not in plain and "op=" not in plain, plain
+        assert plain.endswith("요)."), plain
+        assert plain.count(".") == 1, f"마침표가 둘 이상 — 해소 알림에서 끊긴다: {plain}"
+
+
+def test_kapt_job_messages_translate_to_plain_words():
+    """잡 기록 문구(api_down·partial_outage)도 사유 코드 규칙으로 번역된다(화면·알림 둘 다)."""
+    for raw in (
+        "연속 5단지 호출 실패 — API 장애/한도 의심, 잔여 3 (수집 0, 실패 5, 미공개 0, "
+        "마지막 오류: data.go.kr 오류 코드 04(HTTP 에러) 재시도 3회 후 — op=x; "
+        "생존 확인 1건도 빈 응답 — 210초 대기 뒤 중단)",
+        "공공데이터 서버는 응답하지만 7단지 전부 오류 — 수집 0 (미공개 0, "
+        "마지막 오류: data.go.kr 오류 코드 04(HTTP 에러) — op=x)",
+    ):
+        assert "사유 번호 04" in explain_error(raw)
+        assert "사유 번호 04" in explain_stored_error(raw)

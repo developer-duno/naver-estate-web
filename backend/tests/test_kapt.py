@@ -1552,15 +1552,41 @@ def test_collect_costs_partial_failure_through_real_api_layer(db, monkeypatch):
 # 발동하지 않는다 → 남은 단지(최대 250) 전부에 22콜씩 헛호출. 아래는 그 사각의 회귀 가드.
 
 
+def _fake_sleep(monkeypatch, module):
+    """`module.time.sleep` 을 기록기로 바꾼다 — 실제로 기다리지 않고 대기 순서만 남긴다.
+
+    전역 `time` 모듈을 건드리지 않도록 그 모듈의 `time` 참조만 갈아 끼운다.
+    """
+    slept: list = []
+
+    class _T:
+        @staticmethod
+        def sleep(seconds):
+            slept.append(seconds)
+
+    monkeypatch.setattr(module, "time", _T)
+    return slept
+
+
 def test_collect_costs_consecutive_failures_stop_batch(db, monkeypatch):
-    """연속 5단지 전 op 실패 -> 6번째부터 호출 0 · 잡 failed · 잔여 보고.
+    """연속 5단지 실패 + 카나리 **죽음** -> 30/60/120초 쉬며 재확인 뒤 중단 · 잡 failed · 잔여 보고.
+
+    ⚠ 세션 417 후속(09-25 실사고)으로 뜻이 바뀌었다: 옛 테스트는 "연속 5실패 = 즉시 중단"
+    을 박제했는데, 그 규칙이 제공기관 부분 장애(일부 조합만 04)에도 1.2초 만에 그날 회차를
+    포기하게 만든 결함이었다. 이제는 카나리가 살아있으면 계속 가고(별도 테스트), 죽어 있어도
+    `_API_DOWN_BACKOFF_SEC` 순서로 쉬었다가 재확인한 뒤에만 멈춘다 — 이 테스트는 그 "죽음" 경로다.
+    카나리 표본 1건(9번째 단지, months[0] 보유라 대기열 밖)을 두어 대기 경로가 실제로 돌게 했다.
 
     fixture 두 축을 다르게 (testing.md 세션372 답습): 대상 8단지 / 임계 5 /
     잔여 3 이 전부 다른 값이라, 코드가 셋 중 둘을 뒤바꿔 써도 단언이 잡아낸다.
     """
+    months = candidate_cost_months()
     for i in range(8):
         _make_complex(db, complex_no="60%02d" % i)
         _seed_mapping(db, complex_no="60%02d" % i, kapt_code="K%d" % i)
+    _make_complex(db, complex_no="6099")
+    _seed_mapping(db, complex_no="6099", kapt_code="KS")
+    _seed_cost(db, "6099", months[0])
 
     called = []
 
@@ -1571,21 +1597,56 @@ def test_collect_costs_consecutive_failures_stop_batch(db, monkeypatch):
 
     monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
     monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    probes = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost_probe",
+        lambda code, month: probes.append((code, month)) or None,
+    )
+    slept = _fake_sleep(monkeypatch, service_kapt)
 
     result = collect_kapt_costs(batch_size=10)
 
     assert result["error"] == "api_down"
+    assert slept == [30, 60, 120], f"대기 순서가 다르다: {slept}"
+    assert probes == [("KS", months[0])] * 4, f"즉시 1회 + 대기 뒤 3회 재확인이 아니다: {probes}"
     # 임계(5)에서 멈췄으므로 6~8번째 단지에는 호출이 아예 안 나간다
     assert called == ["K0", "K1", "K2", "K3", "K4"], "임계 후 헛호출 발생: %r" % (called,)
     assert result["failed"] == 5
     assert result["remaining"] == 3
-    assert db.query(KaptManagementCost).count() == 0
+    assert db.query(KaptManagementCost).count() == 1  # 표본 행 하나뿐 — 새 저장 0
 
     from db.models import CrawlJob
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
     assert job.status == "failed"
     assert "연속" in (job.error_message or "")
     assert "잔여 3" in (job.error_message or "")
+    assert "210초 대기 뒤 중단" in (job.error_message or "")
+
+
+def test_collect_costs_consecutive_failures_without_sample_stops_without_wait(db, monkeypatch):
+    """카나리 표본이 0건이면 쉬지 않고 바로 중단한다 (옛 동작 유지).
+
+    쉬어도 표본은 생기지 않는다 — 210초를 헛되이 붙잡을 이유가 없다.
+    """
+    for i in range(7):
+        _make_complex(db, complex_no="64%02d" % i)
+        _seed_mapping(db, complex_no="64%02d" % i, kapt_code="K%d" % i)
+
+    def common(code, month):
+        raise KaptApiError("응답 없음", code=None, op="x")
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    slept = _fake_sleep(monkeypatch, service_kapt)
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert result["error"] == "api_down"
+    assert slept == [], f"표본이 없는데 기다렸다: {slept}"
+    assert result["failed"] == 5 and result["remaining"] == 2
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert "생존 확인 표본 없음" in (job.error_message or "")
 
 
 def test_collect_costs_success_resets_consecutive_counter(db, monkeypatch):
@@ -2759,3 +2820,318 @@ def test_collect_costs_raw_a50630215_through_api_to_endpoint(db, client, monkeyp
     assert body["individual_cost"] == individual
     assert body["total_cost"] == common + individual == 55_732_810
     assert body["cost_per_household"] == 160_152  # 55,732,810 / 348 반올림
+
+
+# ── 09-25 실사고 후속: data.go.kr 오류 봉투 · 일시 오류 재시도 · 연속 실패 카나리 ──────────
+#
+# 06:20 회차가 12초 만에 failed: 제공기관이 일부 (단지, 달) 조합에만 04 오류 봉투를 줬는데
+# ① 봉투를 "예상과 다른 응답 구조" 로 뭉개 사유 코드를 잃고 ② 연속 5실패를 1.2초 만에
+# 판정해 그날 회차를 포기했고 ③ 카나리 표본이 전부 고장난 달(202606)이라 가려내지 못했다.
+# 아래 봉투는 그날 1콜 재현한 원문 그대로다.
+
+RAW_ENVELOPE_04 = {"OpenAPI_ServiceResponse": {"cmmMsgHeader": {
+    "errMsg": "HTTP_ERROR", "returnAuthMsg": "HTTP 에러", "returnReasonCode": "04"}}}
+RAW_ENVELOPE_22 = {"OpenAPI_ServiceResponse": {"cmmMsgHeader": {
+    "errMsg": "SERVICE ERROR",
+    "returnAuthMsg": "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR",
+    "returnReasonCode": "22"}}}
+RAW_ENVELOPE_30 = {"OpenAPI_ServiceResponse": {"cmmMsgHeader": {
+    "errMsg": "SERVICE ERROR", "returnAuthMsg": "SERVICE_KEY_IS_NOT_REGISTERED_ERROR",
+    "returnReasonCode": "30"}}}
+
+
+def _sequence_call_api(monkeypatch, responses):
+    """call_api 가 responses 를 순서대로 돌려준다(마지막 값은 계속 반복). 호출 수를 센다."""
+    calls = []
+
+    def fake_call(cls, url, params):
+        calls.append(url)
+        return responses[min(len(calls), len(responses)) - 1]
+
+    monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(fake_call))
+    return calls
+
+
+def test_body_or_raise_envelope_04_keeps_reason_code(monkeypatch):
+    """(a) 04 봉투 → code "04" · is_quota False · 메시지에 04 · 재시도 3회(3/10/30초) 뒤 예외.
+
+    뮤테이션: `_error_envelope` 판정을 지우면 옛 "예상과 다른 응답 구조"(code None)로 FAIL.
+    """
+    calls = _sequence_call_api(monkeypatch, [RAW_ENVELOPE_04])
+    slept = _fake_sleep(monkeypatch, kapt_api)
+    before = kapt_api.retry_calls_made()
+
+    with pytest.raises(KaptApiError) as exc:
+        kapt_api.KaptAPI._body_or_raise("http://x", {}, op="getHsmpLaborCostInfoV3")
+
+    assert exc.value.code == "04"
+    assert exc.value.is_quota is False
+    assert "data.go.kr 오류 코드 04(HTTP 에러)" in str(exc.value)
+    assert "재시도 3회 후" in str(exc.value)
+    assert "예상과 다른 응답 구조" not in str(exc.value)
+    assert slept == [3, 10, 30], f"재시도 대기 순서가 다르다: {slept}"
+    assert len(calls) == 4, f"첫 호출 + 재시도 3회가 아니다: {len(calls)}"
+    assert kapt_api.retry_calls_made() - before == 3
+
+
+def test_body_or_raise_transient_04_recovers_on_retry(monkeypatch):
+    """04 → 04 → 정상이면 정상 body 를 돌려준다(대기 3·10초 두 번만).
+
+    09-25 08:18 재실측: 04 는 같은 (단지, 달)이라도 호출마다 오락가락했다.
+    뮤테이션: 재시도 루프를 지우면 첫 04 에서 예외가 나 FAIL.
+    """
+    ok = {"response": {"header": {"resultCode": "00"}, "body": {"item": {"pay": 1}}}}
+    calls = _sequence_call_api(monkeypatch, [RAW_ENVELOPE_04, RAW_ENVELOPE_04, ok])
+    slept = _fake_sleep(monkeypatch, kapt_api)
+
+    body = kapt_api.KaptAPI._body_or_raise("http://x", {}, op="opA")
+
+    assert body == {"item": {"pay": 1}}
+    assert slept == [3, 10]
+    assert len(calls) == 3
+
+
+@pytest.mark.parametrize("payload,quota", [
+    (RAW_ENVELOPE_22, True),    # (b) 쿼터는 여전히 is_quota — 봉투 파싱보다 먼저 잡힌다
+    (RAW_ENVELOPE_30, False),   # 설정 오류 — 기다려도 안 바뀐다
+])
+def test_body_or_raise_non_transient_envelope_no_retry(monkeypatch, payload, quota):
+    """쿼터(22)·설정 오류(30)는 재시도 없이 1콜에 즉시 예외, 사유 코드 보존."""
+    calls = _sequence_call_api(monkeypatch, [payload])
+    slept = _fake_sleep(monkeypatch, kapt_api)
+
+    with pytest.raises(KaptApiError) as exc:
+        kapt_api.KaptAPI._body_or_raise("http://x", {}, op="opA")
+
+    assert exc.value.is_quota is quota
+    assert exc.value.code == payload["OpenAPI_ServiceResponse"]["cmmMsgHeader"]["returnReasonCode"]
+    assert slept == [] and len(calls) == 1
+
+
+def test_body_or_raise_unknown_shape_logs_keys(monkeypatch, caplog):
+    """(c) 봉투도 정상 구조도 아닌 진짜 미지 모양 → 옛 문구 유지 + 로그에 최상위 키·앞부분."""
+    _sequence_call_api(monkeypatch, [{"weird": {"x": 1}, "other": 2}])
+    caplog.set_level("WARNING", logger="crawler.kapt_api")
+
+    with pytest.raises(KaptApiError) as exc:
+        kapt_api.KaptAPI._body_or_raise("http://x", {}, op="opA")
+
+    assert "예상과 다른 응답 구조" in str(exc.value)
+    assert exc.value.code is None
+    assert "['weird', 'other']" in caplog.text, caplog.text
+    assert "'weird': {'x': 1}" in caplog.text
+
+
+def test_body_or_raise_top_level_cmm_header_is_envelope(monkeypatch):
+    """`OpenAPI_ServiceResponse` 래퍼 없이 최상위 `cmmMsgHeader` 만 와도 봉투로 읽는다."""
+    _sequence_call_api(monkeypatch, [{"cmmMsgHeader": {
+        "errMsg": "SERVICE ERROR", "returnReasonCode": "12"}}])
+
+    with pytest.raises(KaptApiError) as exc:
+        kapt_api.KaptAPI._body_or_raise("http://x", {}, op="opA")
+
+    assert exc.value.code == "12"
+    assert "SERVICE ERROR" in str(exc.value)  # returnAuthMsg 가 없으면 errMsg
+
+
+def _seed_failure_run(db, prefix, count, months, sample_month_index=0):
+    """대상 count 단지 + 대기열 밖 카나리 표본 단지 1곳(months[sample_month_index] 행 보유)."""
+    for i in range(count):
+        _make_complex(db, complex_no=f"{prefix}{i:02d}")
+        _seed_mapping(db, complex_no=f"{prefix}{i:02d}", kapt_code=f"K{i}")
+    _make_complex(db, complex_no=f"{prefix}99")
+    _seed_mapping(db, complex_no=f"{prefix}99", kapt_code="KS")
+    _seed_cost(db, f"{prefix}99", months[sample_month_index])
+
+
+def test_collect_costs_consecutive_failures_canary_alive_keeps_going(db, monkeypatch):
+    """(d) 연속 5실패 + 카나리 살아있음 → 멈추지 않고 계속 · 카운터 리셋 · 대기 0.
+
+    두 축을 다르게: 대상 8 · 실패 6 · 임계 5 · 수집 2.
+    뮤테이션: 카나리 분기를 지우고 옛 즉시 중단으로 되돌리면 K5~K7 이 안 불려 FAIL.
+    """
+    months = candidate_cost_months()
+    _seed_failure_run(db, "65", 8, months)
+    called = []
+
+    def common(code, month):
+        called.append(code)
+        if code in ("K6", "K7"):
+            return {"aV3": 700}
+        raise KaptApiError("data.go.kr 오류 코드 04(HTTP 에러) — op=x", code="04", op="x")
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    probes = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost_probe",
+        lambda code, month: probes.append(code) or {"pay": 1},
+    )
+    slept = _fake_sleep(monkeypatch, service_kapt)
+
+    result = collect_kapt_costs(batch_size=20)
+
+    assert [c for c in dict.fromkeys(called)] == ["K%d" % i for i in range(8)], called
+    assert result.get("error") is None, result
+    assert (result["collected"], result["failed"]) == (2, 6)
+    assert slept == [], f"살아있는데 기다렸다: {slept}"
+    # K0~K4 에서 1번, 리셋 뒤 K5 하나로는 임계 미달 — 카나리는 딱 1회
+    assert probes == ["KS"], probes
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "completed", "수집이 있는 부분 성공인데 failed 로 마감됐다"
+
+
+def test_collect_costs_canary_alive_but_nothing_collected_fails_with_reason(db, monkeypatch):
+    """(g) 카나리 살아있음으로 끝까지 갔는데 수집 0 · 실패 ≥1 → failed + 사유 코드.
+
+    두 축을 다르게: 대상 7 · 실패 7 · 임계 5 (카나리 1회 뒤 연속 2 로 끝).
+    뮤테이션: `partial_outage` 분기를 지우면 옛 ① 가드 문구로 떨어져 FAIL.
+    """
+    months = candidate_cost_months()
+    _seed_failure_run(db, "66", 7, months)
+
+    def common(code, month):
+        raise KaptApiError(
+            "data.go.kr 오류 코드 04(HTTP 에러) 재시도 3회 후 — op=getHsmpLaborCostInfoV3",
+            code="04", op="getHsmpLaborCostInfoV3",
+        )
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    monkeypatch.setattr(service_kapt, "fetch_common_cost_probe", lambda code, month: {"pay": 1})
+    _fake_sleep(monkeypatch, service_kapt)
+
+    result = collect_kapt_costs(batch_size=20)
+
+    assert result["error"] == "partial_outage", result
+    assert (result["collected"], result["failed"]) == (0, 7)
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "failed"
+    msg = job.error_message or ""
+    assert "공공데이터 서버는 응답하지만 7단지 전부 오류" in msg, msg
+    assert "코드 04" in msg, msg
+
+
+def test_collect_costs_canary_quota_during_failure_streak_stops_as_quota(db, monkeypatch):
+    """연속 실패 뒤 카나리가 한도 초과(22)를 맞으면 기다리지 않고 쿼터 중단."""
+    months = candidate_cost_months()
+    _seed_failure_run(db, "67", 7, months)
+
+    def common(code, month):
+        raise KaptApiError("응답 없음", code=None, op="x")
+
+    def probe(code, month):
+        raise KaptApiError("일일 한도 초과(22)", code="22", is_quota=True)
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    monkeypatch.setattr(service_kapt, "fetch_common_cost_probe", probe)
+    slept = _fake_sleep(monkeypatch, service_kapt)
+
+    result = collect_kapt_costs(batch_size=20)
+
+    assert result["error"] == "quota_exceeded", result
+    assert slept == []
+
+
+def test_collect_costs_canary_error_is_dead_and_reason_kept(db, monkeypatch):
+    """(e 보강) 카나리 호출이 04 로 실패하면 "죽음" 으로 치고, 대기 뒤 중단 사유에 싣는다."""
+    months = candidate_cost_months()
+    _seed_failure_run(db, "68", 6, months)
+
+    def common(code, month):
+        raise KaptApiError("응답 없음", code=None, op="x")
+
+    def probe(code, month):
+        raise KaptApiError("data.go.kr 오류 코드 04(HTTP 에러) — op=p", code="04")
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    monkeypatch.setattr(service_kapt, "fetch_common_cost_probe", probe)
+    slept = _fake_sleep(monkeypatch, service_kapt)
+
+    result = collect_kapt_costs(batch_size=20)
+
+    assert result["error"] == "api_down"
+    assert slept == [30, 60, 120]
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert "생존 확인 호출도 실패" in (job.error_message or "")
+    assert "코드 04" in (job.error_message or "")
+
+
+def test_probe_uses_older_month_sample_when_newest_month_broken(db, monkeypatch):
+    """(f) 창 안 최신 3건이 전부 고장난 달(04)이어도, 그보다 이전 달 1건으로 "살아있음".
+
+    09-25 실사고 그대로: 표본 3건이 전부 202606(= months[0]) 이고 그 달만 04 였다.
+    뮤테이션: 추가 표본 쿼리를 지우면 3건 전부 04 → 예외로 FAIL.
+    """
+    months = candidate_cost_months()
+    for i in range(3):
+        _make_complex(db, complex_no=f"690{i}")
+        _seed_mapping(db, complex_no=f"690{i}", kapt_code=f"N{i}")
+        _seed_cost(db, f"690{i}", months[0])
+    _make_complex(db, complex_no="6909")
+    _seed_mapping(db, complex_no="6909", kapt_code="OLD")
+    _seed_cost(db, "6909", months[1])
+    probes = []
+
+    def probe(code, month):
+        probes.append((code, month))
+        if month == months[0]:
+            raise KaptApiError("data.go.kr 오류 코드 04(HTTP 에러) — op=p", code="04")
+        return {"pay": 1}
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost_probe", probe)
+
+    assert service_kapt._probe_api_alive(db, months) == (True, 4)
+    assert probes[-1] == ("OLD", months[1]), probes
+    assert len(probes) == 4
+
+
+def test_probe_extra_sample_capped_and_never_outside_window(db, monkeypatch):
+    """추가 표본은 1건뿐(최대 4콜)이고 후보월 창 밖 행은 절대 안 쓴다."""
+    months = candidate_cost_months()
+    n = 0
+    for month, k in ((months[0], 4), (months[1], 2)):
+        for _ in range(k):
+            _make_complex(db, complex_no=f"70{n:02d}")
+            _seed_mapping(db, complex_no=f"70{n:02d}", kapt_code=f"P{n}")
+            _seed_cost(db, f"70{n:02d}", month)
+            n += 1
+    _make_complex(db, complex_no="7099")
+    _seed_mapping(db, complex_no="7099", kapt_code="OUT")
+    _seed_cost(db, "7099", "202001")
+    probes = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost_probe",
+        lambda code, month: probes.append((code, month)) or None,
+    )
+
+    assert service_kapt._probe_api_alive(db, months) == (False, 4)
+    assert [m for _, m in probes] == [months[0]] * 3 + [months[1]], probes
+    assert all(code != "OUT" for code, _ in probes)
+
+
+def test_retry_calls_logged_in_run_summary(db, monkeypatch, caplog):
+    """회차 요약 로그에 '일시 오류 재시도 N콜' 이 따로 찍힌다(논리 호출 수와 분리)."""
+    _make_complex(db, complex_no="7101")
+    _seed_mapping(db, complex_no="7101", kapt_code="R1")
+    ok = {"response": {"header": {"resultCode": "00"},
+                       "body": {"item": {"kaptCode": "R1", "pay": 5}}}}
+    state = {"n": 0}
+
+    def fake_call(cls, url, params):
+        state["n"] += 1
+        return RAW_ENVELOPE_04 if state["n"] == 1 else ok
+
+    monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(fake_call))
+    _fake_sleep(monkeypatch, kapt_api)
+    caplog.set_level("INFO", logger="crawler.service_kapt")
+
+    result = collect_kapt_costs(batch_size=5)
+
+    assert result["collected"] == 1
+    assert "일시 오류 재시도 1콜" in caplog.text, caplog.text

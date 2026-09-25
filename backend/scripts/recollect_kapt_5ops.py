@@ -47,7 +47,7 @@
     `all_blank` 로 따로 세고, 연달아 10행이면 멈춘다.
 
 `--limit` 은 조회 행 상한
-    id 순 앞에서 N행을 가져와 돈다 — 매핑 없음·실패·전부 빔으로 건너뛴 행도 N 에 든다.
+    id 순 앞에서 N행을 가져와 돈다 — 매핑 없음·실패·전부 빔·일부 빔(`partial_blank`)으로 건너뛴 행도 N 에 든다.
     "갱신 N행" 으로 세지 않는 이유: 건너뛴 행은 대상에 그대로 남아, 같은 `--limit` 로 다시
     돌리면 같은 앞줄을 다시 조회한다 — 조회 상한이어야 호출 수(≤ N×5)가 예측 가능하고 단순하다.
 
@@ -201,21 +201,18 @@ def _summary_view(breakdown: dict[str, int]) -> dict[str, int]:
     return view
 
 
-def apply_five(row: KaptManagementCost, amounts: dict[str, int | None]) -> list[str]:
-    """행에 새 금액을 반영하고 옛 값을 유지한 op 목록을 돌려준다(커밋은 호출자)."""
+def apply_five(row: KaptManagementCost, amounts: dict[str, int]) -> None:
+    """행에 5 op 새 금액을 반영하고 요약·fetched_at 을 고친다(커밋은 호출자).
+
+    호출자가 5 op 가 **전부** 값이 있을 때만 부른다(하나라도 비면 `partial_blank`·`all_blank`).
+    """
     breakdown = dict(row.breakdown or {})
-    kept: list[str] = []
-    for op, amount in amounts.items():
-        if amount is None:
-            kept.append(op)
-            continue
-        breakdown[op] = amount
+    breakdown.update(amounts)
     summary = _summarize(_summary_view(breakdown), row.household_count)
     row.breakdown = breakdown  # 새 dict 로 바꿔 끼워야 JSON 칸 변경이 감지된다
     for key, value in summary.items():
         setattr(row, key, value)
     row.fetched_at = utcnow()
-    return kept
 
 
 def _calls_now() -> int:

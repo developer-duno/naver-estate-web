@@ -3356,7 +3356,7 @@ def test_collect_costs_alive_cap_stops_on_third_canary_while_empty(db, monkeypat
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
     assert job.status == "failed"
     msg = job.error_message or ""
-    assert "표본은 응답하지만 수집 대상은 15단지 연속 오류 — 회차 중단(살아있음 판정 2회 뒤)" in msg, msg
+    assert "표본은 응답하지만 수집 0인 채 실패 15·미공개 0 — 회차 중단(카나리 '살아있음' 2회 뒤), 잔여 5" in msg, msg
     assert "코드 04" in msg, msg
 
 
@@ -3506,10 +3506,10 @@ def test_fetch_cost_item_failure_carries_kaptcode_and_searchdate(monkeypatch, ca
 
 
 def test_basis_info_does_not_retry_transient_error(monkeypatch):
-    """목록·기본정보용 `_body` 는 일시 오류도 재시도하지 않는다 — 실패 1건 = 1콜 · 대기 0 · None.
+    """기본정보(`fetch_apt_basis_info`)는 일시 오류도 재시도하지 않는다 — 실패 1건 = 1콜 · 대기 0 · None.
 
     장애일에 kapt_match 기본정보 14,747건이 4콜씩·대기 176시간이 되는 것을 막는다(검사관 A).
-    뮤테이션: `_body` 의 `retry_transient=False` 를 지우면 4콜 · 대기 [3, 10, 30] 로 FAIL.
+    뮤테이션: `fetch_apt_basis_info` 의 `retry_transient=False` 를 지우면 4콜 · 대기 [3, 10, 30] 로 FAIL.
     """
     calls = _sequence_call_api(monkeypatch, [RAW_ENVELOPE_04])
     slept = _fake_sleep(monkeypatch, kapt_api)
@@ -3534,3 +3534,49 @@ def test_body_or_raise_result_code_zero_variants_are_success(monkeypatch, code):
 
     assert body == {"item": {"pay": 1}}
     assert len(calls) == 1
+
+
+def test_list_page_retries_transient_error(monkeypatch):
+    """목록 페이지(`fetch_apt_list_page`)는 일시 오류를 **재시도한다** — 04 → 정상이면 그 페이지를 받는다.
+
+    약 22페이지뿐이라 비용이 작고, 한 페이지가 04 로 끊기면 일부 목록으로 매칭돼
+    `_clear_conflicting_mappings` 가 멀쩡한 매핑·관리비 행을 지울 수 있다(검사관 판정 ①).
+    뮤테이션: `_body` 기본값을 `retry_transient=False` 로 바꾸면 ([], 0) 으로 FAIL.
+    """
+    ok = {"response": {"header": {"resultCode": "00"},
+                       "body": {"items": [{"kaptCode": "A1"}], "totalCount": 1}}}
+    calls = _sequence_call_api(monkeypatch, [RAW_ENVELOPE_04, ok])
+    slept = _fake_sleep(monkeypatch, kapt_api)
+
+    items, total = kapt_api.fetch_apt_list_page(1)
+
+    assert (items, total) == ([{"kaptCode": "A1"}], 1)
+    assert len(calls) == 2 and slept == [3]
+
+
+def test_collect_costs_failures_equal_collected_stay_completed(db, monkeypatch):
+    """경계: 2 성공 · 2 실패 → completed(`failed > collected` 만 failed).
+
+    뮤테이션: 조건을 `failed >= collected` 로 바꾸면 failed 로 끝나 FAIL.
+    """
+    for i in range(4):
+        _make_complex(db, complex_no=f"85{i:02d}")
+        _seed_mapping(db, complex_no=f"85{i:02d}", kapt_code=f"E{i}")
+    called = []
+
+    def common(code, month):
+        called.append(code)
+        if len(called) in (2, 4):
+            _raise_04(code, month)
+        return {"aV3": 100}
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert (result["collected"], result["failed"]) == (2, 2)
+    assert result.get("error") is None, result
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "completed"

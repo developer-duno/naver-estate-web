@@ -1254,9 +1254,9 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         if alive_cap_hit:
             remaining = len(queue) - scanned
             message = (
-                f"표본은 응답하지만 수집 대상은 {failed}단지 연속 오류 — 회차 중단"
-                f"(살아있음 판정 {_ALIVE_CONTINUE_CAP_WHILE_EMPTY}회 뒤), 잔여 {remaining} "
-                f"(수집 0, 미공개 {empty}, 마지막 오류: {last_failure})"
+                f"표본은 응답하지만 수집 0인 채 실패 {failed}·미공개 {empty} — 회차 중단"
+                f"(카나리 '살아있음' {_ALIVE_CONTINUE_CAP_WHILE_EMPTY}회 뒤), 잔여 {remaining} "
+                f"(마지막 오류: {last_failure})"
             )
             _fail_job(db, job, message)
             logger.error("[kapt_costs] %s", message)

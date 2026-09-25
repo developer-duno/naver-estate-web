@@ -93,13 +93,13 @@ export default function AdminDashboard() {
         <QuotaStatusCard token={token} />
       </div>
 
-      {/* 3층 — 원인 (기본 접힘, 펼쳤을 때만 불러온다) */}
+      {/* 3층 — 원인 (기본 접힘, 펼쳤을 때만 불러온다). 절 제목이 곧 카드 제목이라 안쪽 카드는 hideTitle */}
       <div className="space-y-3 mb-4">
         <AdminSection id="scheduler" title="자동 작업 현황">
-          <SchedulerMonitor token={token} />
+          <SchedulerMonitor token={token} hideTitle />
         </AdminSection>
         <AdminSection id="freshness" title="데이터 신선도">
-          <DataFreshnessCard token={token} />
+          <DataFreshnessCard token={token} hideTitle />
         </AdminSection>
         {/* 24시간 실패가 있으면 절을 안 열어도 제목 옆 칩으로 건수를 보인다(없으면 칩 없음) */}
         <AdminSection
@@ -107,13 +107,13 @@ export default function AdminDashboard() {
           title="실패 자세히 (최근 24시간)"
           badge={stats && stats.error_count_24h > 0 ? `${stats.error_count_24h}건` : undefined}
         >
-          <FailureBreakdown token={token} onJumpToFailed={jumpToFailed} />
+          <FailureBreakdown token={token} onJumpToFailed={jumpToFailed} hideTitle />
         </AdminSection>
         <AdminSection id="naver-calls" title="네이버 호출 횟수">
-          <NaverCallsCard getToken={getToken} />
+          <NaverCallsCard getToken={getToken} hideTitle />
         </AdminSection>
         <AdminSection id="traffic" title="방문·요청 통계">
-          <TrafficCard getToken={getToken} />
+          <TrafficCard getToken={getToken} hideTitle />
         </AdminSection>
       </div>
 

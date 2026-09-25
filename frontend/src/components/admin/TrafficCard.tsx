@@ -7,6 +7,8 @@ import AdminCard from "./AdminCard";
 
 interface Props {
   getToken: () => Promise<string>;
+  /** true 면 카드 제목을 숨긴다 — 대시보드 접힌 절 안에서 절 제목과 두 줄로 겹치지 않게 (AdminCard.hideTitle) */
+  hideTitle?: boolean;
 }
 
 type WindowKey = "10m" | "1h" | "24h";
@@ -60,7 +62,7 @@ function rateClass(rate: number, warn: number, danger: number): string {
   return "text-gray-700";
 }
 
-export default function TrafficCard({ getToken }: Props) {
+export default function TrafficCard({ getToken, hideTitle = false }: Props) {
   const { data, isLoading, error } = useQuery<TrafficStats, Error>({
     queryKey: queryKeys.admin.traffic(),
     queryFn: async () => {
@@ -76,7 +78,7 @@ export default function TrafficCard({ getToken }: Props) {
   const hourWindow: TrafficWindow | undefined = data?.windows["1h"];
 
   return (
-    <AdminCard
+    <AdminCard hideTitle={hideTitle}
       title="트래픽 (요청 수 · 방문자 · 속도 · 오류)"
       help="사람들이 우리 서비스를 얼마나 쓰고 있는지 보여줘요. 요청 수는 총 몇 번 불렀는지예요. 방문자는 '대략 몇 명'으로만 보세요 — 로그인한 분은 한 시간마다 표가 새로 발급되는데 그때마다 다른 사람으로 세어져서, 실제 인원보다 부풀려 나옵니다. 속도는 절반의 사람이 그 시간 안에 답을 받았다는 뜻(중간)과, 느린 쪽 5%가 겪는 시간(느림)이고요. 오류가 늘거나 느림이 몇 초까지 올라가면 서버가 버거워진다는 신호예요. 서버를 껐다 켜면 숫자는 0부터 다시 세요"
       action={

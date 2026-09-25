@@ -9,6 +9,8 @@
  *  3. "실패 자세히" 행을 누르면 유형을 버리지 않고 실패+유형 조건을 건다
  *  4. 취소는 확인창에서 "취소"하면 API 를 부르지 않는다
  *  5. 취소·일시정지·재개 뒤 목록이 바로 다시 불린다(무효화 키가 목록 키를 잡는다)
+ *  6. 조건(상태·유형·쪽)을 바꾸면 주소 쿼리도 바뀌고(router.replace), 주소가 바뀌면(뒤로가기·붙여넣기)
+ *     조건이 따라온다 — "?status=failed&job_type=kapt_costs" 를 공유하면 받은 사람도 같은 화면
  * 자식 카드(요약·실패 분포·단건 수집·추이 차트)는 각자 테스트가 있어 여기선 가짜로 바꾼다.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -17,9 +19,10 @@ import { TestQueryProvider } from "@/test-setup";
 import type { CrawlJobDetail, PaginatedResponse } from "@/types/admin";
 
 const mockSearch = { value: new URLSearchParams() };
+const replaceMock = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
   useSearchParams: () => mockSearch.value,
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: replaceMock }),
   usePathname: () => "/admin/crawl",
 }));
 
@@ -178,6 +181,86 @@ describe("/admin/crawl 목록 필터", () => {
     await waitFor(() => expect(mockJobs).toHaveBeenCalled());
     expect(screen.queryByRole("heading", { name: "필터" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /수집 작업 목록/ })).toBeInTheDocument();
+  });
+});
+
+describe("/admin/crawl 주소 쿼리 동기화", () => {
+  beforeEach(() => {
+    mockSearch.value = new URLSearchParams();
+    mockJobs.mockReset();
+    replaceMock.mockReset();
+    // 실제 라우터처럼 replace 하면 주소(useSearchParams)가 바뀐다 — 다음 렌더가 새 주소를 읽는다
+    replaceMock.mockImplementation((url: string) => {
+      mockSearch.value = new URLSearchParams(url.split("?")[1] ?? "");
+    });
+    mockJobs.mockResolvedValue(response([]));
+  });
+
+  it("상태를 고르면 주소가 ?status=… 로 바뀐다 (스크롤은 그대로)", async () => {
+    renderPage();
+    await waitFor(() => expect(mockJobs).toHaveBeenCalled());
+    expect(replaceMock).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("상태로 거르기"), { target: { value: "failed" } });
+    expect(replaceMock).toHaveBeenLastCalledWith("/admin/crawl?status=failed", { scroll: false });
+    // 다시 전체로 돌리면 쿼리 없는 주소
+    fireEvent.change(screen.getByLabelText("상태로 거르기"), { target: { value: "" } });
+    expect(replaceMock).toHaveBeenLastCalledWith("/admin/crawl", { scroll: false });
+  });
+
+  it("유형을 고르고 다음 쪽으로 가면 주소에 유형과 쪽이 함께 남는다", async () => {
+    mockJobs.mockResolvedValue({ items: [mkJob({ id: 31, job_type: "kapt_costs" })], total: 45, page: 1, page_size: 20 });
+    renderPage();
+    await waitFor(() => expect(mockJobs).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText("유형으로 거르기"), { target: { value: "kapt_costs" } });
+    expect(replaceMock).toHaveBeenLastCalledWith("/admin/crawl?job_type=kapt_costs", { scroll: false });
+    fireEvent.click(await screen.findByRole("button", { name: "다음" }));
+    expect(replaceMock).toHaveBeenLastCalledWith("/admin/crawl?job_type=kapt_costs&page=2", { scroll: false });
+  });
+
+  it("실패 분포 행으로 건 조건도 주소에 남는다", async () => {
+    renderPage();
+    await waitFor(() => expect(mockJobs).toHaveBeenCalled());
+    fireEvent.click(screen.getByText("가짜 실패 행"));
+    expect(replaceMock).toHaveBeenLastCalledWith(
+      "/admin/crawl?status=failed&job_type=price_history",
+      { scroll: false },
+    );
+  });
+
+  it("주소가 바뀌면(뒤로가기·주소 공유) 조건이 따라와 그 조건으로 다시 부른다", async () => {
+    const view = renderPage();
+    await waitFor(() => expect(mockJobs).toHaveBeenCalled());
+    mockSearch.value = new URLSearchParams("status=failed&job_type=kapt_costs&page=3");
+    view.rerender(
+      <TestQueryProvider>
+        <AdminCrawlPage />
+      </TestQueryProvider>,
+    );
+    await waitFor(() =>
+      expect(mockJobs).toHaveBeenLastCalledWith("test-token", {
+        status: "failed",
+        job_type: "kapt_costs",
+        page: 3,
+      }),
+    );
+    expect(screen.getByLabelText("상태로 거르기")).toHaveValue("failed");
+    expect(screen.getByLabelText("유형으로 거르기")).toHaveValue("kapt_costs");
+    // 주소를 따라온 것이므로 주소를 다시 쓰지 않는다(뒤로가기 기록을 덮지 않게)
+    expect(replaceMock).not.toHaveBeenCalled();
+  });
+
+  it("?page= 는 1 이상 정수만 받는다 (이상한 값은 1쪽)", async () => {
+    mockSearch.value = new URLSearchParams("page=-2");
+    renderPage();
+    await waitFor(() => expect(mockJobs).toHaveBeenCalled());
+    expect(mockJobs).toHaveBeenLastCalledWith("test-token", { status: undefined, page: 1 });
+  });
+
+  it("화면 제목은 쉬운 말 — '자료 수집 관리' / '자료 수집이란?'", async () => {
+    renderPage();
+    expect(await screen.findByRole("heading", { level: 2, name: "자료 수집 관리" })).toBeInTheDocument();
+    expect(screen.getByText("자료 수집이란?")).toBeInTheDocument();
+    expect(screen.queryByText(/크롤링/)).not.toBeInTheDocument();
   });
 });
 

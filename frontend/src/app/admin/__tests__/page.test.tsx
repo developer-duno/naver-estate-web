@@ -9,7 +9,7 @@
  *   `getAdminSchedulerStatus` 가 있고 실제 이름(getSchedulerStatus 등)이 빠져 있었다(세션 419 정정).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 import AdminDashboard from "../page";
 import type { AuditLog, DetailedStats, PaginatedResponse } from "@/types/admin";
@@ -232,6 +232,25 @@ describe("AdminDashboard 4층 배치 (세션 419)", () => {
     await waitFor(() => expect(screen.getByText("1,234")).toBeInTheDocument());
     expect(screen.queryByText("0건")).toBeNull();
     expect(screen.queryByText("3건")).toBeNull();
+  });
+
+  /** 절을 펼쳐도 제목은 절(summary) 것 한 줄뿐 — 안쪽 카드가 같은 제목(h3)을 또 그리지 않는다
+   *  (라이브 실측: "자동 작업 현황 / 자동 작업 현황" 두 줄 중복 → AdminCard hideTitle) */
+  it("3층 절을 펼치면 안쪽 카드는 제목(h3)을 그리지 않는다 — 제목 한 줄", async () => {
+    renderDashboard();
+    for (const t of SECTION_TITLES) fireEvent.click(screen.getByText(t));
+    await screen.findByRole("button", { name: /단지 매물 가져오기 2건 실패/ });
+    for (const id of ["scheduler", "freshness", "failure", "naver-calls", "traffic"]) {
+      const section = document.getElementById(id)!;
+      expect(section).toHaveAttribute("open");
+      expect(within(section).queryAllByRole("heading", { level: 3 })).toHaveLength(0);
+    }
+    // 절 제목 글자는 절마다 정확히 한 번
+    for (const t of SECTION_TITLES) {
+      expect(screen.getAllByText(t, { exact: true })).toHaveLength(1);
+    }
+    // 도움말(ⓘ)은 제목을 숨겨도 남는다 — 5절 모두 설명 버튼이 있다
+    expect(screen.getAllByRole("button", { name: "설명 보기" }).length).toBeGreaterThanOrEqual(5);
   });
 
   it("실패 절을 열고 유형을 누르면 /admin/crawl 로 '실패 + 그 유형' 필터를 들고 간다", async () => {

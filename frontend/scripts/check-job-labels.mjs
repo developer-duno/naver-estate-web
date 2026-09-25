@@ -27,9 +27,14 @@
  * 실행: node scripts/check-job-labels.mjs
  */
 import { readFile, readdir } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const BACKEND_DIR = "../backend";
+// 경로는 이 파일 위치 기준 절대경로 — 실행 위치(cwd)에 따라 "../backend" 가 엉뚱한 곳을 가리키던 것을 막는다
+// (워크트리에서 전체 테스트를 돌리면 cwd 가 frontend 가 아닐 때가 있어 "실제 backend 스캔" 이 간헐 실패했다).
+const FRONTEND_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+export const BACKEND_DIR = resolve(FRONTEND_DIR, "../backend");
+export const LABELS_PATH = join(FRONTEND_DIR, "src/lib/crawl-job-labels.ts");
 
 // ⚠ job_type 은 대문자를 포함한다(complex_detail_APT/OPST/JGC/ABYG/OBYG).
 //   [a-z0-9_]+ 로만 잡으면 그 5종을 통째로 놓친다 — 세션 399 구현 중 실제로 겪은 함정.
@@ -151,7 +156,7 @@ export async function extractBackendJobTypes(backendDir = BACKEND_DIR) {
 
 /** crawl-job-labels.ts 의 사전 키 추출 (TS 를 import 하지 않고 텍스트 파싱) */
 export async function extractLabelKeys(
-  labelsPath = "src/lib/crawl-job-labels.ts",
+  labelsPath = LABELS_PATH,
 ) {
   const src = await readFile(labelsPath, "utf-8");
   const body = src.split("CRAWL_JOB_LABELS")[1] ?? "";

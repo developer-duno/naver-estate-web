@@ -43,9 +43,11 @@ function formatDuration(seconds: number | undefined | null): string {
 
 interface Props {
   token: string;
+  /** true 면 카드 제목을 숨긴다 — 대시보드 접힌 절 안에서 절 제목과 두 줄로 겹치지 않게 (AdminCard.hideTitle) */
+  hideTitle?: boolean;
 }
 
-export default function SchedulerMonitor({ token }: Props) {
+export default function SchedulerMonitor({ token, hideTitle = false }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery({
@@ -58,7 +60,7 @@ export default function SchedulerMonitor({ token }: Props) {
 
   if (isLoading) {
     return (
-      <AdminCard title="자동 작업 현황" help={HELP_TEXT}>
+      <AdminCard hideTitle={hideTitle} title="자동 작업 현황" help={HELP_TEXT}>
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-8 bg-gray-100 rounded animate-pulse" />
@@ -90,7 +92,7 @@ export default function SchedulerMonitor({ token }: Props) {
   );
 
   return (
-    <AdminCard title="자동 작업 현황" help={HELP_TEXT} action={summaryAction}>
+    <AdminCard hideTitle={hideTitle} title="자동 작업 현황" help={HELP_TEXT} action={summaryAction}>
       {/* 테이블 */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

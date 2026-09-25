@@ -28,6 +28,8 @@ const HELP_TEXT =
 
 interface Props {
   token: string;
+  /** true 면 카드 제목을 숨긴다 — 대시보드 접힌 절 안에서 절 제목과 두 줄로 겹치지 않게 (AdminCard.hideTitle) */
+  hideTitle?: boolean;
 }
 
 function JobSummary({ item }: { item: DataFreshnessItem }) {
@@ -54,7 +56,7 @@ function JobSummary({ item }: { item: DataFreshnessItem }) {
   );
 }
 
-export default function DataFreshnessCard({ token }: Props) {
+export default function DataFreshnessCard({ token, hideTitle = false }: Props) {
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.admin.dataFreshness(),
     queryFn: () => getDataFreshness(token),
@@ -65,7 +67,7 @@ export default function DataFreshnessCard({ token }: Props) {
 
   if (error) {
     return (
-      <AdminCard title="데이터 신선도" help={HELP_TEXT}>
+      <AdminCard hideTitle={hideTitle} title="데이터 신선도" help={HELP_TEXT}>
         <p className="text-sm text-red-600">데이터 신선도를 불러오지 못했어요.</p>
       </AdminCard>
     );
@@ -73,7 +75,7 @@ export default function DataFreshnessCard({ token }: Props) {
 
   if (isLoading || !data) {
     return (
-      <AdminCard title="데이터 신선도" help={HELP_TEXT}>
+      <AdminCard hideTitle={hideTitle} title="데이터 신선도" help={HELP_TEXT}>
         <ul className="space-y-2" aria-label="로딩 중">
           {Array.from({ length: 16 }).map((_, i) => (
             <li key={i} className="h-10 bg-gray-100 rounded animate-pulse" />
@@ -85,14 +87,14 @@ export default function DataFreshnessCard({ token }: Props) {
 
   if (data.items.length === 0) {
     return (
-      <AdminCard title="데이터 신선도" help={HELP_TEXT}>
+      <AdminCard hideTitle={hideTitle} title="데이터 신선도" help={HELP_TEXT}>
         <p className="text-sm text-gray-500">데이터 없음</p>
       </AdminCard>
     );
   }
 
   return (
-    <AdminCard title="데이터 신선도" help={HELP_TEXT}>
+    <AdminCard hideTitle={hideTitle} title="데이터 신선도" help={HELP_TEXT}>
       <p className="text-xs text-gray-500 mb-2">
         <span className="font-medium text-gray-600">M건 중 N건 처리</span> = 처리 대상이었던 전체 M건 가운데 이번 작업이 끝낸 N건 ·{" "}
         <span className="font-medium text-gray-600">신규 K건</span> = 그중 진짜로 새로 들어온 데이터 수

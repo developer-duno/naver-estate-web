@@ -116,6 +116,14 @@ class EmergencyAPI(BasePublicDataAPI):
         bed_map = _parse_bed_items(items)
         if not bed_map:
             logger.warning("[emergency] 응급실 병상 조회 실패 또는 빈 응답 — 병상은 모두 '모름'으로 저장")
+        total_count = _safe_nonneg_int(body.get("totalCount")) if isinstance(body, dict) else None
+        num_of_rows = int(_BEDS_NUM_OF_ROWS)
+        if total_count is not None and total_count > num_of_rows:
+            logger.warning(
+                "[emergency] 실시간 병상 응답이 한 페이지를 넘음 — totalCount=%s > numOfRows=%s, 뒷 페이지 누락",
+                total_count,
+                num_of_rows,
+            )
         return bed_map
 
     @classmethod

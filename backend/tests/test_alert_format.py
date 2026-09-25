@@ -238,7 +238,10 @@ def test_failed_body_uses_batch_language():
         "processed": 791, "total": 791, "last_completed_at": "2026-05-19T04:00:00+00:00",
     }
     msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
-    assert "이번에 처리한 양" in msg, f"회차 합계 표현 필요: {msg}"
+    # 실패 본문의 처리량은 monitor `_job_stats` 가 주는 **마지막 completed 회차** 값이라
+    # "이번에" 라고 부르면 거짓이 된다(2026-09-25: 0건 처리한 실패 잡 알림에 500/799(63%)).
+    assert "마지막으로 잘 됐을 때 처리한 양: 791/791" in msg, f"라벨이 출처(마지막 성공 회차)와 맞아야 한다: {msg}"
+    assert "이번에 처리한 양" not in msg, f"실패 알림에 '이번에' 라벨이 남아 있다(회귀): {msg}"
     assert "batch" not in msg, f"영문 'batch' 가 남아 있다: {msg}"
     assert "마지막 처리율" not in msg
 

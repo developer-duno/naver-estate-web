@@ -11,9 +11,10 @@ import { getSchedulerCalendar } from "@/lib/api";
 import type { SchedulerCalendarResponse } from "@/types/admin";
 
 import AdminCard from "@/components/admin/AdminCard";
-import SchedulerCalendarView from "@/components/admin/SchedulerCalendarView";
-
-type CalendarMode = "past" | "upcoming" | "both";
+import SchedulerCalendarView, {
+  CalendarModeToggle,
+  type CalendarMode,
+} from "@/components/admin/SchedulerCalendarView";
 
 function todayYearMonth(): { year: number; month: number } {
   const now = new Date();
@@ -50,31 +51,35 @@ export default function SchedulerCalendarPage() {
   };
   const moveToday = () => setYM(todayYearMonth());
 
+  // 보기 토글(모두/과거만/예정만)과 달 이동을 같은 카드 머리에 둔다
   const navAction = (
-    <div className="flex items-center gap-1">
-      <button
-        type="button"
-        onClick={movePrev}
-        className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
-        aria-label="이전 달"
-      >
-        ←
-      </button>
-      <button
-        type="button"
-        onClick={moveToday}
-        className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
-      >
-        오늘
-      </button>
-      <button
-        type="button"
-        onClick={moveNext}
-        className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
-        aria-label="다음 달"
-      >
-        →
-      </button>
+    <div className="flex flex-wrap items-center gap-2">
+      <CalendarModeToggle mode={mode} onModeChange={setMode} />
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={movePrev}
+          className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
+          aria-label="이전 달"
+        >
+          ←
+        </button>
+        <button
+          type="button"
+          onClick={moveToday}
+          className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
+        >
+          오늘
+        </button>
+        <button
+          type="button"
+          onClick={moveNext}
+          className="text-xs px-2 py-1 border rounded hover:bg-gray-50"
+          aria-label="다음 달"
+        >
+          →
+        </button>
+      </div>
     </div>
   );
 
@@ -98,8 +103,6 @@ export default function SchedulerCalendarPage() {
         ) : query.data ? (
           <SchedulerCalendarView
             events={query.data.events}
-            mode={mode}
-            onModeChange={setMode}
             yearMonth={yearMonth}
             truncated={query.data.truncated}
           />

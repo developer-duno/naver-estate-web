@@ -21,7 +21,7 @@ const WINDOW_ORDER: readonly WindowKey[] = ["10m", "1h", "24h"];
 
 /** 경로 그룹 → 사람이 읽을 한글 이름. 없는 그룹은 원본 그대로 표시. */
 const PATH_LABEL: Record<string, string> = {
-  "/api/live": "실시간 검색·크롤",
+  "/api/live": "실시간 조회",
   "/api/complexes": "단지·매물",
   "/api/mb": "미분양·분양",
   "/api/admin": "관리자",
@@ -44,6 +44,13 @@ function formatUptime(seconds: number): string {
 
 function num(n: number): string {
   return n.toLocaleString("ko");
+}
+
+/** 밀리초 → 초 ("620ms" → "0.62초"). 10초 이상은 정수 초. */
+export function formatSeconds(ms: number): string {
+  if (!Number.isFinite(ms)) return "-";
+  const sec = ms / 1000;
+  return sec >= 10 ? `${Math.round(sec).toLocaleString("ko")}초` : `${sec.toFixed(2)}초`;
 }
 
 /** 에러율 색상 — 5xx 는 1% 넘으면 빨강, 4xx 는 10% 넘으면 주황 */
@@ -80,9 +87,9 @@ export default function TrafficCard({ getToken }: Props) {
                 ? "bg-amber-50 text-amber-700 border-amber-300"
                 : "bg-green-50 text-green-700 border-green-300"
             }`}
-            title="프로세스 재시작 후 카운터가 리셋됩니다"
+            title="서버를 다시 켜면 0부터 다시 셉니다"
           >
-            가동 {formatUptime(uptime)}
+            켜진 지 {formatUptime(uptime)}
           </span>
         ) : undefined
       }
@@ -131,8 +138,12 @@ export default function TrafficCard({ getToken }: Props) {
                   <th className="text-right py-1.5 font-medium">방문자(대략)</th>
                   <th className="text-right py-1.5 font-medium">속도(중간)</th>
                   <th className="text-right py-1.5 font-medium">속도(느림)</th>
-                  <th className="text-right py-1.5 font-medium">오류 4xx</th>
-                  <th className="text-right py-1.5 font-medium">오류 5xx</th>
+                  <th className="text-right py-1.5 font-medium" title="4xx — 잘못된 요청·권한 없음 등">
+                    요청 오류
+                  </th>
+                  <th className="text-right py-1.5 font-medium" title="5xx — 서버 쪽 문제">
+                    서버 오류
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -143,8 +154,8 @@ export default function TrafficCard({ getToken }: Props) {
                       <td className="py-1.5 text-gray-700">{WINDOW_LABEL[key]}</td>
                       <td className="py-1.5 text-right tabular-nums">{num(w.total_requests)}</td>
                       <td className="py-1.5 text-right tabular-nums">{num(w.unique_visitors)}</td>
-                      <td className="py-1.5 text-right tabular-nums">{num(Math.round(w.p50_ms))}ms</td>
-                      <td className="py-1.5 text-right tabular-nums">{num(Math.round(w.p95_ms))}ms</td>
+                      <td className="py-1.5 text-right tabular-nums">{formatSeconds(w.p50_ms)}</td>
+                      <td className="py-1.5 text-right tabular-nums">{formatSeconds(w.p95_ms)}</td>
                       <td className={`py-1.5 text-right tabular-nums ${rateClass(w.rate_4xx, 10, 30)}`}>
                         {w.rate_4xx}%
                       </td>
@@ -170,11 +181,9 @@ export default function TrafficCard({ getToken }: Props) {
                 <ul className="space-y-1">
                   {hourWindow.top_paths.map((p) => (
                     <li key={p.path} className="flex justify-between text-xs">
-                      <span className="text-gray-700">
+                      {/* 경로 원문(/api/...)은 마우스를 올리면 보이게 한다 */}
+                      <span className="text-gray-700" title={p.path}>
                         {PATH_LABEL[p.path] ?? p.path}
-                        {PATH_LABEL[p.path] && (
-                          <span className="ml-1 text-[10px] text-gray-400">({p.path})</span>
-                        )}
                       </span>
                       <span className="tabular-nums text-gray-600">{num(p.count)}</span>
                     </li>
@@ -186,7 +195,7 @@ export default function TrafficCard({ getToken }: Props) {
             {/* 상위 식별자 = 남용 감지용. 자동 차단 없음 (오탐 시 정상 사용자 차단 위험) */}
             <div>
               <h4 className="text-xs font-medium text-gray-500 mb-1.5">
-                가장 많이 쓴 사람 (최근 1시간)
+                가장 많이 쓴 방문자 (익명 번호 · 최근 1시간)
               </h4>
               {!hourWindow || hourWindow.top_identities.length === 0 ? (
                 <p className="text-xs text-gray-500">아직 집계된 요청이 없습니다</p>

@@ -22,6 +22,9 @@ test.describe("admin sub-pages", () => {
     // StatsCards 는 토큰 취득 → /api/admin/stats/detailed(mock) 순으로 비동기 렌더된다.
     // 카드가 뜨기 전에 찍으면 페이지 높이가 달라져 baseline 과 어긋나는 경합(세션 396, PR #480 CI 1회 실패)
     // — 다른 admin 시각 스펙처럼 mock 데이터가 화면에 보인 뒤 찍는다.
+    // 관리자 화면 리뉴얼(A4): 대시보드에서 뺀 숫자(24시간 오류·채워진 비율·가치 점수)가 이 화면의
+    // "숫자 자세히 보기" 소제목 아래로 옮겨 왔다 — 소제목까지 보인 뒤 찍는다.
+    await expect(page.getByText("숫자 자세히 보기")).toBeVisible();
     await expect(page.getByText("단지 수")).toBeVisible();
     await expect(page.getByText("1,234")).toBeVisible();
 
@@ -35,6 +38,7 @@ test.describe("admin sub-pages", () => {
     await page.goto("/admin/users");
 
     await expect(page.getByRole("heading", { name: "사용자 관리" })).toBeVisible();
+    // 관리자 화면 리뉴얼(A4): 필터가 "사용자 목록" 카드 머리로 옮겨졌다 — 첫 combobox 는 여전히 역할 필터다
     await expect(page.getByRole("combobox").first()).toBeVisible();
 
     // UserTable 에 mock 사용자 2명 (admin/expert) 렌더
@@ -51,6 +55,8 @@ test.describe("admin sub-pages", () => {
     await page.goto("/admin/settings");
 
     await expect(page.getByRole("heading", { name: "시스템 설정" })).toBeVisible();
+    // 관리자 화면 리뉴얼(A4): 맨 위 경고 배너 — 원문 key 는 우리말 이름 아래 작게 남는다
+    await expect(page.getByText("저장 전에 읽어 주세요.")).toBeVisible();
     await expect(page.getByText("scheduler.popular_batch_size")).toBeVisible();
     await expect(page.getByText("crawl.throttle_ms")).toBeVisible();
 

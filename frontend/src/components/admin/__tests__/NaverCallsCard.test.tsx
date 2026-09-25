@@ -55,7 +55,7 @@ describe("NaverCallsCard 컴포넌트", () => {
     await waitFor(() => {
       expect(screen.getByText("검색")).toBeInTheDocument();
     });
-    expect(screen.getByText("매물 목록 (배치)")).toBeInTheDocument();
+    expect(screen.getByText("매물 목록 (자동)")).toBeInTheDocument();
     expect(screen.getByText("매물 상세 (실시간)")).toBeInTheDocument();
 
     // 24h 합계 650 이 tfoot 에 표시
@@ -64,7 +64,7 @@ describe("NaverCallsCard 컴포넌트", () => {
     // 정렬 검증: 첫 tbody 행이 24h 가장 큰 crawl_articles_batch(500)
     const rows = screen.getAllByRole("row");
     // [thead, batch(500), search(100), detail(50), tfoot]
-    expect(rows[1]).toHaveTextContent("매물 목록 (배치)");
+    expect(rows[1]).toHaveTextContent("매물 목록 (자동)");
     expect(rows[2]).toHaveTextContent("검색");
     expect(rows[3]).toHaveTextContent("매물 상세 (실시간)");
   });
@@ -105,9 +105,9 @@ describe("NaverCallsCard 컴포넌트", () => {
     });
     const { unmount } = renderWithProvider();
     await waitFor(() => {
-      expect(screen.getByText("가동 2시간 0분")).toBeInTheDocument();
+      expect(screen.getByText("켜진 지 2시간 0분")).toBeInTheDocument();
     });
-    const badge = screen.getByText("가동 2시간 0분");
+    const badge = screen.getByText("켜진 지 2시간 0분");
     expect(badge.className).toContain("bg-amber-50");
     unmount();
 
@@ -119,9 +119,9 @@ describe("NaverCallsCard 컴포넌트", () => {
     });
     renderWithProvider();
     await waitFor(() => {
-      expect(screen.getByText("가동 1일 1시간")).toBeInTheDocument();
+      expect(screen.getByText("켜진 지 1일 1시간")).toBeInTheDocument();
     });
-    const greenBadge = screen.getByText("가동 1일 1시간");
+    const greenBadge = screen.getByText("켜진 지 1일 1시간");
     expect(greenBadge.className).toContain("bg-green-50");
   });
 });

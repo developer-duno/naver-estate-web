@@ -31,7 +31,7 @@ export default function QuotaStatusCard({ token }: Props) {
 
   return (
     <AdminCard
-      title="공공데이터 API 쿼터 (오늘 사용량)"
+      title="공공데이터 하루 사용량"
       help="국토교통부·에어코리아 등 공공데이터를 오늘 몇 번 받아왔는지 보여줘요. 하루 한도 10,000회를 넘으면 수집이 멈춰요. 매월 10일이 토요일이면 같은 열쇠를 쓰는 자매 서비스 8,500회 + 토요일 실거래가 3,600회 = 12,100회로 한도를 넘길 위험이 있어서, 그날은 실거래가 수집을 자동으로 건너뛰어요."
       action={
         showStatusChip ? (

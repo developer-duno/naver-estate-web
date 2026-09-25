@@ -91,3 +91,38 @@ describe("VerificationReview 컴포넌트", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "거부 사유 입력" })).not.toBeInTheDocument());
   });
 });
+
+describe("VerificationReview 우리말 문구 (관리자 화면 리뉴얼 A4)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("'국토부 미매칭' 은 풀어 쓴 문구로 보이고 원문은 title 에 남는다", async () => {
+    mockGet.mockResolvedValue(page([fixture({ broker_verified: false, broker_status: "국토부 미매칭" })]));
+    renderReview();
+    const chip = await screen.findByText("국토부 중개사무소 목록에서 못 찾음");
+    expect(chip).toHaveAttribute("title", "국토부 미매칭");
+  });
+
+  it("이미 우리말인 V-WORLD 상태명(예: 휴업)은 그대로, 값이 없으면 '미확인'", async () => {
+    mockGet.mockResolvedValue(
+      page([
+        fixture({ id: 1, broker_verified: false, broker_status: "휴업" }),
+        fixture({ id: 2, email: "b@example.com", broker_verified: false, broker_status: null }),
+      ]),
+    );
+    renderReview();
+    expect(await screen.findByText("휴업")).toBeInTheDocument();
+    expect(screen.getByText("미확인")).toBeInTheDocument();
+  });
+
+  it("도움말(ⓘ)을 열면 승인은 바로 반영, 거부는 사유가 필요하다고 알린다", async () => {
+    mockGet.mockResolvedValue(page([fixture()]));
+    renderReview();
+    await screen.findByText("agent@example.com");
+    expect(screen.queryByText(/승인은 바로 반영돼요/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "설명 보기" }));
+    expect(screen.getByText(/승인은 바로 반영돼요/)).toBeInTheDocument();
+    expect(screen.getByText(/거부는 사유를 적어야/)).toBeInTheDocument();
+  });
+});

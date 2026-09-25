@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { getAdminVerifications, approveVerification, rejectVerification } from "@/lib/api";
 import type { AgentVerification } from "@/types/admin";
+import { getBrokerStatusLabel } from "@/lib/admin-labels";
 import AdminCard from "./AdminCard";
 
 interface Props {
@@ -83,7 +84,10 @@ export default function VerificationReview({ token }: Props) {
   if (items.length === 0) return null;
 
   return (
-    <AdminCard title={`검증 심사 대기 (${data?.total ?? 0}건)`}>
+    <AdminCard
+      title={`검증 심사 대기 (${data?.total ?? 0}건)`}
+      help="승인은 바로 반영돼요 — 이 사람이 전문가로 바뀌어 구독자 자료를 볼 수 있게 되고, 승인 안내 메일이 나가요. 거부는 사유를 적어야 하고, 적은 사유가 메일로 전달돼요"
+    >
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -116,8 +120,9 @@ export default function VerificationReview({ token }: Props) {
                       국토부 확인됨
                     </span>
                   ) : (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
-                      {v.broker_status ?? "미확인"}
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700"
+                      title={v.broker_status ?? undefined}>
+                      {getBrokerStatusLabel(v.broker_status)}
                     </span>
                   )}
                 </td>

@@ -28,6 +28,28 @@ const PERIOD_PRESETS = [
   { label: "무기한", months: 0 },
 ];
 
+/**
+ * 되돌리기 어려운 변경(정지·거부·관리자 승격) 직전 확인 문구. 확인이 필요 없으면 null.
+ * 근거(백엔드 원문): PATCH /api/admin/users/{id} 는 저장 직후 프로필 캐시를 지워 즉시 반영한다
+ * (routers/admin/users.py). 정지 = 로그인 사용자 확인 단계에서 403(deps.py "계정이 정지되었습니다"),
+ * 거부 = 승인 필요 자료에서 403(deps.py get_approved_user), 관리자 = 관리자 전용 기능 전부 통과.
+ */
+function riskyChangeMessage(
+  who: string,
+  change: { role?: string; status?: string },
+): string | null {
+  if (change.status === "suspended") {
+    return `${who}님을 정지하면 바로 이 사이트의 조회가 모두 막혀요(로그인해도 쓸 수 없어요). 계속할까요?`;
+  }
+  if (change.status === "rejected") {
+    return `${who}님을 거부하면 바로 구독자 전용 자료를 볼 수 없게 돼요. 계속할까요?`;
+  }
+  if (change.role === "admin") {
+    return `${who}님을 관리자로 올리면 바로 관리자 화면 전체(사용자 정지·설정 바꾸기 포함)를 쓸 수 있어요. 계속할까요?`;
+  }
+  return null;
+}
+
 function getRemainingDays(approvedUntil?: string | null): string {
   if (!approvedUntil) return "무기한";
   const expiry = new Date(approvedUntil);
@@ -87,7 +109,12 @@ export default function UserTable({ users, onUpdate }: Props) {
   const [approvalModal, setApprovalModal] = useState<string | null>(null);
   const approvalDialogRef = useDialogA11y(approvalModal !== null, () => setApprovalModal(null));
 
-  const handleRoleChange = async (userId: string, role: string) => {
+  // 확인창에서 취소하면 onUpdate 를 부르지 않는다 — select 는 제어 컴포넌트(value={u.role})라
+  // 상태가 안 바뀌면 React 가 화면 값을 원래 값으로 되돌린다.
+  const handleRoleChange = async (user: UserProfile, role: string) => {
+    const userId = user.user_id;
+    const msg = riskyChangeMessage(user.display_name || user.email, { role });
+    if (msg && !confirm(msg)) return;
     setUpdating(userId);
     try {
       await onUpdate(userId, { role: role as UserUpdatePayload["role"] });
@@ -96,11 +123,14 @@ export default function UserTable({ users, onUpdate }: Props) {
     }
   };
 
-  const handleStatusChange = async (userId: string, newStatus: string) => {
+  const handleStatusChange = async (user: UserProfile, newStatus: string) => {
+    const userId = user.user_id;
     if (newStatus === "approved") {
       setApprovalModal(userId);
       return;
     }
+    const msg = riskyChangeMessage(user.display_name || user.email, { status: newStatus });
+    if (msg && !confirm(msg)) return;
     setUpdating(userId);
     try {
       await onUpdate(userId, { status: newStatus as UserUpdatePayload["status"] });
@@ -146,7 +176,7 @@ export default function UserTable({ users, onUpdate }: Props) {
               <td className="py-2 pr-4">
                 <select
                   value={u.role}
-                  onChange={(e) => handleRoleChange(u.user_id, e.target.value)}
+                  onChange={(e) => handleRoleChange(u, e.target.value)}
                   disabled={updating === u.user_id}
                   className="text-xs border rounded px-1.5 py-0.5"
                 >
@@ -158,7 +188,7 @@ export default function UserTable({ users, onUpdate }: Props) {
               <td className="py-2 pr-4">
                 <select
                   value={u.status}
-                  onChange={(e) => handleStatusChange(u.user_id, e.target.value)}
+                  onChange={(e) => handleStatusChange(u, e.target.value)}
                   disabled={updating === u.user_id}
                   className={`text-xs border rounded px-1.5 py-0.5 ${STATUS_COLORS[u.status] || ""}`}
                 >

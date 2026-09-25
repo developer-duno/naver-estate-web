@@ -35,10 +35,13 @@ function JobSummary({ item }: { item: DataFreshnessItem }) {
     return <span className="text-gray-400">정기 작업 없음</span>;
   }
   const { processed_items, total_items, completed_at } = item.last_job;
-  const ratio = total_items > 0 ? `${processed_items}/${total_items}` : `${processed_items}건`;
+  const ratio =
+    total_items > 0
+      ? `${total_items.toLocaleString()}건 중 ${processed_items.toLocaleString()}건 처리`
+      : `${processed_items.toLocaleString()}건 처리`;
   return (
     <span className="tabular-nums">
-      {formatRelativeKo(completed_at)} · 처리 {ratio}
+      {formatRelativeKo(completed_at)} · {ratio}
       {item.new_rows !== null && (
         <>
           {" · "}
@@ -91,7 +94,7 @@ export default function DataFreshnessCard({ token }: Props) {
   return (
     <AdminCard title="데이터 신선도" help={HELP_TEXT}>
       <p className="text-xs text-gray-500 mb-2">
-        <span className="font-medium text-gray-600">처리 N/M</span> = 이번 작업이 끝낸 건수 / 처리 대상이었던 전체 건수 ·{" "}
+        <span className="font-medium text-gray-600">M건 중 N건 처리</span> = 처리 대상이었던 전체 M건 가운데 이번 작업이 끝낸 N건 ·{" "}
         <span className="font-medium text-gray-600">신규 K건</span> = 그중 진짜로 새로 들어온 데이터 수
       </p>
       <ul className="divide-y divide-gray-100">
@@ -121,7 +124,7 @@ export default function DataFreshnessCard({ token }: Props) {
         ))}
       </ul>
       <div className="text-xs text-gray-400 mt-3 space-y-0.5">
-        <p>● 정상 = 작업 주기 이내 · ● 주의 = 1.5배 초과 · ● 지연 = 3배 초과</p>
+        <p>● 정상 = 작업 주기 이내 · ● 주의 = 예상보다 1.5배 넘게 늦음 · ● 지연 = 3배 넘게 늦음</p>
         <p>헛바퀴 의심 = 작업은 돌았는데 처리 0건 또는 신규 0건</p>
       </div>
     </AdminCard>

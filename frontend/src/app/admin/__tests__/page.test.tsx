@@ -1,13 +1,15 @@
 /**
- * 관리자 대시보드 "최근 활동" 카드 회귀 가드 (PR-R1)
+ * 관리자 대시보드 회귀 가드 — "최근 활동" 카드(PR-R1) + 4층 배치(세션 419)
  * 실행: npx vitest run src/app/admin/__tests__/page.test.tsx
  *
  * 감사 로그 탭(AuditLogTable)이 이미 쓰는 admin-labels 유틸을 대시보드 카드도 써서
  * 탭 간 표기를 통일한다 — 코드 원문(admin_user_update, user:abc) 노출 금지.
- * 자식 카드 11종은 같은 @/lib/api 목으로 덮여 각자의 로딩·빈 상태로 렌더된다.
+ * 자식 카드들은 같은 @/lib/api 목으로 덮여 각자의 로딩·빈 상태로 렌더된다.
+ * ⚠ 목 이름은 카드가 실제로 부르는 함수 이름과 같아야 한다 — 옛 목에는 존재하지 않는
+ *   `getAdminSchedulerStatus` 가 있고 실제 이름(getSchedulerStatus 등)이 빠져 있었다(세션 419 정정).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 import AdminDashboard from "../page";
 import type { AuditLog, DetailedStats, PaginatedResponse } from "@/types/admin";
@@ -24,18 +26,41 @@ vi.mock("@/lib/api", () => ({
   getRecrawlProgress: vi.fn(),
   runRecrawlArticles: vi.fn(),
   triggerCollection: vi.fn(),
-  getAdminSchedulerStatus: vi.fn(),
+  getSchedulerStatus: vi.fn(),
+  getAdminTraffic: vi.fn(),
+  getAdminVerifications: vi.fn(),
   getAdminUsers: vi.fn(),
+}));
+
+const pushMock = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: pushMock, replace: vi.fn(), refresh: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => "/admin",
+  useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({}),
 }));
 
 vi.mock("@/hooks/useAdminQuery", () => ({
   useTokenReady: () => ({ token: "test-token", getToken: vi.fn(async () => "test-token") }),
 }));
 
-import { getAdminDetailedStats, getAdminAuditLogs } from "@/lib/api";
+import {
+  getAdminDetailedStats,
+  getAdminAuditLogs,
+  getSchedulerStatus,
+  getAdminTraffic,
+  getAdminNaverCalls,
+  getAdminCrawlFailures,
+  getAdminCrawlJobs,
+} from "@/lib/api";
 
 const mockStats = vi.mocked(getAdminDetailedStats);
 const mockLogs = vi.mocked(getAdminAuditLogs);
+const mockScheduler = vi.mocked(getSchedulerStatus);
+const mockTraffic = vi.mocked(getAdminTraffic);
+const mockNaver = vi.mocked(getAdminNaverCalls);
+const mockFailures = vi.mocked(getAdminCrawlFailures);
+const mockJobs = vi.mocked(getAdminCrawlJobs);
 
 const emptyStats: DetailedStats = {
   complex_count: 0,
@@ -108,5 +133,76 @@ describe("AdminDashboard 최근 활동", () => {
     await waitFor(() => {
       expect(screen.getByText("활동 기록이 없습니다")).toBeInTheDocument();
     });
+  });
+});
+
+describe("AdminDashboard 4층 배치 (세션 419)", () => {
+  const SECTION_TITLES = [
+    "자동 작업 현황",
+    "데이터 신선도",
+    "실패 자세히 (최근 24시간)",
+    "네이버 호출 횟수",
+    "방문·요청 통계",
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    window.history.replaceState(null, "", window.location.pathname);
+    // 24시간 오류 3건 — compact 라 대시보드엔 보이지 않아야 한다
+    mockStats.mockResolvedValue({ ...emptyStats, complex_count: 1234, error_count_24h: 3 });
+    mockLogs.mockResolvedValue(mkLogPage([]));
+    mockJobs.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 });
+    mockFailures.mockResolvedValue({
+      window_hours: 24,
+      total: 2,
+      items: [{ job_type: "complex_articles", count: 2, last_error: null, last_failed_at: null }],
+    });
+  });
+
+  it("1층 '지금 상태' 카드 + 지금 돌아가는 작업 한 줄, 좌측 목차·우측 라이브 패널은 없다", async () => {
+    renderDashboard();
+    expect(screen.getByRole("heading", { name: "지금 상태" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText("지금 돌아가는 작업 없음")).toBeInTheDocument();
+    });
+    expect(mockJobs).toHaveBeenCalledWith("test-token", { status: "running" });
+    // 옛 좌측 목차·우측 라이브 패널 (파일째 삭제)
+    expect(screen.queryByLabelText("실시간 운영 신호")).toBeNull();
+    expect(screen.queryByText("최근 실패 5건 (24h)")).toBeNull();
+  });
+
+  it("2층 숫자는 4칸만 — 24시간 오류·채워진 비율은 대시보드에 없다", async () => {
+    renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByText("1,234")).toBeInTheDocument();
+    });
+    expect(screen.getByText("오늘 수집")).toBeInTheDocument();
+    expect(screen.queryByText(/최근 24시간 오류/)).toBeNull();
+    expect(screen.queryByText("채워진 비율")).toBeNull();
+  });
+
+  it("3층 절 5개는 기본 접힘 — 안쪽 카드의 API 를 부르지 않는다", async () => {
+    renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByText("지금 돌아가는 작업 없음")).toBeInTheDocument();
+    });
+    for (const t of SECTION_TITLES) {
+      expect(screen.getByText(t)).toBeInTheDocument();
+    }
+    expect(screen.getAllByText(/펼치기/)).toHaveLength(SECTION_TITLES.length);
+    expect(mockScheduler).not.toHaveBeenCalled();
+    expect(mockTraffic).not.toHaveBeenCalled();
+    expect(mockNaver).not.toHaveBeenCalled();
+    // 24시간 실패는 절 안에서만 부른다 (이번 주 카드는 168시간을 부른다)
+    expect(mockFailures).not.toHaveBeenCalledWith("test-token", 24);
+  });
+
+  it("실패 절을 열고 유형을 누르면 /admin/crawl 로 '실패 + 그 유형' 필터를 들고 간다", async () => {
+    renderDashboard();
+    fireEvent.click(screen.getByText("실패 자세히 (최근 24시간)"));
+    const row = await screen.findByRole("button", { name: /단지 매물 가져오기 2건 실패/ });
+    expect(mockFailures).toHaveBeenCalledWith("test-token", 24);
+    fireEvent.click(row);
+    expect(pushMock).toHaveBeenCalledWith("/admin/crawl?status=failed&job_type=complex_articles");
   });
 });

@@ -82,7 +82,7 @@ function renderWithProvider() {
 
 describe("SchedulerMonitor 컴포넌트", () => {
   /** 정상 렌더링 — 제목과 요약 표시 */
-  it("스케줄러 모니터링 제목과 요약이 표시된다", async () => {
+  it("자동 작업 현황 제목과 요약이 표시된다", async () => {
     mockGetStatus.mockResolvedValueOnce(MOCK_RESPONSE);
     const { container } = renderWithProvider();
     // "스케줄러 모니터링" 타이틀은 isLoading 분기에서도 AdminCard 헤더로 즉시 렌더되므로,
@@ -90,7 +90,9 @@ describe("SchedulerMonitor 컴포넌트", () => {
     await waitFor(() => {
       expect(screen.getByText("에어코리아 대기질")).toBeInTheDocument();
     });
-    expect(screen.getByText("스케줄러 모니터링")).toBeInTheDocument();
+    expect(screen.getByText("자동 작업 현황")).toBeInTheDocument();
+    // 열 이름도 우리말 (세션 419: 스케줄 → 주기)
+    expect(screen.getByText("주기")).toBeInTheDocument();
     // summary 는 <span> 안에 내부 <span> 이 중첩되어 있어 getByText 가 다중 요소로 판단함 → textContent 포함 검증
     expect(container.textContent).toContain("오늘 3회 실행");
     expect(container.textContent).toContain("1건 실패");
@@ -149,17 +151,18 @@ describe("SchedulerMonitor 컴포넌트", () => {
     });
 
     // 에러 메시지가 처음에는 안 보임
-    expect(screen.queryByText("API 연결 실패: timeout")).not.toBeInTheDocument();
+    expect(screen.queryByText("알 수 없는 오류 (원문은 마우스를 올려 보세요)")).not.toBeInTheDocument();
 
     // 실패 행 클릭
     const failedRow = screen.getByText("범죄통계").closest("tr");
     expect(failedRow).not.toBeNull();
     fireEvent.click(failedRow!);
 
-    // 에러 메시지 표시
+    // 에러 메시지 표시 (MOCK 은 error_plain 없음 → 고정 문구 + title 원문)
     await waitFor(() => {
-      expect(screen.getByText("API 연결 실패: timeout")).toBeInTheDocument();
+      expect(screen.getByText("알 수 없는 오류 (원문은 마우스를 올려 보세요)")).toBeInTheDocument();
     });
+    expect(screen.getByText("알 수 없는 오류 (원문은 마우스를 올려 보세요)")).toHaveAttribute("title", "API 연결 실패: timeout");
   });
 
   /** 펼침 영역은 쉬운 우리말(error_plain)을 보여주고 원문은 title 로 남긴다 (세션 411) */
@@ -200,8 +203,8 @@ describe("SchedulerMonitor 컴포넌트", () => {
     expect(screen.getByText(plain).getAttribute("title")).toBe(raw);
   });
 
-  /** 옛 백엔드(error_plain 없음)면 원문으로 폴백 — 화면이 비지 않는다 */
-  it("error_plain 이 없으면 원문으로 폴백한다", async () => {
+  /** 옛 백엔드(error_plain 없음)면 원문 대신 고정 문구 — 화면이 비지도, 영어 원문이 드러나지도 않는다 (세션 419) */
+  it("error_plain 이 없으면 고정 문구를 보이고 원문은 title 로만 둔다", async () => {
     const raw = "API 연결 실패: timeout";
     mockGetStatus.mockResolvedValueOnce(MOCK_RESPONSE);
     renderWithProvider();
@@ -211,12 +214,14 @@ describe("SchedulerMonitor 컴포넌트", () => {
     fireEvent.click(screen.getByText("범죄통계").closest("tr")!);
 
     await waitFor(() => {
-      expect(screen.getByText(raw)).toBeInTheDocument();
+      expect(screen.getByText("알 수 없는 오류 (원문은 마우스를 올려 보세요)")).toBeInTheDocument();
     });
+    expect(screen.queryByText(raw)).toBeNull();
+    expect(screen.getByText("알 수 없는 오류 (원문은 마우스를 올려 보세요)")).toHaveAttribute("title", raw);
   });
 
-  /** error_plain 이 빈 문자열이어도 원문으로 폴백 — `??` 였다면 화면이 비어 버린다 (세션 411) */
-  it("error_plain 이 빈 문자열이면 원문으로 폴백한다", async () => {
+  /** error_plain 이 빈 문자열이어도 고정 문구 — `??` 였다면 화면이 비어 버린다 (세션 411·419) */
+  it("error_plain 이 빈 문자열이면 고정 문구로 폴백한다", async () => {
     const raw = "API 연결 실패: timeout";
     mockGetStatus.mockResolvedValueOnce({
       ...MOCK_RESPONSE,
@@ -234,8 +239,9 @@ describe("SchedulerMonitor 컴포넌트", () => {
     fireEvent.click(screen.getByText("범죄통계").closest("tr")!);
 
     await waitFor(() => {
-      expect(screen.getByText(raw)).toBeInTheDocument();
+      expect(screen.getByText("알 수 없는 오류 (원문은 마우스를 올려 보세요)")).toBeInTheDocument();
     });
+    expect(screen.queryByText(raw)).toBeNull();
   });
 
   /** API 에러 시 에러 메시지 표시 */
@@ -243,7 +249,7 @@ describe("SchedulerMonitor 컴포넌트", () => {
     mockGetStatus.mockRejectedValueOnce(new Error("네트워크 에러"));
     renderWithProvider();
     await waitFor(() => {
-      expect(screen.getByText(/스케줄러 상태를 불러오지 못했어요/)).toBeInTheDocument();
+      expect(screen.getByText(/자동 작업 현황을 불러오지 못했어요/)).toBeInTheDocument();
     });
     // 개발자 에러 원문은 사장님 화면에 노출하지 않는다 (세션 410)
     expect(screen.queryByText(/네트워크 에러/)).toBeNull();
@@ -256,8 +262,8 @@ describe("SchedulerMonitor 컴포넌트", () => {
     await waitFor(() => {
       expect(screen.getByText("에어코리아 대기질")).toBeInTheDocument();
     });
-    expect(screen.getByText("출처: 에어코리아 실시간 대기질")).toBeInTheDocument();
-    expect(screen.getByText("출처: 경찰청 범죄통계 (3074462)")).toBeInTheDocument();
+    expect(screen.getByText("자료 출처: 에어코리아 실시간 대기질")).toBeInTheDocument();
+    expect(screen.getByText("자료 출처: 경찰청 범죄통계 (3074462)")).toBeInTheDocument();
   });
 
   /** source 가 null 이어도 렌더가 깨지지 않는다 */
@@ -280,7 +286,7 @@ describe("SchedulerMonitor 컴포넌트", () => {
     });
     renderWithProvider();
     await waitFor(() => {
-      expect(screen.getByText("등록된 스케줄러 작업이 없습니다")).toBeInTheDocument();
+      expect(screen.getByText("등록된 자동 작업이 없습니다")).toBeInTheDocument();
     });
   });
 });

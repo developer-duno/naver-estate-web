@@ -7,9 +7,9 @@ import { jobTypeLabel, jobTypeDesc, CRAWL_JOB_LABELS } from "../crawl-job-labels
 
 describe("crawl-job-labels", () => {
   it("등록된 코드는 한글 라벨로 변환", () => {
-    expect(jobTypeLabel("complex_articles")).toBe("단지 매물 수집");
-    expect(jobTypeLabel("price_history")).toBe("시세 이력 수집");
-    expect(jobTypeLabel("public_trade_data")).toBe("공공 실거래가 수집");
+    expect(jobTypeLabel("complex_articles")).toBe("단지 매물 가져오기");
+    expect(jobTypeLabel("price_history")).toBe("단지 시세 기록 모으기");
+    expect(jobTypeLabel("public_trade_data")).toBe("정부 실거래가 받기");
   });
 
   it("미등록 코드는 입력 그대로 반환 (안전한 fallback)", () => {

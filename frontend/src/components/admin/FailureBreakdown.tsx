@@ -73,10 +73,10 @@ export default function FailureBreakdown({ token, onJumpToFailed }: Props) {
               className="w-full text-left py-3 px-1 hover:bg-gray-50 transition flex flex-wrap gap-x-3 gap-y-1 items-baseline"
               aria-label={`${jobTypeLabel(it.job_type)} ${it.count}건 실패 — 클릭 시 해당 유형 실패 작업으로 이동`}
             >
-              <span className="font-medium text-gray-800">
+              {/* 작업 코드 원문(job_type)은 본문에 두지 않고 마우스를 올리면 보이게 한다 */}
+              <span className="font-medium text-gray-800" title={it.job_type}>
                 {jobTypeLabel(it.job_type)}
               </span>
-              <span className="text-xs text-gray-400">{it.job_type}</span>
               <span className="text-red-700 font-semibold ml-auto">
                 {it.count}건
               </span>
@@ -90,9 +90,18 @@ export default function FailureBreakdown({ token, onJumpToFailed }: Props) {
                   {jobTypeDesc(it.job_type)}
                 </span>
               )}
+              {/* 우리말 번역(last_error_plain)이 오면 그것을 본문에, 원문은 늘 title 로.
+                  번역이 없으면(옛 백엔드·빈 문자열) 영어 원문을 본문에 두지 않고 고정 문구만 —
+                  작업 목록 표(CrawlJobTable)도 오류를 보여 주지 않으므로 "목록에서 확인" 이라고 쓰지 않는다.
+                  `||` 인 이유: `??` 는 빈 문자열을 통과시켜 본문이 비어 버린다. */}
               {it.last_error && (
-                <span className="text-xs text-gray-600 w-full bg-gray-50 rounded px-2 py-1 mt-1 leading-snug break-words">
-                  최근 오류: {it.last_error}
+                <span
+                  className="text-xs text-gray-600 w-full bg-gray-50 rounded px-2 py-1 mt-1 leading-snug break-words"
+                  title={it.last_error}
+                >
+                  {it.last_error_plain
+                    ? `최근 오류: ${it.last_error_plain}`
+                    : "최근 오류 기록 있음 — 마우스를 올리면 원문이 보여요"}
                 </span>
               )}
             </button>

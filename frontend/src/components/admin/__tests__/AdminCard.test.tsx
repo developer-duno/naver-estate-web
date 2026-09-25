@@ -3,7 +3,7 @@
  * 실행: npx vitest run src/components/admin/__tests__/AdminCard.test.tsx
  */
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import AdminCard from "../AdminCard";
 
 describe("AdminCard", () => {
@@ -43,23 +43,38 @@ describe("AdminCard", () => {
     expect(screen.queryByRole("button")).toBeNull();
   });
 
-  /** help prop: ⓘ 는 aria-hidden 장식, 도움말 텍스트는 항상 보이는 캡션 p 가 단독 노출
-   *  (스크린리더 중복 읽기 방지 — 세션 287 적대검증 답습) */
-  it("help prop 이 있으면 ⓘ(aria-hidden 장식) + 캡션 텍스트 단독 노출", () => {
+  /** help prop: 도움말은 기본 접힘 — ⓘ 버튼을 눌러야 보인다 (세션 419, 사장님 "난잡하다").
+   *  문구는 지우지 않고(운영 지식) 조건부 렌더로 숨긴다 — 닫힌 동안 DOM 에 없어 스크린리더도 조용. */
+  it("help 는 기본 숨김이고 ⓘ 버튼을 누르면 보이며 다시 누르면 숨는다", () => {
     render(
       <AdminCard title="도움말 카드" help="이건 도움말 텍스트입니다">
         <p>body</p>
       </AdminCard>,
     );
-    // 캡션이 항상 보이는 회색 텍스트로 렌더 (sighted + 스크린리더 모두 1회 노출)
+    const btn = screen.getByRole("button", { name: "설명 보기" });
+    // 열기 전: 문구 없음 + aria-expanded=false
+    expect(screen.queryByText("이건 도움말 텍스트입니다")).toBeNull();
+    expect(btn).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.click(btn);
     expect(screen.getByText("이건 도움말 텍스트입니다")).toBeInTheDocument();
-    // ⓘ 는 장식이라 role=img 로 노출되지 않음 (aria-hidden → 스크린리더가 무시, help 중복 읽기 방지)
-    expect(screen.queryByRole("img")).toBeNull();
-    // ⓘ 글리프 자체는 시각적으로 존재
-    expect(screen.getByText("ⓘ")).toBeInTheDocument();
+    expect(btn).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.click(btn);
+    expect(screen.queryByText("이건 도움말 텍스트입니다")).toBeNull();
   });
 
-  /** help 미지정: ⓘ 글리프 미렌더 */
+  /** 버튼이 제목(h3) 밖에 있어 제목의 접근 이름에 "설명 보기"가 섞이지 않는다 */
+  it("help 가 있어도 제목 heading 의 이름은 제목 그대로다", () => {
+    render(
+      <AdminCard title="도움말 카드" help="설명">
+        <p>body</p>
+      </AdminCard>,
+    );
+    expect(screen.getByRole("heading", { level: 3, name: "도움말 카드" })).toBeInTheDocument();
+  });
+
+  /** help 미지정: ⓘ 버튼 미렌더 */
   it("help 미지정 시 ⓘ 미렌더", () => {
     render(
       <AdminCard title="기본 카드">

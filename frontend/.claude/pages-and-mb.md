@@ -28,6 +28,14 @@
 |--------|---------|-------------|
 | `/login`, `/signup`, `/verify` | Supabase Auth + `/api/users/login-record` | `/api/users/*` |
 | `/admin` (+ /admin/users/scheduler/etc) | `getAdminDetailedStats()`, `getAdminUsers()`, FreshnessCard 등 | `/api/admin/*` |
+
+> **관리자 화면 구조(세션 419, PR #584 — 리뉴얼 A2·A3·A4)**: `/admin` 대시보드는 세로 한 열 **4층**이다 —
+> ① 지금 상태(`HealthSummary` 한 줄 + `RunningJobsLine` 실행 중 작업 15초 갱신) / 이번 주 챙길 일 ② 숫자(`StatsCards compact` 4칸 + `QuotaStatusCard`)
+> ③ 원인 5절(`AdminSection` = `<details>` 기반, 기본 접힘, **펼쳤을 때만 안쪽 렌더 = 접힌 동안 API 0**, `#id` 해시로 자동 열림: 자동 작업 현황·데이터 신선도·실패 자세히·네이버 호출·방문·요청 통계)
+> ④ 작업(`CollectorTrigger`/`BulkRecrawlCard`) + 최근 활동. 옛 3열(좌 `AdminLeftNav` 목차·우 `AdminLivePanel`)은 삭제됐다(경위 = `docs/archive/superpowers/2026-05-28-pr-6e-admin-dashboard-3column-design.md` 머리 주석).
+> `AdminCard` 의 `help` 는 ⓘ 버튼(`aria-label="설명 보기"`) 토글로 기본 숨김 — 문구는 그대로 보존. 24시간 오류·채워진 비율·가치 점수는 `/admin/data` "숫자 자세히 보기" 로 이동.
+> 하위 화면 규칙: 필터는 **목록 카드 헤더(`AdminCard action`)** 에 둔다(크롤·사용자·감사 로그·달력 통일) · 되돌릴 수 없는 조작(정지·거부·관리자 승격·크롤 취소·설정 저장)은 `window.confirm` + 무엇이 바뀌는지 한 줄 · 개발자 원문(job_type·영어 오류·ms·4xx)은 본문에 두지 않고 `title` 로만.
+> 작업 이름 사전 `src/lib/crawl-job-labels.ts` 의 `label` 은 BE `crawler/plain_words.py JOB_WORDS` 와 **글자까지 동일**해야 한다(가드 `crawl-job-labels-sync.test.ts` 가 BE 파일을 읽어 대조). 시각 회귀 baseline 4장(dashboard·data·users·settings)은 이 배치 기준(CI run 36156873895).
 | `/pricing` | 정적 (B2B 구독 안내) | — |
 | `/blog` + `/blog/[slug]` | 라인업 = `.claude/BLOG.md` (단일 진실 공급원) | — |
 

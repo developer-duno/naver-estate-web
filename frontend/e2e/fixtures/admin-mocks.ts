@@ -90,6 +90,26 @@ export const mockCrawlJobs: PaginatedResponse<CrawlJobDetail> = {
   page_size: 20,
 };
 
+/** 대시보드 1층 "지금 돌아가는 작업" 용 — `?status=running` 요청에만 돌려준다(세션 419).
+ *  다른 화면(/admin/crawl 목록)의 mockCrawlJobs 는 그대로 비워 둬 그 화면 촬영을 흔들지 않는다.
+ *  시각은 고정값이라 촬영마다 같은 글자가 나온다(화면은 한국 시각으로 고정 표기). */
+export const mockRunningCrawlJobs: PaginatedResponse<CrawlJobDetail> = {
+  items: [
+    {
+      id: 101,
+      job_type: "article_detail",
+      status: "running",
+      total_items: 500,
+      processed_items: 120,
+      started_at: "2026-04-16T13:05:00+09:00",
+      created_at: "2026-04-16T13:05:00+09:00",
+    },
+  ],
+  total: 1,
+  page: 1,
+  page_size: 20,
+};
+
 export const mockSchedulerStatus: SchedulerStatusResponse = {
   jobs: [
     {
@@ -311,7 +331,9 @@ export async function applyAdminMocks(page: Page): Promise<void> {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockAuditLogs) });
   });
   await page.route("**/api/admin/crawl-jobs*", async (route) => {
-    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockCrawlJobs) });
+    const running = new URL(route.request().url()).searchParams.get("status") === "running";
+    const body = running ? mockRunningCrawlJobs : mockCrawlJobs;
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
   });
   await page.route("**/api/admin/scheduler-status", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockSchedulerStatus) });

@@ -35,7 +35,7 @@ describe("FailureBreakdown", () => {
     });
   });
 
-  it("유형별 카운트 + 한글 라벨 + 코드명 + 마지막 오류 표시", async () => {
+  it("유형별 카운트 + 한글 라벨 표시, 코드명·오류 원문은 본문이 아니라 title 로만", async () => {
     mockGet.mockResolvedValueOnce({
       window_hours: 24,
       total: 4,
@@ -56,17 +56,56 @@ describe("FailureBreakdown", () => {
     });
     renderCard();
     await waitFor(() => {
-      expect(screen.getByText("단지 매물 수집")).toBeInTheDocument();
+      expect(screen.getByText("단지 매물 가져오기")).toBeInTheDocument();
     });
-    expect(screen.getByText("시세 이력 수집")).toBeInTheDocument();
+    expect(screen.getByText("단지 시세 기록 모으기")).toBeInTheDocument();
     expect(screen.getByText("3건")).toBeInTheDocument();
     expect(screen.getByText("1건")).toBeInTheDocument();
-    // 코드명 병기
-    expect(screen.getByText("complex_articles")).toBeInTheDocument();
-    // 최근 오류
-    expect(screen.getByText(/네이버 API 차단/)).toBeInTheDocument();
+    // 코드명은 본문에 없고 라벨의 title 로만 (세션 419 원칙 3)
+    expect(screen.queryByText("complex_articles")).toBeNull();
+    expect(screen.getByText("단지 매물 가져오기")).toHaveAttribute("title", "complex_articles");
+    // 오류 원문은 본문에 없고, 번역이 없으면 고정 안내 문구 + title 원문
+    expect(screen.queryByText(/네이버 API 차단/)).toBeNull();
+    const notes = screen.getAllByText(/최근 오류 기록 있음/);
+    expect(notes).toHaveLength(2);
+    expect(notes[0]).toHaveAttribute("title", "네이버 API 차단");
     // 카드 헤더에 총합
     expect(screen.getByRole("heading", { level: 3 })).toHaveTextContent("총 4건");
+  });
+
+  /** BE 가 last_error_plain 을 주면 그것을 본문에, 원문은 title 로. 빈 문자열이면 고정 문구로 폴백 */
+  it("last_error_plain 이 있으면 우리말을, 없거나 빈 문자열이면 고정 안내 문구를 보인다", async () => {
+    mockGet.mockResolvedValueOnce({
+      window_hours: 24,
+      total: 3,
+      items: [
+        {
+          job_type: "complex_articles",
+          count: 2,
+          last_error: "HTTPError 403 Forbidden",
+          last_error_plain: "네이버가 잠시 막았어요",
+          last_failed_at: null,
+        },
+        {
+          job_type: "price_history",
+          count: 1,
+          last_error: "psycopg2.OperationalError",
+          last_error_plain: "",
+          last_failed_at: null,
+        },
+      ],
+    });
+    renderCard();
+    await waitFor(() => {
+      expect(screen.getByText("최근 오류: 네이버가 잠시 막았어요")).toBeInTheDocument();
+    });
+    expect(screen.getByText("최근 오류: 네이버가 잠시 막았어요")).toHaveAttribute(
+      "title",
+      "HTTPError 403 Forbidden",
+    );
+    // 빈 문자열 번역 → 영어 원문이 아니라 고정 문구
+    expect(screen.queryByText(/psycopg2/)).toBeNull();
+    expect(screen.getByText(/최근 오류 기록 있음/)).toHaveAttribute("title", "psycopg2.OperationalError");
   });
 
   it("행 클릭 시 onJumpToFailed(jobType) 콜백 호출", async () => {
@@ -80,9 +119,9 @@ describe("FailureBreakdown", () => {
     const spy = vi.fn();
     renderCard(spy);
     await waitFor(() => {
-      expect(screen.getByText("단지 매물 수집")).toBeInTheDocument();
+      expect(screen.getByText("단지 매물 가져오기")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByRole("button", { name: /단지 매물 수집/ }));
+    fireEvent.click(screen.getByRole("button", { name: /단지 매물 가져오기/ }));
     expect(spy).toHaveBeenCalledWith("complex_articles");
   });
 

@@ -12,11 +12,11 @@ interface CollectorTriggerProps {
 }
 
 const COLLECTORS: { name: CollectorName; label: string; description: string }[] = [
-  { name: "crime-stats", label: "범죄통계", description: "경찰청 범죄통계 API" },
+  { name: "crime-stats", label: "범죄통계", description: "경찰청 범죄통계" },
   { name: "air-quality", label: "대기질", description: "에어코리아 대기질 측정" },
   { name: "emergency", label: "응급의료", description: "응급의료기관 정보" },
   { name: "childcare", label: "어린이집", description: "보육정보공개시스템" },
-  { name: "backfill-price", label: "실거래가 소급", description: "이력 부족 상위 단지 자동 선정" },
+  { name: "backfill-price", label: "실거래가 지난 자료 채우기", description: "기록이 적은 단지부터 알아서 골라요" },
 ];
 
 export default function CollectorTrigger({ getToken }: CollectorTriggerProps) {

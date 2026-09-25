@@ -24,7 +24,7 @@ function mkJob(overrides: Partial<CrawlJobDetail>): CrawlJobDetail {
 }
 
 describe("CrawlJobTable", () => {
-  it("job_type 코드를 한글 라벨로 표시하고 코드명을 회색으로 병기", () => {
+  it("job_type 코드를 한글 라벨로 표시하고 코드명은 title(마우스 올리면)로만 보존", () => {
     render(
       <CrawlJobTable
         jobs={[
@@ -34,12 +34,13 @@ describe("CrawlJobTable", () => {
         ]}
       />,
     );
-    expect(screen.getByText("단지 매물 수집")).toBeInTheDocument();
-    expect(screen.getByText("시세 이력 수집")).toBeInTheDocument();
-    expect(screen.getByText("공공 실거래가 수집")).toBeInTheDocument();
-    // 코드명 병기 (회색 작은 글씨)
-    expect(screen.getByText("complex_articles")).toBeInTheDocument();
-    expect(screen.getByText("price_history")).toBeInTheDocument();
+    expect(screen.getByText("단지 매물 가져오기")).toBeInTheDocument();
+    expect(screen.getByText("단지 시세 기록 모으기")).toBeInTheDocument();
+    expect(screen.getByText("정부 실거래가 받기")).toBeInTheDocument();
+    // 코드명은 본문 글자가 아니라 title 속성에만 있다 (원칙 3 — 개발자 원문은 마우스 올리면)
+    expect(screen.queryByText("complex_articles")).not.toBeInTheDocument();
+    expect(screen.getByText("단지 매물 가져오기")).toHaveAttribute("title", "complex_articles");
+    expect(screen.getByText("단지 시세 기록 모으기")).toHaveAttribute("title", "price_history");
   });
 
   it("status 코드를 한글로 표시 (running → 실행 중, failed → 실패 등)", () => {
@@ -57,11 +58,15 @@ describe("CrawlJobTable", () => {
     expect(screen.getByText("일시정지")).toBeInTheDocument();
   });
 
-  it("미등록 job_type 은 코드명 그대로 두 곳에 표시 (fallback)", () => {
+  it("미등록 job_type 은 코드명을 그대로 이름 자리에 표시 (fallback — 정보 손실 방지)", () => {
     render(<CrawlJobTable jobs={[mkJob({ id: 1, job_type: "future_unknown" })]} />);
-    // 한글 라벨 자리와 코드명 자리에 같은 문자열 노출됨
-    const all = screen.getAllByText("future_unknown");
-    expect(all.length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("future_unknown")).toHaveAttribute("title", "future_unknown");
+  });
+
+  it("모르는 상태값은 영문 원문 대신 '알 수 없음' + title 에 원문", () => {
+    render(<CrawlJobTable jobs={[mkJob({ id: 1, status: "zombie_state" })]} />);
+    expect(screen.queryByText("zombie_state")).not.toBeInTheDocument();
+    expect(screen.getByText("알 수 없음")).toHaveAttribute("title", "zombie_state");
   });
 
   it("작업 0건이면 안내 메시지", () => {

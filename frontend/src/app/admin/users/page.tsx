@@ -8,7 +8,7 @@ import AdminCard from "@/components/admin/AdminCard";
 import UserTable from "@/components/admin/UserTable";
 import UsersSummary from "@/components/admin/UsersSummary";
 import VerificationReview from "@/components/admin/VerificationReview";
-import { getAdminUsers, updateAdminUser, suspendAdminUser } from "@/lib/api";
+import { getAdminUsers, updateAdminUser } from "@/lib/api";
 import type { UserProfile, UserUpdatePayload, PaginatedResponse } from "@/types/admin";
 
 export default function AdminUsersPage() {
@@ -46,17 +46,8 @@ export default function AdminUsersPage() {
     },
   });
 
-  const suspendMutation = useMutation<{ status: string }, Error, string>({
-    mutationFn: async (userId) => {
-      const t = await getToken();
-      return suspendAdminUser(t, userId);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.admin.users() });
-    },
-  });
-
-  const error = usersQuery.error?.message ?? updateMutation.error?.message ?? suspendMutation.error?.message ?? "";
+  // 정지는 표 안 상태 select(PATCH status=suspended)로 한다 — 쓰이지 않던 별도 정지 뮤테이션은 걷어냈다
+  const error = usersQuery.error?.message ?? updateMutation.error?.message ?? "";
 
   const handleUpdate = async (userId: string, payload: UserUpdatePayload) => {
     await updateMutation.mutateAsync({ userId, payload });
@@ -73,34 +64,6 @@ export default function AdminUsersPage() {
         {token && <VerificationReview token={token} />}
       </div>
 
-      {/* 필터 */}
-      <div className="mt-6">
-        <AdminCard title="필터" help="역할(일반·전문가·관리자)이나 상태(승인·대기·정지)로 사용자 목록을 좁혀서 볼 수 있어요">
-          <div className="flex gap-3">
-            <select
-              value={filterRole}
-              onChange={(e) => { setFilterRole(e.target.value); setPage(1); }}
-              className="text-sm border rounded px-2 py-1"
-            >
-              <option value="">역할 전체</option>
-              <option value="user">일반</option>
-              <option value="expert">전문가</option>
-              <option value="admin">관리자</option>
-            </select>
-            <select
-              value={filterStatus}
-              onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
-              className="text-sm border rounded px-2 py-1"
-            >
-              <option value="">상태 전체</option>
-              <option value="approved">승인</option>
-              <option value="pending">대기</option>
-              <option value="suspended">정지</option>
-            </select>
-          </div>
-        </AdminCard>
-      </div>
-
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mt-4">{error}</div>
       )}
@@ -108,7 +71,33 @@ export default function AdminUsersPage() {
       <div className="mt-6">
         <AdminCard
           title={`사용자 목록 (총 ${usersQuery.data?.total ?? 0}명)`}
-          help="가입한 사용자 목록이에요. 표 안에서 바로 역할이나 상태를 바꿀 수 있고, 승인 버튼을 누르면 기간을 정하는 작은 창이 떠요"
+          help="가입한 사용자 목록이에요. 역할(일반·전문가·관리자)이나 상태(승인·대기·정지)로 좁혀 볼 수 있어요. 표 안에서 바로 역할이나 상태를 바꿀 수 있고, 승인을 고르면 기간을 정하는 작은 창이 떠요. 정지·거부·관리자로 올리기는 바로 반영되므로 한 번 더 묻고 나서 바꿔요"
+          action={
+            <div className="flex flex-wrap gap-2">
+              <select
+                aria-label="역할로 거르기"
+                value={filterRole}
+                onChange={(e) => { setFilterRole(e.target.value); setPage(1); }}
+                className="text-sm border rounded px-2 py-1"
+              >
+                <option value="">역할 전체</option>
+                <option value="user">일반</option>
+                <option value="expert">전문가</option>
+                <option value="admin">관리자</option>
+              </select>
+              <select
+                aria-label="상태로 거르기"
+                value={filterStatus}
+                onChange={(e) => { setFilterStatus(e.target.value); setPage(1); }}
+                className="text-sm border rounded px-2 py-1"
+              >
+                <option value="">상태 전체</option>
+                <option value="approved">승인</option>
+                <option value="pending">대기</option>
+                <option value="suspended">정지</option>
+              </select>
+            </div>
+          }
         >
           {usersQuery.isLoading ? (
             <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>

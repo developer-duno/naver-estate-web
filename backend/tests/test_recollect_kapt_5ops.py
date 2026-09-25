@@ -294,3 +294,68 @@ def test_dry_run_makes_no_calls(db, monkeypatch, capsys):
     assert result["targets"] == 1 and result["calls"] == 5 and result["days"] == 1
     out = capsys.readouterr().out
     assert "대상 1행" in out and "id=" in out
+
+
+# ① 5 op 전부 빔 — 갱신 안 함 + 계수, 연속 10행이면 종료
+def test_all_blank_row_not_updated_and_counted(db, monkeypatch):
+    blank_id = _seed(db, "1001", "A1")
+    good_id = _seed(db, "1002", "A2")
+    base = _fake_items()
+
+    def fake(base_url, op, kapt_code, search_date):
+        return None if kapt_code == "A1" else base(base_url, op, kapt_code, search_date)
+
+    monkeypatch.setattr(kapt_api, "fetch_cost_item", fake)
+    stats = _run(db)
+    db.expire_all()
+    blank = db.get(KaptManagementCost, blank_id)
+    assert blank.breakdown == _breakdown()
+    assert blank.fetched_at.replace(tzinfo=timezone.utc) == OLD_AT  # 다음 실행이 다시 시도
+    assert stats.all_blank == 1 and stats.kept_ops == 0
+    assert stats.processed == 1 and stats.stop_reason == "done"
+    assert db.get(KaptManagementCost, good_id).breakdown["getHsmpLaborCostInfoV3"] == 63
+    assert [t.id for t in rk.select_targets(db)] == [blank_id]
+
+
+def test_consecutive_all_blank_stops(db, monkeypatch):
+    for i in range(12):
+        _seed(db, f"{5000 + i}", f"B{i}")
+    calls = []
+    monkeypatch.setattr(kapt_api, "fetch_cost_item",
+                        _fake_items(calls=calls, none_ops=rk.FIVE_OPS))
+    stats = _run(db)
+    assert stats.stop_reason == "consecutive_all_blank"
+    assert stats.all_blank == rk.MAX_CONSECUTIVE_ALL_BLANK
+    assert len({code for code, _ in calls}) == rk.MAX_CONSECUTIVE_ALL_BLANK  # 11번째 행은 안 부른다
+
+
+# ③ 돌던 중 06:20 창에 들어서면 멈춘다
+def test_stops_when_entering_window_mid_run(db, monkeypatch):
+    for i in range(3):
+        _seed(db, f"{6000 + i}", f"W{i}")
+    monkeypatch.setattr(kapt_api, "fetch_cost_item", _fake_items())
+    # 시작 검사 1회 + 행마다 1회 — 둘째 행 직전에 06:20 이 된다
+    clock = iter([datetime(2026, 9, 25, 6, 19, tzinfo=KST)] * 2
+                 + [datetime(2026, 9, 25, 6, 20, tzinfo=KST)] * 5)
+    stats = _run(db, now_fn=lambda: next(clock))
+    assert stats.stop_reason == "window"
+    assert stats.processed == 1
+
+
+# ④ 100행마다 kapt_costs running 재확인
+def test_stops_when_kapt_costs_starts_mid_run(db, monkeypatch):
+    for i in range(5):
+        _seed(db, f"{7000 + i}", f"R{i}")
+    monkeypatch.setattr(rk, "PROGRESS_EVERY", 2)
+    base = _fake_items()
+
+    def fake(base_url, op, kapt_code, search_date):
+        if kapt_code == "R1" and op == rk.FIVE_OPS[-1]:
+            db.add(CrawlJob(job_type="kapt_costs", status="running"))  # 둘째 행 도중 정기 회차 시작
+            db.commit()
+        return base(base_url, op, kapt_code, search_date)
+
+    monkeypatch.setattr(kapt_api, "fetch_cost_item", fake)
+    stats = _run(db)
+    assert stats.stop_reason == "kapt_costs_started"
+    assert stats.processed == 2

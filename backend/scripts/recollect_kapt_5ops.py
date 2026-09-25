@@ -30,14 +30,27 @@
     대상 10,521행 × 5 op = 52,605콜. K-apt 버킷(`quota:kapt:<KST 날짜>`)은 60,000/일이고
     정기 `kapt_costs` 회차가 하루 ≈12,000 을 쓴다 → `--daily-cap`(기본 45,000)에 닿으면
     정상 종료하고 다음 날 다시 돌린다(이틀 분할). 오늘 카운트는 행마다 DB 에서 다시 읽는다.
+    ⚠ 45,000 은 **그날 정기 06:20 회차가 이미 돈 뒤**라는 전제의 값이다(45,000 + 이미 쓴 ≈12,000
+    < 60,000). 그러니 **09:00 이후에 시작해 자정 전에 끝낸다.** 자정을 넘기면 카운터가 새 날짜로
+    바뀌어 다음 날 정기 회차 몫(≈12,000)을 이 스크립트가 먼저 먹는다 — 06:20 회차가 한도에 걸린다.
     06:20~09:00 KST(정기 `kapt_costs` 06:20 시작 ~ 보통 60~90분)에는 시작을 거부하고,
     돌던 중 그 창에 들어서도 멈춘다(`--force` 로만 무시). `crawl_jobs` 에 `kapt_costs`
-    가 running 이어도 시작을 거부한다.
+    가 running 이면 시작을 거부하고, 돌던 중에도 100행마다 다시 확인해 running 이면 멈춘다.
+
+5 op 가 전부 비어 온 행
+    대상 행은 전부 한 번은 공개돼 저장된 자료다. 다시 받았는데 5 op 가 **전부** 비어 오면
+    이상 신호로 보고 UPDATE 하지 않는다(`fetched_at` 도 그대로 — 다음 실행이 다시 시도).
+    `all_blank` 로 따로 세고, 연달아 10행이면 멈춘다.
+
+`--limit` 은 조회 행 상한
+    id 순 앞에서 N행을 가져와 돈다 — 매핑 없음·실패·전부 빔으로 건너뛴 행도 N 에 든다.
+    "갱신 N행" 으로 세지 않는 이유: 건너뛴 행은 대상에 그대로 남아, 같은 `--limit` 로 다시
+    돌리면 같은 앞줄을 다시 조회한다 — 조회 상한이어야 호출 수(≤ N×5)가 예측 가능하고 단순하다.
 
 사용 (backend 폴더에서)
     python scripts/recollect_kapt_5ops.py --dry-run          # 콜 0 — 대상 수·예상 콜·첫 10행
-    python scripts/recollect_kapt_5ops.py --limit 10         # 10행만
-    python scripts/recollect_kapt_5ops.py                    # 상한까지(하루 1회씩 이틀)
+    python scripts/recollect_kapt_5ops.py --limit 10         # 앞에서 10행 조회
+    python scripts/recollect_kapt_5ops.py                    # 상한까지(09:00 이후 시작, 하루 1회씩 이틀)
     옵션: --daily-cap N (기본 45000) · --sleep-between 초 (기본 0 — throttle 은 call_api 가 한다) · --force
 """
 
@@ -87,6 +100,7 @@ FIVE_OPS: tuple[str, ...] = (
 
 DEFAULT_DAILY_CAP = 45_000
 MAX_CONSECUTIVE_FAILURES = 10
+MAX_CONSECUTIVE_ALL_BLANK = 10
 PROGRESS_EVERY = 100
 # 정기 kapt_costs(06:20 시작, 평시 60~90분) 와 겹치지 않게 비워 두는 창(KST).
 BLOCKED_WINDOW = (dtime(6, 20), dtime(9, 0))
@@ -109,6 +123,7 @@ class RunStats:
     failed: int = 0         # KaptApiError 로 건너뛴 행
     kept_ops: int = 0       # 비어 와서 옛 값을 유지한 op 수(행 합계)
     no_mapping: int = 0     # kapt_complex_map 이 없어 건너뛴 행
+    all_blank: int = 0      # 5 op 가 전부 비어 와서 갱신하지 않은 행
     calls: int = 0          # 이 실행이 쓴 관리비 호출 수(재시도 포함)
     stop_reason: str = "done"
     failed_ids: list[int] = field(default_factory=list)
@@ -220,7 +235,12 @@ def run(db, *, limit: int | None = None, daily_cap: int = DEFAULT_DAILY_CAP,
     logger.info("대상 %d행 (CUTOFF %s 이전, id 오름차순) · 예상 %d콜 · 하루 상한 %d",
                 len(targets), CUTOFF.isoformat(), len(targets) * len(FIVE_OPS), daily_cap)
     consecutive = 0
-    for target in targets:
+    consecutive_blank = 0
+    for index, target in enumerate(targets):
+        if index and index % PROGRESS_EVERY == 0 and kapt_costs_running(db):
+            stats.stop_reason = "kapt_costs_started"
+            logger.warning("정기 K-apt 관리비 수집(kapt_costs)이 시작돼 멈춘다 — 끝난 뒤 다시 실행하면 이어간다")
+            break
         if not force and in_blocked_window(now_fn()):
             stats.stop_reason = "window"
             logger.warning("06:20 KST 정기 수집 창에 들어서 멈춘다 — 09:00 뒤 다시 실행하면 이어간다")
@@ -248,6 +268,7 @@ def run(db, *, limit: int | None = None, daily_cap: int = DEFAULT_DAILY_CAP,
             stats.failed += 1
             stats.failed_ids.append(target.id)
             consecutive += 1
+            consecutive_blank = 0
             logger.warning("행 %s(단지 %s·%s) 호출 실패 — 건너뜀 (%s)",
                            target.id, target.complex_no, target.cost_month, exc)
             if consecutive >= MAX_CONSECUTIVE_FAILURES:
@@ -257,13 +278,25 @@ def run(db, *, limit: int | None = None, daily_cap: int = DEFAULT_DAILY_CAP,
                 break
             continue
         stats.calls += _calls_now() - before
+        consecutive = 0  # 호출은 성공했다 — API 는 살아 있다
+
+        if all(amount is None for amount in amounts.values()):
+            stats.all_blank += 1
+            consecutive_blank += 1
+            logger.warning("행 %s(단지 %s·%s) — 5 op 가 전부 비어 왔다(한 번 공개됐던 자료라 이상 신호) · 갱신 안 함",
+                           target.id, target.complex_no, target.cost_month)
+            if consecutive_blank >= MAX_CONSECUTIVE_ALL_BLANK:
+                stats.stop_reason = "consecutive_all_blank"
+                logger.error("5 op 전부 빈 응답이 %d행 연달아 났다 — API 응답 이상으로 보고 멈춘다", consecutive_blank)
+                break
+            continue
+        consecutive_blank = 0
 
         row = db.get(KaptManagementCost, target.id)
         if row is None:  # 그 사이 정기 수집·매칭 정리로 지워진 행
             continue
         kept = apply_five(row, amounts)
         db.commit()
-        consecutive = 0
         stats.processed += 1
         stats.kept_ops += len(kept)
         for op in kept:
@@ -271,15 +304,16 @@ def run(db, *, limit: int | None = None, daily_cap: int = DEFAULT_DAILY_CAP,
                         target.id, target.complex_no, target.cost_month, op)
 
         if stats.processed % PROGRESS_EVERY == 0:
-            logger.info("진행: 처리 %d · 실패 %d · 옛 값 유지 op %d · 이번 실행 %d콜 · 오늘 K-apt %d",
-                        stats.processed, stats.failed, stats.kept_ops, stats.calls, today_quota(db))
+            logger.info("진행: 처리 %d · 실패 %d · 전부 빔 %d · 옛 값 유지 op %d · 이번 실행 %d콜 · 오늘 K-apt %d",
+                        stats.processed, stats.failed, stats.all_blank, stats.kept_ops, stats.calls,
+                        today_quota(db))
         if sleep_between > 0:
             time.sleep(sleep_between)
 
-    logger.info("끝(%s): 처리 %d · 실패 %d%s · 옛 값 유지 op %d · 매핑 없음 %d · 이번 실행 %d콜 · 남은 대상 %d",
+    logger.info("끝(%s): 처리 %d · 실패 %d%s · 전부 빔 %d · 옛 값 유지 op %d · 매핑 없음 %d · 이번 실행 %d콜 · 남은 대상 %d",
                 stats.stop_reason, stats.processed, stats.failed,
                 f"(id {stats.failed_ids[:20]})" if stats.failed_ids else "",
-                stats.kept_ops, stats.no_mapping, stats.calls, count_targets(db))
+                stats.all_blank, stats.kept_ops, stats.no_mapping, stats.calls, count_targets(db))
     return stats
 
 
@@ -305,7 +339,8 @@ def dry_run(db, daily_cap: int = DEFAULT_DAILY_CAP) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="K-apt 관리비 기존 행의 다칸 op 5종 재수집")
     parser.add_argument("--dry-run", action="store_true", help="콜 0 — 대상 수·예상 콜·첫 10행만")
-    parser.add_argument("--limit", type=int, default=None, help="처리할 행 상한")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="조회 행 상한 — id 순 앞에서 N행(건너뛴 행도 센다, 모듈 docstring 참조)")
     parser.add_argument("--daily-cap", type=int, default=DEFAULT_DAILY_CAP,
                         help=f"오늘 K-apt 사용량이 이 값에 닿으면 멈춤 (기본 {DEFAULT_DAILY_CAP})")
     parser.add_argument("--sleep-between", type=float, default=0.0, help="행 사이 대기(초)")
@@ -323,7 +358,7 @@ def main(argv: list[str] | None = None) -> int:
                     sleep_between=args.sleep_between, force=args.force)
     if stats.stop_reason.startswith("refused"):
         return 3
-    if stats.stop_reason in ("quota", "consecutive_failures"):
+    if stats.stop_reason in ("quota", "consecutive_failures", "consecutive_all_blank"):
         return 2
     return 0
 

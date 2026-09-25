@@ -1,6 +1,6 @@
 "use client";
 
-/** /admin/scheduler-calendar — 스케줄러 월간 캘린더 페이지. */
+/** /admin/scheduler-calendar — 수집 일정표(스케줄러 월간 캘린더) 페이지. */
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -85,7 +85,7 @@ export default function SchedulerCalendarPage() {
 
   return (
     <>
-      <h2 className="text-lg font-semibold mb-4">스케줄러 캘린더</h2>
+      <h2 className="text-lg font-semibold mb-4">수집 일정표</h2>
 
       <AdminCard
         title={`${yearMonthLabel} 실행 일정`}
@@ -98,7 +98,7 @@ export default function SchedulerCalendarPage() {
           </div>
         ) : query.error ? (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-            캘린더를 불러오지 못했어요.
+            일정표를 불러오지 못했어요.
           </div>
         ) : query.data ? (
           <SchedulerCalendarView

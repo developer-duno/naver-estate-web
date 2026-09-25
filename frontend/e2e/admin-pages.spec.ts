@@ -51,22 +51,5 @@ test.describe("admin sub-pages", () => {
     });
   });
 
-  test("/admin/settings 렌더 + 설정 키 목록", async ({ page }) => {
-    await page.goto("/admin/settings");
-
-    await expect(page.getByRole("heading", { name: "시스템 설정" })).toBeVisible();
-    // 관리자 화면 리뉴얼(A4): 맨 위 경고 배너 — 원문 key 는 우리말 이름 아래 작게 남는다
-    await expect(page.getByText("저장 전에 읽어 주세요.")).toBeVisible();
-    await expect(page.getByText("scheduler.popular_batch_size")).toBeVisible();
-    await expect(page.getByText("crawl.throttle_ms")).toBeVisible();
-
-    // 편집 버튼 2개 (설정 키당 1개)
-    const editButtons = page.getByRole("button", { name: "편집" });
-    await expect(editButtons).toHaveCount(2);
-
-    await expect(page).toHaveScreenshot("admin-settings.png", {
-      fullPage: true,
-      maxDiffPixelRatio: 0.02,
-    });
-  });
+  // 세션 419(2026-09-26 사장님 결정): /admin/settings 화면 삭제 — 그 렌더·시각 회귀 테스트도 함께 제거.
 });

@@ -26,11 +26,15 @@ function renderAt(path: string) {
 }
 
 describe("AdminLayout", () => {
-  it("7개 네비 탭 + 메인으로 링크 + 본문이 렌더된다", () => {
+  it("6개 네비 탭 + 메인으로 링크 + 본문이 렌더된다", () => {
     renderAt("/admin");
-    for (const label of ["대시보드", "사용자", "크롤링", "캘린더", "데이터", "감사 로그", "설정"]) {
+    const tabs = ["대시보드", "사용자", "자료 수집", "수집 일정", "데이터", "감사 로그"];
+    for (const label of tabs) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
+    // 세션 419: "설정" 탭은 삭제됐다 — 되살아나면 여기서 잡힌다. 탭 수도 정확히 6개(+ 메인으로 링크 1개).
+    expect(screen.queryByRole("link", { name: "설정" })).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation").querySelectorAll("a")).toHaveLength(tabs.length + 1);
     expect(screen.getByRole("link", { name: "← 메인으로" })).toBeInTheDocument();
     expect(screen.getByText("본문 콘텐츠")).toBeInTheDocument();
   });
@@ -43,7 +47,7 @@ describe("AdminLayout", () => {
 
   it("비활성 탭에는 aria-current 가 없다", () => {
     renderAt("/admin/users");
-    expect(screen.getByRole("link", { name: "크롤링" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "자료 수집" })).not.toHaveAttribute("aria-current");
     // 대시보드(/admin)는 정확매칭이라 /admin/users 에서 비활성
     expect(screen.getByRole("link", { name: "대시보드" })).not.toHaveAttribute("aria-current");
   });

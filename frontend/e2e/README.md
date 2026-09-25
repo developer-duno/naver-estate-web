@@ -63,7 +63,7 @@ secrets 미설정 시 `setup` project 가 `TEST_ADMIN_*` missing 로그와 함�
 - `playwright-report-<project>` — HTML 리포트 (14일 보관)
 - `admin-screenshots-<project>` — `test-results/` 실패 시 자동 캡처 (14일 보관)
 - `updated-snapshots-<project>` — workflow_dispatch + `update_snapshots=true` 일 때만.
-  ⚠ 각 꾸러미에 PNG **전량**(현재 21장 — 세는 법 `find frontend/e2e -name "*.png" | wc -l`)이 담기지만 유효한 재촬영본은 `*-<project>-linux.png` 뿐이다
+  ⚠ 각 꾸러미에 PNG **전량**(현재 20장 — 세는 법 `find frontend/e2e -name "*.png" | wc -l`)이 담기지만 유효한 재촬영본은 `*-<project>-linux.png` 뿐이다
   (합치면 옛본이 새본을 덮는다). 대조·판정 절차 = 아래 §baseline 재생성 절차.
 
 ## 시각 회귀 (toHaveScreenshot)
@@ -74,11 +74,11 @@ baseline 은 spec 파일별 `*-snapshots/` 디렉토리에 `<이름>-<project>-l
 (파일명에 project 가 들어가므로 같은 spec 을 두 project 에서 돌리면 장이 이중 생성된다 —
 `public` 의 testIgnore 가 `public-flow` 를 제외하는 이유).
 
-| project | PNG (현재 **21장** — 2026-09-17 실측 20장 + 세션 417 `public-visual-mobile` 1장. `header-public-desktop` baseline 은 PR #501 에서 생성·커밋됨) |
+| project | PNG (현재 **20장** — 2026-09-17 실측 20장 + 세션 417 `public-visual-mobile` 1장 − 세션 419 `admin-settings` 1장(설정 화면 삭제). `header-public-desktop` baseline 은 PR #501 에서 생성·커밋됨) |
 |---|---|
 | `public` (10) | `blog-index-{desktop,iphone}` · `blog-slug-{desktop,iphone}` · `blog-slug-realtime-{desktop,iphone}` · `blog-slug-radar-weights-{desktop,iphone}` · `blog-slug-for-agents-{desktop,iphone}` |
 | `public-visual` (5) | `home` · `login` · `compare` · `mibunyang` · **`header-public-desktop`**(세션 400 신설) |
-| `admin` (5) | `admin-dashboard` · `admin-data` · `admin-users` · `admin-settings` · `complex` |
+| `admin` (4) | `admin-dashboard` · `admin-data` · `admin-users` · `complex` (옛 `admin-settings` 는 세션 419 에 설정 화면과 함께 삭제) |
 | `public-visual-mobile` (1) | `mibunyang`(파일명 `mibunyang-public-visual-mobile-linux.png` — 같은 spec 의 데스크톱 장 `mibunyang-public-visual-linux.png` 와 접미사로 갈린다) |
 
 임계: 전역 `maxDiffPixelRatio: 0.02` + `animations: "disabled"`(playwright.config.ts). 단
@@ -202,7 +202,7 @@ done
 **③ 꾸러미별 접미사 필터로 sha256 대조**
 
 ⚠ **artifact 를 통째로 덮어쓰지 마라.** 각 꾸러미에는 그 프로젝트가 재촬영한 것만이 아니라
-**e2e/ 의 PNG 전량**(현재 21장)이 담긴다(path 글롭이 전체 스냅샷 디렉터리). 4꾸러미를 한 폴더에
+**e2e/ 의 PNG 전량**(현재 20장)이 담긴다(path 글롭이 전체 스냅샷 디렉터리). 4꾸러미를 한 폴더에
 합치면 **옛본이 새본을 덮는다.** 꾸러미 `p` 에서 유효한 재촬영본은 `*-<p>-linux.png` 뿐이다.
 
 ```bash
@@ -307,7 +307,7 @@ bbox 가 **기대한 영역 밖**이면 보류하고 원인을 찾는다. 장별
 `e2e/public-flow.spec.ts` 의 `header-public-desktop.png`(`maxDiffPixels: 100`,
 전역 비율과 `Math.min` 으로 합성되어 실효 100px). 이 프레임에서 메뉴 1개 = 약 6% 라 확실히 잡힌다.
 
-- **관리자 헤더**는 전용 장을 두지 않는다 — admin fullPage 5장이 이미 로그인 헤더를 담고 있고,
+- **관리자 헤더**는 전용 장을 두지 않는다 — admin fullPage 4장이 이미 로그인 헤더를 담고 있고,
   전문가·구독 배지가 계정 상태에 따라 흔들려(비결정) flaky 가 된다.
 - **모바일 헤더**는 `hidden md:flex` 라 nav 자체가 렌더되지 않는다(닫힌 햄버거뿐). 열린 드로어의
   링크 집합은 **DOM 레인**(`Header.test.tsx` 의 집합 동일성 단언 + `LOCKED_PATHS` 음성 순회)이 본다.

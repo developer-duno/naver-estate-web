@@ -154,10 +154,12 @@ def _body_failed(data: dict) -> str:
     extra = f" 외 {count - 1}건" if count > 1 else ""
     lines = [f"▸ <b>{job}</b> 작업이 실패했어요 ({count}건)"]
     lines.append(f"  까닭{extra}: {_esc(explain_error(data.get('error')))}")
-    # 처리율 = PR #44 후 batch 합계 (같은 scheduler_job_id 의 60분 윈도우 합산).
-    # "batch" 는 사장님이 모르는 말이라 "이번에 처리한 양" 으로 부른다 — 뜻은 같다
-    # (1개 단지가 아니라 한 회차 통째의 합계라는 것이 요점, 세션 219 PR #44 취지 보존).
-    lines.append(f"  이번에 처리한 양: {_rate(data.get('processed'), data.get('total'))}")
+    # 여기 processed/total 은 **실패한 회차가 아니라 마지막으로 completed 된 회차**의
+    # 값이다(monitor `_job_stats` — 실패 행은 대개 0/0 이라 정보가 없어서). 옛 라벨
+    # "이번에 처리한 양" 은 실패 알림에서 "이번 회차가 500/799 처리했다" 로 읽혀 거짓이
+    # 됐다(2026-09-25 kapt_costs 12초 실패 알림에 500/799(63%) 표기 — 세션 417 후속).
+    # 바로 아래 "마지막으로 잘 됐던 때" 와 짝이 맞게 부른다. "batch" 는 여전히 쓰지 않는다.
+    lines.append(f"  마지막으로 잘 됐을 때 처리한 양: {_rate(data.get('processed'), data.get('total'))}")
     if data.get("last_completed_at"):
         lines.append(f"  마지막으로 잘 됐던 때: {_esc(_kst_stamp(data['last_completed_at']))}")
     return "\n".join(lines)

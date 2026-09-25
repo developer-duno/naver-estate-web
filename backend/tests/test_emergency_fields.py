@@ -106,6 +106,30 @@ class TestEmergencyListFields:
         assert got[0]["level"] == "지역응급의료기관"
 
 
+class TestBedTotalCountGuard:
+    """실시간 병상 op 응답이 numOfRows(1000)를 넘으면 뒷 페이지 누락을 경고 (검사관-573 LOW)"""
+
+    def test_totalCount_이_numOfRows_초과면_경고_로그(self, caplog):
+        """totalCount=1200 > numOfRows=1000 이면 경고 1건, 맵은 정상 반환."""
+        bed_resp = _wrap([_bed_item("A1700004", 21)], total=1200)
+        with patch.object(EmergencyAPI, "call_api", return_value=bed_resp):
+            with caplog.at_level("WARNING"):
+                got = EmergencyAPI.get_er_bed_map()
+        assert got == {"A1700004": 21}
+        warnings = [r for r in caplog.records if "한 페이지를 넘음" in r.message]
+        assert len(warnings) == 1
+
+    def test_totalCount_이_numOfRows_이하면_경고_없음(self, caplog):
+        """totalCount=416 (실측값) <= numOfRows=1000 이면 경고 0건."""
+        bed_resp = _wrap([_bed_item("A1700004", 21)], total=416)
+        with patch.object(EmergencyAPI, "call_api", return_value=bed_resp):
+            with caplog.at_level("WARNING"):
+                got = EmergencyAPI.get_er_bed_map()
+        assert got == {"A1700004": 21}
+        warnings = [r for r in caplog.records if "한 페이지를 넘음" in r.message]
+        assert len(warnings) == 0
+
+
 class TestParseBedItems:
     def test_0은_0으로_보존_None_음수_문자는_None(self):
         """0 병상은 '0'(확정값)으로 남고, 없음·음수·숫자 아님은 None(모름)."""

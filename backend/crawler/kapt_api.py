@@ -33,6 +33,7 @@ data.go.kr 1613000 계열 3개 서비스를 한 모듈에서 다룬다 (전부 �
 """
 
 import logging
+import time
 
 from crawler.public_data_base import BasePublicDataAPI
 
@@ -146,6 +147,23 @@ _NON_AMOUNT_KEYS = frozenset({
 QUOTA_REASON_CODE = "22"
 QUOTA_ERROR_TOKEN = "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR"
 
+# 오류 봉투 중 **기다리면 풀릴 수 있는** 사유 코드 — 같은 호출을 다시 해 본다.
+# 분류는 세션 417 메인 결정(04 = 09-25 실측 간헐 오류). 01·02·05·99 의 공식 뜻은
+# `_error_envelope` 표대로 출처 미확인이라, "설정 오류가 아니라 서버 쪽 사정" 으로 묶은 운용 판단이다.
+# 쿼터(22)·설정 오류(10·11·12·20·21·30·31·32·33)는 기다려도 안 바뀌므로 재시도하지 않는다.
+_TRANSIENT_REASON_CODES = frozenset({"01", "02", "04", "05", "99"})
+# 재시도 전 대기(초) — 길이 = 재시도 횟수. 호출 1건 최악 대기 = 합 43초. 테스트가 patch 한다.
+_TRANSIENT_RETRY_DELAYS: tuple[int, ...] = (3, 10, 30)
+
+# 일시 오류 **재시도로 더 나간** 호출 수(프로세스 누적). `_cost_call_count`(논리 호출 수)와
+# 따로 센다 — 회차 요약 로그가 "재시도 N콜" 을 따로 찍는다. 차이값으로만 쓴다.
+_retry_call_count = 0
+
+
+def retry_calls_made() -> int:
+    """지금까지 일시 오류 재시도로 더 나간 호출 수(프로세스 누적)."""
+    return _retry_call_count
+
 
 class KaptApiError(RuntimeError):
     """K-apt API **호출 실패** — "데이터 없음"과 구분되는 (c) 상태.
@@ -196,6 +214,96 @@ def _looks_like_quota_exceeded(payload) -> bool:
     return False
 
 
+def _error_envelope(data) -> tuple[str | None, str | None] | None:
+    """data.go.kr 표준 **오류 봉투**면 (사유 코드, 사유 문구), 아니면 None.
+
+    정상 응답은 `{"response": {"header": ..., "body": ...}}` 인데, 오류는 게이트웨이가
+    가로채 전혀 다른 모양으로 준다. 2026-09-25 실측 원문(K-apt 공용관리비 첫 op):
+      {"OpenAPI_ServiceResponse": {"cmmMsgHeader": {"errMsg": "HTTP_ERROR",
+        "returnAuthMsg": "HTTP 에러", "returnReasonCode": "04"}}}
+    `OpenAPI_ServiceResponse` 로 감싸지 않고 최상위에 `cmmMsgHeader` 만 오는 변형도
+    받는다(tests 의 쿼터 픽스처 모양). 사유 문구는 `returnAuthMsg` 우선, 없으면 `errMsg`.
+
+    ⚠ 09-25 이전엔 이 봉투를 `data["response"]` KeyError 로 뭉개 "예상과 다른 응답 구조"
+    로만 남겼다 — 로그·잡 기록·텔레그램 어디에도 사유 코드(04)가 없어 원인을 1콜 재현으로
+    되짚어야 했다.
+
+    사유 코드 뜻 (data.go.kr 공통 코드 — **공식 표 출처 미확인**, 2026-09-25 WebSearch 2회·
+    WebFetch 1회로 data.go.kr 안에서 공식 표를 찾지 못했다. 아래 "실측" 표기는 이 레포가
+    실제 응답 원문으로 본 것이고, 나머지 번호는 뜻을 적지 않는다 — 추측 금지):
+      | 코드 | 응답 문구(실측)                                   | 비고 |
+      |------|---------------------------------------------------|------|
+      | 00   | NORMAL SERVICE (정상 응답 header)                 | 실측 |
+      | 01   | —                                                 | 출처 미확인 |
+      | 02   | —                                                 | 출처 미확인 |
+      | 03   | —                                                 | 출처 미확인 |
+      | 04   | HTTP_ERROR / "HTTP 에러" — 제공기관 서버 쪽 오류  | 실측 2026-09-25 (자료 있는 조합도 받음 → "미공개" 아님) |
+      | 05   | SERVICETIMEOUT_ERROR                              | 실측 (api_version_monitor) |
+      | 10   | —                                                 | 출처 미확인 |
+      | 11   | NO_MANDATORY_REQUEST_PARAMETERS_ERROR             | 실측 (api_version_monitor) |
+      | 12   | NO_OPENAPI_SERVICE_ERROR — 서비스 없음·폐기       | 실측 2026-08-19 (api_version_monitor) |
+      | 20   | —                                                 | 출처 미확인 |
+      | 21   | —                                                 | 출처 미확인 |
+      | 22   | LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR — 일일 한도 초과 | 실측 (쿼터 픽스처) |
+      | 30   | SERVICE_KEY_IS_NOT_REGISTERED_ERROR               | 실측 (api_version_monitor) |
+      | 31   | —                                                 | 출처 미확인 |
+      | 32   | —                                                 | 출처 미확인 |
+      | 33   | —                                                 | 출처 미확인 |
+      | 99   | —                                                 | 출처 미확인 |
+    """
+    if not isinstance(data, dict):
+        return None
+    header = None
+    wrapper = data.get("OpenAPI_ServiceResponse")
+    if isinstance(wrapper, dict):
+        header = wrapper.get("cmmMsgHeader")
+    if header is None:
+        header = data.get("cmmMsgHeader")
+    if not isinstance(header, dict):
+        return None
+    reason = header.get("returnAuthMsg") or header.get("errMsg")
+    return (
+        _norm_reason_code(header.get("returnReasonCode")),
+        str(reason).strip() if reason is not None else None,
+    )
+
+
+def _norm_reason_code(code) -> str | None:
+    """사유 코드 정규화 — 숫자면 두 자리 문자열(정수 4·"4" → "04", 0 → "00").
+
+    같은 사유가 봉투(`returnReasonCode`)·정상 모양(`resultCode`) 어느 쪽으로, 문자열·정수
+    어느 형으로 와도 **같은 일시성 판정·같은 우리말 규칙**을 타게 한다. 빈 값은 None.
+    """
+    if code is None:
+        return None
+    text = str(code).strip()
+    if not text:
+        return None
+    return text.zfill(2) if text.isdigit() else text
+
+
+def _result_code_failure(data) -> tuple[str | None, str | None] | None:
+    """정상 모양(`response.header.resultCode`)인데 코드가 00 이 아니면 (코드, 문구).
+
+    00 이거나 `response`/`header` 가 dict 모양이 아니면 None — 모양 오류는 호출부의
+    구조 판정("예상과 다른 응답 구조")이 받는다. header 가 통째로 없으면 코드 None 인
+    실패다(옛 동작 "비정상 resultCode=None" 과 같은 판정).
+    """
+    if not isinstance(data, dict):
+        return None
+    response = data.get("response")
+    if not isinstance(response, dict):
+        return None
+    header = response.get("header", {})
+    if not isinstance(header, dict):
+        return None
+    code = _norm_reason_code(header.get("resultCode"))
+    if code == "00":
+        return None
+    message = header.get("resultMsg")
+    return code, (str(message).strip() if message is not None else None)
+
+
 class KaptAPI(BasePublicDataAPI):
     """K-apt 단지·관리비 API — BasePublicDataAPI 상속 (쿼터·throttle·재시도 공유)."""
 
@@ -222,42 +330,78 @@ class KaptAPI(BasePublicDataAPI):
         마지막 항목이 중요하다 — data.go.kr 은 `_type=json` 을 줘도 에러는 XML 로
         주는 엔드포인트가 있어, **쿼터 초과가 "그냥 None"으로 도착**한다. 그래서
         None 을 "데이터 없음"으로 해석하면 절대 안 된다.
-        """
-        data = cls.call_api(url, params)
-        if data is None:
-            # call_api 는 실패 사유를 안 돌려준다(공유 기반 클래스라 시그니처 불변).
-            # 코드 미상의 실패로 올리고, 쿼터 여부는 아래 정상-구조 경로에서 판정한다.
-            raise KaptApiError(
-                f"호출 실패 — 응답 없음 (op={op or url})", code=None, op=op
-            )
 
-        # 에러 응답은 `{"response": ...}` 구조가 아니라 `cmmMsgHeader` 로 온다.
-        if _looks_like_quota_exceeded(data):
-            raise KaptApiError(
-                f"일일 한도 초과(22) — op={op or url}",
-                code=QUOTA_REASON_CODE, op=op, is_quota=True,
+        오류 봉투(`_error_envelope`)는 사유 코드째 `KaptApiError(code=…)` 로 올린다.
+        그중 **일시성 코드**(`_TRANSIENT_REASON_CODES`)는 `_TRANSIENT_RETRY_DELAYS` 만큼
+        쉬고 같은 호출을 다시 해 본다 — 2026-09-25 08:18 재실측에서 04 는 특정 단지에
+        고정된 게 아니라 **호출마다 오락가락**했다(같은 단지·달이 08:05 엔 04, 08:18 엔
+        정상). 한 단지 22콜 중 하나만 04 를 맞아도 그 단지 전체가 실패가 되므로, 재시도
+        없이는 회차가 거의 못 모은다. 쿼터(22)·설정 오류는 기다려도 안 바뀌어 즉시 올린다.
+        재시도도 `call_api` 를 거치므로 쿼터 카운터에 그대로 잡힌다(`retry_calls_made`).
+        """
+        global _retry_call_count
+        attempt = 0
+        while True:
+            data = cls.call_api(url, params)
+            if data is None:
+                # call_api 는 실패 사유를 안 돌려준다(공유 기반 클래스라 시그니처 불변).
+                # 코드 미상의 실패로 올리고, 쿼터 여부는 아래 정상-구조 경로에서 판정한다.
+                raise KaptApiError(
+                    f"호출 실패 — 응답 없음 (op={op or url})", code=None, op=op
+                )
+
+            # 에러 응답은 `{"response": ...}` 구조가 아니라 `cmmMsgHeader` 로 온다.
+            if _looks_like_quota_exceeded(data):
+                raise KaptApiError(
+                    f"일일 한도 초과(22) — op={op or url}",
+                    code=QUOTA_REASON_CODE, op=op, is_quota=True,
+                )
+
+            # 쿼터가 아닌 오류 — 봉투든 정상 모양의 resultCode 든 사유 코드째 올린다
+            # (쿼터 22 는 바로 위에서 먼저 잡혀 여기 닿지 않는다. 순서를 바꾸면 22 가
+            # is_quota 없이 올라가 배치가 안 멈춘다. 같은 까닭으로 여기서 is_quota 를
+            # 다시 보지 않는다 — 영원히 실행되지 않는 죽은 분기가 된다).
+            failure = _error_envelope(data)
+            if failure is None:
+                failure = _result_code_failure(data)
+            if failure is None:
+                break
+            reason_code, reason_msg = failure
+            if reason_code in _TRANSIENT_REASON_CODES and attempt < len(_TRANSIENT_RETRY_DELAYS):
+                delay = _TRANSIENT_RETRY_DELAYS[attempt]
+                attempt += 1
+                logger.info(
+                    "[kapt] data.go.kr 일시 오류 코드 %s — %s초 뒤 재시도 %d/%d (op=%s)",
+                    reason_code, delay, attempt, len(_TRANSIENT_RETRY_DELAYS), op or url,
+                )
+                time.sleep(delay)
+                _retry_call_count += 1
+                continue
+            message = (
+                f"data.go.kr 오류 코드 {reason_code or '미상'}({reason_msg or '사유 문구 없음'})"
+                + (f" 재시도 {attempt}회 후" if attempt else "")
+                + f" — op={op or url}"
             )
+            logger.warning("[kapt] %s", message)
+            raise KaptApiError(message, code=reason_code, op=op)
 
         try:
+            # resultCode 판정은 위 루프(`_result_code_failure`)가 이미 했다 — 여기는 모양만 본다.
             response = data["response"]
-            header = response.get("header", {})
-            code = header.get("resultCode")
-            if code not in ("00", "0"):
-                logger.warning(
-                    "[kapt] 비정상 resultCode=%s msg=%s", code, header.get("resultMsg")
-                )
-                # ⚠ is_quota 는 여기서 다시 보지 않는다 — 한도 초과(22)는 어느 포맷으로
-                # 오든 위 `_looks_like_quota_exceeded` 가 먼저 잡아 이 줄에 닿지 않는다
-                # (dict 를 통째로 문자열화해 보므로 resultCode 자리의 22 도 포함).
-                # 여기서 한 번 더 판정하면 영원히 실행되지 않는 분기가 생겨,
-                # 테스트로 검증할 수 없는 죽은 코드가 된다.
-                raise KaptApiError(
-                    f"비정상 resultCode={code} — op={op or url}",
-                    code=str(code) if code is not None else None, op=op,
-                )
+            if not isinstance(response.get("header", {}), dict):
+                raise TypeError("header 가 dict 모양이 아님")
             body = response.get("body")
         except (KeyError, TypeError, AttributeError) as exc:
-            logger.warning("[kapt] 예상과 다른 응답 구조 — op=%s", op or url)
+            # 오류 봉투도 정상 구조도 아닌 **진짜 미지 모양**만 여기 온다. 다음에 원인을
+            # 1콜 재현 없이 보이게 최상위 키와 앞 200자를 남긴다. `data` 는 call_api 가
+            # 돌려준 **응답 본문**(resp.json())뿐이라 serviceKey 는 실리지 않는다 — 키는
+            # 요청 params 에만 있다(public_data_base.call_api).
+            logger.warning(
+                "[kapt] 예상과 다른 응답 구조 — op=%s 최상위 키=%s 앞부분=%s",
+                op or url,
+                list(data) if isinstance(data, dict) else type(data).__name__,
+                str(data)[:200],
+            )
             raise KaptApiError(
                 f"예상과 다른 응답 구조 — op={op or url}", code=None, op=op
             ) from exc

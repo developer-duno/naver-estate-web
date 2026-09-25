@@ -29,6 +29,7 @@
 
 import logging
 import re
+import time
 from datetime import date, datetime, timezone
 from difflib import SequenceMatcher
 
@@ -44,6 +45,7 @@ from crawler.kapt_api import (
     fetch_common_cost,
     fetch_common_cost_probe,
     fetch_individual_cost,
+    retry_calls_made,
 )
 from db.database import SessionLocal
 from db.models import Complex, KaptComplexMap, KaptManagementCost
@@ -118,6 +120,21 @@ _CANARY_SAMPLE_SIZE = 3
 # 무결성은 유지되지만(실패는 저장 안 함) 시간·재시도 예산이 통째로 낭비된다.
 # 개별 단지의 일시적 실패와 구분하려고 "연속" 으로 세고, 한 건이라도 성공하면 리셋한다.
 _CONSECUTIVE_FAILURE_LIMIT = 5
+
+# 연속 실패 임계에 닿았는데 카나리도 "죽음" 일 때, 곧바로 포기하지 않고 쉬었다가 다시
+# 카나리를 찔러 보는 대기(초) 순서. 전부 죽어 있어야 api_down 으로 중단한다.
+# 2026-09-25 06:20 실사고: 연속 5실패를 1.2초 만에 판정해 그날 회차를 통째로 포기했다
+# (대기·재확인 0 — 몇 초짜리 장애도 하루 손실). 최악 추가 대기 = 합 210초.
+# 스케줄러는 BackgroundScheduler 기본 ThreadPoolExecutor(max_workers=10, APScheduler 3.11.3
+# 실측)라 이 잡의 time.sleep 은 자기 스레드 하나만 붙잡는다 — 다른 잡은 안 막힌다.
+_API_DOWN_BACKOFF_SEC: tuple[int, ...] = (30, 60, 120)
+
+# 회차 시간 예산(초). 일시 오류 재시도(호출당 최악 43초)·카나리 대기가 겹치면 회차가
+# 9시간 넘게 늘어날 수 있다(카나리 살아있음 + 전 단지 첫 op 실패 시 산출 약 9.6h).
+# monitor 는 kapt_costs 를 3h 에 cancelled 로 찍지만 스레드는 계속 돌아 다음날 06:20
+# 회차와 겹칠 수 있다 — 그래서 150분(스윕 임계 3h 보다 30분 앞)에서 스스로 멈춘다.
+# 남은 단지는 행이 안 생기므로 다음 회차에 그대로 대상이 된다. 테스트가 monkeypatch 한다.
+_RUN_TIME_BUDGET_SEC = 150 * 60
 
 _MATCH_JOB_TYPE = "kapt_match"
 _COST_JOB_TYPE = "kapt_costs"
@@ -800,7 +817,9 @@ def _summarize(breakdown: dict[str, int], household: int | None) -> dict:
     }
 
 
-def _probe_api_alive(db, months: list[str]) -> tuple[bool, int]:
+def _probe_api_alive(
+    db, months: list[str], include_older_month: bool = False,
+) -> tuple[bool, int]:
     """카나리 — "전량 미공개" 회차에서 K-apt 관리비 API 가 살아있나 직접 확인.
 
     반환 (살아있음, 찔러본 표본 수). 표본이 0건이면 (False, 0).
@@ -820,22 +839,88 @@ def _probe_api_alive(db, months: list[str]) -> tuple[bool, int]:
     ⚠ 한 표본당 **첫 op 1콜만** 쓴다(`fetch_common_cost_probe`). 17콜을 다 태우면
     확인 비용이 수집 비용과 같아진다. `KaptApiError` 는 삼키지 않고 올린다 — 호출이
     실패했다면 그건 "살아있다"의 반대 증거라, 호출자의 예외 처리가 받아야 한다.
+    단 **남은 표본을 다 찔러 본 뒤에** 올린다(마지막 실패 사유). 한 표본의 실패로
+    곧장 올리면 아래 "다른 달 표본"에 닿지 못한다. 쿼터(22)만은 즉시 올린다 —
+    남은 표본에 헛호출해도 결과가 같다.
+
+    ⚠ **다른 달 표본 1건 추가**(세션 417 후속, 09-25 실사고): 위 3건은 `cost_month DESC`
+    라 저장이 많은 최신 달에 몰린다 — 09-25 엔 3건 전부 202606 이었고, 마침 그 달
+    조합만 제공기관 오류(04)를 돌려줘 "API 는 살아있는데 한 달만 고장" 을 못 가렸다.
+    그래서 **표본들의 가장 옛 달보다 이전 달 중 최신 저장행 1건**을 더 찌른다(최대 4콜).
+    ⚠ 이 1건도 **후보월 창 안**에서만 고른다 — 창 밖 옛 행을 생존 증거로 쓰지 않는다는
+    기존 계약(`test_collect_costs_canary_sample_stays_within_candidate_window`: 창 밖 행
+    하나뿐이면 표본 0 → failed)은 그대로다. 창 밖 행의 응답은 "엔드포인트가 답한다"
+    까지만 증명하고 "지금 창의 달들을 준다" 는 증명하지 못하기 때문이다. 창 안 표본이
+    0건이면 추가 표본도 없다(창 안 행이 있었다면 위 3건에 먼저 뽑혔다) → (False, 0).
+    ⚠ 이 추가 표본은 `include_older_month=True` 일 때만 — **연속 실패 재확인 경로
+    (`_recheck_api_after_failures`) 전용**이다. 전량 빈 응답 가드는 옛 동작(최신 3건)
+    그대로다: 거기서 이전 달이 응답해 "살아있음" 이 되면, 저장된 최신 달 조합이 전부
+    빈 응답으로 바뀐 상황("자료가 빠졌다")이 completed 로 묻힌다(세션 417 검사관 실측).
+    연속 실패 경로의 질문은 "서버가 아예 죽었나" 라 이전 달 응답이 정확한 답이다.
     """
-    samples = (
+    base = (
         db.query(KaptManagementCost.cost_month, KaptComplexMap.kapt_code)
         .join(KaptComplexMap, KaptComplexMap.complex_no == KaptManagementCost.complex_no)
-        .filter(KaptManagementCost.cost_month.in_(months))
         .order_by(
             KaptManagementCost.cost_month.desc(),
             KaptManagementCost.fetched_at.desc(),
         )
+    )
+    samples = list(
+        base.filter(KaptManagementCost.cost_month.in_(months))
         .limit(_CANARY_SAMPLE_SIZE)
         .all()
     )
+    if include_older_month and samples:
+        oldest_sampled = min(month for month, _ in samples)
+        older_in_window = [m for m in months if m < oldest_sampled]
+        if older_in_window:
+            extra = base.filter(KaptManagementCost.cost_month.in_(older_in_window)).first()
+            if extra is not None:
+                samples.append(extra)
+    last_error: KaptApiError | None = None
     for cost_month, kapt_code in samples:
-        if fetch_common_cost_probe(kapt_code, cost_month):
-            return True, len(samples)
+        try:
+            if fetch_common_cost_probe(kapt_code, cost_month):
+                return True, len(samples)
+        except KaptApiError as exc:
+            if exc.is_quota:
+                raise
+            last_error = exc
+    if last_error is not None:
+        raise last_error
     return False, len(samples)
+
+
+def _recheck_api_after_failures(db, months: list[str]) -> tuple[bool, int, KaptApiError | None]:
+    """연속 실패 임계 도달 시 — 카나리로 확인하고, 죽어 있으면 쉬었다가 다시 확인.
+
+    반환 (살아있음, 마지막 확인의 표본 수, 마지막 카나리 실패 사유).
+    ⚠ 카나리의 `KaptApiError` 는 "죽어 있음" 으로 친다(삼키지 않고 사유를 돌려준다 —
+    호출자가 api_down 메시지에 싣는다). 쿼터(22)는 기다려도 안 풀리므로 그대로 올린다.
+    ⚠ 표본이 0건이고 오류도 없으면 **대기 없이** 바로 (False, 0, None) — 쉬어도 표본은
+    생기지 않는다(210초를 헛되이 붙잡을 이유가 없다). 이 경우 옛 동작(즉시 중단)과 같다.
+    """
+    probed, error = 0, None
+    for delay in (0, *_API_DOWN_BACKOFF_SEC):
+        if delay:
+            logger.warning(
+                "[kapt_costs] 카나리 응답 없음 — %d초 쉬고 다시 확인 (마지막 사유: %s)",
+                delay, error,
+            )
+            time.sleep(delay)
+        try:
+            alive, probed = _probe_api_alive(db, months, include_older_month=True)
+            error = None
+        except KaptApiError as exc:
+            if exc.is_quota:
+                raise
+            alive, error = False, exc
+        if alive:
+            return True, probed, None
+        if probed == 0 and error is None:
+            return False, 0, None
+    return False, probed, error
 
 
 def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_costs") -> dict:
@@ -877,7 +962,10 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
       · (c) 호출 실패   → **저장하지 않고** `failed` 계수. 그 달 행이 없으므로
                           다음 회차에 자동 재시도된다(to_try 가 그대로 남는다).
       · (c) 중 쿼터 초과(22) → 남은 대상 호출 없이 즉시 중단 + 잡 failed
-      · (c) 가 **연속 5단지** → API 장애/한도 의심으로 중단 + 잡 failed
+      · (c) 가 **연속 5단지** → 카나리로 확인. 살아있으면 개별 조합 오류로 보고 계속,
+                          죽어 있으면 30/60/120초 쉬며 재확인한 뒤에만 중단 + 잡 failed
+      · 카나리 "살아있음" 으로 계속 갔는데 수집 0·실패 ≥1 → 잡 failed(사유 코드 포함).
+                          수집 ≥1 이면 부분 성공이라 completed
     부분 저장을 절대 하지 않는 것이 핵심이다 — 공용 실패 + 개별 성공으로
     "공용 0원" 총액을 저장하면 틀린 값이 사실처럼 화면에 뜨고, 그 달 행이 생겨
     다음 달까지 고쳐지지도 않는다.
@@ -889,6 +977,10 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
          `resp.json()` 에서 터져 코드 미상 실패로 도착해 ①이 안 선다. 그 사각을
          "연속 N건" 이라는 정황으로 메운다. 개별 단지의 일시 실패와 구분하려고
          연속으로 세고, 성공·정상 미공개가 한 건이라도 끼면 리셋한다.
+         ⚠ 정황 판단이라 **바로 멈추지 않는다**(2026-09-25 실사고: 제공기관이 일부
+         (단지, 달) 조합에만 04 오류를 줬는데 1.2초 만에 그날 회차를 포기했다). 카나리
+         (`_recheck_api_after_failures`)가 살아있다고 하면 계속 가고, 죽어 있어도 대기·
+         재확인 뒤에만 멈춘다.
     """
     db = SessionLocal()
     job = _record_job(db, _COST_JOB_TYPE, scheduler_job_id)
@@ -932,16 +1024,34 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         # 연속 전 op 실패 카운터 — 한 단지라도 성공(또는 정상 미공개)하면 리셋한다.
         consecutive_failures = 0
         api_down: KaptApiError | None = None
+        api_down_canary: KaptApiError | None = None  # 중단 직전 카나리의 실패 사유
+        api_down_probed = 0
+        # 연속 실패 뒤 카나리가 "살아있음" 이라 계속 간 적이 있나 — 회차 마감 규칙(아래)용.
+        canary_kept_going = False
+        last_failure: KaptApiError | None = None
         scan_capped = False
         # 호출 계측 — 미공개 단지가 **실제로** 쓴 콜 수(설계값 월당 1콜이 지켜지나)와
         # 이번 회차 관리비 호출 총수. 세션 417 전에는 조기 이탈이 한 번도 안 섰는데
         # 로그에 콜 수가 없어 쿼터 카운터를 역산해야만 알 수 있었다.
         run_calls_start = cost_calls_made()
+        run_retries_start = retry_calls_made()
         empty_calls = 0
+        run_started = time.monotonic()
+        budget_exhausted = False
         for mapping in queue:
             # 슬롯: 수집·실패만 센다. 미공개는 3콜뿐이라 슬롯을 먹이면 미공개가 앞줄에
             # 몰린 날 수집이 0건으로 끝난다.
             if collected + failed >= batch_size:
+                break
+            # 시간 예산 — 최소 1단지는 처리한 뒤부터 본다(예산이 아무리 작아도 회차가
+            # 빈손으로 끝나지 않게). 카나리 대기·일시 오류 재시도 sleep 도 경과에 들어간다.
+            if (collected + failed + empty) and time.monotonic() - run_started >= _RUN_TIME_BUDGET_SEC:
+                budget_exhausted = True
+                logger.warning(
+                    "[kapt_costs] 시간 예산 %d분 소진 — 수집 %d·실패 %d·미공개 %d 에서 중단, "
+                    "남은 단지는 다음 회차",
+                    _RUN_TIME_BUDGET_SEC // 60, collected, failed, empty,
+                )
                 break
             if empty >= _EMPTY_SCAN_CAP:
                 scan_capped = True
@@ -997,16 +1107,35 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                 )
                 failed += 1
                 consecutive_failures += 1
+                last_failure = exc
                 if exc.is_quota:
                     # 일일 한도 초과 — 남은 대상에 호출해봐야 전부 같은 에러다.
                     # 헛호출로 다음 날 쿼터까지 태우지 않도록 배치를 즉시 중단한다.
                     quota_exhausted = exc
                     break
                 if consecutive_failures >= _CONSECUTIVE_FAILURE_LIMIT:
-                    # 코드 미상 실패가 연달아 N건 — 개별 단지 문제가 아니라 API 장애·
-                    # 한도 초과(XML 에러라 is_quota 가 안 선 경우)로 본다. 위 quota 중단이
-                    # 못 잡는 경로를 메우는 2차 방어선이다.
+                    # 실패가 연달아 N건 — API 장애·한도 초과(XML 에러라 is_quota 가 안 선
+                    # 경우)일 수도, 제공기관이 **일부 (단지, 달) 조합에만** 오류를 주는
+                    # 부분 장애일 수도 있다(09-25 실사고: 04 봉투). 곧장 포기하지 않고
+                    # 카나리로 가린다 — 살아있으면 개별 조합 오류로 보고 계속, 죽어 있으면
+                    # `_API_DOWN_BACKOFF_SEC` 만큼 쉬며 재확인한 뒤에만 중단한다.
+                    try:
+                        alive, probed, canary_error = _recheck_api_after_failures(db, months)
+                    except KaptApiError as quota_exc:
+                        quota_exhausted = quota_exc  # 카나리가 한도 초과(22) — 즉시 중단
+                        break
+                    if alive:
+                        logger.warning(
+                            "[kapt_costs] 연속 %d단지 오류(마지막: %s)지만 표본 %d건 중 응답 정상"
+                            " — 개별 조합 오류로 보고 계속",
+                            consecutive_failures, exc, probed,
+                        )
+                        canary_kept_going = True
+                        consecutive_failures = 0
+                        continue
                     api_down = exc
+                    api_down_canary = canary_error
+                    api_down_probed = probed
                     break
             except Exception:
                 logger.exception("[kapt_costs] 단지 %s 처리 실패", mapping.complex_no)
@@ -1024,14 +1153,18 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         # 정상이면 미공개 단지당 평균 ≈ 후보월 수(3) 이하, 17 근처면 조기 이탈이 또 안 선 것.
         logger.info(
             "[kapt_costs] 호출 집계: 미공개 %d단지가 %d콜 사용(단지당 평균 %.1f콜), "
-            "이번 회차 관리비 호출 총 %d콜",
+            "이번 회차 관리비 호출 총 %d콜, 일시 오류 재시도 %d콜",
             empty, empty_calls, (empty_calls / empty) if empty else 0.0,
             cost_calls_made() - run_calls_start,
+            retry_calls_made() - run_retries_start,
         )
 
         # 훑은 단지 수 = 수집 + 실패 + 미공개. 선자르기(`targets[:batch_size]`)가 없어져
         # `len(targets)` 를 대신한다. 잔여는 "아직 안 훑은 후보" = 큐 길이 - 훑은 수.
         scanned = collected + failed + empty
+        budget_note = (
+            f" — 시간 예산 {_RUN_TIME_BUDGET_SEC // 60}분 소진으로 중단" if budget_exhausted else ""
+        )
 
         # 쿼터 초과로 조기 중단 — monitor 가 알아채도록 잡을 failed 로 마감한다.
         # (completed 로 두면 "오늘도 정상 수집" 으로 위장돼 며칠씩 방치된다.)
@@ -1056,13 +1189,39 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             message = (
                 f"연속 {_CONSECUTIVE_FAILURE_LIMIT}단지 호출 실패 — API 장애/한도 의심, "
                 f"잔여 {remaining} (수집 {collected}, 실패 {failed}, 미공개 {empty}, "
-                f"마지막 오류: {api_down})"
+                f"마지막 오류: {api_down}; "
+                + (
+                    f"생존 확인 호출도 실패 — {sum(_API_DOWN_BACKOFF_SEC)}초 대기 뒤 중단: "
+                    f"{api_down_canary})"
+                    if api_down_canary else
+                    f"생존 확인 {api_down_probed}건도 빈 응답 — "
+                    f"{sum(_API_DOWN_BACKOFF_SEC)}초 대기 뒤 중단)"
+                    if api_down_probed else
+                    "생존 확인 표본 없음)"
+                )
             )
             _fail_job(db, job, message)
             logger.error("[kapt_costs] %s", message)
             return {
                 "collected": collected, "failed": failed, "empty": empty,
                 "remaining": remaining, "error": "api_down",
+            }
+
+        # 연속 실패 뒤 카나리가 "서버는 살아있다" 고 해서 끝까지 갔는데 한 건도 못 모은
+        # 회차 — 아래 ① 가드도 잡지만, 그 문구("대상 N개 중 수집 0건")로는 "우리 쪽이
+        # 아니라 제공기관이 조합마다 오류를 준다" 는 사실과 사유 코드가 안 보인다.
+        # 수집이 1건이라도 있으면 부분 성공이라 정상(completed) — 이 분기에 안 온다.
+        if canary_kept_going and collected == 0 and failed > 0:
+            message = (
+                f"공공데이터 서버는 응답하지만 {failed}단지 전부 오류 — 수집 0 "
+                f"(미공개 {empty}, 마지막 오류: {last_failure})"
+                + budget_note
+            )
+            _fail_job(db, job, message)
+            logger.error("[kapt_costs] %s", message)
+            return {
+                "collected": 0, "failed": failed, "empty": empty,
+                "error": "partial_outage",
             }
 
         # ── silent failure 가드 2종의 관계 ──
@@ -1076,6 +1235,9 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         #      표본이 작으면(임계 미만) 정상 미공개와 구분이 안 돼 판정을 보류하고,
         #      표본이 충분하면 **카나리**(아래)로 API 생사를 직접 확인한다.
         # 즉 ①이 1차 방어선이고 ②는 ①을 빠져나가는 무증상 장애용 그물이다.
+        # (세션 417 후속) ① 의 조건을 만족하는 회차 중 "연속 실패 뒤 카나리가 살아있다고
+        # 해서 계속 간" 회차는 바로 위 `partial_outage` 분기가 먼저 받는다 — 결과(failed)는
+        # 같고 문구만 사유 코드가 보이게 바뀐다. 카나리를 한 번도 안 거친 회차는 ① 그대로다.
         #
         # silent failure 가드: 대상이 있는데 한 건도 저장 못 했고 그 원인이
         # '미공개'가 아니라 실패라면 '완료(0)' 위장 대신 failed 로 알린다.
@@ -1083,7 +1245,8 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         if collected == 0 and scanned and failed > 0:
             _fail_job(
                 db, job,
-                f"대상 {scanned}개 중 수집 0건 (실패 {failed}, 미공개 {empty})",
+                f"대상 {scanned}개 중 수집 0건 (실패 {failed}, 미공개 {empty})"
+                + budget_note,
             )
             logger.error(
                 "[kapt_costs] silent failure 감지: 대상 %d개 수집 0건 (실패 %d)",
@@ -1146,10 +1309,20 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         # total>0, routers/admin/freshness.py)가 영영 발동하지 않는다.
         # (위 카나리 경로만은 의도적으로 total=0 — 거기선 "정상"이 확인됐다.)
         _complete_job(db, job, collected, scanned - collected)
+        if failed:
+            # 부분 성공(수집 ≥1 · 실패 ≥1)은 completed 로 두되, 실패가 있었다는 사실과 마지막
+            # 사유를 남긴다 — 인기 단지 잡의 "N/50개 단지 실패" 선례(completed + error_message)와
+            # 같은 방식. 이 줄이 없으면 관리자 화면에서 04 부분 장애가 "정상 완료" 로만 보인다.
+            job.error_message = (
+                f"{failed}단지 호출 실패(마지막 사유: {last_failure or '서버 기록 참고'})"
+                + budget_note
+            )
+            db.commit()
         logger.info(
             "[kapt_costs] 완료: %d 수집, %d 실패, %d 미공개 (대상 %d, 기준월 %s)%s",
             collected, failed, empty, scanned, target_month,
-            f" — 미공개 스캔 상한 {_EMPTY_SCAN_CAP} 도달로 중단" if scan_capped else "",
+            (f" — 미공개 스캔 상한 {_EMPTY_SCAN_CAP} 도달로 중단" if scan_capped else "")
+            + budget_note,
         )
         return {
             "collected": collected,

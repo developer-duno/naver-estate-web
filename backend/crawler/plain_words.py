@@ -142,6 +142,33 @@ _ERROR_RULES: list[tuple[re.Pattern, str]] = [
         re.compile(r"결제 호출 실패"),
         "결제 대행 회사 서버를 부르다 실패했어요.",
     ),
+    # ── data.go.kr 오류 봉투 — `kapt_api._body_or_raise` 가 만드는 우리 접두어 (09-25 실사고) ──
+    # 메시지 모양: "data.go.kr 오류 코드 04(HTTP 에러) — op=getHsmpLaborCostInfoV3".
+    # ⚠ 아래 timeout·HTTP 규칙보다 **앞**이어야 한다 — 05 의 원문 사유(SERVICETIMEOUT_ERROR)
+    #   가 `timed? ?out` 에 먼저 걸리면 "상대 서버가 제때…" 로 번역돼 사유 번호가 사라진다.
+    # 번호별 뜻은 이 레포가 실제 응답 원문으로 본 것만 적는다(kapt_api._error_envelope 표).
+    # 한 문장에 마침표 하나 — plainify_detail 이 꼬리 마침표만 떼고 뒤에 말을 붙인다.
+    (
+        re.compile(r"data\.go\.kr 오류 코드 04\b"),
+        "공공데이터 서버가 자료를 못 줬어요(사유 번호 04, 우리 잘못이 아니라 상대 서버 문제라 다음 회차에 다시 받아요).",
+    ),
+    (
+        re.compile(r"data\.go\.kr 오류 코드 05\b"),
+        "공공데이터 서버가 제때 답하지 않았어요(사유 번호 05, 상대 서버 문제라 다음 회차에 다시 받아요).",
+    ),
+    (
+        re.compile(r"data\.go\.kr 오류 코드 12\b"),
+        "공공데이터 쪽에서 이 자료 서비스가 없어졌다고 알려 왔어요(사유 번호 12, Claude 에게 알려주세요).",
+    ),
+    (
+        re.compile(r"data\.go\.kr 오류 코드 30\b"),
+        "공공데이터 서버가 우리 사용 신청을 모른다고 했어요(사유 번호 30, Claude 에게 알려주세요).",
+    ),
+    (
+        # 위 넷이 못 받은 번호 — 뜻을 추측하지 않되 "상대 서버가 거절했다"는 사실만 남긴다.
+        re.compile(r"data\.go\.kr 오류 코드"),
+        "공공데이터 서버가 오류를 알려 왔어요(사유 번호는 서버 기록에 있어요).",
+    ),
     (
         re.compile(r"statement timeout|QueryCanceled", re.I),
         "데이터베이스가 너무 오래 걸려 스스로 멈췄어요.",

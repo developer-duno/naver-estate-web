@@ -101,7 +101,7 @@ def test_calendar_past_mode_returns_crawl_jobs(mock_sched, client, db):
     events = res.json()["events"]
     assert len(events) == 1
     assert events[0]["scheduler_job_id"] == "collect_air_quality"
-    assert events[0]["name"] == "에어코리아 대기질"  # META 의 한국어 이름
+    assert events[0]["name"] == "동네 공기질 받기"  # META 이름 = add_job 정본 (세션 418)
     assert events[0]["status"] == "completed"
     assert events[0]["kind"] == "past"
     # KST iso 출력 확인 (12:00 KST = 03:00 UTC + 9h)

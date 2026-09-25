@@ -9,6 +9,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from auth.audit import log_action
+from crawler.plain_words import explain_stored_error
 from db.models import Article, Complex, CrawlJob, UserProfile
 from deps import get_admin_user, get_db
 
@@ -32,6 +33,7 @@ def _safe_fill_rate(filled: int, total: int) -> float | None:
 @router.get("/crawl-jobs")
 def list_crawl_jobs(
     status: str | None = None,
+    job_type: str | None = Query(None, description="작업 유형(job_type)으로 좁히기 — 없으면 전체"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -39,6 +41,8 @@ def list_crawl_jobs(
 ):
     """크롤 작업 목록"""
     conditions = []
+    if job_type:
+        conditions.append(CrawlJob.job_type == job_type)
     if status:
         conditions.append(CrawlJob.status == status)
         # running 필터에는 stale(유령) 1시간 컷오프 적용 — recrawl/status와 동일 정책
@@ -68,6 +72,9 @@ def list_crawl_jobs(
                 "total_items": j.total_items,
                 "processed_items": j.processed_items,
                 "error_message": j.error_message,
+                # 원문 옆 우리말 한 줄 — 화면은 이쪽을 보이고 원문은 title 로 남긴다
+                # (scheduler-status·recrawl 과 같은 함수, 세션 411·418).
+                "error_plain": explain_stored_error(j.error_message),
                 "started_at": j.started_at.isoformat() if j.started_at else None,
                 "completed_at": j.completed_at.isoformat() if j.completed_at else None,
                 "created_at": j.created_at.isoformat() if j.created_at else None,
@@ -90,7 +97,11 @@ def list_crawl_failures(
 
     응답 예: { "window_hours": 24, "total": 12,
               "items": [{ "job_type": "complex_articles", "count": 8,
-                          "last_error": "...", "last_failed_at": "..." }] }
+                          "last_error": "...", "last_error_plain": "...",
+                          "last_failed_at": "..." }] }
+
+    last_error_plain 은 **200자로 자르기 전** 원문으로 만든다 — 잘린 원문으로는
+    뒤에 붙은 스윕 마커나 규칙에 걸리는 낱말을 놓칠 수 있다.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
@@ -132,6 +143,7 @@ def list_crawl_failures(
                 "job_type": r.job_type,
                 "count": int(r.count),
                 "last_error": (last[:200] if last else None),
+                "last_error_plain": explain_stored_error(last),
                 "last_failed_at": r.last_failed_at.isoformat() if r.last_failed_at else None,
             }
         )
@@ -292,6 +304,9 @@ def get_detailed_stats(
                 "total_items": j.total_items,
                 "processed_items": j.processed_items,
                 "error_message": j.error_message,
+                # 원문 옆 우리말 한 줄 — 화면은 이쪽을 보이고 원문은 title 로 남긴다
+                # (scheduler-status·recrawl 과 같은 함수, 세션 411·418).
+                "error_plain": explain_stored_error(j.error_message),
                 "started_at": j.started_at.isoformat() if j.started_at else None,
                 "completed_at": j.completed_at.isoformat() if j.completed_at else None,
                 "created_at": j.created_at.isoformat() if j.created_at else None,

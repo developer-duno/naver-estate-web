@@ -473,3 +473,69 @@ def test_scheduler_status_response_includes_source(client, db):
     vacuum = next(j for j in body["jobs"] if j["scheduler_job_id"] == "vacuum_maintenance")
     assert vacuum["source"] is None
     assert vacuum["source_url"] is None
+
+
+# ── 잡 이름 한 벌 가드 (세션 418 — 화면·달력·알림 이름 통일) ─────────────────
+#
+# 정본 = crawler/scheduler.py 의 add_job(name=...). 관리자 화면(SCHEDULER_JOB_META)과
+# 텔레그램 폴백표(_JOB_LABEL_FALLBACK)는 그 글자를 그대로 옮긴다. 세션 418 전에는
+# META 이름 31개 중 30개가 add_job 과 달라, 사장님이 화면과 알림에서 같은 잡을
+# 다른 이름으로 봤다("매물 수집 배치" vs "단지 매물 가져오기").
+
+
+def _scheduler_with_every_job():
+    """조건부 토글을 전부 켠 스케줄러 — 등록될 수 있는 잡을 빠짐없이 만든다."""
+    with (
+        patch.object(sched_mod, "PUBLIC_DATA_ENABLED", True),
+        patch.object(sched_mod, "OFFICIAL_PRICE_ENABLED", True),
+        patch.object(sched_mod, "POPULAR_CRAWL_ENABLED", True),
+        patch.object(sched_mod, "AIR_QUALITY_ENABLED", True),
+        patch.object(sched_mod, "EMERGENCY_ENABLED", True),
+        patch.object(sched_mod, "CHILDCARE_ENABLED", True),
+        patch.object(sched_mod, "CRIME_STATS_ENABLED", True),
+        patch.object(sched_mod, "COMPLEX_DETAIL_ENABLED", True),
+        patch.object(sched_mod, "COMPLEX_METRIC_ENABLED", True),
+        patch.object(sched_mod, "MONITOR_ENABLED", True),
+        patch.object(sched_mod, "KAPT_ENABLED", True),
+        patch.object(sched_mod, "PAYMENT_ENABLED", True),
+        patch.object(sched_mod, "BILLING_AUTO_CHARGE_ENABLED", True),
+        patch.object(sched_mod, "VACUUM_MAINTENANCE_ENABLED", True),
+        patch.object(sched_mod, "API_VERSION_MONITOR_ENABLED", True),
+        patch.object(sched_mod, "FIELD_DRIFT_MONITOR_ENABLED", True),
+        patch.object(sched_mod, "BACKFILL_DETAIL_ENABLED", True),
+    ):
+        return sched_mod.create_scheduler()
+
+
+def test_meta_names_match_add_job_names():
+    """SCHEDULER_JOB_META 의 name == add_job(name=...) — 31개 전부 글자 단위로.
+
+    뮤테이션: META 이름 하나를 옛 이름(예: "매물 수집 배치")으로 되돌리면 FAIL.
+    """
+    from routers.admin.scheduler import SCHEDULER_JOB_META
+
+    jobs = {job.id: job for job in _scheduler_with_every_job().get_jobs()}
+    errors = []
+    for job_id, meta in SCHEDULER_JOB_META.items():
+        job = jobs.get(job_id)
+        if job is None:
+            errors.append(f"{job_id}: 토글을 다 켜도 등록되지 않음 (META 만 있고 잡 없음)")
+        elif meta["name"] != job.name:
+            errors.append(f"{job_id}: META '{meta['name']}' != add_job '{job.name}'")
+    assert not errors, "관리자 화면 이름이 스케줄러 이름과 다르다:\n  " + "\n  ".join(errors)
+
+
+def test_job_label_fallback_matches_add_job_names():
+    """_JOB_LABEL_FALLBACK[id] == add_job(name=...) — 등록되는 잡 전부(동적 id 포함).
+
+    폴백표는 스케줄러 조회가 실패할 때 텔레그램에 찍히는 이름이다. 달라지면 같은
+    잡이 평소와 다른 이름으로 알림이 온다. 뮤테이션: 폴백 값 하나를 바꾸면 FAIL.
+    """
+    from crawler.job_error_listener import _JOB_LABEL_FALLBACK
+
+    errors = []
+    for job in _scheduler_with_every_job().get_jobs():
+        label = _JOB_LABEL_FALLBACK.get(job.id)
+        if label != job.name:
+            errors.append(f"{job.id}: 폴백 '{label}' != add_job '{job.name}'")
+    assert not errors, "알림 폴백 이름이 스케줄러 이름과 다르다:\n  " + "\n  ".join(errors)

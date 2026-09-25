@@ -68,7 +68,7 @@ def test_job_error_sends_telegram_with_job_id_and_exception():
 
     mock_send.assert_called_once()
     msg = mock_send.call_args[0][0]
-    assert "빌링키 자동결제" in msg  # 영문 job_id 대신 한글 라벨(폴백 표 경유)
+    assert "구독료 자동 결제" in msg  # 영문 job_id 대신 한글 라벨(폴백 표 경유, 세션 418 이름 통일)
     # 세션 410: 예외 원문("PortOne 500")은 알림에 안 싣는다 — 사장님이 못 읽는 글자라서.
     # 대신 "왜 실패했는지 한 줄"이 반드시 있어야 알림이 쓸모가 있다. 원문은 바로 위
     # logger.error 에 남아 추적에 지장 없다(test_job_error_location_goes_to_log_not_telegram).
@@ -92,7 +92,7 @@ def test_job_missed_sends_telegram_with_misfire_wording():
     assert "정해진 시각에 못 돌렸어요" in msg, msg
     # 개발자용 낱말이 되돌아오지 않았는지도 함께 지킨다
     assert "누락" not in msg and "misfire" not in msg.lower(), msg
-    assert "시세 이력 수집" in msg  # 영문 job_id 대신 한글 라벨
+    assert "단지 시세 기록 모으기" in msg  # 영문 job_id 대신 한글 라벨(add_job 정본, 세션 418)
 
 
 def test_cooldown_suppresses_duplicate_alert_within_window():
@@ -186,7 +186,7 @@ def test_job_error_message_falls_back_to_label_table_without_scheduler():
         job_event_listener(event, None)
 
     msg = mock_send.call_args[0][0]
-    assert "빌링키 자동결제" in msg
+    assert "구독료 자동 결제" in msg
     # 세션 410: 예외 원문은 알림에 안 싣는다(로그에 보존). 이 테스트의 주제는
     # "scheduler 없이도 한글 라벨이 채워지나" 이므로 위 단언이 본체다.
     assert "PortOne 500" not in msg, msg
@@ -404,7 +404,9 @@ def test_misfire_message_uses_correct_korean_particle():
     #    ("…수집</b>을"). "수집을" 처럼 붙여서 찾으면 코드가 맞아도 실패한다
     #    (세션 408 실측 — 전체 실행에서 이 테스트만 빨갛게 나온 원인).
     cases = [
-        ("official_price", "</b>을"),   # 받침 있음 → 을
+        # 세션 418 이름 통일로 official_price 가 "정부 공시가격 받기"(받침 없음)가 돼
+        # 받침 있는 사례를 collect_metrics("단지 가치 점수 계산")로 바꿨다.
+        ("collect_metrics", "</b>을"),  # 받침 있음 → 을
         ("crawl_articles", "</b>를"),   # 받침 없음 → 를
     ]
     for job_id, expected in cases:

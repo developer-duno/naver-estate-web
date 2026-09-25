@@ -242,3 +242,95 @@ def test_crawl_failures_unauthenticated_401(client, db):
     """인증 없이 접근 → 401"""
     res = client.get("/api/admin/crawl-failures")
     assert res.status_code in (401, 403)
+
+
+# ── 우리말 오류 칸(error_plain) + 작업 유형 필터 (세션 418) ──
+#
+# 관리자 화면의 실패 목록·작업 목록·최근 작업은 원문(psycopg2… 등)만 받아 그대로
+# 보여줬다. scheduler-status·recrawl 처럼 원문 옆에 우리말 한 줄을 함께 싣는다.
+
+_DB_TIMEOUT_RAW = "(psycopg2.errors.QueryCanceled) canceling statement due to statement timeout"
+_DB_TIMEOUT_PLAIN = "데이터베이스가 너무 오래 걸려 스스로 멈췄어요."
+
+
+def test_crawl_failures_adds_plain_error_from_untruncated_raw(client, db):
+    """last_error_plain 은 200자로 자르기 **전** 원문으로 만든다.
+
+    원문 앞 210자가 우리말이고 뒤에 DB 시간 초과가 붙은 형태 — 잘린 200자로 판정하면
+    뒷부분을 못 봐 "우리말 원문 그대로" 가 나간다. 뮤테이션: 라우터를
+    explain_stored_error(last[:200]) 로 바꾸면 FAIL.
+    """
+    from crawler.plain_words import explain_stored_error
+
+    _make_admin(db, "cfp1")
+    now = datetime.now(timezone.utc)
+    raw = "가" * 210 + " " + _DB_TIMEOUT_RAW
+    db.add(CrawlJob(job_type="complex_articles", status="failed",
+                    error_message=raw, created_at=now, completed_at=now))
+    db.commit()
+
+    res = client.get("/api/admin/crawl-failures", headers=_auth(_token("cfp1")))
+    assert res.status_code == 200, res.text
+    item = res.json()["items"][0]
+    assert item["last_error"] == raw[:200]  # 원문 칸은 그대로 잘린다
+    assert item["last_error_plain"] == explain_stored_error(raw)
+    assert item["last_error_plain"] == _DB_TIMEOUT_PLAIN
+
+
+def test_crawl_jobs_list_includes_error_plain(client, db):
+    """/crawl-jobs 목록 항목에 error_plain — 오류 있으면 우리말, 없으면 빈 문자열."""
+    _make_admin(db, "cjp1")
+    now = datetime.now(timezone.utc)
+    db.add(CrawlJob(job_type="complex_articles", status="failed",
+                    error_message=_DB_TIMEOUT_RAW, created_at=now))
+    db.add(CrawlJob(job_type="price_history", status="completed",
+                    created_at=now - timedelta(minutes=1)))
+    db.commit()
+
+    res = client.get("/api/admin/crawl-jobs", headers=_auth(_token("cjp1")))
+    assert res.status_code == 200, res.text
+    items = {it["job_type"]: it for it in res.json()["items"]}
+    assert items["complex_articles"]["error_message"] == _DB_TIMEOUT_RAW  # 원문 보존
+    assert items["complex_articles"]["error_plain"] == _DB_TIMEOUT_PLAIN
+    assert items["price_history"]["error_plain"] == ""
+
+
+def test_detailed_stats_recent_jobs_include_error_plain(client, db):
+    """/stats/detailed 의 최근 작업에도 error_plain."""
+    _make_admin(db, "dsp1")
+    db.add(CrawlJob(job_type="complex_articles", status="failed",
+                    error_message=_DB_TIMEOUT_RAW, created_at=datetime.now(timezone.utc)))
+    db.commit()
+
+    res = client.get("/api/admin/stats/detailed", headers=_auth(_token("dsp1")))
+    assert res.status_code == 200, res.text
+    recent = res.json()["recent_crawl_jobs"]
+    assert recent[0]["error_message"] == _DB_TIMEOUT_RAW
+    assert recent[0]["error_plain"] == _DB_TIMEOUT_PLAIN
+
+
+def test_crawl_jobs_filters_by_job_type(client, db):
+    """job_type 을 주면 그 유형만, total 도 그 유형 기준."""
+    _make_admin(db, "cjf1")
+    for jt in ("complex_articles", "complex_articles", "price_history"):
+        _make_job(db, status="completed", job_type=jt)
+
+    res = client.get("/api/admin/crawl-jobs?job_type=complex_articles",
+                     headers=_auth(_token("cjf1")))
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["total"] == 2
+    assert {it["job_type"] for it in body["items"]} == {"complex_articles"}
+
+
+def test_crawl_jobs_without_job_type_returns_all(client, db):
+    """job_type 을 안 주면 예전처럼 전체."""
+    _make_admin(db, "cjf2")
+    for jt in ("complex_articles", "price_history"):
+        _make_job(db, status="completed", job_type=jt)
+
+    res = client.get("/api/admin/crawl-jobs", headers=_auth(_token("cjf2")))
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["total"] == 2
+    assert {it["job_type"] for it in body["items"]} == {"complex_articles", "price_history"}

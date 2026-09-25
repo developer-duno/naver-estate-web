@@ -39,35 +39,36 @@ _last_alert_at: dict[str, float] = {}
 
 # 잡 id(영문) → 한글 라벨 폴백. scheduler.get_job(job_id).name 조회가 우선이고
 # (잡이 아직 스케줄러에 등록된 상태), 이건 그마저 실패할 때(잡이 이미 제거된 경우
-# 등)의 최후 폴백 — SCHEDULER_JOB_META(admin/scheduler.py) 와 별개의 최소 사본.
+# 등)의 최후 폴백이다.
+# ⚠ 정본 = crawler/scheduler.py 의 add_job(name=...). 값은 그 글자를 그대로 옮긴다 —
+#    관리자 화면(SCHEDULER_JOB_META)도 같은 정본을 따르므로 셋이 한 이름이 된다(세션 418).
+#    어긋나면 test_job_label_fallback_matches_add_job_names 가 막는다.
 _JOB_LABEL_FALLBACK = {
-    "discover_regions": "전국 단지 발견",
-    "crawl_articles": "매물 수집 배치",
-    "crawl_details": "매물 상세 보강",
-    # 세션 402 — scheduler.py add_job(name=...) 과 글자 단위로 같아야 한다.
+    "discover_regions": "새 단지 찾기",
+    "crawl_articles": "단지 매물 가져오기",
+    "crawl_details": "매물 상세 내용 채우기",
     "field_drift_monitor": "정보 안 채워지면 알림",
     # 상세 백필(세션 402) — 두 회차가 반복문으로 등록돼 id 가 정적 추출에 안 잡히므로
-    # 여기에 직접 등록한다. 값은 SCHEDULER_JOB_META 의 name 과 글자 단위로 같아야 한다.
+    # 여기에 직접 등록한다.
     "backfill_detail_dawn": "빠진 정보 뒤늦게 채우기 00:20",
     "backfill_detail_noon": "빠진 정보 뒤늦게 채우기 12:20",
-    "collect_prices": "시세 이력 수집",
-    "backfill_price": "시세 이력 소급 수집",
+    "collect_prices": "단지 시세 기록 모으기",
+    "backfill_price": "옛 시세 채워 넣기",
     "complex_detail_APT": "아파트 단지 정보 채우기",
     "complex_detail_OPST": "오피스텔 단지 정보 채우기",
-    "collect_public_trades": "공공데이터 실거래가 수집",
-    "collect_officetel_presale": "청약홈 오피스텔 수집",
-    "collect_rental_presale": "청약홈 민간임대 수집",
-    "official_price": "공동주택 공시가격 수집",
-    "collect_air_quality": "에어코리아 대기질 수집",
-    "collect_emergency": "응급의료기관 수집",
-    "collect_childcare": "어린이집 수집",
-    "collect_crime_stats": "범죄통계 수집",
-    "crawler_monitor": "크롤링 모니터",
-    "collect_metrics": "단지 가치지표 수집",
-    "billing_charge": "빌링키 자동결제",
+    "collect_public_trades": "정부 실거래가 받기",
+    "collect_officetel_presale": "오피스텔 청약 공고 받기",
+    "collect_rental_presale": "민간임대 청약 공고 받기",
+    "official_price": "정부 공시가격 받기",
+    "collect_air_quality": "동네 공기질 받기",
+    "collect_emergency": "응급실 위치 받기",
+    "collect_childcare": "어린이집 정보 받기",
+    "collect_crime_stats": "동네 범죄 통계 받기",
+    "crawler_monitor": "서버 일감 점검",
+    "collect_metrics": "단지 가치 점수 계산",
+    "billing_charge": "구독료 자동 결제",
     "vacuum_maintenance": "자료 보관함 정리",
-    # K-apt 관리비 연동 + data.go.kr 버전 감시 (세션 393 결손 보강 — 라벨은
-    # crawler/scheduler.py 의 해당 add_job(name=...) 값을 그대로 복사)
+    # K-apt 관리비 연동 + data.go.kr 버전 감시 (세션 393 결손 보강)
     "kapt_match": "관리비 단지 연결하기",
     "kapt_costs": "단지 관리비 받기",
     "api_version_probe": "정부 자료 창구 살아있나 확인",
@@ -76,11 +77,10 @@ _JOB_LABEL_FALLBACK = {
     # 커버리지 가드(정적 id 대상)가 이 6종의 누락을 **구조적으로 못 봤다**.
     # 그래서 실제로 빠진 채 방치됐고, 이 잡들이 실패하면 텔레그램에 영문 job_id 가
     # 그대로 찍혔다("뭐가 문제인지 안 나온다"의 재발).
-    # 라벨은 SCHEDULER_JOB_META 의 공식 명칭을 그대로 복사(화면·알림 표기 통일).
     # 누락 재발은 test_all_dynamic_jobs_have_job_error_label_fallback 가 차단.
-    "popular_1030": "인기 단지 크롤링 10:45",
-    "popular_1430": "인기 단지 크롤링 14:45",
-    "popular_1900": "인기 단지 크롤링 19:15",
+    "popular_1030": "자주 보는 단지 미리 갱신 10:45",
+    "popular_1430": "자주 보는 단지 미리 갱신 14:45",
+    "popular_1900": "자주 보는 단지 미리 갱신 19:15",
     "complex_detail_JGC": "재건축 단지 정보 채우기",
     "complex_detail_ABYG": "아파트 분양권 단지 정보 채우기",
     "complex_detail_OBYG": "오피스텔 분양권 단지 정보 채우기",

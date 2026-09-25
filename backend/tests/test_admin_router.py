@@ -1,4 +1,4 @@
-"""관리자 API 라우터 테스트 — 인증, 사용자 관리, 설정
+"""관리자 API 라우터 테스트 — 인증, 사용자 관리
 실행: python -m pytest tests/test_admin_router.py -v
 """
 from datetime import datetime, timedelta, timezone
@@ -155,24 +155,23 @@ def test_audit_logs(client, db):
     assert res.status_code == 200
 
 
-# ── 설정 ──
+# ── 설정 (세션 419 삭제) ──
 
-def test_get_settings(client, db):
-    """설정 조회"""
+def test_admin_settings_routes_removed(client, db):
+    """설정 조회·저장 API 는 세션 419(2026-09-26 사장님 결정)에 삭제됐다.
+
+    admin_settings 값을 읽는 백엔드 코드가 없어 저장해도 아무것도 바뀌지 않는 화면이었다.
+    관리자 토큰으로 직접 불러도 경로 자체가 없어야 한다(되살아나면 이 테스트가 실패).
+    """
     _make_profile(db, "a1", role="admin")
-    res = client.get("/api/admin/settings", headers=_auth(_token("a1")))
-    assert res.status_code == 200
-
-
-def test_update_setting(client, db):
-    """설정 생성/수정"""
-    _make_profile(db, "a1", role="admin")
+    headers = _auth(_token("a1"))
+    assert client.get("/api/admin/settings", headers=headers).status_code in (404, 405)
     res = client.patch(
         "/api/admin/settings/test_key",
         json={"value": {"enabled": True}},
-        headers={**_auth(_token("a1")), "Content-Type": "application/json"},
+        headers={**headers, "Content-Type": "application/json"},
     )
-    assert res.status_code == 200
+    assert res.status_code in (404, 405)
 
 
 def test_admin_crawl_jobs_200(client, db):
@@ -203,9 +202,6 @@ def test_admin_stats_no_auth_401(client):
 def test_admin_audit_no_auth_401(client):
     assert client.get('/api/admin/audit-logs').status_code == 401
 
-def test_admin_settings_no_auth_401(client):
-    assert client.get('/api/admin/settings').status_code == 401
-
 def test_admin_crawl_no_auth_401(client):
     assert client.get('/api/admin/crawl-jobs').status_code == 401
 
@@ -217,6 +213,3 @@ def test_admin_audit_user_403(client, db):
     _make_profile(db, 'ru2')
     assert client.get('/api/admin/audit-logs', headers=_auth(_token('ru2'))).status_code == 403
 
-def test_admin_settings_user_403(client, db):
-    _make_profile(db, 'ru3')
-    assert client.get('/api/admin/settings', headers=_auth(_token('ru3'))).status_code == 403

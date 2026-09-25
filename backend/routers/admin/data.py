@@ -1,24 +1,18 @@
-"""관리자 데이터/감사/설정 관리 라우트"""
+"""관리자 데이터/감사 관리 라우트"""
 
 import logging
 from datetime import datetime, timezone
 
 from fastapi import Depends, Query
-from pydantic import BaseModel
 from sqlalchemy import and_, delete, func, select
 from sqlalchemy.orm import Session
 
-from auth.audit import log_action
-from db.models import AdminSetting, AuditLog, RateLimitCounter
+from db.models import AuditLog, RateLimitCounter
 from deps import get_admin_user, get_db
 
 from ._shared import router
 
 logger = logging.getLogger(__name__)
-
-
-class SettingUpdateRequest(BaseModel):
-    value: dict
 
 
 # 세션 401: `DELETE /data/stale`(오래된 비활성 매물 물리삭제) **제거**. 사장님 결정.
@@ -89,50 +83,10 @@ def get_audit_logs(
     }
 
 
-@router.get("/settings")
-def get_all_settings(
-    db: Session = Depends(get_db),
-    admin: dict = Depends(get_admin_user),
-):
-    """전체 설정 조회"""
-    settings = db.execute(select(AdminSetting)).scalars().all()
-    return {
-        "items": [
-            {
-                "key": s.key,
-                "value": s.value,
-                "updated_by": s.updated_by,
-                "updated_at": s.updated_at.isoformat() if s.updated_at else None,
-            }
-            for s in settings
-        ]
-    }
-
-
-@router.patch("/settings/{key}")
-def update_setting(
-    key: str,
-    body: SettingUpdateRequest,
-    db: Session = Depends(get_db),
-    admin: dict = Depends(get_admin_user),
-):
-    """설정 값 변경 (없으면 생성)"""
-    setting = db.get(AdminSetting, key)
-    if setting:
-        setting.value = body.value
-        setting.updated_by = admin["user_id"]
-        setting.updated_at = datetime.now(timezone.utc)
-    else:
-        setting = AdminSetting(
-            key=key,
-            value=body.value,
-            updated_by=admin["user_id"],
-        )
-        db.add(setting)
-
-    log_action(db, admin["user_id"], "admin_setting_update", "setting", key, body.value)
-    db.commit()
-    return {"status": "updated", "key": key}
+# 세션 419(2026-09-26 사장님 결정): `GET /settings`·`PATCH /settings/{key}` **제거**.
+#   admin_settings 값을 읽는 백엔드 코드가 이 두 라우트뿐이라, 저장해도 아무 동작도 바뀌지 않는
+#   화면이었다. 화면(app/admin/settings)·FE 래퍼·타입도 함께 제거. 표(AdminSetting)는 기록 보존용으로 둔다.
+#   admin-labels.ts 의 `admin_setting_update` 라벨은 과거 감사 로그 표시용으로 유지.
 
 
 @router.post("/cleanup/rate-limits")

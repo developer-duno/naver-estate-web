@@ -338,6 +338,7 @@ class RateLimitCounter(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+# 화면·API 는 세션 419(2026-09-26 사장님 결정)에 삭제, 표는 기록 보존용
 class AdminSetting(Base):
     __tablename__ = "admin_settings"
 

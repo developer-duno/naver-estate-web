@@ -47,8 +47,12 @@ export const queryKeys = {
     stats: () => ["admin", "stats"] as const,
     users: (params?: Record<string, unknown>) =>
       ["admin", "users", params] as const,
+    // params 없이 부르면 접두 키 ["admin","crawlJobs"] — 무효화할 때 모든 목록 키를 부분 일치로 잡는다.
+    // (3번째 칸이 undefined 이면 {status,page} 가 든 목록 키와 일치하지 않아 취소 뒤 목록이 안 새로고침됐다)
     crawlJobs: (params?: Record<string, unknown>) =>
-      ["admin", "crawlJobs", params] as const,
+      params === undefined
+        ? (["admin", "crawlJobs"] as const)
+        : (["admin", "crawlJobs", params] as const),
     auditLogs: (params?: Record<string, unknown>) =>
       ["admin", "auditLogs", params] as const,
     settings: () => ["admin", "settings"] as const,

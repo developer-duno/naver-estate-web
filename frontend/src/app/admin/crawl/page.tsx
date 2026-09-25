@@ -30,13 +30,6 @@ const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "cancelled", label: "취소" },
 ];
 
-/**
- * 유형으로 거를 때 한 번에 받아 오는 최근 작업 수.
- * BE /api/admin/crawl-jobs 는 아직 job_type 조건을 받지 않아서(상태·쪽 번호만), 유형 조건은
- * 최근 작업을 BE 상한(page_size 100)만큼 받아 화면에서 거른다 — 그 한계를 화면에도 밝힌다.
- */
-const JOB_TYPE_SCAN_SIZE = 100;
-
 const CANCEL_HELP =
   "취소는 되돌릴 수 없어요. 취소하면 작업 기록이 '취소됨'으로 바뀌지만, 이미 돌고 있던 수집을 그 자리에서 멈추지는 않아요 — 그때까지 받은 자료는 그대로 저장되고, 작업이 끝나도 기록은 '취소됨'으로 남아요";
 
@@ -53,9 +46,12 @@ function AdminCrawlContent() {
   const { token, getToken } = useTokenReady();
   const queryClient = useQueryClient();
 
-  const params = filterJobType
-    ? { status: filterStatus || undefined, page: 1, page_size: JOB_TYPE_SCAN_SIZE }
-    : { status: filterStatus || undefined, page };
+  // 유형 조건은 BE(/api/admin/crawl-jobs?job_type=)가 전체 이력에서 걸러 쪽 번호와 함께 돌려준다
+  const params = {
+    status: filterStatus || undefined,
+    job_type: filterJobType || undefined,
+    page,
+  };
 
   const jobsQuery = useQuery<PaginatedResponse<CrawlJobDetail>, Error>({
     queryKey: queryKeys.admin.crawlJobs(params as Record<string, unknown>),
@@ -135,11 +131,12 @@ function AdminCrawlContent() {
   };
 
   const fetchedJobs = jobsQuery.data?.items ?? [];
+  // 안전망 — 재시작 전 옛 BE 는 job_type 을 모르고 전체를 돌려주므로, 고른 유형과 다른 행은 한 번 더 거른다
   const visibleJobs = filterJobType
     ? fetchedJobs.filter((j) => j.job_type === filterJobType)
     : fetchedJobs;
   const listTitle = filterJobType
-    ? `수집 작업 목록 (${jobTypeLabel(filterJobType)} ${visibleJobs.length}건 · 최근 ${fetchedJobs.length}건 중)`
+    ? `수집 작업 목록 (${jobTypeLabel(filterJobType)} 총 ${jobsQuery.data?.total ?? 0}건)`
     : `수집 작업 목록 (총 ${jobsQuery.data?.total ?? 0}건)`;
 
   return (
@@ -208,11 +205,6 @@ function AdminCrawlContent() {
             </div>
           }
         >
-          {filterJobType && (
-            <p className="mb-2 text-xs text-gray-500">
-              유형으로 거르기는 가장 최근 작업 {JOB_TYPE_SCAN_SIZE}건 안에서만 찾아요. 더 오래된 작업은 유형 전체로 바꿔 쪽을 넘겨 보세요.
-            </p>
-          )}
           {jobsQuery.isLoading ? (
             <div className="text-sm text-gray-500 py-8 text-center" role="status">로딩 중...</div>
           ) : (
@@ -226,7 +218,7 @@ function AdminCrawlContent() {
         </AdminCard>
       </div>
 
-      {!filterJobType && (jobsQuery.data?.total ?? 0) > 20 && (
+      {(jobsQuery.data?.total ?? 0) > 20 && (
         <div className="flex justify-center gap-2 mt-4">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}

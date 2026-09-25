@@ -91,4 +91,25 @@ describe("CrawlJobTable", () => {
     expect(screen.getByRole("columnheader", { name: "번호" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "ID" })).not.toBeInTheDocument();
   });
+
+  /** 실패 행에는 BE 가 준 우리말 한 줄(error_plain)을 보이고, 원문(error_message)은 title 로만 남긴다.
+   *  옛 BE(필드 없음)·다른 상태에서는 줄을 그리지 않는다 */
+  it("실패 행에 error_plain 우리말 한 줄 — 원문은 title, 없거나 실패가 아니면 안 그린다", () => {
+    const raw = "공공데이터 오류 봉투 resultCode=04 (kaptCode=A1 searchDate=202608)";
+    render(
+      <CrawlJobTable
+        jobs={[
+          mkJob({ id: 1, status: "failed", error_message: raw, error_plain: "공공데이터 서버가 자료를 못 줬어요(사유 번호 04)" }),
+          mkJob({ id: 2, status: "failed", error_message: "옛 백엔드 원문" }),
+          mkJob({ id: 3, status: "cancelled", error_message: "stale running", error_plain: "취소 사유 문장" }),
+        ]}
+      />,
+    );
+    const line = screen.getByText("공공데이터 서버가 자료를 못 줬어요(사유 번호 04)");
+    expect(line).toHaveAttribute("title", raw);
+    // 원문은 본문 글자로 새지 않는다
+    expect(screen.queryByText(raw)).not.toBeInTheDocument();
+    expect(screen.queryByText("옛 백엔드 원문")).not.toBeInTheDocument();
+    expect(screen.queryByText("취소 사유 문장")).not.toBeInTheDocument();
+  });
 });

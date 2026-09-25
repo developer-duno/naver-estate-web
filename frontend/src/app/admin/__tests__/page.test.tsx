@@ -113,6 +113,28 @@ describe("AdminDashboard 최근 활동", () => {
     expect(screen.queryByText(/user:abc123/)).not.toBeInTheDocument();
   });
 
+  /** 사용자 대상의 36자 UUID 는 앞 8자 + "…" 로 줄이고, 전체는 title 로 남긴다 */
+  it("사용자 대상 UUID 는 앞 8자만 보이고 전체는 title 로", async () => {
+    const uuid = "1234abcd-5678-90ef-1234-567890abcdef";
+    mockLogs.mockResolvedValue(mkLogPage([mkLog({ target_id: uuid })]));
+    renderDashboard();
+
+    const target = await screen.findByText("사용자: 1234abcd…");
+    expect(target).toHaveAttribute("title", uuid);
+    expect(screen.queryByText(new RegExp(uuid))).not.toBeInTheDocument();
+  });
+
+  /** 수집기 대상은 원문 이름(kapt-costs) 대신 우리말 */
+  it("수집기 대상은 우리말 이름으로", async () => {
+    mockLogs.mockResolvedValue(
+      mkLogPage([mkLog({ action: "admin_collect_trigger", target_type: "collector", target_id: "kapt-costs" })]),
+    );
+    renderDashboard();
+
+    expect(await screen.findByText(/수집기: 단지 관리비 받기/)).toBeInTheDocument();
+    expect(screen.queryByText(/kapt-costs/)).not.toBeInTheDocument();
+  });
+
   /** 경계: 미매핑 action 코드는 라벨이 없으니 코드 그대로 (안전 폴백) */
   it("미매핑 action 코드는 코드 원문 그대로 표시한다", async () => {
     mockLogs.mockResolvedValue(
@@ -195,6 +217,21 @@ describe("AdminDashboard 4층 배치 (세션 419)", () => {
     expect(mockNaver).not.toHaveBeenCalled();
     // 24시간 실패는 절 안에서만 부른다 (이번 주 카드는 168시간을 부른다)
     expect(mockFailures).not.toHaveBeenCalledWith("test-token", 24);
+  });
+
+  it("24시간 실패가 있으면 접힌 실패 절 제목 옆에 'N건' 칩, 0 이면 칩이 없다", async () => {
+    const { unmount } = renderDashboard();
+    const chip = await screen.findByText("3건");
+    // 실패 절의 summary 안 — 절을 열지 않아도 보인다
+    expect(chip.closest("summary")).toHaveTextContent("실패 자세히 (최근 24시간)");
+    expect(document.getElementById("failure")).not.toHaveAttribute("open");
+    unmount();
+
+    mockStats.mockResolvedValue({ ...emptyStats, complex_count: 1234, error_count_24h: 0 });
+    renderDashboard();
+    await waitFor(() => expect(screen.getByText("1,234")).toBeInTheDocument());
+    expect(screen.queryByText("0건")).toBeNull();
+    expect(screen.queryByText("3건")).toBeNull();
   });
 
   it("실패 절을 열고 유형을 누르면 /admin/crawl 로 '실패 + 그 유형' 필터를 들고 간다", async () => {

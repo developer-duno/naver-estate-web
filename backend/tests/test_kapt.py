@@ -2952,6 +2952,9 @@ def test_collect_costs_consecutive_failures_canary_alive_keeps_going(db, monkeyp
 
     두 축을 다르게: 대상 8 · 실패 6 · 임계 5 · 수집 2.
     뮤테이션: 카나리 분기를 지우고 옛 즉시 중단으로 되돌리면 K5~K7 이 안 불려 FAIL.
+    ⚠ 마감 판정은 세션 417 최종 검사관 A 로 바뀌었다: 실패 6 > 수집 2 라 이제 completed 가 아니라
+    `mostly_failed`(failed) 다 — 한 단지만 성공해도 completed 면 monitor 가 직전 실패를 "복구" 로
+    풀어 버렸다. "끝까지 계속 간다" 는 이 테스트의 본래 요지(호출 순서·카나리 1회·대기 0)는 그대로다.
     """
     months = candidate_cost_months()
     _seed_failure_run(db, "65", 8, months)
@@ -2975,14 +2978,14 @@ def test_collect_costs_consecutive_failures_canary_alive_keeps_going(db, monkeyp
     result = collect_kapt_costs(batch_size=20)
 
     assert [c for c in dict.fromkeys(called)] == ["K%d" % i for i in range(8)], called
-    assert result.get("error") is None, result
+    assert result.get("error") == "mostly_failed", result
     assert (result["collected"], result["failed"]) == (2, 6)
     assert slept == [], f"살아있는데 기다렸다: {slept}"
     # K0~K4 에서 1번, 리셋 뒤 K5 하나로는 임계 미달 — 카나리는 딱 1회
     assert probes == ["KS"], probes
     from db.models import CrawlJob
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
-    assert job.status == "completed", "수집이 있는 부분 성공인데 failed 로 마감됐다"
+    assert job.status == "failed", "실패 6 > 수집 2 인데 completed 로 마감됐다"
 
 
 def test_collect_costs_canary_alive_but_nothing_collected_fails_with_reason(db, monkeypatch):
@@ -3304,3 +3307,230 @@ def test_partial_success_with_failures_records_reason(db, monkeypatch):
     assert msg.startswith("1단지 호출 실패(마지막 사유: data.go.kr 오류 코드 04"), msg
     rendered = explain_stored_error(msg)
     assert "사유 번호 04" in rendered and "data.go.kr" not in rendered, rendered
+
+
+# ── 세션 417 최종 검사관 A·C 후속 (D9) ────────────────────────────────────
+
+
+def _raise_04(code, month):
+    raise KaptApiError(
+        "data.go.kr 오류 코드 04(HTTP 에러) 재시도 3회 후 — op=getHsmpLaborCostInfoV3",
+        code="04", op="getHsmpLaborCostInfoV3",
+    )
+
+
+def test_collect_costs_alive_cap_stops_on_third_canary_while_empty(db, monkeypatch):
+    """수집 0 인 동안 "살아있음 — 계속" 은 2회까지 — 3번째 카나리에서 partial_outage 로 마감.
+
+    09-25 14:47~17:21 실사고: 표본은 살아있다는데 공개 단지 첫 op 만 04 라 "계속" 이 15번 반복돼
+    150분 예산을 수집 0 으로 다 태웠다. 두 축을 다르게: 대상 20 · 임계 5 · 상한 2 → 카나리 3회 ·
+    실패 15 · 잔여 5.
+    뮤테이션: 상한 검사(`alive_continues_while_empty >= …`)를 지우면 20단지를 다 부르고
+    카나리 4회 · 옛 partial_outage 문구로 끝나 FAIL.
+    """
+    months = candidate_cost_months()
+    _seed_failure_run(db, "80", 20, months)
+    called = []
+
+    def common(code, month):
+        called.append(code)
+        _raise_04(code, month)
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    probes = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost_probe",
+        lambda code, month: probes.append(code) or {"pay": 1},
+    )
+    slept = _fake_sleep(monkeypatch, service_kapt)
+
+    result = collect_kapt_costs(batch_size=50)
+
+    assert result["error"] == "partial_outage", result
+    assert (result["collected"], result["failed"], result["remaining"]) == (0, 15, 5), result
+    assert len(set(called)) == 15, called
+    assert probes == ["KS"] * 3, probes
+    assert slept == []
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "failed"
+    msg = job.error_message or ""
+    assert "표본은 응답하지만 수집 대상은 15단지 연속 오류 — 회차 중단(살아있음 판정 2회 뒤)" in msg, msg
+    assert "코드 04" in msg, msg
+
+
+def test_collect_costs_alive_cap_ignored_once_something_collected(db, monkeypatch):
+    """수집이 1건이라도 있으면 상한을 보지 않는다 — 끝까지 가고 카나리는 임계마다 1회.
+
+    첫 호출 1단지만 성공 · 나머지 20단지 실패(임계 5 → 카나리 4회). 실패 20 > 수집 1 이라 마감은
+    `mostly_failed` 지만 `partial_outage`(상한 중단)가 아니다.
+    뮤테이션: 상한 조건에서 `collected == 0` 을 빼면 3번째 카나리에서 멈춰 FAIL.
+    """
+    months = candidate_cost_months()
+    _seed_failure_run(db, "81", 21, months)
+    called = []
+
+    def common(code, month):
+        called.append(code)
+        if len(called) == 1:
+            return {"aV3": 700}
+        _raise_04(code, month)
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+    probes = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_common_cost_probe",
+        lambda code, month: probes.append(code) or {"pay": 1},
+    )
+    _fake_sleep(monkeypatch, service_kapt)
+
+    result = collect_kapt_costs(batch_size=50)
+
+    assert result.get("error") == "mostly_failed", result
+    assert (result["collected"], result["failed"]) == (1, 20), result
+    assert len(set(called)) == 21, called
+    # 카나리 4회 — 첫 표본(방금 저장한 성공 단지)이 살아있다고 답해 회마다 1번만 찌른다
+    assert len(probes) == 4, probes
+
+
+def test_collect_costs_mostly_failed_marks_job_failed(db, monkeypatch):
+    """수집 ≥1 이지만 실패 > 수집(1 성공 · 4 실패) → failed + "대부분 오류" 사유.
+
+    한 단지만 성공해도 completed 면 monitor 가 직전 crawl_failed 를 "✅ 복구" 로 풀어 버린다.
+    뮤테이션: `failed > collected` 분기를 지우면 completed 로 끝나 FAIL.
+    """
+    for i in range(5):
+        _make_complex(db, complex_no=f"82{i:02d}")
+        _seed_mapping(db, complex_no=f"82{i:02d}", kapt_code=f"M{i}")
+    called = []
+
+    def common(code, month):
+        called.append(code)
+        if len(called) == 1:
+            return {"aV3": 100}
+        _raise_04(code, month)
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert (result["collected"], result["failed"]) == (1, 4)
+    assert result.get("error") == "mostly_failed", result
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "failed"
+    msg = job.error_message or ""
+    assert msg.startswith("실패 4단지 > 수집 1단지 — 대부분 오류(마지막 사유: data.go.kr 오류 코드 04"), msg
+    assert db.query(KaptManagementCost).count() == 1  # 성공분은 저장돼 있다
+
+
+def test_collect_costs_failures_not_exceeding_collected_stay_completed(db, monkeypatch):
+    """실패 ≤ 수집(3 성공 · 1 실패) → completed + error_message(부분 성공) 그대로."""
+    for i in range(4):
+        _make_complex(db, complex_no=f"83{i:02d}")
+        _seed_mapping(db, complex_no=f"83{i:02d}", kapt_code=f"N{i}")
+    called = []
+
+    def common(code, month):
+        called.append(code)
+        if len(called) == 2:
+            _raise_04(code, month)
+        return {"aV3": 100}
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", common)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert (result["collected"], result["failed"]) == (3, 1)
+    assert result.get("error") is None, result
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
+    assert job.status == "completed"
+    assert (job.error_message or "").startswith("1단지 호출 실패"), job.error_message
+
+
+def test_collect_costs_skips_when_already_running(db, monkeypatch):
+    """이미 running 인 kapt_costs 가 있으면 잡 행을 만들지 않고 호출 0 으로 반환.
+
+    뮤테이션: 시작부 running 검사를 지우면 잡 행이 하나 더 생기고 호출이 나가 FAIL.
+    """
+    from db.models import CrawlJob
+    _make_complex(db, complex_no="8400")
+    _seed_mapping(db, complex_no="8400", kapt_code="R0")
+    db.add(CrawlJob(job_type="kapt_costs", status="running"))
+    db.commit()
+
+    def boom(code, month):
+        raise AssertionError("이미 도는 회차가 있는데 API 를 불렀다")
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", boom)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", boom)
+
+    result = collect_kapt_costs(batch_size=10)
+
+    assert result == {"collected": 0, "error": "already_running", "message": "이미 도는 회차 있음"}
+    assert db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").count() == 1
+
+
+def test_fetch_cost_item_failure_carries_kaptcode_and_searchdate(monkeypatch, caplog):
+    """재시도 INFO · "재시도 3회 후" WARNING · 예외 메시지 모두에 kaptCode·searchDate 가 실린다.
+
+    "특정 달·단지만 고장인가" 를 로그로 가르려는 것(세션 417 최종 검사관 C). 텔레그램 쪽은
+    `explain_error` 가 사유 번호 문장으로 통째로 바꿔 영문 키가 새지 않는다.
+    뮤테이션: `fetch_cost_item` 의 `ctx=` 인자를 지우면 FAIL.
+    """
+    import logging
+
+    from crawler.plain_words import explain_error
+
+    _sequence_call_api(monkeypatch, [RAW_ENVELOPE_04])
+    _fake_sleep(monkeypatch, kapt_api)
+    caplog.set_level(logging.INFO, logger="crawler.kapt_api")
+
+    with pytest.raises(KaptApiError) as exc:
+        kapt_api.fetch_cost_item("http://x", "getHsmpLaborCostInfoV3", "A10020001", "202606")
+
+    ctx = "kaptCode=A10020001 searchDate=202606"
+    assert ctx in str(exc.value), str(exc.value)
+    messages = [(r.levelno, r.getMessage()) for r in caplog.records]
+    retry_logs = [m for lv, m in messages if lv == logging.INFO and "초 뒤 재시도" in m]
+    final_logs = [m for lv, m in messages if lv == logging.WARNING and "재시도 3회 후" in m]
+    assert len(retry_logs) == 3 and all(ctx in m for m in retry_logs), retry_logs
+    assert final_logs and ctx in final_logs[0], final_logs
+    plain = explain_error(f"공공데이터 서버는 응답하지만 3단지 전부 오류 — 수집 0 (마지막 오류: {exc.value})")
+    assert "사유 번호 04" in plain and "kaptCode" not in plain and "searchDate" not in plain, plain
+
+
+def test_basis_info_does_not_retry_transient_error(monkeypatch):
+    """목록·기본정보용 `_body` 는 일시 오류도 재시도하지 않는다 — 실패 1건 = 1콜 · 대기 0 · None.
+
+    장애일에 kapt_match 기본정보 14,747건이 4콜씩·대기 176시간이 되는 것을 막는다(검사관 A).
+    뮤테이션: `_body` 의 `retry_transient=False` 를 지우면 4콜 · 대기 [3, 10, 30] 로 FAIL.
+    """
+    calls = _sequence_call_api(monkeypatch, [RAW_ENVELOPE_04])
+    slept = _fake_sleep(monkeypatch, kapt_api)
+    before = kapt_api.retry_calls_made()
+
+    assert kapt_api.fetch_apt_basis_info("A10020001") is None
+    assert len(calls) == 1, calls
+    assert slept == []
+    assert kapt_api.retry_calls_made() == before
+
+
+@pytest.mark.parametrize("code", ["0", 0, "00"])
+def test_body_or_raise_result_code_zero_variants_are_success(monkeypatch, code):
+    """resultCode 가 "0"·정수 0·"00" 모두 성공으로 통과한다(검사관 변이 M7 생존 보강).
+
+    뮤테이션: `_norm_reason_code` 의 zfill 정규화를 지우면 "0"·0 이 오류 코드로 올라가 FAIL.
+    """
+    ok = {"response": {"header": {"resultCode": code}, "body": {"item": {"pay": 1}}}}
+    calls = _sequence_call_api(monkeypatch, [ok])
+
+    body = kapt_api.KaptAPI._body_or_raise("http://x", {}, op="opA")
+
+    assert body == {"item": {"pay": 1}}
+    assert len(calls) == 1

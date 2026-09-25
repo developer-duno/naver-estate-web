@@ -45,8 +45,26 @@ def test_failed_message_multiple_count_shows_extra():
             "processed": 0, "total": 0}
     msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
     assert "외 2건" in msg
-    # 세션 407 — "통계 없음" 은 뜻이 안 통해 "건수를 세지 않는 작업" 으로 바꿨다.
-    assert "건수를 세지 않는 작업" in msg  # total=0 → 0 나눗셈 없이 처리
+    # total=0 → 0 나눗셈 없이 처리. 세션 417 최종 검사관 A: 실패 본문은 이 경우 "건수를 세지
+    # 않는 작업" 대신 줄 자체를 뺀다(건수를 세는 작업이 한 번도 성공 못 한 경우엔 그 말이 거짓).
+    assert "건수를 세지 않는 작업" not in msg
+    assert "마지막으로 잘 됐을 때 처리한 양" not in msg
+
+
+def test_failed_body_omits_amount_line_without_completed_record():
+    """마지막 completed 기록이 없으면(monitor 가 None 을 넘김) 처리한 양 줄을 생략한다.
+
+    옛 코드는 `_rate(None, None)` → "건수를 세지 않는 작업이에요" 를 찍어, 한 번도 성공 못 한
+    kapt_costs 같은 작업에 거짓 설명을 붙였다. 뮤테이션: `if data.get("total")` 가드를 지우면 FAIL.
+    """
+    data = {"job_type": "kapt_costs", "count": 1,
+            "error": "data.go.kr 오류 코드 04(HTTP 에러) — op=x",
+            "processed": None, "total": None, "last_completed_at": None}
+    msg = format_issue_message("crawl_failed", data, event="new", header_ctx=_ctx())
+    assert "마지막으로 잘 됐을 때 처리한 양" not in msg, msg
+    assert "건수를 세지 않는 작업" not in msg, msg
+    assert "마지막으로 잘 됐던 때" not in msg, msg
+    assert "사유 번호 04" in msg, msg
 
 
 def test_stale_message_body():

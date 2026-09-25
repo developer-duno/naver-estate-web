@@ -146,19 +146,36 @@ def test_v2_individual_names_stay_individual_in_summary(db, monkeypatch):
     assert not any(op in row.breakdown for op in INDIVIDUAL_COST_OPS)
 
 
-# (c) 비어 온 op 는 옛 값 유지
-def test_none_op_keeps_old_value(db, monkeypatch):
+# (c) 5 op 중 하나라도 비어 오면 그 행은 갱신하지 않는다(다음 실행 대상에 남김)
+def test_partial_blank_row_not_updated_and_counted(db, monkeypatch):
+    """옛 규칙("비어 온 op 는 옛 값 유지 + 나머지 갱신")을 바꿨다 — 세션 417 최종 검사관 A.
+
+    저장된 행은 22키 전부 아니면 전무라(실측) 한 번 공개됐던 자료의 일부 op 만 비어 오는 것은
+    이상 신호다. 옛 규칙대로면 첫 칸 값(옛 파서)과 칸 합(새 파서)이 한 행에 섞이고 fetched_at 이
+    기준 뒤로 넘어가 다시는 안 고쳐진다. 그래서 그 행은 손대지 않고 `partial_blank` 로 센다.
+    뮤테이션: `if blank_ops:` 분기를 지우면 행이 갱신돼 FAIL.
+    """
     row_id = _seed(db, "1001", "A1")
-    kept_op = "getHsmpTaxdueInfoV3"
-    monkeypatch.setattr(kapt_api, "fetch_cost_item", _fake_items(amount_per_field=7, none_ops=(kept_op,)))
+    good_id = _seed(db, "1002", "A2")
+    blank_op = "getHsmpTaxdueInfoV3"
+    base = _fake_items(amount_per_field=7)
+
+    def fake(base_url, op, kapt_code, search_date):
+        if kapt_code == "A1" and op == blank_op:
+            return None
+        return base(base_url, op, kapt_code, search_date)
+
+    monkeypatch.setattr(kapt_api, "fetch_cost_item", fake)
 
     stats = _run(db)
     db.expire_all()
     row = db.get(KaptManagementCost, row_id)
-    assert row.breakdown[kept_op] == OLD_FIVE  # 0 으로 덮지 않는다
-    assert row.breakdown["getHsmpLaborCostInfoV3"] == 63
-    assert stats.kept_ops == 1 and stats.processed == 1
-    assert row.total_cost == sum(row.breakdown.values())
+    assert row.breakdown == _breakdown()  # 한 칸도 바뀌지 않았다
+    assert row.fetched_at.replace(tzinfo=timezone.utc) == OLD_AT
+    assert stats.partial_blank == 1 and stats.all_blank == 0
+    assert stats.processed == 1 and stats.stop_reason == "done"
+    assert db.get(KaptManagementCost, good_id).breakdown["getHsmpLaborCostInfoV3"] == 63
+    assert [t.id for t in rk.select_targets(db)] == [row_id]  # 다음 실행 대상에 남는다
 
 
 # (d) KaptApiError 행은 미갱신 + 계수, 다음 행은 계속
@@ -247,8 +264,12 @@ def test_refuses_while_kapt_costs_running(db, monkeypatch):
     assert stats.stop_reason == "refused_kapt_costs_running" and calls == []
 
 
-@pytest.mark.parametrize("hhmm,refused", [((6, 19), False), ((6, 20), True), ((8, 59), True), ((9, 0), False)])
-def test_blocked_window_boundaries(db, monkeypatch, hhmm, refused):
+# 시작 허용 = 09:00~23:59 KST (세션 417 최종 검사관 B — 옛 06:20~09:00 만 거부해 00:00~06:20 시작이 새고 있었다)
+@pytest.mark.parametrize("hhmm,refused", [
+    ((0, 0), True), ((3, 0), True), ((6, 19), True), ((6, 20), True), ((8, 59), True),
+    ((9, 0), False), ((23, 59), False),
+])
+def test_start_window_boundaries(db, monkeypatch, hhmm, refused):
     _seed(db, "1001", "A1")
     calls = []
     monkeypatch.setattr(kapt_api, "fetch_cost_item", _fake_items(calls=calls))
@@ -311,7 +332,7 @@ def test_all_blank_row_not_updated_and_counted(db, monkeypatch):
     blank = db.get(KaptManagementCost, blank_id)
     assert blank.breakdown == _breakdown()
     assert blank.fetched_at.replace(tzinfo=timezone.utc) == OLD_AT  # 다음 실행이 다시 시도
-    assert stats.all_blank == 1 and stats.kept_ops == 0
+    assert stats.all_blank == 1 and stats.partial_blank == 0
     assert stats.processed == 1 and stats.stop_reason == "done"
     assert db.get(KaptManagementCost, good_id).breakdown["getHsmpLaborCostInfoV3"] == 63
     assert [t.id for t in rk.select_targets(db)] == [blank_id]
@@ -329,17 +350,48 @@ def test_consecutive_all_blank_stops(db, monkeypatch):
     assert len({code for code, _ in calls}) == rk.MAX_CONSECUTIVE_ALL_BLANK  # 11번째 행은 안 부른다
 
 
-# ③ 돌던 중 06:20 창에 들어서면 멈춘다
-def test_stops_when_entering_window_mid_run(db, monkeypatch):
+# ③ 23:59 에 시작해 돌던 중 자정을 넘기면 멈춘다(새 날짜 한도는 그날 06:20 정기 회차 몫)
+@pytest.mark.parametrize("force", [False, True])
+def test_stops_at_midnight_rollover(db, monkeypatch, force):
+    """뮤테이션: `date_rollover` 검사를 지우면 셋째 행까지 처리돼 FAIL. `--force` 로도 안 풀린다."""
     for i in range(3):
         _seed(db, f"{6000 + i}", f"W{i}")
     monkeypatch.setattr(kapt_api, "fetch_cost_item", _fake_items())
-    # 시작 검사 1회 + 행마다 1회 — 둘째 행 직전에 06:20 이 된다
-    clock = iter([datetime(2026, 9, 25, 6, 19, tzinfo=KST)] * 2
-                 + [datetime(2026, 9, 25, 6, 20, tzinfo=KST)] * 5)
-    stats = _run(db, now_fn=lambda: next(clock))
-    assert stats.stop_reason == "window"
+    # 시작 1회 + 행마다 1회 — 둘째 행 직전에 날짜가 바뀐다
+    clock = iter([datetime(2026, 9, 25, 23, 59, tzinfo=KST)] * 2
+                 + [datetime(2026, 9, 26, 0, 0, tzinfo=KST)] * 5)
+    stats = _run(db, force=force, now_fn=lambda: next(clock))
+    assert stats.stop_reason == "date_rollover"
     assert stats.processed == 1
+
+
+def test_run_calls_count_real_transient_retry(db, monkeypatch):
+    """요약의 콜 수가 `_body_or_raise` 의 **실제** 일시 오류 재시도를 포함한다.
+
+    `fetch_cost_item` 을 patch 하지 않고 그 아래 `KaptAPI.call_api` 만 갈아 끼워, 첫 호출은
+    04 봉투 → 재시도 1회 뒤 정상이 되게 한다. 5 op 논리 호출 + 재시도 1 = 6콜.
+    뮤테이션: `_calls_now` 에서 `retry_calls_made()` 를 빼면 5 로 FAIL(검사관 변이 M1).
+    """
+    _seed(db, "1001", "A1")
+    envelope_04 = {"OpenAPI_ServiceResponse": {"cmmMsgHeader": {
+        "errMsg": "HTTP_ERROR", "returnAuthMsg": "HTTP 에러", "returnReasonCode": "04"}}}
+    seen = []
+
+    def fake_call(cls, url, params):
+        seen.append(url)
+        if len(seen) == 1:
+            return envelope_04
+        op = url.rsplit("/", 1)[-1]
+        item = {f: "7" for f in kapt_api._COST_AMOUNT_FIELDS[op]}
+        return {"response": {"header": {"resultCode": "00"}, "body": {"item": item}}}
+
+    monkeypatch.setattr(kapt_api.KaptAPI, "call_api", classmethod(fake_call))
+    monkeypatch.setattr(kapt_api.time, "sleep", lambda s: None)
+
+    stats = _run(db)
+    assert stats.processed == 1, stats
+    assert len(seen) == 6
+    assert stats.calls == 6, f"재시도 콜이 요약에서 빠졌다: {stats.calls}"
 
 
 # ④ 100행마다 kapt_costs running 재확인

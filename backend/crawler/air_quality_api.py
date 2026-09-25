@@ -66,10 +66,13 @@ def wgs84_to_tm(lat: float, lng: float) -> tuple[float, float]:
     옛 구현에 false northing 이 없는 것은 코드로 확인되는 사실이고, 그 좌표를 쓰면 엉뚱한
     관측소가 나온다(아래 원점 실측표). 회귀 가드는 `tests/test_air_quality_tm.py`.
 
-    ⚠️ 다만 **`air_quality_stations` 표는 여전히 8행**이고 `lat`/`lng` 가 전부 NULL 이다.
-    `infra` 가 쓰는 392종 중 **387종이 이 캐시에 없고**, 2026-09-21 회차가 본 72종 중
-    반영된 것이 **0** 이다(남은 8행은 전부 제주·거제·가거도 계열로 갱신 시각도 다르다).
-    `_upsert_station` 이 매번 불리는데 표에 안 들어가는 셈이라 **별개의 결함**으로 남는다.
+    `air_quality_stations` 캐시 표가 오래 **8행(제주·거제·가거도 계열)** 에 머문 것도 같은
+    뿌리였다 — 전국이 제주 관측소로 몰리니 `_upsert_station` 이 그 이름들만 받았다. 이 수정
+    (PR #556, 2026-09-22 적용) 뒤로는 매일 100단지 순환이 닿는 관측소가 그대로 쌓인다
+    (세션 418 실측 2026-09-25: 177행 — 09-22 47·09-23 50·09-24 73. `infra.air_station_name`
+    394종 중 220종이 아직 없고, 한 바퀴 ≈30일이라 10월 하순쯤 수렴). `lat`/`lng` 칸은
+    `_upsert_station` 이 쓰지 않고 읽는 코드도 양쪽 레포에 0건이라 **전부 NULL 인 것이 정상**
+    (무해한 빈 칸 — 세는 명령: `SELECT count(*), count(lat) FROM air_quality_stations`).
 
     ## 지금 구현
 

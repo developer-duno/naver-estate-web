@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getAdminTraffic, type TrafficStats, type TrafficWindow } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import AdminCard from "./AdminCard";
+import RawDetail from "./RawDetail";
 
 interface Props {
   getToken: () => Promise<string>;
@@ -132,7 +133,8 @@ export default function TrafficCard({ getToken, hideTitle = false }: Props) {
           })()}
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            {/* 7열 숫자 표 — 휴대폰에서 칸이 눌리지 않게 최소 폭을 두고 가로로 넘긴다 */}
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="text-xs text-gray-500 border-b">
                   <th className="text-left py-1.5 font-medium">기간</th>
@@ -140,11 +142,16 @@ export default function TrafficCard({ getToken, hideTitle = false }: Props) {
                   <th className="text-right py-1.5 font-medium">방문자(대략)</th>
                   <th className="text-right py-1.5 font-medium">속도(중간)</th>
                   <th className="text-right py-1.5 font-medium">속도(느림)</th>
-                  <th className="text-right py-1.5 font-medium" title="4xx — 잘못된 요청·권한 없음 등">
-                    요청 오류
+                  {/* 뜻풀이는 마우스를 올리거나(데스크톱) 머리글을 누르면(휴대폰) 보인다 */}
+                  <th className="text-right py-1.5 font-medium">
+                    <RawDetail raw="4xx — 잘못된 요청·권한 없음 등">
+                      <span title="4xx — 잘못된 요청·권한 없음 등">요청 오류</span>
+                    </RawDetail>
                   </th>
-                  <th className="text-right py-1.5 font-medium" title="5xx — 서버 쪽 문제">
-                    서버 오류
+                  <th className="text-right py-1.5 font-medium">
+                    <RawDetail raw="5xx — 서버 쪽 문제">
+                      <span title="5xx — 서버 쪽 문제">서버 오류</span>
+                    </RawDetail>
                   </th>
                 </tr>
               </thead>
@@ -183,10 +190,12 @@ export default function TrafficCard({ getToken, hideTitle = false }: Props) {
                 <ul className="space-y-1">
                   {hourWindow.top_paths.map((p) => (
                     <li key={p.path} className="flex justify-between text-xs">
-                      {/* 경로 원문(/api/...)은 마우스를 올리면 보이게 한다 */}
-                      <span className="text-gray-700" title={p.path}>
-                        {PATH_LABEL[p.path] ?? p.path}
-                      </span>
+                      {/* 경로 원문(/api/...)은 마우스를 올리거나 이름을 누르면 보인다 */}
+                      <RawDetail raw={p.path} className="min-w-0">
+                        <span className="text-gray-700" title={p.path}>
+                          {PATH_LABEL[p.path] ?? p.path}
+                        </span>
+                      </RawDetail>
                       <span className="tabular-nums text-gray-600">{num(p.count)}</span>
                     </li>
                   ))}

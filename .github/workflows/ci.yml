@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       update_snapshots:
-        description: "Playwright 시각 회귀 baseline 갱신 (Linux). artifact 4개(updated-snapshots-admin/-public/-public-visual/-public-visual-mobile) — 각 꾸러미는 자기 프로젝트 접미사(-<project>-linux.png) 파일만 유효. sha256 대조 후 달라진 것만 커밋. 절차 = frontend/e2e/README.md §baseline 재생성 절차"
+        description: "Playwright 시각 회귀 baseline 갱신 (Linux). artifact 5개(updated-snapshots-admin/-admin-mobile/-public/-public-visual/-public-visual-mobile) — 각 꾸러미는 자기 프로젝트 접미사(-<project>-linux.png) 파일만 유효. sha256 대조 후 달라진 것만 커밋. 절차 = frontend/e2e/README.md §baseline 재생성 절차"
         type: boolean
         default: false
 
@@ -215,7 +215,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: [admin, public, public-visual, public-visual-mobile]
+        project: [admin, admin-mobile, public, public-visual, public-visual-mobile]
     defaults:
       run:
         working-directory: frontend
@@ -233,7 +233,8 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - if: matrix.project == 'admin' && needs.e2e-setup.outputs.auth-exists == 'true'
+      # 로그인 산출물(storageState)이 필요한 project = admin·admin-mobile(관리자 대시보드 휴대폰 화면, 세션 419)
+      - if: (matrix.project == 'admin' || matrix.project == 'admin-mobile') && needs.e2e-setup.outputs.auth-exists == 'true'
         uses: actions/download-artifact@v8
         with:
           name: admin-auth-state
@@ -274,7 +275,7 @@ jobs:
 
       # workflow_dispatch + update_snapshots=true 일 때만 baseline 업로드.
       #
-      # ⚠ 이 꾸러미는 **그 프로젝트가 재촬영한 것만이 아니라 e2e/ 의 PNG 전량**(현재 19장, 헤더 baseline 생성 후 20장)**을 담는다
+      # ⚠ 이 꾸러미는 **그 프로젝트가 재촬영한 것만이 아니라 e2e/ 의 PNG 전량**(현재 21장, admin-mobile baseline 생성 후 22장 — 세는 법 `find frontend/e2e -name "*.png" | wc -l`)**을 담는다
       #   (path 글롭이 전체 스냅샷 디렉터리). 따라서 3꾸러미를 한 폴더에 통째로 합치면 옛본이
       #   새본을 덮는다 — 꾸러미 p 에서는 `*-<p>-linux.png` 파일만 유효한 재촬영본이다.
       #   sha256 대조 후 달라진 것만 커밋. 절차 = frontend/e2e/README.md §baseline 재생성 절차.

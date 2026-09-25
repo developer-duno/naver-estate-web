@@ -65,6 +65,22 @@ export default defineConfig({
         storageState: "e2e/.auth/admin.json",
       },
     },
+    {
+      // 관리자 대시보드 휴대폰 화면(세션 419, 사장님 "폰도 쓴다" 2026-09-26) — admin 과 같은 로그인
+      // 산출물(storageState)·setup 의존을 쓰고, 뷰포트만 iPhone 13 으로 바꾼다.
+      // 범위는 admin-dashboard 한 장으로 좁힌다(다른 admin spec 의 대기 조건은 데스크톱 기준으로만 검증됐다).
+      // 엔진·배율은 public-visual-mobile 과 같은 이유로 chromium·1배.
+      // baseline = admin-dashboard-admin-mobile-linux.png (spec 변경 없이 project 접미사로 갈린다)
+      name: "admin-mobile",
+      testMatch: /admin-dashboard\.spec\.ts$/,
+      dependencies: ["setup"],
+      use: {
+        ...devices["iPhone 13"],
+        browserName: "chromium",
+        deviceScaleFactor: 1,
+        storageState: "e2e/.auth/admin.json",
+      },
+    },
   ],
   webServer: {
     command: `npm run dev -- --webpack --port ${port}`,

@@ -10,6 +10,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { getAdminCrawlFailures } from "@/lib/api";
 import { jobTypeLabel, jobTypeDesc } from "@/lib/crawl-job-labels";
 import AdminCard from "./AdminCard";
+import RawDetail from "./RawDetail";
 
 interface Props {
   token: string;
@@ -72,10 +73,10 @@ export default function FailureBreakdown({ token, onJumpToFailed, hideTitle = fa
             <button
               type="button"
               onClick={() => onJumpToFailed?.(it.job_type)}
-              className="w-full text-left py-3 px-1 hover:bg-gray-50 transition flex flex-wrap gap-x-3 gap-y-1 items-baseline"
+              className="w-full text-left pt-3 pb-1 px-1 hover:bg-gray-50 transition flex flex-wrap gap-x-3 gap-y-1 items-baseline"
               aria-label={`${jobTypeLabel(it.job_type)} ${it.count}건 실패 — 클릭 시 해당 유형 실패 작업으로 이동`}
             >
-              {/* 작업 코드 원문(job_type)은 본문에 두지 않고 마우스를 올리면 보이게 한다 */}
+              {/* 작업 코드 원문(job_type)은 본문에 두지 않는다 — 마우스를 올리거나 아래 "원문 보기"로 */}
               <span className="font-medium text-gray-800" title={it.job_type}>
                 {jobTypeLabel(it.job_type)}
               </span>
@@ -92,21 +93,29 @@ export default function FailureBreakdown({ token, onJumpToFailed, hideTitle = fa
                   {jobTypeDesc(it.job_type)}
                 </span>
               )}
-              {/* 우리말 번역(last_error_plain)이 오면 그것을 본문에, 원문은 늘 title 로.
-                  번역이 없으면(옛 백엔드·빈 문자열) 영어 원문을 본문에 두지 않고 고정 문구만 —
-                  작업 목록 표(CrawlJobTable)도 오류를 보여 주지 않으므로 "목록에서 확인" 이라고 쓰지 않는다.
-                  `||` 인 이유: `??` 는 빈 문자열을 통과시켜 본문이 비어 버린다. */}
+            </button>
+            {/* 오류 줄과 "원문 보기"는 버튼 밖에 둔다 — 버튼 안에 누를 거리(details)를 넣으면
+                안 된다(인터랙티브 요소 중첩 금지). 휴대폰엔 마우스가 없어 title 만으로는 원문을 못 본다.
+                우리말 번역(last_error_plain)이 오면 그것을 본문에. 번역이 없으면(옛 백엔드·빈 문자열)
+                영어 원문을 본문에 두지 않고 고정 문구만 — 작업 목록 표(CrawlJobTable)도 오류를 보여 주지
+                않으므로 "목록에서 확인" 이라고 쓰지 않는다.
+                `||` 인 이유: `??` 는 빈 문자열을 통과시켜 본문이 비어 버린다. */}
+            <div className="px-1 pb-3">
               {it.last_error && (
                 <span
-                  className="text-xs text-gray-600 w-full bg-gray-50 rounded px-2 py-1 mt-1 leading-snug break-words"
+                  className="block text-xs text-gray-600 bg-gray-50 rounded px-2 py-1 mt-1 leading-snug break-words"
                   title={it.last_error}
                 >
                   {it.last_error_plain
                     ? `최근 오류: ${it.last_error_plain}`
-                    : "최근 오류 기록 있음 — 마우스를 올리면 원문이 보여요"}
+                    : "최근 오류 기록 있음 — 아래 '원문 보기'를 누르면 원문이 보여요"}
                 </span>
               )}
-            </button>
+              <RawDetail
+                raw={`작업 코드: ${it.job_type}${it.last_error ? `\n오류 원문: ${it.last_error}` : ""}`}
+                className="mt-1"
+              />
+            </div>
           </li>
         ))}
       </ul>

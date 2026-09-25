@@ -63,7 +63,8 @@ export default function AdminSection({ id, title, defaultOpen = false, badge, ch
         className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg list-none [&::-webkit-details-marker]:hidden"
       >
         <span className="flex items-center gap-2 min-w-0">
-          <span>{title}</span>
+          {/* break-keep — 휴대폰 폭에서 줄이 바뀌어도 낱말 가운데서 끊지 않는다 */}
+          <span className="min-w-0 break-keep">{title}</span>
           {badge && (
             <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700 shrink-0">
               {badge}

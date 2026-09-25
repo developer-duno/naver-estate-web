@@ -50,8 +50,8 @@ export default function AdminCard({ title, children, action, help, hideTitle = f
       <div className="bg-white border rounded-lg p-4">
         {(helpButton || action) && (
           <div className="mb-3">
-            <div className="flex items-start justify-end gap-3">
-              {action && <div className="shrink-0">{action}</div>}
+            <div className="flex flex-wrap items-start justify-end gap-3">
+              {action && <div className="min-w-0 max-w-full">{action}</div>}
               {helpButton}
             </div>
             {helpText}
@@ -64,16 +64,19 @@ export default function AdminCard({ title, children, action, help, hideTitle = f
 
   return (
     <div className="bg-white border rounded-lg p-4">
-      <div className="flex items-start justify-between mb-3 gap-3">
+      {/* flex-wrap — 휴대폰(390px)에서 필터·버튼 묶음(action)이 제목 옆에 안 들어가면 다음 줄로
+          내려간다(옛 shrink-0 은 줄어들지도 내려가지도 않아 카드 밖으로 삐져나왔다). 제목 칸은
+          flex-1(기준 폭 0)이라 데스크톱처럼 자리가 넉넉하면 지금처럼 한 줄에 선다 */}
+      <div className="flex flex-wrap items-start justify-between mb-3 gap-3">
         <div className="min-w-0 flex-1">
           {/* 버튼을 h3 밖(형제)에 둔다 — 안에 두면 제목의 접근 이름에 "설명 보기"가 섞인다 */}
           <div className="flex items-center gap-1.5">
-            <h3 className="text-sm font-medium text-gray-700">{title}</h3>
+            <h3 className="min-w-0 break-keep text-sm font-medium text-gray-700">{title}</h3>
             {helpButton}
           </div>
           {helpText}
         </div>
-        {action && <div className="shrink-0">{action}</div>}
+        {action && <div className="min-w-0 max-w-full">{action}</div>}
       </div>
       {children}
     </div>

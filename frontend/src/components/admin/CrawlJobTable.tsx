@@ -2,6 +2,7 @@
 
 import type { CrawlJobDetail } from "@/types/admin";
 import { jobTypeLabel } from "@/lib/crawl-job-labels";
+import RawDetail from "./RawDetail";
 import {
   JOB_STATUS_STYLES,
   FALLBACK_CHIP,
@@ -18,7 +19,8 @@ interface Props {
 export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Props) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+      {/* 7열 — 휴대폰(390px)에서 칸이 눌려 글자가 세로로 꺾이지 않게 최소 폭을 두고 가로로 넘긴다 */}
+      <table className="w-full min-w-[640px] text-sm">
         <thead>
           <tr className="border-b text-left text-gray-500">
             <th className="py-2 pr-3">번호</th>
@@ -35,10 +37,12 @@ export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Pro
             <tr key={j.id} className="border-b hover:bg-gray-50">
               <td className="py-2 pr-3 text-gray-500">{j.id}</td>
               <td className="py-2 pr-3">
-                {/* 작업 코드 원문은 마우스를 올렸을 때만 (본문에는 우리말 이름만) */}
-                <span className="text-gray-800" title={j.job_type}>
-                  {jobTypeLabel(j.job_type)}
-                </span>
+                {/* 작업 코드 원문은 마우스를 올리거나 이름을 누르면 (본문에는 우리말 이름만) */}
+                <RawDetail raw={j.job_type}>
+                  <span className="text-gray-800" title={j.job_type}>
+                    {jobTypeLabel(j.job_type)}
+                  </span>
+                </RawDetail>
               </td>
               <td className="py-2 pr-3 text-xs text-gray-600 max-w-[120px] truncate select-text">{j.target_id || "-"}</td>
               <td className="py-2 pr-3">
@@ -47,20 +51,25 @@ export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Pro
                     {JOB_STATUS_STYLES[j.status as JobStatus].label}
                   </span>
                 ) : (
-                  // 모르는 상태값 — 영문 원문 대신 "알 수 없음", 원문은 title 로 보존
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${FALLBACK_CHIP}`} title={j.status}>
-                    알 수 없음
-                  </span>
+                  // 모르는 상태값 — 영문 원문 대신 "알 수 없음", 원문은 title 과 누르면 펼침으로 보존
+                  <RawDetail raw={j.status}>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${FALLBACK_CHIP}`} title={j.status}>
+                      알 수 없음
+                    </span>
+                  </RawDetail>
                 )}
-                {/* 실패 사유 — BE 가 준 우리말 한 줄(error_plain)만 보이고, 원문은 마우스를 올렸을 때만.
-                    옛 BE 처럼 error_plain 이 없으면 줄 자체를 그리지 않는다 */}
+                {/* 실패 사유 — BE 가 준 우리말 한 줄(error_plain)이 보이고, 원문은 마우스를 올리거나
+                    그 아래 "원문 보기"를 누르면. 옛 BE 처럼 error_plain 이 없으면 줄 자체를 그리지 않는다 */}
                 {j.status === "failed" && j.error_plain && (
-                  <span
-                    className="mt-1 block max-w-[16rem] text-xs text-red-700 whitespace-normal"
-                    title={j.error_message || undefined}
-                  >
-                    {j.error_plain}
-                  </span>
+                  <>
+                    <span
+                      className="mt-1 block max-w-[16rem] text-xs text-red-700 whitespace-normal"
+                      title={j.error_message || undefined}
+                    >
+                      {j.error_plain}
+                    </span>
+                    <RawDetail raw={j.error_message} className="mt-0.5 max-w-[16rem]" />
+                  </>
                 )}
               </td>
               <td className="py-2 pr-3 text-xs">

@@ -51,7 +51,7 @@ describe("AuditLogTable", () => {
   it("정상 렌더 — 액션 한글 + target 한글 + details 요약", async () => {
     renderTable([baseLog()]);
     await waitFor(() => expect(screen.getByText("매물 일괄 재수집 시작")).toBeInTheDocument());
-    expect(screen.getByText("배치 500건")).toBeInTheDocument();
+    expect(screen.getByText("일괄 작업 500건")).toBeInTheDocument();
     expect(screen.getByText("안전")).toBeInTheDocument();
   });
 

@@ -60,7 +60,7 @@ const DAY_CELL_DATES = [new Date(2026, 4, 15, 0, 0, 0), new Date(2026, 4, 25, 0,
 vi.mock("@fullcalendar/daygrid", () => ({ default: {} }));
 vi.mock("@fullcalendar/core/locales/ko", () => ({ default: { code: "ko" } }));
 
-import SchedulerCalendarView, { toLocalDateKey } from "../SchedulerCalendarView";
+import SchedulerCalendarView, { toLocalDateKey, CalendarModeToggle } from "../SchedulerCalendarView";
 
 const sampleEvents: SchedulerCalendarEvent[] = [
   {
@@ -101,8 +101,6 @@ describe("SchedulerCalendarView", () => {
     render(
       <SchedulerCalendarView
         events={sampleEvents}
-        mode="both"
-        onModeChange={() => {}}
         yearMonth="2026-05"
       />,
     );
@@ -113,14 +111,7 @@ describe("SchedulerCalendarView", () => {
   /** 모드 토글 버튼 클릭 시 onModeChange 호출 */
   it("모드 토글 클릭 시 onModeChange 호출", () => {
     const onModeChange = vi.fn();
-    render(
-      <SchedulerCalendarView
-        events={[]}
-        mode="both"
-        onModeChange={onModeChange}
-        yearMonth="2026-05"
-      />,
-    );
+    render(<CalendarModeToggle mode="both" onModeChange={onModeChange} />);
     fireEvent.click(screen.getByRole("button", { name: "과거만" }));
     expect(onModeChange).toHaveBeenCalledWith("past");
     fireEvent.click(screen.getByRole("button", { name: "예정만" }));
@@ -132,13 +123,11 @@ describe("SchedulerCalendarView", () => {
     render(
       <SchedulerCalendarView
         events={[]}
-        mode="both"
-        onModeChange={() => {}}
         yearMonth="2026-05"
       />,
     );
     expect(screen.getByText(/총 0개 실행/)).toBeInTheDocument();
-    expect(screen.queryByText(/잘림/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/50,000개까지만/)).not.toBeInTheDocument();
   });
 
   /** truncated=true 면 잘림 안내 */
@@ -146,25 +135,16 @@ describe("SchedulerCalendarView", () => {
     render(
       <SchedulerCalendarView
         events={sampleEvents}
-        mode="both"
-        onModeChange={() => {}}
         yearMonth="2026-05"
         truncated
       />,
     );
-    expect(screen.getByText(/50,000개에서 잘림/)).toBeInTheDocument();
+    expect(screen.getByText(/너무 많아 50,000개까지만 보여요/)).toBeInTheDocument();
   });
 
   /** 모드 토글의 aria-pressed 가 현재 모드와 일치 */
   it("선택된 모드의 aria-pressed 가 true", () => {
-    render(
-      <SchedulerCalendarView
-        events={[]}
-        mode="past"
-        onModeChange={() => {}}
-        yearMonth="2026-05"
-      />,
-    );
+    render(<CalendarModeToggle mode="past" onModeChange={() => {}} />);
     expect(screen.getByRole("button", { name: "과거만" })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -185,7 +165,7 @@ describe("SchedulerCalendarView", () => {
       { scheduler_job_id: "e", name: "예정", start: "2026-05-25T12:00:00+09:00", status: "upcoming", kind: "upcoming" },
     ];
     render(
-      <SchedulerCalendarView events={events} mode="both" onModeChange={() => {}} yearMonth="2026-05" />,
+      <SchedulerCalendarView events={events} yearMonth="2026-05" />,
     );
     // FullCalendar 가 eventOrder='order' 받았는지
     expect(screen.getByTestId("fc-event-order").textContent).toBe("order");
@@ -202,8 +182,6 @@ describe("SchedulerCalendarView", () => {
     render(
       <SchedulerCalendarView
         events={sampleEvents}
-        mode="both"
-        onModeChange={() => {}}
         yearMonth="2026-05"
       />,
     );
@@ -234,8 +212,6 @@ describe("SchedulerCalendarView", () => {
     render(
       <SchedulerCalendarView
         events={sampleEvents}
-        mode="both"
-        onModeChange={() => {}}
         yearMonth="2026-05"
       />,
     );
@@ -258,8 +234,6 @@ describe("SchedulerCalendarView", () => {
     render(
       <SchedulerCalendarView
         events={sampleEvents}
-        mode="both"
-        onModeChange={() => {}}
         yearMonth="2026-05"
       />,
     );
@@ -284,8 +258,6 @@ describe("SchedulerCalendarView", () => {
     render(
       <SchedulerCalendarView
         events={sampleEvents}
-        mode="both"
-        onModeChange={() => {}}
         yearMonth="2026-05"
       />,
     );
@@ -333,8 +305,6 @@ describe("SchedulerCalendarView", () => {
     render(
       <SchedulerCalendarView
         events={[crossMidnight]}
-        mode="both"
-        onModeChange={() => {}}
         yearMonth="2026-05"
       />,
     );
@@ -364,8 +334,6 @@ describe("SchedulerCalendarView", () => {
     const { container } = render(
       <SchedulerCalendarView
         events={sampleEvents}
-        mode="both"
-        onModeChange={() => {}}
         yearMonth="2026-05"
       />,
     );

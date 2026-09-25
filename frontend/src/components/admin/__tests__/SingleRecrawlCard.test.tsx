@@ -33,13 +33,13 @@ describe("SingleRecrawlCard 컴포넌트", () => {
     expect(
       screen.getByPlaceholderText("단지번호 (예: 12345)"),
     ).toBeInTheDocument();
-    expect(screen.getByText("지금 재크롤")).toBeInTheDocument();
+    expect(screen.getByText("지금 다시 수집")).toBeInTheDocument();
   });
 
   /** 빈 값으로 트리거 시 버튼 disabled — API 호출 안 됨 */
   it("빈 입력에서는 버튼이 비활성화된다", () => {
     renderWithProvider();
-    const button = screen.getByText("지금 재크롤") as HTMLButtonElement;
+    const button = screen.getByText("지금 다시 수집") as HTMLButtonElement;
     expect(button.disabled).toBe(true);
   });
 
@@ -50,7 +50,7 @@ describe("SingleRecrawlCard 컴포넌트", () => {
       "단지번호 (예: 12345)",
     ) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "abc" } });
-    fireEvent.click(screen.getByText("지금 재크롤"));
+    fireEvent.click(screen.getByText("지금 다시 수집"));
     await waitFor(() => {
       expect(screen.getByText("숫자 1~20자리만 허용됩니다")).toBeInTheDocument();
     });
@@ -69,14 +69,14 @@ describe("SingleRecrawlCard 컴포넌트", () => {
       "단지번호 (예: 12345)",
     ) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "12345" } });
-    fireEvent.click(screen.getByText("지금 재크롤"));
+    fireEvent.click(screen.getByText("지금 다시 수집"));
 
     await waitFor(() => {
       expect(mockTrigger).toHaveBeenCalledWith("test-token", "12345", false);
     });
     await waitFor(() => {
       expect(
-        screen.getByText(/테스트단지.*12345.*재크롤 시작됨/),
+        screen.getByText(/테스트단지.*12345.*다시 수집을 시작했어요/),
       ).toBeInTheDocument();
     });
   });
@@ -91,7 +91,7 @@ describe("SingleRecrawlCard 컴포넌트", () => {
       "단지번호 (예: 12345)",
     ) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "99999" } });
-    fireEvent.click(screen.getByText("지금 재크롤"));
+    fireEvent.click(screen.getByText("지금 다시 수집"));
 
     await waitFor(() => {
       expect(

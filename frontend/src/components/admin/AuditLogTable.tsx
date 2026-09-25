@@ -19,7 +19,7 @@ export default function AuditLogTable({ logs, token }: Props) {
           <tr className="border-b text-left text-gray-500">
             <th className="py-2 pr-3">시각</th>
             <th className="py-2 pr-3">사용자</th>
-            <th className="py-2 pr-3">액션</th>
+            <th className="py-2 pr-3">한 일</th>
             <th className="py-2 pr-3">대상</th>
             <th className="py-2">상세</th>
           </tr>

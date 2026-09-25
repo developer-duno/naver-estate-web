@@ -7,7 +7,7 @@
  * 카드 제목이 사람이 읽는 "2026년 8월 실행 일정" 형태인지 고정한다.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 import type { SchedulerCalendarResponse } from "@/types/admin";
 
@@ -77,5 +77,20 @@ describe("/admin/scheduler-calendar 페이지 문구", () => {
     expect(container.textContent).not.toContain("발화");
     // 대체 표현("실행")은 살아 있어야 한다 — 문구가 통째로 사라진 것과 구분
     expect(container.textContent).toContain("실행");
+  });
+
+  it("보기 토글(모두/과거만/예정만)이 캘린더 본문이 아니라 카드 머리에 있고, 누르면 그 모드로 다시 부른다", async () => {
+    renderPage();
+    await screen.findByTestId("fc-stub");
+    const toggle = screen.getByRole("group", { name: "표시 모드" });
+    // 달 이동 버튼과 같은 머리 줄 안에 있다
+    const header = toggle.parentElement as HTMLElement;
+    expect(header).toContainElement(screen.getByRole("button", { name: "이전 달" }));
+    expect(header).not.toContainElement(screen.getByTestId("fc-stub"));
+
+    fireEvent.click(screen.getByRole("button", { name: "과거만" }));
+    await waitFor(() =>
+      expect(mockCalendar).toHaveBeenLastCalledWith("test-token", { year: 2026, month: 8, mode: "past" }),
+    );
   });
 });

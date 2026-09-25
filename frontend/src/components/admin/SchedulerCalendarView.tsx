@@ -3,7 +3,8 @@
 /** 스케줄러 월간 캘린더 — FullCalendar 6 daygrid view.
  *
  * 과거 (crawl_jobs) + 미래 (APScheduler trigger 전개) 실행 시각을 한 달 격자에 표시.
- * dayMaxEvents=3 으로 칸당 3개만 노출 + "더보기" 자동 압축. mode 토글 = 과거/예정/모두.
+ * dayMaxEvents=3 으로 칸당 3개만 노출 + "더보기" 자동 압축.
+ * 과거/예정/모두 토글(CalendarModeToggle)은 페이지가 카드 머리(달 이동 옆)에 둔다.
  *
  * a11y: 색만 의존하지 않도록 아이콘 약어 (✓·✗·→) 와 상태 한글 라벨 (JOB_STATUS_STYLES.label)
  * 병기. DataFreshnessCard 패턴 답습.
@@ -18,12 +19,10 @@ import type { DayCellContentArg, EventContentArg } from "@fullcalendar/core";
 import type { SchedulerCalendarEvent } from "@/types/admin";
 import { JOB_STATUS_STYLES } from "@/lib/admin/job-status-styles";
 
-type CalendarMode = "past" | "upcoming" | "both";
+export type CalendarMode = "past" | "upcoming" | "both";
 
 interface Props {
   events: SchedulerCalendarEvent[];
-  mode: CalendarMode;
-  onModeChange: (mode: CalendarMode) => void;
   /** 사용자 표시용 — 현재 보고 있는 월 (예: "2026-05") */
   yearMonth: string;
   truncated?: boolean;
@@ -59,10 +58,37 @@ const MODE_OPTIONS: { value: CalendarMode; label: string }[] = [
   { value: "upcoming", label: "예정만" },
 ];
 
-export default function SchedulerCalendarView({
-  events,
+/** 과거만/예정만/모두 토글 — 카드 머리(달 이동 버튼 옆)에 놓인다 */
+export function CalendarModeToggle({
   mode,
   onModeChange,
+}: {
+  mode: CalendarMode;
+  onModeChange: (mode: CalendarMode) => void;
+}) {
+  return (
+    <div className="flex gap-1" role="group" aria-label="표시 모드">
+      {MODE_OPTIONS.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onModeChange(opt.value)}
+          className={`text-xs px-3 py-1.5 rounded-md border ${
+            mode === opt.value
+              ? "bg-blue-600 text-white border-blue-600"
+              : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+          }`}
+          aria-pressed={mode === opt.value ? "true" : "false"}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export default function SchedulerCalendarView({
+  events,
   yearMonth,
   truncated = false,
 }: Props) {
@@ -117,32 +143,13 @@ export default function SchedulerCalendarView({
 
   return (
     <div>
-      {/* 토글 + 안내 */}
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <div className="flex gap-1" role="group" aria-label="표시 모드">
-          {MODE_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => onModeChange(opt.value)}
-              className={`text-xs px-3 py-1.5 rounded-md border ${
-                mode === opt.value
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
-              }`}
-              aria-pressed={mode === opt.value ? "true" : "false"}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-        <p className="text-xs text-gray-500">
-          총 {events.length.toLocaleString()}개 실행
-          {truncated && (
-            <span className="ml-2 text-amber-700">· 50,000개에서 잘림</span>
-          )}
-        </p>
-      </div>
+      {/* 개수 안내 (보기 토글은 카드 머리로 옮겼다) */}
+      <p className="text-xs text-gray-500 mb-3">
+        총 {events.length.toLocaleString()}개 실행
+        {truncated && (
+          <span className="ml-2 text-amber-700">· 너무 많아 50,000개까지만 보여요</span>
+        )}
+      </p>
 
       {/* 캘린더 본체 */}
       <FullCalendar

@@ -43,7 +43,7 @@ export const ACTION_LABELS: Record<string, string> = {
 };
 
 export const TARGET_TYPE_LABELS: Record<string, string> = {
-  batch: "배치",
+  batch: "일괄 작업",
   collector: "수집기",
   complex: "단지",
   user: "사용자",
@@ -63,9 +63,25 @@ export const COLLECTOR_LABELS: Record<string, string> = {
   "backfill-price": "실거래가",
 };
 
+/**
+ * 중개사 검증의 broker_status → 화면 문구.
+ * 값의 출처(backend/routers/verify.py): V-WORLD 중개업소 상태명(sttusSeCodeNm — "영업중"·"휴업" 등 이미 우리말)
+ * 또는 우리가 붙이는 "국토부 미매칭". 이미 우리말인 상태명은 그대로 두고, 뜻이 불분명한 것만 풀어 쓴다.
+ * 미등록 값은 원문 그대로(정보 손실 방지).
+ */
+export const BROKER_STATUS_LABELS: Record<string, string> = {
+  "국토부 미매칭": "국토부 중개사무소 목록에서 못 찾음",
+};
+
 /** 사전에서 own-property 로만 조회 — 상속 키(toString 등)가 native code 로 새는 것 차단. */
 function lookup(table: Record<string, string>, key: string): string | undefined {
   return Object.hasOwn(table, key) ? table[key] : undefined;
+}
+
+/** broker_status 화면 문구. 값이 없으면 "미확인", 미등록 값은 원문 그대로. */
+export function getBrokerStatusLabel(status?: string | null): string {
+  if (!status) return "미확인";
+  return lookup(BROKER_STATUS_LABELS, status) ?? status;
 }
 
 /** 액션 한글 반환. 미매핑 시 영문 원본. */

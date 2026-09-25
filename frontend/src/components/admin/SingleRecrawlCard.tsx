@@ -74,7 +74,7 @@ export default function SingleRecrawlCard({ getToken }: Props) {
           disabled={disabled}
           className="px-4 py-2 bg-blue-600 text-white rounded text-sm disabled:opacity-50 hover:bg-blue-700"
         >
-          {runMut.isPending ? "시작 중..." : "지금 재크롤"}
+          {runMut.isPending ? "시작 중..." : "지금 다시 수집"}
         </button>
       </div>
 
@@ -93,12 +93,12 @@ export default function SingleRecrawlCard({ getToken }: Props) {
 
       {runMut.data && !runMut.error && (
         <p className="mt-2 text-xs text-green-700">
-          ✓ {runMut.data.complex_name} ({runMut.data.complex_no}) 재크롤 시작됨
+          ✓ {runMut.data.complex_name} ({runMut.data.complex_no}) 다시 수집을 시작했어요
         </p>
       )}
 
       <p className="mt-2 text-[11px] text-gray-500">
-        아래 &lsquo;크롤 작업 목록&rsquo;의 &lsquo;대상&rsquo; 열에서 단지번호를 복사해 붙여넣을 수 있어요.
+        아래 &lsquo;수집 작업 목록&rsquo;의 &lsquo;대상&rsquo; 열에서 단지번호를 복사해 붙여넣을 수 있어요.
       </p>
     </AdminCard>
   );

@@ -9,6 +9,7 @@ import {
   COLLECTOR_LABELS,
   getActionLabel,
   getTargetLabel,
+  getBrokerStatusLabel,
   getDetailsSummary,
   summarizeDetails,
 } from "../admin-labels";
@@ -46,7 +47,7 @@ describe("getTargetLabel", () => {
   });
 
   it("batch + N → 'N건' 형식", () => {
-    expect(getTargetLabel("batch", "500")).toBe("배치 500건");
+    expect(getTargetLabel("batch", "500")).toBe("일괄 작업 500건");
   });
 
   it("collector + 수집기명 → 한글 collector 라벨", () => {
@@ -273,5 +274,21 @@ describe("getActionLabel — R3 결제 액션 보강", () => {
   it("기존 미등록이던 관리자 액션도 한글", () => {
     expect(getActionLabel("admin_crawl_cancel")).toBe("크롤 작업 취소");
     expect(getActionLabel("admin_setting_update")).toBe("설정 변경");
+  });
+});
+
+describe("getBrokerStatusLabel (중개사 검증 상태)", () => {
+  it("등록된 값은 풀어 쓴 문구", () => {
+    expect(getBrokerStatusLabel("국토부 미매칭")).toBe("국토부 중개사무소 목록에서 못 찾음");
+  });
+  it("미등록 값은 원문 그대로 (V-WORLD 상태명은 이미 우리말)", () => {
+    expect(getBrokerStatusLabel("휴업")).toBe("휴업");
+  });
+  it("값이 없으면 '미확인'", () => {
+    expect(getBrokerStatusLabel(null)).toBe("미확인");
+    expect(getBrokerStatusLabel(undefined)).toBe("미확인");
+  });
+  it("상속 키(toString)는 사전 값으로 새지 않는다", () => {
+    expect(getBrokerStatusLabel("toString")).toBe("toString");
   });
 });

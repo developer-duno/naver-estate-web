@@ -13,7 +13,7 @@ interface Props {
 }
 
 const INPUT_CLASS =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed";
+  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-11 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed";
 
 const MODE_OPTIONS: Array<{ value: HoldPeriodSpecialMode; label: string; hint: string }> = [
   { value: "none", label: "신청 안 함", hint: "기본값 — 입력한 보유연수 그대로 사용" },
@@ -39,7 +39,7 @@ export default function HoldPeriodSpecialFields(props: Props) {
         </span>
         <div className="mt-2 flex flex-col sm:flex-row gap-2">
           {MODE_OPTIONS.map((opt) => (
-            <label key={opt.value} className="flex items-center gap-2 min-h-[44px] flex-1">
+            <label key={opt.value} className="flex items-center gap-2 min-h-11 flex-1">
               <input
                 type="radio"
                 name="holdPeriodSpecialMode"

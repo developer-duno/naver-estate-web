@@ -91,7 +91,7 @@ export default function VerificationReview({ token }: Props) {
     >
       <div className="overflow-x-auto">
         {/* 8열 — 휴대폰에서 칸이 눌리지 않게 최소 폭을 두고 가로로 넘긴다 */}
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-190 text-sm">
           <thead>
             <tr className="border-b text-left text-xs text-gray-500">
               <th className="pb-2 pr-3">이메일</th>
@@ -178,7 +178,7 @@ export default function VerificationReview({ token }: Props) {
           >
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-lg font-semibold">자격증 서류</h3>
-              <button onClick={() => setPreviewUrl(null)} aria-label="닫기" className="text-gray-400 hover:text-gray-600 text-xl min-h-[44px] min-w-[44px]">&times;</button>
+              <button onClick={() => setPreviewUrl(null)} aria-label="닫기" className="text-gray-400 hover:text-gray-600 text-xl min-h-11 min-w-11">&times;</button>
             </div>
             {previewUrl.includes(".pdf") ? (
               <iframe src={previewUrl} className="w-full h-[70vh] border rounded" />

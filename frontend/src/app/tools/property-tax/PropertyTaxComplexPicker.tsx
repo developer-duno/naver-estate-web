@@ -23,7 +23,7 @@ interface PickCandidate {
   complex_name: string;
 }
 
-const SELECT_CLASS = "text-sm border border-gray-300 rounded px-2 py-1.5 text-gray-700 min-h-[44px]";
+const SELECT_CLASS = "text-sm border border-gray-300 rounded px-2 py-1.5 text-gray-700 min-h-11";
 
 /** m² → 평 표기 (소수 1자리) */
 function toPyeongLabel(m2: number): string {
@@ -143,7 +143,7 @@ export default function PropertyTaxComplexPicker({ ownershipPercent, publishedMa
                 type="button"
                 onClick={() => handleSelectComplex(c.complex_no, c.complex_name)}
                 aria-pressed={selectedNo === c.complex_no}
-                className={`rounded-md border px-3 py-1.5 text-xs min-h-[44px] ${
+                className={`rounded-md border px-3 py-1.5 text-xs min-h-11 ${
                   selectedNo === c.complex_no
                     ? "border-blue-500 bg-blue-50 text-blue-700"
                     : "border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -167,7 +167,7 @@ export default function PropertyTaxComplexPicker({ ownershipPercent, publishedMa
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           placeholder="단지명 2글자 이상 (예: 은마)"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px]"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-11"
         />
         {searchQuery.isLoading && (
           <p className="mt-1 text-xs text-gray-500">검색 중...</p>
@@ -194,7 +194,7 @@ export default function PropertyTaxComplexPicker({ ownershipPercent, publishedMa
                 <button
                   type="button"
                   onClick={() => handleSelectComplex(c.complex_no, c.complex_name)}
-                  className={`w-full text-left px-3 py-2 text-sm min-h-[44px] hover:bg-gray-50 ${
+                  className={`w-full text-left px-3 py-2 text-sm min-h-11 hover:bg-gray-50 ${
                     selectedNo === c.complex_no ? "bg-blue-50 text-blue-700" : "text-gray-700"
                   }`}
                 >

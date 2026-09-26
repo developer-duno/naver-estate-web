@@ -111,7 +111,7 @@ export function PresaleSection({ apartment: a }: SectionProps) {
         <div className="overflow-x-auto border rounded-md">
           {/* 열 6개가 전부 보이는 표라 최소 너비가 없으면 좁은 화면에서 셀이 눌려 머리글이 세로로
               한 글자씩 꺾인다(390px 실측). 최소 너비를 주면 넘치는 만큼 위 div 가 가로 스크롤한다. */}
-          <table className="w-full min-w-[560px] text-sm">
+          <table className="w-full min-w-140 text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="px-3 py-2 text-left text-gray-600">타입</th>

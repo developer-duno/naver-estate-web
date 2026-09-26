@@ -220,7 +220,7 @@ function MbPresaleTable({ apartments, isInCompare, onCompareToggle, compareFull 
                     {apt.presale_min_price != null ? `${apt.presale_min_price.toLocaleString()}만` : "-"}
                   </td>
                   <td className="px-3 py-2 text-gray-600 hidden sm:table-cell">{apt.presale_move_in ?? "-"}</td>
-                  <td className="px-3 py-2 text-gray-600 max-w-[120px] truncate hidden sm:table-cell">{apt.builder ?? "-"}</td>
+                  <td className="px-3 py-2 text-gray-600 max-w-30 truncate hidden sm:table-cell">{apt.builder ?? "-"}</td>
                 </tr>
               );
             })}

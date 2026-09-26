@@ -31,8 +31,8 @@ const parseManwon = (v: string): number => {
 
 export default function BrokerageInputs(props: Props) {
   const isMonthly = props.tradeType === "monthly";
-  const inputCls = "w-full min-h-[44px] px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
-  const radioBtn = "min-h-[44px] flex items-center gap-2 px-3 py-2 border rounded-md cursor-pointer text-sm hover:bg-gray-50";
+  const inputCls = "w-full min-h-11 px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500";
+  const radioBtn = "min-h-11 flex items-center gap-2 px-3 py-2 border rounded-md cursor-pointer text-sm hover:bg-gray-50";
 
   return (
     <div className="space-y-5 rounded-lg border border-gray-200 bg-white p-4 sm:p-6">

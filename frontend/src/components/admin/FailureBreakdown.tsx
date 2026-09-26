@@ -103,7 +103,7 @@ export default function FailureBreakdown({ token, onJumpToFailed, hideTitle = fa
             <div className="px-1 pb-3">
               {it.last_error && (
                 <span
-                  className="block text-xs text-gray-600 bg-gray-50 rounded px-2 py-1 mt-1 leading-snug break-words"
+                  className="block text-xs text-gray-600 bg-gray-50 rounded px-2 py-1 mt-1 leading-snug wrap-break-word"
                   title={it.last_error}
                 >
                   {it.last_error_plain

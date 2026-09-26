@@ -240,7 +240,7 @@ function AdminCrawlContent() {
                 aria-label="유형으로 거르기"
                 value={filterJobType}
                 onChange={(e) => applyFilter({ status: filterStatus, jobType: e.target.value, page: 1 })}
-                className="text-sm border rounded px-2 py-1 max-w-[12rem]"
+                className="text-sm border rounded px-2 py-1 max-w-48"
               >
                 <option value="">유형 전체</option>
                 {filterJobType && !CRAWL_JOB_LABELS[filterJobType] && (

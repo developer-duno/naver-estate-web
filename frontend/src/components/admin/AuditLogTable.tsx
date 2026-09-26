@@ -17,7 +17,7 @@ export default function AuditLogTable({ logs, token }: Props) {
     <div className="overflow-x-auto">
       {/* 5열 — 휴대폰에서 칸이 눌리지 않게 최소 폭을 두고 가로로 넘긴다.
           칸의 원래 기록(영문)은 마우스를 올리거나(데스크톱) 칸 글자를 누르면(휴대폰) 보인다 */}
-      <table className="w-full min-w-[600px] text-sm">
+      <table className="w-full min-w-150 text-sm">
         <thead>
           <tr className="border-b text-left text-gray-500">
             <th className="py-2 pr-3">시각</th>

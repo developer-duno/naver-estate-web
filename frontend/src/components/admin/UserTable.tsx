@@ -158,7 +158,7 @@ export default function UserTable({ users, onUpdate }: Props) {
   return (
     <div className="overflow-x-auto">
       {/* 7열(선택 상자 2개 포함) — 휴대폰에서 칸이 눌리지 않게 최소 폭을 두고 가로로 넘긴다 */}
-      <table className="w-full min-w-[720px] text-sm">
+      <table className="w-full min-w-180 text-sm">
         <thead>
           <tr className="border-b text-left text-gray-500">
             <th className="py-2 pr-4">이메일</th>

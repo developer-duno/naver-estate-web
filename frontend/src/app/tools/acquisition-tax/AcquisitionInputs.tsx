@@ -39,7 +39,7 @@ export default function AcquisitionInputs(props: Props) {
           id="propertyType"
           value={propertyType}
           onChange={(e) => onPropertyTypeChange(e.target.value as AcquisitionPropertyType)}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px]"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-11"
         >
           <option value="house">주택 (아파트·단독·다세대)</option>
           <option value="officetel-commercial">오피스텔·상가 (4.6%)</option>
@@ -57,7 +57,7 @@ export default function AcquisitionInputs(props: Props) {
           value={amountManwon || ""}
           onChange={(e) => onAmountChange(Number(e.target.value) || 0)}
           placeholder="예: 50000 (5억원)"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px]"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-11"
         />
       </div>
 
@@ -73,7 +73,7 @@ export default function AcquisitionInputs(props: Props) {
           value={areaM2 || ""}
           onChange={(e) => onAreaM2Change(Number(e.target.value) || 0)}
           placeholder="예: 84.99"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px]"
+          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-11"
         />
         <p className="mt-1 text-xs text-gray-500">전용 85m² 이하 1주택은 농어촌특별세 비과세</p>
       </div>
@@ -82,7 +82,7 @@ export default function AcquisitionInputs(props: Props) {
         <legend className="block text-sm font-medium text-gray-700 mb-1.5">보유 주택수</legend>
         <div className="flex flex-wrap gap-2">
           {[1, 2, 3].map((n) => (
-            <label key={n} className="flex items-center gap-2 min-h-[44px] px-3 rounded-md border border-gray-300 cursor-pointer hover:bg-gray-50">
+            <label key={n} className="flex items-center gap-2 min-h-11 px-3 rounded-md border border-gray-300 cursor-pointer hover:bg-gray-50">
               <input
                 type="radio"
                 name="houses"
@@ -96,7 +96,7 @@ export default function AcquisitionInputs(props: Props) {
         </div>
       </fieldset>
 
-      <label className="flex items-center gap-2 min-h-[44px]">
+      <label className="flex items-center gap-2 min-h-11">
         <input
           type="checkbox"
           checked={isRegulatedArea}
@@ -109,7 +109,7 @@ export default function AcquisitionInputs(props: Props) {
       </label>
 
       <div>
-        <label className="flex items-center gap-2 min-h-[44px]">
+        <label className="flex items-center gap-2 min-h-11">
           <input
             type="checkbox"
             checked={isFirstTime}

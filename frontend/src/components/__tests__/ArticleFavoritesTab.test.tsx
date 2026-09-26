@@ -88,7 +88,7 @@ describe("ArticleFavoritesTab", () => {
   it("삭제 버튼에 min-h/min-w 44px 터치 타깃 클래스가 적용된다", () => {
     render(<ArticleFavoritesTab favorites={makeFavorites()} onRowClick={vi.fn()} onRemove={vi.fn()} />);
     const btn = screen.getByLabelText("가나아파트 즐겨찾기 해제");
-    expect(btn).toHaveClass("min-h-[44px]", "min-w-[44px]");
+    expect(btn).toHaveClass("min-h-11", "min-w-11");
   });
 
   /** 정상 — × 삭제 시 added_at 제외한 매물 객체 전달 */

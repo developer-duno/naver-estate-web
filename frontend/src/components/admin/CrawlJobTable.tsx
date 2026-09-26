@@ -20,7 +20,7 @@ export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Pro
   return (
     <div className="overflow-x-auto">
       {/* 7열 — 휴대폰(390px)에서 칸이 눌려 글자가 세로로 꺾이지 않게 최소 폭을 두고 가로로 넘긴다 */}
-      <table className="w-full min-w-[640px] text-sm">
+      <table className="w-full min-w-160 text-sm">
         <thead>
           <tr className="border-b text-left text-gray-500">
             <th className="py-2 pr-3">번호</th>
@@ -44,7 +44,7 @@ export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Pro
                   </span>
                 </RawDetail>
               </td>
-              <td className="py-2 pr-3 text-xs text-gray-600 max-w-[120px] truncate select-text">{j.target_id || "-"}</td>
+              <td className="py-2 pr-3 text-xs text-gray-600 max-w-30 truncate select-text">{j.target_id || "-"}</td>
               <td className="py-2 pr-3">
                 {JOB_STATUS_STYLES[j.status as JobStatus] ? (
                   <span className={`text-xs px-1.5 py-0.5 rounded ${JOB_STATUS_STYLES[j.status as JobStatus].chip}`}>
@@ -63,12 +63,12 @@ export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Pro
                 {j.status === "failed" && j.error_plain && (
                   <>
                     <span
-                      className="mt-1 block max-w-[16rem] text-xs text-red-700 whitespace-normal"
+                      className="mt-1 block max-w-64 text-xs text-red-700 whitespace-normal"
                       title={j.error_message || undefined}
                     >
                       {j.error_plain}
                     </span>
-                    <RawDetail raw={j.error_message} className="mt-0.5 max-w-[16rem]" />
+                    <RawDetail raw={j.error_message} className="mt-0.5 max-w-64" />
                   </>
                 )}
                 {/* 완료했지만 사유가 남은 회차(세션 420) — 예: 소급 배치가 우리 하루 예산에 걸려 멈춤,
@@ -76,7 +76,7 @@ export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Pro
                     error_plain 이 없는 옛 BE 면 실패 줄과 같은 까닭으로 그리지 않는다(원문이 본문에 새지 않게) */}
                 {j.status === "completed" && j.error_plain && (
                   <span
-                    className="mt-1 block max-w-[16rem] text-xs text-amber-700 whitespace-normal"
+                    className="mt-1 block max-w-64 text-xs text-amber-700 whitespace-normal"
                     title={j.error_message || undefined}
                   >
                     {j.error_plain}

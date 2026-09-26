@@ -198,7 +198,7 @@ export default function Header() {
               >
                 계산기 ▾
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[160px]">
+              <DropdownMenuContent align="end" className="min-w-40">
                 <DropdownMenuItem asChild>
                   <Link href="/tools/brokerage-fee">중개수수료</Link>
                 </DropdownMenuItem>
@@ -218,7 +218,7 @@ export default function Header() {
             </DropdownMenu>
 
             {!mounted ? (
-              <div className="w-[80px] h-[34px]" aria-hidden />
+              <div className="w-20 h-8.5" aria-hidden />
             ) : userEmail ? (
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
@@ -251,7 +251,7 @@ export default function Header() {
                     >
                       내 계정 ▾
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-[200px]">
+                    <DropdownMenuContent align="end" className="min-w-50">
                       <DropdownMenuLabel className="break-all font-normal text-gray-600">
                         {userEmail}
                       </DropdownMenuLabel>
@@ -301,7 +301,7 @@ export default function Header() {
               <Link
                 key={link.href}
                 href={link.href}
-                className={`min-h-[44px] flex items-center px-3 rounded-lg text-base font-medium ${
+                className={`min-h-11 flex items-center px-3 rounded-lg text-base font-medium ${
                   link.active ? "text-blue-600 bg-blue-50" : "text-gray-700 hover:bg-gray-50"
                 }`}
               >
@@ -311,7 +311,7 @@ export default function Header() {
 
             {/* 계산기 그룹 (모바일은 토글 없이 자식 2개 항상 표시) */}
             <div
-              className={`min-h-[44px] flex items-center px-3 rounded-lg text-base font-medium ${
+              className={`min-h-11 flex items-center px-3 rounded-lg text-base font-medium ${
                 toolsActive ? "text-blue-600" : "text-gray-700"
               }`}
             >
@@ -319,7 +319,7 @@ export default function Header() {
             </div>
             <Link
               href="/tools/brokerage-fee"
-              className={`min-h-[44px] flex items-center pl-7 pr-3 rounded-lg text-sm ${
+              className={`min-h-11 flex items-center pl-7 pr-3 rounded-lg text-sm ${
                 pathname === "/tools/brokerage-fee"
                   ? "text-blue-600 bg-blue-50"
                   : "text-gray-700 hover:bg-gray-50"
@@ -329,7 +329,7 @@ export default function Header() {
             </Link>
             <Link
               href="/tools/acquisition-tax"
-              className={`min-h-[44px] flex items-center pl-7 pr-3 rounded-lg text-sm ${
+              className={`min-h-11 flex items-center pl-7 pr-3 rounded-lg text-sm ${
                 pathname === "/tools/acquisition-tax"
                   ? "text-blue-600 bg-blue-50"
                   : "text-gray-700 hover:bg-gray-50"
@@ -339,7 +339,7 @@ export default function Header() {
             </Link>
             <Link
               href="/tools/transfer-tax"
-              className={`min-h-[44px] flex items-center pl-7 pr-3 rounded-lg text-sm ${
+              className={`min-h-11 flex items-center pl-7 pr-3 rounded-lg text-sm ${
                 pathname === "/tools/transfer-tax"
                   ? "text-blue-600 bg-blue-50"
                   : "text-gray-700 hover:bg-gray-50"
@@ -349,7 +349,7 @@ export default function Header() {
             </Link>
             <Link
               href="/tools/property-tax"
-              className={`min-h-[44px] flex items-center pl-7 pr-3 rounded-lg text-sm ${
+              className={`min-h-11 flex items-center pl-7 pr-3 rounded-lg text-sm ${
                 pathname === "/tools/property-tax"
                   ? "text-blue-600 bg-blue-50"
                   : "text-gray-700 hover:bg-gray-50"
@@ -359,7 +359,7 @@ export default function Header() {
             </Link>
             <Link
               href="/tools/area-converter"
-              className={`min-h-[44px] flex items-center pl-7 pr-3 rounded-lg text-sm ${
+              className={`min-h-11 flex items-center pl-7 pr-3 rounded-lg text-sm ${
                 pathname === "/tools/area-converter"
                   ? "text-blue-600 bg-blue-50"
                   : "text-gray-700 hover:bg-gray-50"
@@ -388,7 +388,7 @@ export default function Header() {
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="min-h-[44px] flex items-center px-3 rounded-lg text-base font-medium text-gray-700 hover:bg-gray-50 w-full"
+                  className="min-h-11 flex items-center px-3 rounded-lg text-base font-medium text-gray-700 hover:bg-gray-50 w-full"
                 >
                   로그아웃
                 </button>
@@ -396,7 +396,7 @@ export default function Header() {
             ) : (
               <Link
                 href="/login"
-                className="min-h-[44px] flex items-center px-3 rounded-lg text-base font-medium text-gray-700 hover:bg-gray-50"
+                className="min-h-11 flex items-center px-3 rounded-lg text-base font-medium text-gray-700 hover:bg-gray-50"
               >
                 로그인
               </Link>

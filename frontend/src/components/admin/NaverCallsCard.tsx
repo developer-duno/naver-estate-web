@@ -122,7 +122,7 @@ export default function NaverCallsCard({ getToken, hideTitle = false }: Props) {
       }
     >
       {isLoading && !data && (
-        <div className="h-[120px] bg-gray-100 animate-pulse rounded" />
+        <div className="h-30 bg-gray-100 animate-pulse rounded" />
       )}
 
       {error && (
@@ -135,7 +135,7 @@ export default function NaverCallsCard({ getToken, hideTitle = false }: Props) {
         <>
           <div className="overflow-x-auto">
             {/* 5열 — 휴대폰에서 칸이 눌리지 않게 최소 폭을 두고 가로로 넘긴다 */}
-            <table className="w-full min-w-[420px] text-sm">
+            <table className="w-full min-w-105 text-sm">
               <thead>
                 <tr className="text-xs text-gray-500 border-b">
                   <th className="text-left py-1.5 font-medium">누가</th>

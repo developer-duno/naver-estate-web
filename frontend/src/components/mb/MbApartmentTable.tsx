@@ -292,7 +292,7 @@ function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompa
                 {apt.discount_pct != null ? `${apt.discount_pct.toFixed(1)}%` : "-"}
               </td>
               <td className="px-3 py-2 text-gray-600 hidden sm:table-cell">{apt.presale_move_in ?? apt.completion ?? "-"}</td>
-              <td className="px-3 py-2 text-gray-600 max-w-[120px] truncate hidden sm:table-cell">{apt.builder ?? "-"}</td>
+              <td className="px-3 py-2 text-gray-600 max-w-30 truncate hidden sm:table-cell">{apt.builder ?? "-"}</td>
             </tr>
             );
           })}

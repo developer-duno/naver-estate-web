@@ -348,7 +348,7 @@ const ArticleRow = memo(function ArticleRow({
       <Td className="text-center">{moveIn}</Td>
       <Td className="text-right">{maint}</Td>
       <Td className="text-center">{art.direction || "-"}</Td>
-      <Td className="max-w-[250px] truncate" title={art.article_feature_desc || ""}>
+      <Td className="max-w-62.5 truncate" title={art.article_feature_desc || ""}>
         {art.article_feature_desc || "-"}
       </Td>
       <Td>{art.realtor_name || "-"}</Td>

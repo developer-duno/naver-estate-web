@@ -124,7 +124,7 @@ export default function ArticleFavoritesTab({ favorites, onRowClick, onRemove }:
                         price: fav.price,
                       });
                     }}
-                    className="inline-flex min-h-[44px] min-w-[44px] -my-3 items-center justify-center text-gray-300 hover:text-red-500 text-lg leading-none"
+                    className="inline-flex min-h-11 min-w-11 -my-3 items-center justify-center text-gray-300 hover:text-red-500 text-lg leading-none"
                     aria-label={`${fav.complex_name ?? "매물"} 즐겨찾기 해제`}
                   >
                     ×

@@ -41,6 +41,20 @@ def check(name: str, message: str) -> list[str]:
     return bad
 
 
+# 정부 실거래가 창구 남은 횟수 알림(⑫)은 "이 열쇠는 KOSPI·미분양 사이트와 같이 씁니다"
+# 처럼 다른 프로젝트를 알아보게 하는 이름 하나(KOSPI)만 허용어다 — 그 밖의 영문 단어(2자
+# 이상)가 섞이면 개발자 용어가 새어나간 것(세션 421, test_public_trade_remaining.py
+# _assert_plain_alert 와 같은 기준).
+_ALLOW_EN_WORD = {"KOSPI"}
+
+
+def check_no_english_word(message: str) -> list[str]:
+    """`check()` 의 스네이크케이스 검사와 별개로, 알파벳 2자 이상인 낱말 자체를 잡는다
+    (예: "API", "HTTP") — 허용어(KOSPI)는 제외."""
+    english = set(re.findall(r"[A-Za-z]{2,}", message)) - _ALLOW_EN_WORD
+    return [f"영문단어:{w}" for w in sorted(english)]
+
+
 def main() -> int:
     results: list[tuple[str, str, list[str]]] = []
     now = datetime.now(timezone.utc)
@@ -222,7 +236,8 @@ def main() -> int:
     #
     # 이 열쇠는 KOSPI·mibunyang 과 같이 써서, 회차 시작 때 남은 횟수가 이번 회차 예상 호출 수보다
     # 적으면 알린다. 숫자 셋(남은·한도·예상)이 실제로 찍히는지까지 본다 — 자리표시자가 빠지면
-    # "…번뿐이에요" 만 남아 뜻이 없어진다.
+    # "…번뿐이에요" 만 남아 뜻이 없어진다. ⑫-1·⑫-2 는 남은 횟수가 있는 경우, ⑫-3 은 남은
+    # 횟수가 정확히 0번인 경우(전용 "곧바로 멈춰요" 문구)를 렌더한다.
     import crawler.service_public as sp
 
     for i, (job_type, upper, need_word) in enumerate(
@@ -232,10 +247,21 @@ def main() -> int:
             sp._alert_if_short(job_type, {"remaining": 4910, "limit": 10000, "at": now}, 6000, upper)
         msg = tg.call_args[0][0] if tg.call_args else ""
         bad = check("", msg)
+        bad += check_no_english_word(msg)
         for must in ("4,910번", "10,000번", need_word, "[서버 알림]"):
             if must not in msg:
                 bad.append(f"빠진 말:{must}")
         results.append((f"⑫-{i} 실거래가 창구 남은 횟수 부족", msg, bad))
+
+    with patch("services.telegram.send_telegram") as tg:
+        sp._alert_if_short("public_trade_data", {"remaining": 0, "limit": 10000, "at": now}, 6000, False)
+    msg = tg.call_args[0][0] if tg.call_args else ""
+    bad = check("", msg)
+    bad += check_no_english_word(msg)
+    for must in ("0번이라", "곧바로 멈춰요", "[서버 알림]"):
+        if must not in msg:
+            bad.append(f"빠진 말:{must}")
+    results.append(("⑫-3 실거래가 창구 남은 횟수 0번", msg, bad))
 
     # ── 출력 ──
     failed = 0

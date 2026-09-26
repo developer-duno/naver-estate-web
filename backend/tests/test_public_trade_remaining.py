@@ -13,12 +13,14 @@
 import logging
 import re
 from datetime import date as _real_date
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
 from curl_cffi.requests import Headers
 
 from db.models import Complex
+from utils import utcnow
 
 _EMPTY_ENVELOPE = {
     "response": {
@@ -136,9 +138,13 @@ def _add_regions(db, n: int):
     db.commit()
 
 
-def _run_weekly(window: _FakeWindow):
+def _run_weekly(window: _FakeWindow, after_reset=None):
+    """after_reset: PublicDataAPI.reset() 직후·수집 시작 전에 부르는 콜백(선택).
+    T1 처럼 '회차 시작 전'의 낡은 값을 심는 자리가 필요할 때 쓴다."""
     from crawler.public_data_api import PublicDataAPI
     PublicDataAPI.reset()
+    if after_reset is not None:
+        after_reset()
 
     def _fake(lawd_cd, deal_ymd):
         window.hit()
@@ -327,3 +333,90 @@ def test_c_소급_남은_횟수가_충분하면_알림_없음(db):
     tg = _run_backfill(_FakeWindow(10000), calls_per_complex=1)
 
     assert tg.call_count == 0
+
+
+# ── T1. 회차 시작 전에 본 값은 이번 회차 값으로 치지 않는다 ──────────────
+
+
+def test_t1_회차_시작_전_값은_시작값으로_채택하지_않는다(db, caplog):
+    """앞선 회차(또는 다른 잡)가 남긴 낡은 값이 남아 있고, 이번 회차엔 헤더 갱신이
+    한 번도 없으면(전부 빈 달 응답에 헤더 없음) `_fresh()` 가 그 낡은 값을 걸러내
+    시작값을 못 잡는다 — 로그 "시작 알 수 없음", 텔레그램 0회.
+
+    ⚠ `_run_weekly` 는 내부에서 매번 `PublicDataAPI.reset()`을 부르므로(테스트 간 오염
+    방지), 낡은 값은 그 reset 이후·수집 시작 전(`after_reset` 콜백)에 심어야 한다 —
+    reset 앞에서 심으면 곧바로 지워져 이 시험이 무엇을 검증하는지 알 수 없게 된다."""
+    caplog.set_level(logging.INFO, logger=_SVC_LOGGER)
+    _add_regions(db, 2)
+
+    def _seed_stale_value():
+        from crawler.public_data_api import PublicDataAPI
+        # 회차 시작 "전"에 본 값 — at 을 명시적으로 1시간 과거로 박아 시각 비교가 확실히 걸리게 함
+        with PublicDataAPI._lock:
+            PublicDataAPI._rate_limit = {
+                "remaining": 9999, "limit": 10000,
+                "at": datetime.now(timezone.utc) - timedelta(hours=1),
+            }
+
+    # 이번 회차는 헤더 갱신이 전혀 없다(_FakeWindow(None) 과 같은 패턴 — hit() 이 헤더를 안 남김)
+    window = _FakeWindow(None)
+    tg = _run_weekly(window, after_reset=_seed_stale_value)
+
+    lines = _remaining_log_lines(caplog)
+    assert len(lines) == 1, lines
+    assert "시작 알 수 없음" in lines[0] and "끝 알 수 없음" in lines[0]
+    assert tg.call_count == 0, "회차 전 낡은 값으로 부족 알림이 나가면 안 된다"
+
+
+# ── T2. 예상 호출 수는 체크포인트로 끝난 시군구를 뺀 "남은" 시군구 기준 ──
+
+
+def _seed_resume_checkpoint(db, done_codes: list[str]):
+    """이전 회차가 일부 시군구를 이미 끝낸 채 실패로 죽은 상황을 재현 —
+    collect_public_trade_data() 의 재개(resume) 조건(failed/cancelled, 72h 이내)을
+    그대로 만족하는 CrawlJob + CrawlerCheckpoint 를 심는다."""
+    from db.models import CrawlerCheckpoint, CrawlJob
+
+    prev_job = CrawlJob(
+        job_type="public_trade_data", status="failed", started_at=utcnow(),
+    )
+    db.add(prev_job)
+    db.commit()
+    db.add(CrawlerCheckpoint(
+        job_id=prev_job.id,
+        state_json={"done_codes": sorted(done_codes), "total": len(done_codes) + 99},
+    ))
+    db.commit()
+
+
+def test_t2_예상_호출_수는_체크포인트로_끝난_시군구를_뺀_나머지_기준(db, caplog):
+    """시군구 4개 중 2개가 이미 체크포인트로 끝난 상태 — 이번 회차 예상 호출 수(및
+    부족 알림의 "약 N번")는 남은 시군구 2개 기준이어야 한다(전체 4개 기준이면 거짓으로
+    부풀려진 수치가 나간다)."""
+    caplog.set_level(logging.INFO, logger=_SVC_LOGGER)
+    _add_regions(db, 4)  # sigungu_cd = 11000, 11010, 11020, 11030
+    _seed_resume_checkpoint(db, ["11000", "11010"])  # 앞 2개는 이미 끝남 → 남은 2개
+
+    window = _FakeWindow(10)  # 남은 2시군구 × 24개월 ≫ 10 → 부족 알림 발화
+    tg = _run_weekly(window)
+
+    assert tg.call_count == 1, "잡당 최대 1회"
+    text = tg.call_args[0][0]
+    _assert_plain_alert(text)
+    # 남은 시군구 2개 × 달력 24개월(세션 421 달 목록 수정) = 48 — 전체 4개 기준(96)이 아니다
+    expected = 2 * 24
+    assert f"약 {expected:,}번이 필요" in text, text
+    assert f"약 {4 * 24:,}번이 필요" not in text, "전체 시군구 기준으로 부풀려지면 안 된다"
+
+
+def test_t2_재개_로그에도_남은_시군구_수가_찍힌다(db, caplog):
+    """부족 알림뿐 아니라 시작 로그("N개 시군구 중 M개 남음")도 같은 수를 근거로 한다."""
+    caplog.set_level(logging.INFO, logger=_SVC_LOGGER)
+    _add_regions(db, 4)
+    _seed_resume_checkpoint(db, ["11000", "11010"])
+
+    _run_weekly(_FakeWindow(9755))
+
+    assert any(
+        "4개 시군구 중 2개 남음" in r.getMessage() for r in caplog.records
+    ), [r.getMessage() for r in caplog.records if "시군구" in r.getMessage()]

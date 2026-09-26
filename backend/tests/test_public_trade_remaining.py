@@ -201,7 +201,9 @@ def test_b_주간_수집은_시작과_끝_남은_횟수를_로그_한줄로(db, 
     assert f"끝 {window.last_seen:,}/10,000" in lines[0]
     assert window.last_seen == 9755 - (window.calls - 1)
     assert "정부 실거래가 받기" in lines[0]
-    assert "KOSPI" in lines[0] and "mibunyang" in lines[0]
+    assert "KOSPI" in lines[0] and "미분양 사이트" in lines[0]
+    # 로그 머리는 작업 이름 하나만 — 옛 "[정부 실거래가] 정부 실거래가 받기" 중복으로 되돌아가지 않게(세션 421)
+    assert lines[0].startswith("[정부 실거래가 받기] 창구 남은 횟수: 시작"), lines[0]
 
 
 def test_b_소급_배치도_시작과_끝_남은_횟수를_로그로(db, caplog):
@@ -248,8 +250,8 @@ def test_b_사유칸에는_넣지_않는다(db):
 
 def _assert_plain_alert(text: str):
     assert text.startswith("[서버 알림] ")
-    # 허용 영문 = 프로젝트 이름 둘뿐(같은 열쇠를 쓰는 곳을 사장님이 알아보게)
-    english = set(re.findall(r"[A-Za-z]{2,}", text)) - {"KOSPI", "mibunyang"}
+    # 허용 영문 = 프로젝트 이름 하나뿐(같은 열쇠를 쓰는 곳을 사장님이 알아보게, 미분양은 한글로 표기)
+    english = set(re.findall(r"[A-Za-z]{2,}", text)) - {"KOSPI"}
     assert not english, f"영문이 섞였다: {english} — {text}"
 
 
@@ -269,6 +271,24 @@ def test_c_주간_남은_횟수가_예상보다_적으면_텔레그램_1회(db, 
     assert "최대 약" not in text
     assert "정부 실거래가 받기" in text
     assert any(r.levelno == logging.WARNING and "남은 횟수 부족" in r.getMessage() for r in caplog.records)
+
+
+def test_c_주간_남은_횟수가_0번이면_곧바로_멈춘다는_문구로_1회(db, caplog):
+    """남은 횟수 0번 — 세션 421: "곧바로 멈춰요" 전용 문구."""
+    caplog.set_level(logging.INFO, logger=_SVC_LOGGER)
+    _add_regions(db, 3)
+    window = _FakeWindow(0)
+
+    tg = _run_weekly(window)
+
+    assert tg.call_count == 1, "잡당 최대 1회"
+    text = tg.call_args[0][0]
+    _assert_plain_alert(text)
+    assert "0번이라" in text and "곧바로 멈춰요" in text
+    assert "하루 한도 10,000번" in text
+    assert "정부 실거래가 받기" in text
+    assert "번뿐" not in text  # 0번 전용 문구는 "번뿐" 형태를 안 씀
+    assert "이 열쇠는 KOSPI·미분양 사이트와 같이 씁니다" in text
 
 
 def test_c_주간_남은_횟수가_충분하면_알림_없음(db):

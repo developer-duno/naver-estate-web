@@ -216,7 +216,7 @@ def test_get_apt_trades_daily_limit_reached(mock_limit, mock_key):
     assert result is None
 
 
-# ── 매월 10일 토요일 skip 테스트 ──
+# ── 매월 10일 토요일 — 이제 건너뛰지 않는다(세션 421) ──
 # date는 함수 내부에서 `from datetime import date`로 import되므로
 # datetime.date를 서브클래스로 패치해야 함
 
@@ -275,15 +275,26 @@ def test_collect_public_trade_10th_not_saturday(mock_db_cls):
 
 
 @patch("crawler.service_public.SessionLocal")
-def test_collect_public_trade_10th_saturday_skip(mock_db_cls):
-    """10일이고 토요일 — mibunyang building-info 쿼터 충돌로 skip"""
-    _FakeDate._today = _real_date(2026, 1, 10)  # 토요일
+def test_collect_public_trade_10th_saturday_collects(mock_db_cls):
+    """10일이고 토요일이어도 건너뛰지 않고 수집한다 (세션 421 사장님 결정 — 건너뛰기 규칙 삭제)"""
+    _FakeDate._today = _real_date(2026, 10, 10)  # 토요일
+
+    mock_db = MagicMock()
+    mock_db_cls.return_value = mock_db
 
     with patch.dict("os.environ", {"PUBLIC_DATA_API_KEY": "test-key"}):
         with patch("datetime.date", _FakeDate):
             from crawler.service import collect_public_trade_data
 
-            collect_public_trade_data(batch_size=1)
+            try:
+                # scheduler_job_id 를 넘겨야 옛 건너뛰기 경로가 취소 행을 만들었으므로 그 경로까지 가린다
+                collect_public_trade_data(batch_size=1, scheduler_job_id="collect_public_trades")
+            except Exception:
+                pass  # DB mock 한계로 이후 단계 에러는 무관
 
-    # SessionLocal()이 호출되지 않음 = skip
-    mock_db_cls.assert_not_called()
+    # 가짜 DB 는 add 된 객체를 그대로 붙잡아, 회차 끝의 상태(completed 등)로 보인다 — 그래서 "running 이 있다"가
+    # 아니라 "이 회차의 수집 행이 있고, 그중 건너뛰기 취소 행은 없다"로 본다(옛 경로는 cancelled 행 하나만 남기고 끝났다)
+    jobs = [c.args[0] for c in mock_db.add.call_args_list
+            if c.args and getattr(c.args[0], "job_type", None) == "public_trade_data"]
+    assert jobs, "수집 회차 행이 없다 = 수집 경로에 들어가지 않았다"
+    assert all(j.status != "cancelled" for j in jobs), [(j.status, j.error_message) for j in jobs]

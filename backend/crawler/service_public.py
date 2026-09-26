@@ -118,12 +118,19 @@ def _alert_if_short(job_type: str, rl: dict, expected: int, upper_bound: bool) -
     if remaining < expected:
         limit = rl.get("limit")
         limit_part = f"(하루 한도 {limit:,}번)" if limit else ""
-        need = "최대 약" if upper_bound else "약"
-        text = (
-            f"[서버 알림] 정부 실거래가 창구의 오늘 남은 횟수가 {remaining:,}번뿐이에요{limit_part}. "
-            f"이번 회차({job_words(job_type)})는 {need} {expected:,}번이 필요해 도중에 멈출 수 있어요. "
-            "이 열쇠는 KOSPI·mibunyang 과 같이 씁니다 — 오늘 그쪽 수집이 먼저 돌았는지 봐 주세요."
-        )
+        if remaining == 0:
+            text = (
+                f"[서버 알림] 정부 실거래가 창구의 오늘 남은 횟수가 0번이라 "
+                f"이번 회차({job_words(job_type)})는 곧바로 멈춰요{limit_part}. "
+                "이 열쇠는 KOSPI·미분양 사이트와 같이 씁니다 — 오늘 그쪽 수집이 먼저 돌았는지 봐 주세요."
+            )
+        else:
+            need = "최대 약" if upper_bound else "약"
+            text = (
+                f"[서버 알림] 정부 실거래가 창구의 오늘 남은 횟수가 {remaining:,}번뿐이에요{limit_part}. "
+                f"이번 회차({job_words(job_type)})는 {need} {expected:,}번이 필요해 도중에 멈출 수 있어요. "
+                "이 열쇠는 KOSPI·미분양 사이트와 같이 씁니다 — 오늘 그쪽 수집이 먼저 돌았는지 봐 주세요."
+            )
         logger.warning(
             "[정부 실거래가] 창구 남은 횟수 부족: %s, 이번 회차 예상 %s%d번",
             _fmt_remaining(rl), "최대 " if upper_bound else "", expected,
@@ -172,7 +179,7 @@ class _RemainingWatch:
         from crawler.plain_words import job_words
 
         logger.info(
-            "[정부 실거래가] %s 창구 남은 횟수: 시작 %s → 끝 %s (이 열쇠는 KOSPI·mibunyang 과 같이 씁니다)",
+            "[%s] 창구 남은 횟수: 시작 %s → 끝 %s (이 열쇠는 KOSPI·미분양 사이트와 같이 씁니다)",
             job_words(self._job_type), _fmt_remaining(self.start), _fmt_remaining(self._fresh()),
         )
 
@@ -192,23 +199,6 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
                 job_type="public_trade_data", scheduler_job_id=scheduler_job_id,
                 status="cancelled", started_at=utcnow(), completed_at=utcnow(),
                 error_message="PUBLIC_DATA_API_KEY 미설정",
-            )
-            db.add(job)
-            db.commit()
-            db.close()
-        return
-
-    # 매월 10일 토요일 skip (mibunyang building-info ~8,500회와 API 쿼터 충돌 방지)
-    from datetime import date
-    today = date.today()
-    if today.day == 10 and today.weekday() == 5:  # 5 = Saturday
-        logger.info("매월 10일 토요일 — mibunyang building-info 쿼터 충돌 방지로 수집 skip")
-        if scheduler_job_id:
-            db = SessionLocal()
-            job = CrawlJob(
-                job_type="public_trade_data", scheduler_job_id=scheduler_job_id,
-                status="cancelled", started_at=utcnow(), completed_at=utcnow(),
-                error_message="쿼터 보호 건너뜀 (매월 10일 토요일)",
             )
             db.add(job)
             db.commit()

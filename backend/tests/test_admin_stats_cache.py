@@ -6,12 +6,15 @@ DB 행을 추가해도 숫자가 그대로면 보관본을 준 것이다.
 관리자 전용 전역 집계라 보는 사람과 무관한 값이다(한 벌 보관이 안전한 이유).
 실행: python -m pytest tests/test_admin_stats_cache.py -v
 """
+import threading
+import time
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import jwt
 import pytest
+from fastapi import HTTPException
 
 from db.models import CrawlJob, UserProfile
 
@@ -86,11 +89,19 @@ def test_postgres_raises_timeout_only_when_recomputing():
     from routers.admin import jobs
 
     fake, executed = _fake_pg_db()
-    with patch.object(jobs, "_compute_detailed_stats", return_value={"complex_count": 7}):
+
+    def _fake_compute(db):
+        # 가짜 계산도 같은 실행 기록에 한 줄 남긴다 — "시간 제한을 먼저 올리고 계산" 순서를 보려고.
+        # SQLite(CI)에서는 시간 제한을 관찰할 수 없어 이 순서 단언이 유일한 방어선이다.
+        executed.append("COMPUTE")
+        return {"complex_count": 7}
+
+    with patch.object(jobs, "_compute_detailed_stats", side_effect=_fake_compute):
         assert jobs._cached_detailed_stats(fake, now=0.0) == {"complex_count": 7}
-        assert executed == ["SET LOCAL statement_timeout = 30000"]
+        assert executed == ["SET LOCAL statement_timeout = 30000", "COMPUTE"]
         assert jobs._cached_detailed_stats(fake, now=10.0) == {"complex_count": 7}
-        assert executed == ["SET LOCAL statement_timeout = 30000"]  # 보관본 — 추가 SQL 0
+        # 보관본 — 추가 SQL·추가 계산 0
+        assert executed == ["SET LOCAL statement_timeout = 30000", "COMPUTE"]
 
 
 def test_recompute_failure_is_not_hidden_by_old_value(db):
@@ -104,3 +115,133 @@ def test_recompute_failure_is_not_hidden_by_old_value(db):
     # 실패는 보관본을 갱신하지 않는다 — 다음 요청은 다시 계산한다
     _add_job_now(db)
     assert jobs._cached_detailed_stats(db, now=302.0)["today_crawl_count"] == 1
+
+
+class _CountingLock:
+    """진짜 Lock 을 감싸 acquire 시도 횟수만 센다 — "모두 잠금 앞에 도착했다"를 sleep 없이 알려고."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._count_guard = threading.Lock()
+        self.attempts = 0
+
+    def acquire(self, blocking=True, timeout=-1):
+        with self._count_guard:
+            self.attempts += 1
+        return self._lock.acquire(blocking, timeout)
+
+    def release(self):
+        self._lock.release()
+
+    def locked(self):
+        return self._lock.locked()
+
+    def __enter__(self):  # conftest 의 _reset_stats_cache 가 with 로 쓴다
+        self.acquire()
+        return self
+
+    def __exit__(self, *exc):
+        self.release()
+
+
+def _wait_until(cond, deadline_sec=5.0):
+    """조건이 참이 될 때까지 짧게 돌며 기다린다(시간을 맞추려는 sleep 이 아니라 조건 대기)."""
+    end = time.monotonic() + deadline_sec
+    while time.monotonic() < end:
+        if cond():
+            return True
+        time.sleep(0.005)
+    return cond()
+
+
+def test_concurrent_requests_compute_only_once(monkeypatch):
+    """⑤ 동시에 5개가 와도 계산은 1번 — 나머지는 잠금에서 기다렸다가 보관본을 받는다."""
+    from routers.admin import jobs
+
+    lock = _CountingLock()
+    monkeypatch.setattr(jobs, "_stats_lock", lock)
+    fake, _executed = _fake_pg_db()
+    first_entered = threading.Event()
+    let_go = threading.Event()
+    calls = {"n": 0}
+    calls_guard = threading.Lock()
+
+    def _slow_compute(db):
+        with calls_guard:
+            calls["n"] += 1
+        first_entered.set()
+        assert let_go.wait(5), "시험이 계산을 풀어 주지 않았다"
+        return {"complex_count": 42}
+
+    results: list = []
+    errors: list = []
+
+    def _call():
+        try:
+            results.append(jobs._cached_detailed_stats(fake, now=0.0))
+        except Exception as e:  # noqa: BLE001 — 스레드 안 예외를 시험 본문에서 드러내려고
+            errors.append(e)
+
+    with patch.object(jobs, "_compute_detailed_stats", side_effect=_slow_compute):
+        threads = [threading.Thread(target=_call) for _ in range(5)]
+        threads[0].start()
+        assert first_entered.wait(5), "첫 요청이 계산에 들어가지 않았다"
+        for t in threads[1:]:
+            t.start()
+        # 나머지 4개가 잠금 앞에 도착(시도 5회)하거나, 잠금이 없어 계산에 들어갈 때까지 기다린다
+        _wait_until(lambda: lock.attempts >= 5 or calls["n"] > 1)
+        let_go.set()
+        for t in threads:
+            t.join(5)
+        assert not any(t.is_alive() for t in threads)
+
+    assert errors == []
+    assert calls["n"] == 1
+    assert results == [{"complex_count": 42}] * 5
+    assert not lock.locked()  # 끝나면 잠금이 풀려 있다
+
+
+def test_lock_wait_limit_returns_503_and_does_not_hold_lock():
+    """⑥ 다른 요청이 계산 중이라 잠금을 제한 시간 안에 못 얻으면 503 — 무한정 기다리지 않는다."""
+    from routers.admin import jobs
+
+    fake, executed = _fake_pg_db()
+    outcome: list = []
+
+    def _call():
+        try:
+            outcome.append(jobs._cached_detailed_stats(fake, now=0.0, lock_wait_sec=0.05))
+        except HTTPException as e:
+            outcome.append(e)
+
+    with patch.object(jobs, "_compute_detailed_stats", return_value={"complex_count": 1}):
+        assert jobs._stats_lock.acquire(timeout=1)  # 다른 요청이 계산 중인 상태를 흉내
+        try:
+            t = threading.Thread(target=_call)
+            t.start()
+            t.join(3)
+            finished_while_held = not t.is_alive()
+        finally:
+            jobs._stats_lock.release()
+            t.join(5)
+
+    assert finished_while_held, "잠금을 쥔 동안 제한 시간이 지나도 돌아오지 않았다(대기 상한 없음)"
+    assert len(outcome) == 1 and isinstance(outcome[0], HTTPException)
+    assert outcome[0].status_code == 503
+    assert outcome[0].detail == "상세 통계를 계산하는 중이에요. 잠시 뒤 다시 열어 주세요."
+    assert executed == []  # 계산도 시간 제한도 건드리지 않았다
+    # 503 을 낸 요청은 잠금을 쥐지 않았다 — 바로 다음 요청은 정상 계산
+    with patch.object(jobs, "_compute_detailed_stats", return_value={"complex_count": 1}):
+        assert jobs._cached_detailed_stats(fake, now=0.0) == {"complex_count": 1}
+    assert not jobs._stats_lock.locked()
+
+
+def test_lock_released_when_compute_raises():
+    """⑦ 계산이 예외로 끝나도 잠금은 풀린다(finally) — 다음 요청이 기다리지 않고 바로 들어간다."""
+    from routers.admin import jobs
+
+    fake, _executed = _fake_pg_db()
+    with patch.object(jobs, "_compute_detailed_stats", side_effect=RuntimeError("계산 실패")):
+        with pytest.raises(RuntimeError):
+            jobs._cached_detailed_stats(fake, now=0.0)
+    assert not jobs._stats_lock.locked()

@@ -276,14 +276,24 @@ def test_collect_public_trade_10th_not_saturday(mock_db_cls):
 
 @patch("crawler.service_public.SessionLocal")
 def test_collect_public_trade_10th_saturday_skip(mock_db_cls):
-    """10일이고 토요일 — mibunyang building-info 쿼터 충돌로 skip"""
-    _FakeDate._today = _real_date(2026, 1, 10)  # 토요일
+    """10일이고 토요일이어도 이제는 건너뛰지 않고 수집한다 (세션 421 사장님 결정 — 건너뛰기 규칙 삭제)"""
+    _FakeDate._today = _real_date(2026, 10, 10)  # 토요일
+
+    mock_db = MagicMock()
+    mock_db_cls.return_value = mock_db
 
     with patch.dict("os.environ", {"PUBLIC_DATA_API_KEY": "test-key"}):
         with patch("datetime.date", _FakeDate):
             from crawler.service import collect_public_trade_data
 
-            collect_public_trade_data(batch_size=1)
+            try:
+                collect_public_trade_data(batch_size=1)
+            except Exception:
+                pass  # DB mock 한계로 이후 단계 에러는 무관
 
-    # SessionLocal()이 호출되지 않음 = skip
-    mock_db_cls.assert_not_called()
+    # SessionLocal()이 호출됨 = skip하지 않고 수집 경로로 진입
+    mock_db_cls.assert_called()
+    # cancelled 상태의 job 이 만들어지지 않았는지 확인 (건너뛰기 취소 행 0)
+    for call_args in mock_db.add.call_args_list:
+        job_obj = call_args.args[0] if call_args.args else None
+        assert getattr(job_obj, "status", None) != "cancelled"

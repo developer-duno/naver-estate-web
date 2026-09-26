@@ -88,7 +88,7 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 응급의료 → 매월 첫째 월 03:00 (NEMC → infra.emergency_*)
 어린이집 → 매월 첫째 목 01:00 (CPMS cpmsapi030 → infra.childcare_*, mibunyang 과 키 공유라 01:00 고정 — infra.md §CPMS 키 공유)
 범죄통계 → 분기별 첫째 일 04:00 (경찰청 odcloud → infra.crime_*, CSV 폴백)
-공공데이터 → 토요일 05:00 (국토교통부 실거래가, 10일 토요일 skip)
+공공데이터 → 토요일 05:00 (국토교통부 실거래가)
 관리자 트리거 → POST /api/admin/collect/{name} (수집기 8종, 백그라운드 스레드로 시작하고 곧바로 started — 같은 수집기가 이미 돌면 409, 결과는 그 잡의 crawl_jobs 행으로 본다(세션 420). 버튼 = /admin/crawl)
 ```
 

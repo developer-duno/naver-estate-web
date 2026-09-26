@@ -196,6 +196,9 @@ def setup_db():
     from services.cache import _registry, _registry_lock
     with _registry_lock:
         _registry.clear()
+    # 관리자 상세 통계 5분 캐시도 비운다 — 테스트마다 데이터가 다르다
+    from routers.admin.jobs import _reset_stats_cache
+    _reset_stats_cache()
     Base.metadata.create_all(bind=test_engine)
     yield
     Base.metadata.drop_all(bind=test_engine)

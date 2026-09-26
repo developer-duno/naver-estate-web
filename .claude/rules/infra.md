@@ -82,6 +82,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정 (설정 완�
 - **폭주 쿼리 안전망 = `connect` 이벤트의 `SET statement_timeout`** (env `STATEMENT_TIMEOUT_MS`, 기본 8000ms). NullPool 이라 매 요청 새 연결 → connect 이벤트가 매번 발동 → 모든 세션 보장.
 - ⚠ **`connect_args={"options": "-c statement_timeout=..."}` 는 작동 안 한다.** Supabase Supavisor 풀러가 startup `options` 파라미터를 무시함 (`SHOW statement_timeout` 이 기본 2min 그대로). [Supabase Timeouts 공식문서](https://supabase.com/docs/guides/database/postgres/timeouts): transaction mode 에선 role-level `ALTER ROLE` 도 무효, 연결 직후 명시 `SET` 만 세션에 적용.
 - 검증법 = prod 연결로 `SHOW statement_timeout` (8s 기대) + `SELECT pg_sleep(9)` (8.0초에 QueryCanceled 기대). 실제 앱·배치 쿼리는 0.03~0.05초라 false positive 없음 (인덱스 없는 풀스캔 GROUP BY 만 8초 초과 → 죽음).
+- **예외 1곳 = 관리자 상세 통계 `GET /api/admin/stats/detailed`**(`routers/admin/jobs.py` `_cached_detailed_stats`, 2026-09-26): 운영 부하 시간대에 count 들이 8초를 넘겨 500 이 나서, **결과를 프로세스 안에 5분 캐시**(숫자가 최대 5분 늦는 것은 의도 — 버그 아님)하고 **다시 계산할 때만 그 트랜잭션에 `SET LOCAL statement_timeout = 30000`**(PostgreSQL 만, 다른 경로는 8초 그대로). 계산이 실패하면 옛 값으로 대신하지 않고 500 그대로.
 
 ### 슬로우 쿼리 로깅 (세션 255)
 

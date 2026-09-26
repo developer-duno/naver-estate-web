@@ -96,7 +96,8 @@ class PublicDataAPI:
         if not isinstance(value, str):
             return None
         try:
-            return int(value.strip())
+            # 같은 헤더가 두 번 오면 curl_cffi 가 "9755, 9754" 로 합쳐 준다(0.16.3 실측) — 첫 값만 받는다
+            return int(value.split(",", 1)[0].strip())
         except ValueError:
             return None
 

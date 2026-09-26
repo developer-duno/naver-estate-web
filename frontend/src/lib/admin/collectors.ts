@@ -9,9 +9,8 @@
  * - manualCounted  : 이 버튼으로 돌린 실행도 그 잡 id 로 기록되는가.
  *                 false 인 둘(backfill-price·metrics)은 BE 가 수동 실행에 잡 id 를 붙이지 않아
  *                 scheduler-status 에는 자동 실행만 보인다 → 화면에 "마지막 자동 실행" 이라고 적는다.
- * - long        : 한 번 돌면 오래 걸리는 것. 이 API 는 끝날 때까지 답을 안 주는데(동기 실행) 화면은 120초까지만
- *                 기다린다 → 오래 걸리는 것은 잠깐만 기다린 뒤 "시작했어요" 로 보여 준다
- *                 (연결을 끊어도 서버의 수집은 계속 돈다).
+ * - long        : 한 번 돌면 오래 걸리는 것 — 누르기 전에 confirm 으로 시간·호출 수를 묻는다.
+ *                 (세션 420 부터 API 는 모든 수집기를 백그라운드로 시작하고 곧바로 답한다 — 기다리는 시간은 같다.)
  * - confirm     : 누르기 전에 묻는 문장. 시간·호출 수는 .claude/rules/infra.md 표와 backend/.claude/details.md 의 실측값.
  */
 import type { SchedulerLastRun } from "@/types/admin";

@@ -62,6 +62,17 @@ describe("StatsCards 채움률 row (PR 6a)", () => {
   });
 });
 
+describe("StatsCards 안내 문구 (세션 420)", () => {
+  // 서버가 상세 통계를 5분 보관한다(backend/routers/admin/jobs.py _STATS_CACHE_TTL_SEC = 300)
+  it("대시보드(compact)와 데이터 화면(기본) 둘 다 '숫자는 5분마다 새로 계산해요' 가 보인다", () => {
+    const { unmount } = render(<StatsCards stats={baseStats} loading={false} compact />);
+    expect(screen.getByText("숫자는 5분마다 새로 계산해요")).toBeInTheDocument();
+    unmount();
+    render(<StatsCards stats={baseStats} loading={false} />);
+    expect(screen.getByText("숫자는 5분마다 새로 계산해요")).toBeInTheDocument();
+  });
+});
+
 describe("StatsCards compact (대시보드 4칸, 세션 419)", () => {
   const stats: DetailedStats = {
     ...baseStats,

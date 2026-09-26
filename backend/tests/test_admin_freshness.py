@@ -461,6 +461,58 @@ def test_freshness_spinning_zero_processed(client, db):
     assert childcare["last_job"]["total_items"] == 100
 
 
+def test_freshness_spinning_small_batch_not_flagged(client, db):
+    """processed=0, total=1(대상 1건) → 문턱 미달, 헛바퀴 아님 (세션 421 04:13 헛경보 재현:
+    상한 재시도 매물 1건만 실패한 회차를 빨간 경보로 오판하던 것을 방지)"""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    _make_completed_job(
+        db, "collect_childcare",
+        started_at=now - timedelta(minutes=10), completed_at=now - timedelta(minutes=8),
+        processed=0, total=1,
+    )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    items = res.json()["items"]
+    childcare = _get_item(items, "childcare")
+    assert childcare["spinning"] is False
+    assert childcare["status"] != "red"
+
+
+def test_freshness_spinning_below_threshold_not_flagged(client, db):
+    """processed=0, total=4(SPINNING_MIN_TOTAL=5 미달) → 헛바퀴 아님"""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    _make_completed_job(
+        db, "collect_childcare",
+        started_at=now - timedelta(minutes=10), completed_at=now - timedelta(minutes=8),
+        processed=0, total=4,
+    )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    items = res.json()["items"]
+    childcare = _get_item(items, "childcare")
+    assert childcare["spinning"] is False
+    assert childcare["status"] != "red"
+
+
+def test_freshness_spinning_at_threshold_flagged(client, db):
+    """processed=0, total=5(SPINNING_MIN_TOTAL=5 경계값) → 헛바퀴 빨강 격상"""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    _make_completed_job(
+        db, "collect_childcare",
+        started_at=now - timedelta(minutes=10), completed_at=now - timedelta(minutes=8),
+        processed=0, total=5,
+    )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    items = res.json()["items"]
+    childcare = _get_item(items, "childcare")
+    assert childcare["spinning"] is True
+    assert childcare["status"] == "red"
+
+
 def test_freshness_articles_new_rows_counted(client, db):
     """매물 크롤 작업 후 articles.created_at>=job_start 신규 행 수 카운트"""
     _make_admin(db)

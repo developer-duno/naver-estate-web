@@ -221,9 +221,11 @@ def resume_crawl_job(
 
 
 # ── 상세 통계 캐시 ──
-# 운영 부하 시간대(단지 관리비 받기·정부 실거래가 받기가 같이 도는 아침)에 아래 count 들이
-# 합쳐 8초 statement_timeout 을 넘겨 500 이 났다(2026-09-26 06:27~28 두 번, QueryCanceled —
-# articles 전체 count 3.1초·complex_price_history 2.9초 등). 그래서
+# 운영 부하 시간대(단지 관리비 받기·정부 실거래가 받기가 같이 도는 아침)에 아래 count 중
+# 한 문장이 8초 statement_timeout 을 넘겨 500 이 났다(2026-09-26 06:27~28 두 번, QueryCanceled).
+# statement_timeout 은 합계가 아니라 **문장마다** 걸린다(평소 8초, 이 경로 재계산 때만 30초).
+# 느린 문장은 `article_detail_filled`(상세 채움 매물 count) 하나다 — 09-26 12:55 낮 백필 중
+# 실측 4.8초, 나머지 10문장은 각각 0.2초 미만(11문장 합계 5.3초). 그래서
 #   ① 결과를 프로세스 안에 5분 보관한다. 관리자 전용 전역 집계라 보는 사람마다 다른 값이 없다
 #      → 한 벌만 보관해도 남의 숫자를 보여 주는 일이 없다(사용자와 무관).
 #   ② 다시 계산할 때만 이 요청의 트랜잭션에 한해 시간 제한을 30초로 올린다(PostgreSQL 전용).
@@ -235,6 +237,10 @@ _stats_cache: dict | None = None
 _stats_cache_at: float | None = None  # time.monotonic() 기준 계산 시각
 # 동시에 여러 요청이 와도 한 요청만 계산하고 나머지는 기다렸다가 그 결과를 받는다.
 _stats_lock = threading.Lock()
+# 잠금을 기다리는 상한. 계산 도중 DB 연결이 멈추면(망 끊김 — 클라이언트 쪽 소켓은 시간 제한이
+# 없다) 뒤따르는 요청이 스레드풀을 하나씩 잡은 채 끝없이 기다리게 되므로, 넘으면 503 으로 돌려보낸다.
+_STATS_LOCK_WAIT_SEC = 60
+_STATS_BUSY_DETAIL = "상세 통계를 계산하는 중이에요. 잠시 뒤 다시 열어 주세요."
 
 
 def _reset_stats_cache() -> None:
@@ -246,7 +252,10 @@ def _reset_stats_cache() -> None:
 
 
 def _raise_statement_timeout_for_stats(db: Session) -> bool:
-    """이 트랜잭션에만 시간 제한 30초 — 다른 요청은 연결 때 걸린 8초 그대로.
+    """이 트랜잭션의 문장마다 시간 제한 30초 — 다른 요청은 연결 때 걸린 8초 그대로.
+
+    한도는 문장 하나하나에 걸린다(11문장 합계가 아니다). 이론상 잠금 보유 상한은 문장 수 × 30초지만
+    실측상 한 문장(`article_detail_filled`)이 시간을 거의 다 쓴다.
 
     SET LOCAL 은 현재 트랜잭션이 끝나면 사라진다(NullPool 이라 연결도 요청마다 새것).
     SQLite(CI)에는 이 문법이 없어 실행하지 않는다(domain-mapping-ssot.md 룰 3 dialect 분기).
@@ -259,25 +268,35 @@ def _raise_statement_timeout_for_stats(db: Session) -> bool:
     return True
 
 
-def _cached_detailed_stats(db: Session, now: float | None = None) -> dict:
+def _cached_detailed_stats(
+    db: Session, now: float | None = None, lock_wait_sec: float | None = None
+) -> dict:
     """5분 안이면 보관한 결과, 아니면 다시 계산해 보관한 뒤 반환.
 
     now = time.monotonic() 값. 시험에서 시각을 밖에서 넣기 위한 인자(실제 대기 금지).
+    lock_wait_sec = 잠금 대기 상한(기본 _STATS_LOCK_WAIT_SEC). 시험에서 짧게 넣기 위한 인자.
+    잠금을 그 안에 못 얻으면 503. 얻은 잠금은 예외가 나도 finally 에서 반드시 푼다.
     """
     global _stats_cache, _stats_cache_at
     now = time.monotonic() if now is None else now
-    with _stats_lock:
+    wait = _STATS_LOCK_WAIT_SEC if lock_wait_sec is None else lock_wait_sec
+    if not _stats_lock.acquire(timeout=wait):
+        raise HTTPException(status_code=503, detail=_STATS_BUSY_DETAIL)
+    try:
         if (
             _stats_cache is not None
             and _stats_cache_at is not None
             and now - _stats_cache_at < _STATS_CACHE_TTL_SEC
         ):
             return _stats_cache
+        # 순서가 핵심 — 시간 제한을 먼저 올리고 나서 계산한다(뒤집으면 수정이 무력화된다).
         _raise_statement_timeout_for_stats(db)
         result = _compute_detailed_stats(db)  # 실패하면 예외 그대로 — 캐시도 안 바뀐다
         _stats_cache = result
         _stats_cache_at = now
         return result
+    finally:
+        _stats_lock.release()
 
 
 @router.get("/stats/detailed")

@@ -124,3 +124,29 @@ def test_recrawl_run_recheck_uses_same_threshold(client, db):
     assert seen == [1]
     with recrawl_mod._recrawl_lock:
         assert recrawl_mod._recrawl_running is False
+
+
+def test_clause_reads_monitor_thresholds_live(monkeypatch):
+    """임계는 모니터의 표를 **그 자리에서** 읽어야 한다 — 값만 같은 복사본이면 두 판정이 어긋난다.
+
+    모니터 표를 가짜 유형·임계로 바꿔 끼우면 컷오프 절이 그대로 따라와야 한다.
+    (복사본·import 시점 별칭으로 바꾸면 옛 값이 남아 이 시험이 실패한다.)
+    """
+    from crawler import monitor
+
+    monkeypatch.setattr(monitor, "_STALE_HOURS_BY_TYPE", {"fake_long_job": 7})
+    monkeypatch.setattr(monitor, "_STALE_HOURS", 2)
+    now = datetime(2026, 9, 26, 0, 0, tzinfo=timezone.utc)
+    compiled = (
+        select(CrawlJob.id)
+        .where(running_not_stale_clause(now))
+        .compile(dialect=postgresql.dialect(), compile_kwargs={"render_postcompile": True})
+    )
+    values = list(compiled.params.values())
+    assert "fake_long_job" in values
+    assert now - timedelta(hours=7) in values
+    assert now - timedelta(hours=2) in values  # 기본 임계도 모니터 값을 따른다
+    # 바꿔 끼우기 전의 실제 표 값은 하나도 남지 않는다
+    assert "kapt_costs" not in values
+    assert now - timedelta(hours=3) not in values
+    assert now - timedelta(hours=16) not in values

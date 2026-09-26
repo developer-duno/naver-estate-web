@@ -63,7 +63,12 @@ def main() -> int:
             if col.foreign_keys:
                 flags.append("FK→" + ",".join(str(fk.column) for fk in col.foreign_keys))
             suffix = f"  [{' '.join(flags)}]" if flags else ""
-            print(f"  {col.name:<28} {str(col.type):<22}{suffix}")
+            # 시간대 표시 — DateTime(timezone=True)=timestamptz 는 str(type) 에 안 드러난다.
+            # AT TIME ZONE 을 몇 번 걸어야 하는지(tz-aware 는 한 번)를 눈으로 가르려고 붙인다.
+            type_str = str(col.type)
+            if getattr(col.type, "timezone", False):
+                type_str += " tz"
+            print(f"  {col.name:<28} {type_str:<25}{suffix}")
         uniques = [
             c for c in table.constraints
             if c.__class__.__name__ == "UniqueConstraint"

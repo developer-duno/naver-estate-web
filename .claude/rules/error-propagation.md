@@ -18,6 +18,12 @@ queryFn 이 reject 하지 않으면 React Query `isError` 가 prod 에서 영영
    (`HAS_BACKEND` 가 core.ts 모듈 상수라 `vi.stubEnv` + `vi.resetModules()` + fresh import 필수).
 4. **서킷브레이커/`isBackendAvailable()` false 분기도 silent 빈 반환 금지** — throw 로 교체
    (선례: analytics.ts `BACKEND_DOWN_MSG`).
+5. **백엔드 배치 수집기도 같다 — 재시도 소진·429·5xx 는 "자료 없음"이 아니다**(세션 419 검사관 C 적발).
+   실패로 세고, 체크포인트의 "완료" 집합과 결과 캐시에 넣지 않고, 연속 N회면 회차를 failed 로 끝낸다.
+   2026-09-26 토요일 `public_trade_data` 는 05:40 부터 시간당 약 630번 429 를 받았는데
+   `PublicDataAPI` 가 재시도 끝에 `None` → 수집기가 `if not trades: continue` 로 빈 달처럼 넘기고 시군구를 완료 표시·
+   빈 결과를 프로세스 캐시에 넣어 **completed(평소 96만 → 76만 건)** 로 끝났다. 느린 잡을 "지연"이라 판정하기 전에
+   로그의 HTTP 상태 분포부터 센다(429 재시도는 INFO 로 찍혀 경고 목록에 안 보인다).
 
 ## 새 래퍼·에러 UI 추가 시 체크
 

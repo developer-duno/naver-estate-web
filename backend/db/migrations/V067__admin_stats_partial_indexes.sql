@@ -1,0 +1,116 @@
+-- V067: 관리자 화면 부분 인덱스 2개 — 상세 통계 채움률 count · '지금 돌아가는 작업' 조회 (세션 420)
+--
+-- ══ ⓐ articles 상세 채움 count ═══════════════════════════════════════════════
+--
+-- 배경: `GET /api/admin/stats/detailed` (routers/admin/jobs.py:358-362) 가
+--   SELECT count(*) FROM articles WHERE detail_crawled = true AND is_active = true
+-- 를 실행한다. 상세 통계 11문장 중 이것만 4.8~10초(나머지 10문장은 각 0.2초 미만 —
+-- 세션 419·420 실측). 세션 419 에 결과 5분 캐시 + 재계산 때만 30초 제한(#594·#596)으로
+-- 500 은 막았지만, 캐시가 빌 때마다 이 한 문장이 articles 힙을 통째로 훑는다.
+--
+-- 실측 (운영 DB 읽기 전용, EXPLAIN (ANALYZE, BUFFERS), 2026-09-26 세션 420, PG 17.6):
+--   Finalize Aggregate → Gather(Workers 2) → Partial Aggregate
+--   → **Parallel Seq Scan on articles**, Filter: (detail_crawled AND is_active)
+--   rows=105,301 × loops 3 = **315,903 행 일치** / Rows Removed by Filter 411,080 × 3
+--   Buffers: shared hit=17,953 read=77,917 (합 95,870 = 힙 749MB 전량, 약 609MB 디스크 읽기)
+--   **Execution Time 9,917ms**
+-- 표 규모: reltuples 1,543,111 · relpages 95,870 · relallvisible 95,850(03:50 정비 잡 직후라
+-- 거의 전부 all-visible) · 일치 비율 20.5%.
+-- ⚠ 진짜 비용은 시간보다 **버퍼 캐시 축출**이다 — 한 번에 ≈609MB 를 디스크에서 읽어
+-- shared_buffers 를 밀어낸다(V057 과 같은 논리).
+--
+-- 처방: 조건과 똑같은 술어의 부분 인덱스. count(*) 는 열 값을 하나도 안 보므로 인덱스만
+-- 훑고 끝나는 Index Only Scan 이 된다(힙 방문은 visibility map 에서 all-visible 이 아닌
+-- 페이지만). 술어(`detail_crawled = true AND is_active = true`)가 쿼리 WHERE 와 글자 그대로
+-- 같아 플래너의 술어 함의 판정이 자명하다(PG 는 `= true` 를 `col` 로 정규화 — V057 실측).
+--
+-- ── 인덱스 열 = `complex_no` 를 고른 근거 (후보 complex_no · article_no) ─────────
+-- 키 열 값은 이 count 에 쓰이지 않으므로 **가장 작은 인덱스**가 되는 열이 정답이다.
+--   * complex_no: avg_width 6, n_distinct 13,397(pg_stats) → 일치 31.6만 행에 서로 다른 값이
+--     많아야 1.3만 개라 B-tree **중복 제거(deduplication, PG13+ 기본 on)** 가 한 키에 TID 를
+--     몰아 담는다(TID 6바이트/행). 기존 `ix_articles_complex_active (complex_no, is_active)`
+--     가 전 행 154만에 24MB → 20.5% 부분이면 **약 3~5MB** 로 추정.
+--   * article_no: PK 라 값이 전부 달라 중복 제거가 전혀 안 된다(avg_width 11 → 튜플 28바이트).
+--     31.6만 × 28B ÷ 0.9(리프 채움) ≈ **약 10MB**, 기존 PK `articles_pkey1` 93MB 의 20.5% 로
+--     보면 ≈19MB(부풀어 있음). → complex_no 쪽이 2~4배 작다.
+--   * 쓰기 부담 차이 0: services/upsert.py 매물 upsert 가 이미 인덱스된 열을 매번 덮어써
+--     HOT 이 전면 차단돼 있다(V057 실측 hot_upd 0.1%) — 어느 열을 키로 하든 추가 HOT 손실 없음.
+--     complex_no 는 매물이 단지를 옮기지 않으니 사실상 불변이라 키 변경에 따른 dead 엔트리도 없다.
+--
+-- 기대 계획: Aggregate(또는 Finalize Aggregate/Gather) → **Index Only Scan using
+-- ix_articles_detail_filled_active**, Buffers ≈ 인덱스 페이지 수(수백) + Heap Fetches.
+-- 03:50 정비 VACUUM 직후엔 Heap Fetches 가 거의 0 이고, 낮 동안 upsert 로 visibility map
+-- 비트가 지워진 페이지만큼 늘어난다(현재 n_dead_tup 22,568 = 1.5% 수준). 그래도 힙 전량
+-- 95,870 페이지를 읽는 지금보다 한 자릿수 이상 적다.
+-- 판정 기준: Seq Scan 이 사라지고 Execution Time < 1,000ms. 미달이면 `ANALYZE articles` 없이
+-- 먼저 계획의 Heap Fetches 를 본다(수만이면 visibility map 문제 — 정비 잡 뒤 재측정).
+--
+-- ══ ⓑ crawl_jobs running 조회 ════════════════════════════════════════════════
+--
+-- 배경: 관리자 화면 '지금 돌아가는 작업'(frontend RunningJobsLine.tsx, **15초 폴링**)이
+-- `GET /api/admin/crawl-jobs?status=running` 을 부르고, routers/admin/jobs.py:57(count)·
+-- :59-66(목록) 두 문장이 아래 조건으로 돈다(running_not_stale_clause = 잡 유형별 임계 OR 9개):
+--   WHERE status = 'running' AND ((job_type = … AND started_at >= …) OR … )
+--   ORDER BY created_at DESC LIMIT 20      -- 목록 쪽
+-- 같은 `status = 'running'` 조건은 recrawl.py:66·176(ORDER BY started_at DESC LIMIT 10)·
+-- crawler/monitor.py:271(유령 정리)·main.py 부팅 스윕 등 여러 곳이 쓴다.
+--
+-- 실측 (위와 같은 날·같은 방식, 두 문장 각각):
+--   Gather(Workers 1) → **Parallel Seq Scan on crawl_jobs**, Rows Removed by Filter 29,394 × 2
+--   Buffers: shared hit=1,034 (= 힙 8.3MB 전량) · Execution Time **11.6ms**(count)·**11.6ms**(목록, +Sort)
+--   crawl_jobs 58,789 행 중 running **0 행**(측정 시점). pg_stats: completed 99.5%.
+-- 한 번은 싸지만, 화면이 열려 있는 동안 15초마다 두 번씩 표 전체를 훑는다.
+--
+-- 처방: `WHERE status = 'running'` 부분 인덱스. 엔트리 = 지금 도는 잡 수(0~수 건)라 인덱스가
+-- 한두 페이지(8~16KB)로 끝난다. 키는 15초 폴링 목록의 정렬 `created_at DESC` —
+-- 대상이 몇 건뿐이라 정렬 비용은 어차피 0 에 가깝지만, 가장 자주 도는 문장과 맞춰 둔다.
+-- 기대 계획: **Index Scan using ix_crawl_jobs_running**(목록은 Sort 노드 없이), Buffers 한 자릿수.
+-- (한 건도 없을 때 플래너가 Bitmap Index Scan 을 골라도 같은 효과 — 판정은 Seq Scan 소멸.)
+--
+-- CONCURRENTLY 여부: 선례 V014·V027(crawl_jobs 인덱스)은 CONCURRENTLY 없이 만들었다. 표가
+-- 작아(8MB) 빌드는 1초 미만이지만, 일반 CREATE INDEX 의 SHARE 락은 **돌고 있는 잡이 연 쓰기
+-- 트랜잭션 뒤에 줄을 서고, 그동안 뒤이은 모든 잡의 crawl_jobs 쓰기를 막는다**(락 대기열).
+-- 어차피 ⓐ 를 autocommit 연결로 CONCURRENTLY 실행하므로 같은 방식으로 맞춰 그 위험을 없앤다.
+--
+-- ⚠ 참고(범위 밖, 보고만): V027 의 `ix_crawl_jobs_scheduler_started` 는 운영 DB 의 pg_indexes 에
+-- **없다**(2026-09-26 실측 — crawl_jobs 인덱스는 pkey·ix_crawl_jobs_scheduler_job_id 두 개뿐).
+--
+-- ══ 공통 ════════════════════════════════════════════════════════════════════
+--
+-- 기존 데이터 영향 0: 신규 인덱스 추가뿐 — 쿼리 결과·컬럼·제약 변경 없음, 코드 변경 불필요
+-- (두 쿼리는 이미 이 조건 그대로 실행 중이라 적용 즉시 다음 요청부터 빨라진다).
+-- backend 재시작 불필요: NullPool(매 요청 새 연결) + 서버측 prepared statement 미사용(V057 선례).
+--
+-- 공유 DB(mibunyang) 영향: articles 는 공용 테이블이고 mibunyang naver-collect 가 is_active·
+-- detail_crawled(DEFAULT false 소유) 를 쓴다(V057 공유 DB 절 참조). 부분 인덱스라 술어 불만족
+-- 행은 술어 평가 후 삽입을 생략하며, 저빈도 upsert 라 유지 부담 미미(V038·V061·V064 와 같은 결).
+-- crawl_jobs 는 naver 전용. mibunyang 의 **권한 지문 감시(매주 월 09:00)는 인덱스를 보지 않는다**
+-- (infra.md §권한·정책·뷰·함수를 바꾸는 마이그 — 인덱스는 지문 제외) → **재승인 요청 불필요**.
+--
+-- ORM `__table_args__` 에는 선언하지 않는다 — V038·V039·V048·V057·V061·V064 부분 인덱스와
+-- 같은 SQL 전용 관례(models.py Article 의 기존 Index 3개 선언과는 별개). CI 는 SQLite 라
+-- 이 파일을 실행하지 않는다(문서·재현용).
+--
+-- ── prod 적용법 (V057 선례) ────────────────────────────────────────────────
+--  1) **세션 모드(5432) + AUTOCOMMIT** 연결. CONCURRENTLY 는 트랜잭션 블록 안에서 실행 불가 —
+--     BEGIN/COMMIT 으로 감싸지 말고 **문장 하나씩** 실행한다(Supabase SQL Editor 도 한 문장씩).
+--  2) 같은 연결에서 먼저 `SET statement_timeout = '15min'; SET lock_timeout = '5s';`
+--     (db/database.py connect 이벤트의 8초로는 CIC 가 QueryCanceled → INVALID 잔존).
+--  3) 직후 `pg_index.indisvalid` 확인. false 면 `CREATE … IF NOT EXISTS` 재실행으로는 못 고친다
+--     (이름만 보고 no-op) — `DROP INDEX CONCURRENTLY IF EXISTS <이름>;` 후 재실행.
+--  4) 실행 직전 확인: crawl_jobs running 0건 + 1분 넘는 장기 트랜잭션 0건(pg_stat_activity).
+--  회피 시각 = V057 §실행 회피 시각과 같다(03:30~05:00 · 06:20~07:30 · 10:45/14:45/19:15 ·
+--  토 05:00~08:00 · 매월 15일·21일 오전~). 권장 창 = 평일 08:00~10:30 · 11:00~14:30 · 21:30~24:00.
+--  적용 스크립트는 레포 밖(세션 420 스크래치패드 apply_v067.py)에서 메인 세션이 실행한다.
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_articles_detail_filled_active
+ON articles (complex_no)
+WHERE detail_crawled = true AND is_active = true;
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_crawl_jobs_running
+ON crawl_jobs (created_at DESC)
+WHERE status = 'running';
+
+-- 역방향 (롤백 — 각각 autocommit 단일 문장):
+-- DROP INDEX CONCURRENTLY IF EXISTS ix_articles_detail_filled_active;
+-- DROP INDEX CONCURRENTLY IF EXISTS ix_crawl_jobs_running;

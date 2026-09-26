@@ -122,7 +122,7 @@ export default function NaverCallsCard({ getToken, hideTitle = false }: Props) {
       }
     >
       {isLoading && !data && (
-        <div className="h-[120px] bg-gray-100 animate-pulse rounded" />
+        <div className="h-30 bg-gray-100 animate-pulse rounded" />
       )}
 
       {error && (

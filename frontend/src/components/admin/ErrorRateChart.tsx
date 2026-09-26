@@ -73,7 +73,7 @@ export default function ErrorRateChart({ getToken }: Props) {
       action={daysToggle}
     >
       {isLoading && (
-        <div className="h-[240px] bg-gray-100 animate-pulse rounded" />
+        <div className="h-60 bg-gray-100 animate-pulse rounded" />
       )}
 
       {error && (
@@ -83,7 +83,7 @@ export default function ErrorRateChart({ getToken }: Props) {
       )}
 
       {!isLoading && !error && !hasData && (
-        <div className="h-[240px] flex items-center justify-center text-xs text-gray-500">
+        <div className="h-60 flex items-center justify-center text-xs text-gray-500">
           데이터가 없습니다
         </div>
       )}

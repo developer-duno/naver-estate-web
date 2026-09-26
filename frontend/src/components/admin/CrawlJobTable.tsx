@@ -44,7 +44,7 @@ export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Pro
                   </span>
                 </RawDetail>
               </td>
-              <td className="py-2 pr-3 text-xs text-gray-600 max-w-[120px] truncate select-text">{j.target_id || "-"}</td>
+              <td className="py-2 pr-3 text-xs text-gray-600 max-w-30 truncate select-text">{j.target_id || "-"}</td>
               <td className="py-2 pr-3">
                 {JOB_STATUS_STYLES[j.status as JobStatus] ? (
                   <span className={`text-xs px-1.5 py-0.5 rounded ${JOB_STATUS_STYLES[j.status as JobStatus].chip}`}>

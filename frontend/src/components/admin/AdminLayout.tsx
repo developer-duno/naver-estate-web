@@ -76,7 +76,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 href={item.href}
                 ref={isActive ? activeRef : undefined}
                 aria-current={isActive ? "page" : undefined}
-                className={`shrink-0 whitespace-nowrap min-h-[44px] flex items-center text-sm px-3 border-b-2 -mb-px ${
+                className={`shrink-0 whitespace-nowrap min-h-11 flex items-center text-sm px-3 border-b-2 -mb-px ${
                   isActive
                     ? "border-blue-600 text-blue-700 font-medium"
                     : "border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300"
@@ -88,7 +88,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           })}
           <Link
             href="/"
-            className="shrink-0 whitespace-nowrap min-h-[44px] flex items-center text-sm px-3 ml-auto text-gray-500 hover:text-blue-600"
+            className="shrink-0 whitespace-nowrap min-h-11 flex items-center text-sm px-3 ml-auto text-gray-500 hover:text-blue-600"
           >
             ← 메인으로
           </Link>

@@ -119,7 +119,7 @@ export default function DataFreshnessCard({ token, hideTitle = false }: Props) {
                 갱신 {formatRelativeKo(item.last_updated)}
               </span>
             </div>
-            <div className="text-xs text-gray-500 ml-[1.625rem] mt-1">
+            <div className="text-xs text-gray-500 ml-6.5 mt-1">
               <JobSummary item={item} />
             </div>
           </li>

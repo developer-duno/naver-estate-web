@@ -178,7 +178,7 @@ export default function VerificationReview({ token }: Props) {
           >
             <div className="flex justify-between items-center mb-3">
               <h3 className="text-lg font-semibold">자격증 서류</h3>
-              <button onClick={() => setPreviewUrl(null)} aria-label="닫기" className="text-gray-400 hover:text-gray-600 text-xl min-h-[44px] min-w-[44px]">&times;</button>
+              <button onClick={() => setPreviewUrl(null)} aria-label="닫기" className="text-gray-400 hover:text-gray-600 text-xl min-h-11 min-w-11">&times;</button>
             </div>
             {previewUrl.includes(".pdf") ? (
               <iframe src={previewUrl} className="w-full h-[70vh] border rounded" />

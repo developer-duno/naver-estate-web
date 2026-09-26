@@ -66,7 +66,7 @@ test.describe("admin dashboard", () => {
     // ⚠ TrafficCard 는 `admin-mocks.ts` 의 `/api/admin/traffic` mock 으로 **고정**한다(세션 398).
     //    (세션 419 부터 TrafficCard 는 접힌 절 안이라 이 촬영엔 안 그려지지만, 절을 기본으로
     //     펼치게 바꾸면 아래 사연이 그대로 되살아나므로 mock 과 기록은 남겨 둔다.)
-    //    mock 없이 두면 React Query 기본 retry(3회) 동안 로딩 스켈레톤(h-[160px]) → 에러 문구(짧음)로
+    //    mock 없이 두면 React Query 기본 retry(3회) 동안 로딩 스켈레톤(h-40) → 에러 문구(짧음)로
     //    바뀌는 타이밍에 따라 fullPage 높이가 3642 / 3498px 로 갈려 간헐 실패한다.
     //
     //    ⛔ **mask 로는 이 문제가 안 풀린다** — mask 는 그 영역 픽셀만 덮을 뿐 **fullPage 높이 자체를

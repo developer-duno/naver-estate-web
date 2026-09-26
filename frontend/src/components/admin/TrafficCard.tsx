@@ -97,7 +97,7 @@ export default function TrafficCard({ getToken, hideTitle = false }: Props) {
         ) : undefined
       }
     >
-      {isLoading && !data && <div className="h-[160px] bg-gray-100 animate-pulse rounded" />}
+      {isLoading && !data && <div className="h-40 bg-gray-100 animate-pulse rounded" />}
 
       {error && (
         <p className="text-xs text-red-700">

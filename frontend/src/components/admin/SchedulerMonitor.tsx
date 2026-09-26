@@ -191,7 +191,7 @@ function JobRow({
           {job.source && (
             <RawDetail raw={job.source_url ?? ""}>
               <span
-                className="block text-[11px] text-gray-400 truncate max-w-[220px]"
+                className="block text-[11px] text-gray-400 truncate max-w-55"
                 title={job.source_url ?? job.source}
               >
                 자료 출처: {job.source}

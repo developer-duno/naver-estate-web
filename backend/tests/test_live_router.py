@@ -320,7 +320,11 @@ class TestSearchAllTypes:
         assert "C201" in complex_nos
 
     @patch(SEARCH_PATCH)
-    def test_max_page_limit(self, mock_search, db):
+    # 호출 카운터는 따로 연 연결로 쓰는데, 그룹 세션이 첫 페이지 upsert 뒤 쓰기 잠금을
+    # 쥔 채 다음 페이지로 가므로 시험용 SQLite(busy_timeout 5초)에선 페이지마다 5초씩
+    # 기다린다 — 50페이지면 250초. 운영 PostgreSQL 은 행 잠금이라 무관하다.
+    @patch("routers.live.search.record_call")
+    def test_max_page_limit(self, mock_record_call, mock_search, db):
         """MAX_SEARCH_PAGES 초과 시 페이지네이션 중단"""
         # 항상 isMoreData=True 반환 → 무한 루프 시도
         mock_search.return_value = make_search_result(
@@ -333,6 +337,8 @@ class TestSearchAllTypes:
 
         # MAX_SEARCH_PAGES만큼만 호출되어야 함
         assert mock_search.call_count <= MAX_SEARCH_PAGES
+        # 네이버를 부른 페이지마다 호출 카운터도 1번씩
+        assert mock_record_call.call_count == mock_search.call_count
 
     @patch(SEARCH_PATCH)
     def test_sqlite_sequential_search(self, mock_search, db):

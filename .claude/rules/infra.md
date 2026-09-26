@@ -137,20 +137,21 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정 (설정 완�
   화면에선 원문 그대로 보인다 — **화면이 더 자세한 것은 의도**(검사관 C A-2). 라우터는 `error_plain` 을 raw 옆에 실어 주고
   FE 는 `error_plain || error_message` + `title=raw`. 관리자 카드의 **버튼 조작 오류**(`detail`)도 창구다 —
   `routers/admin/collect.py` 의 수집 버튼(`POST /collect/{name}`)은 세션 420 부터 수집기를 백그라운드로 돌려 `started`/409(우리말 고정 문구)로 답하고, 예외 원문은 로그에만 남는다(사유는 그 잡의 crawl_jobs 행 → 화면). 스레드 시작 실패는 500, 단건 소급(`POST /backfill-price/{no}`)은 여전히 동기라 실패 시 500 + `explain_error` 우리말 사유.
-- 접두어 회귀는 `test_plain_words.py` 가 **`.py` 8모듈 + 워크플로 YAML** 을 전수 추출해 막는다.
+- 접두어 회귀는 `test_plain_words.py` 가 **`.py` 9모듈(세션 421 부터) + 워크플로 YAML** 을 전수 추출해 막는다.
 
-### 적용 현황 — **모듈 8개 / 호출부 11곳 전부 완료** (세션 409)
+### 적용 현황 — **모듈 9개 / 호출부 12곳 전부 완료** (세션 409 8모듈·11곳 + 세션 421 `service_public` 남은 횟수 부족 알림 1곳)
 
 ⚠ **"창구 수"를 셀 때 모듈 수와 호출부 수를 구분하라.** `send_telegram` 을 부르는
-**모듈은 8개**지만, 한 모듈이 여러 곳에서 알림을 쏜다(`service_official_price` 는 3곳).
+**모듈은 9개**지만, 한 모듈이 여러 곳에서 알림을 쏜다(`service_official_price` 는 3곳).
 세션 409 가 모듈만 세고 "8창구 전부"라 보고했다가, `service_official_price:451`
 표준코드 이관 알림 **한 곳이 안 고쳐진 채** 남아 적대검증에 적발됐다.
-→ 판정은 `scripts/verify_alert_wording.py` 로. 그 스크립트가 호출부를 **소스에서 추출**해
-   전수 검사한다(⑧은 3곳으로 나뉘어 출력된다).
+→ 판정은 `scripts/verify_alert_wording.py` 로. ⚠ 그 스크립트는 **창구를 손으로 등록**한다(⑧ 만 호출부를 소스에서
+   추출해 3곳으로 나뉘어 출력) — 새 창구를 만들면 ⑫처럼 직접 등록해야 렌더 검사가 된다(세션 421 적대검증 정정 — 옛 "소스에서
+   추출해 전수 검사" 문장은 과장). 모듈 단위 자동 추출은 `test_plain_words.py` 쪽이다.
 
 `monitor`(#524) · `field_drift_monitor`·`job_error_listener`·`healthcheck.yml`·
 `service_official_price`(#526) · `api_version_monitor`·`scheduler_lock`·
-`billing_charge`·`routers/payment`(세션 409).
+`billing_charge`·`routers/payment`(세션 409) · `service_public`(세션 421 — 정부 실거래가 창구 남은 횟수 부족).
 
 잡 라벨(`_JOB_LABEL_FALLBACK`) 9개에 남아 있던 영문(`단지 상세 backfill APT`,
 `정기 VACUUM 유지보수`, `K-apt 관리비 수집`, `data.go.kr API 버전 감시` 등)도 함께
@@ -169,7 +170,8 @@ cd backend && PYTHONPATH=. PYTHONUTF8=1 python scripts/verify_alert_wording.py
 # 종료 0 = 전부 우리말 / 1 = 어려운 말이 남은 창구를 지목해 출력
 # 세션 410 확장: ⓪ 못 알아본 에러 렌더(새 알림 + 해소 알림 — 내부 마침표 검사) ·
 #   ⑨ 자동결제 중단 사유 6종(_mark_retry 실호출) · ⑩ 부분환불(이메일 마스킹 검사) · ⑪ 관리자 화면 `explain_stored_error`
-#   (스윕 마커·psycopg2·붙는 형태 3입력, 세션 411 후속) 포함 = "11창구 + 미지 에러 렌더".
+#   (스윕 마커·psycopg2·붙는 형태 3입력, 세션 411 후속) · ⑫ 정부 실거래가 창구 남은 횟수 부족(세션 421 — 숫자 셋 검사)
+#   포함 = "12창구 + 미지 에러 렌더".
 #   텔레그램·이메일·log_action 은 전부 patch — 실발송 0. 워크트리(.env 없음)에선 DATABASE_URL="sqlite:///:memory:" 를 앞에 붙인다
 ```
 
@@ -303,18 +305,29 @@ job_type `officetel_presale`(접두어 없음), id `collect_rental_presale` → 
 
 ## 공유 인프라 규칙 (mibunyang 프로젝트와 공유)
 
-### data.go.kr API 쿼터 (일일 10,000회, 동일 키 공유)
+### data.go.kr API 쿼터 (동일 키를 **세 프로젝트**가 공유 — 한도는 **서비스별** 일일 10,000회)
 
-| 일자 | 프로젝트 | 워크플로우 | 추정 호출수 |
-|------|----------|-----------|------------|
-| 매월 1일 | mibunyang | collect-unsold-kosis | ~1 |
-| 매월 5일 | mibunyang | collect-population, market-stats | ~100 |
-| 매월 6일 | mibunyang | collect-trades + molit-units | ~1,500~3,800 |
-| 매월 10일 | mibunyang | **collect-building-info** | **~8,500** |
-| 토요일 | naver-estate-web | collect_public_trades | ~3,600 |
+같은 키(`PUBLIC_DATA_API_KEY`)를 **naver-estate-web·mibunyang·KOSPI daily_report** 세 프로젝트가 같이 쓴다
+(KOSPI `config.py` 의 `DATA_GO_KR_KEY` 값 동일 — 세션 421 실측). 한도는 키 전체가 아니라 **서비스별** 10,000/일이다 —
+실거래가(RTMS)와 K-apt 는 **별도 카운터**(세션 420 실측). 리셋은 한국 자정(세션 420 판정, 09-27 01:06 남은 9,794 로 부합).
+창구가 응답 헤더 `x-ratelimit-remaining`·`x-ratelimit-limit` 로 남은 횟수를 알려주며 200·429 모두에 온다(세션 420·421 실측),
+연속 3콜 차이 1·1 = 포털 집계는 1배(세션 421 실측).
 
-- **위험일**: 매월 10일이 토요일 → 8,500 + 3,600 = 12,100 > 10,000
-- **대응**: collect_public_trade_data()에서 매월 10일 토요일이면 skip
+| 일자 | 프로젝트 | 워크플로우 | 창구(카운터) | 추정 호출수 |
+|------|----------|-----------|------|------------|
+| 매월 1일 | mibunyang | collect-unsold-kosis | (옛 표 그대로 — 창구 미확인) | ~1(원문 — 옛 표) |
+| 매월 5일 | mibunyang | collect-population, market-stats | (옛 표 그대로 — 창구 미확인) | ~100(원문 — 옛 표) |
+| 매월 6일 | mibunyang | collect-trades + molit-units | 실거래가(RTMS) 추정 | ~1,500~3,800(원문 — 옛 표) |
+| 매월 10일 | mibunyang | **collect-building-info** | **K-apt 창구 — 실거래가와 별도 카운터**(메모리 `project_data_source_map` 정정, 세션 421 검사관 C) | **~8,500**(원문 — 옛 표) |
+| 토요일 05:00 | naver-estate-web | collect_public_trades(주간) | 실거래가(RTMS) | **~6,100**(추정 — 코드 253 시군구 × 24개월 = 6,072, 1,000건 넘는 달은 여러 쪽이라 더 많음. 09-26 실측 190/253 시군구에 ≈4,900. 옛 표 "~3,600" 은 낡은 값) |
+| 매일 03:30 | naver-estate-web | backfill_price(소급) | 실거래가(RTMS) | 상한 30단지 × 24개월 = 720, 캐시 적중으로 실제 ≈150~330(추정 — 09-26 회차 153초 실측에서 역산, 세션 421 검사관) |
+| 평일·토 08:00 | KOSPI | daily.yml 실거래가 250지역 | 실거래가(RTMS) 매매 ≈756 + 전월세 ≈756 | ~1,500(원문 — KOSPI `.github/workflows/daily.yml` 55행 주석, 두 서비스 합) |
+| PR·수동마다 | KOSPI | **rehearsal.yml("Closing Rehearsal")** — 진짜 열쇠로 실거래가 수집 | 실거래가(RTMS) 매매 ≈756 + 전월세 ≈756 | 회당 1,512(원문 — 실행 로그 "[수집]아파트 호출 1501~1506/1512건") |
+| 사장님 지정일(주로 자정 직후) | KOSPI | 실거래가 소급(backfill-real-estate.yml 수동 발사 또는 로컬 예약 작업) | 실거래가(RTMS) | 회차당 최대 3,000~6,000(원문 — `--max-cells` 값, 09-27 01:09 회차 2,720칸·분당 20~45콜 실측) |
+
+- **위험일(낡음 — 사장님 결정 필요)**: 옛 근거 "매월 10일이 토요일 → 8,500 + 3,600 > 10,000" 은 building-info 가 **K-apt 창구**라 실거래가 카운터와 별개다(세션 421 검사관 C). 그런데 `collect_public_trade_data()` 의 **"매월 10일 토요일 skip"** 코드는 그대로라 **2026-10-10(토) 주간 수집이 건너뛰어진다** → skip 제거는 사장님 결정 후(세션 421 시작 블록).
+- **위험일(진짜)**: **KOSPI 가 토요일 새벽(00:00~06:00)에 실거래가를 많이 쓰면 05:00 주간 수집과 같은 예산을 먹어 429 로 끝난다** — 2026-09-26 사고 = 우리 ≈4,900(자체 카운터 6,245 − 429 벽 뒤 ≈1,356) + **KOSPI rehearsal.yml 7회 ≈5,300**(01:57~04:17 KST, 세션 421 검사관 C `gh run list` 실측). 소급뿐 아니라 **리허설(PR 마다 진짜 열쇠)** 도 같은 예산. 조율 창구 = KOSPI 메모리 인계 메모 `handoff_from_2u_2026-09-27_shared_data_go_kr_key.md`.
+- **대응**: 우리 잡이 시작·끝의 남은 횟수를 로그로 남기고 부족하면 알린다(세션 421 PR). 알림 문턱 = 시작 남은 횟수 < 이번 회차 예상(주간 6,072) — 평소 토요일(≈9,300)·KOSPI 소급 3,000 뒤(≈6,280)엔 조용하고 05:00 전에 3,928 넘게 쓰였을 때만 울린다(여유 ≈200 — 여유분을 둘지는 사장님 결정 후보).
 
 ### CPMS cpmsapi030 키 공유 (어린이집 API — 일일 1,000건, 동일 키 공유, 세션 366)
 

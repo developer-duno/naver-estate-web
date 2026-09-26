@@ -85,7 +85,7 @@
 
 | 스크립트 | 용도 |
 | --- | --- |
-| `scripts/verify_alert_wording.py` | 알림 11창구 + 미지 에러 렌더가 쉬운 우리말인지 **실발송 없이** 검사(exit 0/1). 워크트리에선 `DATABASE_URL="sqlite:///:memory:"` 를 앞에 붙인다 — `.claude/rules/infra.md` §텔레그램 알림 문구 |
+| `scripts/verify_alert_wording.py` | 알림 12창구 + 미지 에러 렌더가 쉬운 우리말인지 **실발송 없이** 검사(exit 0/1). 워크트리에선 `DATABASE_URL="sqlite:///:memory:"` 를 앞에 붙인다 — `.claude/rules/infra.md` §텔레그램 알림 문구 |
 | `scripts/gen_restart_schedule_table.py` | `.claude/rules/release.md` §3-0 재시작 금지 시각표를 `scheduler.py`·`monitor.py` 에서 **생성** / `--check`(다르면 diff + exit 1) / `--write`. **잡을 추가·삭제하거나 시각·임계를 바꾸면 `--write ../.claude/rules/release.md` 후 함께 커밋** — `tests/test_restart_schedule_table.py` 가 드리프트를 막는다. 간격 상수는 소스 기본값으로 되돌려 만들므로 `.env` 유무와 무관하게 같은 결과(세션 412 #540) |
 | `scripts/run_official_price_now.py` | 공동주택 공시가격 수동 재수집 — 3~7시간이라 세션 독립 실행 필수(`backend/.claude/details.md` §release 레거시 재기동 절차의 schtasks 방식) |
 

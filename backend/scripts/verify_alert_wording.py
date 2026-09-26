@@ -1,4 +1,4 @@
-"""알림 11창구 + 미지 에러 렌더가 전부 쉬운 우리말로 나가는지 한 번에 확인 (세션 409·410·411).
+"""알림 12창구 + 미지 에러 렌더가 전부 쉬운 우리말로 나가는지 한 번에 확인 (세션 409·410·411·421).
 
 재시작 직후 "PR 이 라이브에 반영됐나"를 판정하는 용도. 텔레그램은 mock 이라
 **실발송 0** (conftest 없이 단독 실행되므로 patch 로 직접 막는다).
@@ -218,6 +218,25 @@ def main() -> int:
             bad.append("영문 마커 잔존")
         results.append((f"⑪-{i} 관리자 화면 에러 문구", rendered, bad))
 
+    # ── 12. service_public._alert_if_short — 정부 실거래가 창구 남은 횟수 부족 (세션 421) ──
+    #
+    # 이 열쇠는 KOSPI·mibunyang 과 같이 써서, 회차 시작 때 남은 횟수가 이번 회차 예상 호출 수보다
+    # 적으면 알린다. 숫자 셋(남은·한도·예상)이 실제로 찍히는지까지 본다 — 자리표시자가 빠지면
+    # "…번뿐이에요" 만 남아 뜻이 없어진다.
+    import crawler.service_public as sp
+
+    for i, (job_type, upper, need_word) in enumerate(
+        [("public_trade_data", False, "약 6,000번"), ("price_backfill", True, "최대 약 6,000번")], 1,
+    ):
+        with patch("services.telegram.send_telegram") as tg:
+            sp._alert_if_short(job_type, {"remaining": 4910, "limit": 10000, "at": now}, 6000, upper)
+        msg = tg.call_args[0][0] if tg.call_args else ""
+        bad = check("", msg)
+        for must in ("4,910번", "10,000번", need_word, "[서버 알림]"):
+            if must not in msg:
+                bad.append(f"빠진 말:{must}")
+        results.append((f"⑫-{i} 실거래가 창구 남은 횟수 부족", msg, bad))
+
     # ── 출력 ──
     failed = 0
     for label, msg, bad in results:
@@ -230,9 +249,9 @@ def main() -> int:
 
     print(f"\n{'=' * 64}")
     if failed:
-        print(f"❌ 11창구 + 미지 에러 렌더 중 {failed}곳에 어려운 말이 남아 있다")
+        print(f"❌ 12창구 + 미지 에러 렌더 중 {failed}곳에 어려운 말이 남아 있다")
         return 1
-    print("✅ 11창구 + 미지 에러 렌더 전부 쉬운 우리말 — 라이브 반영 확인")
+    print("✅ 12창구 + 미지 에러 렌더 전부 쉬운 우리말 — 라이브 반영 확인")
     return 0
 
 

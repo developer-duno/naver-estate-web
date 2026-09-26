@@ -69,6 +69,12 @@ FE 만 변경된 PR (frontend/*) 은 본 룰 면제.
 ②의 "5분 안" 판정에는 `GET /api/admin/scheduler-status` 의 `next_run_at` 을 써도 된다 — jitter 가 이미 반영된 확정값이라
 interval 잡(crawl_details 30분±15)도 시각표 추정 대신 그 값으로 정확히 본다(세션 411 검사관 C 실측).
 
+⚠ **①의 "running 0" 만으로는 부족하다 — 짧은 하위 잡을 이어 붙이는 수집은 잡 사이 틈에 0 으로 보인다**(세션 421 실사고:
+일요일 03:00 새 단지 찾기 `discover_regions` 는 `complex_list` 행을 지역마다 몇 초씩 229개 이어 붙여 평소 03:00~03:49 에 도는데,
+03:37 재시작이 그 틈에서 GO 를 받아 130/229 에서 끊었다). ①에 **최근 90초 안에 시작·종료된 행**도 본다 — 있으면 WAIT:
+`SELECT job_type, count(*) FROM crawl_jobs WHERE greatest(started_at, coalesce(completed_at, started_at)) >= now() - interval '90 seconds' GROUP BY 1`.
+**일요일 03:00~03:50 은 사실상 재시작 금지 구간**(아래 표는 시작 시각만 보여 준다).
+
 ```bash
 # (1) running 잡 — 있으면 끝날 때까지 대기. 특히 official_price 는 3~7h 라 절대 중단 금지
 cd /d/naver-estate-web/backend && PYTHONPATH=. PYTHONUTF8=1 python -c "
@@ -154,6 +160,10 @@ interval 잡(시각 `—` 행)의 주기는 **코드 기본값**이다 — 라�
 DB 다운 진단·처방은 `backend/.claude/details.md` §Supabase DB 전면 다운 런북과 재발 이력이 우선.
 
 **3-1. 재시작 실행**
+
+⚠ 창을 기다렸다가 재시작하는 루프를 **백그라운드로 걸 때는 "멈춤 파일"(예: `STOP` 파일이 있으면 exit)을 루프 안에 넣는다** —
+Windows 에서 `TaskStop` 은 bash 껍데기만 끝내고 안쪽 스크립트가 고아로 살아남을 수 있다(세션 421: "멈췄다"고 보고한 뒤 그 스크립트가
+재시작을 실행했다). 멈춘 뒤에는 명령줄에 스크립트 이름이 든 프로세스가 사라졌는지 확인한다.
 
 ```powershell
 # 비관리자 셸 그대로 실행 가능 — 서비스 DACL 에 사용자 시작/중지 권한 등록됨

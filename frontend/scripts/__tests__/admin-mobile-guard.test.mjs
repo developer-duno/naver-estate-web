@@ -2,7 +2,7 @@
  * 관리자 화면 휴대폰 대응 가드 (세션 419, 사장님 "폰도 쓴다" 2026-09-26)
  * 실행: npx vitest run scripts/__tests__/admin-mobile-guard.test.mjs
  *
- * 1) 관리자 표는 최소 폭(min-w-[…])을 둔다 — 없으면 390px 폭에서 칸이 눌려 머리글·숫자가 세로로
+ * 1) 관리자 표는 최소 폭(min-w-[Npx] 또는 같은 값의 Tailwind 표준 이름 min-w-<숫자>)을 둔다 — 없으면 390px 폭에서 칸이 눌려 머리글·숫자가 세로로
  *    꺾인다(세션 417 미분양 분양가 표와 같은 결함). 새 표가 생겨도 자동으로 검사 대상이 되도록
  *    파일 목록을 손으로 적지 않고 `<table` 이 있는 파일을 전부 훑는다.
  *    예외 1곳 = SchedulerMonitor — 좁은 폭에서 열을 숨기는(hidden sm:table-cell) 설계라 최소 폭을
@@ -46,10 +46,11 @@ describe("관리자 표 최소 폭", () => {
     expect(withTable.length).toBeGreaterThanOrEqual(7);
   });
 
-  it.each(withTable.filter((f) => !NO_MIN_WIDTH_OK.has(f)))("%s 의 모든 <table> 에 min-w-[…] 가 있다", (f) => {
+  it.each(withTable.filter((f) => !NO_MIN_WIDTH_OK.has(f)))("%s 의 모든 <table> 에 최소 폭(min-w-[Npx]·min-w-<숫자>)이 있다", (f) => {
     const classes = tableClassNames(readFileSync(join(ADMIN_DIR, f), "utf-8"));
     expect(classes.length).toBeGreaterThan(0);
-    for (const c of classes) expect(c).toMatch(/\bmin-w-\[\d+px\]/);
+    // min-w-0·min-w-full 처럼 최소 폭이 없는 값은 불합격 — 1 이상의 숫자(.5 포함)만 인정
+    for (const c of classes) expect(c).toMatch(/\bmin-w-(?:\[\d+px\]|[1-9]\d*(?:\.5)?)(?![\w.-])/);
   });
 
   it("최소 폭 예외(SchedulerMonitor)는 여전히 좁은 폭에서 열을 숨기는 설계다 — 설계가 바뀌면 예외도 다시 본다", () => {

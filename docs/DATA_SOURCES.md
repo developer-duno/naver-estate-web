@@ -123,7 +123,7 @@ PK 가 `apartment_id`(자매 `apartments.id`)인 **자매 소유 테이블**인�
 | `apis.data.go.kr/1613000` (국토부) | 우리 + 자매 | 일 10,000 공유. 매월 10일이 토요일이면 우리 토요일 수집을 skip |
 | `apis.data.go.kr/B552584`·`B552657` (대기질·응급의료) | 우리 + 자매 | 같은 활용신청 키면 공유 가능성 — **미확인** |
 | `api.odcloud.kr` | 우리 + 자매(청약홈) | 키 공유 여부 **미확인** |
-| `api.vworld.kr` | 우리만 | 개발키 만료 **2027-02-09** |
+| `api.vworld.kr` | 우리만 | 운영키 만료 **2029-02-09** (2026-09 승인 — 연장도 심사라 만료 2달 전 신청) |
 | `new.land.naver.com` | 우리 + 자매 | **쿼터가 아니라 같은 집 IP** — 차단 위험. 시간 분리표 = `.claude/rules/infra.md` §네이버 크롤링 시간 분리 |
 | `dapi.kakao.com`·`kosis.kr`·NEIS·DART | 자매만 | |
 

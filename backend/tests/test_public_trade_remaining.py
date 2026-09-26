@@ -397,16 +397,16 @@ def test_t2_예상_호출_수는_체크포인트로_끝난_시군구를_뺀_나�
     _add_regions(db, 4)  # sigungu_cd = 11000, 11010, 11020, 11030
     _seed_resume_checkpoint(db, ["11000", "11010"])  # 앞 2개는 이미 끝남 → 남은 2개
 
-    window = _FakeWindow(10)  # 남은 2시군구 × 23개월 ≫ 10 → 부족 알림 발화
+    window = _FakeWindow(10)  # 남은 2시군구 × 24개월 ≫ 10 → 부족 알림 발화
     tg = _run_weekly(window)
 
     assert tg.call_count == 1, "잡당 최대 1회"
     text = tg.call_args[0][0]
     _assert_plain_alert(text)
-    # 남은 시군구 2개 × 23개월(= _FakeDate 고정 2026-03-14 기준) = 46 — 전체 4개 기준(92)이 아니다
-    expected = 2 * 23
+    # 남은 시군구 2개 × 달력 24개월(세션 421 달 목록 수정) = 48 — 전체 4개 기준(96)이 아니다
+    expected = 2 * 24
     assert f"약 {expected:,}번이 필요" in text, text
-    assert f"약 {4 * 23:,}번이 필요" not in text, "전체 시군구 기준으로 부풀려지면 안 된다"
+    assert f"약 {4 * 24:,}번이 필요" not in text, "전체 시군구 기준으로 부풀려지면 안 된다"
 
 
 def test_t2_재개_로그에도_남은_시군구_수가_찍힌다(db, caplog):

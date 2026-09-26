@@ -626,7 +626,9 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
             job.status = "failed"
             job.error_message = (
                 f"정부 실거래가 창구 호출이 실패해 {fetch_failed}개 단지를 못 받음(받은 곳 {success}개)"
-                " — 남은 단지는 내일 다시 받아요"
+                # 이 분기의 실패는 전부 한도가 아닌 실패라 시도 마커가 찍힌다(:482) —
+                # 그래서 "내일"이 아니라 재시도 창이 지난 뒤다(검사관 재검사 N1).
+                f" — 못 받은 단지는 {PUBLIC_DATA_RETRY_COOLDOWN_DAYS}일 뒤에 다시 시도해요"
             )
         job.total_items = total
         job.processed_items = success

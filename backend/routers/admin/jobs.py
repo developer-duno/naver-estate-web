@@ -1,11 +1,13 @@
 """관리자 크롤작업 + 통계 라우트"""
 
 import logging
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, HTTPException, Query
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, select, text
 from sqlalchemy.orm import Session
 
 from auth.audit import log_action
@@ -218,12 +220,77 @@ def resume_crawl_job(
     return {"status": "pending"}
 
 
+# ── 상세 통계 캐시 ──
+# 운영 부하 시간대(단지 관리비 받기·정부 실거래가 받기가 같이 도는 아침)에 아래 count 들이
+# 합쳐 8초 statement_timeout 을 넘겨 500 이 났다(2026-09-26 06:27~28 두 번, QueryCanceled —
+# articles 전체 count 3.1초·complex_price_history 2.9초 등). 그래서
+#   ① 결과를 프로세스 안에 5분 보관한다. 관리자 전용 전역 집계라 보는 사람마다 다른 값이 없다
+#      → 한 벌만 보관해도 남의 숫자를 보여 주는 일이 없다(사용자와 무관).
+#   ② 다시 계산할 때만 이 요청의 트랜잭션에 한해 시간 제한을 30초로 올린다(PostgreSQL 전용).
+# 숫자는 최대 5분 늦을 수 있다(의도 — 버그 아님). 계산이 실패하면 옛 값으로 몰래 대신하지
+# 않고 그대로 500 을 낸다(.claude/rules/error-propagation.md 취지).
+_STATS_CACHE_TTL_SEC = 300
+_STATS_STATEMENT_TIMEOUT_MS = 30_000
+_stats_cache: dict | None = None
+_stats_cache_at: float | None = None  # time.monotonic() 기준 계산 시각
+# 동시에 여러 요청이 와도 한 요청만 계산하고 나머지는 기다렸다가 그 결과를 받는다.
+_stats_lock = threading.Lock()
+
+
+def _reset_stats_cache() -> None:
+    """상세 통계 캐시만 비운다 — 테스트 격리용(conftest setup_db 가 부른다)."""
+    global _stats_cache, _stats_cache_at
+    with _stats_lock:
+        _stats_cache = None
+        _stats_cache_at = None
+
+
+def _raise_statement_timeout_for_stats(db: Session) -> bool:
+    """이 트랜잭션에만 시간 제한 30초 — 다른 요청은 연결 때 걸린 8초 그대로.
+
+    SET LOCAL 은 현재 트랜잭션이 끝나면 사라진다(NullPool 이라 연결도 요청마다 새것).
+    SQLite(CI)에는 이 문법이 없어 실행하지 않는다(domain-mapping-ssot.md 룰 3 dialect 분기).
+    반환값 = 실제로 올렸는지.
+    """
+    dialect_name = db.bind.dialect.name if db.bind else ""
+    if dialect_name != "postgresql":
+        return False
+    db.execute(text(f"SET LOCAL statement_timeout = {_STATS_STATEMENT_TIMEOUT_MS}"))
+    return True
+
+
+def _cached_detailed_stats(db: Session, now: float | None = None) -> dict:
+    """5분 안이면 보관한 결과, 아니면 다시 계산해 보관한 뒤 반환.
+
+    now = time.monotonic() 값. 시험에서 시각을 밖에서 넣기 위한 인자(실제 대기 금지).
+    """
+    global _stats_cache, _stats_cache_at
+    now = time.monotonic() if now is None else now
+    with _stats_lock:
+        if (
+            _stats_cache is not None
+            and _stats_cache_at is not None
+            and now - _stats_cache_at < _STATS_CACHE_TTL_SEC
+        ):
+            return _stats_cache
+        _raise_statement_timeout_for_stats(db)
+        result = _compute_detailed_stats(db)  # 실패하면 예외 그대로 — 캐시도 안 바뀐다
+        _stats_cache = result
+        _stats_cache_at = now
+        return result
+
+
 @router.get("/stats/detailed")
 def get_detailed_stats(
     db: Session = Depends(get_db),
     admin: dict = Depends(get_admin_user),
 ):
-    """상세 통계 (관리자용)"""
+    """상세 통계 (관리자용) — 5분 캐시라 숫자는 최대 5분 늦을 수 있다."""
+    return _cached_detailed_stats(db)
+
+
+def _compute_detailed_stats(db: Session) -> dict:
+    """상세 통계 실제 계산 — count 들 + 최근 작업 5건."""
     complex_count = db.execute(select(func.count()).select_from(Complex)).scalar() or 0
     article_count = db.execute(
         select(func.count()).select_from(Article).where(Article.is_active == True)

@@ -156,6 +156,9 @@ def test_s1_alive_after_first_wait_waits_more_without_second_launch(orch, monkey
     assert _count(calls, "kill_port") == 0
     assert len(wait_timeouts) == 2
     assert wait_timeouts[1] == orch.BACKEND_HEALTH_GRACE
+    # 추가 대기는 실측 콜드 부팅 43초(2026-09-27 01:02)보다 길어야 뜻이 있다 — 상수끼리만 비교하면
+    # GRACE=0 으로 바꿔도 통과한다(적대 검사관 X1 변이). 값 자체를 고정한다.
+    assert orch.BACKEND_HEALTH_GRACE >= 45
     assert watchdog_args == [p1]
 
 

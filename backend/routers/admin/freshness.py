@@ -33,6 +33,12 @@ _FRESHNESS_CACHE_KEY = "data_freshness"
 # 통째로 들어오고 그 다음 interval (12h) 와는 충분히 구분된다.
 _BATCH_WINDOW_MINUTES = 60
 
+# 헛바퀴 판정 최소 대상 건수 — 대상이 이 값 미만인 작은 회차는 판정에서 제외한다.
+# 상한 재시도 매물(예: articles.detail_fail_count 상한 도달분을 일일 정비 잡이 하루
+# 1회 되살린 것) 처럼 대상 1~수건짜리 회차가 그 매물오류로 처리 0건이 되면, 헛바퀴가
+# 아니라 정상 동작인데도 빨간 경보가 났다(세션 421 04:13, 매물 상세 회차 #58967 대상1·처리0).
+SPINNING_MIN_TOTAL = 5
+
 
 def _to_utc(value):
     """date / naive datetime / aware datetime → tz-aware UTC datetime (또는 None)."""
@@ -286,8 +292,10 @@ def compute_freshness(db: Session) -> dict:
         status = _status(last_updated, meta["expected_interval_seconds"], now)
         spinning = False
         if job is not None:
-            # processed_items=0 이고 total_items>0 이면 헛바퀴
-            if job["processed_items"] == 0 and job["total_items"] > 0:
+            # processed_items=0 이고 total_items>=SPINNING_MIN_TOTAL 이면 헛바퀴.
+            # 대상이 몇 건뿐인 회차(상한 재시도 매물 등)만 실패하는 것은 헛바퀴가
+            # 아니므로 최소 대상 건수 문턱을 둔다(세션 421 04:13 헛경보).
+            if job["processed_items"] == 0 and job["total_items"] >= SPINNING_MIN_TOTAL:
                 spinning = True
             # N0 측정 가능 + 작업 후 신규 행 0 + 종목 특성상 신규가 기대되는 경우
             if new_rows is not None and new_rows == 0 and meta.get("new_rows_expected", False):

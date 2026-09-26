@@ -3,7 +3,7 @@
  */
 
 import type { UserProfile, AuditLog, AgentVerification, DetailedStats, PaginatedResponse, UserUpdatePayload, CrawlJobDetail, SchedulerStatusResponse, SchedulerCalendarResponse, DataFreshnessResponse, QuotaStatus } from "@/types/admin";
-import { fetchApi, adminHeaders, LIVE_TIMEOUT_MS } from "./core";
+import { fetchApi, adminHeaders } from "./core";
 import type { CollectorName } from "@/lib/admin/collectors";
 
 /** 관리자: 사용자 목록 */
@@ -105,33 +105,22 @@ export async function getDataFreshness(token: string) {
   return fetchApi<DataFreshnessResponse>(`/api/admin/data-freshness`, { headers: adminHeaders(token) });
 }
 
-/** 관리자: 데이터 수집 트리거 — BE 는 수집이 끝날 때까지 답을 안 준다(동기 실행).
- *  수집기 8종의 정본 = lib/admin/collectors.ts. */
+/** 관리자: 데이터 수집 트리거 — BE 는 수집기를 백그라운드로 시작하고 곧바로 답한다(세션 420).
+ *  진행·결과는 그 잡의 crawl_jobs 행(수집 작업 목록·지금 돌아가는 작업)으로 본다.
+ *  같은 수집기가 이미 돌면 409(우리말 detail). 수집기 8종의 정본 = lib/admin/collectors.ts. */
 export type { CollectorName } from "@/lib/admin/collectors";
 
-/** 수집 트리거 응답 — 수집기가 dict 를 돌려주면 BE 가 그 칸을 펼쳐 넣는다(routers/admin/collect.py).
- *  quota_exhausted·success·total = backfill-price(세션 362) / matched = kapt-match / collected = kapt-costs /
- *  error·message = 수집기가 실패를 예외 대신 값으로 돌려준 경우(HTTP 200 이어도 실패다). */
+/** 수집 트리거 응답 — 시작 알림뿐이다(routers/admin/collect.py). 옛 결과 칸(quota_exhausted 등)은 없어졌다. */
 export interface CollectionResult {
-  status: string;
+  status: "started";
   collector: string;
-  quota_exhausted?: boolean;
-  success?: number;
-  failed?: number;
-  total?: number;
-  matched?: number;
-  collected?: number;
-  error?: string;
-  message?: string;
 }
 
-/** signal 을 주면 그 signal 로 끊는다(오래 도는 수집기는 화면이 먼저 손을 뗀다 — CollectorTrigger).
- *  주지 않으면 LIVE_TIMEOUT_MS 뒤 끊는다. */
-export async function triggerCollection(token: string, name: CollectorName, signal?: AbortSignal) {
-  return fetchApi<CollectionResult>(
-    `/api/admin/collect/${encodeURIComponent(name)}`,
-    { method: "POST", headers: adminHeaders(token), timeoutMs: LIVE_TIMEOUT_MS, signal } as RequestInit & { timeoutMs?: number },
-  );
+export async function triggerCollection(token: string, name: CollectorName) {
+  return fetchApi<CollectionResult>(`/api/admin/collect/${encodeURIComponent(name)}`, {
+    method: "POST",
+    headers: adminHeaders(token),
+  });
 }
 
 /** 관리자: 검증 신청 목록 */

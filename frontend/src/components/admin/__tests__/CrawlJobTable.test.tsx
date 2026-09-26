@@ -112,4 +112,30 @@ describe("CrawlJobTable", () => {
     expect(screen.queryByText("옛 백엔드 원문")).not.toBeInTheDocument();
     expect(screen.queryByText("취소 사유 문장")).not.toBeInTheDocument();
   });
+
+  /** 세션 420: 완료했지만 사유가 남은 회차(한도 사전 확인 멈춤·일부 시군구 못 받음)도 한 줄 보인다 —
+   *  수동 실행은 스케줄러 현황에 안 잡혀 이 표가 유일하게 사유를 보여 주는 곳이다 */
+  it("완료 행에 사유가 있으면 흐린 주황 한 줄(빨강 아님), 사유가 없으면 줄 없음", () => {
+    const budget =
+      "정부 실거래가 창구에 오늘 쓸 요청 몫을 다 써 20개 단지 중 0개까지 받고 멈춤 — 남은 단지는 내일 이어서 받아요";
+    render(
+      <CrawlJobTable
+        jobs={[
+          mkJob({ id: 1, job_type: "price_backfill", status: "completed", error_message: budget, error_plain: budget }),
+          mkJob({ id: 2, job_type: "public_trade_data", status: "completed", error_message: undefined, error_plain: null }),
+        ]}
+      />,
+    );
+    const line = screen.getByText(budget);
+    expect(line).toHaveClass("text-amber-700");
+    expect(line).not.toHaveClass("text-red-700");
+    expect(line).toHaveAttribute("title", budget);
+    // 사유 없는 완료 행은 주황 줄을 그리지 않는다
+    expect(document.querySelectorAll(".text-amber-700")).toHaveLength(1);
+  });
+
+  it("완료 행이어도 error_plain 이 없으면(옛 BE) 원문을 본문에 그리지 않는다", () => {
+    render(<CrawlJobTable jobs={[mkJob({ id: 1, status: "completed", error_message: "legacy raw text" })]} />);
+    expect(screen.queryByText("legacy raw text")).not.toBeInTheDocument();
+  });
 });

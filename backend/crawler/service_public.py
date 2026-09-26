@@ -630,6 +630,16 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
                 # 그래서 "내일"이 아니라 재시도 창이 지난 뒤다(검사관 재검사 N1).
                 f" — 못 받은 단지는 {PUBLIC_DATA_RETRY_COOLDOWN_DAYS}일 뒤에 다시 시도해요"
             )
+        elif quota_exhausted:
+            # 우리 하루 예산(사전 확인)에 걸려 멈춘 회차 — 계획된 멈춤이라 completed 그대로 두고
+            # 사유만 남긴다(세션 420). 옛 코드는 문구 없이 completed 라 "다 받았다"로 읽혔다.
+            # 남은 단지는 backfill_price_history 를 부르기 전에 멈춰 시도 마커(:483)가 안 찍히므로
+            # 내일 같은 순서로 다시 뽑힌다. 머리는 "정부 실거래가 창구" — plain_words 원문 보존 규칙이
+            # 숫자를 지키게(한도 규칙이 먼저 잡으면 숫자가 사라진다).
+            job.error_message = (
+                f"정부 실거래가 창구에 오늘 쓸 요청 몫을 다 써 {total}개 단지 중 {success}개까지 받고 멈춤"
+                " — 남은 단지는 내일 이어서 받아요"
+            )
         job.total_items = total
         job.processed_items = success
         job.completed_at = utcnow()

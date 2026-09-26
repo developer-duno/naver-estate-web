@@ -6,8 +6,8 @@
  *  1. 버튼 8개 — 이름은 crawl-job-labels(BE JOB_WORDS 와 같은 표현)
  *  2. 버튼마다 마지막 실행·결과 한 줄(scheduler-status) — 실패면 빨간 점 + 우리말 사유, 도는 중이면 버튼 잠금
  *  3. 오래 걸리는 수집기는 확인창을 거치고, 취소하면 API 를 부르지 않는다
- *  4. 오래 걸리는 수집기는 잠깐만 기다린 뒤 "시작했어요" (서버는 계속 돈다) + 목록 새로고침
- *  5. 짧은 수집기는 답을 받아 결과를 요약, 값으로 돌려준 실패(already_running 등)는 실패로 보인다
+ *  4. 누르면 BE 가 곧바로 "시작" 을 답한다(세션 420 백그라운드화) → "시작했어요" + '지금 돌아가는 작업'·현황 새로고침
+ *  5. 이미 도는 중(409)이면 BE 의 우리말 문구 그대로, 연결 실패 원문은 쉬운 한 줄로
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
@@ -22,7 +22,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 import { triggerCollection, getSchedulerStatus } from "@/lib/api";
-import CollectorTrigger, { LONG_WAIT_MS } from "../admin/CollectorTrigger";
+import CollectorTrigger, { STARTED_TEXT } from "../admin/CollectorTrigger";
 
 const mockTrigger = vi.mocked(triggerCollection);
 const mockStatus = vi.mocked(getSchedulerStatus);
@@ -156,72 +156,48 @@ describe("CollectorTrigger — 누르기 전 확인창", () => {
   });
 
   it("짧은 수집기는 묻지 않고 바로 부른다", async () => {
-    mockTrigger.mockResolvedValueOnce({ status: "completed", collector: "crime-stats" });
+    mockTrigger.mockResolvedValueOnce({ status: "started", collector: "crime-stats" });
     renderIt();
     fireEvent.click(btn("동네 범죄 통계 받기"));
     expect(window.confirm).not.toHaveBeenCalled();
     await waitFor(() => {
-      expect(mockTrigger).toHaveBeenCalledWith("test-token", "crime-stats", expect.any(AbortSignal));
+      expect(mockTrigger).toHaveBeenCalledWith("test-token", "crime-stats");
     });
-    await screen.findByText("수집 완료");
+    await screen.findByText(STARTED_TEXT);
   });
 });
 
-describe("CollectorTrigger — 누른 뒤", () => {
-  it("오래 걸리는 수집기는 잠깐 기다린 뒤 요청을 놓고 '시작했어요' + 목록·현황 새로고침", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    let seenSignal: AbortSignal | undefined;
-    mockTrigger.mockImplementationOnce((_t, _n, signal) => {
-      seenSignal = signal;
-      // 서버는 끝날 때까지 답을 안 준다 — 끊기면 fetchApi 처럼 오류를 던진다
-      return new Promise((_resolve, reject) => {
-        signal?.addEventListener("abort", () => reject(new Error("서버 응답 시간이 초과되었습니다")));
-      });
-    });
+describe("CollectorTrigger — 누른 뒤 (세션 420 백그라운드화)", () => {
+  it("시작 답이 오면 '시작했어요' + '지금 돌아가는 작업'·현황 새로고침", async () => {
+    mockTrigger.mockResolvedValueOnce({ status: "started", collector: "kapt-costs" });
     renderIt();
     const spy = vi.spyOn(client, "invalidateQueries");
     fireEvent.click(btn("단지 관리비 받기"));
-    await screen.findByText("시작하는 중...");
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(LONG_WAIT_MS + 10);
-    });
-    await screen.findByText(/^시작했어요 — 서버에서 계속 받아요/);
-    expect(seenSignal?.aborted).toBe(true);
+    const line = await screen.findByText("시작했어요 — 진행 상황은 아래 '수집 작업 목록'에서 볼 수 있어요");
+    expect(line).toHaveClass("text-green-700");
+    // 접두 키 — 수집 작업 목록과 '지금 돌아가는 작업'(["admin","crawlJobs","running"])을 함께 새로 받는다
     expect(spy).toHaveBeenCalledWith({ queryKey: ["admin", "crawlJobs"] });
     expect(spy).toHaveBeenCalledWith({ queryKey: ["admin", "schedulerStatus"] });
-    // 실패로 보이지 않는다
-    expect(screen.queryByText("서버 응답 시간이 초과되었습니다")).toBeNull();
+    // 옛 "완료" 문구는 더 없다 — 결과는 수집 작업 목록이 보여 준다
+    expect(screen.queryByText(/^수집 완료/)).toBeNull();
   });
 
-  it("기다리는 사이에 온 '이미 도는 회차' 답은 실패로 보인다 (HTTP 200 이어도)", async () => {
-    mockTrigger.mockResolvedValueOnce({
-      status: "completed", collector: "kapt-costs", collected: 0, error: "already_running", message: "이미 도는 회차 있음",
-    });
+  it("이미 도는 중(409)이면 서버의 우리말 문구를 그대로, 빨간 글씨로", async () => {
+    mockTrigger.mockRejectedValueOnce(new ApiError("이미 돌고 있어요 — 끝난 뒤 다시 눌러 주세요", 409));
     renderIt();
+    const spy = vi.spyOn(client, "invalidateQueries");
     fireEvent.click(btn("단지 관리비 받기"));
-    const line = await screen.findByText("이미 도는 회차가 있어요 — 끝난 뒤에 다시 눌러 주세요");
+    const line = await screen.findByText("이미 돌고 있어요 — 끝난 뒤 다시 눌러 주세요");
     expect(line).toHaveClass("text-red-600");
+    // 도는 회차가 버튼 잠금에 반영되게 현황도 새로 받는다
+    expect(spy).toHaveBeenCalledWith({ queryKey: ["admin", "schedulerStatus"] });
   });
 
-  it("짧은 수집기의 거절 문구(우리말 detail)는 그대로, 연결 실패 원문은 쉬운 한 줄로", async () => {
-    mockTrigger.mockRejectedValueOnce(new ApiError("수집 실패: 정부 자료 창구가 잠시 멈췄어요", 500));
+  it("연결 실패 원문은 쉬운 한 줄로", async () => {
     mockTrigger.mockRejectedValueOnce(new TypeError("Failed to fetch"));
     renderIt();
-    fireEvent.click(btn("응급실 위치 받기"));
-    await screen.findByText("수집 실패: 정부 자료 창구가 잠시 멈췄어요");
     fireEvent.click(btn("동네 공기질 받기"));
     await screen.findByText("서버에 연결하지 못했어요 — 잠시 뒤 다시 눌러 주세요");
     expect(screen.queryByText("Failed to fetch")).toBeNull();
-  });
-
-  /** 세션 362 회귀 가드: 한도 소진으로 조기 종료되면 "수집 완료"로 오해하지 않게 */
-  it("옛 시세 채우기가 호출 한도 소진으로 멈추면 경고 문구", async () => {
-    mockTrigger.mockResolvedValueOnce({
-      status: "completed", collector: "backfill-price", quota_exhausted: true, success: 3, failed: 0, total: 20,
-    });
-    renderIt();
-    fireEvent.click(btn("옛 시세 채워 넣기"));
-    await screen.findByText("하루 호출 한도를 다 써서 중단 (3/20건)");
-    expect(screen.queryByText(/^수집 완료/)).toBeNull();
   });
 });

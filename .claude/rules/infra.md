@@ -135,7 +135,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정 (설정 완�
   P1-2 수집 로그를 오염시키므로). 그래서 `세션388 수동 중단 — kaptCode …` 같은 사람이 쓴 문장은 알림에선 "처음 보는 문제",
   화면에선 원문 그대로 보인다 — **화면이 더 자세한 것은 의도**(검사관 C A-2). 라우터는 `error_plain` 을 raw 옆에 실어 주고
   FE 는 `error_plain || error_message` + `title=raw`. 관리자 카드의 **버튼 조작 오류**(`detail`)도 창구다 —
-  `routers/admin/collect.py` 가 `수집 실패: {e}` 로 raw 예외를 실어 보내던 것을 `explain_error` 로 감쌌다(세션 411 후속).
+  `routers/admin/collect.py` 의 수집 버튼(`POST /collect/{name}`)은 세션 420 부터 수집기를 백그라운드로 돌려 `started`/409(우리말 고정 문구)로 답하고, 예외 원문은 로그에만 남는다(사유는 그 잡의 crawl_jobs 행 → 화면). 스레드 시작 실패는 500, 단건 소급(`POST /backfill-price/{no}`)은 여전히 동기라 실패 시 500 + `explain_error` 우리말 사유.
 - 접두어 회귀는 `test_plain_words.py` 가 **`.py` 8모듈 + 워크플로 YAML** 을 전수 추출해 막는다.
 
 ### 적용 현황 — **모듈 8개 / 호출부 11곳 전부 완료** (세션 409)

@@ -1,14 +1,37 @@
 """관리자 수집 트리거 API 테스트
 실행: python -m pytest tests/test_admin_collect.py -v
+
+세션 420: 수집 트리거는 백그라운드로 시작하고 곧바로 {"status":"started"} 를 준다.
+중복 차단·스레드 마무리 시험은 tests/test_admin_collect_background.py.
 """
 
+import threading
 from unittest.mock import patch
 
 import jwt
+import pytest
 
 from db.models import UserProfile
+from routers.admin import collect as collect_mod
 
 JWT_SECRET = "test-secret-key-for-testing-only"
+
+
+@pytest.fixture(autouse=True)
+def _clear_running_flags():
+    with collect_mod._collect_lock:
+        collect_mod._collect_running.clear()
+    yield
+    with collect_mod._collect_lock:
+        collect_mod._collect_running.clear()
+
+
+def _join_collector(name):
+    """백그라운드 수집 스레드가 끝날 때까지 기다린다(흐른 시간이 아니라 스레드 종료로 판정)."""
+    for t in threading.enumerate():
+        if t.name == f"admin-collect-{name}":
+            t.join(timeout=10)
+            assert not t.is_alive(), f"{name} 수집 스레드가 끝나지 않았다"
 
 
 def _token(sub):
@@ -49,16 +72,16 @@ def test_collect_regular_user_403(client, db):
 
 
 def test_collect_crime_stats_success(client, db):
-    """범죄통계 수집 트리거 — 관리자 성공"""
+    """범죄통계 수집 트리거 — 관리자 성공, 곧바로 started"""
     _make_profile(db, "a1", role="admin")
     with patch("routers.admin.collect._get_collector") as mock_get:
         mock_fn = mock_get.return_value
         mock_fn.return_value = None
         res = client.post("/api/admin/collect/crime-stats", headers=_auth(_token("a1")))
+        _join_collector("crime-stats")
         assert res.status_code == 200
-        data = res.json()
-        assert data["status"] == "completed"
-        assert data["collector"] == "crime-stats"
+        assert res.json() == {"status": "started", "collector": "crime-stats"}
+        mock_fn.assert_called_once_with()
 
 
 def test_collect_air_quality_success(client, db):
@@ -68,27 +91,25 @@ def test_collect_air_quality_success(client, db):
         mock_fn = mock_get.return_value
         mock_fn.return_value = None
         res = client.post("/api/admin/collect/air-quality", headers=_auth(_token("a2")))
+        _join_collector("air-quality")
         assert res.status_code == 200
         assert res.json()["collector"] == "air-quality"
 
 
-def test_collect_backfill_price_exposes_quota_exhausted(client, db):
-    """세션 362 회귀 가드: backfill-price 가 반환한 dict(quota_exhausted 등)를
-    응답에 그대로 펼쳐 넣는다 — 이전엔 반환값을 통째로 버려 쿼터 소진으로
-    0단지 처리돼도 화면엔 "completed"만 보였다."""
+def test_collect_response_no_longer_carries_collector_result(client, db):
+    """세션 420: 응답은 시작 알림뿐 — 수집기 반환 dict(quota_exhausted 등)는 싣지 않는다.
+
+    옛 세션 362 가드(dict 펼침)를 대체한다. 한도로 멈춘 사실은 이제 그 잡의
+    crawl_jobs.error_message 로 화면에 보인다(test_admin_collect_background B5 시험)."""
     _make_profile(db, "a6", role="admin")
     with patch("routers.admin.collect._get_collector") as mock_get:
         mock_get.return_value.return_value = {
             "success": 0, "failed": 0, "total": 5, "quota_exhausted": True,
         }
         res = client.post("/api/admin/collect/backfill-price", headers=_auth(_token("a6")))
+        _join_collector("backfill-price")
     assert res.status_code == 200
-    data = res.json()
-    assert data["status"] == "completed"
-    assert data["collector"] == "backfill-price"
-    assert data["quota_exhausted"] is True
-    assert data["success"] == 0
-    assert data["total"] == 5
+    assert res.json() == {"status": "started", "collector": "backfill-price"}
 
 
 def test_collect_invalid_name_422(client, db):
@@ -107,6 +128,7 @@ def test_collect_success_invalidates_freshness_cache(client, db):
     with patch("routers.admin.collect._get_collector") as mock_get:
         mock_get.return_value.return_value = None
         res = client.post("/api/admin/collect/air-quality", headers=_auth(_token("a4")))
+        _join_collector("air-quality")
     assert res.status_code == 200
     assert get_cache("freshness").get("data_freshness") is None  # 무효화됨
 
@@ -120,19 +142,10 @@ def test_collect_failure_keeps_freshness_cache(client, db):
     with patch("routers.admin.collect._get_collector") as mock_get:
         mock_get.return_value.side_effect = RuntimeError("수집 실패")
         res = client.post("/api/admin/collect/air-quality", headers=_auth(_token("a5")))
-    assert res.status_code == 500
+        _join_collector("air-quality")
+    # 시작은 됐다 — 실패는 백그라운드에서 난다
+    assert res.status_code == 200
     assert get_cache("freshness").get("data_freshness") == {"keep": True}  # 유지됨
-
-
-def test_collect_exception_500(client, db):
-    """수집 중 예외 → 500"""
-    _make_profile(db, "a4", role="admin")
-    with patch("routers.admin.collect._get_collector") as mock_get:
-        mock_fn = mock_get.return_value
-        mock_fn.side_effect = RuntimeError("API 장애")
-        res = client.post("/api/admin/collect/crime-stats", headers=_auth(_token("a4")))
-        assert res.status_code == 500
-        assert "수집 실패" in res.json()["detail"]
 
 
 # ── 범죄통계 상태 조회 ──
@@ -161,34 +174,27 @@ def test_crime_stats_status_empty(client, db):
 
 
 def test_collect_kapt_match_success(client, db):
-    """K-apt 단지 매칭 트리거 — 관리자 성공 + dict 반환값 펼침"""
+    """K-apt 단지 매칭 트리거 — 관리자 성공, 곧바로 started"""
     _make_profile(db, "a7", role="admin")
     with patch("routers.admin.collect._get_collector") as mock_get:
         mock_get.return_value.return_value = {"matched": 12, "skipped": 3}
         res = client.post("/api/admin/collect/kapt-match", headers=_auth(_token("a7")))
+        _join_collector("kapt-match")
     assert res.status_code == 200
-    data = res.json()
-    assert data["collector"] == "kapt-match"
-    assert data["matched"] == 12
+    assert res.json() == {"status": "started", "collector": "kapt-match"}
 
 
-def test_collect_kapt_costs_exposes_empty_count(client, db):
-    """K-apt 관리비 트리거 — 미공개(empty) 건수가 응답에 드러나야 한다.
-
-    단지당 22콜이라 "수집 0건"이 쿼터 소진인지 전량 미공개인지 화면에서
-    구분돼야 한다(세션 362 backfill-price 선례와 동일 결).
-    """
+def test_collect_kapt_costs_success(client, db):
+    """K-apt 관리비 트리거 — 곧바로 started (미공개·수집 건수는 그 잡의 crawl_jobs 행이 보여 준다)"""
     _make_profile(db, "a8", role="admin")
     with patch("routers.admin.collect._get_collector") as mock_get:
         mock_get.return_value.return_value = {
             "collected": 0, "failed": 0, "empty": 40, "cost_month": "202605",
         }
         res = client.post("/api/admin/collect/kapt-costs", headers=_auth(_token("a8")))
+        _join_collector("kapt-costs")
     assert res.status_code == 200
-    data = res.json()
-    assert data["collector"] == "kapt-costs"
-    assert data["empty"] == 40
-    assert data["cost_month"] == "202605"
+    assert res.json() == {"status": "started", "collector": "kapt-costs"}
 
 
 def test_collect_kapt_names_resolve_to_real_functions(db):
@@ -205,17 +211,16 @@ def test_collect_kapt_names_resolve_to_real_functions(db):
 # normalizeDetail). 개발자용 예외 원문이 새면 관리자 화면 세 번째 노출 창구가 된다.
 
 
-def test_collect_failure_detail_is_plain_korean(client, db):
-    """수동 수집 실패 — 응답 문구가 우리말이고 예외 원문이 안 샌다"""
+def test_collect_failure_raw_error_never_reaches_response(client, db):
+    """수동 수집 실패 — 세션 420 부터 실패는 백그라운드에서 나므로 예외 원문이 응답에 실릴 길이 없다"""
     _make_profile(db, "a9", role="admin")
     raw = "(psycopg2.errors.QueryCanceled) canceling statement due to statement timeout"
     with patch("routers.admin.collect._get_collector") as mock_get:
         mock_get.return_value.side_effect = RuntimeError(raw)
         res = client.post("/api/admin/collect/crime-stats", headers=_auth(_token("a9")))
-    assert res.status_code == 500
-    detail = res.json()["detail"]
-    assert detail == "수집 실패: 데이터베이스가 너무 오래 걸려 스스로 멈췄어요."
-    assert "psycopg2" not in detail
+        _join_collector("crime-stats")
+    assert res.status_code == 200
+    assert "psycopg2" not in res.text
 
 
 def test_backfill_price_failure_detail_is_plain_korean(client, db):

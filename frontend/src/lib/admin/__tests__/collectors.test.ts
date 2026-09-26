@@ -44,6 +44,17 @@ describe("수집기 버튼 집합 = BE 수집기 집합", () => {
     expect(fe).toEqual(backendCollectorNames().sort());
   });
 
+  it("jobType 짝이 BE collect.py `_COLLECTOR_JOB_TYPE` 와 짝 단위로 같다 (BE 가 이 값으로 중복 실행을 막는다)", () => {
+    // BE 쪽에도 같은 대조가 있지만(test_admin_collect_background.py) CI 경로 필터로 FE 만 바뀐 PR 에선 BE 시험이
+    // 안 돌 수 있어 양쪽에 둔다
+    const src = readFileSync(resolve(BACKEND, "routers/admin/collect.py"), "utf-8");
+    const block = src.match(/^_COLLECTOR_JOB_TYPE[^{]*\{([\s\S]*?)^\}/m);
+    if (!block) throw new Error("collect.py 에서 _COLLECTOR_JOB_TYPE 표를 찾지 못했다");
+    const be = Object.fromEntries([...block[1].matchAll(/"([a-z-]+)":\s*"([a-z_]+)"/g)].map((m) => [m[1], m[2]]));
+    expect(Object.keys(be)).toHaveLength(8);
+    expect(Object.fromEntries(COLLECTORS.map((c) => [c.name, c.jobType]))).toEqual(be);
+  });
+
   it("버튼 이름표(job_type)는 crawl-job-labels 사전에, 마지막 실행 잡 id 는 crawler/scheduler.py 에 있다", () => {
     const scheduler = readFileSync(resolve(BACKEND, "crawler/scheduler.py"), "utf-8");
     for (const c of COLLECTORS) {

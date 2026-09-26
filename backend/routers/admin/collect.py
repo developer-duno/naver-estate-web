@@ -57,7 +57,8 @@ def _get_collector(name: CollectorName):
 
 # 수집기 이름 → 그 수집기가 crawl_jobs 에 남기는 job_type (각 수집기 코드에서 grep 한 값).
 # ⚠ 스케줄러 잡 id 와 다르다(infra.md) — 예: backfill-price 는 `price_backfill`, metrics 는 `complex_metric`.
-# 짝꿍 = frontend/src/lib/admin/collectors.ts 의 jobType. 가드 = tests/test_admin_collect_background.py.
+# 짝꿍 = frontend/src/lib/admin/collectors.ts 의 COLLECTORS[].jobType — 한쪽을 바꾸면 양쪽을 같이 바꾼다.
+# 가드 = tests/test_admin_collect_background.py test_collector_job_type_map_matches_frontend_pairwise(짝 단위 8/8).
 _COLLECTOR_JOB_TYPE: dict[str, str] = {
     "crime-stats": "crime_stats",
     "air-quality": "air_quality",

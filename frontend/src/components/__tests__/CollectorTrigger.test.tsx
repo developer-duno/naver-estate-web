@@ -173,7 +173,7 @@ describe("CollectorTrigger — 누른 뒤 (세션 420 백그라운드화)", () =
     renderIt();
     const spy = vi.spyOn(client, "invalidateQueries");
     fireEvent.click(btn("단지 관리비 받기"));
-    const line = await screen.findByText("시작했어요 — 진행 상황은 '지금 돌아가는 작업'에서 볼 수 있어요");
+    const line = await screen.findByText("시작했어요 — 진행 상황은 아래 '수집 작업 목록'에서 볼 수 있어요");
     expect(line).toHaveClass("text-green-700");
     // 접두 키 — 수집 작업 목록과 '지금 돌아가는 작업'(["admin","crawlJobs","running"])을 함께 새로 받는다
     expect(spy).toHaveBeenCalledWith({ queryKey: ["admin", "crawlJobs"] });

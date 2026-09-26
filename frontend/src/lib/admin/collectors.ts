@@ -5,6 +5,8 @@
  *                 src/lib/admin/__tests__/collectors.test.ts 가 그 파일을 읽어 대조한다)
  * - jobType     : 그 수집기가 남기는 crawl_jobs.job_type — 버튼 이름은 이 값의 한글 이름표(crawl-job-labels.ts,
  *                 BE plain_words.JOB_WORDS 와 같은 표현)를 그대로 쓴다. 이름을 여기 손으로 또 적지 않는다.
+ *                 짝꿍 = backend/routers/admin/collect.py `_COLLECTOR_JOB_TYPE`(중복 실행 409 판정에 쓰인다) —
+ *                 한쪽을 바꾸면 양쪽을 같이 바꾼다. 짝 단위 대조 = backend/tests/test_admin_collect_background.py
  * - schedulerJobId : 마지막 실행·결과를 읽어 올 scheduler-status 의 잡 id (crawler/scheduler.py)
  * - manualCounted  : 이 버튼으로 돌린 실행도 그 잡 id 로 기록되는가.
  *                 false 인 둘(backfill-price·metrics)은 BE 가 수동 실행에 잡 id 를 붙이지 않아

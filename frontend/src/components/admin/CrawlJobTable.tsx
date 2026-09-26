@@ -71,6 +71,17 @@ export default function CrawlJobTable({ jobs, onCancel, onPause, onResume }: Pro
                     <RawDetail raw={j.error_message} className="mt-0.5 max-w-[16rem]" />
                   </>
                 )}
+                {/* 완료했지만 사유가 남은 회차(세션 420) — 예: 소급 배치가 우리 하루 예산에 걸려 멈춤,
+                    일부 시군구를 못 받음. 실패가 아니므로 빨강 대신 흐린 주황 한 줄. 원문은 title 로만,
+                    error_plain 이 없는 옛 BE 면 실패 줄과 같은 까닭으로 그리지 않는다(원문이 본문에 새지 않게) */}
+                {j.status === "completed" && j.error_plain && (
+                  <span
+                    className="mt-1 block max-w-[16rem] text-xs text-amber-700 whitespace-normal"
+                    title={j.error_message || undefined}
+                  >
+                    {j.error_plain}
+                  </span>
+                )}
               </td>
               <td className="py-2 pr-3 text-xs">
                 {j.processed_items}/{j.total_items}건

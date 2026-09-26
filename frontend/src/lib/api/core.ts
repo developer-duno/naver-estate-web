@@ -43,7 +43,6 @@ export function getApiBase(): string {
 const HAS_BACKEND = !!process.env.NEXT_PUBLIC_API_URL;
 
 export const DEFAULT_TIMEOUT_MS = 15_000;
-export const LIVE_TIMEOUT_MS = 120_000; // live crawling takes longer
 
 /** 중복 로그아웃 방지 mutex — 401 응답이 동시 다발 시 signOut 1회만 실행 */
 let _isLoggingOut = false;

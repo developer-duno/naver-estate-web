@@ -12,8 +12,10 @@ POST /api/admin/collect/{name} 은 수집기를 데몬 스레드로 시작하고
 
 import inspect
 import logging
+import re
 import threading
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import patch
 
 import jwt
@@ -193,12 +195,32 @@ def test_b3_success_invalidates_freshness_cache(client, db):
     inv.assert_called_once_with()
 
 
-def test_collector_job_type_map_matches_collector_code():
-    """이름→job_type 표가 8종 전부 있고, 각 값이 그 수집기 모듈 소스에 문자열로 들어 있다."""
+_FE_COLLECTORS_TS = Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "admin" / "collectors.ts"
+
+
+def _fe_collector_job_types() -> dict[str, str]:
+    """FE 정본 collectors.ts 의 `name: "…", jobType: "…"` 짝 전부 (레포 안에 늘 있으므로 못 읽으면 실패)."""
+    src = _FE_COLLECTORS_TS.read_text(encoding="utf-8")
+    pairs = re.findall(r'name:\s*"([^"]+)",\s*jobType:\s*"([^"]+)"', src)
+    return dict(pairs)
+
+
+def test_collector_job_type_map_matches_frontend_pairwise():
+    """이름→job_type 표를 FE collectors.ts 와 **짝 단위로** 대조한다(8/8) — domain-mapping-ssot 룰 1.
+
+    옛 시험은 "그 모듈 어딘가에 그 글자"만 봐서 kapt_match↔kapt_costs 를 맞바꿔도 통과했다(PR #601 검사관).
+    """
     from typing import get_args
 
     names = set(get_args(collect_mod.CollectorName))
     assert set(collect_mod._COLLECTOR_JOB_TYPE) == names
+    fe = _fe_collector_job_types()
+    assert len(fe) == 8, f"collectors.ts 에서 짝을 {len(fe)}개만 읽었다 — 추출이 비면 대조가 헛돈다"
+    assert fe == collect_mod._COLLECTOR_JOB_TYPE
+
+
+def test_collector_job_type_values_appear_in_collector_code():
+    """각 값이 그 수집기 모듈 소스에 문자열로 있다 — 오타로 없는 job_type 을 적는 것을 막는다(짝 대조의 보조)."""
     for name, job_type in collect_mod._COLLECTOR_JOB_TYPE.items():
         fn = collect_mod._get_collector(name)
         src = inspect.getsource(inspect.getmodule(fn))
@@ -244,6 +266,27 @@ def test_b5_budget_precheck_stop_leaves_plain_reason_and_stays_completed(db):
     # 남은 단지는 시도 마커가 없다 — 내일 다시 뽑힌다
     assert db.query(Complex).filter(Complex.complex_no.in_(["B52", "B53"]),
                                     Complex.public_data_attempted_at.isnot(None)).count() == 0
+
+
+def test_b5_overlap_with_mostly_failed_keeps_failed(db):
+    """예산 멈춤과 '창구 호출 실패 > 성공' 이 겹치면 failed 판정이 이긴다(경보 대상이 조용한 completed 로 숨지 않게)."""
+    from crawler.service_public import PublicTradeFetchError, backfill_price_batch
+
+    _add_complex(db, "B61", 3000)
+    _add_complex(db, "B62", 2000)
+    _add_complex(db, "B63", 1000)
+    # 첫 단지: 한도가 아닌 창구 실패(연속 1곳 — 중단 기준 3 미만) → 둘째 단지 앞 사전 확인에서 예산 0 으로 멈춤
+    quota = iter([{"remaining": 5}, {"remaining": 0}])
+    with patch("crawler.quota_db.get_api_quota_status", side_effect=lambda *_a, **_k: next(quota)), \
+            patch("crawler.service_public.backfill_price_history",
+                  side_effect=PublicTradeFetchError("정부 실거래가 창구 호출이 실패해", "other")):
+        result = backfill_price_batch(batch_size=20, scheduler_job_id="backfill_price")
+
+    assert result["quota_exhausted"] is True
+    job = db.query(CrawlJob).filter(CrawlJob.scheduler_job_id == "backfill_price").one()
+    assert job.status == "failed"
+    assert job.error_message.startswith("정부 실거래가 창구 호출이 실패해 1개 단지를 못 받음(받은 곳 0개)")
+    assert "오늘 쓸 요청 몫" not in job.error_message
 
 
 def test_b5_normal_completion_has_no_reason(db):

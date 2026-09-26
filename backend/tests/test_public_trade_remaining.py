@@ -202,6 +202,8 @@ def test_b_주간_수집은_시작과_끝_남은_횟수를_로그_한줄로(db, 
     assert window.last_seen == 9755 - (window.calls - 1)
     assert "정부 실거래가 받기" in lines[0]
     assert "KOSPI" in lines[0] and "미분양 사이트" in lines[0]
+    # 로그 머리는 작업 이름 하나만 — 옛 "[정부 실거래가] 정부 실거래가 받기" 중복으로 되돌아가지 않게(세션 421)
+    assert lines[0].startswith("[정부 실거래가 받기] 창구 남은 횟수: 시작"), lines[0]
 
 
 def test_b_소급_배치도_시작과_끝_남은_횟수를_로그로(db, caplog):

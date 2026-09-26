@@ -42,9 +42,9 @@ interface Props {
 }
 
 const INPUT_CLASS =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px]";
+  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-11";
 const RADIO_LABEL_CLASS =
-  "flex items-center gap-2 min-h-[44px] px-3 rounded-md border border-gray-300 cursor-pointer hover:bg-gray-50";
+  "flex items-center gap-2 min-h-11 px-3 rounded-md border border-gray-300 cursor-pointer hover:bg-gray-50";
 
 export default function PropertyTaxInputs(props: Props) {
   const {
@@ -117,7 +117,7 @@ export default function PropertyTaxInputs(props: Props) {
         </div>
       </fieldset>
 
-      <label className="flex items-center gap-2 min-h-[44px]">
+      <label className="flex items-center gap-2 min-h-11">
         <input
           type="checkbox"
           checked={isSingleHouseEligible}

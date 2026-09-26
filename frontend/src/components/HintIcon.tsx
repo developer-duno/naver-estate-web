@@ -29,7 +29,7 @@ export default function HintIcon({ text, className }: Props) {
       </button>
       <span
         role="tooltip"
-        className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 rounded bg-gray-800 text-white text-xs leading-snug whitespace-normal max-w-[220px] w-max z-50 pointer-events-none transition-opacity ${
+        className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 rounded bg-gray-800 text-white text-xs leading-snug whitespace-normal max-w-55 w-max z-50 pointer-events-none transition-opacity ${
           open ? "opacity-100" : "opacity-0 invisible group-hover:opacity-100 group-hover:visible"
         }`}
       >

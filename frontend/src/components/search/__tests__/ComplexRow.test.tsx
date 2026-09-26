@@ -50,8 +50,8 @@ describe("ComplexRow 컴포넌트", () => {
   it("비교 버튼이 44px 최소 터치타겟 클래스를 가진다", () => {
     renderRow();
     const button = screen.getByRole("button", { name: /비교 추가/ });
-    expect(button.className).toContain("min-h-[44px]");
-    expect(button.className).toContain("min-w-[44px]");
+    expect(button.className).toContain("min-h-11");
+    expect(button.className).toContain("min-w-11");
   });
 
   /** 비교 상태(가득참)에서도 버튼이 비활성만 될 뿐 크기는 유지 */
@@ -59,6 +59,6 @@ describe("ComplexRow 컴포넌트", () => {
     renderRow({ compareFull: true });
     const button = screen.getByRole("button", { name: /가득 참/ });
     expect(button).toBeDisabled();
-    expect(button.className).toContain("min-h-[44px]");
+    expect(button.className).toContain("min-h-11");
   });
 });

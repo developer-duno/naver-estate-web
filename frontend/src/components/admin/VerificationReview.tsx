@@ -91,7 +91,7 @@ export default function VerificationReview({ token }: Props) {
     >
       <div className="overflow-x-auto">
         {/* 8열 — 휴대폰에서 칸이 눌리지 않게 최소 폭을 두고 가로로 넘긴다 */}
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-190 text-sm">
           <thead>
             <tr className="border-b text-left text-xs text-gray-500">
               <th className="pb-2 pr-3">이메일</th>

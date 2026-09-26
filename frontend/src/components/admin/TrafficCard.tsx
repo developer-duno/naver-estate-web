@@ -134,7 +134,7 @@ export default function TrafficCard({ getToken, hideTitle = false }: Props) {
 
           <div className="overflow-x-auto">
             {/* 7열 숫자 표 — 휴대폰에서 칸이 눌리지 않게 최소 폭을 두고 가로로 넘긴다 */}
-            <table className="w-full min-w-[560px] text-sm">
+            <table className="w-full min-w-140 text-sm">
               <thead>
                 <tr className="text-xs text-gray-500 border-b">
                   <th className="text-left py-1.5 font-medium">기간</th>

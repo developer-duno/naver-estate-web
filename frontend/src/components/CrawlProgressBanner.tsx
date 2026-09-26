@@ -92,7 +92,7 @@ export default function CrawlProgressBanner({
       <div
         role="status"
         aria-live="polite"
-        className="no-print rounded-md px-4 py-3 bg-blue-50 text-blue-700 min-h-[140px] md:min-h-[120px] flex flex-col gap-3"
+        className="no-print rounded-md px-4 py-3 bg-blue-50 text-blue-700 min-h-35 md:min-h-30 flex flex-col gap-3"
       >
         <div className="flex items-center gap-2 text-sm font-medium">
           <Spinner />
@@ -140,7 +140,7 @@ export default function CrawlProgressBanner({
     <div
       role="status"
       aria-live="polite"
-      className="no-print rounded-md px-4 py-3 bg-blue-50 text-blue-700 min-h-[140px] md:min-h-[120px] flex flex-col gap-3"
+      className="no-print rounded-md px-4 py-3 bg-blue-50 text-blue-700 min-h-35 md:min-h-30 flex flex-col gap-3"
     >
       <div className="flex items-center gap-2 text-sm font-medium">
         <Spinner />

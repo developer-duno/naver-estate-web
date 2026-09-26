@@ -25,7 +25,7 @@ function ArticlePageSizeSelectInner({ pageSize, onPageSizeChange }: Props) {
         value={String(pageSize)}
         onValueChange={(v) => onPageSizeChange(Number(v) as ArticlePageSize)}
       >
-        <SelectTrigger className="h-8 w-[88px]" aria-label="한 페이지당 매물 개수">
+        <SelectTrigger className="h-8 w-22" aria-label="한 페이지당 매물 개수">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

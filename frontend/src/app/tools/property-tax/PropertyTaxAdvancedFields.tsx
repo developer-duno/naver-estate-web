@@ -56,7 +56,7 @@ const CORP_GENERAL_OPTIONS: Array<{ value: CorporationGeneralRateCategory; label
 ];
 
 const INPUT_CLASS =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed";
+  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-11 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed";
 
 export default function PropertyTaxAdvancedFields(props: Props) {
   const {
@@ -84,7 +84,7 @@ export default function PropertyTaxAdvancedFields(props: Props) {
         해당하면 펼쳐서 입력 (합산배제·공동명의·법인)
       </summary>
       <div className="mt-3 space-y-4">
-        <label className="flex items-center gap-2 min-h-[44px]">
+        <label className="flex items-center gap-2 min-h-11">
           <input
             type="checkbox"
             checked={isCorporation}
@@ -171,7 +171,7 @@ export default function PropertyTaxAdvancedFields(props: Props) {
           </p>
         </div>
 
-        <label className="flex items-start gap-2 min-h-[44px]">
+        <label className="flex items-start gap-2 min-h-11">
           <input
             type="checkbox"
             checked={isSpouseJointSingleHouse}
@@ -263,7 +263,7 @@ export default function PropertyTaxAdvancedFields(props: Props) {
         />
 
         {/* PDF #15 향교·종교단체 직접사용 (세션 114) — 산식 무영향, 안내 4 카드만 push */}
-        <label className="flex items-start gap-2 min-h-[44px] pt-2 border-t border-gray-200">
+        <label className="flex items-start gap-2 min-h-11 pt-2 border-t border-gray-200">
           <input
             type="checkbox"
             className="mt-1"

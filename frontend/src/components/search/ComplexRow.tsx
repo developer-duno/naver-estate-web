@@ -28,7 +28,7 @@ export const ComplexRow = memo(function ComplexRow({ complex, index, urlFilters,
     >
       <td className="px-3 py-2 text-gray-400 text-center text-xs border-r border-gray-100">{index}</td>
       <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap border-r border-gray-100">{complex.complex_name}</td>
-      <td className="px-3 py-2 text-gray-600 max-w-[300px] truncate border-r border-gray-100" title={complex.cortar_address || ""}>{complex.cortar_address || "-"}</td>
+      <td className="px-3 py-2 text-gray-600 max-w-75 truncate border-r border-gray-100" title={complex.cortar_address || ""}>{complex.cortar_address || "-"}</td>
       <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.total_household_count ? complex.total_household_count.toLocaleString() : "-"}</td>
       <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.total_dong_count || "-"}</td>
       <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.high_floor ? `${complex.high_floor}층` : "-"}</td>
@@ -47,7 +47,7 @@ export const ComplexRow = memo(function ComplexRow({ complex, index, urlFilters,
           type="button"
           onClick={(e) => { e.stopPropagation(); onToggleCompare?.({ complex_no: complex.complex_no, complex_name: complex.complex_name }); }}
           disabled={!isCompared && compareFull}
-          className={`text-xs px-2.5 py-1 min-h-[44px] min-w-[44px] rounded border transition-colors ${
+          className={`text-xs px-2.5 py-1 min-h-11 min-w-11 rounded border transition-colors ${
             isCompared
               ? "bg-blue-600 text-white border-blue-600"
               : compareFull

@@ -29,7 +29,7 @@ export default function MbCompareFloatingBar({ list, onRemove, onClear }: Props)
           {list.map((c) => (
             <span
               key={c.id}
-              className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full max-w-[120px]"
+              className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full max-w-30"
             >
               <span className="truncate">{c.name}</span>
               <button

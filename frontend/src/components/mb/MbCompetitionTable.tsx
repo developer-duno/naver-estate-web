@@ -129,7 +129,7 @@ function MbCompetitionTable({ apartments, isInCompare, onCompareToggle, compareF
                 <td className="px-3 py-2 text-right text-gray-700">
                   {apt.competition_supply?.toLocaleString() ?? "-"}
                 </td>
-                <td className="px-3 py-2 text-gray-600 max-w-[120px] truncate hidden sm:table-cell">{apt.builder ?? "-"}</td>
+                <td className="px-3 py-2 text-gray-600 max-w-30 truncate hidden sm:table-cell">{apt.builder ?? "-"}</td>
               </tr>
             ))}
           </tbody>

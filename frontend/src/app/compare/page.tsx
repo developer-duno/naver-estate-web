@@ -341,7 +341,7 @@ function CompareContent() {
             <tr>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 w-28 sticky left-0 bg-gray-100 z-10">항목</th>
               {complexes.map((c) => (
-                <th key={c.complex_no} className="px-4 py-3 text-center min-w-[180px]">
+                <th key={c.complex_no} className="px-4 py-3 text-center min-w-45">
                   <button
                     onClick={() => router.push(`/complex/${c.complex_no}`)}
                     className="text-blue-600 hover:underline font-semibold text-sm"

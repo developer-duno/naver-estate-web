@@ -21,7 +21,7 @@ const RATE_APPLY_OPTIONS: Array<{
 ];
 
 const INPUT_CLASS =
-  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed";
+  "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-11 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed";
 
 export default function RateApplyExclusionFields({ isCorporation, specialHousesRateApply, onRateApplyEntryChange }: Props) {
   // PDF #13 4종 세율 특례주택: 비법인 시만 활성 (PDF 본문 "납세의무자" = 거주자)

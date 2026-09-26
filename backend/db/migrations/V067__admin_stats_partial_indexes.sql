@@ -99,8 +99,9 @@
 --  3) 직후 `pg_index.indisvalid` 확인. false 면 `CREATE … IF NOT EXISTS` 재실행으로는 못 고친다
 --     (이름만 보고 no-op) — `DROP INDEX CONCURRENTLY IF EXISTS <이름>;` 후 재실행.
 --  4) 실행 직전 확인: crawl_jobs running 0건 + 1분 넘는 장기 트랜잭션 0건(pg_stat_activity).
---  회피 시각 = V057 §실행 회피 시각과 같다(03:30~05:00 · 06:20~07:30 · 10:45/14:45/19:15 ·
---  토 05:00~08:00 · 매월 15일·21일 오전~). 권장 창 = 평일 08:00~10:30 · 11:00~14:30 · 21:30~24:00.
+--  회피 시각 = V057 §실행 회피 시각(03:30~05:00 · 06:20~07:30 · 10:45/14:45/19:15 ·
+--  토 05:00~08:00 · 매월 15일·21일 오전~) + 00:20·12:20 상세 백필(낮 회차 113~134분, articles 대량 쓰기)
+--  + 월·목 08:00 mibunyang naver-collect(articles upsert). 권장 창 = 08:00~10:30(월·목 제외) · 21:30~00:10.
 --  적용 스크립트는 레포 밖(세션 420 스크래치패드 apply_v067.py)에서 메인 세션이 실행한다.
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_articles_detail_filled_active

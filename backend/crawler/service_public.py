@@ -80,6 +80,27 @@ def _to_standard_lawd_cd(complexes_in_region, fallback_sigungu_cd: str) -> str:
     return fallback_sigungu_cd
 
 
+# 세션 420: 국토부 창구 호출이 실패(재시도 소진·429·일일 한도)한 것을 "거래 없는 빈 달"로
+# 삼키던 결함(2026-09-26 토요일: 05:40 부터 전부 429 인데 completed·759,061건으로 마감).
+# 실패는 실패로 세고, 연속으로 이만큼 실패하면 회차를 멈춘다(주간 = 시군구, 소급 = 단지).
+PUBLIC_TRADE_ABORT_AFTER_SIGUNGU = 5
+BACKFILL_ABORT_AFTER_COMPLEXES = 3
+
+_QUOTA_WORDS = "정부 실거래가 창구가 하루 요청 한도 초과라고 답해"
+
+
+class PublicTradeFetchError(RuntimeError):
+    """국토부 실거래가 호출 실패 — 빈 수집으로 위장하지 않고 호출자에게 알린다.
+
+    kind: "quota"(하루 요청 한도 초과) | "other". 메시지는 관리자 화면·알림에
+    그대로 쓰이므로 쉬운 우리말로 만든다.
+    """
+
+    def __init__(self, message: str, kind: str):
+        super().__init__(message)
+        self.kind = kind
+
+
 def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | None = None):
     """공공데이터포털 아파트 매매 실거래가 수집 → complex_price_history 저장.
 
@@ -201,6 +222,11 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
 
         processed = 0
         matched = 0
+        ok_sigungu = 0          # 이번 회차에 끝까지 받은 시군구 수
+        failed_sigungu = 0      # 이번 회차에 호출 실패로 못 받은 시군구 수
+        consecutive_failed = 0  # 연속 실패 — 하나라도 성공하면 0
+        any_quota = False
+        aborted_kind: str | None = None
 
         for i, sigungu_cd in enumerate(remaining_codes):
             # 해당 시군구의 단지 목록 조회 (매칭용)
@@ -226,10 +252,15 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
             # 위 그룹핑 키(sigungu_cd)·체크포인트(done_codes)는 원본 그대로 둔다.
             api_lawd_cd = _to_standard_lawd_cd(complexes_in_region, sigungu_cd)
 
+            fetch_failed = False
             for deal_ymd in months:
                 trades = PublicDataAPI.get_all_apt_trades(api_lawd_cd, deal_ymd)
+                if trades is None:
+                    # 호출 실패 ≠ 거래 없는 달. 남은 달은 시도하지 않고 이 시군구를 실패로 센다.
+                    fetch_failed = True
+                    break
                 if not trades:
-                    continue
+                    continue  # 정상 응답인데 거래가 없는 달
 
                 # 아파트별 거래 그룹핑 → 월별 min/max/avg 집계
                 apt_groups: dict[str, list[int]] = {}
@@ -264,6 +295,23 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
 
                 processed += len(trades)
 
+            if fetch_failed:
+                # done_codes 에 넣지 않는다 — 다음 회차(재개 포함)가 이 시군구를 다시 받는다.
+                kind = PublicDataAPI.last_failure_kind() or "other"
+                any_quota = any_quota or kind == "quota"
+                failed_sigungu += 1
+                consecutive_failed += 1
+                logger.warning(
+                    "공공데이터 수집: 시군구 %s 호출 실패(%s) — 연속 %d개",
+                    sigungu_cd, kind, consecutive_failed,
+                )
+                if consecutive_failed >= PUBLIC_TRADE_ABORT_AFTER_SIGUNGU:
+                    aborted_kind = kind
+                    break
+                continue
+
+            consecutive_failed = 0
+            ok_sigungu += 1
             done_codes.add(sigungu_cd)
 
             # 체크포인트 — 완료된 시군구 코드 집합을 저장 (재개 시 이 집합을 건너뜀).
@@ -274,13 +322,49 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
                 _checkpoint.save(db, job.id, {"done_codes": sorted(done_codes), "total": len(sigungu_codes)})
                 logger.info("공공데이터 수집 중간 저장: %d/%d 시군구 완료", len(done_codes), len(sigungu_codes))
 
-        job.status = "completed"
         job.total_items = processed
         job.processed_items = matched
         job.completed_at = utcnow()
+
+        if aborted_kind is not None or failed_sigungu > ok_sigungu:
+            # 연속 실패로 중단했거나, 끝까지 갔어도 실패가 성공보다 많으면 failed
+            # (kapt_costs mostly_failed 선례). 받은 곳까지 체크포인트를 남겨 재개가 이어받게 한다.
+            # 정기 회차는 재개 창(RESUME_MAX_AGE_HOURS) 밖이라 처음부터 다시 받는다 — "이어받아요"
+            # 가 아니라 "다시 받아요"가 사실이다(세션 420 검사관 L3).
+            if aborted_kind is not None:
+                # 중단 직전 실패만이 아니라 이번 회차에 한도 초과가 한 번이라도 있었으면
+                # 한도 문구 — 한도 뒤에 다른 실패가 섞여 끝나도 원인을 가리지 않는다(L2).
+                head = (
+                    _QUOTA_WORDS if any_quota
+                    else f"정부 실거래가 창구 호출이 시군구 {PUBLIC_TRADE_ABORT_AFTER_SIGUNGU}곳 연속 실패해"
+                )
+                message = (
+                    f"{head} {len(done_codes)}/{len(sigungu_codes)}개 시군구까지만 받고 중단"
+                    " — 다음 회차가 다시 받아요"
+                )
+            else:
+                head = _QUOTA_WORDS if any_quota else "정부 실거래가 창구 호출이 실패해"
+                message = (
+                    f"{head} {failed_sigungu}개 시군구를 못 받음(받은 곳 {ok_sigungu}개)"
+                    " — 다음 회차가 다시 받아요"
+                )
+            db.commit()
+            _checkpoint.save(db, job.id, {"done_codes": sorted(done_codes), "total": len(sigungu_codes)})
+            job.status = "failed"
+            job.error_message = message
+            db.commit()
+            logger.warning("공공데이터 수집 실패 마감: %s (%d건 처리, %d건 매칭)", message, processed, matched)
+            return
+
+        job.status = "completed"
+        if failed_sigungu:
+            job.error_message = f"{failed_sigungu}개 시군구는 못 받음(다음 회차 재시도)"
         db.commit()
         _checkpoint.delete(db, job.id)
-        logger.info("공공데이터 수집 완료: %d건 처리, %d건 매칭", processed, matched)
+        logger.info(
+            "공공데이터 수집 완료: %d건 처리, %d건 매칭, 못 받은 시군구 %d개",
+            processed, matched, failed_sigungu,
+        )
 
     except Exception as e:
         try:
@@ -350,8 +434,13 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
         months = sorted(set(months))
 
         collected = 0
+        fetch_failure: str | None = None
         for deal_ymd in months:
             trades = PublicDataAPI.get_all_apt_trades(sigungu_cd, deal_ymd)
+            if trades is None:
+                # 호출 실패 — 빈 수집으로 위장하지 않고 이 단지를 실패로 끝낸다(세션 420).
+                fetch_failure = PublicDataAPI.last_failure_kind() or "other"
+                break
             if not trades:
                 continue
 
@@ -386,8 +475,23 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
         # V046: 매칭 결과(collected==0 포함)와 무관하게 "시도했다"는 사실만 기록.
         # 국토부에 원천적으로 실거래가 없는 단지를 무한 재시도하지 않기 위한 마커
         # (세션 360 — remaining 이 안 줄어드는데 success 로만 카운트되던 문제 근본수정).
-        cpx.public_data_attempted_at = utcnow()
+        # ⚠ 하루 요청 한도 초과로 실패했으면 찍지 않는다 — 찍으면 90일 동안 재시도
+        #   대상에서 빠져 "한도 때문에 못 받은 단지"가 빈 단지처럼 묻힌다(세션 420).
+        #   그 밖의 실패는 기존대로 찍는다 — 영구 오류 단지가 매일 큐 맨 앞을 막아
+        #   연속 실패 중단 규칙으로 배치 전체가 멈추는 것을 막기 위함.
+        if fetch_failure != "quota":
+            cpx.public_data_attempted_at = utcnow()
         db.commit()
+        if fetch_failure is not None:
+            head = (
+                _QUOTA_WORDS if fetch_failure == "quota"
+                else "정부 실거래가 창구 호출이 실패해"
+            )
+            logger.warning(
+                "소급 수집 실패: complex=%s (%s), %d/%d 월 매칭 후 중단(%s)",
+                complex_no, cpx.complex_name, collected, len(months), fetch_failure,
+            )
+            raise PublicTradeFetchError(f"{head} 이 단지의 지난 실거래가를 다 받지 못했어요", fetch_failure)
         logger.info(
             "소급 수집 완료: complex=%s (%s), %d/%d 월 매칭",
             complex_no, cpx.complex_name, collected, len(months),
@@ -460,6 +564,9 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
         success = 0
         failed = 0
         quota_exhausted = False
+        consecutive_fetch_failed = 0  # 호출 실패 연속 단지 수 — 하나라도 성공하면 0
+        fetch_failed = 0              # 창구 호출 실패 단지 수(개별 예외 제외) — 마감 판정용
+        aborted_kind: str | None = None
         for (cno,) in complexes:
             # 세션 361: 쿼터를 이미 다 쓴 뒤에도 남은 단지 수만큼 backfill_price_history()를
             # 계속 호출하면, 그 안에서 매 단지 x 24개월씩 "쿼터 초과" 경고만 반복하며
@@ -478,6 +585,21 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
             try:
                 backfill_price_history(cno, months_back=24)
                 success += 1
+                consecutive_fetch_failed = 0
+            except PublicTradeFetchError as e:
+                # 한 단지 실패로 배치를 끝내지 않는다 — 실패로 세고, 연속으로 쌓이면 멈춘다.
+                db.rollback()
+                failed += 1
+                fetch_failed += 1
+                consecutive_fetch_failed += 1
+                logger.warning("소급 수집 호출 실패: %s (%s) — 연속 %d단지", cno, e.kind, consecutive_fetch_failed)
+                # 한도 초과는 연속 여부와 무관하게 즉시 멈춘다 — 앞 단지의 달이 캐시에 있으면
+                # 그 단지는 "성공"으로 세어져 연속 카운터가 0 이 되므로, 연속 규칙만으로는
+                # 429 폭주 속에서도 배치가 끝까지 헛돈다(세션 420 검사관 M3).
+                # 연속 규칙은 한도가 아닌 실패에만 쓴다.
+                if e.kind == "quota" or consecutive_fetch_failed >= BACKFILL_ABORT_AFTER_COMPLEXES:
+                    aborted_kind = e.kind
+                    break
             except Exception:
                 # ⚠ 세션 346 코드리뷰 정정: backfill_price_history()는 이 db와 별개인
                 # 자신만의 SessionLocal()을 열어 쓴다(NullPool=독립 물리 연결)라서,
@@ -490,12 +612,31 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
                 logger.exception("소급 수집 개별 실패: %s", cno)
 
         job.status = "completed"
+        if aborted_kind is not None:
+            head = (
+                _QUOTA_WORDS if aborted_kind == "quota"
+                else f"정부 실거래가 창구 호출이 단지 {BACKFILL_ABORT_AFTER_COMPLEXES}곳 연속 실패해"
+            )
+            job.status = "failed"
+            job.error_message = f"{head} {total}개 단지 중 {success}개까지만 받고 중단 — 남은 단지는 내일 이어서 받아요"
+        elif fetch_failed > success:
+            # 끝까지 갔어도 창구 호출 실패가 성공보다 많으면 failed — 주간 수집기·kapt
+            # mostly_failed 와 같은 규칙. 창구 호출 실패(PublicTradeFetchError)만 센다 — 그 밖의
+            # 개별 예외는 기존대로 completed 안에서 실패 수로만 남긴다(문구가 "창구"라 원인이 다르면 거짓).
+            job.status = "failed"
+            job.error_message = (
+                f"정부 실거래가 창구 호출이 실패해 {fetch_failed}개 단지를 못 받음(받은 곳 {success}개)"
+                # 이 분기의 실패는 전부 한도가 아닌 실패라 시도 마커가 찍힌다(:482) —
+                # 그래서 "내일"이 아니라 재시도 창이 지난 뒤다(검사관 재검사 N1).
+                f" — 못 받은 단지는 {PUBLIC_DATA_RETRY_COOLDOWN_DAYS}일 뒤에 다시 시도해요"
+            )
         job.total_items = total
         job.processed_items = success
         job.completed_at = utcnow()
         db.commit()
         logger.info(
-            "소급 배치 완료: 성공 %d / 실패 %d / 전체 %d%s",
+            "소급 배치 %s: 성공 %d / 실패 %d / 전체 %d%s",
+            "중단" if aborted_kind is not None else "완료",
             success, failed, total, " (쿼터 소진으로 조기 종료)" if quota_exhausted else "",
         )
         return {"success": success, "failed": failed, "total": total, "quota_exhausted": quota_exhausted}

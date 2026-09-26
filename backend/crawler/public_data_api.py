@@ -38,6 +38,29 @@ def _normalize_apt_name(name: str) -> str:
     return normalized
 
 
+_QUOTA_REASON_CODE = "22"  # data.go.kr "일일 요청 한도 초과" (kapt_api.QUOTA_REASON_CODE 와 같은 값)
+
+
+def _error_envelope_code(data) -> str | None:
+    """data.go.kr 오류 봉투(`cmmMsgHeader`)면 사유 코드(빈 문자열 가능), 아니면 None.
+
+    HTTP 200 인데 정상 모양(`{"response": ...}`)이 아니라 게이트웨이 오류 봉투로 오는
+    엔드포인트가 있다 — `{"OpenAPI_ServiceResponse": {"cmmMsgHeader": {"returnReasonCode":
+    "22", ...}}}` (kapt_api._error_envelope 실측 원문, 2026-09-25). 이걸 정상으로 받으면
+    body 가 없어 totalCount 0 = "거래 없는 빈 달"로 캐시된다(세션 420).
+    최상위에 `cmmMsgHeader` 만 오는 변형도 받는다.
+    """
+    if not isinstance(data, dict):
+        return None
+    wrapper = data.get("OpenAPI_ServiceResponse")
+    header = wrapper.get("cmmMsgHeader") if isinstance(wrapper, dict) else None
+    if header is None:
+        header = data.get("cmmMsgHeader")
+    if not isinstance(header, dict):
+        return None
+    return str(header.get("returnReasonCode") or "").strip()
+
+
 class PublicDataAPI:
     """국토교통부 아파트매매 실거래자료 API
 
@@ -51,6 +74,21 @@ class PublicDataAPI:
     _session: cffi_requests.Session | None = None
     _daily_call_count = 0
     _daily_call_date = ""
+    # 세션 420: 마지막 get_apt_trades 실패의 종류 — "quota"(429 재시도 소진·자체 일일
+    # 한도 게이트) / "other"(그 밖의 실패) / None(직전 호출 성공). 수집기가 "한도 초과로
+    # 멈췄다"와 "다른 이유로 실패했다"를 구분해 쉬운 말로 기록하기 위함.
+    _last_failure_kind: str | None = None
+
+    @classmethod
+    def _set_failure_kind(cls, kind: str | None) -> None:
+        with cls._lock:
+            cls._last_failure_kind = kind
+
+    @classmethod
+    def last_failure_kind(cls) -> str | None:
+        """마지막 get_apt_trades 호출의 실패 종류 ("quota" | "other" | None=성공)."""
+        with cls._lock:
+            return cls._last_failure_kind
 
     @classmethod
     def _get_session(cls) -> cffi_requests.Session:
@@ -126,10 +164,12 @@ class PublicDataAPI:
         service_key = cls._get_service_key()
         if not service_key:
             logger.warning("PUBLIC_DATA_API_KEY 미설정 — 공공데이터 수집 건너뜀")
+            cls._set_failure_kind("other")
             return None
 
         if not cls._check_daily_limit():
             logger.warning("공공데이터 API 일일 호출 한도 도달 — 수집 중단")
+            cls._set_failure_kind("quota")
             return None
 
         params = {
@@ -145,9 +185,11 @@ class PublicDataAPI:
         }
 
         session = cls._get_session()
+        last_was_429 = False  # 마지막 시도가 429 였으면 재시도 소진 = 한도 초과("quota")
 
         for attempt in range(MAX_RETRIES):
             cls._throttle()
+            last_was_429 = False
             try:
                 response = session.get(
                     BASE_URL,
@@ -157,7 +199,33 @@ class PublicDataAPI:
                 )
 
                 if response.status_code == 200:
-                    data = response.json()
+                    try:
+                        data = response.json()
+                    except Exception:
+                        # 본문이 JSON 이 아님 — data.go.kr 은 `_type=json` 을 줘도 오류를 XML 로
+                        # 주는 경우가 있다(kapt_api._body_or_raise 주석). 그 XML 이 한도 초과면
+                        # 재시도 없이 "quota" 로 끝낸다(기다려도 안 바뀐다). 그 외는 기존처럼
+                        # 아래 공통 예외 경로(재시도 후 "other")로 보낸다.
+                        text = response.text or ""
+                        if ("LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR" in text
+                                or f"<returnReasonCode>{_QUOTA_REASON_CODE}<" in text):
+                            logger.warning(
+                                "공공데이터 API 한도 초과(XML 오류 응답) — LAWD=%s, YMD=%s",
+                                lawd_cd, deal_ymd,
+                            )
+                            cls._set_failure_kind("quota")
+                            return None
+                        raise
+                    # 오류 봉투(200 + cmmMsgHeader) — 재시도하지 않는다(한도는 기다려도 안 바뀐다).
+                    envelope_code = _error_envelope_code(data)
+                    if envelope_code is not None:
+                        is_quota = envelope_code.lstrip("0") == _QUOTA_REASON_CODE
+                        logger.warning(
+                            "공공데이터 API 오류 봉투: 코드 %s — LAWD=%s, YMD=%s",
+                            envelope_code or "없음", lawd_cd, deal_ymd,
+                        )
+                        cls._set_failure_kind("quota" if is_quota else "other")
+                        return None
                     # 공공데이터 API 에러 응답 체크
                     header = (data.get("response") or {}).get("header") or {}
                     result_code = str(header.get("resultCode", "")).lstrip("0") or "0"
@@ -167,10 +235,15 @@ class PublicDataAPI:
                             "공공데이터 API 오류: %s (%s) — LAWD=%s, YMD=%s",
                             result_code, result_msg, lawd_cd, deal_ymd,
                         )
+                        # 정상 모양인데 resultCode 22 = 일일 한도 초과(세션 420 검사관 M1)
+                        cls._set_failure_kind(
+                            "quota" if result_code == _QUOTA_REASON_CODE else "other")
                         return None
+                    cls._set_failure_kind(None)
                     return data
 
                 if response.status_code == 429:
+                    last_was_429 = True
                     delay = RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)]
                     logger.info("공공데이터 API 429 — %d초 대기 후 재시도", delay)
                     time.sleep(delay)
@@ -190,6 +263,7 @@ class PublicDataAPI:
             if attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_DELAYS[min(attempt, len(RETRY_DELAYS) - 1)])
 
+        cls._set_failure_kind("quota" if last_was_429 else "other")
         return None
 
     # 세션 359: 같은 (시군구, 월) 조합을 여러 단지가 반복 호출하는 낭비 발견
@@ -203,14 +277,17 @@ class PublicDataAPI:
     _trade_cache_lock = threading.Lock()
 
     @classmethod
-    def get_all_apt_trades(cls, lawd_cd: str, deal_ymd: str) -> list[dict]:
+    def get_all_apt_trades(cls, lawd_cd: str, deal_ymd: str) -> list[dict] | None:
         """아파트 매매 실거래가 전체 페이지 조회 (페이징 자동 처리, 캐싱).
 
         같은 (lawd_cd, deal_ymd) 조합은 프로세스 생존 동안 1회만 API 호출 —
         같은 시군구의 여러 단지가 소급 수집될 때 중복 호출을 없앤다.
 
         Returns:
-            거래 건별 dict 리스트
+            거래 건별 dict 리스트. 정상 응답인데 거래가 없는 달은 [] (캐시함).
+            어느 페이지든 호출이 실패하면 None — **캐시하지 않는다**(세션 420: 429 로
+            실패한 달을 [] 로 캐시·반환해 "빈 달"로 위장하던 결함. 실패 종류는
+            last_failure_kind() 로 확인).
         """
         cache_key = (lawd_cd, deal_ymd)
         with cls._trade_cache_lock:
@@ -224,7 +301,7 @@ class PublicDataAPI:
         while True:
             data = cls.get_apt_trades(lawd_cd, deal_ymd, num_of_rows=1000, page_no=page_no)
             if not data:
-                break
+                return None  # 실패 — 모은 일부를 캐시하지 않는다(반쪽 달 위장 방지)
 
             body = (data.get("response") or {}).get("body") or {}
             total_count = int(body.get("totalCount", 0))
@@ -257,5 +334,6 @@ class PublicDataAPI:
                     pass
             cls._session = None
             cls._daily_call_count = 0
+            cls._last_failure_kind = None
         with cls._trade_cache_lock:
             cls._trade_cache.clear()

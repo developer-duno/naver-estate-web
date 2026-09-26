@@ -36,6 +36,10 @@ PID_FILE = os.path.join(SCRIPTS_DIR, "orchestrator.pid")
 # ── 타임아웃 설정 ──────────────────────────────────────────
 INITIAL_DELAY = 10  # 부팅 후 네트워크 안정화 대기 (초)
 BACKEND_HEALTH_TIMEOUT = 30
+# 첫 health 대기가 끝났는데 프로세스가 아직 살아 있으면(=부팅 중) 겹쳐 띄우지 않고 더 기다리는 시간.
+# 재부팅 직후 콜드 부팅 43초 실측(2026-09-27 01:02 — 첫 프로세스가 30초 뒤 포트를 잡아
+# 겹쳐 띄운 둘째가 10048 로 죽었다).
+BACKEND_HEALTH_GRACE = 60
 WATCHDOG_INTERVAL = 30
 
 # ── 로깅 설정 ──────────────────────────────────────────────
@@ -111,6 +115,21 @@ def wait_for_backend(timeout: int = BACKEND_HEALTH_TIMEOUT) -> bool:
     return False
 
 
+def _terminate_proc(proc) -> None:
+    """추적 중인 백엔드 프로세스가 살아 있으면 끝낸다(이미 죽었으면 아무것도 안 함).
+
+    _kill_port 는 포트를 잡은 프로세스만 죽이므로, 아직 포트를 안 잡은 채 부팅 중인
+    프로세스는 놓친다 → 새로 띄운 프로세스와 겹쳐 포트 충돌(10048)이 난다. 다시 띄우기
+    전에 내 프로세스부터 끝내 한 번에 하나만 돌게 한다."""
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        proc.kill()
+        proc.wait(timeout=10)
+    except Exception as e:
+        logger.warning(f"백엔드 프로세스 {proc.pid} 종료 실패: {e}")
+
+
 def _kill_port(port: int):
     """특정 포트를 점유 중인 프로세스를 강제 종료하고 해제 대기."""
     if not _is_port_in_use(port):
@@ -175,6 +194,7 @@ def watchdog(backend_proc: subprocess.Popen):
             )
             notify(f"⚠ 백엔드 다운 ({reason}) — 재시작 시도 중")
 
+            _terminate_proc(backend_proc)
             _kill_port(BACKEND_PORT)
             backend_proc = start_backend()
             health_fail_count = 0
@@ -252,9 +272,20 @@ def main():
     # 나는 경우 대비, 세션 359 실측: 동시 세션 8개+로 CPU 91% 부하 시 재기동
     # 4회 중 3회 실패). watchdog(153행)과 달리 이 시점은 재시도·알림 안전망
     # 밖이라 여기서 실패하면 무통지로 스크립트가 통째로 죽는다.
+    # 첫 대기가 끝나도 프로세스가 살아 있으면 부팅 중인 것 — 겹쳐 띄우지 않고 더 기다린다
+    # (2026-09-27 재부팅 직후 실사고: 포트 미점유라 _kill_port 가 놓친 첫 프로세스가 살아남아
+    # 둘째와 포트 충돌).
     backend_proc = start_backend()
-    if not wait_for_backend():
-        logger.warning("백엔드 첫 시작 실패 — 포트 정리 후 1회 재시도")
+    ok = wait_for_backend()
+    if not ok and backend_proc.poll() is None:
+        logger.info(
+            f"백엔드 응답 대기 {BACKEND_HEALTH_TIMEOUT}초 초과 — 프로세스는 살아 있어 "
+            f"{BACKEND_HEALTH_GRACE}초 더 기다림(겹쳐 띄우지 않음, 재부팅 직후 느린 부팅 대비)"
+        )
+        ok = wait_for_backend(BACKEND_HEALTH_GRACE)
+    if not ok:
+        logger.warning("백엔드 첫 시작 실패 — 프로세스·포트 정리 후 1회 재시도")
+        _terminate_proc(backend_proc)
         _kill_port(BACKEND_PORT)
         backend_proc = start_backend()
         if not wait_for_backend():

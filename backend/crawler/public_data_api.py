@@ -10,6 +10,7 @@ import logging
 import os
 import threading
 import time
+from datetime import datetime, timezone
 
 from curl_cffi import requests as cffi_requests
 
@@ -78,6 +79,47 @@ class PublicDataAPI:
     # 한도 게이트) / "other"(그 밖의 실패) / None(직전 호출 성공). 수집기가 "한도 초과로
     # 멈췄다"와 "다른 이유로 실패했다"를 구분해 쉬운 말로 기록하기 위함.
     _last_failure_kind: str | None = None
+    # 세션 421: 창구가 응답 헤더로 알려주는 "오늘 남은 횟수"(x-ratelimit-remaining)와 하루 한도
+    # (x-ratelimit-limit) — 200 에도 429 에도 온다(실측). 이 열쇠는 KOSPI·mibunyang 과 같이 쓰므로
+    # 우리 쪽 일일 게이트(_check_daily_limit)만으로는 남의 사용분이 안 보인다. 헤더를 읽기만 한다(추가 호출 0).
+    _rate_limit: dict | None = None
+
+    @staticmethod
+    def _header_int(headers, name: str) -> int | None:
+        """응답 헤더 값을 정수로 — 없거나 숫자가 아니면 None (curl_cffi Headers 는 대소문자 무시)."""
+        try:
+            value = headers.get(name)
+        except Exception:
+            return None
+        if isinstance(value, bytes):
+            value = value.decode("ascii", "ignore")
+        if not isinstance(value, str):
+            return None
+        try:
+            return int(value.strip())
+        except ValueError:
+            return None
+
+    @classmethod
+    def _remember_rate_limit(cls, response) -> None:
+        """응답(상태 무관)의 남은 횟수 헤더를 보관 — 헤더가 없으면 이전 값을 그대로 둔다."""
+        headers = getattr(response, "headers", None)
+        if headers is None:
+            return
+        remaining = cls._header_int(headers, "x-ratelimit-remaining")
+        if remaining is None:
+            return
+        limit = cls._header_int(headers, "x-ratelimit-limit")
+        with cls._lock:
+            cls._rate_limit = {
+                "remaining": remaining, "limit": limit, "at": datetime.now(timezone.utc),
+            }
+
+    @classmethod
+    def last_rate_limit(cls) -> dict | None:
+        """마지막으로 본 창구 남은 횟수 — {"remaining", "limit", "at"} 또는 None(아직 못 봄)."""
+        with cls._lock:
+            return dict(cls._rate_limit) if cls._rate_limit else None
 
     @classmethod
     def _set_failure_kind(cls, kind: str | None) -> None:
@@ -197,6 +239,7 @@ class PublicDataAPI:
                     headers=headers,
                     timeout=REQUEST_TIMEOUT,
                 )
+                cls._remember_rate_limit(response)
 
                 if response.status_code == 200:
                     try:
@@ -335,5 +378,6 @@ class PublicDataAPI:
             cls._session = None
             cls._daily_call_count = 0
             cls._last_failure_kind = None
+            cls._rate_limit = None
         with cls._trade_cache_lock:
             cls._trade_cache.clear()

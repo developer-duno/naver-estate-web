@@ -168,7 +168,8 @@ cd backend && PYTHONPATH=. PYTHONUTF8=1 python scripts/verify_alert_wording.py
 # 종료 0 = 전부 우리말 / 1 = 어려운 말이 남은 창구를 지목해 출력
 # 세션 410 확장: ⓪ 못 알아본 에러 렌더(새 알림 + 해소 알림 — 내부 마침표 검사) ·
 #   ⑨ 자동결제 중단 사유 6종(_mark_retry 실호출) · ⑩ 부분환불(이메일 마스킹 검사) · ⑪ 관리자 화면 `explain_stored_error`
-#   (스윕 마커·psycopg2·붙는 형태 3입력, 세션 411 후속) 포함 = "11창구 + 미지 에러 렌더".
+#   (스윕 마커·psycopg2·붙는 형태 3입력, 세션 411 후속) · ⑫ 정부 실거래가 창구 남은 횟수 부족(세션 421 — 숫자 셋 검사)
+#   포함 = "12창구 + 미지 에러 렌더".
 #   텔레그램·이메일·log_action 은 전부 patch — 실발송 0. 워크트리(.env 없음)에선 DATABASE_URL="sqlite:///:memory:" 를 앞에 붙인다
 ```
 
@@ -302,7 +303,13 @@ job_type `officetel_presale`(접두어 없음), id `collect_rental_presale` → 
 
 ## 공유 인프라 규칙 (mibunyang 프로젝트와 공유)
 
-### data.go.kr API 쿼터 (일일 10,000회, 동일 키 공유)
+### data.go.kr API 쿼터 (동일 키를 **세 프로젝트**가 공유 — 한도는 **서비스별** 일일 10,000회)
+
+같은 키(`PUBLIC_DATA_API_KEY`)를 **naver-estate-web·mibunyang·KOSPI daily_report** 세 프로젝트가 같이 쓴다
+(KOSPI `config.py` 의 `DATA_GO_KR_KEY` 값 동일 — 세션 421 실측). 한도는 키 전체가 아니라 **서비스별** 10,000/일이다 —
+실거래가(RTMS)와 K-apt 는 **별도 카운터**(세션 420 실측). 리셋은 한국 자정(세션 420 판정, 09-27 01:06 남은 9,794 로 부합).
+창구가 응답 헤더 `x-ratelimit-remaining`·`x-ratelimit-limit` 로 남은 횟수를 알려주며 200·429 모두에 온다(세션 420·421 실측),
+연속 3콜 차이 1·1 = 포털 집계는 1배(세션 421 실측).
 
 | 일자 | 프로젝트 | 워크플로우 | 추정 호출수 |
 |------|----------|-----------|------------|
@@ -311,8 +318,12 @@ job_type `officetel_presale`(접두어 없음), id `collect_rental_presale` → 
 | 매월 6일 | mibunyang | collect-trades + molit-units | ~1,500~3,800 |
 | 매월 10일 | mibunyang | **collect-building-info** | **~8,500** |
 | 토요일 | naver-estate-web | collect_public_trades | ~3,600 |
+| 매일 03:30 | naver-estate-web | backfill_price(소급) | ~700(추정 — 세션 420) |
+| 평일·토 08:00 | KOSPI | daily.yml 실거래가 250지역 | ~1,500(원문 — KOSPI `.github/workflows/daily.yml` 55행 주석) |
+| 사장님 지정일(주로 자정 직후) | KOSPI | 실거래가 소급(backfill-real-estate.yml 수동 발사 또는 로컬 예약 작업) | 회차당 최대 3,000~6,000(원문 — `--max-cells` 값, 09-27 01:09 회차 2,720칸·분당 20~45콜 실측) |
 
 - **위험일**: 매월 10일이 토요일 → 8,500 + 3,600 = 12,100 > 10,000
+- **위험일**: **KOSPI 소급이 토요일 새벽에 잡히면 05:00 주간 수집과 같은 예산을 먹어 429 로 끝난다** — 2026-09-26 사고(우리 ~5,000(추정) + 외부 ~5,000(추정), 세션 421 에 KOSPI 공유 확인). 조율 창구 = KOSPI 메모리 인계 메모.
 - **대응**: collect_public_trade_data()에서 매월 10일 토요일이면 skip
 
 ### CPMS cpmsapi030 키 공유 (어린이집 API — 일일 1,000건, 동일 키 공유, 세션 366)

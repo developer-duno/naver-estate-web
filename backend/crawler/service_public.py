@@ -6,7 +6,7 @@ E. 국토교통부 아파트 매매 실거래가 API → complex_price_history �
 import logging
 import os
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from crawler.cortar_legacy import to_standard_cortar
 from crawler.service_common import (
@@ -101,6 +101,82 @@ class PublicTradeFetchError(RuntimeError):
         self.kind = kind
 
 
+def _fmt_remaining(rl: dict | None) -> str:
+    """남은 횟수 표기 — "9,755/10,000" · 한도를 모르면 "9,755" · 값이 없으면 "알 수 없음"."""
+    if rl is None:
+        return "알 수 없음"
+    if rl.get("limit") is None:
+        return f"{rl['remaining']:,}"
+    return f"{rl['remaining']:,}/{rl['limit']:,}"
+
+
+def _alert_if_short(job_type: str, rl: dict, expected: int, upper_bound: bool) -> None:
+    """이번 회차 예상 호출 수보다 창구 남은 횟수가 적으면 경고 로그 + 텔레그램 1건 (세션 421)."""
+    from crawler.plain_words import job_words
+
+    remaining = rl["remaining"]
+    if remaining < expected:
+        limit = rl.get("limit")
+        limit_part = f"(하루 한도 {limit:,}번)" if limit else ""
+        need = "최대 약" if upper_bound else "약"
+        text = (
+            f"[서버 알림] 정부 실거래가 창구의 오늘 남은 횟수가 {remaining:,}번뿐이에요{limit_part}. "
+            f"이번 회차({job_words(job_type)})는 {need} {expected:,}번이 필요해 도중에 멈출 수 있어요. "
+            "이 열쇠는 KOSPI·mibunyang 과 같이 씁니다 — 오늘 그쪽 수집이 먼저 돌았는지 봐 주세요."
+        )
+        logger.warning(
+            "[정부 실거래가] 창구 남은 횟수 부족: %s, 이번 회차 예상 %s%d번",
+            _fmt_remaining(rl), "최대 " if upper_bound else "", expected,
+        )
+        try:
+            from services.telegram import send_telegram
+            send_telegram(text)
+        except Exception as e:  # 알림 실패로 수집을 멈추지 않는다
+            logger.warning("[정부 실거래가] 남은 횟수 알림 발송 실패: %s", type(e).__name__)
+
+
+class _RemainingWatch:
+    """이번 회차의 창구 남은 횟수 — 첫 응답 뒤 '시작', 끝날 때 '끝'을 로그 한 줄로 (세션 421).
+
+    PublicDataAPI 가 응답 헤더에서 보관한 값을 읽기만 한다(추가 호출 0). 회차 시작 전에 본 값
+    (앞 회차·다른 잡)은 이번 회차 값으로 치지 않는다. 기록은 로그뿐 — crawl_jobs.error_message 는
+    관리자 화면 사유 칸이라 넣지 않는다.
+    """
+
+    def __init__(self, api, job_type: str, upper_bound: bool):
+        self._api = api
+        self._job_type = job_type
+        self._upper_bound = upper_bound
+        self._started_at = datetime.now(timezone.utc)
+        self.expected: int | None = None  # 이번 회차 예상 호출 수 — 대상이 정해지면 채운다
+        self.start: dict | None = None
+
+    def _fresh(self) -> dict | None:
+        rl = self._api.last_rate_limit()
+        if rl is None or rl["at"] < self._started_at:
+            return None
+        return rl
+
+    def observe(self) -> None:
+        """창구 호출 뒤마다 부른다 — 이번 회차 첫 응답이면 시작값을 잡고 부족하면 알린다(회차당 1회)."""
+        if self.start is not None:
+            return
+        rl = self._fresh()
+        if rl is None:
+            return
+        self.start = rl
+        if self.expected is not None:
+            _alert_if_short(self._job_type, rl, self.expected, self._upper_bound)
+
+    def log_end(self) -> None:
+        from crawler.plain_words import job_words
+
+        logger.info(
+            "[정부 실거래가] %s 창구 남은 횟수: 시작 %s → 끝 %s (이 열쇠는 KOSPI·mibunyang 과 같이 씁니다)",
+            job_words(self._job_type), _fmt_remaining(self.start), _fmt_remaining(self._fresh()),
+        )
+
+
 def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | None = None):
     """공공데이터포털 아파트 매매 실거래가 수집 → complex_price_history 저장.
 
@@ -185,6 +261,7 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
     db.add(job)
     db.commit()
     job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
+    watch = _RemainingWatch(PublicDataAPI, "public_trade_data", upper_bound=False)
 
     try:
         # 수집 대상 월: 최근 24개월 (차트 분별력 확보, 일일 한도 10,000회 충분)
@@ -219,6 +296,8 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
             )
         else:
             logger.info("공공데이터 수집 시작: %d개 시군구 x %d개월", len(sigungu_codes), len(months))
+        # 이번 회차가 요청할 (시군구, 월) 조합 수 — 체크포인트로 끝난 시군구는 뺀 실제 반복 대상
+        watch.expected = len(remaining_codes) * len(months)
 
         processed = 0
         matched = 0
@@ -255,6 +334,7 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
             fetch_failed = False
             for deal_ymd in months:
                 trades = PublicDataAPI.get_all_apt_trades(api_lawd_cd, deal_ymd)
+                watch.observe()
                 if trades is None:
                     # 호출 실패 ≠ 거래 없는 달. 남은 달은 시도하지 않고 이 시군구를 실패로 센다.
                     fetch_failed = True
@@ -376,6 +456,7 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
             fail_job_safely(job_id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
         logger.exception("공공데이터 수집 실패")
     finally:
+        watch.log_end()
         db.close()
 
 
@@ -522,8 +603,10 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
 
     from sqlalchemy import func, or_, select
 
+    from crawler.public_data_api import PublicDataAPI
     from db.models import ComplexPriceHistory
 
+    months_back = 24  # 단지당 소급 달 수 — 예상 호출 수(남은 횟수 경보)에도 같은 값을 쓴다
     db = SessionLocal()
     # 어드민 scheduler-status 는 CrawlJob(scheduler_job_id) 최신 행으로 last_run 을
     # 보여준다 — 본 함수만 기록이 없어 화면에 항상 last_run: null 로 떠 실행 여부를
@@ -535,6 +618,7 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
     db.add(job)
     db.commit()
     job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
+    watch = _RemainingWatch(PublicDataAPI, "price_backfill", upper_bound=True)
 
     try:
         rich_nos = (
@@ -561,6 +645,8 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
         )
 
         total = len(complexes)
+        # 상한 — 같은 (시군구, 월) 은 캐시로 한 번만 부르므로 실제는 이보다 적을 수 있다
+        watch.expected = total * months_back
         success = 0
         failed = 0
         quota_exhausted = False
@@ -583,7 +669,7 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
                 )
                 break
             try:
-                backfill_price_history(cno, months_back=24)
+                backfill_price_history(cno, months_back=months_back)
                 success += 1
                 consecutive_fetch_failed = 0
             except PublicTradeFetchError as e:
@@ -610,6 +696,9 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
                 db.rollback()
                 failed += 1
                 logger.exception("소급 수집 개별 실패: %s", cno)
+            finally:
+                # 첫 단지의 응답 뒤 시작값을 잡는다(그 단지 호출분만큼 이미 줄어 있을 수 있다)
+                watch.observe()
 
         job.status = "completed"
         if aborted_kind is not None:
@@ -663,4 +752,5 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
         logger.exception("소급 배치 실패")
         return {"success": 0, "failed": 0, "total": 0, "error": str(e)[:200]}
     finally:
+        watch.log_end()
         db.close()

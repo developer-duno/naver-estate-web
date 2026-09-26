@@ -83,6 +83,8 @@ _NO_TIME_MODULES: dict[str, str] = {
         "락 에러 알림은 상태 문구만 — 시각 표기 0건",
     "crawler/service_official_price.py":
         "수집 결과 알림은 매칭수·잔여만 — 시각 표기 0건",
+    "crawler/service_public.py":
+        "정부 실거래가 창구 남은 횟수 알림은 남은 횟수·한도·예상 호출 수만 — 시각 표기 0건(세션 421)",
     "routers/payment.py":
         "운영자 알림(_alert_operator_throttled)은 사유 문구만. 이 파일의 isoformat 3곳은 "
         "API 응답 JSON 의 paid_until 필드이고, 쿨다운의 now 는 time.monotonic()(단조시계)라 "

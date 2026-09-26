@@ -42,6 +42,28 @@ function formatDuration(seconds: number | undefined | null): string {
   return s > 0 ? `${m}분 ${s}초` : `${m}분`;
 }
 
+/** 한국 시간 짧은 시각 (예: "09-27 06:20") — 브라우저 시간대와 무관하게 Asia/Seoul 고정 */
+export function formatKstShort(iso: string): string | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const fmt = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const p = Object.fromEntries(fmt.formatToParts(d).map((x) => [x.type, x.value]));
+  return `${p.month}-${p.day} ${p.hour}:${p.minute}`;
+}
+
+/** 폰에서 작업 이름 아래 한 줄 — "매일 06:20 · 다음 09-27 06:20" / 꺼진 잡은 "다음 실행 없음" */
+export function mobileScheduleLine(job: Pick<SchedulerJobStatus, "schedule" | "next_run_at">): string {
+  const next = job.next_run_at ? formatKstShort(job.next_run_at) : null;
+  return `${job.schedule} · ${next ? `다음 ${next}` : "다음 실행 없음"}`;
+}
+
 interface Props {
   token: string;
   /** true 면 카드 제목을 숨긴다 — 대시보드 접힌 절 안에서 절 제목과 두 줄로 겹치지 않게 (AdminCard.hideTitle) */
@@ -160,6 +182,10 @@ function JobRow({
               <span className="ml-1 text-[10px] text-gray-400 border border-gray-200 rounded px-1">꺼짐</span>
             )}
           </div>
+          {/* 폰(sm 미만)에서는 주기·다음 실행 칸이 숨으므로 이름 아래 한 줄로 보인다. sm 이상은 숨김 */}
+          <span data-testid="mobile-schedule-line" className="block text-[11px] text-gray-400 sm:hidden">
+            {mobileScheduleLine(job)}
+          </span>
           {/* 출처 주소 원문은 마우스를 올리거나(데스크톱) 출처 글자를 누르면(휴대폰) 보인다.
               누름은 행 펼침(onToggle)으로 올라가지 않는다(RawDetail 이 막는다) */}
           {job.source && (

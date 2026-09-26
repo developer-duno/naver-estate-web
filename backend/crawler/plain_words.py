@@ -28,6 +28,7 @@
 
 import logging
 import re
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,22 @@ STALE_SWEPT_WORDS = "작업이 오래 멈춰 있어 자동으로 정리됐어요
 _STALE_TAIL = re.compile(r"^(?P<head>.*?)\s*\|\s*stale running.*$", re.I | re.S)
 
 # (정규식, 사장님이 읽을 한 줄)  — 위에서부터 먼저 맞는 것을 쓴다.
-_ERROR_RULES: list[tuple[re.Pattern, str]] = [
+#   값이 문자열이 아니라 **호출 가능 객체**면 `plain(원문)` 을 돌려준다(원문 보존 규칙용).
+_ERROR_RULES: list[tuple[re.Pattern, str | Callable[[str], str]]] = [
+    # ── 우리 국토부 실거래가 수집기 문구 — 원문 그대로 (세션 420 검사관 M2) ──
+    # `service_public.py` 가 error_message·예외 문구로 만드는 문장은 처음부터 쉬운 우리말이고
+    # "190/253개 시군구까지만" 같은 숫자가 핵심이다. 그런데 아래 한도 규칙(`한도.*초과`)이
+    # 먼저 잡으면 숫자가 사라진 한 줄로 바뀌고, 한도가 아닌 문장은 규칙에 안 맞아 알림에서
+    # "처음 보는 문제" 로 떨어졌다. ⚠ 반드시 **맨 앞**(한도 규칙보다 앞)이다.
+    # 줄머리가 우리 문구로 시작하고 **영문 글자·`|` 가 하나도 없을 때만** 원문을 돌려준다 —
+    # 영문(개발자 원문)이나 스윕 마커(`| stale running`)가 섞인 값은 이 규칙을 지나쳐
+    # 아래 규칙·고정 문장이 받는다(원문 보존이 영문 누출 통로가 되지 않게).
+    # 머리 두 가지 = "정부 실거래가 창구…"(중단·부분 실패·소급 단지/배치 문구 전부) ·
+    # "N개 시군구는 못 받음…"(부분 실패인데 completed 로 끝난 회차).
+    (
+        re.compile(r"^(?:정부 실거래가 창구|\d+개 시군구는 못 받음)[^A-Za-z|]*$"),
+        lambda text: text,
+    ),
     # ── 결제 사유 2종 — billing_charge._mark_retry 가 만드는 우리 접두어 (세션 410) ──
     # ⚠ 반드시 **맨 앞**이다. 사유 문자열 뒤에 PortOne 예외 원문이 이어 붙는데, 그 안의
     #   timeout·50x 가 먼저 이기면 "상대 서버(네이버·정부 자료)가 …" 안내가 나가 결제
@@ -261,7 +277,7 @@ def _translate_known(raw) -> str | None:
     text = str(raw).strip()
     for pattern, plain in _ERROR_RULES:
         if pattern.search(text):
-            return plain
+            return plain(text) if callable(plain) else plain
     return None
 
 

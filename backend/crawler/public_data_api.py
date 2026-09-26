@@ -199,7 +199,23 @@ class PublicDataAPI:
                 )
 
                 if response.status_code == 200:
-                    data = response.json()
+                    try:
+                        data = response.json()
+                    except Exception:
+                        # 본문이 JSON 이 아님 — data.go.kr 은 `_type=json` 을 줘도 오류를 XML 로
+                        # 주는 경우가 있다(kapt_api._body_or_raise 주석). 그 XML 이 한도 초과면
+                        # 재시도 없이 "quota" 로 끝낸다(기다려도 안 바뀐다). 그 외는 기존처럼
+                        # 아래 공통 예외 경로(재시도 후 "other")로 보낸다.
+                        text = response.text or ""
+                        if ("LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR" in text
+                                or f"<returnReasonCode>{_QUOTA_REASON_CODE}<" in text):
+                            logger.warning(
+                                "공공데이터 API 한도 초과(XML 오류 응답) — LAWD=%s, YMD=%s",
+                                lawd_cd, deal_ymd,
+                            )
+                            cls._set_failure_kind("quota")
+                            return None
+                        raise
                     # 오류 봉투(200 + cmmMsgHeader) — 재시도하지 않는다(한도는 기다려도 안 바뀐다).
                     envelope_code = _error_envelope_code(data)
                     if envelope_code is not None:
@@ -219,7 +235,9 @@ class PublicDataAPI:
                             "공공데이터 API 오류: %s (%s) — LAWD=%s, YMD=%s",
                             result_code, result_msg, lawd_cd, deal_ymd,
                         )
-                        cls._set_failure_kind("other")
+                        # 정상 모양인데 resultCode 22 = 일일 한도 초과(세션 420 검사관 M1)
+                        cls._set_failure_kind(
+                            "quota" if result_code == _QUOTA_REASON_CODE else "other")
                         return None
                     cls._set_failure_kind(None)
                     return data

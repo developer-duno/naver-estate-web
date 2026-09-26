@@ -329,20 +329,24 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
         if aborted_kind is not None or failed_sigungu > ok_sigungu:
             # 연속 실패로 중단했거나, 끝까지 갔어도 실패가 성공보다 많으면 failed
             # (kapt_costs mostly_failed 선례). 받은 곳까지 체크포인트를 남겨 재개가 이어받게 한다.
+            # 정기 회차는 재개 창(RESUME_MAX_AGE_HOURS) 밖이라 처음부터 다시 받는다 — "이어받아요"
+            # 가 아니라 "다시 받아요"가 사실이다(세션 420 검사관 L3).
             if aborted_kind is not None:
+                # 중단 직전 실패만이 아니라 이번 회차에 한도 초과가 한 번이라도 있었으면
+                # 한도 문구 — 한도 뒤에 다른 실패가 섞여 끝나도 원인을 가리지 않는다(L2).
                 head = (
-                    _QUOTA_WORDS if aborted_kind == "quota"
+                    _QUOTA_WORDS if any_quota
                     else f"정부 실거래가 창구 호출이 시군구 {PUBLIC_TRADE_ABORT_AFTER_SIGUNGU}곳 연속 실패해"
                 )
                 message = (
                     f"{head} {len(done_codes)}/{len(sigungu_codes)}개 시군구까지만 받고 중단"
-                    " — 다음 회차가 이어받아요"
+                    " — 다음 회차가 다시 받아요"
                 )
             else:
                 head = _QUOTA_WORDS if any_quota else "정부 실거래가 창구 호출이 실패해"
                 message = (
                     f"{head} {failed_sigungu}개 시군구를 못 받음(받은 곳 {ok_sigungu}개)"
-                    " — 다음 회차가 이어받아요"
+                    " — 다음 회차가 다시 받아요"
                 )
             db.commit()
             _checkpoint.save(db, job.id, {"done_codes": sorted(done_codes), "total": len(sigungu_codes)})
@@ -561,6 +565,7 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
         failed = 0
         quota_exhausted = False
         consecutive_fetch_failed = 0  # 호출 실패 연속 단지 수 — 하나라도 성공하면 0
+        fetch_failed = 0              # 창구 호출 실패 단지 수(개별 예외 제외) — 마감 판정용
         aborted_kind: str | None = None
         for (cno,) in complexes:
             # 세션 361: 쿼터를 이미 다 쓴 뒤에도 남은 단지 수만큼 backfill_price_history()를
@@ -585,9 +590,14 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
                 # 한 단지 실패로 배치를 끝내지 않는다 — 실패로 세고, 연속으로 쌓이면 멈춘다.
                 db.rollback()
                 failed += 1
+                fetch_failed += 1
                 consecutive_fetch_failed += 1
                 logger.warning("소급 수집 호출 실패: %s (%s) — 연속 %d단지", cno, e.kind, consecutive_fetch_failed)
-                if consecutive_fetch_failed >= BACKFILL_ABORT_AFTER_COMPLEXES:
+                # 한도 초과는 연속 여부와 무관하게 즉시 멈춘다 — 앞 단지의 달이 캐시에 있으면
+                # 그 단지는 "성공"으로 세어져 연속 카운터가 0 이 되므로, 연속 규칙만으로는
+                # 429 폭주 속에서도 배치가 끝까지 헛돈다(세션 420 검사관 M3).
+                # 연속 규칙은 한도가 아닌 실패에만 쓴다.
+                if e.kind == "quota" or consecutive_fetch_failed >= BACKFILL_ABORT_AFTER_COMPLEXES:
                     aborted_kind = e.kind
                     break
             except Exception:
@@ -609,6 +619,15 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
             )
             job.status = "failed"
             job.error_message = f"{head} {total}개 단지 중 {success}개까지만 받고 중단 — 남은 단지는 내일 이어서 받아요"
+        elif fetch_failed > success:
+            # 끝까지 갔어도 창구 호출 실패가 성공보다 많으면 failed — 주간 수집기·kapt
+            # mostly_failed 와 같은 규칙. 창구 호출 실패(PublicTradeFetchError)만 센다 — 그 밖의
+            # 개별 예외는 기존대로 completed 안에서 실패 수로만 남긴다(문구가 "창구"라 원인이 다르면 거짓).
+            job.status = "failed"
+            job.error_message = (
+                f"정부 실거래가 창구 호출이 실패해 {fetch_failed}개 단지를 못 받음(받은 곳 {success}개)"
+                " — 남은 단지는 내일 다시 받아요"
+            )
         job.total_items = total
         job.processed_items = success
         job.completed_at = utcnow()

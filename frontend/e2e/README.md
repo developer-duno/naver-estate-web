@@ -64,7 +64,7 @@ secrets 미설정 시 `setup` project 가 `TEST_ADMIN_*` missing 로그와 함�
 - `playwright-report-<project>` — HTML 리포트 (14일 보관)
 - `admin-screenshots-<project>` — `test-results/` 실패 시 자동 캡처 (14일 보관)
 - `updated-snapshots-<project>` — workflow_dispatch + `update_snapshots=true` 일 때만.
-  ⚠ 각 꾸러미에 PNG **전량**(현재 21장, `admin-mobile` baseline 생성 후 22장 — 세는 법 `find frontend/e2e -name "*.png" | wc -l`)이 담기지만 유효한 재촬영본은 `*-<project>-linux.png` 뿐이다
+  ⚠ 각 꾸러미에 PNG **전량**(현재 22장 — 2026-09-26 실측, 세는 법 `find frontend/e2e -name "*.png" | wc -l`)이 담기지만 유효한 재촬영본은 `*-<project>-linux.png` 뿐이다
   (합치면 옛본이 새본을 덮는다). 대조·판정 절차 = 아래 §baseline 재생성 절차.
 
 ## 시각 회귀 (toHaveScreenshot)
@@ -75,7 +75,7 @@ baseline 은 spec 파일별 `*-snapshots/` 디렉토리에 `<이름>-<project>-l
 (파일명에 project 가 들어가므로 같은 spec 을 두 project 에서 돌리면 장이 이중 생성된다 —
 `public` 의 testIgnore 가 `public-flow` 를 제외하는 이유).
 
-| project | PNG (현재 **21장** — 2026-09-17 실측 20장 + 세션 417 `public-visual-mobile` 1장 − 세션 419 `admin-settings` 1장(설정 화면 삭제) + #589 `admin-dashboard-sections` 1장. 세션 419 `admin-mobile` baseline 생성 후 **22장**. `header-public-desktop` baseline 은 PR #501 에서 생성·커밋됨) |
+| project | PNG (현재 **22장** — 2026-09-26 실측: 2026-09-17 실측 20장 + 세션 417 `public-visual-mobile` 1장 − 세션 419 `admin-settings` 1장(설정 화면 삭제) + #589 `admin-dashboard-sections` 1장 + #590 `admin-mobile` 1장. `header-public-desktop` baseline 은 PR #501 에서 생성·커밋됨) |
 |---|---|
 | `public` (10) | `blog-index-{desktop,iphone}` · `blog-slug-{desktop,iphone}` · `blog-slug-realtime-{desktop,iphone}` · `blog-slug-radar-weights-{desktop,iphone}` · `blog-slug-for-agents-{desktop,iphone}` |
 | `public-visual` (5) | `home` · `login` · `compare` · `mibunyang` · **`header-public-desktop`**(세션 400 신설) |

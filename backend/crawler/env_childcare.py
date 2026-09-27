@@ -12,7 +12,6 @@ import logging
 from crawler.env_common import (
     _complete_job,
     _fail_job,
-    _is_skip_day,
     _prefetch_infra_map,
     _record_job,
 )
@@ -46,16 +45,6 @@ def collect_childcare_data(batch_size: int = 0):
     옛 배치 100 은 전 단지 한 바퀴에 30개월이 걸려 실익이 없었다(사장님 결정 2026-09-05).
     """
     db = SessionLocal()
-    if _is_skip_day():
-        logger.info("[childcare] 매월 10일 토요일 — 쿼터 보호를 위해 건너뜀")
-        job = _record_job(db, "childcare", "collect_childcare")
-        job.status = "cancelled"
-        job.error_message = "쿼터 보호 건너뜀 (매월 10일 토요일)"
-        job.completed_at = utcnow()
-        db.commit()
-        db.close()
-        return
-
     from crawler.childcare_api import ChildcareAPI, ChildcareAPIError, resolve_sigungu_code
 
     job = _record_job(db, "childcare", "collect_childcare")

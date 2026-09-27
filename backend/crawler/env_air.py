@@ -5,7 +5,6 @@ import logging
 from crawler.env_common import (
     _complete_job,
     _fail_job,
-    _is_skip_day,
     _prefetch_infra_map,
     _record_job,
 )
@@ -33,16 +32,6 @@ def collect_air_quality(batch_size: int = 100):
      공짜였다. childcare 는 시군구당 1콜이라 마찬가지. 대기질만 단지당 1콜이다.)
     """
     db = SessionLocal()
-    if _is_skip_day():
-        logger.info("[air_quality] 매월 10일 토요일 — 쿼터 보호를 위해 건너뜀")
-        job = _record_job(db, "air_quality", "collect_air_quality")
-        job.status = "cancelled"
-        job.error_message = "쿼터 보호 건너뜀 (매월 10일 토요일)"
-        job.completed_at = utcnow()
-        db.commit()
-        db.close()
-        return
-
     from crawler.air_quality_api import AirQualityAPI
 
     job = _record_job(db, "air_quality", "collect_air_quality")

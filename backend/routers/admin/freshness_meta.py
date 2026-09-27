@@ -215,5 +215,6 @@ MONITORING_EXEMPT: dict[str, str] = {
     "field_drift_monitor": "채움률을 재는 감시 잡 자신 — DB 에 데이터를 안 쌓아 신선도 카드 틀이 안 맞음(이상은 자체 텔레그램 알림이 커버)",
     "backfill_detail_dawn": "articles 카드가 같은 테이블 쓰기라 대신 커버 + 채움률은 field_drift_monitor 소관",
     "backfill_detail_noon": "articles 카드가 같은 테이블 쓰기라 대신 커버 + 채움률은 field_drift_monitor 소관",
+    "kapt_costs_noon": "단지 관리비 받기(kapt_costs) 카드가 06:20·12:40 두 회차를 함께 집계(freshness.py _CARD_SCHEDULER_IDS)",
     "api_version_probe": "외부 API 생사만 확인하고 DB 에 데이터를 안 쌓는 감시 잡 — 신선도 카드 틀이 안 맞음(폐기 감지는 자체 텔레그램 알림이 커버)",
 }

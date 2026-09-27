@@ -95,7 +95,8 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "vacuum_maintenance": {"name": "자료 보관함 정리", "schedule": "매일 03:50", "env": "VACUUM_MAINTENANCE_ENABLED", "env_default": "true", "source": None},
     "api_version_probe": {"name": "정부 자료 창구 살아있나 확인", "schedule": "주 1회 일요일 06:40", "env": "API_VERSION_MONITOR_ENABLED", "env_default": "true", "source": f"data.go.kr / odcloud.kr 정부 자료 창구 {len(PROBE_REGISTRY)}곳 모두 확인 (감시 목록)"},
     "kapt_match": {"name": "관리비 단지 연결하기", "schedule": "매월 21일 06:10", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 단지 기본정보 (AptBasisInfoServiceV5)"}},
-    "kapt_costs": {"name": "단지 관리비 받기", "schedule": "매일 06:20", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 공용관리비 (AptCmnuseManageCostServiceV3)"}},
+    "kapt_costs": {"name": "단지 관리비 받기 06:20", "schedule": "매일 06:20", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 공용관리비 (AptCmnuseManageCostServiceV3)"}},
+    "kapt_costs_noon": {"name": "단지 관리비 받기 12:40", "schedule": "매일 12:40", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 공용관리비 (AptCmnuseManageCostServiceV3)"}},
 }
 
 # 캘린더 전용 이름표 — 스케줄러에 등록되지 않는 "수동 실행" 잡들.

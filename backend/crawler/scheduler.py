@@ -473,11 +473,30 @@ def create_scheduler() -> BackgroundScheduler:
                 "batch_size": KAPT_COST_BATCH_SIZE,
                 "scheduler_job_id": "kapt_costs",
             },
-            id="kapt_costs", name="단지 관리비 받기",
+            id="kapt_costs", name="단지 관리비 받기 06:20",
+            max_instances=1, misfire_grace_time=3600,
+        )
+        # 낮 회차 12:40 (세션 422) — 같은 함수·같은 배치를 하루 한 번 더 돌린다.
+        #   왜: 2026-09-25 부터 K-apt 관리비 창구가 아침 시각대에만 분 단위로 간헐 오류(코드 04)를
+        #   내 06:20 회차가 사흘 연속 실패했다(같은 날 09·12시 탐침은 정상). 낮 회차가 그날 몫을 받는다.
+        #   호출량: 둘 다 되는 날엔 하루 1,000단지 · 호출 ≈24,000/일(아침만일 때 ≈12,000) —
+        #   우리 자체 상한 kapt_api._quota_daily_limit 60,000·포털 운영계정 10만/일 안.
+        #   겹침: 06:20 회차가 길어져도(최악 ≈152분 → 08:52) 12:40 과 안 겹치고, 겹치더라도
+        #   collect_kapt_costs 의 already_running 가드(job_type 기준)가 새 회차를 건너뛴다.
+        #   crawl_jobs 행은 scheduler_job_id="kapt_costs_noon" 으로 남는다 — 신선도 카드는 두 id 를 함께 센다.
+        scheduler.add_job(
+            collect_kapt_costs,
+            "cron",
+            hour=12, minute=40,
+            kwargs={
+                "batch_size": KAPT_COST_BATCH_SIZE,
+                "scheduler_job_id": "kapt_costs_noon",
+            },
+            id="kapt_costs_noon", name="단지 관리비 받기 12:40",
             max_instances=1, misfire_grace_time=3600,
         )
         logger.info(
-            "K-apt 관리비 연동 활성화: 매칭 매월 21일 06:10 / 관리비 매일 06:20 (배치 %d)",
+            "K-apt 관리비 연동 활성화: 매칭 매월 21일 06:10 / 관리비 매일 06:20·12:40 (배치 %d)",
             KAPT_COST_BATCH_SIZE,
         )
 

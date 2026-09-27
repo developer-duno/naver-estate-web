@@ -49,13 +49,13 @@ def test_extract_scheduler_job_ids_finds_static_literals():
     """
     ids = extract_scheduler_job_ids(_SCHEDULER_SOURCE)
 
-    # 정적 리터럴은 정확히 25개 — 중복 없이.
+    # 정적 리터럴은 정확히 26개 — 중복 없이.
     # (세션 402: 상세 백필 2회차 + 채움률 감시 신설로 22 → 25. 백필 두 회차는 배치 크기가
     #  달라 별도 잡이고, 루프가 아니라 풀어 쓴 이유는 id 리터럴이 있어야 이 추출기가 잡을
-    #  인식하기 때문이다.)
+    #  인식하기 때문이다. 세션 422: 관리비 낮 회차 kapt_costs_noon 신설로 25 → 26.)
     assert len(ids) == len(set(ids)), f"id 중복 발견: {ids}"
-    assert len(ids) == 25, (
-        f"정적 add_job id 리터럴 개수가 25가 아님 (실제 {len(ids)}개): {ids}. "
+    assert len(ids) == 26, (
+        f"정적 add_job id 리터럴 개수가 26이 아님 (실제 {len(ids)}개): {ids}. "
         "scheduler.py 에 잡이 추가/삭제됐으면 이 테스트의 기대값도 함께 갱신할 것."
     )
 
@@ -69,7 +69,7 @@ def test_extract_scheduler_job_ids_finds_static_literals():
         "collect_crime_stats", "crawler_monitor", "collect_metrics", "billing_charge",
         "vacuum_maintenance",
         # K-apt 관리비 연동 (단지 매칭 + 관리비 수집)
-        "kapt_match", "kapt_costs",
+        "kapt_match", "kapt_costs", "kapt_costs_noon",
         # data.go.kr API 버전 격변 감시 (주 1회 일요일 06:40) — 2026-08-19 폐기 사고 재발방지
         "api_version_probe",
     }

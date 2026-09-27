@@ -94,7 +94,7 @@ def collect_officetel_presale(batch_size: int = 1000, scheduler_job_id: str | No
             job = CrawlJob(
                 job_type="officetel_presale", scheduler_job_id=scheduler_job_id,
                 status="cancelled", started_at=utcnow(), completed_at=utcnow(),
-                error_message="PUBLIC_DATA_API_KEY 미설정",
+                error_message="정부 자료 열쇠가 설정돼 있지 않아 건너뜀",
             )
             db.add(job)
             db.commit()

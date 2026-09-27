@@ -14,8 +14,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { describe, it, expect } from "vitest";
-import { COLLECTORS, describeLastRun } from "../collectors";
+import { COLLECTORS, describeLastRun, pickLatestRun } from "../collectors";
 import { CRAWL_JOB_LABELS } from "@/lib/crawl-job-labels";
+import type { SchedulerLastRun } from "@/types/admin";
 
 // src/lib/admin/__tests__ → frontend → 레포 루트 → backend
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -60,6 +61,15 @@ describe("수집기 버튼 집합 = BE 수집기 집합", () => {
     for (const c of COLLECTORS) {
       expect(CRAWL_JOB_LABELS[c.jobType], c.jobType).toBeDefined();
       expect(scheduler.includes(`"scheduler_job_id": "${c.schedulerJobId}"`) || scheduler.includes(`id="${c.schedulerJobId}"`), c.schedulerJobId).toBe(true);
+    }
+  });
+
+  it("extraSchedulerJobIds 도 crawler/scheduler.py 의 id=\"…\" 에 있다 (세션 423 — 관리비 두 회차)", () => {
+    const scheduler = readFileSync(resolve(BACKEND, "crawler/scheduler.py"), "utf-8");
+    for (const c of COLLECTORS) {
+      for (const id of c.extraSchedulerJobIds ?? []) {
+        expect(scheduler.includes(`"scheduler_job_id": "${id}"`) || scheduler.includes(`id="${id}"`), id).toBe(true);
+      }
     }
   });
 
@@ -109,5 +119,52 @@ describe("describeLastRun — 마지막 실행 한 줄", () => {
       expect(r).toEqual({ text: "지금 도는 중 (10분 전 시작)", tone: "running", running: true });
     }
     expect(describeLastRun({ ...base, status: "cancelled", completed_at: "2026-09-26T06:50:00+09:00" }, true, now).running).toBe(false);
+  });
+
+  it("showStartClock=true 면 머리말·도는 중 문구 뒤에 (HH:MM 시작) 이 붙는다 (세션 423 — 관리비 두 회차 구분)", () => {
+    const completed = describeLastRun(
+      { ...base, status: "completed", started_at: "2026-09-26T12:40:00+09:00", completed_at: "2026-09-26T06:00:00+09:00" },
+      true,
+      now,
+      true,
+    );
+    expect(completed.text).toBe("마지막 실행(12:40 시작): 1시간 전 · 완료");
+    const running = describeLastRun({ ...base, status: "running", started_at: "2026-09-26T06:50:00+09:00" }, true, now, true);
+    expect(running.text).toBe("지금 도는 중 (06:50 시작)");
+  });
+
+  it("showStartClock=false(기본값) 이면 시계 문구가 안 붙는다 — 기존 7개 카드는 글자 그대로", () => {
+    const r = describeLastRun({ ...base, status: "completed", started_at: "2026-09-26T12:40:00+09:00", completed_at: "2026-09-26T04:30:00+09:00" }, true, now);
+    expect(r.text).toBe("마지막 실행: 2시간 전 · 완료");
+  });
+});
+
+describe("pickLatestRun — 여러 잡 중 더 늦게 시작한 실행 고르기 (세션 423)", () => {
+  const A: SchedulerLastRun = { status: "completed", started_at: "2026-09-26T06:20:00+09:00", total_items: 0, processed_items: 0 };
+  const B: SchedulerLastRun = { status: "completed", started_at: "2026-09-26T12:40:00+09:00", total_items: 0, processed_items: 0 };
+
+  it("더 늦게 시작한 쪽을 고른다 (순서 무관)", () => {
+    expect(pickLatestRun([A, B])).toBe(B);
+    expect(pickLatestRun([B, A])).toBe(B);
+  });
+
+  it("null/undefined 는 무시한다", () => {
+    expect(pickLatestRun([null, A, undefined])).toBe(A);
+    expect(pickLatestRun([null, undefined])).toBeNull();
+    expect(pickLatestRun([])).toBeNull();
+  });
+
+  it("started_at 을 못 읽으면 가장 옛것으로 쳐서 밀린다", () => {
+    const broken: SchedulerLastRun = { status: "completed", started_at: "not-a-date", total_items: 0, processed_items: 0 };
+    expect(pickLatestRun([broken, A])).toBe(A);
+    expect(pickLatestRun([A, broken])).toBe(A);
+  });
+
+  it("시각이 같거나(또는 전부 못 읽으면) 앞쪽(첫 번째)을 쓴다", () => {
+    const A2: SchedulerLastRun = { ...A };
+    expect(pickLatestRun([A, A2])).toBe(A);
+    const brokenX: SchedulerLastRun = { status: "completed", total_items: 0, processed_items: 0 };
+    const brokenY: SchedulerLastRun = { status: "completed", total_items: 0, processed_items: 0 };
+    expect(pickLatestRun([brokenX, brokenY])).toBe(brokenX);
   });
 });

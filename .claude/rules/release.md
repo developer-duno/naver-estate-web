@@ -252,7 +252,7 @@ Startup BAT 시절엔 로그인해야 기동 — infra.md §자동 시작 사건
 
 ### 6. Cross-link
 
-- `.claude/rules/infra.md` §스케줄러 (APScheduler) = 25 잡 + 운영 토글 (세션 402 실측: 상세 백필 2 + 채움률 감시 1 신설로 22 → 25. ⚠ 라이브 `scheduler-status` 는 32개(세션 422 관리비 낮 회차 +1)로 보이는데, popular 3회차·complex_detail 5유형이 개별 등록돼 정적 id 수와 다른 것이 정상이다 — 두 수를 맞추려 하지 말 것)
+- `.claude/rules/infra.md` §스케줄러 (APScheduler) = 26 잡 + 운영 토글 (세션 402 실측: 상세 백필 2 + 채움률 감시 1 신설로 22 → 25. 세션 422 관리비 낮 회차로 25 → 26. ⚠ 라이브 `scheduler-status` 는 32개(세션 422 관리비 낮 회차 +1)로 보이는데, popular 3회차·complex_detail 5유형이 개별 등록돼 정적 id 수와 다른 것이 정상이다 — 두 수를 맞추려 하지 말 것)
 - `.claude/rules/infra.md` §IP 차단 방지 = 네이버 호출 보호
 - 글로벌 메모리 박제 = `[[feedback-orchestrator-restart-zombie-risk]]` + `[[feedback-backend-process-zombie-grep]]`
 - 사건 일지 = `~/.claude/projects/d--naver-estate-web/memory/session{229,230,231}_summary.md`

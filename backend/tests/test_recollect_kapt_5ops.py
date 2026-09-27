@@ -17,7 +17,8 @@ from db.models import Complex, CrawlJob, KaptComplexMap, KaptManagementCost, Rat
 from scripts import recollect_kapt_5ops as rk
 
 KST = ZoneInfo("Asia/Seoul")
-NOON_KST = datetime(2026, 9, 25, 12, 0, tzinfo=KST)
+# 시작 허용 창(14:00~23:59 KST, 세션 422) 안의 기본 시각 — 옛 이름 NOON_KST(12:00)는 창이 14:00 으로 옮겨 바꿨다
+ALLOWED_KST = datetime(2026, 9, 25, 15, 0, tzinfo=KST)
 OLD_AT = datetime(2026, 9, 20, 0, 0, tzinfo=timezone.utc)
 NEW_AT = datetime(2026, 9, 25, 3, 0, tzinfo=timezone.utc)
 FIXED_NOW = datetime(2026, 10, 1, 0, 0, tzinfo=timezone.utc)
@@ -74,7 +75,7 @@ def _fixed_clock(monkeypatch):
 
 
 def _run(db, **kw):
-    kw.setdefault("now_fn", lambda: NOON_KST)
+    kw.setdefault("now_fn", lambda: ALLOWED_KST)
     return rk.run(db, **kw)
 
 
@@ -264,10 +265,12 @@ def test_refuses_while_kapt_costs_running(db, monkeypatch):
     assert stats.stop_reason == "refused_kapt_costs_running" and calls == []
 
 
-# 시작 허용 = 09:00~23:59 KST (세션 417 최종 검사관 B — 옛 06:20~09:00 만 거부해 00:00~06:20 시작이 새고 있었다)
+# 시작 허용 = 14:00~23:59 KST (세션 417 최종 검사관 B — 옛 06:20~09:00 만 거부해 00:00~06:20 시작이 새고 있었다.
+# 세션 422 — 관리비 정기 회차가 06:20·12:40 두 번이 되어 낮 회차 뒤 14:00 으로 옮겼다)
 @pytest.mark.parametrize("hhmm,refused", [
     ((0, 0), True), ((3, 0), True), ((6, 19), True), ((6, 20), True), ((8, 59), True),
-    ((9, 0), False), ((23, 59), False),
+    ((9, 0), True), ((12, 40), True), ((13, 59), True),
+    ((14, 0), False), ((23, 59), False),
 ])
 def test_start_window_boundaries(db, monkeypatch, hhmm, refused):
     _seed(db, "1001", "A1")
@@ -350,7 +353,7 @@ def test_consecutive_all_blank_stops(db, monkeypatch):
     assert len({code for code, _ in calls}) == rk.MAX_CONSECUTIVE_ALL_BLANK  # 11번째 행은 안 부른다
 
 
-# ③ 23:59 에 시작해 돌던 중 자정을 넘기면 멈춘다(새 날짜 한도는 그날 06:20 정기 회차 몫)
+# ③ 23:59 에 시작해 돌던 중 자정을 넘기면 멈춘다(새 날짜 한도는 그날 06:20·12:40 정기 회차 몫)
 @pytest.mark.parametrize("force", [False, True])
 def test_stops_at_midnight_rollover(db, monkeypatch, force):
     """뮤테이션: `date_rollover` 검사를 지우면 셋째 행까지 처리돼 FAIL. `--force` 로도 안 풀린다."""

@@ -771,6 +771,36 @@ def test_kapt_costs_card_counts_noon_run_when_morning_failed(client, db):
     assert datetime.fromisoformat(item["last_job"]["completed_at"]) == noon_done, item["last_job"]
 
 
+def test_kapt_costs_card_last_run_is_morning_when_morning_is_newest(client, db):
+    """어제 낮(12:40) 성공 + 오늘 아침(06:20) 성공 → 카드의 마지막 회차 = 오늘 아침.
+
+    묶음에서 아침 id 가 빠져도(낮 회차만 세도) 어제 낮 기록으로 green 은 나오므로, 마지막
+    회차가 **오늘 아침**인지로 구분한다. 뮤테이션: freshness.py `_CARD_SCHEDULER_IDS["kapt_costs"]`
+    에서 "kapt_costs" 를 빼면 last_updated·last_job 이 어제 낮 회차가 되어 FAIL.
+    """
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    yesterday_noon_done = now - timedelta(hours=20)
+    _add_kapt_costs_job(
+        db, "kapt_costs_noon", "completed",
+        started_at=yesterday_noon_done - timedelta(minutes=60), completed_at=yesterday_noon_done,
+        processed=300, total=320,
+    )
+    today_morning_done = now - timedelta(hours=2)
+    _add_kapt_costs_job(
+        db, "kapt_costs", "completed",
+        started_at=today_morning_done - timedelta(minutes=60), completed_at=today_morning_done,
+        processed=500, total=500,
+    )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "kapt_costs")
+    assert item["status"] == "green", item
+    assert datetime.fromisoformat(item["last_updated"]) == today_morning_done, item
+    assert item["last_job"]["processed_items"] == 500, item["last_job"]
+    assert datetime.fromisoformat(item["last_job"]["completed_at"]) == today_morning_done, item["last_job"]
+
+
 def test_kapt_noon_run_does_not_leak_into_other_cards(client, db):
     """kapt_costs_noon 행은 관리비 받기 카드에만 들어간다 — 다른 카드(단일 id)는 옛 동작 그대로."""
     _make_admin(db)

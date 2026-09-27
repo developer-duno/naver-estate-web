@@ -80,6 +80,24 @@ def _to_standard_lawd_cd(complexes_in_region, fallback_sigungu_cd: str) -> str:
     return fallback_sigungu_cd
 
 
+def _recent_months(today, n: int) -> list[str]:
+    """오늘이 속한 달부터 거꾸로 n개의 달력 달(YYYYMM)을 오래된 순으로 반환.
+
+    세션 421: 옛 코드는 "30일씩 거슬러 올라가며 그 날짜가 속한 달을 취함" 방식이라
+    한 달을 28~31일로 계산했다 — 30일 초과인 달(31일)이 겹치면 자연히 중복 제거로
+    흡수되지만, 28일인 2월을 건너뛰면 그 앞뒤 두 델타가 모두 같은(2월이 아닌) 달을
+    가리켜 2월 자체가 통째로 빠지고 그만큼 오래된 달이 중복으로 끼어든다(예: 오늘이
+    2026-03이면 202602 누락 + 202512 중복). 달력의 달 단위로 직접 계산해 이 문제를
+    원천 차단한다. n=0 이면 빈 리스트.
+    """
+    months = []
+    for delta in range(n):
+        total = today.year * 12 + (today.month - 1) - delta
+        y, m0 = divmod(total, 12)
+        months.append(f"{y:04d}{m0 + 1:02d}")
+    return sorted(months)
+
+
 # 세션 420: 국토부 창구 호출이 실패(재시도 소진·429·일일 한도)한 것을 "거래 없는 빈 달"로
 # 삼키던 결함(2026-09-26 토요일: 05:40 부터 전부 429 인데 completed·759,061건으로 마감).
 # 실패는 실패로 세고, 연속으로 이만큼 실패하면 회차를 멈춘다(주간 = 시군구, 소급 = 단지).
@@ -255,15 +273,10 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
 
     try:
         # 수집 대상 월: 최근 24개월 (차트 분별력 확보, 일일 한도 10,000회 충분)
-        # timedelta 는 모듈 상단 import 사용 (여기서 다시 import 하면 함수 전체에서
-        # timedelta 가 지역변수가 돼 위쪽 resume_cutoff 계산이 UnboundLocalError).
+        # 세션 421: 30일 간격 계산이 2월(28일)을 건너뛰던 결함 수정 — 달력 달 기준.
         from datetime import date
         today = date.today()
-        months = []
-        for delta in range(24):
-            d = today.replace(day=1) - timedelta(days=delta * 30)
-            months.append(d.strftime("%Y%m"))
-        months = sorted(set(months))  # 중복 제거 + 정렬
+        months = _recent_months(today, 24)
 
         # DB에서 고유 시군구코드 추출 (cortar_no 앞 5자리)
         from sqlalchemy import func
@@ -463,7 +476,7 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
     Returns:
         {"collected": N, "months_covered": N, "complex_name": "..."}
     """
-    from datetime import date, timedelta
+    from datetime import date
 
     from crawler.public_data_api import PublicDataAPI, _normalize_apt_name
 
@@ -496,13 +509,9 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
         if not _N_DANJI_SUFFIX.search(norm_name) and not _has_sibling_n_danji(db, norm_name, sigungu_cd):
             absorb_n_danji = True
 
-        # 소급 대상 월 생성
+        # 소급 대상 월 생성 (세션 421: 달력 달 기준 — 30일 간격 계산의 2월 건너뛰기 결함 수정)
         today = date.today()
-        months = []
-        for delta in range(months_back):
-            d = today.replace(day=1) - timedelta(days=delta * 30)
-            months.append(d.strftime("%Y%m"))
-        months = sorted(set(months))
+        months = _recent_months(today, months_back)
 
         collected = 0
         fetch_failure: str | None = None

@@ -40,6 +40,21 @@ _BATCH_WINDOW_MINUTES = 60
 # 5는 대상 중앙값 0인 단지 상세 카드의 헛바퀴 감지를 사실상 꺼버렸다).
 _DEFAULT_SPINNING_MIN_TOTAL = 1
 
+# 카드 하나가 스케줄 회차 여러 개를 함께 세는 경우(세션 422) — 카드의 scheduler_job_id → 함께 볼 id 들.
+# 단지 관리비 받기는 06:20(kapt_costs)·12:40(kapt_costs_noon) 두 회차가 같은 함수·같은 표를 채운다.
+# 아침 회차가 포털 장애로 실패하고 낮 회차만 성공한 날에도 카드(와 이 함수를 쓰는 monitor 의
+# "자료 오래됨" 경보)가 "받았음"으로 보게 한다. 여기 없는 카드는 옛 동작(단일 id ==) 그대로.
+_CARD_SCHEDULER_IDS: dict[str, tuple[str, ...]] = {
+    "kapt_costs": ("kapt_costs", "kapt_costs_noon"),
+}
+
+
+def _scheduler_id_match(scheduler_job_id: str | tuple[str, ...]):
+    """단일 id 면 ==(옛 동작), 묶음이면 IN — CrawlJob 조회 조건."""
+    if isinstance(scheduler_job_id, tuple):
+        return CrawlJob.scheduler_job_id.in_(scheduler_job_id)
+    return CrawlJob.scheduler_job_id == scheduler_job_id
+
 
 def _to_utc(value):
     """date / naive datetime / aware datetime → tz-aware UTC datetime (또는 None)."""
@@ -64,7 +79,7 @@ def _status(last_updated: datetime | None, expected: int, now: datetime) -> str:
     return "red"
 
 
-def _last_job(db: Session, scheduler_job_id: str) -> dict | None:
+def _last_job(db: Session, scheduler_job_id: str | tuple[str, ...]) -> dict | None:
     """마지막 batch 통계 — 같은 scheduler_job_id 의 잡들이 _BATCH_WINDOW_MINUTES
     안에 연속 실행된 묶음의 processed/total 합산.
 
@@ -77,7 +92,7 @@ def _last_job(db: Session, scheduler_job_id: str) -> dict | None:
     tail = db.execute(
         select(CrawlJob.completed_at, CrawlJob.started_at)
         .where(
-            (CrawlJob.scheduler_job_id == scheduler_job_id)
+            _scheduler_id_match(scheduler_job_id)
             & (CrawlJob.status == "completed"),
         )
         .order_by(CrawlJob.completed_at.desc())
@@ -96,7 +111,7 @@ def _last_job(db: Session, scheduler_job_id: str) -> dict | None:
             func.coalesce(func.sum(CrawlJob.total_items), 0).label("total_sum"),
         )
         .where(
-            (CrawlJob.scheduler_job_id == scheduler_job_id)
+            _scheduler_id_match(scheduler_job_id)
             & (CrawlJob.status == "completed")
             & (CrawlJob.completed_at >= window_start),
         )
@@ -257,7 +272,7 @@ def compute_freshness(db: Session) -> dict:
                 func.max(CrawlJob.completed_at),
                 func.coalesce(func.max(CrawlJob.processed_items), 0),
             ).where(
-                (CrawlJob.scheduler_job_id == "kapt_costs") & (CrawlJob.status == "completed"),
+                _scheduler_id_match(_CARD_SCHEDULER_IDS["kapt_costs"]) & (CrawlJob.status == "completed"),
             )
         ).one(),
     }
@@ -270,7 +285,7 @@ def compute_freshness(db: Session) -> dict:
         sched_id = meta.get("scheduler_job_id")
 
         # 작업 메타 (해당 종목에 정기 job 있는 경우만)
-        job = _last_job(db, sched_id) if sched_id else None
+        job = _last_job(db, _CARD_SCHEDULER_IDS.get(sched_id, sched_id)) if sched_id else None
         job_start = job.get("_started_at_dt") if job else None
 
         # N0: 작업 시작 후 신규 행 수 (가능한 종목만)

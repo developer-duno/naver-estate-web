@@ -539,3 +539,44 @@ def test_job_label_fallback_matches_add_job_names():
         if label != job.name:
             errors.append(f"{job.id}: 폴백 '{label}' != add_job '{job.name}'")
     assert not errors, "알림 폴백 이름이 스케줄러 이름과 다르다:\n  " + "\n  ".join(errors)
+
+
+def _cron_field(job, name: str) -> str:
+    """cron 트리거의 필드 하나를 문자열로 (예: hour → '12')."""
+    return str(next(f for f in job.trigger.fields if f.name == name))
+
+
+def test_kapt_costs_runs_twice_daily_morning_and_noon():
+    """관리비 받기가 06:20·12:40 두 회차로 등록된다 (세션 422).
+
+    아침 시각대에만 K-apt 창구가 간헐 오류(04)를 내 06:20 회차가 사흘 연속 실패했다 →
+    같은 함수·같은 배치로 12:40 에 한 번 더 돈다. 두 회차는 scheduler_job_id 만 다르다
+    (crawl_jobs 행에서 어느 회차인지 구분하고, 신선도 카드는 둘을 함께 센다).
+    뮤테이션: scheduler.py 의 kapt_costs_noon add_job 을 지우면 FAIL.
+    """
+    with patch.object(sched_mod, "KAPT_ENABLED", True):
+        scheduler = sched_mod.create_scheduler()
+    jobs = {job.id: job for job in scheduler.get_jobs()}
+    assert "kapt_costs" in jobs, "kapt_costs(06:20) 미등록"
+    assert "kapt_costs_noon" in jobs, "kapt_costs_noon(12:40) 미등록"
+
+    morning, noon = jobs["kapt_costs"], jobs["kapt_costs_noon"]
+    assert (_cron_field(morning, "hour"), _cron_field(morning, "minute")) == ("6", "20")
+    assert (_cron_field(noon, "hour"), _cron_field(noon, "minute")) == ("12", "40")
+    assert _cron_field(noon, "day_of_week") == "*", "낮 회차가 매일이 아님"
+
+    # 같은 함수·같은 배치 — 다른 것은 scheduler_job_id 하나뿐
+    assert noon.func is morning.func
+    assert noon.kwargs["batch_size"] == morning.kwargs["batch_size"] == sched_mod.KAPT_COST_BATCH_SIZE
+    assert morning.kwargs["scheduler_job_id"] == "kapt_costs"
+    assert noon.kwargs["scheduler_job_id"] == "kapt_costs_noon"
+    assert noon.max_instances == 1
+
+
+def test_kapt_costs_both_runs_absent_when_disabled():
+    """KAPT_ENABLED 꺼짐이면 두 회차 모두 등록되지 않는다."""
+    with patch.object(sched_mod, "KAPT_ENABLED", False):
+        scheduler = sched_mod.create_scheduler()
+    ids = _job_ids(scheduler)
+    assert "kapt_costs" not in ids
+    assert "kapt_costs_noon" not in ids

@@ -109,7 +109,8 @@ describe("CollectorTrigger — 마지막 실행·결과 한 줄", () => {
       ]),
     );
     renderIt();
-    const fail = await screen.findByText("마지막 실행: 26분 전 실패 — 포털 오류 04");
+    // kapt-costs 는 extraSchedulerJobIds(kapt_costs_noon) 를 보는 카드라 시작 시각이 붙는다(세션 423)
+    const fail = await screen.findByText("마지막 실행(06:20 시작): 26분 전 실패 — 포털 오류 04");
     // 원문은 마우스를 올리면
     expect(fail.parentElement).toHaveAttribute("title", "API error resultCode=04");
     expect(btn("단지 관리비 받기").querySelector(".bg-red-500")).not.toBeNull();
@@ -121,18 +122,21 @@ describe("CollectorTrigger — 마지막 실행·결과 한 줄", () => {
   });
 
   it("지금 도는 중이면 버튼이 잠기고 '이미 도는 중' — 눌러도 API 를 부르지 않는다", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
     mockStatus.mockResolvedValue(
       statusWith([
         mkJob("kapt_costs", {
           status: "running",
-          started_at: new Date(Date.now() - 5 * 60_000).toISOString(),
+          started_at: new Date(NOW.getTime() - 5 * 60_000).toISOString(),
           total_items: 750,
           processed_items: 10,
         }),
       ]),
     );
     renderIt();
-    await screen.findByText("지금 도는 중 (5분 전 시작)");
+    // kapt-costs 는 extraSchedulerJobIds 를 보는 카드라 상대시각 대신 시작 시각이 붙는다(세션 423)
+    await screen.findByText("지금 도는 중 (06:55 시작)");
     expect(screen.getByText("이미 도는 중이라 지금은 누를 수 없어요")).toBeInTheDocument();
     const b = btn("단지 관리비 받기");
     expect(b).toBeDisabled();
@@ -141,6 +145,78 @@ describe("CollectorTrigger — 마지막 실행·결과 한 줄", () => {
     expect(mockTrigger).not.toHaveBeenCalled();
     // 다른 버튼은 그대로 누를 수 있다
     expect(btn("동네 범죄 통계 받기")).not.toBeDisabled();
+  });
+});
+
+describe("CollectorTrigger — 관리비 두 회차 (세션 423)", () => {
+  it("12:40 회차가 더 늦게 시작했으면 그 결과 + (12:40 시작) 을 보여준다", async () => {
+    const AFTERNOON = new Date("2026-09-26T14:00:00+09:00"); // 12:40 회차가 이미 끝난 뒤 시점
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(AFTERNOON);
+    mockStatus.mockResolvedValue(
+      statusWith([
+        mkJob("kapt_costs", {
+          status: "failed",
+          started_at: "2026-09-26T06:20:00+09:00",
+          completed_at: "2026-09-26T06:34:00+09:00",
+          total_items: 0,
+          processed_items: 0,
+          error_plain: "포털 오류 04",
+        }),
+        mkJob("kapt_costs_noon", {
+          status: "completed",
+          started_at: "2026-09-26T12:40:00+09:00",
+          completed_at: "2026-09-26T13:00:00+09:00",
+          total_items: 1012,
+          processed_items: 500,
+        }),
+      ]),
+    );
+    renderIt();
+    expect(await screen.findByText("마지막 실행(12:40 시작): 1시간 전 · 완료 (500/1,012건)")).toBeInTheDocument();
+    // 06:20 실패 문구는 안 보인다 — 더 늦은 12:40 결과로 대체된다
+    expect(screen.queryByText(/포털 오류 04/)).toBeNull();
+  });
+
+  it("12:40 회차가 도는 중이면 (12:40 시작) 과 함께 버튼이 잠긴다", async () => {
+    mockStatus.mockResolvedValue(
+      statusWith([
+        mkJob("kapt_costs", {
+          status: "completed",
+          started_at: "2026-09-26T06:20:00+09:00",
+          completed_at: "2026-09-26T06:34:00+09:00",
+          total_items: 500,
+          processed_items: 500,
+        }),
+        mkJob("kapt_costs_noon", {
+          status: "running",
+          started_at: new Date(Date.now() - 5 * 60_000).toISOString(),
+          total_items: 1012,
+          processed_items: 10,
+        }),
+      ]),
+    );
+    renderIt();
+    await screen.findByText(/지금 도는 중 \(\d{2}:\d{2} 시작\)/);
+    expect(btn("단지 관리비 받기")).toBeDisabled();
+  });
+
+  it("다른 7개 카드는 글자 그대로다 (허용치 0)", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    mockStatus.mockResolvedValue(
+      statusWith([
+        mkJob("collect_metrics", {
+          status: "completed",
+          completed_at: "2026-09-26T04:30:00+09:00",
+          total_items: 1200,
+          processed_items: 1200,
+        }),
+      ]),
+    );
+    renderIt();
+    expect(await screen.findByText("마지막 자동 실행: 2시간 전 · 완료 (1,200/1,200건)")).toBeInTheDocument();
+    expect(screen.queryByText(/\(\d{2}:\d{2} 시작\)/)).toBeNull();
   });
 });
 

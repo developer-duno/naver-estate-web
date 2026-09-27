@@ -8,6 +8,9 @@
  *                 짝꿍 = backend/routers/admin/collect.py `_COLLECTOR_JOB_TYPE`(중복 실행 409 판정에 쓰인다) —
  *                 한쪽을 바꾸면 양쪽을 같이 바꾼다. 짝 단위 대조 = backend/tests/test_admin_collect_background.py
  * - schedulerJobId : 마지막 실행·결과를 읽어 올 scheduler-status 의 잡 id (crawler/scheduler.py)
+ * - extraSchedulerJobIds : 같은 버튼이 여러 예약 잡의 결과를 함께 보는 경우(예: 관리비 06:20/12:40
+ *                 두 회차) 그 나머지 잡 id. 있으면 여러 잡의 last_run 중 더 늦게 시작한 것을 보여주고,
+ *                 머리말 뒤에 "(HH:MM 시작)" 을 붙여 어느 회차인지 밝힌다(세션 423).
  * - manualCounted  : 이 버튼으로 돌린 실행도 그 잡 id 로 기록되는가.
  *                 false 인 둘(backfill-price·metrics)은 BE 가 수동 실행에 잡 id 를 붙이지 않아
  *                 scheduler-status 에는 자동 실행만 보인다 → 화면에 "마지막 자동 실행" 이라고 적는다.
@@ -32,6 +35,8 @@ export interface CollectorDef {
   name: CollectorName;
   jobType: string;
   schedulerJobId: string;
+  /** 같은 버튼이 함께 보는 다른 예약 잡 id (세션 423 — 관리비 06:20/12:40 두 회차) */
+  extraSchedulerJobIds?: string[];
   manualCounted: boolean;
   description: string;
   long: boolean;
@@ -108,6 +113,7 @@ export const COLLECTORS: readonly CollectorDef[] = [
     name: "kapt-costs",
     jobType: "kapt_costs",
     schedulerJobId: "kapt_costs",
+    extraSchedulerJobIds: ["kapt_costs_noon"],
     manualCounted: true,
     description: "짝지어진 단지 500곳의 새로 나온 달 관리비를 받아요",
     long: true,
@@ -128,20 +134,59 @@ export interface LastRunSummary {
   raw?: string;
 }
 
-/** scheduler-status 의 마지막 실행 → 버튼 아래 한 줄 */
+/**
+ * 여러 예약 잡의 마지막 실행 중 실제로 더 늦게 시작한 것을 고른다(세션 423 — 관리비 06:20/12:40).
+ * null/undefined 는 무시. started_at 을 못 읽으면(Date.parse 실패) 그 실행은 가장 옛것으로 친다.
+ * 시각이 같거나 전부 못 읽으면 앞쪽(배열 순서상 먼저 온 것 = schedulerJobId)을 쓴다.
+ */
+export function pickLatestRun(
+  runs: Array<SchedulerLastRun | null | undefined>,
+): SchedulerLastRun | null {
+  let best: SchedulerLastRun | null = null;
+  let bestTime = -Infinity;
+  for (const run of runs) {
+    if (!run) continue;
+    const t = run.started_at ? Date.parse(run.started_at) : NaN;
+    const time = Number.isNaN(t) ? -Infinity : t;
+    if (!best || time > bestTime) {
+      best = run;
+      bestTime = time;
+    }
+  }
+  return best;
+}
+
+/** 한국 시각 "HH:MM" — RunningJobsLine.tsx startedText 와 같은 옵션(영문 AM/PM 회피) */
+function startClockKo(iso?: string): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleTimeString("ko", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Asia/Seoul" });
+}
+
+/**
+ * scheduler-status 의 마지막 실행 → 버튼 아래 한 줄.
+ * showStartClock 이 참이고 시작 시각을 읽을 수 있을 때만 머리말·"도는 중" 문구 뒤에
+ * "(HH:MM 시작)" 을 붙인다 — 잡 id 를 여러 개 보는 카드(관리비)에서 어느 회차인지 밝히기 위함.
+ */
 export function describeLastRun(
   lastRun: SchedulerLastRun | null | undefined,
   manualCounted: boolean,
   now: Date = new Date(),
+  showStartClock: boolean = false,
 ): LastRunSummary {
-  const head = manualCounted ? "마지막 실행" : "마지막 자동 실행";
-  if (!lastRun) return { text: `${head}: 기록 없음`, tone: "none", running: false };
+  const baseHead = manualCounted ? "마지막 실행" : "마지막 자동 실행";
+  if (!lastRun) return { text: `${baseHead}: 기록 없음`, tone: "none", running: false };
+  const clock = showStartClock ? startClockKo(lastRun.started_at) : null;
+  const head = clock ? `${baseHead}(${clock} 시작)` : baseHead;
   const startedRel = formatRelativeKo(lastRun.started_at, now);
   const endRel = formatRelativeKo(lastRun.completed_at ?? lastRun.started_at, now);
   switch (lastRun.status) {
     case "running":
-    case "pending":
-      return { text: `지금 도는 중 (${startedRel} 시작)`, tone: "running", running: true };
+    case "pending": {
+      const runningClock = clock ? ` (${clock} 시작)` : ` (${startedRel} 시작)`;
+      return { text: `지금 도는 중${runningClock}`, tone: "running", running: true };
+    }
     case "completed": {
       const total = lastRun.total_items ?? 0;
       const done = lastRun.processed_items ?? 0;

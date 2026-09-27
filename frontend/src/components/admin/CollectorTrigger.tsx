@@ -17,7 +17,7 @@ import { getSchedulerStatus, triggerCollection } from "@/lib/api";
 import { ApiError } from "@/lib/api/core";
 import { queryKeys } from "@/lib/query-keys";
 import { jobTypeLabel } from "@/lib/crawl-job-labels";
-import { COLLECTORS, describeLastRun, type CollectorDef, type CollectorName } from "@/lib/admin/collectors";
+import { COLLECTORS, describeLastRun, pickLatestRun, type CollectorDef, type CollectorName } from "@/lib/admin/collectors";
 import AdminCard from "./AdminCard";
 
 const HELP =
@@ -83,8 +83,9 @@ export default function CollectorTrigger({ token, getToken }: CollectorTriggerPr
         {COLLECTORS.map((c) => {
           const result = results[c.name];
           const isLoading = mutation.isPending && mutation.variables?.name === c.name;
-          const job = jobsById.get(c.schedulerJobId);
-          const last = statusQuery.data ? describeLastRun(job?.last_run, c.manualCounted) : null;
+          const ids = [c.schedulerJobId, ...(c.extraSchedulerJobIds ?? [])];
+          const run = pickLatestRun(ids.map((id) => jobsById.get(id)?.last_run));
+          const last = statusQuery.data ? describeLastRun(run, c.manualCounted, undefined, ids.length > 1) : null;
           const alreadyRunning = !!last?.running;
           return (
             <button

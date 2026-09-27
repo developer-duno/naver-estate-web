@@ -233,6 +233,7 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
     # lazy import — import chain 실패 방지
     from crawler.public_data_api import PublicDataAPI, _normalize_apt_name
 
+    PublicDataAPI.clear_trade_cache()  # 지난 회차(소급 포함)가 받아 둔 달을 재사용하지 않는다(세션 422)
     db = SessionLocal()
 
     # 재개(resume) — 직전 실행이 중단(failed/cancelled)됐다면 그 체크포인트를 이어받는다.
@@ -470,6 +471,7 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
     finally:
         db.close()
         watch.log_end()  # DB 를 닫은 뒤 — 로그가 실패해도 연결은 이미 반납됐다(세션 422)
+        PublicDataAPI.clear_trade_cache()  # 받은 거래 수십만 건을 다음 재시작까지 쥐고 있지 않는다(세션 422)
 
 
 def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
@@ -615,6 +617,8 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
     from db.models import ComplexPriceHistory
 
     months_back = 24  # 단지당 소급 달 수 — 예상 호출 수(남은 횟수 경보)에도 같은 값을 쓴다
+    # 캐시는 이 배치 안에서만 단지끼리 나눠 쓴다 — 어제 배치·지난 주간 회차 것은 버린다(세션 422)
+    PublicDataAPI.clear_trade_cache()
     db = SessionLocal()
     # 어드민 scheduler-status 는 CrawlJob(scheduler_job_id) 최신 행으로 last_run 을
     # 보여준다 — 본 함수만 기록이 없어 화면에 항상 last_run: null 로 떠 실행 여부를
@@ -762,3 +766,4 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
     finally:
         db.close()
         watch.log_end()  # DB 를 닫은 뒤 — 로그가 실패해도 연결은 이미 반납됐다(세션 422)
+        PublicDataAPI.clear_trade_cache()  # 회차가 끝나면 메모리 반납(세션 422)

@@ -315,16 +315,24 @@ class PublicDataAPI:
     # 정확히 같은 API 응답을 매번 새로 받아옴 — data.go.kr 하루 10,000회 쿼터
     # 중 실제로는 4.8%만 쓰면서도 이 낭비 때문에 배치를 못 키우고 있었다).
     # 프로세스 내 메모리 캐시 — TTL 없음(과거 월 실거래는 사후 변경 없음, 당월만
-    # 예외적으로 갱신될 수 있으나 이 캐시는 한 배치 실행(1회 프로세스) 동안만
-    # 유효해 재시작 때마다 자연 초기화됨).
+    # 예외적으로 갱신될 수 있다). 한 수집 회차 안에서만 쓴다 — 두 수집기
+    # (collect_public_trade_data·backfill_price_batch)가 시작·끝에 clear_trade_cache() 로
+    # 비운다(세션 422 — 옛 주석은 재시작으로 초기화된다고 했으나 백엔드는 며칠씩 떠 있어
+    # 다음 회차가 지난 회차의 달 목록을 그대로 재사용해 새 거래를 못 받았다).
     _trade_cache: dict[tuple[str, str], list[dict]] = {}
     _trade_cache_lock = threading.Lock()
+
+    @classmethod
+    def clear_trade_cache(cls) -> None:
+        """거래 캐시만 비운다 — 세션·일일 카운터·rate_limit 은 그대로(reset() 과 다름)."""
+        with cls._trade_cache_lock:
+            cls._trade_cache.clear()
 
     @classmethod
     def get_all_apt_trades(cls, lawd_cd: str, deal_ymd: str) -> list[dict] | None:
         """아파트 매매 실거래가 전체 페이지 조회 (페이징 자동 처리, 캐싱).
 
-        같은 (lawd_cd, deal_ymd) 조합은 프로세스 생존 동안 1회만 API 호출 —
+        같은 (lawd_cd, deal_ymd) 조합은 한 수집 회차 안에서 1회만 API 호출 —
         같은 시군구의 여러 단지가 소급 수집될 때 중복 호출을 없앤다.
 
         Returns:

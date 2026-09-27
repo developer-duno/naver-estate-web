@@ -1006,12 +1006,17 @@ class TestCollectAirQuality:
         """매월 10일 토요일에도 건너뛰지 않고 수집한다 (세션 422 — 건너뛰기 규칙 삭제, #608 과 같은 결정).
 
         옛 규칙은 미분양 사이트 building-info 와 창구 한도가 겹친다는 전제였는데, 그 호출은
-        K-apt 창구(별도 카운터)라 전제가 사라졌다. 날짜를 2026-10-10(토)으로 고정해 두고,
-        측정소 API 가 실제로 불리고 취소(cancelled) 행이 하나도 없는지 본다.
+        K-apt 창구(별도 카운터)라 전제가 사라졌다. 측정소 API 가 실제로 불리고 취소(cancelled)
+        행이 하나도 없는지 본다.
+        ⚠ 고정 날짜(`patch("datetime.date")`)는 함수 **안에서** 날짜를 가져오는 코드에만 닿는다 —
+        파일 맨 위 `from datetime import date` 로 되살리면 실제 날짜가 쓰여 이 수집 단언은 통과한다
+        (세션 422 검사관 변이 M1). 그래서 재도입은 맨 아래 **소스 검사**(세 모듈에 요일 판정 0건)가 막는다.
         """
         import inspect
 
         import crawler.env_air as env_air
+        import crawler.env_childcare as env_childcare
+        import crawler.env_common as env_common
 
         class _Sat10(date):
             @classmethod
@@ -1033,8 +1038,11 @@ class TestCollectAirQuality:
         mock_station.assert_called_once()
         jobs = db.query(CrawlJob).filter_by(job_type="air_quality").all()
         assert [j.status for j in jobs] == ["completed"], [(j.status, j.error_message) for j in jobs]
-        # 날짜 분기가 코드에 다시 들어오면 위 고정 날짜와 무관하게 여기서 잡힌다
-        assert "_is_skip_day" not in inspect.getsource(env_air)
+        # 요일·날짜로 건너뛰는 분기가 다시 들어오면 이름과 무관하게 여기서 잡힌다
+        for mod in (env_air, env_childcare, env_common):
+            src = inspect.getsource(mod)
+            for needle in ("_is_skip_day", "weekday(", "date.today("):
+                assert needle not in src, f"{mod.__name__} 에 날짜 건너뛰기 흔적: {needle}"
 
     def test_전역_장애_job_failed(self, db):
         """배치 전역(per-단지 try 밖) 장애 시 _fail_job 으로 CrawlJob failed 기록.

@@ -27,6 +27,8 @@ def test_collect_officetel_presale_skips_when_key_missing(db):
     )
     assert job is not None
     assert job.status == "cancelled"
+    # 관리자 화면에 그대로 보이는 사유 — 환경 변수 이름 같은 개발자 말 대신 우리말(세션 423)
+    assert job.error_message == "정부 자료 열쇠가 설정돼 있지 않아 건너뜀"
 
 
 def test_collect_officetel_presale_upserts_matched_apartment(db):

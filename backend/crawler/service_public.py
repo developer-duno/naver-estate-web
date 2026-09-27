@@ -233,6 +233,7 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
     # lazy import — import chain 실패 방지
     from crawler.public_data_api import PublicDataAPI, _normalize_apt_name
 
+    PublicDataAPI.clear_trade_cache()  # 지난 회차(소급 포함)가 받아 둔 달을 재사용하지 않는다(세션 422)
     db = SessionLocal()
 
     # 재개(resume) — 직전 실행이 중단(failed/cancelled)됐다면 그 체크포인트를 이어받는다.
@@ -468,6 +469,8 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
             fail_job_safely(job_id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
         logger.exception("공공데이터 수집 실패")
     finally:
+        # 첫 줄 — 아래 close/log_end 가 던져도 받은 거래 수십만 건은 반납된다(세션 422)
+        PublicDataAPI.clear_trade_cache()
         db.close()
         watch.log_end()  # DB 를 닫은 뒤 — 로그가 실패해도 연결은 이미 반납됐다(세션 422)
 
@@ -602,10 +605,16 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
 PUBLIC_DATA_RETRY_COOLDOWN_DAYS = 90
 
 
-def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = None):
+def backfill_price_batch(
+    batch_size: int = 20, scheduler_job_id: str | None = None, clear_cache: bool = True,
+):
     """가격 이력이 부족한 상위 단지 일괄 소급 수집.
 
     선정 기준: 세대수 상위 + price_history 6개월 미만 + 최근 90일 내 미시도 단지.
+
+    clear_cache: 기본 True — 시작·끝에서 실거래가 캐시를 비운다(스케줄러 경로). 배치를 반복
+    호출하는 일회성 스크립트만 False 로 넘겨 배치 사이에 캐시를 나눠 쓰고, 스크립트가 끝날 때
+    한 번 비운다(세션 422).
     """
     from datetime import timedelta
 
@@ -615,6 +624,9 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
     from db.models import ComplexPriceHistory
 
     months_back = 24  # 단지당 소급 달 수 — 예상 호출 수(남은 횟수 경보)에도 같은 값을 쓴다
+    if clear_cache:
+        # 캐시는 이 배치 안에서만 단지끼리 나눠 쓴다 — 어제 배치·지난 주간 회차 것은 버린다(세션 422)
+        PublicDataAPI.clear_trade_cache()
     db = SessionLocal()
     # 어드민 scheduler-status 는 CrawlJob(scheduler_job_id) 최신 행으로 last_run 을
     # 보여준다 — 본 함수만 기록이 없어 화면에 항상 last_run: null 로 떠 실행 여부를
@@ -760,5 +772,8 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
         logger.exception("소급 배치 실패")
         return {"success": 0, "failed": 0, "total": 0, "error": str(e)[:200]}
     finally:
+        if clear_cache:
+            # 첫 줄 — 아래 close/log_end 가 던져도 메모리는 반납된다(세션 422)
+            PublicDataAPI.clear_trade_cache()
         db.close()
         watch.log_end()  # DB 를 닫은 뒤 — 로그가 실패해도 연결은 이미 반납됐다(세션 422)

@@ -4,6 +4,8 @@
 쿼터(mibunyang과 공유) 중 최대 480회(20개 x 24개월)만 써서 4.8%만 사용 중이었다.
 같은 시군구 여러 단지가 (lawd_cd, deal_ymd) 를 중복 호출하는 낭비도 있었는데
 public_data_api.py 에 프로세스 내 캐시를 추가해 해소했다(세션 359).
+배치 사이 캐시 공유 — 배치마다 clear_cache=False 로 넘기고, 스크립트가 끝날 때 한 번
+비운다(세션 422: 스케줄러 경로는 배치 시작·끝마다 비운다).
 
 아직 A1(매매) 시세 이력이 없는 아파트 23,036개(세대수/법정동코드 보유, 정상
 backfill 대상)를 오늘 하루 안에 처리한다. PublicDataAPI._check_daily_limit
@@ -114,6 +116,7 @@ if __name__ == "__main__":
         print(f"--- 배치 {round_no}회차 시작 (남은 {remaining}개) ---")
         result = backfill_price_batch(
             batch_size=BATCH_SIZE, scheduler_job_id="backfill_apartment_public_data",
+            clear_cache=False,  # 배치 사이 캐시 공유 — 끝에서 한 번 비운다(세션 422)
         )
 
         db = SessionLocal()
@@ -154,4 +157,7 @@ if __name__ == "__main__":
         if remaining > 0:
             time.sleep(BATCH_PAUSE_SEC)
 
+    from crawler.public_data_api import PublicDataAPI
+
+    PublicDataAPI.clear_trade_cache()  # 배치 사이에 나눠 쓴 캐시를 스크립트 끝에서 한 번 비운다(세션 422)
     print(f"=== 종료 — 남은 {remaining}개 ===")

@@ -38,9 +38,13 @@ class _FakeWindow:
 
     def __init__(self):
         self.requested: list[tuple[str, str]] = []
+        self.fail_from_nth: int | None = None  # 시군구마다 n번째 호출(0부터)부터 실패(None)
 
     def get_apt_trades(self, lawd_cd, deal_ymd, *args, **kwargs):
+        nth = sum(1 for lawd, _ in self.requested if lawd == lawd_cd)
         self.requested.append((lawd_cd, deal_ymd))
+        if self.fail_from_nth is not None and nth >= self.fail_from_nth:
+            return None
         return _EMPTY_ENVELOPE
 
 
@@ -84,9 +88,9 @@ def _run_weekly():
     collect_public_trade_data(batch_size=50, scheduler_job_id="collect_public_trades")
 
 
-def _run_batch():
+def _run_batch(**kwargs):
     from crawler.service_public import backfill_price_batch
-    return backfill_price_batch(batch_size=20, scheduler_job_id="backfill_price")
+    return backfill_price_batch(batch_size=20, scheduler_job_id="backfill_price", **kwargs)
 
 
 def _clear_attempted(db):
@@ -171,5 +175,89 @@ def test_clear_trade_cache는_일일_카운터와_rate_limit을_건드리지_않
         assert PublicDataAPI._daily_call_count == 777, "자체 한도 카운터가 0 이 되면 일일 게이트가 풀린다"
         assert PublicDataAPI.last_rate_limit() == rl
         assert PublicDataAPI.last_failure_kind() == "quota"
+    finally:
+        PublicDataAPI.reset()
+
+
+# ── 보완(세션 422 검사관 A-5·C-5): 정상 반환이 아닌 경로에서도 비운다 ──────────
+
+
+def test_주간_연속실패_중단_return_경로에서도_캐시를_비운다(db, window):
+    """시군구마다 첫 달은 받아(캐시에 들어감) 둘째 달에서 실패 → 연속 실패 중단 후
+    failed 마감 return. 끝 비우기가 finally 가 아니라 정상 완료 경로에만 있으면 캐시가 남는다."""
+    from crawler.public_data_api import PublicDataAPI
+    from crawler.service_public import PUBLIC_TRADE_ABORT_AFTER_SIGUNGU
+    from db.models import CrawlJob
+    for k in range(PUBLIC_TRADE_ABORT_AFTER_SIGUNGU):
+        code = f"{11000 + k * 10:05d}"
+        db.add(Complex(complex_no=f"R{k}", complex_name=f"중단단지{k}", cortar_no=code + "00000"))
+    db.commit()
+    window.fail_from_nth = 1
+
+    probe: list[int] = []
+    real_clear = PublicDataAPI.clear_trade_cache.__func__
+
+    def _probe_clear(cls):
+        probe.append(len(cls._trade_cache))  # 비우기 직전 크기 — 탐침
+        real_clear(cls)
+
+    with patch.object(PublicDataAPI, "clear_trade_cache", classmethod(_probe_clear)):
+        _run_weekly()
+
+    db.expire_all()
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "public_trade_data").one()
+    assert job.status == "failed" and "중단" in (job.error_message or ""), job.error_message
+    assert probe[-1] == PUBLIC_TRADE_ABORT_AFTER_SIGUNGU, f"끝 비우기가 받은 달을 비워야 한다: {probe}"
+    assert not PublicDataAPI._trade_cache
+
+
+def test_소급_배치_바깥_예외_경로에서도_캐시를_비운다(db, window):
+    """첫 단지가 24개월을 받아 캐시를 채운 뒤, 둘째 단지 직전 예산 조회가 던져 바깥 except 로 끝난다."""
+    from crawler.public_data_api import PublicDataAPI
+    _add_complexes(db, 2)
+
+    with patch("crawler.quota_db.get_api_quota_status",
+               side_effect=[{"remaining": 5000, "count": 0, "limit": 9000}, RuntimeError("시험용 예외")]):
+        result = _run_batch()
+
+    assert "error" in result, result
+    assert len(window.requested) == 24, "첫 단지는 받았다(캐시가 찼다)"
+    assert not PublicDataAPI._trade_cache, "바깥 예외로 끝나도 캐시를 비운다"
+
+
+def test_clear_cache_False면_두_배치_사이_캐시를_나눠_쓴다(db, window):
+    """일회성 스크립트 경로 — 배치를 반복 호출하며 캐시를 유지한다."""
+    from crawler.public_data_api import PublicDataAPI
+    _add_complexes(db, 1)
+
+    _run_batch(clear_cache=False)
+    assert len(window.requested) == 24
+    assert PublicDataAPI._trade_cache, "clear_cache=False 면 끝에서 비우지 않는다"
+
+    _clear_attempted(db)
+    window.requested.clear()
+    result = _run_batch(clear_cache=False)
+
+    assert result["success"] == 1
+    assert window.requested == [], "같은 (시군구, 달)은 두 번째 배치에서 창구를 부르지 않는다"
+
+
+def test_캐시_비움_로그는_달과_거래_수를_찍는다(caplog):
+    import logging
+
+    from crawler.public_data_api import PublicDataAPI
+    PublicDataAPI.reset()
+    caplog.set_level(logging.INFO, logger="crawler.public_data_api")
+    try:
+        PublicDataAPI._trade_cache[("11680", "202602")] = [{"a": 1}, {"a": 2}]
+        PublicDataAPI._trade_cache[("11680", "202603")] = [{"a": 3}]
+        PublicDataAPI.clear_trade_cache()
+        PublicDataAPI.clear_trade_cache()  # 비어 있어도 0·0 을 찍는다(새 코드가 도는 증거)
+
+        lines = [r.getMessage() for r in caplog.records if "실거래가 캐시 비움" in r.getMessage()]
+        assert lines == [
+            "[정부 실거래가] 실거래가 캐시 비움: 달 2개·거래 3건",
+            "[정부 실거래가] 실거래가 캐시 비움: 달 0개·거래 0건",
+        ], lines
     finally:
         PublicDataAPI.reset()

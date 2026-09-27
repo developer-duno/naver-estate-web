@@ -324,9 +324,16 @@ class PublicDataAPI:
 
     @classmethod
     def clear_trade_cache(cls) -> None:
-        """거래 캐시만 비운다 — 세션·일일 카운터·rate_limit 은 그대로(reset() 과 다름)."""
+        """거래 캐시만 비운다 — 세션·일일 카운터·rate_limit 은 그대로(reset() 과 다름).
+
+        비우기 전 크기를 로그 한 줄로 남긴다(비어 있어도 0·0) — 재시작 뒤 첫 소급 로그에
+        이 줄이 보이면 새 코드가 돈다는 증거다(세션 422).
+        """
         with cls._trade_cache_lock:
+            months = len(cls._trade_cache)
+            trades = sum(len(v) for v in cls._trade_cache.values())
             cls._trade_cache.clear()
+        logger.info("[정부 실거래가] 실거래가 캐시 비움: 달 %d개·거래 %d건", months, trades)
 
     @classmethod
     def get_all_apt_trades(cls, lawd_cd: str, deal_ymd: str) -> list[dict] | None:

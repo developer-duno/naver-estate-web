@@ -156,8 +156,8 @@ def _alert_if_short(job_type: str, rl: dict, expected: int, upper_bound: bool) -
                 "이 열쇠는 KOSPI·미분양 사이트와 같이 씁니다 — 오늘 그쪽 수집이 먼저 돌았는지 봐 주세요."
             )
         logger.warning(
-            "[정부 실거래가] 창구 남은 횟수 부족: %s, 이번 회차 예상 %s%d번 (여유 %s 포함 문턱 %s번)",
-            _fmt_remaining(rl), "최대 " if upper_bound else "", expected,
+            "[정부 실거래가] 창구 남은 횟수 부족: %s, 이번 회차 예상 %s%s번 (여유 %s 포함 문턱 %s번)",
+            _fmt_remaining(rl), "최대 " if upper_bound else "", f"{expected:,}",
             f"{_REMAINING_MARGIN:,}", f"{threshold:,}",
         )
         try:
@@ -276,8 +276,9 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
     db.add(job)
     db.commit()
     job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
-    # upper_bound=True: 캐시 적중분을 미리 뺄 수 없어 소급과 같은 "최대 약" 표현을 쓴다(세션 422)
-    watch = _RemainingWatch(PublicDataAPI, "public_trade_data", upper_bound=True)
+    # upper_bound=False: 주간은 (시군구, 달) 조합이 겹치지 않아 캐시로 줄 몫이 없고, 여러 쪽 달은
+    # 더 쓰므로 예상은 상한이 아니라 하한 쪽이다 — "약" 표현, 초과분은 여유 1,000 이 덮는다(세션 422)
+    watch = _RemainingWatch(PublicDataAPI, "public_trade_data", upper_bound=False)
 
     try:
         # 수집 대상 월: 최근 24개월 (차트 분별력 확보, 일일 한도 10,000회 충분)

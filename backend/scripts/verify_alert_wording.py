@@ -241,7 +241,7 @@ def main() -> int:
     import crawler.service_public as sp
 
     for i, (job_type, upper, need_word) in enumerate(
-        [("public_trade_data", True, "최대 약 6,000번"), ("price_backfill", True, "최대 약 6,000번")], 1,
+        [("public_trade_data", False, "약 6,000번"), ("price_backfill", True, "최대 약 6,000번")], 1,
     ):
         with patch("services.telegram.send_telegram") as tg:
             sp._alert_if_short(job_type, {"remaining": 4910, "limit": 10000, "at": now}, 6000, upper)

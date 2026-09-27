@@ -138,15 +138,18 @@ def _add_regions(db, n: int):
     db.commit()
 
 
-def _run_weekly(window: _FakeWindow, after_reset=None):
+def _run_weekly(window: _FakeWindow, after_reset=None, requested: list | None = None):
     """after_reset: PublicDataAPI.reset() 직후·수집 시작 전에 부르는 콜백(선택).
-    T1 처럼 '회차 시작 전'의 낡은 값을 심는 자리가 필요할 때 쓴다."""
+    T1 처럼 '회차 시작 전'의 낡은 값을 심는 자리가 필요할 때 쓴다.
+    requested: 주면 창구에 요청한 달(YYYYMM)을 차례로 담는다(선택)."""
     from crawler.public_data_api import PublicDataAPI
     PublicDataAPI.reset()
     if after_reset is not None:
         after_reset()
 
     def _fake(lawd_cd, deal_ymd):
+        if requested is not None:
+            requested.append(deal_ymd)
         window.hit()
         return []  # 정상 빈 달
 
@@ -273,8 +276,9 @@ def test_c_주간_남은_횟수가_예상보다_적으면_텔레그램_1회(db, 
     _assert_plain_alert(text)
     assert "10번뿐" in text and "하루 한도 10,000번" in text
     # 주간 = 실제 반복 대상 (시군구 × 월) — 가짜 창구가 받은 호출 수와 같다(전부 빈 달이라 1콜씩)
-    # 세션 422: 주간도 캐시 적중분을 미리 뺄 수 없어 소급과 같은 "최대 약" 표현
-    assert f"최대 약 {window.calls:,}번이 필요" in text
+    # 주간은 (시군구, 달) 조합이 겹치지 않아 예상이 상한이 아니다 — "약" 표현(세션 422 검사관 A)
+    assert f"약 {window.calls:,}번이 필요" in text
+    assert "최대 약" not in text
     assert "정부 실거래가 받기" in text
     assert any(r.levelno == logging.WARNING and "남은 횟수 부족" in r.getMessage() for r in caplog.records)
 
@@ -354,7 +358,8 @@ def test_d_남은_횟수가_예상보다_많아도_여유_1000_안이면_알림(
     _assert_plain_alert(text)
     # 알림 문구는 예상값을 그대로 보인다(여유분은 문구에 안 섞는다)
     assert f"{expected + 500:,}번뿐" in text
-    assert f"최대 약 {expected:,}번이 필요" in text
+    assert f"약 {expected:,}번이 필요" in text
+    assert "최대 약" not in text
     warn = [r.getMessage() for r in caplog.records
             if r.levelno == logging.WARNING and "남은 횟수 부족" in r.getMessage()]
     assert len(warn) == 1
@@ -368,6 +373,52 @@ def test_d_남은_횟수가_예상_더하기_여유보다_많으면_알림_없�
     tg = _run_weekly(_FakeWindow(expected + 1500))
 
     assert tg.call_count == 0
+
+
+def test_d_문턱_경계_남은이_예상_더하기_1000이면_알림_없음(db):
+    """문턱은 "남은 < 예상 + 1,000" — 딱 같으면 조용하다(변이 < → <= 를 잡는다)."""
+    _add_regions(db, 3)
+    expected = 3 * 24
+
+    tg = _run_weekly(_FakeWindow(expected + 1000))
+
+    assert tg.call_count == 0
+
+
+def test_d_문턱_경계_남은이_예상_더하기_999면_알림(db):
+    _add_regions(db, 3)
+    expected = 3 * 24
+
+    tg = _run_weekly(_FakeWindow(expected + 999))
+
+    assert tg.call_count == 1
+
+
+@pytest.mark.parametrize("upper, head", [(False, "예상 "), (True, "예상 최대 ")])
+def test_d_경고_로그의_두_숫자는_쉼표_표기(caplog, upper, head):
+    """주간 실제 규모(6,072)로 로그를 렌더 — 예상·문턱 둘 다 쉼표로 찍힌다."""
+    from crawler.service_public import _alert_if_short
+    caplog.set_level(logging.INFO, logger=_SVC_LOGGER)
+    rl = {"remaining": 5000, "limit": 10000, "at": datetime.now(timezone.utc)}
+
+    with patch("services.telegram.send_telegram"):
+        _alert_if_short("public_trade_data", rl, 6072, upper)
+
+    warn = [r.getMessage() for r in caplog.records if "남은 횟수 부족" in r.getMessage()]
+    assert len(warn) == 1
+    assert f"{head}6,072번 (여유 1,000 포함 문턱 7,072번)" in warn[0], warn[0]
+
+
+def test_d_주간_수집이_요청한_끝_달은_이번_달(db):
+    """주간 수집의 달 목록 끝 = 코드가 쓰는 오늘(가짜 2026-03-14)이 속한 달.
+    변이 `_recent_months(today, 25)[:-1]`(24개월이지만 한 달씩 과거로 밀림)을 잡는다."""
+    _add_regions(db, 1)
+    requested: list[str] = []
+
+    _run_weekly(_FakeWindow(9755), requested=requested)
+
+    assert max(requested) == "202603", requested
+    assert len(set(requested)) == 24, requested
 
 
 # ── (e) 끝 로그는 DB 를 닫은 뒤 (세션 422) ──────────────────────────────

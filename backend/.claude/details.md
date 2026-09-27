@@ -311,6 +311,10 @@ Linux 메모리 오버커밋 모델상 "커밋이 물리 한도의 2배"라는 �
 3. **결과**: compute_freshness **9.2초 → 0.6초**(부하 8배도 8초 여유). V038·V039 둘 다
    CONCURRENTLY prod 적용완료(락0). ⚠ freshness count 는 **순수 표시용**(status=시각 기반,
    spinning=crawl_jobs 기반) — 근사 오차가 알림 오판 유발 0.
+   spinning(헛바퀴)은 마지막 회차가 처리 0 이고 대상이 카드별 최소 건수 이상일 때만 켜진다(`routers/admin/freshness.py`,
+   세션 421 #612) — **매물 상세 카드(`article_detail`)만 `spinning_min_total` 5**(`freshness_meta.py`), 나머지 카드는 1(대상
+   1건도 헛바퀴로 잡던 옛 동작 유지). 대상 1건짜리 상한 재시도 매물 회차가 새벽 빨간 경보를 낸 헛경보(09-27 04:17) 대응으로 #612 가
+   전역 5를 뒀다가, 대상 중앙값 0인 단지 상세 카드의 헛바퀴 감지를 꺼버려 같은 PR 보완 커밋에서 카드별 문턱으로 좁혔다. "새 행 0" 조건은 별개로 그대로.
 
 > 교훈: 이 monitor 크래시는 **statement_timeout(8초 안전망)이 오히려 방아쇠**였다 — 폭주
 > 쿼리를 죽이는 게 목적이나, 정상 집계 쿼리가 대형 테이블 성장으로 8초를 넘기면 monitor

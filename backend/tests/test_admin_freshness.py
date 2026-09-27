@@ -461,6 +461,78 @@ def test_freshness_spinning_zero_processed(client, db):
     assert childcare["last_job"]["total_items"] == 100
 
 
+def test_freshness_spinning_small_batch_not_flagged(client, db):
+    """매물 상세(article_detail) processed=0, total=1(대상 1건) → 문턱 미달, 헛바퀴
+    아님 (세션 421 04:13 헛경보 재현: 상한 재시도 매물 1건만 실패한 회차를 빨간
+    경보로 오판하던 것을 방지 — 이 문턱은 article_detail 카드 전용, 세션 421 #612 보완)"""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    _make_completed_job(
+        db, "crawl_details",
+        started_at=now - timedelta(minutes=10), completed_at=now - timedelta(minutes=8),
+        processed=0, total=1,
+    )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    items = res.json()["items"]
+    item = _get_item(items, "article_detail")
+    assert item["spinning"] is False
+    assert item["status"] != "red"
+
+
+def test_freshness_spinning_below_threshold_not_flagged(client, db):
+    """매물 상세(article_detail) processed=0, total=4(문턱 5 미달) → 헛바퀴 아님"""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    _make_completed_job(
+        db, "crawl_details",
+        started_at=now - timedelta(minutes=10), completed_at=now - timedelta(minutes=8),
+        processed=0, total=4,
+    )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    items = res.json()["items"]
+    item = _get_item(items, "article_detail")
+    assert item["spinning"] is False
+    assert item["status"] != "red"
+
+
+def test_freshness_spinning_at_threshold_flagged(client, db):
+    """매물 상세(article_detail) processed=0, total=5(문턱 5 경계값) → 헛바퀴 빨강 격상"""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    _make_completed_job(
+        db, "crawl_details",
+        started_at=now - timedelta(minutes=10), completed_at=now - timedelta(minutes=8),
+        processed=0, total=5,
+    )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    items = res.json()["items"]
+    item = _get_item(items, "article_detail")
+    assert item["spinning"] is True
+    assert item["status"] == "red"
+
+
+def test_freshness_spinning_other_card_no_threshold(client, db):
+    """단지 상세(complex_detail_apt) processed=0, total=1 → 문턱 없음(기본 1)이라
+    옛 동작대로 헛바퀴 빨강 격상 — 전역 문턱 5로는 이 카드의 감지가 꺼져 있었다
+    (대상 중앙값 0·최대 50/11, 세션 421 #612 보완 · 검사관 C 지적)."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    _make_completed_job(
+        db, "complex_detail_APT",
+        started_at=now - timedelta(minutes=10), completed_at=now - timedelta(minutes=8),
+        processed=0, total=1,
+    )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    items = res.json()["items"]
+    item = _get_item(items, "complex_detail_apt")
+    assert item["spinning"] is True
+    assert item["status"] == "red"
+
+
 def test_freshness_articles_new_rows_counted(client, db):
     """매물 크롤 작업 후 articles.created_at>=job_start 신규 행 수 카운트"""
     _make_admin(db)

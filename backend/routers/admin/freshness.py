@@ -33,6 +33,13 @@ _FRESHNESS_CACHE_KEY = "data_freshness"
 # 통째로 들어오고 그 다음 interval (12h) 와는 충분히 구분된다.
 _BATCH_WINDOW_MINUTES = 60
 
+# 헛바퀴 판정 최소 대상 건수 기본값 — 카드별 meta["spinning_min_total"] 이 없으면 이 값(1).
+# 세션 421 04:13 헛경보(매물 상세 회차 #58967 대상1·처리0)는 매물 상세(article_detail)
+# 카드에만 해당하는 사례라, 문턱은 freshness_meta.py 의 그 카드 항목에만 5 로 올려 두고
+# 나머지 카드는 옛 동작(대상 1건도 헛바퀴로 잡음)을 그대로 유지한다(세션 421 #612 보완 — 전역
+# 5는 대상 중앙값 0인 단지 상세 카드의 헛바퀴 감지를 사실상 꺼버렸다).
+_DEFAULT_SPINNING_MIN_TOTAL = 1
+
 
 def _to_utc(value):
     """date / naive datetime / aware datetime → tz-aware UTC datetime (또는 None)."""
@@ -286,8 +293,12 @@ def compute_freshness(db: Session) -> dict:
         status = _status(last_updated, meta["expected_interval_seconds"], now)
         spinning = False
         if job is not None:
-            # processed_items=0 이고 total_items>0 이면 헛바퀴
-            if job["processed_items"] == 0 and job["total_items"] > 0:
+            # processed_items=0 이고 total_items>=문턱 이면 헛바퀴. 문턱은 카드별
+            # meta["spinning_min_total"](없으면 1=옛 동작). 대상이 몇 건뿐인 회차
+            # (상한 재시도 매물 등)만 실패하는 것은 헛바퀴가 아닌 카드만 문턱을
+            # 올려 예외로 둔다(세션 421 04:13 헛경보 — article_detail 카드 한정).
+            min_total = meta.get("spinning_min_total", _DEFAULT_SPINNING_MIN_TOTAL)
+            if job["processed_items"] == 0 and job["total_items"] >= min_total:
                 spinning = True
             # N0 측정 가능 + 작업 후 신규 행 0 + 종목 특성상 신규가 기대되는 경우
             if new_rows is not None and new_rows == 0 and meta.get("new_rows_expected", False):

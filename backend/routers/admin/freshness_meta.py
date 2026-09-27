@@ -141,6 +141,9 @@ FRESHNESS_ITEMS: list[dict] = [
         "scheduler_job_id": "crawl_details",
         "new_rows_kind": None,  # CrawlJob.completed_at 경유(childcare 패턴), created_at 무관
         "new_rows_expected": False,
+        # 세션 421 #612 보완: 상한 재시도 매물(하루 1건)만 실패하는 04:17 회차를 헛바퀴로
+        # 오판했다(#612) — 이 카드만 최소 대상 5건으로 올려 예외. 다른 카드는 문턱 없음(1).
+        "spinning_min_total": 5,
     },
     {
         # 세션 359: 17개 스케줄러 잡 전수조사에서 "시급하지 않음"으로 분류됐던

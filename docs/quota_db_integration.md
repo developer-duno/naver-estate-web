@@ -151,6 +151,8 @@ data.go.kr 를 호출하는 mibunyang collector (각 호출 직전에 카운터 
 - `crawler/service_public.py:38-53` — 매월 10일 토요일이면 즉시 return + crawl_jobs 에 cancelled 기록
 - 헬퍼: `crawler/env_common.py:43-46 _is_skip_day()`
 
+> 개정(세션 421·422): 두 방어 모두 삭제 — collect-building-info 는 K-apt 창구(별도 카운터)라 위 합산 전제가 성립하지 않는다. 정본 = .claude/rules/infra.md 쿼터 표.
+
 **mibunyang 측 권장 대칭 방어**:
 - (a) `collect-building-info.mjs` 진입 시 토요일이면 skip (역방향 — naver 가 이미 매월 10일 토요일을 양보하므로 mibunyang 은 skip 안 해도 되지만, 하나의 가드 더 두면 안전)
 - 또는 (b) 시작 전 선점유 — 위 SQL 로 현재 count 조회 후 9000 - current < 8500 이면 abort. 이게 더 일반적.

@@ -4,8 +4,6 @@
 실제 API 호출 없이 로직만 검증.
 """
 
-from unittest.mock import MagicMock, patch
-
 # ── 에어코리아 유틸 테스트 ──
 
 
@@ -118,27 +116,6 @@ class TestSafeFloat:
 
         assert _safe_float("") is None
         assert _safe_float(None) is None
-
-
-# ── 10일 토요일 skip 로직 테스트 ──
-
-
-class TestSkipDay:
-    """매월 10일 토요일 쿼터 보호 테스트"""
-
-    @patch("crawler.env_common.date")
-    def test_10일_토요일이면_skip(self, mock_date):
-        mock_date.today.return_value = MagicMock(day=10, weekday=MagicMock(return_value=5))
-        from crawler.env_service import _is_skip_day
-
-        assert _is_skip_day() is True
-
-    @patch("crawler.env_common.date")
-    def test_10일_월요일이면_정상(self, mock_date):
-        mock_date.today.return_value = MagicMock(day=10, weekday=MagicMock(return_value=0))
-        from crawler.env_service import _is_skip_day
-
-        assert _is_skip_day() is False
 
 
 # ── _upsert_station 배치 중복 안전성 테스트 ──

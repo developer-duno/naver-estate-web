@@ -15,7 +15,6 @@ from crawler.env_childcare import collect_childcare_data  # noqa: F401
 from crawler.env_common import (  # noqa: F401
     _complete_job,
     _fail_job,
-    _is_skip_day,
     _record_job,
 )
 from crawler.env_crime import collect_crime_stats, load_crime_stats  # noqa: F401

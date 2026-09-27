@@ -1,7 +1,6 @@
-"""환경 데이터 수집 공통 헬퍼 — CrawlJob 기록 + 쿼터 보호"""
+"""환경 데이터 수집 공통 헬퍼 — CrawlJob 기록"""
 
 import logging
-from datetime import date
 
 from sqlalchemy import inspect
 
@@ -84,9 +83,3 @@ def _fail_job(db, job: CrawlJob, error: str):
             logger.warning("[env] _fail_job job_id 미확보 — fail_job_safely 폴백 스킵")
             return
         fail_job_safely(job_id, error)
-
-
-def _is_skip_day() -> bool:
-    """매월 10일 토요일 — mibunyang building-info 쿼터 충돌 방지"""
-    today = date.today()
-    return today.day == 10 and today.weekday() == 5

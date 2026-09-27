@@ -580,8 +580,7 @@ class TestCollectChildcareData:
         nearest = {"count": 2, "nearest_dist": 120.0, "nearest_name": "행복어린이집",
                    "nearest_capacity": 50, "nearest_type": "국공립",
                    "nearest_teachers": 8}
-        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
-             patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
+        with patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
              patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
                    return_value=facilities), \
              patch("crawler.childcare_api.ChildcareAPI.find_nearest",
@@ -607,8 +606,7 @@ class TestCollectChildcareData:
         empty_nearest = {"count": 0, "nearest_dist": None, "nearest_name": "",
                          "nearest_capacity": 0, "nearest_type": "",
                          "nearest_teachers": 0}
-        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
-             patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
+        with patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
              patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
                    return_value=[]), \
              patch("crawler.childcare_api.ChildcareAPI.find_nearest",
@@ -625,8 +623,7 @@ class TestCollectChildcareData:
         """resolve_sigungu_code -> None 이면 그 단지는 failed, API 호출 안 함"""
         _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
 
-        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
-             patch("crawler.childcare_api.resolve_sigungu_code", return_value=None), \
+        with patch("crawler.childcare_api.resolve_sigungu_code", return_value=None), \
              patch("crawler.childcare_api.ChildcareAPI.get_childcare_list") as mock_list:
             from crawler.env_childcare import collect_childcare_data
             collect_childcare_data()
@@ -635,19 +632,6 @@ class TestCollectChildcareData:
         mock_list.assert_not_called()
         infra = db.get(Infra, "APT1")
         assert infra.childcare_count is None  # 안 건드림
-
-    def test_skip_day_면_cancelled(self, db):
-        """매월 10일 토요일이면 쿼터 보호로 cancelled, API 호출 0"""
-        _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
-
-        with patch("crawler.env_childcare._is_skip_day", return_value=True), \
-             patch("crawler.childcare_api.ChildcareAPI.get_childcare_list") as mock_list:
-            from crawler.env_childcare import collect_childcare_data
-            collect_childcare_data()
-
-        mock_list.assert_not_called()
-        job = db.query(CrawlJob).filter_by(job_type="childcare").one()
-        assert job.status == "cancelled"
 
     def test_CPMS_치명적_에러_배치_중단(self, db):
         """get_childcare_list 가 ChildcareAPIError(쿼터/인증) -> 배치 중단 + CrawlJob failed.
@@ -658,8 +642,7 @@ class TestCollectChildcareData:
         from crawler.childcare_api import ChildcareAPIError
         _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
 
-        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
-             patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
+        with patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
              patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
                    side_effect=ChildcareAPIError("CPMS 일일 쿼터 초과")):
             from crawler.env_childcare import collect_childcare_data
@@ -680,8 +663,7 @@ class TestCollectChildcareData:
         nearest = {"count": 1, "nearest_dist": 80.0, "nearest_name": "새싹어린이집",
                    "nearest_capacity": 30, "nearest_type": "민간",
                    "nearest_teachers": 5}
-        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
-             patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
+        with patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
              patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
                    return_value=[{"name": "새싹어린이집"}]), \
              patch("crawler.childcare_api.ChildcareAPI.find_nearest",
@@ -717,8 +699,7 @@ class TestChildcareBatchRotation:
         """
         nearest = {"count": 1, "nearest_dist": 100.0, "nearest_name": "테스트어린이집",
                    "nearest_capacity": 40, "nearest_type": "민간", "nearest_teachers": 6}
-        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
-             patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
+        with patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
              patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
                    return_value=[{"name": "테스트어린이집"}]), \
              patch("crawler.childcare_api.ChildcareAPI.find_nearest",
@@ -810,8 +791,7 @@ class TestChildcareBatchRotation:
 
         empty_nearest = {"count": 0, "nearest_dist": None, "nearest_name": "",
                          "nearest_capacity": 0, "nearest_type": "", "nearest_teachers": 0}
-        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
-             patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
+        with patch("crawler.childcare_api.resolve_sigungu_code", return_value="11680"), \
              patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
                    return_value=[{"name": "멀리있는집"}]), \
              patch("crawler.childcare_api.ChildcareAPI.find_nearest",
@@ -852,8 +832,7 @@ class TestChildcareFullBatch:
     def _run(batch_size):
         nearest = {"count": 1, "nearest_dist": 100.0, "nearest_name": "테스트어린이집",
                    "nearest_capacity": 40, "nearest_type": "민간", "nearest_teachers": 6}
-        with patch("crawler.env_childcare._is_skip_day", return_value=False), \
-             patch("crawler.childcare_api.resolve_sigungu_code",
+        with patch("crawler.childcare_api.resolve_sigungu_code",
                    side_effect=lambda region, gu: "11680" if gu == "강남구" else "11650"), \
              patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
                    return_value=[{"name": "테스트어린이집"}]), \
@@ -921,8 +900,7 @@ class TestChildcareFullBatch:
                     raise ChildcareAPIError("CPMS 일일 쿼터 초과")
                 return [{"name": "테스트어린이집"}]
 
-            with patch("crawler.env_childcare._is_skip_day", return_value=False), \
-                 patch("crawler.childcare_api.resolve_sigungu_code",
+            with patch("crawler.childcare_api.resolve_sigungu_code",
                        side_effect=lambda region, gu: "11680" if gu == "강남구" else "11650"), \
                  patch("crawler.childcare_api.ChildcareAPI.get_childcare_list",
                        side_effect=_list_side_effect), \
@@ -964,8 +942,7 @@ class TestCollectAirQuality:
 
         station = {"station_name": "강남구", "addr": "서울 강남구", "tm": 1.2}
         air = {"pm10": 30.0, "pm25": 15.0, "o3": 0.03, "grade": "좋음"}
-        with patch("crawler.env_air._is_skip_day", return_value=False), \
-             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+        with patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
                    return_value=station), \
              patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
                    return_value=air):
@@ -992,8 +969,7 @@ class TestCollectAirQuality:
         """
         _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
 
-        with patch("crawler.env_air._is_skip_day", return_value=False), \
-             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+        with patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
                    return_value=None):
             from crawler.env_air import collect_air_quality
             collect_air_quality()
@@ -1012,8 +988,7 @@ class TestCollectAirQuality:
 
         station = {"station_name": "강남구", "addr": "서울", "tm": 1.0}
         air = {"pm10": 30.0, "pm25": 15.0, "o3": 0.03, "grade": "좋음"}
-        with patch("crawler.env_air._is_skip_day", return_value=False), \
-             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+        with patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
                    side_effect=[station, RuntimeError("API 오류")]), \
              patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
                    return_value=air):
@@ -1027,18 +1002,39 @@ class TestCollectAirQuality:
         assert job.processed_items == 1
         assert job.total_items == 2
 
-    def test_skip_day_면_cancelled(self, db):
-        """매월 10일 토요일이면 쿼터 보호로 cancelled, API 호출 0"""
+    def test_10일_토요일에도_수집한다(self, db):
+        """매월 10일 토요일에도 건너뛰지 않고 수집한다 (세션 422 — 건너뛰기 규칙 삭제, #608 과 같은 결정).
+
+        옛 규칙은 미분양 사이트 building-info 와 창구 한도가 겹친다는 전제였는데, 그 호출은
+        K-apt 창구(별도 카운터)라 전제가 사라졌다. 날짜를 2026-10-10(토)으로 고정해 두고,
+        측정소 API 가 실제로 불리고 취소(cancelled) 행이 하나도 없는지 본다.
+        """
+        import inspect
+
+        import crawler.env_air as env_air
+
+        class _Sat10(date):
+            @classmethod
+            def today(cls):
+                return date(2026, 10, 10)  # 토요일
+
+        assert _Sat10.today().weekday() == 5
         _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
 
-        with patch("crawler.env_air._is_skip_day", return_value=True), \
-             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station") as mock_station:
-            from crawler.env_air import collect_air_quality
-            collect_air_quality()
+        station = {"station_name": "강남구", "addr": "서울", "tm": 1.0}
+        air = {"pm10": 30.0, "pm25": 15.0, "o3": 0.03, "grade": "좋음"}
+        with patch("datetime.date", _Sat10), \
+             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+                   return_value=station) as mock_station, \
+             patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
+                   return_value=air):
+            env_air.collect_air_quality()
 
-        mock_station.assert_not_called()
-        job = db.query(CrawlJob).filter_by(job_type="air_quality").one()
-        assert job.status == "cancelled"
+        mock_station.assert_called_once()
+        jobs = db.query(CrawlJob).filter_by(job_type="air_quality").all()
+        assert [j.status for j in jobs] == ["completed"], [(j.status, j.error_message) for j in jobs]
+        # 날짜 분기가 코드에 다시 들어오면 위 고정 날짜와 무관하게 여기서 잡힌다
+        assert "_is_skip_day" not in inspect.getsource(env_air)
 
     def test_전역_장애_job_failed(self, db):
         """배치 전역(per-단지 try 밖) 장애 시 _fail_job 으로 CrawlJob failed 기록.
@@ -1050,8 +1046,7 @@ class TestCollectAirQuality:
 
         station = {"station_name": "강남구", "addr": "서울", "tm": 1.0}
         air = {"pm10": 30.0, "pm25": 15.0, "o3": 0.03, "grade": "좋음"}
-        with patch("crawler.env_air._is_skip_day", return_value=False), \
-             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+        with patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
                    return_value=station), \
              patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
                    return_value=air), \
@@ -1072,8 +1067,7 @@ class TestCollectAirQuality:
         _add_apartment(db, "APT1", "서울특별시", "강남구", lat=37.5, lng=127.0)
 
         station = {"station_name": "강남구", "addr": "서울", "tm": 1.0}
-        with patch("crawler.env_air._is_skip_day", return_value=False), \
-             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+        with patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
                    return_value=station), \
              patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
                    return_value=None):
@@ -1099,8 +1093,7 @@ class TestCollectAirQuality:
         station = {"station_name": "강남구", "addr": "서울", "tm": 1.0}
         # dict 이지만 측정값 전부 None — 에어코리아가 '-' 반환한 경우
         air_all_none = {"pm10": None, "pm25": None, "o3": None, "grade": ""}
-        with patch("crawler.env_air._is_skip_day", return_value=False), \
-             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+        with patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
                    return_value=station), \
              patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
                    return_value=air_all_none):
@@ -1133,8 +1126,7 @@ class TestCollectAirQuality:
 
         station = {"station_name": "강남구", "addr": "서울", "tm": 1.0}
         air = {"pm10": 30.0, "pm25": 15.0, "o3": 0.03, "grade": "좋음"}
-        with patch("crawler.env_air._is_skip_day", return_value=False), \
-             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+        with patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
                    return_value=station), \
              patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
                    return_value=air):
@@ -1174,8 +1166,7 @@ class TestAirBatchRotation:
     @classmethod
     def _run(cls, batch_size, station=..., air=...):
         """외부 에어코리아를 절대 안 때리는 목킹 실행 (이 파일의 기존 air 테스트 답습)"""
-        with patch("crawler.env_air._is_skip_day", return_value=False), \
-             patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
+        with patch("crawler.air_quality_api.AirQualityAPI.get_nearby_station",
                    return_value=cls._STATION if station is ... else station), \
              patch("crawler.air_quality_api.AirQualityAPI.get_realtime_air",
                    return_value=cls._AIR if air is ... else air):

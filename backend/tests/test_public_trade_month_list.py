@@ -102,6 +102,8 @@ def test_backfill_price_history가_실제로_연속된_달을_요청한다(db):
         from crawler.service_public import backfill_price_history
         backfill_price_history("M001", months_back=24)
 
+    # 끝 달 = 코드가 쓰는 "오늘"(가짜 2026-03-14)이 속한 달 — 이번 달이 빠지면 가장 새 거래를 못 받는다(세션 422)
+    assert max(requested_ymd) == "202603", requested_ymd
     assert len(requested_ymd) == 24, requested_ymd
     assert len(set(requested_ymd)) == 24, f"중복 요청: {requested_ymd}"
     assert "202602" in requested_ymd, requested_ymd

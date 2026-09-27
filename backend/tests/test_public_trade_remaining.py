@@ -273,8 +273,8 @@ def test_c_주간_남은_횟수가_예상보다_적으면_텔레그램_1회(db, 
     _assert_plain_alert(text)
     assert "10번뿐" in text and "하루 한도 10,000번" in text
     # 주간 = 실제 반복 대상 (시군구 × 월) — 가짜 창구가 받은 호출 수와 같다(전부 빈 달이라 1콜씩)
-    assert f"약 {window.calls:,}번이 필요" in text
-    assert "최대 약" not in text
+    # 세션 422: 주간도 캐시 적중분을 미리 뺄 수 없어 소급과 같은 "최대 약" 표현
+    assert f"최대 약 {window.calls:,}번이 필요" in text
     assert "정부 실거래가 받기" in text
     assert any(r.levelno == logging.WARNING and "남은 횟수 부족" in r.getMessage() for r in caplog.records)
 
@@ -333,6 +333,95 @@ def test_c_소급_남은_횟수가_충분하면_알림_없음(db):
     tg = _run_backfill(_FakeWindow(10000), calls_per_complex=1)
 
     assert tg.call_count == 0
+
+
+# ── (d) 여유분 1,000 — 1,000건 넘는 달은 여러 쪽이라 예상보다 많이 쓴다 (세션 422) ──
+
+
+def test_d_남은_횟수가_예상보다_많아도_여유_1000_안이면_알림(db, caplog):
+    """주간 3시군구 × 24개월 = 예상 72. 남은 572(= 예상 + 500)는 예상보다 많지만
+    문턱 1,072(= 예상 + 여유 1,000)보다 적어 알린다."""
+    caplog.set_level(logging.INFO, logger=_SVC_LOGGER)
+    _add_regions(db, 3)
+    expected = 3 * 24
+    window = _FakeWindow(expected + 500)
+
+    tg = _run_weekly(window)
+
+    assert window.calls == expected, "빈 달이라 시군구×달 만큼만 부른다"
+    assert tg.call_count == 1
+    text = tg.call_args[0][0]
+    _assert_plain_alert(text)
+    # 알림 문구는 예상값을 그대로 보인다(여유분은 문구에 안 섞는다)
+    assert f"{expected + 500:,}번뿐" in text
+    assert f"최대 약 {expected:,}번이 필요" in text
+    warn = [r.getMessage() for r in caplog.records
+            if r.levelno == logging.WARNING and "남은 횟수 부족" in r.getMessage()]
+    assert len(warn) == 1
+    assert f"여유 1,000 포함 문턱 {expected + 1000:,}번" in warn[0], warn[0]
+
+
+def test_d_남은_횟수가_예상_더하기_여유보다_많으면_알림_없음(db):
+    _add_regions(db, 3)
+    expected = 3 * 24
+
+    tg = _run_weekly(_FakeWindow(expected + 1500))
+
+    assert tg.call_count == 0
+
+
+# ── (e) 끝 로그는 DB 를 닫은 뒤 (세션 422) ──────────────────────────────
+
+
+def _record_close_then_log_end():
+    """service_public 이 여는 세션의 close() 와 _RemainingWatch.log_end() 호출 순서를 기록."""
+    from crawler import service_public
+    from crawler.service_public import _RemainingWatch
+
+    events: list[str] = []
+    real_session_local = service_public.SessionLocal
+    real_log_end = _RemainingWatch.log_end
+
+    def _session_local():
+        s = real_session_local()
+        real_close = s.close
+
+        def _close():
+            events.append("close")
+            real_close()
+
+        s.close = _close
+        return s
+
+    def _log_end(self):
+        events.append("log_end")
+        real_log_end(self)
+
+    patches = (
+        patch.object(service_public, "SessionLocal", side_effect=_session_local),
+        patch.object(_RemainingWatch, "log_end", _log_end),
+    )
+    return events, patches
+
+
+def test_e_주간_수집은_DB를_닫은_뒤_끝_로그(db):
+    _add_regions(db, 1)
+    events, (p1, p2) = _record_close_then_log_end()
+
+    with p1, p2:
+        _run_weekly(_FakeWindow(9755))
+
+    assert events == ["close", "log_end"], events
+
+
+def test_e_소급_배치도_DB를_닫은_뒤_끝_로그(db):
+    _add_backfill_complexes(db, 2)
+    events, (p1, p2) = _record_close_then_log_end()
+
+    with p1, p2:
+        _run_backfill(_FakeWindow(10000), calls_per_complex=1)
+
+    assert events == ["close", "log_end"], events
 
 
 # ── T1. 회차 시작 전에 본 값은 이번 회차 값으로 치지 않는다 ──────────────

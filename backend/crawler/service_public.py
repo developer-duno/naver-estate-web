@@ -106,6 +106,10 @@ BACKFILL_ABORT_AFTER_COMPLEXES = 3
 
 _QUOTA_WORDS = "정부 실거래가 창구가 하루 요청 한도 초과라고 답해"
 
+# 창구 남은 횟수 알림의 여유분 — 1,000건 넘는 달은 여러 쪽으로 나뉘어 예상(시군구×달)보다
+# 많이 쓴다. 남은 횟수가 "예상 + 여유"보다 적으면 알린다(사장님 결정 2026-09-27, 주간 문턱 7,072).
+_REMAINING_MARGIN = 1_000
+
 
 class PublicTradeFetchError(RuntimeError):
     """국토부 실거래가 호출 실패 — 빈 수집으로 위장하지 않고 호출자에게 알린다.
@@ -129,11 +133,13 @@ def _fmt_remaining(rl: dict | None) -> str:
 
 
 def _alert_if_short(job_type: str, rl: dict, expected: int, upper_bound: bool) -> None:
-    """이번 회차 예상 호출 수보다 창구 남은 횟수가 적으면 경고 로그 + 텔레그램 1건 (세션 421)."""
+    """창구 남은 횟수가 이번 회차 예상 호출 수 + 여유(_REMAINING_MARGIN)보다 적으면
+    경고 로그 + 텔레그램 1건 (세션 421, 여유는 세션 422)."""
     from crawler.plain_words import job_words
 
     remaining = rl["remaining"]
-    if remaining < expected:
+    threshold = expected + _REMAINING_MARGIN
+    if remaining < threshold:
         limit = rl.get("limit")
         limit_part = f"(하루 한도 {limit:,}번)" if limit else ""
         if remaining == 0:
@@ -150,8 +156,9 @@ def _alert_if_short(job_type: str, rl: dict, expected: int, upper_bound: bool) -
                 "이 열쇠는 KOSPI·미분양 사이트와 같이 씁니다 — 오늘 그쪽 수집이 먼저 돌았는지 봐 주세요."
             )
         logger.warning(
-            "[정부 실거래가] 창구 남은 횟수 부족: %s, 이번 회차 예상 %s%d번",
-            _fmt_remaining(rl), "최대 " if upper_bound else "", expected,
+            "[정부 실거래가] 창구 남은 횟수 부족: %s, 이번 회차 예상 %s%s번 (여유 %s 포함 문턱 %s번)",
+            _fmt_remaining(rl), "최대 " if upper_bound else "", f"{expected:,}",
+            f"{_REMAINING_MARGIN:,}", f"{threshold:,}",
         )
         try:
             from services.telegram import send_telegram
@@ -210,13 +217,13 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
     """
     api_key = os.getenv("PUBLIC_DATA_API_KEY")
     if not api_key:
-        logger.info("PUBLIC_DATA_API_KEY 미설정 — 공공데이터 수집 건너뜀")
+        logger.info("정부 실거래가 열쇠가 설정돼 있지 않아 건너뜀 — 공공데이터 수집")
         if scheduler_job_id:
             db = SessionLocal()
             job = CrawlJob(
                 job_type="public_trade_data", scheduler_job_id=scheduler_job_id,
                 status="cancelled", started_at=utcnow(), completed_at=utcnow(),
-                error_message="PUBLIC_DATA_API_KEY 미설정",
+                error_message="정부 실거래가 열쇠가 설정돼 있지 않아 건너뜀",
             )
             db.add(job)
             db.commit()
@@ -269,6 +276,8 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
     db.add(job)
     db.commit()
     job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
+    # upper_bound=False: 주간은 (시군구, 달) 조합이 겹치지 않아 캐시로 줄 몫이 없고, 여러 쪽 달은
+    # 더 쓰므로 예상은 상한이 아니라 하한 쪽이다 — "약" 표현, 초과분은 여유 1,000 이 덮는다(세션 422)
     watch = _RemainingWatch(PublicDataAPI, "public_trade_data", upper_bound=False)
 
     try:
@@ -459,8 +468,8 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
             fail_job_safely(job_id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
         logger.exception("공공데이터 수집 실패")
     finally:
-        watch.log_end()
         db.close()
+        watch.log_end()  # DB 를 닫은 뒤 — 로그가 실패해도 연결은 이미 반납됐다(세션 422)
 
 
 def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
@@ -751,5 +760,5 @@ def backfill_price_batch(batch_size: int = 20, scheduler_job_id: str | None = No
         logger.exception("소급 배치 실패")
         return {"success": 0, "failed": 0, "total": 0, "error": str(e)[:200]}
     finally:
-        watch.log_end()
         db.close()
+        watch.log_end()  # DB 를 닫은 뒤 — 로그가 실패해도 연결은 이미 반납됐다(세션 422)

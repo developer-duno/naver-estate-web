@@ -30,10 +30,10 @@
 import logging
 import re
 import time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from difflib import SequenceMatcher
 
-from sqlalchemy import func
+from sqlalchemy import func, update
 
 from crawler.env_common import _complete_job, _fail_job, _record_job
 from crawler.kapt_api import (
@@ -110,6 +110,56 @@ _ALL_EMPTY_MIN_TARGETS = 10
 #     예산(_RUN_TIME_BUDGET_SEC 120분 ≈ 4,800콜)이 먼저 끊으므로 스윕 임계 3h 를 넘지 않는다.
 # → kapt 버킷 일 60,000 의 절반 이하다.
 _EMPTY_SCAN_CAP = 2000
+
+# 미공개로 확인한 단지를 다시 확인하기까지 쉬는 날 수(사장님 결정 2026-10-01, 세션 426).
+# 옛 코드는 미공개 확인을 어디에도 남기지 않아, 같은 미공개 단지를 매 회차(하루 2번)
+# 대기열 맨 앞에서 다시 훑었다(10-01 12:40 회차: 미공개 283단지가 4,818콜 중 849콜).
+# 확인 시각은 `KaptComplexMap.cost_blank_checked_at`(V068). 달이 바뀌면 후보월이 바뀌므로
+# 7일 안이어도 다시 확인한다.
+_BLANK_RECHECK_DAYS = 7
+
+# 미공개 기록 반영 UPDATE 한 번에 넣는 단지 수 — 21일 매칭과 행 잠금이 겹쳐도 짧게 끝나게.
+_BLANK_MARK_CHUNK = 500
+
+
+def _recently_blank(checked: datetime | None, now: datetime) -> bool:
+    """최근 `_BLANK_RECHECK_DAYS` 일 안·같은 달(UTC 연·월)에 미공개로 확인한 단지인가.
+
+    달이 바뀌면 후보월(candidate_cost_months)이 바뀌므로 7일 안이어도 다시 본다.
+    SQLite 시험 DB 는 시간대 없는 값을 돌려줄 수 있어 UTC 로 붙이고(monitor.py 선례),
+    PostgreSQL 은 세션 시간대로 돌려줄 수 있어 UTC 로 바꾼 뒤 연·월을 본다.
+    미래 시각으로 찍힌 값(시계 어긋남 등)은 건너뛰지 않고 다시 확인한다.
+    """
+    if checked is None:
+        return False
+    if checked.tzinfo is None:
+        checked = checked.replace(tzinfo=timezone.utc)
+    checked = checked.astimezone(timezone.utc)
+    return (
+        timedelta(0) <= now - checked < timedelta(days=_BLANK_RECHECK_DAYS)
+        and (checked.year, checked.month) == (now.year, now.month)
+    )
+
+
+def _persist_blank_marks(db, blank_nos: list[str], collected_nos: list[str], now: datetime) -> None:
+    """이번 회차의 미공개 기록을 **관리비 커밋 뒤 별도 트랜잭션**으로 반영한다.
+
+    미공개 단지는 `now` 로 찍고, 수집한 단지는 지운다. 회차 결과(전량 빈 응답 실패 여부)가
+    정해진 뒤에만 부른다 — 루프 안에서 매핑 행을 고치면 관리비 커밋에 같이 실려,
+    ① 전량 빈 응답 실패 회차에도 기록이 남아 다음 회차 대기열이 비고 장애가 숨으며
+    ② 21일 매칭과 행 잠금이 겹치면 그 회차 관리비 수집분까지 되돌려질 수 있다(세션 426 검사관 A·C).
+    청크마다 커밋한다. 이미 지워진 매핑 행은 0행 갱신으로 지나간다.
+    """
+    table = KaptComplexMap.__table__
+    for nos, value in ((blank_nos, now), (collected_nos, None)):
+        for i in range(0, len(nos), _BLANK_MARK_CHUNK):
+            chunk = nos[i:i + _BLANK_MARK_CHUNK]
+            db.execute(
+                update(table)
+                .where(table.c.complex_no.in_(chunk))
+                .values(cost_blank_checked_at=value)
+            )
+            db.commit()
 
 # 카나리 표본 수 — "전량 미공개" 회차에서 API 생사를 확인할 때 찔러볼 저장행 개수.
 _CANARY_SAMPLE_SIZE = 3
@@ -552,6 +602,9 @@ def _clear_conflicting_mappings(db, complex_no: str, kapt_code: str) -> None:
         db.query(KaptManagementCost).filter(
             KaptManagementCost.complex_no == complex_no
         ).delete(synchronize_session=False)
+        # 옛 짝의 미공개 기록(V068)도 지운다 — 매칭 upsert 는 넘긴 칸만 갱신하므로 그대로
+        # 두면 새 짝이 최대 7일 건너뛰어진다(세션 426 검사관 A·C).
+        current.cost_blank_checked_at = None
 
 
 def _purge_unconfirmed_mappings(
@@ -1031,6 +1084,10 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
     처리 순서: **관리비 행이 아예 없는 단지 먼저**, 그다음 `matched_at` 오래된 순.
     화면에 관리비가 아예 안 뜨는 단지가 "한 달 낡은 단지" 보다 급하다(추가 호출 0).
 
+    미공개 건너뛰기(V068, 세션 426): 후보월이 전부 미공개면 `cost_blank_checked_at` 에 회차
+    시작 시각을 찍고, 그 시각이 `_BLANK_RECHECK_DAYS`(7)일 안·같은 달(UTC)이면 대기열에서
+    뺀다. 수집에 성공하면 지우고, 호출 실패는 건드리지 않는다.
+
     ⚠ **공개** 단지 하나에 22콜이 나가므로 batch_size 가 곧 쿼터 소모량(×22)이다.
     미공개 단지는 후보월마다 공용 첫 op 1콜에서 끊겨 **3콜**로 끝난다
     (옛 22콜×3개월=66콜 — `_fetch_costs_for_month` 의 근거 참조).
@@ -1087,8 +1144,19 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         logger.warning("[kapt_costs] 이미 도는 회차 있음 — 이번 실행은 건너뜀")
         return {"collected": 0, "error": "already_running", "message": "이미 도는 회차 있음"}
     job = _record_job(db, _COST_JOB_TYPE, scheduler_job_id)
+    # 미공개 기록(V068) — 루프는 단지 번호만 모으고, 관리비 커밋 뒤 `finally` 에서 별도
+    # 트랜잭션으로 반영한다. `marks_ready` 는 관리비 커밋 직후 켜고, 전량 빈 응답 실패 분기·
+    # api_down 인데 카나리 표본도 빈 응답인 경우·바깥 예외 경로에서 끈다(그 회차의
+    # "미공개" 를 믿을 수 없을 때는 기록하지 않는다).
+    blank_nos: list[str] = []
+    collected_nos: list[str] = []
+    marks_ready = False
+    skipped_recent_blank = 0
     try:
-        months = candidate_cost_months()
+        # "지금"은 회차 시작 때 한 번만 구한다 — 후보월·미공개 건너뛰기 판정·미공개 기록이
+        # 같은 시각을 봐야 회차 도중 자정·월말을 넘겨도 서로 어긋나지 않는다.
+        now = utcnow()
+        months = candidate_cost_months(now.date())
         target_month = months[0]
 
         # 단지별 **보유한 가장 최신 수집월** — GROUP BY 1쿼리. 후보월 창 밖의 옛 달도
@@ -1119,7 +1187,13 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         )
         # 행이 아예 없는 단지 먼저(관리비가 화면에 통째로 안 뜨는 쪽이 급하다), 그다음
         # matched_at 순. sorted 는 안정 정렬이라 같은 그룹 안에서 위 order_by 가 보존된다.
-        queue = [r for r in rows if _to_try(r.complex_no)]
+        pending = [r for r in rows if _to_try(r.complex_no)]
+        queue = [r for r in pending if not _recently_blank(r.cost_blank_checked_at, now)]
+        skipped_recent_blank = len(pending) - len(queue)
+        logger.info(
+            "[kapt_costs] 최근 %d일 안에 미공개로 확인돼 건너뛴 단지 %d곳",
+            _BLANK_RECHECK_DAYS, skipped_recent_blank,
+        )
         queue.sort(key=lambda r: r.complex_no in newest)
 
         collected, failed, empty = 0, 0, 0
@@ -1185,6 +1259,9 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                     consecutive_failures = 0
                     empty += 1
                     empty_calls += cost_calls_made() - calls_before
+                    # 미공개 확인 기록 — 7일 안·같은 달이면 다음 회차들이 이 단지를 건너뛴다.
+                    # 매핑 행은 여기서 고치지 않고, 회차 결과가 정해진 뒤 따로 반영한다.
+                    blank_nos.append(mapping.complex_no)
                     continue
 
                 household = mapping.kapt_household_count
@@ -1202,6 +1279,8 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                     },
                     ["complex_no", "cost_month"],
                 )
+                # 받았으니 미공개 기록은 지운다(다음 달엔 평소처럼 대상이 된다) — 반영은 회차 뒤.
+                collected_nos.append(mapping.complex_no)
                 collected += 1
                 consecutive_failures = 0
             except KaptApiError as exc:
@@ -1262,6 +1341,10 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         # 은 별도 트랜잭션이 아니라 같은 세션이라, 먼저 commit 해두지 않으면 쿼터 중단
         # 시 그날 수집분이 통째로 롤백될 수 있다.
         db.commit()
+        # 이 회차의 미공개는 실제 200 응답이었다(시간 예산·스캔 상한·쿼터·api_down·카나리
+        # 상한 중단 포함) — 아래 전량 빈 응답 실패 분기와, api_down 인데 카나리 표본도 빈
+        # 응답인 경우만 다시 끈다.
+        marks_ready = True
 
         # 호출 집계 한 줄 — 중단·완료 어느 경로든 남도록 분기 전에 찍는다.
         # 정상이면 미공개 단지당 평균 ≈ 후보월 수(3) 이하, 17 근처면 조기 이탈이 또 안 선 것.
@@ -1293,12 +1376,17 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             return {
                 "collected": collected, "failed": failed, "empty": empty,
                 "remaining": remaining, "error": "quota_exceeded",
+                "skipped_recent_blank": skipped_recent_blank,
             }
 
         # 연속 전 op 실패로 조기 중단 — 쿼터 중단과 같은 이유로 잡을 failed 로 마감한다.
         # (쿼터 중단과 별개 분기인 이유: 원인이 확정된 22 와 달리 이쪽은 "코드 미상 실패가
         #  연달아 났다"는 정황 판단이라, 사람이 로그를 보고 원인을 가려야 한다.)
         if api_down is not None:
+            if api_down_probed and api_down_canary is None:
+                # 저장행이 있는 단지(예전에 자료가 왔던 조합)까지 빈 응답 — 이번 회차의
+                # "미공개" 는 믿을 수 없으니 기록하지 않는다(세션 426 재검사 🟡1).
+                marks_ready = False
             remaining = len(queue) - scanned
             message = (
                 f"연속 {_CONSECUTIVE_FAILURE_LIMIT}단지 호출 실패 — API 장애/한도 의심, "
@@ -1319,6 +1407,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             return {
                 "collected": collected, "failed": failed, "empty": empty,
                 "remaining": remaining, "error": "api_down",
+                "skipped_recent_blank": skipped_recent_blank,
             }
 
         # 연속 실패 뒤 카나리가 "서버는 살아있다" 고 해서 끝까지 갔는데 한 건도 못 모은
@@ -1339,6 +1428,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             return {
                 "collected": 0, "failed": failed, "empty": empty,
                 "remaining": remaining, "error": "partial_outage",
+                "skipped_recent_blank": skipped_recent_blank,
             }
         if canary_kept_going and collected == 0 and failed > 0:
             message = (
@@ -1351,6 +1441,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             return {
                 "collected": 0, "failed": failed, "empty": empty,
                 "error": "partial_outage",
+                "skipped_recent_blank": skipped_recent_blank,
             }
 
         # ── silent failure 가드 2종의 관계 ──
@@ -1381,7 +1472,10 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                 "[kapt_costs] silent failure 감지: 대상 %d개 수집 0건 (실패 %d)",
                 scanned, failed,
             )
-            return {"collected": 0, "failed": failed, "empty": empty, "error": "no_collect"}
+            return {
+                "collected": 0, "failed": failed, "empty": empty, "error": "no_collect",
+                "skipped_recent_blank": skipped_recent_blank,
+            }
 
         # ⚠ 전량 빈 응답도 silent failure 다 — 위 가드만으로는 안 잡힌다.
         # (예전엔 `_body` 가 호출 실패·비정상 resultCode 에도 None 을 줘서 breakdown 이
@@ -1417,7 +1511,12 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                 return {
                     "collected": 0, "failed": failed, "empty": empty,
                     "cost_month": target_month, "canary": "alive",
+                    "skipped_recent_blank": skipped_recent_blank,
                 }
+            # 전량 빈 응답 + 카나리도 빈 응답 = 이번 "미공개" 는 장애일 수 있다. 기록하면 다음
+            # 회차 대기열이 비어 completed(0,0) 가 직전 실패를 "복구" 로 풀어 장애가 최대 7일
+            # 숨는다(세션 426 검사관 A) — 이 회차의 미공개 기록은 반영하지 않는다.
+            marks_ready = False
             message = (
                 f"대상 {scanned}개 전부 빈 응답 — API 폐기/키 만료 의심"
                 + (f" (생존 확인용 {probed}건도 전부 빈 응답)" if probed else " (생존 확인 표본 없음)")
@@ -1426,6 +1525,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             logger.error("[kapt_costs] 전량 빈 응답 감지: %s", message)
             return {
                 "collected": 0, "failed": failed, "empty": empty, "error": "all_empty",
+                "skipped_recent_blank": skipped_recent_blank,
             }
         if collected == 0 and scanned and empty == scanned:
             logger.warning(
@@ -1453,6 +1553,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             return {
                 "collected": collected, "failed": failed, "empty": empty,
                 "cost_month": target_month, "error": "mostly_failed",
+                "skipped_recent_blank": skipped_recent_blank,
             }
         _complete_job(db, job, collected, scanned - collected)
         if failed:
@@ -1465,8 +1566,9 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             )
             db.commit()
         logger.info(
-            "[kapt_costs] 완료: %d 수집, %d 실패, %d 미공개 (대상 %d, 기준월 %s)%s",
-            collected, failed, empty, scanned, target_month,
+            "[kapt_costs] 완료: %d 수집, %d 실패, %d 미공개, 최근 미공개라 건너뜀 %d "
+            "(대상 %d, 기준월 %s)%s",
+            collected, failed, empty, skipped_recent_blank, scanned, target_month,
             (f" — 미공개 스캔 상한 {_EMPTY_SCAN_CAP} 도달로 중단" if scan_capped else "")
             + budget_note,
         )
@@ -1475,10 +1577,29 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             "failed": failed,
             "empty": empty,
             "cost_month": target_month,
+            "skipped_recent_blank": skipped_recent_blank,
         }
     except Exception as exc:
+        marks_ready = False  # 결과를 믿을 수 없는 회차 — 미공개 기록 반영 안 함
         _fail_job(db, job, str(exc))
         logger.exception("[kapt_costs] 수집 실패")
-        return {"collected": 0, "error": str(exc)}
+        return {
+            "collected": 0, "error": str(exc),
+            "skipped_recent_blank": skipped_recent_blank,
+        }
     finally:
+        if marks_ready:
+            # 관리비 행은 이미 커밋됐다. 기록 반영이 실패해도 잡 결과는 그대로 둔다 —
+            # 기록을 잃으면 다음 회차에 다시 확인할 뿐이라 손해가 없다.
+            try:
+                _persist_blank_marks(db, blank_nos, collected_nos, now)
+            except Exception as exc:
+                logger.warning(
+                    "[kapt_costs] 미공개 기록 반영 실패(잡 결과는 그대로, 다음 회차에 다시 확인): %s",
+                    exc,
+                )
+                try:
+                    db.rollback()
+                except Exception:
+                    logger.warning("[kapt_costs] 미공개 기록 반영 실패 뒤 rollback 도 실패", exc_info=True)
         db.close()

@@ -817,3 +817,42 @@ def test_kapt_noon_run_does_not_leak_into_other_cards(client, db):
     assert kapt_match["status"] == "unknown", kapt_match
     assert kapt_match["last_job"] is None, kapt_match
     assert _get_item(items, "kapt_costs")["status"] == "green"
+
+
+# ── 관리비 카드 헛바퀴 문턱 10 (세션 426 — 미공개 기록으로 작은 회차가 생김) ──
+
+def test_kapt_costs_small_all_blank_run_not_spinning(client, db):
+    """관리비 회차가 미공개 9곳만 훑고 0건 completed → 헛바퀴 아님(문턱 10 미만).
+
+    미공개 기록(V068)으로 대기열이 줄면 미공개 1~9곳만 훑는 회차가 생기고, 그 회차는
+    카나리 문턱(10) 밑이라 completed(0, 9) 로 끝난다. 문턱 없으면 거짓 헛바퀴 경보.
+    뮤테이션: freshness_meta.py 의 kapt_costs `spinning_min_total` 줄을 빼면 FAIL.
+    """
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    _add_kapt_costs_job(
+        db, "kapt_costs", "completed",
+        started_at=now - timedelta(minutes=10), completed_at=now - timedelta(minutes=8),
+        processed=0, total=9,
+    )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "kapt_costs")
+    assert item["spinning"] is False, item
+    assert item["status"] != "red", item
+
+
+def test_kapt_costs_ten_targets_zero_processed_is_spinning(client, db):
+    """관리비 회차가 10곳 이상 훑고 처리 0 → 헛바퀴 빨강(문턱 경계값 10)."""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    _add_kapt_costs_job(
+        db, "kapt_costs", "completed",
+        started_at=now - timedelta(minutes=10), completed_at=now - timedelta(minutes=8),
+        processed=0, total=10,
+    )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "kapt_costs")
+    assert item["spinning"] is True, item
+    assert item["status"] == "red", item

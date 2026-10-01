@@ -509,6 +509,11 @@ class KaptComplexMap(Base):
     corridor_type: Mapped[str | None] = mapped_column(Text)
     kapt_household_count: Mapped[int | None] = mapped_column(Integer)
     matched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    # V068: 관리비 후보월이 전부 미공개로 확인된 마지막 시각(UTC). 수집 성공 시 NULL.
+    # 7일 안·같은 달이면 관리비 수집이 그 단지를 건너뛴다(세션 426).
+    cost_blank_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class KaptManagementCost(Base):

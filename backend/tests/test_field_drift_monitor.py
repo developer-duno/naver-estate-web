@@ -8,6 +8,7 @@ TELEGRAM_ENABLED=false 로 전역 봉쇄하지만(세션 325 실사고 답습), 
 """
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from sqlalchemy import Integer, Numeric, select
@@ -106,6 +107,128 @@ def test_compute_fill_rates_below_min_sample_returns_empty():
         assert rates == {}
     finally:
         db.close()
+
+
+def test_sqlite_does_not_set_statement_timeout():
+    """세션 424: SQLite(CI)에서는 SET LOCAL 을 실행하지 않는다 — 실행하면 문법 오류로 죽는다."""
+    db = TestSession()
+    try:
+        assert db.bind.dialect.name == "sqlite"
+        _seed_population(db, total=250, filled=225)
+        # 예외 없이 끝나는 것 자체가 증거 — SQLite 는 SET LOCAL 문법이 없어
+        # 실행됐다면 여기서 OperationalError 로 죽는다.
+        population, rates = compute_fill_rates(db)
+        assert population == 250
+    finally:
+        db.close()
+
+
+def test_postgres_sets_statement_timeout_before_select():
+    """세션 424: PostgreSQL 이면 집계 SELECT 직전에 SET LOCAL statement_timeout=30000 이 실행된다.
+
+    48시간 창 모집단이 2026-09-13 실측 8,832건에서 상세 보강 강도 증가로
+    48,887건(5.5배)까지 불어나 연결 때 걸린 기본 8초를 09-29~10-01 사흘 연속
+    넘긴 사건(QueryCanceled)의 회귀 가드. SQLite 로는 실측 불가하므로
+    dialect 를 PostgreSQL 인 척하는 가짜 세션으로 실행된 SQL 순서를 본다
+    (선례: tests/test_admin_stats_cache.py _fake_pg_db 패턴).
+    """
+    executed: list[str] = []
+
+    class _FakeResult:
+        def one(self):
+            # population 1건 + 감시 대상 필드 전부 0(더미) — 반환 형태만 맞추면 된다.
+            fields = {f: 0 for f in _THRESHOLDS}
+            return SimpleNamespace(population=0, **fields)
+
+    def _fake_execute(stmt):
+        executed.append(str(stmt))
+        return _FakeResult()
+
+    fake_db = SimpleNamespace(
+        bind=SimpleNamespace(dialect=SimpleNamespace(name="postgresql")),
+        execute=_fake_execute,
+    )
+
+    population, rates = compute_fill_rates(fake_db)
+
+    assert len(executed) == 2, executed
+    # ⚠ 상수(_FILL_RATE_STATEMENT_TIMEOUT_MS)를 그대로 보간해 비교하면, 상수 값이
+    # 실수로 바뀌어도(예: 30_000 → 8_000, 원래 문제였던 8초로 되돌아가도) 이 단언은
+    # 그대로 통과한다 — "30초로 올렸다"는 사실 자체를 검증하지 못한다(세션 424
+    # 보완 검사관 🟡4 지적). 글자 그대로 30000 을 박아 상수가 달라지면 FAIL 하게 한다.
+    assert executed[0] == "SET LOCAL statement_timeout = 30000"
+    # 두 번째 문장이 집계 SELECT — SET LOCAL 이 먼저(그 뒤라면 이 트랜잭션에 안 걸린다).
+    assert "SELECT" in executed[1]
+    # population 0 < _MIN_SAMPLE 이므로 rates 는 빈 dict (정상 skip 경로).
+    assert population == 0
+    assert rates == {}
+
+
+def test_candidate_select_matches_v061_partial_index_predicate():
+    """세션 424 보완(검사관 🟠1 실측): 집계 SELECT 의 WHERE 절이 V061 부분 인덱스
+    (ix_articles_field_drift_window)의 술어와 글자 단위로 일치해야 PostgreSQL 이
+    그 인덱스를 고른다.
+
+    V061 인덱스 술어 = ``is_active = true AND detail_crawled = true AND
+    heating_type IS NOT NULL``. 코드가 ``Article.is_active.is_(True)`` 처럼 쓰면
+    컴파일된 SQL 이 ``is_active IS true`` 가 되어(값은 같아도 표현이 다르다)
+    플래너가 인덱스를 무시한다 — 운영 EXPLAIN 실측: `IS true` 모양은 두 인덱스
+    합치고 본 테이블 스캔(비용 77,452, 8초 초과) / `= true` 모양은 부분 인덱스
+    스캔(비용 9,465, 4.61초 cold·0.11초 warm). 선례(service_discover.py V057)와
+    같은 함정 — tests/test_migration_v057_detail_pending_idx.py 의 드리프트 가드
+    방식을 답습한다.
+
+    `compute_fill_rates` 가 실제로 `db.execute()` 에 넘기는 `Select` 객체를 가짜
+    세션으로 캡처한 뒤, **PostgreSQL 방언으로 재컴파일한 SQL 문자열**을 본다
+    (SQLite CI 에서도 도는 방식 — dialect 는 명시적으로 postgresql 을 지정하므로
+    실제 실행 엔진과 무관하게 항상 같은 결과를 낸다).
+    """
+    captured_stmt = None
+
+    class _FakeResult:
+        def one(self):
+            fields = {f: 0 for f in _THRESHOLDS}
+            return SimpleNamespace(population=0, **fields)
+
+    def _fake_execute(stmt):
+        nonlocal captured_stmt
+        # SET LOCAL(text() 문)은 건너뛰고 집계 SELECT(has a .compile 대상)만 잡는다.
+        if hasattr(stmt, "compile") and "SELECT" in str(stmt).upper():
+            captured_stmt = stmt
+        return _FakeResult()
+
+    fake_db = SimpleNamespace(
+        bind=SimpleNamespace(dialect=SimpleNamespace(name="postgresql")),
+        execute=_fake_execute,
+    )
+
+    compute_fill_rates(fake_db)
+
+    assert captured_stmt is not None, "집계 SELECT 를 캡처하지 못했다"
+    from sqlalchemy.dialects import postgresql as pg_dialect
+
+    compiled_sql = str(
+        captured_stmt.compile(
+            dialect=pg_dialect.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+
+    assert "is_active = true" in compiled_sql, (
+        f"집계 SELECT 에 is_active = true 조건이 없다 — V061 인덱스 술어와 어긋남\n"
+        f"실제 SQL: {compiled_sql}"
+    )
+    assert "detail_crawled = true" in compiled_sql, (
+        f"집계 SELECT 에 detail_crawled = true 조건이 없다 — V061 인덱스 술어와 어긋남\n"
+        f"실제 SQL: {compiled_sql}"
+    )
+    assert "heating_type IS NOT NULL" in compiled_sql, (
+        f"집계 SELECT 에 heating_type IS NOT NULL 조건이 없다 — V061 인덱스 술어와 어긋남\n"
+        f"실제 SQL: {compiled_sql}"
+    )
+    assert "IS true" not in compiled_sql, (
+        f"집계 SELECT 에 'IS true' 모양이 남아 있다 — V061 부분 인덱스가 조용히 "
+        f"무시된다(운영 EXPLAIN 실측: 비용 77,452, 8초 초과)\n실제 SQL: {compiled_sql}"
+    )
 
 
 def test_compute_fill_rates_excludes_old_articles():

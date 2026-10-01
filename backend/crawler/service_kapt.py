@@ -554,8 +554,19 @@ def _clear_conflicting_mappings(db, complex_no: str, kapt_code: str) -> None:
         ).delete(synchronize_session=False)
 
 
-def _purge_unconfirmed_mappings(db, run_started_at: datetime) -> int:
+def _purge_unconfirmed_mappings(
+    db,
+    run_started_at: datetime,
+    keep: set[str] | frozenset[str] = frozenset(),
+    keep_codes: set[str] | frozenset[str] = frozenset(),
+) -> int:
     """이번 전량 실행이 재확인하지 않은 옛 매칭 + 그 관리비 삭제. 반환 = 삭제 건수.
+
+    `keep` — 이번 회차에 기본정보 받기가 **실패해** 재확인을 못 한 단지(complex_no).
+    "규칙에서 탈락" 이 아니라 "확인 못 함" 이므로 지우지 않는다(세션 426 — 예전엔 실패가
+    None 으로 와 엄격 이름 게이트에서 떨어진 단지의 매칭·관리비가 여기서 지워졌다).
+    `keep_codes` — 그 실패한 시도의 K-apt 코드. 역방향 경합에서 진 기존 짝(W→K)은 이긴 쪽
+    (X→K)의 기본정보가 실패하면 아무도 K 를 재확인하지 못한 것이므로 함께 남긴다(세션 426 검사관).
 
     ⚠ **전량 목록(list_complete=True) 실행에서만** 부른다. 전국 K-apt 목록을 다 받아
     전 단지를 다시 심사한 회차라면, 여기서 살아남지 못한 옛 행은 "새 규칙에서 통과하지
@@ -572,11 +583,14 @@ def _purge_unconfirmed_mappings(db, run_started_at: datetime) -> int:
     (price_queries.get_latest_kapt_cost) 매칭만 지우면 금액이 고아로 남아, 다음
     매칭이 붙는 순간 옛 K-apt 단지의 금액이 새 이름과 나란히 표시된다.
     """
-    stale = (
-        db.query(KaptComplexMap)
+    # keep 은 수천 건일 수 있어 SQL NOT IN 대신 파이썬에서 거른다(파라미터 수 한도 회피).
+    stale = [
+        row
+        for row in db.query(KaptComplexMap)
         .filter(KaptComplexMap.matched_at < run_started_at)
         .all()
-    )
+        if row.complex_no not in keep and row.kapt_code not in keep_codes
+    ]
     for row in stale:
         logger.info(
             "[kapt_match] 정리: 단지 %s ↔ %s(%s) 이 새 규칙에서 재확인 안 됨 — 매칭·관리비 삭제",
@@ -649,10 +663,37 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
 
         # ── pass 2: 생존자만 basis 보강 → 세대수 재게이트 → 저장 ──
         matched = 0
-        for cpx, cand, ratio in survivors:
-            # 확정분만 기본정보 보강 — 실패해도 매칭 자체는 저장한다.
+        # 기본정보 받기가 실패한 단지 — 기존 행을 덮어쓰지도, 새로 저장하지도, 정리로
+        # 지우지도 않는다(세션 426). "응답은 왔는데 item 없음"(None)은 여기 들지 않는다.
+        basis_failed: set[str] = set()
+        # 실패한 시도의 K-apt 코드 — 역방향 경합에서 진 기존 짝(W→K)도 정리에서 지킨다.
+        basis_failed_codes: set[str] = set()
+        for index, (cpx, cand, ratio) in enumerate(survivors):
+            # 확정분만 기본정보 보강. 응답이 와서 item 이 없으면(None) 매칭 자체는 저장한다.
             corridor, household = None, None
-            basis = fetch_apt_basis_info(cand["kaptCode"])
+            try:
+                basis = fetch_apt_basis_info(cand["kaptCode"])
+            except KaptApiError as exc:
+                # 실패를 "세대수 모름" 으로 다루면 기존 행의 복도유형·세대수를 None 으로
+                # 덮거나, 엄격 이름 게이트 탈락 → 회차 끝 정리가 매칭·관리비를 지운다.
+                if exc.is_quota:
+                    # 한도 초과(22)는 기다려도 안 풀린다 — 남은 단지를 1.5초씩 헛호출(약 4시간)
+                    # 하지 않고, 이 단지와 남은 생존 단지 전부를 실패로 세어 끊는다.
+                    for rest_cpx, rest_cand, _ in survivors[index:]:
+                        basis_failed.add(rest_cpx.complex_no)
+                        basis_failed_codes.add(rest_cand["kaptCode"])
+                    logger.warning(
+                        "[kapt_match] 기본정보 한도 초과 — 남은 %d단지는 이번 회차에 건드리지 않고 멈춤 (%s)",
+                        len(survivors) - index, exc,
+                    )
+                    break
+                basis_failed.add(cpx.complex_no)
+                basis_failed_codes.add(cand["kaptCode"])
+                logger.info(
+                    "[kapt_match] 기본정보 받기 실패 — 단지 %s kaptCode=%s 기존 연결 유지 (%s)",
+                    cpx.complex_no, cand["kaptCode"], exc,
+                )
+                continue
             if basis:
                 corridor = basis.get("codeHallNm")
                 raw_cnt = basis.get("kaptdaCnt")
@@ -724,6 +765,27 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
 
         db.commit()
 
+        # 기본정보 실패 판정 — matched==0 가드보다 **먼저** 본다. 그래야 전부 실패한 회차가
+        # "매칭 실패" 가 아니라 기본정보 실패로 기록된다. 실패 > 연결이면 정리도 건너뛴다.
+        basis_note = ""
+        if basis_failed:
+            basis_note = (
+                f"단지 기본정보 {len(basis_failed)}건 받기 실패 — "
+                "그 단지들은 기존 연결을 그대로 두었어요(다음 달 다시 시도)"
+            )
+            if len(basis_failed) > matched:
+                _fail_job(db, job, f"{basis_note} · 연결 {matched}건")
+                logger.error(
+                    "[kapt_match] 기본정보 실패 %d건 > 연결 %d건 — 정리 건너뜀",
+                    len(basis_failed), matched,
+                )
+                return {
+                    "matched": matched,
+                    "skipped": skipped,
+                    "basis_failed": len(basis_failed),
+                    "error": "basis_mostly_failed",
+                }
+
         # silent failure 가드 (env_air.py 세션 280 패턴 답습): 대상 단지가 있는데
         # 한 건도 못 붙였으면 '완료(0)' 위장 대신 failed 로 알린다.
         if matched == 0 and targets:
@@ -737,7 +799,9 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
         # 쓸어버리는 사고 차단).
         purged = 0
         if list_complete:
-            purged = _purge_unconfirmed_mappings(db, run_started_at)
+            purged = _purge_unconfirmed_mappings(
+                db, run_started_at, keep=basis_failed, keep_codes=basis_failed_codes
+            )
             db.commit()
             if purged:
                 logger.warning("[kapt_match] 새 규칙 미통과 옛 매칭 %d건 정리 완료", purged)
@@ -747,21 +811,30 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
         # skipped 를 넘기면 total 이 46,373건만큼 부풀어(라이브 실측 47,606) 실패율
         # 지표가 통째로 망가진다. skipped 는 아래 로그·error_message 로만 관찰한다.
         _complete_job(db, job, matched, 0)
+        notes: list[str] = []
         if not list_complete:
             # 부분 목록으로 돈 회차임을 job 에 남긴다 — 매칭 수가 평소보다 낮아도
             # '정상 완료'로만 보이면 조용한 퇴행이 된다(관측 가능성 확보).
-            job.error_message = (
+            notes.append(
                 f"부분 목록으로 매칭 (K-apt {len(kapt_rows)}건만 수집) — 다음 회차 재시도 필요"
-            )[:500]
+            )
+        if basis_note:
+            # 부분 목록 문구와 이어 붙인다 — 하나가 다른 하나를 덮지 않게.
+            notes.append(basis_note)
+        if notes:
+            job.error_message = " · ".join(notes)[:500]
             db.commit()
         logger.info(
-            "[kapt_match] 완료: %d 매칭, %d 미매칭, %d 정리 (대상 %d, K-apt %d건, 목록완전=%s)",
-            matched, skipped, purged, len(targets), len(kapt_rows), list_complete,
+            "[kapt_match] 완료: %d 매칭, %d 미매칭, %d 정리, 기본정보 실패 %d "
+            "(대상 %d, K-apt %d건, 목록완전=%s)",
+            matched, skipped, purged, len(basis_failed),
+            len(targets), len(kapt_rows), list_complete,
         )
         return {
             "matched": matched,
             "skipped": skipped,
             "purged": purged,
+            "basis_failed": len(basis_failed),
             "list_complete": list_complete,
         }
     except Exception as exc:

@@ -250,10 +250,12 @@ def test_match_household_gate_accepts_close_count_after_basis(db, monkeypatch):
     assert row.corridor_type == "복도식"
 
 
-def test_match_saves_when_basis_lookup_fails(db, monkeypatch):
-    """basis 조회 실패(None)면 세대수를 알 수 없으므로 기존대로 저장한다.
+def test_match_saves_when_basis_item_missing(db, monkeypatch):
+    """basis 응답은 왔는데 item 이 없으면(None) 세대수를 알 수 없으므로 기존대로 저장한다.
 
     이미 이름 임계 0.75 강화를 통과한 건이라 보수 원칙과 상충하지 않는다.
+    ⚠ 호출 **실패**(`KaptApiError`)는 다른 경로다 — 저장·덮어쓰기·정리 모두 안 한다(세션 426,
+    `test_match_basis_failure_*` 참조). 이 시험은 "item 없음" 경로만 가리킨다.
     """
     _make_complex(db, complex_no="5003", name="푸르지오시티", households=500)
     monkeypatch.setattr(
@@ -1996,6 +1998,318 @@ def test_purge_skipped_when_run_matched_nothing(db, monkeypatch):
     assert db.query(KaptComplexMap).filter_by(complex_no="9001").count() == 1
 
 
+# ───────────── 기본정보 호출 실패 = 그 단지는 손대지 않는다 (세션 426) ─────────────
+#
+# 예전엔 `fetch_apt_basis_info` 가 실패도 None 으로 돌려줘, pass 2 가 "세대수 모름" 으로 보고
+# 기존 행의 복도유형·세대수를 None 으로 덮어쓰거나, 엄격 이름 게이트에서 떨어뜨려 회차 끝
+# 정리가 매칭·관리비 행을 지웠다. 이제 실패는 KaptApiError 이고 그 단지는 건너뛴다.
+
+
+def _raise_basis_04(code):
+    raise KaptApiError(
+        f"data.go.kr 오류 코드 04(HTTP 에러) — op=getAphusBassInfoV5 kaptCode={code}",
+        code="04", op="getAphusBassInfoV5",
+    )
+
+
+def _seed_mapped_complex(db, complex_no, name, bjd, kapt_code,
+                         corridor="계단식", households=1200):
+    """이미 연결된 단지 1건(옛 matched_at) + 그 관리비 1건을 심는다. 심은 matched_at 을 돌려준다."""
+    from datetime import timedelta
+
+    from utils import utcnow
+
+    old = utcnow() - timedelta(days=10)
+    db.add(Complex(
+        complex_no=complex_no, complex_name=name, cortar_no=bjd,
+        real_estate_type_code="APT", total_household_count=households,
+    ))
+    db.add(KaptComplexMap(
+        complex_no=complex_no, kapt_code=kapt_code, kapt_name=name, match_score=1.0,
+        corridor_type=corridor, kapt_household_count=households, matched_at=old,
+    ))
+    db.add(KaptManagementCost(complex_no=complex_no, cost_month="202606", total_cost=5000))
+    db.commit()
+    return db.query(KaptComplexMap).filter_by(complex_no=complex_no).one().matched_at
+
+
+def _basis_fails_for(failing_codes):
+    def fake(code):
+        if code in failing_codes:
+            _raise_basis_04(code)
+        return {"codeHallNm": "복도식", "kaptdaCnt": 500.0}
+    return fake
+
+
+def test_match_basis_failure_keeps_existing_mapping_and_costs(db, monkeypatch):
+    """(a)(c)(d) 기본정보 실패 단지는 기존 행 4칸·관리비가 그대로이고 전량 회차 정리에서도 빠진다.
+
+    같은 회차에 재확인 안 된 다른 단지(9001)는 지금처럼 정리된다. 실패 1 ≤ 연결 1 → completed + 문구.
+    뮤테이션 M1(정리에서 keep 거르기 삭제) → 1001 이 지워져 FAIL.
+    뮤테이션 M2(except 분기에서 None 으로 계속 진행해 upsert) → 복도유형·세대수가 None 이 돼 FAIL.
+    """
+    seeded_at = _seed_mapped_complex(
+        db, "1001", "경희궁의아침4단지", "1111011800", "A10021295",
+        corridor="계단식", households=1200,
+    )
+    _make_complex(db, complex_no="1002", name="푸르지오시티",
+                  cortar_no="1111011900", households=500)   # 이번에 정상 연결될 단지
+    _seed_stale_mapping(db)                                   # 재확인 안 될 다른 단지 (9001)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([
+            _kapt(code="A10021295", name="경희궁의아침4단지", bjd="1111011800"),
+            _kapt(code="A9", name="푸르지오시티", bjd="1111011900"),
+        ], True),
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", _basis_fails_for({"A10021295"}))
+
+    result = match_kapt_complexes()
+
+    assert result["matched"] == 1
+    assert result["basis_failed"] == 1
+    row = db.query(KaptComplexMap).filter_by(complex_no="1001").one()
+    assert row.kapt_code == "A10021295"
+    assert row.corridor_type == "계단식"
+    assert row.kapt_household_count == 1200
+    assert row.matched_at == seeded_at
+    assert db.query(KaptManagementCost).filter_by(complex_no="1001").count() == 1
+    # 다른 단지의 정리는 그대로
+    assert result["purged"] == 1
+    assert db.query(KaptComplexMap).filter_by(complex_no="9001").count() == 0
+    assert db.query(KaptComplexMap).filter_by(complex_no="1002").count() == 1
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_match").one()
+    assert job.status == "completed"
+    assert job.error_message == (
+        "단지 기본정보 1건 받기 실패 — 그 단지들은 기존 연결을 그대로 두었어요(다음 달 다시 시도)"
+    )
+
+
+def test_match_basis_failure_new_pair_not_saved_and_job_failed(db, monkeypatch):
+    """(b)·순서 5 — 새 짝인데 기본정보가 실패하면 행을 만들지 않는다. 실패 1 > 연결 0 → failed.
+
+    문구는 "매칭 실패" 가 아니라 기본정보 실패여야 한다.
+    뮤테이션 M3(failed 판정을 matched==0 가드 뒤로) → "전부 매칭 실패" 문구가 나와 FAIL.
+    """
+    _make_complex(db)   # 1001, 연결 행 없음
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt", lambda *a, **k: ([_kapt()], True)
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", _raise_basis_04)
+
+    result = match_kapt_complexes()
+
+    assert result["matched"] == 0
+    assert result["basis_failed"] == 1
+    assert db.query(KaptComplexMap).count() == 0
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_match").one()
+    assert job.status == "failed"
+    assert "기본정보" in job.error_message
+    assert "연결 0건" in job.error_message
+    assert "매칭 실패" not in job.error_message
+
+
+def test_match_basis_failures_exceed_matched_fail_job_and_skip_purge(db, monkeypatch):
+    """(d) 실패 2 > 연결 1 → failed + 정리 건너뜀(재확인 안 된 9001 도 남는다)."""
+    _seed_mapped_complex(db, "1001", "경희궁의아침4단지", "1111011800", "A10021295")
+    _seed_mapped_complex(db, "1003", "래미안타워", "1111012000", "A77")
+    _make_complex(db, complex_no="1002", name="푸르지오시티",
+                  cortar_no="1111011900", households=500)
+    _seed_stale_mapping(db)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([
+            _kapt(code="A10021295", name="경희궁의아침4단지", bjd="1111011800"),
+            _kapt(code="A77", name="래미안타워", bjd="1111012000"),
+            _kapt(code="A9", name="푸르지오시티", bjd="1111011900"),
+        ], True),
+    )
+    monkeypatch.setattr(
+        service_kapt, "fetch_apt_basis_info", _basis_fails_for({"A10021295", "A77"})
+    )
+
+    result = match_kapt_complexes()
+
+    assert result["matched"] == 1
+    assert result["basis_failed"] == 2
+    assert result["error"] == "basis_mostly_failed"
+    assert result.get("purged") is None
+    assert db.query(KaptComplexMap).filter_by(complex_no="9001").count() == 1
+    assert db.query(KaptManagementCost).filter_by(complex_no="9001").count() == 1
+    assert db.query(KaptComplexMap).filter_by(complex_no="1001").one().corridor_type == "계단식"
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_match").one()
+    assert job.status == "failed"
+    assert job.error_message == (
+        "단지 기본정보 2건 받기 실패 — 그 단지들은 기존 연결을 그대로 두었어요(다음 달 다시 시도)"
+        " · 연결 1건"
+    )
+
+
+def test_match_basis_failure_note_joins_partial_list_note(db, monkeypatch):
+    """(d) 부분 목록 경고와 기본정보 실패 문구는 이어 붙는다 — 하나가 다른 하나를 덮지 않는다."""
+    _seed_mapped_complex(db, "1001", "경희궁의아침4단지", "1111011800", "A10021295")
+    _make_complex(db, complex_no="1002", name="푸르지오시티",
+                  cortar_no="1111011900", households=500)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([
+            _kapt(code="A10021295", name="경희궁의아침4단지", bjd="1111011800"),
+            _kapt(code="A9", name="푸르지오시티", bjd="1111011900"),
+        ], False),
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", _basis_fails_for({"A10021295"}))
+
+    result = match_kapt_complexes()
+
+    assert result["matched"] == 1
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_match").one()
+    assert job.status == "completed"
+    assert "부분 목록" in job.error_message
+    assert "단지 기본정보 1건 받기 실패" in job.error_message
+
+
+def test_match_basis_failure_keeps_old_code_mapping_and_costs(db, monkeypatch):
+    """6번(V1) 기존 X→K_old(관리비 있음) · 이번 후보 K_new · 기본정보 실패 → K_old 매칭·관리비 그대로.
+
+    `_clear_conflicting_mappings` 가 불리면 kapt_code 가 바뀐 것으로 보고 옛 관리비를 지운다.
+    """
+    seeded_at = _seed_mapped_complex(
+        db, "1001", "경희궁의아침4단지", "1111011800", "K_OLD", households=120,
+    )
+    _make_complex(db, complex_no="1002", name="푸르지오시티",
+                  cortar_no="1111011900", households=500)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([
+            _kapt(code="K_NEW", name="경희궁의아침4단지", bjd="1111011800"),
+            _kapt(code="A9", name="푸르지오시티", bjd="1111011900"),
+        ], True),
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", _basis_fails_for({"K_NEW"}))
+
+    result = match_kapt_complexes()
+
+    assert result["basis_failed"] == 1
+    row = db.query(KaptComplexMap).filter_by(complex_no="1001").one()
+    assert row.kapt_code == "K_OLD"
+    assert row.matched_at == seeded_at
+    assert db.query(KaptManagementCost).filter_by(complex_no="1001").count() == 1
+
+
+def test_match_basis_failure_keeps_reverse_conflict_loser_mapping(db, monkeypatch):
+    """2번 역방향 경합에서 진 기존 짝 W→K 는, 이긴 X 의 기본정보가 실패하면 정리에서 남는다.
+
+    W(7002) 는 pass 1 에서 떨어져 complex_no 로는 keep 에 없다 — kapt_code(AX)로 지켜야 한다.
+    뮤테이션 N2: 정리의 keep_codes 거르기를 지우면 W 의 매칭·관리비가 지워져 FAIL.
+    """
+    _seed_mapped_complex(db, "7002", "래미안퍼스티지2차", "1111011800", "AX", households=120)
+    _make_complex(db, complex_no="7001", name="래미안퍼스티지1", households=120)
+    _make_complex(db, complex_no="1002", name="푸르지오시티",
+                  cortar_no="1111011900", households=500)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([
+            _kapt(code="AX", name="래미안퍼스티지1", bjd="1111011800"),
+            _kapt(code="A9", name="푸르지오시티", bjd="1111011900"),
+        ], True),
+    )
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", _basis_fails_for({"AX"}))
+
+    result = match_kapt_complexes()
+
+    assert result["matched"] == 1 and result["basis_failed"] == 1
+    assert result["list_complete"] is True        # 정리가 실제로 돈 회차
+    assert db.query(KaptComplexMap).filter_by(complex_no="7002").one().kapt_code == "AX"
+    assert db.query(KaptManagementCost).filter_by(complex_no="7002").count() == 1
+    assert db.query(KaptComplexMap).filter_by(complex_no="7001").count() == 0
+
+
+def test_match_partial_list_basis_failures_exceed_matched_fail_job(db, monkeypatch):
+    """7번(V3) 부분 목록 + 실패 > 연결 → failed(기본정보 문구) · 정리 안 함."""
+    _seed_mapped_complex(db, "1001", "경희궁의아침4단지", "1111011800", "A10021295")
+    _seed_mapped_complex(db, "1003", "래미안타워", "1111012000", "A77")
+    _make_complex(db, complex_no="1002", name="푸르지오시티",
+                  cortar_no="1111011900", households=500)
+    _seed_stale_mapping(db)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([
+            _kapt(code="A10021295", name="경희궁의아침4단지", bjd="1111011800"),
+            _kapt(code="A77", name="래미안타워", bjd="1111012000"),
+            _kapt(code="A9", name="푸르지오시티", bjd="1111011900"),
+        ], False),
+    )
+    monkeypatch.setattr(
+        service_kapt, "fetch_apt_basis_info", _basis_fails_for({"A10021295", "A77"})
+    )
+
+    result = match_kapt_complexes()
+
+    assert result["error"] == "basis_mostly_failed"
+    assert result.get("purged") is None
+    assert db.query(KaptComplexMap).filter_by(complex_no="9001").count() == 1
+    from db.models import CrawlJob
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_match").one()
+    assert job.status == "failed"
+    assert job.error_message.startswith("단지 기본정보 2건 받기 실패")
+    assert job.error_message.endswith(" · 연결 1건")
+
+
+def test_match_basis_quota_stops_remaining_calls(db, monkeypatch):
+    """3번 한도 초과(22)면 남은 단지를 부르지 않고 끊는다 — 전부 실패로 세어 failed·정리 안 함.
+
+    뮤테이션 N3: 쿼터 break 를 지우면 둘째 단지도 불려 FAIL.
+    """
+    _seed_mapped_complex(db, "1001", "경희궁의아침4단지", "1111011800", "A10021295")
+    _seed_mapped_complex(db, "1003", "래미안타워", "1111012000", "A77")
+    _seed_stale_mapping(db)
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([
+            _kapt(code="A10021295", name="경희궁의아침4단지", bjd="1111011800"),
+            _kapt(code="A77", name="래미안타워", bjd="1111012000"),
+        ], True),
+    )
+    calls = []
+
+    def fake(code):
+        calls.append(code)
+        if len(calls) == 1:
+            raise KaptApiError("일일 한도 초과(22)", code="22", is_quota=True)
+        return {"codeHallNm": "복도식", "kaptdaCnt": 1200.0}
+
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", fake)
+
+    result = match_kapt_complexes()
+
+    assert len(calls) == 1, f"한도 초과 뒤에도 기본정보를 불렀다: {calls}"
+    assert result["basis_failed"] == 2
+    assert result["error"] == "basis_mostly_failed"
+    assert db.query(KaptComplexMap).filter_by(complex_no="9001").count() == 1
+    for no in ("1001", "1003"):
+        assert db.query(KaptComplexMap).filter_by(complex_no=no).one().corridor_type == "계단식"
+
+
+def test_purge_unconfirmed_mappings_keep_skips_listed_complexes(db):
+    """`_purge_unconfirmed_mappings(keep=…)` 단위 — keep 단지는 남고 나머지 옛 행은 지운다."""
+    from utils import utcnow
+
+    _seed_mapped_complex(db, "1001", "경희궁의아침4단지", "1111011800", "A10021295")
+    _seed_stale_mapping(db)
+
+    purged = service_kapt._purge_unconfirmed_mappings(db, utcnow(), keep={"1001"})
+    db.commit()
+
+    assert purged == 1
+    assert db.query(KaptComplexMap).filter_by(complex_no="1001").count() == 1
+    assert db.query(KaptManagementCost).filter_by(complex_no="1001").count() == 1
+    assert db.query(KaptComplexMap).filter_by(complex_no="9001").count() == 0
+
+
 # ───────────── 엄격 규칙 적용 시점 (pass 1 느슨 / pass 2 엄격) ─────────────
 #
 # PR #433 의 "세대수 대조 불가 시 엄격 규칙"(임계 0.85 / 차수 모호 탈락)이
@@ -3506,19 +3820,42 @@ def test_fetch_cost_item_failure_carries_kaptcode_and_searchdate(monkeypatch, ca
 
 
 def test_basis_info_does_not_retry_transient_error(monkeypatch):
-    """기본정보(`fetch_apt_basis_info`)는 일시 오류도 재시도하지 않는다 — 실패 1건 = 1콜 · 대기 0 · None.
+    """기본정보(`fetch_apt_basis_info`)는 일시 오류도 재시도하지 않는다 — 실패 1건 = 1콜 · 대기 0.
 
     장애일에 kapt_match 기본정보 14,747건이 4콜씩·대기 176시간이 되는 것을 막는다(검사관 A).
+    세션 426 부터 실패는 None 이 아니라 `KaptApiError`(사유 코드 04)로 올라간다 — 호출자가
+    "item 없음"(None)과 "호출 실패"를 갈라 기존 매칭을 지키게.
     뮤테이션: `fetch_apt_basis_info` 의 `retry_transient=False` 를 지우면 4콜 · 대기 [3, 10, 30] 로 FAIL.
+    뮤테이션(M4): `_body_or_raise` 를 `_body` 로 되돌리면 예외 없이 None 이 와 FAIL.
     """
     calls = _sequence_call_api(monkeypatch, [RAW_ENVELOPE_04])
     slept = _fake_sleep(monkeypatch, kapt_api)
     before = kapt_api.retry_calls_made()
 
-    assert kapt_api.fetch_apt_basis_info("A10020001") is None
+    with pytest.raises(KaptApiError) as exc:
+        kapt_api.fetch_apt_basis_info("A10020001")
+    assert exc.value.code == "04"
     assert len(calls) == 1, calls
     assert slept == []
     assert kapt_api.retry_calls_made() == before
+
+
+def test_basis_info_item_null_returns_none(monkeypatch):
+    """(e) 응답은 왔는데 item 이 dict 가 아니면(`{"item": null}`) 예외가 아니라 None — 옛 약속 유지."""
+    ok_null = {"response": {"header": {"resultCode": "00"}, "body": {"item": None}}}
+    calls = _sequence_call_api(monkeypatch, [ok_null])
+
+    assert kapt_api.fetch_apt_basis_info("A10020001") is None
+    assert len(calls) == 1
+
+
+def test_basis_info_returns_item_dict(monkeypatch):
+    """정상 응답이면 item dict 를 그대로 돌려준다."""
+    ok = {"response": {"header": {"resultCode": "00"},
+                       "body": {"item": {"codeHallNm": "계단식", "kaptdaCnt": "1200"}}}}
+    _sequence_call_api(monkeypatch, [ok])
+
+    assert kapt_api.fetch_apt_basis_info("A10020001") == {"codeHallNm": "계단식", "kaptdaCnt": "1200"}
 
 
 @pytest.mark.parametrize("code", ["0", 0, "00"])

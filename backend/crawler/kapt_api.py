@@ -360,7 +360,9 @@ class KaptAPI(BasePublicDataAPI):
         `plain_words.explain_error` 가 사유 번호 문장으로 통째로 바꿔 내보내므로 영문 키가 새지 않는다.
         `retry_transient=False` 면 일시성 코드도 재시도 없이 즉시 올린다 — 기본정보
         (`fetch_apt_basis_info`)만 쓴다(장애일에 kapt_match 기본정보 14,747건이 4콜씩·대기 176시간이
-        되는 것을 막는다). 목록 페이지는 재시도를 유지한다 — `fetch_apt_list_page` docstring 참조.
+        되는 것을 막는다). 기본정보는 이 함수를 **직접** 불러 실패를 예외로 받는다(세션 426 —
+        실패를 None 으로 뭉개면 호출자가 기존 매칭을 덮어쓰거나 지웠다).
+        목록 페이지는 재시도를 유지한다 — `fetch_apt_list_page` docstring 참조.
         """
         global _retry_call_count
         where = f"op={op or url}" + (f" {ctx}" if ctx else "")
@@ -436,10 +438,11 @@ class KaptAPI(BasePublicDataAPI):
     def _body(cls, url: str, params: dict, retry_transient: bool = True) -> dict | None:
         """`_body_or_raise` 의 비-예외 래퍼 — 실패도 None.
 
-        단지 목록·기본정보 호출 전용이다. 이 둘은 실패해도 "그 단지를 이번 회차에
-        못 붙인다" 로 끝나고(다음 달 매칭이 다시 시도), 관리비처럼 **틀린 값을
-        저장할 위험이 없어** 기존 None 계약을 유지한다. 관리비 경로는 반드시
-        `_body_or_raise` 를 쓴다. `retry_transient` 는 `_body_or_raise` 로 그대로 넘긴다.
+        단지 목록 호출 전용이다. 목록은 실패해도 페이지네이션이 멈출 뿐이고(호출자가
+        totalCount 로 부분 목록을 가른다) 기존 None 계약을 유지한다. 관리비·기본정보
+        경로는 반드시 `_body_or_raise` 를 쓴다 — 기본정보도 세션 426 부터 예외를 받는다
+        (실패를 None 으로 받으면 기존 매칭 행을 덮어쓰거나 지웠다).
+        `retry_transient` 는 `_body_or_raise` 로 그대로 넘긴다.
         """
         try:
             return cls._body_or_raise(url, params, retry_transient=retry_transient)
@@ -467,10 +470,19 @@ def fetch_apt_list_page(page: int, num_of_rows: int = 1000) -> tuple[list[dict],
 
 
 def fetch_apt_basis_info(kapt_code: str) -> dict | None:
-    """단지 기본정보 (getAphusBassInfoV5) — 세대수·복도유형·사용승인일 등."""
+    """단지 기본정보 (getAphusBassInfoV5) — 세대수·복도유형·사용승인일 등.
+
+    약속(세션 426):
+      · 호출 실패(오류 봉투 04 등·응답 없음·쿼터·미지 모양) → `KaptApiError` 를 올린다.
+      · 응답은 왔는데 item 이 dict 가 아님(`{"item": null}` 등) → None.
+    둘을 가르는 까닭: 예전엔 실패도 None 이라 `match_kapt_complexes` 가 "세대수 모름" 으로 보고
+    기존 행의 복도유형·세대수를 None 으로 덮어쓰거나, 엄격 이름 게이트에서 떨어뜨려 회차 끝
+    정리(`_purge_unconfirmed_mappings`)가 매칭·관리비 행을 지웠다. 이제 호출자는 실패한 단지를
+    손대지 않고 넘어간다.
+    """
     # 일시 오류 재시도 안 함 — 단지마다 1건이라 장애일엔 14,747건 × 4콜·대기 176시간이 된다.
-    # 실패는 "그 단지를 이번 달에 못 붙인다" 로 끝나고 다음 달 매칭이 다시 시도한다.
-    body = KaptAPI._body(
+    # 실패는 "그 단지를 이번 달엔 건드리지 않는다" 로 끝나고 다음 달 매칭이 다시 시도한다.
+    body = KaptAPI._body_or_raise(
         f"{_BASIS_URL}/getAphusBassInfoV5", {"kaptCode": kapt_code}, retry_transient=False
     )
     if not body:

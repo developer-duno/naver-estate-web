@@ -573,10 +573,35 @@ def test_kapt_costs_runs_twice_daily_morning_and_noon():
     assert noon.max_instances == 1
 
 
+def test_kapt_costs_evening_run_at_2100():
+    """관리비 받기 저녁 회차가 매일 21:00 에 등록된다 (세션 426).
+
+    호출 간격 1.5초에선 두 회차로 한 달 수요를 못 따라가 세 번째 회차를 더했다.
+    같은 함수·같은 배치, 다른 것은 scheduler_job_id 하나뿐.
+    뮤테이션: scheduler.py 의 kapt_costs_evening add_job 을 지우면 FAIL.
+    """
+    with patch.object(sched_mod, "KAPT_ENABLED", True):
+        scheduler = sched_mod.create_scheduler()
+    jobs = {job.id: job for job in scheduler.get_jobs()}
+    assert "kapt_costs_evening" in jobs, "kapt_costs_evening(21:00) 미등록"
+
+    morning, evening = jobs["kapt_costs"], jobs["kapt_costs_evening"]
+    assert (_cron_field(evening, "hour"), _cron_field(evening, "minute")) == ("21", "0")
+    assert _cron_field(evening, "day_of_week") == "*", "저녁 회차가 매일이 아님"
+    assert _cron_field(evening, "day") == "*", "저녁 회차가 매일이 아님"
+    assert evening.name == "단지 관리비 받기 21:00"
+    assert evening.func is morning.func
+    assert evening.kwargs["batch_size"] == sched_mod.KAPT_COST_BATCH_SIZE
+    assert evening.kwargs["scheduler_job_id"] == "kapt_costs_evening"
+    assert evening.max_instances == 1
+    assert evening.misfire_grace_time == 3600
+
+
 def test_kapt_costs_both_runs_absent_when_disabled():
-    """KAPT_ENABLED 꺼짐이면 두 회차 모두 등록되지 않는다."""
+    """KAPT_ENABLED 꺼짐이면 세 회차 모두 등록되지 않는다."""
     with patch.object(sched_mod, "KAPT_ENABLED", False):
         scheduler = sched_mod.create_scheduler()
     ids = _job_ids(scheduler)
     assert "kapt_costs" not in ids
     assert "kapt_costs_noon" not in ids
+    assert "kapt_costs_evening" not in ids

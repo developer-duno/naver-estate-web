@@ -30,17 +30,21 @@
 
 하루 상한·실행 창
     대상 10,521행 × 5 op = 52,605콜. K-apt 버킷(`quota:kapt:<KST 날짜>`)은 60,000/일이고
-    정기 `kapt_costs` 회차가 하루 2회(06:20·12:40, 세션 422) ≈25,000 을 쓴다. `--daily-cap`(기본
-    45,000)은 **그날 버킷 전체 사용량**(정기 회차 몫 포함)과 비교하므로, 두 정기 회차가 쓴 뒤라면
-    이 스크립트 몫은 하루 ≈20,000 이다 → 상한에 닿으면 정상 종료하고 다음 날 다시 돌린다(사흘 안팎
-    분할). 오늘 카운트는 행마다 DB 에서 다시 읽는다.
-    그러니 **14:00 이후에 시작해 자정 전에 끝낸다 — 코드가 14:00 전 시작을 막고 자정에 멈춘다.**
-    14:00 = 낮 회차(12:40 시작, 평시 ≈13:40 끝) 뒤라 두 정기 회차와 겹치지 않는다. 자정을 넘기면
-    카운터가 새 날짜로 바뀌어 다음 날 정기 회차 몫을 이 스크립트가 먼저 먹는다 — 06:20 회차가 한도에 걸린다.
-    시작은 14:00~23:59 KST 에만 허용한다(00:00~14:00 은 정기 `kapt_costs` 06:20·12:40 회차 전후라 거부,
-    `--force` 로만 무시). 돌던 중 KST 날짜가 시작 때와 달라지면(자정 통과) `date_rollover` 로 멈춘다
-    (`--force` 로도 안 풀린다 — 그다음 날 상한 몫을 먹는 것이 문제라서). `crawl_jobs` 에 `kapt_costs`
-    가 running 이면 시작을 거부하고, 돌던 중에도 100행마다 다시 확인해 running 이면 멈춘다.
+    정기 `kapt_costs` 회차가 하루 3회(06:20·12:40·21:00, 세션 426) 돈다 — K-apt 호출 간격 1.5초라
+    회차당 최대 약 4,800콜, 셋 다 돌면 약 14,400. `--daily-cap`(기본 45,000)은 **그날 버킷 전체
+    사용량**(정기 회차 몫 포함)과 비교한다 → 상한에 닿으면 정상 종료하고 다음 날 다시 돌린다.
+    오늘 카운트는 행마다 DB 에서 다시 읽는다.
+    ⚠ 호출 간격이 1.5초라 이 스크립트도 시간당 약 2,400콜뿐이다 — 하루 창(15:00~20:45) 약 5.7시간이면
+    약 1.4만 콜, 52,605콜은 나흘 안팎이다.
+    시작은 **15:00 이상 · 20:30 미만**(KST)에만 허용한다(세션 426). 15:00 = 낮 회차(12:40 시작)가 1.5초
+    간격으로 14:40~15:13 에 끝난 뒤, 20:30 = 21:00 저녁 회차 전에 몇 행이라도 돌 여유. 그 밖은 거부하고
+    `--force` 로만 무시한다. 돌던 중에는 **행마다** 지금이 20:45 KST 이상이면 `evening_stop` 으로 멈춘다
+    (`--force` 로도 안 풀린다) — 이 스크립트는 crawl_jobs 행을 남기지 않아 21:00 회차가 이 스크립트를
+    못 보고, 두 프로세스가 각자 1.5초 간격으로 부르면 합쳐서 창구 한계(약 0.9콜/초)를 넘어 04 벌칙이
+    난다. 돌던 중 KST 날짜가 시작 때와 달라지면(자정 통과) `date_rollover` 로도 멈춘다(20:45 정지가 먼저라
+    `--force` 로 이른 시각에 시작해 한 행이 몇 시간 걸린 경우만 닿는 안전망). `crawl_jobs` 에 `kapt_costs`·
+    `kapt_match` 가 running 이면 시작을 거부하고, 돌던 중에도 100행마다 다시 확인해 running 이면 멈춘다.
+    멈춘 뒤 다시 실행하면 고친 행은 대상에서 빠져 있으므로 이어서 간다.
 
 5 op 가 전부 비어 온 행
     대상 행은 전부 한 번은 공개돼 저장된 자료다. 다시 받았는데 5 op 가 **전부** 비어 오면
@@ -55,7 +59,7 @@
 사용 (backend 폴더에서)
     python scripts/recollect_kapt_5ops.py --dry-run          # 콜 0 — 대상 수·예상 콜·첫 10행
     python scripts/recollect_kapt_5ops.py --limit 10         # 앞에서 10행 조회
-    python scripts/recollect_kapt_5ops.py                    # 상한까지(14:00 이후 시작·자정에 멈춤, 하루 1회씩 사흘 안팎)
+    python scripts/recollect_kapt_5ops.py                    # 상한까지(15:00~20:30 시작·20:45 에 멈춤, 하루 1회씩 나흘 안팎)
     옵션: --daily-cap N (기본 45000) · --sleep-between 초 (기본 0 — throttle 은 call_api 가 한다) · --force
 """
 
@@ -107,10 +111,14 @@ DEFAULT_DAILY_CAP = 45_000
 MAX_CONSECUTIVE_FAILURES = 10
 MAX_CONSECUTIVE_ALL_BLANK = 10
 PROGRESS_EVERY = 100
-# 시작 허용 시각(KST) — 이 시각 전(00:00~14:00)에는 시작하지 않는다. 정기 kapt_costs 두 회차
-# (06:20·12:40 시작, 평시 60~90분 — 세션 422)와 겹치지 않고, 그날 정기 회차가 쓴 뒤라는
-# `--daily-cap` 전제를 지키려는 것.
-START_NOT_BEFORE = dtime(14, 0)
+# 시작 허용 시각(KST) = START_NOT_BEFORE 이상 · START_NOT_AFTER 미만 (세션 426). 정기 kapt_costs
+# 세 회차(06:20·12:40·21:00 시작, 1.5초 간격이면 회차당 최대 약 2.5시간)와 겹치지 않게 —
+# 15:00 = 12:40 회차가 끝난 뒤(14:40~15:13), 20:30 = 21:00 회차 전에 몇 행이라도 돌 여유.
+START_NOT_BEFORE = dtime(15, 0)
+START_NOT_AFTER = dtime(20, 30)
+# 돌던 중 이 시각(KST) 이상이면 행마다 확인해 멈춘다 — 21:00 저녁 회차가 이 스크립트를 못 보므로
+# (crawl_jobs 행 없음) 이 스크립트가 먼저 비켜 준다. `--force` 로도 안 풀린다.
+EVENING_STOP_AT = dtime(20, 45)
 
 # 옛 개별사용료 op 이름(…V2) → 현재 이름(…V3). 요약 계산 때만 쓴다(저장 키는 불변).
 _V2_TO_V3 = {op[:-2] + "V2": op for op in INDIVIDUAL_COST_OPS}
@@ -136,16 +144,22 @@ class RunStats:
     failed_ids: list[int] = field(default_factory=list)
 
 
-def before_start_window(now_kst: datetime) -> bool:
-    """14:00 KST 전이면 True — 시작 거부 대상."""
-    return now_kst.astimezone(KST).time() < START_NOT_BEFORE
+def outside_start_window(now_kst: datetime) -> bool:
+    """15:00 전이거나 20:30 이후(KST)면 True — 시작 거부 대상."""
+    t = now_kst.astimezone(KST).time()
+    return t < START_NOT_BEFORE or t >= START_NOT_AFTER
+
+
+def past_evening_stop(now_kst: datetime) -> bool:
+    """20:45 KST 이상이면 True — 21:00 저녁 회차에 창구를 비켜 주려고 멈출 시각."""
+    return now_kst.astimezone(KST).time() >= EVENING_STOP_AT
 
 
 def kapt_costs_running(db) -> bool:
     """정기 K-apt 관리비·매칭 회차(kapt_costs · kapt_match) 중 하나라도 running 이면 True.
 
     매칭(`kapt_match`, 매월 21일 14:50 — 세션 426)도 같은 K-apt 창구를 1.5초 간격으로 약 6시간
-    쓴다. 이 스크립트의 시작 허용 창(14:00~23:59)과 겹치므로, 같이 돌면 합쳐서 창구 속도 한계를
+    쓴다. 이 스크립트의 시작 허용 창(15:00~20:30)과 겹치므로, 같이 돌면 합쳐서 창구 속도 한계를
     넘는다(세션 425). 이름은 기존 시험·stop_reason 과 맞추려 그대로 둔다.
     """
     return (
@@ -240,10 +254,10 @@ def run(db, *, limit: int | None = None, daily_cap: int = DEFAULT_DAILY_CAP,
         stats.stop_reason = "refused_kapt_costs_running"
         logger.error("정기 K-apt 관리비·매칭 회차(kapt_costs·kapt_match)가 돌고 있어 시작하지 않는다 — 끝난 뒤 다시 실행")
         return stats
-    if not force and before_start_window(started_kst):
+    if not force and outside_start_window(started_kst):
         stats.stop_reason = "refused_window"
-        logger.error("14:00 KST 전에는 시작하지 않는다 — 정기 관리비 수집(06:20·12:40) 몫을 먼저 쓰지 않게"
-                     "(14:00~23:59 에 다시 실행, --force 로만 무시)")
+        logger.error("15:00~20:30 KST 밖에서는 시작하지 않는다 — 정기 관리비 수집(06:20·12:40·21:00)과 창구를"
+                     " 나눠 쓰지 않게(15:00~20:30 에 다시 실행, --force 로만 무시)")
         return stats
 
     targets = select_targets(db, limit)
@@ -256,10 +270,16 @@ def run(db, *, limit: int | None = None, daily_cap: int = DEFAULT_DAILY_CAP,
             stats.stop_reason = "kapt_costs_started"
             logger.warning("정기 K-apt 관리비·매칭 회차(kapt_costs·kapt_match)가 시작돼 멈춘다 — 끝난 뒤 다시 실행하면 이어간다")
             break
-        if now_fn().astimezone(KST).date() != started_kst.date():
+        now_kst = now_fn().astimezone(KST)
+        if now_kst.date() != started_kst.date():
             stats.stop_reason = "date_rollover"
-            logger.warning("KST 자정을 넘겨 멈춘다 — 새 날짜의 K-apt 한도는 그날 정기 06:20·12:40 회차 몫이다"
-                           "(14:00 뒤 다시 실행하면 이어간다)")
+            logger.warning("KST 자정을 넘겨 멈춘다 — 새 날짜의 K-apt 한도는 그날 정기 06:20·12:40·21:00 회차 몫이다"
+                           "(15:00 뒤 다시 실행하면 이어간다)")
+            break
+        if past_evening_stop(now_kst):
+            stats.stop_reason = "evening_stop"
+            logger.warning("20:45 KST 가 되어 멈춘다 — 21:00 정기 관리비 회차와 창구를 나눠 쓰면 둘 다 04 벌칙을"
+                           " 받는다(내일 15:00 뒤 다시 실행하면 이어간다)")
             break
         quota = today_quota(db)
         if quota + len(FIVE_OPS) > daily_cap:
@@ -345,7 +365,8 @@ def dry_run(db, daily_cap: int = DEFAULT_DAILY_CAP) -> dict:
           f"({len(FIVE_OPS)} op × 행) · 하루 상한 {daily_cap} → 최소 {days}일 "
           f"(정기 kapt_costs 몫 포함, 오늘 K-apt 사용량 {quota})")
     print(f"[dry-run] 정기 수집 running: {kapt_costs_running(db)} · 지금 KST {datetime.now(KST):%H:%M}"
-          f" · 시작 허용 {START_NOT_BEFORE:%H:%M}~23:59 (자정에 멈춤)")
+          f" · 시작 허용 {START_NOT_BEFORE:%H:%M}~{START_NOT_AFTER:%H:%M} 전"
+          f" ({EVENING_STOP_AT:%H:%M} 에 멈춤)")
     first = select_targets(db, 10)
     for t in first:
         row = db.get(KaptManagementCost, t.id)
@@ -362,7 +383,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--daily-cap", type=int, default=DEFAULT_DAILY_CAP,
                         help=f"오늘 K-apt 사용량이 이 값에 닿으면 멈춤 (기본 {DEFAULT_DAILY_CAP})")
     parser.add_argument("--sleep-between", type=float, default=0.0, help="행 사이 대기(초)")
-    parser.add_argument("--force", action="store_true", help="14:00 KST 전 시작 거부를 무시(자정 정지는 그대로)")
+    parser.add_argument("--force", action="store_true", help="15:00~20:30 KST 밖 시작 거부를 무시(20:45·자정 정지는 그대로)")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

@@ -498,8 +498,29 @@ def create_scheduler() -> BackgroundScheduler:
             id="kapt_costs_noon", name="단지 관리비 받기 12:40",
             max_instances=1, misfire_grace_time=3600,
         )
+        # 저녁 회차 21:00 (세션 426, 사장님 결정 2026-10-01) — 같은 함수·같은 배치를 하루 한 번 더.
+        #   왜: 호출 간격이 1.5초(세션 425)라 한 회차 120분 예산이면 약 4,800콜뿐이다. 06:20·12:40
+        #   두 회차로는 한 달 수요의 97~107% 라 새 달이 나온 단지를 다 못 따라간다 — 세 번째 회차로
+        #   매월 최신 달을 유지한다. 밤에도 같은 속도 제한(33번째 콜부터 04)이 걸린다는 것은
+        #   2026-10-01 23:30 실측으로 확인해 시간대로 피할 수는 없다.
+        #   겹침: 다른 정기 K-apt 잡은 21:00 에 없고, 기존 행 재수집 스크립트(recollect_kapt_5ops.py)는
+        #   20:30 이후 시작을 거부하고 20:45 에 멈춘다(이 스크립트는 crawl_jobs 행이 없어 이 회차가 못 보므로
+        #   스크립트가 먼저 비켜 준다). 길면 약 23:30 에 끝나 01:30~ 밤 배치 창과 안 겹친다.
+        #   매월 21일 14:50 매칭(약 6.1시간 + 꼬리)이 21:00 넘어 돌면 collect_kapt_costs 의
+        #   match_running 가드가 이 회차를 건너뛴다 — 21일 저녁 회차는 대개 건너뛴다.
+        scheduler.add_job(
+            collect_kapt_costs,
+            "cron",
+            hour=21, minute=0,
+            kwargs={
+                "batch_size": KAPT_COST_BATCH_SIZE,
+                "scheduler_job_id": "kapt_costs_evening",
+            },
+            id="kapt_costs_evening", name="단지 관리비 받기 21:00",
+            max_instances=1, misfire_grace_time=3600,
+        )
         logger.info(
-            "K-apt 관리비 연동 활성화: 매칭 매월 21일 14:50 / 관리비 매일 06:20·12:40 (배치 %d)",
+            "K-apt 관리비 연동 활성화: 매칭 매월 21일 14:50 / 관리비 매일 06:20·12:40·21:00 (배치 %d)",
             KAPT_COST_BATCH_SIZE,
         )
 

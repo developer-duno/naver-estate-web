@@ -819,6 +819,40 @@ def test_kapt_noon_run_does_not_leak_into_other_cards(client, db):
     assert _get_item(items, "kapt_costs")["status"] == "green"
 
 
+def test_kapt_costs_card_counts_evening_run(client, db):
+    """저녁(21:00, kapt_costs_evening — 세션 426) 회차만 성공한 날 → 관리비 카드가 그 회차를 센다.
+
+    아침·낮 회차는 실패하고 저녁 회차만 성공해도 카드와 monitor 의 "자료 오래됨" 경보가
+    "받았음"으로 봐야 한다. 뮤테이션: freshness.py `_CARD_SCHEDULER_IDS["kapt_costs"]` 에서
+    "kapt_costs_evening" 을 빼면 last_updated 가 10일 전 아침 성공이 되어 red → FAIL.
+    """
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    _add_kapt_costs_job(
+        db, "kapt_costs", "completed",
+        started_at=now - timedelta(days=10, minutes=60), completed_at=now - timedelta(days=10),
+        processed=500, total=500,
+    )
+    _add_kapt_costs_job(
+        db, "kapt_costs_noon", "failed",
+        started_at=now - timedelta(hours=10), completed_at=now - timedelta(hours=10) + timedelta(seconds=12),
+        processed=0, total=500,
+    )
+    evening_done = now - timedelta(hours=1)
+    _add_kapt_costs_job(
+        db, "kapt_costs_evening", "completed",
+        started_at=evening_done - timedelta(minutes=110), completed_at=evening_done,
+        processed=190, total=200,
+    )
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    item = _get_item(res.json()["items"], "kapt_costs")
+    assert item["status"] == "green", f"저녁 회차 성공을 세면 green: {item}"
+    assert datetime.fromisoformat(item["last_updated"]) == evening_done, item
+    assert item["last_job"]["processed_items"] == 190, item["last_job"]
+    assert datetime.fromisoformat(item["last_job"]["completed_at"]) == evening_done, item["last_job"]
+
+
 # ── 관리비 카드 헛바퀴 문턱 10 (세션 426 — 미공개 기록으로 작은 회차가 생김) ──
 
 def test_kapt_costs_small_all_blank_run_not_spinning(client, db):

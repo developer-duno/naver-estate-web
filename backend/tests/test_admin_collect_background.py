@@ -174,11 +174,34 @@ def test_b2_scheduler_running_row_blocks_with_409(client, db):
         assert "kapt-costs" not in collect_mod._collect_running
 
 
+def test_b2_kapt_costs_button_409_while_kapt_match_running(client, db):
+    """관리비 단지 연결(kapt_match)이 도는 중이면 관리비 받기 버튼은 409 + 우리말 사유 (세션 426).
+
+    수집기 자신이 match_running 으로 건너뛰므로, 그대로 시작시키면 화면엔 "시작했어요" 인데
+    아무 일도 안 일어났다(검사관 A·C). 다른 버튼(가치 점수)은 막지 않는다.
+    뮤테이션: collect.py 의 kapt-costs ↔ kapt_match 확인을 지우면 200 이 되어 FAIL.
+    """
+    _admin(db, "bg7")
+    _running_job(db, "kapt_match", 1)  # 매칭 임계 8h 안 — 살아 있는 회차
+    called = []
+    with patch.object(collect_mod, "_get_collector", return_value=lambda: called.append(1)):
+        res = client.post("/api/admin/collect/kapt-costs", headers=_auth("bg7"))
+        other = client.post("/api/admin/collect/metrics", headers=_auth("bg7"))
+        _join_collector("metrics")
+    assert res.status_code == 409
+    assert res.json()["detail"] == "관리비 단지 연결이 도는 중이에요 — 끝난 뒤 다시 눌러 주세요"
+    assert other.status_code == 200
+    assert called == [1]  # 관리비 받기는 부르지 않았다(가치 점수 1회만)
+    with collect_mod._collect_lock:
+        assert "kapt-costs" not in collect_mod._collect_running
+
+
 def test_b2_stale_or_other_running_rows_do_not_block(client, db):
     """유령(임계 지난 running)·다른 job_type 의 running 은 막지 않는다."""
     _admin(db, "bg6")
     _running_job(db, "kapt_costs", 4)  # 임계 3h 초과 — 유령
     _running_job(db, "air_quality", 0.1)  # 다른 수집기
+    _running_job(db, "kapt_match", 9)  # 매칭 임계 8h 초과 — 유령(세션 426 매칭 확인도 유령은 안 센다)
     with patch.object(collect_mod, "_get_collector", return_value=lambda: None):
         res = client.post("/api/admin/collect/kapt-costs", headers=_auth("bg6"))
         _join_collector("kapt-costs")

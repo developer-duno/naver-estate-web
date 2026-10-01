@@ -1114,6 +1114,7 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
       · 수집 ≥1 이고 실패 > 수집 → 잡 failed("대부분 오류"). 실패 ≤ 수집이면 부분 성공이라
                           completed + error_message
       · 이미 running 인 kapt_costs 가 있으면 잡 행을 만들지 않고 바로 반환(`already_running`)
+      · running 인 kapt_match 가 있어도 잡 행을 만들지 않고 바로 반환(`match_running`)
     부분 저장을 절대 하지 않는 것이 핵심이다 — 공용 실패 + 개별 성공으로
     "공용 0원" 총액을 저장하면 틀린 값이 사실처럼 화면에 뜨고, 그 달 행이 생겨
     다음 달까지 고쳐지지도 않는다.
@@ -1143,6 +1144,21 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
         db.close()
         logger.warning("[kapt_costs] 이미 도는 회차 있음 — 이번 실행은 건너뜀")
         return {"collected": 0, "error": "already_running", "message": "이미 도는 회차 있음"}
+    # 관리비 단지 연결(kapt_match)이 돌고 있으면 이번 회차는 건너뛴다(세션 426) — 모든 관리비
+    # 회차·관리자 버튼에 똑같이. 이유: ① 같은 프로세스가 K-apt 호출 간격(1.5초)을 나눠 써서
+    # 둘 다 느려지고 ② 매칭은 짝이 바뀐 단지의 관리비 행을 정리(삭제)하므로, 그 사이 받은 행이
+    # 지워지거나 행 잠금으로 서로 기다린다. 매월 21일 14:50 매칭(약 6.1시간 + 꼬리)이 21:00 회차와
+    # 겹치는 자리라 21일 저녁 회차는 대개 건너뛴다(매칭이 21:00 전에 끝난 날만 평소대로 돈다).
+    # 관리자 버튼은 routers/admin/collect.py 가 같은 조건으로 먼저 409 를 돌려준다.
+    if (
+        db.query(CrawlJob.id)
+        .filter(CrawlJob.job_type == _MATCH_JOB_TYPE, CrawlJob.status == "running")
+        .first()
+        is not None
+    ):
+        db.close()
+        logger.warning("[kapt_costs] 관리비 단지 연결이 도는 중 — 이번 실행은 건너뜀")
+        return {"collected": 0, "error": "match_running", "message": "관리비 단지 연결이 도는 중"}
     job = _record_job(db, _COST_JOB_TYPE, scheduler_job_id)
     # 미공개 기록(V068) — 루프는 단지 번호만 모으고, 관리비 커밋 뒤 `finally` 에서 별도
     # 트랜잭션으로 반영한다. `marks_ready` 는 관리비 커밋 직후 켜고, 전량 빈 응답 실패 분기·

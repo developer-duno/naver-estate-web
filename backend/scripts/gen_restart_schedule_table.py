@@ -68,6 +68,7 @@ _ID_TO_JOB_TYPE = {
     "kapt_match": "kapt_match",
     "kapt_costs": "kapt_costs",
     "kapt_costs_noon": "kapt_costs",
+    "kapt_costs_evening": "kapt_costs",
     "collect_air_quality": "air_quality",
     "collect_emergency": "emergency",
     "collect_childcare": "childcare",

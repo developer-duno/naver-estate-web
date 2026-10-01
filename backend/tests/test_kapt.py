@@ -3790,6 +3790,60 @@ def test_collect_costs_skips_when_already_running(db, monkeypatch):
     assert db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").count() == 1
 
 
+def test_collect_costs_skips_when_match_running(db, monkeypatch, caplog):
+    """관리비 단지 연결(kapt_match)이 running 이면 관리비 회차는 잡 행 0·호출 0 으로 건너뛴다 (세션 426).
+
+    매월 21일 14:50 매칭(약 6.1시간)이 21:00 저녁 회차와 겹치는 자리 — 같은 호출 간격을
+    나눠 쓰고 매칭이 관리비 행을 정리하므로 겹쳐 돌지 않는다. 관리자 버튼도 같은 함수라 같다.
+    뮤테이션: 시작부 kapt_match running 검사를 지우면 잡 행이 생기고 호출이 나가 FAIL.
+    """
+    import logging
+
+    from db.models import CrawlJob
+    _make_complex(db, complex_no="8401")
+    _seed_mapping(db, complex_no="8401", kapt_code="R1")
+    db.add(CrawlJob(job_type="kapt_match", status="running"))
+    db.commit()
+
+    def boom(code, month):
+        raise AssertionError("관리비 단지 연결이 도는 중인데 API 를 불렀다")
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", boom)
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", boom)
+
+    with caplog.at_level(logging.WARNING, logger=service_kapt.logger.name):
+        result = collect_kapt_costs(batch_size=10, scheduler_job_id="kapt_costs_evening")
+
+    assert result == {"collected": 0, "error": "match_running", "message": "관리비 단지 연결이 도는 중"}
+    assert db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").count() == 0
+    assert any("관리비 단지 연결이 도는 중" in r.getMessage() for r in caplog.records), caplog.text
+
+
+@pytest.mark.parametrize("match_status", ["completed", "failed"])
+def test_collect_costs_runs_when_match_finished(db, monkeypatch, match_status):
+    """끝난(completed·failed) kapt_match 행은 관리비 회차를 막지 않는다 (세션 426 검사관 A).
+
+    running 조건이 빠지면 매칭이 한 번 끝난 뒤 모든 관리비 회차가 영구히 건너뛰어진다.
+    뮤테이션: 시작부 kapt_match 검사에서 `CrawlJob.status == "running"` 을 지우면 FAIL.
+    """
+    from db.models import CrawlJob
+    _make_complex(db, complex_no="8402")
+    _seed_mapping(db, complex_no="8402", kapt_code="R2")
+    db.add(CrawlJob(job_type="kapt_match", status=match_status))
+    db.commit()
+
+    monkeypatch.setattr(service_kapt, "fetch_common_cost", lambda code, month: {"aV3": 100})
+    monkeypatch.setattr(service_kapt, "fetch_individual_cost", lambda code, month: {})
+
+    result = collect_kapt_costs(batch_size=10, scheduler_job_id="kapt_costs_evening")
+
+    assert result.get("error") is None, result
+    assert result["collected"] == 1, result
+    jobs = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").all()
+    assert len(jobs) == 1 and jobs[0].status == "completed", [(j.status, j.error_message) for j in jobs]
+    assert jobs[0].scheduler_job_id == "kapt_costs_evening"
+
+
 def test_fetch_cost_item_failure_carries_kaptcode_and_searchdate(monkeypatch, caplog):
     """재시도 INFO · "재시도 3회 후" WARNING · 예외 메시지 모두에 kaptCode·searchDate 가 실린다.
 

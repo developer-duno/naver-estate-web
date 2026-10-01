@@ -145,12 +145,13 @@ interval 잡(시각 `—` 행)의 주기는 **코드 기본값**이다 — 라�
 | 14:45 | `popular_1430` | 매일 14:45 | 1h |
 | 14:50 | ⏰ `kapt_match` | 매월 21일 14:50 | 8h |
 | 19:15 | `popular_1900` | 매일 19:15 | 1h |
+| 21:00 | ⏰ `kapt_costs_evening` | 매일 21:00 | 3h |
 | — | `crawl_details` | 30분마다 | 1h |
 | — | `crawler_monitor` | 30분마다 | 1h |
 | — | `complex_detail_APT` | 4시간마다 | 1h |
 | — | `complex_detail_OPST` | 4시간마다 | 1h |
 
-⏰ = 재시작 절대 금지 구간(스윕 임계 1h 초과 = 오래 도는 잡): backfill_detail_dawn(4h) · collect_childcare(3h) · backfill_price(12h) · collect_prices(3h) · collect_public_trades(8h) · kapt_costs(3h) · official_price(16h) · backfill_detail_noon(4h) · kapt_costs_noon(3h) · kapt_match(8h)
+⏰ = 재시작 절대 금지 구간(스윕 임계 1h 초과 = 오래 도는 잡): backfill_detail_dawn(4h) · collect_childcare(3h) · backfill_price(12h) · collect_prices(3h) · collect_public_trades(8h) · kapt_costs(3h) · official_price(16h) · backfill_detail_noon(4h) · kapt_costs_noon(3h) · kapt_match(8h) · kapt_costs_evening(3h)
 <!-- restart-schedule:end -->
 
 겹치면 **그 회차가 끝난 뒤로 미룬다.** 여러 PR 을 묶어 한 번에 재시작하는 것도 겹침을 줄인다(§1 말미).
@@ -252,7 +253,7 @@ Startup BAT 시절엔 로그인해야 기동 — infra.md §자동 시작 사건
 
 ### 6. Cross-link
 
-- `.claude/rules/infra.md` §스케줄러 (APScheduler) = 26 잡 + 운영 토글 (세션 402 실측: 상세 백필 2 + 채움률 감시 1 신설로 22 → 25. 세션 422 관리비 낮 회차로 25 → 26. ⚠ 라이브 `scheduler-status` 는 32개(세션 422 관리비 낮 회차 +1)로 보이는데, popular 3회차·complex_detail 5유형이 개별 등록돼 정적 id 수와 다른 것이 정상이다 — 두 수를 맞추려 하지 말 것)
+- `.claude/rules/infra.md` §스케줄러 (APScheduler) = 27 잡 + 운영 토글 (세션 402 실측: 상세 백필 2 + 채움률 감시 1 신설로 22 → 25. 세션 422 관리비 낮 회차로 25 → 26. 세션 426 관리비 저녁 회차로 26 → 27. ⚠ 라이브 `scheduler-status` 는 33개(세션 422 관리비 낮 회차 +1 · 세션 426 저녁 회차 +1)로 보이는데, popular 3회차·complex_detail 5유형이 개별 등록돼 정적 id 수와 다른 것이 정상이다 — 두 수를 맞추려 하지 말 것)
 - `.claude/rules/infra.md` §IP 차단 방지 = 네이버 호출 보호
 - 글로벌 메모리 박제 = `[[feedback-orchestrator-restart-zombie-risk]]` + `[[feedback-backend-process-zombie-grep]]`
 - 사건 일지 = `~/.claude/projects/d--naver-estate-web/memory/session{229,230,231}_summary.md`

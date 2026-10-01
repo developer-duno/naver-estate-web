@@ -201,6 +201,42 @@ describe("CollectorTrigger — 관리비 두 회차 (세션 423)", () => {
     expect(btn("단지 관리비 받기")).toBeDisabled();
   });
 
+  it("21:00 저녁 회차(세션 426)가 가장 늦게 시작했으면 그 결과 + (21:00 시작) 을 보여준다", async () => {
+    const NIGHT = new Date("2026-09-26T23:30:00+09:00"); // 21:00 회차가 끝난 뒤 시점
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NIGHT);
+    mockStatus.mockResolvedValue(
+      statusWith([
+        mkJob("kapt_costs", {
+          status: "failed",
+          started_at: "2026-09-26T06:20:00+09:00",
+          completed_at: "2026-09-26T06:34:00+09:00",
+          total_items: 0,
+          processed_items: 0,
+          error_plain: "포털 오류 04",
+        }),
+        mkJob("kapt_costs_noon", {
+          status: "failed",
+          started_at: "2026-09-26T12:40:00+09:00",
+          completed_at: "2026-09-26T12:50:00+09:00",
+          total_items: 0,
+          processed_items: 0,
+          error_plain: "포털 오류 04 낮",
+        }),
+        mkJob("kapt_costs_evening", {
+          status: "completed",
+          started_at: "2026-09-26T21:00:00+09:00",
+          completed_at: "2026-09-26T22:30:00+09:00",
+          total_items: 210,
+          processed_items: 200,
+        }),
+      ]),
+    );
+    renderIt();
+    expect(await screen.findByText("마지막 실행(21:00 시작): 1시간 전 · 완료 (200/210건)")).toBeInTheDocument();
+    expect(screen.queryByText(/포털 오류 04/)).toBeNull();
+  });
+
   it("다른 7개 카드는 글자 그대로다 (허용치 0)", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(NOW);
@@ -225,8 +261,19 @@ describe("CollectorTrigger — 누르기 전 확인창", () => {
     vi.mocked(window.confirm).mockReturnValue(false);
     renderIt();
     fireEvent.click(btn("단지 관리비 받기"));
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("약 55~65분"));
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("약 1만 2천 회"));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("보통 약 2시간, 길면 2시간 반"));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("약 4,800회"));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("우리 하루 상한 6만 회"));
+    await act(async () => {});
+    expect(mockTrigger).not.toHaveBeenCalled();
+  });
+
+  it("관리비 단지 연결 확인창은 그동안 관리비 받기가 쉰다는 것을 알린다 (세션 426)", async () => {
+    vi.mocked(window.confirm).mockReturnValue(false);
+    renderIt();
+    fireEvent.click(btn("관리비 단지 연결하기"));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("약 6시간 걸리고"));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("그동안(약 6시간) 관리비 받기는 쉬어요."));
     await act(async () => {});
     expect(mockTrigger).not.toHaveBeenCalled();
   });

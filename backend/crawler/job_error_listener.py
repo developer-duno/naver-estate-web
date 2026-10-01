@@ -72,6 +72,7 @@ _JOB_LABEL_FALLBACK = {
     "kapt_match": "관리비 단지 연결하기",
     "kapt_costs": "단지 관리비 받기 06:20",
     "kapt_costs_noon": "단지 관리비 받기 12:40",
+    "kapt_costs_evening": "단지 관리비 받기 21:00",
     "api_version_probe": "정부 자료 창구 살아있나 확인",
     # 동적 id 6종 (세션 399 결손 보강) — scheduler.py 가 루프로 등록하는 잡들.
     # extract_scheduler_job_ids() 가 동적 id 를 의도적으로 건너뛰는 탓에, 기존

@@ -106,19 +106,20 @@ export const COLLECTORS: readonly CollectorDef[] = [
     description: "관리비 사이트(K-apt)의 전국 단지 목록과 우리 단지를 다시 짝지어요",
     long: true,
     confirm:
-      "지금 시작하면 약 3~4시간 반 걸리고 관리비 자료 호출을 약 1만 5천 회 써요. " +
-      "짝이 바뀐 단지는 옛 연결과 관리비 기록이 정리돼요. 계속할까요?",
+      "지금 시작하면 약 6시간 걸리고 관리비 자료 호출을 약 1만 5천 회 써요. " +
+      "짝이 바뀐 단지는 옛 연결과 관리비 기록이 정리돼요. " +
+      "그동안(약 6시간) 관리비 받기는 쉬어요. 계속할까요?",
   },
   {
     name: "kapt-costs",
     jobType: "kapt_costs",
     schedulerJobId: "kapt_costs",
-    extraSchedulerJobIds: ["kapt_costs_noon"],
+    extraSchedulerJobIds: ["kapt_costs_noon", "kapt_costs_evening"],
     manualCounted: true,
-    description: "짝지어진 단지 500곳의 새로 나온 달 관리비를 받아요",
+    description: "짝지어진 단지 중 새 달이 나온 곳의 관리비를 받아요(한 번에 약 200곳)",
     long: true,
     confirm:
-      "지금 시작하면 약 55~65분 걸리고 관리비 자료 호출을 약 1만 2천 회 써요 (하루 한도 10만 회). 계속할까요?",
+      "지금 시작하면 보통 약 2시간, 길면 2시간 반 걸리고 관리비 자료 호출을 약 4,800회 써요 (우리 하루 상한 6만 회). 계속할까요?",
   },
 ];
 

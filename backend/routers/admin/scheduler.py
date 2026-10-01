@@ -97,6 +97,7 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "kapt_match": {"name": "관리비 단지 연결하기", "schedule": "매월 21일 14:50", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 단지 기본정보 (AptBasisInfoServiceV5)"}},
     "kapt_costs": {"name": "단지 관리비 받기 06:20", "schedule": "매일 06:20", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 공용관리비 (AptCmnuseManageCostServiceV3)"}},
     "kapt_costs_noon": {"name": "단지 관리비 받기 12:40", "schedule": "매일 12:40", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 공용관리비 (AptCmnuseManageCostServiceV3)"}},
+    "kapt_costs_evening": {"name": "단지 관리비 받기 21:00", "schedule": "매일 21:00", "env": "KAPT_ENABLED", "source": {"probe": "K-apt 공용관리비 (AptCmnuseManageCostServiceV3)"}},
 }
 
 # 캘린더 전용 이름표 — 스케줄러에 등록되지 않는 "수동 실행" 잡들.

@@ -17,7 +17,7 @@ from db.models import Complex, CrawlJob, KaptComplexMap, KaptManagementCost, Rat
 from scripts import recollect_kapt_5ops as rk
 
 KST = ZoneInfo("Asia/Seoul")
-# 시작 허용 창(14:00~23:59 KST, 세션 422) 안의 기본 시각 — 옛 이름 NOON_KST(12:00)는 창이 14:00 으로 옮겨 바꿨다
+# 시작 허용 창(15:00~20:30 KST, 세션 426) 안의 기본 시각 — 옛 이름 NOON_KST(12:00)는 창이 옮겨 바꿨다
 ALLOWED_KST = datetime(2026, 9, 25, 15, 0, tzinfo=KST)
 OLD_AT = datetime(2026, 9, 20, 0, 0, tzinfo=timezone.utc)
 NEW_AT = datetime(2026, 9, 25, 3, 0, tzinfo=timezone.utc)
@@ -280,12 +280,14 @@ def test_refuses_while_kapt_match_running(db, monkeypatch):
     assert stats.stop_reason == "refused_kapt_costs_running" and calls == []
 
 
-# 시작 허용 = 14:00~23:59 KST (세션 417 최종 검사관 B — 옛 06:20~09:00 만 거부해 00:00~06:20 시작이 새고 있었다.
-# 세션 422 — 관리비 정기 회차가 06:20·12:40 두 번이 되어 낮 회차 뒤 14:00 으로 옮겼다)
+# 시작 허용 = 15:00 이상 · 20:30 미만 KST (세션 417 최종 검사관 B — 옛 06:20~09:00 만 거부해 00:00~06:20 시작이 새고 있었다.
+# 세션 422 — 낮 회차 뒤 14:00 으로. 세션 426 — 1.5초 간격이라 12:40 회차가 15:13 까지 가고 21:00 저녁 회차가 생겨
+# 15:00~20:30 으로 좁혔다. 뮤테이션: `t >= START_NOT_AFTER` 조건을 지우면 20:30·23:59 가 FAIL)
 @pytest.mark.parametrize("hhmm,refused", [
     ((0, 0), True), ((3, 0), True), ((6, 19), True), ((6, 20), True), ((8, 59), True),
-    ((9, 0), True), ((12, 40), True), ((13, 59), True),
-    ((14, 0), False), ((23, 59), False),
+    ((9, 0), True), ((12, 40), True), ((13, 59), True), ((14, 0), True), ((14, 59), True),
+    ((15, 0), False), ((20, 29), False),
+    ((20, 30), True), ((21, 0), True), ((23, 59), True),
 ])
 def test_start_window_boundaries(db, monkeypatch, hhmm, refused):
     _seed(db, "1001", "A1")
@@ -368,19 +370,50 @@ def test_consecutive_all_blank_stops(db, monkeypatch):
     assert len({code for code, _ in calls}) == rk.MAX_CONSECUTIVE_ALL_BLANK  # 11번째 행은 안 부른다
 
 
-# ③ 23:59 에 시작해 돌던 중 자정을 넘기면 멈춘다(새 날짜 한도는 그날 06:20·12:40 정기 회차 몫)
+# ③ 돌던 중 자정을 넘기면 멈춘다(새 날짜 한도는 그날 정기 회차 몫).
+# 세션 426 부터 20:45 정지가 먼저라 실전에서는 한 행이 몇 시간 걸린 경우만 닿는 안전망이다 —
+# 그래서 시계를 20:00 → 다음 날 00:00 로 건너뛰게 둔다(20:45~23:59 를 거치면 evening_stop 이 먼저 선다).
 @pytest.mark.parametrize("force", [False, True])
 def test_stops_at_midnight_rollover(db, monkeypatch, force):
-    """뮤테이션: `date_rollover` 검사를 지우면 셋째 행까지 처리돼 FAIL. `--force` 로도 안 풀린다."""
+    """뮤테이션: `date_rollover` 검사를 지우면 stop_reason 이 evening_stop 이 되어 FAIL. `--force` 로도 안 풀린다."""
     for i in range(3):
         _seed(db, f"{6000 + i}", f"W{i}")
     monkeypatch.setattr(kapt_api, "fetch_cost_item", _fake_items())
     # 시작 1회 + 행마다 1회 — 둘째 행 직전에 날짜가 바뀐다
-    clock = iter([datetime(2026, 9, 25, 23, 59, tzinfo=KST)] * 2
+    clock = iter([datetime(2026, 9, 25, 20, 0, tzinfo=KST)] * 2
                  + [datetime(2026, 9, 26, 0, 0, tzinfo=KST)] * 5)
     stats = _run(db, force=force, now_fn=lambda: next(clock))
     assert stats.stop_reason == "date_rollover"
     assert stats.processed == 1
+
+
+# ④ 돌던 중 20:45 KST 가 되면 행마다 확인해 멈춘다(세션 426 검사관 A·C) — 이 스크립트는 crawl_jobs
+# 행이 없어 21:00 저녁 회차가 못 보므로 스크립트가 먼저 비켜 준다. `--force` 로도 안 풀린다.
+@pytest.mark.parametrize("force", [False, True])
+def test_stops_at_2045_before_evening_run(db, monkeypatch, force):
+    """뮤테이션: 행마다 하는 20:45 검사를 지우면 셋째 행까지 처리돼 FAIL."""
+    for i in range(3):
+        _seed(db, f"{6100 + i}", f"E{i}")
+    calls = []
+    monkeypatch.setattr(kapt_api, "fetch_cost_item", _fake_items(calls=calls))
+    # 시작 1회 + 행마다 1회 — 둘째 행 직전에 20:45 가 된다(100행 주기가 아니라 바로 다음 행에서 선다)
+    clock = iter([datetime(2026, 9, 25, 20, 29, tzinfo=KST)] * 2
+                 + [datetime(2026, 9, 25, 20, 45, tzinfo=KST)] * 5)
+    stats = _run(db, force=force, now_fn=lambda: next(clock))
+    assert stats.stop_reason == "evening_stop"
+    assert stats.processed == 1
+    assert len({code for code, _ in calls}) == 1  # 둘째 행은 부르지 않는다
+    # 멈춘 뒤 남은 두 행은 다음 실행 대상에 그대로 남는다(이어받기)
+    assert len(rk.select_targets(db)) == 2
+
+
+def test_start_at_2045_with_force_makes_zero_calls(db, monkeypatch):
+    """--force 로 20:45 이후에 시작해도 첫 행 전에 멈춘다 — 호출 0."""
+    _seed(db, "6200", "F0")
+    calls = []
+    monkeypatch.setattr(kapt_api, "fetch_cost_item", _fake_items(calls=calls))
+    stats = _run(db, force=True, now_fn=lambda: datetime(2026, 9, 25, 21, 30, tzinfo=KST))
+    assert stats.stop_reason == "evening_stop" and calls == []
 
 
 def test_run_calls_count_real_transient_retry(db, monkeypatch):

@@ -71,6 +71,7 @@ _COLLECTOR_JOB_TYPE: dict[str, str] = {
 }
 
 ALREADY_RUNNING_WORDS = "이미 돌고 있어요 — 끝난 뒤 다시 눌러 주세요"
+MATCH_RUNNING_WORDS = "관리비 단지 연결이 도는 중이에요 — 끝난 뒤 다시 눌러 주세요"
 
 # 이 프로세스가 지금 손으로 돌리는 수집기 — recrawl.py 의 `_recrawl_lock`/`_recrawl_running` 선례.
 _collect_lock = threading.Lock()
@@ -131,6 +132,20 @@ def trigger_collection(
         )
         if busy is not None:
             raise HTTPException(status_code=409, detail=ALREADY_RUNNING_WORDS)
+        # 관리비 받기는 관리비 단지 연결이 도는 동안 수집기 자신이 건너뛴다(service_kapt match_running,
+        # 세션 426) — 그대로 시작시키면 화면엔 "시작했어요" 인데 아무 일도 안 일어나므로 여기서 409 로 알린다.
+        if collector_name == "kapt-costs" and (
+            "kapt-match" in _collect_running
+            or db.query(CrawlJob.id)
+            .filter(
+                CrawlJob.job_type == _COLLECTOR_JOB_TYPE["kapt-match"],
+                CrawlJob.status == "running",
+                running_not_stale_clause(),
+            )
+            .first()
+            is not None
+        ):
+            raise HTTPException(status_code=409, detail=MATCH_RUNNING_WORDS)
         _collect_running.add(collector_name)
 
     try:

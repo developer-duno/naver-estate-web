@@ -41,11 +41,12 @@ _BATCH_WINDOW_MINUTES = 60
 _DEFAULT_SPINNING_MIN_TOTAL = 1
 
 # 카드 하나가 스케줄 회차 여러 개를 함께 세는 경우(세션 422) — 카드의 scheduler_job_id → 함께 볼 id 들.
-# 단지 관리비 받기는 06:20(kapt_costs)·12:40(kapt_costs_noon) 두 회차가 같은 함수·같은 표를 채운다.
-# 아침 회차가 포털 장애로 실패하고 낮 회차만 성공한 날에도 카드(와 이 함수를 쓰는 monitor 의
+# 단지 관리비 받기는 06:20(kapt_costs)·12:40(kapt_costs_noon)·21:00(kapt_costs_evening, 세션 426)
+# 세 회차가 같은 함수·같은 표를 채운다.
+# 한 회차가 포털 장애로 실패하고 다른 회차만 성공한 날에도 카드(와 이 함수를 쓰는 monitor 의
 # "자료 오래됨" 경보)가 "받았음"으로 보게 한다. 여기 없는 카드는 옛 동작(단일 id ==) 그대로.
 _CARD_SCHEDULER_IDS: dict[str, tuple[str, ...]] = {
-    "kapt_costs": ("kapt_costs", "kapt_costs_noon"),
+    "kapt_costs": ("kapt_costs", "kapt_costs_noon", "kapt_costs_evening"),
 }
 
 

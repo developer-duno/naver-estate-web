@@ -8,7 +8,6 @@ import os
 import re
 from datetime import datetime, timedelta, timezone
 
-from crawler.cortar_legacy import to_standard_cortar
 from crawler.service_common import (
     RESUME_LOOKBACK_LIMIT,
     RESUME_MAX_AGE_HOURS,
@@ -58,26 +57,6 @@ def _has_sibling_n_danji(db, base_norm_name: str, sigungu_cd: str) -> bool:
         if _strip_n_danji(norm) == base_norm_name:
             return True
     return False
-
-
-def _to_standard_lawd_cd(complexes_in_region, fallback_sigungu_cd: str) -> str:
-    """시군구 그룹의 단지 cortar_no 를 표준 코드로 번역해 lawd_cd(앞 5자리)를 만든다.
-
-    ⚠ 5자리만 잘라서는 번역할 수 없다 — 레거시 12 체계와 표준 29/46 체계는 시군구 코드
-    자체가 다르다(북구 = 12체계 300 / 29체계 170). 그래서 **10자리 cortar_no 를 번역한 뒤**
-    앞 5자리를 취한다.
-
-    같은 시군구의 단지들은 모두 같은 5자리로 수렴하므로 첫 번역 성공분을 쓴다.
-    번역 대상이 없으면(전국 대부분) 원래 값을 그대로 돌려준다.
-    """
-    for c in complexes_in_region:
-        cortar_no = getattr(c, "cortar_no", None)
-        if not cortar_no:
-            continue
-        translated = to_standard_cortar(cortar_no)
-        if translated and translated != cortar_no and len(translated) >= 5:
-            return translated[:5]
-    return fallback_sigungu_cd
 
 
 def _recent_months(today, n: int) -> list[str]:
@@ -337,16 +316,13 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
                 if norm_name:
                     name_map[norm_name] = c.complex_no
 
-            # 국토교통부 API 에 넘길 lawd_cd — 광주·전남은 네이버가 주는 12-프리픽스
-            # (전남광주통합특별시) 체계라 옛 체계(29/46)만 받는 공공 API 에는 그대로 쓸 수
-            # 없다. **10자리 전체를 번역한 뒤 앞 5자리**를 취한다 — 두 체계는 시군구 코드가
-            # 서로 달라(북구 = 12체계 300 / 29체계 170) 5자리만 잘라 변환할 수 없다.
-            # 위 그룹핑 키(sigungu_cd)·체크포인트(done_codes)는 원본 그대로 둔다.
-            api_lawd_cd = _to_standard_lawd_cd(complexes_in_region, sigungu_cd)
-
+            # lawd_cd 는 cortar_no 앞 5자리를 번역 없이 그대로 넘긴다. 광주·전남 12 체계도
+            # 실거래가 창구가 직접 받는다(2026-10-01 27 시군구 전수 실측: 새 코드 25/27 건수 있음 ·
+            # 옛 29/46 코드 0/27). 옛 코드로 번역하던 동안(8/10~9/30) 2,838단지가 0건이었다(세션 424).
+            # 공시가격(V-WORLD)은 여전히 옛 코드라 to_vworld_cortar 로 번역한다 — 이 경로와 다르다.
             fetch_failed = False
             for deal_ymd in months:
-                trades = PublicDataAPI.get_all_apt_trades(api_lawd_cd, deal_ymd)
+                trades = PublicDataAPI.get_all_apt_trades(sigungu_cd, deal_ymd)
                 watch.observe()
                 if trades is None:
                     # 호출 실패 ≠ 거래 없는 달. 남은 달은 시도하지 않고 이 시군구를 실패로 센다.
@@ -500,9 +476,9 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
         if not cpx.cortar_no or len(cpx.cortar_no) < 5:
             raise ValueError(f"단지 {complex_no}의 법정동코드(cortar_no)가 없습니다")
 
-        # 10자리를 먼저 번역한 뒤 앞 5자리 — 광주·전남 12-프리픽스 대응
-        # (5자리만 잘라 변환 불가한 이유는 _to_standard_lawd_cd docstring 참조).
-        sigungu_cd = (to_standard_cortar(cpx.cortar_no) or cpx.cortar_no)[:5]
+        # 앞 5자리를 번역 없이 그대로 — 광주·전남 12 체계도 실거래가 창구가 직접 받는다
+        # (세션 424, 주간 수집 collect_public_trade_data 의 같은 자리 주석 참조).
+        sigungu_cd = cpx.cortar_no[:5]
         norm_name = _normalize_apt_name(cpx.complex_name)
         if not norm_name:
             raise ValueError(f"단지명 정규화 실패: {cpx.complex_name}")

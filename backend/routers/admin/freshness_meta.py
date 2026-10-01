@@ -198,6 +198,13 @@ FRESHNESS_ITEMS: list[dict] = [
         "scheduler_job_id": "kapt_costs",
         "new_rows_kind": None,
         "new_rows_expected": False,
+        # 세션 426: 미공개 기록(V068)으로 대기열이 줄어, 미공개 1~9곳만 훑은 작은 회차가 생긴다.
+        # 그 회차는 카나리 문턱(service_kapt._ALL_EMPTY_MIN_TARGETS = 10) 밑이라 completed
+        # (처리 0, 대상 1~9) 로 끝나는데, 그게 헛바퀴 경보(red + 텔레그램)를 거짓으로 울렸다.
+        # 카나리와 같은 값으로 맞춘다 — 10곳 이상 훑고 0건이면 그때는 카나리가 판정한다.
+        # service_kapt._ALL_EMPTY_MIN_TARGETS 와 같은 값 — 시험이 묶는다
+        # (tests/test_kapt_blank_recheck.py test_spinning_threshold_matches_canary_threshold).
+        "spinning_min_total": 10,
     },
 ]
 

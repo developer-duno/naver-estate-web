@@ -1,22 +1,24 @@
 """cortar 번역 레이어 회귀 테스트 (세션 357 광주·전남 / 세션 372 2026 개편).
 
 배경 1 — 광주·전남: 네이버가 **시도코드 12(전남광주통합특별시)** 체계의 cortar_no 를
-주는데, V-WORLD 공시가격·국토교통부 실거래가 API 는 옛 체계(29/46)만 받아 12 코드로는
+주는데, V-WORLD 공시가격 API 는 옛 체계(29/46)만 받아 12 코드로는
 **조용히 0건**이 온다(라이브 실측: 1224011900→0건 / 2914011900→38,530건).
+실거래가는 번역하지 않는다(공시가격만 to_vworld_cortar) — 세션 424: 실거래가 창구가 12 체계를
+직접 받는다(10-01 27 시군구 전수: 새 25/27 · 옛 0/27).
 
 배경 2 — 2026 행정구역 개편(인천 3구·화성 4구 신설): 네이버는 신 코드를 주는데
 **V-WORLD 공시가격만** 아직 옛 코드에 데이터가 붙어 있다(라이브 실측:
 2827510800→0행 / 2826011000→33,282행). 반면 **국토부 실거래가는 정반대**로 신 코드가
 정상이고 옛 코드가 0건이다(28275→267건 / 28260→0건). 그래서 개편맵은 공시가격 전용
-(`to_vworld_cortar`)이며, 실거래가가 쓰는 `to_standard_cortar` 에는 **들어가면 안 된다** —
-들어가면 지금 잘 되는 실거래가 수집이 죽는다. 아래 테스트가 그 경계를 지킨다.
+(`to_vworld_cortar`)이며, `to_standard_cortar`(공시가격 1단계) 에는 **들어가면 안 된다** —
+그 함수를 실거래가에 다시 쓰게 되면 지금 잘 되는 실거래가 수집이 죽는다. 아래 테스트가 그 경계를 지킨다.
 
 검증 축:
   1. 맵 무결성 — 키/값 형식·건수 하한·자기참조 없음·값 충돌(레거시 맵만)
   2. to_standard_cortar / to_vworld_cortar 단위 — 변환/비대상 통과/None 통과
   3. **경계 가드** — 개편 코드가 to_standard_cortar 로는 번역되지 않을 것
-  4. 수집기 배선 — 공시가격·실거래가가 각자 맞는 코드로 외부 API 를 부르는지
-     (mock 캡처. 저장·체크포인트 키는 원본 유지여야 한다)
+  4. 수집기 배선 — 공시가격은 번역된 코드로, 실거래가는 번역 없이(원본 앞 5자리) 외부 API 를
+     부르는지 (mock 캡처. 저장·체크포인트 키는 원본 유지여야 한다)
 
 외부 API 호출은 전부 mock — 실호출 0.
 """
@@ -206,11 +208,10 @@ def test_official_price_checkpoint_keeps_original_code(db, monkeypatch):
     assert mock_fetch.call_count == 0, "원본 코드 체크포인트로 재개가 안 됐다"
 
 
-def test_public_trade_collector_uses_translated_lawd_cd(db):
-    """국토교통부 실거래가 배치가 **번역된 lawd_cd(앞 5자리)** 로 호출하는지.
+def test_public_trade_collector_uses_raw_lawd_cd(db):
+    """국토교통부 실거래가 배치가 12 체계 cortar_no 앞 5자리를 **번역 없이** 넘기는지.
 
-    12 체계와 29 체계는 시군구 코드가 다르므로(북구 300 vs 170) 5자리만 잘라
-    쓰면 안 되고, 10자리 번역 후 앞 5자리를 취해야 한다.
+    세션 424: 실거래가 창구가 12 체계를 직접 받아 번역이 역효과(10-01 27 시군구 전수: 새 25/27 · 옛 0/27).
     """
     from datetime import date as _real_date
 
@@ -235,7 +236,7 @@ def test_public_trade_collector_uses_translated_lawd_cd(db):
         collect_public_trade_data(batch_size=10, scheduler_job_id="collect_public_trades")
 
     assert seen, "실거래가 API 가 한 번도 호출되지 않았다"
-    assert set(seen) == {"29140"}, f"번역 안 된 lawd_cd 로 호출됨: {set(seen)}"
+    assert set(seen) == {"12240"}, f"옛 코드로 번역된 lawd_cd 로 호출됨: {set(seen)}"
 
 
 def test_public_trade_non_legacy_region_unchanged(db):
@@ -262,8 +263,11 @@ def test_public_trade_non_legacy_region_unchanged(db):
     assert set(seen) == {"11680"}, f"비-레거시 지역이 변경됨: {set(seen)}"
 
 
-def test_backfill_price_history_uses_translated_lawd_cd(db):
-    """단건 소급 수집 경로도 번역된 lawd_cd 를 쓴다."""
+def test_backfill_price_history_uses_raw_lawd_cd(db):
+    """단건 소급 수집 경로도 12 체계 앞 5자리를 번역 없이 쓴다.
+
+    세션 424: 실거래가 창구가 12 체계를 직접 받아 번역이 역효과(10-01 27 시군구 전수: 새 25/27 · 옛 0/27).
+    """
     db.add(Complex(complex_no="G2", complex_name="동림아파트", cortar_no="1230010800"))
     db.commit()
 
@@ -275,7 +279,7 @@ def test_backfill_price_history_uses_translated_lawd_cd(db):
         backfill_price_history("G2", months_back=1)
 
     assert seen, "실거래가 API 가 한 번도 호출되지 않았다"
-    assert set(seen) == {"29170"}, f"번역 안 된 lawd_cd 로 호출됨: {set(seen)}"
+    assert set(seen) == {"12300"}, f"옛 코드로 번역된 lawd_cd 로 호출됨: {set(seen)}"
 
 
 # ── 4. 2026 행정구역 개편 맵 (V-WORLD 전용) ──

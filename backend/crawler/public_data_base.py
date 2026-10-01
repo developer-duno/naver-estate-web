@@ -132,6 +132,10 @@ class BasePublicDataAPI:
     # data.go.kr 한도는 활용신청별이므로, 자기 한도를 따로 받은 API 만 자기 버킷을 선언한다.
     _quota_name: str | None = None
     _quota_daily_limit: int = GLOBAL_DAILY_LIMIT
+    # 호출 간 최소 간격(초). 기본 0.3초 — 창구마다 제한이 다르면 서브클래스가 덮어쓴다
+    # (K-apt = 1.5초, kapt_api._KAPT_MIN_INTERVAL_SEC). 간격 기록(_last_request_time)은
+    # _throttle 의 `cls.` 대입으로 서브클래스마다 따로 붙어 창구끼리 서로 늦추지 않는다.
+    _min_interval: float = MIN_REQUEST_INTERVAL
     _lock = threading.Lock()
     _last_request_time = 0.0
     _session: std_requests.Session | None = None
@@ -145,11 +149,11 @@ class BasePublicDataAPI:
 
     @classmethod
     def _throttle(cls):
-        """요청 간 최소 간격 보장 (0.3초)"""
+        """요청 간 최소 간격 보장 (기본 0.3초, 서브클래스의 _min_interval)"""
         with cls._lock:
             now = time.monotonic()
             elapsed = now - cls._last_request_time
-            sleep_time = max(0, MIN_REQUEST_INTERVAL - elapsed)
+            sleep_time = max(0, cls._min_interval - elapsed)
             cls._last_request_time = now + sleep_time
         if sleep_time > 0:
             time.sleep(sleep_time)

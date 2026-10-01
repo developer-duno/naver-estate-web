@@ -38,7 +38,7 @@ import logging
 import os
 from datetime import timedelta, timezone
 
-from sqlalchemy import Integer, Numeric, and_, case, func, select
+from sqlalchemy import Integer, Numeric, and_, case, func, select, text
 
 from db.models import Article, CrawlJob, MonitorAlert
 from services.telegram import send_telegram
@@ -49,6 +49,21 @@ logger = logging.getLogger(__name__)
 # 모집단 관찰 창 — 상세 보강 배치가 30분±15분 간격으로 도므로, 48시간이면
 # 표본이 수만 건 규모로 쌓여 "크롤이 잠깐 느려서 표본이 적다"는 오탐을 피한다.
 _WINDOW_HOURS = 48
+
+# 집계 문장 전용 시간 제한(ms) — 세션 424: 09-29·09-30·10-01 사흘 연속
+# QueryCanceled 로 실패했다. 주원인 = compute_fill_rates 의 WHERE 조건 모양이
+# V061 부분 인덱스(ix_articles_field_drift_window) 술어와 달라(`IS true` vs
+# `= true`) PostgreSQL 이 그 인덱스를 한 번도 고르지 않았던 것(운영 EXPLAIN 실측:
+# 두 인덱스 합치고 본 테이블 스캔, 비용 77,452 → 조건 모양을 맞추면 부분 인덱스
+# 스캔, 비용 9,465, 4.61초(cold)·0.11초(warm)) — 위 base_filter 의 `== True`
+# 정정으로 근본 해결했다. 여기 30초는 그 위에 얹는 안전망이다: 48시간 창의
+# 모집단이 2026-09-13 실측 8,832건에서 2026-09-27부터 상세 보강이 회차마다
+# 500건 꽉 차게 돌며 48,887건(5.5배)으로 불어난 것도 함께 작용했으므로,
+# 인덱스가 정상 작동해도 모집단이 더 커지면 다시 8초를 넘길 수 있다. 이 트랜잭션의
+# 문장마다 30초(집계 뒤 알림 조회·잡 완료 기록도 포함 — 전부 작은 인덱스 조회) ·
+# 다른 연결·다른 잡은 8초(선례: routers/admin/jobs.py
+# _raise_statement_timeout_for_stats, 같은 이유로 같은 방식).
+_FILL_RATE_STATEMENT_TIMEOUT_MS = 30_000
 
 # 표본 최소치 — 이 아래면 판정하지 않고 skip. 크롤이 멈춘 날 0/0 판정으로
 # 오탐(ZeroDivisionError 회피 목적이 아니라 "판정 자체가 무의미"하다는 신호)을 막는다.
@@ -224,16 +239,27 @@ def compute_fill_rates(db) -> tuple[int, dict[str, float]]:
     그 함정은 **max() 와 count() 를 함께 묶을 때** 발생한다(선두 인덱스가 max 를
     위해 정렬 스캔되면 count 의 필터 최적화가 씹힘). 여기는 count(*) FILTER 만
     N개 묶은 것이고 max() 가 없으므로 해당하지 않는다 — WHERE 절의 updated_at
-    범위·is_active·detail_crawled 조건에 대해 하나의 인덱스(ix_articles_updated_at,
-    V038)로 필요한 행 범위만 스캔한 뒤, 그 범위 안에서 FILTER 로 카운트를 나누는
-    것뿐이라 정렬 요구가 서로 충돌하지 않는다.
+    범위·is_active·detail_crawled·heating_type 조건에 대해 하나의 부분 인덱스
+    (ix_articles_field_drift_window, V061 — 아래 base_filter 주석)로 필요한 행 범위만
+    스캔한 뒤, 그 범위 안에서 FILTER 로 카운트를 나누는 것뿐이라 정렬 요구가 서로
+    충돌하지 않는다.
     """
     now = utcnow()
     cutoff = now - timedelta(hours=_WINDOW_HOURS)
 
     base_filter = and_(
-        Article.is_active.is_(True),
-        Article.detail_crawled.is_(True),
+        # ⚠ 이 두 조건은 V061 부분 인덱스(ix_articles_field_drift_window)의 술어
+        # (is_active = true AND detail_crawled = true AND heating_type IS NOT NULL)와
+        # 글자 단위로 맞춰야 한다 — `.is_(True)`(컴파일 시 `IS true`)와 `== True`
+        # (컴파일 시 `= true`)는 결과가 같아도 SQL 표현이 달라, PostgreSQL 플래너가
+        # `IS true` 모양을 인덱스 술어 `= true` 와 다른 것으로 보고 인덱스를 무시한다
+        # (세션 424 실측: `IS true` 모양 = 두 인덱스 합치고 본 테이블 스캔, 비용 77,452,
+        # 8초 초과 / `= true` 모양 = 부분 인덱스 스캔, 비용 9,465, 4.61초(cold)·0.11초
+        # (warm)). 바꾸면 인덱스가 **조용히** 무시된다 — 선례(service_discover.py
+        # V057)와 같은 함정, 아래 드리프트 가드(tests/test_field_drift_monitor.py)가
+        # 컴파일된 SQL 문자열을 대조해 막는다.
+        Article.is_active == True,  # noqa: E712
+        Article.detail_crawled == True,  # noqa: E712
         Article.updated_at > cutoff,
         # ⚠ 백필 매물 제외 (세션 402 적대검증 HIGH 지적, 실측으로 확인):
         #   백필 잡(backfill_article_details)은 하루 5,500건을 처리하며 그때마다
@@ -272,6 +298,14 @@ def compute_fill_rates(db) -> tuple[int, dict[str, float]]:
         select_cols.append(
             func.sum(case((cond, 1), else_=0)).label(field)
         )
+
+    # 이 트랜잭션의 문장마다 30초(집계 뒤 알림 조회·잡 완료 기록도 포함 — 전부 작은
+    # 인덱스 조회) · 다른 연결·다른 잡은 8초. SET LOCAL 은 현재 트랜잭션이 끝나면
+    # 사라진다(NullPool 이라 연결도 요청마다 새것). SQLite(CI)에는 이 문법이 없어
+    # 실행하지 않는다(domain-mapping-ssot.md 룰 3 dialect 분기, 선례:
+    # routers/admin/jobs.py _raise_statement_timeout_for_stats).
+    if (db.bind.dialect.name if db.bind else "") == "postgresql":
+        db.execute(text(f"SET LOCAL statement_timeout = {_FILL_RATE_STATEMENT_TIMEOUT_MS}"))
 
     row = db.execute(select(*select_cols).where(base_filter)).one()
 

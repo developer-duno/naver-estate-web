@@ -142,9 +142,18 @@ def before_start_window(now_kst: datetime) -> bool:
 
 
 def kapt_costs_running(db) -> bool:
+    """정기 K-apt 관리비·매칭 회차(kapt_costs · kapt_match) 중 하나라도 running 이면 True.
+
+    매칭(`kapt_match`, 매월 21일 14:50 — 세션 426)도 같은 K-apt 창구를 1.5초 간격으로 약 6시간
+    쓴다. 이 스크립트의 시작 허용 창(14:00~23:59)과 겹치므로, 같이 돌면 합쳐서 창구 속도 한계를
+    넘는다(세션 425). 이름은 기존 시험·stop_reason 과 맞추려 그대로 둔다.
+    """
     return (
         db.query(CrawlJob.id)
-        .filter(CrawlJob.job_type == _COST_JOB_TYPE, CrawlJob.status == "running")
+        .filter(
+            CrawlJob.job_type.in_((_COST_JOB_TYPE, "kapt_match")),
+            CrawlJob.status == "running",
+        )
         .first()
         is not None
     )
@@ -229,7 +238,7 @@ def run(db, *, limit: int | None = None, daily_cap: int = DEFAULT_DAILY_CAP,
     started_kst = now_fn().astimezone(KST)
     if kapt_costs_running(db):
         stats.stop_reason = "refused_kapt_costs_running"
-        logger.error("정기 K-apt 관리비 수집(kapt_costs)이 돌고 있어 시작하지 않는다 — 끝난 뒤 다시 실행")
+        logger.error("정기 K-apt 관리비·매칭 회차(kapt_costs·kapt_match)가 돌고 있어 시작하지 않는다 — 끝난 뒤 다시 실행")
         return stats
     if not force and before_start_window(started_kst):
         stats.stop_reason = "refused_window"
@@ -245,7 +254,7 @@ def run(db, *, limit: int | None = None, daily_cap: int = DEFAULT_DAILY_CAP,
     for index, target in enumerate(targets):
         if index and index % PROGRESS_EVERY == 0 and kapt_costs_running(db):
             stats.stop_reason = "kapt_costs_started"
-            logger.warning("정기 K-apt 관리비 수집(kapt_costs)이 시작돼 멈춘다 — 끝난 뒤 다시 실행하면 이어간다")
+            logger.warning("정기 K-apt 관리비·매칭 회차(kapt_costs·kapt_match)가 시작돼 멈춘다 — 끝난 뒤 다시 실행하면 이어간다")
             break
         if now_fn().astimezone(KST).date() != started_kst.date():
             stats.stop_reason = "date_rollover"

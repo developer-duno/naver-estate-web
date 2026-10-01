@@ -452,15 +452,17 @@ def create_scheduler() -> BackgroundScheduler:
         logger.info("공동주택 공시가격 수집 활성화: 매월 15일 06:30")
 
     # F-3. K-apt 관리비 연동 (V051) — 매칭 월 1회 + 관리비 매일.
-    #      06:10/06:20 = 매월15일 06:30 official_price·일요일 06:40 api_version_probe 와
+    #      06:20 = 매월15일 06:30 official_price·일요일 06:40 api_version_probe 와
     #      겹치지 않는 빈 슬롯. 네이버 API 0건이라 IP 차단 무관(data.go.kr 전용).
+    #      매칭 21일 14:50 — 1.5초 간격(세션 425)이면 약 6.1시간이라 06:20·12:40 관리비 회차가
+    #      끝난 뒤 혼자 돌게 옮겼다(사장님 결정 2026-10-01, 옛 06:10).
     if KAPT_ENABLED:
         from crawler.service_kapt import collect_kapt_costs, match_kapt_complexes
 
         scheduler.add_job(
             match_kapt_complexes,
             "cron",
-            day="21", hour=6, minute=10,
+            day="21", hour=14, minute=50,
             kwargs={"scheduler_job_id": "kapt_match"},
             id="kapt_match", name="관리비 단지 연결하기",
             max_instances=1, misfire_grace_time=3600,
@@ -497,7 +499,7 @@ def create_scheduler() -> BackgroundScheduler:
             max_instances=1, misfire_grace_time=3600,
         )
         logger.info(
-            "K-apt 관리비 연동 활성화: 매칭 매월 21일 06:10 / 관리비 매일 06:20·12:40 (배치 %d)",
+            "K-apt 관리비 연동 활성화: 매칭 매월 21일 14:50 / 관리비 매일 06:20·12:40 (배치 %d)",
             KAPT_COST_BATCH_SIZE,
         )
 

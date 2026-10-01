@@ -989,3 +989,36 @@ def test_every_registered_job_name_starts_with_job_words():
         elif not job.name.startswith(words):
             wrong.append(f"{job.id}: '{job.name}' 가 '{words}' 로 시작하지 않는다")
     assert not wrong, "스케줄러 잡 이름이 JOB_WORDS 와 어긋난다:\n  " + "\n  ".join(wrong)
+
+
+# ── 관리비 단지 연결하기(kapt_match) 우리 문구 — 원문 보존 (세션 426 검사관) ──
+_KAPT_MATCH_NOTE = (
+    "단지 기본정보 3건 받기 실패 — 그 단지들은 기존 연결을 그대로 두었어요(다음 달 다시 시도)"
+)
+
+
+def test_kapt_match_messages_kept_as_is():
+    """매칭 회차가 남기는 우리말 문구 3종은 알림·화면에 원문 그대로 나간다.
+
+    뮤테이션 N1: `_ERROR_RULES` 의 kapt_match 규칙을 지우면 "처음 보는 문제" 로 떨어져 FAIL.
+    """
+    for text in (
+        f"{_KAPT_MATCH_NOTE} · 연결 1건",        # 실패 > 연결 → failed
+        _KAPT_MATCH_NOTE,                         # 실패 ≤ 연결 → completed 문구
+        "대상 단지 14747개 전부 매칭 실패 (매칭 0건)",
+    ):
+        assert explain_error(text) == text, explain_error(text)
+
+
+def test_kapt_match_message_with_english_falls_to_unknown():
+    """우리 문구 뒤에 영문(개발자 원문)이 섞이면 원문 보존 규칙을 지나쳐 고정 문장이 된다."""
+    out = explain_error(f"{_KAPT_MATCH_NOTE} KaptApiError")
+    assert out != f"{_KAPT_MATCH_NOTE} KaptApiError"
+    assert "KaptApiError" not in out
+    assert out.startswith("처음 보는 문제예요"), out
+
+
+def test_kapt_match_partial_list_note_not_kept_by_rule():
+    """부분 목록 문구는 영문 "K-apt" 가 있어 원문 보존 규칙에 안 걸린다 — 이 사실을 고정."""
+    text = "부분 목록으로 매칭 (K-apt 2000건만 수집) — 다음 회차 재시도 필요"
+    assert explain_error(text) != text

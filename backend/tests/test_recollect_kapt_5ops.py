@@ -265,6 +265,21 @@ def test_refuses_while_kapt_costs_running(db, monkeypatch):
     assert stats.stop_reason == "refused_kapt_costs_running" and calls == []
 
 
+def test_refuses_while_kapt_match_running(db, monkeypatch):
+    """매칭(kapt_match, 21일 14:50)도 같은 K-apt 창구를 쓰므로 돌고 있으면 시작 거부(세션 426).
+
+    뮤테이션 N4: `kapt_costs_running` 조건에서 kapt_match 를 빼면 호출이 나가 FAIL.
+    """
+    _seed(db, "1001", "A1")
+    db.add(CrawlJob(job_type="kapt_match", status="running"))
+    db.commit()
+    assert rk.kapt_costs_running(db) is True
+    calls = []
+    monkeypatch.setattr(kapt_api, "fetch_cost_item", _fake_items(calls=calls))
+    stats = _run(db, force=True)
+    assert stats.stop_reason == "refused_kapt_costs_running" and calls == []
+
+
 # 시작 허용 = 14:00~23:59 KST (세션 417 최종 검사관 B — 옛 06:20~09:00 만 거부해 00:00~06:20 시작이 새고 있었다.
 # 세션 422 — 관리비 정기 회차가 06:20·12:40 두 번이 되어 낮 회차 뒤 14:00 으로 옮겼다)
 @pytest.mark.parametrize("hhmm,refused", [

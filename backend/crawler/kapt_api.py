@@ -9,7 +9,7 @@ data.go.kr 1613000 계열 3개 서비스를 한 모듈에서 다룬다 (전부 �
 - `AptIndvdlzManageCostServiceV3` 개별사용료 5개 오퍼레이션
 
 `BasePublicDataAPI`(air_quality_api.py·applyhome_officetel_api.py 와 동일 기반)를
-상속해 공유 일일 쿼터 추적·throttle(0.3초)·429 재시도를 그대로 재사용한다 —
+상속해 공유 일일 쿼터 추적·throttle(K-apt 만 1.5초 — `_KAPT_MIN_INTERVAL_SEC`)·429 재시도를 그대로 재사용한다 —
 재시도·세션 관리를 새로 만들지 않는다 (`oss-first.md` 답습).
 
 ⚠ 쿼터: 관리비 두 서비스도 **운영계정(10만/일) 전환 완료** — 목록·기본정보와 같다.
@@ -154,6 +154,19 @@ QUOTA_ERROR_TOKEN = "LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR"
 _TRANSIENT_REASON_CODES = frozenset({"01", "02", "04", "05", "99"})
 # 재시도 전 대기(초) — 길이 = 재시도 횟수. 호출 1건 최악 대기 = 합 43초. 테스트가 patch 한다.
 _TRANSIENT_RETRY_DELAYS: tuple[int, ...] = (3, 10, 30)
+
+# K-apt 창구 호출 간격(초) — 다른 공공데이터 창구(0.3초)보다 느리게 부른다.
+# 2026-10-01 서버 밖 측정(세션 425): K-apt 창구는 짧은 시간에 많이 부르면 약 10분간
+# K-apt 전체(공용관리비·개별관리비·기본정보)를 오류 코드 04 로 돌려보낸다.
+#   - 0.3초 간격: 32콜 정상 → 33번째부터 04, 60초 쉬어도 04, 약 9분 40초 뒤 풀림.
+#   - 1.0초 간격: 90콜 정상 / 이어서 0.6초 간격: 50번째에서 04.
+#   - 1.5초 간격: 400콜·10분 동안 04 0건.
+#   → 지속 약 0.9콜/초 + 여유 약 20콜 모양(두 측정으로 추정 — 1.0초도 오래 부르면 막힌다).
+#     09-25~10-01 관리비 회차 연속 실패의 원인. 막힌 동안 실거래가 창구는 정상(K-apt 쪽만).
+# 그래서 여유를 둔 값이 1.5초다. 낮추려면 운영 회차와 겹치지 않는 시각에
+# 서버 밖 측정(`memory/scripts/kapt_pace_test.py` 방식)부터 다시 한다. ⚠ 이 간격은 한 프로세스
+# 안에서만 지켜진다 — 서버 밖 스크립트·다른 프로젝트(미분양)가 같은 창구를 같이 부르면 합쳐서 넘는다.
+_KAPT_MIN_INTERVAL_SEC = 1.5
 
 # 일시 오류 **재시도로 더 나간** 호출 수(프로세스 누적). `_cost_call_count`(논리 호출 수)와
 # 따로 센다 — 회차 요약 로그가 "재시도 N콜" 을 따로 찍는다. 차이값으로만 쓴다.
@@ -316,6 +329,8 @@ class KaptAPI(BasePublicDataAPI):
     # (KAPT_COST_BATCH_SIZE)와 throttle 페이싱이 제어한다 — 이 값은 폭주 시 최후 차단선.
     _quota_name = "kapt"
     _quota_daily_limit = 60_000
+    # 호출 간격 1.5초 — 0.3초면 33번째 콜부터 약 10분간 K-apt 전체가 04 (위 상수 주석).
+    _min_interval = _KAPT_MIN_INTERVAL_SEC
 
     @classmethod
     def _body_or_raise(cls, url: str, params: dict, op: str | None = None,

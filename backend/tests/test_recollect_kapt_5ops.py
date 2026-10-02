@@ -445,20 +445,28 @@ def test_run_calls_count_real_transient_retry(db, monkeypatch):
     assert stats.calls == 6, f"재시도 콜이 요약에서 빠졌다: {stats.calls}"
 
 
-# ④ 100행마다 kapt_costs running 재확인
-def test_stops_when_kapt_costs_starts_mid_run(db, monkeypatch):
+# ④ 행마다 kapt_costs·kapt_match running 재확인 (세션 427 — 옛 100행마다는 약 12.5분 겹쳤다)
+@pytest.mark.parametrize("job_type", ["kapt_costs", "kapt_match"])
+def test_stops_on_next_row_when_regular_run_starts_mid_run(db, monkeypatch, job_type):
+    """첫 행 도중 정기 회차·매칭이 시작되면 **바로 다음 행**에서 멈춘다(진행 로그 주기 100 과 무관).
+
+    뮤테이션 M4: 확인을 옛 조건(`index % PROGRESS_EVERY == 0` 일 때만)으로 되돌리면 5행을 다 돌아 FAIL.
+    """
+    assert rk.PROGRESS_EVERY == 100   # 진행 로그 주기는 그대로 — 이 시험의 5행은 그 주기에 닿지 않는다
     for i in range(5):
         _seed(db, f"{7000 + i}", f"R{i}")
-    monkeypatch.setattr(rk, "PROGRESS_EVERY", 2)
-    base = _fake_items()
+    calls = []
+    base = _fake_items(calls=calls)
 
     def fake(base_url, op, kapt_code, search_date):
-        if kapt_code == "R1" and op == rk.FIVE_OPS[-1]:
-            db.add(CrawlJob(job_type="kapt_costs", status="running"))  # 둘째 행 도중 정기 회차 시작
+        if kapt_code == "R0" and op == rk.FIVE_OPS[-1]:
+            db.add(CrawlJob(job_type=job_type, status="running"))  # 첫 행 도중 시작
             db.commit()
         return base(base_url, op, kapt_code, search_date)
 
     monkeypatch.setattr(kapt_api, "fetch_cost_item", fake)
     stats = _run(db)
     assert stats.stop_reason == "kapt_costs_started"
-    assert stats.processed == 2
+    assert stats.processed == 1
+    assert {code for code, _ in calls} == {"R0"}  # 둘째 행은 부르지 않는다
+    assert len(rk.select_targets(db)) == 4        # 남은 행은 다음 실행이 이어받는다

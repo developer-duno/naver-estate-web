@@ -196,6 +196,67 @@ def test_b2_kapt_costs_button_409_while_kapt_match_running(client, db):
         assert "kapt-costs" not in collect_mod._collect_running
 
 
+COSTS_RUNNING_WORDS = "관리비 받기가 도는 중이에요 — 끝난 뒤 다시 눌러 주세요"
+
+
+def test_b2_kapt_match_button_409_while_kapt_costs_running(client, db):
+    """관리비 받기(kapt_costs)가 도는 중이면 관리비 단지 연결 버튼은 409 + 우리말 사유 (세션 427 — 거울).
+
+    매칭은 짝이 바뀐 단지의 관리비 행을 지우므로 관리비 받기와 겹쳐 돌지 않는다. 예약 회차는
+    기다리지만 버튼은 기다리지 않는다. 다른 버튼(가치 점수)은 막지 않는다.
+    뮤테이션 M3: collect.py 의 kapt-match ↔ kapt_costs 확인을 지우면 200 이 되어 FAIL.
+    """
+    _admin(db, "bg8")
+    _running_job(db, "kapt_costs", 1)  # 관리비 임계 3h 안 — 살아 있는 회차
+    called = []
+    with patch.object(collect_mod, "_get_collector", return_value=lambda: called.append(1)):
+        res = client.post("/api/admin/collect/kapt-match", headers=_auth("bg8"))
+        other = client.post("/api/admin/collect/metrics", headers=_auth("bg8"))
+        _join_collector("metrics")
+    assert res.status_code == 409
+    assert res.json()["detail"] == COSTS_RUNNING_WORDS
+    assert collect_mod.COSTS_RUNNING_WORDS == COSTS_RUNNING_WORDS
+    assert other.status_code == 200
+    assert called == [1]  # 관리비 단지 연결은 부르지 않았다(가치 점수 1회만)
+    with collect_mod._collect_lock:
+        assert "kapt-match" not in collect_mod._collect_running
+
+
+def test_b2_kapt_match_button_409_while_kapt_costs_button_run_in_process(client, db):
+    """이 프로세스가 손으로 돌리는 관리비 받기(crawl_jobs 행을 아직 못 봐도)도 매칭 버튼을 막는다.
+
+    붙잡힌 가짜 수집기는 crawl_jobs 행을 만들지 않으므로 `_collect_running` 쪽 조건만 걸린다.
+    뮤테이션: `"kapt-costs" in _collect_running` 을 지우면 200 이 되어 FAIL.
+    """
+    _admin(db, "bg9")
+    held = _HeldCollector()
+    try:
+        with patch.object(collect_mod, "_get_collector", return_value=held):
+            first = client.post("/api/admin/collect/kapt-costs", headers=_auth("bg9"))
+            assert first.status_code == 200
+            assert held.entered.wait(timeout=10)
+            res = client.post("/api/admin/collect/kapt-match", headers=_auth("bg9"))
+        assert res.status_code == 409
+        assert res.json()["detail"] == COSTS_RUNNING_WORDS
+        assert held.calls == 1  # 매칭은 부르지 않았다
+    finally:
+        held.release.set()
+        _join_collector("kapt-costs")
+
+
+def test_b2_kapt_match_button_not_blocked_by_stale_or_finished_costs(client, db):
+    """유령(임계 3h 지난 running)·끝난 관리비 회차는 매칭 버튼을 막지 않는다."""
+    _admin(db, "bg10")
+    _running_job(db, "kapt_costs", 4)  # 임계 3h 초과 — 유령
+    db.add(CrawlJob(job_type="kapt_costs", status="completed",
+                    started_at=datetime.now(timezone.utc) - timedelta(minutes=30)))
+    db.commit()
+    with patch.object(collect_mod, "_get_collector", return_value=lambda: None):
+        res = client.post("/api/admin/collect/kapt-match", headers=_auth("bg10"))
+        _join_collector("kapt-match")
+    assert res.status_code == 200
+
+
 def test_b2_stale_or_other_running_rows_do_not_block(client, db):
     """유령(임계 지난 running)·다른 job_type 의 running 은 막지 않는다."""
     _admin(db, "bg6")

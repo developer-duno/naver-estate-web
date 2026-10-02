@@ -78,6 +78,43 @@ _FAILED_WINDOW_HOURS = 24
 _BURST_WINDOW_MIN = 60
 _BURST_MIN_FAILED = 5
 
+# 실패 알림 문턱 — 끝난 회차를 최신순으로 봤을 때 "연속 몇 번" 실패해야 알리는가.
+# 표에 없는 작업은 1(= 한 번 실패하면 바로 알림, 옛 동작 그대로).
+# 배경(세션 427, 사장님 결정 2026-10-02 "연속 두 번 실패 때만"): 관리비 받기는 하루 세
+# 회차(06:20·12:40·21:00)라 한 번 실패해도 다음 회차가 같은 단지를 받아 준다. 그런데
+# 한 회차만 실패해도 "실패 → 계속 → 복구" 3통이 갔고, 21:00 회차가 실패하면 새벽 3시쯤
+# "계속" 알림이 울렸다. 두 회차가 잇달아 실패할 때만 알려 새벽 알림을 줄인다.
+# 이 문턱은 "1. 작업 실패" 신호에만 쓴다 — 묶음 실패·마비·자료 오래됨 신호는 그대로다.
+_MIN_CONSECUTIVE_FAILED_BY_TYPE = {"kapt_costs": 2}
+
+
+def _tail_failed_count(db, job_type: str, need: int) -> int:
+    """끝난 회차(completed·failed)를 최신순 need 개 읽어, 맨 위부터 이어진 failed 개수.
+
+    running·cancelled 등 그 밖의 상태는 아예 읽지 않는다 — 도는 중인 회차나 강제 정리된
+    회차가 "연속 실패"를 끊지도 채우지도 않게 하려는 것이다(예: 실패 → 취소 → 실패 = 2,
+    실패 뒤 다음 회차가 도는 중 = 1).
+    24시간 창(_FAILED_WINDOW_HOURS)은 일부러 걸지 않는다 — 걸면 21:00 실패 → 다음 날
+    06:20 실패로 켜진 알림이, 그날 21:00 에 첫 실패가 창을 빠져나가는 순간 성공 없이
+    사라지는 새 길이 생긴다. 창은 호출하는 쪽(failed 집계)이 이미 본다.
+    정렬은 _resolution_reason 과 같은 관례(created_at desc, id desc).
+    """
+    rows = db.execute(
+        select(CrawlJob.status)
+        .where(and_(
+            CrawlJob.job_type == job_type,
+            CrawlJob.status.in_(("completed", "failed")),
+        ))
+        .order_by(CrawlJob.created_at.desc(), CrawlJob.id.desc())
+        .limit(need)
+    ).all()
+    count = 0
+    for r in rows:
+        if r.status != "failed":
+            break
+        count += 1
+    return count
+
 
 def _burst_rows(db, burst_cutoff):
     """실패 버스트 조건(창 안 failed >= 임계)을 만족하는 job_type 집계 행.
@@ -204,6 +241,12 @@ def detect_issues_ex(db) -> tuple[list[dict], bool]:
 
     for row in failed:
         if row.job_type in recovered:
+            continue
+        # 문턱이 2 이상인 작업(관리비 받기)만 추가로 1쿼리 — 끝난 회차 맨 위가 문턱만큼
+        # 잇달아 실패가 아니면 아직 알리지 않는다(한 번 실패는 다음 회차가 받아 준다).
+        # 문턱 1 인 나머지 작업은 이 조회를 하지 않아 쿼리 수·결과가 옛 그대로다.
+        need = _MIN_CONSECUTIVE_FAILED_BY_TYPE.get(row.job_type, 1)
+        if need > 1 and _tail_failed_count(db, row.job_type, need) < need:
             continue
         stats = _job_stats(db, row.job_type)
         # 실패 job_type 은 평시 0~2개라 job_type 당 1쿼리(N+1)의 부담이 무시 가능하다.

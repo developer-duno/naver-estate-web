@@ -1654,3 +1654,295 @@ def test_run_monitor_burst_still_true_query_failure_degrades_to_window_exit():
         assert failed_alert.status == "active"
     finally:
         db.close()
+
+
+# ── 세션 427: 관리비 받기 실패 알림은 "연속 두 회차 실패"일 때만 ──
+#
+# 사장님 결정(2026-10-02): 관리비 받기(kapt_costs)는 하루 세 회차(06:20·12:40·21:00)라
+# 한 번 실패는 다음 회차가 받아 준다. 그런데 한 회차만 실패해도 "실패 → 계속 → 복구" 3통,
+# 21:00 회차가 실패하면 새벽 3시쯤 "계속" 알림이 갔다. 끝난 회차(completed·failed)를
+# 최신순으로 봤을 때 맨 위 2개가 모두 failed 일 때만 crawl_failed:kapt_costs 를 낸다.
+# 다른 작업은 옛 그대로 한 번 실패하면 바로 알린다.
+# 뮤테이션(전부 FAIL 확인): 문턱 표를 1로 · 문턱 확인 건너뛰기 · 기본 문턱을 2로 ·
+# cancelled 를 성공처럼 세기 · running 을 실패로 세기 · 헬퍼에 24시간 창 걸기.
+
+_KAPT_KEY = "crawl_failed:kapt_costs"
+
+
+def _kapt_run(db, status, hours_ago, *, error=None):
+    """관리비 받기 회차 1건을 "지금으로부터 hours_ago 시간 전"에 만든 것으로 적재하는 팩토리.
+
+    running 은 아직 안 끝난 회차라 completed_at 을 비운다.
+    """
+    ts = _utcnow() - timedelta(hours=hours_ago)
+    db.add(CrawlJob(
+        job_type="kapt_costs", status=status,
+        error_message=error if error is not None else ("창구 오류 04" if status == "failed" else None),
+        started_at=ts,
+        completed_at=None if status == "running" else ts,
+        created_at=ts,
+    ))
+    db.commit()
+
+
+def _failed_keys(db):
+    """이번 스캔이 낸 장애 키 목록."""
+    return [i["alert_key"] for i in detect_issues(db)]
+
+
+def test_kapt_costs_single_failure_then_success_sends_no_alert():
+    """예시 1 — 06:20 실패 → 12:40 성공: 알림 0통.
+
+    06:20 실패 직후 스캔에도 키가 없어야 하고(문턱 미달), 12:40 성공 뒤에도 켜진 알림이
+    없으니 해소 알림도 없다. run_monitor 를 두 시점에 돌려 발송이 한 번도 없음을 단언.
+    """
+    db = TestSession()
+    try:
+        _kapt_run(db, "failed", 6)
+        assert _KAPT_KEY not in _failed_keys(db)
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)          # 06:20 회차 실패 직후 스캔
+            _kapt_run(db, "completed", 0.1)
+            run_monitor(db)          # 12:40 회차 성공 뒤 스캔
+        assert mock_tg.call_count == 0, [c[0][0] for c in mock_tg.call_args_list]
+        assert db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == _KAPT_KEY)
+        ).scalar_one_or_none() is None
+    finally:
+        db.close()
+
+
+def test_kapt_costs_two_consecutive_failures_alert_once_then_resolved():
+    """예시 2 — 06:20 실패 → 12:40 실패: 새 알림 1통 → 21:00 성공이면 해소 1통.
+
+    ⚠ 이 시험은 쿨다운 6시간을 흉내 내지 않은 "스캔 2번" 기준이다(두 번째 실패 직후 1번,
+    성공 직후 1번). 실제 운영에서는 스캔이 10분마다 돌고 쿨다운이 그대로라, 12:40 실패로
+    새 알림이 간 뒤 약 6시간 뒤(대개 21:00 회차가 끝나기 전) "계속" 1통이 더 가고 21:00
+    성공이면 "풀렸어요" — 대개 3통이다. 문턱은 "한 번 실패로는 안 울린다"만 바꾼다.
+    """
+    db = TestSession()
+    try:
+        _kapt_run(db, "failed", 7)
+        _kapt_run(db, "failed", 1)
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)          # 두 번째 실패 뒤 첫 스캔
+            assert mock_tg.call_count == 1
+            first = mock_tg.call_args_list[0][0][0]
+            assert job_words("kapt_costs") in first
+            assert not _is_resolved_message(first)
+            alert = db.execute(
+                select(MonitorAlert).where(MonitorAlert.alert_key == _KAPT_KEY)
+            ).scalar_one()
+            assert alert.status == "active"
+            # 실패 건수·문구는 옛 그대로(24시간 안 실패 2건)
+            issue = next(i for i in detect_issues(db) if i["alert_key"] == _KAPT_KEY)
+            assert issue["data"]["count"] == 2
+            assert "2건 실패" in issue["detail"]
+
+            _kapt_run(db, "completed", 0.1)
+            run_monitor(db)          # 21:00 회차 성공 뒤 스캔
+            assert mock_tg.call_count == 2
+            assert _is_resolved_message(mock_tg.call_args_list[1][0][0])
+        db.refresh(alert)
+        assert alert.status == "resolved"
+    finally:
+        db.close()
+
+
+def test_kapt_costs_consecutive_failures_across_night_alert():
+    """예시 3 — 21:00 실패 → 다음 날 06:20 실패: 알림.
+
+    코드에 "날짜" 개념이 없어 회차 사이가 9시간 20분(밤을 넘김)이어도 연속으로 센다.
+    """
+    db = TestSession()
+    try:
+        _kapt_run(db, "failed", 9.5)   # 전날 21:00 회차
+        assert _KAPT_KEY not in _failed_keys(db)   # 밤사이엔 조용
+        _kapt_run(db, "failed", 0.2)   # 오늘 06:20 회차
+        assert _KAPT_KEY in _failed_keys(db)
+    finally:
+        db.close()
+
+
+def test_kapt_costs_fail_success_fail_no_alert():
+    """예시 4 — 실패 → 성공 → 실패: 알림 0통(가운데 성공이 연속을 끊는다).
+
+    마지막이 실패라 "자가 복구" 선필터는 안 타고, 문턱 확인만이 이 알림을 막는다.
+    """
+    db = TestSession()
+    try:
+        _kapt_run(db, "failed", 15)
+        _kapt_run(db, "completed", 8)
+        _kapt_run(db, "failed", 1)
+        assert _KAPT_KEY not in _failed_keys(db)
+    finally:
+        db.close()
+
+
+def test_kapt_costs_fail_cancelled_fail_counts_as_two():
+    """예시 5 — 실패 → (cancelled) → 실패: 연속 2로 센다 → 알림.
+
+    강제 정리·수동 취소된 회차는 성공이 아니므로 연속을 끊지 않는다(건너뛴다).
+    """
+    db = TestSession()
+    try:
+        _kapt_run(db, "failed", 15)
+        _kapt_run(db, "cancelled", 8, error="stale running — swept by monitor")
+        _kapt_run(db, "failed", 1)
+        assert _KAPT_KEY in _failed_keys(db)
+    finally:
+        db.close()
+
+
+def test_kapt_costs_failure_then_running_round_no_alert():
+    """한 번 실패 뒤 다음 회차가 도는 중: 알림 없음 — 끝난 회차만 센다.
+
+    도는 중인 회차를 실패로 세면 12:40 회차가 시작하자마자 알림이 울린다.
+    """
+    db = TestSession()
+    try:
+        _kapt_run(db, "failed", 6.5)
+        _kapt_run(db, "running", 0.2)   # 임계 3h 미만이라 마비 신호도 아님
+        keys = _failed_keys(db)
+        assert _KAPT_KEY not in keys
+        assert "crawl_stale:kapt_costs" not in keys
+    finally:
+        db.close()
+
+
+def test_kapt_costs_active_alert_stays_when_first_failure_leaves_24h_window():
+    """연속 실패는 24시간 창 밖까지 센다 — 헬퍼에 창을 걸면 생기는 "새" 꺼짐 길을 막는다.
+
+    21:00 실패 → 다음 날 06:20 실패로 알림이 켜진 뒤, 그날 21:00 에 첫 실패가 24시간
+    창을 빠져나간다. 연속 실패를 창 안에서만 세면 그 순간 꼬리가 1로 줄어 키가 사라지고
+    "성공 미확인" 해소 알림이 옛 동작보다 일찍 나간다.
+    (마지막 실패가 창을 나가면 성공 없이도 꺼지는 옛 길은 그대로다 — 이 시험이 막는 것은
+    문턱 때문에 새로 생길 수 있는 길 하나뿐이다.)
+    """
+    db = TestSession()
+    try:
+        _kapt_run(db, "failed", 25)    # 창 밖으로 나간 첫 실패
+        _kapt_run(db, "failed", 15)    # 창 안에 남은 두 번째 실패
+        assert _KAPT_KEY in _failed_keys(db)
+    finally:
+        db.close()
+
+
+def test_other_job_single_failure_alerts_without_tail_query():
+    """문턱 표에 없는 작업은 옛 그대로 — 한 번 실패하면 바로 알리고, 추가 조회도 없다."""
+    db = TestSession()
+    try:
+        db.add(CrawlJob(
+            job_type="article_detail", status="failed", error_message="네이버 502",
+            started_at=_utcnow(), completed_at=_utcnow(), created_at=_utcnow(),
+        ))
+        db.commit()
+        with patch(
+            "crawler.monitor._tail_failed_count",
+            side_effect=AssertionError("문턱 1 인 작업에 연속 실패 조회가 나갔다"),
+        ) as mock_tail:
+            keys = _failed_keys(db)
+        assert "crawl_failed:article_detail" in keys
+        assert mock_tail.call_count == 0
+    finally:
+        db.close()
+
+
+# ── 세션 427 보완(검사관 지적): 위 시험들은 행 배치가 앞뒤 대칭이거나 관리비 행만 있어
+#    아래 세 변이가 살아남았다 → 비대칭 배치·다른 작업 행·그 밖의 상태 행을 섞어 고정한다.
+#    변이(전부 FAIL 확인): 헬퍼 정렬을 오래된 순으로 · 헬퍼에서 job_type 조건 삭제 ·
+#    pending·paused 행을 "끝난 회차"로 세기.
+
+
+def _other_run(db, job_type, status, hours_ago):
+    """관리비가 아닌 작업의 회차 1건을 hours_ago 시간 전에 끝난 것으로 적재하는 팩토리."""
+    ts = _utcnow() - timedelta(hours=hours_ago)
+    db.add(CrawlJob(
+        job_type=job_type, status=status,
+        error_message="네이버 502" if status == "failed" else None,
+        started_at=ts, completed_at=ts, created_at=ts,
+    ))
+    db.commit()
+
+
+def test_kapt_costs_old_success_then_two_failures_alerts():
+    """비대칭 배치 ① — (시간순) 옛 성공 → 실패 → 실패: 알림.
+
+    "최신순 맨 위 2개"를 봐야 한다. 오래된 순으로 읽으면 [성공, 실패] 가 잡혀 조용해진다.
+    """
+    db = TestSession()
+    try:
+        _kapt_run(db, "completed", 20)
+        _kapt_run(db, "failed", 7)
+        _kapt_run(db, "failed", 1)
+        assert _KAPT_KEY in _failed_keys(db)
+    finally:
+        db.close()
+
+
+def test_kapt_costs_two_old_failures_then_success_then_failure_quiet():
+    """비대칭 배치 ② — (시간순) 실패 → 실패 → 성공 → 실패: 조용.
+
+    가장 최근 두 회차는 [실패, 성공] 이다. 오래된 순으로 읽으면 [실패, 실패] 가 잡혀 울린다.
+    """
+    db = TestSession()
+    try:
+        _kapt_run(db, "failed", 20)
+        _kapt_run(db, "failed", 15)
+        _kapt_run(db, "completed", 8)
+        _kapt_run(db, "failed", 1)
+        assert _KAPT_KEY not in _failed_keys(db)
+    finally:
+        db.close()
+
+
+def test_kapt_costs_other_job_success_does_not_break_streak():
+    """다른 작업의 성공은 관리비 연속 실패를 끊지 못한다 — 같은 작업의 회차만 센다.
+
+    관리비 실패 두 개 사이와 뒤에 다른 작업 성공 행을 끼운다. 작업 구분 없이 최신 2개를
+    읽으면 [다른 작업 성공, 관리비 실패] 가 잡혀 조용해진다.
+    """
+    db = TestSession()
+    try:
+        _kapt_run(db, "failed", 7)
+        _other_run(db, "article_detail", "completed", 4)
+        _kapt_run(db, "failed", 1)
+        _other_run(db, "article_detail", "completed", 0.5)
+        assert _KAPT_KEY in _failed_keys(db)
+    finally:
+        db.close()
+
+
+def test_kapt_costs_other_job_failure_does_not_fill_streak():
+    """다른 작업의 실패는 관리비 연속 실패를 채우지 못한다.
+
+    관리비 실패는 1개뿐이고 더 최신에 다른 작업 실패가 있다. 작업 구분 없이 세면
+    [다른 작업 실패, 관리비 실패] = 2 로 관리비 알림이 헛울린다. 다른 작업 자신은
+    문턱 1 이라 옛 그대로 바로 알린다.
+    """
+    db = TestSession()
+    try:
+        _kapt_run(db, "failed", 6)
+        _other_run(db, "article_detail", "failed", 1)
+        keys = _failed_keys(db)
+        assert _KAPT_KEY not in keys
+        assert "crawl_failed:article_detail" in keys
+    finally:
+        db.close()
+
+
+def test_kapt_costs_pending_and_paused_rows_are_skipped():
+    """실패 → paused → pending → 실패: 연속 2 → 알림.
+
+    끝난 회차는 completed·failed 뿐이다. paused·pending 은 running·cancelled 처럼
+    건너뛴다 — "실패가 아닌 행"으로 읽어 연속을 끊으면 조용해진다.
+    """
+    db = TestSession()
+    try:
+        _kapt_run(db, "failed", 15)
+        _kapt_run(db, "paused", 10)
+        _kapt_run(db, "pending", 5)
+        _kapt_run(db, "failed", 1)
+        assert _KAPT_KEY in _failed_keys(db)
+    finally:
+        db.close()

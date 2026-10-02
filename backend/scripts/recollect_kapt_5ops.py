@@ -43,7 +43,7 @@
     못 보고, 두 프로세스가 각자 1.5초 간격으로 부르면 합쳐서 창구 한계(약 0.9콜/초)를 넘어 04 벌칙이
     난다. 돌던 중 KST 날짜가 시작 때와 달라지면(자정 통과) `date_rollover` 로도 멈춘다(20:45 정지가 먼저라
     `--force` 로 이른 시각에 시작해 한 행이 몇 시간 걸린 경우만 닿는 안전망). `crawl_jobs` 에 `kapt_costs`·
-    `kapt_match` 가 running 이면 시작을 거부하고, 돌던 중에도 100행마다 다시 확인해 running 이면 멈춘다.
+    `kapt_match` 가 running 이면 시작을 거부하고, 돌던 중에도 행마다 다시 확인해 running 이면 멈춘다(세션 427).
     멈춘 뒤 다시 실행하면 고친 행은 대상에서 빠져 있으므로 이어서 간다.
 
 5 op 가 전부 비어 온 행
@@ -83,7 +83,7 @@ from sqlalchemy import text  # noqa: E402
 from crawler import kapt_api  # noqa: E402
 from crawler.kapt_api import INDIVIDUAL_COST_OPS, KaptApiError  # noqa: E402
 from crawler.quota_db import _quota_key  # noqa: E402
-from crawler.service_kapt import _COST_JOB_TYPE, _summarize  # noqa: E402
+from crawler.service_kapt import _COST_JOB_TYPE, _MATCH_JOB_TYPE, _summarize  # noqa: E402
 from db.models import CrawlJob, KaptComplexMap, KaptManagementCost  # noqa: E402
 from utils import utcnow  # noqa: E402
 
@@ -165,7 +165,7 @@ def kapt_costs_running(db) -> bool:
     return (
         db.query(CrawlJob.id)
         .filter(
-            CrawlJob.job_type.in_((_COST_JOB_TYPE, "kapt_match")),
+            CrawlJob.job_type.in_((_COST_JOB_TYPE, _MATCH_JOB_TYPE)),
             CrawlJob.status == "running",
         )
         .first()
@@ -266,7 +266,9 @@ def run(db, *, limit: int | None = None, daily_cap: int = DEFAULT_DAILY_CAP,
     consecutive = 0
     consecutive_blank = 0
     for index, target in enumerate(targets):
-        if index and index % PROGRESS_EVERY == 0 and kapt_costs_running(db):
+        # 행마다 다시 본다(세션 427 — 옛 100행마다는 약 12.5분 동안 정기 회차·매칭과 겹쳤다).
+        # 첫 행은 위 시작 가드가 방금 봤으므로 건너뛴다.
+        if index and kapt_costs_running(db):
             stats.stop_reason = "kapt_costs_started"
             logger.warning("정기 K-apt 관리비·매칭 회차(kapt_costs·kapt_match)가 시작돼 멈춘다 — 끝난 뒤 다시 실행하면 이어간다")
             break

@@ -1010,6 +1010,21 @@ def test_kapt_match_messages_kept_as_is():
         assert explain_error(text) == text, explain_error(text)
 
 
+def test_kapt_match_costs_still_running_reason_kept_in_alert():
+    """관리비 받기를 45분 기다려도 안 끝나 매칭을 시작 못 한 사유는 알림에도 원문 그대로 (세션 427).
+
+    고정 문장("처음 보는 문제")으로 바뀌면 "끝난 뒤 다시 눌러 주세요" 안내가 사라진다.
+    사유 글자는 수집기 상수에서 가져온다 — 수집기 문구와 이 규칙의 머리말이 어긋나면 여기서 잡힌다.
+    뮤테이션: `_ERROR_RULES` kapt_match 규칙에서 `관리비 받기가 끝나지 않아` 머리말을 빼면 FAIL.
+    """
+    from crawler.service_kapt import _MATCH_COSTS_RUNNING_WORDS
+
+    assert _MATCH_COSTS_RUNNING_WORDS == (
+        "관리비 받기가 끝나지 않아 시작하지 못했어요 — 끝난 뒤 관리자 화면에서 다시 눌러 주세요"
+    )
+    assert explain_error(_MATCH_COSTS_RUNNING_WORDS) == _MATCH_COSTS_RUNNING_WORDS
+
+
 def test_kapt_match_message_with_english_falls_to_unknown():
     """우리 문구 뒤에 영문(개발자 원문)이 섞이면 원문 보존 규칙을 지나쳐 고정 문장이 된다."""
     out = explain_error(f"{_KAPT_MATCH_NOTE} KaptApiError")

@@ -203,6 +203,17 @@ _RUN_TIME_BUDGET_SEC = 120 * 60
 _MATCH_JOB_TYPE = "kapt_match"
 _COST_JOB_TYPE = "kapt_costs"
 
+# 관리비 단지 연결(kapt_match)이 관리비 받기(kapt_costs) 회차가 끝나기를 기다리는 간격·최대 시간(초).
+# 매월 21일 12:40 관리비 회차가 길어지면(최악 15:12 안팎) 14:50 매칭과 겹친다 — 매칭은 짝이 바뀐
+# 단지의 관리비 행을 지우므로, 그 사이 받은 행이 지워지거나 행 잠금으로 서로 기다린다(세션 427).
+# 최대 시간을 넘기면 시작하지 않고 failed 로 알린다(월 1회 잡이라 조용히 건너뛰지 않는다).
+# 기다린 시간은 잠든 횟수 × 간격으로 센다(시계를 읽지 않는다 — 시험이 잠드는 함수만 바꿔 끼우면 된다).
+_MATCH_WAIT_POLL_SEC = 60
+_MATCH_WAIT_MAX_SEC = 45 * 60
+_MATCH_COSTS_RUNNING_WORDS = (
+    "관리비 받기가 끝나지 않아 시작하지 못했어요 — 끝난 뒤 관리자 화면에서 다시 눌러 주세요"
+)
+
 # 이름 정규화에서 제거할 것들 — 괄호 기호, 공백, 흔한 접미사.
 # ⚠ 괄호 "안의 내용"을 통째로 지우면 안 된다 — K-apt 가 "경희궁의아침(4단지)" 처럼
 # 차수를 괄호 안에 넣어 표기해서, 내용을 지우면 1단지·4단지가 같은 정규형이 되어
@@ -656,19 +667,65 @@ def _purge_unconfirmed_mappings(
     return len(stale)
 
 
+def _costs_round_running() -> bool:
+    """관리비 받기(kapt_costs) 회차가 running 인가 — 조회만 하고 바로 닫는다.
+
+    기다리는 동안 트랜잭션·연결을 쥐고 있지 않으려고 부를 때마다 짧은 세션을 따로 연다
+    (NullPool + 세션 모드 연결 한도). 죽은 채 남은 running 행도 센다 — 서버 일감 점검이 3시간 뒤
+    정리하므로, 그 드문 경우 매칭은 최대 시간 뒤 failed 로 끝나고 알림이 간다(받아들이는 동작).
+    """
+    with SessionLocal() as probe:
+        return (
+            probe.query(CrawlJob.id)
+            .filter(CrawlJob.job_type == _COST_JOB_TYPE, CrawlJob.status == "running")
+            .first()
+            is not None
+        )
+
+
+def _wait_for_costs_round() -> bool:
+    """관리비 받기 회차가 끝나기를 기다린다. 반환 = 시작해도 되는가(False 면 최대 시간을 넘김)."""
+    waited = 0
+    while _costs_round_running():
+        if waited >= _MATCH_WAIT_MAX_SEC:
+            return False
+        logger.info(
+            "[kapt_match] 관리비 받기가 도는 중 — 끝나기를 기다림 (%d분째, 최대 %d분)",
+            waited // 60, _MATCH_WAIT_MAX_SEC // 60,
+        )
+        time.sleep(_MATCH_WAIT_POLL_SEC)
+        waited += _MATCH_WAIT_POLL_SEC
+    return True
+
+
 def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
     """K-apt 단지 목록 ↔ 우리 단지 매칭 (월 1회).
 
     법정동(cortar_no)으로 후보를 좁힌 뒤 이름 유사도·세대수로 거른다.
     매칭 확정분만 getAphusBassInfoV5 를 한 번 더 호출해 복도유형·세대수를 채운다
     (확정 전에 부르면 후보 전량에 API 를 태워 쿼터가 터진다).
+
+    관리비 받기(kapt_costs) 회차가 돌고 있으면 목록을 받기 전에 최대 45분 기다린다(세션 427).
+    그 뒤에도 돌고 있으면 시작하지 않고 failed(`costs_running`) — 관리자 버튼은
+    routers/admin/collect.py 가 기다리지 않고 409 를 돌려준다.
     """
     db = SessionLocal()
+    # 잡 행(running)을 기다리기 **전에** 만든다 — 재시작 게이트·관리비 회차(match_running)·재수집
+    # 스크립트가 "매칭이 시작됐다" 를 봐야, 기다리는 사이 새 관리비 회차가 끼어들지 않는다.
+    # commit 뒤라 이 세션은 기다리는 동안 트랜잭션을 쥐고 있지 않다.
     job = _record_job(db, _MATCH_JOB_TYPE, scheduler_job_id)
-    # 정리(reconciliation) 기준선 — 이 시각보다 오래된 matched_at 은 "이번 실행이
-    # 재확인하지 않은 옛 행"이다. 목록 조회 전에 찍어야 실행 도중 갱신분을 안 놓친다.
-    run_started_at = utcnow()
     try:
+        if not _wait_for_costs_round():
+            _fail_job(db, job, _MATCH_COSTS_RUNNING_WORDS)
+            logger.error(
+                "[kapt_match] 관리비 받기가 %d분 뒤에도 돌고 있어 시작하지 않음",
+                _MATCH_WAIT_MAX_SEC // 60,
+            )
+            return {"matched": 0, "error": "costs_running"}
+        # 정리(reconciliation) 기준선 — 이 시각보다 오래된 matched_at 은 "이번 실행이
+        # 재확인하지 않은 옛 행"이다. 목록 조회 전에 찍어야 실행 도중 갱신분을 안 놓친다.
+        # 기다림이 끝난 **뒤** 찍는다 — 기준선은 잡 행을 만든 시각이 아니라 심사를 시작한 시각이다.
+        run_started_at = utcnow()
         kapt_rows, list_complete = _fetch_all_kapt()
         if not kapt_rows:
             _fail_job(db, job, "K-apt 목록 조회 실패 (0건)")

@@ -2294,6 +2294,69 @@ def test_match_basis_quota_stops_remaining_calls(db, monkeypatch):
         assert db.query(KaptComplexMap).filter_by(complex_no=no).one().corridor_type == "계단식"
 
 
+def test_match_basis_quota_keeps_reverse_conflict_loser_of_uncalled_complex(db, monkeypatch):
+    """한도 초과로 **부르지 못한** 단지가 이긴 K-apt 코드의 기존 짝(경합 패자)도 정리에서 남는다 (세션 427).
+
+    상황 = 한도 초과 + 잡 completed(실패 2 ≤ 연결 2 → 정리가 실제로 돈다) + 역방향 경합 패자.
+    생존 순서를 A9 → A8 → A7(여기서 한도 초과) → AX(남은 단지, 부르지 않음)로 고정한다.
+    W(7002)→AX 는 X(7001)에게 AX 를 내준 기존 짝이라 complex_no 로는 keep 에 없다 — 한도 초과
+    루프가 **남은 단지의 kaptCode**(AX)를 keep 에 넣어야 지켜진다.
+    뮤테이션 MU1: 그 루프의 `basis_failed_codes.add(rest_cand["kaptCode"])` 를 지우면
+    W 의 매칭·관리비가 지워져 FAIL(세션 426 검사관 A2 🟡c — 탐침으로만 잡히던 변이).
+    """
+    _seed_mapped_complex(db, "7002", "래미안퍼스티지2차", "1111011800", "AX", households=120)
+    _make_complex(db, complex_no="7001", name="래미안퍼스티지1", households=120)
+    _make_complex(db, complex_no="1002", name="푸르지오시티",
+                  cortar_no="1111011900", households=500)
+    _make_complex(db, complex_no="1003", name="래미안타워",
+                  cortar_no="1111012000", households=500)
+    _make_complex(db, complex_no="1004", name="힐스테이트광장",
+                  cortar_no="1111012100", households=500)
+    _seed_stale_mapping(db)   # 재확인 안 될 다른 단지(9001) — 정리가 돌았다는 증거
+    monkeypatch.setattr(
+        service_kapt, "_fetch_all_kapt",
+        lambda *a, **k: ([
+            _kapt(code="AX", name="래미안퍼스티지1", bjd="1111011800"),
+            _kapt(code="A9", name="푸르지오시티", bjd="1111011900"),
+            _kapt(code="A8", name="래미안타워", bjd="1111012000"),
+            _kapt(code="A7", name="힐스테이트광장", bjd="1111012100"),
+        ], True),
+    )
+    # 생존 순서를 DB 조회 순서에 맡기지 않는다 — 진짜 해소 결과를 받아 순서만 고정.
+    order = {"A9": 0, "A8": 1, "A7": 2, "AX": 3}
+    real_resolve = service_kapt._resolve_reverse_conflicts
+
+    def resolve_in_fixed_order(proposals):
+        survivors, dropped = real_resolve(proposals)
+        return sorted(survivors, key=lambda item: order[item[1]["kaptCode"]]), dropped
+
+    monkeypatch.setattr(service_kapt, "_resolve_reverse_conflicts", resolve_in_fixed_order)
+    calls = []
+
+    def fake(code):
+        calls.append(code)
+        if code == "A7":
+            raise KaptApiError("일일 한도 초과(22)", code="22", is_quota=True)
+        return {"codeHallNm": "복도식", "kaptdaCnt": 500.0}
+
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", fake)
+
+    result = match_kapt_complexes()
+
+    assert calls == ["A9", "A8", "A7"], f"한도 초과 뒤 남은 단지(AX)를 불렀거나 순서가 다르다: {calls}"
+    assert (result["matched"], result["basis_failed"]) == (2, 2)
+    assert result.get("error") is None, result
+    from db.models import CrawlJob
+    assert db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_match").one().status == "completed"
+    # 정리는 실제로 돌았다 — 무관한 옛 짝(9001)은 지워진다
+    assert result["purged"] == 1
+    assert db.query(KaptComplexMap).filter_by(complex_no="9001").count() == 0
+    # 부르지 못한 X(7001)의 코드 AX 를 쥔 기존 짝 W(7002)는 매칭·관리비 그대로
+    assert db.query(KaptComplexMap).filter_by(complex_no="7002").one().kapt_code == "AX"
+    assert db.query(KaptManagementCost).filter_by(complex_no="7002").count() == 1
+    assert db.query(KaptComplexMap).filter_by(complex_no="7001").count() == 0
+
+
 def test_purge_unconfirmed_mappings_keep_skips_listed_complexes(db):
     """`_purge_unconfirmed_mappings(keep=…)` 단위 — keep 단지는 남고 나머지 옛 행은 지운다."""
     from utils import utcnow
@@ -3971,3 +4034,181 @@ def test_collect_costs_failures_equal_collected_stay_completed(db, monkeypatch):
     from db.models import CrawlJob
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").one()
     assert job.status == "completed"
+
+
+# ───────── 관리비 단지 연결은 관리비 받기 회차가 끝나기를 기다린다 (세션 427) ─────────
+#
+# 매월 21일 12:40 관리비 회차가 길어지면 14:50 매칭과 겹친다. 매칭은 잡 행(running)을 만든 뒤
+# 목록을 받기 전에 60초마다 다시 보며 최대 45분 기다리고, 그래도 돌고 있으면 failed 로 끝낸다.
+# 시험은 실제로 기다리지 않는다 — 잠드는 함수만 바꿔 끼운다(기다린 시간 = 잠든 횟수 × 간격).
+
+
+def _costs_job(db, status="running"):
+    from db.models import CrawlJob
+    db.add(CrawlJob(job_type="kapt_costs", status=status))
+    db.commit()
+
+
+def _fake_match_wait(monkeypatch, db, finish_costs_after=None):
+    """`service_kapt.time.sleep` 을 기록기로 바꾼다. `finish_costs_after` 번째 잠에서 관리비 회차를 끝낸다.
+
+    잠들 때마다 그 순간의 상태도 남긴다: 매칭 잡 행이 running 으로 보이는가 ·
+    service_kapt 가 연 세션 중 트랜잭션을 쥔 것이 있는가.
+    """
+    from db.models import CrawlJob
+
+    state = {"slept": [], "match_running_rows": [], "open_tx": [], "events": []}
+    sessions = []
+    real_factory = service_kapt.SessionLocal
+
+    def factory():
+        session = real_factory()
+        sessions.append(session)
+        return session
+
+    monkeypatch.setattr(service_kapt, "SessionLocal", factory)
+
+    class _T:
+        monotonic = staticmethod(_real_time.monotonic)
+
+        @staticmethod
+        def sleep(seconds):
+            state["slept"].append(seconds)
+            state["events"].append("sleep")
+            state["open_tx"].append(any(s.in_transaction() for s in sessions))
+            state["match_running_rows"].append(
+                db.query(CrawlJob)
+                .filter(CrawlJob.job_type == "kapt_match", CrawlJob.status == "running")
+                .count()
+            )
+            if finish_costs_after is not None and len(state["slept"]) == finish_costs_after:
+                db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_costs").update(
+                    {"status": "completed"}
+                )
+            db.commit()   # 조회·갱신 뒤 이 시험 세션의 트랜잭션도 닫는다
+
+    monkeypatch.setattr(service_kapt, "time", _T)
+    return state
+
+
+def _matchable_fixture(db, monkeypatch, state=None):
+    """정상 연결될 단지 1곳 + 목록·기본정보 가짜. 목록을 받은 횟수(리스트)를 돌려준다."""
+    _make_complex(db)
+    fetched = []
+
+    def fake_list(*a, **k):
+        fetched.append(1)
+        if state is not None:
+            state["events"].append("list")
+        return [_kapt(households=120)], True
+
+    monkeypatch.setattr(service_kapt, "_fetch_all_kapt", fake_list)
+    monkeypatch.setattr(service_kapt, "fetch_apt_basis_info", lambda code: None)
+    return fetched
+
+
+def test_match_wait_constants_are_60s_and_45min():
+    """사장님 결정값 — 60초마다 다시 보고 최대 45분."""
+    assert service_kapt._MATCH_WAIT_POLL_SEC == 60
+    assert service_kapt._MATCH_WAIT_MAX_SEC == 45 * 60
+
+
+def test_match_waits_for_costs_round_then_starts(db, monkeypatch):
+    """관리비 회차가 세 번째 확인 뒤 끝나면, 60초씩 3번 기다린 뒤 목록을 받아 정상 연결한다.
+
+    기다리는 동안: 매칭 잡 행은 이미 running(관리비 회차·재시작 게이트·재수집 스크립트가 본다) ·
+    service_kapt 의 세션은 트랜잭션을 쥐고 있지 않다 · 정리 기준 시각은 기다림이 끝난 뒤 찍는다.
+    뮤테이션 M1: 대기 루프를 건너뛰면 잠든 횟수 0 으로 FAIL.
+    """
+    _costs_job(db)
+    state = _fake_match_wait(monkeypatch, db, finish_costs_after=3)
+    fetched = _matchable_fixture(db, monkeypatch, state)
+    real_utcnow = service_kapt.utcnow
+
+    def recording_utcnow():
+        state["events"].append("utcnow")
+        return real_utcnow()
+
+    monkeypatch.setattr(service_kapt, "utcnow", recording_utcnow)
+
+    result = match_kapt_complexes()
+
+    assert state["slept"] == [60, 60, 60]
+    assert state["match_running_rows"] == [1, 1, 1], "기다리는 동안 매칭 잡 행이 running 으로 안 보였다"
+    assert state["open_tx"] == [False, False, False], "기다리는 동안 DB 트랜잭션을 쥐고 있었다"
+    # 정리 기준 시각(service_kapt.utcnow 첫 호출)은 마지막 잠 뒤 · 목록 받기 앞
+    assert state["events"][:5] == ["sleep", "sleep", "sleep", "utcnow", "list"], state["events"]
+    assert fetched == [1]
+    assert result["matched"] == 1 and result.get("error") is None, result
+    from db.models import CrawlJob
+    assert db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_match").one().status == "completed"
+
+
+def test_match_starts_when_costs_round_ends_on_last_allowed_wait(db, monkeypatch):
+    """경계: 45번째(마지막) 기다림에서 끝나면 시작한다 — 45분까지는 기다린다."""
+    _costs_job(db)
+    state = _fake_match_wait(monkeypatch, db, finish_costs_after=45)
+    fetched = _matchable_fixture(db, monkeypatch)
+
+    result = match_kapt_complexes()
+
+    assert state["slept"] == [60] * 45
+    assert fetched == [1]
+    assert result["matched"] == 1 and result.get("error") is None, result
+
+
+def test_match_gives_up_when_costs_round_still_running_after_45min(db, monkeypatch, caplog):
+    """45분 뒤에도 관리비 회차가 돌면 시작하지 않는다 — failed + 우리말 사유 + K-apt 호출 0.
+
+    월 1회 잡이라 조용히 건너뛰지 않는다(failed → 서버 일감 점검이 알린다). 기존 연결·관리비는 그대로.
+    뮤테이션 M2: 실패 분기를 "그냥 시작" 으로 바꾸면 목록을 받아 FAIL.
+    뮤테이션(경계): `waited >= 최대` 를 `>` 로 바꾸면 46번 잠들어 FAIL.
+    """
+    import logging
+
+    from crawler.plain_words import explain_stored_error
+    from db.models import CrawlJob
+
+    _costs_job(db)
+    _seed_stale_mapping(db)   # 정리가 돌았다면 지워질 옛 짝
+    state = _fake_match_wait(monkeypatch, db)
+    fetched = _matchable_fixture(db, monkeypatch)
+    basis_calls = []
+    monkeypatch.setattr(
+        service_kapt, "fetch_apt_basis_info", lambda code: basis_calls.append(code)
+    )
+
+    with caplog.at_level(logging.INFO, logger=service_kapt.logger.name):
+        result = match_kapt_complexes()
+
+    assert result == {"matched": 0, "error": "costs_running"}
+    assert state["slept"] == [60] * 45
+    assert fetched == [] and basis_calls == [], "관리비 회차가 도는데 K-apt 를 불렀다"
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "kapt_match").one()
+    words = "관리비 받기가 끝나지 않아 시작하지 못했어요 — 끝난 뒤 관리자 화면에서 다시 눌러 주세요"
+    assert job.status == "failed"
+    assert job.error_message == words
+    assert job.completed_at is not None
+    assert explain_stored_error(job.error_message) == words   # 관리자 화면에 원문 그대로
+    assert db.query(KaptComplexMap).filter_by(complex_no="9001").count() == 1
+    assert db.query(KaptManagementCost).filter_by(complex_no="9001").count() == 1
+    waiting = [r.getMessage() for r in caplog.records if "끝나기를 기다림" in r.getMessage()]
+    assert len(waiting) == 45
+    assert "0분째" in waiting[0] and "44분째" in waiting[-1] and "최대 45분" in waiting[0]
+
+
+@pytest.mark.parametrize("costs_status", ["completed", "failed", "cancelled"])
+def test_match_does_not_wait_for_finished_costs_round(db, monkeypatch, costs_status):
+    """끝난 관리비 회차 행은 매칭을 기다리게 하지 않는다.
+
+    뮤테이션: 대기 조회에서 `CrawlJob.status == "running"` 을 지우면 45번 잠든 뒤 failed 로 FAIL.
+    """
+    _costs_job(db, status=costs_status)
+    state = _fake_match_wait(monkeypatch, db)
+    fetched = _matchable_fixture(db, monkeypatch)
+
+    result = match_kapt_complexes()
+
+    assert state["slept"] == []
+    assert fetched == [1]
+    assert result["matched"] == 1, result

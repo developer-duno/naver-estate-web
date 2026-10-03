@@ -11,9 +11,9 @@ complex_price_history 에서 단지별 가치지표 3필드를 집계해 complex
 
 import logging
 
-from sqlalchemy import exists
+from sqlalchemy import exists, func
 
-from crawler.metrics_helpers import calc_median_price, count_recent_price_records
+from crawler.metrics_helpers import _cutoff_month, calc_median_price, count_recent_price_records
 from crawler.service_common import _checkpoint, fail_job_safely
 from crawler.stats import compute_jeonse_rate
 from db.database import SessionLocal
@@ -21,6 +21,9 @@ from db.models import Complex, ComplexPriceHistory, CrawlJob
 from utils import utcnow
 
 logger = logging.getLogger(__name__)
+
+# 매매 중앙값 계산 기간(개월) — 후보 조건과 계산이 같은 값을 써야 헛바퀴가 안 생긴다(세션 428)
+_MEDIAN_MONTHS = 6
 
 
 def collect_complex_metrics(batch_size: int = 200, scheduler_job_id: str | None = None):
@@ -49,9 +52,15 @@ def collect_complex_metrics(batch_size: int = 200, scheduler_job_id: str | None 
     job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
 
     try:
+        # 세션 428: 후보 조건을 아래 중앙값 계산 조건(최근 6개월 A1·price_avg 있음)과 같게 맞춘다.
+        # 옛 조건("A1 이력이 한 번이라도 있음")에서는 마지막 매매가 6개월보다 오래된 단지
+        # 약 3,460곳이 세대수 순 앞 batch_size 자리를 매일 차지해, 계산 가능한 단지(10-03 04:30
+        # 기준 241곳, 전부 1000등 밖)가 차례를 못 받았다 — 하루 0~47건 저장 + 0건 날 헛바퀴 알림.
         has_price_history = exists().where(
             ComplexPriceHistory.complex_no == Complex.complex_no,
             ComplexPriceHistory.trade_type == "A1",
+            func.substr(ComplexPriceHistory.base_month, 1, 6) >= _cutoff_month(_MEDIAN_MONTHS),
+            ComplexPriceHistory.price_avg.isnot(None),
         )
         complexes = (
             db.query(Complex.complex_no)
@@ -64,7 +73,7 @@ def collect_complex_metrics(batch_size: int = 200, scheduler_job_id: str | None 
 
         processed = 0
         for i, (complex_no,) in enumerate(complexes):
-            median = calc_median_price(db, complex_no, "A1", months=6)
+            median = calc_median_price(db, complex_no, "A1", months=_MEDIAN_MONTHS)
             if median is None:
                 # 시세 이력 없음 — 채울 값 없으므로 건너뜀
                 continue

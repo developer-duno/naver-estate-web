@@ -70,3 +70,59 @@ test.describe("public visual regression", () => {
     });
   });
 });
+
+/**
+ * 의견 보내기 흐름 (세션 433 의견함) — 버튼 → 창 → 보내기 → 쪽지.
+ * 서버는 page.route 로 대신 답한다(실제 저장·텔레그램 0). 사진 단언은 하지 않는다.
+ * 백엔드 주소가 다른 출처(localhost:9999)라 CORS 사전 요청(OPTIONS)에도 같이 답한다.
+ */
+test.describe("의견 보내기", () => {
+  test("버튼 → 창 → 보내기 → \"보냈어요\" 쪽지 (보낸 본문 확인)", async ({ page }) => {
+    await applyPublicMocks(page);
+    let posted: Record<string, unknown> | null = null;
+    await page.route("**/api/opinions", async (route) => {
+      const req = route.request();
+      const cors = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      };
+      if (req.method() === "OPTIONS") {
+        await route.fulfill({ status: 204, headers: cors });
+        return;
+      }
+      posted = req.postDataJSON() as Record<string, unknown>;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: cors,
+        body: JSON.stringify({ id: 1, received: true, can_reply: false }),
+      });
+    });
+
+    await page.goto("/");
+    await page.getByTestId("opinion-button").click();
+
+    const dialog = page.getByRole("dialog", { name: "의견 보내기" });
+    await expect(dialog).toBeVisible();
+    // 비로그인 안내
+    await expect(dialog.getByText(/답장을 받으려면 로그인해 주세요/)).toBeVisible();
+
+    await dialog.getByRole("radio", { name: "버그·오류" }).click();
+    await dialog.getByLabel("내용").fill("검색 결과가 비어 보여요 확인 부탁");
+    const submit = dialog.getByTestId("opinion-submit");
+    await expect(submit).toBeDisabled(); // 동의 전
+    await dialog.getByRole("checkbox", { name: /1년 보관하는 데 동의합니다/ }).click();
+    await expect(submit).toBeEnabled();
+    await submit.click();
+
+    await expect(page.getByText("보냈어요. 고맙습니다")).toBeVisible();
+    await expect(dialog).toBeHidden();
+    expect(posted).toMatchObject({
+      kind: "bug",
+      message: "검색 결과가 비어 보여요 확인 부탁",
+      page_path: "/",
+      website: "",
+    });
+  });
+});

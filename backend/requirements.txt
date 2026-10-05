@@ -16,7 +16,7 @@ apscheduler>=3.11.3,<4
 filelock>=4.0.3,<5
 pandas>=3.0.6,<4
 xlsxwriter>=3.2.9,<4
-python-dotenv>=1.2.3,<2
+python-dotenv>=1.2.4,<2
 # python-jose: 유지보수 정체 -> PyJWT 전환.
 # 2026-05-31 lock: python-jose>=3.3,<4 -> PyJWT>=2.0,<3.
 # 2026-06-16 하한 상향: PYSEC-2026-175~179 fix=2.13.0 (advisory OSV DB 전파 시 CI(--strict) 빨강 선제 차단).

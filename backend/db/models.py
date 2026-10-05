@@ -8,6 +8,7 @@ from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Float,
@@ -566,6 +567,14 @@ class SiteOpinion(Base):
     __table_args__ = (
         Index("site_opinions_created_at_idx", "created_at"),
         Index("site_opinions_status_created_at_idx", "status", "created_at"),
+        # V069 의 CHECK 3개를 모델에도 둔다 — SQLite 시험도 같은 제약을 보게(운영은 마이그가 정본)
+        CheckConstraint("kind IN ('bug', 'data', 'suggest', 'other')", name="site_opinions_kind_check"),
+        CheckConstraint(
+            "status IN ('new', 'replied', 'fixed', 'closed')", name="site_opinions_status_check"
+        ),
+        CheckConstraint(
+            "message IS NULL OR length(message) BETWEEN 1 AND 1000", name="site_opinions_message_check"
+        ),
     )
 
     # PG = bigserial, SQLite(CI) = INTEGER PRIMARY KEY 자동증가 (line 301 과 같은 분기)

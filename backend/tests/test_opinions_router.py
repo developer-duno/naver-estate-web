@@ -123,12 +123,12 @@ def test_message_bad_chars_422(client, db, bad):
 
 
 def test_message_zero_width_removed_before_save(client, db):
-    """폭 0 문자가 섞인 글 — 지운 결과(12자)가 저장된다."""
+    """폭 0 문자가 섞인 글 — ZWJ 만 남기고 지운 결과가 저장된다(ZWJ 는 이모지 묶음용이라 보존)."""
     res = _post(client, {"kind": "bug", "message": "가격이\u200b안\u200c보\u200d여요\ufeff 확인 부탁"})
     assert res.status_code == 200
     saved = db.get(SiteOpinion, res.json()["id"]).message
-    assert saved == "가격이안보여요 확인 부탁"
-    assert not any(c in saved for c in "\u200b\u200c\u200d\ufeff")
+    assert saved == "가격이안보\u200d여요 확인 부탁"
+    assert not any(c in saved for c in "\u200b\u200c\ufeff")
 
 
 @pytest.mark.parametrize("raw, saved", [
@@ -177,6 +177,143 @@ def test_honeypot_returns_ok_but_saves_nothing(client, db, notified):
     assert notified == []
     for _ in range(3):  # 봇 요청은 사람 한도도 안 깎는다
         assert _post(client).status_code == 200
+
+
+
+# ── 하루 한도 보완(2026-10-06 사장님 결정 B1~B3) ──
+
+ZWJ = chr(0x200D)
+UTC = timezone.utc
+
+
+@pytest.fixture(autouse=True)
+def _reset_anon_counters():
+    op_router._reset_anon_counters_for_tests()
+    yield
+    op_router._reset_anon_counters_for_tests()
+
+
+def _ip(ip):
+    return {"CF-Connecting-IP": ip}
+
+
+def test_anon_limit_resets_at_korean_midnight(client, monkeypatch):
+    """한국 23:59 에 막힌 사람이 한국 00:00 에 다시 보낼 수 있다(UTC 로는 같은 날 — 한국 날짜로 세야 풀린다)."""
+    monkeypatch.setattr(op_router, "_now", lambda: datetime(2026, 10, 6, 14, 59, 30, tzinfo=UTC))  # KST 23:59:30
+    for _ in range(3):
+        assert _post(client).status_code == 200
+    res = _post(client)
+    assert res.status_code == 429 and res.json()["detail"] == LIMIT_DETAIL
+    monkeypatch.setattr(op_router, "_now", lambda: datetime(2026, 10, 6, 15, 0, 5, tzinfo=UTC))  # KST 10-07 00:00:05
+    assert _post(client).status_code == 200
+
+
+def test_ipv6_same_64_counted_together(client):
+    """같은 /64 의 다른 주소 4번째 → 429 · 다른 /64 는 따로 센다."""
+    for ip in ("2001:db8:1:2::1", "2001:db8:1:2::2", "2001:db8:1:2:ffff:ffff:ffff:9"):
+        assert _post(client, headers=_ip(ip)).status_code == 200
+    res = _post(client, headers=_ip("2001:db8:1:2:abcd::7"))
+    assert res.status_code == 429 and res.json()["detail"] == LIMIT_DETAIL
+    assert _post(client, headers=_ip("2001:db8:1:3::1")).status_code == 200
+
+
+def test_ipv4_addresses_counted_separately(client):
+    for _ in range(3):
+        assert _post(client, headers=_ip("203.0.113.5")).status_code == 200
+    assert _post(client, headers=_ip("203.0.113.5")).status_code == 429
+    assert _post(client, headers=_ip("203.0.113.6")).status_code == 200
+
+
+@pytest.mark.parametrize("raw, bucket", [
+    ("203.0.113.5", "203.0.113.5"),
+    ("2001:db8:1:2:3:4:5:6", "2001:db8:1:2::/64"),
+    ("::ffff:203.0.113.5", "203.0.113.5"),  # IPv4 를 담은 IPv6 — /64 로 묶으면 모든 IPv4 가 한 묶음이 된다
+    ("testclient", "testclient"),
+    ("unknown", "unknown"),
+])
+def test_ip_bucket(raw, bucket):
+    assert op_router.ip_bucket(raw) == bucket
+
+
+def test_anon_total_daily_cap(client, db, monkeypatch):
+    """비로그인 전체 상한 — 개인 한도에 막힌 요청·숨김 칸 요청은 전체 칸을 안 먹고,
+    전체 상한에 막힌 요청은 개인 칸을 안 먹는다 · 로그인 사용자는 영향 없음."""
+    assert op_router.ANON_TOTAL_DAILY_LIMIT == 200
+    monkeypatch.setattr(op_router, "ANON_TOTAL_DAILY_LIMIT", 4)
+    for _ in range(3):
+        assert _post(client, headers=_ip("198.51.100.1")).status_code == 200
+    assert _post(client, headers=_ip("198.51.100.1")).json()["detail"] == LIMIT_DETAIL  # 개인 한도 — 전체 칸 안 먹음
+    for _ in range(3):  # 숨김 칸(봇) — 세지 않음
+        assert _post(client, {**GOOD, "website": "x"}, headers=_ip("198.51.100.9")).status_code == 200
+    assert _post(client, headers=_ip("198.51.100.2")).status_code == 200  # 전체 4번째
+    res = _post(client, headers=_ip("198.51.100.3"))
+    assert res.status_code == 429
+    assert res.json()["detail"] == "오늘은 의견이 많이 와서 더 받을 수 없어요. 로그인하시면 보낼 수 있어요"
+    headers = make_auth_headers(db, user_id="op-cap-user", email="cap@test.com")
+    assert _post(client, headers=headers).status_code == 200  # 로그인은 상관없음
+    monkeypatch.setattr(op_router, "ANON_TOTAL_DAILY_LIMIT", 100)  # 상한을 풀면 막혔던 분은 3건을 그대로 보낸다
+    for _ in range(3):
+        assert _post(client, headers=_ip("198.51.100.3")).status_code == 200
+    assert _post(client, headers=_ip("198.51.100.3")).status_code == 429
+    assert db.query(SiteOpinion).count() == 3 + 1 + 1 + 3
+
+
+def test_honeypot_logged_without_content_or_ip(client, caplog):
+    """숨김 칸에 걸리면 한 줄 기록 — 내용·IP 는 남기지 않는다."""
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="routers.opinions"):
+        _post(client, {**GOOD, "website": "http://spam.example"}, headers=_ip("198.51.100.77"))
+    lines = [r.getMessage() for r in caplog.records if r.name == "routers.opinions"]
+    assert any("의견함 숨김 칸 걸림 1건" in m for m in lines)
+    joined = " ".join(lines)
+    assert "198.51.100.77" not in joined and GOOD["message"] not in joined and "spam.example" not in joined
+
+
+@pytest.mark.parametrize("fields", [
+    '"kind": "bug", "message": "가격이 안 보여요 {S} 확인 부탁"',
+    '"kind": "bug", "message": "짧음{S}"',  # 길이 검사에도 걸리는 글 — 422 응답이 입력을 되돌려 줘도 500 이 아니어야
+    '"kind": "bug{S}", "message": "가격이 안 보여요 확인 부탁"',  # 다른 칸에 들어와도
+    '"kind": "bug", "message": "가격이 안 보여요 확인 부탁", "interests": ["tax{S}"]',
+    '"kind": "bug", "message": "가격이 안 보여요 확인 부탁", "page_path": "/a{S}"',
+])
+def test_lone_surrogate_422(client, db, fields):
+    """짝 없는 서로게이트(JSON 의 백슬래시 ud800·udfff 표기) → NUL 과 같은 422(500 아님) · 저장 0."""
+    bs = chr(0x5C)
+    raw = "{" + fields.replace("{S}", bs + "ud800") + "}"
+    res = client.post("/api/opinions", content=raw.encode("utf-8"),
+                      headers={"Content-Type": "application/json"})
+    assert res.status_code == 422
+    res2 = client.post("/api/opinions", content=("{" + fields.replace("{S}", bs + "udfff") + "}").encode("utf-8"),
+                       headers={"Content-Type": "application/json"})
+    assert res2.status_code == 422
+    assert db.query(SiteOpinion).count() == 0
+
+
+def test_surrogate_pair_emoji_is_fine(client, db):
+    """짝이 맞는 서로게이트(JSON 의 백슬래시 ud83d·ude00 표기)는 한 글자 이모지로 합쳐져 그대로 저장된다."""
+    bs = chr(0x5C)
+    raw = '{"kind": "bug", "message": "가격이 안 보여요 ' + bs + "ud83d" + bs + 'ude00 확인 부탁"}'
+    res = client.post("/api/opinions", content=raw.encode("utf-8"),
+                      headers={"Content-Type": "application/json"})
+    assert res.status_code == 200
+    assert db.get(SiteOpinion, res.json()["id"]).message == "가격이 안 보여요 " + chr(0x1F600) + " 확인 부탁"
+
+
+def test_zwj_emoji_saved_as_is(client, db):
+    """가족 이모지(그림 셋을 ZWJ 로 이은 것)는 풀리지 않고 그대로 저장된다."""
+    family = chr(0x1F468) + ZWJ + chr(0x1F469) + ZWJ + chr(0x1F467)
+    msg = "우리 가족 " + family + " 이 쓰기 좋아요"
+    res = _post(client, {"kind": "suggest", "message": msg})
+    assert res.status_code == 200
+    assert db.get(SiteOpinion, res.json()["id"]).message == msg
+
+
+def test_zwj_only_message_422(client, db):
+    """ZWJ 만으로 10자를 채운 빈 글은 여전히 422(최소 길이는 ZWJ 를 빼고 센다)."""
+    assert _post(client, {"kind": "bug", "message": ZWJ * 12}).status_code == 422
+    assert _post(client, {"kind": "bug", "message": "짧은글" + ZWJ * 9}).status_code == 422
+    assert db.query(SiteOpinion).count() == 0
 
 
 # ── 알림은 BackgroundTasks 로 1회 ──

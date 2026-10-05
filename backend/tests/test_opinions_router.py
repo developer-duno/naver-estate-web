@@ -412,3 +412,59 @@ def test_send_email_sender_name(monkeypatch):
     assert em.send_email("to@test.com", "제목", "<p>x</p>", sender_name="2u부동산") is True
     froms = [str(make_header(decode_header(email_pkg.message_from_string(m)["From"]))) for m in sent_msgs]
     assert froms[0].startswith("네이버부동산") and froms[1].startswith("2u부동산")
+
+
+# ══ 1년 정리(매일 03:50 정비 잡의 곁다리) ══
+
+
+def test_vacuum_job_purges_year_old_opinions(db):
+    """1년 지난 비공개 → 삭제 · 1년 지난 공개 → 원문·개인정보만 NULL(제목·답 유지) · 1년 안은 그대로.
+
+    정비 잡 본체(run_vacuum_maintenance)를 통째로 돌려 배선까지 본다 — SQLite 는 VACUUM 을
+    건너뛰므로(early return) 정리 호출이 그 뒤에 있으면 이 시험이 잡는다.
+    """
+    from crawler.vacuum_maintenance import run_vacuum_maintenance
+
+    now = datetime.now(timezone.utc)
+    old = now - timedelta(days=400)
+    recent = now - timedelta(days=300)
+    old_private = _row(db, created_at=old, user_id="u1", interests=["tax"])
+    old_public = _row(db, created_at=old, user_id="u1", interests=["tax"], is_public=True, status="fixed",
+                      public_title="고친 제목", public_answer="고친 답", published_at=old)
+    recent_private = _row(db, created_at=recent)
+    recent_public = _row(db, created_at=recent, is_public=True, status="fixed",
+                         public_title="최근 제목", public_answer="최근 답", published_at=recent)
+    ids = (old_private.id, old_public.id, recent_private.id, recent_public.id)
+
+    result = run_vacuum_maintenance()
+
+    assert result["opinions_deleted"] == 1 and result["opinions_anonymized"] == 1
+    db.expire_all()
+    assert db.get(SiteOpinion, ids[0]) is None
+    kept = db.get(SiteOpinion, ids[1])
+    assert (kept.message, kept.user_id, kept.user_email, kept.user_agent, kept.interests, kept.page_path) == (
+        None, None, None, None, None, None)
+    assert kept.public_title == "고친 제목" and kept.public_answer == "고친 답" and kept.is_public is True
+    assert db.get(SiteOpinion, ids[2]).message == "원문 비밀 내용입니다"
+    assert db.get(SiteOpinion, ids[3]).user_email == "secret@test.com"
+
+    again = run_vacuum_maintenance()  # 이미 지운 공개 행은 다시 세지 않는다
+    assert again["opinions_deleted"] == 0 and again["opinions_anonymized"] == 0
+
+
+def test_vacuum_job_survives_opinion_purge_failure(db, monkeypatch):
+    """의견 정리가 터져도 다른 곁다리·잡 상태는 멀쩡하다(자기 세션을 따로 쓰므로)."""
+    import sqlalchemy
+
+    from crawler.vacuum_maintenance import run_vacuum_maintenance
+    from db.models import CrawlJob
+
+    def _boom(*a, **k):
+        raise RuntimeError("purge exploded")
+
+    monkeypatch.setattr(sqlalchemy, "delete", _boom)
+    result = run_vacuum_maintenance()
+    assert result["opinions_deleted"] == 0 and result["opinions_anonymized"] == 0
+    assert result["detail_retry_granted"] == 0 and result["purged_counters"] == 0
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "vacuum_maintenance").one()
+    assert job.status == "completed"

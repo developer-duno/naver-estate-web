@@ -584,7 +584,8 @@ class SiteOpinion(Base):
     kind: Mapped[str] = mapped_column(Text, nullable=False)  # bug|data|suggest|other
     message: Mapped[str | None] = mapped_column(Text)
     page_path: Mapped[str | None] = mapped_column(Text)
-    interests: Mapped[list | None] = mapped_column(JSON)  # 마이그는 jsonb, 모델은 JSON(SQLite 호환)
+    # none_as_null: None 을 JSON 의 null 이 아니라 SQL NULL 로 저장(1년 정리 때 NULL 로 지우는 것과 같은 뜻)
+    interests: Mapped[list | None] = mapped_column(JSON(none_as_null=True))  # 마이그는 jsonb, 모델은 JSON(SQLite 호환)
     user_id: Mapped[str | None] = mapped_column(Text)
     user_email: Mapped[str | None] = mapped_column(Text)
     user_agent: Mapped[str | None] = mapped_column(Text)

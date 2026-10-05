@@ -273,6 +273,11 @@ def _resolved_line(detail: str, data: dict) -> str:
             f"ℹ️ {detail} — 알림 조건이 해소됐지만 성공 실행은 확인되지 않았습니다.{suffix}"
         )
     if reason == "recovered":
+        if data.get("resumed"):
+            # 신선도 해소 — monitor 가 지금 값으로 "…다시 들어오고 있어요 (마지막으로
+            # 들어온 때 …)" 를 새로 썼다. 문장 자체가 복구를 말하므로 꼬리를 붙이지
+            # 않는다(뜻 겹침 방지, 세션 435).
+            return f"✅ {detail}."
         return f"✅ {detail} — 정상으로 돌아왔습니다 (최근 실행 성공 확인)."
     return f"▸ {detail} — 정상으로 돌아왔습니다."
 

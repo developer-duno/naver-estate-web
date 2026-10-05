@@ -17,6 +17,7 @@ import services.opinion_alert as oa
 
 KST = ZoneInfo("Asia/Seoul")
 NOW = datetime(2026, 10, 6, 14, 10, tzinfo=KST)
+_previews: list[bool] = []  # sent 가 기록한 disable_link_preview 값(호출 순서대로)
 
 
 @pytest.fixture(autouse=True)
@@ -31,9 +32,12 @@ def sent(monkeypatch):
     """send_telegram 호출 기록(실발송 0 — conftest 봉쇄 위에 한 번 더)."""
     calls: list[tuple[str, object]] = []
 
-    def _fake(text, parse_mode=None):
+    def _fake(text, parse_mode=None, disable_link_preview=False):
         calls.append((text, parse_mode))
+        _previews.append(disable_link_preview)
         return True
+
+    _previews.clear()
 
     monkeypatch.setattr("services.telegram.send_telegram", _fake)
     return calls
@@ -122,12 +126,37 @@ def test_new_hour_starts_fresh(sent):
 
 
 def test_send_failure_does_not_raise(monkeypatch):
-    def _boom(text, parse_mode=None):
+    def _boom(text, parse_mode=None, disable_link_preview=False):
         raise RuntimeError("telegram down")
 
     monkeypatch.setattr("services.telegram.send_telegram", _boom)
     for _ in range(21):  # 한 건씩 알림·잠시 멈춤 알림 둘 다 — 예외가 밖으로 나오면 시험 실패
         _notify()
+
+
+def test_link_preview_disabled_for_new_and_pause(sent):
+    """새 의견 알림·잠시 멈춤 알림 모두 링크 미리보기를 끈다."""
+    for _ in range(21):
+        _notify()
+    assert len(_previews) == 21 and all(_previews)
+
+
+def test_link_preview_option_reaches_request_body(monkeypatch):
+    """끝까지 — 의견 알림이 실제 요청 본문에 link_preview_options.is_disabled=true 를 싣는다(requests.post 는 가짜)."""
+    from unittest.mock import MagicMock
+
+    import services.telegram as tg
+
+    monkeypatch.setenv("TELEGRAM_ENABLED", "true")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
+    post = MagicMock(return_value=MagicMock(status_code=200))
+    monkeypatch.setattr(tg.requests, "post", post)
+    _notify()
+    assert post.call_count == 1
+    body = post.call_args[1]["json"]
+    assert body["link_preview_options"] == {"is_disabled": True}
+    assert "parse_mode" not in body
 
 
 def test_hour_key_uses_korean_hour():

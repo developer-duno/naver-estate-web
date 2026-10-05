@@ -5,6 +5,7 @@
 
 ⚠ 손님 글이 그대로 들어가는 알림이라 지키는 것:
   - parse_mode=None(평문) — `<b>` 같은 글을 서식으로 해석하지 않고 글자 그대로 보낸다.
+  - 링크 미리보기 끔 — 주소가 카드로 펼쳐지지 않게(다른 알림 창구는 기본값 그대로).
   - 줄바꿈·연속 공백을 공백 하나로 접는다 — 손님이 "[서버 알림]" 같은 가짜 줄을 만들 수 없다.
   - 내용은 150자로 자른다 · 이메일은 가린다(routers/payment.py _mask_email 재사용).
   - 폭주 방지: 한국 시각 기준 한 시간에 20통까지만 한 건씩 보내고, 21번째가 오는 **그 순간**
@@ -86,7 +87,8 @@ def build_pause_text() -> str:
 def _send(text: str) -> None:
     from services.telegram import send_telegram
 
-    send_telegram(text, parse_mode=None)
+    # 링크 미리보기 끔 — "답하기" 주소가 카드로 펼쳐져 손님 글이 밀려 보이지 않게(2026-10-06 사장님 결정).
+    send_telegram(text, parse_mode=None, disable_link_preview=True)
 
 
 def notify_new_opinion(

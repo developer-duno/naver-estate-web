@@ -40,7 +40,7 @@ export default function Footer() {
                   전국 미분양 아파트를 모아 비교해요
                 </span>
               </span>
-              <ExternalLink className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
+              <ExternalLink aria-hidden="true" className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
             </a>
             <a
               href="https://sangga-one.vercel.app"
@@ -59,7 +59,7 @@ export default function Footer() {
                   상가 자리와 주변 상권을 살펴봐요
                 </span>
               </span>
-              <ExternalLink className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
+              <ExternalLink aria-hidden="true" className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
             </a>
           </nav>
         </div>

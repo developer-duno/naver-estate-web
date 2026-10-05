@@ -1946,3 +1946,142 @@ def test_kapt_costs_pending_and_paused_rows_are_skipped():
         assert _KAPT_KEY in _failed_keys(db)
     finally:
         db.close()
+
+
+# ── 2026-10-06: 신선도 해소 알림은 "지금 값"으로 새로 쓴다 ──
+# 배경: 해소 알림이 monitor_alerts.detail(문제 생겼을 때 저장한 문장)을 그대로 다시 보내
+#   "✅ 매물 자료가 새로 안 들어오고 있어요 (빨강, 마지막으로 들어온 때 <그때 시각>) — 정상으로
+#   돌아왔습니다" 처럼 앞뒤가 안 맞고 그때 시각이 지금처럼 읽혔다(사장님 결정으로 수정).
+# ⚠ 옛 시각과 새 시각은 일부러 다른 값으로 둔다 — 같으면 옛 문장을 그대로 보내도 통과한다.
+# ⚠ 뮤테이션 검증(2026-10-06): run_monitor 의 _freshness_resolved_detail 호출을 빼고 저장 문장을
+#   그대로 넘기면 아래 세 시험이 전부 실패함을 확인 후 복원.
+
+_OLD_STAMP = "10-04 05:00"
+
+
+def _fresh_item(key: str, label: str, last_updated: str | None, status: str = "green") -> dict:
+    return {
+        "key": key, "label": label, "count": 1, "last_updated": last_updated,
+        "expected_interval_seconds": 3600, "status": status, "spinning": False,
+        "last_job": None, "new_rows": None,
+    }
+
+
+def _stored_fresh_detail(label: str) -> str:
+    """detect_issues_ex 3번이 문제 때 저장하는 문장과 같은 꼴(옛 시각)."""
+    return f"{label} 자료가 새로 안 들어오고 있어요 (빨강, 마지막으로 들어온 때 {_OLD_STAMP})"
+
+
+def test_run_monitor_freshness_resolved_uses_current_scan_time():
+    """1. 단건 해소 — 지금 스캔의 마지막으로 들어온 때(KST)가 나오고 옛 시각·옛 문장은 없다.
+    저장된 DB 값(alert.detail)은 바꾸지 않는다."""
+    db = TestSession()
+    try:
+        stored = _stored_fresh_detail("매물")
+        db.add(MonitorAlert(
+            alert_key="freshness:articles", status="active",
+            detail=stored, last_notified=_utcnow() - timedelta(hours=12),
+        ))
+        db.commit()
+
+        fresh = {"items": [_fresh_item("articles", "매물", "2026-10-05T17:10:00+00:00")]}
+        with patch("crawler.monitor.compute_freshness", return_value=fresh), \
+                patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msg = _resolved_message(mock_tg)
+        assert "✅ 매물 자료가 다시 들어오고 있어요 (마지막으로 들어온 때 10-06 02:10)." in msg, msg
+        assert _OLD_STAMP not in msg, msg
+        assert "새로 안 들어오고" not in msg, msg
+        assert "2026-10-05T17:10" not in msg, msg  # UTC 원문 금지
+        alert = db.execute(
+            select(MonitorAlert).where(MonitorAlert.alert_key == "freshness:articles")
+        ).scalar_one()
+        assert alert.status == "resolved"
+        assert alert.detail == stored, "저장된 문장은 바꾸지 않는다(보낼 때만 바꾼다)"
+    finally:
+        db.close()
+
+
+def test_run_monitor_freshness_resolved_batch_uses_current_scan_time():
+    """2. 묶음 해소(2건) — 단건과 같은 문장이 항목마다 나온다."""
+    db = TestSession()
+    try:
+        for key, label in (("articles", "매물"), ("complexes", "단지")):
+            db.add(MonitorAlert(
+                alert_key=f"freshness:{key}", status="active",
+                detail=_stored_fresh_detail(label), last_notified=_utcnow() - timedelta(hours=12),
+            ))
+        db.commit()
+
+        fresh = {"items": [
+            _fresh_item("articles", "매물", "2026-10-05T17:10:00+00:00"),
+            _fresh_item("complexes", "단지", "2026-10-05T16:40:00+00:00", status="yellow"),
+        ]}
+        with patch("crawler.monitor.compute_freshness", return_value=fresh), \
+                patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msgs = [c[0][0] for c in mock_tg.call_args_list if _is_resolved_message(c[0][0])]
+        assert len(msgs) == 1, msgs
+        msg = msgs[0]
+        assert "해소 2건" in msg, msg
+        assert "✅ 매물 자료가 다시 들어오고 있어요 (마지막으로 들어온 때 10-06 02:10)." in msg, msg
+        assert "✅ 단지 자료가 다시 들어오고 있어요 (마지막으로 들어온 때 10-06 01:40)." in msg, msg
+        assert _OLD_STAMP not in msg, msg
+        assert "새로 안 들어오고" not in msg, msg
+    finally:
+        db.close()
+
+
+def test_run_monitor_freshness_resolved_without_current_item_drops_time():
+    """3. 지금 스캔에 그 항목이 없으면(라벨 삭제 등) 확인 못 함 갈래(ℹ️)로 — 시각·안심 문장 없이."""
+    db = TestSession()
+    try:
+        db.add(MonitorAlert(
+            alert_key="freshness:gone_card", status="active",
+            detail=_stored_fresh_detail("없어진 카드"), last_notified=_utcnow() - timedelta(hours=12),
+        ))
+        db.commit()
+
+        fresh = {"items": [_fresh_item("articles", "매물", "2026-10-05T17:10:00+00:00")]}
+        with patch("crawler.monitor.compute_freshness", return_value=fresh), \
+                patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msg = _resolved_message(mock_tg)
+        assert "ℹ️ 없어진 카드 자료 — 알림 조건이 해소됐지만" in msg, msg
+        assert "지금 상태를 확인할 값이 없어요." in msg, msg
+        assert "다시 들어오고" not in msg, msg
+        assert "새로 안 들어오고" not in msg, msg
+        assert _OLD_STAMP not in msg, msg
+        assert "빨강" not in msg, msg
+        assert "마지막으로 들어온 때" not in msg, msg
+    finally:
+        db.close()
+
+
+def test_run_monitor_crawl_failed_resolved_not_rewritten_as_freshness():
+    """4. 문장 재작성은 신선도 알림에만 — 작업 이름과 신선도 항목 이름이 겹쳐도(article_detail 등)
+    작업 실패 경보의 해소 문장은 그대로다(2026-10-06 검사관 변이 M10 생존 → 추가)."""
+    db = TestSession()
+    try:
+        stored = "매물 상세 작업 2건 실패 — 네이버 응답 없음"
+        db.add(MonitorAlert(
+            alert_key="crawl_failed:article_detail", status="active",
+            detail=stored, last_notified=_utcnow() - timedelta(hours=12),
+        ))
+        db.commit()
+
+        fresh = {"items": [_fresh_item("article_detail", "매물 상세", "2026-10-05T17:10:00+00:00")]}
+        with patch("crawler.monitor.compute_freshness", return_value=fresh), \
+                patch("crawler.monitor._resolution_reason", return_value=("recovered", "")), \
+                patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msg = _resolved_message(mock_tg)
+        assert "정상으로 돌아왔습니다 (최근 실행 성공 확인)" in msg, msg
+        assert "다시 들어오고" not in msg, msg
+        assert "10-06 02:10" not in msg, msg
+    finally:
+        db.close()

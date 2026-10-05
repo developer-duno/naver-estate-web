@@ -7,6 +7,7 @@ APScheduler 의 monitor job 이 주기적으로 run_monitor() 를 호출한다.
 
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import and_, case, func, select, text
@@ -195,8 +196,13 @@ def detect_issues(db) -> list[dict]:
     return detect_issues_ex(db)[0]
 
 
-def detect_issues_ex(db) -> tuple[list[dict], bool]:
-    """detect_issues + 신선도 계산 성공 여부(freshness_ok).
+def detect_issues_ex(db) -> tuple[list[dict], bool, dict[str, dict]]:
+    """detect_issues + 신선도 계산 성공 여부(freshness_ok) + 이번 스캔 신선도 항목 전부.
+
+    세 번째 값 = {freshness 항목 key: 항목 dict} — red 가 아닌 항목도 담긴다. 해소
+    알림이 "지금 값"(마지막으로 들어온 때)을 쓰려고 받는다(2026-10-06). 신선도를 해소
+    경로에서 다시 계산하지 않기 위함이다(8초 statement_timeout·풀스캔 부하). 계산이
+    실패한 스캔이면 빈 dict.
 
     freshness_ok=False 는 "compute_freshness 가 예외로 죽어 freshness:* 신호를
     이번 스캔에서 아예 못 만들었다" 는 뜻이다. 이 경우 freshness:* 키가 통째로
@@ -206,6 +212,7 @@ def detect_issues_ex(db) -> tuple[list[dict], bool]:
     now = datetime.now(timezone.utc)
     issues: list[dict] = []
     freshness_ok = True
+    fresh_items: dict[str, dict] = {}
 
     # 1. 작업 실패 — 최근 24h failed job_type 별
     # 대표 에러는 아래 _latest_failure_error() 로 job_type 마다 따로 조회한다.
@@ -353,6 +360,7 @@ def detect_issues_ex(db) -> tuple[list[dict], bool]:
             fresh = compute_freshness(fresh_db)
         finally:
             fresh_db.close()
+        fresh_items = {item["key"]: item for item in fresh["items"]}
         for item in fresh["items"]:
             if item["status"] != "red":
                 continue
@@ -393,8 +401,38 @@ def detect_issues_ex(db) -> tuple[list[dict], bool]:
     except Exception:
         logger.warning("[monitor] 신선도 계산 실패 — 이번 스캔 skip", exc_info=True)
         freshness_ok = False
+        fresh_items = {}
 
-    return issues, freshness_ok
+    return issues, freshness_ok, fresh_items
+
+
+# 문제 때 저장한 신선도 문장(detect_issues_ex 3번) 의 앞부분 — 괄호(상태·그때 시각)를 뗀다.
+_FRESH_STORED_HEAD = re.compile(r"^(?P<label>.+?) 자료가 새로 안 들어오고 있어요\s*\(.*\)\s*$", re.S)
+
+
+def _freshness_resolved_detail(stored: str, item: dict | None) -> tuple[str, str]:
+    """신선도 해소 알림 문장 — (문장, 상태) · 상태 = "resumed"(지금 값으로 새로 씀) |
+    "unknown"(지금 값이 없어 확인 못 함) | "as_is"(옛 형식이 아님 — 원문 그대로).
+
+    monitor_alerts.detail 에 저장된 것은 **문제가 생겼을 때** 문장("…새로 안 들어오고
+    있어요 (빨강, 마지막으로 들어온 때 <그때 시각>)")이라 해소 때 그대로 보내면 앞뒤가
+    안 맞고 그때 시각이 지금 시각처럼 읽힌다(2026-10-06 사장님 결정). 그래서 보낼 때만
+    같은 스캔의 지금 값으로 새로 쓴다 — 저장된 값은 건드리지 않는다.
+    이번 스캔에 그 항목이 없거나 마지막 시각이 비어 있으면(라벨 삭제·칸이 통째로 빔) 옛 문장에서
+    이름만 꺼내 "unknown" 으로 돌려준다 — 호출부가 "확인 못 함" 갈래로 보내, 확인 없이
+    "다시 들어오고 있어요" 라고 안심시키지 않는다(2026-10-06 검사관 지적).
+    옛 형식이 아니면 원문 그대로(발송 쪽 plainify_detail 이 이어서 다듬는다).
+    """
+    if item and item.get("last_updated"):
+        # ⏰ 시각은 반드시 _kst_stamp 경유 (UTC 원문 금지 — test_alert_time_kst_guard).
+        return (
+            f"{item['label']} 자료가 다시 들어오고 있어요 "
+            f"(마지막으로 들어온 때 {_kst_stamp(item['last_updated'])})"
+        ), "resumed"
+    m = _FRESH_STORED_HEAD.match(stored or "")
+    if m:
+        return f"{m.group('label')} 자료", "unknown"
+    return stored, "as_is"
 
 
 def _cooldown_hours() -> int:
@@ -511,7 +549,7 @@ def run_monitor(db) -> None:
     그건 "부분 신호 결손" 이라 스캔 전체를 죽일 이유가 아니다.
     """
     try:
-        issues, freshness_ok = detect_issues_ex(db)
+        issues, freshness_ok, fresh_items = detect_issues_ex(db)
     except Exception:
         logger.warning("[monitor] 장애 감지 실패", exc_info=True)
         raise
@@ -620,9 +658,17 @@ def run_monitor(db) -> None:
                     # reason="" 는 alert_format 이 기존 문구로 폴백하는 값.
                     logger.warning("[monitor] 해소 사유 판정 실패 — 기존 문구 폴백", exc_info=True)
                     reason, reason_detail = "", ""
+            detail, resumed = alert.detail, False
+            if kind == "freshness":
+                # 보낼 문장만 바꾼다 — alert.detail(DB) 은 그대로 (2026-10-06).
+                detail, state = _freshness_resolved_detail(alert.detail, fresh_items.get(target))
+                resumed = state == "resumed"
+                if state == "unknown":
+                    reason, reason_detail = "unconfirmed", "지금 상태를 확인할 값이 없어요."
             resolved_targets.append((alert, kind, {
                 "alert_key": alert.alert_key,
-                "detail": alert.detail,
+                "detail": detail,
+                "resumed": resumed,
                 "reason": reason,
                 "reason_detail": reason_detail,
             }))

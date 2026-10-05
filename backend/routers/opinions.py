@@ -11,7 +11,6 @@
 """
 
 import logging
-import re
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
@@ -37,7 +36,8 @@ PAGE_PATH_MAX = 200
 USER_AGENT_MAX = 300
 PUBLIC_PAGE_SIZE = 20
 
-_CONTROL_OR_SPACE = re.compile(r"[\x00-\x20\x7f]")
+# 폭 0 문자(눈에 안 보이는 글자) — 이것만으로 10자를 채우는 빈 의견을 막으려고 길이 검사 전에 지운다.
+_ZERO_WIDTH = str.maketrans("", "", "\u200b\u200c\u200d\ufeff")
 
 
 class OpinionIn(BaseModel):
@@ -50,7 +50,10 @@ class OpinionIn(BaseModel):
     @field_validator("message")
     @classmethod
     def _message_length(cls, v: str) -> str:
-        v = v.strip()
+        # NUL 은 PostgreSQL text 에 못 들어간다(저장 순간 500) → 입력 단계에서 422.
+        if "\x00" in v:
+            raise ValueError("쓸 수 없는 글자가 들어 있어요")
+        v = v.translate(_ZERO_WIDTH).strip()
         if not MESSAGE_MIN <= len(v) <= MESSAGE_MAX:
             raise ValueError(f"의견은 {MESSAGE_MIN}자 이상 {MESSAGE_MAX}자 이하로 써 주세요")
         return v
@@ -63,7 +66,14 @@ def clean_page_path(raw: str | None) -> str | None:
     path = raw.split("?", 1)[0].split("#", 1)[0]
     if not path.startswith("/") or path.startswith("//"):
         return None
-    if len(path) > PAGE_PATH_MAX or _CONTROL_OR_SPACE.search(path):
+    # 역슬래시(브라우저가 '/' 로 읽어 '/\evil' → 남의 사이트) · 출력 불가 문자(제어문자·\u2028 등)
+    # · 공백류(ASCII 공백·\u0085 등) 중 하나라도 있으면 버린다.
+    if (
+        len(path) > PAGE_PATH_MAX
+        or "\\" in path
+        or not path.isprintable()
+        or any(c.isspace() for c in path)
+    ):
         return None
     return path
 

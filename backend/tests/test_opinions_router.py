@@ -83,6 +83,22 @@ def test_expired_token_treated_as_anonymous(client, db, monkeypatch):
     assert row.user_email is None and row.user_id is None
 
 
+def test_logged_in_without_email_cannot_reply(client, db):
+    """로그인했지만 가입 이메일이 비어 있는 계정 → can_reply false · user_email NULL(빈 문자열 저장 0)."""
+    from db.models import UserProfile
+
+    db.add(UserProfile(user_id="noemail", email="", role="user", status="approved"))
+    db.commit()
+    token = jwt.encode({"sub": "noemail", "aud": "authenticated"},
+                       os.environ["SUPABASE_JWT_SECRET"], algorithm="HS256")
+    res = _post(client, headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    assert res.json()["can_reply"] is False
+    row = db.get(SiteOpinion, res.json()["id"])
+    assert row.user_id == "noemail"
+    assert row.user_email is None
+
+
 # ── 입력 검증 ──
 
 
@@ -97,6 +113,24 @@ def test_message_length_422(client, db):
     assert _post(client, {"kind": "bug", "message": "가" * 1000}).status_code == 200
 
 
+@pytest.mark.parametrize("bad", [
+    "안녕\x00하세요 의견입니다",  # NUL — PostgreSQL text 에 못 들어간다
+    "\u200b" * 12,  # 눈에 안 보이는 글자만 12개 = 빈 글
+])
+def test_message_bad_chars_422(client, db, bad):
+    assert _post(client, {"kind": "bug", "message": bad}).status_code == 422
+    assert db.query(SiteOpinion).count() == 0
+
+
+def test_message_zero_width_removed_before_save(client, db):
+    """폭 0 문자가 섞인 글 — 지운 결과(12자)가 저장된다."""
+    res = _post(client, {"kind": "bug", "message": "가격이\u200b안\u200c보\u200d여요\ufeff 확인 부탁"})
+    assert res.status_code == 200
+    saved = db.get(SiteOpinion, res.json()["id"]).message
+    assert saved == "가격이안보여요 확인 부탁"
+    assert not any(c in saved for c in "\u200b\u200c\u200d\ufeff")
+
+
 @pytest.mark.parametrize("raw, saved", [
     ("/complex/12345?tab=price#top", "/complex/12345"),
     ("https://evil.example/complex/1", None),
@@ -104,6 +138,10 @@ def test_message_length_422(client, db):
     ("/" + "a" * 200, None),  # 201자
     ("/" + "a" * 199, "/" + "a" * 199),  # 200자
     ("/complex/1\n[서버 알림]", None),
+    ("/\\evil.example", None),  # 역슬래시 — 브라우저가 '//evil.example' 로 읽는다
+    ("/complex/1\u2028x", None),  # 줄 구분 문자(출력 불가)
+    ("/a\u0085b", None),  # 다음 줄 문자(공백류)
+    ("/ok/경로", "/ok/경로"),  # 한글 경로는 그대로
     (None, None),
 ])
 def test_page_path_cleaned(client, db, raw, saved):
@@ -303,6 +341,33 @@ def test_reply_sends_mail_once_and_edit_does_not_resend(client, db, admin_header
     assert res2.json()["mail_sent"] is False and res2.json()["reply"] == "고쳤어요(수정)"
     assert len(mails["calls"]) == 1  # 답을 고쳐도 재발송 0
     assert _audit_actions(db) == ["admin_opinion_update", "admin_opinion_update"]
+
+
+def _new_count(client, headers):
+    return client.get("/api/admin/opinions", headers=headers).json()["new_count"]
+
+
+def test_reply_only_moves_new_to_replied(client, db, admin_headers, mails):
+    """상태 없이 답만 쓰면 '새 의견' → '답함' · 새 의견 수 1 감소."""
+    r = _row(db)
+    _row(db)
+    assert _new_count(client, admin_headers) == 2
+    body = client.patch(f"/api/admin/opinions/{r.id}", json={"reply": "확인했어요"}, headers=admin_headers).json()
+    assert body["status"] == "replied"
+    assert _new_count(client, admin_headers) == 1
+
+
+def test_reply_with_explicit_status_keeps_it(client, db, admin_headers, mails):
+    r = _row(db)
+    body = client.patch(f"/api/admin/opinions/{r.id}", json={"reply": "고쳤어요", "status": "fixed"},
+                        headers=admin_headers).json()
+    assert body["status"] == "fixed"
+
+
+def test_reply_on_fixed_row_keeps_fixed(client, db, admin_headers, mails):
+    r = _row(db, status="fixed")
+    body = client.patch(f"/api/admin/opinions/{r.id}", json={"reply": "추가 답"}, headers=admin_headers).json()
+    assert body["status"] == "fixed"
 
 
 def test_mail_failure_stays_false_then_resend(client, db, admin_headers, mails):

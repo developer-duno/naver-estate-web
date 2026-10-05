@@ -133,6 +133,9 @@ def update_opinion(
             reply_written = True
     if body.status is not None:
         row.status = body.status
+    elif reply_written and row.status == "new":
+        # 답만 쓰고 상태를 안 바꾸면 '새 의견' 수에 계속 남는다 → 처음 답한 새 의견은 '답함'으로.
+        row.status = "replied"
     row.public_title = new_title
     row.public_answer = new_answer
     if new_public and not row.is_public:

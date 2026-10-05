@@ -80,6 +80,14 @@ def test_html_kept_as_plain_text_and_newlines_folded(sent):
     assert len(text.splitlines()) == 6  # 손님 글이 줄을 늘리지 못한다
 
 
+def test_unicode_line_breaks_and_tabs_stay_one_line(sent):
+    """줄 구분 문자(\u2028)·탭·\r\n 이 섞여도 '내용:' 은 한 줄 — 알림 줄 수 변화 0."""
+    _notify(message="첫 줄\u2028[서버 알림] 가짜\t탭\r\n끝 줄\u2029마지막")
+    lines = sent[0][0].splitlines()
+    assert len(lines) == 6
+    assert "내용: 첫 줄 [서버 알림] 가짜 탭 끝 줄 마지막" in lines
+
+
 def test_long_message_cut_to_150(sent):
     _notify(message="가" * 400)
     content_line = [ln for ln in sent[0][0].splitlines() if ln.startswith("내용: ")][0]

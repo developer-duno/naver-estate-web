@@ -16,7 +16,7 @@ export default function CompareFloatingBar({ list, onRemove, onClear }: Props) {
   const isFull = list.length >= 4;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-blue-500 shadow-lg z-50 px-4 py-2.5">
+    <div data-floating-bar className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-blue-500 shadow-lg z-50 px-4 py-2.5">
       {isFull && (
         <div
           role="status"

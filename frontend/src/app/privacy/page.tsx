@@ -39,6 +39,16 @@ export default function PrivacyPage() {
           ※ 카드번호 등 민감한 결제수단 정보는 본 서비스가 직접 수집·보관하지 않으며,
           결제대행사(포트원)가 직접 처리합니다.
         </p>
+        <p className="pt-2">
+          의견 보내기를 이용하는 경우, 아래 정보를 수집합니다:
+        </p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>의견 내용·종류</li>
+          <li>보던 화면 주소</li>
+          <li>브라우저 정보(user agent)</li>
+          <li>궁금한 소식(설문, 선택)</li>
+          <li>로그인한 경우 가입 이메일</li>
+        </ul>
 
         <h2 className="text-lg font-semibold text-gray-900">2. 개인정보의 이용 목적</h2>
         <ul className="list-disc pl-5 space-y-1">
@@ -69,6 +79,11 @@ export default function PrivacyPage() {
           공인중개사 인증 정보(사업자등록번호·중개사무소 상호·대표자명·개업연월일·연락처·자격증
           사본)는 인증 신청 철회 또는 회원 탈퇴 시까지 보유하며, 이후 지체 없이 파기합니다.
         </p>
+        <p>
+          의견 보내기로 받은 정보는 보낸 날부터 1년 보관한 뒤 삭제합니다. 공개한 답변의 제목과
+          답은 개인정보를 지운 채 남깁니다. 회원 탈퇴 뒤에도 1년이 지나기 전까지는 의견이 남을 수
+          있습니다.
+        </p>
 
         <h2 className="text-lg font-semibold text-gray-900">4. 개인정보의 제3자 제공 및 처리 위탁</h2>
         <p>
@@ -96,6 +111,18 @@ export default function PrivacyPage() {
             포트원(주식회사 코리아포트원): 결제·환불 처리 및 결제 내역 관리 — 결제 식별자·결제
             금액·결제수단 승인 정보. 위탁 업무 목적 범위 내에서만 처리되며, 결제·환불 처리 완료
             후 관련 법령이 정한 기간 동안 보관됩니다.
+          </li>
+        </ul>
+        <p className="pt-2">
+          의견 보내기 처리를 위해 아래와 같이 개인정보 처리를 위탁하며, 두 곳 모두 국외 서버입니다:
+        </p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>
+            텔레그램(Telegram, 국외 서버): 새 의견이 왔다는 알림 — 종류·보던 화면·내용 일부·로그인
+            여부(이메일은 일부 가림)
+          </li>
+          <li>
+            구글 Gmail(국외 서버): 의견에 대한 답장 메일 — 가입 이메일·의견 내용 일부·답장
           </li>
         </ul>
 

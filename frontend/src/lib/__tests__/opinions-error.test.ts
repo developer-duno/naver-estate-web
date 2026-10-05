@@ -11,7 +11,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
 const API = "http://test-api:8000";
-const LIMIT_MSG = "오늘은 더 보낼 수 없어요. 내일 다시 보내 주세요";
+const LIMIT_MSG = "시험용 서버 문구 — 이번 주는 더 받지 않아요"; // 대체 문구(DAILY_LIMIT_FALLBACK)와 글자가 달라야 "서버 문구 보존"을 진짜로 검증한다(검사관 🟠)
 
 let lastAuth: string | null = null;
 let lastBody: unknown = null;

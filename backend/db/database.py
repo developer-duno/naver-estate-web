@@ -20,6 +20,23 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL 환경변수가 설정되지 않았습니다")
 
+
+def _with_explicit_driver(url: str) -> str:
+    """`postgresql://` 주소에 접속 부품 이름(psycopg2)을 붙인다.
+
+    SQLAlchemy 2.1 부터 드라이버 없는 `postgresql://` 의 기본값이 psycopg2 → psycopg(3) 로
+    바뀌었다(공식 migration_21 "Default PostgreSQL driver changed to psycopg"). 설치된 건
+    psycopg2 뿐이라 그대로면 엔진 생성에서 ModuleNotFoundError — 서버가 안 뜬다(세션 431,
+    Dependabot #621 검토 중 venv 재현). 2.0 에서도 같은 드라이버라 동작 변화 0.
+    """
+    prefix = "postgresql://"
+    if url.startswith(prefix):
+        return "postgresql+psycopg2://" + url[len(prefix):]
+    return url
+
+
+DATABASE_URL = _with_explicit_driver(DATABASE_URL)
+
 # Sync 엔진 (크롤러 + 웹앱 공용) — NullPool: 요청마다 연결/해제 (Supabase 커넥션 한도 방지).
 # pool_pre_ping: 매 checkout 전에 SELECT 1로 유효성 검사. Supabase idle timeout으로 끊긴
 # 연결을 붙잡아 재사용하다가 "server closed connection unexpectedly"로 터지던 문제 방지

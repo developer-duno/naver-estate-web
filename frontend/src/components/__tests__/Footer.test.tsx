@@ -58,4 +58,34 @@ describe("Footer — 광고법 면책 조항", () => {
       screen.getByText(new RegExp(`© ${year} 2u부동산`)),
     ).toBeInTheDocument();
   });
+
+  /**
+   * 세션 432 — "함께 보면 좋은 사이트" 외부 링크 2개. 새 창 + noopener 보안 속성 회귀 가드.
+   */
+  it("함께 보면 좋은 사이트 — 외부 링크 2개가 새 창·noopener 로 연다", () => {
+    render(<Footer />);
+    expect(
+      screen.getByRole("navigation", { name: "함께 보면 좋은 사이트" }),
+    ).toBeInTheDocument();
+
+    const mibunyangLink = screen.getByRole("link", {
+      name: "미분양 아파트 비교",
+    });
+    expect(mibunyangLink).toHaveAttribute(
+      "href",
+      "https://mibunyang-peach.vercel.app",
+    );
+    expect(mibunyangLink).toHaveAttribute("target", "_blank");
+    expect(mibunyangLink.getAttribute("rel")).toContain("noopener");
+
+    const sanggaLink = screen.getByRole("link", {
+      name: "상가 공간분석(준비 중)",
+    });
+    expect(sanggaLink).toHaveAttribute(
+      "href",
+      "https://sangga-one.vercel.app",
+    );
+    expect(sanggaLink).toHaveAttribute("target", "_blank");
+    expect(sanggaLink.getAttribute("rel")).toContain("noopener");
+  });
 });

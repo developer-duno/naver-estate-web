@@ -17,6 +17,31 @@ export default function Footer() {
           </p>
         </div>
 
+        <div className="mt-6">
+          <p className="text-sm text-gray-500">함께 보면 좋은 사이트</p>
+          <nav
+            aria-label="함께 보면 좋은 사이트"
+            className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-sm"
+          >
+            <a
+              href="https://mibunyang-peach.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-700 hover:text-blue-600 hover:underline"
+            >
+              미분양 아파트 비교
+            </a>
+            <a
+              href="https://sangga-one.vercel.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-700 hover:text-blue-600 hover:underline"
+            >
+              상가 공간분석(준비 중)
+            </a>
+          </nav>
+        </div>
+
         <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
           <nav
             aria-label="법적 고지"

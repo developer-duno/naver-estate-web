@@ -17,10 +17,10 @@ paths:
 > 위 `paths` 파일을 열면 자동으로 읽힌다. 파일을 안 열고도 지켜야 하는 규칙(잡 id ≠ job_type·재시작 묶기·IP 차단·공용 테이블·텔레그램 금지어)은 infra.md 에 남아 있다.
 > 링크의 상대경로(`../../backend/.claude/details.md`)는 같은 폴더라 그대로 맞다.
 
-### 적용 현황 — **모듈 9개 / 호출부 12곳 전부 완료** (세션 409 8모듈·11곳 + 세션 421 `service_public` 남은 횟수 부족 알림 1곳)
+### 적용 현황 — **모듈 10개 / 호출부 13곳 전부 완료** (세션 409 8모듈·11곳 + 세션 421 `service_public` 남은 횟수 부족 알림 1곳 + 세션 435 `services/opinion_alert` 새 의견 알림 1곳)
 
 ⚠ **"창구 수"를 셀 때 모듈 수와 호출부 수를 구분하라.** `send_telegram` 을 부르는
-**모듈은 9개**지만, 한 모듈이 여러 곳에서 알림을 쏜다(`service_official_price` 는 3곳).
+**모듈은 10개**지만, 한 모듈이 여러 곳에서 알림을 쏜다(`service_official_price` 는 3곳).
 세션 409 가 모듈만 세고 "8창구 전부"라 보고했다가, `service_official_price:451`
 표준코드 이관 알림 **한 곳이 안 고쳐진 채** 남아 적대검증에 적발됐다.
 → 판정은 `scripts/verify_alert_wording.py` 로. ⚠ 그 스크립트는 **창구를 손으로 등록**한다(⑧ 만 호출부를 소스에서
@@ -29,7 +29,8 @@ paths:
 
 `monitor`(#524) · `field_drift_monitor`·`job_error_listener`·`healthcheck.yml`·
 `service_official_price`(#526) · `api_version_monitor`·`scheduler_lock`·
-`billing_charge`·`routers/payment`(세션 409) · `service_public`(세션 421 — 정부 실거래가 창구 남은 횟수 부족).
+`billing_charge`·`routers/payment`(세션 409) · `service_public`(세션 421 — 정부 실거래가 창구 남은 횟수 부족) ·
+`services/opinion_alert`(세션 435 — 2u 의견함 새 의견 알림·시간당 20통 넘김 알림, 호출부 `routers/opinions.py`).
 
 잡 라벨(`_JOB_LABEL_FALLBACK`) 9개에 남아 있던 영문(`단지 상세 backfill APT`,
 `정기 VACUUM 유지보수`, `K-apt 관리비 수집`, `data.go.kr API 버전 감시` 등)도 함께
@@ -49,7 +50,7 @@ cd backend && PYTHONPATH=. PYTHONUTF8=1 python scripts/verify_alert_wording.py
 # 세션 410 확장: ⓪ 못 알아본 에러 렌더(새 알림 + 해소 알림 — 내부 마침표 검사) ·
 #   ⑨ 자동결제 중단 사유 6종(_mark_retry 실호출) · ⑩ 부분환불(이메일 마스킹 검사) · ⑪ 관리자 화면 `explain_stored_error`
 #   (스윕 마커·psycopg2·붙는 형태 3입력, 세션 411 후속) · ⑫ 정부 실거래가 창구 남은 횟수 부족(세션 421 — 숫자 셋 검사)
-#   포함 = "12창구 + 미지 에러 렌더".
+#   ⑬ 의견함 새 의견 알림 + 시간당 20통 넘김 알림(세션 435) · 포함 = "13창구 + 미지 에러 렌더".
 #   텔레그램·이메일·log_action 은 전부 patch — 실발송 0. 워크트리(.env 없음)에선 DATABASE_URL="sqlite:///:memory:" 를 앞에 붙인다
 ```
 

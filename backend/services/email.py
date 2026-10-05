@@ -11,8 +11,12 @@ from html import escape
 logger = logging.getLogger(__name__)
 
 
-def send_email(to: str, subject: str, html_body: str) -> bool:
-    """SMTP로 HTML 이메일 발송. 실패 시 False 반환 (예외 전파 금지)."""
+def send_email(to: str, subject: str, html_body: str, sender_name: str = "네이버부동산") -> bool:
+    """SMTP로 HTML 이메일 발송. 실패 시 False 반환 (예외 전파 금지).
+
+    sender_name: 받는 사람 메일함에 보이는 보낸 사람 이름. 기존 호출은 기본값 그대로,
+    의견 답장 메일만 "2u부동산"(세션 433).
+    """
     # 이메일 주소 검증 — SMTP 헤더 인젝션 방지
     parsed = email.utils.parseaddr(to)
     if not parsed[1] or "\n" in parsed[1] or "\r" in parsed[1]:
@@ -31,7 +35,7 @@ def send_email(to: str, subject: str, html_body: str) -> bool:
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["From"] = email.utils.formataddr(("네이버부동산", sender))
+        msg["From"] = email.utils.formataddr((sender_name, sender))
         msg["To"] = to
         msg["Subject"] = subject
         msg.attach(MIMEText(html_body, "html", "utf-8"))
@@ -90,5 +94,37 @@ def build_billing_failed_email(user_email: str) -> tuple[str, str]:
   <p>카드 잔액·한도·유효기간을 확인하신 후, 마이페이지에서 <strong>카드를 다시 등록</strong>해 주세요.</p>
   <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
   <p style="color:#888;font-size:12px">본 메일은 자동 발송되었습니다.</p>
+</div>"""
+    return subject, html
+
+
+OPINION_REPLY_SENDER_NAME = "2u부동산"
+_OPINION_ORIGINAL_CHARS = 200
+
+
+def build_opinion_reply_email(user_email: str, original: str | None, reply: str) -> tuple[str, str]:
+    """의견 답장 메일 제목+본문 (세션 433). 손님 원문(200자)과 관리자 답 **둘 다** HTML 이스케이프.
+
+    원문은 손님이 쓴 글이라 `<script>`·`<a href>` 같은 것이 들어올 수 있다 — 이스케이프하지
+    않으면 우리 이름으로 나가는 메일에 남이 만든 링크·서식이 박힌다.
+    원문이 1년 정리로 지워졌으면(None) 원문 칸을 비운다.
+    """
+    subject = "[2u부동산] 보내 주신 의견에 답장이 왔어요"
+    original_text = (original or "")[:_OPINION_ORIGINAL_CHARS]
+    if original and len(original) > _OPINION_ORIGINAL_CHARS:
+        original_text += "…"
+    html = f"""<div style="max-width:480px;margin:0 auto;font-family:sans-serif">
+  <h2 style="color:#1a73e8">보내 주신 의견에 답장이 왔어요</h2>
+  <p>{escape(user_email)}님, 2u부동산에 의견을 보내 주셔서 고맙습니다.</p>
+  <div style="background:#f5f5f5;border-radius:8px;padding:12px 16px;margin:16px 0">
+    <p style="margin:0;font-weight:600;color:#555">보내 주신 의견</p>
+    <p style="margin:4px 0 0;color:#333;white-space:pre-wrap">{escape(original_text)}</p>
+  </div>
+  <div style="background:#eef4fd;border-radius:8px;padding:12px 16px;margin:16px 0">
+    <p style="margin:0;font-weight:600;color:#1a4fa0">답장</p>
+    <p style="margin:4px 0 0;color:#1f2937;white-space:pre-wrap">{escape(reply)}</p>
+  </div>
+  <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+  <p style="color:#888;font-size:12px">본 메일은 자동 발송되었습니다. 이 메일에 회신해도 답을 받을 수 없어요 — 사이트의 "의견 보내기"를 이용해 주세요.</p>
 </div>"""
     return subject, html

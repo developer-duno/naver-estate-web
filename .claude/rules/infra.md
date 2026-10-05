@@ -109,7 +109,7 @@ URL이 고정(api.2u.pe.kr)이므로 Vercel 재배포 불필요.
 
 ### 적용 현황·라이브 확인 — `infra-scheduler.md` 로 이동 (세션 430)
 
-창구 목록(모듈 9개·호출부 12곳)·재유입 가드·`scripts/verify_alert_wording.py` 라이브 확인 명령·"잡 이름은 두 곳(`add_job(name=…)`·`_JOB_LABEL_FALLBACK`)을 함께 고친다" 주의는
+창구 목록(모듈 10개·호출부 13곳)·재유입 가드·`scripts/verify_alert_wording.py` 라이브 확인 명령·"잡 이름은 두 곳(`add_job(name=…)`·`_JOB_LABEL_FALLBACK`)을 함께 고친다" 주의는
 `.claude/rules/infra-scheduler.md` 에 원문 그대로 있다(`backend/crawler/**` 등을 열면 자동으로 읽힘). **새 알림 창구를 만들거나 알림 문구를 고치기 전에 그 절을 연다.**
 
 ## 스케줄러 (APScheduler)

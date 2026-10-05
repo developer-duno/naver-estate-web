@@ -1,4 +1,4 @@
-"""알림 12창구 + 미지 에러 렌더가 전부 쉬운 우리말로 나가는지 한 번에 확인 (세션 409·410·411·421).
+"""알림 13창구 + 미지 에러 렌더가 전부 쉬운 우리말로 나가는지 한 번에 확인 (세션 409·410·411·421·433).
 
 재시작 직후 "PR 이 라이브에 반영됐나"를 판정하는 용도. 텔레그램은 mock 이라
 **실발송 0** (conftest 없이 단독 실행되므로 patch 로 직접 막는다).
@@ -263,6 +263,39 @@ def main() -> int:
             bad.append(f"빠진 말:{must}")
     results.append(("⑫-3 실거래가 창구 남은 횟수 0번", msg, bad))
 
+    # ── 13. services.opinion_alert — 새 의견 알림 + 시간당 20통 넘을 때 "잠시 멈춤" (세션 433) ──
+    #
+    # 손님 글이 그대로 들어가는 창구라 평문(parse_mode=None)·줄바꿈 접기·이메일 가림까지 본다.
+    # 이메일 도메인·주소(gmail·com·https)가 들어가므로 영문 낱말 검사(check_no_english_word)는 쓰지 않는다.
+    import services.opinion_alert as oa
+
+    oa._reset_for_tests()
+    with patch("services.telegram.send_telegram") as tg:
+        oa.notify_new_opinion(kind="bug", page_path="/complex/12345", user_email="sajang@example.com",
+                              message="<b>가격</b>이 안 보여요\n두 번째 줄", now=now)
+    msg = tg.call_args[0][0] if tg.call_args else ""
+    bad = check("", msg)
+    if tg.call_args and tg.call_args.kwargs.get("parse_mode") is not None:
+        bad.append("parse_mode 가 평문이 아님")
+    for must in ("[서버 알림]", "종류: 버그·오류", "보낸 분: 로그인(sa***@example.com)",
+                 "내용: <b>가격</b>이 안 보여요 두 번째 줄"):
+        if must not in msg:
+            bad.append(f"빠진 말:{must}")
+    if "sajang@example.com" in msg:
+        bad.append("이메일 마스킹 안 됨")
+    results.append(("⑬-1 새 의견 알림", msg, bad))
+
+    oa._reset_for_tests()
+    with patch("services.telegram.send_telegram") as tg:
+        for _ in range(oa.HOURLY_LIMIT + 1):
+            oa.notify_new_opinion(kind="other", page_path=None, user_email=None, message="의견 내용입니다", now=now)
+    msg = tg.call_args[0][0] if tg.call_args else ""
+    bad = check("", msg)
+    if "잠시 멈춰요" not in msg:
+        bad.append("빠진 말:잠시 멈춰요")
+    results.append(("⑬-2 새 의견 알림 잠시 멈춤", msg, bad))
+    oa._reset_for_tests()
+
     # ── 출력 ──
     failed = 0
     for label, msg, bad in results:
@@ -275,9 +308,9 @@ def main() -> int:
 
     print(f"\n{'=' * 64}")
     if failed:
-        print(f"❌ 12창구 + 미지 에러 렌더 중 {failed}곳에 어려운 말이 남아 있다")
+        print(f"❌ 13창구 + 미지 에러 렌더 중 {failed}곳에 어려운 말이 남아 있다")
         return 1
-    print("✅ 12창구 + 미지 에러 렌더 전부 쉬운 우리말 — 라이브 반영 확인")
+    print("✅ 13창구 + 미지 에러 렌더 전부 쉬운 우리말 — 라이브 반영 확인")
     return 0
 
 

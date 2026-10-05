@@ -138,6 +138,70 @@ def _grant_detail_retry_for_capped_articles(db) -> int:
         return 0
 
 
+OPINION_RETENTION_DAYS = 365
+
+
+def _purge_old_opinions(now=None) -> dict:
+    """보낸 지 1년 지난 손님 의견 정리 — **best-effort 곁다리 작업** (세션 433, V069).
+
+    - 비공개 행 → 삭제.
+    - 공개 행("고쳤습니다" 목록에 나간 것) → 원문·회원 번호·이메일·브라우저 정보·소식 설문·화면 주소를
+      NULL 로 지우고 공개 제목·공개 답은 남긴다(처리방침: 공개한 답은 개인정보를 지운 채 남김).
+
+    ⚠ **자기 세션을 따로 연다** — 다른 곁다리와 같은 세션·트랜잭션을 쓰면, 여기서 문장 하나가
+    실패할 때 PostgreSQL 이 그 트랜잭션의 나머지를 전부 거부해 다른 단계까지 멈춘다.
+    기준 시각은 DB 함수(now())가 아니라 **파이썬에서 계산해 바인딩** — SQLite 시험과 운영이 같은 뜻.
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import delete, or_, update
+
+    from db.models import SiteOpinion
+
+    now = now or utcnow()
+    cutoff = now - timedelta(days=OPINION_RETENTION_DAYS)
+    s = SessionLocal()
+    try:
+        deleted = s.execute(
+            delete(SiteOpinion)
+            .where(SiteOpinion.created_at < cutoff, SiteOpinion.is_public.is_(False))
+            .execution_options(synchronize_session=False)
+        ).rowcount or 0
+        anonymized = s.execute(
+            update(SiteOpinion)
+            .where(
+                SiteOpinion.created_at < cutoff,
+                SiteOpinion.is_public.is_(True),
+                or_(
+                    SiteOpinion.message.isnot(None),
+                    SiteOpinion.user_id.isnot(None),
+                    SiteOpinion.user_email.isnot(None),
+                    SiteOpinion.user_agent.isnot(None),
+                    SiteOpinion.interests.isnot(None),
+                    SiteOpinion.page_path.isnot(None),
+                ),
+            )
+            .values(
+                message=None, user_id=None, user_email=None, user_agent=None,
+                interests=None, page_path=None, updated_at=now,
+            )
+            .execution_options(synchronize_session=False)
+        ).rowcount or 0
+        s.commit()
+        if deleted or anonymized:
+            logger.info("1년 지난 의견 정리: 삭제 %d건 · 공개 항목 개인정보 지움 %d건", deleted, anonymized)
+        return {"deleted": deleted, "anonymized": anonymized}
+    except Exception:
+        logger.warning("1년 지난 의견 정리 실패 (VACUUM 결과에는 영향 없음)", exc_info=True)
+        try:
+            s.rollback()
+        except Exception:
+            logger.warning("의견 정리 실패 후 rollback 도 실패", exc_info=True)
+        return {"deleted": 0, "anonymized": 0}
+    finally:
+        s.close()
+
+
 def run_vacuum_maintenance() -> dict:
     """articles/trades VACUUM (ANALYZE) 실행. 결과 요약 dict 반환.
 
@@ -163,6 +227,8 @@ def run_vacuum_maintenance() -> dict:
     purged = _purge_expired_quota_counters(db)
     # 상세 상한 매물 재시도 자격도 dialect 무관 UPDATE 라 같은 자리(early return 앞).
     retry_granted = _grant_detail_retry_for_capped_articles(db)
+    # 1년 지난 의견 정리도 dialect 무관이라 같은 자리 — 자기 세션을 따로 써서 실패가 번지지 않는다.
+    opinions = _purge_old_opinions()
 
     dialect = engine.dialect.name
     if dialect != "postgresql":
@@ -178,6 +244,8 @@ def run_vacuum_maintenance() -> dict:
             "vacuumed": [],
             "purged_counters": purged,
             "detail_retry_granted": retry_granted,
+            "opinions_deleted": opinions["deleted"],
+            "opinions_anonymized": opinions["anonymized"],
         }
 
     vacuumed: list[str] = []
@@ -216,4 +284,6 @@ def run_vacuum_maintenance() -> dict:
         "vacuumed": vacuumed,
         "purged_counters": purged,
         "detail_retry_granted": retry_granted,
+        "opinions_deleted": opinions["deleted"],
+        "opinions_anonymized": opinions["anonymized"],
     }

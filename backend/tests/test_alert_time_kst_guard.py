@@ -89,6 +89,9 @@ _NO_TIME_MODULES: dict[str, str] = {
         "운영자 알림(_alert_operator_throttled)은 사유 문구만. 이 파일의 isoformat 3곳은 "
         "API 응답 JSON 의 paid_until 필드이고, 쿨다운의 now 는 time.monotonic()(단조시계)라 "
         "사람이 읽는 시각이 아니다 — 세션 406 이 grep 오탐으로 한 번 의심했다가 직독으로 확인",
+    "services/opinion_alert.py":
+        "새 의견 알림은 종류·화면·보낸 분·내용만 — 시각 표기 0건. _key_of 의 strftime 은 "
+        "시간당 20통 한도를 세는 카운터 열쇠(한국 시각 기준)이고 알림 본문에 안 찍힌다(세션 433)",
 }
 
 # 예외 — "파일:줄에 있는 코드 조각" → 사유. 사유 없이 추가 금지.

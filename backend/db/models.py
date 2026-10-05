@@ -8,6 +8,7 @@ from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Float,
@@ -547,3 +548,56 @@ class KaptManagementCost(Base):
     household_count: Mapped[int | None] = mapped_column(Integer)
     breakdown: Mapped[dict | None] = mapped_column(JSON)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class SiteOpinion(Base):
+    """손님 "의견 보내기" — V069 site_opinions (세션 433).
+
+    누구나 보낼 수 있고(user_id·user_email 은 로그인한 경우만 토큰에서 서버가 채운다),
+    관리자가 답하면 가입 이메일로 답장 메일 1회, 공개로 돌리면 "고쳤습니다" 목록에
+    public_title·public_answer 만 나간다(원문·이메일·화면 주소는 절대 공개 안 함).
+
+    message 가 nullable 인 이유: 1년 지난 **공개** 행은 정리 잡이 원문·개인정보만 NULL 로
+    지우고 공개 제목·답은 남긴다(crawler/vacuum_maintenance.py _purge_old_opinions).
+    새로 들어오는 의견은 라우터가 10~1000자를 강제한다.
+
+    공유 DB 에 미분양의 site_feedback 이 따로 있다 — 이름이 다른 별개 표다.
+    """
+    __tablename__ = "site_opinions"
+    __table_args__ = (
+        Index("site_opinions_created_at_idx", "created_at"),
+        Index("site_opinions_status_created_at_idx", "status", "created_at"),
+        # V069 의 CHECK 3개를 모델에도 둔다 — SQLite 시험도 같은 제약을 보게(운영은 마이그가 정본)
+        CheckConstraint("kind IN ('bug', 'data', 'suggest', 'other')", name="site_opinions_kind_check"),
+        CheckConstraint(
+            "status IN ('new', 'replied', 'fixed', 'closed')", name="site_opinions_status_check"
+        ),
+        CheckConstraint(
+            "message IS NULL OR length(message) BETWEEN 1 AND 1000", name="site_opinions_message_check"
+        ),
+    )
+
+    # PG = bigserial, SQLite(CI) = INTEGER PRIMARY KEY 자동증가 (line 301 과 같은 분기)
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True
+    )
+    kind: Mapped[str] = mapped_column(Text, nullable=False)  # bug|data|suggest|other
+    message: Mapped[str | None] = mapped_column(Text)
+    page_path: Mapped[str | None] = mapped_column(Text)
+    # none_as_null: None 을 JSON 의 null 이 아니라 SQL NULL 로 저장(1년 정리 때 NULL 로 지우는 것과 같은 뜻)
+    interests: Mapped[list | None] = mapped_column(JSON(none_as_null=True))  # 마이그는 jsonb, 모델은 JSON(SQLite 호환)
+    user_id: Mapped[str | None] = mapped_column(Text)
+    user_email: Mapped[str | None] = mapped_column(Text)
+    user_agent: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="new")  # new|replied|fixed|closed
+    reply: Mapped[str | None] = mapped_column(Text)
+    replied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reply_mail_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    public_title: Mapped[str | None] = mapped_column(Text)
+    public_answer: Mapped[str | None] = mapped_column(Text)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
+    )

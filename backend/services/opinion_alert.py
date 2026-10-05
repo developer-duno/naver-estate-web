@@ -7,15 +7,16 @@
   - parse_mode=None(평문) — `<b>` 같은 글을 서식으로 해석하지 않고 글자 그대로 보낸다.
   - 줄바꿈·연속 공백을 공백 하나로 접는다 — 손님이 "[서버 알림]" 같은 가짜 줄을 만들 수 없다.
   - 내용은 150자로 자른다 · 이메일은 가린다(routers/payment.py _mask_email 재사용).
-  - 폭주 방지: 한국 시각 기준 한 시간에 20통까지만 한 건씩 보내고, 그 뒤로 오는 것은
-    그 시간이 끝날 때 "이번 시간에 의견 N건이 더 왔어요" **한 통**으로 묶는다(모듈 메모리 카운터 —
-    재시작하면 0 부터 다시 센다).
+  - 폭주 방지: 한국 시각 기준 한 시간에 20통까지만 한 건씩 보내고, 21번째가 오는 **그 순간**
+    "알림을 잠시 멈춰요" 한 통을 보낸 뒤 그 시간 동안은 더 안 보낸다(모듈 메모리 카운터 —
+    재시작하면 0 부터 다시 센다). 타이머를 두지 않는 이유 = 웹 프로세스 안 타이머는 재시작·시험에서
+    새는 자원이고, 시간이 끝나야 알리면 사장님이 늦게 안다.
 """
 
 import logging
 import re
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
@@ -34,27 +35,19 @@ KIND_WORDS = {
 
 _lock = threading.Lock()
 _hour_key: str | None = None  # 지금 세는 시간 "YYYY-MM-DD HH"(한국 시각)
-_sent_in_hour = 0
-_overflow: dict[str, int] = {}  # 시간 → 한도 넘어 묶인 건수(아직 안 보낸 것)
+_count_in_hour = 0  # 그 시간에 들어온 의견 수(알림을 보냈든 안 보냈든)
 
 
 def _reset_for_tests() -> None:
     """시험 사이 카운터 초기화(모듈 메모리라 시험끼리 섞이지 않게)."""
-    global _hour_key, _sent_in_hour
+    global _hour_key, _count_in_hour
     with _lock:
         _hour_key = None
-        _sent_in_hour = 0
-        _overflow.clear()
+        _count_in_hour = 0
 
 
 def _key_of(now: datetime) -> str:
     return now.astimezone(KST).strftime("%Y-%m-%d %H")
-
-
-def _seconds_to_next_hour(now: datetime) -> float:
-    local = now.astimezone(KST)
-    next_hour = local.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
-    return max(1.0, (next_hour - local).total_seconds())
 
 
 def _preview(message: str) -> str:
@@ -82,10 +75,10 @@ def build_new_opinion_text(kind: str, page_path: str | None, user_email: str | N
     ])
 
 
-def build_overflow_text(count: int) -> str:
-    """시간당 한도를 넘은 의견 묶음 알림 본문(평문)."""
+def build_pause_text() -> str:
+    """시간당 한도(20통)를 넘은 순간 한 번 보내는 "잠시 멈춤" 알림 본문(평문)."""
     return "\n".join([
-        f"[서버 알림] 💬 이번 시간에 의견 {count}건이 더 왔어요(관리자 화면에서 보세요)",
+        f"[서버 알림] 💬 이번 시간엔 의견이 {HOURLY_LIMIT}건을 넘어 알림을 잠시 멈춰요(관리자 화면에서 보세요)",
         f"답하기: {ADMIN_URL}",
     ])
 
@@ -96,23 +89,6 @@ def _send(text: str) -> None:
     send_telegram(text, parse_mode=None)
 
 
-def flush_overflow(hour_key: str) -> None:
-    """그 시간에 묶인 의견 수를 한 통으로 보낸다(시간이 끝날 때 타이머가 부른다)."""
-    try:
-        with _lock:
-            count = _overflow.pop(hour_key, 0)
-        if count:
-            _send(build_overflow_text(count))
-    except Exception:
-        logger.warning("의견 묶음 알림 실패 (의견은 저장돼 있음)", exc_info=True)
-
-
-def _schedule_overflow_flush(hour_key: str, delay_seconds: float) -> None:
-    timer = threading.Timer(delay_seconds, flush_overflow, args=(hour_key,))
-    timer.daemon = True
-    timer.start()
-
-
 def notify_new_opinion(
     *,
     kind: str,
@@ -121,26 +97,23 @@ def notify_new_opinion(
     message: str,
     now: datetime | None = None,
 ) -> None:
-    """새 의견 알림 — 시간당 20통까지 한 건씩, 그 뒤는 묶음 한 통. 예외를 밖으로 내지 않는다."""
-    global _hour_key, _sent_in_hour
+    """새 의견 알림 — 시간당 20통까지 한 건씩, 21번째에 "잠시 멈춤" 1통, 그 뒤 그 시간엔 0통.
+
+    예외를 밖으로 내지 않는다.
+    """
+    global _hour_key, _count_in_hour
     try:
         now = now or datetime.now(KST)
         key = _key_of(now)
-        text: str | None = None
-        schedule = False
         with _lock:
             if _hour_key != key:
                 _hour_key = key
-                _sent_in_hour = 0
-            if _sent_in_hour < HOURLY_LIMIT:
-                _sent_in_hour += 1
-                text = build_new_opinion_text(kind, page_path, user_email, message)
-            else:
-                _overflow[key] = _overflow.get(key, 0) + 1
-                schedule = _overflow[key] == 1  # 그 시간의 첫 초과 때만 타이머 1개
-        if text is not None:
-            _send(text)
-        elif schedule:
-            _schedule_overflow_flush(key, _seconds_to_next_hour(now))
+                _count_in_hour = 0
+            _count_in_hour += 1
+            nth = _count_in_hour
+        if nth <= HOURLY_LIMIT:
+            _send(build_new_opinion_text(kind, page_path, user_email, message))
+        elif nth == HOURLY_LIMIT + 1:
+            _send(build_pause_text())
     except Exception:
         logger.warning("새 의견 알림 실패 (의견은 저장돼 있음)", exc_info=True)

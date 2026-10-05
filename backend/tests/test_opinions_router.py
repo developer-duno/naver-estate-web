@@ -227,3 +227,188 @@ def test_model_allows_null_message(db):
     db.add(SiteOpinion(kind="other", message=None))
     db.commit()
     assert db.query(SiteOpinion).one().message is None
+
+
+# ══ 관리자 의견함 /api/admin/opinions ══
+
+
+@pytest.fixture
+def admin_headers(db):
+    return make_auth_headers(db, user_id="op-admin", role="admin", email="admin@test.com")
+
+
+@pytest.fixture
+def mails(monkeypatch):
+    """send_email 호출 기록 — 기본은 성공(True). result 를 바꾸면 실패를 흉내."""
+    state = {"result": True, "calls": []}
+
+    def _fake(to, subject, html_body, sender_name="네이버부동산"):
+        state["calls"].append({"to": to, "subject": subject, "html": html_body, "sender_name": sender_name})
+        return state["result"]
+
+    monkeypatch.setattr("services.email.send_email", _fake)
+    return state
+
+
+def _audit_actions(db):
+    from db.models import AuditLog
+
+    return [a.action for a in db.query(AuditLog).order_by(AuditLog.id).all()]
+
+
+def test_admin_routes_need_admin(client, db):
+    r = _row(db)
+    user = make_auth_headers(db, user_id="op-plain", role="user")
+    assert client.get("/api/admin/opinions").status_code == 401
+    assert client.get("/api/admin/opinions", headers=user).status_code == 403
+    assert client.patch(f"/api/admin/opinions/{r.id}", json={"status": "closed"}, headers=user).status_code == 403
+    assert client.post(f"/api/admin/opinions/{r.id}/resend-mail", headers=user).status_code == 403
+    assert client.delete(f"/api/admin/opinions/{r.id}", headers=user).status_code == 403
+    assert db.get(SiteOpinion, r.id).status == "new"
+
+
+def test_admin_list_all_fields_new_count_and_filter(client, db, admin_headers):
+    _row(db)
+    _row(db, status="replied", reply="답")
+    _row(db, message=None, user_email=None, is_public=True, status="fixed",
+         public_title="제목", public_answer="답", published_at=datetime.now(timezone.utc))
+    res = client.get("/api/admin/opinions", headers=admin_headers)
+    assert res.status_code == 200
+    assert res.headers["cache-control"] == "no-store"
+    body = res.json()
+    assert body["total"] == 3 and body["new_count"] == 1 and body["page"] == 1
+    item = next(i for i in body["items"] if i["status"] == "new")
+    assert item["message"] == "원문 비밀 내용입니다" and item["user_email"] == "secret@test.com"
+    assert {"page_path", "user_agent", "interests", "reply_mail_sent", "is_public"} <= set(item)
+    assert any(i["message"] is None for i in body["items"])  # 1년 정리된 공개 행도 목록에 뜬다
+    only_new = client.get("/api/admin/opinions?status=new", headers=admin_headers).json()
+    assert only_new["total"] == 1 and only_new["new_count"] == 1
+    assert client.get("/api/admin/opinions?status=done", headers=admin_headers).status_code == 422
+
+
+def test_reply_sends_mail_once_and_edit_does_not_resend(client, db, admin_headers, mails):
+    r = _row(db)
+    res = client.patch(f"/api/admin/opinions/{r.id}", json={"reply": "고쳤어요", "status": "replied"},
+                       headers=admin_headers)
+    assert res.status_code == 200
+    body = res.json()
+    assert body["mail_sent"] is True and body["reply_mail_sent"] is True
+    assert body["replied_at"] and body["status"] == "replied"
+    assert len(mails["calls"]) == 1
+    call = mails["calls"][0]
+    assert call["to"] == "secret@test.com" and call["sender_name"] == "2u부동산"
+    assert call["subject"] == "[2u부동산] 보내 주신 의견에 답장이 왔어요"
+
+    res2 = client.patch(f"/api/admin/opinions/{r.id}", json={"reply": "고쳤어요(수정)"}, headers=admin_headers)
+    assert res2.json()["mail_sent"] is False and res2.json()["reply"] == "고쳤어요(수정)"
+    assert len(mails["calls"]) == 1  # 답을 고쳐도 재발송 0
+    assert _audit_actions(db) == ["admin_opinion_update", "admin_opinion_update"]
+
+
+def test_mail_failure_stays_false_then_resend(client, db, admin_headers, mails):
+    r = _row(db)
+    mails["result"] = False
+    body = client.patch(f"/api/admin/opinions/{r.id}", json={"reply": "답장"}, headers=admin_headers).json()
+    assert body["mail_sent"] is False and body["reply_mail_sent"] is False
+    mails["result"] = True
+    res = client.post(f"/api/admin/opinions/{r.id}/resend-mail", headers=admin_headers)
+    assert res.json() == {"sent": True}
+    assert len(mails["calls"]) == 2
+    db.expire_all()
+    assert db.get(SiteOpinion, r.id).reply_mail_sent is True
+    assert _audit_actions(db)[-1] == "admin_opinion_resend_mail"
+
+
+def test_no_mail_without_email_or_reply(client, db, admin_headers, mails):
+    anon = _row(db, user_email=None)
+    body = client.patch(f"/api/admin/opinions/{anon.id}", json={"reply": "답장"}, headers=admin_headers).json()
+    assert body["mail_sent"] is False
+    assert client.post(f"/api/admin/opinions/{anon.id}/resend-mail", headers=admin_headers).json() == {"sent": False}
+    no_reply = _row(db)
+    assert client.post(f"/api/admin/opinions/{no_reply.id}/resend-mail",
+                       headers=admin_headers).json() == {"sent": False}
+    assert mails["calls"] == []
+
+
+def test_publish_needs_title_and_answer(client, db, admin_headers):
+    r = _row(db)
+    res = client.patch(f"/api/admin/opinions/{r.id}", json={"is_public": True, "public_title": "제목만"},
+                       headers=admin_headers)
+    assert res.status_code == 422
+    db.expire_all()
+    row = db.get(SiteOpinion, r.id)
+    assert row.is_public is False and row.public_title is None  # 422 뒤 흔적 0
+    ok = client.patch(f"/api/admin/opinions/{r.id}",
+                      json={"is_public": True, "public_title": "제목", "public_answer": "답", "status": "fixed"},
+                      headers=admin_headers).json()
+    assert ok["is_public"] is True and ok["published_at"]
+    assert client.get("/api/opinions/public").json()["total"] == 1
+    # 공개 중에 답을 비우면 422
+    assert client.patch(f"/api/admin/opinions/{r.id}", json={"public_answer": " "},
+                        headers=admin_headers).status_code == 422
+    off = client.patch(f"/api/admin/opinions/{r.id}", json={"is_public": False}, headers=admin_headers).json()
+    assert off["is_public"] is False and off["published_at"] is None
+
+
+def test_delete_with_audit_and_404(client, db, admin_headers):
+    r = _row(db)
+    res = client.delete(f"/api/admin/opinions/{r.id}", headers=admin_headers)
+    assert res.status_code == 200 and res.json() == {"deleted": True}
+    db.expire_all()
+    assert db.get(SiteOpinion, r.id) is None
+    assert _audit_actions(db) == ["admin_opinion_delete"]
+    assert client.delete(f"/api/admin/opinions/{r.id}", headers=admin_headers).status_code == 404
+    assert client.patch("/api/admin/opinions/999999", json={"status": "closed"},
+                        headers=admin_headers).status_code == 404
+
+
+# ── 답장 메일 본문 ──
+
+
+def test_reply_email_escapes_original_and_reply():
+    from services.email import build_opinion_reply_email
+
+    subject, html = build_opinion_reply_email(
+        "a<b>@test.com", "<script>alert(1)</script>" + "가" * 300, '<a href="http://evil">눌러</a>',
+    )
+    assert subject == "[2u부동산] 보내 주신 의견에 답장이 왔어요"
+    assert "<script>" not in html and "&lt;script&gt;" in html
+    assert '<a href="http://evil">' not in html and "&lt;a href=&quot;http://evil&quot;&gt;" in html
+    assert "a&lt;b&gt;@test.com" in html
+    assert "가" * 300 not in html  # 원문은 200자로 자른다
+    _, purged = build_opinion_reply_email("x@test.com", None, "답")
+    assert "None" not in purged
+
+
+def test_send_email_sender_name(monkeypatch):
+    """발신자 이름 인자 — 기본값은 그대로, 의견 메일만 2u부동산."""
+    import email as email_pkg
+    from email.header import decode_header, make_header
+
+    import services.email as em
+
+    sent_msgs: list[str] = []
+
+    class _FakeSMTP:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def login(self, *a):
+            pass
+
+        def sendmail(self, sender, to, msg):
+            sent_msgs.append(msg)
+
+    monkeypatch.setenv("SMTP_USER", "bot@test.com")
+    monkeypatch.setenv("SMTP_PASS", "pw")
+    monkeypatch.setattr(em.smtplib, "SMTP_SSL", _FakeSMTP)
+    assert em.send_email("to@test.com", "제목", "<p>x</p>") is True
+    assert em.send_email("to@test.com", "제목", "<p>x</p>", sender_name="2u부동산") is True
+    froms = [str(make_header(decode_header(email_pkg.message_from_string(m)["From"]))) for m in sent_msgs]
+    assert froms[0].startswith("네이버부동산") and froms[1].startswith("2u부동산")

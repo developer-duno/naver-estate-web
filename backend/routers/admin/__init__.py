@@ -1,6 +1,6 @@
 """admin 패키지 — 관리자 API
 
-sub-modules: _shared, users, jobs, data, collect, scheduler
+sub-modules: _shared, users, jobs, data, collect, scheduler, opinions
 """
 
 # 서브모듈 import → @router 데코레이터 등록  # noqa: I001
@@ -9,6 +9,7 @@ from routers.admin import data as _data_mod  # noqa: F401, I001
 from routers.admin import freshness as _freshness_mod  # noqa: F401, I001
 from routers.admin import jobs as _jobs_mod  # noqa: F401, I001
 from routers.admin import naver_calls as _naver_calls_mod  # noqa: F401, I001
+from routers.admin import opinions as _opinions_mod  # noqa: F401, I001
 from routers.admin import recrawl as _recrawl_mod  # noqa: F401, I001
 from routers.admin import scheduler as _sched_mod  # noqa: F401, I001
 from routers.admin import traffic as _traffic_mod  # noqa: F401, I001

@@ -109,7 +109,7 @@ test.describe("의견 보내기", () => {
     await expect(dialog.getByText(/답장을 받으려면 로그인해 주세요/)).toBeVisible();
 
     await dialog.getByRole("radio", { name: "버그·오류" }).click();
-    await dialog.getByLabel("내용").fill("검색 결과가 비어 보여요 확인 부탁");
+    await dialog.getByLabel("내용", { exact: true }).fill("검색 결과가 비어 보여요 확인 부탁");
     const submit = dialog.getByTestId("opinion-submit");
     await expect(submit).toBeDisabled(); // 동의 전
     await dialog.getByRole("checkbox", { name: /1년 보관하는 데 동의합니다/ }).click();

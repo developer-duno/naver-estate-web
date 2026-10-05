@@ -83,6 +83,7 @@ def main() -> int:
     msg = format_issue_message(
         "crawl_failed",
         {"alert_key": "crawl_failed:article_detail", "detail": resolved_detail,
+         "job_type": "article_detail",  # 운영 해소 경로가 싣는 값(2026-10-06)
          "reason": "recovered", "reason_detail": ""},
         event="resolved", header_ctx={"active_count": 0, "now": now},
     )

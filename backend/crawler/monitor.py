@@ -539,8 +539,9 @@ def _resolution_reason(db, kind: str, job_type: str) -> tuple[str, str]:
         if kind == "crawl_failed_burst":
             return "unconfirmed", f"마지막 실행은 실패, {_BURST_WINDOW_MIN}분 안에 몰리던 실패만 멈춤"
         return "unconfirmed", "마지막 실행은 실패"
-    # pending·paused 등 그 밖의 상태 — 임의로 "실패" 라 부르지 않고 원문 그대로 전달.
-    return "unconfirmed", f"마지막 실행: {row.status}"
+    # pending·paused 등 그 밖의 상태 — "실패" 라 부르지 않는다. 영문 상태 이름은 알림에
+    # 내보내지 않는다(쉬운 우리말 규칙, 2026-10-06).
+    return "unconfirmed", "마지막 실행이 아직 끝나지 않은 상태"
 
 
 def run_monitor(db) -> None:

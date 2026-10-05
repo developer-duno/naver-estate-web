@@ -938,7 +938,8 @@ def test_run_monitor_resolved_other_status_reports_status_verbatim():
             run_monitor(db)
 
         msg = _resolved_message(mock_tg)
-        assert "마지막 실행: paused" in msg
+        assert "마지막 실행이 아직 끝나지 않은 상태" in msg
+        assert "paused" not in msg, msg
         assert "실패" not in msg, f"paused 를 실패로 오표기: {msg}"
     finally:
         db.close()
@@ -1522,6 +1523,10 @@ def test_run_monitor_resolved_burst_says_window_exit():
         msg = _resolved_message(mock_tg)
         assert "몰리던 실패만 멈춤" in msg, msg
         assert "정상으로 돌아왔습니다" not in msg, msg
+        # 몰린 실패 경보도 작업 갈래 문장(상태 먼저, 문제는 뒤에)으로 나가야 한다
+        # (2026-10-06 검사관 변이 M8 — 작업 종류에서 burst 를 빼도 잡히지 않던 빈틈).
+        assert f"ℹ️ {job_words('complex_articles')} 작업 — 알림은 끝났지만" in msg, msg
+        assert "— 문제였던 것: " in msg, msg
         alert = db.execute(
             select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed_burst:complex_articles")
         ).scalar_one()

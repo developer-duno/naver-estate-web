@@ -521,23 +521,24 @@ def _resolution_reason(db, kind: str, job_type: str) -> tuple[str, str]:
     ).first()
 
     if row is None:
-        return "unconfirmed", "실행 이력 없음"
+        return "unconfirmed", "실행한 기록이 없음"
     if row.status == "completed":
         return "recovered", ""
     if row.status == "cancelled":
         # monitor 스윕('swept by monitor')·부팅 스윕('swept on startup') 양쪽 포괄.
         if "swept" in (row.error_message or ""):
             return "swept", ""
-        return "unconfirmed", "마지막 실행: 취소됨 (수동 취소 또는 토글 꺼짐)"
+        return "unconfirmed", "마지막 실행은 취소됨, 사람이 멈췄거나 스위치가 꺼짐"
     if row.status == "failed":
-        # "24h 관찰 창 경과" 는 crawl_failed 알림의 해소 사유일 때만 참이다.
+        # ⚠ 해소 알림이 이 문구를 괄호로 감싼다(2026-10-06) — 안에 괄호·" — "·영문을 넣지 말 것.
+        # "24시간 지켜보는 기간" 은 crawl_failed 알림의 해소 사유일 때만 참이다.
         # crawl_stale(마비)은 24h 창과 무관하게 running 소멸로 해소되므로 그 문구를
         # 붙이면 거짓 설명이 된다.
         if kind == "crawl_failed":
-            return "unconfirmed", f"마지막 실행: 실패 ({_FAILED_WINDOW_HOURS}h 관찰 창 경과)"
+            return "unconfirmed", f"마지막 실행은 실패, {_FAILED_WINDOW_HOURS}시간 지켜보는 기간이 지남"
         if kind == "crawl_failed_burst":
-            return "unconfirmed", f"마지막 실행: 실패 ({_BURST_WINDOW_MIN}분 창 이탈 — 추가 실패만 멈춤)"
-        return "unconfirmed", "마지막 실행: 실패"
+            return "unconfirmed", f"마지막 실행은 실패, {_BURST_WINDOW_MIN}분 안에 몰리던 실패만 멈춤"
+        return "unconfirmed", "마지막 실행은 실패"
     # pending·paused 등 그 밖의 상태 — 임의로 "실패" 라 부르지 않고 원문 그대로 전달.
     return "unconfirmed", f"마지막 실행: {row.status}"
 
@@ -652,7 +653,7 @@ def run_monitor(db) -> None:
                 # (역은 성립: 키가 사라졌는데 burst_still_true 면 1-b 가 already_failed 로
                 # 생략한 것뿐이라 crawl_failed 는 항상 current_keys 에 있다. 그 conjunct 는
                 # 논리상 군더더기지만 1-b 와의 결합을 명시하는 방어선으로 둔다 — 세션 397 리뷰.)
-                reason, reason_detail = "unconfirmed", "같은 작업의 실패 경보로 이어짐 — 실패가 계속되는 중"
+                reason, reason_detail = "unconfirmed", "같은 작업의 실패 알림으로 이어짐, 실패가 계속되는 중"
             else:
                 try:
                     reason, reason_detail = _resolution_reason(db, kind, target)

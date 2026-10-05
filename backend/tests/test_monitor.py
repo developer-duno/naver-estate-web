@@ -913,8 +913,8 @@ def test_run_monitor_resolved_stale_with_failed_omits_window_wording():
             run_monitor(db)
 
         msg = _resolved_message(mock_tg)
-        assert "마지막 실행: 실패" in msg
-        assert "관찰 창" not in msg, f"crawl_stale 인데 24h 창 문구가 붙음: {msg}"
+        assert "마지막 실행은 실패" in msg
+        assert "지켜보는 기간" not in msg, f"crawl_stale 인데 24h 창 문구가 붙음: {msg}"
     finally:
         db.close()
 
@@ -1032,7 +1032,7 @@ def test_run_monitor_resolved_only_failed_says_unconfirmed_expired():
             run_monitor(db)
 
         msg = _resolved_message(mock_tg)
-        assert "성공한 실행은 아직 확인되지 않았어요 (마지막 실행: 실패" in msg
+        assert "성공한 실행은 아직 확인되지 않았어요 (마지막 실행은 실패, 24시간 지켜보는 기간이 지남)" in msg
         assert "문제였던 것: 1건 실패, SSL 끊김" in msg
         assert "정상으로 돌아왔" not in msg
     finally:
@@ -1071,7 +1071,7 @@ def test_run_monitor_resolved_manual_cancel_says_unconfirmed_cancelled():
 
 
 def test_run_monitor_resolved_no_history_says_unconfirmed_no_runs():
-    """엣지: 그 job_type 의 실행 이력이 아예 없으면 '실행 이력 없음' 으로 명시."""
+    """엣지: 그 job_type 의 실행 이력이 아예 없으면 '실행한 기록이 없음' 으로 명시."""
     db = TestSession()
     try:
         db.add(MonitorAlert(
@@ -1084,7 +1084,7 @@ def test_run_monitor_resolved_no_history_says_unconfirmed_no_runs():
             run_monitor(db)
 
         msg = _resolved_message(mock_tg)
-        assert "실행 이력 없음" in msg
+        assert "실행한 기록이 없음" in msg
         # 기존 계약: 상태는 여전히 resolved 로 전환된다
         alert = db.execute(
             select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed:complex_articles")
@@ -1490,7 +1490,7 @@ def test_detect_issues_burst_skipped_when_crawl_failed_active():
 
 
 def test_run_monitor_resolved_burst_says_window_exit():
-    """경로 ①-c: crawl_failed_burst 해소는 "60분 창 이탈 — 추가 실패만 멈춤" 문구.
+    """경로 ①-c: crawl_failed_burst 해소는 "60분 안에 몰리던 실패만 멈춤" 문구.
 
     세션 396 사후검증(mut-2): _resolution_reason 의 crawl_failed_burst 분기가 어떤
     테스트에서도 실행되지 않아, 이 문구가 "정상 복구" 로 잘못 나가도 CI 가 못 잡았다.
@@ -1520,7 +1520,7 @@ def test_run_monitor_resolved_burst_says_window_exit():
             run_monitor(db)
 
         msg = _resolved_message(mock_tg)
-        assert "창 이탈" in msg or "추가 실패만 멈춤" in msg, msg
+        assert "몰리던 실패만 멈춤" in msg, msg
         assert "정상으로 돌아왔습니다" not in msg, msg
         alert = db.execute(
             select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed_burst:complex_articles")
@@ -1577,8 +1577,8 @@ def test_run_monitor_resolved_burst_superseded_by_crawl_failed():
         # 이 스캔은 crawl_failed 신규 알림도 함께 보낸다 — 헬퍼가 해소 알림만 고른다.
         msg = _resolved_message(mock_tg)
         assert "이어짐" in msg, msg
-        assert "창 이탈" not in msg, msg
-        assert "추가 실패만 멈춤" not in msg, msg
+        assert "몰리던 실패만 멈춤" not in msg, msg
+        assert "몰리던 실패만 멈춤" not in msg, msg
         assert "정상으로 돌아왔습니다" not in msg, msg
 
         burst = db.execute(
@@ -1602,7 +1602,7 @@ def test_run_monitor_burst_still_true_query_failure_degrades_to_window_exit():
     쿼리인데 예외 가드 밖에 있었다 — statement_timeout 류로 죽으면 스캔 전체(다른 종류의
     해소·sweep 커밋까지)가 동반 사망한다(세션 342 재현 유형). 가드 후 기대 동작 =
     ① run_monitor 가 예외를 던지지 않고 ② 버스트 경보는 여전히 resolved 로 전이하며
-    ③ 문구는 옛 "창 이탈" 로 폴백(부정확하지만 스캔 사망보다 낫다).
+    ③ 문구는 "몰리던 실패만 멈춤" 으로 폴백(부정확하지만 스캔 사망보다 낫다).
     _burst_rows 는 1-b(detect_issues_ex)와 run_monitor 가 한 번씩 부르므로 두 번째
     호출만 죽여 "판정용 집계만 실패" 를 재현한다. 가드를 지우면 RuntimeError 가 새어
     이 테스트가 FAIL 한다(뮤테이션 검증).
@@ -1649,7 +1649,7 @@ def test_run_monitor_burst_still_true_query_failure_degrades_to_window_exit():
 
         assert calls["n"] == 2, calls
         msg = _resolved_message(mock_tg)
-        assert "창 이탈" in msg, msg          # 폴백 문구
+        assert "몰리던 실패만 멈춤" in msg, msg  # 폴백 문구
         assert "이어짐" not in msg, msg
         burst = db.execute(
             select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed_burst:complex_articles")

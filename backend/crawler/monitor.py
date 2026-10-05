@@ -435,6 +435,10 @@ def _freshness_resolved_detail(stored: str, item: dict | None) -> tuple[str, str
     return stored, "as_is"
 
 
+# 해소 알림을 "상태 먼저, 문제는 뒤에" 로 다시 쓰는 작업 경보 종류 (2026-10-06).
+_JOB_ALERT_KINDS = ("crawl_failed", "crawl_failed_burst", "crawl_stale")
+
+
 def _cooldown_hours() -> int:
     """쿨다운 시간 (기본 6h)."""
     return int(os.getenv("MONITOR_COOLDOWN_HOURS", "6"))
@@ -658,17 +662,21 @@ def run_monitor(db) -> None:
                     # reason="" 는 alert_format 이 기존 문구로 폴백하는 값.
                     logger.warning("[monitor] 해소 사유 판정 실패 — 기존 문구 폴백", exc_info=True)
                     reason, reason_detail = "", ""
-            detail, resumed = alert.detail, False
+            detail, resumed, fresh_unknown = alert.detail, False, False
             if kind == "freshness":
                 # 보낼 문장만 바꾼다 — alert.detail(DB) 은 그대로 (2026-10-06).
                 detail, state = _freshness_resolved_detail(alert.detail, fresh_items.get(target))
                 resumed = state == "resumed"
                 if state == "unknown":
-                    reason, reason_detail = "unconfirmed", "지금 상태를 확인할 값이 없어요."
+                    reason, reason_detail, fresh_unknown = "unconfirmed", "", True
             resolved_targets.append((alert, kind, {
                 "alert_key": alert.alert_key,
                 "detail": detail,
                 "resumed": resumed,
+                "fresh_unknown": fresh_unknown,
+                # 작업 경보만 job_type 을 싣는다 — alert_format 이 "상태 먼저, 문제는 뒤에"
+                # 문장으로 다시 쓴다(2026-10-06 사장님 결정). freshness 는 싣지 않는다.
+                "job_type": target if kind in _JOB_ALERT_KINDS else None,
                 "reason": reason,
                 "reason_detail": reason_detail,
             }))

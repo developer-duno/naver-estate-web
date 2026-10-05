@@ -684,9 +684,10 @@ def test_run_monitor_recovered_failed_sends_resolved_alert():
         with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
             run_monitor(db)
         assert mock_tg.called  # 복구 알림 발송됨
-        # 메시지 본문에 "복구" 또는 "정상으로 돌아왔습니다" 포함
+        # 메시지 본문 = "상태 먼저, 문제는 뒤에" (2026-10-06 사장님 결정)
         sent_msg = mock_tg.call_args[0][0]
-        assert "복구" in sent_msg or "정상으로 돌아왔습니다" in sent_msg
+        assert f"✅ {job_words('complex_list')} 작업이 정상으로 돌아왔어요 (최근 실행 성공 확인)" in sent_msg
+        assert "문제였던 것: 1건 실패, SSL 끊김" in sent_msg
         alert = db.execute(
             select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed:complex_list")
         ).scalar_one()
@@ -818,8 +819,8 @@ def test_run_monitor_resolved_after_sweep_says_swept():
             run_monitor(db)
 
         msg = _resolved_message(mock_tg)
-        assert "강제 정리" in msg and "원인은 미해결" in msg
-        assert "정상으로 돌아왔습니다" not in msg
+        assert "강제 정리" in msg and "원인은 아직 안 풀렸으니" in msg
+        assert "정상으로 돌아왔" not in msg
         # 헤더도 본문과 같은 결이어야 한다 — "✅ 문제가 풀렸어요" 헤더가 붙으면
         # 헤더만 본 사장님이 원인 미해결을 정상으로 오인한다(헤더·본문 모순 가드).
         assert "복구" not in msg, f"swept 인데 헤더에 '복구' 가 남음: {msg}"
@@ -964,7 +965,9 @@ def test_run_monitor_resolution_reason_failure_falls_back_to_legacy_wording():
             run_monitor(db)  # raise 하면 이 줄에서 테스트 실패
 
         msg = _resolved_message(mock_tg)
-        assert "정상으로 돌아왔습니다" in msg  # legacy 문구 폴백
+        # 사유 판정 실패 폴백 — 상태를 단정하지 않는 "알림 조건이 사라졌어요" (2026-10-06)
+        assert "▸ " in msg and "알림 조건이 사라졌어요 — 문제였던 것: 이전 장애" in msg
+        assert "정상으로 돌아왔" not in msg
         alert = db.execute(
             select(MonitorAlert).where(MonitorAlert.alert_key == "crawl_failed:complex_list")
         ).scalar_one()
@@ -1029,9 +1032,9 @@ def test_run_monitor_resolved_only_failed_says_unconfirmed_expired():
             run_monitor(db)
 
         msg = _resolved_message(mock_tg)
-        assert "성공 실행은 확인되지 않았습니다" in msg
-        assert "마지막 실행: 실패" in msg
-        assert "정상으로 돌아왔습니다" not in msg
+        assert "성공한 실행은 아직 확인되지 않았어요 (마지막 실행: 실패" in msg
+        assert "문제였던 것: 1건 실패, SSL 끊김" in msg
+        assert "정상으로 돌아왔" not in msg
     finally:
         db.close()
 
@@ -1060,7 +1063,7 @@ def test_run_monitor_resolved_manual_cancel_says_unconfirmed_cancelled():
             run_monitor(db)
 
         msg = _resolved_message(mock_tg)
-        assert "성공 실행은 확인되지 않았습니다" in msg
+        assert "성공한 실행은 아직 확인되지 않았어요" in msg
         assert "취소됨" in msg
         assert "강제 정리" not in msg
     finally:
@@ -1298,7 +1301,11 @@ def test_run_monitor_batches_multiple_resolved_into_one_message():
         #   그래서 영문 job_type 이 아니라 **우리말 이름**이 메시지에 있어야 한다.
         #   영문이 다시 보이면 사장님이 못 읽는 알림으로 되돌아간 것이므로 같이 막는다.
         for job_type in ("complex_list", "article_detail", "price_history"):
-            assert f"{job_words(job_type)} 작업 1건 실패" in msg, f"{job_type} detail 누락: {msg}"
+            # 2026-10-06: 해소 줄은 "상태 먼저, 문제는 뒤에" — 이름 뒤에 상태, 문제는 꼬리로.
+            assert (
+                f"✅ {job_words(job_type)} 작업이 정상으로 돌아왔어요 (최근 실행 성공 확인)"
+                " — 문제였던 것: 1건 실패, 옛 원인"
+            ) in msg, f"{job_type} detail 누락: {msg}"
             assert job_type not in msg, f"영문 작업명이 그대로 노출됐다: {msg}"
 
         rows = db.execute(select(MonitorAlert)).scalars().all()
@@ -1366,7 +1373,7 @@ def test_run_monitor_batch_header_warns_when_reason_mixed():
         assert "문제가 풀렸어요" not in msg, f"원인 미해결이 섞였는데 헤더가 '복구': {msg}"
         # 각 줄은 자기 사유대로 표기 — 복구는 성공확인, 스윕은 강제 정리 문구
         assert "최근 실행 성공 확인" in msg
-        assert "강제 정리" in msg and "원인은 미해결" in msg
+        assert "강제 정리" in msg and "원인은 아직 안 풀렸으니" in msg
     finally:
         db.close()
 
@@ -2050,8 +2057,8 @@ def test_run_monitor_freshness_resolved_without_current_item_drops_time():
             run_monitor(db)
 
         msg = _resolved_message(mock_tg)
-        assert "ℹ️ 없어진 카드 자료 — 알림 조건이 해소됐지만" in msg, msg
-        assert "지금 상태를 확인할 값이 없어요." in msg, msg
+        assert "ℹ️ 없어진 카드 자료 — 알림은 끝났지만 지금 자료가 들어오는지는 확인할 값이 없어요." in msg, msg
+        assert "성공 실행" not in msg, msg  # 신선도엔 "실행"이 안 맞는다(2026-10-06)
         assert "다시 들어오고" not in msg, msg
         assert "새로 안 들어오고" not in msg, msg
         assert _OLD_STAMP not in msg, msg
@@ -2066,7 +2073,7 @@ def test_run_monitor_crawl_failed_resolved_not_rewritten_as_freshness():
     작업 실패 경보의 해소 문장은 그대로다(2026-10-06 검사관 변이 M10 생존 → 추가)."""
     db = TestSession()
     try:
-        stored = "매물 상세 작업 2건 실패 — 네이버 응답 없음"
+        stored = f"{job_words('article_detail')} 작업 2건 실패 — 네이버 응답 없음"
         db.add(MonitorAlert(
             alert_key="crawl_failed:article_detail", status="active",
             detail=stored, last_notified=_utcnow() - timedelta(hours=12),
@@ -2080,7 +2087,10 @@ def test_run_monitor_crawl_failed_resolved_not_rewritten_as_freshness():
             run_monitor(db)
 
         msg = _resolved_message(mock_tg)
-        assert "정상으로 돌아왔습니다 (최근 실행 성공 확인)" in msg, msg
+        assert (
+            f"✅ {job_words('article_detail')} 작업이 정상으로 돌아왔어요 (최근 실행 성공 확인)"
+            " — 문제였던 것: 2건 실패, 네이버 응답 없음"
+        ) in msg, msg
         assert "다시 들어오고" not in msg, msg
         assert "10-06 02:10" not in msg, msg
     finally:

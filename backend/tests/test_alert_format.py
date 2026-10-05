@@ -462,3 +462,130 @@ def test_failed_burst_message_uses_dedicated_builder():
     assert "statement timeout" not in msg, f"개발자 에러 원문이 그대로 노출됐다: {msg}"
     assert "데이터베이스가 너무 오래 걸려" in msg
     assert "Claude 에게 알려주세요" in msg
+
+
+# ── 작업 경보 해소 문장 — "상태 먼저, 문제는 뒤에" (2026-10-06 사장님 결정) ──────────
+# 저장 문장("<작업> 작업 2건 실패 — <원인>")을 그대로 앞에 두면
+# "✅ …2건 실패 — 네이버 응답 없음 — 정상으로 돌아왔습니다" 처럼 앞뒤가 안 맞았다.
+# monitor 가 작업 경보에만 job_type 을 실어 주고, alert_format 이 상태를 앞에 쓴다.
+
+from crawler.alert_format import format_resolved_batch as _fmt_batch  # noqa: E402
+from crawler.plain_words import job_words as _jw  # noqa: E402
+
+# monitor.detect_issues_ex 가 저장하는 세 문장 모양 그대로 (job_type 은 사전에 있는 것).
+_JOB_STORED = {
+    "crawl_failed": ("article_detail", f"{_jw('article_detail')} 작업 2건 실패 — 네이버 응답 없음"),
+    "crawl_failed_burst": (
+        "complex_articles",
+        f"{_jw('complex_articles')} 작업 최근 60분 내 5건 실패 (일부는 성공했지만 몰려서 실패)"
+        " — 네이버 응답 없음",
+    ),
+    "crawl_stale": (
+        "price_history",
+        f"{_jw('price_history')} 작업 2건이 3시간 넘게 끝나지 않고 있어요 — 멈춘 것으로 보입니다",
+    ),
+}
+_JOB_PROBLEM = {
+    "crawl_failed": "2건 실패, 네이버 응답 없음",
+    "crawl_failed_burst": "최근 60분 내 5건 실패 (일부는 성공했지만 몰려서 실패), 네이버 응답 없음",
+    "crawl_stale": "2건이 3시간 넘게 끝나지 않고 있어요, 멈춘 것으로 보입니다",
+}
+
+
+def _job_data(kind: str, reason: str, reason_detail: str = "") -> dict:
+    job_type, stored = _JOB_STORED[kind]
+    return {
+        "alert_key": f"{kind}:{job_type}", "detail": stored, "job_type": job_type,
+        "reason": reason, "reason_detail": reason_detail,
+    }
+
+
+def test_job_resolved_recovered_puts_state_first_for_all_three_kinds():
+    """1. 작업 경보 3종 × recovered — 상태가 앞, 문제였던 것이 뒤. 옛 꼴은 없다."""
+    for kind, (job_type, _) in _JOB_STORED.items():
+        msg = format_issue_message(kind, _job_data(kind, "recovered"), event="resolved", header_ctx=_ctx(0))
+        line = (
+            f"✅ {_jw(job_type)} 작업이 정상으로 돌아왔어요 (최근 실행 성공 확인)"
+            f" — 문제였던 것: {_JOB_PROBLEM[kind]}"
+        )
+        assert line in msg, msg
+        assert msg.startswith("[서버 알림] ✅ <b>문제가 풀렸어요</b>"), msg
+        assert "정상으로 돌아왔습니다" not in msg, msg
+        assert " — 네이버 응답 없음 — " not in msg, msg
+
+
+def test_job_resolved_swept_unconfirmed_and_empty_reason():
+    """2. swept·unconfirmed(사유 있음/없음)·빈 사유 — 각 갈래 문장."""
+    name = _jw("price_history")
+    problem = _JOB_PROBLEM["crawl_stale"]
+    swept = format_issue_message("crawl_stale", _job_data("crawl_stale", "swept"),
+                                 event="resolved", header_ctx=_ctx(0))
+    assert (
+        f"⚠️ {name} 작업 — 멈춘 작업을 강제 정리해 알림을 종료합니다. "
+        f"원인은 아직 안 풀렸으니 다음 실행을 지켜보세요 — 문제였던 것: {problem}"
+    ) in swept, swept
+
+    unc = format_issue_message(
+        "crawl_stale", _job_data("crawl_stale", "unconfirmed", "마지막 실행: 실패"),
+        event="resolved", header_ctx=_ctx(0),
+    )
+    assert (
+        f"ℹ️ {name} 작업 — 알림은 끝났지만 성공한 실행은 아직 확인되지 않았어요"
+        f" (마지막 실행: 실패) — 문제였던 것: {problem}"
+    ) in unc, unc
+
+    unc_bare = format_issue_message("crawl_stale", _job_data("crawl_stale", "unconfirmed"),
+                                    event="resolved", header_ctx=_ctx(0))
+    assert f"확인되지 않았어요 — 문제였던 것: {problem}" in unc_bare, unc_bare
+    assert "()" not in unc_bare, unc_bare
+
+    empty = format_issue_message("crawl_stale", _job_data("crawl_stale", ""),
+                                 event="resolved", header_ctx=_ctx(0))
+    assert f"▸ {name} 작업 — 알림 조건이 사라졌어요 — 문제였던 것: {problem}" in empty, empty
+    assert "정상으로 돌아왔" not in empty, empty
+
+
+def test_job_resolved_batch_mixed_reasons_same_sentences():
+    """2. 묶음(3건, 갈래 섞임) — 단건과 같은 문장 + ⚠️ 알림 종료 헤더."""
+    items = [
+        _job_data("crawl_failed", "recovered"),
+        _job_data("crawl_failed_burst", "unconfirmed", "마지막 실행: 실패"),
+        _job_data("crawl_stale", "swept"),
+    ]
+    msg = _fmt_batch(items, header_ctx=_ctx(0))
+    assert msg.startswith("[서버 알림] ⚠️ <b>알림 종료</b>"), msg
+    assert "해소 3건" in msg
+    assert f"✅ {_jw('article_detail')} 작업이 정상으로 돌아왔어요 (최근 실행 성공 확인)" in msg
+    assert f"문제였던 것: {_JOB_PROBLEM['crawl_failed_burst']}" in msg
+    assert f"⚠️ {_jw('price_history')} 작업 — 멈춘 작업을 강제 정리해" in msg
+    assert "정상으로 돌아왔습니다" not in msg, msg
+
+
+def test_job_resolved_old_stored_sentence_without_head_kept_whole():
+    """3. 머리("<작업> 작업 ")가 안 맞는 옛 저장 문장 → 다듬은 문장 전체가 {문제}."""
+    data = {"detail": "이전 장애 — 원인 모름", "job_type": "article_detail", "reason": "recovered"}
+    msg = format_issue_message("crawl_failed", data, event="resolved", header_ctx=_ctx(0))
+    assert (
+        f"✅ {_jw('article_detail')} 작업이 정상으로 돌아왔어요 (최근 실행 성공 확인)"
+        " — 문제였던 것: 이전 장애, 원인 모름"
+    ) in msg, msg
+
+
+def test_freshness_resolved_unknown_and_resumed_wording():
+    """4. 신선도 — 확인 못 함(새 문장) · 다시 들어옴(#659 문장 그대로). 작업 문장으로 안 바뀐다."""
+    unknown = format_issue_message(
+        "freshness",
+        {"detail": "단지 자료", "reason": "unconfirmed", "reason_detail": "", "fresh_unknown": True},
+        event="resolved", header_ctx=_ctx(0),
+    )
+    assert "ℹ️ 단지 자료 — 알림은 끝났지만 지금 자료가 들어오는지는 확인할 값이 없어요." in unknown
+    assert "성공 실행" not in unknown and "문제였던 것" not in unknown, unknown
+
+    resumed = format_issue_message(
+        "freshness",
+        {"detail": "단지 자료가 다시 들어오고 있어요 (마지막으로 들어온 때 10-06 01:40)",
+         "reason": "recovered", "resumed": True},
+        event="resolved", header_ctx=_ctx(0),
+    )
+    assert "✅ 단지 자료가 다시 들어오고 있어요 (마지막으로 들어온 때 10-06 01:40)." in resumed
+    assert "문제였던 것" not in resumed, resumed

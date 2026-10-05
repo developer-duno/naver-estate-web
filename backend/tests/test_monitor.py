@@ -1948,12 +1948,12 @@ def test_kapt_costs_pending_and_paused_rows_are_skipped():
         db.close()
 
 
-# ── 세션 435: 신선도 해소 알림은 "지금 값"으로 새로 쓴다 ──
+# ── 2026-10-06: 신선도 해소 알림은 "지금 값"으로 새로 쓴다 ──
 # 배경: 해소 알림이 monitor_alerts.detail(문제 생겼을 때 저장한 문장)을 그대로 다시 보내
 #   "✅ 매물 자료가 새로 안 들어오고 있어요 (빨강, 마지막으로 들어온 때 <그때 시각>) — 정상으로
 #   돌아왔습니다" 처럼 앞뒤가 안 맞고 그때 시각이 지금처럼 읽혔다(사장님 결정으로 수정).
 # ⚠ 옛 시각과 새 시각은 일부러 다른 값으로 둔다 — 같으면 옛 문장을 그대로 보내도 통과한다.
-# ⚠ 뮤테이션 검증(세션 435): run_monitor 의 _freshness_resolved_detail 호출을 빼고 저장 문장을
+# ⚠ 뮤테이션 검증(2026-10-06): run_monitor 의 _freshness_resolved_detail 호출을 빼고 저장 문장을
 #   그대로 넘기면 아래 세 시험이 전부 실패함을 확인 후 복원.
 
 _OLD_STAMP = "10-04 05:00"
@@ -2050,7 +2050,8 @@ def test_run_monitor_freshness_resolved_without_current_item_drops_time():
             run_monitor(db)
 
         msg = _resolved_message(mock_tg)
-        assert "없어진 카드 자료가 새로 안 들어오고 있어요 — 정상으로 돌아왔습니다" in msg, msg
+        assert "✅ 없어진 카드 자료가 다시 들어오고 있어요." in msg, msg
+        assert "새로 안 들어오고" not in msg, msg
         assert _OLD_STAMP not in msg, msg
         assert "빨강" not in msg, msg
         assert "마지막으로 들어온 때" not in msg, msg

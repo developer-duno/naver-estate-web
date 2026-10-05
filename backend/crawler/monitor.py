@@ -200,7 +200,7 @@ def detect_issues_ex(db) -> tuple[list[dict], bool, dict[str, dict]]:
     """detect_issues + 신선도 계산 성공 여부(freshness_ok) + 이번 스캔 신선도 항목 전부.
 
     세 번째 값 = {freshness 항목 key: 항목 dict} — red 가 아닌 항목도 담긴다. 해소
-    알림이 "지금 값"(마지막으로 들어온 때)을 쓰려고 받는다(세션 435). 신선도를 해소
+    알림이 "지금 값"(마지막으로 들어온 때)을 쓰려고 받는다(2026-10-06). 신선도를 해소
     경로에서 다시 계산하지 않기 위함이다(8초 statement_timeout·풀스캔 부하). 계산이
     실패한 스캔이면 빈 dict.
 
@@ -407,7 +407,7 @@ def detect_issues_ex(db) -> tuple[list[dict], bool, dict[str, dict]]:
 
 
 # 문제 때 저장한 신선도 문장(detect_issues_ex 3번) 의 앞부분 — 괄호(상태·그때 시각)를 뗀다.
-_FRESH_STORED_HEAD = re.compile(r"^(?P<head>.+? 자료가 새로 안 들어오고 있어요)\s*\(.*\)\s*$", re.S)
+_FRESH_STORED_HEAD = re.compile(r"^(?P<label>.+?) 자료가 새로 안 들어오고 있어요\s*\(.*\)\s*$", re.S)
 
 
 def _freshness_resolved_detail(stored: str, item: dict | None) -> tuple[str, bool]:
@@ -415,9 +415,10 @@ def _freshness_resolved_detail(stored: str, item: dict | None) -> tuple[str, boo
 
     monitor_alerts.detail 에 저장된 것은 **문제가 생겼을 때** 문장("…새로 안 들어오고
     있어요 (빨강, 마지막으로 들어온 때 <그때 시각>)")이라 해소 때 그대로 보내면 앞뒤가
-    안 맞고 그때 시각이 지금 시각처럼 읽힌다(세션 435 사장님 결정). 그래서 보낼 때만
+    안 맞고 그때 시각이 지금 시각처럼 읽힌다(2026-10-06 사장님 결정). 그래서 보낼 때만
     같은 스캔의 지금 값으로 새로 쓴다 — 저장된 값은 건드리지 않는다.
-    이번 스캔에 그 항목이 없으면(라벨 삭제 등) 옛 문장의 괄호를 떼고 시각 없이 보낸다.
+    이번 스캔에 그 항목이 없으면(라벨 삭제 등) 옛 문장에서 이름만 꺼내 "…다시 들어오고
+    있어요" 를 시각 없이 보낸다 — "새로 안 들어오고 있어요 — 정상으로 돌아왔습니다" 모순 방지.
     옛 형식이 아니면 원문 그대로(발송 쪽 plainify_detail 이 이어서 다듬는다).
     """
     if item and item.get("last_updated"):
@@ -428,7 +429,7 @@ def _freshness_resolved_detail(stored: str, item: dict | None) -> tuple[str, boo
         ), True
     m = _FRESH_STORED_HEAD.match(stored or "")
     if m:
-        return m.group("head"), False
+        return f"{m.group('label')} 자료가 다시 들어오고 있어요", True
     return stored, False
 
 
@@ -657,7 +658,7 @@ def run_monitor(db) -> None:
                     reason, reason_detail = "", ""
             detail, resumed = alert.detail, False
             if kind == "freshness":
-                # 보낼 문장만 바꾼다 — alert.detail(DB) 은 그대로 (세션 435).
+                # 보낼 문장만 바꾼다 — alert.detail(DB) 은 그대로 (2026-10-06).
                 detail, resumed = _freshness_resolved_detail(alert.detail, fresh_items.get(target))
             resolved_targets.append((alert, kind, {
                 "alert_key": alert.alert_key,

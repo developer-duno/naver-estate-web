@@ -18,7 +18,7 @@ describe("Footer — 광고법 면책 조항", () => {
     ).toBeInTheDocument();
   });
 
-  it("법적 고지 링크 4종 — /terms · /privacy · /refund · /help", () => {
+  it("법적 고지 링크 5종 — /terms · /privacy · /refund · /updates · /help", () => {
     render(<Footer />);
     expect(screen.getByRole("link", { name: "이용약관" })).toHaveAttribute(
       "href",
@@ -35,6 +35,14 @@ describe("Footer — 광고법 면책 조항", () => {
       "href",
       "/help",
     );
+    // 세션 437 의견함 — "고쳤습니다" 는 도움말 바로 앞
+    expect(screen.getByRole("link", { name: "고쳤습니다" })).toHaveAttribute(
+      "href",
+      "/updates",
+    );
+    const legal = screen.getByRole("navigation", { name: "법적 고지" });
+    const labels = Array.from(legal.querySelectorAll("a")).map((a) => a.textContent);
+    expect(labels).toEqual(["이용약관", "개인정보처리방침", "환불정책", "고쳤습니다", "도움말"]);
   });
 
   /**

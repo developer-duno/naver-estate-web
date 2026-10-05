@@ -118,6 +118,13 @@ export default function HelpPage() {
         </ul>
       </Section>
 
+      {/* 8. 의견 보내기 (세션 437 의견함) */}
+      <Section num={8} title="의견 보내기 · 고쳤습니다">
+        <p>모든 화면 오른쪽 아래의 &quot;의견 보내기&quot; 버튼으로 버그·틀린 정보·건의를 보낼 수 있습니다.</p>
+        <p>로그인한 상태로 보내면 답장이 가입한 이메일로 갑니다. 로그인하지 않아도 보낼 수 있지만 답장은 받을 수 없습니다.</p>
+        <p>답하거나 고친 의견 가운데 공개한 것은 <Link href="/updates" className="text-blue-600 hover:underline">고쳤습니다</Link> 페이지에 모아 둡니다.</p>
+      </Section>
+
       {/* 하단 */}
       <div className="text-center pt-6 border-t">
         <Link href="/" className="text-blue-600 hover:underline text-sm">홈으로 돌아가기</Link>

@@ -2035,7 +2035,7 @@ def test_run_monitor_freshness_resolved_batch_uses_current_scan_time():
 
 
 def test_run_monitor_freshness_resolved_without_current_item_drops_time():
-    """3. 지금 스캔에 그 항목이 없으면(라벨 삭제 등) 옛 문장의 괄호를 떼고 시각 없이 보낸다."""
+    """3. 지금 스캔에 그 항목이 없으면(라벨 삭제 등) 확인 못 함 갈래(ℹ️)로 — 시각·안심 문장 없이."""
     db = TestSession()
     try:
         db.add(MonitorAlert(
@@ -2050,10 +2050,38 @@ def test_run_monitor_freshness_resolved_without_current_item_drops_time():
             run_monitor(db)
 
         msg = _resolved_message(mock_tg)
-        assert "✅ 없어진 카드 자료가 다시 들어오고 있어요." in msg, msg
+        assert "ℹ️ 없어진 카드 자료 — 알림 조건이 해소됐지만" in msg, msg
+        assert "지금 상태를 확인할 값이 없어요." in msg, msg
+        assert "다시 들어오고" not in msg, msg
         assert "새로 안 들어오고" not in msg, msg
         assert _OLD_STAMP not in msg, msg
         assert "빨강" not in msg, msg
         assert "마지막으로 들어온 때" not in msg, msg
+    finally:
+        db.close()
+
+
+def test_run_monitor_crawl_failed_resolved_not_rewritten_as_freshness():
+    """4. 문장 재작성은 신선도 알림에만 — 작업 이름과 신선도 항목 이름이 겹쳐도(article_detail 등)
+    작업 실패 경보의 해소 문장은 그대로다(2026-10-06 검사관 변이 M10 생존 → 추가)."""
+    db = TestSession()
+    try:
+        stored = "매물 상세 작업 2건 실패 — 네이버 응답 없음"
+        db.add(MonitorAlert(
+            alert_key="crawl_failed:article_detail", status="active",
+            detail=stored, last_notified=_utcnow() - timedelta(hours=12),
+        ))
+        db.commit()
+
+        fresh = {"items": [_fresh_item("article_detail", "매물 상세", "2026-10-05T17:10:00+00:00")]}
+        with patch("crawler.monitor.compute_freshness", return_value=fresh), \
+                patch("crawler.monitor._resolution_reason", return_value=("recovered", "")), \
+                patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        msg = _resolved_message(mock_tg)
+        assert "정상으로 돌아왔습니다 (최근 실행 성공 확인)" in msg, msg
+        assert "다시 들어오고" not in msg, msg
+        assert "10-06 02:10" not in msg, msg
     finally:
         db.close()

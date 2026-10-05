@@ -410,15 +410,17 @@ def detect_issues_ex(db) -> tuple[list[dict], bool, dict[str, dict]]:
 _FRESH_STORED_HEAD = re.compile(r"^(?P<label>.+?) 자료가 새로 안 들어오고 있어요\s*\(.*\)\s*$", re.S)
 
 
-def _freshness_resolved_detail(stored: str, item: dict | None) -> tuple[str, bool]:
-    """신선도 해소 알림 문장 — (문장, 지금 값으로 새로 썼는지).
+def _freshness_resolved_detail(stored: str, item: dict | None) -> tuple[str, str]:
+    """신선도 해소 알림 문장 — (문장, 상태) · 상태 = "resumed"(지금 값으로 새로 씀) |
+    "unknown"(지금 값이 없어 확인 못 함) | "as_is"(옛 형식이 아님 — 원문 그대로).
 
     monitor_alerts.detail 에 저장된 것은 **문제가 생겼을 때** 문장("…새로 안 들어오고
     있어요 (빨강, 마지막으로 들어온 때 <그때 시각>)")이라 해소 때 그대로 보내면 앞뒤가
     안 맞고 그때 시각이 지금 시각처럼 읽힌다(2026-10-06 사장님 결정). 그래서 보낼 때만
     같은 스캔의 지금 값으로 새로 쓴다 — 저장된 값은 건드리지 않는다.
-    이번 스캔에 그 항목이 없으면(라벨 삭제 등) 옛 문장에서 이름만 꺼내 "…다시 들어오고
-    있어요" 를 시각 없이 보낸다 — "새로 안 들어오고 있어요 — 정상으로 돌아왔습니다" 모순 방지.
+    이번 스캔에 그 항목이 없거나 마지막 시각이 비어 있으면(라벨 삭제·칸이 통째로 빔) 옛 문장에서
+    이름만 꺼내 "unknown" 으로 돌려준다 — 호출부가 "확인 못 함" 갈래로 보내, 확인 없이
+    "다시 들어오고 있어요" 라고 안심시키지 않는다(2026-10-06 검사관 지적).
     옛 형식이 아니면 원문 그대로(발송 쪽 plainify_detail 이 이어서 다듬는다).
     """
     if item and item.get("last_updated"):
@@ -426,11 +428,11 @@ def _freshness_resolved_detail(stored: str, item: dict | None) -> tuple[str, boo
         return (
             f"{item['label']} 자료가 다시 들어오고 있어요 "
             f"(마지막으로 들어온 때 {_kst_stamp(item['last_updated'])})"
-        ), True
+        ), "resumed"
     m = _FRESH_STORED_HEAD.match(stored or "")
     if m:
-        return f"{m.group('label')} 자료가 다시 들어오고 있어요", True
-    return stored, False
+        return f"{m.group('label')} 자료", "unknown"
+    return stored, "as_is"
 
 
 def _cooldown_hours() -> int:
@@ -659,7 +661,10 @@ def run_monitor(db) -> None:
             detail, resumed = alert.detail, False
             if kind == "freshness":
                 # 보낼 문장만 바꾼다 — alert.detail(DB) 은 그대로 (2026-10-06).
-                detail, resumed = _freshness_resolved_detail(alert.detail, fresh_items.get(target))
+                detail, state = _freshness_resolved_detail(alert.detail, fresh_items.get(target))
+                resumed = state == "resumed"
+                if state == "unknown":
+                    reason, reason_detail = "unconfirmed", "지금 상태를 확인할 값이 없어요."
             resolved_targets.append((alert, kind, {
                 "alert_key": alert.alert_key,
                 "detail": detail,

@@ -261,6 +261,14 @@ def _resolved_line(detail: str, data: dict) -> str:
     # — DB 무변경이라 되돌리기가 안전하고, 옛 22건도 전부 우리말로 나간다.
     detail = plainify_detail(detail)
     reason = data.get("reason")
+    if data.get("job_type"):
+        # 작업 경보(crawl_failed·crawl_failed_burst·crawl_stale) — "상태 먼저, 문제는 뒤에"
+        # (2026-10-06 사장님 결정). 저장 문장 "<작업> 작업 2건 실패 — <원인>" 을 그대로
+        # 앞에 두면 "…실패 — … — 정상으로 돌아왔습니다" 처럼 앞뒤가 안 맞는다.
+        return _job_resolved_line(str(data["job_type"]), detail, data)
+    if data.get("fresh_unknown"):
+        # 신선도 — 지금 값이 없어 확인 못 함. 신선도엔 "실행"이 안 맞아 따로 쓴다.
+        return f"ℹ️ {detail} — 알림은 끝났지만 지금 자료가 들어오는지는 확인할 값이 없어요."
     if reason == "swept":
         return (
             f"⚠️ {detail} — 멈춘 작업을 강제 정리해 알림을 종료합니다 "
@@ -280,6 +288,33 @@ def _resolved_line(detail: str, data: dict) -> str:
             return f"✅ {detail}."
         return f"✅ {detail} — 정상으로 돌아왔습니다 (최근 실행 성공 확인)."
     return f"▸ {detail} — 정상으로 돌아왔습니다."
+
+
+def _job_resolved_line(job_type: str, detail: str, data: dict) -> str:
+    """작업 경보 해소 한 줄 — 상태를 앞에, 문제였던 것을 뒤에.
+
+    detail 은 이미 _esc + plainify_detail 을 거친 저장 문장이다. 맨 앞 "<작업> 작업 " 을
+    떼고 구분자 " — " 를 ", " 로 바꿔 `{문제}` 로 쓴다. 머리가 안 맞는 옛 문장(세션 407
+    이전 형식 등)은 plainify 결과 전체를 `{문제}` 로 쓴다.
+    """
+    name = _esc(job_words(job_type))
+    head = f"{name} 작업 "
+    problem = detail[len(head):] if detail.startswith(head) else detail
+    problem = problem.replace(" — ", ", ")
+    tail = f" — 문제였던 것: {problem}"
+    reason = data.get("reason")
+    if reason == "recovered":
+        return f"✅ {name} 작업이 정상으로 돌아왔어요 (최근 실행 성공 확인){tail}"
+    if reason == "swept":
+        return (
+            f"⚠️ {name} 작업 — 멈춘 작업을 강제 정리해 알림을 종료합니다. "
+            f"원인은 아직 안 풀렸으니 다음 실행을 지켜보세요{tail}"
+        )
+    if reason == "unconfirmed":
+        why = _esc(data.get("reason_detail") or "")
+        why = f" ({why})" if why else ""
+        return f"ℹ️ {name} 작업 — 알림은 끝났지만 성공한 실행은 아직 확인되지 않았어요{why}{tail}"
+    return f"▸ {name} 작업 — 알림 조건이 사라졌어요{tail}"
 
 
 def format_resolved_batch(items: list[dict], *, header_ctx: dict) -> str:

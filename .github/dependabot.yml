@@ -59,6 +59,11 @@ updates:
       # 해제 + typescript-eslint TS7 지원 출시 둘 다 (세션 374 공식문서 실측).
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # msw 3 = vitest 의 @vitest/mocker(5.0.3)가 선택 peer 로 msw ^2 를 요구해 npm ci 가 잠금 파일
+      # 불일치로 실패한다(#651, 2026-10-06). 시험 도구라 손님 영향 0 — vitest 가 msw 3 을
+      # 받아들이는 판이 나오면 사람이 함께 올린다.
+      - dependency-name: "msw"
+        update-types: ["version-update:semver-major"]
 
   # 백엔드 (FastAPI / curl_cffi / SQLAlchemy 등 — 상한 핀이 major 자동상승 차단)
   - package-ecosystem: "pip"

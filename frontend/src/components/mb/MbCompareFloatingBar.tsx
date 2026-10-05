@@ -22,7 +22,7 @@ export default function MbCompareFloatingBar({ list, onRemove, onClear }: Props)
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-blue-500 shadow-lg z-50 px-4 py-2.5">
+    <div data-floating-bar className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-blue-500 shadow-lg z-50 px-4 py-2.5">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
           <span className="text-sm font-medium text-gray-700 shrink-0">비교 {list.length}/{MAX_DISPLAY}</span>

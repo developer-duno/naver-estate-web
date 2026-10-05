@@ -7,6 +7,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Providers from "@/components/Providers";
+import OpinionButton from "@/components/opinion/OpinionButton";
 import { WebSiteJsonLd } from "@/components/StructuredData";
 import { SITE_URL } from "@/lib/constants";
 
@@ -106,7 +107,14 @@ export default function RootLayout({
             <main id="main-content">{children}</main>
           </ErrorBoundary>
           <Footer />
-          <Toaster position="bottom-right" richColors />
+          <OpinionButton />
+          {/* 쪽지는 "의견 보내기" 버튼(bottom 16px + 높이 44px) 위 8px 에 뜬다 — 겹침 방지(세션 433). */}
+          <Toaster
+            position="bottom-right"
+            richColors
+            offset={{ bottom: 68 }}
+            mobileOffset={{ bottom: 68 }}
+          />
         </Providers>
       </body>
     </html>

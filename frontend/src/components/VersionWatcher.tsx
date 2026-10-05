@@ -68,7 +68,7 @@ export default function VersionWatcher() {
   return (
     <div
       role="status"
-      className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 shadow-lg"
+      className="fixed bottom-20 right-4 z-50 max-w-sm rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 shadow-lg"
     >
       <p className="font-medium">새 버전이 배포됐어요</p>
       <p className="mt-1 text-amber-800">

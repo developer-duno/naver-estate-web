@@ -66,6 +66,12 @@ export default function Footer() {
               환불정책
             </Link>
             <Link
+              href="/updates"
+              className="text-gray-700 hover:text-blue-600 hover:underline"
+            >
+              고쳤습니다
+            </Link>
+            <Link
               href="/help"
               className="text-gray-700 hover:text-blue-600 hover:underline"
             >

@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useTokenReady } from "@/hooks/useAdminQuery";
+import { getAdminOpinions } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "대시보드" },
@@ -11,6 +15,7 @@ const NAV_ITEMS = [
   { href: "/admin/scheduler-calendar", label: "수집 일정" },
   { href: "/admin/data", label: "데이터" },
   { href: "/admin/logs", label: "감사 로그" },
+  { href: "/admin/opinions", label: "의견함" },
   // 세션 419(2026-09-26 사장님 결정): "설정" 탭 삭제 — 저장해도 아무것도 바뀌지 않는 화면이었다.
 ];
 
@@ -20,6 +25,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const navRef = useRef<HTMLElement | null>(null);
   // 오른쪽에 더 볼 탭이 남았는지 — 남았을 때만 페이드 힌트를 띄운다.
   const [atEnd, setAtEnd] = useState(true);
+
+  // "의견함" 탭 배지 = 아직 안 본 새 의견 수(서버 new_count — 필터와 무관한 전체 기준).
+  // 키 {page:1} 은 의견함 화면의 '전체·1쪽' 목록과 같아 한 번만 부른다. 0 이거나 실패면 배지를 숨긴다.
+  const { token } = useTokenReady();
+  const opinionsQuery = useQuery({
+    queryKey: queryKeys.admin.opinions({ page: 1 }),
+    queryFn: () => getAdminOpinions(token, { page: 1 }),
+    enabled: !!token,
+    staleTime: 60_000,
+  });
+  const newOpinions = opinionsQuery.data?.new_count ?? 0;
 
   const updateHint = useCallback(() => {
     const el = navRef.current;
@@ -83,6 +99,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 }`}
               >
                 {item.label}
+                {item.href === "/admin/opinions" && newOpinions > 0 && (
+                  <span
+                    data-testid="opinions-badge"
+                    aria-label={`새 의견 ${newOpinions}건`}
+                    className="ml-1 rounded-full bg-red-500 px-1.5 text-xs font-medium leading-5 text-white"
+                  >
+                    {newOpinions}
+                  </span>
+                )}
               </Link>
             );
           })}

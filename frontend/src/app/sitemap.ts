@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { POSTS } from "./blog/posts";
 import { SITE_URL } from "@/lib/constants";
+import { getPublicUpdates } from "@/lib/api/opinions";
 
 /**
  * 정적 페이지(도구·요금·약관 등)의 lastModified 기준일.
@@ -10,8 +11,24 @@ import { SITE_URL } from "@/lib/constants";
  */
 const STATIC_PAGE_LASTMOD = new Date("2026-06-29");
 
-export default function sitemap(): MetadataRoute.Sitemap {
+/**
+ * /updates("고쳤습니다")의 lastModified = 가장 최근에 공개한 항목의 published_at(목록이 공개 시각 내림차순).
+ * 백엔드 주소가 없거나·실패·빈 목록·날짜를 못 읽으면 고정 날짜로 둔다(빌드 시각을 쓰지 않는다 — 위 주석과 같은 이유).
+ */
+async function updatesLastModified(): Promise<Date> {
+  if (!process.env.NEXT_PUBLIC_API_URL) return STATIC_PAGE_LASTMOD;
+  try {
+    const first = (await getPublicUpdates(1)).items[0];
+    const d = first?.published_at ? new Date(first.published_at) : null;
+    return d && !Number.isNaN(d.getTime()) ? d : STATIC_PAGE_LASTMOD;
+  } catch {
+    return STATIC_PAGE_LASTMOD;
+  }
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastmod = STATIC_PAGE_LASTMOD;
+  const updatesLastmod = await updatesLastModified();
 
   // 마케팅·공개 페이지만 노출. 도구 페이지(/search, /complex, /mibunyang)는 구독자 전용이라 제외.
   // /blog/[slug]: draft:true 글은 본문 채워질 때까지 sitemap 제외 (빈 글 색인 방지).
@@ -32,6 +49,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${SITE_URL}/tools/area-converter`, lastModified: lastmod, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/blog`, lastModified: lastmod, changeFrequency: "weekly", priority: 0.8 },
     ...publishedPosts,
+    { url: `${SITE_URL}/updates`, lastModified: updatesLastmod, changeFrequency: "weekly", priority: 0.5 },
     { url: `${SITE_URL}/help`, lastModified: lastmod, changeFrequency: "monthly", priority: 0.6 },
     { url: `${SITE_URL}/terms`, lastModified: lastmod, changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE_URL}/privacy`, lastModified: lastmod, changeFrequency: "yearly", priority: 0.3 },

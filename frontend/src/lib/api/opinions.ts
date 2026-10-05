@@ -6,7 +6,7 @@
  * 서버 문구("오늘은 더 보낼 수 없어요…")를 그대로 보여 줘야 하기 때문이다.
  * 실패는 전부 throw 한다(.claude/rules/error-propagation.md — 빈 결과로 바꿔치기 금지).
  */
-import { ApiError, DEFAULT_TIMEOUT_MS, getApiBase, normalizeDetail } from "./core";
+import { ApiError, DEFAULT_TIMEOUT_MS, adminHeaders, fetchApi, getApiBase, normalizeDetail } from "./core";
 
 export type OpinionKind = "bug" | "data" | "suggest" | "other";
 export type OpinionInterest = "market" | "presale" | "tax" | "other";
@@ -65,4 +65,111 @@ export async function submitOpinion(
   } finally {
     clearTimeout(timer);
   }
+}
+
+// ── "고쳤습니다" 공개 목록 + 관리자 의견함 (세션 437 PR C, 서버 짝꿍 = backend/routers/opinions.py ·
+//    backend/routers/admin/opinions.py). 실패는 fetchApi 가 throw 하는 그대로 둔다(빈 목록으로 바꾸지 않음).
+
+/** 의견 상태 — 공개 목록에도 4가지가 다 올 수 있다 */
+export type OpinionStatus = "new" | "replied" | "fixed" | "closed";
+
+/** 공개 목록 한 줄 — 원문·이메일·화면 주소는 서버가 아예 싣지 않는다 */
+export interface PublicUpdateItem {
+  id: number;
+  public_title: string;
+  public_answer: string;
+  status: OpinionStatus;
+  published_at: string | null;
+}
+
+export interface PublicUpdatesResponse {
+  items: PublicUpdateItem[];
+  total: number;
+  page: number;
+}
+
+/** 관리자 화면의 의견 한 줄 */
+export interface AdminOpinion {
+  id: number;
+  kind: OpinionKind;
+  /** 1년 정리 뒤에는 NULL */
+  message: string | null;
+  page_path: string | null;
+  interests: OpinionInterest[] | null;
+  user_id: string | null;
+  user_email: string | null;
+  user_agent: string | null;
+  status: OpinionStatus;
+  reply: string | null;
+  replied_at: string | null;
+  reply_mail_sent: boolean;
+  is_public: boolean;
+  public_title: string | null;
+  public_answer: string | null;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminOpinionsResponse {
+  items: AdminOpinion[];
+  total: number;
+  page: number;
+  /** 필터와 무관한 전체 '새 의견' 수 — 메뉴 배지에 쓴다 */
+  new_count: number;
+}
+
+export interface AdminOpinionUpdatePayload {
+  status?: OpinionStatus;
+  reply?: string;
+  is_public?: boolean;
+  public_title?: string;
+  public_answer?: string;
+}
+
+/** PATCH 응답 = 바뀐 행 + 이번 저장에서 메일을 보냈는지 */
+export type AdminOpinionUpdateResult = AdminOpinion & { mail_sent: boolean };
+
+/** 한 쪽에 담기는 줄 수(서버 PUBLIC_PAGE_SIZE·ADMIN_PAGE_SIZE 와 같다) */
+export const OPINION_PAGE_SIZE = 20;
+
+/** 공개 목록 — 서버 컴포넌트에서 부르므로 Next 캐시 5분(revalidate 300)을 건다 */
+export async function getPublicUpdates(page: number = 1) {
+  const qs = new URLSearchParams({ page: String(page) });
+  return fetchApi<PublicUpdatesResponse>(`/api/opinions/public?${qs}`, {
+    next: { revalidate: 300 },
+  });
+}
+
+/** 관리자: 의견 목록(상태 필터·쪽) */
+export async function getAdminOpinions(token: string, params?: { status?: OpinionStatus; page?: number }) {
+  const qs = new URLSearchParams();
+  if (params?.status) qs.set("status", params.status);
+  if (params?.page) qs.set("page", String(params.page));
+  return fetchApi<AdminOpinionsResponse>(`/api/admin/opinions?${qs}`, { headers: adminHeaders(token) });
+}
+
+/** 관리자: 답장·공개·상태 저장 */
+export async function updateAdminOpinion(token: string, id: number, payload: AdminOpinionUpdatePayload) {
+  return fetchApi<AdminOpinionUpdateResult>(`/api/admin/opinions/${encodeURIComponent(String(id))}`, {
+    method: "PATCH",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+/** 관리자: 답장 메일 다시 보내기 */
+export async function resendOpinionMail(token: string, id: number) {
+  return fetchApi<{ sent: boolean }>(`/api/admin/opinions/${encodeURIComponent(String(id))}/resend-mail`, {
+    method: "POST",
+    headers: adminHeaders(token),
+  });
+}
+
+/** 관리자: 의견 지우기(되돌릴 수 없음) */
+export async function deleteAdminOpinion(token: string, id: number) {
+  return fetchApi<{ deleted: true }>(`/api/admin/opinions/${encodeURIComponent(String(id))}`, {
+    method: "DELETE",
+    headers: adminHeaders(token),
+  });
 }

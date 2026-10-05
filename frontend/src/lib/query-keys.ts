@@ -66,6 +66,12 @@ export const queryKeys = {
     dataFreshness: () => ["admin", "dataFreshness"] as const,
     crawlFailures: (hours: number = 24) => ["admin", "crawlFailures", hours] as const,
     quotaStatus: () => ["admin", "quotaStatus"] as const,
+    // 의견함 — params 없이 부르면 접두 키(무효화용, crawlJobs 와 같은 이유).
+    // 메뉴 배지는 {page:1} 로 불러 '전체·1쪽' 목록과 같은 키를 나눠 쓴다(undefined 칸은 키 해시에서 빠진다).
+    opinions: (params?: Record<string, unknown>) =>
+      params === undefined
+        ? (["admin", "opinions"] as const)
+        : (["admin", "opinions", params] as const),
   },
 
   // 중개사 검증

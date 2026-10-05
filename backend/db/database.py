@@ -51,7 +51,17 @@ engine = create_engine(
     # 기본 ~2min 무한 대기하며 /health/db 워커 스레드가 쌓이던 것 차단(세션 341).
     # ⚠ 연결 수립만 제한 — 이미 맺은 연결의 쿼리 지속엔 영향 0(그건 statement_timeout
     # 담당). pool_pre_ping 의 SELECT 1 도 이미 맺은 연결이라 무관 → 크롤 회귀 없음.
-    connect_args={"connect_timeout": 5},
+    # keepalives_idle/interval: 이미 맺은 연결이 "조용히" 죽었을 때(상대가 끊김 신호도 없이
+    # 사라짐) 알아채는 간격. 안 정하면 Windows 기본 2시간이다. 2026-10-05 01:26 단지 매물
+    # 가져오기가 DB 연결이 끊긴 직후 멈춰 03:09 재부팅까지 약 1시간 40분 서 있었다(DB 응답
+    # 대기로 추정 — 멈춘 줄을 찍은 기록은 없음, 세션 432). 60초 조용하면
+    # 확인 신호, 무응답이면 30초마다 재확인 · Windows 는 횟수 10회 고정(keepalives_count
+    # 무시) → 약 6분(60+30×10초) 동안 상대 컴퓨터가 신호에 전혀 답하지 않을 때만 끊김 판정.
+    # 신호는 DB 프로그램이 아니라 상대 OS 가 받아 주므로, DB 가 바쁘거나 쿼리가 오래 돌아도
+    # 오판하지 않는다(세션 432 실측: 5초/2초 간격에서도 pg_sleep(75) 쿼리 생존). 일부러
+    # 넉넉히 잡았다(사장님 지시 — 부하로 늦어지는 경우 여유). ⚠ 한계: 풀러(Supavisor)가
+    # 살아서 신호엔 답하는데 뒤쪽 DB 연결만 잃은 경우는 이 설정으로 못 잡는다.
+    connect_args={"connect_timeout": 5, "keepalives_idle": 60, "keepalives_interval": 30},
 )
 
 

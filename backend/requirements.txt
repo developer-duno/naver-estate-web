@@ -9,7 +9,7 @@ uvicorn[standard]>=0.54.0,<1
 # 2.1 은 세션 431 검토 뒤 올렸다(#645) — 2.1 은 드라이버 없는 `postgresql://` 의 기본이 psycopg(3) 라
 # db/database.py `_with_explicit_driver` 가 psycopg2 를 명시한다. 운영 반영은 서비스 정지 → 전역 pip → 시작
 # (켜진 채 pip 하면 cyextension .pyd 잠김으로 반쯤 설치될 수 있다).
-sqlalchemy[asyncio]>=2.1.0,<2.2
+sqlalchemy[asyncio]>=2.1.2,<2.2
 psycopg2-binary>=2.9.13,<3
 curl_cffi>=0.16.3,<1
 apscheduler>=3.11.3,<4

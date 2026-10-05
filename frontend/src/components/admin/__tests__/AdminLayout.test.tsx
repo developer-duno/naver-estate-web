@@ -5,8 +5,9 @@
  * AdminLeftNav.test 와 달리 이 컴포넌트는 usePathname 으로 active 를 판정하므로
  * next/navigation 을 직접 mock 한다 (AdminLeftNav 는 usePathname 미사용 = 템플릿 아님).
  */
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { TestQueryProvider } from "@/test-setup";
 
 // usePathname mock — 테스트마다 반환 경로를 바꿔 active 판정 검증
 const mockPathname = vi.fn<() => string>();
@@ -14,25 +15,41 @@ vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
 }));
 
+// 세션 437: "의견함" 탭 배지가 새 의견 수(new_count)를 서버에서 읽는다
+vi.mock("@/lib/api", () => ({ getAdminOpinions: vi.fn() }));
+vi.mock("@/hooks/useAdminQuery", () => ({
+  useTokenReady: () => ({ token: "test-token", getToken: vi.fn(async () => "test-token") }),
+}));
+
+import { getAdminOpinions } from "@/lib/api";
 import AdminLayout from "../AdminLayout";
+
+const mockOpinions = vi.mocked(getAdminOpinions);
+
+beforeEach(() => {
+  mockOpinions.mockReset();
+  mockOpinions.mockResolvedValue({ items: [], total: 0, page: 1, new_count: 0 });
+});
 
 function renderAt(path: string) {
   mockPathname.mockReturnValue(path);
   return render(
-    <AdminLayout>
-      <div>본문 콘텐츠</div>
-    </AdminLayout>,
+    <TestQueryProvider>
+      <AdminLayout>
+        <div>본문 콘텐츠</div>
+      </AdminLayout>
+    </TestQueryProvider>,
   );
 }
 
 describe("AdminLayout", () => {
-  it("6개 네비 탭 + 메인으로 링크 + 본문이 렌더된다", () => {
+  it("7개 네비 탭 + 메인으로 링크 + 본문이 렌더된다", () => {
     renderAt("/admin");
-    const tabs = ["대시보드", "사용자", "자료 수집", "수집 일정", "데이터", "감사 로그"];
+    const tabs = ["대시보드", "사용자", "자료 수집", "수집 일정", "데이터", "감사 로그", "의견함"];
     for (const label of tabs) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
-    // 세션 419: "설정" 탭은 삭제됐다 — 되살아나면 여기서 잡힌다. 탭 수도 정확히 6개(+ 메인으로 링크 1개).
+    // 세션 419: "설정" 탭은 삭제됐다 — 되살아나면 여기서 잡힌다. 탭 수도 정확히 7개(+ 메인으로 링크 1개).
     expect(screen.queryByRole("link", { name: "설정" })).not.toBeInTheDocument();
     expect(screen.getByRole("navigation").querySelectorAll("a")).toHaveLength(tabs.length + 1);
     expect(screen.getByRole("link", { name: "← 메인으로" })).toBeInTheDocument();
@@ -61,6 +78,25 @@ describe("AdminLayout", () => {
     renderAt("/admin/data");
     expect(screen.getByRole("link", { name: "대시보드" })).not.toHaveAttribute("aria-current");
     expect(screen.getByRole("link", { name: "데이터" })).toHaveAttribute("aria-current", "page");
+  });
+});
+
+describe("AdminLayout 의견함 배지 (세션 437)", () => {
+  it("새 의견이 있으면 의견함 탭에 수를 보이고, 1쪽 전체 목록으로 묻는다", async () => {
+    mockOpinions.mockResolvedValue({ items: [], total: 9, page: 1, new_count: 3 });
+    renderAt("/admin");
+    const badge = await screen.findByTestId("opinions-badge");
+    expect(badge).toHaveTextContent("3");
+    expect(badge).toHaveAccessibleName("새 의견 3건");
+    expect(screen.getByRole("link", { name: /의견함/ })).toHaveAttribute("href", "/admin/opinions");
+    expect(mockOpinions).toHaveBeenCalledWith("test-token", { page: 1 });
+  });
+
+  it("새 의견이 0 이면 배지를 숨긴다", async () => {
+    renderAt("/admin");
+    await vi.waitFor(() => expect(mockOpinions).toHaveBeenCalled());
+    await act(async () => {});
+    expect(screen.queryByTestId("opinions-badge")).not.toBeInTheDocument();
   });
 });
 

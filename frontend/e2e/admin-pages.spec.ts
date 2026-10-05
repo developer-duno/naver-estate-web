@@ -52,4 +52,37 @@ test.describe("admin sub-pages", () => {
   });
 
   // 세션 419(2026-09-26 사장님 결정): /admin/settings 화면 삭제 — 그 렌더·시각 회귀 테스트도 함께 제거.
+
+  // 세션 437 의견함 — 렌더만 본다(기준 사진 없음). 공통 mock(빈 목록) 위에 이 시험용 한 건을 덮는다
+  // (Playwright 는 나중에 건 route 가 먼저 받는다).
+  test("/admin/opinions 렌더 + 목록 + 배지", async ({ page }) => {
+    await page.route("**/api/admin/opinions*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: [
+            {
+              id: 1, kind: "bug", message: "검색이 안 돼요 확인 부탁드려요", page_path: "/search",
+              interests: null, user_id: null, user_email: null, user_agent: "UA", status: "new",
+              reply: null, replied_at: null, reply_mail_sent: false, is_public: false,
+              public_title: null, public_answer: null, published_at: null,
+              created_at: "2026-10-06T01:00:00+00:00", updated_at: "2026-10-06T01:00:00+00:00",
+            },
+          ],
+          total: 1,
+          page: 1,
+          new_count: 1,
+        }),
+      });
+    });
+    await page.goto("/admin/opinions");
+
+    await expect(page.getByRole("heading", { name: "의견함", level: 2 })).toBeVisible();
+    await expect(page.getByText("/search", { exact: true })).toBeVisible();
+    await expect(page.getByText("로그인 안 함")).toBeVisible();
+    await expect(page.getByTestId("opinions-badge")).toHaveText("1");
+    // 화면 경로는 글자로만 — 링크가 아니다
+    await expect(page.locator('main a[href="/search"]')).toHaveCount(0);
+  });
 });

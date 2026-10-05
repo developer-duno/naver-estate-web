@@ -320,7 +320,13 @@ const mockTraffic = {
   max_records: 200000,
 };
 
+/** 의견함 (세션 437) — 새 의견 0 이라 메뉴 배지가 안 뜬다(관리자 화면 기준 사진이 회차마다 같도록 고정). */
+const mockOpinionsEmpty = { items: [] as unknown[], total: 0, page: 1, new_count: 0 };
+
 export async function applyAdminMocks(page: Page): Promise<void> {
+  await page.route("**/api/admin/opinions*", async (route) => {
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockOpinionsEmpty) });
+  });
   await page.route("**/api/admin/data-freshness", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(mockDataFreshness) });
   });

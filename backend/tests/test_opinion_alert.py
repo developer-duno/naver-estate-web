@@ -162,3 +162,44 @@ def test_link_preview_option_reaches_request_body(monkeypatch):
 def test_hour_key_uses_korean_hour():
     utc_now = datetime(2026, 10, 6, 5, 59, 30, tzinfo=ZoneInfo("UTC"))  # = KST 14:59:30
     assert oa._key_of(utc_now) == "2026-10-06 14"
+
+
+# ── 처음 보는 손님 화면 오류 알림(세션 439) ──
+
+
+def test_new_error_text_lines(sent):
+    oa.notify_new_error(page_path="/complex/12345", error_line="TypeError: x\n[서버 알림] 가짜 줄", now=NOW)
+    assert len(sent) == 1
+    text, parse_mode = sent[0]
+    assert parse_mode is None and _previews == [True]
+    assert text.splitlines() == [
+        "[서버 알림] 🧯 손님 화면에서 처음 보는 오류가 났어요",
+        "화면: /complex/12345",
+        "오류: TypeError: x [서버 알림] 가짜 줄",  # 줄바꿈을 접어 가짜 줄을 못 만든다
+        "→ 같은 오류가 또 나면 알림 없이 횟수만 셉니다. 관리자 의견함에서 볼 수 있어요.",
+    ]
+
+
+def test_new_error_text_cut_100(sent):
+    oa.notify_new_error(page_path=None, error_line="가" * 150, now=NOW)
+    lines = sent[0][0].splitlines()
+    assert lines[1] == "화면: 알 수 없음"
+    assert lines[2] == "오류: " + "가" * 100 + "…"
+
+
+def test_error_and_opinion_share_hourly_limit(sent):
+    """새 의견 20통 뒤 오류 1건 → 그 순간 '잠시 멈춤' 1통, 그 뒤 오류는 0통(시간당 상한을 함께 쓴다)."""
+    for _ in range(20):
+        _notify()
+    oa.notify_new_error(page_path="/x", error_line="E", now=NOW)
+    oa.notify_new_error(page_path="/x", error_line="E2", now=NOW)
+    assert len(sent) == 21
+    assert "알림을 잠시 멈춰요" in sent[20][0]
+
+
+def test_new_error_swallows_exceptions(monkeypatch):
+    def _boom(*a, **k):
+        raise RuntimeError("telegram down")
+
+    monkeypatch.setattr("services.telegram.send_telegram", _boom)
+    oa.notify_new_error(page_path="/x", error_line="E", now=NOW)  # 예외가 밖으로 안 나온다

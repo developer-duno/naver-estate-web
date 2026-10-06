@@ -26,6 +26,7 @@ KST = ZoneInfo("Asia/Seoul")
 HOURLY_LIMIT = 20
 ADMIN_URL = "https://2u.pe.kr/admin/opinions"
 _MESSAGE_PREVIEW_CHARS = 150
+_ERROR_PREVIEW_CHARS = 100
 
 KIND_WORDS = {
     "bug": "버그·오류",
@@ -91,6 +92,26 @@ def _send(text: str) -> None:
     send_telegram(text, parse_mode=None, disable_link_preview=True)
 
 
+def _send_limited(text: str, now: datetime | None) -> None:
+    """시간당 상한을 지키며 한 통 — 20통까지 그대로, 21번째에 "잠시 멈춤" 1통, 그 뒤 그 시간엔 0통.
+
+    새 의견 알림과 처음 보는 오류 알림이 **같은 카운터**를 쓴다(합쳐서 시간당 20통).
+    """
+    global _hour_key, _count_in_hour
+    now = now or datetime.now(KST)
+    key = _key_of(now)
+    with _lock:
+        if _hour_key != key:
+            _hour_key = key
+            _count_in_hour = 0
+        _count_in_hour += 1
+        nth = _count_in_hour
+    if nth <= HOURLY_LIMIT:
+        _send(text)
+    elif nth == HOURLY_LIMIT + 1:
+        _send(build_pause_text())
+
+
 def notify_new_opinion(
     *,
     kind: str,
@@ -103,19 +124,31 @@ def notify_new_opinion(
 
     예외를 밖으로 내지 않는다.
     """
-    global _hour_key, _count_in_hour
     try:
-        now = now or datetime.now(KST)
-        key = _key_of(now)
-        with _lock:
-            if _hour_key != key:
-                _hour_key = key
-                _count_in_hour = 0
-            _count_in_hour += 1
-            nth = _count_in_hour
-        if nth <= HOURLY_LIMIT:
-            _send(build_new_opinion_text(kind, page_path, user_email, message))
-        elif nth == HOURLY_LIMIT + 1:
-            _send(build_pause_text())
+        _send_limited(build_new_opinion_text(kind, page_path, user_email, message), now)
     except Exception:
         logger.warning("새 의견 알림 실패 (의견은 저장돼 있음)", exc_info=True)
+
+
+def build_new_error_text(page_path: str | None, error_line: str) -> str:
+    """처음 보는 손님 화면 오류 알림 본문(평문). 오류 글은 줄바꿈을 접고 100자로 자른다."""
+    flat = re.sub(r"\s+", " ", error_line or "").strip()
+    if len(flat) > _ERROR_PREVIEW_CHARS:
+        flat = flat[:_ERROR_PREVIEW_CHARS] + "…"
+    return "\n".join([
+        "[서버 알림] 🧯 손님 화면에서 처음 보는 오류가 났어요",
+        f"화면: {page_path or '알 수 없음'}",
+        f"오류: {flat or '내용 없음'}",
+        "→ 같은 오류가 또 나면 알림 없이 횟수만 셉니다. 관리자 의견함에서 볼 수 있어요.",
+    ])
+
+
+def notify_new_error(*, page_path: str | None, error_line: str, now: datetime | None = None) -> None:
+    """처음 보는 오류 알림 1통 — 새 의견 알림과 시간당 상한(20통)을 함께 쓴다. 예외를 밖으로 내지 않는다.
+
+    반복된 오류(이미 있는 지문)는 라우터가 이 함수를 부르지 않는다.
+    """
+    try:
+        _send_limited(build_new_error_text(page_path, error_line), now)
+    except Exception:
+        logger.warning("새 오류 알림 실패 (오류 기록은 저장돼 있음)", exc_info=True)

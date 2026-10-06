@@ -11,7 +11,7 @@ import PrivacyPage from "../page";
 describe("/privacy 개인정보 처리방침", () => {
   it("맨 위에 시행일을 보인다", () => {
     render(<PrivacyPage />);
-    expect(screen.getByText("시행일: 2026년 10월 7일")).toBeInTheDocument();
+    expect(screen.getByText("시행일: 2026년 10월 6일")).toBeInTheDocument();
   });
 
   it("보호책임자(2u부동산 운영팀)와 이메일 링크를 보인다", () => {

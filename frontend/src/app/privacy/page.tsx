@@ -1,7 +1,7 @@
 import PaidServicePausedNotice from "@/components/PaidServicePausedNotice";
 
 /** 시행일 — 방침을 고치면 이 날짜와 맨 아래 개정 이력을 함께 고친다 */
-const EFFECTIVE_DATE = "2026년 10월 7일";
+const EFFECTIVE_DATE = "2026년 10월 6일";
 
 /** 개인정보 보호책임자 연락처 */
 const PRIVACY_OFFICER_EMAIL = "kyh11kyh@gmail.com";
@@ -65,7 +65,7 @@ const OVERSEAS_TRANSFERS: {
 
 /** 개정 이력 — 내용이 바뀐 날만 적는다(git log 기준) */
 const REVISIONS: { date: string; summary: string }[] = [
-  { date: "2026-10-07", summary: "화면 오류 자동 수집, 국외 이전, 정보주체 권리, 파기, 안전성 조치, 쿠키·브라우저 저장소, 보호책임자 연락처 추가" },
+  { date: "2026-10-06", summary: "화면 오류 자동 수집, 국외 이전, 정보주체 권리, 파기, 안전성 조치, 쿠키·브라우저 저장소, 보호책임자 연락처 추가" },
   { date: "2026-10-06", summary: "의견 보내기 추가" },
   { date: "2026-09-14", summary: "무료 운영 중 현황 고지 추가" },
   { date: "2026-06-24", summary: "유료 구독 결제 정보와 결제 처리 위탁 추가" },

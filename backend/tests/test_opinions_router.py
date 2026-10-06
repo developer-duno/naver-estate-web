@@ -670,3 +670,57 @@ def test_vacuum_job_survives_opinion_purge_failure(db, monkeypatch):
     assert result["detail_retry_granted"] == 0 and result["purged_counters"] == 0
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "vacuum_maintenance").one()
     assert job.status == "completed"
+
+
+# ── #665 잔여 보완(세션 439) ──
+
+
+@pytest.mark.parametrize("raw", [
+    '"{S}"',  # 본문 전체가 서로게이트 한 글자
+    '{"kind": "bug", "message": "가격이 안 보여요 확인 부탁", "{S}": 1}',  # 칸 이름
+    '{"kind": "bug", "message": "가격이 안 보여요 확인 부탁", "interests": [["tax{S}"]]}',  # 목록 안 목록
+    '{"kind": "bug", "message": "가격이 안 보여요 확인 부탁", "page_path": {"a": "{S}"}}',  # 칸 안의 칸
+    '{"kind": "bug", "message": "가격이 안 보여요 확인 부탁", "extra": {"{S}": ["x"]}}',  # 모르는 칸 안
+])
+def test_lone_surrogate_anywhere_422(client, db, raw):
+    """짝 없는 서로게이트가 본문 어디에 있어도(칸 이름·여러 겹·본문 전체) 500 이 아니라 422 · 저장 0."""
+    bs = chr(0x5C)
+    res = client.post("/api/opinions", content=raw.replace("{S}", bs + "ud800").encode("utf-8"),
+                      headers={"Content-Type": "application/json"})
+    assert res.status_code == 422
+    assert db.query(SiteOpinion).count() == 0
+
+
+def test_anon_slot_refunded_when_save_fails(client, db, monkeypatch):
+    """저장(commit)이 실패하면 비로그인 하루 칸을 되돌린다 — 실패 뒤에도 3건을 그대로 보낼 수 있다."""
+    real_commit = db.commit
+
+    def _fail():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(db, "commit", _fail)
+    with pytest.raises(RuntimeError):
+        _post(client, headers=_ip("203.0.113.77"))
+    assert op_router._anon_by_ip.get("203.0.113.77", 0) == 0 and op_router._anon_total == 0
+    monkeypatch.setattr(db, "commit", real_commit)
+    for _ in range(3):
+        assert _post(client, headers=_ip("203.0.113.77")).status_code == 200
+    assert _post(client, headers=_ip("203.0.113.77")).status_code == 429
+
+
+def test_logged_in_quota_rolled_back_with_failed_save(client, db, monkeypatch):
+    """로그인 한도는 의견 저장과 같은 commit — 저장이 실패하면 카운터도 남지 않는다."""
+    from db.models import RateLimitCounter
+
+    headers = make_auth_headers(db, user_id="op-fail-user", email="f@test.com")
+    real_commit = db.commit
+
+    def _fail():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(db, "commit", _fail)
+    with pytest.raises(RuntimeError):
+        _post(client, headers=headers)
+    monkeypatch.setattr(db, "commit", real_commit)
+    db.expire_all()
+    assert db.query(RateLimitCounter).filter(RateLimitCounter.key.like("user:op-fail-user:%")).count() == 0

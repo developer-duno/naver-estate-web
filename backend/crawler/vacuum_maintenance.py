@@ -147,6 +147,7 @@ def _purge_old_opinions(now=None) -> dict:
     - 비공개 행 → 삭제.
     - 공개 행("고쳤습니다" 목록에 나간 것) → 원문·회원 번호·이메일·브라우저 정보·소식 설문·화면 주소를
       NULL 로 지우고 공개 제목·공개 답은 남긴다(처리방침: 공개한 답은 개인정보를 지운 채 남김).
+    - 손님 화면 오류 자동 기록(kind='error', V070) → 공개 대상이 아니므로 그냥 삭제(기준은 같은 created_at).
 
     ⚠ **자기 세션을 따로 연다** — 다른 곁다리와 같은 세션·트랜잭션을 쓰면, 여기서 문장 하나가
     실패할 때 PostgreSQL 이 그 트랜잭션의 나머지를 전부 거부해 다른 단계까지 멈춘다.
@@ -162,9 +163,13 @@ def _purge_old_opinions(now=None) -> dict:
     cutoff = now - timedelta(days=OPINION_RETENTION_DAYS)
     s = SessionLocal()
     try:
+        # 손님 화면 오류 자동 기록(kind='error', V070)은 공개 대상이 아니므로 공개 여부와 무관하게 삭제.
         deleted = s.execute(
             delete(SiteOpinion)
-            .where(SiteOpinion.created_at < cutoff, SiteOpinion.is_public.is_(False))
+            .where(
+                SiteOpinion.created_at < cutoff,
+                or_(SiteOpinion.is_public.is_(False), SiteOpinion.kind == "error"),
+            )
             .execution_options(synchronize_session=False)
         ).rowcount or 0
         anonymized = s.execute(
@@ -172,6 +177,7 @@ def _purge_old_opinions(now=None) -> dict:
             .where(
                 SiteOpinion.created_at < cutoff,
                 SiteOpinion.is_public.is_(True),
+                SiteOpinion.kind != "error",
                 or_(
                     SiteOpinion.message.isnot(None),
                     SiteOpinion.user_id.isnot(None),
@@ -229,6 +235,14 @@ def run_vacuum_maintenance() -> dict:
     retry_granted = _grant_detail_retry_for_capped_articles(db)
     # 1년 지난 의견 정리도 dialect 무관이라 같은 자리 — 자기 세션을 따로 써서 실패가 번지지 않는다.
     opinions = _purge_old_opinions()
+    # 텔레그램 알림 통로 점검(getMe·getChat 2콜, 메시지 안 보냄) — 막혔으면 Gmail 로 1통(세션 439).
+    # 함수가 예외를 안 내지만, 곁다리가 본체를 죽이지 않게 여기서도 한 번 더 감싼다.
+    try:
+        from services.telegram_health import check_telegram_channel
+
+        check_telegram_channel()
+    except Exception:
+        logger.warning("텔레그램 통로 점검 호출 실패 (VACUUM 결과에는 영향 없음)", exc_info=True)
 
     dialect = engine.dialect.name
     if dialect != "postgresql":

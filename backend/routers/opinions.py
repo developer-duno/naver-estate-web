@@ -2,6 +2,8 @@
 
 - POST /api/opinions          의견 저장 + 사장님 텔레그램(BackgroundTasks — 요청을 안 붙잡음)
 - GET  /api/opinions/public   "고쳤습니다" 공개 목록 — 공개 제목·답만(원문·이메일·화면 주소 없음)
+- POST /api/opinions/error    손님 화면 오류 자동 기록(세션 439) — 같은 오류는 한 행에 횟수만 올리고,
+                              처음 보는 오류만 텔레그램 1통. 이메일·회원 번호는 저장하지 않는다.
 
 관리자 쪽(목록·답장·공개·삭제)은 routers/admin/opinions.py.
 
@@ -9,8 +11,11 @@
   - 비로그인 = IP 묶음당 3건(IPv6 는 앞 64비트로 묶음) + 비로그인 전체 200건(메모리 카운터, 재시작하면 0)
   - 로그인 = 10건(auth.permissions.check_quota)
 답장 메일은 로그인한 분만(가입 이메일) — 만료 토큰은 get_optional_user 가 None 으로 돌려 비로그인과 같게 다룬다.
+
+오류 기록 창구의 하루 한도(손님 의견 한도와 따로 센다): IP 묶음당 20건 · 전체 500건 · 넘으면 조용히 버리고 204.
 """
 
+import hashlib
 import ipaddress
 import logging
 import threading
@@ -19,7 +24,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel, PrivateAttr, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -27,7 +32,8 @@ from auth.permissions import check_quota
 from auth.rate_limiter import _get_client_ip
 from db.models import SiteOpinion
 from deps import get_db, get_optional_user
-from services.opinion_alert import notify_new_opinion
+from services.opinion_alert import notify_new_error, notify_new_opinion
+from utils import utcnow
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -43,6 +49,11 @@ MESSAGE_MAX = 1000
 PAGE_PATH_MAX = 200
 USER_AGENT_MAX = 300
 PUBLIC_PAGE_SIZE = 20
+ERROR_IP_DAILY_LIMIT = 20
+ERROR_TOTAL_DAILY_LIMIT = 500
+ERROR_NAME_MAX = 100
+ERROR_LINE_MAX = 300
+ERROR_DIGEST_MAX = 100
 
 # 폭 0 문자(눈에 안 보이는 글자) — 이것만으로 10자를 채우는 빈 의견을 막으려고 길이 검사 전에 지운다.
 # ZWJ(U+200D)는 지우지 않는다 — 가족 이모지처럼 그림 여럿을 한 그림으로 잇는 글자라 지우면 낱개로 풀린다.
@@ -56,6 +67,10 @@ _anon_lock = threading.Lock()
 _anon_day: str | None = None  # 지금 세는 한국 날짜 "YYYY-MM-DD"
 _anon_by_ip: dict[str, int] = {}  # IP 묶음 → 그날 받은 건수
 _anon_total = 0  # 그날 받은 비로그인 의견 전체 건수
+# 오류 기록 창구 하루 카운터 — 손님 의견 한도와 따로 센다(오류 보고가 손님 의견 칸을 깎지 않게).
+_err_day: str | None = None
+_err_by_ip: dict[str, int] = {}
+_err_total = 0
 
 
 def _now() -> datetime:
@@ -65,11 +80,18 @@ def _now() -> datetime:
 
 def _reset_anon_counters_for_tests() -> None:
     """시험 사이 카운터 초기화(모듈 메모리라 시험끼리 섞이지 않게)."""
-    global _anon_day, _anon_total
+    global _anon_day, _anon_total, _err_day, _err_total
     with _anon_lock:
         _anon_day = None
         _anon_by_ip.clear()
         _anon_total = 0
+        _err_day = None
+        _err_by_ip.clear()
+        _err_total = 0
+
+
+def _today_kst() -> str:
+    return _now().astimezone(KST).date().isoformat()
 
 
 def ip_bucket(ip: str) -> str:
@@ -93,13 +115,13 @@ def ip_bucket(ip: str) -> str:
         return ip
 
 
-def _take_anon_slot(bucket: str) -> str | None:
+def _take_anon_slot(bucket: str, day: str | None = None) -> str | None:
     """비로그인 한 건 받기 — 받으면 None, 막히면 429 문구.
 
     개인 한도에 막힌 요청은 전체 칸을 먹지 않고, 전체 상한에 막힌 요청은 개인 칸을 먹지 않는다.
     """
     global _anon_day, _anon_total
-    day = _now().astimezone(KST).date().isoformat()
+    day = day or _today_kst()
     with _anon_lock:
         if _anon_day != day:
             _anon_day = day
@@ -114,6 +136,39 @@ def _take_anon_slot(bucket: str) -> str | None:
         return None
 
 
+def _release_anon_slot(bucket: str, day: str) -> None:
+    """저장에 실패한 비로그인 한 건을 되돌린다 — 손님은 저장 안 된 글 때문에 한도를 잃지 않는다.
+
+    그 사이 한국 날짜가 바뀌었으면(카운터가 이미 비워짐) 아무것도 안 한다.
+    """
+    global _anon_total
+    with _anon_lock:
+        if _anon_day != day:
+            return
+        left = _anon_by_ip.get(bucket, 0) - 1
+        if left > 0:
+            _anon_by_ip[bucket] = left
+        else:
+            _anon_by_ip.pop(bucket, None)
+        _anon_total = max(0, _anon_total - 1)
+
+
+def _take_error_slot(bucket: str) -> bool:
+    """오류 기록 한 건 받기 — 받으면 True, 하루 한도(IP 묶음 20 · 전체 500)를 넘으면 False."""
+    global _err_day, _err_total
+    day = _today_kst()
+    with _anon_lock:
+        if _err_day != day:
+            _err_day = day
+            _err_by_ip.clear()
+            _err_total = 0
+        if _err_by_ip.get(bucket, 0) >= ERROR_IP_DAILY_LIMIT or _err_total >= ERROR_TOTAL_DAILY_LIMIT:
+            return False
+        _err_by_ip[bucket] = _err_by_ip.get(bucket, 0) + 1
+        _err_total += 1
+        return True
+
+
 def _has_lone_surrogate(text: str) -> bool:
     """짝 없는 서로게이트(U+D800~U+DFFF)가 있나 — 짝이 맞는 이모지는 이미 한 글자로 합쳐져 들어온다."""
     return any(0xD800 <= ord(c) <= 0xDFFF for c in text)
@@ -121,6 +176,36 @@ def _has_lone_surrogate(text: str) -> bool:
 
 def _replace_lone_surrogates(text: str) -> str:
     return "".join(_REPLACEMENT_CHAR if 0xD800 <= ord(c) <= 0xDFFF else c for c in text)
+
+
+def _scrub_lone_surrogates(value):
+    """요청 본문 전체(문자열·목록·사전 — 칸 이름 포함, 몇 겹이든)를 훑어 짝 없는 서로게이트를 대체 글자로.
+
+    돌려주는 값 = (바꾼 본문, 하나라도 있었나). 본문 자체가 문자열 하나여도 바꾼다 —
+    그대로 두면 검사 실패 응답(422)이 입력을 되돌려 주다가 UTF-8 변환에서 500 이 난다.
+    """
+    if isinstance(value, str):
+        if _has_lone_surrogate(value):
+            return _replace_lone_surrogates(value), True
+        return value, False
+    if isinstance(value, list):
+        bad = False
+        items = []
+        for item in value:
+            item, b = _scrub_lone_surrogates(item)
+            bad = bad or b
+            items.append(item)
+        return items, bad
+    if isinstance(value, dict):
+        bad = False
+        clean = {}
+        for key, item in value.items():
+            key, bk = _scrub_lone_surrogates(key)
+            item, bi = _scrub_lone_surrogates(item)
+            bad = bad or bk or bi
+            clean[key] = item
+        return clean, bad
+    return value, False
 
 
 class OpinionIn(BaseModel):
@@ -139,22 +224,9 @@ class OpinionIn(BaseModel):
 
         그대로 두면 저장 순간 UTF-8 변환이 500 을 내고, 검사에서 막아도 FastAPI 기본 422 응답이 입력값을
         되돌려 주다가 같은 이유로 500 이 난다(시험 실측). 그래서 여기선 바꿔 놓기만 하고, 422 는 라우트가 낸다.
+        본문 전체(칸 이름·여러 겹 목록/사전·본문이 문자열 하나인 경우까지)를 _scrub_lone_surrogates 로 훑는다.
         """
-        bad = False
-        if isinstance(data, dict):
-            clean: dict = {}
-            for key, value in data.items():
-                if isinstance(value, str) and _has_lone_surrogate(value):
-                    value, bad = _replace_lone_surrogates(value), True
-                elif isinstance(value, list):
-                    items = []
-                    for item in value:
-                        if isinstance(item, str) and _has_lone_surrogate(item):
-                            item, bad = _replace_lone_surrogates(item), True
-                        items.append(item)
-                    value = items
-                clean[key] = value
-            data = clean
+        data, bad = _scrub_lone_surrogates(data)
         inst = handler(data)
         inst._bad_chars = bad
         return inst
@@ -191,7 +263,12 @@ def clean_page_path(raw: str | None) -> str | None:
     return path
 
 
-def _enforce_daily_limit(db: Session, request: Request, user: dict | None) -> None:
+def _enforce_daily_limit(db: Session, request: Request, user: dict | None) -> tuple[str, str] | None:
+    """하루 한도 확인. 비로그인이면 쓴 칸(IP 묶음, 한국 날짜)을 돌려준다 — 저장이 실패하면 되돌리려고.
+
+    로그인 한도(check_quota)는 DB 카운터를 같은 세션에 더하기만 하고 commit 은 의견 저장과 한 번에
+    하므로, 저장이 실패하면 카운터도 함께 취소된다(되돌릴 것이 없다).
+    """
     if user:
         try:
             check_quota(db, user["user_id"], "opinion", USER_DAILY_LIMIT)
@@ -199,10 +276,13 @@ def _enforce_daily_limit(db: Session, request: Request, user: dict | None) -> No
             if e.status_code == 429:
                 raise HTTPException(status_code=429, detail=LIMIT_DETAIL) from e
             raise
-        return
-    detail = _take_anon_slot(ip_bucket(_get_client_ip(request)))
+        return None
+    bucket = ip_bucket(_get_client_ip(request))
+    day = _today_kst()
+    detail = _take_anon_slot(bucket, day)
     if detail:
         raise HTTPException(status_code=429, detail=detail)
+    return bucket, day
 
 
 @router.post("")
@@ -220,7 +300,7 @@ def submit_opinion(
         logger.info("의견함 숨김 칸 걸림 1건 — 저장 안 함")
         return {"received": True}
 
-    _enforce_daily_limit(db, request, user)
+    anon_slot = _enforce_daily_limit(db, request, user)
 
     user_email = (user.get("email") or None) if user else None
     interests = sorted(set(body.interests)) if body.interests else None
@@ -236,8 +316,14 @@ def submit_opinion(
         user_email=user_email,
         user_agent=user_agent,
     )
-    db.add(row)
-    db.commit()
+    try:
+        db.add(row)
+        db.commit()
+    except Exception:
+        db.rollback()
+        if anon_slot:
+            _release_anon_slot(*anon_slot)
+        raise
     db.refresh(row)
 
     background_tasks.add_task(
@@ -280,3 +366,115 @@ def list_public_opinions(
         "total": total,
         "page": page,
     }
+
+
+# ══ 손님 화면 오류 자동 기록 (세션 439, V070) ══
+
+
+class ErrorReportIn(BaseModel):
+    """손님 화면이 오류를 만났을 때 보내는 기록 — 로그인 불필요, 이메일·회원 번호는 받지도 저장하지도 않는다.
+
+    길이 상한(Field max_length)은 터무니없이 큰 본문만 막는 바깥 울타리이고, 저장 길이는
+    서버가 자른다(이름 100 · 오류 첫 줄 300 · 오류 번호 100) — 긴 오류 글 때문에 기록을 놓치지 않게.
+    """
+
+    area: str | None = Field(None, max_length=2000)  # 오류가 난 화면 경로
+    name: str = Field("", max_length=2000)  # 오류 이름(TypeError 등)
+    message: str = Field("", max_length=5000)  # 오류 글 — 첫 줄만 쓴다
+    digest: str | None = Field(None, max_length=2000)  # 화면 묶음이 붙이는 오류 번호(선택)
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _scrub(cls, data, handler):
+        """짝 없는 서로게이트는 대체 글자로 바꿔 그대로 받는다(오류 기록은 422 로 버릴 이유가 없다)."""
+        data, _ = _scrub_lone_surrogates(data)
+        return handler(data)
+
+
+def _one_line(text: str | None, limit: int) -> str:
+    """첫 줄만, NUL 제거, 앞뒤 공백 제거, limit 자로 자름."""
+    if not text:
+        return ""
+    lines = text.replace("\x00", "").strip().splitlines()
+    return (lines[0].strip() if lines else "")[:limit]
+
+
+def error_fingerprint(page_path: str | None, name: str, first_line: str) -> str:
+    """오류 지문 = sha256(화면 첫 경로 조각 + 오류 이름 + 오류 첫 줄) 앞 32자.
+
+    첫 경로 조각만 쓰는 이유: /complex/123 과 /complex/456 의 같은 오류는 같은 고장이다(단지 번호마다
+    행이 생기면 횟수를 못 센다). 경로가 없으면 빈 조각.
+    """
+    segment = ""
+    if page_path:
+        segment = "/" + page_path.split("/", 2)[1]
+    raw = f"{segment}\n{name}\n{first_line}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+
+
+def _upsert_error_row(db: Session, values: dict) -> bool:
+    """같은 지문이면 횟수 +1·마지막 시각만, 없으면 새 행. 새 행이 생겼으면 True.
+
+    동시 요청에도 행이 하나로 모이게 DB 의 INSERT … ON CONFLICT (fingerprint) WHERE kind='error'
+    (V070 부분 유일 색인)로 한 문장에 처리한다. SQLite 시험도 같은 문법을 지원해 같은 길을 탄다.
+    새 행 판정 = 돌려받은 repeat_count 가 1(갱신이면 2 이상).
+    """
+    if db.get_bind().dialect.name == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert as db_insert
+    else:
+        from sqlalchemy.dialects.postgresql import insert as db_insert
+
+    stmt = db_insert(SiteOpinion).values(**values)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[SiteOpinion.fingerprint],
+        index_where=SiteOpinion.kind == "error",
+        set_={
+            "repeat_count": SiteOpinion.repeat_count + 1,
+            "last_seen_at": stmt.excluded.last_seen_at,
+            "updated_at": stmt.excluded.updated_at,
+        },
+    ).returning(SiteOpinion.repeat_count)
+    return db.execute(stmt).scalar_one() == 1
+
+
+@router.post("/error", status_code=204)
+def report_client_error(
+    body: ErrorReportIn,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """손님 화면 오류 기록. 응답은 늘 204(본문 없음) — 손님 화면에 아무것도 다시 띄우지 않는다.
+
+    - 하루 한도(IP 묶음 20 · 전체 500)를 넘으면 저장 없이 조용히 204.
+    - 손님 의견 하루 한도(3/10)는 깎지 않는다(카운터가 따로다).
+    - 처음 보는 지문으로 행이 새로 생겼을 때만 텔레그램 1통(새 의견 알림과 시간당 상한 공유).
+    - 로그인 토큰이 와도 읽지 않는다 — 이메일·회원 번호 저장 0.
+    """
+    if not _take_error_slot(ip_bucket(_get_client_ip(request))):
+        return Response(status_code=204)
+
+    page_path = clean_page_path(_one_line(body.area, PAGE_PATH_MAX + 1) or None)
+    name = _one_line(body.name, ERROR_NAME_MAX)
+    first_line = _one_line(body.message, ERROR_LINE_MAX)
+    digest = _one_line(body.digest, ERROR_DIGEST_MAX)
+
+    shown = f"{name}: {first_line}" if name and first_line else (name or first_line or "(내용 없음)")
+    stored = f"{shown}\n(오류 번호 {digest})" if digest else shown
+    now = utcnow()
+    is_new = _upsert_error_row(db, {
+        "kind": "error",
+        "message": stored,
+        "page_path": page_path,
+        "user_agent": (request.headers.get("user-agent") or "")[:USER_AGENT_MAX] or None,
+        "fingerprint": error_fingerprint(page_path, name, first_line),
+        "repeat_count": 1,
+        "last_seen_at": now,
+        "created_at": now,
+        "updated_at": now,
+    })
+    db.commit()
+
+    if is_new:
+        background_tasks.add_task(notify_new_error, page_path=page_path, error_line=shown)
+    return Response(status_code=204)

@@ -20,6 +20,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -567,8 +568,16 @@ class SiteOpinion(Base):
     __table_args__ = (
         Index("site_opinions_created_at_idx", "created_at"),
         Index("site_opinions_status_created_at_idx", "status", "created_at"),
+        # V070 부분 유일 색인 — 오류 행(kind='error')은 지문 하나에 한 행(ON CONFLICT 대상)
+        Index(
+            "site_opinions_error_fingerprint_uidx", "fingerprint", unique=True,
+            postgresql_where=text("kind = 'error'"), sqlite_where=text("kind = 'error'"),
+        ),
         # V069 의 CHECK 3개를 모델에도 둔다 — SQLite 시험도 같은 제약을 보게(운영은 마이그가 정본)
-        CheckConstraint("kind IN ('bug', 'data', 'suggest', 'other')", name="site_opinions_kind_check"),
+        # kind 의 'error' 는 V070(손님 화면 오류 자동 기록)
+        CheckConstraint(
+            "kind IN ('bug', 'data', 'suggest', 'other', 'error')", name="site_opinions_kind_check"
+        ),
         CheckConstraint(
             "status IN ('new', 'replied', 'fixed', 'closed')", name="site_opinions_status_check"
         ),
@@ -581,7 +590,7 @@ class SiteOpinion(Base):
     id: Mapped[int] = mapped_column(
         BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True
     )
-    kind: Mapped[str] = mapped_column(Text, nullable=False)  # bug|data|suggest|other
+    kind: Mapped[str] = mapped_column(Text, nullable=False)  # bug|data|suggest|other|error
     message: Mapped[str | None] = mapped_column(Text)
     page_path: Mapped[str | None] = mapped_column(Text)
     # none_as_null: None 을 JSON 의 null 이 아니라 SQL NULL 로 저장(1년 정리 때 NULL 로 지우는 것과 같은 뜻)
@@ -597,6 +606,10 @@ class SiteOpinion(Base):
     public_title: Mapped[str | None] = mapped_column(Text)
     public_answer: Mapped[str | None] = mapped_column(Text)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # V070 — 손님 화면 오류 자동 기록(kind='error')만 쓰는 칸. 손님 의견은 NULL·1·NULL 그대로.
+    fingerprint: Mapped[str | None] = mapped_column(Text)
+    repeat_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow

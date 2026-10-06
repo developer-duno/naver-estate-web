@@ -395,3 +395,37 @@ def test_upsert_postgres_sql_has_literal_partial_where():
     assert op_router._upsert_error_row(_FakeDb(), {"kind": "error", "message": "E: x", "fingerprint": "f" * 32})
     sql = str(captured[0].compile(dialect=postgresql.dialect()))
     assert "ON CONFLICT (fingerprint) WHERE kind = 'error' DO UPDATE" in sql
+
+
+def test_scrub_lone_surrogates_does_not_touch_input():
+    """_scrub_lone_surrogates 는 입력 본문을 고치지 않고 새 목록·사전을 만든다(세션 441 — s439 변이 M9 생존 메우기).
+
+    짝 없는 서로게이트를 칸 이름과 값 둘 다에, 깊이 2 이상으로 숨긴 중첩 사전·목록을 넣는다:
+    돌려받은 값만 대체 글자로 바뀌고, 넣은 객체는 깊은 복사본과 같으며 안쪽 목록·사전 객체도 그대로다.
+    """
+    import copy
+
+    deepest = {"c\ud800": "d\udfff"}
+    deep_list = ["x\udc00", deepest, 7]
+    inner_dict = {"b": deep_list}
+    inner_list = [inner_dict, "멀쩡"]
+    body = {"a\ud800": inner_list, "ok": "fine"}
+    snapshot = copy.deepcopy(body)
+
+    result, bad = op_router._scrub_lone_surrogates(body)
+
+    assert bad is True
+    assert result == {"a\ufffd": [{"b": ["x\ufffd", {"c\ufffd": "d\ufffd"}, 7]}, "멀쩡"], "ok": "fine"}
+    # 넣은 본문은 그대로 — 값도, 안쪽 객체의 정체도
+    assert body == snapshot
+    assert body["a\ud800"] is inner_list
+    assert inner_list[0] is inner_dict
+    assert inner_dict["b"] is deep_list
+    assert deep_list[0] == "x\udc00"
+    assert deep_list[1] is deepest
+    assert deepest == {"c\ud800": "d\udfff"}
+    # 돌려받은 값은 새 객체
+    assert result is not body
+    assert result["a\ufffd"] is not inner_list
+    assert result["a\ufffd"][0] is not inner_dict
+    assert result["a\ufffd"][0]["b"] is not deep_list

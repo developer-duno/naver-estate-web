@@ -4,6 +4,7 @@
   - 알림 본문 모양(접두어·종류·화면·보낸 분 가림·답하기 주소)
   - 손님 글이 서식으로 해석되지 않게 parse_mode=None + 줄바꿈 접기 + 150자 자르기
   - 한 시간 20통까지만 한 건씩, 21번째 순간 "잠시 멈춤" 1통, 그 뒤 그 시간엔 0통
+  - 처음 보는 오류 알림은 따로 센다 — 한 시간 10통, 11번째 순간 오류 전용 "잠시 멈춤" 1통(세션 441)
   - 알림이 터져도 예외가 밖으로 안 나간다
 실행: python -m pytest tests/test_opinion_alert.py -v
 """
@@ -187,14 +188,72 @@ def test_new_error_text_cut_100(sent):
     assert lines[2] == "오류: " + "가" * 100 + "…"
 
 
-def test_error_and_opinion_share_hourly_limit(sent):
-    """새 의견 20통 뒤 오류 1건 → 그 순간 '잠시 멈춤' 1통, 그 뒤 오류는 0통(시간당 상한을 함께 쓴다)."""
+def _error(i: int, now=NOW):
+    oa.notify_new_error(page_path="/x", error_line=f"E{i}", now=now)
+
+
+def test_error_and_opinion_count_separately(sent):
+    """새 의견 20통(의견 몫을 다 씀) 뒤 처음 보는 오류 1건 → 오류 알림은 정상 1통(카운터가 따로다, 세션 441)."""
     for _ in range(20):
         _notify()
-    oa.notify_new_error(page_path="/x", error_line="E", now=NOW)
-    oa.notify_new_error(page_path="/x", error_line="E2", now=NOW)
+    _error(1)
     assert len(sent) == 21
-    assert "알림을 잠시 멈춰요" in sent[20][0]
+    assert sent[20][0].startswith("[서버 알림] 🧯 손님 화면에서 처음 보는 오류가 났어요")
+    assert not any("잠시 멈춰요" in text for text, _ in sent)
+
+
+def test_error_hourly_limit_10_then_error_pause_once(sent):
+    """오류 10통까지 한 건씩 → 11번째 순간 오류 전용 '잠시 멈춤' 1통 → 12번째는 0통(오류 12건 → 11통)."""
+    for i in range(10):
+        _error(i)
+    assert len(sent) == 10
+    assert all(text.startswith("[서버 알림] 🧯 손님 화면에서 처음 보는 오류가 났어요") for text, _ in sent)
+    _error(10)
+    assert len(sent) == 11
+    pause, parse_mode = sent[-1]
+    assert parse_mode is None and _previews[-1] is True
+    assert pause.splitlines() == [
+        "[서버 알림] 🧯 이번 시간엔 처음 보는 오류가 10건을 넘어 오류 알림을 잠시 멈춰요(관리자 화면에서 보세요)",
+        "보기: https://2u.pe.kr/admin/opinions",
+    ]
+    _error(11)
+    assert len(sent) == 11
+
+
+def test_opinion_still_sent_while_error_paused(sent):
+    """오류 알림이 멈춘 시간에도 손님 의견 알림은 정상으로 나간다."""
+    for i in range(12):
+        _error(i)
+    assert len(sent) == 11
+    _notify()
+    assert len(sent) == 12
+    assert sent[-1][0].startswith("[서버 알림] 💬 새 의견이 왔어요")
+
+
+def test_error_counter_new_hour_starts_fresh(sent):
+    """오류 알림도 새 시간(한국 시각)이 되면 0 부터 다시 센다."""
+    for i in range(12):
+        _error(i)
+    assert len(sent) == 11
+    _error(99, now=datetime(2026, 10, 6, 15, 0, 5, tzinfo=KST))
+    assert len(sent) == 12
+    assert sent[-1][0].startswith("[서버 알림] 🧯 손님 화면에서 처음 보는 오류가 났어요")
+
+
+def test_reset_for_tests_clears_both_counters(sent):
+    """_reset_for_tests 는 의견·오류 카운터를 둘 다 0 으로 돌린다."""
+    for _ in range(21):
+        _notify()
+    for i in range(11):
+        _error(i)
+    oa._reset_for_tests()
+    sent.clear()
+    _notify()
+    _error(0)
+    assert [t.splitlines()[0] for t, _ in sent] == [
+        "[서버 알림] 💬 새 의견이 왔어요",
+        "[서버 알림] 🧯 손님 화면에서 처음 보는 오류가 났어요",
+    ]
 
 
 def test_new_error_swallows_exceptions(monkeypatch):

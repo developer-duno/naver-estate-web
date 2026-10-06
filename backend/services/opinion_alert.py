@@ -12,6 +12,8 @@
     "알림을 잠시 멈춰요" 한 통을 보낸 뒤 그 시간 동안은 더 안 보낸다(모듈 메모리 카운터 —
     재시작하면 0 부터 다시 센다). 타이머를 두지 않는 이유 = 웹 프로세스 안 타이머는 재시작·시험에서
     새는 자원이고, 시간이 끝나야 알리면 사장님이 늦게 안다.
+  - 처음 보는 화면 오류 알림은 **따로 센다**(시간당 10통, 11번째에 오류 전용 "잠시 멈춤" 1통 —
+    2026-10-06 사장님 결정). 오류가 몰려도 손님 의견 알림은 막히지 않고, 의견이 몰려도 오류 알림은 막히지 않는다.
 """
 
 import logging
@@ -23,7 +25,8 @@ from zoneinfo import ZoneInfo
 logger = logging.getLogger(__name__)
 
 KST = ZoneInfo("Asia/Seoul")
-HOURLY_LIMIT = 20
+HOURLY_LIMIT = 20  # 새 의견 알림 시간당 상한
+ERROR_HOURLY_LIMIT = 10  # 처음 보는 오류 알림 시간당 상한(의견과 카운터가 따로다)
 ADMIN_URL = "https://2u.pe.kr/admin/opinions"
 _MESSAGE_PREVIEW_CHARS = 150
 _ERROR_PREVIEW_CHARS = 100
@@ -36,16 +39,15 @@ KIND_WORDS = {
 }
 
 _lock = threading.Lock()
-_hour_key: str | None = None  # 지금 세는 시간 "YYYY-MM-DD HH"(한국 시각)
-_count_in_hour = 0  # 그 시간에 들어온 의견 수(알림을 보냈든 안 보냈든)
+# 카운터 이름("opinion"·"error") → (지금 세는 시간 "YYYY-MM-DD HH"(한국 시각), 그 시간에 들어온 수 —
+# 알림을 보냈든 안 보냈든)
+_counters: dict[str, tuple[str, int]] = {}
 
 
 def _reset_for_tests() -> None:
-    """시험 사이 카운터 초기화(모듈 메모리라 시험끼리 섞이지 않게)."""
-    global _hour_key, _count_in_hour
+    """시험 사이 카운터 초기화(모듈 메모리라 시험끼리 섞이지 않게) — 의견·오류 카운터 둘 다."""
     with _lock:
-        _hour_key = None
-        _count_in_hour = 0
+        _counters.clear()
 
 
 def _key_of(now: datetime) -> str:
@@ -85,6 +87,15 @@ def build_pause_text() -> str:
     ])
 
 
+def build_error_pause_text() -> str:
+    """처음 보는 오류 알림이 시간당 한도(10통)를 넘은 순간 한 번 보내는 "잠시 멈춤" 알림 본문(평문)."""
+    return "\n".join([
+        f"[서버 알림] 🧯 이번 시간엔 처음 보는 오류가 {ERROR_HOURLY_LIMIT}건을 넘어 오류 알림을 잠시 멈춰요"
+        "(관리자 화면에서 보세요)",
+        f"보기: {ADMIN_URL}",
+    ])
+
+
 def _send(text: str) -> None:
     from services.telegram import send_telegram
 
@@ -92,24 +103,23 @@ def _send(text: str) -> None:
     send_telegram(text, parse_mode=None, disable_link_preview=True)
 
 
-def _send_limited(text: str, now: datetime | None) -> None:
-    """시간당 상한을 지키며 한 통 — 20통까지 그대로, 21번째에 "잠시 멈춤" 1통, 그 뒤 그 시간엔 0통.
+def _send_limited(text: str, now: datetime | None, *, counter: str, limit: int, build_pause) -> None:
+    """시간당 상한을 지키며 한 통 — limit 통까지 그대로, limit+1 번째에 "잠시 멈춤" 1통, 그 뒤 그 시간엔 0통.
 
-    새 의견 알림과 처음 보는 오류 알림이 **같은 카운터**를 쓴다(합쳐서 시간당 20통).
+    counter 이름마다 카운터가 따로다 — 새 의견("opinion", 20통)과 처음 보는 오류("error", 10통)는 서로의 몫을 안 먹는다.
     """
-    global _hour_key, _count_in_hour
     now = now or datetime.now(KST)
     key = _key_of(now)
     with _lock:
-        if _hour_key != key:
-            _hour_key = key
-            _count_in_hour = 0
-        _count_in_hour += 1
-        nth = _count_in_hour
-    if nth <= HOURLY_LIMIT:
+        hour_key, count = _counters.get(counter, (None, 0))
+        if hour_key != key:
+            count = 0
+        count += 1
+        _counters[counter] = (key, count)
+    if count <= limit:
         _send(text)
-    elif nth == HOURLY_LIMIT + 1:
-        _send(build_pause_text())
+    elif count == limit + 1:
+        _send(build_pause())
 
 
 def notify_new_opinion(
@@ -125,7 +135,10 @@ def notify_new_opinion(
     예외를 밖으로 내지 않는다.
     """
     try:
-        _send_limited(build_new_opinion_text(kind, page_path, user_email, message), now)
+        _send_limited(
+            build_new_opinion_text(kind, page_path, user_email, message), now,
+            counter="opinion", limit=HOURLY_LIMIT, build_pause=build_pause_text,
+        )
     except Exception:
         logger.warning("새 의견 알림 실패 (의견은 저장돼 있음)", exc_info=True)
 
@@ -144,11 +157,15 @@ def build_new_error_text(page_path: str | None, error_line: str) -> str:
 
 
 def notify_new_error(*, page_path: str | None, error_line: str, now: datetime | None = None) -> None:
-    """처음 보는 오류 알림 1통 — 새 의견 알림과 시간당 상한(20통)을 함께 쓴다. 예외를 밖으로 내지 않는다.
+    """처음 보는 오류 알림 1통 — 새 의견 알림과 **따로 센다**: 시간당 10통까지, 11번째에 오류 전용 "잠시 멈춤" 1통,
+    그 뒤 그 시간엔 0통. 예외를 밖으로 내지 않는다.
 
     반복된 오류(이미 있는 지문)는 라우터가 이 함수를 부르지 않는다.
     """
     try:
-        _send_limited(build_new_error_text(page_path, error_line), now)
+        _send_limited(
+            build_new_error_text(page_path, error_line), now,
+            counter="error", limit=ERROR_HOURLY_LIMIT, build_pause=build_error_pause_text,
+        )
     except Exception:
         logger.warning("새 오류 알림 실패 (오류 기록은 저장돼 있음)", exc_info=True)

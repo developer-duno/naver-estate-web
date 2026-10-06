@@ -4,7 +4,7 @@ Next.js + FastAPI + Supabase 기반 웹 서비스. 실시간 네이버 부동산
 
 ## 진입점
 
-새 컨텍스트 읽기 순서 = ① `.claude/rules/` 11종 상시 + `infra-scheduler.md` 1종(필요할 때 — 아래 표) → ② `.claude/ASSETS.md` · `.claude/GLOSSARY.md` · `.claude/BLOG.md` (필요 시 참조) → ③ FE/BE 깊이 토픽 5종 (FE/BE 작업 시 명시 참조) → ④ `memory/MEMORY.md` (세션 누적 박제).
+새 컨텍스트 읽기 순서 = ① `.claude/rules/` 10종 상시 + `infra-scheduler.md`·`seo-metadata.md` 2종(필요할 때 — 아래 표) → ② `.claude/ASSETS.md` · `.claude/GLOSSARY.md` · `.claude/BLOG.md` (필요 시 참조) → ③ FE/BE 깊이 토픽 5종 (FE/BE 작업 시 명시 참조) → ④ `memory/MEMORY.md` (세션 누적 박제).
 
 (상세: .claude/rules-detail/CLAUDE-root.md §자료 위치 표)
 
@@ -97,6 +97,7 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test \
 | 파일 | 내용 |
 |------|------|
 | `infra-scheduler.md` (**필요할 때만** — `paths`) | 잡별 주기·배치·토글 표·잡 이름 대조표·알림 창구 적용 현황·관찰성·data.go.kr 호출 일정 표 (세션 430 infra.md 에서 이동). `backend/crawler`·`scripts`·`routers/admin`·`services`·`tests` 등을 열면 자동 로드 — **DB 만 조회하거나 수동 실행을 정할 땐 직접 연다** |
+| `seo-metadata.md` (**필요할 때만** — `paths`) | og:image PNG·openGraph 상속 끊김·Suspense 첫 HTML·sitemap lastModified (세션 442 에 paths 전환). `frontend/src/app/**` 를 열면 자동 로드 — **curl·빌드 산출물로만 SEO 를 진단할 땐 직접 연다** |
 
 (상세: .claude/rules-detail/CLAUDE-root.md §항상 로드 규칙 표)
 

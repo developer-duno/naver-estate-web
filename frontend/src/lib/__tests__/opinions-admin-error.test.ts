@@ -115,7 +115,13 @@ describe("의견함 래퍼 — 정상 응답은 서버 계약대로", () => {
     const u = new URL(seen.url!);
     expect(u.searchParams.get("status")).toBe("new");
     expect(u.searchParams.get("page")).toBe("3");
+    expect(u.searchParams.has("kind")).toBe(false);
     expect(seen.auth).toBe("Bearer tok");
+  });
+
+  it("getAdminOpinions: 종류(kind=error) 조건을 싣는다 (세션 439)", async () => {
+    await api.getAdminOpinions("tok", { kind: "error" });
+    expect(new URL(seen.url!).searchParams.get("kind")).toBe("error");
   });
 
   it("updateAdminOpinion: PATCH 로 본문을 그대로 싣는다", async () => {

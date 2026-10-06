@@ -212,3 +212,23 @@ describe("OpinionDialog — 보내기 결과 쪽지", () => {
     );
   });
 });
+
+// 세션 439: 'error'(화면 오류 자동 보고) 종류는 관리자 화면 전용 — 손님 창에는 절대 안 나온다
+describe("OpinionDialog — 자동 오류 종류는 손님에게 안 보인다", () => {
+  it("종류 선택지 값은 bug·data·suggest·other 넷뿐이고 '자동 오류'가 없다", () => {
+    renderDialog();
+    const values = screen.getAllByRole("radio").map((r) => r.getAttribute("value"));
+    expect(values).toEqual(["bug", "data", "suggest", "other"]);
+    expect(screen.queryByText("자동 오류")).not.toBeInTheDocument();
+  });
+
+  it("맡겨 둔 글의 종류가 'error' 여도 되살리지 않는다(아무 종류도 안 골라진 상태)", () => {
+    window.sessionStorage.setItem(
+      OPINION_DRAFT_KEY,
+      JSON.stringify({ kind: "error", message: TEN, interests: [] }),
+    );
+    renderDialog();
+    for (const r of screen.getAllByRole("radio")) expect(r).not.toBeChecked();
+    expect(screen.getByLabelText("내용")).toHaveValue(TEN);
+  });
+});

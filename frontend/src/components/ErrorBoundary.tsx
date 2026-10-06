@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { reportClientError } from "@/lib/report-client-error";
 
 interface State {
   error: Error | null;
@@ -17,6 +18,11 @@ export default class ErrorBoundary extends React.Component<
 
   static getDerivedStateFromError(error: Error): State {
     return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    // 운영에서만 서버 의견함에 '자동 오류'로 남긴다(화면 모양은 그대로)
+    reportClientError(error);
   }
 
   render() {

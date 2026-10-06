@@ -3,7 +3,7 @@
  * 상태 뱃지 문구는 사장님 확인 중이라 바뀔 수 있다 → 고칠 땐 이 파일만 고친다.
  * (보내기 창 OpinionDialog 의 종류·소식 선택지 문구와 같은 뜻이어야 한다 — 서버 짝꿍 = backend/routers/opinions.py)
  */
-import type { OpinionInterest, OpinionKind, OpinionStatus } from "@/lib/api/opinions";
+import type { AdminOpinionKind, OpinionInterest, OpinionStatus } from "@/lib/api/opinions";
 
 /** 공개 목록 상태 뱃지 — 서버가 4상태를 다 보낼 수 있으므로 넷 다 둔다 */
 export const PUBLIC_STATUS_BADGE: Record<OpinionStatus, { label: string; className: string }> = {
@@ -21,11 +21,13 @@ export const ADMIN_STATUS_LABELS: Record<OpinionStatus, string> = {
   closed: "닫음",
 };
 
-export const OPINION_KIND_LABELS: Record<OpinionKind, string> = {
+/** 관리자 화면 종류 이름 — 'error' 는 화면 오류 자동 보고(손님 보내기 창 OpinionDialog 의 KINDS 에는 넣지 않는다) */
+export const OPINION_KIND_LABELS: Record<AdminOpinionKind, string> = {
   bug: "버그·오류",
   data: "정보가 틀려요",
   suggest: "건의·제안",
   other: "기타",
+  error: "자동 오류",
 };
 
 export const OPINION_INTEREST_LABELS: Record<OpinionInterest, string> = {

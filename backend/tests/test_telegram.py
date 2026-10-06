@@ -45,6 +45,19 @@ def test_send_telegram_default_no_parse_mode_key(mock_post):
     mock_post.return_value = MagicMock(status_code=200)
     assert send_telegram("테스트") is True
     assert "parse_mode" not in mock_post.call_args[1]["json"]
+    assert "link_preview_options" not in mock_post.call_args[1]["json"]  # 다른 알림 창구는 미리보기 동작 그대로
+
+
+@patch.dict("os.environ", {
+    "TELEGRAM_ENABLED": "true", "TELEGRAM_BOT_TOKEN": "tok", "TELEGRAM_CHAT_ID": "123",
+}, clear=False)
+@patch("services.telegram.requests.post")
+def test_send_telegram_disable_link_preview_in_payload(mock_post):
+    """disable_link_preview=True 면 Bot API 의 link_preview_options.is_disabled=true 가 본문에 들어간다."""
+    mock_post.return_value = MagicMock(status_code=200)
+    assert send_telegram("주소 https://2u.pe.kr", disable_link_preview=True) is True
+    assert mock_post.call_args[1]["json"]["link_preview_options"] == {"is_disabled": True}
+    assert "parse_mode" not in mock_post.call_args[1]["json"]
 
 
 @patch.dict("os.environ", {

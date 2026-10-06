@@ -3,7 +3,7 @@
  * 실행: npx vitest run src/components/__tests__/Footer.test.tsx
  */
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import Footer from "@/components/Footer";
 import { LOCKED_PATHS } from "@/lib/locked-paths";
 
@@ -69,15 +69,17 @@ describe("Footer — 광고법 면책 조항", () => {
 
   /**
    * 세션 432 — "함께 보면 좋은 사이트" 외부 링크 2개. 새 창 + noopener 보안 속성 회귀 가드.
+   * 세션 438 — 카드형으로 변경: 이름 + 설명 + "준비 중" 꼬리표를 각각 단언.
    */
   it("함께 보면 좋은 사이트 — 외부 링크 2개가 새 창·noopener 로 연다", () => {
     render(<Footer />);
-    expect(
-      screen.getByRole("navigation", { name: "함께 보면 좋은 사이트" }),
-    ).toBeInTheDocument();
+    const navi = screen.getByRole("navigation", {
+      name: "함께 보면 좋은 사이트",
+    });
+    expect(navi).toBeInTheDocument();
 
     const mibunyangLink = screen.getByRole("link", {
-      name: "미분양 아파트 비교",
+      name: /미분양 아파트 비교/,
     });
     expect(mibunyangLink).toHaveAttribute(
       "href",
@@ -85,9 +87,12 @@ describe("Footer — 광고법 면책 조항", () => {
     );
     expect(mibunyangLink).toHaveAttribute("target", "_blank");
     expect(mibunyangLink.getAttribute("rel")).toContain("noopener");
+    expect(
+      screen.getByText("전국 미분양 아파트를 모아 비교해요"),
+    ).toBeInTheDocument();
 
     const sanggaLink = screen.getByRole("link", {
-      name: "상가 공간분석(준비 중)",
+      name: /상가 공간분석/,
     });
     expect(sanggaLink).toHaveAttribute(
       "href",
@@ -95,5 +100,9 @@ describe("Footer — 광고법 면책 조항", () => {
     );
     expect(sanggaLink).toHaveAttribute("target", "_blank");
     expect(sanggaLink.getAttribute("rel")).toContain("noopener");
+    expect(
+      screen.getByText("상가 자리와 주변 상권을 살펴봐요"),
+    ).toBeInTheDocument();
+    expect(within(sanggaLink).getByText("준비 중")).toBeInTheDocument();
   });
 });

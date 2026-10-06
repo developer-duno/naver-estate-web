@@ -46,7 +46,6 @@ const baseFixture = (): DataFreshnessResponse => {
       baseItem({ key: "articles", label: "매물", count: 620635, last_updated: ago(30 * 60 * 1000), expected_interval_seconds: 43200, status: "green", new_rows: 245, last_job: { started_at: ago(40 * 60 * 1000), completed_at: ago(20 * 60 * 1000), processed_items: 50, total_items: 50 } }),
       baseItem({ key: "complex_price_history", label: "시세 이력", count: 1200000, last_updated: ago(3 * 86400 * 1000), expected_interval_seconds: 604800, status: "green", new_rows: 1500 }),
       baseItem({ key: "unsold", label: "미분양 이력", count: 8432, last_updated: ago(50 * 86400 * 1000), expected_interval_seconds: 2592000, status: "yellow" }),
-      baseItem({ key: "air_quality", label: "대기질", count: 100, last_updated: ago(40 * 60 * 1000), expected_interval_seconds: 86400, status: "green", last_job: { started_at: ago(45 * 60 * 1000), completed_at: ago(40 * 60 * 1000), processed_items: 100, total_items: 100 } }),
       baseItem({ key: "childcare", label: "어린이집", count: 0, last_updated: null, expected_interval_seconds: 2592000, status: "unknown" }),
       baseItem({ key: "crime_stats", label: "범죄통계", count: 2001, last_updated: ago(300 * 86400 * 1000), expected_interval_seconds: 7776000, status: "red" }),
       baseItem({ key: "public_trades", label: "실거래가(미분양 수집)", count: 173964, last_updated: ago(86400 * 1000), expected_interval_seconds: 2592000, status: "green" }),
@@ -55,14 +54,14 @@ const baseFixture = (): DataFreshnessResponse => {
 };
 
 describe("DataFreshnessCard 컴포넌트", () => {
-  it("제목과 8개 종목 라벨이 모두 렌더된다", async () => {
+  it("제목과 7개 종목 라벨이 모두 렌더된다 (대기질은 세션604 폐지)", async () => {
     mockGet.mockResolvedValueOnce(baseFixture());
     renderCard();
     expect(screen.getByText("데이터 신선도")).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByText("단지")).toBeInTheDocument();
     });
-    for (const label of ["매물", "시세 이력", "미분양 이력", "대기질", "어린이집", "범죄통계", "실거래가(미분양 수집)"]) {
+    for (const label of ["매물", "시세 이력", "미분양 이력", "어린이집", "범죄통계", "실거래가(미분양 수집)"]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });
@@ -123,8 +122,8 @@ describe("DataFreshnessCard 컴포넌트", () => {
   it("spinning=true 인 종목에 '헛바퀴 의심' 뱃지 표시", async () => {
     const fx = baseFixture();
     // 어린이집을 헛바퀴 시나리오로 교체
-    fx.items[5] = {
-      ...fx.items[5],
+    fx.items[4] = {
+      ...fx.items[4],
       status: "red",
       spinning: true,
       last_updated: new Date().toISOString(),

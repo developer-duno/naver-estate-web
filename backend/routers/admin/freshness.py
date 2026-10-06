@@ -184,7 +184,6 @@ def compute_freshness(db: Session) -> dict:
         "articles": (art_max, art_count),
         "complex_price_history": (cph_max, cph_count),
         "unsold": db.execute(select(func.max(UnsoldHistory.recorded_at), func.count(UnsoldHistory.id))).one(),
-        "air_quality": db.execute(select(func.max(Infra.air_updated_at), func.count(Infra.apartment_id).filter(Infra.air_updated_at.isnot(None)))).one(),
         "childcare": db.execute(
             select(
                 func.max(CrawlJob.completed_at),

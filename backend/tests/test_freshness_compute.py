@@ -16,7 +16,7 @@ def test_compute_freshness_returns_items_and_generated_at(db):
     assert "items" in result
     assert "generated_at" in result
     assert isinstance(result["items"], list)
-    assert len(result["items"]) == 18  # 세션 359 신규 8종 + V051 K-apt 2종(단지매칭·관리비) 편입
+    assert len(result["items"]) == 17  # 세션 359 신규 8종 + V051 K-apt 2종(단지매칭·관리비) 편입 − 세션604 대기질
 
 
 def test_compute_freshness_empty_db_status_unknown(db):

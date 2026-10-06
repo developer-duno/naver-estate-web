@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from crawler.api_version_monitor import PROBE_REGISTRY
-from crawler.plain_words import explain_stored_error
+from crawler.plain_words import JOB_WORDS, explain_stored_error
 from db.models import CrawlJob
 from deps import get_admin_user, get_db
 from shared.constants import NAVER_LAND_BASE
@@ -75,7 +75,6 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "collect_rental_presale": {"name": "민간임대 청약 공고 받기", "schedule": "주 1회 월요일 05:30", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "청약홈 오피스텔·민간임대 분양정보 (ApplyhomeInfoDetailSvc/v1)"}},
     "official_price": {"name": "정부 공시가격 받기", "schedule": "매월 15일 06:30", "env": "OFFICIAL_PRICE_ENABLED", "source": _VWORLD_OFFICIAL_PRICE_SOURCE},
     "backfill_price": {"name": "옛 시세 채워 넣기", "schedule": "매일 03:30", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "국토교통부 아파트 매매 실거래가"}},
-    "collect_air_quality": {"name": "동네 공기질 받기", "schedule": "매일 02:00", "env": "AIR_QUALITY_ENABLED", "source": {"probe": "에어코리아 실시간 대기질"}},
     "collect_emergency": {"name": "응급실 위치 받기", "schedule": "매월 첫째 월요일 03:00", "env": "EMERGENCY_ENABLED", "source": {"probe": "응급의료기관 목록"}},
     "collect_childcare": {"name": "어린이집 정보 받기", "schedule": "매월 첫째 목요일 01:00", "env": "CHILDCARE_ENABLED", "source": _CPMS_CHILDCARE_SOURCE},
     "collect_crime_stats": {"name": "동네 범죄 통계 받기", "schedule": "분기별 첫째 일요일 04:00", "env": "CRIME_STATS_ENABLED", "source": {"probe": "경찰청 범죄통계 (3074462)"}},
@@ -123,6 +122,15 @@ MANUAL_JOB_NAMES: dict[str, str] = {
     "collect_official_prices": "정부 공시가격 받기 (수동)",
 }
 
+# 폐지된 잡 — 이력 행 이름표 전용(세션604).
+#
+# 스케줄러에서 내린 잡도 운영 crawl_jobs 에는 지난 실행 행이 남아 달력 과거 이벤트로 나온다.
+# META 에서 빠지면 원래 id("collect_air_quality")가 화면에 그대로 보이므로 여기서 이름을 붙인다.
+# ⚠ MANUAL_JOB_NAMES 에 넣지 말 것 — 그 표는 " (수동)" 접미어와 짝 표 가드(test_plain_words)를 요구한다.
+RETIRED_JOB_NAMES: dict[str, str] = {
+    "collect_air_quality": JOB_WORDS["air_quality"],
+}
+
 
 def _source_text(source: dict | str | None) -> tuple[str | None, str | None]:
     """META 의 "source" 값을 (표시용 이름, 출처 URL) 로 변환.
@@ -146,13 +154,16 @@ def _source_text(source: dict | str | None) -> tuple[str | None, str | None]:
 
 
 def _calendar_job_name(job_id: str, fallback: str | None = None) -> str:
-    """캘린더 이벤트 표시 이름 — META → MANUAL_JOB_NAMES → 원문 3단 폴백."""
+    """캘린더 이벤트 표시 이름 — META → MANUAL_JOB_NAMES → RETIRED_JOB_NAMES → 원문 4단 폴백."""
     meta = SCHEDULER_JOB_META.get(job_id)
     if meta:
         return meta["name"]
     manual = MANUAL_JOB_NAMES.get(job_id)
     if manual:
         return manual
+    retired = RETIRED_JOB_NAMES.get(job_id)
+    if retired:
+        return retired
     return fallback or job_id
 
 

@@ -19,7 +19,7 @@ from ._shared import router
 logger = logging.getLogger(__name__)
 
 CollectorName = Literal[
-    "crime-stats", "air-quality", "emergency", "childcare", "backfill-price", "metrics",
+    "crime-stats", "emergency", "childcare", "backfill-price", "metrics",
     # K-apt 관리비 (V051) — 매칭은 월 1회라 수동 트리거가 사실상 주 실행 경로.
     # ⚠ kapt-costs 는 공개 단지당 22콜(미공개는 3콜 — 세션 414)이라 기본 배치(500)면 최대 11,000콜 — 수동 실행 전 쿼터 확인.
     "kapt-match", "kapt-costs",
@@ -31,9 +31,6 @@ def _get_collector(name: CollectorName):
     if name == "crime-stats":
         from crawler.env_service import collect_crime_stats
         return collect_crime_stats
-    if name == "air-quality":
-        from crawler.env_service import collect_air_quality
-        return collect_air_quality
     if name == "emergency":
         from crawler.env_service import collect_emergency_data
         return collect_emergency_data
@@ -58,10 +55,9 @@ def _get_collector(name: CollectorName):
 # 수집기 이름 → 그 수집기가 crawl_jobs 에 남기는 job_type (각 수집기 코드에서 grep 한 값).
 # ⚠ 스케줄러 잡 id 와 다르다(infra.md) — 예: backfill-price 는 `price_backfill`, metrics 는 `complex_metric`.
 # 짝꿍 = frontend/src/lib/admin/collectors.ts 의 COLLECTORS[].jobType — 한쪽을 바꾸면 양쪽을 같이 바꾼다.
-# 가드 = tests/test_admin_collect_background.py test_collector_job_type_map_matches_frontend_pairwise(짝 단위 8/8).
+# 가드 = tests/test_admin_collect_background.py test_collector_job_type_map_matches_frontend_pairwise(짝 단위 7/7).
 _COLLECTOR_JOB_TYPE: dict[str, str] = {
     "crime-stats": "crime_stats",
-    "air-quality": "air_quality",
     "emergency": "emergency",
     "childcare": "childcare",
     "backfill-price": "price_backfill",

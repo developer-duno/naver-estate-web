@@ -69,6 +69,8 @@ cd backend && PYTHONPATH=. PYTHONUTF8=1 python scripts/verify_alert_wording.py
 (crawl_jobs 를 안 남기는 `crawler_monitor` 만 예외 — 가드 = `tests/test_plain_words.py test_every_registered_job_name_starts_with_job_words`). 옛 이름으로 문서를 찾다 여기 왔다면 오른쪽이 지금 화면에 보이는 이름이다.
 아래 표·다른 문서에서는 옛 이름을 "옛 이름(새 이름)" 으로 함께 적어 두었다.
 
+> 대기질 실시간 수집은 2026-10-06 폐지 — 미분양 3년 평균 표 `air_station_annual` 를 읽는다(세션604).
+
 | 잡 id | 옛 이름 | 새 이름 |
 |---|---|---|
 | `discover_regions` | 전국 단지 발견 | 새 단지 찾기 |
@@ -85,7 +87,6 @@ cd backend && PYTHONPATH=. PYTHONUTF8=1 python scripts/verify_alert_wording.py
 | `collect_rental_presale` | 청약홈 민간임대 수집 | 민간임대 청약 공고 받기 |
 | `official_price` | 공동주택 공시가격 수집 | 정부 공시가격 받기 |
 | `backfill_price` | 시세 이력 소급 수집 | 옛 시세 채워 넣기 |
-| `collect_air_quality` | 에어코리아 대기질 | 동네 공기질 받기 |
 | `collect_emergency` | 응급의료기관 | 응급실 위치 받기 |
 | `collect_childcare` | 어린이집 | 어린이집 정보 받기 |
 | `collect_crime_stats` | 범죄통계 | 동네 범죄 통계 받기 |
@@ -111,6 +112,8 @@ cd backend && PYTHONPATH=. PYTHONUTF8=1 python scripts/verify_alert_wording.py
 > 아래 표는 **설명 + 라이브 실값** 기준이라 interval 이 그 표와 다를 수 있다(크롤링 모니터(서버 일감 점검) = 라이브 `.env` 10분, 코드 기본값·생성 표 30분).
 > 잡을 추가·삭제하거나 시각을 바꾸면 이 표의 행을 고치고 `--write` 로 생성 표도 갱신한다(가드 = `tests/test_restart_schedule_table.py`).
 
+> 대기질 실시간 수집은 2026-10-06 폐지 — 미분양 3년 평균 표 `air_station_annual` 를 읽는다(세션604).
+
 | 작업 | 주기 | 설명 |
 |------|------|------|
 | 새 단지 찾기 (전국 단지 발견) | 일요일 3시 | 네이버 키워드 검색으로 신규 단지 수집 |
@@ -128,7 +131,6 @@ cd backend && PYTHONPATH=. PYTHONUTF8=1 python scripts/verify_alert_wording.py
 | 오피스텔 청약 공고 받기 (청약홈 오피스텔 수집) | 월요일 05:00 | 오피스텔/도시형 청약 공고+평형(getUrbtyOfctlLttotPblancDetail/Mdl), 독립 테이블 officetel_presale_schedule·officetel_unit_supply 저장 (V045 재설계 — apartments 무관, 옛 "로스터 매칭분만 upsert" 방식 폐기. 네이버 0, PUBLIC_DATA_ENABLED 공유 — 이슈 #323) |
 | 민간임대 청약 공고 받기 (청약홈 민간임대 수집) | 월요일 05:30 | 공공지원 민간임대 공고+평형(getPblPvtRentLttotPblancDetail/Mdl), 신규 독립 테이블 (네이버 0, PUBLIC_DATA_ENABLED 공유 — 이슈 #323) |
 | 정부 공시가격 받기 (공동주택 공시가격 수집) | 매월 15일 06:30 | V-WORLD 공시가격 → 단지 매칭(세대수 게이트). 3~7시간 소요, 네이버 0 (상세: [§잡 상세 — 공동주택 공시가격 수집](../../backend/.claude/details.md#잡-상세--공동주택-공시가격-수집)) |
-| 동네 공기질 받기 (대기질 수집) | 매일 2시 | 에어코리아 API. **배치 100 은 `infra.air_attempted_at` 오래된 순(NULL 최우선) 순환**(V055·PR #459, 세션 394 — 옛 ORDER BY 부재로 매일 같은 앞쪽 100개만 재갱신되던 결함 수정. prod 실측 2026-09-05: 2,938단지 중 913개가 한 번도 수집된 적 없고 최근 30일 갱신은 977개뿐 — 매일 100×30일=3,000슬롯을 쓰고도). **전 단지 한 바퀴 ≈ 30일**(2,938 ÷ 100). ⚠ **배치 유지·전량 전환 금지** — 단지마다 `get_nearby_station` 1콜이 나가 전량이면 매일 ~3,000콜로 data.go.kr 공유 쿼터(일 10,000, mibunyang 과 공유)를 압박한다(응급의료 V054 는 전국 목록 1회 + 로컬 계산뿐이라 전량이 공짜였던 것과 다름). ⚠ **순환 키가 `air_updated_at` 이 아니라 신설 `air_attempted_at`("시도" 시각)인 이유**: `air_updated_at` 은 측정값(pm10/pm25/o3)이 하나라도 있을 때만 찍힌다(세션 280 — 전부 None 인데 찍으면 신선도 green 인데 화면은 빈값). 그 의미론은 보존해야 하는데, 그걸 순환 키로 쓰면 측정값이 안 나오는 단지가 영원히 NULL 로 남아 NULLS FIRST 앞자리를 매일 독점 → 순환이 그 자리에서 멈춘다. 그래서 측정소 미발견·측정값 전무여도 찍는 시도 마커를 분리 신설(`complexes.public_data_attempted_at`(V046) 선례와 같은 결). 매월 10일 토요일 건너뛰기 삭제(세션 422) — 그날도 평소처럼 최대 약 200콜(에어코리아 창구 2개: 단지마다 측정소 조회 1콜 + 측정소마다 실시간 측정 1콜, `env_air.py` 런 안 캐시) |
 | 응급실 위치 받기 (응급의료 수집) | 매월 첫째 월 3시 | NEMC 응급의료기관 → infra.emergency_*. 전량 갱신(회차당 목록 6콜 + 병상 1콜 = 7콜). **병상 = 실시간 op `hvs01`(응급실 일반병상), 등급 = 목록 `dutyEmclsName`, 모르면 None** — 세션 417 전까지는 목록 op 에 없는 필드를 읽어 병상 0·등급 빈값만 저장됐다 (상세: [§잡 상세 — 응급의료 수집](../../backend/.claude/details.md#잡-상세--응급의료-수집)) |
 | 어린이집 정보 받기 (어린이집 수집) | 매월 첫째 목 1시 | CPMS cpmsapi030 API (01:00 고정 — 아래 §CPMS 키 공유 참조, 04:30 이후 금지). **배치 = 전량**(`CHILDCARE_BATCH_SIZE=0`, 사장님 결정 2026-09-05 / 세션 393): 위경도 보유 2,938단지를 매월 전부 갱신한다. 전량이 가능한 근거 = 이 수집기는 **시군구당 1콜 + 런 내 캐시 재사용**이라 호출 상한 = 단지가 걸친 (region,gu) 조합 수 = **248콜**(2026-09-05 prod 실측)로, CPMS 일 1,000콜 공유 쿼터 안에서 여유. 옛 배치 100 은 한 바퀴 ≈ 30개월이라 실익이 없었다. `infra.childcare_updated_at` 오래된 순(NULL 최우선) 순환 키(V053·PR #451, 세션 392)는 **안전망으로 유지** — 부분 배치로 되돌릴 때의 폴백 + 전량 실행이 도중에 끊겨도 다음 회차가 미수집분부터 이어받게 한다(500단지마다 중간 저장). 첫 실전 = 2026-10-01 목, 이때 NULL 방치 901단지가 일괄 해소될 전망 |
 | 동네 범죄 통계 받기 (범죄통계 수집) | 분기별 첫째 일 4시 | 경찰청 odcloud API (CSV 폴백) |

@@ -61,6 +61,7 @@ def wgs84_to_tm(lat: float, lng: float) -> tuple[float, float]:
     나눠 쓰는 공동 소유**라 그 컬럼은 mibunyang 의 kakao 수집기가 찍는다 — 대기질의 시각은
     `air_updated_at`·`air_attempted_at` 이다. 실제 수집은 **하루 100단지 순환**(단지당 API
     1콜이라 쿼터 보호, 전 단지 한 바퀴 ≈ 30일)으로 정상 작동 중이었다.
+    (2026-10-06 세션604) 실시간 수집(env_air)은 폐지 — 이 모듈은 TM 변환과 URL 상수(api_version_monitor 가 씀)만 남았다.
 
     그러므로 **이 함수의 수정 근거는 "현재 피해" 가 아니라 "공식이 틀렸다는 것 자체"** 다 —
     옛 구현에 false northing 이 없는 것은 코드로 확인되는 사실이고, 그 좌표를 쓰면 엉뚱한

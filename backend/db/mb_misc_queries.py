@@ -6,6 +6,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from db.mb_models import (
+    AirStationAnnual,
     Builder,
     Infra,
     MBPrice,
@@ -119,6 +120,15 @@ def get_trade_stats(db: Session, apartment_id: str) -> Optional[TradeStats]:
 def get_infra(db: Session, apartment_id: str) -> Optional[Infra]:
     """단지 주변 인프라"""
     return db.get(Infra, apartment_id)
+
+
+def get_air_station_annual(
+    db: Session, station_name: Optional[str]
+) -> Optional[AirStationAnnual]:
+    """측정소 이름으로 3년 평균 대기질 1행 — 이름이 비면 None (세션604)"""
+    if not station_name:
+        return None
+    return db.get(AirStationAnnual, station_name)
 
 
 def get_school(db: Session, apartment_id: str) -> Optional[School]:

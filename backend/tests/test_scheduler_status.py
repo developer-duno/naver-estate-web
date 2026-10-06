@@ -96,8 +96,8 @@ def test_scheduler_status_with_job_history(mock_sched, client, db):
     _make_admin(db)
     now = datetime.now(timezone.utc)
     job = CrawlJob(
-        job_type="air_quality",
-        scheduler_job_id="collect_air_quality",
+        job_type="emergency",
+        scheduler_job_id="collect_emergency",
         status="completed",
         total_items=50,
         processed_items=48,
@@ -111,13 +111,13 @@ def test_scheduler_status_with_job_history(mock_sched, client, db):
     assert res.status_code == 200
     data = res.json()
 
-    # collect_air_quality 작업 찾기
-    air_job = next(j for j in data["jobs"] if j["scheduler_job_id"] == "collect_air_quality")
-    assert air_job["last_run"] is not None
-    assert air_job["last_run"]["status"] == "completed"
-    assert air_job["last_run"]["processed_items"] == 48
-    assert air_job["last_run"]["total_items"] == 50
-    assert air_job["last_run"]["duration_seconds"] == 300
+    # collect_emergency 작업 찾기 (세션604 대기질 잡 폐지로 대상 교체)
+    em_job = next(j for j in data["jobs"] if j["scheduler_job_id"] == "collect_emergency")
+    assert em_job["last_run"] is not None
+    assert em_job["last_run"]["status"] == "completed"
+    assert em_job["last_run"]["processed_items"] == 48
+    assert em_job["last_run"]["total_items"] == 50
+    assert em_job["last_run"]["duration_seconds"] == 300
 
 
 @patch("crawler.scheduler.get_scheduler", return_value=None)
@@ -141,11 +141,11 @@ def test_total_runs_today_uses_kst_midnight(mock_sched, client, db):
     after = (kst_midnight + timedelta(minutes=1)).astimezone(timezone.utc)  # 오늘(포함 기대)
 
     db.add(CrawlJob(
-        job_type="air_quality", scheduler_job_id="collect_air_quality",
+        job_type="emergency", scheduler_job_id="collect_emergency",
         status="failed", started_at=before, completed_at=before,
     ))
     db.add(CrawlJob(
-        job_type="air_quality", scheduler_job_id="collect_air_quality",
+        job_type="emergency", scheduler_job_id="collect_emergency",
         status="failed", started_at=after, completed_at=after,
     ))
     db.commit()
@@ -229,8 +229,8 @@ def test_scheduler_status_24h_stats(mock_sched, client, db):
     # 3개 작업: 2 completed + 1 failed
     for i, status in enumerate(["completed", "completed", "failed"]):
         db.add(CrawlJob(
-            job_type="air_quality",
-            scheduler_job_id="collect_air_quality",
+            job_type="emergency",
+            scheduler_job_id="collect_emergency",
             status=status,
             started_at=now - timedelta(hours=i),
             completed_at=now - timedelta(hours=i) + timedelta(minutes=5),
@@ -240,9 +240,9 @@ def test_scheduler_status_24h_stats(mock_sched, client, db):
 
     res = client.get("/api/admin/scheduler-status", headers=_auth(_token("admin1")))
     data = res.json()
-    air = next(j for j in data["jobs"] if j["scheduler_job_id"] == "collect_air_quality")
-    assert air["stats_24h"]["runs"] == 3
-    assert air["stats_24h"]["failures"] == 1
+    em = next(j for j in data["jobs"] if j["scheduler_job_id"] == "collect_emergency")
+    assert em["stats_24h"]["runs"] == 3
+    assert em["stats_24h"]["failures"] == 1
 
 
 # ── env_service CrawlJob 기록 헬퍼 ──

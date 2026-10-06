@@ -19,7 +19,7 @@ _BACKEND = Path(__file__).resolve().parent.parent
 
 # (파일, 그 파일에서 *_updated_at 저장에 쓰여야 하는 헬퍼)
 _ENV_FILES = [
-    "crawler/env_air.py",
+    # crawler/env_air.py 는 세션604 대기질 실시간 수집 폐지로 삭제됐다
     "crawler/env_crime.py",
 ]
 

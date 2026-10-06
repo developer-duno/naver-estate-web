@@ -28,7 +28,16 @@ interface AxisDef {
   invert?: boolean;
 }
 
-const AXES: AxisDef[] = [
+// 대기질 축 = 측정소별 3년 평균 등급 → 점수 (세션604 — 실시간 등급 폐지)
+// 짝꿍 = backend/routers/mb_air_annual.py:16-21 (등급 라벨·경계, 미분양 채점표와 같다). 등급이 없으면 0
+export const AIR_ANNUAL_RADAR_SCORE: Record<string, number> = { 좋음: 100, 보통: 75, 나쁨: 40 };
+
+export function airQualityAxisValue(a: MbApartment): number {
+  return AIR_ANNUAL_RADAR_SCORE[a.infra?.air_annual?.band ?? ""] ?? 0;
+}
+
+// export = 시험이 대기질 축이 airQualityAxisValue 에 이어져 있는지 확인한다(세션604)
+export const AXES: AxisDef[] = [
   { key: "units", label: "세대수", getValue: (a) => a.units ?? 0 },
   { key: "parking", label: "세대당 주차", getValue: (a) => a.parking_ratio ?? 0 },
   { key: "maxFloor", label: "최고층", getValue: (a) => a.max_floor ?? 0 },
@@ -38,7 +47,7 @@ const AXES: AxisDef[] = [
   { key: "unsold", label: "미분양률", getValue: (a) => a.unsold_rate ?? 0, invert: true },
   { key: "pp", label: "평당가", getValue: (a) => normalizePp(a.presale_pp), invert: true },
   { key: "far", label: "용적률", getValue: (a) => a.floor_area_ratio ?? 0, invert: true },
-  { key: "airQuality", label: "대기질", getValue: (a) => ({ "좋음": 100, "보통": 75, "나쁨": 40, "매우나쁨": 10 }[a.infra?.air_grade ?? ""] ?? 0) },
+  { key: "airQuality", label: "대기질", getValue: airQualityAxisValue },
   { key: "medical", label: "의료인프라", getValue: (a) => a.infra?.emergency_hospital ?? 0 },
   { key: "childcare", label: "보육", getValue: (a) => a.infra?.childcare_count ?? 0 },
   { key: "safety", label: "치안", getValue: (a) => a.infra?.crime_score ?? 0 },

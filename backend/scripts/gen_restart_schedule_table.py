@@ -35,7 +35,7 @@ BLOCK_END = "<!-- restart-schedule:end -->"
 #  표를 다시 고치는 것이 곧 옛 손글씨 표의 실패 방식이었다.)
 _ENABLE_TOGGLES = (
     "POPULAR_CRAWL_ENABLED", "PUBLIC_DATA_ENABLED", "OFFICIAL_PRICE_ENABLED",
-    "KAPT_ENABLED", "AIR_QUALITY_ENABLED", "EMERGENCY_ENABLED", "CHILDCARE_ENABLED",
+    "KAPT_ENABLED", "EMERGENCY_ENABLED", "CHILDCARE_ENABLED",
     "CRIME_STATS_ENABLED", "COMPLEX_DETAIL_ENABLED", "COMPLEX_METRIC_ENABLED",
     "BILLING_AUTO_CHARGE_ENABLED", "PAYMENT_ENABLED", "MONITOR_ENABLED",
     "VACUUM_MAINTENANCE_ENABLED", "API_VERSION_MONITOR_ENABLED",
@@ -69,7 +69,6 @@ _ID_TO_JOB_TYPE = {
     "kapt_costs": "kapt_costs",
     "kapt_costs_noon": "kapt_costs",
     "kapt_costs_evening": "kapt_costs",
-    "collect_air_quality": "air_quality",
     "collect_emergency": "emergency",
     "collect_childcare": "childcare",
     "collect_crime_stats": "crime_stats",

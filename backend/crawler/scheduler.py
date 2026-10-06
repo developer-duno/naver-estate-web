@@ -71,8 +71,6 @@ KAPT_COST_BATCH_SIZE = int(os.getenv("KAPT_COST_BATCH_SIZE", "500"))
 # 시세 이력 부족 단지 소급 수집 (국토교통부 실거래가). PUBLIC_DATA_ENABLED 와 같은
 # data.go.kr 키 사용 — 일일 쿼터(10,000회, mibunyang 공유) 보호 위해 배치 작게.
 PUBLIC_PRICE_BACKFILL_BATCH_SIZE = int(os.getenv("PUBLIC_PRICE_BACKFILL_BATCH_SIZE", "30"))
-AIR_QUALITY_ENABLED = os.getenv("AIR_QUALITY_ENABLED", "false").lower() == "true"
-AIR_QUALITY_BATCH_SIZE = int(os.getenv("AIR_QUALITY_BATCH_SIZE", "100"))
 EMERGENCY_ENABLED = os.getenv("EMERGENCY_ENABLED", "false").lower() == "true"
 # 0 = 전량(위경도 보유 2,938단지). 전국 기관목록을 1회만 받고 단지별 처리는 로컬
 # 거리계산뿐이라 배치 크기가 외부 API 호출 수와 무관 — 전량이어도 비용 증가 0 (세션 394).
@@ -526,22 +524,6 @@ def create_scheduler() -> BackgroundScheduler:
             "K-apt 관리비 연동 활성화: 매칭 매월 21일 14:50 / 관리비 매일 06:20·12:40·21:00 (배치 %d)",
             KAPT_COST_BATCH_SIZE,
         )
-
-    # G. 에어코리아 대기질 수집 — 매일 새벽 2시
-    if AIR_QUALITY_ENABLED:
-        from crawler.env_service import collect_air_quality
-
-        scheduler.add_job(
-            collect_air_quality,
-            "cron",
-            hour=2,
-            kwargs={"batch_size": AIR_QUALITY_BATCH_SIZE},
-            id="collect_air_quality",
-            name="동네 공기질 받기",
-            max_instances=1,
-            misfire_grace_time=3600,
-        )
-        logger.info("에어코리아 대기질 수집 활성화: 매일 02:00 (배치 %d)", AIR_QUALITY_BATCH_SIZE)
 
     # H. 응급의료기관 수집 — 매월 첫째 월요일 새벽 3시
     #    ⚠ 배치 = 전량(0, 세션 394). 전국 기관목록 1콜 + 단지별 로컬 거리계산 구조라

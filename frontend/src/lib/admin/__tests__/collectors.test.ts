@@ -1,5 +1,5 @@
 /**
- * 수집기 8종 정본(lib/admin/collectors.ts) 가드
+ * 수집기 7종 정본(lib/admin/collectors.ts) 가드 (세션604 대기질 삭제로 8 → 7)
  * 실행: npx vitest run src/lib/admin/__tests__/collectors.test.ts
  *
  * 1. 화면 버튼 집합 == BE 가 받는 수집기 집합(backend/routers/admin/collect.py `CollectorName`).
@@ -36,10 +36,10 @@ function backendCollectorNames(): string[] {
 
 describe("수집기 버튼 집합 = BE 수집기 집합", () => {
   it("BE 이름을 제대로 읽었다 (추출이 비면 아래 대조가 헛돈다)", () => {
-    expect(backendCollectorNames().length).toBeGreaterThanOrEqual(8);
+    expect(backendCollectorNames().length).toBeGreaterThanOrEqual(7);
   });
 
-  it("버튼 8종과 BE 가 받는 이름이 정확히 같다 (빠진 것도 남는 것도 없다)", () => {
+  it("버튼 7종과 BE 가 받는 이름이 정확히 같다 (빠진 것도 남는 것도 없다)", () => {
     const fe = COLLECTORS.map((c) => c.name).sort();
     expect(fe).toEqual([...new Set(fe)]); // 중복 없음
     expect(fe).toEqual(backendCollectorNames().sort());
@@ -52,7 +52,7 @@ describe("수집기 버튼 집합 = BE 수집기 집합", () => {
     const block = src.match(/^_COLLECTOR_JOB_TYPE[^{]*\{([\s\S]*?)^\}/m);
     if (!block) throw new Error("collect.py 에서 _COLLECTOR_JOB_TYPE 표를 찾지 못했다");
     const be = Object.fromEntries([...block[1].matchAll(/"([a-z-]+)":\s*"([a-z_]+)"/g)].map((m) => [m[1], m[2]]));
-    expect(Object.keys(be)).toHaveLength(8);
+    expect(Object.keys(be)).toHaveLength(7);
     expect(Object.fromEntries(COLLECTORS.map((c) => [c.name, c.jobType]))).toEqual(be);
   });
 

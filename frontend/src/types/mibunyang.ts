@@ -200,15 +200,22 @@ export interface MbInfra {
   emergency_name?: string;
   emergency_type?: string;
   emergency_updated_at?: string; // V054 순환 키 겸 갱신시각
-  /** 대기질 — 에어코리아 (V012) */
+  /** 대기질 측정소 — 이름·거리 (V012, 미분양 주간 수집기가 맞춘다) */
   air_station_name?: string;
   air_station_dist?: number;
-  air_pm10?: number;
-  air_pm25?: number;
-  air_o3?: number;
-  air_grade?: string;
-  air_updated_at?: string; // 측정값을 받았을 때만 갱신 (세션 280)
-  air_attempted_at?: string; // V055 순환 키 — 측정값 없어도 찍히는 시도 시각
+  /**
+   * 대기질 3년 평균 (세션604 — 실시간 값 대신). BE routers/mb.py 상세 엔드포인트가 붙인다.
+   * 측정소가 없거나 미분양 표 air_station_annual 에 없으면 null.
+   */
+  air_annual?: {
+    pm25: number | null;
+    pm10: number | null;
+    o3: number | null;
+    years: string;
+    band: "좋음" | "보통" | "나쁨" | null;
+    legend: string;
+    updated_at: string | null;
+  } | null;
   /** 어린이집 (V013 + V019 type/teachers) */
   childcare_count?: number;
   childcare_nearest_dist?: number;

@@ -60,7 +60,6 @@ _JOB_LABEL_FALLBACK = {
     "collect_officetel_presale": "오피스텔 청약 공고 받기",
     "collect_rental_presale": "민간임대 청약 공고 받기",
     "official_price": "정부 공시가격 받기",
-    "collect_air_quality": "동네 공기질 받기",
     "collect_emergency": "응급실 위치 받기",
     "collect_childcare": "어린이집 정보 받기",
     "collect_crime_stats": "동네 범죄 통계 받기",

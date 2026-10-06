@@ -192,15 +192,10 @@ def infra_to_dict(i) -> dict:
         "emergency_name": i.emergency_name,
         "emergency_type": i.emergency_type,
         "emergency_updated_at": i.emergency_updated_at.isoformat() if i.emergency_updated_at else None,  # V054
-        # 대기질 — 에어코리아 (V012)
+        # 대기질 — 측정소 이름·거리만(V012). 실시간 air_pm10/pm25/o3/grade·시각 칸은 세션604 수집 폐지로
+        # 값이 낡아 노출하지 않는다. 대기질 값은 상세 엔드포인트가 붙이는 infra.air_annual(3년 평균)
         "air_station_name": i.air_station_name,
         "air_station_dist": i.air_station_dist,
-        "air_pm10": i.air_pm10,
-        "air_pm25": i.air_pm25,
-        "air_o3": i.air_o3,
-        "air_grade": i.air_grade,
-        "air_updated_at": i.air_updated_at.isoformat() if i.air_updated_at else None,
-        "air_attempted_at": i.air_attempted_at.isoformat() if i.air_attempted_at else None,  # V055
         # 어린이집 (V013)
         "childcare_count": i.childcare_count,
         "childcare_nearest_dist": i.childcare_nearest_dist,

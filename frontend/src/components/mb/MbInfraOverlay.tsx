@@ -86,11 +86,14 @@ function SafetyInfo({ apt, loading, error }: LayerProps) {
 }
 
 function AirInfo({ apt, loading, error }: LayerProps) {
-  const grade = apt.infra?.air_grade;
-  if (!grade) return error ? errorRow() : loading ? loadingRow() : noData();
+  // 측정소별 3년 평균(세션604 — 실시간 등급 폐지). 등급이 없으면 기존처럼 정보 없음 분기
+  const annual = apt.infra?.air_annual;
+  const band = annual?.band;
+  if (!band) return error ? errorRow() : loading ? loadingRow() : noData();
   return (
     <div className="space-y-1">
-      <Row label="대기질 등급" value={grade} />
+      <Row label="대기질 등급 (3년 평균)" value={band} />
+      {annual?.pm25 != null && <Row label="PM2.5 3년 평균" value={`${annual.pm25.toFixed(1)} μg/m³`} />}
     </div>
   );
 }

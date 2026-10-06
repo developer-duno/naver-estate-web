@@ -3,6 +3,7 @@
 apartments(97), unsold_history, regions, trades, prices, trade_stats,
 builders, infra, schools, transport, presale_schedule_official,
 applyhome_unit_supply 12개 테이블 매핑.
+air_station_annual(측정소별 3년 평균 대기질 — 미분양 소유, 2u 는 읽기만, 세션604) 도 매핑.
 apartments는 핵심 컬럼만 매핑 (SQLAlchemy는 매핑 안 된 컬럼 무시).
 """
 
@@ -356,6 +357,30 @@ class AirQualityStation(Base):
     address: Mapped[str | None] = mapped_column(Text)
     lat: Mapped[float | None] = mapped_column(Float)
     lng: Mapped[float | None] = mapped_column(Float)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+# ── 측정소별 3년 평균 대기질 (미분양 소유 · 2u 는 읽기만) ──────────────
+
+
+class AirStationAnnual(Base):
+    """측정소별 대기질 3년 평균 — 단지 상세·비교 레이더의 '대기질' 값.
+
+    미분양(mibunyang) 소유 · 연 1회 갱신 · 2u 는 읽기만 한다(쓰기 금지).
+    정의 = mibunyang supabase/migrations/20260922000000_create_air_station_annual.sql
+    단지와의 연결 = infra.air_station_name == station_name (세션604).
+    """
+
+    __tablename__ = "air_station_annual"
+
+    station_name: Mapped[str] = mapped_column(Text, primary_key=True)
+    station_code: Mapped[str | None] = mapped_column(Text)
+    pm25: Mapped[float | None] = mapped_column(Float)
+    pm10: Mapped[float | None] = mapped_column(Float)
+    o3: Mapped[float | None] = mapped_column(Float)
+    years: Mapped[str] = mapped_column(Text, nullable=False)  # 예 "2022,2023,2024"
+    sample_hours: Mapped[int | None] = mapped_column(Integer)
+    address: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 

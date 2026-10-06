@@ -33,7 +33,10 @@ function detailApt(overrides: Partial<MbApartment> = {}): MbApartment {
     school: { school_grade: "A" },
     transport: { subway_name: "강남역", subway_lines: "2호선", subway_dist: 350 },
     infra: {
-      air_grade: "좋음",
+      air_annual: {
+        pm25: 14.24, pm10: 28.0, o3: 0.029, years: "2022,2023,2024", band: "좋음",
+        legend: "좋음 15 이하, 보통 19 이하, 나쁨 19 초과", updated_at: null,
+      },
       childcare_count: 12,
       childcare_nearest_name: "햇빛어린이집",
       childcare_nearest_dist: 1200,
@@ -49,7 +52,7 @@ describe("MbInfraOverlay — 목록형 apt(평탄만, 중첩 없음): A 수정 �
     expect(screen.getByText(/이 단지는 해당 정보가 없습니다/)).toBeInTheDocument();
   });
 
-  it("대기질 레이어는 infra.air_grade 가 없어 '정보 없음'을 표시한다", () => {
+  it("대기질 레이어는 infra.air_annual 이 없어 '정보 없음'을 표시한다", () => {
     render(<MbInfraOverlay apt={flatApt()} layer="air" />);
     expect(screen.getByText(/이 단지는 해당 정보가 없습니다/)).toBeInTheDocument();
   });
@@ -75,10 +78,11 @@ describe("MbInfraOverlay — 상세형 apt(중첩 채움): A 수정 후 동작",
     expect(screen.getByText("350m")).toBeInTheDocument();
   });
 
-  it("대기질 레이어가 등급을 표시한다", () => {
+  it("대기질 레이어가 3년 평균 등급과 PM2.5 를 표시한다 (세션604)", () => {
     render(<MbInfraOverlay apt={detailApt()} layer="air" />);
-    expect(screen.getByText("대기질 등급")).toBeInTheDocument();
+    expect(screen.getByText("대기질 등급 (3년 평균)")).toBeInTheDocument();
     expect(screen.getByText("좋음")).toBeInTheDocument();
+    expect(screen.getByText("14.2 μg/m³")).toBeInTheDocument();
   });
 
   it("어린이집 레이어가 개수+이름+거리를 표시한다", () => {

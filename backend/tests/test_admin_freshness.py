@@ -45,7 +45,7 @@ def test_freshness_empty_db_unknown(client, db):
     res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
     assert res.status_code == 200
     body = res.json()
-    assert len(body["items"]) == 18  # 세션 359 신규 8종 + V051 K-apt 2종(단지매칭·관리비) 편입
+    assert len(body["items"]) == 17  # 세션 359 신규 8종 + V051 K-apt 2종(단지매칭·관리비) 편입 − 세션604 대기질
     for item in body["items"]:
         assert item["count"] == 0
         assert item["last_updated"] is None
@@ -409,7 +409,7 @@ def test_freshness_response_schema(client, db):
     keys = {item["key"] for item in body["items"]}
     expected_keys = {
         "complexes", "articles", "complex_price_history", "unsold",
-        "air_quality", "childcare", "crime_stats", "public_trades",
+        "childcare", "crime_stats", "public_trades",  # air_quality 는 세션604 폐지
         "officetel_presale", "rental_presale", "official_price",
         "emergency", "article_detail", "complex_metric",
         "complex_detail_apt", "complex_detail_opst",

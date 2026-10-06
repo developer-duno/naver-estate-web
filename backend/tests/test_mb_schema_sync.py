@@ -59,7 +59,16 @@ ALLOWLIST: dict[str, set[str]] = {
 # = "섹션별 데이터 신선도 표시 부재"(세션 258 감사 지적, medium) 해소로 노출 → 여기서 제거.
 KNOWN_UNEXPOSED: dict[str, set[str]] = {
     "Apartment": {"balcony_value", "option_value"},  # 채움률 0% 빈칸 — 노출해도 항상 "-"
-    "Infra": {"nearby_facilities"},  # JSON 복합시설 — 표시 UI 미설계(범위 밖)
+    "Infra": {
+        "nearby_facilities",  # JSON 복합시설 — 표시 UI 미설계(범위 밖)
+        # 실시간 수집 폐지(세션604) — 값이 낡아 노출 안 함, 칸은 DB 에 남김
+        "air_pm10",
+        "air_pm25",
+        "air_o3",
+        "air_grade",
+        "air_updated_at",
+        "air_attempted_at",
+    },
     "MBTrade": {"recorded_at"},  # 실거래 region 단위 — 단지 상세 응답에 mb_trade_to_dict 미포함(노출 경로 없음)
     "Builder": {"corp_code"},  # 법인 고유번호 — 화면 가치 낮음(신용조회 미구현)
     # house_type (V040) — 이슈 #323 오피스텔 편입 최초 태스크(DB 컬럼만). 라우터 분기 노출은

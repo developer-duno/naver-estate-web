@@ -120,7 +120,6 @@ interval 잡(시각 `—` 행)의 주기는 **코드 기본값**이다 — 라�
 | 00:20 | ⏰ `backfill_detail_dawn` | 매일 00:20 | 4h |
 | 01:00 | ⏰ `collect_childcare` | 매월 첫째 목요일 01:00 | 3h |
 | 01:00·13:00 | `crawl_articles` | 매일 01:00, 13:00 | 1h |
-| 02:00 | `collect_air_quality` | 매일 02:00 | 1h |
 | 03:00 | `collect_emergency` | 매월 첫째 월요일 03:00 | 1h |
 | 03:00 | `discover_regions` | 주 1회 일요일 03:00 | 1h |
 | 03:30 | ⏰ `backfill_price` | 매일 03:30 | 12h |

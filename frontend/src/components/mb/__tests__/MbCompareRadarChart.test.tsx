@@ -36,7 +36,7 @@ function makeApt(overrides: Partial<MbApartment> & { id: string; name: string })
 }
 
 // 직접 import (dynamic 아님)
-import MbCompareRadarChart from "../MbCompareRadarChart";
+import MbCompareRadarChart, { AXES, airQualityAxisValue } from "../MbCompareRadarChart";
 
 describe("MbCompareRadarChart", () => {
   beforeEach(() => {
@@ -181,5 +181,38 @@ describe("MbCompareRadarChart", () => {
 
     // 슬라이더 가중치 3 복원 단언
     expect((sliders[0] as HTMLInputElement).value).toBe("3");
+  });
+});
+
+// 대기질 축 값 = 3년 평균 등급 → 점수 (세션604). 렌더된 축 값은 recharts mock 이라 못 읽어 함수로 직접 본다
+describe("MbCompareRadarChart — 대기질 축 (air_annual.band)", () => {
+  function aptWithBand(band: "좋음" | "보통" | "나쁨" | null): MbApartment {
+    return makeApt({
+      id: "A",
+      name: "대기질",
+      infra: {
+        air_annual: {
+          pm25: 15, pm10: 30, o3: 0.03, years: "2022,2023,2024", band,
+          legend: "좋음 15 이하, 보통 19 이하, 나쁨 19 초과", updated_at: null,
+        },
+      },
+    });
+  }
+
+  it("좋음 100 · 보통 75 · 나쁨 40 으로 매긴다", () => {
+    expect(airQualityAxisValue(aptWithBand("좋음"))).toBe(100);
+    expect(airQualityAxisValue(aptWithBand("보통"))).toBe(75);
+    expect(airQualityAxisValue(aptWithBand("나쁨"))).toBe(40);
+  });
+
+  it("등급이 없거나 air_annual 이 없으면 0", () => {
+    expect(airQualityAxisValue(aptWithBand(null))).toBe(0);
+    expect(airQualityAxisValue(makeApt({ id: "B", name: "없음", infra: { air_annual: null } }))).toBe(0);
+    expect(airQualityAxisValue(makeApt({ id: "C", name: "인프라없음" }))).toBe(0);
+  });
+
+  it("레이더의 대기질 축은 airQualityAxisValue 로 값을 낸다 (축 정의와 함수가 끊기지 않게)", () => {
+    const axis = AXES.find((a) => a.key === "airQuality");
+    expect(axis?.getValue).toBe(airQualityAxisValue);
   });
 });

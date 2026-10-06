@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from db import mb_queries
 from deps import get_db
+from routers.mb_air_annual import air_annual_to_dict
 from routers.serializers import (
     apartment_to_dict,
     builder_to_dict,
@@ -96,6 +97,9 @@ def get_apartment_detail(
     infra = mb_queries.get_infra(db, apartment_id)
     if infra:
         result["infra"] = infra_to_dict(infra)
+        # 대기질 = 측정소별 3년 평균(미분양 표 · 세션604). 측정소가 없거나 표에 없으면 null
+        air_row = mb_queries.get_air_station_annual(db, infra.air_station_name)
+        result["infra"]["air_annual"] = air_annual_to_dict(air_row) if air_row else None
 
     school = mb_queries.get_school(db, apartment_id)
     if school:
@@ -323,6 +327,9 @@ def get_presale_detail(
     infra = mb_queries.get_infra(db, apartment_id)
     if infra:
         result["infra"] = infra_to_dict(infra)
+        # 대기질 = 측정소별 3년 평균(미분양 표 · 세션604). 측정소가 없거나 표에 없으면 null
+        air_row = mb_queries.get_air_station_annual(db, infra.air_station_name)
+        result["infra"]["air_annual"] = air_annual_to_dict(air_row) if air_row else None
 
     school = mb_queries.get_school(db, apartment_id)
     if school:

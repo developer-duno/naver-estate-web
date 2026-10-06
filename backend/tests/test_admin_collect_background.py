@@ -274,8 +274,8 @@ def test_b3_success_invalidates_freshness_cache(client, db):
     _admin(db, "bg7")
     with patch.object(collect_mod, "_get_collector", return_value=lambda: None), \
             patch("routers.admin.freshness.invalidate_freshness_cache") as inv:
-        client.post("/api/admin/collect/air-quality", headers=_auth("bg7"))
-        _join_collector("air-quality")
+        client.post("/api/admin/collect/emergency", headers=_auth("bg7"))
+        _join_collector("emergency")
     inv.assert_called_once_with()
 
 
@@ -290,7 +290,7 @@ def _fe_collector_job_types() -> dict[str, str]:
 
 
 def test_collector_job_type_map_matches_frontend_pairwise():
-    """이름→job_type 표를 FE collectors.ts 와 **짝 단위로** 대조한다(8/8) — domain-mapping-ssot 룰 1.
+    """이름→job_type 표를 FE collectors.ts 와 **짝 단위로** 대조한다(7/7 — 세션604 대기질 삭제) — domain-mapping-ssot 룰 1.
 
     옛 시험은 "그 모듈 어딘가에 그 글자"만 봐서 kapt_match↔kapt_costs 를 맞바꿔도 통과했다(PR #601 검사관).
     """
@@ -299,7 +299,7 @@ def test_collector_job_type_map_matches_frontend_pairwise():
     names = set(get_args(collect_mod.CollectorName))
     assert set(collect_mod._COLLECTOR_JOB_TYPE) == names
     fe = _fe_collector_job_types()
-    assert len(fe) == 8, f"collectors.ts 에서 짝을 {len(fe)}개만 읽었다 — 추출이 비면 대조가 헛돈다"
+    assert len(fe) == 7, f"collectors.ts 에서 짝을 {len(fe)}개만 읽었다 — 추출이 비면 대조가 헛돈다"
     assert fe == collect_mod._COLLECTOR_JOB_TYPE
 
 

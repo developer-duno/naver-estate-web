@@ -22,13 +22,21 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-/** 대기질 등급 색상 뱃지 */
+/** 대기질 등급 색상 뱃지 — 3년 평균 3단계(좋음·보통·나쁨, 세션604) */
 const AIR_GRADE_STYLES: Record<string, string> = {
   "좋음": "bg-green-100 text-green-800 border-green-300",
   "보통": "bg-yellow-100 text-yellow-800 border-yellow-300",
   "나쁨": "bg-orange-100 text-orange-800 border-orange-300",
-  "매우나쁨": "bg-red-100 text-red-800 border-red-300",
 };
+
+/** "2022,2023,2024" → "2022~2024" (한 해면 그 해만, 읽을 수 없으면 빈 글자) */
+function formatAirYears(years: string | null | undefined): string {
+  const ys = (years ?? "").split(",").map((y) => Number(y.trim())).filter((y) => Number.isInteger(y) && y > 0);
+  if (ys.length === 0) return "";
+  const lo = Math.min(...ys);
+  const hi = Math.max(...ys);
+  return lo === hi ? String(lo) : `${lo}~${hi}`;
+}
 
 function AirGradeBadge({ grade }: { grade: string }) {
   const style = AIR_GRADE_STYLES[grade] ?? "bg-gray-100 text-gray-600 border-gray-300";
@@ -103,30 +111,33 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
         </div>
       )}
 
-      {infra?.air_grade && (
+      {/* 대기질 = 측정소별 3년 평균(세션604 — 실시간 수집 폐지). 등급이 없으면 블록째 숨긴다 */}
+      {infra?.air_annual?.band && (
         <div className="mb-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-2">대기질<FreshnessTag iso={infra.air_updated_at} /></h4>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">
+            대기질 ({formatAirYears(infra.air_annual.years) ? `3년 평균 ${formatAirYears(infra.air_annual.years)}` : "3년 평균"})
+          </h4>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="flex flex-col">
-              <dt className="text-xs text-gray-500">종합 등급</dt>
-              <dd className="text-sm"><AirGradeBadge grade={infra.air_grade} /></dd>
+              <dt className="text-xs text-gray-500">등급 (PM2.5)</dt>
+              <dd className="text-sm"><AirGradeBadge grade={infra.air_annual.band} /></dd>
             </div>
-            {infra.air_pm10 != null && (
-              <div className="flex flex-col">
-                <dt className="text-xs text-gray-500">PM10</dt>
-                <dd className="text-sm">{infra.air_pm10} <span className="text-gray-400">μg/m³</span></dd>
-              </div>
-            )}
-            {infra.air_pm25 != null && (
+            {infra.air_annual.pm25 != null && (
               <div className="flex flex-col">
                 <dt className="text-xs text-gray-500">PM2.5</dt>
-                <dd className="text-sm">{infra.air_pm25} <span className="text-gray-400">μg/m³</span></dd>
+                <dd className="text-sm">{infra.air_annual.pm25.toFixed(1)} <span className="text-gray-400">μg/m³</span></dd>
               </div>
             )}
-            {infra.air_o3 != null && (
+            {infra.air_annual.pm10 != null && (
+              <div className="flex flex-col">
+                <dt className="text-xs text-gray-500">PM10</dt>
+                <dd className="text-sm">{infra.air_annual.pm10.toFixed(1)} <span className="text-gray-400">μg/m³</span></dd>
+              </div>
+            )}
+            {infra.air_annual.o3 != null && (
               <div className="flex flex-col">
                 <dt className="text-xs text-gray-500">오존</dt>
-                <dd className="text-sm">{infra.air_o3} <span className="text-gray-400">ppm</span></dd>
+                <dd className="text-sm">{infra.air_annual.o3.toFixed(3)} <span className="text-gray-400">ppm</span></dd>
               </div>
             )}
             {infra.air_station_name && (
@@ -139,6 +150,9 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
               </div>
             )}
           </dl>
+          {infra.air_annual.legend && (
+            <p className="mt-2 text-xs text-gray-400">등급 기준(PM2.5 3년 평균): {infra.air_annual.legend}</p>
+          )}
         </div>
       )}
 

@@ -69,7 +69,6 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정 (설정 완�
 
 | 시간 | 프로젝트 | 작업 | 실행일 |
 |------|----------|------|--------|
-| 02:00 | naver-estate-web | collect_air_quality | 매일 |
 | 03:00 (첫째 월) | naver-estate-web | collect_emergency | 매월 첫째 월 |
 | 03:00 | naver-estate-web | discover_regions | 일요일 |
 | 03:30 | naver-estate-web | backfill_price (data.go.kr, 네이버 0) | 매일 (PUBLIC_DATA_ENABLED) |
@@ -93,8 +92,10 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정 (설정 완�
 
 ## infra·air_quality_stations 컬럼 분담
 
-  - `infra`: naver 가 `air_updated_at`(env_air.py:88) · `crime_updated_at`(env_crime.py:119·186) · `emergency_*`(env_emergency.py:53~56) · `childcare_*`(env_childcare.py:93~102, 신규 INSERT 포함) write. mibunyang 은 나머지 인프라 컬럼 write.
-  - `air_quality_stations`: naver 가 에어코리아 측정소 캐시 `_do_upsert(AirQualityStation)` write (env_air.py:112~126).
+  - `infra`: naver 가 `crime_updated_at`(env_crime.py:119·186) · `emergency_*`(env_emergency.py:53~56) · `childcare_*`(env_childcare.py:93~102, 신규 INSERT 포함) write. mibunyang 은 나머지 인프라 컬럼 write — 대기질 측정소 `air_station_name/dist` 는 미분양 주간 수집기(`collect-air-quality.mjs --station-only`)가 쓴다.
+  - 대기질 실시간 칸 `air_pm10/pm25/o3/grade/air_updated_at/air_attempted_at`: **쓰는 곳 없음**(세션604 에 2u `env_air.py` 삭제 — 낡은 값, API 응답·화면에서도 뺐다. 칸 삭제는 후속).
+  - `air_quality_stations`: **쓰는 곳 없음**(옛 2u 측정소 캐시 — 세션604 수집 폐지).
+  - `air_station_annual`(측정소별 3년 평균): 미분양 소유·연 1회 갱신, 2u 는 읽기만(상세 응답 `infra.air_annual`).
 
 ## DB 백업 실태·도구 (2026-08-14 실측)
 

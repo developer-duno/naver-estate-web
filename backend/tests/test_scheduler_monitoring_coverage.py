@@ -53,10 +53,11 @@ def test_extract_scheduler_job_ids_finds_static_literals():
     # (세션 402: 상세 백필 2회차 + 채움률 감시 신설로 22 → 25. 백필 두 회차는 배치 크기가
     #  달라 별도 잡이고, 루프가 아니라 풀어 쓴 이유는 id 리터럴이 있어야 이 추출기가 잡을
     #  인식하기 때문이다. 세션 422: 관리비 낮 회차 kapt_costs_noon 신설로 25 → 26.
-    #  세션 426: 관리비 저녁 회차 kapt_costs_evening 신설로 26 → 27.)
+    #  세션 426: 관리비 저녁 회차 kapt_costs_evening 신설로 26 → 27.
+    #  세션604: 대기질 실시간 수집 collect_air_quality 폐지로 27 → 26.)
     assert len(ids) == len(set(ids)), f"id 중복 발견: {ids}"
-    assert len(ids) == 27, (
-        f"정적 add_job id 리터럴 개수가 27이 아님 (실제 {len(ids)}개): {ids}. "
+    assert len(ids) == 26, (
+        f"정적 add_job id 리터럴 개수가 26이 아님 (실제 {len(ids)}개): {ids}. "
         "scheduler.py 에 잡이 추가/삭제됐으면 이 테스트의 기대값도 함께 갱신할 것."
     )
 
@@ -66,7 +67,7 @@ def test_extract_scheduler_job_ids_finds_static_literals():
         "discover_regions", "crawl_articles", "crawl_details", "collect_prices",
         "backfill_price", "complex_detail_APT", "complex_detail_OPST",
         "collect_public_trades", "collect_officetel_presale", "collect_rental_presale",
-        "official_price", "collect_air_quality", "collect_emergency", "collect_childcare",
+        "official_price", "collect_emergency", "collect_childcare",
         "collect_crime_stats", "crawler_monitor", "collect_metrics", "billing_charge",
         "vacuum_maintenance",
         # K-apt 관리비 연동 (단지 매칭 + 관리비 수집)

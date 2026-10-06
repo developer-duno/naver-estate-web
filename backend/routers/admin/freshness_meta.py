@@ -46,14 +46,6 @@ FRESHNESS_ITEMS: list[dict] = [
         "new_rows_expected": False,
     },
     {
-        "key": "air_quality",
-        "label": "대기질",
-        "expected_interval_seconds": 86400,
-        "scheduler_job_id": "collect_air_quality",
-        "new_rows_kind": None,  # infra.created_at 없음
-        "new_rows_expected": False,
-    },
-    {
         "key": "childcare",
         "label": "어린이집",
         "expected_interval_seconds": 86400 * 30,

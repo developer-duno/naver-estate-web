@@ -67,6 +67,6 @@ trigger=SSOT 자동생성으로 근본 전환. 손글씨 정정 PR 과 SSOT PR �
 ## Cross-link
 
 - `.claude/rules/domain-mapping-ssot.md` — BE dict ↔ FE 함수 짝꿍 SSOT (매핑 동기화 결, 본 룰과 상보)
-- `.claude/rules/infra.md` §스케줄러 — **27 잡** + 운영 토글 (표시값 source. 세션 404 실측 정정: 옛 '22 잡'·'13 잡'은 낡은 수치. 세션 422 관리비 낮 회차로 25 → 26. 세션 426 관리비 저녁 회차로 26 → 27. 세는 법 = `grep -oE 'id="[a-zA-Z_]+"' backend/crawler/scheduler.py | sed 's/id="//;s/"//' | sort -u | wc -l`. ⚠ 라이브 `scheduler-status` 는 **33개**(세션 422 관리비 낮 회차 +1 · 세션 426 저녁 회차 +1)로 보이는데 popular 3회차·complex_detail 5유형이 개별 등록된 것이라 정상 — 두 수를 맞추려 하지 말 것)
+- `.claude/rules/infra.md` §스케줄러 — **26 잡** + 운영 토글 (표시값 source. 세션 404 실측 정정: 옛 '22 잡'·'13 잡'은 낡은 수치. 세션 422 관리비 낮 회차로 25 → 26. 세션 426 관리비 저녁 회차로 26 → 27. 세션604 대기질 실시간 수집 삭제로 27 → 26. 세는 법 = `grep -oE 'id="[a-zA-Z_]+"' backend/crawler/scheduler.py | sed 's/id="//;s/"//' | sort -u | wc -l`. ⚠ 라이브 `scheduler-status` 는 **32개**(세션 422 관리비 낮 회차 +1 · 세션 426 저녁 회차 +1 · 세션604 대기질 −1)로 보이는데 popular 3회차·complex_detail 5유형이 개별 등록된 것이라 정상 — 두 수를 맞추려 하지 말 것)
 - `backend/crawler/schedule_describe.py` — `describe_trigger()` 선례
 - `backend/tests/test_schedule_describe.py` — 순수 단위 가드 선례

@@ -84,16 +84,11 @@ def test_collect_crime_stats_success(client, db):
         mock_fn.assert_called_once_with()
 
 
-def test_collect_air_quality_success(client, db):
-    """대기질 수집 트리거 — 관리자 성공"""
+def test_collect_air_quality_removed_422(client, db):
+    """대기질 실시간 수집은 세션604 에 폐지 — 수동 실행 이름도 없어져 422"""
     _make_profile(db, "a2", role="admin")
-    with patch("routers.admin.collect._get_collector") as mock_get:
-        mock_fn = mock_get.return_value
-        mock_fn.return_value = None
-        res = client.post("/api/admin/collect/air-quality", headers=_auth(_token("a2")))
-        _join_collector("air-quality")
-        assert res.status_code == 200
-        assert res.json()["collector"] == "air-quality"
+    res = client.post("/api/admin/collect/air-quality", headers=_auth(_token("a2")))
+    assert res.status_code == 422
 
 
 def test_collect_response_no_longer_carries_collector_result(client, db):
@@ -127,8 +122,8 @@ def test_collect_success_invalidates_freshness_cache(client, db):
     get_cache("freshness").set("data_freshness", {"stale": True})
     with patch("routers.admin.collect._get_collector") as mock_get:
         mock_get.return_value.return_value = None
-        res = client.post("/api/admin/collect/air-quality", headers=_auth(_token("a4")))
-        _join_collector("air-quality")
+        res = client.post("/api/admin/collect/emergency", headers=_auth(_token("a4")))
+        _join_collector("emergency")
     assert res.status_code == 200
     assert get_cache("freshness").get("data_freshness") is None  # 무효화됨
 
@@ -141,8 +136,8 @@ def test_collect_failure_keeps_freshness_cache(client, db):
     get_cache("freshness").set("data_freshness", {"keep": True})
     with patch("routers.admin.collect._get_collector") as mock_get:
         mock_get.return_value.side_effect = RuntimeError("수집 실패")
-        res = client.post("/api/admin/collect/air-quality", headers=_auth(_token("a5")))
-        _join_collector("air-quality")
+        res = client.post("/api/admin/collect/emergency", headers=_auth(_token("a5")))
+        _join_collector("emergency")
     # 시작은 됐다 — 실패는 백그라운드에서 난다
     assert res.status_code == 200
     assert get_cache("freshness").get("data_freshness") == {"keep": True}  # 유지됨

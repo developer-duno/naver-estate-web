@@ -85,7 +85,7 @@ def test_calendar_past_mode_returns_crawl_jobs(mock_sched, client, db):
     # 2026-05-15 12:00 KST = 03:00 UTC
     started = datetime(2026, 5, 15, 3, 0, tzinfo=timezone.utc)
     db.add(CrawlJob(
-        job_type="air_quality", scheduler_job_id="collect_air_quality",
+        job_type="emergency", scheduler_job_id="collect_emergency",
         started_at=started, completed_at=started + timedelta(seconds=60),
         status="completed", total_items=100, processed_items=100,
     ))
@@ -100,8 +100,8 @@ def test_calendar_past_mode_returns_crawl_jobs(mock_sched, client, db):
     assert res.status_code == 200
     events = res.json()["events"]
     assert len(events) == 1
-    assert events[0]["scheduler_job_id"] == "collect_air_quality"
-    assert events[0]["name"] == "동네 공기질 받기"  # META 이름 = add_job 정본 (세션 418)
+    assert events[0]["scheduler_job_id"] == "collect_emergency"
+    assert events[0]["name"] == "응급실 위치 받기"  # META 이름 = add_job 정본 (세션 418)
     assert events[0]["status"] == "completed"
     assert events[0]["kind"] == "past"
     # KST iso 출력 확인 (12:00 KST = 03:00 UTC + 9h)
@@ -266,6 +266,24 @@ def test_calendar_unknown_job_id_falls_back_to_raw(mock_sched, client, db):
     events = res.json()["events"]
     assert len(events) == 1
     assert events[0]["name"] == "some_unregistered_job"
+
+
+@patch("crawler.scheduler.get_scheduler", return_value=None)
+def test_calendar_retired_air_quality_job_keeps_korean_name(mock_sched, client, db):
+    """세션604 — 폐지된 대기질 잡의 지난 이력은 영어 id 대신 "동네 공기질 받기"로 보인다.
+
+    collect_air_quality 는 스케줄러 META 에서 빠졌지만 운영 crawl_jobs 에 지난 실행 행이 남는다.
+    RETIRED_JOB_NAMES 가 없으면 달력에 raw id 가 그대로 노출된다.
+    """
+    _make_admin(db)
+    _add_past_job(db, "collect_air_quality")
+
+    res = client.get(_path(2026, 5, "past"), headers=_auth(_token("admin1")))
+    assert res.status_code == 200
+    events = res.json()["events"]
+    assert len(events) == 1
+    assert events[0]["scheduler_job_id"] == "collect_air_quality"
+    assert events[0]["name"] == "동네 공기질 받기"
 
 
 @patch("crawler.scheduler.get_scheduler", return_value=None)

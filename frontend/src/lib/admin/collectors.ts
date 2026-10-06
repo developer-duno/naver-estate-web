@@ -1,5 +1,5 @@
 /**
- * 관리자 "외부 자료 지금 받아오기" 버튼 8종의 정본 (사장님 결정 2026-09-26).
+ * 관리자 "외부 자료 지금 받아오기" 버튼 7종의 정본 (사장님 결정 2026-09-26 · 세션604 대기질 삭제로 8 → 7).
  *
  * - name        : BE 가 받는 수집기 이름 (backend/routers/admin/collect.py `CollectorName` — 집합 일치는
  *                 src/lib/admin/__tests__/collectors.test.ts 가 그 파일을 읽어 대조한다)
@@ -23,7 +23,6 @@ import { formatRelativeKo } from "@/lib/format-relative";
 
 export type CollectorName =
   | "crime-stats"
-  | "air-quality"
   | "emergency"
   | "childcare"
   | "backfill-price"
@@ -50,14 +49,6 @@ export const COLLECTORS: readonly CollectorDef[] = [
     schedulerJobId: "collect_crime_stats",
     manualCounted: true,
     description: "경찰청 시군구별 범죄 통계를 새로 받아요",
-    long: false,
-  },
-  {
-    name: "air-quality",
-    jobType: "air_quality",
-    schedulerJobId: "collect_air_quality",
-    manualCounted: true,
-    description: "미세먼지를 한동안 못 받은 단지 100곳부터 새로 받아요",
     long: false,
   },
   {

@@ -145,3 +145,49 @@ describe("MbEnvironmentSection — 응급실 일반병상 0/모름 구분 (세�
     expect(screen.queryByText("0병상")).not.toBeInTheDocument();
   });
 });
+
+// 대기질 3년 평균 블록 (세션604) — 실시간 값 대신 BE 가 붙이는 infra.air_annual 로 그린다
+function makeAirAnnual(overrides: Partial<NonNullable<NonNullable<MbApartment["infra"]>["air_annual"]>> = {}) {
+  return {
+    pm25: 17.34,
+    pm10: 33.1,
+    o3: 0.0312,
+    years: "2022,2023,2024",
+    band: "보통" as const,
+    legend: "좋음 15 이하, 보통 19 이하, 나쁨 19 초과",
+    updated_at: "2026-09-22T03:00:00",
+    ...overrides,
+  };
+}
+
+describe("MbEnvironmentSection — 대기질 3년 평균 (air_annual)", () => {
+  it("air_annual 이 있으면 제목·등급 뱃지·PM2.5·측정소·등급 기준이 보인다", () => {
+    const apt = makeApt({
+      infra: { air_station_name: "강남대로", air_station_dist: 850, air_annual: makeAirAnnual() },
+    });
+    render(<EnvironmentSection apartment={apt} />);
+    expect(screen.getByText("대기질 (3년 평균 2022~2024)")).toBeInTheDocument();
+    expect(screen.getByText("보통")).toBeInTheDocument();
+    expect(screen.getByText("17.3")).toBeInTheDocument();
+    expect(screen.getByText("강남대로")).toBeInTheDocument();
+    expect(screen.getByText("(850m)")).toBeInTheDocument();
+    expect(screen.getByText("등급 기준(PM2.5 3년 평균): 좋음 15 이하, 보통 19 이하, 나쁨 19 초과")).toBeInTheDocument();
+  });
+
+  it("air_annual 이 null 이면 대기질 블록이 없다 (측정소가 표에 없음)", () => {
+    const apt = makeApt({
+      infra: { air_station_name: "강남대로", air_station_dist: 850, air_annual: null, hospital: 3 },
+    });
+    render(<EnvironmentSection apartment={apt} />);
+    expect(screen.queryByText(/대기질/)).not.toBeInTheDocument();
+    expect(screen.queryByText("강남대로")).not.toBeInTheDocument();
+  });
+
+  it("air_annual 은 있지만 등급(band)이 null 이면 대기질 블록이 없다 (PM2.5 값 없음)", () => {
+    const apt = makeApt({
+      infra: { air_station_name: "강남대로", air_annual: makeAirAnnual({ pm25: null, band: null }), hospital: 3 },
+    });
+    render(<EnvironmentSection apartment={apt} />);
+    expect(screen.queryByText(/대기질/)).not.toBeInTheDocument();
+  });
+});

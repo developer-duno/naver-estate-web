@@ -44,7 +44,7 @@ articles 약 150만 행 988MB · trades 약 105만 행 · complex_price_history 
 | `backfill_price` · `collect_public_trades` | `apis.data.go.kr/1613000` (국토부 실거래가 RTMSDataSvcAptTrade) | complex_price_history |
 | `kapt_match` | `apis.data.go.kr/1613000` (AptListService4, AptBasisInfoServiceV5) | kapt_complex_map |
 | `kapt_costs` | `apis.data.go.kr/1613000` (AptCmnuseManageCostServiceV3, AptIndvdlzManageCostServiceV3) | kapt_management_costs |
-| `collect_air_quality` | `apis.data.go.kr/B552584` (에어코리아) | infra · air_quality_stations |
+| (대기질 3년 평균) | 미분양 소유 공유 표 `air_station_annual`(에어코리아 최종확정 측정자료 기반, 연 1회 미분양이 갱신) — 2u 는 읽기만(세션604) | — |
 | `collect_emergency` | `apis.data.go.kr/B552657` (응급의료 ErmctInfoInqireService) | infra |
 | `collect_childcare` | `api.childcare.go.kr` (CPMS cpmsapi030) | infra |
 | `collect_crime_stats` | `api.odcloud.kr/api/3074462` (경찰청) | infra |

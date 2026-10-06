@@ -64,12 +64,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("CollectorTrigger — 버튼 8종", () => {
-  it("버튼 8개가 쉬운 이름으로 보인다 (BE JOB_WORDS 와 같은 표현)", async () => {
+describe("CollectorTrigger — 버튼 7종 (대기질은 세션604 폐지)", () => {
+  it("버튼 7개가 쉬운 이름으로 보인다 (BE JOB_WORDS 와 같은 표현)", async () => {
     renderIt();
     for (const label of [
       "동네 범죄 통계 받기",
-      "동네 공기질 받기",
       "응급실 위치 받기",
       "어린이집 정보 받기",
       "옛 시세 채워 넣기",
@@ -79,7 +78,8 @@ describe("CollectorTrigger — 버튼 8종", () => {
     ]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
-    expect(document.querySelectorAll("button[data-collector]")).toHaveLength(8);
+    expect(document.querySelectorAll("button[data-collector]")).toHaveLength(7);
+    expect(screen.queryByText("동네 공기질 받기")).toBeNull();
     expect(screen.getByText("외부 자료 지금 받아오기")).toBeInTheDocument();
   });
 });
@@ -118,7 +118,7 @@ describe("CollectorTrigger — 마지막 실행·결과 한 줄", () => {
     expect(screen.getByText("마지막 자동 실행: 2시간 전 · 완료 (1,200/1,200건)")).toBeInTheDocument();
     expect(btn("단지 가치 점수 계산").querySelector(".bg-red-500")).toBeNull();
     expect(screen.getByText("마지막 자동 실행: 기록 없음", { selector: "span" })).toBeInTheDocument();
-    expect(screen.getAllByText("마지막 실행: 기록 없음")).toHaveLength(5);
+    expect(screen.getAllByText("마지막 실행: 기록 없음")).toHaveLength(4); // 세션604 대기질 버튼 삭제로 5 → 4
   });
 
   it("지금 도는 중이면 버튼이 잠기고 '이미 도는 중' — 눌러도 API 를 부르지 않는다", async () => {
@@ -319,7 +319,7 @@ describe("CollectorTrigger — 누른 뒤 (세션 420 백그라운드화)", () =
   it("연결 실패 원문은 쉬운 한 줄로", async () => {
     mockTrigger.mockRejectedValueOnce(new TypeError("Failed to fetch"));
     renderIt();
-    fireEvent.click(btn("동네 공기질 받기"));
+    fireEvent.click(btn("응급실 위치 받기"));
     await screen.findByText("서버에 연결하지 못했어요 — 잠시 뒤 다시 눌러 주세요");
     expect(screen.queryByText("Failed to fetch")).toBeNull();
   });

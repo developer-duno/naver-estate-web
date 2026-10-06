@@ -230,6 +230,16 @@ def test_opinion_still_sent_while_error_paused(sent):
     assert sent[-1][0].startswith("[서버 알림] 💬 새 의견이 왔어요")
 
 
+def test_error_still_sent_while_opinion_paused(sent):
+    """의견 알림이 멈춘 시간(21번째에 '잠시 멈춤' 1통이 나간 뒤)에도 처음 보는 오류 알림은 정상으로 나간다."""
+    for _ in range(22):
+        _notify()
+    assert len(sent) == 21  # 의견 20통 + 의견 '잠시 멈춤' 1통, 22번째는 0통
+    _error(1)
+    assert len(sent) == 22
+    assert sent[-1][0].startswith("[서버 알림] 🧯 손님 화면에서 처음 보는 오류가 났어요")
+
+
 def test_error_counter_new_hour_starts_fresh(sent):
     """오류 알림도 새 시간(한국 시각)이 되면 0 부터 다시 센다."""
     for i in range(12):

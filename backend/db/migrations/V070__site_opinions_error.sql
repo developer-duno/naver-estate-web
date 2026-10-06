@@ -62,7 +62,7 @@ ALTER TABLE public.site_opinions ADD COLUMN IF NOT EXISTS last_seen_at timestamp
 COMMENT ON COLUMN public.site_opinions.kind IS
   'bug=버그·오류 / data=정보가 틀려요 / suggest=건의·제안 / other=기타 / error=손님 화면 오류 자동 기록(V070)';
 COMMENT ON COLUMN public.site_opinions.fingerprint IS
-  '오류 지문(kind=error 만) — sha256(화면 첫 경로 조각 + 오류 이름 + 오류 첫 줄) 앞 32자. 같은 지문은 한 행';
+  '오류 지문(kind=error 만) — sha256(화면 첫 경로 조각 + 오류 이름 + 오류 첫 줄 [+ 오류 번호 digest 가 있으면]) 앞 32자. 같은 지문은 한 행';
 COMMENT ON COLUMN public.site_opinions.repeat_count IS '같은 오류가 들어온 횟수(오류 행만 의미, 손님 의견은 늘 1)';
 COMMENT ON COLUMN public.site_opinions.last_seen_at IS '같은 오류가 마지막으로 들어온 시각(오류 행만)';
 

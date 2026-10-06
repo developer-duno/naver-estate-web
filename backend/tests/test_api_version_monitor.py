@@ -355,14 +355,13 @@ def test_registry_covers_known_datagokr_endpoints():
     """레지스트리가 실사용 엔드포인트를 빠짐없이 담고 있는가 (새 API 추가 시 갱신 의무).
 
     2026-08-19 사고의 본질 = "코드가 쓰는데 아무도 안 보고 있던 엔드포인트". 레지스트리에서
-    빠지면 그 사각지대가 그대로 재현되므로, 알려진 8개를 명시적으로 단언해 못 박는다.
+    빠지면 그 사각지대가 그대로 재현되므로, 알려진 6개를 명시적으로 단언해 못 박는다.
+    (세션 442 뒤: 에어코리아 2종은 실시간 수집 폐지(#675)로 레지스트리에서 뺐다 8 → 6.)
     """
     urls = {entry["url"] for entry in PROBE_REGISTRY}
     expected = {
         "https://apis.data.go.kr/1613000/RTMSDataSvcAptTrade/getRTMSDataSvcAptTrade",
         "https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEgytListInfoInqire",
-        "https://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getNearbyMsrstnList",
-        "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty",
         "https://apis.data.go.kr/1613000/AptListService4/getSidoAptList4",
         "https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusBassInfoV5",
         "https://apis.data.go.kr/1613000/AptIndvdlzManageCostServiceV3/getHsmpHeatCostInfoV3",
@@ -382,13 +381,12 @@ def test_registry_urls_match_actual_collector_modules():
     수집기가 엔드포인트를 바꿨는데 레지스트리를 안 고치면, 감시는 옛 URL 만 찔러
     "정상"이라 보고하고 실제 수집기는 죽는다 — 감시가 오히려 안심을 파는 최악의 경우.
     """
-    from crawler.air_quality_api import NEARBY_STATION_URL, REALTIME_AIR_URL
     from crawler.emergency_api import EMERGENCY_BEDS_URL, EMERGENCY_LIST_URL
     from crawler.public_data_api import BASE_URL
 
     urls = {entry["url"] for entry in PROBE_REGISTRY}
     for actual in (
-        BASE_URL, EMERGENCY_LIST_URL, EMERGENCY_BEDS_URL, NEARBY_STATION_URL, REALTIME_AIR_URL,
+        BASE_URL, EMERGENCY_LIST_URL, EMERGENCY_BEDS_URL,
     ):
         assert actual in urls, (
             f"수집기 모듈이 쓰는 {actual} 이 PROBE_REGISTRY 에 없다 — "
@@ -606,14 +604,15 @@ def test_probe_failure_before_job_recorded_still_raises():
         probe_api_versions()
 
 
-def test_registry_covers_all_thirteen_endpoints():
-    """감시 대상 총 13종 (apis.data.go.kr 9 + odcloud 4) — 누락 시 사각지대.
+def test_registry_covers_all_eleven_endpoints():
+    """감시 대상 총 11종 (apis.data.go.kr 7 + odcloud 4) — 누락 시 사각지대.
 
     세션 417: 응급실 실시간 가용병상 op 추가(병상 수를 이 op 에서만 받는다) 12 → 13.
+    에어코리아 2종(근접 측정소·실시간 대기질)은 실시간 수집 폐지(#675)로 호출처가 없어 뺐다 13 → 11.
     """
     urls = {entry["url"] for entry in PROBE_REGISTRY}
     assert len(PROBE_REGISTRY) == len(urls), "레지스트리에 중복 URL 이 있다"
-    assert len(PROBE_REGISTRY) == 13, f"감시 대상이 13종이 아님: {len(PROBE_REGISTRY)}"
+    assert len(PROBE_REGISTRY) == 11, f"감시 대상이 11종이 아님: {len(PROBE_REGISTRY)}"
     assert sum(1 for e in PROBE_REGISTRY if e.get("flavor") == FLAVOR_ODCLOUD) == 4
 
 

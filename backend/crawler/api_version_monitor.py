@@ -93,16 +93,6 @@ PROBE_REGISTRY: list[dict] = [
         "name": "응급실 실시간 가용병상",
         "url": "https://apis.data.go.kr/B552657/ErmctInfoInqireService/getEmrrmRltmUsefulSckbdInfoInqire",
     },
-    # crawler/air_quality_api.py NEARBY_STATION_URL
-    {
-        "name": "에어코리아 근접 측정소",
-        "url": "https://apis.data.go.kr/B552584/MsrstnInfoInqireSvc/getNearbyMsrstnList",
-    },
-    # crawler/air_quality_api.py REALTIME_AIR_URL
-    {
-        "name": "에어코리아 실시간 대기질",
-        "url": "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty",
-    },
     # K-apt 공동주택 연동 4종 — 2026-08-19 격변으로 구버전(3·V4)이 죽어 신버전으로 이동한 것들.
     # 같은 격변이 재발하면(V5 → V6 등) 여기서 가장 먼저 잡힌다.
     {

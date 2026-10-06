@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from auth.permissions import check_quota
@@ -54,6 +54,9 @@ ERROR_TOTAL_DAILY_LIMIT = 500
 ERROR_NAME_MAX = 100
 ERROR_LINE_MAX = 300
 ERROR_DIGEST_MAX = 100
+# 요청 본문이 이보다 깊게 겹쳐 있으면 422 — 우리 본문은 2겹(사전 → 목록)이 전부다.
+# 깊은 본문을 그대로 두면 재귀 처리(우리 훑기·검사 실패 응답의 입력 되돌려 주기)가 RecursionError 로 500 이 된다.
+MAX_BODY_DEPTH = 20
 
 # 폭 0 문자(눈에 안 보이는 글자) — 이것만으로 10자를 채우는 빈 의견을 막으려고 길이 검사 전에 지운다.
 # ZWJ(U+200D)는 지우지 않는다 — 가족 이모지처럼 그림 여럿을 한 그림으로 잇는 글자라 지우면 낱개로 풀린다.
@@ -71,6 +74,7 @@ _anon_total = 0  # 그날 받은 비로그인 의견 전체 건수
 _err_day: str | None = None
 _err_by_ip: dict[str, int] = {}
 _err_total = 0
+_err_cap_logged: set[str] = set()  # 그날 이미 "한도 도달" 을 한 줄 남긴 종류(전체·IP묶음)
 
 
 def _now() -> datetime:
@@ -88,6 +92,7 @@ def _reset_anon_counters_for_tests() -> None:
         _err_day = None
         _err_by_ip.clear()
         _err_total = 0
+        _err_cap_logged.clear()
 
 
 def _today_kst() -> str:
@@ -154,7 +159,10 @@ def _release_anon_slot(bucket: str, day: str) -> None:
 
 
 def _take_error_slot(bucket: str) -> bool:
-    """오류 기록 한 건 받기 — 받으면 True, 하루 한도(IP 묶음 20 · 전체 500)를 넘으면 False."""
+    """오류 기록 한 건 받기 — 받으면 True, 하루 한도(IP 묶음 20 · 전체 500)를 넘으면 False.
+
+    한도에 처음 닿은 순간 종류(전체·IP묶음)마다 그날 한 번만 INFO 한 줄(IP·건수 원문 없이).
+    """
     global _err_day, _err_total
     day = _today_kst()
     with _anon_lock:
@@ -162,11 +170,23 @@ def _take_error_slot(bucket: str) -> bool:
             _err_day = day
             _err_by_ip.clear()
             _err_total = 0
-        if _err_by_ip.get(bucket, 0) >= ERROR_IP_DAILY_LIMIT or _err_total >= ERROR_TOTAL_DAILY_LIMIT:
-            return False
-        _err_by_ip[bucket] = _err_by_ip.get(bucket, 0) + 1
-        _err_total += 1
-        return True
+            _err_cap_logged.clear()
+        reason = None
+        if _err_total >= ERROR_TOTAL_DAILY_LIMIT:
+            reason = "전체"
+        elif _err_by_ip.get(bucket, 0) >= ERROR_IP_DAILY_LIMIT:
+            reason = "IP묶음"
+        if reason:
+            first = reason not in _err_cap_logged
+            _err_cap_logged.add(reason)
+        else:
+            _err_by_ip[bucket] = _err_by_ip.get(bucket, 0) + 1
+            _err_total += 1
+    if reason:
+        if first:
+            logger.info("오류 창구 하루 한도 도달(%s)", reason)
+        return False
+    return True
 
 
 def _has_lone_surrogate(text: str) -> bool:
@@ -179,33 +199,44 @@ def _replace_lone_surrogates(text: str) -> str:
 
 
 def _scrub_lone_surrogates(value):
-    """요청 본문 전체(문자열·목록·사전 — 칸 이름 포함, 몇 겹이든)를 훑어 짝 없는 서로게이트를 대체 글자로.
+    """요청 본문 전체(문자열·목록·사전 — 칸 이름 포함)를 훑어 짝 없는 서로게이트를 대체 글자로.
 
     돌려주는 값 = (바꾼 본문, 하나라도 있었나). 본문 자체가 문자열 하나여도 바꾼다 —
     그대로 두면 검사 실패 응답(422)이 입력을 되돌려 주다가 UTF-8 변환에서 500 이 난다.
+    재귀가 아니라 반복문(스택)으로 훑는다 — 재귀면 ~1000겹 본문에서 RecursionError(500).
+    MAX_BODY_DEPTH 겹을 넘으면 (None, True) 를 돌려준다 — 검사기가 None 을 받아 422 를 내고,
+    그 422 응답이 되돌려 주는 입력도 None 이라 깊은 본문을 다시 재귀로 훑지 않는다.
+    입력 본문은 고치지 않고 새 목록·사전을 만든다.
     """
-    if isinstance(value, str):
-        if _has_lone_surrogate(value):
-            return _replace_lone_surrogates(value), True
-        return value, False
-    if isinstance(value, list):
-        bad = False
-        items = []
-        for item in value:
-            item, b = _scrub_lone_surrogates(item)
-            bad = bad or b
-            items.append(item)
-        return items, bad
-    if isinstance(value, dict):
-        bad = False
-        clean = {}
-        for key, item in value.items():
-            key, bk = _scrub_lone_surrogates(key)
-            item, bi = _scrub_lone_surrogates(item)
-            bad = bad or bk or bi
-            clean[key] = item
-        return clean, bad
-    return value, False
+    bad = False
+    holder = [value]
+    stack = [(holder, 0, 0)]  # (담은 곳, 자리, 깊이)
+    while stack:
+        parent, slot, depth = stack.pop()
+        item = parent[slot]
+        if isinstance(item, str):
+            if _has_lone_surrogate(item):
+                parent[slot] = _replace_lone_surrogates(item)
+                bad = True
+            continue
+        if not isinstance(item, (list, dict)):
+            continue
+        if depth >= MAX_BODY_DEPTH:
+            return None, True
+        if isinstance(item, list):
+            copy_list = list(item)
+            parent[slot] = copy_list
+            stack.extend((copy_list, i, depth + 1) for i in range(len(copy_list)))
+        else:
+            copy_dict = {}
+            for key, child in item.items():
+                if isinstance(key, str) and _has_lone_surrogate(key):
+                    key = _replace_lone_surrogates(key)
+                    bad = True
+                copy_dict[key] = child
+            parent[slot] = copy_dict
+            stack.extend((copy_dict, k, depth + 1) for k in copy_dict)
+    return holder[0], bad
 
 
 class OpinionIn(BaseModel):
@@ -399,16 +430,21 @@ def _one_line(text: str | None, limit: int) -> str:
     return (lines[0].strip() if lines else "")[:limit]
 
 
-def error_fingerprint(page_path: str | None, name: str, first_line: str) -> str:
-    """오류 지문 = sha256(화면 첫 경로 조각 + 오류 이름 + 오류 첫 줄) 앞 32자.
+def error_fingerprint(page_path: str | None, name: str, first_line: str, digest: str = "") -> str:
+    """오류 지문 = sha256(화면 첫 경로 조각 + 오류 이름 + 오류 첫 줄 [+ 오류 번호]) 앞 32자.
 
     첫 경로 조각만 쓰는 이유: /complex/123 과 /complex/456 의 같은 오류는 같은 고장이다(단지 번호마다
     행이 생기면 횟수를 못 센다). 경로가 없으면 빈 조각.
+    오류 번호(digest)가 있으면 재료에 넣는다 — 운영 Next.js 는 서버 쪽 오류 문구를 일반 문장 하나로
+    바꿔 보내고 번호로만 구분하므로, 번호를 빼면 서로 다른 고장이 한 행에 섞인다.
+    번호가 없으면 재료가 예전과 같다(이미 저장된 지문 값 그대로).
     """
     segment = ""
     if page_path:
         segment = "/" + page_path.split("/", 2)[1]
     raw = f"{segment}\n{name}\n{first_line}"
+    if digest:
+        raw += f"\n{digest}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 
@@ -427,7 +463,8 @@ def _upsert_error_row(db: Session, values: dict) -> bool:
     stmt = db_insert(SiteOpinion).values(**values)
     stmt = stmt.on_conflict_do_update(
         index_elements=[SiteOpinion.fingerprint],
-        index_where=SiteOpinion.kind == "error",
+        # 글자 그대로 — 바인딩 인자(%(kind_1)s)로 나가면 드라이버에 따라 부분 색인 짝 맞추기가 어긋날 수 있다.
+        index_where=text("kind = 'error'"),
         set_={
             "repeat_count": SiteOpinion.repeat_count + 1,
             "last_seen_at": stmt.excluded.last_seen_at,
@@ -467,7 +504,7 @@ def report_client_error(
         "message": stored,
         "page_path": page_path,
         "user_agent": (request.headers.get("user-agent") or "")[:USER_AGENT_MAX] or None,
-        "fingerprint": error_fingerprint(page_path, name, first_line),
+        "fingerprint": error_fingerprint(page_path, name, first_line, digest),
         "repeat_count": 1,
         "last_seen_at": now,
         "created_at": now,

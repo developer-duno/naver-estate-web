@@ -296,3 +296,102 @@ def test_model_accepts_error_kind_and_unique_fingerprint(db):
     # 손님 의견은 지문이 같아도(보통 NULL) 유일 제약 대상이 아니다
     db.add(SiteOpinion(kind="bug", message="정상 길이의 글입니다", fingerprint="f" * 32))
     db.commit()
+
+
+# ══ 적대검증 보완(세션 439 B1~B4) ══
+
+
+def _deep(n):
+    return "[" * n + "1" + "]" * n
+
+
+@pytest.mark.parametrize("url, prefix", [
+    ("/api/opinions", '{"kind": "bug", "message": "검색 화면에서 가격이 안 보여요", "x": '),
+    ("/api/opinions/error", '{"area": "/x", "name": "E", "x": '),
+])
+@pytest.mark.parametrize("depth", [1000, 25])
+def test_deep_body_422_both_routes(client, db, url, prefix, depth):
+    """B1 — 1000겹 본문이 500(RecursionError)이 아니라 422 · 저장 0 · 본문 자체가 깊어도 422."""
+    raw = prefix + _deep(depth) + "}"
+    res = client.post(url, content=raw.encode("utf-8"), headers={"Content-Type": "application/json"})
+    assert res.status_code == 422
+    res2 = client.post(url, content=_deep(depth).encode("utf-8"), headers={"Content-Type": "application/json"})
+    assert res2.status_code == 422
+    db.expire_all()
+    assert db.query(SiteOpinion).count() == 0
+
+
+def test_normal_nesting_still_ok(client, db):
+    """보통 본문(2겹)은 그대로 받는다 — 깊이 상한이 정상 요청을 막지 않는다."""
+    res = client.post("/api/opinions", json={"kind": "bug", "message": "검색 화면에서 가격이 안 보여요",
+                                             "interests": ["tax", "market"]})
+    assert res.status_code == 200
+
+
+def test_digest_splits_fingerprint(client, db):
+    """B2 — 같은 화면·같은 문구라도 오류 번호가 다르면 다른 행 · 번호 없는 둘은 한 행."""
+    generic = {"area": "/complex/1", "name": "Error", "message": "An error occurred in the Server Components render."}
+    _err(client, {**generic, "digest": "111"})
+    _err(client, {**generic, "digest": "222"})
+    _err(client, generic)
+    _err(client, generic)
+    rows = _error_rows(db)
+    assert len(rows) == 3
+    assert sorted(r.repeat_count for r in rows) == [1, 1, 2]
+
+
+def test_fingerprint_without_digest_unchanged():
+    """B2 — 번호가 없으면 지문 재료가 예전과 같다(이미 저장된 지문 값이 안 바뀐다)."""
+    import hashlib
+
+    old = hashlib.sha256("/complex\nTypeError\nboom".encode("utf-8")).hexdigest()[:32]
+    assert op_router.error_fingerprint("/complex/9", "TypeError", "boom") == old
+    assert op_router.error_fingerprint("/complex/9", "TypeError", "boom", "") == old
+    assert op_router.error_fingerprint("/complex/9", "TypeError", "boom", "d1") != old
+
+
+def test_cap_logged_once_per_kind(client, monkeypatch, caplog):
+    """B3 — 한도에 처음 닿은 순간 종류마다 그날 한 줄(IP 원문 없음)."""
+    import logging
+
+    monkeypatch.setattr(op_router, "ERROR_IP_DAILY_LIMIT", 2)
+    monkeypatch.setattr(op_router, "ERROR_TOTAL_DAILY_LIMIT", 4)
+    with caplog.at_level(logging.INFO, logger="routers.opinions"):
+        for _ in range(5):
+            _err(client, headers=_ip("203.0.113.44"))  # 3·4·5번째 = IP묶음 한도
+        for i in range(4):
+            _err(client, {**ERR, "message": f"e{i}"}, headers=_ip(f"198.51.100.{i}"))  # 3·4번째 = 전체 한도
+    lines = [r.getMessage() for r in caplog.records if r.name == "routers.opinions"]
+    assert lines.count("오류 창구 하루 한도 도달(IP묶음)") == 1
+    assert lines.count("오류 창구 하루 한도 도달(전체)") == 1
+    assert not any("203.0.113" in m or "198.51.100" in m for m in lines)
+
+
+def test_upsert_postgres_sql_has_literal_partial_where():
+    """B4 — PostgreSQL 로 만든 문장의 ON CONFLICT 에 'WHERE kind = 'error'' 가 글자 그대로 나온다
+    (바인딩 인자면 드라이버가 바뀔 때 부분 색인 짝 맞추기가 어긋날 수 있다)."""
+    from sqlalchemy.dialects import postgresql
+
+    captured = []
+
+    class _Dialect:
+        name = "postgresql"
+
+    class _Bind:
+        dialect = _Dialect()
+
+    class _Result:
+        def scalar_one(self):
+            return 1
+
+    class _FakeDb:
+        def get_bind(self):
+            return _Bind()
+
+        def execute(self, stmt):
+            captured.append(stmt)
+            return _Result()
+
+    assert op_router._upsert_error_row(_FakeDb(), {"kind": "error", "message": "E: x", "fingerprint": "f" * 32})
+    sql = str(captured[0].compile(dialect=postgresql.dialect()))
+    assert "ON CONFLICT (fingerprint) WHERE kind = 'error' DO UPDATE" in sql

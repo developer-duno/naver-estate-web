@@ -82,7 +82,7 @@
 | `derived-display-ssot.md` | 파생 표시값(시각·주기 문구)은 source(trigger)에서 자동생성, 손글씨 중복 금지 (세션 256 신설, PR #102) |
 | `error-propagation.md` | FE 데이터 래퍼 에러 삼킴 금지 + 래퍼 레벨 MSW 가드 의무 (폴백 삼킴 3사고, 세션 298 신설) |
 | `release.md` | PR 머지 후 backend 가동 검증 4중 cross-check (세션 230~231 zombie 답습 신설, 세션 257 라이브 표시값 지표 추가) |
-| `seo-metadata.md` | og:image SVG 금지(PNG 필수)·openGraph 직접지정 시 root opengraph-image 상속 끊김·클라 본문 Suspense 함정·sitemap lastModified 고정일자 (세션 336 신설, PR #260) |
+| `seo-metadata.md` (필요할 때만 — `paths: frontend/src/app/**`, 세션 442) | og:image SVG 금지(PNG 필수)·openGraph 직접지정 시 root opengraph-image 상속 끊김·클라 본문 Suspense 함정·sitemap lastModified 고정일자 (세션 336 신설, PR #260) |
 | `browser-automation-isolation.md` | 브라우저 자동화 라이브 조사 전 실계정 프로필 분리 확인 의무 — 자동화 브라우저 로그인 상태=레드 플래그, 토큰·쿠키 원문 dump 금지 (세션 351 실토큰 노출 사고, 세션 353 신설) |
 
 ## 프로젝트 자율자산 표·안전장치

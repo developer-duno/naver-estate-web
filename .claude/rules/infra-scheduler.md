@@ -30,7 +30,9 @@ paths:
 `monitor`(#524) · `field_drift_monitor`·`job_error_listener`·`healthcheck.yml`·
 `service_official_price`(#526) · `api_version_monitor`·`scheduler_lock`·
 `billing_charge`·`routers/payment`(세션 409) · `service_public`(세션 421 — 정부 실거래가 창구 남은 횟수 부족) ·
-`services/opinion_alert`(세션 435 — 2u 의견함 새 의견 알림·시간당 20통 넘김 알림, 호출부 `routers/opinions.py`).
+`services/opinion_alert`(세션 435 — 2u 의견함 새 의견 알림·시간당 20통 넘김 알림, 호출부 `routers/opinions.py` · 세션 439 — 처음 보는 손님 화면 오류 알림 `notify_new_error` 도 같은 보내기 줄·같은 시간당 20통 상한을 쓴다, 호출부 `POST /api/opinions/error`).
+
+텔레그램이 아닌 창구 하나: `services/telegram_health`(세션 439 — 매일 03:50 자료 보관함 정리 잡 안에서 텔레그램 통로를 점검(getMe·getChat, 메시지 안 보냄)하고 막혔으면 보내는 Gmail 주소 자신에게 우리말 메일 1통). 텔레그램이 막힌 날을 알리는 길이라 텔레그램을 쓰지 않는다 — 위 모듈·호출부 수에는 넣지 않는다.
 
 잡 라벨(`_JOB_LABEL_FALLBACK`) 9개에 남아 있던 영문(`단지 상세 backfill APT`,
 `정기 VACUUM 유지보수`, `K-apt 관리비 수집`, `data.go.kr API 버전 감시` 등)도 함께
@@ -50,7 +52,7 @@ cd backend && PYTHONPATH=. PYTHONUTF8=1 python scripts/verify_alert_wording.py
 # 세션 410 확장: ⓪ 못 알아본 에러 렌더(새 알림 + 해소 알림 — 내부 마침표 검사) ·
 #   ⑨ 자동결제 중단 사유 6종(_mark_retry 실호출) · ⑩ 부분환불(이메일 마스킹 검사) · ⑪ 관리자 화면 `explain_stored_error`
 #   (스윕 마커·psycopg2·붙는 형태 3입력, 세션 411 후속) · ⑫ 정부 실거래가 창구 남은 횟수 부족(세션 421 — 숫자 셋 검사)
-#   ⑬ 의견함 새 의견 알림 + 시간당 20통 넘김 알림(세션 435) · 포함 = "13창구 + 미지 에러 렌더".
+#   ⑬ 의견함 새 의견 알림 + 시간당 20통 넘김 알림(세션 435) + 처음 보는 화면 오류 알림(⑬-3, 세션 439 — 100자 자르기 검사) · 포함 = "13창구 + 미지 에러 렌더".
 #   텔레그램·이메일·log_action 은 전부 patch — 실발송 0. 워크트리(.env 없음)에선 DATABASE_URL="sqlite:///:memory:" 를 앞에 붙인다
 ```
 

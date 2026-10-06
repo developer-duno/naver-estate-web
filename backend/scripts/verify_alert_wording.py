@@ -295,6 +295,21 @@ def main() -> int:
     if "잠시 멈춰요" not in msg:
         bad.append("빠진 말:잠시 멈춰요")
     results.append(("⑬-2 새 의견 알림 잠시 멈춤", msg, bad))
+
+    # 처음 보는 손님 화면 오류 알림(세션 439) — 같은 상한을 쓰고, 오류 글은 줄바꿈을 접어 100자로 자른다
+    oa._reset_for_tests()
+    with patch("services.telegram.send_telegram") as tg:
+        oa.notify_new_error(page_path="/complex/12345", error_line="TypeError: x is undefined\n" + "가" * 200, now=now)
+    msg = tg.call_args[0][0] if tg.call_args else ""
+    bad = check("", msg)
+    if tg.call_args and tg.call_args.kwargs.get("parse_mode") is not None:
+        bad.append("parse_mode 가 평문이 아님")
+    for must in ("[서버 알림]", "처음 보는 오류", "화면: /complex/12345", "횟수만 셉니다"):
+        if must not in msg:
+            bad.append(f"빠진 말:{must}")
+    if "가" * 101 in msg:
+        bad.append("오류 글이 100자로 안 잘림")
+    results.append(("⑬-3 처음 보는 화면 오류 알림", msg, bad))
     oa._reset_for_tests()
 
     # ── 출력 ──

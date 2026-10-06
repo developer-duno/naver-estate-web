@@ -9,6 +9,8 @@
 import { ApiError, DEFAULT_TIMEOUT_MS, adminHeaders, fetchApi, getApiBase, normalizeDetail } from "./core";
 
 export type OpinionKind = "bug" | "data" | "suggest" | "other";
+/** 관리자 화면에서만 보이는 종류 — 'error' 는 화면 오류 자동 보고(세션 439)라 손님 보내기 창에는 없다 */
+export type AdminOpinionKind = OpinionKind | "error";
 export type OpinionInterest = "market" | "presale" | "tax" | "other";
 
 export interface OpinionSubmitBody {
@@ -91,7 +93,7 @@ export interface PublicUpdatesResponse {
 /** 관리자 화면의 의견 한 줄 */
 export interface AdminOpinion {
   id: number;
-  kind: OpinionKind;
+  kind: AdminOpinionKind;
   /** 1년 정리 뒤에는 NULL */
   message: string | null;
   page_path: string | null;
@@ -109,14 +111,22 @@ export interface AdminOpinion {
   published_at: string | null;
   created_at: string;
   updated_at: string;
+  // ↓ 자동 오류 행 전용(세션 439). 화면이 서버 재시작보다 먼저 배포될 수 있어 선택 칸으로 둔다
+  /** 같은 오류가 몇 번 났는지(손님 의견은 1) */
+  repeat_count?: number;
+  /** 같은 오류가 마지막으로 난 시각 */
+  last_seen_at?: string | null;
+  fingerprint?: string | null;
 }
 
 export interface AdminOpinionsResponse {
   items: AdminOpinion[];
   total: number;
   page: number;
-  /** 필터와 무관한 전체 '새 의견' 수 — 메뉴 배지에 쓴다 */
+  /** 필터와 무관한 전체 '새 의견' 수 — 메뉴 배지에 쓴다(자동 오류는 빼고 센다) */
   new_count: number;
+  /** 개인정보가 아직 남은 의견 중 가장 오래된 것이 며칠째인지 — 없으면 null. 366 을 넘으면 1년 정리가 멈춘 것 */
+  oldest_days?: number | null;
 }
 
 export interface AdminOpinionUpdatePayload {
@@ -141,10 +151,14 @@ export async function getPublicUpdates(page: number = 1) {
   });
 }
 
-/** 관리자: 의견 목록(상태 필터·쪽) */
-export async function getAdminOpinions(token: string, params?: { status?: OpinionStatus; page?: number }) {
+/** 관리자: 의견 목록(상태·종류 필터·쪽) */
+export async function getAdminOpinions(
+  token: string,
+  params?: { status?: OpinionStatus; kind?: AdminOpinionKind; page?: number },
+) {
   const qs = new URLSearchParams();
   if (params?.status) qs.set("status", params.status);
+  if (params?.kind) qs.set("kind", params.kind);
   if (params?.page) qs.set("page", String(params.page));
   return fetchApi<AdminOpinionsResponse>(`/api/admin/opinions?${qs}`, { headers: adminHeaders(token) });
 }

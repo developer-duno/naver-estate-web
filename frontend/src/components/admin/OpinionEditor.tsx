@@ -95,6 +95,8 @@ export default function OpinionEditor({
     });
   }
 
+  // 자동 오류 행은 사람이 보낸 글이 아니라 답장·공개가 없다(서버도 공개를 400 으로 막는다 — 세션 439)
+  const isError = view.kind === "error";
   const canResend = !!view.user_email && !!view.reply && !view.reply_mail_sent;
   const publicIncomplete = isPublic && (!publicTitle.trim() || !publicAnswer.trim());
   const interests = view.interests?.length
@@ -106,89 +108,93 @@ export default function OpinionEditor({
       <section>
         <h4 className="font-medium text-gray-800">보낸 내용</h4>
         <p className="mt-1 whitespace-pre-line text-gray-700">{view.message ?? "원문은 1년이 지나 지워졌어요"}</p>
-        <p className="mt-1 text-xs text-gray-500">궁금한 소식: {interests}</p>
+        {!isError && <p className="mt-1 text-xs text-gray-500">궁금한 소식: {interests}</p>}
       </section>
 
-      <section className="space-y-2">
-        <label className="block font-medium text-gray-800" htmlFor={`reply-${opinion.id}`}>
-          답장
-        </label>
-        <textarea
-          id={`reply-${opinion.id}`}
-          value={reply}
-          onChange={(e) => setReply(e.target.value)}
-          maxLength={5000}
-          rows={4}
-          disabled={busy}
-          className="w-full rounded border bg-white p-2"
-        />
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => run({ type: "update", what: "reply", payload: { reply } })}
-            disabled={busy}
-            className="rounded bg-blue-600 px-3 py-1.5 text-white disabled:opacity-40"
-          >
-            답장 저장
-          </button>
-          {canResend && (
+      {!isError && (
+        <>
+          <section className="space-y-2">
+            <label className="block font-medium text-gray-800" htmlFor={`reply-${opinion.id}`}>
+              답장
+            </label>
+            <textarea
+              id={`reply-${opinion.id}`}
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              maxLength={5000}
+              rows={4}
+              disabled={busy}
+              className="w-full rounded border bg-white p-2"
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => run({ type: "update", what: "reply", payload: { reply } })}
+                disabled={busy}
+                className="rounded bg-blue-600 px-3 py-1.5 text-white disabled:opacity-40"
+              >
+                답장 저장
+              </button>
+              {canResend && (
+                <button
+                  type="button"
+                  onClick={() => run({ type: "resend" })}
+                  disabled={busy}
+                  className="rounded border px-3 py-1.5 disabled:opacity-40"
+                >
+                  메일 다시 보내기
+                </button>
+              )}
+            </div>
+          </section>
+
+          <section className="space-y-2">
+            <label className="flex items-center gap-2 font-medium text-gray-800">
+              <input
+                type="checkbox"
+                checked={isPublic}
+                onChange={(e) => setIsPublic(e.target.checked)}
+                disabled={busy}
+              />
+              &quot;고쳤습니다&quot; 목록에 공개
+            </label>
+            <input
+              aria-label="공개 제목"
+              placeholder="공개 제목"
+              value={publicTitle}
+              onChange={(e) => setPublicTitle(e.target.value)}
+              maxLength={200}
+              disabled={busy}
+              className="w-full rounded border bg-white p-2"
+            />
+            <textarea
+              aria-label="공개 답"
+              placeholder="공개 답 (손님 글·이메일은 넣지 마세요)"
+              value={publicAnswer}
+              onChange={(e) => setPublicAnswer(e.target.value)}
+              maxLength={5000}
+              rows={3}
+              disabled={busy}
+              className="w-full rounded border bg-white p-2"
+            />
             <button
               type="button"
-              onClick={() => run({ type: "resend" })}
-              disabled={busy}
+              onClick={() =>
+                run({
+                  type: "update",
+                  what: "public",
+                  payload: { is_public: isPublic, public_title: publicTitle, public_answer: publicAnswer },
+                })
+              }
+              disabled={busy || publicIncomplete}
               className="rounded border px-3 py-1.5 disabled:opacity-40"
             >
-              메일 다시 보내기
+              공개 설정 저장
             </button>
-          )}
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <label className="flex items-center gap-2 font-medium text-gray-800">
-          <input
-            type="checkbox"
-            checked={isPublic}
-            onChange={(e) => setIsPublic(e.target.checked)}
-            disabled={busy}
-          />
-          &quot;고쳤습니다&quot; 목록에 공개
-        </label>
-        <input
-          aria-label="공개 제목"
-          placeholder="공개 제목"
-          value={publicTitle}
-          onChange={(e) => setPublicTitle(e.target.value)}
-          maxLength={200}
-          disabled={busy}
-          className="w-full rounded border bg-white p-2"
-        />
-        <textarea
-          aria-label="공개 답"
-          placeholder="공개 답 (손님 글·이메일은 넣지 마세요)"
-          value={publicAnswer}
-          onChange={(e) => setPublicAnswer(e.target.value)}
-          maxLength={5000}
-          rows={3}
-          disabled={busy}
-          className="w-full rounded border bg-white p-2"
-        />
-        <button
-          type="button"
-          onClick={() =>
-            run({
-              type: "update",
-              what: "public",
-              payload: { is_public: isPublic, public_title: publicTitle, public_answer: publicAnswer },
-            })
-          }
-          disabled={busy || publicIncomplete}
-          className="rounded border px-3 py-1.5 disabled:opacity-40"
-        >
-          공개 설정 저장
-        </button>
-        {publicIncomplete && <p className="text-xs text-gray-500">공개하려면 공개 제목과 공개 답을 모두 써 주세요.</p>}
-      </section>
+            {publicIncomplete && <p className="text-xs text-gray-500">공개하려면 공개 제목과 공개 답을 모두 써 주세요.</p>}
+          </section>
+        </>
+      )}
 
       <section className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2">

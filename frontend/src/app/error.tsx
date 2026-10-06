@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import ErrorActions from "@/components/ErrorActions";
+import { reportClientError } from "@/lib/report-client-error";
 
 /**
  * Next.js 16 루트 에러 바운더리.
@@ -22,8 +23,9 @@ export default function GlobalError(
   const isDev = process.env.NODE_ENV !== "production";
 
   useEffect(() => {
-    // 공식 예시 패턴 — 추후 Sentry 등 에러 리포터로 교체 가능
     console.error("[GlobalError]", error);
+    // 운영에서만 서버 의견함에 '자동 오류'로 남긴다(같은 오류는 한 방문 1통)
+    reportClientError(error);
   }, [error]);
 
   return (

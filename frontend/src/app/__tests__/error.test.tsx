@@ -5,6 +5,9 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import GlobalError from "../error";
+import { reportClientError } from "@/lib/report-client-error";
+
+vi.mock("@/lib/report-client-error", () => ({ reportClientError: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), back: vi.fn() }),
@@ -32,5 +35,14 @@ describe("GlobalError 500 페이지", () => {
     render(<GlobalError error={err} reset={resetFn} />);
     fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
     expect(resetFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("화면이 뜨면 자동 보고 함수(reportClientError)를 그 오류로 부른다", () => {
+    vi.mocked(reportClientError).mockClear();
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const err = new Error("report-me");
+    render(<GlobalError error={err} unstable_retry={vi.fn()} />);
+    expect(reportClientError).toHaveBeenCalledWith(err);
+    spy.mockRestore();
   });
 });

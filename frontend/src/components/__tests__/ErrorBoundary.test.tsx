@@ -6,6 +6,9 @@ import React from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import ErrorBoundary from "../ErrorBoundary";
+import { reportClientError } from "@/lib/report-client-error";
+
+vi.mock("@/lib/report-client-error", () => ({ reportClientError: vi.fn() }));
 
 function GoodChild() {
   return <div>정상 컨텐츠</div>;
@@ -47,5 +50,28 @@ describe("ErrorBoundary", () => {
     );
     expect(screen.getByText(/테스트 에러/)).toBeInTheDocument();
     spy.mockRestore();
+  });
+
+  it("오류를 잡으면 자동 보고 함수(reportClientError)를 그 오류로 부른다", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(reportClientError).mockClear();
+    render(
+      <ErrorBoundary>
+        <BadChild />
+      </ErrorBoundary>
+    );
+    expect(reportClientError).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(reportClientError).mock.calls[0][0]).toMatchObject({ message: "테스트 에러" });
+    spy.mockRestore();
+  });
+
+  it("정상 자식이면 보고하지 않는다", () => {
+    vi.mocked(reportClientError).mockClear();
+    render(
+      <ErrorBoundary>
+        <GoodChild />
+      </ErrorBoundary>
+    );
+    expect(reportClientError).not.toHaveBeenCalled();
   });
 });

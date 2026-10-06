@@ -11,6 +11,7 @@
  *  6. 원문이 1년 정리로 NULL 이면 안내 문구
  *  7. 지우기 — 확인창 "취소"면 안 부르고, "확인"이면 부른다
  *  8. 서버 422 문구를 그대로 보여 준다
+ *  9. (세션 439) 종류 필터 '자동 오류' · 오류 행 반복 표시·답장/공개 숨김 · 가장 오래된 의견 며칠째(366 경계)
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
@@ -106,8 +107,9 @@ describe("/admin/opinions 목록·필터", () => {
     );
     renderPage();
     expect(await screen.findByText("2026.10.06 00:30")).toBeInTheDocument();
-    expect(screen.getByText("정보가 틀려요")).toBeInTheDocument();
-    expect(screen.getByText("버그·오류")).toBeInTheDocument();
+    // 종류 이름은 종류 필터 칸(option)에도 있으므로 표 칸(cell)으로 찾는다(세션 439)
+    expect(screen.getByRole("cell", { name: "정보가 틀려요" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "버그·오류" })).toBeInTheDocument();
     expect(screen.getByText("kim@example.com")).toBeInTheDocument();
     expect(screen.getByText("로그인 안 함")).toBeInTheDocument();
     expect(screen.getByText("새 의견 1건", { exact: false })).toBeInTheDocument();
@@ -250,5 +252,93 @@ describe("/admin/opinions 공개·상태·지우기", () => {
     fireEvent.click(within(row).getByRole("button", { name: "지우기" }));
     await waitFor(() => expect(mockDelete).toHaveBeenCalledWith("test-token", 11));
     expect(confirmSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ── 세션 439: 자동 오류 종류 · 가장 오래된 의견 며칠째 ──
+describe("/admin/opinions 자동 오류·정리 감시", () => {
+  function errorRow(over: Partial<AdminOpinion> = {}): AdminOpinion {
+    return mkOpinion({
+      id: 21,
+      kind: "error",
+      message: "TypeError: x is undefined",
+      interests: null,
+      user_id: null,
+      user_email: null,
+      repeat_count: 7,
+      // UTC 10-06 03:05 = 한국 10-06 12:05
+      last_seen_at: "2026-10-06T03:05:00+00:00",
+      fingerprint: "abc",
+      ...over,
+    });
+  }
+
+  it("종류 필터에 '자동 오류'가 있고 고르면 서버에 kind=error 로 넘긴다", async () => {
+    mockList.mockResolvedValue(listOf([mkOpinion()]));
+    renderPage();
+    await screen.findByText("kim@example.com");
+    const kindSelect = screen.getByRole("combobox", { name: "종류로 거르기" });
+    expect(within(kindSelect).getByRole("option", { name: "자동 오류" })).toBeInTheDocument();
+    fireEvent.change(kindSelect, { target: { value: "error" } });
+    await waitFor(() =>
+      expect(mockList).toHaveBeenCalledWith("test-token", { status: undefined, kind: "error", page: 1 }),
+    );
+  });
+
+  it("기존 종류(정보가 틀려요)를 골라도 kind 로 넘긴다", async () => {
+    mockList.mockResolvedValue(listOf([mkOpinion()]));
+    renderPage();
+    await screen.findByText("kim@example.com");
+    fireEvent.change(screen.getByRole("combobox", { name: "종류로 거르기" }), { target: { value: "data" } });
+    await waitFor(() =>
+      expect(mockList).toHaveBeenCalledWith("test-token", { status: undefined, kind: "data", page: 1 }),
+    );
+  });
+
+  it("오류 행은 'N번 반복 · 마지막 시각'을 보이고, 펼쳐도 답장·공개 칸이 없다(상태·지우기는 있다)", async () => {
+    mockList.mockResolvedValue(listOf([errorRow()], 0));
+    renderPage();
+    expect(await screen.findByText("7번 반복 · 마지막 2026.10.06 12:05")).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "자동 오류" })).toBeInTheDocument();
+    expect(screen.queryByText("로그인 안 함")).not.toBeInTheDocument();
+    await openRow(21);
+    expect(screen.getByText("TypeError: x is undefined")).toBeInTheDocument();
+    expect(screen.queryByLabelText("답장")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "답장 저장" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "공개 설정 저장" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/궁금한 소식/)).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "상태 바꾸기" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "지우기" })).toBeInTheDocument();
+  });
+
+  it("마지막 시각이 없으면 처음 난 시각으로 보인다", async () => {
+    mockList.mockResolvedValue(listOf([errorRow({ repeat_count: 1, last_seen_at: null })], 0));
+    renderPage();
+    expect(await screen.findByText("1번 반복 · 마지막 2026.10.06 00:30")).toBeInTheDocument();
+  });
+
+  it("oldest_days 가 null(또는 서버가 안 보냄)이면 줄을 숨긴다", async () => {
+    mockList.mockResolvedValue({ ...listOf([mkOpinion()]), oldest_days: null });
+    renderPage();
+    await screen.findByText("kim@example.com");
+    expect(screen.queryByTestId("opinion-oldest-days")).not.toBeInTheDocument();
+  });
+
+  it("366일째는 회색 한 줄(경고 없음)", async () => {
+    mockList.mockResolvedValue({ ...listOf([mkOpinion()]), oldest_days: 366 });
+    renderPage();
+    const line = await screen.findByTestId("opinion-oldest-days");
+    expect(line).toHaveTextContent("가장 오래된 의견 366일째");
+    expect(line).not.toHaveTextContent("1년 정리가 멈춘 것 같아요");
+    expect(line.className).not.toContain("text-red-600");
+  });
+
+  it("367일째부터 빨간 글자로 '1년 정리가 멈춘 것 같아요'", async () => {
+    mockList.mockResolvedValue({ ...listOf([mkOpinion()]), oldest_days: 368 });
+    renderPage();
+    const line = await screen.findByTestId("opinion-oldest-days");
+    expect(line).toHaveTextContent("가장 오래된 의견 368일째 — 1년 정리가 멈춘 것 같아요 — Claude 에게 알려주세요");
+    expect(line.className).toContain("text-red-600");
   });
 });

@@ -60,13 +60,13 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 - `PAYMENT_ENABLED` — 결제 기능 전역 스위치 (**코드 기본값 false = 꺼짐**, 세션 400 무료 전환). 꺼져 있으면 결제 API 7종(`/api/payment/{prepare,complete,webhook}`·`/api/payment/billing/{prepare,register,list,cancel}`)이 전부 **403**(`결제 기능이 비활성화되어 있습니다`)이고 04:50 빌링키 자동결제 잡도 미등록. 라이브 `.env` 에 항목이 없으므로 배포·재시작만으로 잠긴다(`.env` 편집 불필요). 매출 시작 시 `PAYMENT_ENABLED=true` 한 줄 추가 + 재시작으로 결제 코드 그대로 재개. 게이트 구현 = `config/payment_flags.py`, 회귀 = `tests/test_payment_disabled.py`
   - ⚠ **재개는 BE·FE 를 반드시 한 묶음으로** (세션 405 적대검증 HIGH). BE 는 집서버 `.env`+재시작, FE 는 Vercel 커밋+배포라 **배포 경로가 완전히 다르다.** BE 만 켜면 결제 API 는 열렸는데 `/terms`·`/refund`·`/privacy` 는 "지금은 무료로 운영 중입니다" 를 계속 띄운다 — **실제로는 과금되는데 화면은 안 된다고 고지**하는 상태라, 환불 분쟁 시 사업자에게 불리한 증거가 된다. 재개 체크리스트 = ①BE `.env` 에 `PAYMENT_ENABLED=true` + 재시작 ②FE `lib/locked-paths.ts` 의 `LOCKED_PATHS` 에서 `/pricing` 제거 + 헤더 메뉴·sitemap·robots 원복 ③`pricing/page.tsx:83` 등 "7일 무료 체험" 문구가 **그때 가격 정책과 맞는지** 재확인(잠긴 동안 방치돼 낡아 있다) ④라이브에서 세 문서의 배너 소멸 확인(`curl -s https://2u.pe.kr/terms | grep -c "무료로 운영 중"` = 0). 배너 판정 = `isPaidServicePaused()`(= `/pricing` 잠금 파생)
 
-## 테스트 현황 (BE = 세션 427 직접 실측 2026-10-02 · FE = 세션 427 CI 실측 2026-10-02)
+## 테스트 현황 (BE = 세션 445 직접 실측 2026-10-07 · FE = 세션 445 CI 실측 2026-10-07)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2332개** (세션 427 CI 실측 2026-10-02, PR #637 Frontend CI: Test Files 256). RegionSelector 는 세션 416 에 구조 수정 — 이 파일이 타임아웃으로 실패하면 **새 원인**이다 |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2438개** (세션 445 CI 실측 2026-10-07, main a82f282c(#679) run 37564806961 Frontend CI: Test Files 265). RegionSelector 는 세션 416 에 구조 수정 — 이 파일이 타임아웃으로 실패하면 **새 원인**이다 |
 | FE E2E | `frontend/e2e/*.spec.ts` | **21 파일** (Playwright, --webpack 모드) · 시각회귀 baseline PNG **22장**(세는 법 = `find frontend/e2e -name "*.png" \| wc -l`). 재생성 순서·판정·함정 = `frontend/e2e/README.md` |
-| BE pytest | `backend/tests/` | **2323개** (세션 427 직접 실측 `--collect-only` 2026-10-02, main a6a2a957). ⚠ `backend/` 안에서 실행이 표준 · 작업반 보고를 옮기지 말고 **매번 직접 재실측** |
+| BE pytest | `backend/tests/` | **2514개** (세션 445 직접 실측 `--collect-only` 2026-10-07, main c3db4903). ⚠ `backend/` 안에서 실행이 표준 · 작업반 보고를 옮기지 말고 **매번 직접 재실측** |
 
 > 숫자마다의 옛 값·근거 run·증감 사유(세션 396~427)는 `.claude/history/test-baseline-history.md` 로 옮겼다(세션 430). 숫자를 갱신하면 옛 값을 그 파일에 한 줄 더한다.
 

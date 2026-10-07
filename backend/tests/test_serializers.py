@@ -21,12 +21,17 @@ def _make_article(**kw):
 
 def test_complex_to_dict_has_all_fields():
     """complex_to_dict가 모든 필드를 반환"""
-    c = _make_complex(last_crawled_at=datetime(2025, 1, 1))
+    c = _make_complex(
+        last_crawled_at=datetime(2025, 1, 1),
+        articles_crawled_at=datetime(2026, 10, 7, 16, 0),
+    )
     d = complex_to_dict(c)
     assert d["complex_no"] == "C001"
     assert d["complex_name"] == "테스트아파트"
     assert d["sido"] == "서울"
     assert d["last_crawled_at"] == "2025-01-01T00:00:00"
+    # 매물 저장본 나이(우리 목록 크롤 완주 시각) — last_crawled_at 과 다른 칸
+    assert d["articles_crawled_at"] == "2026-10-07T16:00:00"
 
 
 def test_complex_to_dict_null_dates():
@@ -34,6 +39,7 @@ def test_complex_to_dict_null_dates():
     c = _make_complex()
     d = complex_to_dict(c)
     assert d["last_crawled_at"] is None
+    assert d["articles_crawled_at"] is None
     assert d["detail_crawled_at"] is None
 
 

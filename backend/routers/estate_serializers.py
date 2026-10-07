@@ -35,6 +35,7 @@ def complex_to_dict(c) -> dict:
         "parking_count_by_household": c.parking_count_by_household,
         "management_office_tel": c.management_office_tel,
         "last_crawled_at": c.last_crawled_at.isoformat() if c.last_crawled_at else None,
+        "articles_crawled_at": c.articles_crawled_at.isoformat() if c.articles_crawled_at else None,
         "nearby_median_price": c.nearby_median_price,
         "jeonse_rate": c.jeonse_rate,
         "recent_trades_6m": c.recent_trades_6m,

@@ -526,3 +526,35 @@ def test_canary_is_complex_with_most_articles(mock_api, _mock_detail, db, monkey
     service_discover.crawl_articles_batch(batch_size=20)
 
     assert called == ["CNG-SMALL", "CNG-BIG", "CNG-MID", *empties, "CNG-BIG"], called
+
+
+@patch("crawler.service_discover.NaverEstateAPI")
+def test_canary_confirm_waits_throttle_once_before_call(mock_api, monkeypatch):
+    """h) 확인 호출 1회마다 네이버 속도 조절(_throttle_articles.wait)을 정확히 1번, 호출 **전에** 거친다.
+
+    다른 시험의 _no_throttle 은 wait 를 무동작으로 바꿔 이 줄이 빠져도 통과한다 — 그래서 따로 센다
+    (infra.md IP 차단 방지 1항: 모든 네이버 수집 코드는 AdaptiveThrottle 경유).
+    뮤테이션(10-07 확인): _confirm_soft_block 의 _throttle_articles.wait() 줄을 지우면 FAIL.
+    """
+    events: list[str] = []
+    monkeypatch.setattr(
+        service_discover._throttle_articles, "wait", lambda *a, **k: events.append("wait")
+    )
+    monkeypatch.setattr(service_discover, "record_call", lambda *a, **k: None)
+
+    def _fake_articles(complex_no, page=1):
+        events.append(f"call:{complex_no}")
+        return _page(_arts("cnh", 2))
+
+    mock_api.get_complex_articles.side_effect = _fake_articles
+    service_discover.reset_round_canary()
+    service_discover.reset_empty_streak()
+    service_discover._note_nonempty_result("CNH-BIG", 7)
+    try:
+        for _ in range(2):
+            assert service_discover._confirm_soft_block("배치 회차 중단") is False
+    finally:
+        service_discover.reset_round_canary()
+        service_discover.reset_empty_streak()
+
+    assert events == ["wait", "call:CNH-BIG", "wait", "call:CNH-BIG"], events

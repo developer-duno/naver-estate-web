@@ -68,6 +68,27 @@ describe("CrawlMessage — 진행 중 한 줄 글", () => {
     expect(screen.getByRole("status")).toHaveTextContent("이미 크롤링이 진행 중입니다.");
   });
 
+  it("낡은 자료면 나이 안내를 앞에 붙인다 — 값 없음이면 '저장된 자료가 오래됐어요' (세션 447 2-5)", () => {
+    const { rerender } = renderMsg({
+      crawling: true,
+      staleLabel: "5일 전 자료예요",
+      progress: makeProgress({ phase: "articles", article_count: 12 }),
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("5일 전 자료예요 · 네이버에서 지금 매물 받는 중 · 12건");
+
+    rerender(
+      <CrawlMessage
+        crawling
+        message="네이버에서 지금 매물 받는 중"
+        messageType="info"
+        progress={null}
+        onClear={() => {}}
+        staleLabel="저장된 자료가 오래됐어요"
+      />,
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(/^저장된 자료가 오래됐어요 · 네이버에서 지금 매물 받는 중$/);
+  });
+
   it("큰 상자(단계 표시)는 그리지 않고, 글은 한 줄 말줄임", () => {
     renderMsg({ crawling: true, progress: makeProgress({ phase: "details", detail_crawled_count: 3, detail_total: 10 }) });
     expect(screen.queryByText("매물 목록 받기")).not.toBeInTheDocument();
@@ -108,6 +129,12 @@ describe("CrawlMessage — 끝·오류 안내도 같은 자리", () => {
     renderMsg({ tableLoading: true, message: "갱신 완료", messageType: "success" });
     expect(screen.getByText("갱신 완료")).toBeInTheDocument();
     expect(screen.queryByRole("status", { name: "매물 갱신 중" })).not.toBeInTheDocument();
+  });
+
+  it("낡은 자료 실패 안내: 빨강 한 줄 + × 닫기 (2-7)", () => {
+    renderMsg({ message: "5일 전 자료예요 — 지금은 새로 못 받았어요", messageType: "error" });
+    expect(screen.getByText("5일 전 자료예요 — 지금은 새로 못 받았어요").parentElement).toHaveClass("bg-red-50");
+    expect(screen.getByRole("button", { name: "닫기" })).toBeInTheDocument();
   });
 
   it("아무 것도 없으면 그리지 않는다", () => {

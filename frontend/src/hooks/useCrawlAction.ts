@@ -1,10 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { CrawlProgress } from "@/types";
+import { useMutation, useQueryClient, hashKey, type QueryKey } from "@tanstack/react-query";
+import type { Complex, CrawlProgress } from "@/types";
 import { startLiveCrawl, getCrawlStatus, ApiError } from "@/lib/api";
 import { createClient } from "@/lib/supabase";
 import { queryKeys } from "@/lib/query-keys";
+import { formatTimeAgo } from "@/components/complex/ComplexHeader";
+import { diffArticleLists, type ArticleListSnapshot } from "@/lib/article-list-diff";
 
 export type MessageType = "info" | "error" | "success";
 
@@ -23,6 +25,24 @@ const NAVER_BLOCKED_MESSAGE =
 // 크롤링이 덜 끝난 줄 알고 재시도하므로, 이유를 함께 알린다.
 const PARTIAL_DONE_MESSAGE =
   "갱신 완료. 이미 삭제된 매물이 많아 일부는 상세 정보를 가져오지 못했어요.";
+
+// 저장본 나이 기준 (세션 447) — 크롤 시작 순간 articles_crawled_at 이 이보다 오래됐거나 없으면 "낡은 자료"
+// (last_crawled_at 은 다른 수집기가 지도 단지 전부에 찍어 매물 저장본 나이가 아니다 — 세션 448)
+const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+
+const START_MESSAGE = "네이버에서 지금 매물 받는 중";
+
+/**
+ * 크롤 시작 순간의 articles_crawled_at(매물 목록을 끝까지 받은 시각)으로 저장본 나이를 판정한다.
+ * 새 자료(24시간 이하)면 null, 낡은 자료면 화면 안내 글("5일 전 자료예요" 등).
+ */
+export function staleLabelFor(lastCrawledAt: string | null | undefined, now = Date.now()): string | null {
+  if (!lastCrawledAt) return "저장된 자료가 오래됐어요";
+  const age = now - new Date(lastCrawledAt).getTime();
+  if (age <= STALE_AFTER_MS) return null;
+  if (Number.isNaN(age)) return "저장된 자료가 오래됐어요";
+  return `${formatTimeAgo(lastCrawledAt)} 자료예요`;
+}
 
 function formatAgo(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -70,20 +90,41 @@ function refetchComplexQueries(
 }
 
 /**
- * 서버가 돌려준 last_crawled_at 을 Complex 쿼리 캐시에 즉시 주입 (낙관적 업데이트).
- * refetch 가 끝나기 전에도 배지가 "방금 전" 으로 바뀌어 사용자 체감 개선.
+ * 새 자료일 때의 종료 처리 (세션 447) — 카드·배지·평형·시세는 지금처럼 다시 받고,
+ * 표(필터·페이지가 붙은 articles 키)는 다시 받지 않고 낡음 표시만 한다(refetchType:"none").
+ * 다른 페이지·필터로 옮기면 그때 서버에서 새로 받는다.
+ */
+function refetchNonTableQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  complexNo: string,
+) {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo), refetchType: "none" });
+  void queryClient.refetchQueries({ queryKey: queryKeys.articles(complexNo, undefined), exact: true });
+  void queryClient.refetchQueries({ queryKey: queryKeys.complex(complexNo) });
+  void queryClient.refetchQueries({ queryKey: queryKeys.pyeongDetails(complexNo) });
+  void queryClient.refetchQueries({ queryKey: queryKeys.priceStats(complexNo) });
+}
+
+/**
+ * 서버가 돌려준 last_crawled_at·articles_crawled_at 을 Complex 쿼리 캐시에 즉시 주입 (낙관적 업데이트).
+ * refetch 가 끝나기 전에도 배지가 "방금 전" 으로 바뀌어 사용자 체감 개선. 값이 없는 키는 건드리지 않는다.
  */
 function patchLastCrawledAt(
   queryClient: ReturnType<typeof useQueryClient>,
   complexNo: string,
   lastCrawledAt: string | null | undefined,
+  articlesCrawledAt?: string | null,
 ) {
-  if (!lastCrawledAt) return;
+  if (!lastCrawledAt && !articlesCrawledAt) return;
   queryClient.setQueryData(
     queryKeys.complex(complexNo),
     (old: unknown) => {
       if (!old || typeof old !== "object") return old;
-      return { ...old, last_crawled_at: lastCrawledAt };
+      return {
+        ...old,
+        ...(lastCrawledAt ? { last_crawled_at: lastCrawledAt } : {}),
+        ...(articlesCrawledAt ? { articles_crawled_at: articlesCrawledAt } : {}),
+      };
     },
   );
 }
@@ -93,6 +134,18 @@ export interface UseCrawlActionOptions {
   auto?: boolean;
   /** 자동 실행 전제 조건 (모든 초기 쿼리 성공 후) */
   autoEnabled?: boolean;
+  /**
+   * 지금 화면의 표(매물 목록) — 새 자료 크롤이 끝나면 같은 조건으로 따로 받아 비교한다 (세션 447).
+   * queryKey = 표 쿼리 키, fetch = 같은 조건(필터·정렬·페이지·크기)으로 캐시를 거치지 않고 받기.
+   */
+  table?: { queryKey: QueryKey; fetch: () => Promise<ArticleListSnapshot> };
+}
+
+interface PendingRefresh {
+  queryKey: QueryKey;
+  hash: string;
+  data: ArticleListSnapshot;
+  count: number;
 }
 
 /** 크롤 트리거 + 폴링 + UI 상태를 캡슐화. 수동 버튼과 자동 크롤이 동일 경로로 동작. */
@@ -110,6 +163,15 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState<MessageType>("info");
   const [progress, setProgress] = useState<CrawlProgress | null>(null);
+  // 크롤 시작 순간에 고정한 저장본 나이 판정 — null = 새 자료 (서버 응답이 캐시를 덮어도 바뀌지 않음)
+  const staleLabelRef = useRef<string | null>(null);
+  const [staleLabel, setStaleLabel] = useState<string | null>(null);
+  // 새 자료 크롤 뒤 따로 받아 둔 새 목록 — "새 매물 반영" 버튼을 누르면 표에 넣는다
+  const [pending, setPending] = useState<PendingRefresh | null>(null);
+  const tableRef = useRef(options.table);
+  useEffect(() => {
+    tableRef.current = options.table;
+  });
 
   const setMsg = useCallback((text: string, type: MessageType = "info") => {
     setMessage(text);
@@ -134,6 +196,23 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
     };
   }, [clearPolling]);
 
+  // 새 자료 크롤 종료 — 지금 표와 같은 조건으로 새 목록을 따로 받아 비교 (표 캐시는 건드리지 않음)
+  const checkTableChanges = useCallback(async () => {
+    const table = tableRef.current;
+    if (!table) return;
+    const current = queryClient.getQueryData<ArticleListSnapshot>(table.queryKey);
+    try {
+      const next = await table.fetch();
+      const diff = diffArticleLists(current, next);
+      if (diff.changed) {
+        setPending({ queryKey: table.queryKey, hash: hashKey(table.queryKey), data: next, count: diff.count });
+      }
+    } catch {
+      // 비교용 목록을 못 받으면 표는 그대로 둔다 — 표 쿼리는 낡음 표시가 돼 있어
+      // 다른 페이지·필터로 옮기거나 "데이터 갱신"을 다시 누르면 서버에서 새로 받는다
+    }
+  }, [queryClient]);
+
   const startPolling = useCallback(() => {
     clearPolling();
     consecutiveErrorsRef.current = 0;
@@ -144,27 +223,43 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
         const status = await getCrawlStatus(complexNo);
         consecutiveErrorsRef.current = 0;
         if (status.status === "running") {
-          // 진행률 문구 실시간 갱신 + progress 객체를 CrawlProgressBanner 에 전달
+          // 진행률 문구 실시간 갱신 + progress 객체를 CrawlMessage(한 줄 안내)에 전달
           setMsg(buildProgressMessage(status), "info");
           setProgress(status);
           // 매 3 폴링(6초) 마다 조용히 articles 갱신 — articles/details/enriching 전 phase
           // BE 가 페이지당 커밋 + 캐시 delete 하므로 전 phase refetch 가 의미 있음
+          // 새 자료면 카드 쿼리 하나만 — 표는 받는 동안에도 건드리지 않는다 (세션 447)
           if (attempts % 3 === 0) {
-            queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo) });
+            if (staleLabelRef.current) {
+              queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo) });
+            } else {
+              queryClient.invalidateQueries({ queryKey: queryKeys.articles(complexNo, undefined), exact: true });
+            }
           }
           return;
         }
         if (TERMINAL_STATUSES.has(status.status)) {
           clearPolling();
-          setCrawling(false);
-          setProgress(null);
+          const stale = staleLabelRef.current;
           if (status.status === "error") {
+            setCrawling(false);
+            setProgress(null);
+            setStaleLabel(null);
             // 🚨 refetch/invalidate 호출 금지 — 기존 저장 데이터를 그대로 유지
             //    사용자가 X 눌러 배너 닫을 때까지 메시지 유지 (자동 사라짐 X)
-            setMsg(NAVER_BLOCKED_MESSAGE, "error");
+            setMsg(stale ? `${stale} — 지금은 새로 못 받았어요` : NAVER_BLOCKED_MESSAGE, "error");
             return;
           }
-          refetchComplexQueries(queryClient, complexNo);
+          if (stale) {
+            // 낡은 자료 — 지금처럼 표까지 다시 받아 자동 교체
+            refetchComplexQueries(queryClient, complexNo);
+          } else {
+            refetchNonTableQueries(queryClient, complexNo);
+            await checkTableChanges();
+          }
+          setCrawling(false);
+          setProgress(null);
+          setStaleLabel(null);
           if (status.status === "done_partial") {
             setMsg(PARTIAL_DONE_MESSAGE, "success");
           } else {
@@ -181,7 +276,7 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
         }
       }
     }, POLL_INTERVAL_MS);
-  }, [complexNo, queryClient, clearPolling, setMsg]);
+  }, [complexNo, queryClient, clearPolling, setMsg, checkTableChanges]);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -193,40 +288,61 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
       return startLiveCrawl(complexNo, session.access_token);
     },
     onMutate: () => {
+      // 판정은 시작 순간의 articles_crawled_at 으로 고정 — 뒤이은 patchLastCrawledAt 이 덮어도 그대로
+      const complex = queryClient.getQueryData<Complex>(queryKeys.complex(complexNo));
+      const label = staleLabelFor(complex?.articles_crawled_at);
+      staleLabelRef.current = label;
+      setStaleLabel(label);
+      setPending(null);
       setCrawling(true);
       setProgress(null);
-      setMsg("매물 목록 불러오는 중...", "info");
+      setMsg(START_MESSAGE, "info");
     },
     onSuccess: (result: CrawlProgress) => {
       if (result.status === "cached") {
-        // 서버가 쿨다운으로 스킵 — DB 재조회 + 캐시 즉시 패치로 배지 빠르게 갱신
-        patchLastCrawledAt(queryClient, complexNo, result.last_crawled_at);
-        refetchComplexQueries(queryClient, complexNo);
+        // 서버가 쿨다운으로 스킵 — 캐시 즉시 패치로 배지 빠르게 갱신
+        patchLastCrawledAt(queryClient, complexNo, result.last_crawled_at, result.articles_crawled_at);
         setCrawling(false);
         setProgress(null);
-        const ago = formatAgo(result.last_crawled_at);
+        setStaleLabel(null);
+        // 서버가 돌려준 매물 받은 시각으로 다시 판정 (세션 448) — 낡았으면 다시 받을 것이 없으니
+        // 표·카드는 그대로 두고 나이만 알린다 ("갱신됨" 초록 문구 안 띄움, × 로 닫을 때까지 유지)
+        const cachedStale = staleLabelFor(result.articles_crawled_at);
+        if (cachedStale) {
+          setMsg(`${cachedStale} — 지금은 새로 못 받았어요`, "error");
+          return;
+        }
+        refetchComplexQueries(queryClient, complexNo);
+        const ago = formatAgo(result.articles_crawled_at);
         setMsg(ago ? `${ago} 갱신됨` : "최근 갱신됨", "success");
         timersRef.current.push(setTimeout(() => setMessage(""), 4_000));
         return;
       }
       if (result.status === "already_running") {
-        // 자동 크롤 폴링이 이미 진행 중인 상태를 서버가 감지.
-        // startPolling 재호출하면 2개 interval 이 겹치고, setCrawling 을
-        // 건드리면 기존 폴링의 종료 시점 해제 로직과 꼬인다. 메시지만 교체.
+        // 다른 화면·자동 크롤이 시작한 크롤이 서버에서 이미 도는 중.
+        // setCrawling 은 건드리지 않는다(종료 시점 해제는 폴링이 맡는다).
         // 문구는 기존 onError 409 분기와 톤 통일 — 사용자 입장에서 동일 상황.
         setMsg("이미 크롤링이 진행 중입니다.", "info");
+        // 이 화면에서 폴링이 안 돌고 있으면(새로 열어 남의 크롤을 만난 경우) 끝날 때까지 지켜본다 —
+        // 안 그러면 흐림·나이 안내가 풀리지 않는다 (세션 448). 이미 돌고 있으면 interval 중복 금지.
+        if (!pollRef.current) startPolling();
         return;
       }
       // started 분기 — 서버가 돌려준 현재 last_crawled_at 즉시 반영(이전 시각)해서
       // 갱신 시작 순간에도 배지 표시가 어긋나지 않게 함. 진짜 "방금 전" 은
       // 폴링의 done 수신 후 refetch 로 교체.
-      patchLastCrawledAt(queryClient, complexNo, result.last_crawled_at);
+      patchLastCrawledAt(queryClient, complexNo, result.last_crawled_at, result.articles_crawled_at);
       // 서버 상태를 2초 간격 폴링 → terminal 신호 수신 시 종료
       startPolling();
     },
     onError: (err: unknown) => {
       clearPolling();
       setProgress(null);
+      setStaleLabel(null);
+      // 낡은 자료였으면 "N일 전 자료예요 — 지금은 새로 못 받았어요" (429·403·401·409 는 기존 문구·동작)
+      const failText = staleLabelRef.current
+        ? `${staleLabelRef.current} — 지금은 새로 못 받았어요`
+        : NAVER_BLOCKED_MESSAGE;
       if (err instanceof ApiError) {
         if (err.statusCode === 401) {
           router.push(`/login?redirect=${encodeURIComponent(`/complex/${complexNo}`)}`);
@@ -240,10 +356,10 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
         } else if (err.statusCode === 429) {
           setMsg("일일 크롤링 한도를 초과했습니다.", "error");
         } else {
-          setMsg(NAVER_BLOCKED_MESSAGE, "error");
+          setMsg(failText, "error");
         }
       } else {
-        setMsg(NAVER_BLOCKED_MESSAGE, "error");
+        setMsg(failText, "error");
       }
       setCrawling(false);
     },
@@ -264,11 +380,26 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auto, autoEnabled]);
 
+  // 표 조건(페이지·필터)이 바뀌면 받아 둔 새 목록은 버린다 — 새 조건은 서버에서 새로 받는다
+  const tableHash = options.table ? hashKey(options.table.queryKey) : null;
+  if (pending && pending.hash !== tableHash) setPending(null);
+
+  const applyPendingRefresh = useCallback(() => {
+    if (!pending) return;
+    queryClient.setQueryData(pending.queryKey, pending.data);
+    setPending(null);
+  }, [pending, queryClient]);
+
   return {
     crawling,
     message,
     messageType,
     progress,
+    /** 크롤 중이고 저장본이 낡았으면 나이 안내 글, 아니면 null */
+    staleLabel,
+    /** 새 자료 크롤 뒤 표와 달라진 게 있으면 { count }, 없으면 null */
+    pendingRefresh: pending ? { count: pending.count } : null,
+    applyPendingRefresh,
     setMsg,
     clearMessage,
     handleCrawl,

@@ -9,6 +9,8 @@ interface CrawlMessageProps {
   onClear: () => void;
   /** 표 쿼리가 다시 받는 중 — 크롤 안내가 없을 때만 "갱신 중" 으로 보인다 */
   tableLoading?: boolean;
+  /** 낡은 저장본을 받는 중이면 나이 안내("5일 전 자료예요") — 진행 글 앞에 붙인다 */
+  staleLabel?: string | null;
 }
 
 /** 진행 단계(progress)를 한 줄 글로 바꾼다. progress 가 없으면 훅이 넘긴 문구를 쓴다. */
@@ -42,9 +44,11 @@ export default function CrawlMessage({
   progress,
   onClear,
   tableLoading = false,
+  staleLabel = null,
 }: CrawlMessageProps) {
   if (crawling && messageType === "info") {
-    const text = progressText(progress, message);
+    const step = progressText(progress, message);
+    const text = staleLabel ? `${staleLabel} · ${step}` : step;
     return (
       <div role="status" aria-live="polite" className="no-print flex items-center gap-1.5 min-w-0 text-xs text-blue-600">
         <Spinner />

@@ -130,13 +130,23 @@ export default function ComplexDetailPage() {
     message: crawlMessage,
     messageType: crawlMessageType,
     progress: crawlProgress,
+    staleLabel: crawlStaleLabel,
+    pendingRefresh,
+    applyPendingRefresh,
     clearMessage: clearCrawlMessage,
     handleCrawl,
   } = useCrawlAction(complexNo, {
     auto: true,
     autoEnabled:
       complexQuery.isSuccess && articlesQuery.isSuccess && pyeongQuery.isSuccess,
+    // 새 자료 크롤이 끝나면 지금 표와 같은 조건으로 따로 받아 비교한다 (세션 447)
+    table: {
+      queryKey: articlesQueryKey,
+      fetch: () => getArticles(complexNo, { ...filters, page: currentPage, page_size: pageSize }, sessionToken),
+    },
   });
+  // 낡은 자료를 받는 동안엔 표를 흐리게 (세션 447)
+  const tableDimmed = tableLoading || (crawling && !!crawlStaleLabel);
 
   const handleSortChange = useCallback(
     (newSortBy: string) => {
@@ -298,8 +308,9 @@ export default function ComplexDetailPage() {
 
         {/* 매물 수 + 데이터 갱신 + 엑셀 */}
         <div className="flex items-center justify-between flex-wrap gap-2">
-          {/* 크롤 진행·완료·오류는 이 줄 안에 한 줄로 — 표를 위아래로 밀지 않는다 (세션 447) */}
-          <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+          {/* 크롤 진행·완료·오류는 이 줄 안에 한 줄로 — 표를 위아래로 밀지 않는다 (세션 447)
+              좁은 폭(640px 미만)에선 이 묶음이 한 줄을 다 쓰고 버튼 묶음이 다음 줄로 (세션 448 — 360px 겹침) */}
+          <div className="flex items-center gap-2 md:gap-3 min-w-0 grow basis-full sm:basis-0">
             <span className="text-base md:text-lg font-semibold shrink-0">매물 {totalCount}건</span>
             <CrawlMessage
               crawling={crawling}
@@ -308,18 +319,25 @@ export default function ComplexDetailPage() {
               progress={crawlProgress}
               onClear={clearCrawlMessage}
               tableLoading={tableLoading}
+              staleLabel={crawlStaleLabel}
             />
           </div>
           <div className="flex items-center gap-1.5 md:gap-2 no-print">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleCrawl}
-              disabled={crawling}
-            >
-              {crawling ? "갱신 중..." : "데이터 갱신"}
-            </Button>
+            {pendingRefresh ? (
+              <Button type="button" size="sm" onClick={applyPendingRefresh}>
+                {`새 매물 반영 (${pendingRefresh.count}건 바뀜)`}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCrawl}
+                disabled={crawling}
+              >
+                {crawling ? "갱신 중..." : "데이터 갱신"}
+              </Button>
+            )}
             <HintIcon text="네이버에서 최신 매물을 다시 가져옵니다 (30초~2분)" />
             <Button
               type="button"
@@ -357,7 +375,7 @@ export default function ComplexDetailPage() {
 
         {/* 매물 테이블 / 카드 */}
         {!articlesQuery.isLoading && !articlesQuery.isError && (
-          <div className={`transition-opacity duration-200 ${tableLoading ? "opacity-50" : "opacity-100"}`}>
+          <div className={`transition-opacity duration-200 ${tableDimmed ? "opacity-50" : "opacity-100"}`}>
             <div className="hidden md:block">
               <div className="flex justify-end mb-2">
                 <ArticlePageSizeSelect pageSize={pageSize} onPageSizeChange={handlePageSizeChange} />

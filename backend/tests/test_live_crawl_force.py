@@ -27,12 +27,13 @@ def _make_user(db, uid="u1", role="user"):
     db.commit()
 
 
-def _make_complex(db, complex_no="C001", last_crawled_at=None):
+def _make_complex(db, complex_no="C001", last_crawled_at=None, articles_crawled_at=None):
     cpx = Complex(
         complex_no=complex_no,
         complex_name="테스트단지",
         real_estate_type_code="APT",
         last_crawled_at=last_crawled_at,
+        articles_crawled_at=articles_crawled_at,
     )
     db.add(cpx)
     db.commit()
@@ -91,6 +92,68 @@ def test_cached_response_last_crawled_at_null_when_never_crawled(client, db):
         assert res.json()["last_crawled_at"] is None
     finally:
         _reset_live_state("C002")
+
+
+# ── articles_crawled_at 동봉 (cached·started 두 응답) ──
+
+
+def test_cached_response_includes_articles_crawled_at(client, db):
+    """cached 응답에 articles_crawled_at(매물 저장본 나이)이 last_crawled_at 과 따로 실린다"""
+    _reset_live_state("C005")
+    _make_user(db)
+    _make_complex(
+        db, "C005",
+        last_crawled_at=datetime(2026, 10, 6, 1, 0, tzinfo=timezone.utc),
+        articles_crawled_at=datetime(2026, 10, 1, 4, 0, tzinfo=timezone.utc),
+    )
+    _cache.set("crawl_done:C005", True)
+
+    try:
+        res = client.post(
+            "/api/live/C005/articles/start-crawl",
+            headers=_auth(_token("u1")),
+        )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["status"] == "cached"
+        # SQLite 는 TZ 정보를 떨어뜨리므로 ISO prefix 로 비교
+        assert body["articles_crawled_at"].startswith("2026-10-01T04:00:00")
+        assert body["last_crawled_at"].startswith("2026-10-06T01:00:00")
+    finally:
+        _reset_live_state("C005")
+
+
+def test_started_response_includes_articles_crawled_at(client, db):
+    """started 응답에도 articles_crawled_at(시작 전 저장본 시각)이 실린다"""
+    _reset_live_state("C006")
+    _make_user(db)
+    _make_complex(
+        db, "C006",
+        last_crawled_at=datetime(2026, 10, 6, 1, 0, tzinfo=timezone.utc),
+        articles_crawled_at=datetime(2026, 10, 1, 4, 0, tzinfo=timezone.utc),
+    )
+
+    class _FakeThread:
+        def __init__(self, *, target=None, args=(), daemon=True):
+            pass
+
+        def start(self):
+            pass
+
+    try:
+        with patch("routers.live.crawl.threading.Thread", _FakeThread):
+            res = client.post(
+                "/api/live/C006/articles/start-crawl",
+                headers=_auth(_token("u1")),
+            )
+        assert res.status_code == 200
+        body = res.json()
+        assert body["status"] == "started"
+        # 값이 있는 단지 — None 으로 고정하는 회귀를 잡는다(검사관 🟡1)
+        assert body["articles_crawled_at"].startswith("2026-10-01T04:00:00")
+        assert body["last_crawled_at"].startswith("2026-10-06T01:00:00")
+    finally:
+        _reset_live_state("C006")
 
 
 # ── force=True 분기 ──

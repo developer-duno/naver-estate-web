@@ -164,8 +164,13 @@ def _build_filter_conditions(filters: dict) -> list:
     return conditions
 
 
-def _build_order_clause(sort_by: str):
-    """정렬 키워드를 SQLAlchemy ORDER BY 절로 변환"""
+def _build_order_clause(sort_by: str) -> list:
+    """정렬 키워드를 SQLAlchemy ORDER BY 절 목록으로 변환.
+
+    1차 기준 뒤에 매물 번호 오름차순을 2차 기준으로 붙인다 — 1차 값이 같은 매물
+    (같은 확인일자·같은 가격)의 순서가 DB 마음대로 바뀌어 새로고침마다 줄이 섞이는 것을 막는다.
+    호출처는 `.order_by(*_build_order_clause(...))` 로 펼쳐 쓴다.
+    """
     sort_map = {
         "rank": Article.article_confirm_ymd.desc(),
         "price_asc": Article.numeric_price.asc(),
@@ -179,4 +184,5 @@ def _build_order_clause(sort_by: str):
         "confirm_asc": Article.article_confirm_ymd.asc(),
         "confirm_desc": Article.article_confirm_ymd.desc(),
     }
-    return sort_map.get(sort_by, Article.article_confirm_ymd.desc())
+    primary = sort_map.get(sort_by, Article.article_confirm_ymd.desc())
+    return [primary, Article.article_no.asc()]

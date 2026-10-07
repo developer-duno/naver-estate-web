@@ -112,6 +112,29 @@ def test_explain_error_translates_real_prod_errors():
         assert plain.endswith("요."), f"설명 문장이 아니다: {plain}"
 
 
+def test_explain_error_translates_detail_save_guard_message():
+    """상세 배치 '저장 성공 0건' 회차 실패 원문(2026-10-07)이 "처음 보는 문제"가 아니라 원인+조치로 나간다.
+
+    원문은 실제 생산자(_DetailSaveGuard.finish)로 만든다 — 문구가 바뀌면 이 시험이 바로 깨진다.
+    끝에 붙는 "OperationalError" 가 DB 연결 규칙에 먼저 잡히지 않는지(규칙 순서)도 함께 본다.
+    """
+    import pytest
+
+    from crawler.service_discover import _DetailSaveGuard
+
+    guard = _DetailSaveGuard()
+    guard.failed = 20  # 차단기 문턱(_ARTICLE_ERROR_SYSTEMIC_MIN) 이상이어야 회차 실패 원문이 나온다
+    guard._last_type = "OperationalError"
+    with pytest.raises(RuntimeError) as ei:
+        guard.finish(db=None, processed=0)
+
+    plain = explain_error(str(ei.value))
+    assert plain != UNKNOWN_ERROR_WORDS
+    assert "매물 상세 내용을 한 건도 저장하지 못했어요" in plain
+    assert "다음 회차에 다시 시도해요" in plain
+    assert not re.search(r"[A-Za-z]", plain), f"영문이 섞였다: {plain}"
+
+
 def test_explain_error_unknown_has_no_raw_text():
     """모르는 에러는 **원문을 한 조각도 싣지 않는다** (세션 410 적대검증 MEDIUM).
 

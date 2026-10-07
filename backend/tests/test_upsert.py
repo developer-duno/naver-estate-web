@@ -183,6 +183,18 @@ class TestUpsertArticle:
         assert row.numeric_price == 150000
         assert row.is_active is True
 
+    def test_list_upsert_strips_nul(self, db):
+        """회귀: 목록 수집 값(특징 설명·태그)에 NUL(0x00)이 섞여 와도 저장 값에서 빠진다.
+        PostgreSQL 은 NUL 문자열을 거부한다 — 상세 경로(#678)와 같은 처방을 목록 경로에도."""
+        upsert_complex_from_search(db, _make_search_data())
+
+        art = _make_article(article_feature_desc="로얄층\x00 남향", tags=["급\x00매"])
+        upsert_article(db, art)
+
+        row = db.query(ArticleModel).filter(ArticleModel.article_no == "2400001234").first()
+        assert row.article_feature_desc == "로얄층 남향"
+        assert row.tags == ["급매"]
+
     def test_price_tracking(self, db):
         """정상: 가격 변동 감지 시 ArticlePriceHistory 기록"""
         upsert_complex_from_search(db, _make_search_data())
@@ -400,6 +412,15 @@ class TestArticleDetail4Fields:
         assert update["detail_description"] == "남향 올수리"
         assert update["photo_urls"] == ["https://img/a.jpg"]
         assert not any("\x00" in str(v) for v in update.values())
+
+    def test_maintenance_cost_number_uses_nul_stripped_text(self):
+        """회귀: 관리비 문자열에 NUL 이 끼면 숫자 칸도 NUL 뺀 값으로 계산한다.
+        "12\x0034" 를 그대로 파싱하면 12 가 되어 문자 칸("1234")과 어긋난다."""
+        art = self._make_domain()
+        art.maintenance_cost = "12\x0034"
+        update = build_detail_update_dict(art)
+        assert update["maintenance_cost"] == "1234"
+        assert update["numeric_maintenance_cost"] == 1234
 
 
 class TestArticleDetailKeyDrift:

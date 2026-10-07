@@ -209,6 +209,14 @@ _ERROR_RULES: list[tuple[re.Pattern, str | Callable[[str], str]]] = [
         "공공데이터 서버가 오류를 알려 왔어요(사유 번호는 서버 기록에 있어요).",
     ),
     (
+        # 상세 배치 회차 끝 판정(service_discover._DetailSaveGuard.finish, 2026-10-07)이 남기는
+        # 우리말 원문. ⚠ 원문 끝에 "마지막 오류 종류 OperationalError" 가 붙을 수 있어
+        # 아래 OperationalError 규칙보다 **앞**에 둬야 이 문장이 나간다.
+        re.compile(r"상세 저장이 한 건도 안 됐어요"),
+        "매물 상세 내용을 한 건도 저장하지 못했어요. 저장할 수 없는 값이 섞였거나"
+        " 데이터베이스에 문제가 생긴 것 같아요. 다음 회차에 다시 시도해요.",
+    ),
+    (
         re.compile(r"statement timeout|QueryCanceled", re.I),
         "데이터베이스가 너무 오래 걸려 스스로 멈췄어요.",
     ),

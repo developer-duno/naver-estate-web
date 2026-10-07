@@ -558,6 +558,99 @@ def _apply_article_error_counts(db, hits: list[tuple[str, int, str, str]]) -> No
             )
 
 
+# 매물 한 건의 상세 저장 실패(불량값 — NUL·길이 초과 등)가 회차 전체를 끝내지 않게 한다.
+# 2026-10-07 05:35~10:25: 매물 한 건의 NUL 이 UPDATE 를 깨뜨려 회차가 통째로 실패했고,
+# 그 매물이 신선도 정렬 맨 앞에 남아 9회 연속 0건이 됐다. 그래서 그 한 건만 되돌리고
+# 다음 매물로 넘어간 뒤, 회차 끝에 자료 모양 실패 건의 detail_fail_count 를 +1 한다
+# (상한이면 선정 제외). 구조는 위 매물단위 오류 차단기(루프 뒤 판정)와 같다.
+# 저장 실패가 _ARTICLE_ERROR_SYSTEMIC_MIN(20) 이상인데 저장 성공이 0건이면 매물 문제가 아니라
+# 시스템성(DB 장애·스키마 어긋남)으로 보고 카운트를 보류하고 회차를 failed 로 끝낸다
+# (error-propagation.md 5항). 20 미만이면 판정 근거가 못 되므로(대기 매물이 불량 몇 건뿐인
+# 회차가 평소 흔하다) 그대로 +1 해 상한에서 저절로 빠지게 한다 — 매물오류 차단기와 같은 문턱.
+# DB 연결 계열 오류는 저장 성공 없이 아래 수만큼 쌓이면 루프 도중에 바로 멈춘다.
+_SAVE_FAIL_SYSTEMIC_MIN = 3
+
+# 저장 실패 회차의 crawl_jobs.error_message (completed 회차) — 관리자 화면에 그대로 보이므로
+# 우리말 한 줄(infra.md 텔레그램 알림 문구 절 · plain_words.explain_stored_error ③).
+_SAVE_FAILED_WORDS = "상세 저장 실패 {n}건 — 그 매물만 건너뛰고 다음 매물로 넘어갔어요"
+
+
+def _is_db_system_error(exc: Exception) -> bool:
+    """매물 자료 탓이 아닌 DB 쪽 일시 장애(연결 끊김·QueryCanceled 등)인가.
+
+    codes.md "시스템성 transient 는 세지 않는다" — 이 갈래는 detail_fail_count 를 안 올린다.
+    """
+    from sqlalchemy.exc import InterfaceError, OperationalError
+
+    return isinstance(exc, (OperationalError, InterfaceError)) or bool(
+        getattr(exc, "connection_invalidated", False)
+    )
+
+
+def _exc_head(exc: Exception) -> str:
+    """로그용 예외 메시지 앞 200자(개행 제거). SQLAlchemy 예외는 원 드라이버 메시지만 —
+    str(StatementError) 에는 [SQL]·[parameters](매물 값)가 붙기 때문이다."""
+    return " ".join(str(getattr(exc, "orig", None) or exc).split())[:200]
+
+
+class _DetailSaveGuard:
+    """상세 배치 한 회차의 매물별 저장 실패 기록·판정 (두 경로 공용)."""
+
+    def __init__(self) -> None:
+        self.failed = 0
+        self._db_error_run = 0  # 저장 성공 없이 쌓인 DB 연결 계열 오류 수
+        self._shape_hits: list[tuple[str, int]] = []  # (article_no, 선추출 detail_fail_count)
+        self._last_type = ""
+
+    def on_success(self) -> None:
+        self._db_error_run = 0
+
+    def on_failure(self, db, article_no: str, prev_fail_count: int, exc: Exception) -> None:
+        """그 매물 변경만 되돌리고 기록한다. 순회마다 commit 하므로(세션 396) rollback 으로
+        잃는 변경은 이 매물의 UPDATE 1건뿐이다(rollback 자체가 실패하면 그대로 올라간다)."""
+        db.rollback()
+        self.failed += 1
+        self._last_type = type(exc).__name__
+        db_error = _is_db_system_error(exc)
+        logger.warning(
+            "상세 저장 실패(이 매물만 건너뜀): article %s (%s%s) %s",
+            article_no, self._last_type, ", DB 장애 의심" if db_error else "", _exc_head(exc),
+        )
+        if db_error:
+            # DB 가 죽어 있으면 남은 매물도 전부 실패한다 — 네이버 콜을 더 쓰지 않고 멈춘다.
+            self._db_error_run += 1
+            if self._db_error_run >= _SAVE_FAIL_SYSTEMIC_MIN:
+                raise exc
+        else:
+            self._shape_hits.append((article_no, prev_fail_count or 0))
+
+    def finish(self, db, processed: int) -> None:
+        """회차 끝 판정. 저장 성공 0건 + 실패 ≥ _ARTICLE_ERROR_SYSTEMIC_MIN 이면 카운트 보류 +
+        회차 failed(예외). 그 밖에는 자료 모양 실패 건 전부 +1(commit 은 호출측의 _finalize_job
+        뒤 commit) — 성공 0건이어도 실패가 문턱 미만이면 completed + error_message 로 끝난다
+        (불량 몇 건뿐인 회차를 failed 로 올리면 상한에 닿을 때까지 30분마다 경보가 반복된다)."""
+        if processed == 0 and self.failed >= _ARTICLE_ERROR_SYSTEMIC_MIN:
+            raise RuntimeError(
+                f"상세 저장이 한 건도 안 됐어요 — 저장 실패 {self.failed}건이라 시스템 문제로 보고"
+                f" 이번 회차를 멈췄어요(마지막 오류 종류 {self._last_type})"
+            )
+        if not self._shape_hits:
+            return
+        db.query(Article).filter(
+            Article.article_no.in_([an for an, _ in self._shape_hits])
+        ).update(
+            {"detail_fail_count": Article.detail_fail_count + 1},
+            synchronize_session=False,
+        )
+        for article_no, prev in self._shape_hits:
+            if prev + 1 >= _DETAIL_FAIL_CAP:
+                logger.warning("상세 시도 중단(저장 실패 상한 도달): article %s", article_no)
+
+    def job_note(self) -> dict:
+        """completed 회차에 남길 error_message (저장 실패가 없으면 빈 dict)."""
+        return {"error_message": _SAVE_FAILED_WORDS.format(n=self.failed)} if self.failed else {}
+
+
 def _process_detail_batch(db, arts: list[tuple], record_call_label: str) -> dict:
     """상세 API 순회 처리 공통 루프 — crawl_article_details·backfill_article_details 공유.
 
@@ -566,7 +659,7 @@ def _process_detail_batch(db, arts: list[tuple], record_call_label: str) -> dict
     record_call_label 만 호출측마다 다르다(관측 구분용, naver_call_counter 집계 키).
 
     반환 dict: processed/skipped_dead/skipped_transient/skipped_article_error/
-    article_error_reasons/systemic_suspected — crawl_article_details 의 기존 로그·
+    save_failed/job_note/article_error_reasons/systemic_suspected — crawl_article_details 의 기존 로그·
     _finalize_job 문구를 그대로 재사용할 수 있도록 원본과 동일한 키로 돌려준다.
 
     ⚠ crawl_article_details 본문은 이 함수 추출 전과 동일 동작을 유지한다(로직 이동만,
@@ -577,6 +670,7 @@ def _process_detail_batch(db, arts: list[tuple], record_call_label: str) -> dict
     skipped_dead = 0
     skipped_transient = 0
     skipped_article_error = 0
+    save_guard = _DetailSaveGuard()
     article_error_reasons: Counter[tuple[str, str]] = Counter()
     article_error_hits: list[tuple[str, int, str, str]] = []
 
@@ -591,20 +685,27 @@ def _process_detail_batch(db, arts: list[tuple], record_call_label: str) -> dict
         record_call(record_call_label)
         detail_data = NaverEstateAPI.get_article_detail(article_no)
         if detail_data and "error" not in detail_data:
-            domain_article = RealEstateArticle(
-                article_no=article_no,
-                trade_type_name=trade_type_name or "",
-            )
-            domain_article.deal_or_warrant_prc = deal_or_warrant_prc
-            domain_article.rent_prc = rent_prc
-            domain_article.area2_m2 = area2_m2
-            domain_article.update_from_detail(detail_data)
+            # 매물 1건 실패가 회차 전체를 끝내지 않게(_DetailSaveGuard 주석 참조)
+            try:
+                domain_article = RealEstateArticle(
+                    article_no=article_no,
+                    trade_type_name=trade_type_name or "",
+                )
+                domain_article.deal_or_warrant_prc = deal_or_warrant_prc
+                domain_article.rent_prc = rent_prc
+                domain_article.area2_m2 = area2_m2
+                domain_article.update_from_detail(detail_data)
 
-            update_data = build_detail_update_dict(domain_article, detail_data)
-            db.query(Article).filter(Article.article_no == article_no).update(
-                update_data, synchronize_session=False
-            )
-            processed += 1
+                update_data = build_detail_update_dict(domain_article, detail_data)
+                db.query(Article).filter(Article.article_no == article_no).update(
+                    update_data, synchronize_session=False
+                )
+                db.commit()
+            except Exception as e:
+                save_guard.on_failure(db, article_no, detail_fail_count, e)
+            else:
+                processed += 1
+                save_guard.on_success()
         elif _is_dead_detail(detail_data):
             db.query(Article).filter(Article.article_no == article_no).update(
                 {"detail_crawled": True, "is_active": False},
@@ -625,6 +726,9 @@ def _process_detail_batch(db, arts: list[tuple], record_call_label: str) -> dict
         # (infra.md §IP차단, crawl_article_details 원본과 동일 기전 — 세션 396 참조).
         db.commit()
         _throttle_details.wait()
+
+    # 저장 실패 회차 끝 판정(성공 0 + 실패 ≥ 문턱이면 예외로 회차 failed)
+    save_guard.finish(db, processed)
 
     systemic_suspected = (
         len(arts) >= _ARTICLE_ERROR_SYSTEMIC_MIN and skipped_article_error == len(arts)
@@ -650,6 +754,8 @@ def _process_detail_batch(db, arts: list[tuple], record_call_label: str) -> dict
         "skipped_dead": skipped_dead,
         "skipped_transient": skipped_transient,
         "skipped_article_error": skipped_article_error,
+        "save_failed": save_guard.failed,
+        "job_note": save_guard.job_note(),
         "systemic_suspected": systemic_suspected,
         "reason_summary": reason_summary,
     }
@@ -739,6 +845,7 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         skipped_dead = 0
         skipped_transient = 0
         skipped_article_error = 0
+        save_guard = _DetailSaveGuard()
         # 매물 단위 오류 사유 집계 — 로그에 (code, message) 별 건수를 남겨야 다음 진단이
         # 가능하다(세션 395 이전엔 오류 내용이 로그에 전혀 안 남아 원인 추적이 불가능했다).
         article_error_reasons: Counter[tuple[str, str]] = Counter()
@@ -756,22 +863,28 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
             record_call("article_detail_batch")
             detail_data = NaverEstateAPI.get_article_detail(article_no)
             if detail_data and "error" not in detail_data:
-                # 도메인 객체로 변환 후 상세 업데이트
-                domain_article = RealEstateArticle(
-                    article_no=article_no,
-                    trade_type_name=trade_type_name or "",
-                )
-                domain_article.deal_or_warrant_prc = deal_or_warrant_prc
-                domain_article.rent_prc = rent_prc
-                domain_article.area2_m2 = area2_m2
-                domain_article.update_from_detail(detail_data)
+                # 매물 1건 실패가 회차 전체를 끝내지 않게(_DetailSaveGuard 주석 참조)
+                try:
+                    # 도메인 객체로 변환 후 상세 업데이트
+                    domain_article = RealEstateArticle(
+                        article_no=article_no,
+                        trade_type_name=trade_type_name or "",
+                    )
+                    domain_article.deal_or_warrant_prc = deal_or_warrant_prc
+                    domain_article.rent_prc = rent_prc
+                    domain_article.area2_m2 = area2_m2
+                    domain_article.update_from_detail(detail_data)
 
-                # DB 업데이트 (commit은 배치로)
-                update_data = build_detail_update_dict(domain_article, detail_data)
-                db.query(Article).filter(Article.article_no == article_no).update(
-                    update_data, synchronize_session=False
-                )
-                processed += 1
+                    update_data = build_detail_update_dict(domain_article, detail_data)
+                    db.query(Article).filter(Article.article_no == article_no).update(
+                        update_data, synchronize_session=False
+                    )
+                    db.commit()
+                except Exception as e:
+                    save_guard.on_failure(db, article_no, detail_fail_count, e)
+                else:
+                    processed += 1
+                    save_guard.on_success()
             elif _is_dead_detail(detail_data):
                 # 진짜 dead (NotExistInformation) → 네이버에서 이미 지운 매물.
                 # detail_crawled=TRUE + is_active=FALSE로 마크해 같은 매물이 다음
@@ -821,6 +934,9 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         # 네이버 세션 전체가 소프트 차단됐을 가능성 → 그 회차는 증가를 보류한다.
         # 보류해도 손해는 "이번 회차만큼 상한 도달이 늦어지는 것"뿐이고, 반대로 잘못
         # 카운트하면 살아있는 매물이 통째로 상세 보강에서 빠진다(비대칭 위험).
+        # 저장 실패 회차 끝 판정(성공 0 + 실패 ≥ 문턱이면 예외로 회차 failed)
+        save_guard.finish(db, processed)
+
         systemic_suspected = (
             len(arts) >= _ARTICLE_ERROR_SYSTEMIC_MIN and skipped_article_error == len(arts)
         )
@@ -856,6 +972,7 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
             db, job, "completed",
             processed_items=processed,
             completed_at=utcnow(),
+            **save_guard.job_note(),
         )
         db.commit()  # 나머지 flush
         error_note = f"({reason_summary})" if reason_summary else ""
@@ -863,9 +980,9 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
             error_note += "(카운트 보류)"
         logger.info(
             "상세 보강 완료: %d/%d건 (dead %d건 비활성화, transient %d건 재시도 대기,"
-            " 매물오류 %d건%s)",
+            " 매물오류 %d건%s, 저장 실패 %d건)",
             processed, len(articles), skipped_dead, skipped_transient,
-            skipped_article_error, error_note,
+            skipped_article_error, error_note, save_guard.failed,
         )
 
     except Exception as e:
@@ -961,6 +1078,7 @@ def backfill_article_details(batch_size: int = 300, scheduler_job_id: str | None
             db, job, "completed",
             processed_items=result["processed"],
             completed_at=utcnow(),
+            **result["job_note"],
         )
         db.commit()
 
@@ -973,9 +1091,10 @@ def backfill_article_details(batch_size: int = 300, scheduler_job_id: str | None
         remaining_hint = "배치 마감(잔여 가능성 높음)" if len(arts) >= batch_size else "배치 미달(잔여 소진 근접)"
         logger.info(
             "상세 백필 완료: 채움 %d건 / dead %d건 / transient %d건 / 매물오류 %d건%s"
-            " (%s, 대상 %d건)",
+            " / 저장 실패 %d건 (%s, 대상 %d건)",
             result["processed"], result["skipped_dead"], result["skipped_transient"],
-            result["skipped_article_error"], error_note, remaining_hint, len(arts),
+            result["skipped_article_error"], error_note, result["save_failed"],
+            remaining_hint, len(arts),
         )
 
     except Exception as e:

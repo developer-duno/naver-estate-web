@@ -4,7 +4,7 @@
  *
  * 검증 항목:
  *  1. cached 응답 시 refetchQueries 호출 + "갱신됨" 문구
- *  2. started 응답 시 "불러오는 중" 메시지 진입 (force 파라미터 삭제됨)
+ *  2. started 응답 시 "매물 받는 중" 메시지 진입 (force 파라미터 삭제됨)
  *  3. started 후 crawl-status 폴링 → done 순간 "갱신 완료" 표시
  *  4. cached 응답의 last_crawled_at 낙관적 주입
  *  5. 폴링 중 running 상태 → buildProgressMessage 결과 메시지 교체
@@ -58,6 +58,8 @@ describe("useCrawlAction — 크롤 트리거 + 폴링 + UI 상태", () => {
       complex_no: "C001",
       status: "cached",
       last_crawled_at: new Date(Date.now() - 12 * 60_000).toISOString(),
+      // 판정·"N분 전" 기준은 매물 받은 시각 (세션 448) — 없으면 낡은 자료로 갈린다
+      articles_crawled_at: new Date(Date.now() - 12 * 60_000).toISOString(),
     });
 
     const { useCrawlAction } = await import("../useCrawlAction");
@@ -84,7 +86,7 @@ describe("useCrawlAction — 크롤 트리거 + 폴링 + UI 상태", () => {
     expect(result.current.crawling).toBe(false);
   }, 15000);
 
-  it("started 응답 시 '매물 목록 불러오는 중...' 메시지로 진입한다", async () => {
+  it("started 응답 시 '네이버에서 지금 매물 받는 중' 메시지로 진입한다 (세션 447 문구)", async () => {
     mockStartLiveCrawl.mockResolvedValue({
       complex_no: "C003",
       status: "started",
@@ -101,7 +103,7 @@ describe("useCrawlAction — 크롤 트리거 + 폴링 + UI 상태", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.message).toContain("불러오는 중");
+      expect(result.current.message).toContain("매물 받는 중");
     });
     expect(result.current.messageType).toBe("info");
   }, 15000);
@@ -262,6 +264,10 @@ describe("useCrawlAction — 크롤 트리거 + 폴링 + UI 상태", () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, gcTime: Infinity, staleTime: Infinity } },
     });
+    // 새 자료(방금 갱신) 기준 — 낡은 자료의 실패 문구는 useCrawlAction.stale.test.ts (세션 447)
+    client.setQueryData(queryKeys.complex("C007"), {
+      complex_no: "C007", complex_name: "단지", articles_crawled_at: new Date().toISOString(),
+    });
     const refetchSpy = vi.spyOn(client, "refetchQueries");
 
     const wrapper = ({ children }: { children: React.ReactNode }) =>
@@ -340,7 +346,7 @@ describe("useCrawlAction — 크롤 트리거 + 폴링 + UI 상태", () => {
     expect(mockStartLiveCrawl).toHaveBeenCalledTimes(1);
   }, 15000);
 
-  it("already_running 응답 시 startPolling 재호출 안됨 + crawling=true 유지 + '이미 크롤링이 진행 중입니다.' 메시지", async () => {
+  it("already_running 응답 시 crawling=true 유지 + '이미 크롤링이 진행 중입니다.' + 폴링은 하나만 시작 (세션 448)", async () => {
     vi.useFakeTimers();
     mockStartLiveCrawl.mockResolvedValue({
       complex_no: "C009",
@@ -348,6 +354,7 @@ describe("useCrawlAction — 크롤 트리거 + 폴링 + UI 상태", () => {
       current_page: 2,
       article_count: 45,
     });
+    mockGetCrawlStatus.mockResolvedValue({ complex_no: "C009", status: "running", phase: "articles" });
 
     const { useCrawlAction } = await import("../useCrawlAction");
     const { result } = renderHook(() => useCrawlAction("C009"), {
@@ -370,11 +377,16 @@ describe("useCrawlAction — 크롤 트리거 + 폴링 + UI 상태", () => {
     expect(result.current.messageType).toBe("info");
     expect(result.current.crawling).toBe(true);
 
-    // 3초 추가 대기 (POLL_INTERVAL_MS = 2000) — startPolling 재호출 안됨 검증
+    // 폴링이 안 돌던 화면이라 끝날 때까지 지켜본다 — 2초에 1회, interval 이 겹치지 않는다
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(3_000);
+      await vi.advanceTimersByTimeAsync(2_100);
     });
-    expect(mockGetCrawlStatus).not.toHaveBeenCalled();
+    expect(mockGetCrawlStatus).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    expect(mockGetCrawlStatus).toHaveBeenCalledTimes(2);
+    expect(result.current.crawling).toBe(true);
 
     vi.useRealTimers();
   }, 15000);

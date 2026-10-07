@@ -101,14 +101,17 @@ const EMPTY_HISTORY: PriceHistoryResponse = {
 
 // 크롤 API: auto:true 자동 크롤(page.tsx:157)이 실서버로 새는 것 차단.
 // start-crawl → "cached" 반환 시 useCrawlAction.onSuccess (L195-204) 가
-// setCrawling(false) + setProgress(null) 즉시 → CrawlProgressBanner 미렌더
+// setCrawling(false) + setProgress(null) 즉시 → CrawlMessage 진행 줄 미렌더
 // (page.tsx:365 `crawling && type==="info"` 두 조건 모두 거짓).
-// last_crawled_at=null 이면 patchLastCrawledAt (L70-82) no-op → Complex mock 의
-// last_crawled_at omit 유지, formatTimeAgo 배지 결정성 확보.
+// last_crawled_at·articles_crawled_at=null 이면 patchLastCrawledAt no-op → Complex mock 의
+// 두 칸 omit 유지, formatTimeAgo 배지 결정성 확보. 세션 448 부터 cached 는 articles_crawled_at 으로
+// 다시 판정하므로 null = "낡은 자료" → 한 줄 자리에 고정 문구
+// "저장된 자료가 오래됐어요 — 지금은 새로 못 받았어요"(시각 글자 없음, 닫기 전까지 유지)가 찍힌다.
 const CACHED_CRAWL: CrawlProgress = {
   complex_no: "100000",
   status: "cached",
   last_crawled_at: null,
+  articles_crawled_at: null,
 };
 
 const IDLE_CRAWL: CrawlProgress = {

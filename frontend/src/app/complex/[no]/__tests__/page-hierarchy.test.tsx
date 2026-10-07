@@ -49,9 +49,18 @@ vi.mock("next/navigation", async () => {
 });
 
 // useCrawlAction · useExport · useFilterParams · useFavorites · useSmartBack mock
+// crawlState 를 바꿔 진행·완료 안내 자리를 시험한다 (세션 447)
+const crawlState = vi.hoisted(() => ({
+  current: {
+    crawling: false, message: "", messageType: "", progress: null as unknown,
+  } as Record<string, unknown>,
+  applyPendingRefresh: (() => {}) as () => void,
+}));
 vi.mock("@/hooks/useCrawlAction", () => ({
   useCrawlAction: () => ({
-    crawling: false, message: "", messageType: "", progress: null,
+    staleLabel: null, pendingRefresh: null,
+    ...crawlState.current,
+    applyPendingRefresh: () => crawlState.applyPendingRefresh(),
     clearMessage: vi.fn(), handleCrawl: vi.fn(),
   }),
 }));
@@ -164,6 +173,99 @@ describe("매물 페이지네이션 스크롤 복귀 (세션 295)", () => {
     } finally {
       window.HTMLElement.prototype.scrollIntoView = orig;
       vi.mocked(api.getArticles).mockResolvedValue({ articles: [], total: 0 } as never);
+    }
+  });
+});
+
+describe("크롤 안내는 '매물 N건' 줄 안에 한 줄로 (세션 447)", () => {
+  it("진행 중 글이 '매물 N건'·'데이터 갱신' 과 같은 줄에 뜨고, 표 위 큰 상자는 없다", async () => {
+    crawlState.current = {
+      crawling: true, message: "", messageType: "info",
+      progress: { complex_no: "12345", status: "running", phase: "articles", article_count: 12 },
+    };
+    try {
+      renderPage();
+      const status = await screen.findByText("네이버에서 지금 매물 받는 중 · 12건");
+      // 같은 줄 = "매물 0건" 과 "갱신 중..." 버튼을 함께 담은 줄 안
+      const row = screen.getByText("매물 0건").closest("div.justify-between");
+      expect(row).not.toBeNull();
+      expect(row).toContainElement(status);
+      expect(row).toContainElement(screen.getByRole("button", { name: "갱신 중..." }));
+      // 옛 큰 상자(단계 표시)는 없다
+      expect(screen.queryByText("매물 목록 받기")).not.toBeInTheDocument();
+    } finally {
+      crawlState.current = { crawling: false, message: "", messageType: "", progress: null };
+    }
+  });
+
+  it("좁은 폭(640px 미만)에선 '매물 N건' 묶음이 한 줄을 다 쓰고 버튼은 다음 줄로 — 640px 이상은 한 줄 (세션 448)", async () => {
+    renderPage();
+    const group = (await screen.findByText("매물 0건")).parentElement;
+    // basis-full = 좁으면 버튼 묶음이 줄바꿈 / sm:basis-0 + grow = 640px 이상은 옛 flex-1 과 같은 한 줄
+    expect(group).toHaveClass("basis-full", "sm:basis-0", "grow", "min-w-0");
+  });
+
+  it("완료 안내도 같은 줄에 뜬다", async () => {
+    crawlState.current = { crawling: false, message: "갱신 완료", messageType: "success", progress: null };
+    try {
+      renderPage();
+      const done = await screen.findByText("갱신 완료");
+      const row = screen.getByText("매물 0건").closest("div.justify-between");
+      expect(row).toContainElement(done);
+    } finally {
+      crawlState.current = { crawling: false, message: "", messageType: "", progress: null };
+    }
+  });
+});
+
+describe("저장본 나이로 나누기 — 화면 (세션 447)", () => {
+  const idle = { crawling: false, message: "", messageType: "", progress: null };
+
+  it("새 자료 크롤 뒤 바뀐 게 있으면 '데이터 갱신' 자리가 '새 매물 반영 (N건 바뀜)' — 누르면 반영 (2-4)", async () => {
+    const apply = vi.fn();
+    crawlState.applyPendingRefresh = apply;
+    crawlState.current = { ...idle, pendingRefresh: { count: 3 } };
+    try {
+      renderPage();
+      const btn = await screen.findByRole("button", { name: "새 매물 반영 (3건 바뀜)" });
+      expect(screen.queryByRole("button", { name: "데이터 갱신" })).not.toBeInTheDocument();
+      fireEvent.click(btn);
+      expect(apply).toHaveBeenCalledTimes(1);
+    } finally {
+      crawlState.current = idle;
+      crawlState.applyPendingRefresh = () => {};
+    }
+  });
+
+  it("낡은 자료를 받는 동안 표가 흐려지고 한 줄에 나이 + 진행 (2-5)", async () => {
+    crawlState.current = {
+      crawling: true, message: "", messageType: "info", staleLabel: "5일 전 자료예요",
+      progress: { complex_no: "12345", status: "running", phase: "articles", article_count: 12 },
+    };
+    try {
+      const { container } = renderPage();
+      expect(await screen.findByText("5일 전 자료예요 · 네이버에서 지금 매물 받는 중 · 12건")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(container.querySelector(".transition-opacity.duration-200")).toHaveClass("opacity-50");
+      });
+    } finally {
+      crawlState.current = idle;
+    }
+  });
+
+  it("새 자료를 받는 동안엔 표를 흐리게 하지 않는다", async () => {
+    crawlState.current = {
+      crawling: true, message: "", messageType: "info", staleLabel: null,
+      progress: { complex_no: "12345", status: "running", phase: "articles", article_count: 12 },
+    };
+    try {
+      const { container } = renderPage();
+      expect(await screen.findByText("네이버에서 지금 매물 받는 중 · 12건")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(container.querySelector(".transition-opacity.duration-200")).toHaveClass("opacity-100");
+      });
+    } finally {
+      crawlState.current = idle;
     }
   });
 });

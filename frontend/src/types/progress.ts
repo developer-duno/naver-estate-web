@@ -23,4 +23,6 @@ export interface CrawlProgress {
   detail_skipped_count?: number;
   /** status=cached 시 DB 상 마지막 크롤링 시각 (ISO string) */
   last_crawled_at?: string | null;
+  /** cached·started 시 DB 상 매물 목록을 끝까지 받은 시각 (ISO string) — 저장본 나이 판정 기준 */
+  articles_crawled_at?: string | null;
 }

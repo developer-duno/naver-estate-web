@@ -82,12 +82,23 @@ describe("ComplexHeader 비교 담기 (세션 296)", () => {
     expect(screen.getByRole("button", { name: /비교 목록 가득 참/ })).toBeDisabled();
   });
 
-  it("크롤 시각 배지는 사용자 언어 '매물 업데이트:' 로 표시", () => {
-    const withCrawl: Complex = { ...baseComplex, last_crawled_at: new Date().toISOString() };
+  it("크롤 시각 배지는 사용자 언어 '매물 업데이트:' 로 표시 — 기준은 articles_crawled_at (세션 448)", () => {
+    const withCrawl: Complex = {
+      ...baseComplex,
+      articles_crawled_at: new Date(Date.now() - 3 * 60 * 60_000).toISOString(),
+    };
     render(
       <ComplexHeader complex={withCrawl} starred={false} onBack={() => {}} onToggleFavorite={() => {}} />
     );
-    expect(screen.getByText(/매물 업데이트:/)).toBeInTheDocument();
+    expect(screen.getByText("매물 업데이트: 3시간 전")).toBeInTheDocument();
     expect(screen.queryByText(/마지막 크롤링/)).not.toBeInTheDocument();
+  });
+
+  it("last_crawled_at 만 있고 articles_crawled_at 이 없으면 배지를 그리지 않는다 (세션 448)", () => {
+    const otherCollectorOnly: Complex = { ...baseComplex, last_crawled_at: new Date().toISOString() };
+    render(
+      <ComplexHeader complex={otherCollectorOnly} starred={false} onBack={() => {}} onToggleFavorite={() => {}} />
+    );
+    expect(screen.queryByText(/매물 업데이트:/)).not.toBeInTheDocument();
   });
 });

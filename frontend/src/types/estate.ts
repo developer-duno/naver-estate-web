@@ -29,6 +29,8 @@ export interface Complex {
   parking_count_by_household?: number;
   management_office_tel?: string;
   last_crawled_at?: string;
+  /** 우리가 매물 목록을 끝까지 받은 시각 — 저장본 나이 판정 기준 (last_crawled_at 은 다른 수집기도 찍는다) */
+  articles_crawled_at?: string | null;
   detail_crawled_at?: string;
   article_count?: number;
   /** 거래유형별 활성 매물 수 (매매/전세/월세/단기임대) */

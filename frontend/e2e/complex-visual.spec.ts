@@ -19,9 +19,10 @@ test.describe("complex detail visual regression", () => {
 
     // useCrawlAction onMutate (L189-193) 가 setCrawling(true) + 메시지를
     // 깜빡 띄운 직후 cached 응답 onSuccess (L195-204) 에서 false 로 복귀.
-    // 한 프레임 mismatch 가 networkidle 직후 스크린샷에 잡혀 CrawlProgressBanner
-    // 가 fallback 분기로 박혀 들어가는 비결정성이 있어, 텍스트가 사라질 때까지 명시 대기.
-    await expect(page.getByText("매물 목록 불러오는 중...")).toHaveCount(0);
+    // 한 프레임 mismatch 가 networkidle 직후 스크린샷에 잡혀 진행 한 줄(CrawlMessage)이
+    // 박혀 들어가는 비결정성이 있어, 시작 문구가 사라질 때까지 명시 대기 (세션 447 문구 변경 —
+    // 낡은 자료면 "저장된 자료가 오래됐어요 · 네이버에서 지금 매물 받는 중" 이라 부분 일치로 잡는다).
+    await expect(page.getByText("네이버에서 지금 매물 받는 중")).toHaveCount(0);
 
     // Header role 결정: Supabase user_profiles 응답이 admin 으로 들어와야 "관리자"
     // 뱃지(banner [ref=e8] 영역)가 렌더. 응답이 늦으면 spec 이 public 헤더로 찍힘.

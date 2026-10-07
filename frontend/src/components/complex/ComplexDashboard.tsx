@@ -38,7 +38,9 @@ export default function ComplexDashboard({
   const [openSection, setOpenSection] = useState<SectionKey | "">("");
   const [isPrinting, setIsPrinting] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const { avgPrice, count } = useComplexArticleAvg(complexNo, sessionToken);
+  const { avgPrice, count, isLoading: countLoading } = useComplexArticleAvg(complexNo, sessionToken);
+  // 불러오는 중엔 count=0 이라 "매물 0건"이 잠깐 보이던 것을 막는다(세션 447)
+  const countText = countLoading ? "매물 …건" : `매물 ${count}건`;
 
   const handleCardClick = (key: SectionKey) => {
     setOpenSection((prev) => (prev === key ? "" : key));
@@ -80,13 +82,13 @@ export default function ComplexDashboard({
         : (avgPrice != null ? `매물 평균 ${formatKoreanPrice(avgPrice)}` : "-"),
       secondary: complex.jeonse_rate != null
         ? `전세가율 ${complex.jeonse_rate}%`
-        : (count > 0 ? `매물 ${count}건` : undefined),
+        : (countLoading || count > 0 ? countText : undefined),
     },
     {
       key: "chart",
       label: "실거래가",
       // recent_trades_6m 은 실제 거래 횟수가 아니라 시세 기록 줄 수라 "거래 N건"으로 보여 주지 않는다(세션 429)
-      primary: `매물 ${count}건`,
+      primary: countText,
       secondary: "현재 매물",
     },
     {

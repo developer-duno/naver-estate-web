@@ -2,7 +2,7 @@ import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import type { Complex } from "@/types";
 
-function formatTimeAgo(dateStr: string): string {
+export function formatTimeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const hours = Math.floor(diff / (1000 * 60 * 60));
   if (hours < 1) return "방금 전";
@@ -70,9 +70,10 @@ export default function ComplexHeader({
           {complex.real_estate_type_name}
         </Badge>
       )}
-      {complex.last_crawled_at && (
+      {/* 매물 목록을 끝까지 받은 시각 — last_crawled_at 은 다른 수집기도 찍어 기준이 아니다 (세션 448) */}
+      {complex.articles_crawled_at && (
         <span className="inline-flex text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-          매물 업데이트: {formatTimeAgo(complex.last_crawled_at)}
+          매물 업데이트: {formatTimeAgo(complex.articles_crawled_at)}
         </span>
       )}
     </div>

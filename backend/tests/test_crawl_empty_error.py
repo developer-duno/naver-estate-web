@@ -327,3 +327,202 @@ def test_background_crawl_genuine_empty_deactivates(db, monkeypatch):
 
     cpx = _reload_complex(db, complex_no)
     assert cpx.articles_crawled_at is not None
+
+
+# ── 7: 차단기 "5곳이면 한 번 확인"(B안, 2026-10-07) ──
+# 연속 5곳 0건에 바로 멈추지 않고, 이번 회차에서 매물이 가장 많이 보였던 단지 1곳의
+# 목록 1페이지만 다시 불러 매물이 보이면 계속, 안 보이면(0건·오류) 지금처럼 멈춘다.
+
+
+def _arts(prefix, n):
+    return [
+        {"articleNo": f"{prefix}-{i}", "tradeTypeName": "매매", "dealOrWarrantPrc": "120,000"}
+        for i in range(n)
+    ]
+
+
+def _setup_round(db, monkeypatch, plan, *, popular=False):
+    """plan = [(단지번호, 응답 목록)] 순서대로 회차에 넣는다.
+
+    응답 목록의 첫 응답이 빈 목록이면 "활성 매물이 있던 단지가 0건"이 되도록 기존 활성
+    매물을 1건 만들어 둔다. 응답은 단지별로 차례대로 꺼내 쓰고(두 번째 응답 = 확인 호출,
+    마지막 응답은 계속 재사용), 호출된 단지 번호를 순서대로 기록해 돌려준다.
+    """
+    from routers.live._shared import _cache, _crawl_status
+
+    order = [no for no, _ in plan]
+    queues = {no: list(resps) for no, resps in plan}
+    for no, resps in plan:
+        upsert_complex_from_search(db, _make_complex_data(no))
+        db.commit()
+        if resps and resps[0] == _page([]):
+            _make_active_article(db, no, f"ghost-{no}")
+        _cache.delete(f"crawl_done:{no}")
+        _crawl_status.pop(no, None)
+
+    called: list[str] = []
+
+    def _fake_articles(complex_no, page=1):
+        called.append(complex_no)
+        q = queues[complex_no]
+        return q.pop(0) if len(q) > 1 else q[0]
+
+    def _fake_get_complexes(_db, _limit):
+        rows = {c.complex_no: c for c in db.query(ComplexModel).filter(
+            ComplexModel.complex_no.in_(order)
+        ).all()}
+        return [rows[no] for no in order]
+
+    target = "get_complexes_for_popular_crawl" if popular else "get_complexes_for_article_crawl"
+    monkeypatch.setattr(service_discover, target, _fake_get_complexes)
+    # 단지 상세 보강은 이 시험과 무관하고 단지마다 수 초씩 걸린다 — 끈다.
+    monkeypatch.setattr(service_discover, "enrich_complex_detail", lambda *_a, **_k: None)
+    return _fake_articles, called
+
+
+@patch("services.enricher.NaverEstateAPI")
+@patch("crawler.service_discover.NaverEstateAPI")
+def test_canary_confirm_ok_continues_batch(mock_api, _mock_detail, db, monkeypatch):
+    """a) 확인 단지에 매물이 보이면 5곳 뒤에도 회차가 계속되고, 확인은 DB 를 안 건드린다.
+
+    뮤테이션(10-07 확인): 확인 성공 분기의 reset_empty_streak() 를 지우면 연속 카운터가
+    5 에 남아 다음 단지 뒤에 또 확인 호출이 나가 called 가 달라져 FAIL.
+    """
+    _no_throttle(monkeypatch)
+    empties = [f"CNA-E{i}" for i in range(5)]
+    plan = [("CNA-BIG", [_page(_arts("cna-big", 3)), _page(_arts("cna-conf", 20))])]
+    plan += [(no, [_page([])]) for no in empties]
+    plan += [("CNA-E5", [_page([])]), ("CNA-AFTER", [_page(_arts("cna-after", 2))])]
+    fake, called = _setup_round(db, monkeypatch, plan)
+    mock_api.get_complex_articles.side_effect = fake
+
+    service_discover.crawl_articles_batch(batch_size=20)
+
+    assert called == ["CNA-BIG", *empties, "CNA-BIG", "CNA-E5", "CNA-AFTER"], called
+    # 확인 호출은 DB 에 아무것도 쓰지 않는다 — 확인 응답의 매물이 저장되지 않았고,
+    # 후보 단지의 매물·크롤 잡도 처음 크롤 그대로다.
+    assert db.query(ArticleModel).filter(ArticleModel.article_no.like("cna-conf-%")).count() == 0
+    assert db.query(ArticleModel).filter(
+        ArticleModel.complex_no == "CNA-BIG", ArticleModel.is_active == True  # noqa: E712
+    ).count() == 3
+    assert db.query(CrawlJob).filter(CrawlJob.target_id == "CNA-BIG").count() == 1
+
+
+@patch("services.enricher.NaverEstateAPI")
+@patch("crawler.service_discover.NaverEstateAPI")
+def test_canary_confirm_empty_stops_batch(mock_api, _mock_detail, db, monkeypatch):
+    """b) 확인 단지도 0건이면 지금처럼 멈춘다."""
+    _no_throttle(monkeypatch)
+    empties = [f"CNB-E{i}" for i in range(5)]
+    plan = [("CNB-BIG", [_page(_arts("cnb-big", 3)), _page([])])]
+    plan += [(no, [_page([])]) for no in empties]
+    plan += [("CNB-AFTER", [_page(_arts("cnb-after", 2))])]
+    fake, called = _setup_round(db, monkeypatch, plan)
+    mock_api.get_complex_articles.side_effect = fake
+
+    service_discover.crawl_articles_batch(batch_size=20)
+
+    assert called == ["CNB-BIG", *empties, "CNB-BIG"], called
+
+
+@patch("services.enricher.NaverEstateAPI")
+@patch("crawler.service_discover.NaverEstateAPI")
+def test_canary_confirm_error_stops_batch(mock_api, _mock_detail, db, monkeypatch):
+    """c) 확인 호출이 오류(dict error)면 멈춘다."""
+    _no_throttle(monkeypatch)
+    empties = [f"CNC-E{i}" for i in range(5)]
+    plan = [("CNC-BIG", [_page(_arts("cnc-big", 3)), {"error": "네이버 API 요청 실패"}])]
+    plan += [(no, [_page([])]) for no in empties]
+    plan += [("CNC-AFTER", [_page(_arts("cnc-after", 2))])]
+    fake, called = _setup_round(db, monkeypatch, plan)
+    mock_api.get_complex_articles.side_effect = fake
+
+    service_discover.crawl_articles_batch(batch_size=20)
+
+    assert called == ["CNC-BIG", *empties, "CNC-BIG"], called
+
+
+@patch("services.enricher.NaverEstateAPI")
+@patch("crawler.service_discover.NaverEstateAPI")
+def test_canary_no_candidate_stops_without_confirm(mock_api, _mock_detail, db, monkeypatch):
+    """d) 이번 회차에 매물이 보인 단지가 없으면 확인 호출 없이 멈춘다."""
+    _no_throttle(monkeypatch)
+    empties = [f"CND-E{i}" for i in range(6)]
+    plan = [(no, [_page([])]) for no in empties]
+    fake, called = _setup_round(db, monkeypatch, plan)
+    mock_api.get_complex_articles.side_effect = fake
+
+    service_discover.crawl_articles_batch(batch_size=20)
+
+    assert called == empties[:5], called
+
+
+@patch("services.enricher.NaverEstateAPI")
+@patch("crawler.service_discover.NaverEstateAPI")
+def test_canary_confirm_limit_three_per_round(mock_api, _mock_detail, db, monkeypatch):
+    """e) 한 회차의 확인은 3회까지 — 네 번째 연속 5곳에서는 확인 없이 멈춘다.
+
+    뮤테이션(10-07 확인): 상한 검사를 지우면 네 번째 확인과 21번째 단지가 호출돼 FAIL.
+    """
+    _no_throttle(monkeypatch)
+    empties = [f"CNE-E{i:02d}" for i in range(21)]
+    plan = [("CNE-BIG", [_page(_arts("cne-big", 3)), _page(_arts("cne-conf", 5))])]
+    plan += [(no, [_page([])]) for no in empties]
+    fake, called = _setup_round(db, monkeypatch, plan)
+    mock_api.get_complex_articles.side_effect = fake
+
+    service_discover.crawl_articles_batch(batch_size=50)
+
+    expected = ["CNE-BIG"]
+    for g in range(4):
+        expected += empties[g * 5:(g + 1) * 5]
+        if g < 3:
+            expected.append("CNE-BIG")
+    assert called == expected, called
+    assert called.count("CNE-BIG") == 4  # 처음 크롤 1 + 확인 3
+
+
+@patch("services.enricher.NaverEstateAPI")
+@patch("crawler.service_discover.NaverEstateAPI")
+def test_canary_confirm_ok_continues_popular(mock_api, _mock_detail, db, monkeypatch):
+    """f) 인기 크롤 루프도 확인 성공이면 계속하고, 회차 중단 표시를 남기지 않는다."""
+    _no_throttle(monkeypatch)
+    empties = [f"CNF-E{i}" for i in range(5)]
+    plan = [("CNF-BIG", [_page(_arts("cnf-big", 3)), _page(_arts("cnf-conf", 4))])]
+    plan += [(no, [_page([])]) for no in empties]
+    plan += [("CNF-AFTER", [_page(_arts("cnf-after", 2))])]
+    fake, called = _setup_round(db, monkeypatch, plan, popular=True)
+    mock_api.get_complex_articles.side_effect = fake
+
+    service_discover.crawl_popular_complexes(batch_size=20)
+
+    assert called == ["CNF-BIG", *empties, "CNF-BIG", "CNF-AFTER"], called
+    job = (
+        db.query(CrawlJob).filter(CrawlJob.job_type == "popular_crawl")
+        .order_by(CrawlJob.id.desc()).first()
+    )
+    assert job.processed_items == 7
+    assert "연속 빈응답" not in (job.error_message or "")
+
+
+@patch("services.enricher.NaverEstateAPI")
+@patch("crawler.service_discover.NaverEstateAPI")
+def test_canary_is_complex_with_most_articles(mock_api, _mock_detail, db, monkeypatch):
+    """g) 확인 단지는 이번 회차에서 매물이 가장 많이 보인 단지다(마지막 단지가 아니다).
+
+    뮤테이션(10-07 확인): 후보를 "마지막으로 매물이 보인 단지"로 바꾸면 CNG-MID 가 호출돼 FAIL.
+    """
+    _no_throttle(monkeypatch)
+    empties = [f"CNG-E{i}" for i in range(5)]
+    plan = [
+        ("CNG-SMALL", [_page(_arts("cng-small", 3)), _page(_arts("cng-x", 1))]),
+        ("CNG-BIG", [_page(_arts("cng-big", 40)), _page(_arts("cng-y", 1))]),
+        ("CNG-MID", [_page(_arts("cng-mid", 12)), _page(_arts("cng-z", 1))]),
+    ]
+    plan += [(no, [_page([])]) for no in empties]
+    fake, called = _setup_round(db, monkeypatch, plan)
+    mock_api.get_complex_articles.side_effect = fake
+
+    service_discover.crawl_articles_batch(batch_size=20)
+
+    assert called == ["CNG-SMALL", "CNG-BIG", "CNG-MID", *empties, "CNG-BIG"], called

@@ -203,7 +203,7 @@ def test_zero_success_hold_revived_bump_failure_keeps_run_reason(db, monkeypatch
     _patch(monkeypatch, bad=set(nos))
 
     def _boom(db, hits):
-        raise RuntimeError("boom")
+        raise OperationalError("UPDATE articles", {}, Exception("boom"))
 
     monkeypatch.setattr(service_discover._DetailSaveGuard, "_bump", staticmethod(_boom))
 

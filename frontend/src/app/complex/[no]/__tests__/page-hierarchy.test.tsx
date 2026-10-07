@@ -49,9 +49,15 @@ vi.mock("next/navigation", async () => {
 });
 
 // useCrawlAction · useExport · useFilterParams · useFavorites · useSmartBack mock
+// crawlState 를 바꿔 진행·완료 안내 자리를 시험한다 (세션 447)
+const crawlState = vi.hoisted(() => ({
+  current: {
+    crawling: false, message: "", messageType: "", progress: null as unknown,
+  },
+}));
 vi.mock("@/hooks/useCrawlAction", () => ({
   useCrawlAction: () => ({
-    crawling: false, message: "", messageType: "", progress: null,
+    ...crawlState.current,
     clearMessage: vi.fn(), handleCrawl: vi.fn(),
   }),
 }));
@@ -164,6 +170,40 @@ describe("매물 페이지네이션 스크롤 복귀 (세션 295)", () => {
     } finally {
       window.HTMLElement.prototype.scrollIntoView = orig;
       vi.mocked(api.getArticles).mockResolvedValue({ articles: [], total: 0 } as never);
+    }
+  });
+});
+
+describe("크롤 안내는 '매물 N건' 줄 안에 한 줄로 (세션 447)", () => {
+  it("진행 중 글이 '매물 N건'·'데이터 갱신' 과 같은 줄에 뜨고, 표 위 큰 상자는 없다", async () => {
+    crawlState.current = {
+      crawling: true, message: "", messageType: "info",
+      progress: { complex_no: "12345", status: "running", phase: "articles", article_count: 12 },
+    };
+    try {
+      renderPage();
+      const status = await screen.findByText("네이버에서 지금 매물 받는 중 · 12건");
+      // 같은 줄 = "매물 0건" 과 "갱신 중..." 버튼을 함께 담은 줄 안
+      const row = screen.getByText("매물 0건").closest("div.justify-between");
+      expect(row).not.toBeNull();
+      expect(row).toContainElement(status);
+      expect(row).toContainElement(screen.getByRole("button", { name: "갱신 중..." }));
+      // 옛 큰 상자(단계 표시)는 없다
+      expect(screen.queryByText("매물 목록 받기")).not.toBeInTheDocument();
+    } finally {
+      crawlState.current = { crawling: false, message: "", messageType: "", progress: null };
+    }
+  });
+
+  it("완료 안내도 같은 줄에 뜬다", async () => {
+    crawlState.current = { crawling: false, message: "갱신 완료", messageType: "success", progress: null };
+    try {
+      renderPage();
+      const done = await screen.findByText("갱신 완료");
+      const row = screen.getByText("매물 0건").closest("div.justify-between");
+      expect(row).toContainElement(done);
+    } finally {
+      crawlState.current = { crawling: false, message: "", messageType: "", progress: null };
     }
   });
 });

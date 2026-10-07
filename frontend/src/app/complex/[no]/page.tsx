@@ -298,14 +298,17 @@ export default function ComplexDetailPage() {
 
         {/* 매물 수 + 데이터 갱신 + 엑셀 */}
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2 md:gap-3">
-            <span className="text-base md:text-lg font-semibold">매물 {totalCount}건</span>
-            {tableLoading && (
-              <div className="flex items-center gap-1.5" role="status" aria-label="매물 갱신 중">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
-                <span className="text-xs text-blue-600">갱신 중</span>
-              </div>
-            )}
+          {/* 크롤 진행·완료·오류는 이 줄 안에 한 줄로 — 표를 위아래로 밀지 않는다 (세션 447) */}
+          <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+            <span className="text-base md:text-lg font-semibold shrink-0">매물 {totalCount}건</span>
+            <CrawlMessage
+              crawling={crawling}
+              message={crawlMessage}
+              messageType={crawlMessageType}
+              progress={crawlProgress}
+              onClear={clearCrawlMessage}
+              tableLoading={tableLoading}
+            />
           </div>
           <div className="flex items-center gap-1.5 md:gap-2 no-print">
             <Button
@@ -333,14 +336,6 @@ export default function ComplexDetailPage() {
             </Button>
           </div>
         </div>
-
-        <CrawlMessage
-          crawling={crawling}
-          message={crawlMessage}
-          messageType={crawlMessageType}
-          progress={crawlProgress}
-          onClear={clearCrawlMessage}
-        />
 
         {/* 매물 API 실패 배너 — 403(승인 권한)은 잠금 안내, 그 외는 다시 시도 */}
         {articlesQuery.isError && (

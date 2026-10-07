@@ -148,6 +148,48 @@ describe("ComplexDashboard (v2)", () => {
     expect(occurrences.length).toBeGreaterThanOrEqual(1);
   });
 
+  it("매물 수를 불러오는 중이면 '매물 0건' 대신 '매물 …건' — 시세 보조 줄도 같은 규칙 (세션 447)", () => {
+    // 불러오는 중엔 count=0 이 돌아온다 — 그대로 쓰면 "매물 0건"이 잠깐 보였다
+    mockUseComplexArticleAvg.mockReturnValue({
+      avgPrice: null,
+      count: 0,
+      isLoading: true,
+      isError: false,
+    });
+    const noRate: Complex = { complex_no: "C003", complex_name: "로딩단지" };
+    const { rerender } = render(
+      <ComplexDashboard
+        complex={noRate}
+        complexNo="C003"
+        pyeongDetails={[]}
+        sessionToken={undefined}
+        onFilterChange={() => {}}
+      />,
+    );
+    expect(screen.queryByText("매물 0건")).not.toBeInTheDocument();
+    // 실거래가 칸 primary + 시세 칸 secondary(jeonse_rate 없음) = 2곳
+    expect(screen.getAllByText("매물 …건")).toHaveLength(2);
+
+    // 다 불러오면 실제 건수로 바뀐다
+    mockUseComplexArticleAvg.mockReturnValue({
+      avgPrice: null,
+      count: 32,
+      isLoading: false,
+      isError: false,
+    });
+    rerender(
+      <ComplexDashboard
+        complex={noRate}
+        complexNo="C003"
+        pyeongDetails={[]}
+        sessionToken={undefined}
+        onFilterChange={() => {}}
+      />,
+    );
+    expect(screen.queryByText("매물 …건")).not.toBeInTheDocument();
+    expect(screen.getAllByText("매물 32건")).toHaveLength(2);
+  });
+
   it("실거래가 칸: recent_trades_6m 이 있어도 '거래 N건'이 아니라 '매물 N건 · 현재 매물' (세션 429)", () => {
     // recent_trades_6m 은 실제 거래 횟수가 아니라 시세 기록 줄 수 — 거래처럼 보이면 안 된다
     mockUseComplexArticleAvg.mockReturnValue({

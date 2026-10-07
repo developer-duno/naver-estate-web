@@ -84,6 +84,83 @@ def get_empty_streak() -> int:
         return _empty_after_active_streak
 
 
+# 차단기 "5곳이면 한 번 확인"(B안, 2026-10-07 사장님 결정) — 연속 5곳 0건은 대부분
+# 매물 1~2건뿐이던 작은 단지가 실제로 빈 것이 이어진 오판이었다(10-07 01:00·13:00).
+# 멈추기 전에 이번 회차에서 매물이 가장 많이 보였던 단지 1곳의 목록 1페이지만 다시 불러
+# 매물이 보이면 차단이 아니라고 보고 계속한다. 후보·확인 횟수는 회차 단위라
+# reset_empty_streak()(단지마다 불림)와 별개로 reset_round_canary() 가 회차 시작에 비운다.
+_CONFIRM_LIMIT_PER_ROUND = 3
+_round_canary_no: str | None = None
+_round_canary_count = 0
+_round_confirm_used = 0
+
+
+def reset_round_canary() -> None:
+    """회차 시작 시 확인 후보 단지와 확인 횟수를 비운다."""
+    global _round_canary_no, _round_canary_count, _round_confirm_used
+    with _empty_streak_lock:
+        _round_canary_no = None
+        _round_canary_count = 0
+        _round_confirm_used = 0
+
+
+def _note_nonempty_result(complex_no: str, total_articles: int) -> None:
+    """목록이 비어 있지 않게 나온 단지 중 매물이 가장 많은 단지를 확인 후보로 기억한다."""
+    global _round_canary_no, _round_canary_count
+    if total_articles <= 0:
+        return
+    with _empty_streak_lock:
+        if total_articles > _round_canary_count:
+            _round_canary_no = complex_no
+            _round_canary_count = total_articles
+
+
+def _confirm_soft_block(stop_label: str) -> bool:
+    """연속 0건 임계 도달 시 후보 단지 1곳을 다시 확인한다. True = 차단으로 보고 멈춤.
+
+    확인 호출은 목록 1페이지 1콜뿐이고 DB 에는 아무것도 쓰지 않는다.
+    후보가 없거나 회차당 확인 상한을 다 썼으면 확인 없이 멈춘다.
+    """
+    global _round_confirm_used
+    streak = get_empty_streak()
+    with _empty_streak_lock:
+        canary = _round_canary_no
+        exhausted = _round_confirm_used >= _CONFIRM_LIMIT_PER_ROUND
+        if canary is not None and not exhausted:
+            _round_confirm_used += 1
+
+    head = "활성 단지 %d개 연속 목록 0건 — 네이버 소프트 차단 의심, %s"
+    if canary is None:
+        logger.error(head + " (확인할 단지 없음)", streak, stop_label)
+        return True
+    if exhausted:
+        logger.error(head + " (확인 %d회 소진)", streak, stop_label, _CONFIRM_LIMIT_PER_ROUND)
+        return True
+
+    try:
+        _throttle_articles.wait()
+        record_call("crawl_articles_batch")
+        result = NaverEstateAPI.get_complex_articles(canary, page=1)
+    except Exception as e:
+        logger.error(head + " (확인 단지 %s 호출 오류: %s)", streak, stop_label, canary, type(e).__name__)
+        return True
+
+    if not isinstance(result, dict) or "error" in result:
+        logger.error(head + " (확인 단지 %s 도 오류)", streak, stop_label, canary)
+        return True
+    article_list = result.get("articleList") or []
+    if not article_list:
+        logger.error(head + " (확인 단지 %s 도 0건)", streak, stop_label, canary)
+        return True
+
+    logger.warning(
+        "활성 단지 %d개 연속 0건 — 단지 %s 다시 확인하니 매물 %d건, 차단 아님 · 계속",
+        streak, canary, len(article_list),
+    )
+    reset_empty_streak()
+    return False
+
+
 def _finalize_job(db, job: CrawlJob, target_status: str, **extra_fields) -> bool:
     """워커 종료 시 job.status 덮어쓰기 race 가드.
 
@@ -296,6 +373,7 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
             _note_empty_result(had_existing_active)
         else:
             reset_empty_streak()
+            _note_nonempty_result(complex_no, total_articles)
 
         # 단지 last_crawled_at 업데이트 (+ 완주했으면 V058 articles_crawled_at 도 같이)
         complex_update = {"last_crawled_at": utcnow()}
@@ -361,6 +439,7 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
         failed_nos: list[str] = []
         streak_aborted = False
         reset_empty_streak()  # 회차 시작 전 리셋 — 이전 회차 카운터가 누적되지 않게 한다
+        reset_round_canary()
         for cpx in complexes:
             try:
                 # crawl_complex_articles 는 예외를 자체 흡수하므로(정책 불변) 아래 except
@@ -377,11 +456,7 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
                 failed += 1
                 failed_nos.append(str(cpx.complex_no))
                 logger.exception("인기 단지 크롤링 개별 실패: complex %s", cpx.complex_no)
-            if get_empty_streak() >= 5:
-                logger.error(
-                    "활성 단지 %d개 연속 목록 0건 — 네이버 소프트 차단 의심, 인기 크롤 회차 중단",
-                    get_empty_streak(),
-                )
+            if get_empty_streak() >= 5 and _confirm_soft_block("인기 크롤 회차 중단"):
                 streak_aborted = True
                 break
             _throttle_articles.wait(extra_delay=0.5)
@@ -439,6 +514,7 @@ def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = No
         complexes = get_complexes_for_article_crawl(db, batch_size)
         logger.info("매물 수집 배치 시작: %d개 단지", len(complexes))
         reset_empty_streak()  # 회차 시작 전 리셋 — 이전 회차 카운터가 누적되지 않게 한다
+        reset_round_canary()
         for cpx in complexes:
             done_key = f"crawl_done:{cpx.complex_no}"
             if _cache.get(done_key) is not None:
@@ -454,11 +530,7 @@ def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = No
                 _cache.set(done_key, True)
             finally:
                 release_complex(cpx.complex_no)
-            if get_empty_streak() >= 5:
-                logger.error(
-                    "활성 단지 %d개 연속 목록 0건 — 네이버 소프트 차단 의심, 배치 회차 중단",
-                    get_empty_streak(),
-                )
+            if get_empty_streak() >= 5 and _confirm_soft_block("배치 회차 중단"):
                 break
             _throttle_articles.wait()
     finally:

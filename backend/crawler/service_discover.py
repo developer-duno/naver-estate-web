@@ -708,7 +708,8 @@ class _DetailSaveGuard:
 
         보류 회차에도 03:50 정비 잡이 CAP-1 로 되살린 매물(prev ≥ CAP-1)은 매물오류 차단기의
         revived_hits 와 같이 +1 을 적용한다 — 안 그러면 그 매물이 매 회차 계속 다시 뽑혀 같은
-        보류를 되풀이한다. 호출측 except 가 db.rollback() 하므로 여기서 commit 한 뒤 raise 한다."""
+        보류를 되풀이한다. 호출측 except 가 db.rollback() 하므로 여기서 commit 한 뒤 raise 한다.
+        +1 저장이 실패해도 회차 사유는 '상세 저장 0건' 그대로(2026-10-08)."""
         if processed == 0 and self.failed >= _ARTICLE_ERROR_SYSTEMIC_MIN:
             revived = [h for h in self._shape_hits if h[1] >= _DETAIL_FAIL_CAP - 1]
             logger.warning(
@@ -717,8 +718,18 @@ class _DetailSaveGuard:
                 self.failed, len(self._shape_hits) - len(revived), len(revived),
             )
             if revived:
-                self._bump(db, revived)
-                db.commit()
+                try:
+                    self._bump(db, revived)
+                    db.commit()
+                except Exception as exc:
+                    # +1 저장이 실패해도(DB 끊김 등) 회차 사유는 아래 RuntimeError 로 지킨다.
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
+                    logger.warning(
+                        "되살린 매물 %d건 +1 저장 실패(보류 회차) — %s", len(revived), _exc_head(exc),
+                    )
             raise RuntimeError(
                 f"상세 저장이 한 건도 안 됐어요 — 저장 실패 {self.failed}건이라 시스템 문제로 보고"
                 f" 이번 회차를 멈췄어요(마지막 오류 종류 {self._last_type})"

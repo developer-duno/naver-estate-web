@@ -191,6 +191,34 @@ def test_zero_success_hold_still_counts_revived_articles(db, monkeypatch, job_fn
 
 
 @pytest.mark.parametrize("job_fn,backfill,job_type", _PATHS)
+def test_zero_success_hold_revived_bump_failure_keeps_run_reason(db, monkeypatch, job_fn, backfill, job_type):
+    """보류 회차에서 되살린 매물 +1 저장이 실패해도(DB 끊김 등) 회차 사유는 '상세 저장 0건'
+    RuntimeError 그대로 남는다 — +1 저장 예외가 회차 사유를 덮어쓰지 않는다(#682 후속, 2026-10-08).
+    +1 은 남지 않고(되돌림) 나머지는 보류(0) 그대로."""
+    cap = service_discover._DETAIL_FAIL_CAP
+    nos = [f"R{i:02d}" for i in range(service_discover._ARTICLE_ERROR_SYSTEMIC_MIN)]
+    _seed(db, nos, backfill=backfill)
+    db.query(Article).filter(Article.article_no == "R05").update({"detail_fail_count": cap - 1})
+    db.commit()
+    _patch(monkeypatch, bad=set(nos))
+
+    def _boom(db, hits):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(service_discover._DetailSaveGuard, "_bump", staticmethod(_boom))
+
+    job_fn(batch_size=50)
+
+    job = _last_job(db, job_type)
+    assert job.status == "failed"
+    assert f"저장 실패 {len(nos)}건" in job.error_message
+    assert "boom" not in job.error_message
+    rows = _rows(db)
+    assert rows["R05"].detail_fail_count == cap - 1
+    assert all(rows[n].detail_fail_count == 0 for n in nos if n != "R05")
+
+
+@pytest.mark.parametrize("job_fn,backfill,job_type", _PATHS)
 def test_only_bad_articles_waiting_are_counted_until_cap(db, monkeypatch, job_fn, backfill, job_type):
     """대기 매물이 불량 3건뿐(상세 대기는 평소 거의 0)이면 회차마다 completed + 카운트 +1,
     상한에 닿으면 선정에서 빠져 끝없는 반복이 멈춘다(재검사 🟠 — 옛 판정은 매 회차 failed + 카운트 0)."""

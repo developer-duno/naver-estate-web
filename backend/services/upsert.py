@@ -343,7 +343,18 @@ def build_detail_update_dict(domain_article, detail_data: dict = None):
         update_data["numeric_rent_price"] = domain_article.numeric_rent_price
     if domain_article.price_per_pyeong is not None:
         update_data["price_per_pyeong"] = domain_article.price_per_pyeong
-    return update_data
+    # PostgreSQL 은 문자열 안의 NUL(0x00)을 거부한다(ValueError). 네이버 설명글에 섞여 오면
+    # 그 한 건 때문에 상세 배치 회차 전체가 되돌려진다(2026-10-07 05:35~ 9회 연속 0건).
+    return {k: _strip_nul(v) for k, v in update_data.items()}
+
+
+def _strip_nul(value):
+    """문자열(과 문자열 목록)에서 NUL 문자를 뺀다. 다른 타입은 그대로."""
+    if isinstance(value, str):
+        return value.replace("\x00", "")
+    if isinstance(value, list):
+        return [_strip_nul(v) for v in value]
+    return value
 
 
 def delete_missing_articles(db, complex_no, seen_article_nos, commit=True):

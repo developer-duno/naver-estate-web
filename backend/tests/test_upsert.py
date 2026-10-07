@@ -390,6 +390,17 @@ class TestArticleDetail4Fields:
         assert update["detail_status_code"] is None
         assert update["trade_complete"] is False
 
+    def test_build_detail_update_dict_strips_nul(self):
+        """회귀: 설명글·사진 주소에 NUL(0x00)이 섞여 와도 UPDATE 값에서 빠진다.
+        PostgreSQL 이 NUL 문자열을 거부해 상세 배치 회차 전체가 실패했다(2026-10-07)."""
+        art = self._make_domain()
+        art.update_from_detail({"articleDetail": {"detailDescription": "남향\x00 올수리"}})
+        art.photo_urls = ["https://img/a\x00.jpg"]
+        update = build_detail_update_dict(art)
+        assert update["detail_description"] == "남향 올수리"
+        assert update["photo_urls"] == ["https://img/a.jpg"]
+        assert not any("\x00" in str(v) for v in update.values())
+
 
 class TestArticleDetailKeyDrift:
     """네이버 articleDetail 키 드리프트 회귀 가드 (세션 401)

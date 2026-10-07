@@ -40,7 +40,7 @@ BACKFILL_DETAIL_ENABLED = os.getenv("BACKFILL_DETAIL_ENABLED", "false").lower() 
 #
 # 왜 새벽과 낮이 다른가 = **소요 시간이 다음 크론과 겹치면 안 되기 때문**.
 # 한 건당 _throttle_details(1.5초)가 붙으므로 소요 = 배치 × 1.5초.
-#   * 00:20 회차: 다음이 01:00 crawl_articles(cron, jitter ±45분이라 00:15부터 시작 가능).
+#   * 00:20 회차: 다음이 01:00 crawl_articles(cron, jitter 는 0~45분 뒤로만 늦춰 01:00 이전 시작 없음).
 #     안전 여유를 두고 1,500건(약 38분) — 01:00 정시 시작 기준으로 끝난다.
 #   * 12:20 회차: 다음 네이버 호출 잡이 14:45 popular_crawl 로 145분 여유.
 #     4,000건(약 100분, 14:00 종료)이라 45분 여유를 남긴다.
@@ -213,7 +213,8 @@ def create_scheduler() -> BackgroundScheduler:
     #    start_date 를 `now + interval` 로 잡으므로(소스 실측) 재시작할 때마다 다음
     #    실행이 12시간 뒤로 밀린다 — 최근 14일 중 9일이 하루 1회만 돌았다(crawl_jobs
     #    실측). cron 은 벽시계 기준이라 재시작 횟수와 무관하게 하루 2회가 보장된다.
-    #    01:00/13:00 ± 45분(jitter)은 release.md 시각표에서 네이버 호출 잡과 겹치지
+    #    01:00/13:00 에서 0~45분 뒤로(jitter — APScheduler cron jitter 는 늦추기만 한다,
+    #    2026-10-07 21일 43회차 실측 전부 정각~+45분)는 release.md 시각표에서 네이버 호출 잡과 겹치지
     #    않는다 (01:00 childcare 는 data.go.kr 호출이라 네이버 IP 부하 무관, 13:00 공백).
     scheduler.add_job(
         crawl_articles_batch,

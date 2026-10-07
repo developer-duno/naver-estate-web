@@ -82,7 +82,7 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정 (설정 완�
 | 10:45/14:45/19:15 | naver-estate-web | popular 크롤링 | 매일 |
 | 12:40 | naver-estate-web | kapt_costs_noon (data.go.kr, 네이버 0 — 세션 422 관리비 낮 회차) | 매일 |
 | 21:00 | naver-estate-web | kapt_costs_evening (data.go.kr, 네이버 0 — 세션 426 관리비 저녁 회차, 길면 약 23:30 끝) | 매일 |
-| 01:00 / 13:00 | naver-estate-web | crawl_articles (cron, ±45분 jitter — 세션 402 에 12h interval 에서 전환) | 매일 |
+| 01:00 / 13:00 | naver-estate-web | crawl_articles (cron, jitter 0~45분 뒤로 — 세션 402 에 12h interval 에서 전환) | 매일 |
 | 00:20 / 12:20 | naver-estate-web | 상세 백필 — backfill_detail_dawn(배치 1500·약 38분) / backfill_detail_noon(배치 4000·실측 113~134분), 상세 API. 키 드리프트로 빈 채 굴러간 필드(난방·총층수 등)를 사후 보강한다. 토글 `BACKFILL_DETAIL_ENABLED`(코드 기본 false — 2026-09-14 라이브 .env 에서 ON). 배치 조절은 `BACKFILL_DETAIL_BATCH_SIZE` | 매일 |
 | 30m interval | naver-estate-web | crawl_details | 매일 |
 

@@ -11,6 +11,7 @@
 2. 불량 매물 3건이 나란히 붙어도 저장 성공이 1건이라도 있으면 completed, 3건 모두 +1.
 3. 저장 성공 0건 + 실패 20건 이상 → 시스템성 장애로 보고 카운트 보류 + 회차 failed.
    20건 미만(불량 몇 건만 대기)이면 회차는 completed, 카운트가 올라 상한에서 저절로 빠진다.
+   단 보류 회차에도 정비 잡이 CAP-1 로 되살린 매물은 +1(매물오류 차단기 revived 와 같은 예외).
 4. DB 연결 계열 오류(OperationalError)는 매물 탓으로 세지 않는다(codes.md "transient 는 세지 않음").
 5. DB 연결 계열 오류가 성공 없이 3건 쌓이면 루프 도중 멈춘다(DB 장애 중 네이버 콜 낭비 방지).
    사이에 저장 성공이 끼면 그 수가 초기화돼 멈추지 않는다.
@@ -155,6 +156,38 @@ def test_zero_success_with_many_failures_fails_run_and_holds_counts(db, monkeypa
     assert f"저장 실패 {len(nos)}건" in job.error_message
     rows = _rows(db)
     assert all(rows[n].detail_fail_count == 0 for n in nos)
+
+
+@pytest.mark.parametrize("job_fn,backfill,job_type", _PATHS)
+def test_zero_success_hold_still_counts_revived_articles(db, monkeypatch, job_fn, backfill, job_type):
+    """보류 회차(성공 0 + 실패 20건)에도 03:50 정비 잡이 CAP-1 로 되살린 매물만은 +1 → CAP 이 되어
+    다음 회차 선정에서 빠진다. 나머지는 지금처럼 보류(0). 매물오류 차단기 revived_hits 와 같은 예외.
+
+    호출측 except 가 db.rollback() 하므로 finish 안의 commit 이 없으면 +1 이 사라진다
+    (뮤테이션 2026-10-07: 그 commit 줄을 지우면 이 시험이 FAIL).
+    """
+    cap = service_discover._DETAIL_FAIL_CAP
+    nos = [f"R{i:02d}" for i in range(service_discover._ARTICLE_ERROR_SYSTEMIC_MIN)]
+    _seed(db, nos, backfill=backfill)
+    db.query(Article).filter(Article.article_no == "R05").update({"detail_fail_count": cap - 1})
+    # 경계: CAP-2 매물은 되살린 매물이 아니라 보류 그대로(문턱이 CAP-2 로 느슨해지는 변이를 잡는다)
+    db.query(Article).filter(Article.article_no == "R06").update({"detail_fail_count": cap - 2})
+    db.commit()
+    _patch(monkeypatch, bad=set(nos))
+
+    job_fn(batch_size=50)
+
+    job = _last_job(db, job_type)
+    assert job.status == "failed"
+    assert f"저장 실패 {len(nos)}건" in job.error_message
+    rows = _rows(db)
+    assert rows["R05"].detail_fail_count == cap
+    assert rows["R06"].detail_fail_count == cap - 2
+    assert all(rows[n].detail_fail_count == 0 for n in nos if n not in ("R05", "R06"))
+
+    called = _patch(monkeypatch, bad=set(nos))
+    job_fn(batch_size=50)
+    assert "R05" not in called and len(called) == len(nos) - 1
 
 
 @pytest.mark.parametrize("job_fn,backfill,job_type", _PATHS)

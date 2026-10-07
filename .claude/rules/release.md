@@ -67,7 +67,7 @@ FE 만 변경된 PR (frontend/*) 은 본 룰 면제.
 는 파이프 종료코드가 **grep 의 0** 이라 스크립트가 WAIT(exit 1)를 내도 `&&` 가 통과한다. 잡음 제거는 스크립트 안에서 하거나
 `out=$(python check.py 2>&1); echo "$out"; [[ "$out" == *GO* ]] && …` 처럼 **문자열로 판정**한다(꼭 파이프면 `set -o pipefail`).
 ②의 "5분 안" 판정에는 `GET /api/admin/scheduler-status` 의 `next_run_at` 을 써도 된다 — jitter 가 이미 반영된 확정값이라
-interval 잡(crawl_details 30분±15)도 시각표 추정 대신 그 값으로 정확히 본다(세션 411 검사관 C 실측).
+interval 잡(crawl_details 30분 + 0~15분)도 시각표 추정 대신 그 값으로 정확히 본다(세션 411 검사관 C 실측).
 
 ⚠ **①의 "running 0" 만으로는 부족하다 — 짧은 하위 잡을 이어 붙이는 수집은 잡 사이 틈에 0 으로 보인다**(세션 421 실사고:
 일요일 03:00 새 단지 찾기 `discover_regions` 는 `complex_list` 행을 지역마다 몇 초씩 229개 이어 붙여 평소 03:00~03:49 에 도는데,

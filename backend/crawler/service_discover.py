@@ -96,7 +96,11 @@ _round_confirm_used = 0
 
 
 def reset_round_canary() -> None:
-    """회차 시작 시 확인 후보 단지와 확인 횟수를 비운다."""
+    """회차 시작 시 확인 후보 단지와 확인 횟수를 비운다.
+
+    ⚠ 배치(13시)·인기(14:45) 회차가 동시에 돌면 회차 상태를 서로 비운다 — 2026-10-07 기준
+    21일 동안 겹침 0회(최장 배치 80분)라 그대로 둠.
+    """
     global _round_canary_no, _round_canary_count, _round_confirm_used
     with _empty_streak_lock:
         _round_canary_no = None
@@ -700,21 +704,38 @@ class _DetailSaveGuard:
         """회차 끝 판정. 저장 성공 0건 + 실패 ≥ _ARTICLE_ERROR_SYSTEMIC_MIN 이면 카운트 보류 +
         회차 failed(예외). 그 밖에는 자료 모양 실패 건 전부 +1(commit 은 호출측의 _finalize_job
         뒤 commit) — 성공 0건이어도 실패가 문턱 미만이면 completed + error_message 로 끝난다
-        (불량 몇 건뿐인 회차를 failed 로 올리면 상한에 닿을 때까지 30분마다 경보가 반복된다)."""
+        (불량 몇 건뿐인 회차를 failed 로 올리면 상한에 닿을 때까지 30분마다 경보가 반복된다).
+
+        보류 회차에도 03:50 정비 잡이 CAP-1 로 되살린 매물(prev ≥ CAP-1)은 매물오류 차단기의
+        revived_hits 와 같이 +1 을 적용한다 — 안 그러면 그 매물이 매 회차 계속 다시 뽑혀 같은
+        보류를 되풀이한다. 호출측 except 가 db.rollback() 하므로 여기서 commit 한 뒤 raise 한다."""
         if processed == 0 and self.failed >= _ARTICLE_ERROR_SYSTEMIC_MIN:
+            revived = [h for h in self._shape_hits if h[1] >= _DETAIL_FAIL_CAP - 1]
+            logger.warning(
+                "상세 저장 실패 %d건·성공 0건 — 시스템 문제 의심, 실패 횟수 올리기 보류 %d건"
+                " (되살린 매물 %d건은 예외 적용)",
+                self.failed, len(self._shape_hits) - len(revived), len(revived),
+            )
+            if revived:
+                self._bump(db, revived)
+                db.commit()
             raise RuntimeError(
                 f"상세 저장이 한 건도 안 됐어요 — 저장 실패 {self.failed}건이라 시스템 문제로 보고"
                 f" 이번 회차를 멈췄어요(마지막 오류 종류 {self._last_type})"
             )
-        if not self._shape_hits:
-            return
+        if self._shape_hits:
+            self._bump(db, self._shape_hits)
+
+    @staticmethod
+    def _bump(db, hits: list[tuple[str, int]]) -> None:
+        """자료 모양 실패 매물의 detail_fail_count 를 일괄 +1 하고 상한 도달을 로그한다."""
         db.query(Article).filter(
-            Article.article_no.in_([an for an, _ in self._shape_hits])
+            Article.article_no.in_([an for an, _ in hits])
         ).update(
             {"detail_fail_count": Article.detail_fail_count + 1},
             synchronize_session=False,
         )
-        for article_no, prev in self._shape_hits:
+        for article_no, prev in hits:
             if prev + 1 >= _DETAIL_FAIL_CAP:
                 logger.warning("상세 시도 중단(저장 실패 상한 도달): article %s", article_no)
 

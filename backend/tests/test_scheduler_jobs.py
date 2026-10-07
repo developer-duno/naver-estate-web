@@ -84,7 +84,7 @@ def test_crawl_articles_runs_on_cron_twice_daily():
     fields = {f.name: str(f) for f in job.trigger.fields}
     assert fields["hour"] == "1,13", f"hour 가 1,13 이 아님: {fields['hour']}"
     assert fields["minute"] == "0", f"minute 이 0 이 아님: {fields['minute']}"
-    # jitter(±45분) 유지 — 같은 IP 네이버 요청 분산
+    # jitter(0~45분 뒤로) 유지 — 같은 IP 네이버 요청 분산
     assert job.trigger.jitter == 2700, "crawl_articles jitter 가 2700 이 아님"
 
 

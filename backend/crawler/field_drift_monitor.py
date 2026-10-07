@@ -16,7 +16,7 @@ HTTP 200 정상 응답이라 에러도 경보도 없었고, ``heating_type``·``
 
     is_active AND detail_crawled AND updated_at > now() - _WINDOW_HOURS
 
-_WINDOW_HOURS=48 인 근거: 상세 보강 배치는 30분 간격(±jitter 15분) × 500건 이므로
+_WINDOW_HOURS=48 인 근거: 상세 보강 배치는 30분 간격(+ 0~15분 뒤로 jitter) × 500건 이므로
 48시간이면 최소 (48*60/45)*500 ≈ 32,000건 이상이 갱신돼 표본이 통계적으로 충분하다
 (infra.md §스케줄러 crawl_details 배경 참조).
 

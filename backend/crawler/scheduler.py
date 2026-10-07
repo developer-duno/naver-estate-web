@@ -214,7 +214,7 @@ def create_scheduler() -> BackgroundScheduler:
     #    실행이 12시간 뒤로 밀린다 — 최근 14일 중 9일이 하루 1회만 돌았다(crawl_jobs
     #    실측). cron 은 벽시계 기준이라 재시작 횟수와 무관하게 하루 2회가 보장된다.
     #    01:00/13:00 에서 0~45분 뒤로(jitter — APScheduler cron jitter 는 늦추기만 한다,
-    #    2026-10-07 21일 43회차 실측 전부 정각~+45분)는 release.md 시각표에서 네이버 호출 잡과 겹치지
+    #    2026-10-07 21일 회차 실측 전부 정각~+45분)는 release.md 시각표에서 네이버 호출 잡과 겹치지
     #    않는다 (01:00 childcare 는 data.go.kr 호출이라 네이버 IP 부하 무관, 13:00 공백).
     scheduler.add_job(
         crawl_articles_batch,

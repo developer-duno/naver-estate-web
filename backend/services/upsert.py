@@ -219,7 +219,8 @@ def upsert_article(db, article, commit=True, track_price=False, existing_prices=
     existing_prices: {article_no: (numeric_price, numeric_rent_price)} dict.
     전달 시 개별 SELECT 대신 캐시 사용 (N+1 방지).
     """
-    values = _build_article_values(article)
+    # 목록 수집 값에도 NUL 제거 — PostgreSQL 이 NUL 문자열을 거부한다(상세 경로와 같은 처방, 2026-10-07)
+    values = {k: _strip_nul(v) for k, v in _build_article_values(article).items()}
 
     if track_price:
         if existing_prices is not None:
@@ -310,6 +311,8 @@ def build_detail_update_dict(domain_article, detail_data: dict = None):
     maint = domain_article.maintenance_cost
     if maint is None and detail_data:
         maint = _extract_maintenance_from_detail(detail_data)
+    # 숫자 칸을 NUL 뺀 문자열로 계산해 문자·숫자 두 칸이 어긋나지 않게 한다
+    maint = _strip_nul(maint)
 
     update_data = {
         "detail_description": domain_article.detail_description,

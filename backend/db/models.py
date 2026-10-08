@@ -622,7 +622,8 @@ class SgisAreaStats(Base):
     적재 = scripts/load_sgis_stats.py(공공데이터포털 15129688 zip, 연 1회 수동).
     한 행 = (행정구역코드, 기준연도, 통계항목) 하나의 값. 원본 "N/A" 는 value NULL.
     건축년도 구간은 코드 뜻이 기준연도마다 달라 라벨 항목(ho_cy_label_<시작>_<끝>)을 같이 둔다.
-    미분양도 같은 표를 읽는다(공유 DB). 지금은 이 표를 조회하는 라우터가 없다.
+    미분양도 같은 표를 읽는다(공유 DB). 단지 상세 "이 동네는" 카드 = GET /api/complexes/{no}/neighborhood
+    (db/sgis_queries.py)가 읽고, 보조 API·재해 항목(api_*·ndsm_*)은 crawler/service_sgis.py 가 넣는다.
     """
     __tablename__ = "sgis_area_stats"
     __table_args__ = (Index("sgis_area_stats_item_idx", "item_code", "year"),)

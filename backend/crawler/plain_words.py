@@ -61,6 +61,7 @@ JOB_WORDS: dict[str, str] = {
     "emergency": "응급실 위치 받기",
     "childcare": "어린이집 정보 받기",
     "crime_stats": "동네 범죄 통계 받기",
+    "sgis_area": "동네 통계 받기",
     # 관리비(K-apt)
     "kapt_match": "관리비 단지 연결하기",
     "kapt_costs": "단지 관리비 받기",

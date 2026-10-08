@@ -45,7 +45,9 @@ def _corp(adm_cd):
 
 
 def _flood_list(*adm_cds):
-    return {"errCd": 0, "result": [{"sido_cd": c[:2], "base_year": "2025", "adm_cd": c, "adm_nm": "동"} for c in adm_cds]}
+    names = {"11": "서울특별시", "21": "부산광역시"}
+    return {"errCd": 0, "result": [{"sido_cd": c[:2], "sido_nm": names.get(c[:2]), "base_year": "2025", "adm_cd": c,
+                                    "adm_nm": "동"} for c in adm_cds]}
 
 
 def _board():
@@ -131,7 +133,7 @@ def test_요약3종_원문_칸이름으로_저장_NA는_NULL_정상완료(db, mo
     assert _val(db, "11050650", "api_adm_nm") is None                               # 이름 칸은 안 넣는다
     assert _val(db, "11050650", "api_thirty_cnt")[0] == Decimal("3700")
     assert _val(db, "11050650", "api_corp_1006_per")[0] == Decimal("2.89")          # 설계서 §8 이름
-    assert _val(db, "11050650", "api_corp_1001_per")[0] == Decimal("0.07")
+    assert _val(db, "11050650", "api_corp_1001_per") is None                         # 1006 만 저장(F5)
     jobs = db.query(CrawlJob).filter(CrawlJob.job_type == "sgis_area").all()
     assert [(j.status, j.total_items, j.processed_items, j.error_message) for j in jobs] == [("completed", 1, 1, None)] * 3
 
@@ -163,15 +165,53 @@ def _fail_then_ok(n_fail):
     return route
 
 
-def test_연속_실패_19번은_계속_간다(db, monkeypatch):
-    dongs = [f"110506{i:02d}" for i in range(21)]
+def test_실패19_성공1_실패19는_연속이_풀려_계속_간다(db, monkeypatch):
+    """성공 한 번이 연속 수를 되돌리는지 — 되돌리지 않으면 38번째에서 멈춘다. 400곳 중 38곳(9.5%)이라 completed."""
+    dongs = [f"11{i:06d}" for i in range(400)]
     _seed_dongs(db, *dongs)
-    fake = FakeHttp({HOUSE_URL: _fail_then_ok(19)})
+    seq = {"n": 0}
+
+    def route(p):
+        seq["n"] += 1
+        bad = seq["n"] <= 19 or 21 <= seq["n"] <= 39
+        return sc.SgisRequestError("HTTP 429") if bad else _house(p["adm_cd"])
+    fake = FakeHttp({HOUSE_URL: route})
     st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house")
-    assert (st.stop_reason, st.failed, st.done) == ("done", 19, 21)
-    assert _job(db).status == "completed"
+    assert (st.stop_reason, st.failed, st.done) == ("done", 38, 400)
+    job = _job(db)
+    assert job.status == "completed"
+    assert job.error_message == "동 38곳은 자료를 못 받아 비워 뒀어요(다시 돌리면 채워집니다)."
     assert _val(db, dongs[18], "api_officetel_cnt") is None          # 실패한 동은 '자료 없음'으로도 안 쓴다
     assert _val(db, dongs[19], "api_officetel_cnt")[0] == Decimal("155")
+
+
+def test_정상_응답인데_그_동의_행이_없음이_20번이면_failed(db, monkeypatch):
+    """ok 응답이라는 이유만으로 연속 수를 되돌리면 모양이 바뀐 창구에서 영영 안 멈춘다(검사관 B 🔴-1)."""
+    dongs = [f"11{i:06d}" for i in range(30)]
+    _seed_dongs(db, *dongs)
+    fake = FakeHttp({HOUSE_URL: lambda p: _house("99999999")})
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house")
+    assert (st.stop_reason, st.failed) == ("consecutive_failures", 20)
+    assert len(fake.urls(HOUSE_URL)) == 20
+    assert _job(db).status == "failed"
+
+
+def test_실패_비율_10퍼센트_경계():
+    assert ss.too_many_failures(99, 1000) is False      # 9.9%
+    assert ss.too_many_failures(100, 1000) is True      # 10%
+    assert ss.too_many_failures(0, 0) is False
+
+
+@pytest.mark.parametrize("n_dongs, status", [(10, "failed"), (11, "completed")])
+def test_실패한_동이_10퍼센트_이상이면_failed_미만이면_사유만(db, monkeypatch, n_dongs, status):
+    dongs = [f"11{i:06d}" for i in range(n_dongs)]
+    _seed_dongs(db, *dongs)
+    fake = FakeHttp({HOUSE_URL: lambda p: sc.SgisRequestError("HTTP 500") if p["adm_cd"] == dongs[3] else _house(p["adm_cd"])})
+    ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house")
+    job = _job(db)
+    assert job.status == status
+    assert job.error_message.startswith("동 1곳은 자료를 못 받아 비워 뒀어요(다시 돌리면 채워집니다).")
+    assert ("10%가 넘어" in job.error_message) == (status == "failed")
 
 
 def test_연속_실패_20번이면_회차_failed_우리말_사유(db, monkeypatch):
@@ -199,11 +239,10 @@ def test_오류코드는_토큰을_새로_받아_한번만_다시_묻는다(db, 
 
 def test_하루_상한에_닿으면_멈추고_완료로_사유를_남긴다(db, monkeypatch):
     _seed_dongs(db, "11050650", "11050660", "11050670")
-    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"]), PPL_URL: lambda p: _ppl(p["adm_cd"]),
-                     CORP_URL: lambda p: _corp(p["adm_cd"])})
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"]), CORP_URL: lambda p: _corp(p["adm_cd"])})
     client = _client(fake, monkeypatch)
     st = ss.refresh_sgis_area(db, client, call_cap=4)
-    assert (st.stop_reason, client.calls, st.done) == ("daily_cap", 4, 1)
+    assert (st.stop_reason, client.calls, st.done) == ("daily_cap", 4, 2)
     job = _job(db)
     assert job.status == "completed" and "하루 호출 상한(4번)" in job.error_message
     assert fake.urls(FLOOD_LIST_URL) == []                          # 상한 뒤 재해로 넘어가지 않는다
@@ -227,11 +266,11 @@ def test_동_N개마다_넣고_커밋한다(db, monkeypatch):
 
 def test_재해_목록에_든_동만_상세_목록_밖은_0_목록_실패_시도는_안_쓴다(db, monkeypatch):
     _seed_dongs(db, "11050650", "11050660", "21010510")
-    lists = {"11": _flood_list("11050650", "11999999"), "21": sc.SgisRequestError("HTTP 500")}
+    lists = {"11": _flood_list("11050650"), "21": sc.SgisRequestError("HTTP 500")}
     fake = FakeHttp({FLOOD_LIST_URL: lambda p: lists[p["adm_cd"]], FLOOD_BOARD_URL: lambda p: _board()})
     st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="flood")
     assert [p["adm_cd"] for p in fake.urls(FLOOD_LIST_URL)] == ["11", "21"]
-    assert [p["adm_cd"] for p in fake.urls(FLOOD_BOARD_URL)] == ["11050650"]   # 목록 밖(11050660)·대상 밖(11999999) 상세 금지
+    assert [p["adm_cd"] for p in fake.urls(FLOOD_BOARD_URL)] == ["11050650"]   # 목록 밖(11050660) 상세 금지
     assert _val(db, "11050650", "ndsm_flood_affected")[0] == 1
     assert _val(db, "11050650", "ndsm_flood_affc_pop")[0] == Decimal("7115")
     assert _val(db, "11050650", "ndsm_flood_adm_pop")[0] == Decimal("10317")
@@ -311,3 +350,116 @@ def test_연결부_HTTP_오류는_실패(monkeypatch):
 def test_only_값이_틀리면_거부(db):
     with pytest.raises(ValueError):
         ss.refresh_sgis_area(db, None, only="air")
+
+
+# ── 보완(검사관 지적) F4·F5·F7·F8·F9·F10·F11 ───────────────────────────────
+
+
+def test_재해_목록에_대상에_없는_코드가_있는_시도는_0을_안_쓴다(db, monkeypatch):
+    """목록(2025 경계)의 코드가 대상(2024 통계)에 없으면 동 번호가 바뀐 곳이 있다 → 그 시도는 '영향 없음' 보류."""
+    _seed_dongs(db, "11050650", "11050660", "21010510", "21010520")
+    lists = {"11": _flood_list("11050650", "11999999"), "21": _flood_list("21010510")}
+    fake = FakeHttp({FLOOD_LIST_URL: lambda p: lists[p["adm_cd"]], FLOOD_BOARD_URL: lambda p: _board()})
+    ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="flood")
+    assert [p["adm_cd"] for p in fake.urls(FLOOD_BOARD_URL)] == ["11050650", "21010510"]   # 상세는 그대로
+    assert _val(db, "11050650", "ndsm_flood_affected")[0] == 1
+    assert _val(db, "11050660", "ndsm_flood_affected") is None        # 어긋남 1개 시도 → 0 안 씀
+    assert _val(db, "21010520", "ndsm_flood_affected")[0] == 0        # 어긋남 0 시도 → 지금처럼 0
+    job = _job(db)
+    assert job.status == "completed"
+    assert job.error_message == "서울특별시 홍수 목록은 동 번호가 바뀐 곳 1개가 있어 '영향 없음'을 쓰지 않았어요."
+
+
+def test_어긋남_판정은_limit_과_무관하게_전체_대상으로(db, monkeypatch):
+    _seed_dongs(db, "11050650", "11050660")
+    fake = FakeHttp({FLOOD_LIST_URL: lambda p: _flood_list("11050660"), FLOOD_BOARD_URL: lambda p: _board()})
+    ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="flood", limit=1)
+    assert _val(db, "11050650", "ndsm_flood_affected")[0] == 0        # 11050660 은 대상(전체)에 있어 어긋남 아님
+
+
+def test_기본_실행은_ppl을_부르지_않는다(db, monkeypatch):
+    _seed_dongs(db, "11050650")
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"]), CORP_URL: lambda p: _corp(p["adm_cd"]),
+                     FLOOD_LIST_URL: lambda p: _flood_list(),
+                     sc.BASE_URL + ss.DISASTER_PATHS["lndsld"][0]: lambda p: _flood_list()})
+    ss.refresh_sgis_area(db, _client(fake, monkeypatch))
+    assert fake.urls(PPL_URL) == []
+    assert "ppl" not in ss.DEFAULT_KINDS and "ppl" in ss.KINDS
+    assert _val(db, "11050650", "ndsm_lndsld_affected")[0] == 0
+
+
+def test_외부_호출_순간에_트랜잭션이_열려_있지_않다(db, monkeypatch):
+    _seed_dongs(db, "11050650", "11050660")
+    states = []
+    routes = {HOUSE_URL: lambda p: _house(p["adm_cd"]), CORP_URL: lambda p: _corp(p["adm_cd"]),
+              FLOOD_LIST_URL: lambda p: _flood_list("11050650"), FLOOD_BOARD_URL: lambda p: _board(),
+              sc.BASE_URL + ss.DISASTER_PATHS["lndsld"][0]: lambda p: _flood_list()}
+    fake = FakeHttp({u: (lambda f: lambda p: states.append(db.in_transaction()) or f(p))(f) for u, f in routes.items()})
+    ss.refresh_sgis_area(db, _client(fake, monkeypatch))
+    assert len(states) == 7 and not any(states)
+
+
+def test_코드_오류_동은_따로_세고_회차는_계속(db, monkeypatch):
+    dongs = [f"11{i:06d}" for i in range(10)]
+    _seed_dongs(db, *dongs)
+    code_err = {"errCd": -200, "errMsg": "행정동 코드를 확인하세요"}
+    fake = FakeHttp({HOUSE_URL: lambda p: code_err if p["adm_cd"] in dongs[:8] else _house(p["adm_cd"])})
+    client = _client(fake, monkeypatch)
+    st = ss.refresh_sgis_area(db, client, only="house")
+    assert (st.stop_reason, st.code_error, st.failed, client.calls, fake.issued) == ("done", 8, 0, 10, 1)  # 재발급·재시도 0
+    job = _job(db)
+    assert job.status == "completed"
+    assert job.error_message == "창구가 동 번호를 모른다고 한 8곳은 비워 뒀어요."
+    assert _val(db, dongs[9], "api_officetel_cnt")[0] == Decimal("155")
+
+
+def test_코드_오류가_200번_이어지면_failed(db, monkeypatch):
+    _seed_dongs(db, *[f"11{i:06d}" for i in range(205)])
+    fake = FakeHttp({HOUSE_URL: lambda p: {"errCd": -200, "errMsg": "x"}})
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house")
+    assert (st.stop_reason, st.code_error) == ("consecutive_code_errors", 200)
+    assert _job(db).status == "failed"
+
+
+def test_쉼표_숫자와_모양_이상_값(db, monkeypatch):
+    _seed_dongs(db, "11050650")
+    body = _house("11050650")
+    body["result"][0].update(officetel_cnt="1,234", apart_cnt={"x": 1}, etc_cnt="")
+    fake = FakeHttp({HOUSE_URL: lambda p: body})
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house")
+    assert _val(db, "11050650", "api_officetel_cnt")[0] == Decimal("1234")
+    assert _val(db, "11050650", "api_apart_cnt") == (None, None)       # dict → 그 칸만 NULL
+    assert _val(db, "11050650", "api_etc_cnt") == (None, None)         # 빈 문자열 → NULL(이상 아님)
+    assert (st.bad_values, st.failed) == (1, 0)
+
+
+def test_토큰은_만료_5분_전에_새로_받는다(monkeypatch):
+    now = {"ms": BASE_MS}
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})
+    monkeypatch.setattr(sc, "http_get_json", fake)
+    client = sc.SgisClient(sc.TokenCache("k", "s", now_ms=lambda: now["ms"]), sleep=lambda s: None)
+    client.get(ss.SUMMARY_PATHS["house"], adm_cd="11050650")
+    now["ms"] = BASE_MS + 4 * 3600_000 - 6 * 60_000       # 만료 6분 전 — 그대로
+    client.get(ss.SUMMARY_PATHS["house"], adm_cd="11050650")
+    now["ms"] = BASE_MS + 4 * 3600_000 - 4 * 60_000       # 만료 4분 전 — 새로 받는다
+    client.get(ss.SUMMARY_PATHS["house"], adm_cd="11050650")
+    assert [p["accessToken"] for p in fake.urls(HOUSE_URL)] == ["tok1", "tok1", "tok2"]
+
+
+def test_재해_상세가_실패한_동은_지난_회차_그_종류_행을_지운다(db, monkeypatch):
+    _seed_dongs(db, "11050650", "21010510")
+    for cd in ("11050650", "21010510"):
+        for code, v in (("ndsm_flood_affected", "0"), ("ndsm_flood_affc_pop", "5"), ("ndsm_lndsld_affected", "0")):
+            db.add(SgisAreaStats(adm_cd=cd, year=2024, item_code=code, value=Decimal(v)))
+    db.commit()
+    lists = {"11": _flood_list("11050650"), "21": sc.SgisRequestError("HTTP 500")}   # 21 은 이번에 아무것도 안 씀
+    fake = FakeHttp({FLOOD_LIST_URL: lambda p: lists[p["adm_cd"]],
+                     FLOOD_BOARD_URL: lambda p: sc.SgisRequestError("HTTP 500")})
+    ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="flood")
+    assert _val(db, "11050650", "ndsm_flood_affected") is None
+    assert _val(db, "11050650", "ndsm_flood_affc_pop") is None
+    assert _val(db, "11050650", "ndsm_lndsld_affected")[0] == 0        # 다른 종류는 그대로
+    assert _val(db, "11050650", "to_in_001")[0] == Decimal("1000")
+    # 다른 동의 같은 종류 행은 남는다(지우기는 실패한 그 동만)
+    assert _val(db, "21010510", "ndsm_flood_affected")[0] == 0
+    assert _val(db, "21010510", "ndsm_flood_affc_pop")[0] == Decimal("5")

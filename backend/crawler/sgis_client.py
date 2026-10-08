@@ -9,7 +9,8 @@
 
 결과 판정 (SgisClient.get)
     * errCd 0 → ok · errCd -100(결과 없음) → no_result.
-    * 그 밖의 오류코드(-200·-201 코드 오류, 토큰 만료 등) → 토큰을 새로 받아 한 번만 다시 묻고, 그래도면 fail.
+    * errCd -200(코드 오류) → code_error. 그 코드에 늘 나는 오류라 토큰을 새로 받지도, 다시 묻지도 않는다.
+    * 그 밖의 오류코드(-201 재해 코드 오류, 토큰 만료 등) → 토큰을 새로 받아 한 번만 다시 묻고, 그래도면 fail.
     * HTTP 412·429·5xx·네트워크 오류·JSON 아님 → fail. **"자료 없음"이 아니라 실패**다(error-propagation 룰 5).
     호출 사이 간격(기본 0.2초)은 클라이언트가 지킨다 — 네이버가 아니라 AdaptiveThrottle 불필요.
 """
@@ -24,6 +25,7 @@ BASE_URL = "https://sgisapi.mods.go.kr/OpenAPI3/"
 AUTH_PATH = "auth/authentication.json"
 ERR_OK = 0
 ERR_NO_RESULT = -100
+ERR_CODE = -200
 DEFAULT_INTERVAL = 0.2
 TOKEN_MARGIN_MS = 5 * 60 * 1000
 HTTP_TIMEOUT = 10
@@ -99,7 +101,7 @@ class TokenCache:
 
 @dataclass
 class Reply:
-    kind: str            # ok | no_result | fail
+    kind: str            # ok | no_result | code_error | fail
     result: Any = None
     detail: str = ""
 
@@ -127,6 +129,8 @@ class SgisClient:
                     return Reply("ok", data.get("result"))
                 if err == ERR_NO_RESULT:
                     return Reply("no_result", detail=str(data.get("errMsg")))
+                if err == ERR_CODE:
+                    return Reply("code_error", detail=str(data.get("errMsg")))
             return Reply("fail", detail=f"오류코드 {data.get('errCd')} {data.get('errMsg')}")
         except SgisRequestError as e:
             return Reply("fail", detail=str(e))

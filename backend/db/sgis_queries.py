@@ -71,10 +71,15 @@ def _int(d: Decimal | None) -> int | None:
     return None if d is None else int(d)
 
 
-def _pct(part: Decimal | None, whole: Decimal | None) -> float | None:
+def _round0(d: Decimal) -> int:
+    """원래 값에서 곧장 정수로(HALF_UP) — 소수 1자리로 먼저 반올림하지 않는다(61.45 → 61, 62 아님)."""
+    return int(d.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def _pct(part: Decimal | None, whole: Decimal | None) -> int | None:
     if part is None or whole is None or whole == 0:
         return None
-    return _round1(part / whole * 100)
+    return _round0(part / whole * 100)
 
 
 def _disaster(items: Items, prefix: str) -> dict | None:
@@ -95,6 +100,7 @@ def build_neighborhood(emd_cd: str, items: Items, year: int = NEIGHBORHOOD_YEAR)
     """카드 응답(설계서 §6). 그 동에 총인구(to_in_001) 행이 없으면 None(→ 404).
 
     산식에 드는 값이 하나라도 NULL·없음이면 그 칸만 null(0 으로 채우지 않는다).
+    비율은 정수(2026-10-09 사장님 결정 — 화면 "67%") · avg_age 는 소수 1자리 · broker_pct 는 원문 그대로.
     """
     if "to_in_001" not in items:
         return None
@@ -111,7 +117,8 @@ def build_neighborhood(emd_cd: str, items: Items, year: int = NEIGHBORHOOD_YEAR)
         "avg_age": None if avg_age is None else _round1(avg_age),
         "one_person_pct": _pct(_num(items, "ga_sd_005"), _num(items, "to_ga_001")),
         "households": _int(_num(items, "to_ga_001")),
-        "house_mix": None if any(v is None for v in mix.values()) else {k: _round1(v) for k, v in mix.items()},
+        "one_person_households": _int(_num(items, "ga_sd_005")),
+        "house_mix": None if any(v is None for v in mix.values()) else {k: _round0(v) for k, v in mix.items()},
         "old_house_pct": _pct(old_sum, _num(items, "to_ho_001")),
         "old_house_cutoff": OLD_HOUSE_CUTOFF,
         "corp_cnt": _int(_num(items, "to_fa_010")),

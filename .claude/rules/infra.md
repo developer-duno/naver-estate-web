@@ -177,6 +177,10 @@ naver 의 `CHILDCARE_DETAIL_API_KEY` == mibunyang 의 `CHILDCARE_BASIC_API_KEY` 
 - 이 키의 운영계정 만료 = **2027-04-07** (만료 30일 전부터 포털에서 기간연장 신청 — 놓치면
   naver·mibunyang 어린이집 수집 동시 정지).
 
+### SGIS 오픈API 키 공유 (국가데이터처 통계지리정보 — 일일 5만 콜, 2u·미분양·상가 같은 키, 세션 456)
+
+`SGIS_CONSUMER_KEY`·`SGIS_CONSUMER_SECRET` 은 세 레포가 같은 값을 쓰고 한도(하루 5만, 한도 헤더 없음)도 같이 쓴다. 2u 사용처 = `scripts/map_complex_sgis.py`(단지 짝짓기, 하루 상한 4만 — 첫 회 10-09·10-10) · `scripts/run_sgis_area_refresh.py`(동네 통계, 한 번에 약 7천 + 홍수·산사태 수천 — 연 1회) · 미분양 `sgis-map-emd.mjs`(매주 화요일, 첫 회 ≈2,6xx). **큰 실행 두 개를 같은 날 돌리지 않는다** — 돌리기 전 그날 다른 레포 실행 일정을 본다. 각 스크립트의 상한 인자는 공용 사용량을 모르므로 안전장치가 아니다.
+
 ### 네이버 크롤링 시간 분리 (같은 집 서버 IP)
 
 (상세: .claude/rules-detail/infra.md §네이버 크롤링 시간 분리 표)

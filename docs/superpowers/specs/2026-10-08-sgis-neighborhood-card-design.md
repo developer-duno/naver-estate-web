@@ -78,21 +78,22 @@ CREATE INDEX complexes_sgis_emd_idx ON complexes (sgis_emd_cd);
 ```json
 { "emd_cd": "11230640", "emd_nm": "역삼1동", "year": 2024,
   "population": 33819, "avg_age": 41.3,
-  "one_person_pct": 67.4, "households": 21140,
-  "house_mix": { "apt_pct": 13.7, "officetel_pct": 18.5, "row_pct": 27.5, "detached_pct": 31.9 },
-  "old_house_pct": 57.1, "old_house_cutoff": "2004년 이전",
+  "one_person_pct": 67, "households": 21140, "one_person_households": 14255,
+  "house_mix": { "apt_pct": 14, "officetel_pct": 18, "row_pct": 28, "detached_pct": 32 },
+  "old_house_pct": 57, "old_house_cutoff": "2004년 이전",
   "corp_cnt": 18381, "worker_cnt": 176522, "broker_pct": 3.02,
   "flood": { "affected": false }, "landslide": { "affected": true, "pop": 8578, "pop_total": 19840, "year": 2024 },
   "source": "국가데이터처 통계지리정보 센서스 2024, 홍수·산사태 위험지도 2025" }
 ```
 - 단지에 `sgis_emd_cd` 가 없거나 표에 그 동의 `to_in_001`(총인구) 행이 없으면 **404** — "그 adm_cd 행이 하나라도 있나"로 판정하면 이름(`adm_nm`)만 있는 동이 숫자 전부 빈 200 이 된다(2026-10-09 맹점 검사) (FE 는 섹션 생략). `Cache-Control: max-age=3600`(하위 경로 규칙). 인증 불필요(공개 통계).
-- 비율 산식: 1인가구 = `ga_*`(A0 상당 item) ÷ 총가구 · 집 종류 = housesummary 비율 그대로(분모 = 거처 전체) · 오래된 집 = 건축년도 구간 라벨 합(2004 이전) ÷ 총주택 · 값이 NULL 이면 그 줄 생략.
+- 비율 3종(one_person_pct·old_house_pct·house_mix)은 **정수**(원래 값에서 한 번만 HALF_UP — 사장님 결정 2026-10-09 "화면 비율은 정수 67%") · `one_person_households` = `ga_sd_005` 원값(화면 보조 문구 "N가구 중 M가구", 사장님 결정 2026-10-09) · avg_age 소수 1자리 · broker_pct 원문.
+- 비율 산식: 1인가구 = `ga_sd_005` ÷ 총가구 · 집 종류 = housesummary 비율 그대로(분모 = 거처 전체) · 오래된 집 = 건축년도 구간 라벨 합(2004 이전) ÷ 총주택 · 값이 NULL 이면 그 줄 생략.
 
 ## 7. 화면 (frontend)
 
 - `lib/api/complex.ts` 에 `getComplexNeighborhood(no)` — 404 는 `null`, 5xx 는 throw(error-propagation 룰, 래퍼 MSW 가드 1건).
 - `ComplexBasicInfo.tsx`: 기존 `rows` 아래 **구분선 + 소제목 "이 동네는"** + 줄 6개(시안 A안 문구) + 출처 줄. 로딩 중엔 소제목 없음 · 에러면 "동네 통계를 불러오지 못했어요" 한 줄. 인쇄 모드 포함.
-- 문구 규칙: 숫자는 `toLocaleString`·소수 1자리 · 재해 줄 = 영향 없음 `위험지도 영향 구역 아님` / 있음 `동네 안에 홍수위험 구역 있음 — 동네 19,840명 중 8,578명` (단지가 위험하다는 뜻이 아님을 "동네 안에"로). 광고법 게이트(`check:ad-compliance`) 단어 금지.
+- 문구 규칙: 숫자는 `toLocaleString` · 비율(%)은 정수·나이는 소수 1자리(2026-10-09 사장님 결정) · 1인가구 줄 보조 문구 `N가구 중 M가구` · 재해 줄 = 영향 없음 `위험지도 영향 구역 아님` / 있음 `동네 안에 홍수위험 구역 있음 — 그 구역에 8,578명`(2026-10-09 사장님 결정 — 위험지도의 동네 인구는 '사는 사람'(센서스) 숫자와 달라 헷갈리므로 화면에 쓰지 않는다) (단지가 위험하다는 뜻이 아님을 "동네 안에"로). 광고법 게이트(`check:ad-compliance`) 단어 금지.
 - 시각 회귀: 단지정보 상자를 **연 상태**를 찍는 baseline 이 있으면 그 장만 CI dispatch 재촬영(`frontend/e2e/README.md`), 카드 응답은 `page.route` mock 고정.
 - 상자 4개·배치 불변 → `ComplexDashboard` 손 안 댐.
 
@@ -112,7 +113,7 @@ CREATE INDEX complexes_sgis_emd_idx ON complexes (sgis_emd_cd);
 ## 10. 사장님 결정 (2026-10-08 확정)
 
 1. **오래된 집 기준** = "2004년 이전 지은 집"(20년 넘음) — 자료 구간(2000~2004)과 맞음.
-2. **재해 줄 문구** = 시안 그대로: 없으면 `위험지도 영향 구역 아님`, 있으면 `동네 안에 홍수위험 구역 있음 — 동네 N명 중 M명`.
+2. **재해 줄 문구** = 시안 그대로: 없으면 `위험지도 영향 구역 아님`, 있으면 `동네 안에 홍수위험 구역 있음 — 동네 N명 중 M명` → **2026-10-09 바꿈: `— 그 구역에 M명`**(동네 인구 두 숫자가 헷갈려서) · 비율 정수 67% · 1인가구 보조 문구 넣기 · '집 종류' 줄 이름 그대로 · 검색 노출용 문장(SSR)은 후속.
 
 ## 11. 미확정·후속
 

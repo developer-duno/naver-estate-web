@@ -58,10 +58,11 @@ def test_자양2동_산식_기대값_그대로_그리고_캐시헤더(client, nd
     assert body == {
         "emd_cd": EMD, "emd_nm": "자양2동", "year": 2024,
         "population": 23116, "avg_age": 45.4,
-        "one_person_pct": 36.0,          # 3638 / 10105
+        "one_person_pct": 36,            # 3638 / 10105 = 36.0 → 정수(사장님 결정 2026-10-09)
         "households": 10105,
+        "one_person_households": 3638,   # "10,105가구 중 3,638가구"
         "house_mix": None,               # 요약 수집 전
-        "old_house_pct": 61.5,           # (103+789+2513+1044) / 7240
+        "old_house_pct": 61,             # (103+789+2513+1044) / 7240 = 61.45 → 61 (61.5 를 거쳐 62 가 되면 안 됨)
         "old_house_cutoff": "2004년 이전",
         "corp_cnt": 1821, "worker_cnt": 5496,
         "broker_pct": None, "flood": None, "landslide": None,
@@ -78,7 +79,7 @@ def test_요약_재해_수집_뒤_칸이_채워진다(client, ndb):
                         "ndsm_lndsld_affected": "1", "ndsm_lndsld_affc_pop": "8578",
                         "ndsm_lndsld_adm_pop": "19840", "ndsm_lndsld_year": "2024"})
     body = client.get("/api/complexes/100/neighborhood").json()
-    assert body["house_mix"] == {"apt_pct": 27.2, "officetel_pct": 1.5, "row_pct": 34.7, "detached_pct": 33.0}
+    assert body["house_mix"] == {"apt_pct": 27, "officetel_pct": 2, "row_pct": 35, "detached_pct": 33}
     assert body["broker_pct"] == 2.89
     assert body["flood"] == {"affected": False}
     assert body["landslide"] == {"affected": True, "pop": 8578, "pop_total": 19840, "year": 2024}
@@ -129,9 +130,10 @@ def _items(**over):
 def test_산식_값_하나가_NULL이면_그_칸만_null():
     out = build_neighborhood(EMD, _items(ho_cy_label_1990_1999=None))
     assert out["old_house_pct"] is None
-    assert out["one_person_pct"] == 36.0
+    assert out["one_person_pct"] == 36
     out = build_neighborhood(EMD, _items(ga_sd_005="drop"))
     assert out["one_person_pct"] is None and out["households"] == 10105
+    assert out["one_person_households"] is None
     out = build_neighborhood(EMD, _items(to_ga_001=Decimal(0)))
     assert out["one_person_pct"] is None                    # 0 으로 나누지 않는다
 
@@ -149,3 +151,20 @@ def test_총인구_값이_NULL이어도_행이_있으면_200_모양():
 
 def test_총인구_행이_없으면_None():
     assert build_neighborhood(EMD, {"adm_nm": (None, "자양2동")}) is None
+
+
+def test_반올림은_사사오입_경계값():
+    """.5 는 위로 — 은행가 반올림(HALF_EVEN)이면 45.4·12 가 된다. 비율은 정수, 평균나이는 소수 1자리."""
+    out = build_neighborhood(EMD, _items(to_in_002=Decimal("45.45"), ga_sd_005=Decimal("1250"),
+                                         to_ga_001=Decimal("10000")))
+    assert out["avg_age"] == 45.5
+    assert out["one_person_pct"] == 13       # 12.5 → 13 (HALF_EVEN 이면 12)
+
+
+def test_비율은_원래_값에서_곧장_정수로_이중_반올림_안_함():
+    out = build_neighborhood(EMD, _items(ga_sd_005=Decimal("6145"), to_ga_001=Decimal("10000")))
+    assert out["one_person_pct"] == 61       # 61.45 → 61 (61.5 를 거치면 62)
+    items = _items(api_apart_per=Decimal("27.45"), api_officetel_per=Decimal("1.5"),
+                   api_row_house_per=Decimal("34.49"), api_detach_house_per=Decimal("33.03"))
+    assert build_neighborhood(EMD, items)["house_mix"] == {"apt_pct": 27, "officetel_pct": 2, "row_pct": 34,
+                                                           "detached_pct": 33}

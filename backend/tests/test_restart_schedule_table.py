@@ -103,7 +103,9 @@ def test_stale_hours_job_types_all_map_to_registered_jobs():
     #    import 시점 값을 붙들면 monkeypatch 가 안 먹혀 **가드가 자기 뮤테이션 검증을
     #    통과해 버린다**(구현 중 실측: 가짜 job_type 을 넣었는데 이 테스트가 초록이었다).
     registered = {_ID_TO_JOB_TYPE.get(job.id, job.id) for job in build_jobs()}
-    orphans = sorted(set(monitor_mod._STALE_HOURS_BY_TYPE) - registered)
+    # 아직 스케줄러에 없고 사람이 돌리는 장시간 잡 — 등록(SGIS PR ④)하면 이 줄에서 뺀다
+    manual_only = {"sgis_area"}
+    orphans = sorted(set(monitor_mod._STALE_HOURS_BY_TYPE) - registered - manual_only)
     assert not orphans, (
         f"_STALE_HOURS_BY_TYPE 에 있는데 등록된 잡과 연결이 안 되는 job_type: {orphans}. "
         "scripts/gen_restart_schedule_table.py 의 _ID_TO_JOB_TYPE 에 짝을 추가하거나, "

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from crawler.utils import haversine_km
 from db import queries
+from db.sgis_queries import build_neighborhood
 from deps import get_approved_user, get_db
 from routers.serializers import (
     article_to_dict,
@@ -439,6 +440,27 @@ def get_nearby_subway(
         ]
     }
     _subway_cache.set(cache_key, result)
+    return result
+
+
+@router.get("/{complex_no}/neighborhood")
+def get_complex_neighborhood(
+    complex_no: str,
+    db: Session = Depends(get_db),
+):
+    """단지가 속한 행정동의 "이 동네는" 통계 — 무료 공개 (게이트 없음, 공개 통계).
+
+    404 = 단지 없음 · 행정동 코드 없음 · 그 동에 총인구(to_in_001) 행 없음(이름만 있는 동 포함).
+    캐시 헤더는 main.py 미들웨어가 200 에만 `private, max-age=3600` 을 붙인다(오류 응답엔 없음).
+    """
+    found, emd_cd = queries.get_complex_sgis_emd_cd(db, complex_no)
+    if not found:
+        raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다")
+    result = None
+    if emd_cd:
+        result = build_neighborhood(emd_cd, queries.get_sgis_neighborhood_items(db, emd_cd))
+    if result is None:
+        raise HTTPException(status_code=404, detail="이 단지의 동네 통계가 아직 없습니다")
     return result
 
 

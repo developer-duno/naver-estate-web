@@ -12,7 +12,9 @@
 --
 -- 보안: 이 DB 의 anon key 는 프런트 번들에 공개돼 있다. 공개 통계라도 쓰기 구멍을 막으려고
 --   RLS 를 켜고 정책을 0개로 두며 PUBLIC·anon·authenticated 3역할의 표 권한을 전부 회수한다(V069 모양).
---   backend 는 postgres 역할(표 소유자)이라 REVOKE 에 안 걸린다. service_role 은 건드리지 않는다.
+--   backend 는 postgres 역할(표 소유자)이라 REVOKE 에 안 걸린다.
+--   service_role(미분양이 읽는 역할)에는 SELECT 를 **명시해서** 준다 — Supabase 가 2026-10-30 부터 기존
+--   프로젝트도 새 public 표에 service_role 기본 권한을 주지 않는다(공식 changelog 45329, s454 확인).
 --
 -- 공유 DB(mibunyang) 영향:
 --   * complexes 두 칸은 nullable 추가라 기존 행·기존 쿼리 동작 변화 0. mibunyang 의 complexes 쓰기는
@@ -23,9 +25,11 @@
 --   RAISE EXCEPTION → 전부 취소된다. 적용 직전 스키마 덤프 1회(infra.md §DB 백업 — 추가만).
 --   lock_timeout(5초)으로 실패하면 complexes 를 잡은 다른 트랜잭션이 끝난 뒤 잠시 있다가 다시 실행한다(전부 취소라 안전).
 --   그다음 맨 아래 CREATE INDEX CONCURRENTLY 한 줄을 **따로**(트랜잭션 밖, autocommit) 실행한다.
+--   ⚠ 파일 전체를 SQL Editor 에 한 번에 넣으면 그 한 줄만 "트랜잭션 블록 안에서 못 돈다"로 실패할 수 있다
+--   (앞 BEGIN~COMMIT 은 이미 반영 — 피해 없음) → 그 한 줄만 다시 따로 실행하면 된다.
 --
 -- 적용 뒤 의무: mibunyang 권한 지문 기준선 재승인 요청(infra.md §권한·정책·뷰·함수를 바꾸는 마이그)
---   — 기대 차이 = 새 표 public.sgis_area_stats 1 · RLS 켬·정책 0 · PUBLIC·anon·authenticated REVOKE ALL.
+--   — 기대 차이 = 새 표 public.sgis_area_stats 1 · RLS 켬·정책 0 · PUBLIC·anon·authenticated REVOKE ALL · service_role SELECT 명시.
 --   (시퀀스 없음 — 키가 자연키라 bigserial 을 안 쓴다. complexes 칸·인덱스 추가는 지문 밖)
 --
 -- 순서: 서버 코드는 이 표·칸을 아직 읽지 않는다(Complex 모델에 두 칸을 넣지 않았고, SgisAreaStats 모델은
@@ -64,6 +68,8 @@ ALTER TABLE public.sgis_area_stats ENABLE ROW LEVEL SECURITY;
 
 -- Supabase 는 public 새 표에 기본 권한을 준다 → PUBLIC·anon·authenticated 3역할 전부 회수.
 REVOKE ALL ON public.sgis_area_stats FROM PUBLIC, anon, authenticated;
+-- 미분양(service_role)은 읽기만 — 2026-10-30 뒤 적용돼도 자체검사 ④ 가 통과하도록 명시(머리 주석).
+GRANT SELECT ON public.sgis_area_stats TO service_role;
 
 -- complexes: 단지 → SGIS 행정동 코드(8글자) + 매핑 시각
 ALTER TABLE public.complexes ADD COLUMN IF NOT EXISTS sgis_emd_cd text;

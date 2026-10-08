@@ -140,7 +140,10 @@ def build_emd_cd(result) -> str | None:
         raw = first.get(key)
         if raw is None or isinstance(raw, bool):
             return None
-        piece = str(raw).strip().zfill(width)
+        piece = str(raw).strip()
+        if not piece:  # 빈 조각을 zfill 하면 "000" 이 되어 그럴듯한 가짜 코드가 저장된다
+            return None
+        piece = piece.zfill(width)
         if len(piece) != width or not piece.isdigit():
             return None
         pieces.append(piece)
@@ -303,6 +306,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     if st.stop_reason == "consecutive_no_result":
         print(f"멈춤: 결과 없음이 {MAX_CONSECUTIVE_NO_RESULT}번 이어졌어요 — 좌표 칸(위도·경도)이 뒤바뀐 것 같은지 확인하세요")
+        print("  이번 실행에서 '결과 없음'으로 찍힌 단지를 다시 묻게 하려면: UPDATE complexes SET sgis_mapped_at = NULL"
+              " WHERE sgis_emd_cd IS NULL AND sgis_mapped_at >= '<이번 실행 시작 시각>';")
     elif st.stop_reason == "consecutive_failures":
         print(f"멈춤: 실패가 {MAX_CONSECUTIVE_FAILURES}번 이어졌어요 — SGIS 쪽 장애나 한도를 확인하세요")
     return 2 if st.stop_reason in ("consecutive_failures", "consecutive_no_result") else 0

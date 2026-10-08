@@ -68,7 +68,7 @@ CREATE INDEX complexes_sgis_emd_idx ON complexes (sgis_emd_cd);
 ## 5. 수집·적재 (backend)
 
 1. `scripts/load_sgis_stats.py <zip경로> [--year 2024]` — zip 안 `1. 통계/*.csv` 전부 → 8글자 행만 upsert(2/5글자는 미분양·상가가 필요하면 플래그로). 코드표 xlsx 로 `const_year` 구간 라벨 item(`ho_cy_label_<구간>`)도 생성. 1차는 **수동 1회**(zip 은 사람이 내려받아 경로 지정 — data.go.kr 다운로드는 폼 POST 라 자동화는 후속). 멱등.
-2. `scripts/map_complex_sgis.py` — `complexes.sgis_emd_cd IS NULL AND latitude IS NOT NULL` 을 0.2초 간격으로 `rgeocodewgs84` 호출(네이버가 아니라 `AdaptiveThrottle` 불필요, 하루 4만 콜 상한·중단 재개 가능). 결과 8글자 + `sgis_mapped_at`. 실패(-100)는 NULL 유지 + 로그.
+2. `scripts/map_complex_sgis.py` — `complexes.sgis_emd_cd IS NULL AND latitude IS NOT NULL` 을 0.2초 간격으로 `rgeocodewgs84` 호출(네이버가 아니라 `AdaptiveThrottle` 불필요, 하루 4만 콜 상한·중단 재개 가능). 결과 8글자 + `sgis_mapped_at`. 실패(-100)는 NULL 유지 + 로그. 같은 응답의 `emdong_nm` 을 `sgis_area_stats`(item_code `adm_nm`, year 2024) 에 같은 커밋으로 넣는다(2026-10-08 확정). ⚠ 표본 확인은 `--dry-run` 이 아니라 실제 `--limit 20` 으로 — dry-run 끝 줄의 '동 이름'은 늘 0 이다. 합격 = 끝 줄 '채움' = '동 이름'(단지 수) · 표의 `adm_nm` 행 수는 **동 수**라 `count(DISTINCT sgis_emd_cd)` 와 맞댄다.
 3. `crawler/service_sgis.py` — 잡 1개 `sgis_area_refresh`(연 1회, 매년 **2월 첫째 일요일 05:00** — 파일 반기 등록 뒤·다른 새벽 잡과 안 겹침): 보조 API 3종 × 읍면동 + 재해 목록·상세 → upsert. `CrawlJob(job_type="sgis_area")` 기록 · 429/5xx 는 실패로 세고 연속 20회면 failed(error-propagation 5). 새 잡 등록 위치 = `reference_known_traps.md` "새 잡 등록 6곳"(scheduler.py id · META 표시 · `JOB_WORDS` + FE `crawl-job-labels.ts` · release.md 시각표 생성 · 관리자 수집 버튼 · 시험).
 4. 알림 문구(텔레그램·관리자 화면) 쉬운 우리말(infra.md §텔레그램).
 
@@ -85,7 +85,7 @@ CREATE INDEX complexes_sgis_emd_idx ON complexes (sgis_emd_cd);
   "flood": { "affected": false }, "landslide": { "affected": true, "pop": 8578, "pop_total": 19840, "year": 2024 },
   "source": "국가데이터처 통계지리정보 센서스 2024, 홍수·산사태 위험지도 2025" }
 ```
-- 단지에 `sgis_emd_cd` 가 없거나 표에 그 동이 없으면 **404** (FE 는 섹션 생략). `Cache-Control: max-age=3600`(하위 경로 규칙). 인증 불필요(공개 통계).
+- 단지에 `sgis_emd_cd` 가 없거나 표에 그 동의 `to_in_001`(총인구) 행이 없으면 **404** — "그 adm_cd 행이 하나라도 있나"로 판정하면 이름(`adm_nm`)만 있는 동이 숫자 전부 빈 200 이 된다(2026-10-09 맹점 검사) (FE 는 섹션 생략). `Cache-Control: max-age=3600`(하위 경로 규칙). 인증 불필요(공개 통계).
 - 비율 산식: 1인가구 = `ga_*`(A0 상당 item) ÷ 총가구 · 집 종류 = housesummary 비율 그대로(분모 = 거처 전체) · 오래된 집 = 건축년도 구간 라벨 합(2004 이전) ÷ 총주택 · 값이 NULL 이면 그 줄 생략.
 
 ## 7. 화면 (frontend)
@@ -98,7 +98,7 @@ CREATE INDEX complexes_sgis_emd_idx ON complexes (sgis_emd_cd);
 
 ## 8. 미분양에 줄 것 (설계서 확정 뒤 한 줄로 전달)
 
-표 = `sgis_area_stats`(8글자, year 2024) · item_code: (`adm_nm` 동 이름은 1차 적재에 없음 — 출처 후보 ① 매핑 응답 `emdong_nm`(추가 호출 0, 단지 있는 동만) ② 경계 dbf(전국), PR ② 에서 정해 알림) · `to_in_001` 총인구 · `to_in_002` 평균나이 · `to_in_004` 노령화지수 · `to_ga_001` 총가구 · `ga_sd_005` 1인가구(코드집 실측 — 역삼1동 14,255 = API 값) · `to_ho_001` 총주택 · `ho_gb_003` 아파트(⚠ `ho_gb_002` = 단독주택 — 코드집 실측 2026-10-08 s454) · `ho_cy_label_<시작>_<끝>` 건축년도 구간(value_text = 라벨 원문 · 원자료 항목은 `ho_yr_001~020` — 2024 파일은 코드집 "2015년 이후" 표: 001 1979년 이전·002 1980~89·003 1990~99·004 2000~04·005 2005~09·006~020 2010~2024 단년) · `to_fa_010` 사업체 · `to_em_020` 종사자 · `api_officetel_cnt` · `api_corp_1006_per` · `ndsm_flood_affected`·`ndsm_flood_affc_pop`·`ndsm_flood_adm_pop`·`ndsm_flood_affc_hh`·`ndsm_flood_affc_house`·`ndsm_flood_affc_basement`·`ndsm_flood_year` + `ndsm_lndsld_*` 같은 모양.
+표 = `sgis_area_stats`(8글자, year 2024) · item_code: (`adm_nm` 동 이름 = 짝짓기 응답 `emdong_nm` 으로 확정(2026-10-08 사장님) — `scripts/map_complex_sgis.py` 가 코드를 저장할 때 value_text 로 함께 넣는다(추가 호출 0, 단지 있는 동만)) · `to_in_001` 총인구 · `to_in_002` 평균나이 · `to_in_004` 노령화지수 · `to_ga_001` 총가구 · `ga_sd_005` 1인가구(코드집 실측 — 역삼1동 14,255 = API 값) · `to_ho_001` 총주택 · `ho_gb_003` 아파트(⚠ `ho_gb_002` = 단독주택 — 코드집 실측 2026-10-08 s454) · `ho_cy_label_<시작>_<끝>` 건축년도 구간(value_text = 라벨 원문 · 원자료 항목은 `ho_yr_001~020` — 2024 파일은 코드집 "2015년 이후" 표: 001 1979년 이전·002 1980~89·003 1990~99·004 2000~04·005 2005~09·006~020 2010~2024 단년) · `to_fa_010` 사업체 · `to_em_020` 종사자 · `api_officetel_cnt` · `api_corp_1006_per` · `ndsm_flood_affected`·`ndsm_flood_affc_pop`·`ndsm_flood_adm_pop`·`ndsm_flood_affc_hh`·`ndsm_flood_affc_house`·`ndsm_flood_affc_basement`·`ndsm_flood_year` + `ndsm_lndsld_*` 같은 모양.
 
 ## 9. PR 쪼개기 (각각 재시작 창 1회, 2·3은 묶어도 됨)
 
@@ -118,5 +118,9 @@ CREATE INDEX complexes_sgis_emd_idx ON complexes (sgis_emd_cd);
 
 - data.go.kr zip 자동 내려받기(폼 POST) — 1차는 수동, 되면 ④에 합침.
 - 2차 집계구: 상가 폴더 CSV + 경계 SHP(shapely 보유) 또는 `transcoord` 1콜 — 그때 설계.
-- ⚠ `adm_nm`(행정동 이름)은 통계 CSV 에 없다(경계 dbf 에만) — PR ① 은 안 넣음, PR ② 에서 이름 출처 정하기(s454 실측).
+- `adm_nm`(행정동 이름)은 통계 CSV 에 없다(경계 dbf 에만, s454 실측) — 출처는 짝짓기 응답 `emdong_nm` 으로 확정(2026-10-08 사장님). `scripts/map_complex_sgis.py` 가 단지 짝짓기 때 함께 넣는다(단지 있는 동만).
 - 2u 단지 중 좌표 없는 단지 수·매핑 실패율은 ① 실행 뒤 실측해 적는다.
+- 짝짓기 응답 코드는 지금(2025?) 경계, 통계는 2024 경계일 수 있다(미확인) — 짝짓기 뒤 통계 없는 코드 수를 잰다: `SELECT count(DISTINCT c.sgis_emd_cd) FROM complexes c WHERE c.sgis_emd_cd IS NOT NULL AND NOT EXISTS (SELECT 1 FROM sgis_area_stats s WHERE s.adm_cd=c.sgis_emd_cd AND s.year=2024 AND s.item_code='to_in_001')`. 크면 PR ② 에서 처리(이름을 통계 있는 코드만 넣을지 포함).
+- 이름은 단지 있는 동에만 생기고 새 단지를 다시 짝짓는 일정이 없다 — 미분양 알림에 "`adm_nm` 없으면 자기 주소의 동 이름" 을 적는다 · 경계 dbf 로 전국 이름을 채울지는 PR ② 에서 다시 여쭙는다(호출 0).
+- 해가 바뀌어 2025 통계를 넣으면 이름 행은 2024 에만 있다 — 연 1회 잡(④)이 이름도 새 해로 옮기거나 API 가 이름은 해와 무관하게 읽는다(그때 정함).
+- 표 전체 행 수(916,651)는 이름 행만큼 늘어난다 — 적재 대조는 `item_code <> 'adm_nm'` 조건으로.

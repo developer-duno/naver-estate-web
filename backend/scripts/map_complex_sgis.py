@@ -9,6 +9,13 @@
     쥐고 있으면 같은 단지를 고치는 크롤·미분양 쓰기가 기다리다 8초 제한에 걸린다. 대상 목록을 읽은
     트랜잭션도 바로 닫는다. UPDATE 는 `AND sgis_emd_cd IS NULL` 가드로 이미 채운 값을 덮지 않는다.
 
+동 이름
+    같은 응답의 emdong_nm(행정동 이름, 앞뒤 공백 제거)도 sgis_area_stats 에 (adm_cd=8글자 코드,
+    year=load_sgis_stats.DEFAULT_YEAR, item_code='adm_nm', value=NULL, value_text=이름)으로 넣는다 — 코드를
+    저장하는 바로 그 커밋에서, 이미 있으면 이름·loaded_at 만 고친다(추가 호출 0). 이름이 없거나 빈 글자면
+    이 줄만 건너뛰고 코드는 그대로 저장한다. 가드 때문에 코드 UPDATE 가 0행이면(다른 쪽이 먼저 채움)
+    이름도 넣지 않는다. 이름 출처 = 짝짓기 응답 emdong_nm(2026-10-08 사장님 확정, 설계서 §8·§11).
+
 인증
     `auth/authentication.json`(env SGIS_CONSUMER_KEY·SGIS_CONSUMER_SECRET) → accessToken 을 들고 다니다가
     만료(accessTimeout — 실측 밀리초 시각, 발급 뒤 약 4시간) 5분 전에 새로 받는다. 응답이 정상(0)도
@@ -150,10 +157,20 @@ def build_emd_cd(result) -> str | None:
     return "".join(pieces)
 
 
+def build_emd_name(result) -> str | None:
+    """rgeocodewgs84 result → 행정동 이름(emdong_nm, 앞뒤 공백 제거). 없거나 빈 글자면 None."""
+    first = result[0] if isinstance(result, list) and result else result
+    raw = first.get("emdong_nm") if isinstance(first, dict) else None
+    # NUL 글자는 PostgreSQL 이 거부해 그 단지에서 매번 죽으므로 지운다(s444 NUL 장애)
+    name = raw.replace(chr(0), "").strip() if isinstance(raw, str) else ""
+    return name or None
+
+
 @dataclass
 class Outcome:
     kind: str            # ok | no_result | fail
     emd_cd: str | None = None
+    emd_nm: str | None = None   # 이름이 없어도 kind 는 ok 그대로(이름 때문에 실패로 세지 않는다)
     detail: str = ""
     calls: int = 0       # 실제로 부른 rgeocode 횟수(다시 묻기 포함)
 
@@ -171,7 +188,7 @@ def lookup(tokens: TokenCache, lon: float, lat: float) -> Outcome:
                 code = build_emd_cd(data.get("result"))
                 if code is None:
                     return Outcome("fail", detail="응답 모양 이상(코드 조각 없음)", calls=calls)
-                return Outcome("ok", emd_cd=code, calls=calls)
+                return Outcome("ok", emd_cd=code, emd_nm=build_emd_name(data.get("result")), calls=calls)
             if err == ERR_NO_RESULT:
                 return Outcome("no_result", detail=str(data.get("errMsg")), calls=calls)
         return Outcome("fail", detail=f"오류코드 {err} {data.get('errMsg')}", calls=calls)
@@ -186,6 +203,7 @@ class Stats:
     ok: int = 0
     no_result: int = 0
     failed: int = 0
+    named: int = 0          # 동 이름까지 넣은 단지 수
     stop_reason: str = "done"
 
 
@@ -217,6 +235,7 @@ def run(
 ) -> Stats:
     from sqlalchemy import text
 
+    from scripts.load_sgis_stats import DEFAULT_YEAR as STATS_YEAR
     from utils import utcnow
 
     st = Stats()
@@ -232,6 +251,12 @@ def run(
         "UPDATE complexes SET sgis_mapped_at = :at"
         " WHERE complex_no = :no AND sgis_emd_cd IS NULL AND sgis_mapped_at IS NULL"
     )
+    save_name = text(
+        "INSERT INTO sgis_area_stats (adm_cd, year, item_code, value, value_text, loaded_at)"
+        " VALUES (:cd, :year, 'adm_nm', NULL, :nm, :at)"
+        " ON CONFLICT (adm_cd, year, item_code) DO UPDATE"
+        " SET value_text = excluded.value_text, loaded_at = excluded.loaded_at"
+    )
     for i, (complex_no, lat, lon) in enumerate(targets):
         if call_cap is not None and st.calls >= call_cap:
             st.stop_reason = "daily_cap"
@@ -244,7 +269,12 @@ def run(
             st.ok += 1
             consecutive = consecutive_none = 0
             if not dry_run:
-                db.execute(save_code, {"cd": out.emd_cd, "at": utcnow(), "no": complex_no})
+                now = utcnow()
+                saved = db.execute(save_code, {"cd": out.emd_cd, "at": now, "no": complex_no}).rowcount
+                # 가드에 막혀 코드가 0행이면(다른 쪽이 먼저 채움) 이름도 넣지 않는다 — 같은 커밋으로 묶는다
+                if saved and out.emd_nm:
+                    db.execute(save_name, {"cd": out.emd_cd, "year": STATS_YEAR, "nm": out.emd_nm, "at": now})
+                    st.named += 1
                 db.commit()
         elif out.kind == "no_result":
             st.no_result += 1
@@ -304,7 +334,7 @@ def main(argv: list[str] | None = None) -> int:
         st = run(db, tokens, limit=limit, call_cap=args.daily_cap, dry_run=args.dry_run, interval=args.interval)
     print(
         f"끝({st.stop_reason}): 대상 {st.targets:,} · 호출 {st.calls:,}(+인증 {tokens.issued}) · 채움 {st.ok:,}"
-        f" · 결과 없음 {st.no_result:,} · 실패 {st.failed:,}" + (" · 시험 실행이라 DB 안 씀" if args.dry_run else "")
+        f" · 결과 없음 {st.no_result:,} · 실패 {st.failed:,} · 동 이름 {st.named:,}" + (" · 시험 실행이라 DB 안 씀" if args.dry_run else "")
     )
     if st.stop_reason == "consecutive_no_result":
         print(f"멈춤: 결과 없음이 {MAX_CONSECUTIVE_NO_RESULT}번 이어졌어요 — 좌표 칸(위도·경도)이 뒤바뀐 것 같은지 확인하세요")

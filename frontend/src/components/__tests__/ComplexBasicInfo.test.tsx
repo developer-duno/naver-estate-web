@@ -235,33 +235,6 @@ describe("ComplexBasicInfo — 가까운 지하철", () => {
   });
 });
 
-describe("ComplexBasicInfo — 인쇄 경로 회귀 (PR-D)", () => {
-  beforeEach(() => {
-    mockGetOfficialPrices.mockReset();
-    mockGetOfficialPrices.mockResolvedValue({
-      complex_no: "C001",
-      year: "2026",
-      items: [{ prvuse_ar: 84.99, price_median: 840_000_000, ho_count: 380 }],
-    });
-  });
-
-  it("인쇄(beforeprint) 후에도 공시가격·공시가율 행이 그대로 노출된다", async () => {
-    // ComplexDashboard 는 beforeprint 이벤트로 isPrinting=true 를 세워 info 섹션(이 컴포넌트)을
-    // 강제 노출한다(ComplexDashboard.tsx:62~71, 142). 이 컴포넌트 자체는 isPrinting 을 받지
-    // 않으므로, 인쇄 시 마운트된 상태에서 두 행이 사라지지 않는지를 가드한다.
-    renderInfo(makeComplex({ nearby_median_price: 120_000 }));
-
-    expect(await screen.findByText("공시가격(대표평형 중위, 2026년)")).toBeInTheDocument();
-    expect(screen.getByText("공시가율(공시가격÷주변시세)")).toBeInTheDocument();
-
-    window.dispatchEvent(new Event("beforeprint"));
-
-    expect(screen.getByText("공시가격(대표평형 중위, 2026년)")).toBeInTheDocument();
-    expect(screen.getByText("공시가율(공시가격÷주변시세)")).toBeInTheDocument();
-    expect(screen.getByText("70.0%")).toBeInTheDocument();
-  });
-});
-
 describe("ComplexBasicInfo — 월 관리비 · 복도유형 (K-apt)", () => {
   beforeEach(() => {
     mockGetOfficialPrices.mockReset();
@@ -392,12 +365,34 @@ describe("ComplexBasicInfo — 이 동네는 (SGIS)", () => {
     expect(screen.getByText("주소")).toBeInTheDocument();
   });
 
-  it("비율은 받은 값 그대로 — 화면에서 다시 반올림하지 않는다", async () => {
-    mockGetComplexNeighborhood.mockResolvedValue(makeNeighborhood({ one_person_pct: 61.5 }));
+  it("비율은 받은 값 그대로 — 화면에서 다시 반올림하지 않는다(1인가구·오래된 집·집 종류)", async () => {
+    mockGetComplexNeighborhood.mockResolvedValue(
+      makeNeighborhood({
+        one_person_pct: 61.5,
+        old_house_pct: 61.5,
+        house_mix: { apt_pct: 13.7, officetel_pct: 18.5, row_pct: 27.45, detached_pct: 31.9 },
+      }),
+    );
 
     renderInfo(makeComplex());
 
     expect(await screen.findByText("61.5%")).toBeInTheDocument();
+    expect(screen.getByText("2004년 이전 지은 집 61.5%")).toBeInTheDocument();
+    expect(
+      screen.getByText("아파트 13.7% · 오피스텔 18.5% · 다세대 27.45% · 단독 31.9%"),
+    ).toBeInTheDocument();
+  });
+
+  it("0 값은 빈 값이 아니다 — 사는 사람 0명·1인가구 0% 줄이 사라지지 않는다", async () => {
+    mockGetComplexNeighborhood.mockResolvedValue(
+      makeNeighborhood({ population: 0, one_person_pct: 0 }),
+    );
+
+    renderInfo(makeComplex());
+
+    expect(await screen.findByText("0명 · 평균 45.4세")).toBeInTheDocument();
+    expect(screen.getByText("1인가구")).toBeInTheDocument();
+    expect(screen.getByText("0%")).toBeInTheDocument();
   });
 
   it("1인가구 수가 없으면 셋째 칸(보조 문구) 생략", async () => {
@@ -435,7 +430,7 @@ describe("ComplexBasicInfo — 이 동네는 (SGIS)", () => {
     expect(screen.getByText("위험지도 영향 구역 아님")).toBeInTheDocument();
   });
 
-  it("홍수·산사태 영향 있음 → 영향 있는 것마다 '동네 안에 … 구역 있음 — 동네 N명 중 M명'", async () => {
+  it("홍수·산사태 영향 있음 → 영향 있는 것마다 '동네 안에 … 구역 있음 — 그 구역에 M명'(동네 전체 인구는 안 씀)", async () => {
     mockGetComplexNeighborhood.mockResolvedValue(
       makeNeighborhood({
         flood: { affected: true, pop: 1200, pop_total: 23116, year: 2024 },
@@ -447,9 +442,10 @@ describe("ComplexBasicInfo — 이 동네는 (SGIS)", () => {
 
     expect(
       await screen.findByText(
-        "동네 안에 홍수위험 구역 있음 — 동네 23,116명 중 1,200명 · 동네 안에 산사태위험 구역 있음 — 동네 19,840명 중 8,578명",
+        "동네 안에 홍수위험 구역 있음 — 그 구역에 1,200명 · 동네 안에 산사태위험 구역 있음 — 그 구역에 8,578명",
       ),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/19,840/)).not.toBeInTheDocument();
   });
 
   it("하나만 영향 있음(다른 하나는 모름) → 영향 있는 쪽만 표시", async () => {
@@ -463,8 +459,35 @@ describe("ComplexBasicInfo — 이 동네는 (SGIS)", () => {
     renderInfo(makeComplex());
 
     expect(
-      await screen.findByText("동네 안에 산사태위험 구역 있음 — 동네 19,840명 중 8,578명"),
+      await screen.findByText("동네 안에 산사태위험 구역 있음 — 그 구역에 8,578명"),
     ).toBeInTheDocument();
+  });
+
+  it("영향 구역 사람 수 0 → '그 구역에 0명'(0 을 빈 값으로 보지 않는다)", async () => {
+    mockGetComplexNeighborhood.mockResolvedValue(
+      makeNeighborhood({
+        flood: { affected: true, pop: 0, pop_total: 23116, year: 2024 },
+        landslide: { affected: false },
+      }),
+    );
+
+    renderInfo(makeComplex());
+
+    expect(await screen.findByText("동네 안에 홍수위험 구역 있음 — 그 구역에 0명")).toBeInTheDocument();
+  });
+
+  it("영향 구역 사람 수 모름(null) → 꼬리 없이 앞부분만", async () => {
+    mockGetComplexNeighborhood.mockResolvedValue(
+      makeNeighborhood({
+        flood: { affected: true, pop: null, pop_total: 23116, year: 2024 },
+        landslide: { affected: false },
+      }),
+    );
+
+    renderInfo(makeComplex());
+
+    expect(await screen.findByText("동네 안에 홍수위험 구역 있음")).toBeInTheDocument();
+    expect(screen.queryByText(/그 구역에/)).not.toBeInTheDocument();
   });
 
   it("홍수·산사태 둘 다 모름(null) → 줄 생략", async () => {
@@ -528,15 +551,6 @@ describe("ComplexBasicInfo — 이 동네는 (SGIS)", () => {
     expect(await screen.findByText("이 동네는")).toBeInTheDocument();
     expect(screen.getByText("단지 상세 정보가 아직 수집되지 않았습니다.")).toBeInTheDocument();
   });
-
-  it("인쇄(beforeprint) 후에도 동네 섹션이 그대로 노출된다", async () => {
-    mockGetComplexNeighborhood.mockResolvedValue(makeNeighborhood());
-
-    renderInfo(makeComplex());
-
-    expect(await screen.findByText("이 동네는")).toBeInTheDocument();
-    window.dispatchEvent(new Event("beforeprint"));
-    expect(screen.getByText("이 동네는")).toBeInTheDocument();
-    expect(screen.getByText("23,116명 · 평균 45.4세")).toBeInTheDocument();
-  });
+  // 인쇄 경로: 동네 섹션은 이 컴포넌트 안에 있으므로, 인쇄 시 이 컴포넌트가 마운트되는지는
+  // ComplexDashboard.test.tsx 의 "인쇄(beforeprint) 시 단지정보 섹션 포함 4 섹션 모두 노출" 이 가드한다.
 });

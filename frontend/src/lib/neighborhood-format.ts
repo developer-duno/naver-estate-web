@@ -17,11 +17,14 @@ function joinParts(parts: (string | null)[]): string | null {
   return kept.length > 0 ? kept.join(" · ") : null;
 }
 
-/** 영향 구역 한 종류 문구 — 사람 수가 없으면 뒤 꼬리를 뗀다 */
+/**
+ * 영향 구역 한 종류 문구 — 사람 수가 없으면 뒤 꼬리를 뗀다.
+ * pop_total(위험지도 자료의 동네 인구)은 쓰지 않는다 — '사는 사람'(센서스) 숫자와 달라 헷갈린다.
+ */
 function affectedText(name: string, d: NeighborhoodDisaster): string {
   const head = `동네 안에 ${name} 구역 있음`;
-  if (d.pop == null || d.pop_total == null) return head;
-  return `${head} — 동네 ${d.pop_total.toLocaleString()}명 중 ${d.pop.toLocaleString()}명`;
+  if (d.pop == null) return head;
+  return `${head} — 그 구역에 ${d.pop.toLocaleString()}명`;
 }
 
 /**

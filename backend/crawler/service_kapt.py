@@ -1075,6 +1075,9 @@ def _probe_api_alive(
             extra = base.filter(KaptManagementCost.cost_month.in_(older_in_window)).first()
             if extra is not None:
                 samples.append(extra)
+    # 표본 조회의 트랜잭션을 HTTP·재확인 대기(`_recheck_api_after_failures` 의 sleep) 전에 닫는다.
+    # 호출자는 단지마다 커밋하므로 여기 남은 쓰기는 없다 — 표본은 Row 라 커밋 뒤에도 읽힌다.
+    db.commit()
     last_error: KaptApiError | None = None
     for cost_month, kapt_code in samples:
         try:
@@ -1253,8 +1256,16 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                 return list(months)
             return [m for m in months if m > have]
 
+        # ⚠ ORM 객체가 아니라 **열 값 묶음(Row)** 으로 받는다 — 아래에서 단지마다 커밋하는데,
+        # 세션이 expire_on_commit 이라 ORM 객체면 커밋 뒤 첫 속성 접근이 SELECT 를 다시 날려
+        # K-apt 호출 동안 트랜잭션이 또 열린다. Row 는 만료되지 않는다.
         rows = (
-            db.query(KaptComplexMap)
+            db.query(
+                KaptComplexMap.complex_no,
+                KaptComplexMap.kapt_code,
+                KaptComplexMap.kapt_household_count,
+                KaptComplexMap.cost_blank_checked_at,
+            )
             .order_by(KaptComplexMap.matched_at.asc())
             .all()
         )
@@ -1268,6 +1279,10 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             _BLANK_RECHECK_DAYS, skipped_recent_blank,
         )
         queue.sort(key=lambda r: r.complex_no in newest)
+        # 시작 조회의 트랜잭션을 여기서 닫는다 — 이 뒤로는 K-apt 호출·대기 동안 트랜잭션을
+        # 쥐지 않고, 단지 하나를 저장할 때마다 짧게 열고 닫는다(세션 454 실사고: 회차 연결이
+        # idle in transaction 5,437초 → complexes 구조 변경 V071 이 잠금 대기로 취소됐다).
+        db.commit()
 
         collected, failed, empty = 0, 0, 0
         quota_exhausted: KaptApiError | None = None
@@ -1352,6 +1367,9 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
                     },
                     ["complex_no", "cost_month"],
                 )
+                # 단지 하나 = 트랜잭션 하나. 다음 단지의 K-apt 호출 전에 닫는다 — 관리비 행은
+                # complexes 를 참조(FK)해 열려 있는 동안 complexes 행 잠금도 같이 쥔다.
+                db.commit()
                 # 받았으니 미공개 기록은 지운다(다음 달엔 평소처럼 대상이 된다) — 반영은 회차 뒤.
                 collected_nos.append(mapping.complex_no)
                 collected += 1
@@ -1406,13 +1424,18 @@ def collect_kapt_costs(batch_size: int = 500, scheduler_job_id: str = "kapt_cost
             except Exception:
                 logger.exception("[kapt_costs] 단지 %s 처리 실패", mapping.complex_no)
                 failed += 1
+                # 이 단지만 되돌린다 — 앞 단지들은 이미 커밋됐고, 다음 단지는 깨끗한 세션에서 간다.
+                try:
+                    db.rollback()
+                except Exception:
+                    logger.warning("[kapt_costs] 단지 %s 되돌리기도 실패", mapping.complex_no, exc_info=True)
                 # ⚠ 여기(예상 못 한 예외)는 연속 카운터를 올리지 않는다 — API 생사
                 #   신호가 아니라 우리 쪽 처리 버그일 수 있어, 조기 중단의 근거로는
                 #   약하다. 이 경우는 아래 `failed > 0` silent failure 가드가 잡는다.
 
         # 중단 여부와 무관하게 **여기까지 저장한 정상 단지는 지킨다** — 아래 _fail_job
         # 은 별도 트랜잭션이 아니라 같은 세션이라, 먼저 commit 해두지 않으면 쿼터 중단
-        # 시 그날 수집분이 통째로 롤백될 수 있다.
+        # 시 그날 수집분이 통째로 롤백될 수 있다. (단지마다 이미 커밋하므로 안전망이다.)
         db.commit()
         # 이 회차의 미공개는 실제 200 응답이었다(시간 예산·스캔 상한·쿼터·api_down·카나리
         # 상한 중단 포함) — 아래 전량 빈 응답 실패 분기와, api_down 인데 카나리 표본도 빈

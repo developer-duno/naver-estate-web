@@ -1,11 +1,13 @@
 """단지 좌표 → SGIS 행정동 코드(8글자)를 complexes.sgis_emd_cd 에 채운다 (V071, 세션 453 — 설계서 §5-2).
 
 무엇을 하나
-    `complexes.sgis_emd_cd IS NULL AND latitude IS NOT NULL AND longitude IS NOT NULL` 인 단지를
+    `complexes.sgis_emd_cd IS NULL AND sgis_mapped_at IS NULL AND latitude IS NOT NULL AND longitude IS NOT NULL` 인 단지를
     complex_no 순으로 골라, 단지마다 SGIS `OpenAPI3/addr/rgeocodewgs84.json`(x_coor=경도, y_coor=위도,
     addr_type=20 — WGS84 그대로)을 1번 부른다. 응답의 sido_cd(2)+sgg_cd(3)+emdong_cd(3)를 이어 붙인
     8글자를 sgis_emd_cd 에, 지금 시각을 sgis_mapped_at 에 넣는다. 호출 간격 0.2초(네이버가 아니라
-    AdaptiveThrottle 불필요). 50단지마다 커밋.
+    AdaptiveThrottle 불필요). UPDATE 마다 바로 커밋한다 — 공유 표 complexes 의 행 잠금을 외부 호출 동안
+    쥐고 있으면 같은 단지를 고치는 크롤·미분양 쓰기가 기다리다 8초 제한에 걸린다. 대상 목록을 읽은
+    트랜잭션도 바로 닫는다. UPDATE 는 `AND sgis_emd_cd IS NULL` 가드로 이미 채운 값을 덮지 않는다.
 
 인증
     `auth/authentication.json`(env SGIS_CONSUMER_KEY·SGIS_CONSUMER_SECRET) → accessToken 을 들고 다니다가
@@ -15,12 +17,16 @@
 
 결과 판정
     * errCd 0 + 8글자 조립 성공 → 저장.
-    * errCd -100(결과 없음 — 바다 위·좌표 이상 등) → NULL 그대로 두고 로그. 다음 실행에서 다시 묻는다.
+    * errCd -100(결과 없음 — 바다 위·좌표 이상 등) → 코드는 NULL 그대로, sgis_mapped_at 만 찍고 로그.
+      다음 실행 대상에서 빠진다(같은 단지를 매일 다시 묻지 않게). **결과 없음 단지를 다시 시도하려면
+      그 행의 sgis_mapped_at 을 비운다.** 결과 없음이 **연속 200회**면 멈춘다(종료코드 2) — 좌표 칸이
+      뒤바뀐 자료처럼 한도만 쓰고 0건 저장이 되는 상황을 막는다.
     * HTTP 429·5xx·네트워크 오류·JSON 아님·다시 물어도 오류코드·응답 모양 이상 → **"자료 없음"이 아니라
-      실패**로 센다(error-propagation 룰 5). NULL 그대로. 실패가 **연속 20회**면 멈춘다(종료코드 2).
+      실패**로 센다(error-propagation 룰 5). 아무것도 안 찍는다(다음 실행에 다시 묻는다). 실패가 **연속 20회**면
+      멈춘다(종료코드 2). 성공이 끼면 두 연속 횟수가 모두 풀리고, 실패·결과 없음은 서로의 연속 횟수를 푼다.
 
 중단·재개
-    NULL 인 단지만 고르므로 중간에 끊겨도 다시 돌리면 남은 것부터 간다(커밋된 것은 다시 안 부른다).
+    아직 안 물어본 단지(두 칸 다 NULL)만 고르므로 중간에 끊겨도 다시 돌리면 남은 것부터 간다.
 
 하루 상한
     공식 한도 5만 콜/일(SGIS 안내 원문). 한 번 실행에 부르는 rgeocode 횟수 상한 = `--daily-cap`(기본 40,000).
@@ -57,7 +63,7 @@ ERR_NO_RESULT = -100
 DEFAULT_DAILY_CAP = 40_000
 DEFAULT_INTERVAL = 0.2
 MAX_CONSECUTIVE_FAILURES = 20
-COMMIT_EVERY = 50
+MAX_CONSECUTIVE_NO_RESULT = 200
 TOKEN_MARGIN_MS = 5 * 60 * 1000
 HTTP_TIMEOUT = 10
 
@@ -128,11 +134,17 @@ def build_emd_cd(result) -> str | None:
     first = result[0] if isinstance(result, list) and result else result
     if not isinstance(first, dict):
         return None
-    parts = (first.get("sido_cd"), first.get("sgg_cd"), first.get("emdong_cd"))
-    if any(p is None for p in parts):
-        return None
-    code = "".join(str(p).strip() for p in parts)
-    return code if len(code) == 8 and code.isdigit() else None
+    pieces = []
+    # 조각별 자리 수 — 숫자로 오면 앞 0 이 빠지므로(sgg 010 → 10) 조각마다 채운 뒤 조각마다 검사한다
+    for key, width in (("sido_cd", 2), ("sgg_cd", 3), ("emdong_cd", 3)):
+        raw = first.get(key)
+        if raw is None or isinstance(raw, bool):
+            return None
+        piece = str(raw).strip().zfill(width)
+        if len(piece) != width or not piece.isdigit():
+            return None
+        pieces.append(piece)
+    return "".join(pieces)
 
 
 @dataclass
@@ -180,11 +192,13 @@ def select_targets(db, limit: int) -> list[tuple[str, float, float]]:
     rows = db.execute(
         text(
             "SELECT complex_no, latitude, longitude FROM complexes"
-            " WHERE sgis_emd_cd IS NULL AND latitude IS NOT NULL AND longitude IS NOT NULL"
+            " WHERE sgis_emd_cd IS NULL AND sgis_mapped_at IS NULL"
+            " AND latitude IS NOT NULL AND longitude IS NOT NULL"
             " ORDER BY complex_no LIMIT :n"
         ),
         {"n": limit},
     ).fetchall()
+    db.commit()  # 읽기 트랜잭션을 외부 호출 동안 열어 두지 않는다
     return [(str(r[0]), float(r[1]), float(r[2])) for r in rows]
 
 
@@ -206,49 +220,58 @@ def run(
     targets = select_targets(db, limit)
     st.targets = len(targets)
     consecutive = 0
-    pending = 0
-    update = text("UPDATE complexes SET sgis_emd_cd = :cd, sgis_mapped_at = :at WHERE complex_no = :no")
-    try:
-        for i, (complex_no, lat, lon) in enumerate(targets):
-            if call_cap is not None and st.calls >= call_cap:
-                st.stop_reason = "daily_cap"
+    consecutive_none = 0
+    save_code = text(
+        "UPDATE complexes SET sgis_emd_cd = :cd, sgis_mapped_at = :at"
+        " WHERE complex_no = :no AND sgis_emd_cd IS NULL"
+    )
+    mark_asked = text(
+        "UPDATE complexes SET sgis_mapped_at = :at"
+        " WHERE complex_no = :no AND sgis_emd_cd IS NULL AND sgis_mapped_at IS NULL"
+    )
+    for i, (complex_no, lat, lon) in enumerate(targets):
+        if call_cap is not None and st.calls >= call_cap:
+            st.stop_reason = "daily_cap"
+            break
+        if i:
+            sleep(interval)
+        out = lookup(tokens, lon, lat)
+        st.calls += out.calls
+        if out.kind == "ok":
+            st.ok += 1
+            consecutive = consecutive_none = 0
+            if not dry_run:
+                db.execute(save_code, {"cd": out.emd_cd, "at": utcnow(), "no": complex_no})
+                db.commit()
+        elif out.kind == "no_result":
+            st.no_result += 1
+            consecutive = 0
+            consecutive_none += 1
+            logger.info("결과 없음 — 단지 %s (%.6f, %.6f): %s", complex_no, lat, lon, out.detail)
+            if not dry_run:
+                db.execute(mark_asked, {"at": utcnow(), "no": complex_no})
+                db.commit()
+            if consecutive_none >= MAX_CONSECUTIVE_NO_RESULT:
+                st.stop_reason = "consecutive_no_result"
                 break
-            if i:
-                sleep(interval)
-            out = lookup(tokens, lon, lat)
-            st.calls += out.calls
-            if out.kind == "ok":
-                st.ok += 1
-                consecutive = 0
-                if not dry_run:
-                    db.execute(update, {"cd": out.emd_cd, "at": utcnow(), "no": complex_no})
-                    pending += 1
-                    if pending >= COMMIT_EVERY:
-                        db.commit()
-                        pending = 0
-            elif out.kind == "no_result":
-                st.no_result += 1
-                consecutive = 0
-                logger.info("결과 없음 — 단지 %s (%.6f, %.6f): %s", complex_no, lat, lon, out.detail)
-            else:
-                st.failed += 1
-                consecutive += 1
-                logger.warning("실패 — 단지 %s: %s (연속 %d회)", complex_no, out.detail, consecutive)
-                if consecutive >= MAX_CONSECUTIVE_FAILURES:
-                    st.stop_reason = "consecutive_failures"
-                    break
-            if (i + 1) % 500 == 0:
-                logger.info("진행 %d/%d — 채움 %d · 결과 없음 %d · 실패 %d", i + 1, st.targets, st.ok, st.no_result, st.failed)
-    finally:
-        if pending:
-            db.commit()
+        else:
+            st.failed += 1
+            consecutive_none = 0
+            consecutive += 1
+            logger.warning("실패 — 단지 %s: %s (연속 %d회)", complex_no, out.detail, consecutive)
+            if consecutive >= MAX_CONSECUTIVE_FAILURES:
+                st.stop_reason = "consecutive_failures"
+                break
+        if (i + 1) % 500 == 0:
+            logger.info("진행 %d/%d — 채움 %d · 결과 없음 %d · 실패 %d", i + 1, st.targets, st.ok, st.no_result, st.failed)
     return st
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="단지 좌표 → SGIS 행정동 코드(complexes.sgis_emd_cd) 채우기",
-        epilog="⚠ --dry-run 도 SGIS 를 실제로 부른다 — 부른 만큼 그날 한도(5만/일)를 쓴다.",
+        epilog="⚠ --dry-run 도 SGIS 를 실제로 부른다 — 부른 만큼 그날 한도(5만/일)를 쓴다."
+               " 결과 없음 단지를 다시 시도하려면 그 행의 sgis_mapped_at 을 비운다.",
     )
     parser.add_argument("--limit", type=int, default=None, help="이번에 물어볼 단지 수 상한")
     parser.add_argument("--daily-cap", type=int, default=DEFAULT_DAILY_CAP,
@@ -278,7 +301,11 @@ def main(argv: list[str] | None = None) -> int:
         f"끝({st.stop_reason}): 대상 {st.targets:,} · 호출 {st.calls:,}(+인증 {tokens.issued}) · 채움 {st.ok:,}"
         f" · 결과 없음 {st.no_result:,} · 실패 {st.failed:,}" + (" · 시험 실행이라 DB 안 씀" if args.dry_run else "")
     )
-    return 2 if st.stop_reason == "consecutive_failures" else 0
+    if st.stop_reason == "consecutive_no_result":
+        print(f"멈춤: 결과 없음이 {MAX_CONSECUTIVE_NO_RESULT}번 이어졌어요 — 좌표 칸(위도·경도)이 뒤바뀐 것 같은지 확인하세요")
+    elif st.stop_reason == "consecutive_failures":
+        print(f"멈춤: 실패가 {MAX_CONSECUTIVE_FAILURES}번 이어졌어요 — SGIS 쪽 장애나 한도를 확인하세요")
+    return 2 if st.stop_reason in ("consecutive_failures", "consecutive_no_result") else 0
 
 
 if __name__ == "__main__":

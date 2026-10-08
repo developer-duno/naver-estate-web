@@ -99,8 +99,51 @@ def test_결과없음_100_은_NULL_유지_그리고_실패가_아니다(cdb, mon
     monkeypatch.setattr(mc, "http_get_json", FakeHttp([{"errCd": -100, "errMsg": "검색결과가 존재하지 않습니다"}, _ok()]))
     st = mc.run(cdb, _tokens(), limit=10, sleep=lambda s: None)
     assert (st.no_result, st.ok, st.failed) == (1, 1, 0)
-    assert _emd(cdb, "A1") == (None, None)
+    code, at = _emd(cdb, "A1")
+    assert code is None and at is not None          # 물어본 시각만 찍힌다
     assert _emd(cdb, "A2")[0] == "11230640"
+
+
+def test_결과없음_단지는_다음_실행에서_다시_묻지_않는다(cdb, monkeypatch):
+    _seed(cdb, "A1")
+    fake = FakeHttp([{"errCd": -100, "errMsg": "결과 없음"}])
+    monkeypatch.setattr(mc, "http_get_json", fake)
+    mc.run(cdb, _tokens(), limit=10, sleep=lambda s: None)
+    st2 = mc.run(cdb, _tokens(), limit=10, sleep=lambda s: None)
+    assert st2.targets == 0 and st2.calls == 0
+    # sgis_mapped_at 을 비우면 다시 대상이 된다
+    cdb.execute(text("UPDATE complexes SET sgis_mapped_at = NULL WHERE complex_no = 'A1'"))
+    cdb.commit()
+    assert mc.run(cdb, _tokens(), limit=10, sleep=lambda s: None).targets == 1
+
+
+def test_실패한_단지는_아무것도_안_찍고_다음_실행에_다시_묻는다(cdb, monkeypatch):
+    _seed(cdb, "A1")
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp([mc.SgisRequestError("HTTP 503")]))
+    mc.run(cdb, _tokens(), limit=10, sleep=lambda s: None)
+    assert _emd(cdb, "A1") == (None, None)
+    assert mc.run(cdb, _tokens(), limit=10, sleep=lambda s: None).targets == 1
+
+
+def test_묻는_사이에_다른_쪽이_채운_값은_덮지_않는다(cdb, monkeypatch):
+    """대상 목록을 읽은 뒤 다른 프로세스(같은 날 두 번째 실행 등)가 먼저 채우면 그 값을 지킨다."""
+    from db.database import SessionLocal
+
+    _seed(cdb, "A1")
+
+    def fake(url, params):
+        if url == AUTH_URL:
+            return {"errCd": 0, "result": {"accessToken": "t", "accessTimeout": BASE_MS + 4 * HOUR_MS}}
+        with SessionLocal() as other:
+            other.execute(text("UPDATE complexes SET sgis_emd_cd = '99999999' WHERE complex_no = 'A1'"))
+            other.commit()
+        return _ok()
+
+    monkeypatch.setattr(mc, "http_get_json", fake)
+    st = mc.run(cdb, _tokens(), limit=10, sleep=lambda s: None)
+    assert st.ok == 1
+    cdb.expire_all()
+    assert _emd(cdb, "A1")[0] == "99999999"
 
 
 def test_이미_채운_단지와_좌표없는_단지는_고르지_않는다(cdb, monkeypatch):
@@ -168,6 +211,65 @@ def test_호출_상한에_닿으면_멈춘다(cdb, monkeypatch):
     monkeypatch.setattr(mc, "http_get_json", FakeHttp([_ok()]))
     st = mc.run(cdb, _tokens(), limit=5, call_cap=3, sleep=lambda s: None)
     assert st.stop_reason == "daily_cap" and st.calls == 3 and st.ok == 3
+
+
+def test_결과없음이_연속_상한이면_멈춘다(cdb, monkeypatch):
+    assert mc.MAX_CONSECUTIVE_NO_RESULT == 200
+    monkeypatch.setattr(mc, "MAX_CONSECUTIVE_NO_RESULT", 5)
+    cdb.add_all([Complex(complex_no=f"N{i}", complex_name="n", latitude=37.5, longitude=127.0) for i in range(8)])
+    cdb.commit()
+    fake = FakeHttp([{"errCd": -100, "errMsg": "결과 없음"}])
+    monkeypatch.setattr(mc, "http_get_json", fake)
+    st = mc.run(cdb, _tokens(), limit=100, sleep=lambda s: None)
+    assert st.stop_reason == "consecutive_no_result" and st.no_result == 5 and st.calls == 5
+
+
+def test_결과없음_사이에_성공이나_실패가_끼면_연속_횟수가_풀린다(cdb, monkeypatch):
+    monkeypatch.setattr(mc, "MAX_CONSECUTIVE_NO_RESULT", 5)
+    cdb.add_all([Complex(complex_no=f"N{i:02d}", complex_name="n", latitude=37.5, longitude=127.0) for i in range(13)])
+    cdb.commit()
+    none = {"errCd": -100, "errMsg": "결과 없음"}
+    seq = [none] * 4 + [_ok()] + [none] * 4 + [mc.SgisRequestError("HTTP 503")] + [none] * 3
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp(seq))
+    st = mc.run(cdb, _tokens(), limit=100, sleep=lambda s: None)
+    assert st.stop_reason == "done" and st.no_result == 11 and st.ok == 1 and st.failed == 1
+
+
+def test_main_은_결과없음_연속이면_종료코드_2(cdb, monkeypatch, capsys):
+    monkeypatch.setattr(mc, "MAX_CONSECUTIVE_NO_RESULT", 2)
+    monkeypatch.setenv("SGIS_CONSUMER_KEY", "k")
+    monkeypatch.setenv("SGIS_CONSUMER_SECRET", "s")
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: False)
+    _seed(cdb, "A1")
+    _seed(cdb, "A2")
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp([{"errCd": -100, "errMsg": "결과 없음"}]))
+    assert mc.main(["--interval", "0"]) == 2
+    assert "좌표 칸" in capsys.readouterr().out
+
+
+# ── 조각 자리 수 ─────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("pieces,expected", [
+    (("11", "230", "640"), "11230640"),
+    ((11, 230, 640), "11230640"),             # 숫자형 조각
+    ((31, 10, 510), "31010510"),              # sgg 010 이 숫자 10 으로 와도 앞 0 을 채운다
+    (("31", "010", "510"), "31010510"),
+    (("11", "2300", "640"), None),            # 조각 길이가 틀리면 저장 안 함
+    (("1", "2300", "640"), None),             # 합치면 8글자지만 조각이 틀림
+    (("11", "23a", "640"), None),
+    ((True, "230", "640"), None),
+])
+def test_조각별로_자리_수를_채우고_검사한다(pieces, expected):
+    sido, sgg, emd = pieces
+    assert mc.build_emd_cd([{"sido_cd": sido, "sgg_cd": sgg, "emdong_cd": emd}]) == expected
+
+
+def test_조각_길이가_틀린_응답은_저장하지_않는다(cdb, monkeypatch):
+    _seed(cdb, "A1")
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp([_ok(sgg="2300")]))
+    st = mc.run(cdb, _tokens(), limit=10, sleep=lambda s: None)
+    assert st.failed == 1 and _emd(cdb, "A1") == (None, None)
 
 
 # ── 토큰 ─────────────────────────────────────────────────────────────

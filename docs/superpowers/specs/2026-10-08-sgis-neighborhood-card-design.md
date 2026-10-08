@@ -98,7 +98,7 @@ CREATE INDEX complexes_sgis_emd_idx ON complexes (sgis_emd_cd);
 
 ## 8. 미분양에 줄 것 (설계서 확정 뒤 한 줄로 전달)
 
-표 = `sgis_area_stats`(8글자, year 2024) · item_code: `adm_nm`(value_text) · `to_in_001` 총인구 · `to_in_002` 평균나이 · `to_in_004` 노령화지수 · `to_ga_001` 총가구 · `ga_sd_005` 1인가구(코드집 실측 — 역삼1동 14,255 = API 값) · `to_ho_001` 총주택 · `ho_gb_003` 아파트(⚠ `ho_gb_002` = 단독주택 — 코드집 실측 2026-10-08 s454) · `ho_cy_label_<시작>_<끝>` 건축년도 구간(value_text = 라벨 원문 · 원자료 항목은 `ho_yr_001~020` — 2024 파일은 코드집 "2015년 이후" 표: 001 1979년 이전·002 1980~89·003 1990~99·004 2000~04·005 2005~09·006~020 2010~2024 단년) · `to_fa_010` 사업체 · `to_em_020` 종사자 · `api_officetel_cnt` · `api_corp_1006_per` · `ndsm_flood_affected`·`ndsm_flood_affc_pop`·`ndsm_flood_adm_pop`·`ndsm_flood_affc_hh`·`ndsm_flood_affc_house`·`ndsm_flood_affc_basement`·`ndsm_flood_year` + `ndsm_lndsld_*` 같은 모양.
+표 = `sgis_area_stats`(8글자, year 2024) · item_code: (`adm_nm` 동 이름은 1차 적재에 없음 — 출처 후보 ① 매핑 응답 `emdong_nm`(추가 호출 0, 단지 있는 동만) ② 경계 dbf(전국), PR ② 에서 정해 알림) · `to_in_001` 총인구 · `to_in_002` 평균나이 · `to_in_004` 노령화지수 · `to_ga_001` 총가구 · `ga_sd_005` 1인가구(코드집 실측 — 역삼1동 14,255 = API 값) · `to_ho_001` 총주택 · `ho_gb_003` 아파트(⚠ `ho_gb_002` = 단독주택 — 코드집 실측 2026-10-08 s454) · `ho_cy_label_<시작>_<끝>` 건축년도 구간(value_text = 라벨 원문 · 원자료 항목은 `ho_yr_001~020` — 2024 파일은 코드집 "2015년 이후" 표: 001 1979년 이전·002 1980~89·003 1990~99·004 2000~04·005 2005~09·006~020 2010~2024 단년) · `to_fa_010` 사업체 · `to_em_020` 종사자 · `api_officetel_cnt` · `api_corp_1006_per` · `ndsm_flood_affected`·`ndsm_flood_affc_pop`·`ndsm_flood_adm_pop`·`ndsm_flood_affc_hh`·`ndsm_flood_affc_house`·`ndsm_flood_affc_basement`·`ndsm_flood_year` + `ndsm_lndsld_*` 같은 모양.
 
 ## 9. PR 쪼개기 (각각 재시작 창 1회, 2·3은 묶어도 됨)
 

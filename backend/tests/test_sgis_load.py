@@ -174,6 +174,43 @@ def test_두_번_돌려도_행_수와_값이_같다(db, tmp_path):
     assert db.scalar(select(func.count()).select_from(SgisAreaStats)) == 10
 
 
+def test_같은_키가_다시_나오면_세고_마지막_값만_남긴다(db, tmp_path, capsys):
+    z = _make_zip(tmp_path, {"x.csv": _csv_bytes([
+        ["2024", "11230640", "to_ga_001", "1"],
+        ["2024", "11230640", "to_ga_001", "2"],     # 같은 키 다시
+        ["2024", "11230650", "to_ga_001", "3"],
+    ])})
+    n, stats = _load(db, z)
+    assert stats[0].dup_keys == 1
+    rows = _rows(db)
+    assert len(rows) == 2 and rows[("11230640", 2024, "to_ga_001")][0] == Decimal("2")
+    assert ls.main([str(z), "--dry-run"]) == 0
+    assert "같은 키 중복 1" in capsys.readouterr().out
+
+
+def test_한_묶음_안_같은_키는_하나로_줄인다():
+    """PostgreSQL 은 한 문장에서 같은 행을 두 번 고치면 거부한다 — SQLite CI 는 받아 주므로 묶음 함수를 직접 본다."""
+    rows = [
+        {"adm_cd": "11230640", "year": 2024, "item_code": "a", "value": 1},
+        {"adm_cd": "11230640", "year": 2024, "item_code": "b", "value": 2},
+        {"adm_cd": "11230640", "year": 2024, "item_code": "a", "value": 3},
+    ]
+    batches = list(ls._batched(rows, 10))
+    assert len(batches) == 1 and len(batches[0]) == 2
+    assert {r["item_code"]: r["value"] for r in batches[0]} == {"a": 3, "b": 2}
+
+
+@pytest.mark.parametrize("year", [2025, 2030, 2012, 1995])
+def test_코드집이_다루지_않는_연도면_멈춘다(year):
+    with pytest.raises(ls.SgisLoadError, match="코드집 건축년도 표"):
+        ls.load_build_year_labels(_codebook_bytes(), year)
+
+
+def test_코드집이_다루는_연도는_통과한다():
+    assert ls.load_build_year_labels(_codebook_bytes(), 2024)["ho_yr_001"] == "1979년 이전"
+    assert ls.load_build_year_labels(_codebook_bytes(), 2010)["ho_yr_001"] == "1959년 이전"
+
+
 # ── dry-run 은 DB 없이 ───────────────────────────────────────────────
 
 

@@ -50,6 +50,7 @@ LABEL_PREFIX = "ho_cy_label_"
 NA = "N/A"
 DEFAULT_YEAR = 2024
 DEFAULT_BATCH = 1000
+OLD_TABLE_YEARS = frozenset({2000, 2005, 2010})   # 코드집 '건축년도별 주택(2000,05,10년)' 표가 다루는 연도
 
 
 class SgisLoadError(Exception):
@@ -67,6 +68,8 @@ class FileStats:
     other_year: int = 0
     items: set[str] = field(default_factory=set)
     label_rows: int = 0         # 만든 건축년도 라벨 행
+    dup_keys: int = 0           # 같은 파일 안에서 (코드, 연도, 항목) 키가 다시 나온 행 — 마지막 값만 남는다
+    seen: set[tuple[str, str]] = field(default_factory=set, repr=False)
 
 
 def parse_value(raw: str) -> tuple[Decimal | None, str | None, str]:
@@ -104,6 +107,8 @@ def load_build_year_labels(xlsx_bytes: bytes, year: int) -> dict[str, str]:
 
     시트 '집계구·행정동' 의 열 = (빈칸, 분류, 소분류, 통계항목, 코드, …). 소분류 칸이 차 있으면 새 묶음이다.
     ho_yr 묶음이 둘 있다 — 머리에 '2015' 가 든 표(2015년 이후 기준)와 '2000' 표(2000·05·10년 기준).
+    그 표가 다루지 않는 연도(2015 표의 마지막 단년 라벨보다 뒤 · 2000·2005·2010 이 아닌 2015 이전)면 멈춘다 —
+    새 연도 파일인데 코드집이 옛것이면 조용히 엉뚱한 라벨을 붙이지 않게.
     """
     import openpyxl
 
@@ -128,7 +133,15 @@ def load_build_year_labels(xlsx_bytes: bytes, year: int) -> dict[str, str]:
         raise SgisLoadError(
             f"코드집에서 {year}년 기준 건축년도 표를 하나로 고르지 못했어요(찾은 묶음 {[h for h, _ in blocks]})"
         )
-    return chosen[0]
+    mapping = chosen[0]
+    if year >= 2015:
+        ends = [int(m.group(1)) for lb in mapping.values() if (m := re.search(r"(\d{4})년$", lb.strip()))]
+        last = max(ends, default=0)
+        if year > last:
+            raise SgisLoadError(f"코드집 건축년도 표가 {last}년까지만 다뤄요 — {year}년 파일에는 새 코드집이 필요해요")
+    elif year not in OLD_TABLE_YEARS:
+        raise SgisLoadError(f"코드집 건축년도 표가 {year}년을 다루지 않아요(2015년 이전은 {sorted(OLD_TABLE_YEARS)}만)")
+    return mapping
 
 
 def find_members(zf: zipfile.ZipFile) -> tuple[list[str], str]:
@@ -170,6 +183,10 @@ def iter_file_rows(
             continue
         value, value_text, kind = parse_value(raw)
         stats.kept += 1
+        if (adm_cd, item) in stats.seen:
+            stats.dup_keys += 1
+        else:
+            stats.seen.add((adm_cd, item))
         stats.items.add(item)
         if kind == "na":
             stats.na += 1
@@ -252,11 +269,13 @@ def _print_stats(stats: list[FileStats]) -> None:
         print(
             f"- {s.name}: 전체 {s.rows:,}행({lens}) → 넣을 행 {s.kept:,} · 항목 {len(s.items)}개"
             f" · N/A {s.na:,} · 숫자 아님 {s.bad_value:,} · 다른 연도 {s.other_year:,} · 건축년도 라벨 {s.label_rows:,}"
+            f" · 같은 키 중복 {s.dup_keys:,}"
         )
     kept = sum(s.kept for s in stats)
     labels = sum(s.label_rows for s in stats)
     print(f"합계: 파일 {len(stats)}개 · 넣을 행 {kept:,} + 라벨 행 {labels:,} = {kept + labels:,}"
-          f" · N/A {sum(s.na for s in stats):,} · 숫자 아님 {sum(s.bad_value for s in stats):,}")
+          f" · N/A {sum(s.na for s in stats):,} · 숫자 아님 {sum(s.bad_value for s in stats):,}"
+          f" · 같은 키 중복 {sum(s.dup_keys for s in stats):,}(마지막 값만 남김)")
 
 
 def main(argv: list[str] | None = None) -> int:

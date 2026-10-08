@@ -21,6 +21,8 @@
 --
 -- 적용: SQL Editor 에서 아래 BEGIN~COMMIT 을 통째로 실행. 끝의 자체검사가 하나라도 어긋나면
 --   RAISE EXCEPTION → 전부 취소된다. 적용 직전 스키마 덤프 1회(infra.md §DB 백업 — 추가만).
+--   lock_timeout(5초)으로 실패하면 complexes 를 잡은 다른 트랜잭션이 끝난 뒤 잠시 있다가 다시 실행한다(전부 취소라 안전).
+--   그다음 맨 아래 CREATE INDEX CONCURRENTLY 한 줄을 **따로**(트랜잭션 밖, autocommit) 실행한다.
 --
 -- 적용 뒤 의무: mibunyang 권한 지문 기준선 재승인 요청(infra.md §권한·정책·뷰·함수를 바꾸는 마이그)
 --   — 기대 차이 = 새 표 public.sgis_area_stats 1 · RLS 켬·정책 0 · PUBLIC·anon·authenticated REVOKE ALL.
@@ -31,6 +33,10 @@
 --   ⚠ 나중에 Complex 모델에 두 칸을 넣는 PR 은 반드시 이 파일 운영 적용 뒤에 머지·재시작(V058 관례).
 
 BEGIN;
+
+-- complexes 는 손님 조회·크롤이 늘 쓰는 표다. ADD COLUMN 의 가장 강한 잠금을 오래 기다리면 그 뒤 조회까지
+-- 줄줄이 막히므로, 5초 안에 못 잡으면 실패(전부 취소)한다 — V070:32 선례.
+SET LOCAL lock_timeout = '5s';
 
 CREATE TABLE IF NOT EXISTS public.sgis_area_stats (
   adm_cd     text         NOT NULL,
@@ -64,10 +70,7 @@ ALTER TABLE public.complexes ADD COLUMN IF NOT EXISTS sgis_emd_cd text;
 ALTER TABLE public.complexes ADD COLUMN IF NOT EXISTS sgis_mapped_at timestamptz;
 COMMENT ON COLUMN public.complexes.sgis_emd_cd IS
   'SGIS 행정동 코드 8글자(sido_cd+sgg_cd+emdong_cd, rgeocodewgs84) — scripts/map_complex_sgis.py 가 채움. NULL = 아직 안 함 또는 결과 없음';
-COMMENT ON COLUMN public.complexes.sgis_mapped_at IS 'sgis_emd_cd 를 채운 시각';
-
-CREATE INDEX IF NOT EXISTS complexes_sgis_emd_idx
-  ON public.complexes (sgis_emd_cd);
+COMMENT ON COLUMN public.complexes.sgis_mapped_at IS 'SGIS 에 물어본 시각(코드를 채웠거나 결과 없음). NULL = 아직 안 물어봄';
 
 -- 자체검사 — 하나라도 어긋나면 전부 취소('public' = PUBLIC 의사 역할)
 DO $$
@@ -100,16 +103,25 @@ BEGIN
          AND column_name IN ('sgis_emd_cd', 'sgis_mapped_at')) <> 2 THEN
     RAISE EXCEPTION 'sgis_area_stats self-check: complexes.sgis_emd_cd/sgis_mapped_at missing';
   END IF;
+  -- ④ 반대 방향 실수 방지 — 미분양은 service_role 로 이 표를 읽는다
+  IF NOT pg_catalog.has_table_privilege('service_role', t, 'SELECT') THEN
+    RAISE EXCEPTION 'sgis_area_stats self-check: service_role lacks SELECT on %', t;
+  END IF;
 END $$;
 
 NOTIFY pgrst, 'reload schema';
 
 COMMIT;
 
+-- complexes 인덱스 — 트랜잭션 밖(autocommit)에서 따로 실행한다(V048 선례: CONCURRENTLY 는 쓰기를 막지 않지만
+-- BEGIN 블록 안에서는 못 돈다). 실패해 INVALID 로 남으면 `DROP INDEX CONCURRENTLY IF EXISTS complexes_sgis_emd_idx;`
+-- 뒤 다시 실행한다(IF NOT EXISTS 는 INVALID 인덱스도 "있음"으로 본다).
+CREATE INDEX CONCURRENTLY IF NOT EXISTS complexes_sgis_emd_idx ON public.complexes (sgis_emd_cd);
+
 -- 역방향 (롤백):
 -- 표를 지우면 적재한 통계도 사라진다(zip 으로 다시 적재 가능). 칸을 지우면 매핑 결과(약 6만 콜 분량)도 사라진다.
 -- DROP TABLE IF EXISTS public.sgis_area_stats;
--- DROP INDEX IF EXISTS public.complexes_sgis_emd_idx;
+-- DROP INDEX CONCURRENTLY IF EXISTS public.complexes_sgis_emd_idx;   -- 트랜잭션 밖에서 따로
 -- ALTER TABLE public.complexes DROP COLUMN IF EXISTS sgis_mapped_at;
 -- ALTER TABLE public.complexes DROP COLUMN IF EXISTS sgis_emd_cd;
 -- (그 뒤 mibunyang 권한 지문 기준선 재승인 — 표 1개 사라짐)

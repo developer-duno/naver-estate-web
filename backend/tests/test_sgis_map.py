@@ -312,3 +312,101 @@ def test_인증이_429_로_막혀도_실패로_센다(cdb, monkeypatch):
     monkeypatch.setattr(mc, "http_get_json", FakeHttp([_ok()], auth=[mc.SgisRequestError("HTTP 429")]))
     st = mc.run(cdb, _tokens(), limit=10, sleep=lambda s: None)
     assert st.failed == 1 and st.ok == 0
+
+
+# ── 동 이름(emdong_nm) → sgis_area_stats(item_code adm_nm) ──────────────
+
+
+def _names(db):
+    return db.execute(text("SELECT adm_cd, year, item_code, value, value_text FROM sgis_area_stats"
+                           " WHERE item_code = 'adm_nm' ORDER BY adm_cd")).fetchall()
+
+
+def _ok_named(name, sgg="230"):
+    r = _ok(sgg=sgg)
+    r["result"][0]["emdong_nm"] = name
+    return r
+
+
+def test_동_이름도_통계_표에_넣는다(cdb, monkeypatch):
+    from scripts.load_sgis_stats import DEFAULT_YEAR
+
+    _seed(cdb, "A1")
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp([_ok_named("  역삼1동 ")]))
+    st = mc.run(cdb, _tokens(), limit=10, sleep=lambda s: None)
+    assert (st.ok, st.named) == (1, 1)
+    assert DEFAULT_YEAR == 2024                       # 적재 스크립트와 같은 연도
+    assert [tuple(r) for r in _names(cdb)] == [("11230640", 2024, "adm_nm", None, "역삼1동")]
+
+
+def test_이름의_NUL_글자는_지우고_넣는다(cdb, monkeypatch):
+    # PostgreSQL 은 NUL 이 든 글자를 거부한다 — 그 단지에서 매번 죽지 않게 지운다
+    _seed(cdb, "A1")
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp([_ok_named("역삼" + chr(0) + "1동")]))
+    st = mc.run(cdb, _tokens(), limit=10, sleep=lambda s: None)
+    assert st.named == 1
+    assert [r[4] for r in _names(cdb)] == ["역삼1동"]
+
+
+@pytest.mark.parametrize("name", [None, "", "   ", 123])
+def test_이름이_없으면_코드만_저장하고_이름_행은_없다(cdb, monkeypatch, name):
+    _seed(cdb, "A1")
+    resp = _ok()
+    if name is None:
+        del resp["result"][0]["emdong_nm"]
+    else:
+        resp["result"][0]["emdong_nm"] = name
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp([resp]))
+    st = mc.run(cdb, _tokens(), limit=10, sleep=lambda s: None)
+    assert (st.ok, st.failed, st.named) == (1, 0, 0)  # 이름 때문에 실패로 세지 않는다
+    assert _emd(cdb, "A1")[0] == "11230640"
+    assert _names(cdb) == []
+
+
+def test_가드에_막혀_코드를_못_넣으면_이름도_안_넣는다(cdb, monkeypatch):
+    from db.database import SessionLocal
+
+    _seed(cdb, "A1")
+
+    def fake(url, params):
+        if url == AUTH_URL:
+            return {"errCd": 0, "result": {"accessToken": "t", "accessTimeout": BASE_MS + 4 * HOUR_MS}}
+        with SessionLocal() as other:
+            other.execute(text("UPDATE complexes SET sgis_emd_cd = '99999999' WHERE complex_no = 'A1'"))
+            other.commit()
+        return _ok()
+
+    monkeypatch.setattr(mc, "http_get_json", fake)
+    st = mc.run(cdb, _tokens(), limit=10, sleep=lambda s: None)
+    assert st.ok == 1 and st.named == 0
+    cdb.expire_all()
+    assert _emd(cdb, "A1")[0] == "99999999"
+    assert _names(cdb) == []
+
+
+def test_dry_run_은_이름도_안_쓴다(cdb, monkeypatch):
+    _seed(cdb, "A1")
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp([_ok()]))
+    st = mc.run(cdb, _tokens(), limit=10, dry_run=True, sleep=lambda s: None)
+    assert st.ok == 1 and st.named == 0
+    assert _names(cdb) == []
+
+
+def test_같은_동의_두_단지는_이름_행_하나로_고쳐진다(cdb, monkeypatch):
+    _seed(cdb, "A1")
+    _seed(cdb, "A2")
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp([_ok_named("역삼1동"), _ok_named("역삼제1동")]))
+    st = mc.run(cdb, _tokens(), limit=10, sleep=lambda s: None)
+    assert (st.ok, st.failed, st.named) == (2, 0, 2)
+    rows = _names(cdb)
+    assert len(rows) == 1 and rows[0].adm_cd == "11230640" and rows[0].value_text == "역삼제1동"
+
+
+def test_main_끝_줄에_동_이름_수가_붙는다(cdb, monkeypatch, capsys):
+    monkeypatch.setenv("SGIS_CONSUMER_KEY", "k")
+    monkeypatch.setenv("SGIS_CONSUMER_SECRET", "s")
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: False)
+    _seed(cdb, "A1")
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp([_ok()]))
+    assert mc.main(["--interval", "0"]) == 0
+    assert "실패 0 · 동 이름 1" in capsys.readouterr().out

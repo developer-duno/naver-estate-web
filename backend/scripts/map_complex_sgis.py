@@ -296,7 +296,9 @@ def main(argv: list[str] | None = None) -> int:
     limit = min(args.limit, args.daily_cap) if args.limit is not None else args.daily_cap
 
     from db.database import SessionLocal
+    from utils import utcnow
 
+    started_at = utcnow().isoformat()  # sgis_mapped_at 과 같은 UTC — 되살리기 SQL 에 그대로 붙여 넣는다
     tokens = TokenCache(key, secret)
     with SessionLocal() as db:
         st = run(db, tokens, limit=limit, call_cap=args.daily_cap, dry_run=args.dry_run, interval=args.interval)
@@ -307,7 +309,7 @@ def main(argv: list[str] | None = None) -> int:
     if st.stop_reason == "consecutive_no_result":
         print(f"멈춤: 결과 없음이 {MAX_CONSECUTIVE_NO_RESULT}번 이어졌어요 — 좌표 칸(위도·경도)이 뒤바뀐 것 같은지 확인하세요")
         print("  이번 실행에서 '결과 없음'으로 찍힌 단지를 다시 묻게 하려면: UPDATE complexes SET sgis_mapped_at = NULL"
-              " WHERE sgis_emd_cd IS NULL AND sgis_mapped_at >= '<이번 실행 시작 시각>';")
+              f" WHERE sgis_emd_cd IS NULL AND sgis_mapped_at >= '{started_at}';")
     elif st.stop_reason == "consecutive_failures":
         print(f"멈춤: 실패가 {MAX_CONSECUTIVE_FAILURES}번 이어졌어요 — SGIS 쪽 장애나 한도를 확인하세요")
     return 2 if st.stop_reason in ("consecutive_failures", "consecutive_no_result") else 0

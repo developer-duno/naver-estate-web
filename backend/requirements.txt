@@ -16,6 +16,8 @@ apscheduler>=3.11.3,<4
 filelock>=4.0.9,<5
 pandas>=3.0.6,<4
 xlsxwriter>=3.2.9,<4
+# SGIS 코드집(.xlsx) 읽기 — scripts/load_sgis_stats.py (세션 454, 집서버엔 3.1.5 설치돼 있음)
+openpyxl>=3.1.5,<4
 python-dotenv>=1.2.4,<2
 # python-jose: 유지보수 정체 -> PyJWT 전환.
 # 2026-05-31 lock: python-jose>=3.3,<4 -> PyJWT>=2.0,<3.

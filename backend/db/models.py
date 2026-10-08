@@ -614,3 +614,22 @@ class SiteOpinion(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow, onupdate=utcnow
     )
+
+
+class SgisAreaStats(Base):
+    """SGIS 행정구역 통계(긴 모양) — V071 sgis_area_stats (세션 453).
+
+    적재 = scripts/load_sgis_stats.py(공공데이터포털 15129688 zip, 연 1회 수동).
+    한 행 = (행정구역코드, 기준연도, 통계항목) 하나의 값. 원본 "N/A" 는 value NULL.
+    건축년도 구간은 코드 뜻이 기준연도마다 달라 라벨 항목(ho_cy_label_<시작>_<끝>)을 같이 둔다.
+    미분양도 같은 표를 읽는다(공유 DB). 지금은 이 표를 조회하는 라우터가 없다.
+    """
+    __tablename__ = "sgis_area_stats"
+    __table_args__ = (Index("sgis_area_stats_item_idx", "item_code", "year"),)
+
+    adm_cd: Mapped[str] = mapped_column(Text, primary_key=True)
+    year: Mapped[int] = mapped_column(SmallInteger, primary_key=True)
+    item_code: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[Decimal | None] = mapped_column(Numeric)
+    value_text: Mapped[str | None] = mapped_column(Text)
+    loaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)

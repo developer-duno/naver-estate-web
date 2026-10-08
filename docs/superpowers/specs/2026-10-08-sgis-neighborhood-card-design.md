@@ -98,7 +98,7 @@ CREATE INDEX complexes_sgis_emd_idx ON complexes (sgis_emd_cd);
 
 ## 8. 미분양에 줄 것 (설계서 확정 뒤 한 줄로 전달)
 
-표 = `sgis_area_stats`(8글자, year 2024) · item_code: `adm_nm`(value_text) · `to_in_001` 총인구 · `to_in_002` 평균나이 · `to_in_004` 노령화지수 · `to_ga_001` 총가구 · `ga_1person`(코드표 확정 뒤 실제 코드) · `to_ho_001` 총주택 · `ho_gb_002` 아파트 · `ho_cy_label_*` 건축년도 구간 · `to_fa_010` 사업체 · `to_em_020` 종사자 · `api_officetel_cnt` · `api_corp_1006_per` · `ndsm_flood_affected`·`ndsm_flood_affc_pop`·`ndsm_flood_adm_pop`·`ndsm_flood_affc_hh`·`ndsm_flood_affc_house`·`ndsm_flood_affc_basement`·`ndsm_flood_year` + `ndsm_lndsld_*` 같은 모양.
+표 = `sgis_area_stats`(8글자, year 2024) · item_code: `adm_nm`(value_text) · `to_in_001` 총인구 · `to_in_002` 평균나이 · `to_in_004` 노령화지수 · `to_ga_001` 총가구 · `ga_sd_005` 1인가구(코드집 실측 — 역삼1동 14,255 = API 값) · `to_ho_001` 총주택 · `ho_gb_003` 아파트(⚠ `ho_gb_002` = 단독주택 — 코드집 실측 2026-10-08 s454) · `ho_cy_label_<시작>_<끝>` 건축년도 구간(value_text = 라벨 원문 · 원자료 항목은 `ho_yr_001~020` — 2024 파일은 코드집 "2015년 이후" 표: 001 1979년 이전·002 1980~89·003 1990~99·004 2000~04·005 2005~09·006~020 2010~2024 단년) · `to_fa_010` 사업체 · `to_em_020` 종사자 · `api_officetel_cnt` · `api_corp_1006_per` · `ndsm_flood_affected`·`ndsm_flood_affc_pop`·`ndsm_flood_adm_pop`·`ndsm_flood_affc_hh`·`ndsm_flood_affc_house`·`ndsm_flood_affc_basement`·`ndsm_flood_year` + `ndsm_lndsld_*` 같은 모양.
 
 ## 9. PR 쪼개기 (각각 재시작 창 1회, 2·3은 묶어도 됨)
 
@@ -118,4 +118,5 @@ CREATE INDEX complexes_sgis_emd_idx ON complexes (sgis_emd_cd);
 
 - data.go.kr zip 자동 내려받기(폼 POST) — 1차는 수동, 되면 ④에 합침.
 - 2차 집계구: 상가 폴더 CSV + 경계 SHP(shapely 보유) 또는 `transcoord` 1콜 — 그때 설계.
+- ⚠ `adm_nm`(행정동 이름)은 통계 CSV 에 없다(경계 dbf 에만) — PR ① 은 안 넣음, PR ② 에서 이름 출처 정하기(s454 실측).
 - 2u 단지 중 좌표 없는 단지 수·매핑 실패율은 ① 실행 뒤 실측해 적는다.

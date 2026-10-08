@@ -28,6 +28,8 @@ export const queryKeys = {
   complexSubway: (no: string) => ["complexSubway", no] as const,
   /** 단지 공동주택 관리비 (K-apt) — 데이터 없는 단지는 null 캐시 */
   complexKapt: (no: string) => ["complexKapt", no] as const,
+  /** 단지가 속한 행정동 동네 통계 (SGIS) — 데이터 없는 단지는 null 캐시 */
+  complexNeighborhood: (no: string) => ["complexNeighborhood", no] as const,
   priceStats: (no: string) => ["priceStats", no] as const,
   priceHistory: (no: string, tradeType?: string, areaNo?: string) =>
     ["priceHistory", no, tradeType, areaNo] as const,

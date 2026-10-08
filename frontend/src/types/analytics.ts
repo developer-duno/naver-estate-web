@@ -104,3 +104,49 @@ export interface KaptInfo {
   cost_per_household: number | null;
   household_count: number | null;
 }
+
+/** 동네 재해 위험지도 요약 — 영향 없음이면 `{ affected: false }` 만 온다 */
+export interface NeighborhoodDisaster {
+  affected: boolean;
+  /** 동네 안 영향 구역에 사는 사람 수 */
+  pop?: number | null;
+  /** 동네 전체 사람 수 */
+  pop_total?: number | null;
+  year?: number | null;
+}
+
+/**
+ * 단지가 속한 행정동의 동네 통계 (SGIS, GET /api/complexes/{no}/neighborhood).
+ *
+ * 단지의 행정동 매핑이나 그 동의 총인구 행이 없으면 BE 가 404 → FE 래퍼가 null 로 변환한다.
+ * 값이 없는 칸은 null — 화면은 그 줄을 생략한다. 비율(%)은 서버가 반올림한 값을 그대로 쓴다.
+ */
+export interface NeighborhoodInfo {
+  emd_cd: string;
+  /** 행정동 이름 (출처 줄의 "(역삼1동 기준)"). 없으면 null */
+  emd_nm: string | null;
+  year: number;
+  population: number | null;
+  avg_age: number | null;
+  one_person_pct: number | null;
+  households: number | null;
+  /** 1인가구 수 — 응답에 없을 수도 있다 */
+  one_person_households?: number | null;
+  /** 집 종류 비율 (분모 = 거처 전체) */
+  house_mix: {
+    apt_pct: number;
+    officetel_pct: number;
+    row_pct: number;
+    detached_pct: number;
+  } | null;
+  old_house_pct: number | null;
+  /** 오래된 집 기준 문구 (예: "2004년 이전") */
+  old_house_cutoff: string;
+  corp_cnt: number | null;
+  worker_cnt: number | null;
+  /** 화면에는 쓰지 않는다 */
+  broker_pct: number | null;
+  flood: NeighborhoodDisaster | null;
+  landslide: NeighborhoodDisaster | null;
+  source: string;
+}

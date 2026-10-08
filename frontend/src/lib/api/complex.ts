@@ -2,7 +2,7 @@
  * 단지 검색/조회 API
  */
 
-import type { Complex, KaptInfo, OfficialPriceResponse, SubwayNearResponse } from "@/types";
+import type { Complex, KaptInfo, NeighborhoodInfo, OfficialPriceResponse, SubwayNearResponse } from "@/types";
 import * as direct from "@/lib/api-direct";
 import { ApiError, fetchApi, isBackendAvailable } from "./core";
 
@@ -101,6 +101,24 @@ export async function getComplexKapt(complexNo: string): Promise<KaptInfo | null
     return await fetchApi<KaptInfo>(`/api/complexes/${encodeURIComponent(complexNo)}/kapt`);
   } catch (err) {
     // 404 만 "데이터 없음"으로 흡수. 나머지는 원본 에러 그대로 전파(타입 보존).
+    if (err instanceof ApiError && err.statusCode === 404) return null;
+    throw err;
+  }
+}
+
+/**
+ * 단지가 속한 행정동의 동네 통계 (GET /api/complexes/{no}/neighborhood — SGIS)
+ *
+ * ⚠ getComplexKapt 와 같은 결: 404 는 "그 단지의 동네 통계 없음"(행정동 미매핑 등)의
+ * 확정 답변이라 null 로 변환하고, 그 외 실패(5xx·429 등)는 원본 에러 그대로 throw 한다
+ * (error-propagation.md §1·§2, 회귀 가드: lib/__tests__/complex-neighborhood-error.test.ts).
+ * direct(Supabase) 폴백 경로는 없다.
+ */
+export async function getComplexNeighborhood(complexNo: string): Promise<NeighborhoodInfo | null> {
+  if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
+  try {
+    return await fetchApi<NeighborhoodInfo>(`/api/complexes/${encodeURIComponent(complexNo)}/neighborhood`);
+  } catch (err) {
     if (err instanceof ApiError && err.statusCode === 404) return null;
     throw err;
   }

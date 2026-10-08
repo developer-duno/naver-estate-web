@@ -1,11 +1,13 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Complex, OfficialPriceItem } from "@/types";
 import { formatDateFull, formatKoreanPrice } from "@/lib/format";
-import { getOfficialPrices, getComplexSubway, getComplexKapt } from "@/lib/api/complex";
+import { getOfficialPrices, getComplexSubway, getComplexKapt, getComplexNeighborhood } from "@/lib/api/complex";
 import { formatSubwayStations } from "@/lib/subway-format";
 import { formatCostPerHousehold, formatCostBreakdown } from "@/lib/kapt-format";
+import { buildNeighborhoodRows, formatNeighborhoodSource } from "@/lib/neighborhood-format";
 import { queryKeys } from "@/lib/query-keys";
 
 /**
@@ -73,6 +75,14 @@ export default function ComplexBasicInfo({ cpx }: { cpx: Complex }) {
     staleTime: 60_000,
   });
 
+  // 동네 통계 (SGIS). 관리비와 같은 래퍼 규칙 — 404 → null(섹션 생략), 5xx → throw(isError).
+  const neighborhoodQuery = useQuery({
+    queryKey: queryKeys.complexNeighborhood(cpx.complex_no),
+    queryFn: () => getComplexNeighborhood(cpx.complex_no),
+    enabled: !!cpx.complex_no,
+    staleTime: 60_000,
+  });
+
   // [라벨, 값, 보조텍스트?] — 보조텍스트는 값 아래 작은 회색 글씨로 표시(관리비 총액 등)
   const rows: [string, string, string?][] = [];
   const addr = cpx.address || cpx.cortar_address;
@@ -130,10 +140,44 @@ export default function ComplexBasicInfo({ cpx }: { cpx: Complex }) {
     }
   }
 
-  if (rows.length === 0) {
-    return <p className="text-gray-500 text-sm">단지 상세 정보가 아직 수집되지 않았습니다.</p>;
+  // 동네 통계 섹션 — 로딩 중엔 아무것도 안 보이고, 404(null)면 섹션 통째 생략,
+  // 실패면 한 줄 안내(이 섹션만 기존 "실패 = 미표시" 관례와 다르다 — 설계서 §7).
+  const neighborhood = neighborhoodQuery.data;
+  let neighborhoodSection: ReactNode = null;
+  if (neighborhoodQuery.isError) {
+    neighborhoodSection = (
+      <div className="mt-4 pt-4 border-t border-gray-200">
+        <p className="text-sm text-gray-500">동네 통계를 불러오지 못했어요</p>
+      </div>
+    );
+  } else if (neighborhood) {
+    const nRows = buildNeighborhoodRows(neighborhood);
+    if (nRows.length > 0) {
+      neighborhoodSection = (
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <h4 className="text-sm font-semibold mb-2">이 동네는</h4>
+          <RowGrid rows={nRows} />
+          <p className="mt-2 text-xs text-gray-500">
+            {formatNeighborhoodSource(neighborhood.source, neighborhood.emd_nm)}
+          </p>
+        </div>
+      );
+    }
   }
 
+  return (
+    <>
+      {rows.length === 0 ? (
+        <p className="text-gray-500 text-sm">단지 상세 정보가 아직 수집되지 않았습니다.</p>
+      ) : (
+        <RowGrid rows={rows} />
+      )}
+      {neighborhoodSection}
+    </>
+  );
+}
+
+function RowGrid({ rows }: { rows: [string, string, string?][] }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
       {rows.map(([label, value, sub]) => (

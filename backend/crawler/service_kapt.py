@@ -90,10 +90,10 @@ _COST_LAG_MONTHS = 3
 # 최신 공개월을 못 찾을 때 거슬러 올라가며 시도할 개월 수.
 _COST_MONTH_TRIES = 3
 
-# 매칭 중간 저장 주기(단지 수). 매칭 확정분마다 basis 1콜(K-apt 1.5초 간격, 세션 425)이
-# 나가 전체(약 1.5만 건)가 약 6시간 도는데, 끝에서 한 번만 commit 하면 크래시·재시작 sweep 한 방에
-# 전량이 날아간다. upsert 라 재실행이 안전해 부분 저장에 부작용이 없다.
-_MATCH_COMMIT_EVERY = 200
+# 매칭 진행 로그 주기(단지 수). 매칭 확정분마다 basis 1콜(K-apt 1.5초 간격, 세션 425)이
+# 나가 전체(약 1.5만 건)가 약 6시간 돈다. 저장은 단지마다 커밋한다(세션 456 — 200건 묶음 커밋은
+# 그 사이 basis 호출 동안 트랜잭션을 쥐었다). upsert 라 재실행이 안전해 부분 저장에 부작용이 없다.
+_MATCH_PROGRESS_EVERY = 200
 
 # "대상 전량이 빈 응답" 을 API 장애로 판정하기 위한 최소 표본 수.
 # 이보다 적으면 개별 단지의 정상적인 미공개와 구분되지 않아 판정을 보류한다
@@ -740,14 +740,25 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
                 continue
             by_bjd.setdefault(bjd, []).append(row)
 
+        # ⚠ ORM 객체가 아니라 **열 값 묶음(Row)** 으로 받는다 — 아래에서 단지마다 커밋하는데,
+        # 세션이 expire_on_commit 이라 ORM 객체면 커밋 뒤 첫 속성 접근이 SELECT 를 다시 날려
+        # 기본정보 호출 동안 트랜잭션(complexes 잠금)이 또 열린다. Row 는 만료되지 않는다.
         targets = (
-            db.query(Complex)
+            db.query(
+                Complex.complex_no,
+                Complex.complex_name,
+                Complex.cortar_no,
+                Complex.total_household_count,
+            )
             .filter(
                 Complex.real_estate_type_code.in_(("APT", "JGC")),
                 Complex.cortar_no.isnot(None),
             )
             .all()
         )
+        # 대상 조회의 트랜잭션을 여기서 닫는다 — 이 뒤로는 기본정보 호출 동안 트랜잭션을 쥐지 않고,
+        # 단지 하나를 저장할 때마다 짧게 열고 닫는다(세션 456: 회차 내내 complexes 잠금이 이어졌다).
+        db.commit()
 
         # ── pass 1: 후보 선별만 (API 호출 0) ──
         # 여기서 kaptCode 별로 모아 "한 K-apt 단지를 여러 우리 단지가 노리는"
@@ -778,6 +789,10 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
         basis_failed: set[str] = set()
         # 실패한 시도의 K-apt 코드 — 역방향 경합에서 진 기존 짝(W→K)도 정리에서 지킨다.
         basis_failed_codes: set[str] = set()
+        # 저장 중 DB 오류로 되돌린 단지(와 그 K-apt 코드) — 기존 연결을 재확인하지 못했으므로
+        # 기본정보 실패와 같은 이유로 회차 끝 정리에서 지킨다.
+        save_failed: set[str] = set()
+        save_failed_codes: set[str] = set()
         for index, (cpx, cand, ratio) in enumerate(survivors):
             # 확정분만 기본정보 보강. 응답이 와서 item 이 없으면(None) 매칭 자체는 저장한다.
             corridor, household = None, None
@@ -848,60 +863,82 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
                 skipped += 1
                 continue
 
-            _clear_conflicting_mappings(db, cpx.complex_no, cand["kaptCode"])
+            # 단지 하나 = 트랜잭션 하나. 다음 단지의 기본정보 호출 전에 닫는다 — 정리·저장 사이에
+            # 외부 호출이 끼지 않으므로 트랜잭션은 이 몇 줄 동안만 열린다.
+            try:
+                _clear_conflicting_mappings(db, cpx.complex_no, cand["kaptCode"])
 
-            _do_upsert(
-                db,
-                KaptComplexMap,
-                {
-                    "complex_no": cpx.complex_no,
-                    "kapt_code": cand["kaptCode"],
-                    "kapt_name": cand.get("kaptName"),
-                    "match_score": round(ratio, 4),
-                    "corridor_type": corridor,
-                    "kapt_household_count": household,
-                    "matched_at": utcnow(),
-                },
-                "complex_no",
-            )
+                _do_upsert(
+                    db,
+                    KaptComplexMap,
+                    {
+                        "complex_no": cpx.complex_no,
+                        "kapt_code": cand["kaptCode"],
+                        "kapt_name": cand.get("kaptName"),
+                        "match_score": round(ratio, 4),
+                        "corridor_type": corridor,
+                        "kapt_household_count": household,
+                        "matched_at": utcnow(),
+                    },
+                    "complex_no",
+                )
+                db.commit()
+            except Exception:
+                logger.exception("[kapt_match] 단지 %s 저장 실패", cpx.complex_no)
+                save_failed.add(cpx.complex_no)
+                save_failed_codes.add(cand["kaptCode"])
+                # 이 단지만 되돌린다 — 앞 단지들은 이미 커밋됐고, 다음 단지는 깨끗한 세션에서 간다.
+                try:
+                    db.rollback()
+                except Exception:
+                    logger.warning("[kapt_match] 단지 %s 되돌리기도 실패", cpx.complex_no, exc_info=True)
+                continue
             matched += 1
 
-            # 중간 저장 — 이 잡은 basis 호출(K-apt 1.5초 간격, 세션 425)로 약 6시간 돌기 때문에,
-            # 끝에서 한 번만 commit 하면 크래시·재시작 sweep 한 방에 전량이 날아간다.
-            # upsert 라 재실행이 안전해 부분 저장에 부작용이 없다.
-            if matched % _MATCH_COMMIT_EVERY == 0:
-                db.commit()
-                logger.info("[kapt_match] 중간 저장: %d건 매칭", matched)
+            if matched % _MATCH_PROGRESS_EVERY == 0:
+                logger.info("[kapt_match] 진행: %d건 매칭 저장", matched)
 
         db.commit()
 
-        # 기본정보 실패 판정 — matched==0 가드보다 **먼저** 본다. 그래야 전부 실패한 회차가
-        # "매칭 실패" 가 아니라 기본정보 실패로 기록된다. 실패 > 연결이면 정리도 건너뛴다.
-        basis_note = ""
+        # 실패 판정(기본정보 실패 + 저장 실패) — matched==0 가드보다 **먼저** 본다. 그래야 전부
+        # 실패한 회차가 "매칭 실패" 가 아니라 그 원인으로 기록된다. 실패 합 > 연결이면 정리도 건너뛴다
+        # (저장 실패가 쌓이는 장면 = 회차 도중 DB 가 멈춤 — completed 로 끝나면 알림이 안 간다).
+        failure_notes: list[str] = []
         if basis_failed:
-            basis_note = (
+            failure_notes.append(
                 f"단지 기본정보 {len(basis_failed)}건 받기 실패 — "
                 "그 단지들은 기존 연결을 그대로 두었어요(다음 달 다시 시도)"
             )
-            if len(basis_failed) > matched:
-                _fail_job(db, job, f"{basis_note} · 연결 {matched}건")
-                logger.error(
-                    "[kapt_match] 기본정보 실패 %d건 > 연결 %d건 — 정리 건너뜀",
-                    len(basis_failed), matched,
-                )
-                return {
-                    "matched": matched,
-                    "skipped": skipped,
-                    "basis_failed": len(basis_failed),
-                    "error": "basis_mostly_failed",
-                }
+        if save_failed:
+            failure_notes.append(
+                f"단지 {len(save_failed)}건 저장 실패 — "
+                "그 단지들은 기존 연결을 그대로 두었어요(다음 달 다시 시도)"
+            )
+        if len(basis_failed) + len(save_failed) > matched:
+            _fail_job(db, job, " · ".join([*failure_notes, f"연결 {matched}건"]))
+            logger.error(
+                "[kapt_match] 기본정보 실패 %d건 + 저장 실패 %d건 > 연결 %d건 — 정리 건너뜀",
+                len(basis_failed), len(save_failed), matched,
+            )
+            return {
+                "matched": matched,
+                "skipped": skipped,
+                "basis_failed": len(basis_failed),
+                "save_failed": len(save_failed),
+                "error": (
+                    "basis_mostly_failed"
+                    if len(basis_failed) >= len(save_failed)
+                    else "save_mostly_failed"
+                ),
+            }
 
         # silent failure 가드 (env_air.py 세션 280 패턴 답습): 대상 단지가 있는데
         # 한 건도 못 붙였으면 '완료(0)' 위장 대신 failed 로 알린다.
+        # (여기 오면 실패 합이 0 이다 — 위 판정이 0 < 실패 합인 경우를 먼저 받는다.)
         if matched == 0 and targets:
             _fail_job(db, job, f"대상 단지 {len(targets)}개 전부 매칭 실패 (매칭 0건)")
             logger.error("[kapt_match] silent failure 감지: 대상 %d개 전부 실패", len(targets))
-            return {"matched": 0, "skipped": skipped, "error": "no_match"}
+            return {"matched": 0, "skipped": skipped, "save_failed": 0, "error": "no_match"}
 
         # 전량 실행 정리 — 이번에 재확인되지 않은 옛 매칭은 새 규칙 탈락분이므로 지운다.
         # 부분 목록 회차에서는 "못 본 단지"와 구분이 안 되므로 절대 지우지 않는다.
@@ -910,7 +947,9 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
         purged = 0
         if list_complete:
             purged = _purge_unconfirmed_mappings(
-                db, run_started_at, keep=basis_failed, keep_codes=basis_failed_codes
+                db, run_started_at,
+                keep=basis_failed | save_failed,
+                keep_codes=basis_failed_codes | save_failed_codes,
             )
             db.commit()
             if purged:
@@ -920,7 +959,8 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
         # 미매칭(skipped)은 실패가 아니라 정상적인 '해당 없음'이므로 0 을 넘긴다 —
         # skipped 를 넘기면 total 이 46,373건만큼 부풀어(라이브 실측 47,606) 실패율
         # 지표가 통째로 망가진다. skipped 는 아래 로그·error_message 로만 관찰한다.
-        _complete_job(db, job, matched, 0)
+        # 저장 중 DB 오류로 되돌린 단지는 진짜 실패라 여기 센다(평소엔 0).
+        _complete_job(db, job, matched, len(save_failed))
         notes: list[str] = []
         if not list_complete:
             # 부분 목록으로 돈 회차임을 job 에 남긴다 — 매칭 수가 평소보다 낮아도
@@ -928,16 +968,15 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
             notes.append(
                 f"부분 목록으로 매칭 (K-apt {len(kapt_rows)}건만 수집) — 다음 회차 재시도 필요"
             )
-        if basis_note:
-            # 부분 목록 문구와 이어 붙인다 — 하나가 다른 하나를 덮지 않게.
-            notes.append(basis_note)
+        # 부분 목록 문구와 이어 붙인다 — 하나가 다른 하나를 덮지 않게.
+        notes.extend(failure_notes)
         if notes:
             job.error_message = " · ".join(notes)[:500]
             db.commit()
         logger.info(
-            "[kapt_match] 완료: %d 매칭, %d 미매칭, %d 정리, 기본정보 실패 %d "
+            "[kapt_match] 완료: %d 매칭, %d 미매칭, %d 정리, 기본정보 실패 %d, 저장 실패 %d "
             "(대상 %d, K-apt %d건, 목록완전=%s)",
-            matched, skipped, purged, len(basis_failed),
+            matched, skipped, purged, len(basis_failed), len(save_failed),
             len(targets), len(kapt_rows), list_complete,
         )
         return {
@@ -945,6 +984,7 @@ def match_kapt_complexes(scheduler_job_id: str = "kapt_match") -> dict:
             "skipped": skipped,
             "purged": purged,
             "basis_failed": len(basis_failed),
+            "save_failed": len(save_failed),
             "list_complete": list_complete,
         }
     except Exception as exc:

@@ -11,6 +11,7 @@ export const metadata: Metadata = {
   description: `2u부동산에 ${DESCRIPTION}`,
   alternates: { canonical: "/updates" },
   openGraph: {
+    url: "/updates",
     title: "고쳤습니다 — 보내 주신 의견과 답 | 2u부동산",
     description: `2u부동산에 ${DESCRIPTION}`,
     type: "website",

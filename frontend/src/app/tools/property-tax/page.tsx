@@ -10,6 +10,7 @@ export const metadata: Metadata = {
     "공시가격을 입력하면 지방세법 §111 + 종부세법 §8/§9 (국세청 PDF 16개 권위 출처) 기준 재산세·종합부동산세·농어촌특별세 합산 보유세를 즉시 계산합니다.",
   alternates: { canonical: "/tools/property-tax" },
   openGraph: {
+    url: "/tools/property-tax",
     title: "보유세 계산기 (재산세 + 종부세) | 2u부동산",
     description:
       "공인중개사를 위한 보유세 자동 계산 — 1세대1주택 12억 공제·연령/보유 세액공제·다주택 9억 공제·3주택 25억 초과 중과·농특세 20%",

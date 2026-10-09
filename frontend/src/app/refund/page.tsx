@@ -5,13 +5,21 @@ export const metadata: Metadata = {
   description:
     "유료 구독 이용권의 청약철회 및 환불 규정 안내 — 결제 후 7일 이내 미사용 시 전액 환불.",
   alternates: { canonical: "/refund" },
+  openGraph: {
+    url: "/refund",
+    title: "환불정책 | 2u부동산",
+    description: "유료 구독 이용권의 청약철회 및 환불 규정 안내 — 결제 후 7일 이내 미사용 시 전액 환불.",
+    type: "website",
+    // openGraph 를 직접 쓰면 root opengraph-image 상속이 끊긴다 → images 를 꼭 적는다(seo-metadata.md 룰 2)
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
+  },
 };
 
 import PaidServicePausedNotice from "@/components/PaidServicePausedNotice";
 
 export default function RefundPage() {
   return (
-    <main className="max-w-3xl mx-auto px-4 py-12">
+    <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-2xl font-bold mb-6">환불정책</h1>
 
       {/* 무료 운영 중 현황 고지 — 문서 전체가 유료 결제를 전제하므로(세션 405).
@@ -96,6 +104,6 @@ export default function RefundPage() {
           ※ 위 사업자 정보는 정식 결제 서비스 개시 전 실제 등록 정보로 갱신됩니다.
         </p>
       </section>
-    </main>
+    </div>
   );
 }

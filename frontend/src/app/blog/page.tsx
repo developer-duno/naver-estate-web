@@ -13,6 +13,7 @@ export const metadata: Metadata = {
     types: { "application/rss+xml": "/feed.xml" },
   },
   openGraph: {
+    url: "/blog",
     title: "블로그 — 공인중개사를 위한 인사이트 | 2u부동산",
     description:
       "전세가율·시세 분석·미분양·매물 조회 노하우. 공인중개사 실무에 바로 쓰는 글 모음.",
@@ -29,7 +30,7 @@ export default function BlogIndexPage() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
       <section className="text-center mb-8 sm:mb-10">
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 leading-tight mb-3">
-          공인중개사를 위한
+          공인중개사를 위한{" "}
           <br className="sm:hidden" />
           <span className="sm:ml-2">부동산 인사이트</span>
         </h1>

@@ -24,6 +24,8 @@ function HomeHeader() {
   });
   const complexCount = stats?.complex_count ?? 0;
   const articleCount = stats?.article_count ?? 0;
+  const { sessionToken, tokenReady } = useSessionToken();
+  const showSignupCta = tokenReady && !sessionToken;
 
   return (
     <>
@@ -58,6 +60,36 @@ function HomeHeader() {
           </div>
         )}
       </div>
+
+      {/* 서비스 소개 + 가입 유도 — 정적 텍스트라 첫 HTML 에 포함(검색·AI 봇이 읽는 본문). 가입 버튼은 비로그인일 때만. */}
+      <section aria-labelledby="home-intro" className="mx-auto mb-8 max-w-2xl text-center">
+        <h2 id="home-intro" className="text-base font-semibold text-gray-800">
+          2u부동산은 무엇을 하나요
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-gray-600">
+          공인중개사가 손님 응대 자료를 빨리 만들도록 돕는 웹 도구입니다. 단지를 검색하면 네이버 부동산에
+          올라온 매물을 실시간으로 모아 시세·평당가를 비교하고, 국토교통부 실거래가와 미분양 현황을 함께
+          봅니다. 취득세·양도소득세·보유세·중개수수료 계산기는 로그인 없이 쓸 수 있습니다.
+        </p>
+        <ul className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-sm">
+          <li><Link href="/tools" className="text-blue-600 hover:underline">부동산 계산기 5종</Link></li>
+          <li><Link href="/blog" className="text-blue-600 hover:underline">실무 가이드 블로그</Link></li>
+          <li><Link href="/help" className="text-blue-600 hover:underline">사용 가이드</Link></li>
+        </ul>
+        {showSignupCta && (
+          <div className="mt-4">
+            <Link
+              href="/signup"
+              className="inline-block rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              무료로 시작하기
+            </Link>
+            <p className="mt-2 text-xs text-gray-500">
+              가입 뒤 공인중개사 확인(관리자 승인)을 거치면 단지 매물 조회를 쓸 수 있습니다.
+            </p>
+          </div>
+        )}
+      </section>
     </>
   );
 }

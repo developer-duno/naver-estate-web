@@ -2,6 +2,16 @@
 
 import { SITE_URL } from "@/lib/constants";
 
+/** 사이트 운영 조직 — 같은 `@id` 를 공유해 한 페이지에 여러 번 나와도 하나로 합쳐진다(화면에 보이는 이름·주소만). */
+export function organizationJsonLd() {
+  return {
+    "@type": "Organization",
+    "@id": `${SITE_URL}/#organization`,
+    name: "2u부동산",
+    url: SITE_URL,
+  };
+}
+
 /** JSON-LD 직렬화 — `</script>` 조기 종료 방지를 위해 `<`/`>` 를 유니코드 이스케이프 */
 function serializeJsonLd(data: unknown): string {
   return JSON.stringify(data).replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
@@ -21,6 +31,7 @@ export function WebSiteJsonLd({ name, url, description }: WebSiteJsonLdProps) {
     url,
     ...(description ? { description } : {}),
     inLanguage: "ko-KR",
+    publisher: organizationJsonLd(),
   };
   return (
     <script
@@ -53,11 +64,7 @@ export function BlogPostingJsonLd({
   url,
   articleSection,
 }: BlogPostingJsonLdProps) {
-  const organization = {
-    "@type": "Organization",
-    name: "2u부동산",
-    url: SITE_URL,
-  };
+  const organization = organizationJsonLd();
   const data = {
     "@context": "https://schema.org",
     "@type": "BlogPosting",

@@ -13,6 +13,7 @@
       예) officetel_cnt → api_officetel_cnt · apart_per → api_apart_per
     * corpdistsummary → theme_list 중 **1006 부동산중개업만** `api_corp_1006_per` = dist_per(72개 업종 전부는 안 넣는다)
     * pplsummary(연령 7구간) → 화면이 안 써서 기본 종류에서 뺐다. `only="ppl"` 로만 돈다(api_thirty_cnt 꼴).
+    저장할 값이 0개(corp 에 1006 없음·house 칸 없음)면 응답 모양 이상 = 실패 — 실측 응답은 늘 칸 전부를 준다.
     값은 문자열·숫자가 섞여 온다 → numeric. "1,234" → 1234 · "N/A"·빈 값 → NULL. 숫자로 못 읽는 값(dict 등)은
     그 칸만 NULL 로 두고 "값 모양 이상"으로 세어 회차 끝에 로그 한 줄.
 
@@ -20,12 +21,14 @@
     `ndsm/floodRiskAdmCdList`·`lndsldWarnAdmCdList`(adm_cd=시도 2글자) 로 영향 동 목록을 받고, **목록에 든
     대상 동만** `…DataBoard`(adm_cd=8글자)를 부른다 — 목록 밖 동을 넣으면 HTTP 500 이 온다(실측).
     * 목록 호출이 성공한 시도: 목록 밖 대상 동에 `ndsm_<종>_affected` = 0. 결과 없음(-100)도 "영향 동 0곳"으로 본다.
-    * **목록 호출이 실패한 시도는 아무것도 안 쓴다** — '위험 없음'으로 잘못 남기지 않게.
+    * **목록 호출이 실패한 시도는 아무것도 안 쓴다** — '위험 없음'으로 잘못 남기지 않게. 그 시도의 대상 동은
+      실패한 동으로 센다(아래 10% 판정에 들어간다).
     * 목록(2025 경계)에 대상(2024 통계 코드)에 없는 8글자 코드가 하나라도 있으면 그 시도는 동 번호가 바뀐 곳이
       있는 것이라 **목록 밖 동에 0 을 쓰지 않는다**(상세는 그대로). 시도별 목록 행 수는 로그 한 줄로 남긴다.
     * 상세 성공 동: affected 1 · affc_pop/adm_pop(인구 총합의 영향구역/행정구역) · affc_hh(가구) ·
       affc_house(주택) · affc_basement(지하건물) · year(인구 항목의 crtr_yr).
-    * 상세 호출이 실패한 동은 그 종류의 지난 회차 `ndsm_<종>_*` 행을 지운다(옛 '영향 없음'이 거짓으로 남지 않게).
+    * 상세 호출이 실패했거나 결과 없음(-100)인 동은 그 종류의 지난 회차 `ndsm_<종>_*` 행을 지운다
+      (옛 '영향 없음'이 거짓으로 남지 않게).
 
 실패 집계
     HTTP 429·5xx·네트워크·다시 물어도 오류코드·응답 모양 이상 → 실패. 실패한 동·시도는 "자료 없음"으로 쓰지
@@ -277,6 +280,8 @@ def _collect_summaries(run: _Run, targets: list[str], kinds: list[str]) -> None:
                 rows = parse_summary(kind, reply.result, adm_cd, run.bad)
                 if rows is None:
                     run.fail(f"{kind} {adm_cd}: 응답 모양 이상(그 동의 행 없음)", adm_cd)
+                elif not rows:   # corp 에 1006 이 없음·house 칸이 빔 — 실측 응답은 늘 칸 전부(72업종은 0 도)를 준다
+                    run.fail(f"{kind} {adm_cd}: 응답 모양 이상(저장할 값 0개)", adm_cd)
                 else:
                     run.ok()
                     run.buf.extend(rows)
@@ -298,12 +303,14 @@ def _collect_disaster(run: _Run, targets: list[str], all_targets: set[str], kind
         reply = run.ask(list_path, adm_cd=sido)
         if reply is None:
             break
-        if reply.kind in ("fail", "code_error"):
-            run.st.failed_sidos.append(f"{kind}:{sido}")
-            continue
-        if reply.kind == "ok" and not isinstance(reply.result, list):
+        bad_shape = reply.kind == "ok" and not isinstance(reply.result, list)
+        if bad_shape:
             run.fail(f"{kind} 목록 {sido}: 응답 모양 이상")
+        # 동 하나의 -200 은 늘 나는 오류라 판정에서 빼지만, 시도 목록 -200 은 그 시도 재해 정보 전체가 빠지는 것이라
+        # 실패로 알린다(메인 결정, 세션 457).
+        if bad_shape or reply.kind in ("fail", "code_error"):
             run.st.failed_sidos.append(f"{kind}:{sido}")
+            run.st.failed_dongs.update(dongs)   # 그 시도 동은 이 종류를 못 받았다 — 10% 판정에 넣는다
             continue
         listing = [r for r in (reply.result or []) if isinstance(r, dict)] if reply.kind == "ok" else []
         if reply.kind == "ok":
@@ -341,8 +348,9 @@ def _collect_disaster(run: _Run, targets: list[str], all_targets: set[str], kind
                     run.buf.extend(rows)
             elif board.kind in ("fail", "code_error"):
                 run.deletes.append((adm_cd, kind))
-            else:
+            else:   # 결과 없음 — 지난 회차 값(예: 옛 '영향 없음' 0)이 남지 않게 지운다
                 logger.info("동네 통계 %s 상세 결과 없음 — %s(목록에는 있음)", kind, adm_cd)
+                run.deletes.append((adm_cd, kind))
             boards += 1
             if boards % FLUSH_EVERY == 0:
                 run.flush()
@@ -372,7 +380,7 @@ def _job_message(st: Stats, cap: int) -> str:
     if st.failed_dongs:
         line = f"동 {len(st.failed_dongs):,}곳은 자료를 못 받아 비워 뒀어요(다시 돌리면 채워집니다)."
         if too_many_failures(len(st.failed_dongs), st.dongs):
-            line += " 대상의 10%가 넘어 실패로 끝냈어요."
+            line += " 대상의 10% 이상이라 실패로 끝냈어요."
         parts.append(line)
     if st.code_error_dongs:
         parts.append(f"창구가 동 번호를 모른다고 한 {len(st.code_error_dongs):,}곳은 비워 뒀어요.")

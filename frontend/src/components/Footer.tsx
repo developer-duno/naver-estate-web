@@ -18,6 +18,24 @@ export default function Footer() {
           </p>
         </div>
 
+        <nav
+          aria-label="둘러보기"
+          className="mt-6 flex flex-wrap gap-x-4 gap-y-2 text-sm"
+        >
+          <Link
+            href="/tools"
+            className="text-gray-700 hover:text-blue-600 hover:underline"
+          >
+            부동산 계산기 5종
+          </Link>
+          <Link
+            href="/blog"
+            className="text-gray-700 hover:text-blue-600 hover:underline"
+          >
+            블로그
+          </Link>
+        </nav>
+
         <div className="mt-6">
           <p className="text-sm font-semibold text-gray-700">
             함께 보면 좋은 사이트

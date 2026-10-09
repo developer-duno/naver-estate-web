@@ -8,6 +8,7 @@ export const metadata: Metadata = {
     "거래유형·매물유형·금액을 입력하면 공인중개사법 시행규칙(2021.10.19 개정) 기준 법정 한도 수수료와 부가세를 즉시 계산합니다.",
   alternates: { canonical: "/tools/brokerage-fee" },
   openGraph: {
+    url: "/tools/brokerage-fee",
     title: "중개수수료 계산기 | 2u부동산",
     description: "공인중개사를 위한 중개수수료 자동 계산 — 매매·전세·월세·오피스텔·토지 모두 지원",
     // openGraph 직접 지정 시 root opengraph-image 자동 상속이 끊겨 브랜드 PNG og 를 명시(빌드 실측 확인)

@@ -4,6 +4,15 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "도움말 - 공인중개사용 매물·시세 분석 도구",
   description: "공인중개사를 위한 매물·시세 분석 도구 사용 가이드",
+  alternates: { canonical: "/help" },
+  openGraph: {
+    url: "/help",
+    title: "도움말 - 공인중개사용 매물·시세 분석 도구 | 2u부동산",
+    description: "공인중개사를 위한 매물·시세 분석 도구 사용 가이드",
+    type: "website",
+    // openGraph 를 직접 쓰면 root opengraph-image 상속이 끊긴다 → images 를 꼭 적는다(seo-metadata.md 룰 2)
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
+  },
 };
 
 export default function HelpPage() {

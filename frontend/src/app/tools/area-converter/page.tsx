@@ -8,6 +8,7 @@ export const metadata: Metadata = {
     "평수와 제곱미터를 양방향 즉시 변환합니다. 1평 = 3.3058㎡ 표준 환산식 기준, 입력 단위를 바꾸면 자동으로 반대 단위로 환산됩니다.",
   alternates: { canonical: "/tools/area-converter" },
   openGraph: {
+    url: "/tools/area-converter",
     title: "평·㎡ 면적 변환 계산기 | 2u부동산",
     description: "공인중개사를 위한 평·㎡ 양방향 즉시 변환 — 1평 = 3.3058㎡ 표준식",
     // openGraph 직접 지정 시 root opengraph-image 자동 상속이 끊겨 브랜드 PNG og 를 명시(빌드 실측 확인)

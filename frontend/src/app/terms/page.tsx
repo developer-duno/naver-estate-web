@@ -1,8 +1,23 @@
+import type { Metadata } from "next";
 import PaidServicePausedNotice from "@/components/PaidServicePausedNotice";
+
+export const metadata: Metadata = {
+  title: "이용약관",
+  description: "2u부동산 서비스 이용약관 — 서비스 내용·이용자 의무·면책·유료 서비스와 환불·약관 변경을 안내합니다.",
+  alternates: { canonical: "/terms" },
+  openGraph: {
+    url: "/terms",
+    title: "이용약관 | 2u부동산",
+    description: "2u부동산 서비스 이용약관 — 서비스 내용·이용자 의무·면책·유료 서비스와 환불·약관 변경을 안내합니다.",
+    type: "website",
+    // openGraph 를 직접 쓰면 root opengraph-image 상속이 끊긴다 → images 를 꼭 적는다(seo-metadata.md 룰 2)
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
+  },
+};
 
 export default function TermsPage() {
   return (
-    <main className="max-w-3xl mx-auto px-4 py-12">
+    <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-2xl font-bold mb-6">이용약관</h1>
 
       {/* 무료 운영 중 현황 고지 — 제5조·제7조가 유료 구독을 전제하므로(세션 405).
@@ -75,6 +90,6 @@ export default function TermsPage() {
           공지를 통해 안내합니다.
         </p>
       </section>
-    </main>
+    </div>
   );
 }

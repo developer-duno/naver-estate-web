@@ -62,3 +62,16 @@ describe("sitemap /updates lastModified", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("sitemap — 공개 대표 URL 만 (세션 458 SEO)", () => {
+  it("계산기 허브 /tools 가 들어 있고, 잠긴·비공개 경로(/pricing·/search·/complex·/mibunyang·/admin)는 없다", async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
+    const urls = (await sitemap()).map((x) => x.url);
+    expect(urls).toContain("https://2u.pe.kr/tools");
+    // 경로 머리글자로 판정 — 블로그 글 주소(/blog/mibunyang-…)는 비공개 경로가 아니다
+    const paths = urls.map((u) => new URL(u).pathname);
+    for (const bad of ["/pricing", "/search", "/complex", "/mibunyang", "/admin", "/login"]) {
+      expect(paths.some((p) => p === bad || p.startsWith(`${bad}/`))).toBe(false);
+    }
+  });
+});

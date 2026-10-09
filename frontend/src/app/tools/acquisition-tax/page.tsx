@@ -8,6 +8,7 @@ export const metadata: Metadata = {
     "매매가·주택수·면적을 입력하면 지방세법 + 농특세법 + 지방세특례제한법(생애최초) 기준 취득세 본세·농특세·교육세를 즉시 계산합니다.",
   alternates: { canonical: "/tools/acquisition-tax" },
   openGraph: {
+    url: "/tools/acquisition-tax",
     title: "취득세 계산기 | 2u부동산",
     description: "공인중개사를 위한 취득세 자동 계산 — 1주택 표준·다주택 중과·생애최초 감면·오피스텔까지 모두 지원",
     // openGraph 직접 지정 시 root opengraph-image 자동 상속이 끊겨 브랜드 PNG og 를 명시(빌드 실측 확인)

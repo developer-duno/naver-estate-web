@@ -9,6 +9,7 @@ export const metadata: Metadata = {
     "취득세·양도소득세·보유세·중개수수료·평㎡ 변환을 한곳에서. 공인중개사를 위한 부동산 계산기 모음.",
   alternates: { canonical: "/tools" },
   openGraph: {
+    url: "/tools",
     title: "부동산 계산기 5종 | 2u부동산",
     description: "취득세·양도소득세·보유세·중개수수료·평㎡ 변환 — 부동산 계산기 모음",
     // openGraph 직접 지정 시 root opengraph-image 자동 상속이 끊겨 브랜드 PNG og 를 명시(빌드 실측 확인)
@@ -65,6 +66,10 @@ export default function ToolsHubPage() {
         </h1>
         <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
           취득세·양도소득세·보유세·중개수수료·평㎡ 변환을 한곳에서 빠르게 계산하세요.
+        </p>
+        <p className="mt-2 text-sm text-gray-500 leading-relaxed">
+          다섯 계산기 모두 로그인 없이 쓸 수 있고, 각 계산기 화면에 계산 기준이 되는 법령과 개정일을 적어
+          두었습니다. 결과는 참고용이며 최종 금액은 관할 기관에 확인하세요.
         </p>
       </section>
 

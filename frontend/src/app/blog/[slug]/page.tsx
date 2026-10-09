@@ -27,6 +27,7 @@ export async function generateMetadata({
     description: post.description,
     alternates: { canonical: `/blog/${slug}` },
     openGraph: {
+      url: `/blog/${slug}`,
       title: `${post.title} | 2u부동산`,
       description: post.description,
       type: "article",

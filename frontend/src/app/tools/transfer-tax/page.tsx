@@ -11,6 +11,7 @@ export const metadata: Metadata = {
     "양도가액·취득가액·보유·거주연수를 입력하면 소득세법 §95② + §104 (9 권위 출처 교차검증) 기준 양도소득세 본세를 즉시 계산합니다.",
   alternates: { canonical: "/tools/transfer-tax" },
   openGraph: {
+    url: "/tools/transfer-tax",
     title: "양도소득세 계산기 | 2u부동산",
     description:
       "공인중개사를 위한 양도세 자동 계산 — 1세대1주택 비과세·12억 초과 안분·중과 한시배제·미등기·장기보유공제 표1/표2 모두 지원",

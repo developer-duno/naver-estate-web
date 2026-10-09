@@ -1,4 +1,19 @@
+import type { Metadata } from "next";
 import PaidServicePausedNotice from "@/components/PaidServicePausedNotice";
+
+export const metadata: Metadata = {
+  title: "개인정보처리방침",
+  description: "2u부동산이 수집하는 개인정보 항목·이용 목적·보관 기간·국외 이전·보호책임자 연락처를 안내합니다.",
+  alternates: { canonical: "/privacy" },
+  openGraph: {
+    url: "/privacy",
+    title: "개인정보처리방침 | 2u부동산",
+    description: "2u부동산이 수집하는 개인정보 항목·이용 목적·보관 기간·국외 이전·보호책임자 연락처를 안내합니다.",
+    type: "website",
+    // openGraph 를 직접 쓰면 root opengraph-image 상속이 끊긴다 → images 를 꼭 적는다(seo-metadata.md 룰 2)
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
+  },
+};
 
 /** 시행일 — 방침을 고치면 이 날짜와 맨 아래 개정 이력을 함께 고친다 */
 const EFFECTIVE_DATE = "2026년 10월 6일";
@@ -75,7 +90,7 @@ const REVISIONS: { date: string; summary: string }[] = [
 
 export default function PrivacyPage() {
   return (
-    <main className="max-w-3xl mx-auto px-4 py-12">
+    <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-2xl font-bold mb-2">개인정보 처리방침</h1>
       <p className="text-sm text-gray-500 mb-6">시행일: {EFFECTIVE_DATE}</p>
 
@@ -323,6 +338,6 @@ export default function PrivacyPage() {
           ))}
         </ul>
       </section>
-    </main>
+    </div>
   );
 }

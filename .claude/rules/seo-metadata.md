@@ -89,6 +89,14 @@ curl -sL -A "Googlebot" https://<도메인>/ | grep -c '<h1'   # 1 이상이어�
 데이터 보호로 의도된 설계**(robots.ts). 진단·수정 시 이를 "결함"으로 오판하지 말 것.
 마케팅·공개 페이지(홈·blog·tools·pricing)만 색인 대상.
 
+## 룰 6 — 공개 페이지는 title·description·alternates.canonical 을 자기 것으로 (세션 458)
+
+`metadata` 를 안 쓰거나 `alternates.canonical` 을 빼면 루트 layout 의 canonical `/` 를 물려받아
+**"이 페이지는 홈의 중복"이라고 검색엔진에 알리는 셈**이 된다(세션 458 실측: 약관·개인정보·도움말이 그 상태였다).
+공개 페이지(sitemap 에 든 것)는 `title`·`description`·`alternates.canonical`(자기 경로) 셋을 직접 지정한다.
+자체 `openGraph` 를 두면 룰 2 대로 `images` 와 함께 **`url`(자기 경로)도** 넣는다 — 빼면 og:url 이 비거나 홈을 가리킨다.
+검증 = 빌드 산출물(`.next/server/app/<경로>.html`)에서 `rel="canonical"`·`og:url` 이 자기 경로인지 grep.
+
 ## Cross-link
 
 - `web-rules.md` — React/Next.js 코딩 규칙 (본 룰과 상보)

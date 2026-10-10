@@ -63,6 +63,9 @@ export const ESTATE_TYPE_TABS = [
   { code: "RDV", label: "재개발" },
 ] as const;
 
+/** 매물유형 탭 기본 선택 — 아파트만 (사장님 결정 2026-10-11). 선택은 URL `types` 로만 전달(기기 기억 없음). */
+export const DEFAULT_ESTATE_TYPES = ["APT"] as const;
+
 /** 매물유형 필터 옵션 (FilterBar 드롭다운용 — 매물 레벨 필터) */
 export const ESTATE_TYPE_FILTER_OPTIONS = [
   { code: "apt", label: "아파트" },

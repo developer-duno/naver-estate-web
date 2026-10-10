@@ -11,8 +11,9 @@ import { createClient } from "@/lib/supabase";
 import RegionSelector from "@/components/RegionSelector";
 import FilterBar from "@/components/FilterBar";
 import FilterBarMobileSheet from "@/components/FilterBarMobileSheet";
-import { COMPLEX_SORT_OPTIONS, ESTATE_TYPE_TABS } from "@/lib/constants";
+import { COMPLEX_SORT_OPTIONS, ESTATE_TYPE_TABS, DEFAULT_ESTATE_TYPES } from "@/lib/constants";
 import EstateTypeTabs from "@/components/EstateTypeTabs";
+import HiddenTypesHint from "@/components/search/HiddenTypesHint";
 import ComplexSortDropdown from "@/components/ComplexSortDropdown";
 import { SkeletonPage } from "@/components/Skeleton";
 import { useFilterParams, buildFilterURL } from "@/hooks/useFilterParams";
@@ -45,6 +46,12 @@ const SearchClusterMap = dynamic(() => import("@/components/search/SearchCluster
 
 const VALID_COMPLEX_SORT = new Set<string>(COMPLEX_SORT_OPTIONS.map((o) => o.v));
 
+/** 매물유형 선택이 기본값(아파트만)과 같은지 — 순서 무관 집합 비교. */
+function isDefaultTypes(sel: string[]): boolean {
+  const defaults = DEFAULT_ESTATE_TYPES as readonly string[];
+  return sel.length === defaults.length && defaults.every((c) => sel.includes(c));
+}
+
 interface Props {
   /** 결과 영역 위에 끼울 부가 영역 (검색 결과 없을 때 홈의 도구카드 등). */
   emptyExtra?: ReactNode;
@@ -72,9 +79,13 @@ export default function SearchExperience({ emptyExtra }: Props) {
   const dong = searchParams.get("dong") || "";
   const allCodes = ESTATE_TYPE_TABS.map((t) => t.code) as string[];
   const typesParam = searchParams.get("types");
-  const [selectedTypes, setSelectedTypes] = useState<string[]>(
-    typesParam ? typesParam.split(",").filter((c) => allCodes.includes(c)) : [...allCodes],
-  );
+  // 기본 = 아파트만(DEFAULT_ESTATE_TYPES). URL types 는 허용 코드만 받고, 남는 게 없으면 기본값.
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(() => {
+    const parsed = [...new Set((typesParam ?? "").split(",").filter((c) => allCodes.includes(c)))];
+    return parsed.length > 0 ? parsed : [...DEFAULT_ESTATE_TYPES];
+  });
+  // 기본값과 다를 때만 URL 에 types 를 쓴다(6개 전부여도 씀 — 공유 주소가 같은 화면이 되도록).
+  const typesForUrl = isDefaultTypes(selectedTypes) ? undefined : selectedTypes.join(",");
 
   const { filters: urlFilters, setFilters: setUrlFilters, filterKey } = useFilterParams();
   const { list: compareList, toggle: toggleCompare, remove: removeCompare, clear: clearCompare, isInCompare, isFull: compareFull } = useCompare();
@@ -90,7 +101,8 @@ export default function SearchExperience({ emptyExtra }: Props) {
   const { coords: userLocation } = useGeolocation(viewMode === "map" && !regionSelected);
 
   const filtersActive = Object.keys(urlFilters).some((k) => k !== "sort_by");
-  const typesNarrowed = selectedTypes.length < allCodes.length;
+  // 기본값(아파트만)과 다르면 활성 칩·필터 초기화 대상
+  const typesNarrowed = !isDefaultTypes(selectedTypes);
   const hasActiveFilters = filtersActive || typesNarrowed;
 
   const rawComplexSort = searchParams.get("complex_sort") ?? "default";
@@ -108,12 +120,12 @@ export default function SearchExperience({ emptyExtra }: Props) {
 
   const resetFilters = useCallback(() => {
     setUrlFilters({});
-    setSelectedTypes([...allCodes]);
+    setSelectedTypes([...DEFAULT_ESTATE_TYPES]);
     const params = new URLSearchParams(searchParams.toString());
     params.delete("types");
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [setUrlFilters, setSelectedTypes, allCodes, searchParams, router, pathname]);
+  }, [setUrlFilters, setSelectedTypes, searchParams, router, pathname]);
 
   const goToRecent = useCallback((item: SearchHistoryItem) => {
     const extra: Record<string, string> = {};
@@ -126,9 +138,9 @@ export default function SearchExperience({ emptyExtra }: Props) {
     } else {
       return;
     }
-    if (selectedTypes.length < allCodes.length) extra.types = selectedTypes.join(",");
+    if (typesForUrl) extra.types = typesForUrl;
     router.push(buildFilterURL(pathname, extra, urlFilters));
-  }, [router, selectedTypes, allCodes, urlFilters, pathname]);
+  }, [router, typesForUrl, urlFilters, pathname]);
 
   const title = keyword
     ? `"${keyword}" 검색 결과`
@@ -136,7 +148,12 @@ export default function SearchExperience({ emptyExtra }: Props) {
     ? `${sido} ${sigungu}${dong ? ` ${dong}` : ""} 단지 목록`
     : "검색";
 
-  const typesStr = selectedTypes.length < allCodes.length ? selectedTypes.join(",") : undefined;
+  // 서버 전달 types — 기본값(아파트만)이면 보내지 않는다: 전부 받아 화면에서 거르고(숨긴 유형 개수를
+  // 세야 함) 크롤 범위도 바꾸지 않는다. 기본값과 다르면 옛 규칙(6개 전부면 미전달, 아니면 그 유형만).
+  const typesStr =
+    isDefaultTypes(selectedTypes) || selectedTypes.length >= allCodes.length
+      ? undefined
+      : selectedTypes.join(",");
 
   const { data: searchData, isLoading: loading, isError, refetch: retrySearch } = useQuery({
     queryKey: keyword
@@ -208,7 +225,7 @@ export default function SearchExperience({ emptyExtra }: Props) {
   const handleTabChange = (types: string[]) => {
     setSelectedTypes(types);
     const params = new URLSearchParams(searchParams.toString());
-    if (types.length < allCodes.length) {
+    if (!isDefaultTypes(types)) {
       params.set("types", types.join(","));
     } else {
       params.delete("types");
@@ -221,7 +238,7 @@ export default function SearchExperience({ emptyExtra }: Props) {
     if (!q) return;
     addHistory({ type: "keyword", keyword: q });
     const extra: Record<string, string> = { q };
-    if (selectedTypes.length < allCodes.length) extra.types = selectedTypes.join(",");
+    if (typesForUrl) extra.types = typesForUrl;
     router.push(buildFilterURL(pathname, extra, urlFilters));
   };
 
@@ -229,7 +246,7 @@ export default function SearchExperience({ emptyExtra }: Props) {
     addHistory({ type: "region", sido: s, sigungu: sg, dong: d });
     const extra: Record<string, string> = { sido: s, sigungu: sg };
     if (d) extra.dong = d;
-    if (selectedTypes.length < allCodes.length) extra.types = selectedTypes.join(",");
+    if (typesForUrl) extra.types = typesForUrl;
     router.push(buildFilterURL(pathname, extra, urlFilters));
   };
 
@@ -248,7 +265,7 @@ export default function SearchExperience({ emptyExtra }: Props) {
     setUrlFilters({ ...urlFilters, [key]: undefined });
   };
   const resetEstateTypes = () => {
-    setSelectedTypes([...allCodes]);
+    setSelectedTypes([...DEFAULT_ESTATE_TYPES]);
     const params = new URLSearchParams(searchParams.toString());
     params.delete("types");
     const qs = params.toString();
@@ -388,7 +405,7 @@ export default function SearchExperience({ emptyExtra }: Props) {
               <button
                 onClick={() => {
                   const p = new URLSearchParams({ sido, sigungu });
-                  if (typesStr) p.set("types", typesStr);
+                  if (typesForUrl) p.set("types", typesForUrl);
                   router.push(`${pathname}?${p.toString()}`);
                 }}
                 className="text-sm text-blue-600 hover:underline px-3 py-1.5"
@@ -457,10 +474,28 @@ export default function SearchExperience({ emptyExtra }: Props) {
           <p className="text-gray-500 text-sm">
             전체 {complexes.length}개 단지 중 0개가 통과했습니다. 필터를 완화하거나 초기화해보세요.
           </p>
+          <div className="max-w-xl mx-auto text-left">
+            <HiddenTypesHint
+              complexes={complexes}
+              selectedTypes={selectedTypes}
+              visibleCount={0}
+              onShowAll={() => handleTabChange([...allCodes])}
+            />
+          </div>
           <button onClick={resetFilters} className="text-sm text-blue-600 hover:underline px-3 py-1.5">
             필터 초기화
           </button>
         </div>
+      )}
+
+      {/* 결과가 적을 때 매물유형 탭에 가려진 단지 안내 (기본 선택 = 아파트만, 세션 459) */}
+      {!loading && !error && sortedFilteredComplexes.length > 0 && (
+        <HiddenTypesHint
+          complexes={complexes}
+          selectedTypes={selectedTypes}
+          visibleCount={sortedFilteredComplexes.length}
+          onShowAll={() => handleTabChange([...allCodes])}
+        />
       )}
 
       {/* 지도 뷰 — SearchClusterMap 은 next/dynamic(ssr:false) 완전 지연 로드(계획 §핵심결정4).

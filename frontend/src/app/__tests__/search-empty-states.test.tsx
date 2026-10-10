@@ -223,7 +223,8 @@ describe("/search 빈 결과·에러 UI 보강", () => {
       "search_history",
       JSON.stringify([{ type: "keyword", keyword: "래미안", timestamp: 1000 }]),
     );
-    mockSearchParams.mockReturnValue(new URLSearchParams("q=없는키워드&types=APT&min_price=10000"));
+    // 세션 459: 기본 선택이 아파트만이 되어 types=APT 는 기본값(URL 에 안 씀) → 기본과 다른 OPST 로 보존 확인
+    mockSearchParams.mockReturnValue(new URLSearchParams("q=없는키워드&types=OPST&min_price=10000"));
     mockSearchComplexes.mockResolvedValue({ complexes: [], total: 0 });
 
     renderSearch();
@@ -233,7 +234,7 @@ describe("/search 빈 결과·에러 UI 보강", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "래미안" }));
     expect(mockPush).toHaveBeenCalledWith(
-      "/search?q=%EB%9E%98%EB%AF%B8%EC%95%88&types=APT&min_price=10000",
+      "/search?q=%EB%9E%98%EB%AF%B8%EC%95%88&types=OPST&min_price=10000",
     );
   });
 

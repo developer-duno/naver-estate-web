@@ -9,7 +9,7 @@ import subprocess
 import textwrap
 from pathlib import Path
 
-from scripts.audit_shared_db_ownership import FORMAT_CHANGED, check_migration_sql, main
+from scripts.audit_shared_db_ownership import FETCH_FAILED, FORMAT_CHANGED, check_migration_sql, main
 
 MODELS = """
 class Base:
@@ -437,10 +437,11 @@ def test_f_registry_broken_json_is_red(tmp_path, capsys):
 def test_g_off_file_exits_zero(tmp_path, capsys):
     """(g) backend/.ownership-guard-off 가 있으면 정본이 깨져 있어도 판정 없이 exit 0."""
     root, reg = _tree(tmp_path, _registry(version=2))
-    (root / "backend/.ownership-guard-off").write_text("", encoding="utf-8")
+    (root / "backend/.ownership-guard-off").write_text("2026-10-10 정본 v2 대응 중\n둘째 줄\n", encoding="utf-8")
     code, out = _run(capsys, root, reg)
     assert code == 0
     assert "가드 꺼짐(backend/.ownership-guard-off)" in out
+    assert "⚠ 가드 꺼짐 — 끈 날짜·사유는 그 파일 첫 줄\n2026-10-10 정본 v2 대응 중\n" in out
 
 
 def test_missing_registered_file_is_yellow(tmp_path, capsys):
@@ -451,3 +452,215 @@ def test_missing_registered_file_is_yellow(tmp_path, capsys):
     code, out = _run(capsys, root, reg)
     assert code == 0
     assert "| 🟡 정본 | backend/gone.py:0 | - | writers.2u 에 등록됐으나 파일 없음 |" in out
+
+
+# ── 보완(검사관 지적) — 같은 파일에 2u 전용 표 쓰기(db.add(CrawlJob(..)))가 섞여도 공유·미분양 표 쓰기를 잡는다 ──
+
+
+def _red_for(capsys, tmp_path, rel: str, body: str) -> str:
+    root, reg = _tree(tmp_path)
+    _write(root, rel, body)
+    code, out = _run(capsys, root, reg)
+    assert code == 1, out
+    return out
+
+
+def test_g1a_any_receiver_add_and_delete(tmp_path, capsys):
+    """받는 쪽 이름이 db 가 아니어도(sess.add · s.delete) 인자가 모델 생성·풀린 행이면 쓰기·삭제."""
+    out = _red_for(capsys, tmp_path, "backend/crawler/w_a.py", """
+        from db.models import Complex, CrawlJob
+
+
+        def save(db, sess, no):
+            db.add(CrawlJob(job_type="x"))
+            sess.add(Complex(complex_no=no))
+    """)
+    assert "| 🔴 ① | backend/crawler/w_a.py:6 | complexes |" in out
+    out = _red_for(capsys, tmp_path, "backend/crawler/w_a2.py", """
+        from db.models import Article, CrawlJob
+
+
+        def purge(db, s):
+            db.add(CrawlJob(job_type="x"))
+            for row in s.query(Article).all():
+                s.delete(row)
+    """)
+    assert "| 🔴 ③ | backend/crawler/w_a2.py:7 | articles |" in out
+
+
+def test_g1b_other_module_name_update_model(tmp_path, capsys):
+    """sa.update(모델) — 앞 이름이 sa 여도 첫 인자가 모델이면 그 표 쓰기."""
+    out = _red_for(capsys, tmp_path, "backend/crawler/w_b.py", """
+        import sqlalchemy as sa
+        from db.models import Complex, CrawlJob
+
+
+        def save(db):
+            db.add(CrawlJob(job_type="x"))
+            db.execute(sa.update(Complex).values(address="a"))
+    """)
+    assert "| 🔴 ① | backend/crawler/w_b.py:7 | complexes |" in out
+
+
+def test_g1c_imported_insert_alias(tmp_path, capsys):
+    """from sqlalchemy.dialects.sqlite import insert as db_insert — 별명 호출도 insert 와 같다(2u 실제 꼴)."""
+    out = _red_for(capsys, tmp_path, "backend/crawler/w_c.py", """
+        from sqlalchemy.dialects.sqlite import insert as db_insert
+        from db.mb_models import Apartment
+        from db.models import CrawlJob
+
+
+        def save(db):
+            db.add(CrawlJob(job_type="x"))
+            db.execute(db_insert(Apartment).values(name="a"))
+    """)
+    assert "| 🔴 ① | backend/crawler/w_c.py:8 | apartments |" in out
+
+
+def test_g1d_table_chain(tmp_path, capsys):
+    """모델.__table__.update() 사슬."""
+    out = _red_for(capsys, tmp_path, "backend/crawler/w_d.py", """
+        from db.models import Complex, CrawlJob
+
+
+        def save(db):
+            db.add(CrawlJob(job_type="x"))
+            db.execute(Complex.__table__.update().values(address="a"))
+    """)
+    assert "| 🔴 ① | backend/crawler/w_d.py:6 | complexes |" in out
+
+
+def test_g1e_setattr_on_resolved_row(tmp_path, capsys):
+    """setattr(풀린 행 변수, …) 는 그 표 쓰기."""
+    out = _red_for(capsys, tmp_path, "backend/crawler/w_e.py", """
+        from db.mb_models import Infra
+        from db.models import CrawlJob
+
+
+        def run(db):
+            db.add(CrawlJob(job_type="x"))
+            for row in db.query(Infra).all():
+                setattr(row, "crime_score", 1)
+    """)
+    assert "| 🔴 ① | backend/crawler/w_e.py:8 | infra |" in out
+
+
+def test_g1f_concatenated_sql_in_text(tmp_path, capsys):
+    """text('UPDATE ' + '표' + …) 이어 붙인 SQL 은 표 모름 쓰기 → 언급한 표가 미등록이면 🔴."""
+    out = _red_for(capsys, tmp_path, "backend/crawler/w_f.py", """
+        from sqlalchemy import text
+        from db.models import CrawlJob
+
+
+        def run(db):
+            db.add(CrawlJob(job_type="x"))
+            db.execute(text("UPDATE " + "apartments" + " SET x = 1"))
+    """)
+    assert "| 🔴 ① | backend/crawler/w_f.py:7 | apartments |" in out
+
+
+def test_g2_sql_set_with_spaces_is_red(tmp_path, capsys):
+    """등록 파일의 SQL 문자열 `SET corridor_type = :v`(공백) → 🔴 ② · WHERE 뒤 칸은 대입이 아니다."""
+    root, reg = _tree(tmp_path)
+    extra = (
+        "\n\ndef extra(db, no):\n"
+        '    db.execute(text("UPDATE complexes SET corridor_type = :v WHERE complex_no = :n"), {"v": "a", "n": no})\n'
+    )
+    _write(root, "backend/services/enricher.py", ENRICHER + extra)
+    code, out = _run(capsys, root, reg)
+    assert code == 1
+    assert "| 🔴 ② | backend/services/enricher.py:11 | complexes | 미분양 칸 쓰기 — complexes.corridor_type" in out
+
+
+def test_g2_setattr_dict_key_and_dict_call_are_red(tmp_path, capsys):
+    """setattr(행, "칸", …) · {모델.칸: v} · dict(칸 = …) 도 ② 칸 키."""
+    root, reg = _tree(tmp_path)
+    for snippet in ('setattr(obj, "corridor_type", "a")', 'vals = {ComplexModel.corridor_type: "a"}', 'vals = dict(corridor_type = "a")'):
+        _write(root, "backend/services/enricher.py", ENRICHER + f"\n\ndef extra(db, obj):\n    {snippet}\n")
+        code, out = _run(capsys, root, reg)
+        assert code == 1, snippet
+        assert "| 🔴 ② | backend/services/enricher.py:11 | complexes | 미분양 칸 쓰기 — complexes.corridor_type" in out, snippet
+
+
+def test_g3_migration_add_without_column_and_shared_add():
+    """④ ADD(COLUMN 생략)도 칸 추가 · 공유 표 칸 추가도 🟡 · 제약 추가·2u 전용 표는 무관."""
+    sql = (
+        "ALTER TABLE apartments ADD y int;\n"
+        "ALTER TABLE complexes ADD COLUMN z text;\n"
+        "ALTER TABLE complexes ADD CONSTRAINT c UNIQUE (z);\n"
+        "ALTER TABLE crawl_jobs ADD w int;\n"
+    )
+    found = [(f.level, f.table, f.line) for f in check_migration_sql("m.sql", sql, _registry())]
+    assert found == [("yellow", "apartments", 1), ("yellow", "complexes", 2)]
+
+
+def test_g4_registry_fetch_failure_says_rerun(tmp_path, capsys):
+    """정본 받기 실패는 '재실행' 문구 — '형식이 바뀜' 이 아니다."""
+    root, _ = _tree(tmp_path)
+    code, out = _run(capsys, root, tmp_path / "no-such.json")
+    assert code == 1
+    assert FETCH_FAILED in out
+    assert FORMAT_CHANGED not in out
+
+
+def test_g4_registry_shape_odd_owner_or_column_key_is_red(tmp_path, capsys):
+    """owner 값·columns 키가 모르는 값이면 🔴 형식 바뀜 · 미분양 가드가 쓰는 orphan·clock 키는 통과."""
+    reg_dict = _registry()
+    reg_dict["tables"]["complexes"]["columns"]["orphan"] = ["has_pool"]
+    reg_dict["tables"]["complexes"]["columns"]["clock"] = ["created_at"]
+    root, reg = _tree(tmp_path, reg_dict)
+    code, out = _run(capsys, root, reg)
+    assert code == 0, out
+    reg_dict["tables"]["complexes"]["owner"] = "someone"
+    reg.write_text(json.dumps(reg_dict, ensure_ascii=False), encoding="utf-8")
+    code, out = _run(capsys, root, reg)
+    assert code == 1
+    assert "tables[\"complexes\"].owner 가 모르는 값('someone')" in out and FORMAT_CHANGED in out
+    reg_dict["tables"]["complexes"]["owner"] = "shared"
+    reg_dict["tables"]["infra"]["columns"]["weird"] = []
+    reg.write_text(json.dumps(reg_dict, ensure_ascii=False), encoding="utf-8")
+    code, out = _run(capsys, root, reg)
+    assert code == 1
+    assert "tables[\"infra\"].columns 에 모르는 키(['weird'])" in out and FORMAT_CHANGED in out
+
+
+def test_g4_model_table_missing_from_registry_is_yellow(tmp_path, capsys):
+    """모델의 __tablename__ 이 정본 tables 에 없으면 🟡(통과)."""
+    root, reg = _tree(tmp_path)
+    _write(root, "backend/db/models.py", MODELS + '\n\nclass NewThing(Base):\n    __tablename__ = "new_things"\n')
+    code, out = _run(capsys, root, reg)
+    assert code == 0, out
+    assert "| 🟡 정본 | backend/db/models.py:18 | new_things | 정본에 없는 표" in out
+
+
+def test_g4_zero_scanned_files_is_red(tmp_path, capsys):
+    """스캔한 파일이 0개(엉뚱한 --repo-root)면 조용히 통과하지 않는다."""
+    _, reg = _tree(tmp_path)
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    code, out = _run(capsys, empty, reg)
+    assert code == 1
+    assert "스캔한 파일이 0개" in out
+
+
+def test_negative_set_add_of_column_values_is_not_a_write(tmp_path, capsys):
+    """음성 대조 — 미등록 파일이 Complex 행을 읽기만 하고 집합에 칸 값을 모은 뒤 CrawlJob 만 쓰면 🔴 0.
+
+    `ids.add(c.complex_no)` 는 행 쓰기가 아니다 — '.add( 는 무엇이든 쓰기' 로 넓히면 이 시험이 깨진다.
+    """
+    root, reg = _tree(tmp_path)
+    _write(root, "backend/crawler/collect_ids.py", """
+        from db.models import Complex, CrawlJob
+
+
+        def run(db):
+            ids = set()
+            names = set()
+            for c in db.query(Complex).all():
+                ids.add(c.complex_no)
+                names.add(c.complex_name)
+            db.add(CrawlJob(job_type="x", total_items=len(ids)))
+    """)
+    code, out = _run(capsys, root, reg)
+    assert code == 0, out
+    assert "collect_ids.py" not in out

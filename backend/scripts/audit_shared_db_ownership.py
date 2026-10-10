@@ -13,19 +13,34 @@
        없으면 🔴. 머리 주석(첫 30줄) `# ownership-guard: allow <표> <사유>` 가 있으면 그 표의 ① 만 🟡 —
        단 그 표에 직접 쓰는 사슬(`pg_insert(모델)`·`db.query(모델)….update/delete(`·`db.add(모델(`·SQL 쓰기 문)이
        있으면 🔴 그대로.
-    ② 칸 기준선 — 등록된 파일 안의 글자 키(`"col":`·`col=`·`.col =`)가 그 표의 미분양 칸(`columns.mibunyang`)인데
+       쓰기로 세는 꼴: `.add/.add_all/.merge/.delete/.bulk_save_objects(` 는 받는 쪽 이름(`db`·`s`·`sess`…)과 상관없이
+       인자가 모델·모델 생성·풀린 행 변수면 그 표 · `X.insert/update/delete(모델)`(`sa.update(Complex)`) ·
+       `from sqlalchemy… import insert as 별명` 의 별명 호출(`db_insert(모델)`) · `모델.__table__.insert/update/delete()` ·
+       `setattr(풀린 행 변수, …)` · `text('UPDATE ' + …)` 처럼 이어 붙인 SQL(표 모름 쓰기 — f-string 도 같음).
+    ② 칸 기준선 — 등록된 파일 안의 글자 키(`"col":`·`col=`·`.col =`·SQL 문자열 `UPDATE … SET col = :v`·
+       `setattr(행, "col", …)`·`{모델.col: v}`·`dict(col = …)`)가 그 표의 미분양 칸(`columns.mibunyang`)인데
        `writers.2u[파일][표]` 기준선에 없으면 🔴. 기준선 `["*"]` 은 통과, `columns` 없는 표는 생략.
     ③ 행 삭제 — 공유 표 행을 지우는 코드(`db.query(모델)….delete(`·`db.delete(행)`·`DELETE FROM 표`)가
        `delete_allowed.2u[파일]` 밖이면 🔴(allow 주석과 무관). 캐시 `.delete(key)` 는 대상이 아니다 — 대상 표는
        구문 트리로 푼다. 행 변수의 표를 못 풀면 그 파일이 언급한 공유 표 전부를 대상으로 본다(보수적).
     ④ 마이그 — `--since` 가 있으면 그 기준 이후 바뀐/새 `backend/db/migrations/*.sql` 에서 공유·미분양 소유 표이거나
        미분양이 읽는 표(`readers`)의 `DROP COLUMN`·`RENAME COLUMN`·`DROP TABLE`·`ALTER TABLE … RENAME TO` 는 🔴,
-       미분양 소유 표의 `ADD COLUMN` 은 🟡. `--since` 가 없으면 ④ 는 생략하고 그렇다고 출력한다.
-    정본 자체 — 받기 실패·JSON 오류·version != 1 은 🔴(조용히 통과하지 않는다). writers.2u·delete_allowed.2u 에
-       적힌 파일이 레포에 없으면 🟡.
+       미분양 소유·공유 표의 칸 추가(`ADD COLUMN`·`ADD 칸 타입`)는 🟡. `--since` 가 없으면 ④ 는 생략하고 그렇다고 출력한다.
+    정본 자체 — 받기 실패(재실행 안내)와 JSON 오류·version != 1·필수 키 없음·`owner` 값이나 `columns` 키가 모르는 값
+       (형식 바뀜 안내)은 🔴(조용히 통과하지 않는다). writers.2u·delete_allowed.2u 에 적힌 파일이 레포에 없거나,
+       모델의 `__tablename__` 이 정본 `tables` 에 없으면 🟡. 스캔한 파일이 0개면 🔴.
+
+못 잡는 꼴(알고 둔 한계)
+    - 헬퍼가 넘겨준 행에 칸만 대입하는 미등록 파일(`crawler/env_crime.py` 꼴 — 모델 이름도 쓰기 흔적도 없다).
+    - 다른 파일의 헬퍼를 부르는 쪽(`upsert_complex(db, ..)`) — 쓰기는 헬퍼 파일 쪽에서만 센다.
+    - 모델을 글자로 꺼내 쓰는 꼴(`m = getattr(models, "Complex")` 뒤 `m(...)`·행 대입) — 2u 운영 코드에는 0곳.
+    - 표 이름을 인자로 받는 f-string·이어 붙인 SQL — "표 모름" 쓰기로만 세고, 그 파일이 언급한 표로 넓혀 본다.
+    - .sql 마이그 안의 TRUNCATE·DELETE·UPDATE(④ 는 칸·표 삭제와 이름 변경, 칸 추가만 본다).
+    - ② 는 `columns.mibunyang` 만 본다 — 미분양 칸 정의가 없는 표(articles·complex_price_history)는 ② 가 사실상 없다.
 
 끄는 법
     `backend/.ownership-guard-off` 파일이 있으면 판정 없이 exit 0(정본 형식이 바뀌어 가드를 맞출 때까지 등).
+    그 파일 첫 줄에 끈 날짜·사유를 적는다 — 꺼진 동안 매 실행 출력에 그 줄이 보인다.
 
 실행
     python backend/scripts/audit_shared_db_ownership.py                      # 정본을 raw URL 로 받아 판정
@@ -54,8 +69,12 @@ MODEL_FILES = ("backend/db/models.py", "backend/db/mb_models.py")
 SELF_FILE = "backend/scripts/audit_shared_db_ownership.py"
 MIGRATIONS_DIR = "backend/db/migrations/"
 FORMAT_CHANGED = "정본 형식이 바뀜 — 가드를 맞추기 전까지 backend/.ownership-guard-off 파일로 끔"
+FETCH_FAILED = "정본을 받지 못함 — 잠시 뒤 재실행(GitHub/raw 장애). 계속 실패하면 backend/.ownership-guard-off 로 끔"
 ALLOW_HEAD_LINES = 30
 WATCHED_OWNERS = ("mibunyang", "shared")
+# 미분양 가드 audit-shared-db-ownership.mjs 의 OWNERS·COLUMN_BUCKETS 와 같은 값
+OWNERS = ("mibunyang", "2u", "shared", "orphan")
+COLUMN_BUCKETS = ("key", "mibunyang", "2u", "contested", "orphan", "clock")
 
 # 쓰기 흔적(①) — ORM 삭제만 센다. 캐시 `.delete(key)` 는 쓰기가 아니다.
 WRITE_TRACE_RE = re.compile(
@@ -70,10 +89,20 @@ SQL_WRITE_RE = re.compile(
 SQL_DYNAMIC_RE = re.compile(r"\b(insert\s+into|update|delete\s+from)\s+\{", re.IGNORECASE)
 ALLOW_RE = re.compile(r"^\s*#\s*ownership-guard:\s*allow\s+([A-Za-z_]\w*)\s+(\S.*)$")
 _DB_NAMES = ("db", "session")
+# 문 만들기 함수 이름 → 종류. `from sqlalchemy… import insert as 별명` 의 별명은 파일마다 더한다.
+_STMT_FUNCS = {
+    "pg_insert": "insert", "insert": "insert", "update": "update", "delete": "delete",
+    "sa_insert": "insert", "sa_update": "update", "sa_delete": "delete",
+}
+_SQL_KEYWORD_RE = re.compile(r"\b(insert\s+into|update|delete\s+from)\b", re.IGNORECASE)
 
 
 class RegistryError(Exception):
     pass
+
+
+class RegistryFetchError(RegistryError):
+    """정본을 받지(읽지) 못함 — 형식 변경이 아니라 장애라 재실행을 안내한다."""
 
 
 @dataclass
@@ -98,7 +127,7 @@ def load_registry(path: str | None) -> dict:
             with urllib.request.urlopen(REGISTRY_URL, timeout=30) as resp:
                 raw = resp.read().decode("utf-8")
     except (OSError, ValueError) as e:
-        raise RegistryError(f"정본 받기 실패({e})") from e
+        raise RegistryFetchError(str(e)) from e
     try:
         reg = json.loads(raw)
     except json.JSONDecodeError as e:
@@ -108,15 +137,23 @@ def load_registry(path: str | None) -> dict:
         raise RegistryError(f"version 이 1 이 아님({got})")
     if not isinstance(reg.get("tables"), dict) or not isinstance((reg.get("writers") or {}).get("2u"), dict):
         raise RegistryError("tables 또는 writers.2u 가 없음")
+    for t, info in reg["tables"].items():
+        owner = info.get("owner") if isinstance(info, dict) else None
+        if owner not in OWNERS:
+            raise RegistryError(f'tables["{t}"].owner 가 모르는 값({owner!r})')
+        cols = info.get("columns")
+        if cols is not None and (not isinstance(cols, dict) or not set(cols) <= set(COLUMN_BUCKETS)):
+            odd = sorted(set(cols) - set(COLUMN_BUCKETS)) if isinstance(cols, dict) else type(cols).__name__
+            raise RegistryError(f'tables["{t}"].columns 에 모르는 키({odd})')
     return reg
 
 
 # ── 코드 읽기 ──────────────────────────────────────────────────────
 
 
-def load_models(root: Path) -> dict[str, str]:
-    """모델 클래스 이름 → 표 이름 (`__tablename__`, models.py·mb_models.py 둘 다)."""
-    out: dict[str, str] = {}
+def model_defs(root: Path) -> list[tuple[str, int, str, str]]:
+    """(모델 파일, 줄, 클래스 이름, 표 이름) — `__tablename__`, models.py·mb_models.py 둘 다."""
+    out: list[tuple[str, int, str, str]] = []
     for rel in MODEL_FILES:
         p = root / rel
         if not p.exists():
@@ -131,7 +168,7 @@ def load_models(root: Path) -> dict[str, str]:
                     and isinstance(st.value, ast.Constant)
                     and isinstance(st.value.value, str)
                 ):
-                    out[node.name] = st.value.value
+                    out.append((rel, st.lineno, node.name, st.value.value))
     return out
 
 
@@ -213,11 +250,18 @@ class _AstWrites:
 
     def __init__(self, tree: ast.Module, models: dict[str, str]):
         self.alias = dict(models)
+        self.stmt_funcs = dict(_STMT_FUNCS)
+        self.insert_funcs = {"pg_insert"}  # 인자를 못 풀면 '표 모름' 쓰기로 세는 insert 함수
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
+                from_sa = (node.module or "").startswith("sqlalchemy")
                 for a in node.names:
                     if a.name in models and a.asname:
                         self.alias[a.asname] = models[a.name]
+                    if from_sa and a.name in ("insert", "update", "delete"):  # insert as db_insert 등
+                        self.stmt_funcs[a.asname or a.name] = a.name
+                        if a.name == "insert":
+                            self.insert_funcs.add(a.asname or a.name)
         self.writes: dict[str, int] = {}  # 표 → 첫 줄 (삭제 포함 풀린 쓰기 전부)
         self.deletes: dict[str, int] = {}  # 표 → 첫 줄
         self.unresolved_write_line: int | None = None
@@ -242,6 +286,33 @@ class _AstWrites:
         if isinstance(node, ast.Attribute):
             return self.alias.get(node.attr) or self._model_of(node.value)
         return None
+
+    def _model_ref(self, node: ast.AST | None) -> str | None:
+        """식 자체가 모델인가 — `Complex`·`models.Complex`·`Complex.__table__` 만(칸 `Complex.x` 는 아님)."""
+        if isinstance(node, ast.Name):
+            return self.alias.get(node.id)
+        if isinstance(node, ast.Attribute):
+            return self.alias.get(node.attr) or (self._model_ref(node.value) if node.attr == "__table__" else None)
+        return None
+
+    def _row_tables(self, node: ast.AST | None) -> set[str]:
+        """받는 쪽 이름을 모르는 `.add/.merge/.delete(인자)` 의 인자 — 모델·모델 생성·풀린 행 변수·그 목록만 본다.
+
+        `ids.add(c.complex_no)` 같은 칸 값은 행이 아니므로 속성 사슬은 거슬러 가지 않는다.
+        """
+        if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+            return set().union(*(self._row_tables(e) for e in node.elts))
+        if isinstance(node, ast.Starred):
+            return self._row_tables(node.value)
+        if isinstance(node, ast.Call):
+            t = self._model_ref(node.func)
+            return {t} if t else set()
+        t = self._model_ref(node)
+        if t:
+            return {t}
+        if isinstance(node, ast.Name):
+            return set(self.var_tables.get(node.id, ()))
+        return set()
 
     def _expr_tables(self, node: ast.AST | None) -> set[str]:
         """식의 머리가 가리키는 표 — `.query(모델…)`·`.get(모델, …)`·`모델(…)` 생성·이미 푼 변수.
@@ -323,17 +394,33 @@ class _AstWrites:
         func, line = node.func, node.lineno
         first = node.args[0] if node.args else None
         if isinstance(func, ast.Name):
-            # pg_insert(모델) · sqlalchemy insert/update/delete(모델)
-            if func.id in ("pg_insert", "insert", "update", "delete", "sa_insert", "sa_update", "sa_delete"):
+            kind = self.stmt_funcs.get(func.id)
+            if kind:  # pg_insert(모델) · sqlalchemy insert/update/delete(모델) · 그 별명(db_insert)
                 t = self._model_of(first)
                 if t:
-                    self._add(self.deletes if func.id.endswith("delete") else self.writes, t, line)
-                elif func.id == "pg_insert":
+                    self._add(self.deletes if kind == "delete" else self.writes, t, line)
+                elif func.id in self.insert_funcs:
                     self._unresolved(line)
+            elif func.id == "setattr" and isinstance(first, ast.Name):  # setattr(행, "칸", 값)
+                for t in self.var_tables.get(first.id, ()):
+                    self._add(self.writes, t, line)
+            elif func.id == "text":
+                self._visit_text(node)
             return
         if not isinstance(func, ast.Attribute):
             return
         attr = func.attr
+        if attr == "text":
+            self._visit_text(node)
+            return
+        if attr in ("insert", "update", "delete"):
+            # 모델.__table__.insert/update/delete() · sa.update(모델) — 받는 쪽 이름과 상관없이 첫 인자가 모델
+            base = func.value
+            t = self._model_ref(base.value) if isinstance(base, ast.Attribute) and base.attr == "__table__" else None
+            t = t or self._model_ref(first)
+            if t:
+                self._add(self.deletes if attr == "delete" else self.writes, t, line)
+                return
         if attr == "delete" and self._is_db(func.value):  # db.delete(행)
             tables = self._expr_tables(first) if first is not None else set()
             if not tables:
@@ -342,6 +429,8 @@ class _AstWrites:
                 self._add(self.deletes, t, line)
         elif attr in ("update", "delete"):
             tables, chained = self._receiver(func.value)
+            if not tables and attr == "delete":  # s.delete(행) — 받는 쪽 이름이 db 가 아니어도
+                tables = self._row_tables(first)
             for t in tables:
                 self._add(self.deletes if attr == "delete" else self.writes, t, line)
             if tables:
@@ -357,27 +446,79 @@ class _AstWrites:
                 self._unresolved(line)
             for t in tables:
                 self._add(self.writes, t, line)
+        elif attr in ("add", "merge"):  # sess.add(모델(…)) · s.merge(행) — 받는 쪽 이름 무관, 인자가 풀릴 때만
+            for t in self._row_tables(first):
+                self._add(self.writes, t, line)
         elif attr.startswith("bulk_") and attr.endswith(("_mappings", "_objects")):
             t = self._model_of(first)
-            if t:
+            tables = {t} if t else self._row_tables(first)
+            for t in tables:
                 self._add(self.writes, t, line)
-            else:
+            if not tables:
                 self._unresolved(line)
+
+    def _visit_text(self, node: ast.Call) -> None:
+        """`text('UPDATE ' + 표 + …)` — 이어 붙인 SQL 은 표를 모르는 쓰기로 센다(f-string 은 SQL_DYNAMIC_RE 가 본다)."""
+        first = node.args[0] if node.args else None
+        if not isinstance(first, ast.BinOp):
+            return
+        joined = " ".join(n.value for n in ast.walk(first) if isinstance(n, ast.Constant) and isinstance(n.value, str))
+        m = _SQL_KEYWORD_RE.search(joined)
+        if m:
+            self._unresolved(node.lineno, delete=m.group(1).lower().startswith("delete"))
 
 
 # ── 판정 ────────────────────────────────────────────────────────────
 
 
-def extract_keys(masked: str) -> dict[str, int]:
-    """글자 키 → 첫 줄. `"col":`·`'col':` / `col=`(키워드 인자) / `.col =`(속성 대입). `==` 는 제외."""
+_SQL_SET_RE = re.compile(r"\bset\b", re.IGNORECASE)
+_SQL_SET_END_RE = re.compile(r"\b(?:where|returning|from)\b|;", re.IGNORECASE)
+_SQL_ASSIGN_RE = re.compile(r"(?<![\w.:])\"?([a-z_][a-z0-9_]*)\"?\s*=(?![=>])", re.IGNORECASE)
+
+
+def extract_keys(masked: str, tree: ast.AST | None = None, model_names: frozenset[str] = frozenset()) -> dict[str, int]:
+    """글자 키 → 첫 줄. `"col":`·`'col':` / `col=`(키워드 인자) / `.col =`(속성 대입). `==` 는 제외.
+
+    구문 트리가 있으면 더 본다: SQL 문자열 `UPDATE … SET col = :v`(공백 허용) · `setattr(행, "col", …)` ·
+    `{모델.col: v}` 사전 키 · `dict(col = …)`(띄어 쓴 키워드 인자).
+    """
     keys: dict[str, int] = {}
+
+    def put(k: str, ln: int) -> None:
+        keys[k] = min(keys.get(k, ln), ln)
+
     for rx in (
         re.compile(r"[\"']([a-z_][a-z0-9_]*)[\"']\s*:"),
         re.compile(r"\b([a-z_][a-z0-9_]*)=(?!=)"),
         re.compile(r"\.([a-z_][a-z0-9_]*)\s*=(?!=)"),
     ):
         for m in rx.finditer(masked):
-            keys.setdefault(m.group(1), _line_of(masked, m.start()))
+            put(m.group(1), _line_of(masked, m.start()))
+    if tree is None:
+        return keys
+    docstrings = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant)}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docstrings:
+            s = node.value
+            if not re.search(r"\bupdate\b", s, re.IGNORECASE):
+                continue
+            for sm in _SQL_SET_RE.finditer(s):
+                end = _SQL_SET_END_RE.search(s, sm.end())
+                for am in _SQL_ASSIGN_RE.finditer(s, sm.end(), end.start() if end else len(s)):
+                    put(am.group(1).lower(), node.lineno + s.count("\n", 0, am.start()))
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id == "setattr" and len(node.args) >= 2:
+                col = node.args[1]
+                if isinstance(col, ast.Constant) and isinstance(col.value, str):
+                    put(col.value, node.lineno)
+            elif node.func.id == "dict":
+                for kw in node.keywords:
+                    if kw.arg:
+                        put(kw.arg, kw.value.lineno)
+        elif isinstance(node, ast.Dict):
+            for k in node.keys:
+                if isinstance(k, ast.Attribute) and isinstance(k.value, ast.Name) and k.value.id in model_names:
+                    put(k.attr, k.lineno)
     return keys
 
 
@@ -416,14 +557,19 @@ def audit_file(rel: str, raw: str, registry: dict, models: dict[str, str]) -> li
     trace = WRITE_TRACE_RE.search(masked)
     trace_line = _line_of(masked, trace.start()) if trace else None
 
+    tree: ast.Module | None = None
+    model_names: frozenset[str] = frozenset()
     try:
-        aw = _AstWrites(ast.parse(raw), models)
+        tree = ast.parse(raw)
+        aw = _AstWrites(tree, models)
+        model_names = frozenset(aw.alias)
         direct = dict(aw.writes)
         deletes = dict(aw.deletes)
         unresolved_write = aw.unresolved_write_line
         unresolved_delete = aw.unresolved_delete_line
     except SyntaxError as e:
         findings.append(Finding("yellow", "정본", rel, e.lineno or 1, "-", "구문 분석 실패 — 쓰기 흔적이 있으면 언급한 표 전부에 쓴다고 본다"))
+        tree = None
         direct, deletes = {}, {}
         unresolved_write = trace_line
         unresolved_delete = trace_line if trace and ".delete(" in trace.group(0) else None
@@ -460,7 +606,7 @@ def audit_file(rel: str, raw: str, registry: dict, models: dict[str, str]) -> li
         theirs = ((tables.get(t) or {}).get("columns") or {}).get("mibunyang") or []
         if not theirs or cols == ["*"]:
             continue
-        keys = keys if keys is not None else extract_keys(masked)
+        keys = keys if keys is not None else extract_keys(masked, tree, model_names)
         for k in theirs:
             if k in keys and k not in cols:
                 findings.append(Finding("red", "②", rel, keys[k], t, f"미분양 칸 쓰기 — {t}.{k} 가 이 파일 기준선 밖(미분양 소유 칸)"))
@@ -482,6 +628,8 @@ _SQL_DESTRUCTIVE = (
     re.compile(r"\brename\s+to\b", re.I),
     re.compile(r"\brename\s+(?!to\b|column\b|constraint\b)\"?\w+\"?\s+to\b", re.I),
 )
+# 칸 추가 — `ADD COLUMN x` 와 COLUMN 을 생략한 `ADD x int` 둘 다. 제약·키 추가는 칸이 아니다.
+_SQL_ADD_COLUMN = re.compile(r"\badd\s+(?!constraint\b|primary\b|unique\b|foreign\b|check\b|exclude\b)\"?\w", re.I)
 
 
 def check_migration_sql(rel: str, sql: str, registry: dict) -> list[Finding]:
@@ -508,8 +656,10 @@ def check_migration_sql(rel: str, sql: str, registry: dict) -> list[Finding]:
             t = _sql_table(alter.group(1))
             if protected(t) and any(rx.search(stmt) for rx in _SQL_DESTRUCTIVE):
                 findings.append(Finding("red", "④", rel, line, t, f"미분양이 쓰거나 읽는 표의 칸 삭제·이름 변경 — {stmt[:120]}"))
-            if re.search(r"\badd\s+column\b", stmt, re.I) and (tables.get(t) or {}).get("owner") == "mibunyang":
-                findings.append(Finding("yellow", "④", rel, line, t, "미분양 소유 표에 칸 추가 — 미분양에 알릴 것"))
+            owner = (tables.get(t) or {}).get("owner")
+            if _SQL_ADD_COLUMN.search(stmt) and owner in WATCHED_OWNERS:
+                what = "미분양 소유 표" if owner == "mibunyang" else "공유 표"
+                findings.append(Finding("yellow", "④", rel, line, t, f"{what}에 칸 추가 — 미분양에 알릴 것"))
         drop = re.search(r"\bdrop\s+table\s+(?:if\s+exists\s+)?(.+?)(?:\s+(?:cascade|restrict))?$", stmt, re.I)
         if drop:
             for part in drop.group(1).split(","):
@@ -534,13 +684,21 @@ def changed_migrations(root: Path, since: str) -> list[str]:
 
 def audit(root: Path, registry: dict, since: str | None) -> tuple[list[Finding], int, str]:
     """판정 본체. (판정 목록, 스캔 파일 수, ④ 상태 문구)"""
-    models = load_models(root)
+    defs = model_defs(root)
+    models = {cls: table for _, _, cls, table in defs}
     findings: list[Finding] = []
+    seen_tables: set[str] = set()
+    for rel, line, _, table in defs:
+        if table not in registry["tables"] and table not in seen_tables:
+            seen_tables.add(table)
+            findings.append(Finding("yellow", "정본", rel, line, table, "정본에 없는 표 — 미분양 정본 tables 에 등록할 것"))
     for section, entries in (("writers.2u", registry["writers"]["2u"]), ("delete_allowed.2u", (registry.get("delete_allowed") or {}).get("2u") or {})):
         for file in entries:
             if not (root / file).exists():
                 findings.append(Finding("yellow", "정본", file, 0, "-", f"{section} 에 등록됐으나 파일 없음"))
     files = list_targets(root)
+    if not files:
+        findings.append(Finding("red", "정본", "backend/", 0, "-", "스캔한 파일이 0개 — --repo-root 가 레포 루트인지 확인"))
     for rel in files:
         findings += audit_file(rel, (root / rel).read_text(encoding="utf-8"), registry, models)
 
@@ -588,11 +746,18 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     root = Path(args.repo_root).resolve()
 
-    if (root / OFF_FILE).exists():
+    off = root / OFF_FILE
+    if off.exists():
+        lines = off.read_text(encoding="utf-8", errors="replace").splitlines()
         print(f"가드 꺼짐({OFF_FILE})")
+        print("⚠ 가드 꺼짐 — 끈 날짜·사유는 그 파일 첫 줄")
+        print(lines[0] if lines and lines[0].strip() else "(첫 줄 비어 있음 — 끈 날짜·사유를 적을 것)")
         return 0
     try:
         registry = load_registry(args.registry)
+    except RegistryFetchError as e:
+        print(f"🔴 {FETCH_FAILED} ({e})")
+        return 1
     except RegistryError as e:
         print(f"🔴 {e} — {FORMAT_CHANGED}")
         return 1

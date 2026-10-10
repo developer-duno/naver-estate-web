@@ -92,9 +92,8 @@ Vercel에 `NEXT_PUBLIC_API_URL=https://api.2u.pe.kr` 영구 설정 (설정 완�
 
 ## infra·air_quality_stations 컬럼 분담
 
-  - `infra`: naver 가 `crime_updated_at`(env_crime.py:119·186) · `emergency_*`(env_emergency.py:53~56) · `childcare_*`(env_childcare.py:93~102, 신규 INSERT 포함) write. mibunyang 은 나머지 인프라 컬럼 write — 대기질 측정소 `air_station_name/dist` 는 미분양 주간 수집기(`collect-air-quality.mjs --station-only`)가 쓴다.
-  - 대기질 실시간 칸 `air_pm10/pm25/o3/grade/air_updated_at/air_attempted_at`: **쓰는 곳 없음**(세션604 에 2u `env_air.py` 삭제 — 낡은 값, API 응답·화면에서도 뺐다. 칸 삭제는 후속).
-  - `air_quality_stations`: **쓰는 곳 없음**(옛 2u 측정소 캐시 — 세션604 수집 폐지).
+  - `infra` 칸 분담(누가 어느 칸을 쓰나) = 정본 미분양 `supabase/ownership.json` 의 `tables.infra.columns.mibunyang` / `tables.infra.columns.2u` 참조(세션 459 — 여기에 칸 이름을 다시 적지 않는다).
+  - 세션604 사건: 2u `env_air.py` 를 삭제해 대기질 실시간 칸(`air_pm10/pm25/o3/grade/air_updated_at/air_attempted_at`)은 **쓰는 곳이 없다**(낡은 값, API 응답·화면에서도 뺐다. 칸 삭제는 후속) · 옛 2u 측정소 캐시 표 `air_quality_stations` 도 수집 폐지로 쓰는 곳 없음(정본 owner = `orphan`).
   - `air_station_annual`(측정소별 3년 평균): 미분양 소유·연 1회 갱신, 2u 는 읽기만(상세 응답 `infra.air_annual`).
 
 ## DB 백업 실태·도구 (2026-08-14 실측)

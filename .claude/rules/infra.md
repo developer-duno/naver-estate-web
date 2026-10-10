@@ -197,12 +197,14 @@ naver 의 `CHILDCARE_DETAIL_API_KEY` == mibunyang 의 `CHILDCARE_BASIC_API_KEY` 
 
 ### 공용 테이블 규칙 (같은 Supabase DB)
 
-- 공용 (양쪽 upsert): `complexes`, `articles`, `complex_price_history`
-- `trades`: **mibunyang write 전용** (매월 6일 collect-trades), **naver-estate 는 read-only**. naver-estate 는 이 테이블에 절대 안 쓴다(신선도 카드가 읽기만 함 — 세션 343 실측 확정). 옛 "양쪽 upsert" 표기는 부정확.
-- `infra`: **naver-estate 도 write** (환경 수집 스케줄러). 옛 "mibunyang 전용" 표기는 부정확 (세션 343 정밀분석 실측 확정). 세션604 대기질 실시간 수집 폐지 뒤: `infra.air_station_name/dist` = 미분양 주간 수집기(station-only)가 쓴다 · `infra.air_pm10/pm25/o3/grade/air_updated_at/air_attempted_at` = 쓰는 곳 없음(낡은 값, 칸 삭제는 후속) · `air_quality_stations`(세션604 전엔 naver-estate 가 쓰던 표) = 쓰는 곳 없음 · 2u 는 미분양 소유 `air_station_annual`(측정소별 3년 평균)을 읽기만 한다. 컬럼 분담 =
+- **어느 표·칸을 누가 쓰고 읽나 = 정본 미분양 `supabase/ownership.json`**(`tables.<표>.owner/readers/columns` — 읽는 법은 `docs/DATA_SOURCES.md` §1). 여기에 표 목록을 다시 적지 않는다(세션 459 — 손으로 옮긴 목록이 두 번 틀렸다: `trades` "양쪽 upsert"·`infra` "mibunyang 전용", 세션 343 실측 정정).
+  우리 코드의 쓰기는 CI 가드 `backend/scripts/audit_shared_db_ownership.py` 가 정본과 대조하고, 공유 표를 건드린 main 커밋은 `.github/workflows/notify-sister.yml` 이 이 레포(2u)에 `[→미분양]` 이슈를 열고 미분양 세션 시작 훅이 읽는다(닫음 = 읽음 · 미분양 → 우리 통보는 우리 세션 시작 훅이 한 줄로 보여 줌).
+  자동 통보(notify-sister)는 **합친 뒤**의 그물이다 — 공유 표 DDL 을 대시보드에서 적용하기 **전**의 상대 통보는 지금처럼 사람 쪽지(미분양 메모리 handoff 파일)로.
+  가드 운용 세 줄(세션 459 검사관): ① 가드(`ownership-guard` 워크플로)는 정본을 raw 주소로 받는다 — 약 5분 캐시라 정본 PR 을 합친 직후엔 가드 CI 재실행 1회 ② 정본에 등록·변경이 필요하면 **미분양 레포에 PR**(2u 창은 미분양 레포 워크트리에서 — 한 레포 한 세션 쓰기) → 합친 뒤 2u PR ③ 가드는 필수 체크가 아니다 — **빨강이면 합치지 않는다**가 관행 · 끄기 = `backend/.ownership-guard-off` 파일(커밋에 보이게 · 첫 줄에 날짜·사유).
+  infra 대기질 칸 사건(세션604) =
 (상세: .claude/rules-detail/infra.md §infra·air_quality_stations 컬럼 분담)
   - ⚠ ALTER/DROP 시 **양쪽 영향 검토 필수** ("mibunyang 전용" 오판 금지).
-- mibunyang 전용: `apartments`, `unsold_history`, `regions`, `prices`, `trade_stats`, `builders`, `schools`, `transport`
+- `trades` 는 미분양 write 전용 — 2u 는 이 표에 절대 쓰지 않는다(정본 owner mibunyang · 가드 ① 이 막음).
 - **기존 컬럼 타입 변경/삭제 금지** — 컬럼 추가만 허용
 - ALTER/DROP 전 상대 프로젝트의 SELECT 쿼리/ORM 모델 검색 필수
 - 컬럼명 불일치 주의: naver-estate-web은 `latitude`/`longitude`, mibunyang은 `lat`/`lng` (mb_models.py alias)

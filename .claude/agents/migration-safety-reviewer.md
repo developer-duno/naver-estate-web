@@ -25,7 +25,9 @@ effort: high
 
 ### ③ 공용 테이블 변경 시 양쪽 영향
 
-- 공용 테이블: `complexes`·`articles`·`complex_price_history`·`trades` (양쪽 upsert).
+- 공용 테이블 = 정본(미분양 `supabase/ownership.json`, raw 주소는 `docs/DATA_SOURCES.md` §1)에서 `tables.<표>.owner == "shared"` 인 표. 목록을 여기 다시 적지 않는다.
+- DROP·RENAME 전에는 그 표·칸의 `readers`(누가 읽나)를 정본에서 확인한다 — 읽는 쪽이 있으면 상대 레포 SELECT 까지 본다.
+- 2u 가드 `backend/scripts/audit_shared_db_ownership.py` 의 ④번 검사가 CI 에서 같은 판정을 한다(사람 검토와 겹쳐 확인).
 - 변경 시 naver-estate-web(크롤러 upsert·시세 배치) + mibunyang(수집·분석) 양쪽 upsert/SELECT 패턴 확인.
 
 ### ④ prod 컬럼 선행실행 게이트 (V031·V034 답습)

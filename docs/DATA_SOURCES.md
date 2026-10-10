@@ -17,14 +17,20 @@
 자매 `_shared.mjs` 의 `getSupabase()` 와 `getMibuyangSupabase()` 는 이름만 다르고 **같은 URL·같은
 public 스키마**에 붙는다(코드 직독 확인) — 이름만 보고 "다른 DB"로 오해하기 쉬운 함정.
 
-| 테이블 | 소유 | 비고 |
-|---|---|---|
-| `articles` · `complexes` | **양쪽 write** | 우리가 주 writer. 자매도 씀(§3) |
-| `complex_price_history` | **양쪽 write** | ⚠ 자매 주석은 "우리가 관리"라 적혔으나 **실제로 자매도 쓴다**(§5-1) |
-| `infra` | **양쪽 write** | 컬럼이 프리픽스로 분리돼 있음(§3) |
-| `trades` | 자매 단독 write | 우리는 **read-only** |
-| `apartments`·`regions`·`prices`·`schools`·`transport`·`builders`·`unsold_history` 등 | 자매 전용 | 우리는 미분양 화면에서 읽기만 |
-| `kapt_*`·`complex_official_price`·`officetel_*`·`rental_*`·`crawl_jobs`·`monitor_alerts` 등 | 우리 전용 | |
+### 표·칸 소유 — 정본은 미분양 `supabase/ownership.json` (2026-10-10 세션 459)
+
+어느 표를 누가 쓰고 누가 읽는지는 **여기에 다시 적지 않는다**(손으로 옮긴 표는 낡는다). 정본 한 곳만 본다:
+
+- **정본**: 미분양 레포 `supabase/ownership.json` —
+  `https://raw.githubusercontent.com/developer-duno/mibunyang/main/supabase/ownership.json`
+- **읽는 법**: `tables.<표>.owner`(`2u`·`mibunyang`·`shared`·`orphan`) · `tables.<표>.readers`(읽는 쪽) ·
+  `tables.<표>.columns.<2u|mibunyang>`(공유 표에서 각자 쓰는 칸) · `views.<VIEW>` · `writers.2u`(우리 쪽 쓰기 파일 → 표 → 칸)
+- **바꾸는 법**: 미분양 레포에 PR → 합치면 미분양이 우리 쪽에 자동 통보 이슈(`cross-repo-notice`)를 연다
+  (세션 시작 훅 `.claude/hooks/session-start-sister-notices.sh` 가 한 줄로 보여 줌 · 닫음 = 읽음).
+  반대로 우리가 공유 표를 건드린 커밋을 합치면 `.github/workflows/notify-sister.yml` 이 이 레포에 통보 이슈를 연다.
+- **대조**: 2u 가드 `backend/scripts/audit_shared_db_ownership.py` 가 우리 코드의 쓰기와 정본을 CI 에서 맞춰 본다.
+
+⚠ 함정 기록은 아래 §3 에 그대로 남긴다 — 정본은 "누가 어느 칸"만 말하고, 왜 그렇게 갈렸는지(사건)는 말하지 않는다.
 
 **규모 감각** (2026-09-13 `pg_stat_user_tables` 실측 — 추이만 참고, 정확한 현재값은 관리자 화면):
 articles 약 150만 행 988MB · trades 약 105만 행 · complex_price_history 약 40만 행 · complexes 약 6.4만 행.
@@ -78,7 +84,7 @@ articles 약 150만 행 988MB · trades 약 105만 행 · complex_price_history 
 
 ### 3-2. `complexes`
 
-자매 `naver-collect.py` 가 단지 메타(이름·좌표·세대수·준공일·시공사)와 `last_crawled_at` 을 쓴다.
+자매 `naver-collect.py` 도 단지 메타와 `last_crawled_at` 을 쓴다(각자 쓰는 칸 = 정본 `tables.complexes.columns` 참조 — §1).
 ⚠ **`last_crawled_at` 일괄 스탬프**: 자매가 bbox 마커로 받은 단지 **전량**에 이 시각을 찍는다
 (`naver-collect.py:478`). 2026-09-09 에 30,328건이 한꺼번에 찍혔다.
 → 그래서 우리는 **`articles_crawled_at`(V058)** 을 따로 만들었다. 우리 목록 크롤이 **완주**했을
@@ -87,10 +93,7 @@ articles 약 150만 행 988MB · trades 약 105만 행 · complex_price_history 
 ### 3-3. `infra`
 
 PK 가 `apartment_id`(자매 `apartments.id`)인 **자매 소유 테이블**인데 우리도 쓴다.
-컬럼이 프리픽스로 갈려 있어 **직접 충돌은 없다**:
-
-- 자매: `hospital*`·`mart*`·`conv*`·`cafe*`·`culture*`·`bank*`·`pharmacy*`·`park*`·`subway_dist`·`childcare`·`emergency`·`police`
-- 우리: `emergency_hospital*`·`emergency_beds`·`emergency_level`·`air_*`·`childcare_count`·`childcare_nearest_*`·`crime_score`·`crime_grade`·각 `*_updated_at`
+컬럼이 프리픽스로 갈려 있어 **직접 충돌은 없다** — 각자 쓰는 칸 = 정본 `tables.infra.columns` 참조(§1).
 
 ⚠ **공용 `updated_at` 은 양쪽이 갱신**한다 → 신선도 판정 키로 쓰면 상대 갱신에 오판한다.
 그래서 우리는 `air_attempted_at`·`emergency_updated_at`·`childcare_updated_at` 등 전용 시각
@@ -208,4 +211,5 @@ GitHub 자동실행(대부분 자매 전용 테이블): 매일 04:00 단지 동�
 | 잡 상세·DB 다운 런북·운영 배경 3절 | `backend/.claude/details.md` |
 | 네이버 IP 차단 방지 절대 규칙 | `.claude/rules/infra.md` §IP 차단 방지 |
 | 공유 DB 마이그레이션 주의 | `.claude/rules/infra.md` §공용 테이블 규칙 |
+| 공유 표·칸 소유 정본 | 미분양 `supabase/ownership.json` (`https://raw.githubusercontent.com/developer-duno/mibunyang/main/supabase/ownership.json`) |
 | 코드↔화면 표시 drift 방지 | `.claude/rules/derived-display-ssot.md` |

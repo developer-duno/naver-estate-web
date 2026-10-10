@@ -1,0 +1,64 @@
+name: Notify Sister Repo (shared DB)
+
+# 같은 Supabase DB 를 미분양(mibunyang)과 같이 쓴다. main 에 합쳐진 커밋이 공유 표·미분양이 읽는 표를
+# 건드렸으면 **이 레포에** `cross-repo-notice` 라벨 이슈를 하나 열고, 미분양 세션 시작 훅이 그 이슈를 읽는다(닫음 = 읽음).
+# 14일 넘게 안 닫힌 통보는 `stale-unread` 라벨을 붙여 닫는다. 판정은 frontend/scripts/notify-sister.mjs(정본 = 미분양 supabase/ownership.json).
+# ⚠️ 사후 기록이다 — 공유 표 DDL 을 적용하기 **전**의 통보는 사람 쪽지로 한다.
+on:
+  push:
+    branches: [main]
+  # 수동 실행 — force 를 켜면 통보 사유가 없어도 "실증용 강제 통보" 이슈 1건(장치가 살아 있는지 확인용)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "통보 사유가 없어도 실증용 이슈 1건 만들기"
+        type: boolean
+        default: false
+
+# permissions 블록을 명시하면 그 외 권한은 모두 none 이다 — 이슈·라벨 쓰기만 연다.
+permissions:
+  issues: write
+  contents: read
+
+# concurrency 는 두지 않는다 — 같은 그룹에서는 대기 중인 실행이 최대 1개라 연달아 합치면
+# 앞서 대기하던 실행이 취소돼 통보가 빠진다(docs.github.com "using concurrency"). 이슈 생성은 겹쳐 돌아도 안전하다.
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # 기본 비교 = HEAD~1(squash 합침 = PR 전체가 한 커밋)
+          fetch-depth: 2
+
+      # 한 번에 여러 커밋을 밀었으면 push 직전 커밋(github.event.before)과 비교한다 — 그 커밋만 얕게 받는다.
+      # 새 가지 첫 push(0 만 40자)·수동 실행(빈 값)·받기 실패면 notify-sister.mjs 가 HEAD~1 로 돌아간다.
+      - name: Fetch push base
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            git fetch --no-tags --depth=1 origin "$BEFORE" || echo "before 커밋 받기 실패 — HEAD~1 로 비교"
+          fi
+
+      # 정본은 미분양 레포에 있다. 못 받으면 여기서 실패(빨강) — 판정 없이 "통보 없음"으로 지나가지 않게.
+      - name: Fetch ownership registry
+        run: curl -fsSL https://raw.githubusercontent.com/developer-duno/mibunyang/main/supabase/ownership.json -o "$RUNNER_TEMP/ownership.json"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # node 내장 모듈만 써서 npm ci 가 필요 없다.
+      - name: Notify mibunyang if shared DB changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NOTIFY_BEFORE: ${{ github.event.before }}
+          # inputs 문맥은 boolean 을 그대로 둔다(push 실행이면 비어 있어 '')
+          NOTIFY_FORCE: ${{ inputs.force && '1' || '' }}
+          OWNERSHIP_REGISTRY_PATH: ${{ runner.temp }}/ownership.json
+          COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+        run: node frontend/scripts/notify-sister.mjs

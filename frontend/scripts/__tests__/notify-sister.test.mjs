@@ -67,7 +67,6 @@ const COMMENT_DIFF = [
   "+# 새 설명",
   "+",
   "+    # 들여쓴 주석",
-  "+    -- SQL 주석",
 ].join("\n");
 
 /** @param {Partial<Parameters<typeof decideNotice>[0]>} over */
@@ -128,7 +127,7 @@ describe("제외 3", () => {
     expect(d.notify).toBe(false);
   });
 
-  it("⑤ 등록 파일이어도 주석(#·--)·빈 줄만 바뀌면 통보 안 함", () => {
+  it("⑤ 등록 파일이어도 주석(#)·빈 줄만 바뀌면 통보 안 함", () => {
     const d = decide({ changed: [{ path: "backend/services/upsert.py", status: "M" }], diffOf: () => COMMENT_DIFF });
     expect(d.notify).toBe(false);
     expect(substantiveLines(COMMENT_DIFF)).toEqual([]);
@@ -142,6 +141,16 @@ describe("제외 3", () => {
     });
     expect(d.notify).toBe(false);
     expect(d.skipped).toBe("Dependabot");
+  });
+
+  it("범위 안 커밋 중 하나라도 사람이면 Dependabot 이 섞여 있어도 판정한다(git log <base>..HEAD 작성자 전부)", () => {
+    const d = decide({
+      authors: ["dependabot[bot]", "developer-duno"],
+      changed: [{ path: "backend/db/migrations/V072__x.sql", status: "A" }],
+      readFile: () => "ALTER TABLE complexes ADD COLUMN foo text;",
+    });
+    expect(d.notify).toBe(true);
+    expect(decide({ authors: ["dependabot[bot]", "dependabot[bot]"], changed: [] }).skipped).toBe("Dependabot");
   });
 
   it("2u 전용 표 마이그 · 주석 안에만 표 이름 · 기존 마이그 수정(M) → 통보 안 함", () => {
@@ -161,6 +170,24 @@ describe("제외 3", () => {
     expect(substantiveLines("+/* a */ const x = 1;")).toEqual(["const x = 1;"]);
     expect(substantiveLines("+/* a")).toEqual([]);
     expect(substantiveLines("+ * 설명 */")).toEqual([]);
+  });
+});
+
+describe("주석 판정은 확장자별", () => {
+  it(".py 는 # 만 주석 — `**kwargs,`·`*rest, last = rows` 줄은 실질 변경이라 통보", () => {
+    const pyDiff = ["@@ -1,1 +1,3 @@", "+    **save_guard.job_note(),", "+    *rest, last = rows"].join("\n");
+    const d = decide({ changed: [{ path: "backend/services/upsert.py", status: "M" }], diffOf: () => pyDiff });
+    expect(d.notify).toBe(true);
+    expect(d.reasons[0]).toContain("변경(2줄)");
+  });
+
+  it(".sql 은 -- 만 주석 — 등록된 .sql 파일에 -- 주석만 바뀌면 통보 안 함", () => {
+    const base = makeRegistry();
+    const registry = { ...base, writers: { "2u": { ...base.writers["2u"], "backend/scripts/fix_complexes.sql": { complexes: [] } } } };
+    const sqlDiff = ["@@ -1,1 +1,2 @@", "-  -- 옛 설명", "+  -- 새 설명", "+"].join("\n");
+    const d = decide({ registry, changed: [{ path: "backend/scripts/fix_complexes.sql", status: "M" }], diffOf: () => sqlDiff });
+    expect(d.notify).toBe(false);
+    expect(substantiveLines("+# 해시는 SQL 주석이 아님", "a.sql")).toEqual(["# 해시는 SQL 주석이 아님"]);
   });
 });
 
@@ -207,7 +234,7 @@ describe("본체 runNotify(가짜 git·gh)", () => {
       const k = args.join(" ");
       if (k.startsWith("diff --name-status")) return answers.nameStatus;
       if (k === "log -1 --format=%s") return answers.title;
-      if (k === "log -1 --format=%an <%ae>") return answers.author ?? "developer-duno <x@example.com>";
+      if (/^log --format=%an \S+\.\.HEAD$/.test(k)) return answers.authors ?? "developer-duno\n";
       if (k === "rev-parse HEAD") return "abcdef1234567890";
       if (/^diff \S+ HEAD --/.test(k)) return answers.diff ?? "";
       throw new Error(`예상 못 한 git ${k}`);
@@ -285,6 +312,8 @@ describe("본체 runNotify(가짜 git·gh)", () => {
       ["diff", "--name-status", before, "HEAD"],
       ["diff", before, "HEAD", "--", "backend/services/upsert.py"],
     ]);
+    // Dependabot 판정용 작성자는 비교 범위 전체에서 읽는다
+    expect(gitCalls).toContainEqual(["log", "--format=%an", `${before}..HEAD`]);
     expect(pickBase(before, () => true)).toBe(before);
     expect(pickBase("0".repeat(40), () => true)).toBe("HEAD~1");
     expect(pickBase(before, () => false)).toBe("HEAD~1");

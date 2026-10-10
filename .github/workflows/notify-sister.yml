@@ -25,22 +25,25 @@ permissions:
 
 jobs:
   notify:
+    # main 에서만 — 기능 가지에서 수동 실행(workflow_dispatch)해도 그 가지 커밋으로 이슈를 만들지 않게
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
-          # 기본 비교 = HEAD~1(squash 합침 = PR 전체가 한 커밋)
-          fetch-depth: 2
+          # 이력 전체 — 여러 커밋을 한 번에 밀면 before..HEAD 의 작성자를 전부 읽어 Dependabot 을 판정한다
+          # (얕게 받으면 범위 중간 커밋이 빠져 사람 커밋이 가려진다). 비교 기준 없으면 HEAD~1.
+          fetch-depth: 0
 
-      # 한 번에 여러 커밋을 밀었으면 push 직전 커밋(github.event.before)과 비교한다 — 그 커밋만 얕게 받는다.
+      # 한 번에 여러 커밋을 밀었으면 push 직전 커밋(github.event.before)과 비교한다 — 이력 전체를 받았으니 보통 이미 있다(강제 push 로 떨어진 커밋 대비 남겨 둠).
       # 새 가지 첫 push(0 만 40자)·수동 실행(빈 값)·받기 실패면 notify-sister.mjs 가 HEAD~1 로 돌아간다.
       - name: Fetch push base
         env:
           BEFORE: ${{ github.event.before }}
         run: |
           if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
-            git fetch --no-tags --depth=1 origin "$BEFORE" || echo "before 커밋 받기 실패 — HEAD~1 로 비교"
+            git cat-file -e "$BEFORE" 2>/dev/null || git fetch --no-tags origin "$BEFORE" || echo "before 커밋 받기 실패 — HEAD~1 로 비교"
           fi
 
       # 정본은 미분양 레포에 있다. 못 받으면 여기서 실패(빨강) — 판정 없이 "통보 없음"으로 지나가지 않게.

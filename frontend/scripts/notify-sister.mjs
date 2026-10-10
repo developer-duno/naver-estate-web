@@ -22,8 +22,9 @@
  * - `backend/db/migrations/` 새 `.sql` 중 미분양이 읽거나 같이 쓰는 표·VIEW 이름이 든 것
  *   (owner 가 shared·mibunyang 이거나 readers 에 mibunyang)
  * - 정본 `writers.2u` 에 등록된 파일 중 shared·mibunyang 소유 표를 쓰는 파일의 변경 —
- *   단 바뀐 줄이 전부 주석(`//`·`#`·`/*`·`*`·`--`)·빈 줄이면 제외(`git diff -w` 는 주석을 못 거른다)
- * - 제외: Dependabot
+ *   단 바뀐 줄이 전부 주석·빈 줄이면 제외(`git diff -w` 는 주석을 못 거른다). 주석은 확장자별로 본다 —
+ *   `.py` = `#` · `.sql` = `--` · `.js/.mjs/.ts/.tsx` = `//`·`/*`·`*`·`*\/` · 그 외 = 전부
+ * - 제외: 비교 범위 안 커밋이 전부 Dependabot(사람 커밋이 하나라도 섞이면 판정)
  * - `NOTIFY_FORCE=1`(수동 실행 force) 이면 사유가 없어도 "실증용 강제 통보" 1건
  *
  * 실행: .github/workflows/notify-sister.yml 이 main push 마다(GH_TOKEN 필요). 로컬 미리보기 = `--dry-run`.
@@ -75,21 +76,36 @@ export function tablesWrittenTogether(registry) {
 }
 
 /**
+ * 확장자별 주석 규칙 — 파이썬 `**kwargs,`·`*rest, last = rows` 줄을 블록 주석으로 오인하지 않게.
+ * `block` = 줄 머리 `/*`·`*`·`*\/` 를 블록 주석으로 볼지.
+ * @param {string} filePath
+ */
+function commentRule(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".py") return { block: false, line: /^#/ };
+  if (ext === ".sql") return { block: false, line: /^--/ };
+  if ([".js", ".mjs", ".ts", ".tsx"].includes(ext)) return { block: true, line: /^\/\// };
+  return { block: true, line: /^(\/\/|#|--)/ };
+}
+
+/**
  * diff 에서 바뀐 줄(+/-) 중 주석·빈 줄이 아닌 것.
  * @param {string} diffText `git diff` 한 파일분
+ * @param {string} [filePath] 주석 규칙을 고르는 파일 경로(없으면 `//`·`#`·`--`·블록 주석 전부)
  */
-export function substantiveLines(diffText) {
+export function substantiveLines(diffText, filePath = "") {
+  const rule = commentRule(filePath);
   return diffText
     .split(/\r?\n/)
     .filter((l) => (l.startsWith("+") || l.startsWith("-")) && !l.startsWith("+++") && !l.startsWith("---"))
     .map((l) => l.slice(1).trim())
     // 줄 머리 블록 주석이 그 줄에서 닫히고 뒤에 코드가 있으면(`/* a */ const x = 1;`) 뒤 코드는 실질 줄
     .map((l) => {
-      if (!l.startsWith("/*") && !l.startsWith("*")) return l;
+      if (!rule.block || (!l.startsWith("/*") && !l.startsWith("*"))) return l;
       const close = l.indexOf("*/", l.startsWith("/*") ? 2 : 0);
       return close >= 0 ? l.slice(close + 2).trim() : "";
     })
-    .filter((l) => l !== "" && !/^(\/\/|#|--)/.test(l));
+    .filter((l) => l !== "" && !rule.line.test(l));
 }
 
 /**
@@ -98,22 +114,23 @@ export function substantiveLines(diffText) {
  */
 
 /**
- * 통보할지 판정.
- * @param {{ registry: any, changed: ChangedFile[], diffOf: (p: string) => string, readFile: (p: string) => string, commitTitle: string, author: string, force?: boolean }} input
+ * 통보할지 판정. `authors` = 비교 범위 안 모든 커밋의 작성자(없으면 `author` 하나).
+ * @param {{ registry: any, changed: ChangedFile[], diffOf: (p: string) => string, readFile: (p: string) => string, commitTitle: string, author?: string, authors?: string[], force?: boolean }} input
  * @returns {Decision}
  */
-export function decideNotice({ registry, changed, diffOf, readFile, author, force = false }) {
-  const decision = judge({ registry, changed, diffOf, readFile, author });
+export function decideNotice({ registry, changed, diffOf, readFile, author = "", authors, force = false }) {
+  const decision = judge({ registry, changed, diffOf, readFile, authors: authors?.length ? authors : [author] });
   if (!decision.notify && force) return { notify: true, reasons: [FORCED_REASON] };
   return decision;
 }
 
 /**
- * @param {{ registry: any, changed: ChangedFile[], diffOf: (p: string) => string, readFile: (p: string) => string, author: string }} input
+ * @param {{ registry: any, changed: ChangedFile[], diffOf: (p: string) => string, readFile: (p: string) => string, authors: string[] }} input
  * @returns {Decision}
  */
-function judge({ registry, changed, diffOf, readFile, author }) {
-  if (/dependabot/i.test(author)) return { notify: false, skipped: "Dependabot", reasons: [] };
+function judge({ registry, changed, diffOf, readFile, authors }) {
+  // 범위 안 커밋이 **전부** Dependabot 일 때만 건너뛴다 — 사람 커밋이 하나라도 섞이면 판정한다
+  if (authors.every((a) => /dependabot/i.test(a))) return { notify: false, skipped: "Dependabot", reasons: [] };
 
   const care = tablesTheyCareAbout(registry);
   const together = tablesWrittenTogether(registry);
@@ -132,7 +149,7 @@ function judge({ registry, changed, diffOf, readFile, author }) {
     if (byTable) {
       const hit = Object.keys(byTable).filter((t) => together.has(t)).sort();
       if (!hit.length) continue;
-      const lines = substantiveLines(diffOf(f.path));
+      const lines = substantiveLines(diffOf(f.path), f.path);
       if (!lines.length) continue;
       const label = (/** @type {string} */ t) => {
         const cols = byTable[t] ?? [];
@@ -203,7 +220,10 @@ export function runNotify({ git, gh, registry, readFile, commitUrl, now, base = 
       return { status: parts[0], path: parts[parts.length - 1] };
     });
   const commitTitle = git(["log", "-1", "--format=%s"]).trim();
-  const author = git(["log", "-1", "--format=%an <%ae>"]).trim();
+  const authors = git(["log", "--format=%an", `${base}..HEAD`])
+    .split("\n")
+    .map((a) => a.trim())
+    .filter(Boolean);
   const sha = git(["rev-parse", "HEAD"]).trim();
   const decision = decideNotice({
     registry,
@@ -211,7 +231,7 @@ export function runNotify({ git, gh, registry, readFile, commitUrl, now, base = 
     diffOf: (p) => git(["diff", base, "HEAD", "--", p]),
     readFile,
     commitTitle,
-    author,
+    authors,
     force,
   });
 

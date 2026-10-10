@@ -25,8 +25,8 @@ public 스키마**에 붙는다(코드 직독 확인) — 이름만 보고 "다�
   `https://raw.githubusercontent.com/developer-duno/mibunyang/main/supabase/ownership.json`
 - **읽는 법**: `tables.<표>.owner`(`2u`·`mibunyang`·`shared`·`orphan`) · `tables.<표>.readers`(읽는 쪽) ·
   `tables.<표>.columns.<2u|mibunyang>`(공유 표에서 각자 쓰는 칸) · `views.<VIEW>` · `writers.2u`(우리 쪽 쓰기 파일 → 표 → 칸)
-- **바꾸는 법**: 미분양 레포에 PR → 합치면 미분양이 우리 쪽에 자동 통보 이슈(`cross-repo-notice`)를 연다
-  (세션 시작 훅 `.claude/hooks/session-start-sister-notices.sh` 가 한 줄로 보여 줌 · 닫음 = 읽음).
+- **바꾸는 법**: 미분양 레포에 PR → 합치면 미분양 레포에 자동 통보 이슈(`cross-repo-notice`)가 열리고
+  우리 세션 시작 훅 `.claude/hooks/session-start-sister-notices.sh` 가 읽어 한 줄로 보여 준다(닫음 = 읽음).
   반대로 우리가 공유 표를 건드린 커밋을 합치면 `.github/workflows/notify-sister.yml` 이 이 레포에 통보 이슈를 연다.
 - **대조**: 2u 가드 `backend/scripts/audit_shared_db_ownership.py` 가 우리 코드의 쓰기와 정본을 CI 에서 맞춰 본다.
 
@@ -92,8 +92,8 @@ articles 약 150만 행 988MB · trades 약 105만 행 · complex_price_history 
 
 ### 3-3. `infra`
 
-PK 가 `apartment_id`(자매 `apartments.id`)인 **자매 소유 테이블**인데 우리도 쓴다.
-컬럼이 프리픽스로 갈려 있어 **직접 충돌은 없다** — 각자 쓰는 칸 = 정본 `tables.infra.columns` 참조(§1).
+PK 가 `apartment_id`(자매 `apartments.id`)인 표로, **정본 owner = shared**(행 생성은 양쪽)다.
+컬럼은 프리픽스로 갈려 있지만 공용 시계 `updated_at` 은 **알려진 충돌 C3**(정본 `known_conflicts`)다 — 각자 쓰는 칸 = 정본 `tables.infra.columns` 참조(§1).
 
 ⚠ **공용 `updated_at` 은 양쪽이 갱신**한다 → 신선도 판정 키로 쓰면 상대 갱신에 오판한다.
 그래서 우리는 `air_attempted_at`·`emergency_updated_at`·`childcare_updated_at` 등 전용 시각

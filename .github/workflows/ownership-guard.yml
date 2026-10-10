@@ -1,0 +1,50 @@
+name: Ownership guard
+
+# 공유 DB 소유권 가드 (세션 459) — 미분양 정본 supabase/ownership.json 과 2u 백엔드 코드를 대조한다.
+# 판정·끄는 법 = backend/scripts/audit_shared_db_ownership.py 머리 주석. 정본은 raw URL 로 받는다(토큰 불필요).
+# 월요일 정기 실행은 코드가 그대로여도 정본이 바뀌어 어긋난 것을 잡는다.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ownership:
+    name: Shared DB ownership
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # ④ 마이그 diff(<기준>...HEAD)에 기준 커밋이 필요하다
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Audit against mibunyang ownership.json
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          case "$EVENT" in
+            pull_request) SINCE="origin/$BASE_REF" ;;
+            push)
+              if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+                SINCE="HEAD~1"
+              else
+                SINCE="$BEFORE"
+              fi ;;
+            *) SINCE="" ;;
+          esac
+          if [ -n "$SINCE" ]; then
+            python backend/scripts/audit_shared_db_ownership.py --since "$SINCE"
+          else
+            python backend/scripts/audit_shared_db_ownership.py
+          fi

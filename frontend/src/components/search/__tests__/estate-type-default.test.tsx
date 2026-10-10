@@ -152,6 +152,21 @@ describe("매물유형 기본 선택 = 아파트만", () => {
     const last = decodeURIComponent(mockPush.mock.calls.at(-1)?.[0] as string);
     expect(last).toContain(`types=${ALL_CODES.join(",")}`);
   });
+
+  it("(d-4) 기본값(아파트)인데 오피스텔만 내려오면 '필터 통과 0건' 화면 아래에 숨긴 유형 안내가 뜬다", async () => {
+    nav.params = new URLSearchParams("q=오피스텔촌");
+    mockSearchComplexes.mockResolvedValue({
+      complexes: [makeComplex("1", "OPST"), makeComplex("2", "OPST"), makeComplex("3", "OPST")],
+      total: 3,
+    });
+    renderSearch();
+    expect(await screen.findByText("필터 조건에 맞는 단지가 없습니다.")).toBeInTheDocument();
+    const hint = screen.getByTestId("hidden-types-hint");
+    expect(hint.textContent).toContain("숨긴 유형: 오피스텔 3");
+    fireEvent.click(screen.getByRole("button", { name: "모두 보기" }));
+    const last = decodeURIComponent(mockPush.mock.calls.at(-1)?.[0] as string);
+    expect(last).toContain(`types=${ALL_CODES.join(",")}`);
+  });
 });
 
 describe("HiddenTypesHint", () => {

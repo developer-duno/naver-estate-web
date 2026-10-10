@@ -88,6 +88,7 @@
 
 ## 홈/검색 통합 (SearchExperience + ActiveFilterChips) — 세션 314
 - **SearchExperience**: 검색 경험 공용 컴포넌트 (입력=매물유형/필터/검색창/지역 + 결과=단지목록/비교/정렬). 홈(`/`)과 옛 `/search` 가 공유 — `/search` 는 `/` 로 리다이렉트(쿼리 보존)
+  - 매물유형 탭 기본 선택 = **아파트만**(`DEFAULT_ESTATE_TYPES`, 사장님 결정 2026-10-11) · 선택은 URL `types` 로만 전달(기기 기억 없음 · 기본값이면 URL·서버 모두 types 미전달, 6개 전부여도 URL 에 씀) · 보이는 결과 5개 미만이고 탭에 가려진 단지가 있으면 **HiddenTypesHint** 한 줄("숨긴 유형: 오피스텔 12 · … [모두 보기]")
 - **ActiveFilterChips**: 적용 조건 한글 칩 요약 (결과 화면에서 "지금 무슨 조건인지"). urlFilters(ArticleFilters) + 매물유형 narrowing(estateTypeLabels) → 칩, ✕ 클릭 시 개별 해제. 핵심 조건만(YAGNI). verified_only 칩 라벨 "인증매물만"(FilterChips·FilterSections 와 통일, 세션 317)
 - 결과 화면은 필터바 기본 접힘(접이식), 그 외 펼침
 - **홈 소개 섹션 + 푸터 둘러보기 (세션 458, SEO·GEO)**: 홈 하단 `<section aria-labelledby="home-intro">` = h2 "2u부동산은 무엇을 하나요" + 정적 소개 문단(첫 HTML 에 들어가는 본문) + 링크 3(/tools·/blog·/help) + **비로그인일 때만** "무료로 시작하기"(/signup) 버튼(`showSignupCta`, 회귀 = `app/__tests__/home-intro-cta.test.tsx`). `Footer.tsx` 에 `<nav aria-label="둘러보기">`(계산기 5종 /tools · 블로그 /blog) — 공개 페이지 내부 링크 경로

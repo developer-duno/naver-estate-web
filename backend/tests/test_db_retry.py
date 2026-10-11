@@ -1,13 +1,13 @@
 """DB 순간 끊김 재시도 공용 함수(db/retry.py) 회귀 — 세션 459.
 
 DB 없이 가짜 세션(롤백 횟수만 센다)과 일 함수로 재시도 규칙만 본다:
-OperationalError 만 롤백 → 5·15·45초 대기 → 같은 일 다시, 4번째도 실패면 그대로 던짐, 다른 예외는 즉시 던짐.
+OperationalError·InterfaceError(끊긴 연결, 세션 460)만 롤백 → 5·15·45초 대기 → 같은 일 다시, 4번째도 실패면 그대로 던짐, 다른 예외는 즉시 던짐.
 """
 
 import logging
 
 import pytest
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import IntegrityError, InterfaceError, OperationalError
 
 from db.retry import DB_RETRY_WAITS, retry_db
 
@@ -89,3 +89,22 @@ def test_what_을_안_주면_기본_이름이_붙는다(caplog):
     with caplog.at_level(logging.WARNING, logger="db.retry"):
         retry_db(db, work, lambda s: None)
     assert caplog.records[0].getMessage().startswith("DB 작업 중 DB 가 잠깐 응답하지 않았어요")
+
+
+def _if_error():
+    return InterfaceError("SELECT 1", {}, Exception("connection already closed"))
+
+
+def test_끊긴_연결_InterfaceError_도_한_번_끊긴_뒤_성공하면_값을_돌려준다():
+    db, sleeps = FakeDb(), []
+    work, calls = _work(1, exc_factory=_if_error, value="saved")
+    assert retry_db(db, work, sleeps.append) == "saved"
+    assert (calls[0], sleeps, db.rollbacks) == (2, [5], 1)
+
+
+def test_끊긴_연결_InterfaceError_가_4번_연속이면_그대로_던진다():
+    db, sleeps = FakeDb(), []
+    work, calls = _work(4, exc_factory=_if_error)
+    with pytest.raises(InterfaceError):
+        retry_db(db, work, sleeps.append)
+    assert (calls[0], sleeps, db.rollbacks) == (4, [5, 15, 45], 4)

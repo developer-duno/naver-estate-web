@@ -228,10 +228,13 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, sche
                 re_type = c_data.get("realEstateTypeCode", "")
                 if re_type and re_type not in CRAWL_REAL_ESTATE_TYPES:
                     continue
-                # commit=False: 아래 루프 종료 후 job 갱신과 함께 한 번에 커밋.
-                # 기존엔 단지마다 커밋 + 루프 후 또 커밋 = 단지별 커밋이 순수 낭비였다.
+                # commit=False: 단지마다 커밋하지 않고 아래에서 페이지 단위로 한 번에 커밋.
                 upsert_complex_from_search(db, c_data, sido, sigungu, dong, commit=False)
                 total_found += 1
+            # 페이지마다 커밋 — 다음 페이지를 네이버에 묻기 전에 complexes 행 잠금을 놓는다.
+            # 예전엔 지역 전체를 다 돌 때까지 안 놓아 최대 59초 잠갔다(세션 460, 백로그 B14 — 세션 396 의
+            # '잠금 쥔 채 네이버 대기'와 같은 꼴). upsert 는 덮어쓰기라 중간 실패 뒤 다시 돌아도 같은 결과.
+            db.commit()
 
             # 다음 페이지가 있는지 확인
             if not result.get("isMoreData", False):

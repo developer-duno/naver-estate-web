@@ -36,6 +36,7 @@
     아직 안 물어본 단지(두 칸 다 NULL)만 고르므로 중간에 끊겨도 다시 돌리면 남은 것부터 간다.
     DB 순간 끊김(OperationalError)은 5·15·45초 뒤 3번까지 같은 저장 묶음을 통째로 다시 한다(다 실패하면 그대로 멈춘다).
     **일요일 03:00~04:00 은 실행하지 않는다** — 새 단지 찾기(discover_regions)가 complexes 를 길게 쓴다(2026-10-11 03:01 사고).
+    보통 03:48~03:51 에 끝나 여유가 얇다 — 04:00 직후 돌릴 땐 그 회차(crawl_jobs 의 complex_list 행)가 끝났는지 먼저 본다.
 
 하루 상한
     공식 한도 5만 콜/일(SGIS 안내 원문). 한 번 실행에 부르는 rgeocode 횟수 상한 = `--daily-cap`(기본 40,000).
@@ -221,9 +222,11 @@ def _retry_db(db, work, sleep=time.sleep):
     for k, wait in enumerate(DB_RETRY_WAITS, start=1):
         try:
             return work()
-        except OperationalError:
+        except OperationalError as e:
             db.rollback()
-            logger.warning("DB 연결이 잠깐 끊겼어요 — %d초 뒤 다시(재시도 %d/%d)", wait, k, len(DB_RETRY_WAITS))
+            cause = (str(getattr(e, "orig", e)).strip().splitlines() or ["?"])[0][:120]
+            logger.warning("DB 가 잠깐 응답하지 않았어요(제한 시간 초과 또는 연결 끊김) — %d초 뒤 다시(재시도 %d/%d) · 원인: %s",
+                           wait, k, len(DB_RETRY_WAITS), cause)
             sleep(wait)
     try:
         return work()

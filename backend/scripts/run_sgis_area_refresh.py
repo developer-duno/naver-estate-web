@@ -56,7 +56,12 @@ def main(argv: list[str] | None = None) -> int:
 
     client = SgisClient(TokenCache(key, secret), interval=args.interval)
     with SessionLocal() as db:
-        st = refresh_sgis_area(db, client, limit=args.limit, only=args.only, call_cap=args.call_cap)
+        try:
+            st = refresh_sgis_area(db, client, limit=args.limit, only=args.only, call_cap=args.call_cap)
+        except Exception:
+            # 같은 날 다시 돌릴 때 --call-cap 을 정하려면 이번 회차가 쓴 호출 수가 필요하다
+            print(f"멈춤(예외): 이번 회차 SGIS 호출 {client.calls:,}(+인증 {client.tokens.issued}) — 같은 날 다시 돌리면 --call-cap 을 그만큼 낮추세요")
+            raise
     print(
         f"끝({st.stop_reason}): 동 {st.dongs:,} · 호출 {client.calls:,}(+인증 {client.tokens.issued})"
         f" · 저장 {st.saved:,} · 실패 {st.failed:,}"

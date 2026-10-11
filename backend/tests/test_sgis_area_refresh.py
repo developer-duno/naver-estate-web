@@ -619,19 +619,22 @@ def test_저장_묶음이_한_번_끊겨도_끊김_없는_실행과_결과가_�
     fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})
 
     base_sleeps = []
-    base = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house", db_sleep=base_sleeps.append)
+    base_client = _client(fake, monkeypatch)
+    base = ss.refresh_sgis_area(db, base_client, only="house", db_sleep=base_sleeps.append)
     base_job = _job(db)
-    expected = (_snapshot(db), base.saved, base_job.processed_items, base_job.status)
+    expected = (_snapshot(db), base.saved, base_job.processed_items, base_job.status, base_client.calls)
     assert base_sleeps == [] and base.saved == 36 and expected[3] == "completed"   # 동 3곳 × 칸 12개
 
     _reset_run(db)
     state = (_break_insert(db, monkeypatch, nth=2) if where == "upsert_2nd_batch"
              else _break_commit_after_upsert(db, monkeypatch))
     sleeps = []
-    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house", db_sleep=sleeps.append)
+    client = _client(fake, monkeypatch)
+    st = ss.refresh_sgis_area(db, client, only="house", db_sleep=sleeps.append)
     job = _job(db)
     assert state["fired"] == 1 and sleeps == [5]
-    assert (_snapshot(db), st.saved, job.processed_items, job.status) == expected
+    # 재시도는 DB 만 다시 한다 — SGIS 호출 수도 끊김 없는 실행과 같아야 한다(공용 한도)
+    assert (_snapshot(db), st.saved, job.processed_items, job.status, client.calls) == expected
     assert job.error_message is None
 
 

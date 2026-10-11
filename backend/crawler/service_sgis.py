@@ -42,11 +42,14 @@
     `CrawlJob(job_type="sgis_area")`. 받은 값은 메모리에 모았다가 **동 100개마다** 한 번에 넣고 커밋한다 —
     외부 호출 동안 트랜잭션을 열어 두지 않는다. 호출 상한(`call_cap`, 기본 45,000 — 하루 5만 콜 공용 키)에
     닿으면 거기서 멈춘다. 다시 돌리면 처음부터 다시 받는다(upsert 라 같은 결과).
+    DB 순간 끊김(OperationalError — 8초 제한·연결 끊김)은 5·15·45초 뒤 3번까지 같은 저장 묶음을 통째로 다시 한다
+    (대상 읽기·동 100개 저장·회차 마감 — `db.retry.retry_db`). 3번 다 실패하면 회차를 failed 로 끝낸다.
 """
 
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from decimal import Decimal
 
@@ -55,6 +58,7 @@ from sqlalchemy import text
 from crawler.service_common import fail_job_safely
 from crawler.sgis_client import Reply, SgisClient
 from db.models import CrawlJob
+from db.retry import retry_db
 from utils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -180,11 +184,12 @@ class Stats:
 
 
 class _Run:
-    def __init__(self, db, client: SgisClient, job: CrawlJob, call_cap: int):
+    def __init__(self, db, client: SgisClient, job: CrawlJob, call_cap: int, db_sleep=time.sleep):
         self.db = db
         self.client = client
         self.job = job
         self.call_cap = call_cap
+        self.db_sleep = db_sleep
         self.st = Stats()
         self.buf: list[dict] = []
         self.deletes: list[tuple[str, str]] = []   # (동, 재해 종류) — 지난 회차 행을 지울 것
@@ -238,25 +243,34 @@ class _Run:
             self.st.stop_reason = "consecutive_code_errors"
 
     def flush(self) -> None:
+        """지우기 전부 + 넣기 전부 + 진행 수 + 커밋을 한 덩어리로 — DB 순간 끊김이면 통째로 다시 한다.
+
+        upsert_rows 는 내부 묶음마다 커밋하므로 끊기기 전 묶음은 이미 들어가 있을 수 있다. 다시 할 때 같은
+        DELETE·upsert(ON CONFLICT 덮어쓰기)를 처음부터 하므로 최종 상태는 같다. 그래서 지울 목록·넣을 줄은
+        **성공한 뒤에만** 비우고(먼저 비우면 다시 할 때 지우기가 빠진다), 넣은 수도 성공한 시도의 것만 더한다.
+        """
         from scripts.load_sgis_stats import upsert_rows
 
-        for adm_cd, kind in self.deletes:   # 아래 upsert(또는 끝 커밋)와 같은 커밋에 묶인다
-            self.db.execute(
-                text(
-                    "DELETE FROM sgis_area_stats WHERE adm_cd = :cd AND year = :y"
-                    " AND item_code LIKE :p ESCAPE '!'"
-                ),
-                {"cd": adm_cd, "y": YEAR, "p": f"ndsm!_{kind}!_%"},
-            )
+        def work() -> int:
+            for adm_cd, kind in self.deletes:   # 아래 upsert(또는 끝 커밋)와 같은 커밋에 묶인다
+                self.db.execute(
+                    text(
+                        "DELETE FROM sgis_area_stats WHERE adm_cd = :cd AND year = :y"
+                        " AND item_code LIKE :p ESCAPE '!'"
+                    ),
+                    {"cd": adm_cd, "y": YEAR, "p": f"ndsm!_{kind}!_%"},
+                )
+            saved = upsert_rows(self.db, self.buf) if self.buf else 0   # 묶음마다 커밋
+            self.job.processed_items = self.st.done
+            self.db.commit()
+            return saved
+
+        self.st.saved += retry_db(self.db, work, self.db_sleep, "동네 통계 저장")
         self.deletes = []
-        if self.buf:
-            self.st.saved += upsert_rows(self.db, self.buf)   # 묶음마다 커밋
-            self.buf = []
-        self.job.processed_items = self.st.done
-        self.db.commit()
+        self.buf = []
 
 
-def select_target_dongs(db, limit: int | None = None) -> list[str]:
+def select_target_dongs(db, limit: int | None = None, sleep=time.sleep) -> list[str]:
     sql = (
         "SELECT adm_cd FROM sgis_area_stats WHERE year = :y AND item_code = 'to_in_001'"
         " AND length(adm_cd) = 8 ORDER BY adm_cd"
@@ -265,9 +279,13 @@ def select_target_dongs(db, limit: int | None = None) -> list[str]:
     if limit is not None:
         sql += " LIMIT :n"
         params["n"] = limit
-    rows = db.execute(text(sql), params).fetchall()
-    db.commit()  # 읽기 트랜잭션을 외부 호출 동안 열어 두지 않는다
-    return [str(r[0]) for r in rows]
+
+    def read():
+        rows = db.execute(text(sql), params).fetchall()
+        db.commit()  # 읽기 트랜잭션을 외부 호출 동안 열어 두지 않는다
+        return rows
+
+    return [str(r[0]) for r in retry_db(db, read, sleep, "동네 통계 대상 읽기")]
 
 
 def _collect_summaries(run: _Run, targets: list[str], kinds: list[str]) -> None:
@@ -398,12 +416,14 @@ def refresh_sgis_area(
     only: str | None = None,
     call_cap: int = DEFAULT_CALL_CAP,
     scheduler_job_id: str | None = None,
+    db_sleep=time.sleep,
 ) -> Stats:
-    """요약(house·corp) → 홍수 → 산사태 순으로 받는다. only 가 있으면 그 하나만(ppl 은 only 로만)."""
+    """요약(house·corp) → 홍수 → 산사태 순으로 받는다. only 가 있으면 그 하나만(ppl 은 only 로만).
+    db_sleep = DB 순간 끊김 재시도 대기 함수(시험에서 가짜로 넣는다)."""
     if only is not None and only not in KINDS:
         raise ValueError(f"only 는 {KINDS} 중 하나: {only}")
     kinds = [only] if only else list(DEFAULT_KINDS)
-    all_targets = select_target_dongs(db)
+    all_targets = select_target_dongs(db, sleep=db_sleep)
     targets = all_targets if limit is None else all_targets[:limit]
 
     job = CrawlJob(
@@ -414,7 +434,7 @@ def refresh_sgis_area(
     db.flush()
     job_id = job.id
     db.commit()   # id 를 커밋 전에 읽어 둔다 — 커밋 뒤 읽으면 다시 SELECT 가 나가 트랜잭션이 열린 채 외부 호출을 한다
-    run = _Run(db, client, job, call_cap)
+    run = _Run(db, client, job, call_cap, db_sleep)
     run.st.dongs = len(targets)
     try:
         summary_kinds = [k for k in kinds if k in SUMMARY_PATHS]
@@ -431,10 +451,14 @@ def refresh_sgis_area(
             logger.warning("동네 통계 값 모양 이상 %d칸(NULL 로 둠) — 예: %s", len(run.bad), run.bad[:5])
         st = run.st
         hard_stop = st.stop_reason in ("consecutive_failures", "consecutive_code_errors")
-        job.status = "failed" if hard_stop or too_many_failures(len(st.failed_dongs), st.dongs) else "completed"
-        job.error_message = _job_message(st, call_cap) or None
-        job.completed_at = utcnow()
-        db.commit()
+
+        def finish() -> None:   # 롤백되면 고친 칸이 사라지므로 다시 할 때 셋 다 다시 넣는다
+            job.status = "failed" if hard_stop or too_many_failures(len(st.failed_dongs), st.dongs) else "completed"
+            job.error_message = _job_message(st, call_cap) or None
+            job.completed_at = utcnow()
+            db.commit()
+
+        retry_db(db, finish, db_sleep, "동네 통계 회차 마감")
     except Exception:
         logger.exception("동네 통계 받기 중 예외")
         try:

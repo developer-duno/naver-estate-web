@@ -535,3 +535,181 @@ def test_업종_1006_비율이_0이면_실패가_아니고_0을_저장한다(db,
     assert (st.failed, st.failed_dongs) == (0, set())
     assert _val(db, "11050650", "api_corp_1006_per")[0] == Decimal("0")
     assert _job(db).status == "completed"
+
+
+# ── DB 순간 끊김 재시도(세션 459 — 짝짓기 #701 과 같은 규칙: 5·15·45초 뒤 3번까지 같은 저장 묶음 통째로) ──
+
+
+def _op_error():
+    from sqlalchemy.exc import OperationalError
+
+    return OperationalError("INSERT", {}, Exception("canceling statement due to statement timeout"))
+
+
+def _small_batches(monkeypatch):
+    """upsert_rows 의 내부 묶음을 2줄로 — 한 번의 저장이 여러 번 나눠 커밋되게(끊김이 '두 번째 내부 묶음'에 걸리게)."""
+    from scripts import load_sgis_stats
+
+    real = load_sgis_stats.upsert_rows
+    monkeypatch.setattr(load_sgis_stats, "upsert_rows", lambda d, rows: real(d, rows, batch_size=2))
+
+
+def _break_insert(db, monkeypatch, *, nth, times=1):
+    """sgis_area_stats INSERT 실행이 nth 번째부터 times 번 OperationalError(8초 제한)로 끊긴다."""
+    from sqlalchemy.sql.dml import Insert
+
+    real = db.execute
+    state = {"n": 0, "fired": 0}
+
+    def execute(stmt, *a, **kw):
+        if isinstance(stmt, Insert) and stmt.table.name == "sgis_area_stats":
+            state["n"] += 1
+            if state["n"] >= nth and state["fired"] < times:
+                state["fired"] += 1
+                raise _op_error()
+        return real(stmt, *a, **kw)
+
+    monkeypatch.setattr(db, "execute", execute)
+    return state
+
+
+def _break_commit_after_upsert(db, monkeypatch):
+    """upsert_rows 가 다 넣고 돌아온 바로 뒤의 커밋(진행 수 커밋) 한 번이 끊긴다 — 넣기는 이미 다 커밋된 상태."""
+    from scripts import load_sgis_stats
+
+    real_upsert, real_commit = load_sgis_stats.upsert_rows, db.commit
+    state = {"armed": False, "fired": 0}
+
+    def upsert(d, rows):
+        n = real_upsert(d, rows)
+        state["armed"] = state["fired"] == 0
+        return n
+
+    def commit():
+        if state["armed"]:
+            state["armed"] = False
+            state["fired"] += 1
+            raise _op_error()
+        return real_commit()
+
+    monkeypatch.setattr(load_sgis_stats, "upsert_rows", upsert)
+    monkeypatch.setattr(db, "commit", commit)
+    return state
+
+
+def _snapshot(db):
+    db.expire_all()
+    return sorted((r.adm_cd, r.item_code, r.value, r.value_text) for r in db.query(SgisAreaStats).all())
+
+
+def _reset_run(db):
+    """같은 입력으로 한 번 더 돌릴 수 있게 지난 실행이 넣은 것(통계 행·회차 행)을 지운다 — 대상 동(to_in_001)만 남긴다."""
+    db.query(SgisAreaStats).filter(SgisAreaStats.item_code != "to_in_001").delete()
+    db.query(CrawlJob).filter(CrawlJob.job_type == "sgis_area").delete()
+    db.commit()
+
+
+@pytest.mark.parametrize("where", ["upsert_2nd_batch", "commit_after_upsert"])
+def test_저장_묶음이_한_번_끊겨도_끊김_없는_실행과_결과가_같다(db, monkeypatch, where):
+    """(가) 끊기기 전 내부 묶음이 이미 커밋돼 있어도 같은 DELETE·upsert 를 처음부터 다시 하므로 최종 상태가 같다.
+    commit_after_upsert = 넣기가 다 끝난 뒤 끊긴 경우 — 넣은 수를 시도마다 더하면 두 번 세어진다."""
+    dongs = ("11050650", "11050660", "11050670")
+    _seed_dongs(db, *dongs)
+    _small_batches(monkeypatch)
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})
+
+    base_sleeps = []
+    base_client = _client(fake, monkeypatch)
+    base = ss.refresh_sgis_area(db, base_client, only="house", db_sleep=base_sleeps.append)
+    base_job = _job(db)
+    expected = (_snapshot(db), base.saved, base_job.processed_items, base_job.status, base_client.calls)
+    assert base_sleeps == [] and base.saved == 36 and expected[3] == "completed"   # 동 3곳 × 칸 12개
+
+    _reset_run(db)
+    state = (_break_insert(db, monkeypatch, nth=2) if where == "upsert_2nd_batch"
+             else _break_commit_after_upsert(db, monkeypatch))
+    sleeps = []
+    client = _client(fake, monkeypatch)
+    st = ss.refresh_sgis_area(db, client, only="house", db_sleep=sleeps.append)
+    job = _job(db)
+    assert state["fired"] == 1 and sleeps == [5]
+    # 재시도는 DB 만 다시 한다 — SGIS 호출 수도 끊김 없는 실행과 같아야 한다(공용 한도)
+    assert (_snapshot(db), st.saved, job.processed_items, job.status, client.calls) == expected
+    assert job.error_message is None
+
+
+def test_지울_목록이_있는_저장이_한_번_끊겨도_지난_회차_행이_지워진다(db, monkeypatch):
+    """(나) 지울 목록을 먼저 비우면 끊긴 시도의 DELETE 는 롤백되고 다시 할 때 지우기가 빠져 옛 값이 남는다."""
+    _seed_dongs(db, "11050650", "11050660")
+    db.add(SgisAreaStats(adm_cd="11050650", year=2024, item_code="ndsm_flood_affected", value=Decimal("0")))
+    db.add(SgisAreaStats(adm_cd="11050650", year=2024, item_code="ndsm_flood_affc_pop", value=Decimal("5")))
+    db.commit()
+    fake = FakeHttp({FLOOD_LIST_URL: lambda p: _flood_list("11050650", "11050660"),
+                     FLOOD_BOARD_URL: lambda p: {"errCd": -100, "errMsg": "결과 없음"} if p["adm_cd"] == "11050650"
+                     else _board()})
+    state = _break_insert(db, monkeypatch, nth=1)   # 같은 저장 묶음의 첫 INSERT — DELETE 는 아직 커밋 전
+    sleeps = []
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="flood", db_sleep=sleeps.append)
+    assert state["fired"] == 1 and sleeps == [5]
+    assert _val(db, "11050650", "ndsm_flood_affected") is None
+    assert _val(db, "11050650", "ndsm_flood_affc_pop") is None
+    assert _val(db, "11050660", "ndsm_flood_affected")[0] == 1
+    assert st.saved == 7 and _job(db).status == "completed"           # 상세 성공 동 1곳 × 7칸, 두 번 안 센다
+
+
+def test_회차_마감_커밋이_한_번_끊겨도_completed(db, monkeypatch):
+    """(다) 롤백되면 status·completed_at 이 사라지므로 다시 할 때 셋 다 다시 넣고 커밋한다."""
+    _seed_dongs(db, "11050650")
+    real = db.commit
+    state = {"fired": 0}
+
+    def commit():
+        closing = any(isinstance(o, CrawlJob) and o.status in ("completed", "failed") for o in db.dirty)
+        if closing and state["fired"] == 0:
+            state["fired"] += 1
+            raise _op_error()
+        return real()
+
+    monkeypatch.setattr(db, "commit", commit)
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})
+    sleeps = []
+    ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house", db_sleep=sleeps.append)
+    job = _job(db)
+    assert state["fired"] == 1 and sleeps == [5]
+    assert (job.status, job.processed_items, job.error_message) == ("completed", 1, None)
+    assert job.completed_at is not None
+    assert _val(db, "11050650", "api_officetel_cnt")[0] == Decimal("155")
+
+
+def test_4번_연속_끊기면_회차_failed_우리말_사유_그리고_예외를_던진다(db, monkeypatch):
+    """(라) 5·15·45초 기다린 뒤에도 끊기면 조용히 넘기지 않는다 — 회차 failed + 사유, 예외는 위로."""
+    from sqlalchemy.exc import OperationalError
+
+    _seed_dongs(db, "11050650")
+    state = _break_insert(db, monkeypatch, nth=1, times=4)
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})
+    sleeps = []
+    with pytest.raises(OperationalError):
+        ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house", db_sleep=sleeps.append)
+    assert state["fired"] == 4 and sleeps == [5, 15, 45]
+    job = _job(db)
+    assert job.status == "failed" and job.completed_at is not None
+    assert job.error_message == "동네 통계를 저장하다 문제가 생겨 멈췄어요. 서버 기록을 확인해야 해요."
+    assert _val(db, "11050650", "api_officetel_cnt") is None           # 반쪽 저장 없음
+
+
+def test_대상_읽기도_한_번_끊긴_뒤_다시_읽는다(db, monkeypatch):
+    _seed_dongs(db, "11050650", "11050660")
+    real = db.commit
+    state = {"n": 0}
+
+    def commit():
+        state["n"] += 1
+        if state["n"] == 1:
+            raise _op_error()
+        return real()
+
+    monkeypatch.setattr(db, "commit", commit)
+    sleeps = []
+    assert ss.select_target_dongs(db, sleep=sleeps.append) == ["11050650", "11050660"]
+    assert sleeps == [5]

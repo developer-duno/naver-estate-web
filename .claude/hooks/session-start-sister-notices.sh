@@ -13,7 +13,10 @@ fail() {
   last=$( { head -1 "$CACHE"; } 2>/dev/null )
   if [ -f "$CACHE" ] && [ -n "${last#📬 }" ]; then
     when=$(date -r "$CACHE" '+%m-%d %H:%M' 2>/dev/null || echo "?")
-    echo "📬 (GitHub 응답이 늦어 ${when} 기준) ${last#📬 }"
+    old=""   # 기록이 24시간 넘었으면 그 사이 온 통보를 놓쳤을 수 있다(세션 460)
+    age=$(( $(date +%s) - $(date -r "$CACHE" +%s 2>/dev/null || date +%s) ))
+    [ "$age" -gt 86400 ] && old=" ⚠ 하루 넘은 기록 — gh issue list -R ${REPO} --label cross-repo-notice 로 직접 확인"
+    echo "📬 (GitHub 응답이 늦어 ${when} 기준) ${last#📬 }${old}"
   else
     echo "📬 미분양 통보 확인 못 함(gh 오류)"
   fi

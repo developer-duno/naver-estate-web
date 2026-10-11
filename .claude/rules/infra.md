@@ -200,7 +200,7 @@ naver 의 `CHILDCARE_DETAIL_API_KEY` == mibunyang 의 `CHILDCARE_BASIC_API_KEY` 
 - **어느 표·칸을 누가 쓰고 읽나 = 정본 미분양 `supabase/ownership.json`**(`tables.<표>.owner/readers/columns` — 읽는 법은 `docs/DATA_SOURCES.md` §1). 여기에 표 목록을 다시 적지 않는다(세션 459 — 손으로 옮긴 목록이 두 번 틀렸다: `trades` "양쪽 upsert"·`infra` "mibunyang 전용", 세션 343 실측 정정).
   우리 코드의 쓰기는 CI 가드 `backend/scripts/audit_shared_db_ownership.py` 가 정본과 대조하고, 공유 표를 건드린 main 커밋은 `.github/workflows/notify-sister.yml` 이 이 레포(2u)에 `[→미분양]` 이슈를 열고 미분양 세션 시작 훅이 읽는다(닫음 = 읽음 · 미분양 → 우리 통보는 우리 세션 시작 훅이 한 줄로 보여 줌).
   자동 통보(notify-sister)는 **합친 뒤**의 그물이다 — 공유 표 DDL 을 대시보드에서 적용하기 **전**의 상대 통보는 지금처럼 사람 쪽지(미분양 메모리 handoff 파일)로.
-  가드 운용 세 줄(세션 459 검사관): ① 가드(`ownership-guard` 워크플로)는 정본을 raw 주소로 받는다 — 약 5분 캐시라 정본 PR 을 합친 직후엔 가드 CI 재실행 1회 ② 정본에 등록·변경이 필요하면 **미분양 레포에 PR**(2u 창은 미분양 레포 워크트리에서 — 한 레포 한 세션 쓰기) → 합친 뒤 2u PR ③ 가드는 **필수 검사**다(2026-10-11 사장님 결정 — 규칙 묶음 18063894 에 `Shared DB ownership` 필수 · 저장소 관리자는 우회 가능하나 빨강이면 합치지 않는다) · 끄기 = `backend/.ownership-guard-off` 파일(커밋에 보이게 · 첫 줄에 날짜·사유).
+  가드 운용 세 줄(세션 459 검사관): ① 가드(`ownership-guard` 워크플로)는 정본을 raw 주소로 받는다 — 약 5분 캐시라 정본 PR 을 합친 직후엔 가드 CI 재실행 1회 ② 정본에 등록·변경이 필요하면 **미분양 레포에 PR**(2u 창은 미분양 레포 워크트리에서 — 한 레포 한 세션 쓰기) → 합친 뒤 2u PR ③ 가드는 **필수 검사**다(2026-10-11 사장님 결정 — 규칙 묶음 18063894 에 `Shared DB ownership` 필수 · 저장소 관리자는 우회 가능하나 빨강이면 합치지 않는다 — **`gh pr merge --admin` 금지**: 관리자 bypass 가 always 라 가드를 조용히 건너뛴다) · 끄기 = `backend/.ownership-guard-off` 파일(커밋에 보이게 · 첫 줄에 날짜·사유). 우리 코드는 그대로인데 미분양 정본이 바뀌어 빨강이면(월요일 정기 실행) 탈출구는 둘 — 끄기 파일 PR, 또는 미분양 레포에 정본 PR.
   infra 대기질 칸 사건(세션604) =
 (상세: .claude/rules-detail/infra.md §infra·air_quality_stations 컬럼 분담)
   - ⚠ ALTER/DROP 시 **양쪽 영향 검토 필수** ("mibunyang 전용" 오판 금지).

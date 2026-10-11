@@ -10,16 +10,16 @@ REPO="developer-duno/mibunyang"
 # 마지막으로 성공한 한 줄을 레포 밖에 저장해 두고, gh 가 느리거나 실패하면 "몇 시 기준"과 함께 대신 보여 준다(세션 459 — PC 가 바쁠 때 8.6초 폴백 실측).
 CACHE="${HOME}/.cache/naver-estate-sister-notices.txt"
 fail() {
-  if [ -s "$CACHE" ]; then
+  last=$( { head -1 "$CACHE"; } 2>/dev/null )
+  if [ -f "$CACHE" ] && [ -n "${last#📬 }" ]; then
     when=$(date -r "$CACHE" '+%m-%d %H:%M' 2>/dev/null || echo "?")
-    last=$(head -1 "$CACHE")
     echo "📬 (GitHub 응답이 늦어 ${when} 기준) ${last#📬 }"
   else
     echo "📬 미분양 통보 확인 못 함(gh 오류)"
   fi
   exit 0
 }
-say() { echo "$1"; mkdir -p "${HOME}/.cache" 2>/dev/null && printf '%s\n' "$1" > "$CACHE" 2>/dev/null; }
+say() { echo "$1"; { mkdir -p "${HOME}/.cache" && printf '%s\n' "$1" > "$CACHE"; } 2>/dev/null; }
 
 command -v gh >/dev/null 2>&1 || fail
 # gh 활성 계정은 컴퓨터 전역 스위치라 다른 세션이 바꿔 놨을 수 있다 → 레포 주인 계정 토큰을 이 명령에만 쓴다(값은 출력하지 않음).

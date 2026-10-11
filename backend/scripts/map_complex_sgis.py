@@ -34,6 +34,8 @@
 
 중단·재개
     아직 안 물어본 단지(두 칸 다 NULL)만 고르므로 중간에 끊겨도 다시 돌리면 남은 것부터 간다.
+    DB 순간 끊김(OperationalError)은 5·15·45초 뒤 3번까지 같은 저장 묶음을 통째로 다시 한다(다 실패하면 그대로 멈춘다).
+    **일요일 03:00~04:00 은 실행하지 않는다** — 새 단지 찾기(discover_regions)가 complexes 를 길게 쓴다(2026-10-11 03:01 사고).
 
 하루 상한
     공식 한도 5만 콜/일(SGIS 안내 원문). 한 번 실행에 부르는 rgeocode 횟수 상한 = `--daily-cap`(기본 40,000).
@@ -207,19 +209,46 @@ class Stats:
     stop_reason: str = "done"
 
 
-def select_targets(db, limit: int) -> list[tuple[str, float, float]]:
+DB_RETRY_WAITS = (5, 15, 45)  # DB 순간 끊김 재시도 대기(초) — 첫 시도 뒤 최대 3번 다시
+
+
+def _retry_db(db, work, sleep=time.sleep):
+    """DB 쓰기(또는 읽기) 묶음 `work()` 를 실행한다. OperationalError(순간 끊김·8초 제한)만 롤백 →
+    대기 → 같은 묶음 통째로 다시(최대 3번). 3번 다 실패하면 그 예외를 그대로 던진다(조용히 넘기지 않는다).
+    다른 예외(IntegrityError 등)는 재시도 없이 바로 던진다."""
+    from sqlalchemy.exc import OperationalError
+
+    for k, wait in enumerate(DB_RETRY_WAITS, start=1):
+        try:
+            return work()
+        except OperationalError:
+            db.rollback()
+            logger.warning("DB 연결이 잠깐 끊겼어요 — %d초 뒤 다시(재시도 %d/%d)", wait, k, len(DB_RETRY_WAITS))
+            sleep(wait)
+    try:
+        return work()
+    except OperationalError:
+        db.rollback()
+        raise
+
+
+def select_targets(db, limit: int, sleep=time.sleep) -> list[tuple[str, float, float]]:
     from sqlalchemy import text
 
-    rows = db.execute(
-        text(
-            "SELECT complex_no, latitude, longitude FROM complexes"
-            " WHERE sgis_emd_cd IS NULL AND sgis_mapped_at IS NULL"
-            " AND latitude IS NOT NULL AND longitude IS NOT NULL"
-            " ORDER BY complex_no LIMIT :n"
-        ),
-        {"n": limit},
-    ).fetchall()
-    db.commit()  # 읽기 트랜잭션을 외부 호출 동안 열어 두지 않는다
+    def read():
+        rows = db.execute(
+            text(
+                "SELECT complex_no, latitude, longitude FROM complexes"
+                " WHERE sgis_emd_cd IS NULL AND sgis_mapped_at IS NULL"
+                " AND latitude IS NOT NULL AND longitude IS NOT NULL"
+                " ORDER BY complex_no LIMIT :n"
+            ),
+            {"n": limit},
+        ).fetchall()
+        db.commit()  # 읽기 트랜잭션을 외부 호출 동안 열어 두지 않는다
+        return rows
+
+    rows = _retry_db(db, read, sleep)
     return [(str(r[0]), float(r[1]), float(r[2])) for r in rows]
 
 
@@ -239,7 +268,7 @@ def run(
     from utils import utcnow
 
     st = Stats()
-    targets = select_targets(db, limit)
+    targets = select_targets(db, limit, sleep)
     st.targets = len(targets)
     consecutive = 0
     consecutive_none = 0
@@ -270,20 +299,32 @@ def run(
             consecutive = consecutive_none = 0
             if not dry_run:
                 now = utcnow()
-                saved = db.execute(save_code, {"cd": out.emd_cd, "at": now, "no": complex_no}).rowcount
-                # 가드에 막혀 코드가 0행이면(다른 쪽이 먼저 채움) 이름도 넣지 않는다 — 같은 커밋으로 묶는다
-                if saved and out.emd_nm:
-                    db.execute(save_name, {"cd": out.emd_cd, "year": STATS_YEAR, "nm": out.emd_nm, "at": now})
+
+                def save(out=out, now=now, complex_no=complex_no) -> bool:
+                    saved = db.execute(save_code, {"cd": out.emd_cd, "at": now, "no": complex_no}).rowcount
+                    # 가드에 막혀 코드가 0행이면(다른 쪽이 먼저 채움) 이름도 넣지 않는다 — 같은 커밋으로 묶는다
+                    named = bool(saved and out.emd_nm)
+                    if named:
+                        db.execute(save_name, {"cd": out.emd_cd, "year": STATS_YEAR, "nm": out.emd_nm, "at": now})
+                    db.commit()
+                    return named
+
+                # 코드·이름·커밋을 한 덩어리로 다시 한다(반쪽 저장 금지) — 이름 수는 성공한 뒤 한 번만 센다
+                if _retry_db(db, save, sleep):
                     st.named += 1
-                db.commit()
         elif out.kind == "no_result":
             st.no_result += 1
             consecutive = 0
             consecutive_none += 1
             logger.info("결과 없음 — 단지 %s (%.6f, %.6f): %s", complex_no, lat, lon, out.detail)
             if not dry_run:
-                db.execute(mark_asked, {"at": utcnow(), "no": complex_no})
-                db.commit()
+                asked_at = utcnow()
+
+                def mark(asked_at=asked_at, complex_no=complex_no) -> None:
+                    db.execute(mark_asked, {"at": asked_at, "no": complex_no})
+                    db.commit()
+
+                _retry_db(db, mark, sleep)
             if consecutive_none >= MAX_CONSECUTIVE_NO_RESULT:
                 st.stop_reason = "consecutive_no_result"
                 break

@@ -364,7 +364,7 @@ class TestSearchAllTypes:
 
     @patch(SEARCH_PATCH)
     def test_group_commit_persists_complexes(self, mock_search, db):
-        """N+1 commit 배치화: 단지별 커밋을 제거하고 그룹 루프 종료 후 한 번에
+        """N+1 commit 배치화: 단지별 커밋을 제거하고 페이지마다 한 번에(세션 460 — 옛: 그룹 루프 종료 후)
         커밋해도 검색된 단지가 모두 DB 에 영속화되는지 검증.
 
         _search_one_group 은 자체 SessionLocal 을 쓰므로, 같은 DB(SQLite 파일)에
@@ -394,3 +394,52 @@ class TestSearchAllTypes:
         with pytest.raises(HTTPException) as exc_info:
             _search_all_types("테스트", {"APT", "OPST"}, db)
         assert exc_info.value.status_code == 502
+
+    def test_페이지마다_커밋해_대기와_다음_네이버_호출_전에_잠금을_놓는다(self, db):
+        """세션 460(백로그 B18①): 그룹 전체를 다 돌고 한 번 커밋하면 complexes 행 잠금을 쥔 채
+        페이지 사이 대기·다음 네이버 호출을 기다린다. 1쪽 저장 → 커밋 → 대기 → 2쪽 호출 순서여야 한다."""
+        import routers.live.search as ls
+
+        events: list[str] = []
+        real_session_local = ls.SessionLocal
+
+        def logged_session():
+            s = real_session_local()
+            real_commit = s.commit
+
+            def commit():
+                events.append("commit")
+                return real_commit()
+
+            s.commit = commit
+            return s
+
+        pages = [
+            make_search_result([make_complex_data("P1", "1쪽단지")], is_more=True),
+            make_search_result([make_complex_data("P2", "2쪽단지")], is_more=False),
+        ]
+
+        def search(keyword, page=1):
+            events.append(f"search{page}")
+            return pages[page - 1]
+
+        def upsert(db_, c, *a, **k):
+            events.append(f"upsert{c['complexNo']}")
+            return {"complex_no": c["complexNo"]}
+
+        with (
+            patch.object(ls, "SessionLocal", logged_session),
+            patch.object(ls.NaverEstateAPI, "search_by_keyword", side_effect=search),
+            patch.object(ls, "upsert_complex_from_search", side_effect=upsert),
+            patch.object(ls, "record_call"),
+            patch.object(ls, "time") as fake_time,   # 이 모듈의 time 이름만 — 전역 time.sleep 은 그대로
+        ):
+            fake_time.sleep.side_effect = lambda s: events.append("sleep")
+            complexes, error = ls._search_one_group("테스트", None, {"APT"}, {"APT"})
+
+        assert error is None
+        assert [c["complex_no"] for c in complexes] == ["P1", "P2"]
+        i_up1, i_sleep = events.index("upsertP1"), events.index("sleep")
+        assert "commit" in events[i_up1:i_sleep], events
+        assert i_sleep < events.index("search2"), events
+        assert events[-1] == "commit", events   # 마지막 쪽도 커밋된 채 끝난다

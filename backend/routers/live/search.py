@@ -91,17 +91,21 @@ def _search_one_group(keyword: str, suffix: str | None, group_codes: set[str],
                 re_type = c_data.get("realEstateTypeCode", "")
                 if not re_type or re_type not in allowed_types:
                     continue
-                # commit=False: 단지마다 COMMIT 하지 않고 그룹 루프가 끝난 뒤 한 번에 커밋.
+                # commit=False: 단지마다 COMMIT 하지 않고 아래에서 페이지 단위로 한 번에 커밋.
                 # 기존엔 검색 결과 N개 단지가 각각 flush+fsync 로 N번 커밋했다(write 증폭).
                 cpx = upsert_complex_from_search(db, c_data, commit=False, **(upsert_kwargs or {}))
                 if cpx:
                     complexes.append(cpx)
+            # 페이지마다 커밋 — 페이지 사이 대기·다음 네이버 호출 동안 complexes 행 잠금을 쥐지 않는다.
+            # 예전엔 그룹 전체(최대 MAX_SEARCH_PAGES 쪽)를 다 돌고 한 번 커밋해, 병렬로 도는 다른 검색어 그룹·
+            # 새 단지 찾기의 같은 단지 쓰기가 그동안 기다렸다(세션 460, 백로그 B18①). 쓰기는 이 for 안뿐이라
+            # 루프 밖에 남는 미커밋 쓰기는 없다. upsert 는 덮어쓰기라 중간 실패 뒤 다시 검색해도 같은 결과.
+            db.commit()
 
             if not result.get("isMoreData", False):
                 break
             page += 1
             time.sleep(INTER_PAGE_DELAY)
-        db.commit()  # 그룹 전체 upsert 를 한 번에 커밋 (단지별 커밋 제거)
     finally:
         db.close()
 

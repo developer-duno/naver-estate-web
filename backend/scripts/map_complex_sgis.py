@@ -210,33 +210,10 @@ class Stats:
     stop_reason: str = "done"
 
 
-DB_RETRY_WAITS = (5, 15, 45)  # DB 순간 끊김 재시도 대기(초) — 첫 시도 뒤 최대 3번 다시
-
-
-def _retry_db(db, work, sleep=time.sleep):
-    """DB 쓰기(또는 읽기) 묶음 `work()` 를 실행한다. OperationalError(순간 끊김·8초 제한)만 롤백 →
-    대기 → 같은 묶음 통째로 다시(최대 3번). 3번 다 실패하면 그 예외를 그대로 던진다(조용히 넘기지 않는다).
-    다른 예외(IntegrityError 등)는 재시도 없이 바로 던진다."""
-    from sqlalchemy.exc import OperationalError
-
-    for k, wait in enumerate(DB_RETRY_WAITS, start=1):
-        try:
-            return work()
-        except OperationalError as e:
-            db.rollback()
-            cause = (str(getattr(e, "orig", e)).strip().splitlines() or ["?"])[0][:120]
-            logger.warning("DB 가 잠깐 응답하지 않았어요(제한 시간 초과 또는 연결 끊김) — %d초 뒤 다시(재시도 %d/%d) · 원인: %s",
-                           wait, k, len(DB_RETRY_WAITS), cause)
-            sleep(wait)
-    try:
-        return work()
-    except OperationalError:
-        db.rollback()
-        raise
-
-
 def select_targets(db, limit: int, sleep=time.sleep) -> list[tuple[str, float, float]]:
     from sqlalchemy import text
+
+    from db.retry import retry_db
 
     def read():
         rows = db.execute(
@@ -251,7 +228,7 @@ def select_targets(db, limit: int, sleep=time.sleep) -> list[tuple[str, float, f
         db.commit()  # 읽기 트랜잭션을 외부 호출 동안 열어 두지 않는다
         return rows
 
-    rows = _retry_db(db, read, sleep)
+    rows = retry_db(db, read, sleep, "단지 짝짓기 대상 읽기")
     return [(str(r[0]), float(r[1]), float(r[2])) for r in rows]
 
 
@@ -267,6 +244,7 @@ def run(
 ) -> Stats:
     from sqlalchemy import text
 
+    from db.retry import retry_db
     from scripts.load_sgis_stats import DEFAULT_YEAR as STATS_YEAR
     from utils import utcnow
 
@@ -313,7 +291,7 @@ def run(
                     return named
 
                 # 코드·이름·커밋을 한 덩어리로 다시 한다(반쪽 저장 금지) — 이름 수는 성공한 뒤 한 번만 센다
-                if _retry_db(db, save, sleep):
+                if retry_db(db, save, sleep, "단지 짝짓기 저장"):
                     st.named += 1
         elif out.kind == "no_result":
             st.no_result += 1
@@ -327,7 +305,7 @@ def run(
                     db.execute(mark_asked, {"at": asked_at, "no": complex_no})
                     db.commit()
 
-                _retry_db(db, mark, sleep)
+                retry_db(db, mark, sleep, "단지 짝짓기 결과 없음 표시")
             if consecutive_none >= MAX_CONSECUTIVE_NO_RESULT:
                 st.stop_reason = "consecutive_no_result"
                 break

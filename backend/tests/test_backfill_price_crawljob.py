@@ -116,3 +116,46 @@ class TestDiscoverRegionsTotalItems:
         assert job.status == "completed"
         assert job.processed_items == 1
         assert job.total_items == 1
+
+    def test_페이지마다_커밋해_다음_페이지_네이버_호출_전에_잠금을_놓는다(self, db):
+        """세션 460(백로그 B14): 지역 전체를 다 돌 때까지 커밋하지 않으면 complexes 행 잠금을 쥔 채
+        네이버 다음 페이지를 기다린다(최대 59초 실측). 1쪽 단지 저장 → 커밋 → 2쪽 호출 순서여야 한다."""
+        import crawler.service_discover as sd
+
+        events: list[str] = []
+        real_session_local = sd.SessionLocal
+
+        def logged_session():
+            s = real_session_local()
+            real_commit = s.commit
+
+            def commit():
+                events.append("commit")
+                return real_commit()
+
+            s.commit = commit
+            return s
+
+        pages = [
+            {"complexes": [{"complexNo": "P1", "realEstateTypeCode": "APT"}], "isMoreData": True},
+            {"complexes": [{"complexNo": "P2", "realEstateTypeCode": "APT"}], "isMoreData": False},
+        ]
+
+        def search(keyword, page=1):
+            events.append(f"search{page}")
+            return pages[page - 1]
+
+        with patch.object(sd, "SessionLocal", logged_session), \
+             patch.object(sd.NaverEstateAPI, "search_by_keyword", side_effect=search), \
+             patch.object(sd, "upsert_complex_from_search",
+                          side_effect=lambda db_, c, *a, **k: events.append(f"upsert{c['complexNo']}")), \
+             patch.object(sd, "record_call"), \
+             patch.object(sd._throttle_discover, "wait", side_effect=lambda *a, **k: events.append("wait")):
+            sd.discover_complexes_by_region("서울특별시", "강남구", scheduler_job_id="discover_page_commit")
+
+        # 커밋은 1쪽 저장 뒤, 페이지 사이 대기(wait)보다도 앞이어야 한다 — 잠금을 쥔 채 기다리지 않게
+        i_up1, i_wait = events.index("upsertP1"), events.index("wait")
+        assert "commit" in events[i_up1:i_wait], events
+        assert events.index("wait") < events.index("search2"), events
+        job = db.query(CrawlJob).filter(CrawlJob.scheduler_job_id == "discover_page_commit").one()
+        assert (job.status, job.total_items) == ("completed", 2)

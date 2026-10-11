@@ -3,6 +3,7 @@
  * (a) URL 에 types 없으면 아파트만 선택 (b) ?types=APT,OPST 파싱
  * (c) 6개 전부 고르면 URL 에 types 가 써짐 (d) 기본값이면 서버에 types 미전달 · OPST 만이면 "OPST"
  * (e) HiddenTypesHint 문구·개수·임계(5)·[모두 보기]
+ * (R1~R4) 지역 검색 경로(getComplexesByRegion)의 types 전달·안내 표시
  *
  * 실행: npx vitest run src/components/search/__tests__/estate-type-default.test.tsx
  */
@@ -13,11 +14,12 @@ import SearchExperience from "../SearchExperience";
 import HiddenTypesHint from "../HiddenTypesHint";
 import { ESTATE_TYPE_TABS } from "@/lib/constants";
 
-const { mockPush, mockReplace, nav, mockSearchComplexes } = vi.hoisted(() => ({
+const { mockPush, mockReplace, nav, mockSearchComplexes, mockGetComplexesByRegion } = vi.hoisted(() => ({
   mockPush: vi.fn(),
   mockReplace: vi.fn(),
   nav: { params: new URLSearchParams() },
   mockSearchComplexes: vi.fn(),
+  mockGetComplexesByRegion: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -29,7 +31,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/api", () => ({
   searchComplexes: (...args: unknown[]) => mockSearchComplexes(...args),
-  getComplexesByRegion: vi.fn().mockResolvedValue({ complexes: [], total: 0 }),
+  getComplexesByRegion: (...args: unknown[]) => mockGetComplexesByRegion(...args),
 }));
 
 vi.mock("@/lib/supabase", () => ({
@@ -73,6 +75,7 @@ beforeEach(() => {
   localStorage.clear();
   nav.params = new URLSearchParams();
   mockSearchComplexes.mockResolvedValue({ complexes: [], total: 0 });
+  mockGetComplexesByRegion.mockResolvedValue({ complexes: [], total: 0 });
 });
 
 describe("매물유형 기본 선택 = 아파트만", () => {
@@ -166,6 +169,58 @@ describe("매물유형 기본 선택 = 아파트만", () => {
     fireEvent.click(screen.getByRole("button", { name: "모두 보기" }));
     const last = decodeURIComponent(mockPush.mock.calls.at(-1)?.[0] as string);
     expect(last).toContain(`types=${ALL_CODES.join(",")}`);
+  });
+
+  // ── 지역 검색 경로(getComplexesByRegion) — 검색어 경로 (d)·(d-2)·(d-3) 와 짝 ──
+  it("(R1) 지역 검색 + 기본값이면 getComplexesByRegion 다섯 번째 인자 undefined", async () => {
+    nav.params = new URLSearchParams("sido=서울시&sigungu=강남구");
+    renderSearch();
+    await waitFor(() => expect(mockGetComplexesByRegion).toHaveBeenCalled());
+    expect(mockGetComplexesByRegion.mock.calls[0][4]).toBeUndefined();
+  });
+
+  it("(R2) 지역 검색 + types=OPST 면 다섯 번째 인자 \"OPST\"", async () => {
+    nav.params = new URLSearchParams("sido=서울시&sigungu=강남구&types=OPST");
+    renderSearch();
+    await waitFor(() => expect(mockGetComplexesByRegion).toHaveBeenCalled());
+    expect(mockGetComplexesByRegion.mock.calls[0][4]).toBe("OPST");
+  });
+
+  it("(R3) 지역 결과가 적으면 숨긴 유형 안내가 뜨고 [모두 보기] 가 6개를 고른다", async () => {
+    nav.params = new URLSearchParams("sido=서울시&sigungu=강남구");
+    mockGetComplexesByRegion.mockResolvedValue({
+      complexes: [
+        makeComplex("1", "APT"),
+        makeComplex("2", "APT"),
+        makeComplex("3", "OPST"),
+        makeComplex("4", "OPST"),
+        makeComplex("5", "OPST"),
+      ],
+      total: 5,
+    });
+    renderSearch();
+    const hint = await screen.findByTestId("hidden-types-hint");
+    expect(hint.textContent).toContain("지금은 아파트만 보여요");
+    expect(hint.textContent).toContain("오피스텔 3");
+    fireEvent.click(screen.getByRole("button", { name: "모두 보기" }));
+    const last = decodeURIComponent(mockPush.mock.calls.at(-1)?.[0] as string);
+    expect(last).toContain(`types=${ALL_CODES.join(",")}`);
+  });
+
+  it("(R4) 지역 결과에 아파트가 5개 이상이면 숨긴 유형이 있어도 안내가 안 뜬다", async () => {
+    nav.params = new URLSearchParams("sido=서울시&sigungu=강남구");
+    mockGetComplexesByRegion.mockResolvedValue({
+      complexes: [
+        ...["1", "2", "3", "4", "5"].map((n) => makeComplex(n, "APT")),
+        makeComplex("6", "OPST"),
+      ],
+      total: 6,
+    });
+    renderSearch();
+    // 결과 목록이 그려진 뒤(단지 이름이 보인 뒤)에도 안내가 없어야 의미가 있다
+    // (PC 표 + 모바일 카드 두 곳에 그려지므로 All)
+    expect((await screen.findAllByText("단지1")).length).toBeGreaterThan(0);
+    expect(screen.queryByTestId("hidden-types-hint")).toBeNull();
   });
 });
 

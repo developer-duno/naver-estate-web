@@ -410,3 +410,81 @@ def test_main_끝_줄에_동_이름_수가_붙는다(cdb, monkeypatch, capsys):
     monkeypatch.setattr(mc, "http_get_json", FakeHttp([_ok()]))
     assert mc.main(["--interval", "0"]) == 0
     assert "실패 0 · 동 이름 1" in capsys.readouterr().out
+
+
+# ── DB 순간 끊김 재시도(세션 459 — 2026-10-11 03:01 statement timeout 으로 실행이 통째로 죽은 사고) ──
+
+
+def _flaky_commit(db, monkeypatch, *, fail_n, skip=1, exc=None):
+    """db.commit 이 `skip` 번 정상 → 그 뒤 `fail_n` 번 예외 → 이후 정상. skip=1 은 대상 목록 읽기 커밋."""
+    from sqlalchemy.exc import OperationalError
+
+    real = db.commit
+    state = {"n": 0}
+
+    def commit():
+        state["n"] += 1
+        if skip < state["n"] <= skip + fail_n:
+            raise exc if exc is not None else OperationalError("x", {}, Exception("timeout"))
+        return real()
+
+    monkeypatch.setattr(db, "commit", commit)
+
+
+def test_저장_묶음이_순간_끊김을_한_번_맞으면_통째로_다시_해서_코드와_이름이_둘_다_들어간다(cdb, monkeypatch):
+    _seed(cdb, "A1")
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp([_ok()]))
+    _flaky_commit(cdb, monkeypatch, fail_n=1)
+    sleeps = []
+    st = mc.run(cdb, _tokens(), limit=10, sleep=sleeps.append)
+    assert (st.ok, st.failed, st.named) == (1, 0, 1)          # named 는 성공 뒤 한 번만
+    cdb.expire_all()
+    assert _emd(cdb, "A1")[0] == "11230640"
+    assert [r.value_text for r in _names(cdb)] == ["역삼1동"]
+    assert sleeps == [5]
+
+
+def test_4번_연속_끊기면_5_15_45초_기다린_뒤_예외를_그대로_던진다(cdb, monkeypatch):
+    from sqlalchemy.exc import OperationalError
+
+    _seed(cdb, "A1")
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp([_ok()]))
+    _flaky_commit(cdb, monkeypatch, fail_n=4)
+    sleeps = []
+    with pytest.raises(OperationalError):
+        mc.run(cdb, _tokens(), limit=10, sleep=sleeps.append)
+    assert sleeps == [5, 15, 45]
+    assert _emd(cdb, "A1") == (None, None)                    # 반쪽 저장 없음
+
+
+def test_다른_예외는_재시도_없이_바로_던진다(cdb, monkeypatch):
+    from sqlalchemy.exc import IntegrityError
+
+    _seed(cdb, "A1")
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp([_ok()]))
+    _flaky_commit(cdb, monkeypatch, fail_n=1, exc=IntegrityError("x", {}, Exception("dup")))
+    sleeps = []
+    with pytest.raises(IntegrityError):
+        mc.run(cdb, _tokens(), limit=10, sleep=sleeps.append)
+    assert sleeps == []
+
+
+def test_결과없음_표시_묶음도_한_번_끊긴_뒤_찍힌다(cdb, monkeypatch):
+    _seed(cdb, "A1")
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp([{"errCd": -100, "errMsg": "결과 없음"}]))
+    _flaky_commit(cdb, monkeypatch, fail_n=1)
+    sleeps = []
+    st = mc.run(cdb, _tokens(), limit=10, sleep=sleeps.append)
+    assert st.no_result == 1 and sleeps == [5]
+    cdb.expire_all()
+    code, at = _emd(cdb, "A1")
+    assert code is None and at is not None
+
+
+def test_대상_목록_읽기도_한_번_끊긴_뒤_다시_읽는다(cdb, monkeypatch):
+    _seed(cdb, "A1")
+    monkeypatch.setattr(mc, "http_get_json", FakeHttp([_ok()]))
+    _flaky_commit(cdb, monkeypatch, fail_n=1, skip=0)
+    sleeps = []
+    st = mc.run(cdb, _tokens(), limit=10, sleep=sleeps.append)
+    assert st.targets == 1 and st.ok == 1 and sleeps == [5]

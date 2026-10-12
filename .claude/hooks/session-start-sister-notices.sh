@@ -12,10 +12,15 @@ CACHE="${HOME}/.cache/naver-estate-sister-notices.txt"
 fail() {
   last=$( { head -1 "$CACHE"; } 2>/dev/null )
   if [ -f "$CACHE" ] && [ -n "${last#📬 }" ]; then
-    when=$(date -r "$CACHE" '+%m-%d %H:%M' 2>/dev/null || echo "?")
+    # 파일 시각은 date 로 한 번만 재고, 숫자가 아니면 "?" 로 둔다 — 산술 오류로 함수가 끊기면 아래 gh 조회로 넘어간다(세션 461)
+    now=$(printf '%(%s)T' -1)
+    mtime=$(date -r "$CACHE" +%s 2>/dev/null)
     old=""   # 기록이 24시간 넘었으면 그 사이 온 통보를 놓쳤을 수 있다(세션 460)
-    age=$(( $(date +%s) - $(date -r "$CACHE" +%s 2>/dev/null || date +%s) ))
-    [ "$age" -gt 86400 ] && old=" ⚠ 하루 넘은 기록 — gh issue list -R ${REPO} --label cross-repo-notice 로 직접 확인"
+    case "$mtime" in
+      ''|*[!0-9]*) when="?" ;;
+      *) when=$(printf '%(%m-%d %H:%M)T' "$mtime")
+         [ $(( now - mtime )) -gt 86400 ] && old=" ⚠ 하루 넘은 기록 — gh issue list -R ${REPO} --label cross-repo-notice 로 직접 확인" ;;
+    esac
     echo "📬 (GitHub 응답이 늦어 ${when} 기준) ${last#📬 }${old}"
   else
     echo "📬 미분양 통보 확인 못 함(gh 오류)"

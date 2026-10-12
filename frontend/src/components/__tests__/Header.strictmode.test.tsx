@@ -22,6 +22,22 @@ const TEST_EMAIL = "admin@example.com";
 const TEST_TOKEN = "test-access-token";
 const API_URL = "https://api.test.local";
 
+// B19 D-day 경로 이동 시험용 — 경로를 시험 안에서 바꿀 수 있게 test-setup.ts 의 next/navigation mock 을 덮어쓴다.
+// 기본값 "/" 는 test-setup 과 같아 다른 시험에는 영향이 없다.
+const nav = vi.hoisted(() => ({ pathname: "/" }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    refresh: vi.fn(),
+    back: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+  usePathname: () => nav.pathname,
+  useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({}),
+}));
+
 // test-setup.ts 의 전역 supabase mock 은 세션 null 을 돌려준다 —
 // 로그인 상태 재현을 위해 이 파일에서만 세션 있는 클라이언트로 덮어쓴다.
 vi.mock("@/lib/supabase", () => ({
@@ -136,5 +152,76 @@ describe("Header — StrictMode 이중 실행에서도 세션 로드 (세션 395
       expect(screen.getAllByText("내 계정 ▾").length).toBeGreaterThan(0);
       expect(screen.getAllByText("관리자").length).toBeGreaterThan(0);
     });
+  });
+});
+
+// B19: D-day 기준 시각을 렌더 중 Date.now() 대신 상태(초기값 함수·경로 effect)로 옮겼다 —
+// 남은 일수 계산(올림)과 만료 시 숨김이 그대로인지 확인한다.
+describe("Header — 구독 D-day 뱃지 (B19)", () => {
+  const DAY = 86_400_000;
+
+  function mockProfile(paidUntil: string | null) {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ role: "expert", paid_until: paidUntil }),
+    }) as unknown as typeof fetch;
+  }
+
+  beforeEach(() => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", API_URL);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("paid_until 이 2.5일 뒤면 '구독 D-3'(올림)을 보여 준다", async () => {
+    mockProfile(new Date(Date.now() + 2.5 * DAY).toISOString());
+    render(
+      <StrictMode>
+        <Header />
+      </StrictMode>
+    );
+    await waitFor(() => {
+      expect(screen.getAllByText("구독 D-3").length).toBeGreaterThan(0);
+    });
+  });
+
+  // 기준 시각은 경로 변경 effect 에서만 다시 잰다 — 하루가 지난 뒤 경로를 옮기면 남은 일수가 줄어야 한다.
+  // Date 만 가짜로 돌려 setTimeout·Promise(waitFor·fetch 모의)는 진짜로 흐르게 한다.
+  it("시각이 하루 넘게 지난 뒤 경로를 옮기면 D-day 숫자가 줄어든다", async () => {
+    const t0 = new Date("2026-10-13T00:00:00Z").getTime();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(t0);
+    nav.pathname = "/";
+    try {
+      mockProfile(new Date(t0 + 2.5 * DAY).toISOString());
+      const { rerender } = render(<Header />);
+      await waitFor(() => {
+        expect(screen.getAllByText("구독 D-3").length).toBeGreaterThan(0);
+      });
+
+      vi.setSystemTime(t0 + 1.2 * DAY); // 남은 1.3일 → 올림 2
+      nav.pathname = "/blog";
+      rerender(<Header />);
+      await waitFor(() => {
+        expect(screen.getAllByText("구독 D-2").length).toBeGreaterThan(0);
+      });
+      expect(screen.queryByText("구독 D-3")).not.toBeInTheDocument();
+    } finally {
+      nav.pathname = "/";
+      vi.useRealTimers();
+    }
+  });
+
+  it("paid_until 이 지났으면 D-day 뱃지를 숨긴다", async () => {
+    mockProfile(new Date(Date.now() - DAY).toISOString());
+    render(<Header />);
+    await waitFor(() => {
+      expect(screen.getAllByText("전문가").length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText(/구독 D-/)).not.toBeInTheDocument();
   });
 });

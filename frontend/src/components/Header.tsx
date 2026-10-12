@@ -127,18 +127,22 @@ export default function Header() {
   };
 
   const isAdmin = userRole === "admin";
+  // D-day 기준 시각 — 렌더 중 Date.now() 호출은 react-hooks 검사가 막으므로
+  // 상태 초기값 함수와 경로 변경 effect 에서만 잰다(경로가 바뀔 때마다 다시 계산되는 것은 그대로).
+  const [now, setNow] = useState(() => Date.now());
   // 구독 D-day — paid_until 이 미래면 남은 일수(올림). 만료·없음이면 null (뱃지 미표시).
   const subDaysLeft = (() => {
     if (!paidUntil) return null;
-    const ms = new Date(paidUntil).getTime() - Date.now();
+    const ms = new Date(paidUntil).getTime() - now;
     if (Number.isNaN(ms) || ms <= 0) return null;
     return Math.ceil(ms / 86_400_000);
   })();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // 경로 변경 시 모바일 메뉴 닫기 (계산기 드롭다운은 Radix 가 자체 관리)
+  // 경로 변경 시 모바일 메뉴 닫기 (계산기 드롭다운은 Radix 가 자체 관리) + D-day 기준 시각 갱신
   useEffect(() => {
     setMobileOpen(false);
+    setNow(Date.now());
   }, [pathname]);
 
   const toolsActive = pathname?.startsWith("/tools") ?? false;

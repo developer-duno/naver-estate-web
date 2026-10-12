@@ -79,6 +79,25 @@ describe("useFavoritePriceChanges", () => {
     expect(result.current.changedIds.size).toBe(0);
   });
 
+  // B19: currentPrices 를 키 문자열("a,b")을 쪼개 만들게 바꿨다 — 빈 목록이면 "".split(",") 이 [""] 라
+  // 빈 이름("") 단지가 가격 0 으로 생길 수 있다. 그 칸이 스냅샷(=currentPrices 를 그대로 합쳐 저장)에 안 들어가야 한다.
+  it("빈 목록으로 부르면 빈 이름('') 단지가 생기지 않는다 (B19)", async () => {
+    localStorage.setItem(
+      "favorite_price_snapshot",
+      JSON.stringify({ C1: 50000 }),
+    );
+
+    const { result } = renderHook(
+      () => useFavoritePriceChanges([], "tok-1", true),
+      { wrapper: TestQueryProvider },
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockGetPriceStats).not.toHaveBeenCalled();
+    expect(result.current.changedIds.size).toBe(0);
+    expect(getFavoritePriceSnapshot()).toEqual({ C1: 50000 });
+  });
+
   it("조회 후 localStorage 스냅샷이 최신 대표가로 갱신된다", async () => {
     mockGetPriceStats.mockResolvedValue({
       complex_no: "C1",

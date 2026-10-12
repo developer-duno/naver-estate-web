@@ -137,26 +137,33 @@ function CompareContent() {
     })),
   });
   const statsLoading = statsQueries.some((q) => q.isLoading);
+  // useQueries 결과 배열은 렌더마다 새 참조라, 문자열 키로만 memo 한다.
+  // memo 안에서는 키 문자열만 읽는다(react-hooks 검사가 의존성 = 본문 입력 일치를 요구).
+  const idsKey = ids.join(",");
   const statsErrorKey = statsQueries.map((q) => (q.isError ? "1" : "0")).join(",");
   const statsErrorMap = useMemo(() => {
     const m: Record<string, boolean> = {};
-    ids.forEach((id, i) => { if (statsQueries[i]?.isError) m[id] = true; });
+    const flags = statsErrorKey.split(",");
+    idsKey.split(",").filter(Boolean).forEach((id, i) => { if (flags[i] === "1") m[id] = true; });
     return m;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ids.join(","), statsErrorKey]);
+  }, [idsKey, statsErrorKey]);
 
-  /* 평당가 맵: { [complex_no]: 만원/평 } */
+  /* 평당가 맵: { [complex_no]: 만원/평 } — 단지별 평당가(정수 또는 빈칸)를 키로 만든 뒤 memo */
+  const ppKey = statsQueries
+    .map((q) => {
+      const data = q.data as PriceStats | undefined;
+      const pp = data ? calcAvgPricePerPyeong(data) : null;
+      return pp == null ? "" : String(pp);
+    })
+    .join(",");
   const pricePerPyeong: Record<string, number> = useMemo(() => {
     const map: Record<string, number> = {};
-    for (let i = 0; i < ids.length; i++) {
-      const data = statsQueries[i]?.data as PriceStats | undefined;
-      if (!data) continue;
-      const pp = calcAvgPricePerPyeong(data);
-      if (pp != null) map[ids[i]] = pp;
-    }
+    const pps = ppKey.split(",");
+    idsKey.split(",").filter(Boolean).forEach((id, i) => {
+      if (pps[i]) map[id] = Number(pps[i]);
+    });
     return map;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ids.join(","), statsQueries.map((q) => q.dataUpdatedAt).join(",")]);
+  }, [idsKey, ppKey]);
 
   /* 비교 행: 기본 23행 + 평당가 동적 삽입 */
   const compareRows = useMemo(() => {

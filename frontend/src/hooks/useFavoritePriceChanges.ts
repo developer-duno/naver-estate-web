@@ -42,16 +42,21 @@ export function useFavoritePriceChanges(
   });
 
   // React Query 는 데이터 미변경 시 동일 참조 반환 → 안정적 키로 memo (compare/page.tsx 패턴 답습)
+  // memo 안에서는 키 문자열만 읽는다(react-hooks 검사가 의존성 = 본문 입력 일치를 요구).
+  // 칸 값: "x" = 아직 자료 없음 · "null" = 가격 정보 없음 · 그 밖 = 대표가 숫자.
   const dataKey = queries.map((q) => `${q.data ? representativePrice(q.data) : "x"}`).join(",");
+  const complexNosKey = complexNos.join(",");
   const currentPrices = useMemo(() => {
     const m: Record<string, number | null> = {};
-    complexNos.forEach((no, i) => {
-      const q = queries[i];
-      if (q?.data) m[no] = representativePrice(q.data);
+    if (!complexNosKey) return m;
+    const prices = dataKey.split(",");
+    complexNosKey.split(",").forEach((no, i) => {
+      const p = prices[i];
+      if (p === undefined || p === "x") return;
+      m[no] = p === "null" ? null : Number(p);
     });
     return m;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dataKey, complexNos.join(",")]);
+  }, [dataKey, complexNosKey]);
 
   // 스냅샷 대조는 렌더 중이 아니라 조회 완료 시점에 1회 — StrictMode 이중 호출에도 안전.
   const snapshotRef = useRef<FavoritePriceSnapshot | null>(null);

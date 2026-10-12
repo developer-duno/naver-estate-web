@@ -53,7 +53,11 @@ function CompareContent() {
   const router = useRouter();
   const goBack = useSmartBack();
   const MAX_COMPARE = 4;
-  const ids = (searchParams.get("ids") ?? "").split(",").filter(Boolean).slice(0, MAX_COMPARE);
+  // ids 는 주소 글자에서만 정해지므로 memo 로 고정한다 — 렌더 중 만든 배열에 아래에서 메서드(map·join 등)를
+  // 부르면 react-hooks 검사(React Compiler)가 그 배열이 바뀔 수 있다고 보고, 그 사이에 선언된 useState setter 까지
+  // 한 묶음으로 잡아 useCallback 들을 "보존 불가"로 판정한다(B19 실측).
+  const idsParam = searchParams.get("ids") ?? "";
+  const ids = useMemo(() => idsParam.split(",").filter(Boolean).slice(0, MAX_COMPARE), [idsParam]);
   const [isExporting, setIsExporting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [promptOpen, setPromptOpen] = useState(false);

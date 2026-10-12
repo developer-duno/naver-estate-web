@@ -5,6 +5,7 @@
 응답 모양은 2026-10-09 탐침 원문(자양2동 11050650·서울 재해 목록) 칸 이름 그대로다.
 """
 
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 import pytest
@@ -713,3 +714,296 @@ def test_대상_읽기도_한_번_끊긴_뒤_다시_읽는다(db, monkeypatch):
     sleeps = []
     assert ss.select_target_dongs(db, sleep=sleeps.append) == ["11050650", "11050660"]
     assert sleeps == [5]
+
+
+# ── 이어받기 resume (세션 461 — 끊긴 회차를 처음부터 다시 받지 않게) ─────────────────────
+
+
+T0 = datetime(2026, 10, 12, 0, 30, 9, tzinfo=timezone.utc)   # 앞 회차 started_at(#66447 과 같은 시각)
+LNDSLD_LIST_URL = sc.BASE_URL + ss.DISASTER_PATHS["lndsld"][0]
+NOW = T0 + timedelta(hours=3)                                # 이어받기 거부 판정의 지금 시각(고정)
+
+
+def _prev_job(db, started=T0):
+    db.add(CrawlJob(job_type="sgis_area", status="cancelled", started_at=started))
+    db.commit()
+
+
+def _got(db, adm_cd, item, loaded_at):
+    """앞 회차가 이미 받은 행 — loaded_at 을 정해서 넣는다."""
+    db.add(SgisAreaStats(adm_cd=adm_cd, year=2024, item_code=item, value=Decimal("1"), loaded_at=loaded_at))
+    db.commit()
+
+
+def _resume_job(db):
+    """이번(이어받기) 회차 행 — 앞 회차 행 다음 것."""
+    return db.query(CrawlJob).filter(CrawlJob.job_type == "sgis_area").order_by(CrawlJob.id.desc()).first()
+
+
+def test_이어받기_꺼짐이면_받은_행이_있어도_전부_부른다(db, monkeypatch):
+    _seed_dongs(db, "11050650", "11050660")
+    _prev_job(db)
+    _got(db, "11050650", "api_apart_per", T0 + timedelta(hours=1))
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house")       # 기본 = 이어받기 꺼짐
+    assert [p["adm_cd"] for p in fake.urls(HOUSE_URL)] == ["11050650", "11050660"]
+    assert (st.resume_since, st.resumed_skips) == (None, 0)
+
+
+def test_이어받기_켬_앞_회차가_없으면_전부_부르고_로그(db, monkeypatch, caplog):
+    _seed_dongs(db, "11050650", "11050660")
+    _got(db, "11050650", "api_apart_per", T0 + timedelta(hours=1))               # 행은 있어도 기준이 없다
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})
+    with caplog.at_level("INFO", logger="crawler.service_sgis"):
+        st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house", resume=True, now=NOW)
+    assert [p["adm_cd"] for p in fake.urls(HOUSE_URL)] == ["11050650", "11050660"]
+    assert (st.resume_since, st.resumed_skips) == (None, 0)
+    assert "앞 회차가 없어 처음부터 전부 받아요" in caplog.text
+
+
+def test_이어받기_기준_이전_행은_다시_부르고_같은_시각부터는_건너뛴다(db, monkeypatch, caplog):
+    _seed_dongs(db, "11050650", "11050660", "11050670")
+    _prev_job(db)
+    _got(db, "11050650", "api_apart_per", T0 - timedelta(seconds=1))   # 기준 1초 전 = 옛 행 → 다시 받는다
+    _got(db, "11050660", "api_apart_per", T0)                           # 같은 시각 → 건너뜀(>=)
+    _got(db, "11050670", "api_apart_per", T0 + timedelta(hours=1))
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})
+    with caplog.at_level("INFO", logger="crawler.service_sgis"):
+        st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house", resume=True, now=NOW)
+    assert [p["adm_cd"] for p in fake.urls(HOUSE_URL)] == ["11050650"]
+    assert st.resumed_skips == 2
+    assert st.resume_since.replace(tzinfo=timezone.utc) == T0           # SQLite 는 시간대 없이 돌려준다
+    assert "이어받기: 기준 2026-10-12 09:30:09(한국 시각) · 건너뜀 2" in caplog.text
+
+
+def test_이어받기_요약은_종류마다_따로_판정한다(db, monkeypatch):
+    _seed_dongs(db, "11050650", "11050660")
+    _prev_job(db)
+    _got(db, "11050650", "api_apart_per", T0 + timedelta(hours=1))      # house 만 받은 동
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"]), CORP_URL: lambda p: _corp(p["adm_cd"]),
+                     FLOOD_LIST_URL: lambda p: _flood_list(), LNDSLD_LIST_URL: lambda p: _flood_list()})
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), resume=True, now=NOW)
+    assert [p["adm_cd"] for p in fake.urls(HOUSE_URL)] == ["11050660"]
+    assert [p["adm_cd"] for p in fake.urls(CORP_URL)] == ["11050650", "11050660"]   # corp 는 둘 다 부른다
+    assert st.resumed_skips == 1
+
+
+def test_이어받기_재해_전부_받은_시도는_목록도_안_부르고_남은_동만_상세(db, monkeypatch):
+    _seed_dongs(db, "11050650", "11050660", "21010510", "21010520", "22010510", "22010520")
+    _prev_job(db)
+    later = T0 + timedelta(hours=1)
+    for cd in ("11050650", "11050660", "21010510", "22010510"):
+        _got(db, cd, "ndsm_flood_affected", later)
+    lists = {"21": _flood_list("21010510", "21010520"), "22": sc.SgisRequestError("HTTP 500")}
+    fake = FakeHttp({FLOOD_LIST_URL: lambda p: lists[p["adm_cd"]], FLOOD_BOARD_URL: lambda p: _board()})
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="flood", resume=True, now=NOW)
+    assert [p["adm_cd"] for p in fake.urls(FLOOD_LIST_URL)] == ["21", "22"]   # 11 은 전부 받아 목록 0콜
+    assert [p["adm_cd"] for p in fake.urls(FLOOD_BOARD_URL)] == ["21010520"]  # 받은 21010510 은 상세 안 부름
+    assert _val(db, "21010520", "ndsm_flood_affected")[0] == 1
+    assert st.resumed_skips == 4
+    assert st.failed_dongs == {"22010520"}                           # 목록 실패 시도도 이미 받은 동은 실패로 안 센다
+
+
+def test_이어받기_회차도_진행_수와_10퍼센트_분모는_대상_동_전체(db, monkeypatch):
+    """11곳 중 10곳은 받았고 남은 1곳이 실패 — 분모가 남은 동(1)이면 100% 라 failed, 대상 전체(11)면 9% 라 completed."""
+    dongs = [f"11{i:06d}" for i in range(11)]
+    _seed_dongs(db, *dongs)
+    _prev_job(db)
+    for cd in dongs[:10]:
+        _got(db, cd, "api_apart_per", T0 + timedelta(hours=1))
+    fake = FakeHttp({HOUSE_URL: lambda p: sc.SgisRequestError("HTTP 500")})
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house", resume=True, now=NOW)
+    assert [p["adm_cd"] for p in fake.urls(HOUSE_URL)] == [dongs[10]]
+    assert (st.dongs, st.done, st.resumed_skips, st.failed_dongs) == (11, 11, 10, {dongs[10]})
+    job = _resume_job(db)
+    assert (job.status, job.total_items, job.processed_items) == ("completed", 11, 11)
+
+
+def test_하루_상한_사유는_이어받기를_안내한다(db, monkeypatch):
+    _seed_dongs(db, "11050650", "11050660")
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})
+    ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house", call_cap=1)
+    msg = _job(db).error_message
+    assert "이어받기로 돌리면 받은 곳은 건너뛰어요" in msg and "처음부터" not in msg
+    assert "--" not in msg and "resume" not in msg                  # 관리자 화면·알림 문구에 옵션 이름 금지
+
+
+def test_이어받기_손으로_준_기준이_최근_잡보다_우선한다(db, monkeypatch):
+    """이어받기 사이에 작은 실행(최근 잡 = T0+2시간)을 돌렸어도 --since(T0)를 주면 처음 회차 뒤 받은 곳을 건너뛴다."""
+    _seed_dongs(db, "11050650", "11050660")
+    _prev_job(db)
+    _prev_job(db, started=T0 + timedelta(hours=2))                        # 사이에 돌린 작은 실행
+    _got(db, "11050650", "api_apart_per", T0 + timedelta(hours=1))
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house", resume=True, resume_since=T0, now=NOW)
+    assert [p["adm_cd"] for p in fake.urls(HOUSE_URL)] == ["11050660"]
+    assert (st.resume_since, st.resumed_skips) == (T0, 1)
+    with pytest.raises(ValueError):                                       # 이어받기 없이 기준만 주면 거부
+        ss.refresh_sgis_area(db, None, only="house", resume_since=T0)
+    with pytest.raises(ValueError):                                       # 시간대 없는 값은 DB 비교에 안 쓴다
+        ss.refresh_sgis_area(db, None, only="house", resume=True, resume_since=T0.replace(tzinfo=None))
+
+
+def test_since_는_한국_시각을_UTC_로_바꾼다():
+    from scripts import run_sgis_area_refresh as rs
+
+    assert rs.parse_kst("2026-10-12 09:30") == datetime(2026, 10, 12, 0, 30, tzinfo=timezone.utc)
+    assert rs.parse_kst("2026-10-12 09:30").tzinfo is not None
+
+
+def test_since_를_resume_없이_주면_멈춘다(monkeypatch, capsys):
+    from crawler import service_sgis
+    from scripts import run_sgis_area_refresh as rs
+
+    monkeypatch.setattr(service_sgis, "refresh_sgis_area", lambda *a, **k: pytest.fail("받기를 시작하면 안 된다"))
+    with pytest.raises(SystemExit) as e:
+        rs.main(["--since", "2026-10-12 09:30"])
+    assert e.value.code == 2
+    assert "--resume 과 함께만" in capsys.readouterr().err
+
+
+# ── 이어받기 보완(검사관 지적 — 오래된 기준·도는 중인 앞 회차 거부, 다른 해·다른 잡 무시) ─────────
+
+
+def _no_http():
+    return FakeHttp({HOUSE_URL: lambda p: pytest.fail("거부된 이어받기는 창구를 부르면 안 된다")})
+
+
+def _sgis_jobs(db):
+    return db.query(CrawlJob).filter(CrawlJob.job_type == "sgis_area").count()
+
+
+def test_이어받기_자동_기준이_이틀보다_오래면_잡을_만들기_전에_멈춘다(db, monkeypatch):
+    _seed_dongs(db, "11050650")
+    _prev_job(db)
+    with pytest.raises(ss.ResumeRefused, match=r"이어받기 기준\(2026-10-12 09:30\)이 이틀보다 오래됐어요"):
+        ss.refresh_sgis_area(db, _client(_no_http(), monkeypatch), only="house", resume=True,
+                             now=T0 + timedelta(days=2, seconds=1))
+    assert _sgis_jobs(db) == 1                                             # 이번 회차 행을 안 만들었다
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})            # 딱 이틀은 통과
+    ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house", resume=True, now=T0 + timedelta(days=2))
+    assert [p["adm_cd"] for p in fake.urls(HOUSE_URL)] == ["11050650"]
+
+
+def test_이어받기_손으로_준_기준이_미래이거나_7일보다_오래면_멈춘다(db, monkeypatch):
+    _seed_dongs(db, "11050650")
+    client = _client(_no_http(), monkeypatch)
+    with pytest.raises(ss.ResumeRefused, match="지금보다 뒤예요"):
+        ss.refresh_sgis_area(db, client, only="house", resume=True, resume_since=T0, now=T0 - timedelta(seconds=1))
+    with pytest.raises(ss.ResumeRefused, match="7일보다 오래됐어요"):
+        ss.refresh_sgis_area(db, client, only="house", resume=True, resume_since=T0,
+                             now=T0 + timedelta(days=7, seconds=1))
+    assert _sgis_jobs(db) == 0
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})            # 딱 7일은 통과
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house", resume=True, resume_since=T0,
+                              now=T0 + timedelta(days=7))
+    assert st.resume_since == T0 and len(fake.urls(HOUSE_URL)) == 1
+
+
+@pytest.mark.parametrize("given", [None, T0], ids=["자동", "손으로"])
+def test_이어받기_앞_회차가_도는_중이면_멈춘다(db, monkeypatch, given):
+    _seed_dongs(db, "11050650")
+    db.add(CrawlJob(job_type="sgis_area", status="running", started_at=T0 + timedelta(hours=1)))
+    db.commit()
+    with pytest.raises(ss.ResumeRefused, match=r"앞 회차\(시작 2026-10-12 10:30\)가 아직 도는 중으로 기록돼 있어요"):
+        ss.refresh_sgis_area(db, _client(_no_http(), monkeypatch), only="house", resume=True,
+                             resume_since=given, now=NOW)
+    assert _sgis_jobs(db) == 1
+
+
+def test_이어받기는_다른_해_대표_행을_받은_것으로_안_본다(db, monkeypatch):
+    _seed_dongs(db, "11050650")
+    _prev_job(db)
+    db.add(SgisAreaStats(adm_cd="11050650", year=2023, item_code="api_apart_per", value=Decimal("1"),
+                         loaded_at=T0 + timedelta(hours=1)))
+    db.commit()
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house", resume=True, now=NOW)
+    assert [p["adm_cd"] for p in fake.urls(HOUSE_URL)] == ["11050650"] and st.resumed_skips == 0
+
+
+def test_이어받기_기준은_다른_종류_잡이_더_최근이어도_sgis_area_잡(db, monkeypatch):
+    _seed_dongs(db, "11050650")
+    _prev_job(db)
+    _got(db, "11050650", "api_apart_per", T0 + timedelta(hours=1))
+    db.add(CrawlJob(job_type="kapt_costs", status="completed", started_at=T0 + timedelta(hours=2)))
+    db.commit()
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house", resume=True, now=NOW)
+    assert fake.urls(HOUSE_URL) == [] and st.resumed_skips == 1
+    assert st.resume_since.replace(tzinfo=timezone.utc) == T0
+
+
+def test_연속_실패_사유도_이어받기를_안내한다(db, monkeypatch):
+    _seed_dongs(db, *[f"110506{i:02d}" for i in range(25)])
+    fake = FakeHttp({HOUSE_URL: _fail_then_ok(20)})
+    ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house")
+    msg = _job(db).error_message
+    assert "실패가 20번 이어져 멈췄어요" in msg and "다시 돌릴 때 이어받기로 돌리면 받은 곳은 건너뛰어요." in msg
+    assert "--" not in msg and "resume" not in msg
+
+
+def test_스크립트는_이어받기_거부를_한_줄로_알리고_종료코드_3(monkeypatch, capsys):
+    import contextlib
+
+    from crawler import service_sgis
+    from db import database
+    from scripts import run_sgis_area_refresh as rs
+
+    def refuse(*a, **k):
+        raise ss.ResumeRefused("이어받기 기준(2026-10-10 09:30)이 이틀보다 오래됐어요")
+
+    monkeypatch.setenv("SGIS_CONSUMER_KEY", "k")
+    monkeypatch.setenv("SGIS_CONSUMER_SECRET", "s")
+    monkeypatch.setattr(service_sgis, "refresh_sgis_area", refuse)
+    monkeypatch.setattr(database, "SessionLocal", lambda: contextlib.nullcontext(None))
+    assert rs.main(["--resume"]) == 3
+    assert capsys.readouterr().out.strip().endswith("멈춤: 이어받기 기준(2026-10-10 09:30)이 이틀보다 오래됐어요")
+
+
+# ── 이어받기 재검사 보완 — 사람이 멈춘 회차를 running 으로 남기지 않는다 ─────────────────────
+
+
+def test_이어받기_꺼짐이면_앞_회차가_도는_중이어도_그대로_돈다(db, monkeypatch):
+    _seed_dongs(db, "11050650")
+    db.add(CrawlJob(job_type="sgis_area", status="running", started_at=T0))
+    db.commit()
+    fake = FakeHttp({HOUSE_URL: lambda p: _house(p["adm_cd"])})
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house", now=NOW)
+    assert [p["adm_cd"] for p in fake.urls(HOUSE_URL)] == ["11050650"] and st.stop_reason == "done"
+
+
+def test_회차_중_직접_중단하면_잡_행을_cancelled_로_닫고_다시_던진다(db, monkeypatch):
+    _seed_dongs(db, "11050650", "11050660")
+
+    def route(p):
+        if p["adm_cd"] == "11050660":
+            raise KeyboardInterrupt
+        return _house(p["adm_cd"])
+    fake = FakeHttp({HOUSE_URL: route})
+    with pytest.raises(KeyboardInterrupt):
+        ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house")
+    db.rollback()                                                    # 커밋된 것만 본다(같은 세션의 미커밋 변경 배제)
+    job = _job(db)
+    assert job.status == "cancelled" and job.completed_at is not None
+    assert job.error_message == "사람이 중간에 멈췄어요. 다시 돌릴 때 이어받기로 돌리면 받은 곳은 건너뛰어요."
+
+
+def test_스크립트는_직접_중단_줄을_찍고_다시_던진다(monkeypatch, capsys):
+    import contextlib
+
+    from crawler import service_sgis
+    from db import database
+    from scripts import run_sgis_area_refresh as rs
+
+    def interrupt(*a, **k):
+        raise KeyboardInterrupt
+
+    monkeypatch.setenv("SGIS_CONSUMER_KEY", "k")
+    monkeypatch.setenv("SGIS_CONSUMER_SECRET", "s")
+    monkeypatch.setattr(service_sgis, "refresh_sgis_area", interrupt)
+    monkeypatch.setattr(database, "SessionLocal", lambda: contextlib.nullcontext(None))
+    with pytest.raises(KeyboardInterrupt):
+        rs.main([])
+    out = capsys.readouterr().out
+    assert "멈춤(직접 중단): 이번 회차 시작 " in out and "(한국 시각) · SGIS 호출 0(+인증 0)" in out

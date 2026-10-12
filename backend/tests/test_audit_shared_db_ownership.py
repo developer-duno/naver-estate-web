@@ -5,11 +5,20 @@
 """
 
 import json
+import os
 import subprocess
 import textwrap
+from datetime import date
 from pathlib import Path
 
-from scripts.audit_shared_db_ownership import FETCH_FAILED, FORMAT_CHANGED, check_migration_sql, main
+from scripts import audit_shared_db_ownership as audit_mod
+from scripts.audit_shared_db_ownership import (
+    FETCH_FAILED,
+    FORMAT_CHANGED,
+    check_migration_sql,
+    main,
+    off_file_commit_date,
+)
 
 MODELS = """
 class Base:
@@ -442,6 +451,69 @@ def test_g_off_file_exits_zero(tmp_path, capsys):
     assert code == 0
     assert "가드 꺼짐(backend/.ownership-guard-off)" in out
     assert "⚠ 가드 꺼짐 — 끈 날짜·사유는 그 파일 첫 줄\n2026-10-10 정본 v2 대응 중\n" in out
+
+
+def _off_tree(tmp_path, monkeypatch, commit_day: date | None):
+    """끄기 파일이 있는 트리 + 오늘(2026-10-13)·끄기 파일 커밋일을 밖에서 고정."""
+    root, reg = _tree(tmp_path)
+    (root / "backend/.ownership-guard-off").write_text("2026-09-01 정본 대응 중\n", encoding="utf-8")
+    monkeypatch.setattr(audit_mod, "_today", lambda: date(2026, 10, 13))
+    monkeypatch.setattr(audit_mod, "off_file_commit_date", lambda _root: commit_day)
+    return root, reg
+
+
+def test_off_stale_over_limit_is_red(tmp_path, capsys, monkeypatch):
+    """끄기 파일이 14일 초과(15일) 묵었으면 🔴 + exit 1."""
+    root, reg = _off_tree(tmp_path, monkeypatch, date(2026, 9, 28))
+    code, out = _run(capsys, root, reg, "--off-stale-days", "14")
+    assert code == 1
+    assert "🔴 가드가 15일째 꺼져 있음(끈 날 2026-09-28) — 끄기 파일을 지우거나 사유를 새로 적어 다시 커밋" in out
+
+
+def test_off_stale_within_limit_exits_zero(tmp_path, capsys, monkeypatch):
+    """경계: 정확히 14일은 통과(초과가 아니다) — 비교를 >= 로 바꾸면 이 시험이 깨진다."""
+    root, reg = _off_tree(tmp_path, monkeypatch, date(2026, 9, 29))
+    code, out = _run(capsys, root, reg, "--off-stale-days", "14")
+    assert code == 0, out
+    assert "🔴" not in out
+
+
+def test_off_stale_git_date_unknown_exits_zero(tmp_path, capsys, monkeypatch):
+    """git 날짜를 못 얻으면(미커밋·git 없음) 경고만 찍고 exit 0."""
+    root, reg = _off_tree(tmp_path, monkeypatch, None)
+    code, out = _run(capsys, root, reg, "--off-stale-days", "14")
+    assert code == 0, out
+    assert "커밋 날짜를 못 구함" in out
+    assert "🔴" not in out
+
+
+def test_off_stale_without_flag_exits_zero(tmp_path, capsys, monkeypatch):
+    """--off-stale-days 가 없으면 끄기 파일이 아무리 오래돼도 지금처럼 exit 0."""
+    root, reg = _off_tree(tmp_path, monkeypatch, date(2025, 1, 1))
+    code, out = _run(capsys, root, reg)
+    assert code == 0, out
+    assert "🔴" not in out
+
+
+def test_off_file_commit_date_reads_real_git(tmp_path):
+    """진짜 git: 커밋 날짜(GIT_COMMITTER_DATE 고정)를 읽고, 커밋 안 된 파일은 None."""
+    env = {
+        **os.environ,
+        "GIT_COMMITTER_DATE": "2026-09-01T12:00:00+00:00",
+        "GIT_AUTHOR_DATE": "2026-09-01T12:00:00+00:00",
+    }
+
+    def git(*a: str) -> None:
+        subprocess.run(["git", "-C", str(tmp_path), *a], check=True, capture_output=True, env=env)
+
+    git("init", "-q")
+    off = tmp_path / "backend/.ownership-guard-off"
+    off.parent.mkdir(parents=True)
+    off.write_text("2026-09-01 사유\n", encoding="utf-8")
+    assert off_file_commit_date(tmp_path) is None  # 아직 커밋 전
+    git("add", "--", "backend/.ownership-guard-off")
+    git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "off")
+    assert off_file_commit_date(tmp_path) == date(2026, 9, 1)
 
 
 def test_missing_registered_file_is_yellow(tmp_path, capsys):

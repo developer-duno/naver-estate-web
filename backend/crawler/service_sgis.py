@@ -37,6 +37,8 @@
     errCd -200(코드 오류)은 그 동에 늘 나는 오류라 따로 센다(연속 실패에 안 넣음). 단 -200 이 연속 200회면
     (전부 코드 오류 = 우리 쪽 고장) failed. 끝까지 돌았어도 실패한 동이 대상의 10% 이상이면 failed,
     그보다 적어도 실패한 동이 있으면 회차 사유에 우리말 한 줄을 남긴다.
+    요약 응답 `result` 에 그 동 줄이 없으면 -200 과 같이 '동 번호 모름'으로 센다(10-12 운영 두 회차에서 house
+    6동이 똑같이 그랬다 — 결정적). 10% 판정은 실패한 동과 동 번호 모름 동의 합집합으로 센다.
 
 기록·커밋
     `CrawlJob(job_type="sgis_area")`. 받은 값은 메모리에 모았다가 **동 100개마다** 한 번에 넣고 커밋한다 —
@@ -165,7 +167,9 @@ def _own_row(result, adm_cd: str) -> dict | None:
 
 
 def parse_summary(kind: str, result, adm_cd: str, bad: list | None = None) -> list[dict] | None:
-    """요약 응답 → 저장할 행들. 그 동의 행이 없으면 None(응답 모양 이상 = 실패)."""
+    """요약 응답 → 저장할 행들. 해석이 안 되면 None — result 가 목록이 아님·corp 에 theme_list 없음
+    (응답 모양 이상 = 실패)과 목록인데 그 동의 행만 없음(창구가 동 번호를 모름 = 코드 오류)을
+    호출부(_collect_summaries)가 `_own_row` 로 가른다."""
     own = _own_row(result, adm_cd)
     if own is None:
         return None
@@ -415,8 +419,10 @@ def _collect_summaries(run: _Run, targets: list[str], kinds: list[str]) -> None:
                 break
             if reply.kind == "ok":
                 rows = parse_summary(kind, reply.result, adm_cd, run.bad)
-                if rows is None:
-                    run.fail(f"{kind} {adm_cd}: 응답 모양 이상(그 동의 행 없음)", adm_cd)
+                if rows is None and isinstance(reply.result, list) and _own_row(reply.result, adm_cd) is None:
+                    run.code_error(f"{kind} {adm_cd}: 창구 응답에 그 동 줄이 없음", adm_cd)
+                elif rows is None:   # result 가 목록이 아님·corp 에 theme_list 없음
+                    run.fail(f"{kind} {adm_cd}: 응답 모양 이상", adm_cd)
                 elif not rows:   # corp 에 1006 이 없음·house 칸이 빔 — 실측 응답은 늘 칸 전부(72업종은 0 도)를 준다
                     run.fail(f"{kind} {adm_cd}: 응답 모양 이상(저장할 값 0개)", adm_cd)
                 else:
@@ -525,12 +531,12 @@ def _job_message(st: Stats, cap: int) -> str:
             " 다시 돌릴 때 이어받기로 돌리면 받은 곳은 건너뛰어요."
         )
     if st.failed_dongs:
-        line = f"동 {len(st.failed_dongs):,}곳은 자료를 못 받아 비워 뒀어요(다시 돌리면 채워집니다)."
-        if too_many_failures(len(st.failed_dongs), st.dongs):
-            line += " 대상의 10% 이상이라 실패로 끝냈어요."
-        parts.append(line)
+        parts.append(f"동 {len(st.failed_dongs):,}곳은 자료를 못 받아 비워 뒀어요(다시 돌리면 채워질 수 있어요).")
     if st.code_error_dongs:
         parts.append(f"창구가 동 번호를 모른다고 한 {len(st.code_error_dongs):,}곳은 비워 뒀어요.")
+    if too_many_failures(len(st.failed_dongs | st.code_error_dongs), st.dongs):
+        both = st.failed_dongs and st.code_error_dongs
+        parts.append(("둘을 합쳐 " if both else "") + "대상의 10% 이상이라 실패로 끝냈어요.")
     if st.failed_sidos:
         parts.append(f"홍수·산사태 목록을 못 받은 시도가 {len(st.failed_sidos)}곳 있어 그곳은 비워 뒀어요.")
     parts += st.mismatch_sidos
@@ -598,7 +604,8 @@ def refresh_sgis_area(
         hard_stop = st.stop_reason in ("consecutive_failures", "consecutive_code_errors")
 
         def finish() -> None:   # 롤백되면 고친 칸이 사라지므로 다시 할 때 셋 다 다시 넣는다
-            job.status = "failed" if hard_stop or too_many_failures(len(st.failed_dongs), st.dongs) else "completed"
+            too_many = too_many_failures(len(st.failed_dongs | st.code_error_dongs), st.dongs)
+            job.status = "failed" if hard_stop or too_many else "completed"
             job.error_message = _job_message(st, call_cap) or None
             job.completed_at = utcnow()
             db.commit()

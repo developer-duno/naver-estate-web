@@ -139,12 +139,19 @@ def test_요약3종_원문_칸이름으로_저장_NA는_NULL_정상완료(db, mo
     assert [(j.status, j.total_items, j.processed_items, j.error_message) for j in jobs] == [("completed", 1, 1, None)] * 3
 
 
-def test_요약_응답에_그_동의_행이_없으면_실패로_세고_안_쓴다(db, monkeypatch):
-    _seed_dongs(db, "11050650")
-    fake = FakeHttp({HOUSE_URL: lambda p: _house("11050999")})
+def test_요약_응답에_그_동의_줄이_없으면_동_번호_모름으로_세고_안_쓴다(db, monkeypatch):
+    """10-12 운영 두 회차에서 house 6동이 똑같이 '그 동 줄 없음' — 결정적이라 -200 과 같이 센다(B15).
+    다른 동 줄만 있는 응답(11050999·시군구 줄) → 실패가 아니라 code_error_dongs, 11곳 중 1곳이라 completed."""
+    dongs = [f"11{i:06d}" for i in range(11)]
+    _seed_dongs(db, *dongs)
+    fake = FakeHttp({HOUSE_URL: lambda p: _house("11050999") if p["adm_cd"] == dongs[3] else _house(p["adm_cd"])})
     st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house")
-    assert (st.failed, st.saved) == (1, 0)
-    assert _val(db, "11050650", "api_officetel_cnt") is None
+    assert (st.failed, st.failed_dongs, st.code_error_dongs, st.code_error) == (0, set(), {dongs[3]}, 1)
+    assert _val(db, dongs[3], "api_officetel_cnt") is None
+    job = _job(db)
+    assert job.status == "completed"
+    assert "창구가 동 번호를 모른다고 한 1곳" in job.error_message
+    assert "10% 이상" not in job.error_message
 
 
 def test_결과없음은_실패가_아니고_아무것도_안_쓴다(db, monkeypatch):
@@ -181,20 +188,81 @@ def test_실패19_성공1_실패19는_연속이_풀려_계속_간다(db, monkeyp
     assert (st.stop_reason, st.failed, st.done) == ("done", 38, 400)
     job = _job(db)
     assert job.status == "completed"
-    assert job.error_message == "동 38곳은 자료를 못 받아 비워 뒀어요(다시 돌리면 채워집니다)."
+    assert job.error_message == "동 38곳은 자료를 못 받아 비워 뒀어요(다시 돌리면 채워질 수 있어요)."
     assert _val(db, dongs[18], "api_officetel_cnt") is None          # 실패한 동은 '자료 없음'으로도 안 쓴다
     assert _val(db, dongs[19], "api_officetel_cnt")[0] == Decimal("155")
 
 
-def test_정상_응답인데_그_동의_행이_없음이_20번이면_failed(db, monkeypatch):
-    """ok 응답이라는 이유만으로 연속 수를 되돌리면 모양이 바뀐 창구에서 영영 안 멈춘다(검사관 B 🔴-1)."""
-    dongs = [f"11{i:06d}" for i in range(30)]
+def test_house_응답이_통째로_그_동_줄이_없어도_corp_성공이_끼면_10퍼센트로_failed(db, monkeypatch):
+    """모양이 바뀐 창구에서 영영 completed 로 끝나지 않는지(검사관 B 🔴-1 · B15).
+    '줄 없음'은 동 번호 모름으로 세는데, 매 동 사이 corp 성공(ok())이 연속 수를 되돌려 200번 멈춤에 안 닿는다
+    → 10% 판정이 실패 동과 동 번호 모름 동의 합집합이라 failed 로 끝나고 사유 문장이 남아야 한다."""
+    dongs = [f"11{i:06d}" for i in range(10)]
     _seed_dongs(db, *dongs)
-    fake = FakeHttp({HOUSE_URL: lambda p: _house("99999999")})
+    fake = FakeHttp({HOUSE_URL: lambda p: _house("99999999"), CORP_URL: lambda p: _corp(p["adm_cd"]),
+                     FLOOD_LIST_URL: lambda p: _flood_list(),
+                     sc.BASE_URL + ss.DISASTER_PATHS["lndsld"][0]: lambda p: _flood_list()})
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch))
+    assert (st.stop_reason, st.failed, len(st.code_error_dongs), st.done) == ("done", 0, 10, 10)
+    assert len(fake.urls(HOUSE_URL)) == 10 and len(fake.urls(CORP_URL)) == 10
+    job = _job(db)
+    assert job.status == "failed"
+    assert job.error_message == "창구가 동 번호를 모른다고 한 10곳은 비워 뒀어요. 대상의 10% 이상이라 실패로 끝냈어요."
+
+
+def _default_routes(house, corp):
+    """기본 종류(house·corp·flood·lndsld) — 재해 목록은 빈 결과."""
+    return {HOUSE_URL: house, CORP_URL: corp, FLOOD_LIST_URL: lambda p: _flood_list(),
+            sc.BASE_URL + ss.DISASTER_PATHS["lndsld"][0]: lambda p: _flood_list()}
+
+
+def test_요약_result_가_목록이_아니면_동_번호_모름이_아니라_실패(db, monkeypatch):
+    """'그 동 줄 없음'만 동 번호 모름이다 — result 자체가 None 이면 응답 모양 이상(실패)."""
+    _seed_dongs(db, "11050650")
+    fake = FakeHttp({HOUSE_URL: lambda p: {"errCd": 0, "errMsg": "Success", "result": None}})
     st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house")
-    assert (st.stop_reason, st.failed) == ("consecutive_failures", 20)
-    assert len(fake.urls(HOUSE_URL)) == 20
-    assert _job(db).status == "failed"
+    assert (st.failed, st.failed_dongs, st.code_error_dongs) == (1, {"11050650"}, set())
+
+
+def test_corp_에_theme_list_가_없으면_동_번호_모름이_아니라_실패(db, monkeypatch):
+    _seed_dongs(db, "11050650")
+    body = _corp("11050650")
+    del body["result"][0]["theme_list"]
+    fake = FakeHttp({CORP_URL: lambda p: body})
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="corp")
+    assert (st.failed, st.failed_dongs, st.code_error_dongs) == (1, {"11050650"}, set())
+
+
+def test_실패_동과_동_번호_모름이_섞여_10퍼센트면_둘을_합쳐_문장(db, monkeypatch):
+    dongs = [f"11{i:06d}" for i in range(10)]
+    _seed_dongs(db, *dongs)
+
+    def house(p):
+        if p["adm_cd"] == dongs[0]:
+            return _house("99999999")                      # 그 동 줄 없음 → 동 번호 모름
+        return sc.SgisRequestError("HTTP 500") if p["adm_cd"] == dongs[1] else _house(p["adm_cd"])
+    fake = FakeHttp(_default_routes(house, lambda p: _corp(p["adm_cd"])))
+    ss.refresh_sgis_area(db, _client(fake, monkeypatch))
+    job = _job(db)
+    assert job.status == "failed"
+    assert job.error_message == ("동 1곳은 자료를 못 받아 비워 뒀어요(다시 돌리면 채워질 수 있어요)."
+                                 " 창구가 동 번호를 모른다고 한 1곳은 비워 뒀어요."
+                                 " 둘을 합쳐 대상의 10% 이상이라 실패로 끝냈어요.")
+
+
+def test_10퍼센트_판정은_실패_동과_동_번호_모름_동의_합집합(db, monkeypatch):
+    """한 동이 house '줄 없음' + corp 실패로 겹치면 한 곳으로 센다.
+    25곳 중 합집합 2곳(8%) → completed. 단순 합(실패 2 + 모름 1 = 3, 12%)이면 failed 로 갈린다."""
+    dongs = [f"11{i:06d}" for i in range(25)]
+    _seed_dongs(db, *dongs)
+    house = lambda p: _house("99999999") if p["adm_cd"] == dongs[0] else _house(p["adm_cd"])  # noqa: E731
+    corp = lambda p: sc.SgisRequestError("HTTP 500") if p["adm_cd"] in dongs[:2] else _corp(p["adm_cd"])  # noqa: E731
+    fake = FakeHttp(_default_routes(house, corp))
+    st = ss.refresh_sgis_area(db, _client(fake, monkeypatch))
+    assert (st.failed_dongs, st.code_error_dongs) == ({dongs[0], dongs[1]}, {dongs[0]})
+    job = _job(db)
+    assert job.status == "completed"
+    assert "10% 이상" not in job.error_message
 
 
 def test_실패_비율_10퍼센트_경계():
@@ -211,7 +279,7 @@ def test_실패한_동이_10퍼센트_이상이면_failed_미만이면_사유만
     ss.refresh_sgis_area(db, _client(fake, monkeypatch), only="house")
     job = _job(db)
     assert job.status == status
-    assert job.error_message.startswith("동 1곳은 자료를 못 받아 비워 뒀어요(다시 돌리면 채워집니다).")
+    assert job.error_message.startswith("동 1곳은 자료를 못 받아 비워 뒀어요(다시 돌리면 채워질 수 있어요).")
     assert ("대상의 10% 이상이라 실패로 끝냈어요." in job.error_message) == (status == "failed")
 
 
@@ -402,13 +470,14 @@ def test_외부_호출_순간에_트랜잭션이_열려_있지_않다(db, monkey
 
 
 def test_코드_오류_동은_따로_세고_회차는_계속(db, monkeypatch):
-    dongs = [f"11{i:06d}" for i in range(10)]
+    # 100곳 중 8곳(8%) — 동 번호 모름도 10% 판정에 들어가므로(B15) 10% 아래로 둔다
+    dongs = [f"11{i:06d}" for i in range(100)]
     _seed_dongs(db, *dongs)
     code_err = {"errCd": -200, "errMsg": "행정동 코드를 확인하세요"}
     fake = FakeHttp({HOUSE_URL: lambda p: code_err if p["adm_cd"] in dongs[:8] else _house(p["adm_cd"])})
     client = _client(fake, monkeypatch)
     st = ss.refresh_sgis_area(db, client, only="house")
-    assert (st.stop_reason, st.code_error, st.failed, client.calls, fake.issued) == ("done", 8, 0, 10, 1)  # 재발급·재시도 0
+    assert (st.stop_reason, st.code_error, st.failed, client.calls, fake.issued) == ("done", 8, 0, 100, 1)  # 재발급·재시도 0
     job = _job(db)
     assert job.status == "completed"
     assert job.error_message == "창구가 동 번호를 모른다고 한 8곳은 비워 뒀어요."

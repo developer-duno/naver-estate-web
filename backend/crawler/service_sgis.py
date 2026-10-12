@@ -41,9 +41,25 @@
 기록·커밋
     `CrawlJob(job_type="sgis_area")`. 받은 값은 메모리에 모았다가 **동 100개마다** 한 번에 넣고 커밋한다 —
     외부 호출 동안 트랜잭션을 열어 두지 않는다. 호출 상한(`call_cap`, 기본 45,000 — 하루 5만 콜 공용 키)에
-    닿으면 거기서 멈춘다. 다시 돌리면 처음부터 다시 받는다(upsert 라 같은 결과).
+    닿으면 거기서 멈춘다. 그냥 다시 돌리면 처음부터 다시 받는다(upsert 라 같은 결과) — 끊긴 회차를 이어가려면
+    이어받기(`resume=True`, 스크립트 `--resume`)로 돌린다(아래).
     DB 순간 끊김(OperationalError — 8초 제한·연결 끊김)은 5·15·45초 뒤 3번까지 같은 저장 묶음을 통째로 다시 한다
     (대상 읽기·동 100개 저장·회차 마감 — `db.retry.retry_db`). 3번 다 실패하면 회차를 failed 로 끝낸다.
+
+이어받기 (`resume=True` — 기본은 꺼짐 = 전부 받음, 세션 461)
+    이 회차 잡 행을 만들기 전에 가장 최근 `sgis_area` 잡(상태 무관)의 started_at 을 기준 시각으로 읽는다.
+    앞 회차가 없으면 이어받기 없이 전부 받는다. 기준 시각 **이후(같은 시각 포함)** loaded_at 으로 들어온 행을
+    쿼리 한 번에 읽어 받은 곳을 고른다(`RESUME_ITEMS` — 종류마다 늘 들어오는 대표 항목 하나).
+    * 요약: (동, 종류)마다 그 종류의 대표 항목이 있으면 그 호출만 건너뛴다(다른 종류는 따로 판정).
+    * 재해: 시도의 대상 동이 **전부** `ndsm_<종>_affected` 를 가지면 목록도 안 부른다. 아니면 목록은 부르고,
+      상세·'영향 없음(0)' 쓰기·목록 실패 시 실패 동 세기는 아직 없는 동만 대상으로 한다.
+    진행 수(`done`)와 10% 판정의 분모(`dongs`)는 그대로 대상 동 전체다. 건너뛴 (동, 종류) 수는 `resumed_skips`.
+    이어받기가 또 끊겼거나 사이에 작은 실행을 돌렸으면 `--since`(`resume_since`)로 처음 회차 시작 시각을 준다
+    — 주면 최근 잡을 읽지 않고 그 시각을 기준으로 쓴다.
+    거부(잡 행을 만들기 전에 `ResumeRefused`): 가장 최근 sgis_area 잡이 아직 running 으로 기록돼 있을 때 ·
+    자동 기준이 지금보다 이틀 넘게 오래됐을 때 · 손으로 준 기준이 미래이거나 7일 넘게 오래됐을 때.
+    한계: 저장 도중 끊기면 한 동의 대표 항목만 들어가고 나머지 칸이 빠질 수 있어 이어받기가 그 동을 받은 것으로
+    본다(드묾 — 같은 해 자료라 값 차이 작음).
 """
 
 from __future__ import annotations
@@ -51,13 +67,14 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import text
 
 from crawler.service_common import fail_job_safely
 from crawler.sgis_client import Reply, SgisClient
-from db.models import CrawlJob
+from db.models import CrawlJob, SgisAreaStats
 from db.retry import retry_db
 from utils import utcnow
 
@@ -84,6 +101,15 @@ _DISASTER_WORDS = {"flood": "홍수", "lndsld": "산사태"}
 KINDS = (*SUMMARY_PATHS, *DISASTER_PATHS)          # only 로 고를 수 있는 것
 DEFAULT_KINDS = ("house", "corp", "flood", "lndsld")   # 기본 실행 — ppl 은 화면이 안 써서 뺐다
 _SKIP_SUMMARY_KEYS = {"adm_cd", "adm_nm"}
+# 이어받기 판정용 종류별 대표 항목 — 그 종류를 받았으면 늘 들어오는 칸 하나(운영 행 수 2026-10-12: house 3,553 ·
+# corp 3,558 · flood 3,557 · lndsld 3,554 · ppl 은 운영 행 없음 → 탐침 원문 칸 thirty_cnt)
+RESUME_ITEMS = {
+    "house": "api_apart_per",
+    "ppl": "api_thirty_cnt",
+    "corp": "api_corp_1006_per",
+    "flood": "ndsm_flood_affected",
+    "lndsld": "ndsm_lndsld_affected",
+}
 # 상세 항목 이름(iem_nm) → 저장할 칸. 값은 각 항목 data_list 의 div_nm '총합' 행
 _BOARD_FIELDS = (
     ("인구", "affc_zone", "affc_pop"),
@@ -92,6 +118,14 @@ _BOARD_FIELDS = (
     ("주택", "affc_zone", "affc_house"),
     ("지하건물", "affc_zone", "affc_basement"),
 )
+
+
+class ResumeRefused(ValueError):
+    """이어받기를 하면 안 되는 상황 — 잡 행을 만들기 전에 우리말 사유를 담아 멈춘다."""
+
+
+MAX_AUTO_RESUME_AGE = timedelta(days=2)    # 자동 기준(최근 잡 started_at)이 이보다 오래면 거부
+MAX_GIVEN_RESUME_AGE = timedelta(days=7)   # 손으로 준 기준이 이보다 오래면 거부
 
 
 def too_many_failures(failed_dongs: int, total: int) -> bool:
@@ -181,15 +215,19 @@ class Stats:
     code_error_dongs: set[str] = field(default_factory=set)
     failed_sidos: list[str] = field(default_factory=list)
     mismatch_sidos: list[str] = field(default_factory=list)   # 동 번호가 바뀐 곳이 있어 0 을 안 쓴 시도(문장)
+    resume_since: datetime | None = None   # 이어받기 기준 시각(앞 회차 started_at) — 이어받기 안 하면 None
+    resumed_skips: int = 0                 # 이어받기로 건너뛴 (동, 종류) 수
 
 
 class _Run:
-    def __init__(self, db, client: SgisClient, job: CrawlJob, call_cap: int, db_sleep=time.sleep):
+    def __init__(self, db, client: SgisClient, job: CrawlJob, call_cap: int, db_sleep=time.sleep,
+                 have: dict[str, set[str]] | None = None):
         self.db = db
         self.client = client
         self.job = job
         self.call_cap = call_cap
         self.db_sleep = db_sleep
+        self.have = have or {}   # 종류 → 이어받기 기준 이후로 이미 받은 동(이어받기 안 하면 빈 dict)
         self.st = Stats()
         self.buf: list[dict] = []
         self.deletes: list[tuple[str, str]] = []   # (동, 재해 종류) — 지난 회차 행을 지울 것
@@ -288,9 +326,90 @@ def select_target_dongs(db, limit: int | None = None, sleep=time.sleep) -> list[
     return [str(r[0]) for r in retry_db(db, read, sleep, "동네 통계 대상 읽기")]
 
 
+def _aware(dt: datetime) -> datetime:
+    """SQLite(시험)는 시간대 없이 돌려주므로 UTC 로 본다."""
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
+def _resume_refusal(latest, given_since: datetime | None, now: datetime) -> str | None:
+    """latest = 가장 최근 sgis_area 잡의 (started_at, status) 또는 None. 거부 사유(우리말) 또는 None."""
+    if latest is not None and latest[1] == "running":
+        return (f"앞 회차(시작 {kst_minute(latest[0])})가 아직 도는 중으로 기록돼 있어요"
+                " — 끝났는지 확인한 뒤 다시 돌리세요."
+                " 직접 끊었거나 서버가 꺼져 남은 기록이면 시작 3시간 뒤(서버를 다시 켜면 바로) 저절로 정리돼요.")
+    if given_since is not None:
+        if given_since > now:
+            return f"이어받기 기준({kst_minute(given_since)})이 지금보다 뒤예요 — 처음 회차 시작 시각을 다시 확인하세요."
+        if now - given_since > MAX_GIVEN_RESUME_AGE:
+            return (f"이어받기 기준({kst_minute(given_since)})이 7일보다 오래됐어요"
+                    " — 새로 전부 받으려면 이어받기 없이 돌리세요.")
+        return None
+    if latest is not None and now - _aware(latest[0]) > MAX_AUTO_RESUME_AGE:
+        return (f"이어받기 기준({kst_minute(latest[0])})이 이틀보다 오래됐어요"
+                " — 새로 전부 받으려면 이어받기 없이 돌리세요.")
+    return None
+
+
+def read_resume_state(
+    db, kinds: list[str], sleep=time.sleep, given_since: datetime | None = None, now: datetime | None = None
+) -> tuple[datetime | None, dict[str, set[str]]]:
+    """이어받기 기준 시각(가장 최근 sgis_area 잡의 started_at, 상태 무관)과 종류별 이미 받은 동.
+
+    이 회차 잡 행을 만들기 **전에** 부른다. 앞 회차가 없으면 (None, {}). 쿼리 2번(기준·받은 행) 뒤 커밋한다.
+    given_since(손으로 준 기준, 시간대 붙은 값)가 있으면 최근 잡의 시각 대신 그 값을 쓴다(running 확인은 그대로).
+    거부할 상황이면 ResumeRefused(모듈 머리말). now = 지금 시각(시험에서 고정해 넣는다)."""
+    item_kind = {RESUME_ITEMS[k]: k for k in kinds}
+    now = now or utcnow()
+
+    def read():
+        latest = (
+            db.query(CrawlJob.started_at, CrawlJob.status)
+            .filter(CrawlJob.job_type == _JOB_TYPE, CrawlJob.started_at.isnot(None))
+            .order_by(CrawlJob.started_at.desc())
+            .first()
+        )
+        refusal = _resume_refusal(latest, given_since, now)
+        since = given_since or (latest[0] if latest is not None else None)
+        have: dict[str, set[str]] = {k: set() for k in kinds}
+        if since is not None and refusal is None:
+            rows = (
+                db.query(SgisAreaStats.adm_cd, SgisAreaStats.item_code)
+                .filter(
+                    SgisAreaStats.year == YEAR,
+                    SgisAreaStats.item_code.in_(list(item_kind)),
+                    SgisAreaStats.loaded_at >= since,
+                )
+                .all()
+            )
+            for adm_cd, item_code in rows:
+                have[item_kind[item_code]].add(str(adm_cd))
+        db.commit()  # 읽기 트랜잭션을 외부 호출 동안 열어 두지 않는다
+        return since, have, refusal
+
+    since, have, refusal = retry_db(db, read, sleep, "동네 통계 이어받기 기준 읽기")
+    if refusal is not None:
+        raise ResumeRefused(refusal)
+    return (since, have) if since is not None else (None, {})
+
+
+def kst_text(dt: datetime) -> str:
+    """기준 시각을 사람이 읽는 한국 시각으로 — SQLite(시험)는 시간대 없이 돌려주므로 UTC 로 본다."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone(timedelta(hours=9))).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def kst_minute(dt: datetime) -> str:
+    """한국 시각 "YYYY-MM-DD HH:MM" — 스크립트 --since 에 그대로 넣을 수 있는 꼴(초는 버린다)."""
+    return kst_text(dt)[:16]
+
+
 def _collect_summaries(run: _Run, targets: list[str], kinds: list[str]) -> None:
     for i, adm_cd in enumerate(targets):
         for kind in kinds:
+            if adm_cd in run.have.get(kind, ()):   # 이어받기 — 이 종류는 이미 받았다
+                run.st.resumed_skips += 1
+                continue
             reply = run.ask(SUMMARY_PATHS[kind], adm_cd=adm_cd)
             if reply is None:
                 break
@@ -317,7 +436,13 @@ def _collect_disaster(run: _Run, targets: list[str], all_targets: set[str], kind
     by_sido: dict[str, list[str]] = {}
     for adm_cd in targets:
         by_sido.setdefault(adm_cd[:2], []).append(adm_cd)
-    for sido, dongs in sorted(by_sido.items()):
+    done_before = run.have.get(kind, set())
+    for sido, sido_dongs in sorted(by_sido.items()):
+        # 이어받기 — 이미 받은 동은 상세·0 쓰기·실패 세기에서 뺀다. 전부 받은 시도는 목록도 안 부른다
+        dongs = [d for d in sido_dongs if d not in done_before]
+        run.st.resumed_skips += len(sido_dongs) - len(dongs)
+        if not dongs:
+            continue
         reply = run.ask(list_path, adm_cd=sido)
         if reply is None:
             break
@@ -377,6 +502,9 @@ def _collect_disaster(run: _Run, targets: list[str], all_targets: set[str], kind
             break
 
 
+_INTERRUPTED = "사람이 중간에 멈췄어요. 다시 돌릴 때 이어받기로 돌리면 받은 곳은 건너뛰어요."
+
+
 def _job_message(st: Stats, cap: int) -> str:
     parts = []
     if st.stop_reason == "consecutive_failures":
@@ -384,6 +512,7 @@ def _job_message(st: Stats, cap: int) -> str:
             f"동네 통계 창구(국가데이터처 통계지리정보)에서 실패가 {MAX_CONSECUTIVE_FAILURES}번 이어져 멈췄어요."
             " 창구가 고장 났거나 오늘 쓸 수 있는 횟수를 넘었을 수 있어요."
             f" 동 {st.dongs:,}곳 중 요약은 {st.done:,}곳까지 물어봤어요."
+            " 다시 돌릴 때 이어받기로 돌리면 받은 곳은 건너뛰어요."
         )
     elif st.stop_reason == "consecutive_code_errors":
         parts.append(
@@ -393,7 +522,7 @@ def _job_message(st: Stats, cap: int) -> str:
     elif st.stop_reason == "daily_cap":
         parts.append(
             f"하루 호출 상한({cap:,}번)에 닿아 멈췄어요. 동 {st.dongs:,}곳 중 요약은 {st.done:,}곳까지 물어봤어요."
-            " 다시 돌리면 처음부터 다시 받아요."
+            " 다시 돌릴 때 이어받기로 돌리면 받은 곳은 건너뛰어요."
         )
     if st.failed_dongs:
         line = f"동 {len(st.failed_dongs):,}곳은 자료를 못 받아 비워 뒀어요(다시 돌리면 채워집니다)."
@@ -417,12 +546,25 @@ def refresh_sgis_area(
     call_cap: int = DEFAULT_CALL_CAP,
     scheduler_job_id: str | None = None,
     db_sleep=time.sleep,
+    resume: bool = False,
+    resume_since: datetime | None = None,
+    now: datetime | None = None,
 ) -> Stats:
     """요약(house·corp) → 홍수 → 산사태 순으로 받는다. only 가 있으면 그 하나만(ppl 은 only 로만).
-    db_sleep = DB 순간 끊김 재시도 대기 함수(시험에서 가짜로 넣는다)."""
+    db_sleep = DB 순간 끊김 재시도 대기 함수(시험에서 가짜로 넣는다).
+    resume = 이어받기(모듈 머리말) — 기본 꺼짐이면 지금처럼 전부 받는다.
+    resume_since = 이어받기 기준을 손으로 줄 때(시간대 붙은 값) — 주면 최근 잡 started_at 을 읽지 않는다.
+    now = 이어받기 거부 판정의 지금 시각(시험에서 고정해 넣는다 · 기본 utcnow())."""
     if only is not None and only not in KINDS:
         raise ValueError(f"only 는 {KINDS} 중 하나: {only}")
+    if resume_since is not None and (not resume or resume_since.tzinfo is None):
+        raise ValueError("resume_since 는 resume=True 와 함께, 시간대 붙은 값으로만 준다")
     kinds = [only] if only else list(DEFAULT_KINDS)
+    since, have = None, {}
+    if resume:   # 이 회차 잡 행을 만들기 전에 읽는다 — 만든 뒤 읽으면 자기 자신이 기준이 된다
+        since, have = read_resume_state(db, kinds, sleep=db_sleep, given_since=resume_since, now=now)
+        if since is None:
+            logger.info("동네 통계 이어받기: 앞 회차가 없어 처음부터 전부 받아요")
     all_targets = select_target_dongs(db, sleep=db_sleep)
     targets = all_targets if limit is None else all_targets[:limit]
 
@@ -434,8 +576,9 @@ def refresh_sgis_area(
     db.flush()
     job_id = job.id
     db.commit()   # id 를 커밋 전에 읽어 둔다 — 커밋 뒤 읽으면 다시 SELECT 가 나가 트랜잭션이 열린 채 외부 호출을 한다
-    run = _Run(db, client, job, call_cap, db_sleep)
+    run = _Run(db, client, job, call_cap, db_sleep, have)
     run.st.dongs = len(targets)
+    run.st.resume_since = since
     try:
         summary_kinds = [k for k in kinds if k in SUMMARY_PATHS]
         if summary_kinds:
@@ -450,6 +593,8 @@ def refresh_sgis_area(
         if run.bad:
             logger.warning("동네 통계 값 모양 이상 %d칸(NULL 로 둠) — 예: %s", len(run.bad), run.bad[:5])
         st = run.st
+        if since is not None:
+            logger.info("동네 통계 이어받기: 기준 %s(한국 시각) · 건너뜀 %d", kst_text(since), st.resumed_skips)
         hard_stop = st.stop_reason in ("consecutive_failures", "consecutive_code_errors")
 
         def finish() -> None:   # 롤백되면 고친 칸이 사라지므로 다시 할 때 셋 다 다시 넣는다
@@ -459,6 +604,17 @@ def refresh_sgis_area(
             db.commit()
 
         retry_db(db, finish, db_sleep, "동네 통계 회차 마감")
+    except KeyboardInterrupt:   # 사람이 Ctrl+C 로 멈춤 — running 으로 남으면 다음 이어받기가 '도는 중'으로 거부된다
+        logger.warning("동네 통계 받기 — 사람이 중간에 멈춤")
+        try:
+            db.rollback()
+            job.status = "cancelled"
+            job.error_message = _INTERRUPTED
+            job.completed_at = utcnow()
+            db.commit()
+        except Exception:
+            fail_job_safely(job_id, _INTERRUPTED)
+        raise
     except Exception:
         logger.exception("동네 통계 받기 중 예외")
         try:

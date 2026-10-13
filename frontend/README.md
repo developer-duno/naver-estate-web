@@ -39,7 +39,7 @@ npx playwright test --project=admin  # 관리자 (TEST_ADMIN_* 5종 .env.test �
 
 ## 기술 스택
 
-- Next.js 16 (App Router) + React 19 + TypeScript 5
+- Next.js 16 (App Router) + React 19 + TypeScript 6
 - Tailwind CSS 4 + shadcn/Radix (PR 1 도입 답습)
 - React Query (TanStack Query v5) 서버 상태
 - Recharts 3 (`dynamic` import)
@@ -55,7 +55,7 @@ npx playwright test --project=admin  # 관리자 (TEST_ADMIN_* 5종 .env.test �
 | `src/hooks/` | 25 커스텀 훅 |
 | `src/lib/` | 47 파일 (최상위 37 + api/ 9 + admin/ 1) — 도구 5종 계산기 라이브러리 포함 |
 | `src/content/blog/` | MDX 26편 (시세 5 / 세금 6 / 도구 9 / 미분양 6) — SSOT 은 [.claude/BLOG.md](../.claude/BLOG.md) |
-| `e2e/` | Playwright 20 spec (--webpack 모드) |
+| `e2e/` | Playwright 21 파일 (시각회귀 baseline 22장, --webpack 모드) |
 | `scripts/` | GATE 10 가드 (mdx-jsx + ad-compliance) |
 
 ## pre-commit hook (husky v9)

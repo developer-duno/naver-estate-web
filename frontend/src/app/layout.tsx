@@ -52,6 +52,7 @@ export const metadata: Metadata = {
     title: "공인중개사를 위한 부동산 매물·시세 분석 도구",
     description:
       "공인중개사가 빠르게 매물·시세·미분양을 분석하는 전국 부동산 데이터 도구",
+    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
   },
   twitter: {
     card: "summary_large_image",

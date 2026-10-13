@@ -5,7 +5,7 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from crawler.utils import haversine_km
+from crawler.utils import get_shared_throttle, haversine_km
 from db import queries
 from db.sgis_queries import build_neighborhood
 from deps import get_approved_user, get_db
@@ -225,7 +225,11 @@ def get_pyeong_details(
     details = queries.get_complex_pyeong_details(db, complex_no)
     if not details:
         from services.enricher import enrich_complex_detail
-        enrich_complex_detail(db, complex_no)
+        # 상세 배치와 같은 속도 조절 장치를 나눠 쓴다(B18 — 네이버 IP 차단 방지)
+        _throttle_detail = get_shared_throttle("complex_detail")
+        _throttle_detail.wait()
+        if enrich_complex_detail(db, complex_no):
+            _throttle_detail.on_success()
         db.commit()
         details = queries.get_complex_pyeong_details(db, complex_no)
     result = {

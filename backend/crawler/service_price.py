@@ -86,6 +86,7 @@ def collect_price_history_for_complex(
                 _report()
                 continue
 
+            collected_before = collected
             price_list = _extract_price_list(result)
             for p in price_list:
                 base_month = p.get("baseMonth") or p.get("yearMonth")
@@ -100,6 +101,9 @@ def collect_price_history_for_complex(
                     base_month=base_month,
                 )
                 collected += 1
+            # 호출 한 번의 결과를 바로 커밋 — 다음 네이버 대기 동안 행 잠금·열린 트랜잭션을 남기지 않는다(B18)
+            if collected > collected_before:
+                db.commit()
             _report()
 
     # 실거래가(/prices/real): 기본 area_no만 수집 (장기 이력, YYYYMM 월별 저장)
@@ -119,6 +123,7 @@ def collect_price_history_for_complex(
             failed += 1
             _report()
             continue
+        collected_before = collected
         month_list = real_result.get("realPriceOnMonthList") or []
         for month_data in month_list:
             if not isinstance(month_data, dict):
@@ -144,10 +149,10 @@ def collect_price_history_for_complex(
                 base_month=base_month,
             )
             collected += 1
+        if collected > collected_before:
+            db.commit()
         _report()
 
-    if collected > 0:
-        db.commit()
     logger.info("시세 수집 완료: complex=%s, collected=%d, failed=%d", complex_no, collected, failed)
     return {"collected": collected, "failed": failed, "total": total}
 
@@ -258,6 +263,9 @@ def collect_price_history(
                         price_avg=safe_int(p.get("averagePrice")),
                         base_month=base_month,
                     )
+                # 호출 한 번의 결과를 바로 커밋 — 다음 네이버 대기 동안 행 잠금·열린 트랜잭션을
+                # 남기지 않는다(B18). 완료 집합은 아래 체크포인트 때만 저장.
+                db.commit()
                 complex_had_success = True
             # 단지당 한 번만 카운트 (A1, B1 중 하나라도 성공하면)
             # 실패한 단지는 done 에 안 넣음 — 일시적 API 실패일 수 있어 다음 재개 때 재시도.

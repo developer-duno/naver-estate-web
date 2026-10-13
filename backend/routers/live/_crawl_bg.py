@@ -160,7 +160,11 @@ def _background_crawl(complex_no: str):
             _update_crawl_status(complex_no, phase="enriching")
             cpx = db.query(ComplexModel).filter(ComplexModel.complex_no == complex_no).first()
             if cpx:
-                enrich_complex_detail(db, complex_no)
+                # 상세 배치와 같은 속도 조절 장치를 나눠 쓴다(B18 — 네이버 IP 차단 방지)
+                _throttle_detail = get_shared_throttle("complex_detail")
+                _throttle_detail.wait()
+                if enrich_complex_detail(db, complex_no):
+                    _throttle_detail.on_success()
 
             # Phase 2: 상세 정보 자동 크롤링
             _update_crawl_status(complex_no, phase="details", detail_phase="running")

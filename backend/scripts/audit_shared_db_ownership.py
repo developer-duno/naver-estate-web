@@ -41,6 +41,8 @@
 끄는 법
     `backend/.ownership-guard-off` 파일이 있으면 판정 없이 exit 0(정본 형식이 바뀌어 가드를 맞출 때까지 등).
     그 파일 첫 줄에 끈 날짜·사유를 적는다 — 꺼진 동안 매 실행 출력에 그 줄이 보인다.
+    `--off-stale-days N` 을 주면(워크플로 정기·수동 실행은 14) 끄기 파일이 git 에 마지막 커밋된 지 N일 넘으면 🔴 —
+    14일 넘으면 월요일 정기 실행이 빨강이 된다(잊고 둔 끄기 파일이 가드를 영영 끄지 않게).
 
 실행
     python backend/scripts/audit_shared_db_ownership.py                      # 정본을 raw URL 로 받아 판정
@@ -61,6 +63,7 @@ import sys
 import tokenize
 import urllib.request
 from dataclasses import asdict, dataclass
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 REGISTRY_URL = "https://raw.githubusercontent.com/developer-duno/mibunyang/main/supabase/ownership.json"
@@ -733,6 +736,26 @@ def _print_report(findings: list[Finding], summary: str, mig_status: str) -> Non
     print(summary)
 
 
+def off_file_commit_date(root: Path) -> date | None:
+    """끄기 파일이 git 에 마지막으로 커밋된 날. 못 얻으면(미커밋·git 없음·기록 없음) None."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(root), "log", "-1", "--format=%cs", "--", OFF_FILE],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if proc.returncode != 0:
+            return None
+        return date.fromisoformat(proc.stdout.strip())
+    except (OSError, ValueError):
+        return None
+
+
+def _today() -> date:
+    return datetime.now(timezone.utc).date()
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")  # Windows 콘솔(cp949)에서 이모지로 죽지 않게
@@ -743,6 +766,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[2]), help="레포 루트(기본 = 이 스크립트 기준)")
     ap.add_argument("--since", help="④ 마이그 diff 기준 git ref(없으면 ④ 생략)")
     ap.add_argument("--json", action="store_true", help="결과를 JSON 으로 출력")
+    ap.add_argument("--off-stale-days", type=int, help="끄기 파일이 마지막 커밋 뒤 이 일수를 넘기면 🔴(없으면 검사 안 함)")
     args = ap.parse_args(argv)
     root = Path(args.repo_root).resolve()
 
@@ -752,6 +776,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"가드 꺼짐({OFF_FILE})")
         print("⚠ 가드 꺼짐 — 끈 날짜·사유는 그 파일 첫 줄")
         print(lines[0] if lines and lines[0].strip() else "(첫 줄 비어 있음 — 끈 날짜·사유를 적을 것)")
+        if args.off_stale_days is not None:
+            off_date = off_file_commit_date(root)
+            if off_date is None:
+                print("⚠ 끄기 파일의 커밋 날짜를 못 구함 — 오래됐는지 판정 생략")
+            else:
+                days = (_today() - off_date).days
+                if days > args.off_stale_days:
+                    print(f"🔴 가드가 {days}일째 꺼져 있음(끈 날 {off_date.isoformat()}) — 끄기 파일을 지우거나 사유를 새로 적어 다시 커밋")
+                    return 1
         return 0
     try:
         registry = load_registry(args.registry)

@@ -47,5 +47,5 @@ jobs:
           if [ -n "$SINCE" ]; then
             python backend/scripts/audit_shared_db_ownership.py --since "$SINCE"
           else
-            python backend/scripts/audit_shared_db_ownership.py
+            python backend/scripts/audit_shared_db_ownership.py --off-stale-days 14
           fi

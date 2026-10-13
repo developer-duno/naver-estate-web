@@ -190,6 +190,7 @@ naver 의 `CHILDCARE_DETAIL_API_KEY` == mibunyang 의 `CHILDCARE_BASIC_API_KEY` 
 같은 집 서버 IP 로 네이버를 크롤링하므로, 짧은 시간에 대량 요청하면 IP 가 차단된다.
 
 1. **모든 네이버 수집 코드는 `AdaptiveThrottle` 경유 필수.** `crawler/utils.py` 의 `get_shared_throttle(name, ...)` 로 인스턴스를 받아 단지·페이지 루프마다 `.wait()` 호출. 429 응답 시 자동 감속(`on_rate_limit`). throttle 우회한 직접 반복 호출 금지.
+   - **예외 — 손님이 직접 누르는 실시간 길목**(실시간 검색 `routers/live/search.py` · 매물 상세 실시간 `routers/articles.py`·`routers/live/crawl.py`·`routers/live/_detail_worker.py` · 실시간 단지 크롤 페이지 `routers/live/_crawl_bg.py`)은 `NaverEstateAPI._throttle()`(서버 전체 1초 간격 + 429 재시도 3·5·10초)만으로 둔다 — 사장님 결정 2026-10-13(세션 463 "가"). 근거 = 7일 실측 손님 길목 약 137콜 vs 배치 약 13.6만 콜(0.1%) · 배치와 같은 장치를 쓰면 배치가 감속한 동안 손님 검색이 한 쪽에 최대 10초 기다린다. **새 배치·반복 수집 코드는 이 예외에 해당하지 않는다.** 손님 길목 호출이 크게 늘면(`naver_api_call_counts` 의 `search`·`article_detail_live` 등) 다시 판단한다.
 2. **크롤 지표 컬럼을 SQL 직접 일괄 UPDATE 로 찍지 말 것.** `complexes.last_crawled_at`·`complexes.detail_crawled_at`·`articles.detail_crawled` 는 실제 크롤 코드(`CrawlJob` 생성 경유)만 갱신한다. SQL 로 일괄 UPDATE 하면 "크롤된 것처럼" 보이지만 실제 데이터는 없어 진단을 망친다.
 3. **`articles.detail_fail_count` 일괄 리셋은 정비 잡 전용, 수동은 단건만.** 상한 매물 되살리기는 일일 정비 잡(정기 VACUUM 유지보수(자료 보관함 정리), 매일 03:50)이 CAP-1 부여로 이미 한다(매물당 하루 1콜 유계). 손으로 `WHERE detail_fail_count > 0` 같은 일괄 0 리셋을 박으면 그 매물들이 상한까지 N매물×6콜을 다시 태우며 한꺼번에 재유입돼 네이버 부하가 튄다. 수동 개입은 특정 매물 1건(`WHERE article_no = '...'`)만.
 

@@ -45,7 +45,7 @@ docs/loop/
 .vercel
 
 # Claude Code local
-.claude/settings.local.json
+.claude/settings.local.json*
 .claude-memory/
 .claude/worktrees/
 .claude/scheduled_tasks.lock

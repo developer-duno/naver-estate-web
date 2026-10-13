@@ -387,11 +387,15 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
         if first_page_ok and completed_all_pages:
             complex_update["articles_crawled_at"] = utcnow()
         db.query(Complex).filter(Complex.complex_no == complex_no).update(complex_update)
+        # 상세 보강(네이버 1콜) 전에 커밋 — 대기 동안 complexes 행 잠금을 쥐지 않는다(B18)
+        db.commit()
 
         # 단지 상세 정보 보강 (1회성: detail_crawled_at이 없는 경우만)
         cpx = db.query(Complex).filter(Complex.complex_no == complex_no).first()
         if cpx and not cpx.detail_crawled_at:
-            enrich_complex_detail(db, complex_no)
+            _throttle_detail.wait()
+            if enrich_complex_detail(db, complex_no):
+                _throttle_detail.on_success()
 
         _finalize_job(
             db, job, "completed",

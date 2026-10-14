@@ -49,3 +49,23 @@ jobs:
           else
             python backend/scripts/audit_shared_db_ownership.py --off-stale-days 14
           fi
+
+      # 월요일 정기 실행이 빨간불이면 아무도 모른다(PR 은 화면에 보이지만 정기 실행은 안 보인다 — 세션 465 B3).
+      # 정기 실행이 실패했을 때만 텔레그램 한 통. PR·push 실패는 그 화면에서 보이므로 보내지 않는다.
+      # 문구 규칙·줄바꿈($'...')·시크릿 미설정 스킵은 healthcheck.yml 의 알림 단계와 같다.
+      - name: Send Telegram alert on scheduled failure
+        if: ${{ failure() && github.event_name == 'schedule' }}
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "TELEGRAM secrets 미설정 — 알림 스킵"
+            exit 0
+          fi
+          MSG=$'[서버 알림] ⚠ 미분양과 같이 쓰는 자료 창고 규칙 검사가 실패했어요\n우리 코드가 미분양 쪽 규칙과 어긋났거나, 미분양 쪽 규칙을 못 받아 왔거나, 검사를 너무 오래 꺼 둔 것 중 하나예요.\n→ 손님 화면에는 영향이 없어요. 급하지 않으니 Claude 에게 알려주시면 확인합니다.'
+          curl -fsS --max-time 10 \
+            "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="${MSG}"

@@ -62,6 +62,8 @@ def test_rate_limit_text_matches_shared_naver_api():
 
     src = inspect.getsource(NaverEstateAPI._request_with_retry)
     assert f'return {{"error": "{RATE_LIMIT_EXHAUSTED_ERROR}"}}' in src
+    # 같은 문구가 다른 길(401 등)에도 쓰이면 429 가 아닌 실패까지 간격을 늘리게 된다 — 딱 한 곳이어야 한다
+    assert src.count(RATE_LIMIT_EXHAUSTED_ERROR) == 1
 
 
 @patch("services.enricher.NaverEstateAPI")
@@ -164,6 +166,23 @@ def test_crawl_articles_enrich_429_widens_shared_throttle(mock_articles_api, moc
 
     service_discover.crawl_complex_articles("b20c1")
 
+    assert events == ["wait", "on_rate_limit"]
+
+
+@patch("services.enricher.NaverEstateAPI")
+def test_pyeong_details_enrich_429_widens_shared_throttle(mock_api, client, db, approved_headers, monkeypatch):
+    """A 호출부(손님 면적별 상세 화면): 상세 보강이 429 소진 → 공유 장치 on_rate_limit"""
+    from crawler.utils import get_shared_throttle
+
+    upsert_complex_from_search(db, _make_complex_data("b20p1"))
+    db.commit()
+    mock_api.get_complex_detail.return_value = _rate_limited()
+    events: list[str] = []
+    _recording_throttle_methods(monkeypatch, get_shared_throttle("complex_detail"), events)
+
+    res = client.get("/api/complexes/b20p1/pyeong-details", headers=approved_headers)
+
+    assert res.status_code == 200
     assert events == ["wait", "on_rate_limit"]
 
 
@@ -336,6 +355,34 @@ def test_discover_failure_counts_only_committed_pages(db):
             raise RuntimeError("저장 실패")
 
     _run_discover([_page("E", 20, True), _page("F", 5, False)], upsert_side_effect=upsert)
+
+    job = db.query(CrawlJob).filter(CrawlJob.scheduler_job_id == "b20_discover").one()
+    assert job.status == "failed"
+    assert job.processed_items == 20
+
+
+def test_discover_failure_page_commit_error_not_counted(db, monkeypatch):
+    """D 반대(커밋 실패): 2쪽 커밋 자체가 실패 → 그 쪽 5건은 저장 안 됐으니 20(25 가 아니다)"""
+    import crawler.service_discover as sd
+
+    real_factory = sd.SessionLocal
+
+    def factory():
+        session = real_factory()
+        real_commit = session.commit
+        calls = {"n": 0}
+
+        def commit():
+            calls["n"] += 1
+            if calls["n"] == 3:  # 1 = 잡 행, 2 = 1쪽, 3 = 2쪽
+                raise RuntimeError("커밋 실패")
+            return real_commit()
+
+        session.commit = commit
+        return session
+
+    monkeypatch.setattr(sd, "SessionLocal", factory)
+    _run_discover([_page("G", 20, True), _page("H", 5, False)])
 
     job = db.query(CrawlJob).filter(CrawlJob.scheduler_job_id == "b20_discover").one()
     assert job.status == "failed"

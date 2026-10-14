@@ -28,7 +28,8 @@ test.describe("admin sub-pages", () => {
     // "최근 24시간 오류: 0건"(mock error_count_24h=0)·"채워진 비율" 을 기다린다.
     await expect(page.getByText("숫자 자세히 보기")).toBeVisible();
     await expect(page.getByText("최근 24시간 오류: 0건")).toBeVisible();
-    await expect(page.getByText("채워진 비율")).toBeVisible();
+    // 안내 문단에도 같은 낱말이 있어 카드 제목만 정확히 고른다(strict mode 위반 방지)
+    await expect(page.getByText("채워진 비율", { exact: true })).toBeVisible();
     await expect(page.getByText("단지 수", { exact: true })).toHaveCount(0);
 
     await expect(page).toHaveScreenshot("admin-data.png", {

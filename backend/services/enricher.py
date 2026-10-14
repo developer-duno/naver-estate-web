@@ -17,13 +17,21 @@ logger = logging.getLogger(__name__)
 HEAT_METHOD_MAP = {"HT001": "중앙난방", "HT002": "개별난방", "HT003": "지역난방"}
 HEAT_FUEL_MAP = {"HF001": "도시가스", "HF002": "LPG", "HF003": "석유", "HF004": "전기"}
 
+# shared/naver_api.py `_request_with_retry` 가 재시도를 다 쓸 때까지 429 를 받았을 때만
+# 돌려주는 문구(401/403·다른 상태·예외는 마지막 시도에서 다른 문구로 return 한다).
+# shared/ 는 수정 금지라 문구로 구분한다 — 같은 문구가 그 파일에 있는지 시험이 대조한다.
+RATE_LIMIT_EXHAUSTED_ERROR = "API 요청이 반복적으로 실패했습니다. 네트워크 연결을 확인해주세요."
 
-def enrich_complex_detail(db, complex_no) -> bool:
+
+def enrich_complex_detail(db, complex_no, throttle=None) -> bool:
     """단지 상세 정보 보강 (면적별 정보, 난방, 건설사, 주소 등).
 
     live.py와 crawler/service.py 모두 이 함수를 호출.
     반환: 보강 성공(detail_crawled_at 갱신됨) 시 True, API 실패 시 False.
     호출자가 성공/실패를 정확히 집계하도록 함 — 실패해도 예외는 던지지 않음.
+
+    throttle(AdaptiveThrottle)을 주면 결과를 알려 준다(B20): 성공 → on_success(),
+    429 소진 → on_rate_limit(). 그 밖의 실패(없는 단지·예외·빈 응답)는 간격을 건드리지 않는다.
     """
     try:
         record_call("complex_detail")
@@ -33,6 +41,12 @@ def enrich_complex_detail(db, complex_no) -> bool:
         return False
 
     if not detail or not isinstance(detail, dict) or "error" in detail:
+        if (
+            throttle is not None
+            and isinstance(detail, dict)
+            and detail.get("error") == RATE_LIMIT_EXHAUSTED_ERROR
+        ):
+            throttle.on_rate_limit()
         return False
 
     cd = detail.get("complexDetail") or {}
@@ -134,4 +148,6 @@ def enrich_complex_detail(db, complex_no) -> bool:
 
     db.commit()
     logger.info("단지 상세 보강 완료: %s -> %d개 면적", complex_no, len(pyeong_list))
+    if throttle is not None:
+        throttle.on_success()
     return True

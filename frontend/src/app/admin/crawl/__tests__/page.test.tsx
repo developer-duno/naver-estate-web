@@ -44,6 +44,8 @@ vi.mock("@/components/admin/CollectorTrigger", () => ({
 }));
 vi.mock("@/components/admin/SingleRecrawlCard", () => ({ default: () => null }));
 vi.mock("@/components/admin/ErrorRateChart", () => ({ default: () => null }));
+// 네이버 호출 횟수 카드 — 자기 테스트(NaverCallsCard.test.tsx)가 있어 여기선 자리만 본다
+vi.mock("@/components/admin/NaverCallsCard", () => ({ default: () => <div>가짜 네이버 호출 카드</div> }));
 // 실패 분포 카드: 행을 누르면 유형 코드를 넘기는 계약만 흉내 낸다 (FailureBreakdown.tsx onJumpToFailed(it.job_type))
 vi.mock("@/components/admin/FailureBreakdown", () => ({
   default: ({ onJumpToFailed }: { onJumpToFailed?: (jobType?: string) => void }) => (
@@ -275,6 +277,16 @@ describe("/admin/crawl 주소 쿼리 동기화", () => {
     const failure = screen.getByText("가짜 실패 행");
     expect(summary.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(card.compareDocumentPosition(failure) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  /** 세션 465 B6: 네이버 호출 횟수 카드는 대시보드에서 이 화면으로 옮겼다 — 실패 분포 아래, 작업 목록 위 */
+  it("네이버 호출 횟수 카드가 실패 분포 아래·작업 목록 위에 있다", async () => {
+    renderPage();
+    const naver = await screen.findByText("가짜 네이버 호출 카드");
+    const failure = screen.getByText("가짜 실패 행");
+    const list = document.getElementById("crawl-jobs-list")!;
+    expect(failure.compareDocumentPosition(naver) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(naver.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 

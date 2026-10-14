@@ -33,7 +33,7 @@ test.describe("admin dashboard", () => {
     await expect(page.getByText("1,234", { exact: true })).toHaveCount(2);
     await expect(page.getByText(/남은 호출/)).toBeVisible();
 
-    // 3층 원인 — 접힌 절 5개. **열지 않고 촬영한다**: 접힌 동안 안쪽 카드를 그리지도 부르지도
+    // 3층 원인 — 접힌 절 4개(세션 465 B6 에 네이버 호출 횟수 절을 /admin/crawl 로 옮겼다). **열지 않고 촬영한다**: 접힌 동안 안쪽 카드를 그리지도 부르지도
     // 않으므로(AdminSection), 옛 TrafficCard 스켈레톤→표 전환 같은 높이 흔들림이 원천 차단된다.
     // (세션 51 NaverCallsCard·세션 146 FailureBreakdown·세션 398 TrafficCard 가시성 가드는
     //  카드가 접힌 절 안으로 들어가 단위 테스트(각 카드 테스트 + page.test.tsx)로 옮겼다.)
@@ -41,12 +41,11 @@ test.describe("admin dashboard", () => {
       "자동 작업 현황",
       "데이터 신선도",
       "실패 자세히 (최근 24시간)",
-      "네이버 호출 횟수",
       "방문·요청 통계",
     ]) {
       await expect(page.getByText(title, { exact: true })).toBeVisible();
     }
-    await expect(page.getByText(/펼치기/)).toHaveCount(5);
+    await expect(page.getByText(/펼치기/)).toHaveCount(4);
 
     // 4층 작업 + 최근 활동 (감사 로그 mock 이 그려진 시점).
     // 외부 자료 버튼 카드는 /admin/crawl 로 옮겼다(사장님 결정 2026-09-26) — 4층은 이 카드 한 장

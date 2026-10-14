@@ -4,7 +4,7 @@ import type { SchedulerStatusResponse, SchedulerJobStatus } from "../src/types/a
 import type { CrawlFailuresResponse } from "../src/lib/api/admin";
 
 /**
- * 대시보드 3층 "원인" 절 5개를 **전부 펼친** 모습의 시각 회귀.
+ * 대시보드 3층 "원인" 절 4개를 **전부 펼친** 모습의 시각 회귀(세션 465 B6 에 네이버 호출 횟수 절을 /admin/crawl 로 옮겨 5→4).
  *
  * 기존 admin-dashboard.spec.ts 는 절을 접은 채 찍는다(접힌 동안 안쪽 카드를 안 그려 높이가 안정).
  * 그래서 펼쳤을 때의 결함 — 절 제목과 카드 제목이 두 줄로 겹치던 것("자동 작업 현황 / 자동 작업 현황"),
@@ -162,11 +162,11 @@ const SECTIONS = [
   "자동 작업 현황",
   "데이터 신선도",
   "실패 자세히 (최근 24시간)",
-  "네이버 호출 횟수",
   "방문·요청 통계",
 ];
 
-const SECTION_IDS = ["scheduler", "freshness", "failure", "naver-calls", "traffic"];
+// 세션 465 B6: 네이버 호출 횟수 절은 /admin/crawl 로 옮겨 4개다
+const SECTION_IDS = ["scheduler", "freshness", "failure", "traffic"];
 
 test.describe("admin dashboard — 원인 절 전부 펼침", () => {
   test.beforeEach(async ({ page }) => {
@@ -181,7 +181,7 @@ test.describe("admin dashboard — 원인 절 전부 펼침", () => {
     });
   });
 
-  test("절 5개를 펼치면 제목은 절마다 한 줄이고 표·오류 문구가 깨지지 않는다", async ({ page }) => {
+  test("절 4개를 펼치면 제목은 절마다 한 줄이고 표·오류 문구가 깨지지 않는다", async ({ page }) => {
     await page.goto("/admin");
     await expect(page.getByRole("heading", { name: "대시보드" })).toBeVisible();
 
@@ -209,14 +209,13 @@ test.describe("admin dashboard — 원인 절 전부 펼침", () => {
     await expect(scheduler.locator("tbody > tr")).toHaveCount(JOB_ROWS.length);
 
     const freshness = page.locator("#freshness");
-    await expect(freshness.getByText(/헛바퀴 의심 = 작업은 돌았는데/)).toBeVisible();
+    await expect(freshness.getByText(/빈손 의심 = 작업은 돌았는데/)).toBeVisible();
 
+    // 세션 465 B6: 실패 표는 /admin/crawl 에만 둔다 — 절 안에는 그리로 가는 링크 한 줄뿐(데이터 없이 바로 그려진다)
     const failure = page.locator("#failure");
-    await expect(failure.getByRole("button", { name: /단지 관리비 받기 5건 실패/ })).toBeVisible();
-    await expect(failure.getByText(`최근 오류: ${LONG_ERROR_PLAIN}`)).toBeVisible();
-    await expect(failure.locator("li")).toHaveCount(bigCrawlFailures.items.length);
+    await expect(failure.getByRole("link", { name: /자료 수집 화면에서 보기/ })).toBeVisible();
+    await expect(failure.locator("li")).toHaveCount(0);
 
-    await expect(page.locator("#naver-calls").getByText("합계", { exact: true })).toBeVisible();
     await expect(page.locator("#traffic").getByText("속도(중간)").first()).toBeVisible();
 
     // 절 제목과 카드 제목이 두 줄로 겹치지 않는다 — 펼친 절 안에 카드 제목(h3)이 없다

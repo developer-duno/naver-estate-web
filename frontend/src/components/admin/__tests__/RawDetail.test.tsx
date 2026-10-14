@@ -1,5 +1,5 @@
 /**
- * RawDetail 테스트 — 휴대폰에서도 원문을 볼 수 있게 누르면 펼치는 "원문 보기" (세션 419)
+ * RawDetail 테스트 — 휴대폰에서도 원문을 볼 수 있게 누르면 펼치는 "자세한 내용 보기" (세션 419)
  * 실행: npx vitest run src/components/admin/__tests__/RawDetail.test.tsx
  *
  * 옛 방식(title 속성)은 마우스를 올려야만 보여 휴대폰에서는 원문을 볼 길이 없었다.
@@ -14,16 +14,16 @@ describe("RawDetail", () => {
 
     // 접힘 기본 — 원문은 DOM 에 없다
     expect(screen.queryByText("psycopg2.OperationalError: timeout")).not.toBeInTheDocument();
-    const summary = screen.getByText("원문 보기");
+    const summary = screen.getByText("자세한 내용 보기");
     // 데스크톱 마우스 미리보기용 title 은 유지
     expect(summary.closest("summary")).toHaveAttribute("title", "psycopg2.OperationalError: timeout");
 
     fireEvent.click(summary);
     expect(screen.getByText("psycopg2.OperationalError: timeout")).toBeInTheDocument();
-    expect(screen.getByText("원문 접기")).toBeInTheDocument();
+    expect(screen.getByText("자세한 내용 접기")).toBeInTheDocument();
     expect(summary.closest("details")).toHaveAttribute("open");
 
-    fireEvent.click(screen.getByText("원문 접기"));
+    fireEvent.click(screen.getByText("자세한 내용 접기"));
     expect(screen.queryByText("psycopg2.OperationalError: timeout")).not.toBeInTheDocument();
   });
 
@@ -33,8 +33,8 @@ describe("RawDetail", () => {
         <span title="article_detail">매물 상세 가져오기</span>
       </RawDetail>,
     );
-    // "원문 보기" 글자가 새로 생기지 않는다 — 대시보드 사진이 안 바뀌는 근거
-    expect(screen.queryByText("원문 보기")).not.toBeInTheDocument();
+    // "자세한 내용 보기" 글자가 새로 생기지 않는다 — 대시보드 사진이 안 바뀌는 근거
+    expect(screen.queryByText("자세한 내용 보기")).not.toBeInTheDocument();
     expect(screen.queryByText("article_detail")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText("매물 상세 가져오기"));
@@ -48,7 +48,7 @@ describe("RawDetail", () => {
         <RawDetail raw="https://example.invalid/api" />
       </div>,
     );
-    fireEvent.click(screen.getByText("원문 보기"));
+    fireEvent.click(screen.getByText("자세한 내용 보기"));
     expect(onRowClick).not.toHaveBeenCalled();
     expect(screen.getByText("https://example.invalid/api")).toBeInTheDocument();
   });

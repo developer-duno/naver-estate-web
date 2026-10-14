@@ -119,9 +119,9 @@ describe("DataFreshnessCard 컴포넌트", () => {
     expect(mockGet).not.toHaveBeenCalled();
   });
 
-  it("spinning=true 인 종목에 '헛바퀴 의심' 뱃지 표시", async () => {
+  it("spinning=true 인 종목에 '빈손 의심' 뱃지 표시", async () => {
     const fx = baseFixture();
-    // 어린이집을 헛바퀴 시나리오로 교체
+    // 어린이집을 빈손 시나리오로 교체
     fx.items[4] = {
       ...fx.items[4],
       status: "red",
@@ -140,7 +140,7 @@ describe("DataFreshnessCard 컴포넌트", () => {
     await waitFor(() => {
       expect(screen.getByText("어린이집")).toBeInTheDocument();
     });
-    expect(screen.getByText("헛바퀴 의심")).toBeInTheDocument();
+    expect(screen.getByText("빈손 의심")).toBeInTheDocument();
     // "처리 0/100" 대신 우리말 문장 (세션 419)
     expect(screen.getByText(/100건 중 0건 처리/)).toBeInTheDocument();
   });
@@ -168,8 +168,8 @@ describe("DataFreshnessCard 컴포넌트", () => {
     });
     const newRowsText = screen.getByText("신규 0건");
     expect(newRowsText.className).toContain("text-red-600");
-    // 헛바퀴 뱃지도 매물 줄에 떠야 함
-    expect(container.textContent).toContain("헛바퀴 의심");
+    // 빈손 뱃지도 매물 줄에 떠야 함
+    expect(container.textContent).toContain("빈손 의심");
   });
 
   it("last_job=null 종목은 '정기 작업 없음' 표시", async () => {

@@ -48,12 +48,13 @@ export default function AdminDataPage() {
       )}
 
       {/* 관리자 화면 리뉴얼(세션 419): 대시보드의 숫자 줄은 4칸(compact)만 남기고,
-          24시간 오류·채워진 비율·가치 점수는 이 화면에서 전부 보여 준다. */}
+          24시간 오류·채워진 비율·가치 점수는 이 화면에서 보여 준다.
+          세션 465 B6: 대시보드와 같은 4칸은 여기서 뺐다(같은 숫자를 두 화면에 두지 않는다). */}
       <h3 className="text-base font-semibold mb-1">숫자 자세히 보기</h3>
       <p className="text-sm text-gray-500 mb-4">
-        대시보드에는 큰 숫자 4개만 있어요. 24시간 오류·채워진 비율·가치 점수까지 전부 여기서 봅니다.
+        큰 숫자 4개는 대시보드에서 봐요. 여기서는 24시간 오류와 채워진 비율(가치 점수 포함)을 봅니다.
       </p>
-      <StatsCards stats={statsQuery.data ?? null} loading={statsQuery.isLoading} />
+      <StatsCards stats={statsQuery.data ?? null} loading={statsQuery.isLoading} detailOnly />
     </>
   );
 }

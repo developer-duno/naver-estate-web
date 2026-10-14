@@ -7,9 +7,9 @@ export const ACTION_LABELS: Record<string, string> = {
   // 관리자 — 크롤
   admin_recrawl_articles: "매물 일괄 재수집 시작",
   admin_recrawl_single: "단일 단지 재수집",
-  admin_crawl_cancel: "크롤 작업 취소",
-  admin_crawl_pause: "크롤 작업 일시정지",
-  admin_crawl_resume: "크롤 작업 재개",
+  admin_crawl_cancel: "수집 작업 취소",
+  admin_crawl_pause: "수집 작업 일시정지",
+  admin_crawl_resume: "수집 작업 재개",
 
   // 관리자 — 데이터 수집
   admin_collect_trigger: "데이터 수집 시작",
@@ -120,7 +120,7 @@ const DETAIL_KEY_LABELS: Record<string, string> = {
   role: "역할",
   status: "상태",
   approved_until: "승인 만료일",
-  daily_crawl_quota: "하루 크롤 한도",
+  daily_crawl_quota: "하루 수집 한도",
   daily_export_quota: "하루 내보내기 한도",
   // 재수집 (admin/recrawl.py)
   level: "안전도",

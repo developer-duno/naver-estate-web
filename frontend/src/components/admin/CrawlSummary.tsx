@@ -35,9 +35,9 @@ export default function CrawlSummary({ token, onJumpToFailed }: Props) {
       <div
         role="alert"
         className="border border-red-200 bg-red-50 rounded-lg p-3 mb-4 text-sm text-red-700"
-        aria-label="크롤 요약 로드 실패"
+        aria-label="수집 요약 로드 실패"
       >
-        크롤 요약을 불러오지 못했어요.
+        수집 요약을 불러오지 못했어요.
       </div>
     );
   }
@@ -46,7 +46,7 @@ export default function CrawlSummary({ token, onJumpToFailed }: Props) {
     return (
       <div
         className="bg-white border rounded-lg p-3 mb-4 h-12 animate-pulse"
-        aria-label="크롤 요약 로딩 중"
+        aria-label="수집 요약 로딩 중"
       />
     );
   }
@@ -62,7 +62,7 @@ export default function CrawlSummary({ token, onJumpToFailed }: Props) {
   return (
     <div
       className={`border rounded-lg p-3 mb-4 text-sm flex flex-wrap gap-x-3 gap-y-1 ${containerClass}`}
-      aria-label="현재 크롤 작업 요약"
+      aria-label="현재 수집 작업 요약"
     >
       <span className="font-medium text-gray-700">지금 작업 상태:</span>
       <span className="text-gray-700">돌아가는 중 {running}건</span>

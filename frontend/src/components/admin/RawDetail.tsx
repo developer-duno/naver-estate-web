@@ -52,7 +52,7 @@ export default function RawDetail({ raw, children, className = "", summaryClassN
       >
         {plainLabel ? (
           <span className="text-[11px] text-blue-700 underline decoration-dotted underline-offset-2">
-            {open ? "원문 접기" : "원문 보기"}
+            {open ? "자세한 내용 접기" : "자세한 내용 보기"}
           </span>
         ) : (
           children

@@ -1,5 +1,5 @@
 /**
- * WeeklyIssuesCard 컴포넌트 테스트 — 검증 대기 + 7일 실패 크롤 + 헛바퀴 종목 합산
+ * WeeklyIssuesCard 컴포넌트 테스트 — 검증 대기 + 7일 실패 크롤 + 빈손 종목 합산
  * 실행: npx vitest run src/components/admin/__tests__/WeeklyIssuesCard.test.tsx
  */
 import { describe, it, expect, vi } from "vitest";
@@ -65,7 +65,7 @@ describe("WeeklyIssuesCard", () => {
     expect(link.className).toContain("text-gray-400");
   });
 
-  it("검증 대기 2건 + 실패 0 + 헛바퀴 1 → 총 3건 + 검증 대기·헛바퀴 빨간색", async () => {
+  it("검증 대기 2건 + 실패 0 + 빈손 1 → 총 3건 + 검증 대기·빈손 빨간색", async () => {
     mockVerifications.mockResolvedValueOnce({ items: [], total: 2, page: 1, page_size: 20 });
     mockFailures.mockResolvedValueOnce({ window_hours: 168, total: 0, items: [] });
     mockFreshness.mockResolvedValueOnce({
@@ -82,7 +82,7 @@ describe("WeeklyIssuesCard", () => {
     });
     const verifLink = screen.getByRole("link", { name: /검증 대기 공인중개사 2건/ });
     expect(verifLink.className).toContain("text-red-700");
-    const spinBtn = screen.getByRole("button", { name: /데이터 헛바퀴 종목 1건/ });
+    const spinBtn = screen.getByRole("button", { name: /데이터 빈손 종목 1건/ });
     expect(spinBtn.className).toContain("text-red-700");
   });
 

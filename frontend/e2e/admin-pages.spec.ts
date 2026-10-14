@@ -24,9 +24,12 @@ test.describe("admin sub-pages", () => {
     // — 다른 admin 시각 스펙처럼 mock 데이터가 화면에 보인 뒤 찍는다.
     // 관리자 화면 리뉴얼(A4): 대시보드에서 뺀 숫자(24시간 오류·채워진 비율·가치 점수)가 이 화면의
     // "숫자 자세히 보기" 소제목 아래로 옮겨 왔다 — 소제목까지 보인 뒤 찍는다.
+    // 세션 465 B6: 대시보드와 같은 4칸(단지 수 등)은 이 화면에서 뺐다 — 데이터가 그려진 뒤에만 나오는
+    // "최근 24시간 오류: 0건"(mock error_count_24h=0)·"채워진 비율" 을 기다린다.
     await expect(page.getByText("숫자 자세히 보기")).toBeVisible();
-    await expect(page.getByText("단지 수")).toBeVisible();
-    await expect(page.getByText("1,234")).toBeVisible();
+    await expect(page.getByText("최근 24시간 오류: 0건")).toBeVisible();
+    await expect(page.getByText("채워진 비율")).toBeVisible();
+    await expect(page.getByText("단지 수", { exact: true })).toHaveCount(0);
 
     await expect(page).toHaveScreenshot("admin-data.png", {
       fullPage: true,

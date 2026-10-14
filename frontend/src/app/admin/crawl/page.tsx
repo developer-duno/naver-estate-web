@@ -9,6 +9,7 @@ import AdminCard from "@/components/admin/AdminCard";
 import CrawlJobTable from "@/components/admin/CrawlJobTable";
 import CrawlSummary from "@/components/admin/CrawlSummary";
 import FailureBreakdown from "@/components/admin/FailureBreakdown";
+import NaverCallsCard from "@/components/admin/NaverCallsCard";
 import SingleRecrawlCard from "@/components/admin/SingleRecrawlCard";
 import CollectorTrigger from "@/components/admin/CollectorTrigger";
 import ErrorRateChart from "@/components/admin/ErrorRateChart";
@@ -62,7 +63,7 @@ const CANCEL_HELP =
   "취소는 되돌릴 수 없어요. 취소하면 작업 기록이 '취소됨'으로 바뀌지만, 이미 돌고 있던 수집을 그 자리에서 멈추지는 않아요 — 그때까지 받은 자료는 그대로 저장되고, 작업이 끝나도 기록은 '취소됨'으로 남아요";
 
 function AdminCrawlContent() {
-  // 대시보드의 "실패 자세히" 행·"7일 실패" 링크가 /admin/crawl?status=failed&job_type=<유형> 으로 보낸다.
+  // 대시보드의 "7일 실패" 링크가 /admin/crawl?status=failed 로 보낸다(유형까지 걸 때는 ?job_type=<유형>).
   // 목록 조건(상태·유형·쪽)은 주소와 양방향으로 맞춘다 — 조건을 바꾸면 주소가 바뀌고(공유·새로고침해도
   // 같은 화면), 뒤로가기·주소 붙여넣기로 주소가 바뀌면 조건이 따라온다.
   const searchParams = useSearchParams();
@@ -213,6 +214,11 @@ function AdminCrawlContent() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <SingleRecrawlCard getToken={getToken} />
         <ErrorRateChart getToken={getToken} />
+      </div>
+
+      {/* 네이버 호출 횟수 — 대시보드 접힌 절에서 옮겨 왔다(세션 465 B6: 수집과 같이 보는 숫자라 이 화면에 둔다) */}
+      <div className="mb-4">
+        <NaverCallsCard getToken={getToken} />
       </div>
 
       {error && (

@@ -57,9 +57,9 @@ export default function HealthSummary({ token }: Props) {
       </span>
       <span
         className={c.spinning > 0 ? "text-red-700 font-medium mr-3" : "text-gray-500 mr-3"}
-        title="헛바퀴 = 작업은 돌았는데 새로 들어온 자료가 0건"
+        title="빈손 = 작업은 돌았는데 새로 들어온 자료가 0건"
       >
-        ⚠ 헛바퀴(돌았는데 새 자료 0건) {c.spinning}
+        ⚠ 빈손(돌았는데 새 자료 0건) {c.spinning}
       </span>
       {c.unknown > 0 && (
         <span className="text-gray-500 mr-3">미수집 {c.unknown}</span>

@@ -108,11 +108,11 @@ export default function FailureBreakdown({ token, onJumpToFailed, hideTitle = fa
                 >
                   {it.last_error_plain
                     ? `최근 오류: ${it.last_error_plain}`
-                    : "최근 오류 기록 있음 — 아래 '원문 보기'를 누르면 원문이 보여요"}
+                    : "최근 오류 기록 있음 — 아래 '자세한 내용 보기'를 누르면 원래 기록이 보여요"}
                 </span>
               )}
               <RawDetail
-                raw={`작업 코드: ${it.job_type}${it.last_error ? `\n오류 원문: ${it.last_error}` : ""}`}
+                raw={`작업 코드: ${it.job_type}${it.last_error ? `\n오류 내용: ${it.last_error}` : ""}`}
                 className="mt-1"
               />
             </div>

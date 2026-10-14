@@ -45,6 +45,8 @@ class Apartment(Base):
     units: Mapped[int | None] = mapped_column(Integer)
     unsold: Mapped[int | None] = mapped_column(Integer)
     unsold_rate: Mapped[float | None] = mapped_column(Float)
+    # 같은 단지 묶음 키(미분양 소유, 2u 는 읽기만) — 묶음 세대수 조회용 (db/mb_bundle_units.py, B22)
+    complex_key: Mapped[str | None] = mapped_column(Text)
     completion: Mapped[str | None] = mapped_column(Text)
     heating: Mapped[str | None] = mapped_column(Text)
     max_floor: Mapped[int | None] = mapped_column(Integer)

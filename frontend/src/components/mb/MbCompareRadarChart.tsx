@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import { COMPARE_COLORS } from "@/lib/constants";
 import { useMbRadarSettings } from "@/hooks/useMbRadarSettings";
-import { normalizePp } from "@/lib/mb-format";
+import { displayUnits, normalizePp } from "@/lib/mb-format";
 import type { MbApartment } from "@/types";
 import HintIcon from "@/components/HintIcon";
 
@@ -38,7 +38,8 @@ export function airQualityAxisValue(a: MbApartment): number {
 
 // export = 시험이 대기질 축이 airQualityAxisValue 에 이어져 있는지 확인한다(세션604)
 export const AXES: AxisDef[] = [
-  { key: "units", label: "세대수", getValue: (a) => a.units ?? 0 },
+  // 미분양률 축이 묶음 값이므로 세대수도 묶음 값 (B22)
+  { key: "units", label: "세대수", getValue: (a) => displayUnits(a) ?? 0 },
   { key: "parking", label: "세대당 주차", getValue: (a) => a.parking_ratio ?? 0 },
   { key: "maxFloor", label: "최고층", getValue: (a) => a.max_floor ?? 0 },
   { key: "jeonse", label: "전세가율", getValue: (a) => a.naver_jeonse_rate ?? 0 },

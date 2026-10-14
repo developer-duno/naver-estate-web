@@ -3,8 +3,12 @@
 from db.mb_queries import extract_base_name
 
 
-def apartment_to_dict(a) -> dict:
-    """Apartment ORM → dict (name에서 차수 접미사 제거)"""
+def apartment_to_dict(a, bundle_units: dict[str, int] | None = None) -> dict:
+    """Apartment ORM → dict (name에서 차수 접미사 제거)
+
+    bundle_units = `mb_queries.get_bundle_units` 결과(apartment id → 단지 전체 세대수). 묶음 값
+    전환 표식 전이거나 묶음 값을 안 받는 줄이면 `bundle_units` 는 null — 화면은 `bundle_units ?? units` (B22).
+    """
     return {
         "id": a.id,
         "name": extract_base_name(a.name),
@@ -16,6 +20,7 @@ def apartment_to_dict(a) -> dict:
         "longitude": a.longitude,
         "builder": a.builder,
         "units": a.units,
+        "bundle_units": (bundle_units or {}).get(str(a.id)),
         "unsold": a.unsold,
         "unsold_rate": a.unsold_rate,
         "completion": a.completion,

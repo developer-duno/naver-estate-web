@@ -10,6 +10,8 @@ export interface MbApartment {
   longitude?: number;
   builder?: string;
   units?: number;
+  /** 같은 단지 묶음 전체 세대수 — 미분양 묶음 값 전환 뒤에만 채워짐, 화면은 `bundle_units ?? units` (B22) */
+  bundle_units?: number | null;
   unsold?: number;
   unsold_rate?: number;
   completion?: string;

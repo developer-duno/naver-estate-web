@@ -44,7 +44,8 @@ MODEL_SERIALIZER_PAIRS = [
 # 의도적 미노출 (false positive 제외). 사유 명시 — 새 컬럼은 여기 없으면 가드가 잡는다.
 ALLOWLIST: dict[str, set[str]] = {
     # latitude/longitude 로 이름 바꿔 노출됨 + created_at 은 생략(updated_at 만 노출, 설계 선택)
-    "Apartment": {"lat", "lng", "created_at"},
+    # complex_key 는 묶음 세대수 조회 키로만 쓴다(응답엔 bundle_units 로 나감, B22)
+    "Apartment": {"lat", "lng", "created_at", "complex_key"},
     # apartment_id 는 부모 get_apartment_detail 응답에 이미 있어 부속 dict 엔 생략
     "Infra": {"apartment_id"},
     "School": {"apartment_id"},

@@ -4,7 +4,8 @@ import { memo } from "react";
 import { useRouter } from "next/navigation";
 import { Building2 } from "lucide-react";
 import type { MbApartment } from "@/types";
-import { normalizePp } from "@/lib/mb-format";
+import { displayUnits, normalizePp } from "@/lib/mb-format";
+import { MbBundleUnitsTag } from "./MbBundleUnitsTag";
 import { useMbFavorites } from "@/hooks/useMbFavorites";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -212,7 +213,10 @@ function MbPresaleTable({ apartments, isInCompare, onCompareToggle, compareFull 
                       <span className="text-gray-400">-</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-right">{apt.units?.toLocaleString() ?? "-"}</td>
+                  <td className="px-3 py-2 text-right">
+                    {displayUnits(apt)?.toLocaleString() ?? "-"}
+                    <MbBundleUnitsTag apartment={apt} below />
+                  </td>
                   <td className="px-3 py-2 text-right font-medium text-purple-700">
                     {apt.competition_rate != null ? `${apt.competition_rate.toLocaleString()}:1` : "-"}
                   </td>

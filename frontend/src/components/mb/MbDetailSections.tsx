@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import type { MbApartment, MbPrice } from "@/types";
 import { formatKoreanPrice, formatYearMonth, freshness } from "@/lib/format";
-import { normalizePp } from "@/lib/mb-format";
+import { displayUnits, normalizePp } from "@/lib/mb-format";
 import { formatHouseType } from "@/lib/mb-house-type";
 import { MbCancelRatioBar } from "./MbCancelRatioBar";
 import { MbCoverageBar } from "./MbCoverageBar";
@@ -15,6 +15,7 @@ import { MbMaxFloorBar } from "./MbMaxFloorBar";
 import { MbParkingBar } from "./MbParkingBar";
 import { MbPirBar } from "./MbPirBar";
 import { MbUnitsBar } from "./MbUnitsBar";
+import { MbBundleUnitsTag } from "./MbBundleUnitsTag";
 import { MbUnsoldRateBar } from "./MbUnsoldRateBar";
 
 const MbTradeStatsCharts = dynamic(() => import("./MbTradeStatsCharts"), { ssr: false });
@@ -50,7 +51,17 @@ export function OverviewSection({ apartment: a }: SectionProps) {
         <InfoRow label="단지명" value={a.name} />
         <InfoRow label="주소" value={a.address ?? a.road_address} />
         <InfoRow label="지역" value={`${a.region} ${a.gu ?? ""} ${a.dong ?? ""}`.trim()} />
-        <InfoRow label="세대수" value={a.units != null ? <MbUnitsBar value={a.units} /> : undefined} />
+        <InfoRow
+          label="세대수"
+          value={
+            displayUnits(a) != null ? (
+              <>
+                <MbUnitsBar value={displayUnits(a)} />
+                <MbBundleUnitsTag apartment={a} below />
+              </>
+            ) : undefined
+          }
+        />
         <InfoRow label="완공" value={formatYearMonth(a.completion)} />
         <InfoRow label="준공연도(네이버)" value={a.naver_build_year != null ? `${a.naver_build_year}년` : undefined} />
         <InfoRow label="난방" value={a.heating} />

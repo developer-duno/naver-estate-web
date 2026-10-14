@@ -23,6 +23,7 @@ from crawler.service_common import (
 from crawler.utils import AdaptiveThrottle
 from db.database import SessionLocal
 from db.models import Complex, ComplexPriceHistory, ComplexPyeongDetail, CrawlJob
+from services.enricher import RATE_LIMIT_EXHAUSTED_ERROR
 from services.naver_call_counter import record_call
 from shared.naver_api import NaverEstateAPI
 from utils import safe_int, utcnow
@@ -32,6 +33,14 @@ logger = logging.getLogger(__name__)
 # 적응형 쓰로틀: 배치용 / on-demand용 분리
 _throttle = AdaptiveThrottle(min_interval=1.5, max_interval=10.0)
 _throttle_ondemand = AdaptiveThrottle(min_interval=2.0, max_interval=10.0)
+
+
+def _is_rate_limit_exhausted(result) -> bool:
+    """네이버가 429 를 재시도 끝까지 돌려준 응답인가(B20 덤 — enricher 와 같은 판정).
+
+    이때만 간격을 늘린다. 다른 error 문구·빈 응답은 간격을 건드리지 않는다.
+    """
+    return isinstance(result, dict) and result.get("error") == RATE_LIMIT_EXHAUSTED_ERROR
 
 
 def collect_price_history_for_complex(
@@ -73,7 +82,6 @@ def collect_price_history_for_complex(
                 result = NaverEstateAPI.get_complex_prices(
                     complex_no, trade_type=trade_type, area_no=area_no
                 )
-                _throttle_ondemand.on_success()
             except Exception as e:
                 logger.warning("시세 조회 실패: %s %s area=%s -> %s", complex_no, trade_type, area_no, e)
                 _throttle_ondemand.on_rate_limit()
@@ -82,10 +90,13 @@ def collect_price_history_for_complex(
                 continue
 
             if not result or "error" in result:
+                if _is_rate_limit_exhausted(result):
+                    _throttle_ondemand.on_rate_limit()
                 failed += 1
                 _report()
                 continue
 
+            _throttle_ondemand.on_success()
             collected_before = collected
             price_list = _extract_price_list(result)
             for p in price_list:
@@ -112,7 +123,6 @@ def collect_price_history_for_complex(
         record_call("complex_real_prices_ondemand")
         try:
             real_result = NaverEstateAPI.get_complex_real_prices(complex_no, trade_type=trade_type)
-            _throttle_ondemand.on_success()
         except Exception as e:
             logger.debug("실거래가 조회 실패: %s %s -> %s", complex_no, trade_type, e)
             _throttle_ondemand.on_rate_limit()
@@ -120,9 +130,12 @@ def collect_price_history_for_complex(
             _report()
             continue
         if not real_result or "error" in real_result:
+            if _is_rate_limit_exhausted(real_result):
+                _throttle_ondemand.on_rate_limit()
             failed += 1
             _report()
             continue
+        _throttle_ondemand.on_success()
         collected_before = collected
         month_list = real_result.get("realPriceOnMonthList") or []
         for month_data in month_list:
@@ -247,6 +260,8 @@ def collect_price_history(
                     continue
 
                 if not result or "error" in result:
+                    if _is_rate_limit_exhausted(result):
+                        _throttle.on_rate_limit()
                     continue
 
                 _throttle.on_success()
@@ -400,7 +415,6 @@ def recollect_b1_price_for_complex(db, complex_no: str) -> dict:
             result = NaverEstateAPI.get_complex_prices(
                 complex_no, trade_type="B1", area_no=area_no
             )
-            _throttle.on_success()
         except Exception as e:
             logger.warning("B1 시세 재수집 실패: %s area=%s -> %s", complex_no, area_no, e)
             _throttle.on_rate_limit()
@@ -408,9 +422,12 @@ def recollect_b1_price_for_complex(db, complex_no: str) -> dict:
             continue
 
         if not result or "error" in result:
+            if _is_rate_limit_exhausted(result):
+                _throttle.on_rate_limit()
             failed += 1
             continue
 
+        _throttle.on_success()
         for p in _extract_price_list(result):
             base_month = p.get("baseMonth") or p.get("yearMonth")
             if not base_month:

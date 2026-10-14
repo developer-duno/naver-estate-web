@@ -308,8 +308,11 @@ def test_background_crawl_waits_complex_detail_throttle(db, monkeypatch, enrich_
         lambda *_a, **_kw: {"articleList": [], "isMoreData": False},
     )
 
-    def _enrich(_db, _no):
+    def _enrich(_db, _no, throttle=None):
+        # B20: 성공 시 on_success 는 enrich 안에서 넘겨받은 장치로 부른다 — 진짜 함수 흉내
         events.append("enrich")
+        if enrich_ok and throttle is not None:
+            throttle.on_success()
         return enrich_ok
 
     monkeypatch.setattr(_crawl_bg, "enrich_complex_detail", _enrich)
@@ -335,7 +338,7 @@ def test_pyeong_details_waits_complex_detail_throttle(client, db, approved_heade
         lambda name, *a, **k: _RecordingThrottle(name, events),
     )
 
-    def _enrich(_db, _no):
+    def _enrich(_db, _no, throttle=None):
         events.append("enrich")
         return False  # 실패 → on_success 없음
 

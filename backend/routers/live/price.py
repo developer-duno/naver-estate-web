@@ -132,9 +132,6 @@ def start_price_collect(
                     "failed": result["failed"],
                     "total": result["total"],
                 })
-            # 캐시 무효화
-            from routers.complexes import _price_history_cache
-            _price_history_cache.delete_by_prefix(f"price_history:{complex_no}:")
         except Exception as e:
             logger.exception("시세 수집 실패: %s", complex_no)
             with _price_collect_lock:
@@ -143,6 +140,14 @@ def start_price_collect(
                     st["status"] = "error"
                     st["error"] = str(e)[:200]
         finally:
+            # 캐시 무효화 — 도중에 실패해도 그 전까지 커밋된 시세가 있을 수 있어 늘 비운다
+            # (B20 — 옛 코드는 성공 때만 비워 실패 뒤 12시간 옛 차트가 남았다).
+            # 이 줄이 실패해도 세션 닫기·동시 실행 자리 반납은 반드시 한다.
+            try:
+                from routers.complexes import _price_history_cache
+                _price_history_cache.delete_by_prefix(f"price_history:{complex_no}:")
+            except Exception:
+                logger.exception("시세 캐시 비우기 실패: %s", complex_no)
             collect_db.close()
             _price_collect_semaphore.release()
 

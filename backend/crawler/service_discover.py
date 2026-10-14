@@ -210,6 +210,7 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, sche
     db.commit()
     job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
 
+    saved_found = 0  # 커밋까지 끝난 건수 — 도중 실패 시 failed 행에 남긴다(B18)
     try:
         page = 1
         total_found = 0
@@ -235,6 +236,7 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, sche
             # 예전엔 지역 전체를 다 돌 때까지 안 놓아 최대 59초 잠갔다(세션 460, 백로그 B14 — 세션 396 의
             # '잠금 쥔 채 네이버 대기'와 같은 꼴). upsert 는 덮어쓰기라 중간 실패 뒤 다시 돌아도 같은 결과.
             db.commit()
+            saved_found = total_found
 
             # 다음 페이지가 있는지 확인
             if not result.get("isMoreData", False):
@@ -256,6 +258,7 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, sche
             db.rollback()
             job.status = "failed"
             job.error_message = str(e)[:500]
+            job.processed_items = saved_found
             db.commit()
         except Exception:
             # 연결 끊김 등으로 같은 세션 마킹 실패 → 새 세션으로 보장 (세션 266)
@@ -394,8 +397,7 @@ def crawl_complex_articles(complex_no: str, sido: str = None, sigungu: str = Non
         cpx = db.query(Complex).filter(Complex.complex_no == complex_no).first()
         if cpx and not cpx.detail_crawled_at:
             _throttle_detail.wait()
-            if enrich_complex_detail(db, complex_no):
-                _throttle_detail.on_success()
+            enrich_complex_detail(db, complex_no, throttle=_throttle_detail)
 
         _finalize_job(
             db, job, "completed",
@@ -1255,14 +1257,15 @@ def crawl_complex_details_batch(
             try:
                 # enrich_complex_detail 은 API 실패 시 예외 대신 False 반환 —
                 # 실패가 성공으로 집계되던 문제를 반환값으로 정확히 구분.
-                if enrich_complex_detail(db, complex_no):
-                    _throttle_detail.on_success()
+                # 간격 조절(성공 → 줄이기, 429 소진 → 늘리기)은 함수 안에서 한다(B20).
+                if enrich_complex_detail(db, complex_no, throttle=_throttle_detail):
                     processed += 1
                 else:
                     failed += 1
             except Exception:
+                # 여기 오는 것은 DB 저장 예외다(API 실패는 False 반환) — 네이버 간격은
+                # 건드리지 않는다(B20 — 옛 코드는 DB 예외마다 공유 간격을 두 배로 늘렸다).
                 db.rollback()
-                _throttle_detail.on_rate_limit()
                 failed += 1
                 logger.exception("단지 상세 보강 개별 실패: complex %s", complex_no)
             # 순회마다 commit — enrich_complex_detail 이 잡은 complexes/평형 행 잠금을

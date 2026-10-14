@@ -3,7 +3,7 @@
  */
 import type { MbApartment, MbRegion, MbTrade, MbUnsoldHistory } from "@/types";
 import { downloadXlsxBuffer, safeCellValue } from "./compare-export";
-import { normalizePp } from "./mb-format";
+import { displayUnits, normalizePp } from "./mb-format";
 
 export function today() {
   return new Date().toISOString().slice(0, 10);
@@ -32,7 +32,7 @@ async function buildWorkbook(
 export async function exportMbApartmentsToXlsx(apartments: MbApartment[]) {
   const header = ["단지명", "지역", "시군구", "세대수", "미분양", "미분양률(%)", "입주시기", "시공사", "분양가(최저)", "분양가(최고)", "평당가", "할인율(%)"];
   const data = apartments.map((a) => [
-    s(a.name), s(a.region), s(a.gu), s(a.units), s(a.unsold),
+    s(a.name), s(a.region), s(a.gu), s(displayUnits(a)), s(a.unsold),
     a.unsold_rate != null ? s(a.unsold_rate.toFixed(1)) : "",
     s(a.presale_move_in ?? a.completion), s(a.builder),
     s(a.presale_min_price), s(a.presale_max_price), s(normalizePp(a.presale_pp)),

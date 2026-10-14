@@ -4,7 +4,8 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import type { MbApartment } from "@/types";
-import { normalizePp } from "@/lib/mb-format";
+import { displayUnits, normalizePp } from "@/lib/mb-format";
+import { MbBundleUnitsTag } from "./MbBundleUnitsTag";
 
 /** 지도에서 마커 클릭 시 선택된 단지 요약 카드 (지도 아래 렌더).
  * naver InfoWindow 는 HTML 문자열 기반이라 router.push 직접 연결 불가 →
@@ -21,6 +22,7 @@ export default function MbSelectedCard({
 }) {
   const router = useRouter();
   const pp = normalizePp(apt.presale_pp);
+  const units = displayUnits(apt);
 
   return (
     <div className="mt-3 bg-white rounded-lg border border-blue-200 shadow-sm p-3">
@@ -52,7 +54,12 @@ export default function MbSelectedCard({
         {apt.presale_min_price != null && (
           <span className="text-gray-600">분양가(최저) {apt.presale_min_price.toLocaleString()}만</span>
         )}
-        {apt.units != null && <span className="text-gray-500">{apt.units.toLocaleString()}세대</span>}
+        {units != null && (
+          <span className="text-gray-500">
+            {units.toLocaleString()}세대
+            <MbBundleUnitsTag apartment={apt} />
+          </span>
+        )}
         {apt.unsold != null && apt.unsold > 0 && (
           <span className="text-red-600">미분양 {apt.unsold.toLocaleString()}</span>
         )}

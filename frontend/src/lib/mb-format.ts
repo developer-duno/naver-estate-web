@@ -11,3 +11,21 @@
 export function normalizePp(v: number | null | undefined): number | null {
   return v != null && v > 0 ? v : null;
 }
+
+/**
+ * 세대수 옆 작은 이름표 — 미분양이 같은 단지 묶음 값으로 바뀐 뒤 세대수도 묶음 값일 때 (B22).
+ * 사장님이 그림을 보고 문구를 바꿀 수 있어 이 한 곳에만 둔다.
+ */
+export const BUNDLE_UNITS_LABEL = "단지 전체";
+
+type UnitsSource = { units?: number | null; bundle_units?: number | null };
+
+/** 세대수 표시값 = 묶음 세대수(있으면) ?? 행 세대수. 묶음 값 전환 전엔 bundle_units 가 늘 null (B22) */
+export function displayUnits(a: UnitsSource): number | null {
+  return a.bundle_units ?? a.units ?? null;
+}
+
+/** 이름표를 붙일지 — 묶음 세대수가 있고 행 세대수와 다를 때만 */
+export function isBundleUnits(a: UnitsSource): boolean {
+  return a.bundle_units != null && a.bundle_units !== a.units;
+}

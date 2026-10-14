@@ -59,6 +59,18 @@ describe("미분양 엑셀 내보내기 (mb-export)", () => {
     expect(mockAddRow).toHaveBeenCalledTimes(1);
   });
 
+  /** 세대수 열 = bundle_units ?? units — 묶음 값 전환 뒤엔 단지 전체 세대수 (B22) */
+  it.each([
+    ["묶음 세대수 있음 → 묶음 값", { units: 4, bundle_units: 1200 }, "1200"],
+    ["묶음 세대수 없음 → 행 값", { units: 4, bundle_units: null }, "4"],
+    ["묶음 세대수 = 행 값 → 그 값", { units: 300, bundle_units: 300 }, "300"],
+  ])("세대수 열: %s", async (_name, units, expected) => {
+    const { exportMbApartmentsToXlsx } = await import("../mb-export");
+    await exportMbApartmentsToXlsx([makeApt(units)]);
+    const row = mockAddRow.mock.calls[0][0] as string[];
+    expect(row[3]).toBe(expected);
+  });
+
   /** 빈 배열 입력 시에도 정상 동작 — 헤더만 있는 시트 생성 */
   it("빈 배열을 전달해도 에러 없이 실행된다", async () => {
     const { exportMbApartmentsToXlsx } = await import("../mb-export");

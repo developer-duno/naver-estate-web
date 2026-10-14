@@ -4,7 +4,8 @@ import { memo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Building } from "lucide-react";
 import type { MbApartment } from "@/types";
-import { normalizePp } from "@/lib/mb-format";
+import { displayUnits, normalizePp } from "@/lib/mb-format";
+import { MbBundleUnitsTag } from "./MbBundleUnitsTag";
 import { useMbFavorites } from "@/hooks/useMbFavorites";
 import { EmptyState } from "@/components/ui/empty-state";
 
@@ -168,7 +169,10 @@ function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompa
                 <span className="text-gray-300">·</span>
                 <span>{apt.gu ?? "-"}</span>
                 <span className="text-gray-300">·</span>
-                <span>{apt.units?.toLocaleString() ?? "-"}세대</span>
+                <span>
+                  {displayUnits(apt)?.toLocaleString() ?? "-"}세대
+                  <MbBundleUnitsTag apartment={apt} />
+                </span>
               </div>
               {/* 3행: 미분양 강조 */}
               <div className="flex items-center gap-2 text-sm mb-1">
@@ -278,7 +282,10 @@ function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompa
               <td className="px-3 py-2 font-medium text-blue-700 hover:underline">{apt.name}</td>
               <td className="px-3 py-2 text-gray-600">{apt.region}</td>
               <td className="px-3 py-2 text-gray-600">{apt.gu ?? "-"}</td>
-              <td className="px-3 py-2 text-right">{apt.units?.toLocaleString() ?? "-"}</td>
+              <td className="px-3 py-2 text-right">
+                {displayUnits(apt)?.toLocaleString() ?? "-"}
+                <MbBundleUnitsTag apartment={apt} below />
+              </td>
               <td className="px-3 py-2 text-right font-medium text-red-600">
                 {apt.unsold != null ? apt.unsold.toLocaleString() : "-"}
               </td>

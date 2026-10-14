@@ -35,6 +35,12 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+def _apartments_to_dicts(db: Session, items) -> list[dict]:
+    """목록 응답 — 묶음 세대수는 한 번에 읽어 실어 준다(N+1 금지, B22)."""
+    bundle_units = mb_queries.get_bundle_units(db, items)
+    return [apartment_to_dict(a, bundle_units) for a in items]
+
+
 # ── 아파트 단지 ──────────────────────────────────────────────
 
 
@@ -70,7 +76,7 @@ def get_apartments(
     """지역별 아파트 목록 (정렬 + 검색)"""
     items, total = mb_queries.get_apartments_page(db, region, gu, page, page_size, sort_by, keyword)
     return {
-        "apartments": [apartment_to_dict(a) for a in items],
+        "apartments": _apartments_to_dicts(db, items),
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -87,7 +93,7 @@ def get_apartment_detail(
     if not apt:
         raise HTTPException(status_code=404, detail="아파트를 찾을 수 없습니다")
 
-    result = apartment_to_dict(apt)
+    result = apartment_to_dict(apt, mb_queries.get_bundle_units(db, [apt]))
 
     # 부속 정보 병합
     ts = mb_queries.get_trade_stats(db, apartment_id)
@@ -139,7 +145,7 @@ def get_unsold(
         db, region, gu, sort_by, keyword, page, page_size
     )
     return {
-        "unsold": [apartment_to_dict(a) for a in items],
+        "unsold": _apartments_to_dicts(db, items),
         "total": total,
     }
 
@@ -250,7 +256,7 @@ def get_presale(
         keyword=keyword,
     )
     return {
-        "presale": [apartment_to_dict(a) for a in items],
+        "presale": _apartments_to_dicts(db, items),
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -306,7 +312,7 @@ def get_presale_detail(
     if not apt:
         raise HTTPException(status_code=404, detail="아파트를 찾을 수 없습니다")
 
-    result = apartment_to_dict(apt)
+    result = apartment_to_dict(apt, mb_queries.get_bundle_units(db, [apt]))
 
     # 청약홈 공식 분양 일정 (차수별)
     schedules = mb_queries.get_presale_schedules(db, apartment_id)
@@ -368,7 +374,7 @@ def get_competition(
         keyword=keyword,
     )
     return {
-        "competition": [apartment_to_dict(a) for a in items],
+        "competition": _apartments_to_dicts(db, items),
         "total": total,
         "page": page,
         "page_size": page_size,

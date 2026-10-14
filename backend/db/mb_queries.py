@@ -1,9 +1,10 @@
 """Barrel re-export — mibunyang 읽기 쿼리 (기존 import 호환 유지)
 
-서브모듈 3개:
+서브모듈 4개:
   db/mb_query_helpers.py      — 중복 제거 · 정렬 · 필터 헬퍼
   db/mb_apartment_queries.py  — 아파트 단지 · 미분양 조회
   db/mb_misc_queries.py       — 지역 통계 · 실거래 · 단지 부속 정보
+  db/mb_bundle_units.py       — 묶음 값 전환 뒤 '단지 전체' 세대수 (B22)
 """
 
 from db.mb_apartment_queries import (  # noqa: F401
@@ -20,6 +21,7 @@ from db.mb_apartment_queries import (  # noqa: F401
     get_unsold_by_region,
     get_unsold_history,
 )
+from db.mb_bundle_units import get_bundle_units  # noqa: F401
 from db.mb_misc_queries import (  # noqa: F401
     count_trades,
     get_air_station_annual,

@@ -2,7 +2,7 @@
  * 미분양 단지 비교 유틸리티 — 우위 판정 로직
  */
 import type { MbApartment } from "@/types";
-import { normalizePp } from "./mb-format";
+import { displayUnits, normalizePp } from "./mb-format";
 
 /** 비교 우위 방향: "higher"=클수록 우위, "lower"=작을수록 우위, null=비교 불가(텍스트 항목) */
 export type AdvantageDir = "higher" | "lower" | null;
@@ -18,7 +18,8 @@ export interface MbCompareRow {
 export const MB_COMPARE_ROWS: MbCompareRow[] = [
   { label: "단지명", getValue: (a) => a.name, direction: null },
   { label: "지역", getValue: (a) => [a.region, a.gu].filter(Boolean).join(" "), direction: null },
-  { label: "세대수", getValue: (a) => a.units, direction: "higher" },
+  // 미분양이 묶음 값이면 세대수도 묶음 값으로 짝을 맞춘다 (B22)
+  { label: "세대수", getValue: (a) => displayUnits(a), direction: "higher" },
   { label: "미분양", getValue: (a) => a.unsold, direction: "lower" },
   { label: "미분양률(%)", getValue: (a) => a.unsold_rate, direction: "lower" },
   { label: "6개월 취소율(%)", getValue: (a) => a.trade_stats?.cancel_ratio_6m, direction: "lower" },

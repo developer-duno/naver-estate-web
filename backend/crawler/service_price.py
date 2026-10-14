@@ -35,6 +35,31 @@ _throttle = AdaptiveThrottle(min_interval=1.5, max_interval=10.0)
 _throttle_ondemand = AdaptiveThrottle(min_interval=2.0, max_interval=10.0)
 
 
+# 주간 배치(collect_price_history)가 429 로 못 받은 단지가 이만큼 이어지면 회차를 멈추고 failed (B21).
+# error-propagation.md 5번 — 429 소진은 "자료 없음"이 아니라 실패다. 계속 두드리면 차단만 길어진다.
+_RATE_LIMIT_ABORT_STREAK = 5
+
+
+def _rate_limited_words(total: int, rate_limited: int, processed: int, aborted: bool) -> str:
+    """429 로 실패한 회차의 error_message — 쉬운 우리말 한 문장(관리자 화면·텔레그램 알림 공통).
+
+    중단이면 "받은 단지 수"를, 끝까지 돌았으면 "못 받은 단지 수"를 말한다(중단 때는 멈춘 뒤 안 부른 단지가 있어 못 받은 수가 실제보다 적게 읽힌다).
+
+    ⚠ 머리 "네이버가 요청이 너무 많다며 거절해" 는 plain_words._ERROR_RULES 가 원문 그대로 통과시키는
+    표지다 — 바꾸면 알림이 "처음 보는 문제" 로 뭉개진다. 영문 글자·`|`·문장 중간 마침표를 넣지 않는다.
+    """
+    if aborted:
+        got = f"{processed}개만 받고" if processed else "하나도 못 받고"
+        return (
+            f"네이버가 요청이 너무 많다며 거절해 {total}개 단지 중 {got} 멈췄어요"
+            f"(연속 {_RATE_LIMIT_ABORT_STREAK}개 단지 거절)."
+        )
+    return (
+        f"네이버가 요청이 너무 많다며 거절해 {total}개 단지 중 {rate_limited}개를 못 받았어요"
+        f"(받은 단지 {processed}개보다 많아요)."
+    )
+
+
 def _is_rate_limit_exhausted(result) -> bool:
     """네이버가 429 를 재시도 끝까지 돌려준 응답인가(B20 덤 — enricher 와 같은 판정).
 
@@ -242,8 +267,14 @@ def collect_price_history(
 
         processed = 0
         newly_done: set[str] = set()
+        # B21 — 두 호출 모두 성공 못 했고 그중 하나라도 429 소진인 단지 수(전체·연속).
+        # 다른 error(자료 없음 등)·예외는 세지 않는다. 연속 수는 성공 단지가 나올 때만 0 으로.
+        rate_limited = 0
+        rate_limited_streak = 0
+        aborted = False
         for i, (complex_no,) in enumerate(complexes):
             complex_had_success = False
+            complex_rate_limited = False
             for trade_type in ("A1", "B1"):  # 매매, 전세
                 # 세션 359: 사장님 지시 — 매 요청 간격이 규칙적이면(항상 정확히
                 # min_interval) 자동화 패턴으로 더 쉽게 식별될 수 있다는 지적.
@@ -262,6 +293,7 @@ def collect_price_history(
                 if not result or "error" in result:
                     if _is_rate_limit_exhausted(result):
                         _throttle.on_rate_limit()
+                        complex_rate_limited = True
                     continue
 
                 _throttle.on_success()
@@ -287,6 +319,10 @@ def collect_price_history(
             if complex_had_success:
                 processed += 1
                 newly_done.add(complex_no)
+                rate_limited_streak = 0
+            elif complex_rate_limited:
+                rate_limited += 1
+                rate_limited_streak += 1
 
             # 체크포인트 — 완료된 단지 번호 집합을 저장 (재개 시 이 집합을 쿼리에서 제외)
             if _checkpoint.should_save(i + 1):
@@ -297,10 +333,38 @@ def collect_price_history(
                 )
                 logger.info("시세 수집 중간 저장: %d/%d 완료", len(done_complex_nos | newly_done), len(complexes))
 
-        job.status = "completed"
+            if rate_limited_streak >= _RATE_LIMIT_ABORT_STREAK:
+                aborted = True
+                logger.warning(
+                    "시세 수집 중단: 네이버 429 로 %d개 단지 연속 실패 (%d/%d 단지에서)",
+                    rate_limited_streak, i + 1, len(complexes),
+                )
+                break
+
         job.total_items = len(complexes)
         job.processed_items = processed
         job.completed_at = utcnow()
+        if aborted or rate_limited > processed:
+            # 실패로 끝내고 완료분은 체크포인트로 남긴다 — 곧 다시 돌리면 받은 단지를 건너뛴다.
+            # 체크포인트 저장을 먼저 — 저장이 예외를 내도 아래 except 가 429 사유를 예외 원문으로 덮지 않게.
+            try:
+                _checkpoint.save(
+                    db, job.id,
+                    {"done_complex_nos": sorted(done_complex_nos | newly_done), "total": len(complexes)},
+                )
+            except Exception as e:
+                db.rollback()
+                logger.warning("시세 수집 체크포인트 저장 실패: %s", e)
+            job.status = "failed"
+            job.error_message = _rate_limited_words(len(complexes), rate_limited, processed, aborted)
+            job.completed_at = utcnow()
+            job.total_items = len(complexes)
+            job.processed_items = processed
+            db.commit()
+            logger.warning("시세 수집 실패(429): %s", job.error_message)
+            return
+
+        job.status = "completed"
         db.commit()
         _checkpoint.delete(db, job.id)
         logger.info("시세 수집 완료: %d건", processed)

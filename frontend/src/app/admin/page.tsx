@@ -5,16 +5,17 @@
  *
  *  1층 지금 상태 : 데이터 상태 한 줄 + 지금 돌아가는 작업 / 이번 주 챙길 일
  *  2층 숫자      : 핵심 숫자 4칸 / 공공데이터 하루 사용량
- *  3층 원인      : 접힌 절 5개(펼쳤을 때만 불러온다 — AdminSection)
+ *  3층 원인      : 접힌 절 4개(펼쳤을 때만 불러온다 — AdminSection)
  *  4층 작업      : 오래된 단지 다시 수집(전폭) → 최근 활동
  *                  (외부 자료 받아오기 버튼은 /admin/crawl 로 옮겼다 — 사장님 결정 2026-09-26)
  *
  * 24시간 오류·채워진 비율·가치 점수는 /admin/data 에서 본다(한 화면에 같은 숫자는 한 번만).
  * 단 24시간 실패 건수는 3층 "실패 자세히" 절 제목 옆 칩으로도 알린다(접힌 채로 보이게).
+ * 실패 표(FailureBreakdown)와 네이버 호출 횟수 표는 /admin/crawl 에만 둔다(세션 465 B6 — 같은 표를 두 화면에 두지 않는다).
  */
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { useTokenReady } from "@/hooks/useAdminQuery";
 import { queryKeys } from "@/lib/query-keys";
 import StatsCards from "@/components/admin/StatsCards";
@@ -23,10 +24,8 @@ import SchedulerMonitor from "@/components/admin/SchedulerMonitor";
 import DataFreshnessCard from "@/components/admin/DataFreshnessCard";
 import HealthSummary from "@/components/admin/HealthSummary";
 import WeeklyIssuesCard from "@/components/admin/WeeklyIssuesCard";
-import NaverCallsCard from "@/components/admin/NaverCallsCard";
 import TrafficCard from "@/components/admin/TrafficCard";
 import QuotaStatusCard from "@/components/admin/QuotaStatusCard";
-import FailureBreakdown from "@/components/admin/FailureBreakdown";
 import AdminCard from "@/components/admin/AdminCard";
 import AdminSection from "@/components/admin/AdminSection";
 import RunningJobsLine from "@/components/admin/RunningJobsLine";
@@ -38,14 +37,6 @@ import type { PaginatedResponse } from "@/types/admin";
 
 export default function AdminDashboard() {
   const { token, getToken } = useTokenReady();
-  const router = useRouter();
-
-  /** 실패 유형을 누르면 수집 작업 목록을 "실패 + 그 유형" 으로 걸러 연다 (원칙 2: 다음 행동으로 잇기) */
-  const jumpToFailed = (jobType?: string) => {
-    const qs = new URLSearchParams({ status: "failed" });
-    if (jobType) qs.set("job_type", jobType);
-    router.push(`/admin/crawl?${qs.toString()}`);
-  };
 
   const statsQuery = useQuery<DetailedStats, Error>({
     queryKey: queryKeys.admin.stats(),
@@ -108,10 +99,13 @@ export default function AdminDashboard() {
           title="실패 자세히 (최근 24시간)"
           badge={stats && stats.error_count_24h > 0 ? `${stats.error_count_24h}건` : undefined}
         >
-          <FailureBreakdown token={token} onJumpToFailed={jumpToFailed} hideTitle />
-        </AdminSection>
-        <AdminSection id="naver-calls" title="네이버 호출 횟수">
-          <NaverCallsCard getToken={getToken} hideTitle />
+          {/* 실패 표는 자료 수집 화면에만 둔다 — 여기서는 그리로 가는 길만 */}
+          <p className="px-2 py-1 text-sm text-gray-600">
+            실패한 작업을 종류별로 모은 표는 &lsquo;자료 수집&rsquo; 화면에 있어요.{" "}
+            <Link href="/admin/crawl?status=failed" className="text-blue-700 hover:underline">
+              자료 수집 화면에서 보기 →
+            </Link>
+          </p>
         </AdminSection>
         <AdminSection id="traffic" title="방문·요청 통계">
           <TrafficCard getToken={getToken} hideTitle />
@@ -123,7 +117,7 @@ export default function AdminDashboard() {
         <BulkRecrawlCard getToken={getToken} />
       </div>
 
-      <AdminCard title="최근 활동" help="관리자가 직접 누른 작업이나 자동으로 실행된 트리거 기록이에요 (최근 5건). 누가 언제 무슨 작업을 시작했는지 한눈에 볼 수 있어요">
+      <AdminCard title="최근 활동" help="관리자가 직접 누른 작업이나 자동으로 실행된 작업 기록이에요 (최근 5건). 누가 언제 무슨 작업을 시작했는지 한눈에 볼 수 있어요">
         {recentLogs.length === 0 ? (
           <p className="text-sm text-gray-500">활동 기록이 없습니다</p>
         ) : (

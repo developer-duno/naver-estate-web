@@ -24,7 +24,7 @@ const STATUS_LABEL: Record<DataFreshnessItem["status"], string> = {
 };
 
 const HELP_TEXT =
-  "단지·매물·시세 같은 각 종류의 데이터가 제때 갱신되고 있는지 보여줘요. 빨간색은 너무 오래 됐다는 뜻(원래 주기보다 3배 이상 늦음). '헛바퀴 의심'은 작업은 돌긴 돌았는데 실제로 새로 들어온 데이터가 0건이라는 뜻이에요";
+  "단지·매물·시세 같은 각 종류의 데이터가 제때 갱신되고 있는지 보여줘요. 빨간색은 너무 오래 됐다는 뜻(원래 주기보다 3배 이상 늦음). '빈손 의심'은 작업은 돌긴 돌았는데 실제로 새로 들어온 데이터가 0건이라는 뜻이에요";
 
 interface Props {
   token: string;
@@ -112,7 +112,7 @@ export default function DataFreshnessCard({ token, hideTitle = false }: Props) {
               <span className="text-gray-500 tabular-nums">{item.count.toLocaleString()}</span>
               {item.spinning && (
                 <span className="text-xs px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
-                  헛바퀴 의심
+                  빈손 의심
                 </span>
               )}
               <span className="ml-auto text-xs text-gray-500">
@@ -127,7 +127,7 @@ export default function DataFreshnessCard({ token, hideTitle = false }: Props) {
       </ul>
       <div className="text-xs text-gray-400 mt-3 space-y-0.5">
         <p>● 정상 = 작업 주기 이내 · ● 주의 = 예상보다 1.5배 넘게 늦음 · ● 지연 = 3배 넘게 늦음</p>
-        <p>헛바퀴 의심 = 작업은 돌았는데 처리 0건 또는 신규 0건</p>
+        <p>빈손 의심 = 작업은 돌았는데 처리 0건 또는 신규 0건</p>
       </div>
     </AdminCard>
   );

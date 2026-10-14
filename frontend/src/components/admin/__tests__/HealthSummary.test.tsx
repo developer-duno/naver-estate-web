@@ -37,7 +37,7 @@ const mkItem = (overrides: Partial<DataFreshnessResponse["items"][number]>) => (
 });
 
 describe("HealthSummary", () => {
-  it("정상/주의/지연/헛바퀴 카운트가 표시된다", async () => {
+  it("정상/주의/지연/빈손 카운트가 표시된다", async () => {
     mockGet.mockResolvedValueOnce({
       generated_at: new Date().toISOString(),
       items: [
@@ -58,10 +58,10 @@ describe("HealthSummary", () => {
     expect(screen.getByText(/주의 1/)).toBeInTheDocument();
     expect(screen.getByText(/지연 1/)).toBeInTheDocument();
     // 첫 등장에 뜻풀이를 붙인다 (세션 419)
-    expect(screen.getByText(/헛바퀴\(돌았는데 새 자료 0건\) 0/)).toBeInTheDocument();
+    expect(screen.getByText(/빈손\(돌았는데 새 자료 0건\) 0/)).toBeInTheDocument();
   });
 
-  it("헛바퀴 의심 종목이 1+ 이면 빨간 배경 + 강조 텍스트", async () => {
+  it("빈손 의심 종목이 1+ 이면 빨간 배경 + 강조 텍스트", async () => {
     mockGet.mockResolvedValueOnce({
       generated_at: new Date().toISOString(),
       items: [
@@ -71,7 +71,7 @@ describe("HealthSummary", () => {
     });
     const { container } = renderSummary();
     await waitFor(() => {
-      expect(screen.getByText(/헛바퀴\(돌았는데 새 자료 0건\) 1/)).toBeInTheDocument();
+      expect(screen.getByText(/빈손\(돌았는데 새 자료 0건\) 1/)).toBeInTheDocument();
     });
     const button = container.querySelector("button");
     expect(button?.className).toContain("bg-red-50");

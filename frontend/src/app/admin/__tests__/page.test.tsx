@@ -163,7 +163,6 @@ describe("AdminDashboard 4층 배치 (세션 419)", () => {
     "자동 작업 현황",
     "데이터 신선도",
     "실패 자세히 (최근 24시간)",
-    "네이버 호출 횟수",
     "방문·요청 통계",
   ];
 
@@ -212,7 +211,7 @@ describe("AdminDashboard 4층 배치 (세션 419)", () => {
     expect(screen.queryByText("채워진 비율")).toBeNull();
   });
 
-  it("3층 절 5개는 기본 접힘 — 안쪽 카드의 API 를 부르지 않는다", async () => {
+  it("3층 절 4개는 기본 접힘 — 안쪽 카드의 API 를 부르지 않는다", async () => {
     renderDashboard();
     await waitFor(() => {
       expect(screen.getByText("지금 돌아가는 작업 없음")).toBeInTheDocument();
@@ -248,8 +247,8 @@ describe("AdminDashboard 4층 배치 (세션 419)", () => {
   it("3층 절을 펼치면 안쪽 카드는 제목(h3)을 그리지 않는다 — 제목 한 줄", async () => {
     renderDashboard();
     for (const t of SECTION_TITLES) fireEvent.click(screen.getByText(t));
-    await screen.findByRole("button", { name: /단지 매물 가져오기 2건 실패/ });
-    for (const id of ["scheduler", "freshness", "failure", "naver-calls", "traffic"]) {
+    await screen.findByRole("link", { name: /자료 수집 화면에서 보기/ });
+    for (const id of ["scheduler", "freshness", "failure", "traffic"]) {
       const section = document.getElementById(id)!;
       expect(section).toHaveAttribute("open");
       expect(within(section).queryAllByRole("heading", { level: 3 })).toHaveLength(0);
@@ -258,16 +257,32 @@ describe("AdminDashboard 4층 배치 (세션 419)", () => {
     for (const t of SECTION_TITLES) {
       expect(screen.getAllByText(t, { exact: true })).toHaveLength(1);
     }
-    // 도움말(ⓘ)은 제목을 숨겨도 남는다 — 5절 모두 설명 버튼이 있다
-    expect(screen.getAllByRole("button", { name: "설명 보기" }).length).toBeGreaterThanOrEqual(5);
+    // 도움말(ⓘ)은 제목을 숨겨도 남는다 — 카드가 든 3절 모두 설명 버튼이 있다
+    for (const id of ["scheduler", "freshness", "traffic"]) {
+      expect(
+        within(document.getElementById(id)!).getAllByRole("button", { name: "설명 보기" }).length,
+      ).toBeGreaterThanOrEqual(1);
+    }
   });
 
-  it("실패 절을 열고 유형을 누르면 /admin/crawl 로 '실패 + 그 유형' 필터를 들고 간다", async () => {
+  /** 세션 465 B6: 실패 표는 /admin/crawl 에만 둔다 — 대시보드 절에는 그리로 가는 링크 한 줄뿐 */
+  it("실패 절을 열면 표 대신 자료 수집 화면으로 가는 링크 — 24시간 실패 표를 그리지 않는다", async () => {
     renderDashboard();
     fireEvent.click(screen.getByText("실패 자세히 (최근 24시간)"));
-    const row = await screen.findByRole("button", { name: /단지 매물 가져오기 2건 실패/ });
-    expect(mockFailures).toHaveBeenCalledWith("test-token", 24);
-    fireEvent.click(row);
-    expect(pushMock).toHaveBeenCalledWith("/admin/crawl?status=failed&job_type=complex_articles");
+    const link = await screen.findByRole("link", { name: /자료 수집 화면에서 보기/ });
+    expect(link).toHaveAttribute("href", "/admin/crawl?status=failed");
+    expect(mockFailures).not.toHaveBeenCalledWith("test-token", 24);
+    expect(screen.queryByRole("button", { name: /단지 매물 가져오기 2건 실패/ })).toBeNull();
+  });
+
+  /** 세션 465 B6: 네이버 호출 횟수는 /admin/crawl 로 옮겼다 — 대시보드에는 절도 표도 없다 */
+  it("네이버 호출 횟수 절이 대시보드에 없다", async () => {
+    renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByText("지금 돌아가는 작업 없음")).toBeInTheDocument();
+    });
+    expect(document.getElementById("naver-calls")).toBeNull();
+    expect(screen.queryByText("네이버 호출 횟수")).toBeNull();
+    expect(mockNaver).not.toHaveBeenCalled();
   });
 });

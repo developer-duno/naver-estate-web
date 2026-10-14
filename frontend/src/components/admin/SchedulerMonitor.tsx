@@ -5,8 +5,9 @@
 const HELP_TEXT =
   "자동으로 돌아가는 수집 작업들이 마지막에 언제 실행됐고, 다음에 언제 또 돌아갈지 보여줘요. 빨간색은 실패한 작업이에요. 작업이 돌긴 돌았는데 데이터가 진짜 들어왔는지는 아래 '데이터 신선도' 절에서 확인할 수 있어요. '처리' 열은 (처리한 건수)/(할 일 건수) 예요 — 0/0건은 그날 할 일이 없었다는 뜻이라 문제가 아니에요";
 
-/** 우리말 번역(error_plain)이 없을 때 본문에 보이는 문구 — 원문은 title(마우스 올리기)로만 */
-export const UNKNOWN_ERROR_TEXT = "알 수 없는 오류 (원문은 마우스를 올려 보세요)";
+/** 우리말 번역(error_plain)이 없을 때 본문에 보이는 문구 — 원문은 바로 아래 RawDetail('자세한 내용 보기')로 펼친다
+ *  (휴대폰엔 마우스가 없으므로 문구에서 마우스 언급을 뺐다 — 세션 465 B6) */
+export const UNKNOWN_ERROR_TEXT = "알 수 없는 오류 (아래 '자세한 내용 보기'를 누르면 원래 기록이 보여요)";
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";

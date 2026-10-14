@@ -100,7 +100,7 @@ describe("getDetailsSummary", () => {
       "역할: 일반, 상태: 승인",
     );
     expect(getDetailsSummary("admin_user_update", { daily_crawl_quota: 100 })).toBe(
-      "하루 크롤 한도: 100",
+      "하루 수집 한도: 100",
     );
   });
 
@@ -276,7 +276,7 @@ describe("getActionLabel — R3 결제 액션 보강", () => {
   });
 
   it("기존 미등록이던 관리자 액션도 한글", () => {
-    expect(getActionLabel("admin_crawl_cancel")).toBe("크롤 작업 취소");
+    expect(getActionLabel("admin_crawl_cancel")).toBe("수집 작업 취소");
     expect(getActionLabel("admin_setting_update")).toBe("설정 변경");
   });
 });

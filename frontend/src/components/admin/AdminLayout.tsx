@@ -14,7 +14,7 @@ const NAV_ITEMS = [
   { href: "/admin/crawl", label: "자료 수집" },
   { href: "/admin/scheduler-calendar", label: "수집 일정" },
   { href: "/admin/data", label: "데이터" },
-  { href: "/admin/logs", label: "감사 로그" },
+  { href: "/admin/logs", label: "관리 기록" },
   { href: "/admin/opinions", label: "의견함" },
   // 세션 419(2026-09-26 사장님 결정): "설정" 탭 삭제 — 저장해도 아무것도 바뀌지 않는 화면이었다.
 ];

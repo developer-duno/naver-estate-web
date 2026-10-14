@@ -151,7 +151,7 @@ describe("SchedulerMonitor 컴포넌트", () => {
     });
 
     // 에러 메시지가 처음에는 안 보임
-    expect(screen.queryByText("알 수 없는 오류 (원문은 마우스를 올려 보세요)")).not.toBeInTheDocument();
+    expect(screen.queryByText("알 수 없는 오류 (아래 '자세한 내용 보기'를 누르면 원래 기록이 보여요)")).not.toBeInTheDocument();
 
     // 실패 행 클릭
     const failedRow = screen.getByText("범죄통계").closest("tr");
@@ -160,9 +160,9 @@ describe("SchedulerMonitor 컴포넌트", () => {
 
     // 에러 메시지 표시 (MOCK 은 error_plain 없음 → 고정 문구 + title 원문)
     await waitFor(() => {
-      expect(screen.getByText("알 수 없는 오류 (원문은 마우스를 올려 보세요)")).toBeInTheDocument();
+      expect(screen.getByText("알 수 없는 오류 (아래 '자세한 내용 보기'를 누르면 원래 기록이 보여요)")).toBeInTheDocument();
     });
-    expect(screen.getByText("알 수 없는 오류 (원문은 마우스를 올려 보세요)")).toHaveAttribute("title", "API 연결 실패: timeout");
+    expect(screen.getByText("알 수 없는 오류 (아래 '자세한 내용 보기'를 누르면 원래 기록이 보여요)")).toHaveAttribute("title", "API 연결 실패: timeout");
   });
 
   /** 펼침 영역은 쉬운 우리말(error_plain)을 보여주고 원문은 title 로 남긴다 (세션 411) */
@@ -214,10 +214,10 @@ describe("SchedulerMonitor 컴포넌트", () => {
     fireEvent.click(screen.getByText("범죄통계").closest("tr")!);
 
     await waitFor(() => {
-      expect(screen.getByText("알 수 없는 오류 (원문은 마우스를 올려 보세요)")).toBeInTheDocument();
+      expect(screen.getByText("알 수 없는 오류 (아래 '자세한 내용 보기'를 누르면 원래 기록이 보여요)")).toBeInTheDocument();
     });
     expect(screen.queryByText(raw)).toBeNull();
-    expect(screen.getByText("알 수 없는 오류 (원문은 마우스를 올려 보세요)")).toHaveAttribute("title", raw);
+    expect(screen.getByText("알 수 없는 오류 (아래 '자세한 내용 보기'를 누르면 원래 기록이 보여요)")).toHaveAttribute("title", raw);
   });
 
   /** error_plain 이 빈 문자열이어도 고정 문구 — `??` 였다면 화면이 비어 버린다 (세션 411·419) */
@@ -239,7 +239,7 @@ describe("SchedulerMonitor 컴포넌트", () => {
     fireEvent.click(screen.getByText("범죄통계").closest("tr")!);
 
     await waitFor(() => {
-      expect(screen.getByText("알 수 없는 오류 (원문은 마우스를 올려 보세요)")).toBeInTheDocument();
+      expect(screen.getByText("알 수 없는 오류 (아래 '자세한 내용 보기'를 누르면 원래 기록이 보여요)")).toBeInTheDocument();
     });
     expect(screen.queryByText(raw)).toBeNull();
   });

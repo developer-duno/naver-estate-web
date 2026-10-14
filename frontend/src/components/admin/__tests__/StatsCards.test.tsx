@@ -101,3 +101,35 @@ describe("StatsCards compact (대시보드 4칸, 세션 419)", () => {
     expect(screen.getByText("채워진 비율")).toBeInTheDocument();
   });
 });
+
+describe("StatsCards detailOnly (/admin/data — 대시보드와 같은 4칸 빼기, 세션 465 B6)", () => {
+  const stats: DetailedStats = {
+    ...baseStats,
+    complex_count: 1234,
+    active_article_count: 56789,
+    user_count: 42,
+    today_crawl_count: 7,
+    error_count_24h: 3,
+    complex_detail_fill_rate: 0.5,
+  };
+
+  it("detailOnly 면 4칸이 없고 24시간 오류·채워진 비율만 보인다", () => {
+    render(<StatsCards stats={stats} loading={false} detailOnly />);
+    for (const label of ["단지 수", "활성 매물", "사용자", "오늘 수집"]) {
+      expect(screen.queryByText(label)).toBeNull();
+    }
+    expect(screen.queryByText("1,234")).toBeNull();
+    expect(screen.getByText("최근 24시간 오류: 3건")).toBeInTheDocument();
+    expect(screen.getByText("채워진 비율")).toBeInTheDocument();
+  });
+
+  it("detailOnly 면 24시간 오류가 0건이어도 '0건' 으로 보인다", () => {
+    render(<StatsCards stats={{ ...stats, error_count_24h: 0 }} loading={false} detailOnly />);
+    expect(screen.getByText("최근 24시간 오류: 0건")).toBeInTheDocument();
+  });
+
+  it("detailOnly 로딩 중에는 4칸 자리 대신 상자 하나만 깜빡인다", () => {
+    const { container } = render(<StatsCards stats={null} loading detailOnly />);
+    expect(container.querySelectorAll(".animate-pulse")).toHaveLength(1);
+  });
+});

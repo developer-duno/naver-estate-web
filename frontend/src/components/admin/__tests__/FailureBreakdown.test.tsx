@@ -23,7 +23,7 @@ function renderCard(onJumpToFailed?: (jobType?: string) => void) {
 }
 
 describe("FailureBreakdown", () => {
-  it("휴대폰(마우스 없음)에서도 '원문 보기'를 누르면 작업 코드·오류 원문이 펼쳐지고, 유형 이동은 일어나지 않는다", async () => {
+  it("휴대폰(마우스 없음)에서도 '자세한 내용 보기'를 누르면 작업 코드·오류 원문이 펼쳐지고, 유형 이동은 일어나지 않는다", async () => {
     mockGet.mockResolvedValueOnce({
       window_hours: 24,
       total: 3,
@@ -38,13 +38,13 @@ describe("FailureBreakdown", () => {
     });
     const onJump = vi.fn();
     renderCard(onJump);
-    const toggle = await screen.findByText("원문 보기");
+    const toggle = await screen.findByText("자세한 내용 보기");
     // 버튼(유형 이동) 안에 누를 거리를 두지 않는다 — 인터랙티브 요소 중첩 금지
     expect(toggle.closest("button")).toBeNull();
-    expect(screen.queryByText(/오류 원문: 네이버 API 차단/)).toBeNull();
+    expect(screen.queryByText(/오류 내용: 네이버 API 차단/)).toBeNull();
 
     fireEvent.click(toggle);
-    const raw = screen.getByText(/오류 원문: 네이버 API 차단/);
+    const raw = screen.getByText(/오류 내용: 네이버 API 차단/);
     expect(raw).toHaveTextContent("작업 코드: complex_articles");
     expect(onJump).not.toHaveBeenCalled();
   });

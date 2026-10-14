@@ -61,14 +61,14 @@ describe("CrawlSummary", () => {
     await waitFor(() => {
       expect(screen.getByText(/실패 누적 1건/)).toBeInTheDocument();
     });
-    const root = container.querySelector("[aria-label='현재 크롤 작업 요약']");
+    const root = container.querySelector("[aria-label='현재 수집 작업 요약']");
     expect(root?.className).toContain("bg-red-50");
   });
 
   it("로딩 중에는 회색 placeholder 표시", () => {
     mockGet.mockImplementation(() => new Promise(() => { /* never resolves */ }));
     const { container } = renderSummary();
-    const placeholder = container.querySelector("[aria-label='크롤 요약 로딩 중']");
+    const placeholder = container.querySelector("[aria-label='수집 요약 로딩 중']");
     expect(placeholder).toBeTruthy();
     expect(placeholder?.className).toContain("animate-pulse");
   });
@@ -99,7 +99,7 @@ describe("CrawlSummary", () => {
 
     renderSummary();
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent("크롤 요약을 불러오지 못했어요.");
+      expect(screen.getByRole("alert")).toHaveTextContent("수집 요약을 불러오지 못했어요.");
     });
     expect(screen.getByRole("alert").className).toContain("bg-red-50");
     // 개발자 에러 원문은 사장님 화면에 노출하지 않는다 (세션 410)

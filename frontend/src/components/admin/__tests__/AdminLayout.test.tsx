@@ -45,7 +45,7 @@ function renderAt(path: string) {
 describe("AdminLayout", () => {
   it("7개 네비 탭 + 메인으로 링크 + 본문이 렌더된다", () => {
     renderAt("/admin");
-    const tabs = ["대시보드", "사용자", "자료 수집", "수집 일정", "데이터", "감사 로그", "의견함"];
+    const tabs = ["대시보드", "사용자", "자료 수집", "수집 일정", "데이터", "관리 기록", "의견함"];
     for (const label of tabs) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }

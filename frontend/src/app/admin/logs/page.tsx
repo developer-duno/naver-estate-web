@@ -39,7 +39,7 @@ export default function AdminLogsPage() {
 
   return (
     <>
-      <h2 className="text-lg font-semibold mb-4">감사 로그</h2>
+      <h2 className="text-lg font-semibold mb-4">관리 기록</h2>
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">{error}</div>
@@ -47,7 +47,7 @@ export default function AdminLogsPage() {
 
       <AdminCard
         title={`기록 목록 (총 ${logsQuery.data?.total ?? 0}건)`}
-        help="관리자와 사용자가 한 중요한 일(설정 바꾸기·사용자 정지·재수집·결제 등)이 시간 순서로 남는 기록이에요. 칸에 마우스를 올리거나 칸 글자를 누르면 원래 기록(영문)을 볼 수 있어요"
+        help="관리자와 사용자가 한 중요한 일(설정 바꾸기·사용자 정지·재수집·결제 등)이 시간 순서로 남는 기록이에요. 칸 글자를 누르면 원래 기록(영문)을 볼 수 있어요"
         action={
           <div className="flex flex-wrap items-center gap-2">
             <select

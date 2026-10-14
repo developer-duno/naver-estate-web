@@ -149,6 +149,13 @@ _ERROR_RULES: list[tuple[re.Pattern, str | Callable[[str], str]]] = [
         re.compile(r"^최근 6개월 시세 기록을 하나도 못 읽어서[^A-Za-z|]*$"),
         lambda text: text,
     ),
+    # ── 우리 단지 시세 기록 모으기(price_history) 429 실패 문구 — 원문 그대로 (B21) ──
+    # `service_price._rate_limited_words` 가 만드는 문장. "몇 개 단지 중 몇 개를 받았나·못 받았나" 숫자가 핵심인데
+    # 어느 규칙에도 안 맞아 알림이 "처음 보는 문제" 로 떨어졌다. 위 규칙들과 같은 꼴(영문·`|` 섞이면 통과 안 함).
+    (
+        re.compile(r"^네이버가 요청이 너무 많다며 거절해[^A-Za-z|]*$"),
+        lambda text: text,
+    ),
     # ── 결제 사유 2종 — billing_charge._mark_retry 가 만드는 우리 접두어 (세션 410) ──
     # ⚠ 반드시 **맨 앞**이다. 사유 문자열 뒤에 PortOne 예외 원문이 이어 붙는데, 그 안의
     #   timeout·50x 가 먼저 이기면 "상대 서버(네이버·정부 자료)가 …" 안내가 나가 결제

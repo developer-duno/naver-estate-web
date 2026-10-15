@@ -17,3 +17,4 @@
 
 - FE Vitest 2438 → **2538** (Test Files 265 → 271) — main 48f01d51(#717) run 38293853632 Frontend CI(그 뒤 main 의 프론트 변경 f627dd7c 는 프론트 CI 가 안 돌았다 — 다음 push 가 앞 실행을 취소). 세션 445 이후 B19 react-hooks 시험(#718) 등 누적.
 - BE pytest 2514 → **2761** (`--collect-only`, main b45fbf3a) — 세션 445 이후 SGIS 수집·B13·B14·B16·B18·B20(#723 새 시험 21) 등 누적.
+- BE pytest 2761 → **2896** (`--collect-only`, main 82c1e5ea, 세션 467 2026-10-15) — B21(#730)·B22(#731)·B23·B24(#732)·공시가격 알림(#733)·B25(#735 새 시험 43) 누적.

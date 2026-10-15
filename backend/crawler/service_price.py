@@ -41,12 +41,13 @@ _RATE_LIMIT_ABORT_STREAK = 5
 
 
 def _rate_limited_words(
-    total: int, rate_limited: int, processed: int, aborted: bool, mixed: bool = False,
+    total: int, rate_limited: int, processed: int, aborted: bool, mixed: bool = False, unit: str = "단지",
 ) -> str:
     """네이버가 막아 실패한 회차의 error_message — 쉬운 우리말 한 문장(관리자 화면·텔레그램 알림 공통).
 
     중단이면 "받은 단지 수"를, 끝까지 돌았으면 "못 받은 단지 수"를 말한다(중단 때는 멈춘 뒤 안 부른 단지가 있어 못 받은 수가 실제보다 적게 읽힌다).
     mixed=False — 못 받은 단지가 전부 429 소진(B21 문장 그대로). True — 403·5xx·네트워크 오류가 섞임(B24).
+    unit — 세는 대상 이름. 매물 상세 잡(service_discover)은 "매물" 을 넘긴다(B25).
 
     ⚠ 머리 "네이버가 요청이 너무 많다며 거절해"·"네이버가 막거나 오류를 내서" 는 plain_words._ERROR_RULES 가
     원문 그대로 통과시키는 표지다 — 바꾸면 알림이 "처음 보는 문제" 로 뭉개진다. 영문 글자·`|`·문장 중간 마침표를 넣지 않는다.
@@ -55,12 +56,12 @@ def _rate_limited_words(
     if aborted:
         got = f"{processed}개만 받고" if processed else "하나도 못 받고"
         return (
-            f"{head} {total}개 단지 중 {got} 멈췄어요"
-            f"(연속 {_RATE_LIMIT_ABORT_STREAK}개 단지 {'실패' if mixed else '거절'})."
+            f"{head} {total}개 {unit} 중 {got} 멈췄어요"
+            f"(연속 {_RATE_LIMIT_ABORT_STREAK}개 {unit} {'실패' if mixed else '거절'})."
         )
     return (
-        f"{head} {total}개 단지 중 {rate_limited}개를 못 받았어요"
-        f"(받은 단지 {processed}개보다 많아요)."
+        f"{head} {total}개 {unit} 중 {rate_limited}개를 못 받았어요"
+        f"(받은 {unit} {processed}개보다 많아요)."
     )
 
 

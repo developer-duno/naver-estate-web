@@ -23,7 +23,7 @@ HEAT_FUEL_MAP = {"HF001": "도시가스", "HF002": "LPG", "HF003": "석유", "HF
 RATE_LIMIT_EXHAUSTED_ERROR = "API 요청이 반복적으로 실패했습니다. 네트워크 연결을 확인해주세요."
 
 
-def enrich_complex_detail(db, complex_no, throttle=None) -> bool:
+def enrich_complex_detail(db, complex_no, throttle=None, *, failed_responses: list | None = None) -> bool:
     """단지 상세 정보 보강 (면적별 정보, 난방, 건설사, 주소 등).
 
     live.py와 crawler/service.py 모두 이 함수를 호출.
@@ -32,6 +32,9 @@ def enrich_complex_detail(db, complex_no, throttle=None) -> bool:
 
     throttle(AdaptiveThrottle)을 주면 결과를 알려 준다(B20): 성공 → on_success(),
     429 소진 → on_rate_limit(). 그 밖의 실패(없는 단지·예외·빈 응답)는 간격을 건드리지 않는다.
+
+    failed_responses 를 주면 API 실패 응답(오류 dict·빈 응답)을 거기 담는다(B25) — 단지 상세 배치가
+    "네이버가 막았나"를 가르는 데 쓴다. 호출 예외는 담지 않는다.
     """
     try:
         record_call("complex_detail")
@@ -41,6 +44,8 @@ def enrich_complex_detail(db, complex_no, throttle=None) -> bool:
         return False
 
     if not detail or not isinstance(detail, dict) or "error" in detail:
+        if failed_responses is not None:
+            failed_responses.append(detail)
         if (
             throttle is not None
             and isinstance(detail, dict)

@@ -127,6 +127,8 @@ FRESHNESS_ITEMS: list[dict] = [
         # 정상 종료돼 monitor.py 의 "작업 실패"·"작업 마비" 축 어디도 안 걸린다.
         # articles 카드(key="articles")는 scheduler_job_id="crawl_articles"(별개 잡,
         # 매물 목록 수집)에 매여 있어 이 잡을 대신 커버하지 못한다 — 전용 카드 신설.
+        # B25(세션 466): 네이버가 막아 못 받은 회차는 이제 failed 로 끝나 "작업 실패" 축이 잡는다 —
+        # 이 카드가 지키는 것은 대상이 없어(candidates 소진 등) 0건으로 completed 되는 회차다.
         "key": "article_detail",
         "label": "매물 상세 내용 채우기",
         "expected_interval_seconds": 1800 * 3,  # 30분 interval 의 3배(90분) — 배치 스킵 1~2회 여유
@@ -153,7 +155,8 @@ FRESHNESS_ITEMS: list[dict] = [
         # 세션 359: test_scheduler_monitoring_coverage.py(CI 강제 커버리지 검사)가
         # 실제로 찾아낸 사각지대 — article_detail과 정확히 같은 유형이다. 대량
         # 단지(4.6만개, 배치 1000)를 4시간 interval 로 처리하는데, detail_crawled_at
-        # IS NULL 후보가 소진되거나 API 실패가 반복돼도 completed 로 조용히 끝난다.
+        # IS NULL 후보가 소진되면 completed 로 조용히 끝난다(네이버가 막아 못 받은 단지가
+        # 받은 단지보다 많거나 연속 5개면 B25 부터 failed — 옛 코드는 API 실패가 반복돼도 completed).
         "key": "complex_detail_apt",
         "label": "아파트 단지 정보 채우기",
         "expected_interval_seconds": 14400 * 3,  # 4시간 interval 의 3배(12시간)

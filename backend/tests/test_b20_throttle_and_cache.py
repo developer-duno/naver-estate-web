@@ -202,7 +202,7 @@ def test_detail_batch_db_error_keeps_interval(db, monkeypatch):
     monkeypatch.setattr(throttle, "wait", lambda *a, **k: None)
     monkeypatch.setattr(service_discover, "_throttle_detail", throttle)
 
-    def _db_error(_db, _no, throttle=None):
+    def _db_error(_db, _no, throttle=None, **_kw):
         raise RuntimeError("DB 저장 실패")
 
     monkeypatch.setattr(service_discover, "enrich_complex_detail", _db_error)

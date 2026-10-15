@@ -1307,28 +1307,68 @@ def collect_official_prices(
                     t for t in regressed if t.complex_no not in matched_complex_nos
                 ]
                 if remaining_lost:
+                    # 못 짝지었어도 옛 행은 지우지 않으므로 올해 행이 남은 단지는 화면에 지난번
+                    # 값이 그대로 보인다 — 텔레그램은 올해 행이 정말 하나도 없는 단지만 알린다.
+                    # 확인 쿼리가 실패하면 안전 쪽(전부 알림)으로 둔다.
+                    empty_lost = remaining_lost
+                    empty_checked = False
+                    try:
+                        has_year_row = {
+                            row[0]
+                            for row in db.query(ComplexOfficialPrice.complex_no)
+                            .filter(
+                                ComplexOfficialPrice.complex_no.in_(
+                                    [t.complex_no for t in remaining_lost]
+                                ),
+                                ComplexOfficialPrice.stdr_year == year,
+                            )
+                            .distinct()
+                            .all()
+                        }
+                        empty_lost = [
+                            t for t in remaining_lost if t.complex_no not in has_year_row
+                        ]
+                        empty_checked = True
+                    except Exception:
+                        logger.warning(
+                            "[official_price] 잔여 단지의 올해 행 확인 실패 — 안전하게 전부 알림",
+                            exc_info=True,
+                        )
+                        db.rollback()
+
                     summary = ", ".join(
                         f"{t.complex_no}({t.complex_name})" for t in remaining_lost[:10]
                     )
                     logger.warning(
-                        "[official_price] 재수집 후에도 미매칭 잔여 %d단지: %s",
-                        len(remaining_lost), summary,
+                        "[official_price] 재수집 후에도 미매칭 잔여 %d단지(올해 행 없음 %s): %s",
+                        len(remaining_lost),
+                        len(empty_lost) if empty_checked else "확인 못 함",
+                        summary,
                     )
                     # status 는 completed 유지 — 전량 실패가 아니라 일부 소실이라 실패로
                     # 끊으면 정상 수집분까지 실패로 보인다. 잔여 사실만 남겨 추적 가능하게 한다.
-                    job.error_message = (
-                        f"재수집 후 미매칭 잔여 {len(remaining_lost)}단지: {summary}"
-                    )[:500]
+                    message = f"다시 시도해도 짝을 못 찾은 단지 {len(remaining_lost)}곳"
+                    if empty_checked and not empty_lost:
+                        message += f"(지난번 값이 그대로 보여요): {summary}"
+                    else:
+                        message += f": {summary}"
+                        if empty_checked:
+                            message += f" · 그중 값이 빈 단지 {len(empty_lost)}곳"
+                    job.error_message = message[:500]
                     db.commit()
-                    # completed 잡의 error_message 는 admin 화면에서 행을 펼쳐야만 보이고
-                    # monitor 텔레그램은 failed 만 감시한다 — 월 1회 잡이라 이대로면 다음
-                    # 달까지 아무도 모른다. 관찰 가능하게 텔레그램으로 승격(best-effort).
-                    _alert_official_price(
-                        f"[서버 알림] ⚠ <b>정부 공시가격 받기</b> — 일부 단지는 못 받았어요\n\n"
-                        f"▸ 다시 시도했는데도 값이 없는 단지 {len(remaining_lost)}곳: {summary}\n"
-                        "→ 손님 화면은 그대로 보입니다. 그 단지들만 공시가격이 빈칸이에요.\n"
-                        "   급하지 않으니 아침에 Claude 에게 알려주세요."
-                    )
+                    if empty_lost:
+                        # completed 잡의 error_message 는 admin 화면에서 행을 펼쳐야만 보이고
+                        # monitor 텔레그램은 failed 만 감시한다 — 월 1회 잡이라 이대로면 다음
+                        # 달까지 아무도 모른다. 관찰 가능하게 텔레그램으로 승격(best-effort).
+                        empty_summary = ", ".join(
+                            f"{t.complex_no}({t.complex_name})" for t in empty_lost[:10]
+                        )
+                        _alert_official_price(
+                            f"[서버 알림] ⚠ <b>정부 공시가격 받기</b> — 일부 단지는 못 받았어요\n\n"
+                            f"▸ 다시 시도했는데도 값이 없는 단지 {len(empty_lost)}곳: {empty_summary}\n"
+                            "→ 손님 화면은 그대로 보입니다. 그 단지들은 공시가격이 빈칸이에요.\n"
+                            "   급하지 않으니 아침에 Claude 에게 알려주세요."
+                        )
         except Exception:
             # 구제 실패는 본 수집 결과를 되돌리지 않는다 — 로그만 남기고 완료 경로 계속.
             logger.exception("[official_price] 재수집 패스 실패 — 본 수집 결과는 유지")

@@ -156,6 +156,13 @@ _ERROR_RULES: list[tuple[re.Pattern, str | Callable[[str], str]]] = [
         re.compile(r"^네이버가 요청이 너무 많다며 거절해[^A-Za-z|]*$"),
         lambda text: text,
     ),
+    # ── 우리 네이버 막힘·오류 실패 문구 — 원문 그대로 (B23·B24) ──
+    # `service_price._rate_limited_words(mixed=True)`(403·5xx·네트워크가 섞인 날)와 새 단지 찾기의 검색 1쪽 실패 사유.
+    # 바로 위 규칙과 같은 꼴(영문·`|` 섞이면 통과 안 함).
+    (
+        re.compile(r"^네이버가 막거나 오류를 내서[^A-Za-z|]*$"),
+        lambda text: text,
+    ),
     # ── 결제 사유 2종 — billing_charge._mark_retry 가 만드는 우리 접두어 (세션 410) ──
     # ⚠ 반드시 **맨 앞**이다. 사유 문자열 뒤에 PortOne 예외 원문이 이어 붙는데, 그 안의
     #   timeout·50x 가 먼저 이기면 "상대 서버(네이버·정부 자료)가 …" 안내가 나가 결제

@@ -91,7 +91,10 @@ _BURST_MIN_FAILED = 5
 # 한 회차만 실패해도 "실패 → 계속 → 복구" 3통이 갔고, 21:00 회차가 실패하면 새벽 3시쯤
 # "계속" 알림이 울렸다. 두 회차가 잇달아 실패할 때만 알려 새벽 알림을 줄인다.
 # 이 문턱은 "1. 작업 실패" 신호에만 쓴다 — 묶음 실패·마비·자료 오래됨 신호는 그대로다.
-_MIN_CONSECUTIVE_FAILED_BY_TYPE = {"kapt_costs": 2}
+# 매물 상세 채우기(article_detail, 30분 주기 — 사장님 결정 2026-10-15 "두 회차 연속 실패때만", B25): 네이버가 막은 회차를
+# failed 로 남기게 됐는데 대상 20건 미만 회차가 38% 라 1~2건 막힘만으로 곧바로 울리지 않게 한다.
+# 상세 백필(article_detail_backfill)·단지 상세·인기 단지는 1 그대로.
+_MIN_CONSECUTIVE_FAILED_BY_TYPE = {"kapt_costs": 2, "article_detail": 2}
 
 
 def _tail_failed_count(db, job_type: str, need: int) -> int:

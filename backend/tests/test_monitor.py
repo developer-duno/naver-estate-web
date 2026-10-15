@@ -1845,7 +1845,7 @@ def test_other_job_single_failure_alerts_without_tail_query():
     db = TestSession()
     try:
         db.add(CrawlJob(
-            job_type="article_detail", status="failed", error_message="네이버 502",
+            job_type="article_detail_backfill", status="failed", error_message="네이버 502",
             started_at=_utcnow(), completed_at=_utcnow(), created_at=_utcnow(),
         ))
         db.commit()
@@ -1854,7 +1854,7 @@ def test_other_job_single_failure_alerts_without_tail_query():
             side_effect=AssertionError("문턱 1 인 작업에 연속 실패 조회가 나갔다"),
         ) as mock_tail:
             keys = _failed_keys(db)
-        assert "crawl_failed:article_detail" in keys
+        assert "crawl_failed:article_detail_backfill" in keys
         assert mock_tail.call_count == 0
     finally:
         db.close()
@@ -1935,10 +1935,10 @@ def test_kapt_costs_other_job_failure_does_not_fill_streak():
     db = TestSession()
     try:
         _kapt_run(db, "failed", 6)
-        _other_run(db, "article_detail", "failed", 1)
+        _other_run(db, "article_detail_backfill", "failed", 1)
         keys = _failed_keys(db)
         assert _KAPT_KEY not in keys
-        assert "crawl_failed:article_detail" in keys
+        assert "crawl_failed:article_detail_backfill" in keys
     finally:
         db.close()
 

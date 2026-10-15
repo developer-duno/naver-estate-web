@@ -537,7 +537,7 @@ def test_repass_failure_records_remaining_in_error_message(db, seeded, monkeypat
 
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
     assert job.status == "completed", "일부 소실은 전량 실패가 아니라 completed 유지"
-    assert "잔여 1단지" in (job.error_message or "")
+    assert "못 찾은 단지 1곳" in (job.error_message or "")
     assert seeded in (job.error_message or ""), "어느 단지가 잔여인지 식별 가능해야 한다"
 
 
@@ -574,15 +574,15 @@ def test_repass_fetch_failure_does_not_pollute_failed_counters(db, seeded, monke
     # 재수집 실패가 여기 섞이면 2 가 된다 = 카운터 오염.
     assert job.total_items == 1, "재수집 조회 실패가 failed_ld_codes 에 합산돼 total 이 부풀었다"
     # 조회 실패로 구제 못 했으니 그 단지는 잔여 목록에 남아야 한다
-    assert "잔여 1단지" in (job.error_message or "")
+    assert "못 찾은 단지 1곳" in (job.error_message or "")
     assert seeded in (job.error_message or "")
 
 
-def test_repass_remaining_loss_sends_telegram_alert(db, seeded, monkeypatch):
-    """잔여 미매칭은 텔레그램으로 승격 — completed 잡의 error_message 는 아무도 안 본다.
+def test_repass_remaining_loss_with_year_row_sends_no_telegram(db, seeded, monkeypatch):
+    """못 짝지은 단지에 올해 행이 남아 있으면 텔레그램 0 — 화면엔 지난번 값이 그대로 보인다.
 
-    monitor 텔레그램은 failed 만 감시하고 admin UI 는 행을 펼쳐야 보인다. 월 1회 잡이라
-    이대로면 다음 달까지 소실을 아무도 모르는 게 9/15 유일 맹점이었다.
+    옛 행을 지우지 않으므로 "그 단지들만 공시가격이 빈칸" 이라는 알림은 사실이 아니었다
+    (2026-10-15 06:30 회차 4곳 모두 올해 행이 남아 있었다). 기록(error_message)은 남는다.
     (conftest 가 TELEGRAM_ENABLED=false 를 전역 강제하므로 실발송은 0 — 호출만 단언)
     """
     monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
@@ -601,12 +601,141 @@ def test_repass_remaining_loss_sends_telegram_alert(db, seeded, monkeypatch):
     ), patch("services.telegram.send_telegram") as mock_send:
         collect_official_prices(stdr_year=_YEAR)
 
-    assert mock_send.call_count == 1, "잔여 미매칭인데 텔레그램 알림이 안 나갔다"
+    assert mock_send.call_count == 0, "올해 행이 남은 단지인데 빈칸 알림이 나갔다"
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed"
+    message = job.error_message or ""
+    assert "지난번 값이 그대로" in message, f"무슨 상태인지 기록에 안 남았다: {message}"
+    assert seeded in message, f"어느 단지인지 기록에 없다: {message}"
+
+
+def _regressed_with_extra_complex(extra_complex_no):
+    """진짜 소실 판정(`_find_regressed_targets`)에 올해 행 없는 단지 하나를 얹는 래퍼.
+
+    운영 경로에서 올해 행이 없는 단지는 소실 후보가 못 되므로(신규 취급), "그 사이 행이
+    사라진" 상황을 시험에서 만들려면 판정 결과에 직접 얹어야 한다.
+    """
+    from crawler import service_official_price as svc
+
+    real = svc._find_regressed_targets
+
+    def _wrapped(db_, targets, matched, processed, year):
+        found = list(real(db_, targets, matched, processed, year))
+        found.extend(t for t in targets if t.complex_no == extra_complex_no)
+        return found
+
+    return _wrapped
+
+
+def test_repass_remaining_loss_without_year_row_sends_telegram_for_those_only(
+    db, seeded, monkeypatch
+):
+    """올해 행이 하나도 없는 단지가 섞이면 텔레그램 1통 — 그 단지만 나열한다.
+
+    completed 잡의 error_message 는 admin 화면에서 행을 펼쳐야만 보이고 monitor 텔레그램은
+    failed 만 감시한다. 월 1회 잡이라 진짜 빈칸을 다음 달까지 아무도 모르는 게 9/15 맹점이었다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded)  # C1: 올해 행 있음(지난번 값이 보이는 쪽)
+    db.add(Complex(complex_no="C2", complex_name="빈칸아파트", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=10))  # 올해 행 없음
+    db.add(Complex(complex_no="C9", complex_name="정상아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+
+    drifted = make_rows_for_complex(aphus_nm="은마", ho_count=8)
+    healthy = make_rows_for_complex(aphus_code="A9", aphus_nm="정상", ho_count=10)
+
+    with patch(
+        "crawler.service_official_price._find_regressed_targets",
+        side_effect=_regressed_with_extra_complex("C2"),
+    ), patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[drifted, healthy] + [drifted] * (_REPASS_MAX_ATTEMPTS + 2),
+    ), patch("services.telegram.send_telegram") as mock_send:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_send.call_count == 1, "값이 정말 빈 단지가 있는데 알림이 안 나갔다"
     sent = mock_send.call_args[0][0]
-    # 단언 의도("못 받은 단지가 무엇인지 본문에 남는가")는 그대로, 표기만 새 문구에 맞춘다.
-    # 세션 408 에 이 알림을 쉬운 우리말로 바꿨다("잔여" → "다시 시도했는데도 값이 없는 단지").
-    assert seeded in sent, f"알림 본문에 못 받은 단지 번호가 없다: {sent}"
-    assert "값이 없는 단지" in sent, f"무엇이 문제인지 안 나온다: {sent}"
+    assert "C2" in sent, f"빈 단지 번호가 알림에 없다: {sent}"
+    assert "C1" not in sent, f"지난번 값이 보이는 단지까지 빈칸이라고 알렸다: {sent}"
+    assert "1곳" in sent, f"빈 단지 수(1곳)가 아니라 전체 수를 셌다: {sent}"
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    message = job.error_message or ""
+    assert "C1" in message and "C2" in message, f"기록엔 못 찾은 단지 전체가 남아야 한다: {message}"
+    assert "그중 값이 빈 단지 1곳" in message, f"빈 단지 수가 기록에 없다: {message}"
+
+
+def test_repass_remaining_loss_check_failure_still_sends_telegram(db, seeded, monkeypatch):
+    """올해 행 확인 쿼리가 실패하면 안전 쪽 — 확인 못 했으니 알린다. 본 수집은 되돌리지 않는다."""
+    from sqlalchemy import event
+
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded)
+    db.add(Complex(complex_no="C9", complex_name="정상아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+
+    drifted = make_rows_for_complex(aphus_nm="은마", ho_count=8)
+    healthy = make_rows_for_complex(aphus_code="A9", aphus_nm="정상", ho_count=10)
+
+    def _fail_year_row_check(conn, cursor, statement, parameters, context, executemany):
+        # 확인 쿼리만 골라 터뜨린다 — complex_no IN (...) 로 올해 행 보유 단지를 뽑는 SELECT.
+        text_ = statement.upper()
+        if "COMPLEX_OFFICIAL_PRICES" in text_ and "SELECT DISTINCT" in text_ and " IN (" in text_:
+            raise RuntimeError("확인 쿼리 실패(시험용)")
+
+    engine = db.get_bind()
+    event.listen(engine, "before_cursor_execute", _fail_year_row_check)
+    try:
+        with patch(
+            "crawler.vworld_price_api.fetch_official_prices",
+            side_effect=[drifted, healthy] + [drifted] * _REPASS_MAX_ATTEMPTS,
+        ), patch("services.telegram.send_telegram") as mock_send:
+            collect_official_prices(stdr_year=_YEAR)
+    finally:
+        event.remove(engine, "before_cursor_execute", _fail_year_row_check)
+
+    assert mock_send.call_count == 1, "확인 쿼리가 실패했는데 알림을 안 보냈다(안전 쪽이 아니다)"
+    assert seeded in mock_send.call_args[0][0]
+    job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
+    assert job.status == "completed", "확인 실패가 본 수집 결과를 되돌렸다"
+    assert seeded in (job.error_message or "")
+    assert "그중 값이 빈 단지" not in (job.error_message or ""), (
+        "확인을 못 했는데 빈 단지 수를 아는 것처럼 기록했다"
+    )
+
+
+def test_repass_remaining_loss_with_only_last_year_row_counts_as_empty(db, seeded, monkeypatch):
+    """작년 행만 있는 단지는 올해 값이 없는 단지다 — 텔레그램에 나열된다.
+
+    확인 쿼리의 연도 조건이 빠지면 작년 행 때문에 "지난번 값이 보인다"로 오판해 알림이 사라진다.
+    """
+    monkeypatch.setenv("OFFICIAL_PRICE_ENABLED", "true")
+    _seed_prior_row(db, seeded)  # C1: 올해 행 있음
+    db.add(Complex(complex_no="C2", complex_name="작년만아파트", cortar_no="1168010600",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.add(Complex(complex_no="C9", complex_name="정상아파트", cortar_no="1168010700",
+                   real_estate_type_code="APT", total_household_count=10))
+    db.commit()
+    _seed_prior_row(db, "C2", stdr_year="2025")  # C2: 작년 행만
+
+    drifted = make_rows_for_complex(aphus_nm="은마", ho_count=8)
+    healthy = make_rows_for_complex(aphus_code="A9", aphus_nm="정상", ho_count=10)
+
+    with patch(
+        "crawler.service_official_price._find_regressed_targets",
+        side_effect=_regressed_with_extra_complex("C2"),
+    ), patch(
+        "crawler.vworld_price_api.fetch_official_prices",
+        side_effect=[drifted, healthy] + [drifted] * (_REPASS_MAX_ATTEMPTS + 2),
+    ), patch("services.telegram.send_telegram") as mock_send:
+        collect_official_prices(stdr_year=_YEAR)
+
+    assert mock_send.call_count == 1, "올해 행이 없는 단지(작년 행만)인데 알림이 안 나갔다"
+    sent = mock_send.call_args[0][0]
+    assert "C2" in sent, f"작년 행만 있는 단지가 알림에 없다: {sent}"
+    assert "C1" not in sent, f"올해 행이 있는 단지까지 빈칸이라고 알렸다: {sent}"
 
 
 def test_repass_runs_before_silent_failure_guard(db, seeded, monkeypatch):
@@ -957,7 +1086,7 @@ def test_repass_cutoff_map_limited_to_inherited_dongs(db, monkeypatch):
         CrawlJob.id.notin_([job_o.id, job_r.id]),
     ).one()
     assert job.status == "completed"
-    assert "잔여 1단지" in (job.error_message or ""), (
+    assert "못 찾은 단지 1곳" in (job.error_message or ""), (
         "본루프 관할 단지가 이어받은 동 판정에도 걸려 중복 계상됐다"
         f" (실제: {job.error_message})"
     )
@@ -1021,7 +1150,7 @@ def test_repass_inherited_dong_restores_claimed_from_db(db, monkeypatch):
         CrawlJob.job_type == "official_price", CrawlJob.id != prev.id
     ).one()
     assert job.status == "completed"
-    assert "잔여 1단지" in (job.error_message or "")
+    assert "못 찾은 단지 1곳" in (job.error_message or "")
     assert "C2" in (job.error_message or "")
 
 
@@ -1229,7 +1358,7 @@ def test_repass_stops_when_wall_clock_cap_exceeded(db, monkeypatch):
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
     assert job.status == "completed", "일부 소실은 전량 실패가 아니라 completed 유지"
     # 캡으로 못 주운 단지는 별도 채널이 아니라 기존 잔여 보고로 자연 합류해야 한다
-    assert "잔여 1단지" in (job.error_message or "")
+    assert "못 찾은 단지 1곳" in (job.error_message or "")
     assert "L2" in (job.error_message or ""), "캡에 막힌 단지가 잔여 목록에 없다"
     assert "L1" not in (job.error_message or ""), "캡 전에 구제된 단지가 잔여로 잡혔다"
 
@@ -1416,7 +1545,7 @@ def test_repass_gives_up_after_attempt_cap(db, monkeypatch):
 
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
     assert job.status == "completed"
-    assert "잔여 2단지" in (job.error_message or ""), f"실제: {job.error_message}"
+    assert "못 찾은 단지 2곳" in (job.error_message or ""), f"실제: {job.error_message}"
     assert "X1" in (job.error_message or "") and "X2" in (job.error_message or "")
 
 
@@ -1532,7 +1661,7 @@ def test_repass_wall_clock_cap_stops_between_attempts(db, monkeypatch):
 
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
     assert job.status == "completed"
-    assert "잔여 1단지" in (job.error_message or "")
+    assert "못 찾은 단지 1곳" in (job.error_message or "")
     assert "W1" in (job.error_message or "")
 
 
@@ -1745,7 +1874,7 @@ def test_repass_secondary_runs_once_after_union_and_yields_to_exact_match(db, mo
 
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
     assert job.status == "completed"
-    assert "잔여 1단지" in (job.error_message or "")
+    assert "못 찾은 단지 1곳" in (job.error_message or "")
     assert "S2" in (job.error_message or "")
 
 
@@ -2315,7 +2444,7 @@ def test_repass_inherits_claimed_from_main_loop(db, monkeypatch):
     # 구제 실패이므로 잔여로 보고돼야 한다 (조용히 오매칭으로 덮이지 않았다는 증거)
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "official_price").one()
     assert job.status == "completed"
-    assert "잔여 1단지" in (job.error_message or "")
+    assert "못 찾은 단지 1곳" in (job.error_message or "")
     assert "C2" in (job.error_message or "")
 
 

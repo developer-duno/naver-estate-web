@@ -14,6 +14,7 @@ from datetime import timedelta
 from dotenv import load_dotenv
 
 from crawler.service_common import fail_job_safely
+from crawler.service_price import is_naver_server_error
 from crawler.utils import get_shared_throttle
 from db.complex_queries import (
     get_complexes_for_article_crawl,
@@ -198,8 +199,43 @@ CRAWL_REAL_ESTATE_TYPES = set(
 
 # ── A. 단지 발견 ──
 
-def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, scheduler_job_id: str | None = None):
-    """지역 키워드로 네이버 검색 → complexes 테이블 upsert"""
+# discover_complexes_by_region 의 반환값 (B23) — 바깥 반복이 "네이버가 막은 지역"과 "그 밖의 실패"를 가른다.
+DISCOVER_OK = "ok"            # completed (1쪽이 정상이면 단지 0건이어도)
+DISCOVER_BLOCKED = "blocked"  # 검색 1쪽이 오류·빈 응답(5xx 제외) → failed
+DISCOVER_FAILED = "failed"    # 1쪽 5xx·그 밖의 예외(DB 등) → failed
+
+# 새 단지 찾기가 검색 1쪽 실패 지역을 이만큼 연속으로 만나면 남은 지역을 부르지 않는다 (B23).
+# error-propagation.md 5번 — 네이버가 막은 날 229개 지역을 계속 두드리면 차단만 길어진다.
+_DISCOVER_ABORT_STREAK = 5
+
+# 검색 1쪽 실패 사유 — ⚠ 머리 "네이버가 막거나 오류를 내서" 는 plain_words._ERROR_RULES 가 원문 그대로 통과시키는
+# 표지다. 영문 글자·`|`·문장 중간 마침표를 넣지 않는다(네이버 오류 원문은 로그에만).
+def _search_blocked_words(remaining: int = 0) -> str:
+    """검색 1쪽 실패 사유. remaining > 0 = 이 지역에서 연속 실패로 회차를 멈춰 남은 지역을 안 부른다(알림에 드러나게)."""
+    head = "네이버가 막거나 오류를 내서 이 지역 단지 검색 첫 쪽을 못 받았어요"
+    if remaining > 0:
+        return f"{head}(남은 지역 {remaining}곳은 이번 회차에서 멈췄어요)."
+    return f"{head}."
+
+
+class _SearchFirstPageBlocked(RuntimeError):
+    """검색 1쪽이 오류·빈 응답 — "단지 0개"가 아니라 실패다(B23)."""
+
+
+class _SearchFirstPageServerError(_SearchFirstPageBlocked):
+    """검색 1쪽이 네이버 5xx — 실패로 남기되 연속 수에는 안 센다(재시도 없이 바로 돌아와 잠깐 흔들려도 연속이 찬다)."""
+
+
+def discover_complexes_by_region(
+    sido: str, sigungu: str, dong: str = None, scheduler_job_id: str | None = None, abort_remaining: int = 0,
+) -> str:
+    """지역 키워드로 네이버 검색 → complexes 테이블 upsert.
+
+    반환: DISCOVER_OK / DISCOVER_BLOCKED / DISCOVER_FAILED. 검색·저장 중 예외는 여기서 흡수해 잡 행에 failed 로 남기므로
+    (맨 앞 잡 행 생성이 실패하면 그 예외는 위로 올라간다) 호출자가 실패 종류를 알 유일한 경로가 반환값이다 —
+    discover_all_regions 가 이 값으로 연속 실패를 센다.
+    abort_remaining: 이 지역이 막혀 연속 실패가 차면 멈춰서 못 부를 남은 지역 수 — 막힘 사유 뒤에 붙인다.
+    """
     keyword = f"{sido} {sigungu}"
     if dong:
         keyword += f" {dong}"
@@ -218,6 +254,14 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, sche
             record_call("search_discover")
             result = NaverEstateAPI.search_by_keyword(keyword, page=page)
             if not result or "error" in result:
+                if page == 1:
+                    # 1쪽 오류는 "단지 0개"가 아니라 네이버 실패다 — 예외로 올려 아래 except 가 failed 로 남긴다
+                    # (crawl_complex_articles 와 같은 모양). 2쪽 이상은 앞쪽을 이미 저장했으니 지금처럼 멈추고 completed.
+                    err_detail = result.get("error") if isinstance(result, dict) else "응답 없음"
+                    logger.warning("단지 발견 검색 1쪽 실패: %s → %s", keyword, err_detail)
+                    if is_naver_server_error(result):
+                        raise _SearchFirstPageServerError(_search_blocked_words())
+                    raise _SearchFirstPageBlocked(_search_blocked_words(abort_remaining))
                 break
 
             complex_list = result.get("complexes") or result.get("complexList") or []
@@ -252,8 +296,11 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, sche
         job.completed_at = utcnow()
         db.commit()
         logger.info("단지 발견 완료: %s → %d건", keyword, total_found)
+        outcome = DISCOVER_OK
 
     except Exception as e:
+        blocked = isinstance(e, _SearchFirstPageBlocked)
+        outcome = DISCOVER_BLOCKED if blocked and not isinstance(e, _SearchFirstPageServerError) else DISCOVER_FAILED
         try:
             db.rollback()
             job.status = "failed"
@@ -263,18 +310,41 @@ def discover_complexes_by_region(sido: str, sigungu: str, dong: str = None, sche
         except Exception:
             # 연결 끊김 등으로 같은 세션 마킹 실패 → 새 세션으로 보장 (세션 266)
             fail_job_safely(job_id, str(e))
-        logger.exception("단지 발견 실패: %s", keyword)
+        if blocked:
+            logger.warning("단지 발견 실패(네이버 검색 1쪽): %s", keyword)
+        else:
+            logger.exception("단지 발견 실패: %s", keyword)
     finally:
         db.close()
+    return outcome
 
 
 def discover_all_regions(scheduler_job_id: str | None = None):
-    """전국 모든 지역 순회하며 단지 발견"""
-    for sido, sigungu_dict in KOREA_REGIONS.items():
-        for sigungu, dong_list in sigungu_dict.items():
-            logger.info("단지 발견 시작: %s %s", sido, sigungu)
-            discover_complexes_by_region(sido, sigungu, scheduler_job_id=scheduler_job_id)
-            _throttle_discover.wait(extra_delay=0.5)  # 지역 간 딜레이
+    """전국 모든 지역 순회하며 단지 발견.
+
+    검색 1쪽 실패(DISCOVER_BLOCKED) 지역이 _DISCOVER_ABORT_STREAK 개 연속이면 남은 지역을 부르지 않는다(B23).
+    성공 지역이 나오면 연속 수 0. 그 밖의 실패(1쪽 5xx·DB 등)는 연속에 넣지도 끊지도 않는다(B21 판단 ①과 같은 결).
+    """
+    regions = [(sido, sigungu) for sido, sigungu_dict in KOREA_REGIONS.items() for sigungu in sigungu_dict]
+    blocked_streak = 0
+    for i, (sido, sigungu) in enumerate(regions):
+        logger.info("단지 발견 시작: %s %s", sido, sigungu)
+        # 이 지역마저 막히면 여기서 멈춘다 — 그 지역 행의 사유에 "남은 지역 N곳" 을 붙여 알림에 드러낸다.
+        remaining = len(regions) - (i + 1) if blocked_streak == _DISCOVER_ABORT_STREAK - 1 else 0
+        outcome = discover_complexes_by_region(
+            sido, sigungu, scheduler_job_id=scheduler_job_id, abort_remaining=remaining,
+        )
+        if outcome == DISCOVER_OK:
+            blocked_streak = 0
+        elif outcome == DISCOVER_BLOCKED:
+            blocked_streak += 1
+        if blocked_streak >= _DISCOVER_ABORT_STREAK:
+            logger.warning(
+                "새 단지 찾기 중단: 네이버 검색 1쪽이 %d개 지역 연속 실패 (%d/%d 번째 지역에서)",
+                blocked_streak, i + 1, len(regions),
+            )
+            break
+        _throttle_discover.wait(extra_delay=0.5)  # 지역 간 딜레이
 
 
 # ── B. 매물 수집 ──

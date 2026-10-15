@@ -40,22 +40,26 @@ _throttle_ondemand = AdaptiveThrottle(min_interval=2.0, max_interval=10.0)
 _RATE_LIMIT_ABORT_STREAK = 5
 
 
-def _rate_limited_words(total: int, rate_limited: int, processed: int, aborted: bool) -> str:
-    """429 로 실패한 회차의 error_message — 쉬운 우리말 한 문장(관리자 화면·텔레그램 알림 공통).
+def _rate_limited_words(
+    total: int, rate_limited: int, processed: int, aborted: bool, mixed: bool = False,
+) -> str:
+    """네이버가 막아 실패한 회차의 error_message — 쉬운 우리말 한 문장(관리자 화면·텔레그램 알림 공통).
 
     중단이면 "받은 단지 수"를, 끝까지 돌았으면 "못 받은 단지 수"를 말한다(중단 때는 멈춘 뒤 안 부른 단지가 있어 못 받은 수가 실제보다 적게 읽힌다).
+    mixed=False — 못 받은 단지가 전부 429 소진(B21 문장 그대로). True — 403·5xx·네트워크 오류가 섞임(B24).
 
-    ⚠ 머리 "네이버가 요청이 너무 많다며 거절해" 는 plain_words._ERROR_RULES 가 원문 그대로 통과시키는
-    표지다 — 바꾸면 알림이 "처음 보는 문제" 로 뭉개진다. 영문 글자·`|`·문장 중간 마침표를 넣지 않는다.
+    ⚠ 머리 "네이버가 요청이 너무 많다며 거절해"·"네이버가 막거나 오류를 내서" 는 plain_words._ERROR_RULES 가
+    원문 그대로 통과시키는 표지다 — 바꾸면 알림이 "처음 보는 문제" 로 뭉개진다. 영문 글자·`|`·문장 중간 마침표를 넣지 않는다.
     """
+    head = "네이버가 막거나 오류를 내서" if mixed else "네이버가 요청이 너무 많다며 거절해"
     if aborted:
         got = f"{processed}개만 받고" if processed else "하나도 못 받고"
         return (
-            f"네이버가 요청이 너무 많다며 거절해 {total}개 단지 중 {got} 멈췄어요"
-            f"(연속 {_RATE_LIMIT_ABORT_STREAK}개 단지 거절)."
+            f"{head} {total}개 단지 중 {got} 멈췄어요"
+            f"(연속 {_RATE_LIMIT_ABORT_STREAK}개 단지 {'실패' if mixed else '거절'})."
         )
     return (
-        f"네이버가 요청이 너무 많다며 거절해 {total}개 단지 중 {rate_limited}개를 못 받았어요"
+        f"{head} {total}개 단지 중 {rate_limited}개를 못 받았어요"
         f"(받은 단지 {processed}개보다 많아요)."
     )
 
@@ -66,6 +70,37 @@ def _is_rate_limit_exhausted(result) -> bool:
     이때만 간격을 늘린다. 다른 error 문구·빈 응답은 간격을 건드리지 않는다.
     """
     return isinstance(result, dict) and result.get("error") == RATE_LIMIT_EXHAUSTED_ERROR
+
+
+# 네이버 클라이언트(shared/naver_api.py `_request_with_retry` — 수정 금지)가 실패 때 돌려주는 error 의 머리 (B24).
+# 404 등 다른 4xx 는 그 자료가 없다는 답이라 어느 쪽에도 넣지 않는다.
+# 막힘 = 401·403 재발급 뒤에도 실패 / 네트워크 예외 재시도 소진 — 429 소진과 함께 "연속 수"에도 센다.
+_BLOCKED_ERROR_PREFIXES = ("API 인증 실패", "데이터 조회 중 오류 발생")
+# 서버 오류(5xx) — 클라이언트가 재시도 없이 바로 돌려줘서 네이버가 20~30초만 흔들려도 연속 5개가 찬다.
+# 그래서 "못 받은 단지 > 받은 단지" 비율 규칙에만 센다(B24 검사관 C).
+_SERVER_ERROR_PREFIX = "API 요청 실패: 상태 코드 5"
+
+
+def _error_text(result) -> str | None:
+    error = result.get("error") if isinstance(result, dict) else None
+    return error if isinstance(error, str) else None
+
+
+def _is_blocked_error(result) -> bool:
+    """네이버가 막아 못 받은 응답인가(B24) — 429 소진 + 401·403 + 네트워크 오류. 주간 배치에서 연속 수에도 센다.
+
+    간격 늘리기(on_rate_limit)는 여전히 429 일 때만 한다.
+    """
+    if _is_rate_limit_exhausted(result):
+        return True
+    error = _error_text(result)
+    return error is not None and error.startswith(_BLOCKED_ERROR_PREFIXES)
+
+
+def is_naver_server_error(result) -> bool:
+    """네이버 서버 오류(5xx) 응답인가(B24) — 비율 규칙에만 센다. 새 단지 찾기(service_discover)도 같은 판정을 쓴다."""
+    error = _error_text(result)
+    return error is not None and error.startswith(_SERVER_ERROR_PREFIX)
 
 
 def collect_price_history_for_complex(
@@ -267,14 +302,19 @@ def collect_price_history(
 
         processed = 0
         newly_done: set[str] = set()
-        # B21 — 두 호출 모두 성공 못 했고 그중 하나라도 429 소진인 단지 수(전체·연속).
-        # 다른 error(자료 없음 등)·예외는 세지 않는다. 연속 수는 성공 단지가 나올 때만 0 으로.
+        # B21·B24 — 두 호출 모두 성공 못 했고 그중 하나라도 막힘·서버 오류(429 소진·401/403·5xx·네트워크)인
+        # 단지 수(전체). 연속 수는 막힘(429·401/403·네트워크)만 — 5xx 로만 못 받은 단지는 비율에만 세고
+        # 연속 수를 올리지도 0 으로 되돌리지도 않는다. 다른 error(자료 없음 등)·예외는 세지 않는다.
+        # 연속 수는 성공 단지가 나올 때만 0 으로.
         rate_limited = 0
         rate_limited_streak = 0
         aborted = False
+        mixed = False  # 못 받은 단지 중 429 아닌 막힘·오류가 하나라도 있었나 — 실패 문장을 가른다(B24)
         for i, (complex_no,) in enumerate(complexes):
             complex_had_success = False
             complex_rate_limited = False
+            complex_other_blocked = False
+            complex_server_error = False
             for trade_type in ("A1", "B1"):  # 매매, 전세
                 # 세션 359: 사장님 지시 — 매 요청 간격이 규칙적이면(항상 정확히
                 # min_interval) 자동화 패턴으로 더 쉽게 식별될 수 있다는 지적.
@@ -294,6 +334,10 @@ def collect_price_history(
                     if _is_rate_limit_exhausted(result):
                         _throttle.on_rate_limit()
                         complex_rate_limited = True
+                    elif _is_blocked_error(result):
+                        complex_other_blocked = True
+                    elif is_naver_server_error(result):
+                        complex_server_error = True
                     continue
 
                 _throttle.on_success()
@@ -320,9 +364,13 @@ def collect_price_history(
                 processed += 1
                 newly_done.add(complex_no)
                 rate_limited_streak = 0
-            elif complex_rate_limited:
+            elif complex_rate_limited or complex_other_blocked:
                 rate_limited += 1
                 rate_limited_streak += 1
+                mixed = mixed or complex_other_blocked or complex_server_error
+            elif complex_server_error:
+                rate_limited += 1
+                mixed = True
 
             # 체크포인트 — 완료된 단지 번호 집합을 저장 (재개 시 이 집합을 쿼리에서 제외)
             if _checkpoint.should_save(i + 1):
@@ -336,7 +384,7 @@ def collect_price_history(
             if rate_limited_streak >= _RATE_LIMIT_ABORT_STREAK:
                 aborted = True
                 logger.warning(
-                    "시세 수집 중단: 네이버 429 로 %d개 단지 연속 실패 (%d/%d 단지에서)",
+                    "시세 수집 중단: 네이버 거절·오류로 %d개 단지 연속 실패 (%d/%d 단지에서)",
                     rate_limited_streak, i + 1, len(complexes),
                 )
                 break
@@ -356,12 +404,12 @@ def collect_price_history(
                 db.rollback()
                 logger.warning("시세 수집 체크포인트 저장 실패: %s", e)
             job.status = "failed"
-            job.error_message = _rate_limited_words(len(complexes), rate_limited, processed, aborted)
+            job.error_message = _rate_limited_words(len(complexes), rate_limited, processed, aborted, mixed)
             job.completed_at = utcnow()
             job.total_items = len(complexes)
             job.processed_items = processed
             db.commit()
-            logger.warning("시세 수집 실패(429): %s", job.error_message)
+            logger.warning("시세 수집 실패(네이버 거절·오류): %s", job.error_message)
             return
 
         job.status = "completed"

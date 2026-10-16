@@ -385,6 +385,128 @@ def match_complex_group(
     return passed[0]
 
 
+def match_complex_group_by_code(
+    stored_code: str | None,
+    household_count: int | None,
+    grouped_by_name: dict[str, list[tuple[str, dict]]],
+    claimed: set[str],
+) -> tuple[str, dict] | None:
+    """이름이 바뀐 단지를 **지난 수집에서 저장한 정부 단지 번호**(aphusCode)로 잇는다 (세션 468).
+
+    우리 단지명은 네이버 단지 갱신 때마다 덮어써진다(services/upsert.py upsert_complex).
+    그래서 한때 이름으로 짝지어 저장한 단지가 개명 뒤에는 1차·2차 어느 이름 규칙에도 안 걸려
+    매달 '미매칭 잔여'가 되고, 새 해 공시가격도 못 받는다(10-15 실측: 더레이크원 ↔ 율정마을13단지 등 4곳).
+
+    조건 — 넷 다:
+      · 저장 번호가 있다 (신규 단지는 None → 지금과 같음)
+      · 그 번호의 그룹이 **이번 조회 단위(법정동·리)의 색인**에 있다 — 호출부가 그 단위의
+        grouped_by_name 만 넘기므로 다른 동에 있는 같은 번호는 보이지 않는다
+      · 아직 다른 단지가 가져가지 않았다(claimed) — 이름 1차·2차가 가져간 그룹을 빼앗지 않는다
+      · 세대수 ±5% 게이트 통과 — 게이트는 이름 매칭과 똑같이 건다
+    """
+    if not stored_code or stored_code in claimed:
+        return None
+    for candidates in grouped_by_name.values():
+        for code, group in candidates:
+            if code != stored_code:
+                continue
+            if _household_gate_ok(len(group["ho_keys"]), household_count):
+                return code, group
+            return None
+    return None
+
+
+def _load_stored_aphus_codes(db) -> dict[str, str]:
+    """단지별 지난 수집에서 저장한 정부 단지 번호 — {complex_no: aphusCode}.
+
+    가장 최근 기준연도의 행만 본다. 그 해에 번호가 둘 이상이면(모호) 넣지 않는다 —
+    "틀린 값 < 값 없음" 원칙. 전체 단지를 IN 절에 넣지 않는 관례(_find_regressed_targets)대로
+    통째로 뽑는다.
+    """
+    latest: dict[str, tuple[str, set[str]]] = {}
+    for complex_no, stdr_year, aphus_code in (
+        db.query(
+            ComplexOfficialPrice.complex_no,
+            ComplexOfficialPrice.stdr_year,
+            ComplexOfficialPrice.aphus_code,
+        )
+        .filter(ComplexOfficialPrice.aphus_code.isnot(None))
+        .distinct()
+        .all()
+    ):
+        code = (aphus_code or "").strip()
+        if not code:
+            continue
+        prev = latest.get(complex_no)
+        if prev is None or stdr_year > prev[0]:
+            latest[complex_no] = (stdr_year, {code})
+        elif stdr_year == prev[0]:
+            prev[1].add(code)
+    return {c: next(iter(codes)) for c, (_, codes) in latest.items() if len(codes) == 1}
+
+
+def _link_by_stored_codes(db, targets: list, year: str, grouped_by_name: dict,
+                          claimed: set[str], stored_codes: dict[str, str]):
+    """이름 1차·2차를 모두 못 붙은 대상을 저장 번호로 잇고 저장한다 — 본루프·재수집·리 확장 공통.
+
+    **마지막 수단**이다 — 이름 1차·2차 **뒤**에 부른다. 번호를 2차보다 앞에 두면 지난달 2차로
+    붙은 단지(10-15 회차 4,471곳)가 이번엔 번호로 먼저 이어져 2차의 안전장치(후보 유일성·형제
+    단지 배제)를 건너뛰고, 2차 규칙을 고쳐도 옛 오매칭이 해마다 고정된다(세션 468 맹점 검사).
+    이름 단계가 가져간 그룹은 claimed 에 있어 못 빼앗는다. 같은 조회 단위에서 두 단지가
+    같은 저장 번호를 쥐고 있으면 어느 쪽도 고르지 않는다(임의 선택 금지).
+
+    양보 규칙 — 넘겨받은 대상 중에 그 그룹과 **정규화 이름이 정확히 같은** 다른 단지가 있으면
+    잇지 않는다(그 단지가 이름 주인일 수 있다 — 이번엔 세대수 게이트만 놓쳤을 뿐).
+    "틀린 값 < 값 없음". 이 규칙 덕에 재수집 이름 1차 가드(code_linked_by_dong)는 같은 조회
+    단위 목록 밖의 경우만 남는 방어선이다.
+
+    이은 단지마다 INFO 한 줄을 남긴다 — 회차가 끝나면 어느 단지가 번호로 이어졌는지 로그로 본다.
+
+    Returns: (이은 단지 번호들, 저장 행 수, 번호도 안 맞은 대상, 번호는 맞았는데 저장 행 0인 대상)
+    """
+    held_by: dict[str, int] = {}
+    name_keys: dict[str, int] = {}
+    for target in targets:
+        code = stored_codes.get(target.complex_no)
+        if code:
+            held_by[code] = held_by.get(code, 0) + 1
+        key = normalize_complex_name(target.complex_name)
+        name_keys[key] = name_keys.get(key, 0) + 1
+
+    linked: list[str] = []
+    leftover: list = []
+    unsaved: list = []
+    saved = 0
+    for target in targets:
+        code = stored_codes.get(target.complex_no)
+        if code and held_by[code] > 1:
+            code = None
+        hit = match_complex_group_by_code(
+            code, target.total_household_count, grouped_by_name, claimed
+        )
+        if hit is None:
+            leftover.append(target)
+            continue
+        aphus_code, group = hit
+        group_key = normalize_complex_name(group["name"])
+        own = 1 if normalize_complex_name(target.complex_name) == group_key else 0
+        if group_key and name_keys.get(group_key, 0) - own > 0:
+            leftover.append(target)  # 양보 — 이름이 정확히 같은 다른 미매칭 단지가 있다
+            continue
+        n_saved = _save_matched_areas(db, target.complex_no, year, aphus_code, group)
+        if not n_saved:
+            unsaved.append(target)
+            continue
+        saved += n_saved
+        claimed.add(aphus_code)
+        linked.append(target.complex_no)
+        logger.info(
+            "[official_price] 저장 번호로 이음: %s %s ↔ %s (번호 %s)",
+            target.complex_no, target.complex_name, group["name"], aphus_code,
+        )
+    return linked, saved, leftover, unsaved
+
+
 def aggregate_area_medians(rows: list[dict]) -> list[tuple[Decimal, int, int]]:
     """공시 행들을 전용면적별 중위 공시가격으로 집계.
 
@@ -901,6 +1023,18 @@ def collect_official_prices(
             .all()
         )
 
+        # 지난 수집에서 저장한 정부 단지 번호 — 이름이 바뀐 단지를 잇는 데 쓴다(세션 468).
+        # 조회가 실패해도 회차는 살린다 — 번호 잇기만 빼고 이름 매칭으로 진행(이 기능 이전 동작).
+        try:
+            stored_codes = _load_stored_aphus_codes(db)
+        except Exception:
+            logger.warning(
+                "[official_price] 저장 번호 조회 실패 — 이번 회차는 번호 잇기 없이 이름으로만 짝짓기",
+                exc_info=True,
+            )
+            db.rollback()
+            stored_codes = {}
+
         # 법정동별로 우리 단지를 묶는다 — API 호출 단위가 법정동이므로.
         by_ld_code: dict[str, list] = {}
         for row in targets:
@@ -918,6 +1052,8 @@ def collect_official_prices(
         # 2차(이름) 매칭으로 건진 단지 수 — 3개 패스 공통 누계. 9/15 정기 실행에서
         # PR-E3 의 실효를 완료 로그로 측정하기 위한 관찰 지표다.
         name_matched = 0
+        # 저장 번호(aphusCode)로 이은 단지 수 — 이름이 바뀐 단지가 몇 곳 이어졌나 보는 지표.
+        code_matched = 0
         failed_ld_codes = 0
         failed_ld_codes_list: list[str] = []
         # 이번 실행에서 실제로 매칭된 단지 — 재수집 패스의 '소실' 판정 기준.
@@ -930,6 +1066,9 @@ def collect_official_prices(
         # 다른 단지가 가져간 그룹을 재수집의 2차가 다시 집어 **이중 배정**(한쪽은 필연
         # 오매칭, 월 1회 잡이라 매달 고착)되는 것을 막는다(적대검증 MEDIUM-1).
         claimed_by_dong: dict[str, set[str]] = {}
+        # 그중 **저장 번호로 이은** 그룹 — 재수집의 이름 1차는 claimed 를 안 보므로, 이 그룹은
+        # 따로 넘겨 1차가 다시 집지 못하게 한다(세션 468 검사관 재현: 한 그룹이 두 단지에 저장).
+        code_linked_by_dong: dict[str, set[str]] = {}
 
         for idx, ld_code in enumerate(remaining):
             # 전 페이지 수집 완료 후에만 매칭 — 부분 수집 시 세대수 게이트가 통째로
@@ -983,11 +1122,13 @@ def collect_official_prices(
                 matched_complex_nos.add(target.complex_no)
                 claimed.add(aphus_code)
 
+            name_unmatched: list = []
             for target in unmatched:
                 hit = match_complex_group_secondary(
                     target.complex_name, target.total_household_count, grouped_by_name, claimed
                 )
                 if hit is None:
+                    name_unmatched.append(target)
                     continue
                 aphus_code, group = hit
 
@@ -1000,7 +1141,19 @@ def collect_official_prices(
                 claimed.add(aphus_code)
                 name_matched += 1
 
-            # 1차·2차 저장 성공분 모두 인계 대상 (재수집 패스가 이어받는다)
+            # 이름 1차·2차 둘 다 못 붙은 단지만 저장 번호로 잇는다 — 마지막 수단(세션 468).
+            before_link = set(claimed)
+            linked, n_saved, _, _ = _link_by_stored_codes(
+                db, name_unmatched, year, grouped_by_name, claimed, stored_codes
+            )
+            saved_rows += n_saved
+            matched_complexes += len(linked)
+            matched_complex_nos.update(linked)
+            code_matched += len(linked)
+            if claimed - before_link:
+                code_linked_by_dong[ld_code] = claimed - before_link
+
+            # 1차·2차·번호 저장 성공분 모두 인계 대상 (재수집 패스가 이어받는다)
             if claimed:
                 claimed_by_dong[ld_code] = claimed
 
@@ -1146,6 +1299,9 @@ def collect_official_prices(
                     # 빈 set 으로 시작하면 재수집의 2차가 그 그룹을 다시 집어 이중
                     # 배정이 된다(적대검증 MEDIUM-1). 복사본을 쓴다(원본 불변).
                     repass_claimed: set[str] = set(claimed_by_dong.get(ld_code, ()))
+                    # 본루프가 저장 번호로 이은 그룹 — 아래 이름 1차는 claimed 를 안 보므로 따로
+                    # 막는다(재수집 자신의 번호 잇기는 회차가 다 끝난 뒤라 다음 1차가 없다).
+                    repass_code_linked: set[str] = set(code_linked_by_dong.get(ld_code, ()))
                     acc_rows: list[dict] = []          # 이 동에서 성공한 조회의 행 누적 = 키 합집합
                     acc_seen: set = set()              # 누적 중복 제거용(_row_identity)
                     grouped_by_name: dict = {}         # acc_rows 를 색인한 최신 결과
@@ -1200,6 +1356,11 @@ def collect_official_prices(
                                 still_pending.append(target)
                                 continue
                             aphus_code, group = hit
+                            if aphus_code in repass_code_linked:
+                                # 그 그룹은 이미 저장 번호로 다른 단지에 저장됐다 — 1차라도
+                                # 다시 집으면 한 그룹이 두 단지에 저장된다(이중 배정 금지).
+                                still_pending.append(target)
+                                continue
 
                             n_saved = _save_matched_areas(
                                 db, target.complex_no, year, aphus_code, group
@@ -1255,6 +1416,7 @@ def collect_official_prices(
                     # 2차(부분일치)는 동당 **한 번**, 최종 합집합 색인 위에서만 돌린다.
                     # 회차마다 돌리면 부분 표본에서 붙은 느슨한 부분일치가 그룹을 선점해,
                     # 합집합이 완성된 뒤라면 완전일치로 갔을 그룹을 가로챈다 — 1차 우선.
+                    repass_name_unmatched: list = []
                     for target in pending:
                         if target.complex_no in exact_hit_unsaved:
                             # 1차가 붙었던 대상은 2차로 떨어뜨리지 않는다(종전 동작 보존).
@@ -1268,6 +1430,7 @@ def collect_official_prices(
                             grouped_by_name, repass_claimed,
                         )
                         if hit is None:
+                            repass_name_unmatched.append(target)
                             continue
                         aphus_code, group = hit
 
@@ -1284,6 +1447,19 @@ def collect_official_prices(
                         # 의미("재수집이 되찾은 단지 수") 유지.
                         rescued += 1
                         name_matched += 1
+
+                    # 저장 번호는 마지막 수단 — 최종 합집합 위에서 이름 1차·2차 둘 다 못 붙은
+                    # 단지만(본루프와 같은 순서). 1차가 붙었던 대상(exact_hit_unsaved)은 위에서
+                    # 이미 빠졌다.
+                    linked, n_saved, _, _ = _link_by_stored_codes(
+                        db, repass_name_unmatched, year, grouped_by_name,
+                        repass_claimed, stored_codes,
+                    )
+                    saved_rows += n_saved
+                    matched_complexes += len(linked)
+                    matched_complex_nos.update(linked)
+                    rescued += len(linked)
+                    code_matched += len(linked)
 
                     _log_unrescued_targets(
                         ld_code,
@@ -1457,12 +1633,14 @@ def collect_official_prices(
                             ri_claimed.add(aphus_code)
                             expanded += 1
 
+                        ri_name_unmatched: list = []
                         for target in ri_unmatched:
                             hit = match_complex_group_secondary(
                                 target.complex_name, target.total_household_count,
                                 grouped_by_name, ri_claimed,
                             )
                             if hit is None:
+                                ri_name_unmatched.append(target)
                                 continue
                             aphus_code, group = hit
                             n_saved = _save_matched_areas(
@@ -1478,6 +1656,18 @@ def collect_official_prices(
                             # 의미("확장 패스 신규 매칭 수") 유지.
                             expanded += 1
                             name_matched += 1
+
+                        # 본루프와 같은 순서 — 이름 1차 → 이름 2차 → 저장 번호(마지막 수단).
+                        # 조회 단위가 리라서 번호도 그 리의 색인 안에서만 찾는다.
+                        linked, n_saved, _, _ = _link_by_stored_codes(
+                            db, ri_name_unmatched, year, grouped_by_name, ri_claimed,
+                            stored_codes,
+                        )
+                        saved_rows += n_saved
+                        matched_complexes += len(linked)
+                        matched_complex_nos.update(linked)
+                        expanded += len(linked)
+                        code_matched += len(linked)
                 db.commit()
                 logger.info(
                     "[official_price] 읍/면 리 확장 완료: 단지 %d개 신규 매칭"
@@ -1517,13 +1707,13 @@ def collect_official_prices(
 
         _complete_job(db, job, matched_complexes, failed_ld_codes)
         # ⚠ rescued 와 name_matched 는 **서로소가 아니다** — 재수집 패스에서 2차(이름)로
-        # 건진 단지는 양쪽에 +1 된다(리 확장의 expanded 도 마찬가지). 세 수치를
+        # 건진 단지는 양쪽에 +1 된다(리 확장의 expanded·저장 번호의 code_matched 도 마찬가지). 수치들을
         # matched_complexes 의 disjoint 분해로 읽으면 안 되고, 각각 "그 경로가 건진 수"로
         # 읽어야 한다.
         logger.info(
-            "[official_price] 완료: 단지 %d개 매칭(재수집 구제 %d개, 이름 2차 매칭 %d개),"
-            " 공시행 %d건 저장, 법정동 실패 %d개 %s, 재수집 조회실패 %d개",
-            matched_complexes, rescued, name_matched, saved_rows, failed_ld_codes,
+            "[official_price] 완료: 단지 %d개 매칭(재수집 구제 %d개, 이름 2차 매칭 %d개,"
+            " 저장 번호로 이음 %d개), 공시행 %d건 저장, 법정동 실패 %d개 %s, 재수집 조회실패 %d개",
+            matched_complexes, rescued, name_matched, code_matched, saved_rows, failed_ld_codes,
             failed_ld_codes_list[:20], repass_fetch_failed,
         )
     except Exception as exc:

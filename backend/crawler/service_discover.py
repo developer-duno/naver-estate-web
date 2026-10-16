@@ -195,6 +195,11 @@ def _finalize_job(db, job: CrawlJob, target_status: str, **extra_fields) -> bool
     return True
 
 
+# 못 받은 대상이 이 수 이하면 비율 규칙(못 받은 > 받은)을 적용하지 않는다 — completed + 사유 (B26).
+# 연속 _RATE_LIMIT_ABORT_STREAK 개로 멈춘 회차는 이 문턱과 무관하게 failed.
+_SMALL_FAILURE_MAX = 2
+
+
 class _NaverBlockTally:
     """한 회차에서 네이버가 막거나 오류를 내서 못 받은 대상 집계 (B25 — #732 주간 시세 배치와 같은 규칙).
 
@@ -202,7 +207,10 @@ class _NaverBlockTally:
     - 막힘(429 소진·401/403·네트워크) = 못 받은 수 + 연속 수. 연속 _RATE_LIMIT_ABORT_STREAK 개면 회차를 멈춘다.
     - 서버 오류(5xx) = 못 받은 수에만(재시도 없이 바로 돌아와 잠깐 흔들려도 연속이 찬다). 연속 수는 그대로.
     - 404·매물 단위 오류 dict·빈 응답·예외 = 세지 않는다. 연속 수는 성공이 나올 때만 0.
-    - 회차 판정: 멈췄거나 못 받은 수 > 받은 수 → failed.
+    - 회차 판정: 멈췄거나, 못 받은 수가 _SMALL_FAILURE_MAX 를 넘으면서 받은 수보다 많으면 failed (B26).
+      못 받은 것이 1~2개뿐이면 completed + partial_words 사유 — 대상이 적은 회차가 한두 개 막힘만으로
+      실패로 보이지 않게 한다(사장님 결정 2026-10-17 "1~2곳 실패는 '완료+사유'").
+    - "받은 수" = 네이버가 정상으로 답한 수(저장 성공 + 지워진 매물 + 매물 단위 오류 등 — 호출부가 더해 넘긴다).
     간격 늘리기(429 일 때만)는 각 호출부 규칙 그대로 두고 여기서는 건드리지 않는다.
     """
 
@@ -228,8 +236,10 @@ class _NaverBlockTally:
             self.aborted = True
         return self.aborted
 
-    def is_failed(self, processed: int) -> bool:
-        return self.aborted or self.unreceived > processed
+    def is_failed(self, received: int) -> bool:
+        if self.aborted:
+            return True
+        return self.unreceived > _SMALL_FAILURE_MAX and self.unreceived > received
 
     def failed_words(self, total: int, processed: int, unit: str) -> str:
         """failed 회차 사유 — 주간 시세 배치 문장 그대로(단위만 다름)."""
@@ -404,6 +414,10 @@ def discover_all_regions(scheduler_job_id: str | None = None):
 
 
 # ── B. 매물 수집 ──
+
+# 매물 수집 배치(crawl_articles_batch, 01·13시) 회차 부모 행의 job_type (B26).
+# 자식은 단지마다 complex_articles — 관리자 신선도 합산(routers/admin/freshness.py _last_job)은 이 부모를 뺀다.
+ARTICLES_BATCH_JOB_TYPE = "articles_batch"
 
 def crawl_complex_articles(
     complex_no: str, sido: str = None, sigungu: str = None, scheduler_job_id: str | None = None,
@@ -628,7 +642,8 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
         elif failed == 0:
             target_status = "completed"
             err_msg = None
-        elif processed == 0:
+        elif processed == 0 and failed > tally.unreceived:
+            # 네이버 막힘 1~2개뿐인 회차는 아래 completed(B26) — 그 밖의 실패(저장 오류 등)가 섞여 전부 실패면 failed
             target_status = "failed"
             err_msg = f"전체 {total}개 단지 실패: {', '.join(failed_nos[:20])}"
         else:
@@ -659,7 +674,9 @@ def crawl_popular_complexes(batch_size: int = 100, scheduler_job_id: str | None 
         db.close()
 
 
-def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = None):
+def crawl_articles_batch(
+    batch_size: int = 50, scheduler_job_id: str | None = None, *, record_round: bool = True,
+):
     """활성매물 0건 단지를 먼저, 그 다음 last_crawled_at 오래된 순으로 매물 수집.
 
     live 경로(_background_crawl)와 단지별 소유권을 공유 — 이미 live 쪽이
@@ -669,33 +686,120 @@ def crawl_articles_batch(batch_size: int = 50, scheduler_job_id: str | None = No
 
     선정 기준은 get_complexes_for_article_crawl 참조 — last_crawled_at
     허수(2026-04-13 일괄 UPDATE)로 매물 0건 단지가 후순위로 밀린 문제 보완.
+
+    회차 행(B26): job_type ARTICLES_BATCH_JOB_TYPE 부모 행 1개를 남기고, 자식(단지별 complex_articles)
+    결과를 인기 단지 회차와 같은 규칙(_NaverBlockTally)으로 판정한다. 건너뛴 단지(캐시·이미 크롤 중)는
+    받은/못 받은 어디에도 세지 않는다. 예외는 부모를 failed 로 적은 뒤 다시 던진다(옛 동작 — 관리자
+    일괄 재크롤 wrapper·잡 에러 리스너가 그 예외를 본다).
+    record_round=False(관리자 일괄 재크롤 — 자기 부모 행 bulk_recrawl 이 따로 있다)면 부모 행·판정·연속 5개 중단 없이
+    옛 동작 그대로 돈다.
     """
     from routers.live._shared import _cache, release_complex, try_acquire_complex
 
     db = SessionLocal()
+    job = job_id = None
+    if record_round:
+        job = CrawlJob(
+            job_type=ARTICLES_BATCH_JOB_TYPE, scheduler_job_id=scheduler_job_id,
+            status="running", started_at=utcnow(),
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
     try:
         complexes = get_complexes_for_article_crawl(db, batch_size)
-        logger.info("매물 수집 배치 시작: %d개 단지", len(complexes))
+        total = len(complexes)
+        logger.info("매물 수집 배치 시작: %d개 단지", total)
+        processed = 0
+        failed = 0
+        skipped = 0
+        failed_nos: list[str] = []
+        streak_aborted = False
+        tally = _NaverBlockTally()  # 네이버가 막아 못 받은 단지 (B26 — 인기 단지 회차와 같은 규칙)
         reset_empty_streak()  # 회차 시작 전 리셋 — 이전 회차 카운터가 누적되지 않게 한다
         reset_round_canary()
-        for cpx in complexes:
+        for i, cpx in enumerate(complexes):
             done_key = f"crawl_done:{cpx.complex_no}"
             if _cache.get(done_key) is not None:
                 logger.info("배치 skip: %s 동적 TTL 캐시 히트", cpx.complex_no)
+                skipped += 1
                 continue
             if not try_acquire_complex(cpx.complex_no):
                 logger.info("배치 skip: %s 이미 크롤 진행 중", cpx.complex_no)
+                skipped += 1
                 continue
+            responses: list = []
             try:
-                crawl_complex_articles(
-                    cpx.complex_no, cpx.sido, cpx.sigungu, scheduler_job_id=scheduler_job_id
+                ok = crawl_complex_articles(
+                    cpx.complex_no, cpx.sido, cpx.sigungu, scheduler_job_id=scheduler_job_id,
+                    failed_responses=responses,
                 )
                 _cache.set(done_key, True)
             finally:
                 release_complex(cpx.complex_no)
+            if ok:
+                processed += 1
+                tally.on_success()
+            else:
+                failed += 1
+                failed_nos.append(str(cpx.complex_no))
+                tally.on_failure(responses[0] if responses else None)
+            if record_round and tally.aborted:
+                logger.warning(
+                    "매물 수집 배치 중단: 네이버 거절·오류로 %d개 단지 연속 실패 (%d/%d 단지에서)",
+                    tally.streak, i + 1, total,
+                )
+                break
             if get_empty_streak() >= 5 and _confirm_soft_block("배치 회차 중단"):
+                streak_aborted = True
                 break
             _throttle_articles.wait()
+
+        if not record_round:
+            logger.info(
+                "매물 수집 배치 완료(회차 행 없음): 성공 %d / 실패 %d / 건너뜀 %d / 전체 %d",
+                processed, failed, skipped, total,
+            )
+            return
+        # 판정·사유는 인기 단지 회차(crawl_popular_complexes)와 같다.
+        if tally.is_failed(processed):
+            target_status = "failed"
+            err_msg = tally.failed_words(total, processed, "단지")
+            if streak_aborted:
+                err_msg = f"{err_msg[:-1]}, 그리고 빈 응답이 5번 이어져 회차를 멈췄어요."
+        elif failed == 0:
+            target_status = "completed"
+            err_msg = None
+        elif processed == 0 and failed > tally.unreceived:
+            # 네이버 막힘 1~2개뿐인 회차는 아래 completed(B26) — 그 밖의 실패(저장 오류 등)가 섞여 전부 실패면 failed
+            target_status = "failed"
+            err_msg = f"전체 {failed}개 단지 실패: {', '.join(failed_nos[:20])}"
+        else:
+            target_status = "completed"
+            err_msg = f"{failed}/{total}개 단지 실패: {', '.join(failed_nos[:20])}"
+        if streak_aborted and not tally.is_failed(processed):
+            abort_note = "연속 빈응답 5회로 회차 중단"
+            err_msg = f"{err_msg} | {abort_note}" if err_msg else abort_note
+        _finalize_job(
+            db, job, target_status,
+            total_items=total,
+            processed_items=processed,
+            completed_at=utcnow(),
+            error_message=err_msg,
+        )
+        db.commit()
+        logger.info(
+            "매물 수집 배치 완료: 성공 %d / 실패 %d / 건너뜀 %d / 전체 %d", processed, failed, skipped, total,
+        )
+    except Exception as e:
+        if job is not None:
+            try:
+                db.rollback()
+                _finalize_job(db, job, "failed", error_message=str(e)[:500], completed_at=utcnow())
+                db.commit()
+            except Exception:
+                fail_job_safely(job_id, str(e))  # 연결 끊김 대비 새 세션 보장 (세션 266)
+        raise
     finally:
         db.close()
 
@@ -971,6 +1075,7 @@ def _process_detail_batch(db, arts: list[tuple], record_call_label: str) -> dict
                 processed += 1
                 save_guard.on_success()
                 tally.on_success()
+                _throttle_details.on_success()
         elif _is_dead_detail(detail_data):
             db.query(Article).filter(Article.article_no == article_no).update(
                 {"detail_crawled": True, "is_active": False},
@@ -987,8 +1092,10 @@ def _process_detail_batch(db, arts: list[tuple], record_call_label: str) -> dict
         else:
             skipped_transient += 1
             tally.on_failure(detail_data)
+            if _is_rate_limit_exhausted(detail_data):
+                _throttle_details.on_rate_limit()  # 429 소진만 간격을 늘린다(B26 — 단지 정보 B20 과 같은 꼴)
 
-        # 순회마다 commit — 네이버 호출 간격(_throttle_details)은 손대지 않는다
+        # 순회마다 commit — 호출 간격의 최소값·순서는 손대지 않는다(429 소진·성공 알림만, B26)
         # (infra.md §IP차단, crawl_article_details 원본과 동일 기전 — 세션 396 참조).
         db.commit()
         if tally.aborted:
@@ -1034,14 +1141,18 @@ def _process_detail_batch(db, arts: list[tuple], record_call_label: str) -> dict
     }
 
 
-def _detail_round_outcome(tally: _NaverBlockTally, total: int, processed: int, save_note: dict) -> tuple[str, dict]:
+def _detail_round_outcome(
+    tally: _NaverBlockTally, total: int, processed: int, received: int, save_note: dict,
+) -> tuple[str, dict]:
     """매물 상세 회차(crawl_article_details·backfill_article_details)의 (상태, 사유 필드) (B25).
 
-    네이버가 막아 멈췄거나 못 받은 매물이 받은 매물보다 많으면 failed, 아니면 completed.
+    네이버가 막아 멈췄거나 못 받은 매물이 받은 매물보다 많으면 failed, 아니면 completed (못 받은 1~2개는 completed — B26).
+    received = 네이버가 정상으로 답한 매물(저장 성공 + 지워진 매물 + 매물 단위 오류, B26) — 판정에만 쓰고,
+    사유 문장의 "받은 매물" 숫자는 지금처럼 저장 성공 수(processed)다.
     사유 = 못 받은 매물 문장 + 저장 실패 문장(있는 것만). 둘 다면 `|`·문장 중간 마침표 없이 한 문장으로 잇는다 —
     plain_words 통과 표지 유지 + 해소 알림이 꼬리 마침표만 떼고 잇는 규칙(plain_words UNKNOWN_ERROR_WORDS 주석)과 맞춘다.
     """
-    if tally.is_failed(processed):
+    if tally.is_failed(received):
         status, head = "failed", tally.failed_words(total, processed, "매물")
     else:
         status, head = "completed", tally.partial_words(total, "매물")
@@ -1181,6 +1292,7 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
                     processed += 1
                     save_guard.on_success()
                     tally.on_success()
+                    _throttle_details.on_success()
             elif _is_dead_detail(detail_data):
                 # 진짜 dead (NotExistInformation) → 네이버에서 이미 지운 매물.
                 # detail_crawled=TRUE + is_active=FALSE로 마크해 같은 매물이 다음
@@ -1209,6 +1321,8 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
                 # 재시도에 맡긴다.
                 skipped_transient += 1
                 tally.on_failure(detail_data)
+                if _is_rate_limit_exhausted(detail_data):
+                    _throttle_details.on_rate_limit()  # 429 소진만 간격을 늘린다(B26 — 단지 정보 B20 과 같은 꼴)
 
             # 순회마다 commit — throttle 대기 **전에** 행 잠금을 놓는다.
             # (옛 "CV-49: 배치 commit(50건 단위)" 를 세션 396 에 되돌린 이유)
@@ -1221,7 +1335,7 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
             # 순회마다 commit 하면 잠금 보유가 1순회(대기 전)로 줄어든다.
             # 루프 안에 ORM 인스턴스 재접근이 없어(위 선추출, 세션 342) expire 폭풍 없음.
             # 쓰기가 없는 순회의 commit 은 no-op 수준이라 분기 없이 매 순회 호출한다.
-            # 네이버 호출 간격(_throttle_details)은 손대지 않는다 — infra.md §IP차단.
+            # 네이버 호출 간격(_throttle_details)의 최소값은 손대지 않는다 — infra.md §IP차단(429 소진·성공 알림만, B26).
             db.commit()
 
             if tally.aborted:
@@ -1272,7 +1386,9 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         elif article_error_hits:
             _apply_article_error_counts(db, article_error_hits)
 
-        target_status, note = _detail_round_outcome(tally, len(arts), processed, save_guard.job_note())
+        target_status, note = _detail_round_outcome(
+            tally, len(arts), processed, processed + skipped_dead + skipped_article_error, save_guard.job_note(),
+        )
         _finalize_job(
             db, job, target_status,
             processed_items=processed,
@@ -1380,7 +1496,9 @@ def backfill_article_details(batch_size: int = 300, scheduler_job_id: str | None
         result = _process_detail_batch(db, arts, "article_detail_backfill")
 
         target_status, note = _detail_round_outcome(
-            result["tally"], len(arts), result["processed"], result["job_note"],
+            result["tally"], len(arts), result["processed"],
+            result["processed"] + result["skipped_dead"] + result["skipped_article_error"],
+            result["job_note"],
         )
         _finalize_job(
             db, job, target_status,

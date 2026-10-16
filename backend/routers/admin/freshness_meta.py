@@ -127,7 +127,7 @@ FRESHNESS_ITEMS: list[dict] = [
         # 정상 종료돼 monitor.py 의 "작업 실패"·"작업 마비" 축 어디도 안 걸린다.
         # articles 카드(key="articles")는 scheduler_job_id="crawl_articles"(별개 잡,
         # 매물 목록 수집)에 매여 있어 이 잡을 대신 커버하지 못한다 — 전용 카드 신설.
-        # B25(세션 466): 네이버가 막아 못 받은 회차는 이제 failed 로 끝나 "작업 실패" 축이 잡는다 —
+        # B25(세션 467): 네이버가 막아 못 받은 회차는 이제 failed 로 끝나 "작업 실패" 축이 잡는다 —
         # 이 카드가 지키는 것은 대상이 없어(candidates 소진 등) 0건으로 completed 되는 회차다.
         "key": "article_detail",
         "label": "매물 상세 내용 채우기",

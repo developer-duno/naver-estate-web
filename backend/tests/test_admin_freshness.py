@@ -626,6 +626,34 @@ def test_freshness_batch_aggregates_processed_and_total(client, db):
     assert arts["last_job"]["total_items"] == 35, arts["last_job"]
 
 
+def test_freshness_batch_excludes_round_parent_row(client, db):
+    """B26: 매물 배치 회차 부모 행(articles_batch, 단위 = 단지 수)은 자식 합(매물 수)에 섞지 않는다"""
+    _make_admin(db)
+    now = datetime.now(timezone.utc)
+    batch_start = now - timedelta(minutes=30)
+    _make_completed_job(
+        db, "crawl_articles",
+        started_at=batch_start + timedelta(seconds=1), completed_at=batch_start + timedelta(seconds=5),
+        processed=20, total=20,
+    )
+    _make_completed_job(
+        db, "crawl_articles",
+        started_at=batch_start + timedelta(seconds=6), completed_at=batch_start + timedelta(seconds=9),
+        processed=15, total=15,
+    )
+    db.add(CrawlJob(
+        job_type="articles_batch", scheduler_job_id="crawl_articles", status="completed",
+        started_at=batch_start, completed_at=batch_start + timedelta(seconds=10),
+        processed_items=2, total_items=3,
+    ))
+    db.commit()
+
+    res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
+    arts = _get_item(res.json()["items"], "articles")
+    assert arts["last_job"]["processed_items"] == 35, arts["last_job"]
+    assert arts["last_job"]["total_items"] == 35, arts["last_job"]
+
+
 def test_freshness_batch_zero_total_only_not_spinning(client, db):
     """batch 안에 0/0 잡만 있어도 헛바퀴 판정 X — 단지에 매물 0건은 정상.
 

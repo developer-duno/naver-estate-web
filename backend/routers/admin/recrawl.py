@@ -109,7 +109,8 @@ def _run_batch_wrapped(batch_size: int, parent_job_id: int):
     start_ts = datetime.now(timezone.utc)
     try:
         from crawler.service_discover import crawl_articles_batch
-        crawl_articles_batch(batch_size=batch_size, scheduler_job_id="admin_recrawl")
+        # 부모는 이 wrapper 의 bulk_recrawl 행 — 배치가 회차 행(articles_batch)을 또 만들지 않게(B26)
+        crawl_articles_batch(batch_size=batch_size, scheduler_job_id="admin_recrawl", record_round=False)
         logger.info("[admin] 일괄 재크롤 완료 — batch_size=%d", batch_size)
         final_status = "completed"
         err_msg = None

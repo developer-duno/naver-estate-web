@@ -25,7 +25,9 @@ queryFn 이 reject 하지 않으면 React Query `isError` 가 prod 에서 영영
    빈 결과를 프로세스 캐시에 넣어 **completed(평소 96만 → 76만 건)** 로 끝났다. 느린 잡을 "지연"이라 판정하기 전에
    로그의 HTTP 상태 분포부터 센다(429 재시도는 INFO 로 찍혀 경고 목록에 안 보인다).
    네이버 수집기 판정 = `service_price._is_blocked_error`·`is_naver_server_error`(#732 B23·B24 주간 시세·새 단지 찾기) +
-   `service_discover._NaverBlockTally`(B25 — 인기 단지·단지 상세·매물 상세/백필): 못 받은 > 받은 이거나 연속 5개면 failed.
+   `service_discover._NaverBlockTally`(B25·B26 — 인기 단지·매물 수집 배치·단지 상세·매물 상세/백필): 연속 5개면 failed,
+   그 밖에는 못 받은 수가 3 이상이면서 받은 수보다 많을 때만 failed — 1~2곳만 못 받았으면 completed + 사유.
+   받은 수 = 매물 상세·백필은 저장 성공 + 지워진 매물 + 매물 단위 오류, 나머지 잡은 성공 수.
 
 ## 새 래퍼·에러 UI 추가 시 체크
 

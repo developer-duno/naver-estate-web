@@ -40,7 +40,7 @@
 - 미분양 테이블에 "+" 버튼 → useMbCompare로 localStorage 관리 (최대 4개)
 - 하단 MbCompareFloatingBar: 선택 단지 pill + "비교하기" (2개 이상) + "초기화"
 - /mibunyang/compare?ids=id1,id2,... → useQueries 병렬 조회 + 17행 비교 테이블 + 우위★
-- 차트 3종: MbCompareRadarChart(13축 정규화 = 기본 9축 + 인프라 4축, 동적 축 선택 칩 최소3개, getAxisChipClass헬퍼, activeAxes useMemo, 종합우위★), MbComparePriceChart(min/max/pp 막대, 최저가★), MbCompareUnsoldChart(다중아파트 추이, 기간필터 6M/1Y/2Y/ALL)
+- 차트 3종: MbCompareRadarChart(11축 정규화 = 기본 7축 + 인프라 4축 — 네이버 전세가율·주변시세 축은 세션 471 에 뺐다(구 단위 값), 동적 축 선택 칩 최소3개, getAxisChipClass헬퍼, activeAxes useMemo, 종합우위★), MbComparePriceChart(min/max/pp 막대, 최저가★), MbCompareUnsoldChart(다중아파트 추이, 기간필터 6M/1Y/2Y/ALL)
 - 인쇄: window.print() + rAF 2회 + no-print 클래스
 - URL 복사: navigator.clipboard.writeText + fallback alert
 - 단지명→상세 링크: th onClick + router.push
@@ -49,7 +49,7 @@
 
 ## 레이더 가중치 시스템
 - useMbRadarSettings: 축 선택 + 가중치(1-5) localStorage 영속화 (mb_radar_settings)
-- 프리셋 3종: 균등(모두3)/투자형(전세가율5,주변시세5,할인율5)/실거주형(주차5,세대수4,용적률4)
+- 프리셋 3종: 균등(모두3)/투자형(할인율5,미분양률4,평당가4)/실거주형(주차5,세대수4,용적률4)
 - 가중 점수: Σ(normalized×weight)/Σ(weight) → 0-100 스케일, "★ 종합 우위: 단지A (78점)"
 - 슬라이더: details 접이식 (기본 닫힘, 반응형 grid-cols-1/2/3)
 - 축 추가 대응: getMbRadarSettings에서 DEFAULT와 merge → 새 키 자동 기본값

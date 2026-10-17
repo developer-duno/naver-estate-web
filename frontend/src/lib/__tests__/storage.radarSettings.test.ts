@@ -46,6 +46,13 @@ describe("레이더 차트 설정 (storage)", () => {
     expect(getMbRadarSettings().enabledAxes).toHaveLength(11);
   });
 
+  // 검사관 🟡(세션 471): 걸러내기가 지금 있는 축까지 버리면 안 된다 — 11축 전부 + 옛 키 1개를 저장하면 11축이 그대로 남는다
+  it("걸러내기는 지금 있는 11축을 하나도 버리지 않는다", () => {
+    const all = [...DEFAULT_RADAR_SETTINGS.enabledAxes];
+    saveMbRadarSettings({ enabledAxes: [...all, "jeonse"], weights: {} });
+    expect(getMbRadarSettings().enabledAxes).toEqual(all);
+  });
+
   /** enabledAxes < 3이면 기본값으로 폴백 */
   it("enabledAxes가 3개 미만이면 기본값으로 폴백한다", () => {
     saveMbRadarSettings({ enabledAxes: ["units"], weights: {} });

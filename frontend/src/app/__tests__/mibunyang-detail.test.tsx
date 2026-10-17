@@ -157,6 +157,18 @@ describe("미분양 상세 — nested 데이터 null", () => {
 
 // 세션 471: 거래 통계의 전세율 칸은 단지 단위 값(complex_jeonse_rate)만 보여 준다.
 // 구(區) 단위 jeonse_rate 가 단지 칸처럼 보이던 결함(B28)이 다시 새지 않는지 지킨다.
+// 세션 471 B28: 개요의 네이버 인근 시세·네이버 전세가율(구 단위·반경 2km 값)은 뺐다 — 다시 들어오면 잡는다(검사관 🟡)
+describe("미분양 상세 — 네이버 구 단위 칸 제거", () => {
+  it("개요에 '네이버 인근 시세'·'네이버 전세가율'이 없고 '네이버 매물 수'는 있다", async () => {
+    mockDetail.mockResolvedValue({ ...createMockDetail(), naver_nearby_median: 80000, naver_jeonse_rate: 58, naver_sell_count: 12 });
+    mockHistory.mockResolvedValue({ apartment_id: "APT001", items: [] });
+    renderDetail();
+    expect(await screen.findByText("네이버 매물 수")).toBeInTheDocument();
+    expect(screen.queryByText("네이버 인근 시세")).not.toBeInTheDocument();
+    expect(screen.queryByText("네이버 전세가율")).not.toBeInTheDocument();
+  });
+});
+
 describe("미분양 상세 — 전세율(이 단지) 칸", () => {
   beforeEach(() => {
     mockHistory.mockResolvedValue({ apartment_id: "APT001", items: [] });

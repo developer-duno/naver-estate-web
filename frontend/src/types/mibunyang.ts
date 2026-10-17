@@ -150,6 +150,12 @@ export interface MbTradeStats {
   nearby_median?: number;
   recent_trades_6m?: number;
   jeonse_rate?: number;
+  /** 같은 단지 같은 평수 전세가율(%) — 표본이 없으면 비어 있다 (세션 471) */
+  complex_jeonse_rate?: number;
+  /** 단지 전세가율 계산에 쓴 전세 거래 건수 */
+  complex_jeonse_n?: number;
+  /** 단지 전세가율 계산에 쓴 매매 거래 건수 */
+  complex_sale_n?: number;
   pir?: number;
   psr?: number;
   price_by_area?: Record<string, unknown>;

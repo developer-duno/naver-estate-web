@@ -175,7 +175,20 @@ export function TradeStatsSection({ apartment: a }: SectionProps) {
       <dl className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
         <InfoRow label="인근 시세 중위값" value={ts.nearby_median != null ? formatKoreanPrice(ts.nearby_median) : undefined} />
         <InfoRow label="최근 6개월 거래" value={ts.recent_trades_6m != null ? `${ts.recent_trades_6m}건` : undefined} />
-        <InfoRow label="전세율" value={ts.jeonse_rate != null ? <MbJeonseRateBar value={ts.jeonse_rate} /> : undefined} />
+        {/* 단지 단위 값만 쓴다 — ts.jeonse_rate 는 구(區) 단위라 이 칸에 넣지 않는다 (세션 471) */}
+        <InfoRow
+          label="전세율(이 단지)"
+          value={
+            ts.complex_jeonse_rate != null ? (
+              <div className="flex flex-col gap-0.5">
+                <MbJeonseRateBar value={ts.complex_jeonse_rate} />
+                <span className="text-xs text-gray-500">
+                  전세 {ts.complex_jeonse_n ?? 0}건 · 매매 {ts.complex_sale_n ?? 0}건
+                </span>
+              </div>
+            ) : undefined
+          }
+        />
         <InfoRow label="PIR" value={ts.pir != null ? <MbPirBar value={ts.pir} /> : undefined} />
         <InfoRow label="PSR" value={ts.psr != null ? ts.psr.toFixed(1) : undefined} />
         <InfoRow label="평균층" value={ts.avg_floor != null ? `${ts.avg_floor.toFixed(1)}층` : undefined} />

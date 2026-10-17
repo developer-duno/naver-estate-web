@@ -216,6 +216,10 @@ class TradeStats(Base):
     nearby_median: Mapped[int | None] = mapped_column(Integer)
     recent_trades_6m: Mapped[int | None] = mapped_column(Integer)
     jeonse_rate: Mapped[float | None] = mapped_column(Float)
+    # 같은 단지 같은 평수 전세가율(전세 중앙÷매매 중앙×100) + 표본 건수 — 미분양 trade-stats 가 쓴다, 세션 471
+    complex_jeonse_rate: Mapped[float | None] = mapped_column(Float)
+    complex_jeonse_n: Mapped[int | None] = mapped_column(Integer)
+    complex_sale_n: Mapped[int | None] = mapped_column(Integer)
     pir: Mapped[float | None] = mapped_column(Float)
     psr: Mapped[float | None] = mapped_column(Float)
     price_by_area: Mapped[dict | None] = mapped_column(JSON)

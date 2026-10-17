@@ -15,6 +15,7 @@ import {
 } from "@/components/mb/MbDetailSections";
 import MbScheduleTimeline from "@/components/mb/MbScheduleTimeline";
 import MbUnitSupplyTable from "@/components/mb/MbUnitSupplyTable";
+import { MbSourcesFooter } from "@/components/mb/MbSourcesFooter";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { SkeletonPage } from "@/components/Skeleton";
 import { useMbFavoriteStatus } from "@/hooks/useMbFavorites";
@@ -197,6 +198,8 @@ export default function MbDetailPage() {
             <LazyUnsoldChart items={historyQuery.data?.items ?? []} />
           )}
         </section>
+
+        <MbSourcesFooter />
       </div>
     </div>
   );

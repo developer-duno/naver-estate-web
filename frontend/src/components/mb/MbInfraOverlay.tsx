@@ -8,6 +8,7 @@
 
 import type { MbApartment } from "@/types";
 import type { ToolbarLayer } from "./MbMapToolbar";
+import { finiteOrNull, pm25StandardShort } from "./basis-text";
 
 interface Props {
   apt: MbApartment;
@@ -72,28 +73,26 @@ function TransitInfo({ apt, loading, error }: LayerProps) {
 }
 
 function SafetyInfo({ apt, loading, error }: LayerProps) {
-  // 지역 안전등급(infra.crime_grade, A~E letter)과 단지 안전등급(crime_safety_grade, 1~5 숫자)은
-  // 별개 지표 — 라벨 분리 + 단지 등급엔 범례(1=안전) 명시 (EnvironmentSection:177 답습, 세션 319 C).
-  const regionGrade = apt.infra?.crime_grade;
+  // 우리 지역 범죄 등급(infra.crime_grade)은 뺐다 — 인구 없는 지역은 중앙값으로 채운 값이 섞여 있다.
+  // 행정안전부 지역안전지수 등급으로 바꾸는 일은 PR 4 (세션 472). 단지 안전등급(1~5 숫자)은 그대로.
   const complexGrade = apt.crime_safety_grade;
-  if (!regionGrade && complexGrade == null) return error ? errorRow() : loading ? loadingRow() : noData();
+  if (complexGrade == null) return error ? errorRow() : loading ? loadingRow() : noData();
   return (
     <div className="space-y-1">
-      {regionGrade && <Row label="지역 안전 등급" value={regionGrade} />}
-      {complexGrade != null && <Row label="단지 안전 등급" value={`${complexGrade}등급 (1=안전)`} />}
+      <Row label="단지 안전 등급" value={`${complexGrade}등급 (1=안전)`} />
     </div>
   );
 }
 
 function AirInfo({ apt, loading, error }: LayerProps) {
-  // 측정소별 3년 평균(세션604 — 실시간 등급 폐지). 등급이 없으면 기존처럼 정보 없음 분기
-  const annual = apt.infra?.air_annual;
-  const band = annual?.band;
-  if (!band) return error ? errorRow() : loading ? loadingRow() : noData();
+  // 측정소별 3년 평균(세션604 — 실시간 등급 폐지). 우리 등급(좋음/보통/나쁨)은 공인 기준이 아니라 지우고
+  // PM2.5 값 + 국가 기준 이하/초과 글자만(세션 472). PM2.5 가 없으면(등급만 있어도) 정보 없음 분기
+  const pm25 = finiteOrNull(apt.infra?.air_annual?.pm25);
+  if (pm25 == null) return error ? errorRow() : loading ? loadingRow() : noData();
   return (
     <div className="space-y-1">
-      <Row label="대기질 등급 (3년 평균)" value={band} />
-      {annual?.pm25 != null && <Row label="PM2.5 3년 평균" value={`${annual.pm25.toFixed(1)} μg/m³`} />}
+      <Row label="PM2.5 3년 평균" value={`${pm25.toFixed(1)}㎍/㎥`} />
+      <p className="text-xs text-gray-500 text-right">{pm25StandardShort(pm25)}</p>
     </div>
   );
 }

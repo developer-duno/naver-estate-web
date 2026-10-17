@@ -37,7 +37,7 @@ export interface MbApartment {
   naver_jeonse_rate?: number;
   naver_sell_count?: number;
   naver_build_year?: number;
-  /** 학교 도보 시간 (분) — 네이버 연동, 가까울수록 좋음 */
+  /** 가장 가까운 초등학교 도보 시간 (분) — 이름과 달리 네이버 값이 아니라 미분양 calc-school-walk 가 직선거리 ÷ 분속 70m 로 계산 */
   naver_school_walk_min?: number;
   is_regulated?: boolean;
   noise?: number;

@@ -103,11 +103,34 @@ describe("MbEnvironmentSection — 교통 정류장 / 보육 type·teachers / �
     expect(screen.getByText("12명")).toBeInTheDocument();
   });
 
-  it("apt.noise 가 있으면 소음 섹션이 렌더된다 (dB 단위)", () => {
+  // 세션 472: noise 는 측정값이 아니라 큰 도로 거리 구간에 붙인 추정 dB → 거리 구간 글로 보인다
+  it("apt.noise 가 70 이면 큰 도로 거리 '50m 이내' + 추정 출처 줄이 보인다 (dB 글자 없음)", () => {
+    const apt = makeApt({ noise: 70 });
+    render(<EnvironmentSection apartment={apt} />);
+    expect(screen.getByText("큰 도로 거리(추정)")).toBeInTheDocument();
+    expect(screen.getByText("50m 이내")).toBeInTheDocument();
+    expect(screen.getByText(/소음 측정값 아님/)).toBeInTheDocument();
+    expect(screen.queryByText(/dB/)).not.toBeInTheDocument();
+  });
+
+  it("구간에 없는 noise 값(55.5)은 큰 도로 칸째 숨기고, 그것뿐이면 '데이터 없음'", () => {
     const apt = makeApt({ noise: 55.5 });
     render(<EnvironmentSection apartment={apt} />);
-    expect(screen.getByText("소음")).toBeInTheDocument();
-    expect(screen.getByText("55.5 dB")).toBeInTheDocument();
+    expect(screen.queryByText("큰 도로 거리(추정)")).not.toBeInTheDocument();
+    expect(screen.queryByText(/소음 측정값 아님/)).not.toBeInTheDocument();
+    expect(screen.getByText("주변 환경 데이터가 없습니다.")).toBeInTheDocument();
+  });
+
+  // 검사관 🟠(세션 472): 안전 섹션이 그려진 상태에서 범죄 점수·지역 등급이 없는지 본다(빈 화면 통과 방지)
+  it("안전 섹션은 보이지만 우리 범죄 점수·지역 등급은 없다", () => {
+    const apt = makeApt({ crime_safety_grade: 2, infra: { crime_score: 72, crime_grade: "B" } });
+    render(<EnvironmentSection apartment={apt} />);
+    expect(screen.getByText("단지 안전 등급")).toBeInTheDocument();
+    expect(screen.getByText("2등급 (1=안전)")).toBeInTheDocument();
+    expect(screen.queryByText("안전 점수")).not.toBeInTheDocument();
+    expect(screen.queryByText("72/100")).not.toBeInTheDocument();
+    expect(screen.queryByText("지역 안전 등급")).not.toBeInTheDocument();
+    expect(screen.queryByText("B")).not.toBeInTheDocument(); // 옛 지역 등급 글자
   });
 
   it("apt.noise 가 null 이면 소음 섹션이 렌더되지 않는다", () => {
@@ -115,14 +138,14 @@ describe("MbEnvironmentSection — 교통 정류장 / 보육 type·teachers / �
       infra: { childcare_count: 5 },
     });
     render(<EnvironmentSection apartment={apt} />);
-    expect(screen.queryByText("소음")).not.toBeInTheDocument();
+    expect(screen.queryByText("큰 도로 거리(추정)")).not.toBeInTheDocument();
   });
 
   it("noise 만 있고 다른 환경 데이터 모두 없으면 섹션이 렌더된다 (hasData = noise)", () => {
     const apt = makeApt({ noise: 60 });
     render(<EnvironmentSection apartment={apt} />);
     expect(screen.getByText("주변 환경")).toBeInTheDocument();
-    expect(screen.getByText("60 dB")).toBeInTheDocument();
+    expect(screen.getByText("50~100m")).toBeInTheDocument();
   });
 });
 
@@ -161,17 +184,26 @@ function makeAirAnnual(overrides: Partial<NonNullable<NonNullable<MbApartment["i
 }
 
 describe("MbEnvironmentSection — 대기질 3년 평균 (air_annual)", () => {
-  it("air_annual 이 있으면 제목·등급 뱃지·PM2.5·측정소·등급 기준이 보인다", () => {
+  // 세션 472: 등급 뱃지·우리 등급 기준 문장은 지우고, PM2.5 값 + 국가 기준(연평균 15) 초과/이하 글만
+  it("air_annual 이 있으면 제목·PM2.5 값·국가 기준 줄·측정소가 보이고 등급 뱃지는 없다", () => {
     const apt = makeApt({
       infra: { air_station_name: "강남대로", air_station_dist: 850, air_annual: makeAirAnnual() },
     });
     render(<EnvironmentSection apartment={apt} />);
     expect(screen.getByText("대기질 (3년 평균 2022~2024)")).toBeInTheDocument();
-    expect(screen.getByText("보통")).toBeInTheDocument();
-    expect(screen.getByText("17.3")).toBeInTheDocument();
+    expect(screen.getByText("17.3㎍/㎥ (3년 평균)")).toBeInTheDocument();
+    expect(screen.getByText(/^이 값은 국가 대기환경기준\(연평균 15㎍\/㎥\) 초과 · 환경정책기본법 시행령 별표1/)).toBeInTheDocument();
     expect(screen.getByText("강남대로")).toBeInTheDocument();
     expect(screen.getByText("(850m)")).toBeInTheDocument();
-    expect(screen.getByText("등급 기준(PM2.5 3년 평균): 좋음 15 이하, 보통 19 이하, 나쁨 19 초과")).toBeInTheDocument();
+    expect(screen.queryByText("보통")).not.toBeInTheDocument();
+    expect(screen.queryByText(/등급 기준/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/19/)).not.toBeInTheDocument();
+  });
+
+  it("PM2.5 가 15.0 이면 국가 기준 '이하'", () => {
+    const apt = makeApt({ infra: { air_annual: makeAirAnnual({ pm25: 15 }) } });
+    render(<EnvironmentSection apartment={apt} />);
+    expect(screen.getByText(/^이 값은 국가 대기환경기준\(연평균 15㎍\/㎥\) 이하 · /)).toBeInTheDocument();
   });
 
   it("air_annual 이 null 이면 대기질 블록이 없다 (측정소가 표에 없음)", () => {
@@ -183,7 +215,7 @@ describe("MbEnvironmentSection — 대기질 3년 평균 (air_annual)", () => {
     expect(screen.queryByText("강남대로")).not.toBeInTheDocument();
   });
 
-  it("air_annual 은 있지만 등급(band)이 null 이면 대기질 블록이 없다 (PM2.5 값 없음)", () => {
+  it("air_annual 은 있지만 PM2.5 값이 null 이면 대기질 블록이 없다", () => {
     const apt = makeApt({
       infra: { air_station_name: "강남대로", air_annual: makeAirAnnual({ pm25: null, band: null }), hospital: 3 },
     });

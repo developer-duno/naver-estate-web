@@ -50,7 +50,9 @@ components/mb/
 ├── MbApartmentTable.tsx        # 아파트 목록 테이블 (정렬+즐겨찾기★+비교+)
 ├── MbTradeTable.tsx            # 실거래 테이블 (정렬 가능 헤더: 가격/거래월/면적)
 ├── MbRegionStatsTable.tsx      # 지역 통계 테이블
-├── MbDetailSections.tsx        # 상세 5개 섹션 (개요/분양/주변환경/거래통계/미분양추이)
+├── MbDetailSections.tsx        # 상세 5개 섹션 (개요/분양/주변환경/거래통계/미분양추이) — 지표 = 값 + 기준·출처 한 줄(세션 472, 옛 막대 14종 삭제)
+├── basis-text.ts               # 상세 지표의 법령·공공 통계 기준·출처 문구 순수 함수 (세션 472)
+├── MbSourcesFooter.tsx         # 상세 페이지 맨 끝 출처 묶음 한 단락 (세션 472)
 ├── MbUnsoldTrendChart.tsx      # Recharts 미분양 추이 차트 (dynamic import)
 ├── MbCompareFloatingBar.tsx    # 비교 하단 플로팅 바 (최대 4개, 비교하기 버튼)
 ├── MbCompareRadarChart.tsx    # 레이더 차트 (11축 정규화 = 기본 7축 + 인프라 4축 — 네이버 2축은 세션 471 에 제거, 가중치프리셋3종+슬라이더1-5+가중점수, 종합우위★, dynamic import)

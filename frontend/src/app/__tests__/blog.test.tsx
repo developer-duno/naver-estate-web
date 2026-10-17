@@ -207,11 +207,13 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.category).toBe("미분양");
   });
 
-  it("mibunyang-detail-bars-guide 메타 — 미분양 카테고리, 진행바 14종 키워드", () => {
+  // 세션 472: 막대(진행바)·등급 라벨을 지우고 값 + 공인 기준·출처로 바꿔 글 제목도 바뀌었다(주소는 그대로)
+  it("mibunyang-detail-bars-guide 메타 — 미분양 카테고리, 지표 14가지·기준 키워드", () => {
     const post = getPostBySlug("mibunyang-detail-bars-guide");
     expect(post).toBeDefined();
     expect(post?.draft).toBeUndefined();
-    expect(post?.title).toContain("진행바");
+    expect(post?.title).toContain("기준");
+    expect(post?.title).not.toContain("진행바");
     expect(post?.description).toMatch(/세대수|최고층|주차|건폐율|미분양률|전세율|취소율|소음도/);
     expect(post?.category).toBe("미분양");
   });
@@ -221,7 +223,7 @@ describe("blog/posts 메타데이터", () => {
     expect(post).toBeDefined();
     expect(post?.draft).toBeUndefined();
     expect(post?.title).toContain("5 단원");
-    expect(post?.description).toMatch(/개요|분양|거래|주변환경|위치|진행바 14종/);
+    expect(post?.description).toMatch(/개요|분양|거래|주변환경|위치|지표 14가지/);
     expect(post?.category).toBe("미분양");
     expect(post?.date).toBe("2026-05-16");
   });

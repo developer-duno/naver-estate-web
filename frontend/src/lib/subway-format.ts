@@ -17,7 +17,7 @@ export function formatStationName(name: string): string {
 
 /**
  * 거리 표기 — 1000m 미만은 `NNNm`, 1000m 이상은 `N.Nkm`.
- * 기존 관례 답습 (MbInfraOverlay.tsx:69 · metric-bar-configs.ts:98 동일 기준).
+ * 기존 관례 답습 (MbInfraOverlay.tsx:69 동일 기준).
  */
 export function formatDistance(meters: number): string {
   return meters >= 1000 ? `${(meters / 1000).toFixed(1)}km` : `${Math.round(meters)}m`;

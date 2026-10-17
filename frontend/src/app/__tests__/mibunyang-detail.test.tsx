@@ -180,7 +180,7 @@ describe("미분양 상세 — 전세율(이 단지) 칸", () => {
     await waitFor(() => {
       expect(screen.getByText("전세율(이 단지 · 대표 평수)")).toBeInTheDocument();
     });
-    expect(screen.getByText("전세 8건 · 매매 15건")).toBeInTheDocument();
+    expect(screen.getByText(/전용면적이 같은 거래끼리 전세 중앙값 ÷ 매매 중앙값 · 표본 전세 8건·매매 15건 · 국토교통부 실거래가 기반\(미분양 계산\)/)).toBeInTheDocument();
     expect(screen.getByText("61.2%")).toBeInTheDocument();
   });
 
@@ -206,6 +206,86 @@ describe("미분양 상세 — 전세율(이 단지) 칸", () => {
     const label = await screen.findByText("전세율(이 단지 · 대표 평수)");
     expect(label.nextElementSibling?.textContent).toBe("-");
     expect(screen.queryByText(/전세 1건/)).not.toBeInTheDocument();
+  });
+});
+
+// 세션 472 PR 2: 막대·색·등급 라벨(우리 분위수 문턱)을 지우고 값 + 공인 기준·출처 한 줄로
+describe("미분양 상세 — 막대·등급 라벨 대신 값과 공인 기준·출처", () => {
+  // 옛 막대 14종·대기질·범죄 등급이 쓰던 판정 낱말 — 화면 어디에도 없어야 한다
+  const OLD_LABELS = [
+    "적정", "주의", "위험", "저부담", "고부담", "쾌적", "고밀", "우수", "충분", "부족",
+    "저렴", "조용함", "시끄러움", "멀음", "가까움", "소규모", "대규모",
+  ];
+
+  function richDetail() {
+    const base = createMockDetail();
+    return {
+      ...base,
+      max_floor: 34,
+      parking_ratio: 1.2,
+      floor_area_ratio: 214,
+      building_coverage_ratio: 15,
+      exclusive_ratio: 72.9,
+      avg_maintenance_cost: 14,
+      unsold_rate: 11.6,
+      noise: 60,
+      noxious_dist: 1200,
+      naver_school_walk_min: 7,
+      crime_safety_grade: 2,
+      trade_stats: { ...base.trade_stats, cancel_ratio_6m: 2.1 },
+      infra: {
+        ...base.infra,
+        crime_score: 72,
+        crime_grade: "B",
+        air_annual: { pm25: 13, pm10: 30, o3: 0.03, years: "2022,2023,2024", band: "좋음", legend: "좋음 15 이하", updated_at: null },
+      },
+    };
+  }
+
+  beforeEach(() => {
+    mockDetail.mockResolvedValue(richDetail());
+    mockHistory.mockResolvedValue({ apartment_id: "APT001", items: [] });
+  });
+
+  it("ⓐ 옛 판정 낱말이 화면에 없고 막대(progressbar)도 없다", async () => {
+    renderDetail();
+    await screen.findByText("34층");
+    const text = document.body.textContent ?? "";
+    for (const word of OLD_LABELS) expect(text, word).not.toContain(word);
+    expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
+  });
+
+  it("ⓑ 값 옆에 법령·공공 통계 기준 줄이 붙는다", async () => {
+    renderDetail();
+    expect(await screen.findByText("1.20대")).toBeInTheDocument();
+    expect(screen.getByText(/주택건설기준 등에 관한 규정 §27/)).toBeInTheDocument();
+    expect(screen.getByText("고층건축물(30층 이상 또는 120m 이상, 건축법 §2)")).toBeInTheDocument();
+    expect(screen.getByText(/주거실태조사 2024 자가가구 PIR 전국 6.3배 · 수도권 8.7배/)).toBeInTheDocument();
+    expect(screen.getByText("2.1%")).toBeInTheDocument();
+    expect(screen.getByText(/부동산 거래신고 등에 관한 법률 §3의2/)).toBeInTheDocument();
+    expect(screen.getByText("50~100m")).toBeInTheDocument();
+    expect(screen.getByText("약 1,200m")).toBeInTheDocument();
+    expect(screen.getByText(/교육환경 보호에 관한 법률 §8/)).toBeInTheDocument();
+    expect(screen.getByText("13.0㎍/㎥ (3년 평균)")).toBeInTheDocument();
+    expect(screen.getByText(/^이 값은 국가 대기환경기준\(연평균 15㎍\/㎥\) 이하 · /)).toBeInTheDocument();
+  });
+
+  it("ⓒ 우리 범죄 점수·지역 등급은 보이지 않는다", async () => {
+    renderDetail();
+    await screen.findByText("34층");
+    // 안전 섹션 자체는 그려져 있어야 이 단언이 의미가 있다(빈 화면 통과 방지 — 검사관 🟠)
+    expect(screen.getByText("단지 안전 등급")).toBeInTheDocument();
+    expect(screen.queryByText("72/100")).not.toBeInTheDocument();
+    expect(screen.queryByText("안전 점수")).not.toBeInTheDocument();
+    expect(screen.queryByText("지역 안전 등급")).not.toBeInTheDocument();
+    expect(screen.queryByText("매우 안전")).not.toBeInTheDocument();
+  });
+
+  it("ⓓ 페이지 맨 끝에 출처 묶음 단락이 있다", async () => {
+    renderDetail();
+    const footer = await screen.findByTestId("mb-sources-footer");
+    expect(footer.textContent).toContain("국토교통부 실거래가 공개시스템");
+    expect(footer.textContent).toContain("법령: 국가법령정보센터");
   });
 });
 

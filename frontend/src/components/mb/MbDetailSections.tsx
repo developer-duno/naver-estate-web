@@ -5,18 +5,15 @@ import type { MbApartment, MbPrice } from "@/types";
 import { formatKoreanPrice, formatYearMonth, freshness } from "@/lib/format";
 import { displayUnits, normalizePp } from "@/lib/mb-format";
 import { formatHouseType } from "@/lib/mb-house-type";
-import { MbCancelRatioBar } from "./MbCancelRatioBar";
-import { MbCoverageBar } from "./MbCoverageBar";
-import { MbExclusiveRatioBar } from "./MbExclusiveRatioBar";
-import { MbFloorAreaRatioBar } from "./MbFloorAreaRatioBar";
-import { MbJeonseRateBar } from "./MbJeonseRateBar";
-import { MbMaintenanceBar } from "./MbMaintenanceBar";
-import { MbMaxFloorBar } from "./MbMaxFloorBar";
-import { MbParkingBar } from "./MbParkingBar";
-import { MbPirBar } from "./MbPirBar";
-import { MbUnitsBar } from "./MbUnitsBar";
 import { MbBundleUnitsTag } from "./MbBundleUnitsTag";
-import { MbUnsoldRateBar } from "./MbUnsoldRateBar";
+import {
+  BASIS,
+  finiteOrNull,
+  jeonseRateBasis,
+  maxFloorBasis,
+  positiveOrNull,
+  unitsBasis,
+} from "./basis-text";
 
 const MbTradeStatsCharts = dynamic(() => import("./MbTradeStatsCharts"), { ssr: false });
 
@@ -24,11 +21,13 @@ interface SectionProps {
   apartment: MbApartment;
 }
 
-function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+/** 값(굵게) + 기준·출처 한 줄(작은 회색 글, 값이 있을 때만) — 세션 472 막대·등급 라벨 대체 */
+function InfoRow({ label, value, basis }: { label: string; value: React.ReactNode; basis?: string }) {
   return (
     <div className="flex flex-col gap-0.5">
       <dt className="text-xs text-gray-500">{label}</dt>
       <dd className="text-sm font-medium text-gray-900">{value ?? "-"}</dd>
+      {basis && value != null && <dd className="text-xs font-normal leading-snug text-gray-500">{basis}</dd>}
     </div>
   );
 }
@@ -45,6 +44,13 @@ function SectionCard({ title, children }: { title: string; children: React.React
 /** 개요 — 기본정보 + 시공사 */
 export function OverviewSection({ apartment: a }: SectionProps) {
   const b = a.builder_info;
+  const units = displayUnits(a);
+  const maxFloor = finiteOrNull(a.max_floor);
+  const parking = finiteOrNull(a.parking_ratio);
+  const far = positiveOrNull(a.floor_area_ratio);
+  const coverage = finiteOrNull(a.building_coverage_ratio);
+  const exclusive = positiveOrNull(a.exclusive_ratio);
+  const maintenance = finiteOrNull(a.avg_maintenance_cost);
   return (
     <SectionCard title="개요">
       <dl className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -54,13 +60,14 @@ export function OverviewSection({ apartment: a }: SectionProps) {
         <InfoRow
           label="세대수"
           value={
-            displayUnits(a) != null ? (
+            units != null ? (
               <>
-                <MbUnitsBar value={displayUnits(a)} />
+                {`${units.toLocaleString()}세대`}
                 <MbBundleUnitsTag apartment={a} below />
               </>
             ) : undefined
           }
+          basis={units != null ? unitsBasis(units) : undefined}
         />
         <InfoRow label="완공" value={formatYearMonth(a.completion)} />
         <InfoRow label="준공연도(네이버)" value={a.naver_build_year != null ? `${a.naver_build_year}년` : undefined} />
@@ -69,12 +76,20 @@ export function OverviewSection({ apartment: a }: SectionProps) {
         <InfoRow label="복도구조" value={a.corridor_type} />
         <InfoRow label="주향" value={a.primary_direction} />
         <InfoRow label="조망" value={a.view} />
-        <InfoRow label="최고층" value={a.max_floor != null ? <MbMaxFloorBar value={a.max_floor} /> : undefined} />
-        <InfoRow label="세대당 주차" value={a.parking_ratio != null ? <MbParkingBar value={a.parking_ratio} /> : undefined} />
-        <InfoRow label="용적률" value={a.floor_area_ratio != null ? <MbFloorAreaRatioBar value={a.floor_area_ratio} /> : undefined} />
-        <InfoRow label="건폐율" value={a.building_coverage_ratio != null ? <MbCoverageBar value={a.building_coverage_ratio} /> : undefined} />
-        <InfoRow label="전용률" value={a.exclusive_ratio != null ? <MbExclusiveRatioBar value={a.exclusive_ratio} /> : undefined} />
-        <InfoRow label="관리비" value={a.avg_maintenance_cost != null ? <MbMaintenanceBar value={a.avg_maintenance_cost} /> : undefined} />
+        <InfoRow
+          label="최고층"
+          value={maxFloor != null ? `${maxFloor}층` : undefined}
+          basis={maxFloor != null ? maxFloorBasis(maxFloor) : undefined}
+        />
+        <InfoRow label="세대당 주차" value={parking != null ? `${parking.toFixed(2)}대` : undefined} basis={BASIS.parking} />
+        <InfoRow label="용적률" value={far != null ? `${far.toFixed(0)}%` : undefined} basis={BASIS.floorAreaRatio} />
+        <InfoRow label="건폐율" value={coverage != null ? `${coverage.toFixed(1)}%` : undefined} basis={BASIS.coverage} />
+        <InfoRow label="전용률" value={exclusive != null ? `${exclusive.toFixed(1)}%` : undefined} basis={BASIS.exclusiveRatio} />
+        <InfoRow
+          label="관리비"
+          value={maintenance != null ? `${maintenance.toLocaleString()}만원` : undefined}
+          basis={BASIS.maintenance}
+        />
         <InfoRow label="규제지역" value={a.is_regulated ? "예" : a.is_regulated === false ? "아니오" : undefined} />
         <InfoRow label="시공사" value={a.builder} />
         {b && (
@@ -106,7 +121,11 @@ export function PresaleSection({ apartment: a }: SectionProps) {
         <InfoRow label="분양단계" value={a.presale_stage} />
         <InfoRow label="입주시기" value={a.presale_move_in} />
         <InfoRow label="할인율" value={a.discount_pct != null ? `${a.discount_pct}%` : undefined} />
-        <InfoRow label="미분양률" value={a.unsold_rate != null ? <MbUnsoldRateBar value={a.unsold_rate} /> : undefined} />
+        <InfoRow
+          label="미분양률"
+          value={finiteOrNull(a.unsold_rate) != null ? `${a.unsold_rate!.toFixed(1)}%` : undefined}
+          basis={BASIS.unsoldRate}
+        />
         <InfoRow label="미분양 세대수" value={a.unsold != null ? `${a.unsold.toLocaleString()}세대` : undefined} />
         <InfoRow label="발코니 무상" value={a.balcony_free ? "O" : a.balcony_free === false ? "X" : undefined} />
         <InfoRow label="옵션 무상" value={a.option_free ? "O" : a.option_free === false ? "X" : undefined} />
@@ -169,6 +188,10 @@ export function TradeStatsSection({ apartment: a }: SectionProps) {
     );
   }
 
+  const jeonseRate = finiteOrNull(ts.complex_jeonse_rate);
+  const pir = positiveOrNull(ts.pir);
+  const cancelRatio = finiteOrNull(ts.cancel_ratio_6m);
+
   return (
     <SectionCard title="거래 통계">
       <dl className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
@@ -178,22 +201,18 @@ export function TradeStatsSection({ apartment: a }: SectionProps) {
         {/* 대표 평수 하나의 값(미분양 complex_jeonse_rate) — 평수별 표는 B27 */}
         <InfoRow
           label="전세율(이 단지 · 대표 평수)"
-          value={
-            ts.complex_jeonse_rate != null ? (
-              <div className="flex flex-col gap-0.5">
-                <MbJeonseRateBar value={ts.complex_jeonse_rate} />
-                <span className="text-xs text-gray-500">
-                  전세 {ts.complex_jeonse_n ?? 0}건 · 매매 {ts.complex_sale_n ?? 0}건
-                </span>
-              </div>
-            ) : undefined
-          }
+          value={jeonseRate != null ? `${jeonseRate.toFixed(1)}%` : undefined}
+          basis={jeonseRateBasis(ts.complex_jeonse_n, ts.complex_sale_n)}
         />
-        <InfoRow label="PIR" value={ts.pir != null ? <MbPirBar value={ts.pir} /> : undefined} />
+        <InfoRow label="PIR" value={pir != null ? `${pir.toFixed(1)}배` : undefined} basis={BASIS.pir} />
         <InfoRow label="PSR" value={ts.psr != null ? ts.psr.toFixed(1) : undefined} />
         <InfoRow label="평균층" value={ts.avg_floor != null ? `${ts.avg_floor.toFixed(1)}층` : undefined} />
         <InfoRow label="층 범위" value={ts.floor_range} />
-        <InfoRow label="6개월 취소율" value={<MbCancelRatioBar value={ts.cancel_ratio_6m} />} />
+        <InfoRow
+          label="6개월 취소율"
+          value={cancelRatio != null ? `${cancelRatio.toFixed(1)}%` : undefined}
+          basis={BASIS.cancelRatio}
+        />
         <InfoRow label="통계 갱신" value={freshness(ts.updated_at)} />
       </dl>
       <MbTradeStatsCharts tradeStats={ts} />

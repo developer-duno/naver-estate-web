@@ -5,7 +5,7 @@
     이름 단지끼리 거래가 섞였고 오피스텔에도 아파트 매매 값이 붙었다. 짝짓기를 고친 뒤 주간·소급
     수집은 이번 24달 안의 옛 줄을 스스로 지우지만, 그 밖에 남는 두 가지를 이 스크립트가 다룬다.
 
-대상 (정부 줄 = complex_price_history 의 trade_type 'A1' 이고 area_no 가 '' 또는 NULL — 네이버 줄은 안 건드린다)
+대상 (정부 줄 = complex_price_history 의 trade_type 'A1' 이고 area_no 가 '' — 네이버 줄과 NULL(공유 표의 미분양 몫)은 안 건드린다)
     ⓐ 오피스텔(OPST·OBYG) 단지의 정부 줄 전부 → --apply 때 지운다.
     ⓑ "같은 시군구(법정동 코드 앞 5자리)·같은 정규화 이름인데 법정동 코드가 둘 이상이고, 그중 정부 줄을
        가진 단지가 둘 이상"인 묶음 소속 단지의 정부 줄 중 이번 24달 시작보다 오래된 것(ⓐ 와 겹치는 단지는 ⓐ 로만 센다)
@@ -36,9 +36,7 @@ def _chunks(items: list, size: int = CHUNK):
 
 
 def _gov_filter(model):
-    from sqlalchemy import or_
-
-    return (model.trade_type == "A1", or_(model.area_no == "", model.area_no.is_(None)))
+    return (model.trade_type == "A1", model.area_no == "")
 
 
 def _target_complexes(db) -> tuple[list[str], list[str]]:

@@ -48,15 +48,17 @@ _STALE_CHUNK = 500
 
 
 def _gov_rows_query(db, complex_nos: list[str], months: list[str], before: datetime | None):
-    """정부 줄(A1·area_no ''/NULL) 중 그 단지들·그 달들 — before 를 주면 그보다 앞서 쓰인 줄만."""
-    from sqlalchemy import or_
+    """정부 줄(A1·area_no '') 중 그 단지들·그 달들 — before 를 주면 그보다 앞서 쓰인 줄만.
 
+    area_no NULL 은 정부 줄로 치지 않는다 — 2u 저장은 늘 ''(_upsert_price_history) 이고 NULL 은
+    공유 표의 미분양 몫이라 지우지 않는다(공유 DB 소유권 가드, 세션 469).
+    """
     from db.models import ComplexPriceHistory
 
     q = db.query(ComplexPriceHistory).filter(
         ComplexPriceHistory.complex_no.in_(complex_nos),
         ComplexPriceHistory.trade_type == "A1",
-        or_(ComplexPriceHistory.area_no == "", ComplexPriceHistory.area_no.is_(None)),
+        ComplexPriceHistory.area_no == "",
         ComplexPriceHistory.base_month.in_(months),
     )
     if before is not None:
@@ -76,7 +78,7 @@ def _count_gov_rows(db, complex_nos: list[str], months: list[str], before: datet
 def _delete_stale_gov_rows(db, complex_nos: list[str], months: list[str], started_at: datetime) -> int:
     """이번 회차에 다시 쓰이지 않은 옛 정부 실거래가 줄을 지우고 지운 수를 돌려준다 (세션 469).
 
-    정부 줄 = trade_type 'A1' 이고 area_no 가 '' 또는 NULL(네이버 줄은 area_no 가 채워져 있어 안 건드린다).
+    정부 줄 = trade_type 'A1' 이고 area_no 가 ''(네이버 줄은 area_no 가 채워져 있고, NULL 은 미분양 몫이라 안 건드린다).
     이번 회차에 다시 저장된 줄은 recorded_at 이 회차 시작 뒤라 남는다 — 그보다 앞선 줄은
     "이번에 그 단지·그 달에 짝이 안 됐다"는 뜻이다. 대상 단지·달 밖은 건드리지 않는다.
     단지를 _STALE_CHUNK 개씩 나눠 여러 문장으로 지운다.

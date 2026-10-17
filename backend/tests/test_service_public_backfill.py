@@ -118,7 +118,7 @@ class TestBackfillDongAndCleanup:
             ComplexPriceHistory(complex_no="2666", trade_type="A1", area_no="", base_month=month,
                                 price_avg=1, recorded_at=old),           # 창 안 정부 줄 → 삭제
             ComplexPriceHistory(complex_no="2666", trade_type="A1", area_no=None, base_month=month,
-                                price_avg=2, recorded_at=old),           # 창 안 정부 줄(NULL) → 삭제
+                                price_avg=2, recorded_at=old),           # 창 안이지만 NULL = 미분양 몫 → 유지
             ComplexPriceHistory(complex_no="2666", trade_type="A1", area_no="84A", base_month=month,
                                 price_avg=3, recorded_at=old),           # 네이버 줄 → 유지
             ComplexPriceHistory(complex_no="2666", trade_type="A1", area_no="", base_month="201001",
@@ -129,7 +129,7 @@ class TestBackfillDongAndCleanup:
         # 거래는 왔지만(금곡동) 2666(고색동)에는 하나도 짝이 안 되는 달
         _run_backfill("2666", [_make_trade("거산", "50,000", umd="금곡동")])
         db.expire_all()
-        assert sorted(r.price_avg for r in _gov_rows(db, "2666")) == [3, 4]
+        assert sorted(r.price_avg for r in _gov_rows(db, "2666")) == [2, 3, 4]  # '' 줄만 지워짐
 
     def test_소급은_거래가_없는_달의_옛_줄은_남긴다(self, db):
         """정상 응답인데 거래 0건인 달은 '짝이 안 됐다'는 증거가 아니다 — 옛 줄 보존 (보완 1)."""

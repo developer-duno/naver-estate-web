@@ -122,3 +122,17 @@ def test_정부_줄을_가진_단지가_1곳뿐인_다른_동_묶음은_대상_�
 
     _seed_groups(db, [("7001", "홀로", "4111313400", True), ("7002", "홀로", "4111312800", False)])
     assert find_targets(db, _months())["mixed_old"] == []
+
+
+def test_area_no_가_NULL_인_줄은_미분양_몫이라_대상이_아니다(db):
+    """공유 표에서 NULL 줄은 미분양 몫 — 오피스텔 단지 것이어도 세지도 지우지도 않는다(소유권 가드)."""
+    from scripts.cleanup_public_trade_rows import find_targets, main
+
+    _seed(db)
+    db.add(ComplexPriceHistory(complex_no="3001", trade_type="A1", area_no=None, base_month="201001",
+                               price_avg=99, recorded_at=utcnow() - timedelta(days=30)))
+    db.commit()
+
+    assert _avgs_of(db, find_targets(db, _months())["opst"]) == [1, 2]
+    assert main(["--apply"]) == 0
+    assert 99 in _avgs(db)

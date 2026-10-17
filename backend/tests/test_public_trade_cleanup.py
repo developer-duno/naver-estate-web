@@ -85,7 +85,7 @@ def test_주간은_이번에_짝이_안_된_옛_줄을_지운다(db):
     _add_complexes(db)
     db.add_all([
         _gov("2666", "202608", 1),                       # 창 안 → 삭제
-        _gov("2666", "202609", 2, area_no=None),         # 창 안(NULL) → 삭제
+        _gov("2666", "202609", 2, area_no=None),         # 창 안이지만 NULL = 미분양 몫 → 유지
         _gov("3001", "202607", 3),                       # 오피스텔 창 안 → 삭제
         _gov("2666", "201001", 4),                       # 창 밖 → 유지
         _gov("1775", "202608", 5, area_no="84A"),        # 네이버 줄 → 유지
@@ -95,7 +95,7 @@ def test_주간은_이번에_짝이_안_된_옛_줄을_지운다(db):
 
     _run(_suwon_only([_trade("금곡동", "거산", "50,000")]))
 
-    assert [r.price_avg for r in _rows(db, "2666")] == [4]
+    assert [r.price_avg for r in _rows(db, "2666")] == [4, 2]  # 창 밖 줄과 NULL 줄만 남는다
     assert _rows(db, "3001") == []
     assert [r.area_no for r in _rows(db, "1775")].count("84A") == 1
     assert len([r for r in _rows(db, "1775") if r.area_no == ""]) == 3

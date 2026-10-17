@@ -24,8 +24,6 @@ function makeApt(overrides: Partial<MbApartment> = {}): MbApartment {
     heating: "지역난방",
     builder: "삼성물산",
     discount_pct: 5,
-    naver_nearby_median: 90000,
-    naver_jeonse_rate: 65,
     noise: 55,
     ...overrides,
   };
@@ -99,9 +97,12 @@ describe("formatCellValue (셀 포맷)", () => {
 });
 
 describe("MB_COMPARE_ROWS (비교 행 정의)", () => {
-  /** 19개 비교 행이 정의됨 */
-  it("19개 비교 행이 정의되어 있다", () => {
-    expect(MB_COMPARE_ROWS).toHaveLength(19);
+  /** 17개 비교 행이 정의됨 — 네이버 주변 중위가·전세가율 2행은 뺐다(세션 471) */
+  it("17개 비교 행이 정의되어 있고 네이버 구 단위 2행이 없다", () => {
+    expect(MB_COMPARE_ROWS).toHaveLength(17);
+    const labels = MB_COMPARE_ROWS.map((r) => r.label);
+    expect(labels).not.toContain("주변 중위가(만원)");
+    expect(labels).not.toContain("전세가율(%)");
   });
 
   /** 소음도 행이 포함되어 있고 direction이 "lower" */

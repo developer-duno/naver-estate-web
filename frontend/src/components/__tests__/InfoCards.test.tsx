@@ -88,4 +88,15 @@ describe("InfoCards — 단지 정보 (세션 429)", () => {
     expect(screen.queryByText("최근6개월거래")).not.toBeInTheDocument();
     expect(screen.queryByText("42건")).not.toBeInTheDocument();
   });
+
+  it("주변시세는 총액(만원)이라 '/평' 을 붙이지 않는다 (세션 471)", () => {
+    const { container } = render(
+      <InfoCards
+        article={makeArticle()}
+        complex={{ complex_no: "C001", complex_name: "테스트단지", nearby_median_price: 18000 }}
+      />,
+    );
+    expect(screen.getByText("주변시세")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("/평");
+  });
 });

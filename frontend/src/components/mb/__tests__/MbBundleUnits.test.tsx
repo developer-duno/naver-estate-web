@@ -133,10 +133,11 @@ describe("비교 화면 — 세대수도 묶음 값(미분양 행·미분양률 
     expect(unitsRow.getValue(makeApt(CASES.같음))).toBe(300);
   });
 
-  it("레이더 세대수 축: 있음 1200 · 없음 4 · 둘 다 없으면 0", () => {
+  // 둘 다 없으면 null — 레이더 정규화가 0점을 준다(세션 471 빈 값 만점 결함 통일)
+  it("레이더 세대수 축: 있음 1200 · 없음 4 · 둘 다 없으면 null", () => {
     expect(unitsAxis.getValue(makeApt(CASES.있음))).toBe(1200);
     expect(unitsAxis.getValue(makeApt(CASES.없음))).toBe(4);
-    expect(unitsAxis.getValue(makeApt({ units: undefined, bundle_units: null }))).toBe(0);
+    expect(unitsAxis.getValue(makeApt({ units: undefined, bundle_units: null }))).toBeNull();
   });
 });
 

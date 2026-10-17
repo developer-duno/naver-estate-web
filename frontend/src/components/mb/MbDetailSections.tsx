@@ -85,9 +85,8 @@ export function OverviewSection({ apartment: a }: SectionProps) {
             <InfoRow label="시공사 정보 갱신" value={freshness(b.updated_at)} />
           </>
         )}
-        <InfoRow label="네이버 인근 시세" value={a.naver_nearby_median != null ? formatKoreanPrice(a.naver_nearby_median) : undefined} />
+        {/* 네이버 인근 시세·전세가율은 뺐다 — 구 단위 값이라 이 단지 값으로 오해된다(세션 471 · 미분양 사장님 결정 10-17) */}
         <InfoRow label="네이버 매물 수" value={a.naver_sell_count != null ? `${a.naver_sell_count}건` : undefined} />
-        <InfoRow label="네이버 전세가율" value={a.naver_jeonse_rate != null ? `${a.naver_jeonse_rate.toFixed(1)}%` : undefined} />
         <InfoRow label="등록" value={a.created_at ? new Date(a.created_at).toLocaleDateString("ko-KR") : undefined} />
       </dl>
     </SectionCard>

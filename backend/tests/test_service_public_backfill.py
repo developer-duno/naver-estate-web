@@ -273,3 +273,31 @@ class TestBackfillPriceBatchQuotaExhausted:
         mock_backfill.assert_not_called()
         assert result["quota_exhausted"] is True
         assert result["success"] == 0
+
+
+class TestBackfillCleanupScope:
+    """보완 2 의 소급 쪽: 법정동을 모르거나 유형이 비어 짝이 될 수 없는 단지는 소급해도 옛 줄을 안 지운다."""
+
+    def test_주소나_유형이_빈_단지를_소급하면_그_단지_옛_줄은_남는다(self, db):
+        from crawler.service_public import _recent_months
+
+        _add_geosan_pair(db)
+        month = _recent_months(date.today(), 1)[0]
+        db.add_all([
+            Complex(complex_no="4001", complex_name="거산", cortar_no="4111313400",
+                    cortar_address=None, real_estate_type_code="APT"),       # 주소 빈 단지
+            Complex(complex_no="4002", complex_name="다른", cortar_no="4111313400",
+                    cortar_address="경기도 수원시 권선구 금곡동", real_estate_type_code=None),  # 유형 빈 단지
+        ])
+        old = utcnow() - timedelta(days=10)
+        for no, avg in (("4001", 1), ("4002", 2)):
+            db.add(ComplexPriceHistory(complex_no=no, trade_type="A1", area_no="", base_month=month,
+                                       price_avg=avg, recorded_at=old))
+        db.commit()
+
+        trades = [_make_trade("거산", "50,000", umd="금곡동")]  # 거래는 온 달(정리 조건의 나머지는 충족)
+        _run_backfill("4001", trades)
+        _run_backfill("4002", trades)
+        db.expire_all()
+        assert [r.price_avg for r in _gov_rows(db, "4001")] == [1]
+        assert [r.price_avg for r in _gov_rows(db, "4002")] == [2]

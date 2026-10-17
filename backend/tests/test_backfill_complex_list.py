@@ -100,3 +100,36 @@ def test_창구가_하루_한도_초과라고_하면_멈춘다(db, tmp_path):
 
     assert mock_get.call_count == 1  # C1 첫 요청에서 한도 → C2 는 시도하지 않는다
     assert result["reason"] == "quota" and result["done"] == 0 and result["failed"] == 0
+
+
+def test_한_단지가_예외로_실패해도_다음_단지로_넘어간다(db, tmp_path):
+    _seed(db)
+    state = tmp_path / "state.json"
+
+    def _boom_for_c1(lawd_cd, *a, **k):
+        if lawd_cd == "11000":
+            raise RuntimeError("C1 시군구에서만 터짐")
+        return _EMPTY
+
+    result, _ = _run(dict(complex_nos=["C1", "C2", "C3"], months=2, max_calls=100,
+                          min_remaining=0, state=str(state)), side_effect=_boom_for_c1)
+
+    assert result == {"done": 2, "total": 3, "calls": 5, "failed": 1, "reason": "done"}
+    assert json.loads(state.read_text(encoding="utf-8")) == {"done": ["C2", "C3"]}
+
+
+def test_같은_시군구_단지_둘이면_같은_달은_한_번만_요청한다(db, tmp_path):
+    """캐시는 단지 사이에 비우지 않는다 — 같은 (시군구, 달) 은 목록 전체에서 1번."""
+    db.add_all([
+        Complex(complex_no="S1", complex_name="가단지", cortar_no="1100000000",
+                total_household_count=900, real_estate_type_code="APT"),
+        Complex(complex_no="S2", complex_name="나단지", cortar_no="1100000001",
+                total_household_count=800, real_estate_type_code="APT"),
+    ])
+    db.commit()
+
+    result, mock_get = _run(dict(complex_nos=["S1", "S2"], months=2, max_calls=100,
+                                 min_remaining=0, state=str(tmp_path / "s.json")))
+
+    assert mock_get.call_count == 2  # 단지 2 × 달 2 = 4 가 아니라 달 2
+    assert result["calls"] == 2 and result["done"] == 2

@@ -182,6 +182,19 @@ describe("미분양 상세 — 전세율(이 단지) 칸", () => {
     expect(label.nextElementSibling?.textContent).toBe("-");
     expect(screen.queryByText("65.3%")).not.toBeInTheDocument();
   });
+
+  // 검사관 🟡(세션 471): 새 BE 는 표본 부족 단지에 undefined 가 아니라 null 을 보낸다 — null 도 "-" 여야 하고 건수 줄이 붙으면 안 된다
+  it("단지 값이 null(표본 부족)이면 '-' 이고 건수 줄도 없다", async () => {
+    const base = createMockDetail();
+    mockDetail.mockResolvedValue({
+      ...base,
+      trade_stats: { ...base.trade_stats, complex_jeonse_rate: null, complex_jeonse_n: 1, complex_sale_n: 4 },
+    });
+    renderDetail();
+    const label = await screen.findByText("전세율(이 단지)");
+    expect(label.nextElementSibling?.textContent).toBe("-");
+    expect(screen.queryByText(/전세 1건/)).not.toBeInTheDocument();
+  });
 });
 
 describe("미분양 상세 — 에러 처리", () => {

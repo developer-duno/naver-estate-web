@@ -91,7 +91,7 @@ function AirInfo({ apt, loading, error }: LayerProps) {
   if (pm25 == null) return error ? errorRow() : loading ? loadingRow() : noData();
   return (
     <div className="space-y-1">
-      <Row label="PM2.5 3년 평균" value={`${pm25.toFixed(1)} μg/m³`} />
+      <Row label="PM2.5 3년 평균" value={`${pm25.toFixed(1)}㎍/㎥`} />
       <p className="text-xs text-gray-500 text-right">{pm25StandardShort(pm25)}</p>
     </div>
   );

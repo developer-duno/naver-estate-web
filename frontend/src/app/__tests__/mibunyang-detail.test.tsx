@@ -231,6 +231,7 @@ describe("미분양 상세 — 막대·등급 라벨 대신 값과 공인 기준
       noise: 60,
       noxious_dist: 1200,
       naver_school_walk_min: 7,
+      crime_safety_grade: 2,
       trade_stats: { ...base.trade_stats, cancel_ratio_6m: 2.1 },
       infra: {
         ...base.infra,
@@ -272,6 +273,8 @@ describe("미분양 상세 — 막대·등급 라벨 대신 값과 공인 기준
   it("ⓒ 우리 범죄 점수·지역 등급은 보이지 않는다", async () => {
     renderDetail();
     await screen.findByText("34층");
+    // 안전 섹션 자체는 그려져 있어야 이 단언이 의미가 있다(빈 화면 통과 방지 — 검사관 🟠)
+    expect(screen.getByText("단지 안전 등급")).toBeInTheDocument();
     expect(screen.queryByText("72/100")).not.toBeInTheDocument();
     expect(screen.queryByText("안전 점수")).not.toBeInTheDocument();
     expect(screen.queryByText("지역 안전 등급")).not.toBeInTheDocument();

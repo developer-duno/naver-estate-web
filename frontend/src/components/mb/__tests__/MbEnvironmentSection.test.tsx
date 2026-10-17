@@ -113,11 +113,24 @@ describe("MbEnvironmentSection — 교통 정류장 / 보육 type·teachers / �
     expect(screen.queryByText(/dB/)).not.toBeInTheDocument();
   });
 
-  it("구간에 없는 noise 값(55.5)은 '-' 이고 기준 줄도 없다", () => {
+  it("구간에 없는 noise 값(55.5)은 큰 도로 칸째 숨기고, 그것뿐이면 '데이터 없음'", () => {
     const apt = makeApt({ noise: 55.5 });
     render(<EnvironmentSection apartment={apt} />);
-    expect(screen.getByText("큰 도로 거리(추정)").nextElementSibling?.textContent).toBe("-");
+    expect(screen.queryByText("큰 도로 거리(추정)")).not.toBeInTheDocument();
     expect(screen.queryByText(/소음 측정값 아님/)).not.toBeInTheDocument();
+    expect(screen.getByText("주변 환경 데이터가 없습니다.")).toBeInTheDocument();
+  });
+
+  // 검사관 🟠(세션 472): 안전 섹션이 그려진 상태에서 범죄 점수·지역 등급이 없는지 본다(빈 화면 통과 방지)
+  it("안전 섹션은 보이지만 우리 범죄 점수·지역 등급은 없다", () => {
+    const apt = makeApt({ crime_safety_grade: 2, infra: { crime_score: 72, crime_grade: "B" } });
+    render(<EnvironmentSection apartment={apt} />);
+    expect(screen.getByText("단지 안전 등급")).toBeInTheDocument();
+    expect(screen.getByText("2등급 (1=안전)")).toBeInTheDocument();
+    expect(screen.queryByText("안전 점수")).not.toBeInTheDocument();
+    expect(screen.queryByText("72/100")).not.toBeInTheDocument();
+    expect(screen.queryByText("지역 안전 등급")).not.toBeInTheDocument();
+    expect(screen.queryByText("B")).not.toBeInTheDocument(); // 옛 지역 등급 글자
   });
 
   it("apt.noise 가 null 이면 소음 섹션이 렌더되지 않는다", () => {

@@ -84,9 +84,12 @@ export function roadDistanceText(noiseDb: number | null | undefined): string | n
   }
 }
 
-/** PM2.5 가 국가 기준(연평균 15㎍/㎥) 이하인지 넘는지 — 같음은 "이하" */
+/**
+ * PM2.5 가 국가 기준(연평균 15㎍/㎥) 이하인지 넘는지 — 같음은 "이하".
+ * 화면 값과 같은 반올림(소수 첫째, toFixed(1))으로 비교한다 — 15.04 는 "15.0 … 이하", 15.05 는 "15.1 … 초과".
+ */
 function pm25Side(pm25: number): "이하" | "초과" {
-  return pm25 <= PM25_ANNUAL_STANDARD ? "이하" : "초과";
+  return Number(pm25.toFixed(1)) <= PM25_ANNUAL_STANDARD ? "이하" : "초과";
 }
 
 /**

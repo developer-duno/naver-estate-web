@@ -81,7 +81,7 @@ describe("MbInfraOverlay — 상세형 apt(중첩 채움): A 수정 후 동작",
   // 세션 472: 우리 등급(좋음/보통/나쁨) 줄은 지우고 PM2.5 + 국가 기준(연평균 15) 이하/초과 글자만
   it("대기질 레이어가 PM2.5 3년 평균과 국가 기준 이하/초과 글자를 표시하고 등급은 없다", () => {
     render(<MbInfraOverlay apt={detailApt()} layer="air" />);
-    expect(screen.getByText("14.2 μg/m³")).toBeInTheDocument();
+    expect(screen.getByText("14.2㎍/㎥")).toBeInTheDocument();
     expect(screen.getByText("이 값은 국가 대기환경기준(연평균 15㎍/㎥) 이하")).toBeInTheDocument();
     expect(screen.queryByText("대기질 등급 (3년 평균)")).not.toBeInTheDocument();
     expect(screen.queryByText("좋음")).not.toBeInTheDocument();

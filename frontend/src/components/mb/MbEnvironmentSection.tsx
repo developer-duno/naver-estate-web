@@ -41,7 +41,7 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
   const roadText = roadDistanceText(noise);
   const schoolWalk = positiveOrNull(a.naver_school_walk_min);
   const noxious = positiveOrNull(a.noxious_dist);
-  const hasData = (infra ?? school ?? transport ?? noise) != null || a.naver_school_walk_min != null || a.noxious_dist != null || a.crime_safety_grade != null || a.quake_design != null;
+  const hasData = (infra ?? school ?? transport) != null || roadText != null || a.naver_school_walk_min != null || a.noxious_dist != null || a.crime_safety_grade != null || a.quake_design != null;
 
   if (!hasData) {
     return (
@@ -97,7 +97,7 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
             {air.pm10 != null && (
               <div className="flex flex-col">
                 <dt className="text-xs text-gray-500">PM10</dt>
-                <dd className="text-sm">{air.pm10.toFixed(1)} <span className="text-gray-400">μg/m³</span></dd>
+                <dd className="text-sm">{air.pm10.toFixed(1)} <span className="text-gray-400">㎍/㎥</span></dd>
               </div>
             )}
             {air.o3 != null && (
@@ -159,11 +159,12 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
       )}
 
       {/* noise 는 측정값이 아니라 큰 도로 거리 구간에 붙인 추정 dB 라 거리 구간으로 풀어 쓴다 */}
-      {noise != null && (
+      {/* 70·60·50·40 밖의 값은 어느 거리 구간인지 알 수 없어 칸째 숨긴다 */}
+      {roadText != null && (
         <div className="mb-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-2">큰 도로</h4>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <InfoRow wide label="큰 도로 거리(추정)" value={roadText ?? undefined} basis={BASIS.roadDistance} />
+            <InfoRow wide label="큰 도로 거리(추정)" value={roadText} basis={BASIS.roadDistance} />
           </dl>
         </div>
       )}

@@ -21,6 +21,7 @@
 - **자동 정리(주간)**: 한 시군구의 24달을 **모두** 받았고(호출 실패 0) 이번에 그 시군구에서 **1줄 이상 저장했으면**, 그 시군구 단지들의 정부 줄(`trade_type='A1'`, `area_no` 가 `''` 또는 NULL) 중 `base_month ∈ 이번 24달` 이고 `recorded_at < 이번 회차 시작 시각` 인 줄을 지운다. 호출이 하나라도 실패한 시군구·저장 0 인 시군구는 지우지 않는다(이름 규칙이 통째로 어긋난 날 차트를 비우지 않게). 지운 수는 회차 끝 로그 한 줄 `[정부 실거래가] 이번에 짝이 안 된 옛 줄 N개 정리` 로 남긴다(알림·error_message 아님).
 - **자동 정리(소급)**: 한 단지의 달을 모두 받았으면 그 단지의 정부 줄 중 `base_month ∈ 이번 달 목록` 이고 `recorded_at < 시작 시각` 인 줄을 지운다(저장 0 이어도 지운다 — 단지 하나뿐이라 "통째로 어긋남" 가드가 뜻이 없고, 이 단지가 이제 어느 이름에도 안 붙는 게 사실이면 옛 값이 남는 쪽이 더 틀리다).
 - **일회성 정리 스크립트**: ⓐ 유형 `OPST`·`OBYG` 단지의 정부 줄 전부 ⓑ "같은 시군구·같은 정규화 이름·다른 법정동이고 둘 이상이 정부 줄을 가진 묶음" 소속 단지의 정부 줄 중 `base_month < 이번 24달 시작` 인 것. 기본은 **세기만**(dry-run), `--apply` 때만 삭제(1,000줄씩 commit). 실행 절차는 §운영 반영.
+  - **개정(사장님 결정 2026-10-17 18:3x)**: `--apply` 는 ⓐ 오피스텔 줄만 지운다. ⓑ 는 세기만 하고 그 단지 번호를 `--out` JSON 의 `mixed` 에 남기며, `scripts/backfill_complex_list.py` 가 그 단지들만 60달 소급으로 다시 쓴다(소급이 거래 온 달의 틀린 옛 줄을 지우고 맞는 줄을 쓴다).
 - **바꾸지 않는 것**: `_upsert_price_history`·체크포인트·재개·남은 횟수 알림·429 판정·호출 수(같은 (시군구, 달)을 같은 횟수 부른다)·`public_data_attempted_at` 도장 규칙·소급 대상 선정(6줄 미만).
 
 ## Global Constraints
@@ -175,9 +176,11 @@
 
 1. PR → 검사관 2명(백엔드·운영 DB 삭제 = 적대 Opus + 맹점 Opus) → 합치기.
 2. 재시작: `memory/scripts/restart_window.sh` 로만(10-18 일 03:00~03:50 새 단지 찾기·00:20 상세 백필 피함 → 창 04:30~10:30).
-3. 수동 1회: 세션 소유 스크립트 `memory/scripts/run_public_trades_once.py`(`run_kapt_evening_once.py` 꼴 — 같은 함수 `collect_public_trade_data(scheduler_job_id="collect_public_trades")`, 별도 프로세스, 로그 파일) — 정부 창구 약 6,100회 · 약 55분 · 일요일(KOSPI 미사용) 오전.
-4. 덤프(`infra.md` §DB 백업, `pg_dump` 로컬 — DROP·대량 삭제 동반이라 데이터 덤프까지) → `python scripts/cleanup_public_trade_rows.py`(세기) → 사장님 허락 → `--apply`.
-5. 재측정: 세션 469 측정 스크립트 다시 돌려 섞임 묶음·오피스텔 정부 줄·굳은 단지 수 보고 + 거산 2666 화면 확인.
+3. 덤프(`infra.md` §DB 백업, `pg_dump` 로컬 — 자동 정리·오피스텔 삭제가 대량 삭제라 데이터 덤프까지).
+4. 수동 1회: 세션 소유 스크립트 `memory/scripts/run_public_trades_once.py`(`run_kapt_evening_once.py` 꼴 — 같은 함수 `collect_public_trade_data(scheduler_job_id="collect_public_trades")`, 별도 프로세스, 로그 파일) — 정부 창구 약 6,100회 · 약 55분 · 일요일(KOSPI 미사용) 오전. 24달 안의 옛 줄은 이 회차가 시군구마다 정리한다.
+5. `python scripts/cleanup_public_trade_rows.py --out <대상.json>`(세기 + 단지 번호 저장 — 키 `opst`·`mixed`) → 결과 보고 → 사장님 허락 → `--apply`(**오피스텔 정부 줄만** 지운다). 섞인 묶음의 24달 밖 옛 줄은 **지우지 않는다**(사장님 결정 2026-10-17).
+6. 소급 되살리기(이틀): `python scripts/backfill_complex_list.py --list <대상.json> --months 60 --max-calls <그날 몫> --state <진행.json>` — `mixed` 단지만 세대수 큰 순으로 60달 소급(그 단지의 거래가 온 달의 틀린 옛 줄을 지우고 맞는 줄을 쓴다 · 60달 밖·거래 0건 달은 그대로). 창구 남은 횟수 1,500 아래·하루 한도 초과·호출 상한에서 멈추고, 이튿날 같은 명령(같은 진행 파일)이 끝난 단지를 건너뛰고 이어 간다. `--max-calls` 는 그날 다른 소비자(KOSPI·미분양·03:30 소급) 몫을 뺀 값으로 사장님께 여쭙고 정한다.
+7. 재측정: 세션 469 측정 스크립트 다시 돌려 섞임 묶음·오피스텔 정부 줄·굳은 단지 수 보고 + 거산 2666 화면 확인.
 
 ## 자가 점검(계획서 작성 뒤)
 

@@ -3,17 +3,19 @@
 배경
     정부 실거래가에는 단지 번호·법정동 코드가 없어 이름만으로 붙이던 동안, 같은 시군구의 같은
     이름 단지끼리 거래가 섞였고 오피스텔에도 아파트 매매 값이 붙었다. 짝짓기를 고친 뒤 주간·소급
-    수집은 이번 24달 안의 옛 줄을 스스로 지우지만, 그 밖에 남는 두 가지를 이 스크립트가 한 번 지운다.
+    수집은 이번 24달 안의 옛 줄을 스스로 지우지만, 그 밖에 남는 두 가지를 이 스크립트가 다룬다.
 
 대상 (정부 줄 = complex_price_history 의 trade_type 'A1' 이고 area_no 가 '' 또는 NULL — 네이버 줄은 안 건드린다)
-    ⓐ 오피스텔(OPST·OBYG) 단지의 정부 줄 전부.
+    ⓐ 오피스텔(OPST·OBYG) 단지의 정부 줄 전부 → --apply 때 지운다.
     ⓑ "같은 시군구(법정동 코드 앞 5자리)·같은 정규화 이름인데 법정동 코드가 둘 이상이고, 그중 정부 줄을
-       가진 단지가 둘 이상"인 묶음 소속 단지의 정부 줄 중 이번 24달 시작보다 오래된 것(ⓐ 와 겹치는 단지는 ⓐ 로만 센다).
+       가진 단지가 둘 이상"인 묶음 소속 단지의 정부 줄 중 이번 24달 시작보다 오래된 것(ⓐ 와 겹치는 단지는 ⓐ 로만 센다)
+       → **지우지 않고 세기만** 한다(사장님 결정 2026-10-17). 그 단지 번호를 --out 의 "mixed" 에 남기고
+       scripts/backfill_complex_list.py 가 60달 소급으로 다시 쓴다(소급이 틀린 줄을 지우고 맞는 줄을 쓴다).
 
 사용법 (운영 적용 전 pg_dump 데이터 덤프 · 사장님 허락 — infra.md §DB 백업)
-    cd backend && python scripts/cleanup_public_trade_rows.py             # 세기만
-    cd backend && python scripts/cleanup_public_trade_rows.py --out 대상.json  # 대상 단지 번호 저장
-    cd backend && python scripts/cleanup_public_trade_rows.py --apply     # 1,000줄씩 지우고 그때마다 저장
+    cd backend && python scripts/cleanup_public_trade_rows.py                 # 세기만
+    cd backend && python scripts/cleanup_public_trade_rows.py --out 대상.json  # 대상 단지 번호 저장(키 opst·mixed)
+    cd backend && python scripts/cleanup_public_trade_rows.py --apply         # 오피스텔 줄만 1,000줄씩 지우고 그때마다 저장
 """
 
 import argparse
@@ -97,8 +99,10 @@ def find_targets(db, months: list[str]) -> dict[str, list[int]]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="옛 정부 실거래가 줄 일회성 정리 (기본은 세기만)")
-    parser.add_argument("--apply", action="store_true", help="실제로 지운다 (1,000줄씩 지우고 그때마다 저장)")
-    parser.add_argument("--out", default=None, help="대상 단지 번호를 JSON 파일로 저장")
+    parser.add_argument("--apply", action="store_true",
+                        help="오피스텔 정부 줄만 실제로 지운다 (1,000줄씩 지우고 그때마다 저장)")
+    parser.add_argument("--out", default=None,
+                        help="대상 단지 번호를 JSON 파일로 저장 — 키 opst·mixed (mixed = 소급으로 다시 쓸 목록)")
     args = parser.parse_args(argv)
 
     from crawler.service_public import _recent_months
@@ -108,25 +112,26 @@ def main(argv: list[str] | None = None) -> int:
     months = _recent_months(date.today(), 24)
     with SessionLocal() as db:
         targets = find_targets(db, months)
-        print(f"지울 대상: 오피스텔 {len(targets['opst']):,} · 섞인 묶음 창 밖 {len(targets['mixed_old']):,}"
-              f" (24달 창 시작 {months[0]})")
+        opst_nos, mixed_nos = _target_complexes(db)
+        print(f"오피스텔 {len(targets['opst']):,}줄(--apply 때 지움)"
+              f" · 섞인 묶음 창 밖 {len(targets['mixed_old']):,}줄(지우지 않음 — 소급으로 다시 씀,"
+              f" 단지 {len(mixed_nos):,}곳) (24달 창 시작 {months[0]})")
         if args.out:
-            opst_nos, mixed_nos = _target_complexes(db)
             with open(args.out, "w", encoding="utf-8") as f:
                 json.dump({"opst": opst_nos, "mixed": mixed_nos}, f, ensure_ascii=False, indent=1)
             print(f"대상 단지 번호를 {args.out} 에 저장했어요")
         if not args.apply:
-            print("세기만 했어요 — 지우려면 --apply 를 붙여 다시 실행하세요")
+            print("세기만 했어요 — 오피스텔 줄을 지우려면 --apply 를 붙여 다시 실행하세요")
             return 0
         deleted = 0
-        for part in _chunks(targets["opst"] + targets["mixed_old"]):
+        for part in _chunks(targets["opst"]):
             deleted += (
                 db.query(ComplexPriceHistory)
                 .filter(ComplexPriceHistory.id.in_(part))
                 .delete(synchronize_session=False)
             )
             db.commit()
-        print(f"지웠어요: {deleted:,}줄")
+        print(f"지웠어요: 오피스텔 {deleted:,}줄 (섞인 묶음 줄은 그대로 — scripts/backfill_complex_list.py 로 다시 쓰기)")
     return 0
 
 

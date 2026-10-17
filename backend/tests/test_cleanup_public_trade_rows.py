@@ -70,15 +70,30 @@ def test_apply_없이_실행하면_지우지_않는다(db, capsys):
     _seed(db)
     assert main([]) == 0
     assert _avgs(db) == [1, 2, 3, 4, 5, 6, 7, 8]
-    assert "오피스텔 2 · 섞인 묶음 창 밖 2" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "오피스텔 2줄" in out
+    assert "섞인 묶음 창 밖 2줄(지우지 않음 — 소급으로 다시 씀, 단지 2곳)" in out
 
 
-def test_apply_면_대상만_지운다(db):
+def test_apply_면_오피스텔_줄만_지우고_섞인_묶음은_남긴다(db):
+    """사장님 결정 10-17: 섞인 묶음의 창 밖 줄은 지우지 않고 60달 소급으로 다시 쓴다."""
     from scripts.cleanup_public_trade_rows import main
 
     _seed(db)
     assert main(["--apply"]) == 0
-    assert _avgs(db) == [3, 4, 6, 8]
+    assert _avgs(db) == [3, 4, 5, 6, 7, 8]
+
+
+def test_out_에_소급으로_다시_쓸_단지_목록을_남긴다(db, tmp_path):
+    import json
+
+    from scripts.cleanup_public_trade_rows import main
+
+    _seed(db)
+    path = tmp_path / "targets.json"
+    assert main(["--out", str(path)]) == 0
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved == {"opst": ["3001"], "mixed": ["1775", "2666"]}
 
 
 def _seed_groups(db, rows):

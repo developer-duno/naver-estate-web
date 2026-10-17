@@ -270,3 +270,28 @@ def test_두번째_시군구에서_예외가_나면_첫_시군구_저장과_정�
     assert [r.price_avg for r in _rows(db, "2666")] == [1]   # 정리 되돌림
     assert [r.price_avg for r in _rows(db, "9002")] == [2]
     assert _rows(db, "1775") == [] and _rows(db, "9001") == []  # 저장도 되돌림
+
+
+def test_8자리_달_줄은_area_no_가_비어도_주간_정리가_안_지운다(db):
+    """공공 경로 표식 = 6자리 달. 8자리(네이버 경로) 줄은 area_no '' 여도 남는다(미분양 조건 ①)."""
+    _add_complexes(db)
+    db.add_all([_gov("2666", "20260801", 1), _gov("2666", MONTHS[0], 2)])
+    db.commit()
+
+    _run(_suwon_only([_trade("금곡동", "거산", "50,000")]))
+
+    assert [r.price_avg for r in _rows(db, "2666")] == [1]  # 6자리 창 안 줄만 지워짐
+
+
+def test_정리_함수는_달_목록에_8자리가_들어와도_그_줄을_안_지운다(db):
+    """6자리 조건을 글자로 박은 것의 직접 가드 — 달 목록 거르기와 별개로 8자리 줄은 대상 밖."""
+    from crawler.service_public import _delete_stale_gov_rows
+
+    _add_complexes(db)
+    db.add_all([_gov("2666", "20260801", 1), _gov("2666", "202608", 2)])
+    db.commit()
+
+    future = utcnow() + timedelta(days=1)
+    assert _delete_stale_gov_rows(db, ["2666"], ["20260801", "202608"], future) == 1
+    db.commit()
+    assert [r.price_avg for r in _rows(db, "2666")] == [1]  # 8자리 줄만 남는다

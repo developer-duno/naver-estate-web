@@ -8,23 +8,31 @@ N단지 접미사를 떼고 매칭하는 보조 규칙을 추가하되, "경희�
 오매칭(다른 단지 가격이 섞임)을 막기 위해 흡수하지 않는다.
 """
 
+from datetime import date, timedelta
 from unittest.mock import patch
 
-from db.models import ComplexPriceHistory
+import pytest
+
+from db.models import Complex, ComplexPriceHistory
 from services.upsert import upsert_complex_from_search
+from utils import utcnow
 
 
-def _make_complex_data(complex_no, name, cortar_no="1171011100"):
+def _make_complex_data(complex_no, name, cortar_no="1171011100", address="서울시 송파구 잠실동"):
     return {
         "complexNo": complex_no,
         "complexName": name,
         "cortarNo": cortar_no,
+        "cortarAddress": address,
         "realEstateTypeCode": "APT",
     }
 
 
-def _make_trade(apt_name, deal_amount="150,000"):
-    return {"aptNm": apt_name, "dealAmount": deal_amount}
+def _make_trade(apt_name, deal_amount="150,000", umd="잠실동", cancelled=False):
+    return {
+        "aptNm": apt_name, "dealAmount": deal_amount, "umdNm": umd,
+        "cdealType": "O" if cancelled else " ",
+    }
 
 
 class TestStripNDanji:
@@ -40,25 +48,116 @@ class TestStripNDanji:
         assert _strip_n_danji("올림픽선수기자촌") == "올림픽선수기자촌"
 
 
-class TestHasSiblingNDanji:
-    def test_detects_sibling_when_present(self, db):
-        """같은 지역에 'base+N단지' 형태 단지가 있으면 True."""
-        upsert_complex_from_search(db, _make_complex_data("70101", "경희궁의아침2단지"))
-        upsert_complex_from_search(db, _make_complex_data("70102", "경희궁의아침3단지"))
+def _add_geosan_pair(db):
+    """수원 권선구의 같은 이름 '거산' 두 단지 — 금곡동 1775 · 고색동 2666."""
+    db.add_all([
+        Complex(complex_no="1775", complex_name="거산", cortar_no="4111313400",
+                cortar_address="경기도 수원시 권선구 금곡동", real_estate_type_code="APT"),
+        Complex(complex_no="2666", complex_name="거산", cortar_no="4111312800",
+                cortar_address="경기도 수원시 권선구 고색동", real_estate_type_code="APT"),
+    ])
+    db.commit()
+
+
+def _gov_rows(db, complex_no):
+    return (
+        db.query(ComplexPriceHistory)
+        .filter(ComplexPriceHistory.complex_no == complex_no, ComplexPriceHistory.trade_type == "A1")
+        .all()
+    )
+
+
+def _run_backfill(complex_no, trades, months_back=1):
+    from crawler.public_data_api import PublicDataAPI
+    PublicDataAPI.reset()
+    from crawler.service_public import backfill_price_history
+    with patch("crawler.public_data_api.PublicDataAPI.get_all_apt_trades", return_value=trades):
+        return backfill_price_history(complex_no, months_back=months_back)
+
+
+class TestBackfillDongAndCleanup:
+    """세션 469: 소급도 법정동으로 가르고, 해제 거래를 빼고, 이번에 안 쓰인 옛 정부 줄을 지운다."""
+
+    def test_소급은_다른_법정동_같은_이름_거래를_안_가져온다(self, db):
+        _add_geosan_pair(db)
+        trades = [
+            _make_trade("거산", "50,000", umd="금곡동"),
+            _make_trade("거산", "52,000", umd="금곡동"),
+            _make_trade("거산", "54,000", umd="금곡동"),
+        ]
+        assert _run_backfill("2666", trades)["collected"] == 0
+        db.expire_all()
+        assert _gov_rows(db, "2666") == []
+
+        assert _run_backfill("1775", trades)["collected"] == 1
+        db.expire_all()
+        rows = _gov_rows(db, "1775")
+        assert len(rows) == 1
+        assert (rows[0].price_upper, rows[0].price_lower, rows[0].price_avg) == (54000, 50000, 52000)
+
+    def test_소급은_해제_거래를_뺀다(self, db):
+        _add_geosan_pair(db)
+        trades = [
+            _make_trade("거산", "50,000", umd="금곡동"),
+            _make_trade("거산", "90,000", umd="금곡동", cancelled=True),
+        ]
+        _run_backfill("1775", trades)
+        db.expire_all()
+        rows = _gov_rows(db, "1775")
+        assert len(rows) == 1
+        assert rows[0].price_avg == 50000
+        assert rows[0].price_upper == 50000
+
+    def test_소급은_이번에_안_쓰인_옛_줄을_지운다(self, db):
+        from crawler.service_public import _recent_months
+
+        _add_geosan_pair(db)
+        month = _recent_months(date.today(), 1)[0]
+        old = utcnow() - timedelta(days=10)
+        db.add_all([
+            ComplexPriceHistory(complex_no="2666", trade_type="A1", area_no="", base_month=month,
+                                price_avg=1, recorded_at=old),           # 창 안 정부 줄 → 삭제
+            ComplexPriceHistory(complex_no="2666", trade_type="A1", area_no=None, base_month=month,
+                                price_avg=2, recorded_at=old),           # 창 안이지만 NULL = 미분양 몫 → 유지
+            ComplexPriceHistory(complex_no="2666", trade_type="A1", area_no="84A", base_month=month,
+                                price_avg=3, recorded_at=old),           # 네이버 줄 → 유지
+            ComplexPriceHistory(complex_no="2666", trade_type="A1", area_no="", base_month="201001",
+                                price_avg=4, recorded_at=old),           # 달 목록 밖 → 유지
+        ])
         db.commit()
 
-        from crawler.service_public import _has_sibling_n_danji
+        # 거래는 왔지만(금곡동) 2666(고색동)에는 하나도 짝이 안 되는 달
+        _run_backfill("2666", [_make_trade("거산", "50,000", umd="금곡동")])
+        db.expire_all()
+        assert sorted(r.price_avg for r in _gov_rows(db, "2666")) == [2, 3, 4]  # '' 줄만 지워짐
 
-        assert _has_sibling_n_danji(db, "경희궁의아침", "11710") is True
+    def test_소급은_거래가_없는_달의_옛_줄은_남긴다(self, db):
+        """정상 응답인데 거래 0건인 달은 '짝이 안 됐다'는 증거가 아니다 — 옛 줄 보존 (보완 1)."""
+        from crawler.service_public import _recent_months
 
-    def test_no_sibling_when_absent(self, db):
-        """형제 단지가 DB에 없으면 False."""
-        upsert_complex_from_search(db, _make_complex_data("70103", "올림픽선수기자촌"))
+        _add_geosan_pair(db)
+        month = _recent_months(date.today(), 1)[0]
+        db.add(ComplexPriceHistory(complex_no="2666", trade_type="A1", area_no="", base_month=month,
+                                   price_avg=1, recorded_at=utcnow() - timedelta(days=10)))
         db.commit()
 
-        from crawler.service_public import _has_sibling_n_danji
+        _run_backfill("2666", [])
+        db.expire_all()
+        assert [r.price_avg for r in _gov_rows(db, "2666")] == [1]
 
-        assert _has_sibling_n_danji(db, "올림픽선수기자촌", "11710") is False
+    def test_소급_호출이_실패하면_옛_줄을_지우지_않는다(self, db):
+        from crawler.service_public import PublicTradeFetchError, _recent_months
+
+        _add_geosan_pair(db)
+        month = _recent_months(date.today(), 1)[0]
+        db.add(ComplexPriceHistory(complex_no="2666", trade_type="A1", area_no="", base_month=month,
+                                   price_avg=1, recorded_at=utcnow() - timedelta(days=10)))
+        db.commit()
+
+        with pytest.raises(PublicTradeFetchError):
+            _run_backfill("2666", None)
+        db.expire_all()
+        assert [r.price_avg for r in _gov_rows(db, "2666")] == [1]
 
 
 class TestBackfillPriceHistoryNDanjiMatching:
@@ -174,3 +273,31 @@ class TestBackfillPriceBatchQuotaExhausted:
         mock_backfill.assert_not_called()
         assert result["quota_exhausted"] is True
         assert result["success"] == 0
+
+
+class TestBackfillCleanupScope:
+    """보완 2 의 소급 쪽: 법정동을 모르거나 유형이 비어 짝이 될 수 없는 단지는 소급해도 옛 줄을 안 지운다."""
+
+    def test_주소나_유형이_빈_단지를_소급하면_그_단지_옛_줄은_남는다(self, db):
+        from crawler.service_public import _recent_months
+
+        _add_geosan_pair(db)
+        month = _recent_months(date.today(), 1)[0]
+        db.add_all([
+            Complex(complex_no="4001", complex_name="거산", cortar_no="4111313400",
+                    cortar_address=None, real_estate_type_code="APT"),       # 주소 빈 단지
+            Complex(complex_no="4002", complex_name="다른", cortar_no="4111313400",
+                    cortar_address="경기도 수원시 권선구 금곡동", real_estate_type_code=None),  # 유형 빈 단지
+        ])
+        old = utcnow() - timedelta(days=10)
+        for no, avg in (("4001", 1), ("4002", 2)):
+            db.add(ComplexPriceHistory(complex_no=no, trade_type="A1", area_no="", base_month=month,
+                                       price_avg=avg, recorded_at=old))
+        db.commit()
+
+        trades = [_make_trade("거산", "50,000", umd="금곡동")]  # 거래는 온 달(정리 조건의 나머지는 충족)
+        _run_backfill("4001", trades)
+        _run_backfill("4002", trades)
+        db.expire_all()
+        assert [r.price_avg for r in _gov_rows(db, "4001")] == [1]
+        assert [r.price_avg for r in _gov_rows(db, "4002")] == [2]

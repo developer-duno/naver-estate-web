@@ -5,9 +5,10 @@ E. 국토교통부 아파트 매매 실거래가 API → complex_price_history �
 
 import logging
 import os
-import re
 from datetime import datetime, timedelta, timezone
 
+from crawler.public_trade_match import N_DANJI_SUFFIX as _N_DANJI_SUFFIX
+from crawler.public_trade_match import _strip_n_danji  # noqa: F401 — 옛 시험 import 보존
 from crawler.service_common import (
     RESUME_LOOKBACK_LIMIT,
     RESUME_MAX_AGE_HOURS,
@@ -20,14 +21,6 @@ from db.models import Complex, CrawlJob
 from utils import safe_int, utcnow
 
 logger = logging.getLogger(__name__)
-
-_N_DANJI_SUFFIX = re.compile(r"([0-9]+)단지$")
-
-
-def _strip_n_danji(norm_name: str) -> str:
-    """정규화된 단지명에서 말단 'N단지'(숫자+단지)를 뗀 이름. 없으면 그대로."""
-    return _N_DANJI_SUFFIX.sub("", norm_name)
-
 
 def _has_sibling_n_danji(db, base_norm_name: str, sigungu_cd: str) -> bool:
     """같은 지역에 'base_norm_name + N단지' 형태로 등록된 형제 단지가 있는지 확인.

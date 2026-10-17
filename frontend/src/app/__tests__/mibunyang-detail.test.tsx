@@ -166,7 +166,7 @@ describe("미분양 상세 — 전세율(이 단지) 칸", () => {
     mockDetail.mockResolvedValue(createMockDetail());
     renderDetail();
     await waitFor(() => {
-      expect(screen.getByText("전세율(이 단지)")).toBeInTheDocument();
+      expect(screen.getByText("전세율(이 단지 · 대표 평수)")).toBeInTheDocument();
     });
     expect(screen.getByText("전세 8건 · 매매 15건")).toBeInTheDocument();
     expect(screen.getByText("61.2%")).toBeInTheDocument();
@@ -178,7 +178,7 @@ describe("미분양 상세 — 전세율(이 단지) 칸", () => {
     delete tradeStats.complex_jeonse_rate; // jeonse_rate: 65.3 은 그대로 둔다
     mockDetail.mockResolvedValue({ ...base, trade_stats: tradeStats });
     renderDetail();
-    const label = await screen.findByText("전세율(이 단지)");
+    const label = await screen.findByText("전세율(이 단지 · 대표 평수)");
     expect(label.nextElementSibling?.textContent).toBe("-");
     expect(screen.queryByText("65.3%")).not.toBeInTheDocument();
   });
@@ -191,7 +191,7 @@ describe("미분양 상세 — 전세율(이 단지) 칸", () => {
       trade_stats: { ...base.trade_stats, complex_jeonse_rate: null, complex_jeonse_n: 1, complex_sale_n: 4 },
     });
     renderDetail();
-    const label = await screen.findByText("전세율(이 단지)");
+    const label = await screen.findByText("전세율(이 단지 · 대표 평수)");
     expect(label.nextElementSibling?.textContent).toBe("-");
     expect(screen.queryByText(/전세 1건/)).not.toBeInTheDocument();
   });

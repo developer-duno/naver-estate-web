@@ -176,8 +176,9 @@ export function TradeStatsSection({ apartment: a }: SectionProps) {
         <InfoRow label="인근 시세 중위값" value={ts.nearby_median != null ? formatKoreanPrice(ts.nearby_median) : undefined} />
         <InfoRow label="최근 6개월 거래" value={ts.recent_trades_6m != null ? `${ts.recent_trades_6m}건` : undefined} />
         {/* 단지 단위 값만 쓴다 — ts.jeonse_rate 는 구(區) 단위라 이 칸에 넣지 않는다 (세션 471) */}
+        {/* 대표 평수 하나의 값(미분양 complex_jeonse_rate) — 평수별 표는 B27 */}
         <InfoRow
-          label="전세율(이 단지)"
+          label="전세율(이 단지 · 대표 평수)"
           value={
             ts.complex_jeonse_rate != null ? (
               <div className="flex flex-col gap-0.5">

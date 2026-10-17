@@ -79,3 +79,31 @@ def test_apply_면_대상만_지운다(db):
     _seed(db)
     assert main(["--apply"]) == 0
     assert _avgs(db) == [3, 4, 6, 8]
+
+
+def _seed_groups(db, rows):
+    """(단지 번호, 이름, 10자리 코드, 정부 줄 가짐) 목록 → 단지 + 창 밖 정부 줄."""
+    old = utcnow() - timedelta(days=30)
+    for no, name, code, has_gov in rows:
+        db.add(Complex(complex_no=no, complex_name=name, cortar_no=code,
+                       cortar_address="경기도 수원시 권선구 금곡동", real_estate_type_code="APT"))
+        if has_gov:
+            db.add(ComplexPriceHistory(complex_no=no, trade_type="A1", area_no="", base_month="201001",
+                                       price_avg=1, recorded_at=old))
+    db.commit()
+
+
+def test_같은_법정동_묶음은_대상_아님(db):
+    """이름이 같아도 법정동 코드가 하나뿐이면 '섞인 묶음'이 아니다."""
+    from scripts.cleanup_public_trade_rows import find_targets
+
+    _seed_groups(db, [("6001", "같음", "4111313400", True), ("6002", "같음", "4111313400", True)])
+    assert find_targets(db, _months())["mixed_old"] == []
+
+
+def test_정부_줄을_가진_단지가_1곳뿐인_다른_동_묶음은_대상_아님(db):
+    """다른 동 묶음이어도 정부 줄을 가진 단지가 하나뿐이면 섞였을 수 없다."""
+    from scripts.cleanup_public_trade_rows import find_targets
+
+    _seed_groups(db, [("7001", "홀로", "4111313400", True), ("7002", "홀로", "4111312800", False)])
+    assert find_targets(db, _months())["mixed_old"] == []

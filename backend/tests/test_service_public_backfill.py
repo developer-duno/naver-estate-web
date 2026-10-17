@@ -126,9 +126,24 @@ class TestBackfillDongAndCleanup:
         ])
         db.commit()
 
-        _run_backfill("2666", [])
+        # 거래는 왔지만(금곡동) 2666(고색동)에는 하나도 짝이 안 되는 달
+        _run_backfill("2666", [_make_trade("거산", "50,000", umd="금곡동")])
         db.expire_all()
         assert sorted(r.price_avg for r in _gov_rows(db, "2666")) == [3, 4]
+
+    def test_소급은_거래가_없는_달의_옛_줄은_남긴다(self, db):
+        """정상 응답인데 거래 0건인 달은 '짝이 안 됐다'는 증거가 아니다 — 옛 줄 보존 (보완 1)."""
+        from crawler.service_public import _recent_months
+
+        _add_geosan_pair(db)
+        month = _recent_months(date.today(), 1)[0]
+        db.add(ComplexPriceHistory(complex_no="2666", trade_type="A1", area_no="", base_month=month,
+                                   price_avg=1, recorded_at=utcnow() - timedelta(days=10)))
+        db.commit()
+
+        _run_backfill("2666", [])
+        db.expire_all()
+        assert [r.price_avg for r in _gov_rows(db, "2666")] == [1]
 
     def test_소급_호출이_실패하면_옛_줄을_지우지_않는다(self, db):
         from crawler.service_public import PublicTradeFetchError, _recent_months

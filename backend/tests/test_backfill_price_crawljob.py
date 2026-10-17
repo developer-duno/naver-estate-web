@@ -159,3 +159,25 @@ class TestDiscoverRegionsTotalItems:
         assert events.index("wait") < events.index("search2"), events
         job = db.query(CrawlJob).filter(CrawlJob.scheduler_job_id == "discover_page_commit").one()
         assert (job.status, job.total_items) == ("completed", 2)
+
+
+class TestBackfillPriceBatchSkipsOfficetel:
+    """세션 469 보완: 아파트 매매 창구라 오피스텔은 영영 0건 — 소급 대상에서 뺀다(유형 NULL 은 기존대로 대상)."""
+
+    def test_오피스텔은_소급_대상이_아니다(self, db):
+        db.add_all([
+            Complex(complex_no="OP1", complex_name="오피", total_household_count=900,
+                    cortar_no="1100000000", real_estate_type_code="OPST"),
+            Complex(complex_no="OB1", complex_name="오피분양", total_household_count=800,
+                    cortar_no="1100000000", real_estate_type_code="OBYG"),
+            Complex(complex_no="AP1", complex_name="아파트", total_household_count=700,
+                    cortar_no="1100000000", real_estate_type_code="APT"),
+            Complex(complex_no="NL1", complex_name="유형없음", total_household_count=600,
+                    cortar_no="1100000000", real_estate_type_code=None),
+        ])
+        db.commit()
+        with patch("crawler.service_public.backfill_price_history") as mock_backfill:
+            from crawler.service_public import backfill_price_batch
+            backfill_price_batch(batch_size=10, scheduler_job_id="backfill_price")
+
+        assert [c.args[0] for c in mock_backfill.call_args_list] == ["AP1", "NL1"]

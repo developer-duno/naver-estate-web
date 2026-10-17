@@ -129,3 +129,9 @@ def test_from_db_는_시군구_단지만_읽는다(db):
     m = M.from_db(db, "41113")
     assert sorted(m.complex_nos) == ["1775", "2666"]
     assert m.match("금곡동", "거산") == "1775"
+
+
+def test_정확_일치가_모호하면_끝_단지_단계로_넘어가지_않는다():
+    """같은 동 APT 'a' 둘 + 'a단지' 하나, 국토부 'a' → None — 모호함을 느슨한 규칙으로 풀지 않는다."""
+    m = SigunguMatcher([_ref("A1", "a", "금곡동"), _ref("A2", "a", "금곡동"), _ref("AD", "a단지", "금곡동")])
+    assert m.match("금곡동", "a") is None

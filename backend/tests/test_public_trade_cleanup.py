@@ -156,6 +156,7 @@ def test_이번에_한_줄도_못_붙인_시군구는_정리하지_않는다(db,
     assert [r.price_avg for r in _rows(db, "1775")] == [2]
     warned = [r for r in caplog.records if "41113" in r.getMessage() and "정리하지 않음" in r.getMessage()]
     assert len(warned) == 1
+    assert warned[0].levelno == logging.WARNING  # 거래가 왔고 후보도 있는데 0줄 = 이상 신호
 
 
 def test_주간은_해제_거래를_뺀다(db):
@@ -168,3 +169,104 @@ def test_주간은_해제_거래를_뺀다(db):
     rows = _rows(db, "1775")
     assert len(rows) == 3
     assert {(r.price_avg, r.price_upper, r.price_lower) for r in rows} == {(50000, 50000, 50000)}
+
+
+# ── 보완 1 (검사관 A·C 지적) ─────────────────────────────────────────────
+
+
+def test_주간은_거래가_없는_달의_옛_줄은_남긴다(db):
+    """정상 응답인데 거래 0건인 달은 '짝이 안 됐다'는 증거가 아니다 — 그 달의 옛 줄은 보존."""
+    _add_complexes(db)
+    db.add_all([_gov("2666", MONTHS[0], 1), _gov("2666", MONTHS[1], 2)])
+    db.commit()
+
+    def _fake(sigungu_cd, deal_ymd):
+        if sigungu_cd == "41113" and deal_ymd == MONTHS[0]:
+            return [_trade("금곡동", "거산", "50,000")]
+        return []
+
+    _run(_fake)
+
+    assert [r.price_avg for r in _rows(db, "2666")] == [2]  # 거래 온 첫 달만 지워짐
+
+
+def test_법정동이나_유형을_모르는_단지의_옛_줄은_남긴다(db):
+    """주소가 비었거나 유형이 비어 짝이 될 수 없는 단지는 정리 범위 밖."""
+    _add_complexes(db)
+    db.add_all([
+        Complex(complex_no="4001", complex_name="거산", cortar_no="4111313400",
+                cortar_address=None, real_estate_type_code="APT"),
+        Complex(complex_no="4002", complex_name="다른", cortar_no="4111313400",
+                cortar_address="경기도 수원시 권선구 금곡동", real_estate_type_code=None),
+    ])
+    db.add_all([_gov("4001", MONTHS[0], 1), _gov("4002", MONTHS[1], 2)])
+    db.commit()
+
+    _run(_suwon_only([_trade("금곡동", "거산", "50,000")]))
+
+    assert [r.price_avg for r in _rows(db, "4001")] == [1]
+    assert [r.price_avg for r in _rows(db, "4002")] == [2]
+    assert len(_rows(db, "1775")) == 3
+
+
+def test_지울_줄이_보유의_절반을_넘으면_시군구_정리를_건너뛴다(db, caplog):
+    """차단기 — 지울 줄 4 > 보유 7 의 절반이면 하나도 안 지우고 경고 한 줄."""
+    _add_complexes(db)
+    db.add_all([_gov("2666", m, i) for i, m in enumerate(MONTHS, start=1)] + [_gov("3001", MONTHS[0], 9)])
+    db.commit()
+
+    caplog.set_level(logging.WARNING, logger="crawler.service_public")
+    _run(_suwon_only([_trade("금곡동", "거산", "50,000")]))
+
+    assert [r.price_avg for r in _rows(db, "2666")] == [1, 2, 3]
+    assert [r.price_avg for r in _rows(db, "3001")] == [9]
+    skipped = [r for r in caplog.records if "정리 건너뜀" in r.getMessage() and "41113" in r.getMessage()]
+    assert len(skipped) == 1 and skipped[0].levelno == logging.WARNING
+
+
+def test_거래가_없거나_후보가_없는_시군구는_경고가_아니라_안내(db, caplog):
+    """'붙인 줄이 없어 정리하지 않음' 은 거래 0 이거나 아파트 후보 0 이면 INFO."""
+    _add_complexes(db)
+    db.add(Complex(complex_no="2700", complex_name="오피", cortar_no="1171010100",
+                   cortar_address="서울시 송파구 잠실동", real_estate_type_code="OPST"))
+    db.commit()
+
+    def _fake(sigungu_cd, deal_ymd):
+        if sigungu_cd == "11710":  # 거래는 오지만 후보는 오피스텔뿐
+            return [_trade("잠실동", "오피", "30,000")]
+        return []  # 41113·11680 은 거래 0
+
+    caplog.set_level(logging.INFO, logger="crawler.service_public")
+    _run(_fake)
+
+    recs = [r for r in caplog.records if "정리하지 않음" in r.getMessage()]
+    assert {r.args[0] for r in recs} == {"41113", "11680", "11710"}
+    assert all(r.levelno == logging.INFO for r in recs)
+
+
+def test_두번째_시군구에서_예외가_나면_첫_시군구_저장과_정리도_함께_되돌린다(db):
+    """체크포인트 경계 — 5개마다 commit 이라 첫 시군구 정리·저장은 아직 확정 전이고,
+    두 번째 시군구 예외의 rollback 으로 함께 되돌아간다(현재 동작 고정 — 반쪽 반영 없음)."""
+    _add_complexes(db)
+    db.add(Complex(complex_no="9002", complex_name="다른", cortar_no="1168010100",
+                   cortar_address="서울시 강남구 역삼동", real_estate_type_code="APT"))
+    db.add_all([_gov("2666", MONTHS[0], 1), _gov("9002", MONTHS[0], 2)])
+    db.commit()
+
+    first: list[str] = []
+
+    def _fake(sigungu_cd, deal_ymd):
+        if not first:
+            first.append(sigungu_cd)
+        if sigungu_cd != first[0]:
+            raise RuntimeError("두 번째 시군구에서 터짐")
+        return [_trade("금곡동", "거산", "50,000"), _trade("역삼동", "거산", "60,000")]
+
+    _run(_fake)
+
+    from db.models import CrawlJob
+    db.expire_all()
+    assert db.query(CrawlJob).filter(CrawlJob.job_type == "public_trade_data").one().status == "failed"
+    assert [r.price_avg for r in _rows(db, "2666")] == [1]   # 정리 되돌림
+    assert [r.price_avg for r in _rows(db, "9002")] == [2]
+    assert _rows(db, "1775") == [] and _rows(db, "9001") == []  # 저장도 되돌림

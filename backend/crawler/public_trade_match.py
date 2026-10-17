@@ -26,6 +26,8 @@ from utils import safe_int
 N_DANJI_SUFFIX = re.compile(r"([0-9]+)단지$")
 # 없는 유형(OPST·OBYG 등) = 대상 밖
 APT_TYPE_PRIORITY: dict[str, int] = {"APT": 0, "JGC": 1, "ABYG": 2, "RDV": 3, "PRE": 4}
+# 짝짓기 후보는 아니지만 옛 정부 줄은 정리하는 유형(애초에 붙으면 안 됐던 오피스텔 값)
+OFFICETEL_TYPES = ("OPST", "OBYG")
 CANCELLED_MARK = "O"
 
 
@@ -107,6 +109,23 @@ class SigunguMatcher:
     def complex_nos(self) -> list[str]:
         """시군구의 모든 단지 번호(오피스텔 포함 — 옛 줄 정리 범위용)."""
         return [c.complex_no for c in self._all]
+
+    @property
+    def cleanup_complex_nos(self) -> list[str]:
+        """옛 정부 줄을 지워도 되는 단지 — 법정동 낱말이 있고 아파트 유형이거나 오피스텔.
+
+        법정동을 모르거나 유형이 비어 있는 단지는 애초에 짝이 될 수 없으니, "이번에 짝이 안 됐다"를
+        옛 값이 틀렸다는 증거로 삼지 않는다(그 단지의 옛 줄은 그대로 둔다).
+        """
+        return [
+            c.complex_no for c in self._all
+            if c.dong and (c.type_code in APT_TYPE_PRIORITY or c.type_code in OFFICETEL_TYPES)
+        ]
+
+    @property
+    def has_apt_candidates(self) -> bool:
+        """짝이 될 수 있는 단지(법정동·이름·아파트 유형이 다 있는)가 하나라도 있나."""
+        return bool(self._by_dong)
 
     def match(self, umd_nm: str | None, apt_nm: str | None) -> str | None:
         dong = dong_word_of_umd(umd_nm)

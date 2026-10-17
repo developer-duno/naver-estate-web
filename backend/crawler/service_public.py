@@ -7,7 +7,10 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-from crawler.public_trade_match import _strip_n_danji  # noqa: F401 — 옛 시험 import 보존
+from crawler.public_trade_match import (  # _strip_n_danji = 옛 시험 import 보존
+    OFFICETEL_TYPES,
+    _strip_n_danji,  # noqa: F401
+)
 from crawler.service_common import (
     RESUME_LOOKBACK_LIMIT,
     RESUME_MAX_AGE_HOURS,
@@ -40,30 +43,74 @@ def _recent_months(today, n: int) -> list[str]:
     return sorted(months)
 
 
+# 정리 쿼리 한 번에 넣는 단지 수 — 큰 시군구도 문장마다 8초 statement_timeout 안에 끝나게(세션 469)
+_STALE_CHUNK = 500
+
+
+def _gov_rows_query(db, complex_nos: list[str], months: list[str], before: datetime | None):
+    """정부 줄(A1·area_no ''/NULL) 중 그 단지들·그 달들 — before 를 주면 그보다 앞서 쓰인 줄만."""
+    from sqlalchemy import or_
+
+    from db.models import ComplexPriceHistory
+
+    q = db.query(ComplexPriceHistory).filter(
+        ComplexPriceHistory.complex_no.in_(complex_nos),
+        ComplexPriceHistory.trade_type == "A1",
+        or_(ComplexPriceHistory.area_no == "", ComplexPriceHistory.area_no.is_(None)),
+        ComplexPriceHistory.base_month.in_(months),
+    )
+    if before is not None:
+        q = q.filter(ComplexPriceHistory.recorded_at < before)
+    return q
+
+
+def _count_gov_rows(db, complex_nos: list[str], months: list[str], before: datetime | None = None) -> int:
+    if not complex_nos or not months:
+        return 0
+    return sum(
+        _gov_rows_query(db, complex_nos[i:i + _STALE_CHUNK], months, before).count()
+        for i in range(0, len(complex_nos), _STALE_CHUNK)
+    )
+
+
 def _delete_stale_gov_rows(db, complex_nos: list[str], months: list[str], started_at: datetime) -> int:
     """이번 회차에 다시 쓰이지 않은 옛 정부 실거래가 줄을 지우고 지운 수를 돌려준다 (세션 469).
 
     정부 줄 = trade_type 'A1' 이고 area_no 가 '' 또는 NULL(네이버 줄은 area_no 가 채워져 있어 안 건드린다).
     이번 회차에 다시 저장된 줄은 recorded_at 이 회차 시작 뒤라 남는다 — 그보다 앞선 줄은
     "이번에 그 단지·그 달에 짝이 안 됐다"는 뜻이다. 대상 단지·달 밖은 건드리지 않는다.
+    단지를 _STALE_CHUNK 개씩 나눠 여러 문장으로 지운다.
     """
     if not complex_nos or not months:
         return 0
-    from sqlalchemy import or_
-
-    from db.models import ComplexPriceHistory
-
-    return (
-        db.query(ComplexPriceHistory)
-        .filter(
-            ComplexPriceHistory.complex_no.in_(complex_nos),
-            ComplexPriceHistory.trade_type == "A1",
-            or_(ComplexPriceHistory.area_no == "", ComplexPriceHistory.area_no.is_(None)),
-            ComplexPriceHistory.base_month.in_(months),
-            ComplexPriceHistory.recorded_at < started_at,
-        )
+    return sum(
+        _gov_rows_query(db, complex_nos[i:i + _STALE_CHUNK], months, started_at)
         .delete(synchronize_session=False)
+        for i in range(0, len(complex_nos), _STALE_CHUNK)
     )
+
+
+def _cleanup_sigungu_stale_rows(
+    db, sigungu_cd: str, complex_nos: list[str], months: list[str], started_at: datetime,
+) -> int:
+    """주간 수집의 시군구 하나 정리 — 지울 줄이 그 시군구·그 달들 보유 정부 줄의 절반을 넘으면 건너뛴다.
+
+    이름 규칙이나 정부 응답 모양이 크게 어긋난 날 한 시군구의 차트를 통째로 비우지 않게 하는 차단기다
+    (세션 469 검사관 C). 지운 수를 돌려준다(건너뛰면 0).
+    """
+    stale = _count_gov_rows(db, complex_nos, months, started_at)
+    if stale == 0:
+        return 0
+    existing = _count_gov_rows(db, complex_nos, months)
+    if existing > 0 and stale * 2 > existing:
+        logger.warning(
+            "[정부 실거래가] 시군구 %s 옛 줄 정리 건너뜀 — 지울 줄 %d 이 보유 %d 의 절반을 넘음",
+            sigungu_cd, stale, existing,
+        )
+        return 0
+    deleted = _delete_stale_gov_rows(db, complex_nos, months, started_at)
+    logger.info("[정부 실거래가] 시군구 %s 옛 줄 %d개 정리 (보유 %d)", sigungu_cd, deleted, existing)
+    return deleted
 
 
 # 세션 420: 국토부 창구 호출이 실패(재시도 소진·429·일일 한도)한 것을 "거래 없는 빈 달"로
@@ -299,6 +346,7 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
             if not matcher.complex_nos:
                 continue
             sigungu_written = 0  # 이 시군구에서 이번에 저장한 줄 수 — 0 이면 옛 줄 정리를 하지 않는다
+            traded_months: list[str] = []  # 정상 응답으로 거래가 1건 이상 온 달 — 이 달들만 정리한다
 
             # lawd_cd 는 cortar_no 앞 5자리를 번역 없이 그대로 넘긴다. 광주·전남 12 체계도
             # 실거래가 창구가 직접 받는다(2026-10-01 27 시군구 전수 실측: 새 코드 25/27 건수 있음 ·
@@ -313,7 +361,8 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
                     fetch_failed = True
                     break
                 if not trades:
-                    continue  # 정상 응답인데 거래가 없는 달
+                    continue  # 정상 응답인데 거래가 없는 달 — 옛 줄도 그대로 둔다
+                traded_months.append(deal_ymd)
 
                 # 단지별로 모은 가격 → 월별 min/max/avg 1줄(여러 국토부 이름이 한 단지로 모이면 합친다)
                 for complex_no, prices in matcher.aggregate(trades).items():
@@ -347,12 +396,17 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
                     break
                 continue
 
-            # 세션 469: 24달을 모두 받았으니 이번에 다시 안 쓰인 옛 정부 줄을 지운다. 단 이 시군구에서
+            # 세션 469: 24달을 모두 받았으니 이번에 다시 안 쓰인 옛 정부 줄을 지운다 — 거래가 온 달만,
+            # 짝이 될 수 있는 단지(+오피스텔)만, 지울 줄이 보유의 절반을 넘으면 건너뜀. 이 시군구에서
             # 한 줄도 못 붙였으면 이름 규칙이 통째로 어긋난 날일 수 있어 차트를 비우지 않는다.
             if sigungu_written > 0:
-                stale_deleted += _delete_stale_gov_rows(db, matcher.complex_nos, months, run_started_at)
+                stale_deleted += _cleanup_sigungu_stale_rows(
+                    db, sigungu_cd, matcher.cleanup_complex_nos, traded_months, run_started_at,
+                )
             else:
-                logger.warning("[정부 실거래가] 시군구 %s 는 이번에 붙인 줄이 없어 옛 줄을 정리하지 않음", sigungu_cd)
+                # 거래가 왔고 짝이 될 단지도 있는데 0줄이면 이상 신호(WARNING), 그 밖(거래 0·후보 0)은 평범(INFO)
+                level = logging.WARNING if traded_months and matcher.has_apt_candidates else logging.INFO
+                logger.log(level, "[정부 실거래가] 시군구 %s 는 이번에 붙인 줄이 없어 옛 줄을 정리하지 않음", sigungu_cd)
             consecutive_failed = 0
             ok_sigungu += 1
             done_codes.add(sigungu_cd)
@@ -473,6 +527,7 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
 
         collected = 0
         fetch_failure: str | None = None
+        traded_months: list[str] = []  # 정상 응답으로 거래가 1건 이상 온 달 — 이 달들만 정리한다
         for deal_ymd in months:
             trades = PublicDataAPI.get_all_apt_trades(sigungu_cd, deal_ymd)
             if trades is None:
@@ -480,7 +535,8 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
                 fetch_failure = PublicDataAPI.last_failure_kind() or "other"
                 break
             if not trades:
-                continue
+                continue  # 거래 없는 달 — 옛 줄도 그대로 둔다
+            traded_months.append(deal_ymd)
 
             # 이 단지와 짝이 된 거래만
             prices = matcher.aggregate(trades).get(complex_no, [])
@@ -498,12 +554,13 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
                 )
                 collected += 1
 
-        # 세션 469: 달을 모두 받았으면 이번에 다시 안 쓰인 옛 정부 줄(이 단지·이 달 목록 안)을 지운다.
+        # 세션 469: 달을 모두 받았으면 이번에 다시 안 쓰인 옛 정부 줄(이 단지·거래가 온 달)을 지운다.
         # 저장 0 이어도 지운다 — 이 단지가 이제 어느 거래에도 짝이 안 되는 게 사실이면 옛 값이
         # 남는 쪽이 더 틀리다. 호출이 하나라도 실패했으면 못 받은 달이 있으니 지우지 않는다.
+        # 법정동을 모르거나 유형이 비어 짝이 될 수 없는 단지는 건너뛴다(주간과 같은 범위).
         deleted = 0
-        if fetch_failure is None:
-            deleted = _delete_stale_gov_rows(db, [complex_no], months, started_at)
+        if fetch_failure is None and complex_no in matcher.cleanup_complex_nos:
+            deleted = _delete_stale_gov_rows(db, [complex_no], traded_months, started_at)
 
         # V046: 매칭 결과(collected==0 포함)와 무관하게 "시도했다"는 사실만 기록.
         # 국토부에 원천적으로 실거래가 없는 단지를 무한 재시도하지 않기 위한 마커
@@ -594,6 +651,12 @@ def backfill_price_batch(
             .filter(
                 Complex.total_household_count.isnot(None),
                 Complex.cortar_no.isnot(None),
+                # 세션 469: 아파트 매매 창구라 오피스텔은 영영 0건 — 헛호출만 남아 뺀다.
+                # NULL 유형은 기존대로 대상(SQL 의 NOT IN 은 NULL 을 빼므로 따로 살린다).
+                or_(
+                    Complex.real_estate_type_code.is_(None),
+                    Complex.real_estate_type_code.notin_(OFFICETEL_TYPES),
+                ),
                 ~Complex.complex_no.in_(rich_nos),
                 or_(
                     Complex.public_data_attempted_at.is_(None),

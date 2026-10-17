@@ -468,11 +468,12 @@ def test_A_빈응답_중단과_못_받은_수가_겹치면_한_문장(db, monkey
 
 @pytest.mark.parametrize("fn_name, backfill, job_type", _DETAIL_PATHS)
 def test_C_막힘과_저장_실패가_섞이면_한_문장(db, monkeypatch, fn_name, backfill, job_type):
-    """저장 실패 1 + 막힘 2 → failed, 두 사유를 문장 중간 마침표 없이 잇는다"""
-    job, _, _, _ = _run_detail(db, monkeypatch, fn_name, backfill, job_type, [BAD, F403, F403])
+    """저장 실패 1 + 막힘 3 → failed, 두 사유를 문장 중간 마침표 없이 잇는다
+    (B26: 막힘 2 이하면 completed 라 failed 경로를 보려고 막힘을 3 으로 — 옛 값 [BAD, F403, F403])"""
+    job, _, _, _ = _run_detail(db, monkeypatch, fn_name, backfill, job_type, [BAD, F403, F403, F403])
     assert job.status == "failed"
     assert job.error_message == (
-        "네이버가 막거나 오류를 내서 3개 매물 중 2개를 못 받았어요(받은 매물 0개보다 많아요),"
+        "네이버가 막거나 오류를 내서 4개 매물 중 3개를 못 받았어요(받은 매물 0개보다 많아요),"
         " 그리고 상세 저장 실패 1건 — 그 매물만 건너뛰고 다음 매물로 넘어갔어요."
     )
     assert job.error_message.count(".") == 1

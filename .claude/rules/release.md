@@ -119,7 +119,7 @@ interval 잡(시각 `—` 행)의 주기는 **코드 기본값**이다 — 라�
 |---|---|---|---|
 | 00:20 | ⏰ `backfill_detail_dawn` | 매일 00:20 | 4h |
 | 01:00 | ⏰ `collect_childcare` | 매월 첫째 목요일 01:00 | 3h |
-| 01:00·13:00 | `crawl_articles` | 매일 01:00, 13:00 | 1h |
+| 01:00·13:00 | ⏰ `crawl_articles` | 매일 01:00, 13:00 | 2h |
 | 03:00 | `collect_emergency` | 매월 첫째 월요일 03:00 | 1h |
 | 03:00 | `discover_regions` | 주 1회 일요일 03:00 | 1h |
 | 03:30 | ⏰ `backfill_price` | 매일 03:30 | 12h |
@@ -150,7 +150,7 @@ interval 잡(시각 `—` 행)의 주기는 **코드 기본값**이다 — 라�
 | — | `complex_detail_APT` | 4시간마다 | 1h |
 | — | `complex_detail_OPST` | 4시간마다 | 1h |
 
-⏰ = 재시작 절대 금지 구간(스윕 임계 1h 초과 = 오래 도는 잡): backfill_detail_dawn(4h) · collect_childcare(3h) · backfill_price(12h) · collect_prices(3h) · collect_public_trades(8h) · kapt_costs(3h) · official_price(16h) · backfill_detail_noon(4h) · kapt_costs_noon(3h) · kapt_match(8h) · kapt_costs_evening(3h)
+⏰ = 재시작 절대 금지 구간(스윕 임계 1h 초과 = 오래 도는 잡): backfill_detail_dawn(4h) · collect_childcare(3h) · crawl_articles(2h) · backfill_price(12h) · collect_prices(3h) · collect_public_trades(8h) · kapt_costs(3h) · official_price(16h) · backfill_detail_noon(4h) · kapt_costs_noon(3h) · kapt_match(8h) · kapt_costs_evening(3h)
 <!-- restart-schedule:end -->
 
 겹치면 **그 회차가 끝난 뒤로 미룬다.** 여러 PR 을 묶어 한 번에 재시작하는 것도 겹침을 줄인다(§1 말미).

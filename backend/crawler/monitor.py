@@ -68,6 +68,9 @@ _STALE_HOURS_BY_TYPE = {
     # 2026-10-12 전량 실행이 3h15m(호출 12,859) 걸려 옛 임계 3h 에 12:32 monitor 가 cancelled 로 쓸었다
     # (회차 끝에 completed 로 덮임). 실측의 ~2배인 7h.
     "sgis_area": 7,
+    # 매물 수집 배치 회차 행(01·13시, B26): 최장 배치 80분(service_discover reset_round_canary 주석) — 1h 경계를 넘을 수 있어
+    # 정상 최대의 약 2배인 2h.
+    "articles_batch": 2,
 }
 # 실패 작업 조회 윈도 — 최근 이 시간 내 failed 만
 _FAILED_WINDOW_HOURS = 24

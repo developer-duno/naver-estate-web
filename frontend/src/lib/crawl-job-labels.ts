@@ -14,6 +14,10 @@ export const CRAWL_JOB_LABELS: Record<string, { label: string; desc: string }> =
     label: "단지 매물 가져오기",
     desc: "특정 아파트 단지의 현재 매물(매매·전세·월세) 목록을 네이버에서 가져옴",
   },
+  articles_batch: {
+    label: "단지 매물 가져오기",
+    desc: "하루 두 번(새벽 1시·오후 1시) 여러 단지의 매물을 차례로 가져오는 회차 전체 기록 — 단지마다의 기록은 따로 남음",
+  },
   complex_list: {
     label: "새 단지 찾기",
     desc: "키워드 검색으로 새 아파트 단지를 찾아 우리 목록에 추가",

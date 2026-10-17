@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 JOB_WORDS: dict[str, str] = {
     # 매물·단지 수집
     "complex_articles": "단지 매물 가져오기",
+    "articles_batch": "단지 매물 가져오기",  # 매물 수집 배치 회차 행(B26) — 스케줄러 잡 이름과 같게(사장님 결정 2026-10-17)
     "complex_list": "새 단지 찾기",
     "popular_crawl": "자주 보는 단지 미리 갱신",
     "article_detail": "매물 상세 내용 채우기",

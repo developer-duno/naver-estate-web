@@ -482,6 +482,31 @@ def test_run_monitor_sweeps_official_price_over_threshold():
         db.close()
 
 
+def test_run_monitor_does_not_sweep_articles_batch_under_threshold():
+    """경계(B26): 매물 배치 회차 행(articles_batch)은 2h 임계 — 1.5h running 은 정리·알림 안 됨."""
+    db = TestSession()
+    try:
+        ninety_min = _utcnow() - timedelta(minutes=90)
+        job = CrawlJob(
+            job_type="articles_batch", status="running",
+            started_at=ninety_min, created_at=ninety_min,
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id
+
+        with patch("crawler.monitor.send_telegram", return_value=True) as mock_tg:
+            run_monitor(db)
+
+        still = db.execute(
+            select(CrawlJob).where(CrawlJob.id == job_id)
+        ).scalar_one()
+        assert still.status == "running"
+        assert not mock_tg.called
+    finally:
+        db.close()
+
+
 def test_run_monitor_sweep_preserves_existing_error_message():
     """엣지: 기존 error_message 는 보존하되 스윕 마커를 append 한다.
 

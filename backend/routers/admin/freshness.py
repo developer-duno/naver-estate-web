@@ -33,6 +33,11 @@ _FRESHNESS_CACHE_KEY = "data_freshness"
 # 통째로 들어오고 그 다음 interval (12h) 와는 충분히 구분된다.
 _BATCH_WINDOW_MINUTES = 60
 
+# 회차 부모 행 job_type — 자식(단지별 행)과 같은 scheduler_job_id 를 쓰지만 단위가 달라(단지 수 vs 매물 수)
+# _last_job 합산에서 뺀다. 값 = crawler/service_discover.py ARTICLES_BATCH_JOB_TYPE (B26 — 시험이 대조,
+# 무거운 crawler 모듈을 라우터가 import 하지 않으려고 글자로 둔다).
+_ROUND_PARENT_JOB_TYPES = ("articles_batch",)
+
 # 헛바퀴 판정 최소 대상 건수 기본값 — 카드별 meta["spinning_min_total"] 이 없으면 이 값(1).
 # 세션 421 04:13 헛경보(매물 상세 회차 #58967 대상1·처리0)는 매물 상세(article_detail)
 # 카드에만 해당하는 사례라, 문턱은 freshness_meta.py 의 그 카드 항목에만 5 로 올려 두고
@@ -94,7 +99,8 @@ def _last_job(db: Session, scheduler_job_id: str | tuple[str, ...]) -> dict | No
         select(CrawlJob.completed_at, CrawlJob.started_at)
         .where(
             _scheduler_id_match(scheduler_job_id)
-            & (CrawlJob.status == "completed"),
+            & (CrawlJob.status == "completed")
+            & CrawlJob.job_type.notin_(_ROUND_PARENT_JOB_TYPES),
         )
         .order_by(CrawlJob.completed_at.desc())
         .limit(1)
@@ -114,7 +120,8 @@ def _last_job(db: Session, scheduler_job_id: str | tuple[str, ...]) -> dict | No
         .where(
             _scheduler_id_match(scheduler_job_id)
             & (CrawlJob.status == "completed")
-            & (CrawlJob.completed_at >= window_start),
+            & (CrawlJob.completed_at >= window_start)
+            & CrawlJob.job_type.notin_(_ROUND_PARENT_JOB_TYPES),
         )
     ).first()
     if agg is None or agg.batch_start is None:

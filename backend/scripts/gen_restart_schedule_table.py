@@ -47,7 +47,7 @@ _ENABLE_TOGGLES = (
 # 근거 = 각 서비스 모듈의 CrawlJob(job_type=...) / _record_job(db, job_type, ...) 호출부.
 _ID_TO_JOB_TYPE = {
     "discover_regions": "complex_list",
-    "crawl_articles": "complex_articles",
+    "crawl_articles": "articles_batch",  # 회차 행(B26) — 단지별 자식은 complex_articles
     "crawl_details": "article_detail",
     "backfill_detail_dawn": "article_detail_backfill",
     "backfill_detail_noon": "article_detail_backfill",

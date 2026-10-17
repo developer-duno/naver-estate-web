@@ -47,34 +47,40 @@ def _recent_months(today, n: int) -> list[str]:
 _STALE_CHUNK = 500
 
 
-def _gov_rows_query(db, complex_nos: list[str], months: list[str], before: datetime | None):
-    """정부 줄(A1·area_no '') 중 그 단지들·그 달들 — before 를 주면 그보다 앞서 쓰인 줄만.
+def _gov_rows_conds(complex_nos: list[str], months: list[str], before: datetime | None) -> list:
+    """정부 줄(A1·area_no '') 중 그 단지들·그 달들의 조건 목록 — before 를 주면 그보다 앞서 쓰인 줄만.
 
     area_no NULL 은 정부 줄로 치지 않는다 — 2u 저장은 늘 ''(_upsert_price_history) 이고 NULL 은
     공유 표의 미분양 몫이라 지우지 않는다(공유 DB 소유권 가드, 세션 469). 공공 경로 표식인 6자리 달
     (YYYYMM)도 글자로 박는다 — 네이버 경로는 8자리(YYYYMMDD)라 달 목록과 무관하게 걸러진다.
+    쿼리 객체가 아니라 조건만 돌려준다 — 호출부가 `db.query(ComplexPriceHistory).filter(*조건)` 으로
+    시작해야 소유권 가드가 지우는 표를 글자 그대로 읽는다.
     """
     from sqlalchemy import func
 
     from db.models import ComplexPriceHistory
 
-    q = db.query(ComplexPriceHistory).filter(
+    conds = [
         ComplexPriceHistory.complex_no.in_(complex_nos),
         ComplexPriceHistory.trade_type == "A1",
         ComplexPriceHistory.area_no == "",
         func.length(ComplexPriceHistory.base_month) == 6,
         ComplexPriceHistory.base_month.in_(months),
-    )
+    ]
     if before is not None:
-        q = q.filter(ComplexPriceHistory.recorded_at < before)
-    return q
+        conds.append(ComplexPriceHistory.recorded_at < before)
+    return conds
 
 
 def _count_gov_rows(db, complex_nos: list[str], months: list[str], before: datetime | None = None) -> int:
     if not complex_nos or not months:
         return 0
+    from db.models import ComplexPriceHistory
+
     return sum(
-        _gov_rows_query(db, complex_nos[i:i + _STALE_CHUNK], months, before).count()
+        db.query(ComplexPriceHistory)
+        .filter(*_gov_rows_conds(complex_nos[i:i + _STALE_CHUNK], months, before))
+        .count()
         for i in range(0, len(complex_nos), _STALE_CHUNK)
     )
 
@@ -89,8 +95,11 @@ def _delete_stale_gov_rows(db, complex_nos: list[str], months: list[str], starte
     """
     if not complex_nos or not months:
         return 0
+    from db.models import ComplexPriceHistory
+
     return sum(
-        _gov_rows_query(db, complex_nos[i:i + _STALE_CHUNK], months, started_at)
+        db.query(ComplexPriceHistory)
+        .filter(*_gov_rows_conds(complex_nos[i:i + _STALE_CHUNK], months, started_at))
         .delete(synchronize_session=False)
         for i in range(0, len(complex_nos), _STALE_CHUNK)
     )

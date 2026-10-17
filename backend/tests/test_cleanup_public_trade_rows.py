@@ -136,3 +136,17 @@ def test_area_no_가_NULL_인_줄은_미분양_몫이라_대상이_아니다(db)
     assert _avgs_of(db, find_targets(db, _months())["opst"]) == [1, 2]
     assert main(["--apply"]) == 0
     assert 99 in _avgs(db)
+
+
+def test_base_month_가_8자리인_줄은_area_no_가_비어도_대상이_아니다(db):
+    """공공 경로 표식 = 6자리 달. 8자리(네이버 주간 시세 꼴) 줄은 area_no '' 여도 세지도 지우지도 않는다."""
+    from scripts.cleanup_public_trade_rows import find_targets, main
+
+    _seed(db)
+    db.add(ComplexPriceHistory(complex_no="3001", trade_type="A1", area_no="", base_month="20100105",
+                               price_avg=88, recorded_at=utcnow() - timedelta(days=30)))
+    db.commit()
+
+    assert _avgs_of(db, find_targets(db, _months())["opst"]) == [1, 2]
+    assert main(["--apply"]) == 0
+    assert 88 in _avgs(db)

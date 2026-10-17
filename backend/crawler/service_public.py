@@ -17,7 +17,7 @@ from crawler.service_common import (
 )
 from db.database import SessionLocal
 from db.models import Complex, CrawlJob
-from utils import safe_int, utcnow
+from utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -199,7 +199,8 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
         return
 
     # lazy import — import chain 실패 방지
-    from crawler.public_data_api import PublicDataAPI, _normalize_apt_name
+    from crawler.public_data_api import PublicDataAPI
+    from crawler.public_trade_match import SigunguMatcher
 
     PublicDataAPI.clear_trade_cache()  # 지난 회차(소급 포함)가 받아 둔 달을 재사용하지 않는다(세션 422)
     db = SessionLocal()
@@ -242,6 +243,8 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
     job = CrawlJob(
         job_type="public_trade_data", scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow()
     )
+    # 옛 줄 정리 기준 시각(UTC aware) — commit 뒤 ORM 재조회 없이 그대로 쓴다(세션 469)
+    run_started_at = job.started_at
     db.add(job)
     db.commit()
     job_id = job.id  # except 에서 깨진 세션의 ORM 속성 접근 피하기 위해 미리 확보
@@ -282,28 +285,20 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
 
         processed = 0
         matched = 0
-        ok_sigungu = 0          # 이번 회차에 끝까지 받은 시군구 수
+        stale_deleted = 0       # 이번에 짝이 안 된 옛 정부 줄을 지운 수(세션 469)
+        ok_sigungu = 0         # 이번 회차에 끝까지 받은 시군구 수
         failed_sigungu = 0      # 이번 회차에 호출 실패로 못 받은 시군구 수
         consecutive_failed = 0  # 연속 실패 — 하나라도 성공하면 0
         any_quota = False
         aborted_kind: str | None = None
 
         for i, sigungu_cd in enumerate(remaining_codes):
-            # 해당 시군구의 단지 목록 조회 (매칭용)
-            complexes_in_region = (
-                db.query(Complex.complex_no, Complex.complex_name, Complex.cortar_no)
-                .filter(Complex.cortar_no.startswith(sigungu_cd))
-                .all()
-            )
-            if not complexes_in_region:
+            # 세션 469: 해당 시군구 단지 목록으로 짝짓기 색인 — 소급과 같은 규칙(법정동으로 가르기·
+            # 오피스텔 제외·해제 거래 제외·끝 '단지' 떼기·N단지 흡수)이 crawler/public_trade_match.py 에 있다.
+            matcher = SigunguMatcher.from_db(db, sigungu_cd)
+            if not matcher.complex_nos:
                 continue
-
-            # 정규화된 이름 → complex_no 매핑 딕셔너리
-            name_map: dict[str, str] = {}
-            for c in complexes_in_region:
-                norm_name = _normalize_apt_name(c.complex_name)
-                if norm_name:
-                    name_map[norm_name] = c.complex_no
+            sigungu_written = 0  # 이 시군구에서 이번에 저장한 줄 수 — 0 이면 옛 줄 정리를 하지 않는다
 
             # lawd_cd 는 cortar_no 앞 5자리를 번역 없이 그대로 넘긴다. 광주·전남 12 체계도
             # 실거래가 창구가 직접 받는다(2026-10-01 27 시군구 전수 실측: 새 코드 25/27 건수 있음 ·
@@ -320,25 +315,8 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
                 if not trades:
                     continue  # 정상 응답인데 거래가 없는 달
 
-                # 아파트별 거래 그룹핑 → 월별 min/max/avg 집계
-                apt_groups: dict[str, list[int]] = {}
-                for trade in trades:
-                    apt_name = trade.get("aptNm") or trade.get("아파트") or ""
-                    price_str = str(trade.get("dealAmount") or trade.get("거래금액") or "0")
-                    price = safe_int(price_str.replace(",", "").strip())
-                    if not apt_name or not price:
-                        continue
-                    norm = _normalize_apt_name(apt_name)
-                    if norm not in apt_groups:
-                        apt_groups[norm] = []
-                    apt_groups[norm].append(price)
-
-                # 기존 단지에 매칭하여 upsert
-                for norm_name, prices in apt_groups.items():
-                    complex_no = name_map.get(norm_name)
-                    if not complex_no:
-                        continue
-
+                # 단지별로 모은 가격 → 월별 min/max/avg 1줄(여러 국토부 이름이 한 단지로 모이면 합친다)
+                for complex_no, prices in matcher.aggregate(trades).items():
                     _upsert_price_history(
                         db,
                         complex_no=complex_no,
@@ -350,6 +328,7 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
                         base_month=deal_ymd,
                     )
                     matched += 1
+                    sigungu_written += 1
 
                 processed += len(trades)
 
@@ -368,6 +347,12 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
                     break
                 continue
 
+            # 세션 469: 24달을 모두 받았으니 이번에 다시 안 쓰인 옛 정부 줄을 지운다. 단 이 시군구에서
+            # 한 줄도 못 붙였으면 이름 규칙이 통째로 어긋난 날일 수 있어 차트를 비우지 않는다.
+            if sigungu_written > 0:
+                stale_deleted += _delete_stale_gov_rows(db, matcher.complex_nos, months, run_started_at)
+            else:
+                logger.warning("[정부 실거래가] 시군구 %s 는 이번에 붙인 줄이 없어 옛 줄을 정리하지 않음", sigungu_cd)
             consecutive_failed = 0
             ok_sigungu += 1
             done_codes.add(sigungu_cd)
@@ -379,6 +364,9 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
                 db.commit()
                 _checkpoint.save(db, job.id, {"done_codes": sorted(done_codes), "total": len(sigungu_codes)})
                 logger.info("공공데이터 수집 중간 저장: %d/%d 시군구 완료", len(done_codes), len(sigungu_codes))
+
+        # 성공·실패 마감 모두에 남도록 마감 분기 앞에서 한 줄(알림·사유 칸 아님 — 세션 469)
+        logger.info("[정부 실거래가] 이번에 짝이 안 된 옛 줄 %d개 정리", stale_deleted)
 
         job.total_items = processed
         job.processed_items = matched

@@ -6,9 +6,11 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { MbApartment } from "@/types";
 
-// Recharts mock — SVG 대신 간단한 div 반환
+// Recharts mock — SVG 대신 간단한 div 반환. 축별 점수(data)를 data-rows 에 실어 시험이 읽는다(세션 471)
 vi.mock("recharts", () => ({
-  RadarChart: ({ children }: { children: React.ReactNode }) => <div data-testid="radar-chart">{children}</div>,
+  RadarChart: ({ children, data }: { children: React.ReactNode; data?: unknown }) => (
+    <div data-testid="radar-chart" data-rows={JSON.stringify(data ?? [])}>{children}</div>
+  ),
   Radar: ({ name }: { name: string }) => <span data-testid={`radar-${name}`}>{name}</span>,
   PolarGrid: () => null,
   PolarAngleAxis: () => null,
@@ -26,8 +28,6 @@ function makeApt(overrides: Partial<MbApartment> & { id: string; name: string })
     unsold_rate: 3.3,
     parking_ratio: 1.0,
     max_floor: 25,
-    naver_jeonse_rate: 60,
-    naver_nearby_median: 80000,
     discount_pct: 3,
     presale_pp: 2000,
     floor_area_ratio: 220,
@@ -37,6 +37,7 @@ function makeApt(overrides: Partial<MbApartment> & { id: string; name: string })
 
 // 직접 import (dynamic 아님)
 import MbCompareRadarChart, { AXES, airQualityAxisValue } from "../MbCompareRadarChart";
+import { DEFAULT_RADAR_SETTINGS } from "@/lib/storage";
 
 describe("MbCompareRadarChart", () => {
   beforeEach(() => {
@@ -85,8 +86,8 @@ describe("MbCompareRadarChart", () => {
     const apts = [makeApt({ id: "A", name: "단지A" }), makeApt({ id: "B", name: "단지B" })];
     render(<MbCompareRadarChart apartments={apts} />);
 
-    // aria-pressed 버튼만 선택하여 클릭 — 10개 비활성화 → 3개 남음
-    const labels = ["세대수", "세대당 주차", "최고층", "전세가율", "주변시세", "할인율", "대기질", "의료인프라", "보육", "치안"];
+    // aria-pressed 버튼만 선택하여 클릭 — 11축 중 8개 비활성화 → 3개 남음
+    const labels = ["세대수", "세대당 주차", "최고층", "할인율", "대기질", "의료인프라", "보육", "치안"];
     labels.forEach((label) => {
       const btn = screen.getByRole("button", { name: label, pressed: true });
       fireEvent.click(btn);
@@ -127,13 +128,11 @@ describe("MbCompareRadarChart", () => {
       makeApt({
         id: "A", name: "단지A",
         units: 1000, parking_ratio: 1.5, max_floor: 30,
-        naver_jeonse_rate: 80, naver_nearby_median: 100000,
         discount_pct: 10, unsold_rate: 1, presale_pp: 1000, floor_area_ratio: 150,
       }),
       makeApt({
         id: "B", name: "단지B",
         units: 200, parking_ratio: 0.5, max_floor: 10,
-        naver_jeonse_rate: 30, naver_nearby_median: 50000,
         discount_pct: 2, unsold_rate: 10, presale_pp: 3000, floor_area_ratio: 300,
       }),
     ];
@@ -155,6 +154,38 @@ describe("MbCompareRadarChart", () => {
     render(<MbCompareRadarChart apartments={apts} />);
     // 평당가 외 모든 축 동일 → 평당가 축이 우위를 가름. 미공개단지가 거짓 우위면 실패
     expect(screen.getByText(/★ 종합 우위: 정상단지/)).toBeInTheDocument();
+  });
+
+  /** 미분양률 빈 값 만점 결함 회귀 — getValue 가 `?? 0` 이면 invert 축에서 (max-0)/max = 만점 (세션 471) */
+  it("미분양률이 없는 단지는 미분양률 축 0점이고 종합 우위를 받지 못한다", () => {
+    // 빈 단지를 맨 앞에 둔다 — 동점이면 앞 단지가 우위라, 순서 덕에 통과하지 않게
+    // 다른 축은 모두 같다. 결함이면 빈 단지 = 100점(만점)으로 종합 우위, 고치면 0점 → 미분양률 5 단지(50점) 우위
+    const apts = [
+      makeApt({ id: "E", name: "빈단지", unsold_rate: undefined }),
+      makeApt({ id: "A", name: "미분양5", unsold_rate: 5 }),
+      makeApt({ id: "B", name: "미분양10", unsold_rate: 10 }),
+    ];
+    render(<MbCompareRadarChart apartments={apts} />);
+    const rows = JSON.parse(screen.getByTestId("radar-chart").getAttribute("data-rows")!) as Record<string, string | number>[];
+    const unsoldRow = rows.find((r) => r.axis === "미분양률")!;
+    expect(unsoldRow.E).toBe(0);
+    expect(unsoldRow.A).toBe(50);
+    expect(unsoldRow.B).toBe(0);
+    expect(screen.getByText(/★ 종합 우위: 미분양5/)).toBeInTheDocument();
+  });
+
+  /** 네이버 전세가율·주변시세 축 제거 (세션 471 · 미분양 사장님 결정) */
+  it("AXES 에 jeonse·nearby 축이 없고 11축이다", () => {
+    const keys = AXES.map((a) => a.key);
+    expect(keys).not.toContain("jeonse");
+    expect(keys).not.toContain("nearby");
+    expect(keys).toHaveLength(11);
+    // 저장소 기본 축 목록과 같아야 옛 키 걸러내기(getMbRadarSettings)가 맞게 돈다
+    expect(keys).toEqual(DEFAULT_RADAR_SETTINGS.enabledAxes);
+    const apts = [makeApt({ id: "A", name: "단지A" }), makeApt({ id: "B", name: "단지B" })];
+    render(<MbCompareRadarChart apartments={apts} />);
+    expect(screen.queryByRole("button", { name: "전세가율" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "주변시세" })).toBeNull();
   });
 
   /** 프리셋 라벨에 "프리셋:" 텍스트 확인 */
@@ -205,10 +236,10 @@ describe("MbCompareRadarChart — 대기질 축 (air_annual.band)", () => {
     expect(airQualityAxisValue(aptWithBand("나쁨"))).toBe(40);
   });
 
-  it("등급이 없거나 air_annual 이 없으면 0", () => {
-    expect(airQualityAxisValue(aptWithBand(null))).toBe(0);
-    expect(airQualityAxisValue(makeApt({ id: "B", name: "없음", infra: { air_annual: null } }))).toBe(0);
-    expect(airQualityAxisValue(makeApt({ id: "C", name: "인프라없음" }))).toBe(0);
+  it("등급이 없거나 air_annual 이 없으면 null (정규화에서 0점, 세션 471)", () => {
+    expect(airQualityAxisValue(aptWithBand(null))).toBeNull();
+    expect(airQualityAxisValue(makeApt({ id: "B", name: "없음", infra: { air_annual: null } }))).toBeNull();
+    expect(airQualityAxisValue(makeApt({ id: "C", name: "인프라없음" }))).toBeNull();
   });
 
   it("레이더의 대기질 축은 airQualityAxisValue 로 값을 낸다 (축 정의와 함수가 끊기지 않게)", () => {

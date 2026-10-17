@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * 미분양 비교 레이더 차트 — 13축 정규화 + 가중치 프리셋 + 축별 슬라이더 + 가중 점수
+ * 미분양 비교 레이더 차트 — 11축 정규화 + 가중치 프리셋 + 축별 슬라이더 + 가중 점수
  * useMbRadarSettings 훅으로 축 선택 + 가중치를 localStorage에 영속화
  */
 import { useMemo } from "react";
@@ -29,29 +29,29 @@ interface AxisDef {
 }
 
 // 대기질 축 = 측정소별 3년 평균 등급 → 점수 (세션604 — 실시간 등급 폐지)
-// 짝꿍 = backend/routers/mb_air_annual.py:16-21 (등급 라벨·경계, 미분양 채점표와 같다). 등급이 없으면 0
+// 짝꿍 = backend/routers/mb_air_annual.py:16-21 (등급 라벨·경계, 미분양 채점표와 같다). 등급이 없으면 null(= 0점, 세션 471 다른 축과 통일)
 export const AIR_ANNUAL_RADAR_SCORE: Record<string, number> = { 좋음: 100, 보통: 75, 나쁨: 40 };
 
-export function airQualityAxisValue(a: MbApartment): number {
-  return AIR_ANNUAL_RADAR_SCORE[a.infra?.air_annual?.band ?? ""] ?? 0;
+export function airQualityAxisValue(a: MbApartment): number | null {
+  return AIR_ANNUAL_RADAR_SCORE[a.infra?.air_annual?.band ?? ""] ?? null;
 }
 
 // export = 시험이 대기질 축이 airQualityAxisValue 에 이어져 있는지 확인한다(세션604)
+// 네이버 전세가율·주변시세 축은 뺐다 — 구 단위 값이라 단지 비교에 안 맞는다(세션 471 · 미분양 사장님 결정 10-17)
+// 값이 없으면 null → 아래 정규화가 0점을 준다. `?? 0` 이면 '낮을수록 좋음' 축에서 빈 단지가 만점이 된다(세션 471)
 export const AXES: AxisDef[] = [
   // 미분양률 축이 묶음 값이므로 세대수도 묶음 값 (B22)
-  { key: "units", label: "세대수", getValue: (a) => displayUnits(a) ?? 0 },
-  { key: "parking", label: "세대당 주차", getValue: (a) => a.parking_ratio ?? 0 },
-  { key: "maxFloor", label: "최고층", getValue: (a) => a.max_floor ?? 0 },
-  { key: "jeonse", label: "전세가율", getValue: (a) => a.naver_jeonse_rate ?? 0 },
-  { key: "nearby", label: "주변시세", getValue: (a) => a.naver_nearby_median ?? 0 },
-  { key: "discount", label: "할인율", getValue: (a) => a.discount_pct ?? 0 },
-  { key: "unsold", label: "미분양률", getValue: (a) => a.unsold_rate ?? 0, invert: true },
+  { key: "units", label: "세대수", getValue: (a) => displayUnits(a) ?? null },
+  { key: "parking", label: "세대당 주차", getValue: (a) => a.parking_ratio ?? null },
+  { key: "maxFloor", label: "최고층", getValue: (a) => a.max_floor ?? null },
+  { key: "discount", label: "할인율", getValue: (a) => a.discount_pct ?? null },
+  { key: "unsold", label: "미분양률", getValue: (a) => a.unsold_rate ?? null, invert: true },
   { key: "pp", label: "평당가", getValue: (a) => normalizePp(a.presale_pp), invert: true },
-  { key: "far", label: "용적률", getValue: (a) => a.floor_area_ratio ?? 0, invert: true },
+  { key: "far", label: "용적률", getValue: (a) => a.floor_area_ratio ?? null, invert: true },
   { key: "airQuality", label: "대기질", getValue: airQualityAxisValue },
-  { key: "medical", label: "의료인프라", getValue: (a) => a.infra?.emergency_hospital ?? 0 },
-  { key: "childcare", label: "보육", getValue: (a) => a.infra?.childcare_count ?? 0 },
-  { key: "safety", label: "치안", getValue: (a) => a.infra?.crime_score ?? 0 },
+  { key: "medical", label: "의료인프라", getValue: (a) => a.infra?.emergency_hospital ?? null },
+  { key: "childcare", label: "보육", getValue: (a) => a.infra?.childcare_count ?? null },
+  { key: "safety", label: "치안", getValue: (a) => a.infra?.crime_score ?? null },
 ];
 
 // ── 칩 스타일 ──
@@ -72,9 +72,9 @@ interface WeightPreset {
 }
 
 const WEIGHT_PRESETS: WeightPreset[] = [
-  { name: "균등", weights: { units: 3, parking: 3, maxFloor: 3, jeonse: 3, nearby: 3, discount: 3, unsold: 3, pp: 3, far: 3, airQuality: 3, medical: 3, childcare: 3, safety: 3 } },
-  { name: "투자형", weights: { units: 2, parking: 1, maxFloor: 1, jeonse: 5, nearby: 5, discount: 5, unsold: 4, pp: 4, far: 1, airQuality: 2, medical: 1, childcare: 1, safety: 2 } },
-  { name: "실거주형", weights: { units: 4, parking: 5, maxFloor: 3, jeonse: 2, nearby: 2, discount: 2, unsold: 3, pp: 3, far: 4, airQuality: 4, medical: 5, childcare: 5, safety: 4 } },
+  { name: "균등", weights: { units: 3, parking: 3, maxFloor: 3, discount: 3, unsold: 3, pp: 3, far: 3, airQuality: 3, medical: 3, childcare: 3, safety: 3 } },
+  { name: "투자형", weights: { units: 2, parking: 1, maxFloor: 1, discount: 5, unsold: 4, pp: 4, far: 1, airQuality: 2, medical: 1, childcare: 1, safety: 2 } },
+  { name: "실거주형", weights: { units: 4, parking: 5, maxFloor: 3, discount: 2, unsold: 3, pp: 3, far: 4, airQuality: 4, medical: 5, childcare: 5, safety: 4 } },
 ];
 
 /** 현재 가중치가 프리셋과 일치하는지 판정 */

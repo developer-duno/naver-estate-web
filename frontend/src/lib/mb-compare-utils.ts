@@ -34,8 +34,7 @@ export const MB_COMPARE_ROWS: MbCompareRow[] = [
   { label: "난방", getValue: (a) => a.heating, direction: null },
   { label: "시공사", getValue: (a) => a.builder, direction: null },
   { label: "할인율(%)", getValue: (a) => a.discount_pct, direction: "higher" },
-  { label: "주변 중위가(만원)", getValue: (a) => a.naver_nearby_median, direction: "higher" },
-  { label: "전세가율(%)", getValue: (a) => a.naver_jeonse_rate, direction: "higher" },
+  // 네이버 주변 중위가·전세가율 행은 뺐다 — 구 단위 값(세션 471 · 미분양 사장님 결정 10-17)
   { label: "소음도(dB)", getValue: (a) => a.noise, direction: "lower" },
 ];
 

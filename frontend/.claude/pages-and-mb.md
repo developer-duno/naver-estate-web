@@ -53,7 +53,7 @@ components/mb/
 ├── MbDetailSections.tsx        # 상세 5개 섹션 (개요/분양/주변환경/거래통계/미분양추이)
 ├── MbUnsoldTrendChart.tsx      # Recharts 미분양 추이 차트 (dynamic import)
 ├── MbCompareFloatingBar.tsx    # 비교 하단 플로팅 바 (최대 4개, 비교하기 버튼)
-├── MbCompareRadarChart.tsx    # 레이더 차트 (13축 정규화 = 기본 9축 + 인프라 4축, 가중치프리셋3종+슬라이더1-5+가중점수, 종합우위★, dynamic import)
+├── MbCompareRadarChart.tsx    # 레이더 차트 (11축 정규화 = 기본 7축 + 인프라 4축 — 네이버 2축은 세션 471 에 제거, 가중치프리셋3종+슬라이더1-5+가중점수, 종합우위★, dynamic import)
 ├── MbComparePriceChart.tsx    # 분양가 막대 차트 (min/max/pp, 최저가★, dynamic import)
 ├── MbCompareUnsoldChart.tsx   # 미분양 추이 비교 차트 (ComposedChart, 기간필터 6M/1Y/2Y/ALL, dynamic import)
 ├── MbLocationMap.tsx           # Naver Maps v3 단일마커 지도 (단지 상세, vanilla SDK, dynamic import)

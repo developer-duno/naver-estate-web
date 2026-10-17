@@ -2,9 +2,7 @@
 
 import type { MbApartment } from "@/types";
 import { freshness } from "@/lib/format";
-import { MbNoiseBar } from "./MbNoiseBar";
-import { MbNoxiousBar } from "./MbNoxiousBar";
-import { MbSchoolWalkBar } from "./MbSchoolWalkBar";
+import { BASIS, finiteOrNull, pm25Basis, positiveOrNull, roadDistanceText } from "./basis-text";
 
 /** 블록 헤더 옆 작은 회색 갱신시각 라벨 (값 없으면 렌더 안 함) */
 function FreshnessTag({ iso }: { iso?: string }) {
@@ -12,22 +10,16 @@ function FreshnessTag({ iso }: { iso?: string }) {
   return label ? <span className="ml-2 text-xs font-normal text-gray-400">{label}</span> : null;
 }
 
-/** 인프라 정보 행 (label + value) */
-function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+/** 인프라 정보 행 (label + value + 기준·출처 한 줄 — 값이 있을 때만, 세션 472) */
+function InfoRow({ label, value, basis, wide }: { label: string; value: React.ReactNode; basis?: string; wide?: boolean }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className={`flex flex-col gap-0.5${wide ? " col-span-2" : ""}`}>
       <dt className="text-xs text-gray-500">{label}</dt>
       <dd className="text-sm font-medium text-gray-900">{value ?? "-"}</dd>
+      {basis && value != null && <dd className="text-xs font-normal leading-snug text-gray-500">{basis}</dd>}
     </div>
   );
 }
-
-/** 대기질 등급 색상 뱃지 — 3년 평균 3단계(좋음·보통·나쁨, 세션604) */
-const AIR_GRADE_STYLES: Record<string, string> = {
-  "좋음": "bg-green-100 text-green-800 border-green-300",
-  "보통": "bg-yellow-100 text-yellow-800 border-yellow-300",
-  "나쁨": "bg-orange-100 text-orange-800 border-orange-300",
-};
 
 /** "2022,2023,2024" → "2022~2024" (한 해면 그 해만, 읽을 수 없으면 빈 글자) */
 function formatAirYears(years: string | null | undefined): string {
@@ -38,35 +30,17 @@ function formatAirYears(years: string | null | undefined): string {
   return lo === hi ? String(lo) : `${lo}~${hi}`;
 }
 
-function AirGradeBadge({ grade }: { grade: string }) {
-  const style = AIR_GRADE_STYLES[grade] ?? "bg-gray-100 text-gray-600 border-gray-300";
-  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs border ${style}`}>{grade}</span>;
-}
-
-/** 범죄 안전등급 색상 뱃지 */
-const CRIME_GRADE_STYLES: Record<string, string> = {
-  A: "bg-green-100 text-green-800 border-green-300",
-  B: "bg-blue-100 text-blue-800 border-blue-300",
-  C: "bg-yellow-100 text-yellow-800 border-yellow-300",
-  D: "bg-red-100 text-red-800 border-red-300",
-};
-
-const CRIME_GRADE_LABELS: Record<string, string> = {
-  A: "매우 안전", B: "안전", C: "보통", D: "주의",
-};
-
-function CrimeGradeBadge({ grade }: { grade: string }) {
-  const style = CRIME_GRADE_STYLES[grade] ?? "bg-gray-100 text-gray-600 border-gray-300";
-  const label = CRIME_GRADE_LABELS[grade] ?? grade;
-  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs border ${style}`}>{label}</span>;
-}
-
-/** 주변 환경 — 인프라 + 대기질 + 응급의료 + 어린이집 + 범죄 + 소음도 + 학교 접근성 + 학군 + 교통 */
+/** 주변 환경 — 인프라 + 대기질 + 응급의료 + 어린이집 + 안전 + 큰 도로 거리 + 학교 접근성 + 기피시설 + 학군 + 교통 */
 export function EnvironmentSection({ apartment: a }: { apartment: MbApartment }) {
   const infra = a.infra;
   const school = a.school;
   const transport = a.transport;
   const noise = a.noise;
+  const air = infra?.air_annual;
+  const pm25 = finiteOrNull(air?.pm25);
+  const roadText = roadDistanceText(noise);
+  const schoolWalk = positiveOrNull(a.naver_school_walk_min);
+  const noxious = positiveOrNull(a.noxious_dist);
   const hasData = (infra ?? school ?? transport ?? noise) != null || a.naver_school_walk_min != null || a.noxious_dist != null || a.crime_safety_grade != null || a.quake_design != null;
 
   if (!hasData) {
@@ -111,33 +85,25 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
         </div>
       )}
 
-      {/* 대기질 = 측정소별 3년 평균(세션604 — 실시간 수집 폐지). 등급이 없으면 블록째 숨긴다 */}
-      {infra?.air_annual?.band && (
+      {/* 대기질 = 측정소별 3년 평균(세션604 — 실시간 수집 폐지). PM2.5 값이 없으면 블록째 숨긴다(옛 등급 null 과 같은 조건).
+          등급(좋음/보통/나쁨)은 공인 기준이 아니라 지우고, PM2.5 는 국가 기준 이하/초과를 글로만 적는다(세션 472) */}
+      {infra && air && pm25 != null && (
         <div className="mb-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-2">
-            대기질 ({formatAirYears(infra.air_annual.years) ? `3년 평균 ${formatAirYears(infra.air_annual.years)}` : "3년 평균"})
+            대기질 ({formatAirYears(air.years) ? `3년 평균 ${formatAirYears(air.years)}` : "3년 평균"})
           </h4>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="flex flex-col">
-              <dt className="text-xs text-gray-500">등급 (PM2.5)</dt>
-              <dd className="text-sm"><AirGradeBadge grade={infra.air_annual.band} /></dd>
-            </div>
-            {infra.air_annual.pm25 != null && (
-              <div className="flex flex-col">
-                <dt className="text-xs text-gray-500">PM2.5</dt>
-                <dd className="text-sm">{infra.air_annual.pm25.toFixed(1)} <span className="text-gray-400">μg/m³</span></dd>
-              </div>
-            )}
-            {infra.air_annual.pm10 != null && (
+            <InfoRow wide label="PM2.5" value={`${pm25.toFixed(1)}㎍/㎥ (3년 평균)`} basis={pm25Basis(pm25)} />
+            {air.pm10 != null && (
               <div className="flex flex-col">
                 <dt className="text-xs text-gray-500">PM10</dt>
-                <dd className="text-sm">{infra.air_annual.pm10.toFixed(1)} <span className="text-gray-400">μg/m³</span></dd>
+                <dd className="text-sm">{air.pm10.toFixed(1)} <span className="text-gray-400">μg/m³</span></dd>
               </div>
             )}
-            {infra.air_annual.o3 != null && (
+            {air.o3 != null && (
               <div className="flex flex-col">
                 <dt className="text-xs text-gray-500">오존</dt>
-                <dd className="text-sm">{infra.air_annual.o3.toFixed(3)} <span className="text-gray-400">ppm</span></dd>
+                <dd className="text-sm">{air.o3.toFixed(3)} <span className="text-gray-400">ppm</span></dd>
               </div>
             )}
             {infra.air_station_name && (
@@ -150,9 +116,6 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
               </div>
             )}
           </dl>
-          {infra.air_annual.legend && (
-            <p className="mt-2 text-xs text-gray-400">등급 기준(PM2.5 3년 평균): {infra.air_annual.legend}</p>
-          )}
         </div>
       )}
 
@@ -183,41 +146,47 @@ export function EnvironmentSection({ apartment: a }: { apartment: MbApartment })
         </div>
       )}
 
-      {(infra?.crime_score != null || a.crime_safety_grade != null || a.quake_design != null) && (
+      {/* 우리 범죄 점수·지역 등급(infra.crime_score·crime_grade)은 뺐다 — 인구 없는 지역은 중앙값으로 채운
+          값이 섞여 있다. 행정안전부 지역안전지수 등급으로 바꾸는 일은 PR 4 (세션 472) */}
+      {(a.crime_safety_grade != null || a.quake_design != null) && (
         <div className="mb-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-2">안전<FreshnessTag iso={infra?.crime_updated_at} /></h4>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">안전</h4>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {infra?.crime_score != null && <InfoRow label="안전 점수" value={`${infra.crime_score}/100`} />}
-            {infra?.crime_grade && <InfoRow label="지역 안전 등급" value={<CrimeGradeBadge grade={infra.crime_grade} />} />}
             {a.crime_safety_grade != null && <InfoRow label="단지 안전 등급" value={`${a.crime_safety_grade}등급 (1=안전)`} />}
             {a.quake_design != null && <InfoRow label="내진설계" value={a.quake_design ? "적용" : "미적용"} />}
           </dl>
         </div>
       )}
 
+      {/* noise 는 측정값이 아니라 큰 도로 거리 구간에 붙인 추정 dB 라 거리 구간으로 풀어 쓴다 */}
       {noise != null && (
         <div className="mb-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-2">소음</h4>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">큰 도로</h4>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <InfoRow label="소음도" value={<MbNoiseBar value={noise} />} />
+            <InfoRow wide label="큰 도로 거리(추정)" value={roadText ?? undefined} basis={BASIS.roadDistance} />
           </dl>
         </div>
       )}
 
-      {a.naver_school_walk_min != null && (
+      {schoolWalk != null && (
         <div className="mb-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-2">학교 접근성</h4>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <InfoRow label="학교 도보 시간" value={<MbSchoolWalkBar value={a.naver_school_walk_min} />} />
+            <InfoRow wide label="가장 가까운 초등학교 도보(추정)" value={`${Math.round(schoolWalk)}분`} basis={BASIS.schoolWalk} />
           </dl>
         </div>
       )}
 
-      {a.noxious_dist != null && (
+      {noxious != null && (
         <div className="mb-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-2">유해시설</h4>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">기피시설</h4>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <InfoRow label="가장 가까운 유해시설" value={<MbNoxiousBar value={a.noxious_dist} />} />
+            <InfoRow
+              wide
+              label="가장 가까운 기피시설(지도 검색)"
+              value={`약 ${Math.round(noxious).toLocaleString()}m`}
+              basis={BASIS.avoidedFacility}
+            />
           </dl>
         </div>
       )}

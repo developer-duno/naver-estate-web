@@ -78,11 +78,28 @@ describe("MbInfraOverlay — 상세형 apt(중첩 채움): A 수정 후 동작",
     expect(screen.getByText("350m")).toBeInTheDocument();
   });
 
-  it("대기질 레이어가 3년 평균 등급과 PM2.5 를 표시한다 (세션604)", () => {
+  // 세션 472: 우리 등급(좋음/보통/나쁨) 줄은 지우고 PM2.5 + 국가 기준(연평균 15) 이하/초과 글자만
+  it("대기질 레이어가 PM2.5 3년 평균과 국가 기준 이하/초과 글자를 표시하고 등급은 없다", () => {
     render(<MbInfraOverlay apt={detailApt()} layer="air" />);
-    expect(screen.getByText("대기질 등급 (3년 평균)")).toBeInTheDocument();
-    expect(screen.getByText("좋음")).toBeInTheDocument();
     expect(screen.getByText("14.2 μg/m³")).toBeInTheDocument();
+    expect(screen.getByText("이 값은 국가 대기환경기준(연평균 15㎍/㎥) 이하")).toBeInTheDocument();
+    expect(screen.queryByText("대기질 등급 (3년 평균)")).not.toBeInTheDocument();
+    expect(screen.queryByText("좋음")).not.toBeInTheDocument();
+  });
+
+  it("PM2.5 가 15 를 넘으면 '초과'", () => {
+    const apt = detailApt();
+    const air = { ...apt.infra!.air_annual!, pm25: 15.1 };
+    render(<MbInfraOverlay apt={{ ...apt, infra: { ...apt.infra, air_annual: air } }} layer="air" />);
+    expect(screen.getByText("이 값은 국가 대기환경기준(연평균 15㎍/㎥) 초과")).toBeInTheDocument();
+  });
+
+  it("등급(band)만 있고 PM2.5 가 null 이면 '정보 없음'", () => {
+    const apt = detailApt();
+    const air = { ...apt.infra!.air_annual!, pm25: null };
+    render(<MbInfraOverlay apt={{ ...apt, infra: { ...apt.infra, air_annual: air } }} layer="air" />);
+    expect(screen.getByText(/이 단지는 해당 정보가 없습니다/)).toBeInTheDocument();
+    expect(screen.queryByText("좋음")).not.toBeInTheDocument();
   });
 
   it("어린이집 레이어가 개수+이름+거리를 표시한다", () => {
@@ -106,16 +123,23 @@ describe("MbInfraOverlay — C: 안전 등급 단위·범례·라벨 분리", ()
     expect(screen.getByText("2등급 (1=안전)")).toBeInTheDocument();
   });
 
-  it("지역 안전등급(infra.crime_grade)과 단지 안전등급을 별도 행으로 표시한다", () => {
+  // 세션 472: 우리 지역 범죄 등급(infra.crime_grade)은 뺐다(인구 없는 지역 중앙값 채움) — 단지 등급만 남는다
+  it("지역 안전등급(infra.crime_grade)이 있어도 보이지 않고 단지 안전등급만 보인다", () => {
     render(<MbInfraOverlay apt={detailApt()} layer="safety" />);
-    expect(screen.getByText("지역 안전 등급")).toBeInTheDocument();
-    expect(screen.getByText("A")).toBeInTheDocument();
+    expect(screen.queryByText("지역 안전 등급")).not.toBeInTheDocument();
+    expect(screen.queryByText("A")).not.toBeInTheDocument();
     expect(screen.getByText("단지 안전 등급")).toBeInTheDocument();
     expect(screen.getByText("2등급 (1=안전)")).toBeInTheDocument();
   });
 
   it("안전 정보가 전혀 없으면 '정보 없음'", () => {
     render(<MbInfraOverlay apt={flatApt({ crime_safety_grade: undefined })} layer="safety" />);
+    expect(screen.getByText(/이 단지는 해당 정보가 없습니다/)).toBeInTheDocument();
+  });
+
+  it("지역 범죄 등급만 있고 단지 등급이 없으면 '정보 없음'", () => {
+    const apt = detailApt();
+    render(<MbInfraOverlay apt={{ ...apt, crime_safety_grade: undefined }} layer="safety" />);
     expect(screen.getByText(/이 단지는 해당 정보가 없습니다/)).toBeInTheDocument();
   });
 });

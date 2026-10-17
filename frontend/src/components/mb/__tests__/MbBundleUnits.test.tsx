@@ -99,26 +99,28 @@ describe("MbSelectedCard — 세대수", () => {
   });
 });
 
-describe("OverviewSection — 세대수 막대·규모 판정도 같은 값", () => {
-  const bar = () => screen.getAllByRole("progressbar").find((el) =>
-    (el.getAttribute("aria-label") ?? "").includes("세대"),
-  );
+describe("OverviewSection — 세대수 값·기준 줄도 같은 값 (세션 472: 막대 → 값 + 공인 기준)", () => {
+  // 값 칸(dd)은 "N세대" 글 뒤에 이름표 span 이 붙을 수 있어 앞부분만 본다
+  const unitsValue = (text: string) => screen.getByText((_, el) => el?.tagName === "DD" && (el.textContent ?? "").startsWith(text));
 
-  it("있음: 막대가 1,200 으로 그려지고 이름표", () => {
+  it("있음: 1,200세대 + 500세대 이상 기준 줄 + 이름표", () => {
     render(<OverviewSection apartment={makeApt(CASES.있음)} />);
-    expect(bar()?.getAttribute("aria-valuenow")).toBe("1200");
-    expect(screen.getByText(BUNDLE_UNITS_LABEL)).toHaveClass("block"); // 막대 밑 줄
+    expect(unitsValue("1,200세대")).toBeInTheDocument();
+    expect(screen.getByText(/주민공동시설 확대 대상\(500세대 이상/)).toBeInTheDocument();
+    expect(screen.getByText(BUNDLE_UNITS_LABEL)).toHaveClass("block"); // 값 밑 줄
   });
 
-  it("없음: 막대가 행 값 4, 이름표 없음", () => {
+  it("없음: 행 값 4세대 + 300세대 미만 기준 줄, 이름표 없음", () => {
     render(<OverviewSection apartment={makeApt(CASES.없음)} />);
-    expect(bar()?.getAttribute("aria-valuenow")).toBe("4");
+    expect(unitsValue("4세대")).toBeInTheDocument();
+    expect(screen.getByText("의무관리대상(300세대 이상) 미만 · 공동주택관리법 §2")).toBeInTheDocument();
     expect(screen.queryByText(BUNDLE_UNITS_LABEL)).not.toBeInTheDocument();
   });
 
-  it("같음: 막대 300, 이름표 없음", () => {
+  it("같음: 300세대 + 의무관리대상 기준 줄, 이름표 없음", () => {
     render(<OverviewSection apartment={makeApt(CASES.같음)} />);
-    expect(bar()?.getAttribute("aria-valuenow")).toBe("300");
+    expect(unitsValue("300세대")).toBeInTheDocument();
+    expect(screen.getByText("의무관리대상 공동주택(300세대 이상, 공동주택관리법 §2)")).toBeInTheDocument();
     expect(screen.queryByText(BUNDLE_UNITS_LABEL)).not.toBeInTheDocument();
   });
 });

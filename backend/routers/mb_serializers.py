@@ -155,6 +155,10 @@ def trade_stats_to_dict(ts) -> dict:
         "nearby_median": ts.nearby_median,
         "recent_trades_6m": ts.recent_trades_6m,
         "jeonse_rate": ts.jeonse_rate,
+        # 운영 칸은 NUMERIC(5,1) — psycopg2 가 Decimal 로 줄 수 있어 float 로 바꾼다 (0.0 도 값으로 유지)
+        "complex_jeonse_rate": float(ts.complex_jeonse_rate) if ts.complex_jeonse_rate is not None else None,
+        "complex_jeonse_n": ts.complex_jeonse_n,
+        "complex_sale_n": ts.complex_sale_n,
         "pir": ts.pir,
         "psr": ts.psr,
         "price_by_area": ts.price_by_area,

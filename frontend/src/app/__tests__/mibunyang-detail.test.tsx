@@ -42,6 +42,10 @@ function createMockDetail() {
       apartment_id: "APT001",
       nearby_median: 95000,
       jeonse_rate: 65.3,
+      // 단지 단위 전세가율 — 구 단위 jeonse_rate(65.3)와 일부러 다른 값 (세션 471)
+      complex_jeonse_rate: 61.2,
+      complex_jeonse_n: 8,
+      complex_sale_n: 15,
       pir: 12.5,
     },
     infra: { hospital: 3, hospital_dist: 500, mart: 2, mart_dist: 300 },
@@ -148,6 +152,48 @@ describe("미분양 상세 — nested 데이터 null", () => {
     await waitFor(() => {
       expect(screen.getByText("주변 환경 데이터가 없습니다.")).toBeInTheDocument();
     });
+  });
+});
+
+// 세션 471: 거래 통계의 전세율 칸은 단지 단위 값(complex_jeonse_rate)만 보여 준다.
+// 구(區) 단위 jeonse_rate 가 단지 칸처럼 보이던 결함(B28)이 다시 새지 않는지 지킨다.
+describe("미분양 상세 — 전세율(이 단지) 칸", () => {
+  beforeEach(() => {
+    mockHistory.mockResolvedValue({ apartment_id: "APT001", items: [] });
+  });
+
+  it("단지 전세가율과 표본 건수가 표시된다", async () => {
+    mockDetail.mockResolvedValue(createMockDetail());
+    renderDetail();
+    await waitFor(() => {
+      expect(screen.getByText("전세율(이 단지 · 대표 평수)")).toBeInTheDocument();
+    });
+    expect(screen.getByText("전세 8건 · 매매 15건")).toBeInTheDocument();
+    expect(screen.getByText("61.2%")).toBeInTheDocument();
+  });
+
+  it("단지 값이 없으면 '-' 이고 구 단위 값(65.3%)은 화면에 없다", async () => {
+    const base = createMockDetail();
+    const tradeStats: Record<string, unknown> = { ...base.trade_stats };
+    delete tradeStats.complex_jeonse_rate; // jeonse_rate: 65.3 은 그대로 둔다
+    mockDetail.mockResolvedValue({ ...base, trade_stats: tradeStats });
+    renderDetail();
+    const label = await screen.findByText("전세율(이 단지 · 대표 평수)");
+    expect(label.nextElementSibling?.textContent).toBe("-");
+    expect(screen.queryByText("65.3%")).not.toBeInTheDocument();
+  });
+
+  // 검사관 🟡(세션 471): 새 BE 는 표본 부족 단지에 undefined 가 아니라 null 을 보낸다 — null 도 "-" 여야 하고 건수 줄이 붙으면 안 된다
+  it("단지 값이 null(표본 부족)이면 '-' 이고 건수 줄도 없다", async () => {
+    const base = createMockDetail();
+    mockDetail.mockResolvedValue({
+      ...base,
+      trade_stats: { ...base.trade_stats, complex_jeonse_rate: null, complex_jeonse_n: 1, complex_sale_n: 4 },
+    });
+    renderDetail();
+    const label = await screen.findByText("전세율(이 단지 · 대표 평수)");
+    expect(label.nextElementSibling?.textContent).toBe("-");
+    expect(screen.queryByText(/전세 1건/)).not.toBeInTheDocument();
   });
 });
 

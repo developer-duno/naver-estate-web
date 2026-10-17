@@ -7,7 +7,6 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-from crawler.public_trade_match import N_DANJI_SUFFIX as _N_DANJI_SUFFIX
 from crawler.public_trade_match import _strip_n_danji  # noqa: F401 — 옛 시험 import 보존
 from crawler.service_common import (
     RESUME_LOOKBACK_LIMIT,
@@ -21,35 +20,6 @@ from db.models import Complex, CrawlJob
 from utils import safe_int, utcnow
 
 logger = logging.getLogger(__name__)
-
-def _has_sibling_n_danji(db, base_norm_name: str, sigungu_cd: str) -> bool:
-    """같은 지역에 'base_norm_name + N단지' 형태로 등록된 형제 단지가 있는지 확인.
-
-    세션 359: "경희궁의아침2단지"·"3단지"·"4단지"가 각각 별도 단지로 DB에
-    존재하는 사례(전국 2,353건)를 발견 — 이런 경우 국토부의 "N단지" 접미사를
-    떼고 매칭하면 서로 다른 단지의 실거래가가 섞여 가격이 왜곡된다(오매칭).
-    형제 단지가 하나라도 있으면 N단지 흡수 매칭 자체를 하지 않는다 — "덜
-    채워지더라도 틀리지 않는 것"이 이 서비스의 신뢰(정확한 시세 산정)에 더
-    중요하다는 판단(CLAUDE.md "도구 100% 정확 산정" 원칙 답습).
-    """
-    from crawler.public_data_api import _normalize_apt_name
-
-    # PostgreSQL 전용 '~' 정규식 연산자는 SQLite(테스트)에서 문법 오류라 쓰지
-    # 않는다(domain-mapping-ssot.md 룰3 답습) — LIKE로 후보만 넓게 좁히고
-    # (숫자+단지 접미사 여부는) Python 레벨에서 정밀 필터링해 dialect 무관하게 동작.
-    candidates = (
-        db.query(Complex.complex_name)
-        .filter(Complex.cortar_no.like(f"{sigungu_cd}%"))
-        .filter(Complex.complex_name.like("%단지"))
-        .all()
-    )
-    for (name,) in candidates:
-        norm = _normalize_apt_name(name)
-        if not _N_DANJI_SUFFIX.search(norm):
-            continue
-        if _strip_n_danji(norm) == base_norm_name:
-            return True
-    return False
 
 
 def _recent_months(today, n: int) -> list[str]:
@@ -68,6 +38,32 @@ def _recent_months(today, n: int) -> list[str]:
         y, m0 = divmod(total, 12)
         months.append(f"{y:04d}{m0 + 1:02d}")
     return sorted(months)
+
+
+def _delete_stale_gov_rows(db, complex_nos: list[str], months: list[str], started_at: datetime) -> int:
+    """이번 회차에 다시 쓰이지 않은 옛 정부 실거래가 줄을 지우고 지운 수를 돌려준다 (세션 469).
+
+    정부 줄 = trade_type 'A1' 이고 area_no 가 '' 또는 NULL(네이버 줄은 area_no 가 채워져 있어 안 건드린다).
+    이번 회차에 다시 저장된 줄은 recorded_at 이 회차 시작 뒤라 남는다 — 그보다 앞선 줄은
+    "이번에 그 단지·그 달에 짝이 안 됐다"는 뜻이다. 대상 단지·달 밖은 건드리지 않는다.
+    """
+    if not complex_nos or not months:
+        return 0
+    from sqlalchemy import or_
+
+    from db.models import ComplexPriceHistory
+
+    return (
+        db.query(ComplexPriceHistory)
+        .filter(
+            ComplexPriceHistory.complex_no.in_(complex_nos),
+            ComplexPriceHistory.trade_type == "A1",
+            or_(ComplexPriceHistory.area_no == "", ComplexPriceHistory.area_no.is_(None)),
+            ComplexPriceHistory.base_month.in_(months),
+            ComplexPriceHistory.recorded_at < started_at,
+        )
+        .delete(synchronize_session=False)
+    )
 
 
 # 세션 420: 국토부 창구 호출이 실패(재시도 소진·429·일일 한도)한 것을 "거래 없는 빈 달"로
@@ -460,7 +456,9 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
     from datetime import date
 
     from crawler.public_data_api import PublicDataAPI, _normalize_apt_name
+    from crawler.public_trade_match import SigunguMatcher
 
+    started_at = utcnow()  # 이 시각보다 앞선 정부 줄 = 이번에 다시 안 쓰인 옛 줄(정리 대상)
     db = SessionLocal()
     try:
         cpx = db.get(Complex, complex_no)
@@ -475,20 +473,11 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
         norm_name = _normalize_apt_name(cpx.complex_name)
         if not norm_name:
             raise ValueError(f"단지명 정규화 실패: {cpx.complex_name}")
-        # "단지" 접미사 제거 버전도 준비 (국토교통부 API 단지명과 매칭률 향상)
-        import re
-        norm_short = re.sub(r"단지$", "", norm_name)
 
-        # 세션 359: 우리 DB가 "N단지"로 세분화 안 된 통합 단지명(예: "올림픽선수기자촌"
-        # = 5,540세대·122개동 통합 등록)일 때만, 국토부의 "N단지" 거래를 흡수해
-        # 매칭률을 높인다. 단, 같은 지역에 "본체명+N단지" 형태 형제 단지가 실제로
-        # DB에 존재하면(예: "경희궁의아침2단지"/"3단지"가 각각 별도 등록) 절대
-        # 흡수하지 않는다 — 서로 다른 단지의 실거래가가 섞여 가격이 왜곡되는
-        # 오매칭을 막기 위함(전국 2,353건 형제단지 실측 확인, "덜 채워지더라도
-        # 틀리지 않는다"는 원칙).
-        absorb_n_danji = False
-        if not _N_DANJI_SUFFIX.search(norm_name) and not _has_sibling_n_danji(db, norm_name, sigungu_cd):
-            absorb_n_danji = True
+        # 세션 469: 주간 수집과 같은 짝짓기 하나를 쓴다 — 법정동으로 가르고(같은 시군구의
+        # 같은 이름 단지끼리 섞이지 않게) 끝 '단지' 떼기·N단지 흡수(형제 없을 때만, 세션 359)·
+        # 오피스텔 제외·해제 거래 제외 규칙이 전부 crawler/public_trade_match.py 에 있다.
+        matcher = SigunguMatcher.from_db(db, sigungu_cd)
 
         # 소급 대상 월 생성 (세션 421: 달력 달 기준 — 30일 간격 계산의 2월 건너뛰기 결함 수정)
         today = date.today()
@@ -505,20 +494,8 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
             if not trades:
                 continue
 
-            # 이 단지와 매칭되는 거래만 추출
-            prices: list[int] = []
-            for trade in trades:
-                apt_name = trade.get("aptNm") or trade.get("아파트") or ""
-                price_str = str(trade.get("dealAmount") or trade.get("거래금액") or "0")
-                price = safe_int(price_str.replace(",", "").strip())
-                if not price:
-                    continue
-                api_norm = _normalize_apt_name(apt_name)
-                is_match = api_norm == norm_name or api_norm == norm_short
-                if not is_match and absorb_n_danji and _strip_n_danji(api_norm) == norm_name:
-                    is_match = True
-                if is_match:
-                    prices.append(price)
+            # 이 단지와 짝이 된 거래만
+            prices = matcher.aggregate(trades).get(complex_no, [])
 
             if prices:
                 _upsert_price_history(
@@ -532,6 +509,13 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
                     base_month=deal_ymd,
                 )
                 collected += 1
+
+        # 세션 469: 달을 모두 받았으면 이번에 다시 안 쓰인 옛 정부 줄(이 단지·이 달 목록 안)을 지운다.
+        # 저장 0 이어도 지운다 — 이 단지가 이제 어느 거래에도 짝이 안 되는 게 사실이면 옛 값이
+        # 남는 쪽이 더 틀리다. 호출이 하나라도 실패했으면 못 받은 달이 있으니 지우지 않는다.
+        deleted = 0
+        if fetch_failure is None:
+            deleted = _delete_stale_gov_rows(db, [complex_no], months, started_at)
 
         # V046: 매칭 결과(collected==0 포함)와 무관하게 "시도했다"는 사실만 기록.
         # 국토부에 원천적으로 실거래가 없는 단지를 무한 재시도하지 않기 위한 마커
@@ -554,8 +538,8 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
             )
             raise PublicTradeFetchError(f"{head} 이 단지의 지난 실거래가를 다 받지 못했어요", fetch_failure)
         logger.info(
-            "소급 수집 완료: complex=%s (%s), %d/%d 월 매칭",
-            complex_no, cpx.complex_name, collected, len(months),
+            "소급 수집 완료: complex=%s (%s), %d/%d 월 매칭, 옛 줄 정리 %d줄",
+            complex_no, cpx.complex_name, collected, len(months), deleted,
         )
         return {
             "collected": collected,

@@ -23,8 +23,9 @@ describe("admin-labels 매핑 카운트", () => {
     expect(Object.keys(TARGET_TYPE_LABELS)).toHaveLength(10);
   });
 
-  it("COLLECTOR_LABELS = 8개 (BE routers/admin/collect.py 가 받는 수집기 이름 전부)", () => {
-    expect(Object.keys(COLLECTOR_LABELS)).toHaveLength(8);
+  it("COLLECTOR_LABELS = 9개 (BE 가 받는 수집기 이름 전부 + 내린 수집기 옛 감사 기록 이름표 — 대기질·범죄)", () => {
+    expect(Object.keys(COLLECTOR_LABELS)).toHaveLength(9);
+    expect(COLLECTOR_LABELS["region-stats"]).toBe("동네 공식 통계 받기");
   });
 });
 

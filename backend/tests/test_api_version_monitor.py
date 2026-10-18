@@ -538,7 +538,6 @@ def test_registry_odcloud_urls_match_actual_collector_modules():
     """
     from crawler.applyhome_officetel_api import BASE_URL as APPLYHOME_BASE
     from crawler.business_api import STATUS_URL, VALIDATE_URL
-    from crawler.crime_stats_api import CRIME_STATS_URL
 
     urls = {entry["url"] for entry in PROBE_REGISTRY}
 
@@ -547,10 +546,10 @@ def test_registry_odcloud_urls_match_actual_collector_modules():
         f"청약홈 수집기가 쓰는 {APPLYHOME_BASE} 로 시작하는 프로브가 없다 — "
         "crawler/api_version_monitor.py PROBE_REGISTRY 에 추가할 것"
     )
-    # 국세청 status·validate·범죄통계는 전체 URL 이 곧 엔드포인트라 완전일치로 대조.
+    # 국세청 status·validate 는 전체 URL 이 곧 엔드포인트라 완전일치로 대조.
     # ⚠ 국세청 두 오퍼레이션은 서비스가 같아도 개별 폐기가 가능해 각각 등록한다
     #   (청약홈처럼 대표 1개 prefix 대조로 갈음하지 않는다).
-    for actual in (STATUS_URL, VALIDATE_URL, CRIME_STATS_URL):
+    for actual in (STATUS_URL, VALIDATE_URL):
         assert actual in urls, (
             f"수집기 모듈이 쓰는 {actual} 이 PROBE_REGISTRY 에 없다 — "
             "crawler/api_version_monitor.py PROBE_REGISTRY 에 추가할 것"
@@ -604,16 +603,17 @@ def test_probe_failure_before_job_recorded_still_raises():
         probe_api_versions()
 
 
-def test_registry_covers_all_eleven_endpoints():
-    """감시 대상 총 11종 (apis.data.go.kr 7 + odcloud 4) — 누락 시 사각지대.
+def test_registry_covers_all_ten_endpoints():
+    """감시 대상 총 10종 (apis.data.go.kr 7 + odcloud 3) — 누락 시 사각지대.
 
     세션 417: 응급실 실시간 가용병상 op 추가(병상 수를 이 op 에서만 받는다) 12 → 13.
     에어코리아 2종(근접 측정소·실시간 대기질)은 실시간 수집 폐지(#675)로 호출처가 없어 뺐다 13 → 11.
+    세션 473: 경찰청 범죄통계(odcloud 3074462)는 범죄 점수 잡을 내려 호출처가 없어 뺐다 11 → 10.
     """
     urls = {entry["url"] for entry in PROBE_REGISTRY}
     assert len(PROBE_REGISTRY) == len(urls), "레지스트리에 중복 URL 이 있다"
-    assert len(PROBE_REGISTRY) == 11, f"감시 대상이 11종이 아님: {len(PROBE_REGISTRY)}"
-    assert sum(1 for e in PROBE_REGISTRY if e.get("flavor") == FLAVOR_ODCLOUD) == 4
+    assert len(PROBE_REGISTRY) == 10, f"감시 대상이 10종이 아님: {len(PROBE_REGISTRY)}"
+    assert sum(1 for e in PROBE_REGISTRY if e.get("flavor") == FLAVOR_ODCLOUD) == 3
 
 
 def test_registry_common_cost_probe_uses_first_op():

@@ -237,7 +237,7 @@ def charge_due_billing_keys(batch_size: int = 500, scheduler_job_id: str | None 
     """결제할 때가 된 활성 기본 빌링키를 자동결제 (스케줄러 잡 진입점).
 
     env_*.py 의 SessionLocal try/finally 패턴 답습. 각 빌링키를 개별 try 로 격리해
-    1건 실패가 배치 전체를 멈추지 않게 한다(env_crime.py 개별 try/except 답습).
+    1건 실패가 배치 전체를 멈추지 않게 한다(옛 범죄 통계 수집기의 개별 try/except 답습).
 
     관찰성(적대검증 #4): CrawlJob 을 기록해 monitor.py 가 결제 실패·중단을 볼 수 있게 한다
     (service_metrics.py CrawlJob 패턴 답습). retry/stopped 가 있으면 job 메타에 남긴다.

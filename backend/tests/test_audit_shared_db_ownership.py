@@ -1,7 +1,7 @@
 """공유 DB 소유권 가드(scripts/audit_shared_db_ownership.py) 시험 — 세션 459.
 
 가짜 정본(tmp_path) + 가짜 레포 트리(모델 미니판 포함)로 판정 ①~④·끄기·정본 형식 오류를 본다. 네트워크 0 · DB 0.
-양성 대조군(upsert.py·enricher.py·env_crime.py 의 실제 꼴)은 등록돼 있으면 통과해야 한다.
+양성 대조군(upsert.py·enricher.py·env_infra_fill.py(세션 473 에 지운 옛 범죄 통계 수집기) 의 실제 꼴)은 등록돼 있으면 통과해야 한다.
 """
 
 import json
@@ -51,7 +51,7 @@ class Infra(Base):
 """
 
 # 실제 꼴을 옮긴 양성 대조군 — services/upsert.py(pg_insert·articles 삭제) · services/enricher.py(.update({) ·
-# crawler/env_crime.py(헬퍼가 준 Infra 행에 칸 대입) · crawler/env_emergency.py(Infra 생성 + db.add)
+# crawler/env_infra_fill.py(헬퍼가 준 Infra 행에 칸 대입) · crawler/env_emergency.py(Infra 생성 + db.add)
 UPSERT = """
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -148,7 +148,7 @@ def _registry(**override) -> dict:
             "2u": {
                 "backend/services/upsert.py": {"complexes": ["complex_name", "complex_no"], "articles": []},
                 "backend/services/enricher.py": {"complexes": ["address"]},
-                "backend/crawler/env_crime.py": {"infra": ["crime_score"]},
+                "backend/crawler/env_infra_fill.py": {"infra": ["crime_score"]},
                 "backend/crawler/env_emergency.py": {"infra": ["apartment_id", "emergency_hospital"]},
             },
         },
@@ -171,7 +171,7 @@ def _tree(tmp_path: Path, registry: dict | None = None) -> tuple[Path, Path]:
     _write(root, "backend/db/mb_models.py", MB_MODELS)
     _write(root, "backend/services/upsert.py", UPSERT)
     _write(root, "backend/services/enricher.py", ENRICHER)
-    _write(root, "backend/crawler/env_crime.py", ENV_CRIME)
+    _write(root, "backend/crawler/env_infra_fill.py", ENV_CRIME)
     _write(root, "backend/crawler/env_emergency.py", ENV_EMERGENCY)
     _write(root, "backend/crawler/jobs.py", JOBS)
     _write(root, "backend/tests/test_x.py", "def test_x(db):\n    db.query(Complex).delete()\n")  # 시험은 제외
@@ -290,15 +290,15 @@ def test_b_mibunyang_column_in_registered_file_is_red(tmp_path, capsys):
 
 
 def test_b_attribute_assignment_of_mibunyang_column_is_red(tmp_path, capsys):
-    """등록 파일(env_crime)에서 헬퍼가 준 Infra 행에 미분양 칸 대입(infra.hospital = …) → 🔴 ②."""
+    """등록 파일(env_infra_fill)에서 헬퍼가 준 Infra 행에 미분양 칸 대입(infra.hospital = …) → 🔴 ②."""
     root, reg = _tree(tmp_path)
-    _write(root, "backend/crawler/env_crime.py", ENV_CRIME.replace(
+    _write(root, "backend/crawler/env_infra_fill.py", ENV_CRIME.replace(
         'infra.crime_score = result["crime_score"]',
         'infra.crime_score = result["crime_score"]\n        infra.hospital = result["h"]',
     ))
     code, out = _run(capsys, root, reg)
     assert code == 1
-    assert "| 🔴 ② | backend/crawler/env_crime.py:11 | infra | 미분양 칸 쓰기 — infra.hospital" in out
+    assert "| 🔴 ② | backend/crawler/env_infra_fill.py:11 | infra | 미분양 칸 쓰기 — infra.hospital" in out
 
 
 def test_c_shared_table_delete_outside_allowed_is_red(tmp_path, capsys):

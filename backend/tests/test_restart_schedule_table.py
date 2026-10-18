@@ -1,6 +1,6 @@
 """release.md §3-0 스케줄 전수 표가 코드와 어긋나지 않게 막는 가드 (세션 412)
 
-옛 표는 손으로 옮겨 적은 것이라 세 번 잡을 빠뜨렸다(세션 398 collect_crime_stats,
+옛 표는 손으로 옮겨 적은 것이라 세 번 잡을 빠뜨렸다(세션 398 범죄 통계 잡(세션 473 에 삭제),
 세션 403 새 잡 2종, 세션 412 주 1회 07:00 complex_detail 3종). 이제 scripts/gen_restart_schedule_table.py 가
 scheduler.py·monitor.py 에서 표를 생성하고, 이 테스트가 문서와 코드의 드리프트를 잡는다.
 

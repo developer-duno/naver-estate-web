@@ -1,6 +1,6 @@
 """release.md §3-0 "스케줄 전수" 표 생성기 — scheduler.py·monitor.py 가 진실의 원천.
 
-옛 표는 손으로 옮겨 적은 것이라 세 번 잡을 빠뜨렸다(세션 398 collect_crime_stats,
+옛 표는 손으로 옮겨 적은 것이라 세 번 잡을 빠뜨렸다(세션 398 범죄 통계 잡(세션 473 에 삭제),
 세션 403 새 잡 2종, 세션 412 주 1회 07:00 complex_detail_JGC/ABYG/OBYG — 이 생성기의 첫 실행이
 찾아냈다). 손글씨를 없애고 코드에서 뽑는다 — derived-display-ssot.md 의
 "파생 표시값은 source 에서 자동생성" 원칙을 문서 표에 적용한 것이다.
@@ -36,7 +36,7 @@ BLOCK_END = "<!-- restart-schedule:end -->"
 _ENABLE_TOGGLES = (
     "POPULAR_CRAWL_ENABLED", "PUBLIC_DATA_ENABLED", "OFFICIAL_PRICE_ENABLED",
     "KAPT_ENABLED", "EMERGENCY_ENABLED", "CHILDCARE_ENABLED",
-    "CRIME_STATS_ENABLED", "COMPLEX_DETAIL_ENABLED", "COMPLEX_METRIC_ENABLED",
+    "REGION_STATS_ENABLED", "RONE_API_KEY_SET", "COMPLEX_DETAIL_ENABLED", "COMPLEX_METRIC_ENABLED",
     "BILLING_AUTO_CHARGE_ENABLED", "PAYMENT_ENABLED", "MONITOR_ENABLED",
     "VACUUM_MAINTENANCE_ENABLED", "API_VERSION_MONITOR_ENABLED",
     "FIELD_DRIFT_MONITOR_ENABLED", "BACKFILL_DETAIL_ENABLED",
@@ -71,7 +71,7 @@ _ID_TO_JOB_TYPE = {
     "kapt_costs_evening": "kapt_costs",
     "collect_emergency": "emergency",
     "collect_childcare": "childcare",
-    "collect_crime_stats": "crime_stats",
+    "collect_region_stats": "region_stats",
     "crawler_monitor": "crawler_monitor",
     "collect_metrics": "complex_metric",
     "billing_charge": "billing_charge",

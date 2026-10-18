@@ -126,12 +126,12 @@ def test_b2_other_collector_is_not_blocked(client, db):
         with patch.object(collect_mod, "_get_collector", return_value=held):
             assert client.post("/api/admin/collect/emergency", headers=_auth("bg3")).status_code == 200
             assert held.entered.wait(timeout=10)
-            other = client.post("/api/admin/collect/crime-stats", headers=_auth("bg3"))
+            other = client.post("/api/admin/collect/region-stats", headers=_auth("bg3"))
         assert other.status_code == 200
     finally:
         held.release.set()
         _join_collector("emergency")
-        _join_collector("crime-stats")
+        _join_collector("region-stats")
 
 
 def test_b3_collector_exception_releases_flag_and_logs(client, db, caplog):

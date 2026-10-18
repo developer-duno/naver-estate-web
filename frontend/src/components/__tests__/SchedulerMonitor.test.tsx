@@ -38,9 +38,9 @@ const MOCK_RESPONSE = {
       source_url: "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getMsrstnAcctoRltmMesureDnsty",
     },
     {
-      scheduler_job_id: "collect_crime_stats",
-      name: "범죄통계",
-      schedule: "분기별 첫째 일요일 04:00",
+      scheduler_job_id: "collect_region_stats",
+      name: "동네 공식 통계 받기",
+      schedule: "매월 16일 05:45",
       enabled: true,
       last_run: {
         status: "failed",
@@ -53,7 +53,7 @@ const MOCK_RESPONSE = {
       },
       next_run_at: undefined,
       stats_24h: { runs: 1, failures: 1 },
-      source: "경찰청 범죄통계 (3074462)",
+      source: "한국부동산원 부동산통계정보 R-ONE",
       source_url: null,
     },
     {
@@ -105,7 +105,7 @@ describe("SchedulerMonitor 컴포넌트", () => {
     await waitFor(() => {
       expect(screen.getByText("에어코리아 대기질")).toBeInTheDocument();
     });
-    expect(screen.getByText("범죄통계")).toBeInTheDocument();
+    expect(screen.getByText("동네 공식 통계 받기")).toBeInTheDocument();
     expect(screen.getByText("어린이집")).toBeInTheDocument();
   });
 
@@ -147,14 +147,14 @@ describe("SchedulerMonitor 컴포넌트", () => {
     mockGetStatus.mockResolvedValueOnce(MOCK_RESPONSE);
     renderWithProvider();
     await waitFor(() => {
-      expect(screen.getByText("범죄통계")).toBeInTheDocument();
+      expect(screen.getByText("동네 공식 통계 받기")).toBeInTheDocument();
     });
 
     // 에러 메시지가 처음에는 안 보임
     expect(screen.queryByText("알 수 없는 오류 (아래 '자세한 내용 보기'를 누르면 원래 기록이 보여요)")).not.toBeInTheDocument();
 
     // 실패 행 클릭
-    const failedRow = screen.getByText("범죄통계").closest("tr");
+    const failedRow = screen.getByText("동네 공식 통계 받기").closest("tr");
     expect(failedRow).not.toBeNull();
     fireEvent.click(failedRow!);
 
@@ -190,9 +190,9 @@ describe("SchedulerMonitor 컴포넌트", () => {
     });
     renderWithProvider();
     await waitFor(() => {
-      expect(screen.getByText("범죄통계")).toBeInTheDocument();
+      expect(screen.getByText("동네 공식 통계 받기")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByText("범죄통계").closest("tr")!);
+    fireEvent.click(screen.getByText("동네 공식 통계 받기").closest("tr")!);
 
     await waitFor(() => {
       expect(screen.getByText(plain)).toBeInTheDocument();
@@ -209,9 +209,9 @@ describe("SchedulerMonitor 컴포넌트", () => {
     mockGetStatus.mockResolvedValueOnce(MOCK_RESPONSE);
     renderWithProvider();
     await waitFor(() => {
-      expect(screen.getByText("범죄통계")).toBeInTheDocument();
+      expect(screen.getByText("동네 공식 통계 받기")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByText("범죄통계").closest("tr")!);
+    fireEvent.click(screen.getByText("동네 공식 통계 받기").closest("tr")!);
 
     await waitFor(() => {
       expect(screen.getByText("알 수 없는 오류 (아래 '자세한 내용 보기'를 누르면 원래 기록이 보여요)")).toBeInTheDocument();
@@ -234,9 +234,9 @@ describe("SchedulerMonitor 컴포넌트", () => {
     });
     renderWithProvider();
     await waitFor(() => {
-      expect(screen.getByText("범죄통계")).toBeInTheDocument();
+      expect(screen.getByText("동네 공식 통계 받기")).toBeInTheDocument();
     });
-    fireEvent.click(screen.getByText("범죄통계").closest("tr")!);
+    fireEvent.click(screen.getByText("동네 공식 통계 받기").closest("tr")!);
 
     await waitFor(() => {
       expect(screen.getByText("알 수 없는 오류 (아래 '자세한 내용 보기'를 누르면 원래 기록이 보여요)")).toBeInTheDocument();
@@ -263,7 +263,7 @@ describe("SchedulerMonitor 컴포넌트", () => {
       expect(screen.getByText("에어코리아 대기질")).toBeInTheDocument();
     });
     expect(screen.getByText("자료 출처: 에어코리아 실시간 대기질")).toBeInTheDocument();
-    expect(screen.getByText("자료 출처: 경찰청 범죄통계 (3074462)")).toBeInTheDocument();
+    expect(screen.getByText("자료 출처: 한국부동산원 부동산통계정보 R-ONE")).toBeInTheDocument();
   });
 
   /** source 가 null 이어도 렌더가 깨지지 않는다 */

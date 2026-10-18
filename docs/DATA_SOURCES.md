@@ -53,7 +53,7 @@ articles 약 150만 행 988MB · trades 약 105만 행 · complex_price_history 
 | (대기질 3년 평균) | 미분양 소유 공유 표 `air_station_annual`(에어코리아 최종확정 측정자료 기반, 연 1회 미분양이 갱신) — 2u 는 읽기만(세션604) | — |
 | `collect_emergency` | `apis.data.go.kr/B552657` (응급의료 ErmctInfoInqireService) | infra |
 | `collect_childcare` | `api.childcare.go.kr` (CPMS cpmsapi030) | infra |
-| `collect_crime_stats` | `api.odcloud.kr/api/3074462` (경찰청) | infra |
+| `collect_region_stats` | `www.reb.or.kr/r-one/openapi` (한국부동산원 R-ONE — 시군구 전세가율·시도 전월세전환율, 열쇠 `RONE_API_KEY`) | region_stats (세션 473 — 옛 범죄 점수 잡 `infra.crime_*` 은 삭제, 칸은 남고 값은 비움) |
 | `collect_officetel_presale` · `collect_rental_presale` | `api.odcloud.kr/api/ApplyhomeInfoDetailSvc` (청약홈) | officetel_* · rental_* |
 | `official_price` | `api.vworld.kr/ned/data` (공동주택 공시가격) | complex_official_price |
 | `api_version_probe` | data.go.kr 계열 엔드포인트 최소호출(생사 확인) | — (알림만) |

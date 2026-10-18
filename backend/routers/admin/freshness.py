@@ -8,19 +8,24 @@
   - status: green/yellow/red/unknown + 헛바퀴면 red 격상
 """
 
+import logging
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import Depends
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
-from db.mb_models import Infra, MBTrade, OfficetelPresaleSchedule, RentalScheduleOfficial, UnsoldHistory
-from db.models import Article, Complex, ComplexOfficialPrice, ComplexPriceHistory, CrawlJob
+from config.legal_rates import BOK_BASE_RATE, BOK_BASE_RATE_DATE, legal_rent_conversion_cap
+from db.mb_models import MBTrade, OfficetelPresaleSchedule, RentalScheduleOfficial, UnsoldHistory
+from db.models import Article, Complex, ComplexOfficialPrice, ComplexPriceHistory, CrawlJob, RegionStats
 from deps import get_admin_user, get_db
 from services.cache import get_cache
 
 from ._shared import router
 from .freshness_meta import FRESHNESS_ITEMS
+
+logger = logging.getLogger(__name__)
 
 # data-freshness 캐시 (세션 260). compute_freshness 가 8종목 풀 테이블 집계라 5초+.
 # 관리자 화면(30초 폴링)·수동 수집 후 무효화만 캐시 공유. monitor 는 직접 compute 유지
@@ -157,6 +162,18 @@ def _approx_count(db: Session, table_name: str, exact_stmt) -> int:
     return int(approx)
 
 
+def _region_stats_freshness(db: Session) -> tuple:
+    """동네 공식 통계 카드 (최근 받은 시각, 행 수) — 표가 없으면(V072 미적용) 화면 전체가 깨지지 않게 (None, 0)."""
+    try:
+        with db.begin_nested():
+            return tuple(db.execute(
+                select(func.max(RegionStats.loaded_at), func.count(RegionStats.region_code))
+            ).one())
+    except (ProgrammingError, OperationalError):
+        logger.warning("신선도: 동네 공식 통계 표를 읽지 못해 빈 카드로 둬요")
+        return (None, 0)
+
+
 def compute_freshness(db: Session) -> dict:
     """8개 종목 신선도 + 헛바퀴 감지 신호 계산 (DB 세션만 의존).
 
@@ -213,7 +230,8 @@ def compute_freshness(db: Session) -> dict:
                 (CrawlJob.scheduler_job_id == "collect_emergency") & (CrawlJob.status == "completed"),
             )
         ).one(),
-        "crime_stats": db.execute(select(func.max(Infra.crime_updated_at), func.count(Infra.apartment_id).filter(Infra.crime_score.isnot(None)))).one(),
+        # 세션 473: 동네 공식 통계(부동산원) — 받은 시각·행 수. 월 1회(16일)라 31일 기준.
+        "region_stats": _region_stats_freshness(db),
         "public_trades": (trade_max, trade_count),
         # 신규 3종 (세션 359) — "조용한 실패"(0건인데 status=completed) 가 monitor.py
         # 의 작업실패 감지를 우회하는 사각지대를 이 신선도 축으로 메운다. 전량 upsert
@@ -345,7 +363,13 @@ def compute_freshness(db: Session) -> dict:
             "new_rows": new_rows,
         })
 
-    return {"items": items, "generated_at": now.isoformat()}
+    # 손으로 적는 상수(config/legal_rates.py) — 금통위 뒤 사람이 고친다. 화면에 날짜와 함께 보여 낡음을 드러낸다(세션 473).
+    legal_rates = {
+        "bok_base_rate": BOK_BASE_RATE,
+        "bok_base_rate_date": BOK_BASE_RATE_DATE,
+        "legal_rent_conversion_cap": legal_rent_conversion_cap(),
+    }
+    return {"items": items, "generated_at": now.isoformat(), "legal_rates": legal_rates}
 
 
 def get_freshness_cached(db: Session) -> dict:

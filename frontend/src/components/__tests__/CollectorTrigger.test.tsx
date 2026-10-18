@@ -68,7 +68,7 @@ describe("CollectorTrigger — 버튼 7종 (대기질은 세션604 폐지)", () 
   it("버튼 7개가 쉬운 이름으로 보인다 (BE JOB_WORDS 와 같은 표현)", async () => {
     renderIt();
     for (const label of [
-      "동네 범죄 통계 받기",
+      "동네 공식 통계 받기",
       "응급실 위치 받기",
       "어린이집 정보 받기",
       "옛 시세 채워 넣기",
@@ -144,7 +144,7 @@ describe("CollectorTrigger — 마지막 실행·결과 한 줄", () => {
     expect(window.confirm).not.toHaveBeenCalled();
     expect(mockTrigger).not.toHaveBeenCalled();
     // 다른 버튼은 그대로 누를 수 있다
-    expect(btn("동네 범죄 통계 받기")).not.toBeDisabled();
+    expect(btn("동네 공식 통계 받기")).not.toBeDisabled();
   });
 });
 
@@ -279,12 +279,12 @@ describe("CollectorTrigger — 누르기 전 확인창", () => {
   });
 
   it("짧은 수집기는 묻지 않고 바로 부른다", async () => {
-    mockTrigger.mockResolvedValueOnce({ status: "started", collector: "crime-stats" });
+    mockTrigger.mockResolvedValueOnce({ status: "started", collector: "region-stats" });
     renderIt();
-    fireEvent.click(btn("동네 범죄 통계 받기"));
+    fireEvent.click(btn("동네 공식 통계 받기"));
     expect(window.confirm).not.toHaveBeenCalled();
     await waitFor(() => {
-      expect(mockTrigger).toHaveBeenCalledWith("test-token", "crime-stats");
+      expect(mockTrigger).toHaveBeenCalledWith("test-token", "region-stats");
     });
     await screen.findByText(STARTED_TEXT);
   });

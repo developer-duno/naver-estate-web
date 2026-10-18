@@ -125,6 +125,12 @@ export default function DataFreshnessCard({ token, hideTitle = false }: Props) {
           </li>
         ))}
       </ul>
+      {data.legal_rates && (
+        <p className="text-xs text-gray-600 mt-3" data-testid="legal-rates-line">
+          기준금리 {data.legal_rates.bok_base_rate.toFixed(2)}%({data.legal_rates.bok_base_rate_date}) · 법정 전월세 전환율 상한{" "}
+          {data.legal_rates.legal_rent_conversion_cap.toFixed(1)}% — 손으로 적는 값이라 금통위 뒤 고쳐야 해요
+        </p>
+      )}
       <div className="text-xs text-gray-400 mt-3 space-y-0.5">
         <p>● 정상 = 작업 주기 이내 · ● 주의 = 예상보다 1.5배 넘게 늦음 · ● 지연 = 3배 넘게 늦음</p>
         <p>빈손 의심 = 작업은 돌았는데 처리 0건 또는 신규 0건</p>

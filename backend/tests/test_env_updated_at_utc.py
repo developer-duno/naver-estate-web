@@ -1,4 +1,4 @@
-"""env_air·env_crime 의 *_updated_at 저장이 UTC(utcnow) 인지 회귀 가드 (세션 309).
+"""env 수집기 *_updated_at 저장이 UTC(utcnow) 인지 회귀 가드 (세션 309 · 대상 수집기는 세션604·473 에 삭제).
 
 배경: air_updated_at·crime_updated_at 이 과거 naive `datetime.now()`(집 서버 KST)로
 저장돼, freshness.py 가 UTC 로 비교(`_to_utc` 가 naive 를 UTC 로 거짓 태깅)하면서
@@ -10,38 +10,8 @@ SQLite(CI 엔진)는 tzinfo 를 보존하지 않아 "저장값이 aware 였는�
 단언하기 어렵다 → 소스 텍스트 가드로 "naive datetime.now() 로 되돌리면 실패"를 잡는다.
 선례: test_migration_v031_anon_lock.py (SQLite 라 텍스트 자산 검사).
 """
-import re
-from pathlib import Path
-
-import pytest
-
-_BACKEND = Path(__file__).resolve().parent.parent
-
-# (파일, 그 파일에서 *_updated_at 저장에 쓰여야 하는 헬퍼)
-_ENV_FILES = [
-    # crawler/env_air.py 는 세션604 대기질 실시간 수집 폐지로 삭제됐다
-    "crawler/env_crime.py",
-]
-
-
-@pytest.mark.parametrize("rel", _ENV_FILES)
-def test_env_updated_at_uses_utcnow_not_naive_now(rel):
-    """env 수집기는 *_updated_at 저장에 naive datetime.now() 를 쓰면 안 된다.
-
-    naive datetime.now() 는 머신 로컬(집 서버 KST)을 따라가 freshness UTC 비교와
-    9시간 어긋난다. 반드시 utcnow()(aware UTC) 경유.
-    """
-    src = (_BACKEND / rel).read_text(encoding="utf-8")
-
-    # utcnow 가 import 되어 있어야 한다.
-    assert "from utils import utcnow" in src, f"{rel}: utcnow import 누락"
-
-    # *_updated_at = datetime.now() (naive, tz 인자 없음) 패턴 금지.
-    # datetime.now(timezone.utc)·datetime.now(_KST) 같이 tz 인자가 있으면 허용.
-    naive_now = re.findall(r"_updated_at\s*=\s*datetime\.now\(\s*\)", src)
-    assert not naive_now, (
-        f"{rel}: *_updated_at 에 naive datetime.now() 사용 — utcnow() 로 교체 필요. {naive_now}"
-    )
+# 소스 텍스트 가드의 대상이던 env_air.py(세션604)·범죄 통계 수집기(세션 473)는 둘 다 삭제됐다 —
+# 남은 것은 freshness 의 UTC 비교 축 확인뿐이다.
 
 
 def test_freshness_to_utc_matches_utcnow_axis():

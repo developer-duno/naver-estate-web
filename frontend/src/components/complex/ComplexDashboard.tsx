@@ -26,6 +26,8 @@ interface BoxData {
   label: string;
   primary: string;
   secondary?: string;
+  /** 칸 아래 작은 출처 줄 — 정부 값이 붙었을 때만(세션 473) */
+  note?: string;
 }
 
 export default function ComplexDashboard({
@@ -72,6 +74,14 @@ export default function ComplexDashboard({
     };
   }, []);
 
+  // 정부 지역 값(부동산원 시군구 전세가율) — 이 단지 값 옆에 나란히, 출처 줄과 함께(세션 473)
+  // 출처 문구는 BE(region_jeonse_source)가 정본 — 화면에 글자 상수를 또 두지 않는다(derived-display-ssot).
+  const hasRegionJeonse = complex.region_jeonse_ratio != null && !!complex.region_name;
+  const regionJeonseText = hasRegionJeonse ? ` · ${complex.region_name} 아파트 ${complex.region_jeonse_ratio}%` : "";
+  const regionSourceText = hasRegionJeonse && complex.region_jeonse_source
+    ? `지역: ${complex.region_jeonse_source}${complex.region_jeonse_period ? `(${complex.region_jeonse_period})` : ""}`
+    : null;
+
   // 박스 라벨·값 계산 (Q3 NULL fallback)
   const boxes: BoxData[] = [
     {
@@ -81,8 +91,15 @@ export default function ComplexDashboard({
         ? formatKoreanPrice(complex.nearby_median_price)
         : (avgPrice != null ? `매물 평균 ${formatKoreanPrice(avgPrice)}` : "-"),
       secondary: complex.jeonse_rate != null
-        ? `전세가율 ${complex.jeonse_rate}%`
-        : (countLoading || count > 0 ? countText : undefined),
+        ? `전세가율 ${complex.jeonse_rate}%${regionJeonseText}`
+        : hasRegionJeonse
+          ? `${complex.region_name} 아파트 전세가율 ${complex.region_jeonse_ratio}%`
+          : (countLoading || count > 0 ? countText : undefined),
+      note: regionSourceText
+        ? (complex.jeonse_rate != null
+          ? `이 단지: 최근 6개월 시세·실거래 기록 중앙값으로 계산 · ${regionSourceText}`
+          : regionSourceText)
+        : undefined,
     },
     {
       key: "chart",
@@ -128,6 +145,7 @@ export default function ComplexDashboard({
             <span className="text-[11px] md:text-xs text-gray-500">{b.label}</span>
             <span className="text-sm md:text-base font-semibold mt-0.5 break-keep">{b.primary}</span>
             {b.secondary && <span className="text-[10px] md:text-xs text-gray-400 mt-0.5">{b.secondary}</span>}
+            {b.note && <span className="text-[10px] text-gray-400 mt-0.5" data-testid={`box-note-${b.key}`}>{b.note}</span>}
           </button>
         ))}
       </div>

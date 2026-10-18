@@ -61,7 +61,8 @@ export const TARGET_TYPE_LABELS: Record<string, string> = {
  * 뒤 셋은 BE crawler/plain_words.py JOB_WORDS 와 같은 표현이다.
  */
 export const COLLECTOR_LABELS: Record<string, string> = {
-  "crime-stats": "동네 범죄 통계 받기",
+  "region-stats": "동네 공식 통계 받기",
+  "crime-stats": "동네 범죄 통계 받기", // 세션 473 에 내린 수집기 — 옛 감사 기록 이름표로만 남긴다
   "air-quality": "동네 공기질 받기",
   "emergency": "응급실 위치 받기",
   "childcare": "어린이집 정보 받기",

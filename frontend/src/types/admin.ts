@@ -227,6 +227,12 @@ export interface DataFreshnessItem {
 export interface DataFreshnessResponse {
   items: DataFreshnessItem[];
   generated_at: string;
+  /** 손으로 적는 법정 비율(BE config/legal_rates.py, 세션 473) — 옛 캐시 응답엔 없을 수 있다 */
+  legal_rates?: {
+    bok_base_rate: number;
+    bok_base_rate_date: string;
+    legal_rent_conversion_cap: number;
+  };
 }
 
 /** 공공데이터 API 쿼터 현황 (오늘) — BE `crawler/quota_db.py:62~89` 답습 */

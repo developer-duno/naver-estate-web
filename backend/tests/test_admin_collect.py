@@ -58,29 +58,29 @@ def _auth(token):
 
 def test_collect_no_auth_401(client):
     """인증 없이 수집 트리거 → 401"""
-    assert client.post("/api/admin/collect/crime-stats").status_code == 401
+    assert client.post("/api/admin/collect/region-stats").status_code == 401
 
 
 def test_collect_regular_user_403(client, db):
     """일반 사용자 수집 트리거 → 403"""
     _make_profile(db, "u1")
-    res = client.post("/api/admin/collect/crime-stats", headers=_auth(_token("u1")))
+    res = client.post("/api/admin/collect/region-stats", headers=_auth(_token("u1")))
     assert res.status_code == 403
 
 
 # ── 수집 트리거 ──
 
 
-def test_collect_crime_stats_success(client, db):
-    """범죄통계 수집 트리거 — 관리자 성공, 곧바로 started"""
+def test_collect_region_stats_success(client, db):
+    """동네 공식 통계 수집 트리거 — 관리자 성공, 곧바로 started"""
     _make_profile(db, "a1", role="admin")
     with patch("routers.admin.collect._get_collector") as mock_get:
         mock_fn = mock_get.return_value
         mock_fn.return_value = None
-        res = client.post("/api/admin/collect/crime-stats", headers=_auth(_token("a1")))
-        _join_collector("crime-stats")
+        res = client.post("/api/admin/collect/region-stats", headers=_auth(_token("a1")))
+        _join_collector("region-stats")
         assert res.status_code == 200
-        assert res.json() == {"status": "started", "collector": "crime-stats"}
+        assert res.json() == {"status": "started", "collector": "region-stats"}
         mock_fn.assert_called_once_with()
 
 
@@ -143,26 +143,25 @@ def test_collect_failure_keeps_freshness_cache(client, db):
     assert get_cache("freshness").get("data_freshness") == {"keep": True}  # 유지됨
 
 
-# ── 범죄통계 상태 조회 ──
+# ── 범죄통계 (세션 473 에 내림) ──
 
 
-def test_crime_stats_status_no_auth_401(client):
-    """인증 없이 상태 조회 → 401"""
-    assert client.get("/api/admin/collect/crime-stats/status").status_code == 401
-
-
-def test_crime_stats_status_empty(client, db):
-    """데이터 없는 상태에서 상태 조회"""
+def test_collect_crime_collector_removed_422(client, db):
+    """범죄 점수 수집기는 세션 473 에 내렸다 — 수동 실행 이름·상태 조회 길이 없어진다"""
     _make_profile(db, "a5", role="admin")
-    res = client.get(
-        "/api/admin/collect/crime-stats/status",
-        headers=_auth(_token("a5")),
-    )
-    assert res.status_code == 200
-    data = res.json()
-    assert data["total_scored"] == 0
-    assert data["last_updated"] is None
-    assert data["grade_dist"] == {}
+    assert client.post("/api/admin/collect/crime-stats", headers=_auth(_token("a5"))).status_code == 422
+    assert client.get("/api/admin/collect/crime-stats/status", headers=_auth(_token("a5"))).status_code in (404, 405, 422)
+
+
+def test_collect_region_stats_resolves_with_scheduler_job_id(db):
+    """region-stats 버튼은 예약 잡과 같은 잡 id 로 남긴다(화면 manualCounted=true 의 근거)."""
+    import inspect
+
+    from routers.admin.collect import _get_collector
+
+    fn = _get_collector("region-stats")
+    assert fn.__name__ == "collect_region_stats"
+    assert inspect.signature(fn).parameters["scheduler_job_id"].default == "collect_region_stats"
 
 
 # ── K-apt 관리비 연동 (V051) ──
@@ -212,8 +211,8 @@ def test_collect_failure_raw_error_never_reaches_response(client, db):
     raw = "(psycopg2.errors.QueryCanceled) canceling statement due to statement timeout"
     with patch("routers.admin.collect._get_collector") as mock_get:
         mock_get.return_value.side_effect = RuntimeError(raw)
-        res = client.post("/api/admin/collect/crime-stats", headers=_auth(_token("a9")))
-        _join_collector("crime-stats")
+        res = client.post("/api/admin/collect/region-stats", headers=_auth(_token("a9")))
+        _join_collector("region-stats")
     assert res.status_code == 200
     assert "psycopg2" not in res.text
 

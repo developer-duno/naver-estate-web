@@ -316,28 +316,13 @@ const ArticleRow = memo(function ArticleRow({
       <Td className="text-right">{area}</Td>
       <Td className="text-right">{ppyeong}</Td>
       <Td className="text-right">
+        {/* 값만 — 높다·낮다·주의 같은 색 판정은 두지 않는다(사장님 결정 ⓒ 2026-10-18, 세션 473) */}
         {art.monthly_rent_yield != null ? (
-          <span
-            className={`px-1.5 py-0.5 rounded text-xs font-semibold ${
-              art.monthly_rent_yield >= 10
-                ? "bg-blue-100 text-blue-700"
-                : art.monthly_rent_yield >= 5
-                ? "bg-emerald-100 text-emerald-700"
-                : art.monthly_rent_yield < 3
-                ? "bg-yellow-100 text-yellow-700"
-                : "bg-emerald-50 text-emerald-600"
-            }`}
-          >
+          <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700">
             {art.monthly_rent_yield}%
           </span>
         ) : art.article_jeonse_ratio != null ? (
-          <span
-            className={`px-1.5 py-0.5 rounded text-xs font-semibold ${
-              art.article_jeonse_ratio > 80
-                ? "bg-red-100 text-red-700"
-                : "bg-blue-50 text-blue-600"
-            }`}
-          >
+          <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700">
             {art.article_jeonse_ratio}%
           </span>
         ) : (

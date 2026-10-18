@@ -151,15 +151,6 @@ PROBE_REGISTRY: list[dict] = [
         "method": "POST",
         "json": {"businesses": [{"b_no": "0000000000", "p_nm": "", "start_dt": ""}]},
     },
-    # crawler/crime_stats_api.py CRIME_STATS_URL (uddi 포함 전체 URL 이 곧 데이터셋 주소)
-    {
-        "name": "경찰청 범죄통계 (3074462)",
-        "url": (
-            "https://api.odcloud.kr/api/3074462/v1/"
-            "uddi:ae109087-8690-4cb5-bda9-a7876a92f3b8"
-        ),
-        "flavor": FLAVOR_ODCLOUD,
-    },
 ]
 
 REQUEST_TIMEOUT = 15

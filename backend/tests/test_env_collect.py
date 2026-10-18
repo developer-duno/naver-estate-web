@@ -1,5 +1,5 @@
-"""환경 데이터 수집 오케스트레이션 테스트 — crime / emergency / childcare
-(air_quality 수집기는 세션604 에 폐지 — 그 시험도 함께 지웠다)
+"""환경 데이터 수집 오케스트레이션 테스트 — emergency / childcare
+(air_quality 수집기는 세션604, 범죄 통계 수집기는 세션 473 에 폐지 — 그 시험도 함께 지웠다)
 
 기존 test_env_service.py 는 유틸/API 클래스 단위(haversine, _build_population_map,
 find_nearest 등)를 커버하지만, 수집 함수의 **전체 흐름**(외부 API 호출 -> 집계 ->
@@ -17,10 +17,10 @@ DB(Infra) 업데이트 -> CrawlJob 기록 -> 폴백)은 0건이었다.
 - 외부 API 정적 메서드는 원본 모듈 경로로 patch (함수 내부 lazy import 라도 적용됨).
 """
 
-from datetime import date, datetime
+from datetime import datetime
 from unittest.mock import patch
 
-from db.mb_models import Apartment, Infra, MBRegion
+from db.mb_models import Apartment, Infra
 from db.models import CrawlJob
 
 # ── 픽스처 헬퍼 (하드코딩 대신 팩토리) ──
@@ -33,144 +33,6 @@ def _add_apartment(db, apt_id: str, region: str, gu: str | None = None,
                      latitude=lat, longitude=lng))
     db.add(Infra(apartment_id=apt_id))
     db.commit()
-
-
-def _add_region(db, region: str, gu: str | None, population: int):
-    """테스트용 인구 데이터 (regions 테이블)"""
-    db.add(MBRegion(region=region, gu=gu, population=population, recorded_at=date(2026, 1, 1)))
-    db.commit()
-
-
-# ── collect_crime_stats ──
-
-
-class TestCollectCrimeStats:
-    """범죄통계 수집 전체 흐름 — API -> 집계 -> 안전점수 -> Infra 업데이트 / CSV 폴백"""
-
-    def test_정상_수집_infra_업데이트(self, db):
-        """API 3종 성공 시 Infra.crime_score/grade 채워지고 CrawlJob completed"""
-        _add_apartment(db, "APT1", "서울특별시", "강남구")
-        _add_region(db, "서울특별시", "강남구", 550000)
-
-        with patch("crawler.crime_stats_api.CrimeStatsAPI.fetch_all",
-                   return_value=[{"dummy": "row"}]), \
-             patch("crawler.crime_stats_api.CrimeStatsAPI.aggregate_by_region",
-                   return_value={"서울특별시_강남구": {"total": 100}}), \
-             patch("crawler.crime_stats_api.CrimeStatsAPI.compute_scores",
-                   return_value={"서울특별시_강남구": {"crime_score": 85, "crime_grade": "A"}}):
-            from crawler.env_crime import collect_crime_stats
-            collect_crime_stats()
-
-        infra = db.get(Infra, "APT1")
-        assert infra.crime_score == 85
-        assert infra.crime_grade == "A"
-        assert infra.crime_updated_at is not None
-
-        job = db.query(CrawlJob).filter_by(job_type="crime_stats").one()
-        assert job.status == "completed"
-        assert job.processed_items == 1
-
-    def test_API_실패_CSV_폴백_호출(self, db):
-        """fetch_all -> None 이면 load_crime_stats(CSV 폴백)로 위임"""
-        _add_apartment(db, "APT1", "서울특별시", "강남구")
-
-        with patch("crawler.crime_stats_api.CrimeStatsAPI.fetch_all", return_value=None), \
-             patch("crawler.env_crime.load_crime_stats") as mock_csv:
-            from crawler.env_crime import collect_crime_stats
-            collect_crime_stats()
-
-        mock_csv.assert_called_once()
-
-    def test_집계_실패_CSV_폴백_호출(self, db):
-        """aggregate_by_region -> {} 이면 CSV 폴백으로 위임"""
-        _add_apartment(db, "APT1", "서울특별시", "강남구")
-
-        with patch("crawler.crime_stats_api.CrimeStatsAPI.fetch_all",
-                   return_value=[{"dummy": "row"}]), \
-             patch("crawler.crime_stats_api.CrimeStatsAPI.aggregate_by_region",
-                   return_value={}), \
-             patch("crawler.env_crime.load_crime_stats") as mock_csv:
-            from crawler.env_crime import collect_crime_stats
-            collect_crime_stats()
-
-        mock_csv.assert_called_once()
-
-    def test_인구_누락_지역_중앙값_폴백(self, db):
-        """점수 조회 안 되는 지역도 _compute_median_score 결과로 채워진다 (is_fallback 경로)"""
-        # 점수에 없는 지역(강원)의 단지 — 정확 매칭 실패 -> 중앙값 폴백
-        _add_apartment(db, "APT_FALLBACK", "강원특별자치도", "정선군")
-        _add_region(db, "서울특별시", "강남구", 550000)
-
-        scored = {
-            "서울특별시_강남구": {"crime_score": 90, "crime_grade": "A"},
-            "부산광역시_해운대구": {"crime_score": 50, "crime_grade": "C"},
-            "대구광역시_중구": {"crime_score": 30, "crime_grade": "D"},
-        }
-        with patch("crawler.crime_stats_api.CrimeStatsAPI.fetch_all",
-                   return_value=[{"dummy": "row"}]), \
-             patch("crawler.crime_stats_api.CrimeStatsAPI.aggregate_by_region",
-                   return_value={"서울특별시_강남구": {"total": 100}}), \
-             patch("crawler.crime_stats_api.CrimeStatsAPI.compute_scores",
-                   return_value=scored):
-            from crawler.env_crime import collect_crime_stats
-            collect_crime_stats()
-
-        # 강원 정선군은 scored 에 없지만 중앙값(50)으로 채워져야 한다
-        infra = db.get(Infra, "APT_FALLBACK")
-        assert infra.crime_score == 50
-        assert infra.crime_grade == "C"
-
-    def test_점수산출_실패_job_failed_폴백호출(self, db):
-        """compute_scores -> [] (점수산출 실패) 면 job=failed (monitor 알림) + CSV 폴백 호출.
-
-        job 이 이미 running 으로 생성된 뒤(API 응답은 받음) 점수산출만 실패한 경우.
-        '완료(0,0)' 위장 대신 failed 로 알려야 monitor 가 알림 (세션 280). CSV 폴백은
-        그대로 호출되어 데이터는 Infra 에 반영(여기선 mock 으로 호출만 검증).
-        """
-        _add_apartment(db, "APT1", "서울특별시", "강남구")
-
-        with patch("crawler.crime_stats_api.CrimeStatsAPI.fetch_all",
-                   return_value=[{"dummy": "row"}]), \
-             patch("crawler.crime_stats_api.CrimeStatsAPI.aggregate_by_region",
-                   return_value={"서울특별시_강남구": {"total": 100}}), \
-             patch("crawler.crime_stats_api.CrimeStatsAPI.compute_scores",
-                   return_value={}), \
-             patch("crawler.env_crime.load_crime_stats") as mock_csv:
-            from crawler.env_crime import collect_crime_stats
-            collect_crime_stats()
-
-        # 점수산출 실패는 '완료'가 아니라 'failed' (monitor 알림 전제)
-        job = db.query(CrawlJob).filter_by(job_type="crime_stats").one()
-        assert job.status == "failed"
-        assert "점수 산출 실패" in job.error_message
-        # CSV 폴백은 여전히 호출 (데이터 메꿈은 폴백 책임)
-        mock_csv.assert_called_once()
-
-    def test_Infra_없으면_skip_자동생성_안함(self, db):
-        """Infra 행 부재 단지는 skip (childcare 와 달리 자동생성 안 함).
-
-        세션 282: db.get(Infra) -> infra_map.get(apt_id) prefetch 전환 후에도
-        '없으면 skip' 동작이 유지되는지 가드 (prefetch 정합 회귀 가드).
-        """
-        # Apartment 만 추가, Infra 행 없음
-        db.add(Apartment(id="APT_NOINFRA", name="단지", region="서울특별시", gu="강남구"))
-        db.commit()
-        _add_region(db, "서울특별시", "강남구", 550000)
-
-        with patch("crawler.crime_stats_api.CrimeStatsAPI.fetch_all",
-                   return_value=[{"dummy": "row"}]), \
-             patch("crawler.crime_stats_api.CrimeStatsAPI.aggregate_by_region",
-                   return_value={"서울특별시_강남구": {"total": 100}}), \
-             patch("crawler.crime_stats_api.CrimeStatsAPI.compute_scores",
-                   return_value={"서울특별시_강남구": {"crime_score": 85, "crime_grade": "A"}}):
-            from crawler.env_crime import collect_crime_stats
-            collect_crime_stats()
-
-        # Infra 행은 여전히 없어야 한다 (자동생성 안 함)
-        assert db.get(Infra, "APT_NOINFRA") is None
-        # 전 단지 skip -> collected 0 -> silent failure 가드가 failed 처리
-        job = db.query(CrawlJob).filter_by(job_type="crime_stats").one()
-        assert job.status == "failed"
 
 
 # ── collect_emergency_data ──

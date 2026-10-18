@@ -144,4 +144,20 @@ describe("ArticleTable", () => {
       expect(screen.getByText("▲")).toBeInTheDocument();
     });
   });
+
+  it("수익률 칸은 값만 — 전세가율 90% 도 빨강이 아니라 중립 회색 (세션 473, 사장님 결정 ⓒ)", () => {
+    const { container } = render(
+      <ArticleTable
+        articles={[
+          { ...sampleArticle, article_no: "J1", trade_type_name: "전세", article_jeonse_ratio: 90 },
+          { ...sampleArticle, article_no: "W1", trade_type_name: "월세", monthly_rent_yield: 2 },
+        ]}
+      />,
+    );
+    expect(screen.getByText("90%").className).toContain("text-gray-700");
+    expect(screen.getByText("2%").className).toContain("text-gray-700");
+    // 거래 유형 배지(전세·월세 색)는 종류 표시라 그대로 — 값 배지만 본다
+    for (const v of ["90%", "2%"]) expect(screen.getByText(v).className).not.toMatch(/red|emerald|yellow|blue/);
+    expect(container.textContent ?? "").not.toMatch(/\(주의\)|\(높음\)|\(낮음\)/);
+  });
 });

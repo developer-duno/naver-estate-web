@@ -86,7 +86,7 @@ describe("blog/posts 메타데이터", () => {
     expect(post).toBeDefined();
     expect(post?.draft).toBeUndefined();
     expect(post?.title).toContain("매수 타이밍");
-    expect(post?.description).toMatch(/시세 추이|거래량|미분양율/);
+    expect(post?.description).toMatch(/시세 추이|거래량|미분양률/);
     expect(post?.category).toBe("시세 분석");
   });
 
@@ -257,15 +257,15 @@ describe("blog/posts 메타데이터", () => {
     expect(post).toBeDefined();
     expect(post?.draft).toBeUndefined();
     expect(post?.title).toContain("공인중개사 인증");
-    expect(post?.description).toMatch(/사업자등록|자격증|JPG|상태 4|전문가/);
+    expect(post?.description).toMatch(/사업자등록|자격증|JPG|결과 4가지|전문가/);
     expect(post?.category).toBe("도구 활용");
   });
 
-  it("search-history-workflow 메타 — 도구 활용 카테고리, 검색 히스토리 키워드", () => {
+  it("search-history-workflow 메타 — 도구 활용 카테고리, 검색 기록 키워드", () => {
     const post = getPostBySlug("search-history-workflow");
     expect(post).toBeDefined();
     expect(post?.draft).toBeUndefined();
-    expect(post?.title).toContain("검색 히스토리");
+    expect(post?.title).toContain("검색 기록");
     expect(post?.description).toMatch(/10개|재방문|브라우저|북마크/);
     expect(post?.category).toBe("도구 활용");
   });

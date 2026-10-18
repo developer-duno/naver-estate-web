@@ -53,7 +53,7 @@
     <text x="120" y="38"
           font-family="'Pretendard', sans-serif"
           font-size="18" font-weight="600" fill="#FFFFFF">
-      /tools/acquisition-tax
+      취득세 계산기
     </text>
 
     <!-- 입력 필드 4개 -->

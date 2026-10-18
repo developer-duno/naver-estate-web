@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="보유세 계산기 사용법 — 재산세 + 종부세 5 필드 4 분기 자동 판정">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="보유세 계산기 사용법 — 재산세 + 종부세, 입력 5칸 · 4가지 경우 자동 판정">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#F5F1EB"/>
@@ -31,7 +31,7 @@
   <text x="120" y="510"
         font-family="'Pretendard', sans-serif"
         font-size="32" font-weight="400" fill="#4B5563">
-    재산세 + 종부세 5 필드 4 분기 자동 판정
+    재산세 + 종부세 입력 5칸 · 4가지 경우 자동 판정
   </text>
   <text x="120" y="555"
         font-family="'Pretendard', sans-serif"
@@ -53,7 +53,7 @@
     <text x="120" y="38"
           font-family="'Pretendard', sans-serif"
           font-size="18" font-weight="600" fill="#FFFFFF">
-      /tools/property-tax
+      보유세 계산기
     </text>
 
     <!-- 입력 필드 5개 -->

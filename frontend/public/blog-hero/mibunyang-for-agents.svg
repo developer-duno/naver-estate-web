@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="공인중개사 미분양 워크플로 — 5탭 정렬 7종 즐겨찾기 200개 17행 비교">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="공인중개사 미분양 활용 — 탭 5개, 정렬 7종, 즐겨찾기 200개, 17행 비교">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#F5F1EB"/>
@@ -20,7 +20,7 @@
   <text x="120" y="280"
         font-family="'Noto Serif KR', serif"
         font-size="96" font-weight="700" fill="#1F2937" letter-spacing="-3">
-    미분양 워크
+    미분양 활용
   </text>
   <text x="120" y="400"
         font-family="'Noto Serif KR', serif"
@@ -31,7 +31,7 @@
   <text x="120" y="510"
         font-family="'Pretendard', sans-serif"
         font-size="32" font-weight="400" fill="#4B5563">
-    5탭 · 정렬 7종 · 즐겨찾기 200개
+    탭 5개 · 정렬 7종 · 즐겨찾기 200개
   </text>
   <text x="120" y="555"
         font-family="'Pretendard', sans-serif"
@@ -50,7 +50,7 @@
   <g transform="translate(120, 820)">
     <rect x="0" y="0" width="600" height="80" rx="12" fill="#FFFFFF" stroke="#D4A574" stroke-width="2"/>
     <text x="32" y="34" font-family="'Pretendard', sans-serif" font-size="14" font-weight="600" fill="#D4A574" letter-spacing="2">즐겨찾기</text>
-    <text x="32" y="62" font-family="'Pretendard', sans-serif" font-size="20" font-weight="700" fill="#1F2937">최대 200개 · localStorage</text>
+    <text x="32" y="62" font-family="'Pretendard', sans-serif" font-size="20" font-weight="700" fill="#1F2937">최대 200개 · 이 브라우저에만</text>
     <text x="380" y="50" font-family="'Pretendard', sans-serif" font-size="48" font-weight="700" fill="#D4A574">★</text>
   </g>
 
@@ -68,7 +68,7 @@
     <text x="120" y="38"
           font-family="'Pretendard', sans-serif"
           font-size="18" font-weight="600" fill="#FFFFFF">
-      /mibunyang · 5탭 워크플로
+      미분양 화면 · 탭 5개 사용 순서
     </text>
 
     <!-- 5탭 영역 -->
@@ -168,7 +168,7 @@
         법령: 국가법령정보센터 · 법정 기준은 단지 상세 화면에 한 줄로
       </text>
       <text x="32" y="165" font-family="'Pretendard', sans-serif" font-size="14" fill="#FFFFFF" opacity="0.7">
-        URL 공유 · 손님 카톡 한 줄로 응대
+        주소 공유 · 손님 카톡 한 줄로 응대
       </text>
     </g>
   </g>

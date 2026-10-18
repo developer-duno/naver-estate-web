@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="검색 → 플로팅 바 → 24행 비교 표 5분 워크플로 3단">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="검색 → 비교 막대 → 24행 비교 표, 5분 사용 순서 3단계">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#F5F1EB"/>
@@ -20,7 +20,7 @@
   <text x="960" y="120"
         font-family="'Noto Serif KR', serif"
         font-size="56" font-weight="700" fill="#1F2937" text-anchor="middle" letter-spacing="-2">
-    검색에서 비교까지 5분 워크플로
+    검색에서 비교까지 5분 사용 순서
   </text>
   <rect x="900" y="145" width="120" height="3" fill="#B89968"/>
   <text x="960" y="195"
@@ -104,7 +104,7 @@
 
     <text x="120" y="72"
           font-family="'Pretendard', sans-serif"
-          font-size="28" font-weight="700" fill="#1F2937">플로팅 바</text>
+          font-size="28" font-weight="700" fill="#1F2937">비교 막대</text>
 
     <!-- 화면 mockup (배경) -->
     <rect x="40" y="140" width="320" height="380" rx="12" fill="#F9FAFB" stroke="#E5E7EB"/>

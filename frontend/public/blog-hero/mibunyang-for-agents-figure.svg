@@ -214,7 +214,7 @@
     <line x1="0" y1="0" x2="760" y2="0" stroke="#B89968" stroke-width="3" stroke-dasharray="6,6"/>
   </g>
 
-  <!-- ===================== STEP 4: /compare 17행 + 레이더 결과 ===================== -->
+  <!-- ===================== STEP 4: /compare 17행 비교표 + 출처 (세션 472 레이더 삭제) ===================== -->
   <g transform="translate(540, 960)">
     <rect width="840" height="110" rx="16" fill="url(#card)" stroke="#B89968" stroke-width="2" filter="url(#shadow)"/>
 
@@ -227,7 +227,7 @@
           font-size="20" font-weight="700" fill="#1F2937">/mibunyang/compare</text>
     <text x="100" y="74"
           font-family="'Pretendard', sans-serif"
-          font-size="14" fill="#6B7280">17행 우위 표 + 13축 레이더 + 미분양 추이 차트 + ☆ 저장 북마크 20개</text>
+          font-size="14" fill="#6B7280">17행 비교표 · 차트 2종 · 출처 단락 · ☆ 저장 20개</text>
 
     <!-- 미니어처 아이콘 3 -->
     <g transform="translate(560, 30)">
@@ -238,8 +238,10 @@
       <text x="30" y="64" font-family="'Pretendard', sans-serif" font-size="10" fill="#6B7280" text-anchor="middle">17행</text>
 
       <rect x="80"  y="0" width="60" height="50" rx="6" fill="#FBF6EE" stroke="#B89968" stroke-opacity="0.4"/>
-      <polygon points="110,8 130,22 124,42 96,42 90,22" fill="#B89968" fill-opacity="0.3" stroke="#B89968"/>
-      <text x="110" y="64" font-family="'Pretendard', sans-serif" font-size="10" fill="#6B7280" text-anchor="middle">레이더</text>
+      <rect x="94" y="22" width="8" height="20" fill="#B89968" fill-opacity="0.6"/>
+      <rect x="106" y="12" width="8" height="30" fill="#B89968" fill-opacity="0.6"/>
+      <rect x="118" y="28" width="8" height="14" fill="#B89968" fill-opacity="0.6"/>
+      <text x="110" y="64" font-family="'Pretendard', sans-serif" font-size="10" fill="#6B7280" text-anchor="middle">분양가</text>
 
       <rect x="160" y="0" width="60" height="50" rx="6" fill="#FBF6EE" stroke="#B89968" stroke-opacity="0.4"/>
       <polyline points="170,40 180,30 190,34 200,18 210,22" stroke="#1E3A5F" stroke-width="2" fill="none"/>

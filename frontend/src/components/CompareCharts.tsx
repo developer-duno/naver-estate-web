@@ -7,21 +7,18 @@ import { queryKeys } from "@/lib/query-keys";
 import Skeleton from "@/components/Skeleton";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import ChartAccordion from "@/components/ChartAccordion";
-import CompareRadarChart from "@/components/CompareRadarChart";
 import ComparePriceTrendChart from "@/components/ComparePriceTrendChart";
 import ComparePriceBarChart from "@/components/ComparePriceBarChart";
 import CompareFloorChart from "@/components/CompareFloorChart";
 import CompareAreaPriceTable from "@/components/CompareAreaPriceTable";
 import CompareMaintenanceTable from "@/components/CompareMaintenanceTable";
 import CompareUnitCompositionTable from "@/components/CompareUnitCompositionTable";
-import type { Complex, PriceStats, PriceHistoryResponse, PyeongDetail } from "@/types";
+import type { PriceStats, PriceHistoryResponse, PyeongDetail } from "@/types";
 
 /* ── Props ── */
 
 interface Props {
   complexes: { complex_no: string; complex_name: string }[];
-  fullComplexes: Complex[];
-  pricePerPyeong?: Record<string, number>;
   expandAll?: boolean;
   /** B2 게이트: 승인 중개사 전용 시세·면적 데이터 조회용 토큰 */
   accessToken?: string;
@@ -50,7 +47,7 @@ function RetryNotice({ message, onRetry, className }: { message: string; onRetry
 
 /* ── 메인 컨테이너 ── */
 
-export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong, expandAll = false, accessToken, tokenReady = true }: Props) {
+export default function CompareCharts({ complexes, expandAll = false, accessToken, tokenReady = true }: Props) {
   // 데이터 fetch (B2 게이트: accessToken 전달 + tokenReady enabled 가드)
   const historyQueries = useQueries({
     queries: complexes.map((c) => ({
@@ -121,14 +118,8 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
     <div className="space-y-4">
       <h2 className="text-lg font-bold">가격 비교 차트</h2>
 
-      {/* 1. 레이더 — API 불필요, 즉시 렌더 */}
-      <ChartAccordion title="종합 비교 (레이더)" defaultOpen forceOpen={expandAll}>
-        <ErrorBoundary>
-          <CompareRadarChart complexes={fullComplexes} pricePerPyeong={pricePerPyeong} />
-        </ErrorBoundary>
-      </ChartAccordion>
-
-      {/* 2. 가격 추이 */}
+      {/* 레이더(종합 점수·신축도 점수)는 공인 기준이 아니라서 지웠다(세션 472 PR 3) — 값만 비교 */}
+      {/* 1. 가격 추이 */}
       <ChartAccordion title="가격 추이 비교" forceOpen={expandAll}>
         <ErrorBoundary>
           {historyLoading ? (
@@ -146,7 +137,7 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
         </ErrorBoundary>
       </ChartAccordion>
 
-      {/* 3. 현재 평균가 */}
+      {/* 2. 현재 평균가 */}
       <ChartAccordion title="현재 평균가 비교" forceOpen={expandAll}>
         <ErrorBoundary>
           {statsLoading ? (
@@ -164,7 +155,7 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
         </ErrorBoundary>
       </ChartAccordion>
 
-      {/* 4. 층별 가격 */}
+      {/* 3. 층별 가격 */}
       <ChartAccordion title="층별 가격 비교" forceOpen={expandAll}>
         <ErrorBoundary>
           {statsLoading ? (
@@ -182,11 +173,11 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
         </ErrorBoundary>
       </ChartAccordion>
 
-      {/* 5. 상세 데이터 */}
+      {/* 4. 상세 데이터 */}
       <ChartAccordion title="상세 데이터 (면적별 가격 · 관리비 · 세대구성)" forceOpen={expandAll}>
         <ErrorBoundary>
           <div className="space-y-6">
-            {/* 5-A: 면적별 가격표 */}
+            {/* 4-A: 면적별 가격표 */}
             <div>
               <h3 className="text-sm font-semibold mb-2">면적별 가격</h3>
               {statsError ? (
@@ -203,7 +194,7 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
               )}
             </div>
 
-            {/* 5-B: 관리비 비교 */}
+            {/* 4-B: 관리비 비교 */}
             <div>
               <h3 className="text-sm font-semibold mb-2">관리비 비교</h3>
               {pyeongError ? (
@@ -215,7 +206,7 @@ export default function CompareCharts({ complexes, fullComplexes, pricePerPyeong
               )}
             </div>
 
-            {/* 5-C: 세대 구성 */}
+            {/* 4-C: 세대 구성 */}
             <div>
               <h3 className="text-sm font-semibold mb-2">세대 구성</h3>
               {pyeongError ? (

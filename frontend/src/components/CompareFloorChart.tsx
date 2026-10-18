@@ -28,7 +28,7 @@ interface Props {
 }
 
 export default function CompareFloorChart({ datasets }: Props) {
-  const { chartData, bestByFloor } = useMemo(() => {
+  const chartData = useMemo(() => {
     // 모든 층구간 수집
     const floorSet = new Set<string>();
     for (const ds of datasets) {
@@ -53,22 +53,8 @@ export default function CompareFloorChart({ datasets }: Props) {
       return row;
     });
 
-    // 각 층구간에서 최고가 단지
-    const best = new Map<string, string>();
-    for (const row of rows) {
-      let maxVal = -1;
-      let maxName = "";
-      for (const ds of datasets) {
-        const v = Number(row[ds.complexNo]) || 0;
-        if (v > maxVal) {
-          maxVal = v;
-          maxName = ds.complexName;
-        }
-      }
-      if (maxName) best.set(row.floor as string, maxName);
-    }
-
-    return { chartData: rows, bestByFloor: best };
+    // 층구간별 "최고 ★" 판정은 지웠다(세션 472 PR 3) — 막대는 값만 보여 준다
+    return rows;
   }, [datasets]);
 
   const hasData = chartData.some((r) =>
@@ -97,15 +83,6 @@ export default function CompareFloorChart({ datasets }: Props) {
           ))}
         </BarChart>
       </ResponsiveContainer>
-      {bestByFloor.size > 0 && (
-        <p className="text-center text-xs text-gray-500 mt-2">
-          {Array.from(bestByFloor.entries()).map(([floor, name]) => (
-            <span key={floor} className="mr-3">
-              <span className="text-green-600 font-bold">★</span> {floor} 최고: {name}
-            </span>
-          ))}
-        </p>
-      )}
     </div>
   );
 }

@@ -9,7 +9,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { M2_TO_PYEONG } from "@/lib/constants";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useSessionToken } from "@/hooks/useSessionToken";
-import { getAdvantageForRow, getBestIndices, calcAvgPricePerPyeong } from "@/lib/compare-utils";
+import { calcAvgPricePerPyeong } from "@/lib/compare-utils";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { SkeletonPage } from "@/components/Skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -96,6 +96,16 @@ const MOBILE_TAB_LABELS: Record<MobileTab, string> = {
   price: "가격",
   facility: "시설",
 };
+
+/*
+ * 비교 화면 값들의 자료 출처 (세션 472 PR 3 — 판정 ★ 대신 값 + 출처 각주).
+ * 근거: 단지 정보·평형(관리비·세대 구성) = 네이버 단지/평형 API(backend services/enricher.py),
+ * 매물수·평당가·현재 평균가·층별·면적별 가격 = 살아 있는 매물 호가 집계(backend db/price_queries.py FROM articles),
+ * 가격 추이·주변 중위가·전세가율 = complex_price_history(네이버 시세·실거래가 crawler/service_price.py +
+ * 국토교통부 실거래가 공공데이터 crawler/service_public.py)를 모아 계산(crawler/service_metrics.py).
+ */
+const COMPARE_SOURCES_FOOTER_TEXT =
+  "출처: 단지 정보·평형별 관리비·세대 구성 = 네이버부동산 단지 정보 · 매물수·평당가·현재 평균가·층별·면적별 가격 = 네이버부동산 매물 호가 집계(실거래가 아님) · 가격 추이·주변 중위가·전세가율 = 네이버부동산 시세·실거래가와 국토교통부 실거래가(공공데이터포털) 기록으로 계산";
 
 /* ── 메인 컴포넌트 ── */
 
@@ -193,19 +203,6 @@ function CompareContent() {
     rows.splice(bcrIdx >= 0 ? bcrIdx + 1 : 17, 0, ppRow);
     return rows;
   }, [pricePerPyeong, statsLoading, statsErrorMap]);
-
-  /* 우위 인덱스 캐싱 (label → bestIndices) */
-  const advantageMap = useMemo(() => {
-    const map = new Map<string, number[]>();
-    if (complexes.length < 2) return map;
-    for (const row of compareRows) {
-      map.set(row.label, getAdvantageForRow(row.label, complexes));
-    }
-    // 평당가 우위: 낮을수록 좋음
-    const ppValues = complexes.map((c) => pricePerPyeong[c.complex_no] ?? null);
-    map.set("평당가", getBestIndices(ppValues, "lower"));
-    return map;
-  }, [complexes, compareRows, pricePerPyeong]);
 
   /* ── 인쇄/엑셀 ── */
   const [expandAll, setExpandAll] = useState(false);
@@ -333,13 +330,6 @@ function CompareContent() {
         </div>
       </div>
 
-      {/* 범례 */}
-      <p className="text-xs text-gray-400 mb-2">
-        <span className="inline-block w-3 h-3 bg-green-50 border-l-2 border-green-400 mr-1 align-middle" />
-        <span className="text-green-700 font-bold mr-1">★</span>
-        = 우위 항목 (↑ 클수록 / ↓ 낮을수록 / 🆕 최신)
-      </p>
-
       {/* 비교 테이블 (데스크톱) */}
       <div className="hidden md:block print-show-md overflow-x-auto bg-white rounded-lg shadow-sm border">
         <table className="w-full text-sm border-collapse">
@@ -359,33 +349,21 @@ function CompareContent() {
             </tr>
           </thead>
           <tbody>
-            {compareRows.map((row, i) => {
-              const best = advantageMap.get(row.label) ?? [];
-              return (
-                <tr key={row.label} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/60"}>
-                  <td className="px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap border-r border-gray-200 sticky left-0 bg-inherit z-10">
-                    {row.label}
+            {compareRows.map((row, i) => (
+              <tr key={row.label} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/60"}>
+                <td className="px-4 py-2 text-xs font-semibold text-gray-600 whitespace-nowrap border-r border-gray-200 sticky left-0 bg-inherit z-10">
+                  {row.label}
+                </td>
+                {complexes.map((c) => (
+                  <td
+                    key={c.complex_no}
+                    className="px-4 py-2 text-center border-r border-gray-100 last:border-r-0 text-gray-700"
+                  >
+                    {row.render(c)}
                   </td>
-                  {complexes.map((c, ci) => {
-                    const isBest = best.includes(ci);
-                    return (
-                      <td
-                        key={c.complex_no}
-                        className={`px-4 py-2 text-center border-r border-gray-100 last:border-r-0 ${
-                          isBest
-                            ? "bg-green-50 border-l-2 border-green-400 font-bold text-gray-900"
-                            : "text-gray-700"
-                        }`}
-                      >
-                        {isBest && <span className="text-green-600 mr-1" aria-hidden="true">★</span>}
-                        {isBest && <span className="sr-only">우위</span>}
-                        {row.render(c)}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
+                ))}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -408,7 +386,7 @@ function CompareContent() {
             ))}
           </TabsList>
           <TabsContent value={mobileTab} className="mt-4 space-y-4">
-            {complexes.map((c, ci) => (
+            {complexes.map((c) => (
               <div key={c.complex_no} className="bg-white rounded-lg shadow-sm border p-4">
                 <button
                   onClick={() => router.push(`/complex/${c.complex_no}`)}
@@ -417,19 +395,12 @@ function CompareContent() {
                   {c.complex_name}
                 </button>
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-                  {mobileRows.map((row) => {
-                    const best = advantageMap.get(row.label) ?? [];
-                    const isBest = best.includes(ci);
-                    return (
-                      <Fragment key={row.label}>
-                        <dt className={`text-gray-500 text-xs ${isBest ? "font-bold" : ""}`}>{row.label}</dt>
-                        <dd className={isBest ? "text-green-700 font-bold" : "text-gray-800"}>
-                          {isBest && <span className="text-green-600 mr-0.5">★</span>}
-                          {row.render(c)}
-                        </dd>
-                      </Fragment>
-                    );
-                  })}
+                  {mobileRows.map((row) => (
+                    <Fragment key={row.label}>
+                      <dt className="text-gray-500 text-xs">{row.label}</dt>
+                      <dd className="text-gray-800">{row.render(c)}</dd>
+                    </Fragment>
+                  ))}
                 </dl>
               </div>
             ))}
@@ -445,14 +416,17 @@ function CompareContent() {
               complex_no: c.complex_no,
               complex_name: c.complex_name,
             }))}
-            fullComplexes={complexes}
-            pricePerPyeong={pricePerPyeong}
             expandAll={expandAll}
             accessToken={sessionToken}
             tokenReady={tokenReady}
           />
         </div>
       )}
+
+      {/* 값의 자료 출처 각주 (세션 472 PR 3) */}
+      <p className="mt-8 text-xs leading-relaxed text-gray-500" data-testid="compare-sources-footer">
+        {COMPARE_SOURCES_FOOTER_TEXT}
+      </p>
     </div>
   );
 }

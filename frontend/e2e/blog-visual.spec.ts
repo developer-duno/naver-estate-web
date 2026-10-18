@@ -69,7 +69,7 @@ test.describe("blog visual regression (iPhone + Desktop)", () => {
   test("/blog/[slug] hero + BlogFigure — iPhone (mibunyang-radar-weights)", async ({ page }) => {
     await page.setViewportSize(VIEWPORTS.iphone);
     await page.goto("/blog/mibunyang-radar-weights");
-    await expect(page.getByRole("heading", { name: /30초에 줄세우기/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /미분양 비교표 읽는 법/ })).toBeVisible();
     await expect(page).toHaveScreenshot("blog-slug-radar-weights-iphone.png", {
       fullPage: false,
       maxDiffPixelRatio: 0.02,
@@ -79,7 +79,7 @@ test.describe("blog visual regression (iPhone + Desktop)", () => {
   test("/blog/[slug] hero + BlogFigure — Desktop (mibunyang-radar-weights)", async ({ page }) => {
     await page.setViewportSize(VIEWPORTS.desktop);
     await page.goto("/blog/mibunyang-radar-weights");
-    await expect(page.getByRole("heading", { name: /30초에 줄세우기/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /미분양 비교표 읽는 법/ })).toBeVisible();
     await expect(page).toHaveScreenshot("blog-slug-radar-weights-desktop.png", {
       fullPage: false,
       maxDiffPixelRatio: 0.02,

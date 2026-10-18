@@ -292,51 +292,6 @@ export function clearMbCompareBookmarks(): void {
   localStorage.removeItem(MB_COMPARE_BOOKMARK_KEY);
 }
 
-// ── 레이더 차트 설정 (축 선택 + 가중치 영속화) ──
-
-const MB_RADAR_SETTINGS_KEY = "mb_radar_settings";
-
-export interface MbRadarSettings {
-  enabledAxes: string[];
-  weights: Record<string, number>;
-}
-
-/** 모든 축 활성, 가중치 3 (균등) */
-export const DEFAULT_RADAR_SETTINGS: MbRadarSettings = {
-  // 네이버 전세가율(jeonse)·주변시세(nearby) 축은 뺐다(세션 471) — 저장된 옛 키는 레이더의 AXES.filter 가 무시한다
-  enabledAxes: ["units", "parking", "maxFloor", "discount", "unsold", "pp", "far", "airQuality", "medical", "childcare", "safety"],
-  weights: { units: 3, parking: 3, maxFloor: 3, discount: 3, unsold: 3, pp: 3, far: 3, airQuality: 3, medical: 3, childcare: 3, safety: 3 },
-};
-
-/** localStorage에서 레이더 설정 조회 — 방어적 merge로 새 축 자동 대응 */
-export function getMbRadarSettings(): MbRadarSettings {
-  const raw = readJSON<Partial<MbRadarSettings>>(MB_RADAR_SETTINGS_KEY, {});
-  // 없어진 축 키(옛 jeonse·nearby 등)는 버린다 — 남겨 두면 '최소 3축' 판정이 실제 축보다 많이 센다(세션 471)
-  const known = Array.isArray(raw.enabledAxes)
-    ? raw.enabledAxes.filter((k) => DEFAULT_RADAR_SETTINGS.enabledAxes.includes(k))
-    : [];
-  return {
-    enabledAxes: known.length >= 3 ? known : DEFAULT_RADAR_SETTINGS.enabledAxes,
-    weights: { ...DEFAULT_RADAR_SETTINGS.weights, ...(raw.weights ?? {}) },
-  };
-}
-
-/** 레이더 설정 저장 */
-export function saveMbRadarSettings(settings: MbRadarSettings): void {
-  try {
-    localStorage.setItem(MB_RADAR_SETTINGS_KEY, JSON.stringify(settings));
-  } catch (err) {
-    if (typeof window !== "undefined" && err instanceof Error) {
-      console.warn(`[MbRadarSettings] Failed to save: ${err.message}`);
-    }
-  }
-}
-
-/** 레이더 설정 초기화 */
-export function clearMbRadarSettings(): void {
-  localStorage.removeItem(MB_RADAR_SETTINGS_KEY);
-}
-
 // ── 매물 즐겨찾기 (localStorage) ──
 
 const FAVORITE_ARTICLES_KEY = "favorite_articles";

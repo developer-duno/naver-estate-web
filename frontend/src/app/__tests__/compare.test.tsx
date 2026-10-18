@@ -237,3 +237,38 @@ describe("인쇄 silent failure 가드 (PR 5c)", () => {
     expect(wrapper).toHaveClass("print-hide-md");
   });
 });
+
+// 세션 472 PR 3 — 단지 비교 중립화: 판정 ★·우위 범례·초록 강조·레이더 없이 값 + 출처 각주
+describe("단지 비교 — 값과 출처만 (판정 표시 없음)", () => {
+  beforeEach(() => {
+    mockPush.mockClear();
+    // 두 단지 값이 갈라져야 옛 ★ 가 한쪽에만 붙는다 — 같은 값이면 판정 유무를 구분하지 못한다
+    vi.mocked(api.getComplex).mockImplementation((no: string) =>
+      Promise.resolve(
+        no === "A"
+          ? { ...makeComplex(no), total_household_count: 1500, high_floor: 45, floor_area_ratio: "180" }
+          : makeComplex(no),
+      ),
+    );
+    vi.mocked(api.getPriceStats).mockImplementation((no: string) => Promise.resolve(makeStats(no)));
+  });
+
+  it("표·카드·범례 어디에도 판정 ★·우위 글자·초록 강조가 없다", async () => {
+    const { container } = renderPage("ids=A,B");
+    await screen.findByRole("table");
+    expect(screen.getAllByText("1,500").length).toBeGreaterThan(0);
+    const cells = Array.from(container.querySelectorAll("td, dd"));
+    for (const cell of cells) expect(cell.textContent).not.toContain("★");
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/우위|종합|레이더|가중치/);
+    expect(container.querySelector(".bg-green-50")).toBeNull();
+  });
+
+  it("맨 아래에 자료 출처 각주가 있다", async () => {
+    renderPage("ids=A,B");
+    const footer = await screen.findByTestId("compare-sources-footer");
+    expect(footer).toHaveTextContent("출처:");
+    expect(footer).toHaveTextContent("네이버부동산 매물 호가 집계");
+    expect(footer).toHaveTextContent("국토교통부 실거래가");
+  });
+});

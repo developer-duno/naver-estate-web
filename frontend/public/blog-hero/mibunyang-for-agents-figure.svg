@@ -96,7 +96,7 @@
 
     <text x="40" y="140"
           font-family="'Pretendard', sans-serif"
-          font-size="14" fill="#6B7280">최대 200개 · 추가일 / 단지명 / 지역 순서</text>
+          font-size="14" fill="#6B7280">최대 200개 · 추가일 / 단지명 / 지역 정렬</text>
 
     <!-- 정렬 셀렉트 mockup -->
     <g transform="translate(40, 170)">

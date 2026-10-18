@@ -22,7 +22,7 @@ import type { SchedulerLastRun } from "@/types/admin";
 import { formatRelativeKo } from "@/lib/format-relative";
 
 export type CollectorName =
-  | "crime-stats"
+  | "region-stats"
   | "emergency"
   | "childcare"
   | "backfill-price"
@@ -44,11 +44,11 @@ export interface CollectorDef {
 
 export const COLLECTORS: readonly CollectorDef[] = [
   {
-    name: "crime-stats",
-    jobType: "crime_stats",
-    schedulerJobId: "collect_crime_stats",
+    name: "region-stats",
+    jobType: "region_stats",
+    schedulerJobId: "collect_region_stats",
     manualCounted: true,
-    description: "경찰청 시군구별 범죄 통계를 새로 받아요",
+    description: "한국부동산원의 시군구 전세가율·시도 전월세전환율 최근 달 자료를 받아요(호출 약 2회)",
     long: false,
   },
   {

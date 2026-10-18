@@ -54,7 +54,7 @@ FRESHNESS_ITEMS: list[dict] = [
         "new_rows_expected": False,
     },
     {
-        # 세션 359: 전수조사로 발견된 사각지대. air_quality/childcare/crime_stats 는
+        # 세션 359: 전수조사로 발견된 사각지대. air_quality/childcare/(옛)범죄통계 는
         # 이미 등록됐는데 같은 인프라 계열인 emergency 만 등록 누락 — 당시 Infra 테이블에
         # emergency_updated_at 컬럼이 없어(emergency_hospital 등 값 컬럼만 존재)
         # CrawlJob.completed_at 경유(childcare 와 동일 패턴)로 최신성을 측정했다.
@@ -69,10 +69,11 @@ FRESHNESS_ITEMS: list[dict] = [
         "new_rows_expected": False,
     },
     {
-        "key": "crime_stats",
-        "label": "범죄통계",
-        "expected_interval_seconds": 86400 * 90,
-        "scheduler_job_id": "collect_crime_stats",
+        # 세션 473: 범죄통계 카드 자리를 이어받음. 매월 16일 05:45 — 31일 기준(red = 3배).
+        "key": "region_stats",
+        "label": "동네 공식 통계(부동산원)",
+        "expected_interval_seconds": 86400 * 31,
+        "scheduler_job_id": "collect_region_stats",
         "new_rows_kind": None,
         "new_rows_expected": False,
     },

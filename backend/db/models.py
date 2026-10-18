@@ -634,3 +634,23 @@ class SgisAreaStats(Base):
     value: Mapped[Decimal | None] = mapped_column(Numeric)
     value_text: Mapped[str | None] = mapped_column(Text)
     loaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class RegionStats(Base):
+    """동네 공식 통계(긴 모양) — V072 region_stats (세션 473).
+
+    적재 = crawler/service_region_stats.py collect_region_stats(매월 16일 05:45 잡,
+    수동 = scripts/run_region_stats.py). 출처 = 한국부동산원 R-ONE 월간 통계
+    (아파트 중위 전세가율 = 시군구 · 전월세전환율 = 시도·권역 — 권역 행은 짝이 없어 버린다).
+    한 행 = (지역 코드 5자리, 기준 달 YYYYMM, 통계 항목) 하나의 값.
+    읽기 = db/region_stats_queries.py(단지 상세·비교·매물 상세 직렬화).
+    """
+    __tablename__ = "region_stats"
+    __table_args__ = (Index("region_stats_stat_period_idx", "stat_code", "period"),)
+
+    region_code: Mapped[str] = mapped_column(Text, primary_key=True)
+    period: Mapped[str] = mapped_column(Text, primary_key=True)
+    stat_code: Mapped[str] = mapped_column(Text, primary_key=True)
+    value: Mapped[Decimal | None] = mapped_column(Numeric)
+    source: Mapped[str] = mapped_column(Text, nullable=False)
+    loaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)

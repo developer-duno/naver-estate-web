@@ -299,4 +299,32 @@ describe("ComplexDashboard (v2)", () => {
     });
     expect(screen.queryByTestId("mock-basic-info")).not.toBeInTheDocument();
   });
+
+  it("정부 지역 값: 시세 칸에 '이 단지 · 시군구 아파트' 나란히 + 출처 줄 (세션 473)", () => {
+    render(
+      <ComplexDashboard
+        complex={{ ...baseComplex, jeonse_rate: 58, region_jeonse_ratio: 79.4, region_jeonse_period: "2026.01", region_name: "천안시 동남구" }}
+        complexNo="C001"
+        pyeongDetails={samplePyeong}
+        sessionToken={undefined}
+        onFilterChange={() => {}}
+      />,
+    );
+    expect(screen.getByText("전세가율 58% · 천안시 동남구 아파트 79.4%")).toBeInTheDocument();
+    expect(screen.getByTestId("box-note-prices")).toHaveTextContent("출처: 한국부동산원 전국주택가격동향조사(2026.01)");
+  });
+
+  it("정부 지역 값이 없으면 지금처럼 '전세가율 N%' 만, 출처 줄 없음 (세션 473)", () => {
+    render(
+      <ComplexDashboard
+        complex={baseComplex}
+        complexNo="C001"
+        pyeongDetails={samplePyeong}
+        sessionToken={undefined}
+        onFilterChange={() => {}}
+      />,
+    );
+    expect(screen.getByText("전세가율 65%")).toBeInTheDocument();
+    expect(screen.queryByTestId("box-note-prices")).toBeNull();
+  });
 });

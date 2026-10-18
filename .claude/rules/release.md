@@ -124,7 +124,6 @@ interval 잡(시각 `—` 행)의 주기는 **코드 기본값**이다 — 라�
 | 03:00 | `discover_regions` | 주 1회 일요일 03:00 | 1h |
 | 03:30 | ⏰ `backfill_price` | 매일 03:30 | 12h |
 | 03:50 | `vacuum_maintenance` | 매일 03:50 | 1h |
-| 04:00 | `collect_crime_stats` | 분기별 첫째 일요일 04:00 | 1h |
 | 04:00 | ⏰ `collect_prices` | 주 1회 수요일 04:00 | 3h |
 | 04:30 | `collect_metrics` | 매일 04:30 | 1h |
 | 04:40 | `field_drift_monitor` | 매일 04:40 | 1h |
@@ -132,6 +131,7 @@ interval 잡(시각 `—` 행)의 주기는 **코드 기본값**이다 — 라�
 | 05:00 | `collect_officetel_presale` | 주 1회 월요일 05:00 | 1h |
 | 05:00 | ⏰ `collect_public_trades` | 주 1회 토요일 05:00 | 8h |
 | 05:30 | `collect_rental_presale` | 주 1회 월요일 05:30 | 1h |
+| 05:45 | `collect_region_stats` | 매월 16일 05:45 | 1h |
 | 06:20 | ⏰ `kapt_costs` | 매일 06:20 | 3h |
 | 06:30 | ⏰ `official_price` | 매월 15일 06:30 | 16h |
 | 06:40 | `api_version_probe` | 주 1회 일요일 06:40 | 1h |

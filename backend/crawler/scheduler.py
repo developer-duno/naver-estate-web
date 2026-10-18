@@ -79,7 +79,9 @@ CHILDCARE_ENABLED = os.getenv("CHILDCARE_ENABLED", "false").lower() == "true"
 # 0 = 전량(위경도 보유 2,938단지). 시군구당 1콜 + 런 내 캐시 재사용 구조라 전량이어도
 # 호출 상한 = 단지가 걸친 (region,gu) 조합 수 ≈ 248 (2026-09-05 prod 실측).
 CHILDCARE_BATCH_SIZE = int(os.getenv("CHILDCARE_BATCH_SIZE", "0"))
-CRIME_STATS_ENABLED = os.getenv("CRIME_STATS_ENABLED", "false").lower() == "true"
+# 동네 공식 통계(한국부동산원 R-ONE, 세션 473) — 기본 켬. 단 RONE_API_KEY 가 있어야 등록한다(없으면 표본 5건뿐).
+REGION_STATS_ENABLED = os.getenv("REGION_STATS_ENABLED", "true").lower() == "true"
+RONE_API_KEY_SET = bool(os.getenv("RONE_API_KEY", "").strip())
 COMPLEX_DETAIL_ENABLED = os.getenv("COMPLEX_DETAIL_ENABLED", "true").lower() == "true"
 COMPLEX_DETAIL_BATCH_SIZE = int(os.getenv("COMPLEX_DETAIL_BATCH_SIZE", "1000"))
 COMPLEX_DETAIL_APT_INTERVAL_HOURS = int(os.getenv("COMPLEX_DETAIL_APT_INTERVAL_HOURS", "4"))
@@ -580,24 +582,29 @@ def create_scheduler() -> BackgroundScheduler:
             batch_label(CHILDCARE_BATCH_SIZE),
         )
 
-    # J. 범죄통계 수집 — 분기 1회 (1/4/7/10월 첫째 일요일 새벽 4시)
-    #    경찰청 범죄통계 분기별 공표 주기에 맞춤
-    if CRIME_STATS_ENABLED:
-        from crawler.env_service import collect_crime_stats
+    # J. 동네 공식 통계 받기 — 매월 16일 05:45 (세션 473, 범죄 점수 잡 자리를 이어받음)
+    #    한국부동산원 R-ONE 월간 통계(시군구 전세가율·시도 전월세전환율). 부동산원이 15일 전후 전월 자료를
+    #    공표한 다음 날. 월 2콜(R-ONE 열쇠 전용 — 공공데이터 열쇠 한도와 무관). 05:45 = 05:30 민간임대 청약(월요일만)
+    #    · 06:20 관리비 사이 빈 칸. 열쇠가 없으면 표본 5건뿐이라 등록하지 않는다.
+    if REGION_STATS_ENABLED:
+        if RONE_API_KEY_SET:
+            from crawler.service_region_stats import collect_region_stats
 
-        scheduler.add_job(
-            collect_crime_stats,
-            "cron",
-            month="1,4,7,10",
-            day="1-7",
-            day_of_week="sun",
-            hour=4,
-            id="collect_crime_stats",
-            name="동네 범죄 통계 받기",
-            max_instances=1,
-            misfire_grace_time=3600,
-        )
-        logger.info("범죄통계 수집 활성화: 분기별 첫째 일요일 04:00")
+            scheduler.add_job(
+                collect_region_stats,
+                "cron",
+                day=16,
+                hour=5,
+                minute=45,
+                kwargs={"scheduler_job_id": "collect_region_stats"},
+                id="collect_region_stats",
+                name="동네 공식 통계 받기",
+                max_instances=1,
+                misfire_grace_time=3600,
+            )
+            logger.info("동네 공식 통계 받기 활성화: 매월 16일 05:45")
+        else:
+            logger.info("동네 공식 통계: 부동산원 인증키 없음 — 잡 미등록")
 
     # L. 크롤링 모니터 — N분마다 장애 감지 + 텔레그램 알림
     if MONITOR_ENABLED:

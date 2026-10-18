@@ -26,7 +26,7 @@ describe("crawl-job-labels", () => {
     const expected = [
       "complex_articles", "complex_list", "popular_crawl", "article_detail",
       "price_history", "public_trade_data", "bulk_recrawl",
-      "air_quality", "emergency", "childcare", "crime_stats",
+      "air_quality", "emergency", "childcare", "region_stats",
     ];
     for (const code of expected) {
       expect(CRAWL_JOB_LABELS[code]).toBeDefined();

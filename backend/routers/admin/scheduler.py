@@ -77,7 +77,8 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "backfill_price": {"name": "옛 시세 채워 넣기", "schedule": "매일 03:30", "env": "PUBLIC_DATA_ENABLED", "source": {"probe": "국토교통부 아파트 매매 실거래가"}},
     "collect_emergency": {"name": "응급실 위치 받기", "schedule": "매월 첫째 월요일 03:00", "env": "EMERGENCY_ENABLED", "source": {"probe": "응급의료기관 목록"}},
     "collect_childcare": {"name": "어린이집 정보 받기", "schedule": "매월 첫째 목요일 01:00", "env": "CHILDCARE_ENABLED", "source": _CPMS_CHILDCARE_SOURCE},
-    "collect_crime_stats": {"name": "동네 범죄 통계 받기", "schedule": "분기별 첫째 일요일 04:00", "env": "CRIME_STATS_ENABLED", "source": {"probe": "경찰청 범죄통계 (3074462)"}},
+    # env_present: 값이 비어 있지 않아야 등록되는 환경 변수(열쇠) — scheduler.py 의 `if REGION_STATS_ENABLED: if RONE_API_KEY_SET:` 짝.
+    "collect_region_stats": {"name": "동네 공식 통계 받기", "schedule": "매월 16일 05:45", "env": "REGION_STATS_ENABLED", "env_default": "true", "env_present": "RONE_API_KEY", "source": "한국부동산원 부동산통계정보 R-ONE (전세가율·전월세전환율)"},
     "complex_detail_APT": {"name": "아파트 단지 정보 채우기", "schedule": "4시간마다", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
     "complex_detail_OPST": {"name": "오피스텔 단지 정보 채우기", "schedule": "4시간마다", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
     "complex_detail_JGC": {"name": "재건축 단지 정보 채우기", "schedule": "주 1회 화요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
@@ -260,6 +261,8 @@ def get_scheduler_status(
         # 추가 토글(AND) — 등록 조건이 토글 둘 이상인 잡. META 의 env_extra 참조.
         for extra_key, extra_default in meta.get("env_extra", []):
             enabled = enabled and os.getenv(extra_key, extra_default).lower() == "true"
+        if meta.get("env_present"):
+            enabled = enabled and bool(os.getenv(meta["env_present"], "").strip())
 
         # 마지막 실행 정보
         last = latest_map.get(job_id)

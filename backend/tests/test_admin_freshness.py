@@ -6,8 +6,8 @@ from datetime import date, datetime, timedelta, timezone
 
 import jwt
 
-from db.mb_models import Infra, MBTrade, OfficetelPresaleSchedule, RentalScheduleOfficial
-from db.models import Article, Complex, ComplexOfficialPrice, CrawlJob, UserProfile
+from db.mb_models import MBTrade, OfficetelPresaleSchedule, RentalScheduleOfficial
+from db.models import Article, Complex, ComplexOfficialPrice, CrawlJob, RegionStats, UserProfile
 from routers.admin.freshness import invalidate_freshness_cache
 
 JWT_SECRET = "test-secret-key-for-testing-only"
@@ -67,8 +67,9 @@ def test_freshness_status_thresholds(client, db):
 
     # 단지 1: green 후보 (1일 전)
     db.add(Complex(complex_no="C_GREEN", complex_name="green", last_crawled_at=now - timedelta(days=1)))
-    # crime_stats infra 행: yellow 후보 (95일 전 = 1.06x of 90일 → green 실제로). 200일 전 = red
-    db.add(Infra(apartment_id="A_RED", crime_score=10, crime_updated_at=now - timedelta(days=300)))
+    # 동네 공식 통계 행: 31일 주기에서 100일 전 = 3.2x → red (세션 473 — 옛 범죄통계 카드 자리)
+    db.add(RegionStats(region_code="44131", period="202601", stat_code="reb_apt_jeonse_ratio_median",
+                       value=79.4, source="시험", loaded_at=now - timedelta(days=100)))
     db.commit()
 
     res = client.get("/api/admin/data-freshness", headers=_auth(_token("a1")))
@@ -79,10 +80,10 @@ def test_freshness_status_thresholds(client, db):
     assert complexes["count"] == 1
     assert complexes["status"] == "green", f"1일 전이면 green: {complexes}"
 
-    crime = _get_item(items, "crime_stats")
-    assert crime["count"] == 1
-    # 분기 작업(90일 주기)에서 300일 전 = 3.33x → red
-    assert crime["status"] == "red", f"300일 전이면 red: {crime}"
+    region = _get_item(items, "region_stats")
+    assert region["count"] == 1
+    # 월 작업(31일 주기)에서 100일 전 = 3.2x → red
+    assert region["status"] == "red", f"100일 전이면 red: {region}"
 
 
 def test_freshness_status_yellow_boundary(client, db):
@@ -218,7 +219,7 @@ def test_official_price_monthly_meta(client, db):
 # 배경: crawl_details(매물 상세 보강)와 collect_emergency(응급의료기관) 는 몇 시간이고
 # 매번 0건만 처리해도 status="completed"로 정상 종료돼 monitor.py 의 "작업 실패"·
 # "작업 마비" 축 어디도 못 잡는 사각지대였다(17개 스케줄러 잡 전수조사로 발견).
-# air_quality/childcare/crime_stats 는 이미 있는데 emergency 만 등록 누락이었고,
+# air_quality/childcare/(옛)범죄통계 는 이미 있는데 emergency 만 등록 누락이었고,
 # crawl_details 는 애초에 전용 카드가 없었다 — CrawlJob.completed_at 경유(childcare 패턴).
 
 def test_article_detail_fresh_green(client, db):
@@ -273,7 +274,7 @@ def test_emergency_fresh_green(client, db):
 
 def test_emergency_stale_goes_red(client, db):
     """응급의료기관이 100일(3.33×) 넘게 안 갱신되면 red — air_quality/childcare/
-    crime_stats 는 이미 카드가 있는데 emergency 만 누락됐던 사각지대 회귀 가드."""
+    (옛)범죄통계 는 이미 카드가 있는데 emergency 만 누락됐던 사각지대 회귀 가드."""
     _make_admin(db)
     now = datetime.now(timezone.utc)
     db.add(CrawlJob(
@@ -406,10 +407,12 @@ def test_freshness_response_schema(client, db):
     assert res.status_code == 200
     body = res.json()
     assert "generated_at" in body
+    # 손으로 적는 기준금리(config/legal_rates.py) — 화면에 날짜와 함께 보인다(세션 473)
+    assert body["legal_rates"] == {"bok_base_rate": 3.0, "bok_base_rate_date": "2026-08-27", "legal_rent_conversion_cap": 5.0}
     keys = {item["key"] for item in body["items"]}
     expected_keys = {
         "complexes", "articles", "complex_price_history", "unsold",
-        "childcare", "crime_stats", "public_trades",  # air_quality 는 세션604 폐지
+        "childcare", "region_stats", "public_trades",  # air_quality 는 세션604 폐지 · 범죄통계 → 동네 공식 통계(세션 473)
         "officetel_presale", "rental_presale", "official_price",
         "emergency", "article_detail", "complex_metric",
         "complex_detail_apt", "complex_detail_opst",

@@ -15,7 +15,6 @@ import pytest
 from crawler import public_data_base
 from crawler.air_quality_api import AirQualityAPI
 from crawler.applyhome_officetel_api import ApplyhomeOfficetelAPI
-from crawler.crime_stats_api import CrimeStatsAPI
 from crawler.emergency_api import EmergencyAPI
 from crawler.kapt_api import KaptAPI
 from crawler.public_data_base import BasePublicDataAPI
@@ -76,7 +75,7 @@ def test_kapt_min_interval_is_one_and_half_seconds():
 def test_other_existing_apis_keep_point_three_seconds():
     """(c) K-apt 말고 기존 창구는 0.3초 그대로(동작 무변경)."""
     assert BasePublicDataAPI._min_interval == 0.3
-    for cls in (AirQualityAPI, ApplyhomeOfficetelAPI, CrimeStatsAPI, EmergencyAPI, _OtherAPI):
+    for cls in (AirQualityAPI, ApplyhomeOfficetelAPI, EmergencyAPI, _OtherAPI):
         assert cls._min_interval == 0.3, cls.__name__
 
 

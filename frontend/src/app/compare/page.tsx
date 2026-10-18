@@ -69,7 +69,9 @@ const BASE_ROWS: { label: string; render: (c: Complex) => ReactNode }[] = [
   // 평당가는 "건폐율" 다음에 동적 삽입 (compareRows useMemo 의 findIndex 참조)
   { label: "매물수", render: (c) => formatCount(c.article_count) },
   { label: "주변 중위가", render: (c) => formatPrice(c.nearby_median_price) },
-  { label: "전세가율", render: (c) => c.jeonse_rate ? `${c.jeonse_rate.toFixed(0)}%` : "-" },
+  { label: "전세가율(이 단지)", render: (c) => c.jeonse_rate ? `${c.jeonse_rate.toFixed(0)}%` : "-" },
+  // 정부 지역 값(세션 473) — 각 단지의 시군구, 부동산원 최신 달
+  { label: "시군구 전세가율(부동산원)", render: (c) => c.region_jeonse_ratio != null ? `${c.region_jeonse_ratio}%` : "-" },
   { label: "수영장", render: (c) => c.has_pool ? "있음" : "없음" },
   { label: "관리사무소", render: (c) => c.management_office_tel || "-" },
 ];
@@ -81,7 +83,7 @@ const ROW_CATEGORIES = {
     "최저층", "최고층", "준공일", "최소 면적", "최대 면적",
   ]),
   price: new Set([
-    "평당가", "매물수", "주변 중위가", "전세가율",
+    "평당가", "매물수", "주변 중위가", "전세가율(이 단지)", "시군구 전세가율(부동산원)",
   ]),
   facility: new Set([
     "총 주차", "세대당 주차", "난방", "난방 연료", "시공사",
@@ -106,6 +108,9 @@ const MOBILE_TAB_LABELS: Record<MobileTab, string> = {
  */
 const COMPARE_SOURCES_FOOTER_TEXT =
   "출처: 단지 정보·평형별 관리비·세대 구성 = 네이버부동산 단지 정보 · 매물수·평당가·현재 평균가·층별·면적별 가격 = 네이버부동산 매물 호가 집계(실거래가 아님) · 가격 추이·주변 중위가·전세가율 = 네이버부동산 시세·실거래가와 국토교통부 실거래가(공공데이터포털) 기록으로 계산";
+
+const COMPARE_REGION_FOOTNOTE_TEXT =
+  "시군구 전세가율: 한국부동산원 전국주택가격동향조사, 아파트 중위 매매가격 대비 전세가격(각 단지의 시군구, 최신 월)";
 
 /* ── 메인 컴포넌트 ── */
 
@@ -426,6 +431,9 @@ function CompareContent() {
       {/* 값의 자료 출처 각주 (세션 472 PR 3) */}
       <p className="mt-8 text-xs leading-relaxed text-gray-500" data-testid="compare-sources-footer">
         {COMPARE_SOURCES_FOOTER_TEXT}
+      </p>
+      <p className="mt-1 text-xs leading-relaxed text-gray-500" data-testid="compare-region-footnote">
+        {COMPARE_REGION_FOOTNOTE_TEXT}
       </p>
     </div>
   );

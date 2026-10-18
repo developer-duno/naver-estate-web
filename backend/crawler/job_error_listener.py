@@ -62,7 +62,7 @@ _JOB_LABEL_FALLBACK = {
     "official_price": "정부 공시가격 받기",
     "collect_emergency": "응급실 위치 받기",
     "collect_childcare": "어린이집 정보 받기",
-    "collect_crime_stats": "동네 범죄 통계 받기",
+    "collect_region_stats": "동네 공식 통계 받기",
     "crawler_monitor": "서버 일감 점검",
     "collect_metrics": "단지 가치 점수 계산",
     "billing_charge": "구독료 자동 결제",

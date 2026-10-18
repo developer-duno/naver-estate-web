@@ -235,9 +235,8 @@ git 추적 자산만 다른 컴퓨터/CI에서 사용 가능. 사적 파일은 �
 |---|---|---|
 | `scripts/startup_orchestrator.py` | 프로젝트 (수정 금지, 자동 시작 BAT가 호출) | Windows Startup 시 BE+Tunnel+Watchdog |
 | `scripts/start-server.bat` | 프로젝트 | 수동 백엔드+터널 동시 실행 |
-| `backend/scripts/check_crime_stats.py` | BE | 범죄통계 수집 점검 |
-| `backend/scripts/diagnose_crime_keys.py` | BE | data.go.kr 쿼터 키 진단 |
-| `backend/scripts/run_crime_stats.py` | BE | 범죄통계 수동 트리거 |
+| `backend/scripts/run_region_stats.py` | BE | 동네 공식 통계(부동산원) 수동 받기 — 표별 받은/저장/짝 안 됨 수 (`--dry-run`) |
+| `backend/scripts/build_region_codes.py` | BE | 지역 코드 → 이름 표(`data/region_codes.json`) 다시 만들기(운영 complexes 읽기만) |
 | `backend/scripts/test_childcare_api.py` | BE | CPMS cpmsapi030 API 점검 |
 
 ### §8.7 GitHub CLI (gh)

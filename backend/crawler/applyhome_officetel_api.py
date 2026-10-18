@@ -6,7 +6,7 @@ data.go.kr 카탈로그 15098547 (한국부동산원_청약홈 분양정보 조�
 
 API 문서: https://www.data.go.kr/data/15098547/openapi.do
 
-`BasePublicDataAPI`(crime_stats_api.py·air_quality_api.py 와 동일 기반 클래스)를
+`BasePublicDataAPI`(emergency_api.py·air_quality_api.py 와 동일 기반 클래스)를
 상속해 공유 일일 쿼터(9,000회, mibunyang 과 공유) 추적·throttle·재시도를
 그대로 재사용한다 — 별도 재시도 로직을 새로 만들지 않는다 (`oss-first.md` 답습).
 """

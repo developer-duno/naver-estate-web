@@ -128,7 +128,7 @@ class BasePublicDataAPI:
 
     _api_name = "base"
     # 독립 쿼터 버킷 이름. None 이면 기존 전역 버킷(quota:data_go_kr)을 그대로 쓴다 —
-    # 기존 서브클래스(air_quality·emergency·childcare·crime_stats·applyhome…) 동작 무변경.
+    # 기존 서브클래스(air_quality·emergency·childcare·applyhome…) 동작 무변경.
     # data.go.kr 한도는 활용신청별이므로, 자기 한도를 따로 받은 API 만 자기 버킷을 선언한다.
     _quota_name: str | None = None
     _quota_daily_limit: int = GLOBAL_DAILY_LIMIT

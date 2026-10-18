@@ -37,6 +37,11 @@ export interface Complex {
   trade_type_counts?: { 매매: number; 전세: number; 월세: number; 단기임대: number };
   nearby_median_price?: number;
   jeonse_rate?: number;
+  /** 정부 지역 값 — 부동산원 시군구 아파트 중위 전세가율(단지 상세·비교 응답에만, 세션 473) */
+  region_jeonse_ratio?: number | null;
+  region_jeonse_period?: string | null;   // "2026.01"
+  region_name?: string | null;            // 시군구 이름만 "천안시 동남구"
+  region_jeonse_source?: string | null;
   recent_trades_6m?: number;
   filter_options?: FilterOptions;
   has_pool?: boolean;
@@ -97,6 +102,15 @@ export interface Article {
   realtor_phone?: string;
   monthly_rent_yield?: number;      // 월세 수익률 (%)
   article_jeonse_ratio?: number;    // 개별 전세가율 (%)
+  /** 공식 기준값 — 매물 상세 응답에만(세션 473) */
+  legal_rent_conversion_cap?: number;             // 법정 전월세 전환율 상한(%) = min(기준금리+2, 10)
+  bok_base_rate?: number;                         // 한국은행 기준금리(%)
+  bok_base_rate_date?: string;                    // "2026-08-27"
+  region_rent_conversion_rate?: number | null;    // 부동산원 시도 전월세전환율(%)
+  region_rent_conversion_period?: string | null;  // "2026.01"
+  region_rent_conversion_name?: string | null;    // 시도 짧은 이름 "경남"
+  article_rent_conversion_rate?: number | null;   // 이 매물 전환율(부동산원 산식, 같은 평형 네이버 전세 시세 기준)
+  article_rent_conversion_basis?: string | null;  // "네이버 시세 전세가 기준(같은 평형, 2026.10.08)"
   // #9 매물 가치 필드 (네이버 리스트 API 응답)
   price_change_state?: string;      // 가격변동 (SAME/INCREASE/DECREASE)
   article_status?: string;          // 거래상태 코드

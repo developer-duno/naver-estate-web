@@ -174,8 +174,8 @@ def test_scheduler_status_failed_job(mock_sched, client, db):
     now = datetime.now(timezone.utc)
     raw = "(psycopg2.errors.QueryCanceled) canceling statement due to statement timeout"
     job = CrawlJob(
-        job_type="crime_stats",
-        scheduler_job_id="collect_crime_stats",
+        job_type="region_stats",
+        scheduler_job_id="collect_region_stats",
         status="failed",
         error_message=raw,
         started_at=now - timedelta(minutes=1),
@@ -186,14 +186,14 @@ def test_scheduler_status_failed_job(mock_sched, client, db):
 
     res = client.get("/api/admin/scheduler-status", headers=_auth(_token("admin1")))
     data = res.json()
-    crime_job = next(j for j in data["jobs"] if j["scheduler_job_id"] == "collect_crime_stats")
-    assert crime_job["last_run"]["status"] == "failed"
+    region_job = next(j for j in data["jobs"] if j["scheduler_job_id"] == "collect_region_stats")
+    assert region_job["last_run"]["status"] == "failed"
     # 원문은 그대로 온다 — 화면이 `title` 로 남겨 추적 근거를 지키기 때문.
-    assert crime_job["last_run"]["error_message"] == raw
+    assert region_job["last_run"]["error_message"] == raw
     # 화면이 보여줄 우리말 한 줄은 번역된 값이어야 한다 (세션 411).
-    assert crime_job["last_run"]["error_plain"] == "데이터베이스가 너무 오래 걸려 스스로 멈췄어요."
-    assert crime_job["last_run"]["error_plain"] != crime_job["last_run"]["error_message"]
-    assert crime_job["stats_24h"]["failures"] >= 1
+    assert region_job["last_run"]["error_plain"] == "데이터베이스가 너무 오래 걸려 스스로 멈췄어요."
+    assert region_job["last_run"]["error_plain"] != region_job["last_run"]["error_message"]
+    assert region_job["stats_24h"]["failures"] >= 1
 
 
 @patch("crawler.scheduler.get_scheduler", return_value=None)

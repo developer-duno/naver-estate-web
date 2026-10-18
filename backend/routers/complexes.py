@@ -9,6 +9,7 @@ from crawler.utils import get_shared_throttle, haversine_km
 from db import queries
 from db.sgis_queries import build_neighborhood
 from deps import get_approved_user, get_db
+from routers.region_serializers import complex_region_fields
 from routers.serializers import (
     article_to_dict,
     build_filter_dict,
@@ -107,6 +108,8 @@ def get_complex_detail(
         _cache.set(fo_key, filter_options)
     result = {
         **complex_to_dict(cpx),
+        # 정부 지역 값(부동산원 시군구 전세가율) — 상세·비교만(세션 473). 목록에는 안 붙인다.
+        **complex_region_fields(db, cpx),
         "article_count": article_count,
         "trade_type_counts": queries.get_trade_type_counts(db, complex_no),
         "filter_options": filter_options,

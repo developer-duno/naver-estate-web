@@ -4,9 +4,7 @@
   env_common.py — CrawlJob 기록 헬퍼
   env_emergency.py — 응급의료 수집
   env_childcare.py — 어린이집 수집
-  env_crime_population.py — 범죄통계 인구맵
-  env_crime_lookup.py — 범죄통계 점수 조회
-  env_crime.py — 범죄통계 수집
+(범죄통계 3모듈은 세션 473 에 삭제 — 아무도 안 보는 값이라 잡을 내렸다)
 """
 
 from crawler.env_childcare import collect_childcare_data  # noqa: F401
@@ -15,11 +13,4 @@ from crawler.env_common import (  # noqa: F401
     _fail_job,
     _record_job,
 )
-from crawler.env_crime import collect_crime_stats, load_crime_stats  # noqa: F401
-from crawler.env_crime_lookup import (  # noqa: F401
-    _build_score_lookup,
-    _compute_median_score,
-    _lookup_score,
-)
-from crawler.env_crime_population import _build_population_map  # noqa: F401
 from crawler.env_emergency import collect_emergency_data  # noqa: F401

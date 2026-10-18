@@ -68,7 +68,7 @@ def test_extract_scheduler_job_ids_finds_static_literals():
         "backfill_price", "complex_detail_APT", "complex_detail_OPST",
         "collect_public_trades", "collect_officetel_presale", "collect_rental_presale",
         "official_price", "collect_emergency", "collect_childcare",
-        "collect_crime_stats", "crawler_monitor", "collect_metrics", "billing_charge",
+        "collect_region_stats", "crawler_monitor", "collect_metrics", "billing_charge",
         "vacuum_maintenance",
         # K-apt 관리비 연동 (단지 매칭 + 관리비 수집)
         "kapt_match", "kapt_costs", "kapt_costs_noon", "kapt_costs_evening",

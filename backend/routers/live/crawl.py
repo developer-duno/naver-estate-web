@@ -10,6 +10,7 @@ from auth.permissions import check_quota
 from db.models import Article as ArticleModel
 from db.models import Complex as ComplexModel
 from deps import get_approved_user, get_db
+from routers.region_serializers import article_region_fields
 from routers.serializers import article_to_dict
 from services.naver_call_counter import record_call
 from services.upsert import build_detail_update_dict
@@ -127,6 +128,11 @@ def get_crawl_status(complex_no: str):
     return {"complex_no": complex_no, **snapshot}
 
 
+def _article_detail_dict(db, art, complex_obj) -> dict:
+    """매물 상세 응답 = 매물 dict + 공식 기준값(법정 전환율 상한·시도 전환율·이 매물 전환율 — 세션 473)."""
+    return {**article_to_dict(art, complex_obj), **article_region_fields(db, art, complex_obj)}
+
+
 @router.get("/article/{article_no}/detail")
 def live_article_detail(
     article_no: str,
@@ -152,14 +158,14 @@ def live_article_detail(
         # 이전 버그로 detail_crawled=True이지만 필드가 비어있을 수 있음 → 재크롤링
         has_detail = art.heating_type or art.jibun_address or art.use_approve_ymd
         if has_detail:
-            return article_to_dict(art, complex_obj)
+            return _article_detail_dict(db, art, complex_obj)
 
     # 네이버 API에서 상세 정보 가져오기
     record_call("article_detail_live_fallback")
     detail_data = NaverEstateAPI.get_article_detail(article_no)
     if not detail_data or "error" in detail_data:
         if art:
-            return article_to_dict(art, complex_obj)
+            return _article_detail_dict(db, art, complex_obj)
         raise HTTPException(status_code=404, detail="매물 정보를 찾을 수 없습니다")
 
     if not art:
@@ -185,4 +191,4 @@ def live_article_detail(
     # 갱신된 데이터 반환
     db.expire_all()
     art = db.query(ArticleModel).filter(ArticleModel.article_no == article_no).first()
-    return article_to_dict(art, complex_obj)
+    return _article_detail_dict(db, art, complex_obj)

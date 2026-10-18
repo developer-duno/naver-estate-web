@@ -61,8 +61,8 @@ JOB_WORDS: dict[str, str] = {
     "air_quality": "동네 공기질 받기",
     "emergency": "응급실 위치 받기",
     "childcare": "어린이집 정보 받기",
-    "crime_stats": "동네 범죄 통계 받기",
     "sgis_area": "동네 통계 받기",
+    "region_stats": "동네 공식 통계 받기",
     # 관리비(K-apt)
     "kapt_match": "관리비 단지 연결하기",
     "kapt_costs": "단지 관리비 받기",
@@ -162,6 +162,14 @@ _ERROR_RULES: list[tuple[re.Pattern, str | Callable[[str], str]]] = [
     # 바로 위 규칙과 같은 꼴(영문·`|` 섞이면 통과 안 함).
     (
         re.compile(r"^네이버가 막거나 오류를 내서[^A-Za-z|]*$"),
+        lambda text: text,
+    ),
+    # ── 우리 동네 공식 통계 받기(region_stats) 문구 — 원문 그대로 (세션 473) ──
+    # `crawler/rone_api.py`·`service_region_stats.py` 가 만드는 문장("부동산원 인증키가 없어요…",
+    # "부동산원 창구가 오류를 알려 왔어요(사유 번호 290)", "받은 행은 N개인데 지역 짝이 하나도 안 맞아요")은
+    # 처음부터 쉬운 우리말이고 사유 번호·행 수가 핵심이다. 위 규칙들과 같은 꼴(영문·`|` 섞이면 통과 안 함).
+    (
+        re.compile(r"^(?:부동산원|받은 행은 \d+개인데 지역 짝이)[^A-Za-z|]*$"),
         lambda text: text,
     ),
     # ── 결제 사유 2종 — billing_charge._mark_retry 가 만드는 우리 접두어 (세션 410) ──

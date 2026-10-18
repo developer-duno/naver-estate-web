@@ -47,7 +47,7 @@ const baseFixture = (): DataFreshnessResponse => {
       baseItem({ key: "complex_price_history", label: "시세 이력", count: 1200000, last_updated: ago(3 * 86400 * 1000), expected_interval_seconds: 604800, status: "green", new_rows: 1500 }),
       baseItem({ key: "unsold", label: "미분양 이력", count: 8432, last_updated: ago(50 * 86400 * 1000), expected_interval_seconds: 2592000, status: "yellow" }),
       baseItem({ key: "childcare", label: "어린이집", count: 0, last_updated: null, expected_interval_seconds: 2592000, status: "unknown" }),
-      baseItem({ key: "crime_stats", label: "범죄통계", count: 2001, last_updated: ago(300 * 86400 * 1000), expected_interval_seconds: 7776000, status: "red" }),
+      baseItem({ key: "region_stats", label: "동네 공식 통계(부동산원)", count: 2001, last_updated: ago(100 * 86400 * 1000), expected_interval_seconds: 2678400, status: "red" }),
       baseItem({ key: "public_trades", label: "실거래가(미분양 수집)", count: 173964, last_updated: ago(86400 * 1000), expected_interval_seconds: 2592000, status: "green" }),
     ],
   };
@@ -61,7 +61,7 @@ describe("DataFreshnessCard 컴포넌트", () => {
     await waitFor(() => {
       expect(screen.getByText("단지")).toBeInTheDocument();
     });
-    for (const label of ["매물", "시세 이력", "미분양 이력", "어린이집", "범죄통계", "실거래가(미분양 수집)"]) {
+    for (const label of ["매물", "시세 이력", "미분양 이력", "어린이집", "동네 공식 통계(부동산원)", "실거래가(미분양 수집)"]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });
@@ -179,7 +179,7 @@ describe("DataFreshnessCard 컴포넌트", () => {
     await waitFor(() => {
       expect(screen.getByText("미분양 이력")).toBeInTheDocument();
     });
-    // 미분양/시세이력/공공실거래/단지/범죄통계 등 last_job=null 인 종목들 ≥ 1
+    // 미분양/시세이력/공공실거래/단지/동네 공식 통계 등 last_job=null 인 종목들 ≥ 1
     expect(screen.getAllByText("정기 작업 없음").length).toBeGreaterThanOrEqual(1);
   });
 });

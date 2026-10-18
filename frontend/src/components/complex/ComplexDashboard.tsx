@@ -26,6 +26,8 @@ interface BoxData {
   label: string;
   primary: string;
   secondary?: string;
+  /** 칸 아래 작은 출처 줄 — 정부 값이 붙었을 때만(세션 473) */
+  note?: string;
 }
 
 export default function ComplexDashboard({
@@ -72,6 +74,10 @@ export default function ComplexDashboard({
     };
   }, []);
 
+  // 정부 지역 값(부동산원 시군구 전세가율) — 이 단지 값 옆에 나란히, 출처 줄과 함께(세션 473)
+  const hasRegionJeonse = complex.region_jeonse_ratio != null && !!complex.region_name;
+  const regionJeonseText = hasRegionJeonse ? ` · ${complex.region_name} 아파트 ${complex.region_jeonse_ratio}%` : "";
+
   // 박스 라벨·값 계산 (Q3 NULL fallback)
   const boxes: BoxData[] = [
     {
@@ -81,8 +87,11 @@ export default function ComplexDashboard({
         ? formatKoreanPrice(complex.nearby_median_price)
         : (avgPrice != null ? `매물 평균 ${formatKoreanPrice(avgPrice)}` : "-"),
       secondary: complex.jeonse_rate != null
-        ? `전세가율 ${complex.jeonse_rate}%`
+        ? `전세가율 ${complex.jeonse_rate}%${regionJeonseText}`
         : (countLoading || count > 0 ? countText : undefined),
+      note: complex.jeonse_rate != null && hasRegionJeonse
+        ? `출처: 한국부동산원 전국주택가격동향조사${complex.region_jeonse_period ? `(${complex.region_jeonse_period})` : ""}`
+        : undefined,
     },
     {
       key: "chart",
@@ -128,6 +137,7 @@ export default function ComplexDashboard({
             <span className="text-[11px] md:text-xs text-gray-500">{b.label}</span>
             <span className="text-sm md:text-base font-semibold mt-0.5 break-keep">{b.primary}</span>
             {b.secondary && <span className="text-[10px] md:text-xs text-gray-400 mt-0.5">{b.secondary}</span>}
+            {b.note && <span className="text-[10px] text-gray-400 mt-0.5" data-testid={`box-note-${b.key}`}>{b.note}</span>}
           </button>
         ))}
       </div>

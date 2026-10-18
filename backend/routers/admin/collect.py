@@ -5,7 +5,6 @@ import threading
 from typing import Literal
 
 from fastapi import Depends, HTTPException, Query
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from auth.audit import log_action
@@ -19,7 +18,7 @@ from ._shared import router
 logger = logging.getLogger(__name__)
 
 CollectorName = Literal[
-    "crime-stats", "emergency", "childcare", "backfill-price", "metrics",
+    "region-stats", "emergency", "childcare", "backfill-price", "metrics",
     # K-apt 관리비 (V051) — 매칭은 월 1회라 수동 트리거가 사실상 주 실행 경로.
     # ⚠ kapt-costs 는 공개 단지당 22콜(미공개는 3콜 — 세션 414)이라 기본 배치(500)면 최대 11,000콜 — 수동 실행 전 쿼터 확인.
     "kapt-match", "kapt-costs",
@@ -28,9 +27,10 @@ CollectorName = Literal[
 
 def _get_collector(name: CollectorName):
     """수집기 이름 → 함수 매핑 (lazy import로 순환 참조 방지)"""
-    if name == "crime-stats":
-        from crawler.env_service import collect_crime_stats
-        return collect_crime_stats
+    if name == "region-stats":
+        # 기본 잡 id 가 예약 잡과 같다 — 화면이 수동 실행도 "마지막 실행"으로 본다(manualCounted).
+        from crawler.service_region_stats import collect_region_stats
+        return collect_region_stats
     if name == "emergency":
         from crawler.env_service import collect_emergency_data
         return collect_emergency_data
@@ -57,7 +57,7 @@ def _get_collector(name: CollectorName):
 # 짝꿍 = frontend/src/lib/admin/collectors.ts 의 COLLECTORS[].jobType — 한쪽을 바꾸면 양쪽을 같이 바꾼다.
 # 가드 = tests/test_admin_collect_background.py test_collector_job_type_map_matches_frontend_pairwise(짝 단위 7/7).
 _COLLECTOR_JOB_TYPE: dict[str, str] = {
-    "crime-stats": "crime_stats",
+    "region-stats": "region_stats",
     "emergency": "emergency",
     "childcare": "childcare",
     "backfill-price": "price_backfill",
@@ -173,37 +173,6 @@ def trigger_collection(
             _collect_running.discard(collector_name)
         raise
     return {"status": "started", "collector": collector_name}
-
-
-@router.get("/collect/crime-stats/status")
-def get_crime_stats_status(
-    db: Session = Depends(get_db),
-    admin: dict = Depends(get_admin_user),
-):
-    """범죄통계 수집 현황 조회"""
-    from db.mb_models import Infra
-
-    total_scored = db.execute(
-        select(func.count()).select_from(Infra).where(Infra.crime_score.isnot(None))
-    ).scalar() or 0
-
-    last_updated = db.execute(
-        select(func.max(Infra.crime_updated_at))
-    ).scalar()
-
-    # 등급 분포
-    grade_rows = db.execute(
-        select(Infra.crime_grade, func.count())
-        .where(Infra.crime_grade.isnot(None))
-        .group_by(Infra.crime_grade)
-    ).all()
-    grade_dist = {grade: count for grade, count in grade_rows}
-
-    return {
-        "total_scored": total_scored,
-        "last_updated": last_updated.isoformat() if last_updated else None,
-        "grade_dist": grade_dist,
-    }
 
 
 @router.post("/backfill-price/{complex_no}")

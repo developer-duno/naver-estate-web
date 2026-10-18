@@ -14,8 +14,9 @@ from fastapi import Depends
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from db.mb_models import Infra, MBTrade, OfficetelPresaleSchedule, RentalScheduleOfficial, UnsoldHistory
-from db.models import Article, Complex, ComplexOfficialPrice, ComplexPriceHistory, CrawlJob
+from config.legal_rates import BOK_BASE_RATE, BOK_BASE_RATE_DATE, legal_rent_conversion_cap
+from db.mb_models import MBTrade, OfficetelPresaleSchedule, RentalScheduleOfficial, UnsoldHistory
+from db.models import Article, Complex, ComplexOfficialPrice, ComplexPriceHistory, CrawlJob, RegionStats
 from deps import get_admin_user, get_db
 from services.cache import get_cache
 
@@ -213,7 +214,8 @@ def compute_freshness(db: Session) -> dict:
                 (CrawlJob.scheduler_job_id == "collect_emergency") & (CrawlJob.status == "completed"),
             )
         ).one(),
-        "crime_stats": db.execute(select(func.max(Infra.crime_updated_at), func.count(Infra.apartment_id).filter(Infra.crime_score.isnot(None)))).one(),
+        # 세션 473: 동네 공식 통계(부동산원) — 받은 시각·행 수. 월 1회(16일)라 31일 기준.
+        "region_stats": db.execute(select(func.max(RegionStats.loaded_at), func.count(RegionStats.region_code))).one(),
         "public_trades": (trade_max, trade_count),
         # 신규 3종 (세션 359) — "조용한 실패"(0건인데 status=completed) 가 monitor.py
         # 의 작업실패 감지를 우회하는 사각지대를 이 신선도 축으로 메운다. 전량 upsert
@@ -345,7 +347,13 @@ def compute_freshness(db: Session) -> dict:
             "new_rows": new_rows,
         })
 
-    return {"items": items, "generated_at": now.isoformat()}
+    # 손으로 적는 상수(config/legal_rates.py) — 금통위 뒤 사람이 고친다. 화면에 날짜와 함께 보여 낡음을 드러낸다(세션 473).
+    legal_rates = {
+        "bok_base_rate": BOK_BASE_RATE,
+        "bok_base_rate_date": BOK_BASE_RATE_DATE,
+        "legal_rent_conversion_cap": legal_rent_conversion_cap(),
+    }
+    return {"items": items, "generated_at": now.isoformat(), "legal_rates": legal_rates}
 
 
 def get_freshness_cached(db: Session) -> dict:

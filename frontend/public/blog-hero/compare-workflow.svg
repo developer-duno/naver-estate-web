@@ -53,7 +53,7 @@
     <text x="120" y="38"
           font-family="'Pretendard', sans-serif"
           font-size="18" font-weight="600" fill="#FFFFFF">
-      /compare?ids=12345,67890,11111,22222
+      단지 비교 화면
     </text>
 
     <!-- 비교표 헤더 행 -->

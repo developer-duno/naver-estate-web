@@ -261,11 +261,11 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.category).toBe("도구 활용");
   });
 
-  it("search-history-workflow 메타 — 도구 활용 카테고리, 검색 히스토리 키워드", () => {
+  it("search-history-workflow 메타 — 도구 활용 카테고리, 검색 기록 키워드", () => {
     const post = getPostBySlug("search-history-workflow");
     expect(post).toBeDefined();
     expect(post?.draft).toBeUndefined();
-    expect(post?.title).toContain("검색 히스토리");
+    expect(post?.title).toContain("검색 기록");
     expect(post?.description).toMatch(/10개|재방문|브라우저|북마크/);
     expect(post?.category).toBe("도구 활용");
   });

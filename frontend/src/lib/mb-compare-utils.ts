@@ -1,58 +1,42 @@
 /**
- * 미분양 단지 비교 유틸리티 — 우위 판정 로직
+ * 미분양 단지 비교 유틸리티 — 비교표 행 정의 + 셀 포맷
+ * 세션 472 PR 3: 단지 간 우위(★)·초록 강조 판정을 없앴다. 값만 나란히 보이고 출처는 페이지 맨 아래 각주에 둔다.
  */
 import type { MbApartment } from "@/types";
 import { displayUnits, normalizePp } from "./mb-format";
+import { roadDistanceText } from "@/components/mb/basis-text";
 
-/** 비교 우위 방향: "higher"=클수록 우위, "lower"=작을수록 우위, null=비교 불가(텍스트 항목) */
-export type AdvantageDir = "higher" | "lower" | null;
-
-/** 비교 테이블 한 행의 정의 — 라벨, 값 추출 함수, 우위 판정 방향 */
+/** 비교 테이블 한 행의 정의 — 라벨, 값 추출 함수 */
 export interface MbCompareRow {
   label: string;
   getValue: (apt: MbApartment) => string | number | null | undefined;
-  direction: AdvantageDir;
 }
 
-/** 19행 비교 테이블 정의 — /mibunyang/compare 페이지에서 단지 간 우위(★) 판정에 사용 */
+/** 17행 비교 테이블 정의 — /mibunyang/compare 페이지 표·카드와 엑셀 내보내기가 같이 쓴다 */
 export const MB_COMPARE_ROWS: MbCompareRow[] = [
-  { label: "단지명", getValue: (a) => a.name, direction: null },
-  { label: "지역", getValue: (a) => [a.region, a.gu].filter(Boolean).join(" "), direction: null },
+  { label: "단지명", getValue: (a) => a.name },
+  { label: "지역", getValue: (a) => [a.region, a.gu].filter(Boolean).join(" ") },
   // 미분양이 묶음 값이면 세대수도 묶음 값으로 짝을 맞춘다 (B22)
-  { label: "세대수", getValue: (a) => displayUnits(a), direction: "higher" },
-  { label: "미분양", getValue: (a) => a.unsold, direction: "lower" },
-  { label: "미분양률(%)", getValue: (a) => a.unsold_rate, direction: "lower" },
-  { label: "6개월 취소율(%)", getValue: (a) => a.trade_stats?.cancel_ratio_6m, direction: "lower" },
-  { label: "입주시기", getValue: (a) => a.presale_move_in ?? a.completion, direction: null },
-  { label: "분양가 최저(만원)", getValue: (a) => a.presale_min_price, direction: "lower" },
-  { label: "분양가 최고(만원)", getValue: (a) => a.presale_max_price, direction: "lower" },
-  // 평당가 0/미공개는 null → getBestIndices 우위(★) 제외 + formatCellValue "-" (세션 300)
-  { label: "평당가(만원)", getValue: (a) => normalizePp(a.presale_pp), direction: "lower" },
-  { label: "세대당 주차(대)", getValue: (a) => a.parking_ratio, direction: "higher" },
-  { label: "최고층", getValue: (a) => a.max_floor, direction: "higher" },
-  { label: "용적률(%)", getValue: (a) => a.floor_area_ratio, direction: "lower" },
-  { label: "난방", getValue: (a) => a.heating, direction: null },
-  { label: "시공사", getValue: (a) => a.builder, direction: null },
-  { label: "할인율(%)", getValue: (a) => a.discount_pct, direction: "higher" },
+  { label: "세대수", getValue: (a) => displayUnits(a) },
+  { label: "미분양", getValue: (a) => a.unsold },
+  { label: "미분양률(%)", getValue: (a) => a.unsold_rate },
+  { label: "6개월 취소율(%)", getValue: (a) => a.trade_stats?.cancel_ratio_6m },
+  { label: "입주시기", getValue: (a) => a.presale_move_in ?? a.completion },
+  { label: "분양가 최저(만원)", getValue: (a) => a.presale_min_price },
+  { label: "분양가 최고(만원)", getValue: (a) => a.presale_max_price },
+  // 평당가 0/미공개는 null → formatCellValue "-" (세션 300)
+  { label: "평당가(만원)", getValue: (a) => normalizePp(a.presale_pp) },
+  { label: "세대당 주차(대)", getValue: (a) => a.parking_ratio },
+  { label: "최고층", getValue: (a) => a.max_floor },
+  { label: "용적률(%)", getValue: (a) => a.floor_area_ratio },
+  { label: "난방", getValue: (a) => a.heating },
+  { label: "시공사", getValue: (a) => a.builder },
+  { label: "할인율(%)", getValue: (a) => a.discount_pct },
   // 네이버 주변 중위가·전세가율 행은 뺐다 — 구 단위 값(세션 471 · 미분양 사장님 결정 10-17)
-  { label: "소음도(dB)", getValue: (a) => a.noise, direction: "lower" },
+  // noise 는 측정값이 아니라 큰 도로 거리 구간에 붙인 추정 dB 라 상세 화면처럼 거리 구간 글로 쓴다(세션 472).
+  // 70·60·50·40 밖의 값은 구간을 알 수 없어 null → "-"
+  { label: "큰 도로 거리(추정)", getValue: (a) => roadDistanceText(a.noise) },
 ];
-
-/** 숫자 배열에서 우위 인덱스 반환 (direction별) */
-export function getBestIndices(
-  values: (number | null | undefined)[],
-  direction: AdvantageDir,
-): number[] {
-  if (!direction) return [];
-  const nums = values.map((v) => (typeof v === "number" ? v : null));
-  const valid = nums.filter((v): v is number => v !== null);
-  if (valid.length === 0) return [];
-  const best = direction === "higher" ? Math.max(...valid) : Math.min(...valid);
-  return nums.reduce<number[]>((acc, v, i) => {
-    if (v === best) acc.push(i);
-    return acc;
-  }, []);
-}
 
 /** 셀 표시용 포맷 */
 export function formatCellValue(val: string | number | null | undefined): string {

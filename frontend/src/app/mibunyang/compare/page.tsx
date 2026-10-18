@@ -6,7 +6,7 @@ import dynamic from "next/dynamic";
 import { useQueries } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import { getMbApartmentDetail, getMbUnsoldHistory } from "@/lib/api";
-import { MB_COMPARE_ROWS, getBestIndices, formatCellValue } from "@/lib/mb-compare-utils";
+import { MB_COMPARE_ROWS, formatCellValue } from "@/lib/mb-compare-utils";
 import { exportMbCompareToXlsx } from "@/lib/mb-compare-export";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useMbCompareHistory } from "@/hooks/useMbCompareHistory";
@@ -14,21 +14,14 @@ import { useMbCompareBookmarks } from "@/hooks/useMbCompareBookmarks";
 import type { UnsoldDataset } from "@/components/mb/MbCompareUnsoldChart";
 import type { MbCompareHistoryItem, MbCompareBookmarkItem } from "@/lib/storage";
 import MbCompareHistory from "@/components/mb/MbCompareHistory";
+import { MbSourcesFooter } from "@/components/mb/MbSourcesFooter";
 import PromptModal from "@/components/PromptModal";
 import Skeleton, { SkeletonPage } from "@/components/Skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Scale } from "lucide-react";
 import { COMPARE_TEXT_COLORS } from "@/lib/constants";
 
-const LazyMbCompareRadarChart = dynamic(
-  () => import("@/components/mb/MbCompareRadarChart"),
-  { ssr: false, loading: () => (
-    <div role="status" aria-label="로딩 중" className="py-4">
-      <span className="sr-only">차트 로딩...</span>
-      <Skeleton className="h-80 w-full" />
-    </div>
-  ) },
-);
+// 레이더 그림(종합 점수·가중치)은 공인 기준이 아니라서 지웠다(세션 472 PR 3) — 값 + 출처 각주만
 const LazyMbComparePriceChart = dynamic(
   () => import("@/components/mb/MbComparePriceChart"),
   { ssr: false, loading: () => (
@@ -315,30 +308,18 @@ function CompareContent() {
             </tr>
           </thead>
           <tbody>
-            {MB_COMPARE_ROWS.map((row, ri) => {
-              const values = apartments.map((a) => row.getValue(a));
-              const numValues = values.map((v) => (typeof v === "number" ? v : null));
-              const bestIdxs = getBestIndices(numValues, row.direction);
-              return (
-                <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-gray-50/60"}>
-                  <td className="px-4 py-2 font-medium text-gray-700 border-r border-gray-200">
-                    {row.label}
+            {MB_COMPARE_ROWS.map((row, ri) => (
+              <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-gray-50/60"}>
+                <td className="px-4 py-2 font-medium text-gray-700 border-r border-gray-200">
+                  {row.label}
+                </td>
+                {apartments.map((apt) => (
+                  <td key={apt.id} className="px-4 py-2 text-center text-gray-600">
+                    {formatCellValue(row.getValue(apt))}
                   </td>
-                  {apartments.map((apt, ci) => {
-                    const isBest = bestIdxs.includes(ci);
-                    return (
-                      <td
-                        key={apt.id}
-                        className={`px-4 py-2 text-center ${isBest ? "font-bold bg-yellow-50" : "text-gray-600"}`}
-                      >
-                        {formatCellValue(row.getValue(apt))}
-                        {isBest && row.direction && " ★"}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
+                ))}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -354,21 +335,12 @@ function CompareContent() {
               {apt.name}
             </button>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
-              {MB_COMPARE_ROWS.map((row, ri) => {
-                const values = apartments.map((a) => row.getValue(a));
-                const numValues = values.map((v) => (typeof v === "number" ? v : null));
-                const bestIdxs = getBestIndices(numValues, row.direction);
-                const isBest = bestIdxs.includes(ci);
-                return (
-                  <Fragment key={ri}>
-                    <dt className={`text-gray-500 text-xs ${isBest ? "font-bold" : ""}`}>{row.label}</dt>
-                    <dd className={isBest ? "text-amber-700 font-bold" : "text-gray-800"}>
-                      {formatCellValue(row.getValue(apt))}
-                      {isBest && row.direction && " ★"}
-                    </dd>
-                  </Fragment>
-                );
-              })}
+              {MB_COMPARE_ROWS.map((row, ri) => (
+                <Fragment key={ri}>
+                  <dt className="text-gray-500 text-xs">{row.label}</dt>
+                  <dd className="text-gray-800">{formatCellValue(row.getValue(apt))}</dd>
+                </Fragment>
+              ))}
             </dl>
           </div>
         ))}
@@ -376,9 +348,13 @@ function CompareContent() {
 
       {/* 차트 섹션 */}
       <div className="mt-6 space-y-6">
-        <LazyMbCompareRadarChart apartments={apartments} />
         <LazyMbComparePriceChart apartments={apartments} />
         <LazyMbCompareUnsoldChart datasets={unsoldDatasets} onRetry={retryUnsoldHistory} />
+      </div>
+
+      {/* 값의 자료·법령 출처 — 상세 화면과 같은 각주(세션 472 PR 3) */}
+      <div className="mt-6">
+        <MbSourcesFooter />
       </div>
     </div>
   );

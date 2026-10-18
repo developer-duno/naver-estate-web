@@ -14,7 +14,7 @@
 | `mb_search_history`  | 미분양 검색 히스토리    | 최대 10개, 중복 제거  |
 | `mb_compare_history` | 미분양 비교 히스토리    | 최대 10개, 자동 저장, ids 정렬 중복 제거 |
 | `mb_compare_bookmarks` | 미분양 비교 북마크    | 최대 20개, 수동 저장, 이름 지정 가능 |
-| `mb_radar_settings`  | 레이더 축 선택+가중치  | 축 13개, 가중치 1-5, 프리셋 3종 |
+| `mb_radar_settings`  | ~~레이더 축 선택+가중치~~ **폐지(세션 472)** | 레이더 삭제로 읽고 쓰는 코드 없음 — 옛 브라우저에 남은 값은 무해 |
 | `favorite_articles`  | 매물 즐겨찾기           | 무제한, 토글 방식 |
 | `article_view_mode`  | 매물 카드 모양 (compact/medium/large) | 값 1개, default = medium |
 | `article_page_size`  | 한 페이지당 매물 개수 (10/20/30/50) | 값 1개, default = 10 |

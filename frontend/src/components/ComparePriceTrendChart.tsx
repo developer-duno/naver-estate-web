@@ -25,7 +25,7 @@ export default function ComparePriceTrendChart({ datasets }: Props) {
   const [period, setPeriod] = useState<PeriodKey>("ALL");
   const [tradeFilter, setTradeFilter] = useState<TradeFilter>("both");
 
-  const { chartData, seriesKeys, latestBest } = useMemo(() => {
+  const { chartData, seriesKeys } = useMemo(() => {
     const sel = CHART_PERIODS.find((p) => p.key === period);
     const cutoff = sel?.months ? getCutoffMonth(sel.months) : null;
 
@@ -73,21 +73,8 @@ export default function ComparePriceTrendChart({ datasets }: Props) {
       }
     }
 
-    // 최근 월 우위 (매매 기준)
-    let bestName = "";
-    if (sorted.length > 0) {
-      const last = sorted[sorted.length - 1];
-      let bestVal = -1;
-      for (const ds of datasets) {
-        const v = Number(last[`${ds.complexNo}_매매`]) || 0;
-        if (v > bestVal) {
-          bestVal = v;
-          bestName = ds.complexName;
-        }
-      }
-    }
-
-    return { chartData: sorted, seriesKeys: keys, latestBest: bestName };
+    // 최근 월 "매매 최고 ★" 판정은 지웠다(세션 472 PR 3) — 선은 값만 보여 준다
+    return { chartData: sorted, seriesKeys: keys };
   }, [datasets, period, tradeFilter]);
 
   if (chartData.length === 0) {
@@ -152,12 +139,6 @@ export default function ComparePriceTrendChart({ datasets }: Props) {
           ))}
         </ComposedChart>
       </ResponsiveContainer>
-
-      {latestBest && (
-        <p className="text-center text-sm mt-2">
-          <span className="text-green-600 font-bold">★ 최근 매매 최고: {latestBest}</span>
-        </p>
-      )}
     </div>
   );
 }

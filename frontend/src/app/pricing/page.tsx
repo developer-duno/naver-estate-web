@@ -64,7 +64,7 @@ export default function PricingPage() {
         <Feature
           icon={<TrendingUp className="w-7 h-7 text-accent-green" aria-hidden />}
           title="미분양 분석"
-          desc="전국 미분양 단지 + 13축 레이더 차트로 투자·실거주 우위 한눈에"
+          desc="전국 미분양 단지를 값과 공인 기준·출처로 나란히 비교"
         />
         <Feature
           icon={<FileSpreadsheet className="w-7 h-7 text-accent-terracotta" aria-hidden />}

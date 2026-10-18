@@ -17,7 +17,7 @@
 |--------|---------|-------------|
 | `/mibunyang` | `getMbApartments()`, `getMbUnsold()`, `getMbRegions()`, `getMbTrades()`, `getMbGuList()` + **분양 3종** `getMbPresale()`·`getMbCompetition()`·분양결과 (탭: 미분양단지/미분양만/지역통계/실거래/즐겨찾기 + **분양**[민간분양·LH공공분양·분양결과], 세션 314) + **list↔map 토글**(세션 315) | `/api/mb/*`, `/api/mb/presale`, `/api/mb/competition` |
 | `/mibunyang/[id]` | `getMbApartmentDetail()`, `getMbUnsoldHistory()` (5섹션+지도+추이차트) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
-| `/mibunyang/compare` | `getMbApartmentDetail()` x N + `getMbUnsoldHistory()` x N (17행 비교+레이더+막대+추이) | 동일 |
+| `/mibunyang/compare` | `getMbApartmentDetail()` x N + `getMbUnsoldHistory()` x N (17행 비교+분양가 막대+추이+출처 각주 — 레이더는 세션 472 삭제) | 동일 |
 
 ### 도구 5종 (/tools/*) — 모두 클라이언트 산식, BE 호출 없음
 
@@ -52,11 +52,10 @@ components/mb/
 ├── MbRegionStatsTable.tsx      # 지역 통계 테이블
 ├── MbDetailSections.tsx        # 상세 5개 섹션 (개요/분양/주변환경/거래통계/미분양추이) — 지표 = 값 + 기준·출처 한 줄(세션 472, 옛 막대 14종 삭제)
 ├── basis-text.ts               # 상세 지표의 법령·공공 통계 기준·출처 문구 순수 함수 (세션 472)
-├── MbSourcesFooter.tsx         # 상세 페이지 맨 끝 출처 묶음 한 단락 (세션 472)
+├── MbSourcesFooter.tsx         # 상세·비교 페이지 맨 끝 출처 묶음 한 단락 (세션 472)
 ├── MbUnsoldTrendChart.tsx      # Recharts 미분양 추이 차트 (dynamic import)
 ├── MbCompareFloatingBar.tsx    # 비교 하단 플로팅 바 (최대 4개, 비교하기 버튼)
-├── MbCompareRadarChart.tsx    # 레이더 차트 (11축 정규화 = 기본 7축 + 인프라 4축 — 네이버 2축은 세션 471 에 제거, 가중치프리셋3종+슬라이더1-5+가중점수, 종합우위★, dynamic import)
-├── MbComparePriceChart.tsx    # 분양가 막대 차트 (min/max/pp, 최저가★, dynamic import)
+├── MbComparePriceChart.tsx    # 분양가 막대 차트 (min/max/pp, 판정 ★ 없음 — 세션 472, dynamic import)
 ├── MbCompareUnsoldChart.tsx   # 미분양 추이 비교 차트 (ComposedChart, 기간필터 6M/1Y/2Y/ALL, dynamic import)
 ├── MbLocationMap.tsx           # Naver Maps v3 단일마커 지도 (단지 상세, vanilla SDK, dynamic import)
 ├── MbClusterMap.tsx            # 다중마커 지도 (분양/미분양 탭 list↔map 토글, fitBounds, InfoWindow+선택카드, dynamic import)

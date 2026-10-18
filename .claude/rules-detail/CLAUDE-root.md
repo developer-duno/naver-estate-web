@@ -53,10 +53,10 @@
 분양 조회 → /api/mb/presale, /api/mb/competition (분양 탭: 민간분양/LH공공분양/분양결과 — 세션 314) · /api/mb/presale/officetel-rental (오피스텔·민간임대 목록, 둘 다 주소 포함 — 오피스텔 주소는 V066 세션 417)
 분양 상세 → 청약 일정·평형별 공급·D-day (getMbPresaleDetail, 세션 314)
 지도 뷰 → list↔map 토글 (MbClusterMap 다중마커, 접속자 GPS 위치 기준, mb_view_mode — 세션 315~316)
-미분양 비교 → /mibunyang/compare?ids= (17행 우위 + 레이더13축 + 가중치 + 분양가/추이 차트)
+미분양 비교 → /mibunyang/compare?ids= (비교표 값 + 출처 각주 + 분양가/추이 차트 — ★·레이더·가중치는 세션 472 폐지)
 미분양 즐겨찾기 → localStorage (최대 200개, 일괄 비교, FavSortBy)
 미분양 히스토리/북마크 → localStorage (자동 저장 10개 / 수동 저장 20개)
-레이더 설정 → localStorage (축 선택 + 가중치 1-5, 프리셋 3종)
+레이더 설정(mb_radar_settings) → 세션 472 폐지
 ```
 
 ### 환경 데이터 수집 (스케줄러 — 상세는 `.claude/rules/infra.md` 참조)

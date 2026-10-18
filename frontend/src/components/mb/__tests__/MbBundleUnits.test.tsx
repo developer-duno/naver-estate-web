@@ -19,7 +19,6 @@ import MbApartmentTable from "../MbApartmentTable";
 import MbSelectedCard from "../MbSelectedCard";
 import { OverviewSection } from "../MbDetailSections";
 import MbPresaleTable from "../MbPresaleTable";
-import { AXES } from "../MbCompareRadarChart";
 import { MB_COMPARE_ROWS } from "@/lib/mb-compare-utils";
 
 // 행 세대수 4 · 묶음 세대수 1,200 — 두 값이 갈라져야 어느 쪽을 그렸는지 구분된다
@@ -125,21 +124,13 @@ describe("OverviewSection — 세대수 값·기준 줄도 같은 값 (세션 47
   });
 });
 
-describe("비교 화면 — 세대수도 묶음 값(미분양 행·미분양률 축과 짝)", () => {
+describe("비교 화면 — 세대수도 묶음 값(미분양 행과 짝)", () => {
   const unitsRow = MB_COMPARE_ROWS.find((r) => r.label === "세대수")!;
-  const unitsAxis = AXES.find((x) => x.key === "units")!;
 
   it("비교표 세대수 행: 있음 1200 · 없음 4 · 같음 300", () => {
     expect(unitsRow.getValue(makeApt(CASES.있음))).toBe(1200);
     expect(unitsRow.getValue(makeApt(CASES.없음))).toBe(4);
     expect(unitsRow.getValue(makeApt(CASES.같음))).toBe(300);
-  });
-
-  // 둘 다 없으면 null — 레이더 정규화가 0점을 준다(세션 471 빈 값 만점 결함 통일)
-  it("레이더 세대수 축: 있음 1200 · 없음 4 · 둘 다 없으면 null", () => {
-    expect(unitsAxis.getValue(makeApt(CASES.있음))).toBe(1200);
-    expect(unitsAxis.getValue(makeApt(CASES.없음))).toBe(4);
-    expect(unitsAxis.getValue(makeApt({ units: undefined, bundle_units: null }))).toBeNull();
   });
 });
 

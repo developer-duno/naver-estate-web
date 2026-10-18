@@ -30,8 +30,8 @@
 - 검색 결과 테이블에 "+" 버튼 → useCompare로 localStorage 관리 (최대 4개)
 - 단지 상세 헤더(ComplexHeader)에 "+ 비교" pill 토글 — 진입점 2곳 (세션 296). /complex 플로팅 바는 printRef 내부라 no-print 래퍼 + 모달보다 DOM 앞 필수
 - 하단 플로팅 바에 선택 단지 표시 + "비교하기" 버튼
-- /compare 페이지: useQueries로 병렬 조회, 24행 비교 테이블 (평당가 포함) + 우위 판정(★)
-- 차트 5종: CompareRadarChart(8축, 평당가 invert), ComparePriceTrendChart, ComparePriceBarChart(매매/전세/월세 ★), CompareFloorChart
+- /compare 페이지: useQueries로 병렬 조회, 24행 비교 테이블 (평당가 포함) — 값만 나란히, 맨 아래 출처 각주(data-testid=compare-sources-footer). 우위 판정 ★·초록 강조·범례는 세션 472 PR 3 에 삭제(공인 기준 아님)
+- 차트 3종: ComparePriceTrendChart, ComparePriceBarChart(매매/전세/월세 평균), CompareFloorChart — 판정 ★·"최고" 줄 없음. CompareRadarChart(신축도·종합 우위)는 세션 472 PR 3 에 삭제
 - 상세 테이블 3종: 면적별 가격, 관리비, 세대구성
 - 인쇄: @media print .no-print + expandAll(아코디언 전체 펼침) + rAF 2회
 - 엑셀: xlsx dynamic import + safeCellValue 수식 인젝션 방어 (compare-export.ts)
@@ -39,21 +39,17 @@
 ## 미분양 비교 (MbCompareFloatingBar + /mibunyang/compare)
 - 미분양 테이블에 "+" 버튼 → useMbCompare로 localStorage 관리 (최대 4개)
 - 하단 MbCompareFloatingBar: 선택 단지 pill + "비교하기" (2개 이상) + "초기화"
-- /mibunyang/compare?ids=id1,id2,... → useQueries 병렬 조회 + 17행 비교 테이블 + 우위★
-- 차트 3종: MbCompareRadarChart(11축 정규화 = 기본 7축 + 인프라 4축 — 네이버 전세가율·주변시세 축은 세션 471 에 뺐다(구 단위 값), 동적 축 선택 칩 최소3개, getAxisChipClass헬퍼, activeAxes useMemo, 종합우위★), MbComparePriceChart(min/max/pp 막대, 최저가★), MbCompareUnsoldChart(다중아파트 추이, 기간필터 6M/1Y/2Y/ALL)
+- /mibunyang/compare?ids=id1,id2,... → useQueries 병렬 조회 + 17행 비교 테이블(값만, 우위★ 없음) + 맨 아래 MbSourcesFooter 출처 각주 (세션 472 PR 3)
+- 차트 2종: MbComparePriceChart(min/max/pp 막대, 판정 ★ 없음), MbCompareUnsoldChart(다중아파트 추이, 기간필터 6M/1Y/2Y/ALL, "미분양 최소 ★" 줄 없음). MbCompareRadarChart(레이더·가중치·종합 우위)는 세션 472 PR 3 에 삭제
 - 인쇄: window.print() + rAF 2회 + no-print 클래스
 - URL 복사: navigator.clipboard.writeText + fallback alert
 - 단지명→상세 링크: th onClick + router.push
 - 엑셀: mb-compare-export.ts (safeCellValue 재사용)
-- mb-compare-utils.ts: MB_COMPARE_ROWS(17행), getBestIndices(higher/lower 우위 판정)
+- mb-compare-utils.ts: MB_COMPARE_ROWS(17행, label+getValue — direction·getBestIndices 는 세션 472 에 삭제) + formatCellValue. 소음 행은 "큰 도로 거리(추정)" = basis-text roadDistanceText
 
-## 레이더 가중치 시스템
-- useMbRadarSettings: 축 선택 + 가중치(1-5) localStorage 영속화 (mb_radar_settings)
-- 프리셋 3종: 균등(모두3)/투자형(할인율5,미분양률4,평당가4)/실거주형(주차5,세대수4,용적률4)
-- 가중 점수: Σ(normalized×weight)/Σ(weight) → 0-100 스케일, "★ 종합 우위: 단지A (78점)"
-- 슬라이더: details 접이식 (기본 닫힘, 반응형 grid-cols-1/2/3)
-- 축 추가 대응: getMbRadarSettings에서 DEFAULT와 merge → 새 키 자동 기본값
-- 가중치 초기화: reset 함수로 가중치만 3 복원 (축 선택 유지), details 밖 회색 톤 button (closed 상태에서도 노출)
+## 레이더 가중치 시스템 — 폐지 (세션 472 PR 3)
+- 사장님 결정 ②A "★·종합 점수·가중치 프리셋 전부 제거, 값 + 출처 각주". useMbRadarSettings·MbCompareRadarChart·storage mb_radar_settings 함수 삭제
+- 옛 사용자 브라우저에 남은 `mb_radar_settings` 키는 읽는 코드가 없어 무해(지우는 코드는 두지 않음)
 
 ## 미분양 비교 히스토리 + 북마크
 - 비교 히스토리: useMbCompareHistory (localStorage, 최대 10개, 비교 진입 시 자동 저장)

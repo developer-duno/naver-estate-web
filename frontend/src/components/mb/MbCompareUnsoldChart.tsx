@@ -45,7 +45,7 @@ interface Props {
 export default function MbCompareUnsoldChart({ datasets, onRetry }: Props) {
   const [period, setPeriod] = useState<PeriodKey>("ALL");
 
-  const { chartData, seriesKeys, latestBest } = useMemo(() => {
+  const { chartData, seriesKeys } = useMemo(() => {
     const cutoff = PERIODS.find((p) => p.key === period)?.months;
     const cutoffMonth = cutoff ? getCutoffMonth(cutoff) : null;
 
@@ -73,21 +73,8 @@ export default function MbCompareUnsoldChart({ datasets, onRetry }: Props) {
       name: ds.apartmentName,
     }));
 
-    // 최근 월 우위 — 미분양 가장 적은 단지
-    let bestName = "";
-    if (sorted.length > 0) {
-      const last = sorted[sorted.length - 1];
-      let bestVal = Infinity;
-      for (const ds of datasets) {
-        const v = Number(last[ds.apartmentId]);
-        if (!isNaN(v) && v < bestVal) {
-          bestVal = v;
-          bestName = ds.apartmentName;
-        }
-      }
-    }
-
-    return { chartData: sorted, seriesKeys: keys, latestBest: bestName };
+    // 최근 월 "미분양 최소 ★" 판정은 지웠다(세션 472 PR 3) — 선은 값만 보여 준다
+    return { chartData: sorted, seriesKeys: keys };
   }, [datasets, period]);
 
   const hasData = chartData.length > 0;
@@ -170,12 +157,6 @@ export default function MbCompareUnsoldChart({ datasets, onRetry }: Props) {
           ))}
         </ComposedChart>
       </ResponsiveContainer>
-
-      {latestBest && (
-        <p className="text-center text-sm mt-2">
-          <span className="text-green-600 font-bold">★ 최근 미분양 최소: {latestBest}</span>
-        </p>
-      )}
     </div>
   );
 }

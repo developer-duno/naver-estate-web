@@ -2,7 +2,6 @@
 
 import React, { useMemo } from "react";
 import { formatChartPrice } from "@/lib/format";
-import { getBestIndices } from "@/lib/compare-utils";
 import type { PriceStats } from "@/types";
 
 interface CompareAreaPriceTableProps {
@@ -43,46 +42,29 @@ export default function CompareAreaPriceTable({ datasets }: CompareAreaPriceTabl
           </tr>
         </thead>
         <tbody>
-          {allLabels.map((label) => {
-            const maemaeVals = datasets.map((ds) => {
-              const a = ds.stats.by_area.find((x) => x.label === label);
-              return a?.maemae ?? null;
-            });
-            const maeemaeBest = getBestIndices(maemaeVals, "higher");
-
-            const jeonseVals = datasets.map((ds) => {
-              const a = ds.stats.by_area.find((x) => x.label === label);
-              return a?.jeonse ?? null;
-            });
-            const jeonseBest = getBestIndices(jeonseVals, "higher");
-
-            return (
-              <tr key={label}>
-                <td className="px-2 py-1 border font-medium">{label}</td>
-                {datasets.map((ds, di) => {
-                  const a = ds.stats.by_area.find((x) => x.label === label);
-                  const mVal = a?.maemae;
-                  const jVal = a?.jeonse;
-                  const mCnt = a?.maemae_count;
-                  const jCnt = a?.jeonse_count;
-                  return (
-                    <React.Fragment key={`${ds.name}-${label}`}>
-                      <td
-                        className={`px-2 py-1 border text-center ${maeemaeBest.includes(di) ? "bg-green-50 font-bold" : ""}`}
-                      >
-                        {mVal != null ? `${formatChartPrice(mVal)}${mCnt ? ` (${mCnt}건)` : ""}` : "-"}
-                      </td>
-                      <td
-                        className={`px-2 py-1 border text-center ${jeonseBest.includes(di) ? "bg-green-50 font-bold" : ""}`}
-                      >
-                        {jVal != null ? `${formatChartPrice(jVal)}${jCnt ? ` (${jCnt}건)` : ""}` : "-"}
-                      </td>
-                    </React.Fragment>
-                  );
-                })}
-              </tr>
-            );
-          })}
+          {/* 단지 간 "가장 비싼 칸" 초록 강조는 지웠다(세션 472 PR 3) — 값만 */}
+          {allLabels.map((label) => (
+            <tr key={label}>
+              <td className="px-2 py-1 border font-medium">{label}</td>
+              {datasets.map((ds) => {
+                const a = ds.stats.by_area.find((x) => x.label === label);
+                const mVal = a?.maemae;
+                const jVal = a?.jeonse;
+                const mCnt = a?.maemae_count;
+                const jCnt = a?.jeonse_count;
+                return (
+                  <React.Fragment key={`${ds.name}-${label}`}>
+                    <td className="px-2 py-1 border text-center">
+                      {mVal != null ? `${formatChartPrice(mVal)}${mCnt ? ` (${mCnt}건)` : ""}` : "-"}
+                    </td>
+                    <td className="px-2 py-1 border text-center">
+                      {jVal != null ? `${formatChartPrice(jVal)}${jCnt ? ` (${jCnt}건)` : ""}` : "-"}
+                    </td>
+                  </React.Fragment>
+                );
+              })}
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

@@ -105,20 +105,20 @@
       <rect x="0" y="0" width="640" height="36" fill="#FFFFFF" stroke="#F3F4F6"/>
       <text x="20" y="24" font-size="14" font-weight="500" fill="#6B7280">세대수</text>
       <text x="200" y="24" font-size="15" text-anchor="middle">486</text>
-      <text x="340" y="24" font-size="15" font-weight="700" fill="#D4A574" text-anchor="middle">★1,234</text>
+      <text x="340" y="24" font-size="15" text-anchor="middle">1,234</text>
       <text x="480" y="24" font-size="15" text-anchor="middle">920</text>
       <text x="600" y="24" font-size="15" text-anchor="middle">512</text>
 
       <rect x="0" y="36" width="640" height="36" fill="#FAFAF7" stroke="#F3F4F6"/>
-      <text x="20" y="60" font-size="14" font-weight="500" fill="#6B7280">미분양률 ↓</text>
-      <text x="200" y="60" font-size="15" font-weight="700" fill="#D4A574" text-anchor="middle">★3%</text>
+      <text x="20" y="60" font-size="14" font-weight="500" fill="#6B7280">미분양률</text>
+      <text x="200" y="60" font-size="15" text-anchor="middle">3%</text>
       <text x="340" y="60" font-size="15" text-anchor="middle">12%</text>
       <text x="480" y="60" font-size="15" text-anchor="middle">8%</text>
       <text x="600" y="60" font-size="15" text-anchor="middle">15%</text>
 
       <rect x="0" y="72" width="640" height="36" fill="#FFFFFF" stroke="#F3F4F6"/>
-      <text x="20" y="96" font-size="14" font-weight="500" fill="#6B7280">평당가 ↓</text>
-      <text x="200" y="96" font-size="15" font-weight="700" fill="#D4A574" text-anchor="middle">★1,820</text>
+      <text x="20" y="96" font-size="14" font-weight="500" fill="#6B7280">평당가</text>
+      <text x="200" y="96" font-size="15" text-anchor="middle">1,820</text>
       <text x="340" y="96" font-size="15" text-anchor="middle">2,400</text>
       <text x="480" y="96" font-size="15" text-anchor="middle">2,150</text>
       <text x="600" y="96" font-size="15" text-anchor="middle">1,950</text>
@@ -127,22 +127,22 @@
       <text x="20" y="132" font-size="14" font-weight="500" fill="#6B7280">할인율</text>
       <text x="200" y="132" font-size="15" text-anchor="middle">8%</text>
       <text x="340" y="132" font-size="15" text-anchor="middle">12%</text>
-      <text x="480" y="132" font-size="15" font-weight="700" fill="#D4A574" text-anchor="middle">★18%</text>
+      <text x="480" y="132" font-size="15" text-anchor="middle">18%</text>
       <text x="600" y="132" font-size="15" text-anchor="middle">5%</text>
 
       <rect x="0" y="144" width="640" height="36" fill="#FFFFFF" stroke="#F3F4F6"/>
-      <text x="20" y="168" font-size="14" font-weight="500" fill="#6B7280">전세가율</text>
-      <text x="200" y="168" font-size="15" text-anchor="middle">62%</text>
-      <text x="340" y="168" font-size="15" text-anchor="middle">68%</text>
-      <text x="480" y="168" font-size="15" text-anchor="middle">65%</text>
-      <text x="600" y="168" font-size="15" font-weight="700" fill="#D4A574" text-anchor="middle">★71%</text>
+      <text x="20" y="168" font-size="14" font-weight="500" fill="#6B7280">6개월 취소율</text>
+      <text x="200" y="168" font-size="15" text-anchor="middle">2.1%</text>
+      <text x="340" y="168" font-size="15" text-anchor="middle">0.8%</text>
+      <text x="480" y="168" font-size="15" text-anchor="middle">1.5%</text>
+      <text x="600" y="168" font-size="15" text-anchor="middle">-</text>
 
       <rect x="0" y="180" width="640" height="36" fill="#FAFAF7" stroke="#F3F4F6"/>
-      <text x="20" y="204" font-size="14" font-weight="500" fill="#6B7280">주변시세</text>
-      <text x="200" y="204" font-size="15" text-anchor="middle">5.2억</text>
-      <text x="340" y="204" font-size="15" font-weight="700" fill="#D4A574" text-anchor="middle">★8.1억</text>
-      <text x="480" y="204" font-size="15" text-anchor="middle">7.4억</text>
-      <text x="600" y="204" font-size="15" text-anchor="middle">4.9억</text>
+      <text x="20" y="204" font-size="14" font-weight="500" fill="#6B7280">큰 도로 거리</text>
+      <text x="200" y="204" font-size="15" text-anchor="middle">100~200m</text>
+      <text x="340" y="204" font-size="15" text-anchor="middle">50m 이내</text>
+      <text x="480" y="204" font-size="15" text-anchor="middle">200m 넘음</text>
+      <text x="600" y="204" font-size="15" text-anchor="middle">50~100m</text>
 
       <rect x="0" y="216" width="640" height="36" fill="#FFFFFF" stroke="#F3F4F6"/>
       <text x="20" y="240" font-size="14" fill="#9CA3AF">··· 11행 더</text>
@@ -152,24 +152,22 @@
       <text x="600" y="240" font-size="14" fill="#9CA3AF" text-anchor="middle">···</text>
     </g>
 
-    <!-- 결과 박스 (17행 우위 합계) -->
+    <!-- 출처 박스 (판정 ★ 대신 값의 자료 출처 — 세션 472) -->
     <g transform="translate(40, 472)">
       <rect x="0" y="0" width="640" height="190" rx="12" fill="#1A8A8A"/>
       <text x="32" y="36"
             font-family="'Pretendard', sans-serif"
             font-size="14" font-weight="500" fill="#D4A574" letter-spacing="2">
-        17행 우위 합계 · ★ 자동 표시
+        판정 표시 없이 값만 · 출처는 맨 아래
       </text>
       <g font-family="'Pretendard', sans-serif" fill="#FFFFFF">
-        <text x="32" y="80" font-size="20" font-weight="700" fill="#D4A574">A · 6 ★</text>
-        <text x="190" y="80" font-size="20" font-weight="600">B · 4 ★</text>
-        <text x="340" y="80" font-size="20" font-weight="600">C · 4 ★</text>
-        <text x="490" y="80" font-size="20" font-weight="600">D · 3 ★</text>
+        <text x="32" y="76" font-size="16" font-weight="600">국토교통부 실거래가 · 미분양주택현황</text>
+        <text x="32" y="104" font-size="16" font-weight="600">K-apt · 에어코리아 · 네이버부동산(단지 정보)</text>
       </g>
-      <text x="32" y="125" font-family="'Pretendard', sans-serif" font-size="14" fill="#FFFFFF" opacity="0.85">
-        invert 3축 (미분양률·평당가·용적률) = lower better
+      <text x="32" y="137" font-family="'Pretendard', sans-serif" font-size="14" fill="#FFFFFF" opacity="0.85">
+        법령: 국가법령정보센터 · 법정 기준은 단지 상세 화면에 한 줄로
       </text>
-      <text x="32" y="155" font-family="'Pretendard', sans-serif" font-size="14" fill="#FFFFFF" opacity="0.7">
+      <text x="32" y="165" font-family="'Pretendard', sans-serif" font-size="14" fill="#FFFFFF" opacity="0.7">
         URL 공유 · 손님 카톡 한 줄로 응대
       </text>
     </g>

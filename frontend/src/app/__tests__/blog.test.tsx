@@ -198,12 +198,16 @@ describe("blog/posts 메타데이터", () => {
     expect(post?.category).toBe("도구 활용");
   });
 
-  it("mibunyang-radar-weights 메타 — 미분양 카테고리, 레이더 가중치 키워드", () => {
+  // 세션 472 PR 3: 비교 화면의 레이더·가중치·종합 우위를 지워 글을 다시 썼다(주소는 그대로)
+  it("mibunyang-radar-weights 메타 — 미분양 카테고리, 비교표·기준·출처 키워드 (레이더·가중치 없음)", () => {
     const post = getPostBySlug("mibunyang-radar-weights");
     expect(post).toBeDefined();
     expect(post?.draft).toBeUndefined();
-    expect(post?.title).toContain("레이더");
-    expect(post?.description).toMatch(/13축|가중치|프리셋|78점|성향/);
+    expect(post?.title).toContain("비교표");
+    expect(post?.title).not.toMatch(/레이더|가중치|우위/);
+    expect(post?.description).toMatch(/기준/);
+    expect(post?.description).toMatch(/출처/);
+    expect(post?.description).not.toMatch(/레이더|가중치|프리셋|종합 우위|78점/);
     expect(post?.category).toBe("미분양");
   });
 
@@ -243,7 +247,7 @@ describe("blog/posts 메타데이터", () => {
     expect(post).toBeDefined();
     expect(post?.draft).toBeUndefined();
     expect(post?.title).toContain("일괄 비교");
-    expect(post?.description).toMatch(/즐겨찾기|200개|정렬 3종|선택 비교|19행/);
+    expect(post?.description).toMatch(/즐겨찾기|200개|정렬 3종|선택 비교|17행/);
     expect(post?.category).toBe("미분양");
     expect(post?.date).toBe("2026-05-17");
   });

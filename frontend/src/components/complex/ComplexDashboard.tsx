@@ -75,8 +75,12 @@ export default function ComplexDashboard({
   }, []);
 
   // 정부 지역 값(부동산원 시군구 전세가율) — 이 단지 값 옆에 나란히, 출처 줄과 함께(세션 473)
+  // 출처 문구는 BE(region_jeonse_source)가 정본 — 화면에 글자 상수를 또 두지 않는다(derived-display-ssot).
   const hasRegionJeonse = complex.region_jeonse_ratio != null && !!complex.region_name;
   const regionJeonseText = hasRegionJeonse ? ` · ${complex.region_name} 아파트 ${complex.region_jeonse_ratio}%` : "";
+  const regionSourceText = hasRegionJeonse && complex.region_jeonse_source
+    ? `지역: ${complex.region_jeonse_source}${complex.region_jeonse_period ? `(${complex.region_jeonse_period})` : ""}`
+    : null;
 
   // 박스 라벨·값 계산 (Q3 NULL fallback)
   const boxes: BoxData[] = [
@@ -88,9 +92,13 @@ export default function ComplexDashboard({
         : (avgPrice != null ? `매물 평균 ${formatKoreanPrice(avgPrice)}` : "-"),
       secondary: complex.jeonse_rate != null
         ? `전세가율 ${complex.jeonse_rate}%${regionJeonseText}`
-        : (countLoading || count > 0 ? countText : undefined),
-      note: complex.jeonse_rate != null && hasRegionJeonse
-        ? `출처: 한국부동산원 전국주택가격동향조사${complex.region_jeonse_period ? `(${complex.region_jeonse_period})` : ""}`
+        : hasRegionJeonse
+          ? `${complex.region_name} 아파트 전세가율 ${complex.region_jeonse_ratio}%`
+          : (countLoading || count > 0 ? countText : undefined),
+      note: regionSourceText
+        ? (complex.jeonse_rate != null
+          ? `이 단지: 최근 6개월 시세·실거래 기록 중앙값으로 계산 · ${regionSourceText}`
+          : regionSourceText)
         : undefined,
     },
     {

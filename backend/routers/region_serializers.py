@@ -7,6 +7,10 @@ routers/live/crawl.py live_article_detail(매물 상세).
 """
 
 import math
+from datetime import date, datetime, timedelta, timezone
+
+_KST = timezone(timedelta(hours=9))
+JEONSE_QUOTE_MAX_AGE_DAYS = 90   # 이 매물 전환율에 쓰는 네이버 전세 시세의 나이 상한(일)
 
 
 def calc_rent_conversion_rate(monthly_rent, deposit, jeonse_price) -> float | None:
@@ -77,36 +81,38 @@ def _same_pyeong_nos(db, a) -> list[int]:
     return out
 
 
-def _latest_naver_jeonse(db, complex_no: str, pyeong_nos: list[int]) -> tuple[int, str] | None:
-    """같은 단지·같은 평형 후보의 네이버 주간 전세 시세(B1, base_month 8자리) 최근 행 → (price_avg 만원, YYYYMMDD).
+def _latest_naver_jeonse(db, complex_no: str, pyeong_nos: list[int], today: date | None = None) -> tuple[int, str] | None:
+    """같은 단지·같은 평형의 네이버 주간 전세 시세(B1, base_month 8자리) 최근 행 → (price_avg 만원, YYYYMMDD).
 
-    전세 시세가 있는 후보 평형이 **하나뿐일 때만** 쓴다 — 둘 이상이면 어느 평형인지 모르므로 None(지어내지 않는다).
+    * 같은 평형 후보가 **정확히 하나**일 때만 — 둘 이상이면 어느 쪽에 시세가 있든 None(검사관 A-6: 시세 있는 쪽을
+      고르면 다른 타입 매물에 그 평형 값을 붙이는 셈이다).
+    * 시세가 오늘(한국 날짜) 기준 JEONSE_QUOTE_MAX_AGE_DAYS 일 안의 것만(검사관 C-7) — 더 오래되면 None.
     """
     from sqlalchemy import func
 
     from db.models import ComplexPriceHistory
 
-    if not pyeong_nos:
+    if len(pyeong_nos) != 1:
         return None
-    rows = (
-        db.query(ComplexPriceHistory.area_no, ComplexPriceHistory.price_avg, ComplexPriceHistory.base_month)
+    today = today or datetime.now(_KST).date()
+    cutoff = (today - timedelta(days=JEONSE_QUOTE_MAX_AGE_DAYS)).strftime("%Y%m%d")
+    row = (
+        db.query(ComplexPriceHistory.price_avg, ComplexPriceHistory.base_month)
         .filter(
             ComplexPriceHistory.complex_no == complex_no,
-            ComplexPriceHistory.area_no.in_([str(p) for p in pyeong_nos]),
+            ComplexPriceHistory.area_no == str(pyeong_nos[0]),
             ComplexPriceHistory.trade_type == "B1",
             func.length(ComplexPriceHistory.base_month) == 8,
+            ComplexPriceHistory.base_month >= cutoff,
             ComplexPriceHistory.price_avg.isnot(None),
         )
         .order_by(ComplexPriceHistory.base_month.desc())
-        .all()
+        .first()
     )
-    areas = {r[0] for r in rows}
-    if len(areas) != 1:
-        return None
-    return int(rows[0][1]), str(rows[0][2])
+    return (int(row[0]), str(row[1])) if row else None
 
 
-def article_region_fields(db, a, c) -> dict:
+def article_region_fields(db, a, c, today: date | None = None) -> dict:
     """매물 상세용 공식 기준값(세션 473) — 법정 전환율 상한·기준금리 + (월세면) 시도 전환율·이 매물 전환율.
 
     이 매물 전환율의 전세가격 = 같은 단지·같은 평형 네이버 주간 전세 시세 최근 값(사장님 결정 2026-10-18).
@@ -134,7 +140,7 @@ def article_region_fields(db, a, c) -> dict:
         out["region_rent_conversion_rate"] = round(hit[0], 1)
         out["region_rent_conversion_period"] = format_period(hit[1])
         out["region_rent_conversion_name"] = SIDO_NAME_OF_CODE.get(sido)
-    jeonse = _latest_naver_jeonse(db, a.complex_no, _same_pyeong_nos(db, a))
+    jeonse = _latest_naver_jeonse(db, a.complex_no, _same_pyeong_nos(db, a), today)
     if jeonse is not None:
         rate = calc_rent_conversion_rate(a.numeric_rent_price, a.numeric_price, jeonse[0])
         if rate is not None:

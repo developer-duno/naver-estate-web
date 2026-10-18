@@ -79,7 +79,7 @@ def test_no_data_is_empty_list():
 def test_sample_mode_five_rows_raises():
     """열쇠가 적용되지 않으면 쪽 크기를 무시하고 5건만 온다 → 예외(5건만 저장하고 끝내지 않는다)."""
     get = _FakeGet([_page(2087, [_row(i) for i in range(5)])])
-    with pytest.raises(RoneApiError, match="1000건 중 5건만"):
+    with pytest.raises(RoneApiError, match="2087건 중 5건만"):
         fetch_table("A", "202601", "202602", key="k", get=get)
 
 
@@ -98,3 +98,61 @@ def test_error_messages_have_no_latin_letters():
     for msg in ("부동산원 인증키가 맞지 않아요(사유 번호 290)", str(RoneKeyMissing()),
                 "받은 행은 12개인데 지역 짝이 하나도 안 맞아요"):
         assert explain_error(msg) == msg
+
+
+# ── 보완 1 (세션 473 검사관 지적) ──
+
+def test_total_five_rows_is_normal():
+    """F3: 전체가 5건이면 5건 응답은 정상(표본 모드 오판 금지)."""
+    get = _FakeGet([_page(5, [_row(i) for i in range(5)])])
+    assert len(fetch_table("A", "202601", "202602", key="k", get=get, sleep=lambda s: None)) == 5
+
+
+def test_agency_page_cap_smaller_than_psize_continues(monkeypatch):
+    """F3: 기관이 쪽 크기를 pSize 보다 작게 자르면(예: 3) 그 크기로 이어 받는다 — 예외 아님."""
+    monkeypatch.setattr(rone_api, "PAGE_SIZE", 1000)
+    get = _FakeGet([_page(7, [_row(i) for i in range(3)]), _page(7, [_row(i) for i in range(3)]),
+                    _page(7, [_row(6)])])
+    rows = fetch_table("A", "202601", "202602", key="k", get=get, sleep=lambda s: None)
+    assert len(rows) == 7
+    assert [c["pSize"] for c in get.calls] == [1000, 3, 3]
+
+
+def test_retry_on_5xx_then_success():
+    """F20: 5xx 는 5·15초 뒤 다시 불러 성공하면 그대로."""
+    calls = {"n": 0}
+    slept: list[float] = []
+
+    def get(url, params):
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise RoneApiError("부동산원 창구가 응답하지 못했어요(상태 번호 503)", retryable=True)
+        return _page(1, [_row(0)])
+
+    assert len(fetch_table("A", "202601", "202602", key="k", get=get, sleep=slept.append)) == 1
+    assert slept == [5, 15]
+
+
+def test_no_retry_on_bad_key():
+    """F20: ERROR-290 은 다시 부르지 않는다."""
+    get = _FakeGet([{"RESULT": {"CODE": "ERROR-290", "MESSAGE": "인증키가 유효하지 않습니다."}}])
+    slept: list[float] = []
+    with pytest.raises(RoneApiError, match="사유 번호 290"):
+        fetch_table("A", "202601", "202602", key="bad", get=get, sleep=slept.append)
+    assert len(get.calls) == 1 and slept == []
+
+
+def test_network_error_does_not_chain_url_with_key(monkeypatch):
+    """F19: 네트워크 예외를 잇지 않는다(from None) — 원 예외 문구의 열쇠 든 주소가 traceback 에 안 남는다."""
+    import requests
+
+    def boom(url, params=None, timeout=None):
+        raise requests.ConnectionError(f"{url}?KEY=SECRETKEY123 연결 실패")
+
+    monkeypatch.setattr(requests, "get", boom)
+    with pytest.raises(RoneApiError) as ei:
+        rone_api.http_get_json(rone_api.BASE_URL, {"KEY": "SECRETKEY123"})
+    assert ei.value.__cause__ is None and ei.value.__suppress_context__ is True
+    assert "SECRETKEY123" not in str(ei.value)
+    assert ei.value.retryable is True
+

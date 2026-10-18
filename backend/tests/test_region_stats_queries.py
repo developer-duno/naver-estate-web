@@ -49,3 +49,21 @@ def test_codes_and_names():
     assert region_display_name("36110") == "세종시"
     assert format_period("202601") == "2026.01"
     assert format_period("2026") is None
+
+
+def test_missing_table_returns_none_and_warns_once(db, caplog, monkeypatch):
+    """F2: 표가 없으면(V072 미적용) None + 경고는 프로세스당 한 번 · 같은 세션으로 다음 조회도 된다."""
+    import logging
+
+    from sqlalchemy import text
+
+    import db.region_stats_queries as q
+
+    monkeypatch.setattr(q, "_warned", False)
+    db.execute(text("DROP TABLE region_stats"))
+    db.commit()
+    with caplog.at_level(logging.WARNING, logger="db.region_stats_queries"):
+        assert get_latest_region_stat(db, "44131", J) is None
+        assert get_latest_region_stat(db, "44131", J) is None
+    assert sum("동네 공식 통계 표를 읽지 못해" in r.getMessage() for r in caplog.records) == 1
+    assert db.execute(text("SELECT 1")).scalar() == 1   # 바깥 트랜잭션은 살아 있다

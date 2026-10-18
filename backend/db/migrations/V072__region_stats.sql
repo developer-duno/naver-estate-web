@@ -8,6 +8,7 @@
 --     적재 = crawler/service_region_stats.py(매월 16일 05:45 잡 collect_region_stats, 수동 = scripts/run_region_stats.py).
 --     region_code = 시군구 5자리(법정동 코드 앞 5자리) · 시도는 앞 2자리 + '000' · 전국 = '00000'.
 --     단지 → 지역은 complexes.cortar_no 앞 5자리로 잇는다(별도 짝짓기 표 없음).
+--     source 열은 읽지 않는 기록용(어느 통계표에서 왔나) — 화면 출처 문구는 코드 상수(service_region_stats.SOURCE_OF)에서 낸다.
 --
 -- 보안: 이 DB 의 anon key 는 프런트 번들에 공개돼 있다. 공개 통계라도 쓰기 구멍을 막으려고
 --   RLS 를 켜고 정책을 0개로 두며 PUBLIC·anon·authenticated 3역할의 표 권한을 전부 회수한다(V069·V071 모양).
@@ -47,7 +48,7 @@ COMMENT ON COLUMN public.region_stats.region_code IS '지역 코드 5자리 — 
 COMMENT ON COLUMN public.region_stats.period IS '기준 달 YYYYMM(R-ONE WRTTIME_IDTFR_ID)';
 COMMENT ON COLUMN public.region_stats.stat_code IS '통계 항목 — reb_apt_jeonse_ratio_median(아파트 중위 전세가율 %) · reb_rent_conversion_rate(전월세전환율 %)';
 COMMENT ON COLUMN public.region_stats.value IS '숫자 값(단위는 항목마다 — 지금 둘 다 %)';
-COMMENT ON COLUMN public.region_stats.source IS '출처 문구(기관·통계명) — 화면 출처 각주에 그대로 쓴다';
+COMMENT ON COLUMN public.region_stats.source IS '출처 문구(기관·통계명) — 읽지 않는 기록용(어느 통계표에서 왔나). 화면 출처는 코드 상수에서';
 
 CREATE INDEX IF NOT EXISTS region_stats_stat_period_idx
   ON public.region_stats (stat_code, period);

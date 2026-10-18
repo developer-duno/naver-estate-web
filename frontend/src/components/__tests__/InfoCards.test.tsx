@@ -114,25 +114,25 @@ describe("InfoCards — 단지 정보 (세션 429)", () => {
     })} />);
     expect(screen.getByText("전월세전환율(이 매물)")).toBeInTheDocument();
     expect(screen.getByText("4.8%")).toBeInTheDocument();
-    expect(screen.getByText("경남 전환율(부동산원)")).toBeInTheDocument();
+    expect(screen.getByText("경남 전환율(부동산원·종합주택)")).toBeInTheDocument();
     expect(screen.getByText("5.9%")).toBeInTheDocument();
+    expect(screen.getByText("법정 상한(보증금을 월세로 바꿀 때)")).toBeInTheDocument();
     expect(screen.getByText("5.0% (기준금리 3.00%+2%p)")).toBeInTheDocument();
     const src = screen.getByTestId("article-standards-source");
-    expect(src).toHaveTextContent("한국부동산원 전월세전환율(2026.01)");
-    expect(src).toHaveTextContent("주택임대차보호법 제7조의2");
+    expect(src).toHaveTextContent("한국부동산원 전월세전환율(종합주택, 2026.01)");
+    expect(src).toHaveTextContent("주택임대차보호법 제7조의2·시행령 제9조(연 1할·연 2%) — 새 계약 월세에는 적용되지 않음");
     expect(src).toHaveTextContent("네이버 시세 전세가 기준(같은 평형, 2026.10.08)");
     const text = container.textContent ?? "";
     expect(text).not.toMatch(/\(낮음\)|\(높음\)|\(주의\)|월세 수익률/);
   });
 
-  it("전세 매물: 전세가율(매물)에 '(주의)' 없이 + HUG 보증 한도 (세션 473)", () => {
+  it("전세 매물: 전세가율(매물)에 '(주의)' 없이 · 보증 한도 줄 없음(PR 5 뒤로, 사장님 결정 ⓑ) (세션 473)", () => {
     const { container } = render(<InfoCards article={makeArticle({
       trade_type_name: "전세", article_jeonse_ratio: 83, legal_rent_conversion_cap: 5.0, bok_base_rate: 3.0,
     })} />);
     expect(screen.getByText("83%")).toBeInTheDocument();
-    expect(screen.getByText("주택가격의 90%")).toBeInTheDocument();
-    expect(screen.queryByText("법정 상한")).toBeNull();       // 월세가 아니면 전환율 상한은 안 보인다
-    expect(screen.getByTestId("article-standards-source")).toHaveTextContent("HUG 전세보증금반환보증");
-    expect(container.textContent ?? "").not.toMatch(/\(주의\)/);
+    expect(screen.queryByText(/법정 상한/)).toBeNull();       // 월세가 아니면 전환율 상한은 안 보인다
+    expect(screen.queryByTestId("article-standards-source")).toBeNull();   // 출처 줄에 실을 기준값이 없다
+    expect(container.textContent ?? "").not.toMatch(/\(주의\)|HUG|보증 가입 한도/);
   });
 });

@@ -88,18 +88,18 @@ def _indexes() -> tuple[dict[tuple[str, str], list[str]], dict[tuple[str, str], 
     return full, last
 
 
-def rone_path_to_region_code(cls_fullnm: str | None) -> str | None:
-    """R-ONE CLS_FULLNM → 우리 지역 코드 5자리(시군구) · 시도 코드(앞 2자리+000) · "00000"(전국) · None."""
+def _parse_path(cls_fullnm: str | None) -> tuple[str, str | None, list[str]]:
+    """경로 → (단위, 시도 짧은 이름, 시군구 조각들). 단위 = nation·sido·zone·sigungu·unknown."""
     if not cls_fullnm:
-        return None
+        return "unknown", None, []
     raw = [p.strip() for p in str(cls_fullnm).split(">") if p.strip()]
     if not raw:
-        return None
+        return "unknown", None, []
     if raw == ["전국"]:
-        return NATION_CODE
+        return "nation", None, []
     sido = normalize_sido(raw[0])
     if sido is None:
-        return None
+        return "unknown", None, []
     rest = raw[1:]
     had_zone = any(_is_zone(p) for p in rest)
     rest = [p for p in rest if not _is_zone(p)]
@@ -109,11 +109,26 @@ def rone_path_to_region_code(cls_fullnm: str | None) -> str | None:
         elif rest:
             sido = split_gwangju_jeonnam(rest[0])
         else:
-            return None   # 통합 전체 값은 우리 시도 코드표에 자리가 없다
+            return "unknown", None, []   # 통합 전체 값은 우리 시도 코드표에 자리가 없다
     if not rest:
-        if had_zone:
-            return None   # 권역(서울>강북지역) — 시도 값으로 바꾸지 않는다
+        return ("zone" if had_zone else "sido"), sido, []
+    return "sigungu", sido, rest
+
+
+def rone_path_level(cls_fullnm: str | None) -> str:
+    """경로의 단위 — nation(전국)·sido·zone(권역만)·sigungu·unknown. 적재 회차의 '시군구 짝 비율' 판정에 쓴다."""
+    return _parse_path(cls_fullnm)[0]
+
+
+def rone_path_to_region_code(cls_fullnm: str | None) -> str | None:
+    """R-ONE CLS_FULLNM → 우리 지역 코드 5자리(시군구) · 시도 코드(앞 2자리+000) · "00000"(전국) · None."""
+    level, sido, rest = _parse_path(cls_fullnm)
+    if level == "nation":
+        return NATION_CODE
+    if level == "sido":
         return SIDO_CODES.get(sido)
+    if level != "sigungu":
+        return None   # 권역(서울>강북지역)은 시도 값으로 바꾸지 않는다 · 모르는 시도는 짝 없음
     full, last = _indexes()
     hit = full.get((sido, " ".join(rest)))
     if hit and len(hit) == 1:

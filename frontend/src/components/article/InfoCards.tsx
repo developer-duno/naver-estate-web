@@ -32,9 +32,10 @@ export default function InfoCards({ article: a, complex: c }: Props) {
   const areaM2 = a.area2_m2 ?? a.area1_m2;
   const pyeong = areaM2 ? Math.round((areaM2 / M2_TO_PYEONG) * 10) / 10 : null;
 
-  // 공식 기준값(세션 473) — 우리 판정 라벨((낮음)/(높음)/(주의)) 대신 부동산원·법령·HUG 기준을 나란히
+  // 공식 기준값(세션 473) — 우리 판정 라벨((낮음)/(높음)/(주의)) 대신 부동산원·법령 기준을 나란히
+  // (전세 보증 가입 한도 줄은 사장님 결정 ⓑ 2026-10-18 로 PR 5 뒤로 미뤘다)
   const isWolse = a.trade_type_name === "월세";
-  const regionConvLabel = `${a.region_rent_conversion_name ?? "시도"} 전환율(부동산원)`;
+  const regionConvLabel = `${a.region_rent_conversion_name ?? "시도"} 전환율(부동산원·종합주택)`;
   const showLegalCap = isWolse && a.legal_rent_conversion_cap != null;
   const legalCapText = showLegalCap
     ? `${a.legal_rent_conversion_cap!.toFixed(1)}% (${
@@ -43,16 +44,14 @@ export default function InfoCards({ article: a, complex: c }: Props) {
           : "연 10%"
       })`
     : null;
-  const showHug = a.article_jeonse_ratio != null;
   const sourceParts = [
     a.article_rent_conversion_rate != null && a.article_rent_conversion_basis
       ? `이 매물 전환율 = ${a.article_rent_conversion_basis}`
       : null,
     a.region_rent_conversion_rate != null
-      ? `한국부동산원 전월세전환율${a.region_rent_conversion_period ? `(${a.region_rent_conversion_period})` : ""}`
+      ? `한국부동산원 전월세전환율(종합주택${a.region_rent_conversion_period ? `, ${a.region_rent_conversion_period}` : ""})`
       : null,
-    showLegalCap ? "주택임대차보호법 제7조의2" : null,
-    showHug ? "HUG 전세보증금반환보증" : null,
+    showLegalCap ? "주택임대차보호법 제7조의2·시행령 제9조(연 1할·연 2%) — 새 계약 월세에는 적용되지 않음" : null,
   ].filter(Boolean);
 
   const basicItems: [string, string | undefined | null][] = [
@@ -72,9 +71,8 @@ export default function InfoCards({ article: a, complex: c }: Props) {
     ["매물유형", a.article_real_estate_type_name],
     ["전월세전환율(이 매물)", a.article_rent_conversion_rate != null ? `${a.article_rent_conversion_rate}%` : null],
     [regionConvLabel, a.region_rent_conversion_rate != null ? `${a.region_rent_conversion_rate}%` : null],
-    ["법정 상한", legalCapText],
+    ["법정 상한(보증금을 월세로 바꿀 때)", legalCapText],
     ["전세가율(매물)", a.article_jeonse_ratio != null ? `${a.article_jeonse_ratio}%` : null],
-    ["HUG 보증 가입 한도", showHug ? "주택가격의 90%" : null],
     ["동일주소 매물", a.same_addr_cnt != null && a.same_addr_cnt > 1 ? `${a.same_addr_cnt}건 (${a.same_addr_min_prc ?? "-"} ~ ${a.same_addr_max_prc ?? "-"})` : null],
     ["사진 수", a.site_image_count != null && a.site_image_count > 0 ? `${a.site_image_count}장` : null],
     ["분양권 프리미엄", a.is_presale && a.same_addr_premium_min ? `${a.same_addr_premium_min} ~ ${a.same_addr_premium_max ?? "-"}` : null],

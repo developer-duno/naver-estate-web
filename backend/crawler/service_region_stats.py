@@ -23,7 +23,13 @@ from decimal import Decimal, InvalidOperation
 
 from crawler import rone_api
 from crawler.plain_words import explain_error
-from crawler.region_match import SIDO_CODES, SINGLE_SIGUNGU_SIDO, region_codes, rone_path_to_region_code
+from crawler.region_match import (
+    SIDO_CODES,
+    SINGLE_SIGUNGU_SIDO,
+    region_codes,
+    rone_path_level,
+    rone_path_to_region_code,
+)
 from crawler.service_common import fail_job_safely
 from db.models import CrawlJob, RegionStats
 from utils import utcnow
@@ -33,15 +39,22 @@ logger = logging.getLogger(__name__)
 JOB_TYPE = "region_stats"
 STAT_JEONSE_RATIO = "reb_apt_jeonse_ratio_median"
 STAT_RENT_CONVERSION = "reb_rent_conversion_rate"
-# (R-ONE 표 ID, 우리 통계 항목, 출처 문구) — 출처 문구는 화면 각주에 그대로 쓴다.
+# (R-ONE 표 ID, 우리 통계 항목, 출처 문구) — 출처 문구는 화면 각주에 그대로 쓴다(단위 %는 화면 값에 붙는다).
 REGION_STAT_TABLES: list[tuple[str, str, str]] = [
     ("A_2024_00073", STAT_JEONSE_RATIO,
-     "한국부동산원 전국주택가격동향조사 — 아파트 중위 매매가격 대비 전세가격(%)"),
-    ("A_2024_00155", STAT_RENT_CONVERSION, "한국부동산원 전월세전환율 — 종합주택(%)"),
+     "한국부동산원 전국주택가격동향조사 — 아파트 중위 매매가격 대비 전세가격"),
+    ("A_2024_00155", STAT_RENT_CONVERSION, "한국부동산원 전월세전환율 — 종합주택"),
 ]
 SOURCE_OF: dict[str, str] = {stat: src for _, stat, src in REGION_STAT_TABLES}
+TABLE_WORDS: dict[str, str] = {STAT_JEONSE_RATIO: "아파트 전세가율", STAT_RENT_CONVERSION: "전월세전환율"}
+_GAP_NAME_SAMPLE = 5
 _KST = timezone(timedelta(hours=9))
 _UNMATCHED_LOG_TOP = 30
+# 시군구 표(전세가율)에서 시군구 단위 경로 중 짝 맞은 비율이 이보다 낮으면 failed — 전국·시도 몇 줄만 맞고
+# 시군구가 통째로 빠진 회차를 completed 로 끝내지 않는다(검사관 C-2, 세션 473).
+MIN_SIGUNGU_MATCH_RATIO = 0.5
+SIGUNGU_TABLE_STAT = STAT_JEONSE_RATIO
+_UNKNOWN_PREFIX_SAMPLE = 5
 
 
 def month_range(months_back: int, today: date | None = None) -> tuple[str, str]:
@@ -119,7 +132,8 @@ def _fetch_all(start: str, end: str, fetch) -> tuple[dict[str, dict], str | None
     error: str | None = None
     key_missing = False
     for statbl_id, stat_code, source in REGION_STAT_TABLES:
-        info = {"statbl_id": statbl_id, "received": 0, "rows": {}, "unmatched": Counter(), "no_value": 0}
+        info = {"statbl_id": statbl_id, "received": 0, "rows": {}, "unmatched": Counter(), "no_value": 0,
+                "sigungu_paths": 0, "sigungu_matched": 0}
         per[stat_code] = info
         if key_missing:
             continue   # 열쇠가 없으면 다음 표도 똑같이 못 받는다
@@ -139,7 +153,68 @@ def _fetch_all(start: str, end: str, fetch) -> tuple[dict[str, dict], str | None
             error = error or f"부동산원이 {start}~{end} 자료를 하나도 주지 않았어요(표 번호 {statbl_id.replace('A_', '')})"
             continue
         info["rows"], info["unmatched"], info["no_value"] = build_rows(raw, stat_code, source)
+        paths = {str(r.get("CLS_FULLNM") or "").strip() for r in raw}
+        sigungu = {p for p in paths if rone_path_level(p) == "sigungu"}
+        info["sigungu_paths"] = len(sigungu)
+        info["sigungu_matched"] = sum(1 for p in sigungu if rone_path_to_region_code(p) is not None)
     return per, error
+
+
+def sigungu_match_problem(per: dict[str, dict]) -> str | None:
+    """시군구 표에서 시군구 경로 짝 비율이 문턱 미만이면 우리말 사유, 아니면 None(그 표를 못 받았으면 None — 실패는 따로)."""
+    info = per.get(SIGUNGU_TABLE_STAT)
+    if not info or not info["received"]:
+        return None
+    total, matched = info["sigungu_paths"], info["sigungu_matched"]
+    if total == 0:
+        return "부동산원 시군구 표에 시군구 단위 지역이 하나도 없어요 — 지역 표를 봐 주세요"
+    if matched / total < MIN_SIGUNGU_MATCH_RATIO:
+        return f"부동산원 지역 이름 {total}개 중 {matched}개만 우리 지역과 맞았어요 — 지역 표를 봐 주세요"
+    return None
+
+
+def empty_table_problem(per: dict[str, dict]) -> str | None:
+    """표마다 — 받은 행이 있는데 저장 0 인 표가 하나라도 있으면 우리말 사유(검사관 A-4: 한 표만 살아 completed 금지)."""
+    for stat, info in per.items():
+        if info["received"] and not info["rows"]:
+            return f"부동산원 {TABLE_WORDS[stat]} 표는 {info['received']}행을 받았는데 지역 짝이 하나도 안 맞아요"
+    return None
+
+
+def gap_words(result: dict) -> str | None:
+    """완료 회차라도 빈칸이 있으면 관리자 화면에 보일 한 줄(실패 아님 — 알림 없음, B25 관례).
+
+    예: "부동산원 값이 없어 빈칸인 우리 지역 3곳 — 인천 검단구, 경기 화성시 동탄구 외 1곳 · 부동산원 지역 이름 2종은 못 맞춤"
+    """
+    ours = region_codes()
+    gaps = result["uncovered_regions"].get(STAT_JEONSE_RATIO, {}).get("codes", [])
+    names = [f"{ours[c]['sido']} {ours[c]['sigungu']}".strip() for c in gaps if c in ours]
+    parts = []
+    if names:
+        shown = ", ".join(names[:_GAP_NAME_SAMPLE])
+        rest = len(names) - _GAP_NAME_SAMPLE
+        parts.append(f"부동산원 값이 없어 빈칸인 우리 지역 {len(names)}곳 — {shown}" + (f" 외 {rest}곳" if rest > 0 else ""))
+    unmatched = len(result["unmatched"])
+    if unmatched:
+        parts.append(f"부동산원 지역 이름 {unmatched}종은 못 맞춤")
+    if not parts:
+        return None
+    text = " · ".join(parts)
+    return text if text.startswith("부동산원") else f"부동산원 자료 — {text}"
+
+
+def unknown_prefixes(db) -> dict:
+    """운영 단지 코드 앞 5자리 중 region_codes.json 에 없는 것 — 새 구가 생겼다는 신호(F5)."""
+    from sqlalchemy import text
+
+    rows = db.execute(text(
+        "SELECT DISTINCT substr(cortar_no, 1, 5) FROM complexes WHERE cortar_no IS NOT NULL"
+    )).fetchall()
+    ours = region_codes()
+    missing = sorted(
+        p for (p,) in rows if p and len(p) == 5 and p.isdigit() and p not in ours
+    )
+    return {"count": len(missing), "sample": missing[:_UNKNOWN_PREFIX_SAMPLE]}
 
 
 def uncovered_regions(per: dict[str, dict]) -> dict[str, dict]:
@@ -181,6 +256,7 @@ def _summary(per: dict[str, dict], start: str, end: str, saved: dict[str, int]) 
             stat: {
                 "statbl_id": i["statbl_id"], "received": i["received"], "to_save": len(i["rows"]),
                 "saved": saved.get(stat, 0), "unmatched": dict(i["unmatched"]), "no_value": i["no_value"],
+                "sigungu_paths": i["sigungu_paths"], "sigungu_matched": i["sigungu_matched"],
             }
             for stat, i in per.items()
         },
@@ -204,13 +280,15 @@ def collect_region_stats(
     fetch = fetch or rone_api.fetch_table
     start, end = month_range(months_back, today)
 
+    from db.database import SessionLocal
+
     if dry_run:
         per, error = _fetch_all(start, end, fetch)
         result = _summary(per, start, end, {})
-        result.update(status="dry_run", error=error)
+        with SessionLocal() as rdb:   # 읽기만(SELECT 1회)
+            result["unknown_prefixes"] = unknown_prefixes(rdb)
+        result.update(status="dry_run", error=error or empty_table_problem(per) or sigungu_match_problem(per))
         return result
-
-    from db.database import SessionLocal
 
     db = SessionLocal()
     job = CrawlJob(job_type="region_stats", scheduler_job_id=scheduler_job_id, status="running", started_at=utcnow())
@@ -231,13 +309,23 @@ def collect_region_stats(
         for stat, u in result["uncovered_regions"].items():
             if u["count"]:
                 logger.info("동네 공식 통계: %s 값을 못 받은 우리 지역 %d곳 — %s", stat, u["count"], u["codes"][:30])
+        result["unknown_prefixes"] = unknown_prefixes(db)
+        if result["unknown_prefixes"]["count"]:
+            logger.info(
+                "동네 공식 통계: 지역 표(data/region_codes.json)에 없는 단지 코드 %d종 — %s · "
+                "새 구가 생겼으면 scripts/build_region_codes.py 를 다시 돌려 커밋하세요",
+                result["unknown_prefixes"]["count"], result["unknown_prefixes"]["sample"],
+            )
+        problem = empty_table_problem(per) or sigungu_match_problem(per)
         if error is not None:
             status, message = "failed", explain_error(error)
         elif result["saved"] == 0:
             status = "failed"
             message = explain_error(f"받은 행은 {result['received']}개인데 지역 짝이 하나도 안 맞아요")
+        elif problem is not None:
+            status, message = "failed", explain_error(problem)
         else:
-            status, message = "completed", None
+            status, message = "completed", gap_words(result)
         job.status = status
         job.total_items = result["received"]
         job.processed_items = result["saved"]

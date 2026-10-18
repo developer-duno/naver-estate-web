@@ -644,6 +644,7 @@ class RegionStats(Base):
     (아파트 중위 전세가율 = 시군구 · 전월세전환율 = 시도·권역 — 권역 행은 짝이 없어 버린다).
     한 행 = (지역 코드 5자리, 기준 달 YYYYMM, 통계 항목) 하나의 값.
     읽기 = db/region_stats_queries.py(단지 상세·비교·매물 상세 직렬화).
+    source = 읽지 않는 기록용(어느 통계표에서 왔나) — 화면 출처 문구는 service_region_stats.SOURCE_OF 상수에서 낸다.
     """
     __tablename__ = "region_stats"
     __table_args__ = (Index("region_stats_stat_period_idx", "stat_code", "period"),)

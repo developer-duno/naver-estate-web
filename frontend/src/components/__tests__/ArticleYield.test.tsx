@@ -77,4 +77,23 @@ describe("ArticleCardMobile 수익률/뱃지", () => {
     // 체크박스 border 등 제외하고 매물유형 뱃지만 확인
     expect(estateBadges.length).toBe(0);
   });
+
+  it("값만 보이고 높다·낮다·주의 색 판정은 없다 — 전세 90%·수익 12% 모두 같은 회색 (세션 473, 사장님 결정 ⓒ)", () => {
+    const { container } = render(
+      <ArticleCardMobile
+        articles={[
+          makeArticle({ article_no: "J1", trade_type_name: "전세", article_jeonse_ratio: 90 }),
+          makeArticle({ article_no: "W1", trade_type_name: "월세", monthly_rent_yield: 12 }),
+        ]}
+        viewMode="large"
+      />,
+    );
+    const j = screen.getByText(/전세 90%/);
+    const w = screen.getByText(/수익 12%/);
+    expect(j.className).toBe(w.className);
+    expect(j.className).toContain("text-gray-700");
+    // 거래 유형 칸(전세·월세 색 배지)은 판정이 아니라 종류 표시라 그대로다 — 값 배지만 본다
+    for (const el of [j, w]) expect(el.className).not.toMatch(/red|emerald|yellow|blue/);
+    expect(container.textContent ?? "").not.toMatch(/\(주의\)|\(높음\)|\(낮음\)/);
+  });
 });

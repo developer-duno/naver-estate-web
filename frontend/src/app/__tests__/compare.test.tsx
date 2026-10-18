@@ -274,7 +274,7 @@ describe("단지 비교 — 값과 출처만 (판정 표시 없음)", () => {
 
   it("전세가율 행 = '이 단지' + 바로 아래 '시군구 전세가율(부동산원)' · 각주 (세션 473)", async () => {
     vi.mocked(api.getComplex).mockImplementation((no: string) =>
-      Promise.resolve({ ...makeComplex(no), region_jeonse_ratio: no === "A" ? 79.4 : null }),
+      Promise.resolve({ ...makeComplex(no), region_jeonse_ratio: no === "A" ? 79.4 : null, region_jeonse_period: "2026.01" }),
     );
     renderPage("ids=A,B");
     await waitFor(() => {
@@ -282,7 +282,7 @@ describe("단지 비교 — 값과 출처만 (판정 표시 없음)", () => {
     });
     expect(screen.getAllByText("전세가율(이 단지)").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("전세가율")).toBeNull();          // 옛 행 이름 없음
-    expect(screen.getAllByText("79.4%").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("79.4% (2026.01)").length).toBeGreaterThanOrEqual(1);   // 기준 달은 값 옆 괄호(F10)
     const note = screen.getByTestId("compare-region-footnote");
     expect(note).toHaveTextContent("한국부동산원 전국주택가격동향조사, 아파트 중위 매매가격 대비 전세가격");
   });

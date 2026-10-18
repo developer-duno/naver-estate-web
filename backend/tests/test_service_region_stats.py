@@ -81,7 +81,10 @@ def test_collect_upserts_and_counts_unmatched(db):
     job = _job(db)
     assert job.status == "completed"
     assert (job.total_items, job.processed_items) == (8, 5)
-    assert job.error_message is None
+    # 완료여도 빈칸 사유 한 줄(F17) — 실패가 아니라 알림은 없다
+    assert job.error_message.startswith("부동산원 값이 없어 빈칸인 우리 지역 ")
+    assert "부동산원 지역 이름 2종은 못 맞춤" in job.error_message
+    assert result["unknown_prefixes"] == {"count": 0, "sample": []}
     assert job.scheduler_job_id == "collect_region_stats"
 
     # 우리 지역 중 못 받은 곳 — 천안 동남구·만안구는 받았다
@@ -174,3 +177,48 @@ def test_run_script_prints_tables(capsys, monkeypatch):
     assert script.main(["--months-back", "24", "--dry-run"]) == 0
     out = capsys.readouterr().out
     assert "받은 행 1" in out and "짝 안 됨: 서울>강북지역 ×1" in out and "41173" in out
+
+
+# ── 보완 1 (세션 473 검사관 지적) ──
+
+def test_sigungu_rows_all_unmatched_is_failed_even_if_nation_sido_saved(db):
+    """F1: 시군구 표에서 전국·시도 줄만 맞고 시군구 줄은 하나도 안 맞으면 failed(시군구가 통째로 빈 회차)."""
+    fetch = _fetch({
+        "A_2024_00073": [
+            _r("전국", "202609", 66.0),
+            _r("충남", "202609", 70.0),
+            _r("없는도>가시>나구", "202609", 60.0),      # 모르는 시도 = unknown(분모에 안 듦)
+            _r("충남>없는시>가구", "202609", 60.0),
+            _r("경기>경부1권>없는시>나구", "202609", 61.0),
+        ],
+        "A_2024_00155": CONV,
+    })
+    result = collect_region_stats(3, today=TODAY, fetch=fetch)
+    assert result["status"] == "failed"
+    assert _job(db).error_message == "부동산원 지역 이름 2개 중 0개만 우리 지역과 맞았어요 — 지역 표를 봐 주세요"
+    assert result["tables"][STAT_JEONSE_RATIO]["sigungu_paths"] == 2
+
+
+def test_one_table_all_unmatched_is_failed_even_if_other_saved(db):
+    """F16(검사관 A-4 탐침 재현): 전세가율 500행 짝 0 + 전환율 1행 저장 → failed(사유에 표 이름)."""
+    fetch = _fetch({
+        "A_2024_00073": [_r("서울>강북지역", "202609", 60.0)] * 500,
+        "A_2024_00155": [_r("전남광주>전남", "202609", 7.27)],
+    })
+    result = collect_region_stats(3, today=TODAY, fetch=fetch)
+    assert result["status"] == "failed"
+    assert result["saved"] == 1
+    assert _job(db).error_message == "부동산원 아파트 전세가율 표는 500행을 받았는데 지역 짝이 하나도 안 맞아요"
+
+
+def test_unknown_prefixes_reported(db):
+    """F5: 지역 표(region_codes.json)에 없는 운영 단지 코드를 결과에 센다 — 새 구가 생긴 신호."""
+    from db.models import Complex
+
+    db.add(Complex(complex_no="X1", complex_name="새구단지", cortar_no="4199910100"))
+    db.add(Complex(complex_no="X2", complex_name="있는단지", cortar_no="4413110100"))
+    db.commit()
+    fetch = _fetch({"A_2024_00073": JEONSE, "A_2024_00155": CONV})
+    result = collect_region_stats(3, today=TODAY, fetch=fetch)
+    assert result["unknown_prefixes"] == {"count": 1, "sample": ["41999"]}
+

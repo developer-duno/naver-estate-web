@@ -4,6 +4,7 @@
 전세 시세(B1, base_month 8자리) 최근 값. 매물 면적은 소수 버린 정수라 평형도 버림 값으로 대조한다.
 """
 
+from datetime import date
 from types import SimpleNamespace
 
 from db.models import Complex, ComplexPriceHistory, ComplexPyeongDetail, RegionStats
@@ -14,6 +15,7 @@ from routers.region_serializers import (
 )
 
 J = "reb_apt_jeonse_ratio_median"
+TODAY = date(2026, 10, 18)
 C = "reb_rent_conversion_rate"
 
 
@@ -102,7 +104,7 @@ def test_article_fields_wolse_full(db):
     _jeonse(db, "90010", 1, "202609", 1)       # 월 단위(실거래) 행은 안 본다
     _stat(db, "48000", "202601", 5.94, C)
     db.commit()
-    f = article_region_fields(db, _wolse("90010"), c)
+    f = article_region_fields(db, _wolse("90010"), c, today=TODAY)
     assert f["article_rent_conversion_rate"] == 4.8
     assert f["article_rent_conversion_basis"] == "네이버 시세 전세가 기준(같은 평형, 2026.10.08)"
     assert (f["region_rent_conversion_rate"], f["region_rent_conversion_name"], f["region_rent_conversion_period"]) == (5.9, "경남", "2026.01")
@@ -110,14 +112,26 @@ def test_article_fields_wolse_full(db):
 
 
 def test_article_fields_ambiguous_pyeong_is_none(db):
-    """같은 버림 면적 평형 둘이 모두 전세 시세를 가지면 어느 평형인지 몰라 비운다(지어내지 않음)."""
+    """F18(검사관 A-6 탐침 재현): 같은 버림 면적 평형 후보가 둘이면, 한쪽(2번)에만 시세가 있어도 비운다 —
+    시세 있는 쪽을 고르면 다른 타입 매물에 그 평형 값을 붙이는 셈이다."""
     c = _complex(db, "90011", "4812110100")
     _pyeong(db, "90011", 1, "59.94", 78.26)
     _pyeong(db, "90011", 2, "59.85", 78.31)
-    _jeonse(db, "90011", 1, "20261008", 30000)
     _jeonse(db, "90011", 2, "20261008", 31000)
     db.commit()
-    assert article_region_fields(db, _wolse("90011"), c)["article_rent_conversion_rate"] is None
+    assert article_region_fields(db, _wolse("90011"), c, today=TODAY)["article_rent_conversion_rate"] is None
+
+
+def test_article_fields_old_jeonse_quote_is_none(db):
+    """F12: 같은 평형 전세 시세가 90일보다 오래되면 비운다(오늘 2026-10-18 기준 91일 전 = 2026-07-19)."""
+    c = _complex(db, "90015", "4812110100")
+    _pyeong(db, "90015", 1, "59.94", 78.26)
+    _jeonse(db, "90015", 1, "20260719", 30000)
+    db.commit()
+    assert article_region_fields(db, _wolse("90015"), c, today=TODAY)["article_rent_conversion_rate"] is None
+    _jeonse(db, "90015", 1, "20260720", 30000)   # 90일 전 = 경계 안
+    db.commit()
+    assert article_region_fields(db, _wolse("90015"), c, today=TODAY)["article_rent_conversion_rate"] == 4.8
 
 
 def test_article_fields_no_same_pyeong_jeonse_is_none(db):
@@ -146,3 +160,59 @@ def test_article_fields_gwangju_uses_name_not_prefix(db):
     db.commit()
     f = article_region_fields(db, _wolse("90014"), c)
     assert (f["region_rent_conversion_rate"], f["region_rent_conversion_name"]) == (6.1, "광주")
+
+
+# ── F2: 표가 없어도(V072 미적용) 상세가 500 이 아니라 칸을 비운다 ──
+
+def _drop_region_stats(db):
+    from sqlalchemy import text
+
+    db.execute(text("DROP TABLE region_stats"))
+    db.commit()
+
+
+def test_complex_detail_200_when_table_missing(client, db, monkeypatch):
+    import routers.complexes as complexes_mod
+
+    monkeypatch.setattr(complexes_mod.queries, "get_filter_options", lambda db, no: {})
+    _complex(db, "90020", "4413110100")
+    _drop_region_stats(db)
+    res = client.get("/api/complexes/90020")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["complex_no"] == "90020"
+    assert body["region_jeonse_ratio"] is None and body["region_name"] is None
+
+
+def test_article_detail_200_when_table_missing(client, db):
+    from db.models import Article
+
+    _complex(db, "90021", "4812110100")
+    db.add(Article(article_no="A90021", complex_no="90021", trade_type_name="월세", is_active=True,
+                   numeric_price=5000, numeric_rent_price=100, area1_m2=78.0, area2_m2=59.0,
+                   detail_crawled=True, heating_type="개별난방"))
+    db.commit()
+    _drop_region_stats(db)
+    res = client.get("/api/live/article/A90021/detail")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["article_no"] == "A90021"
+    assert body["region_rent_conversion_rate"] is None
+    assert body["legal_rent_conversion_cap"] == 5.0
+
+
+def test_freshness_200_when_table_missing(client, db):
+    import jwt
+
+    from db.models import UserProfile
+
+    db.add(UserProfile(user_id="adm", email="adm@test.com", role="admin", status="approved"))
+    db.commit()
+    _drop_region_stats(db)
+    token = jwt.encode({"sub": "adm", "aud": "authenticated", "email": "adm@test.com"},
+                       "test-secret-key-for-testing-only", algorithm="HS256")
+    res = client.get("/api/admin/data-freshness", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    item = next(i for i in res.json()["items"] if i["key"] == "region_stats")
+    assert item["count"] == 0
+

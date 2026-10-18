@@ -2,11 +2,17 @@
 
 캐시를 두지 않는다 — 요청당 1~2쿼리(기본키 앞부분 + 인덱스)이고 목록 직렬화에는 붙이지 않는다.
 (캐시를 붙이게 되면 키에 region_code·stat_code 둘 다 넣는다 — silent-cache 규칙.)
+
+표가 없거나(V072 미적용) 조회가 실패해도 단지·매물 상세가 500 이 되지 않게 저장점(begin_nested)으로 감싸
+칸을 비운다(None) — 경고는 프로세스당 한 번만(검사관 M-⑥·C-2, 세션 473). 바깥 트랜잭션은 그대로 쓸 수 있다.
 """
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from crawler.region_match import (
@@ -17,6 +23,16 @@ from crawler.region_match import (
     sigungu_name_of_region,
 )
 from db.models import RegionStats
+
+logger = logging.getLogger(__name__)
+_warned = False
+
+
+def _warn_once(e: Exception) -> None:
+    global _warned  # noqa: PLW0603
+    if not _warned:
+        _warned = True
+        logger.warning("동네 공식 통계 표를 읽지 못해 지역 칸을 비워요(표가 없거나 조회 실패): %s", type(e).__name__)
 
 
 def region_code_of_complex(c) -> str | None:
@@ -52,16 +68,21 @@ def get_latest_region_stat(db: Session, region_code: str | None, stat_code: str)
     """그 지역·그 통계의 가장 최근 기준 달 한 행 → (값, "YYYYMM"). 없거나 값이 NULL 이면 None."""
     if not region_code:
         return None
-    row = db.execute(
-        select(RegionStats.value, RegionStats.period)
-        .where(
-            RegionStats.region_code == region_code,
-            RegionStats.stat_code == stat_code,
-            RegionStats.value.isnot(None),
-        )
-        .order_by(RegionStats.period.desc())
-        .limit(1)
-    ).first()
+    try:
+        with db.begin_nested():   # 실패하면 이 저장점만 되돌린다 — 바깥 조회는 계속
+            row = db.execute(
+                select(RegionStats.value, RegionStats.period)
+                .where(
+                    RegionStats.region_code == region_code,
+                    RegionStats.stat_code == stat_code,
+                    RegionStats.value.isnot(None),
+                )
+                .order_by(RegionStats.period.desc())
+                .limit(1)
+            ).first()
+    except (ProgrammingError, OperationalError) as e:
+        _warn_once(e)
+        return None
     if row is None:
         return None
     return float(row[0]), str(row[1])

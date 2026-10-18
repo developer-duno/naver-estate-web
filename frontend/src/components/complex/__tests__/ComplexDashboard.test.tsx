@@ -303,7 +303,8 @@ describe("ComplexDashboard (v2)", () => {
   it("정부 지역 값: 시세 칸에 '이 단지 · 시군구 아파트' 나란히 + 출처 줄 (세션 473)", () => {
     render(
       <ComplexDashboard
-        complex={{ ...baseComplex, jeonse_rate: 58, region_jeonse_ratio: 79.4, region_jeonse_period: "2026.01", region_name: "천안시 동남구" }}
+        complex={{ ...baseComplex, jeonse_rate: 58, region_jeonse_ratio: 79.4, region_jeonse_period: "2026.01", region_name: "천안시 동남구",
+          region_jeonse_source: "BE 가 보낸 출처 문구" }}
         complexNo="C001"
         pyeongDetails={samplePyeong}
         sessionToken={undefined}
@@ -311,7 +312,26 @@ describe("ComplexDashboard (v2)", () => {
       />,
     );
     expect(screen.getByText("전세가율 58% · 천안시 동남구 아파트 79.4%")).toBeInTheDocument();
-    expect(screen.getByTestId("box-note-prices")).toHaveTextContent("출처: 한국부동산원 전국주택가격동향조사(2026.01)");
+    // 출처 문구는 BE(region_jeonse_source)가 정본 — FE 글자 상수 없음(derived-display-ssot)
+    expect(screen.getByTestId("box-note-prices")).toHaveTextContent(
+      "이 단지: 최근 6개월 시세·실거래 기록 중앙값으로 계산 · 지역: BE 가 보낸 출처 문구(2026.01)",
+    );
+  });
+
+  it("우리 전세가율이 없고 지역 값만 있어도 지역 값을 보여 준다 (세션 473 F9)", () => {
+    render(
+      <ComplexDashboard
+        complex={{ ...baseComplex, jeonse_rate: undefined, region_jeonse_ratio: 61.2, region_jeonse_period: "2026.09",
+          region_name: "사천시", region_jeonse_source: "출처문구" }}
+        complexNo="C001"
+        pyeongDetails={samplePyeong}
+        sessionToken={undefined}
+        onFilterChange={() => {}}
+      />,
+    );
+    expect(screen.getByText("사천시 아파트 전세가율 61.2%")).toBeInTheDocument();
+    expect(screen.getByTestId("box-note-prices")).toHaveTextContent("지역: 출처문구(2026.09)");
+    expect(screen.getByTestId("box-note-prices")).not.toHaveTextContent("이 단지:");
   });
 
   it("정부 지역 값이 없으면 지금처럼 '전세가율 N%' 만, 출처 줄 없음 (세션 473)", () => {

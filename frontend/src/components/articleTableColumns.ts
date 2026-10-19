@@ -65,7 +65,7 @@ export const COLUMNS: ColumnDef<Article>[] = [
     enableSorting: true,
     accessorFn: (a) => a.monthly_rent_yield ?? a.article_jeonse_ratio ?? null,
     meta: {
-      headerTitle: "월세: (월세×12)/보증금, 전세: 보증금/매매중위가",
+      headerTitle: "월세: (월세×12)/보증금, 전세: 보증금/같은 면적 매매 중위가",
       className: "w-17.5 text-right",
     },
   },

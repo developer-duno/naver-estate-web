@@ -17,10 +17,12 @@ interface Props {
   complexNo: string;
   pyeongDetails: PyeongDetail[];
   accessToken?: string;
+  /** 대표 전용면적 묶음(세션 474 B27) — 평형을 안 고르면 그래프가 이 면적 값만 그린다 */
+  repAreaM2?: number | null;
 }
 
 /** 실거래가 추이 섹션 — 면적 선택 + 수집 버튼 + 차트 (페이지 진입 시 자동 수집 1회). */
-export default function PriceChartSection({ complexNo, pyeongDetails, accessToken }: Props) {
+export default function PriceChartSection({ complexNo, pyeongDetails, accessToken, repAreaM2 }: Props) {
   const queryClient = useQueryClient();
   const [historyAreaNo, setHistoryAreaNo] = useState<string>("");
   const { collecting, message: collectMessage, messageType: collectMessageType, startCollect, clearPolling } = usePriceCollect();
@@ -45,6 +47,9 @@ export default function PriceChartSection({ complexNo, pyeongDetails, accessToke
   }, [complexNo, accessToken, collecting, startCollect, queryClient]);
 
   const historyItems = priceHistoryQuery.data?.items ?? [];
+  // 그래프가 그린 면적과 기준 글자(BE 정본 — basis). 면적을 모르면(대표 면적 미계산) 옛 그대로 아무것도 안 붙인다.
+  const historyArea = priceHistoryQuery.data?.area_m2 ?? null;
+  const historyBasis = priceHistoryQuery.data?.basis ?? null;
 
   return (
     <div className="space-y-3">
@@ -56,7 +61,7 @@ export default function PriceChartSection({ complexNo, pyeongDetails, accessToke
             className="text-sm border rounded px-2 py-1.5 text-gray-700"
             aria-label="실거래가 면적 선택"
           >
-            <option value="">전체 면적</option>
+            <option value="">{repAreaM2 != null ? `대표 면적(전용 ${repAreaM2}㎡ 대)` : "전체 면적"}</option>
             {pyeongDetails.map((pd) => (
               <option key={pd.pyeong_no} value={String(pd.pyeong_no)}>
                 {pd.pyeong_name ? `${pd.pyeong_name} (${pd.exclusive_area}㎡)` : `${pd.exclusive_area}㎡`}
@@ -113,7 +118,14 @@ export default function PriceChartSection({ complexNo, pyeongDetails, accessToke
           </div>
         )
       ) : (
-        <LazyPriceHistory items={historyItems} />
+        <>
+          {historyBasis && (
+            <p className="text-sm font-medium text-gray-700" data-testid="price-history-basis">
+              실거래가 추이 · {historyBasis}
+            </p>
+          )}
+          <LazyPriceHistory items={historyItems} areaLabel={historyArea != null ? `전용 ${historyArea}㎡ 대` : undefined} />
+        </>
       )}
     </div>
   );

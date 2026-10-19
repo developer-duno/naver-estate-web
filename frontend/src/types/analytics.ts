@@ -41,12 +41,18 @@ export interface PriceHistoryItem {
   price_lower: number | null;
   price_avg: number | null;
   base_month: string;
+  /** 출처 계열(세션 474 B27) — "정부 실거래" · "네이버 시세" · 옛 응답이면 없음 */
+  series?: string | null;
 }
 
 /** 단지 가격 추이 응답 */
 export interface PriceHistoryResponse {
   complex_no: string;
   items: PriceHistoryItem[];
+  /** 그래프가 그린 전용면적 묶음(정수 ㎡) — 기본선 = 대표 면적(세션 474 B27). 모르면 null */
+  area_m2?: number | null;
+  /** 기준 글자(BE 정본) — "전용 59㎡ 대 정부 실거래 중위 + 네이버 시세" */
+  basis?: string | null;
 }
 
 /** 단지 공동주택 공시가격 평형별 항목 */

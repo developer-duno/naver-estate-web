@@ -15,6 +15,7 @@ from crawler.service_common import (
     RESUME_LOOKBACK_LIMIT,
     RESUME_MAX_AGE_HOURS,
     _checkpoint,
+    _upsert_area_stats,
     _upsert_price_history,
     fail_job_safely,
 )
@@ -125,6 +126,74 @@ def _cleanup_sigungu_stale_rows(
         return 0
     deleted = _delete_stale_gov_rows(db, complex_nos, months, started_at)
     logger.info("[정부 실거래가] 시군구 %s 옛 줄 %d개 정리 (보유 %d)", sigungu_cd, deleted, existing)
+    return deleted
+
+
+def _area_rows_conds(complex_nos: list[str], months: list[str], before: datetime | None) -> list:
+    """면적별 정부 실거래 줄(complex_area_trade_stats, V073) 중 그 단지들·그 달들 — before 를 주면 그보다 앞서 쓰인 줄만.
+
+    옛 달 평균 줄 정리(_gov_rows_conds)와 같은 단지·같은 달·같은 시각 기준을 쓴다(세션 474 B27).
+    """
+    from db.models import ComplexAreaTradeStat
+
+    conds = [
+        ComplexAreaTradeStat.complex_no.in_(complex_nos),
+        ComplexAreaTradeStat.base_month.in_(months),
+    ]
+    if before is not None:
+        conds.append(ComplexAreaTradeStat.recorded_at < before)
+    return conds
+
+
+def _count_area_rows(db, complex_nos: list[str], months: list[str], before: datetime | None = None) -> int:
+    if not complex_nos or not months:
+        return 0
+    from db.models import ComplexAreaTradeStat
+
+    return sum(
+        db.query(ComplexAreaTradeStat)
+        .filter(*_area_rows_conds(complex_nos[i:i + _STALE_CHUNK], months, before))
+        .count()
+        for i in range(0, len(complex_nos), _STALE_CHUNK)
+    )
+
+
+def _delete_stale_area_rows(db, complex_nos: list[str], months: list[str], started_at: datetime) -> int:
+    """이번 회차에 다시 쓰이지 않은 면적별 줄을 지우고 지운 수를 돌려준다 (세션 474 B27).
+
+    recorded_at 이 회차 시작보다 앞선 줄 = 이번에 그 단지·그 달·그 면적 묶음에 거래가 안 붙었다는 뜻이다
+    (예: 지난주엔 84㎡ 거래로 붙었던 거래가 이번에 해제돼 빠짐). 대상 단지·달 밖은 건드리지 않는다.
+    """
+    if not complex_nos or not months:
+        return 0
+    from db.models import ComplexAreaTradeStat
+
+    return sum(
+        db.query(ComplexAreaTradeStat)
+        .filter(*_area_rows_conds(complex_nos[i:i + _STALE_CHUNK], months, started_at))
+        .delete(synchronize_session=False)
+        for i in range(0, len(complex_nos), _STALE_CHUNK)
+    )
+
+
+def _cleanup_sigungu_stale_area_rows(
+    db, sigungu_cd: str, complex_nos: list[str], months: list[str], started_at: datetime,
+) -> int:
+    """주간 수집의 시군구 하나 — 면적별 줄 정리. 옛 달 평균 줄 정리(_cleanup_sigungu_stale_rows)와 같은 차단기:
+    지울 줄이 그 시군구·그 달들 보유 면적별 줄의 절반을 넘으면 건너뛴다. 지운 수를 돌려준다(건너뛰면 0).
+    """
+    stale = _count_area_rows(db, complex_nos, months, started_at)
+    if stale == 0:
+        return 0
+    existing = _count_area_rows(db, complex_nos, months)
+    if existing > 0 and stale * 2 > existing:
+        logger.warning(
+            "[정부 실거래가] 시군구 %s 면적별 옛 줄 정리 건너뜀 — 지울 줄 %d 이 보유 %d 의 절반을 넘음",
+            sigungu_cd, stale, existing,
+        )
+        return 0
+    deleted = _delete_stale_area_rows(db, complex_nos, months, started_at)
+    logger.info("[정부 실거래가] 시군구 %s 면적별 옛 줄 %d개 정리 (보유 %d)", sigungu_cd, deleted, existing)
     return deleted
 
 
@@ -393,6 +462,10 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
                     )
                     matched += 1
                     sigungu_written += 1
+                # 세션 474 B27: 같은 거래를 전용면적 묶음(정수 ㎡)별로 한 번 더 묶어 면적별 표에 저장(옛 줄은 그대로)
+                for complex_no, by_area in matcher.aggregate_by_area(trades).items():
+                    for area_m2, area_prices in by_area.items():
+                        _upsert_area_stats(db, complex_no, deal_ymd, area_m2, area_prices)
 
                 processed += len(trades)
 
@@ -416,6 +489,10 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
             # 한 줄도 못 붙였으면 이름 규칙이 통째로 어긋난 날일 수 있어 차트를 비우지 않는다.
             if sigungu_written > 0:
                 stale_deleted += _cleanup_sigungu_stale_rows(
+                    db, sigungu_cd, matcher.cleanup_complex_nos, traded_months, run_started_at,
+                )
+                # 면적별 줄도 같은 단지·같은 달·같은 시각 기준으로(세션 474 B27)
+                _cleanup_sigungu_stale_area_rows(
                     db, sigungu_cd, matcher.cleanup_complex_nos, traded_months, run_started_at,
                 )
             else:
@@ -568,6 +645,9 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
                     base_month=deal_ymd,
                 )
                 collected += 1
+            # 세션 474 B27: 이 단지 거래를 전용면적 묶음(정수 ㎡)별로 면적별 표에 저장(옛 줄은 그대로)
+            for area_m2, area_prices in matcher.aggregate_by_area(trades).get(complex_no, {}).items():
+                _upsert_area_stats(db, complex_no, deal_ymd, area_m2, area_prices)
 
         # 세션 469: 달을 모두 받았으면 이번에 다시 안 쓰인 옛 정부 줄(이 단지·거래가 온 달)을 지운다.
         # 저장 0 이어도 지운다 — 이 단지가 이제 어느 거래에도 짝이 안 되는 게 사실이면 옛 값이
@@ -576,6 +656,8 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
         deleted = 0
         if fetch_failure is None and complex_no in matcher.cleanup_complex_nos:
             deleted = _delete_stale_gov_rows(db, [complex_no], traded_months, started_at)
+            # 면적별 줄도 같은 조건·같은 시각 기준으로(세션 474 B27)
+            _delete_stale_area_rows(db, [complex_no], traded_months, started_at)
 
         # V046: 매칭 결과(collected==0 포함)와 무관하게 "시도했다"는 사실만 기록.
         # 국토부에 원천적으로 실거래가 없는 단지를 무한 재시도하지 않기 위한 마커

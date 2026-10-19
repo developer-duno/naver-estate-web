@@ -189,3 +189,29 @@ class SigunguMatcher:
             if complex_no:
                 out.setdefault(complex_no, []).append(price)
         return out
+
+    def aggregate_by_area(self, trades: list[dict]) -> dict[str, dict[int, list[int]]]:
+        """거래 목록 → 단지 번호별 · 전용면적 묶음(정수 ㎡)별 가격들 (세션 474 B27).
+
+        해제·가격 0·짝 없음 제외는 aggregate 와 같은 규칙이다. 전용면적(excluUseAr)을 못 읽는 거래는 묶음에서만
+        빠진다 — aggregate 의 달 평균 줄에는 그대로 들어간다.
+        """
+        from crawler.area_group import area_group_of
+
+        out: dict[str, dict[int, list[int]]] = {}
+        for trade in trades:
+            if is_cancelled_trade(trade):
+                continue
+            price = trade_price(trade)
+            if not price:
+                continue
+            area = area_group_of(trade.get("excluUseAr") or trade.get("전용면적"))
+            if area is None:
+                continue
+            complex_no = self.match(
+                trade.get("umdNm") or trade.get("법정동"),
+                trade.get("aptNm") or trade.get("아파트"),
+            )
+            if complex_no:
+                out.setdefault(complex_no, {}).setdefault(area, []).append(price)
+        return out

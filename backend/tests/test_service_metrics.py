@@ -2,16 +2,52 @@
 
 collect_complex_metrics 검증 — 정상 단지 / 전세 데이터 결함 단지 / 빈 단지.
 SessionLocal 은 conftest 가 TestSession 으로 교체하므로 별도 mock 불필요.
+
+세션 474 B27: 재료가 "면적이 섞인 정부 달 평균 줄(area_no '' · NULL)"에서 **면적별 정부 실거래 표 +
+네이버 평형번호 줄**로 바뀌었다(사장님 결정 D3 — 대표 면적 하나의 값). 옛 시험이 area_no=None 줄을 정답 재료로
+박아 둔 자리는 아래 도우미(_add_row)가 새 재료로 쓰게 고쳤다 — 매매 = 면적별 정부 표 84㎡ 묶음(거래 1건 = 1표),
+전세 = 네이버 주간(8자리) 평형 1(전용 84.97㎡) 줄. 평균가 빈 매매 줄은 옛 꼴(area_no '')로 남겨 "후보 아님"을 본다.
+recent_trades_6m 은 이제 "대표 묶음 매매 표 수"라 평균가 빈 줄을 세지 않는다(옛 5 → 4 등은 그 정정).
 """
 
 from datetime import date
 
-from db.models import Complex, ComplexPriceHistory
+import pytest
+
+from db.models import Complex, ComplexPriceHistory, ComplexPyeongDetail
 from services.upsert import upsert_complex_from_search
+
+_GOV_PRICES: dict[tuple[str, str], list[int]] = {}
+
+
+@pytest.fixture(autouse=True)
+def _reset_gov_prices():
+    _GOV_PRICES.clear()
+    yield
+    _GOV_PRICES.clear()
 
 
 def _recent_month() -> str:
     return date.today().strftime("%Y%m")
+
+
+def _ensure_pyeong(db, complex_no, pyeong_no=1, exclusive="84.97", households="100"):
+    if db.query(ComplexPyeongDetail).filter_by(complex_no=complex_no, pyeong_no=pyeong_no).first() is None:
+        db.add(ComplexPyeongDetail(
+            complex_no=complex_no, pyeong_no=pyeong_no, exclusive_area=exclusive,
+            household_count_by_pyeong=households,
+        ))
+        db.flush()
+
+
+def _add_gov_trade(db, complex_no, price, base_month, area_m2=84):
+    """면적별 정부 실거래 표에 거래 1건(같은 단지·달·묶음이면 가격 목록에 더함)."""
+    from crawler.service_common import _upsert_area_stats
+
+    _ensure_pyeong(db, complex_no)
+    key = (complex_no, base_month, area_m2)
+    _GOV_PRICES.setdefault(key, []).append(price)
+    _upsert_area_stats(db, complex_no, base_month, area_m2, _GOV_PRICES[key])
 
 
 def _make_complex(complex_no: str) -> dict:
@@ -24,17 +60,7 @@ def _make_complex(complex_no: str) -> dict:
 
 
 def _add_price(db, complex_no, trade_type, price_avg):
-    db.add(
-        ComplexPriceHistory(
-            complex_no=complex_no,
-            trade_type=trade_type,
-            area_no=None,
-            price_upper=price_avg + 10000,
-            price_lower=price_avg - 10000,
-            price_avg=price_avg,
-            base_month=_recent_month(),
-        )
-    )
+    _add_row(db, complex_no, trade_type, price_avg)
 
 
 class TestCollectComplexMetrics:
@@ -85,17 +111,7 @@ class TestCollectComplexMetrics:
 
 def _add_old_price(db, complex_no, price_avg):
     """6개월 계산 창 밖(2년 전) 매매 이력 — 중앙값 계산에는 안 쓰인다."""
-    db.add(
-        ComplexPriceHistory(
-            complex_no=complex_no,
-            trade_type="A1",
-            area_no=None,
-            price_upper=price_avg,
-            price_lower=price_avg,
-            price_avg=price_avg,
-            base_month=f"{date.today().year - 2}01",
-        )
-    )
+    _add_gov_trade(db, complex_no, price_avg, f"{date.today().year - 2}01")
 
 
 def _set_households(db, complex_no, hh):
@@ -187,12 +203,7 @@ class TestMetricCandidateSelection:
 
         upsert_complex_from_search(db, _make_complex("71041"))
         _set_households(db, "71041", 700)
-        db.add(
-            ComplexPriceHistory(
-                complex_no="71041", trade_type="A1", area_no=None,
-                price_upper=250000, price_lower=250000, price_avg=250000, base_month=_cutoff_month(6),
-            )
-        )
+        _add_gov_trade(db, "71041", 250000, _cutoff_month(6))  # 세션 474: 면적별 정부 표의 기준 달 줄
         db.commit()
 
         from crawler.service_metrics import collect_complex_metrics
@@ -230,16 +241,25 @@ class TestMetricCandidateSelection:
 
 
 def _add_row(db, complex_no, trade_type, price_avg, base_month=None):
-    """시세 이력 한 줄. price_avg=None 이면 평균가 빈 줄, base_month 생략 시 이번 달."""
+    """재료 한 표. base_month 생략 시 이번 달(세션 474 — 모듈 머리 주석).
+
+    매매 = 면적별 정부 표 84㎡ 묶음 거래 1건 · 매매 평균가 None = 옛 꼴 '' 줄(평균가 빈 줄 — 후보 아님) ·
+    전세 = 네이버 주간(8자리) 평형 1(84.97㎡ → 84 묶음) 줄 · 전세 평균가 None 도 그 꼴 그대로.
+    """
+    month = base_month or _recent_month()
+    if trade_type == "A1" and price_avg is not None:
+        _add_gov_trade(db, complex_no, price_avg, month)
+        return
+    _ensure_pyeong(db, complex_no)
     db.add(
         ComplexPriceHistory(
             complex_no=complex_no,
             trade_type=trade_type,
-            area_no=None,
+            area_no="" if trade_type == "A1" else "1",
             price_upper=price_avg,
             price_lower=price_avg,
             price_avg=price_avg,
-            base_month=base_month or _recent_month(),
+            base_month=month if trade_type == "A1" else f"{month}01",
         )
     )
 
@@ -252,11 +272,12 @@ def _add_filler(db, complex_no, hh=1):
     _add_row(db, complex_no, "A1", 123000)
 
 
-def _set_metrics(db, complex_no, median, rate, recent, updated_at=None):
+def _set_metrics(db, complex_no, median, rate, recent, updated_at=None, rep_area=None):
     values = {
         Complex.nearby_median_price: median,
         Complex.jeonse_rate: rate,
         Complex.recent_trades_6m: recent,
+        Complex.rep_area_m2: rep_area,
     }
     if updated_at is not None:
         values[Complex.updated_at] = updated_at
@@ -322,11 +343,9 @@ class TestMetricRecomputeAll:
         assert job.status == "completed"
         assert (job.total_items, job.processed_items) == (1, 1)  # 채움 단지만 대상
 
-    def test_same_result_as_per_complex_helpers(self, db):
-        # 항목 3: 한 번에 읽는 새 경로 == 옛 단지별 헬퍼(중앙값·전세 가드·전세가율·거래 수)
-        from crawler.metrics_helpers import calc_median_price, count_recent_price_records
-        from crawler.stats import compute_jeonse_rate
-
+    def test_median_guard_rate_and_count_rules(self, db):
+        # 항목 3: 중앙값(짝수 = 가운데 둘 평균 내림)·전세 가드·전세가율·거래 수(평균가 빈 줄·기간 밖 제외)
+        # 세션 474: 옛 단지별 헬퍼(metrics_helpers — 면적이 섞인 줄을 그대로 셈, 운영 호출처 0)와의 대조는 뺐다.
         nos = ("72301", "72302", "72303")
         for no in nos:
             upsert_complex_from_search(db, _make_complex(no))
@@ -346,22 +365,12 @@ class TestMetricRecomputeAll:
         _add_row(db, "72303", "A1", None)
         db.commit()
 
-        expected = {}
-        for no in nos:
-            median = calc_median_price(db, no, "A1", months=6)
-            jeonse = calc_median_price(db, no, "B1", months=6)
-            if jeonse is not None and jeonse >= median:
-                jeonse = None
-            expected[no] = (median, compute_jeonse_rate(median, jeonse), count_recent_price_records(db, no, months=6))
-
         from crawler.service_metrics import collect_complex_metrics
         collect_complex_metrics(batch_size=100)
 
-        for no in nos:
-            assert _metrics(db, no) == expected[no]
-        assert expected["72301"] == (315000, 66.7, 5)
-        assert expected["72302"] == (100001, None, 2)
-        assert expected["72303"] == (50000, None, 3)
+        assert _metrics(db, "72301") == (315000, 66.7, 4)  # 평균가 빈 줄은 표가 아니다(옛 5 = 섞인 줄 수)
+        assert _metrics(db, "72302") == (100001, None, 2)
+        assert _metrics(db, "72303") == (50000, None, 1)  # 옛 3 = 평균가 빈 줄 2개까지 센 값
 
     def test_batch_zero_is_all_and_positive_limits(self, db):
         # 항목 4: 0(과 함수 기본값) = 전량 · 양수 = 세대수 큰 순 그만큼
@@ -415,7 +424,7 @@ class TestMetricRecomputeAll:
             upsert_complex_from_search(db, _make_complex(no))
             for p in (180000, 200000):
                 _add_row(db, no, "A1", p)
-        _set_metrics(db, "72601", 190000, None, 2, updated_at=old)  # 이미 맞는 값
+        _set_metrics(db, "72601", 190000, None, 2, updated_at=old, rep_area=84)  # 이미 맞는 값
         _set_metrics(db, "72602", 100000, None, 2, updated_at=old)  # 낡은 값
         db.commit()
 

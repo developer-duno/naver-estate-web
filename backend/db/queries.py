@@ -26,7 +26,9 @@ from db.price_queries import (  # noqa: F401
     get_complex_price_history,
     get_latest_kapt_cost,
     get_price_changed_articles,
+    get_price_history_area,
     get_price_stats_aggregated,
+    price_history_basis,
 )
 from db.query_helpers import _build_filter_conditions, _build_order_clause  # noqa: F401
 from db.sgis_queries import get_complex_sgis_emd_cd, get_sgis_neighborhood_items  # noqa: F401

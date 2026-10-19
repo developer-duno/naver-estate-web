@@ -322,7 +322,7 @@ const ArticleRow = memo(function ArticleRow({
             {art.monthly_rent_yield}%
           </span>
         ) : art.article_jeonse_ratio != null ? (
-          <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700">
+          <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700" title="전세가율(같은 면적 기준)">
             {art.article_jeonse_ratio}%
           </span>
         ) : (

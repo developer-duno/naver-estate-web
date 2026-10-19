@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import { getComplex, getPriceStats } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { M2_TO_PYEONG } from "@/lib/constants";
+import { formatKoreanPrice } from "@/lib/format";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useSessionToken } from "@/hooks/useSessionToken";
 import { calcAvgPricePerPyeong } from "@/lib/compare-utils";
@@ -46,6 +47,14 @@ function formatPrice(price?: number): string {
   return `${price.toLocaleString()}만`;
 }
 
+/** 대표 면적 시세 — "59㎡ 1억 7,200만 (3건)". 대표 면적을 아직 못 정한 단지는 저장된 값만(옛 경로) */
+function formatRepAreaPrice(c: Complex): string {
+  if (c.rep_area_m2 == null) return formatPrice(c.nearby_median_price);
+  const price = c.nearby_median_price ? formatKoreanPrice(c.nearby_median_price) : "—";
+  const count = c.recent_trades_6m != null ? ` (${c.recent_trades_6m}건)` : "";
+  return `${c.rep_area_m2}㎡ ${price}${count}`;
+}
+
 /* ── 비교 테이블 행 정의 (기본 23행, 평당가는 동적 삽입) ── */
 
 const BASE_ROWS: { label: string; render: (c: Complex) => ReactNode }[] = [
@@ -68,8 +77,9 @@ const BASE_ROWS: { label: string; render: (c: Complex) => ReactNode }[] = [
   { label: "건폐율", render: (c) => c.building_coverage_ratio ? `${c.building_coverage_ratio}%` : "-" },
   // 평당가는 "건폐율" 다음에 동적 삽입 (compareRows useMemo 의 findIndex 참조)
   { label: "매물수", render: (c) => formatCount(c.article_count) },
-  { label: "주변 중위가", render: (c) => formatPrice(c.nearby_median_price) },
-  { label: "전세가율(이 단지)", render: (c) => c.jeonse_rate ? `${c.jeonse_rate.toFixed(0)}%` : "-" },
+  // 대표 면적 하나의 값(세션 474 B27, 사장님 결정 D3) — 카드·매물 전세가율 분모와 같은 숫자
+  { label: "대표 면적 시세", render: (c) => formatRepAreaPrice(c) },
+  { label: "전세가율(이 단지, 같은 면적)", render: (c) => c.jeonse_rate ? `${c.jeonse_rate.toFixed(0)}%` : "-" },
   // 정부 지역 값(세션 473) — 각 단지의 시군구, 부동산원 최신 달
   { label: "시군구 전세가율(부동산원)", render: (c) => c.region_jeonse_ratio != null
     ? `${c.region_jeonse_ratio}%${c.region_jeonse_period ? ` (${c.region_jeonse_period})` : ""}`
@@ -85,7 +95,7 @@ const ROW_CATEGORIES = {
     "최저층", "최고층", "준공일", "최소 면적", "최대 면적",
   ]),
   price: new Set([
-    "평당가", "매물수", "주변 중위가", "전세가율(이 단지)", "시군구 전세가율(부동산원)",
+    "평당가", "매물수", "대표 면적 시세", "전세가율(이 단지, 같은 면적)", "시군구 전세가율(부동산원)",
   ]),
   facility: new Set([
     "총 주차", "세대당 주차", "난방", "난방 연료", "시공사",
@@ -105,11 +115,11 @@ const MOBILE_TAB_LABELS: Record<MobileTab, string> = {
  * 비교 화면 값들의 자료 출처 (세션 472 PR 3 — 판정 ★ 대신 값 + 출처 각주).
  * 근거: 단지 정보·평형(관리비·세대 구성) = 네이버 단지/평형 API(backend services/enricher.py),
  * 매물수·평당가·현재 평균가·층별·면적별 가격 = 살아 있는 매물 호가 집계(backend db/price_queries.py FROM articles),
- * 가격 추이·주변 중위가·전세가율 = complex_price_history(네이버 시세·실거래가 crawler/service_price.py +
+ * 가격 추이·대표 면적 시세·전세가율 = complex_area_trade_stats(면적별 정부 실거래) + complex_price_history(네이버 시세·실거래가 crawler/service_price.py +
  * 국토교통부 실거래가 공공데이터 crawler/service_public.py)를 모아 계산(crawler/service_metrics.py).
  */
 const COMPARE_SOURCES_FOOTER_TEXT =
-  "출처: 단지 정보·평형별 관리비·세대 구성 = 네이버부동산 단지 정보 · 매물수·평당가·현재 평균가·층별·면적별 가격 = 네이버부동산 매물 호가 집계(실거래가 아님) · 가격 추이·주변 중위가·전세가율 = 네이버부동산 시세·실거래가와 국토교통부 실거래가(공공데이터포털) 기록으로 계산";
+  "출처: 단지 정보·평형별 관리비·세대 구성 = 네이버부동산 단지 정보 · 매물수·평당가·현재 평균가·층별·면적별 가격 = 네이버부동산 매물 호가 집계(실거래가 아님) · 가격 추이·대표 면적 시세·전세가율 = 네이버부동산 시세·실거래가와 국토교통부 실거래가(공공데이터포털) 기록으로 계산";
 
 const COMPARE_REGION_FOOTNOTE_TEXT =
   "시군구 전세가율: 한국부동산원 전국주택가격동향조사, 아파트 중위 매매가격 대비 전세가격(각 단지의 시군구, 기준 달은 값 옆 괄호)";

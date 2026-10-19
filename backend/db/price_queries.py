@@ -200,19 +200,9 @@ def get_price_changed_articles(
     return db.execute(stmt).scalars().all()
 
 
-def get_complex_price_history(
-    db: Session, complex_no: str, trade_type: Optional[str] = None,
-    area_no: Optional[str] = None,
-) -> list[dict]:
-    """단지의 월별 가격 추이 (base_month를 YYYYMM으로 정규화 + 월별 집계)"""
+def _price_history_rows(db: Session, conditions: list) -> list[dict]:
+    """complex_price_history 를 (거래유형, YYYYMM) 로 묶은 줄 — 한 달의 여러 줄은 최고·최저·평균(가중 없음)."""
     month_col = func.left(ComplexPriceHistory.base_month, 6).label("month")
-
-    conditions = [ComplexPriceHistory.complex_no == complex_no]
-    if trade_type:
-        conditions.append(ComplexPriceHistory.trade_type == trade_type)
-    if area_no:
-        conditions.append(ComplexPriceHistory.area_no == area_no)
-
     stmt = (
         select(
             ComplexPriceHistory.trade_type,
@@ -226,6 +216,104 @@ def get_complex_price_history(
         .order_by(month_col.asc())
     )
     return [dict(row._mapping) for row in db.execute(stmt).all()]
+
+
+def _history_area(db: Session, complex_no: str, area_no: Optional[str]) -> tuple[int | None, list[str]]:
+    """그래프에 쓸 면적 묶음과 그 묶음의 평형번호들(문자열) — 세션 474 B27.
+
+    area_no 없음 → 대표 면적(complexes.rep_area_m2) 묶음 · area_no 있음 → 그 평형의 전용면적 묶음.
+    묶음을 모르면 (None, []).
+    """
+    from crawler.area_group import area_group_of, pyeong_area_groups
+    from db.models import Complex
+
+    groups = pyeong_area_groups(db, complex_no)
+    if area_no:
+        try:
+            group = groups.get(int(area_no))
+        except (TypeError, ValueError):
+            group = None
+    else:
+        rep = db.query(Complex.rep_area_m2).filter(Complex.complex_no == complex_no).scalar()
+        group = area_group_of(rep) if isinstance(rep, int) and not isinstance(rep, bool) else None
+    if group is None:
+        return None, []
+    return group, sorted(str(pno) for pno, area in groups.items() if area == group)
+
+
+SERIES_GOV = "정부 실거래"
+SERIES_NAVER = "네이버 시세"
+
+
+def price_history_basis(area_m2: int | None, area_no: Optional[str] = None) -> str | None:
+    """그래프 제목 아래 기준 글자 — 정본(프런트는 그대로 쓴다). 평형을 고르면 네이버 시세가 따로 그려진다는 것까지."""
+    if not area_m2:
+        return None
+    if area_no:
+        return f"전용 {area_m2}㎡ 대 정부 실거래 중위 · 네이버 시세는 이 평형 값을 따로"
+    return f"전용 {area_m2}㎡ 대 정부 실거래 중위 · 전세는 네이버 시세"
+
+
+def get_price_history_area(db: Session, complex_no: str, area_no: Optional[str] = None) -> int | None:
+    """get_complex_price_history 가 쓰는 면적 묶음(응답 area_m2)."""
+    return _history_area(db, complex_no, area_no)[0]
+
+
+def get_complex_price_history(
+    db: Session, complex_no: str, trade_type: Optional[str] = None,
+    area_no: Optional[str] = None,
+) -> list[dict]:
+    """단지의 월별 가격 추이 (base_month를 YYYYMM으로 정규화 + 월별 집계) — 세션 474 B27: 한 면적 묶음만.
+
+    줄마다 series(SERIES_GOV · SERIES_NAVER)를 붙여 출처를 섞지 않는다(보완 ①).
+    - area_no 없음(기본선) → 대표 면적 묶음: 매매(A1) = 면적별 정부 실거래 중위만(price_median→price_avg,
+      최저→price_lower, 최고→price_upper) · 그 밖(전세 등) = 그 묶음 평형의 네이버 줄. 네이버 A1 줄·옛 정부 달 평균
+      ('' 줄 — 면적 섞임)은 안 쓴다.
+    - area_no 있음 → 그 평형의 네이버 줄(모든 유형, SERIES_NAVER) + 그 평형 묶음의 정부 실거래(A1, SERIES_GOV).
+      한 달에 둘이 있어도 합치지 않는다.
+    - 묶음을 모르면(대표 면적 미계산·평형표 없음) 옛 동작 그대로(그 단지 모든 줄을 달마다 묶음, series None).
+    """
+    from db.models import ComplexAreaTradeStat
+
+    group, pyeong_nos = _history_area(db, complex_no, area_no)
+    if group is None:
+        conditions = [ComplexPriceHistory.complex_no == complex_no]
+        if trade_type:
+            conditions.append(ComplexPriceHistory.trade_type == trade_type)
+        if area_no:
+            conditions.append(ComplexPriceHistory.area_no == area_no)
+        return [{**r, "series": None} for r in _price_history_rows(db, conditions)]
+
+    rows: list[dict] = []
+    naver_nos = [area_no] if area_no else pyeong_nos
+    if naver_nos and (area_no or trade_type != "A1"):
+        conditions = [
+            ComplexPriceHistory.complex_no == complex_no,
+            ComplexPriceHistory.area_no.in_(naver_nos),
+        ]
+        if trade_type:
+            conditions.append(ComplexPriceHistory.trade_type == trade_type)
+        if not area_no:
+            conditions.append(ComplexPriceHistory.trade_type != "A1")  # 기본선 매매는 정부 실거래만
+        rows = [{**r, "series": SERIES_NAVER} for r in _price_history_rows(db, conditions)]
+
+    if trade_type in (None, "A1"):
+        for month, median, low, high in (
+            db.query(
+                ComplexAreaTradeStat.base_month,
+                ComplexAreaTradeStat.price_median,
+                ComplexAreaTradeStat.price_min,
+                ComplexAreaTradeStat.price_max,
+            )
+            .filter(ComplexAreaTradeStat.complex_no == complex_no, ComplexAreaTradeStat.area_m2 == group)
+            .all()
+        ):
+            rows.append({
+                "trade_type": "A1", "month": month, "price_upper": high, "price_lower": low,
+                "price_avg": median, "series": SERIES_GOV,
+            })
+    rows.sort(key=lambda r: (r["month"], r["trade_type"], r["series"] or ""))
+    return rows
 
 
 def get_complex_official_prices(db: Session, complex_no: str) -> list[ComplexOfficialPrice]:

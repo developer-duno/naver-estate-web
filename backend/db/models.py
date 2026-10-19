@@ -78,6 +78,8 @@ class Complex(Base):
     nearby_median_price: Mapped[int | None] = mapped_column(Integer)
     jeonse_rate: Mapped[float | None] = mapped_column(Float)
     recent_trades_6m: Mapped[int | None] = mapped_column(Integer)
+    # 대표 전용면적 묶음(정수 ㎡, V073 · 세션 474) — 위 세 칸이 이 묶음 하나의 값이다(crawler/service_metrics.py)
+    rep_area_m2: Mapped[int | None] = mapped_column(Integer)
     has_pool: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
@@ -364,6 +366,27 @@ class ComplexPriceHistory(Base):
     price_lower: Mapped[int | None] = mapped_column(Integer)
     price_avg: Mapped[int | None] = mapped_column(Integer)
     base_month: Mapped[str] = mapped_column(String(8), nullable=False)  # YYYYMMDD (weekly) or YYYYMM (legacy)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ComplexAreaTradeStat(Base):
+    """면적별 정부 실거래(국토부 아파트 매매) — 단지·달·전용면적 정수 ㎡ 묶음 한 줄 (V073, 세션 474 B27).
+
+    적재 = crawler/service_public.py(주간·소급)가 complex_price_history 의 달 평균 줄 옆에서 같은 거래로 같이 쓴다.
+    prices = 그 달·그 묶음 거래 가격 목록(만원, 오름차순) — 6개월 중위를 거래 단위로 다시 셀 때 쓴다.
+    운영 칸 타입은 jsonb, 시험(SQLite)은 JSON — 모델은 SQLAlchemy JSON 하나로 둘 다 읽는다.
+    """
+
+    __tablename__ = "complex_area_trade_stats"
+
+    complex_no: Mapped[str] = mapped_column(String(20), primary_key=True)
+    base_month: Mapped[str] = mapped_column(String(6), primary_key=True)
+    area_m2: Mapped[int] = mapped_column(Integer, primary_key=True)
+    trade_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    price_median: Mapped[int | None] = mapped_column(Integer)
+    price_min: Mapped[int | None] = mapped_column(Integer)
+    price_max: Mapped[int | None] = mapped_column(Integer)
+    prices: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

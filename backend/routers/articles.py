@@ -17,7 +17,9 @@ from auth.audit import log_action
 from auth.permissions import check_quota
 from auth.rate_limiter import _get_client_ip
 from db import queries
+from db.area_price_queries import area_medians, recent_area_prices
 from deps import get_approved_user, get_db
+from routers.estate_serializers import _calc_jeonse_ratio
 from routers.serializers import article_to_dict, build_filter_dict
 from services.naver_call_counter import record_call
 from shared.constants import M2_TO_PYEONG
@@ -160,6 +162,15 @@ def export_articles_to_excel(
     # 파일명용 단지명 조회
     complex_obj = queries.get_complex_by_no(db, complex_no)
     _complex_name = (complex_obj.complex_name if complex_obj else None) or articles[0].complex_name
+    # 전세가율 분모 = 매물 면적 묶음의 6개월 정부 실거래 중위(세션 474 B27 — 매물 상세와 같은 함수, 조회 1번)
+    area_stats = (
+        area_medians(recent_area_prices(db, complex_obj.complex_no))
+        if complex_obj and any(a.trade_type_name == "전세" for a in articles)
+        else None
+    )
+
+    def _excel_blank(val):
+        return "" if val is None else val
 
     def _safe_excel(val: str) -> str:
         """엑셀 수식 인젝션 방어 — =, +, -, @, \\t, \\r 로 시작하는 문자열에 접두사 추가"""
@@ -213,11 +224,7 @@ def export_articles_to_excel(
                 if art.trade_type_name == "월세" and art.numeric_rent_price and art.numeric_price and art.numeric_price > 0
                 else ""
             ),
-            "전세가율(%)": (
-                round(art.numeric_price / complex_obj.nearby_median_price * 100, 1)
-                if art.trade_type_name == "전세" and art.numeric_price and complex_obj and complex_obj.nearby_median_price and complex_obj.nearby_median_price > 0
-                else ""
-            ),
+            "전세가율(%, 같은 면적)": _excel_blank(_calc_jeonse_ratio(art, complex_obj, area_stats)),
         })
 
     try:

@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from auth.permissions import check_quota
+from db.area_price_queries import area_medians, recent_area_prices
 from db.models import Article as ArticleModel
 from db.models import Complex as ComplexModel
 from deps import get_approved_user, get_db
@@ -129,8 +130,17 @@ def get_crawl_status(complex_no: str):
 
 
 def _article_detail_dict(db, art, complex_obj) -> dict:
-    """매물 상세 응답 = 매물 dict + 공식 기준값(법정 전환율 상한·시도 전환율·이 매물 전환율 — 세션 473)."""
-    return {**article_to_dict(art, complex_obj), **article_region_fields(db, art, complex_obj)}
+    """매물 상세 응답 = 매물 dict + 공식 기준값(법정 전환율 상한·시도 전환율·이 매물 전환율 — 세션 473).
+
+    매물 전세가율 분모 = 그 매물 면적 묶음의 6개월 정부 실거래 중위(세션 474 B27 — 면적별 표 조회 1번, 전세 매물만).
+    """
+    area_stats = None
+    if complex_obj is not None and art.trade_type_name == "전세":
+        area_stats = area_medians(recent_area_prices(db, complex_obj.complex_no))
+    return {
+        **article_to_dict(art, complex_obj, area_stats),
+        **article_region_fields(db, art, complex_obj),
+    }
 
 
 @router.get("/article/{article_no}/detail")

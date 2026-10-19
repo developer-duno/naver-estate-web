@@ -167,7 +167,7 @@ const ArticleCardItem = memo(function ArticleCardItem({ article: art, onClick, s
             {art.move_in_date && <><span className="text-gray-300">·</span><span>{art.move_in_date}</span></>}
             {maint !== "-" && <><span className="text-gray-300">·</span><span>관리비 {maint}</span></>}
             {art.monthly_rent_yield != null && <><span className="text-gray-300">·</span><span className="px-1.5 py-0.5 rounded text-sm font-semibold bg-gray-100 text-gray-700">수익 {art.monthly_rent_yield}%</span></>}
-            {art.article_jeonse_ratio != null && <><span className="text-gray-300">·</span><span className="px-1.5 py-0.5 rounded text-sm font-semibold bg-gray-100 text-gray-700">전세 {art.article_jeonse_ratio}%</span></>}
+            {art.article_jeonse_ratio != null && <><span className="text-gray-300">·</span><span className="px-1.5 py-0.5 rounded text-sm font-semibold bg-gray-100 text-gray-700">전세 {art.article_jeonse_ratio}%(같은 면적)</span></>}
           </div>
 
           {/* 4행: 특징 (truncate) */}

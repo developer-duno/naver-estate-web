@@ -72,7 +72,8 @@ export default function InfoCards({ article: a, complex: c }: Props) {
     ["전월세전환율(이 매물)", a.article_rent_conversion_rate != null ? `${a.article_rent_conversion_rate}%` : null],
     [regionConvLabel, a.region_rent_conversion_rate != null ? `${a.region_rent_conversion_rate}%` : null],
     ["법정 상한(보증금을 월세로 바꿀 때)", legalCapText],
-    ["전세가율(매물)", a.article_jeonse_ratio != null ? `${a.article_jeonse_ratio}%` : null],
+    // 분모 = 이 매물 전용면적 묶음의 6개월 정부 실거래 중위(BE 계산, 세션 474 B27)
+    ["전세가율(매물, 같은 면적 기준)", a.article_jeonse_ratio != null ? `${a.article_jeonse_ratio}%` : null],
     ["동일주소 매물", a.same_addr_cnt != null && a.same_addr_cnt > 1 ? `${a.same_addr_cnt}건 (${a.same_addr_min_prc ?? "-"} ~ ${a.same_addr_max_prc ?? "-"})` : null],
     ["사진 수", a.site_image_count != null && a.site_image_count > 0 ? `${a.site_image_count}장` : null],
     ["분양권 프리미엄", a.is_presale && a.same_addr_premium_min ? `${a.same_addr_premium_min} ~ ${a.same_addr_premium_max ?? "-"}` : null],
@@ -88,8 +89,12 @@ export default function InfoCards({ article: a, complex: c }: Props) {
         ["용적률", c.floor_area_ratio ? `${c.floor_area_ratio}%` : null],
         ["건폐율", c.building_coverage_ratio ? `${c.building_coverage_ratio}%` : null],
         ["세대당주차", c.parking_count_by_household ? `${c.parking_count_by_household}대` : null],
-        ["주변시세", c.nearby_median_price ? formatKoreanPrice(c.nearby_median_price) : null],
-        ["전세가율", c.jeonse_rate ? `${c.jeonse_rate}%` : null],
+        // 대표 면적 하나의 값(세션 474 B27) — 대표 면적을 아직 못 정한 단지는 옛 이름 그대로
+        [
+          c.rep_area_m2 != null ? `대표 면적 시세(${c.rep_area_m2}㎡)` : "주변시세",
+          c.nearby_median_price ? formatKoreanPrice(c.nearby_median_price) : null,
+        ],
+        [c.rep_area_m2 != null ? "전세가율(이 단지, 같은 면적)" : "전세가율", c.jeonse_rate ? `${c.jeonse_rate}%` : null],
         ["관리사무소", c.management_office_tel],
       ]
     : [];

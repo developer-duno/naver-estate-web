@@ -1,3 +1,12 @@
+/** 면적 묶음 하나의 최근 6개월 정부 실거래 (세션 474 B27) — 평형표의 모든 묶음, 거래 없으면 null */
+export interface AreaPrice {
+  area_m2: number;
+  /** 평형표 세대수 합(평형표에 없는 묶음이면 null) */
+  households?: number | null;
+  price_median: number | null;
+  trade_count: number | null;
+}
+
 /** 단지 정보 */
 export interface Complex {
   complex_no: string;
@@ -43,6 +52,12 @@ export interface Complex {
   region_name?: string | null;            // 시군구 이름만 "천안시 동남구"
   region_jeonse_source?: string | null;
   recent_trades_6m?: number;
+  /** 대표 전용면적 묶음(정수 ㎡, 세션 474 B27) — nearby_median_price·jeonse_rate·recent_trades_6m 이 이 묶음 값 */
+  rep_area_m2?: number | null;
+  /** 면적 묶음별 최근 6개월 정부 실거래(거래 수 많은 순) — 단지 상세·비교 응답에만 */
+  area_prices?: AreaPrice[];
+  /** 출처 줄 '이 단지:' 뒤 글자(BE 정본) — 단지 상세·비교 응답에만 */
+  area_price_source?: string | null;
   filter_options?: FilterOptions;
   has_pool?: boolean;
 }

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Complex, OfficialPriceItem } from "@/types";
 import { formatDateFull, formatKoreanPrice } from "@/lib/format";
+import { areaGroupOf, areaMedianOf } from "@/lib/area-group";
 import { getOfficialPrices, getComplexSubway, getComplexKapt, getComplexNeighborhood } from "@/lib/api/complex";
 import { formatSubwayStations } from "@/lib/subway-format";
 import { formatCostPerHousehold, formatCostBreakdown } from "@/lib/kapt-format";
@@ -24,12 +25,11 @@ function pickRepresentative(items: OfficialPriceItem[]): OfficialPriceItem | nul
 }
 
 /**
- * 공시가율(%) = 공시가격 ÷ 주변시세 × 100.
+ * 공시가율(%) = 공시가격 ÷ 같은 면적 시세 × 100 (세션 474 B27 — 분모는 면적별 정부 실거래 중위).
  *
  * ⚠ 단위 통일: price_median 은 **원** 단위(BE V-WORLD 원본 그대로 — PR-C
  * PropertyTaxComplexPicker.tsx:122 가 /10_000 으로 만원 환산),
- * nearby_median_price 는 **만원** 단위(ComplexPriceHistory.price_avg =
- * 네이버 averagePrice, ComplexDashboard.tsx:79 formatKoreanPrice 사용).
+ * 분모(area_prices[].price_median — 국토부 거래금액)는 **만원** 단위.
  * 따라서 공시가격을 만원으로 환산한 뒤 나눈다.
  *
  * 표시는 소수 1자리 반올림 — 프로젝트 % 표기 관례(전세가율 toFixed(1)) 답습.
@@ -134,9 +134,13 @@ export default function ComplexBasicInfo({ cpx }: { cpx: Complex }) {
       `공시가격(대표평형 중위${year ? `, ${year}년` : ""})`,
       formatKoreanPrice(Math.round(representative.price_median / 10_000)),
     ]);
-    if (cpx.nearby_median_price != null) {
-      const ratio = calcOfficialPriceRatio(representative.price_median, cpx.nearby_median_price);
-      if (ratio != null) rows.push(["공시가율(공시가격÷주변시세)", `${ratio.toFixed(1)}%`]);
+    // 분모 = 대표 공시가격 평형의 전용면적 묶음(정수 ㎡)에 해당하는 6개월 정부 실거래 중위(세션 474 B27).
+    // 그 묶음 값이 없으면 공시가율 행을 두지 않는다 — 다른 면적·섞인 값으로 나누지 않는다.
+    const officialGroup = areaGroupOf(representative.prvuse_ar);
+    const sameAreaMedian = areaMedianOf(cpx.area_prices, officialGroup);
+    if (sameAreaMedian != null) {
+      const ratio = calcOfficialPriceRatio(representative.price_median, sameAreaMedian);
+      if (ratio != null) rows.push([`공시가율(공시가격÷전용 ${officialGroup}㎡ 대 시세)`, `${ratio.toFixed(1)}%`]);
     }
   }
 

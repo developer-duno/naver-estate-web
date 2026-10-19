@@ -39,13 +39,18 @@ def complex_to_dict(c) -> dict:
         "nearby_median_price": c.nearby_median_price,
         "jeonse_rate": c.jeonse_rate,
         "recent_trades_6m": c.recent_trades_6m,
+        # 대표 면적 묶음(정수 ㎡, 세션 474 B27) — 위 세 값이 이 묶음 값. 칸 하나라 목록에도 실어도 조회가 안 늘어난다
+        "rep_area_m2": getattr(c, "rep_area_m2", None),
         "detail_crawled_at": c.detail_crawled_at.isoformat() if getattr(c, "detail_crawled_at", None) else None,
         "has_pool": getattr(c, "has_pool", None),
     }
 
 
-def article_to_dict(a, complex_obj=None) -> dict:
-    """Article ORM → 전체 필드 dict. complex_obj가 있으면 단지 정보로 빈 필드 보완."""
+def article_to_dict(a, complex_obj=None, area_stats: dict[int, int] | None = None) -> dict:
+    """Article ORM → 전체 필드 dict. complex_obj가 있으면 단지 정보로 빈 필드 보완.
+
+    area_stats = 그 단지 {면적 묶음: 6개월 정부 실거래 중위}(db/area_price_queries.area_medians) — 매물 상세만 넘긴다.
+    """
     pyeong = round(a.area2_m2 / M2_TO_PYEONG, 1) if a.area2_m2 else None
     c = complex_obj
     return {
@@ -121,7 +126,7 @@ def article_to_dict(a, complex_obj=None) -> dict:
         "trade_complete": bool(getattr(a, "trade_complete", False)),
         # 수익률 (동적 계산, DB 컬럼 불필요)
         "monthly_rent_yield": _calc_rent_yield(a),
-        "article_jeonse_ratio": _calc_jeonse_ratio(a, c),
+        "article_jeonse_ratio": _calc_jeonse_ratio(a, c, area_stats),
     }
 
 
@@ -137,17 +142,22 @@ def _calc_rent_yield(a) -> float | None:
     return None
 
 
-def _calc_jeonse_ratio(a, c) -> float | None:
-    """개별 전세가율: 전세보증금 / 매매중위가 × 100"""
-    c_median = getattr(c, "nearby_median_price", None) if c else None
-    if (
-        a.trade_type_name == "전세"
-        and a.numeric_price
-        and c_median
-        and c_median > 0
-    ):
-        return round(a.numeric_price / c_median * 100, 1)
-    return None
+def _calc_jeonse_ratio(a, c, area_stats: dict[int, int] | None = None) -> float | None:
+    """개별 전세가율: 전세보증금 / 같은 면적 묶음 매매 중위 × 100 (세션 474 B27).
+
+    분모 = 그 매물 전용면적(area2_m2)의 묶음(정수 ㎡)에 해당하는 최근 6개월 정부 실거래 중위(area_stats).
+    84㎡ 매물은 84 묶음, 59㎡ 매물은 59 묶음 값으로 나눈다 — 같은 묶음 값이 없으면 None(다른 면적·섞인 값으로
+    나누지 않는다). c 는 옛 호출 꼴 호환용으로만 받는다(분모로 쓰지 않음). 엑셀(routers/articles.py)도 이 함수.
+    """
+    from crawler.area_group import area_group_of
+
+    if a.trade_type_name != "전세" or not a.numeric_price or not area_stats:
+        return None
+    group = area_group_of(a.area2_m2)
+    median = area_stats.get(group) if group is not None else None
+    if not median or median <= 0:
+        return None
+    return round(a.numeric_price / median * 100, 1)
 
 
 def kapt_cost_to_dict(cost, mapping) -> dict:

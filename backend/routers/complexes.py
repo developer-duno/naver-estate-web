@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from crawler.utils import get_shared_throttle, haversine_km
 from db import queries
+from db.area_price_queries import complex_area_fields
 from db.sgis_queries import build_neighborhood
 from deps import get_approved_user, get_db
 from routers.region_serializers import complex_region_fields
@@ -110,6 +111,8 @@ def get_complex_detail(
         **complex_to_dict(cpx),
         # 정부 지역 값(부동산원 시군구 전세가율) — 상세·비교만(세션 473). 목록에는 안 붙인다.
         **complex_region_fields(db, cpx),
+        # 면적별 정부 실거래(대표 면적 외 다른 면적도) — 상세·비교만(세션 474 B27). 목록에는 안 붙인다.
+        **complex_area_fields(db, cpx),
         "article_count": article_count,
         "trade_type_counts": queries.get_trade_type_counts(db, complex_no),
         "filter_options": filter_options,
@@ -299,8 +302,12 @@ def get_price_history(
         return cached
 
     rows = queries.get_complex_price_history(db, complex_no, trade_type, area_no=area_no)
+    # 그래프가 그린 면적 묶음과 기준 글자(세션 474 B27) — 기본선 = 대표 면적, 평형 선택 = 그 평형 묶음
+    area_m2 = queries.get_price_history_area(db, complex_no, area_no)
     result = {
         "complex_no": complex_no,
+        "area_m2": area_m2,
+        "basis": queries.price_history_basis(area_m2, area_no),
         "items": [
             {
                 "trade_type": r["trade_type"],
@@ -309,6 +316,8 @@ def get_price_history(
                 "price_lower": r["price_lower"],
                 "price_avg": int(r["price_avg"]) if r["price_avg"] is not None else None,
                 "base_month": r["month"][:6],
+                # 출처 계열(세션 474 B27) — "정부 실거래" · "네이버 시세" · 옛 동작이면 None
+                "series": r.get("series"),
             }
             for r in rows
         ],

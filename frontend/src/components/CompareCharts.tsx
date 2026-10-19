@@ -92,7 +92,9 @@ export default function CompareCharts({ complexes, expandAll = false, accessToke
     .map((c, i) => {
       const data = historyQueries[i]?.data as PriceHistoryResponse | undefined;
       if (!data?.items?.length) return null;
-      return { complexNo: c.complex_no, complexName: c.complex_name, items: data.items };
+      // 계열 이름에 그 단지 그래프 면적 — "자연 (59㎡)" · 대표 면적이 없으면 "(면적 섞임)"(세션 474 보완 F5)
+      const area = data.area_m2 != null ? `${data.area_m2}㎡` : "면적 섞임";
+      return { complexNo: c.complex_no, complexName: `${c.complex_name} (${area})`, items: data.items };
     })
     .filter(Boolean) as { complexNo: string; complexName: string; items: PriceHistoryResponse["items"] }[];
 

@@ -45,7 +45,7 @@ describe("ArticleCardMobile 수익률/뱃지", () => {
       article_jeonse_ratio: 60.0,
     });
     render(<ArticleCardMobile articles={[art]} viewMode="large" />);
-    expect(screen.getByText(/전세 60%/)).toBeInTheDocument();
+    expect(screen.getByText("전세 60%(같은 면적)")).toBeInTheDocument();   // 분모 = 같은 면적 묶음(세션 474 B27)
   });
 
   it("매매 매물은 수익률 미표시", () => {

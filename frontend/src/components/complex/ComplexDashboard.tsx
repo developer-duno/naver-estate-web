@@ -9,6 +9,7 @@ import ComplexPriceAreaSection from "@/components/complex/ComplexPriceAreaSectio
 import PriceChartSection from "@/components/complex/PriceChartSection";
 import { useComplexArticleAvg } from "@/hooks/useComplexArticleAvg";
 import { formatKoreanPrice } from "@/lib/format";
+import { LEGACY_NOTE, otherAreaText } from "@/lib/area-group";
 import type { ArticleFilters, Complex, PyeongDetail } from "@/types";
 
 type SectionKey = "prices" | "chart" | "info" | "area";
@@ -26,6 +27,10 @@ interface BoxData {
   label: string;
   primary: string;
   secondary?: string;
+  /** 라벨 옆 작은 표시 — "최근 6개월 3건"(세션 474 B27) */
+  chip?: string;
+  /** 값 아래 작은 줄 — 대표 면적 전세가율·지역 값(세션 474 B27) */
+  extra?: string;
   /** 칸 아래 작은 출처 줄 — 정부 값이 붙었을 때만(세션 473) */
   note?: string;
 }
@@ -82,25 +87,45 @@ export default function ComplexDashboard({
     ? `지역: ${complex.region_jeonse_source}${complex.region_jeonse_period ? `(${complex.region_jeonse_period})` : ""}`
     : null;
 
+  // 시세 칸 — 대표 면적이 있으면 그 면적 값 크게 + 다른 면적 작게(세션 474 B27, 사장님 결정 D3 「A」).
+  // 출처 글자(area_price_source)는 BE 정본. 대표 면적이 없으면 옛 경로(시세 → 매물 평균 대체값) 그대로.
+  const rep = complex.rep_area_m2 ?? null;
+  const repHouseholds = rep != null ? complex.area_prices?.find((ap) => ap.area_m2 === rep)?.households : undefined;
+  const pricesBox: BoxData = rep != null
+    ? {
+        key: "prices",
+        label: `시세 · 전용 ${rep}㎡${repHouseholds ? `(${repHouseholds.toLocaleString()}세대)` : ""}`,
+        chip: complex.recent_trades_6m != null ? `최근 6개월 ${complex.recent_trades_6m}건` : undefined,
+        primary: complex.nearby_median_price != null ? formatKoreanPrice(complex.nearby_median_price) : "—",
+        secondary: otherAreaText(rep, complex.area_prices ?? []) || undefined,
+        extra: `전세가율(${rep}㎡) ${complex.jeonse_rate != null ? `${complex.jeonse_rate}%` : "—"}${regionJeonseText}`,
+        note: complex.area_price_source
+          ? `이 단지: ${complex.area_price_source}${regionSourceText ? ` · ${regionSourceText}` : ""}`
+          : (regionSourceText ?? undefined),
+      }
+    : {
+        key: "prices",
+        label: "시세",
+        primary: complex.nearby_median_price != null
+          ? formatKoreanPrice(complex.nearby_median_price)
+          : (avgPrice != null ? `매물 평균 ${formatKoreanPrice(avgPrice)}` : "-"),
+        // 대표 면적이 없는데 옛 값이 남은 단지 — 면적이 섞인 옛 값임을 작게 밝힌다(사장님 결정 Q4)
+        extra: complex.price_basis === "legacy_mixed" ? LEGACY_NOTE : undefined,
+        secondary: complex.jeonse_rate != null
+          ? `전세가율 ${complex.jeonse_rate}%${regionJeonseText}`
+          : hasRegionJeonse
+            ? `${complex.region_name} 아파트 전세가율 ${complex.region_jeonse_ratio}%`
+            : (countLoading || count > 0 ? countText : undefined),
+        note: regionSourceText
+          ? (complex.jeonse_rate != null
+            ? `이 단지: 최근 6개월 시세·실거래 기록 중앙값으로 계산 · ${regionSourceText}`
+            : regionSourceText)
+          : undefined,
+      };
+
   // 박스 라벨·값 계산 (Q3 NULL fallback)
   const boxes: BoxData[] = [
-    {
-      key: "prices",
-      label: "시세",
-      primary: complex.nearby_median_price != null
-        ? formatKoreanPrice(complex.nearby_median_price)
-        : (avgPrice != null ? `매물 평균 ${formatKoreanPrice(avgPrice)}` : "-"),
-      secondary: complex.jeonse_rate != null
-        ? `전세가율 ${complex.jeonse_rate}%${regionJeonseText}`
-        : hasRegionJeonse
-          ? `${complex.region_name} 아파트 전세가율 ${complex.region_jeonse_ratio}%`
-          : (countLoading || count > 0 ? countText : undefined),
-      note: regionSourceText
-        ? (complex.jeonse_rate != null
-          ? `이 단지: 최근 6개월 시세·실거래 기록 중앙값으로 계산 · ${regionSourceText}`
-          : regionSourceText)
-        : undefined,
-    },
+    pricesBox,
     {
       key: "chart",
       label: "실거래가",
@@ -142,9 +167,17 @@ export default function ComplexDashboard({
                 : "border-gray-200 hover:border-gray-400"
             }`}
           >
-            <span className="text-[11px] md:text-xs text-gray-500">{b.label}</span>
+            <span className="text-[11px] md:text-xs text-gray-500">
+              {b.label}
+              {b.chip && (
+                <span className="ml-1 rounded bg-amber-50 px-1 text-[10px] text-amber-700" data-testid={`box-chip-${b.key}`}>
+                  {b.chip}
+                </span>
+              )}
+            </span>
             <span className="text-sm md:text-base font-semibold mt-0.5 break-keep">{b.primary}</span>
             {b.secondary && <span className="text-[10px] md:text-xs text-gray-400 mt-0.5">{b.secondary}</span>}
+            {b.extra && <span className="text-[10px] md:text-xs text-gray-500 mt-0.5" data-testid={`box-extra-${b.key}`}>{b.extra}</span>}
             {b.note && <span className="text-[10px] text-gray-400 mt-0.5" data-testid={`box-note-${b.key}`}>{b.note}</span>}
           </button>
         ))}
@@ -158,7 +191,7 @@ export default function ComplexDashboard({
               <ComplexPriceFloorSection complexNo={complexNo} onFilterChange={onFilterChange} accessToken={sessionToken} />
             )}
             {(openSection === "chart" || isPrinting) && (
-              <PriceChartSection complexNo={complexNo} pyeongDetails={pyeongDetails} accessToken={sessionToken} />
+              <PriceChartSection complexNo={complexNo} pyeongDetails={pyeongDetails} accessToken={sessionToken} repAreaM2={complex.rep_area_m2} />
             )}
             {(openSection === "info" || isPrinting) && <ComplexBasicInfo cpx={complex} />}
             {(openSection === "area" || isPrinting) && (

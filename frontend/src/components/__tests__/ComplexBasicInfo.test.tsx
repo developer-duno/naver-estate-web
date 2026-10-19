@@ -108,6 +108,9 @@ describe("ComplexBasicInfo", () => {
   });
 });
 
+const AREA_59 = { area_m2: 59, price_median: 60_000, trade_count: 5 };
+const AREA_84 = { area_m2: 84, price_median: 120_000, trade_count: 3 };
+
 describe("ComplexBasicInfo — 공시가격 · 공시가율 (PR-D)", () => {
   beforeEach(() => {
     mockGetOfficialPrices.mockReset();
@@ -115,7 +118,8 @@ describe("ComplexBasicInfo — 공시가격 · 공시가율 (PR-D)", () => {
 
   it("정상 표시 — 대표평형(ho_count 최대) 공시가격 + 공시가율", async () => {
     // 대표평형 = ho_count 최대인 84.99㎡ (price_median 8억4천만원 = 84,000만원).
-    // 주변시세 120,000만원(12억) → 공시가율 = 84000/120000 = 70.0%
+    // 같은 면적(84㎡ 대) 6개월 정부 실거래 중위 120,000만원(12억) → 공시가율 = 84000/120000 = 70.0%
+    // (세션 474 B27: 분모가 섞인 주변시세 → 같은 면적 묶음 값. 59㎡ 묶음 값은 분모가 아니다)
     mockGetOfficialPrices.mockResolvedValue({
       complex_no: "C001",
       year: "2026",
@@ -126,48 +130,49 @@ describe("ComplexBasicInfo — 공시가격 · 공시가율 (PR-D)", () => {
       ],
     });
 
-    renderInfo(makeComplex({ nearby_median_price: 120_000 }));
+    renderInfo(makeComplex({ nearby_median_price: 99_000, area_prices: [AREA_59, AREA_84] }));
 
     expect(await screen.findByText("공시가격(대표평형 중위, 2026년)")).toBeInTheDocument();
     // 84,000만원 = 8억 4,000만 (formatKoreanPrice 표기)
     expect(screen.getByText("8억 4,000만")).toBeInTheDocument();
-    expect(screen.getByText("공시가율(공시가격÷주변시세)")).toBeInTheDocument();
+    expect(screen.getByText("공시가율(공시가격÷전용 84㎡ 대 시세)")).toBeInTheDocument();
     expect(screen.getByText("70.0%")).toBeInTheDocument();
   });
 
   it("공시가격 데이터 없음(items:[]) → 두 행 모두 미추가", async () => {
     mockGetOfficialPrices.mockResolvedValue({ complex_no: "C001", year: null, items: [] });
 
-    renderInfo(makeComplex({ nearby_median_price: 120_000 }));
+    renderInfo(makeComplex({ area_prices: [AREA_84] }));
 
     // 기존 행은 정상 렌더 (렌더 완료 대기)
     expect(await screen.findByText("주소")).toBeInTheDocument();
     expect(screen.queryByText(/공시가격\(대표평형 중위/)).not.toBeInTheDocument();
-    expect(screen.queryByText("공시가율(공시가격÷주변시세)")).not.toBeInTheDocument();
+    expect(screen.queryByText("공시가율(공시가격÷전용 84㎡ 대 시세)")).not.toBeInTheDocument();
   });
 
-  it("주변시세(nearby_median_price) 없으면 공시가격 행만 표시, 공시가율 행 미추가", async () => {
+  it("같은 면적 묶음 값이 없으면 공시가격 행만 — 다른 면적·섞인 시세로 나누지 않는다 (세션 474)", async () => {
     mockGetOfficialPrices.mockResolvedValue({
       complex_no: "C001",
       year: "2026",
       items: [{ prvuse_ar: 84.99, price_median: 840_000_000, ho_count: 380 }],
     });
 
-    renderInfo(makeComplex({ nearby_median_price: undefined }));
+    renderInfo(makeComplex({ nearby_median_price: 120_000, area_prices: [AREA_59] }));
 
     expect(await screen.findByText("공시가격(대표평형 중위, 2026년)")).toBeInTheDocument();
-    expect(screen.queryByText("공시가율(공시가격÷주변시세)")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^공시가율/)).not.toBeInTheDocument();
+    expect(screen.queryByText("공시가율(공시가격÷전용 84㎡ 대 시세)")).not.toBeInTheDocument();
   });
 
   it("공시가율 계산·반올림 — 소수 1자리 (66.666..% → 66.7%)", async () => {
-    // 공시가격 60,000만원 ÷ 주변시세 90,000만원 = 66.666..% → 66.7%
+    // 공시가격 60,000만원 ÷ 같은 면적 시세 90,000만원 = 66.666..% → 66.7%
     mockGetOfficialPrices.mockResolvedValue({
       complex_no: "C001",
       year: "2026",
       items: [{ prvuse_ar: 84.99, price_median: 600_000_000, ho_count: 380 }],
     });
 
-    renderInfo(makeComplex({ nearby_median_price: 90_000 }));
+    renderInfo(makeComplex({ area_prices: [{ area_m2: 84, price_median: 90_000, trade_count: 2 }] }));
 
     expect(await screen.findByText("66.7%")).toBeInTheDocument();
   });
@@ -175,11 +180,11 @@ describe("ComplexBasicInfo — 공시가격 · 공시가율 (PR-D)", () => {
   it("조회 실패(에러) → 두 행 미추가, 기존 행은 정상 렌더 (크래시 없음)", async () => {
     mockGetOfficialPrices.mockRejectedValue(new Error("500"));
 
-    renderInfo(makeComplex({ nearby_median_price: 120_000 }));
+    renderInfo(makeComplex({ area_prices: [AREA_84] }));
 
     expect(await screen.findByText("주소")).toBeInTheDocument();
     expect(screen.queryByText(/공시가격\(대표평형 중위/)).not.toBeInTheDocument();
-    expect(screen.queryByText("공시가율(공시가격÷주변시세)")).not.toBeInTheDocument();
+    expect(screen.queryByText("공시가율(공시가격÷전용 84㎡ 대 시세)")).not.toBeInTheDocument();
   });
 });
 

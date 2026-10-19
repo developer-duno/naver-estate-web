@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from crawler.utils import CheckpointManager
-from db.models import ComplexPriceHistory
+from db.models import ComplexAreaTradeStat, ComplexPriceHistory
 from utils import utcnow
 
 logger = logging.getLogger(__name__)
@@ -121,6 +121,41 @@ def _upsert_price_history(
             "price_upper": stmt.excluded.price_upper,
             "price_lower": stmt.excluded.price_lower,
             "price_avg": stmt.excluded.price_avg,
+            "recorded_at": stmt.excluded.recorded_at,
+        },
+    )
+    db.execute(stmt)
+
+
+def _upsert_area_stats(db: Session, complex_no: str, base_month: str, area_m2: int, prices: list[int]):
+    """면적별 정부 실거래 한 줄 upsert — 단지·달·면적 묶음(정수 ㎡) (V073, 세션 474 B27).
+
+    값 = 거래 수 · 중위(짝수면 가운데 둘의 평균 내림 — crawler/stats.compute_median_price) · 최저 · 최고 ·
+    가격 목록(오름차순). recorded_at 을 지금으로 새로 찍어 회차 뒤 정리(_delete_stale_area_rows)에서 남는다.
+    """
+    from crawler.stats import compute_median_price
+
+    ordered = sorted(int(p) for p in prices)
+    values = dict(
+        complex_no=complex_no,
+        base_month=base_month,
+        area_m2=int(area_m2),
+        trade_count=len(ordered),
+        price_median=compute_median_price(ordered),
+        price_min=ordered[0] if ordered else None,
+        price_max=ordered[-1] if ordered else None,
+        prices=ordered,
+        recorded_at=utcnow(),
+    )
+    stmt = pg_insert(ComplexAreaTradeStat).values(**values)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["complex_no", "base_month", "area_m2"],
+        set_={
+            "trade_count": stmt.excluded.trade_count,
+            "price_median": stmt.excluded.price_median,
+            "price_min": stmt.excluded.price_min,
+            "price_max": stmt.excluded.price_max,
+            "prices": stmt.excluded.prices,
             "recorded_at": stmt.excluded.recorded_at,
         },
     )

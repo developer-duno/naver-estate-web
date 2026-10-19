@@ -280,10 +280,45 @@ describe("단지 비교 — 값과 출처만 (판정 표시 없음)", () => {
     await waitFor(() => {
       expect(screen.getAllByText("시군구 전세가율(부동산원)").length).toBeGreaterThanOrEqual(1);
     });
-    expect(screen.getAllByText("전세가율(이 단지)").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("전세가율(이 단지, 같은 면적)").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("전세가율")).toBeNull();          // 옛 행 이름 없음
     expect(screen.getAllByText("79.4% (2026.01)").length).toBeGreaterThanOrEqual(1);   // 기준 달은 값 옆 괄호(F10)
     const note = screen.getByTestId("compare-region-footnote");
     expect(note).toHaveTextContent("한국부동산원 전국주택가격동향조사, 아파트 중위 매매가격 대비 전세가격");
+  });
+});
+
+describe("단지 비교 — 대표 면적 시세 두 줄 (세션 474 B27)", () => {
+  beforeEach(() => {
+    vi.mocked(api.getPriceStats).mockImplementation((no: string) => Promise.resolve(makeStats(no)));
+  });
+
+  it("'주변 중위가'·'전세가율(이 단지)' 두 줄이 대표 면적 값으로 — 59㎡ 1억 7,200만 (3건)", async () => {
+    vi.mocked(api.getComplex).mockImplementation((no: string) =>
+      Promise.resolve(
+        no === "A"
+          ? { ...makeComplex(no), rep_area_m2: 59, nearby_median_price: 17200, recent_trades_6m: 3, jeonse_rate: undefined }
+          : { ...makeComplex(no), rep_area_m2: 84, nearby_median_price: 51000, recent_trades_6m: 12, jeonse_rate: 61 },
+      ),
+    );
+    renderPage("ids=A,B");
+    await waitFor(() => {
+      expect(screen.getAllByText("대표 면적 시세").length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.getAllByText("59㎡ 1억 7,200만 (3건)").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("84㎡ 5억 1,000만 (12건)").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("전세가율(이 단지, 같은 면적)").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("주변 중위가")).toBeNull();
+  });
+
+  it("대표 면적 없이 옛 값만 남은 단지 — '1억 8,000만 (면적 섞인 옛 값)' · '54% (옛 값)' (보완 F2 · Q4)", async () => {
+    vi.mocked(api.getComplex).mockImplementation((no: string) =>
+      Promise.resolve({ ...makeComplex(no), nearby_median_price: 18000, jeonse_rate: 53.6, price_basis: "legacy_mixed" as const }),
+    );
+    renderPage("ids=A,B");
+    await waitFor(() => {
+      expect(screen.getAllByText("1억 8,000만 (면적 섞인 옛 값)").length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.getAllByText("54% (옛 값)").length).toBeGreaterThanOrEqual(1);
   });
 });

@@ -491,5 +491,5 @@ class TestMetricRecomputeSafeguards:
 
         job = _last_metric_job(db)
         assert job.status == "failed"
-        assert "하나도 못 읽어서" in job.error_message
+        assert job.error_message.startswith("첫 수집 전이라 면적별 실거래 표가 비어 있어요")  # 세션 474 문구
         assert (job.total_items, job.processed_items) == (0, 0)

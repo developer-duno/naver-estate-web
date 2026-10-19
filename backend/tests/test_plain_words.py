@@ -1065,6 +1065,16 @@ def test_complex_metric_no_recent_rows_reason_kept_in_alert():
     )
 
 
+def test_complex_metric_partial_coverage_reason_kept_in_alert():
+    """면적별 실거래 표가 덜 채워진 날의 사유(세션 474)도 알림·화면에 원문 그대로 — 숫자(단지 N/M·K곳)가 핵심."""
+    from crawler.service_metrics import _partial_coverage_words
+
+    words = _partial_coverage_words(1200, 13406, 11500)
+    assert words == "면적별 실거래 표가 아직 덜 채워져(단지 1,200/13,406) 11,500곳은 옛 값을 그대로 두었어요"
+    assert explain_error(words) == words
+    assert explain_stored_error(words) == words
+
+
 def test_kapt_match_message_with_english_falls_to_unknown():
     """우리 문구 뒤에 영문(개발자 원문)이 섞이면 원문 보존 규칙을 지나쳐 고정 문장이 된다."""
     out = explain_error(f"{_KAPT_MATCH_NOTE} KaptApiError")

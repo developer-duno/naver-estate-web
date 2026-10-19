@@ -310,4 +310,15 @@ describe("단지 비교 — 대표 면적 시세 두 줄 (세션 474 B27)", () =
     expect(screen.getAllByText("전세가율(이 단지, 같은 면적)").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("주변 중위가")).toBeNull();
   });
+
+  it("대표 면적 없이 옛 값만 남은 단지 — '1억 8,000만 (면적 섞인 옛 값)' · '54% (옛 값)' (보완 F2 · Q4)", async () => {
+    vi.mocked(api.getComplex).mockImplementation((no: string) =>
+      Promise.resolve({ ...makeComplex(no), nearby_median_price: 18000, jeonse_rate: 53.6, price_basis: "legacy_mixed" as const }),
+    );
+    renderPage("ids=A,B");
+    await waitFor(() => {
+      expect(screen.getAllByText("1억 8,000만 (면적 섞인 옛 값)").length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.getAllByText("54% (옛 값)").length).toBeGreaterThanOrEqual(1);
+  });
 });

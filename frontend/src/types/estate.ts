@@ -58,6 +58,8 @@ export interface Complex {
   area_prices?: AreaPrice[];
   /** 출처 줄 '이 단지:' 뒤 글자(BE 정본) — 단지 상세·비교 응답에만 */
   area_price_source?: string | null;
+  /** 시세 세 값이 무엇인가 — "rep_area" 대표 면적 값 · "legacy_mixed" 면적 섞인 옛 값(최근 6개월 거래 없음) · null 없음 */
+  price_basis?: "rep_area" | "legacy_mixed" | null;
   filter_options?: FilterOptions;
   has_pool?: boolean;
 }

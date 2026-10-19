@@ -23,14 +23,16 @@ from crawler.area_group import load_pyeong_tables, pick_representative
 from crawler.metrics_helpers import _cutoff_month
 from crawler.service_common import _checkpoint, fail_job_safely
 from crawler.stats import compute_jeonse_rate, compute_median_price
+from db.area_price_queries import AREA_PRICE_MONTHS
 from db.database import SessionLocal
 from db.models import Complex, ComplexAreaTradeStat, ComplexPriceHistory, CrawlJob
 from utils import utcnow
 
 logger = logging.getLogger(__name__)
 
-# 매매 중앙값 계산 기간(개월) — 후보 조건과 계산이 같은 값을 써야 헛바퀴가 안 생긴다(세션 428)
-_MEDIAN_MONTHS = 6
+# 매매 중앙값 계산 기간(개월) — 후보 조건과 계산이 같은 값을 써야 헛바퀴가 안 생긴다(세션 428).
+# 세션 474: 화면(db/area_price_queries)과 같은 한 곳(AREA_PRICE_MONTHS)에서 — 달력 기준 6개월.
+_MEDIAN_MONTHS = AREA_PRICE_MONTHS
 
 # commit 간격(확인한 단지 수). 운영 DB 왕복 약 9.5ms(10-03 실측) × 묶음 안 UPDATE 약 30건 ≈ 0.3초만 잠그게(세션 428).
 _METRIC_COMMIT_EVERY = 50
@@ -39,13 +41,21 @@ _METRIC_COMMIT_EVERY = 50
 # 그대로 쓰면 체크포인트 기록·로그가 수천 번 생긴다 — 이 잡만 넓게 잡는다(세션 428).
 _METRIC_SAVE_EVERY = 500
 
-# 최근 6개월 시세 줄을 하나도 못 읽어 멈춘 날의 잡 사유 — 알림에도 원문 그대로 나가게
-# `plain_words._ERROR_RULES` 에 같은 머리말 규칙이 있다(세션 428 재검사관).
-# 세션 474: 면적별 정부 실거래 표(V073)가 최근 6개월 0줄이면(운영 첫 주간 수집 전·수집 장애) 대표 면적 값을 만들
-# 재료가 없어 거의 모든 단지를 빈 값으로 바꾸게 된다 — 이때도 아무것도 쓰지 않고 멈춘다.
+# 잡 사유 문구 — 알림에도 원문 그대로 나가게 `plain_words._ERROR_RULES` 에 같은 머리말 규칙이 있다(세션 428 재검사관).
+# 세션 474: 면적별 정부 실거래 표(V073)가 최근 6개월 0줄이면(운영 첫 수집 전·수집 장애) 대표 면적 값을 만들
+# 재료가 없어 거의 모든 단지를 빈 값으로 바꾸게 된다 — 이때는 아무것도 쓰지 않고 failed 로 멈춘다.
 _NO_RECENT_ROWS_WORDS = (
-    "최근 6개월 시세 기록을 하나도 못 읽어서 가치 점수를 건드리지 않았어요 — 면적별 정부 실거래 기록을 확인해 주세요"
+    "첫 수집 전이라 면적별 실거래 표가 비어 있어요 — 주간 수집(토요일 05:00)이나 수동 수집 뒤 채워져요"
 )
+
+# 덮개 비율 문턱(세션 474 검사관 C 🟠1) — 최근 6개월 면적별 표에 줄 있는 단지 ÷ 옛 정부 달 평균('' 줄) 있는 단지.
+# 이보다 낮으면 표가 덜 채워진 날(첫 수동 수집이 도중에 멈춤 등)로 보고, 면적별 줄이 없는 단지는 옛 값을 그대로 둔다.
+_COVERAGE_MIN = 0.9
+
+
+def _partial_coverage_words(have: int, legacy: int, kept: int) -> str:
+    """덮개 비율이 문턱 밑인 날의 잡 사유(completed) — plain_words 같은 머리말 규칙."""
+    return f"면적별 실거래 표가 아직 덜 채워져(단지 {have:,}/{legacy:,}) {kept:,}곳은 옛 값을 그대로 두었어요"
 
 
 @dataclass
@@ -57,6 +67,8 @@ class RecentMaterial:
     # 다시 계산 대상 = 최근 6개월 매매 평균가 줄(옛 정부 '' 줄 포함)이나 면적별 정부 줄이 있는 단지
     seen: set[str] = field(default_factory=set)
     gov_rows: int = 0   # 면적별 정부 실거래 표 최근 줄 수
+    gov_complexes: set[str] = field(default_factory=set)     # 면적별 정부 표 최근 줄이 있는 단지
+    legacy_complexes: set[str] = field(default_factory=set)  # 옛 정부 달 평균('' 줄) 최근 줄이 있는 단지(덮개 비율 분모)
     unmapped: int = 0   # 평형번호 줄인데 평형표에 없어 묶음을 못 정해 버린 줄 수
     # seen 단지들의 평형표 {단지: [(pyeong_no, 묶음 ㎡ | None, 세대수)]} — 대표 면적 판정에도 쓴다
     pyeong: dict[str, list[tuple[int, int | None, int]]] = field(default_factory=dict)
@@ -84,6 +96,7 @@ def _load_recent_prices(db, cutoff: str) -> RecentMaterial:
     ):
         m.gov_rows += 1
         m.seen.add(complex_no)
+        m.gov_complexes.add(complex_no)
         for price in prices or []:
             if price:
                 _add_vote(m.a1, complex_no, int(area_m2), price)
@@ -107,6 +120,8 @@ def _load_recent_prices(db, cutoff: str) -> RecentMaterial:
     for complex_no, trade_type, area_no, base_month, price_avg in rows:
         if trade_type == "A1":
             m.seen.add(complex_no)
+            if area_no == "" and len(base_month or "") == 6:
+                m.legacy_complexes.add(complex_no)
             continue  # 매매 재료는 정부 실거래 표만 — 네이버 A1 · 옛 '' 줄은 섞지 않는다(세션 474 B27 보완 ①)
         if not area_no:
             continue  # '' · NULL = 면적 모름 — 전세 재료에서도 뺀다
@@ -239,6 +254,16 @@ def collect_complex_metrics(batch_size: int = 0, scheduler_job_id: str | None = 
             .all()
         )
         recompute = [c for c in candidates if c.complex_no in material.seen]
+        # 덮개 비율(세션 474 검사관 C 🟠1): 표가 덜 채워진 날엔 면적별 줄 없는 단지를 이번 회차에서 건너뛴다(옛 값 유지)
+        legacy_n = len(material.legacy_complexes)
+        have_n = len(material.gov_complexes)
+        coverage = have_n / legacy_n if legacy_n else 1.0
+        partial_reason = None
+        if coverage < _COVERAGE_MIN:
+            kept = [c for c in recompute if c.complex_no not in material.gov_complexes]
+            recompute = [c for c in recompute if c.complex_no in material.gov_complexes]
+            partial_reason = _partial_coverage_words(have_n, legacy_n, len(kept))
+            logger.warning("가치지표 수집: %s (덮개 %.2f)", partial_reason, coverage)
         if batch_size > 0:
             recompute = recompute[:batch_size]
         total = len(recompute)
@@ -278,6 +303,8 @@ def collect_complex_metrics(batch_size: int = 0, scheduler_job_id: str | None = 
         job.status = "completed"
         job.total_items = total
         job.processed_items = checked
+        if partial_reason:
+            job.error_message = partial_reason
         job.completed_at = utcnow()
         db.commit()
         _checkpoint.delete(db, job_id)

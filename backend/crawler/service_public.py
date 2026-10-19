@@ -417,6 +417,8 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
         processed = 0
         matched = 0
         stale_deleted = 0       # 이번에 짝이 안 된 옛 정부 줄을 지운 수(세션 469)
+        area_stale_deleted = 0  # 이번에 안 쓰인 면적별 줄을 지운 수(세션 474 F7)
+        area_unreadable = 0     # 짝은 됐는데 전용면적을 못 읽어 면적별 표에서 뺀 거래 수(세션 474 F7)
         ok_sigungu = 0         # 이번 회차에 끝까지 받은 시군구 수
         failed_sigungu = 0      # 이번 회차에 호출 실패로 못 받은 시군구 수
         consecutive_failed = 0  # 연속 실패 — 하나라도 성공하면 0
@@ -469,6 +471,7 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
 
                 processed += len(trades)
 
+            area_unreadable += matcher.area_unreadable  # 이 시군구 matcher 누적(세션 474 F7)
             if fetch_failed:
                 # done_codes 에 넣지 않는다 — 다음 회차(재개 포함)가 이 시군구를 다시 받는다.
                 kind = PublicDataAPI.last_failure_kind() or "other"
@@ -492,7 +495,7 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
                     db, sigungu_cd, matcher.cleanup_complex_nos, traded_months, run_started_at,
                 )
                 # 면적별 줄도 같은 단지·같은 달·같은 시각 기준으로(세션 474 B27)
-                _cleanup_sigungu_stale_area_rows(
+                area_stale_deleted += _cleanup_sigungu_stale_area_rows(
                     db, sigungu_cd, matcher.cleanup_complex_nos, traded_months, run_started_at,
                 )
             else:
@@ -512,7 +515,10 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
                 logger.info("공공데이터 수집 중간 저장: %d/%d 시군구 완료", len(done_codes), len(sigungu_codes))
 
         # 성공·실패 마감 모두에 남도록 마감 분기 앞에서 한 줄(알림·사유 칸 아님 — 세션 469)
-        logger.info("[정부 실거래가] 이번에 짝이 안 된 옛 줄 %d개 정리", stale_deleted)
+        logger.info(
+            "[정부 실거래가] 이번에 짝이 안 된 옛 줄 %d개 정리 · 면적별 옛 줄 %d개 정리 · 면적 못 읽음 %d건",
+            stale_deleted, area_stale_deleted, area_unreadable,
+        )
 
         job.total_items = processed
         job.processed_items = matched

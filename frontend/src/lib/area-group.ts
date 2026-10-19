@@ -7,6 +7,9 @@
 import { formatKoreanPrice } from "@/lib/format";
 import type { AreaPrice } from "@/types";
 
+/** 면적 섞인 옛 값 안내 — 대표 면적이 없는데 옛 값이 남은 단지(세션 474 보완 F2 · 사장님 결정 Q4) */
+export const LEGACY_NOTE = "면적 섞인 옛 값 — 최근 6개월 거래가 없어 다시 계산되지 않았어요";
+
 export function areaGroupOf(value: string | number | null | undefined): number | null {
   if (value == null || value === "") return null;
   const num = typeof value === "number" ? value : Number(value);

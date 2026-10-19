@@ -82,6 +82,8 @@ class SigunguMatcher:
             if c.norm_name and N_DANJI_SUFFIX.search(c.norm_name)
         }
         self._memo: dict[tuple[str, str], str | None] = {}
+        # aggregate_by_area 가 짝은 됐는데 전용면적을 못 읽어 묶음에서 뺀 거래 수(누적, 회차 요약 로그용 — 세션 474 F7)
+        self.area_unreadable = 0
 
     @classmethod
     def from_db(cls, db, sigungu_cd: str) -> "SigunguMatcher":
@@ -205,13 +207,15 @@ class SigunguMatcher:
             price = trade_price(trade)
             if not price:
                 continue
-            area = area_group_of(trade.get("excluUseAr") or trade.get("전용면적"))
-            if area is None:
-                continue
             complex_no = self.match(
                 trade.get("umdNm") or trade.get("법정동"),
                 trade.get("aptNm") or trade.get("아파트"),
             )
-            if complex_no:
-                out.setdefault(complex_no, {}).setdefault(area, []).append(price)
+            if not complex_no:
+                continue
+            area = area_group_of(trade.get("excluUseAr") or trade.get("전용면적"))
+            if area is None:
+                self.area_unreadable += 1
+                continue
+            out.setdefault(complex_no, {}).setdefault(area, []).append(price)
         return out

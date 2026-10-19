@@ -165,6 +165,22 @@ def test_aggregate_by_area_해제_면적없음_제외(db):
     assert matcher.aggregate_by_area(trades) == {"6139": {59: [15700, 17200]}}
     assert matcher.aggregate(trades) == {"6139": [15700, 17200, 30000]}  # 옛 달 평균 줄엔 면적 없는 거래도 그대로
     assert matcher.aggregate_by_area(TRADES_6139[M04]) == {"6139": {84: [22000]}}
+    assert matcher.area_unreadable == 1  # 짝은 됐는데 면적을 못 읽은 30,000 1건(짝 없는 거래는 안 셈 — F7)
+
+
+def test_주간수집_요약_로그에_면적못읽음과_면적줄_정리수(db, caplog):
+    import logging
+
+    _add_6139(db)
+    old = utcnow() - timedelta(days=10)
+    db.add(ComplexAreaTradeStat(complex_no="6139", base_month=M06, area_m2=84, trade_count=1,
+                                price_median=1, price_min=1, price_max=1, prices=[1], recorded_at=old))
+    db.commit()
+    trades = dict(TRADES_6139)
+    trades[M05] = TRADES_6139[M05] + [_trade("궁동", "자연", "19,000", "")]
+    with caplog.at_level(logging.INFO, logger="crawler.service_public"):
+        _run_weekly(trades)
+    assert any("면적별 옛 줄 1개 정리 · 면적 못 읽음 1건" in r.getMessage() for r in caplog.records)
 
 
 def test_upsert_area_stats_중위_정렬_JSON(db):
@@ -246,6 +262,49 @@ def test_주간수집_지울줄이_절반을_넘으면_면적줄도_건너뛴다
     rows = _area_rows(db)
     # 지울 줄 4 × 2 > 보유 7(새 3 + 옛 4) → 옛 달 평균 줄 정리와 같은 차단기로 건너뛴다
     assert {(M06, 42), (M06, 84), (M06, 85), (M06, 86)} <= set(rows)
+
+
+def test_주간수집_한_달_호출이_실패하면_면적줄을_정리하지_않는다(db):
+    """보완 F10(검사관 A): 시군구의 한 달 호출이 실패(None)하면 못 받은 달이 있으니 옛 면적별 줄을 지우지 않는다.
+
+    뮤테이션 표적: service_public 주간 수집의 `if fetch_failed:` 블록 끝 `continue` 를 빼면 정리가 돌아
+    (M04, 59) 옛 줄이 지워져 FAIL."""
+    _add_6139(db)
+    old = utcnow() - timedelta(days=10)
+    db.add(ComplexAreaTradeStat(complex_no="6139", base_month=M04, area_m2=59, trade_count=1,
+                                price_median=5, price_min=5, price_max=5, prices=[5], recorded_at=old))
+    db.commit()
+
+    from crawler.public_data_api import PublicDataAPI
+    PublicDataAPI.reset()
+    from crawler.service_public import collect_public_trade_data
+
+    def _fake(sigungu_cd, deal_ymd):
+        if sigungu_cd != "30200":
+            return []
+        if deal_ymd == M05:
+            return None  # 두 번째 달 호출 실패
+        return list(TRADES_6139.get(deal_ymd, []))
+
+    with patch.dict("os.environ", {"PUBLIC_DATA_API_KEY": "test-key"}), \
+         patch("crawler.service_public._recent_months", return_value=[M04, M05, M06]), \
+         patch("crawler.public_data_api.PublicDataAPI.get_all_apt_trades", side_effect=_fake):
+        collect_public_trade_data(batch_size=10, scheduler_job_id="collect_public_trades")
+
+    rows = _area_rows(db)
+    assert (M04, 59) in rows          # 옛 줄 그대로
+    assert (M04, 84) in rows          # 실패 전 달은 저장
+    assert (M06, 59) not in rows      # 실패 뒤 달은 시도하지 않음
+
+
+def test_area_prices_대표_먼저_대표_거래가_더_적어도():
+    """보완 F11(검사관 A): 대표 묶음(세대수 최다 59)의 거래 수(1)가 다른 묶음(84, 3건)보다 적어도 대표가 첫 줄.
+
+    뮤테이션 표적: summarize_area_prices 정렬에서 대표 우선 키를 빼면(거래 수 순) 84 가 먼저 와 FAIL."""
+    from db.area_price_queries import summarize_area_prices
+
+    rows = summarize_area_prices({59: [17200], 84: [22000, 23000, 24000]}, {42: 12, 59: 116, 84: 70}, 59)
+    assert [(r["area_m2"], r["trade_count"]) for r in rows] == [(59, 1), (84, 3), (42, None)]
 
 
 def test_소급도_면적별_저장하고_안_쓰인_줄을_지운다(db):
@@ -389,7 +448,67 @@ def test_가치지표_면적별_표가_비면_아무것도_안_쓰고_failed(db)
     assert _metric_values(db) == (None, 18000, 53.6, 3)
     job = db.query(CrawlJob).filter(CrawlJob.job_type == "complex_metric").order_by(CrawlJob.id.desc()).first()
     assert job.status == "failed"
-    assert "면적별 정부 실거래" in job.error_message
+    assert job.error_message == (
+        "첫 수집 전이라 면적별 실거래 표가 비어 있어요 — 주간 수집(토요일 05:00)이나 수동 수집 뒤 채워져요"
+    )
+
+
+def _legacy_only(db, no, *, stored=(None, None, None, None)):
+    """옛 정부 달 평균('' 줄)만 있는 단지 — 저장값(rep, 중위, 전세가율, 거래 수)을 미리 넣는다."""
+    rep, median, rate, recent = stored
+    db.add(Complex(complex_no=no, complex_name=f"옛{no}", cortar_no="3020012300",
+                   cortar_address="대전광역시 유성구 궁동", real_estate_type_code="APT",
+                   rep_area_m2=rep, nearby_median_price=median, jeonse_rate=rate, recent_trades_6m=recent))
+    db.add(ComplexPriceHistory(complex_no=no, trade_type="A1", area_no="", base_month=M06, price_avg=18000))
+
+
+def _last_job(db):
+    from db.models import CrawlJob
+
+    db.expire_all()
+    return db.query(CrawlJob).filter(CrawlJob.job_type == "complex_metric").order_by(CrawlJob.id.desc()).first()
+
+
+def test_덮개_비율_문턱_밑이면_면적줄_없는_단지는_옛_값_유지(db):
+    """검사관 C 🟠1: 새 표가 일부만 채워진 날(덮개 1/2 = 0.5) 한꺼번에 비우지 않는다.
+
+    뮤테이션 표적: `coverage < _COVERAGE_MIN` 분기를 빼면 7001 이 네 칸 None 이 되어 FAIL."""
+    from crawler.service_metrics import collect_complex_metrics
+
+    _add_6139(db)
+    _add_gov_area_rows(db)
+    _add_legacy_gov_rows(db)          # 6139 = 새 표 + 옛 줄
+    _legacy_only(db, "7001", stored=(None, 18000, 53.6, 3))  # 옛 줄만 — 아직 새 표에 안 들어옴
+    db.commit()
+
+    collect_complex_metrics(batch_size=0)
+
+    assert _metric_values(db) == (59, 17200, None, 3)              # 새 표 있는 단지는 계산
+    assert _metric_values(db, "7001") == (None, 18000, 53.6, 3)     # 없는 단지는 옛 값 그대로
+    job = _last_job(db)
+    assert job.status == "completed"
+    assert (job.total_items, job.processed_items) == (1, 1)
+    assert job.error_message == "면적별 실거래 표가 아직 덜 채워져(단지 1/2) 1곳은 옛 값을 그대로 두었어요"
+
+
+def test_덮개_비율_문턱_이상이면_면적줄_없는_단지는_비운다(db):
+    """덮개 19/20 = 0.95 ≥ 0.9 → 면적줄 없는 단지는 지금처럼 네 칸 None(옛 섞인 값으로 안 돌아간다)."""
+    from crawler.service_common import _upsert_area_stats
+    from crawler.service_metrics import collect_complex_metrics
+
+    for i in range(19):
+        no = f"80{i:02d}"
+        _legacy_only(db, no)
+        _upsert_area_stats(db, no, M06, 84, [30000])
+    _legacy_only(db, "7001", stored=(None, 18000, 53.6, 3))
+    db.commit()
+
+    collect_complex_metrics(batch_size=0)
+
+    assert _metric_values(db, "7001") == (None, None, None, None)
+    assert _metric_values(db, "8000") == (84, 30000, None, 1)
+    job = _last_job(db)
+    assert job.status == "completed" and job.error_message is None
 
 
 # ── I5 직렬화 ────────────────────────────────────────────────────────────────
@@ -459,6 +578,30 @@ def test_평형표_없으면_새_표_묶음만(db):
     assert [(r["area_m2"], r["households"], r["trade_count"]) for r in out["area_prices"]] == [(59, None, 3), (84, None, 1)]
 
 
+def test_price_basis_대표면적_옛값_없음():
+    """보완 F2 · 사장님 결정 Q4 — 화면이 '면적 섞인 옛 값' 을 밝힐 근거."""
+    from routers.estate_serializers import complex_to_dict
+
+    def _c(rep, median):
+        return Complex(complex_no="X", complex_name="X", rep_area_m2=rep, nearby_median_price=median)
+
+    assert complex_to_dict(_c(59, 17200))["price_basis"] == "rep_area"
+    assert complex_to_dict(_c(59, None))["price_basis"] == "rep_area"
+    assert complex_to_dict(_c(None, 18000))["price_basis"] == "legacy_mixed"
+    assert complex_to_dict(_c(None, None))["price_basis"] is None
+
+
+def test_기준달은_달력_6개월():
+    """보완 F4: 옛 '오늘 − 31×6일' 은 7개 달력월을 걸쳤다(10-19 → 202604). 이제 이번 달 포함 6달."""
+    from crawler.metrics_helpers import _cutoff_month
+
+    assert _cutoff_month(6, date(2026, 10, 19)) == "202605"
+    assert _cutoff_month(6, date(2026, 10, 1)) == "202605"
+    assert _cutoff_month(6, date(2026, 3, 31)) == "202510"
+    assert _cutoff_month(1, date(2026, 1, 5)) == "202601"
+    assert _cutoff_month(24, date(2026, 10, 19)) == "202411"
+
+
 def test_목록_검색_응답엔_면적별_시세를_싣지_않는다(client, db):
     _add_6139(db, rep=59)
     _add_gov_area_rows(db)
@@ -506,7 +649,7 @@ def test_그래프_기본선은_대표_묶음만(db):
         (M06, 12000, "네이버 시세"),
     ]
     assert get_price_history_area(db, "6139") == 59
-    assert price_history_basis(59) == "전용 59㎡ 대 정부 실거래 중위 · 전세는 네이버 시세"
+    assert price_history_basis(59) == "최근 2년 전용 59㎡ 대 정부 실거래 중위 · 전세는 네이버 시세"
     assert price_history_basis(84, "5") == "전용 84㎡ 대 정부 실거래 중위 · 네이버 시세는 이 평형 값을 따로"
 
 
@@ -531,6 +674,23 @@ def test_그래프_평형을_고르면_그_평형_묶음과_그_평형_줄(db):
     assert get_price_history_area(db, "6139", "5") == 84
 
 
+def test_그래프_기본선은_최근_2년만_평형선택은_기간_그대로(db):
+    """사장님 결정 Q3: 기본선 = 최근 24 달력월(제목 '최근 2년'). 평형을 고르면 기간을 자르지 않는다."""
+    from crawler.service_common import _upsert_area_stats
+    from db.price_queries import get_complex_price_history
+
+    _add_6139(db, rep=59)
+    _add_gov_area_rows(db)
+    _upsert_area_stats(db, "6139", "202001", 59, [9000])   # 소급이 받은 6년 전 달
+    _upsert_area_stats(db, "6139", "202001", 84, [9500])
+    db.commit()
+
+    base_months = [r["month"] for r in get_complex_price_history(db, "6139") if r["trade_type"] == "A1"]
+    assert base_months == [M05, M06]
+    picked = [r["month"] for r in get_complex_price_history(db, "6139", area_no="5") if r["trade_type"] == "A1"]
+    assert picked == ["202001", M04]
+
+
 def test_그래프_대표면적을_모르면_옛_동작(db):
     from db.price_queries import get_complex_price_history, get_price_history_area
 
@@ -546,7 +706,7 @@ def test_가격추이_API_응답에_면적과_기준(client, db, approved_header
     _add_gov_area_rows(db)
     body = client.get("/api/complexes/6139/price-history", headers=approved_headers).json()
     assert body["area_m2"] == 59
-    assert body["basis"] == "전용 59㎡ 대 정부 실거래 중위 · 전세는 네이버 시세"
+    assert body["basis"] == "최근 2년 전용 59㎡ 대 정부 실거래 중위 · 전세는 네이버 시세"
     assert [(i["base_month"], i["price_avg"], i["series"]) for i in body["items"]] == [
         (M05, 18000, "정부 실거래"), (M06, 16450, "정부 실거래"),
     ]
@@ -575,6 +735,8 @@ def test_V073_표_권한_자체점검():
     for words in ("RLS off", "policy exists", "service_role lacks SELECT", "complexes.rep_area_m2 missing"):
         assert f"complex_area_trade_stats self-check: {words}" in ex
     assert "DROP " not in ex  # 롤백문은 주석에만
+    assert "SET LOCAL lock_timeout = '5s';" in ex  # 보완 F8 — complexes 잠금 대기 상한
+    assert "DROP COLUMN" not in sql  # 공유 표 칸은 되돌릴 때도 지우지 않는다(보완 F8)
     assert "DROP TABLE IF EXISTS public.complex_area_trade_stats" in sql
 
 

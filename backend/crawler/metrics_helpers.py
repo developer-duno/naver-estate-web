@@ -4,7 +4,7 @@ complex_price_history 테이블에서 단지별 중앙값/레코드 수를 집�
 네이버 API 호출 없이 DB 집계만 수행 — service_metrics.py 에서 사용.
 """
 
-from datetime import date, timedelta
+from datetime import date
 
 from sqlalchemy import func
 
@@ -12,10 +12,16 @@ from crawler.stats import compute_median_price
 from db.models import ComplexPriceHistory
 
 
-def _cutoff_month(months: int) -> str:
-    """오늘로부터 N개월 전의 YYYYMM 문자열 (base_month 앞 6자리 비교용)."""
-    cutoff = date.today() - timedelta(days=months * 31)
-    return cutoff.strftime("%Y%m")
+def _cutoff_month(months: int, today: date | None = None) -> str:
+    """달력 기준 최근 N개월의 첫 달 YYYYMM (base_month 앞 6자리 비교용) — 이번 달 포함 N달.
+
+    세션 474(검사관 C 🟡2): 옛 계산(오늘 − 31×N일)은 날짜에 따라 7개 달력월을 걸쳤다(10-19 → 202604).
+    이제 2026-10-19, N=6 → 202605(5~10월 6달). today 는 시험용.
+    """
+    today = today or date.today()
+    total = today.year * 12 + (today.month - 1) - (months - 1)
+    y, m0 = divmod(total, 12)
+    return f"{y:04d}{m0 + 1:02d}"
 
 
 def calc_median_price(db, complex_no: str, trade_type: str, months: int = 6) -> int | None:

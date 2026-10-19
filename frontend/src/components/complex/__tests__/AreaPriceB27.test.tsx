@@ -12,6 +12,7 @@ import ComplexDashboard from "../ComplexDashboard";
 import PriceChartSection from "../PriceChartSection";
 import InfoCards from "@/components/article/InfoCards";
 import PriceHistoryChart from "@/components/PriceHistoryChart";
+import CompareCharts from "@/components/CompareCharts";
 import { areaGroupOf, otherAreaText } from "@/lib/area-group";
 import type { Complex, PyeongDetail } from "@/types";
 
@@ -36,6 +37,10 @@ vi.mock("recharts", () => ({
   ComposedChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Line: ({ name }: { name?: string }) => (name ? <div data-testid="line-name">{name}</div> : null),
   Area: () => null,
+  BarChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Bar: () => null,
+  Cell: () => null,
+  LabelList: () => null,
   XAxis: () => null,
   YAxis: () => null,
   CartesianGrid: () => null,
@@ -46,6 +51,8 @@ vi.mock("recharts", () => ({
 const mockGetPriceHistory = vi.fn();
 vi.mock("@/lib/api", () => ({
   getPriceHistory: (...args: unknown[]) => mockGetPriceHistory(...args),
+  getPriceStats: vi.fn().mockResolvedValue({ complex_no: "X", total_articles: 0, by_area: [], by_floor: [] }),
+  getPyeongDetails: vi.fn().mockResolvedValue({ pyeong_details: [] }),
   startPriceCollect: vi.fn().mockResolvedValue({ complex_no: "6139", status: "fresh" }),
   getPriceCollectStatus: vi.fn().mockResolvedValue({ complex_no: "6139", status: "idle", collected: 0, failed: 0, total: 0 }),
 }));
@@ -122,6 +129,20 @@ describe("ComplexDashboard 시세 칸 — A안 (세션 474 B27)", () => {
     expect(screen.getByTestId("box-chip-prices")).toHaveTextContent("최근 6개월 0건");
   });
 
+  it("대표 면적 없이 옛 값만 남은 단지 — 값은 그대로, '면적 섞인 옛 값' 작은 글 (보완 F2 · Q4)", () => {
+    renderDashboard({ complex_no: "C8", complex_name: "옛값단지", nearby_median_price: 18000, jeonse_rate: 53.6, price_basis: "legacy_mixed" }, []);
+    const box = screen.getByRole("button", { name: "시세 메뉴 열기" });
+    expect(box).toHaveTextContent("1억 8,000만");
+    expect(screen.getByTestId("box-extra-prices")).toHaveTextContent(
+      "면적 섞인 옛 값 — 최근 6개월 거래가 없어 다시 계산되지 않았어요",
+    );
+  });
+
+  it("대표 면적 단지(6139)는 옛 값 표시 없음", () => {
+    renderDashboard({ ...C6139, price_basis: "rep_area" });
+    expect(screen.queryByText(/면적 섞인 옛 값/)).toBeNull();
+  });
+
   it("대표 면적이 없으면 지금처럼 — 라벨 '시세' · 매물 평균 대체값", () => {
     renderDashboard({ complex_no: "C9", complex_name: "옛단지" }, []);
     const box = screen.getByRole("button", { name: "시세 메뉴 열기" });
@@ -192,6 +213,41 @@ describe("PriceHistoryChart 계열 분리 (세션 474 B27 보완 ①)", () => {
   });
 });
 
+describe("InfoCards 옛 값 표시 (보완 F2)", () => {
+  it("옛 값 단지는 '1억 8,000만 (면적 섞인 옛 값)' · '53.6% (옛 값)'", () => {
+    render(
+      <InfoCards
+        article={{ article_no: "A1", complex_no: "C8", trade_type_name: "매매" }}
+        complex={{ complex_no: "C8", complex_name: "옛값단지", nearby_median_price: 18000, jeonse_rate: 53.6, price_basis: "legacy_mixed" }}
+      />,
+    );
+    expect(screen.getByText("1억 8,000만 (면적 섞인 옛 값)")).toBeInTheDocument();
+    expect(screen.getByText("53.6% (옛 값)")).toBeInTheDocument();
+  });
+});
+
+describe("CompareCharts 계열 이름 (보완 F5)", () => {
+  beforeEach(() => {
+    mockGetPriceHistory.mockReset();
+  });
+
+  it("그 단지 그래프 면적을 붙인다 — '자연 (59㎡)' · 면적 모르면 '(면적 섞임)'", async () => {
+    mockGetPriceHistory.mockImplementation((no: string) => Promise.resolve({
+      complex_no: no,
+      area_m2: no === "6139" ? 59 : null,
+      items: [{ trade_type: "A1", trade_type_label: "매매", price_upper: 1, price_lower: 1, price_avg: 1, base_month: "202605" }],
+    }));
+    render(
+      <CompareCharts complexes={[{ complex_no: "6139", complex_name: "자연" }, { complex_no: "9", complex_name: "옛단지" }]} expandAll />,
+      { wrapper: TestQueryProvider },
+    );
+    await waitFor(() => {
+      const names = screen.getAllByTestId("line-name").map((el) => el.textContent);
+      expect(names).toEqual(expect.arrayContaining(["자연 (59㎡) 매매", "옛단지 (면적 섞임) 매매"]));
+    });
+  });
+});
+
 describe("PriceChartSection 제목·범례 (세션 474 B27)", () => {
   beforeEach(() => {
     mockGetPriceHistory.mockReset();
@@ -199,12 +255,12 @@ describe("PriceChartSection 제목·범례 (세션 474 B27)", () => {
 
   it("응답의 basis 를 제목으로, 면적을 범례로 · 기본 선택지 = 대표 면적", async () => {
     mockGetPriceHistory.mockResolvedValue({
-      complex_no: "6139", area_m2: 59, basis: "전용 59㎡ 대 정부 실거래 중위 · 전세는 네이버 시세",
+      complex_no: "6139", area_m2: 59, basis: "최근 2년 전용 59㎡ 대 정부 실거래 중위 · 전세는 네이버 시세",
       items: [{ trade_type: "A1", trade_type_label: "매매", price_upper: 18000, price_lower: 18000, price_avg: 18000, base_month: "202605" }],
     });
     render(<PriceChartSection complexNo="6139" pyeongDetails={PYEONG_6139} repAreaM2={59} />, { wrapper: TestQueryProvider });
     expect(await screen.findByTestId("price-history-basis")).toHaveTextContent(
-      "실거래가 추이 · 전용 59㎡ 대 정부 실거래 중위 · 전세는 네이버 시세",
+      "실거래가 추이 · 최근 2년 전용 59㎡ 대 정부 실거래 중위 · 전세는 네이버 시세",
     );
     await waitFor(() => expect(screen.getByTestId("chart-area-label")).toHaveTextContent("전용 59㎡ 대"));
     expect(screen.getByRole("option", { name: "대표 면적(전용 59㎡ 대)" })).toBeInTheDocument();

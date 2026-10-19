@@ -23,6 +23,8 @@
 --
 -- 적용: SQL Editor 에서 아래 BEGIN~COMMIT 을 통째로 실행. 끝의 자체검사가 하나라도 어긋나면
 --   RAISE EXCEPTION → 전부 취소된다. 적용 직전 스키마 덤프 1회(infra.md §DB 백업 — 추가만).
+--   잠금 대기 상한: complexes 칸 추가는 그 표를 잠깐 잠근다 — BEGIN 바로 뒤 `SET LOCAL lock_timeout = '5s'` 로
+--   다른 쓰기(수집 잡·미분양)가 길게 쥐고 있으면 기다리지 않고 실패하게 했다(실패하면 한가한 시각에 다시 실행).
 --
 -- 적용 뒤 의무: mibunyang 권한 지문 기준선 재승인 요청(infra.md §권한·정책·뷰·함수를 바꾸는 마이그)
 --   — 기대 차이 = 새 표 public.complex_area_trade_stats 1 · RLS 켬·정책 0 · PUBLIC·anon·authenticated REVOKE ALL ·
@@ -32,6 +34,8 @@
 --   실패하므로 **이 파일을 운영에 먼저 적용한 뒤** 머지·재시작한다(V058·V072 관례).
 
 BEGIN;
+
+SET LOCAL lock_timeout = '5s';
 
 CREATE TABLE IF NOT EXISTS public.complex_area_trade_stats (
   complex_no    varchar(20)  NOT NULL,
@@ -115,5 +119,6 @@ COMMIT;
 -- ⚠ 서버 코드가 이 표·칸을 읽으므로 지우기 전에 코드를 먼저 되돌린다.
 -- 표를 지우면 면적별 값도 사라진다(주간 수집이 24달을 다시 받으며 채운다).
 -- DROP TABLE IF EXISTS public.complex_area_trade_stats;
--- ALTER TABLE public.complexes DROP COLUMN IF EXISTS rep_area_m2;
+-- complexes.rep_area_m2 칸은 지우지 않고 남긴다 — 공유 표(미분양도 읽음)의 칸 삭제 금지 규칙(infra.md §공용 테이블 규칙).
+--   값을 비우려면 UPDATE public.complexes SET rep_area_m2 = NULL WHERE rep_area_m2 IS NOT NULL; (코드를 먼저 되돌린 뒤)
 -- (그 뒤 mibunyang 권한 지문 기준선 재승인 — 표 1개 사라짐)

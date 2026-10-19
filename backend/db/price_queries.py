@@ -242,6 +242,7 @@ def _history_area(db: Session, complex_no: str, area_no: Optional[str]) -> tuple
 
 
 SERIES_GOV = "정부 실거래"
+BASELINE_MONTHS = 24  # 그래프 기본선 기간(달력월) — basis 글자 "최근 2년" 과 짝
 SERIES_NAVER = "네이버 시세"
 
 
@@ -251,7 +252,7 @@ def price_history_basis(area_m2: int | None, area_no: Optional[str] = None) -> s
         return None
     if area_no:
         return f"전용 {area_m2}㎡ 대 정부 실거래 중위 · 네이버 시세는 이 평형 값을 따로"
-    return f"전용 {area_m2}㎡ 대 정부 실거래 중위 · 전세는 네이버 시세"
+    return f"최근 2년 전용 {area_m2}㎡ 대 정부 실거래 중위 · 전세는 네이버 시세"
 
 
 def get_price_history_area(db: Session, complex_no: str, area_no: Optional[str] = None) -> int | None:
@@ -273,9 +274,12 @@ def get_complex_price_history(
       한 달에 둘이 있어도 합치지 않는다.
     - 묶음을 모르면(대표 면적 미계산·평형표 없음) 옛 동작 그대로(그 단지 모든 줄을 달마다 묶음, series None).
     """
+    from crawler.metrics_helpers import _cutoff_month
     from db.models import ComplexAreaTradeStat
 
     group, pyeong_nos = _history_area(db, complex_no, area_no)
+    # 기본선은 최근 2년(24 달력월)만 — 제목 "최근 2년" 과 같게(사장님 결정 Q3). 평형 선택은 기간 그대로.
+    since = None if area_no else _cutoff_month(BASELINE_MONTHS)
     if group is None:
         conditions = [ComplexPriceHistory.complex_no == complex_no]
         if trade_type:
@@ -295,6 +299,7 @@ def get_complex_price_history(
             conditions.append(ComplexPriceHistory.trade_type == trade_type)
         if not area_no:
             conditions.append(ComplexPriceHistory.trade_type != "A1")  # 기본선 매매는 정부 실거래만
+            conditions.append(func.left(ComplexPriceHistory.base_month, 6) >= since)
         rows = [{**r, "series": SERIES_NAVER} for r in _price_history_rows(db, conditions)]
 
     if trade_type in (None, "A1"):
@@ -305,7 +310,11 @@ def get_complex_price_history(
                 ComplexAreaTradeStat.price_min,
                 ComplexAreaTradeStat.price_max,
             )
-            .filter(ComplexAreaTradeStat.complex_no == complex_no, ComplexAreaTradeStat.area_m2 == group)
+            .filter(
+                ComplexAreaTradeStat.complex_no == complex_no,
+                ComplexAreaTradeStat.area_m2 == group,
+                ComplexAreaTradeStat.base_month >= (since or ""),
+            )
             .all()
         ):
             rows.append({

@@ -9,7 +9,7 @@ import ComplexPriceAreaSection from "@/components/complex/ComplexPriceAreaSectio
 import PriceChartSection from "@/components/complex/PriceChartSection";
 import { useComplexArticleAvg } from "@/hooks/useComplexArticleAvg";
 import { formatKoreanPrice } from "@/lib/format";
-import { otherAreaText } from "@/lib/area-group";
+import { LEGACY_NOTE, otherAreaText } from "@/lib/area-group";
 import type { ArticleFilters, Complex, PyeongDetail } from "@/types";
 
 type SectionKey = "prices" | "chart" | "info" | "area";
@@ -109,6 +109,8 @@ export default function ComplexDashboard({
         primary: complex.nearby_median_price != null
           ? formatKoreanPrice(complex.nearby_median_price)
           : (avgPrice != null ? `매물 평균 ${formatKoreanPrice(avgPrice)}` : "-"),
+        // 대표 면적이 없는데 옛 값이 남은 단지 — 면적이 섞인 옛 값임을 작게 밝힌다(사장님 결정 Q4)
+        extra: complex.price_basis === "legacy_mixed" ? LEGACY_NOTE : undefined,
         secondary: complex.jeonse_rate != null
           ? `전세가율 ${complex.jeonse_rate}%${regionJeonseText}`
           : hasRegionJeonse

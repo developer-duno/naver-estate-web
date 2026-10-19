@@ -41,9 +41,20 @@ def complex_to_dict(c) -> dict:
         "recent_trades_6m": c.recent_trades_6m,
         # 대표 면적 묶음(정수 ㎡, 세션 474 B27) — 위 세 값이 이 묶음 값. 칸 하나라 목록에도 실어도 조회가 안 늘어난다
         "rep_area_m2": getattr(c, "rep_area_m2", None),
+        # 위 세 값이 무엇인가(세션 474 보완 F2 · 사장님 결정 Q4) — "rep_area" = 대표 면적 값 ·
+        # "legacy_mixed" = 대표 면적이 없는데 옛 값이 남은 단지(최근 6개월 거래가 없어 다시 계산 안 됨, 면적 섞임) · None = 값 없음
+        "price_basis": _price_basis(c),
         "detail_crawled_at": c.detail_crawled_at.isoformat() if getattr(c, "detail_crawled_at", None) else None,
         "has_pool": getattr(c, "has_pool", None),
     }
+
+
+def _price_basis(c) -> str | None:
+    if getattr(c, "rep_area_m2", None) is not None:
+        return "rep_area"
+    if getattr(c, "nearby_median_price", None) is not None:
+        return "legacy_mixed"
+    return None
 
 
 def article_to_dict(a, complex_obj=None, area_stats: dict[int, int] | None = None) -> dict:

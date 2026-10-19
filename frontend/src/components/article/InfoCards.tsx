@@ -81,6 +81,7 @@ export default function InfoCards({ article: a, complex: c }: Props) {
     ["분양권 유형", a.isale_right_type_name],
   ];
 
+  const legacy = c?.price_basis === "legacy_mixed";
   const complexItems: [string, string | undefined | null][] = c
     ? [
         ["건설사", c.construction_company],
@@ -90,11 +91,17 @@ export default function InfoCards({ article: a, complex: c }: Props) {
         ["건폐율", c.building_coverage_ratio ? `${c.building_coverage_ratio}%` : null],
         ["세대당주차", c.parking_count_by_household ? `${c.parking_count_by_household}대` : null],
         // 대표 면적 하나의 값(세션 474 B27) — 대표 면적을 아직 못 정한 단지는 옛 이름 그대로
+        // 면적 섞인 옛 값이면 값 옆에 밝힌다(세션 474 보완 F2 · 사장님 결정 Q4)
         [
           c.rep_area_m2 != null ? `대표 면적 시세(${c.rep_area_m2}㎡)` : "주변시세",
-          c.nearby_median_price ? formatKoreanPrice(c.nearby_median_price) : null,
+          c.nearby_median_price
+            ? `${formatKoreanPrice(c.nearby_median_price)}${legacy ? " (면적 섞인 옛 값)" : ""}`
+            : null,
         ],
-        [c.rep_area_m2 != null ? "전세가율(이 단지, 같은 면적)" : "전세가율", c.jeonse_rate ? `${c.jeonse_rate}%` : null],
+        [
+          c.rep_area_m2 != null ? "전세가율(이 단지, 같은 면적)" : "전세가율",
+          c.jeonse_rate ? `${c.jeonse_rate}%${legacy ? " (옛 값)" : ""}` : null,
+        ],
         ["관리사무소", c.management_office_tel],
       ]
     : [];

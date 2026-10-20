@@ -22,8 +22,8 @@ from db.models import CrawlJob, RegionStats
 TODAY = date(2026, 10, 16)
 
 
-def _r(path: str, period: str, val) -> dict:
-    return {"CLS_FULLNM": path, "WRTTIME_IDTFR_ID": period, "DTA_VAL": val, "UI_NM": "%"}
+def _r(path: str, period: str, val, unit: str = "%") -> dict:
+    return {"CLS_FULLNM": path, "WRTTIME_IDTFR_ID": period, "DTA_VAL": val, "UI_NM": unit}
 
 
 def _fetch(tables: dict):
@@ -55,8 +55,8 @@ CONV = [
 ]
 # 중위 매매가격 표 — 원자료 단위 천원("512345" = 5억 1,234.5만원 → 저장 51234.5 만원)
 MEDIAN = [
-    _r("충남>천안시>동남구", "202609", "512345"),
-    _r("경기>경부1권>안양시>만안구", "202609", "700000"),
+    _r("충남>천안시>동남구", "202609", "512345", "천원"),
+    _r("경기>경부1권>안양시>만안구", "202609", "700000", "천원"),
 ]
 
 
@@ -126,7 +126,7 @@ def test_all_unmatched_is_failed(db):
     fetch = _fetch({
         "A_2024_00073": [_r("서울>강북지역", "202609", 60.0)],
         "A_2024_00155": [_r("서울>강남지역", "202609", 5.0)],
-        "A_2024_00062": [_r("서울>강북지역", "202609", "900000")],
+        "A_2024_00062": [_r("서울>강북지역", "202609", "900000", "천원")],
     })
     result = collect_region_stats(3, today=TODAY, fetch=fetch)
     assert result["status"] == "failed"
@@ -256,7 +256,7 @@ def test_new_median_table_empty_is_failed_but_keeps_other_tables(db):
     assert result["status"] == "failed"
     assert result["saved"] == 5
     assert "하나도 주지 않았어요" in _job(db).error_message
-    assert "00062" in _job(db).error_message
+    assert "아파트 중위 매매가격 표가 202607~202610 자료를 하나도 주지 않았어요" in _job(db).error_message
     assert STAT_APT_SALE_MEDIAN not in result["uncovered_regions"]   # 못 받은 표는 계산에서 뺀다
 
 
@@ -287,3 +287,82 @@ def test_unknown_prefixes_failure_keeps_saved_result(db, monkeypatch):
     job = _job(db)
     assert job.status == "completed"
     assert (job.total_items, job.processed_items) == (10, 7)
+
+
+# ── 보완 3 (세션 475 검사관 🟡1·3·4) ──
+
+def test_rollback_failure_after_commit_keeps_completed(db, monkeypatch):
+    """B1: 단지 코드 조회가 터진 뒤 정리(rollback)까지 터져도, 이미 커밋된 completed 를 failed 로 덮지 않는다."""
+    from sqlalchemy.orm import Session
+
+    def boom_query(_db):
+        raise RuntimeError("canceling statement due to statement timeout")
+
+    def boom_rollback(self):
+        raise RuntimeError("connection already closed")
+
+    with monkeypatch.context() as m:
+        m.setattr("crawler.service_region_stats.unknown_prefixes", boom_query)
+        m.setattr(Session, "rollback", boom_rollback)
+        fetch = _fetch({"A_2024_00073": JEONSE, "A_2024_00155": CONV, "A_2024_00062": MEDIAN})
+        result = collect_region_stats(3, today=TODAY, fetch=fetch)   # 예외가 밖으로 나오면 안 된다
+    assert result["status"] == "completed"
+    assert result["unknown_prefixes"] is None
+    db.expire_all()
+    assert _job(db).status == "completed"
+    assert db.query(RegionStats).count() == 7
+
+
+def test_changed_unit_table_is_not_saved_but_others_are(db):
+    """B2: 중위 매매가격 표의 단위가 천원이 아니면 그 표만 저장하지 않고 failed + 우리말 사유."""
+    wrong = [{**r, "UI_NM": "만원"} for r in MEDIAN]
+    fetch = _fetch({"A_2024_00073": JEONSE, "A_2024_00155": CONV, "A_2024_00062": wrong})
+    result = collect_region_stats(3, today=TODAY, fetch=fetch)
+    assert result["status"] == "failed"
+    assert result["saved"] == 5   # 전세가율 3 + 전환율 2(안 맞는 단위 표만 빠짐)
+    assert _job(db).error_message == "부동산원 아파트 중위 매매가격 표의 단위가 바뀌어(기대 '천원' · 받은 '만원') 저장하지 않았어요"
+    assert db.query(RegionStats).filter_by(stat_code=STAT_APT_SALE_MEDIAN).count() == 0
+    assert STAT_APT_SALE_MEDIAN not in result["uncovered_regions"]
+
+
+def test_changed_unit_on_percent_table_is_not_saved(db):
+    """B2: % 표도 같다 — 전세가율 표 단위가 바뀌면 그 표만 막는다."""
+    odd = [{**r, "UI_NM": "배"} for r in JEONSE]
+    fetch = _fetch({"A_2024_00073": odd, "A_2024_00155": CONV, "A_2024_00062": MEDIAN})
+    result = collect_region_stats(3, today=TODAY, fetch=fetch)
+    assert result["status"] == "failed"
+    assert _job(db).error_message == "부동산원 아파트 전세가율 표의 단위가 바뀌어(기대 '%' · 받은 '배') 저장하지 않았어요"
+    assert db.query(RegionStats).filter_by(stat_code=STAT_JEONSE_RATIO).count() == 0
+    assert db.query(RegionStats).filter_by(stat_code=STAT_APT_SALE_MEDIAN).count() == 2
+
+
+@pytest.mark.parametrize("statbl_id,words", [
+    ("A_2024_00073", "아파트 전세가율"), ("A_2024_00155", "전월세전환율"), ("A_2024_00062", "아파트 중위 매매가격"),
+])
+def test_empty_table_reason_uses_korean_table_name(db, statbl_id, words):
+    """B3: 0행 사유에 표 번호가 아니라 우리말 표 이름이 들어간다(세 표 공통)."""
+    tables = {"A_2024_00073": JEONSE, "A_2024_00155": CONV, "A_2024_00062": MEDIAN, statbl_id: []}
+    result = collect_region_stats(3, today=TODAY, fetch=_fetch(tables))
+    assert result["status"] == "failed"
+    msg = _job(db).error_message
+    assert msg == f"부동산원 {words} 표가 202607~202610 자료를 하나도 주지 않았어요"
+    assert "A_2024" not in msg and "00" not in msg.split("표가")[0]
+
+
+def test_every_table_has_korean_name_and_expected_unit():
+    """B3: 표를 하나 더하면 우리말 이름·기대 단위도 같이 — 빠지면 사유 만들 때 KeyError 로 터진다."""
+    from crawler.service_region_stats import EXPECTED_UNIT, REGION_STAT_TABLES, SOURCE_OF, TABLE_WORDS
+
+    for _, stat, _ in REGION_STAT_TABLES:
+        assert stat in TABLE_WORDS and stat in EXPECTED_UNIT and stat in SOURCE_OF
+
+
+def test_blank_unit_rows_count_as_mismatch(db):
+    """🟡8: UI_NM 이 빈 행(또는 빠진 행)이 섞이면 단위 불일치로 보고 그 표를 저장하지 않는다(failed)."""
+    blank = [{**MEDIAN[0], "UI_NM": ""}, {k: v for k, v in MEDIAN[1].items() if k != "UI_NM"}]
+    fetch = _fetch({"A_2024_00073": JEONSE, "A_2024_00155": CONV, "A_2024_00062": blank})
+    result = collect_region_stats(3, today=TODAY, fetch=fetch)
+    assert result["status"] == "failed"
+    assert _job(db).error_message == "부동산원 아파트 중위 매매가격 표의 단위가 바뀌어(기대 '천원' · 받은 '(없음)') 저장하지 않았어요"
+    assert db.query(RegionStats).filter_by(stat_code=STAT_APT_SALE_MEDIAN).count() == 0
+    assert result["saved"] == 5

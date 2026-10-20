@@ -745,3 +745,71 @@ def test_모델이_마이그와_같은_칸():
     assert [c.name for c in ComplexAreaTradeStat.__table__.primary_key] == ["complex_no", "base_month", "area_m2"]
     assert {"trade_count", "price_median", "price_min", "price_max", "prices", "recorded_at"} <= set(cols.keys())
     assert "rep_area_m2" in Complex.__table__.c
+
+
+# ── 세션 475 PR 6 — 재검사 A2 🟡 세 자리 ─────────────────────────────────────
+
+
+def _month_before(yyyymm: str) -> str:
+    y, m = int(yyyymm[:4]), int(yyyymm[4:])
+    return f"{y - 1:04d}12" if m == 1 else f"{y:04d}{m - 1:02d}"
+
+
+@pytest.mark.parametrize("have, cleared", [(9, True), (8, False)])
+def test_덮개_비율_정확히_문턱이면_계산_밑이면_옛_값(db, have, cleared):
+    """🟡1: 덮개 9/10 = 0.9 는 문턱 이상(`coverage < 0.9` 가 거짓) → 면적줄 없는 단지도 다시 계산(네 칸 None).
+    8/10 = 0.8 은 문턱 밑 → 옛 값 그대로. 뮤테이션 표적: `<` → `<=` 면 9/10 이 옛 값으로 남아 FAIL."""
+    from crawler.service_common import _upsert_area_stats
+    from crawler.service_metrics import collect_complex_metrics
+
+    for i in range(have):
+        no = f"80{i:02d}"
+        _legacy_only(db, no)
+        _upsert_area_stats(db, no, M06, 84, [30000])
+    old = (None, 18000, 53.6, 3)
+    for j in range(10 - have):
+        _legacy_only(db, f"70{j:02d}", stored=old)
+    db.commit()
+
+    collect_complex_metrics(batch_size=0)
+
+    assert _metric_values(db, "7000") == ((None, None, None, None) if cleared else old)
+    assert _metric_values(db, "8000") == (84, 30000, None, 1)
+
+
+def test_그래프_기본선_네이버_줄도_최근_2년만(db):
+    """🟡2: 기본선 전세(네이버 B1) 줄도 24 달력월 기준 달부터 — 제목 '최근 2년' 과 같게.
+    기준 달 줄은 남고 그 한 달 앞(25달 전) 줄은 빠진다. 뮤테이션 표적: 네이버 줄 기간 조건을 지우면 FAIL."""
+    from crawler.metrics_helpers import _cutoff_month
+    from db.price_queries import BASELINE_MONTHS, get_complex_price_history
+
+    _add_6139(db, rep=59)
+    _add_gov_area_rows(db)
+    first = _cutoff_month(BASELINE_MONTHS)
+    for month, price in ((_month_before(first), 9000), (first, 10000), (M06, 12000)):
+        db.add(ComplexPriceHistory(complex_no="6139", trade_type="B1", area_no="2",
+                                   base_month=f"{month}05", price_avg=price, price_lower=price, price_upper=price))
+    db.commit()
+
+    b1 = [(r["month"], r["price_avg"]) for r in get_complex_price_history(db, "6139") if r["trade_type"] == "B1"]
+    assert b1 == [(first, 10000), (M06, 12000)]
+
+
+def test_화면_조회와_가치지표는_같은_기준_달(db):
+    """🟡3: 단지 상세 면적별 시세(recent_area_prices)와 가치지표 잡이 같은 달 수·같은 기준 달 함수를 쓴다.
+    뮤테이션 표적: 화면 조회만 7달(`_cutoff_month(7)`)로 바꾸면 기준 달 한 달 앞 줄이 들어와 FAIL."""
+    import crawler.service_metrics as metrics
+    import db.area_price_queries as area_q
+    from crawler.metrics_helpers import _cutoff_month
+    from crawler.service_common import _upsert_area_stats
+
+    assert metrics._MEDIAN_MONTHS == area_q.AREA_PRICE_MONTHS == 6
+    assert metrics._cutoff_month is _cutoff_month and area_q._cutoff_month is _cutoff_month
+
+    _add_6139(db, rep=59)
+    first = _cutoff_month(area_q.AREA_PRICE_MONTHS)
+    _upsert_area_stats(db, "6139", _month_before(first), 59, [99000])  # 7달 전 — 빠져야 한다
+    _upsert_area_stats(db, "6139", first, 59, [18000])
+    db.commit()
+
+    assert area_q.recent_area_prices(db, "6139") == {59: [18000]}

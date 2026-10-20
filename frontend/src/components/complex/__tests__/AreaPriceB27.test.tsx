@@ -13,12 +13,15 @@ import PriceChartSection from "../PriceChartSection";
 import InfoCards from "@/components/article/InfoCards";
 import PriceHistoryChart from "@/components/PriceHistoryChart";
 import CompareCharts from "@/components/CompareCharts";
-import { areaGroupOf, otherAreaText } from "@/lib/area-group";
+import { areaGroupOf, otherAreaText, pickRepresentativeArea } from "@/lib/area-group";
 import type { Complex, PyeongDetail } from "@/types";
 
-const mockUseComplexArticleAvg = vi.fn(() => ({ avgPrice: 99999 as number | null, count: 5, isLoading: false, isError: false }));
+type AvgResult = { avgPrice: number | null; count: number; isLoading: boolean; isError: boolean };
+const mockUseComplexArticleAvg = vi.fn<(...args: unknown[]) => AvgResult>(
+  () => ({ avgPrice: 99999, count: 5, isLoading: false, isError: false }),
+);
 vi.mock("@/hooks/useComplexArticleAvg", () => ({
-  useComplexArticleAvg: () => mockUseComplexArticleAvg(),
+  useComplexArticleAvg: (...args: unknown[]) => mockUseComplexArticleAvg(...args),
 }));
 vi.mock("@/components/complex/ComplexPriceFloorSection", () => ({ default: () => <div /> }));
 vi.mock("@/components/complex/ComplexPriceAreaSection", () => ({ default: () => <div /> }));
@@ -146,8 +149,36 @@ describe("ComplexDashboard 시세 칸 — A안 (세션 474 B27)", () => {
   it("대표 면적이 없으면 지금처럼 — 라벨 '시세' · 매물 평균 대체값", () => {
     renderDashboard({ complex_no: "C9", complex_name: "옛단지" }, []);
     const box = screen.getByRole("button", { name: "시세 메뉴 열기" });
-    expect(box).toHaveTextContent("매물 평균 9억 9,999만");
+    expect(box).toHaveTextContent("매매 매물 평균 9억 9,999만"); // 평형표가 없어 면적을 모름(세션 475)
+    expect(box).not.toHaveTextContent("㎡)");
     expect(screen.queryByTestId("box-chip-prices")).toBeNull();
+    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("C9", undefined, { avgEnabled: true, avgAreaM2: null });
+  });
+
+  // 세션 475 PR 6 — 대체값은 매매 매물만 + 평형표 세대수 최다 묶음만
+  it("대표 면적이 없으면 매매 매물 평균을 평형표 대표 묶음(59㎡)으로", () => {
+    renderDashboard({ complex_no: "C9", complex_name: "옛단지" });
+    const box = screen.getByRole("button", { name: "시세 메뉴 열기" });
+    expect(box).toHaveTextContent("매매 매물 평균(59㎡) 9억 9,999만");
+    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("C9", undefined, { avgEnabled: true, avgAreaM2: 59 });
+  });
+
+  it("대표 면적 값이 있으면 매매 평균 요청을 켜지 않는다", () => {
+    renderDashboard(C6139);
+    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("6139", undefined, { avgEnabled: false, avgAreaM2: null });
+  });
+
+  it("FE 대표 면적 = BE pick_representative 와 같은 답(6139 평형표 → 59 · 동률이면 작은 면적)", () => {
+    // BE tests/test_area_price_b27.py test_대표면적_6139는_세대수_최다_59 와 같은 입력 — 84 묶음 합 70 < 59 묶음 116
+    expect(pickRepresentativeArea(PYEONG_6139)).toBe(59);
+    expect(pickRepresentativeArea([
+      { exclusive_area: "84.97", household_count_by_pyeong: "100" },
+      { exclusive_area: "59.98", household_count_by_pyeong: "100세대" },
+    ])).toBe(59);
+    expect(pickRepresentativeArea([{ exclusive_area: "84.97", household_count_by_pyeong: "1,200" },
+      { exclusive_area: "59.98", household_count_by_pyeong: "300" }])).toBe(84);
+    expect(pickRepresentativeArea([{ exclusive_area: "", household_count_by_pyeong: "10" }])).toBeNull();
+    expect(pickRepresentativeArea([])).toBeNull();
   });
 });
 

@@ -267,6 +267,7 @@ function ArticleDetailBody({ article, articleNo, complex }: BodyProps) {
           complexNo={complexNo}
           tradeTypeName={tradeTypeName}
           currentArticleNo={articleNo}
+          areaM2={area2M2}
           accessToken={sessionToken}
           tokenReady={tokenReady}
         />

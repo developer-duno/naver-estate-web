@@ -35,6 +35,29 @@ export function otherAreaText(rep: number, areaPrices: AreaPrice[], max = 3): st
     .join(" · ");
 }
 
+/**
+ * 평형표로 고른 대표 면적 묶음(세션 475 PR 6) — BE crawler/area_group.py `pick_representative` 와 같은 규칙:
+ * 묶음별 세대수 합 최다 → 동률이면 작은 면적. 화면엔 최근 거래 수가 없어 BE 의 "동률이면 거래 수" 단계는 빠진다.
+ * 면적을 하나도 못 읽으면 null.
+ */
+export function pickRepresentativeArea(
+  table: { exclusive_area?: string; household_count_by_pyeong?: string }[],
+): number | null {
+  const households = new Map<number, number>();
+  for (const p of table) {
+    const area = areaGroupOf(p.exclusive_area);
+    if (area == null) continue;
+    // BE parse_households 와 같게 — 쉼표를 지우고 첫 숫자 덩어리, 못 읽으면 0
+    const hh = Number((p.household_count_by_pyeong ?? "").replace(/,/g, "").match(/\d+/)?.[0] ?? 0);
+    households.set(area, (households.get(area) ?? 0) + hh);
+  }
+  let best: number | null = null;
+  for (const [area, hh] of households) {
+    if (best == null || hh > households.get(best)! || (hh === households.get(best)! && area < best)) best = area;
+  }
+  return best;
+}
+
 /** 층별 시세 기준 줄 — "전용 59㎡ 대 매물 기준"(세션 475 PR 6). 묶음을 모르면 null(줄 없음) */
 export function floorAreaNote(area: number | null | undefined): string | null {
   return area ? `전용 ${area}㎡ 대 매물 기준` : null;

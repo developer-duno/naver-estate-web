@@ -14,7 +14,7 @@ BE Python dict ↔ FE TypeScript 함수 짝꿍 매핑, SQL `GROUP BY` 의 N→1 
 
 | BE | FE | 매핑 종류 |
 | --- | --- | --- |
-| `backend/db/price_queries.py:99` `tt_key_map` | `frontend/src/lib/trade-types.ts:17` `tradeKey()` | 거래유형 한글명 → 집계 키 |
+| `backend/db/price_queries.py:132` `tt_key_map` | `frontend/src/lib/trade-types.ts:17` `tradeKey()` | 거래유형 한글명 → 집계 키 |
 
 ### 답습
 

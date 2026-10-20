@@ -9,7 +9,7 @@ import ComplexPriceAreaSection from "@/components/complex/ComplexPriceAreaSectio
 import PriceChartSection from "@/components/complex/PriceChartSection";
 import { useComplexArticleAvg } from "@/hooks/useComplexArticleAvg";
 import { formatKoreanPrice } from "@/lib/format";
-import { LEGACY_NOTE, otherAreaText } from "@/lib/area-group";
+import { LEGACY_NOTE, otherAreaText, pickRepresentativeArea } from "@/lib/area-group";
 import type { ArticleFilters, Complex, PyeongDetail } from "@/types";
 
 type SectionKey = "prices" | "chart" | "info" | "area";
@@ -45,7 +45,13 @@ export default function ComplexDashboard({
   const [openSection, setOpenSection] = useState<SectionKey | "">("");
   const [isPrinting, setIsPrinting] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const { avgPrice, count, isLoading: countLoading } = useComplexArticleAvg(complexNo, sessionToken);
+  // 매매 매물 평균은 시세 칸 대체값 — 대표 면적도 시세도 없을 때만 요청, 면적은 평형표 세대수 최다 묶음(세션 475 PR 6)
+  const avgEnabled = complex.rep_area_m2 == null && complex.nearby_median_price == null;
+  const avgArea = avgEnabled ? pickRepresentativeArea(pyeongDetails) : null;
+  const { avgPrice, count, isLoading: countLoading } = useComplexArticleAvg(complexNo, sessionToken, {
+    avgEnabled,
+    avgAreaM2: avgArea,
+  });
   // 불러오는 중엔 count=0 이라 "매물 0건"이 잠깐 보이던 것을 막는다(세션 447)
   const countText = countLoading ? "매물 …건" : `매물 ${count}건`;
 
@@ -108,7 +114,9 @@ export default function ComplexDashboard({
         label: "시세",
         primary: complex.nearby_median_price != null
           ? formatKoreanPrice(complex.nearby_median_price)
-          : (avgPrice != null ? `매물 평균 ${formatKoreanPrice(avgPrice)}` : "-"),
+          : (avgPrice != null
+            ? `매매 매물 평균${avgArea != null ? `(${avgArea}㎡)` : ""} ${formatKoreanPrice(avgPrice)}`
+            : "-"),
         // 대표 면적이 없는데 옛 값이 남은 단지 — 면적이 섞인 옛 값임을 작게 밝힌다(사장님 결정 Q4)
         extra: complex.price_basis === "legacy_mixed" ? LEGACY_NOTE : undefined,
         secondary: complex.jeonse_rate != null

@@ -126,7 +126,7 @@ def get_price_stats_aggregated(db: Session, complex_no: str) -> dict:
         floor_rows = []
 
     # 단기임대 → wolse 합산: 보증금 단위·구조 월세 동일, FE tradeKey 짝꿍 답습.
-    # 새 거래유형 추가 시 본 dict + frontend/src/lib/trade-types.ts:18 양쪽 답습.
+    # 새 거래유형 추가 시 본 dict + frontend/src/lib/trade-types.ts:17 양쪽 답습.
     # 주의: SQL GROUP BY 가 trade_type_name 별로 나누므로 wolse(월세) + wolse(단기임대)
     # 두 행이 같은 키에 들어옴 → count 합산 + 평균 가중평균 계산 의무.
     tt_key_map = {"매매": "maemae", "전세": "jeonse", "월세": "wolse", "단기임대": "wolse"}

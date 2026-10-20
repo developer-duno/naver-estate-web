@@ -35,6 +35,11 @@ export function otherAreaText(rep: number, areaPrices: AreaPrice[], max = 3): st
     .join(" · ");
 }
 
+/** 층별 시세 기준 줄 — "전용 59㎡ 대 매물 기준"(세션 475 PR 6). 묶음을 모르면 null(줄 없음) */
+export function floorAreaNote(area: number | null | undefined): string | null {
+  return area ? `전용 ${area}㎡ 대 매물 기준` : null;
+}
+
 /** 그 면적 묶음의 6개월 중위(없으면 null) — 공시가율 분모 */
 export function areaMedianOf(areaPrices: AreaPrice[] | undefined, group: number | null): number | null {
   if (group == null || !areaPrices) return null;

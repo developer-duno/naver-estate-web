@@ -29,9 +29,30 @@ def get_article_price_history(
 
 
 
+def _floor_area_group(db: Session, complex_no: str) -> int | None:
+    """층별 시세에 쓸 면적 묶음(정수 ㎡) — 세션 475 PR 6.
+
+    complexes.rep_area_m2 → 없으면 평형표 세대수 최다 묶음(pick_representative) → 그래도 없으면 None(전체 매물).
+    """
+    from crawler.area_group import area_group_of, load_pyeong_tables, pick_representative
+    from db.models import Complex
+
+    rep = db.query(Complex.rep_area_m2).filter(Complex.complex_no == complex_no).scalar()
+    if isinstance(rep, int) and not isinstance(rep, bool):
+        group = area_group_of(rep)
+        if group is not None:
+            return group
+    return pick_representative(load_pyeong_tables(db, [complex_no]).get(complex_no), None)
+
+
 def get_price_stats_aggregated(db: Session, complex_no: str) -> dict:
-    """단지 매물 가격 통계 — SQL 집계 (면적 5m² 버킷 + 층수 3티어)"""
+    """단지 매물 가격 통계 — SQL 집계 (면적 5m² 버킷 + 층수 3티어)
+
+    층수 3티어는 대표 면적 묶음 매물만(세션 475 PR 6 — 여러 면적이 섞인 평균을 막는다). 응답 floor_area_m2 =
+    그 묶음(정수 ㎡), 묶음을 모르면 None 이고 그때는 전체 매물로 센다. 면적 묶음 판정 = 내림(area_group_of 와 같음).
+    """
     AREA_BUCKET = 5
+    floor_area = _floor_area_group(db, complex_no)
 
     area_stmt = text("""
         SELECT
@@ -54,7 +75,9 @@ def get_price_stats_aggregated(db: Session, complex_no: str) -> dict:
     # by_area + tt_key_map 매핑 검증은 정상 동작). backend/CLAUDE.md §CI 답습.
     dialect_name = db.bind.dialect.name if db.bind else ""
     if dialect_name == "postgresql":
-        floor_stmt = text("""
+        # 대표 면적 묶음만 — FLOOR = 소수점 버림(crawler/area_group.area_group_of 와 같은 규칙)
+        area_cond = "AND area2_m2 IS NOT NULL AND FLOOR(area2_m2) = :area" if floor_area is not None else ""
+        floor_stmt = text(f"""
             SELECT
                 CASE
                     WHEN floor_info ~ '^[0-9]+' THEN
@@ -78,6 +101,7 @@ def get_price_stats_aggregated(db: Session, complex_no: str) -> dict:
             FROM articles
             WHERE complex_no = :cno AND is_active = TRUE AND numeric_price IS NOT NULL
                 AND floor_info IS NOT NULL
+                {area_cond}
             GROUP BY floor_tier, trade_type_name
             HAVING CASE
                     WHEN floor_info ~ '^[0-9]+' THEN
@@ -95,6 +119,8 @@ def get_price_stats_aggregated(db: Session, complex_no: str) -> dict:
                 END IS NOT NULL
             ORDER BY floor_tier, trade_type_name
         """).bindparams(cno=complex_no)
+        if floor_area is not None:
+            floor_stmt = floor_stmt.bindparams(area=floor_area)
         floor_rows = db.execute(floor_stmt).fetchall()
     else:
         floor_rows = []
@@ -177,6 +203,7 @@ def get_price_stats_aggregated(db: Session, complex_no: str) -> dict:
         "total_articles": total,
         "by_area": by_area,
         "by_floor": by_floor,
+        "floor_area_m2": floor_area,
     }
 
 

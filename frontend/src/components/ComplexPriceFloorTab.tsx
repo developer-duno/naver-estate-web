@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { PriceStats, ArticleFilters } from "@/types";
 import { formatChartPrice } from "@/lib/format";
+import { floorAreaNote } from "@/lib/area-group";
 import Skeleton from "@/components/Skeleton";
 
 /** 층수별 가격 탭 — 카드형 UI + 클릭 시 해당 층수 필터 적용 */
@@ -61,8 +62,11 @@ export default function ComplexPriceFloorTab({ priceStats, error, loading, onFil
     { key: "월세", avgKey: "wolse_avg",  minKey: "wolse_min",  maxKey: "wolse_max",  countKey: "wolse_count",  color: "text-green-600" },
   ] as const;
 
+  const areaNote = floorAreaNote(priceStats.floor_area_m2);
+
   return (
     <div>
+      {areaNote && <p className="text-xs text-gray-500 mb-1">{areaNote}</p>}
       {onFilterChange && (
         <p className="text-xs text-gray-400 mb-2 text-right">카드를 클릭하면 해당 층수 매물만 표시됩니다</p>
       )}

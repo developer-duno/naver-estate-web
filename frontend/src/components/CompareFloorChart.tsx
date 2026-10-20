@@ -7,6 +7,7 @@ import {
 } from "recharts";
 import { COMPARE_COLORS } from "@/lib/constants";
 import { formatChartPrice } from "@/lib/format";
+import { floorAreaNote } from "@/lib/area-group";
 import type { PriceStats } from "@/types";
 
 /** 백엔드 "저층(1-5)" → "저층" */
@@ -64,8 +65,18 @@ export default function CompareFloorChart({ datasets }: Props) {
     return <p className="text-gray-500 text-sm py-8 text-center">층별 가격 데이터가 부족합니다.</p>;
   }
 
+  // 단지마다 대표 면적 묶음 매물만 센다(세션 475 PR 6) — 묶음을 아는 단지만 한 줄에
+  const areaNote = datasets
+    .map((ds) => {
+      const note = floorAreaNote(ds.priceStats.floor_area_m2);
+      return note ? `${ds.complexName} ${note}` : null;
+    })
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <div>
+      {areaNote && <p className="text-xs text-gray-500 mb-2">{areaNote}</p>}
       <ResponsiveContainer width="100%" height={320}>
         <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 4 }} barGap={4}>
           <CartesianGrid strokeDasharray="3 3" />

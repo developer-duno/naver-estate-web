@@ -127,4 +127,19 @@ describe("ComplexPriceFloorTab 컴포넌트", () => {
       max_floor: undefined,
     });
   });
+
+  // 세션 475 PR 6 — 층별 시세는 대표 면적 묶음 매물만, 기준 면적을 한 줄로
+  it("floor_area_m2 가 있으면 '전용 N㎡ 대 매물 기준' 줄을 보여 준다", () => {
+    render(
+      <ComplexPriceFloorTab priceStats={makePriceStats({ floor_area_m2: 59 })} error={false} loading={false} />,
+    );
+    expect(screen.getByText("전용 59㎡ 대 매물 기준")).toBeInTheDocument();
+  });
+
+  it("floor_area_m2 가 null 이면 기준 줄이 없다", () => {
+    render(
+      <ComplexPriceFloorTab priceStats={makePriceStats({ floor_area_m2: null })} error={false} loading={false} />,
+    );
+    expect(screen.queryByText(/매물 기준/)).toBeNull();
+  });
 });

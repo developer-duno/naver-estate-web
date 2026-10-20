@@ -112,3 +112,85 @@ def test_get_price_changed_articles_sql_matches_v064_index_condition(db):
     assert "ORDER BY articles.price_changed_at DESC" in sql, (
         f"price_changed_at DESC 정렬이 없다 (V064 인덱스 정렬과 불일치): {sql}"
     )
+
+
+# ── 세션 475 PR 6 — 층별 시세는 대표 면적 묶음 매물만 ──────────────────────────
+# floor_stmt 는 PostgreSQL 전용이라 SQLite 에서 돌릴 수 없다 → 진짜 세션을 감싸 방언 이름만 postgresql 로 보이게 하고,
+# 층별 SQL 은 실행 대신 문장·바인드 값을 잡아 둔다(나머지 조회는 진짜 SQLite 로).
+
+
+class _PgProxy:
+    def __init__(self, db):
+        from types import SimpleNamespace
+
+        self._db = db
+        self.bind = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+        self.floor_sql: list[tuple[str, dict]] = []
+
+    def execute(self, stmt, *args, **kwargs):
+        from types import SimpleNamespace
+
+        sql = str(stmt)
+        if "floor_tier" in sql:
+            self.floor_sql.append((sql, dict(stmt.compile().params)))
+            return SimpleNamespace(fetchall=lambda: [])
+        return self._db.execute(stmt, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._db, name)
+
+
+def _add_pyeong(db, complex_no, rows):
+    from db.models import ComplexPyeongDetail
+
+    for pno, area, hh in rows:
+        db.add(ComplexPyeongDetail(complex_no=complex_no, pyeong_no=pno, exclusive_area=area,
+                                   household_count_by_pyeong=hh))
+    db.commit()
+
+
+def test_층별_시세_대표면적_묶음만_거른다(db):
+    """6139 처럼 대표 면적 59 → 층별 SQL 에 FLOOR(area2_m2) = 59 조건, 응답 floor_area_m2 = 59.
+    뮤테이션 표적: SQL 의 면적 조건을 지우면 FAIL."""
+    db.add(Complex(complex_no="FA1", complex_name="자연", rep_area_m2=59))
+    db.commit()
+    proxy = _PgProxy(db)
+
+    result = queries.get_price_stats_aggregated(proxy, "FA1")
+
+    assert result["floor_area_m2"] == 59
+    (sql, params), = proxy.floor_sql
+    assert "FLOOR(area2_m2) = :area" in sql
+    assert params["area"] == 59 and params["cno"] == "FA1"
+
+
+def test_층별_시세_대표면적_없으면_평형표_세대수_최다(db):
+    """rep_area_m2 가 비면 평형표(세대수 최다 묶음)로 — 84.97·84.36 은 84 묶음으로 합쳐 28세대 > 59 묶음 20세대."""
+    _add_complex(db, "FA2")
+    _add_pyeong(db, "FA2", [(1, "59.98", "20"), (2, "84.97", "15"), (3, "84.36", "13")])
+
+    result = queries.get_price_stats_aggregated(_PgProxy(db), "FA2")
+
+    assert result["floor_area_m2"] == 84
+
+
+def test_층별_시세_면적을_모르면_전체_매물(db):
+    """대표 면적도 평형표도 없으면 지금처럼 전체 매물 — SQL 에 면적 조건 없음, floor_area_m2 = None."""
+    _add_complex(db, "FA3")
+    proxy = _PgProxy(db)
+
+    result = queries.get_price_stats_aggregated(proxy, "FA3")
+
+    assert result["floor_area_m2"] is None
+    (sql, params), = proxy.floor_sql
+    assert "FLOOR(area2_m2)" not in sql and "area" not in params
+
+
+def test_층별_시세_SQLite_에서도_응답_칸(db):
+    """SQLite(시험 엔진)는 층별을 비워 두지만 floor_area_m2 칸은 같은 규칙으로 싣는다."""
+    db.add(Complex(complex_no="FA4", complex_name="자연", rep_area_m2=84))
+    db.commit()
+
+    result = queries.get_price_stats_aggregated(db, "FA4")
+
+    assert result["by_floor"] == [] and result["floor_area_m2"] == 84

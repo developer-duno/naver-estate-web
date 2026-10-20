@@ -220,6 +220,27 @@ describe("CompareFloorChart", () => {
     expect(screen.queryByText(/최고: 단지B/)).toBeNull();
     expect(screen.queryByText("★")).toBeNull();
   });
+
+  // 세션 475 PR 6 — 단지마다 대표 면적 묶음 매물 기준, 묶음을 아는 단지만 한 줄에
+  it("단지별 층별 기준 면적을 한 줄로, 모르는 단지는 뺀다", () => {
+    render(
+      <CompareFloorChart
+        datasets={[
+          { complexNo: "1", complexName: "단지A", priceStats: makePriceStats({ floor_area_m2: 59 }) },
+          { complexNo: "2", complexName: "단지B", priceStats: makePriceStats({ floor_area_m2: null }) },
+          { complexNo: "3", complexName: "단지C", priceStats: makePriceStats({ floor_area_m2: 84 }) },
+        ]}
+      />,
+    );
+    expect(screen.getByText("단지A 전용 59㎡ 대 매물 기준 · 단지C 전용 84㎡ 대 매물 기준")).toBeInTheDocument();
+  });
+
+  it("어느 단지도 기준 면적을 모르면 기준 줄이 없다", () => {
+    render(
+      <CompareFloorChart datasets={[{ complexNo: "1", complexName: "A", priceStats: makePriceStats() }]} />,
+    );
+    expect(screen.queryByText(/매물 기준/)).toBeNull();
+  });
 });
 
 /* ── 면적별 가격·관리비 표 — 판정 ★·초록 강조 없음 (세션 472 PR 3) ── */

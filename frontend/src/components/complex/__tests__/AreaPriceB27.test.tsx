@@ -13,7 +13,7 @@ import PriceChartSection from "../PriceChartSection";
 import InfoCards from "@/components/article/InfoCards";
 import PriceHistoryChart from "@/components/PriceHistoryChart";
 import CompareCharts from "@/components/CompareCharts";
-import { areaGroupOf, otherAreaText, pickRepresentativeArea } from "@/lib/area-group";
+import { areaGroupOf, areaGroupRange, otherAreaText, pickRepresentativeArea, sameAreaFilters } from "@/lib/area-group";
 import type { Complex, PyeongDetail } from "@/types";
 
 type AvgResult = { avgPrice: number | null; count: number; isLoading: boolean; isError: boolean };
@@ -166,6 +166,28 @@ describe("ComplexDashboard 시세 칸 — A안 (세션 474 B27)", () => {
   it("대표 면적 값이 있으면 매매 평균 요청을 켜지 않는다", () => {
     renderDashboard(C6139);
     expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("6139", undefined, { avgEnabled: false, avgAreaM2: null });
+  });
+
+  // 보완 Q4 — 대표 면적은 없고 옛 시세가 남은 단지(legacy_mixed)는 시세 칸에 옛 값이 나오므로 매매 요청을 켜지 않는다
+  it("legacy_mixed 단지는 매매 평균 요청을 켜지 않는다", () => {
+    renderDashboard({ complex_no: "C8", complex_name: "옛값단지", nearby_median_price: 18000, price_basis: "legacy_mixed" });
+    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("C8", undefined, { avgEnabled: false, avgAreaM2: null });
+  });
+
+  // 보완 Q5 — 평형표를 받기 전엔 매매 평균을 띄우지 않는다(면적 없는 평균 → 묶음 평균으로 숫자가 한 번 바뀌지 않게)
+  it("평형표를 받기 전(pyeongReady=false)엔 매매 평균 요청을 켜지 않는다", () => {
+    render(
+      <ComplexDashboard complex={{ complex_no: "C9", complex_name: "옛단지" }} complexNo="C9" pyeongDetails={[]}
+        pyeongReady={false} sessionToken={undefined} onFilterChange={() => {}} />,
+    );
+    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("C9", undefined, { avgEnabled: false, avgAreaM2: null });
+  });
+
+  it("면적 묶음 필터 = N 이상 N+1 미만(서버 <= 비교라 N+0.999) · 경쟁 매물 필터", () => {
+    expect(areaGroupRange(84)).toEqual({ min_area_m2: 84, max_area_m2: 84.999 });
+    expect(sameAreaFilters("매매", 84.97)).toEqual({ trade_types: "매매", min_area_m2: 84, max_area_m2: 84.999 });
+    expect(sameAreaFilters("매매", null)).toEqual({ trade_types: "매매" });
+    expect(sameAreaFilters(undefined, undefined)).toBeUndefined();
   });
 
   it("FE 대표 면적 = BE pick_representative 와 같은 답(6139 평형표 → 59 · 동률이면 작은 면적)", () => {

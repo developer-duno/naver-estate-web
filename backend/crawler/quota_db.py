@@ -88,7 +88,7 @@ def purge_expired_counters(db) -> int:
 
     dialect 분기 없이 한 문장으로 처리한다 — 비교 기준을 DB 함수(now())가 아니라
     **Python 이 만든 UTC aware 값**으로 바인딩하므로 PostgreSQL·SQLite 양쪽에서
-    같은 의미로 동작한다(`db/price_queries.py:48` 의 dialect 분기가 필요했던
+    같은 의미로 동작한다(`db/price_queries.py:76` 의 dialect 분기가 필요했던
     PostgreSQL 전용 문법을 애초에 쓰지 않는다).
     """
     now = datetime.now(timezone.utc)

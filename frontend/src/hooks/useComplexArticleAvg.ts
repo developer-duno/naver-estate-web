@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getArticles } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import { areaGroupOf } from "@/lib/area-group";
+import { areaGroupOf, areaGroupRange } from "@/lib/area-group";
 
 /** 매매 평균 요청 필터 — 경쟁 매물(CompetingListings)과 같은 queryKey 모양 */
 const MAEMAE_FILTERS = { trade_types: "매매" };
@@ -31,14 +31,16 @@ export function useComplexArticleAvg(
     enabled: !!complexNo,
     staleTime: 30_000,
   });
+  const group = areaGroupOf(avgAreaM2);
+  // 서버가 매매·같은 면적 묶음으로 먼저 거른다 — 첫 쪽만 받아도 그 묶음 매물이 빠지지 않게(세션 475 보완)
+  const maemaeFilters = group != null ? { ...MAEMAE_FILTERS, ...areaGroupRange(group) } : MAEMAE_FILTERS;
   const maemae = useQuery({
-    queryKey: queryKeys.articles(complexNo, MAEMAE_FILTERS),
-    queryFn: () => getArticles(complexNo, MAEMAE_FILTERS, accessToken),
+    queryKey: queryKeys.articles(complexNo, maemaeFilters),
+    queryFn: () => getArticles(complexNo, maemaeFilters, accessToken),
     enabled: !!complexNo && avgEnabled,
     staleTime: 30_000,
   });
 
-  const group = areaGroupOf(avgAreaM2);
   const prices = (maemae.data?.articles ?? [])
     .filter((a) => group == null || areaGroupOf(a.area2_m2) === group)
     .map((a) => a.numeric_price)

@@ -14,6 +14,7 @@ import ChartAccordion from "@/components/ChartAccordion";
 import PriceHeader from "@/components/article/PriceHeader";
 import MarketPosition from "@/components/article/MarketPosition";
 import CompetingListings from "@/components/article/CompetingListings";
+import { sameAreaFilters } from "@/lib/area-group";
 import InfoCards from "@/components/article/InfoCards";
 import MaintenanceCost from "@/components/article/MaintenanceCost";
 import ArticleDescription from "@/components/article/ArticleDescription";
@@ -193,7 +194,8 @@ function ArticleDetailBody({ article, articleNo, complex }: BodyProps) {
     queryFn: () => getPyeongDetails(complexNo, sessionToken),
     enabled: !!complexNo && tokenReady,
   });
-  const competingFilters = tradeTypeName ? { trade_types: tradeTypeName } : undefined;
+  // 자식(CompetingListings)과 같은 필터 — 같은 거래유형·같은 면적 묶음(세션 475 보완)
+  const competingFilters = sameAreaFilters(tradeTypeName, area2M2);
   const articlesQuery = useQuery({
     queryKey: queryKeys.articles(complexNo, competingFilters),
     queryFn: () => getArticles(complexNo, competingFilters, sessionToken),

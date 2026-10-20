@@ -51,6 +51,8 @@ describe("CompetingListings — 같은 면적 묶음끼리", () => {
     expect(getByText("2건")).toBeInTheDocument();
     expect(getByText(`${formatKoreanPrice(50000)} ~ ${formatKoreanPrice(70000)}`)).toBeInTheDocument();
     expect(getByText("2,000만원/평")).toBeInTheDocument(); // (1900+2100)/2 — 59㎡ 1500 은 빠진다
+    // 보완 Q3: 서버가 같은 면적 묶음으로 먼저 거르게 범위를 싣는다
+    expect(getArticles).toHaveBeenCalledWith("C001", { trade_types: "매매", min_area_m2: 84, max_area_m2: 84.999 }, undefined);
   });
 
   it("면적을 모르면 지금처럼 모든 면적", async () => {
@@ -61,6 +63,7 @@ describe("CompetingListings — 같은 면적 묶음끼리", () => {
     );
     expect(await findByText("같은 단지 매매")).toBeInTheDocument();
     expect(getByText("3건")).toBeInTheDocument();
+    expect(getArticles).toHaveBeenCalledWith("C001", { trade_types: "매매" }, undefined);
     expect(getByText(`${formatKoreanPrice(30000)} ~ ${formatKoreanPrice(70000)}`)).toBeInTheDocument();
   });
 

@@ -143,7 +143,10 @@ describe("useComplexArticleAvg — 매매·같은 면적 평균 (세션 475)", (
     await waitFor(() => expect(result.current.avgPrice).toBe(17500));
     expect(result.current.count).toBe(46);
     expect(mockGetArticles).toHaveBeenCalledWith("C001", undefined, "tok");
-    expect(mockGetArticles).toHaveBeenCalledWith("C001", { trade_types: "매매" }, "tok");
+    // 보완 Q3: 서버가 같은 면적 묶음으로 먼저 거르게 범위를 싣는다(N 이상 N+1 미만)
+    expect(mockGetArticles).toHaveBeenCalledWith(
+      "C001", { trade_types: "매매", min_area_m2: 59, max_area_m2: 59.999 }, "tok",
+    );
   });
 
   it("면적을 모르면 매매 전체 평균", async () => {
@@ -153,6 +156,7 @@ describe("useComplexArticleAvg — 매매·같은 면적 평균 (세션 475)", (
       { wrapper: TestQueryProvider },
     );
     await waitFor(() => expect(result.current.avgPrice).toBe(21667)); // (17000+18000+30000)/3
+    expect(mockGetArticles).toHaveBeenCalledWith("C001", { trade_types: "매매" }, undefined);
   });
 
   it("avgEnabled 가 꺼져 있으면 매매 요청 0 · 건수만", async () => {

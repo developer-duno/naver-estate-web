@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getArticles } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { formatKoreanPrice } from "@/lib/format";
-import { areaGroupOf } from "@/lib/area-group";
+import { areaGroupOf, sameAreaFilters } from "@/lib/area-group";
 import { InfoCard, InfoRow } from "@/components/article/InfoCards";
 
 interface Props {
@@ -25,7 +25,8 @@ interface Props {
 }
 
 export default function CompetingListings({ complexNo, tradeTypeName, currentArticleNo, areaM2, accessToken, tokenReady }: Props) {
-  const filters = tradeTypeName ? { trade_types: tradeTypeName } : undefined;
+  // 서버가 같은 면적 묶음으로 먼저 거른다 — 첫 쪽만 받아도 맞는 매물이 빠지지 않게(세션 475 보완)
+  const filters = sameAreaFilters(tradeTypeName, areaM2);
 
   const { data, isError } = useQuery({
     queryKey: queryKeys.articles(complexNo, filters),

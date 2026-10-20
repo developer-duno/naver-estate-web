@@ -5,7 +5,7 @@
  * 화면은 평형표(PyeongDetail.exclusive_area 문자열)와 공시가격(prvuse_ar 숫자)을 같은 규칙으로 묶을 때만 쓴다.
  */
 import { formatKoreanPrice } from "@/lib/format";
-import type { AreaPrice } from "@/types";
+import type { AreaPrice, ArticleFilters } from "@/types";
 
 /** 면적 섞인 옛 값 안내 — 대표 면적이 없는데 옛 값이 남은 단지(세션 474 보완 F2 · 사장님 결정 Q4) */
 export const LEGACY_NOTE = "면적 섞인 옛 값 — 최근 6개월 거래가 없어 다시 계산되지 않았어요";
@@ -56,6 +56,27 @@ export function pickRepresentativeArea(
     if (best == null || hh > households.get(best)! || (hh === households.get(best)! && area < best)) best = area;
   }
   return best;
+}
+
+/**
+ * 면적 묶음 N 의 매물 목록 필터 — N 이상 N+1 미만(소수점 버림 규칙과 같게, 세션 475 PR 6 보완).
+ * 서버(db/query_helpers.py)는 max_area_m2 를 `<=` 로 비교하고 매물 면적은 소수 둘째 자리까지라 N+0.999 로 끊는다.
+ */
+export function areaGroupRange(group: number): { min_area_m2: number; max_area_m2: number } {
+  return { min_area_m2: group, max_area_m2: group + 0.999 };
+}
+
+/** 같은 거래유형·같은 면적 묶음 매물 요청 필터 — 경쟁 매물과 매물 상세 부모가 같은 queryKey 를 쓰게 한 곳에서 */
+export function sameAreaFilters(
+  tradeTypeName: string | undefined,
+  areaM2: number | null | undefined,
+): ArticleFilters | undefined {
+  const group = areaGroupOf(areaM2);
+  const filters: ArticleFilters = {
+    ...(tradeTypeName ? { trade_types: tradeTypeName } : {}),
+    ...(group != null ? areaGroupRange(group) : {}),
+  };
+  return Object.keys(filters).length > 0 ? filters : undefined;
 }
 
 /** 층별 시세 기준 줄 — "전용 59㎡ 대 매물 기준"(세션 475 PR 6). 묶음을 모르면 null(줄 없음) */

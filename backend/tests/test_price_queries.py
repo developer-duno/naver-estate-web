@@ -27,7 +27,7 @@ def test_get_price_stats_단기임대_합산_to_wolse(db):
     """단기임대 매물의 보증금이 wolse 키에 월세와 합산되어 집계되는지 검증.
 
     배경: BE-FE 매핑 정렬 (세션 225).
-    db/price_queries.py:88 tt_key_map 의 "단기임대": "wolse" 매핑 회귀 가드.
+    db/price_queries.py:132 tt_key_map 의 "단기임대": "wolse" 매핑 회귀 가드.
     """
     _add_complex(db, "PQ1")
     # 같은 면적 버킷 (80m²) — 월세 1 + 단기임대 1 → wolse 키에 합산
@@ -194,3 +194,17 @@ def test_층별_시세_SQLite_에서도_응답_칸(db):
     result = queries.get_price_stats_aggregated(db, "FA4")
 
     assert result["by_floor"] == [] and result["floor_area_m2"] == 84
+
+
+def test_매물_목록_면적_묶음_필터는_N이상_N플러스1_미만(client, db, approved_headers):
+    """세션 475 보완 Q3: 화면이 같은 면적 묶음(소수점 버림)을 min_area_m2=N · max_area_m2=N+0.999 로 서버에 요청한다.
+    서버는 max 를 `<=` 로 비교 — 59.0·59.99 는 들어오고 58.99·60.0 은 빠져야 내림 규칙과 같다."""
+    _add_complex(db, "FR1")
+    for no, area in (("R1", 58.99), ("R2", 59.0), ("R3", 59.99), ("R4", 60.0)):
+        _add_article(db, no, "FR1", trade="매매", price=17000, area2_m2=area)
+
+    res = client.get("/api/complexes/FR1/articles?trade_types=매매&min_area_m2=59&max_area_m2=59.999",
+                     headers=approved_headers)
+
+    assert res.status_code == 200
+    assert sorted(a["article_no"] for a in res.json()["articles"]) == ["R2", "R3"]

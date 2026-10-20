@@ -235,6 +235,20 @@ describe("CompareFloorChart", () => {
     expect(screen.getByText("단지A 전용 59㎡ 대 매물 기준 · 단지C 전용 84㎡ 대 매물 기준")).toBeInTheDocument();
   });
 
+  // 세션 475 보완 Q1 — 대표 면적 매물이 0개라 막대가 빠진 단지는 이유를 짧게, 기준 줄에서는 뺀다
+  it("대표 면적 매물이 없어 빠진 단지는 '아직 없어요' 안내", () => {
+    render(
+      <CompareFloorChart
+        datasets={[
+          { complexNo: "1", complexName: "단지A", priceStats: makePriceStats({ floor_area_m2: 59 }) },
+          { complexNo: "2", complexName: "단지B", priceStats: makePriceStats({ floor_area_m2: 84, by_floor: [] }) },
+        ]}
+      />,
+    );
+    expect(screen.getByText("단지A 전용 59㎡ 대 매물 기준")).toBeInTheDocument();
+    expect(screen.getByText("단지B: 전용 84㎡ 대 매물이 아직 없어요")).toBeInTheDocument();
+  });
+
   it("어느 단지도 기준 면적을 모르면 기준 줄이 없다", () => {
     render(
       <CompareFloorChart datasets={[{ complexNo: "1", complexName: "A", priceStats: makePriceStats() }]} />,

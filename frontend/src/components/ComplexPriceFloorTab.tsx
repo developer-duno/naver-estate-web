@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { PriceStats, ArticleFilters } from "@/types";
 import { formatChartPrice } from "@/lib/format";
-import { floorAreaNote } from "@/lib/area-group";
+import { areaGroupRange, floorAreaNote } from "@/lib/area-group";
 import Skeleton from "@/components/Skeleton";
 
 /** 층수별 가격 탭 — 카드형 UI + 클릭 시 해당 층수 필터 적용 */
@@ -38,14 +38,20 @@ export default function ComplexPriceFloorTab({ priceStats, error, loading, onFil
         )}
       </div>
     );
+  // 대표 면적 묶음 매물이 하나도 없으면 왜 비었는지 밝힌다(세션 475 보완)
+  if (priceStats?.floor_area_m2 && priceStats.by_floor.length === 0)
+    return <p className="text-gray-500 text-sm text-center">전용 {priceStats.floor_area_m2}㎡ 대 매물이 아직 없어요</p>;
   if (!priceStats || priceStats.by_floor.length === 0)
     return <p className="text-gray-500 text-sm text-center">층수별 가격 데이터가 부족합니다</p>;
+
+  // 카드의 "매물수" 는 대표 면적 묶음만 센 값 — 누르면 목록도 그 묶음으로 같이 거른다(세션 475 보완)
+  const area = priceStats.floor_area_m2 ?? null;
 
   const handleFloorClick = (label: string) => {
     if (!onFilterChange) return;
     if (selectedLabel === label) {
       setSelectedLabel(null);
-      onFilterChange({ min_floor: undefined, max_floor: undefined });
+      onFilterChange({ min_floor: undefined, max_floor: undefined, min_area_m2: undefined, max_area_m2: undefined });
       return;
     }
     setSelectedLabel(label);
@@ -53,7 +59,7 @@ export default function ComplexPriceFloorTab({ priceStats, error, loading, onFil
     if (!numMatch) return;
     const min = parseInt(numMatch[1], 10);
     const max = numMatch[2] ? parseInt(numMatch[2], 10) : undefined;
-    onFilterChange({ min_floor: min, max_floor: max });
+    onFilterChange({ min_floor: min, max_floor: max, ...(area != null ? areaGroupRange(area) : {}) });
   };
 
   const TRADE_TYPES = [
@@ -68,7 +74,7 @@ export default function ComplexPriceFloorTab({ priceStats, error, loading, onFil
     <div>
       {areaNote && <p className="text-xs text-gray-500 mb-1">{areaNote}</p>}
       {onFilterChange && (
-        <p className="text-xs text-gray-400 mb-2 text-right">카드를 클릭하면 해당 층수 매물만 표시됩니다</p>
+        <p className="text-xs text-gray-400 mb-2 text-right">카드를 클릭하면 해당 층수{area != null ? `·전용 ${area}㎡ 대` : ""} 매물만 표시됩니다</p>
       )}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
       {priceStats.by_floor.map((s) => {

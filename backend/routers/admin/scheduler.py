@@ -78,7 +78,7 @@ SCHEDULER_JOB_META: dict[str, dict] = {
     "collect_emergency": {"name": "응급실 위치 받기", "schedule": "매월 첫째 월요일 03:00", "env": "EMERGENCY_ENABLED", "source": {"probe": "응급의료기관 목록"}},
     "collect_childcare": {"name": "어린이집 정보 받기", "schedule": "매월 첫째 목요일 01:00", "env": "CHILDCARE_ENABLED", "source": _CPMS_CHILDCARE_SOURCE},
     # env_present: 값이 비어 있지 않아야 등록되는 환경 변수(열쇠) — scheduler.py 의 `if REGION_STATS_ENABLED: if RONE_API_KEY_SET:` 짝.
-    "collect_region_stats": {"name": "동네 공식 통계 받기", "schedule": "매월 16일 05:45", "env": "REGION_STATS_ENABLED", "env_default": "true", "env_present": "RONE_API_KEY", "source": "한국부동산원 부동산통계정보 R-ONE (전세가율·전월세전환율)"},
+    "collect_region_stats": {"name": "동네 공식 통계 받기", "schedule": "매월 16일 05:45", "env": "REGION_STATS_ENABLED", "env_default": "true", "env_present": "RONE_API_KEY", "source": "한국부동산원 부동산통계정보 R-ONE (전세가율·중위 매매가격·전월세전환율)"},
     "complex_detail_APT": {"name": "아파트 단지 정보 채우기", "schedule": "4시간마다", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
     "complex_detail_OPST": {"name": "오피스텔 단지 정보 채우기", "schedule": "4시간마다", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},
     "complex_detail_JGC": {"name": "재건축 단지 정보 채우기", "schedule": "주 1회 화요일 07:00", "env": "COMPLEX_DETAIL_ENABLED", "env_default": "true", "source": _NAVER_SOURCE},

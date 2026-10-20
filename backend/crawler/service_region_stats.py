@@ -5,7 +5,7 @@
 
 흐름: CrawlJob 행 생성 → 표마다 rone_api.fetch_table(최근 months_back 개월 ~ 이번 달) → 행마다 지역 짝짓기
 (crawler/region_match.rone_path_to_region_code) → region_stats upsert(같은 키면 값·출처·받은 시각을 덮어씀).
-호출 수 = 표 2개 × 1쪽 = 월 2콜(3~4달치는 표마다 1,000행 안쪽 — 넘으면 쪽이 늘 뿐).
+호출 수 = 표 3개 × 1쪽 = 월 3콜(3~4달치는 표마다 1,000행 안쪽 — 넘으면 쪽이 늘 뿐).
 
 판정 (error-propagation 룰 5 — "자료 없음"으로 끝내지 않는다)
   * 열쇠 없음·API 오류·표 하나라도 0행 → failed + 우리말 사유(plain_words.explain_error 가 원문 그대로 싣는 꼴).
@@ -39,14 +39,24 @@ logger = logging.getLogger(__name__)
 JOB_TYPE = "region_stats"
 STAT_JEONSE_RATIO = "reb_apt_jeonse_ratio_median"
 STAT_RENT_CONVERSION = "reb_rent_conversion_rate"
+STAT_APT_SALE_MEDIAN = "reb_apt_sale_price_median"
 # (R-ONE 표 ID, 우리 통계 항목, 출처 문구) — 출처 문구는 화면 각주에 그대로 쓴다(단위 %는 화면 값에 붙는다).
+# 중위 매매가격(A_2024_00062)은 시군구 표 · 월간 · 원자료 단위 천원 → 앱 가격 단위 만원으로 저장.
 REGION_STAT_TABLES: list[tuple[str, str, str]] = [
     ("A_2024_00073", STAT_JEONSE_RATIO,
      "한국부동산원 전국주택가격동향조사 — 아파트 중위 매매가격 대비 전세가격"),
     ("A_2024_00155", STAT_RENT_CONVERSION, "한국부동산원 전월세전환율 — 종합주택"),
+    ("A_2024_00062", STAT_APT_SALE_MEDIAN, "한국부동산원 전국주택가격동향조사 — 아파트 중위 매매가격"),
 ]
+# 통계 항목별 값 나누기 배율 — 여기 없는 항목은 R-ONE 값을 그대로 저장한다. 단위를 바꾸는 자리는 이 표 하나뿐.
+VALUE_DIVISOR: dict[str, Decimal] = {STAT_APT_SALE_MEDIAN: Decimal(10)}   # 천원 → 만원
+# R-ONE 이 행마다 실어 주는 단위(UI_NM) 기대값 — 다르면 그 표는 저장하지 않는다(단위가 바뀐 값을 옛 단위로 읽지 않게).
+EXPECTED_UNIT: dict[str, str] = {STAT_JEONSE_RATIO: "%", STAT_RENT_CONVERSION: "%", STAT_APT_SALE_MEDIAN: "천원"}
 SOURCE_OF: dict[str, str] = {stat: src for _, stat, src in REGION_STAT_TABLES}
-TABLE_WORDS: dict[str, str] = {STAT_JEONSE_RATIO: "아파트 전세가율", STAT_RENT_CONVERSION: "전월세전환율"}
+TABLE_WORDS: dict[str, str] = {
+    STAT_JEONSE_RATIO: "아파트 전세가율", STAT_RENT_CONVERSION: "전월세전환율",
+    STAT_APT_SALE_MEDIAN: "아파트 중위 매매가격",
+}
 _GAP_NAME_SAMPLE = 5
 _KST = timezone(timedelta(hours=9))
 _UNMATCHED_LOG_TOP = 30
@@ -96,6 +106,7 @@ def build_rows(raw_rows: list[dict], stat_code: str, source: str) -> tuple[dict[
         if value is None:
             no_value += 1
             continue
+        value = value / VALUE_DIVISOR.get(stat_code, Decimal(1))
         out[(code, period, stat_code)] = {
             "region_code": code, "period": period, "stat_code": stat_code,
             "value": value, "source": source,
@@ -133,7 +144,7 @@ def _fetch_all(start: str, end: str, fetch) -> tuple[dict[str, dict], str | None
     key_missing = False
     for statbl_id, stat_code, source in REGION_STAT_TABLES:
         info = {"statbl_id": statbl_id, "received": 0, "rows": {}, "unmatched": Counter(), "no_value": 0,
-                "sigungu_paths": 0, "sigungu_matched": 0}
+                "sigungu_paths": 0, "sigungu_matched": 0, "unit_problem": None}
         per[stat_code] = info
         if key_missing:
             continue   # 열쇠가 없으면 다음 표도 똑같이 못 받는다
@@ -150,8 +161,17 @@ def _fetch_all(start: str, end: str, fetch) -> tuple[dict[str, dict], str | None
             continue
         info["received"] = len(raw)
         if not raw:
-            error = error or f"부동산원이 {start}~{end} 자료를 하나도 주지 않았어요(표 번호 {statbl_id.replace('A_', '')})"
+            error = error or f"부동산원 {TABLE_WORDS[stat_code]} 표가 {start}~{end} 자료를 하나도 주지 않았어요"
             continue
+        units = {str(r.get("UI_NM") or "").strip() for r in raw}
+        if units != {EXPECTED_UNIT[stat_code]}:
+            shown = ", ".join(sorted(u or "(없음)" for u in units))
+            info["unit_problem"] = (
+                f"부동산원 {TABLE_WORDS[stat_code]} 표의 단위가 바뀌어(기대 '{EXPECTED_UNIT[stat_code]}' · 받은 '{shown}') 저장하지 않았어요"
+            )
+            logger.warning("동네 공식 통계: %s 단위 이상 — 기대 '%s' · 받은 %s", statbl_id, EXPECTED_UNIT[stat_code], units)
+            error = error or info["unit_problem"]
+            continue   # 이 표만 저장하지 않는다 — 다른 표는 그대로
         info["rows"], info["unmatched"], info["no_value"] = build_rows(raw, stat_code, source)
         paths = {str(r.get("CLS_FULLNM") or "").strip() for r in raw}
         sigungu = {p for p in paths if rone_path_level(p) == "sigungu"}
@@ -226,7 +246,7 @@ def uncovered_regions(per: dict[str, dict]) -> dict[str, dict]:
     ours = region_codes()
     out: dict[str, dict] = {}
     for stat, info in per.items():
-        if not info["received"]:
+        if not info["received"] or info["unit_problem"]:
             continue
         got = {key[0] for key in info["rows"]}
         if stat == STAT_RENT_CONVERSION:
@@ -309,13 +329,6 @@ def collect_region_stats(
         for stat, u in result["uncovered_regions"].items():
             if u["count"]:
                 logger.info("동네 공식 통계: %s 값을 못 받은 우리 지역 %d곳 — %s", stat, u["count"], u["codes"][:30])
-        result["unknown_prefixes"] = unknown_prefixes(db)
-        if result["unknown_prefixes"]["count"]:
-            logger.info(
-                "동네 공식 통계: 지역 표(data/region_codes.json)에 없는 단지 코드 %d종 — %s · "
-                "새 구가 생겼으면 scripts/build_region_codes.py 를 다시 돌려 커밋하세요",
-                result["unknown_prefixes"]["count"], result["unknown_prefixes"]["sample"],
-            )
         problem = empty_table_problem(per) or sigungu_match_problem(per)
         if error is not None:
             status, message = "failed", explain_error(error)
@@ -333,6 +346,22 @@ def collect_region_stats(
         job.completed_at = utcnow()
         db.commit()
         result.update(status=status, error=message)
+        # 단지 코드 확인(F5)은 저장 커밋 뒤에 — 이 조회가 시간 초과로 실패해도 받은 행·잡 결과는 그대로다.
+        try:
+            result["unknown_prefixes"] = unknown_prefixes(db)
+            if result["unknown_prefixes"]["count"]:
+                logger.info(
+                    "동네 공식 통계: 지역 표(data/region_codes.json)에 없는 단지 코드 %d종 — %s · "
+                    "새 구가 생겼으면 scripts/build_region_codes.py 를 다시 돌려 커밋하세요",
+                    result["unknown_prefixes"]["count"], result["unknown_prefixes"]["sample"],
+                )
+        except Exception:
+            logger.warning("동네 공식 통계: 단지 코드 확인 조회 실패 — 저장 결과는 그대로", exc_info=True)
+            result["unknown_prefixes"] = None
+            try:
+                db.rollback()
+            except Exception:   # 이미 커밋된 잡을 바깥 except 가 failed 로 덮어쓰지 않게
+                logger.warning("동네 공식 통계: 조회 실패 뒤 정리(rollback)도 실패 — 무시", exc_info=True)
         logger.info("동네 공식 통계 받기 끝: %s 받음 %d · 저장 %d", status, result["received"], result["saved"])
         return result
     except Exception:

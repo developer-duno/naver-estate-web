@@ -48,7 +48,7 @@ export const COLLECTORS: readonly CollectorDef[] = [
     jobType: "region_stats",
     schedulerJobId: "collect_region_stats",
     manualCounted: true,
-    description: "한국부동산원의 시군구 전세가율·시도 전월세전환율 최근 달 자료를 받아요(호출 약 2회)",
+    description: "한국부동산원의 시군구 전세가율·시군구 중위 매매가격·시도 전월세전환율 최근 달 자료를 받아요(호출 약 3회)",
     long: false,
   },
   {

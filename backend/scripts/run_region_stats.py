@@ -4,7 +4,7 @@
     python scripts/run_region_stats.py --months-back 3            # 잡과 같은 범위
     python scripts/run_region_stats.py --months-back 24 --dry-run # 받기·짝짓기만, DB 쓰기 0(호출 수는 같다)
 
-열쇠 = backend/.env 의 RONE_API_KEY(없으면 "부동산원 인증키가 없어요"로 멈춤). 호출 수 = 표 2개 × 쪽 수(1,000행당 1쪽).
+열쇠 = backend/.env 의 RONE_API_KEY(없으면 "부동산원 인증키가 없어요"로 멈춤). 호출 수 = 표 3개 × 쪽 수(1,000행당 1쪽).
 """
 
 import argparse

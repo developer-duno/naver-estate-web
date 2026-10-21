@@ -60,10 +60,11 @@ TABLE_WORDS: dict[str, str] = {
 _GAP_NAME_SAMPLE = 5
 _KST = timezone(timedelta(hours=9))
 _UNMATCHED_LOG_TOP = 30
-# 시군구 표(전세가율)에서 시군구 단위 경로 중 짝 맞은 비율이 이보다 낮으면 failed — 전국·시도 몇 줄만 맞고
+# 시군구 표에서 시군구 단위 경로 중 짝 맞은 비율이 이보다 낮으면 failed — 전국·시도 몇 줄만 맞고
 # 시군구가 통째로 빠진 회차를 completed 로 끝내지 않는다(검사관 C-2, 세션 473).
 MIN_SIGUNGU_MATCH_RATIO = 0.5
-SIGUNGU_TABLE_STAT = STAT_JEONSE_RATIO
+# 시군구 표 둘(전세가율·중위 매매가격)을 표마다 검사한다(세션 475 후속). 전환율은 시도·권역 표라 뺀다.
+SIGUNGU_TABLE_STATS = (STAT_JEONSE_RATIO, STAT_APT_SALE_MEDIAN)
 _UNKNOWN_PREFIX_SAMPLE = 5
 
 
@@ -137,10 +138,10 @@ def upsert_region_rows(db, rows: list[dict]) -> int:
     return len(values)
 
 
-def _fetch_all(start: str, end: str, fetch) -> tuple[dict[str, dict], str | None]:
-    """표마다 받아 짝짓기까지. (표별 결과, 첫 실패 사유 원문 또는 None)."""
+def _fetch_all(start: str, end: str, fetch) -> tuple[dict[str, dict], list[tuple[str, str]]]:
+    """표마다 받아 짝짓기까지. (표별 결과, 실패 사유 목록 [(표 우리말 이름, 사유 원문)] — 받은 순서)."""
     per: dict[str, dict] = {}
-    error: str | None = None
+    reasons: list[tuple[str, str]] = []
     key_missing = False
     for statbl_id, stat_code, source in REGION_STAT_TABLES:
         info = {"statbl_id": statbl_id, "received": 0, "rows": {}, "unmatched": Counter(), "no_value": 0,
@@ -152,16 +153,19 @@ def _fetch_all(start: str, end: str, fetch) -> tuple[dict[str, dict], str | None
             raw = fetch(statbl_id, start, end)
         except rone_api.RoneKeyMissing as e:
             key_missing = True
-            error = error or str(e)
+            reasons.append((TABLE_WORDS[stat_code], str(e)))
             continue
         except rone_api.RoneApiError as e:
             logger.warning("동네 공식 통계: %s 받기 실패 — %s (서버 원문 %s)", statbl_id, e,
                            getattr(e, "server_message", None))
-            error = error or str(e)
+            reasons.append((TABLE_WORDS[stat_code], str(e)))
             continue
         info["received"] = len(raw)
         if not raw:
-            error = error or f"부동산원 {TABLE_WORDS[stat_code]} 표가 {start}~{end} 자료를 하나도 주지 않았어요"
+            logger.warning("동네 공식 통계: %s(%s) 0행 — %s~%s", statbl_id, TABLE_WORDS[stat_code], start, end)
+            reasons.append(
+                (TABLE_WORDS[stat_code], f"부동산원 {TABLE_WORDS[stat_code]} 표가 {start}~{end} 자료를 하나도 주지 않았어요")
+            )
             continue
         units = {str(r.get("UI_NM") or "").strip() for r in raw}
         if units != {EXPECTED_UNIT[stat_code]}:
@@ -170,35 +174,53 @@ def _fetch_all(start: str, end: str, fetch) -> tuple[dict[str, dict], str | None
                 f"부동산원 {TABLE_WORDS[stat_code]} 표의 단위가 바뀌어(기대 '{EXPECTED_UNIT[stat_code]}' · 받은 '{shown}') 저장하지 않았어요"
             )
             logger.warning("동네 공식 통계: %s 단위 이상 — 기대 '%s' · 받은 %s", statbl_id, EXPECTED_UNIT[stat_code], units)
-            error = error or info["unit_problem"]
+            reasons.append((TABLE_WORDS[stat_code], info["unit_problem"]))
             continue   # 이 표만 저장하지 않는다 — 다른 표는 그대로
         info["rows"], info["unmatched"], info["no_value"] = build_rows(raw, stat_code, source)
         paths = {str(r.get("CLS_FULLNM") or "").strip() for r in raw}
         sigungu = {p for p in paths if rone_path_level(p) == "sigungu"}
         info["sigungu_paths"] = len(sigungu)
         info["sigungu_matched"] = sum(1 for p in sigungu if rone_path_to_region_code(p) is not None)
-    return per, error
+    return per, reasons
 
 
-def sigungu_match_problem(per: dict[str, dict]) -> str | None:
-    """시군구 표에서 시군구 경로 짝 비율이 문턱 미만이면 우리말 사유, 아니면 None(그 표를 못 받았으면 None — 실패는 따로)."""
-    info = per.get(SIGUNGU_TABLE_STAT)
-    if not info or not info["received"]:
+def sigungu_match_problems(per: dict[str, dict]) -> list[tuple[str, str]]:
+    """시군구 표마다 — 시군구 경로 짝 비율이 문턱 미만이면 [(표 우리말 이름, 사유)].
+
+    그 표를 못 받았거나 단위 이상으로 막힌 표는 뺀다(그 실패 사유는 받기 단계에서 따로 남는다).
+    """
+    out: list[tuple[str, str]] = []
+    for stat in SIGUNGU_TABLE_STATS:
+        info = per.get(stat)
+        if not info or not info["received"] or info["unit_problem"]:
+            continue
+        words = TABLE_WORDS[stat]
+        total, matched = info["sigungu_paths"], info["sigungu_matched"]
+        if total == 0:
+            out.append((words, f"부동산원 {words} 표에 시군구 단위 지역이 하나도 없어요 — 지역 표를 봐 주세요"))
+        elif matched / total < MIN_SIGUNGU_MATCH_RATIO:
+            out.append(
+                (words, f"부동산원 {words} 표의 지역 이름 {total}개 중 {matched}개만 우리 지역과 맞았어요 — 지역 표를 봐 주세요")
+            )
+    return out
+
+
+def empty_table_problems(per: dict[str, dict]) -> list[tuple[str, str]]:
+    """표마다 — 받은 행이 있는데 저장 0 인 표(검사관 A-4: 한 표만 살아 completed 금지). 단위 이상 표는 뺀다(사유 따로)."""
+    return [
+        (TABLE_WORDS[stat], f"부동산원 {TABLE_WORDS[stat]} 표는 {info['received']}행을 받았는데 지역 짝이 하나도 안 맞아요")
+        for stat, info in per.items()
+        if info["received"] and not info["rows"] and not info["unit_problem"]
+    ]
+
+
+def pick_reason(reasons: list[tuple[str, str]]) -> str | None:
+    """사유는 첫 것 하나만 남긴다 — 버려지는 사유도 경고 로그 한 줄씩(표 우리말 이름 + 사유, 세션 475 후속)."""
+    if not reasons:
         return None
-    total, matched = info["sigungu_paths"], info["sigungu_matched"]
-    if total == 0:
-        return "부동산원 시군구 표에 시군구 단위 지역이 하나도 없어요 — 지역 표를 봐 주세요"
-    if matched / total < MIN_SIGUNGU_MATCH_RATIO:
-        return f"부동산원 지역 이름 {total}개 중 {matched}개만 우리 지역과 맞았어요 — 지역 표를 봐 주세요"
-    return None
-
-
-def empty_table_problem(per: dict[str, dict]) -> str | None:
-    """표마다 — 받은 행이 있는데 저장 0 인 표가 하나라도 있으면 우리말 사유(검사관 A-4: 한 표만 살아 completed 금지)."""
-    for stat, info in per.items():
-        if info["received"] and not info["rows"]:
-            return f"부동산원 {TABLE_WORDS[stat]} 표는 {info['received']}행을 받았는데 지역 짝이 하나도 안 맞아요"
-    return None
+    for words, reason in reasons[1:]:
+        logger.warning("동네 공식 통계: 기록엔 첫 사유만 남아 이 사유는 로그로만 — [%s] %s", words, reason)
+    return reasons[0][1]
 
 
 def gap_words(result: dict) -> str | None:
@@ -303,11 +325,12 @@ def collect_region_stats(
     from db.database import SessionLocal
 
     if dry_run:
-        per, error = _fetch_all(start, end, fetch)
+        per, reasons = _fetch_all(start, end, fetch)
         result = _summary(per, start, end, {})
         with SessionLocal() as rdb:   # 읽기만(SELECT 1회)
             result["unknown_prefixes"] = unknown_prefixes(rdb)
-        result.update(status="dry_run", error=error or empty_table_problem(per) or sigungu_match_problem(per))
+        error = pick_reason(reasons + empty_table_problems(per) + sigungu_match_problems(per))
+        result.update(status="dry_run", error=error)
         return result
 
     db = SessionLocal()
@@ -317,7 +340,7 @@ def collect_region_stats(
     job_id = job.id
     db.commit()   # 외부 호출 동안 트랜잭션을 열어 두지 않는다
     try:
-        per, error = _fetch_all(start, end, fetch)
+        per, reasons = _fetch_all(start, end, fetch)
         saved: dict[str, int] = {}
         for stat, info in per.items():
             if info["rows"]:
@@ -329,14 +352,12 @@ def collect_region_stats(
         for stat, u in result["uncovered_regions"].items():
             if u["count"]:
                 logger.info("동네 공식 통계: %s 값을 못 받은 우리 지역 %d곳 — %s", stat, u["count"], u["codes"][:30])
-        problem = empty_table_problem(per) or sigungu_match_problem(per)
-        if error is not None:
-            status, message = "failed", explain_error(error)
-        elif result["saved"] == 0:
-            status = "failed"
-            message = explain_error(f"받은 행은 {result['received']}개인데 지역 짝이 하나도 안 맞아요")
-        elif problem is not None:
-            status, message = "failed", explain_error(problem)
+        # 사유 우선순위 = 받기 실패 → 저장 0 → 표별 짝 문제. 기록엔 첫 것만, 나머지는 pick_reason 이 경고 로그로.
+        if not reasons and result["saved"] == 0:
+            reasons.append(("전체", f"받은 행은 {result['received']}개인데 지역 짝이 하나도 안 맞아요"))
+        reason = pick_reason(reasons + empty_table_problems(per) + sigungu_match_problems(per))
+        if reason is not None:
+            status, message = "failed", explain_error(reason)
         else:
             status, message = "completed", gap_words(result)
         job.status = status

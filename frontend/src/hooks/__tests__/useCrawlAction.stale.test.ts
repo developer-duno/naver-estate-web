@@ -475,4 +475,62 @@ describe("useCrawlAction — 저장본 나이로 나누기", () => {
       expect(filters).toBeUndefined();
     }
   }, 15000);
+
+  it("새 자료 — 끝나면 대시보드 매매 평균(같은 면적) 요청은 다시 받고, 같은 필터에 page 붙은 표 요청은 안 받는다 (세션 475 후속 F1)", async () => {
+    // 표 키를 매매·같은 면적 필터 + page 로 — 판정이 page 를 안 보면 이 표까지 다시 받아 FAIL 한다
+    const TABLE_MAEMAE_KEY = queryKeys.articles(NO, {
+      trade_types: "매매", min_area_m2: 84, max_area_m2: 84.999, page: 1, page_size: 10,
+    });
+    const fetchTable = vi.fn().mockResolvedValue(CURRENT);
+    const { wrapper, qc } = setup(new Date(NOW - 2 * HOUR).toISOString());
+    mockGetArticles.mockReset();
+    mockGetArticles.mockResolvedValue({ articles: [art("1", { area2_m2: 84.9 })], total: 1, page: 1, page_size: 20 });
+    mockStartLiveCrawl.mockResolvedValue({ complex_no: NO, status: "started" });
+    mockGetCrawlStatus.mockResolvedValue({ complex_no: NO, status: "done" });
+
+    const { useQuery } = await import("@tanstack/react-query");
+    const { getArticles } = await import("@/lib/api");
+    const { useCrawlAction } = await import("../useCrawlAction");
+    const { result } = renderHook(
+      () => ({
+        crawl: useCrawlAction(NO, { table: { queryKey: TABLE_MAEMAE_KEY, fetch: fetchTable } }),
+        card: useComplexArticleAvg(NO, undefined, { avgEnabled: true, avgAreaM2: 84.9 }),
+        // 켜져 있는 표 요청 — 크롤 끝에 다시 받으면 안 된다
+        table: useQuery({
+          queryKey: TABLE_MAEMAE_KEY,
+          queryFn: () => getArticles(NO, TABLE_MAEMAE_KEY[2]),
+          staleTime: 30_000,
+        }),
+      }),
+      { wrapper },
+    );
+    const callsWith = (pred: (f: Record<string, unknown> | undefined) => boolean) =>
+      mockGetArticles.mock.calls.filter(([, f]) => pred(f as Record<string, unknown> | undefined)).length;
+    const isAvg = (f?: Record<string, unknown>) => f?.trade_types === "매매" && f.page === undefined;
+    const isTable = (f?: Record<string, unknown>) => f?.page === 1;
+    await vi.waitFor(() => expect(mockGetArticles).toHaveBeenCalledTimes(3)); // 건수·매매 평균·표 첫 요청
+    expect(callsWith(isAvg)).toBe(1);
+    expect(callsWith(isTable)).toBe(1);
+    // 세 요청이 다 받아진 뒤에 크롤을 시작한다(받는 중이면 다시 받기가 합쳐져 판정이 흐려진다)
+    await vi.waitFor(() => expect(qc.getQueryData(TABLE_MAEMAE_KEY)).toBeDefined());
+    await vi.waitFor(() => expect(result.current.card.avgPrice).toBe(50000));
+
+    await runCrawl({ current: { handleCrawl: () => result.current.crawl.handleCrawl() } }, 1);
+    await vi.waitFor(() => expect(result.current.crawl.message).toBe("갱신 완료"));
+    await vi.waitFor(() => expect(callsWith(isAvg)).toBe(2));
+    expect(callsWith(isTable)).toBe(1);
+  }, 15000);
+});
+
+describe("isSameAreaMaemaeKey — 크롤 끝에 다시 받는 매매 평균 키만 고른다 (세션 475 후속 F1)", () => {
+  it("매매+면적만 있는 키 = 참 · page 붙은 키·다른 거래유형·면적 없음·다른 단지 = 거짓", async () => {
+    const { isSameAreaMaemaeKey } = await import("../useCrawlAction");
+    const area = { min_area_m2: 59, max_area_m2: 59.999 };
+    expect(isSameAreaMaemaeKey(queryKeys.articles(NO, { trade_types: "매매", ...area }), NO)).toBe(true);
+    expect(isSameAreaMaemaeKey(queryKeys.articles(NO, { trade_types: "매매", ...area, page: 1, page_size: 10 }), NO)).toBe(false);
+    expect(isSameAreaMaemaeKey(queryKeys.articles(NO, { trade_types: "전세", ...area }), NO)).toBe(false);
+    expect(isSameAreaMaemaeKey(queryKeys.articles(NO, { trade_types: "매매" }), NO)).toBe(false);
+    expect(isSameAreaMaemaeKey(queryKeys.articles(NO, undefined), NO)).toBe(false);
+    expect(isSameAreaMaemaeKey(queryKeys.articles("C1", { trade_types: "매매", ...area }), NO)).toBe(false);
+  });
 });

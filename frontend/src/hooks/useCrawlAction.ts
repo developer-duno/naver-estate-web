@@ -110,15 +110,19 @@ function refetchNonTableQueries(
   void queryClient.refetchQueries({ queryKey: queryKeys.priceStats(complexNo) });
 }
 
-/** 같은 면적 매매 매물 요청 키인가 — 필터가 정확히 {trade_types:"매매", min_area_m2, max_area_m2} 일 때만(page 붙은 표 키는 아님) */
-const SAME_AREA_MAEMAE_FIELDS = ["max_area_m2", "min_area_m2", "trade_types"];
+/**
+ * 매매 평균 요청 키인가 — 필터 칸이 정확히 {trade_types} 또는 {trade_types, min_area_m2, max_area_m2} 이고 값이 매매일 때만.
+ * 표 키는 늘 page·page_size 가 붙어(complex/[no]/page.tsx 의 articlesQueryKey · useComplexPrefetch) 칸 수가 달라 여기 안 걸린다.
+ */
+const MAEMAE_AVG_FIELD_SETS = ["trade_types", "max_area_m2,min_area_m2,trade_types"];
 export function isSameAreaMaemaeKey(key: QueryKey, complexNo: string): boolean {
   if (key.length !== 3 || key[0] !== "articles" || key[1] !== complexNo) return false;
   const filters = key[2];
   if (!filters || typeof filters !== "object") return false;
   const f = filters as Record<string, unknown>;
-  if (Object.keys(f).sort().join(",") !== SAME_AREA_MAEMAE_FIELDS.join(",")) return false;
-  return f.trade_types === "매매" && typeof f.min_area_m2 === "number" && typeof f.max_area_m2 === "number";
+  const fields = Object.keys(f).sort().join(",");
+  if (!MAEMAE_AVG_FIELD_SETS.includes(fields) || f.trade_types !== "매매") return false;
+  return fields === "trade_types" || (typeof f.min_area_m2 === "number" && typeof f.max_area_m2 === "number");
 }
 
 /**

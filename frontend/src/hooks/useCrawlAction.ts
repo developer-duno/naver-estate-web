@@ -100,9 +100,29 @@ function refetchNonTableQueries(
 ) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.articlesAll(complexNo), refetchType: "none" });
   void queryClient.refetchQueries({ queryKey: queryKeys.articles(complexNo, undefined), exact: true });
+  // 대시보드 매매 평균(useComplexArticleAvg)도 다시 받는다 — 켜져 있는 것만, 표 키는 건드리지 않는다(세션 475 후속)
+  void queryClient.refetchQueries({
+    type: "active",
+    predicate: (q) => isSameAreaMaemaeKey(q.queryKey, complexNo),
+  });
   void queryClient.refetchQueries({ queryKey: queryKeys.complex(complexNo) });
   void queryClient.refetchQueries({ queryKey: queryKeys.pyeongDetails(complexNo) });
   void queryClient.refetchQueries({ queryKey: queryKeys.priceStats(complexNo) });
+}
+
+/**
+ * 매매 평균 요청 키인가 — 필터 칸이 정확히 {trade_types} 또는 {trade_types, min_area_m2, max_area_m2} 이고 값이 매매일 때만.
+ * 표 키는 늘 page·page_size 가 붙어(complex/[no]/page.tsx 의 articlesQueryKey · useComplexPrefetch) 칸 수가 달라 여기 안 걸린다.
+ */
+const MAEMAE_AVG_FIELD_SETS = ["trade_types", "max_area_m2,min_area_m2,trade_types"];
+export function isSameAreaMaemaeKey(key: QueryKey, complexNo: string): boolean {
+  if (key.length !== 3 || key[0] !== "articles" || key[1] !== complexNo) return false;
+  const filters = key[2];
+  if (!filters || typeof filters !== "object") return false;
+  const f = filters as Record<string, unknown>;
+  const fields = Object.keys(f).sort().join(",");
+  if (!MAEMAE_AVG_FIELD_SETS.includes(fields) || f.trade_types !== "매매") return false;
+  return fields === "trade_types" || (typeof f.min_area_m2 === "number" && typeof f.max_area_m2 === "number");
 }
 
 /**

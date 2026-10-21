@@ -218,7 +218,10 @@ def test_sigungu_rows_all_unmatched_is_failed_even_if_nation_sido_saved(db):
     })
     result = collect_region_stats(3, today=TODAY, fetch=fetch)
     assert result["status"] == "failed"
-    assert _job(db).error_message == "부동산원 지역 이름 2개 중 0개만 우리 지역과 맞았어요 — 지역 표를 봐 주세요"
+    # 세션 475 후속: 사유에 표 우리말 이름이 들어간다(시군구 표가 둘이라 어느 표인지)
+    assert _job(db).error_message == (
+        "부동산원 아파트 전세가율 표의 지역 이름 2개 중 0개만 우리 지역과 맞았어요 — 지역 표를 봐 주세요"
+    )
     assert result["tables"][STAT_JEONSE_RATIO]["sigungu_paths"] == 2
 
 
@@ -366,3 +369,73 @@ def test_blank_unit_rows_count_as_mismatch(db):
     assert _job(db).error_message == "부동산원 아파트 중위 매매가격 표의 단위가 바뀌어(기대 '천원' · 받은 '(없음)') 저장하지 않았어요"
     assert db.query(RegionStats).filter_by(stat_code=STAT_APT_SALE_MEDIAN).count() == 0
     assert result["saved"] == 5
+
+
+# ── 후속 (세션 475: 시군구 표 둘 다 짝 비율 검사 · 버려지는 사유도 경고 로그) ──
+
+# 시군구 3줄 중 1줄만 맞는 표(33% < 문턱 50%) — 저장은 1행 되므로 "저장 0" 사유와 겹치지 않는다
+BROKEN_SIGUNGU = [
+    ("충남>천안시>동남구", "202609"),
+    ("충남>없는시>가구", "202609"),
+    ("경기>경부1권>없는시>나구", "202609"),
+]
+
+
+@pytest.mark.parametrize("broken_id,words,unit", [
+    ("A_2024_00062", "아파트 중위 매매가격", "천원"),
+    ("A_2024_00073", "아파트 전세가율", "%"),
+])
+def test_sigungu_match_checked_on_each_sigungu_table(db, broken_id, words, unit):
+    """F2: 시군구 표 둘(전세가율·중위 매매가격) 중 어느 한 표만 짝이 무너져도 failed + 그 표 이름 사유."""
+    tables = {"A_2024_00073": JEONSE, "A_2024_00155": CONV, "A_2024_00062": MEDIAN}
+    tables[broken_id] = [_r(p, m, "100", unit) for p, m in BROKEN_SIGUNGU]
+    result = collect_region_stats(3, today=TODAY, fetch=_fetch(tables))
+    assert result["status"] == "failed"
+    assert _job(db).error_message == (
+        f"부동산원 {words} 표의 지역 이름 3개 중 1개만 우리 지역과 맞았어요 — 지역 표를 봐 주세요"
+    )
+
+
+def test_conversion_table_is_not_sigungu_checked(db):
+    """F2: 전환율 표는 시도·권역 표라 시군구 짝 검사에서 뺀다 — 시군구 줄이 없어도 completed."""
+    fetch = _fetch({"A_2024_00073": JEONSE, "A_2024_00155": CONV, "A_2024_00062": MEDIAN})
+    result = collect_region_stats(3, today=TODAY, fetch=fetch)
+    assert result["status"] == "completed"
+    assert result["tables"][STAT_RENT_CONVERSION]["sigungu_paths"] == 0
+
+
+def test_dropped_reasons_are_logged_unit_then_empty(db, caplog):
+    """F3: 앞 표 단위 불일치 + 뒤 표 0행 → 기록은 첫 사유 그대로, 뒤 사유는 경고 로그(표 이름 + 사유) · 0행 로그도."""
+    import logging
+
+    caplog.set_level(logging.WARNING, logger="crawler.service_region_stats")
+    odd = [{**r, "UI_NM": "배"} for r in JEONSE]
+    fetch = _fetch({"A_2024_00073": odd, "A_2024_00155": CONV, "A_2024_00062": []})
+    result = collect_region_stats(3, today=TODAY, fetch=fetch)
+    assert result["status"] == "failed"
+    assert _job(db).error_message == "부동산원 아파트 전세가율 표의 단위가 바뀌어(기대 '%' · 받은 '배') 저장하지 않았어요"
+    msgs = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    dropped = [m for m in msgs if "기록엔 첫 사유만" in m]
+    assert dropped == [
+        "동네 공식 통계: 기록엔 첫 사유만 남아 이 사유는 로그로만 — [아파트 중위 매매가격] "
+        "부동산원 아파트 중위 매매가격 표가 202607~202610 자료를 하나도 주지 않았어요"
+    ]
+    assert any("A_2024_00062(아파트 중위 매매가격) 0행" in m for m in msgs)
+
+
+def test_dropped_sigungu_reason_is_logged_when_both_tables_broken(db, caplog):
+    """F2+F3: 시군구 표 둘 다 무너지면 기록 = 앞 표(전세가율) 사유, 중위 매매가격 사유는 경고 로그."""
+    import logging
+
+    caplog.set_level(logging.WARNING, logger="crawler.service_region_stats")
+    fetch = _fetch({
+        "A_2024_00073": [_r(p, m, 60.0) for p, m in BROKEN_SIGUNGU],
+        "A_2024_00155": CONV,
+        "A_2024_00062": [_r(p, m, "100", "천원") for p, m in BROKEN_SIGUNGU],
+    })
+    result = collect_region_stats(3, today=TODAY, fetch=fetch)
+    assert result["status"] == "failed"
+    assert "아파트 전세가율 표의 지역 이름 3개 중 1개만" in _job(db).error_message
+    dropped = [r.getMessage() for r in caplog.records if "기록엔 첫 사유만" in r.getMessage()]
+    assert len(dropped) == 1
+    assert "[아파트 중위 매매가격]" in dropped[0] and "지역 이름 3개 중 1개만" in dropped[0]

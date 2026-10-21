@@ -271,7 +271,31 @@ describe("ArticleDetail — 세션 토큰 전달 (B2 게이트, 세션 395)", ()
       expect(vi.mocked(api.getPriceStats)).toHaveBeenCalledWith("C001", "tok");
     }, { timeout: 3000 });
     expect(vi.mocked(api.getPyeongDetails)).toHaveBeenCalledWith("C001", "tok");
-    expect(vi.mocked(api.getArticles)).toHaveBeenCalledWith("C001", { trade_types: "매매" }, "tok");
+    // 세션 475 보완 Q3: 경쟁 매물 요청은 같은 거래유형 + 같은 면적 묶음(84㎡ → 84 이상 84.999 이하)
+    expect(vi.mocked(api.getArticles)).toHaveBeenCalledWith(
+      "C001", { trade_types: "매매", min_area_m2: 84, max_area_m2: 84.999 }, "tok",
+    );
+  });
+
+  // 세션 475 보완 — 부모(ArticleDetail)와 자식(CompetingListings)이 같은 queryKey 를 써야 요청이 하나로 합쳐진다.
+  // 부모 필터를 거래유형만으로 되돌리면 면적 범위 없는 요청이 하나 더 나가 FAIL.
+  it("경쟁 매물 펼침 — 부모·자식 매물 요청이 같은 필터(sameAreaFilters) 하나뿐", async () => {
+    const api = await import("@/lib/api");
+    vi.mocked(api.getArticles).mockClear();
+    vi.mocked(api.getArticles).mockResolvedValue({
+      articles: [{ article_no: "A002", complex_no: "C001", numeric_price: 50000, area2_m2: 84.5 }],
+      total: 1, page: 1, page_size: 50,
+    } as any);
+    render(<TestQueryProvider><ArticleDetail articleNo="A001" onClose={vi.fn()} /></TestQueryProvider>);
+
+    const toggle = await screen.findByRole("button", { name: /경쟁 매물/ }, { timeout: 3000 });
+    fireEvent.click(toggle);
+    await screen.findByText("같은 단지 매매 · 같은 면적(84㎡ 대)", {}, { timeout: 3000 }); // 자식이 실제로 그려졌다
+    const filters = vi.mocked(api.getArticles).mock.calls.map((c) => c[1]);
+    expect(filters.length).toBeGreaterThan(0);
+    for (const f of filters) {
+      expect(f).toEqual({ trade_types: "매매", min_area_m2: 84, max_area_m2: 84.999 });
+    }
   });
 
   it("tokenReady=false 면 세 조회 모두 실행되지 않는다 (토큰 도착 전 401 캐시 방지)", async () => {

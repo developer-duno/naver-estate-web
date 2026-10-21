@@ -10,8 +10,8 @@
 
 ### 현재 짝꿍 주석 박힘 위치 (실측)
 
-- BE `backend/db/price_queries.py:95~99`: `"단기임대 → wolse 합산 ... FE tradeKey 짝꿍 답습 ... 본 dict + frontend/src/lib/trade-types.ts:18 양쪽 답습"`
-- FE `frontend/src/lib/trade-types.ts:14~15`: `"BE db/price_queries.py:99 tt_key_map 과 짝꿍 ... 새 거래유형 추가 시 본 함수 + BE tt_key_map 양쪽 답습"`
+- BE `backend/db/price_queries.py:128~132`: `"단기임대 → wolse 합산 ... FE tradeKey 짝꿍 답습 ... 본 dict + frontend/src/lib/trade-types.ts:17 양쪽 답습"`
+- FE `frontend/src/lib/trade-types.ts:14~15`: `"BE db/price_queries.py:132 tt_key_map 과 짝꿍 ... 새 거래유형 추가 시 본 함수 + BE tt_key_map 양쪽 답습"`
 
 ### 확장 후보 (현재 트리거 표 본행 아님, 미래 작업자 판단 근거)
 
@@ -27,7 +27,7 @@
 
 ## 룰 2 코드 인용
 
-### 코드 인용 (`backend/db/price_queries.py:100~157`)
+### 코드 인용 (`backend/db/price_queries.py:132~158`)
 
 area 버킷 합산 핵심 패턴:
 
@@ -49,7 +49,7 @@ for row in area_rows:
         entry[f"{key}_count"] = cnt
 ```
 
-floor 버킷 (`backend/db/price_queries.py:128~157`) 도 동일 패턴 + min/max 누적.
+floor 버킷 (`backend/db/price_queries.py:160~193`) 도 동일 패턴 + min/max 누적.
 
 ## 룰 2 현재 적용 범위
 

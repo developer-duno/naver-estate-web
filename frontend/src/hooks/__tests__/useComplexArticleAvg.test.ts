@@ -41,7 +41,7 @@ describe("useComplexArticleAvg — 매물 평균 호가 + 건수", () => {
     });
 
     const { useComplexArticleAvg } = await import("../useComplexArticleAvg");
-    const { result } = renderHook(() => useComplexArticleAvg("C001"), {
+    const { result } = renderHook(() => useComplexArticleAvg("C001", undefined, { avgEnabled: true }), {
       wrapper: TestQueryProvider,
     });
 
@@ -49,7 +49,7 @@ describe("useComplexArticleAvg — 매물 평균 호가 + 건수", () => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    expect(result.current.avgPrice).toBe(70000); // (50000+70000+90000)/3
+    await waitFor(() => expect(result.current.avgPrice).toBe(70000)); // (50000+70000+90000)/3
     expect(result.current.count).toBe(3);
     expect(result.current.isError).toBe(false);
     // B2 게이트: 3번째 인자 accessToken (미전달 시 undefined)
@@ -107,5 +107,67 @@ describe("useComplexArticleAvg — 매물 평균 호가 + 건수", () => {
 
     expect(result.current.avgPrice).toBeNull();
     expect(result.current.count).toBe(0);
+  });
+});
+
+// 세션 475 PR 6 — 평균은 매매 매물만 + 대표 면적 묶음만, "매물 N건" 은 전체 요청 그대로
+describe("useComplexArticleAvg — 매매·같은 면적 평균 (세션 475)", () => {
+  const ALL = {
+    articles: [
+      { article_no: "A1", complex_no: "C001", trade_type_name: "매매", numeric_price: 17000, area2_m2: 59.98 },
+      { article_no: "A2", complex_no: "C001", trade_type_name: "전세", numeric_price: 12000, area2_m2: 59.98 },
+    ],
+    total: 46, page: 1, page_size: 20,
+  };
+  const MAEMAE = {
+    articles: [
+      { article_no: "A1", complex_no: "C001", trade_type_name: "매매", numeric_price: 17000, area2_m2: 59.98 },
+      { article_no: "A3", complex_no: "C001", trade_type_name: "매매", numeric_price: 18000, area2_m2: 59.5 },
+      { article_no: "A4", complex_no: "C001", trade_type_name: "매매", numeric_price: 30000, area2_m2: 84.97 },
+    ],
+    total: 3, page: 1, page_size: 20,
+  };
+
+  beforeEach(() => {
+    mockGetArticles.mockReset();
+    mockGetArticles.mockImplementation((_no: string, filters?: { trade_types?: string }) =>
+      Promise.resolve(filters?.trade_types === "매매" ? MAEMAE : ALL));
+  });
+
+  it("59㎡ 묶음 매매만 평균(17,000·18,000 → 17,500) · 건수는 전체 요청의 46 그대로", async () => {
+    const { useComplexArticleAvg } = await import("../useComplexArticleAvg");
+    const { result } = renderHook(
+      () => useComplexArticleAvg("C001", "tok", { avgEnabled: true, avgAreaM2: 59 }),
+      { wrapper: TestQueryProvider },
+    );
+    await waitFor(() => expect(result.current.avgPrice).toBe(17500));
+    expect(result.current.count).toBe(46);
+    expect(mockGetArticles).toHaveBeenCalledWith("C001", undefined, "tok");
+    // 보완 Q3: 서버가 같은 면적 묶음으로 먼저 거르게 범위를 싣는다(N 이상 N+1 미만)
+    expect(mockGetArticles).toHaveBeenCalledWith(
+      "C001", { trade_types: "매매", min_area_m2: 59, max_area_m2: 59.999 }, "tok",
+    );
+  });
+
+  it("면적을 모르면 매매 전체 평균", async () => {
+    const { useComplexArticleAvg } = await import("../useComplexArticleAvg");
+    const { result } = renderHook(
+      () => useComplexArticleAvg("C001", undefined, { avgEnabled: true, avgAreaM2: null }),
+      { wrapper: TestQueryProvider },
+    );
+    await waitFor(() => expect(result.current.avgPrice).toBe(21667)); // (17000+18000+30000)/3
+    expect(mockGetArticles).toHaveBeenCalledWith("C001", { trade_types: "매매" }, undefined);
+  });
+
+  it("avgEnabled 가 꺼져 있으면 매매 요청 0 · 건수만", async () => {
+    const { useComplexArticleAvg } = await import("../useComplexArticleAvg");
+    const { result } = renderHook(
+      () => useComplexArticleAvg("C001", undefined, { avgEnabled: false, avgAreaM2: 59 }),
+      { wrapper: TestQueryProvider },
+    );
+    await waitFor(() => expect(result.current.count).toBe(46));
+    expect(mockGetArticles).toHaveBeenCalledTimes(1);
+    expect(mockGetArticles).toHaveBeenCalledWith("C001", undefined, undefined);
+    expect(result.current.avgPrice).toBeNull();
   });
 });

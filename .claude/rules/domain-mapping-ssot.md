@@ -14,7 +14,7 @@ BE Python dict ↔ FE TypeScript 함수 짝꿍 매핑, SQL `GROUP BY` 의 N→1 
 
 | BE | FE | 매핑 종류 |
 | --- | --- | --- |
-| `backend/db/price_queries.py:99` `tt_key_map` | `frontend/src/lib/trade-types.ts:17` `tradeKey()` | 거래유형 한글명 → 집계 키 |
+| `backend/db/price_queries.py:132` `tt_key_map` | `frontend/src/lib/trade-types.ts:17` `tradeKey()` | 거래유형 한글명 → 집계 키 |
 
 ### 답습
 
@@ -68,7 +68,7 @@ BE Python dict ↔ FE TypeScript 함수 짝꿍 매핑, SQL `GROUP BY` 의 N→1 
 ### 답습
 
 - BE CI 엔진 = **SQLite** (`backend/tests/conftest.py`). PostgreSQL 전용 문법은 SQLite 에서 실행 불가 → 테스트 작성 자체가 불가능해 0건이 누적된다 (단순 누락이 아님).
-- 해결책 = **dialect 분기** (`backend/db/price_queries.py:48` 답습):
+- 해결책 = **dialect 분기** (`backend/db/price_queries.py:76` 답습):
 
 (상세: .claude/rules-detail/domain-mapping-ssot.md §룰 3 dialect 분기 예시·선례)
 

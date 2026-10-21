@@ -127,4 +127,40 @@ describe("ComplexPriceFloorTab 컴포넌트", () => {
       max_floor: undefined,
     });
   });
+
+  // 세션 475 PR 6 — 층별 시세는 대표 면적 묶음 매물만, 기준 면적을 한 줄로
+  it("floor_area_m2 가 있으면 '전용 N㎡ 대 매물 기준' 줄을 보여 준다", () => {
+    render(
+      <ComplexPriceFloorTab priceStats={makePriceStats({ floor_area_m2: 59 })} error={false} loading={false} />,
+    );
+    expect(screen.getByText("전용 59㎡ 대 매물 기준")).toBeInTheDocument();
+  });
+
+  it("floor_area_m2 가 null 이면 기준 줄이 없다", () => {
+    render(
+      <ComplexPriceFloorTab priceStats={makePriceStats({ floor_area_m2: null })} error={false} loading={false} />,
+    );
+    expect(screen.queryByText(/매물 기준/)).toBeNull();
+  });
+
+  // 세션 475 보완 Q1 — 대표 면적 매물이 0개면 왜 비었는지
+  it("floor_area_m2 가 있는데 층별이 비면 '전용 N㎡ 대 매물이 아직 없어요'", () => {
+    render(
+      <ComplexPriceFloorTab priceStats={makePriceStats({ floor_area_m2: 59, by_floor: [] })} error={false} loading={false} />,
+    );
+    expect(screen.getByText("전용 59㎡ 대 매물이 아직 없어요")).toBeInTheDocument();
+    expect(screen.queryByText(/층수별 가격 데이터가 부족합니다/)).toBeNull();
+  });
+
+  // 세션 475 보완 Q2 — 카드를 누르면 목록도 같은 면적 묶음으로
+  it("floor_area_m2 가 있으면 카드 클릭 필터에 면적 범위 N 이상 N+1 미만도 함께", () => {
+    const onFilterChange = vi.fn();
+    render(
+      <ComplexPriceFloorTab priceStats={makePriceStats({ floor_area_m2: 59 })} error={false} loading={false}
+        onFilterChange={onFilterChange} />,
+    );
+    expect(screen.getByText("카드를 클릭하면 해당 층수·전용 59㎡ 대 매물만 표시됩니다")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("1~5층"));
+    expect(onFilterChange).toHaveBeenCalledWith({ min_floor: 1, max_floor: 5, min_area_m2: 59, max_area_m2: 59.999 });
+  });
 });

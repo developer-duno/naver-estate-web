@@ -265,6 +265,7 @@ export default function ComplexDetailPage() {
           complex={complex}
           complexNo={complexNo}
           pyeongDetails={pyeongDetails}
+          pyeongReady={!pyeongQuery.isPending}
           sessionToken={sessionToken}
           onFilterChange={handleFilterChange}
         />

@@ -39,7 +39,7 @@ effort: high
 ### ⑤ PostgreSQL 전용 문법 dialect 분기 (domain-mapping-ssot.md 룰 3)
 
 - BE CI 엔진 = SQLite. PostgreSQL 전용 문법(`~` 정규식·`SPLIT_PART`·`JSONB`·`ARRAY[`)은 SQLite 에서 실행 불가 → 테스트 0건 누적.
-- 분기 패턴(`price_queries.py:48` 답습): `dialect_name = db.bind.dialect.name; if == "postgresql": ... else: SQLite 우회`.
+- 분기 패턴(`price_queries.py:76` 답습): `dialect_name = db.bind.dialect.name; if == "postgresql": ... else: SQLite 우회`.
 
 ## 출력 형식
 

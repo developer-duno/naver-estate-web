@@ -31,6 +31,8 @@ export interface PriceStats {
   total_articles: number;
   by_area: AreaPriceStat[];
   by_floor: FloorPriceStat[];
+  /** 층별 시세를 센 면적 묶음(정수 ㎡, 세션 475 PR 6) — null·없음이면 전체 매물 */
+  floor_area_m2?: number | null;
 }
 
 /** 단지 가격 추이 항목 */

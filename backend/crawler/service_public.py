@@ -465,9 +465,12 @@ def collect_public_trade_data(batch_size: int = 300, scheduler_job_id: str | Non
                     matched += 1
                     sigungu_written += 1
                 # 세션 474 B27: 같은 거래를 전용면적 묶음(정수 ㎡)별로 한 번 더 묶어 면적별 표에 저장(옛 줄은 그대로)
-                for complex_no, by_area in matcher.aggregate_by_area(trades).items():
-                    for area_m2, area_prices in by_area.items():
-                        _upsert_area_stats(db, complex_no, deal_ymd, area_m2, area_prices)
+                # 세션 479 B29: 거래 하나하나(가격·거래일·층·거래방식)도 같이 싣는다
+                for complex_no, by_area in matcher.aggregate_trades_by_area(trades).items():
+                    for area_m2, area_trades in by_area.items():
+                        _upsert_area_stats(
+                            db, complex_no, deal_ymd, area_m2, [t["p"] for t in area_trades], trades=area_trades,
+                        )
 
                 processed += len(trades)
 
@@ -652,8 +655,11 @@ def backfill_price_history(complex_no: str, months_back: int = 60) -> dict:
                 )
                 collected += 1
             # 세션 474 B27: 이 단지 거래를 전용면적 묶음(정수 ㎡)별로 면적별 표에 저장(옛 줄은 그대로)
-            for area_m2, area_prices in matcher.aggregate_by_area(trades).get(complex_no, {}).items():
-                _upsert_area_stats(db, complex_no, deal_ymd, area_m2, area_prices)
+            # 세션 479 B29: 거래 하나하나(가격·거래일·층·거래방식)도 같이 싣는다
+            for area_m2, area_trades in matcher.aggregate_trades_by_area(trades).get(complex_no, {}).items():
+                _upsert_area_stats(
+                    db, complex_no, deal_ymd, area_m2, [t["p"] for t in area_trades], trades=area_trades,
+                )
 
         # 세션 469: 달을 모두 받았으면 이번에 다시 안 쓰인 옛 정부 줄(이 단지·거래가 온 달)을 지운다.
         # 저장 0 이어도 지운다 — 이 단지가 이제 어느 거래에도 짝이 안 되는 게 사실이면 옛 값이

@@ -59,6 +59,27 @@ def trade_price(trade: dict) -> int:
     return safe_int(price_str.replace(",", "").strip()) or 0
 
 
+def trade_detail(trade: dict, price: int) -> dict:
+    """거래 하나 → 면적별 표 trades 원소 {"p", "d", "f", "g"} (세션 479 B29).
+
+    d = dealYear·dealMonth·dealDay 셋 다 정수로 읽힐 때만 "YYYY-MM-DD" · f = floor 를 정수로 못 읽으면 None ·
+    g = dealingGbn("중개거래"/"직거래") 원문, 비면 None.
+    """
+    y, m, dd = (safe_int(trade.get(k)) for k in ("dealYear", "dealMonth", "dealDay"))
+    gbn = str(trade.get("dealingGbn") or "").strip()
+    return {
+        "p": price,
+        "d": f"{y:04d}-{m:02d}-{dd:02d}" if None not in (y, m, dd) else None,
+        "f": safe_int(trade.get("floor")),
+        "g": gbn or None,
+    }
+
+
+def _trade_order(detail: dict) -> tuple:
+    """묶음 안 순서 — 거래일 오름차순(날짜 없는 거래는 뒤), 같은 날은 가격 오름차순."""
+    return (detail["d"] is None, detail["d"] or "", detail["p"])
+
+
 @dataclass(frozen=True)
 class ComplexRef:
     complex_no: str
@@ -195,12 +216,22 @@ class SigunguMatcher:
     def aggregate_by_area(self, trades: list[dict]) -> dict[str, dict[int, list[int]]]:
         """거래 목록 → 단지 번호별 · 전용면적 묶음(정수 ㎡)별 가격들 (세션 474 B27).
 
+        aggregate_trades_by_area 에서 가격만 뽑은 것 — 같은 규칙·같은 순서, area_unreadable 도 거기서 한 번만 센다.
+        """
+        return {
+            complex_no: {area: [t["p"] for t in details] for area, details in by_area.items()}
+            for complex_no, by_area in self.aggregate_trades_by_area(trades).items()
+        }
+
+    def aggregate_trades_by_area(self, trades: list[dict]) -> dict[str, dict[int, list[dict]]]:
+        """거래 목록 → 단지 번호별 · 전용면적 묶음(정수 ㎡)별 거래 하나하나(trade_detail) (세션 479 B29).
+
         해제·가격 0·짝 없음 제외는 aggregate 와 같은 규칙이다. 전용면적(excluUseAr)을 못 읽는 거래는 묶음에서만
-        빠진다 — aggregate 의 달 평균 줄에는 그대로 들어간다.
+        빠진다 — aggregate 의 달 평균 줄에는 그대로 들어간다. 묶음 안 순서 = 거래일 오름차순(날짜 없음은 뒤) · 같은 날 가격 오름차순.
         """
         from crawler.area_group import area_group_of
 
-        out: dict[str, dict[int, list[int]]] = {}
+        out: dict[str, dict[int, list[dict]]] = {}
         for trade in trades:
             if is_cancelled_trade(trade):
                 continue
@@ -217,5 +248,8 @@ class SigunguMatcher:
             if area is None:
                 self.area_unreadable += 1
                 continue
-            out.setdefault(complex_no, {}).setdefault(area, []).append(price)
+            out.setdefault(complex_no, {}).setdefault(area, []).append(trade_detail(trade, price))
+        for by_area in out.values():
+            for details in by_area.values():
+                details.sort(key=_trade_order)
         return out

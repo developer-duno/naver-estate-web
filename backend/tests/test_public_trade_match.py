@@ -135,3 +135,46 @@ def test_정확_일치가_모호하면_끝_단지_단계로_넘어가지_않는�
     """같은 동 APT 'a' 둘 + 'a단지' 하나, 국토부 'a' → None — 모호함을 느슨한 규칙으로 풀지 않는다."""
     m = SigunguMatcher([_ref("A1", "a", "금곡동"), _ref("A2", "a", "금곡동"), _ref("AD", "a단지", "금곡동")])
     assert m.match("금곡동", "a") is None
+
+
+# ── 세션 479 B29: 면적 묶음별 거래 하나하나(가격·거래일·층·거래방식) ─────────────
+
+
+def _full_trade(amount, day, floor, cancelled=False, **over):
+    """정부 응답 거래 한 건의 실제 키 모양(2026-10-25 유성구 202606 실측) — 6139 자연 59㎡."""
+    trade = {
+        "umdNm": "궁동", "aptNm": "자연", "dealAmount": amount, "excluUseAr": 59.988,
+        "dealYear": 2026, "dealMonth": 6, "dealDay": day, "floor": floor,
+        "dealingGbn": "중개거래", "cdealType": "O" if cancelled else " ",
+    }
+    trade.update(over)
+    return trade
+
+
+def test_aggregate_trades_by_area_는_거래일_층_거래방식을_싣고_거래일순():
+    m = SigunguMatcher([_ref("6139", "자연", "궁동")])
+    trades = [
+        _full_trade("15,700", 26, 4),
+        _full_trade("17,200", 5, 8),
+        _full_trade("99,000", 12, 10, cancelled=True),  # 해제 → 제외
+    ]
+    assert m.aggregate_trades_by_area(trades) == {"6139": {59: [
+        {"p": 17200, "d": "2026-06-05", "f": 8, "g": "중개거래"},
+        {"p": 15700, "d": "2026-06-26", "f": 4, "g": "중개거래"},
+    ]}}
+    # 옛 함수는 같은 거래의 가격만(같은 순서)
+    assert m.aggregate_by_area(trades) == {"6139": {59: [17200, 15700]}}
+
+
+def test_aggregate_trades_by_area_못_읽은_칸은_None_날짜없음은_뒤_같은날은_가격순():
+    m = SigunguMatcher([_ref("6139", "자연", "궁동")])
+    trades = [
+        _full_trade("16,000", None, "abc", dealingGbn="  "),  # 날짜·층·거래방식 못 읽음
+        _full_trade("18,500", 9, 3, dealingGbn="직거래"),
+        _full_trade("18,000", 9, None, dealingGbn=None),
+    ]
+    assert m.aggregate_trades_by_area(trades) == {"6139": {59: [
+        {"p": 18000, "d": "2026-06-09", "f": None, "g": None},
+        {"p": 18500, "d": "2026-06-09", "f": 3, "g": "직거래"},
+        {"p": 16000, "d": None, "f": None, "g": None},
+    ]}}

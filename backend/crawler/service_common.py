@@ -127,11 +127,15 @@ def _upsert_price_history(
     db.execute(stmt)
 
 
-def _upsert_area_stats(db: Session, complex_no: str, base_month: str, area_m2: int, prices: list[int]):
+def _upsert_area_stats(
+    db: Session, complex_no: str, base_month: str, area_m2: int, prices: list[int], trades: list[dict] | None = None,
+):
     """면적별 정부 실거래 한 줄 upsert — 단지·달·면적 묶음(정수 ㎡) (V073, 세션 474 B27).
 
     값 = 거래 수 · 중위(짝수면 가운데 둘의 평균 내림 — crawler/stats.compute_median_price) · 최저 · 최고 ·
     가격 목록(오름차순). recorded_at 을 지금으로 새로 찍어 회차 뒤 정리(_delete_stale_area_rows)에서 남는다.
+    trades = 거래 하나하나 목록(aggregate_trades_by_area 순서 그대로, V074 · 세션 479 B29). None 이면 그 칸을
+    아예 안 건드린다 — trades 를 안 넘기는 호출이 이미 저장된 목록을 지우지 않게.
     """
     from crawler.stats import compute_median_price
 
@@ -147,16 +151,18 @@ def _upsert_area_stats(db: Session, complex_no: str, base_month: str, area_m2: i
         prices=ordered,
         recorded_at=utcnow(),
     )
+    if trades is not None:
+        values["trades"] = list(trades)
     stmt = pg_insert(ComplexAreaTradeStat).values(**values)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["complex_no", "base_month", "area_m2"],
-        set_={
-            "trade_count": stmt.excluded.trade_count,
-            "price_median": stmt.excluded.price_median,
-            "price_min": stmt.excluded.price_min,
-            "price_max": stmt.excluded.price_max,
-            "prices": stmt.excluded.prices,
-            "recorded_at": stmt.excluded.recorded_at,
-        },
-    )
+    set_ = {
+        "trade_count": stmt.excluded.trade_count,
+        "price_median": stmt.excluded.price_median,
+        "price_min": stmt.excluded.price_min,
+        "price_max": stmt.excluded.price_max,
+        "prices": stmt.excluded.prices,
+        "recorded_at": stmt.excluded.recorded_at,
+    }
+    if trades is not None:
+        set_["trades"] = stmt.excluded.trades
+    stmt = stmt.on_conflict_do_update(index_elements=["complex_no", "base_month", "area_m2"], set_=set_)
     db.execute(stmt)

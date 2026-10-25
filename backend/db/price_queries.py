@@ -278,8 +278,8 @@ def price_history_basis(area_m2: int | None, area_no: Optional[str] = None) -> s
     if not area_m2:
         return None
     if area_no:
-        return f"전용 {area_m2}㎡ 대 정부 실거래 중위 · 네이버 시세는 이 평형 값을 따로"
-    return f"최근 2년 전용 {area_m2}㎡ 대 정부 실거래 중위 · 전세는 네이버 시세"
+        return f"전용 {area_m2}㎡ 대 정부 실거래 최저~최고 · 네이버 시세는 이 평형 값을 따로"
+    return f"최근 2년 전용 {area_m2}㎡ 대 정부 실거래 최저~최고(거래는 점) · 전세는 네이버 시세"
 
 
 def get_price_history_area(db: Session, complex_no: str, area_no: Optional[str] = None) -> int | None:
@@ -300,6 +300,7 @@ def get_complex_price_history(
     - area_no 있음 → 그 평형의 네이버 줄(모든 유형, SERIES_NAVER) + 그 평형 묶음의 정부 실거래(A1, SERIES_GOV).
       한 달에 둘이 있어도 합치지 않는다.
     - 묶음을 모르면(대표 면적 미계산·평형표 없음) 옛 동작 그대로(그 단지 모든 줄을 달마다 묶음, series None).
+    - 정부 줄에는 trades(그 달 거래 하나하나, db/area_price_queries.api_trades 꼴)를 최근 24개월 달만 싣는다(세션 479 B29).
     """
     from crawler.metrics_helpers import _cutoff_month
     from db.models import ComplexAreaTradeStat
@@ -330,12 +331,17 @@ def get_complex_price_history(
         rows = [{**r, "series": SERIES_NAVER} for r in _price_history_rows(db, conditions)]
 
     if trade_type in (None, "A1"):
-        for month, median, low, high in (
+        from db.area_price_queries import api_trades
+
+        # 거래 점(trades)은 기본선·평형 선택 모두 최근 2년 달만(세션 479 B29 — 평형 선택 60개월 점 방지). 줄·띠는 그대로
+        trades_since = _cutoff_month(BASELINE_MONTHS)
+        for month, median, low, high, trades in (
             db.query(
                 ComplexAreaTradeStat.base_month,
                 ComplexAreaTradeStat.price_median,
                 ComplexAreaTradeStat.price_min,
                 ComplexAreaTradeStat.price_max,
+                ComplexAreaTradeStat.trades,
             )
             .filter(
                 ComplexAreaTradeStat.complex_no == complex_no,
@@ -347,6 +353,7 @@ def get_complex_price_history(
             rows.append({
                 "trade_type": "A1", "month": month, "price_upper": high, "price_lower": low,
                 "price_avg": median, "series": SERIES_GOV,
+                "trades": api_trades(trades) if month >= trades_since else [],
             })
     rows.sort(key=lambda r: (r["month"], r["trade_type"], r["series"] or ""))
     return rows

@@ -623,14 +623,18 @@ def test_단지상세_응답에_대표면적과_면적별_시세(client, db, _no
 
     assert body["rep_area_m2"] == 59
     # 평형표 모든 묶음 · 대표 먼저 · 나머지 거래 수 순 · 거래 없는 42 는 null (보완 ①)
+    # 세션 479 B29: price_min/max·trades 추가(거래 목록이 빈 줄이면 prices 로 범위 폴백) — 옛 두 값은 그대로
     assert body["area_prices"] == [
-        {"area_m2": 59, "households": 116, "price_median": 17200, "trade_count": 3},
-        {"area_m2": 84, "households": 70, "price_median": 22000, "trade_count": 1},
-        {"area_m2": 42, "households": 12, "price_median": None, "trade_count": None},
+        {"area_m2": 59, "households": 116, "price_median": 17200, "trade_count": 3,
+         "price_min": 15700, "price_max": 18000, "trades": []},
+        {"area_m2": 84, "households": 70, "price_median": 22000, "trade_count": 1,
+         "price_min": 22000, "price_max": 22000, "trades": []},
+        {"area_m2": 42, "households": 12, "price_median": None, "trade_count": None,
+         "price_min": None, "price_max": None, "trades": []},
     ]
     assert body["area_price_source"] == (
-        "정부 실거래 최근 6개월, 전용 59㎡ 대는 소수점을 버린 같은 크기끼리"
-        " · 전세가율 = 네이버 전세 시세(같은 면적) ÷ 정부 실거래 중위"
+        "정부 실거래 최근 6개월 최저~최고(중개거래 기준), 전용 59㎡ 대는 소수점을 버린 같은 크기끼리"
+        " · 전세가율 = 네이버 전세 시세(같은 면적, 최신 주) ÷ 정부 실거래 최저~최고"
     )
 
 
@@ -722,8 +726,8 @@ def test_그래프_기본선은_대표_묶음만(db):
         (M06, 12000, "네이버 시세"),
     ]
     assert get_price_history_area(db, "6139") == 59
-    assert price_history_basis(59) == "최근 2년 전용 59㎡ 대 정부 실거래 중위 · 전세는 네이버 시세"
-    assert price_history_basis(84, "5") == "전용 84㎡ 대 정부 실거래 중위 · 네이버 시세는 이 평형 값을 따로"
+    assert price_history_basis(59) == "최근 2년 전용 59㎡ 대 정부 실거래 최저~최고(거래는 점) · 전세는 네이버 시세"
+    assert price_history_basis(84, "5") == "전용 84㎡ 대 정부 실거래 최저~최고 · 네이버 시세는 이 평형 값을 따로"
 
 
 def test_그래프_평형을_고르면_그_평형_묶음과_그_평형_줄(db):
@@ -779,7 +783,7 @@ def test_가격추이_API_응답에_면적과_기준(client, db, approved_header
     _add_gov_area_rows(db)
     body = client.get("/api/complexes/6139/price-history", headers=approved_headers).json()
     assert body["area_m2"] == 59
-    assert body["basis"] == "최근 2년 전용 59㎡ 대 정부 실거래 중위 · 전세는 네이버 시세"
+    assert body["basis"] == "최근 2년 전용 59㎡ 대 정부 실거래 최저~최고(거래는 점) · 전세는 네이버 시세"
     assert [(i["base_month"], i["price_avg"], i["series"]) for i in body["items"]] == [
         (M05, 18000, "정부 실거래"), (M06, 16450, "정부 실거래"),
     ]

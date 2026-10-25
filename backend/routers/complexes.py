@@ -318,6 +318,8 @@ def get_price_history(
                 "base_month": r["month"][:6],
                 # 출처 계열(세션 474 B27) — "정부 실거래" · "네이버 시세" · 옛 동작이면 None
                 "series": r.get("series"),
+                # 그 달 거래 하나하나(정부 실거래 줄 · 최근 2년만, 세션 479 B29) — 네이버 줄·옛 동작은 []
+                "trades": r.get("trades") or [],
             }
             for r in rows
         ],

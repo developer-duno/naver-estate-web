@@ -57,13 +57,18 @@ def _price_basis(c) -> str | None:
     return None
 
 
-def article_to_dict(a, complex_obj=None, area_stats: dict[int, int] | None = None) -> dict:
+def article_to_dict(
+    a, complex_obj=None, area_stats: dict[int, int] | None = None,
+    area_ranges: dict[int, tuple[int, int] | None] | None = None,
+) -> dict:
     """Article ORM → 전체 필드 dict. complex_obj가 있으면 단지 정보로 빈 필드 보완.
 
     area_stats = 그 단지 {면적 묶음: 6개월 정부 실거래 중위}(db/area_price_queries.area_medians) — 매물 상세만 넘긴다.
+    area_ranges = 그 단지 {면적 묶음: (최저, 최고)}(db/area_price_queries.area_ranges, 세션 479 B29) — 매물 상세만.
     """
     pyeong = round(a.area2_m2 / M2_TO_PYEONG, 1) if a.area2_m2 else None
     c = complex_obj
+    jeonse_range = _calc_jeonse_ratio_range(a, area_ranges)
     return {
         "article_no": a.article_no,
         "complex_no": a.complex_no,
@@ -138,6 +143,9 @@ def article_to_dict(a, complex_obj=None, area_stats: dict[int, int] | None = Non
         # 수익률 (동적 계산, DB 컬럼 불필요)
         "monthly_rent_yield": _calc_rent_yield(a),
         "article_jeonse_ratio": _calc_jeonse_ratio(a, c, area_stats),
+        # 보증금 ÷ 같은 면적 정부 실거래 최고 ~ 최저(세션 479 B29) — 위 한 값(중위)은 옛 화면 호환용
+        "article_jeonse_ratio_min": jeonse_range[0] if jeonse_range else None,
+        "article_jeonse_ratio_max": jeonse_range[1] if jeonse_range else None,
     }
 
 
@@ -169,6 +177,21 @@ def _calc_jeonse_ratio(a, c, area_stats: dict[int, int] | None = None) -> float 
     if not median or median <= 0:
         return None
     return round(a.numeric_price / median * 100, 1)
+
+
+def _calc_jeonse_ratio_range(a, area_ranges: dict[int, tuple[int, int] | None] | None = None) -> tuple[float, float] | None:
+    """개별 전세가율 범위: (보증금 ÷ 같은 면적 묶음 최고, 보증금 ÷ 최저) × 100 (세션 479 B29).
+
+    분모 = 그 매물 면적 묶음의 최근 6개월 정부 실거래 최저~최고(직거래 제외, area_ranges). 보증금이 최저 이상이면
+    None(단지 전세가율과 같은 방어선 — db/area_price_queries.jeonse_range). 엑셀(routers/articles.py)도 이 함수.
+    """
+    from crawler.area_group import area_group_of
+    from db.area_price_queries import jeonse_range
+
+    if a.trade_type_name != "전세" or not a.numeric_price or not area_ranges:
+        return None
+    group = area_group_of(a.area2_m2)
+    return jeonse_range(a.numeric_price, area_ranges.get(group)) if group is not None else None
 
 
 def kapt_cost_to_dict(cost, mapping) -> dict:

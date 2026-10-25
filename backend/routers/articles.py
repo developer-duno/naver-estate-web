@@ -17,9 +17,9 @@ from auth.audit import log_action
 from auth.permissions import check_quota
 from auth.rate_limiter import _get_client_ip
 from db import queries
-from db.area_price_queries import area_medians, recent_area_prices
+from db.area_price_queries import area_medians, area_ranges, recent_area_prices, recent_area_trades
 from deps import get_approved_user, get_db
-from routers.estate_serializers import _calc_jeonse_ratio
+from routers.estate_serializers import _calc_jeonse_ratio, _calc_jeonse_ratio_range
 from routers.serializers import article_to_dict, build_filter_dict
 from services.naver_call_counter import record_call
 from shared.constants import M2_TO_PYEONG
@@ -163,11 +163,12 @@ def export_articles_to_excel(
     complex_obj = queries.get_complex_by_no(db, complex_no)
     _complex_name = (complex_obj.complex_name if complex_obj else None) or articles[0].complex_name
     # 전세가율 분모 = 매물 면적 묶음의 6개월 정부 실거래 중위(세션 474 B27 — 매물 상세와 같은 함수, 조회 1번)
-    area_stats = (
-        area_medians(recent_area_prices(db, complex_obj.complex_no))
-        if complex_obj and any(a.trade_type_name == "전세" for a in articles)
-        else None
-    )
+    area_stats = ranges = None
+    if complex_obj and any(a.trade_type_name == "전세" for a in articles):
+        by_area = recent_area_prices(db, complex_obj.complex_no)
+        area_stats = area_medians(by_area)
+        # 범위 분모(세션 479 B29) = 직거래를 뺀 최저~최고 — 아래 두 열
+        ranges = area_ranges(by_area, recent_area_trades(db, complex_obj.complex_no))
 
     def _excel_blank(val):
         return "" if val is None else val
@@ -188,6 +189,7 @@ def export_articles_to_excel(
         else:
             price = art.deal_or_warrant_prc or "-"
 
+        jeonse_range = _calc_jeonse_ratio_range(art, ranges)
         confirm = art.article_confirm_ymd or ""
         if confirm and len(confirm) == 8:
             confirm = f"{confirm[:4]}.{confirm[4:6]}.{confirm[6:8]}"
@@ -225,6 +227,8 @@ def export_articles_to_excel(
                 else ""
             ),
             "전세가율(%, 같은 면적)": _excel_blank(_calc_jeonse_ratio(art, complex_obj, area_stats)),
+            "전세가율 최저(%, 같은 면적)": _excel_blank(jeonse_range[0] if jeonse_range else None),
+            "전세가율 최고(%, 같은 면적)": _excel_blank(jeonse_range[1] if jeonse_range else None),
         })
 
     try:

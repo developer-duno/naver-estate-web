@@ -375,6 +375,7 @@ class ComplexAreaTradeStat(Base):
     적재 = crawler/service_public.py(주간·소급)가 complex_price_history 의 달 평균 줄 옆에서 같은 거래로 같이 쓴다.
     prices = 그 달·그 묶음 거래 가격 목록(만원, 오름차순) — 6개월 중위를 거래 단위로 다시 셀 때 쓴다.
     운영 칸 타입은 jsonb, 시험(SQLite)은 JSON — 모델은 SQLAlchemy JSON 하나로 둘 다 읽는다.
+    trades = 같은 거래 하나하나 {"p": 만원, "d": "YYYY-MM-DD"|None, "f": 층|None, "g": 거래방식|None}, 거래일 오름차순 (V074, 세션 479 B29).
     """
 
     __tablename__ = "complex_area_trade_stats"
@@ -387,6 +388,7 @@ class ComplexAreaTradeStat(Base):
     price_min: Mapped[int | None] = mapped_column(Integer)
     price_max: Mapped[int | None] = mapped_column(Integer)
     prices: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    trades: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

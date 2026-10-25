@@ -199,6 +199,59 @@ def test_upsert_area_stats_중위_정렬_JSON(db):
     assert (rows[(M06, 59)].trade_count, rows[(M06, 59)].price_median, rows[(M06, 59)].prices) == (1, 18000, [18000])
 
 
+# 세션 479 B29 — 거래 하나하나 목록(trades)
+TRADES_6139_M06_DETAIL = [
+    {"p": 17200, "d": "2026-06-05", "f": 8, "g": "중개거래"},
+    {"p": 15700, "d": "2026-06-26", "f": 4, "g": "중개거래"},
+]
+
+
+def _dated(trade, yyyymm, day, floor, gbn="중개거래"):
+    """정부 응답의 거래일·층·거래방식 키를 붙인 거래(실측 키 모양)."""
+    return {**trade, "dealYear": int(yyyymm[:4]), "dealMonth": int(yyyymm[4:]), "dealDay": day,
+            "floor": floor, "dealingGbn": gbn}
+
+
+def _expected_m06_detail():
+    """M06 자리 거래 목록 기대값 — 날짜의 연·월은 M06 을 따른다."""
+    return [{**t, "d": f"{M06[:4]}-{M06[4:]}-{t['d'][-2:]}"} for t in TRADES_6139_M06_DETAIL]
+
+
+def _trades_6139_dated():
+    trades = dict(TRADES_6139)
+    first, second = TRADES_6139[M06]  # 15,700 · 17,200
+    trades[M06] = [_dated(first, M06, 26, 4), _dated(second, M06, 5, 8)]
+    return trades
+
+
+def test_upsert_area_stats_trades_저장_None_이면_그대로(db):
+    from crawler.service_common import _upsert_area_stats
+
+    _upsert_area_stats(db, "6139", M06, 59, [17200, 15700], trades=TRADES_6139_M06_DETAIL)
+    db.commit()
+    assert _area_rows(db)[(M06, 59)].trades == TRADES_6139_M06_DETAIL
+
+    _upsert_area_stats(db, "6139", M06, 59, [18000])  # trades 를 안 넘기는 호출 = 그 칸을 안 건드림
+    db.commit()
+    row = _area_rows(db)[(M06, 59)]
+    assert row.prices == [18000]
+    assert row.trades == TRADES_6139_M06_DETAIL
+
+    _upsert_area_stats(db, "6139", M05, 59, [18000])  # 새 줄 + trades 없음 = 빈 목록
+    db.commit()
+    assert _area_rows(db)[(M05, 59)].trades == []
+
+
+def test_주간수집_면적별_줄에_거래목록(db):
+    _add_6139(db)
+    _run_weekly(_trades_6139_dated())
+
+    rows = _area_rows(db)
+    assert rows[(M06, 59)].trades == _expected_m06_detail()
+    assert rows[(M06, 59)].prices == [15700, 17200]  # prices 뜻 불변(오름차순)
+    assert rows[(M04, 84)].trades == [{"p": 22000, "d": None, "f": None, "g": None}]  # 키 없는 거래 = None
+
+
 def _run_weekly(trades_by_month, months=(M04, M05, M06)):
     from crawler.public_data_api import PublicDataAPI
     PublicDataAPI.reset()
@@ -328,6 +381,26 @@ def test_소급도_면적별_저장하고_안_쓰인_줄을_지운다(db):
     rows = _area_rows(db)
     assert set(rows) == {(M04, 84), (M05, 59), (M06, 59)}  # 옛 (M04, 59) 는 이번에 안 쓰여 지워짐
     assert rows[(M04, 84)].prices == [22000]
+
+
+def test_소급도_면적별_줄에_거래목록(db):
+    from crawler.public_data_api import PublicDataAPI
+    from crawler.service_public import backfill_price_history
+
+    _add_6139(db)
+    PublicDataAPI.reset()
+    trades = _trades_6139_dated()
+
+    def _fake(sigungu_cd, deal_ymd):
+        return list(trades.get(deal_ymd, []))
+
+    with patch("crawler.service_public._recent_months", return_value=[M04, M05, M06]), \
+         patch("crawler.public_data_api.PublicDataAPI.get_all_apt_trades", side_effect=_fake):
+        backfill_price_history("6139", months_back=3)
+
+    rows = _area_rows(db)
+    assert rows[(M06, 59)].trades == _expected_m06_detail()
+    assert rows[(M06, 59)].prices == [15700, 17200]
 
 
 # ── I4 가치지표 ──────────────────────────────────────────────────────────────
@@ -740,10 +813,25 @@ def test_V073_표_권한_자체점검():
     assert "DROP TABLE IF EXISTS public.complex_area_trade_stats" in sql
 
 
+_V074 = _V073.parent / "V074__area_trade_stats_trades.sql"
+
+
+def test_V074_칸_추가_자체점검():
+    assert _V074.exists()
+    sql = _V074.read_text(encoding="utf-8")
+    ex = _executable(sql)
+    assert "SET LOCAL lock_timeout = '5s';" in ex
+    assert re.search(r"ADD COLUMN IF NOT EXISTS trades\s+jsonb\s+NOT NULL DEFAULT '\[\]'::jsonb", ex)
+    assert "COMMENT ON COLUMN public.complex_area_trade_stats.trades IS" in ex
+    assert "complex_area_trade_stats self-check: trades column missing" in ex
+    assert "DROP" not in ex  # 롤백문은 주석에만
+    assert "NOTIFY pgrst, 'reload schema';" in ex
+
+
 def test_모델이_마이그와_같은_칸():
     cols = ComplexAreaTradeStat.__table__.c
     assert [c.name for c in ComplexAreaTradeStat.__table__.primary_key] == ["complex_no", "base_month", "area_m2"]
-    assert {"trade_count", "price_median", "price_min", "price_max", "prices", "recorded_at"} <= set(cols.keys())
+    assert {"trade_count", "price_median", "price_min", "price_max", "prices", "trades", "recorded_at"} <= set(cols.keys())
     assert "rep_area_m2" in Complex.__table__.c
 
 

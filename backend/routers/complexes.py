@@ -308,6 +308,8 @@ def get_price_history(
         "complex_no": complex_no,
         "area_m2": area_m2,
         "basis": queries.price_history_basis(area_m2, area_no),
+        # 범위 그래프용 기준 글자(세션 480) — basis 는 옛 그래프(중위 줄)용으로 그대로
+        "basis_range": queries.price_history_range_basis(area_m2, area_no),
         "items": [
             {
                 "trade_type": r["trade_type"],
@@ -320,6 +322,9 @@ def get_price_history(
                 "series": r.get("series"),
                 # 그 달 거래 하나하나(정부 실거래 줄 · 최근 2년만, 세션 479 B29) — 네이버 줄·옛 동작은 []
                 "trades": r.get("trades") or [],
+                # 정부 줄 최저~최고(그 달 직거래 제외, 세션 480) — 네이버 줄·옛 동작은 None
+                "range_lower": r.get("range_lower"),
+                "range_upper": r.get("range_upper"),
             }
             for r in rows
         ],

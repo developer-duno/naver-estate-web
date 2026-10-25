@@ -47,7 +47,9 @@ def main(argv: list[str] | None = None) -> int:
 
     result = collect_region_stats(months_back=args.months_back, dry_run=args.dry_run)
     _print_result(result)
-    return 0 if result["status"] in ("completed", "dry_run") and not result.get("error") else 1
+    if result["status"] == "completed":
+        return 0   # completed 의 error 는 빈칸 안내(gap_words)일 뿐 — 실패 아님(세션 478 함정)
+    return 0 if result["status"] == "dry_run" and not result.get("error") else 1
 
 
 if __name__ == "__main__":

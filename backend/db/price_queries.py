@@ -274,7 +274,19 @@ SERIES_NAVER = "네이버 시세"
 
 
 def price_history_basis(area_m2: int | None, area_no: Optional[str] = None) -> str | None:
-    """그래프 제목 아래 기준 글자 — 정본(프런트는 그대로 쓴다). 평형을 고르면 네이버 시세가 따로 그려진다는 것까지."""
+    """그래프 제목 아래 기준 글자 — 정본(프런트는 그대로 쓴다). 평형을 고르면 네이버 시세가 따로 그려진다는 것까지.
+
+    옛 그래프(중위 줄)용 글자 — 옛 화면이 운영 중이라 그대로 둔다(세션 480). 범위 그래프용은 price_history_range_basis.
+    """
+    if not area_m2:
+        return None
+    if area_no:
+        return f"전용 {area_m2}㎡ 대 정부 실거래 중위 · 네이버 시세는 이 평형 값을 따로"
+    return f"최근 2년 전용 {area_m2}㎡ 대 정부 실거래 중위 · 전세는 네이버 시세"
+
+
+def price_history_range_basis(area_m2: int | None, area_no: Optional[str] = None) -> str | None:
+    """범위 그래프(range_lower/upper 띠 + 거래 점)의 기준 글자 — 응답 칸 basis_range (세션 479 B29·480)."""
     if not area_m2:
         return None
     if area_no:
@@ -301,6 +313,8 @@ def get_complex_price_history(
       한 달에 둘이 있어도 합치지 않는다.
     - 묶음을 모르면(대표 면적 미계산·평형표 없음) 옛 동작 그대로(그 단지 모든 줄을 달마다 묶음, series None).
     - 정부 줄에는 trades(그 달 거래 하나하나, db/area_price_queries.api_trades 꼴)를 최근 24개월 달만 싣는다(세션 479 B29).
+    - 정부 줄 range_lower/upper = 그 달 trades 가 있으면 직거래를 뺀 최저·최고(중개거래 0건이면 None), 비면 저장된
+      price_min·price_max(세션 480). 옛 칸 price_lower/upper 는 그대로. 네이버 줄에는 None.
     """
     from crawler.metrics_helpers import _cutoff_month
     from db.models import ComplexAreaTradeStat
@@ -328,10 +342,11 @@ def get_complex_price_history(
         if not area_no:
             conditions.append(ComplexPriceHistory.trade_type != "A1")  # 기본선 매매는 정부 실거래만
             conditions.append(func.left(ComplexPriceHistory.base_month, 6) >= since)
-        rows = [{**r, "series": SERIES_NAVER} for r in _price_history_rows(db, conditions)]
+        rows = [{**r, "series": SERIES_NAVER, "range_lower": None, "range_upper": None}
+                for r in _price_history_rows(db, conditions)]
 
     if trade_type in (None, "A1"):
-        from db.area_price_queries import api_trades
+        from db.area_price_queries import api_trades, brokered_prices
 
         # 거래 점(trades)은 기본선·평형 선택 모두 최근 2년 달만(세션 479 B29 — 평형 선택 60개월 점 방지). 줄·띠는 그대로
         trades_since = _cutoff_month(BASELINE_MONTHS)
@@ -350,10 +365,16 @@ def get_complex_price_history(
             )
             .all()
         ):
+            brokered = brokered_prices(trades)
+            if brokered is None:
+                range_lower, range_upper = low, high
+            else:
+                range_lower, range_upper = (min(brokered), max(brokered)) if brokered else (None, None)
             rows.append({
                 "trade_type": "A1", "month": month, "price_upper": high, "price_lower": low,
                 "price_avg": median, "series": SERIES_GOV,
                 "trades": api_trades(trades) if month >= trades_since else [],
+                "range_lower": range_lower, "range_upper": range_upper,
             })
     rows.sort(key=lambda r: (r["month"], r["trade_type"], r["series"] or ""))
     return rows

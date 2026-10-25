@@ -48,7 +48,7 @@ python -m pytest --tb=short -q
 | `routers/mb.py` | 미분양/청약/지역통계 API |
 | `db/models.py` | SQLAlchemy ORM 모델 (단지, 매물, 실거래가 등) |
 | `db/database.py` | DB 연결 풀(SQLAlchemy) 및 세션 팩토리 |
-| `db/migrations/` | SQL 마이그레이션 (V000~V071, 72 버전) |
+| `db/migrations/` | SQL 마이그레이션 (V000~V074, 75 버전) |
 | `crawler/scheduler.py` | APScheduler 정기 수집/백필 (단일 인스턴스 파일락 기반) |
 | `crawler/service.py` | 크롤링 서비스 통합 re-export |
 | `shared/naver_api.py` | NaverEstateAPI 네이버 연동 클라이언트 (임의 수정 금지) |
@@ -72,10 +72,10 @@ python -m pytest --tb=short -q
 
 ## 🗄️ DB 마이그레이션 현황
 
-- **방식**: Flyway 스타일 SQL 파일 (`db/migrations/V000__` ~ `V071__`, 총 72 버전)
-- **최신 버전**: **V071** (`sgis_area_stats` 새 공유 표 및 행정동 통계, 2026-10-08 적용 완료)
+- **방식**: Flyway 스타일 SQL 파일 (`db/migrations/V000__` ~ `V074__`, 총 75 버전)
+- **최신 버전**: **V074** (`complex_area_trade_stats.trades` 거래 하나하나 칸, 2026-10-25 적용 완료) — V072 `region_stats`(10-18) · V073 `complex_area_trade_stats`+`complexes.rep_area_m2`(10-19)
 - **적용 규칙**: 자동 러너 없음 (Supabase SQL Editor 수동 적용 원칙, 백업 후 선행 적용 필수)
-- 📖 **V014~V071 전 버전 상세 적용 역사 & 사후 검증 기록**: [`.claude/rules-detail/backend-details.md`](../.claude/rules-detail/backend-details.md#db-마이그레이션-실행-완료) 참조
+- 📖 **V014~V074 전 버전 상세 적용 역사 & 사후 검증 기록**: [`.claude/rules-detail/backend-details.md`](../.claude/rules-detail/backend-details.md#db-마이그레이션-실행-완료) 참조
 
 ---
 

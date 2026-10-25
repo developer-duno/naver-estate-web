@@ -17,13 +17,32 @@ _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def area_price_source(rep_area_m2: int | None) -> str | None:
-    """화면 출처 줄 '이 단지:' 뒤 글자 — 정본(프런트는 이 글자를 그대로 쓴다, derived-display-ssot)."""
+    """화면 출처 줄 '이 단지:' 뒤 글자 — 정본(프런트는 이 글자를 그대로 쓴다, derived-display-ssot).
+
+    옛 화면(중위 한 값·중위 분모 전세가율)용 글자 — 옛 화면이 운영 중이라 그대로 둔다(세션 480).
+    범위 화면용 글자는 area_price_range_source.
+    """
+    if not rep_area_m2:
+        return None
+    return (
+        f"정부 실거래 최근 {AREA_PRICE_MONTHS}개월, 전용 {rep_area_m2}㎡ 대는 소수점을 버린 같은 크기끼리"
+        " · 전세가율 = 네이버 전세 시세(같은 면적) ÷ 정부 실거래 중위"
+    )
+
+
+def area_price_range_source(rep_area_m2: int | None) -> str | None:
+    """범위 화면(price_min/max·jeonse_rate_min/max)의 출처 글자 — 응답 칸 area_price_range_source (세션 479 B29·480)."""
     if not rep_area_m2:
         return None
     return (
         f"정부 실거래 최근 {AREA_PRICE_MONTHS}개월 최저~최고(중개거래 기준), 전용 {rep_area_m2}㎡ 대는 소수점을 버린 같은 크기끼리"
         " · 전세가율 = 네이버 전세 시세(같은 면적, 최신 주) ÷ 정부 실거래 최저~최고"
     )
+
+
+def _as_list(value) -> list:
+    """저장된 JSON 칸(prices·trades)이 목록이 아니면(dict·글자·숫자) 빈 목록 — 모양이 깨진 줄로 500 이 나지 않게."""
+    return value if isinstance(value, list) else []
 
 
 def _api_date(value) -> str | None:
@@ -68,28 +87,57 @@ def sort_api_trades(trades: list[dict]) -> list[dict]:
 
 def api_trades(raw_list) -> list[dict]:
     """저장된 trades 목록 → API 꼴 목록(못 읽는 거래는 버림, 정렬 = sort_api_trades)."""
-    return sort_api_trades([t for t in (api_trade(r) for r in (raw_list or [])) if t is not None])
+    return sort_api_trades([t for t in (api_trade(r) for r in _as_list(raw_list)) if t is not None])
+
+
+def _row_prices(prices) -> list[int]:
+    return [int(p) for p in _as_list(prices) if p]
+
+
+def brokered_prices(raw_trades) -> list[int] | None:
+    """한 줄(한 달) trades 의 중개거래 가격 — 읽을 수 있는 거래가 하나도 없으면 None(그 줄은 prices 로 폴백)."""
+    trades = [t for t in (api_trade(r) for r in _as_list(raw_trades)) if t is not None]
+    if not trades:
+        return None
+    return [t["price"] for t in trades if not t["direct"]]
+
+
+def row_range_material(prices, raw_trades) -> list[int]:
+    """한 줄(한 달)의 범위 재료 — trades 가 있으면 그 줄의 중개거래 가격, 비면 그 줄 prices (세션 480 — 달 단위)."""
+    brokered = brokered_prices(raw_trades)
+    return brokered if brokered is not None else _row_prices(prices)
+
+
+def area_ranges(rows) -> dict[int, tuple[int, int] | None]:
+    """{묶음: (최저, 최고)} — rows = (area_m2, prices, trades) 저장 꼴 줄들. 재료는 줄마다 row_range_material 로 고르고
+    묶음 범위 = 고른 재료 전체의 최저·최고(재료 0 이면 None). 단지 상세·매물 상세·엑셀이 모두 이 함수(세션 479 B29·480)."""
+    material: dict[int, list[int]] = {}
+    for area_m2, prices, trades in rows:
+        material.setdefault(int(area_m2), []).extend(row_range_material(prices, trades))
+    return {area: (min(m), max(m)) if m else None for area, m in material.items()}
 
 
 def _recent_area_material(db, complex_no: str, cutoff: str | None = None):
-    """그 단지 최근 6개월 줄을 한 번 읽어 ({묶음: 가격 목록}, {묶음: API 꼴 거래 목록}) 둘 다 만든다."""
+    """그 단지 최근 6개월 줄을 한 번 읽어 ({묶음: 가격 목록}, {묶음: API 꼴 거래 목록}, {묶음: 범위}) 셋 다 만든다."""
     from db.models import ComplexAreaTradeStat
 
     cutoff = cutoff or _cutoff_month(AREA_PRICE_MONTHS)
-    prices_out: dict[int, list[int]] = {}
-    trades_out: dict[int, list[dict]] = {}
-    for area_m2, prices, trades in (
+    rows = (
         db.query(ComplexAreaTradeStat.area_m2, ComplexAreaTradeStat.prices, ComplexAreaTradeStat.trades)
         .filter(ComplexAreaTradeStat.complex_no == complex_no, ComplexAreaTradeStat.base_month >= cutoff)
         .all()
-    ):
-        prices_out.setdefault(int(area_m2), []).extend(int(p) for p in (prices or []) if p)
+    )
+    prices_out: dict[int, list[int]] = {}
+    trades_out: dict[int, list[dict]] = {}
+    for area_m2, prices, trades in rows:
+        prices_out.setdefault(int(area_m2), []).extend(_row_prices(prices))
         trades_out.setdefault(int(area_m2), []).extend(
-            t for t in (api_trade(r) for r in (trades or [])) if t is not None
+            t for t in (api_trade(r) for r in _as_list(trades)) if t is not None
         )
     return (
         {area: prices for area, prices in prices_out.items() if prices},
         {area: sort_api_trades(trades) for area, trades in trades_out.items() if trades},
+        area_ranges(rows),
     )
 
 
@@ -103,21 +151,10 @@ def recent_area_trades(db, complex_no: str, cutoff: str | None = None) -> dict[i
     return _recent_area_material(db, complex_no, cutoff)[1]
 
 
-def area_ranges(
-    by_area_prices: dict[int, list[int]], by_area_trades: dict[int, list[dict]] | None = None,
-) -> dict[int, tuple[int, int] | None]:
-    """{묶음: (최저, 최고)} — 거래 목록이 있으면 직거래를 뺀 거래로(중개거래 0건이면 None),
-    목록이 비면(V074 채움 전·옛 달) prices 전 거래로 폴백한다(세션 479 B29 설계 §2-3)."""
-    by_area_trades = by_area_trades or {}
-    out: dict[int, tuple[int, int] | None] = {}
-    for area in set(by_area_prices) | set(by_area_trades):
-        trades = by_area_trades.get(area) or []
-        if trades:
-            brokered = [t["price"] for t in trades if not t["direct"]]
-        else:
-            brokered = list(by_area_prices.get(area) or [])
-        out[area] = (min(brokered), max(brokered)) if brokered else None
-    return out
+def recent_area_prices_and_ranges(db, complex_no: str, cutoff: str | None = None):
+    """(가격 목록, 범위) — 매물 상세·엑셀용, 표 조회 1번."""
+    prices, _trades, ranges = _recent_area_material(db, complex_no, cutoff)
+    return prices, ranges
 
 
 def summarize_area_prices(
@@ -125,18 +162,21 @@ def summarize_area_prices(
     households: dict[int, int] | None = None,
     rep_area_m2: int | None = None,
     by_area_trades: dict[int, list[dict]] | None = None,
+    ranges: dict[int, tuple[int, int] | None] | None = None,
 ) -> list[dict]:
     """[{area_m2, households, price_median, trade_count, price_min, price_max, trades}] — 평형표의 모든 묶음 +
     새 표에만 있는 묶음 (보완 ①).
 
     거래 없는 묶음은 price_median·trade_count·price_min·price_max None, trades [](화면 "42㎡ —").
-    price_min/max = area_ranges(직거래 제외 · 목록이 비면 prices 폴백) · price_median 은 옛 화면 호환용.
+    price_min/max = ranges(area_ranges — 달마다 직거래 제외 · 빈 달은 prices 폴백) · price_median 은 옛 화면 호환용.
+    ranges 를 안 넘기면 prices 만으로 범위를 낸다.
     households = 평형표 세대수 합(평형표에 없으면 None).
     순서 = 대표 면적 먼저, 나머지는 거래 수 많은 순(같으면 작은 면적 먼저). 평형표가 없으면 새 표 묶음만.
     """
     households = households or {}
     by_area_trades = by_area_trades or {}
-    ranges = area_ranges(by_area, by_area_trades)
+    if ranges is None:
+        ranges = area_ranges((area, prices, None) for area, prices in by_area.items())
     rows = []
     for area in set(households) | set(by_area):
         prices = by_area.get(area) or []
@@ -160,13 +200,16 @@ def area_medians(by_area: dict[int, list[int]]) -> dict[int, int]:
 
 
 def jeonse_range(jeonse: int | None, rng: tuple[int, int] | None) -> tuple[float, float] | None:
-    """(전세÷최고 %, 전세÷최저 %) — 전세(또는 보증금)가 최저 이상이면 None(범위 전체가 100% 미만일 때만)."""
+    """(전세÷최고 %, 전세÷최저 %) — 전세(또는 보증금)가 최저 이상이면 None(범위 전체가 100% 미만일 때만).
+
+    실제 비율이 100% 미만이므로 반올림이 100.0 을 만들면 99.9 로 낮춘다(세션 480).
+    """
     if not jeonse or jeonse <= 0 or not rng:
         return None
     low, high = rng
     if not low or low <= 0 or jeonse >= low:
         return None
-    return round(jeonse / high * 100, 1), round(jeonse / low * 100, 1)
+    return min(round(jeonse / high * 100, 1), 99.9), min(round(jeonse / low * 100, 1), 99.9)
 
 
 def _latest_rep_jeonse(db, complex_no: str, table, rep: int, cutoff: str) -> int | None:
@@ -238,7 +281,8 @@ def _legacy_range(db, complex_no: str) -> dict | None:
 
 
 def complex_area_fields(db, c) -> dict:
-    """단지 상세·비교 응답에 덧붙이는 면적별 시세 — area_prices · area_price_source · jeonse_rate_min/max · legacy_range.
+    """단지 상세·비교 응답에 덧붙이는 면적별 시세 — area_prices · area_price_source(옛 화면) · area_price_range_source
+    · jeonse_rate_min/max · legacy_range.
 
     rep_area_m2 는 complexes 칸이라 complex_to_dict 가 싣는다. 조회 = 이 표 1번 + 평형표 1번
     + 대표 면적 범위가 있으면 네이버 전세 최신 주 1번 · 옛 값 단지면 옛 정부 줄 1번.
@@ -253,10 +297,10 @@ def complex_area_fields(db, c) -> dict:
         if area is not None:
             households[area] = households.get(area, 0) + hh
     cutoff = _cutoff_month(AREA_PRICE_MONTHS)
-    by_area, by_area_trades = _recent_area_material(db, c.complex_no, cutoff)
+    by_area, by_area_trades, ranges = _recent_area_material(db, c.complex_no, cutoff)
 
     jeonse_min = jeonse_max = None
-    rep_range = area_ranges(by_area, by_area_trades).get(rep) if rep is not None else None
+    rep_range = ranges.get(rep) if rep is not None else None
     if rep_range:
         rate = jeonse_range(_latest_rep_jeonse(db, c.complex_no, table, rep, cutoff), rep_range)
         if rate:
@@ -267,8 +311,9 @@ def complex_area_fields(db, c) -> dict:
         legacy = _legacy_range(db, c.complex_no)
 
     return {
-        "area_prices": summarize_area_prices(by_area, households, rep, by_area_trades),
+        "area_prices": summarize_area_prices(by_area, households, rep, by_area_trades, ranges),
         "area_price_source": area_price_source(rep),
+        "area_price_range_source": area_price_range_source(rep),
         "jeonse_rate_min": jeonse_min,
         "jeonse_rate_max": jeonse_max,
         "legacy_range": legacy,

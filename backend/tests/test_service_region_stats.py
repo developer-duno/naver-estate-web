@@ -439,3 +439,35 @@ def test_dropped_sigungu_reason_is_logged_when_both_tables_broken(db, caplog):
     dropped = [r.getMessage() for r in caplog.records if "기록엔 첫 사유만" in r.getMessage()]
     assert len(dropped) == 1
     assert "[아파트 중위 매매가격]" in dropped[0] and "지역 이름 3개 중 1개만" in dropped[0]
+
+
+# ── 수동 실행 종료 코드 (세션 480 — 세션 478 함정: completed + 빈칸 안내인데 종료 코드 1) ──
+
+def _fake_result(status, error):
+    return {
+        "start": "202607", "end": "202610", "status": status, "error": error, "received": 1, "saved": 1,
+        "unmatched": {}, "uncovered_regions": {}, "tables": {},
+    }
+
+
+def test_run_script_exit_zero_when_completed_with_gap_note(monkeypatch):
+    """completed 인데 error 칸에 빈칸 안내(예: 군 71곳 빈칸)가 실려도 실패가 아니다 → 0."""
+    import scripts.run_region_stats as script
+
+    monkeypatch.setattr(
+        "crawler.service_region_stats.collect_region_stats",
+        lambda **kw: _fake_result("completed", "군 71곳은 값이 비어 있어요"),
+    )
+    assert script.main([]) == 0
+
+
+def test_run_script_exit_one_when_failed_or_dry_run_problem(monkeypatch):
+    """failed 는 1 · 시험 실행(dry_run)인데 실패 사유가 있으면 1(진짜 돌리면 failed 가 될 회차)."""
+    import scripts.run_region_stats as script
+
+    for status, error in (("failed", "부동산원 인증키가 없어요"), ("dry_run", "받은 행이 0개예요")):
+        monkeypatch.setattr(
+            "crawler.service_region_stats.collect_region_stats",
+            lambda status=status, error=error, **kw: _fake_result(status, error),
+        )
+        assert script.main(["--dry-run"]) == 1, status

@@ -29,6 +29,7 @@ from db.price_queries import (  # noqa: F401
     get_price_history_area,
     get_price_stats_aggregated,
     price_history_basis,
+    price_history_range_basis,
 )
 from db.query_helpers import _build_filter_conditions, _build_order_clause  # noqa: F401
 from db.sgis_queries import get_complex_sgis_emd_cd, get_sgis_neighborhood_items  # noqa: F401

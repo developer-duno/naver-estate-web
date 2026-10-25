@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from auth.permissions import check_quota
-from db.area_price_queries import area_medians, area_ranges, recent_area_prices, recent_area_trades
+from db.area_price_queries import area_medians, recent_area_prices_and_ranges
 from db.models import Article as ArticleModel
 from db.models import Complex as ComplexModel
 from deps import get_approved_user, get_db
@@ -136,10 +136,9 @@ def _article_detail_dict(db, art, complex_obj) -> dict:
     """
     area_stats = ranges = None
     if complex_obj is not None and art.trade_type_name == "전세":
-        by_area = recent_area_prices(db, complex_obj.complex_no)
+        by_area, ranges = recent_area_prices_and_ranges(db, complex_obj.complex_no)
         area_stats = area_medians(by_area)
-        # 범위 분모(세션 479 B29) = 같은 표의 거래 목록으로 직거래를 뺀 최저~최고
-        ranges = area_ranges(by_area, recent_area_trades(db, complex_obj.complex_no))
+        # 범위 분모(세션 479 B29·480) = 같은 표의 줄마다 직거래를 뺀 거래(빈 달은 prices)의 최저~최고
     return {
         **article_to_dict(art, complex_obj, area_stats, ranges),
         **article_region_fields(db, art, complex_obj),

@@ -33,7 +33,7 @@
 | `db/mb_query_helpers.py` | mibunyang 중복 제거 + 정렬 + 필터 헬퍼 |
 | `db/mb_apartment_queries.py` | mibunyang 아파트 단지 + 미분양 조회 쿼리 |
 | `db/mb_misc_queries.py` | mibunyang 지역 통계 + 실거래 + 단지 부속 쿼리 |
-| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V071, 72 버전 — 최신은 하단 §DB 마이그레이션 표가 진실) |
+| `db/migrations/` | Flyway 스타일 SQL 마이그레이션 (V000~V074, 75 버전 — 최신은 하단 §DB 마이그레이션 표가 진실) |
 | `shared/naver_api.py` | NaverEstateAPI (수정 금지) |
 | `shared/constants.py` | 상수 (수정 금지) |
 | `auth/permissions.py` | 역할 체크 (require_role) + 일일 쿼터 (check_quota) |
@@ -163,11 +163,14 @@
 | V069 | site_opinions 새 표 — 손님 '의견 보내기'(RLS 켬·정책 0·PUBLIC/anon/authenticated 권한 0, 세션 433·435) | **prod 적용완료 2026-10-06 02:5x**(사전 덤프 `schema_20261006_021212_preV069.sql` · 미분양 기준선 재승인 요청) |
 | V070 | site_opinions 에 손님 화면 오류 자동 기록 칸 3개 + CHECK 'error' + 지문 유니크 인덱스 (세션 439·440) | **prod 적용완료 2026-10-06 12:26:49**(사전 덤프 `schema_20261006_121057_preV070.sql`) |
 | V071 | sgis_area_stats 새 공유 표(SGIS 행정동 통계 긴 모양, RLS 켬·정책 0·anon/authenticated 0·service_role SELECT 명시) + complexes.sgis_emd_cd·sgis_mapped_at + 인덱스(complexes 는 CONCURRENTLY 따로) (세션 452·454, PR #688) | **prod 적용완료 2026-10-08 23:02:40**(사전 덤프 `schema_20261008_222953_preV071.sql` · 시험 모드 ROLLBACK 통과 → 적용 → 23:03 인덱스 · 첫 시도는 21:00 관리비 회차의 긴 트랜잭션 때문에 lock_timeout 5초로 취소 · 미분양 기준선 재승인 요청). ⚠ Supabase 가 2026-10-30 부터 새 public 표에 service_role 기본 권한을 안 준다 — 그 뒤 공유 표는 GRANT 명시 |
+| V072 | region_stats 새 표(한국부동산원 R-ONE 동네 공식 통계 긴 모양, RLS 켬·정책 0, 세션 473) | **prod 적용완료 2026-10-18 22:53**(사전 덤프 `schema_20261018_225301_preV072.sql`) |
+| V073 | complex_area_trade_stats 새 표(단지·달·정수 ㎡ 묶음 정부 실거래) + complexes.rep_area_m2 (세션 474 PR 5 B27) | **prod 적용완료 2026-10-19 14:05**(사전 덤프 `schema_20261019_140423_preV073.sql`) |
+| V074 | complex_area_trade_stats.trades jsonb NOT NULL 기본 `[]`(거래 하나하나 — 가격·거래일·층·거래방식, 세션 479 B29 PR a) | **prod 적용완료 2026-10-25 15:1x**(사전 덤프 `schema_20261025_151335_preV074.sql`) |
 
-- `db/migrations/` 폴더에 `V000__` ~ `V071__` SQL 파일 = 72 버전
+- `db/migrations/` 폴더에 `V000__` ~ `V074__` SQL 파일 = 75 버전
 - Supabase 에 SQLAlchemy 엔진으로 실행 (V023 = 973,837행 backfill)
 - 롤백: 각 마이그레이션 파일의 역방향 SQL 실행
-- 최신 = V071 (sgis_area_stats 새 공유 표 + complexes 칸 2 — **prod 적용완료 2026-10-08 23:02**, 세션 454). V067~V070 은 위 표 참조(전부 prod 적용완료). 그 직전 V066 (officetel_presale_schedule.address 추가 — **prod 적용완료 2026-09-24 20:39**, 코드보다 prod 선행 실행 필수, 세션 417). 직전 V065 (payments·billing_keys 클라이언트 권한 회수 — **prod 적용완료 2026-09-24 19:31**, 세션 417). 그 직전 V064 (articles 가격변동 부분 인덱스 — **prod 적용완료 2026-09-24 19:21**, 세션 417). 그 직전 V063 (storage 정책 삭제 — **prod 적용완료 2026-09-24**, 세션 417). V057~V062 는 위 표 참조(전부 prod 적용완료). 그 이전 최신 V056 (articles.detail_fail_count — **prod 적용완료 2026-09-09**, 세션 395: 코드보다 선행 실행 필수 게이트를 머지 전 적용으로 준수). 직전 V055 (infra.air_attempted_at — **prod 적용완료 2026-09-06**, 세션 394). 직전 V054(infra.emergency_updated_at)·V053(infra.childcare_updated_at)도 **prod 적용완료**(둘 다 2026-09-05, 세션 394·392) — 다만 V053 표기가 오래 "적용 대기"로 방치돼 있어 세션 394 가 소급 정정했다. V053~V055 는 childcare·emergency·air 세 수집기의 **동일 계열 순환 결함**(ORDER BY 부재)을 차례로 메운 3부작이다. 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피. ⚠ V052 가 이 의무를 놓쳐 세션 392 P2-6 drift 점검에서 소급 보강된 선례 — 마이그레이션 PR 에 본 표 갱신을 반드시 동반할 것)
+- 최신 = V074 (complex_area_trade_stats.trades — **prod 적용완료 2026-10-25**, 세션 479). V072·V073 은 위 표. 그 직전 V071 (sgis_area_stats 새 공유 표 + complexes 칸 2 — **prod 적용완료 2026-10-08 23:02**, 세션 454). V067~V070 은 위 표 참조(전부 prod 적용완료). 그 직전 V066 (officetel_presale_schedule.address 추가 — **prod 적용완료 2026-09-24 20:39**, 코드보다 prod 선행 실행 필수, 세션 417). 직전 V065 (payments·billing_keys 클라이언트 권한 회수 — **prod 적용완료 2026-09-24 19:31**, 세션 417). 그 직전 V064 (articles 가격변동 부분 인덱스 — **prod 적용완료 2026-09-24 19:21**, 세션 417). 그 직전 V063 (storage 정책 삭제 — **prod 적용완료 2026-09-24**, 세션 417). V057~V062 는 위 표 참조(전부 prod 적용완료). 그 이전 최신 V056 (articles.detail_fail_count — **prod 적용완료 2026-09-09**, 세션 395: 코드보다 선행 실행 필수 게이트를 머지 전 적용으로 준수). 직전 V055 (infra.air_attempted_at — **prod 적용완료 2026-09-06**, 세션 394). 직전 V054(infra.emergency_updated_at)·V053(infra.childcare_updated_at)도 **prod 적용완료**(둘 다 2026-09-05, 세션 394·392) — 다만 V053 표기가 오래 "적용 대기"로 방치돼 있어 세션 394 가 소급 정정했다. V053~V055 는 childcare·emergency·air 세 수집기의 **동일 계열 순환 결함**(ORDER BY 부재)을 차례로 메운 3부작이다. 새 마이그레이션 시 본 표 1행 추가 의무 (`.claude/rules/release.md` 답습 — backend zombie 회피. ⚠ V052 가 이 의무를 놓쳐 세션 392 P2-6 drift 점검에서 소급 보강된 선례 — 마이그레이션 PR 에 본 표 갱신을 반드시 동반할 것)
   - V043 = prod 적용완료·backend 재시작(zombie 해소) 완료 — 세션 352 라이브 검증: `/presale/officetel-rental` 200 정상 응답 확인.
   - V043 = house_nm TEXT nullable 컬럼 추가 — 기존 아파트 청약 행은 NULL 로 두면 되므로 기존 데이터 영향 0. `ADD COLUMN IF NOT EXISTS` 라 멱등·안전. 코드(`db/mb_models.py`)가 이미 이 컬럼에 매핑돼 SELECT 목록에 포함되므로 **prod 선행 적용 필수** — 세션 352 에 적용·재검증 완료.
   - V040~V042 = 이슈 #323(청약홈 오피스텔·도시형·민간임대 편입) 3종 세트 — `CREATE TABLE/ADD COLUMN IF NOT EXISTS` 라 멱등·안전. V040 은 기존 컬럼에 `NOT NULL DEFAULT 'apt'`로 추가해 기존 아파트 데이터에 영향 0. V041/V042 는 신규 독립 테이블이라 공유 DB(mibunyang) 영향 0. 코드(`db/mb_models.py`)는 이미 이 컬럼/테이블에 매핑돼 있으므로 **prod 선행 적용 필수** — 세션 352 에 적용·재검증 완료.

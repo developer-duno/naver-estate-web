@@ -5,8 +5,9 @@ import { isLockedPath } from "@/lib/locked-paths";
 
 // 관리자 페이지 보호 대상 경로
 const ADMIN_PATHS = ["/admin"];
-// 로그인 필수 경로
-const AUTH_REQUIRED_PATHS = ["/complex", "/verify"];
+// 로그인 필수 경로 — 단지 화면(/complex)은 세션 481 공개 전환으로 뺐다(비로그인도 공공 자료를 본다.
+// 네이버 매물·호가는 화면 안에서 로그인 잠금 카드로 막고, API 가 비로그인 응답에서 걷어낸다).
+const AUTH_REQUIRED_PATHS = ["/verify"];
 // 관리자 user_id 목록 — 서버 전용 env `ADMIN_USER_IDS`(쉼표 구분, NEXT_PUBLIC 아님).
 // ⛔ 이메일로 판정하지 않는다(세션 417): 이메일 목록은 가입 안 된 주소가 들어가는 순간
 //    그 주소로 가입한 사람이 관리자가 되는 구조다. user.id 는 getUser() 가 Supabase 서버에서
@@ -92,7 +93,7 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // 로그인 필수 경로 보호 (/complex/*)
+  // 로그인 필수 경로 보호 (/verify)
   const isAuthRequired = AUTH_REQUIRED_PATHS.some((p) => pathname.startsWith(p));
   if (isAuthRequired && !user) {
     const loginUrl = new URL("/login", request.url);

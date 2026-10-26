@@ -5,6 +5,19 @@ export interface AreaPrice {
   households?: number | null;
   price_median: number | null;
   trade_count: number | null;
+  /** 최근 6개월 최저·최고(달마다 직거래 제외, 세션 479 B29·480) — 거래 없는 묶음은 null */
+  price_min?: number | null;
+  price_max?: number | null;
+  /** 그 묶음 거래 하나하나(최근 6개월) — 아직 안 채워진 단지는 [] */
+  trades?: AreaTrade[];
+}
+
+/** 정부 실거래 거래 하나(API 꼴, 세션 479 B29) — 가격 만원 · 거래일 "YYYY-MM-DD" · direct = 직거래 */
+export interface AreaTrade {
+  price: number;
+  date: string | null;
+  floor: number | null;
+  direct: boolean;
 }
 
 /** 단지 정보 */
@@ -45,7 +58,8 @@ export interface Complex {
   /** 거래유형별 활성 매물 수 (매매/전세/월세/단기임대) */
   trade_type_counts?: { 매매: number; 전세: number; 월세: number; 단기임대: number };
   nearby_median_price?: number;
-  jeonse_rate?: number;
+  /** 이 단지 전세가율 — 로그인 응답은 값 또는 null, 비로그인 응답엔 칸 자체가 없다(undefined, 세션 481: 분자가 네이버 전세 시세) */
+  jeonse_rate?: number | null;
   /** 정부 지역 값 — 부동산원 시군구 아파트 중위 전세가율(단지 상세·비교 응답에만, 세션 473) */
   region_jeonse_ratio?: number | null;
   region_jeonse_period?: string | null;   // "2026.01"
@@ -58,6 +72,8 @@ export interface Complex {
   area_prices?: AreaPrice[];
   /** 출처 줄 '이 단지:' 뒤 글자(BE 정본) — 단지 상세·비교 응답에만 */
   area_price_source?: string | null;
+  /** 최저~최고 출처 글자(BE 정본, 세션 479 B29) — 단지 상세·비교 응답에만 */
+  area_price_range_source?: string | null;
   /** 시세 세 값이 무엇인가 — "rep_area" 대표 면적 값 · "legacy_mixed" 면적 섞인 옛 값(최근 6개월 거래 없음) · null 없음 */
   price_basis?: "rep_area" | "legacy_mixed" | null;
   filter_options?: FilterOptions;

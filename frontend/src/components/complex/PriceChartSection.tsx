@@ -8,7 +8,7 @@ import { getPriceHistory } from "@/lib/api";
 import { usePriceCollect } from "@/hooks/usePriceCollect";
 import { Button } from "@/components/ui/button";
 import Skeleton from "@/components/Skeleton";
-import LockedDataCard, { isAuthGateError } from "@/components/ui/locked-data-card";
+import LockedDataCard, { isAuthGateError, lockReasonOf } from "@/components/ui/locked-data-card";
 import type { PyeongDetail } from "@/types";
 
 const LazyPriceHistory = dynamic(() => import("@/components/PriceHistoryChart"), { ssr: false });
@@ -19,10 +19,14 @@ interface Props {
   accessToken?: string;
   /** 대표 전용면적 묶음(세션 474 B27) — 평형을 안 고르면 그래프가 이 면적 값만 그린다 */
   repAreaM2?: number | null;
+  /** 비로그인 확정 — 추이 요청 없이 잠금 카드(세션 481 보완 F4) */
+  loggedOut?: boolean;
+  /** 승인 중개사 — 자동 실거래가 수집(네이버 호출)은 이때만(세션 481 보완 F6) */
+  canAct?: boolean;
 }
 
 /** 실거래가 추이 섹션 — 면적 선택 + 수집 버튼 + 차트 (페이지 진입 시 자동 수집 1회). */
-export default function PriceChartSection({ complexNo, pyeongDetails, accessToken, repAreaM2 }: Props) {
+export default function PriceChartSection({ complexNo, pyeongDetails, accessToken, repAreaM2, loggedOut = false, canAct = false }: Props) {
   const queryClient = useQueryClient();
   const [historyAreaNo, setHistoryAreaNo] = useState<string>("");
   const { collecting, message: collectMessage, messageType: collectMessageType, startCollect, clearPolling } = usePriceCollect();
@@ -30,21 +34,22 @@ export default function PriceChartSection({ complexNo, pyeongDetails, accessToke
   const priceHistoryQuery = useQuery({
     queryKey: queryKeys.priceHistory(complexNo, undefined, historyAreaNo || undefined),
     queryFn: () => getPriceHistory(complexNo, undefined, historyAreaNo || undefined, accessToken),
-    enabled: !!complexNo,
+    enabled: !!complexNo && !loggedOut,
   });
 
   useEffect(() => clearPolling, [clearPolling]);
 
   // 페이지 진입 시 1회 자동 수집 (24h TTL — 서버 fresh 판단, AdaptiveThrottle 보호)
+  // 승인 중개사만 — 미승인 로그인 회원은 BE 가 403 이라 자동 호출하지 않는다(세션 481 보완 F6)
   const autoCollectRef = useRef<string>("");
   useEffect(() => {
-    if (!accessToken || collecting) return;
+    if (!accessToken || !canAct || collecting) return;
     if (autoCollectRef.current === complexNo) return;
     autoCollectRef.current = complexNo;
     startCollect(complexNo, accessToken, () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.priceHistoryAll(complexNo) });
     });
-  }, [complexNo, accessToken, collecting, startCollect, queryClient]);
+  }, [complexNo, accessToken, canAct, collecting, startCollect, queryClient]);
 
   const historyItems = priceHistoryQuery.data?.items ?? [];
   // 그래프가 그린 면적과 기준 글자(BE 정본 — basis). 면적을 모르면(대표 면적 미계산) 옛 그대로 아무것도 안 붙인다.
@@ -85,7 +90,7 @@ export default function PriceChartSection({ complexNo, pyeongDetails, accessToke
           {collecting ? "수집 중..." : "실거래가 수집"}
         </Button>
         {!accessToken && (
-          <span className="text-xs text-gray-400">로그인 후 수집할 수 있습니다</span>
+          <span className="text-xs text-gray-400">로그인하고 공인중개사 인증을 받으면 수집할 수 있어요</span>
         )}
         {collectMessage && (
           <span className={`text-xs ${
@@ -97,14 +102,16 @@ export default function PriceChartSection({ complexNo, pyeongDetails, accessToke
           </span>
         )}
       </div>
-      {priceHistoryQuery.isLoading ? (
+      {loggedOut ? (
+        <LockedDataCard label="실거래가" />
+      ) : priceHistoryQuery.isLoading ? (
         <div role="status" aria-label="로딩 중">
           <span className="sr-only">실거래가 추이 로딩 중...</span>
           <Skeleton className="h-72 w-full" />
         </div>
       ) : priceHistoryQuery.isError ? (
         isAuthGateError(priceHistoryQuery.error) ? (
-          <LockedDataCard label="실거래가" />
+          <LockedDataCard label="실거래가" reason={lockReasonOf(priceHistoryQuery.error)} />
         ) : (
           <div className="text-center py-4">
             <p className="text-red-500 text-sm">가격 추이를 불러오지 못했습니다</p>

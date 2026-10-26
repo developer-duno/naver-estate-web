@@ -372,7 +372,8 @@ export function useCrawlAction(complexNo: string, options: UseCrawlActionOptions
         if (err.statusCode === 409) {
           setMsg("이미 크롤링이 진행 중입니다.", "info");
         } else if (err.statusCode === 403) {
-          setMsg("크롤링 권한이 없습니다.", "error");
+          // 로그인했지만 승인 중개사가 아니다 — 새로 받기는 공인중개사 인증 뒤 쓸 수 있다(세션 481)
+          setMsg("새로 받기는 공인중개사 인증을 받으면 쓸 수 있어요.", "error");
         } else if (err.statusCode === 429) {
           setMsg("일일 크롤링 한도를 초과했습니다.", "error");
         } else {

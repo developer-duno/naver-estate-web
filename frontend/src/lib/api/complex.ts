@@ -2,9 +2,17 @@
  * 단지 검색/조회 API
  */
 
-import type { Complex, KaptInfo, NeighborhoodInfo, OfficialPriceResponse, SubwayNearResponse } from "@/types";
+import type {
+  Complex,
+  KaptInfo,
+  NeighborhoodInfo,
+  OfficialPriceResponse,
+  PublicPriceHistory,
+  RegionTrend,
+  SubwayNearResponse,
+} from "@/types";
 import * as direct from "@/lib/api-direct";
-import { ApiError, fetchApi, isBackendAvailable } from "./core";
+import { ApiError, fetchApi, isBackendAvailable, optionalAuthHeaders } from "./core";
 
 /** 검색 응답 — BE 가 네이버 쿨다운으로 DB 폴백 시 source/notice 포함 */
 export interface SearchResponse {
@@ -24,9 +32,10 @@ export async function searchComplexes(keyword: string, signal?: AbortSignal, typ
   try {
     let url = `/api/live/search?q=${encodeURIComponent(keyword)}`;
     if (types) url += `&types=${encodeURIComponent(types)}`;
+    // 로그인이면 토큰을 실어야 매물 수가 담긴 응답을 받는다(비로그인은 BE 가 걷어냄, 세션 481)
     return await fetchApi<SearchResponse>(
       url,
-      { signal, timeoutMs: SEARCH_TIMEOUT_MS } as RequestInit & { timeoutMs?: number },
+      { signal, timeoutMs: SEARCH_TIMEOUT_MS, headers: await optionalAuthHeaders() } as RequestInit & { timeoutMs?: number },
     );
   } catch {
     return direct.searchComplexesDirect(keyword);
@@ -43,7 +52,7 @@ export async function getComplexesByRegion(sido: string, sigungu?: string, dong?
     if (effectiveSigungu) path += `&sigungu=${encodeURIComponent(effectiveSigungu)}`;
     if (dong) path += `&dong=${encodeURIComponent(dong)}`;
     if (types) path += `&types=${encodeURIComponent(types)}`;
-    return await fetchApi<SearchResponse>(path, { signal, timeoutMs: SEARCH_TIMEOUT_MS } as RequestInit & { timeoutMs?: number });
+    return await fetchApi<SearchResponse>(path, { signal, timeoutMs: SEARCH_TIMEOUT_MS, headers: await optionalAuthHeaders() } as RequestInit & { timeoutMs?: number });
   } catch {
     return direct.getComplexesByRegionDirect(sido, sigungu, dong);
   }
@@ -54,8 +63,12 @@ export async function getComplexesByRegion(sido: string, sigungu?: string, dong?
 export async function getComplex(complexNo: string) {
   if (!isBackendAvailable()) return direct.getComplexDirect(complexNo);
   try {
-    return await fetchApi<Complex>(`/api/complexes/${encodeURIComponent(complexNo)}`);
-  } catch {
+    // 로그인이면 토큰을 실어 전체 응답(매물 수·필터 옵션·전세가율)을 받는다 — 비로그인은 BE 가 걷어냄(세션 481)
+    return await fetchApi<Complex>(`/api/complexes/${encodeURIComponent(complexNo)}`, { headers: await optionalAuthHeaders() });
+  } catch (err) {
+    // 401/403 = 로그인·권한 확정 답변 — 직접 조회로 뭉개면 정지 계정이 잠금 안내 대신 오류 화면을 본다
+    // (세션 481 보완, error-propagation 규칙 2)
+    if (err instanceof ApiError && (err.statusCode === 401 || err.statusCode === 403)) throw err;
     return direct.getComplexDirect(complexNo);
   }
 }
@@ -125,7 +138,27 @@ export async function getComplexNeighborhood(complexNo: string): Promise<Neighbo
 }
 
 /**
- * 단지명 DB 검색 (GET /api/complexes/search — ILIKE, 네이버 호출 0, 무게이트)
+ * 면적 하나의 최근 24개월 정부 실거래 최저~최고 (GET /api/complexes/{no}/public-price-history — 인증 없음, 세션 482).
+ * 자료 없음은 BE 가 200 + months [] 로 준다 — 에러가 아니다. 실패는 삼키지 않고 throw(error-propagation 규칙,
+ * 회귀 가드: lib/__tests__/complex-public-error.test.ts). direct 폴백 없음.
+ */
+export async function getPublicPriceHistory(complexNo: string, areaM2?: number | null): Promise<PublicPriceHistory> {
+  if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
+  const q = areaM2 != null ? `?area_m2=${encodeURIComponent(areaM2)}` : "";
+  return fetchApi<PublicPriceHistory>(`/api/complexes/${encodeURIComponent(complexNo)}/public-price-history${q}`);
+}
+
+/**
+ * 단지 시군구의 부동산원 중위 매매가·전세가율 최근 24개월 (GET /api/complexes/{no}/region-trend — 인증 없음, 세션 482).
+ * 지역 연결 없음은 200 + items []. 실패는 throw(위와 같은 가드).
+ */
+export async function getRegionTrend(complexNo: string): Promise<RegionTrend> {
+  if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
+  return fetchApi<RegionTrend>(`/api/complexes/${encodeURIComponent(complexNo)}/region-trend`);
+}
+
+/**
+ * 단지명 DB 검색 (GET /api/complexes/search — ILIKE, 네이버 호출 0, 무게이트 — 비로그인은 매물 수 등 걷어낸 응답)
  *
  * searchComplexes 와 달리 실시간 네이버 크롤(/api/live/search)을 타지 않는다.
  * 공개 페이지(계산기 등)에서 단지를 고를 때 쓴다 — IP 차단 위험 0.
@@ -140,5 +173,5 @@ export async function searchComplexesDb(
   if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
   let url = `/api/complexes/search?q=${encodeURIComponent(keyword)}`;
   if (limit) url += `&limit=${limit}`;
-  return fetchApi<SearchResponse>(url, { signal });
+  return fetchApi<SearchResponse>(url, { signal, headers: await optionalAuthHeaders() });
 }

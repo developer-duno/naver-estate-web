@@ -184,7 +184,7 @@ def test_complex_detail_200_when_table_missing(client, db, monkeypatch):
     assert body["region_jeonse_ratio"] is None and body["region_name"] is None
 
 
-def test_article_detail_200_when_table_missing(client, db):
+def test_article_detail_200_when_table_missing(client, db, approved_headers):
     from db.models import Article
 
     _complex(db, "90021", "4812110100")
@@ -193,7 +193,7 @@ def test_article_detail_200_when_table_missing(client, db):
                    detail_crawled=True, heating_type="개별난방"))
     db.commit()
     _drop_region_stats(db)
-    res = client.get("/api/live/article/A90021/detail")
+    res = client.get("/api/live/article/A90021/detail", headers=approved_headers)   # 로그인 회원(세션 481)
     assert res.status_code == 200
     body = res.json()
     assert body["article_no"] == "A90021"

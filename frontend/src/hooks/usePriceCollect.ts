@@ -135,6 +135,10 @@ export function usePriceCollect(): PriceCollectHookResult {
       } else if (apiErr?.statusCode === 429) {
         setCollecting(false);
         setMessage("요청 한도 초과", "error");
+      } else if (apiErr?.statusCode === 403) {
+        // 로그인했지만 승인 중개사가 아니다 — 조용히 삼키지 않고 안내(세션 481 보완 F6)
+        setCollecting(false);
+        setMessage("실거래가 수집은 공인중개사 인증(승인) 뒤 쓸 수 있어요", "error");
       } else {
         console.error("[PriceCollect] start error:", err);
         setCollecting(false);

@@ -57,7 +57,12 @@ export const ComplexCardMobile = memo(function ComplexCardMobile({ complex, inde
       <div className="grid grid-cols-3 gap-2 mt-2.5 text-sm text-gray-600">
         <span>{complex.total_household_count ? `${complex.total_household_count.toLocaleString()}세대` : "-"}</span>
         <span>{year ? `${year}년` : "-"}</span>
-        <span className={`font-medium ${articleCount > 0 ? "text-blue-600" : "text-gray-400"}`}>{articleCount}건</span>
+        {/* 비로그인은 BE 가 매물 수를 걷어낸다(세션 481) — "0건" 이 아니라 빈 칸 */}
+        {complex.article_count === undefined ? (
+          <span className="text-gray-400">-</span>
+        ) : (
+          <span className={`font-medium ${articleCount > 0 ? "text-blue-600" : "text-gray-400"}`}>{articleCount}건</span>
+        )}
       </div>
       {tradeSummary && <p className="text-xs text-gray-400 mt-1">{tradeSummary}</p>}
     </div>

@@ -41,7 +41,7 @@ describe("useComplexArticleAvg — 매물 평균 호가 + 건수", () => {
     });
 
     const { useComplexArticleAvg } = await import("../useComplexArticleAvg");
-    const { result } = renderHook(() => useComplexArticleAvg("C001", undefined, { avgEnabled: true }), {
+    const { result } = renderHook(() => useComplexArticleAvg("C001", "t", { avgEnabled: true }), {
       wrapper: TestQueryProvider,
     });
 
@@ -52,8 +52,8 @@ describe("useComplexArticleAvg — 매물 평균 호가 + 건수", () => {
     await waitFor(() => expect(result.current.avgPrice).toBe(70000)); // (50000+70000+90000)/3
     expect(result.current.count).toBe(3);
     expect(result.current.isError).toBe(false);
-    // B2 게이트: 3번째 인자 accessToken (미전달 시 undefined)
-    expect(mockGetArticles).toHaveBeenCalledWith("C001", undefined, undefined);
+    // 로그인 게이트: 3번째 인자 accessToken — 토큰을 읽은 뒤에만 부른다(세션 481 보완)
+    expect(mockGetArticles).toHaveBeenCalledWith("C001", undefined, "t");
   });
 
   it("numeric_price 전부 null → avgPrice null, count 유지", async () => {
@@ -68,7 +68,7 @@ describe("useComplexArticleAvg — 매물 평균 호가 + 건수", () => {
     });
 
     const { useComplexArticleAvg } = await import("../useComplexArticleAvg");
-    const { result } = renderHook(() => useComplexArticleAvg("C001"), {
+    const { result } = renderHook(() => useComplexArticleAvg("C001", "t"), {
       wrapper: TestQueryProvider,
     });
 
@@ -97,7 +97,7 @@ describe("useComplexArticleAvg — 매물 평균 호가 + 건수", () => {
     mockGetArticles.mockRejectedValue(new Error("network error"));
 
     const { useComplexArticleAvg } = await import("../useComplexArticleAvg");
-    const { result } = renderHook(() => useComplexArticleAvg("C001"), {
+    const { result } = renderHook(() => useComplexArticleAvg("C001", "t"), {
       wrapper: TestQueryProvider,
     });
 
@@ -152,22 +152,48 @@ describe("useComplexArticleAvg — 매매·같은 면적 평균 (세션 475)", (
   it("면적을 모르면 매매 전체 평균", async () => {
     const { useComplexArticleAvg } = await import("../useComplexArticleAvg");
     const { result } = renderHook(
-      () => useComplexArticleAvg("C001", undefined, { avgEnabled: true, avgAreaM2: null }),
+      () => useComplexArticleAvg("C001", "t", { avgEnabled: true, avgAreaM2: null }),
       { wrapper: TestQueryProvider },
     );
     await waitFor(() => expect(result.current.avgPrice).toBe(21667)); // (17000+18000+30000)/3
-    expect(mockGetArticles).toHaveBeenCalledWith("C001", { trade_types: "매매" }, undefined);
+    expect(mockGetArticles).toHaveBeenCalledWith("C001", { trade_types: "매매" }, "t");
   });
 
   it("avgEnabled 가 꺼져 있으면 매매 요청 0 · 건수만", async () => {
     const { useComplexArticleAvg } = await import("../useComplexArticleAvg");
     const { result } = renderHook(
-      () => useComplexArticleAvg("C001", undefined, { avgEnabled: false, avgAreaM2: 59 }),
+      () => useComplexArticleAvg("C001", "t", { avgEnabled: false, avgAreaM2: 59 }),
       { wrapper: TestQueryProvider },
     );
     await waitFor(() => expect(result.current.count).toBe(46));
     expect(mockGetArticles).toHaveBeenCalledTimes(1);
-    expect(mockGetArticles).toHaveBeenCalledWith("C001", undefined, undefined);
+    expect(mockGetArticles).toHaveBeenCalledWith("C001", undefined, "t");
     expect(result.current.avgPrice).toBeNull();
+  });
+
+  // 세션 481 보완: 토큰을 읽는 중엔 매물 조회를 안 보낸다(토큰 없이 401 → 로그인 회원에게 "매물 0건" 이 남던 틈)
+  it("토큰 읽는 중(accessToken 없음)엔 호출 0 · isLoading true → 토큰이 오면 1번 호출", async () => {
+    mockGetArticles.mockResolvedValue({ articles: [], total: 5, page: 1, page_size: 10 });
+    const { useComplexArticleAvg } = await import("../useComplexArticleAvg");
+    const { result, rerender } = renderHook(
+      ({ token }: { token?: string }) => useComplexArticleAvg("C001", token),
+      { wrapper: TestQueryProvider, initialProps: { token: undefined as string | undefined } },
+    );
+    expect(mockGetArticles).not.toHaveBeenCalled();
+    expect(result.current.isLoading).toBe(true);
+
+    rerender({ token: "t" });
+    await waitFor(() => expect(result.current.count).toBe(5));
+    expect(mockGetArticles).toHaveBeenCalledTimes(1);
+    expect(mockGetArticles).toHaveBeenCalledWith("C001", undefined, "t");
+  });
+
+  it("비로그인 확정(enabled=false)이면 호출 0 · isLoading false", async () => {
+    const { useComplexArticleAvg } = await import("../useComplexArticleAvg");
+    const { result } = renderHook(() => useComplexArticleAvg("C001", undefined, { enabled: false }), {
+      wrapper: TestQueryProvider,
+    });
+    expect(result.current.isLoading).toBe(false);
+    expect(mockGetArticles).not.toHaveBeenCalled();
   });
 });

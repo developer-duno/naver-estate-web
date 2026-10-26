@@ -127,3 +127,32 @@ describe("proxy — 관리자 경로(/admin)는 user_id 로만 판정 (세션 41
     expect(res.headers.get("location")).toBe("https://2u.pe.kr/login?redirect=%2Fadmin");
   });
 });
+
+describe("proxy — 단지 화면은 비로그인도 연다 (세션 481 공개 전환)", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    supa.user = null;
+  });
+
+  it("비로그인 /complex/6139 는 로그인 화면으로 보내지 않는다", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-test-key");
+    supa.user = null;
+
+    const res = await proxy(new NextRequest("https://2u.pe.kr/complex/6139"));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("비로그인 /verify 는 지금처럼 로그인 화면으로 보낸다", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-test-key");
+    supa.user = null;
+
+    const res = await proxy(new NextRequest("https://2u.pe.kr/verify"));
+
+    expect([307, 308]).toContain(res.status);
+    expect(res.headers.get("location")).toBe("https://2u.pe.kr/login?redirect=%2Fverify");
+  });
+});

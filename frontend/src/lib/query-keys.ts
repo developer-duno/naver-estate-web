@@ -30,6 +30,10 @@ export const queryKeys = {
   complexKapt: (no: string) => ["complexKapt", no] as const,
   /** 단지가 속한 행정동 동네 통계 (SGIS) — 데이터 없는 단지는 null 캐시 */
   complexNeighborhood: (no: string) => ["complexNeighborhood", no] as const,
+  /** 면적 하나의 공개 가격 기록(세션 482) — 면적이 바뀌면 다른 키 */
+  publicPriceHistory: (no: string, areaM2: number | null) => ["publicPriceHistory", no, areaM2] as const,
+  /** 단지 시군구의 부동산원 지역 흐름(세션 482) */
+  regionTrend: (no: string) => ["regionTrend", no] as const,
   priceStats: (no: string) => ["priceStats", no] as const,
   priceHistory: (no: string, tradeType?: string, areaNo?: string) =>
     ["priceHistory", no, tradeType, areaNo] as const,

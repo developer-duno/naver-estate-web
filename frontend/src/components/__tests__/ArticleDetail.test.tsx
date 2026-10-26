@@ -237,6 +237,28 @@ describe("ArticleDetail — 삭제된 매물 404 분기 (세션 297)", () => {
     expect(screen.getByText("매물 정보를 불러올 수 없습니다.")).toBeInTheDocument();
     expect(screen.queryByText("즐겨찾기에서 제거")).not.toBeInTheDocument();
   });
+
+  // 세션 481 보완 F1: 매물 상세는 로그인 뒤 — 401 은 잠금 카드(로그인), 403 은 인증·승인 안내, 둘 다 다시 시도 없음
+  it("401(비로그인) 이면 매물 상세 잠금 카드 · 다시 시도 없음 · 재요청 없음", async () => {
+    const api = await import("@/lib/api");
+    const { ApiError } = await import("@/lib/api/core");
+    vi.mocked(api.getArticleLive).mockClear();
+    vi.mocked(api.getArticleLive).mockRejectedValue(new ApiError("인증이 필요합니다", 401));
+    render(<TestQueryProvider><ArticleDetail articleNo="LOCK401" onClose={vi.fn()} /></TestQueryProvider>);
+    expect(await screen.findByText("매물 상세은(는) 로그인하면 볼 수 있어요", undefined, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByText("다시 시도")).not.toBeInTheDocument();
+    expect(screen.queryByText("매물 정보를 불러올 수 없습니다.")).not.toBeInTheDocument();
+    expect(vi.mocked(api.getArticleLive)).toHaveBeenCalledTimes(1);
+  });
+
+  it("403 이면 '이 계정으로는 볼 수 없어요' (로그인 버튼 없음)", async () => {
+    const api = await import("@/lib/api");
+    const { ApiError } = await import("@/lib/api/core");
+    vi.mocked(api.getArticleLive).mockRejectedValue(new ApiError("권한 없음", 403));
+    render(<TestQueryProvider><ArticleDetail articleNo="LOCK403" onClose={vi.fn()} /></TestQueryProvider>);
+    expect(await screen.findByText("이 계정으로는 볼 수 없어요", undefined, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "로그인" })).not.toBeInTheDocument();
+  });
 });
 
 // 세션 395: B2 게이트 이후 모달이 토큰 없이 호출해 항상 401 이던 결함 회귀 가드.
@@ -328,7 +350,7 @@ describe("ArticleDetail — 세션 토큰 전달 (B2 게이트, 세션 395)", ()
     await waitFor(() => expect(screen.getByText("시세 정보")).toBeInTheDocument(), { timeout: 3000 });
     fireEvent.click(screen.getByText("시세 정보"));
 
-    expect(await screen.findByText(/승인된 공인중개사만 볼 수 있어요/)).toBeInTheDocument();
+    expect(await screen.findByText(/로그인하면 볼 수 있어요/)).toBeInTheDocument();
     expect(screen.queryByText("시세 정보를 불러오지 못했습니다.")).not.toBeInTheDocument();
   });
 });

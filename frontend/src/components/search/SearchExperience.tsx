@@ -455,15 +455,14 @@ export default function SearchExperience({ emptyExtra }: Props) {
       {/* 비회원 안내 */}
       {isLoggedIn === false && hasSearchParams && !loading && complexes.length > 0 && (
         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-          단지 매물 조회는 <a href="/login" className="text-blue-600 underline font-medium">로그인</a> 후 이용 가능합니다.
-          가입 후 관리자 승인이 필요합니다.
+          단지 정보는 누구나 볼 수 있어요. 네이버 매물·호가는 <a href="/login" className="text-blue-600 underline font-medium">로그인</a>하면 볼 수 있어요.
         </div>
       )}
 
       {/* 승인 대기 안내 */}
       {isLoggedIn === true && userStatus === "pending" && hasSearchParams && !loading && complexes.length > 0 && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
-          회원가입이 완료되었습니다! 관리자 승인 대기 중입니다. 승인 후 단지 매물 조회가 가능합니다.
+          회원가입이 완료되었습니다! 네이버 매물·호가를 볼 수 있어요. 공인중개사 인증을 받으면 새로 받기·실거래가 수집·엑셀까지 쓸 수 있어요.
         </div>
       )}
 

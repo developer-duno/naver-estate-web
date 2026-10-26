@@ -448,7 +448,7 @@ describe("useCrawlAction — 저장본 나이로 나누기", () => {
     const { result } = renderHook(
       () => ({
         crawl: useCrawlAction(NO, { table: { queryKey: TABLE_KEY, fetch: fetchTable } }),
-        card: useComplexArticleAvg(NO),
+        card: useComplexArticleAvg(NO, "t"),
       }),
       { wrapper },
     );
@@ -494,7 +494,7 @@ describe("useCrawlAction — 저장본 나이로 나누기", () => {
     const { result } = renderHook(
       () => ({
         crawl: useCrawlAction(NO, { table: { queryKey: TABLE_MAEMAE_KEY, fetch: fetchTable } }),
-        card: useComplexArticleAvg(NO, undefined, { avgEnabled: true, avgAreaM2: 84.9 }),
+        card: useComplexArticleAvg(NO, "t", { avgEnabled: true, avgAreaM2: 84.9 }),
         // 켜져 있는 표 요청 — 크롤 끝에 다시 받으면 안 된다
         table: useQuery({
           queryKey: TABLE_MAEMAE_KEY,
@@ -535,7 +535,7 @@ describe("useCrawlAction — 저장본 나이로 나누기", () => {
     const { result } = renderHook(
       () => ({
         crawl: useCrawlAction(NO, { table: { queryKey: TABLE_MAEMAE_KEY, fetch: vi.fn().mockResolvedValue(CURRENT) } }),
-        card: useComplexArticleAvg(NO, undefined, { avgEnabled: true, avgAreaM2: null }),
+        card: useComplexArticleAvg(NO, "t", { avgEnabled: true, avgAreaM2: null }),
         table: useQuery({
           queryKey: TABLE_MAEMAE_KEY,
           queryFn: () => getArticles(NO, TABLE_MAEMAE_KEY[2]),
@@ -574,7 +574,7 @@ describe("useCrawlAction — 저장본 나이로 나누기", () => {
       mockGetArticles.mock.calls.filter(([, f]) => pred(f as Record<string, unknown> | undefined)).length;
 
     // 59㎡ 매매 평균을 한 번 받고 화면에서 내린다 — 캐시엔 남지만 꺼진(inactive) 요청이 된다
-    const gone = renderHook(() => useComplexArticleAvg(NO, undefined, { avgEnabled: true, avgAreaM2: 59.5 }), { wrapper });
+    const gone = renderHook(() => useComplexArticleAvg(NO, "t", { avgEnabled: true, avgAreaM2: 59.5 }), { wrapper });
     await vi.waitFor(() => expect(gone.result.current.avgPrice).toBe(50000));
     gone.unmount();
     expect(count(minArea(59))).toBe(1);
@@ -583,7 +583,7 @@ describe("useCrawlAction — 저장본 나이로 나누기", () => {
     const { result } = renderHook(
       () => ({
         crawl: useCrawlAction(NO),
-        card: useComplexArticleAvg(NO, undefined, { avgEnabled: true, avgAreaM2: 84.9 }),
+        card: useComplexArticleAvg(NO, "t", { avgEnabled: true, avgAreaM2: 84.9 }),
       }),
       { wrapper },
     );

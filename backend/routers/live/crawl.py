@@ -10,7 +10,7 @@ from auth.permissions import check_quota
 from db.area_price_queries import area_medians, recent_area_prices_and_ranges
 from db.models import Article as ArticleModel
 from db.models import Complex as ComplexModel
-from deps import get_approved_user, get_db
+from deps import get_approved_user, get_current_user, get_db
 from routers.region_serializers import article_region_fields
 from routers.serializers import article_to_dict
 from services.naver_call_counter import record_call
@@ -149,12 +149,12 @@ def _article_detail_dict(db, art, complex_obj) -> dict:
 def live_article_detail(
     article_no: str,
     db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),  # 로그인 게이트 (네이버 매물, 세션 481)
 ):
     """매물 상세 실시간 조회 — 네이버 API에서 직접 가져와 DB 반영 후 반환.
 
-    인증 없음 — 비로그인 매물 상세 열람은 의도된 공개 기능
-    (frontend/src/components/ArticleDetail.tsx 공개 단지 상세 페이지에서 호출,
-    getArticleLive() 는 Authorization 헤더를 보내지 않음).
+    로그인 회원 전용(세션 481 공개 전환 — 네이버 매물은 로그인 뒤). 옛 동작은 비로그인 공개였다.
+    DB 에 없는 매물 번호는 네이버를 부르기 전에 404 — 옛 코드는 네이버를 부른 뒤에도 결국 404 였다.
     네이버 API 호출(NaverEstateAPI.get_article_detail)은 클래스 레벨 공유 throttle
     (MIN_REQUEST_INTERVAL=1초 강제 간격 + 429 지수 백오프, shared/naver_api.py)과
     10분 TTL 캐시(CACHE_TTL=600)로 방어. IP 단위 방어는 RateLimitMiddleware 가
@@ -172,16 +172,15 @@ def live_article_detail(
         if has_detail:
             return _article_detail_dict(db, art, complex_obj)
 
+    # DB 에 없는 매물은 네이버 응답과 무관하게 404 — 네이버를 부르기 전에 끊는다(세션 481)
+    if not art:
+        raise HTTPException(status_code=404, detail="매물 정보를 찾을 수 없습니다")
+
     # 네이버 API에서 상세 정보 가져오기
     record_call("article_detail_live_fallback")
     detail_data = NaverEstateAPI.get_article_detail(article_no)
     if not detail_data or "error" in detail_data:
-        if art:
-            return _article_detail_dict(db, art, complex_obj)
-        raise HTTPException(status_code=404, detail="매물 정보를 찾을 수 없습니다")
-
-    if not art:
-        raise HTTPException(status_code=404, detail="매물 정보를 찾을 수 없습니다")
+        return _article_detail_dict(db, art, complex_obj)
 
     # 도메인 객체로 변환 후 상세 업데이트
     domain_article = RealEstateArticle(

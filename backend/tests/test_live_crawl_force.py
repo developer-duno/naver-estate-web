@@ -329,16 +329,14 @@ def test_background_crawl_guard_preserves_terminal(monkeypatch):
     assert st["status"] in {"done", "done_partial"}
 
 
-# ── PR-4 5-b: live_article_detail 무인증 접근 회귀 가드 ──
-# get_optional_user/get_approved_user 등 강제 인증 의존성을 실수로 추가하면
-# 비로그인 방문자가 공개 단지 상세 페이지에서 매물을 클릭할 때마다 401/403 회귀가 난다
-# (frontend/src/components/ArticleDetail.tsx → getArticleLive() 는 Authorization 헤더 미전송).
-# 이 테스트는 Authorization 헤더 없이 호출해도 200 이 나오는 것을 못박아, 미래 PR 이
-# 실수로 인증을 강제하면 여기서 즉시 깨지게 한다.
+# ── live_article_detail 인증 경계 (PR-4 5-b → 세션 481 공개 전환으로 뒤집힘) ──
+# 옛 규칙(PR-4 5-b)은 "비로그인도 200" 이었다. 세션 481 사장님 결정 "네이버 매물은 로그인 뒤"로
+# 로그인 회원 전용이 됐고, getArticleLive() 는 로그인이면 토큰을 실어 보낸다(optionalAuthHeaders).
+# 비로그인 401 · DB 에 없는 번호의 네이버 호출 0 은 test_public_complex_s481.py 가 본다.
 
 
-def test_live_article_detail_no_auth_returns_200(db, client):
-    """비로그인(헤더 없음) 호출도 200 — 강제 인증 회귀 방지 (PR-4 5-b)."""
+def test_live_article_detail_login_returns_200(db, client, approved_headers):
+    """로그인 회원 호출 200 (세션 481 — 비로그인은 401)."""
     db.add(
         Article(
             article_no="NOAUTH1",
@@ -350,7 +348,8 @@ def test_live_article_detail_no_auth_returns_200(db, client):
     )
     db.commit()
 
-    res = client.get("/api/live/article/NOAUTH1/detail")
+    assert client.get("/api/live/article/NOAUTH1/detail").status_code == 401
+    res = client.get("/api/live/article/NOAUTH1/detail", headers=approved_headers)
 
     assert res.status_code == 200
     assert res.json()["article_no"] == "NOAUTH1"

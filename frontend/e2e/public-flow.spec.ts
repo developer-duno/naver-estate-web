@@ -1,6 +1,108 @@
 import { test, expect } from "@playwright/test";
 import { applyPublicMocks } from "./fixtures/public-mocks";
 
+/**
+ * 비로그인 단지 화면 (세션 481 공개 전환 → 세션 482 PR 1b 소비자 화면 「C 질문형」) — 시각 회귀 장 아님(스크린샷 없음).
+ * 단지 상세는 BE 가 비로그인 응답에서 네이버 재료 칸을 뺀 모양으로, 공개 자료(공개 가격 기록·지역 흐름·공시가격·
+ * 관리비·지하철·동네)는 200, 매물·평형·호가·그래프는 401 로 mock.
+ * 기대(휴대폰 390 · 데스크톱 1280): 로그인 화면으로 튕기지 않고 200 · 질문 4개 제목 · 필터 바·데이터 갱신·엑셀 없음 ·
+ * 맨 아래 잠금 카드 1장.
+ */
+const PUBLIC_OK: Record<string, unknown> = {
+  "public-price-history": {
+    area_m2: 59,
+    months: [{ month: "202606", trade_count: 2, price_min: 15700, price_max: 17200, price_median: 16500 }],
+    two_year: { min: 14700, max: 20000, count: 12 },
+    basis: "최근 2년 전용 59㎡ 대 정부 실거래 최저~최고(달마다 직거래 제외) · 국토교통부 실거래",
+  },
+  "region-trend": {
+    region_code: "30200", region_name: "유성구", source: "한국부동산원 전국주택가격동향조사",
+    items: [
+      { period: "202410", jeonse_ratio: 69.2, sale_price_median: 40000 },
+      { period: "202609", jeonse_ratio: 69.5, sale_price_median: 40600 },
+    ],
+  },
+  "official-prices": { complex_no: "100000", year: "2026", items: [{ prvuse_ar: 59.9, price_median: 113000000, ho_count: 116 }] },
+  subway: { stations: [{ station_name: "갑천", lines: ["대전1호선"], distance_m: 1100 }] },
+};
+
+for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 720 }]) {
+  test.describe(`비로그인 단지 화면 ${viewport.width}px (세션 482)`, () => {
+    test.use({ viewport });
+
+    test("/complex/<no> 200 · 질문 4개 · 필터·갱신·엑셀 없음 · 잠금 카드 1장", async ({ page }) => {
+      await page.route("**/api/complexes/**", async (route) => {
+        const sub = new URL(route.request().url()).pathname.split("/").filter(Boolean)[3];
+        if (!sub) {
+          return route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+              complex_no: "100000",
+              complex_name: "공개단지",
+              cortar_no: "3020012300",
+              real_estate_type_name: "아파트",
+              sido: "대전",
+              sigungu: "유성구",
+              cortar_address: "대전 유성구 봉명동",
+              total_household_count: 199,
+              total_dong_count: 1,
+              rep_area_m2: 59,
+              // 거래 3줄 — 휴대폰 390px 에서 4열 거래 표가 가로로 넘치지 않는지까지 본다(보완 F8)
+              area_prices: [
+                {
+                  area_m2: 59, households: 116, price_median: 17200, trade_count: 3, price_min: 15700, price_max: 18000,
+                  trades: [
+                    { price: 18000, date: "2026-07-21", floor: 15, direct: false },
+                    { price: 17200, date: "2026-06-03", floor: 7, direct: false },
+                    { price: 15700, date: "2026-05-11", floor: 2, direct: true },
+                  ],
+                },
+              ],
+            }),
+          });
+        }
+        if (sub in PUBLIC_OK) {
+          return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(PUBLIC_OK[sub]) });
+        }
+        if (sub === "kapt" || sub === "neighborhood") {
+          return route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ detail: "없음" }) });
+        }
+        return route.fulfill({
+          status: 401,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "인증이 필요합니다" }),
+        });
+      });
+      await page.route("**/api/live/**", (route) => route.fulfill({ status: 401, body: "{}" }));
+
+      const res = await page.goto("/complex/100000");
+
+      expect(res?.status()).toBe(200);
+      await expect(page.getByRole("heading", { name: "공개단지" })).toBeVisible({ timeout: 10_000 });
+      for (const title of ["1 · 얼마짜리 집인가", "2 · 어떻게 변해 왔나", "3 · 주변은 어떤가", "4 · 내 돈으로 가능한가"]) {
+        await expect(page.getByRole("heading", { name: new RegExp(`^${title}`) })).toBeVisible();
+      }
+      await expect(page.getByText("1억 5,700만 ~ 1억 8,000만")).toBeVisible();
+      await expect(page.getByTestId("consumer-trades").locator("tbody tr")).toHaveCount(3);
+      await expect(page.getByText("지금 나온 매물과 호가는 로그인하면 볼 수 있어요")).toBeVisible();
+      await expect(page.getByText(/로그인하면 볼 수 있어요/)).toHaveCount(1);
+      await expect(page.getByText(/필터 접기|필터 펼치기/)).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "데이터 갱신" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "엑셀 내보내기" })).toHaveCount(0);
+      expect(new URL(page.url()).pathname).toBe("/complex/100000");
+      // 가로 스크롤 없음(휴대폰 폭에서 카드가 넘치지 않는다) — 페이지 전체와 거래 표 자체 둘 다
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(overflow).toBeLessThanOrEqual(0);
+      const tableOverflow = await page.getByTestId("consumer-trades").evaluate((t) => {
+        const card = t.parentElement as HTMLElement;
+        return t.getBoundingClientRect().right - card.getBoundingClientRect().right;
+      });
+      expect(tableOverflow).toBeLessThanOrEqual(0);
+    });
+  });
+}
+
 test.describe("public visual regression", () => {
   test("로그인 페이지 렌더 + 시각 회귀", async ({ page }) => {
     await page.goto("/login");

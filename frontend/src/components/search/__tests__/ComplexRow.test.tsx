@@ -61,4 +61,16 @@ describe("ComplexRow 컴포넌트", () => {
     expect(button).toBeDisabled();
     expect(button.className).toContain("min-h-11");
   });
+
+  /** 세션 481 공개 전환: 비로그인 검색 응답엔 매물 수 칸이 없다 — "0건" 이 아니라 빈 칸 */
+  it("비로그인(매물 수 칸 없음)이면 '0건' 대신 '-'", () => {
+    renderRow({ complex: makeComplex({ article_count: undefined, trade_type_counts: undefined }) });
+    expect(screen.queryByText(/건$/)).not.toBeInTheDocument();
+    expect(screen.getByText("테스트단지")).toBeInTheDocument();
+  });
+
+  it("로그인(매물 수 0)이면 지금처럼 '0건'", () => {
+    renderRow({ complex: makeComplex({ article_count: 0 }) });
+    expect(screen.getByText("0건")).toBeInTheDocument();
+  });
 });

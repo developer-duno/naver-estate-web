@@ -132,6 +132,7 @@
   게이트 없음(막으면 오히려 목록/지도 간 일관성이 깨짐). 단, 마커→선택카드→상세페이지
   (`/complex/[no]`) 진입은 `proxy.ts` `AUTH_REQUIRED_PATHS` 로 로그인 필수 — 비로그인
   클릭 시 `/login` 리다이렉트는 의도된 설계(버그 아님, 세션 351 확인).
+  ⚠ 2026-10-26 공개 전환(사장님 결정) — 비로그인은 공공 자료·우리 지표만, 네이버 매물·호가는 로그인 뒤. robots·noindex 차단은 서버 렌더 PR 까지 임시 — 단지 화면은 이제 비로그인도 열린다(`AUTH_REQUIRED_PATHS` = `/verify` 만), 네이버 매물 자리는 잠금 카드.
 - **마커 클릭**: InfoWindow 는 여전히 HTML 문자열 기반이라 React 라우팅 불가(mb 와 동일
   제약) — 클릭 시 `onSelect(complex)` 콜백으로 부모(`SearchExperience`)가 지도 위 absolute
   오버레이로 `ComplexCardMobile`을 얹어 비교 담기 등 기존 기능 그대로 재사용.

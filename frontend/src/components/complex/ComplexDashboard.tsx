@@ -21,6 +21,10 @@ interface Props {
   /** 평형표 응답을 받았나(성공·실패 모두) — 받기 전엔 매매 평균을 띄우지 않는다(세션 475 보완). 기본 true */
   pyeongReady?: boolean;
   sessionToken: string | undefined;
+  /** 비로그인 확정 — 네이버 매물·호가·추이 요청 없이 잠금 카드(세션 481 보완 F4). 기본 false */
+  loggedOut?: boolean;
+  /** 승인 중개사 — 실거래가 자동 수집(네이버 호출)은 이때만(세션 481 보완 F6). 기본 false */
+  canAct?: boolean;
   onFilterChange: (filters: ArticleFilters) => void;
 }
 
@@ -43,6 +47,8 @@ export default function ComplexDashboard({
   pyeongDetails,
   pyeongReady = true,
   sessionToken,
+  loggedOut = false,
+  canAct = false,
   onFilterChange,
 }: Props) {
   const [openSection, setOpenSection] = useState<SectionKey | "">("");
@@ -52,12 +58,18 @@ export default function ComplexDashboard({
   // 평형표를 받기 전엔 요청하지 않는다 — 면적 없이 낸 평균이 묶음 평균으로 한 번 바뀌는 것을 막는다(보완)
   const avgEnabled = complex.rep_area_m2 == null && complex.nearby_median_price == null && pyeongReady;
   const avgArea = avgEnabled ? pickRepresentativeArea(pyeongDetails) : null;
-  const { avgPrice, count, isLoading: countLoading } = useComplexArticleAvg(complexNo, sessionToken, {
+  const { avgPrice, count, isLoading: countLoading, isError: countError } = useComplexArticleAvg(complexNo, sessionToken, {
     avgEnabled,
     avgAreaM2: avgArea,
+    enabled: !loggedOut,
   });
   // 불러오는 중엔 count=0 이라 "매물 0건"이 잠깐 보이던 것을 막는다(세션 447)
-  const countText = countLoading ? "매물 …건" : `매물 ${count}건`;
+  // 비로그인은 매물 API 가 401 이라 "매물 0건" 대신 로그인 안내(세션 481)
+  const countText = countLoading
+    ? "매물 …건"
+    : loggedOut || (countError && !sessionToken)
+      ? "로그인하면 보여요"
+      : `매물 ${count}건`;
 
   const handleCardClick = (key: SectionKey) => {
     setOpenSection((prev) => (prev === key ? "" : key));
@@ -108,7 +120,10 @@ export default function ComplexDashboard({
         chip: complex.recent_trades_6m != null ? `최근 6개월 ${complex.recent_trades_6m}건` : undefined,
         primary: complex.nearby_median_price != null ? formatKoreanPrice(complex.nearby_median_price) : "—",
         secondary: otherAreaText(rep, complex.area_prices ?? []) || undefined,
-        extra: `전세가율(${rep}㎡) ${complex.jeonse_rate != null ? `${complex.jeonse_rate}%` : "—"}${regionJeonseText}`,
+        // 이 단지 전세가율은 분자가 네이버 전세 시세라 비로그인 응답엔 칸 자체가 없다(세션 481) — 그때는 지역 값만
+        extra: complex.jeonse_rate === undefined
+          ? (hasRegionJeonse ? `${complex.region_name} 아파트 전세가율 ${complex.region_jeonse_ratio}%` : undefined)
+          : `전세가율(${rep}㎡) ${complex.jeonse_rate != null ? `${complex.jeonse_rate}%` : "—"}${regionJeonseText}`,
         note: complex.area_price_source
           ? `이 단지: ${complex.area_price_source}${regionSourceText ? ` · ${regionSourceText}` : ""}`
           : (regionSourceText ?? undefined),
@@ -200,10 +215,10 @@ export default function ComplexDashboard({
         <div id="dashboard-content" ref={contentRef} role="region">
           <Card className="p-3 md:p-4 space-y-4">
             {(openSection === "prices" || isPrinting) && (
-              <ComplexPriceFloorSection complexNo={complexNo} onFilterChange={onFilterChange} accessToken={sessionToken} />
+              <ComplexPriceFloorSection complexNo={complexNo} onFilterChange={onFilterChange} accessToken={sessionToken} loggedOut={loggedOut} />
             )}
             {(openSection === "chart" || isPrinting) && (
-              <PriceChartSection complexNo={complexNo} pyeongDetails={pyeongDetails} accessToken={sessionToken} repAreaM2={complex.rep_area_m2} />
+              <PriceChartSection complexNo={complexNo} pyeongDetails={pyeongDetails} accessToken={sessionToken} repAreaM2={complex.rep_area_m2} loggedOut={loggedOut} canAct={canAct} />
             )}
             {(openSection === "info" || isPrinting) && <ComplexBasicInfo cpx={complex} />}
             {(openSection === "area" || isPrinting) && (
@@ -213,7 +228,7 @@ export default function ComplexDashboard({
                 ) : (
                   <p className="text-gray-500 text-sm">면적별 정보가 아직 수집되지 않았습니다.</p>
                 )}
-                <ComplexPriceAreaSection complexNo={complexNo} onFilterChange={onFilterChange} accessToken={sessionToken} />
+                <ComplexPriceAreaSection complexNo={complexNo} onFilterChange={onFilterChange} accessToken={sessionToken} loggedOut={loggedOut} />
               </div>
             )}
           </Card>

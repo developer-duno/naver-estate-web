@@ -393,6 +393,21 @@ def get_optional_user(
         return None
 
 
+def get_viewer(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> dict | None:
+    """공개 응답용 보는 사람 — 토큰이 없으면 None(비로그인), 토큰이 있는데 검증에 실패하면 401.
+
+    get_optional_user 와 다른 점(세션 481 공개 전환): 단지 상세·목록·검색은 비로그인에게 네이버 재료 칸을
+    걷어낸 응답을 준다. 만료·깨진 토큰을 비로그인으로 다루면 로그인 회원이 조용히 줄어든 응답을 받으므로
+    401 로 알린다(프런트는 토큰을 갱신해 다시 받는다). 의견함은 옛 동작(만료 = 비로그인)이 맞아 get_optional_user 그대로.
+    """
+    if not credentials:
+        return None
+    return get_current_user(credentials, db)
+
+
 def _not_expired(iso: str | None) -> bool:
     """ISO 만료일이 아직 안 지났는지. naive datetime 방어 포함.
 
@@ -432,6 +447,18 @@ def get_approved_user(
     if free_unlimited or _not_expired(approved_until) or _not_expired(user.get("paid_until")):
         return user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="승인 기간이 만료되었습니다")
+
+
+def is_approved_user(user: dict) -> bool:
+    """get_approved_user 와 같은 판정(관리자·승인 상태·기한)을 예외 대신 참/거짓으로 — 판정을 두 벌 두지 않는다(세션 481).
+
+    쓰는 곳 = /api/users/me 의 is_approved_broker(프런트 자동 새로 받기 가드) · 평형표 즉석 네이버 호출 허용.
+    """
+    try:
+        get_approved_user(user)
+    except HTTPException:
+        return False
+    return True
 
 
 def get_admin_user(

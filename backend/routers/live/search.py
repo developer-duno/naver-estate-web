@@ -19,8 +19,9 @@ from db.complex_queries import (
 )
 from db.database import SessionLocal
 from db.models import Article as ArticleModel
-from deps import get_db
+from deps import get_db, get_viewer
 from routers.estate_serializers import complex_to_dict
+from routers.public_fields import list_for_viewer
 from services.cache import get_cache
 from services.naver_call_counter import record_call
 from services.upsert import upsert_complex_from_search
@@ -278,13 +279,14 @@ def live_search(
     q: str = Query(..., min_length=1, max_length=100, description="Search keyword"),
     types: str = Query(None, max_length=100, description="매물유형 코드 (쉼표 구분: APT,OPST,JGC 등)"),
     db: Session = Depends(get_db),
+    user: dict | None = Depends(get_viewer),  # 비로그인 = 응답에서 네이버 재료 칸만 걷어냄(세션 481)
 ):
     """Live keyword search - Naver API -> DB upsert -> return"""
     allowed_types = _parse_allowed_types(types)
     cache_key = f"search:{q}:{','.join(sorted(allowed_types))}"
     cached = _cache.get(cache_key) or _fallback_cache.get(cache_key)
     if cached is not None:
-        return cached  # 캐시 hit 은 네이버 호출 0 → 세마포어 우회
+        return list_for_viewer(cached, user)  # 캐시 hit 은 네이버 호출 0 → 세마포어 우회
 
     # cache miss = 네이버 실호출 경로만 동시성 제한 (release 는 finally 보장)
     if not _live_search_semaphore.acquire(blocking=True, timeout=_LIVE_SEARCH_ACQUIRE_TIMEOUT):
@@ -298,7 +300,7 @@ def live_search(
             _fallback_cache.set(cache_key, response)
         else:
             _cache.set(cache_key, response)
-        return response
+        return list_for_viewer(response, user)
     finally:
         _live_search_semaphore.release()
 
@@ -310,13 +312,14 @@ def live_region(
     dong: str = Query(None),
     types: str = Query(None, max_length=100, description="매물유형 코드 (쉼표 구분: APT,OPST,JGC 등)"),
     db: Session = Depends(get_db),
+    user: dict | None = Depends(get_viewer),  # 비로그인 = 응답에서 네이버 재료 칸만 걷어냄(세션 481)
 ):
     """Live region search - Naver API -> DB upsert -> return"""
     allowed_types = _parse_allowed_types(types)
     cache_key = f"region:{sido}:{sigungu}:{dong}:{','.join(sorted(allowed_types))}"
     cached = _cache.get(cache_key) or _fallback_cache.get(cache_key)
     if cached is not None:
-        return cached
+        return list_for_viewer(cached, user)
 
     keyword = sido
     if sigungu and sigungu != sido:
@@ -358,6 +361,6 @@ def live_region(
             _fallback_cache.set(cache_key, response)
         else:
             _cache.set(cache_key, response)
-        return response
+        return list_for_viewer(response, user)
     finally:
         _live_search_semaphore.release()

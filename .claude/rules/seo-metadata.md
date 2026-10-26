@@ -89,6 +89,8 @@ curl -sL -A "Googlebot" https://<도메인>/ | grep -c '<h1'   # 1 이상이어�
 데이터 보호로 의도된 설계**(robots.ts). 진단·수정 시 이를 "결함"으로 오판하지 말 것.
 마케팅·공개 페이지(홈·blog·tools·pricing)만 색인 대상.
 
+⚠ 2026-10-26 공개 전환(사장님 결정) — 비로그인은 공공 자료·우리 지표만, 네이버 매물·호가는 로그인 뒤. robots·noindex 차단은 서버 렌더 PR 까지 임시. 단지 화면은 로그인 벽 없이 열리지만(비로그인 API 응답은 네이버 재료 칸을 뺀다) `/complex/` robots 차단·noindex 는 서버 렌더 PR 에서 연다.
+
 ## 룰 6 — 공개 페이지는 title·description·alternates.canonical 을 자기 것으로 (세션 458)
 
 `metadata` 를 안 쓰거나 `alternates.canonical` 을 빼면 루트 layout 의 canonical `/` 를 물려받아

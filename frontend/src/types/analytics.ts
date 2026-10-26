@@ -158,3 +158,36 @@ export interface NeighborhoodInfo {
   landslide: NeighborhoodDisaster | null;
   source: string;
 }
+
+/** 공개 가격 기록 한 달 (GET /api/complexes/{no}/public-price-history, 세션 482) — 직거래를 뺀 최저~최고 */
+export interface PublicPriceMonth {
+  month: string;              // "YYYYMM"
+  trade_count: number | null;
+  price_min: number;
+  price_max: number;
+  /** 화면에 쓰지 않는다(이 단지 값은 중위 하나로 보이지 않음) */
+  price_median: number | null;
+}
+
+/** 공개 가격 기록 응답 — 면적 하나의 최근 24개월. 자료가 없으면 months [] · two_year null */
+export interface PublicPriceHistory {
+  area_m2: number | null;
+  months: PublicPriceMonth[];
+  two_year: { min: number; max: number; count: number } | null;
+  basis: string | null;
+}
+
+/** 지역 흐름 한 달 (GET /api/complexes/{no}/region-trend, 세션 482) — 부동산원 시군구 통계 */
+export interface RegionTrendItem {
+  period: string;             // "YYYYMM"
+  jeonse_ratio: number | null;
+  sale_price_median: number | null;
+}
+
+/** 지역 흐름 응답 — 지역 연결이 안 되면 items [] */
+export interface RegionTrend {
+  region_code: string | null;
+  region_name: string | null;
+  source: string;
+  items: RegionTrendItem[];
+}

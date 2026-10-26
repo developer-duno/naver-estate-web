@@ -615,11 +615,12 @@ def _no_filter_options(monkeypatch):
     _cache.delete_by_prefix("complex_detail:6139")
 
 
-def test_단지상세_응답에_대표면적과_면적별_시세(client, db, _no_filter_options):
+def test_단지상세_응답에_대표면적과_면적별_시세(client, db, approved_headers, _no_filter_options):
     _add_6139(db, rep=59)
     _add_gov_area_rows(db)
 
-    body = client.get("/api/complexes/6139").json()
+    # 로그인 응답(전세가율 설명 포함 글자) — 비로그인 응답은 test_public_complex_s481.py
+    body = client.get("/api/complexes/6139", headers=approved_headers).json()
 
     assert body["rep_area_m2"] == 59
     # 평형표 모든 묶음 · 대표 먼저 · 나머지 거래 수 순 · 거래 없는 42 는 null (보완 ①)

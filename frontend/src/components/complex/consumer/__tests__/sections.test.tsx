@@ -7,7 +7,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import ConsumerHeader from "../ConsumerHeader";
 import NeighborhoodSection from "../NeighborhoodSection";
 import PriceRangeSection from "../PriceRangeSection";
-import PriceTrendSection from "../PriceTrendSection";
+import PriceTrendSection, { JEONSE_MIN_SPAN, axisRange, trendPoints } from "../PriceTrendSection";
 import { END_YM, HOOD, KAPT, OFFICIAL, SUBWAY, makeComplex, makeHistory, makeTrend } from "./fixtures";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/complex/6139" }));
@@ -102,6 +102,33 @@ describe("S2 어떻게 변해 왔나", () => {
       "유성구 아파트는 2년 동안 중위 매매가 4억→4억 600만 · 전세가율 69.2%→69.5%",
     );
     expect(container.textContent).toContain("한국부동산원 전국주택가격동향조사 2024.10~2026.09");
+  });
+
+  it("축 범위 — 전세가율은 최소 5%p(좁으면 가운데 ±2.5), 그 밖은 최소~최대 + 10% 여백 · 0부터 아님", () => {
+    expect(JEONSE_MIN_SPAN).toBe(5);
+    expect(axisRange([69.1, 70.1], 5).map((v) => +v.toFixed(2))).toEqual([67.1, 72.1]);
+    expect(axisRange([60, 70], 5)).toEqual([59, 71]);
+    expect(axisRange([40000, 40600])).toEqual([39940, 40660]);
+  });
+
+  it("전세가율 69.1~70.1 이면 y 차이가 그림 칸 높이의 20% 이하(1%p ÷ 5%p) — 과장 없음", () => {
+    const items = Array.from({ length: 24 }, (_, i) => ({
+      period: `2025${String((i % 12) + 1).padStart(2, "0")}`,
+      jeonse_ratio: i === 3 ? 69.1 : i === 17 ? 70.1 : 69.6,
+      sale_price_median: 40000,
+    }));
+    const ys = trendPoints(items, "jeonse_ratio").map((p) => p.y);
+    const plot = 96 - 16 - 16;
+    expect(Math.max(...ys) - Math.min(...ys)).toBeLessThanOrEqual(plot * 0.2 + 1e-9);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(plot * 0.19);
+  });
+
+  it("두 선 양 끝 값 라벨 — 4억 / 4억 600만 · 69.2% / 69.5%", () => {
+    render(<PriceTrendSection history={null} trend={makeTrend()} endYm={END_YM} />);
+    const sale = screen.getByTestId("trend-sale_price_median");
+    const jeonse = screen.getByTestId("trend-jeonse_ratio");
+    expect(Array.from(sale.querySelectorAll("text")).map((t) => t.textContent)).toEqual(["4억", "4억 600만"]);
+    expect(Array.from(jeonse.querySelectorAll("text")).map((t) => t.textContent)).toEqual(["69.2%", "69.5%"]);
   });
 
   it("둘 다 비면 카드 숨김", () => {

@@ -50,16 +50,70 @@ function MonthBands({ history, endYm }: { history: PublicPriceHistory; endYm: st
   );
 }
 
-function points(items: RegionTrendItem[], key: "sale_price_median" | "jeonse_ratio", h: number): string {
-  const vals = items.map((it) => it[key]);
-  const nums = vals.filter((v): v is number => v != null);
+/** 지역 흐름 그림 높이·위아래 여백(값 라벨 자리) */
+const LINE_H = 96;
+const LINE_TOP = 16;
+const LINE_BOTTOM = 16;
+/** 전세가율 축 최소 폭(%p) — 1%p 오르내림이 칸 높이 전체로 보이는 과장을 막는다(메인 결정 2026-10-26) */
+export const JEONSE_MIN_SPAN = 5;
+
+/**
+ * 축 범위 [아래, 위] — 값 범위가 minSpan 미만이면 가운데 ± minSpan/2 로 고정, 아니면 최소~최대 + 위아래 10% 여백.
+ * 0부터 시작하지 않는다. 값이 하나뿐이면(폭 0) 그 값 ±5%.
+ */
+export function axisRange(nums: number[], minSpan = 0): [number, number] {
   const lo = Math.min(...nums);
   const hi = Math.max(...nums);
+  const span = hi - lo;
+  if (minSpan > 0 && span < minSpan) {
+    const mid = (lo + hi) / 2;
+    return [mid - minSpan / 2, mid + minSpan / 2];
+  }
+  const pad = span > 0 ? span * 0.1 : Math.abs(lo) * 0.05 || 1;
+  return [lo - pad, hi + pad];
+}
+
+type TrendKey = "sale_price_median" | "jeonse_ratio";
+
+/** 선 하나의 점 좌표 — 값이 없는 달은 건너뛴다 */
+export function trendPoints(items: RegionTrendItem[], key: TrendKey): { x: number; y: number; v: number }[] {
+  const vals = items.map((it) => it[key]);
+  const nums = vals.filter((v): v is number => v != null);
+  if (nums.length === 0) return [];
+  const [lo, hi] = axisRange(nums, key === "jeonse_ratio" ? JEONSE_MIN_SPAN : 0);
+  const plot = LINE_H - LINE_TOP - LINE_BOTTOM;
   const step = items.length > 1 ? W / (items.length - 1) : 0;
-  return vals
-    .map((v, i) => (v == null ? null : `${(i * step).toFixed(1)},${(hi > lo ? h - 4 - ((v - lo) / (hi - lo)) * (h - 8) : h / 2).toFixed(1)}`))
-    .filter(Boolean)
-    .join(" ");
+  const out: { x: number; y: number; v: number }[] = [];
+  vals.forEach((v, i) => {
+    if (v == null) return;
+    out.push({ x: i * step, y: LINE_TOP + ((hi - v) / (hi - lo)) * plot, v });
+  });
+  return out;
+}
+
+/** 선 + 양 끝 값 라벨(첫 달·마지막 달). 매매가 라벨은 점 위, 전세가율 라벨은 점 아래 — 두 선 라벨이 덜 겹치게 */
+function TrendLine({ items, k, color, fmt }: { items: RegionTrendItem[]; k: TrendKey; color: string; fmt: (v: number) => string }) {
+  const pts = trendPoints(items, k);
+  if (pts.length === 0) return null;
+  const ends = pts.length > 1 ? [pts[0], pts[pts.length - 1]] : [pts[0]];
+  const below = k === "jeonse_ratio";
+  return (
+    <g data-testid={`trend-${k}`}>
+      <polyline fill="none" stroke={color} strokeWidth="2" points={pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} />
+      {ends.map((p, i) => (
+        <text
+          key={i}
+          x={i === 0 ? 2 : W - 2}
+          y={below ? Math.min(LINE_H - 2, p.y + 13) : Math.max(10, p.y - 5)}
+          fontSize="10"
+          fill={color}
+          textAnchor={i === 0 ? "start" : "end"}
+        >
+          {fmt(p.v)}
+        </text>
+      ))}
+    </g>
+  );
 }
 
 function firstLast(items: RegionTrendItem[], key: "sale_price_median" | "jeonse_ratio"): [number, number] | null {
@@ -96,9 +150,9 @@ export default function PriceTrendSection({ history, trend, endYm }: Props) {
           <p className="text-sm" data-testid="consumer-region-sentence">
             {trend.region_name} 아파트는 2년 동안 {parts.join(" · ")}
           </p>
-          <svg viewBox={`0 0 ${W} 60`} className="w-full max-w-[480px] h-auto" role="img" aria-label={`${trend.region_name} 중위 매매가와 전세가율 2년 흐름`}>
-            {sale && <polyline fill="none" stroke="#1d4ed8" strokeWidth="2" points={points(items, "sale_price_median", 60)} />}
-            {jeonse && <polyline fill="none" stroke="#f59e0b" strokeWidth="2" points={points(items, "jeonse_ratio", 60)} />}
+          <svg viewBox={`0 0 ${W} ${LINE_H}`} className="w-full max-w-[480px] h-auto" role="img" aria-label={`${trend.region_name} 중위 매매가와 전세가율 2년 흐름`}>
+            {sale && <TrendLine items={items} k="sale_price_median" color="#1d4ed8" fmt={formatKoreanPrice} />}
+            {jeonse && <TrendLine items={items} k="jeonse_ratio" color="#d97706" fmt={(v) => `${v.toFixed(1)}%`} />}
           </svg>
           <p className="text-xs text-gray-400">
             {trend.source} {period}

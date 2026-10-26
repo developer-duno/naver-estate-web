@@ -28,7 +28,7 @@ import type { ArticlePageSize } from "@/lib/storage";
 import { useArticleViewPreferences } from "@/hooks/useArticleViewPreferences";
 import { usePopstateRefresh } from "@/hooks/usePopstateRefresh";
 import { useSessionToken } from "@/hooks/useSessionToken";
-import { useIsApprovedBroker } from "@/hooks/useIsApprovedBroker";
+import { useApprovedBrokerStatus } from "@/hooks/useIsApprovedBroker";
 import Pagination from "@/components/Pagination";
 import HintIcon from "@/components/HintIcon";
 import ComplexHeader from "@/components/complex/ComplexHeader";
@@ -36,6 +36,7 @@ import CompareFloatingBar from "@/components/CompareFloatingBar";
 import ComplexLoadState from "@/components/complex/ComplexLoadState";
 import CrawlMessage from "@/components/complex/CrawlMessage";
 import ComplexDashboard from "@/components/complex/ComplexDashboard";
+import ConsumerComplexView from "@/components/complex/consumer/ConsumerComplexView";
 import PrintButton from "@/components/complex/PrintButton";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -57,7 +58,8 @@ export default function ComplexDetailPage() {
   const [error, setError] = useState("");
   const { sessionToken, tokenError, tokenReady, dismissTokenError } = useSessionToken();
   // 자동 새로 받기(네이버 호출)는 승인 중개사만 — 비로그인·미승인은 화면을 봐도 자동 호출 0(세션 481)
-  const isApprovedBroker = useIsApprovedBroker(sessionToken);
+  // 화면 고르기(세션 482 PR 1b): 승인 중개사 = 작업 화면 · 비로그인·일반 회원 = 소비자 화면. 판정이 끝날 때까지는 로딩
+  const { approved: isApprovedBroker, pending: brokerPending } = useApprovedBrokerStatus(sessionToken);
   // 비로그인 확정(세션 해석 끝 + 토큰 없음) — 네이버 매물·평형·호가·추이는 요청하지 않고 잠금 카드만(세션 481 보완 F4)
   const loggedOut = tokenReady && !sessionToken;
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
@@ -224,7 +226,8 @@ export default function ComplexDetailPage() {
     return <ComplexLoadState kind="invalid" />;
   }
 
-  if (loading) {
+  // 판정 전(세션 해석 중 · 승인 여부 묻는 중)은 로딩 — 중개사에게 소비자 화면이 잠깐 비치지 않게(세션 482 PR 1b)
+  if (loading || !tokenReady || brokerPending) {
     return <ComplexLoadState kind="loading" />;
   }
 
@@ -241,6 +244,188 @@ export default function ComplexDetailPage() {
   }
 
   const totalPages = Math.ceil(totalCount / pageSize);
+
+  // 🥈 매물 리스트 (spec L323 정보 위계 2순위) — 중개사 화면 본문 · 일반 회원 소비자 화면 맨 아래(세션 482 PR 1b)
+  const articleSection = (
+    <section aria-labelledby="section-articles" className="space-y-4">
+      <h2 id="section-articles" className="text-lg md:text-xl font-semibold">매물</h2>
+
+      {/* 필터 바 */}
+      <div className="no-print">
+        {/* 모바일 (< md) — shadcn Sheet 바텀시트 (PR 3b) */}
+        <div className="md:hidden">
+          <FilterBarMobileSheet key={`mobile-${navKey}`} onChange={handleFilterChange} filterOptions={filterOptions} onSortChange={handleSortChange} initialFilters={filters} />
+        </div>
+        {/* 데스크탑 (md+) — 기존 7 드롭다운 툴바 유지 */}
+        <button
+          type="button"
+          onClick={() => setFilterOpen(v => !v)}
+          className="text-sm text-blue-600 hover:text-blue-800 mb-1 hidden md:flex items-center gap-1"
+        >
+          {filterOpen ? "▲ 필터 접기" : "▼ 필터 펼치기"}
+        </button>
+        <div className={filterOpen ? "hidden md:block" : "hidden"}>
+          <FilterBar key={navKey} onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} initialFilters={filters} />
+        </div>
+      </div>
+
+      {/* 엑셀 내보내기 에러 배너 */}
+      {exportError && (
+        <Card className="bg-red-50 border-red-200 text-red-600 text-sm px-4 py-2 no-print">
+          <div className="flex justify-between items-center">
+            <span>{exportError}</span>
+            <button type="button" onClick={() => clearExportError()} className="text-red-400 hover:text-red-600" aria-label="닫기">×</button>
+          </div>
+        </Card>
+      )}
+
+      {/* 적용된 필터 한 줄 요약 */}
+      {hasActiveFilters && <FilterChipsSummary filters={filters} />}
+
+      {/* 매물 수 + 데이터 갱신 + 엑셀 */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        {/* 크롤 진행·완료·오류는 이 줄 안에 한 줄로 — 표를 위아래로 밀지 않는다 (세션 447)
+            좁은 폭(640px 미만)에선 이 묶음이 한 줄을 다 쓰고 버튼 묶음이 다음 줄로 (세션 448 — 360px 겹침) */}
+        <div className="flex items-center gap-2 md:gap-3 min-w-0 grow basis-full sm:basis-0">
+          <span className="text-base md:text-lg font-semibold shrink-0">{loggedOut ? "매물" : `매물 ${totalCount}건`}</span>
+          <CrawlMessage
+            crawling={crawling}
+            message={crawlMessage}
+            messageType={crawlMessageType}
+            progress={crawlProgress}
+            onClear={clearCrawlMessage}
+            tableLoading={tableLoading}
+            staleLabel={crawlStaleLabel}
+          />
+        </div>
+        {/* 데이터 갱신·엑셀(네이버 호출·내보내기)은 승인 중개사에게만(세션 482 PR 1b · 결정 2) */}
+        {isApprovedBroker && (
+          <div className="flex items-center gap-1.5 md:gap-2 no-print">
+            {pendingRefresh ? (
+              <Button type="button" size="sm" onClick={applyPendingRefresh}>
+                {`새 매물 반영 (${pendingRefresh.count}건 바뀜)`}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCrawl}
+                disabled={crawling}
+              >
+                {crawling ? "갱신 중..." : "데이터 갱신"}
+              </Button>
+            )}
+            <HintIcon text="네이버에서 최신 매물을 다시 가져옵니다 (30초~2분)" />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              {exporting
+                ? "내보내는 중..."
+                : selectedArticleNos.size > 0
+                  ? `선택 ${selectedArticleNos.size}건 내보내기`
+                  : "엑셀 내보내기"}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* 매물 API 실패 배너 — 401/403 은 잠금 안내, 그 외는 다시 시도 */}
+      {articlesQuery.isError && (
+        isAuthGateError(articlesQuery.error) ? (
+          <LockedDataCard label="매물 목록" reason={lockReasonOf(articlesQuery.error)} />
+        ) : (
+          <Card className="bg-red-50 border-red-200 text-red-600 text-sm px-4 py-2">
+            <div className="flex justify-between items-center gap-3">
+              <span>매물 목록을 불러올 수 없습니다.</span>
+              <button
+                type="button"
+                onClick={() => articlesQuery.refetch()}
+                className="text-xs border border-red-300 rounded px-2 py-1 hover:bg-red-100 shrink-0"
+              >다시 시도</button>
+            </div>
+          </Card>
+        )
+      )}
+
+      {/* 매물 테이블 / 카드 */}
+      {!loggedOut && !articlesQuery.isLoading && !articlesQuery.isError && (
+        <div className={`transition-opacity duration-200 ${tableDimmed ? "opacity-50" : "opacity-100"}`}>
+          <div className="hidden md:block">
+            <div className="flex justify-end mb-2">
+              <ArticlePageSizeSelect pageSize={pageSize} onPageSizeChange={handlePageSizeChange} />
+            </div>
+            <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} />
+          </div>
+          <div className="md:hidden space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <ArticlePageSizeSelect pageSize={pageSize} onPageSizeChange={handlePageSizeChange} />
+              {articles.length > 0 && (
+                <ArticleViewToggle value={articleViewMode} onChange={handleViewModeChange} />
+              )}
+            </div>
+            <ArticleCardMobile articles={articles} onRowClick={setSelectedArticle} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} viewMode={articleViewMode} />
+          </div>
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={handlePageChange}
+        />
+      )}
+    </section>
+  );
+
+  const overlays = (
+    <>
+      {/* 비교 플로팅 바 — printRef 내부라 no-print 필수, 모달(아래 조건부)보다 DOM 앞이어야 백드롭이 바를 덮음 */}
+      <div className="no-print">
+        <CompareFloatingBar list={compare.list} onRemove={compare.remove} onClear={compare.clear} />
+        {compare.list.length > 0 && <div className="pb-16" />}
+      </div>
+
+      {/* 매물 상세 모달 */}
+      {selectedArticle && (
+        <ArticleDetail articleNo={selectedArticle} onClose={() => setSelectedArticle(null)} complex={complexQuery.data} />
+      )}
+    </>
+  );
+
+  // 비로그인·일반 회원 = 소비자 화면 「C 질문형」(세션 482 PR 1b) — 맨 아래만 다르다
+  if (!isApprovedBroker) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-8">
+        <ConsumerComplexView
+          complex={complex}
+          starred={starred}
+          onBack={goBack}
+          onToggleFavorite={() => toggleFavorite(complex.complex_name, complex.cortar_address)}
+          isCompared={compare.isInCompare(complexNo)}
+          compareFull={compare.isFull}
+          onToggleCompare={() => compare.toggle({ complex_no: complexNo, complex_name: complex.complex_name })}
+          footer={
+            loggedOut ? (
+              <LockedDataCard
+                className="max-w-3xl"
+                title="지금 나온 매물과 호가, 가격 추이는 로그인하면 볼 수 있어요"
+                description="공인중개사 인증을 받으면 새로 받기·실거래가 수집·엑셀·인쇄까지"
+              />
+            ) : (
+              articleSection
+            )
+          }
+        />
+        {overlays}
+      </div>
+    );
+  }
 
   return (
     <div ref={printRef} className="max-w-7xl mx-auto px-4 py-6 space-y-8">
@@ -287,152 +472,9 @@ export default function ComplexDetailPage() {
         />
       )}
 
-      {/* 🥈 매물 리스트 (spec L323 정보 위계 2순위) */}
-      <section aria-labelledby="section-articles" className="space-y-4">
-        <h2 id="section-articles" className="text-lg md:text-xl font-semibold">매물</h2>
+      {articleSection}
 
-        {/* 필터 바 */}
-        <div className="no-print">
-          {/* 모바일 (< md) — shadcn Sheet 바텀시트 (PR 3b) */}
-          <div className="md:hidden">
-            <FilterBarMobileSheet key={`mobile-${navKey}`} onChange={handleFilterChange} filterOptions={filterOptions} onSortChange={handleSortChange} initialFilters={filters} />
-          </div>
-          {/* 데스크탑 (md+) — 기존 7 드롭다운 툴바 유지 */}
-          <button
-            type="button"
-            onClick={() => setFilterOpen(v => !v)}
-            className="text-sm text-blue-600 hover:text-blue-800 mb-1 hidden md:flex items-center gap-1"
-          >
-            {filterOpen ? "▲ 필터 접기" : "▼ 필터 펼치기"}
-          </button>
-          <div className={filterOpen ? "hidden md:block" : "hidden"}>
-            <FilterBar key={navKey} onChange={handleFilterChange} filterOptions={filterOptions} sortBy={activeSortBy} onSortChange={handleSortChange} initialFilters={filters} />
-          </div>
-        </div>
-
-        {/* 엑셀 내보내기 에러 배너 */}
-        {exportError && (
-          <Card className="bg-red-50 border-red-200 text-red-600 text-sm px-4 py-2 no-print">
-            <div className="flex justify-between items-center">
-              <span>{exportError}</span>
-              <button type="button" onClick={() => clearExportError()} className="text-red-400 hover:text-red-600" aria-label="닫기">×</button>
-            </div>
-          </Card>
-        )}
-
-        {/* 적용된 필터 한 줄 요약 */}
-        {hasActiveFilters && <FilterChipsSummary filters={filters} />}
-
-        {/* 매물 수 + 데이터 갱신 + 엑셀 */}
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          {/* 크롤 진행·완료·오류는 이 줄 안에 한 줄로 — 표를 위아래로 밀지 않는다 (세션 447)
-              좁은 폭(640px 미만)에선 이 묶음이 한 줄을 다 쓰고 버튼 묶음이 다음 줄로 (세션 448 — 360px 겹침) */}
-          <div className="flex items-center gap-2 md:gap-3 min-w-0 grow basis-full sm:basis-0">
-            <span className="text-base md:text-lg font-semibold shrink-0">{loggedOut ? "매물" : `매물 ${totalCount}건`}</span>
-            <CrawlMessage
-              crawling={crawling}
-              message={crawlMessage}
-              messageType={crawlMessageType}
-              progress={crawlProgress}
-              onClear={clearCrawlMessage}
-              tableLoading={tableLoading}
-              staleLabel={crawlStaleLabel}
-            />
-          </div>
-          <div className="flex items-center gap-1.5 md:gap-2 no-print">
-            {pendingRefresh ? (
-              <Button type="button" size="sm" onClick={applyPendingRefresh}>
-                {`새 매물 반영 (${pendingRefresh.count}건 바뀜)`}
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleCrawl}
-                disabled={crawling}
-              >
-                {crawling ? "갱신 중..." : "데이터 갱신"}
-              </Button>
-            )}
-            <HintIcon text="네이버에서 최신 매물을 다시 가져옵니다 (30초~2분)" />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-              disabled={exporting}
-            >
-              {exporting
-                ? "내보내는 중..."
-                : selectedArticleNos.size > 0
-                  ? `선택 ${selectedArticleNos.size}건 내보내기`
-                  : "엑셀 내보내기"}
-            </Button>
-          </div>
-        </div>
-
-        {/* 비로그인 = 요청 없이 잠금 안내(세션 481 보완 F4) */}
-        {loggedOut && <LockedDataCard label="매물 목록" />}
-
-        {/* 매물 API 실패 배너 — 401/403 은 잠금 안내, 그 외는 다시 시도 */}
-        {articlesQuery.isError && (
-          isAuthGateError(articlesQuery.error) ? (
-            <LockedDataCard label="매물 목록" reason={lockReasonOf(articlesQuery.error)} />
-          ) : (
-            <Card className="bg-red-50 border-red-200 text-red-600 text-sm px-4 py-2">
-              <div className="flex justify-between items-center gap-3">
-                <span>매물 목록을 불러올 수 없습니다.</span>
-                <button
-                  type="button"
-                  onClick={() => articlesQuery.refetch()}
-                  className="text-xs border border-red-300 rounded px-2 py-1 hover:bg-red-100 shrink-0"
-                >다시 시도</button>
-              </div>
-            </Card>
-          )
-        )}
-
-        {/* 매물 테이블 / 카드 */}
-        {!loggedOut && !articlesQuery.isLoading && !articlesQuery.isError && (
-          <div className={`transition-opacity duration-200 ${tableDimmed ? "opacity-50" : "opacity-100"}`}>
-            <div className="hidden md:block">
-              <div className="flex justify-end mb-2">
-                <ArticlePageSizeSelect pageSize={pageSize} onPageSizeChange={handlePageSizeChange} />
-              </div>
-              <ArticleTable articles={articles} onRowClick={setSelectedArticle} onSortChange={handleSortChange} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} />
-            </div>
-            <div className="md:hidden space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <ArticlePageSizeSelect pageSize={pageSize} onPageSizeChange={handlePageSizeChange} />
-                {articles.length > 0 && (
-                  <ArticleViewToggle value={articleViewMode} onChange={handleViewModeChange} />
-                )}
-              </div>
-              <ArticleCardMobile articles={articles} onRowClick={setSelectedArticle} selectedArticleNos={selectedArticleNos} onSelectionChange={handleSelectionChange} onSelectAll={handleSelectAll} hasActiveFilters={hasActiveFilters} onResetFilters={resetFilters} viewMode={articleViewMode} />
-            </div>
-          </div>
-        )}
-
-        {totalPages > 1 && (
-          <Pagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={handlePageChange}
-          />
-        )}
-      </section>
-
-      {/* 비교 플로팅 바 — printRef 내부라 no-print 필수, 모달(아래 조건부)보다 DOM 앞이어야 백드롭이 바를 덮음 */}
-      <div className="no-print">
-        <CompareFloatingBar list={compare.list} onRemove={compare.remove} onClear={compare.clear} />
-        {compare.list.length > 0 && <div className="pb-16" />}
-      </div>
-
-      {/* 매물 상세 모달 */}
-      {selectedArticle && (
-        <ArticleDetail articleNo={selectedArticle} onClose={() => setSelectedArticle(null)} complex={complexQuery.data} />
-      )}
+      {overlays}
     </div>
   );
 }

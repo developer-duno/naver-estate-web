@@ -86,12 +86,19 @@ vi.mock("@/hooks/useFavorites", () => ({
 vi.mock("@/hooks/useSmartBack", () => ({
   useSmartBack: () => vi.fn(),
 }));
+// 이 시험은 승인 중개사의 작업 화면을 본다 — 세션 482 PR 1b 부터 비로그인·일반 회원은 소비자 화면이라
+// 로그인(토큰) + 세션 해석 끝 + 승인 판정 끝(승인)을 밝혀 둔다
 vi.mock("@/hooks/useSessionToken", () => ({
   useSessionToken: () => ({
-    sessionToken: undefined,
+    sessionToken: "tok-broker",
+    tokenReady: true,
     tokenError: false,
     dismissTokenError: vi.fn(),
   }),
+}));
+vi.mock("@/hooks/useIsApprovedBroker", () => ({
+  useApprovedBrokerStatus: () => ({ approved: true, pending: false }),
+  useIsApprovedBroker: () => true,
 }));
 vi.mock("@/hooks/useArticleViewPreferences", () => ({
   useArticleViewPreferences: () => ({

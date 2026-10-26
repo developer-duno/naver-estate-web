@@ -21,7 +21,15 @@ export function isApprovedBrokerProfile(me: MyProfile | null | undefined): boole
  * 놓쳐 BE 와 어긋난다(보완 F5). 비로그인(토큰 없음)이면 조회하지 않고 false, 조회 실패도 false.
  */
 export function useIsApprovedBroker(sessionToken: string | undefined): boolean {
-  const { data } = useQuery({
+  return useApprovedBrokerStatus(sessionToken).approved;
+}
+
+/**
+ * 위와 같은 판정 + 아직 묻는 중인가(세션 482 PR 1b) — 단지 화면이 소비자 화면/중개사 화면을 고르기 전에
+ * 판정이 끝나길 기다려 중개사에게 소비자 화면이 잠깐 비치지 않게 한다. 조회 실패는 끝난 것(= 승인 아님)으로 본다.
+ */
+export function useApprovedBrokerStatus(sessionToken: string | undefined): { approved: boolean; pending: boolean } {
+  const { data, isPending } = useQuery({
     queryKey: ["users", "me", sessionToken ?? null],
     queryFn: () =>
       fetchApi<MyProfile>("/api/users/me", { headers: { Authorization: `Bearer ${sessionToken}` } }),
@@ -29,5 +37,5 @@ export function useIsApprovedBroker(sessionToken: string | undefined): boolean {
     staleTime: 5 * 60_000,
     retry: false,
   });
-  return !!sessionToken && isApprovedBrokerProfile(data);
+  return { approved: !!sessionToken && isApprovedBrokerProfile(data), pending: !!sessionToken && isPending };
 }

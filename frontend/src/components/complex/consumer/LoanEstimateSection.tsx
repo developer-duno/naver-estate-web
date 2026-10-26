@@ -57,7 +57,7 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
   return (
     <div className={`flex justify-between gap-2 ${strong ? "text-base" : "text-xs"}`}>
       <span className={strong ? "font-bold" : ""}>{label}</span>
-      <b className={strong ? "text-blue-700" : ""}>{value}</b>
+      <b className={`shrink-0 whitespace-nowrap ${strong ? "text-blue-700" : ""}`}>{value}</b>
     </div>
   );
 }

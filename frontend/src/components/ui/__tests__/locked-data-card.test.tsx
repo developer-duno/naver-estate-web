@@ -73,3 +73,14 @@ describe("LockedDataCard — 사유·돌아올 주소 (세션 481 보완 F9·F10
     expect(lockReasonOf(new Error("x"))).toBe("login");
   });
 });
+
+describe("LockedDataCard — 문구 바꾸기 (세션 482 PR 1b 소비자 화면 맨 아래)", () => {
+  it("title·description 을 주면 그 글자, 로그인·인증 버튼은 그대로", () => {
+    render(<LockedDataCard title="지금 나온 매물과 호가, 가격 추이는 로그인하면 볼 수 있어요" description="공인중개사 인증을 받으면 새로 받기·실거래가 수집·엑셀·인쇄까지" />);
+    expect(screen.getByText("지금 나온 매물과 호가, 가격 추이는 로그인하면 볼 수 있어요")).toBeInTheDocument();
+    expect(screen.getByText("공인중개사 인증을 받으면 새로 받기·실거래가 수집·엑셀·인쇄까지")).toBeInTheDocument();
+    expect(screen.queryByText(/은\(는\) 로그인하면/)).toBeNull();
+    expect(screen.getByRole("link", { name: "로그인" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "공인중개사 인증" })).toBeInTheDocument();
+  });
+});

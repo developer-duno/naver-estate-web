@@ -32,10 +32,13 @@ interface Props {
   /** 잠금 사유 — 기본 "login" */
   reason?: LockReason;
   className?: string;
+  /** 로그인 안내 제목·설명을 바꿀 때(소비자 단지 화면 맨 아래 — 세션 482). 없으면 기본 문구 */
+  title?: string;
+  description?: string;
 }
 
 /** 로그인 유도 안내 카드. 로그인(돌아올 주소 포함)/공인중개사 인증 버튼. */
-export default function LockedDataCard({ label = "이 정보", reason = "login", className }: Props) {
+export default function LockedDataCard({ label = "이 정보", reason = "login", className, title, description }: Props) {
   const pathname = usePathname();
   const loginHref = pathname && pathname !== "/login"
     ? `/login?redirect=${encodeURIComponent(pathname)}`
@@ -51,10 +54,10 @@ export default function LockedDataCard({ label = "이 정보", reason = "login",
       ) : (
         <>
           <p className="mt-3 text-sm font-medium text-gray-700">
-            {label}은(는) 로그인하면 볼 수 있어요
+            {title ?? `${label}은(는) 로그인하면 볼 수 있어요`}
           </p>
           <p className="mt-1 text-xs text-gray-500">
-            로그인하면 네이버 매물·호가·가격 추이를 볼 수 있고, 공인중개사 인증을 받으면 새로 받기·실거래가 수집·엑셀까지 쓸 수 있어요
+            {description ?? "로그인하면 네이버 매물·호가·가격 추이를 볼 수 있고, 공인중개사 인증을 받으면 새로 받기·실거래가 수집·엑셀까지 쓸 수 있어요"}
           </p>
         </>
       )}

@@ -27,7 +27,7 @@ function MonthBands({ history, endYm }: { history: PublicPriceHistory; endYm: st
   const step = W / slots.length;
   const label = `${history.area_m2}제곱미터 월별 거래 범위 띠`;
   return (
-    <svg viewBox={`0 0 ${W} ${BAND_H}`} className="w-full h-auto" role="img" aria-label={label} data-testid="consumer-bands">
+    <svg viewBox={`0 0 ${W} ${BAND_H}`} className="w-full max-w-[480px] h-auto" role="img" aria-label={label} data-testid="consumer-bands">
       <line x1="0" y1={BOTTOM + 2} x2={W} y2={BOTTOM + 2} stroke="#e5e7eb" />
       {slots.map((ym, i) => {
         const m = byMonth.get(ym);
@@ -96,7 +96,7 @@ export default function PriceTrendSection({ history, trend, endYm }: Props) {
           <p className="text-sm" data-testid="consumer-region-sentence">
             {trend.region_name} 아파트는 2년 동안 {parts.join(" · ")}
           </p>
-          <svg viewBox={`0 0 ${W} 60`} className="w-full h-auto" role="img" aria-label={`${trend.region_name} 중위 매매가와 전세가율 2년 흐름`}>
+          <svg viewBox={`0 0 ${W} 60`} className="w-full max-w-[480px] h-auto" role="img" aria-label={`${trend.region_name} 중위 매매가와 전세가율 2년 흐름`}>
             {sale && <polyline fill="none" stroke="#1d4ed8" strokeWidth="2" points={points(items, "sale_price_median", 60)} />}
             {jeonse && <polyline fill="none" stroke="#f59e0b" strokeWidth="2" points={points(items, "jeonse_ratio", 60)} />}
           </svg>

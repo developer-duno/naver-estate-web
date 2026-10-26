@@ -1,10 +1,10 @@
 /**
- * 단지 화면 공개 전환 (세션 481) — 비로그인도 화면을 보고, 네이버 매물은 잠금 카드, 자동 새로 받기는 승인 중개사만.
+ * 단지 화면 공개 전환 (세션 481) + 소비자 화면 분기 (세션 482 PR 1b) — 자동 새로 받기는 승인 중개사만.
  *
- * - 비로그인: 매물·평형·호가·추이 API 를 아예 안 부른다(보완 F4) → 잠금 카드 "로그인하면 볼 수 있어요"
- *   · 단지 대시보드(공공 카드)는 보임 · 자동 새로 받기 옵션 auto=false(네이버 호출 0)
- * - 미승인 로그인: 매물은 보이지만 auto=false
- * - 승인 중개사: auto=true · autoEnabled=true
+ * - 비로그인: 소비자 화면(질문 4개) + 맨 아래 잠금 카드 1장 · 매물·평형·호가·추이 API 를 아예 안 부른다(보완 F4)
+ *   · 필터 바·데이터 갱신·엑셀 없음 · 자동 새로 받기 옵션 auto=false(네이버 호출 0)
+ * - 미승인 로그인(일반 회원): 소비자 화면 + 맨 아래 기존 매물 섹션 · 데이터 갱신·엑셀 없음 · auto=false
+ * - 승인 중개사: 기존 작업 화면(대시보드) · 데이터 갱신·엑셀 있음 · auto=true · autoEnabled=true
  * 승인 판정 = /api/users/me 의 is_approved_broker(BE get_approved_user 와 같은 판정 — 보완 F5).
  * mock 묶음은 page-pyeong-ready.test.tsx 와 같다(useCrawlAction 만 받은 옵션을 기록).
  * 실행: npx vitest run src/app/complex/[no]/__tests__/page-public-s481.test.tsx
@@ -31,9 +31,13 @@ vi.mock("@/lib/api", async () => {
       address: "대전 유성구",
       total_household_count: 500,
       total_dong_count: 7,
+      cortar_no: "3020012300",
+      sido: "대전",
       rep_area_m2: 59,
       nearby_median_price: 17200,
-      area_prices: [],
+      area_prices: [
+        { area_m2: 59, households: 116, price_median: 17200, trade_count: 3, price_min: 15700, price_max: 18000, trades: [] },
+      ],
       region_jeonse_ratio: 71.2,
       region_name: "대전 유성구",
     }),
@@ -46,6 +50,16 @@ vi.mock("@/lib/api", async () => {
     fetchApi: vi.fn(() => Promise.resolve(state.me)),
   };
 });
+
+// 소비자 화면 공개 자료 래퍼 — 비어 있는 응답(카드는 숨김). 네이버 재료가 아니다
+vi.mock("@/lib/api/complex", () => ({
+  getOfficialPrices: vi.fn().mockResolvedValue({ complex_no: "6139", year: null, items: [] }),
+  getComplexKapt: vi.fn().mockResolvedValue(null),
+  getComplexSubway: vi.fn().mockResolvedValue({ stations: [] }),
+  getComplexNeighborhood: vi.fn().mockResolvedValue(null),
+  getPublicPriceHistory: vi.fn().mockResolvedValue({ area_m2: 59, months: [], two_year: null, basis: null }),
+  getRegionTrend: vi.fn().mockResolvedValue({ region_code: null, region_name: null, source: "", items: [] }),
+}));
 
 vi.mock("next/navigation", async () => {
   const actual = await vi.importActual<typeof import("next/navigation")>("next/navigation");
@@ -99,8 +113,15 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-describe("단지 화면 공개 전환 (세션 481)", () => {
-  it("비로그인: 대시보드는 보이고 매물은 잠금 카드 · 이 단지 전세가율 글자 없음 · 자동 새로 받기 꺼짐", async () => {
+const QUESTIONS = ["1 · 얼마짜리 집인가", "2 · 어떻게 변해 왔나", "3 · 주변은 어떤가", "4 · 내 돈으로 가능한가"];
+
+function expectNoBrokerButtons() {
+  expect(screen.queryByRole("button", { name: "데이터 갱신" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "엑셀 내보내기" })).not.toBeInTheDocument();
+}
+
+describe("단지 화면 공개 전환 (세션 481) · 소비자 화면 분기 (세션 482)", () => {
+  it("비로그인: 소비자 화면 + 잠금 카드 1장 · 필터·갱신·엑셀 없음 · 네이버 재료 요청 0 · 자동 새로 받기 꺼짐", async () => {
     state.token = undefined;
     state.me = null;
     state.anon = true;
@@ -108,11 +129,16 @@ describe("단지 화면 공개 전환 (세션 481)", () => {
 
     render(<ComplexDetailPage />, { wrapper: TestQueryProvider });
 
-    expect(await screen.findByText("매물 목록은(는) 로그인하면 볼 수 있어요")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /단지정보 메뉴 열기/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^시세 · 전용 59㎡/ })).toHaveTextContent("1억 7,200만");
-    expect(screen.getByTestId("box-extra-prices")).toHaveTextContent("대전 유성구 아파트 전세가율 71.2%");
-    expect(screen.queryByText(/전세가율\(59㎡\)/)).not.toBeInTheDocument();
+    expect(await screen.findByText("지금 나온 매물과 호가, 가격 추이는 로그인하면 볼 수 있어요")).toBeInTheDocument();
+    expect(screen.getAllByText(/로그인하면 볼 수 있어요/)).toHaveLength(1); // 잠금 카드 1장
+    expect(screen.getByText("1 · 얼마짜리 집인가")).toBeInTheDocument();
+    expect(screen.getByText(/^4 · 내 돈으로 가능한가/)).toBeInTheDocument();
+    expect(screen.getByTestId("consumer-summary")).toHaveTextContent("최대 약 1억 990만");
+    expect(screen.queryByLabelText("단지 종합 대시보드")).not.toBeInTheDocument();
+    expect(screen.queryByText(/필터 접기|필터 펼치기/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "매물" })).not.toBeInTheDocument();
+    expectNoBrokerButtons();
+    expect(screen.queryByText(/1억 7,200만/)).not.toBeInTheDocument(); // 이 단지 중위값 글자 0
     expect(state.crawlOpts.every((o) => o.auto === false && o.autoEnabled === false)).toBe(true);
     expect(consoleError).not.toHaveBeenCalled();
     // 보완 F4: 비로그인이면 네이버 재료 API 요청 0(401 도 안 낸다)
@@ -124,27 +150,55 @@ describe("단지 화면 공개 전환 (세션 481)", () => {
     expect(vi.mocked(api.fetchApi)).not.toHaveBeenCalled();
   });
 
-  it("미승인 로그인: 매물은 받아도 자동 새로 받기는 꺼짐", async () => {
+  it("일반 회원(미승인 로그인): 소비자 화면 + 맨 아래 매물 섹션 · 갱신·엑셀 없음 · 자동 새로 받기 꺼짐", async () => {
     state.token = "tok-pending";
     state.me = { is_approved_broker: false };
     state.anon = false;
 
     render(<ComplexDetailPage />, { wrapper: TestQueryProvider });
 
-    await screen.findByText("공개단지");
-    await waitFor(() => expect(state.crawlOpts.length).toBeGreaterThan(1));
+    expect(await screen.findByText("1 · 얼마짜리 집인가")).toBeInTheDocument();
+    // S2·S3 은 이 시험 자료가 비어 숨김 — 보이는 질문은 1·4
+    for (const q of [QUESTIONS[0], QUESTIONS[3]]) expect(screen.getByText(new RegExp(`^${q}`))).toBeInTheDocument();
+    for (const q of [QUESTIONS[1], QUESTIONS[2]]) expect(screen.queryByText(q)).not.toBeInTheDocument();
+    expect(await screen.findByText("매물 0건")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "매물" })).toBeInTheDocument();
     expect(screen.queryByText(/로그인하면 볼 수 있어요/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("단지 종합 대시보드")).not.toBeInTheDocument();
+    expectNoBrokerButtons();
+    await waitFor(() => expect(state.crawlOpts.length).toBeGreaterThan(1));
     expect(state.crawlOpts.every((o) => o.auto === false && o.autoEnabled === false)).toBe(true);
   });
 
-  it("승인 중개사: 첫 조회가 끝나면 자동 새로 받기 켜짐", async () => {
+  it("승인 중개사: 기존 작업 화면 · 갱신·엑셀 있음 · 첫 조회가 끝나면 자동 새로 받기 켜짐", async () => {
     state.token = "tok-approved";
     state.me = { is_approved_broker: true };
     state.anon = false;
 
     render(<ComplexDetailPage />, { wrapper: TestQueryProvider });
 
+    expect(await screen.findByLabelText("단지 종합 대시보드")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "데이터 갱신" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "엑셀 내보내기" })).toBeInTheDocument();
+    expect(screen.queryByText("1 · 얼마짜리 집인가")).not.toBeInTheDocument();
     await waitFor(() => expect(last()).toEqual({ auto: true, autoEnabled: true }));
+  });
+
+  it("승인 판정 중엔 로딩 — 중개사에게 소비자 화면이 비치지 않는다", async () => {
+    state.token = "tok-slow";
+    state.me = { is_approved_broker: true };
+    state.anon = false;
+    const api = await import("@/lib/api");
+    let release: (v: unknown) => void = () => {};
+    vi.mocked(api.fetchApi).mockImplementationOnce(() => new Promise((r) => { release = r; }));
+
+    render(<ComplexDetailPage />, { wrapper: TestQueryProvider });
+
+    await waitFor(() => expect(vi.mocked(api.fetchApi)).toHaveBeenCalled());
+    expect(screen.queryByText("1 · 얼마짜리 집인가")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("단지 종합 대시보드")).not.toBeInTheDocument();
+    release({ is_approved_broker: true });
+    expect(await screen.findByLabelText("단지 종합 대시보드")).toBeInTheDocument();
   });
 
   it("단지 정보가 403(정지 계정)이면 오류 화면이 아니라 '이 계정으로는 볼 수 없어요' 잠금 안내", async () => {

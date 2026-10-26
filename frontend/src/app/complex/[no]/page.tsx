@@ -410,17 +410,15 @@ export default function ComplexDetailPage() {
           isCompared={compare.isInCompare(complexNo)}
           compareFull={compare.isFull}
           onToggleCompare={() => compare.toggle({ complex_no: complexNo, complex_name: complex.complex_name })}
-          footer={
+          aside={
             loggedOut ? (
               <LockedDataCard
-                className="max-w-3xl"
                 title="지금 나온 매물과 호가, 가격 추이는 로그인하면 볼 수 있어요"
                 description="공인중개사 인증을 받으면 새로 받기·실거래가 수집·엑셀·인쇄까지"
               />
-            ) : (
-              articleSection
-            )
+            ) : undefined
           }
+          footer={loggedOut ? undefined : articleSection}
         />
         {overlays}
       </div>

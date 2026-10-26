@@ -3,7 +3,7 @@
  * 실행: npx vitest run src/components/complex/consumer/__tests__/ConsumerComplexView.test.tsx
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 import ConsumerComplexView, { CONSUMER_SOURCE_LINE, defaultArea } from "../ConsumerComplexView";
 import { END_YM, HOOD, KAPT, OFFICIAL, SUBWAY, makeComplex, makeHistory, makeTrend } from "./fixtures";
@@ -37,7 +37,13 @@ beforeEach(() => {
 function renderView(complex = makeComplex()) {
   return render(
     <TestQueryProvider>
-      <ConsumerComplexView complex={complex} endYm={END_YM} footer={<div data-testid="footer-slot">맨 아래</div>} {...header} />
+      <ConsumerComplexView
+        complex={complex}
+        endYm={END_YM}
+        aside={<div data-testid="aside-slot">잠금 카드 자리</div>}
+        footer={<div data-testid="footer-slot">맨 아래</div>}
+        {...header}
+      />
     </TestQueryProvider>,
   );
 }
@@ -54,6 +60,22 @@ describe("ConsumerComplexView", () => {
     expect(screen.getByTestId("footer-slot")).toBeInTheDocument();
     expect(screen.getByText(CONSUMER_SOURCE_LINE)).toBeInTheDocument();
     expect(api.getPublicPriceHistory).toHaveBeenCalledWith("6139", 59);
+  });
+
+  it("넓은 화면 2열(3:2) — 왼쪽 머리·1·2·3, 오른쪽 4 + 잠금 카드 자리 · 매물 자리는 격자 밖 전체 폭", async () => {
+    renderView();
+    await screen.findByTestId("consumer-region-sentence");
+    const grid = screen.getByTestId("consumer-grid");
+    expect(grid.className).toContain("grid-cols-1");
+    expect(grid.className).toContain("lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]");
+    const [left, right] = Array.from(grid.children) as HTMLElement[];
+    expect(grid.children).toHaveLength(2);
+    expect(within(left).getByText("1 · 얼마짜리 집인가")).toBeInTheDocument();
+    expect(within(left).getByText("3 · 주변은 어떤가")).toBeInTheDocument();
+    expect(within(left).getByTestId("consumer-summary")).toBeInTheDocument();
+    expect(within(right).getByTestId("consumer-loan")).toBeInTheDocument();
+    expect(within(right).getByTestId("aside-slot")).toBeInTheDocument();
+    expect(grid.contains(screen.getByTestId("footer-slot"))).toBe(false);
   });
 
   it("면적을 바꾸면 S1·요약·B1 이 같이 바뀐다", async () => {

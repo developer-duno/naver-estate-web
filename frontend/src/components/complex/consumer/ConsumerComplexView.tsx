@@ -37,7 +37,9 @@ interface Props {
   isCompared: boolean;
   compareFull: boolean;
   onToggleCompare: () => void;
-  /** S5 — 비로그인 잠금 카드 / 일반 회원 매물 섹션 */
+  /** S5 오른쪽 칸(넓은 화면에선 4번 카드 아래) — 비로그인 잠금 카드 */
+  aside?: ReactNode;
+  /** S5 아래 전체 폭 — 일반 회원 매물 섹션 */
   footer?: ReactNode;
   /** 띠 그래프 마지막 달(시험용 고정) — 없으면 오늘 달 */
   endYm?: string;
@@ -51,7 +53,7 @@ export function defaultArea(complex: Complex): number | null {
   return list.find(hasRange)?.area_m2 ?? null;
 }
 
-export default function ConsumerComplexView({ complex, footer, endYm, ...header }: Props) {
+export default function ConsumerComplexView({ complex, aside, footer, endYm, ...header }: Props) {
   const no = complex.complex_no;
   const [area, setArea] = useState<number | null>(() => defaultArea(complex));
   const areaPrices = complex.area_prices ?? [];
@@ -84,27 +86,33 @@ export default function ConsumerComplexView({ complex, footer, endYm, ...header 
 
   return (
     <div className="space-y-4">
-      <div className="space-y-4 max-w-3xl">
-        <ConsumerHeader complex={complex} summary={summary} {...header} />
-        <PriceRangeSection
-          areaPrices={areaPrices}
-          selected={area}
-          onSelect={setArea}
-          twoYear={history?.two_year ?? null}
-          official={officialQuery.data}
-          kapt={kaptQuery.data}
-          rangeSource={complex.area_price_range_source}
-        />
-        <PriceTrendSection history={history} trend={trendQuery.data} endYm={endYm ?? currentYm()} />
-        <NeighborhoodSection stations={subwayQuery.data?.stations ?? []} neighborhood={hoodQuery.data} />
-        <LoanEstimateSection
-          areaPrices={areaPrices}
-          selected={area}
-          onSelect={setArea}
-          zone={zone}
-          sido={complex.sido}
-          regionLabel={regionLabel}
-        />
+      {/* 넓은 화면(lg+)은 2열 — 왼쪽 3 = 머리·1·2·3, 오른쪽 2 = 4 대출 카드 + 잠금 카드(그림 C-desk). 휴대폰은 한 열 */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-4 items-start" data-testid="consumer-grid">
+        <div className="space-y-4 min-w-0">
+          <ConsumerHeader complex={complex} summary={summary} {...header} />
+          <PriceRangeSection
+            areaPrices={areaPrices}
+            selected={area}
+            onSelect={setArea}
+            twoYear={history?.two_year ?? null}
+            official={officialQuery.data}
+            kapt={kaptQuery.data}
+            rangeSource={complex.area_price_range_source}
+          />
+          <PriceTrendSection history={history} trend={trendQuery.data} endYm={endYm ?? currentYm()} />
+          <NeighborhoodSection stations={subwayQuery.data?.stations ?? []} neighborhood={hoodQuery.data} />
+        </div>
+        <div className="space-y-4 min-w-0">
+          <LoanEstimateSection
+            areaPrices={areaPrices}
+            selected={area}
+            onSelect={setArea}
+            zone={zone}
+            sido={complex.sido}
+            regionLabel={regionLabel}
+          />
+          {aside}
+        </div>
       </div>
       {footer}
       <p className="text-xs text-gray-400">{CONSUMER_SOURCE_LINE}</p>

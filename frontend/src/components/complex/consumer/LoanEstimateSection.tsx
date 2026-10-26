@@ -119,7 +119,7 @@ export default function LoanEstimateSection({ areaPrices, selected, onSelect, zo
           ))}
         </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2.5">
         <Field id={`${uid}-first`} label="이미 있는 담보대출(선순위)" value={firstLien} onChange={setFirstLien} unit="만원" placeholder="0" />
         <Field id={`${uid}-dep`} label="임차보증금 (세입자가 있으면)" value={deposit} onChange={setDeposit} unit="만원" placeholder="0" />
         <Field id={`${uid}-inc`} label="연소득 (선택 · 넣으면 소득 기준도 계산)" value={income} onChange={setIncome} unit="만원" placeholder="예: 4800" />

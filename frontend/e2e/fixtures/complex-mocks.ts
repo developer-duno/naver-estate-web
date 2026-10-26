@@ -143,6 +143,9 @@ export async function applyComplexMocks(page: Page): Promise<void> {
     if (sub === "pyeong-details") return fulfillJson(route, EMPTY_PYEONG);
     if (sub === "price-stats") return fulfillJson(route, EMPTY_STATS);
     if (sub === "price-history") return fulfillJson(route, EMPTY_HISTORY);
+    // 소비자 화면 공개 경로(세션 482 PR 1b) — 중개사 화면은 부르지 않지만 404 대신 빈 답으로 고정
+    if (sub === "public-price-history") return fulfillJson(route, { area_m2: null, months: [], two_year: null, basis: null });
+    if (sub === "region-trend") return fulfillJson(route, { region_code: null, region_name: null, source: "", items: [] });
 
     await route.fulfill({ status: 404, body: "not found" });
   });
@@ -158,8 +161,10 @@ export async function applyComplexMocks(page: Page): Promise<void> {
 
   // Header role 결정성 — fetchProfile 1순위 (백엔드 /api/users/me) mock.
   // 응답이 admin 이면 setUserRole('admin') → "관리자" 뱃지 렌더 (Header.tsx L240·370).
+  // is_approved_broker: 단지 화면은 이 칸이 true 일 때만 중개사 작업 화면을 그린다(세션 482 PR 1b) — 실서버도 관리자에게
+  // true 를 준다. 빠지면 complex.png 가 소비자 화면으로 바뀌어 중개사 화면 시각 회귀가 사라진다(보완 F6·A-1).
   await page.route("**/api/users/me", async (route) => {
-    await fulfillJson(route, { role: "admin", email: "admin@test" });
+    await fulfillJson(route, { role: "admin", email: "admin@test", is_approved_broker: true });
   });
 
   // Header role 결정성 — fetchRoleFromSupabase fallback (Supabase PostgREST) mock.

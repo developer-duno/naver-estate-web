@@ -25,6 +25,42 @@ export function brokeredCount(ap: AreaPrice): number {
   return ap.trade_count ?? 0;
 }
 
+/**
+ * 부제의 건수 글자 — 거래 목록이 있으면 "중개거래 N건"(직거래를 뺀 수), 비면 "거래 N건"
+ * (저장된 거래 수는 직거래가 섞였을 수 있어 "중개거래"라 부르지 않는다 — 보완 F7)
+ */
+export function tradeCountText(ap: AreaPrice): string {
+  return (ap.trades ?? []).length > 0 ? `중개거래 ${brokeredCount(ap)}건` : `거래 ${brokeredCount(ap)}건`;
+}
+
+/** 주제 조사 — 끝 글자에 받침이 있으면 "은", 없으면 "는"(한글이 아니면 "는"). "유성구는"·"이 단지 지역은" */
+export function topicParticle(word: string): "은" | "는" {
+  const code = word.trim().charCodeAt(word.trim().length - 1);
+  if (!(code >= 0xac00 && code <= 0xd7a3)) return "는";
+  return (code - 0xac00) % 28 !== 0 ? "은" : "는";
+}
+
+/** 대출 카드·머리 요약의 집값 단계(결정 12) — 6개월 범위 → 2년 범위 → 직접 입력 */
+export type PriceStage =
+  | { kind: "6m"; min: number; max: number }
+  | { kind: "2y"; min: number; max: number }
+  | { kind: "manual" };
+
+export function priceStage(
+  ap: AreaPrice | undefined | null,
+  twoYear: { min: number; max: number } | null | undefined,
+): PriceStage {
+  if (hasRange(ap)) return { kind: "6m", min: ap.price_min, max: ap.price_max };
+  if (twoYear && twoYear.min > 0 && twoYear.max > 0) return { kind: "2y", min: twoYear.min, max: twoYear.max };
+  return { kind: "manual" };
+}
+
+/** 오피스텔(비주택)인가 — 유형 코드 OPST·OBYG, 코드가 없으면 유형 이름으로 */
+export function isOfficetel(c: { real_estate_type_code?: string | null; real_estate_type_name?: string | null }): boolean {
+  if (c.real_estate_type_code) return c.real_estate_type_code === "OPST" || c.real_estate_type_code === "OBYG";
+  return (c.real_estate_type_name ?? "").startsWith("오피스텔");
+}
+
 /** 선택 면적 ±1㎡ 안에서 가장 가까운 공시가격 평형(없으면 null) */
 export function officialForArea(items: OfficialPriceItem[], area: number): OfficialPriceItem | null {
   let best: OfficialPriceItem | null = null;

@@ -3,8 +3,8 @@
 import type { AreaPrice, KaptInfo, OfficialPriceResponse } from "@/types";
 import { Card } from "@/components/ui/card";
 import { formatKoreanPrice } from "@/lib/format";
+import LoadRetry from "./LoadRetry";
 import {
-  brokeredCount,
   dateDot,
   hasRange,
   kaptCostText,
@@ -12,6 +12,7 @@ import {
   officialRatioText,
   priceRangeText,
   representativeOfficial,
+  tradeCountText,
   wonToManwon,
   ymDot,
 } from "./consumer-format";
@@ -59,10 +60,23 @@ interface Props {
   onSelect: (area: number) => void;
   /** 선택 면적의 2년 범위(B1 two_year) — 없으면 막대 생략 */
   twoYear: { min: number; max: number } | null;
+  /** 2년 범위 답을 받았나(받기 전엔 "2년 기록 없음"을 단정하지 않는다) */
+  twoYearReady?: boolean;
   official: OfficialPriceResponse | null | undefined;
   kapt: KaptInfo | null | undefined;
   /** BE 출처 글자(area_price_range_source) — 그대로 */
   rangeSource: string | null | undefined;
+  /** 오피스텔·오피스텔분양권 — 정부 실거래를 받지 않는다(보완 F4) */
+  officetel?: boolean;
+  /** 이 카드 자료 중 불러오지 못한 것이 있으면 다시 시도(보완 A-4) */
+  onRetry?: () => void;
+}
+
+/** 6개월 범위가 없을 때 본문 한 줄(보완 F4·F5) */
+function noRangeText(officetel: boolean, twoYear: { min: number; max: number } | null, ready: boolean): string {
+  if (officetel) return "오피스텔은 정부 실거래 자료를 아직 받지 않아요";
+  if (twoYear) return `최근 6개월 거래 없음 · 2년 범위 ${priceRangeText(twoYear.min, twoYear.max)}`;
+  return ready ? "최근 2년 정부 실거래 기록 없음" : "최근 6개월 거래 없음";
 }
 
 function SmallBox({ label, value, note }: { label: string; value: string; note?: string | null }) {
@@ -76,7 +90,9 @@ function SmallBox({ label, value, note }: { label: string; value: string; note?:
 }
 
 /** S1 · 얼마짜리 집인가 — 이 단지 값은 범위로만(중위 없음) */
-export default function PriceRangeSection({ areaPrices, selected, onSelect, twoYear, official, kapt, rangeSource }: Props) {
+export default function PriceRangeSection({
+  areaPrices, selected, onSelect, twoYear, twoYearReady = true, official, kapt, rangeSource, officetel = false, onRetry,
+}: Props) {
   const ap = areaPrices.find((a) => a.area_m2 === selected);
   const ranged = hasRange(ap) ? ap : null;
   const anyRange = areaPrices.some(hasRange);
@@ -103,7 +119,7 @@ export default function PriceRangeSection({ areaPrices, selected, onSelect, twoY
               <p className="text-2xl font-bold tracking-tight" data-testid="consumer-range">
                 {priceRangeText(ranged.price_min, ranged.price_max, true)}
               </p>
-              <p className="text-xs text-gray-500">최근 6개월 중개거래 {brokeredCount(ranged)}건 · 국토교통부 실거래</p>
+              <p className="text-xs text-gray-500">최근 6개월 {tradeCountText(ranged)} · 국토교통부 실거래</p>
               {bar && (
                 <div data-testid="consumer-range-bar">
                   <div className="relative h-2.5 rounded-full bg-slate-200" aria-hidden="true">
@@ -145,7 +161,7 @@ export default function PriceRangeSection({ areaPrices, selected, onSelect, twoY
           )}
         </>
       ) : (
-        <p className="text-sm text-gray-700">이 단지의 정부 실거래 기록이 아직 없어요</p>
+        <p className="text-sm text-gray-700" data-testid="consumer-no-range">{noRangeText(officetel, twoYear, twoYearReady)}</p>
       )}
       {(off || kaptText) && (
         <div className="flex flex-wrap gap-2">
@@ -153,6 +169,7 @@ export default function PriceRangeSection({ areaPrices, selected, onSelect, twoY
           {kaptText && <SmallBox label="한 달 관리비" value={kaptText} note={[ymDot(kapt?.cost_month), "K-apt"].filter(Boolean).join(" ")} />}
         </div>
       )}
+      {onRetry && <LoadRetry onRetry={onRetry} />}
     </Card>
   );
 }

@@ -10,13 +10,14 @@
  * 실행: npx vitest run src/app/complex/[no]/__tests__/page-public-s481.test.tsx
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 
 const state = vi.hoisted(() => ({
   token: undefined as string | undefined,
   me: null as null | { is_approved_broker?: boolean },
   anon: true,
+  tokenError: false,
   crawlOpts: [] as { auto?: boolean; autoEnabled?: boolean }[],
 }));
 
@@ -93,7 +94,7 @@ vi.mock("@/hooks/useFavorites", () => ({ useFavoriteStatus: () => ({ starred: fa
 vi.mock("@/hooks/useSmartBack", () => ({ useSmartBack: () => vi.fn() }));
 vi.mock("@/hooks/useSessionToken", () => ({
   useSessionToken: () => ({
-    sessionToken: state.token, tokenReady: true, tokenError: false, dismissTokenError: vi.fn(),
+    sessionToken: state.token, tokenReady: true, tokenError: state.tokenError, dismissTokenError: vi.fn(),
   }),
 }));
 vi.mock("@/hooks/useArticleViewPreferences", () => ({
@@ -109,6 +110,7 @@ const last = () => state.crawlOpts[state.crawlOpts.length - 1];
 
 beforeEach(() => {
   state.crawlOpts.length = 0;
+  state.tokenError = false;
   Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(() => vi.restoreAllMocks());
@@ -129,7 +131,9 @@ describe("단지 화면 공개 전환 (세션 481) · 소비자 화면 분기 (�
 
     render(<ComplexDetailPage />, { wrapper: TestQueryProvider });
 
-    expect(await screen.findByText("지금 나온 매물과 호가, 가격 추이는 로그인하면 볼 수 있어요")).toBeInTheDocument();
+    // 보완 F3: "가격 추이" 는 일반 회원에게도 안 열리므로 약속하지 않는다
+    expect(await screen.findByText("지금 나온 매물과 호가는 로그인하면 볼 수 있어요")).toBeInTheDocument();
+    expect(screen.queryByText(/가격 추이/)).not.toBeInTheDocument();
     expect(screen.getAllByText(/로그인하면 볼 수 있어요/)).toHaveLength(1); // 잠금 카드 1장
     expect(screen.getByText("1 · 얼마짜리 집인가")).toBeInTheDocument();
     expect(screen.getByText(/^4 · 내 돈으로 가능한가/)).toBeInTheDocument();
@@ -154,6 +158,7 @@ describe("단지 화면 공개 전환 (세션 481) · 소비자 화면 분기 (�
     state.token = "tok-pending";
     state.me = { is_approved_broker: false };
     state.anon = false;
+    const pyeongBefore = vi.mocked((await import("@/lib/api")).getPyeongDetails).mock.calls.length;
 
     render(<ComplexDetailPage />, { wrapper: TestQueryProvider });
 
@@ -168,6 +173,9 @@ describe("단지 화면 공개 전환 (세션 481) · 소비자 화면 분기 (�
     expectNoBrokerButtons();
     await waitFor(() => expect(state.crawlOpts.length).toBeGreaterThan(1));
     expect(state.crawlOpts.every((o) => o.auto === false && o.autoEnabled === false)).toBe(true);
+    // 보완 F3: 평형 정보는 중개사 대시보드만 쓴다 — 일반 회원에겐 부르지 않는다
+    const api = await import("@/lib/api");
+    expect(vi.mocked(api.getPyeongDetails).mock.calls.length).toBe(pyeongBefore);
   });
 
   it("승인 중개사: 기존 작업 화면 · 갱신·엑셀 있음 · 첫 조회가 끝나면 자동 새로 받기 켜짐", async () => {
@@ -184,7 +192,7 @@ describe("단지 화면 공개 전환 (세션 481) · 소비자 화면 분기 (�
     await waitFor(() => expect(last()).toEqual({ auto: true, autoEnabled: true }));
   });
 
-  it("승인 판정 중엔 로딩 — 중개사에게 소비자 화면이 비치지 않는다", async () => {
+  it("승인 판정 중엔 로딩 — 단지 정보는 이미 받았어도 중개사에게 소비자 화면이 비치지 않는다(보완 A-2)", async () => {
     state.token = "tok-slow";
     state.me = { is_approved_broker: true };
     state.anon = false;
@@ -192,13 +200,36 @@ describe("단지 화면 공개 전환 (세션 481) · 소비자 화면 분기 (�
     let release: (v: unknown) => void = () => {};
     vi.mocked(api.fetchApi).mockImplementationOnce(() => new Promise((r) => { release = r; }));
 
+    const getComplex = vi.mocked(api.getComplex);
+    const before = getComplex.mock.calls.length; // 앞 시험의 호출은 빼고 이번 렌더의 호출만 본다
+
     render(<ComplexDetailPage />, { wrapper: TestQueryProvider });
 
-    await waitFor(() => expect(vi.mocked(api.fetchApi)).toHaveBeenCalled());
+    // 단지 정보 응답이 끝나 React 가 그 결과로 다시 그린 뒤에도(= 남은 대기 조건은 승인 판정뿐) 로딩이어야 한다
+    await waitFor(() => expect(getComplex.mock.calls.length).toBeGreaterThan(before));
+    await act(async () => {
+      await getComplex.mock.results[before].value;
+    });
+    await act(async () => {}); // 쿼리 결과 반영 렌더 한 번 더 흘려 보낸다
+    expect(vi.mocked(api.fetchApi)).toHaveBeenCalled();
+    expect(screen.getByText("단지 정보를 불러오는 중...")).toBeInTheDocument();
     expect(screen.queryByText("1 · 얼마짜리 집인가")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("단지 종합 대시보드")).not.toBeInTheDocument();
-    release({ is_approved_broker: true });
+    await act(async () => release({ is_approved_broker: true }));
     expect(await screen.findByLabelText("단지 종합 대시보드")).toBeInTheDocument();
+  });
+
+  it("세션 확인 실패 경고는 소비자 화면에도 맨 위에 보인다(보완 A-3)", async () => {
+    state.token = undefined;
+    state.me = null;
+    state.anon = true;
+    state.tokenError = true;
+
+    render(<ComplexDetailPage />, { wrapper: TestQueryProvider });
+
+    const warn = await screen.findByText(/로그인 세션을 확인할 수 없어/);
+    const first = screen.getByText("1 · 얼마짜리 집인가");
+    expect(warn.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // 경고가 카드보다 앞
   });
 
   it("단지 정보가 403(정지 계정)이면 오류 화면이 아니라 '이 계정으로는 볼 수 없어요' 잠금 안내", async () => {

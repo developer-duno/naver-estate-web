@@ -18,15 +18,28 @@ describe("S0 머리", () => {
   const header = {
     starred: false, onBack: () => {}, onToggleFavorite: () => {}, isCompared: false, compareFull: false, onToggleCompare: () => {},
   };
+  const range = { kind: "range" as const, area: 59, period: "6m" as const, min: 15700, max: 18000, ltv: 10990, zoneUnknown: false };
   it("사실 칩 + 한 줄 요약", () => {
-    render(<ConsumerHeader complex={makeComplex()} summary={{ area: 59, min: 15700, max: 18000, ltv: 10990 }} {...header} />);
+    render(<ConsumerHeader complex={makeComplex()} summary={range} {...header} />);
     expect(screen.getByRole("heading", { name: "자연" })).toBeInTheDocument();
     expect(screen.getByText("1997년 사용승인")).toBeInTheDocument();
     expect(screen.getByText("199세대")).toBeInTheDocument();
     expect(screen.getByText("1개동")).toBeInTheDocument();
     expect(screen.getByTestId("consumer-summary").textContent).toBe(
-      "59㎡ 기준 최근 거래 1억 5,700만~1억 8,000만 · 담보대출 한도 최대 약 1억 990만 (선순위 없을 때 · 참고)",
+      "59㎡ 기준 최근 거래 1억 5,700만~1억 8,000만 · 담보대출 한도 최대 약 1억 990만 (가진 집 담보 · 선순위 없을 때 · 참고)",
     );
+  });
+  it("2년 단계 · 구역 모름 꼬리표(보완 F2·A-5)", () => {
+    render(<ConsumerHeader complex={makeComplex()} summary={{ ...range, period: "2y", min: 14700, max: 20000, ltv: 10290, zoneUnknown: true }} {...header} />);
+    const t = screen.getByTestId("consumer-summary").textContent ?? "";
+    expect(t).toContain("59㎡ 기준 최근 2년 거래 1억 4,700만~2억");
+    expect(t.endsWith("(규제지역이면 더 낮아요)")).toBe(true);
+  });
+  it("직접 입력 단계면 한도 숫자 생략", () => {
+    render(<ConsumerHeader complex={makeComplex()} summary={{ kind: "manual" }} {...header} />);
+    const t = screen.getByTestId("consumer-summary").textContent ?? "";
+    expect(t).toContain("최근 2년 정부 실거래 기록 없음");
+    expect(t).not.toMatch(/최대 약|\d억/);
   });
   it("면적 자료 없으면 요약 줄 생략", () => {
     render(<ConsumerHeader complex={makeComplex()} summary={null} {...header} />);
@@ -40,7 +53,7 @@ describe("S1 얼마짜리 집인가", () => {
   it("설계 예시값 — 범위·3건·2년 막대·공시 63~72%·관리비 약 19만 원 · 중위 글자 0", () => {
     const { container } = render(<PriceRangeSection {...base} />);
     expect(screen.getByTestId("consumer-range").textContent).toBe("1억 5,700만 ~ 1억 8,000만");
-    expect(screen.getByText("최근 6개월 중개거래 3건 · 국토교통부 실거래")).toBeInTheDocument();
+    expect(screen.getByText("최근 6개월 거래 3건 · 국토교통부 실거래")).toBeInTheDocument(); // 거래 목록이 비면 "중개거래"라 부르지 않는다(F7)
     expect(screen.getByText("2년 최저 1억 4,700만")).toBeInTheDocument();
     expect(screen.getByText("2년 최고 2억")).toBeInTheDocument();
     expect(screen.getByText("1억 1,300만")).toBeInTheDocument();
@@ -79,13 +92,28 @@ describe("S1 얼마짜리 집인가", () => {
     expect(screen.getByText("최근 6개월 중개거래 1건 · 국토교통부 실거래")).toBeInTheDocument();
   });
 
-  it("면적 자료가 하나도 없으면 안내 문장 + 공시가·관리비 상자만(비율 없음)", () => {
-    const empty = AREAS.map((a) => ({ ...a, price_min: null, price_max: null }));
+  const empty = AREAS.map((a) => ({ ...a, price_min: null, price_max: null }));
+  it("6개월·2년 모두 없으면 '최근 2년 정부 실거래 기록 없음' + 공시가·관리비 상자만(비율 없음)", () => {
     render(<PriceRangeSection {...base} areaPrices={empty} selected={null} twoYear={null} />);
-    expect(screen.getByText("이 단지의 정부 실거래 기록이 아직 없어요")).toBeInTheDocument();
+    expect(screen.getByTestId("consumer-no-range").textContent).toBe("최근 2년 정부 실거래 기록 없음");
     expect(screen.queryByTestId("consumer-range")).toBeNull();
     expect(screen.getByText("1억 1,300만")).toBeInTheDocument(); // 대표 평형(호수 최다)
     expect(screen.queryByText(/실거래의/)).toBeNull();
+  });
+
+  it("6개월 없고 2년 있으면 '최근 6개월 거래 없음 · 2년 범위' (보완 F5)", () => {
+    render(<PriceRangeSection {...base} areaPrices={empty} selected={59} twoYear={{ min: 14700, max: 20000 }} />);
+    expect(screen.getByTestId("consumer-no-range").textContent).toBe("최근 6개월 거래 없음 · 2년 범위 1억 4,700만~2억");
+  });
+
+  it("2년 답을 받기 전엔 '2년 기록 없음'을 단정하지 않는다", () => {
+    render(<PriceRangeSection {...base} areaPrices={empty} selected={59} twoYear={null} twoYearReady={false} />);
+    expect(screen.getByTestId("consumer-no-range").textContent).toBe("최근 6개월 거래 없음");
+  });
+
+  it("오피스텔은 '정부 실거래 자료를 아직 받지 않아요' (보완 F4)", () => {
+    render(<PriceRangeSection {...base} areaPrices={empty} selected={null} twoYear={null} officetel />);
+    expect(screen.getByTestId("consumer-no-range").textContent).toBe("오피스텔은 정부 실거래 자료를 아직 받지 않아요");
   });
 });
 

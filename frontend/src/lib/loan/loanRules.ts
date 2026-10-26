@@ -11,6 +11,7 @@
  * 정본은 미분양이다 — 원본이 바뀌면 이 파일을 다시 복사하고 loanRules.test.ts 의 동일성 표를 원본으로 다시 뽑는다.
  * 분양 전용(ltvForPresale·경과규정·GRANDFATHER_RULES·planFunding)과 이름 판정(getZone·ZONE_MAP)은 복사하지 않는다 —
  * 2u 의 규제지역 판정은 시군구 코드로 한다(./regulation-codes.ts).
+ * 맨 아래 「2u 추가」 절은 미분양 정본에 없는 2u 전용 상수다 — 다시 복사할 때 그 절은 남긴다.
  */
 
 // ── src/constants/regulations.ts ─────────────────────────────────────────────
@@ -124,3 +125,16 @@ export function calcMonthlyPayment(principal: number, annualRate: number, years:
   const n = years * 12;
   return (principal * r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
 }
+
+// ── 2u 추가 (미분양 정본에 없음 — 세션 482 PR 1b 보완, 결정 11) ─────────────────
+
+/**
+ * 생활안정자금 목적 주담대 한도(만원) — 수도권·규제지역 안 이미 가진 집을 담보로 생활비 등을 빌릴 때 최대 1억.
+ * 원문: 금융위원회 「가계부채 관리 강화 방안」 2025-06-27 발표, 2025-06-28 시행
+ *   "수도권·규제지역 내 보유주택을 담보로 하여 생활비 등 조달목적으로 대출받는 생활안정자금 목적 주담대 한도를
+ *    최대 1억원으로 제한한다. 수도권·규제지역 내 주택을 2채 이상 보유한 차주에 대해서는 … 취급을 금지한다.
+ *    다만, 지방 소재 주택을 담보로 하는 생활안정자금 목적 주담대 한도는 현행과 동일하게 금융회사가 자율적으로 설정"
+ * 10·15 대책 FAQ 3-1: "생활안정자금 목적의 주담대는 금번 대책(가격별 한도 축소)의 적용을 받지 않음"
+ *   — 그래서 가진 집 계산에는 15억·25억 가격별 한도(REGULATED_LTV_CAPS)와 수도권 구입 6억(METRO_LOAN_CAP)을 쓰지 않는다.
+ */
+export const LIVING_FUND_CAP_METRO = 10000;

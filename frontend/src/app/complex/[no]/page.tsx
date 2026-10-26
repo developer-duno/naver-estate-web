@@ -107,10 +107,11 @@ export default function ComplexDetailPage() {
     staleTime: 30_000,
   });
 
+  // 평형 정보는 중개사 대시보드만 쓴다 — 일반 회원 소비자 화면에선 부르지 않는다(세션 482 PR 1b 보완 F3)
   const pyeongQuery = useQuery({
     queryKey: queryKeys.pyeongDetails(complexNo),
     queryFn: () => getPyeongDetails(complexNo, sessionToken),
-    enabled: !!complexNo && /^\d+$/.test(complexNo) && tokenReady && !!sessionToken,
+    enabled: !!complexNo && /^\d+$/.test(complexNo) && tokenReady && !!sessionToken && isApprovedBroker,
     staleTime: 60_000,
   });
 
@@ -383,6 +384,21 @@ export default function ComplexDetailPage() {
     </section>
   );
 
+  // 로그인 세션 경고 — 확인 실패면 비로그인으로 판정돼 소비자 화면이 되므로 두 화면 모두 맨 위에(보완 A-3)
+  const tokenWarning = tokenError ? (
+    <Card className="bg-amber-50 border-amber-200 text-amber-800 px-3 py-2 no-print">
+      <div className="flex justify-between items-center gap-2 text-xs">
+        <span>로그인 세션을 확인할 수 없어 일부 기능(실거래가 수집)이 제한됩니다. 새로고침하거나 다시 로그인해 주세요.</span>
+        <button
+          type="button"
+          onClick={dismissTokenError}
+          aria-label="닫기"
+          className="text-amber-600 hover:text-amber-900 shrink-0"
+        >×</button>
+      </div>
+    </Card>
+  ) : null;
+
   const overlays = (
     <>
       {/* 비교 플로팅 바 — printRef 내부라 no-print 필수, 모달(아래 조건부)보다 DOM 앞이어야 백드롭이 바를 덮음 */}
@@ -402,6 +418,7 @@ export default function ComplexDetailPage() {
   if (!isApprovedBroker) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-8">
+        {tokenWarning}
         <ConsumerComplexView
           complex={complex}
           starred={starred}
@@ -413,7 +430,7 @@ export default function ComplexDetailPage() {
           aside={
             loggedOut ? (
               <LockedDataCard
-                title="지금 나온 매물과 호가, 가격 추이는 로그인하면 볼 수 있어요"
+                title="지금 나온 매물과 호가는 로그인하면 볼 수 있어요"
                 description="공인중개사 인증을 받으면 새로 받기·실거래가 수집·엑셀·인쇄까지"
               />
             ) : undefined
@@ -442,19 +459,7 @@ export default function ComplexDetailPage() {
       </div>
 
       {/* 로그인 세션 경고 */}
-      {tokenError && (
-        <Card className="bg-amber-50 border-amber-200 text-amber-800 px-3 py-2 no-print">
-          <div className="flex justify-between items-center gap-2 text-xs">
-            <span>로그인 세션을 확인할 수 없어 일부 기능(실거래가 수집)이 제한됩니다. 새로고침하거나 다시 로그인해 주세요.</span>
-            <button
-              type="button"
-              onClick={dismissTokenError}
-              aria-label="닫기"
-              className="text-amber-600 hover:text-amber-900 shrink-0"
-            >×</button>
-          </div>
-        </Card>
-      )}
+      {tokenWarning}
 
       {/* 📱 한눈 대시보드 (PR 6d — 모바일 2×2 + 데스크톱 4×1 단일 컴포넌트) */}
       {complex && (

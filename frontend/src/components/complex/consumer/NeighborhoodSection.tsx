@@ -3,11 +3,14 @@
 import type { NeighborhoodInfo, SubwayStationNear } from "@/types";
 import { Card } from "@/components/ui/card";
 import { formatDistance, formatStationName, normalizeLineName } from "@/lib/subway-format";
+import LoadRetry from "./LoadRetry";
 import { peopleText } from "./consumer-format";
 
 interface Props {
   stations: SubwayStationNear[];
   neighborhood: NeighborhoodInfo | null | undefined;
+  /** 이 카드 자료 중 불러오지 못한 것이 있으면 다시 시도 — 자료가 없어도 카드를 숨기지 않는다(보완 A-4) */
+  onRetry?: () => void;
 }
 
 /** 지하철 막대 척도 — BE 반경과 같은 3km */
@@ -24,8 +27,8 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
 }
 
 /** S3 · 주변은 어떤가 — 지하철·동네 둘 다 없으면 카드 숨김 */
-export default function NeighborhoodSection({ stations, neighborhood: n }: Props) {
-  if (stations.length === 0 && !n) return null;
+export default function NeighborhoodSection({ stations, neighborhood: n, onRetry }: Props) {
+  if (stations.length === 0 && !n && !onRetry) return null;
   const lines = [...new Set(stations.flatMap((s) => s.lines.map(normalizeLineName)))];
 
   const stats: { label: string; value: string; note?: string }[] = [];
@@ -95,6 +98,7 @@ export default function NeighborhoodSection({ stations, neighborhood: n }: Props
           <p className="text-xs text-gray-400">{n.source}</p>
         </div>
       )}
+      {onRetry && <LoadRetry onRetry={onRetry} />}
     </Card>
   );
 }

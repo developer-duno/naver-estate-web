@@ -3,12 +3,16 @@ import { describe, expect, it } from "vitest";
 import {
   brokeredCount,
   currentYm,
+  isOfficetel,
   kaptCostText,
   monthsEndingAt,
   officialForArea,
   officialRatioText,
   peopleText,
   priceRangeText,
+  priceStage,
+  topicParticle,
+  tradeCountText,
 } from "../consumer-format";
 import { OFFICIAL } from "./fixtures";
 
@@ -56,5 +60,36 @@ describe("consumer-format", () => {
       area_m2: 59, price_median: null, trade_count: 3,
       trades: [{ price: 1, date: null, floor: null, direct: true }, { price: 2, date: null, floor: null, direct: false }],
     })).toBe(1);
+  });
+
+  it("건수 글자 — 거래 목록이 비면 '거래 N건', 있으면 '중개거래 N건'(보완 F7)", () => {
+    expect(tradeCountText({ area_m2: 59, price_median: null, trade_count: 3, trades: [] })).toBe("거래 3건");
+    expect(tradeCountText({
+      area_m2: 59, price_median: null, trade_count: 3,
+      trades: [{ price: 1, date: null, floor: null, direct: true }, { price: 2, date: null, floor: null, direct: false }],
+    })).toBe("중개거래 1건");
+  });
+
+  it("주제 조사 — 받침 있으면 '은', 없으면 '는'", () => {
+    expect(topicParticle("유성구")).toBe("는");
+    expect(topicParticle("이 단지 지역")).toBe("은");
+    expect(topicParticle("ABC")).toBe("는");
+  });
+
+  it("집값 단계 3가지 — 6개월 → 2년 → 직접 입력(결정 12)", () => {
+    const ranged = { area_m2: 59, price_median: null, trade_count: 3, price_min: 15700, price_max: 18000, trades: [] };
+    const none = { ...ranged, price_min: null, price_max: null };
+    expect(priceStage(ranged, { min: 14700, max: 20000 })).toEqual({ kind: "6m", min: 15700, max: 18000 });
+    expect(priceStage(none, { min: 14700, max: 20000 })).toEqual({ kind: "2y", min: 14700, max: 20000 });
+    expect(priceStage(none, null)).toEqual({ kind: "manual" });
+    expect(priceStage(undefined, { min: 0, max: 0 })).toEqual({ kind: "manual" });
+  });
+
+  it("오피스텔 판정 — OPST·OBYG, 코드 없으면 이름", () => {
+    expect(isOfficetel({ real_estate_type_code: "OPST" })).toBe(true);
+    expect(isOfficetel({ real_estate_type_code: "OBYG" })).toBe(true);
+    expect(isOfficetel({ real_estate_type_code: "APT", real_estate_type_name: "오피스텔" })).toBe(false);
+    expect(isOfficetel({ real_estate_type_name: "오피스텔분양권" })).toBe(true);
+    expect(isOfficetel({ real_estate_type_name: "아파트" })).toBe(false);
   });
 });

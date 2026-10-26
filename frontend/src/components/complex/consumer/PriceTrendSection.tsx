@@ -3,6 +3,7 @@
 import type { PublicPriceHistory, RegionTrend, RegionTrendItem } from "@/types";
 import { Card } from "@/components/ui/card";
 import { formatChartPrice, formatKoreanPrice } from "@/lib/format";
+import LoadRetry from "./LoadRetry";
 import { monthsEndingAt, ymDot, ymShort } from "./consumer-format";
 
 interface Props {
@@ -10,6 +11,8 @@ interface Props {
   trend: RegionTrend | null | undefined;
   /** 띠 그래프 마지막 달 "YYYYMM"(오늘 달) — 시험은 고정값 */
   endYm: string;
+  /** 이 카드 자료 중 불러오지 못한 것이 있으면 다시 시도 — 자료가 없어도 카드를 숨기지 않는다(보완 A-4) */
+  onRetry?: () => void;
 }
 
 const W = 340;
@@ -122,13 +125,13 @@ function firstLast(items: RegionTrendItem[], key: "sale_price_median" | "jeonse_
 }
 
 /** S2 · 어떻게 변해 왔나 — 둘 다 비면 카드 숨김. 지역 통계의 중위 매매가는 예외로 보인다(부동산원 공식 통계) */
-export default function PriceTrendSection({ history, trend, endYm }: Props) {
+export default function PriceTrendSection({ history, trend, endYm, onRetry }: Props) {
   const hasBands = !!history && history.months.length > 0;
   const items = trend?.items ?? [];
   const sale = firstLast(items, "sale_price_median");
   const jeonse = firstLast(items, "jeonse_ratio");
   const hasTrend = items.length > 0 && (sale != null || jeonse != null);
-  if (!hasBands && !hasTrend) return null;
+  if (!hasBands && !hasTrend && !onRetry) return null;
 
   const parts: string[] = [];
   if (sale) parts.push(`중위 매매가 ${formatKoreanPrice(sale[0])}→${formatKoreanPrice(sale[1])}`);
@@ -161,6 +164,7 @@ export default function PriceTrendSection({ history, trend, endYm }: Props) {
           </p>
         </div>
       )}
+      {onRetry && <LoadRetry onRetry={onRetry} />}
     </Card>
   );
 }

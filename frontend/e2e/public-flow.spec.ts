@@ -48,8 +48,16 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 720 
               total_household_count: 199,
               total_dong_count: 1,
               rep_area_m2: 59,
+              // 거래 3줄 — 휴대폰 390px 에서 4열 거래 표가 가로로 넘치지 않는지까지 본다(보완 F8)
               area_prices: [
-                { area_m2: 59, households: 116, price_median: 17200, trade_count: 3, price_min: 15700, price_max: 18000, trades: [] },
+                {
+                  area_m2: 59, households: 116, price_median: 17200, trade_count: 3, price_min: 15700, price_max: 18000,
+                  trades: [
+                    { price: 18000, date: "2026-07-21", floor: 15, direct: false },
+                    { price: 17200, date: "2026-06-03", floor: 7, direct: false },
+                    { price: 15700, date: "2026-05-11", floor: 2, direct: true },
+                  ],
+                },
               ],
             }),
           });
@@ -76,15 +84,21 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 720 
         await expect(page.getByRole("heading", { name: new RegExp(`^${title}`) })).toBeVisible();
       }
       await expect(page.getByText("1억 5,700만 ~ 1억 8,000만")).toBeVisible();
-      await expect(page.getByText("지금 나온 매물과 호가, 가격 추이는 로그인하면 볼 수 있어요")).toBeVisible();
+      await expect(page.getByTestId("consumer-trades").locator("tbody tr")).toHaveCount(3);
+      await expect(page.getByText("지금 나온 매물과 호가는 로그인하면 볼 수 있어요")).toBeVisible();
       await expect(page.getByText(/로그인하면 볼 수 있어요/)).toHaveCount(1);
       await expect(page.getByText(/필터 접기|필터 펼치기/)).toHaveCount(0);
       await expect(page.getByRole("button", { name: "데이터 갱신" })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "엑셀 내보내기" })).toHaveCount(0);
       expect(new URL(page.url()).pathname).toBe("/complex/100000");
-      // 가로 스크롤 없음(휴대폰 폭에서 카드가 넘치지 않는다)
+      // 가로 스크롤 없음(휴대폰 폭에서 카드가 넘치지 않는다) — 페이지 전체와 거래 표 자체 둘 다
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow).toBeLessThanOrEqual(0);
+      const tableOverflow = await page.getByTestId("consumer-trades").evaluate((t) => {
+        const card = t.parentElement as HTMLElement;
+        return t.getBoundingClientRect().right - card.getBoundingClientRect().right;
+      });
+      expect(tableOverflow).toBeLessThanOrEqual(0);
     });
   });
 }

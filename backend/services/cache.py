@@ -39,11 +39,13 @@ _registry: dict[str, "TTLCache"] = {}
 _registry_lock = threading.Lock()
 
 
-def get_cache(name: str, dynamic: bool = False) -> "TTLCache":
-    """이름으로 TTLCache 조회. 없으면 생성 (스레드 안전)."""
+def get_cache(
+    name: str, dynamic: bool = False, ttl: int = DEFAULT_TTL_SECONDS, max_size: int = MAX_CACHE_SIZE,
+) -> "TTLCache":
+    """이름으로 TTLCache 조회. 없으면 생성 (스레드 안전). ttl·max_size 는 처음 만들 때만 쓰인다."""
     with _registry_lock:
         if name not in _registry:
-            _registry[name] = TTLCache(dynamic=dynamic)
+            _registry[name] = TTLCache(ttl=ttl, max_size=max_size, dynamic=dynamic)
         return _registry[name]
 
 

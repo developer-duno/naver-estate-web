@@ -1,11 +1,12 @@
 """단지 관련 API 엔드포인트"""
 
+import re
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
-from crawler.utils import get_shared_throttle, haversine_km
+from crawler.utils import get_shared_throttle
 from db import queries
 from db.area_price_queries import complex_area_fields
 from db.sgis_queries import build_neighborhood
@@ -19,6 +20,8 @@ from routers.serializers import (
     kapt_cost_to_dict,
 )
 from services.cache import TTLCache, get_cache
+from services.public_pages import nearest_stations, official_price_payload, public_summary
+from services.seo_grade import sitemap_ids
 
 router = APIRouter()
 
@@ -87,6 +90,44 @@ def get_complexes_by_region(
     }
     _cache.set(cache_key, result)
     return list_for_viewer(result, user)
+
+
+# ── 검색엔진 색인용 공개 창구(세션 483 PR 3a) — `/{complex_no}` 보다 먼저 등록해야 sitemap-ids 가 안 빨려 간다 ──
+_COMPLEX_NO = re.compile(r"\d{1,12}")
+
+
+@router.get("/sitemap-ids")
+def get_sitemap_ids(
+    response: Response,
+    grade: Literal["A"] = Query(...),
+    db: Session = Depends(get_db),
+):
+    """사이트맵에 넣을 단지 번호 — indexable 인 그 등급 단지만(services/seo_grade 한 곳 판정), 1일 메모리 캐시.
+
+    계산 실패는 5xx 그대로(빈 목록을 굳히지 않는다). lastmod 는 싣지 않는다(설계 v2 O6).
+    """
+    items = sitemap_ids(db, grade)
+    response.headers["Cache-Control"] = _PUBLIC_CACHE
+    return {"grade": grade, "count": len(items), "items": items}
+
+
+@router.get("/{complex_no}/public-summary")
+def get_public_summary(
+    complex_no: str,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """단지 공개 요약 — 서버 렌더(ISR)가 한 번에 받는 재료. 인증 없음 · 허용 목록 칸만(좌표·중위값·네이버 칸 0).
+
+    숫자가 아닌 번호·없는 단지 = 404(Cache-Control 없음). 200 은 public 1시간 + 백엔드 메모리 1시간.
+    """
+    if not _COMPLEX_NO.fullmatch(complex_no):
+        raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다")
+    result = public_summary(db, complex_no)
+    if result is None:
+        raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다")
+    response.headers["Cache-Control"] = _PUBLIC_CACHE
+    return result
 
 
 @router.get("/{complex_no}")
@@ -364,25 +405,8 @@ def get_official_prices(
     if cached is not None:
         return cached
 
-    rows = queries.get_complex_official_prices(db, complex_no)
-    years = {r.stdr_year for r in rows}
-    latest_year = max(years) if years else None
-    result = {
-        "complex_no": complex_no,
-        "year": latest_year,
-        "items": sorted(
-            (
-                {
-                    "prvuse_ar": float(r.prvuse_ar),
-                    "price_median": r.price_median,
-                    "ho_count": r.ho_count,
-                }
-                for r in rows
-                if r.stdr_year == latest_year
-            ),
-            key=lambda item: item["prvuse_ar"],
-        ),
-    }
+    # 계산 본문은 공개 요약(services/public_pages)과 공용 — 동작 같음(세션 483 PR 3a 에서 떼어 냄)
+    result = official_price_payload(complex_no, queries.get_complex_official_prices(db, complex_no))
     _official_price_cache.set(cache_key, result)
     return result
 
@@ -390,30 +414,6 @@ def get_official_prices(
 # 가까운 지하철 캐시 — 역사 데이터는 연 1회 갱신이라 오래 캐시 가능
 # (12시간 고정 TTL, official-prices 답습)
 _subway_cache = TTLCache(ttl=43200, max_size=1000)
-
-_SUBWAY_RADIUS_KM = 3.0
-_SUBWAY_MAX_STATIONS = 3
-
-
-def _normalize_station_name(name: str) -> str:
-    """역명 끝의 "역" 접미사를 떼어낸 그룹핑 정규형.
-
-    원본이 같은 물리 역을 노선에 따라 "선릉"(2호선)/"선릉역"(분당선) 처럼 다르게 실어서,
-    접미사를 안 떼면 한 역이 결과 슬롯을 두 칸 차지한다(라이브 실측: 역삼IPARK).
-    전국 50개 역이 이 표기 불일치에 걸린다.
-
-    떼어낸 결과가 한 글자 이하면 원본을 유지한다 — "역" 단독 역명 방어(현 데이터엔
-    없지만 갱신본에서 생길 수 있다).
-
-    ⚠ 이름만으로 묶으므로 원리상 동명이역(부산 "송정" vs 부산진구 "송정역", 340km)도
-    같은 키가 된다. 다만 호출부가 3km 반경으로 먼저 거른 뒤 묶어서 실제 충돌은 없다
-    (실측: 한 반경에 동시 등장 가능한 동명 쌍 51건은 전부 4~376m 의 진짜 환승역).
-    """
-    if name.endswith("역"):
-        stripped = name[:-1]
-        if len(stripped) > 1:
-            return stripped
-    return name
 
 
 @router.get("/{complex_no}/subway")
@@ -425,7 +425,8 @@ def get_nearby_subway(
 
     같은 역이 노선별로 여러 행인 원본 구조라 역명으로 묶는다 — 거리는 최단 행 기준,
     노선명은 반경 안에 든 그 역의 모든 노선을 모아 보여준다. 원본이 "선릉"/"선릉역"
-    처럼 접미사를 섞어 쓰므로 정규형(_normalize_station_name)을 그룹핑 키로 쓴다.
+    처럼 접미사를 섞어 쓰므로 정규형(normalize_station_name)을 그룹핑 키로 쓴다.
+    계산 본문 = services/public_pages.nearest_stations(공개 요약과 공용 — 세션 483 PR 3a 에서 떼어 냄, 동작 같음).
 
     응답 station_name 도 접미사 없는 정규형이다 — FE formatStationName 이 "역"을
     붙여 표시하므로 화면에는 "선릉역"으로 나온다.
@@ -440,43 +441,7 @@ def get_nearby_subway(
         raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다")
 
     # 좌표 없는 단지는 계산이 불가능 — 에러가 아니라 빈 목록 (FE 계약)
-    if cpx.latitude is None or cpx.longitude is None:
-        result = {"stations": []}
-        _subway_cache.set(cache_key, result)
-        return result
-
-    # 정규화 역명 → {최단거리, 노선명 집합}. 반경 밖 행은 노선 수집에서도 제외한다.
-    grouped: dict[str, dict] = {}
-    for station in queries.get_all_subway_stations(db):
-        distance_km = haversine_km(
-            cpx.latitude, cpx.longitude, station.latitude, station.longitude
-        )
-        if distance_km > _SUBWAY_RADIUS_KM:
-            continue
-        key = _normalize_station_name(station.station_name)
-        entry = grouped.get(key)
-        if entry is None:
-            grouped[key] = {
-                "distance_km": distance_km,
-                "lines": {station.line_name},
-            }
-        else:
-            entry["distance_km"] = min(entry["distance_km"], distance_km)
-            entry["lines"].add(station.line_name)
-
-    nearest = sorted(grouped.items(), key=lambda item: item[1]["distance_km"])[
-        :_SUBWAY_MAX_STATIONS
-    ]
-    result = {
-        "stations": [
-            {
-                "station_name": name,
-                "lines": sorted(entry["lines"]),
-                "distance_m": round(entry["distance_km"] * 1000),
-            }
-            for name, entry in nearest
-        ]
-    }
+    result = {"stations": nearest_stations(db, cpx)}
     _subway_cache.set(cache_key, result)
     return result
 

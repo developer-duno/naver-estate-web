@@ -3,6 +3,7 @@
 Redis 사용 가능 시 Redis sorted set 기반, 없으면 in-memory 폴백.
 """
 
+import hmac
 import logging
 import os
 import time
@@ -22,6 +23,10 @@ RATE_LIMITS = {
     "/api/": (60, 60),  # 기본: 60/분
 }
 LOGIN_RATE_LIMIT = (5, 300)  # 로그인: 5/5분
+# 서버 렌더(Vercel ISR) 전용 통 — 요청 머리 X-SSR-Key 가 env SSR_SHARED_KEY 와 같으면 IP 무관 전체 한 통 분당 300
+# (세션 483 PR 3a · 설계 v2 O7). env 가 비면 기능 꺼짐 = 지금과 똑같음. 열쇠 값은 어디에도 찍지 않는다.
+SSR_RATE_LIMIT = (300, 60)
+SSR_RATE_KEY = "rl:ssr:all"
 
 # ── Redis 또는 In-Memory 백엔드 선택 ──
 
@@ -63,6 +68,17 @@ def _get_client_ip(request: Request) -> str:
     if request.client:
         return request.client.host
     return "unknown"
+
+
+def _is_ssr_request(request: Request) -> bool:
+    """X-SSR-Key 머리가 SSR_SHARED_KEY 와 같은가 — env 가 비었거나 머리가 없으면 False. 비교는 hmac.compare_digest."""
+    key = os.getenv("SSR_SHARED_KEY", "")
+    if not key:
+        return False
+    given = request.headers.get("x-ssr-key")
+    if not given:
+        return False
+    return hmac.compare_digest(given.encode("utf-8"), key.encode("utf-8"))
 
 
 def _check_rate_limit_redis(rate_key: str, max_req: int, window: int) -> bool:
@@ -149,12 +165,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ip = _get_client_ip(request)
         started = time.perf_counter()
 
+        rate_key = f"rl:{ip}:{path.split('/')[2] if len(path.split('/')) > 2 else 'api'}"
         if path == "/api/auth/login" or (path == "/api/signup" and request.method == "POST"):
             max_req, window = LOGIN_RATE_LIMIT
+        elif _is_ssr_request(request):
+            max_req, window = SSR_RATE_LIMIT
+            rate_key = SSR_RATE_KEY
         else:
             max_req, window = RATE_LIMITS.get("/api/", (60, 60))
-
-        rate_key = f"rl:{ip}:{path.split('/')[2] if len(path.split('/')) > 2 else 'api'}"
 
         exceeded = (
             _check_rate_limit_redis(rate_key, max_req, window)

@@ -39,7 +39,7 @@ describe("PriceChartSection", () => {
   });
 
   it("accessToken 있으면 자동 수집 1회 trigger", async () => {
-    renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} accessToken="t" />);
+    renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} accessToken="t" canAct />);
     await waitFor(() => {
       expect(mockStartPriceCollect).toHaveBeenCalledWith("C001", "t");
     });
@@ -87,23 +87,23 @@ describe("PriceChartSection", () => {
     mockGetPriceHistory.mockResolvedValue({ complex_no: "C001", items: [] });
   });
 
-  it("accessToken 없으면 수집 버튼 옆에 '로그인 후 수집할 수 있습니다' 안내 노출", async () => {
+  it("accessToken 없으면 수집 버튼 옆에 '로그인하고 공인중개사 인증을 받으면 수집할 수 있어요' 안내 노출", async () => {
     renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} />);
-    expect(await screen.findByText(/로그인 후 수집할 수 있습니다/)).toBeInTheDocument();
+    expect(await screen.findByText(/로그인하고 공인중개사 인증을 받으면 수집할 수 있어요/)).toBeInTheDocument();
   });
 
   it("accessToken 있으면 로그인 안내 미노출", async () => {
-    renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} accessToken="t" />);
+    renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} accessToken="t" canAct />);
     await waitFor(() => {
       expect(mockStartPriceCollect).toHaveBeenCalled();
     });
-    expect(screen.queryByText(/로그인 후 수집할 수 있습니다/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/로그인하고 공인중개사 인증을 받으면 수집할 수 있어요/)).not.toBeInTheDocument();
   });
 
   it("startPriceCollect 가 429 reject 시 '요청 한도 초과' 에러 메시지 노출 (사용자 침묵 방지)", async () => {
     const apiErr = Object.assign(new Error("rate limit"), { statusCode: 429 });
     mockStartPriceCollect.mockRejectedValueOnce(apiErr);
-    renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} accessToken="t" />);
+    renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} accessToken="t" canAct />);
     await waitFor(() => {
       expect(mockStartPriceCollect).toHaveBeenCalledWith("C001", "t");
     });
@@ -111,5 +111,27 @@ describe("PriceChartSection", () => {
     await waitFor(() => {
       expect(screen.getByText(/요청 한도 초과/)).toBeInTheDocument();
     });
+  });
+
+  // 세션 481 보완 F6: 자동 실거래가 수집(네이버 호출)은 승인 중개사만 · 403 은 안내
+  it("로그인했지만 승인 중개사가 아니면(canAct 없음) 자동 수집 호출 0", async () => {
+    mockStartPriceCollect.mockClear();
+    renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} accessToken="t" />);
+    await waitFor(() => expect(mockGetPriceHistory).toHaveBeenCalled());
+    expect(mockStartPriceCollect).not.toHaveBeenCalled();
+  });
+
+  it("수집이 403 이면 '공인중개사 인증(승인) 뒤 쓸 수 있어요' 안내", async () => {
+    mockStartPriceCollect.mockRejectedValueOnce(Object.assign(new Error("forbidden"), { statusCode: 403 }));
+    renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} accessToken="t" canAct />);
+    expect(await screen.findByText(/실거래가 수집은 공인중개사 인증\(승인\) 뒤 쓸 수 있어요/)).toBeInTheDocument();
+  });
+
+  // 세션 481 보완 F4: 비로그인 확정이면 추이 요청 없이 잠금 카드
+  it("loggedOut 이면 가격 추이 요청 0 · 잠금 카드", async () => {
+    mockGetPriceHistory.mockClear();
+    renderWithQuery(<PriceChartSection complexNo="C001" pyeongDetails={[]} loggedOut />);
+    expect(await screen.findByText("실거래가은(는) 로그인하면 볼 수 있어요")).toBeInTheDocument();
+    expect(mockGetPriceHistory).not.toHaveBeenCalled();
   });
 });

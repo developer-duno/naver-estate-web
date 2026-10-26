@@ -13,25 +13,25 @@ def _seed(db):
     db.commit()
 
 
-def test_get_article_200(client, db):
-    """매물 상세 조회 성공"""
+def test_get_article_200(client, db, approved_headers):
+    """매물 상세 조회 성공 (로그인 회원 — 세션 481)"""
     _seed(db)
-    res = client.get("/api/articles/A001")
+    res = client.get("/api/articles/A001", headers=approved_headers)
     assert res.status_code == 200
     data = res.json()
     assert data["article_no"] == "A001"
 
 
-def test_get_article_404(client):
+def test_get_article_404(client, approved_headers):
     """존재하지 않는 매물 → 404"""
-    res = client.get("/api/articles/NOEXIST")
+    res = client.get("/api/articles/NOEXIST", headers=approved_headers)
     assert res.status_code == 404
 
 
-def test_price_changes_200(client, db):
-    """가격 변동 매물 조회"""
+def test_price_changes_200(client, db, approved_headers):
+    """가격 변동 매물 조회 (로그인 회원 — 세션 481)"""
     _seed(db)
-    res = client.get("/api/articles/price-changes")
+    res = client.get("/api/articles/price-changes", headers=approved_headers)
     assert res.status_code == 200
     data = res.json()
     assert isinstance(data, list) or "articles" in data
@@ -56,9 +56,9 @@ def test_export_no_auth_403(client, db):
     assert res.status_code in (401, 403)
 
 
-def test_get_article_has_fields(client, db):
+def test_get_article_has_fields(client, db, approved_headers):
     _seed(db)
-    data = client.get('/api/articles/A001').json()
+    data = client.get('/api/articles/A001', headers=approved_headers).json()
     for k in ['article_no','complex_no','trade_type_name']:
         assert k in data
 
@@ -67,17 +67,17 @@ def test_export_with_data(client, db, approved_headers):
     res = client.post('/api/articles/export?complex_no=C001', headers=approved_headers)
     assert res.status_code == 200
 
-def test_price_changes_empty(client):
-    res = client.get('/api/articles/price-changes')
+def test_price_changes_empty(client, approved_headers):
+    res = client.get('/api/articles/price-changes', headers=approved_headers)
     assert res.status_code == 200
 
-def test_get_article_inactive(client, db):
+def test_get_article_inactive(client, db, approved_headers):
     from db.models import Article as A2
     from db.models import Complex as C2
     db.add(C2(complex_no="CI",complex_name="t",sido="s",sigungu="g"))
     db.add(A2(article_no="AI",complex_no="CI",trade_type_name="t",is_active=False,numeric_price=1))
     db.commit()
-    assert client.get("/api/articles/AI").status_code == 200
+    assert client.get("/api/articles/AI", headers=approved_headers).status_code == 200
 
 def test_export_content_disposition(client, db, approved_headers):
     _seed(db)
@@ -113,7 +113,7 @@ def test_export_audit_ip_ignores_forged_xff(client, db, approved_headers):
     assert "6.6.6" not in (row.ip_address or "")  # 위조 XFF 미채택
 
 
-def test_multiple_articles(client, db):
+def test_multiple_articles(client, db, approved_headers):
     from db.models import Article as A3
     from db.models import Complex as C3
     db.add(C3(complex_no="CM",complex_name="m",sido="s",sigungu="g"))
@@ -121,4 +121,4 @@ def test_multiple_articles(client, db):
         db.add(A3(article_no=f"AM{i}",complex_no="CM",trade_type_name="m",is_active=True,numeric_price=1000*i))
     db.commit()
     for i in range(3):
-        assert client.get(f"/api/articles/AM{i}").status_code == 200
+        assert client.get(f"/api/articles/AM{i}", headers=approved_headers).status_code == 200

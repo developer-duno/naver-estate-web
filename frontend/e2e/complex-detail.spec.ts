@@ -4,10 +4,11 @@
  */
 import { test, expect } from "@playwright/test";
 
-test("단지 상세 페이지 접근 시 크래시 없음", async ({ page }) => {
+test("단지 상세 페이지 접근 시 크래시 없음 — 비로그인도 로그인 화면으로 보내지 않는다 (세션 481)", async ({ page }) => {
   const res = await page.goto("/complex/12345");
-  // 페이지가 로드되면 성공 (200 또는 리다이렉트)
-  expect(res?.status()).toBeLessThan(500);
+  // 세션 481 공개 전환: 로그인 벽(307 → /login)을 걷었다 — 비로그인도 단지 화면이 200 으로 열린다
+  expect(res?.status()).toBe(200);
+  expect(new URL(page.url()).pathname).toBe("/complex/12345");
   await expect(page.locator("header")).toBeVisible();
 });
 

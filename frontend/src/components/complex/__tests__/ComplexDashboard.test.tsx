@@ -190,6 +190,26 @@ describe("ComplexDashboard (v2)", () => {
     expect(screen.getAllByText("매물 32건")).toHaveLength(2);
   });
 
+  // 세션 481 보완 F8: 비로그인은 매물 수를 모른다 — "매물 0건" 이 아니라 로그인 안내
+  it("비로그인 확정(loggedOut)이면 실거래가 칸 '로그인하면 보여요' · '매물 0건' 없음", () => {
+    render(
+      <ComplexDashboard complex={baseComplex} complexNo="C001" pyeongDetails={samplePyeong}
+        sessionToken={undefined} loggedOut onFilterChange={() => {}} />,
+    );
+    expect(screen.getByText("로그인하면 보여요")).toBeInTheDocument();
+    expect(screen.queryByText("매물 0건")).toBeNull();
+  });
+
+  it("토큰 없이 매물 조회가 실패(401)해도 '로그인하면 보여요'", () => {
+    mockUseComplexArticleAvg.mockReturnValue({ avgPrice: null, count: 0, isLoading: false, isError: true });
+    render(
+      <ComplexDashboard complex={baseComplex} complexNo="C001" pyeongDetails={samplePyeong}
+        sessionToken={undefined} onFilterChange={() => {}} />,
+    );
+    expect(screen.getByText("로그인하면 보여요")).toBeInTheDocument();
+    expect(screen.queryByText("매물 0건")).toBeNull();
+  });
+
   it("실거래가 칸: recent_trades_6m 이 있어도 '거래 N건'이 아니라 '매물 N건 · 현재 매물' (세션 429)", () => {
     // recent_trades_6m 은 실제 거래 횟수가 아니라 시세 기록 줄 수 — 거래처럼 보이면 안 된다
     mockUseComplexArticleAvg.mockReturnValue({

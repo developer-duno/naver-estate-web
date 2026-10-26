@@ -20,7 +20,7 @@ import MaintenanceCost from "@/components/article/MaintenanceCost";
 import ArticleDescription from "@/components/article/ArticleDescription";
 import PriceHistoryTable from "@/components/article/PriceHistoryTable";
 import ArticleFavoriteButton from "@/components/ArticleFavoriteButton";
-import LockedDataCard, { isAuthGateError } from "@/components/ui/locked-data-card";
+import LockedDataCard, { isAuthGateError, lockReasonOf } from "@/components/ui/locked-data-card";
 
 /**
  * ChartAccordion emptyHint 의 네트워크 실패(isError) 안내 + "다시 시도" 버튼.
@@ -53,11 +53,12 @@ export default function ArticleDetail({ articleNo, onClose, complex, onRemoveFav
   const { data: article, isLoading, isError, error, refetch } = useQuery({
     queryKey: queryKeys.articleLive(articleNo),
     queryFn: () => getArticleLive(articleNo),
-    // 404 = 매물 삭제 확정 답변 — 재시도 무의미
+    // 404 = 매물 삭제 확정 답변 · 401/403 = 로그인·권한 확정 답변 — 재시도 무의미
     retry: (failureCount, err) =>
-      !(err instanceof ApiError && err.statusCode === 404) && failureCount < 1,
+      !(err instanceof ApiError && err.statusCode === 404) && !isAuthGateError(err) && failureCount < 1,
   });
   const isGone = isError && error instanceof ApiError && error.statusCode === 404;
+  const isLocked = isError && isAuthGateError(error);
 
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -132,7 +133,10 @@ export default function ArticleDetail({ articleNo, onClose, complex, onRemoveFav
               <Skeleton className="h-40 w-full" />
             </div>
           )}
-          {!isLoading && isError && (isGone ? (
+          {!isLoading && isLocked && (
+            <LockedDataCard label="매물 상세" reason={lockReasonOf(error)} />
+          )}
+          {!isLoading && isError && !isLocked && (isGone ? (
             <div className="text-center py-8">
               <p className="text-gray-700 font-medium mb-1">이 매물은 더 이상 확인할 수 없어요.</p>
               <p className="text-sm text-gray-500 mb-4">거래가 완료됐거나 네이버에서 내려간 매물이에요.</p>
@@ -242,7 +246,7 @@ function ArticleDetailBody({ article, articleNo, complex }: BodyProps) {
         hasContent={hasMarketPosition}
         emptyHint={
           isAuthGateError(priceStatsQuery.error)
-            ? <LockedDataCard label="시세 정보" />
+            ? <LockedDataCard label="시세 정보" reason={lockReasonOf(priceStatsQuery.error)} />
             : priceStatsQuery.isError
               ? <RetryHint message="시세 정보를 불러오지 못했습니다." onRetry={priceStatsQuery.refetch} />
               : "이 면적의 시세 정보가 아직 수집되지 않았습니다."
@@ -261,7 +265,7 @@ function ArticleDetailBody({ article, articleNo, complex }: BodyProps) {
         hasContent={hasCompeting}
         emptyHint={
           isAuthGateError(articlesQuery.error)
-            ? <LockedDataCard label="경쟁 매물" />
+            ? <LockedDataCard label="경쟁 매물" reason={lockReasonOf(articlesQuery.error)} />
             : <RetryHint message="경쟁 매물 정보를 불러오지 못했습니다." onRetry={articlesQuery.refetch} />
         }
       >
@@ -279,7 +283,7 @@ function ArticleDetailBody({ article, articleNo, complex }: BodyProps) {
         hasContent={hasMaintenance}
         emptyHint={
           isAuthGateError(pyeongQuery.error)
-            ? <LockedDataCard label="관리비 정보" />
+            ? <LockedDataCard label="관리비 정보" reason={lockReasonOf(pyeongQuery.error)} />
             : pyeongQuery.isError
               ? <RetryHint message="관리비 정보를 불러오지 못했습니다." onRetry={pyeongQuery.refetch} />
               : "이 면적의 관리비 정보가 아직 수집되지 않았습니다."

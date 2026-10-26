@@ -28,6 +28,7 @@ import type { ArticlePageSize } from "@/lib/storage";
 import { useArticleViewPreferences } from "@/hooks/useArticleViewPreferences";
 import { usePopstateRefresh } from "@/hooks/usePopstateRefresh";
 import { useSessionToken } from "@/hooks/useSessionToken";
+import { useIsApprovedBroker } from "@/hooks/useIsApprovedBroker";
 import Pagination from "@/components/Pagination";
 import HintIcon from "@/components/HintIcon";
 import ComplexHeader from "@/components/complex/ComplexHeader";
@@ -38,7 +39,7 @@ import ComplexDashboard from "@/components/complex/ComplexDashboard";
 import PrintButton from "@/components/complex/PrintButton";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import LockedDataCard, { isAuthGateError } from "@/components/ui/locked-data-card";
+import LockedDataCard, { isAuthGateError, lockReasonOf } from "@/components/ui/locked-data-card";
 
 export default function ComplexDetailPage() {
   const params = useParams();
@@ -55,6 +56,10 @@ export default function ComplexDetailPage() {
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [error, setError] = useState("");
   const { sessionToken, tokenError, tokenReady, dismissTokenError } = useSessionToken();
+  // 자동 새로 받기(네이버 호출)는 승인 중개사만 — 비로그인·미승인은 화면을 봐도 자동 호출 0(세션 481)
+  const isApprovedBroker = useIsApprovedBroker(sessionToken);
+  // 비로그인 확정(세션 해석 끝 + 토큰 없음) — 네이버 매물·평형·호가·추이는 요청하지 않고 잠금 카드만(세션 481 보완 F4)
+  const loggedOut = tokenReady && !sessionToken;
   const [filterOptions, setFilterOptions] = useState<FilterOptions | undefined>(undefined);
   const { articleViewMode, pageSize, setPageSize, handleViewModeChange } = useArticleViewPreferences();
 
@@ -94,7 +99,8 @@ export default function ComplexDetailPage() {
     }, sessionToken),
     // tokenReady 가드: 토큰 해석 완료 후 실행 — 토큰 도착 전 undefined 로 먼저 쏴서
     // 403→queryKey 불변 refetch 안 됨(승인 중개사 잠금 오인) 차단 (B2 게이트)
-    enabled: !!complexNo && /^\d+$/.test(complexNo) && tokenReady,
+    // 비로그인이면 아예 안 부른다(401 요청 0 — 세션 481 보완 F4)
+    enabled: !!complexNo && /^\d+$/.test(complexNo) && tokenReady && !!sessionToken,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
@@ -102,7 +108,7 @@ export default function ComplexDetailPage() {
   const pyeongQuery = useQuery({
     queryKey: queryKeys.pyeongDetails(complexNo),
     queryFn: () => getPyeongDetails(complexNo, sessionToken),
-    enabled: !!complexNo && /^\d+$/.test(complexNo) && tokenReady,
+    enabled: !!complexNo && /^\d+$/.test(complexNo) && tokenReady && !!sessionToken,
     staleTime: 60_000,
   });
 
@@ -136,9 +142,9 @@ export default function ComplexDetailPage() {
     clearMessage: clearCrawlMessage,
     handleCrawl,
   } = useCrawlAction(complexNo, {
-    auto: true,
+    auto: isApprovedBroker,
     autoEnabled:
-      complexQuery.isSuccess && articlesQuery.isSuccess && pyeongQuery.isSuccess,
+      isApprovedBroker && complexQuery.isSuccess && articlesQuery.isSuccess && pyeongQuery.isSuccess,
     // 새 자료 크롤이 끝나면 지금 표와 같은 조건으로 따로 받아 비교한다 (세션 447)
     table: {
       queryKey: articlesQueryKey,
@@ -222,6 +228,14 @@ export default function ComplexDetailPage() {
     return <ComplexLoadState kind="loading" />;
   }
 
+  // 단지 정보 401(깨진·만료 토큰) / 403(정지 계정) — 오류 화면이 아니라 잠금 안내(세션 481 보완)
+  if (complexQuery.isError && isAuthGateError(complexQuery.error)) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-16">
+        <LockedDataCard label="단지 정보" reason={lockReasonOf(complexQuery.error)} />
+      </div>
+    );
+  }
   if (error || !complex) {
     return <ComplexLoadState kind="error" error={error} />;
   }
@@ -267,6 +281,8 @@ export default function ComplexDetailPage() {
           pyeongDetails={pyeongDetails}
           pyeongReady={!pyeongQuery.isPending}
           sessionToken={sessionToken}
+          loggedOut={loggedOut}
+          canAct={isApprovedBroker}
           onFilterChange={handleFilterChange}
         />
       )}
@@ -312,7 +328,7 @@ export default function ComplexDetailPage() {
           {/* 크롤 진행·완료·오류는 이 줄 안에 한 줄로 — 표를 위아래로 밀지 않는다 (세션 447)
               좁은 폭(640px 미만)에선 이 묶음이 한 줄을 다 쓰고 버튼 묶음이 다음 줄로 (세션 448 — 360px 겹침) */}
           <div className="flex items-center gap-2 md:gap-3 min-w-0 grow basis-full sm:basis-0">
-            <span className="text-base md:text-lg font-semibold shrink-0">매물 {totalCount}건</span>
+            <span className="text-base md:text-lg font-semibold shrink-0">{loggedOut ? "매물" : `매물 ${totalCount}건`}</span>
             <CrawlMessage
               crawling={crawling}
               message={crawlMessage}
@@ -356,10 +372,13 @@ export default function ComplexDetailPage() {
           </div>
         </div>
 
-        {/* 매물 API 실패 배너 — 403(승인 권한)은 잠금 안내, 그 외는 다시 시도 */}
+        {/* 비로그인 = 요청 없이 잠금 안내(세션 481 보완 F4) */}
+        {loggedOut && <LockedDataCard label="매물 목록" />}
+
+        {/* 매물 API 실패 배너 — 401/403 은 잠금 안내, 그 외는 다시 시도 */}
         {articlesQuery.isError && (
           isAuthGateError(articlesQuery.error) ? (
-            <LockedDataCard label="매물 목록" />
+            <LockedDataCard label="매물 목록" reason={lockReasonOf(articlesQuery.error)} />
           ) : (
             <Card className="bg-red-50 border-red-200 text-red-600 text-sm px-4 py-2">
               <div className="flex justify-between items-center gap-3">
@@ -375,7 +394,7 @@ export default function ComplexDetailPage() {
         )}
 
         {/* 매물 테이블 / 카드 */}
-        {!articlesQuery.isLoading && !articlesQuery.isError && (
+        {!loggedOut && !articlesQuery.isLoading && !articlesQuery.isError && (
           <div className={`transition-opacity duration-200 ${tableDimmed ? "opacity-50" : "opacity-100"}`}>
             <div className="hidden md:block">
               <div className="flex justify-end mb-2">

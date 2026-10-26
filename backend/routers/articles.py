@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 logger = logging.getLogger(__name__)
 
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -18,7 +18,7 @@ from auth.permissions import check_quota
 from auth.rate_limiter import _get_client_ip
 from db import queries
 from db.area_price_queries import recent_area_prices_and_ranges
-from deps import get_approved_user, get_db
+from deps import get_approved_user, get_current_user, get_db
 from routers.estate_serializers import _calc_jeonse_ratio_range
 from routers.serializers import article_to_dict, build_filter_dict
 from services.naver_call_counter import record_call
@@ -34,10 +34,11 @@ MAX_EXPORT_ROWS = 5000
 @router.get("/price-changes")
 def get_price_changed_articles_endpoint(
     complex_no: str | None = None,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),  # 로그인 게이트 (네이버 매물 원문, 세션 481)
 ):
-    """최근 가격 변동 매물 조회"""
+    """최근 가격 변동 매물 조회 — 로그인 회원"""
     articles = queries.get_price_changed_articles(db, complex_no, limit)
     return {
         "articles": [article_to_dict(a) for a in articles],
@@ -49,8 +50,9 @@ def get_price_changed_articles_endpoint(
 def get_article(
     article_no: str,
     db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),  # 로그인 게이트 (네이버 매물 원문, 세션 481)
 ):
-    """매물 상세 조회 (DB 저장 데이터)"""
+    """매물 상세 조회 (DB 저장 데이터) — 로그인 회원"""
     article = queries.get_article_by_no(db, article_no)
     if not article:
         raise HTTPException(status_code=404, detail="매물을 찾을 수 없습니다")
@@ -62,8 +64,9 @@ def get_article_price_history_endpoint(
     article_no: str,
     limit: int = 50,
     db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),  # 로그인 게이트 (네이버 호가 이력, 세션 481)
 ):
-    """매물 가격 변동 이력 조회"""
+    """매물 가격 변동 이력 조회 — 로그인 회원"""
     history = queries.get_article_price_history(db, article_no, limit)
     return {
         "article_no": article_no,
@@ -81,9 +84,12 @@ def get_article_price_history_endpoint(
 @router.get("/{article_no}/detail")
 def get_article_realtime_detail(
     article_no: str,
+    user: dict = Depends(get_approved_user),  # 승인 중개사 전용(세션 481) — 매번 네이버를 부르는 길
 ):
-    """매물 실시간 상세 조회 (네이버 API 직접 호출, 인증 선택 — 비로그인도 허용.
-    네이버 API 공유 throttle + record_call 카운터로 방어, PR #186 의도적 공개)"""
+    """매물 실시간 상세 조회 (네이버 API 직접 호출) — 승인 중개사 전용.
+
+    옛 PR #186 은 비로그인 공개였으나 프런트 호출처가 0 이고 매번 네이버를 부른다(세션 481 공개 전환 —
+    네이버 매물은 로그인 뒤, 네이버를 부르는 행동은 승인 중개사). 데스크톱 앱 공유 가능성을 몰라 삭제 대신 게이트."""
     record_call("article_detail_realtime")
     detail_data = NaverEstateAPI.get_article_detail(article_no)
     if not detail_data:

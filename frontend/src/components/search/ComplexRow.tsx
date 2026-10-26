@@ -39,7 +39,12 @@ export const ComplexRow = memo(function ComplexRow({ complex, index, urlFilters,
         ) : "-"}
       </td>
       <td className="px-3 py-2 text-right whitespace-nowrap">
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${articleCount > 0 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{articleCount}건</span>
+        {/* 비로그인은 BE 가 매물 수를 걷어낸다(세션 481) — "0건" 이 아니라 빈 칸 */}
+        {complex.article_count === undefined ? (
+          <span className="text-gray-400">-</span>
+        ) : (
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${articleCount > 0 ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{articleCount}건</span>
+        )}
         {tradeSummary && <div className="text-[11px] text-gray-400 mt-0.5">{tradeSummary}</div>}
       </td>
       <td className="px-2 py-2 text-center whitespace-nowrap">

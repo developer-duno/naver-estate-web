@@ -157,4 +157,5 @@ def test_complexes_search_no_auth(client):
     assert client.get('/api/complexes/search?q=test').status_code in [200, 404]
 
 def test_articles_no_auth(client):
-    assert client.get('/api/articles/NONE').status_code in [200, 404]
+    # 세션 481: 네이버 매물 원문은 로그인 뒤 — 비로그인 401(옛 규칙은 200/404)
+    assert client.get('/api/articles/NONE').status_code == 401

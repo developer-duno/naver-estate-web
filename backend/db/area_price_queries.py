@@ -16,28 +16,34 @@ DIRECT_DEAL = "직거래"  # 정부 응답 dealingGbn 원문 — 범위·전세�
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
-def area_price_source(rep_area_m2: int | None) -> str | None:
+def area_price_source(rep_area_m2: int | None, include_jeonse: bool = True) -> str | None:
     """화면 출처 줄 '이 단지:' 뒤 글자 — 정본(프런트는 이 글자를 그대로 쓴다, derived-display-ssot).
 
     옛 화면(중위 한 값·중위 분모 전세가율)용 글자 — 옛 화면이 운영 중이라 그대로 둔다(세션 480).
     범위 화면용 글자는 area_price_range_source.
+    include_jeonse=False = 비로그인 응답용 — 전세가율(네이버 재료)을 숨기므로 그 설명 꼬리도 안 붙인다(세션 481).
     """
     if not rep_area_m2:
         return None
-    return (
-        f"정부 실거래 최근 {AREA_PRICE_MONTHS}개월, 전용 {rep_area_m2}㎡ 대는 소수점을 버린 같은 크기끼리"
-        " · 전세가율 = 네이버 전세 시세(같은 면적) ÷ 정부 실거래 중위"
-    )
+    head = f"정부 실거래 최근 {AREA_PRICE_MONTHS}개월, 전용 {rep_area_m2}㎡ 대는 소수점을 버린 같은 크기끼리"
+    if not include_jeonse:
+        return head
+    return head + " · 전세가율 = 네이버 전세 시세(같은 면적) ÷ 정부 실거래 중위"
 
 
-def area_price_range_source(rep_area_m2: int | None) -> str | None:
-    """범위 화면(price_min/max·jeonse_rate_min/max)의 출처 글자 — 응답 칸 area_price_range_source (세션 479 B29·480)."""
+def area_price_range_source(rep_area_m2: int | None, include_jeonse: bool = True) -> str | None:
+    """범위 화면(price_min/max·jeonse_rate_min/max)의 출처 글자 — 응답 칸 area_price_range_source (세션 479 B29·480).
+
+    include_jeonse=False = 비로그인 응답용(세션 481) — area_price_source 와 같다.
+    """
     if not rep_area_m2:
         return None
-    return (
+    head = (
         f"정부 실거래 최근 {AREA_PRICE_MONTHS}개월 최저~최고(중개거래 기준), 전용 {rep_area_m2}㎡ 대는 소수점을 버린 같은 크기끼리"
-        " · 전세가율 = 네이버 전세 시세(같은 면적, 최신 주) ÷ 정부 실거래 최저~최고"
     )
+    if not include_jeonse:
+        return head
+    return head + " · 전세가율 = 네이버 전세 시세(같은 면적, 최신 주) ÷ 정부 실거래 최저~최고"
 
 
 def _as_list(value) -> list:

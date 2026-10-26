@@ -9,7 +9,8 @@ from crawler.utils import get_shared_throttle, haversine_km
 from db import queries
 from db.area_price_queries import complex_area_fields
 from db.sgis_queries import build_neighborhood
-from deps import get_approved_user, get_db
+from deps import get_current_user, get_db, get_viewer, is_approved_user
+from routers.public_fields import for_viewer, list_for_viewer
 from routers.region_serializers import complex_region_fields
 from routers.serializers import (
     article_to_dict,
@@ -32,6 +33,7 @@ def search_complexes(
     q: str = Query(..., min_length=1, description="검색 키워드"),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    user: dict | None = Depends(get_viewer),  # 비로그인 = 네이버 재료 칸 걷어냄(세션 481)
 ):
     """단지명 키워드 검색"""
     results = queries.search_complexes(db, q, limit=limit)
@@ -39,7 +41,7 @@ def search_complexes(
     complex_nos = [c.complex_no for c in results]
     counts = queries.get_article_counts_by_complexes(db, complex_nos)
     trade_counts = queries.get_trade_type_counts_by_complexes(db, complex_nos)
-    return {
+    return list_for_viewer({
         "complexes": [
             {
                 **complex_to_dict(c),
@@ -49,7 +51,7 @@ def search_complexes(
             for c in results
         ],
         "total": len(results),
-    }
+    }, user)
 
 
 @router.get("/region")
@@ -59,12 +61,13 @@ def get_complexes_by_region(
     dong: Optional[str] = Query(None),
     limit: int = Query(500, ge=1, le=1000),
     db: Session = Depends(get_db),
+    user: dict | None = Depends(get_viewer),  # 비로그인 = 네이버 재료 칸 걷어냄(세션 481)
 ):
     """지역별 단지 조회"""
     cache_key = f"region:{sido}:{sigungu or ''}:{dong or ''}:{limit}"
     cached = _cache.get(cache_key)
     if cached is not None:
-        return cached
+        return list_for_viewer(cached, user)
 
     results = queries.get_complexes_by_region(db, sido, sigungu, dong, limit=limit)
     # 매물 수 배치 조회
@@ -83,19 +86,23 @@ def get_complexes_by_region(
         "total": len(results),
     }
     _cache.set(cache_key, result)
-    return result
+    return list_for_viewer(result, user)
 
 
 @router.get("/{complex_no}")
 def get_complex_detail(
     complex_no: str,
     db: Session = Depends(get_db),
+    user: dict | None = Depends(get_viewer),
 ):
-    """단지 상세 정보 (캐시 적용)"""
+    """단지 상세 정보 (캐시 적용) — 비로그인도 열람(세션 481 공개 전환).
+
+    캐시는 전체 응답 하나. 비로그인이면 반환 직전 네이버 재료 칸을 걷어낸 사본을 준다(routers/public_fields.py).
+    """
     detail_key = f"complex_detail:{complex_no}"
     cached = _cache.get(detail_key)
     if cached is not None:
-        return cached
+        return for_viewer(cached, user)
 
     cpx = queries.get_complex_by_no(db, complex_no)
     if not cpx:
@@ -118,7 +125,7 @@ def get_complex_detail(
         "filter_options": filter_options,
     }
     _cache.set(detail_key, result)
-    return result
+    return for_viewer(result, user)
 
 
 
@@ -126,8 +133,9 @@ def get_complex_detail(
 def get_filter_options(
     complex_no: str,
     db: Session = Depends(get_db),
+    user: dict = Depends(get_current_user),  # 로그인 게이트 (매물 집계 — 네이버 재료, 세션 481)
 ):
-    """단지 내 필터 옵션 (동, 태그, 방향)"""
+    """단지 내 필터 옵션 (동, 태그, 방향) — 로그인 회원"""
     cache_key = f"filter_options:{complex_no}"
     cached = _cache.get(cache_key)
     if cached is not None:
@@ -170,9 +178,9 @@ def get_complex_articles(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
-    user: dict = Depends(get_approved_user),  # B2 게이트: 승인 중개사 전용 (매물 목록)
+    user: dict = Depends(get_current_user),  # 로그인 게이트 (매물 목록 — 네이버 재료, 세션 481: 승인 → 로그인)
 ):
-    """단지별 매물 조회 (필터 + 정렬 + 페이지네이션, 기본 조회 캐시) — 승인 중개사 전용"""
+    """단지별 매물 조회 (필터 + 정렬 + 페이지네이션, 기본 조회 캐시) — 로그인 회원"""
     filters = build_filter_dict(
         trade_types=trade_types, min_price=min_price, max_price=max_price,
         min_rent=min_rent, max_rent=max_rent,
@@ -220,15 +228,23 @@ def get_complex_articles(
 def get_pyeong_details(
     complex_no: str,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_approved_user),  # B2 게이트: 승인 중개사 전용 (면적별 상세)
+    user: dict = Depends(get_current_user),  # 로그인 게이트 (면적별 상세, 세션 481: 승인 → 로그인)
 ):
-    """단지 면적별 상세 정보 (캐시 적용) — 승인 중개사 전용"""
+    """단지 면적별 상세 정보 (캐시 적용) — 로그인 회원.
+
+    평형표가 비어 있을 때의 즉석 네이버 호출은 승인 중개사만 일으킨다(세션 481 — 네이버를 부르는 행동은
+    승인 중개사, 호출 상한 불변). 미승인 회원은 저장분만 보고, 그 빈 결과는 캐시하지 않는다
+    (캐시하면 뒤에 온 승인 중개사도 즉석 호출 없이 빈 목록을 받는다).
+    """
     pyeong_key = f"pyeong_details:{complex_no}"
     cached = _cache.get(pyeong_key)
     if cached is not None:
         return cached
 
     details = queries.get_complex_pyeong_details(db, complex_no)
+    can_enrich = is_approved_user(user)
+    if not details and not can_enrich:
+        return {"pyeong_details": []}
     if not details:
         from services.enricher import enrich_complex_detail
         # 상세 배치와 같은 속도 조절 장치를 나눠 쓴다(B18 — 네이버 IP 차단 방지)
@@ -271,9 +287,9 @@ def get_pyeong_details(
 def get_price_stats(
     complex_no: str,
     db: Session = Depends(get_db),
-    user: dict = Depends(get_approved_user),  # B2 게이트: 승인 중개사 전용 (시세 통계)
+    user: dict = Depends(get_current_user),  # 로그인 게이트 (호가 통계 — 네이버 재료, 세션 481: 승인 → 로그인)
 ):
-    """단지 매물 가격 통계 — 거래유형별 면적/층수 비교 (SQL 집계) — 승인 중개사 전용"""
+    """단지 매물 가격 통계 — 거래유형별 면적/층수 비교 (SQL 집계) — 로그인 회원"""
     cache_key = f"price_stats:{complex_no}"
     cached = _cache.get(cache_key)
     if cached is not None:
@@ -293,9 +309,9 @@ def get_price_history(
     trade_type: Optional[Literal["A1", "B1", "B2", "B3"]] = Query(None),
     area_no: Optional[str] = Query(None, max_length=20, pattern=r"^[0-9]+$"),
     db: Session = Depends(get_db),
-    user: dict = Depends(get_approved_user),  # B2 게이트: 승인 중개사 전용 (가격 추이)
+    user: dict = Depends(get_current_user),  # 로그인 게이트 (가격 추이 — 네이버 시세 포함, 세션 481: 승인 → 로그인)
 ):
-    """단지 월별 가격 추이 (실거래가 + 시세) — 승인 중개사 전용"""
+    """단지 월별 가격 추이 (실거래가 + 시세) — 로그인 회원"""
     cache_key = f"price_history:{complex_no}:{trade_type or 'all'}:{area_no or 'all'}"
     cached = _price_history_cache.get(cache_key)
     if cached is not None:

@@ -69,6 +69,14 @@ function markBackendDown() {
   _backendDownSince = Date.now();
 }
 
+/** 요청 헤더에 Authorization 이 실렸나 — 401 자동 로그아웃 판정용(세션 481). */
+function hasAuthHeader(headers: HeadersInit | undefined): boolean {
+  if (!headers) return false;
+  if (headers instanceof Headers) return headers.has("Authorization");
+  if (Array.isArray(headers)) return headers.some(([k]) => k.toLowerCase() === "authorization");
+  return Object.keys(headers).some((k) => k.toLowerCase() === "authorization");
+}
+
 /** 핵심 fetch 래퍼: 타임아웃, 401 자동 로그아웃, 429 rate limit, 에러 전파 */
 async function _fetchApiImpl<T>(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const url = `${getApiBase()}${path}`;
@@ -88,7 +96,9 @@ async function _fetchApiImpl<T>(path: string, options?: RequestInit & { timeoutM
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       // P1-1: 인증 실패 시 자동 로그아웃 (토큰 만료만 — 403은 승인/권한 문제이므로 유지)
-      if (res.status === 401 && !_isLoggingOut) {
+      // 토큰을 실어 보낸 요청의 401 만 "세션 만료"다. 토큰 없이 보낸 401 은 "로그인 필요" 답이라
+      // 로그인 화면으로 튕기지 않는다 — 비로그인도 단지 화면을 보고 잠금 카드를 봐야 한다(세션 481 공개 전환).
+      if (res.status === 401 && !_isLoggingOut && hasAuthHeader(options?.headers)) {
         if (typeof window !== "undefined") {
           const { createClient } = await import("@/lib/supabase");
           const supabase = createClient();
@@ -137,6 +147,26 @@ async function _fetchApiImpl<T>(path: string, options?: RequestInit & { timeoutM
 /** fetchApi — React Query가 요청 중복 제거를 담당 */
 export function fetchApi<T>(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
   return _fetchApiImpl<T>(path, options);
+}
+
+/**
+ * 로그인했으면 Authorization 헤더, 아니면 빈 헤더 — 공개 엔드포인트용 (세션 481 공개 전환).
+ *
+ * 단지 상세·검색은 비로그인에게도 열려 있고, BE 가 비로그인 응답에서만 네이버 재료 칸
+ * (매물 수·전세가율·크롤 시각 등)을 걷어낸다. 그래서 로그인 회원 요청에는 토큰을 실어야
+ * 전체 응답을 받는다. 세션을 못 읽으면(서버 렌더·Supabase 미설정·getSession 실패) 빈 헤더로만
+ * 폴백한다 — API 호출 자체의 에러는 이 함수와 무관하게 그대로 전파된다.
+ */
+export async function optionalAuthHeaders(): Promise<Record<string, string>> {
+  if (typeof window === "undefined") return {};
+  try {
+    const { createClient } = await import("@/lib/supabase");
+    const { data: { session } } = await createClient().auth.getSession();
+    return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
+  } catch (err) {
+    console.warn("[api] 세션을 읽지 못해 비로그인으로 요청합니다", err);
+    return {};
+  }
 }
 
 /** Authorization 헤더 생성 헬퍼 */

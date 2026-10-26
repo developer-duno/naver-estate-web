@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from db.models import UserProfile
-from deps import get_current_user, get_db
+from deps import get_current_user, get_db, is_approved_user
 
 router = APIRouter()
 
@@ -18,10 +18,13 @@ def get_my_profile(
 ):
     """현재 로그인 사용자 프로필 조회"""
     profile = db.get(UserProfile, user["user_id"])
+    # 승인 중개사인가 — BE 승인 게이트(get_approved_user)와 같은 판정. 프런트 자동 새로 받기 가드가 본다(세션 481)
+    is_approved_broker = is_approved_user(user)
     if not profile:
-        return user  # 프로필이 없으면 JWT 정보만 반환
+        return {**user, "is_approved_broker": is_approved_broker}  # 프로필이 없으면 JWT 정보만 반환
 
     return {
+        "is_approved_broker": is_approved_broker,
         "user_id": profile.user_id,
         "email": profile.email,
         "display_name": profile.display_name,

@@ -227,3 +227,41 @@ def test_success_response_still_cached(client):
     res = client.get("/api/regions")
     assert res.status_code == 200
     assert res.headers["Cache-Control"] == "public, max-age=86400"
+
+
+# ── Vary: Authorization (세션 481 공개 전환) ──
+# 목록·검색 4곳은 비로그인 응답에서 네이버 재료 칸(매물 수·전세가율 등)을 걷어낸다. 같은 주소가 로그인 여부로
+# 다른 응답을 주므로, 브라우저 캐시(private, max-age=…)가 로그인 전후 응답을 섞지 않게 Vary 를 붙인다.
+# 오류 응답엔 아무 캐시 헤더도 안 붙이는 규칙(위)은 그대로.
+
+
+@patch(SEARCH_PATCH)
+def test_live_search_vary_authorization(mock_search, client, db):
+    mock_search.return_value = {
+        "complexes": [{"complexNo": "481481", "complexName": "바리단지", "cortarAddress": "서울시 테스트구",
+                       "realEstateTypeCode": "APT"}],
+        "isMoreData": False,
+    }
+    res = client.get("/api/live/search?q=바리검색481")
+    assert res.status_code == 200, res.text[:200]
+    assert "Authorization" in res.headers.get("Vary", "")
+    assert res.headers["Cache-Control"].startswith("private, max-age=")   # 기존 캐시 정책 그대로
+
+
+def test_db_search_and_region_vary_authorization(client, db):
+    db.add(Complex(complex_no="481482", complex_name="바리지역단지", sido="서울", sigungu="바리구"))
+    db.commit()
+    for url in ("/api/complexes/search?q=바리지역단지", "/api/complexes/region?sido=서울&sigungu=바리구"):
+        res = client.get(url)
+        assert res.status_code == 200, (url, res.text[:200])
+        assert "Authorization" in res.headers.get("Vary", ""), url
+
+
+@patch(SEARCH_PATCH)
+def test_live_search_error_has_no_vary(mock_search, client, db):
+    """오류(502 — 네이버 0건 + 저장 데이터 0건)엔 Vary·Cache-Control 둘 다 없다."""
+    mock_search.return_value = {"complexes": [], "isMoreData": False}
+    res = client.get("/api/live/search?q=없는단지바리481")
+    assert res.status_code >= 400
+    assert "Authorization" not in res.headers.get("Vary", "")
+    assert "Cache-Control" not in res.headers

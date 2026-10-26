@@ -17,18 +17,20 @@ const MAEMAE_FILTERS = { trade_types: "매매" };
 export function useComplexArticleAvg(
   complexNo: string,
   accessToken?: string,
-  opts: { avgEnabled?: boolean; avgAreaM2?: number | null } = {},
+  opts: { avgEnabled?: boolean; avgAreaM2?: number | null; enabled?: boolean } = {},
 ): {
   avgPrice: number | null;
   count: number;
   isLoading: boolean;
   isError: boolean;
 } {
-  const { avgEnabled = false, avgAreaM2 = null } = opts;
+  // enabled=false = 비로그인 확정 — 매물 API 를 아예 안 부른다(401 요청 0, 세션 481 보완 F4)
+  const { avgEnabled = false, avgAreaM2 = null, enabled = true } = opts;
   const { data, isLoading, isError } = useQuery({
     queryKey: queryKeys.articles(complexNo, undefined),
     queryFn: () => getArticles(complexNo, undefined, accessToken),
-    enabled: !!complexNo,
+    // 토큰을 다 읽은 뒤에만 — 읽는 중 첫 렌더에 토큰 없이 401 이 나가 로그인 회원에게 "매물 0건"이 남던 틈(세션 481 보완)
+    enabled: !!complexNo && enabled && !!accessToken,
     staleTime: 30_000,
   });
   const group = areaGroupOf(avgAreaM2);
@@ -37,7 +39,7 @@ export function useComplexArticleAvg(
   const maemae = useQuery({
     queryKey: queryKeys.articles(complexNo, maemaeFilters),
     queryFn: () => getArticles(complexNo, maemaeFilters, accessToken),
-    enabled: !!complexNo && avgEnabled,
+    enabled: !!complexNo && enabled && !!accessToken && avgEnabled,
     staleTime: 30_000,
   });
 
@@ -49,8 +51,10 @@ export function useComplexArticleAvg(
     ? Math.round(prices.reduce((s, v) => s + v, 0) / prices.length)
     : null;
 
+  // 토큰을 아직 못 읽었으면(비로그인 확정 전) 조회가 안 나간 것 — "매물 0건" 이 아니라 불러오는 중으로 알린다
+  const waitingToken = !!complexNo && enabled && !accessToken;
   if (isError || !data) {
-    return { avgPrice, count: 0, isLoading, isError };
+    return { avgPrice, count: 0, isLoading: isLoading || waitingToken, isError };
   }
 
   return {

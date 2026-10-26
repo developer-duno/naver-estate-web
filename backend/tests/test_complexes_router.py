@@ -183,14 +183,15 @@ def test_articles_no_auth_403(client, db):
     assert res.status_code in (401, 403)
 
 
-def test_articles_pending_403(client, db):
-    """미승인(pending) 중개사 → 매물 목록 403"""
+def test_articles_pending_200(client, db):
+    """미승인(pending) 로그인 회원 → 매물 목록 200 (세션 481: 네이버 매물은 승인이 아니라 로그인 뒤)"""
     from tests.conftest import make_auth_headers
     _add_complex(db, "CG2")
     _add_article(db, "GA2", "CG2")
     pending = make_auth_headers(db, user_id="pending-user", status="pending")
     res = client.get("/api/complexes/CG2/articles", headers=pending)
-    assert res.status_code == 403
+    assert res.status_code == 200
+    assert res.json()["total"] == 1
 
 
 def test_price_stats_no_auth_403(client, db):

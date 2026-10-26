@@ -4,7 +4,7 @@
 
 import type { Article, ArticleFilters, ArticlePriceHistoryItem } from "@/types";
 import * as direct from "@/lib/api-direct";
-import { fetchApi, isBackendAvailable, getApiBase, ApiError } from "./core";
+import { fetchApi, isBackendAvailable, getApiBase, ApiError, optionalAuthHeaders } from "./core";
 
 /** 단지별 매물 조회 (B2 게이트: 승인 중개사 전용 — accessToken 전달) */
 export async function getArticles(complexNo: string, filters?: ArticleFilters, accessToken?: string) {
@@ -32,22 +32,27 @@ export async function getArticles(complexNo: string, filters?: ArticleFilters, a
   }
 }
 
-/** 매물 상세 실시간 (네이버 API 직접 조회 + DB 저장) */
+/** 매물 상세 실시간 (네이버 API 직접 조회 + DB 저장) — 로그인 회원 전용(세션 481) */
 export async function getArticleLive(articleNo: string) {
   if (!isBackendAvailable()) return direct.getArticleDirect(articleNo);
   try {
-    return await fetchApi<Article>(`/api/live/article/${encodeURIComponent(articleNo)}/detail`, { timeoutMs: 30_000 } as RequestInit & { timeoutMs?: number });
+    return await fetchApi<Article>(
+      `/api/live/article/${encodeURIComponent(articleNo)}/detail`,
+      { timeoutMs: 30_000, headers: await optionalAuthHeaders() } as RequestInit & { timeoutMs?: number },
+    );
   } catch (err) {
     // 404 = backend 의 확정 답변 (매물 삭제/내려감) — 장애가 아니므로 폴백 없이 전파 (ArticleDetail 404 분기 짝꿍)
-    if (err instanceof ApiError && err.statusCode === 404) throw err;
+    // 401/403 = 로그인·권한 확정 답변 — 폴백으로 뭉개면 잠금 카드에 못 닿는다(세션 481, error-propagation 규칙 2)
+    if (err instanceof ApiError && (err.statusCode === 404 || err.statusCode === 401 || err.statusCode === 403)) throw err;
     return direct.getArticleDirect(articleNo);
   }
 }
 
-/** 매물 가격 변동 이력 조회 */
+/** 매물 가격 변동 이력 조회 — 로그인 회원 전용(세션 481) */
 export async function getArticlePriceHistory(articleNo: string) {
   return await fetchApi<{ article_no: string; history: ArticlePriceHistoryItem[] }>(
-    `/api/articles/${encodeURIComponent(articleNo)}/price-history`
+    `/api/articles/${encodeURIComponent(articleNo)}/price-history`,
+    { headers: await optionalAuthHeaders() },
   );
 }
 

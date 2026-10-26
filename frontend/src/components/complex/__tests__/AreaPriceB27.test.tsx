@@ -105,7 +105,8 @@ describe("ComplexDashboard 시세 칸 — A안 (세션 474 B27)", () => {
   });
 
   it("대표 면적 값 크게 · 칩 · 다른 면적 작게(거래 없는 42㎡ —) · 전세가율(59㎡) — · 출처", () => {
-    renderDashboard(C6139);
+    // 로그인 응답 — 전세가율 칸이 있고 값이 없다(null). 비로그인(칸 없음)은 아래 시험
+    renderDashboard({ ...C6139, jeonse_rate: null });
     const box = screen.getByRole("button", { name: /^시세 · 전용 59㎡\(116세대\)/ });
     expect(box).toHaveTextContent("시세 · 전용 59㎡(116세대)");
     expect(screen.getByTestId("box-chip-prices")).toHaveTextContent("최근 6개월 3건");
@@ -116,6 +117,13 @@ describe("ComplexDashboard 시세 칸 — A안 (세션 474 B27)", () => {
       `이 단지: ${SOURCE} · 지역: 한국부동산원 전국주택가격동향조사(2026.09)`,
     );
     expect(box).not.toHaveTextContent("매물 평균");
+  });
+
+  it("비로그인 응답(전세가율 칸 없음)이면 이 단지 전세가율 글자 없이 지역 값만 (세션 481)", () => {
+    renderDashboard(C6139);
+    const extra = screen.getByTestId("box-extra-prices");
+    expect(extra).toHaveTextContent("대전 유성구 아파트 전세가율 71.2%");
+    expect(extra).not.toHaveTextContent("전세가율(59㎡)");
   });
 
   it("대표 면적에 거래가 없으면 큰 숫자는 — (매물 평균 대체값으로 안 돌아간다)", () => {
@@ -152,7 +160,7 @@ describe("ComplexDashboard 시세 칸 — A안 (세션 474 B27)", () => {
     expect(box).toHaveTextContent("매매 매물 평균 9억 9,999만"); // 평형표가 없어 면적을 모름(세션 475)
     expect(box).not.toHaveTextContent("㎡)");
     expect(screen.queryByTestId("box-chip-prices")).toBeNull();
-    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("C9", undefined, { avgEnabled: true, avgAreaM2: null });
+    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("C9", undefined, { avgEnabled: true, avgAreaM2: null, enabled: true });
   });
 
   // 세션 475 PR 6 — 대체값은 매매 매물만 + 평형표 세대수 최다 묶음만
@@ -160,18 +168,18 @@ describe("ComplexDashboard 시세 칸 — A안 (세션 474 B27)", () => {
     renderDashboard({ complex_no: "C9", complex_name: "옛단지" });
     const box = screen.getByRole("button", { name: "시세 메뉴 열기" });
     expect(box).toHaveTextContent("매매 매물 평균(59㎡) 9억 9,999만");
-    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("C9", undefined, { avgEnabled: true, avgAreaM2: 59 });
+    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("C9", undefined, { avgEnabled: true, avgAreaM2: 59, enabled: true });
   });
 
   it("대표 면적 값이 있으면 매매 평균 요청을 켜지 않는다", () => {
     renderDashboard(C6139);
-    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("6139", undefined, { avgEnabled: false, avgAreaM2: null });
+    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("6139", undefined, { avgEnabled: false, avgAreaM2: null, enabled: true });
   });
 
   // 보완 Q4 — 대표 면적은 없고 옛 시세가 남은 단지(legacy_mixed)는 시세 칸에 옛 값이 나오므로 매매 요청을 켜지 않는다
   it("legacy_mixed 단지는 매매 평균 요청을 켜지 않는다", () => {
     renderDashboard({ complex_no: "C8", complex_name: "옛값단지", nearby_median_price: 18000, price_basis: "legacy_mixed" });
-    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("C8", undefined, { avgEnabled: false, avgAreaM2: null });
+    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("C8", undefined, { avgEnabled: false, avgAreaM2: null, enabled: true });
   });
 
   // 보완 Q5 — 평형표를 받기 전엔 매매 평균을 띄우지 않는다(면적 없는 평균 → 묶음 평균으로 숫자가 한 번 바뀌지 않게)
@@ -180,7 +188,7 @@ describe("ComplexDashboard 시세 칸 — A안 (세션 474 B27)", () => {
       <ComplexDashboard complex={{ complex_no: "C9", complex_name: "옛단지" }} complexNo="C9" pyeongDetails={[]}
         pyeongReady={false} sessionToken={undefined} onFilterChange={() => {}} />,
     );
-    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("C9", undefined, { avgEnabled: false, avgAreaM2: null });
+    expect(mockUseComplexArticleAvg).toHaveBeenLastCalledWith("C9", undefined, { avgEnabled: false, avgAreaM2: null, enabled: true });
   });
 
   it("면적 묶음 필터 = N 이상 N+1 미만(서버 <= 비교라 N+0.999) · 경쟁 매물 필터", () => {

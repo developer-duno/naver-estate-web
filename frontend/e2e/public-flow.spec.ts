@@ -1,6 +1,49 @@
 import { test, expect } from "@playwright/test";
 import { applyPublicMocks } from "./fixtures/public-mocks";
 
+/**
+ * 비로그인 단지 화면 (세션 481 공개 전환) — 시각 회귀 장 아님(스크린샷 없음).
+ * 단지 상세는 BE 가 비로그인 응답에서 네이버 재료 칸을 뺀 모양으로, 매물·평형·호가·그래프는 401 로 mock.
+ * 기대: 로그인 화면으로 튕기지 않고 200 · 단지 이름 보임 · 매물 자리에 잠금 카드 문구.
+ */
+test.describe("비로그인 단지 화면 (세션 481)", () => {
+  test("/complex/<no> 200 · 잠금 카드 '로그인하면 볼 수 있어요'", async ({ page }) => {
+    await page.route("**/api/complexes/**", async (route) => {
+      const sub = new URL(route.request().url()).pathname.split("/").filter(Boolean)[3];
+      if (!sub) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            complex_no: "100000",
+            complex_name: "공개단지",
+            real_estate_type_name: "아파트",
+            cortar_address: "서울시 강남구 역삼동",
+            total_household_count: 520,
+            total_dong_count: 6,
+            rep_area_m2: null,
+            nearby_median_price: 120000,
+            area_prices: [],
+          }),
+        });
+      }
+      return route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({ detail: "인증이 필요합니다" }),
+      });
+    });
+    await page.route("**/api/live/**", (route) => route.fulfill({ status: 401, body: "{}" }));
+
+    const res = await page.goto("/complex/100000");
+
+    expect(res?.status()).toBe(200);
+    await expect(page.getByRole("heading", { name: "공개단지" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("매물 목록은(는) 로그인하면 볼 수 있어요")).toBeVisible();
+    expect(new URL(page.url()).pathname).toBe("/complex/100000");
+  });
+});
+
 test.describe("public visual regression", () => {
   test("로그인 페이지 렌더 + 시각 회귀", async ({ page }) => {
     await page.goto("/login");

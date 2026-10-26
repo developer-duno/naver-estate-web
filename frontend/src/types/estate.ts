@@ -45,7 +45,8 @@ export interface Complex {
   /** 거래유형별 활성 매물 수 (매매/전세/월세/단기임대) */
   trade_type_counts?: { 매매: number; 전세: number; 월세: number; 단기임대: number };
   nearby_median_price?: number;
-  jeonse_rate?: number;
+  /** 이 단지 전세가율 — 로그인 응답은 값 또는 null, 비로그인 응답엔 칸 자체가 없다(undefined, 세션 481: 분자가 네이버 전세 시세) */
+  jeonse_rate?: number | null;
   /** 정부 지역 값 — 부동산원 시군구 아파트 중위 전세가율(단지 상세·비교 응답에만, 세션 473) */
   region_jeonse_ratio?: number | null;
   region_jeonse_period?: string | null;   // "2026.01"

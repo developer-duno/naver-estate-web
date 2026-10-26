@@ -74,6 +74,9 @@ async function freshFetchApi() {
   return mod.fetchApi as <T>(path: string, options?: RequestInit) => Promise<T>;
 }
 
+/** 토큰을 실어 보낸 요청 — 401 자동 로그아웃은 이런 요청에만 걸린다(세션 481) */
+const AUTH = { headers: { Authorization: "Bearer expired-token" } };
+
 describe("fetchApi 401 — 멀티탭 경합 오탐 방어", () => {
   it("세션이 살아있으면 401 이어도 로그아웃/리다이렉트하지 않는다 (경합 오탐)", async () => {
     getSessionMock.mockResolvedValue({
@@ -82,7 +85,7 @@ describe("fetchApi 401 — 멀티탭 경합 오탐 방어", () => {
     });
     const fetchApi = await freshFetchApi();
 
-    const err = (await fetchApi("/api/me").catch((e) => e)) as Error & { statusCode?: number };
+    const err = (await fetchApi("/api/me", AUTH).catch((e) => e)) as Error & { statusCode?: number };
 
     // 401 은 그대로 호출자에게 전파돼 각자의 에러 UI 가 처리한다
     expect(err.name).toBe("ApiError");
@@ -97,7 +100,7 @@ describe("fetchApi 401 — 멀티탭 경합 오탐 방어", () => {
     getSessionMock.mockResolvedValue({ data: { session: null }, error: null });
     const fetchApi = await freshFetchApi();
 
-    const err = (await fetchApi("/api/me").catch((e) => e)) as Error & { statusCode?: number };
+    const err = (await fetchApi("/api/me", AUTH).catch((e) => e)) as Error & { statusCode?: number };
 
     expect(err.statusCode).toBe(401);
     expect(getSessionMock).toHaveBeenCalledTimes(1);
@@ -110,10 +113,24 @@ describe("fetchApi 401 — 멀티탭 경합 오탐 방어", () => {
     const fetchApi = await freshFetchApi();
 
     await Promise.all([
-      fetchApi("/api/me").catch(() => {}),
-      fetchApi("/api/me").catch(() => {}),
+      fetchApi("/api/me", AUTH).catch(() => {}),
+      fetchApi("/api/me", AUTH).catch(() => {}),
     ]);
 
     expect(signOutMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("fetchApi 401 — 토큰 없이 보낸 요청 (세션 481 공개 전환)", () => {
+  it("토큰 없이 받은 401 은 로그인 필요 답일 뿐 — 로그아웃·로그인 화면 이동 없이 ApiError(401) 만 전파", async () => {
+    getSessionMock.mockResolvedValue({ data: { session: null }, error: null });
+    const fetchApi = await freshFetchApi();
+
+    const err = (await fetchApi("/api/me").catch((e) => e)) as Error & { statusCode?: number };
+
+    expect(err.name).toBe("ApiError");
+    expect(err.statusCode).toBe(401);
+    expect(signOutMock).not.toHaveBeenCalled();
+    expect(hrefSetter).not.toHaveBeenCalled();
   });
 });

@@ -437,13 +437,14 @@ def test_가격추이_API_items_에_trades(client, db, approved_headers, _detail
 # ── ⓗ 단지 상세 응답 ─────────────────────────────────────────────────────────
 
 
-def test_단지상세_응답에_범위_거래목록_전세가율범위_옛값단지(client, db, _detail_route):
+def test_단지상세_응답에_범위_거래목록_전세가율범위_옛값단지(client, db, approved_headers, _detail_route):
     _add_6139(db, rep=59)
     _add_trade_rows(db, direct_m05=True)   # 18,000 이 직거래 → 범위는 15,700~17,200
     _add_naver(db, "B1", "2", f"{M06}12", 12000)
     db.commit()
 
-    body = client.get("/api/complexes/6139").json()
+    # 전세가율 범위는 네이버 재료라 로그인 응답에만(세션 481)
+    body = client.get("/api/complexes/6139", headers=approved_headers).json()
     rep = body["area_prices"][0]
     assert (rep["area_m2"], rep["price_median"], rep["trade_count"]) == (59, 17200, 3)   # 옛 칸 그대로
     assert (rep["price_min"], rep["price_max"]) == (15700, 17200)
@@ -483,7 +484,7 @@ def test_범위_정본_문구에_중위가_없고_옛_글자는_그대로():
 def test_단지상세_그래프_API_에_범위_글자_새_칸(client, db, approved_headers, _detail_route):
     _add_6139(db, rep=59)
     _add_trade_rows(db)
-    body = client.get("/api/complexes/6139").json()
+    body = client.get("/api/complexes/6139", headers=approved_headers).json()   # 로그인 글자(세션 481)
     assert body["area_price_source"].endswith("÷ 정부 실거래 중위")
     assert body["area_price_range_source"].endswith("÷ 정부 실거래 최저~최고")
     hist = client.get("/api/complexes/6139/price-history", headers=approved_headers).json()

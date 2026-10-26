@@ -202,6 +202,11 @@ async def log_response_time(request: Request, call_next):
 
 # 단지 상세 1건 정확 매칭 (/api/complexes/{no} — 하위 경로는 제외)
 _COMPLEX_DETAIL_PATH = re.compile(r"/api/complexes/[^/]+")
+# 비로그인 응답에서 네이버 재료 칸을 걷어내는 목록·검색(세션 481) — 같은 주소라도 로그인 여부로 응답이 달라
+# 브라우저 캐시가 로그인 전후 응답을 섞지 않게 Vary: Authorization 을 붙인다(성공 응답만)
+_VARY_AUTH_PATHS = frozenset({
+    "/api/live/search", "/api/live/region", "/api/complexes/search", "/api/complexes/region",
+})
 
 
 # TTL 캐시 (get_dynamic_ttl 호출 최적화 — 60초 간격으로 갱신)
@@ -274,6 +279,9 @@ async def security_headers_middleware(request: Request, call_next):
             response.headers["Cache-Control"] = f"private, max-age={_get_cached_ttl()}"
         else:
             response.headers["Cache-Control"] = "private, max-age=30"  # 30초 (기본)
+        if path in _VARY_AUTH_PATHS:
+            vary = response.headers.get("Vary")
+            response.headers["Vary"] = f"{vary}, Authorization" if vary else "Authorization"
     return response
 
 

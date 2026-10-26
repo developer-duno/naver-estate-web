@@ -14,13 +14,12 @@ NO = "S481"
 
 # 비로그인 단지 상세 응답의 키 — 정본 스냅샷(칸을 더하거나 빼면 이 목록을 같이 고친다)
 ANON_DETAIL_KEYS = {
-    # 단지 사실(결정 1 — 공개)
+    # 단지 사실(결정 1 — 공개). 네이버에만 있는 5칸(건설사·관리사무소 전화·난방 방식·연료·수영장)은 세션 482 에 뺐다
     "complex_no", "complex_name", "cortar_no", "real_estate_type_code", "real_estate_type_name",
     "latitude", "longitude", "total_household_count", "high_floor", "low_floor", "use_approve_ymd",
     "total_dong_count", "min_supply_area_m2", "max_supply_area_m2", "cortar_address", "sido", "sigungu",
-    "dong", "heat_method_type", "total_parking_count", "construction_company", "floor_area_ratio",
-    "building_coverage_ratio", "address", "road_address", "heat_fuel_type", "parking_count_by_household",
-    "management_office_tel", "has_pool",
+    "dong", "total_parking_count", "floor_area_ratio",
+    "building_coverage_ratio", "address", "road_address", "parking_count_by_household",
     # 정부 실거래 파생
     "nearby_median_price", "recent_trades_6m", "rep_area_m2", "price_basis",
     "area_prices", "area_price_source", "area_price_range_source", "legacy_range",
@@ -55,13 +54,48 @@ def _detail(monkeypatch):
 # ── 순수 함수 ──────────────────────────────────────────────────────────────
 
 
-def test_걷어내기는_원본을_바꾸지_않고_9칸만_뺀다():
+def test_걷어내기는_원본을_바꾸지_않고_14칸만_뺀다():
     src = {k: 1 for k in NAVER_FIELDS} | {"complex_no": "1", "rep_area_m2": None, "area_prices": []}
     before = dict(src)
     out = strip_naver_fields(src)
     assert src == before                       # 캐시 안 객체는 그대로
     assert set(out) == {"complex_no", "rep_area_m2", "area_prices"}
-    assert len(NAVER_FIELDS) == 9
+    assert len(NAVER_FIELDS) == 14
+
+
+# 네이버 단지 상세에만 있는 5칸(세션 482 PR 1b · 결정 9) — 비로그인에서 빠진다
+NAVER_ONLY_FACTS = {"construction_company", "management_office_tel", "heat_method_type", "heat_fuel_type", "has_pool"}
+# 건축물대장에도 있는 값이라 남기는 칸(대조 C1)
+KEPT_FACTS = {"total_household_count", "total_dong_count", "use_approve_ymd", "total_parking_count",
+              "parking_count_by_household", "high_floor", "low_floor", "min_supply_area_m2", "max_supply_area_m2",
+              "floor_area_ratio", "building_coverage_ratio", "address", "road_address", "cortar_address",
+              "latitude", "longitude"}
+
+
+def test_네이버에만_있는_5칸은_NAVER_FIELDS_남는_칸은_아님():
+    assert NAVER_ONLY_FACTS <= NAVER_FIELDS
+    assert not (KEPT_FACTS & NAVER_FIELDS)
+
+
+def test_단지상세_비로그인_5칸_없고_남는_칸_있음_로그인은_5칸_그대로(client, db, approved_headers, _detail):
+    db.add(Complex(complex_no=NO, complex_name="공개단지", sido="서울", sigungu="강남", rep_area_m2=59,
+                   total_household_count=199, construction_company="계룡건설", management_office_tel="042-000-0000",
+                   heat_method_type="개별난방", heat_fuel_type="도시가스", has_pool=False))
+    db.commit()
+    anon = client.get(f"/api/complexes/{NO}").json()
+    assert not (NAVER_ONLY_FACTS & set(anon))
+    assert KEPT_FACTS <= set(anon)
+    assert anon["total_household_count"] == 199
+    auth = client.get(f"/api/complexes/{NO}", headers=approved_headers).json()
+    assert auth["construction_company"] == "계룡건설" and auth["has_pool"] is False
+
+
+def test_단지검색_비로그인_5칸_없음(client, db):
+    db.add(Complex(complex_no=NO, complex_name="오칸검색단지", sido="서울", sigungu="강남",
+                   construction_company="계룡건설", heat_fuel_type="도시가스"))
+    db.commit()
+    anon = client.get("/api/complexes/search?q=오칸검색단지").json()["complexes"][0]
+    assert not (NAVER_ONLY_FACTS & set(anon)) and anon["complex_name"] == "오칸검색단지"
 
 
 def test_걷어내기_출처_글자는_전세가율_꼬리_없이():

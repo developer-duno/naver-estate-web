@@ -108,6 +108,19 @@ def brokered_prices(raw_trades) -> list[int] | None:
     return [t["price"] for t in trades if not t["direct"]]
 
 
+def gov_month_range(low, high, raw_trades, trade_count=None) -> tuple[int | None, int | None, int | None]:
+    """정부 실거래 한 달 줄의 (최저, 최고, 거래 수) — 그래프 정부 줄과 공개 범위 API 가 같이 부른다(세션 480·482).
+
+    trades 가 있으면 직거래를 뺀 중개거래로 셈(중개거래 0건이면 (None, None, 0)), 비면 저장된 price_min·price_max·trade_count.
+    """
+    brokered = brokered_prices(raw_trades)
+    if brokered is None:
+        return low, high, trade_count
+    if not brokered:
+        return None, None, 0
+    return min(brokered), max(brokered), len(brokered)
+
+
 def row_range_material(prices, raw_trades) -> list[int]:
     """한 줄(한 달)의 범위 재료 — trades 가 있으면 그 줄의 중개거래 가격, 비면 그 줄 prices (세션 480 — 달 단위)."""
     brokered = brokered_prices(raw_trades)

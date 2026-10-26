@@ -2,7 +2,7 @@
 
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from crawler.utils import get_shared_throttle, haversine_km
@@ -533,3 +533,44 @@ def get_kapt_management_cost(
     result = kapt_cost_to_dict(cost, mapping)
     _kapt_cost_cache.set(cache_key, result)
     return result
+
+
+# 공개 단지 화면(세션 482 PR 1b) — 인증 없음 · 네이버 재료 칸 0. 200 에만 public 1시간(오류 응답엔 안 붙는다).
+_PUBLIC_CACHE = "public, max-age=3600"
+
+
+@router.get("/{complex_no}/public-price-history")
+def get_public_price_history(
+    complex_no: str,
+    response: Response,
+    area_m2: Optional[int] = Query(None, ge=1, le=1000),
+    db: Session = Depends(get_db),
+):
+    """면적 하나의 최근 24개월 정부 실거래 최저~최고(달마다 직거래 제외) + 2년 범위 — 무료 공개.
+
+    area_m2 가 없으면 그 단지 대표 면적(rep_area_m2), 그것도 없으면 months [].
+    """
+    from db.public_complex_queries import public_price_history
+
+    cpx = queries.get_complex_by_no(db, complex_no)
+    if not cpx:
+        raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다")
+    area = area_m2 if area_m2 is not None else getattr(cpx, "rep_area_m2", None)
+    response.headers["Cache-Control"] = _PUBLIC_CACHE
+    return public_price_history(db, complex_no, area)
+
+
+@router.get("/{complex_no}/region-trend")
+def get_region_trend(
+    complex_no: str,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """그 단지 시군구의 부동산원 중위 매매가·중위 전세가율 최근 24개월 — 무료 공개(지역 공식 통계)."""
+    from db.public_complex_queries import region_trend
+
+    cpx = queries.get_complex_by_no(db, complex_no)
+    if not cpx:
+        raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다")
+    response.headers["Cache-Control"] = _PUBLIC_CACHE
+    return region_trend(db, cpx)

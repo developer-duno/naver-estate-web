@@ -346,7 +346,7 @@ def get_complex_price_history(
                 for r in _price_history_rows(db, conditions)]
 
     if trade_type in (None, "A1"):
-        from db.area_price_queries import api_trades, brokered_prices
+        from db.area_price_queries import api_trades, gov_month_range
 
         # 거래 점(trades)은 기본선·평형 선택 모두 최근 2년 달만(세션 479 B29 — 평형 선택 60개월 점 방지). 줄·띠는 그대로
         trades_since = _cutoff_month(BASELINE_MONTHS)
@@ -365,11 +365,7 @@ def get_complex_price_history(
             )
             .all()
         ):
-            brokered = brokered_prices(trades)
-            if brokered is None:
-                range_lower, range_upper = low, high
-            else:
-                range_lower, range_upper = (min(brokered), max(brokered)) if brokered else (None, None)
+            range_lower, range_upper, _count = gov_month_range(low, high, trades)
             rows.append({
                 "trade_type": "A1", "month": month, "price_upper": high, "price_lower": low,
                 "price_avg": median, "series": SERIES_GOV,

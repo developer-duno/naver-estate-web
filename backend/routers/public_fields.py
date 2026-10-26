@@ -8,6 +8,8 @@
 - article_count · trade_type_counts · filter_options = 매물 표 집계(네이버 매물)
 - jeonse_rate · jeonse_rate_min · jeonse_rate_max = 분자가 네이버 전세 시세
 - last_crawled_at · articles_crawled_at · detail_crawled_at = 크롤 시각
+- construction_company · management_office_tel · heat_method_type · heat_fuel_type · has_pool = 네이버 단지 상세에만
+  있는 칸(세션 482 PR 1b · 결정 9). 용적률·건폐율·세대수·동수·사용승인·주차·층수·면적은 건축물대장에도 있는 값이라 남긴다.
 남는 칸 = 정부 실거래(nearby_median_price·recent_trades_6m·area_prices·legacy_range) · 부동산원 지역 값 · 단지 사실 정보.
 단 옛 값 단지(price_basis == "legacy_mixed")의 세 값은 네이버 실거래 줄이 섞인 옛 계산이라 같이 뺀다
 (LEGACY_FIELDS — 세션 481 맹점 검사관 A·K). 그때 price_basis 는 None(= 보여 줄 값 없음).
@@ -25,6 +27,12 @@ NAVER_FIELDS = frozenset({
     "last_crawled_at",
     "articles_crawled_at",
     "detail_crawled_at",
+    # 네이버 단지 상세에만 있는 칸(세션 482 PR 1b)
+    "construction_company",
+    "management_office_tel",
+    "heat_method_type",
+    "heat_fuel_type",
+    "has_pool",
 })
 
 # 옛 값 단지(면적 섞인 옛 계산 — 네이버 실거래 줄이 섞였다)에서만 비로그인에게 빼는 칸

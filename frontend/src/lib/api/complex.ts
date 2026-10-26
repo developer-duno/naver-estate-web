@@ -2,7 +2,15 @@
  * 단지 검색/조회 API
  */
 
-import type { Complex, KaptInfo, NeighborhoodInfo, OfficialPriceResponse, SubwayNearResponse } from "@/types";
+import type {
+  Complex,
+  KaptInfo,
+  NeighborhoodInfo,
+  OfficialPriceResponse,
+  PublicPriceHistory,
+  RegionTrend,
+  SubwayNearResponse,
+} from "@/types";
 import * as direct from "@/lib/api-direct";
 import { ApiError, fetchApi, isBackendAvailable, optionalAuthHeaders } from "./core";
 
@@ -127,6 +135,26 @@ export async function getComplexNeighborhood(complexNo: string): Promise<Neighbo
     if (err instanceof ApiError && err.statusCode === 404) return null;
     throw err;
   }
+}
+
+/**
+ * 면적 하나의 최근 24개월 정부 실거래 최저~최고 (GET /api/complexes/{no}/public-price-history — 인증 없음, 세션 482).
+ * 자료 없음은 BE 가 200 + months [] 로 준다 — 에러가 아니다. 실패는 삼키지 않고 throw(error-propagation 규칙,
+ * 회귀 가드: lib/__tests__/complex-public-error.test.ts). direct 폴백 없음.
+ */
+export async function getPublicPriceHistory(complexNo: string, areaM2?: number | null): Promise<PublicPriceHistory> {
+  if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
+  const q = areaM2 != null ? `?area_m2=${encodeURIComponent(areaM2)}` : "";
+  return fetchApi<PublicPriceHistory>(`/api/complexes/${encodeURIComponent(complexNo)}/public-price-history${q}`);
+}
+
+/**
+ * 단지 시군구의 부동산원 중위 매매가·전세가율 최근 24개월 (GET /api/complexes/{no}/region-trend — 인증 없음, 세션 482).
+ * 지역 연결 없음은 200 + items []. 실패는 throw(위와 같은 가드).
+ */
+export async function getRegionTrend(complexNo: string): Promise<RegionTrend> {
+  if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
+  return fetchApi<RegionTrend>(`/api/complexes/${encodeURIComponent(complexNo)}/region-trend`);
 }
 
 /**

@@ -5,6 +5,19 @@ export interface AreaPrice {
   households?: number | null;
   price_median: number | null;
   trade_count: number | null;
+  /** 최근 6개월 최저·최고(달마다 직거래 제외, 세션 479 B29·480) — 거래 없는 묶음은 null */
+  price_min?: number | null;
+  price_max?: number | null;
+  /** 그 묶음 거래 하나하나(최근 6개월) — 아직 안 채워진 단지는 [] */
+  trades?: AreaTrade[];
+}
+
+/** 정부 실거래 거래 하나(API 꼴, 세션 479 B29) — 가격 만원 · 거래일 "YYYY-MM-DD" · direct = 직거래 */
+export interface AreaTrade {
+  price: number;
+  date: string | null;
+  floor: number | null;
+  direct: boolean;
 }
 
 /** 단지 정보 */
@@ -59,6 +72,8 @@ export interface Complex {
   area_prices?: AreaPrice[];
   /** 출처 줄 '이 단지:' 뒤 글자(BE 정본) — 단지 상세·비교 응답에만 */
   area_price_source?: string | null;
+  /** 최저~최고 출처 글자(BE 정본, 세션 479 B29) — 단지 상세·비교 응답에만 */
+  area_price_range_source?: string | null;
   /** 시세 세 값이 무엇인가 — "rep_area" 대표 면적 값 · "legacy_mixed" 면적 섞인 옛 값(최근 6개월 거래 없음) · null 없음 */
   price_basis?: "rep_area" | "legacy_mixed" | null;
   filter_options?: FilterOptions;

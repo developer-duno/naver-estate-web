@@ -94,6 +94,9 @@ export const PUBLIC_SUMMARIES = {
     area_ranges: [
       { area_key: 59, exclusive_area: 59, recent6: null, recent24: { min: 14700, max: 20000, count: 2 } },
     ],
+    // 등급 B = 공시가격·관리비 중 하나는 반드시 있다(실제 판정과 같게) — 제목 "공시가격·관리비"의 재료
+    official_price: { year: "2026", items: [{ prvuse_ar: 59.9, price_median: 113000000, ho_count: 80 }] },
+    kapt_cost: { ym: "202607", monthly_total: 189000 },
     subway: [{ station_name: "갑천", lines: ["대전1호선"], distance_m: 1100 }],
   }),
   // complex-detail.spec.ts·responsive.spec.ts 의 "열리기만 하면 되는" 단지 — 자료 없는 C 등급

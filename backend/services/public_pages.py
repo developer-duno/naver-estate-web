@@ -14,18 +14,19 @@ import logging
 from datetime import date
 from types import SimpleNamespace
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
+from crawler.area_group import load_pyeong_tables
 from crawler.metrics_helpers import _cutoff_month
-from crawler.region_match import sido_name_of_region
+from crawler.region_match import region_codes, sido_name_of_region
 from crawler.utils import haversine_km
 from db import queries
-from db.area_price_queries import AREA_PRICE_MONTHS, gov_month_range
+from db.area_price_queries import AREA_PRICE_MONTHS, gov_month_range, recent_area_prices_and_ranges
 from db.models import Complex, ComplexAreaTradeStat, ComplexOfficialPrice
 from db.price_queries import BASELINE_MONTHS
-from db.public_complex_queries import public_price_history, region_trend
+from db.public_complex_queries import is_missing_schema_error, public_price_history, region_trend
 from db.region_stats_queries import region_display_name
 from db.sgis_queries import build_neighborhood, get_sgis_neighborhood_items
 from services.cache import get_cache
@@ -148,12 +149,18 @@ def _chunks(seq: list, n: int = _IN_CHUNK):
         yield seq[i:i + n]
 
 
+OFFICIAL_AREA_TOLERANCE_M2 = 1   # 화면 officialForArea 의 ±1㎡ 와 같은 값
+
+
 def _pick_official(items: list[dict], rep_area: int | None) -> dict | None:
-    """대표 면적에 가장 가까운 전용면적 항목, 대표 면적이 없으면 호수가 가장 많은 항목(화면 officialForArea 와 같은 규칙)."""
+    """화면과 같은 규칙(frontend/src/components/complex/consumer/consumer-format.ts officialForArea·representativeOfficial):
+    대표 면적이 있으면 ±1㎡ 안에서 가장 가까운 항목(없으면 None — 다른 면적 값을 '공시가격'으로 보이지 않게),
+    대표 면적이 없으면 호수가 가장 많은 항목(같으면 앞 — items 는 면적 오름차순)."""
     if not items:
         return None
     if rep_area is not None:
-        return min(items, key=lambda it: abs(it["prvuse_ar"] - rep_area))
+        near = [it for it in items if abs(it["prvuse_ar"] - rep_area) <= OFFICIAL_AREA_TOLERANCE_M2]
+        return min(near, key=lambda it: abs(it["prvuse_ar"] - rep_area)) if near else None
     return max(items, key=lambda it: it["ho_count"] or 0)
 
 
@@ -279,36 +286,88 @@ def _kapt_cost(db: Session, complex_no: str) -> dict | None:
     return {"ym": cost.cost_month, "monthly_total": cost.cost_per_household}
 
 
-def _name_dup_scope(db: Session, cpx) -> str:
-    """같은 법정동 안 같은 이름 → "dong" · 같은 시군구 안 → "sigungu" · 없음 → "none"(제목 접미사 판정)."""
+def _name_dups(db: Session, cpx) -> tuple[str, str]:
+    """(name_dup_scope, title_suffix) — 제목 꼬리를 서버가 정한다(세션 483 보완 F2 · 설계 v2 🟡 제목 규칙).
+
+    name_dup_scope: 같은 법정동 안 같은 이름 → "dong" · 같은 시군구 안 → "sigungu" · 없음 → "none".
+    title_suffix: "none"(시군구 안 동명 없음) · "dong"(시군구 안 동명, 같은 동엔 없음 → "(동)") ·
+    "dong_households"(같은 동 동명 전부와 세대수가 다름 → "(동 N세대)") · "dong_year"(세대수로 못 가르고 사용승인 연도가
+    전부와 다름 → "(동 YYYY년)") · "dong_no"(그것도 같음 → 단지 번호). 세대수·연도를 모르면(None) 그 단계로 못 가른다.
+    """
     cortar = cpx.cortar_no
     if not cortar or len(cortar) != 10:
-        return "none"
+        return "none", "none"
     others = db.execute(
-        select(Complex.cortar_no).where(
+        select(Complex.cortar_no, Complex.total_household_count, Complex.use_approve_ymd).where(
             Complex.complex_name == cpx.complex_name,
             Complex.complex_no != cpx.complex_no,
             Complex.cortar_no.startswith(cortar[:5]),
         )
-    ).scalars().all()
+    ).all()
     if not others:
-        return "none"
-    return "dong" if cortar in others else "sigungu"
+        return "none", "none"
+    same_dong = [o for o in others if o.cortar_no == cortar]
+    if not same_dong:
+        return "sigungu", "dong"
+    hh = cpx.total_household_count
+    if hh is not None and all(o.total_household_count != hh for o in same_dong):
+        return "dong", "dong_households"
+    year = use_approve_year(cpx.use_approve_ymd)
+    if year is not None and all(use_approve_year(o.use_approve_ymd) != year for o in same_dong):
+        return "dong", "dong_year"
+    return "dong", "dong_no"
 
 
-def _nearby(db: Session, cpx, region: bool) -> tuple[list[dict], str | None, int, int]:
-    """(같은 동(없으면 같은 시군구) A·B 카드 최대 12, 범위 "dong"/"sigungu"/None, 후보 총수, 그 동 A·B 수(자기 포함))."""
+def _nearby(db: Session, cpx, region: bool) -> tuple[list[dict], str | None, int]:
+    """(같은 동(없으면 같은 시군구) A·B 카드 최대 12, 범위 "dong"/"sigungu"/None, 후보 총수)."""
     if not region:
-        return [], None, 0, 0
+        return [], None, 0
     dong_rows = _scope_rows(db, cpx.cortar_no)
-    dong_ab = sum(1 for r in dong_rows if _is_ab(r))
     cands = [r for r in dong_rows if _is_ab(r) and r.complex_no != cpx.complex_no]
     scope = "dong"
     if not cands:
         scope = "sigungu"
         cands = [r for r in _scope_rows(db, cpx.cortar_no[:5]) if _is_ab(r) and r.complex_no != cpx.complex_no]
     cards = sorted(build_cards(db, cands), key=card_sort_key)
-    return cards[:NEARBY_MAX], scope, len(cards), dong_ab
+    return cards[:NEARBY_MAX], scope, len(cards)
+
+
+def _rep_area_key(db: Session, cpx) -> int | None:
+    """요약 기본 면적 — 화면 defaultArea(frontend/src/components/complex/consumer/ConsumerComplexView.tsx) 와 같은 규칙.
+
+    대표 면적(rep_area_m2)에 최근 6개월 범위가 있으면 그것 → 범위 있는 면적 중 면적 목록 순서(대표 먼저 → 6개월 거래 수
+    많은 순 → 작은 면적, summarize_area_prices 와 같은 정렬) 첫 면적 → 대표 면적 → 평형표 첫 면적(작은 순) → None.
+    (평형표에만 있는 면적은 거래가 없어 범위가 없으므로 앞 단계 결과는 화면과 같다.)
+    """
+    prices, ranges = recent_area_prices_and_ranges(db, cpx.complex_no)
+    rep = cpx.rep_area_m2
+    if rep is not None and ranges.get(rep):
+        return rep
+    ordered = sorted(prices, key=lambda a: (a != rep, -len(prices[a]), a))
+    ranged = next((a for a in ordered if ranges.get(a)), None)
+    if ranged is not None:
+        return ranged
+    if rep is not None:
+        return rep
+    if ordered:
+        return ordered[0]
+    table = load_pyeong_tables(db, [cpx.complex_no]).get(cpx.complex_no, [])
+    areas = sorted({area for _pno, area, _hh in table if area is not None})
+    return areas[0] if areas else None
+
+
+def _data_last_ym(db: Session, complex_no: str) -> str | None:
+    """그 단지 정부 실거래 자료의 마지막 달 "YYYYMM"(없으면 None) — 화면 '기준월' 줄용(basis_ym 은 오늘 달)."""
+    return db.execute(
+        select(func.max(ComplexAreaTradeStat.base_month)).where(ComplexAreaTradeStat.complex_no == complex_no)
+    ).scalar()
+
+
+def _dong_has_page(db: Session, cpx) -> bool:
+    """동 페이지가 있나 — 동 페이지(dong_page)와 **같은 캐시된 판정**(dong_flags)에서 읽는다(수명 어긋남으로 링크가 404 가
+    되지 않게, F9). 지역 추이를 부르지 않는다 — 추이 실패가 요약으로 번지지 않게(F12)."""
+    flags = dong_flags(db, cpx.cortar_no[:5])
+    return bool(flags["dongs"].get(cpx.cortar_no, {}).get("has_page"))
 
 
 def _breadcrumb(cpx, region: bool, dong_has_page: bool) -> dict | None:
@@ -338,15 +397,19 @@ def public_summary(db: Session, complex_no: str) -> dict | None:
         return None
     grade = grade_of_complex(db, complex_no)
     region = grade["has_region"]
-    nearby, scope, total, dong_ab = _nearby(db, cpx, region)
+    nearby, scope, total = _nearby(db, cpx, region)
     official = official_price_payload(complex_no, queries.get_complex_official_prices(db, complex_no))
+    dup_scope, title_suffix = _name_dups(db, cpx) if region else ("none", "none")
     result = {
         **{out: getattr(cpx, col) for out, col in SUMMARY_BASE_FIELDS.items()},
         "use_approve_year": use_approve_year(cpx.use_approve_ymd),
+        "rep_area_key": _rep_area_key(db, cpx),
         **grade,
-        "breadcrumb": _breadcrumb(cpx, region, dong_ab >= DONG_PAGE_MIN),
-        "name_dup_scope": _name_dup_scope(db, cpx) if region else "none",
+        "breadcrumb": _breadcrumb(cpx, region, _dong_has_page(db, cpx) if region else False),
+        "name_dup_scope": dup_scope,
+        "title_suffix": title_suffix,
         "basis_ym": ym,
+        "data_last_ym": _data_last_ym(db, complex_no),
         "area_ranges": _area_ranges(db, complex_no),
         "official_price": {"year": official["year"], "items": official["items"]} if official["year"] else None,
         "kapt_cost": _kapt_cost(db, complex_no),
@@ -360,22 +423,62 @@ def public_summary(db: Session, complex_no: str) -> dict | None:
 
 
 # ── 시군구 허브 · 동 페이지 ─────────────────────────────────────────────────
+# 동 페이지·색인 판정은 dong_flags 한 곳(1일 캐시, 지역 추이와 분리 — F12). 요약 dong_has_page · 동 페이지 404 ·
+# 허브 dongs[].has_page/indexable · 허브 indexable · sitemap-codes 가 모두 이 캐시를 읽는다(F9 "같은 판정").
+# 동 페이지 = A·B 10곳 이상 · 색인 = indexable 단지 1곳 이상.
 
 
-def region_hub(db: Session, sigungu5: str) -> dict | None:
-    """GET /api/regions/{sigungu5}/hub 본문 — 이름 모르는 코드·단지 0 이면 None(→ 404). 1일 캐시.
+def _dong_has_page_rows(rows) -> bool:
+    return sum(1 for r in rows if _is_ab(r)) >= DONG_PAGE_MIN
 
-    dongs[] 는 단지 많은 동 먼저 · 각 동 단지 목록은 C 단지까지 둔다(손님 탐색용 — 그 단지 페이지는 noindex).
-    """
+
+def _any_indexable(rows) -> bool:
+    return any(info_of_row(r)["indexable"] for r in rows)
+
+
+def _flags_from_rows(rows) -> dict:
+    """한 시군구 단지 줄들 → {"indexable", "dongs": {동10: {dong_name, has_page, indexable, complex_count}}} (지역 온전한 줄만)."""
+    by_dong: dict[str, list] = {}
+    for r in rows:
+        if info_of_row(r)["has_region"]:
+            by_dong.setdefault(r.cortar_no, []).append(r)
+    dongs = {}
+    for code, drows in by_dong.items():
+        has_page = _dong_has_page_rows(drows)
+        dongs[code] = {
+            "dong_name": dong_name_of(drows[0].cortar_address),
+            "has_page": has_page,
+            "indexable": has_page and _any_indexable(drows),
+            "complex_count": len(drows),
+        }
+    return {"indexable": any(_any_indexable(d) for d in by_dong.values()), "dongs": dongs}
+
+
+def _flags_cache():
+    return get_cache("region_dong_flags", ttl=PAGE_TTL, max_size=300)
+
+
+def dong_flags(db: Session, sigungu5: str) -> dict:
+    """그 시군구의 동 페이지·색인 판정 — 1일 캐시(키 = 시군구:기준월). 지역 추이는 부르지 않는다."""
+    key = f"{sigungu5}:{basis_ym()}"
+    cache = _flags_cache()
+    hit = cache.get(key)
+    if hit is not None:
+        return hit
+    rows = grade_rows(db, Complex.cortar_no.startswith(sigungu5), extra=(Complex.cortar_address,))
+    flags = _flags_from_rows(rows)
+    cache.set(key, flags)
+    return flags
+
+
+def _hub_base(db: Session, sigungu5: str, name: str) -> dict | None:
+    """허브의 판정 없는 몸통(동별 단지 카드·지역 추이) — 1일 캐시. 지역 추이가 연결 오류·시간 초과면 예외(F5)."""
     ym = basis_ym()
     cache = get_cache("region_hub", ttl=PAGE_TTL, max_size=300)
     key = f"{sigungu5}:{ym}"
     hit = cache.get(key)
     if hit is not None:
         return hit
-    name = region_display_name(sigungu5)
-    if name is None:
-        return None
     rows = [r for r in _scope_rows(db, sigungu5) if info_of_row(r)["has_region"]]
     if not rows:
         return None
@@ -383,29 +486,63 @@ def region_hub(db: Session, sigungu5: str) -> dict | None:
     by_dong: dict[str, list] = {}
     for r in rows:
         by_dong.setdefault(r.cortar_no, []).append(r)
-    dongs = []
-    for dong_code, drows in by_dong.items():
-        ab = sum(1 for r in drows if _is_ab(r))
-        dongs.append({
-            "dong_code": dong_code,
+    dongs = [
+        {
+            "dong_code": code,
             "dong_name": dong_name_of(drows[0].cortar_address),
-            "has_page": ab >= DONG_PAGE_MIN,
             "complex_count": len(drows),
             "complexes": sorted((cards[r.complex_no] for r in drows), key=card_sort_key),
-        })
+        }
+        for code, drows in by_dong.items()
+    ]
     dongs.sort(key=lambda d: (-d["complex_count"], d["dong_code"]))
-    trend = region_trend(db, SimpleNamespace(cortar_no=sigungu5 + "00000"))
-    result = {
+    trend = region_trend(db, SimpleNamespace(cortar_no=sigungu5 + "00000"), raise_errors=True)
+    base = {
         "sigungu_code": sigungu5,
         "sido": sido_name_of_region(sigungu5),
         "sigungu_name": name,
-        "indexable": any(info_of_row(r)["indexable"] for r in rows),
         "complex_count": len(rows),
         "region_trend": trend,
         "dongs": dongs,
     }
-    cache.set(key, result)
-    return result
+    cache.set(key, base)
+    return base
+
+
+def region_hub(db: Session, sigungu5: str) -> dict | None:
+    """GET /api/regions/{sigungu5}/hub 본문 — 이름 모르는 코드·단지 0 이면 None(→ 404).
+
+    몸통(_hub_base, 1일 캐시) + 판정(dong_flags, 1일 캐시)을 요청마다 합친다 — has_page·indexable 은 늘 dong_flags 값.
+    dongs[] 는 단지 많은 동 먼저 · 각 동 단지 목록은 C 단지까지 둔다(손님 탐색용 — 그 단지 페이지는 noindex).
+    지역 추이 실패는 예외 그대로(허브만 503 — 요약·동 페이지는 추이를 안 부른다).
+    """
+    name = region_display_name(sigungu5)
+    if name is None:
+        return None
+    base = _hub_base(db, sigungu5, name)
+    if base is None:
+        return None
+    flags = dong_flags(db, sigungu5)
+    dongs = []
+    for d in base["dongs"]:
+        f = flags["dongs"].get(d["dong_code"], {})
+        dongs.append({
+            "dong_code": d["dong_code"],
+            "dong_name": d["dong_name"],
+            "has_page": bool(f.get("has_page")),
+            "indexable": bool(f.get("indexable")),
+            "complex_count": d["complex_count"],
+            "complexes": d["complexes"],
+        })
+    return {
+        "sigungu_code": base["sigungu_code"],
+        "sido": base["sido"],
+        "sigungu_name": base["sigungu_name"],
+        "indexable": flags["indexable"],
+        "complex_count": base["complex_count"],
+        "region_trend": base["region_trend"],
+        "dongs": dongs,
+    }
 
 
 def _dong_neighborhood(db: Session, dong10: str) -> list[dict]:
@@ -414,7 +551,7 @@ def _dong_neighborhood(db: Session, dong10: str) -> list[dict]:
     동네 자료는 행정동(8자리) 키라 법정동과 1:1 이 아니다(10-27 실측: 동 페이지 1,091 중 행정동 1개 572 · 여럿 519)
     → 행정동별 목록(메인 판정 10-27). 순서 = 그 동 단지가 많이 붙은 행정동 먼저 → 코드 순. 행정동 이름은
     sgis_area_stats 의 adm_nm(build_neighborhood 의 emd_nm). 자료 없는 행정동(총인구 행 없음)은 뺀다. 0개면 [].
-    sgis_emd_cd 칸이 없는 DB(시험·V071 전)에서도 페이지가 500 이 되지 않게 저장점으로 감싼다.
+    칸·표가 아예 없는 DB(시험·V071 전)만 [] 로 두고, 연결 오류·시간 초과는 그대로 올린다(1일 캐시에 굳히지 않게 — F5).
     """
     try:
         with db.begin_nested():
@@ -430,38 +567,74 @@ def _dong_neighborhood(db: Session, dong10: str) -> list[dict]:
                     out.append({"emd_cd": code, "emd_name": hood.get("emd_nm"), **hood})
             return out
     except (ProgrammingError, OperationalError) as e:
-        logger.warning("동 페이지 동네 자료를 읽지 못해 비워요: %s", type(e).__name__)
+        if not is_missing_schema_error(e):
+            raise
+        logger.warning("동 페이지 동네 자료 표·칸이 없어 비워요: %s", type(e).__name__)
         return []
 
 
 def dong_page(db: Session, sigungu5: str, dong10: str) -> dict | None:
-    """GET /api/regions/{sigungu5}/dongs/{dong10} 본문 — 시작이 안 맞음·A·B 10곳 미만이면 None(→ 404). 1일 캐시."""
+    """GET /api/regions/{sigungu5}/dongs/{dong10} 본문 — 시작이 안 맞음·A·B 10곳 미만이면 None(→ 404).
+
+    404 판정·indexable·다른 동 목록은 요청마다 dong_flags(캐시)에서, 단지 목록·동네 자료만 1일 캐시. 지역 추이 안 부름(F12).
+    """
     if not dong10.startswith(sigungu5):
+        return None
+    name = region_display_name(sigungu5)
+    if name is None:
+        return None
+    flags = dong_flags(db, sigungu5)
+    mine = flags["dongs"].get(dong10)
+    if mine is None or not mine["has_page"]:
         return None
     ym = basis_ym()
     cache = get_cache("region_dong", ttl=PAGE_TTL, max_size=2000)
     key = f"{dong10}:{ym}"
-    hit = cache.get(key)
-    if hit is not None:
-        return hit
-    hub = region_hub(db, sigungu5)
-    if hub is None:
-        return None
-    dong = next((d for d in hub["dongs"] if d["dong_code"] == dong10), None)
-    if dong is None or not dong["has_page"]:
-        return None
-    result = {
+    body = cache.get(key)
+    if body is None:
+        rows = [r for r in _scope_rows(db, dong10) if info_of_row(r)["has_region"]]
+        body = {
+            "complexes": sorted(build_cards(db, rows, with_year=True), key=card_sort_key),
+            "neighborhood": _dong_neighborhood(db, dong10),
+        }
+        cache.set(key, body)
+    siblings = sorted(
+        ((code, f) for code, f in flags["dongs"].items() if f["has_page"] and code != dong10),
+        key=lambda item: (-item[1]["complex_count"], item[0]),
+    )
+    return {
         "dong_code": dong10,
-        "dong_name": dong["dong_name"],
-        "sido": hub["sido"],
+        "dong_name": mine["dong_name"],
+        "sido": sido_name_of_region(sigungu5),
         "sigungu_code": sigungu5,
-        "sigungu_name": hub["sigungu_name"],
-        "complexes": dong["complexes"],
-        "neighborhood": _dong_neighborhood(db, dong10),
-        "sibling_dongs": [
-            {"dong_code": d["dong_code"], "dong_name": d["dong_name"]}
-            for d in hub["dongs"] if d["has_page"] and d["dong_code"] != dong10
-        ],
+        "sigungu_name": name,
+        "indexable": mine["indexable"],
+        "complexes": body["complexes"],
+        "neighborhood": body["neighborhood"],
+        "sibling_dongs": [{"dong_code": code, "dong_name": f["dong_name"]} for code, f in siblings],
     }
-    cache.set(key, result)
-    return result
+
+
+def region_sitemap_codes(db: Session) -> dict:
+    """GET /api/regions/sitemap-codes 본문 — {"hubs":[색인 대상 시군구5…], "dongs":[색인 대상이고 페이지 있는 동10…]}.
+
+    dong_flags 캐시를 그대로 읽는다(페이지와 같은 판정). 비어 있는 시군구만 전체 단지 한 번 읽기로 채운다 —
+    이미 캐시된 시군구는 그 값을 쓴다(페이지가 보는 값과 어긋나지 않게). 실패는 예외 그대로(빈 목록을 굳히지 않는다).
+    """
+    ym = basis_ym()
+    cache = _flags_cache()
+    codes = sorted(region_codes())
+    flags = {sgg: cache.get(f"{sgg}:{ym}") for sgg in codes}
+    missing = [sgg for sgg, f in flags.items() if f is None]
+    if missing:
+        by_sgg: dict[str, list] = {}
+        for r in grade_rows(db, extra=(Complex.cortar_address,)):
+            if r.cortar_no and len(r.cortar_no) >= 5:
+                by_sgg.setdefault(r.cortar_no[:5], []).append(r)
+        for sgg in missing:
+            flags[sgg] = _flags_from_rows(by_sgg.get(sgg, []))
+            cache.set(f"{sgg}:{ym}", flags[sgg])
+    return {
+        "hubs": [sgg for sgg in codes if flags[sgg]["indexable"]],
+        "dongs": sorted(code for f in flags.values() for code, d in f["dongs"].items() if d["indexable"]),
+    }

@@ -40,7 +40,8 @@ CUTOFF6 = _cutoff_month(6)
 
 SUMMARY_KEYS = {
     "complex_no", "name", "real_estate_type", "household_count", "building_count", "use_approve_year",
-    "parking_count", "grade", "indexable", "has_region", "breadcrumb", "name_dup_scope", "basis_ym",
+    "parking_count", "rep_area_key", "grade", "indexable", "has_region", "breadcrumb", "name_dup_scope",
+    "title_suffix", "basis_ym", "data_last_ym",
     "area_ranges", "official_price", "kapt_cost", "subway", "nearby", "nearby_scope", "nearby_total",
 }
 CARD_KEYS = {"complex_no", "name", "grade", "household_count", "rep_area_key", "recent6_min", "recent6_max",
@@ -279,6 +280,21 @@ def test_같은이름_범위_3종(db, client):
     assert scope == {"701": "dong", "703": "sigungu", "705": "none"}
 
 
+def test_제목_꼬리_5종(db, client):
+    _cpx(db, "711", name="가람", hh=300, ymd="20000101")
+    _cpx(db, "712", name="가람", hh=500, ymd="20000101")                 # 같은 동 · 세대수 다름
+    _cpx(db, "721", name="나래", hh=300, ymd="19990101")
+    _cpx(db, "722", name="나래", hh=300, ymd="20050101")                 # 같은 동 · 세대수 같고 연도 다름
+    _cpx(db, "731", name="다솜", hh=300, ymd="20000101")
+    _cpx(db, "732", name="다솜", hh=300, ymd="20000601")                 # 세대수·연도 다 같음
+    _cpx(db, "741", name="라온")
+    _cpx(db, "742", name="라온", cortar=DONG_Y, addr=ADDR_Y)            # 같은 시군구 다른 동
+    _cpx(db, "751", name="마루")                                         # 혼자
+    suffix = {no: client.get(f"/api/complexes/{no}/public-summary").json()["title_suffix"]
+              for no in ("711", "721", "731", "741", "751")}
+    assert suffix == {"711": "dong_households", "721": "dong_year", "731": "dong_no", "741": "dong", "751": "none"}
+
+
 # ── 10. 캐시 ─────────────────────────────────────────────────────────────────
 
 
@@ -373,7 +389,7 @@ def test_동페이지_모양과_다른동_그리고_동네자료_없으면_null(
     res = client.get(f"/api/regions/{SGG}/dongs/{DONG_X}")
     assert res.status_code == 200 and res.headers["cache-control"] == "public, max-age=3600"
     body = res.json()
-    assert set(body) == {"dong_code", "dong_name", "sido", "sigungu_code", "sigungu_name", "complexes",
+    assert set(body) == {"dong_code", "dong_name", "sido", "sigungu_code", "sigungu_name", "indexable", "complexes",
                          "neighborhood", "sibling_dongs"}
     assert body["dong_name"] == "봉명동" and len(body["complexes"]) == 10
     assert body["sibling_dongs"] == [{"dong_code": DONG_Y, "dong_name": "궁동"}]
@@ -472,3 +488,332 @@ def test_X_Robots_Tag_가_아무_응답에나(client, monkeypatch):
         assert client.get(path).headers.get("x-robots-tag") == "noindex", path
     res = _hit(client, 61)
     assert res.status_code == 429 and res.headers.get("x-robots-tag") == "noindex"
+
+
+# ══ 보완(세션 483 검사관 지적 F1~F11) ═══════════════════════════════════════
+
+DIRECT_ONLY = [{"p": 50000, "g": "직거래"}, {"p": 60000, "g": " 직거래 "}]
+MIXED = [{"p": 50000, "g": "직거래"}, {"p": 60000, "g": "중개거래"}]
+
+
+# F1 — 직거래만 있는 달은 A 근거가 아니다
+
+
+def test_F1_직거래만_있으면_A아님_B조건으로(db):
+    _cpx(db, "1101")
+    _trade(db, "1101", trades=DIRECT_ONLY)                                 # 직거래만 → C
+    _cpx(db, "1102")
+    _trade(db, "1102", trades=DIRECT_ONLY)
+    _official(db, "1102")                                                  # 직거래만 + 공시가격 → B
+    _cpx(db, "1103")
+    _trade(db, "1103", trades=MIXED)                                       # 중개거래 1건 → A
+    _cpx(db, "1104")
+    _trade(db, "1104", trades=[])                                          # 옛 줄(목록 빔) + price_min → A
+    got = {no: grade_of_complex(db, no)["grade"] for no in ("1101", "1102", "1103", "1104")}
+    assert got == {"1101": "C", "1102": "B", "1103": "A", "1104": "A"}
+    assert {no: g["grade"] for no, g in compute_grades(db).items()} == got
+    assert sitemap_ids(db, "A") == ["1103", "1104"]
+
+
+# F3 — 같은 동 카드 공시가격은 ±1㎡ 안만
+
+
+def test_F3_카드_공시가격_면적차이_1제곱미터_넘으면_null(db, client):
+    _cpx(db, "1301")
+    _trade(db, "1301")
+    _cpx(db, "1302", rep=59)
+    _official(db, "1302", area="84.90")                                    # 대표 59 · 공시가격 84.9 만
+    _cpx(db, "1303", rep=84)
+    _official(db, "1303", area="84.90", price=500_000_000)                 # 0.9㎡ 차이 → 그 값
+    cards = {c["complex_no"]: c for c in client.get("/api/complexes/1301/public-summary").json()["nearby"]}
+    assert cards["1302"]["official_price"] is None
+    assert cards["1303"]["official_price"] == 500_000_000
+
+
+# F4 — 동 페이지 색인 여부
+
+
+def test_F4_동페이지_indexable_A0_B12_는_false_A있으면_true(db, client):
+    _dong_with_ab(db, DONG_X, ADDR_X, 12, 9000)                            # B 만 12곳
+    _dong_with_ab(db, DONG_Y, ADDR_Y, 10, 9100)
+    _cpx(db, "9150", cortar=DONG_Y, addr=ADDR_Y)
+    _trade(db, "9150")                                                     # Y 동엔 A 1곳
+    assert client.get(f"/api/regions/{SGG}/dongs/{DONG_X}").json()["indexable"] is False
+    assert client.get(f"/api/regions/{SGG}/dongs/{DONG_Y}").json()["indexable"] is True
+
+
+# F5 — DB 오류는 캐시에 굳히지 않고 503
+
+
+def _op_error():
+    from sqlalchemy.exc import OperationalError
+    return OperationalError("SELECT 1", {}, Exception("canceling statement due to statement timeout"))
+
+
+def test_F5_허브_지역추이_실패는_503_다음_호출은_정상(db, client, monkeypatch):
+    import db.public_complex_queries as pcq
+    db.add(seo_region_stat(SGG, CUTOFF24))
+    db.commit()
+    _cpx(db, "1501")
+    _trade(db, "1501")
+    real = pcq._trend_rows
+    calls = {"n": 0}
+
+    def flaky(*a, **k):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise _op_error()
+        return real(*a, **k)
+
+    monkeypatch.setattr(pcq, "_trend_rows", flaky)
+    res = client.get(f"/api/regions/{SGG}/hub")
+    assert res.status_code == 503 and "cache-control" not in res.headers
+    res = client.get(f"/api/regions/{SGG}/hub")
+    assert res.status_code == 200 and len(res.json()["region_trend"]["items"]) == 1
+
+
+def test_F5_기존_지역추이_라우트는_실패를_그대로_삼킴(db, client, monkeypatch):
+    import db.public_complex_queries as pcq
+    _cpx(db, "1502")
+
+    def boom(*a, **k):
+        raise _op_error()
+
+    monkeypatch.setattr(pcq, "_trend_rows", boom)
+    res = client.get("/api/complexes/1502/region-trend")
+    assert res.status_code == 200 and res.json()["items"] == []
+
+
+def test_F5_동네자료_실패는_503_다음_호출은_정상(db, client, monkeypatch):
+    import services.public_pages as pp
+    _emd_fixture(db, {str(9000 + i): "25050510" for i in range(10)})
+    real = pp.get_sgis_neighborhood_items
+    calls = {"n": 0}
+
+    def flaky(*a, **k):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise _op_error()
+        return real(*a, **k)
+
+    monkeypatch.setattr(pp, "get_sgis_neighborhood_items", flaky)
+    res = client.get(f"/api/regions/{SGG}/dongs/{DONG_X}")
+    assert res.status_code == 503 and "cache-control" not in res.headers
+    res = client.get(f"/api/regions/{SGG}/dongs/{DONG_X}")
+    assert res.status_code == 200 and len(res.json()["neighborhood"]) == 1
+
+
+def seo_region_stat(code, period):
+    from crawler.service_region_stats import STAT_JEONSE_RATIO
+    from db.models import RegionStats
+    return RegionStats(region_code=code, stat_code=STAT_JEONSE_RATIO, period=period, value=Decimal("61.2"),
+                       source="시험")
+
+
+# F6 — 요약 기본 면적(화면 defaultArea 와 같은 규칙)
+
+
+def test_F6_대표면적에_범위있으면_그것(db, client):
+    _cpx(db, "1601", rep=59)
+    _trade(db, "1601", month=CUTOFF6, area=59)
+    _trade(db, "1601", month=CUTOFF6, area=84, prices=(1, 2, 3, 4))
+    assert client.get("/api/complexes/1601/public-summary").json()["rep_area_key"] == 59
+
+
+def test_F6_대표면적에_범위없으면_거래많은_범위면적(db, client):
+    _cpx(db, "1602", rep=59)
+    _trade(db, "1602", month=CUTOFF6, area=59, prices=(50000,), trades=[{"p": 50000, "g": "직거래"}])
+    _trade(db, "1602", month=CUTOFF6, area=74, prices=(60000,))
+    _trade(db, "1602", month=CUTOFF6, area=84, prices=(70000, 71000))
+    assert client.get("/api/complexes/1602/public-summary").json()["rep_area_key"] == 84
+
+
+def test_F6_6개월_범위가_없으면_대표면적_그것도_없으면_null(db, client):
+    _cpx(db, "1603", rep=59)
+    _trade(db, "1603", month=CUTOFF24, area=84)                            # 24개월 전쯤만
+    _cpx(db, "1604")
+    assert client.get("/api/complexes/1603/public-summary").json()["rep_area_key"] == 59
+    assert client.get("/api/complexes/1604/public-summary").json()["rep_area_key"] is None
+
+
+# F7 — 자료 마지막 달
+
+
+def test_F7_data_last_ym_은_그_단지_마지막_거래달(db, client):
+    _cpx(db, "1701")
+    _trade(db, "1701", month=CUTOFF24)
+    _trade(db, "1701", month=CUTOFF6, area=84)
+    _cpx(db, "1702")
+    assert client.get("/api/complexes/1701/public-summary").json()["data_last_ym"] == CUTOFF6
+    assert client.get("/api/complexes/1702/public-summary").json()["data_last_ym"] is None
+
+
+# F8 — 사이트맵 코드
+
+
+def test_F8_사이트맵코드_허브와_동페이지(db, client):
+    _dong_with_ab(db, DONG_X, ADDR_X, 10, 9000)                            # 페이지 있음 · A 0
+    _dong_with_ab(db, DONG_Y, ADDR_Y, 10, 9100)
+    _cpx(db, "9150", cortar=DONG_Y, addr=ADDR_Y)
+    _trade(db, "9150")                                                     # Y 만 색인 대상
+    _cpx(db, "9160", cortar="1168010100", addr="서울특별시 강남구 역삼동")
+    _official(db, "9160")                                                  # 강남구 = B 만 → 허브 색인 아님
+    res = client.get("/api/regions/sitemap-codes")
+    assert res.status_code == 200 and res.headers["cache-control"] == "public, max-age=3600"
+    assert res.json() == {"hubs": [SGG], "dongs": [DONG_Y]}
+    hub = client.get(f"/api/regions/{SGG}/hub").json()
+    dong_idx = {d["dong_code"] for d in hub["dongs"] if d["indexable"]}
+    assert dong_idx == set(res.json()["dongs"])                             # 허브 판정과 같다
+
+
+# F9 — 요약의 동 페이지 표시는 동 페이지와 같은 캐시 판정
+
+
+def test_F9_9에서_10곳이_돼도_요약과_동페이지가_같은값(db, client):
+    from services.cache import get_cache
+    _dong_with_ab(db, DONG_X, ADDR_X, 9, 9000)
+    assert client.get("/api/complexes/9000/public-summary").json()["breadcrumb"]["dong_has_page"] is False
+    assert client.get(f"/api/regions/{SGG}/dongs/{DONG_X}").status_code == 404
+    _cpx(db, "9009")
+    _official(db, "9009")                                                  # 10곳째
+    get_cache("public_summary").delete_by_prefix("")                       # 요약만 수명이 끝난 상황
+    has_page = client.get("/api/complexes/9000/public-summary").json()["breadcrumb"]["dong_has_page"]
+    status = client.get(f"/api/regions/{SGG}/dongs/{DONG_X}").status_code
+    assert (has_page, status) == (False, 404)                              # 둘 다 옛 판정 — 어긋나지 않음
+    hub_has_page = {d["dong_code"]: d["has_page"] for d in client.get(f"/api/regions/{SGG}/hub").json()["dongs"]}
+    assert hub_has_page[DONG_X] is False                                   # 허브도 같은 옛 판정
+    get_cache("public_summary").delete_by_prefix("")
+    get_cache("region_dong_flags").delete_by_prefix("")                    # 판정 캐시 수명이 끝남
+    has_page = client.get("/api/complexes/9000/public-summary").json()["breadcrumb"]["dong_has_page"]
+    status = client.get(f"/api/regions/{SGG}/dongs/{DONG_X}").status_code
+    hub_has_page = {d["dong_code"]: d["has_page"] for d in client.get(f"/api/regions/{SGG}/hub").json()["dongs"]}
+    assert (has_page, status, hub_has_page[DONG_X]) == (True, 200, True)   # 허브 몸통 캐시는 그대로여도 같이 바뀜
+
+
+# F12 — 지역 추이 실패는 허브만 503, 요약·동 페이지는 정상
+
+
+def test_F12_지역추이_실패해도_요약과_동페이지는_200_허브만_503(db, client, monkeypatch):
+    import db.public_complex_queries as pcq
+    db.add(seo_region_stat(SGG, CUTOFF24))
+    db.commit()
+    _dong_with_ab(db, DONG_X, ADDR_X, 10, 9000)
+    real = pcq._trend_rows
+
+    def boom(*a, **k):
+        raise _op_error()
+
+    monkeypatch.setattr(pcq, "_trend_rows", boom)
+    res = client.get("/api/complexes/9000/public-summary")
+    assert res.status_code == 200 and res.json()["breadcrumb"]["dong_has_page"] is True
+    assert client.get(f"/api/regions/{SGG}/dongs/{DONG_X}").status_code == 200
+    assert client.get(f"/api/regions/{SGG}/hub").status_code == 503
+    monkeypatch.setattr(pcq, "_trend_rows", real)
+    res = client.get(f"/api/regions/{SGG}/hub")
+    assert res.status_code == 200 and len(res.json()["region_trend"]["items"]) == 1
+
+
+# 재검사 🟡 — F3 정확히 1.0㎡ 경계 · F2 같은 동 동명 3곳 이상
+
+
+def test_F3_면적차이_정확히_1제곱미터는_포함(db, client):
+    _cpx(db, "1311")
+    _trade(db, "1311")
+    _cpx(db, "1312", rep=59)
+    _official(db, "1312", area="60.00", price=420_000_000)
+    cards = {c["complex_no"]: c for c in client.get("/api/complexes/1311/public-summary").json()["nearby"]}
+    assert cards["1312"]["official_price"] == 420_000_000
+
+
+def test_F2_같은동_동명_3곳이면_모두와_달라야_그_단계(db, client):
+    _cpx(db, "761", name="바다", hh=300, ymd="20000101")
+    _cpx(db, "762", name="바다", hh=500, ymd="20010101")
+    _cpx(db, "763", name="바다", hh=300, ymd="20050101")                 # 세대수가 하나와 같음 → 연도로
+    _cpx(db, "771", name="하늘", hh=300, ymd="20000101")
+    _cpx(db, "772", name="하늘", hh=300, ymd="20000601")
+    _cpx(db, "773", name="하늘", hh=300, ymd="20030101")                 # 연도도 하나와 같음 → 번호
+    suffix = {no: client.get(f"/api/complexes/{no}/public-summary").json()["title_suffix"] for no in ("761", "771")}
+    assert suffix == {"761": "dong_year", "771": "dong_no"}
+
+
+# F10 — 열쇠 공백·로그
+
+
+def test_F10_열쇠_앞뒤_공백은_떼고_비교(client, monkeypatch):
+    monkeypatch.setenv("SSR_SHARED_KEY", f"  {KEY}\n")
+    for _ in range(70):
+        assert client.get("/api/regions", headers={"X-SSR-Key": f"{KEY} "}).status_code == 200
+
+
+def test_F10_켜질때_한줄_그리고_시간당_일치_불일치_횟수(monkeypatch, caplog):
+    import logging
+
+    from auth import rate_limiter as rl
+    monkeypatch.setenv("SSR_SHARED_KEY", KEY)
+    with caplog.at_level(logging.INFO, logger="auth.rate_limiter"):
+        rl.RateLimitMiddleware(app=lambda *a: None)
+        monkeypatch.setattr(rl, "_SSR_TALLY_SEC", 0)
+        monkeypatch.setattr(rl, "_ssr_tally", {"ok": 0, "bad": 2, "since": 0.0})
+        rl._count_ssr(True)
+    assert "서버 렌더 열쇠 설정됨" in caplog.text
+    assert "서버 렌더 열쇠 일치 1 · 불일치 2" in caplog.text
+    assert KEY not in caplog.text
+
+
+# F11 — 시험 빈틈
+
+
+def test_F11_허브는_지역칸이_온전한_단지만(db, client):
+    _cpx(db, "1901")
+    _trade(db, "1901")
+    _cpx(db, "1902", cortar="30200")                                       # 앞 5자리는 맞지만 10자리가 아님
+    _trade(db, "1902")
+    body = client.get(f"/api/regions/{SGG}/hub").json()
+    nos = [c["complex_no"] for d in body["dongs"] for c in d["complexes"]]
+    assert nos == ["1901"] and body["complex_count"] == 1
+
+
+def test_F11_요약_캐시키에_기준월(db, client, monkeypatch):
+    import services.public_pages as pp
+    _cpx(db, "1903")
+    monkeypatch.setattr(pp, "basis_ym", lambda today=None: "2026-10")
+    assert client.get("/api/complexes/1903/public-summary").json()["basis_ym"] == "2026-10"
+    monkeypatch.setattr(pp, "basis_ym", lambda today=None: "2026-11")
+    assert client.get("/api/complexes/1903/public-summary").json()["basis_ym"] == "2026-11"
+
+
+def test_F11_허용목록의_DB칸_이름도_네이버칸_아님():
+    from services.public_pages import SUMMARY_BASE_FIELDS
+    db_cols = set(SUMMARY_BASE_FIELDS.values())
+    assert db_cols & NAVER_FIELDS == set()
+    assert db_cols & {"latitude", "longitude", "nearby_median_price", "jeonse_rate", "recent_trades_6m"} == set()
+
+
+# 재검사 변이 N2·N4·N5 — 시험 보강
+
+
+def test_N2_사이트맵코드는_판정캐시를_그대로_따른다(db, client):
+    import services.public_pages as pp
+    fake_dong = "3020099999"
+    pp._flags_cache().set(f"{SGG}:{pp.basis_ym()}", {
+        "indexable": True,
+        "dongs": {fake_dong: {"dong_name": "가짜동", "has_page": True, "indexable": True, "complex_count": 10}},
+    })
+    body = client.get("/api/regions/sitemap-codes").json()                 # DB 에는 단지 0
+    assert body == {"hubs": [SGG], "dongs": [fake_dong]}
+
+
+def test_N4_동페이지_카드에_C단지도_있다(db, client):
+    _dong_with_ab(db, DONG_X, ADDR_X, 10, 9000)
+    _cpx(db, "9400", type_="OPST", hh=1)
+    nos = [c["complex_no"] for c in client.get(f"/api/regions/{SGG}/dongs/{DONG_X}").json()["complexes"]]
+    assert "9400" in nos and nos[-1] == "9400" and len(nos) == 11
+
+
+def test_N5_다른동_목록은_페이지있는_동만(db, client):
+    dong_z, addr_z = "3020012500", "대전광역시 유성구 어은동"
+    _dong_with_ab(db, DONG_X, ADDR_X, 10, 9000)
+    _dong_with_ab(db, DONG_Y, ADDR_Y, 11, 9100)
+    _dong_with_ab(db, dong_z, addr_z, 3, 9200)                             # 페이지 없음
+    body = client.get(f"/api/regions/{SGG}/dongs/{DONG_X}").json()
+    assert body["sibling_dongs"] == [{"dong_code": DONG_Y, "dong_name": "궁동"}]

@@ -4,6 +4,7 @@ import re
 from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from crawler.utils import get_shared_throttle
@@ -123,7 +124,10 @@ def get_public_summary(
     """
     if not _COMPLEX_NO.fullmatch(complex_no):
         raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다")
-    result = public_summary(db, complex_no)
+    try:
+        result = public_summary(db, complex_no)
+    except OperationalError:   # DB 연결 오류·시간 초과 — 캐시에 안 넣고 503(화면이 404 로 굳히지 않게)
+        raise HTTPException(status_code=503, detail="잠시 자료를 읽지 못했습니다. 조금 뒤 다시 시도해 주세요")
     if result is None:
         raise HTTPException(status_code=404, detail="단지를 찾을 수 없습니다")
     response.headers["Cache-Control"] = _PUBLIC_CACHE

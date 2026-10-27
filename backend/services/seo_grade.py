@@ -1,6 +1,7 @@
 """단지 색인 등급 — 검색엔진에 보일 단지 고르기 (세션 483 PR 3a · 설계 design-pr3 §2 · 결정 14).
 
-- A = 아파트·재건축(APT·JGC)이고 정부 실거래 면적별 표(complex_area_trade_stats)에 최근 24개월 줄이 있음
+- A = 아파트·재건축(APT·JGC)이고 정부 실거래 면적별 표(complex_area_trade_stats)에 최근 24개월 **범위가 있는** 줄이 있음
+  (직거래만 있는 달은 범위가 비어 근거가 못 된다 — _RANGE_ROW_*)
 - B = A 아님 + 공시가격(complex_official_prices) 또는 K-apt 관리비(kapt_management_costs)가 있음
 - C = 그 밖(오피스텔·분양권은 전부 C)
 - 지역 없음(cortar_no 가 10자리 숫자가 아니거나 시군구 이름을 모름) = has_region False → 등급과 무관하게 색인 안 함
@@ -11,7 +12,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import exists, or_, select, text
 from sqlalchemy.orm import Session
 
 from crawler.metrics_helpers import _cutoff_month
@@ -31,10 +32,37 @@ def grade_since(today=None) -> str:
     return _cutoff_month(GRADE_WINDOW_MONTHS, today)
 
 
-def _grade_select(since: str, *extra):
+_DIRECT = "직거래"   # area_price_queries.DIRECT_DEAL 과 같은 글자
+_T = "complex_area_trade_stats.trades"
+_PRICE_MIN = "complex_area_trade_stats.price_min"
+# "그 달 줄에 범위가 있다" — 화면 범위 계산(gov_month_range)과 같은 뜻: trades 목록이 있으면 직거래 아닌 거래 1건 이상,
+# 비어 있으면(옛 줄) price_min 있음. 직거래만 있는 달은 범위가 비므로 A 근거가 못 된다(세션 483 보완 F1 — 운영 619곳).
+# PostgreSQL 은 jsonb 함수, 시험 DB(SQLite)는 json1 함수 — 같은 판정의 두 표기(domain-mapping-ssot 룰 3).
+# 배열이 아닌 값에 길이·펼치기를 부르면 PG 가 오류를 내므로 CASE 로 먼저 거른다.
+_RANGE_ROW_PG = f"""(
+  (CASE WHEN jsonb_typeof({_T}::jsonb) = 'array' THEN jsonb_array_length({_T}::jsonb) ELSE 0 END > 0
+    AND EXISTS (SELECT 1 FROM jsonb_array_elements(
+          CASE WHEN jsonb_typeof({_T}::jsonb) = 'array' THEN {_T}::jsonb ELSE '[]'::jsonb END) e
+        WHERE coalesce(trim(e->>'g'), '') <> '{_DIRECT}'))
+  OR (CASE WHEN jsonb_typeof({_T}::jsonb) = 'array' THEN jsonb_array_length({_T}::jsonb) ELSE 0 END = 0
+      AND {_PRICE_MIN} IS NOT NULL))"""
+_RANGE_ROW_SQLITE = f"""(
+  (CASE WHEN json_type({_T}) = 'array' THEN json_array_length({_T}) ELSE 0 END > 0
+    AND EXISTS (SELECT 1 FROM json_each(CASE WHEN json_type({_T}) = 'array' THEN {_T} ELSE '[]' END) e
+        WHERE coalesce(trim(json_extract(e.value, '$.g')), '') <> '{_DIRECT}'))
+  OR (CASE WHEN json_type({_T}) = 'array' THEN json_array_length({_T}) ELSE 0 END = 0
+      AND {_PRICE_MIN} IS NOT NULL))"""
+
+
+def _range_row_condition(dialect: str):
+    return text(_RANGE_ROW_PG if dialect == "postgresql" else _RANGE_ROW_SQLITE)
+
+
+def _grade_select(since: str, *extra, dialect: str = "postgresql"):
     has_a = exists().where(
         ComplexAreaTradeStat.complex_no == Complex.complex_no,
         ComplexAreaTradeStat.base_month >= since,
+        _range_row_condition(dialect),
     )
     has_b = or_(
         exists().where(ComplexOfficialPrice.complex_no == Complex.complex_no),
@@ -81,7 +109,8 @@ def info_of_row(row) -> dict:
 
 def grade_rows(db: Session, *where, extra=(), since: str | None = None) -> list:
     """조건에 맞는 단지 줄(번호·지역·유형·has_a·has_b + extra 칸). 등급은 info_of_row 로."""
-    stmt = _grade_select(since or grade_since(), *extra)
+    bind = db.get_bind()
+    stmt = _grade_select(since or grade_since(), *extra, dialect=bind.dialect.name if bind is not None else "")
     if where:
         stmt = stmt.where(*where)
     return list(db.execute(stmt).all())

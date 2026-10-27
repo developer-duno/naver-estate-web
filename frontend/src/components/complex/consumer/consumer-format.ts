@@ -61,6 +61,7 @@ export function isOfficetel(c: { real_estate_type_code?: string | null; real_est
   return (c.real_estate_type_name ?? "").startsWith("오피스텔");
 }
 
+// 같은 규칙을 서버 쪽 backend/services/public_pages.py _pick_official 이 쓴다 — 바꾸면 함께 고친다
 /** 선택 면적 ±1㎡ 안에서 가장 가까운 공시가격 평형(없으면 null) */
 export function officialForArea(items: OfficialPriceItem[], area: number): OfficialPriceItem | null {
   let best: OfficialPriceItem | null = null;

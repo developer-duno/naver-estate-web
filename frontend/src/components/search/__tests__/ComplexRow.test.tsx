@@ -69,6 +69,16 @@ describe("ComplexRow 컴포넌트", () => {
     expect(screen.getByText("테스트단지")).toBeInTheDocument();
   });
 
+  it("단지명 글자만 진짜 링크(행 전체 감싸기 금지) — <tr> 안 <a> 는 이름 칸 하나뿐 (세션 483 PR 3b)", () => {
+    const { container } = renderRow();
+    const link = screen.getByRole("link", { name: "테스트단지" });
+    expect(link).toHaveAttribute("href", "/complex/123");
+    const anchors = container.querySelectorAll("tr a");
+    expect(anchors).toHaveLength(1);
+    expect(anchors[0].closest("td")?.textContent).toBe("테스트단지");
+    expect(container.querySelector("a tr, a td")).toBeNull();
+  });
+
   it("로그인(매물 수 0)이면 지금처럼 '0건'", () => {
     renderRow({ complex: makeComplex({ article_count: 0 }) });
     expect(screen.getByText("0건")).toBeInTheDocument();

@@ -4,13 +4,15 @@
  * 소비자 단지 화면 「C 질문형」(세션 482 PR 1b, 설계 design-pr1b.md §3) — 비로그인·일반 회원이 보는 한 장.
  * 질문 4개 순서: 얼마짜리 → 어떻게 변해 왔나 → 주변은 → 내 돈으로 가능한가. 맨 아래(S5)는 페이지가 footer 로 넘긴다.
  * 네이버 재료는 쓰지 않는다 — 단지 응답(비로그인이면 BE 가 걷어냄)·공시가격·K-apt·지하철·동네·공개 가격 기록·지역 흐름만.
- * 공시가격·지하철·관리비·동네 쿼리 키는 ComplexBasicInfo 와 같아 자동으로 한 번만 부른다.
+ * 공시가격·지하철·동네 쿼리 키는 ComplexBasicInfo 와 같아 자동으로 한 번만 부른다. 공시가격·지하철은 서버 요약을 initialData 로
+ * 받아 브라우저가 다시 부르지 않는다(세션 483 PR 3b). 관리비는 '한눈에 보기' 표(서버)로 옮겨 여기선 부르지 않는다.
  */
 import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { Complex } from "@/types";
+import type { Complex, OfficialPriceResponse, SubwayNearResponse } from "@/types";
+import type { ClientSeed } from "@/types/public-summary";
+import { basisToYm } from "@/lib/seo/complex-page";
 import {
-  getComplexKapt,
   getComplexNeighborhood,
   getComplexSubway,
   getOfficialPrices,
@@ -56,9 +58,14 @@ interface Props {
   aside?: ReactNode;
   /** S5 아래 전체 폭 — 일반 회원 매물 섹션 */
   footer?: ReactNode;
-  /** 띠 그래프 마지막 달(시험용 고정) — 없으면 오늘 달 */
+  /** 띠 그래프 마지막 달(시험용 고정) — 없으면 서버 기준월(seed.basis_ym), 그것도 없으면 오늘 달 */
   endYm?: string;
+  /** 서버 공개 요약 중 화면 재료(세션 483 PR 3b) — 공시가격·지하철 initialData · 지역·동 링크 · 기준월 */
+  seed?: ClientSeed | null;
 }
+
+/** 서버가 준 공시가격·지하철은 거의 안 바뀐다(공시 연 1회·역 고정) — 하루 동안 다시 받지 않는다 */
+const SEED_STALE_MS = 86_400_000;
 
 /**
  * 기본 면적 = 대표 면적(범위가 있을 때) → 범위가 있는 첫 면적 → (6개월 범위가 하나도 없으면) 대표 면적 → 면적 목록 첫 면적 → null.
@@ -71,15 +78,33 @@ export function defaultArea(complex: Complex): number | null {
   return list.find(hasRange)?.area_m2 ?? complex.rep_area_m2 ?? list[0]?.area_m2 ?? null;
 }
 
-export default function ConsumerComplexView({ complex, aside, footer, endYm, ...header }: Props) {
+export default function ConsumerComplexView({ complex, aside, footer, endYm, seed: rawSeed, ...header }: Props) {
   const no = complex.complex_no;
+  // 다른 단지 재료가 섞이지 않게 — 번호가 같을 때만 쓴다
+  const seed = rawSeed && rawSeed.complex_no === no ? rawSeed : null;
   const [area, setArea] = useState<number | null>(() => defaultArea(complex));
   const areaPrices = complex.area_prices ?? [];
   const selected = areaPrices.find((a) => a.area_m2 === area);
 
-  const officialQuery = useQuery({ queryKey: queryKeys.officialPrices(no), queryFn: () => getOfficialPrices(no), staleTime: 60_000 });
-  const kaptQuery = useQuery({ queryKey: queryKeys.complexKapt(no), queryFn: () => getComplexKapt(no), staleTime: 60_000 });
-  const subwayQuery = useQuery({ queryKey: queryKeys.complexSubway(no), queryFn: () => getComplexSubway(no), staleTime: 60_000 });
+  // initialData = 서버 요약과 같은 모양인 두 쿼리만(공시가격·지하철) — 관리비·가격 기록은 모양이 달라 넣지 않는다(v2 🟡)
+  const officialSeed: OfficialPriceResponse | undefined = seed
+    ? { complex_no: no, year: seed.official_price?.year ?? null, items: seed.official_price?.items ?? [] }
+    : undefined;
+  const subwaySeed: SubwayNearResponse | undefined = seed ? { stations: seed.subway ?? [] } : undefined;
+  const officialQuery = useQuery({
+    queryKey: queryKeys.officialPrices(no),
+    queryFn: () => getOfficialPrices(no),
+    staleTime: officialSeed ? SEED_STALE_MS : 60_000,
+    initialData: officialSeed,
+    initialDataUpdatedAt: officialSeed ? seed?.at : undefined,
+  });
+  const subwayQuery = useQuery({
+    queryKey: queryKeys.complexSubway(no),
+    queryFn: () => getComplexSubway(no),
+    staleTime: subwaySeed ? SEED_STALE_MS : 60_000,
+    initialData: subwaySeed,
+    initialDataUpdatedAt: subwaySeed ? seed?.at : undefined,
+  });
   const hoodQuery = useQuery({ queryKey: queryKeys.complexNeighborhood(no), queryFn: () => getComplexNeighborhood(no), staleTime: 60_000 });
   // 오피스텔은 정부 실거래를 받지 않는다 — 공개 가격 기록을 부르지 않고 대출 카드도 숨긴다(보완 F4)
   const officetel = isOfficetel(complex);
@@ -134,22 +159,21 @@ export default function ConsumerComplexView({ complex, aside, footer, endYm, ...
             onSelect={setArea}
             twoYear={twoYear}
             twoYearReady={twoYearReady}
-            official={officialQuery.data}
-            kapt={kaptQuery.data}
-            rangeSource={complex.area_price_range_source}
             officetel={officetel}
-            onRetry={retryOf(officialQuery, kaptQuery, historyQuery)}
+            onRetry={retryOf(historyQuery)}
           />
           <PriceTrendSection
             history={officetel ? null : history}
             trend={trendQuery.data}
-            endYm={endYm ?? currentYm()}
+            endYm={endYm ?? basisToYm(seed?.basis_ym) ?? currentYm()}
             onRetry={retryOf(historyQuery, trendQuery)}
+            breadcrumb={seed?.breadcrumb ?? null}
           />
           <NeighborhoodSection
             stations={subwayQuery.data?.stations ?? []}
             neighborhood={hoodQuery.data}
             onRetry={retryOf(subwayQuery, hoodQuery)}
+            breadcrumb={seed?.breadcrumb ?? null}
           />
         </div>
         <div className="space-y-4 min-w-0">

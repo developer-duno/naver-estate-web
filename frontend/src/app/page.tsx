@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useState, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getStats } from "@/lib/api";
@@ -96,7 +95,6 @@ function HomeHeader() {
 
 /** 홈 하단 — 도구 카드 + 즐겨찾기. 검색 결과 없을 때 SearchExperience emptyExtra 로 주입. */
 function HomeExtras() {
-  const router = useRouter();
   const { favorites } = useFavorites();
   const { favorites: articleFavorites } = useArticleFavorites();
   const [showAllFavorites, setShowAllFavorites] = useState(false);
@@ -118,9 +116,10 @@ function HomeExtras() {
         {favorites.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">
             {visibleFavorites.map((f) => (
-              <button
+              // 진짜 링크(세션 483 PR 3b — 단지로 가는 <a href>) · 칩 안에 다른 버튼이 없어 칩 전체가 링크
+              <Link
                 key={f.complex_no}
-                onClick={() => router.push(`/complex/${f.complex_no}`)}
+                href={`/complex/${f.complex_no}`}
                 className="inline-flex items-center gap-1 bg-yellow-50 text-yellow-800 text-xs rounded-full px-2.5 py-1 border border-yellow-200 hover:bg-yellow-100 cursor-pointer transition-colors"
               >
                 <span className="text-yellow-500">&#9733;</span>
@@ -131,7 +130,7 @@ function HomeExtras() {
                     title="가격이 변동됐어요"
                   />
                 )}
-              </button>
+              </Link>
             ))}
             {!showAllFavorites && favorites.length > 10 && (
               <button

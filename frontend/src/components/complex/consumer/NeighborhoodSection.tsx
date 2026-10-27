@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import type { NeighborhoodInfo, SubwayStationNear } from "@/types";
+import type { PublicSummaryBreadcrumb } from "@/types/public-summary";
+import { REGION_PAGES_ENABLED, dongPagePath, regionHubPath } from "@/lib/seo/complex-page";
 import { Card } from "@/components/ui/card";
 import { formatDistance, formatStationName, normalizeLineName } from "@/lib/subway-format";
 import LoadRetry from "./LoadRetry";
@@ -11,48 +14,37 @@ interface Props {
   neighborhood: NeighborhoodInfo | null | undefined;
   /** 이 카드 자료 중 불러오지 못한 것이 있으면 다시 시도 — 자료가 없어도 카드를 숨기지 않는다(보완 A-4) */
   onRetry?: () => void;
+  /** 서버 공개 요약 빵부스러기 — 동 페이지·허브 링크 재료(없으면 링크 없음) */
+  breadcrumb?: PublicSummaryBreadcrumb | null;
 }
 
 /** 지하철 막대 척도 — BE 반경과 같은 3km */
 const SUBWAY_SCALE_M = 3000;
 
-function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
-  return (
-    <div>
-      <span className="block text-xs text-gray-500">{label}</span>
-      <b className="text-sm">{value}</b>
-      {note && <span className="text-xs text-gray-500"> · {note}</span>}
-    </div>
-  );
+/** 동네 한 줄 — 사는 사람·1인 가구·아파트 비율 중 있는 것만 */
+export function neighborhoodLine(n: NeighborhoodInfo): string {
+  const parts: string[] = [];
+  if (n.population != null) parts.push(`사는 사람 ${peopleText(n.population)}`);
+  if (n.one_person_pct != null) parts.push(`1인 가구 ${n.one_person_pct}%`);
+  if (n.house_mix?.apt_pct != null) parts.push(`아파트 ${n.house_mix.apt_pct}%`);
+  return parts.join(" · ");
 }
 
-/** S3 · 주변은 어떤가 — 지하철·동네 둘 다 없으면 카드 숨김 */
-export default function NeighborhoodSection({ stations, neighborhood: n, onRetry }: Props) {
+/**
+ * S3 · 주변은 어떤가 — 지하철·동네 둘 다 없으면 카드 숨김.
+ * 동네 통계(칸·집 종류 띠·위험지도)는 같은 동 단지마다 똑같이 반복되므로 한 줄 + 동 페이지(없으면 시군구 허브) 링크로
+ * 줄였다(세션 483 PR 3b · 결정 24). 링크는 지역 페이지가 열린 뒤(REGION_PAGES_ENABLED)에만. 지하철 거리는 그대로.
+ */
+export default function NeighborhoodSection({ stations, neighborhood: n, onRetry, breadcrumb = null }: Props) {
   if (stations.length === 0 && !n && !onRetry) return null;
   const lines = [...new Set(stations.flatMap((s) => s.lines.map(normalizeLineName)))];
-
-  const stats: { label: string; value: string; note?: string }[] = [];
-  if (n) {
-    if (n.population != null) {
-      stats.push({ label: "사는 사람", value: peopleText(n.population), note: n.avg_age != null ? `평균 ${Math.round(n.avg_age)}세` : undefined });
-    }
-    if (n.one_person_pct != null) stats.push({ label: "1인 가구", value: `${n.one_person_pct}%` });
-    if (n.corp_cnt != null) stats.push({ label: "일터", value: `사업체 ${n.corp_cnt.toLocaleString()}곳` });
-    if (n.old_house_pct != null) stats.push({ label: `${n.old_house_cutoff} 집`, value: `${n.old_house_pct}%` });
-  }
-  const mix = n?.house_mix;
-  const mixParts = mix
-    ? [
-        { label: "아파트", pct: mix.apt_pct, color: "bg-blue-700" },
-        { label: "오피스텔", pct: mix.officetel_pct, color: "bg-blue-400" },
-        { label: "다세대", pct: mix.row_pct, color: "bg-indigo-300" },
-        { label: "단독", pct: mix.detached_pct, color: "bg-slate-300" },
-      ]
-    : [];
-  const hazards = [
-    n?.flood?.affected ? "홍수 위험지도 영향 동" : null,
-    n?.landslide?.affected ? "산사태 위험지도 영향 동" : null,
-  ].filter((v): v is string => v != null);
+  const line = n ? neighborhoodLine(n) : "";
+  const dongHref =
+    REGION_PAGES_ENABLED && breadcrumb
+      ? breadcrumb.dong_has_page
+        ? dongPagePath(breadcrumb.sigungu_code, breadcrumb.dong_code)
+        : regionHubPath(breadcrumb.sigungu_code)
+      : null;
 
   return (
     <Card className="p-4 space-y-3" aria-labelledby="consumer-q3">
@@ -71,32 +63,17 @@ export default function NeighborhoodSection({ stations, neighborhood: n, onRetry
           <p className="text-xs text-gray-500">{[...lines, "직선거리"].join(" · ")}</p>
         </div>
       )}
-      {n && (
-        <div className="space-y-2" data-testid="consumer-neighborhood">
-          {n.emd_nm && <h3 className="text-sm font-bold">{n.emd_nm}</h3>}
-          {stats.length > 0 && (
-            <div className="grid grid-cols-2 gap-2">
-              {stats.map((s) => <Stat key={s.label} {...s} />)}
-            </div>
+      {n && (line || dongHref) && (
+        <p className="text-sm" data-testid="consumer-neighborhood">
+          {n.emd_nm ? `${n.emd_nm} ` : ""}{line}
+          {n.source && <span className="text-xs text-gray-400"> · {n.source}</span>}
+          {dongHref && (
+            <>
+              {" "}
+              <Link href={dongHref} className="text-xs text-blue-700 underline">동네 정보 더 보기</Link>
+            </>
           )}
-          {mix && (
-            <div>
-              <span className="block text-xs text-gray-500 mb-1">집 종류</span>
-              <div className="flex h-3.5 rounded-full overflow-hidden bg-slate-100" aria-hidden="true">
-                {mixParts.map((p) => <i key={p.label} className={p.color} style={{ width: `${p.pct}%` }} />)}
-              </div>
-              <p className="mt-1 text-xs text-gray-500">{mixParts.map((p) => `${p.label} ${p.pct}%`).join(" · ")}</p>
-            </div>
-          )}
-          {hazards.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {hazards.map((h) => (
-                <span key={h} className="text-xs rounded-full border border-amber-500 text-amber-800 px-2.5 py-0.5">{h}</span>
-              ))}
-            </div>
-          )}
-          <p className="text-xs text-gray-400">{n.source}</p>
-        </div>
+        </p>
       )}
       {onRetry && <LoadRetry onRetry={onRetry} />}
     </Card>

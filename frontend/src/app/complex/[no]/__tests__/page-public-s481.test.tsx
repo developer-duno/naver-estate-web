@@ -104,7 +104,9 @@ vi.mock("@/hooks/useArticleViewPreferences", () => ({
 }));
 vi.mock("@/hooks/usePopstateRefresh", () => ({ usePopstateRefresh: () => ({ navKey: 0 }) }));
 
-import ComplexDetailPage from "../page";
+// 세션 483 PR 3b: page.tsx 는 서버 껍데기가 되었고 옛 본문은 ComplexClientView 로 옮겼다 — 같은 화면을 그대로 시험한다
+import ComplexClientView from "../ComplexClientView";
+const ComplexDetailPage = () => <ComplexClientView complexNo="6139" />;
 
 const last = () => state.crawlOpts[state.crawlOpts.length - 1];
 
@@ -121,6 +123,35 @@ function expectNoBrokerButtons() {
   expect(screen.queryByRole("button", { name: "데이터 갱신" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "엑셀 내보내기" })).not.toBeInTheDocument();
 }
+
+describe("서버가 그린 '한눈에 보기' 자리 (세션 483 PR 3b · 결정 23·25)", () => {
+  const GLANCE = <section data-testid="glance-slot">한눈에 보기</section>;
+
+  it("비로그인 소비자 화면 — 맨 위에 펼친 채 · 접기 상자 없음 · 화면 안 h1 0(h1 은 서버 껍데기 하나)", async () => {
+    state.token = undefined;
+    state.me = null;
+    state.anon = true;
+    const { container } = render(<ComplexClientView complexNo="6139" glance={GLANCE} />, { wrapper: TestQueryProvider });
+    expect(await screen.findByText("1 · 얼마짜리 집인가")).toBeInTheDocument();
+    expect(screen.getByTestId("glance-slot")).toBeVisible();
+    expect(screen.queryByTestId("broker-glance-fold")).toBeNull();
+    expect(container.querySelectorAll("h1")).toHaveLength(0);
+  });
+
+  it("승인 중개사 — '이 단지 공공 자료 요약' 접힘(기본 닫힘) · 화면 안 h1 0", async () => {
+    state.token = "tok-approved";
+    state.me = { is_approved_broker: true };
+    state.anon = false;
+    const { container } = render(<ComplexClientView complexNo="6139" glance={GLANCE} />, { wrapper: TestQueryProvider });
+    expect(await screen.findByLabelText("단지 종합 대시보드")).toBeInTheDocument();
+    const fold = screen.getByTestId("broker-glance-fold") as HTMLDetailsElement;
+    expect(fold.tagName).toBe("DETAILS");
+    expect(fold.open).toBe(false);
+    expect(fold.textContent).toContain("이 단지 공공 자료 요약");
+    expect(fold.contains(screen.getByTestId("glance-slot"))).toBe(true);
+    expect(container.querySelectorAll("h1")).toHaveLength(0);
+  });
+});
 
 describe("단지 화면 공개 전환 (세션 481) · 소비자 화면 분기 (세션 482)", () => {
   it("비로그인: 소비자 화면 + 잠금 카드 1장 · 필터·갱신·엑셀 없음 · 네이버 재료 요청 0 · 자동 새로 받기 꺼짐", async () => {

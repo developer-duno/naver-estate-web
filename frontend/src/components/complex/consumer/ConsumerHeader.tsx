@@ -52,7 +52,8 @@ export default function ConsumerHeader({ complex, summary, ...header }: Props) {
 
   return (
     <div className="space-y-2">
-      <ComplexHeader complex={complex} {...header} />
+      {/* 이름은 서버 h1 이 바로 위에 있어 뺀다 — 뒤로·★·비교 버튼만(버튼 aria-label 에는 이름이 남는다, 세션 483 PR 3b) */}
+      <ComplexHeader complex={complex} showName={false} {...header} />
       {chips.length > 0 && (
         <ul className="flex flex-wrap gap-1.5" aria-label="단지 기본 사실">
           {chips.map((c) => (

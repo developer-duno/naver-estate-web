@@ -22,7 +22,7 @@ const PUBLIC_OK: Record<string, unknown> = {
       { period: "202609", jeonse_ratio: 69.5, sale_price_median: 40600 },
     ],
   },
-  "official-prices": { complex_no: "100000", year: "2026", items: [{ prvuse_ar: 59.9, price_median: 113000000, ho_count: 116 }] },
+  "official-prices": { complex_no: "100001", year: "2026", items: [{ prvuse_ar: 59.9, price_median: 113000000, ho_count: 116 }] },
   subway: { stations: [{ station_name: "갑천", lines: ["대전1호선"], distance_m: 1100 }] },
 };
 
@@ -38,7 +38,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 720 
             status: 200,
             contentType: "application/json",
             body: JSON.stringify({
-              complex_no: "100000",
+              complex_no: "100001",
               complex_name: "공개단지",
               cortar_no: "3020012300",
               real_estate_type_name: "아파트",
@@ -76,21 +76,30 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 720 
       });
       await page.route("**/api/live/**", (route) => route.fulfill({ status: 401, body: "{}" }));
 
-      const res = await page.goto("/complex/100000");
+      // 세션 483 PR 3b: 서버 렌더 — 단지명 h1·'한눈에 보기'는 가짜 API 서버(fixtures/public-summary-mocks.mjs "100001")가 준다
+      const res = await page.goto("/complex/100001");
 
       expect(res?.status()).toBe(200);
-      await expect(page.getByRole("heading", { name: "공개단지" })).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByRole("heading", { level: 1, name: "공개단지" })).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator("h1")).toHaveCount(1);
       for (const title of ["1 · 얼마짜리 집인가", "2 · 어떻게 변해 왔나", "3 · 주변은 어떤가", "4 · 내 돈으로 가능한가"]) {
         await expect(page.getByRole("heading", { name: new RegExp(`^${title}`) })).toBeVisible();
       }
-      await expect(page.getByText("1억 5,700만 ~ 1억 8,000만")).toBeVisible();
+      // 범위 숫자는 서버 '한눈에 보기' 표로(결정 23) — 카드 1 은 막대·2년 최저/최고 + 지금 있는 거래 목록 표
+      await expect(page.getByTestId("glance-areas").locator("tbody tr")).toHaveCount(1);
+      await expect(page.getByTestId("glance-areas")).toContainText("1억 5,700만~1억 8,000만");
+      await expect(page.getByText("2년 최저 1억 4,700만")).toBeVisible();
       await expect(page.getByTestId("consumer-trades").locator("tbody tr")).toHaveCount(3);
+      await expect(page.locator('a[href^="/region"]')).toHaveCount(0); // 지역 페이지 열리기 전(3c)
+      // 가까운 단지(결정 27) — 가짜 API 서버가 가까운 순 + 거리로 준다
+      await expect(page.getByRole("heading", { level: 2, name: "가까운 단지" })).toBeVisible();
+      await expect(page.getByTestId("nearby-complexes")).toContainText("320m");
       await expect(page.getByText("지금 나온 매물과 호가는 로그인하면 볼 수 있어요")).toBeVisible();
       await expect(page.getByText(/로그인하면 볼 수 있어요/)).toHaveCount(1);
       await expect(page.getByText(/필터 접기|필터 펼치기/)).toHaveCount(0);
       await expect(page.getByRole("button", { name: "데이터 갱신" })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "엑셀 내보내기" })).toHaveCount(0);
-      expect(new URL(page.url()).pathname).toBe("/complex/100000");
+      expect(new URL(page.url()).pathname).toBe("/complex/100001");
       // 가로 스크롤 없음(휴대폰 폭에서 카드가 넘치지 않는다) — 페이지 전체와 거래 표 자체 둘 다
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow).toBeLessThanOrEqual(0);

@@ -19,6 +19,8 @@ interface ComplexHeaderProps {
   isCompared?: boolean;
   compareFull?: boolean;
   onToggleCompare?: () => void;
+  /** 이름 글자를 보일까 — 소비자 화면은 서버 h1 바로 아래라 false(겹침 방지, 세션 483 PR 3b) · 중개사 작업 머리는 기본 true */
+  showName?: boolean;
 }
 
 /** 단지 상세 헤더 — 뒤로가기 + 단지명 + 즐겨찾기 + 비교 담기 + 매물유형 뱃지 + 매물 업데이트 시각 */
@@ -30,6 +32,7 @@ export default function ComplexHeader({
   isCompared,
   compareFull,
   onToggleCompare,
+  showName = true,
 }: ComplexHeaderProps) {
   return (
     <div className="flex items-center gap-2 md:gap-4 flex-wrap">
@@ -37,7 +40,8 @@ export default function ComplexHeader({
       <button type="button" onClick={onBack} aria-label="이전 페이지" className="px-3.5 py-2 -mx-3.5 -my-2 text-gray-500 hover:text-gray-600 text-xl rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
         ←
       </button>
-      <h1 className="text-lg md:text-2xl font-bold truncate">{complex.complex_name}</h1>
+      {/* h1 은 서버 껍데기(app/complex/[no]/page.tsx) 하나뿐 — 여기는 일반 글자(세션 483 PR 3b · 결정 25) */}
+      {showName && <p className="text-lg md:text-2xl font-bold truncate">{complex.complex_name}</p>}
       <button
         type="button"
         onClick={onToggleFavorite}

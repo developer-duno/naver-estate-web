@@ -106,7 +106,9 @@ vi.mock("@/hooks/usePopstateRefresh", () => ({
   usePopstateRefresh: () => ({ navKey: 0 }),
 }));
 
-import ComplexDetailPage from "../page";
+// 세션 483 PR 3b: page.tsx 는 서버 껍데기가 되었고 옛 본문은 ComplexClientView 로 옮겼다 — 같은 화면을 그대로 시험한다
+import ComplexClientView from "../ComplexClientView";
+const ComplexDetailPage = () => <ComplexClientView complexNo="12345" />;
 
 function renderPage() {
   return render(<ComplexDetailPage />, { wrapper: TestQueryProvider });

@@ -12,10 +12,31 @@ test("단지 상세 페이지 접근 시 크래시 없음 — 비로그인도 �
   await expect(page.locator("header")).toBeVisible();
 });
 
-test("존재하지 않는 단지 접근 시 크래시 없음", async ({ page }) => {
-  await page.goto("/complex/99999999");
-  // 프론트엔드가 에러를 잡고 정상 렌더링하는지 확인 (서버 500도 프론트가 처리)
-  await expect(page.locator("header")).toBeVisible();
+test("존재하지 않는 단지 · 숫자 아닌 번호 = 404 (세션 483 PR 3b — 서버 렌더 notFound)", async ({ page }) => {
+  for (const no of ["99999999", "abc"]) {
+    const res = await page.goto(`/complex/${no}`);
+    // 운영 빌드(next start·Vercel ISR)는 다 그린 뒤 보내 404. e2e 의 dev 서버는 흘려 보내기(스트리밍)라 상태가 200 으로
+    // 먼저 나가고 Next 가 noindex 를 붙인다(공식 not-found 문서 "Calling notFound() after streaming has started") —
+    // 그래서 여기선 "404 이거나, 200 이면 noindex + 찾을 수 없음 화면"으로 본다. 운영 404 는 빌드 실측으로 확인했다.
+    const status = res?.status();
+    expect([404, 200], no).toContain(status);
+    if (status === 200) {
+      await expect(page.locator('meta[name="robots"][content*="noindex"]').first(), no).toHaveCount(1);
+    }
+    await expect(page.getByRole("heading", { name: "페이지를 찾을 수 없습니다" })).toBeVisible();
+    await expect(page.locator("header")).toBeVisible();
+  }
+});
+
+test("서버가 그린 첫 HTML — h1 단지명 1개 · title · canonical 자기 주소 · noindex(등급 B)", async ({ request }) => {
+  const res = await request.get("/complex/200000");
+  expect(res.status()).toBe(200);
+  const html = await res.text();
+  expect(html.match(/<h1[\s>]/g) ?? []).toHaveLength(1);
+  expect(html).toContain("<title>거래적은단지 공시가격·관리비 | 2u부동산</title>");
+  expect(html).toMatch(/<link rel="canonical" href="[^"]*\/complex\/200000"/);
+  expect(html).toMatch(/<meta name="robots" content="noindex, follow"/);
+  expect(html).toContain("한눈에 보기");
 });
 
 test("엑셀 내보내기 버튼 — 페이지 크래시 없이 로드", async ({ page }) => {

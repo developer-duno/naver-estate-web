@@ -20,6 +20,16 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/api/complex", () => api);
 
+/** 서버 공개 요약 중 화면 재료(세션 483 PR 3b) — 6139 */
+const SEED = {
+  complex_no: "6139",
+  basis_ym: "2026-08", // 오늘 달과 다른 값 — 서버 기준월을 쓰는지 가르려고
+  breadcrumb: null,
+  official_price: { year: OFFICIAL.year, items: OFFICIAL.items },
+  subway: SUBWAY.stations,
+  at: Date.now(),
+};
+
 const header = {
   starred: false, onBack: () => {}, onToggleFavorite: () => {}, isCompared: false, compareFull: false, onToggleCompare: () => {},
 };
@@ -82,7 +92,8 @@ describe("ConsumerComplexView", () => {
     renderView();
     await screen.findByText("2년 최고 2억");
     fireEvent.click(screen.getAllByRole("button", { name: /^84㎡/ })[0]);
-    expect(screen.getByTestId("consumer-range").textContent).toBe("2억 2,000만 ~ 2억 3,000만");
+    // 범위 숫자는 서버 '한눈에 보기'로 옮겼다(세션 483 PR 3b) — 카드 1 은 그 면적의 막대
+    expect(await screen.findByText("노란 띠 = 84㎡ 최근 6개월 거래 범위")).toBeInTheDocument();
     expect(screen.getByTestId("consumer-summary").textContent).toContain("84㎡ 기준");
     await waitFor(() => expect(api.getPublicPriceHistory).toHaveBeenCalledWith("6139", 84));
     expect(screen.getByRole("button", { name: "보수적 2억 2,000만" })).toBeInTheDocument();
@@ -141,6 +152,32 @@ describe("ConsumerComplexView", () => {
     const s2 = screen.getByText("2 · 어떻게 변해 왔나").closest("[aria-labelledby]") as HTMLElement;
     fireEvent.click(within(s2).getByRole("button", { name: "다시 시도" }));
     await waitFor(() => expect(api.getRegionTrend.mock.calls.length).toBe(before + 1));
+  });
+
+  it("서버 요약(seed)이 있으면 공시가격·지하철은 initialData — 브라우저가 다시 부르지 않는다 · 관리비는 부르지 않는다(세션 483 PR 3b)", async () => {
+    render(
+      <TestQueryProvider>
+        <ConsumerComplexView complex={makeComplex()} seed={SEED} {...header} />
+      </TestQueryProvider>,
+    );
+    await screen.findByTestId("consumer-region-sentence");
+    expect(screen.getByText("갑천역")).toBeInTheDocument(); // 지하철 = seed 값
+    expect(api.getOfficialPrices).not.toHaveBeenCalled();
+    expect(api.getComplexSubway).not.toHaveBeenCalled();
+    expect(api.getComplexKapt).not.toHaveBeenCalled();
+    // 띠 그래프 마지막 달 = 서버 기준월(basis_ym "2026-08" → 26.08) — currentYm() 이 아니다
+    expect(screen.getByTestId("consumer-bands").textContent).toContain("26.08");
+    expect(screen.getByTestId("consumer-bands").textContent).not.toContain("26.10");
+  });
+
+  it("다른 단지 번호의 seed 는 쓰지 않는다 — 공시가격·지하철을 브라우저가 부른다", async () => {
+    render(
+      <TestQueryProvider>
+        <ConsumerComplexView complex={makeComplex()} seed={{ ...SEED, complex_no: "9999" }} endYm={END_YM} {...header} />
+      </TestQueryProvider>,
+    );
+    await waitFor(() => expect(api.getComplexSubway).toHaveBeenCalledWith("6139"));
+    expect(api.getOfficialPrices).toHaveBeenCalledWith("6139");
   });
 
   it("기본 면적 — 대표 면적에 범위가 없으면 범위 있는 첫 면적 · 범위가 하나도 없으면 대표 면적 → 첫 면적", () => {

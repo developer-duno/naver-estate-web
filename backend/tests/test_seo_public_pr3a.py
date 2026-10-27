@@ -227,7 +227,7 @@ def test_같은동_정렬_A먼저_세대수_C제외_자기제외(db, client):
     _cpx(db, "305", hh=5000)                            # C
     body = client.get("/api/complexes/301/public-summary").json()
     assert [c["complex_no"] for c in body["nearby"]] == ["303", "302", "304"]
-    assert body["nearby_scope"] == "dong" and body["nearby_total"] == 3
+    assert body["nearby_scope"] == "dong" and body["nearby_total"] == 5   # 그 동 단지 수(C·자기 포함, 결정 27)
     assert all(set(c) == CARD_KEYS for c in body["nearby"])
     c302 = body["nearby"][1]
     assert (c302["rep_area_key"], c302["recent6_min"], c302["recent6_max"]) == (59, 50000, 61000)
@@ -242,7 +242,7 @@ def test_같은동_12개_상한(db, client):
         _cpx(db, no, hh=100 + i)
         _trade(db, no)
     body = client.get("/api/complexes/400/public-summary").json()
-    assert len(body["nearby"]) == 12 and body["nearby_total"] == 14
+    assert len(body["nearby"]) == 12 and body["nearby_total"] == 15   # 그 동 단지 수(자기 포함)
     assert body["nearby"][0]["household_count"] == 113
 
 
@@ -817,3 +817,90 @@ def test_N5_다른동_목록은_페이지있는_동만(db, client):
     _dong_with_ab(db, dong_z, addr_z, 3, 9200)                             # 페이지 없음
     body = client.get(f"/api/regions/{SGG}/dongs/{DONG_X}").json()
     assert body["sibling_dongs"] == [{"dong_code": DONG_Y, "dong_name": "궁동"}]
+
+
+# ══ PR 3a-2 — 같은 시군구 가까운 순 12곳(결정 27) ══════════════════════════════
+
+LAT, LON = 36.350, 127.340
+
+
+def _near(db, no, dlat, grade="A", cortar=DONG_X, addr=ADDR_X, hh=None, type_="APT", coords=True):
+    kw = {"latitude": LAT + dlat, "longitude": LON} if coords else {}
+    _cpx(db, no, cortar=cortar, addr=addr, hh=hh, type_=type_, **kw)
+    if grade == "A":
+        _trade(db, no)
+    elif grade == "B":
+        _official(db, no)
+
+
+def test_가까운순_자기_C_좌표없음_제외_그리고_거리(db, client):
+    from crawler.utils import haversine_km
+    from services.public_pages import round_10m
+    _near(db, "2001", 0.0)                                                # 자기
+    _near(db, "2002", 0.003, cortar=DONG_Y, addr=ADDR_Y)                  # 333m · 다른 동도 후보
+    _near(db, "2003", 0.001, grade="B", hh=10)                            # 111m · B
+    _near(db, "2004", 0.002, hh=5000)                                     # 222m · 세대수 가장 큼
+    _near(db, "2005", 0.0005, grade="C")                                  # C → 제외
+    _near(db, "2006", 0.0002, coords=False)                               # 좌표 없음 → 제외
+    _near(db, "2007", 0.0001, type_="OPST")                               # 오피스텔(C) → 제외
+    _cpx(db, "2008", cortar="1168010100", addr="서울특별시 강남구 역삼동", latitude=LAT, longitude=LON)
+    _trade(db, "2008")                                                    # 다른 시군구 → 제외
+    body = client.get("/api/complexes/2001/public-summary").json()
+    assert body["nearby_scope"] == "near"
+    assert [c["complex_no"] for c in body["nearby"]] == ["2003", "2004", "2002"]
+    assert body["nearby"][0]["distance_m"] == round_10m(haversine_km(LAT, LON, LAT + 0.001, LON))
+    assert set(body["nearby"][0]) == CARD_KEYS | {"distance_m"}
+    assert body["nearby_total"] == 6                                      # 봉명동 단지 수(자기·C·좌표 없음 포함)
+
+
+def test_가까운순_같은거리는_번호순_12개_상한(db, client):
+    _near(db, "2101", 0.0)
+    for i in range(14):
+        _near(db, str(2110 + i), 0.0005 * (i + 1))
+    _near(db, "2130", 0.0005)                                             # 2110 과 같은 거리 → 번호 뒤
+    nos = [c["complex_no"] for c in client.get("/api/complexes/2101/public-summary").json()["nearby"]]
+    assert len(nos) == 12 and nos[:3] == ["2110", "2130", "2111"]
+
+
+def test_같은동_두단지의_가까운목록이_서로_다르다(db, client):
+    for i, d in enumerate((0.0, 0.004, 0.0005, 0.0035, 0.001, 0.003)):
+        _near(db, str(2201 + i), d)
+    a = [c["complex_no"] for c in client.get("/api/complexes/2201/public-summary").json()["nearby"]]
+    b = [c["complex_no"] for c in client.get("/api/complexes/2202/public-summary").json()["nearby"]]
+    assert a[0] == "2203" and b[0] == "2204" and a != b
+
+
+def test_자기_좌표_없으면_같은동_옛방식으로(db, client):
+    _near(db, "2301", 0.0, coords=False)
+    _near(db, "2302", 0.001, hh=10)
+    _near(db, "2303", 0.003, hh=900)
+    body = client.get("/api/complexes/2301/public-summary").json()
+    assert body["nearby_scope"] == "dong"
+    assert [c["complex_no"] for c in body["nearby"]] == ["2303", "2302"]  # 세대수 순
+    assert all("distance_m" not in c for c in body["nearby"])
+
+
+def test_10m_반올림():
+    from services.public_pages import round_10m
+    assert (round_10m(0.1149), round_10m(0.115), round_10m(0.0), round_10m(1.2345)) == (110, 120, 0, 1230)
+
+
+def test_가까운_후보는_캐시되고_실패는_굳지_않는다(db, client, monkeypatch):
+    import services.public_pages as pp
+    _near(db, "2401", 0.0)
+    _near(db, "2402", 0.001)
+    real = pp.grade_rows
+    calls = {"n": 0}
+
+    def flaky(*a, **k):
+        if k.get("extra") and len(k["extra"]) == len(pp._CARD_EXTRA) + 2:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise _op_error()
+        return real(*a, **k)
+
+    monkeypatch.setattr(pp, "grade_rows", flaky)
+    assert client.get("/api/complexes/2401/public-summary").status_code == 503
+    assert client.get("/api/complexes/2401/public-summary").status_code == 200
+    assert client.get("/api/complexes/2402/public-summary").status_code == 200
+    assert calls["n"] == 2                                                # 2402 는 캐시된 후보를 썼다

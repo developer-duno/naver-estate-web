@@ -11,6 +11,7 @@ get_complex_official_prices + official_price_payload · 관리비 = get_latest_k
 from __future__ import annotations
 
 import logging
+import math
 from datetime import date
 from types import SimpleNamespace
 
@@ -318,10 +319,48 @@ def _name_dups(db: Session, cpx) -> tuple[str, str]:
     return "dong", "dong_no"
 
 
+def _sigungu_candidates(db: Session, sigungu5: str) -> list:
+    """같은 시군구의 가까운 단지 후보(A·B · 지역 온전 · 좌표 있음) 줄 — 1일 캐시(키 = 시군구:기준월).
+
+    요약마다 시군구 전체를 다시 읽지 않게(결정 27 · PR 3a-2). 조회 실패는 예외 그대로(캐시에 굳히지 않음 — F5 원칙).
+    """
+    key = f"{sigungu5}:{basis_ym()}"
+    cache = get_cache("region_nearby_candidates", ttl=PAGE_TTL, max_size=300)
+    hit = cache.get(key)
+    if hit is not None:
+        return hit
+    rows = grade_rows(db, Complex.cortar_no.startswith(sigungu5),
+                      extra=_CARD_EXTRA + (Complex.latitude, Complex.longitude))
+    cands = [r for r in rows
+             if _is_ab(r) and info_of_row(r)["has_region"] and r.latitude is not None and r.longitude is not None]
+    cache.set(key, cands)
+    return cands
+
+
+def round_10m(distance_km: float) -> int:
+    """거리(km) → 10m 단위 반올림 정수 미터(반은 올림)."""
+    return int(math.floor(distance_km * 100 + 0.5)) * 10
+
+
 def _nearby(db: Session, cpx, region: bool) -> tuple[list[dict], str | None, int]:
-    """(같은 동(없으면 같은 시군구) A·B 카드 최대 12, 범위 "dong"/"sigungu"/None, 후보 총수)."""
+    """(가까운 단지 카드 최대 12, 범위, 그 동 단지 수).
+
+    결정 27(10-27): 같은 시군구 A·B 단지 중 자기 좌표에서 가까운 순 12곳 — 범위 "near", 카드마다 distance_m.
+    같은 거리면 번호 순. 자기·C·좌표 없는 후보는 뺀다. 자기 좌표가 없으면 옛 방식(같은 동 → 없으면 같은 시군구,
+    A → 세대수 → 번호) — 범위 "dong"/"sigungu". 세 번째 값 = 그 동의 단지 수(C 포함, 동 페이지 목록과 같은 dong_flags
+    판정 — 화면 '{동} 단지 전체 보기' 용).
+    """
     if not region:
         return [], None, 0
+    dong_total = dong_flags(db, cpx.cortar_no[:5])["dongs"].get(cpx.cortar_no, {}).get("complex_count", 0)
+    if cpx.latitude is not None and cpx.longitude is not None:
+        scored = sorted(
+            ((haversine_km(cpx.latitude, cpx.longitude, r.latitude, r.longitude), r)
+             for r in _sigungu_candidates(db, cpx.cortar_no[:5]) if r.complex_no != cpx.complex_no),
+            key=lambda item: (item[0], _no_order(item[1].complex_no)),
+        )[:NEARBY_MAX]
+        cards = {c["complex_no"]: c for c in build_cards(db, [r for _d, r in scored])}
+        return [{**cards[r.complex_no], "distance_m": round_10m(d)} for d, r in scored], "near", dong_total
     dong_rows = _scope_rows(db, cpx.cortar_no)
     cands = [r for r in dong_rows if _is_ab(r) and r.complex_no != cpx.complex_no]
     scope = "dong"
@@ -329,7 +368,7 @@ def _nearby(db: Session, cpx, region: bool) -> tuple[list[dict], str | None, int
         scope = "sigungu"
         cands = [r for r in _scope_rows(db, cpx.cortar_no[:5]) if _is_ab(r) and r.complex_no != cpx.complex_no]
     cards = sorted(build_cards(db, cands), key=card_sort_key)
-    return cards[:NEARBY_MAX], scope, len(cards)
+    return cards[:NEARBY_MAX], scope, dong_total
 
 
 def _rep_area_key(db: Session, cpx) -> int | None:

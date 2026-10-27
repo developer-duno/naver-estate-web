@@ -147,6 +147,11 @@ export default function LoanEstimateSection({
         <Chip on={own} onClick={() => setMode("own")}>이미 가진 집으로</Chip>
         <Chip on={!own} onClick={() => setMode("buy")}>이 집을 사려고</Chip>
       </div>
+      {/* 계산 전제(1주택자·2주택 금지 등)는 늘 보인다 — 결과가 보이는 동안 그 전제가 숨으면 안 된다(맹점🟠3) */}
+      <p className="text-xs text-gray-500" data-testid="consumer-loan-basis">{basisText}</p>
+      {own && (metro || zone !== "normal") && (
+        <p className="text-xs text-gray-500">수도권·규제지역 2주택 이상은 취급 금지</p>
+      )}
       {areaPrices.some(hasRange) && (
         <AreaChips areaPrices={areaPrices} selected={selected} onSelect={onSelect} label="계산할 면적" />
       )}
@@ -236,7 +241,7 @@ export default function LoanEstimateSection({
           </>
         )}
       </div>
-      {/* 고정 설명 글은 접어 둔다(기본 닫힘) — 같은 글이 단지마다 반복되므로 열었을 때만 그린다(세션 483 PR 3b · 결정 24) */}
+      {/* 금감원·은행연합회 안내 문단만 접어 둔다(기본 닫힘) — 같은 글이 단지마다 반복되므로 열었을 때만 그린다(결정 24) */}
       <button
         type="button"
         aria-expanded={notesOpen}
@@ -244,14 +249,10 @@ export default function LoanEstimateSection({
         className="text-xs text-blue-700 underline"
         data-testid="consumer-loan-notes-toggle"
       >
-        {notesOpen ? "계산 기준·안내 접기" : "계산 기준·안내 보기"}
+        {notesOpen ? "금융사 조건 비교 안내 접기" : "금융사 조건 비교 안내 보기"}
       </button>
       {notesOpen && (
         <div className="space-y-1" data-testid="consumer-loan-notes">
-          <p className="text-xs text-gray-500" data-testid="consumer-loan-basis">{basisText}</p>
-          {own && (metro || zone !== "normal") && (
-            <p className="text-xs text-gray-500">수도권·규제지역 2주택 이상은 취급 금지</p>
-          )}
           <p className="text-xs text-gray-500">
             실제 한도는 소득·신용·기존 대출로 달라져요. 금융사별 조건은{" "}
             <a href="https://finlife.fss.or.kr" target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">금융감독원 금융상품 비교공시</a>

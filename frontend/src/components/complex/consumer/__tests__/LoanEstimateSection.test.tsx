@@ -153,11 +153,13 @@ describe("LoanEstimateSection — 공통", () => {
     }
   });
 
-  it("고정 설명 글은 기본 닫힘 — 첫 화면(HTML)에 기준 글자·링크 0, 누르면 열림(세션 483 PR 3b · 결정 24)", () => {
-    render(<LoanEstimateSection {...base} />);
+  it("금융사 안내 링크 문단만 기본 닫힘 — 계산 전제(1주택자·2주택 금지)는 닫힌 채로도 보인다(맹점🟠3)", () => {
+    render(<LoanEstimateSection {...base} areaPrices={SEOUL} zone="overheated" sido="서울" regionLabel="강남구" />);
     expect(screen.getByTestId("consumer-loan-notes-toggle")).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByTestId("consumer-loan-notes")).toBeNull();
     expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(screen.getByTestId("consumer-loan-basis").textContent).toContain("1주택자");
+    expect(screen.getByText("수도권·규제지역 2주택 이상은 취급 금지")).toBeInTheDocument();
     openNotes();
     expect(screen.getByTestId("consumer-loan-notes-toggle")).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByTestId("consumer-loan-notes")).toBeInTheDocument();

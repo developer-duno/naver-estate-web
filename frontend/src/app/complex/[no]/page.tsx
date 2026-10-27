@@ -38,7 +38,11 @@ export default async function ComplexPage({ params }: PageProps) {
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
       <ComplexBreadcrumb crumbs={complexCrumbs(summary)} />
-      <h1 className="text-lg md:text-2xl font-bold">{summary.name}</h1>
+      {/* h1 옆 자리 — 소비자 화면의 ★·비교 버튼이 클라이언트에서 이리로 온다(ConsumerHeader TITLE_ACTIONS_ID, 승인 그림 A안) */}
+      <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+        <h1 className="text-lg md:text-2xl font-bold">{summary.name}</h1>
+        <div id="complex-title-actions" className="flex items-center gap-2" />
+      </div>
       {/* 클라이언트 화면은 useSearchParams(필터 주소)를 써서 서버에서 그리지 못하고 클라이언트로 넘어간다 —
           자체 Suspense 로 그 범위를 이 칸에만 가둔다. 없으면 루트 loading.tsx 까지 넘어가 h1·요약·링크가 첫 HTML 에서
           통째로 빠진다(seo-metadata 룰 3, 세션 483 build 실측). 대기 화면에도 '한눈에 보기'를 그대로 둔다. */}

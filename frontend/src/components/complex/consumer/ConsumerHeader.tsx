@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Complex } from "@/types";
-import ComplexHeader from "@/components/complex/ComplexHeader";
+import ComplexHeader, { FavoriteCompareButtons, type FavoriteCompareProps } from "@/components/complex/ComplexHeader";
 import { formatKoreanPrice } from "@/lib/format";
 import { priceRangeText } from "./consumer-format";
 
@@ -40,20 +42,42 @@ function SummaryLine({ s }: { s: ConsumerSummary }) {
   );
 }
 
-/** S0 머리 — 이름·관심·비교(기존 ComplexHeader) + 사실 칩 + 한 줄 요약(세션 482 PR 1b) */
+/** 서버 h1 옆 자리 id — app/complex/[no]/page.tsx 가 h1 옆에 둔다 */
+export const TITLE_ACTIONS_ID = "complex-title-actions";
+
+/**
+ * ★·비교 버튼을 서버 h1 옆(같은 줄, 승인 그림 A안)으로 보낸다 — h1 은 서버 것 하나 그대로, 버튼만 클라이언트 섬.
+ * 자리가 없으면(시험·서버 껍데기 밖) 이 자리에 그대로 그린다. 첫 그림 전엔 아무것도 안 그린다(자리 이동 깜빡임 방지).
+ */
+function TitleActions(props: FavoriteCompareProps) {
+  const [slot, setSlot] = useState<HTMLElement | null | undefined>(undefined);
+  useEffect(() => {
+    setSlot(document.getElementById(TITLE_ACTIONS_ID)); // eslint-disable-line react-hooks/set-state-in-effect -- 마운트 뒤 자리 찾기
+  }, []);
+  if (slot === undefined) return null;
+  const buttons = <FavoriteCompareButtons {...props} />;
+  return slot ? createPortal(buttons, slot) : buttons;
+}
+
+/** S0 머리 — 뒤로·유형 배지 + 주소 칩 + 한 줄 요약(세션 482 PR 1b). ★·비교는 서버 h1 옆으로(세션 483 PR 3b) */
 export default function ConsumerHeader({ complex, summary, ...header }: Props) {
+  // 사용승인·세대수·동수는 '한눈에 보기' 표에 있어 머리 칩에서 뺀다(두 번 나오지 않게 — 맹점🟠4⑤). 주소만 남긴다
   const chips: string[] = [];
   const addr = complex.address || complex.cortar_address;
   if (addr) chips.push(addr);
-  const year = complex.use_approve_ymd?.slice(0, 4);
-  if (year && /^\d{4}$/.test(year)) chips.push(`${year}년 사용승인`);
-  if (complex.total_household_count != null) chips.push(`${complex.total_household_count.toLocaleString()}세대`);
-  if (complex.total_dong_count != null) chips.push(`${complex.total_dong_count}개동`);
 
   return (
     <div className="space-y-2">
-      {/* 이름은 서버 h1 이 바로 위에 있어 뺀다 — 뒤로·★·비교 버튼만(버튼 aria-label 에는 이름이 남는다, 세션 483 PR 3b) */}
-      <ComplexHeader complex={complex} showName={false} {...header} />
+      <TitleActions
+        name={complex.complex_name}
+        starred={header.starred}
+        onToggleFavorite={header.onToggleFavorite}
+        isCompared={header.isCompared}
+        compareFull={header.compareFull}
+        onToggleCompare={header.onToggleCompare}
+      />
+      {/* 이름은 서버 h1 이 바로 위에 있어 뺀다 · ★·비교는 h1 옆으로 — 이 줄은 뒤로·유형 배지만(세션 483 PR 3b) */}
+      <ComplexHeader complex={complex} showName={false} showActions={false} {...header} />
       {chips.length > 0 && (
         <ul className="flex flex-wrap gap-1.5" aria-label="단지 기본 사실">
           {chips.map((c) => (

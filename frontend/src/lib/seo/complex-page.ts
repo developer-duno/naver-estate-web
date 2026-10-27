@@ -51,9 +51,17 @@ export function titleTail(s: PublicSummary): string {
   }
 }
 
-/** A = 실거래가·공시가격 / 그 밖 = 공시가격·관리비 + 꼬리. 템플릿 "%s | 2u부동산" 은 루트 layout */
+/**
+ * 제목 단어 = 실제 있는 자료만(맹점🟡) — A: 실거래가 + (공시가격 있으면) 공시가격 / B·C: 공시가격·관리비 중 있는 것.
+ * 아무것도 없으면 "단지 정보". + 꼬리. 템플릿 "%s | 2u부동산" 은 루트 layout.
+ */
 export function complexTitle(s: PublicSummary): string {
-  const kind = s.grade === "A" ? "실거래가·공시가격" : "공시가격·관리비";
+  const hasOfficial = (s.official_price?.items ?? []).length > 0;
+  const hasKapt = s.kapt_cost != null;
+  const words = s.grade === "A"
+    ? ["실거래가", hasOfficial ? "공시가격" : null]
+    : [hasOfficial ? "공시가격" : null, hasKapt ? "관리비" : null];
+  const kind = words.filter(Boolean).join("·") || "단지 정보";
   return `${s.name} ${kind}${titleTail(s)}`;
 }
 
@@ -124,6 +132,9 @@ export function complexMetadata(s: PublicSummary): Metadata {
     // openGraph 를 직접 쓰면 루트 opengraph-image 상속이 끊긴다 → images 명시(seo-metadata 룰 2)
     openGraph: {
       type: "website",
+      // 루트 layout 과 같은 값 — openGraph 를 직접 쓰면 루트의 site_name·locale 도 상속이 끊긴다(적대🟡4)
+      siteName: "2u부동산",
+      locale: "ko_KR",
       title,
       description,
       url,

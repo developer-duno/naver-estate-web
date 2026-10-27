@@ -159,8 +159,9 @@ export default function ConsumerComplexView({ complex, aside, footer, endYm, see
             onSelect={setArea}
             twoYear={twoYear}
             twoYearReady={twoYearReady}
+            official={officialQuery.data}
             officetel={officetel}
-            onRetry={retryOf(historyQuery)}
+            onRetry={retryOf(officialQuery, historyQuery)}
           />
           <PriceTrendSection
             history={officetel ? null : history}

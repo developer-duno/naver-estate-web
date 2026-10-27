@@ -120,6 +120,7 @@ function HomeExtras() {
               <Link
                 key={f.complex_no}
                 href={`/complex/${f.complex_no}`}
+                prefetch={false}
                 className="inline-flex items-center gap-1 bg-yellow-50 text-yellow-800 text-xs rounded-full px-2.5 py-1 border border-yellow-200 hover:bg-yellow-100 cursor-pointer transition-colors"
               >
                 <span className="text-yellow-500">&#9733;</span>

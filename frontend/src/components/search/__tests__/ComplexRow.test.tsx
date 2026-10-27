@@ -3,13 +3,20 @@
  * 실행: npx vitest run src/components/search/__tests__/ComplexRow.test.tsx
  */
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 import { ComplexRow } from "../ComplexRow";
 import type { Complex } from "@/types";
 
+const nav = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), prefetch: vi.fn() }),
+  useRouter: () => ({ push: nav.push, prefetch: vi.fn() }),
+}));
+// next/link 가짜 — prefetch 값을 data-prefetch 로 남겨 미리 받기 꺼짐을 본다(세션 483 PR 3b · 맹점🟠1)
+vi.mock("next/link", () => ({
+  default: ({ children, href, prefetch, ...props }: { children: React.ReactNode; href: string; prefetch?: boolean }) => (
+    <a href={href} data-prefetch={String(prefetch)} {...props}>{children}</a>
+  ),
 }));
 
 const makeComplex = (overrides: Partial<Complex> = {}): Complex => ({
@@ -77,6 +84,16 @@ describe("ComplexRow 컴포넌트", () => {
     expect(anchors).toHaveLength(1);
     expect(anchors[0].closest("td")?.textContent).toBe("테스트단지");
     expect(container.querySelector("a tr, a td")).toBeNull();
+    expect(link).toHaveAttribute("data-prefetch", "false"); // 화면에 보이는 행마다 단지 장을 미리 그리지 않게
+  });
+
+  it("이름 링크를 누르면 행 클릭(router.push)은 불리지 않는다 · 행의 다른 칸을 누르면 불린다", () => {
+    nav.push.mockClear();
+    renderRow();
+    fireEvent.click(screen.getByRole("link", { name: "테스트단지" }));
+    expect(nav.push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("서울시 강남구"));
+    expect(nav.push).toHaveBeenCalledWith("/complex/123");
   });
 
   it("로그인(매물 수 0)이면 지금처럼 '0건'", () => {

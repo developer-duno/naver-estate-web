@@ -53,7 +53,8 @@ export default function NearbyComplexes({
           const note = nearbyNote(c);
           return (
             <li key={c.complex_no} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-              <Link href={complexPath(c.complex_no)} className="text-sm font-medium text-blue-700 hover:underline">
+              {/* 미리 받기 끔 — 화면에 들어온 링크마다 그 단지 장을 서버에서 그리게 되면 열쇠 통(분당 300)이 넘친다(맹점🟠1) */}
+              <Link href={complexPath(c.complex_no)} prefetch={false} className="text-sm font-medium text-blue-700 hover:underline">
                 {c.name}
               </Link>
               {note && <span className="block text-xs text-gray-500">{note}</span>}

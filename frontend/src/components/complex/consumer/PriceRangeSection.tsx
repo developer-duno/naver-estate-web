@@ -1,10 +1,18 @@
 "use client";
 
-import type { AreaPrice } from "@/types";
+import type { AreaPrice, OfficialPriceResponse } from "@/types";
 import { Card } from "@/components/ui/card";
 import { formatKoreanPrice } from "@/lib/format";
 import LoadRetry from "./LoadRetry";
-import { dateDot, hasRange, priceRangeText } from "./consumer-format";
+import {
+  dateDot,
+  hasRange,
+  officialForArea,
+  officialRatioText,
+  priceRangeText,
+  representativeOfficial,
+  wonToManwon,
+} from "./consumer-format";
 
 export interface AreaChipsProps {
   areaPrices: AreaPrice[];
@@ -51,6 +59,8 @@ interface Props {
   twoYear: { min: number; max: number } | null;
   /** 2년 범위 답을 받았나(받기 전엔 "2년 기록 없음"을 단정하지 않는다) */
   twoYearReady?: boolean;
+  /** 공시가격 — 고른 면적의 공시가격·실거래 대비 비율 작은 상자(면적 칩을 바꾸면 따라 바뀐다, #773 그대로) */
+  official?: OfficialPriceResponse | null;
   /** 오피스텔·오피스텔분양권 — 정부 실거래를 받지 않는다(보완 F4) */
   officetel?: boolean;
   /** 이 카드 자료 중 불러오지 못한 것이 있으면 다시 시도(보완 A-4) */
@@ -70,13 +80,19 @@ function noRangeText(officetel: boolean, twoYear: { min: number; max: number } |
  * 이 카드는 면적 칩 · 2년 안에서 최근 6개월이 어디쯤인지 막대 · 2년 최저/최고 · (있으면) 지금 있는 거래 목록 표.
  */
 export default function PriceRangeSection({
-  areaPrices, selected, onSelect, twoYear, twoYearReady = true, officetel = false, onRetry,
+  areaPrices, selected, onSelect, twoYear, twoYearReady = true, official, officetel = false, onRetry,
 }: Props) {
   const ap = areaPrices.find((a) => a.area_m2 === selected);
   const ranged = hasRange(ap) ? ap : null;
   const anyRange = areaPrices.some(hasRange);
 
   const trades = ranged?.trades ?? [];
+
+  // 공시가격 상자 — 선택 면적 ±1㎡, 면적 자료가 하나도 없으면 대표 평형(비율 없이). '한눈에 보기' 표는 대표 면적 하나 그대로
+  const items = official?.items ?? [];
+  const off = ranged ? officialForArea(items, ranged.area_m2) : anyRange ? null : representativeOfficial(items);
+  const offNote = off && ranged ? officialRatioText(off.price_median, ranged.price_min, ranged.price_max) : null;
+  const offLabel = `공시가격${official?.year ? ` ${official.year}` : ""}${off && !ranged ? ` · 전용 ${Math.floor(off.prvuse_ar)}㎡` : ""}`;
   const bar = ranged && twoYear && twoYear.max > twoYear.min ? twoYear : null;
   const pct = (v: number) => (bar ? Math.min(100, Math.max(0, ((v - bar.min) / (bar.max - bar.min)) * 100)) : 0);
 
@@ -130,6 +146,13 @@ export default function PriceRangeSection({
         </>
       ) : (
         <p className="text-sm text-gray-700" data-testid="consumer-no-range">{noRangeText(officetel, twoYear, twoYearReady)}</p>
+      )}
+      {off && (
+        <div className="bg-slate-50 rounded-lg p-2.5" data-testid="consumer-official-box">
+          <span className="block text-xs text-gray-500 mb-0.5">{offLabel}</span>
+          <b className="text-sm">{formatKoreanPrice(wonToManwon(off.price_median))}</b>
+          {offNote && <span className="text-xs text-gray-500"> · {offNote}</span>}
+        </div>
       )}
       {onRetry && <LoadRetry onRetry={onRetry} />}
     </Card>

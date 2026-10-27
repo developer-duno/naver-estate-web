@@ -8,7 +8,7 @@ import ConsumerHeader from "../ConsumerHeader";
 import NeighborhoodSection from "../NeighborhoodSection";
 import PriceRangeSection from "../PriceRangeSection";
 import PriceTrendSection, { JEONSE_MIN_SPAN, axisRange, trendPoints } from "../PriceTrendSection";
-import { END_YM, HOOD, SUBWAY, makeComplex, makeHistory, makeTrend } from "./fixtures";
+import { END_YM, HOOD, OFFICIAL, SUBWAY, makeComplex, makeHistory, makeTrend } from "./fixtures";
 
 /** 서버 공개 요약 빵부스러기 — 링크 재료(플래그 false 동안 링크 0 확인용) */
 const BREADCRUMB = {
@@ -31,12 +31,27 @@ describe("S0 머리", () => {
     expect(screen.queryByText("자연")).toBeNull();
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.getByRole("button", { name: "자연 비교 추가" })).toBeInTheDocument();
-    expect(screen.getByText("1997년 사용승인")).toBeInTheDocument();
-    expect(screen.getByText("199세대")).toBeInTheDocument();
-    expect(screen.getByText("1개동")).toBeInTheDocument();
+    // 사용승인·세대수·동수는 '한눈에 보기' 표에 있어 머리 칩에서 뺐다(맹점🟠4⑤) — 주소 칩만
+    expect(screen.queryByText("1997년 사용승인")).toBeNull();
+    expect(screen.queryByText("199세대")).toBeNull();
+    expect(screen.queryByText("1개동")).toBeNull();
     expect(screen.getByTestId("consumer-summary").textContent).toBe(
       "59㎡ 기준 최근 거래 1억 5,700만~1억 8,000만 · 담보대출 한도 최대 약 1억 990만 (가진 집 담보 · 선순위 없을 때 · 참고)",
     );
+  });
+  it("★·비교는 서버 h1 옆 자리(complex-title-actions)로 옮겨 간다 — 머리 줄엔 없음(맹점🟠4④)", async () => {
+    const slot = document.createElement("div");
+    slot.id = "complex-title-actions";
+    document.body.appendChild(slot);
+    try {
+      const { container } = render(<ConsumerHeader complex={makeComplex()} summary={range} {...header} />);
+      expect(await within(slot).findByRole("button", { name: "자연 비교 추가" })).toBeInTheDocument();
+      expect(within(slot).getByRole("button", { name: "즐겨찾기 추가" })).toBeInTheDocument();
+      expect(within(container).queryByRole("button", { name: "자연 비교 추가" })).toBeNull();
+      expect(within(container).getByRole("button", { name: "이전 페이지" })).toBeInTheDocument();
+    } finally {
+      slot.remove();
+    }
   });
   it("2년 단계 · 구역 모름 꼬리표(보완 F2·A-5)", () => {
     render(<ConsumerHeader complex={makeComplex()} summary={{ ...range, period: "2y", min: 14700, max: 20000, ltv: 10290, zoneUnknown: true }} {...header} />);
@@ -68,6 +83,14 @@ describe("S1 얼마짜리 집인가", () => {
     expect(screen.queryByTestId("consumer-range")).toBeNull(); // 큰 범위 숫자 줄 삭제
     expect(container.textContent).not.toMatch(/1억 5,700만|1억 1,300만|약 19만 원|공시가격|관리비/);
     expect(container.textContent).not.toMatch(/중위|1억 7,200만/); // 이 단지 중위값(17200)은 어디에도 없다
+  });
+
+  it("공시가격 작은 상자 — 고른 면적 공시가격 · '실거래의 N~M%', 면적을 바꾸면 따라 바뀐다(맹점🟠4①②, #773 그대로)", () => {
+    const { rerender } = render(<PriceRangeSection {...base} official={OFFICIAL} />);
+    const box = () => screen.getByTestId("consumer-official-box").textContent;
+    expect(box()).toBe("공시가격 20261억 1,300만 · 실거래의 63~72%");
+    rerender(<PriceRangeSection {...base} official={OFFICIAL} selected={84} />);
+    expect(box()).toBe("공시가격 20261억 6,000만 · 실거래의 70~73%");
   });
 
   it("거래 없는 면적 칩은 흐리게 '거래 없음'·누를 수 없음 · 다른 면적을 누르면 onSelect", () => {
@@ -139,19 +162,31 @@ describe("S2 어떻게 변해 왔나", () => {
     expect(bands.querySelector('[data-month="202501"]')).toBeNull(); // 빈 달은 비움
     expect(bands.textContent).toContain("24.11");
     expect(bands.textContent).toContain("26.10");
-    // 세션 483 PR 3b(결정 24): 지역 흐름 선 그래프 → 한 줄(전세가율은 마지막 달)
+    // 지역 페이지가 열리기 전(기본 = REGION_PAGES_ENABLED false)엔 #773 그대로 — 문장 + 2년 선 그래프(결정 28)
     expect(screen.getByTestId("consumer-region-sentence").textContent).toBe(
-      "유성구 아파트 2년 중위 매매가 4억→4억 600만 · 전세가율 69.5% · 한국부동산원 전국주택가격동향조사 2024.10~2026.09",
+      "유성구 아파트는 2년 동안 중위 매매가 4억→4억 600만 · 전세가율 69.2%→69.5%",
     );
-    expect(container.querySelector("[data-testid^='trend-']")).toBeNull(); // 선 그래프 없음
-    expect(container.querySelectorAll("svg")).toHaveLength(1); // 띠 그래프만
+    expect(container.textContent).toContain("한국부동산원 전국주택가격동향조사 2024.10~2026.09");
+    expect(container.querySelector('a[href^="/region"]')).toBeNull();
   });
 
-  it("지역 페이지가 열리기 전(REGION_PAGES_ENABLED=false)엔 허브 링크 0", () => {
+  it("두 선 양 끝 값 라벨 — 4억 / 4억 600만 · 69.2% / 69.5%(플래그 false = 그래프 있음)", () => {
+    render(<PriceTrendSection history={null} trend={makeTrend()} endYm={END_YM} />);
+    const sale = screen.getByTestId("trend-sale_price_median");
+    const jeonse = screen.getByTestId("trend-jeonse_ratio");
+    expect(Array.from(sale.querySelectorAll("text")).map((t) => t.textContent)).toEqual(["4억", "4억 600만"]);
+    expect(Array.from(jeonse.querySelectorAll("text")).map((t) => t.textContent)).toEqual(["69.2%", "69.5%"]);
+  });
+
+  it("지역 페이지가 열린 뒤(compact) = 한 줄(전세가율 처음→끝) + 시군구 허브 링크 · 선 그래프 없음", () => {
     const { container } = render(
-      <PriceTrendSection history={null} trend={makeTrend()} endYm={END_YM} breadcrumb={BREADCRUMB} />,
+      <PriceTrendSection history={null} trend={makeTrend()} endYm={END_YM} breadcrumb={BREADCRUMB} compact />,
     );
-    expect(container.querySelector('a[href^="/region"]')).toBeNull();
+    expect(screen.getByTestId("consumer-region-sentence").textContent).toBe(
+      "유성구 아파트 2년 중위 매매가 4억→4억 600만 · 전세가율 69.2%→69.5% · 한국부동산원 전국주택가격동향조사 2024.10~2026.09 유성구 지역 정보",
+    );
+    expect(container.querySelector("[data-testid^='trend-']")).toBeNull();
+    expect(container.querySelector('a[href="/region/30200"]')).not.toBeNull();
   });
 
   it("축 범위 — 전세가율은 최소 5%p(좁으면 가운데 ±2.5), 그 밖은 최소~최대 + 10% 여백 · 0부터 아님", () => {
@@ -188,16 +223,40 @@ describe("S2 어떻게 변해 왔나", () => {
 });
 
 describe("S3 주변은 어떤가", () => {
-  it("지하철 3역 그대로 · 동네는 한 줄(칸·집 종류 띠·위험지도 없음 — 세션 483 PR 3b 결정 24)", () => {
+  it("지하철 3역 · 동네 숫자 · 위험 칩 2 — 지역 페이지가 열리기 전(기본)엔 #773 그대로(결정 28)", () => {
     const { container } = render(<NeighborhoodSection stations={SUBWAY.stations} neighborhood={HOOD} breadcrumb={BREADCRUMB} />);
     expect(screen.getByText("갑천역")).toBeInTheDocument();
     expect(screen.getByText("1.1km")).toBeInTheDocument();
     expect(screen.getByText("대전1호선 · 직선거리")).toBeInTheDocument();
+    expect(screen.getByText("5만 4,325명")).toBeInTheDocument();
+    expect(screen.getByText(/평균 36세/)).toBeInTheDocument();
+    expect(screen.getByText("55%")).toBeInTheDocument();
+    expect(screen.getByText("사업체 4,819곳")).toBeInTheDocument();
+    expect(screen.getByText("2004년 이전 집")).toBeInTheDocument();
+    expect(screen.getByText("아파트 40% · 오피스텔 1% · 다세대 2% · 단독 52%")).toBeInTheDocument();
+    expect(screen.getByText("홍수 위험지도 영향 동")).toBeInTheDocument();
+    expect(screen.getByText("산사태 위험지도 영향 동")).toBeInTheDocument();
+    expect(screen.getByText(HOOD.source)).toBeInTheDocument();
+    expect(container.querySelector('a[href^="/region"]')).toBeNull();
+  });
+
+  it("위험 영향 없으면 칩 없음", () => {
+    render(<NeighborhoodSection stations={[]} neighborhood={{ ...HOOD, flood: { affected: false }, landslide: null }} />);
+    expect(screen.queryByText(/위험지도 영향 동/)).toBeNull();
+    expect(screen.queryByTestId("consumer-subway")).toBeNull();
+  });
+
+  it("지역 페이지가 열린 뒤(compact) = 동네 한 줄 + 동 페이지 링크(없으면 허브) · 칸·띠·위험지도 없음", () => {
+    const { container, rerender } = render(
+      <NeighborhoodSection stations={SUBWAY.stations} neighborhood={HOOD} breadcrumb={BREADCRUMB} compact />,
+    );
     expect(screen.getByTestId("consumer-neighborhood").textContent).toBe(
-      `온천2동 사는 사람 5만 4,325명 · 1인 가구 55% · 아파트 40% · ${HOOD.source}`,
+      `온천2동 사는 사람 5만 4,325명 · 1인 가구 55% · 아파트 40% · ${HOOD.source} 동네 정보 더 보기`,
     );
     expect(container.textContent).not.toMatch(/위험지도|사업체|단독 52%/);
-    expect(container.querySelector('a[href^="/region"]')).toBeNull(); // 플래그 false = 동 페이지 링크 0
+    expect(container.querySelector('a[href="/region/30200/3020012300"]')).not.toBeNull();
+    rerender(<NeighborhoodSection stations={SUBWAY.stations} neighborhood={HOOD} breadcrumb={{ ...BREADCRUMB, dong_has_page: false }} compact />);
+    expect(container.querySelector('a[href="/region/30200"]')).not.toBeNull();
   });
 
   it("동네 없으면 지하철만", () => {

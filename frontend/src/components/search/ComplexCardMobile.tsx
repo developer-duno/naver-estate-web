@@ -33,7 +33,7 @@ export const ComplexCardMobile = memo(function ComplexCardMobile({ complex, inde
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-400 shrink-0">{index}</span>
             {/* 이름 글자만 진짜 링크 · 카드 클릭과 두 번 이동하지 않게 전파 멈춤(세션 483 PR 3b) */}
-            <Link href={href} className="font-medium text-gray-900 truncate hover:underline" onClick={(e) => e.stopPropagation()}>{complex.complex_name}</Link>
+            <Link href={href} prefetch={false} className="font-medium text-gray-900 truncate hover:underline" onClick={(e) => e.stopPropagation()}>{complex.complex_name}</Link>
             {complex.real_estate_type_name && (
               <span className={`text-sm px-2 py-1 rounded border shrink-0 ${colorClass}`}>{complex.real_estate_type_name}</span>
             )}

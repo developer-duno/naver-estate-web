@@ -18,6 +18,8 @@ interface Props {
   onRetry?: () => void;
   /** 서버 공개 요약 빵부스러기 — 시군구 허브 링크 재료(없으면 링크 없음) */
   breadcrumb?: PublicSummaryBreadcrumb | null;
+  /** 한 줄 + 허브 링크로 줄일까 — 기본 = 지역 페이지 열림 여부(결정 28). 시험은 직접 넣는다 */
+  compact?: boolean;
 }
 
 const W = 340;
@@ -99,6 +101,31 @@ export function trendPoints(items: RegionTrendItem[], key: TrendKey): { x: numbe
   return out;
 }
 
+/** 선 + 양 끝 값 라벨(첫 달·마지막 달). 매매가 라벨은 점 위, 전세가율 라벨은 점 아래 — 두 선 라벨이 덜 겹치게 */
+function TrendLine({ items, k, color, fmt }: { items: RegionTrendItem[]; k: TrendKey; color: string; fmt: (v: number) => string }) {
+  const pts = trendPoints(items, k);
+  if (pts.length === 0) return null;
+  const ends = pts.length > 1 ? [pts[0], pts[pts.length - 1]] : [pts[0]];
+  const below = k === "jeonse_ratio";
+  return (
+    <g data-testid={`trend-${k}`}>
+      <polyline fill="none" stroke={color} strokeWidth="2" points={pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} />
+      {ends.map((p, i) => (
+        <text
+          key={i}
+          x={i === 0 ? 2 : W - 2}
+          y={below ? Math.min(LINE_H - 2, p.y + 13) : Math.max(10, p.y - 5)}
+          fontSize="10"
+          fill={color}
+          textAnchor={i === 0 ? "start" : "end"}
+        >
+          {fmt(p.v)}
+        </text>
+      ))}
+    </g>
+  );
+}
+
 function firstLast(items: RegionTrendItem[], key: "sale_price_median" | "jeonse_ratio"): [number, number] | null {
   const vals = items.map((it) => it[key]).filter((v): v is number => v != null);
   return vals.length > 0 ? [vals[0], vals[vals.length - 1]] : null;
@@ -106,10 +133,10 @@ function firstLast(items: RegionTrendItem[], key: "sale_price_median" | "jeonse_
 
 /**
  * S2 · 어떻게 변해 왔나 — 둘 다 비면 카드 숨김. 지역 통계의 중위 매매가는 예외로 보인다(부동산원 공식 통계).
- * 지역(시군구) 흐름은 같은 시군구 단지마다 똑같이 반복되므로 한 줄 + 시군구 허브 링크로 줄였다(세션 483 PR 3b · 결정 24).
- * 허브 링크는 지역 페이지가 열린 뒤(REGION_PAGES_ENABLED)에만 — 그 전엔 한 줄만.
+ * 지역(시군구) 흐름: 지역 페이지가 열리기 전(compact=false, 기본 = REGION_PAGES_ENABLED)엔 지금(#773)처럼 문장 + 2년 선 그래프,
+ * 열린 뒤(compact=true)엔 한 줄 + 시군구 허브 링크(결정 24 의 '반복 줄이기'를 3c 와 같이 — 결정 28).
  */
-export default function PriceTrendSection({ history, trend, endYm, onRetry, breadcrumb = null }: Props) {
+export default function PriceTrendSection({ history, trend, endYm, onRetry, breadcrumb = null, compact = REGION_PAGES_ENABLED }: Props) {
   const hasBands = !!history && history.months.length > 0;
   const items = trend?.items ?? [];
   const sale = firstLast(items, "sale_price_median");
@@ -118,10 +145,10 @@ export default function PriceTrendSection({ history, trend, endYm, onRetry, brea
   if (!hasBands && !hasTrend && !onRetry) return null;
 
   const parts: string[] = [];
-  if (sale) parts.push(`2년 중위 매매가 ${formatKoreanPrice(sale[0])}→${formatKoreanPrice(sale[1])}`);
-  if (jeonse) parts.push(`전세가율 ${jeonse[1].toFixed(1)}%`);
+  if (sale) parts.push(`중위 매매가 ${formatKoreanPrice(sale[0])}→${formatKoreanPrice(sale[1])}`);
+  if (jeonse) parts.push(`전세가율 ${jeonse[0].toFixed(1)}%→${jeonse[1].toFixed(1)}%`);
   const period = items.length > 0 ? `${ymDot(items[0].period)}~${ymDot(items[items.length - 1].period)}` : "";
-  const hubHref = REGION_PAGES_ENABLED && breadcrumb ? regionHubPath(breadcrumb.sigungu_code) : null;
+  const hubHref = compact && breadcrumb ? regionHubPath(breadcrumb.sigungu_code) : null;
 
   return (
     <Card className="p-4 space-y-3" aria-labelledby="consumer-q2">
@@ -133,17 +160,33 @@ export default function PriceTrendSection({ history, trend, endYm, onRetry, brea
           <MonthBands history={history} endYm={endYm} />
         </div>
       )}
-      {hasTrend && trend && (
+      {hasTrend && trend && compact && (
         <p className="text-sm" data-testid="consumer-region-sentence">
-          {trend.region_name} 아파트 {parts.join(" · ")}
+          {trend.region_name} 아파트 2년 {parts.join(" · ")}
           <span className="text-xs text-gray-400"> · {trend.source} {period}</span>
           {hubHref && (
             <>
               {" "}
-              <Link href={hubHref} className="text-xs text-blue-700 underline">{trend.region_name} 지역 정보</Link>
+              <Link href={hubHref} prefetch={false} className="text-xs text-blue-700 underline">{trend.region_name} 지역 정보</Link>
             </>
           )}
         </p>
+      )}
+      {hasTrend && trend && !compact && (
+        <div className="space-y-1">
+          <p className="text-sm" data-testid="consumer-region-sentence">
+            {trend.region_name} 아파트는 2년 동안 {parts.join(" · ")}
+          </p>
+          <svg viewBox={`0 0 ${W} ${LINE_H}`} className="w-full max-w-[480px] h-auto" role="img" aria-label={`${trend.region_name} 중위 매매가와 전세가율 2년 흐름`}>
+            {sale && <TrendLine items={items} k="sale_price_median" color="#1d4ed8" fmt={formatKoreanPrice} />}
+            {jeonse && <TrendLine items={items} k="jeonse_ratio" color="#d97706" fmt={(v) => `${v.toFixed(1)}%`} />}
+          </svg>
+          <p className="text-xs text-gray-400">
+            {trend.source} {period}
+            {sale ? " · 파랑 중위 매매가" : ""}
+            {jeonse ? " · 주황 전세가율" : ""}
+          </p>
+        </div>
       )}
       {onRetry && <LoadRetry onRetry={onRetry} />}
     </Card>

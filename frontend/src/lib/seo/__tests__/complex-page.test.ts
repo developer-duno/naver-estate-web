@@ -21,6 +21,14 @@ describe("제목", () => {
     expect(complexTitle(makeSummary({ grade: "C" }))).toBe("햇살마을 공시가격·관리비");
   });
 
+  it("제목 단어 = 실제 있는 자료만(맹점🟡) — 공시가격 없는 A·공시가격/관리비 하나뿐인 B·둘 다 없는 C", () => {
+    expect(complexTitle(makeSummary({ official_price: null }))).toBe("햇살마을 실거래가");
+    expect(complexTitle(makeSummary({ official_price: { year: "2026", items: [] } }))).toBe("햇살마을 실거래가");
+    expect(complexTitle(makeSummary({ grade: "B", kapt_cost: null }))).toBe("햇살마을 공시가격");
+    expect(complexTitle(makeSummary({ grade: "B", official_price: null }))).toBe("햇살마을 관리비");
+    expect(complexTitle(makeSummary({ grade: "C", official_price: null, kapt_cost: null }))).toBe("햇살마을 단지 정보");
+  });
+
   it("같은 이름 단지 꼬리 5종 — 판정은 백엔드 title_suffix", () => {
     expect(complexTitle(makeSummary({ title_suffix: "none" }))).toBe("햇살마을 실거래가·공시가격");
     expect(complexTitle(makeSummary({ title_suffix: "dong" }))).toBe("햇살마을 실거래가·공시가격 (봉명동)");
@@ -68,6 +76,8 @@ describe("메타", () => {
     expect(m.openGraph).toMatchObject({ url: "/complex/6139", title: "햇살마을 실거래가·공시가격" });
     expect((m.openGraph as { images: { url: string }[] }).images[0].url).toBe("/opengraph-image");
     expect(m.twitter).toMatchObject({ title: "햇살마을 실거래가·공시가격" });
+    // 루트 layout 과 같은 사이트 칸(openGraph 를 직접 쓰면 상속이 끊긴다 — 적대🟡4)
+    expect(m.openGraph).toMatchObject({ siteName: "2u부동산", locale: "ko_KR" });
   });
 
   it("robots — indexable 이면 index,follow / 아니면 noindex,follow (등급이 A 여도 indexable 이 기준)", () => {

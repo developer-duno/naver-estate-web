@@ -31,7 +31,7 @@ export const ComplexRow = memo(function ComplexRow({ complex, index, urlFilters,
       <td className="px-3 py-2 text-gray-400 text-center text-xs border-r border-gray-100">{index}</td>
       <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap border-r border-gray-100">
         {/* 이름 글자만 진짜 링크(행 전체를 감싸지 않는다 — hydration) · 행 클릭과 두 번 이동하지 않게 전파 멈춤(세션 483 PR 3b) */}
-        <Link href={href} className="hover:underline" onClick={(e) => e.stopPropagation()}>{complex.complex_name}</Link>
+        <Link href={href} prefetch={false} className="hover:underline" onClick={(e) => e.stopPropagation()}>{complex.complex_name}</Link>
       </td>
       <td className="px-3 py-2 text-gray-600 max-w-75 truncate border-r border-gray-100" title={complex.cortar_address || ""}>{complex.cortar_address || "-"}</td>
       <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.total_household_count ? complex.total_household_count.toLocaleString() : "-"}</td>

@@ -32,6 +32,14 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
+  // 단지 번호가 숫자 1~8자리가 아니면 화면을 그리기 전에 404 — 아무 문자열 주소마다 404 장이 하루씩 저장되지 않게(적대🟡2).
+  // 세션·쿠키 조회도 하지 않는다. 없는 경로로 바꿔 보내 사이트의 '찾을 수 없음' 화면(app/not-found.tsx)을 404 로 받는다.
+  // 페이지(app/complex/[no]) 쪽 같은 검사는 그대로 둔다(이중 안전망).
+  const complexSeg = request.nextUrl.pathname.match(/^\/complex\/([^/]+)\/?$/);
+  if (complexSeg && !/^\d{1,8}$/.test(complexSeg[1])) {
+    return NextResponse.rewrite(new URL("/__complex-not-found", request.url));
+  }
+
   let response = NextResponse.next({
     request: { headers: request.headers },
   });

@@ -82,8 +82,23 @@ def _trend_rows(db: Session, region_code: str, stat_codes: tuple[str, ...], sinc
     ).all()
 
 
-def region_trend(db: Session, c) -> dict:
-    """{region_code, region_name, source, items:[{period, jeonse_ratio, sale_price_median}]} — 연결 안 되면 items []."""
+def is_missing_schema_error(e: Exception) -> bool:
+    """표·칸이 아예 없는 DB 의 오류인가(PG = ProgrammingError, 시험 SQLite = "no such table/column").
+
+    그 밖의 OperationalError(연결 끊김·8초 시간 초과)는 일시 오류라 빈 결과로 바꿔 캐시에 굳히면 안 된다(세션 483 보완 F5).
+    """
+    if isinstance(e, ProgrammingError):
+        return True
+    msg = str(getattr(e, "orig", e)).lower()
+    return isinstance(e, OperationalError) and ("no such table" in msg or "no such column" in msg)
+
+
+def region_trend(db: Session, c, raise_errors: bool = False) -> dict:
+    """{region_code, region_name, source, items:[{period, jeonse_ratio, sale_price_median}]} — 연결 안 되면 items [].
+
+    raise_errors=True(허브 — 1일 캐시) 면 표가 없는 경우만 빈 결과, 연결 오류·시간 초과는 그대로 올린다.
+    기존 /{no}/region-trend 라우트는 기본값(삼킴) 그대로.
+    """
     from crawler.region_match import SINGLE_SIGUNGU_SIDO, sido_name_of_region
     from crawler.service_region_stats import SOURCE_OF, STAT_APT_SALE_MEDIAN, STAT_JEONSE_RATIO
     from db.region_stats_queries import region_code_of_complex, region_display_name, sido_code
@@ -104,7 +119,9 @@ def region_trend(db: Session, c) -> dict:
             if not rows and sido_name_of_region(code) in SINGLE_SIGUNGU_SIDO:
                 sido = sido_code(code)
                 rows = _trend_rows(db, sido, stats, since) if sido else []
-    except (ProgrammingError, OperationalError):
+    except (ProgrammingError, OperationalError) as e:
+        if raise_errors and not is_missing_schema_error(e):
+            raise
         return empty
     by_period: dict[str, dict] = {}
     for period, stat, value in rows:

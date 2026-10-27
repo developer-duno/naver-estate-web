@@ -30,6 +30,7 @@ from routers import (
     mb,
     opinions,
     payment,
+    region_pages,
     regions,
     stats,
     users,
@@ -231,6 +232,9 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # API 응답은 검색 결과에 안 뜨게(세션 483 PR 3a · 설계 v2 R2). robots.txt 로 막지 않는 이유 = 구글이 화면을
+    # 그릴 때 막힌 API 를 안 받아 브라우저 쪽 호출이 전부 실패하기 때문 — 색인 방지는 이 머리 하나로.
+    response.headers["X-Robots-Tag"] = "noindex"
     if not IS_DEBUG:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     # GET 응답에 엔드포인트별 캐시 적용
@@ -290,6 +294,8 @@ app.include_router(live.router, prefix="/api/live", tags=["실시간 크롤링"]
 app.include_router(complexes.router, prefix="/api/complexes", tags=["단지"])
 app.include_router(articles.router, prefix="/api/articles", tags=["매물"])
 app.include_router(stats.router, prefix="/api", tags=["통계"])
+# 지역 페이지 자료(세션 483 PR 3a) — regions 보다 먼저: `/regions/{sido}/{sigungu}` 가 `/regions/{코드}/hub` 를 가로채지 않게
+app.include_router(region_pages.router, prefix="/api", tags=["지역 페이지"])
 app.include_router(regions.router, prefix="/api", tags=["지역"])
 app.include_router(admin.router, prefix="/api/admin", tags=["관리자"])
 app.include_router(users.router, prefix="/api/users", tags=["사용자"])

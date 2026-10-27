@@ -3,8 +3,10 @@
 Redis 사용 가능 시 Redis sorted set 기반, 없으면 in-memory 폴백.
 """
 
+import hmac
 import logging
 import os
+import threading
 import time
 from collections import defaultdict
 
@@ -22,6 +24,10 @@ RATE_LIMITS = {
     "/api/": (60, 60),  # 기본: 60/분
 }
 LOGIN_RATE_LIMIT = (5, 300)  # 로그인: 5/5분
+# 서버 렌더(Vercel ISR) 전용 통 — 요청 머리 X-SSR-Key 가 env SSR_SHARED_KEY 와 같으면 IP 무관 전체 한 통 분당 300
+# (세션 483 PR 3a · 설계 v2 O7). env 가 비면 기능 꺼짐 = 지금과 똑같음. 열쇠 값은 어디에도 찍지 않는다.
+SSR_RATE_LIMIT = (300, 60)
+SSR_RATE_KEY = "rl:ssr:all"
 
 # ── Redis 또는 In-Memory 백엔드 선택 ──
 
@@ -63,6 +69,44 @@ def _get_client_ip(request: Request) -> str:
     if request.client:
         return request.client.host
     return "unknown"
+
+
+_SSR_TALLY_SEC = 3600
+_ssr_tally = {"ok": 0, "bad": 0, "since": time.time()}
+_ssr_tally_lock = threading.Lock()
+
+
+def _ssr_key() -> str:
+    """env 열쇠 — 앞뒤 공백 제거(붙여 넣다 끝 공백·줄바꿈이 섞여 조용히 일반 통으로 떨어지지 않게, 보완 F10)."""
+    return os.getenv("SSR_SHARED_KEY", "").strip()
+
+
+def _count_ssr(matched: bool) -> None:
+    """열쇠 일치·불일치 횟수 — 한 시간에 한 번 한 줄 로그(값·길이 없이). 두 곳 열쇠가 어긋났는지 라이브에서 보는 길."""
+    with _ssr_tally_lock:
+        _ssr_tally["ok" if matched else "bad"] += 1
+        now = time.time()
+        if now - _ssr_tally["since"] < _SSR_TALLY_SEC:
+            return
+        ok, bad = _ssr_tally["ok"], _ssr_tally["bad"]
+        _ssr_tally.update(ok=0, bad=0, since=now)
+    logger.info("서버 렌더 열쇠 일치 %d · 불일치 %d (지난 1시간)", ok, bad)
+
+
+def _is_ssr_request(request: Request) -> bool:
+    """X-SSR-Key 머리가 SSR_SHARED_KEY 와 같은가 — env 가 비었거나 머리가 없으면 False. 비교는 hmac.compare_digest.
+
+    둘 다 앞뒤 공백을 뗀 뒤 비교한다. 열쇠가 켜져 있고 머리가 왔을 때만 일치·불일치를 센다.
+    """
+    key = _ssr_key()
+    if not key:
+        return False
+    given = (request.headers.get("x-ssr-key") or "").strip()
+    if not given:
+        return False
+    matched = hmac.compare_digest(given.encode("utf-8"), key.encode("utf-8"))
+    _count_ssr(matched)
+    return matched
 
 
 def _check_rate_limit_redis(rate_key: str, max_req: int, window: int) -> bool:
@@ -140,6 +184,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     미들웨어를 하나 더 쌓으면 요청마다 ASGI 래핑이 한 겹 더 늘 뿐 얻는 게 없다.
     """
 
+    def __init__(self, app, *args, **kwargs):
+        super().__init__(app, *args, **kwargs)
+        if _ssr_key():   # 켜질 때 한 줄(값·길이 없이) — 열쇠가 실제로 읽혔는지 라이브에서 확인하는 길(보완 F10)
+            logger.info("서버 렌더 열쇠 설정됨 — 열쇠가 맞는 요청은 전용 통(분당 %d)", SSR_RATE_LIMIT[0])
+
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
 
@@ -149,12 +198,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ip = _get_client_ip(request)
         started = time.perf_counter()
 
+        rate_key = f"rl:{ip}:{path.split('/')[2] if len(path.split('/')) > 2 else 'api'}"
         if path == "/api/auth/login" or (path == "/api/signup" and request.method == "POST"):
             max_req, window = LOGIN_RATE_LIMIT
+        elif _is_ssr_request(request):
+            max_req, window = SSR_RATE_LIMIT
+            rate_key = SSR_RATE_KEY
         else:
             max_req, window = RATE_LIMITS.get("/api/", (60, 60))
-
-        rate_key = f"rl:{ip}:{path.split('/')[2] if len(path.split('/')) > 2 else 'api'}"
 
         exceeded = (
             _check_rate_limit_redis(rate_key, max_req, window)

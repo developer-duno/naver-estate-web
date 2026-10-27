@@ -71,7 +71,7 @@ vi.mock("next/navigation", () => ({
 
 // Mock next/link — children을 <a>로 감싸서 반환
 vi.mock("next/link", () => ({
-  default: ({ children, href, ...props }: any) => {
+  default: ({ children, href, prefetch: _prefetch, ...props }: any) => { // eslint-disable-line @typescript-eslint/no-unused-vars -- next/link 전용 prop 제외(세션 483 PR 3b)
     const React = require("react");
     return React.createElement("a", { href, ...props }, children);
   },

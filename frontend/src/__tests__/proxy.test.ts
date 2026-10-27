@@ -13,18 +13,19 @@
  * 관리자 분기(세션 417)는 아래 별도 describe 에서 `@supabase/ssr` 를 목으로 바꿔 다룬다.
  * 목은 파일 전체에 걸리지만, 위 잠금 테스트는 Supabase env 가 없어 목에 닿기 전에 return 하므로 영향 0.
  */
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import { proxy } from "@/proxy";
 
 // getUser() 가 돌려줄 사용자 — 테스트마다 바꿔 끼운다
 const supa = vi.hoisted(() => ({
   user: null as null | { id: string; email?: string },
+  calls: 0,
 }));
 
 vi.mock("@supabase/ssr", () => ({
   createServerClient: () => ({
-    auth: { getUser: async () => ({ data: { user: supa.user } }) },
+    auth: { getUser: async () => { supa.calls += 1; return { data: { user: supa.user } }; } },
   }),
 }));
 
@@ -154,5 +155,33 @@ describe("proxy — 단지 화면은 비로그인도 연다 (세션 481 공개 �
 
     expect([307, 308]).toContain(res.status);
     expect(res.headers.get("location")).toBe("https://2u.pe.kr/login?redirect=%2Fverify");
+  });
+});
+
+describe("proxy — 단지 번호 모양이 아니면 그리기 전에 404 (세션 483 PR 3b · 적대🟡2)", () => {
+  beforeEach(() => {
+    supa.calls = 0;
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    supa.calls = 0;
+  });
+  const rewriteOf = (res: Response) => res.headers.get("x-middleware-rewrite") ?? "";
+
+  it.each(["abc", "12a", "123456789", "%20"])("/complex/%s → 찾을 수 없음 경로로 바꿔 보냄 · 세션 조회 0", async (no) => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-test");
+    const res = await proxy(new NextRequest(`https://2u.pe.kr/complex/${no}`));
+    expect(rewriteOf(res)).toBe("https://2u.pe.kr/__complex-not-found");
+    expect(supa.calls).toBe(0);
+  });
+
+  it.each(["6139", "12345678"])("/complex/%s(숫자 1~8자리)는 그대로 통과", async (no) => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-test");
+    const res = await proxy(new NextRequest(`https://2u.pe.kr/complex/${no}`));
+    expect(rewriteOf(res)).toBe("");
+    expect(res.status).toBe(200);
+    expect(supa.calls).toBe(1);
   });
 });

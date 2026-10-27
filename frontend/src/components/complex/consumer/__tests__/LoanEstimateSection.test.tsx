@@ -19,6 +19,8 @@ function type(label: RegExp, value: string) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } });
 }
 const result = () => screen.getByTestId("consumer-loan-result").textContent ?? "";
+/** 고정 설명 글 펼치기(세션 483 PR 3b — 기본 닫힘) */
+const openNotes = () => fireEvent.click(screen.getByTestId("consumer-loan-notes-toggle"));
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -27,6 +29,7 @@ describe("LoanEstimateSection — 이미 가진 집(기본)", () => {
     render(<LoanEstimateSection {...base} />);
     expect(screen.getByRole("button", { name: "이미 가진 집으로" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "보수적 1억 5,700만" })).toHaveAttribute("aria-pressed", "true");
+    openNotes();
     expect(screen.getByTestId("consumer-loan-basis").textContent).toContain("생활안정자금 기준 · 1주택자 · 수도권·규제지역은 최대 1억(금융위 2025-06-28)");
     expect(result()).toContain("유성구 비규제 · 담보가치의 70%");
     expect(result()).toContain("1억 990만");
@@ -44,6 +47,7 @@ describe("LoanEstimateSection — 이미 가진 집(기본)", () => {
     expect(result()).toContain("강남구는 규제지역 — 담보가치의 40%4억"); // 가진 집엔 가격별 상한 문구 없음
     expect(result()).toContain("생활안정자금 상한 · 수도권·규제지역최대 1억");
     expect(result()).toContain("추가로 가능한 담보대출(담보 기준) (소득 확인 전)약 1억");
+    openNotes();
     expect(screen.getByText("수도권·규제지역 2주택 이상은 취급 금지")).toBeInTheDocument();
   });
 
@@ -90,6 +94,7 @@ describe("LoanEstimateSection — 이 집을 사려고", () => {
     render(<LoanEstimateSection {...base} />);
     fireEvent.click(screen.getByRole("button", { name: "이 집을 사려고" }));
     expect(screen.queryByLabelText(/선순위/)).toBeNull();
+    openNotes();
     expect(screen.getByTestId("consumer-loan-basis").textContent).toContain("무주택 구입 기준");
     expect(result()).toContain("구입 담보대출 한도(담보 기준) (소득 확인 전)약 1억 990만");
     expect(result()).not.toContain("지방 주택은");
@@ -138,6 +143,7 @@ describe("LoanEstimateSection — 공통", () => {
     type(/연소득/, "4800");
     type(/기존 대출 월 상환/, "30");
     type(/금리/, "4.2");
+    openNotes(); // 접힌 설명 글까지 검사
     const ownText = screen.getByTestId("consumer-loan").textContent ?? "";
     fireEvent.click(screen.getByRole("button", { name: "이 집을 사려고" }));
     const buyText = screen.getByTestId("consumer-loan").textContent ?? "";
@@ -147,8 +153,21 @@ describe("LoanEstimateSection — 공통", () => {
     }
   });
 
+  it("금융사 안내 링크 문단만 기본 닫힘 — 계산 전제(1주택자·2주택 금지)는 닫힌 채로도 보인다(맹점🟠3)", () => {
+    render(<LoanEstimateSection {...base} areaPrices={SEOUL} zone="overheated" sido="서울" regionLabel="강남구" />);
+    expect(screen.getByTestId("consumer-loan-notes-toggle")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("consumer-loan-notes")).toBeNull();
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(screen.getByTestId("consumer-loan-basis").textContent).toContain("1주택자");
+    expect(screen.getByText("수도권·규제지역 2주택 이상은 취급 금지")).toBeInTheDocument();
+    openNotes();
+    expect(screen.getByTestId("consumer-loan-notes-toggle")).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("consumer-loan-notes")).toBeInTheDocument();
+  });
+
   it("링크 2곳 — 새 탭 · noopener noreferrer · 기준 글자 · 저장 안 함 안내", () => {
     render(<LoanEstimateSection {...base} />);
+    openNotes();
     const links = screen.getAllByRole("link");
     expect(links.map((l) => l.getAttribute("href"))).toEqual(["https://finlife.fss.or.kr", "https://portal.kfb.or.kr"]);
     for (const l of links) {

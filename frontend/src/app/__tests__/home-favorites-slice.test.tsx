@@ -51,9 +51,9 @@ describe("홈 — 즐겨찾기 칩 10개 제한 + 더보기", () => {
     renderHome();
 
     // localStorage 는 effect 에서 읽음 → 칩 등장 대기
-    expect(await screen.findByRole("button", { name: /단지1$/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /단지10$/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /단지11$/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /단지1$/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /단지10$/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /단지11$/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "+2개 더보기" })).toBeInTheDocument();
   });
 
@@ -62,7 +62,7 @@ describe("홈 — 즐겨찾기 칩 10개 제한 + 더보기", () => {
     renderHome();
 
     fireEvent.click(await screen.findByRole("button", { name: "+2개 더보기" }));
-    expect(screen.getByRole("button", { name: /단지12$/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /단지12$/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "+2개 더보기" })).not.toBeInTheDocument();
   });
 
@@ -70,15 +70,15 @@ describe("홈 — 즐겨찾기 칩 10개 제한 + 더보기", () => {
     seedFavorites(10);
     renderHome();
 
-    expect(await screen.findByRole("button", { name: /단지10$/ })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /단지10$/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /더보기/ })).not.toBeInTheDocument();
   });
 
-  it("칩 클릭 시 단지 상세로 이동 (기존 동작 유지)", async () => {
+  it("칩은 단지 상세로 가는 진짜 링크", async () => {
     seedFavorites(3);
     renderHome();
 
-    fireEvent.click(await screen.findByRole("button", { name: /단지2$/ }));
-    expect(mockRouter.push).toHaveBeenCalledWith("/complex/C2");
+    // 세션 483 PR 3b: 칩이 진짜 링크(<a href>)가 됐다 — 이동 = href(검색엔진도 따라갈 수 있게)
+    expect(await screen.findByRole("link", { name: /단지2$/ })).toHaveAttribute("href", "/complex/C2");
   });
 });

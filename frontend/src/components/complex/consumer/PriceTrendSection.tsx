@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import type { PublicPriceHistory, RegionTrend, RegionTrendItem } from "@/types";
+import type { PublicSummaryBreadcrumb } from "@/types/public-summary";
+import { REGION_PAGES_ENABLED, regionHubPath } from "@/lib/seo/complex-page";
 import { Card } from "@/components/ui/card";
 import { formatChartPrice, formatKoreanPrice } from "@/lib/format";
 import LoadRetry from "./LoadRetry";
@@ -13,6 +16,10 @@ interface Props {
   endYm: string;
   /** 이 카드 자료 중 불러오지 못한 것이 있으면 다시 시도 — 자료가 없어도 카드를 숨기지 않는다(보완 A-4) */
   onRetry?: () => void;
+  /** 서버 공개 요약 빵부스러기 — 시군구 허브 링크 재료(없으면 링크 없음) */
+  breadcrumb?: PublicSummaryBreadcrumb | null;
+  /** 한 줄 + 허브 링크로 줄일까 — 기본 = 지역 페이지 열림 여부(결정 28). 시험은 직접 넣는다 */
+  compact?: boolean;
 }
 
 const W = 340;
@@ -124,8 +131,12 @@ function firstLast(items: RegionTrendItem[], key: "sale_price_median" | "jeonse_
   return vals.length > 0 ? [vals[0], vals[vals.length - 1]] : null;
 }
 
-/** S2 · 어떻게 변해 왔나 — 둘 다 비면 카드 숨김. 지역 통계의 중위 매매가는 예외로 보인다(부동산원 공식 통계) */
-export default function PriceTrendSection({ history, trend, endYm, onRetry }: Props) {
+/**
+ * S2 · 어떻게 변해 왔나 — 둘 다 비면 카드 숨김. 지역 통계의 중위 매매가는 예외로 보인다(부동산원 공식 통계).
+ * 지역(시군구) 흐름: 지역 페이지가 열리기 전(compact=false, 기본 = REGION_PAGES_ENABLED)엔 지금(#773)처럼 문장 + 2년 선 그래프,
+ * 열린 뒤(compact=true)엔 한 줄 + 시군구 허브 링크(결정 24 의 '반복 줄이기'를 3c 와 같이 — 결정 28).
+ */
+export default function PriceTrendSection({ history, trend, endYm, onRetry, breadcrumb = null, compact = REGION_PAGES_ENABLED }: Props) {
   const hasBands = !!history && history.months.length > 0;
   const items = trend?.items ?? [];
   const sale = firstLast(items, "sale_price_median");
@@ -137,6 +148,7 @@ export default function PriceTrendSection({ history, trend, endYm, onRetry }: Pr
   if (sale) parts.push(`중위 매매가 ${formatKoreanPrice(sale[0])}→${formatKoreanPrice(sale[1])}`);
   if (jeonse) parts.push(`전세가율 ${jeonse[0].toFixed(1)}%→${jeonse[1].toFixed(1)}%`);
   const period = items.length > 0 ? `${ymDot(items[0].period)}~${ymDot(items[items.length - 1].period)}` : "";
+  const hubHref = compact && breadcrumb ? regionHubPath(breadcrumb.sigungu_code) : null;
 
   return (
     <Card className="p-4 space-y-3" aria-labelledby="consumer-q2">
@@ -148,7 +160,19 @@ export default function PriceTrendSection({ history, trend, endYm, onRetry }: Pr
           <MonthBands history={history} endYm={endYm} />
         </div>
       )}
-      {hasTrend && trend && (
+      {hasTrend && trend && compact && (
+        <p className="text-sm" data-testid="consumer-region-sentence">
+          {trend.region_name} 아파트 2년 {parts.join(" · ")}
+          <span className="text-xs text-gray-400"> · {trend.source} {period}</span>
+          {hubHref && (
+            <>
+              {" "}
+              <Link href={hubHref} prefetch={false} className="text-xs text-blue-700 underline">{trend.region_name} 지역 정보</Link>
+            </>
+          )}
+        </p>
+      )}
+      {hasTrend && trend && !compact && (
         <div className="space-y-1">
           <p className="text-sm" data-testid="consumer-region-sentence">
             {trend.region_name} 아파트는 2년 동안 {parts.join(" · ")}

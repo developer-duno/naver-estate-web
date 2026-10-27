@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Complex, ArticleFilters } from "@/types";
 import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
@@ -13,6 +14,7 @@ import { tradeTypeSummary } from "./tradeTypeSummary";
 export const ComplexRow = memo(function ComplexRow({ complex, index, urlFilters, isCompared, compareFull, onToggleCompare }: { complex: Complex; index: number; urlFilters?: ArticleFilters; isCompared?: boolean; compareFull?: boolean; onToggleCompare?: (item: CompareItem) => void }) {
   const router = useRouter();
   const filterURL = buildFilterURL(`/complex/${complex.complex_no}`, undefined, urlFilters);
+  const href = filterURL || `/complex/${complex.complex_no}`;
   const year = complex.use_approve_ymd?.slice(0, 4);
   const articleCount = complex.article_count ?? 0;
   const tradeSummary = tradeTypeSummary(complex.trade_type_counts);
@@ -22,12 +24,15 @@ export const ComplexRow = memo(function ComplexRow({ complex, index, urlFilters,
   return (
     <tr
       className={`hover:bg-blue-50 cursor-pointer transition-colors border-b border-gray-200 ${isEven ? "bg-gray-50/60" : "bg-white"}`}
-      onClick={() => router.push(filterURL || `/complex/${complex.complex_no}`)}
+      onClick={() => router.push(href)}
       onMouseEnter={prefetch.onMouseEnter}
       onMouseLeave={prefetch.onMouseLeave}
     >
       <td className="px-3 py-2 text-gray-400 text-center text-xs border-r border-gray-100">{index}</td>
-      <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap border-r border-gray-100">{complex.complex_name}</td>
+      <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap border-r border-gray-100">
+        {/* 이름 글자만 진짜 링크(행 전체를 감싸지 않는다 — hydration) · 행 클릭과 두 번 이동하지 않게 전파 멈춤(세션 483 PR 3b) */}
+        <Link href={href} prefetch={false} className="hover:underline" onClick={(e) => e.stopPropagation()}>{complex.complex_name}</Link>
+      </td>
       <td className="px-3 py-2 text-gray-600 max-w-75 truncate border-r border-gray-100" title={complex.cortar_address || ""}>{complex.cortar_address || "-"}</td>
       <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.total_household_count ? complex.total_household_count.toLocaleString() : "-"}</td>
       <td className="px-3 py-2 text-right text-gray-700 whitespace-nowrap border-r border-gray-100">{complex.total_dong_count || "-"}</td>

@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Complex, ArticleFilters } from "@/types";
 import { ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
@@ -17,12 +18,13 @@ export const ComplexCardMobile = memo(function ComplexCardMobile({ complex, inde
   const tradeSummary = tradeTypeSummary(complex.trade_type_counts);
   const colorClass = complex.real_estate_type_name ? (ESTATE_TYPE_COLORS[complex.real_estate_type_name] ?? ESTATE_TYPE_DEFAULT_COLOR) : "";
   const filterURL = buildFilterURL(`/complex/${complex.complex_no}`, undefined, urlFilters);
+  const href = filterURL || `/complex/${complex.complex_no}`;
   const prefetch = useComplexPrefetch(complex.complex_no);
 
   return (
     <div
       className="bg-white rounded-lg shadow-sm border p-4 cursor-pointer hover:bg-blue-50 transition-colors active:bg-blue-100"
-      onClick={() => router.push(filterURL || `/complex/${complex.complex_no}`)}
+      onClick={() => router.push(href)}
       onMouseEnter={prefetch.onMouseEnter}
       onMouseLeave={prefetch.onMouseLeave}
     >
@@ -30,7 +32,8 @@ export const ComplexCardMobile = memo(function ComplexCardMobile({ complex, inde
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-400 shrink-0">{index}</span>
-            <span className="font-medium text-gray-900 truncate">{complex.complex_name}</span>
+            {/* 이름 글자만 진짜 링크 · 카드 클릭과 두 번 이동하지 않게 전파 멈춤(세션 483 PR 3b) */}
+            <Link href={href} prefetch={false} className="font-medium text-gray-900 truncate hover:underline" onClick={(e) => e.stopPropagation()}>{complex.complex_name}</Link>
             {complex.real_estate_type_name && (
               <span className={`text-sm px-2 py-1 rounded border shrink-0 ${colorClass}`}>{complex.real_estate_type_name}</span>
             )}

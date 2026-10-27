@@ -1,16 +1,6 @@
-import type { Metadata } from "next";
 import Script from "next/script";
 
-export const metadata: Metadata = {
-  title: "단지 상세",
-  description: "아파트·오피스텔 단지의 매물 목록, 시세 통계, 면적별 정보를 확인하세요.",
-  openGraph: {
-    title: "단지 상세 | 아파트·오피스텔",
-    description: "아파트·오피스텔 단지의 매물 목록, 시세 통계, 면적별 정보를 확인하세요",
-    images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
-  },
-  robots: { index: false, follow: true },
-};
+// 메타(제목·설명·canonical·robots)는 page.tsx generateMetadata 가 단지마다 정한다(세션 483 PR 3b — 옛 정적 noindex 삭제)
 
 export default function ComplexLayout({ children }: { children: React.ReactNode }) {
   const clientId = process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID;

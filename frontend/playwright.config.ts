@@ -1,6 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const port = Number(process.env.PLAYWRIGHT_PORT ?? 3000);
+// e2e API 주소 — 기본 = 가짜 API 서버(fake-api-server.mjs, 9999). CI 도 NEXT_PUBLIC_API_URL=http://localhost:9999
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:9999";
+const apiPort = Number(new URL(apiUrl).port || 9999);
 
 export default defineConfig({
   testDir: "./e2e",
@@ -82,14 +85,25 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    command: `npm run dev -- --webpack --port ${port}`,
-    port,
-    reuseExistingServer: true,
-    timeout: 180_000,
-    env: {
-      // CSP connect-src 가 http://localhost:* 만 허용하므로 API URL 을 localhost 로 고정
-      NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8002",
+  webServer: [
+    {
+      // 서버 렌더(ISR)가 Next 서버에서 직접 부르는 요청은 page.route 로 못 가로챈다 → 가짜 API 서버(세션 483 PR 3b · 설계 v2 O11).
+      // 포트 = API 주소의 포트(CI = 9999). 집 서버 백엔드(8002)·운영 API 는 부르지 않는다.
+      command: "node e2e/fixtures/fake-api-server.mjs",
+      port: apiPort,
+      reuseExistingServer: true,
+      timeout: 30_000,
+      env: { E2E_FAKE_API_PORT: String(apiPort) },
     },
-  },
+    {
+      command: `npm run dev -- --webpack --port ${port}`,
+      port,
+      reuseExistingServer: true,
+      timeout: 180_000,
+      env: {
+        // CSP connect-src 가 http://localhost:* 만 허용하므로 API URL 을 localhost 로 고정 — 기본값 = 가짜 API 서버
+        NEXT_PUBLIC_API_URL: apiUrl,
+      },
+    },
+  ],
 });

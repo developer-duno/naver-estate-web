@@ -119,7 +119,7 @@ export default function Footer() {
             </Link>
           </nav>
           <p className="text-xs text-gray-500">
-            © {year} 2u부동산 — 공인중개사를 위한 매물·시세 분석 도구
+            © {year} 2u부동산 — 아파트·오피스텔 실거래가·시세, 공인중개사 업무 도구
           </p>
         </div>
       </div>

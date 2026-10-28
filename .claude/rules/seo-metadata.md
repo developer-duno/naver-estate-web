@@ -68,6 +68,7 @@ grep -oE '<meta property="og:image" content="[^"]*"' .next/server/app/<page>.htm
   Suspense 안에 둔다. `"use client"` + useQuery 컴포넌트여도 정적 JSX 는 서버가 첫
   HTML 로 렌더하므로(QueryClientProvider 안이면 안전, suspense:false 기본) Suspense 밖
   배치 OK. 선례: `app/page.tsx` HomeHeader 를 Suspense 밖으로 분리.
+- **ISR·서버 렌더 공개 장의 조상 폴더(루트 포함)에 `loading.tsx` 를 두지 않는다** — 저장본 본문이 `<div hidden id="S:0">` 상자로 들어가 스크립트를 안 돌리는 봇에 안 보인다(세션 484 · 3b 적대 실측, loading 빼면 0). 가드 시험 `src/app/__tests__/no-loading-file.test.ts` 가 0개를 단언한다.
 
 ### 검증법
 

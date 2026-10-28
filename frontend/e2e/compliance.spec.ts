@@ -25,7 +25,7 @@ test.describe("광고법 컴플라이언스 회귀 가드", () => {
     ).toBeVisible();
   });
 
-  test("메인 H1 — '공인중개사를 위한 매물·시세 분석 도구' 정합", async ({
+  test("메인 H1 — '아파트·오피스텔 실거래가·시세 조회' 정합", async ({
     page,
   }) => {
     await applyPublicMocks(page);
@@ -33,7 +33,7 @@ test.describe("광고법 컴플라이언스 회귀 가드", () => {
 
     await expect(
       page.getByRole("heading", { level: 1 }),
-    ).toContainText("공인중개사를 위한 매물·시세 분석 도구");
+    ).toContainText("아파트·오피스텔 실거래가·시세 조회");
   });
 
   test("signup 마케팅 수신 동의 체크박스 — 개인정보보호법 정합", async ({

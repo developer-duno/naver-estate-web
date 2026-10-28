@@ -11,10 +11,12 @@ import type { DongPage, RegionComplexCard, RegionHub } from "@/types/region-page
 import { dongPagePath, regionHubPath, type Crumb } from "./complex-page";
 
 /**
- * 지역 장 색인 스위치(v2 O7) — false 면 지역 장 전부 robots noindex,follow(링크·장은 그대로).
+ * 지역 장 색인 스위치(v2 O7 · 결정 37) — false 면 지역 장 셋(/region·허브·동) 전부 robots "noindex, nofollow"(링크·장은 그대로).
+ * nofollow 인 까닭: 지금은 robots.txt 가 /complex/ 를 막고 있어, 로봇이 허브 표의 단지 링크를 따라가면 "설명 없는 색인"이 생긴다.
+ * 3c-2(robots 열기·학습 봇 묶음·Vercel Pro·서버 렌더 열쇠)에서 true 로 바꾼다 — true 면 indexable 따라 index,follow / noindex,follow.
  * 되돌리기 순서: ① 이것을 false 로 배포 → ② 서치콘솔에서 지역 장이 빠지는 것 확인 → ③ 그 뒤에야 robots·REGION_PAGES_ENABLED.
  */
-export const REGION_PAGES_INDEX = true;
+export const REGION_PAGES_INDEX = false;
 
 /** 전국 목록 주소 */
 export const REGION_INDEX_PATH = "/region";
@@ -34,11 +36,14 @@ export function sigunguLabel(sido: string, sigungu: string): string {
 
 /**
  * "{시도} {시군구}" — 같은 이름 구(중구·동구…)가 여러 시도에 있어 시도를 늘 붙인다(미분양 교훈).
- * 단 시도와 시군구가 같거나 시군구가 시도로 시작하면(세종 "세종시"·"제주시") 한 번만(v2 Y7).
+ * 단 시군구가 시도와 같거나 "{시도}시"(세종 "세종시"·제주 "제주시")면 한 번만(v2 Y7). "부산진구"처럼 시도로 시작할 뿐인 이름은 그대로 붙인다.
  */
+export function sidoRedundant(sido: string | null | undefined, sigungu: string): boolean {
+  return !sido || sido === sigungu || sigungu === `${sido}시`;
+}
+
 export function regionName(sido: string | null | undefined, sigungu: string): string {
-  if (!sido || sido === sigungu || sigungu.startsWith(sido)) return sigungu;
-  return `${sido} ${sigungu}`;
+  return sidoRedundant(sido, sigungu) ? sigungu : `${sido} ${sigungu}`;
 }
 
 /** 전국 목록 시도 순서(행정 표준 순) — 이름표에 없는 시도가 생기면 맨 뒤 */
@@ -108,7 +113,7 @@ export function hubDescription(h: RegionHub): string {
   const name = regionName(h.sido, h.sigungu_name);
   const out = [`${name} 아파트 단지 ${h.complex_count.toLocaleString()}곳·${h.dongs.length.toLocaleString()}개 동.`];
   const sale = latestRegionSale(h.region_trend);
-  const tail = "단지별 실거래가 범위·공시가격·관리비.";
+  const tail = "단지별 실거래가 범위·공시가격.";
   out.push(sale ? `최근 중위 매매가 ${formatKoreanPrice(sale.value)}(한국부동산원 ${ymDot(sale.period)}), ${tail}` : tail);
   return out.join(" ");
 }
@@ -127,11 +132,13 @@ export function dongDescription(d: DongPage): string {
 
 // ── 메타 ───────────────────────────────────────────────────────────────
 
-function robotsOf(index: boolean): Metadata["robots"] {
-  return index ? { index: true, follow: true } : { index: false, follow: true };
+/** 색인 스위치가 꺼져 있으면 noindex,nofollow(결정 37) · 켜져 있으면 indexable 따라 index,follow / noindex,follow */
+export function regionRobots(indexable: boolean, indexSwitch: boolean = REGION_PAGES_INDEX): Metadata["robots"] {
+  if (!indexSwitch) return { index: false, follow: false };
+  return indexable ? { index: true, follow: true } : { index: false, follow: true };
 }
 
-function pageMeta(title: string, description: string, url: string, index: boolean): Metadata {
+function pageMeta(title: string, description: string, url: string, robots: Metadata["robots"]): Metadata {
   return {
     title,
     description,
@@ -147,25 +154,25 @@ function pageMeta(title: string, description: string, url: string, index: boolea
       images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
     },
     twitter: { card: "summary_large_image", title, description },
-    robots: robotsOf(index),
+    robots,
   };
 }
 
 export function indexMetadata(index: boolean = REGION_PAGES_INDEX): Metadata {
   return pageMeta(
     INDEX_TITLE,
-    "전국 시도·시군구별 아파트 단지의 실거래가 범위·공시가격·관리비·동네 통계를 누구나 무료로.",
+    "전국 시도·시군구별 아파트 단지의 실거래가 범위·공시가격·동네 통계를 누구나 무료로.",
     REGION_INDEX_PATH,
-    index,
+    regionRobots(true, index),
   );
 }
 
 export function hubMetadata(h: RegionHub, index: boolean = REGION_PAGES_INDEX): Metadata {
-  return pageMeta(hubTitle(h), hubDescription(h), regionHubPath(h.sigungu_code), h.indexable && index);
+  return pageMeta(hubTitle(h), hubDescription(h), regionHubPath(h.sigungu_code), regionRobots(h.indexable, index));
 }
 
 export function dongMetadata(d: DongPage, index: boolean = REGION_PAGES_INDEX): Metadata {
-  return pageMeta(dongTitle(d), dongDescription(d), dongPagePath(d.sigungu_code, d.dong_code), d.indexable && index);
+  return pageMeta(dongTitle(d), dongDescription(d), dongPagePath(d.sigungu_code, d.dong_code), regionRobots(d.indexable, index));
 }
 
 // ── 빵부스러기 ──────────────────────────────────────────────────────────
@@ -181,7 +188,8 @@ export function indexCrumbs(): Crumb[] {
 /** 홈 › 시도(글자 — 시도 페이지 없음) › 시군구 */
 export function hubCrumbs(h: Pick<RegionHub, "sido" | "sigungu_code" | "sigungu_name">): Crumb[] {
   const out: Crumb[] = [{ name: "홈", href: "/" }];
-  if (h.sido && h.sido !== h.sigungu_name) out.push({ name: h.sido, href: null });
+  // 시도 단계 = 제목과 같은 규칙(세종: 홈 › 세종시)
+  if (!sidoRedundant(h.sido, h.sigungu_name)) out.push({ name: h.sido!, href: null });
   out.push({ name: h.sigungu_name, href: regionHubPath(h.sigungu_code) });
   return out;
 }
@@ -193,11 +201,14 @@ export function dongCrumbs(d: Pick<DongPage, "sido" | "sigungu_code" | "sigungu_
 
 // ── 단지 표 ─────────────────────────────────────────────────────────────
 
-/** 사실 배지 — 등급 글자(A/B/C)는 화면에 안 보인다(결정 33). 글자 상수는 여기 한 곳 */
+/**
+ * 사실 배지 — 등급 글자(A/B/C)는 화면에 안 보인다(결정 33). 글자는 결정 38: A = 최근 2년 실거래 · B = 실거래 없음 ·
+ * C = 빈칸(배지 요소를 그리지 않는다). 글자 상수는 여기 한 곳
+ */
 export const GRADE_LABELS: Record<RegionComplexCard["grade"], string> = {
-  A: "실거래 있음",
-  B: "공시가격·관리비만",
-  C: "공공 자료 없음",
+  A: "최근 2년 실거래",
+  B: "실거래 없음",
+  C: "",
 };
 
 export function gradeLabel(grade: RegionComplexCard["grade"]): string {

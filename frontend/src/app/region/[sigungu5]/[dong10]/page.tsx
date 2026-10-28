@@ -3,11 +3,11 @@
  *
  * 빌드 때는 그리지 않고 첫 요청 때 그려 하루 저장한다. 쿠키·세션 안 읽음.
  * 본문 = 빵부스러기(시군구 = 허브 링크) · h1 · 한 줄 · 단지 표(전부, 준공 포함) · 행정동별 동네 정보 · 다른 동 칩 + 시군구 전체 보기.
- * 동 페이지가 사라진 옛 주소(그 동이 허브엔 있음) = 허브 안 그 동 묶음으로 308 · 그 밖 = 404 — 판정은 lib/server/region-pages.ts loadDong.
+ * 동 페이지가 사라진 옛 주소(그 동이 허브엔 있음) = 허브 안 그 동 묶음으로 307(임시 — 되살아날 수 있다) · 그 밖 = 404 — 판정은 lib/server/region-pages.ts loadDong.
  */
 import Link from "next/link";
 import type { Metadata } from "next";
-import { loadDong } from "@/lib/server/region-pages";
+import { loadDong, resolveDong } from "@/lib/server/region-pages";
 import { dongPagePath, regionHubPath } from "@/lib/seo/complex-page";
 import {
   dongCrumbs,
@@ -31,7 +31,11 @@ type PageProps = { params: Promise<{ sigungu5: string; dong10: string }> };
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { sigungu5, dong10 } = await params;
-  return dongMetadata(await loadDong(sigungu5, dong10));
+  const r = await resolveDong(sigungu5, dong10);
+  // 이동(307)·404 는 페이지 본문 한 곳에서만 던진다(보완 F11) — 그 경우 메타는 최소(색인·따라가기 안 함)만.
+  // 같은 요청의 판정은 cache 로 한 번만(loadDong 도 기본값이면 인자 2개로 부른다). 첫 요청 location 두 줄은 원인 미상 — region-pages.ts 주석.
+  if (r.kind !== "page") return { robots: { index: false, follow: false } };
+  return dongMetadata(r.page);
 }
 
 export default async function DongPageView({ params }: PageProps) {

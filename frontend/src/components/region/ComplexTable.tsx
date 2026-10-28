@@ -16,7 +16,7 @@ export function recentRangeText(c: RegionComplexCard): string | null {
 const BADGE_CLASS: Record<RegionComplexCard["grade"], string> = {
   A: "border-blue-200 bg-blue-50 text-blue-800",
   B: "border-gray-200 bg-gray-50 text-gray-700",
-  C: "border-gray-200 bg-white text-gray-500",
+  C: "",
 };
 
 /**
@@ -48,30 +48,37 @@ export default function ComplexTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {complexes.map((c) => (
-            <tr key={c.complex_no}>
-              <td className="px-3 py-2">
-                <Link href={complexPath(c.complex_no)} prefetch={false} className="font-medium text-blue-700 hover:underline">
-                  {c.name}
-                </Link>
-              </td>
-              <td className="px-3 py-2 text-right tabular-nums">
-                {c.household_count != null ? `${c.household_count.toLocaleString()}세대` : "—"}
-              </td>
-              {showYear && (
-                <td className="px-3 py-2 text-right tabular-nums">{c.use_approve_year != null ? `${c.use_approve_year}년` : "—"}</td>
-              )}
-              <td className="px-3 py-2">{recentRangeText(c) ?? "—"}</td>
-              <td className="px-3 py-2 text-right tabular-nums">
-                {c.official_price != null ? formatKoreanPrice(wonToManwon(c.official_price)) : "—"}
-              </td>
-              <td className="px-3 py-2">
-                <span className={`inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-xs ${BADGE_CLASS[c.grade]}`}>
-                  {gradeLabel(c.grade)}
-                </span>
-              </td>
-            </tr>
-          ))}
+          {complexes.map((c) => {
+            const badge = gradeLabel(c.grade);
+            return (
+              <tr key={c.complex_no}>
+                {/* 단지 이름 = 행 머리(화면 읽기 프로그램이 칸마다 단지 이름을 같이 읽게) */}
+                <th scope="row" className="px-3 py-2 text-left font-normal">
+                  <Link href={complexPath(c.complex_no)} prefetch={false} className="font-medium text-blue-700 hover:underline">
+                    {c.name}
+                  </Link>
+                </th>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {c.household_count != null ? `${c.household_count.toLocaleString()}세대` : "—"}
+                </td>
+                {showYear && (
+                  <td className="px-3 py-2 text-right tabular-nums">{c.use_approve_year != null ? `${c.use_approve_year}년` : "—"}</td>
+                )}
+                <td className="px-3 py-2">{recentRangeText(c) ?? "—"}</td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {c.official_price != null ? formatKoreanPrice(wonToManwon(c.official_price)) : "—"}
+                </td>
+                <td className="px-3 py-2">
+                  {/* 글자가 빈 등급(C — 공공 자료 없음)은 배지를 그리지 않는다(결정 38) */}
+                  {badge && (
+                    <span className={`inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-xs ${BADGE_CLASS[c.grade]}`}>
+                      {badge}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

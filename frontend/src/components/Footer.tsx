@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
+import { REGION_PAGES_ENABLED } from "@/lib/seo/complex-page";
 
 export default function Footer() {
   const year = new Date().getFullYear();
@@ -111,14 +112,17 @@ export default function Footer() {
             >
               고쳤습니다
             </Link>
-            {/* 지역 장 입구(결정 34) — 미리 받기 끔(모든 장 푸터에 있어 켜 두면 /region 을 장마다 미리 그린다, v2 O3) */}
-            <Link
-              href="/region"
-              prefetch={false}
-              className="text-gray-700 hover:text-blue-600 hover:underline"
-            >
-              지역별 실거래가
-            </Link>
+            {/* 지역 장 입구(결정 34) — 지역 장이 열렸을 때만(플래그 false 배포 때 404 링크 방지) ·
+                미리 받기 끔(모든 장 푸터에 있어 켜 두면 /region 을 장마다 미리 그린다, v2 O3) */}
+            {REGION_PAGES_ENABLED && (
+              <Link
+                href="/region"
+                prefetch={false}
+                className="text-gray-700 hover:text-blue-600 hover:underline"
+              >
+                지역별 실거래가
+              </Link>
+            )}
             <Link
               href="/help"
               className="text-gray-700 hover:text-blue-600 hover:underline"

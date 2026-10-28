@@ -1,6 +1,6 @@
 /**
  * 전국 지역 목록(/region, 세션 484 PR 3c-1b · B4 · 메인 결정 10-28 ⓐ) — 백엔드 호출 0 · h1 하나 · 시도 17묶음(<section id=시도>) ·
- * 시군구 허브 링크 253(색인 밖 영양군 포함) · 빵부스러기 · 메타(canonical /region · 색인 스위치).
+ * 시군구 허브 링크 253(색인 밖 영양군 포함) · 빵부스러기 · 메타(canonical /region · 색인 스위치 꺼짐 = noindex,nofollow, 결정 37).
  * 실행: npx vitest run src/app/region/__tests__/page.test.tsx
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -39,11 +39,11 @@ describe("/region 목록", () => {
     expect(container.querySelector('section[id="세종"] a')!.textContent).toBe("세종시");
   });
 
-  it("빵부스러기 홈 › 전국 · 메타 canonical /region · index(색인 스위치 true)", () => {
+  it("빵부스러기 홈 › 전국 · 메타 canonical /region · noindex,nofollow(색인 스위치 꺼짐 — 3c-2 에서 켠다)", () => {
     render(<RegionIndexPage />);
     expect(screen.getByRole("navigation", { name: "현재 위치" }).textContent).toBe("홈›전국");
     expect(metadata.alternates?.canonical).toBe("/region");
-    expect(metadata.robots).toEqual({ index: true, follow: true });
+    expect(metadata.robots).toEqual({ index: false, follow: false });
     expect(metadata.title).toBe("전국 아파트 실거래가·공시가격 — 시도·시군구별");
   });
 });

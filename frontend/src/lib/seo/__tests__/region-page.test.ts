@@ -1,6 +1,7 @@
 /**
  * 지역 페이지 글자(세션 484 PR 3c-1b · B3) — 제목·설명(실제 숫자만, 없으면 문장째 뺌)·같은 이름 시도 한 번(세종·제주시)·
- * canonical·og siteName/locale/이미지·robots 네 갈래(indexable × 색인 스위치)·빵부스러기·옛 코드 표·사실 배지·정렬.
+ * canonical·og siteName/locale/이미지·robots 네 갈래(indexable × 색인 스위치 — 스위치 false = noindex,nofollow, 결정 37)·
+ * 빵부스러기(세종은 시도 단계 생략)·옛 코드 표·사실 배지(결정 38)·정렬.
  * 실행: npx vitest run src/lib/seo/__tests__/region-page.test.ts
  */
 import { describe, expect, it } from "vitest";
@@ -39,10 +40,11 @@ describe("이름", () => {
     expect(regionName("서울", "중구")).toBe("서울 중구");
   });
 
-  it("시도와 같거나 시도로 시작하면 한 번만(세종시·제주시) · 시도가 없으면 시군구만", () => {
+  it("시도와 같거나 '{시도}시'면 한 번만(세종시·제주시) · 시도로 시작할 뿐이면 그대로(부산진구) · 시도가 없으면 시군구만", () => {
     expect(regionName("세종", "세종시")).toBe("세종시");
     expect(regionName("제주", "제주시")).toBe("제주시");
     expect(regionName("세종", "세종")).toBe("세종");
+    expect(regionName("부산", "부산진구")).toBe("부산 부산진구");
     expect(regionName(null, "유성구")).toBe("유성구");
   });
 
@@ -64,13 +66,13 @@ describe("제목", () => {
 describe("설명 — 실제 숫자만", () => {
   it("허브 = 단지 N곳·M개 동 + 지역 마지막 달 중위 매매가(한국부동산원 YYYY.MM)", () => {
     expect(hubDescription(makeHub())).toBe(
-      "대전 유성구 아파트 단지 16곳·2개 동. 최근 중위 매매가 4억 600만(한국부동산원 2026.09), 단지별 실거래가 범위·공시가격·관리비.",
+      "대전 유성구 아파트 단지 16곳·2개 동. 최근 중위 매매가 4억 600만(한국부동산원 2026.09), 단지별 실거래가 범위·공시가격.",
     );
   });
 
   it("허브 — 지역 추이가 없으면 중위 문장째 뺀다 · 마지막 달 값이 비면 값 있는 달", () => {
     expect(hubDescription(makeHub({ region_trend: null }))).toBe(
-      "대전 유성구 아파트 단지 16곳·2개 동. 단지별 실거래가 범위·공시가격·관리비.",
+      "대전 유성구 아파트 단지 16곳·2개 동. 단지별 실거래가 범위·공시가격.",
     );
     const t = makeTrend();
     t.items[2] = { ...t.items[2], sale_price_median: null };
@@ -105,19 +107,27 @@ describe("메타", () => {
     expect(indexMetadata().alternates?.canonical).toBe("/region");
   });
 
-  it("robots 네 갈래 — indexable && 색인 스위치일 때만 index", () => {
+  it("robots 네 갈래 — 스위치 켜짐: indexable 이면 index,follow 아니면 noindex,follow · 스위치 꺼짐: 늘 noindex,nofollow(결정 37)", () => {
     const yes = { index: true, follow: true };
     const no = { index: false, follow: true };
-    expect(REGION_PAGES_INDEX).toBe(true);
+    const off = { index: false, follow: false };
     expect(hubMetadata(makeHub({ indexable: true }), true).robots).toEqual(yes);
     expect(hubMetadata(makeHub({ indexable: false }), true).robots).toEqual(no);
-    expect(hubMetadata(makeHub({ indexable: true }), false).robots).toEqual(no);
-    expect(hubMetadata(makeHub({ indexable: false }), false).robots).toEqual(no);
+    expect(hubMetadata(makeHub({ indexable: true }), false).robots).toEqual(off);
+    expect(hubMetadata(makeHub({ indexable: false }), false).robots).toEqual(off);
     expect(dongMetadata(makeDong({ indexable: true }), true).robots).toEqual(yes);
     expect(dongMetadata(makeDong({ indexable: false }), true).robots).toEqual(no);
-    expect(dongMetadata(makeDong({ indexable: true }), false).robots).toEqual(no);
+    expect(dongMetadata(makeDong({ indexable: true }), false).robots).toEqual(off);
     expect(indexMetadata(true).robots).toEqual(yes);
-    expect(indexMetadata(false).robots).toEqual(no);
+    expect(indexMetadata(false).robots).toEqual(off);
+  });
+
+  it("3c-1b 배포 = 색인 스위치 꺼짐 → 세 장 모두 noindex, nofollow(3c-2 에서 켠다)", () => {
+    const off = { index: false, follow: false };
+    expect(REGION_PAGES_INDEX).toBe(false);
+    expect(hubMetadata(makeHub()).robots).toEqual(off);
+    expect(dongMetadata(makeDong()).robots).toEqual(off);
+    expect(indexMetadata().robots).toEqual(off);
   });
 
   it("기본값 = 색인 스위치", () => {
@@ -128,6 +138,11 @@ describe("메타", () => {
 describe("빵부스러기", () => {
   it("목록 = 홈 › 전국", () => {
     expect(indexCrumbs()).toEqual([{ name: "홈", href: "/" }, { name: "전국", href: "/region" }]);
+  });
+
+  it("세종 = 홈 › 세종시(시도 단계 생략 — 제목과 같은 규칙) · 부산진구 = 시도 단계 있음", () => {
+    expect(hubCrumbs(makeHub({ sigungu_code: "36110", sido: "세종", sigungu_name: "세종시" })).map((c) => c.name)).toEqual(["홈", "세종시"]);
+    expect(hubCrumbs(makeHub({ sigungu_code: "26230", sido: "부산", sigungu_name: "부산진구" })).map((c) => c.name)).toEqual(["홈", "부산", "부산진구"]);
   });
 
   it("허브 = 홈 › 시도(글자) › 시군구 · 동 = 홈 › 시도 › 시군구(허브 링크) › 동", () => {
@@ -180,10 +195,10 @@ describe("표·앵커·옛 코드", () => {
     expect(HUB_DONG_LIMIT).toBe(12);
   });
 
-  it("사실 배지 — 등급 글자 대신 사실(결정 33)", () => {
-    expect(gradeLabel("A")).toBe("실거래 있음");
-    expect(gradeLabel("B")).toBe("공시가격·관리비만");
-    expect(gradeLabel("C")).toBe("공공 자료 없음");
+  it("사실 배지 — 등급 글자 대신 사실(결정 33·38): A 최근 2년 실거래 · B 실거래 없음 · C 빈칸", () => {
+    expect(gradeLabel("A")).toBe("최근 2년 실거래");
+    expect(gradeLabel("B")).toBe("실거래 없음");
+    expect(gradeLabel("C")).toBe("");
     for (const label of Object.values(GRADE_LABELS)) expect(label).not.toMatch(/\b[ABC]\b/);
   });
 

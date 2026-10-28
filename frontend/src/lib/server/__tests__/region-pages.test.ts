@@ -1,6 +1,6 @@
 /**
  * 지역 페이지 재료 받기(서버 전용, 세션 484 PR 3c-1b · B2) —
- * 모양 아님(5자리·10자리·동 코드가 시군구로 시작) = 백엔드를 부르지 않고 404 · 백엔드 404 = 404(동은 허브에 있으면 허브#동 308) ·
+ * 모양 아님(5자리·10자리·동 코드가 시군구로 시작) = 백엔드를 부르지 않고 404 · 백엔드 404 = 404(동은 허브에 있으면 허브#동 307 임시 이동) ·
  * 429·5xx = throw · 열쇠 머리 · 하루 revalidate · 플래그 false = 세 장 모두 404 · 옛 코드 = 새 허브 308.
  * 실행: npx vitest run src/lib/server/__tests__/region-pages.test.ts
  */
@@ -130,12 +130,13 @@ describe("loadDong", () => {
     expect((await loadDong("30200", "3020011800")).dong_name).toBe("봉명동");
   });
 
-  it("동 페이지 404 인데 허브에 그 동이 있으면 = 허브 안 그 동 묶음으로 308(사라진 옛 주소)", async () => {
+  it("동 페이지 404 인데 허브에 그 동이 있으면 = 허브 안 그 동 묶음으로 307 임시 이동(되살아날 수 있어 영구 이동 아님)", async () => {
     fetchMock.mockImplementation(async (url: string) => (url.includes("/dongs/") ? json(404) : json(200, makeHub())));
     const e = await caught(loadDong("30200", "3020012900"));
     expect(isNotFound(e)).toBe(false);
     expect(redirectOf(e)).toContain("/region/30200#3020012900");
-    expect(redirectOf(e)).toContain("308");
+    expect(redirectOf(e)).toContain(";307;");
+    expect(redirectOf(e)).not.toContain("308");
   });
 
   it("허브에도 없는 동 코드 · 없는 시군구 = notFound", async () => {

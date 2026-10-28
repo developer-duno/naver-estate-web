@@ -13,6 +13,7 @@ import { useArticleFavorites } from "@/hooks/useArticleFavorites";
 import { useSessionToken } from "@/hooks/useSessionToken";
 import { useFavoritePriceChanges } from "@/hooks/useFavoritePriceChanges";
 import Link from "next/link";
+import { REGION_PAGES_ENABLED } from "@/lib/seo/complex-page";
 
 /** 홈 상단 — hero 이미지 + 타이틀 + 통계 (SEO 랜딩 자산). Suspense 밖에서 렌더해 h1·소개가 첫 HTML 에 포함. */
 function HomeHeader() {
@@ -88,10 +89,12 @@ function HomeHeader() {
             </p>
           </div>
         )}
-        {/* 지역 장 입구(결정 34) — 미리 받기 끔(v2 O3) */}
-        <p className="mt-3 text-sm">
-          <Link href="/region" prefetch={false} className="text-blue-600 hover:underline">지역별 실거래가 보기 →</Link>
-        </p>
+        {/* 지역 장 입구(결정 34) — 지역 장이 열렸을 때만(플래그 false 배포 때 404 링크 방지) · 미리 받기 끔(v2 O3) */}
+        {REGION_PAGES_ENABLED && (
+          <p className="mt-3 text-sm">
+            <Link href="/region" prefetch={false} className="text-blue-600 hover:underline">지역별 실거래가 보기 →</Link>
+          </p>
+        )}
       </section>
     </>
   );

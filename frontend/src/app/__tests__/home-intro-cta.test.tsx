@@ -20,6 +20,15 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/",
 }));
 
+// next/link 가짜 — prefetch 값을 data-prefetch 로 드러낸다(지역 입구 링크의 미리 받기 끔 확인, 세션 484 PR 3c-1b 보완 F3)
+vi.mock("next/link", async () => {
+  const React = await import("react");
+  return {
+    default: ({ children, href, prefetch, ...props }: { children: React.ReactNode; href: string; prefetch?: boolean }) =>
+      React.createElement("a", { href, "data-prefetch": String(prefetch), ...props }, children),
+  };
+});
+
 vi.mock("@/lib/api", () => ({
   getStats: vi.fn().mockResolvedValue({ complex_count: 100, article_count: 200 }),
   getRegions: vi.fn().mockResolvedValue({}),
@@ -60,7 +69,9 @@ describe("홈 — 서비스 소개 문단과 가입 버튼", () => {
   it("소개 절 끝 '지역별 실거래가 보기 →' → /region (세션 484 PR 3c-1b · 결정 34) — 로그인 여부와 무관", () => {
     sessionState.sessionToken = "token";
     renderHome();
-    expect(screen.getByRole("link", { name: "지역별 실거래가 보기 →" })).toHaveAttribute("href", "/region");
+    const link = screen.getByRole("link", { name: "지역별 실거래가 보기 →" });
+    expect(link).toHaveAttribute("href", "/region");
+    expect(link).toHaveAttribute("data-prefetch", "false"); // 미리 받기 끔(v2 O3)
   });
 
   it("비로그인(세션 확인 끝·토큰 없음)이면 '무료로 시작하기' → /signup 버튼이 보인다", () => {

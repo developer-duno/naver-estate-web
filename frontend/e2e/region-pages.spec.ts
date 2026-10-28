@@ -13,15 +13,30 @@ test.describe("지역 장", () => {
     await expect(page.getByRole("heading", { level: 1, name: "대전 유성구 아파트 실거래가·공시가격" })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "유성구 동 목록" }).locator("a")).toHaveCount(2);
     await expect(page.locator('section[id="3020011800"] tbody tr')).toHaveCount(12);
-    await expect(page.getByRole("link", { name: "봉명동 단지 전체 13곳 →" })).toHaveAttribute("href", "/region/30200/3020011800");
+    await expect(page.getByRole("link", { name: "햇살동 단지 전체 13곳 →" })).toHaveAttribute("href", "/region/30200/3020011800");
     await expect(page.locator('section[id="3020012300"] tbody tr')).toHaveCount(2);
+    await expect(page.getByTestId("region-trend")).toBeVisible();
+  });
+
+  test("지역 추이가 없는 허브 — 200 · 흐름 카드 없음 · 한 줄에 자료 기준 없음", async ({ page }) => {
+    const res = await page.goto("/region/11110");
+    expect(res?.status()).toBe(200);
+    await expect(page.locator("h1")).toHaveCount(1);
+    await expect(page.getByTestId("region-trend")).toHaveCount(0);
+    await expect(page.getByTestId("region-hub-line")).toHaveText("단지 1곳 · 동 1곳");
+  });
+
+  test("동 페이지가 없는 동 주소 = 허브 안 그 동 묶음으로 307(임시 이동)", async ({ request }) => {
+    const res = await request.get("/region/30200/3020012300", { maxRedirects: 0 });
+    expect(res.status()).toBe(307);
+    expect(res.headers()["location"]).toContain("/region/30200#3020012300");
   });
 
   test("동 장 — 200 · h1 하나 · 단지 13곳 · 동네 정보 카드", async ({ page }) => {
     const res = await page.goto("/region/30200/3020011800");
     expect(res?.status()).toBe(200);
     await expect(page.locator("h1")).toHaveCount(1);
-    await expect(page.getByRole("heading", { level: 1, name: "대전 유성구 봉명동 아파트 실거래가·공시가격" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "대전 유성구 햇살동 아파트 실거래가·공시가격" })).toBeVisible();
     await expect(page.locator("table tbody tr")).toHaveCount(13);
     await expect(page.getByTestId("dong-neighborhood-card")).toHaveCount(1);
   });

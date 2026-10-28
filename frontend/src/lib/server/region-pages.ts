@@ -6,7 +6,8 @@ import "server-only";
  * (진짜 지역이 404 로 하루 굳지 않게). 모양 검사(시군구 5자리·동 10자리·동 코드가 시군구 코드로 시작)는 백엔드 부르기 전.
  * REGION_PAGES_ENABLED=false 면 세 장(/region·허브·동) 모두 notFound — 플래그를 되돌리면 장도 같이 사라진다(v2 O7).
  */
-import { notFound, permanentRedirect } from "next/navigation";
+import { cache } from "react";
+import { notFound, permanentRedirect, redirect } from "next/navigation";
 import { REGION_PAGES_ENABLED, regionHubPath } from "@/lib/seo/complex-page";
 import { REGION_CODES } from "@/lib/seo/region-codes";
 import { REGION_CODE_REDIRECTS, dongAnchor, regionIndexGroups, type RegionIndexGroup } from "@/lib/seo/region-page";
@@ -82,19 +83,40 @@ export async function loadHub(
   return hub;
 }
 
+/** 동 주소 판정 결과 — 던지지 않는다(메타 함수와 페이지가 같이 쓴다) */
+export type DongResolution =
+  | { kind: "page"; page: DongPage }
+  | { kind: "moved"; to: string }
+  | { kind: "notFound" };
+
 /**
- * 동 페이지 재료 — 플래그 false·모양 아님(동 코드가 시군구 코드로 시작 안 함 포함) = notFound.
- * 백엔드 404 면: 그 동이 허브에 있으면(단지 수가 줄어 동 페이지만 사라진 옛 주소) 허브 안 그 동 묶음으로 permanentRedirect,
- * 허브에도 없는 동(없는 코드)·없는 시군구면 notFound(v2 실패 길).
+ * 동 주소 판정 — 플래그 false·모양 아님(동 코드가 시군구 코드로 시작 안 함 포함) = notFound.
+ * 백엔드 404 면: 그 동이 허브에 있으면(단지 수가 줄어 동 페이지만 사라진 옛 주소) 허브 안 그 동 묶음으로 임시 이동(moved —
+ * 단지 수가 9↔10곳을 오가면 동 페이지가 되살아나므로 307, 영구 이동 아님), 허브에도 없는 동(없는 코드)·없는 시군구면 notFound(v2 실패 길).
+ * 429·5xx 는 throw 그대로(404 로 굳히지 않는다). React cache 로 감싸 같은 요청 안 generateMetadata·page 두 호출이 백엔드를 한 번만 부른다.
+ */
+export const resolveDong = cache(
+  async (sigungu5: string, dong10: string, enabled: boolean = REGION_PAGES_ENABLED): Promise<DongResolution> => {
+    if (!enabled || !isDongOf(sigungu5, dong10)) return { kind: "notFound" };
+    const page = await fetchDongPage(sigungu5, dong10);
+    if (page) return { kind: "page", page };
+    const hub = await fetchRegionHub(sigungu5);
+    if (hub?.dongs.some((d) => d.dong_code === dong10)) {
+      return { kind: "moved", to: `${regionHubPath(sigungu5)}${dongAnchor(dong10)}` };
+    }
+    return { kind: "notFound" };
+  },
+);
+
+/**
+ * 동 페이지 재료(페이지 본문 전용) — 판정이 moved 면 307 redirect, notFound 면 notFound().
+ * 이동은 여기 한 곳에서만 던진다(generateMetadata 는 최소 메타만 — 보완 F11). 첫 요청(ISR MISS)의 location 머리 두 줄은
+ * 이 구조로도 남는다 — 원인 미상(Next 16.4.0 첫 렌더 추정), 값이 같아 무해 · Vercel 라이브에서 재측정(세션 484 재검사 🟡2).
  */
 export async function loadDong(sigungu5: string, dong10: string, enabled: boolean = REGION_PAGES_ENABLED): Promise<DongPage> {
-  if (!enabled) notFound();
-  if (!isDongOf(sigungu5, dong10)) notFound();
-  const page = await fetchDongPage(sigungu5, dong10);
-  if (page) return page;
-  const hub = await fetchRegionHub(sigungu5);
-  if (hub?.dongs.some((d) => d.dong_code === dong10)) {
-    permanentRedirect(`${regionHubPath(sigungu5)}${dongAnchor(dong10)}`);
-  }
-  notFound();
+  // React cache 는 인자 개수까지 키로 쓴다 — 기본값일 땐 generateMetadata(인자 2개)와 같은 칸을 쓰게 2개로 부른다(재검사 🟡1)
+  const r = enabled === REGION_PAGES_ENABLED ? await resolveDong(sigungu5, dong10) : await resolveDong(sigungu5, dong10, enabled);
+  if (r.kind === "moved") redirect(r.to);
+  if (r.kind === "notFound") notFound();
+  return r.page;
 }

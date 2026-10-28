@@ -19,7 +19,7 @@ function card(no, name, over = {}) {
   };
 }
 
-/** 동 페이지 있는 동(봉명동) 13곳 — 허브에선 12곳 + 전체 링크 */
+/** 동 페이지 있는 동(햇살동) 13곳 — 허브에선 12곳 + 전체 링크 */
 const BIG = Array.from({ length: 13 }, (_, i) =>
   card(String(900100 + i), `햇살마을${i + 1}단지`, {
     household_count: 1300 - i * 100,
@@ -44,7 +44,7 @@ const TREND = {
   ],
 };
 
-export const SITEMAP_CODES = { hubs: ["30200"], dongs: ["3020011800"] };
+export const SITEMAP_CODES = { hubs: ["30200", "11110"], dongs: ["3020011800"] };
 
 /** 시군구 5자리 → 허브(없으면 404) */
 export const HUBS = {
@@ -56,17 +56,32 @@ export const HUBS = {
     complex_count: BIG.length + SMALL.length,
     region_trend: TREND,
     dongs: [
-      { dong_code: "3020011800", dong_name: "봉명동", has_page: true, indexable: true, complex_count: BIG.length, complexes: BIG },
-      { dong_code: "3020012300", dong_name: "달빛동", has_page: false, indexable: false, complex_count: SMALL.length, complexes: SMALL },
+      { dong_code: "3020011800", dong_name: "햇살동", has_page: true, indexable: true, complex_count: BIG.length, complexes: BIG },
+      // 동 페이지 없는 작은 동 — public-summary-mocks.mjs "100001"·"200000" 의 동(3020012300 봉명동)과 같은 코드·이름.
+      // /region/30200/3020012300 은 동 창구 404 + 허브엔 있음 → 허브#동 307(사라진 동 페이지 갈래)
+      { dong_code: "3020012300", dong_name: "봉명동", has_page: false, indexable: false, complex_count: SMALL.length, complexes: SMALL },
     ],
   },
+};
+
+/** 지역 추이가 없는 허브(부동산원 통계 없음) — 흐름 카드가 안 그려지는 갈래 */
+HUBS["11110"] = {
+  sigungu_code: "11110",
+  sido: "서울",
+  sigungu_name: "종로구",
+  indexable: true,
+  complex_count: 1,
+  region_trend: { region_code: "11110", region_name: "종로구", source: "한국부동산원 전국주택가격동향조사", items: [] },
+  dongs: [
+    { dong_code: "1111010100", dong_name: "별빛동", has_page: false, indexable: false, complex_count: 1, complexes: [card("900301", "별빛마을")] },
+  ],
 };
 
 /** 동 10자리 → 동 페이지(없으면 404 — 동 페이지 없는 작은 동 포함) */
 export const DONGS = {
   "3020011800": {
     dong_code: "3020011800",
-    dong_name: "봉명동",
+    dong_name: "햇살동",
     sido: "대전",
     sigungu_code: "30200",
     sigungu_name: "유성구",

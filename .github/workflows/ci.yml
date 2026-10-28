@@ -39,6 +39,9 @@ jobs:
             frontend:
               - 'frontend/**'
               - '.github/workflows/ci.yml'
+              # 지역 이름표(frontend/src/lib/seo/region-codes.ts)는 이 JSON 의 복사본 — 백엔드만 고친 PR 에서도
+              # 대조 시험(region-codes.test.ts)이 돌아야 어긋남을 잡는다(세션 484 PR 3c-1b 맹점 🟠4, 세션 403 선례와 같은 구멍).
+              - 'backend/data/region_codes.json'
             backend:
               - 'backend/**'
               - 'scripts/**'

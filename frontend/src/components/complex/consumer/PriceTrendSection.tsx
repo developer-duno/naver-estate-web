@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { formatChartPrice, formatKoreanPrice } from "@/lib/format";
 import LoadRetry from "./LoadRetry";
 import { monthsEndingAt, ymDot, ymShort } from "./consumer-format";
-import { LINE_H, TrendLine, firstLast } from "./trend-line";
+import { LINE_H, TREND_W as W, TrendLine, firstLast } from "./trend-line";
 
 interface Props {
   history: PublicPriceHistory | null | undefined;
@@ -23,7 +23,7 @@ interface Props {
   compact?: boolean;
 }
 
-const W = 340;
+// 그림 폭 W = trend-line.tsx 의 TREND_W(띠 그래프·지역 선 그래프가 같은 폭 — 상수는 한 곳)
 const BAND_H = 130;
 const TOP = 12;
 const BOTTOM = 108;

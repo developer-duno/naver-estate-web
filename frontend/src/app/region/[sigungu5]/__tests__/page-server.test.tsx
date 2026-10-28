@@ -1,6 +1,7 @@
 /**
  * 시군구 허브 서버 렌더(세션 484 PR 3c-1b · B5) — ISR 설정 · h1 하나 · 한 줄 · 2년 흐름 카드 · 동 칩(동 페이지 = 링크 / 작은 동 = 앵커) ·
- * 동 묶음 앵커 id · 동 페이지 있는 동 12곳 + 전체 링크(결정 35) · 작은 동 전부 · 사실 배지(등급 글자 0, 결정 33) · JSON-LD · 메타 · 404/throw.
+ * 동 묶음 앵커 id · 동 페이지 있는 동 12곳 + 전체 링크(결정 35) · 작은 동 전부 · 사실 배지(등급 글자 0 · C 빈칸, 결정 33·38) ·
+ * 단지 이름 = 행 머리(th scope=row) · JSON-LD · 메타(색인 스위치 꺼짐 = noindex,nofollow) · 404/throw.
  * 실행: npx vitest run "src/app/region/[sigungu5]/__tests__/page-server.test.tsx"
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -68,7 +69,7 @@ describe("허브 본문", () => {
     expect(big).not.toBeNull();
     const rows = big.querySelectorAll("tbody tr");
     expect(rows).toHaveLength(12);
-    const households = [...rows].map((r) => r.querySelectorAll("td")[1].textContent);
+    const households = [...rows].map((r) => r.querySelectorAll("td")[0].textContent);
     expect(households[0]).toBe("1,200세대");
     expect(households[11]).toBe("100세대");
     expect(big.textContent).not.toContain("햇살마을13단지"); // 세대수 없는 단지는 맨 뒤라 13번째 → 동 페이지에서
@@ -86,13 +87,17 @@ describe("허브 본문", () => {
     expect(small.textContent).not.toContain("전체");
   });
 
-  it("단지 표 칸 — 이름 링크 · 대표 면적 6개월 범위(없으면 —) · 공시가격 · 사실 배지(등급 글자 A/B/C 단독 0)", async () => {
+  it("단지 표 칸 — 이름 = 행 머리 링크 · 대표 면적 6개월 범위(없으면 —) · 공시가격 · 사실 배지(A 최근 2년 실거래 · B 실거래 없음 · C 빈칸, 등급 글자 0)", async () => {
     const { container } = await renderPage();
     const small = container.querySelector('section[id="3020012900"]') as HTMLElement;
-    const cells = [...small.querySelectorAll("tbody tr")].map((r) => [...r.querySelectorAll("td")].map((td) => td.textContent));
-    expect(cells[0]).toEqual(["달빛마을2단지", "300세대", "—", "3억 1,000만", "공시가격·관리비만"]);
-    expect(cells[1]).toEqual(["달빛마을1단지", "120세대", "—", "—", "공공 자료 없음"]);
-    expect(cells[2]).toEqual(["달빛마을3단지", "80세대", "84㎡ 4억~4억 4,000만", "3억 1,000만", "실거래 있음"]);
+    const rowsEl = [...small.querySelectorAll("tbody tr")];
+    for (const r of rowsEl) expect(r.firstElementChild!.matches('th[scope="row"]')).toBe(true);
+    const cells = rowsEl.map((r) => [...r.querySelectorAll("th, td")].map((td) => td.textContent));
+    expect(cells[0]).toEqual(["달빛마을2단지", "300세대", "—", "3억 1,000만", "실거래 없음"]);
+    expect(cells[1]).toEqual(["달빛마을1단지", "120세대", "—", "—", ""]);
+    expect(cells[2]).toEqual(["달빛마을3단지", "80세대", "84㎡ 4억~4억 4,000만", "3억 1,000만", "최근 2년 실거래"]);
+    // C 행의 자료 칸엔 배지 요소 자체가 없다(결정 38)
+    expect(rowsEl[1].querySelectorAll("td")[3].querySelector("span")).toBeNull();
     expect(small.querySelector("a")!.getAttribute("href")).toBe("/complex/9202");
     const texts = [...container.querySelectorAll("td, span, a, p, h2")].map((el) => el.textContent?.trim());
     expect(texts.filter((t) => t === "A" || t === "B" || t === "C")).toEqual([]);
@@ -109,11 +114,11 @@ describe("허브 본문", () => {
 });
 
 describe("메타·404", () => {
-  it("generateMetadata — 제목·canonical·robots", async () => {
+  it("generateMetadata — 제목·canonical·robots(색인 스위치 꺼짐 = noindex,nofollow, 결정 37)", async () => {
     const m = await generateMetadata(params("30200"));
     expect(m.title).toBe("대전 유성구 아파트 실거래가·공시가격");
     expect(m.alternates?.canonical).toBe("/region/30200");
-    expect(m.robots).toEqual({ index: true, follow: true });
+    expect(m.robots).toEqual({ index: false, follow: false });
   });
 
   it("문자 코드 = 백엔드 안 부르고 404 · 백엔드 404 = 404 · 5xx = throw(404 아님)", async () => {

@@ -16,8 +16,11 @@ import {
 import type { OfficialPriceItem } from "@/types";
 import type { PublicSummary, PublicSummaryAreaRange } from "@/types/public-summary";
 
-/** 지역 페이지(/region/*)가 열렸나 — PR 3c 에서 true. false 동안 지역 이름은 글자만(404 로 가는 링크 금지) */
-export const REGION_PAGES_ENABLED = false;
+/**
+ * 지역 페이지(/region/*)가 열렸나 — 세션 484 PR 3c-1b 에서 true. false 면 지역 이름은 글자만(404 로 가는 링크 금지)이고
+ * 지역 장 셋(/region·허브·동)도 notFound(v2 O7 — 플래그를 되돌리면 장도 같이 사라진다). 색인만 끄는 스위치 = region-page.ts REGION_PAGES_INDEX.
+ */
+export const REGION_PAGES_ENABLED = true;
 
 export function complexPath(no: string): string {
   return `/complex/${no}`;
@@ -162,7 +165,8 @@ export function complexCrumbs(s: PublicSummary, regionPages: boolean = REGION_PA
     if (bc.sido) out.push({ name: bc.sido, href: null });
     if (bc.sigungu_name) out.push({ name: bc.sigungu_name, href: regionPages ? hub : null });
     if (bc.dong_name) {
-      const dongHref = bc.dong_has_page ? dongPagePath(bc.sigungu_code, bc.dong_code) : hub;
+      // 동 페이지가 없는 동 = 허브 안 그 동 묶음(앵커, v2 O3)
+      const dongHref = bc.dong_has_page ? dongPagePath(bc.sigungu_code, bc.dong_code) : `${hub}#${bc.dong_code}`;
       out.push({ name: bc.dong_name, href: regionPages ? dongHref : null });
     }
   }
@@ -174,13 +178,25 @@ function absolute(path: string): string {
   return new URL(path, SITE_URL).toString();
 }
 
+/** 주소에서 앵커(#…)를 뗀 경로 */
+function pathOnly(href: string): string {
+  return href.split("#")[0];
+}
+
 /**
  * BreadcrumbList — 화면 빵부스러기에서 갈 페이지가 있는 단계만 싣는다.
  * 구글 문서(2026-09-08 갱신): 마지막 단계가 아니면 item(주소)이 필수 — 주소 없는 시도·(플래그 false 동안) 시군구·동을
  * item 없이 넣으면 "item 누락" 오류가 된다. 그래서 그 단계는 JSON-LD 에서 뺀다(position 은 남은 단계로 다시 센다).
+ * 같은 경로(앵커 뗀 주소)가 두 번이면 뒤 단계를 뺀다 — 동 페이지 없는 동(허브#동코드)이 허브와 같은 주소가 되지 않게(🟡9).
  */
 export function breadcrumbJsonLd(crumbs: Crumb[]): Record<string, unknown> {
-  const linked = crumbs.filter((c) => c.href != null) as { name: string; href: string }[];
+  const seen = new Set<string>();
+  const linked = (crumbs.filter((c) => c.href != null) as { name: string; href: string }[]).filter((c) => {
+    const p = pathOnly(c.href);
+    if (seen.has(p)) return false;
+    seen.add(p);
+    return true;
+  });
   return {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",

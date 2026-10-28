@@ -91,23 +91,34 @@ describe("메타", () => {
 });
 
 describe("빵부스러기", () => {
-  it("지역 페이지 플래그는 3b 동안 false", () => {
-    expect(REGION_PAGES_ENABLED).toBe(false);
+  it("지역 페이지 플래그는 3c-1b 부터 true(기본값 = 플래그)", () => {
+    expect(REGION_PAGES_ENABLED).toBe(true);
+    expect(complexCrumbs(makeSummary())).toEqual(complexCrumbs(makeSummary(), true));
   });
 
-  it("플래그 false — 홈 › 시도 › 시군구 › 동 › 단지, /region 주소 0", () => {
-    const crumbs = complexCrumbs(makeSummary());
+  it("플래그 false(인자) — 홈 › 시도 › 시군구 › 동 › 단지, /region 주소 0", () => {
+    const crumbs = complexCrumbs(makeSummary(), false);
     expect(crumbs.map((c) => c.name)).toEqual(["홈", "대전", "유성구", "봉명동", "햇살마을"]);
     expect(crumbs.map((c) => c.href)).toEqual(["/", null, null, null, "/complex/6139"]);
     expect(JSON.stringify(breadcrumbJsonLd(crumbs))).not.toContain("/region");
   });
 
-  it("플래그 true — 시군구 = 허브, 동 = 동 페이지(있으면)·없으면 허브 · 시도는 늘 글자만", () => {
+  it("플래그 true — 시군구 = 허브, 동 = 동 페이지(있으면)·없으면 허브 안 그 동 앵커(v2 O3) · 시도는 늘 글자만", () => {
     expect(complexCrumbs(makeSummary(), true).map((c) => c.href)).toEqual([
       "/", null, "/region/30200", "/region/30200/3020011800", "/complex/6139",
     ]);
     const noPage = makeSummary({ breadcrumb: { ...makeSummary().breadcrumb!, dong_has_page: false } });
-    expect(complexCrumbs(noPage, true)[3].href).toBe("/region/30200");
+    expect(complexCrumbs(noPage, true)[3].href).toBe("/region/30200#3020011800");
+  });
+
+  it("동 페이지 없는 동 — JSON-LD 에서 허브와 같은 경로(앵커 뗀 주소)가 두 번이면 뒤 단계(동)를 뺀다(🟡9)", () => {
+    const noPage = makeSummary({ breadcrumb: { ...makeSummary().breadcrumb!, dong_has_page: false } });
+    const ld = breadcrumbJsonLd(complexCrumbs(noPage, true)) as { itemListElement: { name: string; item: string; position: number }[] };
+    expect(ld.itemListElement.map((e) => e.name)).toEqual(["홈", "유성구", "햇살마을"]);
+    expect(ld.itemListElement.map((e) => e.position)).toEqual([1, 2, 3]);
+    const paths = ld.itemListElement.map((e) => new URL(e.item).pathname);
+    expect(new Set(paths).size).toBe(paths.length);
+    expect(JSON.stringify(ld)).not.toContain("#");
   });
 
   it("지역이 없으면 홈 › 단지", () => {

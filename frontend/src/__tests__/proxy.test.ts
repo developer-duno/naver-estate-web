@@ -184,4 +184,24 @@ describe("proxy — 단지 번호 모양이 아니면 그리기 전에 404 (세�
     expect(res.status).toBe(200);
     expect(supa.calls).toBe(1);
   });
+
+  // 지역 장도 같은 방식(세션 484 PR 3c-1b · v2 Y5) — 시군구 5자리·동 10자리가 아니면 그리기 전에 404
+  it.each(["/region/abc", "/region/3020", "/region/302000", "/region/30200/abc", "/region/30200/302001180", "/region/abc/3020011800"])(
+    "%s → 찾을 수 없음 경로로 바꿔 보냄 · 세션 조회 0",
+    async (p) => {
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+      vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-test");
+      const res = await proxy(new NextRequest(`https://2u.pe.kr${p}`));
+      expect(rewriteOf(res)).toBe("https://2u.pe.kr/__complex-not-found");
+      expect(supa.calls).toBe(0);
+    },
+  );
+
+  it.each(["/region", "/region/30200", "/region/30200/", "/region/30200/3020011800"])("%s(모양 맞음)는 그대로 통과", async (p) => {
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "anon-test");
+    const res = await proxy(new NextRequest(`https://2u.pe.kr${p}`));
+    expect(rewriteOf(res)).toBe("");
+    expect(res.status).toBe(200);
+  });
 });

@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "2u부동산 — 공인중개사 매물·시세 분석 도구";
+export const alt = "2u부동산 — 아파트 실거래가·공시가격";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -69,8 +69,8 @@ export default function OpengraphImage() {
             marginBottom: 24,
           }}
         >
-          <div style={{ display: "flex" }}>공인중개사를 위한</div>
-          <div style={{ display: "flex" }}>부동산 매물·시세 분석 도구</div>
+          <div style={{ display: "flex" }}>아파트·오피스텔</div>
+          <div style={{ display: "flex" }}>실거래가·공시가격 조회</div>
         </div>
         <div
           style={{
@@ -79,7 +79,7 @@ export default function OpengraphImage() {
             textAlign: "center",
           }}
         >
-          전국 단지 시세 · 미분양 · 실거래가 · 평당가 비교
+          누구나 무료 · 공인중개사 업무 도구 · 2u부동산
         </div>
         <div
           style={{

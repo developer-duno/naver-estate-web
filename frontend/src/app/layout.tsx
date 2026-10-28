@@ -33,14 +33,18 @@ export const viewport = {
 const GOOGLE_VERIFICATION = process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION;
 const NAVER_VERIFICATION = process.env.NEXT_PUBLIC_NAVER_SITE_VERIFICATION;
 
+// 사이트 제목·설명 (세션 484 PR 3c-1a · 결정 6·31). "누구나 무료" 는 결제 재개 때 정정 — 루트 CLAUDE.md 재개 체크리스트 ⑤
+const SITE_TITLE = "아파트·오피스텔 실거래가·공시가격 조회 — 누구나 무료";
+const SITE_DESCRIPTION =
+  "전국 아파트·오피스텔의 실거래가 범위·공시가격·관리비·동네 통계를 누구나 무료로. 공인중개사는 네이버 매물·시세까지 한 번에.";
+
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "공인중개사를 위한 부동산 매물·시세 분석 도구 | 2u부동산",
+    default: `${SITE_TITLE} | 2u부동산`,
     template: "%s | 2u부동산",
   },
-  description:
-    "공인중개사가 빠르게 매물·시세·미분양·실거래가를 한 번에 분석하는 전국 부동산 데이터 도구. 실시간 단지 시세, 평당가 비교, 미분양 현황 제공.",
+  description: SITE_DESCRIPTION,
   alternates: {
     canonical: "/",
   },
@@ -49,16 +53,14 @@ export const metadata: Metadata = {
     locale: "ko_KR",
     siteName: "2u부동산",
     url: SITE_URL,
-    title: "공인중개사를 위한 부동산 매물·시세 분석 도구",
-    description:
-      "공인중개사가 빠르게 매물·시세·미분양을 분석하는 전국 부동산 데이터 도구",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "공인중개사를 위한 부동산 매물·시세 분석 도구",
-    description:
-      "공인중개사가 빠르게 매물·시세·미분양을 분석하는 전국 부동산 데이터 도구",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
   },
   robots: {
     index: true,
@@ -94,7 +96,7 @@ export default function RootLayout({
         <WebSiteJsonLd
           name="2u부동산"
           url={SITE_URL}
-          description="공인중개사를 위한 부동산 매물·시세 분석 도구"
+          description={SITE_DESCRIPTION}
         />
         <a
           href="#main-content"

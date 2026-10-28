@@ -219,7 +219,7 @@ export default function SearchExperience({ emptyExtra }: Props) {
   useEffect(() => {
     document.title = hasSearchParams
       ? `${title} - 아파트·오피스텔`
-      : "공인중개사를 위한 매물·시세 분석 도구";
+      : "아파트·오피스텔 실거래가·시세 조회";
   }, [title, hasSearchParams]);
 
   const handleTabChange = (types: string[]) => {

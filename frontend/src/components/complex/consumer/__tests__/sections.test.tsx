@@ -10,7 +10,7 @@ import PriceRangeSection from "../PriceRangeSection";
 import PriceTrendSection, { JEONSE_MIN_SPAN, axisRange, trendPoints } from "../PriceTrendSection";
 import { END_YM, HOOD, OFFICIAL, SUBWAY, makeComplex, makeHistory, makeTrend } from "./fixtures";
 
-/** 서버 공개 요약 빵부스러기 — 링크 재료(플래그 false 동안 링크 0 확인용) */
+/** 서버 공개 요약 빵부스러기 — 링크 재료(compact 기본값 판정·링크 주소 확인용) */
 const BREADCRUMB = {
   sido: "대전", sigungu_code: "30200", sigungu_name: "유성구",
   dong_code: "3020012300", dong_name: "봉명동", dong_has_page: true,
@@ -162,7 +162,7 @@ describe("S2 어떻게 변해 왔나", () => {
     expect(bands.querySelector('[data-month="202501"]')).toBeNull(); // 빈 달은 비움
     expect(bands.textContent).toContain("24.11");
     expect(bands.textContent).toContain("26.10");
-    // 지역 페이지가 열리기 전(기본 = REGION_PAGES_ENABLED false)엔 #773 그대로 — 문장 + 2년 선 그래프(결정 28)
+    // 빵부스러기가 없으면(기본 compact = 플래그 && 빵부스러기 → false) #773 그대로 — 문장 + 2년 선 그래프(결정 28)
     expect(screen.getByTestId("consumer-region-sentence").textContent).toBe(
       "유성구 아파트는 2년 동안 중위 매매가 4억→4억 600만 · 전세가율 69.2%→69.5%",
     );
@@ -170,7 +170,7 @@ describe("S2 어떻게 변해 왔나", () => {
     expect(container.querySelector('a[href^="/region"]')).toBeNull();
   });
 
-  it("두 선 양 끝 값 라벨 — 4억 / 4억 600만 · 69.2% / 69.5%(플래그 false = 그래프 있음)", () => {
+  it("두 선 양 끝 값 라벨 — 4억 / 4억 600만 · 69.2% / 69.5%(빵부스러기 없음 = 그래프 있음)", () => {
     render(<PriceTrendSection history={null} trend={makeTrend()} endYm={END_YM} />);
     const sale = screen.getByTestId("trend-sale_price_median");
     const jeonse = screen.getByTestId("trend-jeonse_ratio");
@@ -187,6 +187,19 @@ describe("S2 어떻게 변해 왔나", () => {
     );
     expect(container.querySelector("[data-testid^='trend-']")).toBeNull();
     expect(container.querySelector('a[href="/region/30200"]')).not.toBeNull();
+  });
+
+  it("기본 compact(결정 30) — 빵부스러기가 있으면 한 줄 + 허브 링크(동 페이지 유무 무관), 없으면 선 그래프", () => {
+    const { container, rerender } = render(
+      <PriceTrendSection history={null} trend={makeTrend()} endYm={END_YM} breadcrumb={{ ...BREADCRUMB, dong_has_page: false }} />,
+    );
+    expect(container.querySelector("[data-testid^='trend-']")).toBeNull();
+    expect(container.querySelector('a[href="/region/30200"]')).not.toBeNull();
+    rerender(<PriceTrendSection history={null} trend={makeTrend()} endYm={END_YM} breadcrumb={BREADCRUMB} />);
+    expect(container.querySelector('a[href="/region/30200"]')).not.toBeNull();
+    rerender(<PriceTrendSection history={null} trend={makeTrend()} endYm={END_YM} breadcrumb={null} />);
+    expect(container.querySelector("[data-testid^='trend-']")).not.toBeNull();
+    expect(container.querySelector('a[href^="/region"]')).toBeNull();
   });
 
   it("축 범위 — 전세가율은 최소 5%p(좁으면 가운데 ±2.5), 그 밖은 최소~최대 + 10% 여백 · 0부터 아님", () => {
@@ -223,8 +236,10 @@ describe("S2 어떻게 변해 왔나", () => {
 });
 
 describe("S3 주변은 어떤가", () => {
-  it("지하철 3역 · 동네 숫자 · 위험 칩 2 — 지역 페이지가 열리기 전(기본)엔 #773 그대로(결정 28)", () => {
-    const { container } = render(<NeighborhoodSection stations={SUBWAY.stations} neighborhood={HOOD} breadcrumb={BREADCRUMB} />);
+  it("지하철 3역 · 동네 숫자 · 위험 칩 2 — 동 페이지 없는 작은 동(기본 compact false)엔 #773 그대로(결정 28·30)", () => {
+    const { container } = render(
+      <NeighborhoodSection stations={SUBWAY.stations} neighborhood={HOOD} breadcrumb={{ ...BREADCRUMB, dong_has_page: false }} />,
+    );
     expect(screen.getByText("갑천역")).toBeInTheDocument();
     expect(screen.getByText("1.1km")).toBeInTheDocument();
     expect(screen.getByText("대전1호선 · 직선거리")).toBeInTheDocument();
@@ -238,6 +253,18 @@ describe("S3 주변은 어떤가", () => {
     expect(screen.getByText("산사태 위험지도 영향 동")).toBeInTheDocument();
     expect(screen.getByText(HOOD.source)).toBeInTheDocument();
     expect(container.querySelector('a[href^="/region"]')).toBeNull();
+  });
+
+  it("기본 compact(결정 30) — 동 페이지 있는 동 = 한 줄 + 동 페이지 링크 · 없는 동 = 전부(링크 0) · 빵부스러기 없음 = 전부", () => {
+    const { container, rerender } = render(<NeighborhoodSection stations={[]} neighborhood={HOOD} breadcrumb={BREADCRUMB} />);
+    expect(container.querySelector('a[href="/region/30200/3020012300"]')).not.toBeNull();
+    expect(container.textContent).not.toMatch(/위험지도|사업체/);
+    rerender(<NeighborhoodSection stations={[]} neighborhood={HOOD} breadcrumb={{ ...BREADCRUMB, dong_has_page: false }} />);
+    expect(container.textContent).toContain("사업체 4,819곳");
+    expect(container.textContent).toContain("홍수 위험지도 영향 동");
+    expect(container.querySelector('a[href^="/region"]')).toBeNull();
+    rerender(<NeighborhoodSection stations={[]} neighborhood={HOOD} breadcrumb={null} />);
+    expect(container.textContent).toContain("사업체 4,819곳");
   });
 
   it("위험 영향 없으면 칩 없음", () => {

@@ -42,8 +42,10 @@ export default function NearbyComplexes({
   const near = s.nearby_scope === "near";
   const place = s.nearby_scope === "sigungu" ? bc.sigungu_name : bc.dong_name;
   const title = near ? "가까운 단지" : place ? `${place} 다른 단지` : "가까운 다른 단지";
+  // 범위가 시군구면 허브 · 동이면 동 페이지, 동 페이지가 없는 동은 허브 안 그 동 묶음(앵커, v2 O3)
+  const hub = regionHubPath(bc.sigungu_code);
   const allHref =
-    s.nearby_scope !== "sigungu" && bc.dong_has_page ? dongPagePath(bc.sigungu_code, bc.dong_code) : regionHubPath(bc.sigungu_code);
+    s.nearby_scope === "sigungu" ? hub : bc.dong_has_page ? dongPagePath(bc.sigungu_code, bc.dong_code) : `${hub}#${bc.dong_code}`;
 
   return (
     <section aria-labelledby="nearby-complexes" className="space-y-2" data-testid="nearby-complexes">
@@ -64,7 +66,8 @@ export default function NearbyComplexes({
       </ul>
       {regionPages ? (
         <p className="text-xs text-gray-500">
-          <Link href={allHref} className="text-blue-700 hover:underline">
+          {/* 미리 받기 끔 — 단지 장을 열 때마다 허브·동 장을 미리 그리게 되면 서버 렌더가 몇 배(v2 O3) */}
+          <Link href={allHref} prefetch={false} className="text-blue-700 hover:underline">
             {place ?? "이 지역"} 단지 전체({s.nearby_total}곳) 보기
           </Link>
         </p>

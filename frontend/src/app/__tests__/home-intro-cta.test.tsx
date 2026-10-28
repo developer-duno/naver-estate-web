@@ -57,6 +57,12 @@ describe("홈 — 서비스 소개 문단과 가입 버튼", () => {
     expect(screen.getByRole("link", { name: "사용 가이드" })).toHaveAttribute("href", "/help");
   });
 
+  it("소개 절 끝 '지역별 실거래가 보기 →' → /region (세션 484 PR 3c-1b · 결정 34) — 로그인 여부와 무관", () => {
+    sessionState.sessionToken = "token";
+    renderHome();
+    expect(screen.getByRole("link", { name: "지역별 실거래가 보기 →" })).toHaveAttribute("href", "/region");
+  });
+
   it("비로그인(세션 확인 끝·토큰 없음)이면 '무료로 시작하기' → /signup 버튼이 보인다", () => {
     renderHome();
     expect(screen.getByRole("link", { name: "무료로 시작하기" })).toHaveAttribute("href", "/signup");

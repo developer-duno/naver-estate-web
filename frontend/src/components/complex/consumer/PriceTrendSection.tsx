@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import type { PublicPriceHistory, RegionTrend, RegionTrendItem } from "@/types";
+import type { PublicPriceHistory, RegionTrend } from "@/types";
 import type { PublicSummaryBreadcrumb } from "@/types/public-summary";
 import { REGION_PAGES_ENABLED, regionHubPath } from "@/lib/seo/complex-page";
 import { Card } from "@/components/ui/card";
 import { formatChartPrice, formatKoreanPrice } from "@/lib/format";
 import LoadRetry from "./LoadRetry";
 import { monthsEndingAt, ymDot, ymShort } from "./consumer-format";
+import { LINE_H, TrendLine, firstLast } from "./trend-line";
 
 interface Props {
   history: PublicPriceHistory | null | undefined;
@@ -18,7 +19,7 @@ interface Props {
   onRetry?: () => void;
   /** 서버 공개 요약 빵부스러기 — 시군구 허브 링크 재료(없으면 링크 없음) */
   breadcrumb?: PublicSummaryBreadcrumb | null;
-  /** 한 줄 + 허브 링크로 줄일까 — 기본 = 지역 페이지 열림 여부(결정 28). 시험은 직접 넣는다 */
+  /** 한 줄 + 허브 링크로 줄일까 — 기본 = 지역 페이지가 열렸고 빵부스러기(시군구)가 있을 때(결정 28·30). 시험은 직접 넣는다 */
   compact?: boolean;
 }
 
@@ -60,83 +61,15 @@ function MonthBands({ history, endYm }: { history: PublicPriceHistory; endYm: st
   );
 }
 
-/** 지역 흐름 그림 높이·위아래 여백(값 라벨 자리) */
-const LINE_H = 96;
-const LINE_TOP = 16;
-const LINE_BOTTOM = 16;
-/** 전세가율 축 최소 폭(%p) — 1%p 오르내림이 칸 높이 전체로 보이는 과장을 막는다(메인 결정 2026-10-26) */
-export const JEONSE_MIN_SPAN = 5;
-
-/**
- * 축 범위 [아래, 위] — 값 범위가 minSpan 미만이면 가운데 ± minSpan/2 로 고정, 아니면 최소~최대 + 위아래 10% 여백.
- * 0부터 시작하지 않는다. 값이 하나뿐이면(폭 0) 그 값 ±5%.
- */
-export function axisRange(nums: number[], minSpan = 0): [number, number] {
-  const lo = Math.min(...nums);
-  const hi = Math.max(...nums);
-  const span = hi - lo;
-  if (minSpan > 0 && span < minSpan) {
-    const mid = (lo + hi) / 2;
-    return [mid - minSpan / 2, mid + minSpan / 2];
-  }
-  const pad = span > 0 ? span * 0.1 : Math.abs(lo) * 0.05 || 1;
-  return [lo - pad, hi + pad];
-}
-
-type TrendKey = "sale_price_median" | "jeonse_ratio";
-
-/** 선 하나의 점 좌표 — 값이 없는 달은 건너뛴다 */
-export function trendPoints(items: RegionTrendItem[], key: TrendKey): { x: number; y: number; v: number }[] {
-  const vals = items.map((it) => it[key]);
-  const nums = vals.filter((v): v is number => v != null);
-  if (nums.length === 0) return [];
-  const [lo, hi] = axisRange(nums, key === "jeonse_ratio" ? JEONSE_MIN_SPAN : 0);
-  const plot = LINE_H - LINE_TOP - LINE_BOTTOM;
-  const step = items.length > 1 ? W / (items.length - 1) : 0;
-  const out: { x: number; y: number; v: number }[] = [];
-  vals.forEach((v, i) => {
-    if (v == null) return;
-    out.push({ x: i * step, y: LINE_TOP + ((hi - v) / (hi - lo)) * plot, v });
-  });
-  return out;
-}
-
-/** 선 + 양 끝 값 라벨(첫 달·마지막 달). 매매가 라벨은 점 위, 전세가율 라벨은 점 아래 — 두 선 라벨이 덜 겹치게 */
-function TrendLine({ items, k, color, fmt }: { items: RegionTrendItem[]; k: TrendKey; color: string; fmt: (v: number) => string }) {
-  const pts = trendPoints(items, k);
-  if (pts.length === 0) return null;
-  const ends = pts.length > 1 ? [pts[0], pts[pts.length - 1]] : [pts[0]];
-  const below = k === "jeonse_ratio";
-  return (
-    <g data-testid={`trend-${k}`}>
-      <polyline fill="none" stroke={color} strokeWidth="2" points={pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} />
-      {ends.map((p, i) => (
-        <text
-          key={i}
-          x={i === 0 ? 2 : W - 2}
-          y={below ? Math.min(LINE_H - 2, p.y + 13) : Math.max(10, p.y - 5)}
-          fontSize="10"
-          fill={color}
-          textAnchor={i === 0 ? "start" : "end"}
-        >
-          {fmt(p.v)}
-        </text>
-      ))}
-    </g>
-  );
-}
-
-function firstLast(items: RegionTrendItem[], key: "sale_price_median" | "jeonse_ratio"): [number, number] | null {
-  const vals = items.map((it) => it[key]).filter((v): v is number => v != null);
-  return vals.length > 0 ? [vals[0], vals[vals.length - 1]] : null;
-}
+// 지역 흐름 선 그래프 부품은 trend-line.tsx 로 옮겼다(세션 484 PR 3c-1b — 허브 서버 렌더와 같이 씀). 시험 호환을 위해 다시 내보낸다
+export { JEONSE_MIN_SPAN, axisRange, trendPoints } from "./trend-line";
 
 /**
  * S2 · 어떻게 변해 왔나 — 둘 다 비면 카드 숨김. 지역 통계의 중위 매매가는 예외로 보인다(부동산원 공식 통계).
- * 지역(시군구) 흐름: 지역 페이지가 열리기 전(compact=false, 기본 = REGION_PAGES_ENABLED)엔 지금(#773)처럼 문장 + 2년 선 그래프,
- * 열린 뒤(compact=true)엔 한 줄 + 시군구 허브 링크(결정 24 의 '반복 줄이기'를 3c 와 같이 — 결정 28).
+ * 지역(시군구) 흐름: 지역 페이지가 열렸고 빵부스러기가 있으면(compact 기본) 한 줄 + 시군구 허브 링크(결정 28·30 — 허브는 지역 있는 단지면 늘 있다),
+ * 아니면 지금(#773)처럼 문장 + 2년 선 그래프.
  */
-export default function PriceTrendSection({ history, trend, endYm, onRetry, breadcrumb = null, compact = REGION_PAGES_ENABLED }: Props) {
+export default function PriceTrendSection({ history, trend, endYm, onRetry, breadcrumb = null, compact = REGION_PAGES_ENABLED && !!breadcrumb }: Props) {
   const hasBands = !!history && history.months.length > 0;
   const items = trend?.items ?? [];
   const sale = firstLast(items, "sale_price_median");

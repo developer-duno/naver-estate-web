@@ -16,7 +16,7 @@ interface Props {
   onRetry?: () => void;
   /** 서버 공개 요약 빵부스러기 — 동 페이지·허브 링크 재료(없으면 링크 없음) */
   breadcrumb?: PublicSummaryBreadcrumb | null;
-  /** 동네 통계를 한 줄 + 링크로 줄일까 — 기본 = 지역 페이지 열림 여부(결정 28). 시험은 직접 넣는다 */
+  /** 동네 통계를 한 줄 + 링크로 줄일까 — 기본 = 지역 페이지가 열렸고 이 동에 동 페이지가 있을 때만(결정 28·30 — 작은 동은 전부). 시험은 직접 넣는다 */
   compact?: boolean;
 }
 
@@ -42,8 +42,11 @@ export function neighborhoodLine(n: NeighborhoodInfo): string {
   return parts.join(" · ");
 }
 
-/** 지금(#773)의 동네 통계 — 칸·집 종류 띠·위험지도 칩. 지역 페이지가 열리기 전엔 이것을 그대로 보인다(결정 28) */
-function NeighborhoodFull({ n }: { n: NeighborhoodInfo }) {
+/**
+ * 지금(#773)의 동네 통계 — 칸·집 종류 띠·위험지도 칩. 동 페이지가 없는 동의 단지 화면은 이것을 그대로 보인다(결정 28·30).
+ * 동 페이지(서버 컴포넌트)도 행정동마다 이것을 그대로 쓴다(세션 484 PR 3c-1b — 모양 변경 0).
+ */
+export function NeighborhoodFull({ n }: { n: NeighborhoodInfo }) {
   const stats: { label: string; value: string; note?: string }[] = [];
   if (n.population != null) {
     stats.push({ label: "사는 사람", value: peopleText(n.population), note: n.avg_age != null ? `평균 ${Math.round(n.avg_age)}세` : undefined });
@@ -96,10 +99,10 @@ function NeighborhoodFull({ n }: { n: NeighborhoodInfo }) {
 
 /**
  * S3 · 주변은 어떤가 — 지하철·동네 둘 다 없으면 카드 숨김. 지하철 거리는 늘 그대로.
- * 동네 통계: 지역 페이지가 열리기 전(compact=false, 기본 = REGION_PAGES_ENABLED)엔 지금(#773)처럼 칸·띠·위험지도 전부,
- * 열린 뒤(compact=true)엔 한 줄 + 동 페이지(없으면 시군구 허브) 링크(결정 24 의 '반복 줄이기'를 3c 와 같이 — 결정 28).
+ * 동네 통계: 동 페이지가 있는 동(compact 기본 = REGION_PAGES_ENABLED && dong_has_page)이면 한 줄 + "동네 정보 더 보기"(동 페이지),
+ * 동 페이지가 없는 작은 동·지역 페이지가 닫혀 있으면 지금(#773)처럼 칸·띠·위험지도 전부(결정 28·30).
  */
-export default function NeighborhoodSection({ stations, neighborhood: n, onRetry, breadcrumb = null, compact = REGION_PAGES_ENABLED }: Props) {
+export default function NeighborhoodSection({ stations, neighborhood: n, onRetry, breadcrumb = null, compact = REGION_PAGES_ENABLED && !!breadcrumb?.dong_has_page }: Props) {
   if (stations.length === 0 && !n && !onRetry) return null;
   const lines = [...new Set(stations.flatMap((s) => s.lines.map(normalizeLineName)))];
   const line = n ? neighborhoodLine(n) : "";

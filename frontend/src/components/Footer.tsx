@@ -111,6 +111,14 @@ export default function Footer() {
             >
               고쳤습니다
             </Link>
+            {/* 지역 장 입구(결정 34) — 미리 받기 끔(모든 장 푸터에 있어 켜 두면 /region 을 장마다 미리 그린다, v2 O3) */}
+            <Link
+              href="/region"
+              prefetch={false}
+              className="text-gray-700 hover:text-blue-600 hover:underline"
+            >
+              지역별 실거래가
+            </Link>
             <Link
               href="/help"
               className="text-gray-700 hover:text-blue-600 hover:underline"

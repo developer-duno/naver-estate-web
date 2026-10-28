@@ -90,7 +90,9 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 720 
       await expect(page.getByTestId("glance-areas")).toContainText("1억 5,700만~1억 8,000만");
       await expect(page.getByText("2년 최저 1억 4,700만")).toBeVisible();
       await expect(page.getByTestId("consumer-trades").locator("tbody tr")).toHaveCount(3);
-      await expect(page.locator('a[href^="/region"]')).toHaveCount(0); // 지역 페이지 열리기 전(3c)
+      // 지역 페이지가 열린 뒤(3c-1b) — 빵부스러기 시군구·동(이 단지는 동 페이지 없는 동 → 허브#동)·푸터 입구 등 1개 이상
+      expect(await page.locator('a[href^="/region"]').count()).toBeGreaterThan(0);
+      await expect(page.locator('a[href="/region/30200#3020012300"]').first()).toBeVisible();
       // 가까운 단지(결정 27) — 가짜 API 서버가 가까운 순 + 거리로 준다
       await expect(page.getByRole("heading", { level: 2, name: "가까운 단지" })).toBeVisible();
       await expect(page.getByTestId("nearby-complexes")).toContainText("320m");

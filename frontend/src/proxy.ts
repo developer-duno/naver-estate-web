@@ -39,6 +39,12 @@ export async function proxy(request: NextRequest) {
   if (complexSeg && !/^\d{1,8}$/.test(complexSeg[1])) {
     return NextResponse.rewrite(new URL("/__complex-not-found", request.url));
   }
+  // 지역 장도 같은 방식(세션 484 PR 3c-1b · v2 Y5) — /region/<시군구 5자리>[/<동 10자리>] 모양이 아니면 그리기 전에 404.
+  // /region(목록)은 그대로. 동 코드가 시군구 코드로 시작하는지는 페이지(loadDong)가 본다(이중 안전망).
+  const regionSeg = request.nextUrl.pathname.match(/^\/region\/([^/]+)(?:\/([^/]+))?\/?$/);
+  if (regionSeg && (!/^\d{5}$/.test(regionSeg[1]) || (regionSeg[2] !== undefined && !/^\d{10}$/.test(regionSeg[2])))) {
+    return NextResponse.rewrite(new URL("/__complex-not-found", request.url));
+  }
 
   let response = NextResponse.next({
     request: { headers: request.headers },

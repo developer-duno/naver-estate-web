@@ -88,6 +88,10 @@ function HomeHeader() {
             </p>
           </div>
         )}
+        {/* 지역 장 입구(결정 34) — 미리 받기 끔(v2 O3) */}
+        <p className="mt-3 text-sm">
+          <Link href="/region" prefetch={false} className="text-blue-600 hover:underline">지역별 실거래가 보기 →</Link>
+        </p>
       </section>
     </>
   );

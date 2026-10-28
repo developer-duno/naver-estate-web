@@ -1,6 +1,6 @@
 /**
  * 단지 화면 서버 껍데기(세션 483 PR 3b) — ISR 설정 · h1 하나 · 한눈에 보기(면적 수 = 표 행 수) · 같은 동 단지 최대 12 ·
- * 지역 페이지 플래그 false 동안 /region 링크 0 · BreadcrumbList · 없는 번호 404 · 5xx 는 throw.
+ * 지역 페이지 링크(3c-1b 부터 플래그 true — 시군구 허브·동 페이지·전체 보기, 미리 받기 끔) · BreadcrumbList · 없는 번호 404 · 5xx 는 throw.
  * 클라이언트 화면(ComplexClientView)은 가짜로 바꿔 서버가 그리는 것만 본다.
  * 실행: npx vitest run "src/app/complex/[no]/__tests__/page-server.test.tsx"
  */
@@ -51,14 +51,27 @@ describe("서버가 그리는 것", () => {
     expect(h1s[0].textContent).toBe("햇살마을");
   });
 
-  it("빵부스러기 5단계 · 지역 페이지 플래그 false 동안 /region 으로 가는 <a> 0", async () => {
-    const { container } = await renderPage();
+  it("빵부스러기 5단계 · 시군구 = 허브 · 동 = 동 페이지 링크(3c-1b 플래그 true) · JSON-LD 같은 주소 0", async () => {
+    await renderPage();
     const nav = screen.getByRole("navigation", { name: "현재 위치" });
     expect(nav.textContent).toBe("홈›대전›유성구›봉명동›햇살마을");
-    expect(container.querySelectorAll('a[href^="/region"]')).toHaveLength(0);
-    const ld = JSON.parse(container.querySelector('script[type="application/ld+json"]')!.textContent!);
+    expect([...nav.querySelectorAll("a")].map((a) => a.getAttribute("href"))).toEqual(["/", "/region/30200", "/region/30200/3020011800"]);
+    const ld = JSON.parse(document.querySelector('script[type="application/ld+json"]')!.textContent!);
     expect(ld["@type"]).toBe("BreadcrumbList");
-    expect(JSON.stringify(ld)).not.toContain("/region");
+    const items = ld.itemListElement.map((e: { item: string }) => new URL(e.item).pathname);
+    expect(new Set(items).size).toBe(items.length);
+  });
+
+  it("동 페이지 없는 동 — 빵부스러기 동 = 허브 안 그 동 앵커 · 전체 보기도 앵커 · JSON-LD 엔 동 단계 없음", async () => {
+    const base = makeSummary();
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify({ ...base, breadcrumb: { ...base.breadcrumb!, dong_has_page: false } }), { status: 200 }));
+    await renderPage();
+    const nav = screen.getByRole("navigation", { name: "현재 위치" });
+    expect(nav.querySelector('a[href="/region/30200#3020011800"]')).not.toBeNull();
+    const box = screen.getByTestId("nearby-complexes");
+    expect(within(box).getByRole("link", { name: /단지 전체/ }).getAttribute("href")).toBe("/region/30200#3020011800");
+    const ld = JSON.parse(document.querySelector('script[type="application/ld+json"]')!.textContent!);
+    expect(ld.itemListElement.map((e: { name: string }) => e.name)).toEqual(["홈", "유성구", "햇살마을"]);
   });
 
   it("'한눈에 보기' — 면적 수만큼 표 행 · 6개월 없으면 2년 · 공시가격·관리비·역·사용승인·세대수·동수 · 출처", async () => {
@@ -79,16 +92,17 @@ describe("서버가 그리는 것", () => {
     expect(glance.textContent).toContain("실거래 자료 2026.09까지");
   });
 
-  it("같은 동 다른 단지 — 최대 12 링크 · 백엔드 순서 그대로 · 작은 글씨 = 6개월 범위, 없으면 공시가격", async () => {
+  it("같은 동 다른 단지 — 최대 12 단지 링크 · 백엔드 순서 그대로 · 작은 글씨 = 6개월 범위, 없으면 공시가격 · 전체 보기 = 동 페이지(미리 받기 끔)", async () => {
     await renderPage();
     const box = screen.getByTestId("nearby-complexes");
     expect(within(box).getByRole("heading", { level: 2 }).textContent).toBe("봉명동 다른 단지");
-    const links = within(box).getAllByRole("link");
+    const links = within(box).getAllByRole("link").filter((a) => a.getAttribute("href")!.startsWith("/complex/"));
     expect(links).toHaveLength(12);
     expect(links.map((a) => a.getAttribute("href"))).toEqual(Array.from({ length: 12 }, (_, i) => `/complex/${7000 + i}`));
     expect(box.textContent).toContain("최근 6개월 4억~4억 4,000만");
     expect(box.textContent).toContain("공시가격 2억 8,000만");
-    expect(box.textContent).toContain("자료 있는 다른 단지 14곳 중 12곳");
+    const all = within(box).getByRole("link", { name: "봉명동 단지 전체(14곳) 보기" });
+    expect(all.getAttribute("href")).toBe("/region/30200/3020011800");
   });
 
   it("가까운 순(scope near, 결정 27) — 제목 '가까운 단지' · 작은 글씨 = 거리(1km 넘으면 km) · 가격 · 몇 곳 중 몇 곳 줄 없음", async () => {
@@ -100,7 +114,7 @@ describe("서버가 그리는 것", () => {
     expect(within(box).getByRole("heading", { level: 2 }).textContent).toBe("가까운 단지");
     expect(box.textContent).toContain("320m · 최근 6개월 4억~4억 4,000만");
     expect(box.textContent).toContain("1.2km · 최근 6개월 4억 100만~4억 4,100만");
-    expect(within(box).getAllByRole("link")).toHaveLength(12);
+    expect(within(box).getAllByRole("link").filter((a) => a.getAttribute("href")!.startsWith("/complex/"))).toHaveLength(12);
     expect(box.textContent).not.toContain("곳 중");
   });
 

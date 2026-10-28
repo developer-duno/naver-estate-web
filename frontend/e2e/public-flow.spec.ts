@@ -131,7 +131,8 @@ test.describe("public visual regression", () => {
     await applyPublicMocks(page);
     await page.goto("/");
 
-    await expect(page.getByRole("heading", { name: /공인중개사.*분석 도구/ })).toBeVisible();
+    // 홈 h1 = "아파트·오피스텔 실거래가·시세 조회"(세션 484 PR 3c-1a, 결정 31)
+    await expect(page.getByRole("heading", { name: /아파트.*실거래가.*시세 조회/ })).toBeVisible();
     await expect(page.getByText("단지", { exact: true })).toBeVisible();
     await expect(page.getByText("매물", { exact: true })).toBeVisible();
 

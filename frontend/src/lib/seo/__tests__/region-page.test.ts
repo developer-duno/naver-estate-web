@@ -122,12 +122,13 @@ describe("메타", () => {
     expect(indexMetadata(false).robots).toEqual(off);
   });
 
-  it("3c-1b 배포 = 색인 스위치 꺼짐 → 세 장 모두 noindex, nofollow(3c-2 에서 켠다)", () => {
-    const off = { index: false, follow: false };
-    expect(REGION_PAGES_INDEX).toBe(false);
-    expect(hubMetadata(makeHub()).robots).toEqual(off);
-    expect(dongMetadata(makeDong()).robots).toEqual(off);
-    expect(indexMetadata().robots).toEqual(off);
+  it("3c-2 배포 = 색인 스위치 켜짐 → 세 장 index, follow(indexable 장 기준) · 색인 밖 장은 noindex, follow", () => {
+    const on = { index: true, follow: true };
+    expect(REGION_PAGES_INDEX).toBe(true);
+    expect(hubMetadata(makeHub()).robots).toEqual(on);
+    expect(dongMetadata(makeDong()).robots).toEqual(on);
+    expect(indexMetadata().robots).toEqual(on);
+    expect(hubMetadata(makeHub({ indexable: false })).robots).toEqual({ index: false, follow: true });
   });
 
   it("기본값 = 색인 스위치", () => {

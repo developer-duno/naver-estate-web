@@ -84,13 +84,11 @@ curl -sL -A "Googlebot" https://<도메인>/ | grep -c '<h1'   # 1 이상이어�
 개편 시에만 손으로 갱신. blog 글은 발행일(`p.date`) 사용. 선례: `app/sitemap.ts`
 `STATIC_PAGE_LASTMOD`.
 
-## 룰 5 — 의도된 봇 차단과 노출은 구분 (B2B 구독 데이터)
+## 룰 5 — 의도된 봇 차단과 노출은 구분
 
-`/complex/`·`/mibunyang/`·`/search` 의 robots.txt 차단 + noindex 는 **B2B 구독자 전용
-데이터 보호로 의도된 설계**(robots.ts). 진단·수정 시 이를 "결함"으로 오판하지 말 것.
-마케팅·공개 페이지(홈·blog·tools·pricing)만 색인 대상.
+`/mibunyang/`·`/search`·`/compare`·`/admin`·로그인 계열·`/pricing` 의 robots.txt 차단은 **의도된 설계**(robots.ts `COMMON_DISALLOW`). 진단·수정 시 "결함"으로 오판하지 말 것.
 
-⚠ 2026-10-26 공개 전환(사장님 결정) — 비로그인은 공공 자료·우리 지표만, 네이버 매물·호가는 로그인 뒤. robots·noindex 차단은 서버 렌더 PR 까지 임시. 단지 화면은 로그인 벽 없이 열리지만(비로그인 API 응답은 네이버 재료 칸을 뺀다) `/complex/` robots 차단·noindex 는 서버 렌더 PR 에서 연다.
+2026-10-29 PR 3c-2(세션 485)부터 단지(`/complex/`)·지역(`/region/`) 장은 검색 봇에 열려 있다 — 단지는 `indexable`(등급 A 이면서 지역 정보가 있는 단지 — `backend/services/seo_grade.py`, B 는 `INDEX_GRADE_B` 스위치로 꺼 둠)만 index·나머지는 noindex,follow, 지역은 `REGION_PAGES_INDEX` 스위치. 사이트맵 = `/sitemap.xml`(정적·블로그) + `/sitemaps/complexes.xml` + `/sitemaps/regions.xml`. **AI 학습 봇 묶음**(`AI_TRAINING_BOTS`, 결정 18)만 `/complex/`·`/region/` 을 막는다 — 검색·인용 봇은 `*` 로 허용(결정 17). 되돌리기 순서 = 설계서 v2 O7(색인 스위치 먼저 → 서치콘솔에서 빠진 것 확인 → 그 뒤 robots).
 
 ## 룰 6 — 공개 페이지는 title·description·alternates.canonical 을 자기 것으로 (세션 458)
 

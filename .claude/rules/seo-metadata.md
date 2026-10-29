@@ -88,7 +88,7 @@ curl -sL -A "Googlebot" https://<도메인>/ | grep -c '<h1'   # 1 이상이어�
 
 `/mibunyang/`·`/search`·`/compare`·`/admin`·로그인 계열·`/pricing` 의 robots.txt 차단은 **의도된 설계**(robots.ts `COMMON_DISALLOW`). 진단·수정 시 "결함"으로 오판하지 말 것.
 
-2026-10-29 PR 3c-2(세션 485)부터 단지(`/complex/`)·지역(`/region/`) 장은 검색 봇에 열려 있다 — 단지는 등급 A 만 index(B·C 는 noindex,follow), 지역은 `REGION_PAGES_INDEX` 스위치. 사이트맵 = `/sitemap.xml`(정적·블로그) + `/sitemaps/complexes.xml` + `/sitemaps/regions.xml`. **AI 학습 봇 묶음**(`AI_TRAINING_BOTS`, 결정 18)만 `/complex/`·`/region/` 을 막는다 — 검색·인용 봇은 `*` 로 허용(결정 17). 되돌리기 순서 = 설계서 v2 O7(색인 스위치 먼저 → 서치콘솔에서 빠진 것 확인 → 그 뒤 robots).
+2026-10-29 PR 3c-2(세션 485)부터 단지(`/complex/`)·지역(`/region/`) 장은 검색 봇에 열려 있다 — 단지는 `indexable`(등급 A 이면서 지역 정보가 있는 단지 — `backend/services/seo_grade.py`, B 는 `INDEX_GRADE_B` 스위치로 꺼 둠)만 index·나머지는 noindex,follow, 지역은 `REGION_PAGES_INDEX` 스위치. 사이트맵 = `/sitemap.xml`(정적·블로그) + `/sitemaps/complexes.xml` + `/sitemaps/regions.xml`. **AI 학습 봇 묶음**(`AI_TRAINING_BOTS`, 결정 18)만 `/complex/`·`/region/` 을 막는다 — 검색·인용 봇은 `*` 로 허용(결정 17). 되돌리기 순서 = 설계서 v2 O7(색인 스위치 먼저 → 서치콘솔에서 빠진 것 확인 → 그 뒤 robots).
 
 ## 룰 6 — 공개 페이지는 title·description·alternates.canonical 을 자기 것으로 (세션 458)
 

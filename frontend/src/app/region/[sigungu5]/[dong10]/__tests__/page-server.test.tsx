@@ -1,6 +1,6 @@
 /**
  * 동 페이지 서버 렌더(세션 484 PR 3c-1b · B6) — ISR 설정 · h1 하나 · 한 줄 · 단지 표(전부, 준공 포함) · 행정동별 동네 정보 카드 ·
- * 다른 동 칩 + 시군구 전체 보기 · 빵부스러기(시군구 = 허브 링크) · 메타(색인 스위치 꺼짐 = noindex,nofollow) ·
+ * 다른 동 칩 + 시군구 전체 보기 · 빵부스러기(시군구 = 허브 링크) · 메타(색인 스위치 켜짐 = indexable 따라 index,follow / noindex,follow) ·
  * 사라진 동 페이지 = 허브#동 307(임시) · 없는 동 404 · 5xx throw.
  * 실행: npx vitest run "src/app/region/[sigungu5]/[dong10]/__tests__/page-server.test.tsx"
  */
@@ -93,13 +93,13 @@ describe("동 페이지 본문", () => {
 });
 
 describe("메타·실패 길", () => {
-  it("generateMetadata — 제목·canonical·robots(색인 스위치 꺼짐 = indexable 무관 noindex,nofollow, 결정 37)", async () => {
+  it("generateMetadata — 제목·canonical·robots(색인 스위치 켜짐 = indexable 따라 index,follow / noindex,follow, 결정 37)", async () => {
     const m = await generateMetadata(params("30200", "3020011800"));
     expect(m.title).toBe("대전 유성구 봉명동 아파트 실거래가·공시가격");
     expect(m.alternates?.canonical).toBe("/region/30200/3020011800");
-    expect(m.robots).toEqual({ index: false, follow: false });
+    expect(m.robots).toEqual({ index: true, follow: true });
     fetchMock.mockImplementation(async () => new Response(JSON.stringify(makeDong({ indexable: false })), { status: 200 }));
-    expect((await generateMetadata(params("30200", "3020011800"))).robots).toEqual({ index: false, follow: false });
+    expect((await generateMetadata(params("30200", "3020011800"))).robots).toEqual({ index: false, follow: true });
   });
 
   it("generateMetadata 는 이동·404 에 던지지 않고 최소 메타만(이동은 페이지 한 곳 — 첫 응답 location 머리 두 줄 방지, 보완 F11)", async () => {

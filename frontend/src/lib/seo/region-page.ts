@@ -11,12 +11,12 @@ import type { DongPage, RegionComplexCard, RegionHub } from "@/types/region-page
 import { dongPagePath, regionHubPath, type Crumb } from "./complex-page";
 
 /**
- * 지역 장 색인 스위치(v2 O7 · 결정 37) — false 면 지역 장 셋(/region·허브·동) 전부 robots "noindex, nofollow"(링크·장은 그대로).
- * nofollow 인 까닭: 지금은 robots.txt 가 /complex/ 를 막고 있어, 로봇이 허브 표의 단지 링크를 따라가면 "설명 없는 색인"이 생긴다.
- * 3c-2(robots 열기·학습 봇 묶음·Vercel Pro·서버 렌더 열쇠)에서 true 로 바꾼다 — true 면 indexable 따라 index,follow / noindex,follow.
+ * 지역 장 색인 스위치(v2 O7 · 결정 37) — 켜져 있다(세션 485 PR 3c-2, robots 가 /complex/ 를 연 것과 같이).
+ * true = indexable 따라 index,follow / noindex,follow · regions.xml 사이트맵을 낸다.
+ * false = 지역 장 셋(/region·허브·동) 전부 robots "noindex, nofollow"(링크·장은 그대로) + regions.xml 503.
  * 되돌리기 순서: ① 이것을 false 로 배포 → ② 서치콘솔에서 지역 장이 빠지는 것 확인 → ③ 그 뒤에야 robots·REGION_PAGES_ENABLED.
  */
-export const REGION_PAGES_INDEX = false;
+export const REGION_PAGES_INDEX = true;
 
 /** 전국 목록 주소 */
 export const REGION_INDEX_PATH = "/region";

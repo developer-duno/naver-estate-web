@@ -1,7 +1,7 @@
 /**
  * 시군구 허브 서버 렌더(세션 484 PR 3c-1b · B5) — ISR 설정 · h1 하나 · 한 줄 · 2년 흐름 카드 · 동 칩(동 페이지 = 링크 / 작은 동 = 앵커) ·
  * 동 묶음 앵커 id · 동 페이지 있는 동 12곳 + 전체 링크(결정 35) · 작은 동 전부 · 사실 배지(등급 글자 0 · C 빈칸, 결정 33·38) ·
- * 단지 이름 = 행 머리(th scope=row) · JSON-LD · 메타(색인 스위치 꺼짐 = noindex,nofollow) · 404/throw.
+ * 단지 이름 = 행 머리(th scope=row) · JSON-LD · 메타(색인 스위치 켜짐 = index,follow) · 404/throw.
  * 실행: npx vitest run "src/app/region/[sigungu5]/__tests__/page-server.test.tsx"
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -114,11 +114,11 @@ describe("허브 본문", () => {
 });
 
 describe("메타·404", () => {
-  it("generateMetadata — 제목·canonical·robots(색인 스위치 꺼짐 = noindex,nofollow, 결정 37)", async () => {
+  it("generateMetadata — 제목·canonical·robots(색인 스위치 켜짐 + indexable = index,follow, 결정 37)", async () => {
     const m = await generateMetadata(params("30200"));
     expect(m.title).toBe("대전 유성구 아파트 실거래가·공시가격");
     expect(m.alternates?.canonical).toBe("/region/30200");
-    expect(m.robots).toEqual({ index: false, follow: false });
+    expect(m.robots).toEqual({ index: true, follow: true });
   });
 
   it("문자 코드 = 백엔드 안 부르고 404 · 백엔드 404 = 404 · 5xx = throw(404 아님)", async () => {

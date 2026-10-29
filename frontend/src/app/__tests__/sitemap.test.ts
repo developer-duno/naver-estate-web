@@ -64,6 +64,7 @@ describe("sitemap /updates lastModified", () => {
 });
 
 describe("sitemap — 공개 대표 URL 만 (세션 458 SEO)", () => {
+  // 단지·지역 주소는 이 파일이 아니라 /sitemaps/complexes.xml·/sitemaps/regions.xml 에 있다(세션 485 PR 3c-2)
   it("계산기 허브 /tools 가 들어 있고, 잠긴·비공개 경로(/pricing·/search·/complex·/mibunyang·/admin)는 없다", async () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
     const urls = (await sitemap()).map((x) => x.url);

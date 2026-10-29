@@ -175,4 +175,18 @@ describe("지역 사이트맵 /sitemaps/regions.xml", () => {
     // 기본값(지금 둘 다 켜짐)은 200
     expect((await regionsSitemapResponse()).status).toBe(200);
   });
+
+  it("기본값은 색인 스위치 상수를 따른다 — REGION_PAGES_INDEX 를 false 로 되돌리면 route 가 503(되돌리기 O7 · 검사관 🟡2)", async () => {
+    fetchMock.mockResolvedValue(json(200, { hubs: ["11110"], dongs: [] }));
+    vi.resetModules();
+    vi.doMock("@/lib/seo/region-page", async (orig) => ({ ...(await orig<object>()), REGION_PAGES_INDEX: false }));
+    try {
+      const route = await import("@/app/sitemaps/regions.xml/route");
+      await expectUnavailable(await route.GET());
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.doUnmock("@/lib/seo/region-page");
+      vi.resetModules();
+    }
+  });
 });

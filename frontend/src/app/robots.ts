@@ -35,6 +35,9 @@ export const AI_TRAINING_BOTS = [
   "Applebot-Extended",
   // https://developers.facebook.com/docs/sharing/webmasters/web-crawlers/ — "crawls the web for use cases such as training foundation AI models"
   "meta-externalagent",
+  // https://commoncrawl.org/ccbot — 공개 웹 보관소 수집 봇. 공식 문서에 '학습' 문구는 없지만 결정 18 이 이름으로 막기로 함
+  // (👤 2026-10-29 재확인 — 여러 AI 학습 자료의 출처라서)
+  "CCBot",
 ];
 
 export default function robots(): MetadataRoute.Robots {

@@ -46,11 +46,14 @@ describe("robots — `*` 묶음", () => {
     expect(dis).not.toContain("/region/");
     expect(dis.some((p) => p.startsWith("/complex") || p.startsWith("/region"))).toBe(false);
   });
+  it("차단 목록 = 공통 목록 그대로(사이트 전체 차단 \"/\" 같은 덧붙임 0 · 검사관 🟡1)", () => {
+    expect(asList(star.disallow)).toEqual(COMMON_DISALLOW);
+  });
 });
 
 describe("robots — 학습 봇 묶음(결정 18)", () => {
-  it("학습 봇 목록 = 공식 문서로 확인한 5개 그대로", () => {
-    expect(AI_TRAINING_BOTS).toEqual(["GPTBot", "ClaudeBot", "Google-Extended", "Applebot-Extended", "meta-externalagent"]);
+  it("학습 봇 목록 = 공식 문서 확인 5개 + CCBot(결정 18) 그대로", () => {
+    expect(AI_TRAINING_BOTS).toEqual(["GPTBot", "ClaudeBot", "Google-Extended", "Applebot-Extended", "meta-externalagent", "CCBot"]);
     expect(training.userAgent).toEqual(AI_TRAINING_BOTS);
   });
 

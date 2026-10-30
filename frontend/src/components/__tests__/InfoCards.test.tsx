@@ -81,10 +81,12 @@ describe("InfoCards — 단지 정보 (세션 429)", () => {
     render(
       <InfoCards
         article={makeArticle()}
-        complex={{ complex_no: "C001", complex_name: "테스트단지", recent_trades_6m: 42, jeonse_rate: 60 }}
+        complex={{ complex_no: "C001", complex_name: "테스트단지", recent_trades_6m: 42, jeonse_rate: 60, jeonse_rate_min: 55, jeonse_rate_max: 61.5 }}
       />,
     );
     expect(screen.getByText("전세가율")).toBeInTheDocument();
+    expect(screen.getByText("55%~61.5%")).toBeInTheDocument();   // 범위(세션 489 B29) — 옛 한 값 60% 는 안 읽는다
+    expect(screen.queryByText("60%")).toBeNull();
     expect(screen.queryByText("최근6개월거래")).not.toBeInTheDocument();
     expect(screen.queryByText("42건")).not.toBeInTheDocument();
   });
@@ -93,10 +95,12 @@ describe("InfoCards — 단지 정보 (세션 429)", () => {
     const { container } = render(
       <InfoCards
         article={makeArticle()}
-        complex={{ complex_no: "C001", complex_name: "테스트단지", nearby_median_price: 18000 }}
+        complex={{ complex_no: "C001", complex_name: "테스트단지", nearby_median_price: 18000, price_basis: "legacy_mixed",
+          legacy_range: { lower: 16000, upper: 18000, month: "202503" } }}
       />,
     );
     expect(screen.getByText("주변시세")).toBeInTheDocument();
+    expect(screen.getByText("1억 6,000만 ~ 1억 8,000만 (2025년 3월 거래 · 면적 섞임 · 직거래 포함 · 그 뒤 거래 없음)")).toBeInTheDocument();
     expect(container.textContent).not.toContain("/평");
   });
 
@@ -128,9 +132,10 @@ describe("InfoCards — 단지 정보 (세션 429)", () => {
 
   it("전세 매물: 전세가율(매물)에 '(주의)' 없이 · 보증 한도 줄 없음(PR 5 뒤로, 사장님 결정 ⓑ) (세션 473)", () => {
     const { container } = render(<InfoCards article={makeArticle({
-      trade_type_name: "전세", article_jeonse_ratio: 83, legal_rent_conversion_cap: 5.0, bok_base_rate: 3.0,
+      trade_type_name: "전세", article_jeonse_ratio: 83, article_jeonse_ratio_min: 66.7, article_jeonse_ratio_max: 76.4, legal_rent_conversion_cap: 5.0, bok_base_rate: 3.0,
     })} />);
-    expect(screen.getByText("83%")).toBeInTheDocument();
+    expect(screen.getByText("66.7%~76.4%")).toBeInTheDocument();   // 보증금 ÷ 최고 ~ 최저(세션 489 B29)
+    expect(screen.queryByText("83%")).toBeNull();                 // 옛 중위 분모 값은 안 읽는다
     expect(screen.queryByText(/법정 상한/)).toBeNull();       // 월세가 아니면 전환율 상한은 안 보인다
     expect(screen.queryByTestId("article-standards-source")).toBeNull();   // 출처 줄에 실을 기준값이 없다
     expect(container.textContent ?? "").not.toMatch(/\(주의\)|HUG|보증 가입 한도/);

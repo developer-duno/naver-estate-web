@@ -52,9 +52,10 @@ export default function PriceChartSection({ complexNo, pyeongDetails, accessToke
   }, [complexNo, accessToken, canAct, collecting, startCollect, queryClient]);
 
   const historyItems = priceHistoryQuery.data?.items ?? [];
-  // 그래프가 그린 면적과 기준 글자(BE 정본 — basis). 면적을 모르면(대표 면적 미계산) 옛 그대로 아무것도 안 붙인다.
+  // 그래프가 그린 면적과 기준 글자(BE 정본 — 범위 그래프용 basis_range, 세션 479 B29 · 옛 basis 는 중위 선 시절 글자라 안 읽는다).
+  // 면적을 모르면(대표 면적 미계산) 옛 그대로 아무것도 안 붙인다.
   const historyArea = priceHistoryQuery.data?.area_m2 ?? null;
-  const historyBasis = priceHistoryQuery.data?.basis ?? null;
+  const historyBasis = priceHistoryQuery.data?.basis_range ?? null;
 
   return (
     <div className="space-y-3">

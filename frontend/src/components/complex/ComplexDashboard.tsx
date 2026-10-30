@@ -7,9 +7,17 @@ import { PyeongDetailsList } from "@/components/ComplexPyeongCard";
 import ComplexPriceFloorSection from "@/components/complex/ComplexPriceFloorSection";
 import ComplexPriceAreaSection from "@/components/complex/ComplexPriceAreaSection";
 import PriceChartSection from "@/components/complex/PriceChartSection";
+import RepAreaTradeList from "@/components/complex/RepAreaTradeList";
 import { useComplexArticleAvg } from "@/hooks/useComplexArticleAvg";
 import { formatKoreanPrice } from "@/lib/format";
-import { LEGACY_NOTE, otherAreaText, pickRepresentativeArea } from "@/lib/area-group";
+import { otherAreaText, pickRepresentativeArea } from "@/lib/area-group";
+import {
+  areaRangeSummary,
+  legacyRangeTexts,
+  percentRangeText,
+  repChipText,
+  repPrimaryText,
+} from "@/lib/range-price";
 import type { ArticleFilters, Complex, PyeongDetail } from "@/types";
 
 type SectionKey = "prices" | "chart" | "info" | "area";
@@ -109,45 +117,42 @@ export default function ComplexDashboard({
     ? `지역: ${complex.region_jeonse_source}${complex.region_jeonse_period ? `(${complex.region_jeonse_period})` : ""}`
     : null;
 
-  // 시세 칸 — 대표 면적이 있으면 그 면적 값 크게 + 다른 면적 작게(세션 474 B27, 사장님 결정 D3 「A」).
-  // 출처 글자(area_price_source)는 BE 정본. 대표 면적이 없으면 옛 경로(시세 → 매물 평균 대체값) 그대로.
+  const regionOnlyText = hasRegionJeonse ? `${complex.region_name} 아파트 전세가율 ${complex.region_jeonse_ratio}%` : undefined;
+
+  // 시세 칸 — 대표 면적이 있으면 그 면적 최저~최고 크게 + 다른 면적 작게(세션 474 B27 · 479 B29 범위화).
+  // 칩 N = 대표 면적 거래 목록 길이(펼친 목록 줄 수와 같은 출처). 출처 글자(area_price_range_source)는 BE 정본.
   const rep = complex.rep_area_m2 ?? null;
-  const repHouseholds = rep != null ? complex.area_prices?.find((ap) => ap.area_m2 === rep)?.households : undefined;
+  const repArea = rep != null ? complex.area_prices?.find((ap) => ap.area_m2 === rep) : undefined;
+  const repHouseholds = repArea?.households;
+  const repSummary = areaRangeSummary(repArea);
+  // 이 단지 전세가율은 분자가 네이버 전세 시세라 비로그인 응답엔 칸 자체가 없다(세션 481) — 없거나 비면 지역 값만
+  const jeonseText = percentRangeText(complex.jeonse_rate_min, complex.jeonse_rate_max);
+  // 옛 값 단지(대표 면적 없음) — 마지막 정부 섞인 줄의 범위 + 그 달 작은 줄(사장님 결정 ㄱ, 전세가율은 비움)
+  const isLegacy = complex.price_basis === "legacy_mixed";
+  const legacyTexts = isLegacy ? legacyRangeTexts(complex.legacy_range) : null;
   const pricesBox: BoxData = rep != null
     ? {
         key: "prices",
         label: `시세 · 전용 ${rep}㎡${repHouseholds ? `(${repHouseholds.toLocaleString()}세대)` : ""}`,
-        chip: complex.recent_trades_6m != null ? `최근 6개월 ${complex.recent_trades_6m}건` : undefined,
-        primary: complex.nearby_median_price != null ? formatKoreanPrice(complex.nearby_median_price) : "—",
+        chip: repChipText(repSummary),
+        primary: repPrimaryText(repSummary),
         secondary: otherAreaText(rep, complex.area_prices ?? []) || undefined,
-        // 이 단지 전세가율은 분자가 네이버 전세 시세라 비로그인 응답엔 칸 자체가 없다(세션 481) — 그때는 지역 값만
-        extra: complex.jeonse_rate === undefined
-          ? (hasRegionJeonse ? `${complex.region_name} 아파트 전세가율 ${complex.region_jeonse_ratio}%` : undefined)
-          : `전세가율(${rep}㎡) ${complex.jeonse_rate != null ? `${complex.jeonse_rate}%` : "—"}${regionJeonseText}`,
-        note: complex.area_price_source
-          ? `이 단지: ${complex.area_price_source}${regionSourceText ? ` · ${regionSourceText}` : ""}`
+        extra: jeonseText != null ? `전세가율(${rep}㎡) ${jeonseText}${regionJeonseText}` : regionOnlyText,
+        note: complex.area_price_range_source
+          ? `이 단지: ${complex.area_price_range_source}${regionSourceText ? ` · ${regionSourceText}` : ""}`
           : (regionSourceText ?? undefined),
       }
     : {
         key: "prices",
         label: "시세",
-        primary: complex.nearby_median_price != null
-          ? formatKoreanPrice(complex.nearby_median_price)
+        primary: isLegacy
+          ? (legacyTexts?.value ?? "—")
           : (avgPrice != null
             ? `매매 매물 평균${avgArea != null ? `(${avgArea}㎡)` : ""} ${formatKoreanPrice(avgPrice)}`
             : "-"),
-        // 대표 면적이 없는데 옛 값이 남은 단지 — 면적이 섞인 옛 값임을 작게 밝힌다(사장님 결정 Q4)
-        extra: complex.price_basis === "legacy_mixed" ? LEGACY_NOTE : undefined,
-        secondary: complex.jeonse_rate != null
-          ? `전세가율 ${complex.jeonse_rate}%${regionJeonseText}`
-          : hasRegionJeonse
-            ? `${complex.region_name} 아파트 전세가율 ${complex.region_jeonse_ratio}%`
-            : (countLoading || count > 0 ? countText : undefined),
-        note: regionSourceText
-          ? (complex.jeonse_rate != null
-            ? `이 단지: 최근 6개월 시세·실거래 기록 중앙값으로 계산 · ${regionSourceText}`
-            : regionSourceText)
-          : undefined,
+        extra: legacyTexts?.note,
+        secondary: regionOnlyText ?? (countLoading || count > 0 ? countText : undefined),
+        note: regionSourceText ?? undefined,
       };
 
   // 박스 라벨·값 계산 (Q3 NULL fallback)
@@ -214,6 +219,9 @@ export default function ComplexDashboard({
       {(openSection || isPrinting) && (
         <div id="dashboard-content" ref={contentRef} role="region">
           <Card className="p-3 md:p-4 space-y-4">
+            {(openSection === "prices" || isPrinting) && rep != null && (
+              <RepAreaTradeList areaM2={rep} trades={repArea?.trades ?? []} />
+            )}
             {(openSection === "prices" || isPrinting) && (
               <ComplexPriceFloorSection complexNo={complexNo} onFilterChange={onFilterChange} accessToken={sessionToken} loggedOut={loggedOut} />
             )}

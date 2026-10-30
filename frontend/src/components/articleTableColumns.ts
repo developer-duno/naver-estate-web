@@ -63,9 +63,9 @@ export const COLUMNS: ColumnDef<Article>[] = [
     id: "yield",
     header: "수익률",
     enableSorting: true,
-    accessorFn: (a) => a.monthly_rent_yield ?? a.article_jeonse_ratio ?? null,
+    accessorFn: (a) => a.monthly_rent_yield ?? a.article_jeonse_ratio_min ?? null,
     meta: {
-      headerTitle: "월세: (월세×12)/보증금, 전세: 보증금/같은 면적 매매 중위가",
+      headerTitle: "월세: (월세×12)/보증금, 전세: 보증금/같은 면적 매매 최저~최고",
       className: "w-17.5 text-right",
     },
   },

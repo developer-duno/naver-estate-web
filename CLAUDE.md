@@ -67,7 +67,7 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2,757개** (세션 485 전체 1회 2026-10-29, 5fca9b57: Test Files 286 — PR 3a~3c-2 서버 렌더·지역 페이지·사이트맵·robots 시험 포함. 옛 2,387(s474, 258파일)은 `.claude/history/test-baseline-history.md`). RegionSelector 는 세션 416 에 구조 수정 — 이 파일이 타임아웃으로 실패하면 **새 원인**이다 |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2,799개** (세션 489 전체 1회 2026-10-31 워크트리 s489-b2: Test Files 288 · 2,798 + 그 뒤 시험 1 — B29 시세 범위 화면 `range-price`·그래프 점 시험 포함. 옛 2,757(s485, 286파일)은 `.claude/history/test-baseline-history.md`). RegionSelector 는 세션 416 에 구조 수정 — 이 파일이 타임아웃으로 실패하면 **새 원인**이다 |
 | FE E2E | `frontend/e2e/*.spec.ts` | **21 파일** (Playwright, --webpack 모드) · 시각회귀 baseline PNG **22장**(세는 법 = `find frontend/e2e -name "*.png" \| wc -l`). 재생성 순서·판정·함정 = `frontend/e2e/README.md` |
 | BE pytest | `backend/tests/` | **3,239개** (#783 CI 전체 1회 passed 2026-10-31 02:22 KST, cc0a60cf · 8 skipped — 연결 창고 `test_database_pool.py` +5 등. 옛 3,035(s474)는 `.claude/history/test-baseline-history.md`). ⚠ `backend/` 안에서 실행이 표준 · 작업반 보고를 옮기지 말고 **매번 직접 재실측** |
 

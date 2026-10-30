@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import type { Article } from "@/types";
 import { M2_TO_PYEONG, TRADE_TYPE_COLORS, TRADE_TYPE_DEFAULT_COLOR, ESTATE_TYPE_COLORS, ESTATE_TYPE_DEFAULT_COLOR } from "@/lib/constants";
 import { formatMaintenanceCost } from "@/lib/format";
+import { percentRangeText } from "@/lib/range-price";
 import type { ArticleViewMode } from "@/lib/storage";
 import ArticleFavoriteButton from "@/components/ArticleFavoriteButton";
 import ArticleCompactRow from "@/components/ArticleCompactRow";
@@ -106,6 +107,8 @@ const ArticleCardItem = memo(function ArticleCardItem({ article: art, onClick, s
     : art.room_count != null ? `${art.room_count}/-` : null;
 
   const maint = formatMaintenanceCost(art.maintenance_cost, art.numeric_maintenance_cost);
+  // 전세가율 범위(세션 479 B29) — 목록 API 는 분모를 안 넘겨 값이 늘 null(이름만 새 칸에 맞춤)
+  const jeonseText = percentRangeText(art.article_jeonse_ratio_min, art.article_jeonse_ratio_max);
 
   return (
     <div
@@ -167,7 +170,7 @@ const ArticleCardItem = memo(function ArticleCardItem({ article: art, onClick, s
             {art.move_in_date && <><span className="text-gray-300">·</span><span>{art.move_in_date}</span></>}
             {maint !== "-" && <><span className="text-gray-300">·</span><span>관리비 {maint}</span></>}
             {art.monthly_rent_yield != null && <><span className="text-gray-300">·</span><span className="px-1.5 py-0.5 rounded text-sm font-semibold bg-gray-100 text-gray-700">수익 {art.monthly_rent_yield}%</span></>}
-            {art.article_jeonse_ratio != null && <><span className="text-gray-300">·</span><span className="px-1.5 py-0.5 rounded text-sm font-semibold bg-gray-100 text-gray-700">전세 {art.article_jeonse_ratio}%(같은 면적)</span></>}
+            {jeonseText != null && <><span className="text-gray-300">·</span><span className="px-1.5 py-0.5 rounded text-sm font-semibold bg-gray-100 text-gray-700">전세 {jeonseText}(같은 면적)</span></>}
           </div>
 
           {/* 4행: 특징 (truncate) */}

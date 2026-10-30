@@ -33,3 +33,7 @@
 
 - FE Vitest 2387 → **2757** (Test Files 258 → 286) — 세션 485 워크트리 5fca9b57 전체 1회(PR 3a~3c-2 서버 렌더·지역 페이지·사이트맵·robots 시험).
 - BE pytest 3035 → **3239** passed(8 skipped) — #783 CI cc0a60cf 전체 1회 2026-10-31 02:22 KST(연결 창고 `test_database_pool.py` 5 등 · 세션 486 로컬 전체 1회는 3238 — CI 와 1건 차이는 환경 분기 시험 1건으로 추정, 다음 전체 실측 때 대조).
+
+## 세션 489 갱신 (2026-10-31)
+
+- FE Vitest 2757 → **2799** (Test Files 286 → 288) — 세션 489 워크트리 s489-b2 전체 1회 2,798(그중 `scripts/__tests__/check-job-labels.test.mjs` 1건은 새 워크트리 첫 읽기 5초 초과 — 단독 재실행 14/14 통과) + 검사 뒤 비교표 직거래만 시험 1. 증가 = `lib/__tests__/range-price.test.ts` 13 · `PriceHistoryChart.scatter.test.tsx` 3 · AreaPriceB27·PriceHistoryChart·compare 등.

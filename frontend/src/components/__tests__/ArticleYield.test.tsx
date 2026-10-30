@@ -42,7 +42,9 @@ describe("ArticleCardMobile 수익률/뱃지", () => {
     const art = makeArticle({
       trade_type_name: "전세",
       numeric_price: 30000,
-      article_jeonse_ratio: 60.0,
+      article_jeonse_ratio: 55.0,   // 옛 칸(중위 분모) — 화면은 범위 칸을 읽는다(세션 489 B29)
+      article_jeonse_ratio_min: 60.0,
+      article_jeonse_ratio_max: 60.0,
     });
     render(<ArticleCardMobile articles={[art]} viewMode="large" />);
     expect(screen.getByText("전세 60%(같은 면적)")).toBeInTheDocument();   // 분모 = 같은 면적 묶음(세션 474 B27)
@@ -82,13 +84,13 @@ describe("ArticleCardMobile 수익률/뱃지", () => {
     const { container } = render(
       <ArticleCardMobile
         articles={[
-          makeArticle({ article_no: "J1", trade_type_name: "전세", article_jeonse_ratio: 90 }),
+          makeArticle({ article_no: "J1", trade_type_name: "전세", article_jeonse_ratio_min: 85, article_jeonse_ratio_max: 90 }),
           makeArticle({ article_no: "W1", trade_type_name: "월세", monthly_rent_yield: 12 }),
         ]}
         viewMode="large"
       />,
     );
-    const j = screen.getByText(/전세 90%/);
+    const j = screen.getByText("전세 85%~90%(같은 면적)");
     const w = screen.getByText(/수익 12%/);
     expect(j.className).toBe(w.className);
     expect(j.className).toContain("text-gray-700");

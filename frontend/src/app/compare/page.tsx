@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 import { getComplex, getPriceStats } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 import { M2_TO_PYEONG } from "@/lib/constants";
-import { formatKoreanPrice } from "@/lib/format";
+import { complexPriceText, percentRangeText } from "@/lib/range-price";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useSessionToken } from "@/hooks/useSessionToken";
 import { calcAvgPricePerPyeong } from "@/lib/compare-utils";
@@ -47,18 +47,11 @@ function formatPrice(price?: number): string {
   return `${price.toLocaleString()}만`;
 }
 
-/** 대표 면적 시세 — "59㎡ 1억 7,200만 (3건)". 대표 면적을 아직 못 정한 단지는 저장된 값만(옛 경로) */
-function formatRepAreaPrice(c: Complex): string {
-  if (c.rep_area_m2 == null) {
-    // 대표 면적이 없는데 옛 값이 남은 단지 — 면적 섞인 옛 값임을 밝힌다(세션 474 보완 F2 · 사장님 결정 Q4)
-    if (c.price_basis === "legacy_mixed" && c.nearby_median_price) {
-      return `${formatKoreanPrice(c.nearby_median_price)} (면적 섞인 옛 값)`;
-    }
-    return formatPrice(c.nearby_median_price);
-  }
-  const price = c.nearby_median_price ? formatKoreanPrice(c.nearby_median_price) : "—";
-  const count = c.recent_trades_6m != null ? ` (${c.recent_trades_6m}건)` : "";
-  return `${c.rep_area_m2}㎡ ${price}${count}`;
+const JEONSE_ROW_LABEL = "전세가율(이 단지, 같은 면적)";
+
+/** 이 단지 전세가율 칸이 응답에 없다(비로그인 — 분자가 네이버 전세 시세, 세션 481) */
+function jeonseRangeAbsent(c: Complex): boolean {
+  return c.jeonse_rate_min === undefined && c.jeonse_rate_max === undefined;
 }
 
 /* ── 비교 테이블 행 정의 (기본 23행, 평당가는 동적 삽입) ── */
@@ -83,11 +76,9 @@ const BASE_ROWS: { label: string; render: (c: Complex) => ReactNode }[] = [
   { label: "건폐율", render: (c) => c.building_coverage_ratio ? `${c.building_coverage_ratio}%` : "-" },
   // 평당가는 "건폐율" 다음에 동적 삽입 (compareRows useMemo 의 findIndex 참조)
   { label: "매물수", render: (c) => formatCount(c.article_count) },
-  // 대표 면적 하나의 값(세션 474 B27, 사장님 결정 D3) — 카드·매물 전세가율 분모와 같은 숫자
-  { label: "대표 면적 시세", render: (c) => formatRepAreaPrice(c) },
-  { label: "전세가율(이 단지, 같은 면적)", render: (c) => c.jeonse_rate
-    ? `${c.jeonse_rate.toFixed(0)}%${c.price_basis === "legacy_mixed" ? " (옛 값)" : ""}`
-    : "-" },
+  // 대표 면적 최저~최고(세션 479 B29 범위화) — 단지 대시보드 시세 칸과 같은 글자, (N건) = 거래 목록 길이
+  { label: "대표 면적 시세", render: (c) => complexPriceText(c, true) ?? "-" },
+  { label: JEONSE_ROW_LABEL, render: (c) => percentRangeText(c.jeonse_rate_min, c.jeonse_rate_max) ?? "-" },
   // 정부 지역 값(세션 473) — 각 단지의 시군구, 부동산원 최신 달
   { label: "시군구 전세가율(부동산원)", render: (c) => c.region_jeonse_ratio != null
     ? `${c.region_jeonse_ratio}%${c.region_jeonse_period ? ` (${c.region_jeonse_period})` : ""}`
@@ -124,10 +115,10 @@ const MOBILE_TAB_LABELS: Record<MobileTab, string> = {
  * 근거: 단지 정보·평형(관리비·세대 구성) = 네이버 단지/평형 API(backend services/enricher.py),
  * 매물수·평당가·현재 평균가·층별·면적별 가격 = 살아 있는 매물 호가 집계(backend db/price_queries.py FROM articles),
  * 대표 면적 시세·가격 추이 기본선 = complex_area_trade_stats(국토교통부 실거래가 면적별, crawler/service_public.py) ·
- * 전세가율 = 네이버 전세 시세(complex_price_history B1, crawler/service_price.py) ÷ 정부 실거래 중위(crawler/service_metrics.py).
+ * 전세가율 = 네이버 전세 시세(complex_price_history B1 최신 주) ÷ 정부 실거래 최저~최고(backend db/area_price_queries.py jeonse_range).
  */
 const COMPARE_SOURCES_FOOTER_TEXT =
-  "출처: 단지 정보·평형별 관리비·세대 구성 = 네이버부동산 단지 정보 · 매물수·평당가·현재 평균가·층별·면적별 가격 = 네이버부동산 매물 호가 집계(실거래가 아님) · 대표 면적 시세·가격 추이 기본선 = 국토교통부 실거래가(공공데이터포털) · 전세가율 = 네이버부동산 전세 시세 ÷ 정부 실거래 중위";
+  "출처: 단지 정보·평형별 관리비·세대 구성 = 네이버부동산 단지 정보 · 매물수·평당가·현재 평균가·층별·면적별 가격 = 네이버부동산 매물 호가 집계(실거래가 아님) · 대표 면적 시세·가격 추이 기본선 = 국토교통부 실거래가(공공데이터포털) · 전세가율 = 네이버부동산 전세 시세 ÷ 정부 실거래 최저~최고(중개거래 기준)";
 
 const COMPARE_REGION_FOOTNOTE_TEXT =
   "시군구 전세가율: 한국부동산원 전국주택가격동향조사, 아파트 중위 매매가격 대비 전세가격(각 단지의 시군구, 기준 달은 값 옆 괄호)";
@@ -160,6 +151,9 @@ function CompareContent() {
   );
   const failedIds = ids.filter((_, i) => queries[i]?.isError);
   const hasAnyError = failedIds.length > 0;
+  // 받은 단지 전부 이 단지 전세가율 칸이 없으면 그 행을 숨긴다(H — 칸 없음과 값 없음 "-" 구분). memo 키가 아니라 응답에서 바로
+  const loadedComplexes = queries.map((q) => q.data).filter(Boolean) as Complex[];
+  const jeonseHidden = loadedComplexes.length > 0 && loadedComplexes.every(jeonseRangeAbsent);
 
   /* 가격 통계 (React Query 캐시 공유 — CompareCharts와 동일 queryKey) */
   const statsQueries = useQueries({
@@ -223,11 +217,12 @@ function CompareContent() {
     };
     // 평당가는 "건폐율" 행 다음(= 매물수 앞)에 삽입. BASE_ROWS 순서가 바뀌어도
     // 위치가 따라가도록 라벨로 찾는다. 못 찾으면(라벨 변경 등) 기존 위치 17로 폴백.
-    const rows = [...BASE_ROWS];
+    // 이 단지 전세가율 칸이 모든 단지 응답에 없으면(비로그인) 그 행을 그리지 않는다 — 시군구(부동산원) 행만 남는다
+    const rows = BASE_ROWS.filter((r) => !(jeonseHidden && r.label === JEONSE_ROW_LABEL));
     const bcrIdx = rows.findIndex((r) => r.label === "건폐율");
     rows.splice(bcrIdx >= 0 ? bcrIdx + 1 : 17, 0, ppRow);
     return rows;
-  }, [pricePerPyeong, statsLoading, statsErrorMap]);
+  }, [pricePerPyeong, statsLoading, statsErrorMap, jeonseHidden]);
 
   /* ── 인쇄/엑셀 ── */
   const [expandAll, setExpandAll] = useState(false);

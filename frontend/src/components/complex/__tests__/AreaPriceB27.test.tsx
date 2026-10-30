@@ -6,7 +6,8 @@
  * 실행: npx vitest run src/components/complex/__tests__/AreaPriceB27.test.tsx
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { TestQueryProvider } from "@/test-setup";
 import ComplexDashboard from "../ComplexDashboard";
 import PriceChartSection from "../PriceChartSection";
@@ -14,7 +15,7 @@ import InfoCards from "@/components/article/InfoCards";
 import PriceHistoryChart from "@/components/PriceHistoryChart";
 import CompareCharts from "@/components/CompareCharts";
 import { areaGroupOf, areaGroupRange, otherAreaText, pickRepresentativeArea, sameAreaFilters } from "@/lib/area-group";
-import type { Complex, PyeongDetail } from "@/types";
+import type { AreaPrice, AreaTrade, Complex, PyeongDetail } from "@/types";
 
 type AvgResult = { avgPrice: number | null; count: number; isLoading: boolean; isError: boolean };
 const mockUseComplexArticleAvg = vi.fn<(...args: unknown[]) => AvgResult>(
@@ -39,7 +40,9 @@ vi.mock("recharts", () => ({
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   ComposedChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Line: ({ name }: { name?: string }) => (name ? <div data-testid="line-name">{name}</div> : null),
-  Area: () => null,
+  // 범위 띠·거래 점도 범례 이름이 있으면 같은 자리에(세션 489 B29 — 정부 실거래는 선 대신 띠 + 점)
+  Area: ({ name }: { name?: string }) => (name ? <div data-testid="line-name">{name}</div> : null),
+  Scatter: ({ name }: { name?: string }) => (name ? <div data-testid="line-name">{name}</div> : null),
   BarChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Bar: () => null,
   Cell: () => null,
@@ -70,22 +73,36 @@ const PYEONG_6139: PyeongDetail[] = [
   { pyeong_no: 7, exclusive_area: "84.97", household_count_by_pyeong: "15" },
 ];
 
-const SOURCE =
+/** 옛 화면(중위)용 출처 — 화면은 더 이상 읽지 않는다(세션 489 PR b2 G) */
+const OLD_SOURCE =
   "정부 실거래 최근 6개월, 전용 59㎡ 대는 소수점을 버린 같은 크기끼리 · 전세가율 = 네이버 전세 시세(같은 면적) ÷ 정부 실거래 중위";
+/** 범위 화면 출처(BE area_price_range_source 정본 글자) */
+const SOURCE =
+  "정부 실거래 최근 6개월 최저~최고(중개거래 기준), 전용 59㎡ 대는 소수점을 버린 같은 크기끼리 · 전세가율 = 네이버 전세 시세(같은 면적, 최신 주) ÷ 정부 실거래 최저~최고";
+
+/** 6139 59㎡ 라이브 API 실측(10-31 06:5x) — 거래일 내림차순 */
+const T59: AreaTrade[] = [
+  { price: 15700, date: "2026-06-26", floor: 4, direct: false },
+  { price: 17200, date: "2026-06-05", floor: 8, direct: false },
+  { price: 18000, date: "2026-05-05", floor: 7, direct: false },
+];
 
 const C6139: Complex = {
   complex_no: "6139",
   complex_name: "자연",
   rep_area_m2: 59,
+  // 옛 칸(중위·잡 건수) — 화면이 읽지 않는 것을 단언하려고 일부러 다른 값으로 둔다
   nearby_median_price: 17200,
-  recent_trades_6m: 3,
-  // BE 가 평형표의 모든 묶음을 대표 먼저·거래 수 순으로 준다(보완 ①) — 거래 없는 42 는 null
+  recent_trades_6m: 9,
+  // BE 가 평형표의 모든 묶음을 대표 먼저·거래 수 순으로 준다(보완 ①) — 거래 없는 42 는 null · trades []
   area_prices: [
-    { area_m2: 59, households: 116, price_median: 17200, trade_count: 3 },
-    { area_m2: 84, households: 70, price_median: 22000, trade_count: 1 },
-    { area_m2: 42, households: 12, price_median: null, trade_count: null },
+    { area_m2: 59, households: 116, price_median: 17200, trade_count: 3, price_min: 15700, price_max: 18000, trades: T59 },
+    { area_m2: 84, households: 70, price_median: 22000, trade_count: 1, price_min: 22000, price_max: 22000,
+      trades: [{ price: 22000, date: "2026-07-10", floor: 12, direct: false }] },
+    { area_m2: 42, households: 12, price_median: null, trade_count: null, price_min: null, price_max: null, trades: [] },
   ],
-  area_price_source: SOURCE,
+  area_price_source: OLD_SOURCE,
+  area_price_range_source: SOURCE,
   region_jeonse_ratio: 71.2,
   region_name: "대전 유성구",
   region_jeonse_source: "한국부동산원 전국주택가격동향조사",
@@ -104,54 +121,145 @@ describe("ComplexDashboard 시세 칸 — A안 (세션 474 B27)", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
-  it("대표 면적 값 크게 · 칩 · 다른 면적 작게(거래 없는 42㎡ —) · 전세가율(59㎡) — · 출처", () => {
-    // 로그인 응답 — 전세가율 칸이 있고 값이 없다(null). 비로그인(칸 없음)은 아래 시험
-    renderDashboard({ ...C6139, jeonse_rate: null });
-    const box = screen.getByRole("button", { name: /^시세 · 전용 59㎡\(116세대\)/ });
+  /** 대표 면적(59) 항목만 바꾼 단지 */
+  function withRep(rep: Partial<AreaPrice>, extra: Partial<Complex> = {}): Complex {
+    return { ...C6139, ...extra, area_prices: [{ ...C6139.area_prices![0], ...rep }, ...C6139.area_prices!.slice(1)] };
+  }
+  const priceBox = () => screen.getByRole("button", { name: /^시세 · 전용 59㎡/ });
+
+  it("A1·B·G — 최저 ~ 최고 · 칩 N = 거래 목록 길이 · 다른 면적 범위 · 전세가율 범위 · 새 출처 글자 (세션 489 B29)", () => {
+    renderDashboard({ ...C6139, jeonse_rate: 61, jeonse_rate_min: 72, jeonse_rate_max: 80 });
+    const box = priceBox();
     expect(box).toHaveTextContent("시세 · 전용 59㎡(116세대)");
-    expect(screen.getByTestId("box-chip-prices")).toHaveTextContent("최근 6개월 3건");
-    expect(box).toHaveTextContent("1억 7,200만");
+    expect(box).toHaveTextContent("1억 5,700만 ~ 1억 8,000만");
+    expect(box).not.toHaveTextContent("1억 7,200만"); // 중위(nearby_median_price)는 안 읽는다
+    expect(screen.getByTestId("box-chip-prices")).toHaveTextContent("최근 6개월 3건"); // 잡 값 9 가 아니라 목록 3
     expect(box).toHaveTextContent("84㎡ 2억 2,000만 (1건) · 42㎡ —");
-    expect(screen.getByTestId("box-extra-prices")).toHaveTextContent("전세가율(59㎡) — · 대전 유성구 아파트 71.2%");
+    expect(screen.getByTestId("box-extra-prices")).toHaveTextContent("전세가율(59㎡) 72%~80% · 대전 유성구 아파트 71.2%");
+    expect(box).not.toHaveTextContent("61%"); // 옛 한 값 전세가율은 안 읽는다
     expect(screen.getByTestId("box-note-prices")).toHaveTextContent(
       `이 단지: ${SOURCE} · 지역: 한국부동산원 전국주택가격동향조사(2026.09)`,
     );
+    expect(box).not.toHaveTextContent(OLD_SOURCE);
+    expect(box.textContent).not.toMatch(/중위|중앙값/);
     expect(box).not.toHaveTextContent("매물 평균");
   });
 
-  it("비로그인 응답(전세가율 칸 없음)이면 이 단지 전세가율 글자 없이 지역 값만 (세션 481)", () => {
+  it("A1 — 펼치면 최근 6개월 거래 목록(거래일 내림차순) · 줄 수 = 칩 N", async () => {
+    renderDashboard({ ...C6139, jeonse_rate_min: 72, jeonse_rate_max: 80 });
+    await userEvent.click(priceBox());
+    const items = within(screen.getByTestId("rep-trade-list")).getAllByRole("listitem").map((li) => li.textContent);
+    expect(items).toEqual([
+      "2026.06.26 · 4층 · 1억 5,700만",
+      "2026.06.05 · 8층 · 1억 7,200만",
+      "2026.05.05 · 7층 · 1억 8,000만",
+    ]);
+    expect(screen.getByTestId("box-chip-prices")).toHaveTextContent(`최근 6개월 ${items.length}건`);
+    expect(document.body.textContent).not.toMatch(/중위|중앙값/);
+  });
+
+  it("직거래 줄엔 작은 '직거래' · 날짜 없으면 '날짜 미상' · 층 없으면 생략", async () => {
+    renderDashboard(withRep({ trades: [...T59, { price: 12000, date: null, floor: null, direct: true }] }));
+    await userEvent.click(priceBox());
+    const items = within(screen.getByTestId("rep-trade-list")).getAllByRole("listitem");
+    expect(items).toHaveLength(4);
+    expect(items[3]).toHaveTextContent("날짜 미상 · 1억 2,000만직거래");
+    expect(items.slice(0, 3).filter((li) => li.textContent?.includes("직거래"))).toHaveLength(0);
+    expect(screen.getByTestId("box-chip-prices")).toHaveTextContent("최근 6개월 4건");
+  });
+
+  it("A3 — 최저=최고 & 2건 이상이면 한 값 + (2건)", () => {
+    renderDashboard(withRep({ price_min: 18000, price_max: 18000, trades: [T59[2], { ...T59[2], date: "2026-05-01" }] }));
+    expect(priceBox()).toHaveTextContent("1억 8,000만 (2건)");
+  });
+
+  it("A3 — 직거래만(범위 null · 목록 있음) → — · 칩 '3건(직거래만)' · 목록은 보인다", async () => {
+    renderDashboard(withRep({ price_min: null, price_max: null, trades: T59.map((t) => ({ ...t, direct: true })) }));
+    expect(screen.getByTestId("box-chip-prices")).toHaveTextContent("최근 6개월 3건(직거래만)");
+    expect(priceBox()).toHaveTextContent("—");
+    await userEvent.click(priceBox());
+    expect(within(screen.getByTestId("rep-trade-list")).getAllByRole("listitem")).toHaveLength(3);
+  });
+
+  it("A4 — 목록이 비었는데 범위가 있으면 값은 보이고 칩은 숨긴다(0건으로 보이지 않게)", () => {
+    renderDashboard(withRep({ trades: [] }));
+    expect(priceBox()).toHaveTextContent("1억 5,700만 ~ 1억 8,000만");
+    expect(screen.queryByTestId("box-chip-prices")).toBeNull();
+  });
+
+  it("A3 — 대표 면적 거래 0건이면 큰 숫자 — · 칩 없음 · 다른 면적 줄만 (매물 평균으로 안 돌아간다)", () => {
+    renderDashboard(withRep({ price_median: null, trade_count: null, price_min: null, price_max: null, trades: [] }, { nearby_median_price: undefined }));
+    const box = priceBox();
+    expect(box).toHaveTextContent("—");
+    expect(box).toHaveTextContent("84㎡ 2억 2,000만 (1건)");
+    expect(box).not.toHaveTextContent("매물 평균");
+    expect(screen.queryByTestId("box-chip-prices")).toBeNull();
+  });
+
+  it("B — 로그인 응답인데 전세가율 범위가 null 이면 이 단지 전세가율은 비우고 지역 값만", () => {
+    renderDashboard({ ...C6139, jeonse_rate: 61, jeonse_rate_min: null, jeonse_rate_max: null });
+    const extra = screen.getByTestId("box-extra-prices");
+    expect(extra).toHaveTextContent("대전 유성구 아파트 전세가율 71.2%");
+    expect(extra).not.toHaveTextContent("전세가율(59㎡)");
+  });
+
+  it("B — 범위 양끝이 같으면 한 값", () => {
+    renderDashboard({ ...C6139, jeonse_rate_min: 75, jeonse_rate_max: 75 });
+    expect(screen.getByTestId("box-extra-prices")).toHaveTextContent("전세가율(59㎡) 75% · 대전 유성구 아파트 71.2%");
+  });
+
+  it("H — 비로그인 응답(전세가율 칸 없음)이면 이 단지 전세가율 글자 없이 지역 값만 (세션 481)", () => {
     renderDashboard(C6139);
     const extra = screen.getByTestId("box-extra-prices");
     expect(extra).toHaveTextContent("대전 유성구 아파트 전세가율 71.2%");
     expect(extra).not.toHaveTextContent("전세가율(59㎡)");
   });
 
-  it("대표 면적에 거래가 없으면 큰 숫자는 — (매물 평균 대체값으로 안 돌아간다)", () => {
-    renderDashboard({
-      ...C6139, nearby_median_price: undefined, recent_trades_6m: 0,
-      area_prices: [
-        { area_m2: 59, households: 116, price_median: null, trade_count: null },
-        { area_m2: 84, households: 70, price_median: 22000, trade_count: 1 },
-      ],
-    });
-    const box = screen.getByRole("button", { name: /^시세 · 전용 59㎡/ });
+  it("H — 면적별 칸이 아예 없으면(직접 조회 폴백) 큰 값 — · 칩·다른 면적 줄·목록 없음 · 못 불러옴 글자 없음", async () => {
+    renderDashboard({ ...C6139, area_prices: undefined });
+    const box = priceBox();
     expect(box).toHaveTextContent("—");
-    expect(box).not.toHaveTextContent("매물 평균");
-    expect(screen.getByTestId("box-chip-prices")).toHaveTextContent("최근 6개월 0건");
+    expect(screen.queryByTestId("box-chip-prices")).toBeNull();
+    expect(box).not.toHaveTextContent("84㎡");
+    expect(box).not.toHaveTextContent("1억 7,200만");
+    await userEvent.click(box);
+    expect(screen.queryByTestId("rep-trade-list")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/불러오지|못 불러/);
   });
 
-  it("대표 면적 없이 옛 값만 남은 단지 — 값은 그대로, '면적 섞인 옛 값' 작은 글 (보완 F2 · Q4)", () => {
-    renderDashboard({ complex_no: "C8", complex_name: "옛값단지", nearby_median_price: 18000, jeonse_rate: 53.6, price_basis: "legacy_mixed" }, []);
+  it("A' — 옛 값 단지: legacy_range 범위 + 작은 줄(직거래 포함) · 전세가율 비움 · 중위 글자 없음", () => {
+    renderDashboard({
+      complex_no: "C8", complex_name: "옛값단지", nearby_median_price: 15000, jeonse_rate: 53.6, price_basis: "legacy_mixed",
+      legacy_range: { lower: 12000, upper: 18000, month: "202503" },
+      region_jeonse_ratio: 71.2, region_name: "대전 유성구", region_jeonse_source: "부동산원", region_jeonse_period: "2026.09",
+    }, []);
     const box = screen.getByRole("button", { name: "시세 메뉴 열기" });
-    expect(box).toHaveTextContent("1억 8,000만");
-    expect(screen.getByTestId("box-extra-prices")).toHaveTextContent(
-      "면적 섞인 옛 값 — 최근 6개월 거래가 없어 다시 계산되지 않았어요",
-    );
+    expect(box).toHaveTextContent("1억 2,000만 ~ 1억 8,000만");
+    expect(box).not.toHaveTextContent("1억 5,000만");
+    expect(screen.getByTestId("box-extra-prices")).toHaveTextContent("2025년 3월 거래 · 면적 섞임 · 직거래 포함 · 그 뒤 거래 없음");
+    expect(box).not.toHaveTextContent("53.6");
+    expect(box).toHaveTextContent("대전 유성구 아파트 전세가율 71.2%");
+    expect(box.textContent).not.toMatch(/중위|중앙값|면적 섞인 옛 값/);
+  });
+
+  it("A' — legacy_range 가 null 이면 — + '최근 거래 없음'", () => {
+    renderDashboard({ complex_no: "C8", complex_name: "옛값단지", nearby_median_price: 15000, price_basis: "legacy_mixed", legacy_range: null }, []);
+    const box = screen.getByRole("button", { name: "시세 메뉴 열기" });
+    expect(box).toHaveTextContent("—");
+    expect(screen.getByTestId("box-extra-prices")).toHaveTextContent("최근 거래 없음");
+  });
+
+  it("A'·H — legacy_range 칸이 없으면 — 만(작은 줄 없음, 중위 값으로 안 돌아간다)", () => {
+    renderDashboard({ complex_no: "C8", complex_name: "옛값단지", nearby_median_price: 15000, price_basis: "legacy_mixed" }, []);
+    const box = screen.getByRole("button", { name: "시세 메뉴 열기" });
+    expect(box).toHaveTextContent("—");
+    expect(box).not.toHaveTextContent("1억 5,000만");
+    expect(screen.queryByTestId("box-extra-prices")).toBeNull();
   });
 
   it("대표 면적 단지(6139)는 옛 값 표시 없음", () => {
     renderDashboard({ ...C6139, price_basis: "rep_area" });
-    expect(screen.queryByText(/면적 섞인 옛 값/)).toBeNull();
+    expect(screen.queryByText(/면적 섞임/)).toBeNull();
   });
 
   it("대표 면적이 없으면 지금처럼 — 라벨 '시세' · 매물 평균 대체값", () => {
@@ -222,16 +330,17 @@ describe("area-group 도우미", () => {
     expect(areaGroupOf(undefined)).toBeNull();
   });
 
-  it("otherAreaText 는 최대 3개", () => {
-    const many = [
-      { area_m2: 59, price_median: 1, trade_count: 9 },
-      { area_m2: 74, price_median: 20000, trade_count: 5 },
-      { area_m2: 84, price_median: 30000, trade_count: 4 },
-      { area_m2: 101, price_median: 40000, trade_count: 2 },
-      { area_m2: 114, price_median: 50000, trade_count: 1 },
+  it("otherAreaText 는 최대 3개 · 범위 + 거래 목록 건수 · 중위는 안 읽는다 (세션 489 B29)", () => {
+    const t = (price: number): AreaTrade => ({ price, date: "2026-06-01", floor: 3, direct: false });
+    const many: AreaPrice[] = [
+      { area_m2: 59, price_median: 1, trade_count: 9, price_min: 1, price_max: 2, trades: [t(1)] },
+      { area_m2: 74, price_median: 99999, trade_count: 5, price_min: 20000, price_max: 21000, trades: [t(20000), t(21000)] },
+      { area_m2: 84, price_median: 99999, trade_count: 4, price_min: 30000, price_max: 30000, trades: [t(30000)] },
+      { area_m2: 101, price_median: 99999, trade_count: 2, price_min: 40000, price_max: 42000, trades: [t(40000), t(42000), t(41000)] },
+      { area_m2: 114, price_median: 50000, trade_count: 1, price_min: 50000, price_max: 50000, trades: [t(50000)] },
     ];
     expect(otherAreaText(59, many).split(" · ")).toHaveLength(3);
-    expect(otherAreaText(59, many)).toBe("74㎡ 2억 (5건) · 84㎡ 3억 (4건) · 101㎡ 4억 (2건)");
+    expect(otherAreaText(59, many)).toBe("74㎡ 2억~2억 1,000만 (2건) · 84㎡ 3억 (1건) · 101㎡ 4억~4억 2,000만 (3건)");
   });
 });
 
@@ -239,33 +348,54 @@ describe("InfoCards 라벨 (세션 474 B27)", () => {
   it("대표 면적이 있으면 '대표 면적 시세(59㎡)' · '전세가율(이 단지, 같은 면적)' · 매물은 '같은 면적 기준'", () => {
     render(
       <InfoCards
-        article={{ article_no: "A1", complex_no: "6139", trade_type_name: "전세", article_jeonse_ratio: 68.2 }}
-        complex={{ ...C6139, jeonse_rate: 61 }}
+        article={{ article_no: "A1", complex_no: "6139", trade_type_name: "전세", article_jeonse_ratio: 68.2,
+          article_jeonse_ratio_min: 66.7, article_jeonse_ratio_max: 76.4 }}
+        complex={{ ...C6139, jeonse_rate: 61, jeonse_rate_min: 72, jeonse_rate_max: 80 }}
       />,
     );
     expect(screen.getByText("대표 면적 시세(59㎡)")).toBeInTheDocument();
-    expect(screen.getByText("1억 7,200만")).toBeInTheDocument();
+    // F — 대시보드·비교표와 같은 글자(세션 489 B29) · 중위 1억 7,200만은 안 읽는다
+    expect(screen.getByText("1억 5,700만 ~ 1억 8,000만 (3건)")).toBeInTheDocument();
+    expect(screen.queryByText("1억 7,200만")).toBeNull();
     expect(screen.getByText("전세가율(이 단지, 같은 면적)")).toBeInTheDocument();
+    expect(screen.getByText("72%~80%")).toBeInTheDocument();
     expect(screen.getByText("전세가율(매물, 같은 면적 기준)")).toBeInTheDocument();
+    expect(screen.getByText("66.7%~76.4%")).toBeInTheDocument();   // C — 보증금 ÷ 최고 ~ 최저
+    expect(screen.queryByText(/68\.2|61%/)).toBeNull();
     expect(screen.queryByText("주변시세")).toBeNull();
+  });
+
+  it("H — 매물 상세 단지 카드: 칸이 없으면(직접 조회 폴백·비로그인) 그 줄을 그리지 않는다 · 값 null 이면 비움", () => {
+    render(
+      <InfoCards
+        article={{ article_no: "A1", complex_no: "6139", trade_type_name: "전세", article_jeonse_ratio_min: null, article_jeonse_ratio_max: null }}
+        complex={{ ...C6139, area_prices: undefined, jeonse_rate: 61 }}
+      />,
+    );
+    expect(screen.queryByText("대표 면적 시세(59㎡)")).toBeNull();
+    expect(screen.queryByText("전세가율(이 단지, 같은 면적)")).toBeNull();
+    expect(screen.queryByText("전세가율(매물, 같은 면적 기준)")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/불러오지|못 불러|중위/);
   });
 });
 
-describe("PriceHistoryChart 계열 분리 (세션 474 B27 보완 ①)", () => {
+describe("PriceHistoryChart 계열 분리 (세션 474 B27 보완 ① · 세션 489 B29 범위 띠)", () => {
   const base = { trade_type_label: "매매", price_upper: null, price_lower: null, base_month: "202604" };
 
-  it("평형을 고르면 같은 달 매매가 정부 실거래·네이버 시세 두 선으로 — 합치지 않는다", () => {
+  it("평형을 고르면 같은 달 매매가 정부 실거래(최저~최고 띠)·네이버 시세 선으로 — 합치지 않는다 · 중위 선 없음", () => {
     render(
       <PriceHistoryChart
         areaLabel="전용 84㎡ 대"
         items={[
-          { ...base, trade_type: "A1", price_avg: 22000, series: "정부 실거래" },
+          { ...base, trade_type: "A1", price_avg: 22000, series: "정부 실거래", range_lower: 21000, range_upper: 23000,
+            trades: [{ price: 21000, date: "2026-04-03", floor: 5, direct: false }, { price: 23000, date: "2026-04-20", floor: 9, direct: false }] },
           { ...base, trade_type: "A1", price_avg: 24000, series: "네이버 시세" },
         ]}
       />,
     );
     const names = screen.getAllByTestId("line-name").map((el) => el.textContent);
-    expect(names).toEqual(["매매 정부 실거래 중위 (전용 84㎡ 대)", "매매 네이버 시세(이 평형)"]);
+    expect(names).toEqual(["매매 정부 실거래 최저~최고 (전용 84㎡ 대)", "매매 실거래(거래 1건 = 점 1개)", "매매 네이버 시세(이 평형)"]);
+    expect(names.join(" ")).not.toMatch(/중위|중앙값/);
   });
 
   it("옛 응답(series 없음)이면 범례 그대로 '매매 평균'", () => {
@@ -274,16 +404,27 @@ describe("PriceHistoryChart 계열 분리 (세션 474 B27 보완 ①)", () => {
   });
 });
 
-describe("InfoCards 옛 값 표시 (보완 F2)", () => {
-  it("옛 값 단지는 '1억 8,000만 (면적 섞인 옛 값)' · '53.6% (옛 값)'", () => {
+describe("InfoCards 옛 값 표시 (보완 F2 → 세션 489 B29 A')", () => {
+  it("옛 값 단지는 legacy_range 범위 + 작은 줄 · 전세가율 비움", () => {
     render(
       <InfoCards
         article={{ article_no: "A1", complex_no: "C8", trade_type_name: "매매" }}
-        complex={{ complex_no: "C8", complex_name: "옛값단지", nearby_median_price: 18000, jeonse_rate: 53.6, price_basis: "legacy_mixed" }}
+        complex={{ complex_no: "C8", complex_name: "옛값단지", nearby_median_price: 15000, jeonse_rate: 53.6, price_basis: "legacy_mixed",
+          jeonse_rate_min: null, jeonse_rate_max: null, legacy_range: { lower: 12000, upper: 18000, month: "202503" } }}
       />,
     );
-    expect(screen.getByText("1억 8,000만 (면적 섞인 옛 값)")).toBeInTheDocument();
-    expect(screen.getByText("53.6% (옛 값)")).toBeInTheDocument();
+    expect(screen.getByText("1억 2,000만 ~ 1억 8,000만 (2025년 3월 거래 · 면적 섞임 · 직거래 포함 · 그 뒤 거래 없음)")).toBeInTheDocument();
+    expect(screen.queryByText(/53\.6|옛 값\)|1억 5,000만/)).toBeNull();
+  });
+
+  it("legacy_range 가 null 이면 '— (최근 거래 없음)'", () => {
+    render(
+      <InfoCards
+        article={{ article_no: "A1", complex_no: "C8", trade_type_name: "매매" }}
+        complex={{ complex_no: "C8", complex_name: "옛값단지", nearby_median_price: 15000, price_basis: "legacy_mixed", legacy_range: null }}
+      />,
+    );
+    expect(screen.getByText("— (최근 거래 없음)")).toBeInTheDocument();
   });
 });
 
@@ -314,15 +455,18 @@ describe("PriceChartSection 제목·범례 (세션 474 B27)", () => {
     mockGetPriceHistory.mockReset();
   });
 
-  it("응답의 basis 를 제목으로, 면적을 범례로 · 기본 선택지 = 대표 면적", async () => {
+  it("G — 응답의 basis_range(새 칸)를 제목으로, 면적을 범례로 · 옛 basis(중위) 글자는 안 보인다 · 기본 선택지 = 대표 면적", async () => {
     mockGetPriceHistory.mockResolvedValue({
       complex_no: "6139", area_m2: 59, basis: "최근 2년 전용 59㎡ 대 정부 실거래 중위 · 전세는 네이버 시세",
+      basis_range: "최근 2년 전용 59㎡ 대 정부 실거래 최저~최고(거래는 점) · 전세는 네이버 시세",
       items: [{ trade_type: "A1", trade_type_label: "매매", price_upper: 18000, price_lower: 18000, price_avg: 18000, base_month: "202605" }],
     });
     render(<PriceChartSection complexNo="6139" pyeongDetails={PYEONG_6139} repAreaM2={59} />, { wrapper: TestQueryProvider });
-    expect(await screen.findByTestId("price-history-basis")).toHaveTextContent(
-      "실거래가 추이 · 최근 2년 전용 59㎡ 대 정부 실거래 중위 · 전세는 네이버 시세",
+    const basis = await screen.findByTestId("price-history-basis");
+    expect(basis).toHaveTextContent(
+      "실거래가 추이 · 최근 2년 전용 59㎡ 대 정부 실거래 최저~최고(거래는 점) · 전세는 네이버 시세",
     );
+    expect(basis.textContent).not.toMatch(/중위/);
     await waitFor(() => expect(screen.getByTestId("chart-area-label")).toHaveTextContent("전용 59㎡ 대"));
     expect(screen.getByRole("option", { name: "대표 면적(전용 59㎡ 대)" })).toBeInTheDocument();
   });

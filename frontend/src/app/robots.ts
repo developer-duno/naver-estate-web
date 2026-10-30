@@ -40,11 +40,16 @@ export const AI_TRAINING_BOTS = [
   "CCBot",
 ];
 
+/**
+ * `Allow: /` 줄은 두지 않는다(세션 488) — 막지 않은 경로는 원래 허용이라 없어도 같고, 구글·네이버는 순서와 무관하게
+ * 더 구체적인 경로를 따른다(네이버 안내 예시 `Disallow: /` 뒤 `Allow: /$` 가 그 방식). 다만 위에서부터 처음 맞는 줄을
+ * 따르는 해석기(파이썬 표준 urllib.robotparser 등)는 맨 앞 `Allow: /` 에서 멈춰 학습 봇의 /complex/·/admin 까지 허용으로 읽었다.
+ */
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: [
-      { userAgent: "*", allow: "/", disallow: COMMON_DISALLOW },
-      { userAgent: AI_TRAINING_BOTS, allow: "/", disallow: [...COMMON_DISALLOW, "/complex/", "/region/"] },
+      { userAgent: "*", disallow: COMMON_DISALLOW },
+      { userAgent: AI_TRAINING_BOTS, disallow: [...COMMON_DISALLOW, "/complex/", "/region/"] },
     ],
     sitemap: [`${SITE_URL}/sitemap.xml`, `${SITE_URL}/sitemaps/complexes.xml`, `${SITE_URL}/sitemaps/regions.xml`],
     host: SITE_URL,

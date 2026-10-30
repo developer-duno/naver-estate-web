@@ -336,6 +336,14 @@ def test_failed_article_at_cap_leaves_selection(db, monkeypatch):
     assert "B" not in called
 
 
+def test_pool_timeout_is_db_system_error():
+    """연결 창고 대기 초과(sqlalchemy.exc.TimeoutError)는 매물 탓이 아닌 DB 쪽 일시 장애 — 세지 않는 갈래(세션 486)."""
+    from sqlalchemy.exc import TimeoutError as PoolTimeoutError
+
+    assert service_discover._is_db_system_error(PoolTimeoutError("pool", None, None)) is True
+    assert service_discover._is_db_system_error(ValueError("bad")) is False
+
+
 def test_exc_head_drops_newlines_and_sql_params():
     """로그용 예외 문구 — 개행 제거·200자 이내, SQLAlchemy 예외는 [parameters](매물 값) 없이 원 메시지만."""
     from sqlalchemy.exc import StatementError

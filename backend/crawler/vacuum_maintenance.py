@@ -106,9 +106,10 @@ def _grant_detail_retry_for_capped_articles(db) -> int:
         # 흡수하는 best-effort 규약 탓에 **조용한 기능 사망**(매일 warning 만 남고
         # 되살아나는 매물은 0)이 된다. 배치 잡 세션에 한해 30초로 상향 —
         # service_discover.crawl_article_details 의 후보 SELECT 선례와 동일하다.
-        # NullPool 이라 연결이 세션 전용이고 종료 시 닫혀 다른 요청에 누수 0.
+        # LOCAL = 이 트랜잭션(아래 UPDATE) 안에서만 30초, commit 뒤 8초로 복귀 —
+        # 연결 창고(QueuePool, 세션 486)로 반납된 연결에 30초가 새지 않는다.
         if db.bind is not None and db.bind.dialect.name == "postgresql":
-            db.execute(text("SET statement_timeout = 30000"))
+            db.execute(text("SET LOCAL statement_timeout = 30000"))
         result = db.execute(
             # dialect 무관 표준 SQL (PostgreSQL·SQLite 동일 동작)
             text(

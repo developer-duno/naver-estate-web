@@ -94,7 +94,7 @@ shared/naver_api.py NaverEstateAPI.search()
   ↓
 services/upsert.py _do_upsert(db, Complex, dict) — PG/SQLite 자동 분기
   ↓ INSERT ON CONFLICT DO UPDATE
-DB upsert (Supabase PostgreSQL, NullPool)
+DB upsert (Supabase PostgreSQL, 연결 창고 QueuePool 10+10 — 세션 486)
   ↓ TTL 캐시 적중률 (services/cache.py 동적 TTL)
 FE 응답 + React Query 캐시
   ↓

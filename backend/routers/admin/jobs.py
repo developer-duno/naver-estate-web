@@ -257,7 +257,7 @@ def _raise_statement_timeout_for_stats(db: Session) -> bool:
     한도는 문장 하나하나에 걸린다(11문장 합계가 아니다). 이론상 잠금 보유 상한은 문장 수 × 30초지만
     실측상 한 문장(`article_detail_filled`)이 시간을 거의 다 쓴다.
 
-    SET LOCAL 은 현재 트랜잭션이 끝나면 사라진다(NullPool 이라 연결도 요청마다 새것).
+    SET LOCAL 은 현재 트랜잭션이 끝나면 사라진다(연결 창고(QueuePool)라 LOCAL 이 아니면 반납 뒤 다음 요청에 샌다 — 세션 486).
     SQLite(CI)에는 이 문법이 없어 실행하지 않는다(domain-mapping-ssot.md 룰 3 dialect 분기).
     반환값 = 실제로 올렸는지.
     """

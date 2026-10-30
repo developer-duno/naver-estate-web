@@ -363,7 +363,7 @@ def detect_issues_ex(db) -> tuple[list[dict], bool, dict[str, dict]]:
     # 넘길 수 있다(세션 342 실측: articles slow query 9.6초). timeout 이 나면 트랜잭션이
     # aborted 되는데, 메인 db 를 공유하면 그 뒤 monitor_alerts SELECT/UPDATE 가 전부
     # InFailedSqlTransaction 으로 연쇄 실패한다. 그래서 freshness 는 **별도 세션**으로
-    # 격리해 실패해도 메인 트랜잭션을 오염시키지 않게 한다(NullPool 이라 연결 1개 잠깐 추가).
+    # 격리해 실패해도 메인 트랜잭션을 오염시키지 않게 한다(연결 창고에서 연결 1개를 잠깐 더 꺼낸다).
     try:
         from db.database import SessionLocal
         fresh_db = SessionLocal()

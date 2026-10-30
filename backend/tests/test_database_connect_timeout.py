@@ -1,7 +1,8 @@
 """db/database.py 의 create_engine 에 connect_timeout 이 설정됐는지 회귀 가드 (세션 341).
 
-배경: Supabase 가 unreachable(먹통)이면 NullPool 이 매 요청 새 connect → psycopg2 기본
+배경(옛 NullPool 시절): Supabase 가 unreachable(먹통)이면 매 요청 새 connect → psycopg2 기본
 ~2min 무한 대기하며 /health/db 워커 스레드가 쌓이던 것을 connect_timeout=5 로 차단.
+세션 486 부터는 연결 창고(QueuePool)라 새 연결을 맺을 때만 이 제한이 걸린다.
 
 검증 방식 = AST 정적 파싱. conftest 가 sys.modules["db.database"] 를 가짜 SQLite 모듈로
 교체하므로(conftest.py:79-85) 런타임 introspection 은 prod 엔진을 못 본다 — 그 자체가

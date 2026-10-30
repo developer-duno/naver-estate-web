@@ -918,10 +918,12 @@ def _is_db_system_error(exc: Exception) -> bool:
     """매물 자료 탓이 아닌 DB 쪽 일시 장애(연결 끊김·QueryCanceled 등)인가.
 
     codes.md "시스템성 transient 는 세지 않는다" — 이 갈래는 detail_fail_count 를 안 올린다.
+    연결 창고 대기 초과(sqlalchemy.exc.TimeoutError, 세션 486)도 DB 쪽 일시 장애라 같은 갈래다.
     """
     from sqlalchemy.exc import InterfaceError, OperationalError
+    from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 
-    return isinstance(exc, (OperationalError, InterfaceError)) or bool(
+    return isinstance(exc, (OperationalError, InterfaceError, PoolTimeoutError)) or bool(
         getattr(exc, "connection_invalidated", False)
     )
 
@@ -1176,18 +1178,18 @@ def crawl_article_details(batch_size: int = 100, scheduler_job_id: str | None = 
         # 아래 후보 SELECT 가 부하 꼬리에서 간헐적으로 8s statement_timeout 에 잘린다
         # (2026-06-10 라이브 24h 31회 중 2회 QueryCanceled, 동일 쿼리 EXPLAIN 1.4~3.3s).
         # 8s 가드(세션 255)는 웹 요청 폭주 보호용 — 배치 잡 세션에 한해 30s 로 상향.
-        # NullPool 이라 연결이 세션 전용이고 종료 시 닫혀 다른 요청에 누수 0.
-        # ⚠ 적용 범위 = **이 SET 직후부터 다음 commit 전까지**(= 아래 후보 SELECT).
-        #   NullPool 은 commit 마다 물리 연결을 반납하고, 재연결 시 database.py 의 connect
-        #   이벤트가 STATEMENT_TIMEOUT_MS(기본 8000)로 다시 SET 한다. 세션 396 에서 루프가
-        #   순회마다 commit 하도록 바뀌었으므로 루프 안 UPDATE 들은 8s 로 보호된다(의도된 동작 —
-        #   개별 UPDATE 는 단건이라 8s 로 충분하고, 길게 잡으면 잠금 보유가 다시 늘어난다).
+        # ⚠ 적용 범위 = **이 SET LOCAL 직후부터 다음 commit 전까지**(= 아래 후보 SELECT).
+        #   LOCAL 이라 이 트랜잭션 안에서만 30s 이고 commit·rollback 뒤엔 8s 로 돌아온다 —
+        #   연결 창고(QueuePool, 세션 486)로 반납된 연결이 다음 요청에 30s 를 들고 가지 않는다.
+        #   세션 396 에서 루프가 순회마다 commit 하도록 바뀌었으므로 루프 안 UPDATE 들은 8s 로
+        #   보호된다(의도된 동작 — 개별 UPDATE 는 단건이라 8s 로 충분하고, 길게 잡으면 잠금
+        #   보유가 다시 늘어난다).
         # 아래 후보 SELECT 는 V057 부분 인덱스(ix_articles_detail_pending, 세션 400)로
         # 커버된다 — 옛 "인덱스 추가 폐기"(세션 266·267) 판정의 전제가 반전됐다(대기 38만 →
         # 실질 0 으로 수렴해 LIMIT 조기 종료가 불가능해지고 매회 전량 스캔).
         if db.bind is not None and db.bind.dialect.name == "postgresql":
             from sqlalchemy import text
-            db.execute(text("SET statement_timeout = 30000"))
+            db.execute(text("SET LOCAL statement_timeout = 30000"))
 
         articles = (
             db.query(Article)
@@ -1460,9 +1462,11 @@ def backfill_article_details(batch_size: int = 300, scheduler_job_id: str | None
     job_id = job.id
 
     try:
+        # LOCAL = 아래 후보 SELECT 가 든 이 트랜잭션 안에서만 30s · commit 뒤 8s 로 복귀 —
+        # 연결 창고(세션 486)로 반납된 연결에 30s 가 새지 않는다(crawl_article_details 와 같은 이유).
         if db.bind is not None and db.bind.dialect.name == "postgresql":
             from sqlalchemy import text
-            db.execute(text("SET statement_timeout = 30000"))
+            db.execute(text("SET LOCAL statement_timeout = 30000"))
 
         cutoff = utcnow() - timedelta(days=30)
         articles = (

@@ -47,15 +47,15 @@ URL이 고정(api.2u.pe.kr)이므로 Vercel 재배포 불필요.
 
 ## DB 커넥션 풀
 
-- **NullPool** 사용 (요청마다 연결/해제) — Supabase Session Mode 동시 연결 한도 방지
-- `db/database.py`에서 설정
+- **QueuePool(연결 창고)** 사용 — 상시 10 + 넘침 10 = 최대 20(Supabase 세션 풀 30 의 67%, 수동 스크립트·미분양 몫 10 남김), 다 차면 5초 기다리고 그래도 없으면 503 + `Retry-After: 5`(main.py 처리기). env `DB_POOL_SIZE`·`DB_POOL_MAX_OVERFLOW`·`DB_POOL_TIMEOUT_S` 로 덮을 수 있다(코드 기본값만 씀). 옛 NullPool(요청마다 연결/해제)은 스레드 50 이 몰리면 30 을 넘겨 EMAXCONNSESSION — 2026-10-30 하루 18회로 세션 486 에 전환
+- `db/database.py`에서 설정 · 가드 = `tests/test_database_pool.py`
 
 ### statement_timeout 적용 방식 (세션 255 실측 — 함정 주의)
 
-- **폭주 쿼리 안전망 = `connect` 이벤트의 `SET statement_timeout`** (env `STATEMENT_TIMEOUT_MS`, 기본 8000ms). NullPool 이라 매 요청 새 연결 → connect 이벤트가 매번 발동 → 모든 세션 보장.
+- **폭주 쿼리 안전망 = `connect` 이벤트의 `SET statement_timeout`** (env `STATEMENT_TIMEOUT_MS`, 기본 8000ms). connect 이벤트는 창고에 새 연결이 생길 때 한 번 돌고 그 값이 연결이 쓰이는 동안 유지된다. ⛔ 그래서 **세션 단위 `SET statement_timeout` 금지** — 반납된 연결이 다음 요청에 그 값을 들고 간다. 늘릴 땐 `SET LOCAL`(그 트랜잭션만, commit 뒤 8초로 복귀 · 세션 486 에 배치 3곳 전환).
 - ⚠ **`connect_args={"options": "-c statement_timeout=..."}` 는 작동 안 한다.** Supabase Supavisor 풀러가 startup `options` 파라미터를 무시함 (`SHOW statement_timeout` 이 기본 2min 그대로). [Supabase Timeouts 공식문서](https://supabase.com/docs/guides/database/postgres/timeouts): transaction mode 에선 role-level `ALTER ROLE` 도 무효, 연결 직후 명시 `SET` 만 세션에 적용.
 - 검증법 = prod 연결로 `SHOW statement_timeout` (8s 기대) + `SELECT pg_sleep(9)` (8.0초에 QueryCanceled 기대). 실제 앱·배치 쿼리는 0.03~0.05초라 false positive 없음 (인덱스 없는 풀스캔 GROUP BY 만 8초 초과 → 죽음).
-- **예외는 세는 명령으로 확인**(숫자를 문서에 고정하면 새 예외가 생겨도 안 갱신되니 — 세션 424 보완): `grep -rn 'text(f\?"SET \(LOCAL \)\?statement_timeout' backend --include=*.py | grep -v "/tests/"`(2026-10-01 현재 5곳: 관리자 상세 통계·정보 안 채워지면 알림(둘 다 `SET LOCAL`, 트랜잭션 단위) + service_discover 2곳·vacuum_maintenance 1곳(연결 단위 `SET`, 세션 단위)). 둘 다 PostgreSQL 일 때만 걸고 다른 연결·다른 잡은 8초 그대로다:
+- **예외는 세는 명령으로 확인**(숫자를 문서에 고정하면 새 예외가 생겨도 안 갱신되니 — 세션 424 보완): `grep -rn 'text(f\?"SET \(LOCAL \)\?statement_timeout' backend --include=*.py | grep -v "/tests/"`(2026-10-01 현재 5곳: 관리자 상세 통계·정보 안 채워지면 알림(둘 다 `SET LOCAL`, 트랜잭션 단위) + service_discover 2곳·vacuum_maintenance 1곳(세션 486 부터 이 셋도 `SET LOCAL`)). 둘 다 PostgreSQL 일 때만 걸고 다른 연결·다른 잡은 8초 그대로다:
 (상세: .claude/rules-detail/infra.md §statement_timeout 예외 두 곳의 경위)
 
 ### 슬로우 쿼리 로깅 (세션 255)

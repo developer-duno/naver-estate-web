@@ -6,6 +6,7 @@
 import logging
 import os
 import re
+import threading
 import time
 from contextlib import asynccontextmanager
 
@@ -15,6 +16,8 @@ load_dotenv()
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.responses import Response
 
@@ -151,6 +154,13 @@ async def lifespan(app: FastAPI):
             lock.release()  # nullcontext sentinel 도 release() no-op 지원
         except Exception:  # release 예외가 다음 재시작 락 획득을 막지 않게
             pass
+    # 연결 창고(QueuePool, 세션 486)에 쥔 연결을 닫고 끝낸다 — 풀러에 끊긴 연결이 남지 않게.
+    try:
+        from db.database import engine
+
+        engine.dispose()
+    except Exception as e:
+        logger.warning("DB 연결 창고 정리 실패: %s", e)
     logger.info("FastAPI 서버 종료")
 
 
@@ -160,6 +170,40 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+# ── DB 연결 창고가 다 찼을 때(세션 486) ──
+# 창고(db/database.py QueuePool)가 꽉 차 DB_POOL_TIMEOUT_S 동안 연결을 못 받으면
+# sqlalchemy.exc.TimeoutError 가 난다(OperationalError 가 아니라 공개 창구의 503 분기에 안 걸림).
+# 그대로 두면 500 — 잠깐 바쁜 것이므로 503 + Retry-After 로 "조금 뒤 다시"를 알린다.
+# 로그는 몰릴 때 줄이 폭주하지 않게 1분에 1줄로 묶는다(auth/rate_limiter.py _count_ssr 꼴 · 값 없이 횟수만).
+_POOL_TIMEOUT_TALLY_SEC = 60
+_pool_timeout_tally = {"count": 0, "kinds": set(), "since": float("-inf")}
+_pool_timeout_lock = threading.Lock()
+
+
+def _count_pool_timeout(path: str) -> None:
+    """창고 대기 초과 횟수·경로 종류 수를 세어 1분에 한 줄 warning. 첫 건은 바로 찍힌다."""
+    kind = re.sub(r"\d+", "#", path)
+    with _pool_timeout_lock:
+        _pool_timeout_tally["count"] += 1
+        _pool_timeout_tally["kinds"].add(kind)
+        now = time.monotonic()
+        if now - _pool_timeout_tally["since"] < _POOL_TIMEOUT_TALLY_SEC:
+            return
+        count, kinds = _pool_timeout_tally["count"], len(_pool_timeout_tally["kinds"])
+        _pool_timeout_tally.update(count=0, kinds=set(), since=now)
+    logger.warning("DB 연결 창고가 다 차서 503 으로 답함 %d건 · 경로 종류 %d개 (직전 기록 뒤 누적)", count, kinds)
+
+
+@app.exception_handler(PoolTimeoutError)
+async def _pool_timeout_to_503(request: Request, exc: PoolTimeoutError):
+    _count_pool_timeout(request.url.path)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "서버가 바빠 잠시 자료를 읽지 못했습니다. 조금 뒤 다시 시도해 주세요"},
+        headers={"Retry-After": "5"},
+    )
 
 # GZip 압축 (1KB 이상 응답 자동 압축)
 # compresslevel=6: 기본값 9 는 CPU 약 2.9배 더 쓰면서 압축률 이득은 0.3%p 뿐(세션 329 실측:

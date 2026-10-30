@@ -127,6 +127,10 @@ def test_explain_error_translates_pool_timeout_before_generic_timeout():
     assert explain_error(
         "QueuePool limit of size 10 overflow 10 reached, connection timed out, timeout 5.00"
     ) == pool_plain
+    # 갈래별 단독 원문 — 정규식 두 갈래 중 하나만 지워도 잡힌다(세션 487 검사관 🟡: 두 갈래가
+    # 한 원문에 같이 있어 한 갈래 제거 변이가 살아남았다)
+    assert explain_error("QueuePool limit of size 10 overflow 10 reached") == pool_plain
+    assert explain_error("connection timed out, timeout 5.00") == pool_plain
     # 영문·개발자 용어 0
     assert not re.search(r"[A-Za-z]", pool_plain), f"영문이 섞였다: {pool_plain}"
 

@@ -250,6 +250,14 @@ _ERROR_RULES: list[tuple[re.Pattern, str | Callable[[str], str]]] = [
         "데이터베이스가 너무 오래 걸려 스스로 멈췄어요.",
     ),
     (
+        # 연결 창고 대기 초과(sqlalchemy.exc.TimeoutError, 세션 486 QueuePool) 원문:
+        # "QueuePool limit of size 10 overflow 10 reached, connection timed out, timeout 5.00".
+        # ⚠ 아래 일반 timeout 규칙(`timed? ?out`)보다 **앞**이어야 한다 — 뒤에 두면 "connection timed out"
+        #   에 선점돼 우리 서버 문제를 "상대 서버가 제때 답하지 않아…" 로 잘못 번역한다.
+        re.compile(r"QueuePool limit|connection timed out, timeout", re.I),
+        "우리 서버의 데이터베이스 연결 창고가 다 차서 기다리다 멈췄어요(상대 서버 탓이 아니에요).",
+    ),
+    (
         re.compile(r"invalid input syntax for type (\w+)", re.I),
         "저장된 값의 모양이 예상과 달라 계산하다 멈췄어요.",
     ),

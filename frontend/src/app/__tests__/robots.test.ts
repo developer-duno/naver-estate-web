@@ -34,7 +34,8 @@ describe("robots — 공통 차단", () => {
     for (const r of rules) {
       const dis = asList(r.disallow);
       for (const p of COMMON_DISALLOW) expect(dis).toContain(p);
-      expect(r.allow).toBe("/");
+      // `Allow: /` 를 맨 앞에 두면 처음 맞는 줄을 따르는 해석기가 차단 줄을 못 본다(세션 488) — 어느 묶음에도 allow 를 두지 않는다
+      expect(r.allow).toBeUndefined();
     }
   });
 });

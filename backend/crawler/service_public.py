@@ -821,7 +821,7 @@ def backfill_price_batch(
                     break
             except Exception:
                 # ⚠ 세션 346 코드리뷰 정정: backfill_price_history()는 이 db와 별개인
-                # 자신만의 SessionLocal()을 열어 쓴다(NullPool=독립 물리 연결)라서,
+                # 자신만의 SessionLocal()을 열어 쓴다(연결 창고에서 따로 꺼낸 연결)라서,
                 # 여기서 실패해도 바깥 db 트랜잭션이 실제로 오염되지는 않는다 —
                 # crawl_complex_details_batch(같은 db를 파라미터로 공유하는 구조)와는
                 # 다르다. 지금 당장 InFailedSqlTransaction 연쇄를 막는 효과는 없지만,

@@ -47,8 +47,11 @@ URL이 고정(api.2u.pe.kr)이므로 Vercel 재배포 불필요.
 
 ## DB 커넥션 풀
 
-- **QueuePool(연결 창고)** 사용 — 상시 10 + 넘침 10 = 최대 20(Supabase 세션 풀 30 의 67%, 수동 스크립트·미분양 몫 10 남김), 다 차면 5초 기다리고 그래도 없으면 503 + `Retry-After: 5`(main.py 처리기). env `DB_POOL_SIZE`·`DB_POOL_MAX_OVERFLOW`·`DB_POOL_TIMEOUT_S` 로 덮을 수 있다(코드 기본값만 씀). 옛 NullPool(요청마다 연결/해제)은 스레드 50 이 몰리면 30 을 넘겨 EMAXCONNSESSION — 2026-10-30 하루 18회로 세션 486 에 전환
+- **QueuePool(연결 창고)** 사용 — 상시 10 + 넘침 10 = 최대 20(Supabase 세션 풀 30 의 67%, 수동·되살리기 스크립트 몫 10 남김 — 미분양은 PostgREST 만 써서 이 세션 풀 30 칸을 안 쓴다, 세션 487 맹점 검사), 다 차면 5초 기다리고 그래도 없으면 503 + `Retry-After: 5`(main.py 처리기). env `DB_POOL_SIZE`·`DB_POOL_MAX_OVERFLOW`·`DB_POOL_TIMEOUT_S` 로 덮을 수 있다(코드 기본값만 씀). 옛 NullPool(요청마다 연결/해제)은 스레드 50 이 몰리면 30 을 넘겨 EMAXCONNSESSION — 2026-10-30 하루 18회로 세션 486 에 전환
 - `db/database.py`에서 설정 · 가드 = `tests/test_database_pool.py`
+- **새 DB 장애 분류 갈래에는 창고 대기 초과(`sqlalchemy.exc.TimeoutError` — OperationalError 가 아니다)도 넣는다**(선례 `service_discover._is_db_system_error` · `main.py` 503 처리기 · 세션 486 적대검증 🟡1).
+- **connect 이벤트에서 세션 설정(`SET …`)을 더 할 때는 autocommit 을 켜고 한다** — psycopg2 가 첫 문장에 연 트랜잭션이 창고 반납 rollback 에 지워진다(`db/database.py` 선례 · `test_database_pool.py` 가드).
+- 창고 관찰 명령 = `grep -a -c EMAXCONNSESSION scripts/backend.log` · `grep -a -c "QueuePool limit" scripts/backend.log`(잡·배경 스레드 쪽 대기 초과 — 503 로그엔 안 찍힌다) · 503 집계 줄은 cp949 라 `python memory/scripts/log_grep.py` 류로(세션 487 맹점 🟠1).
 
 ### statement_timeout 적용 방식 (세션 255 실측 — 함정 주의)
 

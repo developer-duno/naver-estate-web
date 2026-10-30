@@ -671,7 +671,7 @@ def _costs_round_running() -> bool:
     """관리비 받기(kapt_costs) 회차가 running 인가 — 조회만 하고 바로 닫는다.
 
     기다리는 동안 트랜잭션·연결을 쥐고 있지 않으려고 부를 때마다 짧은 세션을 따로 연다
-    (NullPool + 세션 모드 연결 한도). 죽은 채 남은 running 행도 센다 — 서버 일감 점검이 3시간 뒤
+    (연결 창고 최대 20 + Supabase 세션 모드 연결 한도 30). 죽은 채 남은 running 행도 센다 — 서버 일감 점검이 3시간 뒤
     정리하므로, 그 드문 경우 매칭은 최대 시간 뒤 failed 로 끝나고 알림이 간다(받아들이는 동작).
     """
     with SessionLocal() as probe:

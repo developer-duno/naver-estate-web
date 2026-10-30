@@ -301,7 +301,7 @@ def compute_fill_rates(db) -> tuple[int, dict[str, float]]:
 
     # 이 트랜잭션의 문장마다 30초(집계 뒤 알림 조회·잡 완료 기록도 포함 — 전부 작은
     # 인덱스 조회) · 다른 연결·다른 잡은 8초. SET LOCAL 은 현재 트랜잭션이 끝나면
-    # 사라진다(NullPool 이라 연결도 요청마다 새것). SQLite(CI)에는 이 문법이 없어
+    # 사라진다(연결 창고(QueuePool)라 LOCAL 이 아니면 반납 뒤 다음 요청에 샌다 — 세션 486). SQLite(CI)에는 이 문법이 없어
     # 실행하지 않는다(domain-mapping-ssot.md 룰 3 dialect 분기, 선례:
     # routers/admin/jobs.py _raise_statement_timeout_for_stats).
     if (db.bind.dialect.name if db.bind else "") == "postgresql":

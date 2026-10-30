@@ -28,3 +28,8 @@
 
 - FE Vitest 2373 → **2387** (Test Files 257 → 258) — 워크트리 3184aa58 전체 1회(PR 5 면적별 시세 `AreaPriceB27.test.tsx` 등 +14, 삭제 1).
 - BE pytest 2978 → **3035** passed(8 skipped·6 xfailed) — 워크트리 3184aa58 전체 1회(`test_area_price_b27.py` 44 + 정정, 보완 ① 뒤 52).
+
+## 세션 487 갱신 (2026-10-31)
+
+- FE Vitest 2387 → **2757** (Test Files 258 → 286) — 세션 485 워크트리 5fca9b57 전체 1회(PR 3a~3c-2 서버 렌더·지역 페이지·사이트맵·robots 시험).
+- BE pytest 3035 → **3239** passed(8 skipped) — #783 CI cc0a60cf 전체 1회 2026-10-31 02:22 KST(연결 창고 `test_database_pool.py` 5 등 · 세션 486 로컬 전체 1회는 3238 — CI 와 1건 차이는 환경 분기 시험 1건으로 추정, 다음 전체 실측 때 대조).

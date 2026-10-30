@@ -41,7 +41,7 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 
 ## 주요 기능·구현 사항
 
-> **인프라·운영**: 상세 = `.claude/rules/infra.md` §스케줄러 (APScheduler) + 서버 자동 시작 / Named Tunnel / 공유 쿼터 / NullPool / CSP·Hydration.
+> **인프라·운영**: 상세 = `.claude/rules/infra.md` §스케줄러 (APScheduler) + 서버 자동 시작 / Named Tunnel / 공유 쿼터 / 연결 창고(QueuePool) / CSP·Hydration.
 >
 > **공인중개사 검증 (B2B 구독 모델)**: FE = `/verify` + `/admin/users` + Header 전문가 뱃지 (role=expert). BE 워크플로 상세 = `backend/.claude/details.md` §공인중개사 검증 워크플로 참조.
 
@@ -63,13 +63,13 @@ PR 0~7 전부 머지 (#28~#94). 후속 UI 작업은 spec 의 디자인 원칙을
 - `PAYMENT_ENABLED` — 결제 기능 전역 스위치 (**코드 기본값 false = 꺼짐**, 세션 400 무료 전환). 꺼져 있으면 결제 API 7종(`/api/payment/{prepare,complete,webhook}`·`/api/payment/billing/{prepare,register,list,cancel}`)이 전부 **403**(`결제 기능이 비활성화되어 있습니다`)이고 04:50 빌링키 자동결제 잡도 미등록. 라이브 `.env` 에 항목이 없으므로 배포·재시작만으로 잠긴다(`.env` 편집 불필요). 매출 시작 시 `PAYMENT_ENABLED=true` 한 줄 추가 + 재시작으로 결제 코드 그대로 재개. 게이트 구현 = `config/payment_flags.py`, 회귀 = `tests/test_payment_disabled.py`
   - ⚠ **재개는 BE·FE 를 반드시 한 묶음으로** (세션 405 적대검증 HIGH). BE 는 집서버 `.env`+재시작, FE 는 Vercel 커밋+배포라 **배포 경로가 완전히 다르다.** BE 만 켜면 결제 API 는 열렸는데 `/terms`·`/refund`·`/privacy` 는 "지금은 무료로 운영 중입니다" 를 계속 띄운다 — **실제로는 과금되는데 화면은 안 된다고 고지**하는 상태라, 환불 분쟁 시 사업자에게 불리한 증거가 된다. 재개 체크리스트 = ①BE `.env` 에 `PAYMENT_ENABLED=true` + 재시작 ②FE `lib/locked-paths.ts` 의 `LOCKED_PATHS` 에서 `/pricing` 제거 + 헤더 메뉴·sitemap·robots 원복 ③`pricing/page.tsx:83` 등 "7일 무료 체험" 문구가 **그때 가격 정책과 맞는지** 재확인(잠긴 동안 방치돼 낡아 있다) + 홈 소개 섹션의 "무료로 시작하기" 버튼 문구(`app/page.tsx`, 세션 458)도 유료 전환에 맞게 정정 ④라이브에서 세 문서의 배너 소멸 확인(`curl -s https://2u.pe.kr/terms | grep -c "무료로 운영 중"` = 0) ⑤ 사이트 제목·설명·OG 그림·manifest 의 "누구나 무료" 문구 정정(layout.tsx·opengraph-image.tsx·manifest.ts — 세션 484 PR 3c-1a 에서 넣음). 배너 판정 = `isPaidServicePaused()`(= `/pricing` 잠금 파생)
 
-## 테스트 현황 (BE·FE = 세션 474 전체 1회 실측 2026-10-19, 3184aa58)
+## 테스트 현황 (FE = 세션 485 전체 1회 2026-10-29 5fca9b57 · BE = #783 CI 전체 1회 2026-10-31 cc0a60cf)
 
 | 영역 | 도구 | 테스트 수 |
 |------|------|----------|
-| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2,387개** (세션 474 전체 1회 2026-10-19, 3184aa58: Test Files 258 — PR 5 면적별 시세 시험 +1파일. 옛 271·2538 은 #744~#746 막대·레이더 시험 삭제 전 수치). RegionSelector 는 세션 416 에 구조 수정 — 이 파일이 타임아웃으로 실패하면 **새 원인**이다 |
+| FE Vitest | `frontend/src/**/__tests__/` + `frontend/scripts/__tests__/` | **2,757개** (세션 485 전체 1회 2026-10-29, 5fca9b57: Test Files 286 — PR 3a~3c-2 서버 렌더·지역 페이지·사이트맵·robots 시험 포함. 옛 2,387(s474, 258파일)은 `.claude/history/test-baseline-history.md`). RegionSelector 는 세션 416 에 구조 수정 — 이 파일이 타임아웃으로 실패하면 **새 원인**이다 |
 | FE E2E | `frontend/e2e/*.spec.ts` | **21 파일** (Playwright, --webpack 모드) · 시각회귀 baseline PNG **22장**(세는 법 = `find frontend/e2e -name "*.png" \| wc -l`). 재생성 순서·판정·함정 = `frontend/e2e/README.md` |
-| BE pytest | `backend/tests/` | **3,035개** (세션 474 전체 1회 passed 2026-10-19, 3184aa58 — PR 5 면적별 시세 `test_area_price_b27.py` 등 +57 · 보완 ① e778caa7 뒤 표적 1,158). ⚠ `backend/` 안에서 실행이 표준 · 작업반 보고를 옮기지 말고 **매번 직접 재실측** |
+| BE pytest | `backend/tests/` | **3,239개** (#783 CI 전체 1회 passed 2026-10-31 02:22 KST, cc0a60cf · 8 skipped — 연결 창고 `test_database_pool.py` +5 등. 옛 3,035(s474)는 `.claude/history/test-baseline-history.md`). ⚠ `backend/` 안에서 실행이 표준 · 작업반 보고를 옮기지 말고 **매번 직접 재실측** |
 
 > 숫자마다의 옛 값·근거 run·증감 사유(세션 396~427)는 `.claude/history/test-baseline-history.md` 로 옮겼다(세션 430). 숫자를 갱신하면 옛 값을 그 파일에 한 줄 더한다.
 

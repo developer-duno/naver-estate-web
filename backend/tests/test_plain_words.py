@@ -112,6 +112,33 @@ def test_explain_error_translates_real_prod_errors():
         assert plain.endswith("요."), f"설명 문장이 아니다: {plain}"
 
 
+def test_explain_error_translates_pool_timeout_before_generic_timeout():
+    """연결 창고 대기 초과(세션 486 QueuePool)는 '상대 서버 탓'이 아니라 우리 서버 문구로 나간다.
+
+    원문에 "connection timed out" 이 들어 있어 일반 timeout 규칙이 앞서면
+    "상대 서버가 제때 답하지 않아…" 로 잘못 번역된다 — 규칙 순서를 지키는지 본다.
+    """
+    pool_raw = (
+        "(sqlalchemy.exc.TimeoutError) QueuePool limit of size 10 overflow 10 reached, "
+        "connection timed out, timeout 5.00 (Background on this error at: https://sqlalche.me/e/21/3o7r)"
+    )
+    pool_plain = explain_error(pool_raw)
+    assert pool_plain == "우리 서버의 데이터베이스 연결 창고가 다 차서 기다리다 멈췄어요(상대 서버 탓이 아니에요)."
+    assert explain_error(
+        "QueuePool limit of size 10 overflow 10 reached, connection timed out, timeout 5.00"
+    ) == pool_plain
+    # 갈래별 단독 원문 — 정규식 두 갈래 중 하나만 지워도 잡힌다(세션 487 검사관 🟡: 두 갈래가
+    # 한 원문에 같이 있어 한 갈래 제거 변이가 살아남았다)
+    assert explain_error("QueuePool limit of size 10 overflow 10 reached") == pool_plain
+    assert explain_error("connection timed out, timeout 5.00") == pool_plain
+    # 영문·개발자 용어 0
+    assert not re.search(r"[A-Za-z]", pool_plain), f"영문이 섞였다: {pool_plain}"
+
+    # 회귀 0 — 진짜 상대 서버 timeout 은 그대로 "상대 서버…" 문구
+    for raw in ("requests.exceptions.ReadTimeout: HTTPSConnectionPool read timed out", "ConnectTimeout"):
+        assert explain_error(raw) == "상대 서버가 제때 답하지 않아 기다리다 멈췄어요.", raw
+
+
 def test_explain_error_translates_detail_save_guard_message():
     """상세 배치 '저장 성공 0건' 회차 실패 원문(2026-10-07)이 "처음 보는 문제"가 아니라 원인+조치로 나간다.
 

@@ -42,4 +42,14 @@ describe("ComplexSortDropdown", () => {
     await user.click(screen.getByRole("option", { name: "신축순" }));
     expect(onChange).toHaveBeenCalledWith("year_desc");
   });
+
+  // 비로그인 확정 화면(publicView)은 네이버 재료 기준 '매물 많은순' 만 빠지고 여섯 개가 남는다(세션 491)
+  it("publicView 면 '매물 많은순' 이 빠지고 6개 옵션만 노출", async () => {
+    const user = userEvent.setup();
+    render(<ComplexSortDropdown value="default" onChange={() => {}} publicView />);
+    await user.click(screen.getByLabelText("단지 정렬"));
+    expect(screen.getAllByRole("option")).toHaveLength(6);
+    expect(screen.queryByRole("option", { name: "매물 많은순" })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "오래된순" })).toBeInTheDocument();
+  });
 });

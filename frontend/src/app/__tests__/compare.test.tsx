@@ -22,6 +22,17 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => mockSearchParams(),
 }));
 
+// 로그인 상태 가짜(세션 490) — 기본 = 로그인(네이버 행·차트가 있는 화면). 비로그인 시험만 토큰을 비운다
+const mockSession = vi.hoisted(() => ({ sessionToken: "tok" as string | undefined, tokenReady: true }));
+vi.mock("@/hooks/useSessionToken", () => ({
+  useSessionToken: () => ({
+    sessionToken: mockSession.sessionToken,
+    tokenReady: mockSession.tokenReady,
+    tokenError: false,
+    dismissTokenError: () => {},
+  }),
+}));
+
 vi.mock("@/components/CompareCharts", () => ({
   default: () => <div data-testid="compare-charts" />,
 }));
@@ -67,6 +78,12 @@ function renderPage(params = "") {
     </TestQueryProvider>,
   );
 }
+
+// 모든 시험의 시작 = 로그인 상태(비로그인 시험은 자기 안에서 토큰을 비운다)
+beforeEach(() => {
+  mockSession.sessionToken = "tok";
+  mockSession.tokenReady = true;
+});
 
 describe("단지 비교 — 에러 분기", () => {
   beforeEach(() => {
@@ -388,5 +405,59 @@ describe("단지 비교 — 대표 면적 시세 두 줄 (세션 474 B27)", () =
     const footer = await screen.findByTestId("compare-sources-footer");
     expect(footer).toHaveTextContent("전세가율 = 네이버부동산 전세 시세 ÷ 정부 실거래 최저~최고(중개거래 기준)");
     expect(footer.textContent).not.toMatch(/중위|중앙값/);
+  });
+});
+
+// 세션 490 — 비로그인 손님: 네이버 자료 행·차트·상세 상자를 그리지 않고 로그인 전용 가격 통계도 부르지 않는다
+describe("단지 비교 — 비로그인이면 네이버 자료 행·상자 숨김 (세션 490)", () => {
+  const NAVER_LABELS = ["난방", "난방 연료", "시공사", "평당가", "매물수", "수영장", "관리사무소"];
+
+  beforeEach(() => {
+    vi.mocked(api.getComplex).mockImplementation((no: string) => Promise.resolve(makeComplex(no)));
+    vi.mocked(api.getPriceStats).mockClear();
+    vi.mocked(api.getPriceStats).mockImplementation((no: string) => Promise.resolve(makeStats(no)));
+  });
+
+  function rowLabels(container: HTMLElement): string[] {
+    return Array.from(container.querySelectorAll("tbody tr")).map((tr) => tr.querySelector("td")?.textContent ?? "");
+  }
+
+  it("비로그인: 네이버 행 7개·차트 묶음이 없고 가격 통계를 부르지 않으며 출처에 네이버가 없다", async () => {
+    mockSession.sessionToken = undefined;
+    const { container } = renderPage("ids=A,B");
+    await screen.findByTestId("compare-sources-footer");
+    const labels = rowLabels(container);
+    expect(labels).toContain("주소");
+    expect(labels).toContain("건폐율");
+    expect(labels).toContain("대표 면적 시세");
+    for (const l of NAVER_LABELS) expect(labels).not.toContain(l);
+    // 휴대폰 탭(시설)에도 네이버 행이 없다 — 데스크톱 표엔 이미 없으니 화면 전체에서 0
+    await userEvent.click(screen.getByRole("tab", { name: "시설" }));
+    expect(screen.queryByText("난방")).toBeNull();
+    expect(screen.queryByText("관리사무소")).toBeNull();
+    expect(screen.queryByTestId("compare-charts")).toBeNull();
+    expect(api.getPriceStats).not.toHaveBeenCalled();
+    const footer = screen.getByTestId("compare-sources-footer");
+    expect(footer.textContent).not.toMatch(/네이버/);
+    expect(footer).toHaveTextContent("출처: 대표 면적 시세 = 국토교통부 실거래가(공공데이터포털)");
+    expect(screen.getByTestId("compare-region-footnote")).toHaveTextContent("시군구 전세가율");
+  });
+
+  it("로그인: 네이버 행 7개·차트 묶음이 있고 가격 통계를 부르며 출처는 기존 글자", async () => {
+    const { container } = renderPage("ids=A,B");
+    await screen.findByTestId("compare-sources-footer");
+    await waitFor(() => expect(api.getPriceStats).toHaveBeenCalledTimes(2));
+    const labels = rowLabels(container);
+    for (const l of NAVER_LABELS) expect(labels).toContain(l);
+    expect(screen.getByTestId("compare-charts")).toBeInTheDocument();
+    expect(screen.getByTestId("compare-sources-footer")).toHaveTextContent("네이버부동산 매물 호가 집계");
+  });
+
+  it("로그인 확인 전(tokenReady false): 가격 통계를 쏘지 않는다", async () => {
+    mockSession.sessionToken = undefined;
+    mockSession.tokenReady = false;
+    renderPage("ids=A,B");
+    await screen.findByTestId("compare-sources-footer");
+    expect(api.getPriceStats).not.toHaveBeenCalled();
   });
 });

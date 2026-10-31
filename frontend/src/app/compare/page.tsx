@@ -120,6 +120,18 @@ const MOBILE_TAB_LABELS: Record<MobileTab, string> = {
 const COMPARE_SOURCES_FOOTER_TEXT =
   "출처: 단지 정보·평형별 관리비·세대 구성 = 네이버부동산 단지 정보 · 매물수·평당가·현재 평균가·층별·면적별 가격 = 네이버부동산 매물 호가 집계(실거래가 아님) · 대표 면적 시세·가격 추이 기본선 = 국토교통부 실거래가(공공데이터포털) · 전세가율 = 네이버부동산 전세 시세 ÷ 정부 실거래 최저~최고(중개거래 기준)";
 
+/*
+ * 비로그인 손님 화면(세션 490) — 백엔드가 비로그인 응답에서 네이버 재료 칸을 빼고(public_fields.for_viewer)
+ * 가격 통계·추이·평형 API 는 로그인 전용(401)이라, 네이버 자료 행·차트·상세 상자를 그리지 않는다.
+ * 남는 값의 출처 = 위 각주의 공공 부분만.
+ */
+const NAVER_ROW_LABELS = new Set([
+  "난방", "난방 연료", "시공사", "평당가", "매물수", "수영장", "관리사무소",
+]);
+
+const COMPARE_SOURCES_FOOTER_PUBLIC_TEXT =
+  "출처: 대표 면적 시세 = 국토교통부 실거래가(공공데이터포털)";
+
 const COMPARE_REGION_FOOTNOTE_TEXT =
   "시군구 전세가율: 한국부동산원 전국주택가격동향조사, 아파트 중위 매매가격 대비 전세가격(각 단지의 시군구, 기준 달은 값 옆 괄호)";
 
@@ -154,6 +166,8 @@ function CompareContent() {
   // 받은 단지 전부 이 단지 전세가율 칸이 없으면 그 행을 숨긴다(H — 칸 없음과 값 없음 "-" 구분). memo 키가 아니라 응답에서 바로
   const loadedComplexes = queries.map((q) => q.data).filter(Boolean) as Complex[];
   const jeonseHidden = loadedComplexes.length > 0 && loadedComplexes.every(jeonseRangeAbsent);
+  // 비로그인으로 확정(토큰 해석 끝 + 토큰 없음) — 네이버 자료 행·차트·상세 상자를 그리지 않는다(세션 490)
+  const publicView = tokenReady && !sessionToken;
 
   /* 가격 통계 (React Query 캐시 공유 — CompareCharts와 동일 queryKey) */
   const statsQueries = useQueries({
@@ -161,7 +175,8 @@ function CompareContent() {
       queryKey: queryKeys.priceStats(id),
       queryFn: () => getPriceStats(id, sessionToken),
       // tokenReady 가드 (B2 게이트): 토큰 해석 후 실행 — 승인 중개사 잠금 오인 차단
-      enabled: tokenReady,
+      // 비로그인이면 부르지 않는다 — 로그인 전용 API 라 401 만 돌아온다(세션 490)
+      enabled: tokenReady && !!sessionToken,
       staleTime: 60_000,
     })),
   });
@@ -218,11 +233,14 @@ function CompareContent() {
     // 평당가는 "건폐율" 행 다음(= 매물수 앞)에 삽입. BASE_ROWS 순서가 바뀌어도
     // 위치가 따라가도록 라벨로 찾는다. 못 찾으면(라벨 변경 등) 기존 위치 17로 폴백.
     // 이 단지 전세가율 칸이 모든 단지 응답에 없으면(비로그인) 그 행을 그리지 않는다 — 시군구(부동산원) 행만 남는다
-    const rows = BASE_ROWS.filter((r) => !(jeonseHidden && r.label === JEONSE_ROW_LABEL));
+    // 비로그인으로 확정이면 네이버 자료 행(평당가 포함)을 그리지 않는다(세션 490)
+    const rows = BASE_ROWS.filter((r) => !(jeonseHidden && r.label === JEONSE_ROW_LABEL))
+      .filter((r) => !(publicView && NAVER_ROW_LABELS.has(r.label)));
+    if (publicView) return rows;
     const bcrIdx = rows.findIndex((r) => r.label === "건폐율");
     rows.splice(bcrIdx >= 0 ? bcrIdx + 1 : 17, 0, ppRow);
     return rows;
-  }, [pricePerPyeong, statsLoading, statsErrorMap, jeonseHidden]);
+  }, [pricePerPyeong, statsLoading, statsErrorMap, jeonseHidden, publicView]);
 
   /* ── 인쇄/엑셀 ── */
   const [expandAll, setExpandAll] = useState(false);
@@ -429,7 +447,8 @@ function CompareContent() {
       </div>
 
       {/* 차트 섹션 */}
-      {complexes.length >= 2 && (
+      {/* 비로그인으로 확정이면 차트·상세 상자(전부 네이버 자료·로그인 전용 API)를 그리지 않는다(세션 490) */}
+      {complexes.length >= 2 && !publicView && (
         <div className="mt-8" data-testid="compare-charts">
           <LazyCompareCharts
             complexes={complexes.map((c) => ({
@@ -445,7 +464,7 @@ function CompareContent() {
 
       {/* 값의 자료 출처 각주 (세션 472 PR 3) */}
       <p className="mt-8 text-xs leading-relaxed text-gray-500" data-testid="compare-sources-footer">
-        {COMPARE_SOURCES_FOOTER_TEXT}
+        {publicView ? COMPARE_SOURCES_FOOTER_PUBLIC_TEXT : COMPARE_SOURCES_FOOTER_TEXT}
       </p>
       <p className="mt-1 text-xs leading-relaxed text-gray-500" data-testid="compare-region-footnote">
         {COMPARE_REGION_FOOTNOTE_TEXT}

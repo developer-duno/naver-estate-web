@@ -192,7 +192,12 @@ export default function PriceHistoryChart({ items, areaLabel }: Props) {
           <XAxis dataKey="month" fontSize={11} allowDuplicatedCategory={false} />
           <YAxis tickFormatter={formatChartPrice} fontSize={11} width={68} />
           <Tooltip content={<CustomTooltip tradesByMonth={tradesByMonth} />} />
-          <Legend />
+          {/* 범례 글자색은 그 계열 색을 따르는데 띠는 채움색(12% 투명)이라 거의 안 보인다 — 띠 글자만 진한 빨강으로(다른 범례 그대로) */}
+          <Legend
+            formatter={(value, entry) =>
+              entry.dataKey === "매매_범위" ? <span style={{ color: "#ef4444" }}>{value}</span> : value
+            }
+          />
           {hasMaemae && (
             <>
               {hasGovSeries ? (

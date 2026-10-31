@@ -202,14 +202,15 @@ export default function ComplexDashboard({
             <span className="text-[11px] md:text-xs text-gray-500">
               {b.label}
               {b.chip && (
-                <span className="ml-1 rounded bg-amber-50 px-1 text-[10px] text-amber-700" data-testid={`box-chip-${b.key}`}>
+                <span className="ml-1 rounded bg-amber-50 px-1 text-[10px] text-amber-700 break-keep" data-testid={`box-chip-${b.key}`}>
                   {b.chip}
                 </span>
               )}
             </span>
-            <span className="text-sm md:text-base font-semibold mt-0.5 break-keep">{b.primary}</span>
-            {b.secondary && <span className="text-[10px] md:text-xs text-gray-400 mt-0.5">{b.secondary}</span>}
-            {b.extra && <span className="text-[10px] md:text-xs text-gray-500 mt-0.5" data-testid={`box-extra-${b.key}`}>{b.extra}</span>}
+            {/* 범위 "2억 4,500만 ~ 2억 8,500만" 이 가격 하나 안("2억 / 8,500만")에서 줄이 갈리지 않게 억 뒤 띄어쓰기만 붙인다(390px) */}
+            <span className="text-sm md:text-base font-semibold mt-0.5 break-keep">{b.primary.replace(/억 (?=\d)/g, "억\u00a0")}</span>
+            {b.secondary && <span className="text-[10px] md:text-xs text-gray-400 mt-0.5 break-keep">{b.secondary}</span>}
+            {b.extra && <span className="text-[10px] md:text-xs text-gray-500 mt-0.5 break-keep" data-testid={`box-extra-${b.key}`}>{b.extra}</span>}
             {b.note && <span className="text-[10px] text-gray-400 mt-0.5" data-testid={`box-note-${b.key}`}>{b.note}</span>}
           </button>
         ))}

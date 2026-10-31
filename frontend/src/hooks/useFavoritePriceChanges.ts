@@ -18,6 +18,7 @@ import type { PriceStats, AreaPriceStat } from "@/types";
  * tokenReady 가드 없이 호출하면 비승인 사용자에게 401/403 이 뜬다 — compare/page.tsx 의
  * enabled: tokenReady 패턴을 그대로 따른다. 비승인 사용자는 이 훅이 아무 요청도 안 보내고
  * changedIds 가 항상 빈 Set 이라 기존 화면과 동일하게 보인다.
+ * tokenReady 는 비로그인이어도 true 가 되므로 토큰 유무도 함께 본다 — 없으면 401 헛호출(세션 491).
  */
 
 /** 단지의 대표가 — 첫 면적의 매매가, 없으면 전세가. 아예 없으면 null(가격 정보 없음). */
@@ -36,7 +37,7 @@ export function useFavoritePriceChanges(
     queries: complexNos.map((no) => ({
       queryKey: queryKeys.priceStats(no),
       queryFn: () => getPriceStats(no, sessionToken),
-      enabled: tokenReady && !!no,
+      enabled: tokenReady && !!sessionToken && !!no,
       staleTime: 60_000,
     })),
   });

@@ -115,6 +115,7 @@ describe("loadHub", () => {
   });
 
   it("옛 코드 = 새 허브로 영구 이동(308) · 백엔드 안 부름(결정 20)", async () => {
+    // 30100 은 이름표(REGION_CODES)에 없는 코드여야 한다 — 그래야 '이동 검사가 이름표 검사보다 먼저'인 순서를 이 시험이 지킨다(세션 490 검사 🟡2)
     const e = await caught(loadHub("30100", true, { "30100": "30200" }));
     expect(redirectOf(e)).toContain("/region/30200");
     expect(redirectOf(e)).toContain("308");

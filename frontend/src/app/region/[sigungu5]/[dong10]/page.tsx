@@ -54,7 +54,7 @@ export default async function DongPageView({ params }: PageProps) {
         <h1 className="text-lg md:text-2xl font-bold">{dongTitle(d)}</h1>
         <p className="text-sm text-gray-600" data-testid="region-dong-line">{line}</p>
       </div>
-      <ComplexTable complexes={sortComplexes(d.complexes)} caption={`${d.dong_name} 아파트 단지`} showYear />
+      <ComplexTable complexes={sortComplexes(d.complexes)} caption={`${d.dong_name} 아파트·오피스텔 단지`} showYear />
       {d.neighborhood.length > 0 && (
         <section aria-labelledby="dong-neighborhood" className="space-y-3">
           <h2 id="dong-neighborhood" className="text-base font-bold text-gray-900">{d.dong_name} 동네 정보</h2>

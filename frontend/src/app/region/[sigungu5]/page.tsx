@@ -52,7 +52,7 @@ function DongGroup({ sigungu5, d }: { sigungu5: string; d: RegionHubDong }) {
         )}
         <span className="ml-2 text-xs font-normal text-gray-500">단지 {d.complex_count.toLocaleString()}곳</span>
       </h2>
-      <ComplexTable complexes={shown} caption={`${d.dong_name} 아파트 단지`} />
+      <ComplexTable complexes={shown} caption={`${d.dong_name} 아파트·오피스텔 단지`} />
       {page && (
         <p className="text-sm">
           <Link href={page} prefetch={false} className="text-blue-700 hover:underline">

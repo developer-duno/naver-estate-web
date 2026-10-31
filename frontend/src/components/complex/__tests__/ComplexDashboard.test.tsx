@@ -41,6 +41,8 @@ vi.mock("@/components/ComplexBasicInfo", () => ({
   default: () => <div data-testid="mock-basic-info" />,
 }));
 
+// 대표 면적 단지(세션 489 B29 — 범위 화면). 옛 칸(nearby_median_price·jeonse_rate·recent_trades_6m)은
+// 화면이 읽지 않음을 보이려고 범위와 다른 값으로 둔다
 const baseComplex: Complex = {
   complex_no: "C001",
   complex_name: "테스트단지",
@@ -49,6 +51,18 @@ const baseComplex: Complex = {
   nearby_median_price: 80000,
   jeonse_rate: 65,
   recent_trades_6m: 42,
+  rep_area_m2: 84,
+  area_prices: [
+    {
+      area_m2: 84, households: 500, price_median: 80000, trade_count: 2, price_min: 78000, price_max: 83000,
+      trades: [
+        { price: 83000, date: "2026-07-02", floor: 11, direct: false },
+        { price: 78000, date: "2026-06-12", floor: 3, direct: false },
+      ],
+    },
+  ],
+  jeonse_rate_min: 60.2,
+  jeonse_rate_max: 64.1,
 };
 
 const samplePyeong: PyeongDetail[] = [
@@ -79,7 +93,7 @@ describe("ComplexDashboard (v2)", () => {
     );
 
     // 4 박스 button accessible name (F6 selector 패턴 유지)
-    expect(screen.getByRole("button", { name: "시세 메뉴 열기" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "시세 · 전용 84㎡(500세대) 메뉴 열기" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "실거래가 메뉴 열기" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "단지정보 메뉴 열기" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "면적별 시세 메뉴 열기" })).toBeInTheDocument();
@@ -87,8 +101,10 @@ describe("ComplexDashboard (v2)", () => {
     // 평형 박스 부재 (Q4 흡수)
     expect(screen.queryByRole("button", { name: "평형 메뉴 열기" })).not.toBeInTheDocument();
 
-    // 핵심 지표
-    expect(screen.getByText(/전세가율 65%/)).toBeInTheDocument();
+    // 핵심 지표 — 범위(최저 ~ 최고)·전세가율 범위, 옛 중위·한 값은 안 보인다
+    expect(screen.getByText("7억 8,000만 ~ 8억 3,000만")).toBeInTheDocument();
+    expect(screen.getByText("전세가율(84㎡) 60.2%~64.1%")).toBeInTheDocument();
+    expect(screen.queryByText(/65%/)).toBeNull();
     expect(screen.getByText("매물 0건")).toBeInTheDocument();
     expect(screen.getByText("1,234세대")).toBeInTheDocument();
     expect(screen.getByText("2개 평형")).toBeInTheDocument();
@@ -105,7 +121,7 @@ describe("ComplexDashboard (v2)", () => {
       />,
     );
 
-    const priceCard = screen.getByRole("button", { name: "시세 메뉴 열기" });
+    const priceCard = screen.getByRole("button", { name: "시세 · 전용 84㎡(500세대) 메뉴 열기" });
     expect(priceCard).toHaveAttribute("aria-expanded", "false");
 
     // 펼침 영역 초기 부재
@@ -115,6 +131,9 @@ describe("ComplexDashboard (v2)", () => {
     expect(priceCard).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("region")).toBeInTheDocument();
     expect(screen.getByTestId("mock-price-floor")).toBeInTheDocument();
+    // 대표 면적 거래 목록(세션 489 B29) — 칩 N(2) = 목록 줄 수
+    expect(screen.getByTestId("rep-trade-list").querySelectorAll("li")).toHaveLength(2);
+    expect(screen.getByTestId("box-chip-prices")).toHaveTextContent("최근 6개월 2건");
 
     // 다시 클릭 → 닫힘
     await userEvent.click(priceCard);
@@ -323,25 +342,28 @@ describe("ComplexDashboard (v2)", () => {
   it("정부 지역 값: 시세 칸에 '이 단지 · 시군구 아파트' 나란히 + 출처 줄 (세션 473)", () => {
     render(
       <ComplexDashboard
-        complex={{ ...baseComplex, jeonse_rate: 58, region_jeonse_ratio: 79.4, region_jeonse_period: "2026.01", region_name: "천안시 동남구",
-          region_jeonse_source: "BE 가 보낸 출처 문구" }}
+        complex={{ ...baseComplex, jeonse_rate_min: 58, jeonse_rate_max: 58, region_jeonse_ratio: 79.4, region_jeonse_period: "2026.01",
+          region_name: "천안시 동남구", region_jeonse_source: "BE 가 보낸 출처 문구",
+          area_price_source: "옛 중위 출처", area_price_range_source: "BE 가 보낸 범위 출처" }}
         complexNo="C001"
         pyeongDetails={samplePyeong}
         sessionToken={undefined}
         onFilterChange={() => {}}
       />,
     );
-    expect(screen.getByText("전세가율 58% · 천안시 동남구 아파트 79.4%")).toBeInTheDocument();
-    // 출처 문구는 BE(region_jeonse_source)가 정본 — FE 글자 상수 없음(derived-display-ssot)
+    expect(screen.getByText("전세가율(84㎡) 58% · 천안시 동남구 아파트 79.4%")).toBeInTheDocument();
+    // 출처 문구는 BE(area_price_range_source·region_jeonse_source)가 정본 — FE 글자 상수 없음(derived-display-ssot)
     expect(screen.getByTestId("box-note-prices")).toHaveTextContent(
-      "이 단지: 최근 6개월 시세·실거래 기록 중앙값으로 계산 · 지역: BE 가 보낸 출처 문구(2026.01)",
+      "이 단지: BE 가 보낸 범위 출처 · 지역: BE 가 보낸 출처 문구(2026.01)",
     );
+    expect(screen.getByTestId("box-note-prices")).not.toHaveTextContent("옛 중위 출처");
   });
 
   it("우리 전세가율이 없고 지역 값만 있어도 지역 값을 보여 준다 (세션 473 F9)", () => {
     render(
       <ComplexDashboard
-        complex={{ ...baseComplex, jeonse_rate: undefined, region_jeonse_ratio: 61.2, region_jeonse_period: "2026.09",
+        complex={{ ...baseComplex, jeonse_rate: undefined, jeonse_rate_min: undefined, jeonse_rate_max: undefined,
+          region_jeonse_ratio: 61.2, region_jeonse_period: "2026.09",
           region_name: "사천시", region_jeonse_source: "출처문구" }}
         complexNo="C001"
         pyeongDetails={samplePyeong}
@@ -354,7 +376,7 @@ describe("ComplexDashboard (v2)", () => {
     expect(screen.getByTestId("box-note-prices")).not.toHaveTextContent("이 단지:");
   });
 
-  it("정부 지역 값이 없으면 지금처럼 '전세가율 N%' 만, 출처 줄 없음 (세션 473)", () => {
+  it("정부 지역 값이 없으면 이 단지 전세가율 범위만, 출처 줄 없음 (세션 473 · 489 범위화)", () => {
     render(
       <ComplexDashboard
         complex={baseComplex}
@@ -364,7 +386,7 @@ describe("ComplexDashboard (v2)", () => {
         onFilterChange={() => {}}
       />,
     );
-    expect(screen.getByText("전세가율 65%")).toBeInTheDocument();
+    expect(screen.getByTestId("box-extra-prices")).toHaveTextContent(/^전세가율\(84㎡\) 60\.2%~64\.1%$/);
     expect(screen.queryByTestId("box-note-prices")).toBeNull();
   });
 });

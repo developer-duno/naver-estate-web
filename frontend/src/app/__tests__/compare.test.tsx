@@ -38,7 +38,10 @@ function makeComplex(no: string) {
     parking_count_by_household: 1.2,
     floor_area_ratio: "250",
     building_coverage_ratio: "20",
-    jeonse_rate: 67.7, // BE 저장 단위 = 퍼센트 (crawler/stats.py = jeonse/sale*100)
+    jeonse_rate: 67.7, // BE 저장 단위 = 퍼센트 (crawler/stats.py = jeonse/sale*100) — 옛 칸, 화면은 안 읽는다
+    // 이 단지 전세가율 범위(세션 479 B29) — 퍼센트 그대로
+    jeonse_rate_min: 64.2 as number | null | undefined,
+    jeonse_rate_max: 67.7 as number | null | undefined,
   };
 }
 
@@ -111,10 +114,10 @@ describe("단지 비교 — 에러 분기", () => {
 
   it("전세가율은 BE 퍼센트값을 그대로 표시 (×100 이중적용 회귀 차단)", async () => {
     // 세션278 발견: BE jeonse_rate=67.7(퍼센트)인데 compare 가 ×100 → 6770% 오표시.
-    // makeComplex jeonse_rate:67.7 → toFixed(0) = "68%" 기대, "6770%" 절대 금지.
+    // 세션 489 범위화 뒤: makeComplex jeonse_rate_min/max 64.2·67.7 → "64.2%~67.7%" 그대로, "6770%" 절대 금지.
     renderPage("ids=A,B");
     await waitFor(() => {
-      expect(screen.getAllByText("68%").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("64.2%~67.7%").length).toBeGreaterThanOrEqual(1);
     });
     expect(screen.queryByText("6770%")).toBeNull();
   });
@@ -134,7 +137,7 @@ describe("단지 비교 — 에러 분기", () => {
     // 평당가가 건폐율 다음에 오는지 행 라벨 순서로 가드. (데스크톱 테이블 좌측 라벨 th)
     renderPage("ids=A,B");
     await waitFor(() => {
-      expect(screen.getAllByText("68%").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("64.2%~67.7%").length).toBeGreaterThanOrEqual(1);
     });
     // 데스크톱 테이블 행의 좌측 라벨(첫 셀) 텍스트를 순서대로 수집
     const labelCells = Array.from(
@@ -148,7 +151,7 @@ describe("단지 비교 — 에러 분기", () => {
   it("비교 표에 '최근 6개월 거래' 줄이 없고 매물수 줄은 남는다 (세션 429 — 시세 기록 줄 수를 거래로 보이던 것)", async () => {
     renderPage("ids=A,B");
     await waitFor(() => {
-      expect(screen.getAllByText("68%").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("64.2%~67.7%").length).toBeGreaterThanOrEqual(1);
     });
     const labelCells = Array.from(
       document.querySelectorAll("table tbody tr th:first-child, table tbody tr td:first-child"),
@@ -293,32 +296,97 @@ describe("단지 비교 — 대표 면적 시세 두 줄 (세션 474 B27)", () =
     vi.mocked(api.getPriceStats).mockImplementation((no: string) => Promise.resolve(makeStats(no)));
   });
 
-  it("'주변 중위가'·'전세가율(이 단지)' 두 줄이 대표 면적 값으로 — 59㎡ 1억 7,200만 (3건)", async () => {
+  const trade = (price: number, date: string, floor: number) => ({ price, date, floor, direct: false });
+
+  it("E — 대표 면적 최저~최고 + (N건) N = 거래 목록 길이 · 전세가율 범위 · 중위 글자 없음 (세션 489 B29)", async () => {
     vi.mocked(api.getComplex).mockImplementation((no: string) =>
       Promise.resolve(
         no === "A"
-          ? { ...makeComplex(no), rep_area_m2: 59, nearby_median_price: 17200, recent_trades_6m: 3, jeonse_rate: undefined }
-          : { ...makeComplex(no), rep_area_m2: 84, nearby_median_price: 51000, recent_trades_6m: 12, jeonse_rate: 61 },
+          ? { ...makeComplex(no), rep_area_m2: 59, nearby_median_price: 17200, recent_trades_6m: 9, jeonse_rate: 61,
+              jeonse_rate_min: 72, jeonse_rate_max: 80,
+              area_prices: [{ area_m2: 59, price_median: 17200, trade_count: 3, price_min: 15700, price_max: 18000,
+                trades: [trade(15700, "2026-06-26", 4), trade(17200, "2026-06-05", 8), trade(18000, "2026-05-05", 7)] }] }
+          : { ...makeComplex(no), rep_area_m2: 84, nearby_median_price: 51000, recent_trades_6m: 12, jeonse_rate: 61,
+              jeonse_rate_min: null, jeonse_rate_max: null,
+              area_prices: [{ area_m2: 84, price_median: 51000, trade_count: 2, price_min: 51000, price_max: 51000,
+                trades: [trade(51000, "2026-07-01", 3), trade(51000, "2026-06-01", 9)] }] },
       ),
     );
-    renderPage("ids=A,B");
+    const { container } = renderPage("ids=A,B");
     await waitFor(() => {
-      expect(screen.getAllByText("대표 면적 시세").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("59㎡ 1억 5,700만 ~ 1억 8,000만 (3건)").length).toBeGreaterThanOrEqual(1);
     });
-    expect(screen.getAllByText("59㎡ 1억 7,200만 (3건)").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("84㎡ 5억 1,000만 (12건)").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText("전세가율(이 단지, 같은 면적)").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("84㎡ 5억 1,000만 (2건)").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("72%~80%").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("1억 7,200만")).toBeNull();
+    expect(screen.queryByText(/\(9건\)|\(12건\)/)).toBeNull(); // 잡 값 recent_trades_6m 은 안 쓴다
+    expect(screen.queryByText("61%")).toBeNull();
     expect(screen.queryByText("주변 중위가")).toBeNull();
+    // I — 표 칸 글자에 중위·중앙값 0건(부동산원 지역 통계 각주는 예외라 표 칸만 본다)
+    for (const cell of Array.from(container.querySelectorAll("td, dd"))) expect(cell.textContent).not.toMatch(/중위|중앙값/);
   });
 
-  it("대표 면적 없이 옛 값만 남은 단지 — '1억 8,000만 (면적 섞인 옛 값)' · '54% (옛 값)' (보완 F2 · Q4)", async () => {
+  it("E — 직거래만 있는 단지(범위 null · 거래 목록 있음)는 '59㎡ — (직거래만 2건)'", async () => {
     vi.mocked(api.getComplex).mockImplementation((no: string) =>
-      Promise.resolve({ ...makeComplex(no), nearby_median_price: 18000, jeonse_rate: 53.6, price_basis: "legacy_mixed" as const }),
+      Promise.resolve({ ...makeComplex(no), rep_area_m2: 59,
+        area_prices: [{ area_m2: 59, price_median: 16000, trade_count: 2, price_min: null, price_max: null,
+          trades: [{ ...trade(16000, "2026-06-10", 3), direct: true }, { ...trade(15000, "2026-05-02", 6), direct: true }] }] }),
     );
     renderPage("ids=A,B");
     await waitFor(() => {
-      expect(screen.getAllByText("1억 8,000만 (면적 섞인 옛 값)").length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText("59㎡ — (직거래만 2건)").length).toBeGreaterThanOrEqual(1);
     });
-    expect(screen.getAllByText("54% (옛 값)").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/1억 6,000만/)).toBeNull();
+  });
+
+  it("E·A' — 옛 값 단지: legacy_range 범위 + 작은 줄(직거래 포함) · 전세가율 '-'", async () => {
+    vi.mocked(api.getComplex).mockImplementation((no: string) =>
+      Promise.resolve({ ...makeComplex(no), nearby_median_price: 15000, jeonse_rate: 53.6, price_basis: "legacy_mixed" as const,
+        jeonse_rate_min: null, jeonse_rate_max: null, legacy_range: { lower: 12000, upper: 18000, month: "202503" } }),
+    );
+    renderPage("ids=A,B");
+    await waitFor(() => {
+      expect(screen.getAllByText("1억 2,000만 ~ 1억 8,000만 (2025년 3월 거래 · 면적 섞임 · 직거래 포함 · 그 뒤 거래 없음)").length)
+        .toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.queryByText(/53\.6|54%|옛 값\)/)).toBeNull();
+    expect(screen.queryByText("1억 5,000만")).toBeNull();
+  });
+
+  it("H — 비로그인(전세가율 칸 없음)이면 '이 단지' 전세가율 행을 그리지 않고 시군구 행만 · 값 null 이면 '-'", async () => {
+    vi.mocked(api.getComplex).mockImplementation((no: string) => {
+      // 비로그인 응답 = 네이버 재료 칸이 아예 없다(BE public_fields.strip_naver_fields)
+      const c: Partial<ReturnType<typeof makeComplex>> = { ...makeComplex(no) };
+      delete c.jeonse_rate;
+      delete c.jeonse_rate_min;
+      delete c.jeonse_rate_max;
+      return Promise.resolve({ ...c, complex_no: no, complex_name: `단지${no}`, region_jeonse_ratio: 79.4, region_jeonse_period: "2026.01" });
+    });
+    renderPage("ids=A,B");
+    await waitFor(() => {
+      expect(screen.getAllByText("시군구 전세가율(부동산원)").length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.queryByText("전세가율(이 단지, 같은 면적)")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/불러오지|못 불러/);
+  });
+
+  it("H — 로그인 응답인데 값이 null 이면 행은 있고 칸은 '-'", async () => {
+    vi.mocked(api.getComplex).mockImplementation((no: string) =>
+      Promise.resolve({ ...makeComplex(no), jeonse_rate_min: null, jeonse_rate_max: null }),
+    );
+    const { container } = renderPage("ids=A,B");
+    await waitFor(() => {
+      expect(screen.getAllByText("전세가율(이 단지, 같은 면적)").length).toBeGreaterThanOrEqual(1);
+    });
+    const row = Array.from(container.querySelectorAll("tr")).find((tr) => tr.querySelector("th, td")?.textContent === "전세가율(이 단지, 같은 면적)");
+    expect(row).toBeDefined();
+    expect(Array.from(row!.querySelectorAll("td")).slice(-2).map((td) => td.textContent)).toEqual(["-", "-"]);
+  });
+
+  it("G — 출처 각주는 '정부 실거래 최저~최고(중개거래 기준)' · 중위 아님(부동산원 각주는 그대로)", async () => {
+    renderPage("ids=A,B");
+    const footer = await screen.findByTestId("compare-sources-footer");
+    expect(footer).toHaveTextContent("전세가율 = 네이버부동산 전세 시세 ÷ 정부 실거래 최저~최고(중개거래 기준)");
+    expect(footer.textContent).not.toMatch(/중위|중앙값/);
   });
 });

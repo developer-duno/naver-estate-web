@@ -3,10 +3,11 @@
 import { useMemo, useState } from "react";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, ComposedChart, Line, Area,
+  ResponsiveContainer, ComposedChart, Line, Area, Scatter,
 } from "recharts";
-import type { PriceHistoryItem } from "@/types";
+import type { AreaTrade, PriceHistoryItem } from "@/types";
 import { formatChartPrice, formatChartMonth, getCutoffMonth, CHART_PERIODS, type PeriodKey } from "@/lib/format";
+import { tradeLineText } from "@/lib/range-price";
 
 interface ChartRow {
   month: string;
@@ -19,7 +20,21 @@ interface Props {
   areaLabel?: string;
 }
 
-function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ dataKey: string; value: number; color: string }>; label?: string }) {
+/** 거래 점 하나 — x = 그 달(차트 달 글자), y = 가격(만원) */
+interface TradePoint {
+  month: string;
+  거래: number;
+}
+
+interface TooltipProps {
+  active?: boolean;
+  payload?: Array<{ dataKey: string; value: number; color: string }>;
+  label?: string;
+  /** 차트 달 글자("26.06") → 그 달 정부 실거래 거래들(세션 479 B29 — 설명창에 한 줄씩) */
+  tradesByMonth?: Map<string, AreaTrade[]>;
+}
+
+export function CustomTooltip({ active, payload, label, tradesByMonth }: TooltipProps) {
   if (!active || !payload?.length) return null;
 
   const findVal = (key: string) => {
@@ -31,6 +46,9 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   const maemaeNaver = findVal("매매_네이버");
   const maemaeUpper = findVal("매매_상한");
   const maemaeLower = findVal("매매_하한");
+  // 정부 실거래 매매는 중위 선 없이 범위 띠만(세션 479 B29) — 설명창도 최저~최고 + 그 달 거래 줄
+  const govRange = !maemae && maemaeUpper && maemaeLower;
+  const trades = (label && tradesByMonth?.get(label)) || [];
   const jeonse = findVal("전세");
   const jeonseUpper = findVal("전세_상한");
   const jeonseLower = findVal("전세_하한");
@@ -46,6 +64,16 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
           )}
         </div>
       )}
+      {govRange && (
+        <div className="text-red-500">
+          <span className="font-medium">매매 정부 실거래 최저~최고</span> {maemaeLower === maemaeUpper ? maemaeLower : `${maemaeLower}~${maemaeUpper}`}
+        </div>
+      )}
+      {trades.map((t, i) => (
+        <div key={i} className="text-red-400" data-testid="tooltip-trade">
+          {tradeLineText(t)}{t.direct ? " · 직거래" : ""}
+        </div>
+      ))}
       {maemaeNaver && (
         <div className="text-orange-500">
           <span className="font-medium">매매 네이버 시세</span> {maemaeNaver}
@@ -74,9 +102,11 @@ export default function PriceHistoryChart({ items, areaLabel }: Props) {
     return items.filter((item) => item.base_month >= cutoff);
   }, [items, period]);
 
-  const { data, hasMaemae, hasJeonse, hasMaemaeNaver, hasGovSeries } = useMemo(() => {
+  const { data, points, tradesByMonth, hasMaemae, hasMaemaeLine, hasJeonse, hasMaemaeNaver, hasGovSeries } = useMemo(() => {
+    const points: TradePoint[] = [];
+    const tradesByMonth = new Map<string, AreaTrade[]>();
     if (!filteredItems || filteredItems.length === 0) {
-      return { data: [], hasMaemae: false, hasJeonse: false, hasMaemaeNaver: false, hasGovSeries: false };
+      return { data: [], points, tradesByMonth, hasMaemae: false, hasMaemaeLine: false, hasJeonse: false, hasMaemaeNaver: false, hasGovSeries: false };
     }
     // 평형을 고르면 BE 가 같은 달 매매를 정부 실거래·네이버 시세 두 계열로 준다 — 합치지 않고 따로 그린다(세션 474 B27)
     const govSeries = filteredItems.some((it) => it.trade_type === "A1" && it.series === "정부 실거래");
@@ -92,6 +122,21 @@ export default function PriceHistoryChart({ items, areaLabel }: Props) {
         if (item.price_avg != null) row["매매_네이버"] = item.price_avg;
         continue;
       }
+      // 정부 실거래 매매 = 그 달 최저~최고 띠(직거래 제외 range_lower/upper) + 거래 하나 = 점 하나(세션 479 B29).
+      // 중위(price_avg) 선은 그리지 않는다. 점은 trades 가 있는 달만 — BE 가 최근 2년 밖 달엔 [] 를 준다
+      if (govSeries && item.trade_type === "A1" && item.series === "정부 실거래") {
+        const lo = item.range_lower ?? null;
+        const hi = item.range_upper ?? null;
+        if (hi != null) row["매매_상한"] = hi;
+        if (lo != null) row["매매_하한"] = lo;
+        if (lo != null && hi != null) row["매매_범위"] = [lo, hi];
+        const trades = item.trades ?? [];
+        if (trades.length > 0) {
+          tradesByMonth.set(row.month, [...(tradesByMonth.get(row.month) ?? []), ...trades]);
+          for (const t of trades) points.push({ month: row.month, 거래: t.price });
+        }
+        continue;
+      }
       const label = item.trade_type_label;
       if (item.price_avg != null) row[label] = item.price_avg;
       if (item.price_upper != null) row[`${label}_상한`] = item.price_upper;
@@ -104,7 +149,10 @@ export default function PriceHistoryChart({ items, areaLabel }: Props) {
     const rows = Array.from(monthMap.values());
     return {
       data: rows,
-      hasMaemae: rows.some((d) => d["매매"] != null),
+      points,
+      tradesByMonth,
+      hasMaemae: rows.some((d) => d["매매"] != null || d["매매_범위"] != null),
+      hasMaemaeLine: rows.some((d) => d["매매"] != null),
       hasJeonse: rows.some((d) => d["전세"] != null),
       hasMaemaeNaver: rows.some((d) => d["매매_네이버"] != null),
       hasGovSeries: govSeries,
@@ -140,17 +188,33 @@ export default function PriceHistoryChart({ items, areaLabel }: Props) {
       <ResponsiveContainer width="100%" height={320}>
         <ComposedChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" />
-          <XAxis dataKey="month" fontSize={11} />
+          {/* 같은 달 거래 점을 한 x 에 모은다 — 기본값(true)이면 점마다 범주가 새로 생긴다(PriceHistoryChart.scatter.test) */}
+          <XAxis dataKey="month" fontSize={11} allowDuplicatedCategory={false} />
           <YAxis tickFormatter={formatChartPrice} fontSize={11} width={68} />
-          <Tooltip content={<CustomTooltip />} />
-          <Legend />
+          <Tooltip content={<CustomTooltip tradesByMonth={tradesByMonth} />} />
+          {/* 범례 글자색은 그 계열 색을 따르는데 띠는 채움색(12% 투명)이라 거의 안 보인다 — 띠 글자만 진한 빨강으로(다른 범례 그대로) */}
+          <Legend
+            formatter={(value, entry) =>
+              entry.dataKey === "매매_범위" ? <span style={{ color: "#ef4444" }}>{value}</span> : value
+            }
+          />
           {hasMaemae && (
             <>
-              <Area type="monotone" dataKey="매매_범위" fill="#ef444420" stroke="none" connectNulls legendType="none" />
+              {hasGovSeries ? (
+                <Area type="monotone" dataKey="매매_범위" name={`매매 정부 실거래 최저~최고${legendSuffix}`} fill="#ef444420" stroke="none" connectNulls legendType="square" />
+              ) : (
+                <Area type="monotone" dataKey="매매_범위" fill="#ef444420" stroke="none" connectNulls legendType="none" />
+              )}
               <Line type="monotone" dataKey="매매_상한" stroke="#ef444460" strokeWidth={1} strokeDasharray="3 3" dot={false} connectNulls legendType="none" />
               <Line type="monotone" dataKey="매매_하한" stroke="#ef444460" strokeWidth={1} strokeDasharray="3 3" dot={false} connectNulls legendType="none" />
-              <Line type="monotone" dataKey="매매" name={`매매 ${hasGovSeries ? "정부 실거래 중위" : "평균"}${legendSuffix}`} stroke="#ef4444" strokeWidth={2} dot={{ r: 5, fill: "#ef4444" }} activeDot={{ r: 7, stroke: "#ef4444", strokeWidth: 2, fill: "#fff" }} connectNulls />
+              {/* 옛 응답(계열 없음 — 네이버 시세 평균)만 선. 정부 실거래는 중위 선 없음(세션 479 B29) */}
+              {hasMaemaeLine && (
+                <Line type="monotone" dataKey="매매" name={`매매 평균${legendSuffix}`} stroke="#ef4444" strokeWidth={2} dot={{ r: 5, fill: "#ef4444" }} activeDot={{ r: 7, stroke: "#ef4444", strokeWidth: 2, fill: "#fff" }} connectNulls />
+              )}
             </>
+          )}
+          {points.length > 0 && (
+            <Scatter data={points} dataKey="거래" name="매매 실거래(거래 1건 = 점 1개)" fill="#ef4444" isAnimationActive={false} />
           )}
           {hasMaemaeNaver && (
             <Line type="monotone" dataKey="매매_네이버" name="매매 네이버 시세(이 평형)" stroke="#f97316" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 4, fill: "#f97316" }} connectNulls />

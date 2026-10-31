@@ -23,8 +23,25 @@ const COMPLEX_A: Complex = {
   building_coverage_ratio: "18%",
   article_count: 42,
   nearby_median_price: 120000,
-  jeonse_rate: 62, // BE 저장 단위 = 퍼센트 (세션278 H2)
+  jeonse_rate: 62, // BE 저장 단위 = 퍼센트 (세션278 H2) — 옛 칸, 화면은 아래 범위 칸을 읽는다(세션 489 B29)
   recent_trades_6m: 12,
+  // 대표 면적 단지(세션 479 B29 · 489 PR b2) — 최저~최고 + (N건) N = 거래 목록 길이 · 전세가율 범위
+  rep_area_m2: 84,
+  price_basis: "rep_area",
+  area_prices: [
+    {
+      area_m2: 84, households: 300, price_median: 120000, trade_count: 3, price_min: 115000, price_max: 128000,
+      trades: [
+        { price: 128000, date: "2026-07-18", floor: 21, direct: false },
+        { price: 99000, date: "2026-06-30", floor: 2, direct: true },
+        { price: 115000, date: "2026-06-02", floor: 7, direct: false },
+      ],
+    },
+  ],
+  jeonse_rate_min: 58.6,
+  jeonse_rate_max: 65.2,
+  area_price_range_source: "정부 실거래 최근 6개월 최저~최고(중개거래 기준), 전용 84㎡ 대는 소수점을 버린 같은 크기끼리 · 전세가율 = 네이버 전세 시세(같은 면적, 최신 주) ÷ 정부 실거래 최저~최고",
+  legacy_range: null,
   has_pool: false,
   management_office_tel: "02-555-1234",
 };
@@ -51,8 +68,16 @@ const COMPLEX_B: Complex = {
   building_coverage_ratio: "20%",
   article_count: 28,
   nearby_median_price: 180000,
-  jeonse_rate: 55, // BE 저장 단위 = 퍼센트 (세션278 H2)
+  jeonse_rate: 55, // BE 저장 단위 = 퍼센트 (세션278 H2) — 옛 칸
   recent_trades_6m: 7,
+  // 옛 값 단지(대표 면적 없음, 세션 479 B29 A') — 마지막 정부 섞인 줄 범위 + 그 달 · 전세가율 비움
+  rep_area_m2: null,
+  price_basis: "legacy_mixed",
+  area_prices: [],
+  jeonse_rate_min: null,
+  jeonse_rate_max: null,
+  area_price_range_source: null,
+  legacy_range: { lower: 170000, upper: 186000, month: "202503" },
   has_pool: true,
   management_office_tel: "02-555-5678",
 };
@@ -93,6 +118,7 @@ const STATS_B: PriceStats = {
 const EMPTY_HISTORY = (id: string): PriceHistoryResponse => ({
   complex_no: id,
   items: [],
+  basis_range: null,
 });
 
 const EMPTY_PYEONG: { pyeong_details: PyeongDetail[] } = { pyeong_details: [] };

@@ -76,6 +76,11 @@ export interface Complex {
   area_price_range_source?: string | null;
   /** 시세 세 값이 무엇인가 — "rep_area" 대표 면적 값 · "legacy_mixed" 면적 섞인 옛 값(최근 6개월 거래 없음) · null 없음 */
   price_basis?: "rep_area" | "legacy_mixed" | null;
+  /** 대표 면적 전세가율 범위(전세÷최고 ~ 전세÷최저 %, 세션 479 B29) — 비로그인 응답엔 칸 자체가 없다(네이버 재료) */
+  jeonse_rate_min?: number | null;
+  jeonse_rate_max?: number | null;
+  /** 옛 값 단지의 마지막 정부 섞인 줄 범위(month "YYYYMM", 세션 479 B29) — 없으면 null · 비로그인 옛 값 단지는 칸 없음 */
+  legacy_range?: { lower: number | null; upper: number | null; month: string } | null;
   filter_options?: FilterOptions;
   has_pool?: boolean;
 }
@@ -134,7 +139,10 @@ export interface Article {
   realtor_id?: string;
   realtor_phone?: string;
   monthly_rent_yield?: number;      // 월세 수익률 (%)
-  article_jeonse_ratio?: number;    // 개별 전세가율 (%)
+  article_jeonse_ratio?: number;    // 개별 전세가율 (%) — 옛 화면 호환(중위 분모), 화면은 아래 범위를 읽는다
+  /** 보증금 ÷ 같은 면적 최고 ~ 최저 (%, 세션 479 B29) — 매물 상세 응답에만 값, 목록 API 는 null */
+  article_jeonse_ratio_min?: number | null;
+  article_jeonse_ratio_max?: number | null;
   /** 공식 기준값 — 매물 상세 응답에만(세션 473) */
   legal_rent_conversion_cap?: number;             // 법정 전월세 전환율 상한(%) = min(기준금리+2, 10)
   bok_base_rate?: number;                         // 한국은행 기준금리(%)

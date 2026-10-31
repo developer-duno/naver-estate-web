@@ -21,6 +21,7 @@ import {
   ESTATE_TYPE_DEFAULT_COLOR,
 } from "@/lib/constants";
 import { formatDateShort, formatMaintenanceCost } from "@/lib/format";
+import { percentRangeText } from "@/lib/range-price";
 import { COLUMNS, SERVER_SORT_MAP, type ArticleColumnMeta } from "@/components/articleTableColumns";
 import ArticleFavoriteButton from "@/components/ArticleFavoriteButton";
 import {
@@ -221,6 +222,8 @@ const ArticleRow = memo(function ArticleRow({
     : "-";
 
   const ppyeong = art.price_per_pyeong ? `${art.price_per_pyeong.toLocaleString()}` : "-";
+  // 전세가율 범위(세션 479 B29) — 목록 API 는 분모를 안 넘겨 값이 늘 null(이름만 새 칸에 맞춤)
+  const jeonseText = percentRangeText(art.article_jeonse_ratio_min, art.article_jeonse_ratio_max);
 
   const rooms =
     art.room_count != null && art.bathroom_count != null
@@ -321,9 +324,9 @@ const ArticleRow = memo(function ArticleRow({
           <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700">
             {art.monthly_rent_yield}%
           </span>
-        ) : art.article_jeonse_ratio != null ? (
+        ) : jeonseText != null ? (
           <span className="px-1.5 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700" title="전세가율(같은 면적 기준)">
-            {art.article_jeonse_ratio}%
+            {jeonseText}
           </span>
         ) : (
           "-"

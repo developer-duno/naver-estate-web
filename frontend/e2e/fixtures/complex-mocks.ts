@@ -23,8 +23,32 @@ const COMPLEX: Complex = {
   building_coverage_ratio: "18%",
   article_count: 2,
   nearby_median_price: 120000,
-  jeonse_rate: 62, // BE 저장 단위 = 퍼센트 (세션278 H2)
+  jeonse_rate: 62, // BE 저장 단위 = 퍼센트 (세션278 H2) — 옛 칸, 화면은 아래 범위 칸을 읽는다(세션 489 B29)
   recent_trades_6m: 12,
+  // 시세 범위 화면(세션 479 B29 · 489 PR b2) — 대표 면적 최저~최고 + 거래 목록 · 전세가율 범위 · 새 출처 글자
+  rep_area_m2: 84,
+  price_basis: "rep_area",
+  area_prices: [
+    {
+      area_m2: 84, households: 300, price_median: 120000, trade_count: 3, price_min: 115000, price_max: 128000,
+      trades: [
+        { price: 128000, date: "2026-07-18", floor: 21, direct: false },
+        { price: 99000, date: "2026-06-30", floor: 2, direct: true },
+        { price: 115000, date: "2026-06-02", floor: 7, direct: false },
+      ],
+    },
+    {
+      area_m2: 59, households: 220, price_median: 95000, trade_count: 2, price_min: 93000, price_max: 97000,
+      trades: [
+        { price: 97000, date: "2026-07-05", floor: 15, direct: false },
+        { price: 93000, date: "2026-05-21", floor: 4, direct: false },
+      ],
+    },
+  ],
+  jeonse_rate_min: 58.6,
+  jeonse_rate_max: 65.2,
+  area_price_range_source: "정부 실거래 최근 6개월 최저~최고(중개거래 기준), 전용 84㎡ 대는 소수점을 버린 같은 크기끼리 · 전세가율 = 네이버 전세 시세(같은 면적, 최신 주) ÷ 정부 실거래 최저~최고",
+  legacy_range: null,
   has_pool: false,
   management_office_tel: "02-555-1234",
   filter_options: {
@@ -94,9 +118,22 @@ const EMPTY_STATS: PriceStats = {
   by_floor: [],
 };
 
-const EMPTY_HISTORY: PriceHistoryResponse = {
+// 정부 실거래 한 달(범위 띠 range_lower/upper + 거래 점 trades, 세션 489 B29) — 그래프 칸은 시각 회귀 사진에서 닫혀 있다
+const PRICE_HISTORY: PriceHistoryResponse = {
   complex_no: "100000",
-  items: [],
+  area_m2: 84,
+  basis: null,
+  basis_range: "최근 2년 전용 84㎡ 대 정부 실거래 최저~최고(거래는 점) · 전세는 네이버 시세",
+  items: [
+    {
+      trade_type: "A1", trade_type_label: "매매", base_month: "202606", series: "정부 실거래",
+      price_avg: 115000, price_lower: 99000, price_upper: 115000, range_lower: 115000, range_upper: 115000,
+      trades: [
+        { price: 99000, date: "2026-06-30", floor: 2, direct: true },
+        { price: 115000, date: "2026-06-02", floor: 7, direct: false },
+      ],
+    },
+  ],
 };
 
 // 크롤 API: auto:true 자동 크롤(page.tsx:157)이 실서버로 새는 것 차단.
@@ -142,7 +179,7 @@ export async function applyComplexMocks(page: Page): Promise<void> {
     if (sub === "articles") return fulfillJson(route, ARTICLES_RESPONSE);
     if (sub === "pyeong-details") return fulfillJson(route, EMPTY_PYEONG);
     if (sub === "price-stats") return fulfillJson(route, EMPTY_STATS);
-    if (sub === "price-history") return fulfillJson(route, EMPTY_HISTORY);
+    if (sub === "price-history") return fulfillJson(route, PRICE_HISTORY);
     // 소비자 화면 공개 경로(세션 482 PR 1b) — 중개사 화면은 부르지 않지만 404 대신 빈 답으로 고정
     if (sub === "public-price-history") return fulfillJson(route, { area_m2: null, months: [], two_year: null, basis: null });
     if (sub === "region-trend") return fulfillJson(route, { region_code: null, region_name: null, source: "", items: [] });

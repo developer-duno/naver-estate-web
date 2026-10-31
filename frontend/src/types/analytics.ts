@@ -1,3 +1,5 @@
+import type { AreaTrade } from "./estate";
+
 /** DB 통계 */
 export interface DbStats {
   complex_count: number;
@@ -45,6 +47,11 @@ export interface PriceHistoryItem {
   base_month: string;
   /** 출처 계열(세션 474 B27) — "정부 실거래" · "네이버 시세" · 옛 응답이면 없음 */
   series?: string | null;
+  /** 정부 줄 그 달 최저~최고(직거래 제외, 세션 479 B29·480) — 네이버 줄은 null */
+  range_lower?: number | null;
+  range_upper?: number | null;
+  /** 정부 줄 그 달 거래 하나하나(최근 2년 달만, 세션 479 B29) — 그 밖은 [] */
+  trades?: AreaTrade[];
 }
 
 /** 단지 가격 추이 응답 */
@@ -55,6 +62,8 @@ export interface PriceHistoryResponse {
   area_m2?: number | null;
   /** 기준 글자(BE 정본) — "전용 59㎡ 대 정부 실거래 중위 + 네이버 시세" */
   basis?: string | null;
+  /** 범위 그래프 기준 글자(BE 정본, 세션 479 B29·480) — 화면은 이 칸을 읽는다(basis 는 옛 그래프용) */
+  basis_range?: string | null;
 }
 
 /** 단지 공동주택 공시가격 평형별 항목 */

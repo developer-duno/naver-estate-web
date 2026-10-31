@@ -1,8 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { applyCompareMocks } from "./fixtures/compare-mocks";
+import { COMPARE_FIXED_NOW, applyCompareMocks } from "./fixtures/compare-mocks";
 
 test.describe("compare visual regression", () => {
   test("단지 비교 페이지 렌더 + 시각 회귀", async ({ page }) => {
+    // 비로그인 실거래가 추이 띠의 마지막 달 = 오늘 달 → 시계 고정(세션 491). 타이머는 그대로 돈다
+    await page.clock.setFixedTime(COMPARE_FIXED_NOW);
     await applyCompareMocks(page);
     await page.goto("/compare?ids=100000,200000");
 
@@ -17,6 +19,10 @@ test.describe("compare visual regression", () => {
     await page.addStyleTag({
       content: `[data-testid="compare-charts"] { visibility: hidden !important; }`,
     });
+    // 실거래가 추이 카드(비로그인 · mock 고정)가 회색 자리에서 굳을 때까지 — A = 띠, B = 거래 없음 글자
+    const trendCells = page.getByTestId("compare-public-trend-cell");
+    await expect(trendCells.nth(0).getByTestId("consumer-bands")).toBeVisible();
+    await expect(trendCells.nth(1).getByText("최근 2년 실거래 없음")).toBeVisible();
     await page.waitForLoadState("networkidle");
 
     await expect(page).toHaveScreenshot("compare.png", {

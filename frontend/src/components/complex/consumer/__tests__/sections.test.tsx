@@ -7,7 +7,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import ConsumerHeader from "../ConsumerHeader";
 import NeighborhoodSection from "../NeighborhoodSection";
 import PriceRangeSection from "../PriceRangeSection";
-import PriceTrendSection, { JEONSE_MIN_SPAN, axisRange, trendPoints } from "../PriceTrendSection";
+import PriceTrendSection, { JEONSE_MIN_SPAN, MonthBands, axisRange, trendPoints } from "../PriceTrendSection";
 import { END_YM, HOOD, OFFICIAL, SUBWAY, makeComplex, makeHistory, makeTrend } from "./fixtures";
 
 /** 서버 공개 요약 빵부스러기 — 링크 재료(compact 기본값 판정·링크 주소 확인용) */
@@ -232,6 +232,23 @@ describe("S2 어떻게 변해 왔나", () => {
     render(<PriceTrendSection history={null} trend={makeTrend()} endYm={END_YM} />);
     expect(screen.queryByTestId("consumer-bands")).toBeNull();
     expect(screen.getByTestId("consumer-region-sentence")).toBeInTheDocument();
+  });
+
+  // 세션 491 — 비교표가 세로 범위를 밖에서 넣는다(단지끼리 같은 눈금). 안 넣으면 그 단지 two_year 그대로
+  it("MonthBands range 를 넣으면 눈금이 그 범위 · 안 넣으면 그 단지 2년 범위", () => {
+    const { unmount } = render(<MonthBands history={makeHistory()} endYm={END_YM} range={{ min: 10000, max: 25000 }} />);
+    const wide = screen.getByTestId("consumer-bands");
+    expect(wide.textContent).toContain("2억5,000만");
+    expect(wide.textContent).toContain("1억");
+    expect(wide.textContent).not.toContain("1억4,700만");
+    // 같은 달(202605 최고 2억)의 띠 위쪽이 넓은 범위에선 맨 위가 아니다
+    const topWide = Number(wide.querySelector('[data-month="202605"]')!.getAttribute("y"));
+    unmount();
+    render(<MonthBands history={makeHistory()} endYm={END_YM} />);
+    const own = screen.getByTestId("consumer-bands");
+    expect(own.textContent).toContain("2억");
+    expect(own.textContent).toContain("1억4,700만");
+    expect(Number(own.querySelector('[data-month="202605"]')!.getAttribute("y"))).toBeLessThan(topWide);
   });
 });
 

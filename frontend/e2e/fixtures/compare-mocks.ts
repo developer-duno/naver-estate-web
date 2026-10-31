@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import type { Complex, PriceStats, PriceHistoryResponse, PyeongDetail } from "../../src/types";
+import type { Complex, PriceStats, PriceHistoryResponse, PublicPriceHistory, PyeongDetail } from "../../src/types";
 
 const COMPLEX_A: Complex = {
   complex_no: "100000",
@@ -123,6 +123,28 @@ const EMPTY_HISTORY = (id: string): PriceHistoryResponse => ({
 
 const EMPTY_PYEONG: { pyeong_details: PyeongDetail[] } = { pyeong_details: [] };
 
+/**
+ * 비로그인 비교표 실거래가 추이(세션 491) — 띠 그래프 마지막 달 = 오늘 달(currentYm)이라
+ * spec 이 이 시각으로 시계를 고정한다(page.clock.setFixedTime) — 사진이 달마다 바뀌지 않게.
+ * 고정 달 202512~202609 는 이 시각 기준 24개월 창(202411~202610) 안이다.
+ */
+export const COMPARE_FIXED_NOW = new Date("2026-10-15T12:00:00+09:00");
+
+const PUBLIC_HISTORY_A: PublicPriceHistory = {
+  area_m2: 84,
+  months: [
+    { month: "202512", trade_count: 2, price_min: 118000, price_max: 124000, price_median: null },
+    { month: "202602", trade_count: 1, price_min: 121000, price_max: 121000, price_median: null },
+    { month: "202605", trade_count: 3, price_min: 122000, price_max: 130000, price_median: null },
+    { month: "202609", trade_count: 2, price_min: 126000, price_max: 132000, price_median: null },
+  ],
+  two_year: { min: 118000, max: 132000, count: 8 },
+  basis: null,
+};
+
+/** 단지 B = 최근 2년 거래 없음 */
+const PUBLIC_HISTORY_EMPTY: PublicPriceHistory = { area_m2: null, months: [], two_year: null, basis: null };
+
 async function fulfillJson(route: import("@playwright/test").Route, body: unknown) {
   await route.fulfill({
     status: 200,
@@ -145,6 +167,9 @@ export async function applyCompareMocks(page: Page): Promise<void> {
     }
     if (sub === "price-history") return fulfillJson(route, EMPTY_HISTORY(id));
     if (sub === "pyeong-details") return fulfillJson(route, EMPTY_PYEONG);
+    if (sub === "public-price-history") {
+      return fulfillJson(route, id === "100000" ? PUBLIC_HISTORY_A : PUBLIC_HISTORY_EMPTY);
+    }
     if (!sub) {
       if (id === "100000") return fulfillJson(route, COMPLEX_A);
       if (id === "200000") return fulfillJson(route, COMPLEX_B);

@@ -28,12 +28,15 @@ const BAND_H = 130;
 const TOP = 12;
 const BOTTOM = 108;
 
-/** 이 단지 면적 하나의 월별 최저~최고 띠 24개월 — 1건(최저=최고)이면 점, 거래 없는 달은 비움 */
-function MonthBands({ history, endYm }: { history: PublicPriceHistory; endYm: string }) {
+/**
+ * 이 단지 면적 하나의 월별 최저~최고 띠 24개월 — 1건(최저=최고)이면 점, 거래 없는 달은 비움.
+ * range = 세로 범위를 밖에서 정할 때(비교표 — 단지끼리 같은 눈금, 세션 491). 없으면 이 단지 two_year
+ */
+export function MonthBands({ history, endYm, range }: { history: PublicPriceHistory; endYm: string; range?: { min: number; max: number } }) {
   const slots = monthsEndingAt(endYm, 24);
   const byMonth = new Map(history.months.map((m) => [m.month, m]));
-  const lo = history.two_year?.min ?? 0;
-  const hi = history.two_year?.max ?? 0;
+  const lo = range?.min ?? history.two_year?.min ?? 0;
+  const hi = range?.max ?? history.two_year?.max ?? 0;
   const y = (v: number) => (hi > lo ? BOTTOM - ((v - lo) / (hi - lo)) * (BOTTOM - TOP) : (TOP + BOTTOM) / 2);
   const step = W / slots.length;
   const label = `${history.area_m2}제곱미터 월별 거래 범위 띠`;

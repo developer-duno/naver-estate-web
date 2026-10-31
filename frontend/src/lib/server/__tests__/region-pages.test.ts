@@ -90,9 +90,18 @@ describe("loadHub", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("이름표에 없는 시군구 = 백엔드를 부르지 않고 notFound · 이름표에 있으면 부른다", async () => {
+    fetchMock.mockImplementation(async () => json(200, makeHub()));
+    expect(isNotFound(await caught(loadHub("99999")))).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    await loadHub("30200");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("백엔드 404 = notFound · 5xx = throw · 200 = 그대로", async () => {
     fetchMock.mockImplementation(async () => json(404));
-    expect(isNotFound(await caught(loadHub("00000")))).toBe(true);
+    expect(isNotFound(await caught(loadHub("11110")))).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     fetchMock.mockImplementation(async () => json(503));
     expect(isNotFound(await caught(loadHub("30200")))).toBe(false);
     fetchMock.mockImplementation(async () => json(200, makeHub()));
@@ -106,6 +115,7 @@ describe("loadHub", () => {
   });
 
   it("옛 코드 = 새 허브로 영구 이동(308) · 백엔드 안 부름(결정 20)", async () => {
+    // 30100 은 이름표(REGION_CODES)에 없는 코드여야 한다 — 그래야 '이동 검사가 이름표 검사보다 먼저'인 순서를 이 시험이 지킨다(세션 490 검사 🟡2)
     const e = await caught(loadHub("30100", true, { "30100": "30200" }));
     expect(redirectOf(e)).toContain("/region/30200");
     expect(redirectOf(e)).toContain("308");
@@ -142,8 +152,16 @@ describe("loadDong", () => {
   it("허브에도 없는 동 코드 · 없는 시군구 = notFound", async () => {
     fetchMock.mockImplementation(async (url: string) => (url.includes("/dongs/") ? json(404) : json(200, makeHub())));
     expect(isNotFound(await caught(loadDong("30200", "3020099999")))).toBe(true);
+    fetchMock.mockClear();
     fetchMock.mockImplementation(async () => json(404));
-    expect(isNotFound(await caught(loadDong("00000", "0000011100")))).toBe(true);
+    expect(isNotFound(await caught(loadDong("11110", "1111011100")))).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // 이름표에 있는 시군구 — 동 페이지·허브 둘 다 백엔드에 물었다
+  });
+
+  it("이름표에 없는 시군구 = 백엔드를 부르지 않고 notFound", async () => {
+    fetchMock.mockImplementation(async () => json(200, makeDong()));
+    expect(isNotFound(await caught(loadDong("99999", "9999910100")))).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("5xx = throw(404 아님)", async () => {

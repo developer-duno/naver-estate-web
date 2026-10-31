@@ -66,13 +66,13 @@ describe("제목", () => {
 describe("설명 — 실제 숫자만", () => {
   it("허브 = 단지 N곳·M개 동 + 지역 마지막 달 중위 매매가(한국부동산원 YYYY.MM)", () => {
     expect(hubDescription(makeHub())).toBe(
-      "대전 유성구 아파트 단지 16곳·2개 동. 최근 중위 매매가 4억 600만(한국부동산원 2026.09), 단지별 실거래가 범위·공시가격.",
+      "대전 유성구 아파트·오피스텔 단지 16곳·2개 동. 최근 중위 매매가 4억 600만(한국부동산원 2026.09), 단지별 실거래가 범위·공시가격.",
     );
   });
 
   it("허브 — 지역 추이가 없으면 중위 문장째 뺀다 · 마지막 달 값이 비면 값 있는 달", () => {
     expect(hubDescription(makeHub({ region_trend: null }))).toBe(
-      "대전 유성구 아파트 단지 16곳·2개 동. 단지별 실거래가 범위·공시가격.",
+      "대전 유성구 아파트·오피스텔 단지 16곳·2개 동. 단지별 실거래가 범위·공시가격.",
     );
     const t = makeTrend();
     t.items[2] = { ...t.items[2], sale_price_median: null };
@@ -81,10 +81,10 @@ describe("설명 — 실제 숫자만", () => {
 
   it("동 = 단지 N곳, 실거래 범위 있는 단지 K곳 · K 가 0 이면 그 말을 뺀다", () => {
     expect(dongDescription(makeDong())).toBe(
-      "대전 유성구 봉명동 아파트 단지 13곳, 실거래 범위 있는 단지 5곳. 단지별 실거래가 범위·공시가격·동네 통계.",
+      "대전 유성구 봉명동 아파트·오피스텔 단지 13곳, 실거래 범위 있는 단지 5곳. 단지별 실거래가 범위·공시가격·동네 통계.",
     );
     const none = makeDong({ complexes: [makeCard({ recent6_min: null, recent6_max: null })] });
-    expect(dongDescription(none)).toBe("대전 유성구 봉명동 아파트 단지 1곳. 단지별 실거래가 범위·공시가격·동네 통계.");
+    expect(dongDescription(none)).toBe("대전 유성구 봉명동 아파트·오피스텔 단지 1곳. 단지별 실거래가 범위·공시가격·동네 통계.");
   });
 
   it("허브 '자료 기준' = 지역 추이 마지막 달 · 없으면 null", () => {

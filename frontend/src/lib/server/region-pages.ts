@@ -78,6 +78,8 @@ export async function loadHub(
   if (!SIGUNGU5_RE.test(sigungu5)) notFound();
   const moved = redirects[sigungu5];
   if (moved) permanentRedirect(regionHubPath(moved));
+  // 이름표에 없는 시군구는 백엔드도 DB 전에 404 — 부르지 않고 바로 notFound(왕복·404 하루 캐시 없음)
+  if (!REGION_CODES[sigungu5]) notFound();
   const hub = await fetchRegionHub(sigungu5);
   if (!hub) notFound();
   return hub;
@@ -98,6 +100,8 @@ export type DongResolution =
 export const resolveDong = cache(
   async (sigungu5: string, dong10: string, enabled: boolean = REGION_PAGES_ENABLED): Promise<DongResolution> => {
     if (!enabled || !isDongOf(sigungu5, dong10)) return { kind: "notFound" };
+    // 이름표에 없는 시군구 = 백엔드를 부르지 않고 notFound(loadHub 와 같은 이유)
+    if (!REGION_CODES[sigungu5]) return { kind: "notFound" };
     const page = await fetchDongPage(sigungu5, dong10);
     if (page) return { kind: "page", page };
     const hub = await fetchRegionHub(sigungu5);

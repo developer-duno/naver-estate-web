@@ -111,7 +111,7 @@ export function hubBasis(h: Pick<RegionHub, "region_trend">): string | null {
 
 export function hubDescription(h: RegionHub): string {
   const name = regionName(h.sido, h.sigungu_name);
-  const out = [`${name} 아파트 단지 ${h.complex_count.toLocaleString()}곳·${h.dongs.length.toLocaleString()}개 동.`];
+  const out = [`${name} 아파트·오피스텔 단지 ${h.complex_count.toLocaleString()}곳·${h.dongs.length.toLocaleString()}개 동.`];
   const sale = latestRegionSale(h.region_trend);
   const tail = "단지별 실거래가 범위·공시가격.";
   out.push(sale ? `최근 중위 매매가 ${formatKoreanPrice(sale.value)}(한국부동산원 ${ymDot(sale.period)}), ${tail}` : tail);
@@ -126,7 +126,7 @@ export function recentRangeCount(list: RegionComplexCard[]): number {
 export function dongDescription(d: DongPage): string {
   const name = `${regionName(d.sido, d.sigungu_name)} ${d.dong_name}`;
   const k = recentRangeCount(d.complexes);
-  const head = `${name} 아파트 단지 ${d.complexes.length.toLocaleString()}곳${k > 0 ? `, 실거래 범위 있는 단지 ${k.toLocaleString()}곳` : ""}.`;
+  const head = `${name} 아파트·오피스텔 단지 ${d.complexes.length.toLocaleString()}곳${k > 0 ? `, 실거래 범위 있는 단지 ${k.toLocaleString()}곳` : ""}.`;
   return `${head} 단지별 실거래가 범위·공시가격·동네 통계.`;
 }
 

@@ -94,6 +94,18 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test \
 >
 > **CI 보안 게이트 (세션 339)**: CI 는 BE `pip-audit -r requirements.txt --strict`(prod 취약점 자동 차단) + FE `npm audit --omit=dev --audit-level=high`(prod high/critical 자동 차단)를 상시 실행한다. 의존성 추가·bump PR 은 이 게이트를 통과해야 머지된다. 로컬 사전 확인 = `cd frontend && npm audit --omit=dev`. ⚠ 윈도우 로컬 `pip-audit` 은 requirements.txt UTF-8 한글 주석을 cp949 로 읽어 `UnicodeDecodeError` 로 죽으니 `PYTHONUTF8=1 pip-audit ...` 로 실행(CI 리눅스는 정상). dependabot PR 재생성·secrets 처리는 메모리 `[[dependabot-secrets-gate]]` 참조.
 
+## 머지 뒤 라이브 확인 (전역 CLAUDE.md §0-8 — "합쳤습니다"로 끝내지 않는다 · 2026-11-02 실측)
+
+| 칸 | FE (`frontend/**`) | BE (`backend/**`) |
+|---|---|---|
+| 배포 곳 | **Vercel** 자동(main push → 2u.pe.kr) | **집 서버 nssm `naver-orchestrator`** — 자동 배포 없음, 사람이 재시작해야 반영(`.claude/rules/release.md` §1·§3 · 여러 PR 은 묶어 한 번) |
+| 그 커밋 배포 확인 | `gh api repos/developer-duno/naver-estate-web/commits/<전체 해시>/status --jq '.state, (.statuses[]\|"\(.context) \(.state)")'` → `success` + `Vercel success`(맨 위 기록 아님 — 해시로). BE 전용 커밋은 Vercel 빌드가 없어 `statuses` 가 빈다(정상) | release.md §2 4중 지표(`scripts/orchestrator.pid` mtime · `scripts/backend.log` 첫 줄 시각 · 해당 잡 crawl_jobs · 관리자 라이브 GET) |
+| 라이브 확인 주소(기대) | `https://2u.pe.kr/` 200 · `/complex/13543` 200(비로그인 열림) · `/admin` 307 · `/search/favorites` 200 | `https://api.2u.pe.kr/health` 200 · `/health/db` `{"status":"ok","db":"ok"}` · `/api/live/article/1/detail` 401(비로그인 잠금 — 200 이면 결함) |
+| 바뀐 글자 | 서버 렌더 글자 = `curl.exe -s https://2u.pe.kr/<경로> \| grep -c "<글자>"` · 클라 번들·버튼은 playwright(글로벌 스킬 `live-verify`, chromium 데스크톱 + webkit 390px) | 바뀐 API 의 라이브 GET 응답 칸 |
+| 로그인 뒤 화면 | ① 시험 관리자 계정 qa-admin(메모리 `project_qa_admin_account` — 켜고 끄기 SQL · 끝나면 반드시 끔) ② 비로그인 응답·번들 grep ③ 사장님이 연 별도 크롬에 로그인 뒤 Claude 조종 ④ 사장님 새로고침 확인 | 관리자 API 는 release.md §2 의 admin 토큰 발급(라이브 `.env` JWT) |
+
+> 보고는 숫자로(응답 코드·grep 개수·배포 상태 글자). 쿼터를 깎는 경로(크롤·시세 수집)의 라이브 확인은 `browser-automation-isolation.md` §실계정 부수효과(admin 계정).
+
 ## 규칙 & 커맨드
 
 ### 항상 로드 (`.claude/rules/`)

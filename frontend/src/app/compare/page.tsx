@@ -316,7 +316,9 @@ function CompareContent() {
     );
   }
 
-  if (loading) return <SkeletonPage message="단지 정보를 불러오는 중..." />;
+  // 로그인 확인 전에는 표를 그리지 않는다 — publicView 가 아직 false 라 비로그인 손님에게 네이버 행·차트가
+  // 잠깐 그려졌다 사라지던 깜빡임(세션 490 검사관 🟡1 → 세션 493)
+  if (loading || !tokenReady) return <SkeletonPage message="단지 정보를 불러오는 중..." />;
 
   if (complexes.length === 0) {
     return (

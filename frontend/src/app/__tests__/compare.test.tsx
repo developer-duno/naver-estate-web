@@ -8,7 +8,7 @@
  * - 평당가 statsQueries 1개 fail → 해당 단지 평당가 셀에 "불러오기 실패" 표시
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { currentYm, monthsEndingAt } from "@/components/complex/consumer/consumer-format";
 import userEvent from "@testing-library/user-event";
 import ComparePage from "../compare/page";
@@ -458,12 +458,52 @@ describe("단지 비교 — 비로그인이면 네이버 자료 행·상자 숨�
     expect(screen.getByTestId("compare-sources-footer")).toHaveTextContent("네이버부동산 매물 호가 집계");
   });
 
-  it("로그인 확인 전(tokenReady false): 가격 통계를 쏘지 않는다", async () => {
+  // 로그인 확인 전 = 단지 응답이 와도 표·차트·출처를 그리지 않고 로딩 모양만(세션 493 — 네이버 칸 깜빡임 차단)
+  async function renderBeforeTokenReady() {
     mockSession.sessionToken = undefined;
     mockSession.tokenReady = false;
-    renderPage("ids=A,B");
-    await screen.findByTestId("compare-sources-footer");
+    const view = renderPage("ids=A,B");
+    await waitFor(() => expect(api.getComplex).toHaveBeenCalledTimes(2));
+    // 단지 응답이 화면에 반영될 시간을 준다 — 옛 코드는 이 사이에 표(네이버 행 포함)를 그렸다
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    return view;
+  }
+
+  it("로그인 확인 전(tokenReady false): 네이버 칸 0개 · 차트 없음 · 로딩 모양 · 가격 통계를 쏘지 않는다", async () => {
+    vi.mocked(api.getComplex).mockClear();
+    const { container } = await renderBeforeTokenReady();
+    const labels = rowLabels(container);
+    for (const l of NAVER_LABELS) expect(labels).not.toContain(l);
+    expect(screen.queryByText("난방")).toBeNull();
+    expect(screen.queryByTestId("compare-charts")).toBeNull();
+    expect(screen.queryByTestId("compare-sources-footer")).toBeNull();
+    expect(screen.getByRole("status", { name: "로딩 중" })).toBeInTheDocument();
     expect(api.getPriceStats).not.toHaveBeenCalled();
+  });
+
+  it("확인 전 → 비로그인 확정: 네이버 칸 없이 공개 화면만 나온다", async () => {
+    vi.mocked(api.getComplex).mockClear();
+    const { container, rerender } = await renderBeforeTokenReady();
+    mockSession.tokenReady = true;
+    rerender(<TestQueryProvider><ComparePage /></TestQueryProvider>);
+    await screen.findByTestId("compare-sources-footer");
+    const labels = rowLabels(container);
+    expect(labels).toContain("주소");
+    for (const l of NAVER_LABELS) expect(labels).not.toContain(l);
+    expect(screen.queryByTestId("compare-charts")).toBeNull();
+  });
+
+  it("확인 전 → 로그인 확정: 네이버 행·차트가 나오고 가격 통계를 부른다", async () => {
+    vi.mocked(api.getComplex).mockClear();
+    const { container, rerender } = await renderBeforeTokenReady();
+    mockSession.sessionToken = "tok";
+    mockSession.tokenReady = true;
+    rerender(<TestQueryProvider><ComparePage /></TestQueryProvider>);
+    await screen.findByTestId("compare-sources-footer");
+    await waitFor(() => expect(api.getPriceStats).toHaveBeenCalledTimes(2));
+    const labels = rowLabels(container);
+    for (const l of NAVER_LABELS) expect(labels).toContain(l);
+    expect(screen.getByTestId("compare-charts")).toBeInTheDocument();
   });
 });
 

@@ -80,9 +80,8 @@ export function floorAreaNote(area: number | null | undefined): string | null {
   return area ? `전용 ${area}㎡ 대 매물 기준` : null;
 }
 
-/** 그 면적 묶음의 6개월 중위(없으면 null) — 공시가율 분모 */
-export function areaMedianOf(areaPrices: AreaPrice[] | undefined, group: number | null): number | null {
+/** 그 면적 묶음의 6개월 정부 실거래(없으면 null) — 공시가율 분모(범위) */
+export function areaPriceOf(areaPrices: AreaPrice[] | undefined, group: number | null): AreaPrice | null {
   if (group == null || !areaPrices) return null;
-  const hit = areaPrices.find((ap) => ap.area_m2 === group);
-  return hit?.price_median ?? null;
+  return areaPrices.find((ap) => ap.area_m2 === group) ?? null;
 }

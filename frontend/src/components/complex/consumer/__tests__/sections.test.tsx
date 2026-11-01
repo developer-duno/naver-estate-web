@@ -7,7 +7,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import ConsumerHeader from "../ConsumerHeader";
 import NeighborhoodSection from "../NeighborhoodSection";
 import PriceRangeSection from "../PriceRangeSection";
-import PriceTrendSection, { JEONSE_MIN_SPAN, MonthBands, axisRange, trendPoints } from "../PriceTrendSection";
+import PriceTrendSection, { BAND_AXIS_W, JEONSE_MIN_SPAN, MonthBands, axisRange, trendPoints } from "../PriceTrendSection";
 import { END_YM, HOOD, OFFICIAL, SUBWAY, makeComplex, makeHistory, makeTrend } from "./fixtures";
 
 /** 서버 공개 요약 빵부스러기 — 링크 재료(compact 기본값 판정·링크 주소 확인용) */
@@ -249,6 +249,23 @@ describe("S2 어떻게 변해 왔나", () => {
     expect(own.textContent).toContain("2억");
     expect(own.textContent).toContain("1억4,700만");
     expect(Number(own.querySelector('[data-month="202605"]')!.getAttribute("y"))).toBeLessThan(topWide);
+  });
+
+  // 세션 491 사장님 "눈금 글자를 그래프 왼쪽 바깥으로" — 최고·최저 글자는 오른쪽 끝을 띠 영역 시작 왼쪽에 둔다(겹침 0)
+  it("MonthBands 최고·최저 글자는 띠 영역 왼쪽 바깥 — 띠·점은 모두 그 오른쪽", () => {
+    render(<MonthBands history={makeHistory()} endYm={END_YM} />);
+    const bands = screen.getByTestId("consumer-bands");
+    const labels = ["max", "min"].map((k) => bands.querySelector(`[data-axis="${k}"]`)!);
+    for (const t of labels) {
+      expect(t.getAttribute("text-anchor")).toBe("end");
+      expect(Number(t.getAttribute("x"))).toBeLessThan(BAND_AXIS_W);
+    }
+    const lefts = [
+      ...Array.from(bands.querySelectorAll("rect[data-month]")).map((r) => Number(r.getAttribute("x"))),
+      ...Array.from(bands.querySelectorAll("circle[data-month]")).map((c) => Number(c.getAttribute("cx")) - Number(c.getAttribute("r"))),
+    ];
+    expect(lefts.length).toBeGreaterThan(0);
+    expect(Math.min(...lefts)).toBeGreaterThanOrEqual(BAND_AXIS_W);
   });
 });
 

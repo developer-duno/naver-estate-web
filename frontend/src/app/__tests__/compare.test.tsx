@@ -441,8 +441,9 @@ describe("단지 비교 — 비로그인이면 네이버 자료 행·상자 숨�
     expect(api.getPriceStats).not.toHaveBeenCalled();
     const footer = screen.getByTestId("compare-sources-footer");
     expect(footer.textContent).not.toMatch(/네이버/);
+    // 이 시험 단지들은 고를 면적이 없어 실거래가 추이 카드가 없다 → '실거래가 추이' 낱말이 빠진 출처(세션 491)
     expect(footer.textContent).toBe(
-      "출처: 단지 기본 정보(세대수·동수·층·주차·용적률·건폐율) = 건축물대장 기준 · 대표 면적 시세·실거래가 추이 = 국토교통부 실거래가(공공데이터포털)",
+      "출처: 단지 기본 정보(세대수·동수·층·주차·용적률·건폐율) = 건축물대장 기준 · 대표 면적 시세 = 국토교통부 실거래가(공공데이터포털)",
     );
     expect(screen.getByTestId("compare-region-footnote")).toHaveTextContent("시군구 전세가율");
   });
@@ -466,7 +467,7 @@ describe("단지 비교 — 비로그인이면 네이버 자료 행·상자 숨�
   });
 });
 
-// 세션 491 — 비로그인 비교표: 실거래가 추이(단지마다 작은 그래프 · 같은 세로 눈금 · 거래 없음 글자 · 실패는 다시 시도)
+// 세션 491 — 비로그인 비교표: 실거래가 추이(단지마다 작은 그래프 · 같은 세로 눈금 · 기록 없는 단지는 칸 없음 · 실패는 다시 시도)
 describe("단지 비교 — 비로그인 실거래가 추이 (세션 491)", () => {
   // 띠 그래프 창(오늘 달까지 24개월) 안에 드는 달 — 시험 날짜와 무관하게
   const recent = monthsEndingAt(currentYm(), 24).slice(-3);
@@ -481,47 +482,84 @@ describe("단지 비교 — 비로그인 실거래가 추이 (세션 491)", () =
       basis: null,
     };
   }
+  const NO_RECORD = { area_m2: null, months: [], two_year: null, basis: null };
+  const SHORT_FOOTER =
+    "출처: 단지 기본 정보(세대수·동수·층·주차·용적률·건폐율) = 건축물대장 기준 · 대표 면적 시세 = 국토교통부 실거래가(공공데이터포털)";
+  // 대표 면적이 있는 단지(면적 고르기 = 단지 화면 defaultArea)
+  const REP: Record<string, number> = { A: 84, B: 59, C: 84 };
+  const withRep = (no: string) => ({ ...makeComplex(no), rep_area_m2: REP[no] ?? 84 });
 
   beforeEach(() => {
-    vi.mocked(api.getComplex).mockImplementation((no: string) => Promise.resolve(makeComplex(no)));
+    vi.mocked(api.getComplex).mockImplementation((no: string) => Promise.resolve(withRep(no)));
     vi.mocked(api.getPublicPriceHistory).mockClear();
     vi.mocked(api.getPublicPriceHistory).mockImplementation((no: string) => {
       if (no === "A") return Promise.resolve(history(84, 79000, 86000));
       if (no === "B") return Promise.resolve(history(59, 75000, 84000));
-      return Promise.resolve({ area_m2: null, months: [], two_year: null, basis: null });
+      return Promise.resolve(NO_RECORD);
     });
   });
 
-  it("비로그인: 단지마다 칸 1개 · 제목 = 이름+대표 면적 · 모든 칸 같은 눈금(전 단지 최저~최고) · 거래 없으면 그 글자만", async () => {
+  it("비로그인: 기록 있는 단지마다 칸 1개 · 제목 = 이름+면적 · 모든 칸 같은 눈금 · 기록 없는 단지는 칸 없음", async () => {
     mockSession.sessionToken = undefined;
     renderPage("ids=A,B,C");
     const card = await screen.findByTestId("compare-public-trend");
     expect(within(card).getByRole("heading", { level: 2 }).textContent).toBe("실거래가 추이 · 대표 면적 · 최근 2년");
+    await waitFor(() => expect(within(card).getAllByTestId("compare-public-trend-cell")).toHaveLength(2));
     const cells = within(card).getAllByTestId("compare-public-trend-cell");
-    expect(cells).toHaveLength(3);
     await waitFor(() => expect(within(cells[0]).getByTestId("consumer-bands")).toBeInTheDocument());
     expect(within(cells[0]).getByRole("heading", { level: 3 }).textContent).toBe("단지A 84㎡");
     expect(within(cells[1]).getByRole("heading", { level: 3 }).textContent).toBe("단지B 59㎡");
-    // 같은 눈금: A(7.9~8.6억)·B(7.5~8.4억) 두 칸 모두 7억5000만~8억6000만
-    for (const cell of cells.slice(0, 2)) {
+    // 같은 눈금: A(7.9~8.6억)·B(7.5~8.4억) 두 칸 모두 7억5000만~8억6000만 (C 는 기록 없음 → 눈금에서도 빠짐)
+    for (const cell of cells) {
       const bands = within(cell).getByTestId("consumer-bands");
       expect(bands.textContent).toContain("8억6,000만");
       expect(bands.textContent).toContain("7억5,000만");
     }
     expect(within(cells[0]).getByTestId("consumer-bands").textContent).not.toContain("7억9,000만");
-    // C = 2년 거래 없음 → 칸은 두고 글자만(세로 범위 계산에서 빠짐)
-    expect(within(cells[2]).getByRole("heading", { level: 3 }).textContent).toBe("단지C");
-    expect(within(cells[2]).queryByTestId("consumer-bands")).toBeNull();
-    expect(cells[2]).toHaveTextContent("최근 2년 실거래 없음");
-    expect(api.getPublicPriceHistory).toHaveBeenCalledTimes(3);
-    // 공개 창구 — 토큰 인자 없이 단지 번호만(대표 면적은 서버가 정한다)
-    expect(vi.mocked(api.getPublicPriceHistory).mock.calls.every((c) => c.length === 1)).toBe(true);
+    expect(card).not.toHaveTextContent("단지C");
+    expect(screen.queryByText("최근 2년 실거래 없음")).toBeNull();
+    // 공개 창구 — 단지 번호 + 단지 화면과 같은 면적(토큰 인자 없음)
+    expect(vi.mocked(api.getPublicPriceHistory).mock.calls).toEqual([["A", 84], ["B", 59], ["C", 84]]);
+    expect(screen.getByTestId("compare-sources-footer")).toHaveTextContent("실거래가 추이");
+  });
+
+  it("전부 기록 없음: 카드 없음 · 출처는 짧은 글자", async () => {
+    mockSession.sessionToken = undefined;
+    vi.mocked(api.getPublicPriceHistory).mockImplementation(() => Promise.resolve(NO_RECORD));
+    renderPage("ids=A,B");
+    await waitFor(() => expect(api.getPublicPriceHistory).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByTestId("compare-sources-footer").textContent).toBe(SHORT_FOOTER));
+    expect(screen.queryByTestId("compare-public-trend")).toBeNull();
+  });
+
+  it("대표 면적이 없어도 범위 있는 면적으로 부른다(단지 화면 defaultArea) · 고를 면적이 없으면 호출 0", async () => {
+    mockSession.sessionToken = undefined;
+    vi.mocked(api.getComplex).mockImplementation((no: string) =>
+      Promise.resolve(
+        no === "A"
+          ? {
+              ...makeComplex(no),
+              rep_area_m2: null,
+              area_prices: [
+                { area_m2: 49, price_median: null, trade_count: 0, price_min: null, price_max: null },
+                { area_m2: 59, price_median: null, trade_count: 3, price_min: 75000, price_max: 84000 },
+              ],
+            }
+          : { ...makeComplex(no), rep_area_m2: null, area_prices: [] },
+      ),
+    );
+    vi.mocked(api.getPublicPriceHistory).mockImplementation(() => Promise.resolve(history(59, 75000, 84000)));
+    renderPage("ids=A,B");
+    const card = await screen.findByTestId("compare-public-trend");
+    await waitFor(() => expect(within(card).getByTestId("consumer-bands")).toBeInTheDocument());
+    expect(vi.mocked(api.getPublicPriceHistory).mock.calls).toEqual([["A", 59]]);
+    expect(within(card).getAllByTestId("compare-public-trend-cell")).toHaveLength(1);
   });
 
   it("아파트+오피스텔 섞임: 오피스텔 칸은 안 그리고 공개 창구도 안 부른다", async () => {
     mockSession.sessionToken = undefined;
     vi.mocked(api.getComplex).mockImplementation((no: string) =>
-      Promise.resolve(no === "B" ? { ...makeComplex(no), real_estate_type_code: "OPST" } : makeComplex(no)),
+      Promise.resolve(no === "B" ? { ...withRep(no), real_estate_type_code: "OPST" } : withRep(no)),
     );
     renderPage("ids=A,B");
     const card = await screen.findByTestId("compare-public-trend");
@@ -538,15 +576,13 @@ describe("단지 비교 — 비로그인 실거래가 추이 (세션 491)", () =
   it("전부 오피스텔: 카드 없음 · 호출 0 · 출처 줄에서 '실거래가 추이' 낱말만 빠진다", async () => {
     mockSession.sessionToken = undefined;
     vi.mocked(api.getComplex).mockImplementation((no: string) =>
-      Promise.resolve({ ...makeComplex(no), real_estate_type_name: "오피스텔" }),
+      Promise.resolve({ ...withRep(no), real_estate_type_name: "오피스텔" }),
     );
     renderPage("ids=A,B");
     const footer = await screen.findByTestId("compare-sources-footer");
     expect(screen.queryByTestId("compare-public-trend")).toBeNull();
     expect(api.getPublicPriceHistory).not.toHaveBeenCalled();
-    expect(footer.textContent).toBe(
-      "출처: 단지 기본 정보(세대수·동수·층·주차·용적률·건폐율) = 건축물대장 기준 · 대표 면적 시세 = 국토교통부 실거래가(공공데이터포털)",
-    );
+    expect(footer.textContent).toBe(SHORT_FOOTER);
   });
 
   it("한 단지 응답이 늦으면 먼저 온 칸도 회색 자리 — 다 받은 뒤 모든 칸을 같은 눈금으로", async () => {
@@ -583,7 +619,7 @@ describe("단지 비교 — 비로그인 실거래가 추이 (세션 491)", () =
     expect(api.getPublicPriceHistory).not.toHaveBeenCalled();
   });
 
-  it("실패한 단지 칸은 '다시 시도'(거래 없음으로 바꾸지 않음) · 누르면 다시 부른다", async () => {
+  it("실패한 단지 칸은 남아 '다시 시도'(기록 없음으로 숨기지 않음) · 누르면 다시 부른다", async () => {
     mockSession.sessionToken = undefined;
     vi.mocked(api.getPublicPriceHistory).mockImplementation((no: string) =>
       no === "A" ? Promise.reject(new Error("서버 오류")) : Promise.resolve(history(59, 75000, 84000)),
@@ -592,7 +628,7 @@ describe("단지 비교 — 비로그인 실거래가 추이 (세션 491)", () =
     const card = await screen.findByTestId("compare-public-trend");
     const cells = within(card).getAllByTestId("compare-public-trend-cell");
     const retry = await within(cells[0]).findByRole("button", { name: "다시 시도" });
-    expect(cells[0]).not.toHaveTextContent("최근 2년 실거래 없음");
+    expect(within(cells[0]).getByRole("heading", { level: 3 }).textContent).toBe("단지A");
     expect(within(cells[1]).getByTestId("consumer-bands")).toBeInTheDocument();
     const before = vi.mocked(api.getPublicPriceHistory).mock.calls.filter((c) => c[0] === "A").length;
     await userEvent.click(retry);

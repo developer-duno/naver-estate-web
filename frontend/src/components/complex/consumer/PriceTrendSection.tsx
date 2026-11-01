@@ -27,6 +27,9 @@ interface Props {
 const BAND_H = 130;
 const TOP = 12;
 const BOTTOM = 108;
+// 왼쪽 바깥 눈금 글자 자리(최고·최저 금액) — 띠는 이 오른쪽에서만 그려 글자와 겹치지 않는다(세션 491)
+// 글자 크기 10 기준 '123억4,500만'(약 62) 이 들어가는 폭
+export const BAND_AXIS_W = 70;
 
 /**
  * 이 단지 면적 하나의 월별 최저~최고 띠 24개월 — 1건(최저=최고)이면 점, 거래 없는 달은 비움.
@@ -38,15 +41,15 @@ export function MonthBands({ history, endYm, range }: { history: PublicPriceHist
   const lo = range?.min ?? history.two_year?.min ?? 0;
   const hi = range?.max ?? history.two_year?.max ?? 0;
   const y = (v: number) => (hi > lo ? BOTTOM - ((v - lo) / (hi - lo)) * (BOTTOM - TOP) : (TOP + BOTTOM) / 2);
-  const step = W / slots.length;
+  const step = (W - BAND_AXIS_W) / slots.length;
   const label = `${history.area_m2}제곱미터 월별 거래 범위 띠`;
   return (
     <svg viewBox={`0 0 ${W} ${BAND_H}`} className="w-full max-w-[480px] h-auto" role="img" aria-label={label} data-testid="consumer-bands">
-      <line x1="0" y1={BOTTOM + 2} x2={W} y2={BOTTOM + 2} stroke="#e5e7eb" />
+      <line x1={BAND_AXIS_W} y1={BOTTOM + 2} x2={W} y2={BOTTOM + 2} stroke="#e5e7eb" />
       {slots.map((ym, i) => {
         const m = byMonth.get(ym);
         if (!m) return null;
-        const cx = i * step + step / 2;
+        const cx = BAND_AXIS_W + i * step + step / 2;
         if (m.price_max === m.price_min) {
           return <circle key={ym} data-month={ym} cx={cx} cy={y(m.price_min)} r={4} fill="#f59e0b" />;
         }
@@ -56,10 +59,10 @@ export function MonthBands({ history, endYm, range }: { history: PublicPriceHist
         );
       })}
       {[0, 12, slots.length - 1].map((i) => (
-        <text key={i} x={Math.min(i * step, W - 30)} y={BAND_H - 4} fontSize="10" fill="#6b7280">{ymShort(slots[i])}</text>
+        <text key={i} x={Math.min(BAND_AXIS_W + i * step, W - 30)} y={BAND_H - 4} fontSize="10" fill="#6b7280">{ymShort(slots[i])}</text>
       ))}
-      {hi > 0 && <text x={W - 4} y={TOP + 4} fontSize="10" fill="#6b7280" textAnchor="end">{formatChartPrice(hi)}</text>}
-      {lo > 0 && hi > lo && <text x={W - 4} y={BOTTOM - 2} fontSize="10" fill="#6b7280" textAnchor="end">{formatChartPrice(lo)}</text>}
+      {hi > 0 && <text data-axis="max" x={BAND_AXIS_W - 6} y={TOP + 4} fontSize="10" fill="#6b7280" textAnchor="end">{formatChartPrice(hi)}</text>}
+      {lo > 0 && hi > lo && <text data-axis="min" x={BAND_AXIS_W - 6} y={BOTTOM} fontSize="10" fill="#6b7280" textAnchor="end">{formatChartPrice(lo)}</text>}
     </svg>
   );
 }

@@ -12,8 +12,9 @@ import { useSmartBack } from "@/hooks/useSmartBack";
 import { useSessionToken } from "@/hooks/useSessionToken";
 import { calcAvgPricePerPyeong } from "@/lib/compare-utils";
 import LoadingSpinner from "@/components/LoadingSpinner";
-import ComparePublicTrend from "@/components/compare/ComparePublicTrend";
+import ComparePublicTrend, { usePublicTrend, type PublicTrendTarget } from "@/components/compare/ComparePublicTrend";
 import { isOfficetel } from "@/components/complex/consumer/consumer-format";
+import { defaultArea } from "@/components/complex/consumer/ConsumerComplexView";
 import { SkeletonPage } from "@/components/Skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -174,8 +175,14 @@ function CompareContent() {
   // 비로그인으로 확정(토큰 해석 끝 + 토큰 없음) — 네이버 자료 행·차트·상세 상자를 그리지 않는다(세션 490)
   const publicView = tokenReady && !sessionToken;
   // 비로그인 실거래가 추이(세션 491) — 오피스텔은 정부 실거래를 받지 않아 칸·호출 없음(단지 화면과 같은 판정). 전부 오피스텔이면 카드도 없음
-  const trendComplexes = complexes.filter((c) => !isOfficetel(c));
-  const publicTrendShown = publicView && complexes.length >= 2 && trendComplexes.length > 0;
+  // 면적 = 단지 화면과 같은 defaultArea(대표 면적이 없어도 범위 있는 면적) — 고를 면적이 없으면 칸·호출 없음
+  const trendTargets: PublicTrendTarget[] = complexes.flatMap((c) => {
+    const area = isOfficetel(c) ? null : defaultArea(c);
+    return area == null ? [] : [{ complex_no: c.complex_no, complex_name: c.complex_name, area }];
+  });
+  // 기록 없는 단지는 칸을 안 그린다(사장님 11-01) — 그릴 칸이 하나도 없으면 카드도 없고 출처는 짧은 글자
+  const publicTrend = usePublicTrend(trendTargets, publicView && complexes.length >= 2);
+  const publicTrendShown = publicView && complexes.length >= 2 && publicTrend.cells.length > 0;
 
   /* 가격 통계 (React Query 캐시 공유 — CompareCharts와 동일 queryKey) */
   const statsQueries = useQueries({
@@ -472,9 +479,7 @@ function CompareContent() {
       {/* 비로그인 = 그 자리에 공개 실거래가 추이만(단지마다 작은 그래프, 세션 491) — 오피스텔 칸은 안 그림 */}
       {publicTrendShown && (
         <div className="mt-8">
-          <ComparePublicTrend
-            complexes={trendComplexes.map((c) => ({ complex_no: c.complex_no, complex_name: c.complex_name }))}
-          />
+          <ComparePublicTrend trend={publicTrend} />
         </div>
       )}
 

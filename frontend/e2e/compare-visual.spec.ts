@@ -19,10 +19,11 @@ test.describe("compare visual regression", () => {
     await page.addStyleTag({
       content: `[data-testid="compare-charts"] { visibility: hidden !important; }`,
     });
-    // 실거래가 추이 카드(비로그인 · mock 고정)가 회색 자리에서 굳을 때까지 — A = 띠, B = 거래 없음 글자
+    // 실거래가 추이 카드(비로그인 · mock 고정)가 회색 자리에서 굳을 때까지 — 두 칸 모두 띠
     const trendCells = page.getByTestId("compare-public-trend-cell");
+    await expect(trendCells).toHaveCount(2);
     await expect(trendCells.nth(0).getByTestId("consumer-bands")).toBeVisible();
-    await expect(trendCells.nth(1).getByText("최근 2년 실거래 없음")).toBeVisible();
+    await expect(trendCells.nth(1).getByTestId("consumer-bands")).toBeVisible();
     await page.waitForLoadState("networkidle");
 
     await expect(page).toHaveScreenshot("compare.png", {

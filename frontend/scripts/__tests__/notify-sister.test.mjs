@@ -215,13 +215,14 @@ describe("정본 읽기 — 없으면 조용히 통과하지 않는다", () => {
     expect(loadRegistry(good)?.writers["2u"]).toBeDefined();
   });
 
+  // 병렬 부하에서 5초를 넘긴 적 있음(s493) — 프로세스 기동
   it("CLI — OWNERSHIP_REGISTRY_PATH 가 없으면 '정본 없음' 으로 exit 1", () => {
     const env = { ...process.env };
     delete env.OWNERSHIP_REGISTRY_PATH;
     const r = spawnSync(process.execPath, [SCRIPT, "--dry-run"], { env, encoding: "utf8" });
     expect(r.status).toBe(1);
     expect(r.stderr).toContain("정본 없음");
-  });
+  }, 20_000);
 });
 
 describe("본체 runNotify(가짜 git·gh)", () => {

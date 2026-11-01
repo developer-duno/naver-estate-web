@@ -202,6 +202,7 @@ describe("check-job-labels", () => {
     expect(LABELS_PATH.split(sep).join("/")).toMatch(/[/]frontend[/]src[/]lib[/]crawl-job-labels[.]ts$/);
   });
 
+  // 병렬 부하에서 5초를 넘긴 적 있음(s493) — 실제 backend 폴더 스캔
   it("실제 backend 를 스캔하면 job_type 을 여러 종 찾아낸다 (파서 살아있음 확인)", async () => {
     // 인자 없이 = 기본 경로(절대경로)로 — cwd 에 기대지 않는다
     const { types } = await extractBackendJobTypes();
@@ -209,5 +210,5 @@ describe("check-job-labels", () => {
     expect(types.has("complex_articles")).toBe(true);
     // f-string 전개가 실제 소스에서도 동작하는지
     expect(types.has("complex_detail_JGC")).toBe(true);
-  });
+  }, 20_000);
 });

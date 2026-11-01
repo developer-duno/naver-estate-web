@@ -106,7 +106,12 @@ export default function SearchExperience({ emptyExtra }: Props) {
   const hasActiveFilters = filtersActive || typesNarrowed;
 
   const rawComplexSort = searchParams.get("complex_sort") ?? "default";
-  const complexSort = VALID_COMPLEX_SORT.has(rawComplexSort) ? rawComplexSort : "default";
+  // 비로그인으로 확정되면 매물 수 정렬은 쓰지 않는다 — 주소 글자는 그대로 두고(로그인하면 살아남) 기본순으로 본다(세션 491)
+  const publicView = isLoggedIn === false;
+  const complexSort =
+    VALID_COMPLEX_SORT.has(rawComplexSort) && !(publicView && rawComplexSort === "article_desc")
+      ? rawComplexSort
+      : "default";
   const setComplexSort = useCallback((next: string) => {
     const params = new URLSearchParams(searchParams.toString());
     if (next === "default" || !VALID_COMPLEX_SORT.has(next)) {
@@ -325,13 +330,13 @@ export default function SearchExperience({ emptyExtra }: Props) {
           <div className="mb-5">
             <div className="md:hidden flex flex-wrap items-center gap-2">
               <FilterBarMobileSheet key={`mobile-${filterKey}`} onChange={setUrlFilters} initialFilters={urlFilters} />
-              <ComplexSortDropdown value={complexSort} onChange={setComplexSort} />
+              <ComplexSortDropdown value={complexSort} onChange={setComplexSort} publicView={publicView} />
             </div>
             <div className="hidden md:flex flex-wrap items-start gap-2">
               <div className="flex-1 min-w-0">
                 <FilterBar key={filterKey} onChange={setUrlFilters} initialFilters={urlFilters} />
               </div>
-              <ComplexSortDropdown value={complexSort} onChange={setComplexSort} />
+              <ComplexSortDropdown value={complexSort} onChange={setComplexSort} publicView={publicView} />
             </div>
           </div>
         </>
@@ -342,7 +347,7 @@ export default function SearchExperience({ emptyExtra }: Props) {
       {showResults && !filtersOpen && (
         <div className="mb-4 flex justify-end gap-2">
           <MbViewToggle viewMode={viewMode} onChange={setViewMode} />
-          <ComplexSortDropdown value={complexSort} onChange={setComplexSort} />
+          <ComplexSortDropdown value={complexSort} onChange={setComplexSort} publicView={publicView} />
         </div>
       )}
 

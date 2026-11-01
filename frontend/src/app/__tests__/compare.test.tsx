@@ -72,6 +72,10 @@ vi.mock("@/lib/api", () => ({
   getPublicPriceHistory: vi.fn().mockImplementation(() => Promise.resolve({ area_m2: null, months: [], two_year: null, basis: null })),
 }));
 
+vi.mock("@/lib/compare-export", () => ({
+  exportCompareToXlsx: vi.fn().mockResolvedValue(undefined),
+}));
+
 function renderPage(params = "") {
   mockSearchParams.mockReturnValue(new URLSearchParams(params));
   return render(
@@ -307,6 +311,42 @@ describe("단지 비교 — 값과 출처만 (판정 표시 없음)", () => {
     expect(screen.getAllByText("79.4% (2026.01)").length).toBeGreaterThanOrEqual(1);   // 기준 달은 값 옆 괄호(F10)
     const note = screen.getByTestId("compare-region-footnote");
     expect(note).toHaveTextContent("한국부동산원 전국주택가격동향조사, 아파트 중위 매매가격 대비 전세가격");
+  });
+});
+
+// 세션 493 — 사장님 11-02 "이름표 붙이기": 위쪽 표 면적은 공급면적(네이버 단지 정보 min/max_supply_area_m2)
+describe("단지 비교 — 면적 행 이름 = 공급면적 (세션 493)", () => {
+  beforeEach(() => {
+    vi.mocked(api.getComplex).mockImplementation((no: string) =>
+      Promise.resolve({ ...makeComplex(no), min_supply_area_m2: 113, max_supply_area_m2: 145 }),
+    );
+    vi.mocked(api.getPriceStats).mockImplementation((no: string) => Promise.resolve(makeStats(no)));
+  });
+
+  it("데스크톱 표·휴대폰 기본 탭 행 이름 = '최소/최대 공급면적' · 값 글자는 그대로", async () => {
+    const { container } = renderPage("ids=A,B");
+    await screen.findByTestId("compare-sources-footer");
+    const row = Array.from(container.querySelectorAll("tbody tr")).find((tr) => tr.querySelector("td")?.textContent === "최소 공급면적");
+    expect(row).toBeDefined();
+    expect(row!.querySelectorAll("td")[1].textContent).toBe("113m² (34평)");
+    expect(screen.queryByText("최소 면적")).toBeNull();
+    expect(screen.queryByText("최대 면적")).toBeNull();
+    // 데스크톱 1 + 휴대폰 기본 탭(단지 2개) 2 — 탭 분류 목록 이름이 어긋나면 휴대폰 쪽이 빠진다
+    expect(screen.getAllByText("최소 공급면적")).toHaveLength(3);
+    expect(screen.getAllByText("최대 공급면적")).toHaveLength(3);
+  });
+
+  it("엑셀 내보내기 행 이름도 '최소/최대 공급면적'", async () => {
+    const { exportCompareToXlsx } = await import("@/lib/compare-export");
+    renderPage("ids=A,B");
+    await screen.findByTestId("compare-sources-footer");
+    await userEvent.click(screen.getByRole("button", { name: "엑셀" }));
+    await waitFor(() => expect(exportCompareToXlsx).toHaveBeenCalled());
+    const rows = vi.mocked(exportCompareToXlsx).mock.calls.at(-1)![1] as { label: string }[];
+    const labels = rows.map((r) => r.label);
+    expect(labels).toContain("최소 공급면적");
+    expect(labels).toContain("최대 공급면적");
+    expect(labels).not.toContain("최소 면적");
   });
 });
 
@@ -547,8 +587,8 @@ describe("단지 비교 — 비로그인 실거래가 추이 (세션 491)", () =
     await waitFor(() => expect(within(card).getAllByTestId("compare-public-trend-cell")).toHaveLength(2));
     const cells = within(card).getAllByTestId("compare-public-trend-cell");
     await waitFor(() => expect(within(cells[0]).getByTestId("consumer-bands")).toBeInTheDocument());
-    expect(within(cells[0]).getByRole("heading", { level: 3 }).textContent).toBe("단지A 84㎡");
-    expect(within(cells[1]).getByRole("heading", { level: 3 }).textContent).toBe("단지B 59㎡");
+    expect(within(cells[0]).getByRole("heading", { level: 3 }).textContent).toBe("단지A 전용 84㎡");
+    expect(within(cells[1]).getByRole("heading", { level: 3 }).textContent).toBe("단지B 전용 59㎡");
     // 같은 눈금: A(7.9~8.6억)·B(7.5~8.4억) 두 칸 모두 7억5000만~8억6000만 (C 는 기록 없음 → 눈금에서도 빠짐)
     for (const cell of cells) {
       const bands = within(cell).getByTestId("consumer-bands");
@@ -606,7 +646,7 @@ describe("단지 비교 — 비로그인 실거래가 추이 (세션 491)", () =
     const cells = within(card).getAllByTestId("compare-public-trend-cell");
     expect(cells).toHaveLength(1);
     await waitFor(() => expect(within(cells[0]).getByTestId("consumer-bands")).toBeInTheDocument());
-    expect(within(cells[0]).getByRole("heading", { level: 3 }).textContent).toBe("단지A 84㎡");
+    expect(within(cells[0]).getByRole("heading", { level: 3 }).textContent).toBe("단지A 전용 84㎡");
     // 눈금 = A 만(오피스텔 B 는 범위 계산에서도 빠짐)
     expect(within(cells[0]).getByTestId("consumer-bands").textContent).toContain("7억9,000만");
     expect(vi.mocked(api.getPublicPriceHistory).mock.calls.map((c) => c[0])).toEqual(["A"]);
@@ -637,7 +677,7 @@ describe("단지 비교 — 비로그인 실거래가 추이 (세션 491)", () =
     const card = await screen.findByTestId("compare-public-trend");
     const cells = within(card).getAllByTestId("compare-public-trend-cell");
     // A 응답은 이미 왔다(제목에 면적) — 그래도 B 를 기다리는 동안 띠를 그리지 않는다
-    await waitFor(() => expect(within(cells[0]).getByRole("heading", { level: 3 }).textContent).toBe("단지A 84㎡"));
+    await waitFor(() => expect(within(cells[0]).getByRole("heading", { level: 3 }).textContent).toBe("단지A 전용 84㎡"));
     for (const cell of cells) {
       expect(within(cell).queryByTestId("consumer-bands")).toBeNull();
       expect(cell.querySelector(".animate-pulse")).not.toBeNull();

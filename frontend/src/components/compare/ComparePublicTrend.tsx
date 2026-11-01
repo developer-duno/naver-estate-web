@@ -85,7 +85,7 @@ export default function ComparePublicTrend({ trend, endYm = currentYm() }: Props
             <div key={target.complex_no} className="space-y-1 min-w-0" data-testid="compare-public-trend-cell">
               <h3 className="text-sm font-semibold">
                 {target.complex_name}
-                {h?.area_m2 != null && ` ${h.area_m2}㎡`}
+                {h?.area_m2 != null && ` 전용 ${h.area_m2}㎡`}
               </h3>
               {q.isError ? (
                 <LoadRetry onRetry={() => q.refetch()} />

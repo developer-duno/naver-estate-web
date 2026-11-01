@@ -181,6 +181,22 @@ describe("ComplexBasicInfo — 공시가격 · 공시가율 (PR-D)", () => {
     expect(screen.queryByText("공시가율(공시가격÷전용 84㎡ 대 시세)")).not.toBeInTheDocument();
   });
 
+  it("같은 면적 묶음이 없고 더 작은·더 큰 묶음만 있으면 공시가율 행 없음 — 옆 묶음(100㎡)을 집지 않는다 (세션 494 검사관 M3)", async () => {
+    mockGetOfficialPrices.mockResolvedValue({
+      complex_no: "C001",
+      year: "2026",
+      items: [{ prvuse_ar: 84.99, price_median: 840_000_000, ho_count: 380 }],
+    });
+
+    // 대표 평형 84㎡ 묶음이 없고 59·100 만 있다 — 정확히 같은 묶음(===)만 써야 한다
+    const AREA_100 = { area_m2: 100, price_median: 150_000, trade_count: 4, price_min: 140_000, price_max: 160_000 };
+    renderInfo(makeComplex({ area_prices: [AREA_59, AREA_100] }));
+
+    expect(await screen.findByText("공시가격(대표평형 중위, 2026년)")).toBeInTheDocument();
+    expect(screen.queryByText(/^공시가율/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/실거래의/)).not.toBeInTheDocument();
+  });
+
   it("공시가율 반올림 — 최저=최고면 정수 하나 (66.666..% → 실거래의 67%)", async () => {
     // 공시가격 60,000만원 ÷ 같은 면적 범위 90,000~90,000만원 = 66.666..% → 67%
     mockGetOfficialPrices.mockResolvedValue({

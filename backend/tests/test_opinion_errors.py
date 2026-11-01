@@ -350,6 +350,65 @@ def test_fingerprint_without_digest_unchanged():
     assert op_router.error_fingerprint("/complex/9", "TypeError", "boom", "d1") != old
 
 
+GOOGLEBOT_UA = ("Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/153.0.8010.52 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)")
+CUBOT_UA = "Mozilla/5.0 (Linux; Android 9; CUBOT_X19) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36"
+IPHONE_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) "
+             "Version/17.4 Mobile/15E148 Safari/604.1")
+
+
+def test_bot_error_recorded_without_alert(client, db, alerts):
+    """검색 로봇이 낸 새 오류는 204·행 저장은 하되 알림은 안 보낸다."""
+    assert _err(client, headers={"User-Agent": GOOGLEBOT_UA}).status_code == 204
+    assert len(_error_rows(db)) == 1
+    assert alerts == []
+
+
+def test_bot_first_then_customer_still_alerts_customer(client, db, alerts):
+    """로봇이 먼저 낸 같은 오류를 손님이 나중에 겪어도 행은 따로 · 손님 몫 알림 1통."""
+    _err(client, headers={"User-Agent": GOOGLEBOT_UA})
+    _err(client, headers={"User-Agent": IPHONE_UA})
+    rows = _error_rows(db)
+    assert len(rows) == 2 and len({r.fingerprint for r in rows}) == 2
+    assert len(alerts) == 1
+
+
+def test_phone_named_cubot_is_not_bot(client, db, alerts):
+    """CUBOT_X19 폰 이름은 낱말 경계가 아니라 로봇이 아니다 — 알림이 간다."""
+    _err(client, headers={"User-Agent": CUBOT_UA})
+    assert len(alerts) == 1
+
+
+@pytest.mark.parametrize("ua, expected", [
+    (GOOGLEBOT_UA, True),
+    (CUBOT_UA, False),
+    (IPHONE_UA, False),
+    ("Yeti/1.1 (+https://naver.me/spd)", True),
+    ("Mozilla/5.0 (compatible; Daum/4.1; +http://cs.daum.net/faq/15/4118.html?faqId=28966)", True),
+    ("Mozilla/5.0 (compatible; GoogleOther)", True),
+    ("Mozilla/5.0 (compatible; Daumoa/4.0)", True),
+    ("Mediapartners-Google", True),
+    ("Mozilla/5.0 (Linux; Android 14; SM-S928N; wv) AppleWebKit/537.36 Chrome/130.0 Mobile Safari/537.36 DaumApps/6.9.0", False),
+    (None, False),
+    ("", False),
+])
+def test_is_bot_user_agent_table(ua, expected):
+    assert op_router._is_bot_user_agent(ua) is expected
+
+
+def test_bot_word_after_300_chars_still_bot(client, db, alerts):
+    """로봇 낱말이 저장 길이(300자) 뒤에 있어도 자르기 전 원문으로 판정 — 알림 없음."""
+    _err(client, headers={"User-Agent": "Mozilla/5.0 " + "x" * 400 + " Googlebot/2.1"})
+    assert len(_error_rows(db)) == 1
+    assert alerts == []
+
+
+def test_fingerprint_bot_differs_and_default_unchanged():
+    base = op_router.error_fingerprint("/complex/9", "TypeError", "boom")
+    assert op_router.error_fingerprint("/complex/9", "TypeError", "boom", bot=False) == base
+    assert op_router.error_fingerprint("/complex/9", "TypeError", "boom", bot=True) != base
+
+
 def test_cap_logged_once_per_kind(client, monkeypatch, caplog):
     """B3 — 한도에 처음 닿은 순간 종류마다 그날 한 줄(IP 원문 없음)."""
     import logging

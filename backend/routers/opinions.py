@@ -18,6 +18,7 @@
 import hashlib
 import ipaddress
 import logging
+import re
 import threading
 from datetime import datetime
 from typing import Literal
@@ -430,14 +431,31 @@ def _one_line(text: str | None, limit: int) -> str:
     return (lines[0].strip() if lines else "")[:limit]
 
 
-def error_fingerprint(page_path: str | None, name: str, first_line: str, digest: str = "") -> str:
-    """오류 지문 = sha256(화면 첫 경로 조각 + 오류 이름 + 오류 첫 줄 [+ 오류 번호]) 앞 32자.
+# 검색 로봇 user_agent 낱말. `bot` 은 낱말 경계로 봐서 CUBOT_X19 같은 폰 이름은 로봇이 아니다.
+# daum/ 은 다음 검색 로봇(Daum/4.1)만 — 다음 앱 손님(DaumApps/…)은 걸리지 않게 슬래시까지 본다.
+_BOT_UA_RE = re.compile(
+    r"bot\b|spider|crawler|slurp|yeti|inspectiontool|lighthouse|daum/|daumoa|googleother|mediapartners",
+    re.IGNORECASE,
+)
+
+
+def _is_bot_user_agent(ua: str | None) -> bool:
+    """user_agent 에 검색 로봇 낱말이 있으면 True. 없거나 빈 값이면 False."""
+    return bool(ua) and _BOT_UA_RE.search(ua) is not None
+
+
+def error_fingerprint(
+    page_path: str | None, name: str, first_line: str, digest: str = "", *, bot: bool = False
+) -> str:
+    """오류 지문 = sha256(화면 첫 경로 조각 + 오류 이름 + 오류 첫 줄 [+ 오류 번호] [+ 로봇 표시]) 앞 32자.
 
     첫 경로 조각만 쓰는 이유: /complex/123 과 /complex/456 의 같은 오류는 같은 고장이다(단지 번호마다
     행이 생기면 횟수를 못 센다). 경로가 없으면 빈 조각.
     오류 번호(digest)가 있으면 재료에 넣는다 — 운영 Next.js 는 서버 쪽 오류 문구를 일반 문장 하나로
     바꿔 보내고 번호로만 구분하므로, 번호를 빼면 서로 다른 고장이 한 행에 섞인다.
     번호가 없으면 재료가 예전과 같다(이미 저장된 지문 값 그대로).
+    검색 로봇이 낸 오류(bot=True)는 지문을 따로 만든다 — 같은 지문이면 로봇이 먼저 낸 오류를 손님이
+    나중에 겪어도 새 행이 아니라서 손님 첫 알림이 사라진다.
     """
     segment = ""
     if page_path:
@@ -445,6 +463,8 @@ def error_fingerprint(page_path: str | None, name: str, first_line: str, digest:
     raw = f"{segment}\n{name}\n{first_line}"
     if digest:
         raw += f"\n{digest}"
+    if bot:
+        raw += "\nbot"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
 
@@ -486,6 +506,7 @@ def report_client_error(
     - 하루 한도(IP 묶음 20 · 전체 500)를 넘으면 저장 없이 조용히 204.
     - 손님 의견 하루 한도(3/10)는 깎지 않는다(카운터가 따로다).
     - 처음 보는 지문으로 행이 새로 생겼을 때만 텔레그램 1통(새 의견 알림과 따로 세는 시간당 10통 상한).
+    - 검색 로봇(user_agent 판정)은 기록만·알림 없음, 지문도 따로.
     - 로그인 토큰이 와도 읽지 않는다 — 이메일·회원 번호 저장 0.
     """
     if not _take_error_slot(ip_bucket(_get_client_ip(request))):
@@ -499,12 +520,15 @@ def report_client_error(
     shown = f"{name}: {first_line}" if name and first_line else (name or first_line or "(내용 없음)")
     stored = f"{shown}\n(오류 번호 {digest})" if digest else shown
     now = utcnow()
+    raw_ua = request.headers.get("user-agent") or ""
+    user_agent = raw_ua[:USER_AGENT_MAX] or None
+    is_bot = _is_bot_user_agent(raw_ua)  # 300자로 자르기 전 원문으로 판정
     is_new = _upsert_error_row(db, {
         "kind": "error",
         "message": stored,
         "page_path": page_path,
-        "user_agent": (request.headers.get("user-agent") or "")[:USER_AGENT_MAX] or None,
-        "fingerprint": error_fingerprint(page_path, name, first_line, digest),
+        "user_agent": user_agent,
+        "fingerprint": error_fingerprint(page_path, name, first_line, digest, bot=is_bot),
         "repeat_count": 1,
         "last_seen_at": now,
         "created_at": now,
@@ -512,6 +536,6 @@ def report_client_error(
     })
     db.commit()
 
-    if is_new:
+    if is_new and not is_bot:
         background_tasks.add_task(notify_new_error, page_path=page_path, error_line=shown)
     return Response(status_code=204)

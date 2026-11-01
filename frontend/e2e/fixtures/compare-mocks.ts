@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import type { Complex, PriceStats, PriceHistoryResponse, PyeongDetail } from "../../src/types";
+import type { Complex, PriceStats, PriceHistoryResponse, PublicPriceHistory, PyeongDetail } from "../../src/types";
 
 const COMPLEX_A: Complex = {
   complex_no: "100000",
@@ -73,7 +73,10 @@ const COMPLEX_B: Complex = {
   // 옛 값 단지(대표 면적 없음, 세션 479 B29 A') — 마지막 정부 섞인 줄 범위 + 그 달 · 전세가율 비움
   rep_area_m2: null,
   price_basis: "legacy_mixed",
-  area_prices: [],
+  // 대표 면적은 없지만 범위 있는 면적이 있다(운영 3,631곳 꼴, 세션 491) — 비교표 표엔 안 쓰이고, 실거래가 추이 면적 고르기(defaultArea)만 이 114㎡ 를 고른다
+  area_prices: [
+    { area_m2: 114, households: 120, price_median: null, trade_count: 2, price_min: 176000, price_max: 186000, trades: [] },
+  ],
   jeonse_rate_min: null,
   jeonse_rate_max: null,
   area_price_range_source: null,
@@ -123,6 +126,37 @@ const EMPTY_HISTORY = (id: string): PriceHistoryResponse => ({
 
 const EMPTY_PYEONG: { pyeong_details: PyeongDetail[] } = { pyeong_details: [] };
 
+/**
+ * 비로그인 비교표 실거래가 추이(세션 491) — 띠 그래프 마지막 달 = 오늘 달(currentYm)이라
+ * spec 이 이 시각으로 시계를 고정한다(page.clock.setFixedTime) — 사진이 달마다 바뀌지 않게.
+ * 고정 달 202511~202609 는 이 시각 기준 24개월 창(202411~202610) 안이다.
+ */
+export const COMPARE_FIXED_NOW = new Date("2026-10-15T12:00:00+09:00");
+
+const PUBLIC_HISTORY_A: PublicPriceHistory = {
+  area_m2: 84,
+  months: [
+    { month: "202512", trade_count: 2, price_min: 118000, price_max: 124000, price_median: null },
+    { month: "202602", trade_count: 1, price_min: 121000, price_max: 121000, price_median: null },
+    { month: "202605", trade_count: 3, price_min: 122000, price_max: 130000, price_median: null },
+    { month: "202609", trade_count: 2, price_min: 126000, price_max: 132000, price_median: null },
+  ],
+  two_year: { min: 118000, max: 132000, count: 8 },
+  basis: null,
+};
+
+/** 단지 B = A 와 다른 가격대(같은 눈금이 사진에 보이게) */
+const PUBLIC_HISTORY_B: PublicPriceHistory = {
+  area_m2: 114,
+  months: [
+    { month: "202511", trade_count: 1, price_min: 165000, price_max: 165000, price_median: null },
+    { month: "202603", trade_count: 2, price_min: 170000, price_max: 178000, price_median: null },
+    { month: "202608", trade_count: 2, price_min: 176000, price_max: 186000, price_median: null },
+  ],
+  two_year: { min: 165000, max: 186000, count: 5 },
+  basis: null,
+};
+
 async function fulfillJson(route: import("@playwright/test").Route, body: unknown) {
   await route.fulfill({
     status: 200,
@@ -145,6 +179,9 @@ export async function applyCompareMocks(page: Page): Promise<void> {
     }
     if (sub === "price-history") return fulfillJson(route, EMPTY_HISTORY(id));
     if (sub === "pyeong-details") return fulfillJson(route, EMPTY_PYEONG);
+    if (sub === "public-price-history") {
+      return fulfillJson(route, id === "100000" ? PUBLIC_HISTORY_A : PUBLIC_HISTORY_B);
+    }
     if (!sub) {
       if (id === "100000") return fulfillJson(route, COMPLEX_A);
       if (id === "200000") return fulfillJson(route, COMPLEX_B);

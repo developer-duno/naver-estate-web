@@ -155,15 +155,18 @@ function HomeExtras() {
         )}
       </div>
 
-      <div>
-        <Link
-          href="/search/favorites"
-          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
-        >
-          <span className="text-yellow-500">&#9733;</span>
-          즐겨찾기 매물{articleFavorites.length > 0 ? ` (${articleFavorites.length})` : ""} &#8594;
-        </Link>
-      </div>
+      {/* 매물은 로그인 뒤 기능 — 토큰이 있을 때만 그린다(비로그인·토큰 확인 전엔 숨김, 세션 493) */}
+      {sessionToken && (
+        <div>
+          <Link
+            href="/search/favorites"
+            className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
+          >
+            <span className="text-yellow-500">&#9733;</span>
+            즐겨찾기 매물{articleFavorites.length > 0 ? ` (${articleFavorites.length})` : ""} &#8594;
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

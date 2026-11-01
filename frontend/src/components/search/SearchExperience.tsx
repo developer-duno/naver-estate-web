@@ -286,13 +286,16 @@ export default function SearchExperience({ emptyExtra }: Props) {
           {!loading && (
             <span className="text-gray-500 text-sm">({filteredComplexes.length}개 단지)</span>
           )}
-          <Link
-            href="/search/favorites"
-            className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline whitespace-nowrap"
-          >
-            <span className="text-yellow-500">&#9733;</span>
-            즐겨찾기 매물{articleFavorites.length > 0 ? ` (${articleFavorites.length})` : ""} &#8594;
-          </Link>
+          {/* 매물은 로그인 뒤 기능 — 로그인 확정일 때만 그린다(비로그인·세션 확인 전엔 숨김, 세션 493) */}
+          {isLoggedIn === true && (
+            <Link
+              href="/search/favorites"
+              className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline whitespace-nowrap"
+            >
+              <span className="text-yellow-500">&#9733;</span>
+              즐겨찾기 매물{articleFavorites.length > 0 ? ` (${articleFavorites.length})` : ""} &#8594;
+            </Link>
+          )}
         </div>
       )}
 

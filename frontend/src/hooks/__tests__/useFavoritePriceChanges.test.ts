@@ -79,6 +79,18 @@ describe("useFavoritePriceChanges", () => {
     expect(result.current.changedIds.size).toBe(0);
   });
 
+  it("비로그인(tokenReady=true · 토큰 없음)이면 getPriceStats 를 호출하지 않는다 (401 헛호출 방지)", async () => {
+    // useSessionToken 은 비로그인이어도 해석이 끝나면 tokenReady=true 를 준다(홈 화면의 실제 조합).
+    const { result } = renderHook(
+      () => useFavoritePriceChanges(["C1", "C2"], undefined, true),
+      { wrapper: TestQueryProvider },
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockGetPriceStats).not.toHaveBeenCalled();
+    expect(result.current.changedIds.size).toBe(0);
+  });
+
   // B19: currentPrices 를 키 문자열("a,b")을 쪼개 만들게 바꿨다 — 빈 목록이면 "".split(",") 이 [""] 라
   // 빈 이름("") 단지가 가격 0 으로 생길 수 있다. 그 칸이 스냅샷(=currentPrices 를 그대로 합쳐 저장)에 안 들어가야 한다.
   it("빈 목록으로 부르면 빈 이름('') 단지가 생기지 않는다 (B19)", async () => {

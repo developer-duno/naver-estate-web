@@ -68,8 +68,8 @@ const BASE_ROWS: { label: string; render: (c: Complex) => ReactNode }[] = [
   { label: "최저층", render: (c) => c.low_floor ? `${c.low_floor}층` : "-" },
   { label: "최고층", render: (c) => c.high_floor ? `${c.high_floor}층` : "-" },
   { label: "준공일", render: (c) => formatYear(c.use_approve_ymd) },
-  { label: "최소 면적", render: (c) => formatArea(c.min_supply_area_m2) },
-  { label: "최대 면적", render: (c) => formatArea(c.max_supply_area_m2) },
+  { label: "최소 공급면적", render: (c) => formatArea(c.min_supply_area_m2) },
+  { label: "최대 공급면적", render: (c) => formatArea(c.max_supply_area_m2) },
   { label: "총 주차", render: (c) => formatCount(c.total_parking_count) },
   { label: "세대당 주차", render: (c) => c.parking_count_by_household ? `${c.parking_count_by_household}대` : "-" },
   { label: "난방", render: (c) => c.heat_method_type || "-" },
@@ -94,7 +94,7 @@ const BASE_ROWS: { label: string; render: (c: Complex) => ReactNode }[] = [
 const ROW_CATEGORIES = {
   basic: new Set([
     "주소", "도로명주소", "유형", "세대수", "동수",
-    "최저층", "최고층", "준공일", "최소 면적", "최대 면적",
+    "최저층", "최고층", "준공일", "최소 공급면적", "최대 공급면적",
   ]),
   price: new Set([
     "평당가", "매물수", "대표 면적 시세", "전세가율(이 단지, 같은 면적)", "시군구 전세가율(부동산원)",
@@ -316,7 +316,9 @@ function CompareContent() {
     );
   }
 
-  if (loading) return <SkeletonPage message="단지 정보를 불러오는 중..." />;
+  // 로그인 확인 전에는 표를 그리지 않는다 — publicView 가 아직 false 라 비로그인 손님에게 네이버 행·차트가
+  // 잠깐 그려졌다 사라지던 깜빡임(세션 490 검사관 🟡1 → 세션 493)
+  if (loading || !tokenReady) return <SkeletonPage message="단지 정보를 불러오는 중..." />;
 
   if (complexes.length === 0) {
     return (

@@ -8,7 +8,6 @@
 import re
 
 from crawler.metrics_helpers import _cutoff_month
-from crawler.stats import compute_median_price
 
 AREA_PRICE_MONTHS = 6
 DIRECT_DEAL = "직거래"  # 정부 응답 dealingGbn 원문 — 범위·전세가율 분모에서 뺀다(사장님 결정 ㄱ, 세션 479)
@@ -183,11 +182,11 @@ def summarize_area_prices(
     by_area_trades: dict[int, list[dict]] | None = None,
     ranges: dict[int, tuple[int, int] | None] | None = None,
 ) -> list[dict]:
-    """[{area_m2, households, price_median, trade_count, price_min, price_max, trades}] — 평형표의 모든 묶음 +
+    """[{area_m2, households, trade_count, price_min, price_max, trades}] — 평형표의 모든 묶음 +
     새 표에만 있는 묶음 (보완 ①).
 
-    거래 없는 묶음은 price_median·trade_count·price_min·price_max None, trades [](화면 "42㎡ —").
-    price_min/max = ranges(area_ranges — 달마다 직거래 제외 · 빈 달은 prices 폴백) · price_median 은 옛 화면 호환용.
+    거래 없는 묶음은 trade_count·price_min·price_max None, trades [](화면 "42㎡ —").
+    price_min/max = ranges(area_ranges — 달마다 직거래 제외 · 빈 달은 prices 폴백).
     ranges 를 안 넘기면 prices 만으로 범위를 낸다.
     households = 평형표 세대수 합(평형표에 없으면 None).
     순서 = 대표 면적 먼저, 나머지는 거래 수 많은 순(같으면 작은 면적 먼저). 평형표가 없으면 새 표 묶음만.
@@ -203,7 +202,6 @@ def summarize_area_prices(
         rows.append({
             "area_m2": area,
             "households": households.get(area),
-            "price_median": compute_median_price(prices) if prices else None,
             "trade_count": len(prices) if prices else None,
             "price_min": rng[0] if rng else None,
             "price_max": rng[1] if rng else None,
@@ -211,11 +209,6 @@ def summarize_area_prices(
         })
     rows.sort(key=lambda r: (r["area_m2"] != rep_area_m2, -(r["trade_count"] or 0), r["area_m2"]))
     return rows
-
-
-def area_medians(by_area: dict[int, list[int]]) -> dict[int, int]:
-    """{면적 묶음: 6개월 중위} — 매물 전세가율 분모."""
-    return {area: compute_median_price(prices) for area, prices in by_area.items() if prices}
 
 
 def jeonse_range(jeonse: int | None, rng: tuple[int, int] | None) -> tuple[float, float] | None:

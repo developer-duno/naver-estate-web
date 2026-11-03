@@ -6,7 +6,7 @@
 
 칸별 재료 판정(세션 481 판정 표 — 메인 확인):
 - article_count · trade_type_counts · filter_options = 매물 표 집계(네이버 매물)
-- jeonse_rate · jeonse_rate_min · jeonse_rate_max = 분자가 네이버 전세 시세
+- jeonse_rate_min · jeonse_rate_max = 분자가 네이버 전세 시세(옛 한 값 jeonse_rate 칸은 세션 497 에 응답에서 삭제)
 - last_crawled_at · articles_crawled_at · detail_crawled_at = 크롤 시각
 - construction_company · management_office_tel · heat_method_type · heat_fuel_type · has_pool = 네이버 단지 상세에만
   있는 칸(세션 482 PR 1b · 결정 9). 용적률·건폐율·세대수·동수·사용승인·주차·층수·면적은 건축물대장에도 있는 값이라 남긴다.
@@ -21,7 +21,6 @@ NAVER_FIELDS = frozenset({
     "article_count",
     "trade_type_counts",
     "filter_options",
-    "jeonse_rate",
     "jeonse_rate_min",
     "jeonse_rate_max",
     "last_crawled_at",

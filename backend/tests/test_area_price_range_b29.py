@@ -1,6 +1,6 @@
 """세션 479 B29 PR b1 — 시세 범위(최저~최고, 중개거래 기준)·거래 목록·전세가율 범위를 API 에 더한다.
 
-옛 칸(price_median·jeonse_rate·article_jeonse_ratio)은 그대로 두고 새 칸만 더한다(설계 §5-2).
+옛 칸(price_median·jeonse_rate·article_jeonse_ratio)은 세션 497 에 삭제(설계 §2-3 — b2 합친 지 1주 뒤).
 실측 6139 자연 59㎡: 최근 6개월 거래 3건(15,700 · 17,200 · 18,000, 전부 중개거래) — 달 자리는 b27 시험과 같은 M04~M06.
 """
 
@@ -361,7 +361,7 @@ def test_매물_전세가율_범위():
     assert _calc_jeonse_ratio_range(_art("전세", 12000, 59.98), None) is None
 
 
-def test_매물상세_응답에_전세가율_범위_옛값도_그대로(db):
+def test_매물상세_응답에_전세가율_범위_옛값_없음(db):
     from routers.live.crawl import _article_detail_dict
 
     _add_6139(db, rep=59)
@@ -369,7 +369,7 @@ def test_매물상세_응답에_전세가율_범위_옛값도_그대로(db):
     art = Article(article_no="A1", complex_no="6139", trade_type_name="전세", numeric_price=12000, area2_m2=59.98)
     out = _article_detail_dict(db, art, db.get(Complex, "6139"))
     assert (out["article_jeonse_ratio_min"], out["article_jeonse_ratio_max"]) == (66.7, 76.4)
-    assert out["article_jeonse_ratio"] == 69.8   # 옛 중위 분모(17,200) 값 그대로
+    assert "article_jeonse_ratio" not in out   # 옛 칸 삭제(세션 497)
 
 
 def test_article_to_dict_분모를_안_넘기면_두칸_None():
@@ -446,16 +446,17 @@ def test_단지상세_응답에_범위_거래목록_전세가율범위_옛값단
     # 전세가율 범위는 네이버 재료라 로그인 응답에만(세션 481)
     body = client.get("/api/complexes/6139", headers=approved_headers).json()
     rep = body["area_prices"][0]
-    assert (rep["area_m2"], rep["price_median"], rep["trade_count"]) == (59, 17200, 3)   # 옛 칸 그대로
+    assert (rep["area_m2"], rep["trade_count"]) == (59, 3)
+    assert "price_median" not in rep   # 옛 칸 삭제(세션 497)
     assert (rep["price_min"], rep["price_max"]) == (15700, 17200)
     assert rep["trades"] == EXPECTED_59[:2] + [{**EXPECTED_59[2], "direct": True}]       # 직거래도 목록엔 보임
     assert body["area_prices"][2] == {
-        "area_m2": 42, "households": 12, "price_median": None, "trade_count": None,
+        "area_m2": 42, "households": 12, "trade_count": None,
         "price_min": None, "price_max": None, "trades": [],
     }
     assert (body["jeonse_rate_min"], body["jeonse_rate_max"]) == (69.8, 76.4)   # 12000 / 17200 · 12000 / 15700
     assert body["legacy_range"] is None
-    assert "jeonse_rate" in body   # 옛 칸 유지
+    assert "jeonse_rate" not in body   # 옛 칸 삭제(세션 497)
 
 
 # ── ⓘ B8 문구 — 두 정본 함수에 "중위" 0건 ─────────────────────────────────────

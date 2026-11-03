@@ -54,13 +54,13 @@ def _detail(monkeypatch):
 # ── 순수 함수 ──────────────────────────────────────────────────────────────
 
 
-def test_걷어내기는_원본을_바꾸지_않고_14칸만_뺀다():
+def test_걷어내기는_원본을_바꾸지_않고_13칸만_뺀다():
     src = {k: 1 for k in NAVER_FIELDS} | {"complex_no": "1", "rep_area_m2": None, "area_prices": []}
     before = dict(src)
     out = strip_naver_fields(src)
     assert src == before                       # 캐시 안 객체는 그대로
     assert set(out) == {"complex_no", "rep_area_m2", "area_prices"}
-    assert len(NAVER_FIELDS) == 14
+    assert len(NAVER_FIELDS) == 13   # 옛 jeonse_rate 칸은 세션 497 에 응답에서 삭제 → 목록에서도 뺐다
 
 
 # 네이버 단지 상세에만 있는 5칸(세션 482 PR 1b · 결정 9) — 비로그인에서 빠진다
@@ -122,7 +122,7 @@ def test_출처_글자_로그인용은_바이트_동일():
 
 
 def test_목록_걷어내기는_각_단지에_적용하고_원본_그대로():
-    src = {"complexes": [{"complex_no": "1", "article_count": 3, "jeonse_rate": 70.0}], "total": 1, "source": "naver"}
+    src = {"complexes": [{"complex_no": "1", "article_count": 3, "jeonse_rate_min": 70.0}], "total": 1, "source": "naver"}
     out = strip_naver_list(src)
     assert out == {"complexes": [{"complex_no": "1"}], "total": 1, "source": "naver"}
     assert src["complexes"][0]["article_count"] == 3
@@ -230,7 +230,8 @@ def test_단지검색_비로그인은_매물수_전세가율_크롤시각_없음
     anon = client.get("/api/complexes/search?q=공개검색단지").json()["complexes"][0]
     auth = client.get("/api/complexes/search?q=공개검색단지", headers=approved_headers).json()["complexes"][0]
     assert not (set(anon) & NAVER_FIELDS) and anon["complex_name"] == "공개검색단지"
-    assert auth["article_count"] == 1 and "jeonse_rate" in auth
+    # 검색 응답은 complex_to_dict 라 범위 칸이 원래 없다 — 로그인 응답이 네이버 칸을 유지하는지는 last_crawled_at 으로
+    assert auth["article_count"] == 1 and "jeonse_rate" not in auth and "last_crawled_at" in auth
 
 
 def test_지역목록_비로그인_걷어냄_캐시는_로그인_그대로(client, db, approved_headers):
@@ -259,7 +260,7 @@ def test_실시간_검색_비로그인_응답만_걷어냄(client, db, approved_
 
     full_key = key + ",".join(sorted(_parse_allowed_types(None)))
     cached = {"complexes": [{"complex_no": "1", "complex_name": "캐시단지", "article_count": 5,
-                             "trade_type_counts": {"매매": 5}, "jeonse_rate": 70.0,
+                             "trade_type_counts": {"매매": 5}, "jeonse_rate_min": 70.0,
                              "last_crawled_at": "2026-10-26T00:00:00"}], "total": 1}
     _cache.set(full_key, cached)
     try:

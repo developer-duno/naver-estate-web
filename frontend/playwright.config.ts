@@ -14,6 +14,8 @@ export default defineConfig({
     toHaveScreenshot: {
       animations: "disabled",
       maxDiffPixelRatio: 0.02,
+      // 개발 서버 덧그림(Next 개발 표시·React Query 개발 도구)을 사진에서 뺀다 — 이유는 그 CSS 파일 머리말(세션 498)
+      stylePath: "./e2e/screenshot-hide-dev-overlays.css",
     },
   },
   use: {

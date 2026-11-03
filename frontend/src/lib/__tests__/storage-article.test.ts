@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import {
-  getFavoriteArticles, isArticleFavorite, toggleFavoriteArticle,
+  getFavoriteArticles, isArticleFavorite, toggleFavoriteArticle, clearFavoriteArticles,
 } from "../storage";
 
 beforeEach(() => {
@@ -54,5 +54,20 @@ describe("매물 즐겨찾기", () => {
     const fav = getFavoriteArticles()[0];
     expect(fav.added_at).toBeGreaterThanOrEqual(before);
     expect(fav.added_at).toBeLessThanOrEqual(Date.now());
+  });
+});
+
+describe("clearFavoriteArticles (세션 496 · B31 로그아웃 때 비우기)", () => {
+  it("즐겨찾기 매물만 지우고 다른 저장값은 남긴다", () => {
+    toggleFavoriteArticle({ article_no: "2440000001", complex_no: "100001" });
+    localStorage.setItem("other_key", "keep");
+    clearFavoriteArticles();
+    expect(getFavoriteArticles()).toEqual([]);
+    expect(localStorage.getItem("other_key")).toBe("keep");
+  });
+
+  it("비어 있을 때 불러도 오류 없음", () => {
+    expect(() => clearFavoriteArticles()).not.toThrow();
+    expect(getFavoriteArticles()).toEqual([]);
   });
 });

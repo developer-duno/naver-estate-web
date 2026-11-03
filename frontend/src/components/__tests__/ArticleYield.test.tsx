@@ -42,10 +42,10 @@ describe("ArticleCardMobile 수익률/뱃지", () => {
     const art = makeArticle({
       trade_type_name: "전세",
       numeric_price: 30000,
-      article_jeonse_ratio: 55.0,   // 옛 칸(중위 분모) — 화면은 범위 칸을 읽는다(세션 489 B29)
+      article_jeonse_ratio: 55.0,   // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — 화면은 범위 칸을 읽는다(세션 489 B29)
       article_jeonse_ratio_min: 60.0,
       article_jeonse_ratio_max: 60.0,
-    });
+    } as Partial<Article>);
     render(<ArticleCardMobile articles={[art]} viewMode="large" />);
     expect(screen.getByText("전세 60%(같은 면적)")).toBeInTheDocument();   // 분모 = 같은 면적 묶음(세션 474 B27)
   });

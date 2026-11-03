@@ -7,6 +7,7 @@ import { render, screen } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 import ComplexBasicInfo from "../ComplexBasicInfo";
 import type {
+  AreaPrice,
   Complex,
   KaptInfo,
   NeighborhoodInfo,
@@ -108,7 +109,8 @@ describe("ComplexBasicInfo", () => {
   });
 });
 
-const AREA_59 = { area_m2: 59, price_median: 60_000, trade_count: 5, price_min: 55_000, price_max: 65_000 };
+const AREA_59 = { area_m2: 59, trade_count: 5, price_min: 55_000, price_max: 65_000 };
+// 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — 중위 120_000 이 분모면 '실거래의 70%' 가 되어 범위 단언이 깨진다
 const AREA_84 = { area_m2: 84, price_median: 120_000, trade_count: 3, price_min: 110_000, price_max: 130_000 };
 
 describe("ComplexBasicInfo — 공시가격 · 공시가율 (PR-D)", () => {
@@ -146,8 +148,9 @@ describe("ComplexBasicInfo — 공시가격 · 공시가율 (PR-D)", () => {
       items: [{ prvuse_ar: 84.99, price_median: 840_000_000, ho_count: 380 }],
     });
 
+    // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — 범위 없이 중위만
     renderInfo(
-      makeComplex({ area_prices: [{ area_m2: 84, price_median: 120_000, trade_count: 3, price_min: null, price_max: null }] }),
+      makeComplex({ area_prices: [{ area_m2: 84, price_median: 120_000, trade_count: 3, price_min: null, price_max: null } as AreaPrice] }),
     );
 
     expect(await screen.findByText("공시가격(대표평형 중위, 2026년)")).toBeInTheDocument();
@@ -189,7 +192,7 @@ describe("ComplexBasicInfo — 공시가격 · 공시가율 (PR-D)", () => {
     });
 
     // 대표 평형 84㎡ 묶음이 없고 59·100 만 있다 — 정확히 같은 묶음(===)만 써야 한다
-    const AREA_100 = { area_m2: 100, price_median: 150_000, trade_count: 4, price_min: 140_000, price_max: 160_000 };
+    const AREA_100 = { area_m2: 100, trade_count: 4, price_min: 140_000, price_max: 160_000 };
     renderInfo(makeComplex({ area_prices: [AREA_59, AREA_100] }));
 
     expect(await screen.findByText("공시가격(대표평형 중위, 2026년)")).toBeInTheDocument();
@@ -206,7 +209,7 @@ describe("ComplexBasicInfo — 공시가격 · 공시가율 (PR-D)", () => {
     });
 
     renderInfo(
-      makeComplex({ area_prices: [{ area_m2: 84, price_median: 90_000, trade_count: 2, price_min: 90_000, price_max: 90_000 }] }),
+      makeComplex({ area_prices: [{ area_m2: 84, trade_count: 2, price_min: 90_000, price_max: 90_000 }] }),
     );
 
     expect(await screen.findByText("실거래의 67%")).toBeInTheDocument();

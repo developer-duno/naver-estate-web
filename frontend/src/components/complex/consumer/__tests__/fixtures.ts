@@ -4,6 +4,7 @@
  * 공시 1억 1,300만 "63~72%" · 관리비 약 19만 원 · 유성구 비규제 70% = 1억 990만.
  */
 import type {
+  AreaPrice,
   Complex,
   KaptInfo,
   NeighborhoodInfo,
@@ -31,9 +32,10 @@ export function makeComplex(overrides: Partial<Complex> = {}): Complex {
     region_name: "유성구",
     area_price_range_source: "정부 실거래 최근 6개월 최저~최고(중개거래 기준), 전용 59㎡ 대는 소수점을 버린 같은 크기끼리",
     area_prices: [
-      { area_m2: 59, households: 116, price_median: 17200, trade_count: 3, price_min: 15700, price_max: 18000, trades: [] },
-      { area_m2: 84, households: 71, price_median: 22500, trade_count: 2, price_min: 22000, price_max: 23000, trades: [] },
-      { area_m2: 42, households: 12, price_median: null, trade_count: null, price_min: null, price_max: null, trades: [] },
+      // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — 중위 17200 (sections.test "1억 7,200만 없음" 단언 재료)
+      { area_m2: 59, households: 116, price_median: 17200, trade_count: 3, price_min: 15700, price_max: 18000, trades: [] } as AreaPrice,
+      { area_m2: 84, households: 71, trade_count: 2, price_min: 22000, price_max: 23000, trades: [] },
+      { area_m2: 42, households: 12, trade_count: null, price_min: null, price_max: null, trades: [] },
     ],
     ...overrides,
   };

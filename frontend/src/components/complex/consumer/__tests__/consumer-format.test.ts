@@ -55,17 +55,17 @@ describe("consumer-format", () => {
   });
 
   it("거래 수 — 거래 목록이 있으면 중개거래만", () => {
-    expect(brokeredCount({ area_m2: 59, price_median: null, trade_count: 3, trades: [] })).toBe(3);
+    expect(brokeredCount({ area_m2: 59, trade_count: 3, trades: [] })).toBe(3);
     expect(brokeredCount({
-      area_m2: 59, price_median: null, trade_count: 3,
+      area_m2: 59, trade_count: 3,
       trades: [{ price: 1, date: null, floor: null, direct: true }, { price: 2, date: null, floor: null, direct: false }],
     })).toBe(1);
   });
 
   it("건수 글자 — 거래 목록이 비면 '거래 N건', 있으면 '중개거래 N건'(보완 F7)", () => {
-    expect(tradeCountText({ area_m2: 59, price_median: null, trade_count: 3, trades: [] })).toBe("거래 3건");
+    expect(tradeCountText({ area_m2: 59, trade_count: 3, trades: [] })).toBe("거래 3건");
     expect(tradeCountText({
-      area_m2: 59, price_median: null, trade_count: 3,
+      area_m2: 59, trade_count: 3,
       trades: [{ price: 1, date: null, floor: null, direct: true }, { price: 2, date: null, floor: null, direct: false }],
     })).toBe("중개거래 1건");
   });
@@ -77,7 +77,7 @@ describe("consumer-format", () => {
   });
 
   it("집값 단계 3가지 — 6개월 → 2년 → 직접 입력(결정 12)", () => {
-    const ranged = { area_m2: 59, price_median: null, trade_count: 3, price_min: 15700, price_max: 18000, trades: [] };
+    const ranged = { area_m2: 59, trade_count: 3, price_min: 15700, price_max: 18000, trades: [] };
     const none = { ...ranged, price_min: null, price_max: null };
     expect(priceStage(ranged, { min: 14700, max: 20000 })).toEqual({ kind: "6m", min: 15700, max: 18000 });
     expect(priceStage(none, { min: 14700, max: 20000 })).toEqual({ kind: "2y", min: 14700, max: 20000 });

@@ -37,6 +37,7 @@ vi.mock("@/lib/api", async () => {
       rep_area_m2: 59,
       nearby_median_price: 17200,
       area_prices: [
+        // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — 중위 17200 (아래 "1억 7,200만 없음" 단언 재료)
         { area_m2: 59, households: 116, price_median: 17200, trade_count: 3, price_min: 15700, price_max: 18000, trades: [] },
       ],
       region_jeonse_ratio: 71.2,

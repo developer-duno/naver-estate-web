@@ -59,7 +59,7 @@ test("비로그인 — 6개월 거래 없는 단지도 질문 4개 · 대출 카
       return json({
         complex_no: "200000", complex_name: "거래적은단지", cortar_no: "3020012300", real_estate_type_code: "APT",
         real_estate_type_name: "아파트", sido: "대전", sigungu: "유성구", rep_area_m2: 59,
-        area_prices: [{ area_m2: 59, households: 80, price_median: null, trade_count: null, price_min: null, price_max: null, trades: [] }],
+        area_prices: [{ area_m2: 59, households: 80, trade_count: null, price_min: null, price_max: null, trades: [] }],
       });
     }
     if (sub === "public-price-history") {

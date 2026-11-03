@@ -51,7 +51,7 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 720 
               // 거래 3줄 — 휴대폰 390px 에서 4열 거래 표가 가로로 넘치지 않는지까지 본다(보완 F8)
               area_prices: [
                 {
-                  area_m2: 59, households: 116, price_median: 17200, trade_count: 3, price_min: 15700, price_max: 18000,
+                  area_m2: 59, households: 116, trade_count: 3, price_min: 15700, price_max: 18000,
                   trades: [
                     { price: 18000, date: "2026-07-21", floor: 15, direct: false },
                     { price: 17200, date: "2026-06-03", floor: 7, direct: false },

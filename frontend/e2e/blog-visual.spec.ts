@@ -20,6 +20,8 @@ test.describe("blog visual regression (iPhone + Desktop)", () => {
     await page.setViewportSize(VIEWPORTS.desktop);
     await page.goto("/blog");
     await expect(page.getByRole("heading", { name: /부동산 인사이트/ })).toBeVisible();
+    // 로그인 확인이 끝나기 전 머리줄(로그인 버튼 없음)이 찍히지 않게 — 머리줄 전용 시험과 같은 기다림(세션 498)
+    await expect(page.locator("header").first().getByRole("link", { name: "로그인" })).toBeVisible();
     await expect(page).toHaveScreenshot("blog-index-desktop.png", {
       fullPage: false,
       maxDiffPixelRatio: 0.02,
@@ -40,6 +42,8 @@ test.describe("blog visual regression (iPhone + Desktop)", () => {
     await page.setViewportSize(VIEWPORTS.desktop);
     await page.goto("/blog/compare-workflow");
     await expect(page.getByRole("heading", { name: /24행 비교/ })).toBeVisible();
+    // 로그인 확인이 끝나기 전 머리줄(로그인 버튼 없음)이 찍히지 않게 — 머리줄 전용 시험과 같은 기다림(세션 498)
+    await expect(page.locator("header").first().getByRole("link", { name: "로그인" })).toBeVisible();
     await expect(page).toHaveScreenshot("blog-slug-desktop.png", {
       fullPage: false,
       maxDiffPixelRatio: 0.02,
@@ -60,6 +64,8 @@ test.describe("blog visual regression (iPhone + Desktop)", () => {
     await page.setViewportSize(VIEWPORTS.desktop);
     await page.goto("/blog/realtime-listing");
     await expect(page.getByRole("heading", { name: /네이버 매물 실시간 조회/ })).toBeVisible();
+    // 로그인 확인이 끝나기 전 머리줄(로그인 버튼 없음)이 찍히지 않게 — 머리줄 전용 시험과 같은 기다림(세션 498)
+    await expect(page.locator("header").first().getByRole("link", { name: "로그인" })).toBeVisible();
     await expect(page).toHaveScreenshot("blog-slug-realtime-desktop.png", {
       fullPage: false,
       maxDiffPixelRatio: 0.02,
@@ -80,6 +86,8 @@ test.describe("blog visual regression (iPhone + Desktop)", () => {
     await page.setViewportSize(VIEWPORTS.desktop);
     await page.goto("/blog/mibunyang-radar-weights");
     await expect(page.getByRole("heading", { name: /미분양 비교표 읽는 법/ })).toBeVisible();
+    // 로그인 확인이 끝나기 전 머리줄(로그인 버튼 없음)이 찍히지 않게 — 머리줄 전용 시험과 같은 기다림(세션 498)
+    await expect(page.locator("header").first().getByRole("link", { name: "로그인" })).toBeVisible();
     await expect(page).toHaveScreenshot("blog-slug-radar-weights-desktop.png", {
       fullPage: false,
       maxDiffPixelRatio: 0.02,
@@ -100,6 +108,8 @@ test.describe("blog visual regression (iPhone + Desktop)", () => {
     await page.setViewportSize(VIEWPORTS.desktop);
     await page.goto("/blog/mibunyang-for-agents");
     await expect(page.getByRole("heading", { name: /공인중개사를 위한 미분양/ })).toBeVisible();
+    // 로그인 확인이 끝나기 전 머리줄(로그인 버튼 없음)이 찍히지 않게 — 머리줄 전용 시험과 같은 기다림(세션 498)
+    await expect(page.locator("header").first().getByRole("link", { name: "로그인" })).toBeVisible();
     await expect(page).toHaveScreenshot("blog-slug-for-agents-desktop.png", {
       fullPage: false,
       maxDiffPixelRatio: 0.02,

@@ -34,6 +34,7 @@ vi.mock("@/components/VersionWatcher", () => ({ default: () => null }));
 vi.mock("@tanstack/react-query-devtools", () => ({ ReactQueryDevtools: () => null }));
 
 import Providers, { LOGIN_DEPENDENT_QUERY_PREFIXES } from "../Providers";
+import { getFavoriteArticles, toggleFavoriteArticle } from "@/lib/storage";
 
 const SESSION = { access_token: "t" };
 
@@ -47,6 +48,7 @@ function setup() {
 
 beforeEach(() => {
   auth.cb = null;
+  localStorage.clear();
 });
 
 describe("Providers — 로그인 직후 다시 받기 (세션 481 F7)", () => {
@@ -76,6 +78,17 @@ describe("Providers — 로그인 직후 다시 받기 (세션 481 F7)", () => {
     expect(clear).toHaveBeenCalledTimes(1);
     auth.cb!("SIGNED_IN", SESSION);
     expect(invalidate).toHaveBeenCalledTimes(LOGIN_DEPENDENT_QUERY_PREFIXES.length);
+  });
+
+  it("로그아웃하면 즐겨찾기 매물 목록도 비운다 (세션 496 · B31)", () => {
+    setup();
+    toggleFavoriteArticle({ article_no: "2440000001", complex_no: "100001", complex_name: "래미안 강남", price: "15억" });
+    auth.cb!("INITIAL_SESSION", SESSION);
+    auth.cb!("TOKEN_REFRESHED", SESSION);
+    auth.cb!("SIGNED_IN", SESSION);
+    expect(getFavoriteArticles()).toHaveLength(1); // 로그아웃 아닌 이벤트는 그대로
+    auth.cb!("SIGNED_OUT", null);
+    expect(getFavoriteArticles()).toEqual([]);
   });
 
   it("대상 접두사 = 단지 상세·매물·평형·호가 통계·추이·매물 상세·검색 3종", () => {

@@ -328,6 +328,21 @@ export function toggleFavoriteArticle(article: Omit<FavoriteArticle, "added_at">
   return true;
 }
 
+/** 즐겨찾기 매물을 비웠다는 알림 — 이미 열린 화면(목록·별표)이 옛 목록을 들고 있지 않게 */
+export const FAVORITE_ARTICLES_CLEARED_EVENT = "favorite-articles-cleared";
+
+/** 로그아웃 때 비우기 — 같은 PC 다음 사람에게 단지 이름·가격이 안 보이게(세션 496 · B31 👤 결정) */
+export function clearFavoriteArticles(): void {
+  try {
+    localStorage.removeItem(FAVORITE_ARTICLES_KEY);
+  } catch {
+    // 저장소 접근 막힌 브라우저(사생활 보호 모드 등) — 지울 것도 없다
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(FAVORITE_ARTICLES_CLEARED_EVENT));
+  }
+}
+
 // ── 매물 카드 보기 모양 (compact/medium/large) ──
 
 const ARTICLE_VIEW_MODE_KEY = "article_view_mode";

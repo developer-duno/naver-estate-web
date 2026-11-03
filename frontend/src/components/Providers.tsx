@@ -5,6 +5,7 @@ import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { makeQueryClient } from "@/lib/query-client";
 import { createClient } from "@/lib/supabase";
+import { clearFavoriteArticles } from "@/lib/storage";
 import VersionWatcher from "@/components/VersionWatcher";
 
 /**
@@ -46,6 +47,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       const hasSession = !!session;
       if (event === "SIGNED_OUT") {
         queryClient.clear();
+        // 즐겨찾기 매물(브라우저 저장)도 비운다 — 로그아웃 버튼·401 자동 로그아웃·다른 탭 로그아웃 모두 이 이벤트로 온다
+        clearFavoriteArticles();
       } else if (hasSession && hadSessionRef.current === false) {
         // 세션 없음 → 있음일 때만(이 탭 로그인·다른 탭 로그인). auth-js 는 탭 포커스 때도 SIGNED_IN 을
         // 다시 보내므로 이벤트 이름만 보면 포커스마다 다시 받는다(세션 481 보완 F7).

@@ -4,10 +4,26 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from db.mb_models import Apartment, MBTrade
+
+# ── 미분양 수 비공개 판정 (서버 한 곳 — FE 는 응답의 unsold_hidden 만 본다) ─────
+
+# 지자체 명단(govlist)에는 올라 있는데 단지별 미분양 수가 비공개인 단지 — 2026-09 대구시부터.
+UNSOLD_HIDDEN_SOURCE = "govlist"
+
+
+def is_unsold_hidden(unsold_source: Optional[str], unsold: Optional[int]) -> bool:
+    """명단에 있으나 미분양 수 비공개 = 출처 govlist 이고 unsold 가 비었을 때만."""
+    return unsold_source == UNSOLD_HIDDEN_SOURCE and unsold is None
+
+
+def unsold_hidden_clause():
+    """is_unsold_hidden 의 SQL 짝꿍 (조건·정렬에 쓴다)."""
+    return and_(Apartment.unsold_source == UNSOLD_HIDDEN_SOURCE, Apartment.unsold.is_(None))
+
 
 # ── 중복 제거 헬퍼 ──────────────────────────────────────────
 
@@ -125,18 +141,23 @@ def _paginate_deduped_apartments(
     sort_by: str,
     page: int,
     page_size: int,
+    hidden_last: bool = False,
 ) -> tuple[list["Apartment"], int]:
     """conditions 로 필터된 아파트를 중복 제거 + 정렬 + 페이지네이션해 (행 목록, 전체 수) 반환.
 
     PostgreSQL: SQL CTE + ROW_NUMBER + regexp_replace (인덱스 활용)
     SQLite: Python fallback (CI 테스트 호환)
-    get_apartments_page · get_unsold_by_region 공통 답습 — conditions 빌드만 호출처가 다르다."""
+    get_apartments_page · get_unsold_by_region 공통 답습 — conditions 빌드만 호출처가 다르다.
+    hidden_last=True 면 미분양 수 비공개 단지(is_unsold_hidden)를 어떤 정렬이든 숫자 있는 단지 뒤로."""
     if _is_sqlite(db):
         # SQLite: regexp_replace 미지원 → Python fallback
         stmt = select(Apartment).where(and_(*conditions))
         all_rows = list(db.execute(stmt).scalars().all())
         deduped = _deduplicate_apartments(all_rows)
         sorted_rows = _sort_apartments(deduped, sort_by)
+        if hidden_last:
+            # 안정 정렬 — 같은 무리 안의 기존 순서는 그대로
+            sorted_rows = sorted(sorted_rows, key=lambda a: is_unsold_hidden(a.unsold_source, a.unsold))
         start = (page - 1) * page_size
         return sorted_rows[start : start + page_size], len(deduped)
 
@@ -158,12 +179,14 @@ def _paginate_deduped_apartments(
     total = db.execute(count_stmt).scalar() or 0
 
     # 페이지 데이터
-    order = _build_mb_order_clause(sort_by)
+    order = [_build_mb_order_clause(sort_by)]
+    if hidden_last:
+        order.insert(0, case((unsold_hidden_clause(), 1), else_=0).asc())
     stmt = (
         select(Apartment)
         .join(subq, Apartment.id == subq.c.id)
         .where(subq.c.rn == 1)
-        .order_by(order)
+        .order_by(*order)
         .offset((page - 1) * page_size)
         .limit(page_size)
     )

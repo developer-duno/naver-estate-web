@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import type { MbApartment } from "@/types";
 import { displayUnits, normalizePp } from "@/lib/mb-format";
+import { isUnsoldHidden } from "@/lib/mb-unsold-hidden";
 import { MbBundleUnitsTag } from "./MbBundleUnitsTag";
 
 /** 지도에서 마커 클릭 시 선택된 단지 요약 카드 (지도 아래 렌더).
@@ -62,6 +63,9 @@ export default function MbSelectedCard({
         )}
         {apt.unsold != null && apt.unsold > 0 && (
           <span className="text-red-600">미분양 {apt.unsold.toLocaleString()}</span>
+        )}
+        {apt.unsold == null && isUnsoldHidden(apt) && (
+          <span className="text-gray-400">미분양 비공개</span>
         )}
       </div>
 

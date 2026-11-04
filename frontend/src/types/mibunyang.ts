@@ -14,6 +14,10 @@ export interface MbApartment {
   bundle_units?: number | null;
   unsold?: number;
   unsold_rate?: number;
+  /** 지자체 명단에 있으나 단지별 미분양 수 비공개 — 판정은 서버(is_unsold_hidden). 칸이 없으면 옛 서버 = 지금 화면 그대로 */
+  unsold_hidden?: boolean;
+  /** 그 명단의 기준일 (ISO 날짜) */
+  unsold_listed_as_of?: string | null;
   completion?: string;
   heating?: string;
   max_floor?: number;

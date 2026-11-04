@@ -20,6 +20,7 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 import { SkeletonPage } from "@/components/Skeleton";
 import { useMbFavoriteStatus } from "@/hooks/useMbFavorites";
 import { exportMbUnsoldHistoryToXlsx } from "@/lib/mb-export";
+import { isUnsoldHidden, unsoldHiddenNotice, unsoldListAuthority } from "@/lib/mb-unsold-hidden";
 
 const LazyUnsoldChart = dynamic(() => import("@/components/mb/MbUnsoldTrendChart"), {
   ssr: false,
@@ -94,6 +95,8 @@ export default function MbDetailPage() {
 
   if (!apt) return null;
 
+  const unsoldHidden = isUnsoldHidden(apt);
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* 헤더 */}
@@ -116,6 +119,9 @@ export default function MbDetailPage() {
           {apt.region} {apt.gu ?? ""} {apt.dong ?? ""}
           {apt.unsold != null && (
             <span className="ml-2 text-red-600 font-medium">미분양 {apt.unsold}세대</span>
+          )}
+          {apt.unsold == null && unsoldHidden && (
+            <span className="ml-2 text-gray-400">미분양 수 비공개({unsoldListAuthority(apt.region)})</span>
           )}
         </p>
       </div>
@@ -195,7 +201,14 @@ export default function MbDetailPage() {
               </button>
             </div>
           ) : (
-            <LazyUnsoldChart items={historyQuery.data?.items ?? []} />
+            <>
+              {unsoldHidden && (
+                <p data-testid="mb-unsold-hidden-notice" className="text-sm text-gray-500 mb-3">
+                  {unsoldHiddenNotice(apt.region, apt.unsold_listed_as_of, historyQuery.data?.items ?? [])}
+                </p>
+              )}
+              <LazyUnsoldChart items={historyQuery.data?.items ?? []} />
+            </>
           )}
         </section>
 

@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Building } from "lucide-react";
 import type { MbApartment } from "@/types";
 import { displayUnits, normalizePp } from "@/lib/mb-format";
+import { isUnsoldHidden } from "@/lib/mb-unsold-hidden";
 import { MbBundleUnitsTag } from "./MbBundleUnitsTag";
 import { useMbFavorites } from "@/hooks/useMbFavorites";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -177,9 +178,13 @@ function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompa
               {/* 3행: 미분양 강조 */}
               <div className="flex items-center gap-2 text-sm mb-1">
                 <span className="text-gray-500">미분양</span>
-                <span className="font-semibold text-red-600">
-                  {apt.unsold != null ? `${apt.unsold.toLocaleString()}세대` : "-"}
-                </span>
+                {apt.unsold == null && isUnsoldHidden(apt) ? (
+                  <span className="text-gray-400">비공개</span>
+                ) : (
+                  <span className="font-semibold text-red-600">
+                    {apt.unsold != null ? `${apt.unsold.toLocaleString()}세대` : "-"}
+                  </span>
+                )}
                 {apt.unsold_rate != null && (
                   <span className="ml-auto font-medium text-red-700">
                     {apt.unsold_rate.toFixed(1)}%
@@ -286,9 +291,13 @@ function MbApartmentTable({ apartments, sort, onSortChange, isInCompare, onCompa
                 {displayUnits(apt)?.toLocaleString() ?? "-"}
                 <MbBundleUnitsTag apartment={apt} below />
               </td>
-              <td className="px-3 py-2 text-right font-medium text-red-600">
-                {apt.unsold != null ? apt.unsold.toLocaleString() : "-"}
-              </td>
+              {apt.unsold == null && isUnsoldHidden(apt) ? (
+                <td className="px-3 py-2 text-right text-gray-400">비공개</td>
+              ) : (
+                <td className="px-3 py-2 text-right font-medium text-red-600">
+                  {apt.unsold != null ? apt.unsold.toLocaleString() : "-"}
+                </td>
+              )}
               <td className="px-3 py-2 text-right">
                 {apt.unsold_rate != null ? `${apt.unsold_rate.toFixed(1)}%` : "-"}
               </td>

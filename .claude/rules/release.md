@@ -18,6 +18,9 @@
   `pip` 의 `Successfully installed` 출력은 그 자체로 증거가 아니다(설치 대상 인터프리터가 다를 수 있다).
   ⚠ 이 PC 파이썬은 **전역 공유**(`Python312`, 집서버 4프로젝트 동거)라 교체는 다른 프로젝트에도 적용된다 —
   사장님 승인 후 진행하고, 되돌리기는 `pip install "<패키지>==<옛버전>"`.
+  ⛔ **"pip install → 재시작"을 켜진 서버에 손으로 치지 않는다** — 부품 교체 실행 정본 = 메모리 `scripts/restart_window.sh` 사본에서 RESTART 줄만
+  `restart_with_pip.ps1` 로 바꿔 **한 번에**(게이트 → fetch·`pull --ff-only` → HEAD=origin/main → 정지 → 로컬 휠 설치 → import 확인 → finally 시작).
+  켜진 채 pip 하면 `.pyd` 잠김으로 반쯤 설치된다(`requirements.txt` 10~11행 주석 · 2026-09-25 8분 다운) · 정지 전 `pip freeze` 저장본이 되돌리기 목록(세션 499 맹점 🔴).
 - DB 마이그레이션 (`backend/db/migrations/V*.sql`)
 - backend 모듈 import 흐름 변경 (`main.py`, `routers/*`, `crawler/*`)
 

@@ -1,0 +1,13 @@
+/*
+ * 시각 회귀 사진을 찍는 순간에만 바르는 CSS (playwright.config.ts expect.toHaveScreenshot.stylePath).
+ * e2e 는 개발 서버(next dev)로 돌아서, 손님 화면에는 없는 개발용 덧그림 2개가 사진에 섞인다:
+ *   ① Next.js 개발 표시 — 왼쪽 아래 "N" 동그라미 / "Compiling…" 알약 (컴파일 시점마다 모양이 바뀐다)
+ *   ② React Query 개발 도구 버튼 — 오른쪽 아래 야자수 섬 동그라미 (늦게 뜨면 찍히고 빨리 찍으면 안 찍힌다)
+ * 그래서 재촬영마다 블로그·미분양 장이 "바뀐 것처럼" 보였다(세션 498 — s493 재촬영 run 41330243544 픽셀 비교).
+ * 이 CSS 는 그림자 영역(Shadow DOM) 안까지 닿는다(playwright page.screenshot style 옵션 설명).
+ * ⚠ 손님에게 보이는 요소는 여기에 넣지 않는다 — 그건 시각 회귀 안전망을 끄는 것과 같다.
+ */
+nextjs-portal,
+.tsqd-open-btn-container {
+  display: none !important;
+}

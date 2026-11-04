@@ -50,7 +50,7 @@ function makeComplex(no: string) {
     parking_count_by_household: 1.2,
     floor_area_ratio: "250",
     building_coverage_ratio: "20",
-    jeonse_rate: 67.7, // BE 저장 단위 = 퍼센트 (crawler/stats.py = jeonse/sale*100) — 옛 칸, 화면은 안 읽는다
+    jeonse_rate: 67.7, // BE 저장 단위 = 퍼센트 (crawler/stats.py = jeonse/sale*100) — 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드
     // 이 단지 전세가율 범위(세션 479 B29) — 퍼센트 그대로
     jeonse_rate_min: 64.2 as number | null | undefined,
     jeonse_rate_max: 67.7 as number | null | undefined,
@@ -361,13 +361,14 @@ describe("단지 비교 — 대표 면적 시세 두 줄 (세션 474 B27)", () =
     vi.mocked(api.getComplex).mockImplementation((no: string) =>
       Promise.resolve(
         no === "A"
+          // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — A 중위 17200 · 두 단지 jeonse_rate 61
           ? { ...makeComplex(no), rep_area_m2: 59, nearby_median_price: 17200, recent_trades_6m: 9, jeonse_rate: 61,
               jeonse_rate_min: 72, jeonse_rate_max: 80,
               area_prices: [{ area_m2: 59, price_median: 17200, trade_count: 3, price_min: 15700, price_max: 18000,
                 trades: [trade(15700, "2026-06-26", 4), trade(17200, "2026-06-05", 8), trade(18000, "2026-05-05", 7)] }] }
           : { ...makeComplex(no), rep_area_m2: 84, nearby_median_price: 51000, recent_trades_6m: 12, jeonse_rate: 61,
               jeonse_rate_min: null, jeonse_rate_max: null,
-              area_prices: [{ area_m2: 84, price_median: 51000, trade_count: 2, price_min: 51000, price_max: 51000,
+              area_prices: [{ area_m2: 84, trade_count: 2, price_min: 51000, price_max: 51000,
                 trades: [trade(51000, "2026-07-01", 3), trade(51000, "2026-06-01", 9)] }] },
       ),
     );
@@ -388,6 +389,7 @@ describe("단지 비교 — 대표 면적 시세 두 줄 (세션 474 B27)", () =
   it("E — 직거래만 있는 단지(범위 null · 거래 목록 있음)는 '59㎡ — (직거래만 2건)'", async () => {
     vi.mocked(api.getComplex).mockImplementation((no: string) =>
       Promise.resolve({ ...makeComplex(no), rep_area_m2: 59,
+        // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — 중위 16000
         area_prices: [{ area_m2: 59, price_median: 16000, trade_count: 2, price_min: null, price_max: null,
           trades: [{ ...trade(16000, "2026-06-10", 3), direct: true }, { ...trade(15000, "2026-05-02", 6), direct: true }] }] }),
     );
@@ -400,6 +402,7 @@ describe("단지 비교 — 대표 면적 시세 두 줄 (세션 474 B27)", () =
 
   it("E·A' — 옛 값 단지: legacy_range 범위 + 작은 줄(직거래 포함) · 전세가율 '-'", async () => {
     vi.mocked(api.getComplex).mockImplementation((no: string) =>
+      // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — jeonse_rate 53.6
       Promise.resolve({ ...makeComplex(no), nearby_median_price: 15000, jeonse_rate: 53.6, price_basis: "legacy_mixed" as const,
         jeonse_rate_min: null, jeonse_rate_max: null, legacy_range: { lower: 12000, upper: 18000, month: "202503" } }),
     );
@@ -621,8 +624,8 @@ describe("단지 비교 — 비로그인 실거래가 추이 (세션 491)", () =
               ...makeComplex(no),
               rep_area_m2: null,
               area_prices: [
-                { area_m2: 49, price_median: null, trade_count: 0, price_min: null, price_max: null },
-                { area_m2: 59, price_median: null, trade_count: 3, price_min: 75000, price_max: 84000 },
+                { area_m2: 49, trade_count: 0, price_min: null, price_max: null },
+                { area_m2: 59, trade_count: 3, price_min: 75000, price_max: 84000 },
               ],
             }
           : { ...makeComplex(no), rep_area_m2: null, area_prices: [] },

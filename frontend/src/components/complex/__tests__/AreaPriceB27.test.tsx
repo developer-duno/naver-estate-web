@@ -15,7 +15,7 @@ import InfoCards from "@/components/article/InfoCards";
 import PriceHistoryChart from "@/components/PriceHistoryChart";
 import CompareCharts from "@/components/CompareCharts";
 import { areaGroupOf, areaGroupRange, otherAreaText, pickRepresentativeArea, sameAreaFilters } from "@/lib/area-group";
-import type { AreaPrice, AreaTrade, Complex, PyeongDetail } from "@/types";
+import type { AreaPrice, AreaTrade, Article, Complex, PyeongDetail } from "@/types";
 
 type AvgResult = { avgPrice: number | null; count: number; isLoading: boolean; isError: boolean };
 const mockUseComplexArticleAvg = vi.fn<(...args: unknown[]) => AvgResult>(
@@ -96,10 +96,11 @@ const C6139: Complex = {
   recent_trades_6m: 9,
   // BE 가 평형표의 모든 묶음을 대표 먼저·거래 수 순으로 준다(보완 ①) — 거래 없는 42 는 null · trades []
   area_prices: [
-    { area_m2: 59, households: 116, price_median: 17200, trade_count: 3, price_min: 15700, price_max: 18000, trades: T59 },
-    { area_m2: 84, households: 70, price_median: 22000, trade_count: 1, price_min: 22000, price_max: 22000,
+    // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — 중위 17200 이 와도 1억 7,200만이 안 보이는지
+    { area_m2: 59, households: 116, price_median: 17200, trade_count: 3, price_min: 15700, price_max: 18000, trades: T59 } as AreaPrice,
+    { area_m2: 84, households: 70, trade_count: 1, price_min: 22000, price_max: 22000,
       trades: [{ price: 22000, date: "2026-07-10", floor: 12, direct: false }] },
-    { area_m2: 42, households: 12, price_median: null, trade_count: null, price_min: null, price_max: null, trades: [] },
+    { area_m2: 42, households: 12, trade_count: null, price_min: null, price_max: null, trades: [] },
   ],
   area_price_source: OLD_SOURCE,
   area_price_range_source: SOURCE,
@@ -128,7 +129,8 @@ describe("ComplexDashboard 시세 칸 — A안 (세션 474 B27)", () => {
   const priceBox = () => screen.getByRole("button", { name: /^시세 · 전용 59㎡/ });
 
   it("A1·B·G — 최저 ~ 최고 · 칩 N = 거래 목록 길이 · 다른 면적 범위 · 전세가율 범위 · 새 출처 글자 (세션 489 B29)", () => {
-    renderDashboard({ ...C6139, jeonse_rate: 61, jeonse_rate_min: 72, jeonse_rate_max: 80 });
+    // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — jeonse_rate 61
+    renderDashboard({ ...C6139, jeonse_rate: 61, jeonse_rate_min: 72, jeonse_rate_max: 80 } as Complex);
     const box = priceBox();
     expect(box).toHaveTextContent("시세 · 전용 59㎡(116세대)");
     expect(box).toHaveTextContent("1억 5,700만 ~ 1억 8,000만");
@@ -188,7 +190,7 @@ describe("ComplexDashboard 시세 칸 — A안 (세션 474 B27)", () => {
   });
 
   it("A3 — 대표 면적 거래 0건이면 큰 숫자 — · 칩 없음 · 다른 면적 줄만 (매물 평균으로 안 돌아간다)", () => {
-    renderDashboard(withRep({ price_median: null, trade_count: null, price_min: null, price_max: null, trades: [] }, { nearby_median_price: undefined }));
+    renderDashboard(withRep({ trade_count: null, price_min: null, price_max: null, trades: [] }, { nearby_median_price: undefined }));
     const box = priceBox();
     expect(box).toHaveTextContent("—");
     expect(box).toHaveTextContent("84㎡ 2억 2,000만 (1건)");
@@ -197,7 +199,8 @@ describe("ComplexDashboard 시세 칸 — A안 (세션 474 B27)", () => {
   });
 
   it("B — 로그인 응답인데 전세가율 범위가 null 이면 이 단지 전세가율은 비우고 지역 값만", () => {
-    renderDashboard({ ...C6139, jeonse_rate: 61, jeonse_rate_min: null, jeonse_rate_max: null });
+    // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — 범위가 null 일 때 jeonse_rate 61 로 돌아가지 않는지
+    renderDashboard({ ...C6139, jeonse_rate: 61, jeonse_rate_min: null, jeonse_rate_max: null } as Complex);
     const extra = screen.getByTestId("box-extra-prices");
     expect(extra).toHaveTextContent("대전 유성구 아파트 전세가율 71.2%");
     expect(extra).not.toHaveTextContent("전세가율(59㎡)");
@@ -228,11 +231,12 @@ describe("ComplexDashboard 시세 칸 — A안 (세션 474 B27)", () => {
   });
 
   it("A' — 옛 값 단지: legacy_range 범위 + 작은 줄(직거래 포함) · 전세가율 비움 · 중위 글자 없음", () => {
+    // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — jeonse_rate 53.6
     renderDashboard({
       complex_no: "C8", complex_name: "옛값단지", nearby_median_price: 15000, jeonse_rate: 53.6, price_basis: "legacy_mixed",
       legacy_range: { lower: 12000, upper: 18000, month: "202503" },
       region_jeonse_ratio: 71.2, region_name: "대전 유성구", region_jeonse_source: "부동산원", region_jeonse_period: "2026.09",
-    }, []);
+    } as Complex, []);
     const box = screen.getByRole("button", { name: "시세 메뉴 열기" });
     expect(box).toHaveTextContent("1억 2,000만 ~ 1억 8,000만");
     expect(box).not.toHaveTextContent("1억 5,000만");
@@ -333,11 +337,12 @@ describe("area-group 도우미", () => {
   it("otherAreaText 는 최대 3개 · 범위 + 거래 목록 건수 · 중위는 안 읽는다 (세션 489 B29)", () => {
     const t = (price: number): AreaTrade => ({ price, date: "2026-06-01", floor: 3, direct: false });
     const many: AreaPrice[] = [
-      { area_m2: 59, price_median: 1, trade_count: 9, price_min: 1, price_max: 2, trades: [t(1)] },
-      { area_m2: 74, price_median: 99999, trade_count: 5, price_min: 20000, price_max: 21000, trades: [t(20000), t(21000)] },
-      { area_m2: 84, price_median: 99999, trade_count: 4, price_min: 30000, price_max: 30000, trades: [t(30000)] },
-      { area_m2: 101, price_median: 99999, trade_count: 2, price_min: 40000, price_max: 42000, trades: [t(40000), t(42000), t(41000)] },
-      { area_m2: 114, price_median: 50000, trade_count: 1, price_min: 50000, price_max: 50000, trades: [t(50000)] },
+      { area_m2: 59, trade_count: 9, price_min: 1, price_max: 2, trades: [t(1)] },
+      // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — 중위 99999
+      { area_m2: 74, price_median: 99999, trade_count: 5, price_min: 20000, price_max: 21000, trades: [t(20000), t(21000)] } as AreaPrice,
+      { area_m2: 84, price_median: 99999, trade_count: 4, price_min: 30000, price_max: 30000, trades: [t(30000)] } as AreaPrice,
+      { area_m2: 101, price_median: 99999, trade_count: 2, price_min: 40000, price_max: 42000, trades: [t(40000), t(42000), t(41000)] } as AreaPrice,
+      { area_m2: 114, trade_count: 1, price_min: 50000, price_max: 50000, trades: [t(50000)] },
     ];
     expect(otherAreaText(59, many).split(" · ")).toHaveLength(3);
     expect(otherAreaText(59, many)).toBe("74㎡ 2억~2억 1,000만 (2건) · 84㎡ 3억 (1건) · 101㎡ 4억~4억 2,000만 (3건)");
@@ -346,11 +351,12 @@ describe("area-group 도우미", () => {
 
 describe("InfoCards 라벨 (세션 474 B27)", () => {
   it("대표 면적이 있으면 '대표 면적 시세(59㎡)' · '전세가율(이 단지, 같은 면적)' · 매물은 '같은 면적 기준'", () => {
+    // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — 매물 article_jeonse_ratio 68.2 · 단지 jeonse_rate 61
     render(
       <InfoCards
         article={{ article_no: "A1", complex_no: "6139", trade_type_name: "전세", article_jeonse_ratio: 68.2,
-          article_jeonse_ratio_min: 66.7, article_jeonse_ratio_max: 76.4 }}
-        complex={{ ...C6139, jeonse_rate: 61, jeonse_rate_min: 72, jeonse_rate_max: 80 }}
+          article_jeonse_ratio_min: 66.7, article_jeonse_ratio_max: 76.4 } as Article}
+        complex={{ ...C6139, jeonse_rate: 61, jeonse_rate_min: 72, jeonse_rate_max: 80 } as Complex}
       />,
     );
     expect(screen.getByText("대표 면적 시세(59㎡)")).toBeInTheDocument();
@@ -366,10 +372,11 @@ describe("InfoCards 라벨 (세션 474 B27)", () => {
   });
 
   it("H — 매물 상세 단지 카드: 칸이 없으면(직접 조회 폴백·비로그인) 그 줄을 그리지 않는다 · 값 null 이면 비움", () => {
+    // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — 단지 jeonse_rate 61
     render(
       <InfoCards
         article={{ article_no: "A1", complex_no: "6139", trade_type_name: "전세", article_jeonse_ratio_min: null, article_jeonse_ratio_max: null }}
-        complex={{ ...C6139, area_prices: undefined, jeonse_rate: 61 }}
+        complex={{ ...C6139, area_prices: undefined, jeonse_rate: 61 } as Complex}
       />,
     );
     expect(screen.queryByText("대표 면적 시세(59㎡)")).toBeNull();
@@ -406,11 +413,12 @@ describe("PriceHistoryChart 계열 분리 (세션 474 B27 보완 ① · 세션 4
 
 describe("InfoCards 옛 값 표시 (보완 F2 → 세션 489 B29 A')", () => {
   it("옛 값 단지는 legacy_range 범위 + 작은 줄 · 전세가율 비움", () => {
+    // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — 단지 jeonse_rate 53.6
     render(
       <InfoCards
         article={{ article_no: "A1", complex_no: "C8", trade_type_name: "매매" }}
         complex={{ complex_no: "C8", complex_name: "옛값단지", nearby_median_price: 15000, jeonse_rate: 53.6, price_basis: "legacy_mixed",
-          jeonse_rate_min: null, jeonse_rate_max: null, legacy_range: { lower: 12000, upper: 18000, month: "202503" } }}
+          jeonse_rate_min: null, jeonse_rate_max: null, legacy_range: { lower: 12000, upper: 18000, month: "202503" } } as Complex}
       />,
     );
     expect(screen.getByText("1억 2,000만 ~ 1억 8,000만 (2025년 3월 거래 · 면적 섞임 · 직거래 포함 · 그 뒤 거래 없음)")).toBeInTheDocument();

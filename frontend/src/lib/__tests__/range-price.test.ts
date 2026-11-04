@@ -20,7 +20,7 @@ function trade(o: Partial<AreaTrade> = {}): AreaTrade {
 }
 
 function area(o: Partial<AreaPrice> = {}): AreaPrice {
-  return { area_m2: 59, households: 300, price_median: 17200, trade_count: 3, price_min: 15700, price_max: 18000, trades: [], ...o };
+  return { area_m2: 59, households: 300, trade_count: 3, price_min: 15700, price_max: 18000, trades: [], ...o };
 }
 
 /** 6139 59㎡ 라이브 API 실측(10-31) 세 건 */
@@ -71,11 +71,12 @@ describe("대표 면적 범위(A1·A3·A4)", () => {
 
 describe("다른 면적 줄(A2)", () => {
   it("84㎡ 범위 (3건) · 1건이면 값 (1건) · 거래 없음 — · price_median 은 안 읽는다", () => {
+    // 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — 중위 99999·88888
     const text = otherAreaText(59, [
       area({ trades: LIVE_TRADES }),
-      area({ area_m2: 84, price_median: 99999, price_min: 22000, price_max: 24900, trades: LIVE_TRADES }),
-      area({ area_m2: 74, price_median: 88888, price_min: 21000, price_max: 21000, trades: [trade({ price: 21000 })] }),
-      area({ area_m2: 42, price_median: null, price_min: null, price_max: null, trades: [] }),
+      area({ area_m2: 84, price_median: 99999, price_min: 22000, price_max: 24900, trades: LIVE_TRADES } as Partial<AreaPrice>),
+      area({ area_m2: 74, price_median: 88888, price_min: 21000, price_max: 21000, trades: [trade({ price: 21000 })] } as Partial<AreaPrice>),
+      area({ area_m2: 42, price_min: null, price_max: null, trades: [] }),
     ]);
     expect(text).toBe("84㎡ 2억 2,000만~2억 4,900만 (3건) · 74㎡ 2억 1,000만 (1건) · 42㎡ —");
     expect(text).not.toContain("9억");

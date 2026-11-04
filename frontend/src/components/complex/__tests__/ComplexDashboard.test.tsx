@@ -43,7 +43,8 @@ vi.mock("@/components/ComplexBasicInfo", () => ({
 
 // 대표 면적 단지(세션 489 B29 — 범위 화면). 옛 칸(nearby_median_price·jeonse_rate·recent_trades_6m)은
 // 화면이 읽지 않음을 보이려고 범위와 다른 값으로 둔다
-const baseComplex: Complex = {
+// 옛 응답 칸(B29 #807 로 사라짐) — 남아 와도 화면에 안 나오는지 가드 — jeonse_rate 65 · 면적 중위 80000
+const baseComplex = {
   complex_no: "C001",
   complex_name: "테스트단지",
   total_household_count: 1234,
@@ -63,7 +64,7 @@ const baseComplex: Complex = {
   ],
   jeonse_rate_min: 60.2,
   jeonse_rate_max: 64.1,
-};
+} as unknown as Complex;
 
 const samplePyeong: PyeongDetail[] = [
   { pyeong_no: 1, pyeong_name: "84A", exclusive_area: "84.99" },
@@ -362,7 +363,7 @@ describe("ComplexDashboard (v2)", () => {
   it("우리 전세가율이 없고 지역 값만 있어도 지역 값을 보여 준다 (세션 473 F9)", () => {
     render(
       <ComplexDashboard
-        complex={{ ...baseComplex, jeonse_rate: undefined, jeonse_rate_min: undefined, jeonse_rate_max: undefined,
+        complex={{ ...baseComplex, jeonse_rate_min: undefined, jeonse_rate_max: undefined,
           region_jeonse_ratio: 61.2, region_jeonse_period: "2026.09",
           region_name: "사천시", region_jeonse_source: "출처문구" }}
         complexNo="C001"

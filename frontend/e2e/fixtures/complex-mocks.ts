@@ -23,14 +23,13 @@ const COMPLEX: Complex = {
   building_coverage_ratio: "18%",
   article_count: 2,
   nearby_median_price: 120000,
-  jeonse_rate: 62, // BE 저장 단위 = 퍼센트 (세션278 H2) — 옛 칸, 화면은 아래 범위 칸을 읽는다(세션 489 B29)
   recent_trades_6m: 12,
   // 시세 범위 화면(세션 479 B29 · 489 PR b2) — 대표 면적 최저~최고 + 거래 목록 · 전세가율 범위 · 새 출처 글자
   rep_area_m2: 84,
   price_basis: "rep_area",
   area_prices: [
     {
-      area_m2: 84, households: 300, price_median: 120000, trade_count: 3, price_min: 115000, price_max: 128000,
+      area_m2: 84, households: 300, trade_count: 3, price_min: 115000, price_max: 128000,
       trades: [
         { price: 128000, date: "2026-07-18", floor: 21, direct: false },
         { price: 99000, date: "2026-06-30", floor: 2, direct: true },
@@ -38,7 +37,7 @@ const COMPLEX: Complex = {
       ],
     },
     {
-      area_m2: 59, households: 220, price_median: 95000, trade_count: 2, price_min: 93000, price_max: 97000,
+      area_m2: 59, households: 220, trade_count: 2, price_min: 93000, price_max: 97000,
       trades: [
         { price: 97000, date: "2026-07-05", floor: 15, direct: false },
         { price: 93000, date: "2026-05-21", floor: 4, direct: false },

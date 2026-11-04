@@ -3,7 +3,6 @@ export interface AreaPrice {
   area_m2: number;
   /** 평형표 세대수 합(평형표에 없는 묶음이면 null) */
   households?: number | null;
-  price_median: number | null;
   trade_count: number | null;
   /** 최근 6개월 최저·최고(달마다 직거래 제외, 세션 479 B29·480) — 거래 없는 묶음은 null */
   price_min?: number | null;
@@ -58,15 +57,13 @@ export interface Complex {
   /** 거래유형별 활성 매물 수 (매매/전세/월세/단기임대) */
   trade_type_counts?: { 매매: number; 전세: number; 월세: number; 단기임대: number };
   nearby_median_price?: number;
-  /** 이 단지 전세가율 — 로그인 응답은 값 또는 null, 비로그인 응답엔 칸 자체가 없다(undefined, 세션 481: 분자가 네이버 전세 시세) */
-  jeonse_rate?: number | null;
   /** 정부 지역 값 — 부동산원 시군구 아파트 중위 전세가율(단지 상세·비교 응답에만, 세션 473) */
   region_jeonse_ratio?: number | null;
   region_jeonse_period?: string | null;   // "2026.01"
   region_name?: string | null;            // 시군구 이름만 "천안시 동남구"
   region_jeonse_source?: string | null;
   recent_trades_6m?: number;
-  /** 대표 전용면적 묶음(정수 ㎡, 세션 474 B27) — nearby_median_price·jeonse_rate·recent_trades_6m 이 이 묶음 값 */
+  /** 대표 전용면적 묶음(정수 ㎡, 세션 474 B27) — nearby_median_price·recent_trades_6m 이 이 묶음 값 */
   rep_area_m2?: number | null;
   /** 면적 묶음별 최근 6개월 정부 실거래(거래 수 많은 순) — 단지 상세·비교 응답에만 */
   area_prices?: AreaPrice[];
@@ -139,7 +136,6 @@ export interface Article {
   realtor_id?: string;
   realtor_phone?: string;
   monthly_rent_yield?: number;      // 월세 수익률 (%)
-  article_jeonse_ratio?: number;    // 개별 전세가율 (%) — 옛 화면 호환(중위 분모), 화면은 아래 범위를 읽는다
   /** 보증금 ÷ 같은 면적 최고 ~ 최저 (%, 세션 479 B29) — 매물 상세 응답에만 값, 목록 API 는 null */
   article_jeonse_ratio_min?: number | null;
   article_jeonse_ratio_max?: number | null;

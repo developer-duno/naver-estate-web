@@ -12,7 +12,7 @@ import { makeComplex } from "./fixtures";
 const AREAS = makeComplex().area_prices!;
 const base = { areaPrices: AREAS, selected: 59, onSelect: () => {}, zone: "normal" as const, sido: "대전", regionLabel: "유성구" };
 /** 서울 규제 단지 — 59㎡ 최근 6개월 10억~12억(가짜 자료) */
-const SEOUL: AreaPrice[] = [{ area_m2: 59, households: 100, price_median: null, trade_count: 2, price_min: 100000, price_max: 120000, trades: [] }];
+const SEOUL: AreaPrice[] = [{ area_m2: 59, households: 100, trade_count: 2, price_min: 100000, price_max: 120000, trades: [] }];
 const NO_RANGE: AreaPrice[] = AREAS.map((a) => ({ ...a, price_min: null, price_max: null }));
 
 function type(label: RegExp, value: string) {

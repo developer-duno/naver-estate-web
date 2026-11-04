@@ -182,6 +182,8 @@ def _paginate_deduped_apartments(
     order = [_build_mb_order_clause(sort_by)]
     if hidden_last:
         order.insert(0, case((unsold_hidden_clause(), 1), else_=0).asc())
+    # 동률 끝 기준 — 비공개 무리(unsold 전부 NULL)가 쪽 경계에 걸려도 OFFSET 중복·누락이 없게 (세션 500 검사관 🟠)
+    order.append(Apartment.id.asc())
     stmt = (
         select(Apartment)
         .join(subq, Apartment.id == subq.c.id)

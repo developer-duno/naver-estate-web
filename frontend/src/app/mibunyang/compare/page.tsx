@@ -352,7 +352,10 @@ function CompareContent() {
       {/* 차트 섹션 */}
       <div className="mt-6 space-y-6">
         <LazyMbComparePriceChart apartments={apartments} />
-        <LazyMbCompareUnsoldChart datasets={unsoldDatasets} onRetry={retryUnsoldHistory} />
+        {/* 고른 단지가 전부 미분양 수 비공개면 추이 칸을 그리지 않는다 — '데이터 없음'으로 읽히지 않게(세션 502) */}
+        {!apartments.every(isUnsoldHidden) && (
+          <LazyMbCompareUnsoldChart datasets={unsoldDatasets} onRetry={retryUnsoldHistory} />
+        )}
       </div>
 
       {/* 값의 자료·법령 출처 — 상세 화면과 같은 각주(세션 472 PR 3) */}

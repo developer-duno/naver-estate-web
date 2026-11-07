@@ -260,4 +260,14 @@ describe("미분양 비교 — 미분양 수 비공개 단지는 추이 점을 �
     expect(datasets[0].isError).toBe(false);
     expect(datasets[1].items).toHaveLength(1);
   });
+
+  it("고른 단지가 전부 비공개면 추이 칸 자체를 그리지 않는다", async () => {
+    vi.mocked(api.getMbApartmentDetail).mockImplementation((id: string) =>
+      Promise.resolve({ ...makeApt(id, `단지${id}`), unsold_hidden: true }),
+    );
+    renderPage("ids=A1,A2");
+    expect((await screen.findAllByText("단지A2")).length).toBeGreaterThan(0);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByTestId("mb-compare-unsold-chart-stub")).not.toBeInTheDocument();
+  });
 });

@@ -71,8 +71,12 @@ FE 만 변경된 PR (frontend/*) 은 본 룰 면제.
 ⛔ **판정 명령에 파이프를 붙이지 말 것**(세션 411 실사고, details.md §release 사건 박제 표 411 행): `python check.py | grep -v "slow query" && Restart-Service …`
 는 파이프 종료코드가 **grep 의 0** 이라 스크립트가 WAIT(exit 1)를 내도 `&&` 가 통과한다. 잡음 제거는 스크립트 안에서 하거나
 `out=$(python check.py 2>&1); echo "$out"; [[ "$out" == *GO* ]] && …` 처럼 **문자열로 판정**한다(꼭 파이프면 `set -o pipefail`).
-②의 "5분 안" 판정에는 `GET /api/admin/scheduler-status` 의 `next_run_at` 을 써도 된다 — jitter 가 이미 반영된 확정값이라
-interval 잡(crawl_details 30분 + 0~15분)도 시각표 추정 대신 그 값으로 정확히 본다(세션 411 검사관 C 실측).
+②의 "5분 안" 판정은 **재시작 게이트**(메모리 `scripts/restart_gate.py` — `restart_window*.sh` 가 부른다)가 한다. 승인된 관리자 줄이 있으면
+`GET /api/admin/scheduler-status` 의 `next_run_at`(jitter 반영 확정값)을 보지만, **10-27 이후엔 관리자 줄이 없어 늘 예약표 경로로 판정한다**(세션 502 B34):
+cron 잡은 코드 예약표로, interval 잡은 `scripts/backend.log` 의 APScheduler `next run at`(마지막 부팅 뒤 · 이름별 최댓값)으로 보고,
+마지막 `Running job` 뒤 끝난 줄이 없으면 "지금 도는 중" · 아직 줄이 없는 잡은 부팅 시각 + 주기 ~ + jitter 첫 회차 창으로 본다(짧은 점검 잡은 여유 1분).
+사유가 없으면 DB 를 한 번 더 본 뒤에만 GO. `restart_with_pip.ps1` 은 **`Stop-Service` 바로 앞에서 게이트를 한 번 더** 돌려 WAIT 면 멈추지 않고 exit 12(다음 반복에서 재시도),
+게이트가 죽으면(새 코드가 옛 부품으로 import 안 됨 등) exit 13 → sh exit 14 로 멈추고 사람 판단을 남긴다(11-07 19:25 GO 직후 정지 5초 전 30분 잡이 시작된 사고 · 2건째).
 
 ⚠ **①의 "running 0" 만으로는 부족하다 — 짧은 하위 잡을 이어 붙이는 수집은 잡 사이 틈에 0 으로 보인다**(세션 421 실사고:
 일요일 03:00 새 단지 찾기 `discover_regions` 는 `complex_list` 행을 지역마다 몇 초씩 229개 이어 붙여 평소 03:00~03:49 에 도는데,
@@ -114,7 +118,7 @@ date "+%F(%a) %H:%M"
 손으로 고치지 말 것 — `tests/test_restart_schedule_table.py` 가 코드와의 드리프트를 막는다.
 갱신 = `cd backend && python scripts/gen_restart_schedule_table.py --write ../.claude/rules/release.md`
 interval 잡(시각 `—` 행)의 주기는 **코드 기본값**이다 — 라이브 `.env` 가 덮을 수 있고(`crawler_monitor`: 코드 30분·라이브 10분) jitter 도 붙으므로
-5분 판정은 위 `next_run_at` 으로 한다. 표는 토글을 전부 켠 상태로 만들어 라이브에서 꺼진 잡(`billing_charge` 등)도 보인다 — "언제든 돌 수 있는 잡 전부"가 기준.
+5분 판정은 위 재시작 게이트가 라이브 값으로 한다(표의 주기를 손으로 대조하지 않는다). 표는 토글을 전부 켠 상태로 만들어 라이브에서 꺼진 잡(`billing_charge` 등)도 보인다 — "언제든 돌 수 있는 잡 전부"가 기준.
 (상세: .claude/rules-detail/release.md §시각표 생성기 이력)
 
 <!-- restart-schedule:start -->

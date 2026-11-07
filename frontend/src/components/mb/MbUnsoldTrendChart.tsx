@@ -27,6 +27,12 @@ interface Props {
   items: MbUnsoldHistory[];
 }
 
+/** "202609" → "2026년 9월" (요약 상자의 기준월 글자) */
+function formatKoreanMonth(ym: string): string {
+  if (!ym || ym.length < 6) return ym;
+  return `${ym.slice(0, 4)}년 ${Number(ym.slice(4, 6))}월`;
+}
+
 export default function MbUnsoldTrendChart({ items }: Props) {
   const [period, setPeriod] = useState<number>(24);
 
@@ -41,10 +47,34 @@ export default function MbUnsoldTrendChart({ items }: Props) {
     }));
   }, [items, period]);
 
+  // 값이 한 달도 없는 시리즈는 그리지 않는다 — 없는 값을 0 으로 그리면 "0세대"로 읽힌다
+  const hasPostCompletion = items.some((d) => d.post_completion_unsold != null);
+  const hasChange = items.some((d) => d.change != null);
+
   if (items.length === 0) {
     return (
       <div className="text-center py-12 text-gray-400">
         미분양 추이 데이터가 없습니다.
+      </div>
+    );
+  }
+
+  // 한 달치뿐이면 점 하나짜리 그래프 대신 요약 한 줄
+  if (items.length === 1) {
+    const only = items[0];
+    return (
+      <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-6 text-center">
+        <p className="text-2xl font-bold text-gray-900">
+          {only.unsold_count != null ? (
+            `${only.unsold_count.toLocaleString()}세대`
+          ) : (
+            <span className="text-gray-400">미분양 수 비공개</span>
+          )}
+        </p>
+        <p className="mt-1 text-sm text-gray-500">{formatKoreanMonth(only.base_month)} 기준</p>
+        <p className="mt-3 text-sm text-gray-500">
+          아직 한 달치 자료입니다. 다음 달 자료부터 추이 그래프가 그려집니다.
+        </p>
       </div>
     );
   }
@@ -80,8 +110,10 @@ export default function MbUnsoldTrendChart({ items }: Props) {
           />
           <Legend formatter={(value: string) => SERIES_LABELS[value] ?? value} />
           <Line type="monotone" dataKey="unsold" stroke="#3b82f6" strokeWidth={2} dot={false} />
-          <Line type="monotone" dataKey="postCompletion" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-          <Bar dataKey="change" fill="#10b981" opacity={0.6} />
+          {hasPostCompletion && (
+            <Line type="monotone" dataKey="postCompletion" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+          )}
+          {hasChange && <Bar dataKey="change" fill="#10b981" opacity={0.6} />}
         </ComposedChart>
       </ResponsiveContainer>
     </div>

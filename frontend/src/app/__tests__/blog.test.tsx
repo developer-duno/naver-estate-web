@@ -11,7 +11,7 @@ import BlogIndexPage from "../blog/page";
 import { POSTS, getPostBySlug } from "../blog/posts";
 
 describe("/blog 목록 페이지", () => {
-  it("Hero 제목과 25편 카드가 모두 렌더된다", () => {
+  it("Hero 제목과 27편 카드가 모두 렌더된다", () => {
     const { container } = render(<BlogIndexPage />);
     expect(screen.getByRole("heading", { name: /부동산 인사이트/, level: 1 })).toBeInTheDocument();
     // 모든 글 제목이 카드에 표시
@@ -46,10 +46,10 @@ describe("/blog 목록 페이지", () => {
 });
 
 describe("blog/posts 메타데이터", () => {
-  it("POSTS — slug 가 모두 unique 하고 발행 글 26편 (전체)", () => {
-    expect(POSTS.length).toBe(26);
+  it("POSTS — slug 가 모두 unique 하고 발행 글 27편 (전체)", () => {
+    expect(POSTS.length).toBe(27);
     const slugs = POSTS.map((p) => p.slug);
-    expect(new Set(slugs).size).toBe(26);
+    expect(new Set(slugs).size).toBe(27);
     const publishedSlugs = POSTS.filter((p) => !p.draft).map((p) => p.slug).sort();
     expect(publishedSlugs).toEqual([
       "acquisition-tax-tool-guide",
@@ -61,6 +61,7 @@ describe("blog/posts 메타데이터", () => {
       "compare-workflow",
       "complex-price-analysis",
       "hold-period-special-guide",
+      "illegal-loan-filter",
       "jeonse-ratio",
       "mibunyang-batch-compare-guide",
       "mibunyang-detail-bars-guide",

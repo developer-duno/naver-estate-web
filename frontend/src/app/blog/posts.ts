@@ -237,6 +237,15 @@ export const POSTS: BlogPost[] = [
     category: "도구 활용",
     readingTime: 6,
   },
+  {
+    slug: "illegal-loan-filter",
+    title: "대출이 급할 때, 불법·고금리 대출 걸러 내는 법 — 연 20%·연 60% 선과 조회 3곳",
+    description:
+      "연 20%를 넘는 이자는 무효, 연 60%를 넘기로 한 대출은 계약 전체가 무효입니다. 수수료를 먼저 달라는 소개는 불법. 빌리기 전 등록 여부를 조회하는 3곳과 이미 당했을 때 할 일.",
+    date: "2026-11-07",
+    category: "대출",
+    readingTime: 4,
+  },
 ];
 
 export function getPostBySlug(slug: string): BlogPost | undefined {

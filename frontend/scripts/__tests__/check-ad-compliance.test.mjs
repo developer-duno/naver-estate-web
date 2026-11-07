@@ -3,7 +3,7 @@
  * 실행: npx vitest run scripts/__tests__/check-ad-compliance.test.mjs
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { scan } from "../check-ad-compliance.mjs";
@@ -104,5 +104,32 @@ describe("check-ad-compliance.scan()", () => {
       "대출 신청하면", "신청하면 대출",
     ]));
     expect(hits.every((h) => h.line !== 4)).toBe(true);
+  });
+
+  // 세션 502 — 불법·고금리 대출 경고 글 한 편만 '대부업'·'대부중개'를 건너뛴다(사장님 2026-11-07 결정).
+  const LOAN_POST_LINES = "대부업체 조회 · 대부중개업자에게 수수료를 주지 마세요\n";
+
+  it("파일 예외 ① — 경고 글 경로에서는 '대부업'·'대부중개'가 통과", async () => {
+    const dir = join(FIXTURE, "src", "content", "blog");
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "illegal-loan-filter.mdx"), LOAN_POST_LINES);
+    const hits = await scan([FIXTURE]);
+    expect(hits).toEqual([]);
+  });
+
+  it("파일 예외 ② — 다른 경로(src/app/x.tsx)에서는 같은 낱말이 그대로 걸림", async () => {
+    const dir = join(FIXTURE, "src", "app");
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "x.tsx"), LOAN_POST_LINES);
+    const hits = await scan([FIXTURE]);
+    expect(new Set(hits.map((h) => h.word))).toEqual(new Set(["대부업", "대부중개"]));
+  });
+
+  it("파일 예외 ③ — 경고 글 경로에서도 '최고의' 같은 나머지 낱말은 걸림", async () => {
+    const dir = join(FIXTURE, "src", "content", "blog");
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "illegal-loan-filter.mdx"), `${LOAN_POST_LINES}최고의 조건을 보장합니다\n`);
+    const hits = await scan([FIXTURE]);
+    expect(new Set(hits.map((h) => h.word))).toEqual(new Set(["최고의", "보장합니다"]));
   });
 });

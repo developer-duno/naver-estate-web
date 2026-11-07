@@ -19,6 +19,8 @@ const CATEGORY_FALLBACK: Record<BlogCategory, string> = {
   "세금": "/blog-hero/category-tax.webp",
   "도구 활용": "/blog-hero/category-tools.webp",
   "미분양": "/blog-hero/category-mibunyang.webp",
+  // 분류 '대출'(세션 502)은 전용 그림이 아직 없어 마지막 대체 그림과 같은 파일을 쓴다.
+  "대출": "/blog-hero/_fallback.svg",
 };
 
 const FINAL_FALLBACK = "/blog-hero/_fallback.svg";

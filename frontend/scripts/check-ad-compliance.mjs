@@ -59,6 +59,22 @@ function isWhitelisted(line) {
   return WHITELIST.some((w) => line.includes(w));
 }
 
+// 파일 한 편만의 예외 — 그 파일에서만 적힌 낱말을 건너뛰고, 나머지 RISKY 낱말은 그 파일도 계속 검사한다.
+// 전역 WHITELIST 에 구절을 더하지 않는 이유: 다른 화면까지 느슨해진다.
+const FILE_EXEMPT = {
+  // 세션 502 · 사장님 2026-11-07 결정 — 불법·고금리 대출을 걸러 내라는 경고 글이라 법이 쓰는 이름
+  // (대부업체·대부중개업자)과 파인 조회 메뉴 이름(「대부업체 조회」)을 그대로 써야 한다. 이 글 한 편만.
+  "src/content/blog/illegal-loan-filter.mdx": ["대부업", "대부중개"],
+};
+
+function exemptWordsFor(file) {
+  const p = file.replace(/\\/g, "/");
+  for (const [key, words] of Object.entries(FILE_EXEMPT)) {
+    if (p === key || p.endsWith(`/${key}`)) return words;
+  }
+  return [];
+}
+
 async function* walk(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
   for (const e of entries) {
@@ -83,9 +99,11 @@ export async function scan(targets = TARGETS) {
     for await (const file of walk(target)) {
       const content = await readFile(file, "utf8");
       const lines = content.split("\n");
+      const exempt = exemptWordsFor(file);
       lines.forEach((line, idx) => {
         if (isWhitelisted(line)) return;
         for (const word of RISKY) {
+          if (exempt.includes(word)) continue;
           if (line.includes(word)) {
             hits.push({
               file: relative(".", file).replace(/\\/g, "/"),

@@ -17,6 +17,16 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => mockSearchParams(),
 }));
 
+// next/dynamic 은 전역 test-setup 이 null 렌더로 바꿔 둔다 — datasets 를 받는 비교 추이 그래프만
+// 받은 값을 글자로 드러내는 가짜로 바꾼다(가격 그래프는 apartments 를 받으므로 계속 null)
+vi.mock("next/dynamic", () => ({
+  default: () => function DynamicStub({ datasets }: { datasets?: unknown[] }) {
+    return datasets !== undefined
+      ? <div data-testid="mb-compare-unsold-chart-stub" data-datasets={JSON.stringify(datasets)} />
+      : null;
+  },
+}));
+
 function makeApt(id: string, name: string) {
   return {
     id, name, region: "서울", gu: "강남", units: 500, unsold: 10,
@@ -211,5 +221,53 @@ describe("미분양 비교 — 값과 출처만 (판정 표시 없음)", () => {
   it("즐겨찾기(저장) 별 버튼은 그대로 있다", async () => {
     renderPage("ids=A1,A2");
     expect(await screen.findByRole("button", { name: "☆ 저장" })).toBeInTheDocument();
+  });
+});
+
+// 세션 502 — 미분양 수 비공개 단지는 비교 추이 선도 그리지 않는다(상세 화면과 같은 결정)
+describe("미분양 비교 — 미분양 수 비공개 단지는 추이 점을 비운다", () => {
+  beforeEach(() => {
+    mockPush.mockClear();
+    vi.mocked(api.getMbApartmentDetail).mockImplementation((id: string) =>
+      Promise.resolve(id === "A1" ? { ...makeApt(id, `단지${id}`), unsold_hidden: true } : makeApt(id, `단지${id}`)),
+    );
+    // 두 단지 모두 옛 추이 점이 있다 — 비공개 단지만 비어야 한다
+    vi.mocked(api.getMbUnsoldHistory).mockImplementation((id: string) =>
+      Promise.resolve({
+        apartment_id: id,
+        items: [{ id: 1, apartment_id: id, base_month: "202608", unsold_count: 7 }],
+      }),
+    );
+  });
+
+  async function readDatasets() {
+    const stub = await screen.findByTestId("mb-compare-unsold-chart-stub");
+    // 추이 응답이 풀려 둘째 단지 점이 들어올 때까지 기다린다 — 응답 전 빈 값을 통과하지 않게
+    await waitFor(() => {
+      const ds = JSON.parse(stub.getAttribute("data-datasets") ?? "[]") as { apartmentId: string; items: unknown[] }[];
+      expect(ds.find((d) => d.apartmentId === "A2")?.items.length).toBe(1);
+    });
+    return JSON.parse(stub.getAttribute("data-datasets") ?? "[]") as {
+      apartmentId: string; items: unknown[]; isError: boolean;
+    }[];
+  }
+
+  it("비공개 단지(A1)는 빈 items·오류 아님, 단지 순서는 그대로, 다른 단지(A2)는 점 그대로", async () => {
+    renderPage("ids=A1,A2");
+    const datasets = await readDatasets();
+    expect(datasets.map((d) => d.apartmentId)).toEqual(["A1", "A2"]);
+    expect(datasets[0].items).toEqual([]);
+    expect(datasets[0].isError).toBe(false);
+    expect(datasets[1].items).toHaveLength(1);
+  });
+
+  it("고른 단지가 전부 비공개면 추이 칸 자체를 그리지 않는다", async () => {
+    vi.mocked(api.getMbApartmentDetail).mockImplementation((id: string) =>
+      Promise.resolve({ ...makeApt(id, `단지${id}`), unsold_hidden: true }),
+    );
+    renderPage("ids=A1,A2");
+    expect((await screen.findAllByText("단지A2")).length).toBeGreaterThan(0);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByTestId("mb-compare-unsold-chart-stub")).not.toBeInTheDocument();
   });
 });

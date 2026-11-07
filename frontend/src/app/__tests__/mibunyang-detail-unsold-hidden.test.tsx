@@ -17,6 +17,14 @@ vi.mock("next/navigation", () => ({
 const mockDetail = vi.fn();
 const mockHistory = vi.fn();
 
+// next/dynamic 은 전역 test-setup 이 null 렌더로 바꿔 그래프 유무를 못 본다 — items 를 받는 추이 그래프만 보이는 가짜로
+// (위치 지도도 dynamic 이지만 items 를 안 받고, 이 시험의 단지는 좌표가 없어 아예 안 그린다)
+vi.mock("next/dynamic", () => ({
+  default: () => function DynamicStub({ items }: { items?: unknown[] }) {
+    return items !== undefined ? <div data-testid="mb-unsold-chart-stub" /> : null;
+  },
+}));
+
 vi.mock("@/lib/api", () => ({
   getMbApartmentDetail: (...args: unknown[]) => mockDetail(...args),
   getMbUnsoldHistory: (...args: unknown[]) => mockHistory(...args),
@@ -54,21 +62,28 @@ describe("상세 — 미분양 수 비공개", () => {
     expect(screen.queryByText(/미분양 \d+세대/)).not.toBeInTheDocument();
   });
 
-  it("그래프 위 안내 줄 — 9월 말 명단 · 8월까지", async () => {
+  it("추이 절에는 안내 한 문장만 — 추정치 문장 없음", async () => {
     await renderWith(detail({ unsold_hidden: true, unsold_listed_as_of: "2026-09-30" }));
     const notice = await screen.findByTestId("mb-unsold-hidden-notice");
-    expect(notice.textContent).toBe(
-      "대구시 9월 말 명단은 이 단지의 미분양 수를 공개하지 않습니다. 아래는 8월까지의 추정치입니다.",
-    );
+    expect(notice.textContent).toBe("대구시 9월 말 명단은 이 단지의 미분양 수를 공개하지 않습니다.");
   });
 
-  it("추이 기록이 비면 안내 둘째 문장 없음", async () => {
-    await renderWith(detail({ unsold_hidden: true, unsold_listed_as_of: "2026-09-30" }), {
-      apartment_id: "ah-2021910048",
-      items: [],
-    });
-    const notice = await screen.findByTestId("mb-unsold-hidden-notice");
-    expect(notice.textContent).toBe("대구시 9월 말 명단은 이 단지의 미분양 수를 공개하지 않습니다.");
+  it("옛 추정 점이 있어도 그래프·엑셀 단추를 그리지 않는다", async () => {
+    await renderWith(detail({ unsold_hidden: true, unsold_listed_as_of: "2026-09-30" }));
+    await waitFor(() => expect(mockHistory).toHaveBeenCalled());
+    await screen.findByTestId("mb-unsold-hidden-notice");
+    // 추이 응답이 다 풀린 뒤에도 그래프·단추가 끝내 안 나오는지 — 응답 전 '없음'을 잘못 통과하지 않게 한 박자 기다린다
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByTestId("mb-unsold-chart-stub")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "엑셀" })).not.toBeInTheDocument();
+  });
+});
+
+describe("상세 — 비공개가 아니면 그래프·엑셀 그대로", () => {
+  it("숫자 있는 단지는 추이 그래프와 엑셀 단추가 보인다", async () => {
+    await renderWith(detail({ unsold: 25, unsold_hidden: false, unsold_listed_as_of: "2026-09-30" }));
+    expect(await screen.findByTestId("mb-unsold-chart-stub")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "엑셀" })).toBeInTheDocument();
   });
 });
 

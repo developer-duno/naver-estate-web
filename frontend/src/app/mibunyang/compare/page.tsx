@@ -8,6 +8,7 @@ import { queryKeys } from "@/lib/query-keys";
 import { getMbApartmentDetail, getMbUnsoldHistory } from "@/lib/api";
 import { MB_COMPARE_ROWS, formatCellValue } from "@/lib/mb-compare-utils";
 import { exportMbCompareToXlsx } from "@/lib/mb-compare-export";
+import { isUnsoldHidden } from "@/lib/mb-unsold-hidden";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { useMbCompareHistory } from "@/hooks/useMbCompareHistory";
 import { useMbCompareBookmarks } from "@/hooks/useMbCompareBookmarks";
@@ -123,11 +124,13 @@ function CompareContent() {
   const unsoldDatasets: UnsoldDataset[] = apartments.map((apt) => {
     const idx = ids.indexOf(apt.id);
     const hq = historyQueries[idx];
+    // 미분양 수 비공개 단지는 옛 추정 점을 그리지 않는다(세션 502 · 👤 결정) — 단지 순서·색이 비교표 열과 맞도록 데이터셋은 남기고 점만 비운다
+    const hidden = isUnsoldHidden(apt);
     return {
       apartmentId: apt.id,
       apartmentName: apt.name,
-      items: hq?.data?.items ?? [],
-      isError: !!hq?.isError,
+      items: hidden ? [] : hq?.data?.items ?? [],
+      isError: hidden ? false : !!hq?.isError,
     };
   });
 
@@ -349,7 +352,10 @@ function CompareContent() {
       {/* 차트 섹션 */}
       <div className="mt-6 space-y-6">
         <LazyMbComparePriceChart apartments={apartments} />
-        <LazyMbCompareUnsoldChart datasets={unsoldDatasets} onRetry={retryUnsoldHistory} />
+        {/* 고른 단지가 전부 미분양 수 비공개면 추이 칸을 그리지 않는다 — '데이터 없음'으로 읽히지 않게(세션 502) */}
+        {!apartments.every(isUnsoldHidden) && (
+          <LazyMbCompareUnsoldChart datasets={unsoldDatasets} onRetry={retryUnsoldHistory} />
+        )}
       </div>
 
       {/* 값의 자료·법령 출처 — 상세 화면과 같은 각주(세션 472 PR 3) */}

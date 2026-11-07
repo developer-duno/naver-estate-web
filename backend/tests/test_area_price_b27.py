@@ -10,7 +10,6 @@
 import re
 from datetime import date, timedelta
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -587,22 +586,6 @@ def test_덮개_비율_문턱_이상이면_면적줄_없는_단지는_비운다(
 # ── I5 직렬화 ────────────────────────────────────────────────────────────────
 
 
-def _art(trade_type, price, area2):
-    return SimpleNamespace(trade_type_name=trade_type, numeric_price=price, area2_m2=area2)
-
-
-def test_매물_전세가율_분모는_같은_면적_묶음():
-    from routers.estate_serializers import _calc_jeonse_ratio
-
-    stats = {59: 17200, 84: 22000}
-    assert _calc_jeonse_ratio(_art("전세", 15000, 84.0), None, stats) == 68.2   # 84 매물 → 84 분모
-    assert _calc_jeonse_ratio(_art("전세", 15000, 59.0), None, stats) == 87.2   # 59 매물 → 59 분모
-    assert _calc_jeonse_ratio(_art("전세", 9000, 42.0), None, stats) is None    # 42 묶음 값 없음
-    assert _calc_jeonse_ratio(_art("전세", 15000, None), None, stats) is None
-    assert _calc_jeonse_ratio(_art("전세", 15000, 84.0), SimpleNamespace(nearby_median_price=17200), None) is None
-    assert _calc_jeonse_ratio(_art("매매", 15000, 84.0), None, stats) is None
-
-
 @pytest.fixture
 def _no_filter_options(monkeypatch):
     """단지 상세의 필터 옵션 조회는 PostgreSQL unnest 를 써 SQLite 에서 못 돈다 — 이 시험과 무관하니 비운다."""
@@ -624,13 +607,13 @@ def test_단지상세_응답에_대표면적과_면적별_시세(client, db, app
 
     assert body["rep_area_m2"] == 59
     # 평형표 모든 묶음 · 대표 먼저 · 나머지 거래 수 순 · 거래 없는 42 는 null (보완 ①)
-    # 세션 479 B29: price_min/max·trades 추가(거래 목록이 빈 줄이면 prices 로 범위 폴백) — 옛 두 값은 그대로
+    # 세션 479 B29: price_min/max·trades 추가(거래 목록이 빈 줄이면 prices 로 범위 폴백) — 옛 price_median 은 세션 497 에 삭제
     assert body["area_prices"] == [
-        {"area_m2": 59, "households": 116, "price_median": 17200, "trade_count": 3,
+        {"area_m2": 59, "households": 116, "trade_count": 3,
          "price_min": 15700, "price_max": 18000, "trades": []},
-        {"area_m2": 84, "households": 70, "price_median": 22000, "trade_count": 1,
+        {"area_m2": 84, "households": 70, "trade_count": 1,
          "price_min": 22000, "price_max": 22000, "trades": []},
-        {"area_m2": 42, "households": 12, "price_median": None, "trade_count": None,
+        {"area_m2": 42, "households": 12, "trade_count": None,
          "price_min": None, "price_max": None, "trades": []},
     ]
     assert body["area_price_source"] == (
@@ -689,7 +672,7 @@ def test_목록_검색_응답엔_면적별_시세를_싣지_않는다(client, db
     assert "area_prices" not in row
 
 
-def test_매물상세_전세가율은_면적별_중위로(db):
+def test_매물상세_전세가율은_면적별_범위로(db):
     from db.models import Article
     from routers.live.crawl import _article_detail_dict
 
@@ -697,7 +680,9 @@ def test_매물상세_전세가율은_면적별_중위로(db):
     _add_gov_area_rows(db)
     art = Article(article_no="A1", complex_no="6139", trade_type_name="전세", numeric_price=15000, area2_m2=84.0)
     out = _article_detail_dict(db, art, db.get(Complex, "6139"))
-    assert out["article_jeonse_ratio"] == 68.2
+    # 84 묶음 = 22,000 한 건(trades 빈 줄 → prices 폴백) → 15000 / 22000 = 68.2 (최저=최고)
+    assert (out["article_jeonse_ratio_min"], out["article_jeonse_ratio_max"]) == (68.2, 68.2)
+    assert "article_jeonse_ratio" not in out   # 옛 칸 삭제(세션 497)
 
 
 # ── I6 그래프 ────────────────────────────────────────────────────────────────

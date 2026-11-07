@@ -47,24 +47,16 @@ describe("isUnsoldHidden — 응답 칸만 본다", () => {
   });
 });
 
-describe("unsoldHiddenNotice — 그래프 위 안내 줄", () => {
-  const hist = [{ base_month: "202607" }, { base_month: "202608" }, { base_month: "202606" }];
-
-  it("기준일 달 + 추이 마지막 달 (순서가 섞여 와도 가장 늦은 달)", () => {
-    expect(unsoldHiddenNotice("대구", "2026-09-30", hist)).toBe(
-      "대구시 9월 말 명단은 이 단지의 미분양 수를 공개하지 않습니다. 아래는 8월까지의 추정치입니다.",
+describe("unsoldHiddenNotice — 그래프 대신 그리는 안내 줄 (세션 502: 추정치 문장 없음)", () => {
+  it("기준일 달이 있으면 '대구시 9월 말 명단은'", () => {
+    expect(unsoldHiddenNotice("대구", "2026-09-30")).toBe(
+      "대구시 9월 말 명단은 이 단지의 미분양 수를 공개하지 않습니다.",
     );
   });
 
   it("기준일이 없으면 '대구시 명단은'", () => {
-    expect(unsoldHiddenNotice("대구", null, hist)).toBe(
-      "대구시 명단은 이 단지의 미분양 수를 공개하지 않습니다. 아래는 8월까지의 추정치입니다.",
-    );
-  });
-
-  it("추이 기록이 비면 둘째 문장을 뺀다", () => {
-    expect(unsoldHiddenNotice("대구", "2026-09-30", [])).toBe(
-      "대구시 9월 말 명단은 이 단지의 미분양 수를 공개하지 않습니다.",
+    expect(unsoldHiddenNotice("대구", null)).toBe(
+      "대구시 명단은 이 단지의 미분양 수를 공개하지 않습니다.",
     );
   });
 });

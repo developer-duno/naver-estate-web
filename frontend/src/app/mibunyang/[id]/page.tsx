@@ -176,7 +176,8 @@ export default function MbDetailPage() {
         <section data-testid="mb-unsold-trend" className="bg-white rounded-lg shadow-sm border p-4 md:p-6">
           <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
             <h3 className="text-base font-bold text-gray-800">미분양 추이</h3>
-            {historyQuery.data?.items?.length ? (
+            {/* 비공개 단지는 그래프를 숨기므로 옛 추정 점이 엑셀로 내려받아지지 않게 단추도 숨긴다 (세션 502 · 👤 결정) */}
+            {!unsoldHidden && historyQuery.data?.items?.length ? (
               <button
                 type="button"
                 disabled={exporting}
@@ -187,7 +188,12 @@ export default function MbDetailPage() {
               </button>
             ) : null}
           </div>
-          {historyQuery.isLoading ? (
+          {/* 비공개 단지의 추이 점은 옛 시군구 비례 추정이라 실제 숫자처럼 읽힌다 — 안내 줄만 (세션 502 · 👤 결정) */}
+          {unsoldHidden ? (
+            <p data-testid="mb-unsold-hidden-notice" className="text-sm text-gray-500">
+              {unsoldHiddenNotice(apt.region, apt.unsold_listed_as_of)}
+            </p>
+          ) : historyQuery.isLoading ? (
             <LoadingSpinner size="sm" message="추이 데이터 로딩 중..." />
           ) : historyQuery.error ? (
             <div>
@@ -201,14 +207,7 @@ export default function MbDetailPage() {
               </button>
             </div>
           ) : (
-            <>
-              {unsoldHidden && (
-                <p data-testid="mb-unsold-hidden-notice" className="text-sm text-gray-500 mb-3">
-                  {unsoldHiddenNotice(apt.region, apt.unsold_listed_as_of, historyQuery.data?.items ?? [])}
-                </p>
-              )}
-              <LazyUnsoldChart items={historyQuery.data?.items ?? []} />
-            </>
+            <LazyUnsoldChart items={historyQuery.data?.items ?? []} />
           )}
         </section>
 

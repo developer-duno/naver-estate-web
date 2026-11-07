@@ -60,6 +60,8 @@ export default function Article({
 
       <div className="mdx-content">{children}</div>
 
+      {/* '대출' 글(불법 대출 거르기 등)에는 가입 단추를 붙이지 않는다 — 다룬 도구가 없고, 대출 신청 단추처럼 읽힐 수 있다(세션 502) */}
+      {post.category !== "대출" && (
       <footer className="mt-12 pt-8 border-t border-gray-200">
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 sm:p-8 text-center">
           <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
@@ -76,6 +78,7 @@ export default function Article({
           </Link>
         </div>
       </footer>
+      )}
     </article>
   );
 }

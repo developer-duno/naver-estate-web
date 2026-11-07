@@ -1,4 +1,4 @@
-export type BlogCategory = "시세 분석" | "세금" | "미분양" | "도구 활용";
+export type BlogCategory = "시세 분석" | "세금" | "미분양" | "도구 활용" | "대출";
 
 export type BlogPost = {
   slug: string;

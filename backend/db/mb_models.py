@@ -45,6 +45,10 @@ class Apartment(Base):
     units: Mapped[int | None] = mapped_column(Integer)
     unsold: Mapped[int | None] = mapped_column(Integer)
     unsold_rate: Mapped[float | None] = mapped_column(Float)
+    # 미분양 수의 출처(미분양 소유, 2u 는 읽기만) — NULL·kosis·applyhome·hold·govlist.
+    # govlist + unsold NULL = 지자체 명단이 단지별 수를 공개하지 않음 (mb_query_helpers.is_unsold_hidden)
+    unsold_source: Mapped[str | None] = mapped_column(Text)
+    unsold_listed_as_of: Mapped[date | None] = mapped_column(Date)  # 그 명단의 기준일
     # 같은 단지 묶음 키(미분양 소유, 2u 는 읽기만) — 묶음 세대수 조회용 (db/mb_bundle_units.py, B22)
     complex_key: Mapped[str | None] = mapped_column(Text)
     completion: Mapped[str | None] = mapped_column(Text)

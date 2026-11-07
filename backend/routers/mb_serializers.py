@@ -1,6 +1,7 @@
 """mibunyang ORM → dict 직렬화 (10개 모델)"""
 
 from db.mb_queries import extract_base_name
+from db.mb_query_helpers import is_unsold_hidden
 
 
 def apartment_to_dict(a, bundle_units: dict[str, int] | None = None) -> dict:
@@ -23,6 +24,9 @@ def apartment_to_dict(a, bundle_units: dict[str, int] | None = None) -> dict:
         "bundle_units": (bundle_units or {}).get(str(a.id)),
         "unsold": a.unsold,
         "unsold_rate": a.unsold_rate,
+        # 미분양 수 비공개(지자체 명단에 있으나 단지별 수 미공개) — 판정은 서버 한 곳, FE 는 이 칸만 본다
+        "unsold_hidden": is_unsold_hidden(a.unsold_source, a.unsold),
+        "unsold_listed_as_of": a.unsold_listed_as_of.isoformat() if a.unsold_listed_as_of else None,
         "completion": a.completion,
         "heating": a.heating,
         "max_floor": a.max_floor,

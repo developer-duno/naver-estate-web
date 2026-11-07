@@ -5,6 +5,7 @@ import type { MbApartment, MbPrice } from "@/types";
 import { formatKoreanPrice, formatYearMonth, freshness } from "@/lib/format";
 import { displayUnits, normalizePp } from "@/lib/mb-format";
 import { formatHouseType } from "@/lib/mb-house-type";
+import { isUnsoldHidden, unsoldListAuthority } from "@/lib/mb-unsold-hidden";
 import { MbBundleUnitsTag } from "./MbBundleUnitsTag";
 import {
   BASIS,
@@ -126,7 +127,16 @@ export function PresaleSection({ apartment: a }: SectionProps) {
           value={finiteOrNull(a.unsold_rate) != null ? `${a.unsold_rate!.toFixed(1)}%` : undefined}
           basis={BASIS.unsoldRate}
         />
-        <InfoRow label="미분양 세대수" value={a.unsold != null ? `${a.unsold.toLocaleString()}세대` : undefined} />
+        <InfoRow
+          label="미분양 세대수"
+          value={
+            a.unsold != null
+              ? `${a.unsold.toLocaleString()}세대`
+              : isUnsoldHidden(a)
+                ? `비공개(${unsoldListAuthority(a.region)})`
+                : undefined
+          }
+        />
         <InfoRow label="발코니 무상" value={a.balcony_free ? "O" : a.balcony_free === false ? "X" : undefined} />
         <InfoRow label="옵션 무상" value={a.option_free ? "O" : a.option_free === false ? "X" : undefined} />
         <InfoRow label="캐시백" value={a.cashback != null ? formatKoreanPrice(a.cashback) : undefined} />

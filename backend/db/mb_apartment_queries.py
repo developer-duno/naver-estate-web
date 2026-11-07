@@ -15,6 +15,7 @@ from db.mb_models import (
 from db.mb_query_helpers import (
     _apply_keyword_filter,
     _paginate_deduped_apartments,
+    unsold_hidden_clause,
 )
 
 # presale_type 분류 (prod 실측 11종 전수 — 세션 314 워크플로 wf_0ed0ffe6 확증).
@@ -127,18 +128,20 @@ def get_unsold_by_region(
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[Apartment], int]:
-    """지역별 미분양 아파트 + 전체 수 (unsold > 0, 중복 제거 + 정렬 + 페이지네이션)
+    """지역별 미분양 아파트 + 전체 수 (unsold > 0 또는 미분양 수 비공개, 중복 제거 + 정렬 + 페이지네이션)
 
+    미분양 수 비공개(지자체 명단에 있으나 단지별 수 미공개 — is_unsold_hidden)도 목록·전체 수에 넣고,
+    어떤 정렬이든 숫자 있는 단지 뒤에 둔다(👤 2026-11-04 결정).
     PostgreSQL: SQL CTE + ROW_NUMBER + regexp_replace
     SQLite: Python fallback (CI 테스트 호환)
     반환: (페이지 행 목록, 중복 제거 후 전체 수)
     """
-    conditions = [Apartment.region == region, Apartment.unsold > 0]
+    conditions = [Apartment.region == region, or_(Apartment.unsold > 0, unsold_hidden_clause())]
     if gu:
         conditions.append(Apartment.gu == gu)
     _apply_keyword_filter(conditions, keyword)
 
-    return _paginate_deduped_apartments(db, conditions, sort_by, page, page_size)
+    return _paginate_deduped_apartments(db, conditions, sort_by, page, page_size, hidden_last=True)
 
 
 # ── 분양 단지 조회 ───────────────────────────────────────────

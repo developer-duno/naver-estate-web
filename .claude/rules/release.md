@@ -17,10 +17,12 @@
   검증은 라이브가 쓰는 파이썬으로 `python -c "import psycopg2; print(psycopg2.__version__)"` —
   `pip` 의 `Successfully installed` 출력은 그 자체로 증거가 아니다(설치 대상 인터프리터가 다를 수 있다).
   ⚠ 이 PC 파이썬은 **전역 공유**(`Python312`, 집서버 4프로젝트 동거)라 교체는 다른 프로젝트에도 적용된다 —
-  사장님 승인 후 진행하고, 되돌리기는 `pip install "<패키지>==<옛버전>"`.
+  사장님 승인 후 진행한다. **되돌리기도 같은 절차로**(켜진 채 pip 금지는 아래 ⛔ 그대로): `requirements.txt` 는 `>=` 범위라 PR 을 되돌려도 판이 안 내려간다 →
+  정지 전 저장한 `pip freeze` 에서 바뀐 부품만 `==` 로 적은 파일(예: `D:\db-backups
+aver-estate\pip-rollback-20261107.txt`)을 `RESTART_ARGS="-Requirements <그 파일>"` 로 주어 `restart_window_pip.sh` 를 한 번 더(세션 501 맹점 🟠1).
   ⛔ **"pip install → 재시작"을 켜진 서버에 손으로 치지 않는다** — 부품 교체 실행 정본 = 메모리 `scripts/restart_window.sh` 사본에서 RESTART 줄만
   `restart_with_pip.ps1` 로 바꿔 **한 번에**(게이트 → fetch·`pull --ff-only` → HEAD=origin/main → 정지 → 로컬 휠 설치 → import 확인 → finally 시작).
-  켜진 채 pip 하면 `.pyd` 잠김으로 반쯤 설치된다(`requirements.txt` 10~11행 주석 · 2026-09-25 8분 다운) · 정지 전 `pip freeze` 저장본이 되돌리기 목록(세션 499 맹점 🔴).
+  켜진 채 pip 하면 `.pyd` 잠김으로 반쯤 설치된다(`requirements.txt` 10~11행 주석 · 2026-09-25 8분 다운) · 정지 전 `pip freeze` 저장본이 되돌리기 목록(세션 499 맹점 🔴). 절차 전체(리허설 "Would install" 비교 → freeze → 한 번에 → exit 5 면 완주부터 → 창을 놓치면 다음 창)는 `restart_with_pip.ps1` 머리 주석이 정본(달력 행은 지워진다 — 세션 501 맹점 🟠2).
 - DB 마이그레이션 (`backend/db/migrations/V*.sql`)
 - backend 모듈 import 흐름 변경 (`main.py`, `routers/*`, `crawler/*`)
 

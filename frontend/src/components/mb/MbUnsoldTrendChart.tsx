@@ -33,23 +33,41 @@ function formatKoreanMonth(ym: string): string {
   return `${ym.slice(0, 4)}년 ${Number(ym.slice(4, 6))}월`;
 }
 
+export interface UnsoldChartPoint {
+  month: string;
+  unsold: number | null;
+  postCompletion: number | null;
+  change: number | null;
+}
+
+/**
+ * 정렬 → 기간 자르기 → 그림용 점 변환 (순수 함수).
+ * 빈 달은 null 로 둔다 — 0 으로 바꾸면 손님이 "0세대"로 읽는다(Recharts 는 null 에서 선을 끊고 막대를 그리지 않는다).
+ * 계열 표시 판정(hasPostCompletion·hasChange)도 자른 기간 기준 — 보이는 기간에 값이 없으면 범례에 빈 계열이 뜨지 않게.
+ */
+export function buildUnsoldChartData(items: MbUnsoldHistory[], period: number) {
+  const sorted = [...items].sort((a, b) => a.base_month.localeCompare(b.base_month));
+  const sliced = Number.isFinite(period) ? sorted.slice(-period) : sorted;
+  const data: UnsoldChartPoint[] = sliced.map((d) => ({
+    month: formatChartMonth(d.base_month),
+    unsold: d.unsold_count ?? null,
+    postCompletion: d.post_completion_unsold ?? null,
+    change: d.change ?? null,
+  }));
+  return {
+    data,
+    hasPostCompletion: sliced.some((d) => d.post_completion_unsold != null),
+    hasChange: sliced.some((d) => d.change != null),
+  };
+}
+
 export default function MbUnsoldTrendChart({ items }: Props) {
   const [period, setPeriod] = useState<number>(24);
 
-  const chartData = useMemo(() => {
-    const sorted = [...items].sort((a, b) => a.base_month.localeCompare(b.base_month));
-    const sliced = Number.isFinite(period) ? sorted.slice(-period) : sorted;
-    return sliced.map((d) => ({
-      month: formatChartMonth(d.base_month),
-      unsold: d.unsold_count ?? 0,
-      postCompletion: d.post_completion_unsold ?? 0,
-      change: d.change ?? 0,
-    }));
-  }, [items, period]);
-
-  // 값이 한 달도 없는 시리즈는 그리지 않는다 — 없는 값을 0 으로 그리면 "0세대"로 읽힌다
-  const hasPostCompletion = items.some((d) => d.post_completion_unsold != null);
-  const hasChange = items.some((d) => d.change != null);
+  const { data: chartData, hasPostCompletion, hasChange } = useMemo(
+    () => buildUnsoldChartData(items, period),
+    [items, period],
+  );
 
   if (items.length === 0) {
     return (

@@ -37,3 +37,7 @@
 ## 세션 489 갱신 (2026-10-31)
 
 - FE Vitest 2757 → **2799** (Test Files 286 → 288) — 세션 489 워크트리 s489-b2 전체 1회 2,798(그중 `scripts/__tests__/check-job-labels.test.mjs` 1건은 새 워크트리 첫 읽기 5초 초과 — 단독 재실행 14/14 통과) + 검사 뒤 비교표 직거래만 시험 1. 증가 = `lib/__tests__/range-price.test.ts` 13 · `PriceHistoryChart.scatter.test.tsx` 3 · AreaPriceB27·PriceHistoryChart·compare 등.
+
+## 세션 501 갱신 (2026-11-07)
+
+- FE Vitest 2799 → **2863** (Test Files 288 → 295) — 세션 501 워크트리 s501-b32(커밋 1053a3cf, PR #813 B32) 전체 1회 `Test Files 295 passed · Tests 2863 passed`(로그 b32-vitest-full.log). 증가분 = s489 뒤 합친 PR 들의 시험(#798·#799·#800~#805·#808·#809·#811·#813 등) · 이번 PR 몫은 `MbUnsoldTrendChart.test.tsx` 5건.

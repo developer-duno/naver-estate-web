@@ -27,7 +27,6 @@ const SEED = {
   breadcrumb: null,
   official_price: { year: OFFICIAL.year, items: OFFICIAL.items },
   subway: SUBWAY.stations,
-  at: Date.now(),
 };
 
 const header = {

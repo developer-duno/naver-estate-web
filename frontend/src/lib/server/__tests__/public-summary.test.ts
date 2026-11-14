@@ -95,8 +95,21 @@ describe("열쇠", () => {
 
   it("클라이언트 넘김 재료에 열쇠·안 보이는 칸(주차·등급·이웃) 0", () => {
     const seed = clientSeedOf(makeSummary());
-    expect(Object.keys(seed).sort()).toEqual(["at", "basis_ym", "breadcrumb", "complex_no", "official_price", "subway"]);
+    expect(Object.keys(seed).sort()).toEqual(["basis_ym", "breadcrumb", "complex_no", "official_price", "subway"]);
     expect(JSON.stringify(seed)).not.toContain(FAKE_KEY);
+  });
+
+  it("넘김 재료는 그린 시각과 무관하게 같다 — ISR 다시 그리기가 같은 결과면 쓰기 요금 0(세션 503)", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-11-01T00:00:00Z"));
+      const first = JSON.stringify(clientSeedOf(makeSummary()));
+      vi.setSystemTime(new Date("2026-11-02T09:30:00Z"));
+      const second = JSON.stringify(clientSeedOf(makeSummary()));
+      expect(second).toBe(first);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('이 모듈은 첫 줄이 import "server-only" · "use client" 파일은 lib/server 를 부르지 않는다', () => {

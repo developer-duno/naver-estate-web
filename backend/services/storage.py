@@ -14,10 +14,12 @@ SIGNED_URL_EXPIRY = 3600  # 1시간
 
 
 def _headers() -> dict:
-    return {
-        "apikey": SUPABASE_SERVICE_KEY,
-        "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
-    }
+    # 새 secret 열쇠(sb_secret_…)는 JWT 가 아니라 apikey 머리말에만 보낸다(Bearer 에 넣으면 Invalid JWT).
+    # 옛 JWT 열쇠(eyJ…)는 지금 동작 그대로 유지. https://supabase.com/docs/guides/api/api-keys
+    headers = {"apikey": SUPABASE_SERVICE_KEY}
+    if SUPABASE_SERVICE_KEY.startswith("eyJ"):
+        headers["Authorization"] = f"Bearer {SUPABASE_SERVICE_KEY}"
+    return headers
 
 
 def upload_license_doc(path: str, content: bytes, content_type: str) -> dict:

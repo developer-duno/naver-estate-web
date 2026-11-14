@@ -96,14 +96,12 @@ export default function ConsumerComplexView({ complex, aside, footer, endYm, see
     queryFn: () => getOfficialPrices(no),
     staleTime: officialSeed ? SEED_STALE_MS : 60_000,
     initialData: officialSeed,
-    initialDataUpdatedAt: officialSeed ? seed?.at : undefined,
   });
   const subwayQuery = useQuery({
     queryKey: queryKeys.complexSubway(no),
     queryFn: () => getComplexSubway(no),
     staleTime: subwaySeed ? SEED_STALE_MS : 60_000,
     initialData: subwaySeed,
-    initialDataUpdatedAt: subwaySeed ? seed?.at : undefined,
   });
   const hoodQuery = useQuery({ queryKey: queryKeys.complexNeighborhood(no), queryFn: () => getComplexNeighborhood(no), staleTime: 60_000 });
   // 오피스텔은 정부 실거래를 받지 않는다 — 공개 가격 기록을 부르지 않고 대출 카드도 숨긴다(보완 F4)

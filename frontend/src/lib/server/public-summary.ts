@@ -56,7 +56,7 @@ export function clientSeedOf(s: PublicSummary): ClientSeed {
     breadcrumb: s.breadcrumb,
     official_price: s.official_price,
     subway: s.subway,
-    // 서버가 그린 시각 — 화면 쿼리의 initialDataUpdatedAt(ISR 이면 그 장을 그린 시각)
-    at: Date.now(),
+    // ⚠ 그린 시각(Date.now 등)을 넣지 말 것 — ISR 은 다시 그린 결과가 전과 같으면 쓰기 요금이 없는데,
+    // 시각 하나로 매번 "바뀐 장"이 돼 단지 1.6만 장이 다시 그릴 때마다 쓰기가 붙었다(세션 503 · Vercel 문서 "Check that you're not using new Date()").
   };
 }

@@ -78,6 +78,4 @@ export interface PublicSummary {
 /** 서버가 클라이언트 화면에 넘기는 재료 — 화면에 쓰는 칸만(lib/server/public-summary.ts clientSeedOf) */
 export type ClientSeed = Pick<PublicSummary, "basis_ym" | "breadcrumb" | "official_price" | "subway"> & {
   complex_no: string;
-  /** 서버가 그린 시각(ms) — initialDataUpdatedAt */
-  at: number;
 };

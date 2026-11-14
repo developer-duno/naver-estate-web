@@ -49,7 +49,7 @@ FE 만 변경된 PR (frontend/*) 은 본 룰 면제.
 | **orchestrator.pid mtime** | `ls -la scripts/orchestrator.pid` 또는 `stat -c '%y' scripts/orchestrator.pid` | 머지 시각 이후 |
 | **backend.log 첫 줄 시각** | `head -1 scripts/backend.log` (uvicorn 부팅 시각) | 머지 시각 이후 |
 | **crawl_jobs 최신 row** | 해당 PR 변경한 잡의 최신 row 가 새 코드 기대 동작 일치 (예: PR #61 = `complex_metric` total=1000) | 새 코드 동작 |
-| **관리자 화면 표시값(라이브 GET)** | `.env` SUPABASE_JWT_SECRET 로 admin 토큰 발급 후 `GET /api/admin/scheduler-status` → `jobs[].schedule` | 새 코드 표시값 (정적 분석·pytest 로 대체 불가 — 라이브만 ground truth, §5-1 답습) |
+| **관리자 화면 표시값(라이브 GET)** | 시험 관리자 계정 qa-admin 을 켜고(사장님 PowerShell 1줄 — 메모리 `project_qa_admin_account`) 그 계정으로 로그인한 세션에서 `GET /api/admin/scheduler-status` → `jobs[].schedule` · 끝나면 반드시 끔. ⛔ `.env` 비밀값으로 admin 토큰을 직접 서명하는 길은 쓰지 않는다(10-27 가짜 관리자 정리로 승인된 관리자 줄 없음 · 운영 로그인 만들어 내기 금지 — 아래 §3-0 「10-27 이후엔 관리자 줄이 없어」 문장과 같은 사정) | 새 코드 표시값 (정적 분석·pytest 로 대체 불가 — 라이브만 ground truth, §5-1 답습) |
 
 위 지표가 머지 시각 이후로 모두 갱신되어야 새 코드 반영 확정. ⚠ 표시값 변경 PR (예: SSOT 자동생성) 은 trigger 동작이 새값이어도 **화면 표시는 표시 모듈 본문이 옛 코드라 옛값 잔존** 가능 — 4번째 지표(라이브 GET) 필수 (세션 257 사고).
 
@@ -249,7 +249,7 @@ Startup BAT 시절엔 로그인해야 기동 — infra.md §자동 시작 사건
 - lazy import (`함수 내부 from X import`) 는 X 모듈만 지연 — **그 import 문을 담은 호출처 모듈 본문(함수 정의)은 부팅 때 옛 버전으로 메모리 상주**. 옛 프로세스의 옛 함수는 새 lazy import 를 애초에 호출하지 않는다.
 - pytest 통과 = **디스크 코드 self-consistency** 증명 (테스트는 디스크 fresh import + fresh scheduler 생성). 부팅한 프로세스 메모리 상태와 무관.
 
-판정은 **라이브 실측**으로만: 살아있는 엔드포인트를 실제 호출 (`.env` SUPABASE_JWT_SECRET 로 admin 토큰 발급 → GET scheduler-status) 하거나, backend.log 의 trigger/next-run 로그로 현재 프로세스의 실제 등록값을 본다. 글로벌 `[[feedback-browser-measurement-overrides-plan]]` 와 같은 패턴.
+판정은 **라이브 실측**으로만: 살아있는 엔드포인트를 실제 호출 (시험 관리자 계정 qa-admin 로그인 → GET scheduler-status · §2 표 4번째 행) 하거나, backend.log 의 trigger/next-run 로그로 현재 프로세스의 실제 등록값을 본다. 글로벌 `[[feedback-browser-measurement-overrides-plan]]` 와 같은 패턴.
 
 ⚠ **crawler_monitor(크롤링 모니터(서버 일감 점검)) 잡의 실동작 확인은 위 두 방법이 전부 무효**다(세션 391 실측) — monitor 는 CrawlJob 을 안 남겨 scheduler-status 의 last_run/runs 가 영구 null/0 이고, 정상 스캔은 로그도 안 찍는다(무음 설계). 유일한 유효 경로 = prod `pg_stat_user_tables` 에서 freshness 대상 4테이블(trades·complex_price_history·crawl_jobs·complexes)의 **동시 스캔 타임스탬프가 monitor 주기(10분) 간격으로 반복**되는지 확인.
 

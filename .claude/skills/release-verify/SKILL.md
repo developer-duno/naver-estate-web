@@ -48,8 +48,8 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8002/health   # 기대
 
 **④ 관리자 라이브 GET** (표시값 변경 PR 전용 — 정적분석·pytest 로 대체 불가)
 ```bash
-# .env SUPABASE_JWT_SECRET 로 admin 토큰(HS256, aud=authenticated, role 클레임) 발급 후
-# localhost:8002 직접 호출 (api.2u.pe.kr 는 Cloudflare 1010 봇차단)
+# 시험 관리자 계정 qa-admin 을 켜고(사장님 PowerShell — 메모리 project_qa_admin_account) 로그인해 받은 토큰으로
+# localhost:8002 직접 호출 · 끝나면 반드시 끔 · ⛔ .env 비밀값으로 토큰 직접 서명 금지(release.md §2 표 4번째 행) (api.2u.pe.kr 는 Cloudflare 1010 봇차단)
 curl -s http://localhost:8002/api/admin/scheduler-status -H "Authorization: Bearer <TOKEN>"
 # 기대: jobs[].schedule 이 새 코드 표시값
 # 함정: trigger 동작은 새값이나 표시 모듈 본문이 옛 코드면 옛값 잔존 = 라이브만 ground truth (세션 257)

@@ -29,7 +29,7 @@ description: 코드 변경이 라이브 backend 에 실제 반영됐는지, 새 
 
 ### 1️⃣ 살아있는 엔드포인트 호출 → 응답으로 판정
 
-`.env SUPABASE_JWT_SECRET` 로 admin 토큰(HS256, aud=authenticated, role 클레임) 발급 후 **localhost:8002 직접 호출**(api.2u.pe.kr 는 Cloudflare 1010 봇차단).
+시험 관리자 계정 qa-admin 을 켜고(사장님 PowerShell 1줄 — 메모리 `project_qa_admin_account`) 그 계정으로 로그인해 받은 토큰으로 **localhost:8002 직접 호출**(api.2u.pe.kr 는 Cloudflare 1010 봇차단) · 끝나면 반드시 끔. ⛔ `.env` 비밀값으로 토큰을 직접 서명하지 않는다(10-27 가짜 관리자 정리로 승인된 관리자 줄 없음 · 운영 로그인 만들어 내기 금지 — release.md §2 표 4번째 행).
 
 ```bash
 curl -s http://localhost:8002/api/admin/scheduler-status -H "Authorization: Bearer <TOKEN>"

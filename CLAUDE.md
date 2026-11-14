@@ -102,7 +102,7 @@ cd frontend && npx tsc --noEmit && npm run lint && npm test \
 | 그 커밋 배포 확인 | `gh api repos/developer-duno/naver-estate-web/commits/<전체 해시>/status --jq '.state, (.statuses[]\|"\(.context) \(.state)")'` → `success` + `Vercel success`(맨 위 기록 아님 — 해시로). BE 전용 커밋은 Vercel 빌드가 없어 `statuses` 가 빈다(정상) | release.md §2 4중 지표(`scripts/orchestrator.pid` mtime · `scripts/backend.log` 첫 줄 시각 · 해당 잡 crawl_jobs · 관리자 라이브 GET) |
 | 라이브 확인 주소(기대) | `https://2u.pe.kr/` 200 · `/complex/13543` 200(비로그인 열림) · `/admin` 307 · `/search/favorites` 200 | `https://api.2u.pe.kr/health` 200 · `/health/db` `{"status":"ok","db":"ok"}` · `/api/live/article/1/detail` 401(비로그인 잠금 — 200 이면 결함) |
 | 바뀐 글자 | 서버 렌더 글자 = `curl.exe -s https://2u.pe.kr/<경로> \| grep -c "<글자>"` · 클라 번들·버튼은 playwright(글로벌 스킬 `live-verify`, chromium 데스크톱 + webkit 390px) | 바뀐 API 의 라이브 GET 응답 칸 |
-| 로그인 뒤 화면 | ① 시험 관리자 계정 qa-admin(메모리 `project_qa_admin_account` — 켜고 끄기 SQL · 끝나면 반드시 끔) ② 비로그인 응답·번들 grep ③ 사장님이 연 별도 크롬에 로그인 뒤 Claude 조종 ④ 사장님 새로고침 확인 | 관리자 API 는 release.md §2 의 admin 토큰 발급(라이브 `.env` JWT) |
+| 로그인 뒤 화면 | ① 시험 관리자 계정 qa-admin(메모리 `project_qa_admin_account` — 켜고 끄기 SQL · 끝나면 반드시 끔) ② 비로그인 응답·번들 grep ③ 사장님이 연 별도 크롬에 로그인 뒤 Claude 조종 ④ 사장님 새로고침 확인 | 관리자 API 는 왼쪽 ① qa-admin 로그인으로(release.md §2 표 4번째 행 · `.env` 비밀값으로 토큰 직접 서명 금지) |
 
 > 보고는 숫자로(응답 코드·grep 개수·배포 상태 글자). 쿼터를 깎는 경로(크롤·시세 수집)의 라이브 확인은 `browser-automation-isolation.md` §실계정 부수효과(admin 계정).
 

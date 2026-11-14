@@ -109,7 +109,8 @@ async function _fetchApiImpl<T>(path: string, options?: RequestInit & { timeoutM
           const {
             data: { session },
           } = await supabase.auth.getSession();
-          if (!session) {
+          // getSession 을 기다리는 사이 다른 401 이 먼저 로그아웃을 시작했을 수 있어 깃발을 한 번 더 본다.
+          if (!session && !_isLoggingOut) {
             _isLoggingOut = true;
             await supabase.auth.signOut();
             window.location.href = "/login";

@@ -41,3 +41,8 @@
 ## 세션 501 갱신 (2026-11-07)
 
 - FE Vitest 2799 → **2863** (Test Files 288 → 295) — 세션 501 워크트리 s501-b32(커밋 1053a3cf, PR #813 B32) 전체 1회 `Test Files 295 passed · Tests 2863 passed`(로그 b32-vitest-full.log). 증가분 = s489 뒤 합친 PR 들의 시험(#798·#799·#800~#805·#808·#809·#811·#813 등) · 이번 PR 몫은 `MbUnsoldTrendChart.test.tsx` 5건.
+
+## 세션 509 갱신 (2026-11-15)
+
+- FE Vitest 2863 → **2940** (Test Files 295 → 304) — main 커밋 4786610e(#832 홈 개편 1차) 의 CI run 43713135801 Frontend CI 잡 `Test Files 304 passed · Tests 2940 passed`(2026-11-15 21:20 KST). 증가분 = s501 뒤 합친 PR #813~#832(dependabot 포함, `git log 1053a3cf..4786610e`).
+- FE E2E 표기 21 → **22 파일**(`git ls-tree -r --name-only origin/main frontend/e2e | grep -c '\.spec\.ts$'`) — s501 뒤 새 spec 0개라 늘어난 게 아니라 **옛 표기가 낡았던 것**. 기준 그림 PNG 22장 그대로(11-15 전부 재촬영, run 43711234951).

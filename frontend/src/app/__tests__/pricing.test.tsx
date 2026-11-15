@@ -60,15 +60,15 @@ describe("/pricing 마케팅 페이지", () => {
     expect(screen.getByText("공공 데이터")).toBeInTheDocument();
   });
 
-  it("PR 7a — 데이터 출처 6 배지가 모두 렌더된다", () => {
+  it("데이터 출처 5 배지가 모두 렌더된다(세션 508: 경찰청 범죄통계 뺌 — 범죄 점수 수집은 세션 473 에 삭제)", () => {
     renderPage();
-    // 6 출처 (DataSourceBadges 컴포넌트 답습)
+    // 5 출처 (DataSourceBadges 컴포넌트 답습)
     expect(screen.getByText("네이버 부동산")).toBeInTheDocument();
     expect(screen.getByText("국토교통부")).toBeInTheDocument();
     expect(screen.getByText("에어코리아")).toBeInTheDocument();
     expect(screen.getByText("NEMC")).toBeInTheDocument();
     expect(screen.getByText("CPMS")).toBeInTheDocument();
-    expect(screen.getByText("경찰청")).toBeInTheDocument();
+    expect(screen.queryByText("경찰청")).not.toBeInTheDocument();
   });
 
   it("PR 7a — FAQ 7 항목 (데이터 출처 / 결제 보안 추가)", () => {

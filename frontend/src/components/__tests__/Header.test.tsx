@@ -9,11 +9,12 @@ import Header from "../Header";
 import { LOCKED_PATHS } from "@/lib/locked-paths";
 
 describe("Header 기본", () => {
-  it("로고 텍스트 표시", async () => {
+  it("로고 텍스트 표시 — 「2u」 + 주황 「부동산」(세션 508)", async () => {
     render(<Header />);
     await waitFor(() => {
-      expect(screen.getByText("2u부동산")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "2u부동산 홈" })).toHaveTextContent("2u부동산");
     });
+    expect(screen.getByText("부동산").className).toContain("text-brand-orange");
   });
 
   it("네비게이션 영역에 홈, 미분양 텍스트 포함 (세션 314: 검색 메뉴 제거, 홈이 검색 겸함)", async () => {
@@ -71,7 +72,7 @@ describe("Header 네비게이션", () => {
   it("요금제 메뉴가 없다 (세션 400: 무료 전환으로 /pricing 잠김)", async () => {
     render(<Header />);
     await waitFor(() => {
-      expect(screen.getByText("2u부동산")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "2u부동산 홈" })).toBeInTheDocument();
     });
     expect(screen.queryByText("요금제")).not.toBeInTheDocument();
     expect(document.querySelector('a[href="/pricing"]')).toBeNull();
@@ -99,11 +100,11 @@ describe("Header 네비게이션", () => {
     expect(header?.className).toContain("sticky");
   });
 
-  it("로고 SVG + aria-label 존재", () => {
+  it("로고 aria-label 존재 · 남색 바탕(세션 508: 옛 SVG 아이콘은 글자 로고로 바뀜)", () => {
     render(<Header />);
     const logoLink = screen.getByRole("link", { name: "2u부동산 홈" });
     expect(logoLink).toBeInTheDocument();
-    expect(logoLink.querySelector("svg")).not.toBeNull();
+    expect(document.querySelector("header")?.className).toContain("bg-brand-navy");
   });
 
   it("최대 너비 컨테이너 존재", () => {

@@ -1,66 +1,48 @@
 import Link from "next/link";
-import { TrendingDown, Calculator, Newspaper, HelpCircle } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 
 /**
- * HomeToolCards — 홈 도구 발견성 카드 4종 (미분양/계산기/블로그/도움말)
- * 순수 표현 컴포넌트(데이터 페칭 없음). 검색 영역 아래 2×2 그리드로 진입점 노출.
- * 설계: docs/superpowers/specs/2026-06-08-home-tool-cards-design.md
+ * HomeToolCards — 홈 「계산기 모음」 6칸(세션 508 · 승인 항목 12). 후순위 대출 한도는 주황 강조 + 기존 계산기 5종.
+ * 순수 표현 컴포넌트(데이터 페칭 없음). 옛 4칸(미분양·계산기·블로그·도움말)은 머리 메뉴·가이드 칸으로 옮겨 갔다.
  */
 type ToolCard = {
   href: string;
-  Icon: LucideIcon;
   title: string;
   desc: string;
-  aria: string;
+  accent?: boolean;
 };
 
 const CARDS: ToolCard[] = [
-  {
-    href: "/mibunyang",
-    Icon: TrendingDown,
-    title: "미분양 현황",
-    desc: "전국 미분양·지역 통계",
-    aria: "미분양 현황 — 전국 미분양·지역 통계",
-  },
-  {
-    href: "/tools",
-    Icon: Calculator,
-    title: "부동산 계산기",
-    desc: "세금·중개수수료·평 변환",
-    aria: "부동산 계산기 — 세금·중개수수료·평 변환",
-  },
-  {
-    href: "/blog",
-    Icon: Newspaper,
-    title: "블로그",
-    desc: "시세·세금 분석 글",
-    aria: "블로그 — 시세·세금 분석 글",
-  },
-  {
-    href: "/help",
-    Icon: HelpCircle,
-    title: "도움말",
-    desc: "사용법·자주 묻는 질문",
-    aria: "도움말 — 사용법·자주 묻는 질문",
-  },
+  { href: "/tools/second-mortgage", title: "후순위 대출 한도", desc: "추가 한도 · 매달 이자", accent: true },
+  { href: "/tools/acquisition-tax", title: "취득세", desc: "살 때 내는 세금" },
+  { href: "/tools/transfer-tax", title: "양도소득세", desc: "팔 때 내는 세금" },
+  { href: "/tools/property-tax", title: "보유세", desc: "재산세 · 종부세" },
+  { href: "/tools/brokerage-fee", title: "중개수수료", desc: "복비 계산" },
+  { href: "/tools/area-converter", title: "평 · ㎡ 변환", desc: "면적 계산" },
 ];
 
 export default function HomeToolCards() {
   return (
-    <div className="grid grid-cols-2 gap-3">
-      {CARDS.map(({ href, Icon, title, desc, aria }) => (
-        <Link
-          key={href}
-          href={href}
-          aria-label={aria}
-          className="rounded-lg border bg-white p-4 hover:bg-gray-50 transition-colors"
-        >
-          <Icon aria-hidden className="h-5 w-5 text-blue-600" />
-          <span className="mt-2 block text-sm font-semibold text-gray-800">{title}</span>
-          <p className="mt-0.5 text-xs text-gray-500">{desc}</p>
-        </Link>
-      ))}
-    </div>
+    <section aria-labelledby="home-tools">
+      <h2 id="home-tools" className="text-[22px] font-black tracking-tight text-brand-navy sm:text-[26px]">
+        계산기 모음
+      </h2>
+      <div className="mt-4 grid grid-cols-2 gap-2.5 text-[15px] font-bold sm:mt-5 sm:grid-cols-[repeat(auto-fill,minmax(170px,1fr))] sm:gap-3 sm:text-base">
+        {CARDS.map(({ href, title, desc, accent }) => (
+          <Link
+            key={href}
+            href={href}
+            aria-label={`${title} — ${desc}`}
+            className={`rounded-xl px-3.5 py-[18px] text-brand-navy hover:underline sm:rounded-[14px] sm:px-[18px] sm:py-[22px] ${
+              accent ? "bg-brand-orange" : "bg-white"
+            }`}
+          >
+            {title}
+            <span className={`mt-0.5 block text-xs font-medium sm:text-[13px] ${accent ? "text-brand-navy" : "text-brand-muted"}`}>
+              {desc}
+            </span>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }

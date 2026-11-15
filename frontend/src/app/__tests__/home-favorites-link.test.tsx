@@ -24,6 +24,7 @@ vi.mock("@/lib/api", () => ({
   getRegions: vi.fn().mockResolvedValue({}),
   searchComplexes: vi.fn().mockResolvedValue({ complexes: [] }),
   getComplexesByRegion: vi.fn().mockResolvedValue({ complexes: [] }),
+  getRegionHubTrend: vi.fn().mockResolvedValue(null), // 홈 「지역 시세 흐름」(세션 508)
 }));
 
 vi.mock("@/hooks/useSessionToken", () => ({

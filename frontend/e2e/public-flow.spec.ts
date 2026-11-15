@@ -133,10 +133,13 @@ test.describe("public visual regression", () => {
     await applyPublicMocks(page);
     await page.goto("/");
 
-    // 홈 h1 = "아파트·오피스텔 실거래가·시세 조회"(세션 484 PR 3c-1a, 결정 31)
-    await expect(page.getByRole("heading", { name: /아파트.*실거래가.*시세 조회/ })).toBeVisible();
-    await expect(page.getByText("단지", { exact: true })).toBeVisible();
-    await expect(page.getByText("매물", { exact: true })).toBeVisible();
+    // 홈 h1 = "우리 아파트, 요즘 얼마에 거래됐을까요"(세션 508 홈 개편 — 단지·매물 숫자 상자는 뺐다)
+    await expect(page.getByRole("heading", { level: 1, name: /우리 아파트, 요즘 얼마에 거래됐을까요/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "집을 담보로 더 받을 수 있는 한도부터 확인하세요" })).toBeVisible();
+    // 촬영 전 대기 — 「지역 시세 흐름」 카드가 로딩을 끝내고 굳은 뒤(자료·빈 자료·오류 세 갈래 중 하나)
+    await expect(
+      page.getByTestId("trend-empty").or(page.getByTestId("trend-error")).or(page.getByRole("img", { name: /중위 매매가 최근/ })),
+    ).toBeVisible({ timeout: 15_000 });
 
     await expect(page).toHaveScreenshot("home.png", {
       fullPage: true,

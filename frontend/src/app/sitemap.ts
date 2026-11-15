@@ -11,11 +11,11 @@ import { getPublicUpdates } from "@/lib/api/opinions";
  * 근거 커밋(세션 507 `git log -p` 판정): / = 3e0bfe30(비로그인 '즐겨찾기 매물' 링크 숨김) · /tools = 9b0f2292(안내 문단) ·
  * 계산기 넷 = 30dcf3a6(바닥 안내 글) · 보유세 = 26af5c99(입력 칸 이름) · /help = c6d3b2c7('의견 보내기' 절) ·
  * /terms·/privacy = 9b0f2292(제목·설명 신설).
- * 세션 508: /tools(6종으로 제목·설명) · /tools/second-mortgage(새 장) = 2026-11-15.
+ * 세션 508: /(홈 개편) · /tools(6종으로 제목·설명) · /tools/second-mortgage(새 장) = 2026-11-15.
  * /blog 는 공개 글 중 가장 최근 발행일, /updates 는 updatesLastModified() 가 정한다(이 표에 없음).
  */
 const STATIC_PAGE_LASTMOD = {
-  "/": "2026-11-02",
+  "/": "2026-11-15",
   "/tools": "2026-11-15",
   "/tools/second-mortgage": "2026-11-15",
   "/tools/brokerage-fee": "2026-06-09",

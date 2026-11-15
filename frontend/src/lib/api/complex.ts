@@ -158,6 +158,18 @@ export async function getRegionTrend(complexNo: string): Promise<RegionTrend> {
 }
 
 /**
+ * 시군구 하나의 부동산원 중위 매매가·전세가율 흐름 — 홈 「지역 시세 흐름」 카드용(세션 508).
+ * GET /api/regions/{시군구5}/hub(인증 없음 — 서버 렌더 쪽 fetchRegionHub 와 같은 주소)에서 region_trend 만 쓴다.
+ * 지역 통계가 없으면 null. 실패(404 포함)는 삼키지 않고 throw(error-propagation 규칙,
+ * 회귀 가드: lib/__tests__/region-hub-trend-error.test.ts). direct 폴백 없음.
+ */
+export async function getRegionHubTrend(sigungu5: string): Promise<RegionTrend | null> {
+  if (!isBackendAvailable()) throw new Error(BACKEND_DOWN_MSG);
+  const hub = await fetchApi<{ region_trend: RegionTrend | null }>(`/api/regions/${encodeURIComponent(sigungu5)}/hub`);
+  return hub.region_trend ?? null;
+}
+
+/**
  * 단지명 DB 검색 (GET /api/complexes/search — ILIKE, 네이버 호출 0, 무게이트 — 비로그인은 매물 수 등 걷어낸 응답)
  *
  * searchComplexes 와 달리 실시간 네이버 크롤(/api/live/search)을 타지 않는다.

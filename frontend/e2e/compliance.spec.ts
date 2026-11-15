@@ -25,7 +25,7 @@ test.describe("광고법 컴플라이언스 회귀 가드", () => {
     ).toBeVisible();
   });
 
-  test("메인 H1 — '아파트·오피스텔 실거래가·시세 조회' 정합", async ({
+  test("메인 H1 — '우리 아파트, 요즘 얼마에 거래됐을까요' 정합 (세션 508 홈 개편)", async ({
     page,
   }) => {
     await applyPublicMocks(page);
@@ -33,7 +33,7 @@ test.describe("광고법 컴플라이언스 회귀 가드", () => {
 
     await expect(
       page.getByRole("heading", { level: 1 }),
-    ).toContainText("아파트·오피스텔 실거래가·시세 조회");
+    ).toContainText("우리 아파트, 요즘 얼마에 거래됐을까요");
   });
 
   test("signup 마케팅 수신 동의 체크박스 — 개인정보보호법 정합", async ({

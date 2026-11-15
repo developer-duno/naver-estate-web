@@ -50,7 +50,7 @@ const cardTitleClass = "text-lg font-black tracking-tight text-brand-navy sm:tex
 export default function BrokerHubPage() {
   return (
     <div className="-mb-16 bg-brand-bg pb-16">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
         <section className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-brand-navy">중개 실무</h1>
           <p className="mt-2 text-sm sm:text-base text-brand-muted leading-relaxed">

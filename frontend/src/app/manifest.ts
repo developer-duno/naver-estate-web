@@ -17,6 +17,17 @@ export default function manifest(): MetadataRoute.Manifest {
         sizes: "32x32",
         type: "image/png",
       },
+      // 홈 화면·앱 설치용 큰 그림(세션 509) — public/ 정적 PNG · scripts/gen-app-icons.py 로 만든다
+      {
+        src: "/icon-192.png",
+        sizes: "192x192",
+        type: "image/png",
+      },
+      {
+        src: "/icon-512.png",
+        sizes: "512x512",
+        type: "image/png",
+      },
     ],
   };
 }

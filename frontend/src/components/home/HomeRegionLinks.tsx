@@ -22,7 +22,7 @@ export default function HomeRegionLinks({ enabled = REGION_PAGES_ENABLED }: { en
           시·군·구 전체 보기 →
         </Link>
       </div>
-      <div className="mt-4 grid grid-cols-4 gap-2 text-center text-[15px] font-bold sm:mt-5 sm:grid-cols-[repeat(auto-fill,minmax(120px,1fr))] sm:gap-2.5 sm:text-base">
+      <div className="mt-4 grid grid-cols-4 gap-2 text-center text-[15px] font-bold sm:mt-5 sm:grid-cols-9 sm:gap-2.5 sm:text-base">
         {SIDO_NAMES.map((sido) => (
           <Link
             key={sido}

@@ -10,6 +10,7 @@ import { useFavoritePriceChanges } from "@/hooks/useFavoritePriceChanges";
 /**
  * 홈 즐겨찾기 — 단지 칩(앞 10개 + 더보기) · 가격 변동 점 · 「즐겨찾기 매물」 링크(토큰 있을 때만).
  * 세션 508 에 page.tsx HomeExtras 에서 그대로 옮겼다(동작 그대로, 색만 새 토큰).
+ * 세션 509 부터 남색 검색 상자(HomeSearchBox) 안 최근 검색 칩 바로 아래에 그린다.
  */
 export default function HomeFavorites() {
   const { favorites } = useFavorites();
@@ -24,12 +25,16 @@ export default function HomeFavorites() {
     tokenReady,
   );
 
+  // 세션 509(B36 ①) — 남색 검색 상자 안으로 옮김. 단지 즐겨찾기 0개면 줄을 통째로 안 그린다(안내 문장 없음).
+  // 단 로그인한 분은 매물 즐겨찾기로 가는 홈 입구가 이 링크 하나뿐이라 링크만은 남긴다.
+  if (favorites.length === 0 && !sessionToken) return null;
+
   return (
-    <section aria-label="즐겨찾기" className="space-y-3">
-      <div>
-        <span className="mb-1.5 block text-xs font-semibold text-brand-muted">즐겨찾기</span>
-        {favorites.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
+    <section aria-label="즐겨찾기" className="mt-4 space-y-3">
+      {favorites.length > 0 && (
+        <div>
+          <span className="mb-1.5 block text-xs font-semibold text-brand-on-navy-muted">즐겨찾기</span>
+          <div className="flex flex-wrap justify-start gap-1.5">
             {visibleFavorites.map((f) => (
               // 진짜 링크(세션 483 PR 3b — 단지로 가는 <a href>) · 칩 안에 다른 버튼이 없어 칩 전체가 링크
               <Link
@@ -58,17 +63,15 @@ export default function HomeFavorites() {
               </button>
             )}
           </div>
-        ) : (
-          <p className="text-xs text-brand-muted">관심 단지의 ★ 버튼을 누르면 여기에 모입니다.</p>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 매물은 로그인 뒤 기능 — 토큰이 있을 때만 그린다(비로그인·토큰 확인 전엔 숨김, 세션 493) */}
       {sessionToken && (
         <div>
           <Link
             href="/search/favorites"
-            className="inline-flex items-center gap-1 text-xs font-medium text-brand-orange-text hover:underline"
+            className="inline-flex items-center gap-1 text-xs font-medium text-white hover:underline"
           >
             <span className="text-brand-orange">&#9733;</span>
             즐겨찾기 매물{articleFavorites.length > 0 ? ` (${articleFavorites.length})` : ""} &#8594;

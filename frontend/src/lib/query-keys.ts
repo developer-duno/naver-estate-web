@@ -2,7 +2,6 @@ import type { ArticleFilters } from "@/types";
 
 export const queryKeys = {
   // Public
-  stats: ["stats"] as const,
   regions: ["regions"] as const,
 
   // Search

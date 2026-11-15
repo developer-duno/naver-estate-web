@@ -12,8 +12,8 @@
 - **서버 데이터**: `useQuery` / `useMutation` 사용 (캐싱, 중복 제거, 자동 재시도)
   ```tsx
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: queryKeys.stats,
-    queryFn: () => getStats(),
+    queryKey: queryKeys.regions,
+    queryFn: () => getRegions(),
   });
   ```
 - **폴링**: `refetchInterval` 옵션 (setInterval 대신)

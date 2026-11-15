@@ -59,8 +59,6 @@ export interface EmptySearchApi {
 }
 
 interface Props {
-  /** 결과 영역 위에 끼울 부가 영역 (검색 결과 없을 때 홈의 도구카드 등). */
-  emptyExtra?: ReactNode;
   /** 있으면 검색어 없는 빈 화면 전체를 이것으로 그린다(매물유형 탭·필터·검색 카드 대신 — 홈 전용, 세션 508) */
   renderEmpty?: (api: EmptySearchApi) => ReactNode;
   /** 빈 화면이 아닐 때(결과·로딩·오류) 바깥 상자 클래스 */
@@ -73,7 +71,7 @@ interface Props {
  * 검색 시 현재 pathname(usePathname) 기준으로 URL 갱신 → 홈에선 /?q=, 검색에선 /search?q=.
  * (세션 314 — search/page.tsx SearchContent 본문 이식, 동작 보존)
  */
-export default function SearchExperience({ emptyExtra, renderEmpty, className }: Props) {
+export default function SearchExperience({ renderEmpty, className }: Props) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname() || "/";
@@ -409,8 +407,6 @@ export default function SearchExperience({ emptyExtra, renderEmpty, className }:
             <h2 className="text-lg font-semibold mb-3">지역 선택</h2>
             <RegionSelector onSearch={handleInlineRegionSearch} />
           </div>
-
-          {emptyExtra}
 
           <RecentSearchChips items={recentItems} onSelect={goToRecent} />
         </div>

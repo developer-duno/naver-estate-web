@@ -2,19 +2,9 @@
  * 통계/분석 API (DB 통계, 지역, 면적, 가격)
  */
 
-import type { DbStats, Regions, PyeongDetail, PriceStats, PriceHistoryResponse } from "@/types";
+import type { Regions, PyeongDetail, PriceStats, PriceHistoryResponse } from "@/types";
 import * as direct from "@/lib/api-direct";
 import { fetchApi, isBackendAvailable } from "./core";
-
-/** DB 통계 */
-export async function getStats() {
-  if (!isBackendAvailable()) return direct.getStatsDirect();
-  try {
-    return await fetchApi<DbStats>(`/api/stats`);
-  } catch {
-    return direct.getStatsDirect();
-  }
-}
 
 /** 지역 목록 */
 export async function getRegions() {

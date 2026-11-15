@@ -15,7 +15,6 @@ import {
   getComplexesByRegionDirect,
   searchComplexesDirect,
   getArticlesDirect,
-  getStatsDirect,
   getRegionsDirect,
 } from "@/lib/api-direct";
 
@@ -72,12 +71,6 @@ describe("api-direct — V031 anon 차단 시 silent 빈 배열 대신 throw (�
       mockResult = { data: null, count: null, error: PERMISSION_DENIED };
       await expect(getRegionsDirect()).rejects.toThrow();
     });
-
-    it("getStatsDirect 는 error 시 throw 한다", async () => {
-      // getStatsDirect 는 head:true 라 data 없이 count/error 만 본다.
-      mockResult = { data: null, count: null, error: PERMISSION_DENIED };
-      await expect(getStatsDirect()).rejects.toThrow();
-    });
   });
 
   describe("정상(error=null) 시 데이터 반환 — 회귀 방지", () => {
@@ -93,13 +86,6 @@ describe("api-direct — V031 anon 차단 시 silent 빈 배열 대신 throw (�
       mockResult = { data: [{ complex_no: "C001" }], count: 1, error: null };
       const res = await searchComplexesDirect("래미안");
       expect(res.complexes).toHaveLength(1);
-    });
-
-    it("getStatsDirect 는 정상 시 카운트를 반환한다", async () => {
-      mockResult = { data: null, count: 42, error: null };
-      const res = await getStatsDirect();
-      expect(res.complex_count).toBe(42);
-      expect(res.article_count).toBe(42);
     });
   });
 });

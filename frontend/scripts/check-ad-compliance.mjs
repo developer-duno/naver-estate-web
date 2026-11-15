@@ -2,7 +2,7 @@
 /**
  * 광고법 위험 단어 회귀 가드
  *
- * 검사 대상: blog mdx 20편 + app/components tsx
+ * 검사 대상: blog mdx + app/components tsx·ts + lib/broker(TARGETS)
  * 검출 시 exit 1 + 위치·라인·문맥 출력
  *
  * 실행: node scripts/check-ad-compliance.mjs
@@ -10,7 +10,8 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, relative } from "node:path";
 
-const TARGETS = ["src/app", "src/components", "src/content/blog"];
+// src/lib/broker = 「중개 실무」(/broker) 화면에 그대로 나가는 손글씨 자료(세션 511 — upcoming-dates.ts 등 .ts 파일)
+export const TARGETS = ["src/app", "src/components", "src/content/blog", "src/lib/broker"];
 
 const RISKY = [
   "1등",
@@ -82,7 +83,8 @@ async function* walk(dir) {
     if (e.isDirectory()) {
       if (e.name === "__tests__" || e.name === "node_modules") continue;
       yield* walk(p);
-    } else if (/\.(tsx|mdx)$/.test(e.name)) {
+    } else if (/\.(tsx|ts|mdx)$/.test(e.name)) {
+      // .ts 도 본다(세션 511) — 화면 글자를 담은 자료 파일(src/lib/broker/*.ts)이 .ts 라 빠지면 검사가 0파일이 된다
       yield p;
     }
   }

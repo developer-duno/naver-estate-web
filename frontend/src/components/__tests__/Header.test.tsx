@@ -2,11 +2,27 @@
  * Header 컴포넌트 테스트 — 인증 상태별 렌더링, 네비게이션 링크
  * 실행: npx vitest run src/components/__tests__/Header.test.tsx
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import Header from "../Header";
 import { LOCKED_PATHS } from "@/lib/locked-paths";
+
+// 「중개 실무」 활성 표시 시험용(세션 511) — 경로를 시험 안에서 바꿀 수 있게 test-setup.ts 의 next/navigation mock 을 덮어쓴다.
+// 기본값 "/" 는 test-setup 과 같아 다른 시험에는 영향이 없다(Header.strictmode.test.tsx 와 같은 꼴).
+const nav = vi.hoisted(() => ({ pathname: "/" }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: vi.fn(),
+    replace: vi.fn(),
+    refresh: vi.fn(),
+    back: vi.fn(),
+    prefetch: vi.fn(),
+  }),
+  usePathname: () => nav.pathname,
+  useSearchParams: () => new URLSearchParams(),
+  useParams: () => ({}),
+}));
 
 describe("Header 기본", () => {
   it("로고 텍스트 표시 — 「2u」 + 주황 「부동산」(세션 508)", async () => {
@@ -67,6 +83,30 @@ describe("Header 네비게이션", () => {
       const mbLink = document.querySelector("a[href='/mibunyang']");
       expect(mbLink).not.toBeNull();
     });
+  });
+
+  it("「중개 실무」 링크 — 데스크톱·휴대폰 메뉴 둘 다, 「미분양」 바로 뒤 (세션 511)", async () => {
+    render(<Header />);
+    await waitFor(() => {
+      expect(screen.getByText("로그인")).toBeInTheDocument();
+    });
+    const orderIn = (nav: Element) =>
+      [...nav.querySelectorAll("a[href]")].map((a) => a.getAttribute("href"));
+
+    const desktopNav = document.querySelector("nav")!;
+    const desktopLink = desktopNav.querySelector('a[href="/broker"]');
+    expect(desktopLink).toHaveTextContent("중개 실무");
+    const d = orderIn(desktopNav);
+    expect(d.indexOf("/broker")).toBe(d.indexOf("/mibunyang") + 1);
+
+    fireEvent.click(screen.getByRole("button", { name: "메뉴 열기" }));
+    await waitFor(() => {
+      expect(document.querySelectorAll("nav").length).toBeGreaterThan(1);
+    });
+    const drawerNav = document.querySelectorAll("nav")[1];
+    expect(drawerNav.querySelector('a[href="/broker"]')).toHaveTextContent("중개 실무");
+    const m = orderIn(drawerNav);
+    expect(m.indexOf("/broker")).toBe(m.indexOf("/mibunyang") + 1);
   });
 
   it("요금제 메뉴가 없다 (세션 400: 무료 전환으로 /pricing 잠김)", async () => {
@@ -192,7 +232,7 @@ describe("Header 계산기 드롭다운 (데스크톱, Radix)", () => {
  */
 describe("Header 메뉴 집합 (세션 400 DOM 레인)", () => {
   /** navLinks 로 렌더되는 경로만 — 로그인(상태 의존)·계산기 드롭다운(별도 단언) 제외 */
-  const NAV_LINK_PATHS = ["/", "/mibunyang", "/blog", "/help"];
+  const NAV_LINK_PATHS = ["/", "/mibunyang", "/broker", "/blog", "/help"];
   const CALC_PATHS = [
     "/tools/brokerage-fee",
     "/tools/acquisition-tax",
@@ -283,6 +323,44 @@ describe("Header 메뉴 집합 (세션 400 DOM 레인)", () => {
     });
     for (const locked of LOCKED_PATHS) {
       expect(document.querySelector(`a[href^="${locked}"]`)).toBeNull();
+    }
+  });
+});
+
+/**
+ * 「중개 실무」 활성 표시(세션 511) — 활성 표식 = `text-brand-orange` 클래스 낱말
+ * (꺼짐은 `hover:text-brand-orange` 라 classList 낱말로는 다르다). PC nav 와 휴대폰 서랍 둘 다 본다.
+ */
+describe("Header 「중개 실무」 활성 표시 (세션 511)", () => {
+  afterEach(() => {
+    nav.pathname = "/";
+  });
+
+  const brokerLinks = async () => {
+    render(<Header />);
+    await waitFor(() => {
+      expect(screen.getByText("로그인")).toBeInTheDocument();
+    });
+    const desktop = document.querySelector("nav")!.querySelector('a[href="/broker"]')!;
+    fireEvent.click(screen.getByRole("button", { name: "메뉴 열기" }));
+    await waitFor(() => {
+      expect(document.querySelectorAll("nav").length).toBeGreaterThan(1);
+    });
+    const drawer = document.querySelectorAll("nav")[1].querySelector('a[href="/broker"]')!;
+    return [desktop, drawer];
+  };
+
+  it.each(["/broker", "/broker/sale"])("%s 에서 켜짐", async (path) => {
+    nav.pathname = path;
+    for (const a of await brokerLinks()) {
+      expect(a.classList.contains("text-brand-orange")).toBe(true);
+    }
+  });
+
+  it.each(["/", "/mibunyang", "/brokerage"])("%s 에서 꺼짐", async (path) => {
+    nav.pathname = path;
+    for (const a of await brokerLinks()) {
+      expect(a.classList.contains("text-brand-orange")).toBe(false);
     }
   });
 });

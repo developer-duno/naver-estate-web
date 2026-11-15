@@ -114,6 +114,15 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 720 
   });
 }
 
+/** 「중개 실무」(/broker) 스모크 — 비로그인으로 열리고 h1 이 하나(세션 511 PR 1 · 스크린샷 없음) */
+test("/broker 200 · h1 「중개 실무」", async ({ page }) => {
+  await applyPublicMocks(page);
+  const res = await page.goto("/broker");
+  expect(res?.status()).toBe(200);
+  await expect(page.getByRole("heading", { level: 1, name: "중개 실무" })).toBeVisible();
+  await expect(page.locator("h1")).toHaveCount(1);
+});
+
 test.describe("public visual regression", () => {
   test("로그인 페이지 렌더 + 시각 회귀", async ({ page }) => {
     await page.goto("/login");

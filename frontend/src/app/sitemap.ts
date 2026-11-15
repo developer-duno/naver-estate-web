@@ -11,11 +11,13 @@ import { getPublicUpdates } from "@/lib/api/opinions";
  * 근거 커밋(세션 507 `git log -p` 판정): / = 3e0bfe30(비로그인 '즐겨찾기 매물' 링크 숨김) · /tools = 9b0f2292(안내 문단) ·
  * 계산기 넷 = 30dcf3a6(바닥 안내 글) · 보유세 = 26af5c99(입력 칸 이름) · /help = c6d3b2c7('의견 보내기' 절) ·
  * /terms·/privacy = 9b0f2292(제목·설명 신설).
+ * 세션 508: /(홈 개편) · /tools(6종으로 제목·설명) · /tools/second-mortgage(새 장) = 2026-11-15.
  * /blog 는 공개 글 중 가장 최근 발행일, /updates 는 updatesLastModified() 가 정한다(이 표에 없음).
  */
 const STATIC_PAGE_LASTMOD = {
-  "/": "2026-11-02",
-  "/tools": "2026-10-09",
+  "/": "2026-11-15",
+  "/tools": "2026-11-15",
+  "/tools/second-mortgage": "2026-11-15",
   "/tools/brokerage-fee": "2026-06-09",
   "/tools/acquisition-tax": "2026-06-09",
   "/tools/transfer-tax": "2026-06-09",
@@ -67,6 +69,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: SITE_URL, lastModified: lastmod("/"), changeFrequency: "weekly", priority: 1.0 },
     // 세션 400: /pricing 은 무료 전환으로 잠긴 페이지라 sitemap 제외 (lib/locked-paths.ts)
     { url: `${SITE_URL}/tools`, lastModified: lastmod("/tools"), changeFrequency: "monthly", priority: 0.8 },
+    { url: `${SITE_URL}/tools/second-mortgage`, lastModified: lastmod("/tools/second-mortgage"), changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/tools/brokerage-fee`, lastModified: lastmod("/tools/brokerage-fee"), changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/tools/acquisition-tax`, lastModified: lastmod("/tools/acquisition-tax"), changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/tools/transfer-tax`, lastModified: lastmod("/tools/transfer-tax"), changeFrequency: "monthly", priority: 0.8 },

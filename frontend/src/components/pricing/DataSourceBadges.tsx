@@ -11,7 +11,6 @@ const SOURCES: Source[] = [
   { name: "에어코리아", desc: "단지 대기질" },
   { name: "NEMC", desc: "응급의료기관" },
   { name: "CPMS", desc: "어린이집" },
-  { name: "경찰청", desc: "범죄통계" },
 ];
 
 interface Props {

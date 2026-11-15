@@ -31,14 +31,14 @@ test("모바일 — 검색 결과 페이지 렌더링", async ({ page }) => {
   await expectHeader(page);
 });
 
-// 세션 314: 홈 빈 상태 진입(홈/검색 통합으로 /search→홈) + FilterBarMobileSheet 트리거 가시성.
-// 빈 상태는 필터 펼침(filtersExpanded)이라 모바일 시트 트리거 노출. 인터랙션은 vitest 위임.
-test("모바일 — 홈 빈 상태 FilterBarMobileSheet 트리거 노출 (smoke)", async ({ page }) => {
+// 세션 508 홈 개편: 홈 빈 상태는 매물유형 탭·필터 막대 대신 남색 머리 검색창을 그린다
+// (필터는 검색 뒤 「조건 수정」에서 그대로 — 사장님 승인 2026-11-15). 옛 「필터 창 열기」 노출 smoke 를 갈음.
+test("모바일 — 홈 빈 상태 검색창 노출 (smoke)", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 667 });
   const res = await page.goto("/");
   expect(res?.status()).toBeLessThan(500);
   await expectHeader(page);
-  await expect(page.getByRole("button", { name: /필터 창 열기/ })).toBeVisible();
+  await expect(page.getByLabel("단지 또는 지역 검색")).toBeVisible();
 });
 
 // ── 태블릿 (768x1024) ──

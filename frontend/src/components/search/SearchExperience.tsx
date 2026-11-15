@@ -52,9 +52,19 @@ function isDefaultTypes(sel: string[]): boolean {
   return sel.length === defaults.length && defaults.every((c) => sel.includes(c));
 }
 
+/** renderEmpty 에 넘기는 기존 검색 손잡이(세션 508 홈 개편) — 검색 실행은 아래 handleInline* 그대로 */
+export interface EmptySearchApi {
+  keyword: string; setKeyword: (v: string) => void; submitKeyword: () => void;
+  searchRegion: (sido: string, sigungu: string, dong?: string) => void; recentChips: ReactNode;
+}
+
 interface Props {
   /** 결과 영역 위에 끼울 부가 영역 (검색 결과 없을 때 홈의 도구카드 등). */
   emptyExtra?: ReactNode;
+  /** 있으면 검색어 없는 빈 화면 전체를 이것으로 그린다(매물유형 탭·필터·검색 카드 대신 — 홈 전용, 세션 508) */
+  renderEmpty?: (api: EmptySearchApi) => ReactNode;
+  /** 빈 화면이 아닐 때(결과·로딩·오류) 바깥 상자 클래스 */
+  className?: string;
 }
 
 /**
@@ -63,7 +73,7 @@ interface Props {
  * 검색 시 현재 pathname(usePathname) 기준으로 URL 갱신 → 홈에선 /?q=, 검색에선 /search?q=.
  * (세션 314 — search/page.tsx SearchContent 본문 이식, 동작 보존)
  */
-export default function SearchExperience({ emptyExtra }: Props) {
+export default function SearchExperience({ emptyExtra, renderEmpty, className }: Props) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname() || "/";
@@ -221,10 +231,14 @@ export default function SearchExperience({ emptyExtra }: Props) {
     return () => controller.abort();
   }, []);
 
+  // 검색 화면에서만 제목을 바꾸고 떠날 때 원래 제목으로 돌린다 — 빈 화면은 layout 제목 그대로(세션 508: 옛 홈 h1 글자로 덮던 것)
   useEffect(() => {
-    document.title = hasSearchParams
-      ? `${title} - 아파트·오피스텔`
-      : "아파트·오피스텔 실거래가·시세 조회";
+    if (!hasSearchParams) return;
+    const prev = document.title;
+    const mine = `${title} - 아파트·오피스텔`;
+    document.title = mine;
+    // 다른 장으로 옮겨 그 장이 제목을 이미 바꿨으면 덮지 않는다 — 내가 쓴 제목일 때만 되돌림
+    return () => { if (document.title === mine) document.title = prev; };
   }, [title, hasSearchParams]);
 
   const handleTabChange = (types: string[]) => {
@@ -277,8 +291,20 @@ export default function SearchExperience({ emptyExtra }: Props) {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
 
+  if (renderEmpty && !hasSearchParams) {
+    return (
+      <>
+        {renderEmpty({
+          keyword: inlineKeyword, setKeyword: setInlineKeyword, submitKeyword: handleInlineKeywordSearch,
+          searchRegion: handleInlineRegionSearch, recentChips: <RecentSearchChips items={recentItems} onSelect={goToRecent} />,
+        })}
+        <CompareFloatingBar list={compareList} onRemove={removeCompare} onClear={clearCompare} />
+      </>
+    );
+  }
+
   return (
-    <div>
+    <div className={className}>
       {/* 검색 결과 헤더 — 결과가 있을 때만 제목/개수/즐겨찾기 링크 */}
       {hasSearchParams && (
         <div className="flex items-center gap-4 mb-6 flex-wrap">

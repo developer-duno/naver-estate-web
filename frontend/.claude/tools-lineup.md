@@ -1,11 +1,12 @@
-# 도구 5종 라인업 + 매물 상세 모달 + 모바일 + 코드 구조
+# 도구 6종 라인업 + 매물 상세 모달 + 모바일 + 코드 구조
 
 > 본 파일은 명시 참조 자료. 진입점 = `frontend/CLAUDE.md` §토픽 인덱스.
 
-## /tools 도구 5종 라인업
+## /tools 도구 6종 라인업
 
 | 도구 | 경로 | 핵심 |
 |---|---|---|
+| 후순위 대출 한도 (세션 508) | `/tools/second-mortgage` | 한도 = max(0, 시세 × 손님이 고른 비율 − 남은 대출) · 매달 이자 = 한도 × 연 이자율 ÷ 12. 비율·이자율 기본값 없음(금융위 등록 전 — 금리 예시 금지). 계산 `lib/second-mortgage.ts` · 화면 `components/SecondMortgageCalculator.tsx`(홈 대출 판과 같이 씀). 단지 화면의 규제 반영 계산 `lib/loan/secondLien.ts` 와는 다른 계산 |
 | 중개수수료 | `/tools/brokerage-fee` | 시행규칙 별표1 4종 요율 + 월세환산 ×100→×70 + 부가세 |
 | 취득세 | `/tools/acquisition-tax` | standard/multi-house/first-time/officetel/first-time-rejected 5분기 + 면적·가격 누진 |
 | 평·㎡ 변환 | `/tools/area-converter` | 단순 변환 |

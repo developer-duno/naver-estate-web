@@ -157,26 +157,14 @@ export default function Header() {
   ];
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-50 no-print">
+    <header className="bg-brand-navy text-white sticky top-0 z-50 no-print">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-14">
-          {/* 로고 — icon.tsx 와 동일 톤 (terracotta) */}
-          <Link href="/" className="flex items-center gap-2" aria-label="2u부동산 홈">
-            <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">
-              <rect width="32" height="32" rx="7" fill="#d97757" />
-              <text
-                x="50%"
-                y="55%"
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fontSize="14"
-                fontWeight="700"
-                fill="#faf9f5"
-              >
-                2u
-              </text>
-            </svg>
-            <span className="text-lg font-bold text-gray-900">2u부동산</span>
+          {/* 로고 — 「2u」 흰색 + 「부동산」 주황(세션 508 새 색) */}
+          <Link href="/" className="flex items-center" aria-label="2u부동산 홈">
+            <span className="text-xl font-black tracking-tight text-white">
+              2u<span className="text-brand-orange">부동산</span>
+            </span>
           </Link>
 
           {/* 데스크톱 네비게이션 */}
@@ -186,7 +174,7 @@ export default function Header() {
                 key={link.href}
                 href={link.href}
                 className={`text-sm font-medium ${
-                  link.active ? "text-blue-600" : "text-gray-600 hover:text-gray-900"
+                  link.active ? "text-brand-orange" : "text-white hover:text-brand-orange"
                 }`}
               >
                 {link.label}
@@ -197,7 +185,7 @@ export default function Header() {
             <DropdownMenu>
               <DropdownMenuTrigger
                 className={`text-sm font-medium outline-none ${
-                  toolsActive ? "text-blue-600" : "text-gray-600 hover:text-gray-900"
+                  toolsActive ? "text-brand-orange" : "text-white hover:text-brand-orange"
                 }`}
               >
                 계산기 ▾
@@ -227,18 +215,18 @@ export default function Header() {
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
                   {isAdmin && (
-                    <span className="text-xs bg-accent-blue/15 text-[#3a6da0] px-2 py-0.5 rounded-md font-semibold">
+                    <span className="text-xs bg-brand-orange text-brand-navy px-2 py-0.5 rounded-md font-semibold">
                       관리자
                     </span>
                   )}
                   {userRole === "expert" && (
-                    <span className="text-xs bg-accent-green/15 text-[#4a5a3a] px-2 py-0.5 rounded-md font-semibold">
+                    <span className="text-xs bg-white text-brand-navy px-2 py-0.5 rounded-md font-semibold">
                       전문가
                     </span>
                   )}
                   {/* 세션 400: 요금제가 잠겨 링크 제거 — 남은 기간 표시만 유지 */}
                   {subDaysLeft !== null && (
-                    <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-semibold">
+                    <span className="text-xs bg-brand-orange-soft text-brand-orange-text px-2 py-0.5 rounded-md font-semibold">
                       구독 D-{subDaysLeft}
                     </span>
                   )}
@@ -250,13 +238,13 @@ export default function Header() {
                       Radix 라 ESC·외부클릭·포커스 트랩 자동 — frontend/CLAUDE.md §모달 규칙 충족. */}
                   <DropdownMenu>
                     <DropdownMenuTrigger
-                      className="text-xs text-gray-500 hover:text-gray-700 outline-none hidden sm:inline"
+                      className="text-xs text-brand-on-navy-muted hover:text-white outline-none hidden sm:inline"
                       aria-label="내 계정"
                     >
                       내 계정 ▾
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="min-w-50">
-                      <DropdownMenuLabel className="break-all font-normal text-gray-600">
+                      <DropdownMenuLabel className="break-all font-normal text-brand-muted">
                         {userEmail}
                       </DropdownMenuLabel>
                     </DropdownMenuContent>
@@ -264,7 +252,7 @@ export default function Header() {
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md px-3 py-1.5"
+                  className="text-sm font-medium text-white hover:bg-white/10 border border-brand-navy-line rounded-md px-3 py-1.5"
                 >
                   로그아웃
                 </button>
@@ -272,7 +260,7 @@ export default function Header() {
             ) : (
               <Link
                 href="/login"
-                className="text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-300 rounded-md px-3 py-1.5"
+                className="text-sm font-medium text-white hover:bg-white/10 border border-brand-navy-line rounded-md px-3 py-1.5"
               >
                 로그인
               </Link>
@@ -281,7 +269,7 @@ export default function Header() {
 
           {/* 모바일 햄버거 버튼 */}
           <button
-            className="md:hidden p-2 text-gray-600 hover:text-gray-900"
+            className="md:hidden p-2 text-white hover:text-brand-orange"
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label={mobileOpen ? "메뉴 닫기" : "메뉴 열기"}
           >
@@ -300,13 +288,13 @@ export default function Header() {
       {mobileOpen && (
         <>
           <div className="fixed inset-0 top-14 bg-black/30 z-40 md:hidden" onClick={() => setMobileOpen(false)} />
-          <nav className="fixed top-14 right-0 bottom-0 w-64 bg-white shadow-xl z-50 p-4 flex flex-col gap-1 md:hidden overflow-y-auto">
+          <nav className="fixed top-14 right-0 bottom-0 w-64 bg-brand-navy text-white shadow-xl z-50 p-4 flex flex-col gap-1 md:hidden overflow-y-auto">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
                 className={`min-h-11 flex items-center px-3 rounded-lg text-base font-medium ${
-                  link.active ? "text-blue-600 bg-blue-50" : "text-gray-700 hover:bg-gray-50"
+                  link.active ? "text-brand-orange bg-white/10" : "text-white hover:bg-white/10"
                 }`}
               >
                 {link.label}
@@ -316,7 +304,7 @@ export default function Header() {
             {/* 계산기 그룹 (모바일은 토글 없이 자식 2개 항상 표시) */}
             <div
               className={`min-h-11 flex items-center px-3 rounded-lg text-base font-medium ${
-                toolsActive ? "text-blue-600" : "text-gray-700"
+                toolsActive ? "text-brand-orange" : "text-white"
               }`}
             >
               계산기
@@ -325,8 +313,8 @@ export default function Header() {
               href="/tools/brokerage-fee"
               className={`min-h-11 flex items-center pl-7 pr-3 rounded-lg text-sm ${
                 pathname === "/tools/brokerage-fee"
-                  ? "text-blue-600 bg-blue-50"
-                  : "text-gray-700 hover:bg-gray-50"
+                  ? "text-brand-orange bg-white/10"
+                  : "text-white hover:bg-white/10"
               }`}
             >
               중개수수료
@@ -335,8 +323,8 @@ export default function Header() {
               href="/tools/acquisition-tax"
               className={`min-h-11 flex items-center pl-7 pr-3 rounded-lg text-sm ${
                 pathname === "/tools/acquisition-tax"
-                  ? "text-blue-600 bg-blue-50"
-                  : "text-gray-700 hover:bg-gray-50"
+                  ? "text-brand-orange bg-white/10"
+                  : "text-white hover:bg-white/10"
               }`}
             >
               취득세
@@ -345,8 +333,8 @@ export default function Header() {
               href="/tools/transfer-tax"
               className={`min-h-11 flex items-center pl-7 pr-3 rounded-lg text-sm ${
                 pathname === "/tools/transfer-tax"
-                  ? "text-blue-600 bg-blue-50"
-                  : "text-gray-700 hover:bg-gray-50"
+                  ? "text-brand-orange bg-white/10"
+                  : "text-white hover:bg-white/10"
               }`}
             >
               양도소득세
@@ -355,8 +343,8 @@ export default function Header() {
               href="/tools/property-tax"
               className={`min-h-11 flex items-center pl-7 pr-3 rounded-lg text-sm ${
                 pathname === "/tools/property-tax"
-                  ? "text-blue-600 bg-blue-50"
-                  : "text-gray-700 hover:bg-gray-50"
+                  ? "text-brand-orange bg-white/10"
+                  : "text-white hover:bg-white/10"
               }`}
             >
               보유세
@@ -365,34 +353,34 @@ export default function Header() {
               href="/tools/area-converter"
               className={`min-h-11 flex items-center pl-7 pr-3 rounded-lg text-sm ${
                 pathname === "/tools/area-converter"
-                  ? "text-blue-600 bg-blue-50"
-                  : "text-gray-700 hover:bg-gray-50"
+                  ? "text-brand-orange bg-white/10"
+                  : "text-white hover:bg-white/10"
               }`}
             >
               평·㎡ 변환
             </Link>
 
-            <hr className="my-2 border-gray-200" />
+            <hr className="my-2 border-brand-navy-line" />
 
             {userEmail ? (
               <>
                 <div className="px-3 py-2">
                   <div className="flex items-center gap-1.5 mb-1">
                     {isAdmin && (
-                      <span className="text-xs bg-accent-blue/15 text-[#3a6da0] px-2 py-0.5 rounded-md font-semibold">관리자</span>
+                      <span className="text-xs bg-brand-orange text-brand-navy px-2 py-0.5 rounded-md font-semibold">관리자</span>
                     )}
                     {userRole === "expert" && (
-                      <span className="text-xs bg-accent-green/15 text-[#4a5a3a] px-2 py-0.5 rounded-md font-semibold">전문가</span>
+                      <span className="text-xs bg-white text-brand-navy px-2 py-0.5 rounded-md font-semibold">전문가</span>
                     )}
                     {subDaysLeft !== null && (
-                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md font-semibold">구독 D-{subDaysLeft}</span>
+                      <span className="text-xs bg-brand-orange-soft text-brand-orange-text px-2 py-0.5 rounded-md font-semibold">구독 D-{subDaysLeft}</span>
                     )}
                   </div>
-                  <span className="text-sm text-gray-500 break-all">{userEmail}</span>
+                  <span className="text-sm text-brand-on-navy-muted break-all">{userEmail}</span>
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="min-h-11 flex items-center px-3 rounded-lg text-base font-medium text-gray-700 hover:bg-gray-50 w-full"
+                  className="min-h-11 flex items-center px-3 rounded-lg text-base font-medium text-white hover:bg-white/10 w-full"
                 >
                   로그아웃
                 </button>
@@ -400,7 +388,7 @@ export default function Header() {
             ) : (
               <Link
                 href="/login"
-                className="min-h-11 flex items-center px-3 rounded-lg text-base font-medium text-gray-700 hover:bg-gray-50"
+                className="min-h-11 flex items-center px-3 rounded-lg text-base font-medium text-white hover:bg-white/10"
               >
                 로그인
               </Link>

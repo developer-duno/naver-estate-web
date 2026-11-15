@@ -7,7 +7,7 @@
 ### 매물 영역 (estate)
 | 페이지 | API 호출 | 백엔드 라우터 |
 |--------|---------|-------------|
-| `/` (홈=검색 통합, 세션 314) | `getStats()` + **SearchExperience**(검색창/매물유형/필터/지역 → 결과) + localStorage(히스토리/즐겨찾기) | `/api/stats`, `/api/live/search`, `/api/live/region` |
+| `/` (홈=검색 통합, 세션 314 · 세션 508 개편) | **SearchExperience**(빈 화면은 `renderEmpty` → `components/home/HomeSections`: 머리 검색창·「지역으로 찾기」 → 결과) + `getRegionHubTrend()`(지역 시세 흐름) + localStorage(히스토리/즐겨찾기). `getStats()` 는 홈에서 안 부름 | `/api/live/search`, `/api/live/region`, `/api/regions/{시군구}/hub` |
 | `/search` → `/` 리다이렉트 | SearchExperience 공용 — 옛 `/search` 는 쿼리 보존하며 홈으로 redirect (직접 링크 6곳 잔존) | (동일) |
 | `/complex/[no]` | `startLiveCrawl()`, `getCrawlStatus()`, `getArticles()`, `getPyeongDetails()`, `getPriceHistory()`, `startPriceCollect()` + useFavoriteStatus + ComplexNoteButton | `/api/live/{no}/articles/*`, `/api/complexes/{no}/*`, `/api/live/{no}/price-history/*` |
 | `/compare` | `getComplex()` x N + `getPriceStats()` x N (useQueries 병렬) + 인쇄/엑셀 | `/api/complexes/{no}`, `/api/complexes/{no}/price-stats` |
@@ -19,9 +19,9 @@
 | `/mibunyang/[id]` | `getMbApartmentDetail()`, `getMbUnsoldHistory()` (5섹션+지도+추이차트) | `/api/mb/apartments/{id}`, `/api/mb/unsold/{id}/history` |
 | `/mibunyang/compare` | `getMbApartmentDetail()` x N + `getMbUnsoldHistory()` x N (17행 비교+분양가 막대+추이+출처 각주 — 레이더는 세션 472 삭제) | 동일 |
 
-### 도구 5종 (/tools/*) — 모두 클라이언트 산식, BE 호출 없음
+### 도구 6종 (/tools/*) — 모두 클라이언트 산식, BE 호출 없음
 
-> 상세 = `frontend/.claude/tools-lineup.md` §/tools 도구 5종 라인업 참조
+> 상세 = `frontend/.claude/tools-lineup.md` §/tools 도구 6종 라인업 참조
 
 ### 인증·관리·마케팅·블로그
 | 페이지 | API 호출 | 백엔드 라우터 |

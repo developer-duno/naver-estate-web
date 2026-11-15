@@ -24,6 +24,7 @@ vi.mock("@/lib/api", () => ({
   getRegions: vi.fn().mockResolvedValue({}),
   searchComplexes: vi.fn().mockResolvedValue({ complexes: [] }),
   getComplexesByRegion: vi.fn().mockResolvedValue({ complexes: [] }),
+  getRegionHubTrend: vi.fn().mockResolvedValue(null), // 홈 「지역 시세 흐름」(세션 508)
 }));
 
 vi.mock("@/hooks/useSessionToken", () => ({
@@ -40,9 +41,10 @@ describe("플래그 false — 입구 링크 0", () => {
     expect(screen.getByRole("link", { name: "도움말" })).toHaveAttribute("href", "/help");
   });
 
-  it("홈 소개 절에 '지역별 실거래가 보기 →' 없음(소개 절 링크는 그대로)", () => {
+  it("홈에 /region 링크 없음 — 「지역별 실거래가」 칸 전체 숨김(세션 508 · 다른 칸 링크는 그대로)", () => {
     const { container } = render(<HomePage />, { wrapper: TestQueryProvider });
     expect(container.querySelector('a[href^="/region"]')).toBeNull();
-    expect(screen.getByRole("link", { name: "사용 가이드" })).toHaveAttribute("href", "/help");
+    expect(screen.queryByRole("heading", { name: "지역별 실거래가" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "글 전체 보기 →" })).toHaveAttribute("href", "/blog");
   });
 });

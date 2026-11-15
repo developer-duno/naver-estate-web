@@ -20,6 +20,18 @@
   --color-accent-green: #788c5d;
   --color-neutral-light: #e8e6dc;
   --color-neutral-mid: #b0aea5;
+  /* 2u 새 색(세션 508 홈 개편 · 사장님 결정 2026-11-15) — 홈·머리·바닥글·후순위 대출 계산기는 이 이름만 쓴다.
+     위 옛 5색 줄은 /pricing 이 쓰므로 지우지 않는다. */
+  --color-brand-navy: #0b1f3a;
+  --color-brand-navy-line: #5b6f8f;
+  --color-brand-on-navy-muted: #c5d0e2;
+  --color-brand-orange: #ff9a4d;
+  --color-brand-orange-text: #a8470a;
+  --color-brand-orange-soft: #fff3e8;
+  --color-brand-bg: #f3f5f9;
+  --color-brand-muted: #4b5a72;
+  --color-brand-line: #c9d2e0;
+  --color-brand-line-soft: #e3e8f0;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);

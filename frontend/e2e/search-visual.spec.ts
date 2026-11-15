@@ -4,15 +4,16 @@ import { applySearchEmptyMocks } from "./fixtures/search-mocks";
 /**
  * 세션 314: 홈/검색 통합으로 /search 는 홈으로 리다이렉트됨. 빈 상태 시각 회귀는
  * public-flow.spec.ts 의 home.png 가 이미 커버(중복 스냅샷 제거). 여기선 홈 빈 상태의
- * 검색 폼 섹션(단지명 검색·지역 선택) 노출만 smoke 로 가드.
+ * 검색 폼(남색 머리 검색창·「지역으로 찾기」 안 지역 고르기 — 세션 508) 노출만 smoke 로 가드.
  */
 test.describe("home search form smoke", () => {
   test("홈 빈 상태 — 검색 폼 섹션 노출", async ({ page }) => {
     await applySearchEmptyMocks(page);
     await page.goto("/");
 
-    await expect(page.getByRole("heading", { name: "단지명 검색" })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole("heading", { name: "지역 선택" })).toBeVisible();
+    // 세션 508 홈 개편: 남색 머리 검색창 + 「지역으로 찾기 ▾」 안의 지역 고르기(옛 「단지명 검색」·「지역 선택」 카드 제목은 없다)
+    await expect(page.getByLabel("단지 또는 지역 검색")).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: /지역으로 찾기/ }).click();
 
     // 시/도 input 은 "노출"만 확인한다(노출 smoke 목적). enabled 까지 기다리지 않는다 —
     // disabled={loading} 가 풀리려면 /api/regions(mock 200) → React Query 해소 → base-ui Combobox

@@ -66,6 +66,14 @@ describe("/broker 페이지", () => {
     expect(within(card).getByRole("link", { name: "단지 찾기" })).toHaveAttribute("href", "/");
   });
 
+  it("중개사 인증 — 인증 전용 기능만 안내(엑셀·데이터 갱신 · 비로그인에도 있는 실거래가는 적지 않음)", () => {
+    render(<BrokerHubPage />);
+    const card = screen.getByRole("region", { name: "중개사 인증" });
+    expect(card).toHaveTextContent("매물 엑셀 내보내기");
+    expect(card).toHaveTextContent("데이터 갱신");
+    expect(card.textContent).not.toContain("실거래가");
+  });
+
   it("메타 — canonical /broker · og url·images 명시(seo-metadata 룰 2·6)", () => {
     expect(metadata.alternates?.canonical).toBe("/broker");
     const og = metadata.openGraph as { url?: string; images?: Array<{ url: string }> };

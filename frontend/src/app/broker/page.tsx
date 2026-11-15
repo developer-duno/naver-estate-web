@@ -127,7 +127,8 @@ export default function BrokerHubPage() {
           <section aria-labelledby="broker-verify" className={cardClass}>
             <h2 id="broker-verify" className={cardTitleClass}>중개사 인증</h2>
             <p className="mt-3 text-sm text-brand-muted leading-relaxed">
-              공인중개사 인증을 받으면 단지 화면에서 실거래가·면적별 시세 상자와 화면 인쇄·엑셀 내보내기를 쓸 수 있습니다.
+              공인중개사 인증을 받으면 단지 화면에서 매물 엑셀 내보내기, 최신 매물을 다시 받는 데이터 갱신, 화면 인쇄를 쓸 수
+              있습니다.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <Link

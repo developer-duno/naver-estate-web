@@ -37,7 +37,7 @@ describe("UPCOMING_DATES 자료", () => {
     }
   });
 
-  it("원문 확인일은 그날보다 앞이다(지난 항목을 남겨 두지 않는다)", () => {
+  it("원문 확인일이 그 날짜보다 앞선다", () => {
     for (const d of UPCOMING_DATES) {
       expect(d.checkedAt < d.date).toBe(true);
     }

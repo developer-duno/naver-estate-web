@@ -151,7 +151,8 @@ export default function Header() {
     { href: "/", label: "홈", active: pathname === "/" },
     { href: "/mibunyang", label: "미분양", active: pathname?.startsWith("/mibunyang") },
     // 세션 511: 공인중개사 실무 공간(/broker) — 날짜·서식·계산 모음
-    { href: "/broker", label: "중개 실무", active: pathname?.startsWith("/broker") },
+    // active 는 "/broker" 와 그 아래만 — 접두어가 겹치는 다른 주소(/brokerage 등)에서 켜지지 않게
+    { href: "/broker", label: "중개 실무", active: pathname === "/broker" || (pathname?.startsWith("/broker/") ?? false) },
     // 세션 400: "요금제" 메뉴 제거 — 무료 전환으로 /pricing 진입 차단(lib/locked-paths.ts).
     { href: "/blog", label: "블로그", active: pathname?.startsWith("/blog") },
     { href: "/help", label: "도움말", active: pathname === "/help" },

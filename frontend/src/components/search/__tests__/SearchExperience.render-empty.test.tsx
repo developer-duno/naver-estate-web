@@ -73,6 +73,16 @@ describe("SearchExperience — renderEmpty", () => {
     expect(document.title).toBe("layout 제목");
   });
 
+  it("떠나기 전에 다른 장이 제목을 바꿨으면 그 제목을 덮지 않는다(재검사 🟠)", async () => {
+    document.title = "layout 제목";
+    params.qs = "q=래미안";
+    const r = renderWithEmpty();
+    await waitFor(() => expect(document.title).toBe('"래미안" 검색 결과 - 아파트·오피스텔'));
+    document.title = "단지 상세 제목"; // 클라이언트 이동으로 새 장이 먼저 제목을 바꾼 상황
+    r.unmount();
+    expect(document.title).toBe("단지 상세 제목");
+  });
+
   it("지역 검색 주소(sido+sigungu)도 결과 화면", async () => {
     params.qs = "sido=서울&sigungu=강남구";
     renderWithEmpty();

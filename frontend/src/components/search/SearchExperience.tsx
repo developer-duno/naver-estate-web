@@ -235,8 +235,10 @@ export default function SearchExperience({ emptyExtra, renderEmpty, className }:
   useEffect(() => {
     if (!hasSearchParams) return;
     const prev = document.title;
-    document.title = `${title} - 아파트·오피스텔`;
-    return () => { document.title = prev; };
+    const mine = `${title} - 아파트·오피스텔`;
+    document.title = mine;
+    // 다른 장으로 옮겨 그 장이 제목을 이미 바꿨으면 덮지 않는다 — 내가 쓴 제목일 때만 되돌림
+    return () => { if (document.title === mine) document.title = prev; };
   }, [title, hasSearchParams]);
 
   const handleTabChange = (types: string[]) => {

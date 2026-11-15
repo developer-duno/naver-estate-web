@@ -7,7 +7,8 @@ import { formatChartMonth, formatKoreanPrice } from "@/lib/format";
 export function axisEok(manwon: number): string {
   if (!Number.isFinite(manwon)) return "";
   if (Math.abs(manwon) < 10_000) return `${Math.round(manwon).toLocaleString()}만`;
-  return `${(manwon / 10_000).toFixed(1).replace(/\.0$/, "")}억`;
+  // toFixed(1) 은 9.95 를 9.9 로 낸다(2진 소수 오차) — 천만 단위 정수로 반올림한 뒤 10 으로 나눈다
+  return `${Math.round(manwon / 1_000) / 10}억`;
 }
 
 /**

@@ -12,6 +12,11 @@ describe("axisEok", () => {
     expect(axisEok(200_000)).toBe("20억");
     expect(axisEok(10_000)).toBe("1억");
   });
+  it("소수 둘째 자리 반올림 경계 — 21.25억은 21.3억, 21.24억은 21.2억, 9.95억은 10억(.0 뗌)", () => {
+    expect(axisEok(212_500)).toBe("21.3억");
+    expect(axisEok(212_400)).toBe("21.2억");
+    expect(axisEok(99_500)).toBe("10억");
+  });
   it("1억 미만은 만 단위", () => {
     expect(axisEok(8_500)).toBe("8,500만");
   });

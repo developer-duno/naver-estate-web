@@ -47,6 +47,8 @@ export const metadata: Metadata = {
   description: SITE_DESCRIPTION,
   alternates: {
     canonical: "/",
+    // 블로그 RSS 를 홈 머리에도 알린다(세션 507). 하위 장이 alternates 를 직접 쓰면 이 값은 그 장에서 빠진다 — 그 장 canonical 이 우선
+    types: { "application/rss+xml": "/feed.xml" },
   },
   openGraph: {
     type: "website",

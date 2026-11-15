@@ -63,6 +63,32 @@ describe("sitemap /updates lastModified", () => {
   });
 });
 
+describe("sitemap — 정적 장 lastModified 는 장마다 실제로 바뀐 날 (세션 507)", () => {
+  // 옛 코드는 정적 장 전부가 한 날짜(2026-06-29)를 썼다 — 홈 제목이 바뀌어도 lastmod 가 그대로였다.
+  it("정적 장들이 서로 다른 날짜를 갖고, 홈은 약관보다 나중에 바뀌었다", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+    const entries = await sitemap();
+    const byPath = new Map(entries.map((e) => [new URL(e.url).pathname, new Date(e.lastModified as Date).getTime()]));
+    const statics = ["/", "/tools", "/tools/brokerage-fee", "/tools/acquisition-tax", "/tools/transfer-tax",
+      "/tools/property-tax", "/tools/area-converter", "/help", "/terms", "/privacy"];
+    const times = statics.map((p) => byPath.get(p));
+    expect(times.every((t) => typeof t === "number" && !Number.isNaN(t))).toBe(true);
+    expect(new Set(times).size).toBeGreaterThan(1);
+    expect(byPath.get("/")!).toBeGreaterThan(byPath.get("/terms")!);
+    // 빌드 시각을 쓰지 않는다 — 어느 정적 장도 "지금"이 아니다
+    expect(times.every((t) => Date.now() - (t as number) > 24 * 3600 * 1000)).toBe(true);
+  });
+
+  it("/blog 는 공개 글 중 가장 최근 발행일", async () => {
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+    const entries = await sitemap();
+    const blog = entries.find((e) => new URL(e.url).pathname === "/blog");
+    const posts = entries.filter((e) => new URL(e.url).pathname.startsWith("/blog/"));
+    const latest = Math.max(...posts.map((e) => new Date(e.lastModified as Date).getTime()));
+    expect(new Date(blog!.lastModified as Date).getTime()).toBe(latest);
+  });
+});
+
 describe("sitemap — 공개 대표 URL 만 (세션 458 SEO)", () => {
   // 단지·지역 주소는 이 파일이 아니라 /sitemaps/complexes.xml·/sitemaps/regions.xml 에 있다(세션 485 PR 3c-2)
   it("계산기 허브 /tools 가 들어 있고, 잠긴·비공개 경로(/pricing·/search·/complex·/mibunyang·/admin)는 없다", async () => {

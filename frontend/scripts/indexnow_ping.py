@@ -1,0 +1,162 @@
+"""IndexNow 알림 — 바뀐 주소를 빙·네이버(·Yandex·Seznam·Yep)에 한 번에 알린다.
+
+IndexNow(https://www.indexnow.org/documentation)는 "이 주소가 새로 생겼거나 바뀌었다"를
+검색엔진에 알리는 공개 규격이다. 한 곳(api.indexnow.org)에 보내면 참여 엔진 전부가 나눠 받는다
+(규격 원문: "submitted URLs will be automatically shared with all other participating search engines").
+
+주의 세 가지:
+- **구글은 참여하지 않는다** — 구글은 sitemap·서치콘솔이 길이다.
+- **네이버는 IndexNow 를 쓰기 시작한 뒤 새로 생긴 주소만** 이 길로 받는다 — 이미 있던 주소는 서치어드바이저·sitemap 이 길이다.
+- **같은 주소를 자주 보내면 429(너무 잦음)** — 실제로 바뀐 주소만, 바뀐 뒤 한 번 보낸다.
+
+열쇠(key)는 비밀이 아니다 — 사이트 루트의 `/<key>.txt`(frontend/public/ 에 둔다) 가 "이 사이트 주인이 보낸 알림"임을
+증명하는 공개 표식이다. 열쇠 파일이 없거나 내용이 다르면 403 으로 거부된다(배포가 끝난 뒤에 보낸다).
+
+응답 코드(규격 원문): 200 받음 · 202 받음(열쇠 검증은 나중) · 400 형식 오류 · 403 열쇠 불일치 ·
+422 주소가 이 호스트가 아님 · 429 너무 잦음. **200 은 "받았다"일 뿐 색인을 보장하지 않는다.**
+
+쓰는 때: 첫 HTML 이 바뀌는 배포 뒤(제목·설명·소개문) · sitemap 에 주소를 더한 뒤.
+기본값은 첫 화면 하나. 더 보내려면 인자로 주소를 나열하거나 사이트맵(파일 또는 주소)을 준다.
+2u 사이트맵은 Next 동적 라우트라 디스크에 파일이 없다 → `--from-sitemap` 에 https 주소를 주면 받아서 읽는다
+(이때는 2u.pe.kr 에 GET 한 번이 나간다 — `--dry-run` 이어도 사이트맵 주소를 주면 그 GET 은 한다).
+규격상 POST 한 번에 주소 1만 개까지라서 **1만 개씩 나눠 보낸다**(덩어리 사이 1초 쉼).
+
+    python frontend/scripts/indexnow_ping.py                                  # 첫 화면 알림
+    python frontend/scripts/indexnow_ping.py --dry-run                        # 보낼 본문만 출력(네트워크 0)
+    python frontend/scripts/indexnow_ping.py https://2u.pe.kr/tools https://2u.pe.kr/blog   # 주소 여러 개
+    python frontend/scripts/indexnow_ping.py --from-sitemap https://2u.pe.kr/sitemaps/regions.xml   # 사이트맵의 <loc> 전부
+
+종료 코드: 0 = 덩어리 전부 200/202 · 1 = 그 밖의 응답 · 2 = 연결 실패(하나라도).
+400·403·422·429 가 나오면 같은 오류를 되풀이하지 않도록 나머지 덩어리는 보내지 않고 멈춘다.
+(옮겨 온 곳: 상가 레포 scripts/indexnow_ping.py — 사이트·열쇠·사이트맵 주소 받기만 다르다.)
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+import urllib.error
+import urllib.request
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+SITE = "https://2u.pe.kr/"
+MAX_PER_POST = 10000  # 규격: POST 한 번에 urlList 1만 개까지
+SITEMAP_NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
+# 이 응답이 나오면 나머지 덩어리를 보내지 않는다(같은 오류 반복 방지)
+STOP_CODES = (400, 403, 422, 429)
+CODE_MEANING = {
+    200: "받음(색인 보장 아님)", 202: "받음 · 열쇠 검증은 나중", 400: "형식 오류",
+    403: "열쇠 불일치(배포가 아직이거나 파일 내용이 다름)", 422: "주소가 이 호스트가 아님",
+    429: "너무 잦음", -1: "연결 실패",
+}
+HOST = "2u.pe.kr"
+ENDPOINT = "https://api.indexnow.org/indexnow"
+# 열쇠 = frontend/public/<key>.txt 파일 이름과 내용 — 아래 main() 이 보내기 전에 둘이 같은지 확인한다.
+KEY = "ed3b56a47a6f1126e795deee41d43078"
+KEY_FILE = Path(__file__).resolve().parent.parent / "public" / f"{KEY}.txt"
+
+
+def build_body(urls: list[str]) -> dict:
+    """규격의 POST 본문 — host·key·keyLocation·urlList."""
+    bad = [u for u in urls if not u.startswith(SITE)]
+    if bad:
+        raise ValueError(f"이 사이트 주소가 아님: {bad}")
+    return {
+        "host": HOST,
+        "key": KEY,
+        "keyLocation": f"{SITE}{KEY}.txt",
+        "urlList": urls,
+    }
+
+
+def ping(urls: list[str], timeout: float = 20.0) -> int:
+    """POST 한 번. 응답 코드를 돌려준다(연결 실패는 -1)."""
+    data = json.dumps(build_body(urls), ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(
+        ENDPOINT, data=data, method="POST",
+        headers={"Content-Type": "application/json; charset=utf-8"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 — 고정 https 주소
+            return resp.status
+    except urllib.error.HTTPError as e:
+        return e.code
+    except (urllib.error.URLError, OSError) as e:
+        print(f"[연결 실패] {e}", file=sys.stderr)
+        return -1
+
+
+def read_sitemap_urls(source: str | Path, timeout: float = 20.0) -> list[str]:
+    """사이트맵 XML 의 <loc> 값을 순서대로. `&amp;` 는 파서가 `&` 로 풀어 준다.
+
+    source 가 이 사이트의 https 주소면 받아서 읽고(2u 사이트맵은 동적 라우트라 파일이 없다), 아니면 파일 경로로 읽는다.
+    남의 사이트 주소는 받지 않는다(보낼 주소도 이 사이트 것만이라 받을 까닭이 없다).
+    """
+    s = str(source)
+    if s.startswith(("http://", "https://")):
+        if not s.startswith(SITE):
+            raise ValueError(f"이 사이트의 사이트맵 주소가 아님: {s}")
+        with urllib.request.urlopen(s, timeout=timeout) as resp:  # noqa: S310 — SITE 로 시작하는 https 주소만
+            root = ET.fromstring(resp.read())
+    else:
+        root = ET.parse(s).getroot()
+    return [e.text.strip() for e in root.iter(f"{{{SITEMAP_NS}}}loc") if e.text and e.text.strip()]
+
+
+def dedupe(urls: list[str]) -> list[str]:
+    """처음 나온 순서를 지키며 중복 제거."""
+    return list(dict.fromkeys(urls))
+
+
+def chunks(urls: list[str], size: int = MAX_PER_POST) -> list[list[str]]:
+    """size 개씩 나눈다."""
+    return [urls[i:i + size] for i in range(0, len(urls), size)]
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description="IndexNow 로 바뀐 주소를 빙·네이버에 알린다")
+    ap.add_argument("urls", nargs="*", default=[], help=f"알릴 주소(아무것도 안 주면 {SITE})")
+    ap.add_argument("--from-sitemap", action="append", default=[], metavar="PATH_OR_URL",
+                    help="사이트맵 XML(파일 경로 또는 이 사이트 https 주소)의 <loc> 을 읽어 보낸다"
+                         "(여러 번 가능 · 1만 개씩 나눠 보냄)")
+    ap.add_argument("--dry-run", action="store_true", help="보낼 본문만 출력(IndexNow 로는 보내지 않음)")
+    args = ap.parse_args(argv)
+
+    if not KEY_FILE.is_file() or KEY_FILE.read_text(encoding="utf-8").strip() != KEY:
+        print(f"[사고] 열쇠 파일이 없거나 내용이 다름: {KEY_FILE}", file=sys.stderr)
+        return 1
+    urls = list(args.urls)
+    for sm in args.from_sitemap:
+        urls += read_sitemap_urls(sm)
+    urls = dedupe(urls) or [SITE]
+    body = build_body(urls)  # 남의 주소가 하나라도 섞였으면 여기서 멈춘다(보내기 전)
+    parts = chunks(urls)
+    if len(urls) <= 20:
+        print(json.dumps(body, ensure_ascii=False, indent=2))
+    else:
+        print(f"보낼 주소 {len(urls)}개 · 덩어리 {len(parts)}개(1만 개씩)")
+        print(f"첫 주소: {urls[0]}")
+        print(f"끝 주소: {urls[-1]}")
+    if args.dry_run:
+        print("[dry-run] 보내지 않음")
+        return 0
+    codes: list[int] = []
+    for i, part in enumerate(parts, 1):
+        code = ping(part)
+        codes.append(code)
+        print(f"덩어리 {i}/{len(parts)}: 응답 {code} — {CODE_MEANING.get(code, '알 수 없는 응답')}")
+        if code in STOP_CODES:
+            print("같은 오류를 되풀이하지 않도록 나머지 덩어리는 보내지 않고 멈춤")
+            break
+        if i < len(parts):
+            time.sleep(1)
+    if -1 in codes:
+        return 2
+    return 0 if all(c in (200, 202) for c in codes) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

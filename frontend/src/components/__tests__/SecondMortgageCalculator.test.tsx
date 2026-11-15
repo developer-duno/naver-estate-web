@@ -5,7 +5,7 @@
  * 실행: npx vitest run src/components/__tests__/SecondMortgageCalculator.test.tsx
  */
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SecondMortgageCalculator from "../SecondMortgageCalculator";
 
@@ -44,6 +44,20 @@ describe("SecondMortgageCalculator", () => {
     await user.type(screen.getByLabelText("연 이자율"), "4.8");
     expect(screen.getByTestId("sm-limit")).toHaveTextContent("2억 5,000만원");
     expect(screen.getByTestId("sm-monthly")).toHaveTextContent("1,000,000원");
+  });
+
+  it("금액 칸은 15자리에서 끊긴다 — 아주 긴 숫자에 「∞」가 찍히지 않는다", () => {
+    render(<SecondMortgageCalculator />);
+    const input = screen.getByLabelText("우리 집 시세");
+    fireEvent.change(input, { target: { value: "9".repeat(400) } });
+    expect((input as HTMLInputElement).value).not.toContain("∞");
+    expect((input as HTMLInputElement).value.replace(/,/g, "")).toBe("9".repeat(15));
+  });
+
+  it("연 이자율·비율 직접 입력 칸의 안내 글에 숫자 예시가 없다(금리 예시 수치 금지 — 승인 7번)", () => {
+    render(<SecondMortgageCalculator />);
+    expect(screen.getByLabelText("연 이자율").getAttribute("placeholder")).not.toMatch(/\d/);
+    expect(screen.getByLabelText("담보 인정 비율 직접 입력").getAttribute("placeholder")).not.toMatch(/\d/);
   });
 
   it("비율이 100 을 넘으면 고쳐 넣으라는 글", async () => {

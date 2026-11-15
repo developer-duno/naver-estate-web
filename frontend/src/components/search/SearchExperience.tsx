@@ -231,10 +231,12 @@ export default function SearchExperience({ emptyExtra, renderEmpty, className }:
     return () => controller.abort();
   }, []);
 
+  // 검색 화면에서만 제목을 바꾸고 떠날 때 원래 제목으로 돌린다 — 빈 화면은 layout 제목 그대로(세션 508: 옛 홈 h1 글자로 덮던 것)
   useEffect(() => {
-    document.title = hasSearchParams
-      ? `${title} - 아파트·오피스텔`
-      : "아파트·오피스텔 실거래가·시세 조회";
+    if (!hasSearchParams) return;
+    const prev = document.title;
+    document.title = `${title} - 아파트·오피스텔`;
+    return () => { document.title = prev; };
   }, [title, hasSearchParams]);
 
   const handleTabChange = (types: string[]) => {

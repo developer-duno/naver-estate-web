@@ -12,7 +12,8 @@ export default function HomeLoanPanel() {
       aria-labelledby="home-loan"
       className="flex flex-col overflow-hidden rounded-2xl bg-white shadow-[0_8px_24px_rgba(11,31,58,0.14)] md:flex-row"
     >
-      <div className="bg-brand-orange-soft p-5 sm:p-8 md:flex-1 md:p-10">
+      {/* PC 에선 오른쪽 계산기가 더 길다 — 왼쪽 글은 세로 가운데로(세션 508 보완) */}
+      <div className="bg-brand-orange-soft p-5 sm:p-8 md:flex md:flex-1 md:flex-col md:justify-center md:p-10">
         <p className="text-[13px] font-bold text-brand-orange-text sm:text-sm">아파트 후순위 담보대출</p>
         <h2 id="home-loan" className="mt-2 text-[22px] font-black leading-snug tracking-tight text-brand-navy sm:text-[30px]">
           집을 담보로 더 받을 수 있는 한도부터 확인하세요

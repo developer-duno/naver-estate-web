@@ -72,7 +72,10 @@ describe("sitemap — 정적 장 lastModified 는 장마다 실제로 바뀐 날
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(FROZEN_NOW);
     try {
-      const entries = await sitemap();
+      // 날짜 표가 모듈을 불러올 때 계산되면 고정 전에 이미 읽힌다 — 고정 뒤 새로 불러온다(적대검증 🟠3)
+      vi.resetModules();
+      const { default: freshSitemap } = await import("../sitemap");
+      const entries = await freshSitemap();
       const byPath = new Map(entries.map((e) => [new URL(e.url).pathname, new Date(e.lastModified as Date).getTime()]));
       const statics = ["/", "/tools", "/tools/second-mortgage", "/tools/brokerage-fee", "/tools/acquisition-tax",
         "/tools/transfer-tax", "/tools/property-tax", "/tools/area-converter", "/help", "/terms", "/privacy"];

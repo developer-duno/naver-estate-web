@@ -16,7 +16,7 @@
 
 ```
 frontend/src/
-├── app/           # Next.js App Router (31 페이지 = page.tsx 실측, mibunyang/* + tools/* 5종 + admin/* + blog/* + search/favorites 매물 즐겨찾기 포함)
+├── app/           # Next.js App Router (31 페이지 = page.tsx 실측, mibunyang/* + tools/* 6종(세션 508 후순위 대출 한도 추가) + admin/* + blog/* + search/favorites 매물 즐겨찾기 포함)
 ├── components/    # 재사용 컴포넌트 (mb/47 — 세션 314~319 분양탭·지도뷰·인프라 누적 / admin/21 + ui/13 + complex/7 + article/7 + filter/4 + search/2 + blog/2 + 루트 45, `__tests__/` 제외 — 루트에 ArticleFavoritesTab 등 누적)
 ├── hooks/         # 커스텀 훅 (21개, useLocalStorageList + useLocalStorageFavorites 제네릭 훅 포함)
 ├── lib/           # 47개 (최상위 37 + api/ 9 모듈 + admin/ 1, `__tests__/` 제외 — storage/format/query-keys 별도 폴더 아니라 최상위 .ts 통합)
@@ -32,7 +32,7 @@ frontend/src/
 | `frontend/.claude/hooks-and-state.md` | 커스텀 훅 21표 + FilterBar 구조 |
 | `frontend/.claude/ui-patterns.md` | UI 패턴 8 하위 (FilterBar / 뱃지 / 차트 / RegionSelector / 비교 / 레이더 / 히스토리·북마크 / 즐겨찾기) |
 | `frontend/.claude/pages-and-mb.md` | 페이지별 데이터 흐름 28 페이지 + 미분양 컴포넌트 + URL 상태 관리 |
-| `frontend/.claude/tools-lineup.md` | /tools 도구 5종 라인업 + 매물 상세 모달 + 모바일 반응형 + 코드 구조 |
+| `frontend/.claude/tools-lineup.md` | /tools 도구 6종 라인업 + 매물 상세 모달 + 모바일 반응형 + 코드 구조 |
 | `frontend/e2e/README.md` | **E2E·시각회귀 정본** — project 구조·로컬 실행·baseline 재생성 7단계·촬영 전 대기 조건 두 갈래·헤더 전용 스냅샷·`check:visual-guard` (세션 412 에 `.claude/rules/testing.md` 에서 원문 이동 — 자동 로드 아님. **`e2e/*.spec.ts`·baseline PNG 를 고치기 전에 반드시 읽는다**) |
 
 ## Critical Rules

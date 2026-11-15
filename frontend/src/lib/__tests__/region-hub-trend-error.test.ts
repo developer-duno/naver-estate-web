@@ -50,4 +50,15 @@ describe("getRegionHubTrend", () => {
   it("지역 통계가 없으면 null", async () => {
     await expect(complex.getRegionHubTrend("11110")).resolves.toBeNull();
   });
+
+  it("백엔드를 못 쓰는 상태(isBackendAvailable=false)면 null 이 아니라 reject(적대검증 🟠2)", async () => {
+    // HAS_BACKEND 는 core.ts 모듈 상수라 주소를 비운 뒤 새로 불러와야 한다
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+    vi.resetModules();
+    const fresh = await import("@/lib/api/complex");
+    const core = await import("@/lib/api/core");
+    expect(core.isBackendAvailable()).toBe(false);
+    await expect(fresh.getRegionHubTrend("11680")).rejects.toThrow("서버에 연결할 수 없습니다");
+    vi.stubEnv("NEXT_PUBLIC_API_URL", API);
+  });
 });

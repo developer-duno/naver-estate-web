@@ -1,7 +1,14 @@
 "use client";
 
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { formatChartMonth, formatChartPrice, formatKoreanPrice } from "@/lib/format";
+import { formatChartMonth, formatKoreanPrice } from "@/lib/format";
+
+/** 세로축 짧은 단위(만원 → "21.3억"·"8,500만") — 「21억3,000만」은 축 칸에서 왼쪽이 잘렸다(세션 508 보완) */
+export function axisEok(manwon: number): string {
+  if (!Number.isFinite(manwon)) return "";
+  if (Math.abs(manwon) < 10_000) return `${Math.round(manwon).toLocaleString()}만`;
+  return `${(manwon / 10_000).toFixed(1).replace(/\.0$/, "")}억`;
+}
 
 /**
  * 홈 「지역 시세 흐름」 꺾은선(세션 508) — 남색 카드 위에 그린다. 부모가 dynamic(ssr:false)로 불러온다.
@@ -22,10 +29,11 @@ export default function HomeTrendChart({ points }: { points: { period: string; v
         />
         <YAxis
           tick={{ fill: "var(--color-brand-on-navy-muted)", fontSize: 11 }}
-          tickFormatter={formatChartPrice}
+          tickFormatter={axisEok}
           tickLine={false}
           axisLine={false}
-          width={56}
+          width={52}
+          tickCount={5}
           domain={["auto", "auto"]}
         />
         <Tooltip

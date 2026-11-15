@@ -9,14 +9,17 @@ import { calcSecondMortgage, formatWonKorean, parseAmount } from "@/lib/second-m
  */
 const LTV_CHOICES = [60, 70, 80] as const;
 
-/** 금액 칸 — 숫자만 남기고 쉼표를 찍는다 */
-function withCommas(text: string): string {
-  const digits = text.replace(/[^\d]/g, "");
+/** 금액 칸 자릿수 상한 — 15자리(999조)면 Number 정밀도 안이고, 그 이상은 「∞」·반올림 글자가 찍혔다(세션 508 보완) */
+export const MAX_AMOUNT_DIGITS = 15;
+
+/** 금액 칸 — 숫자만 남기고(앞 15자리까지) 쉼표를 찍는다 */
+export function withCommas(text: string): string {
+  const digits = text.replace(/[^\d]/g, "").slice(0, MAX_AMOUNT_DIGITS);
   return digits === "" ? "" : Number(digits).toLocaleString();
 }
 
 const inputCls =
-  "h-12 w-full rounded-[10px] border border-brand-line bg-white px-3.5 text-base text-brand-navy placeholder:text-brand-muted/70 focus:outline-none focus:ring-2 focus:ring-brand-orange";
+  "h-12 w-full rounded-[10px] border border-brand-line bg-white px-3.5 text-base text-brand-navy placeholder:text-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-orange";
 
 function AmountField({ id, label, value, onChange, placeholder }: {
   id: string; label: string; value: string; onChange: (v: string) => void; placeholder: string;
@@ -105,7 +108,7 @@ export default function SecondMortgageCalculator() {
             inputMode="decimal"
             autoComplete="off"
             value={rate}
-            placeholder="예: 6.5"
+            placeholder="연 이자율을 입력하세요"
             onChange={(e) => setRate(e.target.value.replace(/[^\d.]/g, ""))}
             className={inputCls}
           />

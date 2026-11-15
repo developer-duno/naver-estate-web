@@ -11,7 +11,10 @@ import { regionIndexGroups, regionName } from "@/lib/seo/region-page";
 
 const HomeTrendChart = dynamic(() => import("./HomeTrendChart"), {
   ssr: false,
-  loading: () => <div className="h-[180px]" aria-hidden />,
+  // 그림 부품을 받는 동안에도 빈 남색 칸이 아니라 같은 로딩 글자(세션 508 보완)
+  loading: () => (
+    <div className="flex h-[180px] items-center justify-center text-sm text-brand-on-navy-muted">불러오는 중...</div>
+  ),
 });
 
 const GROUPS = regionIndexGroups(REGION_CODES);

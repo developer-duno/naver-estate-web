@@ -4,8 +4,10 @@ import { useState } from "react";
 import RegionSelector from "@/components/RegionSelector";
 import type { EmptySearchApi } from "@/components/search/SearchExperience";
 
+// 휴대폰은 세로로 쌓이므로 flex-1(기준 높이 0)을 쓰면 WebKit·Chromium 모두 입력 칸이 19px 로 눌린다(세션 508 실측) →
+// 세로 쌓임에선 w-full + shrink-0, 가로 줄(sm 이상)에서만 flex-1
 const inputCls =
-  "h-[54px] min-w-0 flex-1 rounded-xl border-0 bg-white px-4 text-base text-brand-navy placeholder:text-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-orange sm:h-[60px] sm:px-5 sm:text-lg";
+  "h-[54px] w-full shrink-0 sm:w-auto sm:min-w-0 sm:flex-1 rounded-xl border-0 bg-white px-4 text-base text-brand-navy placeholder:text-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-orange sm:h-[60px] sm:px-5 sm:text-lg";
 const buttonCls =
   "h-[54px] rounded-xl bg-brand-orange px-8 text-[17px] font-bold text-brand-navy hover:brightness-95 sm:h-[60px] sm:text-lg";
 const toggleCls = "mt-3 text-sm text-brand-on-navy-muted underline-offset-2 hover:text-white hover:underline";

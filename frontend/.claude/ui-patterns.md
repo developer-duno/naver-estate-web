@@ -88,7 +88,7 @@
   - 매물유형 탭 기본 선택 = **아파트만**(`DEFAULT_ESTATE_TYPES`, 사장님 결정 2026-10-11) · 선택은 URL `types` 로만 전달(기기 기억 없음 · 기본값이면 URL·서버 모두 types 미전달, 6개 전부여도 URL 에 씀) · 보이는 결과 5개 미만이고 탭에 가려진 단지가 있으면 **HiddenTypesHint** 한 줄("숨긴 유형: 오피스텔 12 · … [모두 보기]")
 - **ActiveFilterChips**: 적용 조건 한글 칩 요약 (결과 화면에서 "지금 무슨 조건인지"). urlFilters(ArticleFilters) + 매물유형 narrowing(estateTypeLabels) → 칩, ✕ 클릭 시 개별 해제. 핵심 조건만(YAGNI). verified_only 칩 라벨 "인증매물만"(FilterChips·FilterSections 와 통일, 세션 317)
 - 결과 화면은 필터바 기본 접힘(접이식), 그 외 펼침
-- **홈 소개 섹션 + 푸터 둘러보기 (세션 458, SEO·GEO)**: 홈 하단 `<section aria-labelledby="home-intro">` = h2 "2u부동산은 무엇을 하나요" + 정적 소개 문단(첫 HTML 에 들어가는 본문) + 링크 3(/tools·/blog·/help) + **비로그인일 때만** "무료로 시작하기"(/signup) 버튼(`showSignupCta`, 회귀 = `app/__tests__/home-intro-cta.test.tsx`). `Footer.tsx` 에 `<nav aria-label="둘러보기">`(계산기 5종 /tools · 블로그 /blog) — 공개 페이지 내부 링크 경로
+- **홈 칸 + 푸터 둘러보기 (세션 508 홈 개편 — 옛 세션 458 소개 섹션·「무료로 시작하기」는 없어짐)**: 남색 머리 `components/home/HomeHero`(h1·설명, Suspense 밖) + `HomeSections`(검색창 → 대출 판 `HomeLoanPanel` → 지역 17곳 `HomeRegionLinks` → 지역 시세 흐름 `HomeRegionTrend` → 계산기 모음 `HomeToolCards` 6칸 → 즐겨찾기 `HomeFavorites` → 가이드 `HomeGuide` 3편). `HomeSections` 는 Suspense 대기 화면(정적 GET 검색창·즐겨찾기/차트 자리만 · `HomeFallback`)과 `SearchExperience renderEmpty` 가 같이 그린다. 색은 globals.css `brand-*` 토큰만. 회귀 = `app/__tests__/home-intro-cta.test.tsx`·`components/home/__tests__/`. `Footer.tsx` 에 `<nav aria-label="둘러보기">`(계산기 6종 /tools · 블로그 /blog) — 공개 페이지 내부 링크 경로
 
 ### 검색 결과 지도뷰 (SearchClusterMap) — FEATURE_BACKLOG 항목1, 2026-08-02 (세션 351 클러스터링 엔진 교체로 mb 와 분기)
 

@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Receipt, Landmark, TrendingUp, Home, Ruler } from "lucide-react";
+import { Receipt, Landmark, TrendingUp, Home, Ruler, HandCoins } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "부동산 계산기 5종",
+  title: "부동산 계산기 6종",
   description:
-    "취득세·양도소득세·보유세·중개수수료·평㎡ 변환을 한곳에서. 공인중개사를 위한 부동산 계산기 모음.",
+    "후순위 대출 한도·취득세·양도소득세·보유세·중개수수료·평㎡ 변환을 한곳에서. 부동산 계산기 모음.",
   alternates: { canonical: "/tools" },
   openGraph: {
     url: "/tools",
-    title: "부동산 계산기 5종 | 2u부동산",
-    description: "취득세·양도소득세·보유세·중개수수료·평㎡ 변환 — 부동산 계산기 모음",
+    title: "부동산 계산기 6종 | 2u부동산",
+    description: "후순위 대출 한도·취득세·양도소득세·보유세·중개수수료·평㎡ 변환 — 부동산 계산기 모음",
     // openGraph 직접 지정 시 root opengraph-image 자동 상속이 끊겨 브랜드 PNG og 를 명시(빌드 실측 확인)
     images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: "2u부동산" }],
   },
@@ -25,6 +25,12 @@ type CalcCard = {
 };
 
 const CALCS: CalcCard[] = [
+  {
+    href: "/tools/second-mortgage",
+    Icon: HandCoins,
+    title: "후순위 대출 한도",
+    desc: "추가 대출 한도·매달 이자",
+  },
   {
     href: "/tools/brokerage-fee",
     Icon: Receipt,
@@ -62,13 +68,13 @@ export default function ToolsHubPage() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
       <section className="text-center mb-8 sm:mb-12">
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 leading-tight mb-3">
-          부동산 계산기 5종
+          부동산 계산기 6종
         </h1>
         <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
-          취득세·양도소득세·보유세·중개수수료·평㎡ 변환을 한곳에서 빠르게 계산하세요.
+          후순위 대출 한도·취득세·양도소득세·보유세·중개수수료·평㎡ 변환을 한곳에서 빠르게 계산하세요.
         </p>
         <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-          다섯 계산기 모두 로그인 없이 쓸 수 있고, 각 계산기 화면에 계산 기준이 되는 법령과 개정일을 적어
+          여섯 계산기 모두 로그인 없이 쓸 수 있고, 세금·수수료 계산기 화면에는 계산 기준이 되는 법령과 개정일을 적어
           두었습니다. 결과는 참고용이며 최종 금액은 관할 기관에 확인하세요.
         </p>
       </section>

@@ -83,6 +83,9 @@
 - **MbSelectedCard**: 마커 클릭 시 선택 단지 요약+상세보기 (InfoWindow router.push 불가 회피용 React 카드). 부모가 `selected && items.some(id 일치)` 가드로 stale 선택 방지. 풀스크린 시 지도 위 absolute 좌하단 오버레이로 띄워 overflow-hidden 클립 회피(세션 319 B). 툴바 켰는데 selected 없으면 "단지를 선택하면 정보가 표시됩니다" 안내(세션 319 E)
 - **useGeolocation**: 접속자 GPS 1회 조회 (getCurrentPosition, enabled 게이트, SSR·타임아웃·거부 안전, status 4종). region 미선택 시 지도 "내 위치" 줌 (지역선택 > GPS > 전국 폴백, Permissions-Policy geolocation=(self) 필요). 분양 탭만 전달(전국조회), 미분양·미분양단지 탭은 지역선택 전제라 미전달(의도된 설계)
 
+## 헤더 메뉴 (Header.tsx `navLinks`)
+- 순서 = 홈 · 미분양 · **중개 실무**(`/broker`, 세션 511) · 블로그 · 도움말 · [관리] + 계산기 ▾ 드롭다운. PC nav 와 휴대폰 드로어가 같은 `navLinks` 배열을 쓴다 — 회귀 = `components/__tests__/Header.test.tsx`(메뉴 경로 집합·「중개 실무」 순서) + e2e 헤더 좁은 스냅샷 `header-public-desktop.png`(메뉴를 바꾸면 CI 재촬영)
+
 ## 홈/검색 통합 (SearchExperience + ActiveFilterChips) — 세션 314
 - **SearchExperience**: 검색 경험 공용 컴포넌트 (입력=매물유형/필터/검색창/지역 + 결과=단지목록/비교/정렬). 홈(`/`)과 옛 `/search` 가 공유 — `/search` 는 `/` 로 리다이렉트(쿼리 보존)
   - 매물유형 탭 기본 선택 = **아파트만**(`DEFAULT_ESTATE_TYPES`, 사장님 결정 2026-10-11) · 선택은 URL `types` 로만 전달(기기 기억 없음 · 기본값이면 URL·서버 모두 types 미전달, 6개 전부여도 URL 에 씀) · 보이는 결과 5개 미만이고 탭에 가려진 단지가 있으면 **HiddenTypesHint** 한 줄("숨긴 유형: 오피스텔 12 · … [모두 보기]")

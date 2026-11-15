@@ -69,6 +69,30 @@ describe("Header 네비게이션", () => {
     });
   });
 
+  it("「중개 실무」 링크 — 데스크톱·휴대폰 메뉴 둘 다, 「미분양」 바로 뒤 (세션 511)", async () => {
+    render(<Header />);
+    await waitFor(() => {
+      expect(screen.getByText("로그인")).toBeInTheDocument();
+    });
+    const orderIn = (nav: Element) =>
+      [...nav.querySelectorAll("a[href]")].map((a) => a.getAttribute("href"));
+
+    const desktopNav = document.querySelector("nav")!;
+    const desktopLink = desktopNav.querySelector('a[href="/broker"]');
+    expect(desktopLink).toHaveTextContent("중개 실무");
+    const d = orderIn(desktopNav);
+    expect(d.indexOf("/broker")).toBe(d.indexOf("/mibunyang") + 1);
+
+    fireEvent.click(screen.getByRole("button", { name: "메뉴 열기" }));
+    await waitFor(() => {
+      expect(document.querySelectorAll("nav").length).toBeGreaterThan(1);
+    });
+    const drawerNav = document.querySelectorAll("nav")[1];
+    expect(drawerNav.querySelector('a[href="/broker"]')).toHaveTextContent("중개 실무");
+    const m = orderIn(drawerNav);
+    expect(m.indexOf("/broker")).toBe(m.indexOf("/mibunyang") + 1);
+  });
+
   it("요금제 메뉴가 없다 (세션 400: 무료 전환으로 /pricing 잠김)", async () => {
     render(<Header />);
     await waitFor(() => {
@@ -192,7 +216,7 @@ describe("Header 계산기 드롭다운 (데스크톱, Radix)", () => {
  */
 describe("Header 메뉴 집합 (세션 400 DOM 레인)", () => {
   /** navLinks 로 렌더되는 경로만 — 로그인(상태 의존)·계산기 드롭다운(별도 단언) 제외 */
-  const NAV_LINK_PATHS = ["/", "/mibunyang", "/blog", "/help"];
+  const NAV_LINK_PATHS = ["/", "/mibunyang", "/broker", "/blog", "/help"];
   const CALC_PATHS = [
     "/tools/brokerage-fee",
     "/tools/acquisition-tax",

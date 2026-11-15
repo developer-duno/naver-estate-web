@@ -77,7 +77,7 @@ describe("sitemap — 정적 장 lastModified 는 장마다 실제로 바뀐 날
       const { default: freshSitemap } = await import("../sitemap");
       const entries = await freshSitemap();
       const byPath = new Map(entries.map((e) => [new URL(e.url).pathname, new Date(e.lastModified as Date).getTime()]));
-      const statics = ["/", "/tools", "/tools/second-mortgage", "/tools/brokerage-fee", "/tools/acquisition-tax",
+      const statics = ["/", "/broker", "/tools", "/tools/second-mortgage", "/tools/brokerage-fee", "/tools/acquisition-tax",
         "/tools/transfer-tax", "/tools/property-tax", "/tools/area-converter", "/help", "/terms", "/privacy"];
       const times = statics.map((p) => byPath.get(p));
       expect(times.every((t) => typeof t === "number" && !Number.isNaN(t))).toBe(true);
@@ -106,6 +106,8 @@ describe("sitemap — 공개 대표 URL 만 (세션 458 SEO)", () => {
     fetchMock.mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
     const urls = (await sitemap()).map((x) => x.url);
     expect(urls).toContain("https://2u.pe.kr/tools");
+    // 세션 511 — 「중개 실무」 공개 장
+    expect(urls).toContain("https://2u.pe.kr/broker");
     // 경로 머리글자로 판정 — 블로그 글 주소(/blog/mibunyang-…)는 비공개 경로가 아니다
     const paths = urls.map((u) => new URL(u).pathname);
     for (const bad of ["/pricing", "/search", "/complex", "/mibunyang", "/admin", "/login"]) {

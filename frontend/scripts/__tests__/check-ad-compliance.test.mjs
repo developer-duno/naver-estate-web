@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { scan } from "../check-ad-compliance.mjs";
+import { scan, TARGETS } from "../check-ad-compliance.mjs";
 
 // 워커별 고유 임시 디렉터리 — 고정 경로 공유 시 병렬 워커가 동시 rm 하다 EPERM 경합 (세션 195).
 // scan() 은 절대경로 정상 처리. hits.file 은 임시폴더 절대경로가 되나 현 테스트는 file 미검증.
@@ -131,5 +131,18 @@ describe("check-ad-compliance.scan()", () => {
     await writeFile(join(dir, "illegal-loan-filter.mdx"), `${LOAN_POST_LINES}최고의 조건을 보장합니다\n`);
     const hits = await scan([FIXTURE]);
     expect(new Set(hits.map((h) => h.word))).toEqual(new Set(["최고의", "보장합니다"]));
+  });
+
+  // 세션 511 — 「중개 실무」 자료(src/lib/broker/*.ts)도 화면에 그대로 나가므로 검사 대상이다.
+  it("TARGETS 에 src/lib/broker 가 들어 있다", () => {
+    expect(TARGETS).toContain("src/lib/broker");
+  });
+
+  it(".ts 파일의 위험 단어도 검출 — 자료 파일(upcoming-dates.ts 꼴)", async () => {
+    const dir = join(FIXTURE, "src", "lib", "broker");
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "dates.ts"), `export const x = [{ note: "최고의 서식" }];\n`);
+    const hits = await scan([FIXTURE]);
+    expect(hits.map((h) => h.word)).toEqual(["최고의"]);
   });
 });

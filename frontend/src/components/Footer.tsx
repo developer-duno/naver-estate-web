@@ -10,12 +10,14 @@ export default function Footer() {
       <div className="max-w-6xl mx-auto px-4 py-8 sm:py-10">
         <div className="space-y-4 text-sm leading-relaxed">
           <p>
-            매물 정보의 정확성·완전성·적시성을 보장하지 않습니다. 거래 시
-            반드시 공인중개사를 통해 확인하시기 바랍니다.
+            실거래가·공시가격·관리비는 정부·공공기관이 공개한 자료로 보여
+            드립니다. 계약 전에는 등기부등본과 공인중개사를 통해 한 번 더
+            확인하세요.
           </p>
           <p className="text-xs">
-            데이터 출처: 네이버 부동산, 국토교통부 공공데이터, 에어코리아,
-            응급의료정보, 보육통합정보(CPMS)
+            자료 출처: 국토교통부(실거래가·공시가격) · 한국부동산원(관리비·지역
+            통계) · 국가데이터처(동네 통계) · 국립중앙의료원(응급의료) ·
+            보육통합정보(어린이집) · 네이버 부동산(회원 매물)
           </p>
         </div>
 
@@ -131,7 +133,7 @@ export default function Footer() {
             </Link>
           </nav>
           <p className="text-xs">
-            © {year} 2u부동산 — 아파트·오피스텔 실거래가·시세, 공인중개사 업무 도구
+            © {year} 2u부동산 — 아파트·오피스텔 실거래가·공시가격 조회
           </p>
         </div>
       </div>

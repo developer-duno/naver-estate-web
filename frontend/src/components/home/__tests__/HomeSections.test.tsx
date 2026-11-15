@@ -26,6 +26,18 @@ describe("HomeSections — 대기 화면", () => {
     expect(screen.queryByText("즐겨찾기")).not.toBeInTheDocument();
   });
 
+  // 세션 509(B36 ①) — PC 는 9칸 고정(17개 = 9 + 8, 제주 단추가 둘째 줄 끝에 맞춰짐) · 휴대폰 4칸 · 「전체 보기」 단추는 휴대폰만
+  it("지역 단추 칸은 휴대폰 4칸 · PC 9칸", () => {
+    const { container } = render(<HomeSections search={<HomeSearchBoxStatic />} interactive={false} />);
+    const grid = container.querySelector('a[href^="/region#"]')?.parentElement as HTMLElement;
+    const tokens = grid.className.split(/\s+/);
+    expect(tokens).toContain("grid-cols-4");
+    expect(tokens).toContain("sm:grid-cols-9");
+    expect(grid.className).not.toContain("auto-fill");
+    const all = Array.from(grid.querySelectorAll("a")).find((a) => a.getAttribute("href") === "/region");
+    expect(all?.className.split(/\s+/)).toContain("sm:hidden");
+  });
+
   it("검색 입력 칸은 세로로 쌓일 때 flex-1(기준 높이 0)을 쓰지 않는다 — 휴대폰에서 19px 로 눌린 결함(세션 508 보완)", () => {
     render(<HomeSearchBoxStatic />);
     const tokens = screen.getByLabelText("단지 또는 지역 검색").className.split(/\s+/);

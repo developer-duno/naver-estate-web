@@ -6,11 +6,12 @@ test.describe("광고법 컴플라이언스 회귀 가드", () => {
     await applyPublicMocks(page);
     await page.goto("/");
 
+    // 세션 509(B36 ①) — 푸터 안내 문장 새 문구(공공 자료 + 계약 전 등기부등본·공인중개사 확인)
     await expect(
-      page.getByText(/정확성·완전성·적시성을 보장하지 않습니다/),
+      page.getByText(/정부·공공기관이 공개한 자료로 보여 드립니다/),
     ).toBeVisible();
     await expect(
-      page.getByText(/반드시 공인중개사를 통해 확인/),
+      page.getByText(/등기부등본과 공인중개사를 통해 한 번 더 확인하세요/),
     ).toBeVisible();
     await expect(page.getByRole("link", { name: "이용약관" })).toBeVisible();
     await expect(
@@ -21,7 +22,7 @@ test.describe("광고법 컴플라이언스 회귀 가드", () => {
   test("Footer 면책 조항 — /blog 페이지", async ({ page }) => {
     await page.goto("/blog");
     await expect(
-      page.getByText(/정확성·완전성·적시성을 보장하지 않습니다/),
+      page.getByText(/정부·공공기관이 공개한 자료로 보여 드립니다/),
     ).toBeVisible();
   });
 

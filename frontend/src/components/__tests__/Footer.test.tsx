@@ -8,14 +8,15 @@ import Footer from "@/components/Footer";
 import { LOCKED_PATHS } from "@/lib/locked-paths";
 
 describe("Footer — 광고법 면책 조항", () => {
-  it("면책 텍스트 노출 — '보장하지 않습니다' + '공인중개사 확인'", () => {
+  // 세션 509(B36 ①) — 사장님이 고른 A 문장: 공공 자료라는 사실 + 계약 전 등기부등본·공인중개사 확인 안내
+  it("안내 문장 — 공공기관 공개 자료 + 등기부등본·공인중개사 확인", () => {
     render(<Footer />);
     expect(
-      screen.getByText(/정확성·완전성·적시성을 보장하지 않습니다/),
+      screen.getByText(
+        "실거래가·공시가격·관리비는 정부·공공기관이 공개한 자료로 보여 드립니다. 계약 전에는 등기부등본과 공인중개사를 통해 한 번 더 확인하세요.",
+      ),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/반드시 공인중개사를 통해 확인/),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/정확성·완전성·적시성/)).not.toBeInTheDocument();
   });
 
   it("법적 고지 링크 5종 — /terms · /privacy · /refund · /updates · /help", () => {
@@ -63,14 +64,20 @@ describe("Footer — 광고법 면책 조항", () => {
     }
   });
 
-  it("데이터 출처 6종 + 카피라이트(연도 포함) 노출", () => {
+  // 세션 509(B36 ①) — 출처 6곳(에어코리아 뺌 · 대기질 수집은 세션604 에 삭제) + 카피라이트 새 꼬리말
+  it("자료 출처 6곳(에어코리아 없음) + 카피라이트(연도 포함) 노출", () => {
     render(<Footer />);
-    expect(screen.getByText(/네이버 부동산/)).toBeInTheDocument();
-    expect(screen.getByText(/국토교통부/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "자료 출처: 국토교통부(실거래가·공시가격) · 한국부동산원(관리비·지역 통계) · 국가데이터처(동네 통계) · 국립중앙의료원(응급의료) · 보육통합정보(어린이집) · 네이버 부동산(회원 매물)",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/에어코리아/)).not.toBeInTheDocument();
     const year = new Date().getFullYear();
     expect(
-      screen.getByText(new RegExp(`© ${year} 2u부동산`)),
+      screen.getByText(`© ${year} 2u부동산 — 아파트·오피스텔 실거래가·공시가격 조회`),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/공인중개사 업무 도구/)).not.toBeInTheDocument();
   });
 
   /**

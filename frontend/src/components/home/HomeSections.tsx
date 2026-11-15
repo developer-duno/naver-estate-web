@@ -3,7 +3,6 @@ import HomeToolCards from "@/components/HomeToolCards";
 import HomeLoanPanel from "./HomeLoanPanel";
 import HomeRegionLinks from "./HomeRegionLinks";
 import HomeRegionTrend from "./HomeRegionTrend";
-import HomeFavorites from "./HomeFavorites";
 import HomeGuide from "./HomeGuide";
 
 /** 대기 화면에서 지역 시세 카드 자리 — 실제 카드의 로딩 상태와 같은 모양(브라우저 저장소·요청 0) */
@@ -22,7 +21,8 @@ function TrendPlaceholder() {
 /**
  * 홈 빈 화면(검색어 없음) 칸 묶음(세션 508) — Suspense 대기 화면(정적 프리렌더 = 봇이 받는 첫 HTML)과
  * SearchExperience renderEmpty 가 **같은 컴포넌트**를 그린다(모양이 같아 깜빡임 없음).
- * interactive=false(대기 화면)면 브라우저 저장소·세션·요청을 쓰는 칸(즐겨찾기·지역 시세 차트)은 자리만 둔다.
+ * interactive=false(대기 화면)면 브라우저 저장소·세션·요청을 쓰는 칸(지역 시세 차트)은 자리만 둔다.
+ * 즐겨찾기는 세션 509 부터 검색 상자(HomeSearchBox — 대화형 판만) 안에 있다.
  */
 export default function HomeSections({ search, interactive }: { search: ReactNode; interactive: boolean }) {
   return (
@@ -37,7 +37,6 @@ export default function HomeSections({ search, interactive }: { search: ReactNod
         <HomeRegionLinks />
         {interactive ? <HomeRegionTrend /> : <TrendPlaceholder />}
         <HomeToolCards />
-        {interactive && <HomeFavorites />}
         <HomeGuide />
       </div>
     </>

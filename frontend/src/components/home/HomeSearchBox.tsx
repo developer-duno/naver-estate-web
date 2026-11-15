@@ -3,6 +3,7 @@
 import { useState } from "react";
 import RegionSelector from "@/components/RegionSelector";
 import type { EmptySearchApi } from "@/components/search/SearchExperience";
+import HomeFavorites from "./HomeFavorites";
 
 // 휴대폰은 세로로 쌓이므로 flex-1(기준 높이 0)을 쓰면 WebKit·Chromium 모두 입력 칸이 19px 로 눌린다(세션 508 실측) →
 // 세로 쌓임에선 w-full + shrink-0, 가로 줄(sm 이상)에서만 flex-1
@@ -45,6 +46,8 @@ export function HomeSearchBox({ api }: { api: EmptySearchApi }) {
       )}
       {/* 최근 검색 칩(기존 부품) — 남색 위라 제목 글자색만 바꾸고 왼쪽 정렬 */}
       <div className="mt-2 [&>div]:mx-0 [&_div]:justify-start [&_p]:text-brand-on-navy-muted">{api.recentChips}</div>
+      {/* 즐겨찾기 칩(세션 509 · B36 ①) — 최근 검색 칩 바로 아래 · 0개면 안 그림. 대기 화면(Static)엔 없다(브라우저 저장소) */}
+      <HomeFavorites />
     </div>
   );
 }

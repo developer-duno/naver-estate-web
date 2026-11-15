@@ -41,6 +41,7 @@ import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from urllib.parse import urlparse
 
 SITE = "https://2u.pe.kr/"
 MAX_PER_POST = 10000  # 규격: POST 한 번에 urlList 1만 개까지
@@ -61,7 +62,8 @@ KEY_FILE = Path(__file__).resolve().parent.parent / "public" / f"{KEY}.txt"
 
 def build_body(urls: list[str]) -> dict:
     """규격의 POST 본문 — host·key·keyLocation·urlList."""
-    bad = [u for u in urls if not u.startswith(SITE)]
+    # 사이트맵의 홈 loc 은 끝 슬래시가 없다(`https://2u.pe.kr`) → 접두어가 아니라 호스트로 본다
+    bad = [u for u in urls if not (urlparse(u).scheme == "https" and urlparse(u).hostname == HOST)]
     if bad:
         raise ValueError(f"이 사이트 주소가 아님: {bad}")
     return {

@@ -80,9 +80,10 @@ curl -sL -A "Googlebot" https://<도메인>/ | grep -c '<h1'   # 1 이상이어�
 ## 룰 4 — sitemap lastModified 는 빌드시각(new Date()) 금지, 실제 수정일
 
 정적 페이지 lastModified 를 `new Date()`(빌드 시각)로 두면 콘텐츠가 안 바뀌어도 매 배포
-"수정됨"으로 찍혀 검색엔진이 lastmod 신뢰를 거둔다. **고정 날짜 상수**로 두고 실제
-개편 시에만 손으로 갱신. blog 글은 발행일(`p.date`) 사용. 선례: `app/sitemap.ts`
-`STATIC_PAGE_LASTMOD`.
+"수정됨"으로 찍혀 검색엔진이 lastmod 신뢰를 거둔다. **주소별 고정 날짜 표**로 두고 그 장의
+화면 글자·title·description 을 바꾼 PR 에서 그 줄만 손으로 갱신(세션 507 — 옛 단일 상수
+`STATIC_PAGE_LASTMOD` 는 홈 개편 뒤에도 06-29 로 남아 있었다). blog 글은 발행일(`p.date`),
+`/blog` 는 공개 글 중 최신 발행일. 선례: `app/sitemap.ts` 날짜 표.
 
 ## 룰 5 — 의도된 봇 차단과 노출은 구분
 

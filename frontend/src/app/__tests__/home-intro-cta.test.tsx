@@ -1,6 +1,6 @@
 /**
  * 홈 개편 화면(세션 508 · 사장님 결정 2026-11-15) — 옛 「2u부동산은 무엇을 하나요」 소개·「무료로 시작하기」·단지/매물 숫자 시험을 갈음.
- * - 머리: 「로그인 없이 · 무료」 · h1 · 설명, 매물·단지 숫자와 getStats 호출 없음
+ * - 머리: 「로그인 없이 · 무료」 · h1 · 설명, 매물·단지 숫자 없음
  * - 대출 판 · 지역별 실거래가 17곳(/region#시도, 미리 받기 끔) · 계산기 모음(후순위 대출 한도) · 가이드 3편(대출 글 맨 앞)
  * 실행: npx vitest run src/app/__tests__/home-intro-cta.test.tsx
  */
@@ -8,10 +8,9 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { TestQueryProvider } from "@/test-setup";
 
-const { mockRouter, mockSearchParams, getStats } = vi.hoisted(() => ({
+const { mockRouter, mockSearchParams } = vi.hoisted(() => ({
   mockRouter: { push: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() },
   mockSearchParams: new URLSearchParams(),
-  getStats: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -30,7 +29,6 @@ vi.mock("next/link", async () => {
 });
 
 vi.mock("@/lib/api", () => ({
-  getStats,
   getRegions: vi.fn().mockResolvedValue({}),
   searchComplexes: vi.fn().mockResolvedValue({ complexes: [] }),
   getComplexesByRegion: vi.fn().mockResolvedValue({ complexes: [] }),
@@ -57,9 +55,8 @@ describe("홈 개편 — 머리", () => {
     expect(screen.getByText("국토교통부 실거래가 · 공시가격 · 한국부동산원 지역 시세를 한곳에서 봅니다.")).toBeInTheDocument();
   });
 
-  it("매물·단지 숫자·통계 로딩·옛 소개·가입 단추가 없고 getStats 를 부르지 않는다", () => {
+  it("매물·단지 숫자·통계 로딩·옛 소개·가입 단추가 없다", () => {
     renderHome();
-    expect(getStats).not.toHaveBeenCalled();
     expect(screen.queryByText(/통계 로딩/)).not.toBeInTheDocument();
     expect(screen.queryByText("2u부동산은 무엇을 하나요")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "무료로 시작하기" })).not.toBeInTheDocument();

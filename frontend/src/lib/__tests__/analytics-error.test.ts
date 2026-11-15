@@ -10,9 +10,8 @@ import { setupServer } from "msw/node";
 
 const API = "http://test-api:8000";
 
-// getStats/getRegions 의 Supabase 폴백 경로 차단 (본 테스트 범위 밖)
+// getRegions 의 Supabase 폴백 경로 차단 (본 테스트 범위 밖)
 vi.mock("@/lib/api-direct", () => ({
-  getStatsDirect: vi.fn(),
   getRegionsDirect: vi.fn(),
 }));
 

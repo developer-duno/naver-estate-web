@@ -4,7 +4,7 @@
  */
 
 import { createClient } from "@/lib/supabase";
-import type { Complex, Article, DbStats, Regions, FilterOptions } from "@/types";
+import type { Complex, Article, Regions, FilterOptions } from "@/types";
 
 function sb() {
   return createClient();
@@ -21,26 +21,6 @@ const SIDO_NORMALIZE: Record<string, string> = {
   "울산시": "울산광역시",
   "세종시": "세종특별자치시",
 };
-
-/** DB 통계 */
-export async function getStatsDirect(): Promise<DbStats> {
-  const supabase = sb();
-  const [complexRes, articleRes] = await Promise.all([
-    supabase.from("complexes").select("*", { count: "exact", head: true }),
-    supabase.from("articles").select("*", { count: "exact", head: true }).eq("is_active", true),
-  ]);
-  // V031 로 anon SELECT 가 차단되면 error(42501) 가 오는데, count 만 보면 silent 0 으로
-  // 위장된다. error 시 throw 해 호출처(React Query)가 isError 로 잡게 한다.
-  if (complexRes.error || articleRes.error) {
-    throw new Error("통계 조회 실패");
-  }
-  return {
-    complex_count: complexRes.count ?? 0,
-
-    article_count: articleRes.count ?? 0,
-  };
-}
-
 
 // 지역 목록 캐시 (5분 TTL)
 let _regionCache: { data: Regions; time: number } | null = null;

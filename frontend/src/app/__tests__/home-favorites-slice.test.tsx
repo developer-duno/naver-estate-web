@@ -18,7 +18,6 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/api", () => ({
-  getStats: vi.fn().mockResolvedValue({ complex_count: 100, article_count: 200 }),
   getRegions: vi.fn().mockResolvedValue({}),
   searchComplexes: vi.fn().mockResolvedValue({ complexes: [] }),
   getComplexesByRegion: vi.fn().mockResolvedValue({ complexes: [] }),

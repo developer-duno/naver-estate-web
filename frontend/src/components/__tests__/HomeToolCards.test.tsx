@@ -1,6 +1,6 @@
 /**
  * HomeToolCards 컴포넌트 테스트 — 홈 「계산기 모음」 7칸(세션 508: 옛 4칸 미분양·계산기·블로그·도움말에서 바뀜 ·
- * 세션 514: 끝에 「계약 체크 목록」 /checklist · 세션 516: 그 카드 설명 「전세 · 매매 — 당사자별」 · 세션 517: 「전세 · 월세 · 매매 — 당사자별」)
+ * 세션 514: 끝에 「계약 체크 목록」 /checklist · 세션 516: 그 카드 설명 「전세 · 매매 — 당사자별」 · 세션 517: 「전세 · 월세 · 매매」 — PC 6칸 폭에서 「당사자별」이 낱말 중간에서 꺾여 뺌)
  * 실행: npx vitest run src/components/__tests__/HomeToolCards.test.tsx
  */
 import { describe, it, expect } from "vitest";
@@ -20,7 +20,7 @@ describe("HomeToolCards — 계산기 모음 7칸", () => {
       "/tools/area-converter",
       "/checklist",
     ]);
-    expect(screen.getByRole("link", { name: "계약 체크 목록 — 전세 · 월세 · 매매 — 당사자별" })).toHaveAttribute("href", "/checklist");
+    expect(screen.getByRole("link", { name: "계약 체크 목록 — 전세 · 월세 · 매매" })).toHaveAttribute("href", "/checklist");
   });
 
   it("후순위 대출 한도 칸만 주황 강조", () => {

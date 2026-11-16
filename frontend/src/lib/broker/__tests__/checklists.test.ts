@@ -38,6 +38,29 @@ describe("체크 목록 자료", () => {
     }
   });
 
+  it("근거 조문 글자와 주소가 같은 법령·같은 조문을 가리킨다(label ↔ url)", () => {
+    // 화면 글자의 약칭 → 법제처 주소의 법령명(띄어쓰기 뺀 뒤 앞부분만 바꾼다)
+    const FULL_NAME: Record<string, string> = { 부동산거래신고법: "부동산거래신고등에관한법률" };
+    const ARTICLE = /제\d+조(의\d+)?/;
+    for (const item of items) {
+      for (const law of item.laws) {
+        const [, name, article] = decodeURI(law.url).match(/^https:\/\/www\.law\.go\.kr\/법령\/([^/]+)\/([^/]+)$/) ?? [];
+        const labelArticle = law.label.match(ARTICLE)?.[0];
+        expect({ id: item.id, article: labelArticle }).toEqual({ id: item.id, article });
+        let labelName = law.label.slice(0, law.label.search(ARTICLE)).replace(/\s/g, "");
+        for (const [short, full] of Object.entries(FULL_NAME)) {
+          if (labelName.startsWith(short)) labelName = full + labelName.slice(short.length);
+        }
+        expect({ id: item.id, name: labelName }).toEqual({ id: item.id, name });
+      }
+    }
+  });
+
+  it("8번 설명 ⓑ 는 임대인 동의를 받아 국세·지방세 열람을 신청한다고 적는다(법 원문 감사 반영)", () => {
+    const rights = items.find((i) => i.id === "jeonse.explain-rights");
+    expect(rights?.detail).toContain("ⓑ 임대인 동의를 받아 임대인이 내지 않은");
+  });
+
   it("바로가기 링크는 사이트 안 주소(/) 또는 https 원문만", () => {
     const links = items.flatMap((i) => i.links ?? []);
     expect(links.length).toBeGreaterThan(0);

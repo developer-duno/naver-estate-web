@@ -25,6 +25,8 @@ describe("/terms 이용약관", () => {
     expect(text.split("고의 또는 중대한 과실").length - 1).toBe(1);
     expect(text).toContain("공인중개사 실무에 쓰는 법령 근거, 서식 원문 연결, 체크 목록");
     expect(text).toContain("개별 거래에 대한 법률 자문이 아닙니다");
+    // 제4조 ① — 기준일은 기준일이 있는 자료에만 함께 보여 준다(법 원문 감사 반영)
+    expect(text).toContain("기준일이 있는 자료는 기준일도 함께");
   });
 
   it("제1조~제8조 제목 순서 그대로 + 부칙", () => {

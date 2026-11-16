@@ -1,20 +1,38 @@
 /**
  * 「중개 실무」 체크 목록 자료(lib/broker/checklists.ts) — 키 꼴·근거 조문 주소·항목 수(세션 513 PR 2a)
+ * 세션 514: audience(broker/party) 거르기 · 조문 글자↔주소 짝 시험은 세 목록(전세·세입자·집주인) 전부를 돈다.
  * 실행: npx vitest run src/lib/broker/__tests__/checklists.test.ts
  */
 import { describe, it, expect } from "vitest";
-import { CHECKLISTS, CHECKLIST_TYPES, getChecklist } from "../checklists";
+import { BROKER_TYPES, CHECKLISTS, PARTY_TYPES, getChecklist } from "../checklists";
 
 const jeonse = CHECKLISTS.jeonse;
 const items = jeonse.stages.flatMap((s) => s.items);
 
 describe("체크 목록 자료", () => {
-  it("유형 목록은 CHECKLISTS 키에서 파생 — 지금은 jeonse 하나", () => {
-    expect(CHECKLIST_TYPES).toEqual(["jeonse"]);
-    for (const t of CHECKLIST_TYPES) expect(CHECKLISTS[t].type).toBe(t);
-    expect(getChecklist("jeonse")).toBe(jeonse);
-    expect(getChecklist("wolse")).toBeUndefined();
-    expect(getChecklist("toString")).toBeUndefined();
+  it("유형 목록은 CHECKLISTS 키에서 audience 로 갈라 파생 — 중개사용 jeonse · 당사자용 세입자·집주인", () => {
+    expect(BROKER_TYPES).toEqual(["jeonse"]);
+    expect(PARTY_TYPES).toEqual(["jeonse-tenant", "jeonse-landlord"]);
+    expect(BROKER_TYPES.filter((t) => (PARTY_TYPES as string[]).includes(t))).toEqual([]);
+    expect([...BROKER_TYPES, ...PARTY_TYPES].sort()).toEqual(Object.keys(CHECKLISTS).sort());
+    for (const t of Object.keys(CHECKLISTS) as (keyof typeof CHECKLISTS)[]) expect(CHECKLISTS[t].type).toBe(t);
+    expect(getChecklist("jeonse", "broker")).toBe(jeonse);
+    expect(getChecklist("wolse", "broker")).toBeUndefined();
+    expect(getChecklist("toString", "broker")).toBeUndefined();
+    expect(getChecklist("toString", "party")).toBeUndefined();
+  });
+
+  it("audience 가 다르면 undefined — /broker/jeonse-tenant · /checklist/jeonse 는 열리지 않는다", () => {
+    expect(getChecklist("jeonse-tenant", "broker")).toBeUndefined();
+    expect(getChecklist("jeonse-landlord", "broker")).toBeUndefined();
+    expect(getChecklist("jeonse", "party")).toBeUndefined();
+    expect(getChecklist("jeonse-tenant", "party")).toBe(CHECKLISTS["jeonse-tenant"]);
+    expect(getChecklist("jeonse-landlord", "party")).toBe(CHECKLISTS["jeonse-landlord"]);
+  });
+
+  it("중개사용 전세의 손님 목록 짝(partyTypes)은 당사자용 목록만 가리킨다", () => {
+    expect(jeonse.partyTypes).toEqual(["jeonse-tenant", "jeonse-landlord"]);
+    for (const t of jeonse.partyTypes ?? []) expect(getChecklist(t, "party")).toBeDefined();
   });
 
   it("전세 = 단계 4 · 항목 18", () => {
@@ -38,11 +56,13 @@ describe("체크 목록 자료", () => {
     }
   });
 
-  it("근거 조문 글자와 주소가 같은 법령·같은 조문을 가리킨다(label ↔ url)", () => {
+  it("근거 조문 글자와 주소가 같은 법령·같은 조문을 가리킨다(label ↔ url) — 세 목록 전부", () => {
+    const allItems = Object.values(CHECKLISTS).flatMap((l) => l.stages.flatMap((s) => s.items));
+    expect(allItems).toHaveLength(18 + 15 + 10);
     // 화면 글자의 약칭 → 법제처 주소의 법령명(띄어쓰기 뺀 뒤 앞부분만 바꾼다)
     const FULL_NAME: Record<string, string> = { 부동산거래신고법: "부동산거래신고등에관한법률" };
     const ARTICLE = /제\d+조(의\d+)?/;
-    for (const item of items) {
+    for (const item of allItems) {
       for (const law of item.laws) {
         const [, name, article] = decodeURI(law.url).match(/^https:\/\/www\.law\.go\.kr\/법령\/([^/]+)\/([^/]+)$/) ?? [];
         const labelArticle = law.label.match(ARTICLE)?.[0];

@@ -97,4 +97,18 @@ describe("/broker/[type] 장", () => {
     expect(notFoundMock).toHaveBeenCalledTimes(1);
     expect(await generateMetadata(params("wolse"))).toEqual({});
   });
+
+  it("세입자·집주인용 유형은 이 장에서 열리지 않는다(/broker/jeonse-tenant → notFound · 세션 514)", async () => {
+    await expect(BrokerChecklistPage(params("jeonse-tenant"))).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(BrokerChecklistPage(params("jeonse-landlord"))).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(await generateMetadata(params("jeonse-tenant"))).toEqual({});
+  });
+
+  it("전세 머리에 「손님에게 보낼 목록: 세입자용 · 집주인용」 링크(세션 514)", async () => {
+    render(await BrokerChecklistPage(params("jeonse")));
+    const line = screen.getByText(/손님에게 보낼 목록:/);
+    expect(line).toHaveTextContent("손님에게 보낼 목록: 세입자용 · 집주인용");
+    expect(within(line).getByRole("link", { name: "세입자용" })).toHaveAttribute("href", "/checklist/jeonse-tenant");
+    expect(within(line).getByRole("link", { name: "집주인용" })).toHaveAttribute("href", "/checklist/jeonse-landlord");
+  });
 });

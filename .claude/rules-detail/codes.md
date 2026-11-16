@@ -21,4 +21,4 @@
 | `mb_view_mode`       | 미분양 탭 보기 방식 (list/map)          | 값 1개, default = list |
 | `favorite_price_snapshot` | 즐겨찾기 단지 가격 변동 배지용 마지막 조회가 (complex_no→가격 맵) | 승인 중개사 전용(B2 게이트), 표시용 캐시라 유실돼도 무해 |
 | `search_view_mode`   | 매물 검색 결과 보기 방식 (list/map)     | 값 1개, default = list, mb_view_mode 와 물리적으로 분리된 키(탭 간 의도치 않은 결합 방지) |
-| `broker_deals_v1`    | 중개 실무 체크 목록의 거래 묶음(거래 번호·유형·계약일)과 체크 표시 (`lib/broker/deals-storage.ts`, 세션 513) | 거래 20개(모든 유형 합) · 읽을 때 모양 검사(틀리면 버리고 화면이 한 번 알림) · 체크는 항목 id 로만(지금 목록에 없는 id 는 버림) · 모양을 바꾸면 `_v2` 새 키 + v1 이관 |
+| `broker_deals_v1`    | 중개 실무 체크 목록의 거래 묶음(거래 번호·유형·계약일)과 체크 표시 (`lib/broker/deals-storage.ts`, 세션 513) | 중개사용 거래 20개(유형 합 · 세입자·집주인은 유형마다 1개라 합계에서 뺌, 세션 514) · 읽을 때 모양 검사(틀리면 버리고 화면이 한 번 알림) · 체크는 항목 id 로만(지금 목록에 없는 id 는 버림) · 모양을 바꾸면 `_v2` 새 키 + v1 이관 · 계약 체크 목록(세입자·집주인, `/checklist/<type>`)도 같은 키 · 유형 `jeonse-tenant`·`jeonse-landlord`(세션 514) |

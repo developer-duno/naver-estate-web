@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 /**
- * HomeToolCards — 홈 「계산기 모음」 6칸(세션 508 · 승인 항목 12). 후순위 대출 한도는 주황 강조 + 기존 계산기 5종.
+ * HomeToolCards — 홈 「계산기 모음」 7칸(세션 508 · 승인 항목 12). 후순위 대출 한도는 주황 강조 + 기존 계산기 5종
+ * + 계산기는 아니지만 일반인이 들어오는 문으로 「계약 체크 목록」(/checklist · 세션 514 — 제목은 그대로 두기로 결정).
  * 순수 표현 컴포넌트(데이터 페칭 없음). 옛 4칸(미분양·계산기·블로그·도움말)은 머리 메뉴·가이드 칸으로 옮겨 갔다.
  */
 type ToolCard = {
@@ -18,6 +19,7 @@ const CARDS: ToolCard[] = [
   { href: "/tools/property-tax", title: "보유세", desc: "재산세 · 종부세" },
   { href: "/tools/brokerage-fee", title: "중개수수료", desc: "복비 계산" },
   { href: "/tools/area-converter", title: "평 · ㎡ 변환", desc: "면적 계산" },
+  { href: "/checklist", title: "계약 체크 목록", desc: "전세 세입자 · 집주인" },
 ];
 
 export default function HomeToolCards() {

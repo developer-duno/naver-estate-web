@@ -14,7 +14,11 @@ import { safeSetItem } from "@/lib/storage";
 import { CHECKLISTS, type ChecklistType } from "./checklists";
 
 export const DEALS_KEY = "broker_deals_v1";
-/** 저장하는 거래 수 상한(모든 유형 합) */
+/**
+ * 중개사용 목록(audience broker)의 거래 수 상한(그 유형들 합).
+ * 세입자·집주인 같은 당사자용 목록(audience party)은 유형마다 거래가 1개뿐이라 이 합계에 넣지 않는다 —
+ * 중개사 거래가 꽉 차도 당사자용 장의 첫 체크가 늘 저장되게(세션 514).
+ */
 export const MAX_DEALS = 20;
 
 export type Deal = {
@@ -44,6 +48,16 @@ export function emptyState(): DealsState {
 
 function isKnownType(t: unknown): t is ChecklistType {
   return typeof t === "string" && Object.prototype.hasOwnProperty.call(CHECKLISTS, t);
+}
+
+/** 당사자용(세입자·집주인) 유형인가 — 유형마다 거래 1개, 상한 합계에서 뺀다 */
+function isPartyType(type: ChecklistType): boolean {
+  return CHECKLISTS[type].audience === "party";
+}
+
+/** 상한(MAX_DEALS)에 세는 거래 수 = 중개사용 유형의 거래만 */
+export function limitedDealCount(state: DealsState): number {
+  return state.deals.filter((d) => !isPartyType(d.type)).length;
 }
 
 function itemIds(type: ChecklistType): Set<string> {
@@ -107,7 +121,17 @@ export function parseDeals(raw: string | null): ReadResult {
     if (d.contractDate !== undefined) deal.contractDate = d.contractDate as string;
     deals.push(deal);
   }
-  const kept = deals.slice(0, MAX_DEALS);
+  // 중개사용 거래는 앞에서부터 상한까지, 당사자용 거래는 유형마다 첫 1개만 남긴다
+  let limited = 0;
+  const partySeen = new Set<ChecklistType>();
+  const kept = deals.filter((d) => {
+    if (isPartyType(d.type)) {
+      if (partySeen.has(d.type)) return false;
+      partySeen.add(d.type);
+      return true;
+    }
+    return ++limited <= MAX_DEALS;
+  });
   const active: DealsState["active"] = {};
   for (const [t, id] of Object.entries(data.active)) {
     if (isKnownType(t) && kept.some((d) => d.id === id && d.type === t)) active[t] = id as string;
@@ -147,9 +171,12 @@ function mapDeal(state: DealsState, dealId: string, fn: (d: Deal) => Deal): Deal
   return { ...state, deals: state.deals.map((d) => (d.id === dealId ? fn(d) : d)) };
 }
 
-/** 새 거래(번호 = 그 유형의 가장 큰 번호 + 1)를 만들고 고른다. 상한이면 null. */
+/**
+ * 새 거래(번호 = 그 유형의 가장 큰 번호 + 1)를 만들고 고른다.
+ * 중개사용 유형은 상한(MAX_DEALS)이면 null · 당사자용 유형은 이미 거래가 있으면 null(유형마다 1개).
+ */
 export function addDeal(state: DealsState, type: ChecklistType, now: number): { state: DealsState; deal: Deal } | null {
-  if (state.deals.length >= MAX_DEALS) return null;
+  if (isPartyType(type) ? dealsOf(state, type).length > 0 : limitedDealCount(state) >= MAX_DEALS) return null;
   const no = dealsOf(state, type).reduce((m, d) => Math.max(m, d.no), 0) + 1;
   const deal: Deal = { id: `${type}-${now.toString(36)}-${no}`, no, type, checks: [], createdAt: now };
   return { state: { ...state, deals: [...state.deals, deal], active: { ...state.active, [type]: deal.id } }, deal };

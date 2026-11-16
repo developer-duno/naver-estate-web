@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 import { POSTS } from "./blog/posts";
 import { SITE_URL } from "@/lib/constants";
 import { getPublicUpdates } from "@/lib/api/opinions";
-import { CHECKLISTS, CHECKLIST_TYPES } from "@/lib/broker/checklists";
+import { CHECKLISTS, BROKER_TYPES, PARTY_TYPES } from "@/lib/broker/checklists";
 
 /**
  * 정적 페이지의 lastModified — 장마다 "화면 글자나 title·description 이 마지막으로 바뀐 날"(세션 507).
@@ -17,11 +17,14 @@ import { CHECKLISTS, CHECKLIST_TYPES } from "@/lib/broker/checklists";
  * 세션 511: /broker(중개 실무 · 새 장) = 2026-11-16.
  * 세션 513: /terms(제1·2·4조) = 2026-11-16 · /broker/<type> = checklists.ts checkedAt(이 표에 두지 않는다).
  * 세션 513: /privacy(10절·개정 예고) = 2026-11-16.
+ * 세션 514: /checklist(계약 체크 목록 · 새 모음 장) = 2026-11-16 · /checklist/<type> = checklists.ts checkedAt(이 표에 두지 않는다) ·
+ *   /privacy 는 10절에 계약 체크 목록을 더했으나 같은 날(2026-11-16)이라 그대로.
  * /blog 는 공개 글 중 가장 최근 발행일, /updates 는 updatesLastModified() 가 정한다(이 표에 없음).
  */
 const STATIC_PAGE_LASTMOD = {
   "/": "2026-11-16",
   "/broker": "2026-11-16",
+  "/checklist": "2026-11-16",
   "/tools": "2026-11-15",
   "/tools/second-mortgage": "2026-11-15",
   "/tools/brokerage-fee": "2026-06-09",
@@ -76,8 +79,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // 세션 400: /pricing 은 무료 전환으로 잠긴 페이지라 sitemap 제외 (lib/locked-paths.ts)
     { url: `${SITE_URL}/broker`, lastModified: lastmod("/broker"), changeFrequency: "monthly", priority: 0.8 },
     // 거래 유형별 체크 목록 — 장·허브 버튼과 같은 한 목록(checklists.ts), lastmod = 그 목록의 법령 기준일
-    ...CHECKLIST_TYPES.map((t) => ({
+    ...BROKER_TYPES.map((t) => ({
       url: `${SITE_URL}/broker/${t}`,
+      lastModified: new Date(CHECKLISTS[t].checkedAt),
+      changeFrequency: "monthly" as const,
+      priority: 0.7,
+    })),
+    // 계약 체크 목록(세입자·집주인 — 세션 514) — 모음 장 + 당사자용 목록(PARTY_TYPES), lastmod = 그 목록의 법령 기준일
+    { url: `${SITE_URL}/checklist`, lastModified: lastmod("/checklist"), changeFrequency: "monthly", priority: 0.8 },
+    ...PARTY_TYPES.map((t) => ({
+      url: `${SITE_URL}/checklist/${t}`,
       lastModified: new Date(CHECKLISTS[t].checkedAt),
       changeFrequency: "monthly" as const,
       priority: 0.7,

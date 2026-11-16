@@ -1,23 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CHECKLIST_TYPES, getChecklist, type ChecklistType } from "@/lib/broker/checklists";
+import { BROKER_TYPES, getChecklist, type ChecklistType } from "@/lib/broker/checklists";
 import DealChecklist from "@/components/broker/DealChecklist";
 import { formatDateDot } from "@/lib/broker/upcoming-dates";
 
 /**
  * 거래 유형별 체크 목록(세션 513 PR 2a) — 서버 정적 장. 자료 = lib/broker/checklists.ts 한 목록.
  * 단계 카드·체크 상자·「내 거래」 줄은 클라이언트 부품 DealChecklist(PR 2b — 이 기기 저장). 글자는 첫 HTML 에 그대로 들어간다.
+ * 중개사용(audience broker) 목록만 연다 — 세입자·집주인용은 /checklist/[type](세션 514).
  */
 export const dynamicParams = false;
 
 export function generateStaticParams() {
-  return CHECKLIST_TYPES.map((type) => ({ type }));
+  return BROKER_TYPES.map((type) => ({ type }));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ type: string }> }): Promise<Metadata> {
   const { type } = await params;
-  const list = getChecklist(type);
+  const list = getChecklist(type, "broker");
   if (!list) return {};
   const path = `/broker/${list.type}`;
   return {
@@ -37,8 +38,13 @@ export async function generateMetadata({ params }: { params: Promise<{ type: str
 
 export default async function BrokerChecklistPage({ params }: { params: Promise<{ type: string }> }) {
   const { type } = await params;
-  const list = getChecklist(type);
+  const list = getChecklist(type, "broker");
   if (!list) notFound();
+  // 손님에게 보낼 당사자용 목록(세션 514) — 짝은 자료의 partyTypes 에서 읽는다(지금은 전세만)
+  const partyLists = (list.partyTypes ?? []).flatMap((t) => {
+    const p = getChecklist(t, "party");
+    return p ? [p] : [];
+  });
 
   return (
     <div className="-mb-16 bg-brand-bg pb-16">
@@ -49,6 +55,22 @@ export default async function BrokerChecklistPage({ params }: { params: Promise<
           </Link>
           <h1 className="mt-2 text-2xl sm:text-3xl font-black tracking-tight text-brand-navy">{list.h1}</h1>
           <p className="mt-2 text-sm sm:text-base text-brand-muted leading-relaxed">{list.description}</p>
+          {partyLists.length > 0 && (
+            <p className="mt-1 text-sm text-brand-muted">
+              손님에게 보낼 목록:{" "}
+              {partyLists.map((p, i) => (
+                <span key={p.type}>
+                  {i > 0 && " · "}
+                  <Link
+                    href={`/checklist/${p.type}`}
+                    className="font-bold text-brand-orange-text underline hover:text-brand-navy"
+                  >
+                    {p.name}
+                  </Link>
+                </span>
+              ))}
+            </p>
+          )}
           <p className="mt-1 text-sm text-brand-muted">
             법령 기준일 <time dateTime={list.checkedAt}>{formatDateDot(list.checkedAt)}</time>
           </p>

@@ -141,6 +141,25 @@ test("/broker/jeonse 200 · h1 「전세 계약 체크 목록」 · /broker/wols
   expect(missing?.status()).toBe(404);
 });
 
+/** 「계약 체크 목록」(/checklist · 세입자·집주인) 스모크 — 모음 장·세입자 장 200 · 체크 저장 유지(세션 514 · 스크린샷 없음) */
+test("/checklist · /checklist/jeonse-tenant 200 · h1 · 체크 유지", async ({ page }) => {
+  await applyPublicMocks(page);
+  const hub = await page.goto("/checklist");
+  expect(hub?.status()).toBe(200);
+  await expect(page.getByRole("heading", { level: 1, name: "계약 체크 목록" })).toBeVisible();
+  const res = await page.goto("/checklist/jeonse-tenant");
+  expect(res?.status()).toBe(200);
+  await expect(page.getByRole("heading", { level: 1, name: "전세 계약 체크 목록 — 세입자용" })).toBeVisible();
+  await expect(page.locator("h1")).toHaveCount(1);
+  const name = "중개사에게 등기사항증명서·건축물대장을 보여 달라고 하고 근저당·압류·신탁 설명 듣기";
+  const first = page.getByRole("checkbox", { name });
+  await expect(first).not.toBeChecked();
+  await first.check();
+  await expect(page.getByText(/15개 중 1개 확인/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("checkbox", { name })).toBeChecked();
+});
+
 test.describe("public visual regression", () => {
   test("로그인 페이지 렌더 + 시각 회귀", async ({ page }) => {
     await page.goto("/login");

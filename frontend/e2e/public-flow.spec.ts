@@ -124,7 +124,7 @@ test("/broker 200 · h1 「중개 실무」", async ({ page }) => {
 });
 
 /** 「전세 중개 체크 목록 — 공인중개사용」(/broker/jeonse) 스모크 — 정적 장 200 · 체크 저장 유지(PR 2b) · 없는 유형 404(세션 513 PR 2a · 스크린샷 없음) */
-test("/broker/jeonse 200 · h1 「전세 중개 체크 목록 — 공인중개사용」 · /broker/wolse 404", async ({ page }) => {
+test("/broker/jeonse 200 · h1 「전세 중개 체크 목록 — 공인중개사용」 · /broker/zz-unknown 404", async ({ page }) => {
   await applyPublicMocks(page);
   const res = await page.goto("/broker/jeonse");
   expect(res?.status()).toBe(200);
@@ -137,7 +137,7 @@ test("/broker/jeonse 200 · h1 「전세 중개 체크 목록 — 공인중개�
   await expect(page.getByText(/18개 중 1개 확인/)).toBeVisible();
   await page.reload();
   await expect(page.getByRole("checkbox", { name: "등기사항증명서로 권리관계 확인" })).toBeChecked();
-  const missing = await page.goto("/broker/wolse");
+  const missing = await page.goto("/broker/zz-unknown");
   expect(missing?.status()).toBe(404);
 });
 
@@ -170,6 +170,19 @@ test("/broker/sale · /checklist/sale-buyer 200 · h1", async ({ page }) => {
   const buyer = await page.goto("/checklist/sale-buyer");
   expect(buyer?.status()).toBe(200);
   await expect(page.getByRole("heading", { level: 1, name: "집 살 때 체크리스트 — 매수인용" })).toBeVisible();
+  await expect(page.locator("h1")).toHaveCount(1);
+});
+
+/** 월세 체크 목록(세션 517) 스모크 — 중개사용 /broker/wolse · 세입자용 /checklist/wolse-tenant 200 · h1(스크린샷 없음) */
+test("/broker/wolse · /checklist/wolse-tenant 200 · h1", async ({ page }) => {
+  await applyPublicMocks(page);
+  const broker = await page.goto("/broker/wolse");
+  expect(broker?.status()).toBe(200);
+  await expect(page.getByRole("heading", { level: 1, name: "월세 중개 체크 목록 — 공인중개사용" })).toBeVisible();
+  await expect(page.locator("h1")).toHaveCount(1);
+  const tenant = await page.goto("/checklist/wolse-tenant");
+  expect(tenant?.status()).toBe(200);
+  await expect(page.getByRole("heading", { level: 1, name: "월세 계약 체크리스트 — 세입자용" })).toBeVisible();
   await expect(page.locator("h1")).toHaveCount(1);
 });
 

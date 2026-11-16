@@ -1,6 +1,6 @@
 /**
  * 「중개 실무」 체크 목록 자료(lib/broker/checklists.ts) — 키 꼴·근거 조문 주소·항목 수(세션 513 PR 2a)
- * 세션 514: audience(broker/party) 거르기 · 조문 글자↔주소 짝 시험은 모든 목록(세션 516 부터 전세 3 + 매매 3 = 여섯)을 돈다.
+ * 세션 514: audience(broker/party) 거르기 · 조문 글자↔주소 짝 시험은 모든 목록(세션 517 부터 전세 3 + 월세 3 + 매매 3 = 아홉)을 돈다.
  * 실행: npx vitest run src/lib/broker/__tests__/checklists.test.ts
  */
 import { describe, it, expect } from "vitest";
@@ -10,14 +10,21 @@ const jeonse = CHECKLISTS.jeonse;
 const items = jeonse.stages.flatMap((s) => s.items);
 
 describe("체크 목록 자료", () => {
-  it("유형 목록은 CHECKLISTS 키에서 audience 로 갈라 파생 — 중개사용 전세·매매 · 당사자용 세입자·집주인·매수인·매도인", () => {
-    expect(BROKER_TYPES).toEqual(["jeonse", "sale"]);
-    expect(PARTY_TYPES).toEqual(["jeonse-tenant", "jeonse-landlord", "sale-buyer", "sale-seller"]);
+  it("유형 목록은 CHECKLISTS 키에서 audience 로 갈라 파생 — 중개사용 전세·월세·매매 · 당사자용 6개(임대차끼리 붙인 순서)", () => {
+    expect(BROKER_TYPES).toEqual(["jeonse", "wolse", "sale"]);
+    expect(PARTY_TYPES).toEqual([
+      "jeonse-tenant",
+      "jeonse-landlord",
+      "wolse-tenant",
+      "wolse-landlord",
+      "sale-buyer",
+      "sale-seller",
+    ]);
     expect(BROKER_TYPES.filter((t) => (PARTY_TYPES as string[]).includes(t))).toEqual([]);
     expect([...BROKER_TYPES, ...PARTY_TYPES].sort()).toEqual(Object.keys(CHECKLISTS).sort());
     for (const t of Object.keys(CHECKLISTS) as (keyof typeof CHECKLISTS)[]) expect(CHECKLISTS[t].type).toBe(t);
     expect(getChecklist("jeonse", "broker")).toBe(jeonse);
-    expect(getChecklist("wolse", "broker")).toBeUndefined();
+    expect(getChecklist("zz-unknown", "broker")).toBeUndefined();
     expect(getChecklist("toString", "broker")).toBeUndefined();
     expect(getChecklist("toString", "party")).toBeUndefined();
   });
@@ -33,6 +40,13 @@ describe("체크 목록 자료", () => {
   it("중개사용 전세의 손님 목록 짝(partyTypes)은 당사자용 목록만 가리킨다", () => {
     expect(jeonse.partyTypes).toEqual(["jeonse-tenant", "jeonse-landlord"]);
     for (const t of jeonse.partyTypes ?? []) expect(getChecklist(t, "party")).toBeDefined();
+  });
+
+  it("목록마다 단계 id 는 서로 다르다(아홉 목록 각각 — 장의 h2 id·번호가 단계 id 로 갈린다)", () => {
+    for (const l of Object.values(CHECKLISTS)) {
+      const ids = l.stages.map((s) => s.id);
+      expect({ type: l.type, unique: new Set(ids).size }).toEqual({ type: l.type, unique: ids.length });
+    }
   });
 
   it("전세 = 단계 4 · 항목 18", () => {
@@ -56,9 +70,9 @@ describe("체크 목록 자료", () => {
     }
   });
 
-  it("근거 조문 글자와 주소가 같은 법령·같은 조문을 가리킨다(label ↔ url) — 여섯 목록 전부", () => {
+  it("근거 조문 글자와 주소가 같은 법령·같은 조문을 가리킨다(label ↔ url) — 아홉 목록 전부", () => {
     const allItems = Object.values(CHECKLISTS).flatMap((l) => l.stages.flatMap((s) => s.items));
-    expect(allItems).toHaveLength(18 + 15 + 10 + 15 + 13 + 9);
+    expect(allItems).toHaveLength(18 + 15 + 10 + 20 + 19 + 12 + 15 + 13 + 9);
     // 화면 글자의 약칭 → 법제처 주소의 법령명(띄어쓰기 뺀 뒤 앞부분만 바꾼다)
     const FULL_NAME: Record<string, string> = { 부동산거래신고법: "부동산거래신고등에관한법률" };
     const ARTICLE = /제\d+조(의\d+)?/;

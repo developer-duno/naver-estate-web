@@ -71,10 +71,10 @@ describe("parseDeals — 읽을 때 모양 검사", () => {
     const r = parseDeals(
       raw({
         deals: [
-          deal({ checks: ["jeonse.registry", "jeonse.gone", "wolse.x", "jeonse.registry"] }),
-          deal({ id: "wolse-1", type: "wolse", checks: [] }),
+          deal({ checks: ["jeonse.registry", "jeonse.gone", "zz-unknown.x", "jeonse.registry"] }),
+          deal({ id: "zz-unknown-1", type: "zz-unknown", checks: [] }),
         ],
-        active: { jeonse: "jeonse-a-1", wolse: "wolse-1" },
+        active: { jeonse: "jeonse-a-1", "zz-unknown": "zz-unknown-1" },
       }),
     );
     expect(r.ok).toBe(true);
@@ -89,7 +89,7 @@ describe("parseDeals — 읽을 때 모양 검사", () => {
 
   it("active 가 (읽을 때 빠진) 다른 유형 거래의 id 를 가리키면 뺀다", () => {
     // 지금 유형은 jeonse 하나뿐 — 다른 유형 거래는 읽을 때 먼저 빠지므로, 그 id 를 jeonse 의 active 로 둔 경우를 본다
-    const r = parseDeals(raw({ deals: [deal(), deal({ id: "wolse-1", type: "wolse", checks: [] })], active: { jeonse: "wolse-1" } }));
+    const r = parseDeals(raw({ deals: [deal(), deal({ id: "zz-unknown-1", type: "zz-unknown", checks: [] })], active: { jeonse: "zz-unknown-1" } }));
     expect(r.state.deals.map((d) => d.id)).toEqual(["jeonse-a-1"]);
     expect(r.state.active).toEqual({});
   });
@@ -267,17 +267,17 @@ describe("거래 수 상한은 중개사용 목록만 센다 — 세입자·집�
 });
 
 describe("이 판이 모르는 유형·항목 체크는 읽을 때 숨기고 쓸 때 보존한다(세션 515)", () => {
-  // 새 판(예: 월세 목록 추가 — 세션 516 에 매매가 생겨 예시를 월세로)이 저장한 거래를 옛 판으로 열린 탭이 체크 한 번에 지워 버리던 결함의 가드
+  // 새 판(예시 유형 이름 zz-unknown — 세션 516 매매·세션 517 월세가 진짜 유형이 되어 앞으로도 안 생길 이름으로)이 저장한 거래를 옛 판으로 열린 탭이 체크 한 번에 지워 버리던 결함의 가드
   beforeEach(() => {
     localStorage.clear();
   });
 
   /** 새 판이 저장했을 법한 「이 판이 모르는 유형」 거래 */
   const futureDeal = (over: Record<string, unknown> = {}) => ({
-    id: "wolse-tenant-x-1",
+    id: "zz-unknown-tenant-x-1",
     no: 1,
-    type: "wolse-tenant",
-    checks: ["wolse-tenant.registry", "wolse-tenant.loan"],
+    type: "zz-unknown-tenant",
+    checks: ["zz-unknown-tenant.registry", "zz-unknown-tenant.loan"],
     createdAt: 7,
     contractDate: "2026-12-01",
     ...over,
@@ -300,7 +300,7 @@ describe("이 판이 모르는 유형·항목 체크는 읽을 때 숨기고 쓸
     const text = raw({ deals: [deal(), futureDeal()], active: { jeonse: "jeonse-a-1" } });
     expect(parseDeals(text).state.deals.map((d) => d.id)).toEqual(["jeonse-a-1"]);
     const out = roundTrip(text, (s) => toggleCheck(s, "jeonse-a-1", "jeonse.trust"));
-    expect(out.deals.find((d) => d.id === "wolse-tenant-x-1")).toEqual(futureDeal());
+    expect(out.deals.find((d) => d.id === "zz-unknown-tenant-x-1")).toEqual(futureDeal());
     expect(out.deals.find((d) => d.id === "jeonse-a-1")?.checks).toEqual(["jeonse.registry", "jeonse.trust"]);
   });
 
@@ -312,10 +312,10 @@ describe("이 판이 모르는 유형·항목 체크는 읽을 때 숨기고 쓸
   });
 
   it("T3 active 의 모르는 유형 열쇠는 화면용 active 에 없고, 쓸 때 다시 붙는다", () => {
-    const text = raw({ active: { jeonse: "jeonse-a-1", "wolse-tenant": "x1" } });
+    const text = raw({ active: { jeonse: "jeonse-a-1", "zz-unknown-tenant": "x1" } });
     expect(parseDeals(text).state.active).toEqual({ jeonse: "jeonse-a-1" });
     const out = roundTrip(text, (s) => toggleCheck(s, "jeonse-a-1", "jeonse.trust"));
-    expect(out.active).toEqual({ jeonse: "jeonse-a-1", "wolse-tenant": "x1" });
+    expect(out.active).toEqual({ jeonse: "jeonse-a-1", "zz-unknown-tenant": "x1" });
   });
 
   it("T4 비우기는 모르는 체크까지 지우고(알림 숫자는 보이던 체크 수), 되돌리기는 모르는 체크까지 살린다", () => {
@@ -337,7 +337,7 @@ describe("이 판이 모르는 유형·항목 체크는 읽을 때 숨기고 쓸
     expect(r.state.deals).toHaveLength(MAX_DEALS);
     expect(limitedDealCount(r.state)).toBe(MAX_DEALS);
     const out = roundTrip(full);
-    expect(out.deals.filter((d) => d.type === "wolse-tenant").map((d) => d.id)).toEqual(
+    expect(out.deals.filter((d) => d.type === "zz-unknown-tenant").map((d) => d.id)).toEqual(
       futures.slice(0, MAX_UNKNOWN_DEALS).map((d) => d.id),
     );
     expect(out.deals.filter((d) => d.type === "jeonse")).toHaveLength(MAX_DEALS);
@@ -348,7 +348,7 @@ describe("이 판이 모르는 유형·항목 체크는 읽을 때 숨기고 쓸
   it("T6 쓴 글자에 새 칸이 없다 — 최상위는 v·deals·active, 거래는 기존 칸만(옛 판이 읽어도 corrupt 가 아니다)", () => {
     const text = raw({
       deals: [deal({ checks: ["jeonse.registry", "jeonse.future-item"], contractDate: "2026-11-20" }), futureDeal()],
-      active: { jeonse: "jeonse-a-1", "wolse-tenant": "wolse-tenant-x-1" },
+      active: { jeonse: "jeonse-a-1", "zz-unknown-tenant": "zz-unknown-tenant-x-1" },
     });
     const out = roundTrip(text, (s) => toggleCheck(s, "jeonse-a-1", "jeonse.trust"));
     expect(Object.keys(out).sort()).toEqual(["active", "deals", "v"]);
@@ -399,5 +399,51 @@ describe("매매 유형(세션 516) — 중개사 sale · 매수인 sale-buyer �
       active: { "sale-buyer": "b1" },
     });
     expect(parseDeals(text).state.deals[0].checks).toEqual(["sale-buyer.fee"]);
+  });
+});
+
+describe("월세 유형(세션 517) — 중개사 wolse · 세입자 wolse-tenant 체크가 저장→읽기에서 살아남고 전세 거래와 섞이지 않는다", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("전세·월세·월세 세입자·전세 세입자 거래가 함께 저장돼도 각자의 체크·고른 거래가 그대로 읽힌다", () => {
+    let s = addDeal(emptyState(), "jeonse", 1_000)!.state;
+    s = toggleCheck(s, s.active.jeonse!, "jeonse.registry");
+    const wolse = addDeal(s, "wolse", 2_000)!;
+    s = toggleCheck(wolse.state, wolse.deal.id, "wolse.rent-caps-notice");
+    s = toggleCheck(s, wolse.deal.id, "jeonse.trust"); // 전세 id → 월세 거래에 안 들어간다
+    const tenant = addDeal(s, "wolse-tenant", 3_000)!;
+    s = toggleCheck(tenant.state, tenant.deal.id, "wolse-tenant.rent-arrears");
+    s = toggleCheck(s, tenant.deal.id, "jeonse-tenant.registry-explain"); // 같은 뒷부분이어도 전세 세입자 id 는 안 들어간다
+    const jt = addDeal(s, "jeonse-tenant", 4_000)!;
+    s = toggleCheck(jt.state, jt.deal.id, "jeonse-tenant.registry-explain");
+    expect(writeDeals(s)).toBe(true);
+    const r = readDeals();
+    expect(r).toEqual({ ok: true, state: s });
+    expect(activeDeal(r.state, "jeonse")?.checks).toEqual(["jeonse.registry"]);
+    expect(activeDeal(r.state, "wolse")?.checks).toEqual(["wolse.rent-caps-notice"]);
+    expect(activeDeal(r.state, "wolse-tenant")?.checks).toEqual(["wolse-tenant.rent-arrears"]);
+    expect(activeDeal(r.state, "jeonse-tenant")?.checks).toEqual(["jeonse-tenant.registry-explain"]);
+    expect(activeDeal(r.state, "wolse-landlord")).toBeUndefined();
+    // 월세 세입자·전세 세입자는 당사자용이라 거래 수 상한에 세지 않는다(전세 1 + 월세 1)
+    expect(limitedDealCount(r.state)).toBe(2);
+  });
+
+  it("월세 세입자 거래에 남은 전세 세입자·월세 중개사 id 는 읽을 때 화면에서 빠진다", () => {
+    const text = JSON.stringify({
+      v: 1,
+      deals: [
+        {
+          id: "t1",
+          no: 1,
+          type: "wolse-tenant",
+          checks: ["jeonse-tenant.registry-explain", "wolse.registry", "wolse-tenant.registry-explain"],
+          createdAt: 1,
+        },
+      ],
+      active: { "wolse-tenant": "t1" },
+    });
+    expect(parseDeals(text).state.deals[0].checks).toEqual(["wolse-tenant.registry-explain"]);
   });
 });

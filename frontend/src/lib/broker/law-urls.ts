@@ -42,3 +42,9 @@ export const RGS2 = `${LAW}부동산등기특별조치법/제2조`;
 export const LT20 = `${LAW}지방세법/제20조`;
 export const IT89 = `${LAW}소득세법/제89조`;
 export const IT105 = `${LAW}소득세법/제105조`;
+// 월세 세 목록(세션 517)
+export const CV640 = `${LAW}민법/제640조`;
+export const H7_2 = `${LAW}주택임대차보호법/제7조의2`;
+export const H10_2 = `${LAW}주택임대차보호법/제10조의2`;
+export const HD9 = `${LAW}주택임대차보호법시행령/제9조`;
+export const TS95_2 = `${LAW}조세특례제한법/제95조의2`;

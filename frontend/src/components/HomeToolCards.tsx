@@ -19,7 +19,7 @@ const CARDS: ToolCard[] = [
   { href: "/tools/property-tax", title: "보유세", desc: "재산세 · 종부세" },
   { href: "/tools/brokerage-fee", title: "중개수수료", desc: "복비 계산" },
   { href: "/tools/area-converter", title: "평 · ㎡ 변환", desc: "면적 계산" },
-  { href: "/checklist", title: "계약 체크 목록", desc: "전세 · 매매 — 당사자별" },
+  { href: "/checklist", title: "계약 체크 목록", desc: "전세 · 월세 · 매매 — 당사자별" },
 ];
 
 export default function HomeToolCards() {

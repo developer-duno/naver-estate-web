@@ -78,8 +78,8 @@ describe("/broker/[type] 장", () => {
     expect(container.textContent).not.toContain("준비 중");
   });
 
-  it("정적 경로 = 전세·매매 · dynamicParams === false", () => {
-    expect(generateStaticParams()).toEqual([{ type: "jeonse" }, { type: "sale" }]);
+  it("정적 경로 = 전세·월세·매매 · dynamicParams === false", () => {
+    expect(generateStaticParams()).toEqual([{ type: "jeonse" }, { type: "wolse" }, { type: "sale" }]);
     expect(dynamicParams).toBe(false);
   });
 
@@ -93,9 +93,9 @@ describe("/broker/[type] 장", () => {
   });
 
   it("없는 유형 → notFound", async () => {
-    await expect(BrokerChecklistPage(params("wolse"))).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(BrokerChecklistPage(params("zz-unknown"))).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFoundMock).toHaveBeenCalledTimes(1);
-    expect(await generateMetadata(params("wolse"))).toEqual({});
+    expect(await generateMetadata(params("zz-unknown"))).toEqual({});
   });
 
   it("세입자·집주인용 유형은 이 장에서 열리지 않는다(/broker/jeonse-tenant → notFound · 세션 514)", async () => {
@@ -105,6 +105,10 @@ describe("/broker/[type] 장", () => {
     // 세션 516 — 매수인·매도인용도 같다
     await expect(BrokerChecklistPage(params("sale-buyer"))).rejects.toThrow("NEXT_NOT_FOUND");
     await expect(BrokerChecklistPage(params("sale-seller"))).rejects.toThrow("NEXT_NOT_FOUND");
+    // 세션 517 — 월세 세입자·집주인용도 같다
+    await expect(BrokerChecklistPage(params("wolse-tenant"))).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(BrokerChecklistPage(params("wolse-landlord"))).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(await generateMetadata(params("wolse-tenant"))).toEqual({});
   });
 
   it("전세 머리에 「손님에게 보낼 목록: 세입자용 · 집주인용」 링크(세션 514)", async () => {
@@ -130,5 +134,25 @@ describe("/broker/[type] 장", () => {
     const meta = await generateMetadata(params("sale"));
     expect(meta.title).toBe("매매 중개 체크 목록 — 공인중개사용");
     expect(meta.alternates?.canonical).toBe("/broker/sale");
+  });
+
+  it("월세 장(세션 517) — h1 · 단계 h2 4개 · 체크 상자 20개 · 머리에 「손님에게 보낼 목록」 세입자용·집주인용 링크 2개 · 메타", async () => {
+    render(await BrokerChecklistPage(params("wolse")));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("월세 중개 체크 목록 — 공인중개사용");
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(
+      CHECKLISTS.wolse.stages.map((s) => s.title),
+    );
+    expect(screen.getAllByRole("checkbox")).toHaveLength(20);
+    expect(screen.getByText(/20개 중 0개 확인/)).toBeInTheDocument();
+    const line = screen.getByText(/손님에게 보낼 목록:/);
+    expect(line).toHaveTextContent("손님에게 보낼 목록: 세입자용 · 집주인용");
+    const links = within(line).getAllByRole("link");
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/checklist/wolse-tenant", "/checklist/wolse-landlord"]);
+    const meta = await generateMetadata(params("wolse"));
+    expect(meta.title).toBe("월세 중개 체크 목록 — 공인중개사용");
+    expect(meta.alternates?.canonical).toBe("/broker/wolse");
+    const og = meta.openGraph as { url?: string; images?: Array<{ url: string }> };
+    expect(og.url).toBe("/broker/wolse");
+    expect(og.images?.[0]).toMatchObject({ url: "/opengraph-image" });
   });
 });

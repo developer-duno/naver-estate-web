@@ -84,7 +84,9 @@ describe("sitemap — 정적 장 lastModified 는 장마다 실제로 바뀐 날
         // 세션 514 — 계약 체크 목록 모음 장 + 세입자·집주인 장
         "/checklist", "/checklist/jeonse-tenant", "/checklist/jeonse-landlord",
         // 세션 516 — 매매 세 장
-        "/checklist/sale-buyer", "/checklist/sale-seller"];
+        "/checklist/sale-buyer", "/checklist/sale-seller",
+        // 세션 517 — 월세 세 장
+        "/broker/wolse", "/checklist/wolse-tenant", "/checklist/wolse-landlord"];
       const times = statics.map((p) => byPath.get(p));
       expect(times.every((t) => typeof t === "number" && !Number.isNaN(t))).toBe(true);
       expect(new Set(times).size).toBeGreaterThan(1);
@@ -93,10 +95,19 @@ describe("sitemap — 정적 장 lastModified 는 장마다 실제로 바뀐 날
       expect(byPath.get("/privacy")!).toBe(new Date("2026-11-16").getTime());
       expect(byPath.get("/terms")!).toBe(new Date("2026-11-16").getTime());
       expect(byPath.get("/broker/jeonse")!).toBe(new Date("2026-11-16").getTime());
-      expect(byPath.get("/checklist")!).toBe(new Date("2026-11-16").getTime());
+      // 세션 517 — /checklist(월세 카드)·/broker(월세 단추)는 2026-11-17
+      expect(byPath.get("/checklist")!).toBe(new Date("2026-11-17").getTime());
+      expect(byPath.get("/broker")!).toBe(new Date("2026-11-17").getTime());
       expect(byPath.get("/checklist/jeonse-tenant")!).toBe(new Date("2026-11-16").getTime());
       expect(byPath.get("/checklist/jeonse-landlord")!).toBe(new Date("2026-11-16").getTime());
-      for (const p of ["/broker/sale", "/checklist/sale-buyer", "/checklist/sale-seller"]) {
+      for (const p of [
+        "/broker/sale",
+        "/checklist/sale-buyer",
+        "/checklist/sale-seller",
+        "/broker/wolse",
+        "/checklist/wolse-tenant",
+        "/checklist/wolse-landlord",
+      ]) {
         expect(byPath.get(p)!).toBe(new Date("2026-11-16").getTime());
       }
       // 빌드 시각을 쓰지 않는다 — 어느 정적 장도 고정한 "지금"(2030-01-01)이 아니다
@@ -138,6 +149,12 @@ describe("sitemap — 공개 대표 URL 만 (세션 458 SEO)", () => {
     expect(urls).toContain("https://2u.pe.kr/checklist/sale-seller");
     expect(urls).not.toContain("https://2u.pe.kr/broker/sale-buyer");
     expect(urls).not.toContain("https://2u.pe.kr/checklist/sale");
+    // 세션 517 — 월세: 중개사용 /broker/wolse · 세입자·집주인 /checklist/wolse-tenant·wolse-landlord
+    expect(urls).toContain("https://2u.pe.kr/broker/wolse");
+    expect(urls).toContain("https://2u.pe.kr/checklist/wolse-tenant");
+    expect(urls).toContain("https://2u.pe.kr/checklist/wolse-landlord");
+    expect(urls).not.toContain("https://2u.pe.kr/broker/wolse-tenant");
+    expect(urls).not.toContain("https://2u.pe.kr/checklist/wolse");
     // 경로 머리글자로 판정 — 블로그 글 주소(/blog/mibunyang-…)는 비공개 경로가 아니다
     const paths = urls.map((u) => new URL(u).pathname);
     for (const bad of ["/pricing", "/search", "/complex", "/mibunyang", "/admin", "/login"]) {

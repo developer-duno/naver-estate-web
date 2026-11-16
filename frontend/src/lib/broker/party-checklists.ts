@@ -232,7 +232,7 @@ export const JEONSE_LANDLORD: DealChecklist = {
         {
           id: "jeonse-landlord.increase-cap",
           title:
-            "계약 중이거나 세입자 요구로 갱신할 때 보증금 인상은 5% 이내(시·도 조례로 더 낮을 수 있음), 올린 뒤 1년 안에는 다시 못 올림",
+            "계약 중이거나 세입자 요구로 갱신할 때 보증금 인상은 5% 이내(시·도 조례로 더 낮을 수 있음), 계약하거나 올린 뒤 1년 안에는 못 올림",
           laws: [
             { label: "주택임대차보호법 제6조의3 제3항", url: H6_3 },
             { label: "주택임대차보호법 제7조 제1항·제2항", url: H7 },

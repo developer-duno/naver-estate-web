@@ -7,13 +7,14 @@
  * - 법이 바뀌어 항목을 고치면 그 목록의 checkedAt(법령 기준일, YYYY-MM-DD)을 고친다 — 사이트맵 lastmod 도 이 값을 쓴다.
  * - 장·허브 버튼·사이트맵이 모두 CHECKLISTS 한 목록에서 나온다. 목록마다 `audience` 로 갈린다(세션 514):
  *   broker = 중개사용(/broker/<type> · BROKER_TYPES) · party = 세입자·집주인 같은 거래 당사자용(/checklist/<type> · PARTY_TYPES).
- *   당사자용 자료는 party-checklists.ts, 매매 세 목록은 sale-checklists.ts(세션 516), 조문 주소는 law-urls.ts(서로 부르지 않게 — 이 파일만 셋을 가져온다).
+ *   당사자용 자료는 party-checklists.ts, 매매 세 목록은 sale-checklists.ts(세션 516), 월세 세 목록은 wolse-checklists.ts(세션 517), 조문 주소는 law-urls.ts(서로 부르지 않게 — 이 파일만 넷을 가져온다).
  * - 체크 저장(deals-storage.ts)도 이 CHECKLISTS 로 아는 유형·아는 id 를 검사한다.
  * 시험 = `src/lib/broker/__tests__/checklists.test.ts` · `party-checklists.test.ts`.
  */
 import { A25, A25_3, A26, A30, D21, D22, H3, H3_2, H3_6, H3_7, H8, L6, R29_2, RD4_3, RT6_2, RT6_5, T109 } from "./law-urls";
 import { JEONSE_LANDLORD, JEONSE_TENANT } from "./party-checklists";
 import { SALE, SALE_BUYER, SALE_SELLER } from "./sale-checklists";
+import { WOLSE, WOLSE_LANDLORD, WOLSE_TENANT } from "./wolse-checklists";
 
 /** 누가 보는 목록인가 — broker = 공인중개사 · party = 거래 당사자(세입자·집주인 등) */
 export type ChecklistAudience = "broker" | "party";
@@ -260,6 +261,9 @@ export const CHECKLISTS = {
   jeonse: JEONSE,
   "jeonse-tenant": JEONSE_TENANT,
   "jeonse-landlord": JEONSE_LANDLORD,
+  wolse: WOLSE,
+  "wolse-tenant": WOLSE_TENANT,
+  "wolse-landlord": WOLSE_LANDLORD,
   sale: SALE,
   "sale-buyer": SALE_BUYER,
   "sale-seller": SALE_SELLER,

@@ -7,7 +7,7 @@ import { CHECKLISTS, PARTY_TYPES } from "@/lib/broker/checklists";
  * 카드는 PARTY_TYPES 한 목록에서 만든다(손으로 두 번 적지 않는다) — 새 당사자용 목록이 생기면 카드도 저절로 생긴다.
  */
 const DESCRIPTION =
-  "아파트 전세·매매 계약에서 세입자·집주인, 사는 사람·파는 사람이 각자 챙길 일을 법 조문과 함께 정리했습니다.";
+  "아파트 전세·월세·매매 계약에서 세입자·집주인, 사는 사람·파는 사람이 각자 챙길 일을 법 조문과 함께 정리했습니다.";
 
 export const metadata: Metadata = {
   title: "계약 체크 목록",

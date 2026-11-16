@@ -46,3 +46,7 @@
 
 - FE Vitest 2863 → **2940** (Test Files 295 → 304) — main 커밋 4786610e(#832 홈 개편 1차) 의 CI run 43713135801 Frontend CI 잡 `Test Files 304 passed · Tests 2940 passed`(2026-11-15 21:20 KST). 증가분 = s501 뒤 합친 PR #813~#832(dependabot 포함, `git log 1053a3cf..4786610e`).
 - FE E2E 표기 21 → **22 파일**(`git ls-tree -r --name-only origin/main frontend/e2e | grep -c '\.spec\.ts$'`) — s501 뒤 새 spec 0개라 늘어난 게 아니라 **옛 표기가 낡았던 것**. 기준 그림 PNG 22장 그대로(11-15 전부 재촬영, run 43711234951).
+
+## 세션 515 갱신 (2026-11-16)
+
+- FE Vitest 2940 → **3062** (Test Files 304 → 315) — main 커밋 aa9623ec(#845 계약 체크 목록) 의 CI run 43832273009 Frontend CI 잡 `Test Files 315 passed · Tests 3062 passed`(2026-11-16 17:39 KST). 증가분 = s509 뒤 합친 PR #833~#845(`git log 4786610e..aa9623ec`) — 중개 실무 틀(#836) · 전세 체크 목록(#838) · 내 기기 저장(#844) · 세입자·집주인 목록(#845) 시험이 대부분. e2e spec 22 파일 · 기준 그림 22장 그대로(home-public-visual 1장만 #845 에서 재촬영).

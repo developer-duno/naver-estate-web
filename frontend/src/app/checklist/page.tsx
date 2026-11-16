@@ -6,7 +6,8 @@ import { CHECKLISTS, PARTY_TYPES } from "@/lib/broker/checklists";
  * 계약 체크 목록 모음 장(세션 514) — 세입자·집주인 같은 거래 당사자용 목록을 모은다. 서버 정적 장.
  * 카드는 PARTY_TYPES 한 목록에서 만든다(손으로 두 번 적지 않는다) — 새 당사자용 목록이 생기면 카드도 저절로 생긴다.
  */
-const DESCRIPTION = "아파트 전세 계약에서 세입자와 집주인이 각자 챙길 일을 법 조문과 함께 정리했습니다.";
+const DESCRIPTION =
+  "아파트 전세·매매 계약에서 세입자·집주인, 사는 사람·파는 사람이 각자 챙길 일을 법 조문과 함께 정리했습니다.";
 
 export const metadata: Metadata = {
   title: "계약 체크 목록",
@@ -53,8 +54,8 @@ export default function ChecklistHubPage() {
 
         <p className="mt-6 text-sm text-brand-muted">
           공인중개사용 목록은{" "}
-          <Link href="/broker/jeonse" className="underline hover:text-brand-navy">
-            중개 실무 › 전세
+          <Link href="/broker" className="underline hover:text-brand-navy">
+            중개 실무
           </Link>
           에 있습니다.
         </p>

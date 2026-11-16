@@ -25,11 +25,11 @@ describe("/broker/[type] 장", () => {
     notFoundMock.mockClear();
   });
 
-  it("h1 「전세 계약 체크 목록」 1개 · 단계 h2 4개(자료 순서)", async () => {
+  it("h1 「전세 중개 체크 목록 — 공인중개사용」 1개 · 단계 h2 4개(자료 순서)", async () => {
     render(await BrokerChecklistPage(params("jeonse")));
     const h1s = screen.getAllByRole("heading", { level: 1 });
     expect(h1s).toHaveLength(1);
-    expect(h1s[0]).toHaveTextContent("전세 계약 체크 목록");
+    expect(h1s[0]).toHaveTextContent("전세 중개 체크 목록 — 공인중개사용");
     const h2 = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
     expect(h2).toEqual(CHECKLISTS.jeonse.stages.map((s) => s.title));
     expect(h2).toHaveLength(4);
@@ -78,14 +78,14 @@ describe("/broker/[type] 장", () => {
     expect(container.textContent).not.toContain("준비 중");
   });
 
-  it("정적 경로 = [{type:'jeonse'}] · dynamicParams === false", () => {
-    expect(generateStaticParams()).toEqual([{ type: "jeonse" }]);
+  it("정적 경로 = 전세·매매 · dynamicParams === false", () => {
+    expect(generateStaticParams()).toEqual([{ type: "jeonse" }, { type: "sale" }]);
     expect(dynamicParams).toBe(false);
   });
 
   it("메타 — title·canonical·og url·images(seo-metadata 룰 2·6)", async () => {
     const meta = await generateMetadata(params("jeonse"));
-    expect(meta.title).toBe("전세 계약 체크 목록");
+    expect(meta.title).toBe("전세 중개 체크 목록 — 공인중개사용");
     expect(meta.alternates?.canonical).toBe("/broker/jeonse");
     const og = meta.openGraph as { url?: string; images?: Array<{ url: string; width: number; height: number }> };
     expect(og.url).toBe("/broker/jeonse");
@@ -102,6 +102,9 @@ describe("/broker/[type] 장", () => {
     await expect(BrokerChecklistPage(params("jeonse-tenant"))).rejects.toThrow("NEXT_NOT_FOUND");
     await expect(BrokerChecklistPage(params("jeonse-landlord"))).rejects.toThrow("NEXT_NOT_FOUND");
     expect(await generateMetadata(params("jeonse-tenant"))).toEqual({});
+    // 세션 516 — 매수인·매도인용도 같다
+    await expect(BrokerChecklistPage(params("sale-buyer"))).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(BrokerChecklistPage(params("sale-seller"))).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("전세 머리에 「손님에게 보낼 목록: 세입자용 · 집주인용」 링크(세션 514)", async () => {
@@ -110,5 +113,22 @@ describe("/broker/[type] 장", () => {
     expect(line).toHaveTextContent("손님에게 보낼 목록: 세입자용 · 집주인용");
     expect(within(line).getByRole("link", { name: "세입자용" })).toHaveAttribute("href", "/checklist/jeonse-tenant");
     expect(within(line).getByRole("link", { name: "집주인용" })).toHaveAttribute("href", "/checklist/jeonse-landlord");
+  });
+
+  it("매매 장(세션 516) — h1 · 단계 h2 4개 · 체크 상자 15개 · 머리에 「손님에게 보낼 목록」 매수인용·매도인용 링크 2개", async () => {
+    render(await BrokerChecklistPage(params("sale")));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("매매 중개 체크 목록 — 공인중개사용");
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(
+      CHECKLISTS.sale.stages.map((s) => s.title),
+    );
+    expect(screen.getAllByRole("checkbox")).toHaveLength(15);
+    const line = screen.getByText(/손님에게 보낼 목록:/);
+    const links = within(line).getAllByRole("link");
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/checklist/sale-buyer", "/checklist/sale-seller"]);
+    expect(links.map((a) => a.textContent)).toEqual([CHECKLISTS["sale-buyer"].name, CHECKLISTS["sale-seller"].name]);
+    expect(screen.getByRole("link", { name: /취득세 계산기/ })).toHaveAttribute("href", "/tools/acquisition-tax");
+    const meta = await generateMetadata(params("sale"));
+    expect(meta.title).toBe("매매 중개 체크 목록 — 공인중개사용");
+    expect(meta.alternates?.canonical).toBe("/broker/sale");
   });
 });

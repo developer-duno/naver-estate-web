@@ -123,12 +123,12 @@ test("/broker 200 · h1 「중개 실무」", async ({ page }) => {
   await expect(page.locator("h1")).toHaveCount(1);
 });
 
-/** 「전세 계약 체크 목록」(/broker/jeonse) 스모크 — 정적 장 200 · 체크 저장 유지(PR 2b) · 없는 유형 404(세션 513 PR 2a · 스크린샷 없음) */
-test("/broker/jeonse 200 · h1 「전세 계약 체크 목록」 · /broker/wolse 404", async ({ page }) => {
+/** 「전세 중개 체크 목록 — 공인중개사용」(/broker/jeonse) 스모크 — 정적 장 200 · 체크 저장 유지(PR 2b) · 없는 유형 404(세션 513 PR 2a · 스크린샷 없음) */
+test("/broker/jeonse 200 · h1 「전세 중개 체크 목록 — 공인중개사용」 · /broker/wolse 404", async ({ page }) => {
   await applyPublicMocks(page);
   const res = await page.goto("/broker/jeonse");
   expect(res?.status()).toBe(200);
-  await expect(page.getByRole("heading", { level: 1, name: "전세 계약 체크 목록" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "전세 중개 체크 목록 — 공인중개사용" })).toBeVisible();
   await expect(page.locator("h1")).toHaveCount(1);
   // PR 2b — 1번 체크 → 새로고침 → 그대로 체크됨(이 기기 저장 broker_deals_v1)
   const first = page.getByRole("checkbox", { name: "등기사항증명서로 권리관계 확인" });
@@ -149,7 +149,7 @@ test("/checklist · /checklist/jeonse-tenant 200 · h1 · 체크 유지", async 
   await expect(page.getByRole("heading", { level: 1, name: "계약 체크 목록" })).toBeVisible();
   const res = await page.goto("/checklist/jeonse-tenant");
   expect(res?.status()).toBe(200);
-  await expect(page.getByRole("heading", { level: 1, name: "전세 계약 체크 목록 — 세입자용" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "전세 계약 체크리스트 — 세입자용" })).toBeVisible();
   await expect(page.locator("h1")).toHaveCount(1);
   const name = "중개사에게 등기사항증명서·건축물대장을 보여 달라고 하고 근저당·압류·신탁 설명 듣기";
   const first = page.getByRole("checkbox", { name });
@@ -158,6 +158,19 @@ test("/checklist · /checklist/jeonse-tenant 200 · h1 · 체크 유지", async 
   await expect(page.getByText(/15개 중 1개 확인/)).toBeVisible();
   await page.reload();
   await expect(page.getByRole("checkbox", { name })).toBeChecked();
+});
+
+/** 매매 체크 목록(세션 516) 스모크 — 중개사용 /broker/sale · 매수인용 /checklist/sale-buyer 200 · h1(스크린샷 없음) */
+test("/broker/sale · /checklist/sale-buyer 200 · h1", async ({ page }) => {
+  await applyPublicMocks(page);
+  const broker = await page.goto("/broker/sale");
+  expect(broker?.status()).toBe(200);
+  await expect(page.getByRole("heading", { level: 1, name: "매매 중개 체크 목록 — 공인중개사용" })).toBeVisible();
+  await expect(page.locator("h1")).toHaveCount(1);
+  const buyer = await page.goto("/checklist/sale-buyer");
+  expect(buyer?.status()).toBe(200);
+  await expect(page.getByRole("heading", { level: 1, name: "집 살 때 체크리스트 — 매수인용" })).toBeVisible();
+  await expect(page.locator("h1")).toHaveCount(1);
 });
 
 test.describe("public visual regression", () => {

@@ -1,5 +1,5 @@
 /**
- * /checklist 「계약 체크 목록」 모음 장 + /checklist/[type] 세입자·집주인 장(세션 514)
+ * /checklist 「계약 체크 목록」 모음 장 + /checklist/[type] 세입자·집주인 장(세션 514) · 매수인·매도인 장(세션 516)
  * 실행: npx vitest run src/app/__tests__/checklist.test.tsx
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -22,27 +22,38 @@ import { CHECKLISTS } from "@/lib/broker/checklists";
 const params = (type: string) => ({ params: Promise.resolve({ type }) });
 
 describe("/checklist 모음 장", () => {
-  it("h1 「계약 체크 목록」 · 설명 · 카드 2장(세입자·집주인 — 이름·항목 수·설명·링크)", () => {
+  it("h1 「계약 체크 목록」 · 설명 · 카드 4장(세입자·집주인·매수인·매도인 순 — 이름·항목 수·설명·링크)", () => {
     render(<ChecklistHubPage />);
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("계약 체크 목록");
     expect(
-      screen.getByText("아파트 전세 계약에서 세입자와 집주인이 각자 챙길 일을 법 조문과 함께 정리했습니다."),
+      screen.getByText(
+        "아파트 전세·매매 계약에서 세입자·집주인, 사는 사람·파는 사람이 각자 챙길 일을 법 조문과 함께 정리했습니다.",
+      ),
     ).toBeInTheDocument();
     const cards = screen.getAllByRole("listitem");
-    expect(cards).toHaveLength(2);
+    expect(cards).toHaveLength(4);
     expect(within(cards[0]).getByRole("link")).toHaveAttribute("href", "/checklist/jeonse-tenant");
-    expect(within(cards[0]).getByRole("heading", { level: 2 })).toHaveTextContent("전세 계약 체크 목록 — 세입자용");
+    expect(within(cards[0]).getByRole("heading", { level: 2 })).toHaveTextContent("전세 계약 체크리스트 — 세입자용");
     expect(cards[0]).toHaveTextContent("15항목");
     expect(cards[0]).toHaveTextContent(CHECKLISTS["jeonse-tenant"].description);
     expect(within(cards[1]).getByRole("link")).toHaveAttribute("href", "/checklist/jeonse-landlord");
     expect(cards[1]).toHaveTextContent("10항목");
+    expect(cards.map((c) => within(c).getByRole("link").getAttribute("href"))).toEqual([
+      "/checklist/jeonse-tenant",
+      "/checklist/jeonse-landlord",
+      "/checklist/sale-buyer",
+      "/checklist/sale-seller",
+    ]);
+    expect(within(cards[2]).getByRole("heading", { level: 2 })).toHaveTextContent("집 살 때 체크리스트 — 매수인용");
+    expect(cards[2]).toHaveTextContent("13항목");
+    expect(cards[3]).toHaveTextContent("9항목");
   });
 
-  it("맨 아래 중개사용 목록 줄 → /broker/jeonse", () => {
+  it("맨 아래 중개사용 목록 줄 → /broker(전세·매매 둘 다 있어 허브로 — 세션 516)", () => {
     render(<ChecklistHubPage />);
-    expect(screen.getByText(/공인중개사용 목록은/)).toHaveTextContent("공인중개사용 목록은 중개 실무 › 전세에 있습니다.");
-    expect(screen.getByRole("link", { name: "중개 실무 › 전세" })).toHaveAttribute("href", "/broker/jeonse");
+    expect(screen.getByText(/공인중개사용 목록은/)).toHaveTextContent("공인중개사용 목록은 중개 실무에 있습니다.");
+    expect(screen.getByRole("link", { name: "중개 실무" })).toHaveAttribute("href", "/broker");
   });
 
   it("메타 — title·canonical·og url·images(seo-metadata 룰 2·6)", () => {
@@ -62,7 +73,7 @@ describe("/checklist/[type] 장", () => {
   it("세입자 — h1 · 단계 h2 4개 · 체크 상자 15개(전부 꺼짐) · 거래 고르기 없음", async () => {
     const { container } = render(await PartyChecklistPage(params("jeonse-tenant")));
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("전세 계약 체크 목록 — 세입자용");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("전세 계약 체크리스트 — 세입자용");
     expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual(
       CHECKLISTS["jeonse-tenant"].stages.map((s) => s.title),
     );
@@ -80,7 +91,7 @@ describe("/checklist/[type] 장", () => {
 
   it("집주인 — 체크 상자 10개 · 계산기 링크는 사이트 안", async () => {
     render(await PartyChecklistPage(params("jeonse-landlord")));
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("전세 계약 체크 목록 — 집주인용");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("전세 계약 체크리스트 — 집주인용");
     expect(screen.getAllByRole("checkbox")).toHaveLength(10);
     const fee = screen.getByRole("link", { name: /중개수수료 계산기/ });
     expect(fee).toHaveAttribute("href", "/tools/brokerage-fee");
@@ -99,14 +110,19 @@ describe("/checklist/[type] 장", () => {
     );
   });
 
-  it("정적 경로 = 세입자·집주인 · dynamicParams === false", () => {
-    expect(generateStaticParams()).toEqual([{ type: "jeonse-tenant" }, { type: "jeonse-landlord" }]);
+  it("정적 경로 = 세입자·집주인·매수인·매도인 · dynamicParams === false", () => {
+    expect(generateStaticParams()).toEqual([
+      { type: "jeonse-tenant" },
+      { type: "jeonse-landlord" },
+      { type: "sale-buyer" },
+      { type: "sale-seller" },
+    ]);
     expect(dynamicParams).toBe(false);
   });
 
   it("메타 — title·canonical·og url·images", async () => {
     const meta = await generateMetadata(params("jeonse-landlord"));
-    expect(meta.title).toBe("전세 계약 체크 목록 — 집주인용");
+    expect(meta.title).toBe("전세 계약 체크리스트 — 집주인용");
     expect(meta.alternates?.canonical).toBe("/checklist/jeonse-landlord");
     const og = meta.openGraph as { url?: string; images?: Array<{ url: string; width: number; height: number }> };
     expect(og.url).toBe("/checklist/jeonse-landlord");
@@ -118,5 +134,33 @@ describe("/checklist/[type] 장", () => {
     await expect(PartyChecklistPage(params("wolse"))).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFoundMock).toHaveBeenCalledTimes(2);
     expect(await generateMetadata(params("jeonse"))).toEqual({});
+    await expect(PartyChecklistPage(params("sale"))).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(await generateMetadata(params("sale"))).toEqual({});
+  });
+
+  it("매수인(세션 516) — h1 · 체크 상자 13개 · 대출 계산 항목은 단지 찾기 링크만 있고 「근거」 줄이 없다", async () => {
+    const { container } = render(await PartyChecklistPage(params("sale-buyer")));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("집 살 때 체크리스트 — 매수인용");
+    expect(screen.getAllByRole("checkbox")).toHaveLength(13);
+    // 근거 조문이 없는 대출 계산 항목도 합계에 든다
+    expect(screen.getByText(/13개 중 0개 확인/)).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    const loanTitle = "살 단지 화면에서 구입 대출 한도를 먼저 계산해 보기";
+    const loanItem = screen.getByRole("checkbox", { name: loanTitle }).closest("li")!;
+    expect(within(loanItem).getByRole("link", { name: /단지 찾기/ })).toHaveAttribute("href", "/search");
+    expect(loanItem.textContent).not.toContain("근거");
+    // 근거 줄은 근거 조문이 있는 12항목에만
+    const withLaws = Array.from(container.querySelectorAll("ol > li")).filter((li) => li.textContent?.includes("근거"));
+    expect(withLaws).toHaveLength(12);
+  });
+
+  it("매도인(세션 516) — h1 · 체크 상자 9개 · 양도소득세 계산기 링크 · 메타 canonical", async () => {
+    render(await PartyChecklistPage(params("sale-seller")));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("집 팔 때 체크리스트 — 매도인용");
+    expect(screen.getAllByRole("checkbox")).toHaveLength(9);
+    expect(screen.getByRole("link", { name: /양도소득세 계산기/ })).toHaveAttribute("href", "/tools/transfer-tax");
+    const meta = await generateMetadata(params("sale-seller"));
+    expect(meta.title).toBe("집 팔 때 체크리스트 — 매도인용");
+    expect(meta.alternates?.canonical).toBe("/checklist/sale-seller");
   });
 });

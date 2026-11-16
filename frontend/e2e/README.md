@@ -127,6 +127,10 @@ gh workflow run ci.yml --ref <작업 브랜치> -f update_snapshots=true
 기다린 뒤** `toHaveScreenshot` 을 찍는다. 그 목록에 없는 카드를 화면에 추가하면 **스켈레톤 →
 실제 내용으로 바뀌는 사이에 촬영**돼 fullPage 높이가 요동치고 실패한다.
 
+**public 기준 그림이 있는 장(목록 = `find e2e -name '*public*png'`)의 보이는 글·칸을 바꾸면, PR 을 올린 직후
+그 장 1장 재촬영 dispatch 를 같이 건다**(작업 가지 `--ref` · 절차는 아래 baseline 재생성 절). 기다렸다가 PR CI 의
+public-visual 빨강을 보고 시작하면 CI 한 바퀴를 버린다(세션 514 #845 — 홈 「계산기 모음」에 카드 1개를 더함).
+
 ### 실패를 보면 먼저 두 갈래로 가른다
 
 | 로그 신호 | 뜻 | 처방 |

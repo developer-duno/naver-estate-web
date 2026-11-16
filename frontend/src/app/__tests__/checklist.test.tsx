@@ -1,5 +1,5 @@
 /**
- * /checklist 「계약 체크 목록」 모음 장 + /checklist/[type] 세입자·집주인 장(세션 514) · 매수인·매도인 장(세션 516)
+ * /checklist 「계약 체크 목록」 모음 장 + /checklist/[type] 세입자·집주인 장(세션 514) · 매수인·매도인 장(세션 516) · 월세 세입자·집주인 장(세션 517)
  * 실행: npx vitest run src/app/__tests__/checklist.test.tsx
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -22,17 +22,17 @@ import { CHECKLISTS } from "@/lib/broker/checklists";
 const params = (type: string) => ({ params: Promise.resolve({ type }) });
 
 describe("/checklist 모음 장", () => {
-  it("h1 「계약 체크 목록」 · 설명 · 카드 4장(세입자·집주인·매수인·매도인 순 — 이름·항목 수·설명·링크)", () => {
+  it("h1 「계약 체크 목록」 · 설명 · 카드 6장(전세 세입자·집주인 · 월세 세입자·집주인 · 매수인·매도인 순 — 이름·항목 수·설명·링크)", () => {
     render(<ChecklistHubPage />);
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("계약 체크 목록");
     expect(
       screen.getByText(
-        "아파트 전세·매매 계약에서 세입자·집주인, 사는 사람·파는 사람이 각자 챙길 일을 법 조문과 함께 정리했습니다.",
+        "아파트 전세·월세·매매 계약에서 세입자·집주인, 사는 사람·파는 사람이 각자 챙길 일을 법 조문과 함께 정리했습니다.",
       ),
     ).toBeInTheDocument();
     const cards = screen.getAllByRole("listitem");
-    expect(cards).toHaveLength(4);
+    expect(cards).toHaveLength(6);
     expect(within(cards[0]).getByRole("link")).toHaveAttribute("href", "/checklist/jeonse-tenant");
     expect(within(cards[0]).getByRole("heading", { level: 2 })).toHaveTextContent("전세 계약 체크리스트 — 세입자용");
     expect(cards[0]).toHaveTextContent("15항목");
@@ -42,12 +42,18 @@ describe("/checklist 모음 장", () => {
     expect(cards.map((c) => within(c).getByRole("link").getAttribute("href"))).toEqual([
       "/checklist/jeonse-tenant",
       "/checklist/jeonse-landlord",
+      "/checklist/wolse-tenant",
+      "/checklist/wolse-landlord",
       "/checklist/sale-buyer",
       "/checklist/sale-seller",
     ]);
-    expect(within(cards[2]).getByRole("heading", { level: 2 })).toHaveTextContent("집 살 때 체크리스트 — 매수인용");
-    expect(cards[2]).toHaveTextContent("13항목");
-    expect(cards[3]).toHaveTextContent("9항목");
+    expect(within(cards[2]).getByRole("heading", { level: 2 })).toHaveTextContent("월세 계약 체크리스트 — 세입자용");
+    expect(cards[2]).toHaveTextContent("19항목");
+    expect(within(cards[3]).getByRole("heading", { level: 2 })).toHaveTextContent("월세 계약 체크리스트 — 집주인용");
+    expect(cards[3]).toHaveTextContent("12항목");
+    expect(within(cards[4]).getByRole("heading", { level: 2 })).toHaveTextContent("집 살 때 체크리스트 — 매수인용");
+    expect(cards[4]).toHaveTextContent("13항목");
+    expect(cards[5]).toHaveTextContent("9항목");
   });
 
   it("맨 아래 중개사용 목록 줄 → /broker(전세·매매 둘 다 있어 허브로 — 세션 516)", () => {
@@ -110,10 +116,12 @@ describe("/checklist/[type] 장", () => {
     );
   });
 
-  it("정적 경로 = 세입자·집주인·매수인·매도인 · dynamicParams === false", () => {
+  it("정적 경로 = 전세 세입자·집주인 · 월세 세입자·집주인 · 매수인·매도인 · dynamicParams === false", () => {
     expect(generateStaticParams()).toEqual([
       { type: "jeonse-tenant" },
       { type: "jeonse-landlord" },
+      { type: "wolse-tenant" },
+      { type: "wolse-landlord" },
       { type: "sale-buyer" },
       { type: "sale-seller" },
     ]);
@@ -129,13 +137,16 @@ describe("/checklist/[type] 장", () => {
     expect(og.images?.[0]).toMatchObject({ url: "/opengraph-image", width: 1200, height: 630 });
   });
 
-  it("중개사용 유형·없는 유형 → notFound(/checklist/jeonse · /checklist/wolse)", async () => {
+  it("중개사용 유형·없는 유형 → notFound(/checklist/jeonse · /checklist/zz-unknown)", async () => {
     await expect(PartyChecklistPage(params("jeonse"))).rejects.toThrow("NEXT_NOT_FOUND");
-    await expect(PartyChecklistPage(params("wolse"))).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(PartyChecklistPage(params("zz-unknown"))).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFoundMock).toHaveBeenCalledTimes(2);
     expect(await generateMetadata(params("jeonse"))).toEqual({});
     await expect(PartyChecklistPage(params("sale"))).rejects.toThrow("NEXT_NOT_FOUND");
     expect(await generateMetadata(params("sale"))).toEqual({});
+    // 세션 517 — 월세 중개사용(/checklist/wolse)도 404
+    await expect(PartyChecklistPage(params("wolse"))).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(await generateMetadata(params("wolse"))).toEqual({});
   });
 
   it("매수인(세션 516) — h1 · 체크 상자 13개 · 대출 계산 항목은 단지 찾기 링크만 있고 「근거」 줄이 없다", async () => {
@@ -162,5 +173,40 @@ describe("/checklist/[type] 장", () => {
     const meta = await generateMetadata(params("sale-seller"));
     expect(meta.title).toBe("집 팔 때 체크리스트 — 매도인용");
     expect(meta.alternates?.canonical).toBe("/checklist/sale-seller");
+  });
+
+  it("월세 세입자(세션 517) — h1 · 단계 5개(사는 동안 — 월세) · 체크 상자 19개 · 거래 고르기 없음 · 넣지 않은 것 · 메타", async () => {
+    render(await PartyChecklistPage(params("wolse-tenant")));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("월세 계약 체크리스트 — 세입자용");
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+      "계약 전 — 집과 집주인 확인",
+      "계약",
+      "계약 뒤 — 이사 날까지",
+      "사는 동안 — 월세",
+      "만기 때",
+    ]);
+    expect(screen.getAllByRole("checkbox")).toHaveLength(19);
+    expect(screen.getByText(/19개 중 0개 확인/)).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.getByText(/이 목록에 넣지 않은 것/)).toHaveTextContent(
+      "이 목록에 넣지 않은 것: 보증금 반환보증(HUG 등) 가입 요건 · 개별 특약 문구",
+    );
+    const meta = await generateMetadata(params("wolse-tenant"));
+    expect(meta.title).toBe("월세 계약 체크리스트 — 세입자용");
+    expect(meta.alternates?.canonical).toBe("/checklist/wolse-tenant");
+    expect((meta.openGraph as { url?: string }).url).toBe("/checklist/wolse-tenant");
+  });
+
+  it("월세 집주인(세션 517) — h1 · 체크 상자 12개 · 만기 때 첫 항목에 월세 연체 설명 · 메타 canonical", async () => {
+    render(await PartyChecklistPage(params("wolse-landlord")));
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("월세 계약 체크리스트 — 집주인용");
+    expect(screen.getAllByRole("checkbox")).toHaveLength(12);
+    const notice = screen
+      .getByRole("checkbox", { name: /갱신 거절·조건 변경은 끝나기 6개월 전/ })
+      .closest("li")!;
+    expect(notice).toHaveTextContent("월세를 2기분 밀린 세입자에게는 자동 연장이 적용되지 않습니다.");
+    const meta = await generateMetadata(params("wolse-landlord"));
+    expect(meta.title).toBe("월세 계약 체크리스트 — 집주인용");
+    expect(meta.alternates?.canonical).toBe("/checklist/wolse-landlord");
   });
 });

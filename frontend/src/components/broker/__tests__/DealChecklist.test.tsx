@@ -302,9 +302,9 @@ describe("DealChecklist — 이 판이 모르는 유형·항목 체크를 지우
       v: 1,
       deals: [
         { id: "jeonse-a-1", no: 1, type: "jeonse", checks: ["jeonse.registry", "jeonse.future-item"], createdAt: 1 },
-        { id: "wolse-tenant-x-1", no: 1, type: "wolse-tenant", checks: ["wolse-tenant.registry"], createdAt: 2 },
+        { id: "zz-unknown-tenant-x-1", no: 1, type: "zz-unknown-tenant", checks: ["zz-unknown-tenant.registry"], createdAt: 2 },
       ],
-      active: { jeonse: "jeonse-a-1", "wolse-tenant": "wolse-tenant-x-1" },
+      active: { jeonse: "jeonse-a-1", "zz-unknown-tenant": "zz-unknown-tenant-x-1" },
     });
   }
   const savedRaw = () => JSON.parse(localStorage.getItem(DEALS_KEY)!) as { deals: Record<string, unknown>[]; active: Record<string, string> };
@@ -316,9 +316,9 @@ describe("DealChecklist — 이 판이 모르는 유형·항목 체크를 지우
     expect(screen.getByText(/18개 중 1개 확인/)).toBeInTheDocument();
     fireEvent.click(box(SECOND));
     const s = savedRaw();
-    expect(s.deals.find((d) => d.id === "wolse-tenant-x-1")).toEqual(JSON.parse(futureText()).deals[1]);
+    expect(s.deals.find((d) => d.id === "zz-unknown-tenant-x-1")).toEqual(JSON.parse(futureText()).deals[1]);
     expect(s.deals.find((d) => d.id === "jeonse-a-1")!.checks).toEqual(["jeonse.registry", "jeonse.trust", "jeonse.future-item"]);
-    expect(s.active).toEqual({ jeonse: "jeonse-a-1", "wolse-tenant": "wolse-tenant-x-1" });
+    expect(s.active).toEqual({ jeonse: "jeonse-a-1", "zz-unknown-tenant": "zz-unknown-tenant-x-1" });
   });
 
   it("비우기 알림은 보이던 체크 수(1개) · 저장 글자는 모르는 체크까지 비고, 되돌리면 둘 다 돌아온다", async () => {

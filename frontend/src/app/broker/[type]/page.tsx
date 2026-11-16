@@ -40,7 +40,7 @@ export default async function BrokerChecklistPage({ params }: { params: Promise<
   const { type } = await params;
   const list = getChecklist(type, "broker");
   if (!list) notFound();
-  // 손님에게 보낼 당사자용 목록(세션 514) — 짝은 자료의 partyTypes 에서 읽는다(전세·매매)
+  // 손님에게 보낼 당사자용 목록(세션 514) — 짝은 자료의 partyTypes 에서 읽는다(전세·월세·매매)
   const partyLists = (list.partyTypes ?? []).flatMap((t) => {
     const p = getChecklist(t, "party");
     return p ? [p] : [];

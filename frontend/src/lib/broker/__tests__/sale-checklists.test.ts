@@ -1,6 +1,6 @@
 /**
  * 매매 체크 목록 세 장 자료(lib/broker/sale-checklists.ts) — 항목 수·id 꼴·audience·손님 목록 짝·대출 가드(세션 516)
- * 조문 글자↔주소 짝 시험은 checklists.test.ts 에서 여섯 목록 전부를 돈다.
+ * 조문 글자↔주소 짝 시험은 checklists.test.ts 에서 모든 목록(세션 517 부터 아홉)을 돈다.
  * 실행: npx vitest run src/lib/broker/__tests__/sale-checklists.test.ts
  */
 import { describe, it, expect } from "vitest";
@@ -40,9 +40,9 @@ describe("매매 체크 목록 자료 — 중개사·매수인·매도인", () =
     expect(SALE_SELLER.stages.map((s) => s.title)).toEqual(["계약 전·계약", "계약 뒤"]);
   });
 
-  it("항목 id 는 여섯 목록을 합쳐 서로 다르고, 유형 접두어 + 소문자/하이픈 꼴(체크 저장 키)", () => {
+  it("항목 id 는 아홉 목록을 합쳐 서로 다르고, 유형 접두어 + 소문자/하이픈 꼴(체크 저장 키)", () => {
     const all = Object.values(CHECKLISTS).flatMap((l) => l.stages.flatMap((s) => s.items.map((i) => i.id)));
-    expect(Object.keys(CHECKLISTS)).toHaveLength(6);
+    expect(Object.keys(CHECKLISTS)).toHaveLength(9);
     expect(new Set(all).size).toBe(all.length);
     for (const id of itemsOf(SALE).map((i) => i.id)) expect(id).toMatch(/^sale\.[a-z]+(-[a-z]+)*$/);
     for (const id of itemsOf(SALE_BUYER).map((i) => i.id)) expect(id).toMatch(/^sale-buyer\.[a-z]+(-[a-z]+)*$/);

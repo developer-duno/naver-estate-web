@@ -4,7 +4,10 @@
  * - 키 `broker_deals_v1` 의 `_v1` 은 저장 모양의 판 번호다. 모양을 바꾸면 `broker_deals_v2` 새 키를 만들고,
  *   읽을 때 v1 을 v2 로 옮기는 이관 함수를 두며, 옮긴 뒤 옛 키는 지운다(같은 키에 다른 모양을 덮어쓰지 않는다).
  * - 체크는 **항목 id 로만** 저장한다(순번 금지) — 법이 바뀌어 항목이 중간에 끼어들어도 체크가 다른 줄로 옮겨 가지 않게.
- *   지금 CHECKLISTS 에 없는 id 는 읽을 때 버린다.
+ * - 이 판의 CHECKLISTS 에 없는 유형의 거래·없는 항목 id 의 체크·active 의 모르는 유형 열쇠는 **읽을 때 화면에서 숨기고 쓸 때 보존**한다
+ *   (`unknown*` 칸에 들고 있다가 `writeDeals` 가 기존 deals·checks·active 자리에 다시 붙인다 — 저장 모양에 새 칸은 없다).
+ *   새 판(새 유형·새 항목)이 저장한 것을 옛 판으로 열린 탭이 체크 한 번에 지우지 않게(세션 515).
+ *   모르는 거래는 상한에 세지 않고, 보존은 앞 MAX_UNKNOWN_DEALS 개까지.
  * - 손님 이름·연락처·자유 글 칸은 두지 않는다(칸 = 거래 번호 · 거래 유형 · 계약일).
  * - 읽을 때 모양을 검사한다(`readJSON` 은 검사가 없다). 모양이 틀리면 통째로 버리고 corrupt 를 돌려 화면이 한 번 알린다.
  * - 쓰기는 `safeSetItem` — 막힌 브라우저면 false 를 그대로 돌려 화면이 알린다.
@@ -20,6 +23,8 @@ export const DEALS_KEY = "broker_deals_v1";
  * 중개사 거래가 꽉 차도 당사자용 장의 첫 체크가 늘 저장되게(세션 514).
  */
 export const MAX_DEALS = 20;
+/** 이 판이 모르는 유형의 거래를 보존하는 최대 개수(넘으면 뒤쪽을 버린다 — 한없이 늘지 않게) */
+export const MAX_UNKNOWN_DEALS = 50;
 
 export type Deal = {
   id: string;
@@ -31,6 +36,8 @@ export type Deal = {
   /** 체크한 항목 id */
   checks: string[];
   createdAt: number;
+  /** 이 판이 모르는 항목 id 의 체크 — 화면에 안 보이고, 쓸 때 checks 뒤에 다시 붙인다(없으면 칸 자체가 없다) */
+  unknownChecks?: string[];
 };
 
 export type DealsState = {
@@ -38,6 +45,10 @@ export type DealsState = {
   deals: Deal[];
   /** 유형마다 지금 고른 거래 id */
   active: Partial<Record<ChecklistType, string>>;
+  /** 이 판이 모르는 유형의 거래(읽은 그대로) — 화면에 안 보이고, 쓸 때 deals 뒤에 다시 붙인다(없으면 칸 자체가 없다) */
+  unknownDeals?: Record<string, unknown>[];
+  /** active 의 모르는 유형 열쇠 — 쓸 때 active 에 다시 붙인다(없으면 칸 자체가 없다) */
+  unknownActive?: Record<string, string>;
 };
 
 export type ReadResult = { ok: true; state: DealsState } | { ok: false; reason: "corrupt"; state: DealsState };
@@ -89,6 +100,7 @@ export function parseDeals(raw: string | null): ReadResult {
     return corrupt;
   }
   const deals: Deal[] = [];
+  const unknownDeals: Record<string, unknown>[] = [];
   const seen = new Set<string>();
   for (const d of data.deals) {
     if (
@@ -108,17 +120,23 @@ export function parseDeals(raw: string | null): ReadResult {
       return corrupt;
     }
     seen.add(d.id);
-    // 모르는 유형(이 판에 없는 체크 목록)의 거래는 조용히 뺀다
-    if (!isKnownType(d.type)) continue;
+    // 모르는 유형(이 판에 없는 체크 목록)의 거래는 화면에서 빼되, 읽은 그대로 들고 있다가 쓸 때 다시 붙인다
+    if (!isKnownType(d.type)) {
+      if (unknownDeals.length < MAX_UNKNOWN_DEALS) unknownDeals.push(d);
+      continue;
+    }
     const known = itemIds(d.type);
+    const ids = [...new Set(d.checks as string[])];
     const deal: Deal = {
       id: d.id,
       no: d.no as number,
       type: d.type,
-      checks: [...new Set(d.checks as string[])].filter((c) => known.has(c)),
+      checks: ids.filter((c) => known.has(c)),
       createdAt: d.createdAt,
     };
     if (d.contractDate !== undefined) deal.contractDate = d.contractDate as string;
+    const unknownChecks = ids.filter((c) => !known.has(c));
+    if (unknownChecks.length > 0) deal.unknownChecks = unknownChecks;
     deals.push(deal);
   }
   // 중개사용 거래는 앞에서부터 상한까지, 당사자용 거래는 유형마다 첫 1개만 남긴다
@@ -133,10 +151,19 @@ export function parseDeals(raw: string | null): ReadResult {
     return ++limited <= MAX_DEALS;
   });
   const active: DealsState["active"] = {};
+  const unknownActive: [string, string][] = [];
   for (const [t, id] of Object.entries(data.active)) {
-    if (isKnownType(t) && kept.some((d) => d.id === id && d.type === t)) active[t] = id as string;
+    if (isKnownType(t)) {
+      if (kept.some((d) => d.id === id && d.type === t)) active[t] = id as string;
+    } else if (typeof id === "string") {
+      unknownActive.push([t, id]);
+    }
   }
-  return { ok: true, state: { v: 1, deals: kept, active } };
+  const state: DealsState = { v: 1, deals: kept, active };
+  if (unknownDeals.length > 0) state.unknownDeals = unknownDeals;
+  // fromEntries 는 열쇠를 제 칸으로 만든다("__proto__" 열쇠도 원형을 건드리지 않는다)
+  if (unknownActive.length > 0) state.unknownActive = Object.fromEntries(unknownActive);
+  return { ok: true, state };
 }
 
 /** 이 브라우저에서 읽기(서버·막힌 저장소면 빈 상태) */
@@ -151,9 +178,29 @@ export function readDeals(): ReadResult {
   return parseDeals(raw);
 }
 
+/** 상태 → 저장 글자. 보존해 둔 모르는 거래·체크·active 열쇠를 기존 자리에 다시 붙인다(새 칸을 만들지 않는다). */
+function serializeDeals(state: DealsState): string {
+  const deals: Record<string, unknown>[] = state.deals.map((d) => {
+    const out: Record<string, unknown> = {
+      id: d.id,
+      no: d.no,
+      type: d.type,
+      checks: [...d.checks, ...(d.unknownChecks ?? [])],
+      createdAt: d.createdAt,
+    };
+    if (d.contractDate !== undefined) out.contractDate = d.contractDate;
+    return out;
+  });
+  return JSON.stringify({
+    v: 1,
+    deals: [...deals, ...(state.unknownDeals ?? [])],
+    active: { ...state.unknownActive, ...state.active },
+  });
+}
+
 /** 저장 — 막힌 브라우저면 false */
 export function writeDeals(state: DealsState): boolean {
-  return safeSetItem(DEALS_KEY, JSON.stringify(state), "broker-deals");
+  return safeSetItem(DEALS_KEY, serializeDeals(state), "broker-deals");
 }
 
 /** 그 유형의 거래들(번호 순) */
@@ -196,17 +243,31 @@ export function toggleCheck(state: DealsState, dealId: string, itemId: string): 
   });
 }
 
-/** 고른 거래 하나의 체크를 모두 지운다 — 지운 id 목록을 함께 돌려 되돌리기에 쓴다 */
-export function clearChecks(state: DealsState, dealId: string): { state: DealsState; removed: string[] } {
-  const removed = state.deals.find((d) => d.id === dealId)?.checks ?? [];
-  return { state: mapDeal(state, dealId, (d) => ({ ...d, checks: [] })), removed: [...removed] };
+/**
+ * 고른 거래 하나의 체크를 모두 지운다(이 판이 모르는 항목 체크까지) — 지운 id 목록을 함께 돌려 되돌리기에 쓴다.
+ * removed = 화면에 보이던 체크(알림 숫자) · removedUnknown = 모르는 항목 체크.
+ */
+export function clearChecks(
+  state: DealsState,
+  dealId: string,
+): { state: DealsState; removed: string[]; removedUnknown: string[] } {
+  const deal = state.deals.find((d) => d.id === dealId);
+  const next = mapDeal(state, dealId, (d) => {
+    const cleared = { ...d, checks: [] };
+    delete cleared.unknownChecks;
+    return cleared;
+  });
+  return { state: next, removed: [...(deal?.checks ?? [])], removedUnknown: [...(deal?.unknownChecks ?? [])] };
 }
 
-/** 되돌리기 — 지웠던 체크를 다시 넣는다(그 사이 새로 켠 체크는 남긴다) */
-export function restoreChecks(state: DealsState, dealId: string, checks: string[]): DealsState {
+/** 되돌리기 — 지웠던 체크(모르는 항목 체크 포함)를 다시 넣는다(그 사이 새로 켠 체크는 남긴다) */
+export function restoreChecks(state: DealsState, dealId: string, checks: string[], unknown: string[] = []): DealsState {
   return mapDeal(state, dealId, (d) => {
     const known = itemIds(d.type);
-    return { ...d, checks: [...new Set([...checks, ...d.checks])].filter((c) => known.has(c)) };
+    const next = { ...d, checks: [...new Set([...checks, ...d.checks])].filter((c) => known.has(c)) };
+    const unknownChecks = [...new Set([...unknown, ...(d.unknownChecks ?? [])])].filter((c) => !known.has(c));
+    if (unknownChecks.length > 0) next.unknownChecks = unknownChecks;
+    return next;
   });
 }
 

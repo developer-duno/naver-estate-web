@@ -287,3 +287,50 @@ describe("DealChecklist single — 세입자·집주인용(세션 514)", () => {
     expect(s.deals.find((d) => d.type === "jeonse-tenant")).toMatchObject({ no: 1, checks: ["jeonse-tenant.registry-explain"] });
   });
 });
+
+describe("DealChecklist — 이 판이 모르는 유형·항목 체크를 지우지 않는다(세션 515)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** 새 판이 저장했을 법한 저장 글자 — 아는 전세 거래(모르는 항목 체크 1개 포함) + 모르는 유형 거래 1개 */
+  function futureText(): string {
+    return JSON.stringify({
+      v: 1,
+      deals: [
+        { id: "jeonse-a-1", no: 1, type: "jeonse", checks: ["jeonse.registry", "jeonse.future-item"], createdAt: 1 },
+        { id: "sale-buyer-x-1", no: 1, type: "sale-buyer", checks: ["sale-buyer.registry"], createdAt: 2 },
+      ],
+      active: { jeonse: "jeonse-a-1", "sale-buyer": "sale-buyer-x-1" },
+    });
+  }
+  const savedRaw = () => JSON.parse(localStorage.getItem(DEALS_KEY)!) as { deals: Record<string, unknown>[]; active: Record<string, string> };
+
+  it("T7 체크 1개를 눌러도 모르는 유형 거래·모르는 항목 체크·active 열쇠가 저장 글자에 남는다", async () => {
+    localStorage.setItem(DEALS_KEY, futureText());
+    render(<DealChecklist type="jeonse" />);
+    await waitFor(() => expect(box(FIRST).checked).toBe(true));
+    expect(screen.getByText(/18개 중 1개 확인/)).toBeInTheDocument();
+    fireEvent.click(box(SECOND));
+    const s = savedRaw();
+    expect(s.deals.find((d) => d.id === "sale-buyer-x-1")).toEqual(JSON.parse(futureText()).deals[1]);
+    expect(s.deals.find((d) => d.id === "jeonse-a-1")!.checks).toEqual(["jeonse.registry", "jeonse.trust", "jeonse.future-item"]);
+    expect(s.active).toEqual({ jeonse: "jeonse-a-1", "sale-buyer": "sale-buyer-x-1" });
+  });
+
+  it("비우기 알림은 보이던 체크 수(1개) · 저장 글자는 모르는 체크까지 비고, 되돌리면 둘 다 돌아온다", async () => {
+    localStorage.setItem(DEALS_KEY, futureText());
+    render(<DealChecklist type="jeonse" />);
+    await waitFor(() => expect(box(FIRST).checked).toBe(true));
+    fireEvent.click(screen.getByRole("button", { name: "비우기" }));
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("거래 1의 체크 1개를 지웠습니다.");
+    expect(savedRaw().deals.find((d) => d.id === "jeonse-a-1")!.checks).toEqual([]);
+    fireEvent.click(within(status).getByRole("button", { name: "되돌리기" }));
+    expect(box(FIRST).checked).toBe(true);
+    expect(savedRaw().deals.find((d) => d.id === "jeonse-a-1")!.checks).toEqual(["jeonse.registry", "jeonse.future-item"]);
+  });
+});

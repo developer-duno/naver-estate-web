@@ -3,6 +3,7 @@
  *
  * - 출처·조문 주소는 열어 그 조문이 맞는지 본 뒤에만 적는다(법제처 한글 주소 `https://www.law.go.kr/법령/<법령명>/제X조`).
  * - 항목 id 는 바꾸지 않는다 — 다음 PR 에서 체크 저장 키가 된다(순번 금지 · `<type>.<영문 소문자-하이픈>` 꼴).
+ *   항목의 **뜻이 바뀌면 새 id** 를 준다(옛 id 를 재사용하면 옛 체크가 새 의무를 한 것으로 보인다).
  * - 법이 바뀌어 항목을 고치면 그 목록의 checkedAt(법령 기준일, YYYY-MM-DD)을 고친다 — 사이트맵 lastmod 도 이 값을 쓴다.
  * - 장·허브 버튼·사이트맵이 모두 CHECKLISTS 한 목록에서 나온다. 목록마다 `audience` 로 갈린다(세션 514):
  *   broker = 중개사용(/broker/<type> · BROKER_TYPES) · party = 세입자·집주인 같은 거래 당사자용(/checklist/<type> · PARTY_TYPES).

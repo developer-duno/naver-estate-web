@@ -1,11 +1,12 @@
 /**
- * 「중개 실무」 체크 저장(lib/broker/deals-storage.ts) — 모양 검사·모르는 id 버림·상한 20·비우기/되돌리기·쓰기 실패·계약일 형식
+ * 「중개 실무」 체크 저장(lib/broker/deals-storage.ts) — 모양 검사·모르는 유형·id 는 화면에서 숨기고 쓸 때 보존·상한 20·비우기/되돌리기·쓰기 실패·계약일 형식
  * 실행: npx vitest run src/lib/broker/__tests__/deals-storage.test.ts
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   DEALS_KEY,
   MAX_DEALS,
+  MAX_UNKNOWN_DEALS,
   activeDeal,
   addDeal,
   clearChecks,
@@ -66,7 +67,7 @@ describe("parseDeals — 읽을 때 모양 검사", () => {
     expect(r).toEqual({ ok: false, reason: "corrupt", state: emptyState() });
   });
 
-  it("지금 목록에 없는 항목 id 는 버리고, 모르는 유형의 거래는 뺀다", () => {
+  it("지금 목록에 없는 항목 id·모르는 유형의 거래는 화면용 상태에서 뺀다(쓸 때 보존은 아래 세션 515 묶음)", () => {
     const r = parseDeals(
       raw({
         deals: [
@@ -262,5 +263,98 @@ describe("거래 수 상한은 중개사용 목록만 센다 — 세입자·집�
     expect(r.ok).toBe(true);
     expect(r.state.deals).toHaveLength(MAX_DEALS + 1);
     expect(r.state.deals.filter((d) => d.type === "jeonse-tenant").map((d) => d.id)).toEqual(["t1"]);
+  });
+});
+
+describe("이 판이 모르는 유형·항목 체크는 읽을 때 숨기고 쓸 때 보존한다(세션 515)", () => {
+  // 새 판(예: 매매 목록 추가)이 저장한 거래를 옛 판으로 열린 탭이 체크 한 번에 지워 버리던 결함의 가드
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  /** 새 판이 저장했을 법한 「이 판이 모르는 유형」 거래 */
+  const futureDeal = (over: Record<string, unknown> = {}) => ({
+    id: "sale-buyer-x-1",
+    no: 1,
+    type: "sale-buyer",
+    checks: ["sale-buyer.registry", "sale-buyer.loan"],
+    createdAt: 7,
+    contractDate: "2026-12-01",
+    ...over,
+  });
+
+  /** 저장 글자를 넣고 → 읽고 → fn 으로 바꾸고 → 쓴 뒤, 저장된 글자를 JSON 으로 돌려준다 */
+  function roundTrip(text: string, fn: (s: DealsState) => DealsState = (s) => s) {
+    localStorage.setItem(DEALS_KEY, text);
+    const r = readDeals();
+    expect(r.ok).toBe(true);
+    expect(writeDeals(fn(r.state))).toBe(true);
+    return JSON.parse(localStorage.getItem(DEALS_KEY)!) as {
+      v: number;
+      deals: Record<string, unknown>[];
+      active: Record<string, string>;
+    };
+  }
+
+  it("T1 모르는 유형 거래는 화면용 deals 에 없고, 아는 거래 체크를 바꿔 써도 처음 그대로 남는다", () => {
+    const text = raw({ deals: [deal(), futureDeal()], active: { jeonse: "jeonse-a-1" } });
+    expect(parseDeals(text).state.deals.map((d) => d.id)).toEqual(["jeonse-a-1"]);
+    const out = roundTrip(text, (s) => toggleCheck(s, "jeonse-a-1", "jeonse.trust"));
+    expect(out.deals.find((d) => d.id === "sale-buyer-x-1")).toEqual(futureDeal());
+    expect(out.deals.find((d) => d.id === "jeonse-a-1")?.checks).toEqual(["jeonse.registry", "jeonse.trust"]);
+  });
+
+  it("T2 아는 거래의 모르는 항목 체크는 화면용 checks 에 없고, 다른 항목을 바꿔 써도 남는다", () => {
+    const text = raw({ deals: [deal({ checks: ["jeonse.registry", "jeonse.future-item"] })] });
+    expect(parseDeals(text).state.deals[0].checks).toEqual(["jeonse.registry"]);
+    const out = roundTrip(text, (s) => toggleCheck(s, "jeonse-a-1", "jeonse.trust"));
+    expect(out.deals[0].checks).toEqual(["jeonse.registry", "jeonse.trust", "jeonse.future-item"]);
+  });
+
+  it("T3 active 의 모르는 유형 열쇠는 화면용 active 에 없고, 쓸 때 다시 붙는다", () => {
+    const text = raw({ active: { jeonse: "jeonse-a-1", "sale-buyer": "x1" } });
+    expect(parseDeals(text).state.active).toEqual({ jeonse: "jeonse-a-1" });
+    const out = roundTrip(text, (s) => toggleCheck(s, "jeonse-a-1", "jeonse.trust"));
+    expect(out.active).toEqual({ jeonse: "jeonse-a-1", "sale-buyer": "x1" });
+  });
+
+  it("T4 비우기는 모르는 체크까지 지우고(알림 숫자는 보이던 체크 수), 되돌리기는 모르는 체크까지 살린다", () => {
+    localStorage.setItem(DEALS_KEY, raw({ deals: [deal({ checks: ["jeonse.registry", "jeonse.future-item"] })] }));
+    const cleared = clearChecks(readDeals().state, "jeonse-a-1");
+    expect(cleared.removed).toEqual(["jeonse.registry"]);
+    writeDeals(cleared.state);
+    expect(JSON.parse(localStorage.getItem(DEALS_KEY)!).deals[0].checks).toEqual([]);
+    writeDeals(restoreChecks(cleared.state, "jeonse-a-1", cleared.removed, cleared.removedUnknown));
+    expect(JSON.parse(localStorage.getItem(DEALS_KEY)!).deals[0].checks).toEqual(["jeonse.registry", "jeonse.future-item"]);
+  });
+
+  it(`T5 모르는 거래는 상한에 세지 않고(아는 거래 ${MAX_DEALS}개는 그대로), 보존은 앞 ${MAX_UNKNOWN_DEALS}개까지`, () => {
+    const futures = Array.from({ length: MAX_UNKNOWN_DEALS + 10 }, (_, i) => futureDeal({ id: `f${i}`, no: i + 1 }));
+    const known = (n: number) => Array.from({ length: n }, (_, i) => deal({ id: `d${i}`, no: i + 1, checks: [] }));
+    // 모르는 거래를 앞에 둔다 — 상한에 세면 아는 거래가 잘린다
+    const full = raw({ deals: [...futures, ...known(MAX_DEALS)] });
+    const r = parseDeals(full);
+    expect(r.state.deals).toHaveLength(MAX_DEALS);
+    expect(limitedDealCount(r.state)).toBe(MAX_DEALS);
+    const out = roundTrip(full);
+    expect(out.deals.filter((d) => d.type === "sale-buyer").map((d) => d.id)).toEqual(
+      futures.slice(0, MAX_UNKNOWN_DEALS).map((d) => d.id),
+    );
+    expect(out.deals.filter((d) => d.type === "jeonse")).toHaveLength(MAX_DEALS);
+    // 아는 거래가 상한보다 1개 적으면 모르는 거래가 많아도 새 거래를 만들 수 있다
+    expect(addDeal(parseDeals(raw({ deals: [...futures, ...known(MAX_DEALS - 1)] })).state, "jeonse", 9_000)).not.toBeNull();
+  });
+
+  it("T6 쓴 글자에 새 칸이 없다 — 최상위는 v·deals·active, 거래는 기존 칸만(옛 판이 읽어도 corrupt 가 아니다)", () => {
+    const text = raw({
+      deals: [deal({ checks: ["jeonse.registry", "jeonse.future-item"], contractDate: "2026-11-20" }), futureDeal()],
+      active: { jeonse: "jeonse-a-1", "sale-buyer": "sale-buyer-x-1" },
+    });
+    const out = roundTrip(text, (s) => toggleCheck(s, "jeonse-a-1", "jeonse.trust"));
+    expect(Object.keys(out).sort()).toEqual(["active", "deals", "v"]);
+    expect(out.v).toBe(1);
+    const allowed = new Set(["id", "no", "type", "checks", "createdAt", "contractDate"]);
+    for (const d of out.deals) expect(Object.keys(d).filter((k) => !allowed.has(k))).toEqual([]);
+    expect(parseDeals(JSON.stringify(out)).ok).toBe(true);
   });
 });

@@ -106,6 +106,41 @@ describe("DealChecklist", () => {
     expect(screen.getByRole("button", { name: "비우기" })).toBeDisabled();
   });
 
+  it("되돌리기는 지운 거래로 복원한다 — 비운 뒤 다른 거래로 바꿔도 그 거래는 그대로", () => {
+    vi.useFakeTimers();
+    // 거래 1(체크 2개) + 거래 2(체크 1개), 거래 1을 고른 상태
+    const base = seeded(["jeonse.registry", "jeonse.trust"]);
+    const two = addDeal(base, "jeonse", 2_000)!;
+    const s = { ...toggleCheck(two.state, two.deal.id, "jeonse.fee"), active: { jeonse: base.deals[0].id } };
+    localStorage.setItem(DEALS_KEY, JSON.stringify(s));
+    render(<DealChecklist type="jeonse" />);
+    const select = screen.getByRole("combobox", { name: "거래 고르기" });
+    expect(select).toHaveDisplayValue("거래 1 · 전세");
+    fireEvent.click(screen.getByRole("button", { name: "비우기" }));
+    fireEvent.change(select, { target: { value: two.deal.id } });
+    expect(select).toHaveDisplayValue("거래 2 · 전세");
+    fireEvent.click(within(screen.getByRole("status")).getByRole("button", { name: "되돌리기" }));
+    const after = saved()!;
+    expect(after.deals.find((d) => d.no === 1)!.checks).toEqual(["jeonse.registry", "jeonse.trust"]);
+    expect(after.deals.find((d) => d.no === 2)!.checks).toEqual(["jeonse.fee"]);
+    // 화면은 여전히 거래 2 — 거래 1의 체크가 거래 2 화면에 나타나지 않는다
+    expect(box(FIRST).checked).toBe(false);
+    expect(box("중개보수·실비 금액과 산출내역 설명").checked).toBe(true);
+  });
+
+  it("다른 탭이 저장소를 통째로 지우면(storage 이벤트 key=null) 화면 체크가 다 꺼진다", async () => {
+    localStorage.setItem(DEALS_KEY, JSON.stringify(seeded(["jeonse.registry", "jeonse.trust"])));
+    render(<DealChecklist type="jeonse" />);
+    await waitFor(() => expect(box(FIRST).checked).toBe(true));
+    localStorage.clear();
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: null }));
+    });
+    await waitFor(() => expect(box(FIRST).checked).toBe(false));
+    expect(box(SECOND).checked).toBe(false);
+    expect(screen.getByText(/아직 거래가 없습니다/)).toBeInTheDocument();
+  });
+
   it("다른 탭이 같은 키를 바꾸면(storage 이벤트) 다시 읽는다", async () => {
     render(<DealChecklist type="jeonse" />);
     expect(box(FIRST).checked).toBe(false);

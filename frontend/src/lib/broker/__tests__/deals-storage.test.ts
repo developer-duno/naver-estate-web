@@ -84,6 +84,13 @@ describe("parseDeals — 읽을 때 모양 검사", () => {
     expect(parseDeals(raw({ active: { jeonse: "nope" } })).state.active).toEqual({});
   });
 
+  it("active 가 (읽을 때 빠진) 다른 유형 거래의 id 를 가리키면 뺀다", () => {
+    // 지금 유형은 jeonse 하나뿐 — 다른 유형 거래는 읽을 때 먼저 빠지므로, 그 id 를 jeonse 의 active 로 둔 경우를 본다
+    const r = parseDeals(raw({ deals: [deal(), deal({ id: "wolse-1", type: "wolse", checks: [] })], active: { jeonse: "wolse-1" } }));
+    expect(r.state.deals.map((d) => d.id)).toEqual(["jeonse-a-1"]);
+    expect(r.state.active).toEqual({});
+  });
+
   it(`거래가 ${MAX_DEALS}개를 넘게 저장돼 있으면 앞 ${MAX_DEALS}개만`, () => {
     const many = Array.from({ length: MAX_DEALS + 3 }, (_, i) => deal({ id: `d${i}`, no: i + 1 }));
     expect(parseDeals(raw({ deals: many })).state.deals).toHaveLength(MAX_DEALS);
@@ -98,6 +105,13 @@ describe("상태 바꾸기(순수 함수)", () => {
     const s20 = stateWith(MAX_DEALS);
     expect(s20.deals).toHaveLength(MAX_DEALS);
     expect(addDeal(s20, "jeonse", 9_999)).toBeNull();
+  });
+
+  it("addDeal — 번호 = 그 유형의 가장 큰 번호 + 1(중간 번호가 비어도 겹치지 않는다: 1·3 → 4)", () => {
+    const r = parseDeals(raw({ deals: [deal({ id: "a", no: 1 }), deal({ id: "c", no: 3 })] }));
+    const next = addDeal(r.state, "jeonse", 5_000)!;
+    expect(next.deal.no).toBe(4);
+    expect(next.state.deals.map((d) => d.no)).toEqual([1, 3, 4]);
   });
 
   it("toggleCheck — 켜고 끈다 · 그 유형에 없는 id 는 무시", () => {

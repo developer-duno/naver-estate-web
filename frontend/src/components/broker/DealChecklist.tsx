@@ -12,6 +12,7 @@ import {
   clearChecks,
   dealsOf,
   emptyState,
+  limitedDealCount,
   readDeals,
   restoreChecks,
   setActive,
@@ -87,7 +88,7 @@ export default function DealChecklist({ type, single = false }: { type: Checklis
   const deals = dealsOf(state, type);
   const current = activeDeal(state, type);
   const checked = new Set(current?.checks ?? []);
-  const full = state.deals.length >= MAX_DEALS;
+  const full = limitedDealCount(state) >= MAX_DEALS;
 
   const onNewDeal = () => {
     const r = addDeal(stateRef.current, type, nowMs());

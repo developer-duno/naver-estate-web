@@ -73,6 +73,9 @@ describe("/checklist/[type] 장", () => {
     expect(screen.queryByRole("button", { name: "+ 새 거래" })).toBeNull();
     expect(container.querySelectorAll("ol > li")).toHaveLength(15);
     expect(screen.getByText(/법령 기준일/)).toHaveTextContent("2026. 11. 16.");
+    // 법 원문 검사 반영 설명(세션 514)도 서버 렌더 글자에 그대로
+    expect(screen.getByText("법은 집주인이 계약할 때 세입자에게 보여 주도록 정합니다.")).toBeInTheDocument();
+    expect(screen.getByText("보증금 6천만원 초과 또는 월 차임 30만원 초과 계약이 대상입니다.")).toBeInTheDocument();
   });
 
   it("집주인 — 체크 상자 10개 · 계산기 링크는 사이트 안", async () => {

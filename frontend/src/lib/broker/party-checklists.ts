@@ -8,7 +8,7 @@
  * 시험 = `src/lib/broker/__tests__/party-checklists.test.ts` · `checklists.test.ts`(조문 글자↔주소 짝은 세 목록 전부).
  */
 import type { DealChecklist } from "./checklists";
-import { A25, A26, A30, A32, D21, H3, H3_2, H3_3, H3_6, H3_7, H4, H6, H6_2, H6_3, H7, H8, L6, R29_2, RT6_2, RT6_5, T109 } from "./law-urls";
+import { A25, A26, A30, A32, D21, H3, H3_2, H3_3, H3_6, H3_7, H4, H6, H6_2, H6_3, H7, H8, L6, R29_2, RD4_3, RT6_2, RT6_5, T109 } from "./law-urls";
 
 const FEE_CALC = { label: "중개수수료 계산기", href: "/tools/brokerage-fee" };
 const NOT_COVERED = ["전세보증(HUG 등) 가입 요건", "전세대출 조건", "개별 특약 문구"];
@@ -38,6 +38,7 @@ export const JEONSE_TENANT: DealChecklist = {
           id: "jeonse-tenant.landlord-info",
           title:
             "집주인에게 확정일자 현황과 국세·지방세 납세증명서 받기(계약 전에 열람에 동의했으면 그것으로 갈음)",
+          detail: "법은 집주인이 계약할 때 세입자에게 보여 주도록 정합니다.",
           laws: [{ label: "주택임대차보호법 제3조의7", url: H3_7 }],
         },
         {
@@ -69,8 +70,8 @@ export const JEONSE_TENANT: DealChecklist = {
           id: "jeonse-tenant.contract-docs",
           title: "거래계약서와 확인·설명서를 받기(중개사 서명·날인 확인)",
           laws: [
-            { label: "공인중개사법 제25조 제3항", url: A25 },
-            { label: "공인중개사법 제26조 제1항", url: A26 },
+            { label: "공인중개사법 제25조 제3항·제4항", url: A25 },
+            { label: "공인중개사법 제26조 제1항·제2항", url: A26 },
           ],
         },
         {
@@ -94,9 +95,11 @@ export const JEONSE_TENANT: DealChecklist = {
           id: "jeonse-tenant.lease-report",
           title:
             "임대차 신고: 계약일부터 30일 안(전입신고를 하면 신고한 것으로 보고, 계약서를 내고 신고하면 확정일자도 받은 것으로 봄)",
+          detail: "보증금 6천만원 초과 또는 월 차임 30만원 초과 계약이 대상입니다.",
           laws: [
             { label: "부동산거래신고법 제6조의2", url: RT6_2 },
             { label: "부동산거래신고법 제6조의5", url: RT6_5 },
+            { label: "부동산거래신고법 시행령 제4조의3", url: RD4_3 },
           ],
         },
         {
@@ -137,6 +140,7 @@ export const JEONSE_TENANT: DealChecklist = {
           laws: [
             { label: "주택임대차보호법 제6조", url: H6 },
             { label: "주택임대차보호법 제6조의2", url: H6_2 },
+            { label: "주택임대차보호법 제6조의3 제4항", url: H6_3 },
           ],
         },
         {
@@ -199,6 +203,7 @@ export const JEONSE_LANDLORD: DealChecklist = {
         {
           id: "jeonse-landlord.lease-report",
           title: "임대차 신고: 계약일부터 30일 안, 세입자와 함께",
+          detail: "한쪽이 신고를 거부하면 다른 쪽이 혼자 신고할 수 있습니다.",
           laws: [{ label: "부동산거래신고법 제6조의2", url: RT6_2 }],
         },
         {
@@ -221,6 +226,7 @@ export const JEONSE_LANDLORD: DealChecklist = {
           id: "jeonse-landlord.renewal-refusal",
           title:
             "세입자 갱신 요구는 정해진 사유(2기 차임 연체·직접 거주 등 9가지)가 없으면 거절 못 함 — 직접 거주로 거절하고 남에게 세를 주면 손해배상",
+          detail: "손해배상은 정당한 사유 없이, 원래 갱신됐을 기간이 끝나기 전에 남에게 세를 준 경우입니다.",
           laws: [{ label: "주택임대차보호법 제6조의3 제1항·제5항", url: H6_3 }],
         },
         {

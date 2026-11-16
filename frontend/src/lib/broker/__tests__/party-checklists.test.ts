@@ -60,6 +60,27 @@ describe("계약 체크 목록 자료 — 세입자·집주인", () => {
     }
   });
 
+  it("법 원문 검사 반영(세션 514) — 세입자 6번 근거 ④·② 포함 · 보강 설명 4건 · 세입자 9·14번 근거 추가", () => {
+    const item = (l: typeof JEONSE_TENANT, id: string) => itemsOf(l).find((i) => i.id === id)!;
+    expect(item(JEONSE_TENANT, "jeonse-tenant.contract-docs").laws.map((x) => x.label)).toEqual([
+      "공인중개사법 제25조 제3항·제4항",
+      "공인중개사법 제26조 제1항·제2항",
+    ]);
+    expect(item(JEONSE_TENANT, "jeonse-tenant.landlord-info").detail).toBe("법은 집주인이 계약할 때 세입자에게 보여 주도록 정합니다.");
+    const report = item(JEONSE_TENANT, "jeonse-tenant.lease-report");
+    expect(report.detail).toBe("보증금 6천만원 초과 또는 월 차임 30만원 초과 계약이 대상입니다.");
+    expect(report.laws.map((x) => x.label)).toContain("부동산거래신고법 시행령 제4조의3");
+    expect(item(JEONSE_TENANT, "jeonse-tenant.implied-renewal-exit").laws.map((x) => x.label)).toContain(
+      "주택임대차보호법 제6조의3 제4항",
+    );
+    expect(item(JEONSE_LANDLORD, "jeonse-landlord.lease-report").detail).toBe(
+      "한쪽이 신고를 거부하면 다른 쪽이 혼자 신고할 수 있습니다.",
+    );
+    expect(item(JEONSE_LANDLORD, "jeonse-landlord.renewal-refusal").detail).toBe(
+      "손해배상은 정당한 사유 없이, 원래 갱신됐을 기간이 끝나기 전에 남에게 세를 준 경우입니다.",
+    );
+  });
+
   it("신뢰도를 변명하는 문장이 없다(금지 문구 2종 0)", () => {
     const banned = ["참고" + "용", "정확하지 않을" + " 수"];
     const all = JSON.stringify([JEONSE_TENANT, JEONSE_LANDLORD]);

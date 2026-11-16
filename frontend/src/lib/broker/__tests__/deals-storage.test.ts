@@ -11,6 +11,7 @@ import {
   clearChecks,
   emptyState,
   isValidDate,
+  limitedDealCount,
   parseDeals,
   readDeals,
   restoreChecks,
@@ -233,5 +234,33 @@ describe("유형이 둘 이상일 때 — 중개사용 전세와 세입자·집�
       active: { "jeonse-tenant": "t1" },
     });
     expect(parseDeals(raw).state.deals[0].checks).toEqual(["jeonse-tenant.fee"]);
+  });
+});
+
+describe("거래 수 상한은 중개사용 목록만 센다 — 세입자·집주인은 유형마다 1개(세션 514)", () => {
+  it("중개사 거래 20개로 꽉 차도 세입자·집주인 첫 거래는 만들어진다 · 중개사 새 거래는 여전히 막힌다", () => {
+    const full = stateWith(MAX_DEALS);
+    expect(limitedDealCount(full)).toBe(MAX_DEALS);
+    expect(addDeal(full, "jeonse", 9_000)).toBeNull();
+    const t = addDeal(full, "jeonse-tenant", 9_001)!;
+    expect(t.deal).toMatchObject({ no: 1, type: "jeonse-tenant" });
+    const l = addDeal(t.state, "jeonse-landlord", 9_002)!;
+    expect(l.state.deals).toHaveLength(MAX_DEALS + 2);
+    expect(limitedDealCount(l.state)).toBe(MAX_DEALS);
+    expect(addDeal(l.state, "jeonse", 9_003)).toBeNull();
+  });
+
+  it("세입자 거래는 유형마다 1개 — 두 번째는 만들지 않는다", () => {
+    const t = addDeal(emptyState(), "jeonse-tenant", 1)!;
+    expect(addDeal(t.state, "jeonse-tenant", 2)).toBeNull();
+  });
+
+  it("읽을 때도 중개사 거래 20개 + 세입자 1개를 그대로 남긴다(세입자 둘째 거래는 버림)", () => {
+    const many = Array.from({ length: MAX_DEALS }, (_, i) => deal({ id: `d${i}`, no: i + 1, checks: [] }));
+    const tenant = (id: string, no: number) => deal({ id, no, type: "jeonse-tenant", checks: ["jeonse-tenant.fee"] });
+    const r = parseDeals(raw({ deals: [...many, tenant("t1", 1), tenant("t2", 2)] }));
+    expect(r.ok).toBe(true);
+    expect(r.state.deals).toHaveLength(MAX_DEALS + 1);
+    expect(r.state.deals.filter((d) => d.type === "jeonse-tenant").map((d) => d.id)).toEqual(["t1"]);
   });
 });

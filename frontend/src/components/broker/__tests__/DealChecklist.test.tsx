@@ -252,6 +252,30 @@ describe("DealChecklist single — 세입자·집주인용(세션 514)", () => {
     expect(status).toBeEmptyDOMElement();
   });
 
+  it("중개사 거래가 20개로 꽉 차 있어도 세입자 첫 체크는 「거래 1」로 저장된다(상한은 중개사용만 · 세션 514)", async () => {
+    let s = emptyState();
+    for (let i = 0; i < MAX_DEALS; i++) s = addDeal(s, "jeonse", i + 1)!.state;
+    localStorage.setItem(DEALS_KEY, JSON.stringify(s));
+    render(<DealChecklist type="jeonse-tenant" single />);
+    await waitFor(() => expect(screen.getByText(/15개 중 0개 확인/)).toBeInTheDocument());
+    fireEvent.click(box(TENANT_FIRST));
+    expect(box(TENANT_FIRST).checked).toBe(true);
+    const after = saved()!;
+    expect(after.deals).toHaveLength(MAX_DEALS + 1);
+    expect(after.deals.find((d) => d.type === "jeonse-tenant")).toMatchObject({ no: 1, checks: ["jeonse-tenant.registry-explain"] });
+  });
+
+  it("세입자 거래가 있어도 중개사 장의 「20개까지」 판정은 중개사 거래만 센다", async () => {
+    let s = emptyState();
+    for (let i = 0; i < MAX_DEALS - 1; i++) s = addDeal(s, "jeonse", i + 1)!.state;
+    s = addDeal(s, "jeonse-tenant", 100)!.state;
+    localStorage.setItem(DEALS_KEY, JSON.stringify(s));
+    render(<DealChecklist type="jeonse" />);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "거래 고르기" })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "+ 새 거래" })).toBeEnabled();
+    expect(screen.queryByText(/거래는 20개까지 저장됩니다/)).toBeNull();
+  });
+
   it("중개사용 전세 거래가 저장돼 있어도 세입자 화면은 비어 있고, 세입자 체크는 전세 거래에 안 섞인다", async () => {
     localStorage.setItem(DEALS_KEY, JSON.stringify(seeded(["jeonse.registry", "jeonse.trust"])));
     render(<DealChecklist type="jeonse-tenant" single />);

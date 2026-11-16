@@ -84,7 +84,7 @@ describe("홈 개편 — 칸", () => {
     expect(screen.getAllByRole("link", { name: /시·군·구 전체 보기/ }).length).toBeGreaterThan(0);
   });
 
-  it("계산기 모음 6칸(후순위 대출 한도 포함) · 가이드 3편(대출 글 맨 앞) · 글 전체 보기", () => {
+  it("계산기 모음 7칸(후순위 대출 한도 포함) · 가이드 3편(대출 글 맨 앞) · 글 전체 보기", () => {
     const { container } = renderHome();
     expect(screen.getByRole("heading", { level: 2, name: "계산기 모음" })).toBeInTheDocument();
     expect(container.querySelector('a[href="/tools/second-mortgage"]')).not.toBeNull();

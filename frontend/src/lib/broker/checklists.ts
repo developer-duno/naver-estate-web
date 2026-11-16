@@ -7,12 +7,13 @@
  * - 법이 바뀌어 항목을 고치면 그 목록의 checkedAt(법령 기준일, YYYY-MM-DD)을 고친다 — 사이트맵 lastmod 도 이 값을 쓴다.
  * - 장·허브 버튼·사이트맵이 모두 CHECKLISTS 한 목록에서 나온다. 목록마다 `audience` 로 갈린다(세션 514):
  *   broker = 중개사용(/broker/<type> · BROKER_TYPES) · party = 세입자·집주인 같은 거래 당사자용(/checklist/<type> · PARTY_TYPES).
- *   당사자용 자료는 party-checklists.ts, 조문 주소는 law-urls.ts(두 파일이 서로 부르지 않게 — 이 파일만 둘을 가져온다).
+ *   당사자용 자료는 party-checklists.ts, 매매 세 목록은 sale-checklists.ts(세션 516), 조문 주소는 law-urls.ts(서로 부르지 않게 — 이 파일만 셋을 가져온다).
  * - 체크 저장(deals-storage.ts)도 이 CHECKLISTS 로 아는 유형·아는 id 를 검사한다.
  * 시험 = `src/lib/broker/__tests__/checklists.test.ts` · `party-checklists.test.ts`.
  */
 import { A25, A25_3, A26, A30, D21, D22, H3, H3_2, H3_6, H3_7, H8, L6, R29_2, RD4_3, RT6_2, RT6_5, T109 } from "./law-urls";
 import { JEONSE_LANDLORD, JEONSE_TENANT } from "./party-checklists";
+import { SALE, SALE_BUYER, SALE_SELLER } from "./sale-checklists";
 
 /** 누가 보는 목록인가 — broker = 공인중개사 · party = 거래 당사자(세입자·집주인 등) */
 export type ChecklistAudience = "broker" | "party";
@@ -60,7 +61,7 @@ const JEONSE: DealChecklist = {
   audience: "broker",
   partyTypes: ["jeonse-tenant", "jeonse-landlord"],
   name: "전세",
-  h1: "전세 계약 체크 목록",
+  h1: "전세 중개 체크 목록 — 공인중개사용",
   description:
     "아파트 전세 중개에서 계약 전·계약·계약 뒤에 할 일을 법 조문 순서로 정리했습니다. 항목마다 근거 조문 원문으로 이어집니다.",
   checkedAt: "2026-11-16",
@@ -259,6 +260,9 @@ export const CHECKLISTS = {
   jeonse: JEONSE,
   "jeonse-tenant": JEONSE_TENANT,
   "jeonse-landlord": JEONSE_LANDLORD,
+  sale: SALE,
+  "sale-buyer": SALE_BUYER,
+  "sale-seller": SALE_SELLER,
 } as const satisfies Record<string, DealChecklist>;
 
 export type ChecklistType = keyof typeof CHECKLISTS;

@@ -17,7 +17,7 @@ export const JEONSE_TENANT: DealChecklist = {
   type: "jeonse-tenant",
   audience: "party",
   name: "세입자용",
-  h1: "전세 계약 체크 목록 — 세입자용",
+  h1: "전세 계약 체크리스트 — 세입자용",
   description:
     "아파트 전세 계약에서 세입자(임차인)가 계약 전·계약·이사·만기 때 챙길 일을 법 조문과 함께 정리했습니다.",
   checkedAt: "2026-11-16",
@@ -158,7 +158,7 @@ export const JEONSE_LANDLORD: DealChecklist = {
   type: "jeonse-landlord",
   audience: "party",
   name: "집주인용",
-  h1: "전세 계약 체크 목록 — 집주인용",
+  h1: "전세 계약 체크리스트 — 집주인용",
   description:
     "아파트 전세 계약에서 집주인(임대인)이 계약 전·계약·만기 때 지킬 일과 챙길 일을 법 조문과 함께 정리했습니다.",
   checkedAt: "2026-11-16",

@@ -30,8 +30,8 @@ describe("계약 체크 목록 자료 — 세입자·집주인", () => {
   });
 
   it("이름·제목·설명(사장님 승인 글자)", () => {
-    expect(JEONSE_TENANT).toMatchObject({ name: "세입자용", h1: "전세 계약 체크 목록 — 세입자용" });
-    expect(JEONSE_LANDLORD).toMatchObject({ name: "집주인용", h1: "전세 계약 체크 목록 — 집주인용" });
+    expect(JEONSE_TENANT).toMatchObject({ name: "세입자용", h1: "전세 계약 체크리스트 — 세입자용" });
+    expect(JEONSE_LANDLORD).toMatchObject({ name: "집주인용", h1: "전세 계약 체크리스트 — 집주인용" });
     expect(JEONSE_TENANT.description).toContain("세입자(임차인)");
     expect(JEONSE_LANDLORD.description).toContain("집주인(임대인)");
   });

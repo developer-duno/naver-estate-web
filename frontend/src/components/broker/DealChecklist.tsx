@@ -300,22 +300,25 @@ export default function DealChecklist({ type, single = false }: { type: Checklis
                         )}
                       </p>
                     )}
-                    <p className="mt-1 text-xs text-brand-muted leading-relaxed">
-                      <span className="font-bold">근거</span>{" "}
-                      {item.laws.map((law, li) => (
-                        <span key={law.label}>
-                          {li > 0 && " · "}
-                          <a
-                            href={law.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline hover:text-brand-navy"
-                          >
-                            {law.label} ↗
-                          </a>
-                        </span>
-                      ))}
-                    </p>
+                    {/* 근거 조문이 없는 항목(매수인 대출 계산 링크 · 세션 516)은 「근거」 줄을 그리지 않는다 */}
+                    {item.laws.length > 0 && (
+                      <p className="mt-1 text-xs text-brand-muted leading-relaxed">
+                        <span className="font-bold">근거</span>{" "}
+                        {item.laws.map((law, li) => (
+                          <span key={law.label}>
+                            {li > 0 && " · "}
+                            <a
+                              href={law.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline hover:text-brand-navy"
+                            >
+                              {law.label} ↗
+                            </a>
+                          </span>
+                        ))}
+                      </p>
+                    )}
                   </li>
                 );
               })}

@@ -32,12 +32,13 @@ describe("/broker 페이지", () => {
     });
   });
 
-  it("거래 유형별 체크 목록 — checklists.ts 유형마다 버튼(지금은 「전세 →」 /broker/jeonse)", () => {
+  it("거래 유형별 체크 목록 — checklists.ts 중개사용 유형마다 버튼(「전세 →」 /broker/jeonse · 「매매 →」 /broker/sale — 세션 516)", () => {
     render(<BrokerHubPage />);
     const card = screen.getByRole("region", { name: "거래 유형별 체크 목록" });
     const links = within(card).getAllByRole("link");
-    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/broker/jeonse"]);
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/broker/jeonse", "/broker/sale"]);
     expect(links[0]).toHaveTextContent("전세 →");
+    expect(links[1]).toHaveTextContent("매매 →");
   });
 
   it("자주 쓰는 계산 — 이미 있는 계산기 장 4개 + 계산기 전체", () => {

@@ -30,7 +30,8 @@ const cardTitleClass = "text-lg font-black tracking-tight text-brand-navy sm:tex
 const btnClass =
   "inline-flex min-h-11 items-center rounded-lg border border-brand-line px-3 text-sm font-bold text-brand-navy hover:bg-brand-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy disabled:cursor-not-allowed disabled:opacity-50";
 
-type Undo = { dealId: string; no: number; checks: string[] };
+/** checks = 화면에 보이던 체크(알림 숫자) · unknown = 이 판이 모르는 항목 체크(되돌릴 때 함께 살린다) */
+type Undo = { dealId: string; no: number; checks: string[]; unknown: string[] };
 
 /** 새 거래의 만든 시각 — 이벤트 처리기에서만 부른다(렌더 중에 시각을 읽지 않는다) */
 function nowMs(): number {
@@ -113,12 +114,12 @@ export default function DealChecklist({ type, single = false }: { type: Checklis
     if (!deal || deal.checks.length === 0) return;
     const r = clearChecks(stateRef.current, deal.id);
     commit(r.state);
-    setUndo({ dealId: deal.id, no: deal.no, checks: r.removed });
+    setUndo({ dealId: deal.id, no: deal.no, checks: r.removed, unknown: r.removedUnknown });
   };
 
   const onUndo = () => {
     if (!undo) return;
-    commit(restoreChecks(stateRef.current, undo.dealId, undo.checks));
+    commit(restoreChecks(stateRef.current, undo.dealId, undo.checks, undo.unknown));
     setUndo(null);
   };
 

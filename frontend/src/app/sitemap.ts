@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { POSTS } from "./blog/posts";
 import { SITE_URL } from "@/lib/constants";
 import { getPublicUpdates } from "@/lib/api/opinions";
+import { CHECKLISTS, CHECKLIST_TYPES } from "@/lib/broker/checklists";
 
 /**
  * 정적 페이지의 lastModified — 장마다 "화면 글자나 title·description 이 마지막으로 바뀐 날"(세션 507).
@@ -14,6 +15,7 @@ import { getPublicUpdates } from "@/lib/api/opinions";
  * 세션 508: /(홈 개편) · /tools(6종으로 제목·설명) · /tools/second-mortgage(새 장) = 2026-11-15.
  * 세션 509: / = 2026-11-16(즐겨찾기 0개일 때의 안내 문장 삭제 · 즐겨찾기 줄을 검색 상자 안으로 — 푸터 문구·지역 단추 칸 수는 제외 대상).
  * 세션 511: /broker(중개 실무 · 새 장) = 2026-11-16.
+ * 세션 513: /terms(제1·2·4조) = 2026-11-16 · /broker/<type> = checklists.ts checkedAt(이 표에 두지 않는다).
  * /blog 는 공개 글 중 가장 최근 발행일, /updates 는 updatesLastModified() 가 정한다(이 표에 없음).
  */
 const STATIC_PAGE_LASTMOD = {
@@ -27,7 +29,7 @@ const STATIC_PAGE_LASTMOD = {
   "/tools/property-tax": "2026-08-25",
   "/tools/area-converter": "2026-06-09",
   "/help": "2026-10-06",
-  "/terms": "2026-10-09",
+  "/terms": "2026-11-16",
   "/privacy": "2026-10-09",
 } as const;
 
@@ -72,6 +74,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: SITE_URL, lastModified: lastmod("/"), changeFrequency: "weekly", priority: 1.0 },
     // 세션 400: /pricing 은 무료 전환으로 잠긴 페이지라 sitemap 제외 (lib/locked-paths.ts)
     { url: `${SITE_URL}/broker`, lastModified: lastmod("/broker"), changeFrequency: "monthly", priority: 0.8 },
+    // 거래 유형별 체크 목록 — 장·허브 버튼과 같은 한 목록(checklists.ts), lastmod = 그 목록의 법령 기준일
+    ...CHECKLIST_TYPES.map((t) => ({
+      url: `${SITE_URL}/broker/${t}`,
+      lastModified: new Date(CHECKLISTS[t].checkedAt),
+      changeFrequency: "monthly" as const,
+      priority: 0.7,
+    })),
     { url: `${SITE_URL}/tools`, lastModified: lastmod("/tools"), changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/tools/second-mortgage`, lastModified: lastmod("/tools/second-mortgage"), changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/tools/brokerage-fee`, lastModified: lastmod("/tools/brokerage-fee"), changeFrequency: "monthly", priority: 0.8 },

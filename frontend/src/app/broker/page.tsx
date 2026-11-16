@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { UPCOMING_DATES, formatDateDot } from "@/lib/broker/upcoming-dates";
+import { CHECKLISTS, CHECKLIST_TYPES } from "@/lib/broker/checklists";
 
 export const metadata: Metadata = {
   title: "중개 실무 — 공인중개사 날짜·서식·계산",
@@ -27,6 +28,7 @@ const CALC_LINKS = [
  * 서식 원문 — 공식 누리집 주소만(사본 파일은 두지 않는다). 세션 511 에 원문을 열어 확인:
  * ⓐ 법제처 국가법령정보센터 별표·서식 화면(제목 「중개대상물 확인ㆍ설명서[Ⅰ] (주거용 건축물)」, 공인중개사법 시행규칙
  *   [시행 2026. 8. 28.] 서식 20) — 서식 자체의 개정일은 원문 화면에서 확인하지 못해 적지 않는다.
+ *   세션 513: 판 번호 없는 한글 주소로 교체 — 11-16 메인 실측 같은 서식.
  * ⓑ 법무부 게시글 「주택임대차 표준계약서(2023. 10. 6. 개정) 다운받기」(글번호 575868).
  */
 const FORM_LINKS = [
@@ -34,7 +36,7 @@ const FORM_LINKS = [
     title: "중개대상물 확인·설명서(주거용 건축물)",
     meta: "공인중개사법 시행규칙 별지 제20호서식",
     sourceLabel: "법제처 국가법령정보센터",
-    url: "https://www.law.go.kr/LSW/lsBylInfoPLinkR.do?lsiSeq=288753&bylNo=0020&bylBrNo=00&bylCls=BF&bylEfYd=20260828&bylEfYdYn=Y",
+    url: "https://www.law.go.kr/법령별표서식/(공인중개사법시행규칙,서식20)",
   },
   {
     title: "주택임대차 표준계약서",
@@ -80,6 +82,22 @@ export default function BrokerHubPage() {
                     </a>
                     <span className="ml-2">원문 확인 {formatDateDot(d.checkedAt)}</span>
                   </p>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section aria-labelledby="broker-checklists" className={cardClass}>
+            <h2 id="broker-checklists" className={cardTitleClass}>거래 유형별 체크 목록</h2>
+            <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {CHECKLIST_TYPES.map((t) => (
+                <li key={t}>
+                  <Link
+                    href={`/broker/${t}`}
+                    className="flex min-h-11 items-center justify-center rounded-lg border border-brand-line px-3 text-sm font-bold text-brand-navy hover:bg-brand-bg"
+                  >
+                    {CHECKLISTS[t].name} →
+                  </Link>
                 </li>
               ))}
             </ul>

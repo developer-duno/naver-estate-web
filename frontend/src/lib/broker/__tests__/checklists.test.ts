@@ -17,9 +17,9 @@ describe("체크 목록 자료", () => {
     expect(getChecklist("toString")).toBeUndefined();
   });
 
-  it("전세 = 단계 4 · 항목 17", () => {
+  it("전세 = 단계 4 · 항목 18", () => {
     expect(jeonse.stages).toHaveLength(4);
-    expect(items).toHaveLength(17);
+    expect(items).toHaveLength(18);
   });
 
   it("항목 id 는 서로 다르고 `jeonse.` + 소문자/하이픈 꼴(다음 PR 의 체크 저장 키)", () => {

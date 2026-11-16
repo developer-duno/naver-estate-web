@@ -1,7 +1,8 @@
 /**
  * /privacy 개인정보 처리방침 시험 (세션 439 보강)
  * 이 시험이 지키는 것: 시행일 · 보호책임자 이메일 · 국외 이전 표의 받는 자 5곳 ·
- * 화면 오류 자동 수집 고지 · 기존 결제·외부 대조 문단이 남아 있는지.
+ * 화면 오류 자동 수집 고지 · 기존 결제·외부 대조 문단이 남아 있는지 ·
+ * 10절 중개 실무 체크 목록 · 개정 예고 문단 · 개정 이력 첫 줄(세션 513 PR 2b).
  * 실행: npx vitest run src/app/privacy/__tests__/page.test.tsx
  */
 import { describe, it, expect } from "vitest";
@@ -9,9 +10,31 @@ import { render, screen, within } from "@testing-library/react";
 import PrivacyPage from "../page";
 
 describe("/privacy 개인정보 처리방침", () => {
-  it("맨 위에 시행일을 보인다", () => {
+  it("맨 위에 시행일 2026년 11월 23일 · 그 바로 아래 개정 예고 문단(11절 7일 예고 약속 — 세션 513)", () => {
     render(<PrivacyPage />);
-    expect(screen.getByText("시행일: 2026년 10월 6일")).toBeInTheDocument();
+    const effective = screen.getByText("시행일: 2026년 11월 23일");
+    expect(effective.nextElementSibling).toHaveTextContent(
+      "개정 예고 — 2026년 11월 23일부터 10절(쿠키와 브라우저 저장소)에 중개 실무 체크 목록이 더해집니다. 그 전까지는 2026년 10월 6일 방침이 적용됩니다.",
+    );
+  });
+
+  it("10절(쿠키와 브라우저 저장소) 목록 끝에 중개 실무 체크 목록(세션 513)", () => {
+    render(<PrivacyPage />);
+    const h10 = screen.getByRole("heading", { level: 2, name: "10. 쿠키와 브라우저 저장소" });
+    // 10절 제목 다음부터 다음 제목 전까지의 글
+    let text = "";
+    for (let el = h10.nextElementSibling; el && el.tagName !== "H2"; el = el.nextElementSibling) text += el.textContent;
+    expect(text).toContain(
+      "화면 오류 보고 횟수, 중개 실무 체크 목록의 거래 묶음(거래 번호·거래 유형·계약일)과 체크 표시.",
+    );
+  });
+
+  it("개정 이력 첫 줄 = 2026-11-23 체크 목록 추가(11-16 예고 · 세션 513)", () => {
+    render(<PrivacyPage />);
+    const h = screen.getByRole("heading", { level: 2, name: "개정 이력" });
+    expect(h.nextElementSibling?.querySelector("li")).toHaveTextContent(
+      "2026-11-23 — 브라우저 저장소에 중개 실무 체크 목록 추가 (2026-11-16 예고)",
+    );
   });
 
   it("보호책임자(2u부동산 운영팀)와 이메일 링크를 보인다", () => {

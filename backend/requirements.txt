@@ -11,7 +11,7 @@ uvicorn[standard]>=0.54.0,<1
 # (켜진 채 pip 하면 cyextension .pyd 잠김으로 반쯤 설치될 수 있다).
 sqlalchemy[asyncio]>=2.1.8,<2.2
 psycopg2-binary>=2.9.13,<3
-curl_cffi>=0.16.3,<1
+curl_cffi>=0.17.0,<1
 apscheduler>=3.11.3,<4
 filelock>=4.2.4,<5
 pandas>=3.1.0,<4

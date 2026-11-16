@@ -85,6 +85,7 @@
 
 ## 헤더 메뉴 (Header.tsx `navLinks`)
 - 순서 = 홈 · 미분양 · **중개 실무**(`/broker`, 세션 511) · 블로그 · 도움말 · [관리] + 계산기 ▾ 드롭다운. PC nav 와 휴대폰 드로어가 같은 `navLinks` 배열을 쓴다 — 회귀 = `components/__tests__/Header.test.tsx`(메뉴 경로 집합·「중개 실무」 순서) + e2e 헤더 좁은 스냅샷 `header-public-desktop.png`(메뉴를 바꾸면 CI 재촬영)
+- **메뉴를 한 칸 더 늘리기 전에**: ① 768px 에서 관리자 로그인(관리 메뉴 + 뱃지 + 내 계정·로그아웃이 다 붙는 최악) 헤더 넘침을 playwright 로 먼저 잰다 — 세션 511 실측 여유 24px(중개사 계정 64px)라 한 칸이면 넘친다 ② PC 기준 그림은 헤더가 들어간 장이 전부 바뀐다(세션 511 = 15장 · 휴대폰 0장 — 닫힌 햄버거뿐) → CI dispatch 재촬영을 PR 일정에 넣는다
 
 ## 홈/검색 통합 (SearchExperience + ActiveFilterChips) — 세션 314
 - **SearchExperience**: 검색 경험 공용 컴포넌트 (입력=매물유형/필터/검색창/지역 + 결과=단지목록/비교/정렬). 홈(`/`)과 옛 `/search` 가 공유 — `/search` 는 `/` 로 리다이렉트(쿼리 보존)

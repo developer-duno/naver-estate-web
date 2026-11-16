@@ -8,13 +8,13 @@ import BrokerHubPage, { metadata } from "../broker/page";
 import { UPCOMING_DATES } from "@/lib/broker/upcoming-dates";
 
 describe("/broker 페이지", () => {
-  it("h1 「중개 실무」 1개와 카드 제목 4개", () => {
+  it("h1 「중개 실무」 1개와 카드 제목 5개", () => {
     render(<BrokerHubPage />);
     const h1s = screen.getAllByRole("heading", { level: 1 });
     expect(h1s).toHaveLength(1);
     expect(h1s[0]).toHaveTextContent("중개 실무");
     const h2 = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(h2).toEqual(["다가오는 날짜", "자주 쓰는 계산", "서식 원문", "중개사 인증"]);
+    expect(h2).toEqual(["다가오는 날짜", "거래 유형별 체크 목록", "자주 쓰는 계산", "서식 원문", "중개사 인증"]);
   });
 
   it("다가오는 날짜 — 자료의 항목마다 날짜·제목·출처 링크(새 탭 · noopener)", () => {
@@ -30,6 +30,14 @@ describe("/broker 페이지", () => {
       expect(a).toHaveAttribute("target", "_blank");
       expect(a.getAttribute("rel")).toContain("noopener");
     });
+  });
+
+  it("거래 유형별 체크 목록 — checklists.ts 유형마다 버튼(지금은 「전세 →」 /broker/jeonse)", () => {
+    render(<BrokerHubPage />);
+    const card = screen.getByRole("region", { name: "거래 유형별 체크 목록" });
+    const links = within(card).getAllByRole("link");
+    expect(links.map((a) => a.getAttribute("href"))).toEqual(["/broker/jeonse"]);
+    expect(links[0]).toHaveTextContent("전세 →");
   });
 
   it("자주 쓰는 계산 — 이미 있는 계산기 장 4개 + 계산기 전체", () => {
@@ -52,6 +60,8 @@ describe("/broker 페이지", () => {
     expect(links).toHaveLength(2);
     const hosts = links.map((a) => new URL(a.getAttribute("href")!).host);
     expect(hosts).toEqual(["www.law.go.kr", "www.moj.go.kr"]);
+    // 세션 513 — 판 번호 없는 법제처 한글 주소(서식 20)
+    expect(links[0]).toHaveAttribute("href", "https://www.law.go.kr/법령별표서식/(공인중개사법시행규칙,서식20)");
     for (const a of links) {
       expect(a.getAttribute("href")!.startsWith("https://")).toBe(true);
       expect(a).toHaveAttribute("target", "_blank");

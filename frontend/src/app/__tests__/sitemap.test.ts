@@ -65,7 +65,7 @@ describe("sitemap /updates lastModified", () => {
 
 describe("sitemap — 정적 장 lastModified 는 장마다 실제로 바뀐 날 (세션 507)", () => {
   // 옛 코드는 정적 장 전부가 한 날짜(2026-06-29)를 썼다 — 홈 제목이 바뀌어도 lastmod 가 그대로였다.
-  it("정적 장들이 서로 다른 날짜를 갖고, 홈은 약관보다 나중에 바뀌었다", async () => {
+  it("정적 장들이 서로 다른 날짜를 갖고, 홈은 개인정보처리방침보다 나중에 바뀌었다", async () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "");
     // "지금"을 먼 미래로 고정한다 — 실제 오늘 날짜에 기대면 오늘 고친 장(날짜 = 오늘)이 "빌드 시각"으로 오판된다(세션 508).
     const FROZEN_NOW = new Date("2030-01-01T00:00:00Z").getTime();
@@ -78,11 +78,16 @@ describe("sitemap — 정적 장 lastModified 는 장마다 실제로 바뀐 날
       const entries = await freshSitemap();
       const byPath = new Map(entries.map((e) => [new URL(e.url).pathname, new Date(e.lastModified as Date).getTime()]));
       const statics = ["/", "/broker", "/tools", "/tools/second-mortgage", "/tools/brokerage-fee", "/tools/acquisition-tax",
-        "/tools/transfer-tax", "/tools/property-tax", "/tools/area-converter", "/help", "/terms", "/privacy"];
+        "/tools/transfer-tax", "/tools/property-tax", "/tools/area-converter", "/help", "/terms", "/privacy",
+        // 세션 513 — 체크 목록 장(lastmod = checklists.ts checkedAt)
+        "/broker/jeonse"];
       const times = statics.map((p) => byPath.get(p));
       expect(times.every((t) => typeof t === "number" && !Number.isNaN(t))).toBe(true);
       expect(new Set(times).size).toBeGreaterThan(1);
-      expect(byPath.get("/")!).toBeGreaterThan(byPath.get("/terms")!);
+      // 세션 513: /terms 도 2026-11-16 에 고쳐 홈과 같은 날이 됐다 → 비교 상대를 /privacy 로
+      expect(byPath.get("/")!).toBeGreaterThan(byPath.get("/privacy")!);
+      expect(byPath.get("/terms")!).toBe(new Date("2026-11-16").getTime());
+      expect(byPath.get("/broker/jeonse")!).toBe(new Date("2026-11-16").getTime());
       // 빌드 시각을 쓰지 않는다 — 어느 정적 장도 고정한 "지금"(2030-01-01)이 아니다
       expect(times.every((t) => FROZEN_NOW - (t as number) > 24 * 3600 * 1000)).toBe(true);
     } finally {
@@ -108,6 +113,8 @@ describe("sitemap — 공개 대표 URL 만 (세션 458 SEO)", () => {
     expect(urls).toContain("https://2u.pe.kr/tools");
     // 세션 511 — 「중개 실무」 공개 장
     expect(urls).toContain("https://2u.pe.kr/broker");
+    // 세션 513 — 체크 목록 장은 checklists.ts 한 목록에서 나온다
+    expect(urls).toContain("https://2u.pe.kr/broker/jeonse");
     // 경로 머리글자로 판정 — 블로그 글 주소(/blog/mibunyang-…)는 비공개 경로가 아니다
     const paths = urls.map((u) => new URL(u).pathname);
     for (const bad of ["/pricing", "/search", "/complex", "/mibunyang", "/admin", "/login"]) {

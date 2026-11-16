@@ -27,6 +27,7 @@
 | 페이지 | 자료 | 비고 |
 |--------|------|------|
 | `/broker` | `lib/broker/upcoming-dates.ts`(손으로 관리 · 원문 확인 뒤에만 추가 · 지난 항목 삭제) + 서식 원문 링크(법제처·법무부, 사본 없음) + 계산기 4장·`/verify` 링크 | 사이트맵·`public/llms.txt` 등록 · 광고법 게이트 TARGETS 에 `src/lib/broker` · 「중개사 인증하면 되는 것」 문구는 비인증 화면과 대조한 뒤에만 쓴다(인증 전용 = 엑셀·데이터 갱신·인쇄 — 실거래·면적별 시세·매물표는 인증 없이도 보인다, 세션 511 검사 🟠) · 자료 파일에 적는 출처 주소는 열어서 그 공고가 맞는지 본 뒤에만(세션 511: 다른 공고 주소였다) |
+| `/broker/[type]` | `lib/broker/checklists.ts`(손으로 관리 · 조문 주소는 열어 본 뒤에만 · 항목 id 는 체크 저장 키라 바꾸지 않는다) | 서버 정적 장(`generateStaticParams` = `CHECKLIST_TYPES` · `dynamicParams = false` → 없는 유형 404) · 허브 버튼·사이트맵 행도 같은 목록에서 생성(lastmod = `checkedAt`) · 세션 513 PR 2a = `jeonse` 17항목 |
 
 ### 인증·관리·마케팅·블로그
 | 페이지 | API 호출 | 백엔드 라우터 |

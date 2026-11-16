@@ -16,7 +16,14 @@ export const metadata: Metadata = {
 };
 
 /** 시행일 — 방침을 고치면 이 날짜와 맨 아래 개정 이력을 함께 고친다 */
-const EFFECTIVE_DATE = "2026년 10월 6일";
+const EFFECTIVE_DATE = "2026년 11월 23일";
+
+/**
+ * 개정 예고(세션 513) — 11절 「시행 7일 전부터 알린다」 약속에 따라, 고친 방침의 시행일 전까지 시행일 줄 아래에 띄운다.
+ * 합치는 날이 바뀌면 이 파일 안의 세 곳(EFFECTIVE_DATE · 이 문장 · REVISIONS 첫 줄)만 고친다. 시행일이 지나면 null 로 바꿔 지운다.
+ */
+const REVISION_NOTICE: string | null =
+  "개정 예고 — 2026년 11월 23일부터 10절(쿠키와 브라우저 저장소)에 중개 실무 체크 목록이 더해집니다. 그 전까지는 2026년 10월 6일 방침이 적용됩니다.";
 
 /** 개인정보 보호책임자 연락처 */
 const PRIVACY_OFFICER_EMAIL = "kyh11kyh@gmail.com";
@@ -80,6 +87,7 @@ const OVERSEAS_TRANSFERS: {
 
 /** 개정 이력 — 내용이 바뀐 날만 적는다(git log 기준) */
 const REVISIONS: { date: string; summary: string }[] = [
+  { date: "2026-11-23", summary: "브라우저 저장소에 중개 실무 체크 목록 추가 (2026-11-16 예고)" },
   { date: "2026-10-06", summary: "화면 오류 자동 수집, 국외 이전, 정보주체 권리, 파기, 안전성 조치, 쿠키·브라우저 저장소, 보호책임자 연락처 추가" },
   { date: "2026-10-06", summary: "의견 보내기 추가" },
   { date: "2026-09-14", summary: "무료 운영 중 현황 고지 추가" },
@@ -93,6 +101,7 @@ export default function PrivacyPage() {
     <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-2xl font-bold mb-2">개인정보 처리방침</h1>
       <p className="text-sm text-gray-500 mb-6">시행일: {EFFECTIVE_DATE}</p>
+      {REVISION_NOTICE && <p className="text-sm text-gray-700 -mt-4 mb-6">{REVISION_NOTICE}</p>}
 
       {/* 무료 운영 중 현황 고지 — 1·2·5절이 유료 결제 데이터 수집·포트원 위탁을 전제하므로
           (세션 405 적대검증에서 terms·refund 만 고치고 여기를 빠뜨린 것이 적발됨).
@@ -319,7 +328,7 @@ export default function PrivacyPage() {
           그 밖의 편의 기능은 쿠키 대신 브라우저 저장소(localStorage·sessionStorage)에 이 기기
           브라우저 안에만 저장합니다 — 최근 검색, 즐겨찾기(단지·매물·미분양), 비교 목록, 목록·지도
           보기 방식, 미분양 비교 설정, 의견 쓰던 글(로그인하러 갈 때 잠시), 로그인 실패 횟수, 화면
-          오류 보고 횟수.
+          오류 보고 횟수, 중개 실무 체크 목록의 거래 묶음(거래 번호·거래 유형·계약일)과 체크 표시.
         </p>
         <p>
           브라우저 설정에서 쿠키와 사이트 데이터를 지울 수 있습니다. 지우면 로그인이 풀리고 저장된

@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CHECKLIST_TYPES, getChecklist } from "@/lib/broker/checklists";
+import { CHECKLIST_TYPES, getChecklist, type ChecklistType } from "@/lib/broker/checklists";
+import DealChecklist from "@/components/broker/DealChecklist";
 import { formatDateDot } from "@/lib/broker/upcoming-dates";
 
-/** 거래 유형별 체크 목록(세션 513 PR 2a) — 서버 정적 장. 자료 = lib/broker/checklists.ts 한 목록. */
+/**
+ * 거래 유형별 체크 목록(세션 513 PR 2a) — 서버 정적 장. 자료 = lib/broker/checklists.ts 한 목록.
+ * 단계 카드·체크 상자·「내 거래」 줄은 클라이언트 부품 DealChecklist(PR 2b — 이 기기 저장). 글자는 첫 HTML 에 그대로 들어간다.
+ */
 export const dynamicParams = false;
 
 export function generateStaticParams() {
@@ -31,20 +35,10 @@ export async function generateMetadata({ params }: { params: Promise<{ type: str
   };
 }
 
-const cardClass = "rounded-xl bg-white p-[18px] sm:rounded-2xl sm:p-6";
-const cardTitleClass = "text-lg font-black tracking-tight text-brand-navy sm:text-xl";
-
 export default async function BrokerChecklistPage({ params }: { params: Promise<{ type: string }> }) {
   const { type } = await params;
   const list = getChecklist(type);
   if (!list) notFound();
-
-  // 단계마다 이어지는 번호(1~N) — 각 단계 <ol> 의 start
-  const starts: number[] = [];
-  list.stages.reduce((n, s) => {
-    starts.push(n);
-    return n + s.items.length;
-  }, 1);
 
   return (
     <div className="-mb-16 bg-brand-bg pb-16">
@@ -60,67 +54,7 @@ export default async function BrokerChecklistPage({ params }: { params: Promise<
           </p>
         </section>
 
-        <div className="flex flex-col gap-3 sm:gap-4">
-          {list.stages.map((stage, si) => (
-            <section key={stage.id} aria-labelledby={`stage-${stage.id}`} className={cardClass}>
-              <h2 id={`stage-${stage.id}`} className={cardTitleClass}>
-                {stage.title}
-              </h2>
-              <ol
-                start={starts[si]}
-                className="mt-3 flex list-decimal flex-col divide-y divide-brand-line-soft pl-6 marker:font-bold marker:text-brand-orange-text"
-              >
-                {stage.items.map((item) => (
-                  <li key={item.id} id={item.id} className="py-3 first:pt-0 last:pb-0">
-                    <h3 className="text-base font-bold leading-snug text-brand-navy">{item.title}</h3>
-                    {item.detail && <p className="mt-1 text-sm text-brand-muted leading-relaxed">{item.detail}</p>}
-                    {item.links && item.links.length > 0 && (
-                      <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm">
-                        {item.links.map((l) =>
-                          l.href.startsWith("/") ? (
-                            <Link
-                              key={l.href}
-                              href={l.href}
-                              className="text-brand-orange-text underline hover:text-brand-navy"
-                            >
-                              {l.label} →
-                            </Link>
-                          ) : (
-                            <a
-                              key={l.href}
-                              href={l.href}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-brand-orange-text underline hover:text-brand-navy"
-                            >
-                              {l.label} ↗
-                            </a>
-                          ),
-                        )}
-                      </p>
-                    )}
-                    <p className="mt-1 text-xs text-brand-muted leading-relaxed">
-                      <span className="font-bold">근거</span>{" "}
-                      {item.laws.map((law, li) => (
-                        <span key={law.label}>
-                          {li > 0 && " · "}
-                          <a
-                            href={law.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline hover:text-brand-navy"
-                          >
-                            {law.label} ↗
-                          </a>
-                        </span>
-                      ))}
-                    </p>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          ))}
-        </div>
+        <DealChecklist type={list.type as ChecklistType} />
 
         <p className="mt-6 text-sm text-brand-muted leading-relaxed">
           이 목록에 넣지 않은 것: {list.notCovered.join(" · ")} · 조문 원문은 각 링크(법제처)에서 현행 내용을 봅니다.

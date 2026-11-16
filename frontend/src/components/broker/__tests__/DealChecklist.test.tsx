@@ -1,0 +1,194 @@
+/**
+ * 체크 목록 부품(DealChecklist) — 이 기기 저장·거래 1 자동 생성·비우기/되돌리기 10초·다른 탭 반영·저장 실패 알림·StrictMode
+ * 실행: npx vitest run src/components/broker/__tests__/DealChecklist.test.tsx
+ */
+import { StrictMode } from "react";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import DealChecklist, { UNDO_MS } from "../DealChecklist";
+import { DEALS_KEY, MAX_DEALS, addDeal, emptyState, toggleCheck, type DealsState } from "@/lib/broker/deals-storage";
+
+const FIRST = "등기사항증명서로 권리관계 확인";
+const SECOND = "신탁등기가 있으면 신탁원부 확인";
+
+/** 저장소에 미리 넣어 둘 상태(거래 1 + 체크) */
+function seeded(checks: string[] = ["jeonse.registry"]): DealsState {
+  const r = addDeal(emptyState(), "jeonse", 1_000)!;
+  return checks.reduce((s, c) => toggleCheck(s, r.deal.id, c), r.state);
+}
+
+const box = (name: string) => screen.getByRole("checkbox", { name }) as HTMLInputElement;
+const saved = () => JSON.parse(localStorage.getItem(DEALS_KEY) ?? "null") as DealsState | null;
+
+describe("DealChecklist", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("묶음 0개에서 처음 체크하면 「거래 1」이 생기고 이 기기에 저장된다", () => {
+    render(<DealChecklist type="jeonse" />);
+    expect(screen.getByText(/아직 거래가 없습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/18개 중 0개 확인/)).toBeInTheDocument();
+    fireEvent.click(box(FIRST));
+    expect(box(FIRST).checked).toBe(true);
+    expect(screen.getByRole("combobox", { name: "거래 고르기" })).toHaveDisplayValue("거래 1 · 전세");
+    expect(screen.getByText(/18개 중 1개 확인/)).toBeInTheDocument();
+    const s = saved()!;
+    expect(s.deals).toHaveLength(1);
+    expect(s.deals[0]).toMatchObject({ no: 1, type: "jeonse", checks: ["jeonse.registry"] });
+  });
+
+  it("체크 → 저장 → 다시 그려도 체크가 남아 있다(첫 그림은 꺼진 상태, 마운트 뒤 채움)", async () => {
+    const first = render(<DealChecklist type="jeonse" />);
+    fireEvent.click(box(FIRST));
+    first.unmount();
+    render(<DealChecklist type="jeonse" />);
+    await waitFor(() => expect(box(FIRST).checked).toBe(true));
+    expect(box(SECOND).checked).toBe(false);
+  });
+
+  it("[+ 새 거래] → 거래 2 · 계약일을 넣으면 고르기 글자에 계약일", () => {
+    localStorage.setItem(DEALS_KEY, JSON.stringify(seeded()));
+    render(<DealChecklist type="jeonse" />);
+    fireEvent.click(screen.getByRole("button", { name: "+ 새 거래" }));
+    const select = screen.getByRole("combobox", { name: "거래 고르기" });
+    expect(select).toHaveDisplayValue("거래 2 · 전세");
+    expect(box(FIRST).checked).toBe(false);
+    fireEvent.change(screen.getByLabelText("계약일(선택)"), { target: { value: "2026-11-20" } });
+    expect(select).toHaveDisplayValue("거래 2 · 전세 · 계약일 2026. 11. 20.");
+    fireEvent.change(select, { target: { value: saved()!.deals[0].id } });
+    expect(box(FIRST).checked).toBe(true);
+  });
+
+  it("거래가 20개면 [+ 새 거래] 비활성 + 안내", () => {
+    let s = emptyState();
+    for (let i = 0; i < MAX_DEALS; i++) s = addDeal(s, "jeonse", i + 1)!.state;
+    localStorage.setItem(DEALS_KEY, JSON.stringify(s));
+    render(<DealChecklist type="jeonse" />);
+    expect(screen.getByRole("button", { name: "+ 새 거래" })).toBeDisabled();
+    expect(screen.getByText("거래는 20개까지 저장됩니다. 끝난 거래는 비워서 다시 쓰세요.")).toBeInTheDocument();
+  });
+
+  it("비우기 → 바로 지우고 알림 → 10초 안 되돌리기면 그대로 복원", () => {
+    vi.useFakeTimers();
+    localStorage.setItem(DEALS_KEY, JSON.stringify(seeded(["jeonse.registry", "jeonse.trust"])));
+    render(<DealChecklist type="jeonse" />);
+    fireEvent.click(screen.getByRole("button", { name: "비우기" }));
+    expect(box(FIRST).checked).toBe(false);
+    expect(saved()!.deals[0].checks).toEqual([]);
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("거래 1의 체크 2개를 지웠습니다.");
+    act(() => {
+      vi.advanceTimersByTime(UNDO_MS - 1_000);
+    });
+    fireEvent.click(within(status).getByRole("button", { name: "되돌리기" }));
+    expect(box(FIRST).checked).toBe(true);
+    expect(box(SECOND).checked).toBe(true);
+    expect(saved()!.deals[0].checks).toEqual(["jeonse.registry", "jeonse.trust"]);
+    expect(status).toBeEmptyDOMElement();
+  });
+
+  it("되돌리기를 안 누르면 10초 뒤 알림이 사라지고 체크는 지운 채로 · 체크 0개면 비우기 비활성", () => {
+    vi.useFakeTimers();
+    localStorage.setItem(DEALS_KEY, JSON.stringify(seeded()));
+    render(<DealChecklist type="jeonse" />);
+    fireEvent.click(screen.getByRole("button", { name: "비우기" }));
+    expect(screen.getByRole("status")).toHaveTextContent("지웠습니다");
+    act(() => {
+      vi.advanceTimersByTime(UNDO_MS);
+    });
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    expect(box(FIRST).checked).toBe(false);
+    expect(screen.getByRole("button", { name: "비우기" })).toBeDisabled();
+  });
+
+  it("되돌리기는 지운 거래로 복원한다 — 비운 뒤 다른 거래로 바꿔도 그 거래는 그대로", () => {
+    vi.useFakeTimers();
+    // 거래 1(체크 2개) + 거래 2(체크 1개), 거래 1을 고른 상태
+    const base = seeded(["jeonse.registry", "jeonse.trust"]);
+    const two = addDeal(base, "jeonse", 2_000)!;
+    const s = { ...toggleCheck(two.state, two.deal.id, "jeonse.fee"), active: { jeonse: base.deals[0].id } };
+    localStorage.setItem(DEALS_KEY, JSON.stringify(s));
+    render(<DealChecklist type="jeonse" />);
+    const select = screen.getByRole("combobox", { name: "거래 고르기" });
+    expect(select).toHaveDisplayValue("거래 1 · 전세");
+    fireEvent.click(screen.getByRole("button", { name: "비우기" }));
+    fireEvent.change(select, { target: { value: two.deal.id } });
+    expect(select).toHaveDisplayValue("거래 2 · 전세");
+    fireEvent.click(within(screen.getByRole("status")).getByRole("button", { name: "되돌리기" }));
+    const after = saved()!;
+    expect(after.deals.find((d) => d.no === 1)!.checks).toEqual(["jeonse.registry", "jeonse.trust"]);
+    expect(after.deals.find((d) => d.no === 2)!.checks).toEqual(["jeonse.fee"]);
+    // 화면은 여전히 거래 2 — 거래 1의 체크가 거래 2 화면에 나타나지 않는다
+    expect(box(FIRST).checked).toBe(false);
+    expect(box("중개보수·실비 금액과 산출내역 설명").checked).toBe(true);
+  });
+
+  it("다른 탭이 저장소를 통째로 지우면(storage 이벤트 key=null) 화면 체크가 다 꺼진다", async () => {
+    localStorage.setItem(DEALS_KEY, JSON.stringify(seeded(["jeonse.registry", "jeonse.trust"])));
+    render(<DealChecklist type="jeonse" />);
+    await waitFor(() => expect(box(FIRST).checked).toBe(true));
+    localStorage.clear();
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: null }));
+    });
+    await waitFor(() => expect(box(FIRST).checked).toBe(false));
+    expect(box(SECOND).checked).toBe(false);
+    expect(screen.getByText(/아직 거래가 없습니다/)).toBeInTheDocument();
+  });
+
+  it("다른 탭이 같은 키를 바꾸면(storage 이벤트) 다시 읽는다", async () => {
+    render(<DealChecklist type="jeonse" />);
+    expect(box(FIRST).checked).toBe(false);
+    localStorage.setItem(DEALS_KEY, JSON.stringify(seeded()));
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: DEALS_KEY }));
+    });
+    await waitFor(() => expect(box(FIRST).checked).toBe(true));
+  });
+
+  it("저장이 막힌 브라우저 → 주황 줄 · 화면의 체크는 그대로", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("quota", "QuotaExceededError");
+    });
+    render(<DealChecklist type="jeonse" />);
+    expect(screen.queryByText(/저장을 막아 두어/)).toBeNull();
+    fireEvent.click(box(FIRST));
+    expect(box(FIRST).checked).toBe(true);
+    expect(screen.getByText("이 브라우저는 저장을 막아 두어, 창을 닫으면 체크 표시가 사라집니다.")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["JSON 아님", "{깨짐"],
+    ["JSON 이지만 모양이 틀림(deals 가 null)", JSON.stringify({ v: 1, deals: null, active: {} })],
+  ])("저장된 글자가 깨져 있으면(%s) 화면이 죽지 않고 한 번 알린 뒤 새로 시작한다", async (_name, text) => {
+    localStorage.setItem(DEALS_KEY, text);
+    render(<DealChecklist type="jeonse" />);
+    expect(await screen.findByText("저장된 체크를 읽지 못해 새로 시작합니다.")).toBeInTheDocument();
+    fireEvent.click(box(FIRST));
+    expect(screen.queryByText("저장된 체크를 읽지 못해 새로 시작합니다.")).toBeNull();
+    expect(saved()!.deals[0].checks).toEqual(["jeonse.registry"]);
+  });
+
+  it("StrictMode(effect 두 번)에서도 저장된 체크를 채우고, 다른 탭 반영이 한 번만 걸린다", async () => {
+    localStorage.setItem(DEALS_KEY, JSON.stringify(seeded()));
+    const add = vi.spyOn(window, "addEventListener");
+    const remove = vi.spyOn(window, "removeEventListener");
+    render(
+      <StrictMode>
+        <DealChecklist type="jeonse" />
+      </StrictMode>,
+    );
+    await waitFor(() => expect(box(FIRST).checked).toBe(true));
+    const added = add.mock.calls.filter(([t]) => t === "storage").length;
+    const removed = remove.mock.calls.filter(([t]) => t === "storage").length;
+    expect(added - removed).toBe(1);
+    fireEvent.click(box(SECOND));
+    expect(saved()!.deals[0].checks).toEqual(["jeonse.registry", "jeonse.trust"]);
+  });
+});

@@ -123,13 +123,20 @@ test("/broker 200 · h1 「중개 실무」", async ({ page }) => {
   await expect(page.locator("h1")).toHaveCount(1);
 });
 
-/** 「전세 계약 체크 목록」(/broker/jeonse) 스모크 — 정적 장 200 · 없는 유형 404(세션 513 PR 2a · 스크린샷 없음) */
+/** 「전세 계약 체크 목록」(/broker/jeonse) 스모크 — 정적 장 200 · 체크 저장 유지(PR 2b) · 없는 유형 404(세션 513 PR 2a · 스크린샷 없음) */
 test("/broker/jeonse 200 · h1 「전세 계약 체크 목록」 · /broker/wolse 404", async ({ page }) => {
   await applyPublicMocks(page);
   const res = await page.goto("/broker/jeonse");
   expect(res?.status()).toBe(200);
   await expect(page.getByRole("heading", { level: 1, name: "전세 계약 체크 목록" })).toBeVisible();
   await expect(page.locator("h1")).toHaveCount(1);
+  // PR 2b — 1번 체크 → 새로고침 → 그대로 체크됨(이 기기 저장 broker_deals_v1)
+  const first = page.getByRole("checkbox", { name: "등기사항증명서로 권리관계 확인" });
+  await expect(first).not.toBeChecked();
+  await first.check();
+  await expect(page.getByText(/18개 중 1개 확인/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("checkbox", { name: "등기사항증명서로 권리관계 확인" })).toBeChecked();
   const missing = await page.goto("/broker/wolse");
   expect(missing?.status()).toBe(404);
 });

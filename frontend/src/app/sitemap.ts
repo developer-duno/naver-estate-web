@@ -16,6 +16,7 @@ import { CHECKLISTS, CHECKLIST_TYPES } from "@/lib/broker/checklists";
  * 세션 509: / = 2026-11-16(즐겨찾기 0개일 때의 안내 문장 삭제 · 즐겨찾기 줄을 검색 상자 안으로 — 푸터 문구·지역 단추 칸 수는 제외 대상).
  * 세션 511: /broker(중개 실무 · 새 장) = 2026-11-16.
  * 세션 513: /terms(제1·2·4조) = 2026-11-16 · /broker/<type> = checklists.ts checkedAt(이 표에 두지 않는다).
+ * 세션 513: /privacy(10절·개정 예고) = 2026-11-16.
  * /blog 는 공개 글 중 가장 최근 발행일, /updates 는 updatesLastModified() 가 정한다(이 표에 없음).
  */
 const STATIC_PAGE_LASTMOD = {
@@ -30,7 +31,7 @@ const STATIC_PAGE_LASTMOD = {
   "/tools/area-converter": "2026-06-09",
   "/help": "2026-10-06",
   "/terms": "2026-11-16",
-  "/privacy": "2026-10-09",
+  "/privacy": "2026-11-16",
 } as const;
 
 /** /updates 를 못 읽었거나 공개 글이 0편일 때의 고정 날짜(세션 437 PR C 부터 같은 값 — 빌드 시각을 쓰지 않는다). */

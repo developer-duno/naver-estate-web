@@ -36,11 +36,11 @@ describe("/broker/[type] 장", () => {
     expect(screen.getByText(/법령 기준일/)).toHaveTextContent("2026. 11. 16.");
   });
 
-  it("항목 번호가 단계를 넘어 1~17 로 이어진다(ol start)", async () => {
+  it("항목 번호가 단계를 넘어 1~18 로 이어진다(ol start)", async () => {
     const { container } = render(await BrokerChecklistPage(params("jeonse")));
     const ols = Array.from(container.querySelectorAll("ol"));
-    expect(ols.map((ol) => ol.getAttribute("start"))).toEqual(["1", "7", "12", "16"]);
-    expect(container.querySelectorAll("ol > li")).toHaveLength(17);
+    expect(ols.map((ol) => ol.getAttribute("start"))).toEqual(["1", "8", "13", "17"]);
+    expect(container.querySelectorAll("ol > li")).toHaveLength(18);
   });
 
   it("근거 조문 링크는 법제처 주소 · 새 탭 · noopener", async () => {
@@ -68,12 +68,14 @@ describe("/broker/[type] 장", () => {
     expect(screen.getByText(/이 목록에 넣지 않은 것/)).toHaveTextContent("전세보증(HUG 등) 가입 요건");
   });
 
-  it("체크 상자·준비 중 자리표시가 없다", async () => {
+  it("항목마다 체크 상자(라벨 = 항목 제목) — 저장된 것이 없으면 전부 꺼짐 · 준비 중 자리표시 없음(PR 2b)", async () => {
     const { container } = render(await BrokerChecklistPage(params("jeonse")));
-    expect(container.querySelectorAll("input")).toHaveLength(0);
-    expect(container.textContent).not.toContain("준비 중");
     const main = within(container as HTMLElement);
-    expect(main.queryByRole("checkbox")).toBeNull();
+    const boxes = main.getAllByRole("checkbox");
+    expect(boxes).toHaveLength(18);
+    for (const b of boxes) expect(b).not.toBeChecked();
+    expect(main.getByRole("checkbox", { name: "등기사항증명서로 권리관계 확인" })).toBeInTheDocument();
+    expect(container.textContent).not.toContain("준비 중");
   });
 
   it("정적 경로 = [{type:'jeonse'}] · dynamicParams === false", () => {

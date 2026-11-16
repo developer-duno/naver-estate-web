@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { UPCOMING_DATES, formatDateDot } from "@/lib/broker/upcoming-dates";
-import { CHECKLISTS, CHECKLIST_TYPES } from "@/lib/broker/checklists";
+import { CHECKLISTS, BROKER_TYPES } from "@/lib/broker/checklists";
 
 export const metadata: Metadata = {
   title: "중개 실무 — 공인중개사 날짜·서식·계산",
@@ -90,7 +90,7 @@ export default function BrokerHubPage() {
           <section aria-labelledby="broker-checklists" className={cardClass}>
             <h2 id="broker-checklists" className={cardTitleClass}>거래 유형별 체크 목록</h2>
             <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {CHECKLIST_TYPES.map((t) => (
+              {BROKER_TYPES.map((t) => (
                 <li key={t}>
                   <Link
                     href={`/broker/${t}`}

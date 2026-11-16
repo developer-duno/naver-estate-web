@@ -40,8 +40,10 @@ function nowMs(): number {
  * 거래 유형별 체크 목록의 단계 카드 + 「내 거래」 줄(세션 513 PR 2b).
  * 서버 HTML 은 체크 상자가 전부 꺼진 상태로 그리고(글자는 첫 HTML 에 그대로), 마운트 뒤 이 기기 저장소를 읽어 채운다.
  * 저장 = lib/broker/deals-storage.ts(이 기기 이 브라우저에만).
+ * single(세션 514 — 세입자·집주인용 /checklist/[type]): 거래가 보통 하나라 「거래 고르기·새 거래·계약일」을 그리지 않고
+ * 진행 막대·「비우기」(10초 되돌리기)·저장 안내만 둔다. 저장 모양은 같다(처음 체크하면 그 유형 「거래 1」이 생긴다).
  */
-export default function DealChecklist({ type }: { type: ChecklistType }) {
+export default function DealChecklist({ type, single = false }: { type: ChecklistType; single?: boolean }) {
   const list = CHECKLISTS[type];
   const total = list.stages.reduce((n, s) => n + s.items.length, 0);
   const uid = useId();
@@ -135,14 +137,25 @@ export default function DealChecklist({ type }: { type: ChecklistType }) {
   const doneCount = checked.size;
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
 
+  const clearButton = (
+    <button
+      type="button"
+      onClick={onClear}
+      disabled={!current || doneCount === 0}
+      className={btnClass}
+    >
+      비우기
+    </button>
+  );
+
   return (
     <>
       <section aria-labelledby={`${uid}-deals`} className={`${cardClass} mb-3 sm:mb-4`}>
-        <p id={`${uid}-deals`} className="text-base font-black text-brand-navy">
-          내 거래
+        <p id={`${uid}-deals`} className={single ? "sr-only" : "text-base font-black text-brand-navy"}>
+          {single ? "확인한 항목" : "내 거래"}
         </p>
-        <div className="mt-3 flex flex-col gap-3">
-          {deals.length > 0 ? (
+        <div className={single ? "flex flex-col gap-3" : "mt-3 flex flex-col gap-3"}>
+          {single ? null : deals.length > 0 ? (
             <div>
               <label htmlFor={`${uid}-select`} className="sr-only">
                 거래 고르기
@@ -164,33 +177,33 @@ export default function DealChecklist({ type }: { type: ChecklistType }) {
             <p className="text-sm text-brand-muted">아직 거래가 없습니다. 항목을 체크하면 「거래 1」이 생깁니다.</p>
           )}
 
-          <div className="flex flex-wrap items-end gap-2">
-            <button
-              type="button"
-              onClick={onNewDeal}
-              disabled={full}
-              className="inline-flex min-h-11 items-center rounded-lg bg-brand-navy px-3 text-sm font-bold text-white hover:bg-brand-navy/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              + 새 거래
-            </button>
-            <div className="flex flex-col">
-              <label htmlFor={`${uid}-date`} className="text-xs text-brand-muted">
-                계약일(선택)
-              </label>
-              <input
-                id={`${uid}-date`}
-                type="date"
-                value={current?.contractDate ?? ""}
-                onChange={(e) => onDate(e.target.value)}
-                disabled={!current}
-                className="min-h-11 rounded-lg border border-brand-line bg-white px-3 text-sm text-brand-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy disabled:opacity-50"
-              />
+          {!single && (
+            <div className="flex flex-wrap items-end gap-2">
+              <button
+                type="button"
+                onClick={onNewDeal}
+                disabled={full}
+                className="inline-flex min-h-11 items-center rounded-lg bg-brand-navy px-3 text-sm font-bold text-white hover:bg-brand-navy/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-orange disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                + 새 거래
+              </button>
+              <div className="flex flex-col">
+                <label htmlFor={`${uid}-date`} className="text-xs text-brand-muted">
+                  계약일(선택)
+                </label>
+                <input
+                  id={`${uid}-date`}
+                  type="date"
+                  value={current?.contractDate ?? ""}
+                  onChange={(e) => onDate(e.target.value)}
+                  disabled={!current}
+                  className="min-h-11 rounded-lg border border-brand-line bg-white px-3 text-sm text-brand-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy disabled:opacity-50"
+                />
+              </div>
+              {clearButton}
             </div>
-            <button type="button" onClick={onClear} disabled={!current || doneCount === 0} className={btnClass}>
-              비우기
-            </button>
-          </div>
-          {full && (
+          )}
+          {full && !single && (
             <p className="text-xs text-brand-muted">거래는 20개까지 저장됩니다. 끝난 거래는 비워서 다시 쓰세요.</p>
           )}
 
@@ -211,6 +224,7 @@ export default function DealChecklist({ type }: { type: ChecklistType }) {
               </span>{" "}
               · 이 기기 이 브라우저에만 저장됩니다. 다른 기기로 옮겨지지 않습니다.
             </p>
+            {single && <div className="mt-2">{clearButton}</div>}
           </div>
 
           {saveFailed && (
@@ -314,7 +328,9 @@ export default function DealChecklist({ type }: { type: ChecklistType }) {
           <div data-floating-bar className="fixed inset-x-0 bottom-0 z-50 px-4 pb-3">
             <div className="mx-auto flex max-w-md items-center justify-between gap-3 rounded-lg bg-brand-navy px-4 py-1.5 text-sm text-white shadow-lg">
               <span>
-                거래 {undo.no}의 체크 {undo.checks.length}개를 지웠습니다.
+                {single
+                  ? `체크 ${undo.checks.length}개를 지웠습니다.`
+                  : `거래 ${undo.no}의 체크 ${undo.checks.length}개를 지웠습니다.`}
               </span>
               <button
                 type="button"

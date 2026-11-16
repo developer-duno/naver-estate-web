@@ -14,6 +14,7 @@ import {
   parseDeals,
   readDeals,
   restoreChecks,
+  setActive,
   setContractDate,
   toggleCheck,
   writeDeals,
@@ -170,5 +171,67 @@ describe("읽기·쓰기(이 브라우저 저장소)", () => {
   it("저장된 글자가 깨져 있으면 corrupt", () => {
     localStorage.setItem(DEALS_KEY, "{깨짐");
     expect(readDeals().ok).toBe(false);
+  });
+});
+
+describe("유형이 둘 이상일 때 — 중개사용 전세와 세입자·집주인 목록이 섞이지 않는다(세션 514 · s513 검사 M8)", () => {
+  /** 전세(중개사용) 거래 1개를 고르고 체크 2개 */
+  function withJeonse(): DealsState {
+    const r = addDeal(emptyState(), "jeonse", 1_000)!;
+    return toggleCheck(toggleCheck(r.state, r.deal.id, "jeonse.registry"), r.deal.id, "jeonse.trust");
+  }
+
+  it("전세 거래를 고른 상태에서 세입자 목록의 고른 거래는 없다 — 전세 체크가 세입자 화면에 안 보인다", () => {
+    const s = withJeonse();
+    expect(activeDeal(s, "jeonse")?.checks).toEqual(["jeonse.registry", "jeonse.trust"]);
+    expect(activeDeal(s, "jeonse-tenant")).toBeUndefined();
+    expect(activeDeal(s, "jeonse-landlord")).toBeUndefined();
+  });
+
+  it("세입자 첫 거래는 그 유형의 「거래 1」 · 전세의 고른 거래는 그대로", () => {
+    const s = withJeonse();
+    const jeonseId = s.active.jeonse;
+    const r = addDeal(s, "jeonse-tenant", 2_000)!;
+    expect(r.deal).toMatchObject({ no: 1, type: "jeonse-tenant", checks: [] });
+    expect(r.state.active).toEqual({ jeonse: jeonseId, "jeonse-tenant": r.deal.id });
+    expect(activeDeal(r.state, "jeonse")?.id).toBe(jeonseId);
+    expect(activeDeal(r.state, "jeonse-tenant")?.id).toBe(r.deal.id);
+  });
+
+  it("다른 유형의 항목 id 는 체크되지 않고, 세입자 비우기는 전세 체크를 건드리지 않는다", () => {
+    const r = addDeal(withJeonse(), "jeonse-tenant", 2_000)!;
+    let s = toggleCheck(r.state, r.deal.id, "jeonse.registry"); // 전세 id → 무시
+    s = toggleCheck(s, r.deal.id, "jeonse-tenant.registry-explain");
+    expect(activeDeal(s, "jeonse-tenant")?.checks).toEqual(["jeonse-tenant.registry-explain"]);
+    const cleared = clearChecks(s, r.deal.id).state;
+    expect(activeDeal(cleared, "jeonse-tenant")?.checks).toEqual([]);
+    expect(activeDeal(cleared, "jeonse")?.checks).toEqual(["jeonse.registry", "jeonse.trust"]);
+  });
+
+  it("고른 거래 목록(active)에 다른 유형의 거래 id 를 넣어 두면 읽을 때 버린다 · setActive 도 막는다", () => {
+    const s = withJeonse();
+    const jeonseId = s.deals[0].id;
+    const r = parseDeals(JSON.stringify({ ...s, active: { jeonse: jeonseId, "jeonse-tenant": jeonseId } }));
+    expect(r.ok).toBe(true);
+    expect(r.state.active).toEqual({ jeonse: jeonseId });
+    expect(activeDeal(r.state, "jeonse-tenant")).toBeUndefined();
+    expect(setActive(s, "jeonse-tenant", jeonseId)).toBe(s);
+  });
+
+  it("세입자 거래에 남은 전세 id·집주인 id 는 읽을 때 버린다", () => {
+    const raw = JSON.stringify({
+      v: 1,
+      deals: [
+        {
+          id: "t1",
+          no: 1,
+          type: "jeonse-tenant",
+          checks: ["jeonse.registry", "jeonse-landlord.show-info", "jeonse-tenant.fee"],
+          createdAt: 1,
+        },
+      ],
+      active: { "jeonse-tenant": "t1" },
+    });
+    expect(parseDeals(raw).state.deals[0].checks).toEqual(["jeonse-tenant.fee"]);
   });
 });

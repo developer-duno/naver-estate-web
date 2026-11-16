@@ -80,7 +80,9 @@ describe("sitemap — 정적 장 lastModified 는 장마다 실제로 바뀐 날
       const statics = ["/", "/broker", "/tools", "/tools/second-mortgage", "/tools/brokerage-fee", "/tools/acquisition-tax",
         "/tools/transfer-tax", "/tools/property-tax", "/tools/area-converter", "/help", "/terms", "/privacy",
         // 세션 513 — 체크 목록 장(lastmod = checklists.ts checkedAt)
-        "/broker/jeonse"];
+        "/broker/jeonse",
+        // 세션 514 — 계약 체크 목록 모음 장 + 세입자·집주인 장
+        "/checklist", "/checklist/jeonse-tenant", "/checklist/jeonse-landlord"];
       const times = statics.map((p) => byPath.get(p));
       expect(times.every((t) => typeof t === "number" && !Number.isNaN(t))).toBe(true);
       expect(new Set(times).size).toBeGreaterThan(1);
@@ -89,6 +91,9 @@ describe("sitemap — 정적 장 lastModified 는 장마다 실제로 바뀐 날
       expect(byPath.get("/privacy")!).toBe(new Date("2026-11-16").getTime());
       expect(byPath.get("/terms")!).toBe(new Date("2026-11-16").getTime());
       expect(byPath.get("/broker/jeonse")!).toBe(new Date("2026-11-16").getTime());
+      expect(byPath.get("/checklist")!).toBe(new Date("2026-11-16").getTime());
+      expect(byPath.get("/checklist/jeonse-tenant")!).toBe(new Date("2026-11-16").getTime());
+      expect(byPath.get("/checklist/jeonse-landlord")!).toBe(new Date("2026-11-16").getTime());
       // 빌드 시각을 쓰지 않는다 — 어느 정적 장도 고정한 "지금"(2030-01-01)이 아니다
       expect(times.every((t) => FROZEN_NOW - (t as number) > 24 * 3600 * 1000)).toBe(true);
     } finally {
@@ -116,6 +121,12 @@ describe("sitemap — 공개 대표 URL 만 (세션 458 SEO)", () => {
     expect(urls).toContain("https://2u.pe.kr/broker");
     // 세션 513 — 체크 목록 장은 checklists.ts 한 목록에서 나온다
     expect(urls).toContain("https://2u.pe.kr/broker/jeonse");
+    // 세션 514 — 당사자용 목록은 /checklist/<type> 에만, /broker/<type> 은 중개사용만
+    expect(urls).toContain("https://2u.pe.kr/checklist");
+    expect(urls).toContain("https://2u.pe.kr/checklist/jeonse-tenant");
+    expect(urls).toContain("https://2u.pe.kr/checklist/jeonse-landlord");
+    expect(urls).not.toContain("https://2u.pe.kr/broker/jeonse-tenant");
+    expect(urls).not.toContain("https://2u.pe.kr/checklist/jeonse");
     // 경로 머리글자로 판정 — 블로그 글 주소(/blog/mibunyang-…)는 비공개 경로가 아니다
     const paths = urls.map((u) => new URL(u).pathname);
     for (const bad of ["/pricing", "/search", "/complex", "/mibunyang", "/admin", "/login"]) {

@@ -192,3 +192,74 @@ describe("DealChecklist", () => {
     expect(saved()!.deals[0].checks).toEqual(["jeonse.registry", "jeonse.trust"]);
   });
 });
+
+describe("DealChecklist single — 세입자·집주인용(세션 514)", () => {
+  const TENANT_FIRST = "중개사에게 등기사항증명서·건축물대장을 보여 달라고 하고 근저당·압류·신탁 설명 듣기";
+  const TENANT_SECOND =
+    "집주인에게 확정일자 현황과 국세·지방세 납세증명서 받기(계약 전에 열람에 동의했으면 그것으로 갈음)";
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  it("거래 고르기·새 거래·계약일 칸을 그리지 않는다 · 진행 막대·비우기·저장 안내는 있다", () => {
+    render(<DealChecklist type="jeonse-tenant" single />);
+    expect(screen.queryByRole("combobox")).toBeNull();
+    expect(screen.queryByRole("button", { name: "+ 새 거래" })).toBeNull();
+    expect(screen.queryByLabelText("계약일(선택)")).toBeNull();
+    expect(screen.queryByText(/아직 거래가 없습니다/)).toBeNull();
+    expect(screen.queryByText("내 거래")).toBeNull();
+    expect(screen.getByRole("progressbar", { name: "확인한 항목" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "비우기" })).toBeDisabled();
+    expect(screen.getByText(/15개 중 0개 확인/)).toHaveTextContent("15개 중 0개 확인");
+    expect(screen.getByText(/이 기기 이 브라우저에만 저장됩니다/)).toBeInTheDocument();
+    expect(screen.getAllByRole("checkbox")).toHaveLength(15);
+  });
+
+  it("처음 체크하면 그 유형의 「거래 1」이 생겨 저장되고, 다시 그려도 남는다", async () => {
+    const first = render(<DealChecklist type="jeonse-tenant" single />);
+    fireEvent.click(box(TENANT_FIRST));
+    expect(screen.getByText(/15개 중 1개 확인/)).toBeInTheDocument();
+    expect(saved()!.deals).toEqual([
+      expect.objectContaining({ no: 1, type: "jeonse-tenant", checks: ["jeonse-tenant.registry-explain"] }),
+    ]);
+    first.unmount();
+    render(<DealChecklist type="jeonse-tenant" single />);
+    await waitFor(() => expect(box(TENANT_FIRST).checked).toBe(true));
+  });
+
+  it("비우기 → 「체크 M개를 지웠습니다.」(거래 번호 없이) → 되돌리기면 복원", () => {
+    vi.useFakeTimers();
+    render(<DealChecklist type="jeonse-tenant" single />);
+    fireEvent.click(box(TENANT_FIRST));
+    fireEvent.click(box(TENANT_SECOND));
+    fireEvent.click(screen.getByRole("button", { name: "비우기" }));
+    expect(box(TENANT_FIRST).checked).toBe(false);
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("체크 2개를 지웠습니다.");
+    expect(status.textContent).not.toContain("거래");
+    act(() => {
+      vi.advanceTimersByTime(UNDO_MS - 1_000);
+    });
+    fireEvent.click(within(status).getByRole("button", { name: "되돌리기" }));
+    expect(box(TENANT_FIRST).checked).toBe(true);
+    expect(box(TENANT_SECOND).checked).toBe(true);
+    expect(saved()!.deals[0].checks).toEqual(["jeonse-tenant.registry-explain", "jeonse-tenant.landlord-info"]);
+    expect(status).toBeEmptyDOMElement();
+  });
+
+  it("중개사용 전세 거래가 저장돼 있어도 세입자 화면은 비어 있고, 세입자 체크는 전세 거래에 안 섞인다", async () => {
+    localStorage.setItem(DEALS_KEY, JSON.stringify(seeded(["jeonse.registry", "jeonse.trust"])));
+    render(<DealChecklist type="jeonse-tenant" single />);
+    await waitFor(() => expect(screen.getByText(/15개 중 0개 확인/)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "비우기" })).toBeDisabled();
+    fireEvent.click(box(TENANT_FIRST));
+    const s = saved()!;
+    expect(s.deals.find((d) => d.type === "jeonse")!.checks).toEqual(["jeonse.registry", "jeonse.trust"]);
+    expect(s.deals.find((d) => d.type === "jeonse-tenant")).toMatchObject({ no: 1, checks: ["jeonse-tenant.registry-explain"] });
+  });
+});

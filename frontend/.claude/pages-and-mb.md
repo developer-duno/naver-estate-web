@@ -27,7 +27,9 @@
 | 페이지 | 자료 | 비고 |
 |--------|------|------|
 | `/broker` | `lib/broker/upcoming-dates.ts`(손으로 관리 · 원문 확인 뒤에만 추가 · 지난 항목 삭제) + 서식 원문 링크(법제처·법무부, 사본 없음) + 계산기 4장·`/verify` 링크 | 사이트맵·`public/llms.txt` 등록 · 광고법 게이트 TARGETS 에 `src/lib/broker` · 「중개사 인증하면 되는 것」 문구는 비인증 화면과 대조한 뒤에만 쓴다(인증 전용 = 엑셀·데이터 갱신·인쇄 — 실거래·면적별 시세·매물표는 인증 없이도 보인다, 세션 511 검사 🟠) · 자료 파일에 적는 출처 주소는 열어서 그 공고가 맞는지 본 뒤에만(세션 511: 다른 공고 주소였다) |
-| `/broker/[type]` | `lib/broker/checklists.ts`(손으로 관리 · 조문 주소는 열어 본 뒤에만 · 항목 id 는 체크 저장 키라 바꾸지 않는다) | 서버 정적 장(`generateStaticParams` = `CHECKLIST_TYPES` · `dynamicParams = false` → 없는 유형 404) · 허브 버튼·사이트맵 행도 같은 목록에서 생성(lastmod = `checkedAt`) · 세션 513 PR 2a = `jeonse` 17항목 · 세션 513 PR 2b = 18항목(`jeonse.refused-docs`) · 체크 = 내 기기 저장(`broker_deals_v1` · `lib/broker/deals-storage.ts` · 부품 `components/broker/DealChecklist.tsx`) |
+| `/broker/[type]` | `lib/broker/checklists.ts`(손으로 관리 · 조문 주소는 열어 본 뒤에만 · 항목 id 는 체크 저장 키라 바꾸지 않는다) | 서버 정적 장(`generateStaticParams` = `BROKER_TYPES`(audience broker) · `dynamicParams = false` → 없는 유형·당사자용 유형 404) · 허브 버튼·사이트맵 행도 같은 목록에서 생성(lastmod = `checkedAt`) · 세션 513 PR 2a = `jeonse` 17항목 · 세션 513 PR 2b = 18항목(`jeonse.refused-docs`) · 체크 = 내 기기 저장(`broker_deals_v1` · `lib/broker/deals-storage.ts` · 부품 `components/broker/DealChecklist.tsx`) · 세션 514: 머리에 「손님에게 보낼 목록: 세입자용 · 집주인용」(자료 `partyTypes`) |
+| `/checklist` | `PARTY_TYPES`(audience party) 로 카드 생성 | 계약 체크 목록 모음 장(세션 514) · 서버 정적 · 맨 아래 중개사용 `/broker/jeonse` 줄 · 들어오는 문 = 홈 「계산기 모음」 카드(`HomeToolCards`) · `/broker/jeonse` 머리 링크 · 사이트맵·llms.txt (헤더 메뉴 없음) |
+| `/checklist/[type]` | `lib/broker/party-checklists.ts`(세입자 `jeonse-tenant` 15 · 집주인 `jeonse-landlord` 10 · 레지스트리는 `checklists.ts` · 조문 주소 = `lib/broker/law-urls.ts`) | `/broker/[type]` 와 같은 꼴(`generateStaticParams` = `PARTY_TYPES` · `dynamicParams = false` · `getChecklist(type, "party")`) · 체크 = 같은 `broker_deals_v1` · 부품 `DealChecklist single`(거래 고르기·새 거래·계약일 없이 비우기만 · 알림 「체크 M개를 지웠습니다.」) |
 
 ### 인증·관리·마케팅·블로그
 | 페이지 | API 호출 | 백엔드 라우터 |

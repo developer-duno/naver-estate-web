@@ -4,9 +4,18 @@
  * - 출처·조문 주소는 열어 그 조문이 맞는지 본 뒤에만 적는다(법제처 한글 주소 `https://www.law.go.kr/법령/<법령명>/제X조`).
  * - 항목 id 는 바꾸지 않는다 — 다음 PR 에서 체크 저장 키가 된다(순번 금지 · `<type>.<영문 소문자-하이픈>` 꼴).
  * - 법이 바뀌어 항목을 고치면 그 목록의 checkedAt(법령 기준일, YYYY-MM-DD)을 고친다 — 사이트맵 lastmod 도 이 값을 쓴다.
- * - 장(/broker/[type])·허브 버튼·사이트맵이 모두 CHECKLISTS / CHECKLIST_TYPES 한 목록에서 나온다.
- * 시험 = `src/lib/broker/__tests__/checklists.test.ts`.
+ * - 장·허브 버튼·사이트맵이 모두 CHECKLISTS 한 목록에서 나온다. 목록마다 `audience` 로 갈린다(세션 514):
+ *   broker = 중개사용(/broker/<type> · BROKER_TYPES) · party = 세입자·집주인 같은 거래 당사자용(/checklist/<type> · PARTY_TYPES).
+ *   당사자용 자료는 party-checklists.ts, 조문 주소는 law-urls.ts(두 파일이 서로 부르지 않게 — 이 파일만 둘을 가져온다).
+ * - 체크 저장(deals-storage.ts)도 이 CHECKLISTS 로 아는 유형·아는 id 를 검사한다.
+ * 시험 = `src/lib/broker/__tests__/checklists.test.ts` · `party-checklists.test.ts`.
  */
+import { A25, A25_3, A26, A30, D21, D22, H3, H3_2, H3_6, H3_7, H8, L6, R29_2, RD4_3, RT6_2, RT6_5, T109 } from "./law-urls";
+import { JEONSE_LANDLORD, JEONSE_TENANT } from "./party-checklists";
+
+/** 누가 보는 목록인가 — broker = 공인중개사 · party = 거래 당사자(세입자·집주인 등) */
+export type ChecklistAudience = "broker" | "party";
+
 export type LawRef = {
   /** 화면 글자(예: 「공인중개사법 제25조 제1항」) */
   label: string;
@@ -32,7 +41,10 @@ export type ChecklistStage = {
 
 export type DealChecklist = {
   type: string;
-  /** 허브 버튼 글자(예: 「전세」) */
+  audience: ChecklistAudience;
+  /** 중개사용 목록에서 손님에게 보낼 당사자용 목록의 유형(예: jeonse → jeonse-tenant·jeonse-landlord) */
+  partyTypes?: string[];
+  /** 버튼·카드 글자(예: 「전세」·「세입자용」) */
   name: string;
   h1: string;
   description: string;
@@ -42,28 +54,10 @@ export type DealChecklist = {
   notCovered: string[];
 };
 
-const LAW = "https://www.law.go.kr/법령/";
-
-const A25 = `${LAW}공인중개사법/제25조`;
-const A25_3 = `${LAW}공인중개사법/제25조의3`;
-const A26 = `${LAW}공인중개사법/제26조`;
-const A30 = `${LAW}공인중개사법/제30조`;
-const D21 = `${LAW}공인중개사법시행령/제21조`;
-const D22 = `${LAW}공인중개사법시행령/제22조`;
-const H3 = `${LAW}주택임대차보호법/제3조`;
-const H3_2 = `${LAW}주택임대차보호법/제3조의2`;
-const H3_6 = `${LAW}주택임대차보호법/제3조의6`;
-const H3_7 = `${LAW}주택임대차보호법/제3조의7`;
-const H8 = `${LAW}주택임대차보호법/제8조`;
-const T109 = `${LAW}국세징수법/제109조`;
-const L6 = `${LAW}지방세징수법/제6조`;
-const R29_2 = `${LAW}주민등록법/제29조의2`;
-const RT6_2 = `${LAW}부동산거래신고등에관한법률/제6조의2`;
-const RT6_5 = `${LAW}부동산거래신고등에관한법률/제6조의5`;
-const RD4_3 = `${LAW}부동산거래신고등에관한법률시행령/제4조의3`;
-
 const JEONSE: DealChecklist = {
   type: "jeonse",
+  audience: "broker",
+  partyTypes: ["jeonse-tenant", "jeonse-landlord"],
   name: "전세",
   h1: "전세 계약 체크 목록",
   description:
@@ -256,16 +250,28 @@ const JEONSE: DealChecklist = {
   notCovered: ["전세보증(HUG 등) 가입 요건", "전세대출 조건", "개별 특약 문구"],
 };
 
-/** 유형 키 → 체크 목록. 새 유형은 여기에 한 줄 더하면 장·허브 버튼·사이트맵이 함께 생긴다. */
+/**
+ * 유형 키 → 체크 목록. 새 유형은 여기에 한 줄 더하면 그 audience 의 장·버튼·사이트맵이 함께 생긴다.
+ * 키는 목록의 type 과 같고, 키 이름은 모든 audience 를 통틀어 하나뿐이다(체크 저장의 유형 키).
+ */
 export const CHECKLISTS = {
   jeonse: JEONSE,
+  "jeonse-tenant": JEONSE_TENANT,
+  "jeonse-landlord": JEONSE_LANDLORD,
 } as const satisfies Record<string, DealChecklist>;
 
 export type ChecklistType = keyof typeof CHECKLISTS;
 
-export const CHECKLIST_TYPES = Object.keys(CHECKLISTS) as ChecklistType[];
+const ALL_TYPES = Object.keys(CHECKLISTS) as ChecklistType[];
 
-/** 없는 유형이면 undefined */
-export function getChecklist(type: string): DealChecklist | undefined {
-  return Object.prototype.hasOwnProperty.call(CHECKLISTS, type) ? CHECKLISTS[type as ChecklistType] : undefined;
+/** 중개사용 목록 유형(/broker/<type>) */
+export const BROKER_TYPES = ALL_TYPES.filter((t) => CHECKLISTS[t].audience === "broker");
+/** 거래 당사자용 목록 유형(/checklist/<type>) */
+export const PARTY_TYPES = ALL_TYPES.filter((t) => CHECKLISTS[t].audience === "party");
+
+/** 없는 유형이거나 audience 가 다르면 undefined(→ /broker/jeonse-tenant · /checklist/jeonse 는 404) */
+export function getChecklist(type: string, audience: ChecklistAudience): DealChecklist | undefined {
+  if (!Object.prototype.hasOwnProperty.call(CHECKLISTS, type)) return undefined;
+  const list: DealChecklist = CHECKLISTS[type as ChecklistType];
+  return list.audience === audience ? list : undefined;
 }

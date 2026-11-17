@@ -227,6 +227,10 @@ describe("DealChecklist single — 세입자·집주인용(세션 514)", () => {
     expect(screen.getByRole("button", { name: "비우기" })).toBeDisabled();
     expect(screen.getByText(/15개 중 0개 확인/)).toHaveTextContent("15개 중 0개 확인");
     expect(screen.getByText(/이 기기 이 브라우저에만 저장됩니다/)).toBeInTheDocument();
+    // 아이폰 사파리 7일 저장 삭제 안내 + 할 일(홈 화면 추가)
+    expect(screen.getByText(/아이폰 사파리는 이 사이트를 7일 넘게 열지 않으면 저장을 지울 수 있습니다/)).toHaveTextContent(
+      "홈 화면에 추가해 두면 유지됩니다",
+    );
     expect(screen.getAllByRole("checkbox")).toHaveLength(15);
   });
 

@@ -168,9 +168,13 @@ describe("DealChecklist", () => {
     });
     render(<DealChecklist type="jeonse" />);
     expect(screen.queryByText(/저장을 막아 두어/)).toBeNull();
+    // 중개사 모드에도 사파리 7일 안내가 보인다(세션 522 검사 🟡1)
+    expect(screen.getByText(/아이폰 사파리는 이 사이트를 7일 넘게 열지 않으면/)).toBeInTheDocument();
     fireEvent.click(box(FIRST));
     expect(box(FIRST).checked).toBe(true);
     expect(screen.getByText("이 브라우저는 저장을 막아 두어, 창을 닫으면 체크 표시가 사라집니다.")).toBeInTheDocument();
+    // 저장이 막혔으면 「홈 화면에 추가하면 유지」는 거짓이 되므로 숨긴다(검사 🟡2)
+    expect(screen.queryByText(/아이폰 사파리는/)).toBeNull();
   });
 
   it.each([

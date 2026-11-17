@@ -4,6 +4,8 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { CHECKLISTS, type ChecklistType } from "@/lib/broker/checklists";
 import { formatDateDot } from "@/lib/broker/upcoming-dates";
+import { REPORT_ITEM, todayKST } from "@/lib/broker/deadlines";
+import DeadlineBox from "./DeadlineBox";
 import {
   DEALS_KEY,
   MAX_DEALS,
@@ -14,12 +16,15 @@ import {
   emptyState,
   limitedDealCount,
   readDeals,
+  removeDeal,
   restoreChecks,
+  restoreDeal,
   setActive,
   setContractDate,
   toggleCheck,
   writeDeals,
   type DealsState,
+  type RemovedDeal,
 } from "@/lib/broker/deals-storage";
 
 /** 되돌리기 알림이 떠 있는 시간 */
@@ -30,8 +35,13 @@ const cardTitleClass = "text-lg font-black tracking-tight text-brand-navy sm:tex
 const btnClass =
   "inline-flex min-h-11 items-center rounded-lg border border-brand-line px-3 text-sm font-bold text-brand-navy hover:bg-brand-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-navy disabled:cursor-not-allowed disabled:opacity-50";
 
-/** checks = 화면에 보이던 체크(알림 숫자) · unknown = 이 판이 모르는 항목 체크(되돌릴 때 함께 살린다) */
-type Undo = { dealId: string; no: number; checks: string[]; unknown: string[] };
+/**
+ * 되돌리기 알림 한 자리 — 비우기(checks = 화면에 보이던 체크(알림 숫자) · unknown = 이 판이 모르는 항목 체크) 또는
+ * 거래 지우기(세션 519 — 지운 거래를 그대로 들고 있다). 나중 것이 앞 것을 바꾼다.
+ */
+type Undo =
+  | { kind: "checks"; dealId: string; no: number; checks: string[]; unknown: string[] }
+  | { kind: "deal"; removed: RemovedDeal };
 
 /** 새 거래의 만든 시각 — 이벤트 처리기에서만 부른다(렌더 중에 시각을 읽지 않는다) */
 function nowMs(): number {
@@ -55,10 +65,13 @@ export default function DealChecklist({ type, single = false }: { type: Checklis
   const [saveFailed, setSaveFailed] = useState(false);
   const [corrupt, setCorrupt] = useState(false);
   const [undo, setUndo] = useState<Undo | null>(null);
+  /** 한국 시각의 오늘 — 마운트 뒤에 넣는다(그 전엔 신고 기한의 남은 날수를 그리지 않는다) */
+  const [today, setToday] = useState<string | null>(null);
 
   useEffect(() => {
-    // localStorage 는 서버에서 못 읽는다 — 마운트 뒤 1회 읽고, 다른 탭이 같은 키를 바꾸면 다시 읽는다
+    // localStorage 는 서버에서 못 읽는다 — 마운트 뒤 1회 읽고, 다른 탭이 같은 키를 바꾸면 다시 읽는다(오늘 날짜도 함께)
     const load = () => {
+      setToday(todayKST(new Date(nowMs())));
       const r = readDeals();
       stateRef.current = r.state;
       setState(r.state);
@@ -92,8 +105,19 @@ export default function DealChecklist({ type, single = false }: { type: Checklis
   const full = limitedDealCount(state) >= MAX_DEALS;
 
   const onNewDeal = () => {
+    // 지우기 알림이 떠 있으면 닫는다 — 새 거래로 상한이 차면 되살릴 수 없어서
+    if (undo?.kind === "deal") setUndo(null);
     const r = addDeal(stateRef.current, type, nowMs());
     if (r) commit(r.state);
+  };
+
+  const onDeleteDeal = () => {
+    const deal = activeDeal(stateRef.current, type);
+    if (!deal) return;
+    const r = removeDeal(stateRef.current, deal.id);
+    if (!r) return;
+    commit(r.state);
+    setUndo({ kind: "deal", removed: r.removed });
   };
 
   const onToggle = (itemId: string) => {
@@ -114,12 +138,18 @@ export default function DealChecklist({ type, single = false }: { type: Checklis
     if (!deal || deal.checks.length === 0) return;
     const r = clearChecks(stateRef.current, deal.id);
     commit(r.state);
-    setUndo({ dealId: deal.id, no: deal.no, checks: r.removed, unknown: r.removedUnknown });
+    setUndo({ kind: "checks", dealId: deal.id, no: deal.no, checks: r.removed, unknown: r.removedUnknown });
   };
 
   const onUndo = () => {
     if (!undo) return;
-    commit(restoreChecks(stateRef.current, undo.dealId, undo.checks, undo.unknown));
+    if (undo.kind === "checks") {
+      commit(restoreChecks(stateRef.current, undo.dealId, undo.checks, undo.unknown));
+    } else {
+      // 그 사이 상한이 찼거나 같은 거래가 이미 있으면 되살리지 않는다(상태 그대로)
+      const next = restoreDeal(stateRef.current, undo.removed);
+      if (next) commit(next);
+    }
     setUndo(null);
   };
 
@@ -138,6 +168,7 @@ export default function DealChecklist({ type, single = false }: { type: Checklis
 
   const doneCount = checked.size;
   const pct = total ? Math.round((doneCount / total) * 100) : 0;
+  const reportItem = REPORT_ITEM[type];
 
   const clearButton = (
     <button
@@ -203,10 +234,17 @@ export default function DealChecklist({ type, single = false }: { type: Checklis
                 />
               </div>
               {clearButton}
+              <button type="button" onClick={onDeleteDeal} disabled={!current} className={btnClass}>
+                거래 지우기
+              </button>
             </div>
           )}
           {full && !single && (
-            <p className="text-xs text-brand-muted">거래는 20개까지 저장됩니다. 끝난 거래는 비워서 다시 쓰세요.</p>
+            <p className="text-xs text-brand-muted">거래는 20개까지 저장됩니다. 끝난 거래는 지워 주세요.</p>
+          )}
+          {/* 신고 기한(세션 519) — 중개사 장에서 신고 항목이 있는 유형이고 계약일이 있을 때만 */}
+          {!single && reportItem && current?.contractDate && (
+            <DeadlineBox type={type} contractDate={current.contractDate} reported={checked.has(reportItem)} today={today} />
           )}
 
           <div>
@@ -333,9 +371,11 @@ export default function DealChecklist({ type, single = false }: { type: Checklis
           <div data-floating-bar className="fixed inset-x-0 bottom-0 z-50 px-4 pb-3">
             <div className="mx-auto flex max-w-md items-center justify-between gap-3 rounded-lg bg-brand-navy px-4 py-1.5 text-sm text-white shadow-lg">
               <span>
-                {single
-                  ? `체크 ${undo.checks.length}개를 지웠습니다.`
-                  : `거래 ${undo.no}의 체크 ${undo.checks.length}개를 지웠습니다.`}
+                {undo.kind === "deal"
+                  ? `거래 ${undo.removed.deal.no}(${list.name})를 지웠습니다.`
+                  : single
+                    ? `체크 ${undo.checks.length}개를 지웠습니다.`
+                    : `거래 ${undo.no}의 체크 ${undo.checks.length}개를 지웠습니다.`}
               </span>
               <button
                 type="button"

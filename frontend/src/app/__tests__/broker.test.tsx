@@ -8,13 +8,20 @@ import BrokerHubPage, { metadata } from "../broker/page";
 import { UPCOMING_DATES } from "@/lib/broker/upcoming-dates";
 
 describe("/broker 페이지", () => {
-  it("h1 「중개 실무」 1개와 카드 제목 5개", () => {
+  it("h1 「중개 실무」 1개와 카드 제목 6개(「내 거래 신고 기한」은 「다가오는 날짜」 바로 아래 · 세션 519)", () => {
     render(<BrokerHubPage />);
     const h1s = screen.getAllByRole("heading", { level: 1 });
     expect(h1s).toHaveLength(1);
     expect(h1s[0]).toHaveTextContent("중개 실무");
     const h2 = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(h2).toEqual(["다가오는 날짜", "거래 유형별 체크 목록", "자주 쓰는 계산", "서식 원문", "중개사 인증"]);
+    expect(h2).toEqual([
+      "다가오는 날짜",
+      "내 거래 신고 기한",
+      "거래 유형별 체크 목록",
+      "자주 쓰는 계산",
+      "서식 원문",
+      "중개사 인증",
+    ]);
   });
 
   it("다가오는 날짜 — 자료의 항목마다 날짜·제목·출처 링크(새 탭 · noopener)", () => {

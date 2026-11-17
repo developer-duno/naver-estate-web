@@ -6,7 +6,16 @@ import { StrictMode } from "react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import DealChecklist, { UNDO_MS } from "../DealChecklist";
-import { DEALS_KEY, MAX_DEALS, addDeal, emptyState, toggleCheck, type DealsState } from "@/lib/broker/deals-storage";
+import {
+  DEALS_KEY,
+  MAX_DEALS,
+  addDeal,
+  emptyState,
+  setContractDate,
+  toggleCheck,
+  type DealsState,
+} from "@/lib/broker/deals-storage";
+import type { ChecklistType } from "@/lib/broker/checklists";
 
 const FIRST = "등기사항증명서로 권리관계 확인";
 const SECOND = "신탁등기가 있으면 신탁원부 확인";
@@ -70,7 +79,8 @@ describe("DealChecklist", () => {
     localStorage.setItem(DEALS_KEY, JSON.stringify(s));
     render(<DealChecklist type="jeonse" />);
     expect(screen.getByRole("button", { name: "+ 새 거래" })).toBeDisabled();
-    expect(screen.getByText("거래는 20개까지 저장됩니다. 끝난 거래는 비워서 다시 쓰세요.")).toBeInTheDocument();
+    expect(screen.getByText("거래는 20개까지 저장됩니다. 끝난 거래는 지워 주세요.")).toBeInTheDocument();
+    expect(screen.queryByText(/비워서 다시 쓰세요/)).toBeNull();
   });
 
   it("비우기 → 바로 지우고 알림 → 10초 안 되돌리기면 그대로 복원", () => {
@@ -332,5 +342,150 @@ describe("DealChecklist — 이 판이 모르는 유형·항목 체크를 지우
     fireEvent.click(within(status).getByRole("button", { name: "되돌리기" }));
     expect(box(FIRST).checked).toBe(true);
     expect(savedRaw().deals.find((d) => d.id === "jeonse-a-1")!.checks).toEqual(["jeonse.registry", "jeonse.future-item"]);
+  });
+});
+
+describe("DealChecklist — 신고 기한 상자 · 거래 지우기(세션 519)", () => {
+  // 오늘 = 2026-11-17(화) 낮(한국 시각) — 남은 날수가 실제 날짜에 따라 바뀌지 않게 시계를 고정한다
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-17T03:00:00Z"));
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  /** 그 유형의 거래 n 개(마지막 거래를 고름) · 마지막 거래에 계약일·체크 */
+  function dealsOfType(type: ChecklistType, n: number, contractDate?: string, checks: string[] = []): DealsState {
+    let s = emptyState();
+    let id = "";
+    for (let i = 0; i < n; i++) {
+      const r = addDeal(s, type, 1_000 + i)!;
+      s = r.state;
+      id = r.deal.id;
+    }
+    if (contractDate) s = setContractDate(s, id, contractDate)!;
+    return checks.reduce((acc, c) => toggleCheck(acc, id, c), s);
+  }
+  const seed = (s: DealsState) => localStorage.setItem(DEALS_KEY, JSON.stringify(s));
+
+  it("전세 — 제목 「임대차 신고 기한」 · 기본 기한 토요일 · 남은 날수 · 월요일까지 늘어남 줄 + 민법 제161조 링크(새 창)", () => {
+    seed(dealsOfType("jeonse", 2, "2026-11-05", ["jeonse.registry"]));
+    render(<DealChecklist type="jeonse" />);
+    expect(screen.getByText("임대차 신고 기한(신고 대상 계약이면)")).toBeInTheDocument();
+    expect(screen.getByText("2026. 12. 5.(토)까지")).toBeInTheDocument();
+    expect(screen.getByText("18일 남음")).toBeInTheDocument();
+    expect(
+      screen.getByText(/계약일 다음 날부터 세어 30일째입니다\. 그날이 토요일이라 법으로는 12\. 7\.\(월\)까지 늘어납니다\./),
+    ).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "민법 제161조 ↗" });
+    expect(link.getAttribute("href")).toBe("https://www.law.go.kr/법령/민법/제161조");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.queryByText(/개업공인중개사가 신고합니다/)).toBeNull();
+  });
+
+  it("매매 — 제목 「부동산 거래신고 기한」 · 수요일이라 늘어남 줄 없음 · 개업공인중개사 신고 안내", () => {
+    seed(dealsOfType("sale", 1, "2026-11-02"));
+    render(<DealChecklist type="sale" />);
+    expect(screen.getByText("부동산 거래신고 기한")).toBeInTheDocument();
+    expect(screen.getByText("2026. 12. 2.(수)까지")).toBeInTheDocument();
+    expect(screen.getByText("15일 남음")).toBeInTheDocument();
+    expect(screen.getByText(/중개한 거래는 개업공인중개사가 신고합니다\./)).toBeInTheDocument();
+    expect(screen.queryByText(/늘어납니다/)).toBeNull();
+    expect(screen.queryByRole("link", { name: "민법 제161조 ↗" })).toBeNull();
+  });
+
+  it("기한이 지난 거래는 「기한 지남」", () => {
+    seed(dealsOfType("jeonse", 1, "2026-10-10"));
+    render(<DealChecklist type="jeonse" />);
+    expect(screen.getByText("2026. 11. 9.(월)까지")).toBeInTheDocument();
+    expect(screen.getByText("기한 지남")).toBeInTheDocument();
+  });
+
+  it("신고 항목을 체크한 거래 → 상태 대신 「신고 항목 체크함 ✓」 + 「기한은 …였습니다.」 · 체크를 끄면 남은 날수로 돌아온다", () => {
+    seed(dealsOfType("wolse", 1, "2026-11-12", ["wolse.lease-report"]));
+    render(<DealChecklist type="wolse" />);
+    expect(screen.getByText("신고 항목 체크함 ✓")).toBeInTheDocument();
+    expect(screen.getByText("기한은 2026. 12. 12.(토)였습니다.")).toBeInTheDocument();
+    expect(screen.queryByText(/일 남음/)).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { checked: true }));
+    expect(screen.queryByText("신고 항목 체크함 ✓")).toBeNull();
+    expect(screen.getByText("25일 남음")).toBeInTheDocument();
+  });
+
+  it("계약일이 없으면 상자가 없고, 계약일을 넣으면 생긴다", () => {
+    seed(dealsOfType("jeonse", 1));
+    render(<DealChecklist type="jeonse" />);
+    expect(screen.queryByText(/신고 기한/)).toBeNull();
+    fireEvent.change(screen.getByLabelText("계약일(선택)"), { target: { value: "2026-11-02" } });
+    expect(screen.getByText("2026. 12. 2.(수)까지")).toBeInTheDocument();
+  });
+
+  it("거래 지우기 → 바로 지우고 알림 「거래 2(전세)를 지웠습니다.」 → 되돌리기면 저장 글자가 지우기 전 그대로 · 그 거래를 다시 고른다", () => {
+    seed(dealsOfType("jeonse", 2, "2026-11-05", ["jeonse.registry", "jeonse.trust"]));
+    const before = localStorage.getItem(DEALS_KEY);
+    render(<DealChecklist type="jeonse" />);
+    const select = screen.getByRole("combobox", { name: "거래 고르기" });
+    expect(select).toHaveDisplayValue("거래 2 · 전세 · 계약일 2026. 11. 5.");
+    fireEvent.click(screen.getByRole("button", { name: "거래 지우기" }));
+    expect(select).toHaveDisplayValue("거래 1 · 전세");
+    expect(saved()!.deals).toHaveLength(1);
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent("거래 2(전세)를 지웠습니다.");
+    act(() => {
+      vi.advanceTimersByTime(UNDO_MS - 1_000);
+    });
+    fireEvent.click(within(status).getByRole("button", { name: "되돌리기" }));
+    expect(select).toHaveDisplayValue("거래 2 · 전세 · 계약일 2026. 11. 5.");
+    expect(box(FIRST).checked).toBe(true);
+    expect(box(SECOND).checked).toBe(true);
+    expect(localStorage.getItem(DEALS_KEY)).toBe(before);
+    expect(status).toBeEmptyDOMElement();
+  });
+
+  it("되돌리기를 안 누르면 10초 뒤 알림이 사라지고 거래는 지운 채로 · 거래가 없으면 「거래 지우기」 비활성", () => {
+    seed(dealsOfType("jeonse", 1));
+    render(<DealChecklist type="jeonse" />);
+    fireEvent.click(screen.getByRole("button", { name: "거래 지우기" }));
+    act(() => {
+      vi.advanceTimersByTime(UNDO_MS);
+    });
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    expect(saved()!.deals).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "거래 지우기" })).toBeDisabled();
+  });
+
+  it(`${MAX_DEALS}개가 찬 상태 → 하나 지우면 「+ 새 거래」가 다시 켜지고, 새 거래를 누르면 지우기 알림이 닫힌다`, () => {
+    seed(dealsOfType("jeonse", MAX_DEALS));
+    render(<DealChecklist type="jeonse" />);
+    expect(screen.getByRole("button", { name: "+ 새 거래" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "거래 지우기" }));
+    expect(screen.getByRole("button", { name: "+ 새 거래" })).toBeEnabled();
+    expect(screen.queryByText(/거래는 20개까지 저장됩니다/)).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("지웠습니다");
+    fireEvent.click(screen.getByRole("button", { name: "+ 새 거래" }));
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    expect(saved()!.deals).toHaveLength(MAX_DEALS);
+  });
+
+  it("비우기 알림이 떠 있을 때 거래를 지우면 알림 자리는 하나 — 지우기 알림으로 바뀐다", () => {
+    seed(dealsOfType("jeonse", 1, undefined, ["jeonse.registry"]));
+    render(<DealChecklist type="jeonse" />);
+    fireEvent.click(screen.getByRole("button", { name: "비우기" }));
+    expect(screen.getByRole("status")).toHaveTextContent("거래 1의 체크 1개를 지웠습니다.");
+    fireEvent.click(screen.getByRole("button", { name: "거래 지우기" }));
+    expect(screen.getByRole("status")).toHaveTextContent("거래 1(전세)를 지웠습니다.");
+    expect(within(screen.getByRole("status")).getAllByRole("button")).toHaveLength(1);
+  });
+
+  it("single(세입자용) 장에는 기한 상자·「거래 지우기」가 없다(계약일이 저장돼 있어도)", () => {
+    seed(dealsOfType("jeonse-tenant", 1, "2026-11-05"));
+    render(<DealChecklist type="jeonse-tenant" single />);
+    expect(screen.queryByText(/신고 기한/)).toBeNull();
+    expect(screen.queryByText(/일 남음/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "거래 지우기" })).toBeNull();
   });
 });

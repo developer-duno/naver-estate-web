@@ -20,11 +20,13 @@ import { CHECKLISTS, BROKER_TYPES, PARTY_TYPES } from "@/lib/broker/checklists";
  * 세션 514: /checklist(계약 체크 목록 · 새 모음 장) = 2026-11-16 · /checklist/<type> = checklists.ts checkedAt(이 표에 두지 않는다) ·
  *   /privacy 는 10절에 계약 체크 목록을 더했으나 같은 날(2026-11-16)이라 그대로.
  * 세션 517: /checklist(월세 카드 2장·설명) · /broker(「월세」 단추) = 2026-11-17 · / 는 계산기 카드 설명 한 줄뿐이라 그대로(세션 509 제외 기준).
+ * 세션 520: /broker/jeonse-guarantee(전세보증 한도 · 새 장) = 2026-11-17 · /broker(넓은 단추·설명) 는 이미 2026-11-17.
  * /blog 는 공개 글 중 가장 최근 발행일, /updates 는 updatesLastModified() 가 정한다(이 표에 없음).
  */
 const STATIC_PAGE_LASTMOD = {
   "/": "2026-11-16",
   "/broker": "2026-11-17",
+  "/broker/jeonse-guarantee": "2026-11-17",
   "/checklist": "2026-11-17",
   "/tools": "2026-11-15",
   "/tools/second-mortgage": "2026-11-15",
@@ -86,6 +88,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "monthly" as const,
       priority: 0.7,
     })),
+    // 전세보증 한도 계산(세션 520 — 정적 폴더, /broker/[type] 목록 밖)
+    {
+      url: `${SITE_URL}/broker/jeonse-guarantee`,
+      lastModified: lastmod("/broker/jeonse-guarantee"),
+      changeFrequency: "monthly",
+      priority: 0.7,
+    },
     // 계약 체크 목록(세입자·집주인 — 세션 514) — 모음 장 + 당사자용 목록(PARTY_TYPES), lastmod = 그 목록의 법령 기준일
     { url: `${SITE_URL}/checklist`, lastModified: lastmod("/checklist"), changeFrequency: "monthly", priority: 0.8 },
     ...PARTY_TYPES.map((t) => ({

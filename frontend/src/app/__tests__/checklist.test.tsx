@@ -71,6 +71,26 @@ describe("/checklist 모음 장", () => {
   });
 });
 
+describe("/checklist/[type] 장 — 「한도 계산 →」 링크(세션 520)", () => {
+  it.each([
+    ["jeonse-tenant", true],
+    ["jeonse-landlord", true],
+    ["wolse-tenant", true],
+    ["wolse-landlord", true],
+    ["sale-buyer", false],
+    ["sale-seller", false],
+  ])("%s 장에 있음=%s", async (type, shown) => {
+    render(await PartyChecklistPage(params(type)));
+    const link = screen.queryByRole("link", { name: "한도 계산 →" });
+    if (shown) {
+      expect(link).toHaveAttribute("href", "/broker/jeonse-guarantee");
+      expect(screen.getByText(/이 목록에 넣지 않은 것/)).toContainElement(link);
+    } else {
+      expect(link).toBeNull();
+    }
+  });
+});
+
 describe("/checklist/[type] 장", () => {
   beforeEach(() => {
     notFoundMock.mockClear();

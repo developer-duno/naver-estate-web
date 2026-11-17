@@ -78,7 +78,7 @@ export type HugResult =
       seniorRatioText: string;
       /** 조건 ③ 보증금 상한(원) */
       depositCapWon: number;
-      /** 월세가 있으면 환산 보증금(원 미만 버림), 없으면 null */
+      /** 월세가 있으면 환산 보증금(상한 이하면 원 미만 버림 · 넘으면 올림), 없으면 null */
       convertedDepositWon: number | null;
       /** 조건 ③ (환산) 보증금 ≤ 상한 */
       capFits: boolean;
@@ -128,7 +128,10 @@ export function calcHugLimit(input: HugInput): HugResult {
   // 환산 보증금 = 보증금 + 월세×12 ÷ 전환율 → 양변에 전환율(천분율)을 곱한 정수식
   const scaled = big(depositWon) * big(HUG_CONVERSION_RATE_PERMILLE) + big(monthlyRentWon) * big(12_000);
   const capFits = scaled <= big(depositCapWon) * big(HUG_CONVERSION_RATE_PERMILLE);
-  const convertedDepositWon = monthlyRentWon > 0 ? Number(scaled / big(HUG_CONVERSION_RATE_PERMILLE)) : null;
+  // 넘었을 때는 올림 — 내림하면 상한을 넘었는데 화면에 상한과 같은 금액(예 「5억 원」)이 보인다
+  const rate = big(HUG_CONVERSION_RATE_PERMILLE);
+  const convertedDepositWon =
+    monthlyRentWon > 0 ? Number(capFits ? scaled / rate : (scaled + rate - big(1)) / rate) : null;
 
   return {
     status: "ok",
@@ -196,6 +199,7 @@ export function hugBasisLine(): string {
 
 /** 이 계산에 넣지 않은 심사 조건 */
 export const HUG_NOT_COVERED = [
+  "HUG 상품 기준입니다 — HF(주택금융공사)·SGI서울보증 전세보증은 조건이 다릅니다",
   "등기부 갑구 권리침해(압류·가압류 등) · 건물·토지가 모두 임대인 소유인지",
   "전입신고·확정일자 · 계약기간 1년 이상 · 공인중개사를 통한 계약서",
   "신청 기한(잔금·전입 중 늦은 날부터 계약기간 절반 전) · 다른 기관 중복 가입",
@@ -203,6 +207,18 @@ export const HUG_NOT_COVERED = [
   "HUG가 실제로 쓰는 시세(KB·부동산원, 최저층은 하위평균가)",
   "보증료(원문의 보증료율 표를 보세요)",
   "감정평가서가 있으면 HUG는 그 값을 먼저 씁니다(6개월 이내)",
+  // 원문 672행 · 공지 37801 9항
+  "갱신 계약에서 보증금이 늘지 않으면 HUG는 주택가격을 다시 보지 않고, 전월세전환율도 예전 보증 때 것을 씁니다",
+  // 원문 701~703행
+  "질권 설정·채권양도 통지가 된 전세대출이 있으면 가입할 수 없습니다(HUG와 협약한 SGI서울보증 보증부 대출은 예외)",
+  // 원문 704~708행
+  "임대인이 HUG 보증금지 대상이거나 전세보증금 미반환 임대인으로 등록된 경우 · 임대인이 미성년자면 법정대리인 연대보증",
+  // 원문 657행
+  "오피스텔은 전세계약서나 중개대상물 확인·설명서에 「주거용」 표기가 있어야 합니다",
+  // 원문 699~700행
+  "전세권이 설정돼 있으면 말소하거나 보증 이행 때 HUG로 이전해야 합니다",
+  // 원문 720행
+  "이사 전 사전한도심사(계약일부터 계약 시작 14일 전까지 안심전세 앱에서 신청)",
 ] as const;
 
 /** 계산기 장 주소 */

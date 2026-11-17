@@ -121,20 +121,34 @@ describe("H5 조건 ② 선순위 ≤ 주택가격 × 60% · 비율 0.1 단위 �
 });
 
 describe("H6 조건 ③ 보증금 상한(월세는 전월세전환율 6.5% 로 환산)", () => {
-  it("그 외 지역 · 보증금 4억 · 월세 60만 → 환산 510,769,230 · 넘음 / 같은 값 수도권 → 이하", () => {
+  it("그 외 지역 · 보증금 4억 · 월세 60만 → 환산 510,769,231(넘음이라 올림) / 같은 값 수도권 → 510,769,230 이하", () => {
     const other = ok({ region: "other", priceWon: 1_000_000_000, depositWon: 400_000_000, monthlyRentWon: 600_000 });
-    expect(other.convertedDepositWon).toBe(510_769_230);
+    expect(other.convertedDepositWon).toBe(510_769_231);
     expect(other.depositCapWon).toBe(500_000_000);
     expect(other.capFits).toBe(false);
     const capital = ok({ region: "capital", priceWon: 1_000_000_000, depositWon: 400_000_000, monthlyRentWon: 600_000 });
     expect(capital.depositCapWon).toBe(700_000_000);
     expect(capital.capFits).toBe(true);
+    expect(capital.convertedDepositWon).toBe(510_769_230);
   });
   it("수도권 보증금 정확히 7억 → 이하 · 700,000,001 → 넘음 · 월세 0 이면 환산값 없음", () => {
     const eq = ok({ priceWon: 2_000_000_000, depositWon: 700_000_000 });
     expect(eq.capFits).toBe(true);
     expect(eq.convertedDepositWon).toBeNull();
     expect(ok({ priceWon: 2_000_000_000, depositWon: 700_000_001 }).capFits).toBe(false);
+  });
+  it("상한을 아주 조금 넘으면 환산 보증금은 올림 — 그 외 지역 · 보증금 499,999,816 · 월세 1원 → 500,000,001(넘음)", () => {
+    // 환산 = 499,999,816 + 12 ÷ 0.065 = 500,000,000.61… → 내림이면 「5억 원」인데 넘음으로 보인다(세션 521 검사관 재현)
+    const r = ok({ region: "other", priceWon: 2_000_000_000, depositWon: 499_999_816, monthlyRentWon: 1 });
+    expect(r.capFits).toBe(false);
+    expect(r.convertedDepositWon).toBe(500_000_001);
+    expect(r.convertedDepositWon!).toBeGreaterThan(r.depositCapWon);
+  });
+  it("상한 안이면 환산 보증금은 내림 그대로 — 그 외 지역 · 보증금 499,999,815 · 월세 1원 → 499,999,999", () => {
+    // 499,999,815 + 184.61… = 499,999,999.61… → 이하이므로 버림
+    const r = ok({ region: "other", priceWon: 2_000_000_000, depositWon: 499_999_815, monthlyRentWon: 1 });
+    expect(r.capFits).toBe(true);
+    expect(r.convertedDepositWon).toBe(499_999_999);
   });
   it("그 외 지역 보증금 5억 → 이하 · 5억 1원 → 넘음", () => {
     expect(ok({ region: "other", priceWon: 2_000_000_000, depositWon: 500_000_000 }).capFits).toBe(true);
@@ -189,10 +203,19 @@ describe("H11 적용 기준 줄 · H12 넣지 않은 조건 · H14 링크 판정
     );
     expect(hugBasisLine()).toContain(`전세가율 ${HUG_JEONSE_RATIO_PCT}%`);
   });
-  it("넣지 않은 조건 7줄 — 보증료·감정평가서 줄 포함", () => {
-    expect(HUG_NOT_COVERED).toHaveLength(7);
-    expect(HUG_NOT_COVERED[5]).toBe("보증료(원문의 보증료율 표를 보세요)");
-    expect(HUG_NOT_COVERED[6]).toBe("감정평가서가 있으면 HUG는 그 값을 먼저 씁니다(6개월 이내)");
+  it("넣지 않은 조건 14줄 — 맨 앞 HUG 상품 기준 · 보증료·감정평가서 줄 · 원문에서 더한 6줄(세션 521)", () => {
+    expect(HUG_NOT_COVERED).toHaveLength(14);
+    expect(HUG_NOT_COVERED[0]).toBe("HUG 상품 기준입니다 — HF(주택금융공사)·SGI서울보증 전세보증은 조건이 다릅니다");
+    expect(HUG_NOT_COVERED[6]).toBe("보증료(원문의 보증료율 표를 보세요)");
+    expect(HUG_NOT_COVERED[7]).toBe("감정평가서가 있으면 HUG는 그 값을 먼저 씁니다(6개월 이내)");
+    expect(HUG_NOT_COVERED.slice(8)).toEqual([
+      "갱신 계약에서 보증금이 늘지 않으면 HUG는 주택가격을 다시 보지 않고, 전월세전환율도 예전 보증 때 것을 씁니다",
+      "질권 설정·채권양도 통지가 된 전세대출이 있으면 가입할 수 없습니다(HUG와 협약한 SGI서울보증 보증부 대출은 예외)",
+      "임대인이 HUG 보증금지 대상이거나 전세보증금 미반환 임대인으로 등록된 경우 · 임대인이 미성년자면 법정대리인 연대보증",
+      "오피스텔은 전세계약서나 중개대상물 확인·설명서에 「주거용」 표기가 있어야 합니다",
+      "전세권이 설정돼 있으면 말소하거나 보증 이행 때 HUG로 이전해야 합니다",
+      "이사 전 사전한도심사(계약일부터 계약 시작 14일 전까지 안심전세 앱에서 신청)",
+    ]);
   });
   it("「HUG」 글자가 든 항목이 있을 때만 참", () => {
     expect(hasHugItem(["전세보증(HUG 등) 가입 요건", "개별 특약 문구"])).toBe(true);

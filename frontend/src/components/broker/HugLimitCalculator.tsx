@@ -28,14 +28,20 @@ const HOUSE_TYPES: { value: HouseType; label: string; directGuide: string }[] = 
   {
     value: "apt",
     label: "아파트",
-    directGuide: "HUG는 KB·한국부동산원 시세를 먼저 씁니다(최저층은 하위평균가). 시세가 없으면 공시가격의 140%.",
+    directGuide:
+      "HUG는 KB·한국부동산원 시세를 먼저 씁니다(최저층은 하위평균가). 없으면 공시가격의 140% → 안심전세 앱 하한가 → 1년 안 등기부 매매가 → 준공 1년 안이면 분양가의 90%.",
   },
   {
     value: "officetel",
     label: "오피스텔",
-    directGuide: "HUG는 KB 시세 하위평균가를 먼저 씁니다. 없으면 국세청 기준시가의 140%.",
+    directGuide:
+      "HUG는 KB 시세 하위평균가를 먼저 씁니다. 없으면 국세청 기준시가의 140% → 안심전세 앱 하한가 → 1년 안 등기부 매매가 → 준공 1년 안이면 분양가의 90%.",
   },
-  { value: "villa", label: "연립·다세대", directGuide: "HUG는 공동주택가격(공시가격)의 140%를 먼저 씁니다." },
+  {
+    value: "villa",
+    label: "연립·다세대",
+    directGuide: "HUG는 공동주택가격(공시가격)의 140%를 먼저 씁니다. 없으면 안심전세 앱 하한가 → 1년 안 등기부 매매가.",
+  },
 ];
 
 const REGIONS: { value: HugRegion; label: string }[] = [
@@ -165,13 +171,14 @@ export default function HugLimitCalculator() {
               <p className={hintCls}>
                 × {HUG_OFFICIAL_PRICE_PCT}% ={" "}
                 <b className="text-brand-orange-text">{W(result.housePriceWon)}</b>을 주택가격으로 씁니다.
+                {houseType !== "villa" && " (아파트·오피스텔은 시세가 없을 때 쓰는 방법)"}
               </p>
             )
           )}
         </div>
         <div className="flex flex-col gap-1.5">
           <AmountInput id={`${id}-senior`} label="선순위채권 등" value={senior} onChange={setSenior} placeholder="없으면 0" />
-          <p className={hintCls}>등기부 을구의 근저당 금액</p>
+          <p className={hintCls}>등기부 을구의 근저당 금액과 등기일자(원문 표현) — 내 보증금보다 먼저 받는 채권</p>
         </div>
         <AmountInput id={`${id}-deposit`} label="전세보증금" value={deposit} onChange={setDeposit} placeholder="예: 180,000,000" />
         <AmountInput id={`${id}-rent`} label="월세 (있으면)" value={rent} onChange={setRent} placeholder="없으면 0" />

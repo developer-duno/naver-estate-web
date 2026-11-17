@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { PARTY_TYPES, getChecklist, type ChecklistType } from "@/lib/broker/checklists";
 import DealChecklist from "@/components/broker/DealChecklist";
 import { formatDateDot } from "@/lib/broker/upcoming-dates";
+import { HUG_LIMIT_PATH, hasHugItem } from "@/lib/broker/hug-guarantee";
 
 /**
  * 계약 체크 목록 — 세입자·집주인용(세션 514). 서버 정적 장 · 자료 = lib/broker/party-checklists.ts(레지스트리 checklists.ts).
@@ -59,6 +60,14 @@ export default async function PartyChecklistPage({ params }: { params: Promise<{
 
         <p className="mt-6 text-sm text-brand-muted leading-relaxed">
           이 목록에 넣지 않은 것: {list.notCovered.join(" · ")} · 조문 원문은 각 링크(법제처)에서 현행 내용을 봅니다.
+          {hasHugItem(list.notCovered) && (
+            <>
+              {" "}
+              <Link href={HUG_LIMIT_PATH} className="font-bold text-brand-orange-text underline hover:text-brand-navy">
+                한도 계산 →
+              </Link>
+            </>
+          )}
         </p>
       </div>
     </div>

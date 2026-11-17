@@ -36,6 +36,21 @@ describe("/broker/[type] 장", () => {
     expect(screen.getByText(/법령 기준일/)).toHaveTextContent("2026. 11. 16.");
   });
 
+  it.each([
+    ["jeonse", true],
+    ["wolse", true],
+    ["sale", false],
+  ])("「넣지 않은 것」 줄의 「한도 계산 →」 링크(세션 520) — %s 장에 있음=%s", async (type, shown) => {
+    render(await BrokerChecklistPage(params(type)));
+    const link = screen.queryByRole("link", { name: "한도 계산 →" });
+    if (shown) {
+      expect(link).toHaveAttribute("href", "/broker/jeonse-guarantee");
+      expect(screen.getByText(/이 목록에 넣지 않은 것/)).toContainElement(link);
+    } else {
+      expect(link).toBeNull();
+    }
+  });
+
   it("항목 번호가 단계를 넘어 1~18 로 이어진다(ol start)", async () => {
     const { container } = render(await BrokerChecklistPage(params("jeonse")));
     const ols = Array.from(container.querySelectorAll("ol"));

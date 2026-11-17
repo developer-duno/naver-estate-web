@@ -123,6 +123,15 @@ test("/broker 200 · h1 「중개 실무」", async ({ page }) => {
   await expect(page.locator("h1")).toHaveCount(1);
 });
 
+/** 「전세보증 한도」(/broker/jeonse-guarantee) 스모크 — 정적 폴더 장 200 · h1 하나(세션 520 PR 5 · 스크린샷 없음) */
+test("/broker/jeonse-guarantee 200 · h1 「전세보증 한도」", async ({ page }) => {
+  await applyPublicMocks(page);
+  const res = await page.goto("/broker/jeonse-guarantee");
+  expect(res?.status()).toBe(200);
+  await expect(page.getByRole("heading", { level: 1, name: "전세보증 한도" })).toBeVisible();
+  await expect(page.locator("h1")).toHaveCount(1);
+});
+
 /** 「전세 중개 체크 목록 — 공인중개사용」(/broker/jeonse) 스모크 — 정적 장 200 · 체크 저장 유지(PR 2b) · 없는 유형 404(세션 513 PR 2a · 스크린샷 없음) */
 test("/broker/jeonse 200 · h1 「전세 중개 체크 목록 — 공인중개사용」 · /broker/zz-unknown 404", async ({ page }) => {
   await applyPublicMocks(page);

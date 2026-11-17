@@ -49,17 +49,27 @@ describe("/broker 페이지", () => {
     expect(links[2]).toHaveTextContent("매매 →");
   });
 
-  it("자주 쓰는 계산 — 이미 있는 계산기 장 4개 + 계산기 전체", () => {
+  it("자주 쓰는 계산 — 맨 위 넓은 단추 「전세보증 한도」(세션 520) + 이미 있는 계산기 장 4개 + 계산기 전체", () => {
     render(<BrokerHubPage />);
     const card = screen.getByRole("region", { name: "자주 쓰는 계산" });
     const hrefs = within(card).getAllByRole("link").map((a) => a.getAttribute("href"));
     expect(hrefs).toEqual([
+      "/broker/jeonse-guarantee",
       "/tools/brokerage-fee",
       "/tools/acquisition-tax",
       "/tools/transfer-tax",
       "/tools/property-tax",
       "/tools",
     ]);
+  });
+
+  it("전세보증 한도 넓은 단추(세션 520) — 제목·작은 글·사이트 안 링크(새 창 아님)", () => {
+    render(<BrokerHubPage />);
+    const card = screen.getByRole("region", { name: "자주 쓰는 계산" });
+    const wide = within(card).getByRole("link", { name: /전세보증 한도/ });
+    expect(wide).toHaveAttribute("href", "/broker/jeonse-guarantee");
+    expect(wide).toHaveTextContent("HUG 산식 · 보증금이 들어가는지");
+    expect(wide).not.toHaveAttribute("target");
   });
 
   it("서식 원문 — 법제처·법무부 공식 주소(https)만, 새 탭", () => {
@@ -99,5 +109,7 @@ describe("/broker 페이지", () => {
     expect(og.url).toBe("/broker");
     expect(og.images?.[0]?.url).toBe("/opengraph-image");
     expect(String(metadata.title)).toContain("중개 실무");
+    // 세션 520 — 설명에 전세보증 한도 계산기(llms.txt 와 같은 말)
+    expect(metadata.description).toContain("전세보증 한도·중개수수료·세금 계산기");
   });
 });

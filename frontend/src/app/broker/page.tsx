@@ -7,7 +7,7 @@ import DealDeadlines from "@/components/broker/DealDeadlines";
 export const metadata: Metadata = {
   title: "중개 실무 — 공인중개사 날짜·서식·계산",
   description:
-    "아파트 매매·전세·월세 중개에 쓰는 날짜·서식·계산을 한곳에. 다가오는 제도 날짜, 확인·설명서와 표준계약서 원문, 중개수수료·세금 계산기.",
+    "아파트 매매·전세·월세 중개에 쓰는 날짜·서식·계산을 한곳에. 다가오는 제도 날짜, 확인·설명서와 표준계약서 원문, 전세보증 한도·중개수수료·세금 계산기.",
   alternates: { canonical: "/broker" },
   openGraph: {
     url: "/broker",
@@ -108,7 +108,18 @@ export default function BrokerHubPage() {
 
           <section aria-labelledby="broker-calcs" className={cardClass}>
             <h2 id="broker-calcs" className={cardTitleClass}>자주 쓰는 계산</h2>
-            <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {/* 세션 520 — 중개 실무 전용 계산기는 세금 계산기 4칸과 따로 넓은 단추로 */}
+            <Link
+              href="/broker/jeonse-guarantee"
+              className="mt-3 flex min-h-[52px] items-center justify-between gap-3 rounded-[10px] bg-brand-navy px-4 py-2.5 text-white hover:bg-brand-navy/90"
+            >
+              <span className="flex flex-col">
+                <span className="text-[15px] font-bold">전세보증 한도</span>
+                <span className="text-xs text-brand-on-navy-muted">HUG 산식 · 보증금이 들어가는지</span>
+              </span>
+              <span aria-hidden="true" className="font-bold">→</span>
+            </Link>
+            <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
               {CALC_LINKS.map((c) => (
                 <li key={c.href}>
                   <Link

@@ -50,3 +50,4 @@
 ## 세션 515 갱신 (2026-11-16)
 
 - FE Vitest 2940 → **3062** (Test Files 304 → 315) — main 커밋 aa9623ec(#845 계약 체크 목록) 의 CI run 43832273009 Frontend CI 잡 `Test Files 315 passed · Tests 3062 passed`(2026-11-16 17:39 KST). 증가분 = s509 뒤 합친 PR #833~#845(`git log 4786610e..aa9623ec`) — 중개 실무 틀(#836) · 전세 체크 목록(#838) · 내 기기 저장(#844) · 세입자·집주인 목록(#845) 시험이 대부분. e2e spec 22 파일 · 기준 그림 22장 그대로(home-public-visual 1장만 #845 에서 재촬영).
+- FE Vitest 3062 → **3225** (Test Files 315 → 322) — PR #852(전세보증 한도) CI run 44105406425 Frontend CI 잡 `Test Files 322 passed · Tests 3225 passed`(2026-11-17 23:42 KST · 커밋 24d2815c = 합친 main 66fb961a 와 트리 같음). 증가분 = #846~#852(체크 목록 매매·월세 · 신고 기한 · 전세보증 한도) (세션 521)

@@ -46,6 +46,14 @@ describe("buildUnsoldChartData — 증감 계산 (세션 523 · B33)", () => {
     expect(data[1].change).toBe(7);
   });
 
+  it("change 가 0 으로 온 달은 계산값(−10)으로 덮지 않는다 — 0 은 「없음」이 아니다", () => {
+    const { data } = buildUnsoldChartData(
+      [makeItem("202608", { unsold_count: 100 }), makeItem("202609", { unsold_count: 90, change: 0 })],
+      24,
+    );
+    expect(data.map((d) => d.change)).toEqual([null, 0]);
+  });
+
   it("앞 달 자료가 없는 달(빠진 달 바로 뒤)은 null — 배열상 앞 칸과 계산하지 않는다", () => {
     const { data } = buildUnsoldChartData(
       [makeItem("202603", { unsold_count: 128 }), makeItem("202605", { unsold_count: 120 })],

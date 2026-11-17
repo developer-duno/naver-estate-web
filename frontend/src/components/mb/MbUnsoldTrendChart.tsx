@@ -144,7 +144,7 @@ export default function MbUnsoldTrendChart({ items }: Props) {
 
       <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
         <ComposedChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <CartesianGrid yAxisId="left" strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis dataKey="month" tick={{ fontSize: 11 }} />
           <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
           {/* 증감은 크기가 미분양 수보다 훨씬 작아 오른쪽 눈금을 따로 쓴다 — 0 이 가운데 · 위아래 대칭 (👤 11-18 그림 ②) */}

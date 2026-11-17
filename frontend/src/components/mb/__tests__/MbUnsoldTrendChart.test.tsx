@@ -1,5 +1,6 @@
 /**
  * MbUnsoldTrendChart 시험 — 이력 1건 요약 한 줄 + 값 없는 시리즈를 0 으로 그리지 않기 (세션 501 · B32)
+ * + 증감 막대를 앞 달과의 차이로 계산 · 오른쪽 눈금 따로 (세션 523 · B33)
  * 실행: npx vitest run src/components/mb/__tests__/MbUnsoldTrendChart.test.tsx
  */
 import { describe, it, expect, vi } from "vitest";
@@ -8,12 +9,14 @@ import MbUnsoldTrendChart, { buildUnsoldChartData } from "../MbUnsoldTrendChart"
 import type { MbUnsoldHistory } from "@/types";
 
 // Recharts 는 jsdom 에서 폭 0 이라 그려지지 않는다 → 어느 시리즈를 그렸는지 dataKey 로 찍는 얇은 가짜
+// (눈금 범위·기준선·툴팁 글자는 MbUnsoldTrendChart.axis.test.tsx)
 vi.mock("recharts", () => ({
   ComposedChart: ({ children }: { children: React.ReactNode }) => <div data-testid="composed-chart">{children}</div>,
   Line: ({ dataKey }: { dataKey: string }) => <div data-testid={`series-${dataKey}`} />,
   Bar: ({ dataKey }: { dataKey: string }) => <div data-testid={`series-${dataKey}`} />,
   XAxis: () => null,
-  YAxis: () => null,
+  YAxis: ({ yAxisId }: { yAxisId?: string }) => <div data-testid={`yaxis-${yAxisId}`} />,
+  ReferenceLine: () => null,
   CartesianGrid: () => null,
   Tooltip: () => null,
   Legend: () => null,
@@ -54,12 +57,28 @@ describe("MbUnsoldTrendChart — 이력 1건", () => {
 });
 
 describe("MbUnsoldTrendChart — 값 없는 시리즈 숨김", () => {
-  it("2건 · 준공후·증감이 전부 null 이면 그 두 시리즈를 그리지 않는다", () => {
-    render(<MbUnsoldTrendChart items={[makeItem("202608"), makeItem("202609")]} />);
+  it("연속 두 달 · change 칸이 비어도 증감은 계산되므로 그린다 · 준공후는 전부 null 이라 숨김", () => {
+    render(
+      <MbUnsoldTrendChart
+        items={[makeItem("202608", { unsold_count: 140 }), makeItem("202609", { unsold_count: 136 })]}
+      />,
+    );
     expect(screen.getByTestId("series-unsold")).toBeInTheDocument();
     expect(screen.queryByTestId("series-postCompletion")).toBeNull();
-    expect(screen.queryByTestId("series-change")).toBeNull();
+    expect(screen.getByTestId("series-change")).toBeInTheDocument();
     expect(screen.getByText("6M")).toBeInTheDocument();
+  });
+
+  it("한 달 건너뛴 두 건이면 증감을 계산할 앞 달이 없어 증감 계열과 오른쪽 눈금을 그리지 않는다", () => {
+    render(
+      <MbUnsoldTrendChart
+        items={[makeItem("202603", { unsold_count: 128 }), makeItem("202605", { unsold_count: 120 })]}
+      />,
+    );
+    expect(screen.getByTestId("series-unsold")).toBeInTheDocument();
+    expect(screen.queryByTestId("series-change")).toBeNull();
+    expect(screen.queryByTestId("yaxis-right")).toBeNull();
+    expect(screen.getByTestId("yaxis-left")).toBeInTheDocument();
   });
 
   it("2건 · 준공후·증감 값이 한 달이라도 있으면 그린다", () => {
@@ -104,9 +123,9 @@ describe("buildUnsoldChartData — 빈 달은 0 이 아니라 null (세션 502 �
     expect(data[0].unsold).toBe(0);
   });
 
-  it("준공후·증감의 빈 달도 null", () => {
+  it("준공후의 빈 달은 null · 이번 달 미분양 수가 null 이면 증감도 null (0 아님)", () => {
     const { data } = buildUnsoldChartData(
-      [makeItem("202608", { post_completion_unsold: 3, change: -1 }), makeItem("202609")],
+      [makeItem("202608", { post_completion_unsold: 3, change: -1 }), makeItem("202609", { unsold_count: null })],
       24,
     );
     expect(data[1].postCompletion).toBeNull();
@@ -115,10 +134,10 @@ describe("buildUnsoldChartData — 빈 달은 0 이 아니라 null (세션 502 �
 });
 
 describe("buildUnsoldChartData — 계열 표시 판정은 자른 기간 기준", () => {
-  // 8개월: 가장 오래된 달(2025-01)에만 준공후·증감 값이 있고, 최근 6개월에는 없다
+  // 8개월: 가장 오래된 달(2025-01)에만 준공후·증감 값이 있고, 그 뒤 달은 미분양 수가 비어 증감도 계산되지 않는다
   function oldOnly(): MbUnsoldHistory[] {
     return months(8).map((m, i) =>
-      makeItem(m, i === 0 ? { post_completion_unsold: 5, change: 2 } : {}),
+      makeItem(m, i === 0 ? { post_completion_unsold: 5, change: 2 } : { unsold_count: null }),
     );
   }
 
@@ -144,15 +163,15 @@ describe("buildUnsoldChartData — 계열 표시 판정은 자른 기간 기준"
     expect(r.hasChange).toBe(true);
   });
 
-  it("화면: 오래된 달에만 값이 있으면 기본(2Y)에선 계열이 보이고 6M 을 누르면 사라진다", () => {
+  it("화면: 준공후 값이 오래된 달에만 있으면 6M 에서 사라지고, 계산된 증감 막대는 남는다", () => {
     const items = months(30).map((m, i) =>
-      makeItem(m, i === 6 ? { post_completion_unsold: 5, change: 2 } : {}),
+      makeItem(m, { unsold_count: 100 + i, ...(i === 6 ? { post_completion_unsold: 5 } : {}) }),
     );
     render(<MbUnsoldTrendChart items={items} />);
     expect(screen.getByTestId("series-postCompletion")).toBeInTheDocument();
     fireEvent.click(screen.getByText("6M"));
     expect(screen.queryByTestId("series-postCompletion")).toBeNull();
-    expect(screen.queryByTestId("series-change")).toBeNull();
+    expect(screen.getByTestId("series-change")).toBeInTheDocument();
     expect(screen.getByTestId("series-unsold")).toBeInTheDocument();
   });
 });

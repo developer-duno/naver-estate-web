@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import {
-  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import type { MbUnsoldHistory } from "@/types";
 import { formatChartMonth } from "@/lib/format";
@@ -40,31 +40,58 @@ export interface UnsoldChartPoint {
   change: number | null;
 }
 
+/** "YYYYMM" 의 달력상 바로 앞 달 ("202609" → "202608", "202701" → "202612") */
+function previousMonth(ym: string): string {
+  const y = Number(ym.slice(0, 4));
+  const m = Number(ym.slice(4, 6));
+  return m === 1 ? `${y - 1}12` : `${y}${String(m - 1).padStart(2, "0")}`;
+}
+
+/** 증감 글자 — 부호를 붙인다 (+3 · −5 · 0) */
+export function formatSignedCount(v: number): string {
+  if (v > 0) return `+${v.toLocaleString()}`;
+  if (v < 0) return `−${Math.abs(v).toLocaleString()}`;
+  return "0";
+}
+
 /**
- * 정렬 → 기간 자르기 → 그림용 점 변환 (순수 함수).
+ * 정렬 → 증감 계산 → 기간 자르기 → 그림용 점 변환 (순수 함수).
  * 빈 달은 null 로 둔다 — 0 으로 바꾸면 손님이 "0세대"로 읽는다(Recharts 는 null 에서 선을 끊고 막대를 그리지 않는다).
+ * 증감: 자료의 change 가 있으면 그 값, 없으면 달력상 바로 앞 달 unsold_count 와의 차이(운영 자료는 change 가 늘 비어 있다 · 세션 523).
+ *   앞 달 자료가 없거나 어느 한쪽 수가 null 이면 null. 자르기 전 전체 목록으로 계산해 자른 첫 달도 앞 달이 있으면 값이 있다.
  * 계열 표시 판정(hasPostCompletion·hasChange)도 자른 기간 기준 — 보이는 기간에 값이 없으면 범례에 빈 계열이 뜨지 않게.
  */
 export function buildUnsoldChartData(items: MbUnsoldHistory[], period: number) {
   const sorted = [...items].sort((a, b) => a.base_month.localeCompare(b.base_month));
-  const sliced = Number.isFinite(period) ? sorted.slice(-period) : sorted;
-  const data: UnsoldChartPoint[] = sliced.map((d) => ({
-    month: formatChartMonth(d.base_month),
-    unsold: d.unsold_count ?? null,
-    postCompletion: d.post_completion_unsold ?? null,
-    change: d.change ?? null,
-  }));
+  const all: UnsoldChartPoint[] = sorted.map((d, i) => {
+    const prev = sorted[i - 1];
+    let change: number | null = d.change ?? null;
+    if (change == null && prev && prev.base_month === previousMonth(d.base_month)
+        && d.unsold_count != null && prev.unsold_count != null) {
+      change = d.unsold_count - prev.unsold_count;
+    }
+    return {
+      month: formatChartMonth(d.base_month),
+      unsold: d.unsold_count ?? null,
+      postCompletion: d.post_completion_unsold ?? null,
+      change,
+    };
+  });
+  const data = Number.isFinite(period) ? all.slice(-period) : all;
+  // 오른쪽(증감) 눈금은 0 이 가운데 오게 [−M, +M] — M = 보이는 기간 증감 절댓값 최댓값(전부 0·없음이면 1)
+  const changeMax = Math.max(1, ...data.map((d) => Math.abs(d.change ?? 0)));
   return {
     data,
-    hasPostCompletion: sliced.some((d) => d.post_completion_unsold != null),
-    hasChange: sliced.some((d) => d.change != null),
+    hasPostCompletion: data.some((d) => d.postCompletion != null),
+    hasChange: data.some((d) => d.change != null),
+    changeMax,
   };
 }
 
 export default function MbUnsoldTrendChart({ items }: Props) {
   const [period, setPeriod] = useState<number>(24);
 
-  const { data: chartData, hasPostCompletion, hasChange } = useMemo(
+  const { data: chartData, hasPostCompletion, hasChange, changeMax } = useMemo(
     () => buildUnsoldChartData(items, period),
     [items, period],
   );
@@ -117,21 +144,33 @@ export default function MbUnsoldTrendChart({ items }: Props) {
 
       <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
         <ComposedChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+          <CartesianGrid yAxisId="left" strokeDasharray="3 3" stroke="#e5e7eb" />
           <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-          <YAxis tick={{ fontSize: 11 }} />
+          <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+          {/* 증감은 크기가 미분양 수보다 훨씬 작아 오른쪽 눈금을 따로 쓴다 — 0 이 가운데 · 위아래 대칭 (👤 11-18 그림 ②) */}
+          {hasChange && (
+            <YAxis
+              yAxisId="right"
+              orientation="right"
+              domain={[-changeMax, changeMax]}
+              ticks={[-changeMax, 0, changeMax]}
+              tick={{ fontSize: 11 }}
+              tickFormatter={(v: number) => formatSignedCount(Number(v))}
+            />
+          )}
+          {hasChange && <ReferenceLine yAxisId="right" y={0} stroke="#d1d5db" />}
           <Tooltip
             formatter={(value, name) => [
-              Number(value).toLocaleString(),
+              name === "change" ? formatSignedCount(Number(value)) : Number(value).toLocaleString(),
               SERIES_LABELS[String(name)] ?? name,
             ]}
           />
           <Legend formatter={(value: string) => SERIES_LABELS[value] ?? value} />
-          <Line type="monotone" dataKey="unsold" stroke="#3b82f6" strokeWidth={2} dot={false} />
+          <Line yAxisId="left" type="monotone" dataKey="unsold" stroke="#3b82f6" strokeWidth={2} dot={false} />
           {hasPostCompletion && (
-            <Line type="monotone" dataKey="postCompletion" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+            <Line yAxisId="left" type="monotone" dataKey="postCompletion" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} />
           )}
-          {hasChange && <Bar dataKey="change" fill="#10b981" opacity={0.6} />}
+          {hasChange && <Bar yAxisId="right" dataKey="change" fill="#10b981" opacity={0.6} />}
         </ComposedChart>
       </ResponsiveContainer>
     </div>

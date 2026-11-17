@@ -128,7 +128,7 @@ export const JEONSE_TENANT: DealChecklist = {
         },
         {
           id: "jeonse-tenant.increase-cap",
-          title: "갱신 때 보증금 인상은 5% 이내(시·도 조례로 더 낮을 수 있음)",
+          title: "계약 중이거나 갱신을 요구해 연장할 때 보증금 인상은 5% 이내(시·도 조례로 더 낮을 수 있음)",
           laws: [
             { label: "주택임대차보호법 제6조의3 제3항", url: H6_3 },
             { label: "주택임대차보호법 제7조 제2항", url: H7 },

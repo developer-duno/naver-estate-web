@@ -181,6 +181,16 @@ describe("월세에만 있는 항목 — 법 글자·낱말 가드", () => {
     }
   });
 
+  // 왜: 법은 제7조 증액청구와 제6조의3 요구갱신만 5% 로 묶는다 — 맨 「갱신 때」 라고만 쓰면 합의 갱신까지 5% 라는 뜻이 된다(세션 518 맹점 🟠2)
+  it("인상 상한 네 항목 제목 — 맨 「갱신 때」 없음 · 세입자는 「갱신을 요구해 연장할 때」 · 집주인은 「세입자 요구로 갱신할 때」", () => {
+    const titleOf = (l: DealChecklist) => itemsOf(l).find((i) => i.id === `${l.type}.increase-cap`)!.title;
+    for (const l of [JEONSE_TENANT, WOLSE_TENANT, JEONSE_LANDLORD, WOLSE_LANDLORD]) {
+      expect(titleOf(l), l.type).not.toContain("갱신 때");
+    }
+    for (const l of [JEONSE_TENANT, WOLSE_TENANT]) expect(titleOf(l), l.type).toContain("갱신을 요구해 연장할 때");
+    for (const l of [JEONSE_LANDLORD, WOLSE_LANDLORD]) expect(titleOf(l), l.type).toContain("세입자 요구로 갱신할 때");
+  });
+
   it("신뢰도를 변명하는 문장이 없다(금지 문구 2종 0)", () => {
     const banned = ["참고" + "용", "정확하지 않을" + " 수"];
     const text = JSON.stringify([WOLSE, WOLSE_TENANT, WOLSE_LANDLORD]);

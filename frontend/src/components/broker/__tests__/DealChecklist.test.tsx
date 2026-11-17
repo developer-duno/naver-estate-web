@@ -489,3 +489,58 @@ describe("DealChecklist — 신고 기한 상자 · 거래 지우기(세션 519)
     expect(screen.queryByRole("button", { name: "거래 지우기" })).toBeNull();
   });
 });
+
+describe("DealChecklist — 검사 보완 B1~B3(세션 519)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-17T03:00:00Z"));
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  /** 그 유형의 거래 하나(계약일·체크) */
+  function oneDeal(type: ChecklistType, contractDate?: string, checks: string[] = []): DealsState {
+    const r = addDeal(emptyState(), type, 1_000)!;
+    const s = contractDate ? setContractDate(r.state, r.deal.id, contractDate)! : r.state;
+    return checks.reduce((acc, c) => toggleCheck(acc, r.deal.id, c), s);
+  }
+  const seed = (s: DealsState) => localStorage.setItem(DEALS_KEY, JSON.stringify(s));
+
+  it("B1 하나뿐인 거래를 지운 뒤 10초 안에 체크하면 새 「거래 1」이 생기고 지우기 알림은 닫힌다 — 같은 번호가 둘이 되지 않는다", () => {
+    seed(oneDeal("jeonse", undefined, ["jeonse.trust"]));
+    render(<DealChecklist type="jeonse" />);
+    fireEvent.click(screen.getByRole("button", { name: "거래 지우기" }));
+    expect(screen.getByRole("status")).toHaveTextContent("거래 1(전세)를 지웠습니다.");
+    fireEvent.click(box(FIRST));
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
+    expect(within(screen.getByRole("status")).queryByRole("button", { name: "되돌리기" })).toBeNull();
+    const jeonse = saved()!.deals.filter((d) => d.type === "jeonse");
+    expect(jeonse.map((d) => d.no)).toEqual([1]);
+    expect(jeonse[0].checks).toEqual(["jeonse.registry"]);
+  });
+
+  it("B2 기본 기한(12. 5. 토)이 지났고 늘어난 기한 안이면 큰 글자도 늘어난 날짜 · 설명은 「늘어났습니다」", () => {
+    vi.setSystemTime(new Date("2026-12-06T03:00:00Z"));
+    seed(oneDeal("jeonse", "2026-11-05"));
+    render(<DealChecklist type="jeonse" />);
+    expect(screen.getByText("2026. 12. 7.(월)까지")).toBeInTheDocument();
+    expect(screen.getByText("늘어난 기한까지 1일 남음")).toBeInTheDocument();
+    expect(
+      screen.getByText(/계약일 다음 날부터 세어 30일째인 12\. 5\.\(토\)가 토요일이라 법으로 12\. 7\.\(월\)까지 늘어났습니다\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("2026. 12. 5.(토)까지")).toBeNull();
+    expect(screen.queryByText(/늘어납니다/)).toBeNull();
+    expect(screen.getByRole("link", { name: "민법 제161조 ↗" })).toBeInTheDocument();
+  });
+
+  it("B3 매매에서 해제 신고 항목(sale.cancel-report)만 체크하면 「신고 항목 체크함」이 아니라 남은 날수", () => {
+    seed(oneDeal("sale", "2026-11-02", ["sale.cancel-report"]));
+    render(<DealChecklist type="sale" />);
+    expect(screen.queryByText("신고 항목 체크함 ✓")).toBeNull();
+    expect(screen.getByText("2026. 12. 2.(수)까지")).toBeInTheDocument();
+    expect(screen.getByText("15일 남음")).toBeInTheDocument();
+  });
+});

@@ -295,6 +295,8 @@ export function removeDeal(state: DealsState, dealId: string): { state: DealsSta
 export function restoreDeal(state: DealsState, removed: RemovedDeal): DealsState | null {
   const { deal, index, prevActive } = removed;
   if (state.deals.some((d) => d.id === deal.id)) return null;
+  // 지운 사이 같은 유형에 같은 번호가 새로 생겼으면(빈 장에서 첫 체크 → 「거래 1」) 되살리지 않는다 — 번호가 겹치지 않게
+  if (state.deals.some((d) => d.type === deal.type && d.no === deal.no)) return null;
   if (isPartyType(deal.type) ? dealsOf(state, deal.type).length > 0 : limitedDealCount(state) >= MAX_DEALS) return null;
   const deals = [...state.deals];
   deals.splice(Math.min(index, deals.length), 0, deal);

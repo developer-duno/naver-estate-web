@@ -541,3 +541,21 @@ describe("거래 되살리기 — active 열쇠 순서(세션 519)", () => {
     expect(Object.keys(restoreDeal(r.state, r.removed)!.active)).toEqual(["jeonse", "sale"]);
   });
 });
+
+describe("거래 되살리기 — 같은 유형에 같은 번호가 새로 생겼으면 거절(세션 519 보완 B1)", () => {
+  it("addDeal → removeDeal → addDeal(새 「거래 1」) → restoreDeal = null(번호 1이 둘이 되지 않는다)", () => {
+    const first = addDeal(emptyState(), "jeonse", 1)!;
+    const r = removeDeal(first.state, first.deal.id)!;
+    const again = addDeal(r.state, "jeonse", 2)!;
+    expect(again.deal.no).toBe(1);
+    expect(again.deal.id).not.toBe(first.deal.id);
+    expect(restoreDeal(again.state, r.removed)).toBeNull();
+  });
+
+  it("다른 유형의 같은 번호는 막지 않는다(매매 거래 1이 있어도 전세 거래 1은 되살린다)", () => {
+    const j = addDeal(emptyState(), "jeonse", 1)!;
+    const r = removeDeal(j.state, j.deal.id)!;
+    const sale = addDeal(r.state, "sale", 2)!;
+    expect(restoreDeal(sale.state, r.removed)!.deals.map((d) => `${d.type}-${d.no}`)).toEqual(["jeonse-1", "sale-1"]);
+  });
+});

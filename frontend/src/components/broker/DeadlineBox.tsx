@@ -28,6 +28,9 @@ export default function DeadlineBox({
 }) {
   const deadline = computeDeadline(contractDate);
   if (!deadline) return null;
+  const status = today ? deadlineStatus(deadline, today) : null;
+  // 기본 기한이 지났고 늘어난 기한 안이면 큰 글자도 늘어난 날짜로(첫 화면 줄과 같게)
+  const inExtension = status?.kind === "extended-left" ? deadline.extended : undefined;
   return (
     <div className="flex flex-col gap-1 rounded-lg bg-brand-bg px-3.5 py-3 sm:max-w-xl">
       <p className="text-xs text-brand-muted">{deadlineTitle(type)}</p>
@@ -39,17 +42,17 @@ export default function DeadlineBox({
       ) : (
         <>
           <p className="text-base font-black text-brand-navy">
-            {formatFull(deadline.base)}까지
-            {today && (
-              <span className="ml-1.5 text-brand-orange-text">{statusText(deadlineStatus(deadline, today))}</span>
-            )}
+            {formatFull(inExtension ?? deadline.base)}까지
+            {status && <span className="ml-1.5 text-brand-orange-text">{statusText(status)}</span>}
           </p>
           <p className="text-[13px] leading-relaxed text-brand-muted">
-            계약일 다음 날부터 세어 30일째입니다.
+            {inExtension
+              ? `계약일 다음 날부터 세어 30일째인 ${formatShort(deadline.base)}가 ${kindLabel(deadline)}이라 법으로 ${formatShort(inExtension)}까지 늘어났습니다.`
+              : "계약일 다음 날부터 세어 30일째입니다."}
             {type === "sale" && " 중개한 거래는 개업공인중개사가 신고합니다."}
             {deadline.extended && (
               <>
-                {` 그날이 ${kindLabel(deadline)}이라 법으로는 ${formatShort(deadline.extended)}까지 늘어납니다. `}
+                {inExtension ? " " : ` 그날이 ${kindLabel(deadline)}이라 법으로는 ${formatShort(deadline.extended)}까지 늘어납니다. `}
                 <a href={CIV161} target="_blank" rel="noopener noreferrer" className="underline hover:text-brand-navy">
                   민법 제161조 ↗
                 </a>

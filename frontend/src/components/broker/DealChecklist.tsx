@@ -124,7 +124,8 @@ export default function DealChecklist({ type, single = false }: { type: Checklis
     let s = stateRef.current;
     let deal = activeDeal(s, type);
     if (!deal) {
-      // 묶음이 하나도 없을 때 처음 체크하면 「거래 1」을 만든다
+      // 묶음이 하나도 없을 때 처음 체크하면 「거래 1」을 만든다 — 지우기 알림은 닫는다(onNewDeal 과 같게)
+      if (undo?.kind === "deal") setUndo(null);
       const r = addDeal(s, type, nowMs());
       if (!r) return;
       s = r.state;

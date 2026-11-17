@@ -15,7 +15,9 @@ import {
   limitedDealCount,
   parseDeals,
   readDeals,
+  removeDeal,
   restoreChecks,
+  restoreDeal,
   setActive,
   setContractDate,
   toggleCheck,
@@ -445,5 +447,115 @@ describe("월세 유형(세션 517) — 중개사 wolse · 세입자 wolse-tenan
       active: { "wolse-tenant": "t1" },
     });
     expect(parseDeals(text).state.deals[0].checks).toEqual(["wolse-tenant.registry-explain"]);
+  });
+});
+
+describe("거래 지우기·되돌리기(세션 519) — 지운 거래를 그대로 되살리고, 상한에 걸리면 되살리지 않는다", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  /** 아는 전세 거래 2개(둘째에 계약일·모르는 항목 체크) + 모르는 유형 거래 + active 두 열쇠 */
+  const text = () =>
+    raw({
+      deals: [
+        deal(),
+        deal({
+          id: "jeonse-b-2",
+          no: 2,
+          contractDate: "2026-11-05",
+          checks: ["jeonse.registry", "zz-unknown.future-item"],
+          createdAt: 5,
+        }),
+        { id: "zz-unknown-1", no: 1, type: "zz-unknown", checks: ["zz-unknown.a"], createdAt: 9 },
+      ],
+      active: { jeonse: "jeonse-b-2", "zz-unknown": "zz-unknown-1" },
+    });
+
+  it("지우기 → 되살리기 뒤 저장 글자가 지우기 전과 같다(모르는 체크·모르는 거래·active 순서 포함)", () => {
+    localStorage.setItem(DEALS_KEY, text());
+    const before = readDeals().state;
+    expect(writeDeals(before)).toBe(true);
+    const savedBefore = localStorage.getItem(DEALS_KEY);
+
+    const r = removeDeal(before, "jeonse-b-2")!;
+    expect(r.state.deals.map((d) => d.id)).toEqual(["jeonse-a-1"]);
+    expect(r.state.active.jeonse).toBeUndefined();
+    expect(r.removed.deal.unknownChecks).toEqual(["zz-unknown.future-item"]);
+    writeDeals(r.state);
+    expect(localStorage.getItem(DEALS_KEY)).not.toContain("jeonse-b-2");
+    // 지운 뒤에도 모르는 유형 거래는 남는다
+    expect(localStorage.getItem(DEALS_KEY)).toContain("zz-unknown-1");
+
+    const back = restoreDeal(r.state, r.removed)!;
+    expect(back.active.jeonse).toBe("jeonse-b-2");
+    expect(writeDeals(back)).toBe(true);
+    expect(localStorage.getItem(DEALS_KEY)).toBe(savedBefore);
+  });
+
+  it("앞 거래를 지웠다 되살려도 원래 자리(첫째)로 돌아온다 · 고른 거래는 되살린 거래", () => {
+    const s = parseDeals(text()).state;
+    const r = removeDeal(s, "jeonse-a-1")!;
+    const back = restoreDeal(r.state, r.removed)!;
+    expect(back.deals.map((d) => d.id)).toEqual(["jeonse-a-1", "jeonse-b-2"]);
+    expect(back.active.jeonse).toBe("jeonse-a-1");
+  });
+
+  it("없는 id 는 지우지 않는다(null) · 같은 id 가 이미 있으면 되살리지 않는다(null)", () => {
+    const s = parseDeals(text()).state;
+    expect(removeDeal(s, "nope")).toBeNull();
+    const r = removeDeal(s, "jeonse-a-1")!;
+    expect(restoreDeal(s, r.removed)).toBeNull();
+  });
+
+  it(`지운 사이 새 거래로 ${MAX_DEALS}개가 차면 되살리지 않는다(null — 상태 그대로)`, () => {
+    const full = stateWith(MAX_DEALS);
+    const r = removeDeal(full, full.deals[0].id)!;
+    const refilled = addDeal(r.state, "jeonse", 99_999)!.state;
+    expect(limitedDealCount(refilled)).toBe(MAX_DEALS);
+    expect(restoreDeal(refilled, r.removed)).toBeNull();
+  });
+
+  it(`(s518 🟠1) 매매 거래 ${MAX_DEALS}개로 차면 전세 첫 체크는 지금처럼 거래가 안 생기지만, 매매 하나를 지우면 전세 첫 체크가 저장된다`, () => {
+    let s = emptyState();
+    for (let i = 0; i < MAX_DEALS; i++) s = addDeal(s, "sale", 1_000 + i)!.state;
+    // 전세 장 첫 체크 = 거래 1 을 만들려 하지만 상한(중개사 거래 합계)이라 무시된다(DealChecklist onToggle 과 같은 길)
+    expect(addDeal(s, "jeonse", 5_000)).toBeNull();
+    const r = removeDeal(s, s.deals[0].id)!;
+    const made = addDeal(r.state, "jeonse", 5_000)!;
+    expect(writeDeals(toggleCheck(made.state, made.deal.id, "jeonse.registry"))).toBe(true);
+    const read = readDeals().state;
+    expect(read.deals.filter((d) => d.type === "jeonse")).toHaveLength(1);
+    expect(read.deals.find((d) => d.type === "jeonse")!.checks).toEqual(["jeonse.registry"]);
+    expect(limitedDealCount(read)).toBe(MAX_DEALS);
+  });
+});
+
+describe("거래 되살리기 — active 열쇠 순서(세션 519)", () => {
+  it("전세·매매를 고른 상태에서 전세 거래를 지웠다 되살려도 열쇠 순서가 [전세, 매매] 그대로", () => {
+    const j = addDeal(emptyState(), "jeonse", 1)!;
+    const s = addDeal(j.state, "sale", 2)!.state;
+    expect(Object.keys(s.active)).toEqual(["jeonse", "sale"]);
+    const r = removeDeal(s, j.deal.id)!;
+    expect(Object.keys(r.state.active)).toEqual(["sale"]);
+    expect(Object.keys(restoreDeal(r.state, r.removed)!.active)).toEqual(["jeonse", "sale"]);
+  });
+});
+
+describe("거래 되살리기 — 같은 유형에 같은 번호가 새로 생겼으면 거절(세션 519 보완 B1)", () => {
+  it("addDeal → removeDeal → addDeal(새 「거래 1」) → restoreDeal = null(번호 1이 둘이 되지 않는다)", () => {
+    const first = addDeal(emptyState(), "jeonse", 1)!;
+    const r = removeDeal(first.state, first.deal.id)!;
+    const again = addDeal(r.state, "jeonse", 2)!;
+    expect(again.deal.no).toBe(1);
+    expect(again.deal.id).not.toBe(first.deal.id);
+    expect(restoreDeal(again.state, r.removed)).toBeNull();
+  });
+
+  it("다른 유형의 같은 번호는 막지 않는다(매매 거래 1이 있어도 전세 거래 1은 되살린다)", () => {
+    const j = addDeal(emptyState(), "jeonse", 1)!;
+    const r = removeDeal(j.state, j.deal.id)!;
+    const sale = addDeal(r.state, "sale", 2)!;
+    expect(restoreDeal(sale.state, r.removed)!.deals.map((d) => `${d.type}-${d.no}`)).toEqual(["jeonse-1", "sale-1"]);
   });
 });

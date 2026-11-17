@@ -48,3 +48,5 @@ export const H7_2 = `${LAW}주택임대차보호법/제7조의2`;
 export const H10_2 = `${LAW}주택임대차보호법/제10조의2`;
 export const HD9 = `${LAW}주택임대차보호법시행령/제9조`;
 export const TS95_2 = `${LAW}조세특례제한법/제95조의2`;
+// 신고 기한(세션 519) — 기간 말일이 토요일·공휴일이면 다음 날로 늘어난다
+export const CIV161 = `${LAW}민법/제161조`;

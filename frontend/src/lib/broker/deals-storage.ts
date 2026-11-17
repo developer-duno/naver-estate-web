@@ -271,6 +271,45 @@ export function restoreChecks(state: DealsState, dealId: string, checks: string[
   });
 }
 
+/** 지운 거래 하나 — 되살리기에 그대로 쓴다(거래 칸·모르는 체크·원래 자리·지우기 전 active) */
+export type RemovedDeal = { deal: Deal; index: number; prevActive: DealsState["active"] };
+
+/** 거래 하나를 지운다(그 거래를 가리키던 active 열쇠도 뺀다). 없는 id 면 null. */
+export function removeDeal(state: DealsState, dealId: string): { state: DealsState; removed: RemovedDeal } | null {
+  const index = state.deals.findIndex((d) => d.id === dealId);
+  if (index < 0) return null;
+  const deal = state.deals[index];
+  const active = { ...state.active };
+  if (active[deal.type] === dealId) delete active[deal.type];
+  return {
+    state: { ...state, deals: state.deals.filter((d) => d.id !== dealId), active },
+    removed: { deal, index, prevActive: { ...state.active } },
+  };
+}
+
+/**
+ * 되돌리기 — 지운 거래를 그대로(체크·모르는 체크·계약일·만든 시각·id) 원래 자리에 되살리고 그 거래를 고른다.
+ * active 열쇠 순서도 지우기 전대로 둔다(그 사이 바뀐 다른 유형 값은 지금 값). 같은 id 가 이미 있거나
+ * 상한(중개사용 MAX_DEALS · 당사자용 1개)에 걸리면 null(되살리지 않는다).
+ */
+export function restoreDeal(state: DealsState, removed: RemovedDeal): DealsState | null {
+  const { deal, index, prevActive } = removed;
+  if (state.deals.some((d) => d.id === deal.id)) return null;
+  // 지운 사이 같은 유형에 같은 번호가 새로 생겼으면(빈 장에서 첫 체크 → 「거래 1」) 되살리지 않는다 — 번호가 겹치지 않게
+  if (state.deals.some((d) => d.type === deal.type && d.no === deal.no)) return null;
+  if (isPartyType(deal.type) ? dealsOf(state, deal.type).length > 0 : limitedDealCount(state) >= MAX_DEALS) return null;
+  const deals = [...state.deals];
+  deals.splice(Math.min(index, deals.length), 0, deal);
+  // 지우기 전 열쇠 순서대로 먼저 자리를 잡고(되살린 유형 = 그 거래), 그 사이 새로 생긴 열쇠는 뒤에 붙인다
+  const active: DealsState["active"] = {};
+  for (const t of Object.keys(prevActive) as ChecklistType[]) {
+    const id = t === deal.type ? deal.id : state.active[t];
+    if (id !== undefined) active[t] = id;
+  }
+  Object.assign(active, state.active, { [deal.type]: deal.id });
+  return { ...state, deals, active };
+}
+
 /** 계약일 넣기·지우기(빈 값 = 지우기). 형식이 틀리면 null. */
 export function setContractDate(state: DealsState, dealId: string, date: string | undefined): DealsState | null {
   if (date !== undefined && date !== "" && !isValidDate(date)) return null;

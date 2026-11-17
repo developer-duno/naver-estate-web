@@ -168,9 +168,13 @@ describe("DealChecklist", () => {
     });
     render(<DealChecklist type="jeonse" />);
     expect(screen.queryByText(/저장을 막아 두어/)).toBeNull();
+    // 중개사 모드에도 사파리 7일 안내가 보인다(세션 522 검사 🟡1)
+    expect(screen.getByText(/아이폰 사파리는 이 사이트를 7일 넘게 열지 않으면/)).toBeInTheDocument();
     fireEvent.click(box(FIRST));
     expect(box(FIRST).checked).toBe(true);
     expect(screen.getByText("이 브라우저는 저장을 막아 두어, 창을 닫으면 체크 표시가 사라집니다.")).toBeInTheDocument();
+    // 저장이 막혔으면 「홈 화면에 추가하면 유지」는 거짓이 되므로 숨긴다(검사 🟡2)
+    expect(screen.queryByText(/아이폰 사파리는/)).toBeNull();
   });
 
   it.each([
@@ -227,6 +231,10 @@ describe("DealChecklist single — 세입자·집주인용(세션 514)", () => {
     expect(screen.getByRole("button", { name: "비우기" })).toBeDisabled();
     expect(screen.getByText(/15개 중 0개 확인/)).toHaveTextContent("15개 중 0개 확인");
     expect(screen.getByText(/이 기기 이 브라우저에만 저장됩니다/)).toBeInTheDocument();
+    // 아이폰 사파리 7일 저장 삭제 안내 + 할 일(홈 화면 추가)
+    expect(screen.getByText(/아이폰 사파리는 이 사이트를 7일 넘게 열지 않으면 저장을 지울 수 있습니다/)).toHaveTextContent(
+      "홈 화면에 추가해 두면 유지됩니다",
+    );
     expect(screen.getAllByRole("checkbox")).toHaveLength(15);
   });
 

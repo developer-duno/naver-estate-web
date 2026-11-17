@@ -265,6 +265,11 @@ export default function DealChecklist({ type, single = false }: { type: Checklis
               </span>{" "}
               · 이 기기 이 브라우저에만 저장됩니다. 다른 기기로 옮겨지지 않습니다.
             </p>
+            {/* WebKit 공식(2020-03): 사파리를 쓰는 동안 7일 상호작용이 없으면 사이트 저장을 지움 · 홈 화면 웹 앱은 제외(세션 522, 👤 위치 ①) */}
+            {/* 저장이 막힌 브라우저엔 「홈 화면에 추가하면 유지」가 거짓이 되므로 숨긴다(검사 🟡2) */}
+            {!saveFailed && <p className="mt-1 text-xs text-brand-muted">
+              아이폰 사파리는 이 사이트를 7일 넘게 열지 않으면 저장을 지울 수 있습니다. 홈 화면에 추가해 두면 유지됩니다.
+            </p>}
             {single && <div className="mt-2">{clearButton}</div>}
           </div>
 

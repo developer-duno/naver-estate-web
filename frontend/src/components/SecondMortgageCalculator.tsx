@@ -15,7 +15,8 @@ export const MAX_AMOUNT_DIGITS = 15;
 /** 금액 칸 — 숫자만 남기고(앞 15자리까지) 쉼표를 찍는다 */
 export function withCommas(text: string): string {
   const digits = text.replace(/[^\d]/g, "").slice(0, MAX_AMOUNT_DIGITS);
-  return digits === "" ? "" : Number(digits).toLocaleString();
+  // 언어를 고정 — 브라우저 언어가 독일어 등이면 「600.000」으로 찍혀 parseAmount 와 어긋난다(세션 522, B39 ②)
+  return digits === "" ? "" : Number(digits).toLocaleString("ko-KR");
 }
 
 const inputCls =

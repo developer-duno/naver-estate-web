@@ -4,10 +4,10 @@
  * - 네 칸을 채우면 한도·매달 이자가 나온다 · 직접 입력 비율도 쓴다
  * 실행: npx vitest run src/components/__tests__/SecondMortgageCalculator.test.tsx
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import SecondMortgageCalculator from "../SecondMortgageCalculator";
+import SecondMortgageCalculator, { withCommas } from "../SecondMortgageCalculator";
 
 describe("SecondMortgageCalculator", () => {
   it("처음엔 비율이 하나도 선택돼 있지 않고 안내 글을 보여 준다", () => {
@@ -68,5 +68,20 @@ describe("SecondMortgageCalculator", () => {
     await user.type(screen.getByLabelText("담보 인정 비율 직접 입력"), "120");
     await user.type(screen.getByLabelText("연 이자율"), "5");
     expect(screen.getByTestId("sm-guide")).toHaveTextContent("100 이하로 넣어 주세요");
+  });
+
+  it("금액 쉼표는 브라우저 언어와 상관없이 한국식(세션 522 B39 ②) — 기본 언어가 독일어여도 「600,000」", () => {
+    const orig = Number.prototype.toLocaleString;
+    // 언어를 안 주면 독일어(de-DE)로 찍히는 브라우저를 흉내
+    const spy = vi.spyOn(Number.prototype, "toLocaleString").mockImplementation(function (this: number, locales?: Intl.LocalesArgument, opts?: Intl.NumberFormatOptions) {
+      return orig.call(this, locales ?? "de-DE", opts);
+    });
+    try {
+      expect(withCommas("600000")).toBe("600,000");
+      expect(withCommas("1억2")).toBe("12");
+      expect(withCommas("")).toBe("");
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

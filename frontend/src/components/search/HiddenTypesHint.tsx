@@ -43,7 +43,7 @@ export default function HiddenTypesHint({ complexes, selectedTypes, visibleCount
   return (
     <div
       data-testid="hidden-types-hint"
-      className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded text-sm text-gray-700 flex flex-wrap items-center gap-x-2 gap-y-1"
+      className="mb-4 p-3 bg-white border border-brand-line-soft rounded-xl text-sm text-brand-navy flex flex-wrap items-center gap-x-2 gap-y-1"
     >
       <span>
         지금은 {shownLabel}만 보여요 — 숨긴 유형:{" "}
@@ -52,7 +52,7 @@ export default function HiddenTypesHint({ complexes, selectedTypes, visibleCount
       <button
         type="button"
         onClick={onShowAll}
-        className="text-blue-600 hover:underline font-medium"
+        className="text-brand-orange-text hover:underline font-bold"
       >
         모두 보기
       </button>

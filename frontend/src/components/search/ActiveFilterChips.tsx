@@ -136,17 +136,17 @@ export default function ActiveFilterChips({ filters, estateTypeLabels, onRemoveF
 
   return (
     <div className="flex flex-wrap items-center gap-1.5 mb-3" data-testid="active-filter-chips">
-      <span className="text-xs text-gray-400">적용 조건:</span>
+      <span className="text-xs text-brand-muted">적용 조건:</span>
       {chips.map((c, i) => (
         <button
           key={`${c.label}-${i}`}
           type="button"
           onClick={c.onRemove}
-          className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs rounded-full pl-2.5 pr-1.5 py-1 border border-blue-200 hover:bg-blue-100 transition-colors"
+          className="inline-flex items-center gap-1 bg-brand-orange-soft text-brand-orange-text text-xs font-medium rounded-full pl-2.5 pr-1.5 py-1 border border-brand-orange/40 hover:brightness-95 transition-colors"
           aria-label={`${c.label} 조건 해제`}
         >
           {c.label}
-          <span className="text-blue-400 leading-none" aria-hidden="true">✕</span>
+          <span className="text-brand-orange-text/70 leading-none" aria-hidden="true">✕</span>
         </button>
       ))}
     </div>

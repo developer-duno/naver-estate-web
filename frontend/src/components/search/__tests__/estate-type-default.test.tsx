@@ -118,12 +118,13 @@ describe("매물유형 기본 선택 = 아파트만", () => {
     expect(back).not.toContain("types=");
   });
 
-  it("(c-2) 6개 전부 선택된 결과 화면은 유형 칩을 보여 준다(기본값과 다르므로)", async () => {
+  // 세션 525(B40 PR 2a): 유형 표시는 적용 조건 칩(로그인 전용이 됨)에서 띠의 유형 칩으로 옮겼다 — 고른 유형 글자를 보여 준다는 뜻은 같다
+  it("(c-2) 6개 전부 선택된 결과 화면은 띠의 유형 칩에 고른 유형을 다 보여 준다", async () => {
     nav.params = new URLSearchParams(`q=래미안&types=${ALL_CODES.join(",")}`);
     mockSearchComplexes.mockResolvedValue({ complexes: [makeComplex("1", "APT")], total: 1 });
     renderSearch();
     await waitFor(() => {
-      expect(screen.getByText(/유형: 아파트·아파트분양권/)).toBeInTheDocument();
+      expect(screen.getByTestId("type-chip").textContent).toContain("아파트·아파트분양권·재건축·오피스텔·오피스텔분양권·재개발");
     });
   });
 

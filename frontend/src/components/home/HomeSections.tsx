@@ -4,6 +4,7 @@ import HomeLoanPanel from "./HomeLoanPanel";
 import HomeRegionLinks from "./HomeRegionLinks";
 import HomeRegionTrend from "./HomeRegionTrend";
 import HomeGuide from "./HomeGuide";
+import HomeHero from "./HomeHero";
 
 /** 대기 화면에서 지역 시세 카드 자리 — 실제 카드의 로딩 상태와 같은 모양(브라우저 저장소·요청 0) */
 function TrendPlaceholder() {
@@ -23,10 +24,12 @@ function TrendPlaceholder() {
  * SearchExperience renderEmpty 가 **같은 컴포넌트**를 그린다(모양이 같아 깜빡임 없음).
  * interactive=false(대기 화면)면 브라우저 저장소·세션·요청을 쓰는 칸(지역 시세 차트)은 자리만 둔다.
  * 즐겨찾기는 세션 509 부터 검색 상자(HomeSearchBox — 대화형 판만) 안에 있다.
+ * 머리(HomeHero · h1)도 세션 525 부터 여기 맨 위 — 대기 화면(첫 HTML)에 그대로 들어가고, 검색 결과 화면엔 안 그려진다(h1 하나).
  */
 export default function HomeSections({ search, interactive }: { search: ReactNode; interactive: boolean }) {
   return (
     <>
+      <HomeHero />
       <div className="bg-brand-navy text-white">
         <div className="mx-auto max-w-[1160px] px-4 pb-[88px] sm:px-6 sm:pb-[120px]">{search}</div>
       </div>

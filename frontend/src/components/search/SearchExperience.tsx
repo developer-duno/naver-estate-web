@@ -25,8 +25,9 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 import { sortComplexes } from "@/lib/sortComplexes";
 import type { SearchHistoryItem } from "@/lib/storage";
 import CompareFloatingBar from "@/components/CompareFloatingBar";
-import { ComplexRow } from "@/components/search/ComplexRow";
 import { ComplexCardMobile } from "@/components/search/ComplexCardMobile";
+import SearchBand from "@/components/search/SearchBand";
+import SearchResults from "@/components/search/SearchResults";
 import RecentSearchChips from "@/components/search/RecentSearchChips";
 import ActiveFilterChips from "@/components/search/ActiveFilterChips";
 import MbViewToggle from "@/components/mb/MbViewToggle";
@@ -168,7 +169,7 @@ export default function SearchExperience({ renderEmpty, className }: Props) {
       ? undefined
       : selectedTypes.join(",");
 
-  const { data: searchData, isLoading: loading, isError, refetch: retrySearch } = useQuery({
+  const { data: searchData, isLoading: loading, isError, isPlaceholderData, refetch: retrySearch } = useQuery({
     queryKey: keyword
       ? queryKeys.search(keyword, typesStr)
       : queryKeys.regionSearch(sido, sigungu, dong || undefined, typesStr),
@@ -250,14 +251,15 @@ export default function SearchExperience({ renderEmpty, className }: Props) {
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  const handleInlineKeywordSearch = () => {
-    const q = inlineKeyword.trim();
+  const handleInlineKeywordSearch = () => submitKeyword(inlineKeyword);
+  function submitKeyword(raw: string) {
+    const q = raw.trim();
     if (!q) return;
     addHistory({ type: "keyword", keyword: q });
     const extra: Record<string, string> = { q };
     if (typesForUrl) extra.types = typesForUrl;
     router.push(buildFilterURL(pathname, extra, urlFilters));
-  };
+  }
 
   const handleInlineRegionSearch = (s: string, sg: string, d?: string) => {
     addHistory({ type: "region", sido: s, sigungu: sg, dong: d });
@@ -268,11 +270,17 @@ export default function SearchExperience({ renderEmpty, className }: Props) {
   };
 
   // ── F3: 적용 조건 칩 + 필터 접이식 ──
-  // 결과가 있으면 필터를 평소 접고 칩으로 요약, "조건 수정"으로 펼침. 빈 상태는 항상 펼침.
+  // 매물 필터는 로그인 확정 손님이 「조건 수정」을 눌렀을 때만 연다(모든 상태 · 👤 11-18 결정 3) — 유형·정렬은 띠 칩(누구나).
   const [filtersOpen, setFiltersOpen] = useState(false);
   const showResults = hasSearchParams && !loading && sortedFilteredComplexes.length > 0;
-  // 결과 화면이면 기본 접힘, 그 외(빈 상태·결과없음)는 펼침
-  const filtersExpanded = !showResults || filtersOpen;
+  const canEditFilters = hasSearchParams && isLoggedIn === true;
+  // 검색 결과 h1(세션 525 T1·T2) — 옛 결과를 잠깐 보여 주는 동안(isPlaceholderData)은 옛 단지 수 대신 「검색 중」
+  const headName = keyword ? `「${keyword}」` : `${sido} ${sigungu}${dong ? ` ${dong}` : ""}`;
+  const heading = loading || isPlaceholderData
+    ? `${headName} 검색 중`
+    : isError ? `${headName} 검색 결과` : `${headName} 단지 ${filteredComplexes.length}곳`;
+  // 「더 보기」 펼친 수를 기억하는 목록 이름 — 검색어·지역·유형·정렬
+  const listKey = [keyword, sido, sigungu, dong, typesForUrl ?? "", complexSort].join("|");
 
   const estateTypeLabels = typesNarrowed
     ? ESTATE_TYPE_TABS.filter((t) => selectedTypes.includes(t.code)).map((t) => t.label)
@@ -302,34 +310,55 @@ export default function SearchExperience({ renderEmpty, className }: Props) {
   }
 
   return (
+    <>
+    {/* 검색 결과 = 얇은 남색 띠(세션 525 · 홈 큰 띠는 HomeSections 안이라 결과 화면엔 없다) */}
+    {hasSearchParams && (
+      <SearchBand
+        query={keyword}
+        onSubmitKeyword={submitKeyword}
+        onSearchRegion={handleInlineRegionSearch}
+        selectedTypes={selectedTypes}
+        onTypesChange={handleTabChange}
+        sort={complexSort}
+        onSortChange={setComplexSort}
+        publicView={publicView}
+      />
+    )}
     <div className={className}>
-      {/* 검색 결과 헤더 — 결과가 있을 때만 제목/개수/즐겨찾기 링크 */}
+      {/* 제목 줄 — h1 + (비로그인) 안내 한 줄 · 오른쪽 (로그인) 즐겨찾기 매물 · 목록/지도 */}
       {hasSearchParams && (
-        <div className="flex items-center gap-4 mb-6 flex-wrap">
-          <h1 className="text-2xl font-bold">{title}</h1>
-          {!loading && (
-            <span className="text-gray-500 text-sm">({filteredComplexes.length}개 단지)</span>
-          )}
-          {/* 매물은 로그인 뒤 기능 — 로그인 확정일 때만 그린다(비로그인·세션 확인 전엔 숨김, 세션 493) */}
-          {isLoggedIn === true && (
-            <Link
-              href="/search/favorites"
-              className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline whitespace-nowrap"
-            >
-              <span className="text-yellow-500">&#9733;</span>
-              즐겨찾기 매물{articleFavorites.length > 0 ? ` (${articleFavorites.length})` : ""} &#8594;
-            </Link>
-          )}
+        <div className="mb-4 flex flex-wrap items-start gap-x-4 gap-y-2">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-[22px] font-black leading-tight tracking-tight text-brand-navy sm:text-[28px]">{heading}</h1>
+            {isLoggedIn === false && !loading && complexes.length > 0 && (
+              <p className="mt-1.5 text-sm text-brand-muted">
+                단지 정보는 누구나 볼 수 있어요. 네이버 매물·호가는 <a href="/login" className="font-bold text-brand-navy underline">로그인</a> 뒤에 보입니다.
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {/* 매물은 로그인 뒤 기능 — 로그인 확정일 때만 그린다(비로그인·세션 확인 전엔 숨김, 세션 493) */}
+            {isLoggedIn === true && (
+              <Link
+                href="/search/favorites"
+                className="inline-flex items-center gap-1 text-xs font-bold text-brand-navy hover:underline whitespace-nowrap"
+              >
+                <span className="text-brand-orange">&#9733;</span>
+                즐겨찾기 매물{articleFavorites.length > 0 ? ` (${articleFavorites.length})` : ""} &#8594;
+              </Link>
+            )}
+            {showResults && <MbViewToggle viewMode={viewMode} onChange={setViewMode} />}
+          </div>
         </div>
       )}
 
-      {/* F3: 결과 화면이면 적용 조건 칩 요약 + "조건 수정" 토글, 빈 상태는 필터 펼침 */}
-      {showResults && (
+      {/* F3: 로그인 확정이면 「조건 수정」 토글 + 적용 조건 칩 요약(모든 상태) */}
+      {canEditFilters && (
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setFiltersOpen((v) => !v)}
-            className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 border border-gray-300 rounded-md px-2.5 py-1 hover:bg-gray-50"
+            className="inline-flex items-center gap-1 text-xs font-bold text-brand-navy border border-brand-line bg-white rounded-full px-3 py-1.5 hover:bg-brand-bg"
             aria-expanded={filtersOpen ? "true" : "false"}
           >
             {filtersOpen ? "조건 접기 ▲" : "조건 수정 ▼"}
@@ -347,35 +376,28 @@ export default function SearchExperience({ renderEmpty, className }: Props) {
         </div>
       )}
 
-      {/* 매물유형 탭 + 필터 — 접이식 (결과 화면은 기본 접힘, 그 외 펼침) */}
-      {filtersExpanded && (
+      {/* 매물 필터 — 검색 결과는 「조건 수정」을 눌렀을 때만(유형·정렬은 띠 칩) · 검색어 없는 갈래(renderEmpty 없을 때)는 옛 그대로 탭·정렬과 함께 펼침 */}
+      {(!hasSearchParams || (canEditFilters && filtersOpen)) && (
         <>
-          <div className="mb-3">
-            <EstateTypeTabs selected={selectedTypes} onChange={handleTabChange} />
-          </div>
+          {!hasSearchParams && (
+            <div className="mb-3">
+              <EstateTypeTabs selected={selectedTypes} onChange={handleTabChange} />
+            </div>
+          )}
 
-          <div className="mb-5">
+          <div className="mb-5" data-testid="search-filters">
             <div className="md:hidden flex flex-wrap items-center gap-2">
               <FilterBarMobileSheet key={`mobile-${filterKey}`} onChange={setUrlFilters} initialFilters={urlFilters} />
-              <ComplexSortDropdown value={complexSort} onChange={setComplexSort} publicView={publicView} />
+              {!hasSearchParams && <ComplexSortDropdown value={complexSort} onChange={setComplexSort} publicView={publicView} />}
             </div>
             <div className="hidden md:flex flex-wrap items-start gap-2">
               <div className="flex-1 min-w-0">
                 <FilterBar key={filterKey} onChange={setUrlFilters} initialFilters={urlFilters} />
               </div>
-              <ComplexSortDropdown value={complexSort} onChange={setComplexSort} publicView={publicView} />
+              {!hasSearchParams && <ComplexSortDropdown value={complexSort} onChange={setComplexSort} publicView={publicView} />}
             </div>
           </div>
         </>
-      )}
-
-      {/* 결과 화면 접힘 상태에서도 정렬은 항상 접근 가능. 지도 토글도 여기 배치
-          (MAP_ENABLED=false 시 MbViewToggle 이 null 반환 — graceful degradation). */}
-      {showResults && !filtersOpen && (
-        <div className="mb-4 flex justify-end gap-2">
-          <MbViewToggle viewMode={viewMode} onChange={setViewMode} />
-          <ComplexSortDropdown value={complexSort} onChange={setComplexSort} publicView={publicView} />
-        </div>
       )}
 
       {/* 검색 파라미터 없을 때: 인라인 검색 폼 */}
@@ -417,7 +439,7 @@ export default function SearchExperience({ renderEmpty, className }: Props) {
 
       {/* DB 폴백 안내 */}
       {fallbackNotice && !loading && (
-        <div role="status" className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
+        <div role="status" className="mb-4 p-3 bg-brand-orange-soft border border-brand-orange/40 rounded-xl text-sm text-brand-orange-text">
           <span aria-hidden="true">⚠ </span>
           {fallbackNotice}
         </div>
@@ -428,7 +450,7 @@ export default function SearchExperience({ renderEmpty, className }: Props) {
         <div className="text-center py-8 space-y-3">
           <p className="text-red-500">{error}</p>
           <div className="flex justify-center gap-2 flex-wrap">
-            <button onClick={() => retrySearch()} className="text-sm text-blue-600 hover:underline px-3 py-1.5">
+            <button onClick={() => retrySearch()} className="text-sm font-bold text-brand-navy hover:underline px-3 py-1.5">
               다시 시도
             </button>
             {sido && sigungu && dong && (
@@ -438,7 +460,7 @@ export default function SearchExperience({ renderEmpty, className }: Props) {
                   if (typesForUrl) p.set("types", typesForUrl);
                   router.push(`${pathname}?${p.toString()}`);
                 }}
-                className="text-sm text-blue-600 hover:underline px-3 py-1.5"
+                className="text-sm font-bold text-brand-navy hover:underline px-3 py-1.5"
               >
                 {sigungu} 단위로 검색
               </button>
@@ -471,9 +493,9 @@ export default function SearchExperience({ renderEmpty, className }: Props) {
                 onKeyDown={(e) => e.key === "Enter" && handleInlineKeywordSearch()}
                 placeholder="다른 키워드로 검색해보세요"
                 maxLength={100}
-                className="flex-1 border border-gray-300 rounded-md px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 min-w-0 border border-brand-line rounded-xl bg-white px-4 py-2.5 text-sm text-brand-navy focus:outline-none focus:ring-2 focus:ring-brand-orange"
               />
-              <button onClick={handleInlineKeywordSearch} className="bg-blue-600 text-white px-6 py-2.5 rounded-md text-sm font-medium hover:bg-blue-700">
+              <button onClick={handleInlineKeywordSearch} className="bg-brand-orange text-brand-navy px-6 py-2.5 rounded-xl text-sm font-bold hover:brightness-95">
                 검색
               </button>
             </div>
@@ -482,16 +504,9 @@ export default function SearchExperience({ renderEmpty, className }: Props) {
         </div>
       )}
 
-      {/* 비회원 안내 */}
-      {isLoggedIn === false && hasSearchParams && !loading && complexes.length > 0 && (
-        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-          단지 정보는 누구나 볼 수 있어요. 네이버 매물·호가는 <a href="/login" className="text-blue-600 underline font-medium">로그인</a>하면 볼 수 있어요.
-        </div>
-      )}
-
-      {/* 승인 대기 안내 */}
+      {/* 승인 대기 안내 (비회원 안내는 제목 줄 아래 한 줄로 옮김 — 세션 525) */}
       {isLoggedIn === true && userStatus === "pending" && hasSearchParams && !loading && complexes.length > 0 && (
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+        <div className="mb-4 p-3 bg-white border border-brand-line-soft rounded-xl text-sm text-brand-navy">
           회원가입이 완료되었습니다! 네이버 매물·호가를 볼 수 있어요. 공인중개사 인증을 받으면 새로 받기·실거래가 수집·엑셀까지 쓸 수 있어요.
         </div>
       )}
@@ -511,7 +526,7 @@ export default function SearchExperience({ renderEmpty, className }: Props) {
               onShowAll={() => handleTabChange([...allCodes])}
             />
           </div>
-          <button onClick={resetFilters} className="text-sm text-blue-600 hover:underline px-3 py-1.5">
+          <button onClick={resetFilters} className="text-sm font-bold text-brand-navy hover:underline px-3 py-1.5">
             필터 초기화
           </button>
         </div>
@@ -563,48 +578,19 @@ export default function SearchExperience({ renderEmpty, className }: Props) {
           전환이 display 토글 한 번으로 끝난다. display:none 은 접근성 트리에서도 빠져
           스크린리더 중복 노출도 없다. */}
       {!loading && sortedFilteredComplexes.length > 0 && (
-        <div
-          className={
-            viewMode === "map"
-              ? "hidden"
-              : "hidden md:block overflow-x-auto bg-white rounded-lg shadow-sm border"
-          }
-        >
-          <table className="w-full text-sm border-collapse">
-            <thead className="bg-gray-100 border-b-2 border-gray-300 sticky top-0 z-10">
-              <tr>
-                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 w-[45px] text-center">No</th>
-                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 min-w-35 text-left">단지명</th>
-                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 min-w-50 text-left">주소</th>
-                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 w-17.5 text-right">세대수</th>
-                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 w-[55px] text-right">동수</th>
-                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 w-15 text-right">최고층</th>
-                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 w-15 text-center">준공</th>
-                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 w-[65px] text-center">유형</th>
-                <th className="px-3 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap w-[65px] text-right">매물수</th>
-                <th className="px-2 py-2.5 text-xs font-semibold text-gray-700 whitespace-nowrap w-10 text-center" title="최대 4개 단지를 비교할 수 있습니다">비교</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedFilteredComplexes.map((cpx, idx) => (
-                <ComplexRow key={cpx.complex_no} complex={cpx} index={idx + 1} urlFilters={urlFilters} isCompared={isInCompare(cpx.complex_no)} compareFull={compareFull} onToggleCompare={toggleCompare} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* 단지 카드 (모바일) — 데스크톱 표와 같은 이유로 언마운트 대신 hidden 으로 숨긴다
-          (세션 351: 500행 해체가 지도 전환 INP 2.6초의 진범). */}
-      {!loading && sortedFilteredComplexes.length > 0 && (
-        <div className={viewMode === "map" ? "hidden" : "md:hidden space-y-3"}>
-          {sortedFilteredComplexes.map((cpx, idx) => (
-            <ComplexCardMobile key={cpx.complex_no} complex={cpx} index={idx + 1} urlFilters={urlFilters} isCompared={isInCompare(cpx.complex_no)} compareFull={compareFull} onToggleCompare={toggleCompare} />
-          ))}
-        </div>
+        <SearchResults
+          complexes={sortedFilteredComplexes}
+          listKey={listKey}
+          hidden={viewMode === "map"}
+          urlFilters={urlFilters}
+          isInCompare={isInCompare}
+          compareFull={compareFull}
+          onToggleCompare={toggleCompare}
+        />
       )}
 
       <CompareFloatingBar list={compareList} onRemove={removeCompare} onClear={clearCompare} />
     </div>
+    </>
   );
 }

@@ -28,6 +28,33 @@ test("검색 결과 페이지 테이블 표시", async ({ page }) => {
   await expect(table.or(noResults).or(loading)).toBeVisible({ timeout: 30_000 });
 });
 
+// 세션 525(B40 PR 2a): 검색 결과 새 틀 — 홈 큰 띠 없음(보이는 h1 하나) · 20곳씩 「더 보기」.
+// 브라우저의 검색 요청만 가짜로 답한다(운영 API·네이버를 부르지 않는다). 기준 그림 없음.
+test("검색 결과 새 틀 — h1 하나 · 20곳씩 더 보기", async ({ page }) => {
+  const complexes = Array.from({ length: 45 }, (_, i) => ({
+    complex_no: `9${String(i + 1).padStart(3, "0")}`,
+    complex_name: `시험단지 ${String(i + 1).padStart(3, "0")}`,
+    real_estate_type_code: "APT",
+    real_estate_type_name: "아파트",
+    cortar_address: "서울시 서초구 반포동",
+  }));
+  await page.route("**/api/live/search**", (route) =>
+    route.request().method() === "OPTIONS"
+      ? route.fulfill({ status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type, Authorization" } })
+      : route.fulfill({ status: 200, contentType: "application/json", headers: { "Access-Control-Allow-Origin": "*" }, body: JSON.stringify({ complexes, total: 45 }) }),
+  );
+  await page.goto("/?q=래미안");
+  await expect(page.getByRole("heading", { level: 1, name: "「래미안」 단지 45곳" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("h1:visible")).toHaveCount(1);
+  const names = page.locator('a[href^="/complex/"]:visible');
+  await expect(names).toHaveCount(20);
+  await page.getByRole("button", { name: "더 보기 · 20 / 45" }).click();
+  await expect(names).toHaveCount(40);
+  await page.getByRole("button", { name: "더 보기 · 40 / 45" }).click();
+  await expect(names).toHaveCount(45);
+  await expect(page.getByRole("button", { name: /더 보기/ })).toHaveCount(0);
+});
+
 // ── 인터랙션 테스트 ──
 
 test("존재하지 않는 키워드 검색 — 빈 결과 또는 로딩", async ({ page }) => {

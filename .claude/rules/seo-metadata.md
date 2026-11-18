@@ -67,9 +67,10 @@ grep -oE '<meta property="og:image" content="[^"]*"' .next/server/app/<page>.htm
 - **정적 텍스트(h1·hero·소개)는 Suspense 밖**에, useSearchParams 쓰는 동적 컴포넌트만
   Suspense 안에 둔다. `"use client"` + useQuery 컴포넌트여도 정적 JSX 는 서버가 첫
   HTML 로 렌더하므로(QueryClientProvider 안이면 안전, suspense:false 기본) Suspense 밖
-  배치 OK. 선례(세션 508 홈 개편 뒤): `app/page.tsx` — h1·설명은 `components/home/HomeHero` 로 Suspense 밖,
-  홈 칸(대출 판·지역·계산기·가이드)은 `HomeSections` 를 Suspense fallback(정적 프리렌더)과 `SearchExperience renderEmpty`
-  가 같이 그려 첫 HTML 에 들어간다(옛 선례 = HomeHeader 분리).
+  배치 OK. 선례(세션 525 B40 PR 2a 뒤): `app/page.tsx` — `HomeHero`(h1·설명)는 `HomeSections` 맨 위 — 대기 화면(정적
+  프리렌더)과 `SearchExperience renderEmpty` 가 같이 그려 첫 HTML 에 들어간다(대출 판·지역·계산기·가이드도 같은 길 ·
+  검색 결과 화면엔 큰 띠가 없어 h1 하나). 대기 화면도 첫 HTML 이므로 "Suspense 밖"과 같은 효과 — 단 대기 화면에서
+  브라우저 저장소·세션·요청을 쓰는 부품은 빼야 한다(`interactive=false`). 옛 선례 = 세션 508 `HomeHero` Suspense 밖 · HomeHeader 분리.
 - **ISR·서버 렌더 공개 장의 조상 폴더(루트 포함)에 `loading.tsx` 를 두지 않는다** — 저장본 본문이 `<div hidden id="S:0">` 상자로 들어가 스크립트를 안 돌리는 봇에 안 보인다(세션 484 · 3b 적대 실측, loading 빼면 0). 가드 시험 `src/app/__tests__/no-loading-file.test.ts` 가 0개를 단언한다.
 
 ### 검증법

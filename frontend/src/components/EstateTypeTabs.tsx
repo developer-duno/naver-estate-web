@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { ESTATE_TYPE_TABS, ESTATE_TYPE_COLORS } from "@/lib/constants";
+import { ESTATE_TYPE_TABS } from "@/lib/constants";
 
 interface Props {
   selected: string[];
@@ -30,10 +30,10 @@ export default memo(function EstateTypeTabs({ selected, onChange }: Props) {
             key={tab.code}
             type="button"
             onClick={() => toggle(tab.code)}
-            className={`px-3 py-1.5 text-sm rounded-md border transition-colors ${
+            className={`min-h-10 px-3.5 py-1.5 text-sm rounded-full border transition-colors ${
               active
-                ? `${ESTATE_TYPE_COLORS[tab.label] ?? "bg-green-100 border-green-500 text-green-700"} font-semibold`
-                : "bg-white border-gray-300 text-gray-500 hover:border-gray-400"
+                ? "bg-brand-navy border-brand-navy text-white font-bold"
+                : "bg-white border-brand-line text-brand-muted hover:border-brand-navy-line"
             }`}
           >
             {active && <span className="mr-1">✓</span>}

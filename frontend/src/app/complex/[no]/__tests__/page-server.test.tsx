@@ -110,6 +110,20 @@ describe("서버가 그리는 것", () => {
     expect(glance.textContent).toContain("실거래 자료 2026.09까지");
   });
 
+  it("'한눈에 보기' 면적 2개 = 표 줄 2 + 큰 줄 1 · 면적 3개 = 표 줄 3(표 문턱 = 2 · 세션 524 검사 🟡②)", async () => {
+    const [a59, a84, a114] = makeSummary().area_ranges!;
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(makeSummary({ area_ranges: [a59, a84] })), { status: 200 }));
+    const first = await renderPage();
+    let glance = within(screen.getByTestId("client-view")).getByTestId("complex-glance");
+    expect(within(glance).getByTestId("glance-areas").querySelectorAll("tbody tr")).toHaveLength(2);
+    expect(within(glance).getAllByTestId("glance-headline")).toHaveLength(1);
+    first.unmount();
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(makeSummary({ area_ranges: [a59, a84, a114] })), { status: 200 }));
+    await renderPage();
+    glance = within(screen.getByTestId("client-view")).getByTestId("complex-glance");
+    expect(within(glance).getByTestId("glance-areas").querySelectorAll("tbody tr")).toHaveLength(3);
+  });
+
   it("'한눈에 보기' 면적 1개 = 표 없이 큰 줄만 · 대표 면적 번호가 없어도(null) 큰 줄은 첫 면적으로 · 6개월 없으면 「최근 2년」", async () => {
     const one = [{ area_key: 59, exclusive_area: 59, recent6: null, recent24: { min: 28000, max: 34500, count: 15 } }];
     fetchMock.mockImplementation(async () => new Response(JSON.stringify(makeSummary({ area_ranges: one, rep_area_key: null })), { status: 200 }));

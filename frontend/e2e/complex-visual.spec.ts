@@ -30,6 +30,13 @@ test.describe("complex detail visual regression", () => {
 
     await page.waitForLoadState("networkidle");
 
+    // 중개사 작업 화면이 굳은 시점(세션 524 B40 PR 1 보완) — 위 단지명 heading 은 서버 h1(띠)이라 처음부터 보여 대기 기준이 못 된다.
+    // 승인 판정 전 로딩(「단지 정보를 불러오는 중...」 · 높이 +552px 안팎)이 networkidle 뒤에도 0.2~1초 남아 fullPage 높이가
+    // 1804 → 1613 으로 바뀌는 것을 로컬 3/3 회 실측(CI run 44230335653 재시도 1596 → 1804 → 1596 과 같은 흔들림).
+    // 로딩 분기와 대시보드는 같이 그려지지 않으므로 대시보드가 보이고 로딩 글자가 0 이면 최종 상태다.
+    await expect(page.getByLabel("단지 종합 대시보드")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("단지 정보를 불러오는 중...")).toHaveCount(0);
+
     await expect(page).toHaveScreenshot("complex.png", {
       fullPage: true,
       maxDiffPixelRatio: 0.02,

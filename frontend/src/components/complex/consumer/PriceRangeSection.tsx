@@ -91,8 +91,14 @@ export default function PriceRangeSection({
   const anyRange = areaPrices.some(hasRange);
 
   const trades = ranged?.trades ?? [];
-  // 펼친 면적 번호 — 면적을 바꾸면 다른 번호라 저절로 접힌다(따로 되돌리는 effect 없음)
+  // 펼친 면적 번호 — 고른 면적이 바뀌는 순간(이 카드 칩이든 대출 판 칩이든) 접힘으로 되돌린다.
+  // 번호만 비교하면 A 펼침 → B → A 에서 A 가 펼친 채로 돌아온다(세션 524 검사 🟡①). 렌더 중 이전 값 비교 = effect 없이 한 번에
   const [openArea, setOpenArea] = useState<number | null>(null);
+  const [seenSelected, setSeenSelected] = useState(selected);
+  if (seenSelected !== selected) {
+    setSeenSelected(selected);
+    setOpenArea(null);
+  }
   const expanded = ranged != null && openArea === ranged.area_m2;
   const shown = expanded ? trades : trades.slice(0, TRADES_PREVIEW);
   const tableId = useId();

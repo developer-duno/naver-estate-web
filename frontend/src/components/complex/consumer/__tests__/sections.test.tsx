@@ -151,6 +151,23 @@ describe("S1 최근 거래(옛 얼마짜리 집인가)", () => {
     expect(screen.getByRole("button", { name: "9건 모두 보기 ▾" })).toHaveAttribute("aria-expanded", "false");
   });
 
+  it("A 펼침 → B → 다시 A = A 는 접힌 채(5줄 · 「N건 모두 보기 ▾」) — 면적이 바뀌는 순간 접힘(세션 524 검사 🟡①)", () => {
+    const areas = makeComplex({
+      area_prices: [{ ...AREAS[0], trades: tradesOf(7) }, { ...AREAS[1], trades: tradesOf(9, 22000) }],
+    }).area_prices!;
+    function Harness() {
+      const [sel, setSel] = useState<number | null>(59);
+      return <PriceRangeSection {...base} areaPrices={areas} selected={sel} onSelect={setSel} />;
+    }
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "7건 모두 보기 ▾" }));
+    expect(screen.getByTestId("consumer-trades").querySelectorAll("tbody tr")).toHaveLength(7);
+    fireEvent.click(screen.getByRole("button", { name: /84㎡/ }));
+    fireEvent.click(screen.getByRole("button", { name: /59㎡/ }));
+    expect(screen.getByTestId("consumer-trades").querySelectorAll("tbody tr")).toHaveLength(5);
+    expect(screen.getByRole("button", { name: "7건 모두 보기 ▾" })).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("거래 목록이 비면 표 생략", () => {
     render(<PriceRangeSection {...base} />);
     expect(screen.queryByTestId("consumer-trades")).toBeNull();

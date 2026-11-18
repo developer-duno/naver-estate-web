@@ -4,8 +4,6 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Complex } from "@/types";
 import ComplexHeader, { FavoriteCompareButtons, type FavoriteCompareProps } from "@/components/complex/ComplexHeader";
-import { formatKoreanPrice } from "@/lib/format";
-import { priceRangeText } from "./consumer-format";
 
 interface Props {
   complex: Complex;
@@ -15,34 +13,9 @@ interface Props {
   isCompared: boolean;
   compareFull: boolean;
   onToggleCompare: () => void;
-  /** 한 줄 요약 — null 이면 생략(오피스텔 등) */
-  summary: ConsumerSummary | null;
 }
 
-/**
- * 머리 요약(보완 F2·A-5) — 대출 카드와 같은 집값 단계. range = 6개월(또는 2년) 범위 + 가진 집 기준 한도(선순위 0),
- * manual = 최근 2년 기록이 없어 한도 숫자는 생략. zoneUnknown 이면 끝에 "(규제지역이면 더 낮아요)".
- */
-export type ConsumerSummary =
-  | { kind: "range"; area: number | null; period: "6m" | "2y"; min: number; max: number; ltv: number; zoneUnknown: boolean }
-  | { kind: "manual" };
-
-function SummaryLine({ s }: { s: ConsumerSummary }) {
-  if (s.kind === "manual") {
-    return <>최근 2년 정부 실거래 기록 없음 · 담보대출 한도는 아래 4번에서 집값을 넣어 계산해요</>;
-  }
-  return (
-    <>
-      {s.area != null ? `${s.area}㎡ 기준 ` : ""}최근 {s.period === "2y" ? "2년 " : ""}거래{" "}
-      <b className="text-gray-900">{priceRangeText(s.min, s.max)}</b>
-      {" · "}담보대출 한도 최대 약 <b className="text-blue-700">{formatKoreanPrice(s.ltv)}</b>
-      <span className="text-xs text-gray-500"> (가진 집 담보 · 선순위 없을 때 · 참고)</span>
-      {s.zoneUnknown && <span className="text-xs text-gray-500"> (규제지역이면 더 낮아요)</span>}
-    </>
-  );
-}
-
-/** 서버 h1 옆 자리 id — app/complex/[no]/page.tsx 가 h1 옆에 둔다 */
+/** 서버 단추 자리 id — app/complex/[no]/page.tsx 가 남색 띠 안(h1·사실 줄 아래)에 둔다 */
 export const TITLE_ACTIONS_ID = "complex-title-actions";
 
 /**
@@ -55,12 +28,15 @@ function TitleActions(props: FavoriteCompareProps) {
     setSlot(document.getElementById(TITLE_ACTIONS_ID)); // eslint-disable-line react-hooks/set-state-in-effect -- 마운트 뒤 자리 찾기
   }, []);
   if (slot === undefined) return null;
-  const buttons = <FavoriteCompareButtons {...props} />;
-  return slot ? createPortal(buttons, slot) : buttons;
+  // 서버 h1 옆 자리는 남색 띠 안 — 그 자리로 갈 때만 띠 단추 모양(세션 524 B40 PR 1)
+  return slot ? createPortal(<FavoriteCompareButtons {...props} tone="navy" />, slot) : <FavoriteCompareButtons {...props} />;
 }
 
-/** S0 머리 — 뒤로·유형 배지 + 주소 칩 + 한 줄 요약(세션 482 PR 1b). ★·비교는 서버 h1 옆으로(세션 483 PR 3b) */
-export default function ConsumerHeader({ complex, summary, ...header }: Props) {
+/**
+ * S0 머리 — 뒤로·유형 배지 + 주소 칩(세션 482 PR 1b). ★·비교는 서버 h1 옆으로(세션 483 PR 3b).
+ * 한 줄 요약(범위·한도)은 세션 524 B40 PR 1 에 뺐다 — 범위는 '한눈에 보기' 큰 줄, 한도는 대출 판 큰 줄이 같은 숫자를 보인다.
+ */
+export default function ConsumerHeader({ complex, ...header }: Props) {
   // 사용승인·세대수·동수는 '한눈에 보기' 표에 있어 머리 칩에서 뺀다(두 번 나오지 않게 — 맹점🟠4⑤). 주소만 남긴다
   const chips: string[] = [];
   const addr = complex.address || complex.cortar_address;
@@ -81,14 +57,9 @@ export default function ConsumerHeader({ complex, summary, ...header }: Props) {
       {chips.length > 0 && (
         <ul className="flex flex-wrap gap-1.5" aria-label="단지 기본 사실">
           {chips.map((c) => (
-            <li key={c} className="text-xs text-gray-600 bg-gray-100 rounded-full px-2.5 py-0.5">{c}</li>
+            <li key={c} className="text-xs text-brand-muted bg-white rounded-full px-2.5 py-0.5">{c}</li>
           ))}
         </ul>
-      )}
-      {summary && (
-        <p className="text-sm text-gray-600" data-testid="consumer-summary">
-          <SummaryLine s={summary} />
-        </p>
       )}
     </div>
   );

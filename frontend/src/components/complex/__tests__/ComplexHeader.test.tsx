@@ -5,7 +5,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import ComplexHeader from "../ComplexHeader";
+import { useState } from "react";
+import ComplexHeader, { FavoriteCompareButtons } from "../ComplexHeader";
 import type { Complex } from "@/types";
 
 const baseComplex: Complex = {
@@ -100,5 +101,47 @@ describe("ComplexHeader 비교 담기 (세션 296)", () => {
       <ComplexHeader complex={otherCollectorOnly} starred={false} onBack={() => {}} onToggleFavorite={() => {}} />
     );
     expect(screen.queryByText(/매물 업데이트:/)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * 남색 띠 안 단추(세션 524 B40 PR 1 · 설계 D4) — tone 기본값은 지금 모양 그대로(중개사 머리),
+ * navy 는 글자 붙은 테두리 단추(높이 44px = min-h-11) · 누르면 글자·라벨이 바뀐다.
+ */
+describe("FavoriteCompareButtons tone", () => {
+  it("기본 = 지금 모양(별 글자만 · 작은 비교 단추) — 중개사 머리 픽셀 변화 0", () => {
+    render(<FavoriteCompareButtons name="래미안테스트" starred={false} onToggleFavorite={() => {}} isCompared={false} compareFull={false} onToggleCompare={() => {}} />);
+    const star = screen.getByRole("button", { name: "즐겨찾기 추가" });
+    expect(star.textContent).toBe("☆");
+    expect(star.className).toContain("text-xl");
+    expect(star.className).not.toContain("min-h-11");
+    expect(screen.getByRole("button", { name: /비교 추가/ }).className).toContain("text-xs px-2.5 py-1");
+  });
+
+  it("navy = 「☆ 즐겨찾기」「+ 비교」 테두리 단추 · 높이 44px · 누르면 「★ 즐겨찾기」「✓ 비교중」", async () => {
+    function Harness() {
+      const [s, setS] = useState(false);
+      const [c, setC] = useState(false);
+      return (
+        <FavoriteCompareButtons name="래미안테스트" tone="navy" starred={s} onToggleFavorite={() => setS((v) => !v)} isCompared={c} compareFull={false} onToggleCompare={() => setC((v) => !v)} />
+      );
+    }
+    render(<Harness />);
+    const star = screen.getByRole("button", { name: "즐겨찾기 추가" });
+    const cmp = screen.getByRole("button", { name: "래미안테스트 비교 추가" });
+    expect(star.textContent).toBe("☆즐겨찾기");
+    expect(cmp.textContent).toBe("+ 비교");
+    for (const b of [star, cmp]) expect(b.className).toContain("min-h-11");
+    await userEvent.click(star);
+    await userEvent.click(cmp);
+    expect(screen.getByRole("button", { name: "즐겨찾기 해제" }).textContent).toBe("★즐겨찾기");
+    const on = screen.getByRole("button", { name: "래미안테스트 비교 해제" });
+    expect(on.textContent).toBe("✓ 비교중");
+    expect(on.className).toContain("bg-white text-brand-navy");
+  });
+
+  it("navy · 가득 참 = 누를 수 없음", () => {
+    render(<FavoriteCompareButtons name="래미안테스트" tone="navy" starred={false} onToggleFavorite={() => {}} isCompared={false} compareFull onToggleCompare={() => {}} />);
+    expect(screen.getByRole("button", { name: /비교 목록 가득 참/ })).toBeDisabled();
   });
 });

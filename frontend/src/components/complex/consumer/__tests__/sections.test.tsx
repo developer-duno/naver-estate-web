@@ -1,7 +1,9 @@
 /**
  * 소비자 화면 섹션 S0~S3(세션 482 PR 1b) — 정상 1 + 빈 자료(카드 숨김) 1씩, 설계 예시값 그대로 나오는지.
+ * 세션 524 B40 PR 1: 카드 제목 짧게 · 머리 한 줄 요약 삭제 · 거래 목록 5건 + 모두 보기.
  * 실행: npx vitest run src/components/complex/consumer/__tests__/sections.test.tsx
  */
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import ConsumerHeader from "../ConsumerHeader";
@@ -24,54 +26,41 @@ describe("S0 머리", () => {
   const header = {
     starred: false, onBack: () => {}, onToggleFavorite: () => {}, isCompared: false, compareFull: false, onToggleCompare: () => {},
   };
-  const range = { kind: "range" as const, area: 59, period: "6m" as const, min: 15700, max: 18000, ltv: 10990, zoneUnknown: false };
-  it("사실 칩 + 한 줄 요약", () => {
-    render(<ConsumerHeader complex={makeComplex()} summary={range} {...header} />);
+  it("뒤로·유형 배지·주소 칩 — 한 줄 요약(consumer-summary)은 없다(세션 524 B40 PR 1)", () => {
+    render(<ConsumerHeader complex={makeComplex()} {...header} />);
     // 세션 483 PR 3b: 이름은 서버 h1 이 바로 위에 있어 머리 줄에서 뺀다 — 버튼 이름표에만 남는다
     expect(screen.queryByText("자연")).toBeNull();
     expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
     expect(screen.getByRole("button", { name: "자연 비교 추가" })).toBeInTheDocument();
-    // 사용승인·세대수·동수는 '한눈에 보기' 표에 있어 머리 칩에서 뺐다(맹점🟠4⑤) — 주소 칩만
+    // 사용승인·세대수·동수는 서버 쪽(세션 524 부터 띠 사실 줄)에 있어 머리 칩에서 뺐다(맹점🟠4⑤) — 주소 칩만
     expect(screen.queryByText("1997년 사용승인")).toBeNull();
     expect(screen.queryByText("199세대")).toBeNull();
     expect(screen.queryByText("1개동")).toBeNull();
-    expect(screen.getByTestId("consumer-summary").textContent).toBe(
-      "59㎡ 기준 최근 거래 1억 5,700만~1억 8,000만 · 담보대출 한도 최대 약 1억 990만 (가진 집 담보 · 선순위 없을 때 · 참고)",
-    );
+    expect(screen.getByRole("button", { name: "이전 페이지" })).toBeInTheDocument();
+    expect(screen.getByText("아파트")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "단지 기본 사실" }).textContent).toBe("대전 유성구 봉명동");
+    // 범위·한도 요약은 '한눈에 보기' 큰 줄 · 대출 판 큰 줄로 옮겼다(뜻 = LoanEstimateSection·ConsumerComplexView 시험)
+    expect(screen.queryByTestId("consumer-summary")).toBeNull();
   });
-  it("★·비교는 서버 h1 옆 자리(complex-title-actions)로 옮겨 간다 — 머리 줄엔 없음(맹점🟠4④)", async () => {
+  it("★·비교는 서버 단추 자리(complex-title-actions · 남색 띠 안)로 옮겨 가 띠 모양(navy) — 머리 줄엔 없음(맹점🟠4④)", async () => {
     const slot = document.createElement("div");
     slot.id = "complex-title-actions";
     document.body.appendChild(slot);
     try {
-      const { container } = render(<ConsumerHeader complex={makeComplex()} summary={range} {...header} />);
+      const { container } = render(<ConsumerHeader complex={makeComplex()} {...header} />);
       expect(await within(slot).findByRole("button", { name: "자연 비교 추가" })).toBeInTheDocument();
-      expect(within(slot).getByRole("button", { name: "즐겨찾기 추가" })).toBeInTheDocument();
+      const star = within(slot).getByRole("button", { name: "즐겨찾기 추가" });
+      expect(star.textContent).toBe("☆즐겨찾기");
+      expect(star.className).toContain("min-h-11");
       expect(within(container).queryByRole("button", { name: "자연 비교 추가" })).toBeNull();
       expect(within(container).getByRole("button", { name: "이전 페이지" })).toBeInTheDocument();
     } finally {
       slot.remove();
     }
   });
-  it("2년 단계 · 구역 모름 꼬리표(보완 F2·A-5)", () => {
-    render(<ConsumerHeader complex={makeComplex()} summary={{ ...range, period: "2y", min: 14700, max: 20000, ltv: 10290, zoneUnknown: true }} {...header} />);
-    const t = screen.getByTestId("consumer-summary").textContent ?? "";
-    expect(t).toContain("59㎡ 기준 최근 2년 거래 1억 4,700만~2억");
-    expect(t.endsWith("(규제지역이면 더 낮아요)")).toBe(true);
-  });
-  it("직접 입력 단계면 한도 숫자 생략", () => {
-    render(<ConsumerHeader complex={makeComplex()} summary={{ kind: "manual" }} {...header} />);
-    const t = screen.getByTestId("consumer-summary").textContent ?? "";
-    expect(t).toContain("최근 2년 정부 실거래 기록 없음");
-    expect(t).not.toMatch(/최대 약|\d억/);
-  });
-  it("면적 자료 없으면 요약 줄 생략", () => {
-    render(<ConsumerHeader complex={makeComplex()} summary={null} {...header} />);
-    expect(screen.queryByTestId("consumer-summary")).toBeNull();
-  });
 });
 
-describe("S1 얼마짜리 집인가", () => {
+describe("S1 최근 거래(옛 얼마짜리 집인가)", () => {
   const base = { areaPrices: AREAS, selected: 59, onSelect: () => {}, twoYear: { min: 14700, max: 20000 } };
 
   it("면적 칩 · 2년 막대 · 2년 최저/최고만 — 범위 숫자·공시가·관리비는 서버 '한눈에 보기'로 옮겼다(세션 483 PR 3b)", () => {
@@ -119,6 +108,49 @@ describe("S1 얼마짜리 집인가", () => {
     expect(within(table).getByText("직거래")).toBeInTheDocument();
   });
 
+  /** 거래 n건(최신순) — 날짜가 하루씩 앞으로 */
+  const tradesOf = (n: number, base = 15000) =>
+    Array.from({ length: n }, (_, i) => ({ price: base + i * 100, date: `2026-06-${String(28 - i).padStart(2, "0")}`, floor: i + 1, direct: false }));
+
+  it("거래 목록은 최근 5건 + 「N건 모두 보기 ▾」 → 전부 + 「접기 ▴」 → 다시 5건(세션 524 B40 PR 1)", () => {
+    const areas = makeComplex({ area_prices: [{ ...AREAS[0], trades: tradesOf(7) }] }).area_prices!;
+    render(<PriceRangeSection {...base} areaPrices={areas} />);
+    const rows = () => screen.getByTestId("consumer-trades").querySelectorAll("tbody tr").length;
+    expect(rows()).toBe(5);
+    expect(screen.getByTestId("consumer-trades").textContent).toContain("2026.06.28"); // 최신(맨 앞)부터
+    const btn = screen.getByRole("button", { name: "7건 모두 보기 ▾" });
+    expect(btn).toHaveAttribute("aria-expanded", "false");
+    expect(btn.getAttribute("aria-controls")).toBe(screen.getByTestId("consumer-trades").id);
+    fireEvent.click(btn);
+    expect(rows()).toBe(7);
+    expect(screen.getByRole("button", { name: "접기 ▴" })).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(screen.getByRole("button", { name: "접기 ▴" }));
+    expect(rows()).toBe(5);
+  });
+
+  it("거래가 5건 이하면 단추 없음", () => {
+    const areas = makeComplex({ area_prices: [{ ...AREAS[0], trades: tradesOf(5) }] }).area_prices!;
+    render(<PriceRangeSection {...base} areaPrices={areas} />);
+    expect(screen.getByTestId("consumer-trades").querySelectorAll("tbody tr")).toHaveLength(5);
+    expect(screen.queryByTestId("consumer-trades-toggle")).toBeNull();
+  });
+
+  it("펼친 뒤 면적을 바꾸면 다시 접힌다 · 그 면적 거래 수가 단추 글자", () => {
+    const areas = makeComplex({
+      area_prices: [{ ...AREAS[0], trades: tradesOf(7) }, { ...AREAS[1], trades: tradesOf(9, 22000) }],
+    }).area_prices!;
+    function Harness() {
+      const [sel, setSel] = useState<number | null>(59);
+      return <PriceRangeSection {...base} areaPrices={areas} selected={sel} onSelect={setSel} />;
+    }
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "7건 모두 보기 ▾" }));
+    expect(screen.getByTestId("consumer-trades").querySelectorAll("tbody tr")).toHaveLength(7);
+    fireEvent.click(screen.getByRole("button", { name: /84㎡/ }));
+    expect(screen.getByTestId("consumer-trades").querySelectorAll("tbody tr")).toHaveLength(5);
+    expect(screen.getByRole("button", { name: "9건 모두 보기 ▾" })).toHaveAttribute("aria-expanded", "false");
+  });
+
   it("거래 목록이 비면 표 생략", () => {
     render(<PriceRangeSection {...base} />);
     expect(screen.queryByTestId("consumer-trades")).toBeNull();
@@ -153,7 +185,7 @@ describe("S1 얼마짜리 집인가", () => {
   });
 });
 
-describe("S2 어떻게 변해 왔나", () => {
+describe("S2 2년 동안 어떻게 변했나", () => {
   it("띠 7개(1건 달은 점) · 지역 문장 설계 예시 그대로", () => {
     const { container } = render(<PriceTrendSection history={makeHistory()} trend={makeTrend()} endYm={END_YM} />);
     const bands = screen.getByTestId("consumer-bands");

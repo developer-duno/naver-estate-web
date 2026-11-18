@@ -118,7 +118,9 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-const QUESTIONS = ["1 · 얼마짜리 집인가", "2 · 어떻게 변해 왔나", "3 · 주변은 어떤가", "4 · 내 돈으로 가능한가"];
+// 카드 제목(세션 524 B40 PR 1 · 👤 결정 3 「그림대로 짧게」) — 옛 「1 · 얼마짜리 집인가」 등
+const QUESTIONS = ["최근 거래", "2년 동안 어떻게 변했나", "주변은 어떤가", "이 집을 담보로"];
+const FIRST_CARD = QUESTIONS[0];
 
 function expectNoBrokerButtons() {
   expect(screen.queryByRole("button", { name: "데이터 갱신" })).not.toBeInTheDocument();
@@ -133,10 +135,23 @@ describe("서버가 그린 '한눈에 보기' 자리 (세션 483 PR 3b · 결정
     state.me = null;
     state.anon = true;
     const { container } = render(<ComplexClientView complexNo="6139" glance={GLANCE} />, { wrapper: TestQueryProvider });
-    expect(await screen.findByText("1 · 얼마짜리 집인가")).toBeInTheDocument();
+    expect(await screen.findByText(FIRST_CARD)).toBeInTheDocument();
     expect(screen.getByTestId("glance-slot")).toBeVisible();
     expect(screen.queryByTestId("broker-glance-fold")).toBeNull();
     expect(container.querySelectorAll("h1")).toHaveLength(0);
+  });
+
+  it("세션 확인 실패 경고는 '한눈에 보기' 바로 아래 — 띠에 걸치는 첫 요소는 '한눈에 보기'(세션 524 B40 PR 1 · 설계 D7)", async () => {
+    state.token = undefined;
+    state.me = null;
+    state.anon = true;
+    state.tokenError = true;
+    render(<ComplexClientView complexNo="6139" glance={GLANCE} />, { wrapper: TestQueryProvider });
+    const warn = await screen.findByText(/로그인 세션을 확인할 수 없어/);
+    const glance = screen.getByTestId("glance-slot");
+    expect(glance.parentElement!.firstElementChild).toBe(glance);
+    expect(glance.compareDocumentPosition(warn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // 한눈에 보기 → 경고
+    expect(warn.compareDocumentPosition(screen.getByText(FIRST_CARD)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // 경고 → 카드
   });
 
   it("승인 중개사 — '이 단지 공공 자료 요약' 접힘(기본 닫힘) · 화면 안 h1 0", async () => {
@@ -167,9 +182,11 @@ describe("단지 화면 공개 전환 (세션 481) · 소비자 화면 분기 (�
     expect(await screen.findByText("지금 나온 매물과 호가는 로그인하면 볼 수 있어요")).toBeInTheDocument();
     expect(screen.queryByText(/가격 추이/)).not.toBeInTheDocument();
     expect(screen.getAllByText(/로그인하면 볼 수 있어요/)).toHaveLength(1); // 잠금 카드 1장
-    expect(screen.getByText("1 · 얼마짜리 집인가")).toBeInTheDocument();
-    expect(screen.getByText(/^4 · 내 돈으로 가능한가/)).toBeInTheDocument();
-    expect(screen.getByTestId("consumer-summary")).toHaveTextContent("최대 약 1억 990만");
+    expect(screen.getByText(FIRST_CARD)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "이 집을 담보로" })).toBeInTheDocument();
+    // 옛 머리 요약 「한도 최대 약 1억 990만」 → 대출 판 큰 줄(세션 524 B40 PR 1)
+    expect(screen.queryByTestId("consumer-summary")).toBeNull();
+    expect(screen.getByTestId("consumer-loan-headline")).toHaveTextContent("추가로 가능한 담보대출 약 1억 990만");
     expect(screen.queryByLabelText("단지 종합 대시보드")).not.toBeInTheDocument();
     expect(screen.queryByText(/필터 접기|필터 펼치기/)).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "매물" })).not.toBeInTheDocument();
@@ -194,9 +211,9 @@ describe("단지 화면 공개 전환 (세션 481) · 소비자 화면 분기 (�
 
     render(<ComplexDetailPage />, { wrapper: TestQueryProvider });
 
-    expect(await screen.findByText("1 · 얼마짜리 집인가")).toBeInTheDocument();
-    // S2·S3 은 이 시험 자료가 비어 숨김 — 보이는 질문은 1·4
-    for (const q of [QUESTIONS[0], QUESTIONS[3]]) expect(screen.getByText(new RegExp(`^${q}`))).toBeInTheDocument();
+    expect(await screen.findByText(FIRST_CARD)).toBeInTheDocument();
+    // S2·S3 은 이 시험 자료가 비어 숨김 — 보이는 카드는 최근 거래·대출 판
+    for (const q of [QUESTIONS[0], QUESTIONS[3]]) expect(screen.getByRole("heading", { level: 2, name: q })).toBeInTheDocument();
     for (const q of [QUESTIONS[1], QUESTIONS[2]]) expect(screen.queryByText(q)).not.toBeInTheDocument();
     expect(await screen.findByText("매물 0건")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "매물" })).toBeInTheDocument();
@@ -220,7 +237,7 @@ describe("단지 화면 공개 전환 (세션 481) · 소비자 화면 분기 (�
     expect(await screen.findByLabelText("단지 종합 대시보드")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "데이터 갱신" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "엑셀 내보내기" })).toBeInTheDocument();
-    expect(screen.queryByText("1 · 얼마짜리 집인가")).not.toBeInTheDocument();
+    expect(screen.queryByText(FIRST_CARD)).not.toBeInTheDocument();
     await waitFor(() => expect(last()).toEqual({ auto: true, autoEnabled: true }));
   });
 
@@ -245,7 +262,7 @@ describe("단지 화면 공개 전환 (세션 481) · 소비자 화면 분기 (�
     await act(async () => {}); // 쿼리 결과 반영 렌더 한 번 더 흘려 보낸다
     expect(vi.mocked(api.fetchApi)).toHaveBeenCalled();
     expect(screen.getByText("단지 정보를 불러오는 중...")).toBeInTheDocument();
-    expect(screen.queryByText("1 · 얼마짜리 집인가")).not.toBeInTheDocument();
+    expect(screen.queryByText(FIRST_CARD)).not.toBeInTheDocument();
     expect(screen.queryByLabelText("단지 종합 대시보드")).not.toBeInTheDocument();
     await act(async () => release({ is_approved_broker: true }));
     expect(await screen.findByLabelText("단지 종합 대시보드")).toBeInTheDocument();
@@ -260,7 +277,7 @@ describe("단지 화면 공개 전환 (세션 481) · 소비자 화면 분기 (�
     render(<ComplexDetailPage />, { wrapper: TestQueryProvider });
 
     const warn = await screen.findByText(/로그인 세션을 확인할 수 없어/);
-    const first = screen.getByText("1 · 얼마짜리 집인가");
+    const first = screen.getByText(FIRST_CARD);
     expect(warn.compareDocumentPosition(first) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // 경고가 카드보다 앞
   });
 

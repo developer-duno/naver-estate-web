@@ -82,12 +82,13 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 720 
       expect(res?.status()).toBe(200);
       await expect(page.getByRole("heading", { level: 1, name: "공개단지" })).toBeVisible({ timeout: 10_000 });
       await expect(page.locator("h1")).toHaveCount(1);
-      for (const title of ["1 · 얼마짜리 집인가", "2 · 어떻게 변해 왔나", "3 · 주변은 어떤가", "4 · 내 돈으로 가능한가"]) {
-        await expect(page.getByRole("heading", { name: new RegExp(`^${title}`) })).toBeVisible();
+      // 카드 제목 4개(세션 524 B40 PR 1 · 👤 결정 3 「그림대로 짧게」)
+      for (const title of ["최근 거래", "2년 동안 어떻게 변했나", "주변은 어떤가", "이 집을 담보로"]) {
+        await expect(page.getByRole("heading", { level: 2, name: title, exact: true })).toBeVisible();
       }
-      // 범위 숫자는 서버 '한눈에 보기' 표로(결정 23) — 카드 1 은 막대·2년 최저/최고 + 지금 있는 거래 목록 표
-      await expect(page.getByTestId("glance-areas").locator("tbody tr")).toHaveCount(1);
-      await expect(page.getByTestId("glance-areas")).toContainText("1억 5,700만~1억 8,000만");
+      // 범위 숫자는 서버 '한눈에 보기'(결정 23) — 면적이 하나뿐이라 표 대신 큰 줄(세션 524) · 카드 「최근 거래」는 막대·2년 최저/최고 + 거래 목록
+      await expect(page.getByTestId("glance-areas")).toHaveCount(0);
+      await expect(page.getByTestId("glance-headline")).toContainText("1억 5,700만~1억 8,000만");
       await expect(page.getByText("2년 최저 1억 4,700만")).toBeVisible();
       await expect(page.getByTestId("consumer-trades").locator("tbody tr")).toHaveCount(3);
       // 지역 페이지가 열린 뒤(3c-1b) — 빵부스러기 시군구·동(이 단지는 동 페이지 없는 동 → 허브#동)·푸터 입구 등 1개 이상

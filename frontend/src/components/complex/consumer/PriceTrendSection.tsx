@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { PublicPriceHistory, RegionTrend } from "@/types";
 import type { PublicSummaryBreadcrumb } from "@/types/public-summary";
 import { REGION_PAGES_ENABLED, regionHubPath } from "@/lib/seo/complex-page";
-import { Card } from "@/components/ui/card";
+import BrandCard from "@/components/brand/BrandCard";
 import { formatChartPrice, formatKoreanPrice } from "@/lib/format";
 import LoadRetry from "./LoadRetry";
 import { monthsEndingAt, ymDot, ymShort } from "./consumer-format";
@@ -71,7 +71,7 @@ export function MonthBands({ history, endYm, range }: { history: PublicPriceHist
 export { JEONSE_MIN_SPAN, axisRange, trendPoints } from "./trend-line";
 
 /**
- * S2 · 어떻게 변해 왔나 — 둘 다 비면 카드 숨김. 지역 통계의 중위 매매가는 예외로 보인다(부동산원 공식 통계).
+ * S2 · 2년 동안 어떻게 변했나(세션 524 B40 PR 1 제목) — 둘 다 비면 카드 숨김. 그래프 색·그 설명 글자는 그대로(설계 D5 — 비교 장이 같은 띠를 쓴다). 지역 통계의 중위 매매가는 예외로 보인다(부동산원 공식 통계).
  * 지역(시군구) 흐름: 지역 페이지가 열렸고 빵부스러기가 있으면(compact 기본) 한 줄 + 시군구 허브 링크(결정 28·30 — 허브는 지역 있는 단지면 늘 있다),
  * 아니면 지금(#773)처럼 문장 + 2년 선 그래프.
  */
@@ -90,23 +90,23 @@ export default function PriceTrendSection({ history, trend, endYm, onRetry, brea
   const hubHref = compact && breadcrumb ? regionHubPath(breadcrumb.sigungu_code) : null;
 
   return (
-    <Card className="p-4 space-y-3" aria-labelledby="consumer-q2">
-      <h2 id="consumer-q2" className="text-sm font-bold text-blue-700 tracking-wide">2 · 어떻게 변해 왔나</h2>
+    <BrandCard className="p-4 sm:p-5 space-y-3" aria-labelledby="consumer-q2">
+      <h2 id="consumer-q2" className="text-[15px] font-black text-brand-navy">2년 동안 어떻게 변했나</h2>
       {hasBands && history && (
         <div className="space-y-1">
-          <h3 className="text-base font-bold">{history.area_m2}㎡ 월별 거래 범위 · 2년</h3>
-          {history.basis && <p className="text-xs text-gray-500">{history.basis} · 거래 없는 달은 비움</p>}
+          <h3 className="text-base font-bold text-brand-navy">{history.area_m2}㎡ 월별 거래 범위 · 2년</h3>
+          {history.basis && <p className="text-xs text-brand-muted">{history.basis} · 거래 없는 달은 비움</p>}
           <MonthBands history={history} endYm={endYm} />
         </div>
       )}
       {hasTrend && trend && compact && (
         <p className="text-sm" data-testid="consumer-region-sentence">
           {trend.region_name} 아파트 2년 {parts.join(" · ")}
-          <span className="text-xs text-gray-400"> · {trend.source} {period}</span>
+          <span className="text-xs text-brand-muted"> · {trend.source} {period}</span>
           {hubHref && (
             <>
               {" "}
-              <Link href={hubHref} prefetch={false} className="text-xs text-blue-700 underline">{trend.region_name} 지역 정보</Link>
+              <Link href={hubHref} prefetch={false} className="text-xs font-bold text-brand-orange-text underline">{trend.region_name} 지역 정보</Link>
             </>
           )}
         </p>
@@ -120,7 +120,7 @@ export default function PriceTrendSection({ history, trend, endYm, onRetry, brea
             {sale && <TrendLine items={items} k="sale_price_median" color="#1d4ed8" fmt={formatKoreanPrice} />}
             {jeonse && <TrendLine items={items} k="jeonse_ratio" color="#d97706" fmt={(v) => `${v.toFixed(1)}%`} />}
           </svg>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-brand-muted">
             {trend.source} {period}
             {sale ? " · 파랑 중위 매매가" : ""}
             {jeonse ? " · 주황 전세가율" : ""}
@@ -128,6 +128,6 @@ export default function PriceTrendSection({ history, trend, endYm, onRetry, brea
         </div>
       )}
       {onRetry && <LoadRetry onRetry={onRetry} />}
-    </Card>
+    </BrandCard>
   );
 }

@@ -1,5 +1,5 @@
 /**
- * S4 내 돈으로 가능한가(참고 계산) — 설계 예시값 · 두 모드(보완 F1, 결정 11) · 집값 단계(보완 F2, 결정 12) · 규제 문구(F7) ·
+ * S4 이 집을 담보로(옛 「내 돈으로 가능한가」 · 참고 계산) — 설계 예시값 · 두 모드(보완 F1, 결정 11) · 집값 단계(보완 F2, 결정 12) · 규제 문구(F7) ·
  * 금지 낱말 0(미분양 FundingPlanner.test.tsx:342 답습) · 링크 2곳 · 입력값이 어디로도 안 나간다(fetch 0).
  * 실행: npx vitest run src/components/complex/consumer/__tests__/LoanEstimateSection.test.tsx
  */
@@ -21,12 +21,15 @@ function type(label: RegExp, value: string) {
 const result = () => screen.getByTestId("consumer-loan-result").textContent ?? "";
 /** 고정 설명 글 펼치기(세션 483 PR 3b — 기본 닫힘) */
 const openNotes = () => fireEvent.click(screen.getByTestId("consumer-loan-notes-toggle"));
+/** 계산기 펼치기(세션 524 B40 PR 1 — 기본 접힘 · hidden 속성이라 접힌 단추는 역할 조회에 안 잡힌다) */
+const openCalc = () => fireEvent.click(screen.getByRole("button", { name: "내 조건으로 계산하기" }));
 
 afterEach(() => vi.restoreAllMocks());
 
 describe("LoanEstimateSection — 이미 가진 집(기본)", () => {
   it("설계 예시 — 6139 보수적 1억 5,700만 · 유성구 비규제 70% = 1억 990만 · 선순위 5,000만 → 약 5,990만 · 지방 상한 없음", () => {
     render(<LoanEstimateSection {...base} />);
+    openCalc();
     expect(screen.getByRole("button", { name: "이미 가진 집으로" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "보수적 1억 5,700만" })).toHaveAttribute("aria-pressed", "true");
     openNotes();
@@ -58,6 +61,7 @@ describe("LoanEstimateSection — 이미 가진 집(기본)", () => {
 
   it("높은 쪽 집값을 고르면 그 값으로", () => {
     render(<LoanEstimateSection {...base} />);
+    openCalc();
     fireEvent.click(screen.getByRole("button", { name: "1억 8,000만" }));
     expect(result()).toContain("1억 2,600만"); // 18000 × 0.7
   });
@@ -65,7 +69,7 @@ describe("LoanEstimateSection — 이미 가진 집(기본)", () => {
   it("선순위가 한도보다 크면 '지금은 담보 여력이 없어요'", () => {
     render(<LoanEstimateSection {...base} />);
     type(/선순위/, "20000");
-    expect(screen.getByText("지금은 담보 여력이 없어요")).toBeInTheDocument();
+    expect(result()).toContain("지금은 담보 여력이 없어요"); // 판 큰 줄에도 같은 글자(세션 524) — 결과 칸 안에서 본다
   });
 
   it("소득 빈칸이면 '(소득 확인 전)' · 연소득만 넣으면 금리 안내 · 금리까지 넣으면 소득 기준·둘 중 작은 값·월 상환", () => {
@@ -92,6 +96,7 @@ describe("LoanEstimateSection — 이미 가진 집(기본)", () => {
 describe("LoanEstimateSection — 이 집을 사려고", () => {
   it("6139 사려는 집 → 1억 990만 · 선순위 칸 숨김 · 무주택 구입 기준", () => {
     render(<LoanEstimateSection {...base} />);
+    openCalc();
     fireEvent.click(screen.getByRole("button", { name: "이 집을 사려고" }));
     expect(screen.queryByLabelText(/선순위/)).toBeNull();
     openNotes();
@@ -102,6 +107,7 @@ describe("LoanEstimateSection — 이 집을 사려고", () => {
 
   it("규제 문구에 가격별 상한 포함 · 수도권 6억 표기 · 1억 상한 없음", () => {
     render(<LoanEstimateSection {...base} areaPrices={SEOUL} zone="overheated" sido="서울" regionLabel="강남구" />);
+    openCalc();
     fireEvent.click(screen.getByRole("button", { name: "이 집을 사려고" }));
     expect(result()).toContain("강남구는 규제지역 — 담보가치의 40%, 15억 초과는 4억·25억 초과는 2억까지 · 수도권 최대 6억");
     expect(result()).toContain("약 4억");
@@ -112,6 +118,7 @@ describe("LoanEstimateSection — 이 집을 사려고", () => {
 describe("LoanEstimateSection — 집값 단계(결정 12)", () => {
   it("6개월 범위가 없으면 2년 범위 칩 — '최근 2년' 라벨", () => {
     render(<LoanEstimateSection {...base} areaPrices={NO_RANGE} twoYear={{ min: 14700, max: 20000 }} />);
+    openCalc();
     expect(screen.getByText(/최근 2년 거래 범위에서 고르기/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "보수적 1억 4,700만" })).toHaveAttribute("aria-pressed", "true");
     expect(result()).toContain("1억 290만"); // 14700 × 0.7
@@ -138,6 +145,7 @@ describe("LoanEstimateSection — 공통", () => {
   it("금지 낱말 0 — 두 모드 모두, 모든 입력을 넣은 상태에서", () => {
     const BANNED = ["후순위로 해결", "연결", "신청하면", "대부", "해결", "보장", "승인 보장", "최저 금리", "무심사"];
     render(<LoanEstimateSection {...base} />);
+    openCalc();
     type(/선순위/, "5000");
     type(/임차보증금/, "1000");
     type(/연소득/, "4800");
@@ -153,13 +161,15 @@ describe("LoanEstimateSection — 공통", () => {
     }
   });
 
-  it("금융사 안내 링크 문단만 기본 닫힘 — 계산 전제(1주택자·2주택 금지)는 닫힌 채로도 보인다(맹점🟠3)", () => {
+  it("금융사 안내 링크 문단만 기본 닫힘 — 계산 전제(1주택자·2주택 금지)는 닫힌 채로도 보인다(맹점🟠3 · 세션 524 계산기를 접어도)", () => {
     render(<LoanEstimateSection {...base} areaPrices={SEOUL} zone="overheated" sido="서울" regionLabel="강남구" />);
     expect(screen.getByTestId("consumer-loan-notes-toggle")).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByTestId("consumer-loan-notes")).toBeNull();
     expect(screen.queryAllByRole("link")).toHaveLength(0);
+    expect(screen.getByTestId("consumer-loan-calc")).not.toBeVisible(); // 계산기 접힘
     expect(screen.getByTestId("consumer-loan-basis").textContent).toContain("1주택자");
-    expect(screen.getByText("수도권·규제지역 2주택 이상은 취급 금지")).toBeInTheDocument();
+    expect(screen.getByTestId("consumer-loan-basis")).toBeVisible();
+    expect(screen.getByText("수도권·규제지역 2주택 이상은 취급 금지")).toBeVisible();
     openNotes();
     expect(screen.getByTestId("consumer-loan-notes-toggle")).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByTestId("consumer-loan-notes")).toBeInTheDocument();
@@ -167,6 +177,7 @@ describe("LoanEstimateSection — 공통", () => {
 
   it("링크 2곳 — 새 탭 · noopener noreferrer · 기준 글자 · 저장 안 함 안내", () => {
     render(<LoanEstimateSection {...base} />);
+    openCalc();
     openNotes();
     const links = screen.getAllByRole("link");
     expect(links.map((l) => l.getAttribute("href"))).toEqual(["https://finlife.fss.or.kr", "https://portal.kfb.or.kr"]);
@@ -183,5 +194,84 @@ describe("LoanEstimateSection — 공통", () => {
     type(/선순위/, "5000");
     type(/연소득/, "4800");
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * 세션 524 B40 PR 1 — 주황 판(큰 줄·기준·전제·고지)은 늘 보이고 계산기는 「내 조건으로 계산하기」로 펼친다(hidden 속성).
+ * 큰 줄은 결과 칸 굵은 줄과 같은 함수(loanHeadline)라 입력을 따라간다 — 옛 머리 요약(consumer-summary) 단언도 여기로 옮겼다.
+ */
+describe("LoanEstimateSection — 주황 판 · 펼침(세션 524)", () => {
+  const head = () => screen.getByTestId("consumer-loan-headline").textContent ?? "";
+  /** 결과 칸 굵은 줄 금액(오른쪽 값) — 소득 전엔 담보 기준 줄, 소득 뒤엔 「둘 중 작은 값」 */
+  const strongValue = () => {
+    const bold = [...screen.getByTestId("consumer-loan-result").querySelectorAll("div.text-base > b")];
+    return bold[bold.length - 1]?.textContent ?? null;
+  };
+
+  it("처음엔 접힘 — 결과 칸 안 보임 · 제목·큰 줄·기준·전제·고지는 보임 · 단추 aria-expanded/controls", () => {
+    render(<LoanEstimateSection {...base} />);
+    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("이 집을 담보로");
+    expect(screen.getByTestId("consumer-loan-result")).not.toBeVisible();
+    for (const id of ["consumer-loan-headline", "consumer-loan-target", "consumer-loan-basis", "consumer-loan-notice"]) {
+      expect(screen.getByTestId(id)).toBeVisible();
+    }
+    expect(head()).toBe("추가로 가능한 담보대출 약 1억 990만"); // 옛 머리 요약 「한도 최대 약 1억 990만」과 같은 값
+    expect(screen.getByTestId("consumer-loan-target").textContent).toBe("전용 59㎡ · 집값 1억 5,700만 기준");
+    expect(screen.getByTestId("consumer-loan-notice").textContent).toBe("최근 실거래가로 계산한 참고 예시입니다");
+    const btn = screen.getByRole("button", { name: "내 조건으로 계산하기" });
+    expect(btn).toHaveAttribute("aria-expanded", "false");
+    expect(btn.getAttribute("aria-controls")).toBe(screen.getByTestId("consumer-loan-calc").id);
+  });
+
+  it("펼치면 결과 칸 보임 · 큰 줄 숫자 = 결과 칸 굵은 줄 숫자 · 선순위 넣고 접어도 큰 줄은 바뀐 값 · 다시 펴면 입력값 그대로", () => {
+    render(<LoanEstimateSection {...base} />);
+    openCalc();
+    expect(screen.getByTestId("consumer-loan-result")).toBeVisible();
+    expect(screen.getByRole("button", { name: "계산기 접기" })).toHaveAttribute("aria-expanded", "true");
+    expect(head()).toBe(`추가로 가능한 담보대출 ${strongValue()}`);
+    type(/선순위/, "5000");
+    expect(strongValue()).toBe("약 5,990만");
+    fireEvent.click(screen.getByRole("button", { name: "계산기 접기" }));
+    expect(screen.getByTestId("consumer-loan-result")).not.toBeVisible();
+    expect(head()).toBe("추가로 가능한 담보대출 약 5,990만");
+    openCalc();
+    expect(screen.getByLabelText(/선순위/)).toHaveValue("5000");
+  });
+
+  it("소득·금리를 넣으면 큰 줄도 「둘 중 작은 값」을 따른다", () => {
+    render(<LoanEstimateSection {...base} />);
+    openCalc();
+    type(/연소득/, "1000");
+    type(/금리/, "4");
+    expect(result()).toContain("둘 중 작은 값");
+    expect(head()).toBe(`추가로 가능한 담보대출 ${strongValue()}`);
+    expect(head()).not.toContain("1억 990만");
+  });
+
+  it("구입 모드 = 「구입 담보대출 한도 약 …」 · 여력 없음 = 「지금은 담보 여력이 없어요」", () => {
+    render(<LoanEstimateSection {...base} />);
+    openCalc();
+    fireEvent.click(screen.getByRole("button", { name: "이 집을 사려고" }));
+    expect(head()).toBe("구입 담보대출 한도 약 1억 990만");
+    fireEvent.click(screen.getByRole("button", { name: "이미 가진 집으로" }));
+    type(/선순위/, "20000");
+    expect(head()).toBe("지금은 담보 여력이 없어요");
+  });
+
+  it("2년 단계 = 2년 최저 기준 · 지역(규제 여부)을 모르면 기준 줄 끝에 「규제지역이면 더 낮아요」(옛 머리 요약 꼬리표)", () => {
+    render(<LoanEstimateSection {...base} areaPrices={NO_RANGE} twoYear={{ min: 14700, max: 20000 }} zone={null} />);
+    expect(head()).toBe("추가로 가능한 담보대출 약 1억 290만");
+    expect(screen.getByTestId("consumer-loan-target").textContent).toBe("전용 59㎡ · 집값 1억 4,700만 기준 · 규제지역이면 더 낮아요");
+  });
+
+  it("직접 입력 단계 = 한도 숫자 없이 「집값을 넣으면 한도를 계산해요」 · 고지는 「입력하신 집값으로…」 · 넣으면 큰 줄이 계산", () => {
+    render(<LoanEstimateSection {...base} areaPrices={NO_RANGE} twoYear={null} />);
+    expect(head()).toBe("집값을 넣으면 한도를 계산해요");
+    expect(head()).not.toMatch(/\d/);
+    expect(screen.getByTestId("consumer-loan-target").textContent).toBe("전용 59㎡");
+    expect(screen.getByTestId("consumer-loan-notice").textContent).toBe("입력하신 집값으로 계산한 참고 예시입니다");
+    type(/집값/, "20000");
+    expect(head()).toBe("추가로 가능한 담보대출 약 1억 4,000만");
   });
 });

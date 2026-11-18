@@ -9,7 +9,7 @@
 |--------|---------|-------------|
 | `/` (홈=검색 통합, 세션 314 · 세션 508 개편) | **SearchExperience**(빈 화면은 `renderEmpty` → `components/home/HomeSections`: 머리 검색창·「지역으로 찾기」 → 결과) + `getRegionHubTrend()`(지역 시세 흐름) + localStorage(히스토리/즐겨찾기) | `/api/live/search`, `/api/live/region`, `/api/regions/{시군구}/hub` |
 | `/search` → `/` 리다이렉트 | SearchExperience 공용 — 옛 `/search` 는 쿼리 보존하며 홈으로 redirect (직접 링크 6곳 잔존) | (동일) |
-| `/complex/[no]` | `startLiveCrawl()`, `getCrawlStatus()`, `getArticles()`, `getPyeongDetails()`, `getPriceHistory()`, `startPriceCollect()` + useFavoriteStatus + ComplexNoteButton | `/api/live/{no}/articles/*`, `/api/complexes/{no}/*`, `/api/live/{no}/price-history/*` |
+| `/complex/[no]` | 서버 = `loadSummary()`(공개 요약 → 남색 띠·'한눈에 보기'·가까운 단지 · ISR) / 클라이언트 비로그인·일반 회원 = 공개 자료(공시가격·지하철·동네·공개 가격 기록·지역 흐름)로 「최근 거래 → 2년 → 대출 판 → 주변」(세션 524 B40 PR 1 — 구조 = `ui-patterns.md` §단지 화면 새 틀) / 승인 중개사 = `startLiveCrawl()`, `getCrawlStatus()`, `getArticles()`, `getPyeongDetails()`, `getPriceHistory()`, `startPriceCollect()` + useFavoriteStatus + ComplexNoteButton | `/api/complexes/{no}/public-summary`, `/api/live/{no}/articles/*`, `/api/complexes/{no}/*`, `/api/live/{no}/price-history/*` |
 | `/compare` | `getComplex()` x N + `getPriceStats()` x N (useQueries 병렬) + 인쇄/엑셀 | `/api/complexes/{no}`, `/api/complexes/{no}/price-stats` |
 
 ### 미분양 영역 (mibunyang)

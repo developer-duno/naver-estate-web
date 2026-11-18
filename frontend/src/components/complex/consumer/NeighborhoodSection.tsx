@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { NeighborhoodInfo, SubwayStationNear } from "@/types";
 import type { PublicSummaryBreadcrumb } from "@/types/public-summary";
 import { REGION_PAGES_ENABLED, dongPagePath, regionHubPath } from "@/lib/seo/complex-page";
-import { Card } from "@/components/ui/card";
+import BrandCard from "@/components/brand/BrandCard";
 import { formatDistance, formatStationName, normalizeLineName } from "@/lib/subway-format";
 import LoadRetry from "./LoadRetry";
 import { peopleText } from "./consumer-format";
@@ -114,8 +114,8 @@ export default function NeighborhoodSection({ stations, neighborhood: n, onRetry
       : null;
 
   return (
-    <Card className="p-4 space-y-3" aria-labelledby="consumer-q3">
-      <h2 id="consumer-q3" className="text-sm font-bold text-blue-700 tracking-wide">3 · 주변은 어떤가</h2>
+    <BrandCard className="p-4 sm:p-5 space-y-3" aria-labelledby="consumer-q3">
+      <h2 id="consumer-q3" className="text-[15px] font-black text-brand-navy">주변은 어떤가</h2>
       {stations.length > 0 && (
         <div className="space-y-1.5" data-testid="consumer-subway">
           {stations.map((s) => (
@@ -144,6 +144,6 @@ export default function NeighborhoodSection({ stations, neighborhood: n, onRetry
         </p>
       )}
       {onRetry && <LoadRetry onRetry={onRetry} />}
-    </Card>
+    </BrandCard>
   );
 }

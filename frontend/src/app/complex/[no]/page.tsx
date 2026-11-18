@@ -13,7 +13,9 @@ import type { Metadata } from "next";
 import { clientSeedOf, loadSummary } from "@/lib/server/public-summary";
 import { complexCrumbs, complexMetadata } from "@/lib/seo/complex-page";
 import ComplexBreadcrumb from "@/components/complex/public/ComplexBreadcrumb";
-import ComplexGlance from "@/components/complex/public/ComplexGlance";
+import ComplexGlance, { bandFactLine } from "@/components/complex/public/ComplexGlance";
+import BrandPage from "@/components/brand/BrandPage";
+import PageBand from "@/components/brand/PageBand";
 import NearbyComplexes from "@/components/complex/public/NearbyComplexes";
 import { SkeletonPage } from "@/components/Skeleton";
 import ComplexClientView from "./ComplexClientView";
@@ -36,27 +38,37 @@ export default async function ComplexPage({ params }: PageProps) {
   const summary = await loadSummary(no);
   const glance = <ComplexGlance summary={summary} />;
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
-      <ComplexBreadcrumb crumbs={complexCrumbs(summary)} />
-      {/* h1 옆 자리 — 소비자 화면의 ★·비교 버튼이 클라이언트에서 이리로 온다(ConsumerHeader TITLE_ACTIONS_ID, 승인 그림 A안) */}
-      <div className="flex items-center gap-2 md:gap-3 flex-wrap">
-        <h1 className="text-lg md:text-2xl font-bold">{summary.name}</h1>
-        <div id="complex-title-actions" className="flex items-center gap-2" />
+    <BrandPage>
+      {/* 남색 띠(세션 524 B40 PR 1) — 빵부스러기·h1·사실 줄·단추 자리. 안쪽 폭은 본문과 같은 max-w-7xl px-4(중개사 표 폭 그대로, 설계 D3) */}
+      <PageBand
+        overlap
+        innerClassName="mx-auto max-w-7xl px-4"
+        eyebrow={<ComplexBreadcrumb crumbs={complexCrumbs(summary)} tone="navy" />}
+        title={summary.name}
+        description={bandFactLine(summary)}
+        // 단추 자리 — 소비자 화면의 ★·비교 버튼이 클라이언트에서 이리로 온다(ConsumerHeader TITLE_ACTIONS_ID).
+        // 높이를 미리 잡아 둬서 단추가 들어올 때 띠가 늘어나지 않는다
+        actions={<div id="complex-title-actions" className="flex min-h-11 flex-wrap items-center gap-2" />}
+      />
+      <div className="max-w-7xl mx-auto px-4 pb-6 space-y-4">
+        {/* 띠에 걸치는 자리는 여기 한 곳(설계 D7) — 어느 상태든 첫 요소(한눈에 보기 · 중개사 접힌 요약)가 걸친다.
+            클라이언트 화면은 useSearchParams(필터 주소)를 써서 서버에서 그리지 못하고 클라이언트로 넘어간다 —
+            자체 Suspense 로 그 범위를 이 칸에만 가둔다. 없으면 루트 loading.tsx 까지 넘어가 h1·요약·링크가 첫 HTML 에서
+            통째로 빠진다(seo-metadata 룰 3, 세션 483 build 실측). 대기 화면에도 '한눈에 보기'를 그대로 둔다. */}
+        <div className="-mt-16">
+          <Suspense
+            fallback={
+              <div className="space-y-8">
+                {glance}
+                <SkeletonPage message="단지 정보를 불러오는 중..." />
+              </div>
+            }
+          >
+            <ComplexClientView complexNo={summary.complex_no} seed={clientSeedOf(summary)} glance={glance} />
+          </Suspense>
+        </div>
+        <NearbyComplexes summary={summary} />
       </div>
-      {/* 클라이언트 화면은 useSearchParams(필터 주소)를 써서 서버에서 그리지 못하고 클라이언트로 넘어간다 —
-          자체 Suspense 로 그 범위를 이 칸에만 가둔다. 없으면 루트 loading.tsx 까지 넘어가 h1·요약·링크가 첫 HTML 에서
-          통째로 빠진다(seo-metadata 룰 3, 세션 483 build 실측). 대기 화면에도 '한눈에 보기'를 그대로 둔다. */}
-      <Suspense
-        fallback={
-          <div className="space-y-8">
-            {glance}
-            <SkeletonPage message="단지 정보를 불러오는 중..." />
-          </div>
-        }
-      >
-        <ComplexClientView complexNo={summary.complex_no} seed={clientSeedOf(summary)} glance={glance} />
-      </Suspense>
-      <NearbyComplexes summary={summary} />
-    </div>
+    </BrandPage>
   );
 }

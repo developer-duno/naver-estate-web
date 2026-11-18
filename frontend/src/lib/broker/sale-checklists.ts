@@ -221,7 +221,7 @@ export const SALE_BUYER: DealChecklist = {
         {
           id: "sale-buyer.loan-calc",
           title: "살 단지 화면에서 구입 대출 한도를 먼저 계산해 보기",
-          detail: "단지 화면의 「내 돈으로 가능한가 → 이 집을 사려고」에서 계산합니다.",
+          detail: "단지 화면의 「내 조건으로 계산하기 → 이 집을 사려고」에서 계산합니다.",
           laws: [],
           links: [{ label: "단지 찾기", href: "/search" }],
         },

@@ -26,9 +26,17 @@
 - 트리거 버튼 hover → fixed 팝업 패널 (시/도 | 시/군/구 | 읍/면/동)
 - hover로 하위 목록 미리보기, 읍/면/동 선택 시 검색 실행
 
+## 단지 화면 새 틀 (세션 524 B40 PR 1 — 홈과 같은 남색 띠 + 흰 카드 + 주황 대출 판)
+- 공통 부품 `components/brand/` 3개: `PageBand`(남색 띠 · eyebrow·h1·설명·단추 자리 · `overlap` = 아래 첫 카드가 걸칠 여백 · `innerClassName` 안쪽 폭, 기본 1160) · `BrandCard`(흰 카드 `rounded-2xl` + 그림자 `rgba(11,31,58,0.14)` · `as="section"`) · `BrandPage`(바탕 `-mb-16 bg-brand-bg pb-16`). 홈 부품(`components/home/**`)은 따로 — 손대지 않는다
+- `/complex/[no]` 서버 껍데기: `BrandPage` > `PageBand overlap`(빵부스러기 `tone="navy"` · h1 단지명 · 사실 줄 `bandFactLine` 「1998년 사용승인 · N세대 · N개동」 · 단추 자리 `#complex-title-actions` min-h-11) → `max-w-7xl px-4` 묶음 안 **`-mt-16` 한 곳**(Suspense 묶음 — 어느 상태든 첫 요소 '한눈에 보기'·중개사 접힌 요약이 걸친다) → 가까운 단지(흰 카드). 안쪽 폭은 띠·본문 모두 `max-w-7xl px-4`(중개사 표 폭 그대로)
+- 공유 부품은 「고르는 칸」: `ComplexBreadcrumb tone`(기본 = 회색 · 지역 3장은 tone 없이 그대로) · `FavoriteCompareButtons tone`(기본 = 별 글자 · 중개사 머리 그대로). 기본값이 바뀌면 `band-parts.test.tsx`·`ComplexHeader.test.tsx` 가 깨진다
+- '한눈에 보기'(`ComplexGlance`): 큰 줄 `glance-headline`(대표 면적 `repAreaRange` · 6개월 없으면 「최근 2년」) · 면적별 표 `glance-areas` 는 면적 2개 이상일 때만 · 사실 칸 3(공시가격·관리비·역 · 홀수면 마지막 칸 두 칸 폭)
+- 소비자 화면 순서(휴대폰 = DOM): 머리(뒤로·배지·주소 칩 — 한 줄 요약 없음) → 「최근 거래」(면적 칩·2년 막대·거래 5줄 + 「N건 모두 보기 ▾」, 면적 바꾸면 접힘) → 「2년 동안 어떻게 변했나」 → 대출 판 → 「주변은 어떤가」 → 잠금 카드. lg 는 한 격자 `grid-rows-[repeat(5,auto)_1fr]` 에 대출 판만 `col-start-2 row-start-1 row-span-6`(order 로 뒤집지 않음 · 1fr 행이 판 높이를 받아 펼쳐도 왼쪽 간격 그대로)
+- 대출 판(`LoanEstimateSection`): 주황 위쪽 = h2 「이 집을 담보로」 · 큰 줄 `consumer-loan-headline`(= `loanHeadline()` — 결과 칸 굵은 줄과 같은 함수) · 기준 줄 `consumer-loan-target` · 전제 `consumer-loan-basis`·2주택 줄 · 고지 `consumer-loan-notice` · 남색 단추 「내 조건으로 계산하기」/「계산기 접기」. 계산기는 `hidden` 속성(조건부 렌더 아님 — 접힌 단추는 역할 조회에 안 잡혀 시험은 먼저 펼친다). 그래프 색(`MonthBands` #f59e0b·지역 선 #1d4ed8·#d97706·2년 막대 amber)은 비교 장과 같이 쓰므로 그대로
+
 ## 단지 비교 (CompareFloatingBar + CompareCharts)
 - 검색 결과 테이블에 "+" 버튼 → useCompare로 localStorage 관리 (최대 4개)
-- 단지 상세 헤더(ComplexHeader)에 "+ 비교" pill 토글 — 진입점 2곳 (세션 296). /complex 플로팅 바는 printRef 내부라 no-print 래퍼 + 모달보다 DOM 앞 필수
+- 단지 상세 헤더(ComplexHeader)에 "+ 비교" pill 토글 — 진입점 2곳 (세션 296). /complex 플로팅 바는 printRef 내부라 no-print 래퍼 + 모달보다 DOM 앞 필수 · 소비자 화면은 같은 단추(`FavoriteCompareButtons tone="navy"`)가 남색 띠 안 「☆ 즐겨찾기」「+ 비교」 테두리 단추(44px)로 간다(세션 524)
 - 하단 플로팅 바에 선택 단지 표시 + "비교하기" 버튼
 - /compare 페이지: useQueries로 병렬 조회, 24행 비교 테이블 (평당가 포함) — 값만 나란히, 맨 아래 출처 각주(data-testid=compare-sources-footer). 우위 판정 ★·초록 강조·범례는 세션 472 PR 3 에 삭제(공인 기준 아님)
 - 차트 3종: ComparePriceTrendChart, ComparePriceBarChart(매매/전세/월세 평균), CompareFloorChart — 판정 ★·"최고" 줄 없음. CompareRadarChart(신축도·종합 우위)는 세션 472 PR 3 에 삭제

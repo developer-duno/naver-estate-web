@@ -2,7 +2,8 @@
 
 /**
  * 소비자 단지 화면 「C 질문형」(세션 482 PR 1b, 설계 design-pr1b.md §3) — 비로그인·일반 회원이 보는 한 장.
- * 질문 4개 순서: 얼마짜리 → 어떻게 변해 왔나 → 주변은 → 내 돈으로 가능한가. 맨 아래(S5)는 페이지가 footer 로 넘긴다.
+ * 세션 524 B40 PR 1 순서(휴대폰 한 열): 머리 → 최근 거래 → 2년 동안 어떻게 변했나 → 이 집을 담보로(대출 판) → 주변은 어떤가 → 잠금 카드.
+ * 맨 아래(S5)는 페이지가 footer 로 넘긴다.
  * 네이버 재료는 쓰지 않는다 — 단지 응답(비로그인이면 BE 가 걷어냄)·공시가격·K-apt·지하철·동네·공개 가격 기록·지역 흐름만.
  * 공시가격·지하철·동네 쿼리 키는 ComplexBasicInfo 와 같아 자동으로 한 번만 부른다. 공시가격·지하철은 서버 요약을 initialData 로
  * 받아 브라우저가 다시 부르지 않는다(세션 483 PR 3b). 관리비는 '한눈에 보기' 표(서버)로 옮겨 여기선 부르지 않는다.
@@ -21,9 +22,8 @@ import {
 } from "@/lib/api/complex";
 import { queryKeys } from "@/lib/query-keys";
 import { zoneOfCortar } from "@/lib/loan/regulation-codes";
-import { secondLienLimit } from "@/lib/loan/secondLien";
-import { Card } from "@/components/ui/card";
-import ConsumerHeader, { type ConsumerSummary } from "./ConsumerHeader";
+import BrandCard from "@/components/brand/BrandCard";
+import ConsumerHeader from "./ConsumerHeader";
 import LoanEstimateSection from "./LoanEstimateSection";
 import NeighborhoodSection from "./NeighborhoodSection";
 import PriceRangeSection from "./PriceRangeSection";
@@ -54,7 +54,7 @@ interface Props {
   isCompared: boolean;
   compareFull: boolean;
   onToggleCompare: () => void;
-  /** S5 오른쪽 칸(넓은 화면에선 4번 카드 아래) — 비로그인 잠금 카드 */
+  /** 비로그인 잠금 카드 — 넓은 화면에선 왼쪽 열 맨 아래(세션 524 B40 PR 1 · 설계 §3 lg 왼쪽 = 3·4·5·7·8) */
   aside?: ReactNode;
   /** S5 아래 전체 폭 — 일반 회원 매물 섹션 */
   footer?: ReactNode;
@@ -122,24 +122,8 @@ export default function ConsumerComplexView({ complex, aside, footer, endYm, see
   // 2년 범위 답을 받았나 — 받기 전·실패면 "2년 기록 없음"을 단정하지 않는다
   const twoYearReady = area == null || history != null;
 
-  // 머리 요약 = 대출 카드와 같은 집값 단계(결정 12) · 가진 집 기준(카드 기본 모드) · 선순위 0
+  // 대출 판 집값 단계(결정 12) — 6개월 범위가 있으면 다시 시도 단추를 안 둔다
   const stage = priceStage(selected, twoYear);
-  let summary: ConsumerSummary | null = null;
-  if (!officetel) {
-    if (stage.kind !== "manual") {
-      summary = {
-        kind: "range",
-        area,
-        period: stage.kind,
-        min: stage.min,
-        max: stage.max,
-        ltv: secondLienLimit({ mode: "own", price: stage.min, zone, sido: complex.sido }).available,
-        zoneUnknown: zone == null,
-      };
-    } else if (twoYearReady && !historyQuery.isError) {
-      summary = { kind: "manual" };
-    }
-  }
 
   // 직접 입력 단계의 참고 글자 — 선택 면적 ±1㎡ 공시가격(면적을 모르면 대표 평형)
   const officialItems = officialQuery.data?.items ?? [];
@@ -147,39 +131,36 @@ export default function ConsumerComplexView({ complex, aside, footer, endYm, see
 
   return (
     <div className="space-y-4">
-      {/* 넓은 화면(lg+)은 2열 — 왼쪽 3 = 머리·1·2·3, 오른쪽 2 = 4 대출 카드 + 잠금 카드(그림 C-desk). 휴대폰은 한 열 */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-4 items-start" data-testid="consumer-grid">
-        <div className="space-y-4 min-w-0">
-          <ConsumerHeader complex={complex} summary={summary} {...header} />
-          <PriceRangeSection
-            areaPrices={areaPrices}
-            selected={area}
-            onSelect={setArea}
-            twoYear={twoYear}
-            twoYearReady={twoYearReady}
-            official={officialQuery.data}
-            officetel={officetel}
-            onRetry={retryOf(officialQuery, historyQuery)}
-          />
-          <PriceTrendSection
-            history={officetel ? null : history}
-            trend={trendQuery.data}
-            endYm={endYm ?? basisToYm(seed?.basis_ym) ?? currentYm()}
-            onRetry={retryOf(historyQuery, trendQuery)}
-            breadcrumb={seed?.breadcrumb ?? null}
-          />
-          <NeighborhoodSection
-            stations={subwayQuery.data?.stations ?? []}
-            neighborhood={hoodQuery.data}
-            onRetry={retryOf(subwayQuery, hoodQuery)}
-            breadcrumb={seed?.breadcrumb ?? null}
-          />
-        </div>
-        <div className="space-y-4 min-w-0">
+      {/* 휴대폰 한 열 = DOM 순서 그대로(order 로 뒤집지 않는다). 넓은 화면(lg+) 2열 — 대출 판만 오른쪽 열 1행부터 끝 행까지,
+          나머지는 왼쪽 열에 차례로(오른쪽이 차 있어 자동으로 왼쪽). 왼쪽 카드 행은 auto, 마지막 1fr 행이 대출 판의 남는 높이를 받아
+          계산기를 펼쳐도 왼쪽 카드 사이 간격이 그대로다(세션 524 B40 PR 1). */}
+      <div
+        className="grid grid-cols-1 gap-4 items-start lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:grid-rows-[repeat(5,auto)_1fr]"
+        data-testid="consumer-grid"
+      >
+        <ConsumerHeader complex={complex} {...header} />
+        <PriceRangeSection
+          areaPrices={areaPrices}
+          selected={area}
+          onSelect={setArea}
+          twoYear={twoYear}
+          twoYearReady={twoYearReady}
+          official={officialQuery.data}
+          officetel={officetel}
+          onRetry={retryOf(officialQuery, historyQuery)}
+        />
+        <PriceTrendSection
+          history={officetel ? null : history}
+          trend={trendQuery.data}
+          endYm={endYm ?? basisToYm(seed?.basis_ym) ?? currentYm()}
+          onRetry={retryOf(historyQuery, trendQuery)}
+          breadcrumb={seed?.breadcrumb ?? null}
+        />
+        <div className="min-w-0 lg:col-start-2 lg:row-start-1 lg:row-span-6" data-testid="consumer-loan-col">
           {officetel ? (
-            <Card className="p-4" data-testid="consumer-loan-skip">
-              <p className="text-xs text-gray-600">오피스텔(비주택) 담보대출은 주택 규칙과 달라 계산하지 않아요</p>
-            </Card>
+            <BrandCard className="p-4" data-testid="consumer-loan-skip">
+              <p className="text-xs text-brand-muted">오피스텔(비주택) 담보대출은 주택 규칙과 달라 계산하지 않아요</p>
+            </BrandCard>
           ) : (
             <LoanEstimateSection
               areaPrices={areaPrices}
@@ -193,11 +174,17 @@ export default function ConsumerComplexView({ complex, aside, footer, endYm, see
               onRetry={stage.kind === "6m" ? undefined : retryOf(historyQuery, officialQuery)}
             />
           )}
-          {aside}
         </div>
+        <NeighborhoodSection
+          stations={subwayQuery.data?.stations ?? []}
+          neighborhood={hoodQuery.data}
+          onRetry={retryOf(subwayQuery, hoodQuery)}
+          breadcrumb={seed?.breadcrumb ?? null}
+        />
+        {aside}
       </div>
       {footer}
-      <p className="text-xs text-gray-400">{CONSUMER_SOURCE_LINE}</p>
+      <p className="text-xs text-brand-muted">{CONSUMER_SOURCE_LINE}</p>
     </div>
   );
 }

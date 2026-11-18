@@ -2,11 +2,11 @@
 
 import { useId, useState, type ReactNode } from "react";
 import type { AreaPrice } from "@/types";
-import { Card } from "@/components/ui/card";
+import BrandCard from "@/components/brand/BrandCard";
 import { formatKoreanPrice } from "@/lib/format";
 import { LOAN_RULES_BASIS, isMetroRegion } from "@/lib/loan/loanRules";
 import { metroSidoOf } from "@/lib/loan/regulation-codes";
-import { livingFundCapApplies, secondLienLimit, type LoanMode } from "@/lib/loan/secondLien";
+import { livingFundCapApplies, secondLienLimit, type LoanMode, type SecondLienResult } from "@/lib/loan/secondLien";
 import LoadRetry from "./LoadRetry";
 import { AreaChips } from "./PriceRangeSection";
 import { hasRange, priceStage, topicParticle } from "./consumer-format";
@@ -43,7 +43,7 @@ function Field({ id, label, value, onChange, unit, placeholder }: {
 }) {
   return (
     <div>
-      <label htmlFor={id} className="block text-xs text-gray-500 mb-1">{label}</label>
+      <label htmlFor={id} className="block text-xs text-brand-muted mb-1">{label}</label>
       <div className="flex items-center gap-1.5">
         <input
           id={id}
@@ -52,9 +52,9 @@ function Field({ id, label, value, onChange, unit, placeholder }: {
           value={value}
           placeholder={placeholder}
           onChange={(e) => onChange(e.target.value)}
-          className="h-10 w-full rounded-lg border border-gray-300 px-2.5 text-sm"
+          className="h-10 w-full rounded-lg border border-brand-line px-2.5 text-sm"
         />
-        <span className="text-xs text-gray-500 shrink-0">{unit}</span>
+        <span className="text-xs text-brand-muted shrink-0">{unit}</span>
       </div>
     </div>
   );
@@ -65,9 +65,9 @@ function Row({ label, value, strong, tail }: { label: string; value: string; str
     <div className={`flex justify-between gap-2 ${strong ? "text-base" : "text-xs"}`}>
       <span className={strong ? "font-bold" : ""}>
         {label}
-        {tail && <span className="text-xs font-normal text-gray-500"> {tail}</span>}
+        {tail && <span className="text-xs font-normal text-brand-muted"> {tail}</span>}
       </span>
-      <b className={`shrink-0 whitespace-nowrap ${strong ? "text-blue-700" : ""}`}>{value}</b>
+      <b className={`shrink-0 whitespace-nowrap ${strong ? "text-brand-orange-text" : ""}`}>{value}</b>
     </div>
   );
 }
@@ -78,7 +78,7 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
       type="button"
       aria-pressed={on}
       onClick={onClick}
-      className={`h-8 px-3 rounded-full border text-xs ${on ? "bg-blue-700 text-white border-blue-700" : "bg-white text-gray-700 border-gray-300"}`}
+      className={`h-8 px-3 rounded-full border text-xs ${on ? "bg-brand-navy text-white border-brand-navy" : "bg-white text-brand-navy border-brand-line"}`}
     >
       {children}
     </button>
@@ -97,8 +97,22 @@ function ruleTextOf(mode: LoanMode, zone: Props["zone"], regionLabel: string | n
 }
 
 /**
- * S4 · 내 돈으로 가능한가(참고 계산) — 두 모드(결정 11: 기본 '이미 가진 집') · 집값 단계(결정 12: 6개월 → 2년 → 직접 입력).
+ * 판 큰 줄과 결과 칸 굵은 줄이 같이 쓰는 글자(세션 524 B40 PR 1 · 설계 D8) — 숫자가 둘로 갈리지 않게 한 곳에서 만든다.
+ * 소득을 넣으면 「둘 중 작은 값」이 굵은 줄이라 큰 줄도 그 값을 따른다.
+ */
+export function loanHeadline(r: SecondLienResult | null, own: boolean): { label: string; value: string | null } {
+  if (r == null) return { label: "집값을 넣으면 한도를 계산해요", value: null };
+  if (r.available <= 0) return { label: "지금은 담보 여력이 없어요", value: null };
+  const label = own ? "추가로 가능한 담보대출" : "구입 담보대출 한도";
+  if (r.incomeLimit != null) return { label, value: r.loan > 0 ? `약 ${money(r.loan)}` : "0원" };
+  return { label, value: `약 ${formatKoreanPrice(r.available)}` };
+}
+
+/**
+ * S4 · 이 집을 담보로(옛 「내 돈으로 가능한가」 · 참고 계산) — 두 모드(결정 11: 기본 '이미 가진 집') · 집값 단계(결정 12: 6개월 → 2년 → 직접 입력).
  * 입력은 화면 상태에만 있고 저장·전송하지 않는다. 금융사·상품·금리 숫자 표시 0.
+ * 세션 524 B40 PR 1: 위쪽 주황 판(큰 줄·기준·전제·고지·펼침 단추)은 늘 보이고, 계산기는 hidden 속성으로 접는다
+ * (조건부 렌더가 아니라서 접어도 입력값이 남고 큰 줄은 지금 입력을 따라간다).
  */
 export default function LoanEstimateSection({
   areaPrices, selected, onSelect, zone, sido, regionLabel, twoYear, officialManwon, onRetry,
@@ -113,6 +127,7 @@ export default function LoanEstimateSection({
   const [existing, setExisting] = useState("");
   const [rate, setRate] = useState("");
   const [notesOpen, setNotesOpen] = useState(false);
+  const [calcOpen, setCalcOpen] = useState(false);
 
   const ap = areaPrices.find((a) => a.area_m2 === selected);
   const stage = priceStage(ap, twoYear);
@@ -137,21 +152,50 @@ export default function LoanEstimateSection({
   const basisText = own
     ? `생활안정자금 기준 · 1주택자 · 수도권·규제지역은 최대 1억(금융위 2025-06-28) · 은행 기준 · ${LOAN_RULES_BASIS} 규정 · 입력값은 저장되지 않아요`
     : `무주택 구입 기준 · 은행 기준 · ${LOAN_RULES_BASIS} 규정 · 입력값은 저장되지 않아요`;
+  const head = loanHeadline(r, own);
+  // 기준 줄 「전용 39㎡ · 집값 6,000만 기준」 — 지역(규제 여부)을 모르면 끝에 한 마디(옛 머리 요약 꼬리표)
+  const target = [
+    selected != null ? `전용 ${selected}㎡` : null,
+    price > 0 ? `집값 ${formatKoreanPrice(price)} 기준` : null,
+    price > 0 && zone == null ? "규제지역이면 더 낮아요" : null,
+  ].filter(Boolean).join(" · ");
+  const calcId = `${uid}-calc`;
 
   return (
-    <Card className="p-4 space-y-3 border-2 border-blue-700" aria-labelledby="consumer-q4" data-testid="consumer-loan">
-      <h2 id="consumer-q4" className="text-sm font-bold text-blue-700 tracking-wide">
-        4 · 내 돈으로 가능한가 <span className="text-xs font-normal text-gray-500">(참고 계산)</span>
-      </h2>
+    <BrandCard as="section" className="overflow-hidden" aria-labelledby="consumer-q4" data-testid="consumer-loan">
+      {/* 늘 보이는 위쪽 판 — 계산 전제(1주택자·2주택 금지 등)는 접혀도 보인다(맹점🟠3 · 설계 D9) */}
+      <div className="bg-brand-orange-soft p-4 sm:p-5 space-y-2">
+        <h2 id="consumer-q4" className="text-[13px] font-bold text-brand-orange-text">이 집을 담보로</h2>
+        <p className="text-[19px] font-black leading-snug tracking-tight text-brand-navy sm:text-[22px]" data-testid="consumer-loan-headline">
+          {head.label}
+          {head.value && <span className="whitespace-nowrap"> {head.value}</span>}
+        </p>
+        {target && <p className="text-xs text-brand-navy" data-testid="consumer-loan-target">{target}</p>}
+        <p className="text-xs text-brand-muted" data-testid="consumer-loan-basis">{basisText}</p>
+        {own && (metro || zone !== "normal") && (
+          <p className="text-xs text-brand-muted">수도권·규제지역 2주택 이상은 취급 금지</p>
+        )}
+        <p className="text-xs text-brand-muted" data-testid="consumer-loan-notice">
+          {stage.kind === "manual" ? "입력하신 집값으로 계산한 참고 예시입니다" : "최근 실거래가로 계산한 참고 예시입니다"}
+        </p>
+        {onRetry && <LoadRetry onRetry={onRetry} />}
+        <button
+          type="button"
+          aria-expanded={calcOpen}
+          aria-controls={calcId}
+          onClick={() => setCalcOpen((v) => !v)}
+          className="!mt-3 flex min-h-12 w-full items-center justify-between rounded-[10px] bg-brand-navy px-4 text-[15px] font-bold text-white"
+          data-testid="consumer-loan-toggle"
+        >
+          <span>{calcOpen ? "계산기 접기" : "내 조건으로 계산하기"}</span>
+          <span aria-hidden="true">{calcOpen ? "▴" : "→"}</span>
+        </button>
+      </div>
+      <div id={calcId} hidden={!calcOpen} className="p-4 sm:p-5 space-y-3" data-testid="consumer-loan-calc">
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="계산 기준 고르기">
         <Chip on={own} onClick={() => setMode("own")}>이미 가진 집으로</Chip>
         <Chip on={!own} onClick={() => setMode("buy")}>이 집을 사려고</Chip>
       </div>
-      {/* 계산 전제(1주택자·2주택 금지 등)는 늘 보인다 — 결과가 보이는 동안 그 전제가 숨으면 안 된다(맹점🟠3) */}
-      <p className="text-xs text-gray-500" data-testid="consumer-loan-basis">{basisText}</p>
-      {own && (metro || zone !== "normal") && (
-        <p className="text-xs text-gray-500">수도권·규제지역 2주택 이상은 취급 금지</p>
-      )}
       {areaPrices.some(hasRange) && (
         <AreaChips areaPrices={areaPrices} selected={selected} onSelect={onSelect} label="계산할 면적" />
       )}
@@ -166,12 +210,12 @@ export default function LoanEstimateSection({
             placeholder="예: 30000"
           />
           {officialManwon != null && officialManwon > 0 && (
-            <p className="mt-1 text-xs text-gray-500">공시가격 {formatKoreanPrice(officialManwon)} · 시세보다 낮을 수 있어요</p>
+            <p className="mt-1 text-xs text-brand-muted">공시가격 {formatKoreanPrice(officialManwon)} · 시세보다 낮을 수 있어요</p>
           )}
         </div>
       ) : (
         <div>
-          <span className="block text-xs text-gray-500 mb-1">
+          <span className="block text-xs text-brand-muted mb-1">
             집값으로 볼 금액 ({stage.kind === "2y" ? "최근 2년" : "최근 6개월"} 거래 범위에서 고르기)
           </span>
           <div className="flex flex-wrap gap-1.5" role="group" aria-label="집값 고르기">
@@ -183,12 +227,11 @@ export default function LoanEstimateSection({
           </div>
         </div>
       )}
-      {onRetry && <LoadRetry onRetry={onRetry} />}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2.5">
         {own && (
           <div>
             <Field id={`${uid}-first`} label="이미 있는 담보대출(선순위)" value={firstLien} onChange={setFirstLien} unit="만원" placeholder="0" />
-            <p className="mt-1 text-xs text-gray-500">선순위 대출의 월 상환액은 아래 &lsquo;기존 대출 월 상환&rsquo;에 넣어 주세요</p>
+            <p className="mt-1 text-xs text-brand-muted">선순위 대출의 월 상환액은 아래 &lsquo;기존 대출 월 상환&rsquo;에 넣어 주세요</p>
           </div>
         )}
         <Field id={`${uid}-dep`} label="임차보증금 (세입자가 있으면)" value={deposit} onChange={setDeposit} unit="만원" placeholder="0" />
@@ -196,9 +239,9 @@ export default function LoanEstimateSection({
         <Field id={`${uid}-ext`} label="기존 대출 월 상환 (선택)" value={existing} onChange={setExisting} unit="만원" placeholder="0" />
         <Field id={`${uid}-rate`} label="금리 (선택 · 넣으면 월 상환액)" value={rate} onChange={setRate} unit="연 %" placeholder="예: 4.0" />
       </div>
-      <div className="rounded-lg bg-blue-50 p-3 space-y-1.5" data-testid="consumer-loan-result">
+      <div className="rounded-lg bg-brand-bg p-3 space-y-1.5" data-testid="consumer-loan-result">
         {r == null ? (
-          <p className="text-xs text-gray-600">집값을 넣으면 계산해요</p>
+          <p className="text-xs text-brand-muted">집값을 넣으면 계산해요</p>
         ) : (
           <>
             <Row label={`지역 규칙 · ${ruleText}${!own && metro ? " · 수도권 최대 6억" : ""}`} value={formatKoreanPrice(r.regionLimit)} />
@@ -208,19 +251,19 @@ export default function LoanEstimateSection({
             {r.available > 0 ? (
               <Row
                 label={own ? "추가로 가능한 담보대출(담보 기준)" : "구입 담보대출 한도(담보 기준)"}
-                value={`약 ${formatKoreanPrice(r.available)}`}
+                value={r.incomeLimit == null ? head.value ?? "" : `약 ${formatKoreanPrice(r.available)}`}
                 strong={r.incomeLimit == null}
                 tail={r.incomeLimit == null ? "(소득 확인 전)" : undefined}
               />
             ) : (
-              <p className="text-sm font-bold">지금은 담보 여력이 없어요</p>
+              <p className="text-sm font-bold">{head.label}</p>
             )}
-            {own && !capApplies && <p className="text-xs text-gray-600">지방 주택은 1억 상한 없이 은행마다 달라요</p>}
-            {r.incomeSkip === "no-rate" && <p className="text-xs text-gray-600">금리를 넣으면 소득 기준도 계산</p>}
+            {own && !capApplies && <p className="text-xs text-brand-muted">지방 주택은 1억 상한 없이 은행마다 달라요</p>}
+            {r.incomeSkip === "no-rate" && <p className="text-xs text-brand-muted">금리를 넣으면 소득 기준도 계산</p>}
             {r.incomeLimit != null && (
               <>
                 <Row label={`소득 기준 · DSR 40% · 스트레스 금리 ${r.stressRate}% · 30년`} value={`약 ${money(r.incomeLimit)}`} />
-                <Row label="둘 중 작은 값" value={r.loan > 0 ? `약 ${money(r.loan)}` : "0원"} strong />
+                <Row label="둘 중 작은 값" value={head.value ?? "0원"} strong />
               </>
             )}
             {r.monthly != null && ratePct != null && (
@@ -228,11 +271,11 @@ export default function LoanEstimateSection({
             )}
             {barTotal > 0 && (
               <div aria-hidden="true">
-                <div className="flex h-3.5 rounded-full overflow-hidden bg-slate-200">
-                  <i className="bg-slate-400" style={{ width: `${(used / barTotal) * 100}%` }} />
-                  <i className="bg-blue-700" style={{ width: `${(r.available / barTotal) * 100}%` }} />
+                <div className="flex h-3.5 rounded-full overflow-hidden bg-brand-line-soft">
+                  <i className="bg-brand-navy-line" style={{ width: `${(used / barTotal) * 100}%` }} />
+                  <i className="bg-brand-orange" style={{ width: `${(r.available / barTotal) * 100}%` }} />
                 </div>
-                <div className="mt-1 flex justify-between text-xs text-gray-500">
+                <div className="mt-1 flex justify-between text-xs text-brand-muted">
                   <span>{own ? "선순위·보증금" : "보증금"} {money(used)}</span>
                   <span>{own ? "추가 가능" : "대출 가능"} {money(r.available)}</span>
                 </div>
@@ -246,22 +289,23 @@ export default function LoanEstimateSection({
         type="button"
         aria-expanded={notesOpen}
         onClick={() => setNotesOpen((v) => !v)}
-        className="text-xs text-blue-700 underline"
+        className="text-xs text-brand-navy underline"
         data-testid="consumer-loan-notes-toggle"
       >
         {notesOpen ? "금융사 조건 비교 안내 접기" : "금융사 조건 비교 안내 보기"}
       </button>
       {notesOpen && (
         <div className="space-y-1" data-testid="consumer-loan-notes">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-brand-muted">
             실제 한도는 소득·신용·기존 대출로 달라져요. 금융사별 조건은{" "}
-            <a href="https://finlife.fss.or.kr" target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">금융감독원 금융상품 비교공시</a>
+            <a href="https://finlife.fss.or.kr" target="_blank" rel="noopener noreferrer" className="text-brand-navy underline">금융감독원 금융상품 비교공시</a>
             {" · "}
-            <a href="https://portal.kfb.or.kr" target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">은행연합회 소비자포털</a>
+            <a href="https://portal.kfb.or.kr" target="_blank" rel="noopener noreferrer" className="text-brand-navy underline">은행연합회 소비자포털</a>
             에서 비교해 보세요.
           </p>
         </div>
       )}
-    </Card>
+      </div>
+    </BrandCard>
   );
 }

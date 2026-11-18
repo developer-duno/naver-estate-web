@@ -18,27 +18,47 @@ export interface FavoriteCompareProps {
   isCompared?: boolean;
   compareFull?: boolean;
   onToggleCompare?: () => void;
+  /** 모양 두 벌 — default = 지금 그대로(중개사 머리 등) · navy = 남색 띠 안 테두리 단추(글자 붙음 · 높이 44px, 세션 524 B40 PR 1) */
+  tone?: "default" | "navy";
+}
+
+/** 남색 띠 안 테두리 단추 — 비교 단추는 상태에 따라 칠함·흐림 */
+const NAVY_BTN = "no-print inline-flex min-h-11 items-center gap-1 rounded-lg border px-3.5 text-sm font-bold transition-colors";
+function navyCompareClass(isCompared: boolean | undefined, compareFull: boolean | undefined): string {
+  if (isCompared) return `${NAVY_BTN} border-white bg-white text-brand-navy`;
+  if (compareFull) return `${NAVY_BTN} cursor-not-allowed border-brand-navy-line text-brand-on-navy-muted opacity-60`;
+  return `${NAVY_BTN} border-brand-navy-line text-white hover:bg-white/10`;
 }
 
 /** 즐겨찾기 ★ + 비교 담기 버튼 — 머리 줄과 서버 h1 옆(소비자 화면, 세션 483 PR 3b)이 같은 버튼을 쓴다 */
-export function FavoriteCompareButtons({ name, starred, onToggleFavorite, isCompared, compareFull, onToggleCompare }: FavoriteCompareProps) {
+export function FavoriteCompareButtons({ name, starred, onToggleFavorite, isCompared, compareFull, onToggleCompare, tone = "default" }: FavoriteCompareProps) {
+  const navy = tone === "navy";
   return (
     <>
       <button
         type="button"
         onClick={onToggleFavorite}
-        className={`text-xl transition-colors ${starred ? "text-yellow-500" : "text-gray-300 hover:text-yellow-400"}`}
+        className={
+          navy
+            ? `${NAVY_BTN} border-brand-navy-line text-white hover:bg-white/10`
+            : `text-xl transition-colors ${starred ? "text-yellow-500" : "text-gray-300 hover:text-yellow-400"}`
+        }
         aria-label={starred ? "즐겨찾기 해제" : "즐겨찾기 추가"}
         title={starred ? "즐겨찾기 해제" : "즐겨찾기 추가"}
       >
-        {starred ? "★" : "☆"}
+        {navy ? (
+          <>
+            <span aria-hidden="true" className={starred ? "text-brand-orange" : ""}>{starred ? "★" : "☆"}</span>
+            즐겨찾기
+          </>
+        ) : starred ? "★" : "☆"}
       </button>
       {onToggleCompare && (
         <button
           type="button"
           onClick={onToggleCompare}
           disabled={!isCompared && compareFull}
-          className={`no-print text-xs px-2.5 py-1 rounded border transition-colors ${
+          className={navy ? navyCompareClass(isCompared, compareFull) : `no-print text-xs px-2.5 py-1 rounded border transition-colors ${
             isCompared
               ? "bg-blue-600 text-white border-blue-600"
               : compareFull

@@ -83,10 +83,13 @@ test("비로그인 — 6개월 거래 없는 단지도 질문 4개 · 대출 카
   const res = await page.goto("/complex/200000");
   expect(res?.status()).toBe(200);
   await expect(page.getByRole("heading", { name: "거래적은단지" })).toBeVisible({ timeout: 10_000 });
-  for (const title of ["1 · 얼마짜리 집인가", "2 · 어떻게 변해 왔나", "3 · 주변은 어떤가", "4 · 내 돈으로 가능한가"]) {
-    await expect(page.getByRole("heading", { name: new RegExp(`^${title}`) })).toBeVisible();
+  for (const title of ["최근 거래", "2년 동안 어떻게 변했나", "주변은 어떤가", "이 집을 담보로"]) {
+    await expect(page.getByRole("heading", { level: 2, name: title, exact: true })).toBeVisible();
   }
   await expect(page.getByText("최근 6개월 거래 없음 · 2년 범위 1억 4,700만~2억")).toBeVisible();
+  // 대출 판 큰 줄 = 2년 범위 보수적(최저) 집값 기준 · 계산기는 「내 조건으로 계산하기」로 펼친다(세션 524 B40 PR 1)
+  await expect(page.getByTestId("consumer-loan-headline")).toContainText("추가로 가능한 담보대출");
+  await page.getByRole("button", { name: "내 조건으로 계산하기" }).click();
   await expect(page.getByRole("button", { name: "보수적 1억 4,700만" })).toBeVisible();
   await expect(page.getByRole("button", { name: "이미 가진 집으로" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText(/로그인하면 볼 수 있어요/)).toHaveCount(1);

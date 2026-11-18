@@ -1,7 +1,8 @@
 "use client";
 
+import { useId, useState } from "react";
 import type { AreaPrice, OfficialPriceResponse } from "@/types";
-import { Card } from "@/components/ui/card";
+import BrandCard from "@/components/brand/BrandCard";
 import { formatKoreanPrice } from "@/lib/format";
 import LoadRetry from "./LoadRetry";
 import {
@@ -37,10 +38,10 @@ export function AreaChips({ areaPrices, selected, onSelect, label }: AreaChipsPr
             onClick={() => onSelect(ap.area_m2)}
             className={`h-8 px-3 rounded-full border text-xs transition-colors ${
               on
-                ? "bg-blue-700 text-white border-blue-700"
+                ? "bg-brand-navy text-white border-brand-navy"
                 : usable
-                  ? "bg-white text-gray-700 border-gray-300 hover:border-blue-400"
-                  : "bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed"
+                  ? "bg-white text-brand-navy border-brand-line hover:border-brand-navy-line"
+                  : "bg-brand-bg text-brand-muted border-brand-line-soft cursor-not-allowed"
             }`}
           >
             {ap.area_m2}㎡{usable ? (ap.households ? ` · ${ap.households}세대` : "") : " · 거래 없음"}
@@ -74,10 +75,13 @@ function noRangeText(officetel: boolean, twoYear: { min: number; max: number } |
   return ready ? "최근 2년 정부 실거래 기록 없음" : "최근 6개월 거래 없음";
 }
 
+/** 거래 목록 처음에 보이는 줄 수 — 나머지는 「N건 모두 보기」로 펼친다(세션 524 B40 PR 1) */
+export const TRADES_PREVIEW = 5;
+
 /**
- * S1 · 얼마짜리 집인가 — 이 단지 값은 범위로만(중위 없음).
+ * S1 · 최근 거래(옛 「얼마짜리 집인가」) — 이 단지 값은 범위로만(중위 없음).
  * 세션 483 PR 3b(결정 23·26): 면적별 범위 숫자·공시가격·관리비는 서버 '한눈에 보기' 표로 옮겼다 —
- * 이 카드는 면적 칩 · 2년 안에서 최근 6개월이 어디쯤인지 막대 · 2년 최저/최고 · (있으면) 지금 있는 거래 목록 표.
+ * 이 카드는 면적 칩 · 2년 안에서 최근 6개월이 어디쯤인지 막대 · 2년 최저/최고 · (있으면) 거래 목록 표(최신순 5줄 + 모두 보기).
  */
 export default function PriceRangeSection({
   areaPrices, selected, onSelect, twoYear, twoYearReady = true, official, officetel = false, onRetry,
@@ -87,6 +91,17 @@ export default function PriceRangeSection({
   const anyRange = areaPrices.some(hasRange);
 
   const trades = ranged?.trades ?? [];
+  // 펼친 면적 번호 — 고른 면적이 바뀌는 순간(이 카드 칩이든 대출 판 칩이든) 접힘으로 되돌린다.
+  // 번호만 비교하면 A 펼침 → B → A 에서 A 가 펼친 채로 돌아온다(세션 524 검사 🟡①). 렌더 중 이전 값 비교 = effect 없이 한 번에
+  const [openArea, setOpenArea] = useState<number | null>(null);
+  const [seenSelected, setSeenSelected] = useState(selected);
+  if (seenSelected !== selected) {
+    setSeenSelected(selected);
+    setOpenArea(null);
+  }
+  const expanded = ranged != null && openArea === ranged.area_m2;
+  const shown = expanded ? trades : trades.slice(0, TRADES_PREVIEW);
+  const tableId = useId();
 
   // 공시가격 상자 — 선택 면적 ±1㎡, 면적 자료가 하나도 없으면 대표 평형(비율 없이). '한눈에 보기' 표는 대표 면적 하나 그대로
   const items = official?.items ?? [];
@@ -97,8 +112,8 @@ export default function PriceRangeSection({
   const pct = (v: number) => (bar ? Math.min(100, Math.max(0, ((v - bar.min) / (bar.max - bar.min)) * 100)) : 0);
 
   return (
-    <Card className="p-4 space-y-3" aria-labelledby="consumer-q1">
-      <h2 id="consumer-q1" className="text-sm font-bold text-blue-700 tracking-wide">1 · 얼마짜리 집인가</h2>
+    <BrandCard className="p-4 sm:p-5 space-y-3" aria-labelledby="consumer-q1">
+      <h2 id="consumer-q1" className="text-[15px] font-black text-brand-navy">최근 거래</h2>
       {anyRange ? (
         <>
           <AreaChips areaPrices={areaPrices} selected={selected} onSelect={onSelect} label="면적 고르기" />
@@ -110,21 +125,21 @@ export default function PriceRangeSection({
                   style={{ left: `${pct(ranged.price_min)}%`, right: `${100 - pct(ranged.price_max)}%` }}
                 />
               </div>
-              <div className="mt-1 flex justify-between text-xs text-gray-500">
+              <div className="mt-1 flex justify-between text-xs text-brand-muted">
                 <span>2년 최저 {formatKoreanPrice(bar.min)}</span>
                 <span>2년 최고 {formatKoreanPrice(bar.max)}</span>
               </div>
-              <p className="mt-1 text-xs text-gray-500">노란 띠 = {ranged.area_m2}㎡ 최근 6개월 거래 범위</p>
+              <p className="mt-1 text-xs text-brand-muted">노란 띠 = {ranged.area_m2}㎡ 최근 6개월 거래 범위</p>
             </div>
           )}
           {ranged && !bar && twoYear && (
-            <p className="text-xs text-gray-500">2년 거래 {priceRangeText(twoYear.min, twoYear.max)}</p>
+            <p className="text-xs text-brand-muted">2년 거래 {priceRangeText(twoYear.min, twoYear.max)}</p>
           )}
-          {/* 거래 목록 표 — 세션 482 PR 1b(#773) 부터 라이브에 보이던 것 그대로 둔다(결정 26 은 새 표를 b2 에서 붙이는 것) */}
+          {/* 거래 목록 표(세션 482 PR 1b #773) — 최신순(백엔드 정렬) 5줄만 보이고 나머지는 「모두 보기」(세션 524 B40 PR 1) */}
           {trades.length > 0 && (
-            <table className="w-full text-xs" data-testid="consumer-trades">
+            <table id={tableId} className="w-full text-xs" data-testid="consumer-trades">
               <thead>
-                <tr className="text-gray-500 text-left">
+                <tr className="text-brand-muted text-left">
                   <th className="py-1 font-medium">거래일</th>
                   <th className="py-1 font-medium">층</th>
                   <th className="py-1 font-medium">가격</th>
@@ -132,8 +147,8 @@ export default function PriceRangeSection({
                 </tr>
               </thead>
               <tbody>
-                {trades.map((t, i) => (
-                  <tr key={`${t.date}-${t.price}-${i}`} className="border-t border-gray-100">
+                {shown.map((t, i) => (
+                  <tr key={`${t.date}-${t.price}-${i}`} className="border-t border-brand-line-soft">
                     <td className="py-1">{dateDot(t.date) ?? "날짜 미상"}</td>
                     <td className="py-1">{t.floor != null ? `${t.floor}층` : ""}</td>
                     <td className="py-1">{formatKoreanPrice(t.price)}</td>
@@ -143,18 +158,30 @@ export default function PriceRangeSection({
               </tbody>
             </table>
           )}
+          {trades.length > TRADES_PREVIEW && (
+            <button
+              type="button"
+              aria-expanded={expanded}
+              aria-controls={tableId}
+              onClick={() => setOpenArea(expanded ? null : ranged?.area_m2 ?? null)}
+              className="flex min-h-11 w-full items-center justify-center rounded-lg border border-brand-line text-sm font-bold text-brand-navy hover:bg-brand-bg"
+              data-testid="consumer-trades-toggle"
+            >
+              {expanded ? "접기 ▴" : `${trades.length}건 모두 보기 ▾`}
+            </button>
+          )}
         </>
       ) : (
-        <p className="text-sm text-gray-700" data-testid="consumer-no-range">{noRangeText(officetel, twoYear, twoYearReady)}</p>
+        <p className="text-sm text-brand-navy" data-testid="consumer-no-range">{noRangeText(officetel, twoYear, twoYearReady)}</p>
       )}
       {off && (
-        <div className="bg-slate-50 rounded-lg p-2.5" data-testid="consumer-official-box">
-          <span className="block text-xs text-gray-500 mb-0.5">{offLabel}</span>
-          <b className="text-sm">{formatKoreanPrice(wonToManwon(off.price_median))}</b>
-          {offNote && <span className="text-xs text-gray-500"> · {offNote}</span>}
+        <div className="bg-brand-bg rounded-[10px] p-2.5" data-testid="consumer-official-box">
+          <span className="block text-xs text-brand-muted mb-0.5">{offLabel}</span>
+          <b className="text-sm text-brand-navy">{formatKoreanPrice(wonToManwon(off.price_median))}</b>
+          {offNote && <span className="text-xs text-brand-muted"> · {offNote}</span>}
         </div>
       )}
       {onRetry && <LoadRetry onRetry={onRetry} />}
-    </Card>
+    </BrandCard>
   );
 }

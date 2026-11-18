@@ -404,7 +404,8 @@ export default function ComplexClientView({ complexNo, seed = null, glance = nul
     </section>
   );
 
-  // 로그인 세션 경고 — 확인 실패면 비로그인으로 판정돼 소비자 화면이 되므로 두 화면 모두 맨 위에(보완 A-3)
+  // 로그인 세션 경고 — 확인 실패면 비로그인으로 판정돼 소비자 화면이 되므로 두 화면 모두 위쪽에(보완 A-3) ·
+  // 소비자 화면은 띠에 걸치는 '한눈에 보기' 바로 아래(세션 524 B40 PR 1)
   const tokenWarning = tokenError ? (
     <Card className="bg-amber-50 border-amber-200 text-amber-800 px-3 py-2 no-print">
       <div className="flex justify-between items-center gap-2 text-xs">
@@ -438,8 +439,9 @@ export default function ComplexClientView({ complexNo, seed = null, glance = nul
   if (!isApprovedBroker) {
     return (
       <div className="space-y-8">
-        {tokenWarning}
+        {/* 첫 요소 = 남색 띠에 걸치는 '한눈에 보기' — 로그인 경고는 그 아래(세션 524 B40 PR 1 · 설계 D7) */}
         {glance}
+        {tokenWarning}
         <ConsumerComplexView
           complex={complex}
           seed={seed}

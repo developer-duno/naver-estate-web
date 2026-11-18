@@ -1,5 +1,5 @@
 /**
- * 단지 화면 서버 껍데기(세션 483 PR 3b) — ISR 설정 · h1 하나 · 한눈에 보기(면적 수 = 표 행 수) · 같은 동 단지 최대 12 ·
+ * 단지 화면 서버 껍데기(세션 483 PR 3b) — ISR 설정 · h1 하나 · 남색 띠(세션 524) · 한눈에 보기(큰 줄 · 면적 2개↑ = 표 행 수) · 같은 동 단지 최대 12 ·
  * 지역 페이지 링크(3c-1b 부터 플래그 true — 시군구 허브·동 페이지·전체 보기, 미리 받기 끔) · BreadcrumbList · 없는 번호 404 · 5xx 는 throw.
  * 클라이언트 화면(ComplexClientView)은 가짜로 바꿔 서버가 그리는 것만 본다.
  * 실행: npx vitest run "src/app/complex/[no]/__tests__/page-server.test.tsx"
@@ -51,6 +51,21 @@ describe("서버가 그리는 것", () => {
     expect(h1s[0].textContent).toBe("햇살마을");
   });
 
+  it("남색 띠(세션 524 B40 PR 1) — 빵부스러기(주황)·h1·사실 줄·단추 자리가 띠 안 · 첫 요소는 띠에 걸친다", async () => {
+    const { container } = await renderPage();
+    const band = screen.getByTestId("page-band");
+    expect(band.querySelector("h1")?.textContent).toBe("햇살마을");
+    expect(band.querySelector('nav[aria-label="현재 위치"]')?.className).toContain("text-brand-orange");
+    expect(band.textContent).toContain("1998년 사용승인 · 1,200세대 · 12개동");
+    expect(band.querySelector("#complex-title-actions")).not.toBeNull();
+    expect(screen.getByTestId("brand-page")).toContainElement(band);
+    // 걸침 자리는 클라이언트 화면 묶음 한 곳 — 그 묶음 첫 요소가 '한눈에 보기'
+    const lifted = screen.getByTestId("client-view").parentElement as HTMLElement;
+    expect(lifted.className).toBe("-mt-16");
+    expect(lifted.parentElement!.className).toContain("max-w-7xl");
+    expect(container.querySelectorAll(".-mt-16")).toHaveLength(1);
+  });
+
   it("빵부스러기 5단계 · 시군구 = 허브 · 동 = 동 페이지 링크(3c-1b 플래그 true) · JSON-LD 같은 주소 0", async () => {
     await renderPage();
     const nav = screen.getByRole("navigation", { name: "현재 위치" });
@@ -74,22 +89,57 @@ describe("서버가 그리는 것", () => {
     expect(ld.itemListElement.map((e: { name: string }) => e.name)).toEqual(["홈", "유성구", "햇살마을"]);
   });
 
-  it("'한눈에 보기' — 면적 수만큼 표 행 · 6개월 없으면 2년 · 공시가격·관리비·역·사용승인·세대수·동수 · 출처", async () => {
+  it("'한눈에 보기' — 큰 줄 = 대표 면적 범위 · 면적 2개 이상이면 면적 수만큼 표 행 · 6개월 없으면 2년 · 공시가격·관리비·역 · 출처", async () => {
     await renderPage();
     const glance = within(screen.getByTestId("client-view")).getByTestId("complex-glance");
+    expect(within(glance).getByTestId("glance-headline").textContent).toBe("전용 84㎡ · 최근 6개월 실거래 6건4억 1,000만~4억 5,500만");
     const rows = within(glance).getByTestId("glance-areas").querySelectorAll("tbody tr");
     expect(rows).toHaveLength(3);
     expect(rows[1].textContent).toBe("84㎡4억 1,000만~4억 5,500만 · 최근 6개월6건");
     expect(rows[2].textContent).toBe("114㎡5억 2,000만~5억 6,000만 · 최근 2년(6개월 거래 없음)3건");
-    const facts = within(glance).getByTestId("glance-facts").textContent ?? "";
-    expect(facts).toContain("공시가격 2026 · 전용 84㎡3억 1,000만");
-    expect(facts).toContain("한 달 관리비 · 2026.07약 22만 원");
-    expect(facts).toContain("가까운 역봉명역 650m");
-    expect(facts).toContain("사용승인1998년");
-    expect(facts).toContain("세대수1,200세대");
-    expect(facts).toContain("동수12개동");
-    expect(facts).not.toContain("1500"); // 주차는 지금 화면에 안 보이는 값 — 싣지 않는다
+    const facts = within(glance).getByTestId("glance-facts");
+    const text = facts.textContent ?? "";
+    expect(text).toContain("공시가격 2026 · 전용 84㎡3억 1,000만");
+    expect(text).toContain("한 달 관리비 · 2026.07약 22만 원");
+    expect(text).toContain("가까운 역봉명역 650m");
+    // 사용승인·세대수·동수는 띠 사실 줄로 옮겼다(세션 524 B40 PR 1) — 첫 HTML 에는 여전히 있다(띠 시험)
+    expect(text).not.toContain("사용승인");
+    expect(facts.querySelectorAll("dt")).toHaveLength(3);
+    expect(facts.lastElementChild!.className).toContain("col-span-2"); // 3칸 = 홀수 → 마지막 칸 두 칸 폭
+    expect(text).not.toContain("1500"); // 주차는 지금 화면에 안 보이는 값 — 싣지 않는다
     expect(glance.textContent).toContain("실거래 자료 2026.09까지");
+  });
+
+  it("'한눈에 보기' 면적 2개 = 표 줄 2 + 큰 줄 1 · 면적 3개 = 표 줄 3(표 문턱 = 2 · 세션 524 검사 🟡②)", async () => {
+    const [a59, a84, a114] = makeSummary().area_ranges!;
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(makeSummary({ area_ranges: [a59, a84] })), { status: 200 }));
+    const first = await renderPage();
+    let glance = within(screen.getByTestId("client-view")).getByTestId("complex-glance");
+    expect(within(glance).getByTestId("glance-areas").querySelectorAll("tbody tr")).toHaveLength(2);
+    expect(within(glance).getAllByTestId("glance-headline")).toHaveLength(1);
+    first.unmount();
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(makeSummary({ area_ranges: [a59, a84, a114] })), { status: 200 }));
+    await renderPage();
+    glance = within(screen.getByTestId("client-view")).getByTestId("complex-glance");
+    expect(within(glance).getByTestId("glance-areas").querySelectorAll("tbody tr")).toHaveLength(3);
+  });
+
+  it("'한눈에 보기' 면적 1개 = 표 없이 큰 줄만 · 대표 면적 번호가 없어도(null) 큰 줄은 첫 면적으로 · 6개월 없으면 「최근 2년」", async () => {
+    const one = [{ area_key: 59, exclusive_area: 59, recent6: null, recent24: { min: 28000, max: 34500, count: 15 } }];
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(makeSummary({ area_ranges: one, rep_area_key: null })), { status: 200 }));
+    await renderPage();
+    const glance = within(screen.getByTestId("client-view")).getByTestId("complex-glance");
+    expect(within(glance).queryByTestId("glance-areas")).toBeNull();
+    expect(within(glance).getByTestId("glance-headline").textContent).toBe("전용 59㎡ · 최근 2년 실거래 15건2억 8,000만~3억 4,500만");
+  });
+
+  it("'한눈에 보기' 면적 0개 = 큰 줄·표 없이 「최근 2년 정부 실거래 기록 없음」", async () => {
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(makeSummary({ area_ranges: [] })), { status: 200 }));
+    await renderPage();
+    const glance = within(screen.getByTestId("client-view")).getByTestId("complex-glance");
+    expect(within(glance).queryByTestId("glance-headline")).toBeNull();
+    expect(within(glance).queryByTestId("glance-areas")).toBeNull();
+    expect(glance.textContent).toContain("최근 2년 정부 실거래 기록 없음");
   });
 
   it("같은 동 다른 단지 — 최대 12 단지 링크 · 백엔드 순서 그대로 · 작은 글씨 = 6개월 범위, 없으면 공시가격 · 전체 보기 = 동 페이지(미리 받기 끔)", async () => {

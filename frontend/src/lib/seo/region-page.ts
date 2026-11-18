@@ -220,9 +220,15 @@ export function dongAnchor(dong10: string): string {
   return `#${dong10}`;
 }
 
-/** 세대수 큰 순(없으면 뒤) → 같으면 이름 순. 원본은 그대로 둔다 */
+/**
+ * 거래 있는 단지 먼저(세션 526 B40 PR 2b · E12 — 10-28 결정 35 「세대수 큰 순」을 👤 11-18 결정 2 로 바꿈):
+ * 최근 6개월 범위 있는 단지 → 등급 A → 세대수 큰 순(없으면 뒤) → 이름 순. 허브 12곳·동 장 전부가 같이 쓴다. 원본은 그대로 둔다
+ */
 export function sortComplexes(list: RegionComplexCard[]): RegionComplexCard[] {
+  const hasRange = (c: RegionComplexCard) => c.recent6_min != null && c.recent6_max != null;
   return [...list].sort((a, b) => {
+    if (hasRange(a) !== hasRange(b)) return hasRange(a) ? -1 : 1;
+    if ((a.grade === "A") !== (b.grade === "A")) return a.grade === "A" ? -1 : 1;
     const ha = a.household_count;
     const hb = b.household_count;
     if (ha != null && hb != null && ha !== hb) return hb - ha;

@@ -187,3 +187,102 @@
     max-height: min(85vh, calc(100vh - 44px)) !important;
   }
 }
+
+/*
+ * 지역 장 단지 표(세션 526 B40 PR 2b) — components/region/ComplexTable.tsx 는 class="region-table" 하나만 단다.
+ * md(48rem) 이상 = 표 · 그 아래(390) = 줄 쌓기(1줄 단지 이름 + 오른쪽 배지 · 2줄 값들 · 표 안 가로 스크롤 0).
+ * 칸마다 클래스를 붙이면 동 46곳 허브 HTML 이 35% 커져(HTML·RSC 두 벌) 규칙을 여기 모았다.
+ * 열 자리: 단지(th) · 세대(2번째) · [준공(3번째 · 끝에서 4번째)] · 범위(끝에서 3) · 공시가격(끝에서 2) · 배지(끝) — 준공 칸이 있어도 끝에서 센 자리는 같다.
+ * 범위 있는 칸 = [data-r] · 배지 = [data-g] (A·B).
+ */
+@layer components {
+  .region-table { @apply w-full text-sm; }
+  .region-table thead { @apply bg-brand-bg text-xs text-brand-muted; }
+  .region-table thead th {
+    @apply px-3 py-2 text-left font-medium;
+  }
+  .region-table tbody tr + tr {
+    @apply border-t border-brand-line-soft;
+  }
+  .region-table th[scope="row"] {
+    @apply text-left font-normal;
+  }
+  .region-table th[scope="row"] a {
+    @apply font-bold text-brand-navy hover:underline;
+  }
+  /* 가격 「6억 8,200만」이 글자 가운데서 끊기지 않게 — 줄은 빈칸에서만 바뀐다 */
+  .region-table td {
+    word-break: keep-all;
+  }
+  .region-table :is(th, td):nth-child(2),
+  .region-table :is(th, td):nth-child(3):nth-last-child(4),
+  .region-table :is(th, td):nth-last-child(2) {
+    @apply text-right tabular-nums;
+  }
+  .region-table td:nth-last-child(3) {
+    @apply text-brand-muted;
+  }
+  .region-table td[data-r] {
+    @apply font-bold text-brand-navy;
+  }
+  /* 가격은 「~」 앞뒤까지 한 덩어리 · 공시가격 칸도 한 줄(390 값 줄은 칸 사이 빈칸에서만 바뀐다) */
+  .region-table td[data-r] > span,
+  .region-table td:nth-last-child(2) {
+    white-space: nowrap;
+  }
+  .region-table td:last-child > span {
+    @apply inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-normal;
+  }
+  .region-table [data-g="A"] {
+    @apply border-brand-orange/40 bg-brand-orange-soft text-brand-orange-text;
+  }
+  .region-table [data-g="B"] {
+    @apply border-brand-line bg-brand-bg text-brand-muted;
+  }
+  @media (width >= 48rem) {
+    .region-table th[scope="row"],
+    .region-table td {
+      @apply px-3 py-2;
+    }
+  }
+  @media (width < 48rem) {
+    .region-table,
+    .region-table tbody,
+    .region-table tr,
+    .region-table th[scope="row"] {
+      display: block;
+    }
+    .region-table thead { display: none; }
+    /* 줄 높이 — 값 줄(13px)이 두 줄로 넘어가도 짧게(동 여럿 허브 390 길이 ≤ 전, 세션 526 보완) */
+    .region-table tr {
+      @apply relative py-2 leading-[1.3];
+    }
+    /* 오른쪽 배지 자리 */
+    .region-table th[scope="row"] {
+      padding-right: 7.25rem;
+    }
+    .region-table td {
+      display: inline;
+      font-size: 13px;
+    }
+    .region-table td:empty { display: none; }
+    .region-table td:last-child {
+      @apply absolute top-2 right-0;
+    }
+    /* 머리줄이 안 보이므로 값 앞 작은 이름표 — 첫 HTML 글자에는 없다 */
+    .region-table td[data-r]::before {
+      content: "최근 6개월";
+    }
+    .region-table td:nth-last-child(2)::before {
+      content: "공시가격";
+    }
+    .region-table td::before {
+      @apply mr-1 text-xs font-normal text-brand-muted;
+    }
+    /* 값 사이 가운데 점 — 뒤에 보이는 값 칸이 있을 때만(배지 칸 제외) */
+    .region-table td:not(:empty):has(~ td:not(:empty):not(:last-child))::after {
+      content: "·";
+      @apply mx-1.5 font-normal text-brand-muted;
+    }
+  }
+}

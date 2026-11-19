@@ -21,6 +21,7 @@ const EFFECTIVE_DATE = "2026년 11월 23일";
 /**
  * 개정 예고(세션 513) — 11절 「시행 7일 전부터 알린다」 약속에 따라, 고친 방침의 시행일 전까지 시행일 줄 아래에 띄운다.
  * 합치는 날이 바뀌면 이 파일 안의 세 곳(EFFECTIVE_DATE · 이 문장 · REVISIONS 첫 줄)만 고친다. 시행일이 지나면 null 로 바꿔 지운다.
+ * 지금은 null(2026-11-23 시행) — 다음에 방침을 고칠 때 이 자리에 다시 문장을 넣는다.
  */
 const REVISION_NOTICE: string | null = null; // 2026-11-23 시행일이 되어 지움(세션 528 준비 · 11절 7일 예고 끝)
 
@@ -340,8 +341,8 @@ export default function PrivacyPage() {
 
         <h2 className="text-lg font-semibold text-gray-900">개정 이력</h2>
         <ul className="list-disc pl-5 space-y-1">
-          {REVISIONS.map((r) => (
-            <li key={r.date}>
+          {REVISIONS.map((r, i) => (
+            <li key={`${r.date}-${i}`}>
               {r.date} — {r.summary}
             </li>
           ))}

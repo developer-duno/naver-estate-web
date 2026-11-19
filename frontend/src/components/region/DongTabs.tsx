@@ -124,7 +124,13 @@ export default function DongTabs({ label, tabs, children }: { label: string; tab
               <button
                 type="button"
                 data-chip-more=""
-                onClick={() => rootRef.current?.setAttribute("data-all", "")}
+                onClick={() => {
+                  // 이 단추는 누르는 순간 숨겨진다 — 키보드 초점이 body 로 떨어지지 않게 새로 보인 첫 칩으로 옮긴다
+                  const root = rootRef.current;
+                  if (!root) return;
+                  root.setAttribute("data-all", "");
+                  root.querySelector<HTMLElement>("[data-chip-extra] a")?.focus();
+                }}
                 className="hidden min-h-11 items-center rounded-full border border-brand-line bg-brand-bg px-3.5 text-sm font-bold text-brand-navy hover:bg-white"
               >
                 동 {tabs.length.toLocaleString()}곳 모두 ▾

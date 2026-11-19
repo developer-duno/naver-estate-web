@@ -72,7 +72,7 @@ grep -oE '<meta property="og:image" content="[^"]*"' .next/server/app/<page>.htm
   검색 결과 화면엔 큰 띠가 없어 h1 하나). 대기 화면도 첫 HTML 이므로 "Suspense 밖"과 같은 효과 — 단 대기 화면에서
   브라우저 저장소·세션·요청을 쓰는 부품은 빼야 한다(`interactive=false`). 옛 선례 = 세션 508 `HomeHero` Suspense 밖 · HomeHeader 분리.
 - **ISR·서버 렌더 공개 장의 조상 폴더(루트 포함)에 `loading.tsx` 를 두지 않는다** — 저장본 본문이 `<div hidden id="S:0">` 상자로 들어가 스크립트를 안 돌리는 봇에 안 보인다(세션 484 · 3b 적대 실측, loading 빼면 0). 가드 시험 `src/app/__tests__/no-loading-file.test.ts` 가 0개를 단언한다.
-- **색인 열린 장에서 사람 눈에만 일부를 숨길 때도 서버 HTML 엔 `hidden`·숨김 표시를 넣지 않는다** — 묶음 앞 짧은 스크립트가 그리기 전에 표시를 붙이고 그 표시가 있을 때만 CSS 가 숨긴다(스크립트 끈 사람·봇은 전부 본다). 선례 = 허브 「그 동만 보기」 `components/region/DongTabs.tsx`(세션 526 B40 PR 2b · 시험이 서버 HTML 의 hidden 0 을 단언).
+- **색인 열린 장에서 사람 눈에만 일부를 숨길 때도 서버 HTML 엔 `hidden`·숨김 표시를 넣지 않는다** — 묶음 앞 짧은 스크립트가 그리기 전에 표시를 붙이고 그 표시가 있을 때만 CSS 가 숨긴다(스크립트 끈 사람·봇은 전부 본다). 선례 = 허브 「그 동만 보기」 `components/region/DongTabs.tsx`(세션 526 B40 PR 2b · 시험이 서버 HTML 의 hidden 0 을 단언). 근거 = 구글 「모바일 우선 색인」 공식 문서(https://developers.google.com/search/docs/crawling-indexing/mobile/mobile-sites-mobile-first-indexing · 2026-11-19 원문 확인): 색인은 모바일 판에 보이는 내용만 쓰고("Only the content shown on the mobile site is used for indexing"), 누르거나 넘겨야 불러오는 내용은 읽지 않으며, 공간을 아끼려면 내용을 지우지 말고 접기·탭에 두라고 한다. 네이버는 공식 문서에서 같은 내용을 아직 확인하지 못했다.
 
 ### 검증법
 

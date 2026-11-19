@@ -114,6 +114,14 @@ describe("스크립트가 돌 때", () => {
     expect(screen.queryByRole("button", { name: /모두/ })).toBeNull();
   });
 
+  it("「모두」를 누르면 초점이 새로 보인 첫 칩으로 — 숨겨진 단추에 남아 body 로 떨어지지 않게", () => {
+    render(<Tabs n={10} />);
+    const more = screen.getByRole("button", { name: "동 10곳 모두 ▾" });
+    more.focus();
+    fireEvent.click(more);
+    expect(document.activeElement).toBe(screen.getByRole("link", { name: "시험9동 92" }));
+  });
+
   it("떠나면(언마운트) 숨김 CSS·표시를 뗀다 — 다른 장에 숨김이 남지 않게", () => {
     const { unmount } = render(<Tabs n={5} />);
     expect(document.getElementById(DONG_TABS_STYLE_ID)).not.toBeNull();

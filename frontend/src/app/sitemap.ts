@@ -19,6 +19,7 @@ import { CHECKLISTS, BROKER_TYPES, PARTY_TYPES } from "@/lib/broker/checklists";
  * 세션 513: /privacy(10절·개정 예고) = 2026-11-16.
  * 세션 514: /checklist(계약 체크 목록 · 새 모음 장) = 2026-11-16 · /checklist/<type> = checklists.ts checkedAt(이 표에 두지 않는다) ·
  *   /privacy 는 10절에 계약 체크 목록을 더했으나 같은 날(2026-11-16)이라 그대로.
+ * 세션 528: /privacy(시행일이 되어 개정 예고 문단 삭제) = 2026-11-23.
  * 세션 517: /checklist(월세 카드 2장·설명) · /broker(「월세」 단추) = 2026-11-17 · / 는 계산기 카드 설명 한 줄뿐이라 그대로(세션 509 제외 기준).
  * 세션 520: /broker/jeonse-guarantee(전세보증 한도 · 새 장) = 2026-11-17 · /broker(넓은 단추·설명) 는 이미 2026-11-17.
  * /blog 는 공개 글 중 가장 최근 발행일, /updates 는 updatesLastModified() 가 정한다(이 표에 없음).
@@ -37,7 +38,7 @@ const STATIC_PAGE_LASTMOD = {
   "/tools/area-converter": "2026-06-09",
   "/help": "2026-10-06",
   "/terms": "2026-11-16",
-  "/privacy": "2026-11-16",
+  "/privacy": "2026-11-23",
 } as const;
 
 /** /updates 를 못 읽었거나 공개 글이 0편일 때의 고정 날짜(세션 437 PR C 부터 같은 값 — 빌드 시각을 쓰지 않는다). */

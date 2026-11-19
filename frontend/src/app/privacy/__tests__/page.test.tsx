@@ -11,13 +11,11 @@ import { render, screen, within } from "@testing-library/react";
 import PrivacyPage from "../page";
 
 describe("/privacy 개인정보 처리방침", () => {
-  it("맨 위에 시행일 · 그 바로 아래 개정 예고 문단(11절 7일 예고 약속 — 세션 513·514)", () => {
+  it("맨 위 시행일 2026년 11월 23일 그대로 · 시행일이 지나 개정 예고 문단은 없다(세션 528 — 11절 7일 예고 끝)", () => {
     render(<PrivacyPage />);
     const effective = screen.getByText(/^시행일: \d{4}년 \d{1,2}월 \d{1,2}일$/);
-    const date = effective.textContent!.replace("시행일: ", "");
-    expect(effective.nextElementSibling).toHaveTextContent(
-      `개정 예고 — ${date}부터 10절(쿠키와 브라우저 저장소)에 중개 실무 체크 목록과 계약 체크 목록(세입자·집주인용 등 모든 목록)이 더해집니다. 이 저장은 이 기기 브라우저 안에서만 쓰이고 서버로 보내지 않습니다. 그 전까지는 2026년 10월 6일 방침이 적용됩니다.`,
-    );
+    expect(effective).toHaveTextContent("시행일: 2026년 11월 23일");
+    expect(screen.queryByText(/개정 예고/)).toBeNull();
   });
 
   it("10절(쿠키와 브라우저 저장소) 목록 끝에 중개 실무 체크 목록(세션 513)", () => {

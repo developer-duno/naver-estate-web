@@ -195,6 +195,9 @@ export default function Header() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-40">
                 <DropdownMenuItem asChild>
+                  <Link href="/tools/second-mortgage">후순위 대출 한도</Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
                   <Link href="/tools/brokerage-fee">중개수수료</Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
@@ -312,6 +315,16 @@ export default function Header() {
             >
               계산기
             </div>
+            <Link
+              href="/tools/second-mortgage"
+              className={`min-h-11 flex items-center pl-7 pr-3 rounded-lg text-sm ${
+                pathname === "/tools/second-mortgage"
+                  ? "text-brand-orange bg-white/10"
+                  : "text-white hover:bg-white/10"
+              }`}
+            >
+              후순위 대출 한도
+            </Link>
             <Link
               href="/tools/brokerage-fee"
               className={`min-h-11 flex items-center pl-7 pr-3 rounded-lg text-sm ${

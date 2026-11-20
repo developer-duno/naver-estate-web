@@ -22,6 +22,7 @@
 ### 도구 6종 (/tools/*) — 모두 클라이언트 산식, BE 호출 없음
 
 > 상세 = `frontend/.claude/tools-lineup.md` §/tools 도구 6종 라인업 참조
+> 화면 틀(세션 530 B40 PR 3a): `/tools`(모음)·`/tools/second-mortgage` 는 새 틀 `ToolPage`(서버 · `ui-patterns.md` §계산기 새 틀) · 세금·수수료·평㎡ 5장은 옛 틀(3b~3d 에서 바꿈)
 
 ### 중개 실무 (/broker) — 세션 511 PR 1, 서버 렌더 정적 장(로그인 없이 · BE 호출 없음)
 | 페이지 | 자료 | 비고 |

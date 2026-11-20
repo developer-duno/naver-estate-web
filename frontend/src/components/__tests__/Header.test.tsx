@@ -173,7 +173,7 @@ describe("Header 계산기 드롭다운 (데스크톱, Radix)", () => {
     expect(findMenu()).toBeNull();
   });
 
-  it("트리거 클릭 — 메뉴 열리고 자식 5개 노출", async () => {
+  it("트리거 클릭 — 메뉴 열리고 자식 6개 노출(세션 530: 맨 위 후순위 대출 한도)", async () => {
     const user = userEvent.setup();
     render(<Header />);
     await waitFor(() => getTrigger());
@@ -183,13 +183,15 @@ describe("Header 계산기 드롭다운 (데스크톱, Radix)", () => {
       expect(findMenu()).not.toBeNull();
     });
     const items = findMenu()?.querySelectorAll('[role="menuitem"]') ?? [];
-    expect(items.length).toBe(5);
+    expect(items.length).toBe(6);
     // asChild + Link 조합이므로 menuitem 자체가 anchor — href 직접 검증
-    expect(items[0].getAttribute("href")).toBe("/tools/brokerage-fee");
-    expect(items[1].getAttribute("href")).toBe("/tools/acquisition-tax");
-    expect(items[2].getAttribute("href")).toBe("/tools/transfer-tax");
-    expect(items[3].getAttribute("href")).toBe("/tools/property-tax");
-    expect(items[4].getAttribute("href")).toBe("/tools/area-converter");
+    expect(items[0].getAttribute("href")).toBe("/tools/second-mortgage");
+    expect(items[0].textContent).toBe("후순위 대출 한도");
+    expect(items[1].getAttribute("href")).toBe("/tools/brokerage-fee");
+    expect(items[2].getAttribute("href")).toBe("/tools/acquisition-tax");
+    expect(items[3].getAttribute("href")).toBe("/tools/transfer-tax");
+    expect(items[4].getAttribute("href")).toBe("/tools/property-tax");
+    expect(items[5].getAttribute("href")).toBe("/tools/area-converter");
   });
 
   it("자식 클릭 — 메뉴 자동 닫힘", async () => {
@@ -234,6 +236,7 @@ describe("Header 메뉴 집합 (세션 400 DOM 레인)", () => {
   /** navLinks 로 렌더되는 경로만 — 로그인(상태 의존)·계산기 드롭다운(별도 단언) 제외 */
   const NAV_LINK_PATHS = ["/", "/mibunyang", "/broker", "/blog", "/help"];
   const CALC_PATHS = [
+    "/tools/second-mortgage",
     "/tools/brokerage-fee",
     "/tools/acquisition-tax",
     "/tools/transfer-tax",
@@ -277,19 +280,30 @@ describe("Header 메뉴 집합 (세션 400 DOM 레인)", () => {
     expect(navPathSet(drawerNav)).toEqual(desktopSet);
   });
 
-  it("드로어에 계산기 자식 5링크가 모두 있다", async () => {
+  it("드로어의 계산기 링크가 정확히 6개이고 순서가 데스크톱 드롭다운과 같다(세션 530)", async () => {
+    const user = userEvent.setup();
     render(<Header />);
     await waitFor(() => {
       expect(screen.getByText("로그인")).toBeInTheDocument();
     });
+    // 데스크톱 드롭다운 줄(Radix Portal) — 닫으면 사라지므로 먼저 읽어 둔다
+    await user.click(screen.getByRole("button", { name: /계산기/ }));
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
+    const dropdownHrefs = [...document.querySelectorAll('[role="menu"] [role="menuitem"]')].map((a) =>
+      a.getAttribute("href"),
+    );
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+
     fireEvent.click(screen.getByRole("button", { name: "메뉴 열기" }));
     await waitFor(() => {
-      expect(document.querySelector('a[href="/tools/brokerage-fee"]')).not.toBeNull();
+      expect(document.querySelectorAll("nav").length).toBeGreaterThan(1);
     });
     const drawerNav = document.querySelectorAll("nav")[1];
-    for (const p of CALC_PATHS) {
-      expect(drawerNav.querySelector(`a[href="${p}"]`)).not.toBeNull();
-    }
+    const drawerHrefs = [...drawerNav.querySelectorAll('a[href^="/tools/"]')].map((a) => a.getAttribute("href"));
+    expect(drawerHrefs).toEqual(CALC_PATHS);
+    expect(dropdownHrefs).toEqual(CALC_PATHS);
+    expect(drawerNav.querySelector('a[href="/tools/second-mortgage"]')?.textContent?.trim()).toBe("후순위 대출 한도");
   });
 
   it("비로그인 데스크톱 nav 에 로그인 링크가 있다", async () => {

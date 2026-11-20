@@ -2,6 +2,13 @@
 
 import { useId, useState } from "react";
 import { calcSecondMortgage, formatWonKorean, parseAmount } from "@/lib/second-mortgage";
+import {
+  TOOL_CHOICE_OFF,
+  TOOL_CHOICE_ON,
+  TOOL_INPUT_CLASS,
+  TOOL_LABEL_CLASS,
+  TOOL_VALUE_TILE_CLASS,
+} from "@/components/tools/tool-classes";
 
 /**
  * 후순위 대출 한도·이자 계산기(세션 508) — 홈 대출 판과 /tools/second-mortgage 가 같이 쓴다.
@@ -19,16 +26,13 @@ export function withCommas(text: string): string {
   return digits === "" ? "" : Number(digits).toLocaleString("ko-KR");
 }
 
-const inputCls =
-  "h-12 w-full rounded-[10px] border border-brand-line bg-white px-3.5 text-base text-brand-navy placeholder:text-brand-muted focus:outline-none focus:ring-2 focus:ring-brand-orange";
-
 function AmountField({ id, label, value, onChange, placeholder }: {
   id: string; label: string; value: string; onChange: (v: string) => void; placeholder: string;
 }) {
   const n = parseAmount(value);
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-[13px] text-brand-muted">{label}</label>
+      <label htmlFor={id} className={TOOL_LABEL_CLASS}>{label}</label>
       <div className="flex items-center gap-2">
         <input
           id={id}
@@ -37,7 +41,7 @@ function AmountField({ id, label, value, onChange, placeholder }: {
           value={value}
           placeholder={placeholder}
           onChange={(e) => onChange(withCommas(e.target.value))}
-          className={inputCls}
+          className={TOOL_INPUT_CLASS}
         />
         <span className="shrink-0 text-sm text-brand-muted">원</span>
       </div>
@@ -68,7 +72,7 @@ export default function SecondMortgageCalculator() {
       <AmountField id={`${id}-debt`} label="지금 남아 있는 대출" value={debt} onChange={setDebt} placeholder="없으면 0" />
 
       <fieldset className="flex flex-col gap-1.5">
-        <legend className="mb-1.5 text-[13px] text-brand-muted">담보 인정 비율</legend>
+        <legend className={`mb-1.5 ${TOOL_LABEL_CLASS}`}>담보 인정 비율</legend>
         <div className="flex flex-wrap items-center gap-2">
           {LTV_CHOICES.map((v) => (
             <button
@@ -77,9 +81,7 @@ export default function SecondMortgageCalculator() {
               aria-pressed={ltvChoice === v}
               onClick={() => { setLtvChoice(v); setLtvText(""); }}
               className={`h-11 min-w-16 rounded-[10px] border px-3 text-sm font-bold ${
-                ltvChoice === v
-                  ? "border-brand-navy bg-brand-navy text-white"
-                  : "border-brand-line bg-white text-brand-navy hover:bg-brand-bg"
+                ltvChoice === v ? TOOL_CHOICE_ON : TOOL_CHOICE_OFF
               }`}
             >
               {v}%
@@ -94,7 +96,7 @@ export default function SecondMortgageCalculator() {
               value={ltvText}
               placeholder="직접 입력"
               onChange={(e) => { setLtvText(e.target.value.replace(/[^\d.]/g, "")); setLtvChoice(null); }}
-              className={`${inputCls} h-11 w-28`}
+              className={`${TOOL_INPUT_CLASS} h-11 w-28`}
             />
             <span className="text-sm text-brand-muted">%</span>
           </div>
@@ -102,7 +104,7 @@ export default function SecondMortgageCalculator() {
       </fieldset>
 
       <div className="flex flex-col gap-1.5">
-        <label htmlFor={`${id}-rate`} className="text-[13px] text-brand-muted">연 이자율</label>
+        <label htmlFor={`${id}-rate`} className={TOOL_LABEL_CLASS}>연 이자율</label>
         <div className="flex items-center gap-2">
           <input
             id={`${id}-rate`}
@@ -111,7 +113,7 @@ export default function SecondMortgageCalculator() {
             value={rate}
             placeholder="연 이자율을 입력하세요"
             onChange={(e) => setRate(e.target.value.replace(/[^\d.]/g, ""))}
-            className={inputCls}
+            className={TOOL_INPUT_CLASS}
           />
           <span className="shrink-0 text-sm text-brand-muted">%</span>
         </div>
@@ -120,13 +122,13 @@ export default function SecondMortgageCalculator() {
       <div aria-live="polite">
         {result.status === "ok" ? (
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-[10px] bg-brand-bg p-3.5">
+            <div className={TOOL_VALUE_TILE_CLASS}>
               <p className="text-xs text-brand-muted">예상 추가 한도</p>
               <p className="mt-1 text-lg font-black text-brand-navy sm:text-[22px]" data-testid="sm-limit">
                 {formatWonKorean(result.limitWon)}
               </p>
             </div>
-            <div className="rounded-[10px] bg-brand-bg p-3.5">
+            <div className={TOOL_VALUE_TILE_CLASS}>
               <p className="text-xs text-brand-muted">매달 이자(이자만 낼 때)</p>
               <p className="mt-1 text-lg font-black text-brand-navy sm:text-[22px]" data-testid="sm-monthly">
                 {`${result.monthlyInterestWon.toLocaleString()}원`}

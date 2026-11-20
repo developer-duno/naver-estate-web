@@ -101,6 +101,9 @@ describe("sitemap — 정적 장 lastModified 는 장마다 실제로 바뀐 날
       expect(byPath.get("/checklist")!).toBe(new Date("2026-11-17").getTime());
       expect(byPath.get("/broker")!).toBe(new Date("2026-11-17").getTime());
       expect(byPath.get("/broker/jeonse-guarantee")!).toBe(new Date("2026-11-17").getTime());
+      // 세션 530 B40 PR 3a — 계산기 모음(새 틀·카드 설명)·후순위 장(새 틀 띠)은 2026-11-20
+      expect(byPath.get("/tools")!).toBe(new Date("2026-11-20").getTime());
+      expect(byPath.get("/tools/second-mortgage")!).toBe(new Date("2026-11-20").getTime());
       expect(byPath.get("/checklist/jeonse-tenant")!).toBe(new Date("2026-11-16").getTime());
       expect(byPath.get("/checklist/jeonse-landlord")!).toBe(new Date("2026-11-16").getTime());
       for (const p of [

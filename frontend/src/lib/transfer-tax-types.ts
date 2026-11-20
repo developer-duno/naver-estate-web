@@ -14,6 +14,7 @@ export type TransferExemptionOverride = "auto" | "force-exclude" | "force-apply"
 export type TransferNoticeKey =
   | "disclaimer" | "out-of-scope" | "loss-no-tax" | "unregistered-70"
   | "single-house-exempt-met" | "single-house-prorate"
+  | "single-house-prorate-table1" | "single-house-prorate-no-deduction"
   | "single-house-fail-hold" | "single-house-fail-live"
   | "short-term-70" | "short-term-60"
   | "multi-heavy-suspended" | "multi-heavy-applied"

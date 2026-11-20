@@ -45,14 +45,30 @@ export function singleHouseExemptBranch(gain: number): TransferResult {
 export function singleHouseProrateBranch(input: TransferInput, gain: number): TransferResult {
   // 12억 안분: gain × (transferWon - 12억) / transferWon.
   const taxableGain = Math.floor(gain * (input.transferWon - HIGH_VALUE_THRESHOLD) / input.transferWon);
-  const longTermDeduction = computeTable2Deduction(input.holdYears, input.livedYears, taxableGain);
+  // 공제 표: 보유 3년 미만 = 없음(§95② 본문) · 거주 2년 이상 = 표2(§95② 단서·시행령 §159의4) · 그 밖 = 표1.
+  let appliedTable: TransferResult["appliedTable"];
+  let longTermDeduction: number;
+  let prorateNote: TransferNoticeKey;
+  if (input.holdYears < 3) {
+    appliedTable = "none";
+    longTermDeduction = 0;
+    prorateNote = "single-house-prorate-no-deduction";
+  } else if (input.livedYears >= 2) {
+    appliedTable = "table2";
+    longTermDeduction = computeTable2Deduction(input.holdYears, input.livedYears, taxableGain);
+    prorateNote = "single-house-prorate";
+  } else {
+    appliedTable = "table1";
+    longTermDeduction = computeTable1Deduction(input.holdYears, taxableGain);
+    prorateNote = "single-house-prorate-table1";
+  }
   const taxBase = Math.max(0, taxableGain - longTermDeduction - BASIC_DEDUCTION);
   const baseTax = Math.floor(applyProgressive(taxBase));
   const appliedRate = PROGRESSIVE_BRACKETS.find((b) => taxBase <= b.max)?.rate ?? 0;
   return buildResult({
     branch: "single-house-prorate", gain, taxableGain, longTermDeduction, taxBase,
-    baseTax, totalTax: baseTax, appliedTable: "table2", appliedRate,
-    notes: ["disclaimer", "single-house-prorate", "local-income-tax"],
+    baseTax, totalTax: baseTax, appliedTable, appliedRate,
+    notes: ["disclaimer", prorateNote, "local-income-tax"],
   });
 }
 

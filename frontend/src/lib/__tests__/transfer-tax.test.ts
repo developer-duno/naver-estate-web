@@ -235,15 +235,23 @@ describe("calculateTransferTax — 도메인 15 케이스 (plan v1.8 매트릭�
     expect(r.totalTax).toBe(292_500_000);
   });
 
-  it("#13 12억 초과 + 보유 2.5y (표2 자격 미달, 표1 폴백) → 378,810,000원", () => {
+  // 옛 기대값 378,810,000 은 전액 과세 결함을 정답으로 붙잡은 것 — 소득세법 §95③·시행령 §160①:
+  // 비과세 요건(보유 2년 + 조정 취득 거주 2년)을 갖춘 12억 초과 1주택은 표2 자격과 관계없이 12억 넘는 몫만 과세(안분).
+  // 보유 3년 미만이라 장기보유공제는 0 (§95② 본문). 세션 531 B46 ①.
+  it("#13 12억 초과 + 보유 2.5y (비과세 요건 충족 · 장특공 없음) → 안분 54,350,000원", () => {
     const r = calculateTransferTax({
       ...base, transferWon: 1_500_000_000, acquisitionWon: 500_000_000, expensesWon: 10_000_000,
       holdYears: 2.5, livedYears: 2.5, houses: 1,
       isRegulatedAtTransfer: true, isRegulatedAtAcquisition: true,
     });
-    expect(r.branch).toBe("general");
-    expect(r.totalTax).toBe(378_810_000);
-    expect(r.appliedRate).toBeCloseTo(0.42); // R12 회귀 가드 (taxBase 987.5M → 42% 구간)
+    expect(r.branch).toBe("single-house-prorate");
+    expect(r.taxableGain).toBe(198_000_000);
+    expect(r.longTermDeduction).toBe(0);
+    expect(r.totalTax).toBe(54_350_000);
+    expect(r.appliedTable).toBe("none");
+    expect(r.appliedRate).toBeCloseTo(0.38);
+    expect(r.notes).toContain("single-house-prorate-no-deduction");
+    expect(r.notes).not.toContain("single-house-prorate");
   });
 
   it("#14 미등기 + 다주택 → unregistered 우선 343,000,000원", () => {
@@ -273,6 +281,101 @@ describe("calculateTransferTax — 도메인 15 케이스 (plan v1.8 매트릭�
     });
     expect(r.branch).toBe("general");
     expect(r.notes).toContain("single-house-fail-hold"); // R14 회귀 가드 (dead notes 활성화)
+  });
+});
+
+// 세션 531 B46 ①: 비과세 요건을 갖춘 12억 초과 1주택은 표2 자격과 관계없이 안분(§95③·시행령 §160①).
+// 공제 표만 갈린다 — 보유 3년 미만 = 없음 · 거주 2년 이상 = 표2 · 그 밖 = 표1 (§95② 본문·단서, 시행령 §159의4).
+// 정답 숫자 = 메모리 reviews/s531/calc_b46_1.py 「법대로」 칸 (세법 검수 판정 🟢).
+describe("12억 초과 1주택 안분 — 공제 표 갈래 (B46 ①)", () => {
+  const oneHouse = (over: Partial<TransferInput>) => calculateTransferTax({
+    ...base, transferWon: 1_500_000_000, acquisitionWon: 500_000_000, expensesWon: 0, houses: 1,
+    ...over,
+  });
+
+  it("B 비조정 취득 · 보유 5y · 거주 0 → 안분 + 표1 47,510,000원", () => {
+    const r = oneHouse({ holdYears: 5, livedYears: 0 });
+    expect(r.branch).toBe("single-house-prorate");
+    expect(r.appliedTable).toBe("table1");
+    expect(r.totalTax).toBe(47_510_000);
+    expect(r.notes).toContain("single-house-prorate-table1");
+    expect(r.notes).not.toContain("single-house-prorate");
+  });
+
+  it("C 비조정 취득 · 보유 2.5y · 거주 0 → 안분 + 공제 없음 55,110,000원", () => {
+    const r = oneHouse({ holdYears: 2.5, livedYears: 0 });
+    expect(r.branch).toBe("single-house-prorate");
+    expect(r.appliedTable).toBe("none");
+    expect(r.longTermDeduction).toBe(0);
+    expect(r.totalTax).toBe(55_110_000);
+    expect(r.notes).toContain("single-house-prorate-no-deduction");
+  });
+
+  it("D 20억/8억 · 보유 10y · 거주 1.5 → 안분 + 표1 126,660,000원", () => {
+    const r = oneHouse({ transferWon: 2_000_000_000, acquisitionWon: 800_000_000, holdYears: 10, livedYears: 1.5 });
+    expect(r.branch).toBe("single-house-prorate");
+    expect(r.appliedTable).toBe("table1");
+    expect(r.totalTax).toBe(126_660_000);
+    expect(r.notes).toContain("single-house-prorate-table1");
+  });
+
+  it("E 보유 3y · 거주 1.99 (비조정) → 안분 + 표1 6% 50,550,000원", () => {
+    const r = oneHouse({ holdYears: 3, livedYears: 1.99 });
+    expect(r.branch).toBe("single-house-prorate");
+    expect(r.appliedTable).toBe("table1");
+    expect(r.totalTax).toBe(50_550_000);
+    expect(r.notes).toContain("single-house-prorate-table1");
+  });
+
+  it("F 조정 취득 · 보유 2.99y · 거주 2.5 → 공제 없음 55,110,000원 (보유 3년 미만엔 거주 8% 안 붙음)", () => {
+    const r = oneHouse({
+      holdYears: 2.99, livedYears: 2.5, isRegulatedAtTransfer: true, isRegulatedAtAcquisition: true,
+    });
+    expect(r.branch).toBe("single-house-prorate");
+    expect(r.appliedTable).toBe("none");
+    expect(r.longTermDeduction).toBe(0);
+    expect(r.totalTax).toBe(55_110_000);
+    expect(r.notes).toContain("single-house-prorate-no-deduction");
+  });
+
+  it("J 양도가 12억 1만원 · 보유 2.5y → 안분 0원 (12억 경계 절벽 없음)", () => {
+    const r = oneHouse({ transferWon: 1_200_010_000, holdYears: 2.5, livedYears: 0 });
+    expect(r.branch).toBe("single-house-prorate");
+    expect(r.appliedTable).toBe("none");
+    expect(r.totalTax).toBe(0);
+    expect(r.notes).toContain("single-house-prorate-no-deduction");
+  });
+
+  it("H 대조: 조정 취득 · 거주 0 (비과세 요건 미달) → 일반 표1 337,230,000원 (지금 그대로)", () => {
+    const r = oneHouse({
+      expensesWon: 10_000_000, holdYears: 5, livedYears: 0,
+      isRegulatedAtTransfer: true, isRegulatedAtAcquisition: true,
+    });
+    expect(r.branch).toBe("general");
+    expect(r.appliedTable).toBe("table1");
+    expect(r.totalTax).toBe(337_230_000);
+    expect(r.notes).toContain("single-house-fail-live");
+  });
+
+  it("I 대조: 조정 취득 · 보유 3y · 거주 2 → 안분 + 표2 39,910,000원 (지금 그대로)", () => {
+    const r = oneHouse({
+      holdYears: 3, livedYears: 2, isRegulatedAtTransfer: true, isRegulatedAtAcquisition: true,
+    });
+    expect(r.branch).toBe("single-house-prorate");
+    expect(r.appliedTable).toBe("table2");
+    expect(r.totalTax).toBe(39_910_000);
+    expect(r.notes).toContain("single-house-prorate");
+    expect(r.notes).not.toContain("single-house-prorate-table1");
+  });
+
+  it("K 대조: E 와 같은 입력 + 조정 취득 (거주 1.99 = 요건 미달) → 일반 표1 357,810,000원", () => {
+    const r = oneHouse({
+      holdYears: 3, livedYears: 1.99, isRegulatedAtTransfer: true, isRegulatedAtAcquisition: true,
+    });
+    expect(r.branch).toBe("general");
+    expect(r.appliedTable).toBe("table1");
+    expect(r.totalTax).toBe(357_810_000);
+    expect(r.notes).toContain("single-house-fail-live");
   });
 });
 

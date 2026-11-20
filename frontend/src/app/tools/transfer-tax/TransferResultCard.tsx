@@ -31,6 +31,13 @@ const BRANCH_TEXT: Record<TransferResult["branch"], { color: string; label: stri
   "general": { color: "blue", label: "일반 양도소득세 (표1 장특공 + 누진세율)" },
 };
 
+// 안분 분기는 쓴 공제 표로 글을 고른다 (세션 531 B46 ① — table2 글은 e2e 가 붙잡음).
+const PRORATE_LABEL: Record<TransferResult["appliedTable"], string> = {
+  "table2": "12억 초과 안분 + 표2 장특공",
+  "table1": "12억 초과 안분 + 표1 장특공",
+  "none": "12억 초과 안분 (보유 3년 미만 · 장특공 없음)",
+};
+
 const APPLIED_TABLE_LABEL: Record<TransferResult["appliedTable"], string> = {
   "table1": "표1 (일반)", "table2": "표2 (1세대1주택)", "none": "장특공 미적용",
 };
@@ -49,7 +56,7 @@ export default function TransferResultCard({ result }: Props) {
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6 space-y-3" aria-live="polite">
       <div className={`rounded-md border px-3 py-2 text-sm ${COLOR_CLASS[branchInfo.color]}`}>
-        <strong>분기:</strong> {branchInfo.label}
+        <strong>분기:</strong> {result.branch === "single-house-prorate" ? PRORATE_LABEL[result.appliedTable] : branchInfo.label}
       </div>
       {!empty && (
         <>

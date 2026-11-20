@@ -72,9 +72,8 @@ export function calculateTransferTax(input: TransferInput): TransferResult {
     const livingOK = !input.isRegulatedAtAcquisition || input.livedYears >= 2;
     if (livingOK) {
       if (input.transferWon <= HIGH_VALUE_THRESHOLD) return singleHouseExemptBranch(gain);
-      if (input.holdYears >= 3 && input.livedYears >= 2) {
-        return singleHouseProrateBranch(input, gain);
-      }
+      // 비과세 요건을 갖춘 12억 초과 = 표2 자격과 관계없이 안분 (§95③·시행령 §160①). 공제 표는 branch 안에서.
+      return singleHouseProrateBranch(input, gain);
     }
   }
 

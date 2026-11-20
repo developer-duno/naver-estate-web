@@ -41,6 +41,18 @@ const NOTICE_MESSAGES: Record<TransferNoticeKey, { title: string; body: string; 
     body:
       "양도가 12억 초과분에 한해 과세. 안분 산식: 양도차익 × (양도가 - 12억) / 양도가. 표2 보유+거주 합산 공제 (최대 80%) 적용.",
   },
+  "single-house-prorate-table1": {
+    tone: "info",
+    title: "12억 초과 안분 적용",
+    body:
+      "양도가 12억 초과분에 한해 과세. 안분 산식: 양도차익 × (양도가 - 12억) / 양도가. 거주 2년 미만이라 표2 대신 표1 보유기간 공제 (연 2%, 최대 30%) 적용.",
+  },
+  "single-house-prorate-no-deduction": {
+    tone: "info",
+    title: "12억 초과 안분 적용",
+    body:
+      "양도가 12억 초과분에 한해 과세. 안분 산식: 양도차익 × (양도가 - 12억) / 양도가. 보유 3년 미만이라 장기보유공제는 없음.",
+  },
   "single-house-fail-hold": {
     tone: "warn",
     title: "보유 2년 미충족 — 비과세 불가",

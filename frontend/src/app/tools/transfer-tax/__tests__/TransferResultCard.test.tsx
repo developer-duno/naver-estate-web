@@ -101,6 +101,35 @@ describe("TransferResultCard R13: 단기+중과 동시 케이스 가산세 별�
   });
 });
 
+// 세션 531 B46 ①: 안분 분기의 상태 줄은 쓴 공제 표(appliedTable)로 글을 고른다.
+describe("TransferResultCard 12억 초과 안분 상태 줄 (B46 ①)", () => {
+  const prorate = (over: Partial<TransferResult>) => buildTestResult({
+    branch: "single-house-prorate", appliedRate: 0.38, ...over,
+  });
+
+  it("table2 → 「12억 초과 안분 + 표2 장특공」 (e2e 가 붙잡는 글 그대로)", () => {
+    render(<TransferResultCard result={prorate({ appliedTable: "table2", notes: ["disclaimer", "single-house-prorate"] })} />);
+    expect(screen.getByText("12억 초과 안분 + 표2 장특공")).toBeInTheDocument();
+  });
+
+  it("table1 → 「12억 초과 안분 + 표1 장특공」", () => {
+    render(<TransferResultCard result={prorate({ appliedTable: "table1", notes: ["disclaimer", "single-house-prorate-table1"] })} />);
+    expect(screen.getByText("12억 초과 안분 + 표1 장특공")).toBeInTheDocument();
+    expect(screen.queryByText("12억 초과 안분 + 표2 장특공")).not.toBeInTheDocument();
+  });
+
+  it("none → 「12억 초과 안분 (보유 3년 미만 · 장특공 없음)」", () => {
+    render(<TransferResultCard result={prorate({ appliedTable: "none", notes: ["disclaimer", "single-house-prorate-no-deduction"] })} />);
+    expect(screen.getByText("12억 초과 안분 (보유 3년 미만 · 장특공 없음)")).toBeInTheDocument();
+    expect(screen.queryByText("12억 초과 안분 + 표2 장특공")).not.toBeInTheDocument();
+  });
+
+  it("일반 분기 글은 그대로", () => {
+    render(<TransferResultCard result={buildTestResult({ appliedTable: "table1" })} />);
+    expect(screen.getByText("일반 양도소득세 (표1 장특공 + 누진세율)")).toBeInTheDocument();
+  });
+});
+
 describe("TransferResultCard 결과 복사 버튼 (세션 265)", () => {
   it("복사 버튼이 렌더되고 클릭 시 산출세액 + 참고용 면책을 복사한다", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);

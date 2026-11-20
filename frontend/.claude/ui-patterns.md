@@ -91,8 +91,12 @@
 - **MbSelectedCard**: 마커 클릭 시 선택 단지 요약+상세보기 (InfoWindow router.push 불가 회피용 React 카드). 부모가 `selected && items.some(id 일치)` 가드로 stale 선택 방지. 풀스크린 시 지도 위 absolute 좌하단 오버레이로 띄워 overflow-hidden 클립 회피(세션 319 B). 툴바 켰는데 selected 없으면 "단지를 선택하면 정보가 표시됩니다" 안내(세션 319 E)
 - **useGeolocation**: 접속자 GPS 1회 조회 (getCurrentPosition, enabled 게이트, SSR·타임아웃·거부 안전, status 4종). region 미선택 시 지도 "내 위치" 줌 (지역선택 > GPS > 전국 폴백, Permissions-Policy geolocation=(self) 필요). 분양 탭만 전달(전국조회), 미분양·미분양단지 탭은 지역선택 전제라 미전달(의도된 설계)
 
+## 계산기 새 틀 (세션 530 B40 PR 3a — 단지 화면과 같은 띠 + 흰 카드)
+- 뼈대 `components/tools/ToolPage`(서버): `BrandPage > PageBand(overlap · innerClassName = TOOL_PAGE_INNER "mx-auto max-w-3xl px-4 sm:px-6" · eyebrow · title(h1) · description) > div(TOOL_PAGE_INNER pb-6) > div.-mt-16 {children}` + 바닥 `links`(안 주면 아무것도 안 그림 = 모음 장). 본문 폭은 옛 틀과 같은 max-w-3xl
+- 부품 5(`components/tools/`): `ToolPage` · `ToolLinks current`(후순위 = 지금의 두 링크 글 그대로 / 세금·수수료·평㎡ = 자기 뺀 칩 + 계산기 모음 + 계산기 안내 글 · 후순위 칩은 안 넣음) · `ToolNotesFold count`(`<details>` 「계산 기준과 주의할 점 (N)」 닫힘 기본 · 위험·경고 안내는 넣지 않는다) · `ManwonHint`(만원 → 「= 1억 2,345만원」 · 빈 칸·0·음수·1만원 미만 안 그림 · 소수는 원 단위까지 · 쉼표 ko-KR 고정) · 클래스 상수 `tool-classes.ts`(`TOOL_INPUT_CLASS`·`TOOL_LABEL_CLASS`·`TOOL_CHOICE_ON/OFF`·`TOOL_VALUE_TILE_CLASS` = 후순위 계산기 글자 그대로 — 홈 대출 판도 같은 부품이라 글자를 바꾸면 두 화면이 같이 바뀐다 · 가드 `SecondMortgageCalculator.classes.test.tsx`). 3a 에서 실제로 쓰는 장 = 모음·후순위(나머지 부품은 3b~3d 가 쓴다 · `MoreInputsFold` 는 3c)
+
 ## 헤더 메뉴 (Header.tsx `navLinks`)
-- 순서 = 홈 · 미분양 · **중개 실무**(`/broker`, 세션 511) · 블로그 · 도움말 · [관리] + 계산기 ▾ 드롭다운. PC nav 와 휴대폰 드로어가 같은 `navLinks` 배열을 쓴다 — 회귀 = `components/__tests__/Header.test.tsx`(메뉴 경로 집합·「중개 실무」 순서) + e2e 헤더 좁은 스냅샷 `header-public-desktop.png`(메뉴를 바꾸면 CI 재촬영)
+- 순서 = 홈 · 미분양 · **중개 실무**(`/broker`, 세션 511) · 블로그 · 도움말 · [관리] + 계산기 ▾ 드롭다운(세션 530: 6줄 = 후순위 대출 한도 · 중개수수료 · 취득세 · 양도소득세 · 보유세 · 평·㎡ 변환 — 드롭다운과 휴대폰 서랍은 **배열 공용이 아니라 따로 적혀 있어** 둘 다 고친다 · 시험이 두 순서를 같은 목록과 대조). PC nav 와 휴대폰 드로어가 같은 `navLinks` 배열을 쓴다 — 회귀 = `components/__tests__/Header.test.tsx`(메뉴 경로 집합·「중개 실무」 순서) + e2e 헤더 좁은 스냅샷 `header-public-desktop.png`(메뉴를 바꾸면 CI 재촬영)
 - **메뉴를 한 칸 더 늘리기 전에**: ① 768px 에서 관리자 로그인(관리 메뉴 + 뱃지 + 내 계정·로그아웃이 다 붙는 최악) 헤더 넘침을 playwright 로 먼저 잰다 — 세션 511 실측 여유 24px(중개사 계정 64px)라 한 칸이면 넘친다 ② PC 기준 그림은 헤더가 들어간 장이 전부 바뀐다(세션 511 = 15장 · 휴대폰 0장 — 닫힌 햄버거뿐) → CI dispatch 재촬영을 PR 일정에 넣는다
 
 ## 홈/검색 통합 (SearchExperience + ActiveFilterChips) — 세션 314

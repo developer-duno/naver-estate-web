@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import BrandCard from "@/components/brand/BrandCard";
 import SecondMortgageCalculator from "@/components/SecondMortgageCalculator";
+import ToolLinks from "@/components/tools/ToolLinks";
+import ToolPage from "@/components/tools/ToolPage";
 
 export const metadata: Metadata = {
   title: "후순위 대출 한도 계산기",
@@ -18,34 +20,21 @@ export const metadata: Metadata = {
 
 export default function SecondMortgageToolPage() {
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
-      <section className="text-center mb-8 sm:mb-12">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-brand-navy leading-tight mb-3">
-          후순위 대출 한도 계산기
-        </h1>
-        <p className="text-sm sm:text-base text-brand-muted leading-relaxed">
+    <ToolPage
+      eyebrow="계산기 · 로그인 없이"
+      title="후순위 대출 한도 계산기"
+      description={
+        <>
           이미 받은 대출이 있어도, 집 시세에서 남는 만큼을 담보로 추가 대출을 받는 방법입니다.
           <br className="hidden sm:inline" /> 한도와 매달 낼 이자를 먼저 계산해 보세요.
-        </p>
-      </section>
-
-      <div className="rounded-2xl border border-brand-line-soft bg-white p-5 sm:p-8">
+        </>
+      }
+      links={<ToolLinks current="second-mortgage" />}
+    >
+      {/* 계산기 안쪽은 홈 대출 판과 같은 부품 — 모양·글을 바꾸지 않는다(설계 T8 · §9 🟠5) */}
+      <BrandCard className="p-5 sm:p-8">
         <SecondMortgageCalculator />
-      </div>
-
-      <section className="mt-10 text-center">
-        <p className="text-sm text-brand-muted">
-          다른 계산기는{" "}
-          <Link href="/tools" className="font-medium text-brand-orange-text hover:underline">
-            계산기 모음
-          </Link>
-          에서 찾아보세요. 대출 광고를 볼 때는{" "}
-          <Link href="/blog/illegal-loan-filter" className="font-medium text-brand-orange-text hover:underline">
-            불법 대출 광고 거르는 법
-          </Link>
-          을 먼저 읽어 보세요.
-        </p>
-      </section>
-    </div>
+      </BrandCard>
+    </ToolPage>
   );
 }

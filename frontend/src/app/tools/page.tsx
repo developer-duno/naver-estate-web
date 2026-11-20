@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Receipt, Landmark, TrendingUp, Home, Ruler, HandCoins } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import BrandCard from "@/components/brand/BrandCard";
+import ToolPage from "@/components/tools/ToolPage";
 
 export const metadata: Metadata = {
   title: "부동산 계산기 6종",
@@ -19,7 +19,6 @@ export const metadata: Metadata = {
 
 type CalcCard = {
   href: string;
-  Icon: LucideIcon;
   title: string;
   desc: string;
 };
@@ -27,73 +26,61 @@ type CalcCard = {
 const CALCS: CalcCard[] = [
   {
     href: "/tools/second-mortgage",
-    Icon: HandCoins,
     title: "후순위 대출 한도",
-    desc: "추가 대출 한도·매달 이자",
+    desc: "추가 대출 한도 · 매달 이자",
   },
   {
     href: "/tools/brokerage-fee",
-    Icon: Receipt,
     title: "중개수수료",
-    desc: "법정 한도 수수료·부가세",
+    desc: "법정 한도 수수료 · 부가세",
   },
   {
     href: "/tools/acquisition-tax",
-    Icon: Landmark,
     title: "취득세",
-    desc: "매매·증여 취득세",
+    desc: "집을 살 때 내는 세금",
   },
   {
     href: "/tools/transfer-tax",
-    Icon: TrendingUp,
     title: "양도소득세",
-    desc: "양도차익 세액",
+    desc: "집을 팔 때 내는 세금",
   },
   {
     href: "/tools/property-tax",
-    Icon: Home,
     title: "보유세",
-    desc: "재산세·종부세",
+    desc: "해마다 내는 재산세 · 종부세",
   },
   {
     href: "/tools/area-converter",
-    Icon: Ruler,
     title: "평·㎡ 변환",
-    desc: "면적 단위 변환",
+    desc: "면적 단위 바꾸기",
   },
 ];
 
+/** 계산기 모음(세션 530 · B40 PR 3a) — 새 틀 띠 + 흰 카드 한 장 안에 6줄. 링크는 이 6개뿐(시험이 수를 고정) */
 export default function ToolsHubPage() {
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 sm:py-16">
-      <section className="text-center mb-8 sm:mb-12">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 leading-tight mb-3">
-          부동산 계산기 6종
-        </h1>
-        <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
-          후순위 대출 한도·취득세·양도소득세·보유세·중개수수료·평㎡ 변환을 한곳에서 빠르게 계산하세요.
-        </p>
-        <p className="mt-2 text-sm text-gray-500 leading-relaxed">
-          여섯 계산기 모두 로그인 없이 쓸 수 있습니다. 세금·수수료 계산기 화면에는 계산 기준이 되는 법령과 개정일을
-          적어 두었고, 그 결과는 참고용이라 최종 금액은 관할 기관에 확인하세요. 후순위 대출 한도 계산기의 결과는
-          입력하신 값으로 계산한 예시입니다.
-        </p>
-      </section>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        {CALCS.map(({ href, Icon, title, desc }) => (
+    <ToolPage eyebrow="로그인 없이 · 무료" title="부동산 계산기 6종" description="대출 한도, 세금, 수수료, 면적을 한곳에서">
+      <BrandCard className="divide-y divide-brand-line-soft overflow-hidden">
+        {CALCS.map(({ href, title, desc }) => (
           <Link
             key={href}
             href={href}
             aria-label={`${title} — ${desc}`}
-            className="rounded-lg border bg-white p-4 hover:bg-gray-50 transition-colors"
+            className="flex min-h-16 items-center gap-3 px-4 py-3 transition-colors hover:bg-brand-bg sm:px-5"
           >
-            <Icon aria-hidden className="h-6 w-6 text-blue-600" />
-            <span className="mt-2 block text-base font-semibold text-gray-800">{title}</span>
-            <p className="mt-0.5 text-sm text-gray-500">{desc}</p>
+            <span className="min-w-0 flex-1">
+              <span className="block text-base font-bold text-brand-navy">{title}</span>
+              <span className="mt-0.5 block text-sm text-brand-muted">{desc}</span>
+            </span>
+            <span aria-hidden className="shrink-0 text-xl text-brand-muted">
+              ›
+            </span>
           </Link>
         ))}
-      </div>
-    </div>
+      </BrandCard>
+      <p className="mt-4 text-center text-xs text-brand-muted">
+        세금·수수료 결과는 참고용입니다. 최종 금액은 관할 기관에서 확인하세요.
+      </p>
+    </ToolPage>
   );
 }

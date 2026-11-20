@@ -13,6 +13,13 @@ describe("/tools/second-mortgage", () => {
     expect(screen.getByLabelText("우리 집 시세")).toBeInTheDocument();
   });
 
+  it("새 틀 남색 띠에 h1 과 작은 줄 「계산기 · 로그인 없이」를 그린다(세션 530 · B40 PR 3a)", () => {
+    render(<SecondMortgageToolPage />);
+    const band = screen.getByTestId("page-band");
+    expect(band).toContainElement(screen.getByRole("heading", { level: 1 }));
+    expect(band).toHaveTextContent("계산기 · 로그인 없이");
+  });
+
   it("canonical·og:url 이 자기 주소이고 og 그림을 명시한다(seo-metadata 룰 2·6)", () => {
     expect(metadata.alternates?.canonical).toBe("/tools/second-mortgage");
     const og = metadata.openGraph as { url?: string; images?: unknown[] };

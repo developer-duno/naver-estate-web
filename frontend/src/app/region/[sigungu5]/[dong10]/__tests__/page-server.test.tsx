@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
-import { makeDong, makeHub } from "@/lib/seo/__tests__/region-fixture";
+import { makeCard, makeDong, makeHub } from "@/lib/seo/__tests__/region-fixture";
 
 vi.mock("next/navigation", async () => ({ ...(await vi.importActual<typeof import("next/navigation")>("next/navigation")) }));
 
@@ -44,16 +44,40 @@ describe("동 페이지 본문", () => {
     expect(screen.getByTestId("region-dong-line").textContent).toBe("단지 13곳 · 실거래 범위 있는 단지 5곳");
   });
 
-  it("단지 표 = 전부(13) · 준공 열 · 세대수 큰 순(없으면 뒤)", async () => {
+  it("단지 표 = 전부(13) · 준공 열 · 거래 있는 단지 먼저(범위 → 세대수 큰 순 — 👤 11-18 결정 2)", async () => {
     const { container } = await renderPage();
     const table = container.querySelector("table")!;
     expect([...table.querySelectorAll("thead th")].map((th) => th.textContent)).toContain("준공");
     const rows = table.querySelectorAll("tbody tr");
     expect(rows).toHaveLength(13);
-    expect(rows[0].querySelector('th[scope="row"]')!.textContent).toBe("햇살마을12단지");
-    expect(rows[0].querySelectorAll("td")[0].textContent).toBe("1,200세대");
+    expect(rows[0].querySelector('th[scope="row"]')!.textContent).toBe("햇살마을10단지"); // 범위 있는 단지 중 세대수 가장 큰 곳
+    expect(rows[0].querySelectorAll("td")[0].textContent).toBe("1,000세대");
     expect(rows[0].querySelectorAll("td")[1].textContent).toBe("2010년");
-    expect(rows[12].querySelector("a")!.textContent).toBe("햇살마을13단지");
+    expect(rows[4].querySelector("a")!.textContent).toBe("햇살마을13단지"); // 범위 있는데 세대수 없음 = 범위 묶음 끝
+    expect(rows[5].querySelector("a")!.textContent).toBe("햇살마을12단지"); // 범위 없는 단지 중 세대수 가장 큰 곳
+    expect(rows[12].querySelector("a")!.textContent).toBe("햇살마을2단지");
+  });
+
+  it("단지 20곳까지 표 하나 + 나머지는 <details> 「나머지 N곳 보기」 안 둘째 표(E13 · T10) — 첫 HTML 에 전부 · 13곳이면 details 없음", async () => {
+    const many = Array.from({ length: 25 }, (_, i) =>
+      makeCard({ complex_no: String(9500 + i), name: `시험단지 ${String(i + 1).padStart(3, "0")}`, household_count: 1000 - i }),
+    );
+    fetchMock.mockImplementation(async () => new Response(JSON.stringify(makeDong({ complexes: many })), { status: 200 }));
+    const { container } = await renderPage();
+    const tables = container.querySelectorAll("table");
+    expect(tables).toHaveLength(2);
+    expect(tables[0].querySelectorAll("tbody tr")).toHaveLength(20);
+    const details = container.querySelector("details")!;
+    expect(details.querySelector("summary")!.textContent).toBe("나머지 5곳 보기");
+    expect(details.querySelectorAll("tbody tr")).toHaveLength(5);
+    expect(details.contains(tables[1])).toBe(true);
+    expect(container.querySelectorAll('a[href^="/complex/"]')).toHaveLength(25);
+  });
+
+  it("13곳 장 = details 없음 · 표 하나", async () => {
+    const { container } = await renderPage();
+    expect(container.querySelector("details")).toBeNull();
+    expect(container.querySelectorAll("table")).toHaveLength(1);
   });
 
   it("행정동별 동네 정보 카드 2 — 단지 화면 카드 3과 같은 부품(칸·띠·위험지도)", async () => {

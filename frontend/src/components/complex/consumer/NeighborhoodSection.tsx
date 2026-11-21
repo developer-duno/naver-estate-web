@@ -26,9 +26,9 @@ const SUBWAY_SCALE_M = 3000;
 function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div>
-      <span className="block text-xs text-gray-500">{label}</span>
+      <span className="block text-xs text-brand-muted">{label}</span>
       <b className="text-sm">{value}</b>
-      {note && <span className="text-xs text-gray-500"> · {note}</span>}
+      {note && <span className="text-xs text-brand-muted"> · {note}</span>}
     </div>
   );
 }
@@ -57,8 +57,8 @@ export function NeighborhoodFull({ n }: { n: NeighborhoodInfo }) {
   const mix = n.house_mix;
   const mixParts = mix
     ? [
-        { label: "아파트", pct: mix.apt_pct, color: "bg-blue-700" },
-        { label: "오피스텔", pct: mix.officetel_pct, color: "bg-blue-400" },
+        { label: "아파트", pct: mix.apt_pct, color: "bg-brand-navy" },
+        { label: "오피스텔", pct: mix.officetel_pct, color: "bg-brand-navy-line" },
         { label: "다세대", pct: mix.row_pct, color: "bg-indigo-300" },
         { label: "단독", pct: mix.detached_pct, color: "bg-slate-300" },
       ]
@@ -78,11 +78,11 @@ export function NeighborhoodFull({ n }: { n: NeighborhoodInfo }) {
       )}
       {mix && (
         <div>
-          <span className="block text-xs text-gray-500 mb-1">집 종류</span>
+          <span className="block text-xs text-brand-muted mb-1">집 종류</span>
           <div className="flex h-3.5 rounded-full overflow-hidden bg-slate-100" aria-hidden="true">
             {mixParts.map((p) => <i key={p.label} className={p.color} style={{ width: `${p.pct}%` }} />)}
           </div>
-          <p className="mt-1 text-xs text-gray-500">{mixParts.map((p) => `${p.label} ${p.pct}%`).join(" · ")}</p>
+          <p className="mt-1 text-xs text-brand-muted">{mixParts.map((p) => `${p.label} ${p.pct}%`).join(" · ")}</p>
         </div>
       )}
       {hazards.length > 0 && (
@@ -92,7 +92,7 @@ export function NeighborhoodFull({ n }: { n: NeighborhoodInfo }) {
           ))}
         </div>
       )}
-      <p className="text-xs text-gray-400">{n.source}</p>
+      <p className="text-xs text-brand-muted">{n.source}</p>
     </div>
   );
 }
@@ -122,7 +122,7 @@ export default function NeighborhoodSection({ stations, neighborhood: n, onRetry
             <div key={s.station_name} className="flex items-center gap-2 text-xs">
               <span className="w-20 truncate">{formatStationName(s.station_name)}</span>
               <div className="relative flex-1 h-2.5 rounded-full bg-slate-200" aria-hidden="true">
-                <i className="absolute inset-y-0 left-0 rounded-full bg-blue-700" style={{ width: `${Math.min(100, (s.distance_m / SUBWAY_SCALE_M) * 100)}%` }} />
+                <i className="absolute inset-y-0 left-0 rounded-full bg-brand-navy" style={{ width: `${Math.min(100, (s.distance_m / SUBWAY_SCALE_M) * 100)}%` }} />
               </div>
               <span className="w-14 text-right">{formatDistance(s.distance_m)}</span>
             </div>
@@ -138,7 +138,7 @@ export default function NeighborhoodSection({ stations, neighborhood: n, onRetry
           {dongHref && (
             <>
               {" "}
-              <Link href={dongHref} prefetch={false} className="text-xs text-blue-700 underline">동네 정보 더 보기</Link>
+              <Link href={dongHref} prefetch={false} className="text-xs font-bold text-brand-orange-text underline">동네 정보 더 보기</Link>
             </>
           )}
         </p>

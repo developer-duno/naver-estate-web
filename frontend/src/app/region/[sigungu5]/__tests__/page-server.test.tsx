@@ -54,25 +54,30 @@ describe("허브 본문", () => {
     expect(screen.getByTestId("region-hub-line").textContent).toBe("단지 16곳 · 동 2곳");
   });
 
-  it("동 칩 — 동 페이지 있는 동 = 동 페이지 링크 · 작은 동 = 같은 장 앵커", async () => {
-    await renderPage();
+  it("동 칩 = 같은 장 닻 `#동코드`(이름 + 단지 수 · 👤 11-18 결정 2) · 동 장 링크는 묶음 제목·「전체 N곳 →」에 남음", async () => {
+    const { container } = await renderPage();
     const nav = screen.getByRole("navigation", { name: "유성구 동 목록" });
     expect([...nav.querySelectorAll("a")].map((a) => [a.textContent, a.getAttribute("href")])).toEqual([
-      ["봉명동", "/region/30200/3020011800"],
-      ["달빛동", "#3020012900"],
+      ["봉명동 13", "#3020011800"],
+      ["달빛동 3", "#3020012900"],
     ]);
+    const big = container.querySelector('section[id="3020011800"]') as HTMLElement;
+    expect(within(big).getByRole("heading", { level: 2 }).querySelector("a")?.getAttribute("href")).toBe("/region/30200/3020011800");
+    expect(within(big).getByRole("link", { name: "봉명동 단지 전체 13곳 →" }).getAttribute("href")).toBe("/region/30200/3020011800");
   });
 
-  it("동 묶음 = <section id=동코드> · 동 페이지 있는 동 = 세대수 큰 순 12곳 + '전체 13곳' 링크(결정 35)", async () => {
+  it("동 묶음 = <section id=동코드> · 동 페이지 있는 동 = 거래 있는 단지 먼저 12곳 + '전체 13곳' 링크(👤 11-18 결정 2 — 옛 결정 35 세대수 큰 순을 바꿈)", async () => {
     const { container } = await renderPage();
     const big = container.querySelector('section[id="3020011800"]') as HTMLElement;
     expect(big).not.toBeNull();
     const rows = big.querySelectorAll("tbody tr");
     expect(rows).toHaveLength(12);
     const households = [...rows].map((r) => r.querySelectorAll("td")[0].textContent);
-    expect(households[0]).toBe("1,200세대");
-    expect(households[11]).toBe("100세대");
-    expect(big.textContent).not.toContain("햇살마을13단지"); // 세대수 없는 단지는 맨 뒤라 13번째 → 동 페이지에서
+    // 범위 있는 단지 5곳(1000·700·400·100·세대수 없음) 먼저 → 범위 없는 단지 세대수 큰 순(1,200 …)
+    expect(households.slice(0, 6)).toEqual(["1,000세대", "700세대", "400세대", "100세대", "", "1,200세대"]);
+    expect(households[11]).toBe("300세대");
+    expect(rows[0].querySelector("td")!.nextElementSibling!.textContent).toBe("84㎡ 4억 900만~4억 4,900만"); // 첫 줄 = 범위 있는 단지
+    expect(big.textContent).not.toContain("햇살마을2단지"); // 범위 없는 가장 작은 단지(200세대)가 13번째 → 동 페이지에서
     const all = within(big).getByRole("link", { name: "봉명동 단지 전체 13곳 →" });
     expect(all.getAttribute("href")).toBe("/region/30200/3020011800");
     expect(within(big).getByRole("heading", { level: 2 }).querySelector("a")?.getAttribute("href")).toBe("/region/30200/3020011800");
@@ -82,23 +87,31 @@ describe("허브 본문", () => {
     const { container } = await renderPage();
     const small = container.querySelector('section[id="3020012900"]') as HTMLElement;
     const names = [...small.querySelectorAll("tbody tr")].map((r) => r.querySelector("a")!.textContent);
-    expect(names).toEqual(["달빛마을2단지", "달빛마을1단지", "달빛마을3단지"]);
-    expect(within(small).getByRole("heading", { level: 2 }).querySelector("a")).toBeNull();
+    expect(names).toEqual(["달빛마을3단지", "달빛마을2단지", "달빛마을1단지"]); // 범위 있는 3단지 먼저 → 세대수 큰 순
+    // 고른 동(첫 동) 말고는 스크립트가 숨긴다(DongTabs) — 숨긴 묶음도 DOM·첫 HTML 엔 그대로라 hidden 까지 찾는다
+    expect(within(small).getByRole("heading", { level: 2, hidden: true }).querySelector("a")).toBeNull();
     expect(small.textContent).not.toContain("전체");
   });
 
-  it("단지 표 칸 — 이름 = 행 머리 링크 · 대표 면적 6개월 범위(없으면 —) · 공시가격 · 사실 배지(A 최근 2년 실거래 · B 실거래 없음 · C 빈칸, 등급 글자 0)", async () => {
+  it("단지 표 칸 — 이름 = 행 머리 링크 · 대표 면적 6개월 범위(없으면 「최근 6개월 거래 없음」 T6) · 공시가격(없으면 빈칸 T7) · 사실 배지(A 최근 2년 실거래 · B 실거래 없음 · C 빈칸, 등급 글자 0)", async () => {
     const { container } = await renderPage();
     const small = container.querySelector('section[id="3020012900"]') as HTMLElement;
     const rowsEl = [...small.querySelectorAll("tbody tr")];
     for (const r of rowsEl) expect(r.firstElementChild!.matches('th[scope="row"]')).toBe(true);
     const cells = rowsEl.map((r) => [...r.querySelectorAll("th, td")].map((td) => td.textContent));
-    expect(cells[0]).toEqual(["달빛마을2단지", "300세대", "—", "3억 1,000만", "실거래 없음"]);
-    expect(cells[1]).toEqual(["달빛마을1단지", "120세대", "—", "—", ""]);
-    expect(cells[2]).toEqual(["달빛마을3단지", "80세대", "84㎡ 4억~4억 4,000만", "3억 1,000만", "최근 2년 실거래"]);
+    expect(cells[0]).toEqual(["달빛마을3단지", "80세대", "84㎡ 4억~4억 4,000만", "3억 1,000만", "최근 2년 실거래"]);
+    expect(cells[1]).toEqual(["달빛마을2단지", "300세대", "최근 6개월 거래 없음", "3억 1,000만", "실거래 없음"]);
+    expect(cells[2]).toEqual(["달빛마을1단지", "120세대", "최근 6개월 거래 없음", "", ""]);
+    // 「—」 글자 0(빈칸·T6 로 바꿈 — 세션 526)
+    expect(small.textContent).not.toContain("—");
+    // 모양은 globals.css .region-table 한 곳 — 칸엔 클래스 0 · 표시는 범위 있는 칸 data-r · 배지 data-g 뿐(HTML 크기, 세션 526 보완)
+    expect(small.querySelectorAll("tbody td[class], tbody th[class], tbody tr[class]")).toHaveLength(0);
+    expect(rowsEl.map((r) => r.querySelector("td[data-r]") != null)).toEqual([true, false, false]);
+    expect(rowsEl[0].querySelector("td[data-r] > span")!.textContent).toBe("4억~4억 4,000만"); // 가격은 한 덩어리(390 줄바꿈)
+    expect(rowsEl.map((r) => r.querySelector("span[data-g]")?.getAttribute("data-g") ?? null)).toEqual(["A", "B", null]);
     // C 행의 자료 칸엔 배지 요소 자체가 없다(결정 38)
-    expect(rowsEl[1].querySelectorAll("td")[3].querySelector("span")).toBeNull();
-    expect(small.querySelector("a")!.getAttribute("href")).toBe("/complex/9202");
+    expect(rowsEl[2].querySelectorAll("td")[3].querySelector("span")).toBeNull();
+    expect(small.querySelector("a")!.getAttribute("href")).toBe("/complex/9203");
     const texts = [...container.querySelectorAll("td, span, a, p, h2")].map((el) => el.textContent?.trim());
     expect(texts.filter((t) => t === "A" || t === "B" || t === "C")).toEqual([]);
   });

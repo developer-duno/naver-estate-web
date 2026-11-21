@@ -117,12 +117,12 @@ export default function PriceTrendSection({ history, trend, endYm, onRetry, brea
             {trend.region_name} 아파트는 2년 동안 {parts.join(" · ")}
           </p>
           <svg viewBox={`0 0 ${W} ${LINE_H}`} className="w-full max-w-[480px] h-auto" role="img" aria-label={`${trend.region_name} 중위 매매가와 전세가율 2년 흐름`}>
-            {sale && <TrendLine items={items} k="sale_price_median" color="#1d4ed8" fmt={formatKoreanPrice} />}
+            {sale && <TrendLine items={items} k="sale_price_median" color="#0b1f3a" fmt={formatKoreanPrice} />}
             {jeonse && <TrendLine items={items} k="jeonse_ratio" color="#d97706" fmt={(v) => `${v.toFixed(1)}%`} />}
           </svg>
           <p className="text-xs text-brand-muted">
             {trend.source} {period}
-            {sale ? " · 파랑 중위 매매가" : ""}
+            {sale ? " · 남색 중위 매매가" : ""}
             {jeonse ? " · 주황 전세가율" : ""}
           </p>
         </div>

@@ -203,7 +203,7 @@ describe("표·앵커·옛 코드", () => {
     for (const label of Object.values(GRADE_LABELS)) expect(label).not.toMatch(/\b[ABC]\b/);
   });
 
-  it("정렬 — 세대수 큰 순 · 세대수 없으면 뒤 · 같으면 이름 순 · 원본 그대로", () => {
+  it("정렬 — (범위·등급이 같으면) 세대수 큰 순 · 세대수 없으면 뒤 · 같으면 이름 순 · 원본 그대로", () => {
     const list = [
       makeCard({ complex_no: "1", name: "다", household_count: 100 }),
       makeCard({ complex_no: "2", name: "가", household_count: null }),
@@ -212,5 +212,18 @@ describe("표·앵커·옛 코드", () => {
     ];
     expect(sortComplexes(list).map((c) => c.complex_no)).toEqual(["3", "4", "1", "2"]);
     expect(list.map((c) => c.complex_no)).toEqual(["1", "2", "3", "4"]);
+  });
+
+  it("정렬 — 거래 있는 단지 먼저(E12): 최근 6개월 범위 있는 작은 단지 → 범위 없는 A → 범위 없는 B·C(세대수 큰 순)", () => {
+    const none = { recent6_min: null, recent6_max: null };
+    const list = [
+      makeCard({ complex_no: "big-b", name: "가", grade: "B", household_count: 3000, ...none }),
+      makeCard({ complex_no: "big-a", name: "나", grade: "A", household_count: 2000, ...none }),
+      makeCard({ complex_no: "small-range", name: "다", grade: "A", household_count: 50 }),
+      makeCard({ complex_no: "mid-c", name: "라", grade: "C", household_count: 2500, ...none }),
+      makeCard({ complex_no: "half", name: "마", grade: "A", household_count: 9000, recent6_min: 40000, recent6_max: null }),
+    ];
+    // 범위가 반쪽(최댓값 없음)이면 범위 없음과 같다 — 화면도 「최근 6개월 거래 없음」
+    expect(sortComplexes(list).map((c) => c.complex_no)).toEqual(["small-range", "half", "big-a", "big-b", "mid-c"]);
   });
 });

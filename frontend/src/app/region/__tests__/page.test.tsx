@@ -31,6 +31,15 @@ describe("/region 목록", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("시도 칩 17 = 그 시도 카드로 뛰는 닻(`#시도` · 스크립트 0) — 시군구 링크는 하나도 숨기지 않는다(E10)", () => {
+    const { container } = render(<RegionIndexPage />);
+    const chips = [...screen.getByRole("navigation", { name: "시도 바로 가기" }).querySelectorAll("a")];
+    expect(chips).toHaveLength(17);
+    const ids = [...container.querySelectorAll("section[id]")].map((s) => s.id);
+    expect(chips.map((a) => a.getAttribute("href"))).toEqual(ids.map((id) => `#${id}`));
+    expect(container.innerHTML).not.toMatch(/\shidden(=|\s|>)/);
+  });
+
   it("대전 묶음에 유성구 · 세종 묶음 = 세종시", () => {
     const { container } = render(<RegionIndexPage />);
     const daejeon = container.querySelector('section[id="대전"]')!;

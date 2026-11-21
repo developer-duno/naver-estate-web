@@ -16,6 +16,25 @@ test.describe("지역 장", () => {
     await expect(page.getByRole("link", { name: "햇살동 단지 전체 13곳 →" })).toHaveAttribute("href", "/region/30200/3020011800");
     await expect(page.locator('section[id="3020012300"] tbody tr')).toHaveCount(2);
     await expect(page.getByTestId("region-trend")).toBeVisible();
+    // 그 동만 보기(세션 526 B40 PR 2b · 👤 11-18 결정 2) — 처음 = 첫 동 하나만 · 칩 누르면 그 동만 · 주소 # 는 바꾸되 기록은 안 쌓임
+    await expect(page.locator('section[id="3020011800"]')).toBeVisible();
+    await expect(page.locator('section[id="3020012300"]')).toBeHidden();
+    await page.getByRole("navigation", { name: "유성구 동 목록" }).getByRole("link", { name: "봉명동 2" }).click();
+    await expect(page.locator('section[id="3020012300"]')).toBeVisible();
+    await expect(page.locator('section[id="3020011800"]')).toBeHidden();
+    expect(new URL(page.url()).hash).toBe("#3020012300");
+  });
+
+  test("허브 #동코드 로 바로 들어오면 그 동만 · 스크립트 끄면 동 묶음 전부(봇·첫 HTML)", async ({ page, browser }) => {
+    await page.goto("/region/30200#3020012300");
+    await expect(page.locator('section[id="3020012300"]')).toBeVisible();
+    await expect(page.locator('section[id="3020011800"]')).toBeHidden();
+    const noJs = await browser.newContext({ javaScriptEnabled: false });
+    const p = await noJs.newPage();
+    await p.goto(new URL("/region/30200", page.url()).toString());
+    await expect(p.locator('section[id="3020011800"]')).toBeVisible();
+    await expect(p.locator('section[id="3020012300"]')).toBeVisible();
+    await noJs.close();
   });
 
   test("지역 추이가 없는 허브 — 200 · 흐름 카드 없음 · 한 줄에 자료 기준 없음", async ({ page }) => {
@@ -38,6 +57,7 @@ test.describe("지역 장", () => {
     await expect(page.locator("h1")).toHaveCount(1);
     await expect(page.getByRole("heading", { level: 1, name: "대전 유성구 햇살동 아파트 실거래가·공시가격" })).toBeVisible();
     await expect(page.locator("table tbody tr")).toHaveCount(13);
+    await expect(page.locator("details")).toHaveCount(0); // 20곳 이하 = 접기 없음(E13)
     await expect(page.getByTestId("dong-neighborhood-card")).toHaveCount(1);
   });
 

@@ -94,7 +94,7 @@ describe("sitemap — 정적 장 lastModified 는 장마다 실제로 바뀐 날
       expect(new Set(times).size).toBeGreaterThan(1);
       // 세션 513: /terms·/privacy 도 2026-11-16 에 고쳐 홈과 같은 날이 됐다 → 비교 상대를 /help 로
       expect(byPath.get("/")!).toBeGreaterThan(byPath.get("/help")!);
-      expect(byPath.get("/privacy")!).toBe(new Date("2026-11-16").getTime());
+      expect(byPath.get("/privacy")!).toBe(new Date("2026-11-23").getTime()); // 세션 528: 개정 예고 문단을 지운 날
       expect(byPath.get("/terms")!).toBe(new Date("2026-11-16").getTime());
       expect(byPath.get("/broker/jeonse")!).toBe(new Date("2026-11-16").getTime());
       // 세션 517 — /checklist(월세 카드)·/broker(월세 단추)는 2026-11-17
